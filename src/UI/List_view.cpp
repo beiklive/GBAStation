@@ -101,12 +101,12 @@ void DataSource::didSelectRowAt(brls::RecyclerFrame* recycler, brls::IndexPath i
                 std::string lastPathStr = *lastPath->AsString();
                 if (!lastPathStr.empty())
                 {
-                    struct VDir* dir = VDirOpen(lastPathStr.c_str());
-                    if (dir) {
-                        dir->close(dir);
-                        G_CurrentDir = lastPathStr;
-                        brls::Logger::info("Set current path to lastDirectory: {}", lastPathStr);
-                    }
+                    // struct VDir* dir = VDirOpen(lastPathStr.c_str());
+                    // if (dir) {
+                    //     dir->close(dir);
+                    //     G_CurrentDir = lastPathStr;
+                    //     brls::Logger::info("Set current path to lastDirectory: {}", lastPathStr);
+                    // }
                 }
             }
 
