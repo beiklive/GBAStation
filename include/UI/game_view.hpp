@@ -5,6 +5,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <deque>
 #include <mutex>
 #include <thread>
@@ -53,6 +54,19 @@ class GameView : public brls::Box
     std::atomic<bool> m_running{false};
     std::atomic<bool> m_fastForward{false};
 
+    // ---- Dedicated audio-feed thread --------------------------------
+    // Decouples audio pushSamples() blocking from the game loop so the
+    // game thread can maintain stable 60 fps regardless of audio output jitter.
+    std::thread                       m_audioThread;
+    std::atomic<bool>                 m_audioRunning{false};
+    std::mutex                        m_audioQueueMutex;
+    std::condition_variable           m_audioQueueCV;
+    std::deque<std::vector<int16_t>>  m_audioQueue;  ///< Pending PCM batches
+
+    // ---- Keyboard exit ----------------------------------------------
+    std::atomic<bool> m_requestExit{false}; ///< Set by game thread; consumed by draw()
+    int               m_kbExitKey = -1;     ///< BrlsKeyboardScancode for exit (keyboard.exit)
+
     // ---- Fast-forward config ----------------------------------------
     float    m_ffMultiplier   = 4.0f;   ///< Speed multiplier (fastforward.multiplier)
     bool     m_ffMute         = true;   ///< Mute audio during fast-forward (fastforward.mute)
@@ -75,7 +89,9 @@ class GameView : public brls::Box
     mutable std::mutex           m_rewindMutex;
 
     // ---- FPS display ------------------------------------------------
-    bool     m_showFps     = false; ///< display.showFps
+    bool     m_showFps          = false; ///< display.showFps
+    bool     m_showFfOverlay    = true;  ///< display.showFfOverlay
+    bool     m_showRewindOverlay = true;  ///< display.showRewindOverlay
     mutable std::mutex m_fpsMutex;
     unsigned m_fpsFrameCount = 0;
     float    m_currentFps    = 0.0f;

@@ -221,6 +221,46 @@ static int parseKbdScancode(const std::string& s)
 }
 
 // ============================================================
+// ControllerButton name ↔ brls::ControllerButton lookup
+// Allows config entries like   handle.a = A
+// instead of numeric values    handle.a = 13
+// ============================================================
+struct BrlsBtnName { const char* name; brls::ControllerButton btn; };
+static const BrlsBtnName k_brlsBtnNames[] = {
+    { "LT",    brls::BUTTON_LT    },
+    { "LB",    brls::BUTTON_LB    },
+    { "LSB",   brls::BUTTON_LSB   },
+    { "UP",    brls::BUTTON_UP    },
+    { "RIGHT", brls::BUTTON_RIGHT },
+    { "DOWN",  brls::BUTTON_DOWN  },
+    { "LEFT",  brls::BUTTON_LEFT  },
+    { "BACK",  brls::BUTTON_BACK  },
+    { "GUIDE", brls::BUTTON_GUIDE },
+    { "START", brls::BUTTON_START },
+    { "RSB",   brls::BUTTON_RSB   },
+    { "Y",     brls::BUTTON_Y     },
+    { "B",     brls::BUTTON_B     },
+    { "A",     brls::BUTTON_A     },
+    { "X",     brls::BUTTON_X     },
+    { "RB",    brls::BUTTON_RB    },
+    { "RT",    brls::BUTTON_RT    },
+};
+
+/// Parse a ControllerButton from a config value: accepts named strings
+/// (e.g. "A", "LB", "RT") or numeric integer strings – case-insensitive.
+static int parseBrlsButton(const std::string& s)
+{
+    std::string upper(s.size(), '\0');
+    std::transform(s.begin(), s.end(), upper.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+    for (auto& bn : k_brlsBtnNames) {
+        if (upper == bn.name) return static_cast<int>(bn.btn);
+    }
+    try { return std::stoi(s); } catch (...) {}
+    return -1;
+}
+
+// ============================================================
 // Resolve the mgba_libretro shared library path
 // ============================================================
 std::string GameView::resolveCoreLibPath()
@@ -341,25 +381,28 @@ void GameView::initialize()
         cfg->SetDefault("rewind.mode",       CV(std::string("hold")));
 
         // ---- FPS display default -------------------------------------
-        cfg->SetDefault("display.showFps", CV(std::string("false")));
+        cfg->SetDefault("display.showFps",          CV(std::string("false")));
+        cfg->SetDefault("display.showFfOverlay",    CV(std::string("true")));
+        cfg->SetDefault("display.showRewindOverlay",CV(std::string("true")));
 
         // ---- Handle (gamepad) button mapping defaults ----------------
-        cfg->SetDefault("handle.a",           CV(static_cast<int>(brls::BUTTON_A)));
-        cfg->SetDefault("handle.b",           CV(static_cast<int>(brls::BUTTON_B)));
-        cfg->SetDefault("handle.x",           CV(static_cast<int>(brls::BUTTON_X)));
-        cfg->SetDefault("handle.y",           CV(static_cast<int>(brls::BUTTON_Y)));
-        cfg->SetDefault("handle.up",          CV(static_cast<int>(brls::BUTTON_UP)));
-        cfg->SetDefault("handle.down",        CV(static_cast<int>(brls::BUTTON_DOWN)));
-        cfg->SetDefault("handle.left",        CV(static_cast<int>(brls::BUTTON_LEFT)));
-        cfg->SetDefault("handle.right",       CV(static_cast<int>(brls::BUTTON_RIGHT)));
-        cfg->SetDefault("handle.start",       CV(static_cast<int>(brls::BUTTON_START)));
-        cfg->SetDefault("handle.select",      CV(static_cast<int>(brls::BUTTON_BACK)));
-        cfg->SetDefault("handle.l",           CV(static_cast<int>(brls::BUTTON_LB)));
-        cfg->SetDefault("handle.r",           CV(static_cast<int>(brls::BUTTON_RB)));
-        cfg->SetDefault("handle.l2",          CV(static_cast<int>(brls::BUTTON_LT)));
-        cfg->SetDefault("handle.r2",          CV(static_cast<int>(brls::BUTTON_RT)));
-        cfg->SetDefault("handle.fastforward", CV(static_cast<int>(brls::BUTTON_RT)));
-        cfg->SetDefault("handle.rewind",      CV(static_cast<int>(brls::BUTTON_LT)));
+        // Values use readable button names (e.g. "A", "LB", "RT").
+        cfg->SetDefault("handle.a",           CV(std::string("A")));
+        cfg->SetDefault("handle.b",           CV(std::string("B")));
+        cfg->SetDefault("handle.x",           CV(std::string("X")));
+        cfg->SetDefault("handle.y",           CV(std::string("Y")));
+        cfg->SetDefault("handle.up",          CV(std::string("UP")));
+        cfg->SetDefault("handle.down",        CV(std::string("DOWN")));
+        cfg->SetDefault("handle.left",        CV(std::string("LEFT")));
+        cfg->SetDefault("handle.right",       CV(std::string("RIGHT")));
+        cfg->SetDefault("handle.start",       CV(std::string("START")));
+        cfg->SetDefault("handle.select",      CV(std::string("BACK")));
+        cfg->SetDefault("handle.l",           CV(std::string("LB")));
+        cfg->SetDefault("handle.r",           CV(std::string("RB")));
+        cfg->SetDefault("handle.l2",          CV(std::string("LT")));
+        cfg->SetDefault("handle.r2",          CV(std::string("RT")));
+        cfg->SetDefault("handle.fastforward", CV(std::string("RT")));
+        cfg->SetDefault("handle.rewind",      CV(std::string("LT")));
 
         // ---- Keyboard mapping defaults (use readable key names) -----------
         cfg->SetDefault("keyboard.a",           CV(std::string("X")));
@@ -378,6 +421,7 @@ void GameView::initialize()
         cfg->SetDefault("keyboard.r2",          CV(std::string("R")));
         cfg->SetDefault("keyboard.fastforward", CV(std::string("TAB")));
         cfg->SetDefault("keyboard.rewind",      CV(std::string("GRAVE")));
+        cfg->SetDefault("keyboard.exit",        CV(std::string("ESC")));
 
         cfg->Save();
         m_core.setConfigManager(cfg);
@@ -425,12 +469,34 @@ void GameView::initialize()
         m_rewindMute       = getBool("rewind.mute", false);
         m_rewindToggleMode = (getString("rewind.mode", "hold") == "toggle");
 
-        m_showFps = getBool("display.showFps", false);
+        m_showFps           = getBool("display.showFps",          false);
+        m_showFfOverlay     = getBool("display.showFfOverlay",    true);
+        m_showRewindOverlay = getBool("display.showRewindOverlay",true);
 
-        // Fast-forward and rewind buttons from config
-        m_ffButton     = getInt("handle.fastforward", static_cast<int>(brls::BUTTON_RT));
-        m_rewindButton = getInt("handle.rewind",      static_cast<int>(brls::BUTTON_LT));
-    }
+        // Fast-forward and rewind buttons from config (named string or int)
+        {
+            auto readBtn = [&](const std::string& key, brls::ControllerButton def) -> int {
+                auto v = cfg->Get(key);
+                if (v) {
+                    if (auto i = v->AsInt())    return *i;
+                    if (auto s = v->AsString()) return parseBrlsButton(*s);
+                }
+                return static_cast<int>(def);
+            };
+            m_ffButton     = readBtn("handle.fastforward", brls::BUTTON_RT);
+            m_rewindButton = readBtn("handle.rewind",      brls::BUTTON_LT);
+        }
+
+        // Keyboard exit key from config
+        {
+            auto v = cfg->Get("keyboard.exit");
+            if (v) {
+                if (auto i = v->AsInt())    m_kbExitKey = *i;
+                else if (auto s = v->AsString()) m_kbExitKey = parseKbdScancode(*s);
+            }
+            if (m_kbExitKey < 0) m_kbExitKey = static_cast<int>(brls::BRLS_KBD_KEY_ESCAPE);
+        }
+    } // end if (gameRunner && gameRunner->settingConfig)
 
     // ---- Load configurable button maps ----------------------------------
     loadButtonMaps();
@@ -517,19 +583,18 @@ void GameView::initialize()
 
 void GameView::loadButtonMaps()
 {
-    // Helper: get int from config or fall back to default
-    auto getCfgInt = [](beiklive::ConfigManager* cfg,
-                        const std::string& key, int def) -> int {
-        if (!cfg) return def;
+    beiklive::ConfigManager* cfg = gameRunner ? gameRunner->settingConfig : nullptr;
+
+    // Helper: read a ControllerButton value from config (named string or int)
+    auto getCfgBtn = [&](const std::string& key, brls::ControllerButton def) -> int {
+        if (!cfg) return static_cast<int>(def);
         auto v = cfg->Get(key);
         if (v) {
-            if (auto i = v->AsInt())   return *i;
-            if (auto f = v->AsFloat()) return static_cast<int>(*f);
+            if (auto i = v->AsInt())    return *i;
+            if (auto s = v->AsString()) return parseBrlsButton(*s);
         }
-        return def;
+        return static_cast<int>(def);
     };
-
-    beiklive::ConfigManager* cfg = gameRunner ? gameRunner->settingConfig : nullptr;
 
     // Build handle (gamepad) button map from config
     m_buttonMap.clear();
@@ -541,7 +606,7 @@ void GameView::loadButtonMaps()
         for (auto& rn : k_retroNames) {
             if (rn.id == retroId) {
                 std::string cfgKey = std::string("handle.") + rn.name;
-                int brlsBtn = getCfgInt(cfg, cfgKey, static_cast<int>(def.brl));
+                int brlsBtn = getCfgBtn(cfgKey, def.brl);
                 if (brlsBtn >= 0 && brlsBtn < static_cast<int>(brls::_BUTTON_MAX)) {
                     m_buttonMap.push_back({brlsBtn, retroId});
                 }
@@ -598,6 +663,31 @@ void GameView::startGameThread()
         beiklive::AudioManager::instance().setMaxLatencyFrames(maxLatencyFrames);
     }
 
+    // ---- Start dedicated audio-feed thread ---------------------------------
+    // The audio thread pops PCM batches from m_audioQueue and pushes them to
+    // AudioManager.  This decouples the potentially-blocking pushSamples() call
+    // from the game loop so the emulation thread can maintain stable 60 fps.
+    m_audioRunning.store(true, std::memory_order_release);
+    m_audioThread = std::thread([this]() {
+        while (m_audioRunning.load(std::memory_order_acquire)) {
+            std::vector<int16_t> samples;
+            {
+                std::unique_lock<std::mutex> lk(m_audioQueueMutex);
+                m_audioQueueCV.wait_for(lk, std::chrono::milliseconds(10), [this] {
+                    return !m_audioQueue.empty() || !m_audioRunning.load(std::memory_order_relaxed);
+                });
+                if (!m_audioRunning.load(std::memory_order_relaxed)) break;
+                if (m_audioQueue.empty()) continue;
+                samples = std::move(m_audioQueue.front());
+                m_audioQueue.pop_front();
+            }
+            if (!samples.empty()) {
+                size_t frames = samples.size() / STEREO_CHANNELS;
+                beiklive::AudioManager::instance().pushSamples(samples.data(), frames);
+            }
+        }
+    });
+
     m_running.store(true, std::memory_order_release);
     m_gameThread = std::thread([this]() {
         double fps = m_core.fps();
@@ -618,6 +708,9 @@ void GameView::startGameThread()
         Clock::time_point fpsTimerStart = Clock::now();
         unsigned          fpsCounter    = 0;
 
+        // Max audio queue depth: discard oldest batch if queue grows too large
+        static constexpr size_t AUDIO_QUEUE_MAX = 8;
+
         while (m_running.load(std::memory_order_acquire)) {
             auto frameStart = Clock::now();
 
@@ -626,6 +719,10 @@ void GameView::startGameThread()
 
             bool ff      = m_fastForward.load(std::memory_order_relaxed);
             bool rew     = m_rewinding.load(std::memory_order_relaxed);
+
+            // framesThisIter tracks how many logical frames were rendered,
+            // used by the FPS counter below.
+            unsigned framesThisIter = 1u;
 
             if (rew && m_rewindEnabled) {
                 // ---- Rewind: restore from buffer then run to update video ----
@@ -648,8 +745,11 @@ void GameView::startGameThread()
                     std::vector<int16_t> dummy;
                     bool hasSamples = m_core.drainAudio(dummy) && !dummy.empty();
                     if (!m_rewindMute && hasSamples) {
-                        size_t frames = dummy.size() / STEREO_CHANNELS;
-                        beiklive::AudioManager::instance().pushSamples(dummy.data(), frames);
+                        std::lock_guard<std::mutex> lk(m_audioQueueMutex);
+                        while (m_audioQueue.size() >= AUDIO_QUEUE_MAX)
+                            m_audioQueue.pop_front();
+                        m_audioQueue.push_back(std::move(dummy));
+                        m_audioQueueCV.notify_one();
                     }
                 }
             } else {
@@ -658,9 +758,8 @@ void GameView::startGameThread()
                 // For fast-forward with multiplier = N, run N frames per normal
                 // frame-period so effective speed = N × fps (exact multiplier).
                 // For sub-1x, run 1 frame but stretch the sleep duration.
-                unsigned runsThisIter = 1u;
                 if (ff) {
-                    runsThisIter = (m_ffMultiplier >= 1.0f)
+                    framesThisIter = (m_ffMultiplier >= 1.0f)
                         ? static_cast<unsigned>(std::round(m_ffMultiplier))
                         : 1u;
                 }
@@ -679,11 +778,11 @@ void GameView::startGameThread()
                     }
                 }
 
-                for (unsigned i = 0; i < runsThisIter; ++i) {
+                for (unsigned i = 0; i < framesThisIter; ++i) {
                     m_core.run();
                 }
 
-                // Drain audio samples.
+                // Drain audio samples and forward to audio thread (non-blocking).
                 {
                     std::vector<int16_t> samples;
                     bool hasSamples = m_core.drainAudio(samples) && !samples.empty();
@@ -692,17 +791,18 @@ void GameView::startGameThread()
                     //   - no samples available
                     bool mute = (ff && m_ffMute) || !hasSamples;
                     if (!mute) {
-                        size_t frames = samples.size() / STEREO_CHANNELS;
-                        // pushSamples() blocks if ring is too full, which
-                        // naturally synchronises game speed to audio output rate.
-                        beiklive::AudioManager::instance().pushSamples(
-                            samples.data(), frames);
+                        std::lock_guard<std::mutex> lk(m_audioQueueMutex);
+                        while (m_audioQueue.size() >= AUDIO_QUEUE_MAX)
+                            m_audioQueue.pop_front();
+                        m_audioQueue.push_back(std::move(samples));
+                        m_audioQueueCV.notify_one();
                     }
                 }
             }
 
             // ---- FPS counter (game-thread side) -------------------------
-            ++fpsCounter;
+            // Count all rendered frames (including fast-forward multiplied frames).
+            fpsCounter += framesThisIter;
             auto now = Clock::now();
             double elapsed = std::chrono::duration<double>(now - fpsTimerStart).count();
             if (elapsed >= FPS_UPDATE_INTERVAL) {
@@ -776,10 +876,20 @@ void GameView::stopGameThread()
 void GameView::cleanup()
 {
     // Signal AudioManager to stop and wake any pushSamples() waiter BEFORE
-    // joining the game thread.  Without this, the game thread may be blocked
-    // inside pushSamples() waiting for ring space, causing a deadlock when
-    // stopGameThread() tries to join it.
+    // joining the audio feed thread.
     beiklive::AudioManager::instance().deinit();
+
+    // Stop the audio feed thread
+    m_audioRunning.store(false, std::memory_order_release);
+    m_audioQueueCV.notify_all();
+    if (m_audioThread.joinable()) {
+        m_audioThread.join();
+    }
+    // Clear the audio queue
+    {
+        std::lock_guard<std::mutex> lk(m_audioQueueMutex);
+        m_audioQueue.clear();
+    }
 
     // Now safe to stop and join the emulation thread
     stopGameThread();
@@ -983,6 +1093,16 @@ void GameView::pollInput()
                     static_cast<brls::BrlsKeyboardScancode>(mapping.scancode));
             m_core.setButtonState(mapping.retroId, pressed);
         }
+
+        // ---- Keyboard exit key -------------------------------------------
+        // Check exit key (default: ESC) in keyboard mode and request exit.
+#ifndef __SWITCH__
+        if (m_kbExitKey >= 0 && im4 && !m_requestExit.load(std::memory_order_relaxed)) {
+            if (im4->getKeyboardKeyState(static_cast<brls::BrlsKeyboardScancode>(m_kbExitKey))) {
+                m_requestExit.store(true, std::memory_order_relaxed);
+            }
+        }
+#endif
     } else {
         // Gamepad mode: use ControllerState buttons
         for (const auto& mapping : m_buttonMap) {
@@ -1005,6 +1125,16 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
     if (!m_initialized && !m_coreFailed) {
         initialize();
     }
+
+    // ---- Keyboard exit: game thread sets this flag; handle on main thread -----
+#ifndef __SWITCH__
+    if (m_requestExit.exchange(false, std::memory_order_relaxed)) {
+        bklog::info("GameView: exit requested via keyboard");
+        stopGameThread();
+        brls::Application::popActivity();
+        return;
+    }
+#endif
 
     if (!m_initialized) {
         // Draw error/placeholder rectangle
@@ -1104,8 +1234,26 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
         nvgText(vg, fx + 6.0f, fy + fh * 0.5f, fpsBuf, nullptr);
     }
 
-    // ---- Rewind status overlay ---------------------------------------
-    if (m_rewindEnabled && m_rewinding.load(std::memory_order_relaxed)) {
+    // ---- Fast-forward overlay (configurable) -------------------------
+    if (m_showFfOverlay && m_fastForward.load(std::memory_order_relaxed)) {
+        const char* ffText = ">> FF";
+        float fw = 70.0f, fh = 22.0f;
+        float fx = x + width - fw - 4.0f;
+        float fy = y + 4.0f;
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, fx, fy, fw, fh, 4.0f);
+        nvgFillColor(vg, nvgRGBA(0, 0, 0, 160));
+        nvgFill(vg);
+
+        nvgFontSize(vg, 14.0f);
+        nvgFontFace(vg, "regular");
+        nvgFillColor(vg, nvgRGBA(100, 220, 255, 230));
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgText(vg, fx + fw * 0.5f, fy + fh * 0.5f, ffText, nullptr);
+    }
+
+    // ---- Rewind status overlay (configurable) ------------------------
+    if (m_showRewindOverlay && m_rewindEnabled && m_rewinding.load(std::memory_order_relaxed)) {
         const char* rewText = "<<< REWIND";
         float rw = 110.0f, rh = 22.0f;
         float rx = x + width * 0.5f - rw * 0.5f;
