@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <vector>
 #include <mutex>
+#include <condition_variable>
 #include <atomic>
 #include <thread>
 
@@ -41,6 +42,8 @@ public:
     bool init(int sampleRate = 32768, int channels = 2);
 
     /// Push @a frames frames of interleaved stereo 16-bit PCM into the buffer.
+    /// Blocks if the ring buffer fill level exceeds the configured threshold,
+    /// which keeps game/audio in sync and prevents latency buildup.
     /// Thread-safe – safe to call from the libretro audio callback.
     void pushSamples(const int16_t* data, size_t frames);
 
@@ -48,6 +51,11 @@ public:
     void deinit();
 
     bool isRunning() const { return m_running.load(); }
+
+    /// Set maximum allowed ring-buffer fill (in stereo frames) before
+    /// pushSamples() starts blocking.  Call after init().
+    /// Default: RING_CAPACITY / 2.
+    void setMaxLatencyFrames(size_t frames) { m_maxLatencySamples = frames * static_cast<size_t>(m_channels); }
 
 private:
     AudioManager()  = default;
@@ -57,13 +65,16 @@ private:
     AudioManager& operator=(const AudioManager&) = delete;
 
     // ---- Ring buffer ------------------------------------------------
-    static constexpr size_t RING_CAPACITY = 32768 * 2; // ~1 second stereo
+    // Reduced from 32768*2 to 8192 to keep total latency below ~250ms
+    static constexpr size_t RING_CAPACITY = 8192;
 
-    std::mutex           m_mutex;
-    std::vector<int16_t> m_ring;   ///< Circular PCM sample storage
-    size_t               m_writePos = 0;
-    size_t               m_readPos  = 0;
-    size_t               m_available = 0;
+    std::mutex               m_mutex;
+    std::condition_variable  m_spaceCV;   ///< Notified when ring drains (space freed)
+    std::vector<int16_t>     m_ring;      ///< Circular PCM sample storage
+    size_t                   m_writePos   = 0;
+    size_t                   m_readPos    = 0;
+    size_t                   m_available  = 0;
+    size_t                   m_maxLatencySamples = RING_CAPACITY / 2;
 
     void ringWrite(const int16_t* data, size_t count);
     size_t ringRead(int16_t* out, size_t maxCount);

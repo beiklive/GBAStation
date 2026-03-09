@@ -66,6 +66,8 @@ size_t AudioManager::ringRead(int16_t* out, size_t maxCount)
         m_readPos = (m_readPos + 1) % RING_CAPACITY;
     }
     m_available -= n;
+    if (n > 0)
+        m_spaceCV.notify_all();
     return n;
 }
 
@@ -76,8 +78,14 @@ size_t AudioManager::ringRead(int16_t* out, size_t maxCount)
 void AudioManager::pushSamples(const int16_t* data, size_t frames)
 {
     if (!m_running) return;
-    std::lock_guard<std::mutex> lk(m_mutex);
-    ringWrite(data, frames * static_cast<size_t>(m_channels));
+    const size_t count = frames * static_cast<size_t>(m_channels);
+    std::unique_lock<std::mutex> lk(m_mutex);
+    // Block if ring is too full to keep game/audio in sync and avoid latency buildup.
+    m_spaceCV.wait(lk, [&] {
+        return m_available + count <= m_maxLatencySamples || !m_running;
+    });
+    if (!m_running) return;
+    ringWrite(data, count);
 }
 
 // ============================================================
@@ -88,7 +96,8 @@ void AudioManager::pushSamples(const int16_t* data, size_t frames)
 #ifdef __SWITCH__
 
 static constexpr int    SWITCH_OUT_RATE   = 48000;
-static constexpr size_t SWITCH_FRAMES     = 1024;
+// Reduced from 1024 to 512 for lower hardware latency (~21ms per buffer)
+static constexpr size_t SWITCH_FRAMES     = 512;
 static constexpr size_t SWITCH_BYTES      = SWITCH_FRAMES * 2 * sizeof(int16_t);
 
 struct SwitchAudioState {
@@ -169,6 +178,7 @@ void AudioManager::deinit()
 {
     if (!m_running) return;
     m_running = false;
+    m_spaceCV.notify_all(); // unblock any pushSamples() waiter
     if (m_thread.joinable()) m_thread.join();
     auto* sw = static_cast<SwitchAudioState*>(m_platformState);
     audoutStopAudioOut();
@@ -185,7 +195,8 @@ void AudioManager::deinit()
 // ============================================================
 #elif defined(BK_AUDIO_ALSA)
 
-static constexpr size_t ALSA_PERIOD_FRAMES = 512;
+// Reduced from 512 to 256 for lower output latency
+static constexpr size_t ALSA_PERIOD_FRAMES = 256;
 
 struct AlsaState {
     snd_pcm_t* handle = nullptr;
@@ -260,6 +271,7 @@ void AudioManager::deinit()
 {
     if (!m_running) return;
     m_running = false;
+    m_spaceCV.notify_all(); // unblock any pushSamples() waiter
     if (m_thread.joinable()) m_thread.join();
     auto* st = static_cast<AlsaState*>(m_platformState);
     if (st->handle) {
@@ -278,8 +290,9 @@ void AudioManager::deinit()
 // ============================================================
 #elif defined(BK_AUDIO_WINMM)
 
-static constexpr int    WINMM_NUM_BUFS   = 4;
-static constexpr size_t WINMM_BUF_FRAMES = 1024;
+// Reduced from 4×1024 to 3×512 for lower output latency (~47ms vs ~125ms)
+static constexpr int    WINMM_NUM_BUFS   = 3;
+static constexpr size_t WINMM_BUF_FRAMES = 512;
 static constexpr size_t WINMM_BUF_BYTES  = WINMM_BUF_FRAMES * 2 * sizeof(int16_t);
 
 struct WinMMState {
@@ -379,6 +392,7 @@ void AudioManager::deinit()
     if (!m_running) return;
     auto* st = static_cast<WinMMState*>(m_platformState);
     m_running = false;
+    m_spaceCV.notify_all(); // unblock any pushSamples() waiter
     if (st && st->event) SetEvent(st->event); // unblock thread if waiting
     if (m_thread.joinable()) m_thread.join();
 
@@ -492,6 +506,7 @@ void AudioManager::deinit()
 {
     if (!m_running) return;
     m_running = false;
+    m_spaceCV.notify_all(); // unblock any pushSamples() waiter
     // No thread to join for CoreAudio backend
     auto* st = static_cast<CoreAudioState*>(m_platformState);
     if (st->audioUnit) {
@@ -537,6 +552,7 @@ void AudioManager::deinit()
 {
     if (!m_running) return;
     m_running = false;
+    m_spaceCV.notify_all(); // unblock any pushSamples() waiter
     if (m_thread.joinable()) m_thread.join();
     m_ring.clear();
 }
