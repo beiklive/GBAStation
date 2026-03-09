@@ -73,7 +73,7 @@ void StartPageView::Init()
         {
     
     
-            registerAction("beiklive/hints/APP"_i18n, brls::ControllerButton::BUTTON_LT, [this](brls::View*) {
+            registerAction("beiklive/hints/APP"_i18n, brls::ControllerButton::BUTTON_RT, [this](brls::View*) {
                 bklog::debug("Switch to APP View");
                 return true;
             });
