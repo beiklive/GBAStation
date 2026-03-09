@@ -41,9 +41,8 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/borealis/library)
 set(BUILD_LIBRETRO ON  CACHE BOOL "将 mGBA 构建为独立的 libretro 核心"  FORCE)
 set(BUILD_QT OFF  CACHE BOOL "禁用 mGBA 的 Qt 前端" FORCE)
 set(BUILD_SDL OFF CACHE BOOL "禁用 mGBA 的 SDL 前端" FORCE)
-
-if(WIN32)
-
+if(PLATFORM_SWITCH)
+    set(CMAKE_TOOLCHAIN_FILE ${CMAKE_CURRENT_SOURCE_DIR}/mgba/src/platform/switch/CMakeToolchain.txt)
 else()
 
 endif()
