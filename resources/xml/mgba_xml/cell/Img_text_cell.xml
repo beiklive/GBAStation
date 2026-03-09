@@ -1,0 +1,30 @@
+<brls:Box width="auto"
+    height="auto"
+    id="img_text_cell_root"
+    focusable="true"
+    paddingTop="10"
+    paddingBottom="10">
+
+        <brls:Rectangle
+            id="brls/sidebar/item_accent"
+            width="@style/brls/sidebar/item_accent_rect_width"
+            height="auto"
+            visibility="invisible"
+            color="@theme/brls/sidebar/active_item"
+            marginTop="@style/brls/sidebar/item_accent_margin_top_bottom"
+            marginBottom="@style/brls/sidebar/item_accent_margin_top_bottom"
+            marginLeft="@style/brls/sidebar/item_accent_margin_sides"
+            marginRight="@style/brls/sidebar/item_accent_margin_sides" />
+
+    <brls:Image id="image"
+        width="44px"
+        height="44px"
+        marginLeft="@style/brls/sidebar/item_accent_margin_sides"
+        marginRight="@style/brls/sidebar/item_accent_margin_sides"/>
+
+    <brls:Label id="title"
+        width="auto"
+        height="auto"
+        grow="1.0" />
+
+</brls:Box>

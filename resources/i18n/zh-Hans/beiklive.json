@@ -1,0 +1,23 @@
+{
+    "title": "mGBA-NX",
+    "tabs": {
+        "select":  "主页",
+        "settings": "设置",
+        "about": "关于"
+    },
+    "select": {
+        "file": "从文件列表选择",
+        "recent": "最近游戏",
+        "favorites": "收藏列表"
+    },
+    "hints":{
+        "APP" : "游戏库",
+        "FILE" : "文件列表",
+        "start" : "启动",
+        "set" : "设置",
+        "UP" : "上级目录",
+        "exit" : "退出",
+        "back" : "返回"
+
+    }
+}
