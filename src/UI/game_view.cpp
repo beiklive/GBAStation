@@ -663,42 +663,11 @@ void GameView::startGameThread()
         beiklive::AudioManager::instance().setMaxLatencyFrames(maxLatencyFrames);
     }
 
-    // ---- Start dedicated audio-feed thread ---------------------------------
-    // The audio thread pops PCM batches from m_audioQueue and pushes them to
-    // AudioManager.  This decouples the potentially-blocking pushSamples() call
-    // from the game loop so the emulation thread can maintain stable 60 fps.
-    m_audioRunning.store(true, std::memory_order_release);
-    m_audioThread = std::thread([this]() {
-#ifdef __SWITCH__
-        // Pin audio-feed thread to Core 2 (shared with the AudioManager output
-        // thread).  Both audio threads are mostly blocked on I/O, so sharing
-        // Core 2 is fine and leaves Core 1 free for game emulation.
-        svcSetThreadCoreMask(CUR_THREAD_HANDLE, 2, 1ULL << 2);
-#endif
-        while (m_audioRunning.load(std::memory_order_acquire)) {
-            std::vector<int16_t> samples;
-            {
-                std::unique_lock<std::mutex> lk(m_audioQueueMutex);
-                m_audioQueueCV.wait_for(lk, std::chrono::milliseconds(10), [this] {
-                    return !m_audioQueue.empty() || !m_audioRunning.load(std::memory_order_relaxed);
-                });
-                if (!m_audioRunning.load(std::memory_order_relaxed)) break;
-                if (m_audioQueue.empty()) continue;
-                samples = std::move(m_audioQueue.front());
-                m_audioQueue.pop_front();
-            }
-            if (!samples.empty()) {
-                size_t frames = samples.size() / STEREO_CHANNELS;
-                beiklive::AudioManager::instance().pushSamples(samples.data(), frames);
-            }
-        }
-    });
-
     m_running.store(true, std::memory_order_release);
     m_gameThread = std::thread([this]() {
 #ifdef __SWITCH__
         // Pin game-emulation thread to Core 1 (dedicated core).
-        // Core 0 = UI/main thread.  Core 1 = game emulation.  Core 2 = audio.
+        // Core 0 = UI/main thread.  Core 1 = game emulation (audio inline).
         svcSetThreadCoreMask(CUR_THREAD_HANDLE, 1, 1ULL << 1);
 #endif
         double fps = m_core.fps();
@@ -718,9 +687,6 @@ void GameView::startGameThread()
         // Per-thread FPS counter
         Clock::time_point fpsTimerStart = Clock::now();
         unsigned          fpsCounter    = 0;
-
-        // Max audio queue depth: discard oldest batch if queue grows too large
-        static constexpr size_t AUDIO_QUEUE_MAX = 8;
 
         // Accumulated ideal frame-end time for drift-free 60fps timing.
         // Advancing by frameDuration each iteration prevents timing errors from
@@ -761,11 +727,8 @@ void GameView::startGameThread()
                     std::vector<int16_t> dummy;
                     bool hasSamples = m_core.drainAudio(dummy) && !dummy.empty();
                     if (!m_rewindMute && hasSamples) {
-                        std::lock_guard<std::mutex> lk(m_audioQueueMutex);
-                        while (m_audioQueue.size() >= AUDIO_QUEUE_MAX)
-                            m_audioQueue.pop_front();
-                        m_audioQueue.push_back(std::move(dummy));
-                        m_audioQueueCV.notify_one();
+                        size_t frames = dummy.size() / STEREO_CHANNELS;
+                        beiklive::AudioManager::instance().pushSamples(dummy.data(), frames);
                     }
                 }
             } else {
@@ -797,7 +760,7 @@ void GameView::startGameThread()
                     m_core.run();
                 }
 
-                // Drain audio samples and forward to audio thread (non-blocking).
+                // Drain audio samples and push directly to AudioManager.
                 {
                     std::vector<int16_t> samples;
                     bool hasSamples = m_core.drainAudio(samples) && !samples.empty();
@@ -806,11 +769,8 @@ void GameView::startGameThread()
                     //   - no samples available
                     bool mute = (ff && m_ffMute) || !hasSamples;
                     if (!mute) {
-                        std::lock_guard<std::mutex> lk(m_audioQueueMutex);
-                        while (m_audioQueue.size() >= AUDIO_QUEUE_MAX)
-                            m_audioQueue.pop_front();
-                        m_audioQueue.push_back(std::move(samples));
-                        m_audioQueueCV.notify_one();
+                        size_t frames = samples.size() / STEREO_CHANNELS;
+                        beiklive::AudioManager::instance().pushSamples(samples.data(), frames);
                     }
                 }
             }
@@ -904,22 +864,10 @@ void GameView::stopGameThread()
 void GameView::cleanup()
 {
     // Signal AudioManager to stop and wake any pushSamples() waiter BEFORE
-    // joining the audio feed thread.
+    // joining the game thread.
     beiklive::AudioManager::instance().deinit();
 
-    // Stop the audio feed thread
-    m_audioRunning.store(false, std::memory_order_release);
-    m_audioQueueCV.notify_all();
-    if (m_audioThread.joinable()) {
-        m_audioThread.join();
-    }
-    // Clear the audio queue
-    {
-        std::lock_guard<std::mutex> lk(m_audioQueueMutex);
-        m_audioQueue.clear();
-    }
-
-    // Now safe to stop and join the emulation thread
+    // Stop and join the emulation thread (audio is called inline)
     stopGameThread();
 
     // Clear rewind buffer

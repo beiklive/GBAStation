@@ -5,7 +5,6 @@
 
 #include <atomic>
 #include <chrono>
-#include <condition_variable>
 #include <deque>
 #include <mutex>
 #include <thread>
@@ -53,15 +52,6 @@ class GameView : public brls::Box
     std::thread       m_gameThread;
     std::atomic<bool> m_running{false};
     std::atomic<bool> m_fastForward{false};
-
-    // ---- Dedicated audio-feed thread --------------------------------
-    // Decouples audio pushSamples() blocking from the game loop so the
-    // game thread can maintain stable 60 fps regardless of audio output jitter.
-    std::thread                       m_audioThread;
-    std::atomic<bool>                 m_audioRunning{false};
-    std::mutex                        m_audioQueueMutex;
-    std::condition_variable           m_audioQueueCV;
-    std::deque<std::vector<int16_t>>  m_audioQueue;  ///< Pending PCM batches
 
     // ---- Keyboard exit ----------------------------------------------
     std::atomic<bool> m_requestExit{false}; ///< Set by game thread; consumed by draw()
