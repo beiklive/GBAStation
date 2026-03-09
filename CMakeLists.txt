@@ -42,6 +42,11 @@ endif ()
 
 add_subdirectory(third_party)
 
+# 为 mGBA 打开 POSIX/GNU 扩展，确保 strdup 有声明
+if (TARGET mgba AND NOT WIN32)
+    target_compile_definitions(mgba PRIVATE _POSIX_C_SOURCE=200809L _GNU_SOURCE)
+endif ()
+
 find_package(Threads REQUIRED)
 list(APPEND APP_PLATFORM_LIB ${CMAKE_THREAD_LIBS_INIT})
 
