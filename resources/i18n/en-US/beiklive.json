@@ -18,7 +18,8 @@
         "UP" : "Parent Directory",
         "exit" : "Exit",
         "exit_game" : "Exit Game",
-        "back" : "Back"
+        "back" : "Back",
+        "close_on_a" : "Press A to close"
 
     }
 }

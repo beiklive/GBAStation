@@ -377,10 +377,51 @@ bool LibretroLoader::s_environmentCallback(unsigned cmd, void* data)
         }
         case RETRO_ENVIRONMENT_SHUTDOWN:
             return true;
+        // ---- Core options version: report 0 to use legacy SET_VARIABLES ----
+        case RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION: {
+            unsigned* ver = static_cast<unsigned*>(data);
+            if (ver) *ver = 0;
+            return true;
+        }
+        // ---- Core declares its variables with defaults ----------------------
+        case RETRO_ENVIRONMENT_SET_VARIABLES: {
+            const retro_variable* vars = static_cast<const retro_variable*>(data);
+            if (!vars || !s_current->m_configManager) return false;
+            ConfigManager* cfg = s_current->m_configManager;
+            for (const retro_variable* v = vars; v->key; ++v) {
+                if (!v->value) continue;
+                // Format: "Description text; default_val|opt2|opt3..."
+                // The first option after "; " is the default value.
+                std::string valStr(v->value);
+                size_t semiPos = valStr.find("; ");
+                if (semiPos == std::string::npos) continue;
+                std::string optsPart = valStr.substr(semiPos + 2);
+                size_t pipePos = optsPart.find('|');
+                std::string defaultVal = (pipePos != std::string::npos)
+                    ? optsPart.substr(0, pipePos) : optsPart;
+                if (defaultVal.empty()) continue;
+                std::string cfgKey = std::string("core.") + v->key;
+                cfg->SetDefault(cfgKey, defaultVal);
+            }
+            cfg->Save();
+            return true;
+        }
+        // ---- Core queries a variable value ---------------------------------
         case RETRO_ENVIRONMENT_GET_VARIABLE: {
             retro_variable* var = static_cast<retro_variable*>(data);
-            if (var) var->value = nullptr;
-            return false;
+            if (!var || !var->key) return false;
+            var->value = nullptr;
+            if (!s_current->m_configManager) return false;
+            std::string cfgKey = std::string("core.") + var->key;
+            auto entry = s_current->m_configManager->Get(cfgKey);
+            if (!entry) return false;
+            auto str = entry->AsString();
+            if (!str) return false;
+            // Store in persistent map so the c_str() pointer remains valid.
+            auto& stored = s_current->m_coreVarStorage[var->key];
+            stored = *str;
+            var->value = stored.c_str();
+            return true;
         }
         case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE: {
             bool* b = static_cast<bool*>(data);
@@ -388,7 +429,6 @@ bool LibretroLoader::s_environmentCallback(unsigned cmd, void* data)
             return true;
         }
         case RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL:
-        case RETRO_ENVIRONMENT_SET_VARIABLES:
         case RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME:
         case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO:
         case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS:

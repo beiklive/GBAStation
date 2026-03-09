@@ -129,24 +129,37 @@ void AudioManager::audioThreadFunc()
     auto* sw = static_cast<SwitchAudioState*>(m_platformState);
     while (m_running) {
         int16_t* dst = sw->bufData[sw->curBuf];
+
+        // Calculate the exact number of core-rate input frames needed to produce
+        // SWITCH_FRAMES output frames at SWITCH_OUT_RATE via resampling.
+        // inputFrames = round(SWITCH_FRAMES * coreSampleRate / 48000)
+        // This avoids over-draining the ring buffer (which caused audio glitches
+        // in release builds where emulation ran faster than expected).
+        double ratio = static_cast<double>(m_sampleRate) / SWITCH_OUT_RATE;
+        size_t inputFrames = static_cast<size_t>(SWITCH_FRAMES * ratio + 0.5);
+        if (inputFrames == 0) inputFrames = 1;
+        if (inputFrames > SWITCH_FRAMES) inputFrames = SWITCH_FRAMES;
+
+        int16_t tmp[SWITCH_FRAMES * 2];
         {
             std::lock_guard<std::mutex> lk(m_mutex);
-            size_t got = ringRead(dst, SWITCH_FRAMES * 2);
-            if (got < SWITCH_FRAMES * 2)
-                memset(dst + got, 0, (SWITCH_FRAMES * 2 - got) * sizeof(int16_t));
+            size_t got = ringRead(tmp, inputFrames * 2);
+            if (got < inputFrames * 2)
+                memset(tmp + got, 0, (inputFrames * 2 - got) * sizeof(int16_t));
         }
-        // Simple nearest-neighbor resample: core rate → 48 kHz
+
         if (m_sampleRate != SWITCH_OUT_RATE) {
-            int16_t tmp[SWITCH_FRAMES * 2];
-            memcpy(tmp, dst, sizeof(tmp));
-            double ratio = static_cast<double>(m_sampleRate) / SWITCH_OUT_RATE;
+            // Nearest-neighbor resample: inputFrames → SWITCH_FRAMES output
             for (size_t i = 0; i < SWITCH_FRAMES; ++i) {
                 size_t s = static_cast<size_t>(i * ratio);
-                if (s >= SWITCH_FRAMES) s = SWITCH_FRAMES - 1;
+                if (s >= inputFrames) s = inputFrames - 1;
                 dst[i * 2]     = tmp[s * 2];
                 dst[i * 2 + 1] = tmp[s * 2 + 1];
             }
+        } else {
+            memcpy(dst, tmp, SWITCH_FRAMES * 2 * sizeof(int16_t));
         }
+
         audoutPlayBuffer(&sw->outBuf[sw->curBuf], &sw->released);
         sw->curBuf ^= 1;
     }

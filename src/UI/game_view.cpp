@@ -38,10 +38,14 @@ static constexpr size_t STEREO_CHANNELS    = 2;     ///< Samples per audio frame
 // Selects the correct function based on the active GL backend.
 // ============================================================
 static int nvgImageFromGLTexture(NVGcontext* vg, GLuint tex,
-                                  int w, int h)
+                                  int w, int h,
+                                  beiklive::FilterMode filter = beiklive::FilterMode::Nearest)
 {
-    // NVG_IMAGE_NODELETE ensures NanoVG won't delete our texture
+    // NVG_IMAGE_NODELETE ensures NanoVG won't delete our texture.
+    // NVG_IMAGE_NEAREST selects nearest-neighbor sampling in NanoVG.
     int flags = NVG_IMAGE_NODELETE;
+    if (filter == beiklive::FilterMode::Nearest)
+        flags |= NVG_IMAGE_NEAREST;
 #if defined(USE_GLES2)
     return nvglCreateImageFromHandleGLES2(vg, tex, w, h, flags);
 #elif defined(USE_GLES3)
@@ -115,7 +119,13 @@ GameView::GameView()
     setHideHighlight(true);
 
     // Swallow all game buttons so Borealis doesn't process them as navigation.
-    beiklive::swallow(this, brls::BUTTON_A);
+    // BUTTON_A: swallow during gameplay; pop activity if core failed to load.
+    registerAction("", brls::BUTTON_A, [this](brls::View*) {
+        if (m_coreFailed) {
+            brls::Application::popActivity();
+        }
+        return true;
+    }, true);
     beiklive::swallow(this, brls::BUTTON_B);
     beiklive::swallow(this, brls::BUTTON_Y);
     beiklive::swallow(this, brls::BUTTON_UP);
@@ -164,6 +174,29 @@ void GameView::initialize()
     if (gameRunner && gameRunner->settingConfig)
         m_display.load(*gameRunner->settingConfig);
 
+    // Register mgba core variable defaults and wire up SettingManager.
+    // SetDefault() only writes the value when the key is not already present,
+    // so user-saved values in the config file take precedence.
+    if (gameRunner && gameRunner->settingConfig) {
+        ConfigManager* cfg = gameRunner->settingConfig;
+        using CV = beiklive::ConfigValue;
+        cfg->SetDefault("core.mgba_gb_model",                  CV(std::string("Autodetect")));
+        cfg->SetDefault("core.mgba_use_bios",                   CV(std::string("ON")));
+        cfg->SetDefault("core.mgba_skip_bios",                  CV(std::string("OFF")));
+        cfg->SetDefault("core.mgba_gb_colors",                  CV(std::string("Grayscale")));
+        cfg->SetDefault("core.mgba_gb_colors_preset",           CV(std::string("0")));
+        cfg->SetDefault("core.mgba_sgb_borders",                CV(std::string("ON")));
+        cfg->SetDefault("core.mgba_audio_low_pass_filter",      CV(std::string("disabled")));
+        cfg->SetDefault("core.mgba_audio_low_pass_range",       CV(std::string("60")));
+        cfg->SetDefault("core.mgba_allow_opposing_directions",  CV(std::string("no")));
+        cfg->SetDefault("core.mgba_solar_sensor_level",         CV(std::string("0")));
+        cfg->SetDefault("core.mgba_force_gbp",                  CV(std::string("OFF")));
+        cfg->SetDefault("core.mgba_idle_optimization",          CV(std::string("Remove Known")));
+        cfg->SetDefault("core.mgba_frameskip",                  CV(std::string("0")));
+        cfg->Save();
+        m_core.setConfigManager(cfg);
+    }
+
     // ---- Load libretro core -------------------------------------------
     std::string corePath = resolveCoreLibPath();
     bklog::info("Loading libretro core: {}", corePath);
@@ -207,8 +240,12 @@ void GameView::initialize()
     // ---- Create GL texture for video output ----------------------------
     glGenTextures(1, &m_texture);
     glBindTexture(GL_TEXTURE_2D, m_texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    // Apply filter mode from display config (Nearest or Linear)
+    m_activeFilter     = m_display.filterMode;
+    GLenum glFilter    = (m_activeFilter == beiklive::FilterMode::Nearest)
+                         ? GL_NEAREST : GL_LINEAR;
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, glFilter);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, glFilter);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
@@ -253,27 +290,35 @@ void GameView::startGameThread()
 
         while (m_running.load(std::memory_order_acquire)) {
             auto frameStart = Clock::now();
+            bool ff = m_fastForward.load(std::memory_order_relaxed);
 
             // Poll controller input and forward to the core
             pollInput();
 
-            // Run one emulation frame
-            m_core.run();
+            // Run one frame normally, or FAST_FORWARD_MULT frames when ZR held
+            unsigned runsThisIter = ff ? FAST_FORWARD_MULT : 1u;
+            for (unsigned i = 0; i < runsThisIter; ++i) {
+                m_core.run();
+            }
 
-            // Drain audio samples and push to AudioManager
+            // Drain audio samples.
+            // During fast-forward the buffer would overflow, so samples are
+            // discarded to keep the ring buffer empty.
             {
                 std::vector<int16_t> samples;
-                if (m_core.drainAudio(samples) && !samples.empty()) {
+                if (m_core.drainAudio(samples) && !samples.empty() && !ff) {
                     size_t frames = samples.size() / STEREO_CHANNELS;
                     beiklive::AudioManager::instance().pushSamples(
                         samples.data(), frames);
                 }
             }
 
-            // Frame-rate control: sleep for the remainder of the frame budget
-            auto elapsed = Clock::now() - frameStart;
-            if (elapsed < frameDuration) {
-                std::this_thread::sleep_for(frameDuration - elapsed);
+            // Frame-rate control: sleep only during normal-speed playback
+            if (!ff) {
+                auto elapsed = Clock::now() - frameStart;
+                if (elapsed < frameDuration) {
+                    std::this_thread::sleep_for(frameDuration - elapsed);
+                }
             }
         }
     });
@@ -354,7 +399,8 @@ void GameView::uploadFrame(NVGcontext* vg,
         }
         m_nvgImage = nvgImageFromGLTexture(vg, m_texture,
                                            static_cast<int>(m_texWidth),
-                                           static_cast<int>(m_texHeight));
+                                           static_cast<int>(m_texHeight),
+                                           m_activeFilter);
     } else {
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
                         static_cast<GLsizei>(frame.width),
@@ -373,6 +419,10 @@ void GameView::uploadFrame(NVGcontext* vg,
 void GameView::pollInput()
 {
     const brls::ControllerState& state = brls::Application::getControllerState();
+
+    // ZR (BUTTON_RT) → fast-forward: run multiple frames per iteration
+    if (static_cast<int>(brls::BUTTON_RT) < static_cast<int>(brls::_BUTTON_MAX))
+        m_fastForward.store(state.buttons[brls::BUTTON_RT], std::memory_order_relaxed);
 
     for (const auto& mapping : k_buttonMap) {
         bool pressed = false;
@@ -405,8 +455,14 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
         nvgFontFace(vg, "regular");
         nvgFillColor(vg, nvgRGBA(200, 60, 60, 255));
         nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-        nvgText(vg, x + width * 0.5f, y + height * 0.5f,
+        nvgText(vg, x + width * 0.5f, y + height * 0.5f - 15.0f,
                 "Failed to load emulator core", nullptr);
+
+        // Hint: press A to dismiss the screen
+        nvgFontSize(vg, 16.0f);
+        nvgFillColor(vg, nvgRGBA(200, 200, 200, 200));
+        nvgText(vg, x + width * 0.5f, y + height * 0.5f + 15.0f,
+                "beiklive/hints/close_on_a"_i18n.c_str(), nullptr);
         return;
     }
 
@@ -419,11 +475,29 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
         }
     }
 
+    // ---- Handle run-time filter mode changes -------------------------
+    // If the display config filter changes (e.g. user updates settings),
+    // update the GL texture parameters and recreate the NVG image.
+    if (m_display.filterMode != m_activeFilter && m_texture) {
+        m_activeFilter  = m_display.filterMode;
+        GLenum glFilter = (m_activeFilter == beiklive::FilterMode::Nearest)
+                          ? GL_NEAREST : GL_LINEAR;
+        glBindTexture(GL_TEXTURE_2D, m_texture);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, glFilter);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, glFilter);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        if (m_nvgImage >= 0) {
+            nvgDeleteImage(vg, m_nvgImage);
+            m_nvgImage = -1;
+        }
+    }
+
     // ---- Create NVG image handle on first valid frame ----------------
     if (m_nvgImage < 0 && m_texWidth > 0 && m_texHeight > 0) {
         m_nvgImage = nvgImageFromGLTexture(vg, m_texture,
                                            static_cast<int>(m_texWidth),
-                                           static_cast<int>(m_texHeight));
+                                           static_cast<int>(m_texHeight),
+                                           m_activeFilter);
     }
 
     // ---- Render the game texture using NanoVG ------------------------
