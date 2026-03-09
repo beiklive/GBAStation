@@ -2,8 +2,8 @@
 # ============================================================
 # macOS 编译脚本
 # 编译后产物：
-#   build_macos/New_mGBA                —— 主程序（普通可执行文件）
-#   build_macos/New_mGBA.app            —— macOS Bundle（需 -DBUNDLE_MACOS_APP=ON）
+#   build_macos/BKStation                —— 主程序（普通可执行文件）
+#   build_macos/BKStation.app            —— macOS Bundle（需 -DBUNDLE_MACOS_APP=ON）
 #   build_macos/mgba_libretro.dylib     —— libretro 核心
 #
 # 依赖：Xcode Command Line Tools / CMake（brew install cmake）

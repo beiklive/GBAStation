@@ -2,7 +2,7 @@
 # ============================================================
 # Nintendo Switch 编译脚本（DevkitPro / libnx）
 # 编译后产物：
-#   build_switch/New_mGBA.nro           —— Switch 可执行文件（NRO 格式）
+#   build_switch/BKStation.nro           —— Switch 可执行文件（NRO 格式）
 #   build_switch/mgba_libretro.so       —— libretro 核心
 #
 # 依赖：
@@ -43,10 +43,10 @@ echo "[3/4] 编译主程序 ELF（并行线程：${JOBS}）..."
 cmake --build . -j "${JOBS}"
 
 echo "[4/4] 打包为 NRO 文件..."
-cmake --build . --target New_mGBA.nro
+cmake --build . --target BKStation.nro
 
 cd ..
 echo ""
 echo "[完成] 产物目录：${BUILD_DIR}/"
-echo "  主程序：${BUILD_DIR}/New_mGBA.nro"
+echo "  主程序：${BUILD_DIR}/BKStation.nro"
 echo "  核心库：${BUILD_DIR}/mgba_libretro.so"

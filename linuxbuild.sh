@@ -2,7 +2,7 @@
 # ============================================================
 # Linux 编译脚本
 # 编译后产物：
-#   build_linux/New_mGBA                —— 主程序
+#   build_linux/BKStation                —— 主程序
 #   build_linux/mgba_libretro.so        —— libretro 核心
 #
 # 依赖（Ubuntu / Debian 示例）：
