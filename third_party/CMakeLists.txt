@@ -66,3 +66,15 @@ set(BUILD_CINEMA   OFF CACHE BOOL "" FORCE)
 set(BUILD_DOCGEN   OFF CACHE BOOL "" FORCE)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/mgba)
+
+# ── Switch: 补充 VFS 文件 ──────────────────────────────────────────────
+# mGBA 的 CMakeLists.txt 只在 WIN32 / UNIX 条件下把 vfs-fd.c / vfs-dirent.c
+# 加入 CORE_VFS_SRC，Switch（嵌入式目标）两个条件都不满足，导致
+# VFileOpenFD / VDirOpen 符号缺失。devkitA64/newlib 提供 open() / opendir()，
+# 直接补充源文件即可。
+if (PLATFORM_SWITCH AND TARGET mgba_libretro)
+    target_sources(mgba_libretro PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/mgba/src/util/vfs/vfs-fd.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/mgba/src/util/vfs/vfs-dirent.c
+    )
+endif ()
