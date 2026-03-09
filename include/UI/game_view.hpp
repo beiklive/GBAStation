@@ -6,7 +6,8 @@
 
 
 #include "common.hpp"
-#include "GameRuntime.hpp"
+#include "Game/GameRuntime.hpp"
+
 
 class GameView : public brls::Box
 {
