@@ -42,7 +42,11 @@ set(BUILD_LIBRETRO ON  CACHE BOOL "将 mGBA 构建为独立的 libretro 核心" 
 set(BUILD_QT OFF  CACHE BOOL "禁用 mGBA 的 Qt 前端" FORCE)
 set(BUILD_SDL OFF CACHE BOOL "禁用 mGBA 的 SDL 前端" FORCE)
 
+if(WIN32)
 
+else()
+
+endif()
 
 # 禁止 mGBA 构建文档、性能分析及各类测试相关目标
 # set(BUILD_PERF     OFF CACHE BOOL "" FORCE)
