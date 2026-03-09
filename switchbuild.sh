@@ -48,5 +48,3 @@ cmake --build . --target BKStation.nro
 cd ..
 echo ""
 echo "[完成] 产物目录：${BUILD_DIR}/"
-echo "  主程序：${BUILD_DIR}/BKStation.nro"
-echo "  核心库：${BUILD_DIR}/mgba_libretro.so"
