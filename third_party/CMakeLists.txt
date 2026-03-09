@@ -43,6 +43,14 @@ set(LIBRETRO ON  CACHE BOOL "将 mGBA 构建为独立的 libretro 核心"  FORCE
 set(BUILD_QT OFF  CACHE BOOL "禁用 mGBA 的 Qt 前端" FORCE)
 set(BUILD_SDL OFF CACHE BOOL "禁用 mGBA 的 SDL 前端" FORCE)
 
+# mGBA 内部通过 `DEFINED SWITCH`（CMake 变量）检测 Switch 平台；
+# borealis 工具链设置的是 PLATFORM_SWITCH，不会触发 mGBA 的逻辑。
+# 在此手动对齐，使 mGBA 能正确进入嵌入式平台分支：
+#   set(USE_SQLITE3 OFF) / set(IS_EMBEDDED ON) 等。
+if (PLATFORM_SWITCH)
+    set(SWITCH TRUE CACHE BOOL "Nintendo Switch platform (for mGBA detection)" FORCE)
+endif ()
+
 # 禁止 mGBA 构建文档、性能分析及各类测试相关目标
 set(BUILD_PERF     OFF CACHE BOOL "" FORCE)
 set(BUILD_TEST     OFF CACHE BOOL "" FORCE)
