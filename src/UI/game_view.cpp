@@ -669,6 +669,12 @@ void GameView::startGameThread()
     // from the game loop so the emulation thread can maintain stable 60 fps.
     m_audioRunning.store(true, std::memory_order_release);
     m_audioThread = std::thread([this]() {
+#ifdef __SWITCH__
+        // Pin audio-feed thread to Core 2 (shared with the AudioManager output
+        // thread).  Both audio threads are mostly blocked on I/O, so sharing
+        // Core 2 is fine and leaves Core 1 free for game emulation.
+        svcSetThreadCoreMask(CUR_THREAD_HANDLE, 2, 1ULL << 2);
+#endif
         while (m_audioRunning.load(std::memory_order_acquire)) {
             std::vector<int16_t> samples;
             {
@@ -690,6 +696,11 @@ void GameView::startGameThread()
 
     m_running.store(true, std::memory_order_release);
     m_gameThread = std::thread([this]() {
+#ifdef __SWITCH__
+        // Pin game-emulation thread to Core 1 (dedicated core).
+        // Core 0 = UI/main thread.  Core 1 = game emulation.  Core 2 = audio.
+        svcSetThreadCoreMask(CUR_THREAD_HANDLE, 1, 1ULL << 1);
+#endif
         double fps = m_core.fps();
         if (fps <= 0.0 || fps > MAX_REASONABLE_FPS) fps = 60.0;
 
@@ -711,9 +722,14 @@ void GameView::startGameThread()
         // Max audio queue depth: discard oldest batch if queue grows too large
         static constexpr size_t AUDIO_QUEUE_MAX = 8;
 
-        while (m_running.load(std::memory_order_acquire)) {
-            auto frameStart = Clock::now();
+        // Accumulated ideal frame-end time for drift-free 60fps timing.
+        // Advancing by frameDuration each iteration prevents timing errors from
+        // compounding: one slow frame does not shrink the next frame's budget.
+        // Initialised to Clock::now() so the very first frame gets a full
+        // frameDuration budget starting from the current wall-clock instant.
+        auto nextFrameTarget = Clock::now();
 
+        while (m_running.load(std::memory_order_acquire)) {
             // Poll controller input and forward to the core
             pollInput();
 
@@ -802,8 +818,8 @@ void GameView::startGameThread()
             // ---- FPS counter (game-thread side) -------------------------
             // Count all rendered frames (including fast-forward multiplied frames).
             fpsCounter += framesThisIter;
-            auto now = Clock::now();
-            double elapsed = std::chrono::duration<double>(now - fpsTimerStart).count();
+            auto nowPost = Clock::now(); // captured once, reused for sleep below
+            double elapsed = std::chrono::duration<double>(nowPost - fpsTimerStart).count();
             if (elapsed >= FPS_UPDATE_INTERVAL) {
                 float newFps = static_cast<float>(static_cast<double>(fpsCounter) / elapsed);
                 {
@@ -812,40 +828,53 @@ void GameView::startGameThread()
                     m_fpsFrameCount = fpsCounter;
                 }
                 fpsCounter   = 0;
-                fpsTimerStart = now;
+                fpsTimerStart = nowPost;
             }
 
-            // ---- Frame-rate control -------------------------------------
-            // Target: complete one 'frameDuration' period per iteration.
+            // ---- Frame-rate control (accumulated ideal-time approach) ----
+            // nextFrameTarget advances by exactly one frame period each
+            // iteration, independent of actual execution time.  This prevents
+            // timing errors from accumulating across frames (e.g. one slow
+            // frame no longer shrinks the next frame's sleep budget).
             //
             // fast-forward (multiplier >= 1x):
-            //   runsThisIter frames were run; sleep for the same frameDuration.
-            //   Effective speed = runsThisIter / frameDuration = multiplier × fps. ✓
+            //   Run N frames per period; sleep for same frameDuration.
+            //   Effective speed = N / frameDuration = multiplier × fps. ✓
             //
             // fast-forward (sub-1x):
-            //   Stretch to 1/(fps*multiplier) per frame.
+            //   Stretch period to 1/(fps*multiplier) per frame.
             //
             // normal / rewind:
             //   Sleep for frameDuration.
             //
-            // Hybrid sleep: coarse sleep for (target − spinGuard), then
-            // spin-wait for the remainder to compensate for OS timer
-            // granularity (up to ~15 ms on Windows without timeBeginPeriod).
+            // Hybrid sleep: coarse sleep for (remaining − spinGuard), then
+            // spin-wait for precise deadline.  Anti-drift guard resets the
+            // accumulated target to now whenever a frame runs over budget,
+            // giving the next frame a fresh full-period budget instead of
+            // scheduling it in the past (which would cause a catch-up burst).
             {
                 Duration targetDur = frameDuration;
                 if (ff && m_ffMultiplier < 1.0f) {
                     targetDur = Duration(1.0 / (fps * static_cast<double>(m_ffMultiplier)));
                 }
 
-                auto sleepTarget = frameStart + targetDur;
-                auto nowPre = Clock::now();
-                if (nowPre < sleepTarget) {
+                // Advance accumulated target by one frame.
+                nextFrameTarget += targetDur;
+
+                // Anti-drift: if the frame ran over budget, sync nextFrameTarget
+                // to now so the next frame gets a fresh full budget instead of
+                // trying to schedule itself in the past.
+                if (nextFrameTarget < nowPost) {
+                    nextFrameTarget = nowPost;
+                }
+
+                if (nowPost < nextFrameTarget) {
                     // Coarse sleep (leave spinGuard for spin-wait)
-                    auto coarseDur = (sleepTarget - nowPre) - spinGuard;
+                    auto coarseDur = (nextFrameTarget - nowPost) - spinGuard;
                     if (coarseDur.count() > 0)
                         std::this_thread::sleep_for(coarseDur);
                     // Spin-wait for precise deadline
-                    while (Clock::now() < sleepTarget) { /* busy spin */ }
+                    while (Clock::now() < nextFrameTarget) { /* busy spin */ }
                 }
             }
         }

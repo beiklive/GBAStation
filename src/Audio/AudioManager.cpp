@@ -135,6 +135,12 @@ bool AudioManager::init(int sampleRate, int channels)
 
 void AudioManager::audioThreadFunc()
 {
+#ifdef __SWITCH__
+    // Pin AudioManager output thread to Core 2.
+    // Core 0 = UI, Core 1 = game emulation, Core 2 = audio (this + feed thread).
+    // Both audio threads are mostly blocked on hardware I/O so sharing is fine.
+    svcSetThreadCoreMask(CUR_THREAD_HANDLE, 2, 1ULL << 2);
+#endif
     auto* sw = static_cast<SwitchAudioState*>(m_platformState);
     while (m_running) {
         int16_t* dst = sw->bufData[sw->curBuf];
