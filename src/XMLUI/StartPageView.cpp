@@ -55,7 +55,6 @@ void StartPageView::Init()
             app_page->addGame({ "/mGBA/roms/gba/MuChangWuYu.gba", "牧场物语", "" });
             app_page->addGame({ "/mGBA/roms/gba/Mother 3.gba", "地球冒险3", BK_RES("img/thumb/214.png") });
             app_page->addGame({ "/mGBA/roms/gba/MuChangWuYu.gba", "牧场物语", "" });
-    #ifdef __SWITCH__
             app_page->onGameSelected = [](const GameEntry& e)
             {
                 auto* frame = new brls::AppletFrame(new GameView(e.path));
@@ -64,12 +63,6 @@ void StartPageView::Init()
                 frame->setBackground(brls::ViewBackground::NONE);
                 brls::Application::pushActivity(new brls::Activity(frame));
             };
-    #else
-            app_page->onGameSelected = [this](const GameEntry& e)
-            {
-                bklog::debug("Game Selected: {} {} {}", e.path, e.title, e.cover);
-            };
-    #endif
             addView(app_page);
             registerAction("beiklive/hints/FILE"_i18n, brls::ControllerButton::BUTTON_LT, [this](brls::View*) {
                 bklog::debug("Switch to File List View");
