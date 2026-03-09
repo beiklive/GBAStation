@@ -47,6 +47,18 @@ if (TARGET mgba AND NOT WIN32)
     target_compile_definitions(mgba PRIVATE _POSIX_C_SOURCE=200809L _GNU_SOURCE)
 endif ()
 
+# Switch (devkitA64/newlib) 交叉编译时，CMake feature-detection 无法运行目标
+# 平台二进制，导致 HAVE_LOCALE / HAVE_STRTOF_L 未被检测到。
+# 但 devkitA64 的 newlib 实际提供了 locale_t / strtof_l / localtime_r，
+# 若不补充这些宏，formatting.h 会重复定义 locale_t / strtof_l，产生类型冲突。
+if (TARGET mgba AND PLATFORM_SWITCH)
+    target_compile_definitions(mgba PRIVATE
+        HAVE_LOCALE
+        HAVE_STRTOF_L
+        HAVE_LOCALTIME_R
+    )
+endif ()
+
 find_package(Threads REQUIRED)
 list(APPEND APP_PLATFORM_LIB ${CMAKE_THREAD_LIBS_INIT})
 
