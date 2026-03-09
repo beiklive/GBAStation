@@ -87,7 +87,7 @@ list(APPEND APP_PLATFORM_LIB ${CMAKE_THREAD_LIBS_INIT})
 # mGBA 以 PUBLIC 方式导出头文件路径，链接后会自动传播
 # 至所有依赖它的目标，无需手动添加 include 路径。
 message(STATUS "Building mGBA from source (third_party/mgba)")
-list(APPEND APP_PLATFORM_LIB mgba)
+# list(APPEND APP_PLATFORM_LIB mgba)
 # mGBA 相关=============
 
 include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/include)
