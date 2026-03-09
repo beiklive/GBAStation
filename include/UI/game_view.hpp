@@ -3,6 +3,9 @@
 #include <borealis.hpp>
 #include <glad/glad.h>
 
+#include <atomic>
+#include <thread>
+
 #include "common.hpp"
 #include "Game/LibretroLoader.hpp"
 #include "Game/DisplayConfig.hpp"
@@ -40,9 +43,19 @@ class GameView : public brls::Box
     // ---- Display configuration (scaling / filtering) ----------------
     beiklive::DisplayConfig m_display;
 
+    // ---- Independent game thread ------------------------------------
+    std::thread       m_gameThread;
+    std::atomic<bool> m_running{false};
+
     // ---- Helper methods ---------------------------------------------
     void initialize();
     void cleanup();
+
+    /// Start the independent emulation thread (called from initialize()).
+    void startGameThread();
+
+    /// Stop and join the emulation thread (called from cleanup()).
+    void stopGameThread();
 
     /// Resolve path to mgba_libretro shared library (.dll/.so/.dylib).
     static std::string resolveCoreLibPath();

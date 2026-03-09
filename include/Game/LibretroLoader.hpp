@@ -52,10 +52,9 @@ public:
     // ---- Video frame ------------------------------------------------
 
     struct VideoFrame {
-        std::vector<uint32_t> pixels;  ///< XRGB8888 pixels
+        std::vector<uint32_t> pixels;  ///< RGBA8888 pixels (converted from core output)
         unsigned width  = 0;
         unsigned height = 0;
-        size_t   pitch  = 0;          ///< bytes per row
     };
 
     /// Returns a snapshot of the most-recently delivered video frame.
@@ -106,6 +105,7 @@ private:
 
     // ---- State ------------------------------------------------------
     retro_system_av_info m_avInfo{};
+    retro_pixel_format   m_pixelFormat = RETRO_PIXEL_FORMAT_0RGB1555;
     bool m_coreReady  = false;
     bool m_gameLoaded = false;
 

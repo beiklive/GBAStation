@@ -15,6 +15,17 @@
 #  include <dlfcn.h>
 #endif
 
+// ---- Pixel format helpers -------------------------------------------
+
+/// Construct an RGBA8888 pixel (as little-endian uint32: bytes [R,G,B,A]).
+static inline uint32_t makeRGBA8888(uint8_t r, uint8_t g, uint8_t b)
+{
+    return static_cast<uint32_t>(r)
+         | (static_cast<uint32_t>(g) << 8)
+         | (static_cast<uint32_t>(b) << 16)
+         | 0xFF000000u;
+}
+
 namespace beiklive {
 
 // ---- Static instance pointer ----------------------------------------
@@ -342,9 +353,12 @@ bool LibretroLoader::s_environmentCallback(unsigned cmd, void* data)
         }
         case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT: {
             const retro_pixel_format* fmt = static_cast<const retro_pixel_format*>(data);
-            // Accept XRGB8888 and RGB565; reject others
-            return (*fmt == RETRO_PIXEL_FORMAT_XRGB8888 ||
-                    *fmt == RETRO_PIXEL_FORMAT_RGB565);
+            if (*fmt == RETRO_PIXEL_FORMAT_XRGB8888 ||
+                *fmt == RETRO_PIXEL_FORMAT_RGB565) {
+                s_current->m_pixelFormat = *fmt;
+                return true;
+            }
+            return false;
         }
         case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY:
         case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY:
@@ -405,14 +419,42 @@ void LibretroLoader::s_videoRefreshCallback(const void* data,
     auto& vf       = s_current->m_videoFrame;
     vf.width       = width;
     vf.height      = height;
-    vf.pitch       = pitch;
     vf.pixels.resize(width * height);
 
     const uint8_t* src = static_cast<const uint8_t*>(data);
-    for (unsigned row = 0; row < height; ++row) {
-        const uint32_t* srcRow = reinterpret_cast<const uint32_t*>(src + row * pitch);
-        uint32_t*       dstRow = vf.pixels.data() + row * width;
-        std::copy(srcRow, srcRow + width, dstRow);
+
+    if (s_current->m_pixelFormat == RETRO_PIXEL_FORMAT_XRGB8888) {
+        // Source bytes per row: pitch (may be wider than width*4)
+        // Convert XRGB8888 [B,G,R,X] → RGBA8888 [R,G,B,0xFF]
+        for (unsigned row = 0; row < height; ++row) {
+            const uint32_t* srcRow = reinterpret_cast<const uint32_t*>(src + row * pitch);
+            uint32_t*       dstRow = vf.pixels.data() + row * width;
+            for (unsigned col = 0; col < width; ++col) {
+                uint32_t px = srcRow[col]; // little-endian: byte0=B, byte1=G, byte2=R, byte3=X
+                dstRow[col] = makeRGBA8888(
+                    static_cast<uint8_t>((px >> 16) & 0xFF),
+                    static_cast<uint8_t>((px >>  8) & 0xFF),
+                    static_cast<uint8_t>( px        & 0xFF));
+            }
+        }
+    } else {
+        // RGB565: 16-bit pixels — expand to RGBA8888 using bit-shift approximation
+        for (unsigned row = 0; row < height; ++row) {
+            const uint16_t* srcRow = reinterpret_cast<const uint16_t*>(src + row * pitch);
+            uint32_t*       dstRow = vf.pixels.data() + row * width;
+            for (unsigned col = 0; col < width; ++col) {
+                uint16_t px = srcRow[col];
+                uint8_t r5 = (px >> 11) & 0x1F;
+                uint8_t g6 = (px >>  5) & 0x3F;
+                uint8_t b5 =  px        & 0x1F;
+                // Expand 5-bit → 8-bit: (v << 3) | (v >> 2)
+                // Expand 6-bit → 8-bit: (v << 2) | (v >> 4)
+                dstRow[col] = makeRGBA8888(
+                    static_cast<uint8_t>((r5 << 3) | (r5 >> 2)),
+                    static_cast<uint8_t>((g6 << 2) | (g6 >> 4)),
+                    static_cast<uint8_t>((b5 << 3) | (b5 >> 2)));
+            }
+        }
     }
 }
 
