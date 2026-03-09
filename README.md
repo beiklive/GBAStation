@@ -1,116 +1,263 @@
 # BeikLiveStation
-基于 libretro 核心 + borealis UI框架的模拟器
 
-
-你的任务是：
-1. 参考项目根目录的CMakeLists.txt, 编写 extern 目录下的CMakeLists.txt, 用于构建 extern 目录下的borealis库。
-2. extern 目录下的CMakeLists.txt 需要对 mGBA库 进行libretro编译
-3. 修改根目录的CMakeLists.txt, 将 extern 目录下的CMakeLists.txt 添加到构建过程中
-4. 以上所有构建都要兼容 Windows 、 APPLE平台 、Linux平台、Switch平台, 并且需要使用 CMake 进行构建管理。可以参考各仓库的官方文档和示例来实现跨平台构建。
+基于 [libretro](https://www.libretro.com/) 核心与 [borealis](https://github.com/xfangfang/borealis) UI 框架构建的跨平台模拟器前端，当前内置 mGBA（Game Boy Advance）libretro 核心，支持 Linux、macOS、Windows 及 Nintendo Switch 平台。
 
 ---
 
-## 任务汇报 – libretro 加载、游戏渲染与音频管理器实现
+## 目录
 
-### 概述
+- [功能概览](#功能概览)
+- [环境依赖](#环境依赖)
+- [构建说明](#构建说明)
+- [运行方式](#运行方式)
+- [配置参考](#配置参考)
+- [项目结构](#项目结构)
 
-本次实现了将 `mgba_libretro` 核心与 borealis/NanoVG 前端对接所需的三个核心模块，并同步完成了构建系统的配套调整。
+---
 
-### 新增文件
+## 功能概览
 
-| 文件 | 说明 |
+| 功能 | 说明 |
 |------|------|
-| `include/Game/LibretroLoader.hpp` | libretro 动态库加载器接口 |
-| `src/Game/LibretroLoader.cpp`     | 跨平台动态加载实现 |
-| `include/Audio/AudioManager.hpp`  | 通用音频管理器接口 |
-| `src/Audio/AudioManager.cpp`      | 多平台音频后端实现 |
-
-### 修改文件
-
-| 文件 | 变更内容 |
-|------|----------|
-| `include/UI/game_view.hpp` | 移除 `#ifdef __SWITCH__` 限制，新增 GL 纹理 / NVG 图像成员 |
-| `src/UI/game_view.cpp`     | 完整实现：加载核心、运行帧、渲染画面、轮询输入、推送音频 |
-| `src/XMLUI/StartPageView.cpp` | 移除 `#ifdef __SWITCH__` 限制，所有平台均可启动游戏 |
-| `CMakeLists.txt`           | 新增音频库链接、mGBA 头文件路径、libretro 后处理拷贝步骤 |
-
----
-
-### 模块详解
-
-#### 1. LibretroLoader（`include/Game/LibretroLoader.hpp` / `src/Game/LibretroLoader.cpp`）
-
-- 使用 `dlopen`/`dlsym`（Linux/macOS/Switch）或 `LoadLibrary`/`GetProcAddress`（Windows）动态加载 `mgba_libretro.so/.dylib/.dll`
-- 解析所有必要的 libretro API 函数指针（`retro_init`、`retro_run`、`retro_load_game` 等）
-- 注册 5 个静态 C 回调：
-  - `video_refresh`：将 XRGB8888 视频帧存入受互斥锁保护的缓冲区
-  - `audio_sample_batch`：将立体声 int16_t 样本写入音频环形缓冲区
-  - `audio_sample`：单样本包装，同上
-  - `input_poll`：空实现（主线程已在 `retro_run()` 前完成状态更新）
-  - `input_state`：从按键状态数组查询 RETRO_DEVICE_JOYPAD 按钮状态
-- `environment_callback` 处理核心所需的最低限度环境命令（`GET_CAN_DUPE`、`SET_PIXEL_FORMAT`、`GET_SYSTEM_DIRECTORY` 等）
-
-#### 2. AudioManager（`include/Audio/AudioManager.hpp` / `src/Audio/AudioManager.cpp`）
-
-单例 + 线程安全环形缓冲区（容量 ≈ 1 秒 32768 Hz 立体声）。
-
-| 平台 | 音频后端 |
-|------|---------|
-| Linux   | ALSA (`libasound`) — 阻塞式 `snd_pcm_writei` |
-| Windows | WinMM (`waveOut`) — 双缓冲 WAVEHDR 回调 |
-| macOS   | CoreAudio (`AudioUnit`) — 拉取渲染回调 |
-| Switch  | libnx `audout` — 双缓冲 + 最近邻重采样至 48 kHz |
-| 其他    | 静默 fallback（样本丢弃） |
-
-`pushSamples(data, frames)` 可从任意线程安全调用（libretro 音频回调）。
-
-#### 3. GameView（`include/UI/game_view.hpp` / `src/UI/game_view.cpp`）
-
-- **跨平台**：移除 `#ifdef __SWITCH__` 限制，在 Windows / macOS / Linux / Switch 上均可运行
-- **延迟初始化**：第一次 `draw()` 时在有效 GL 上下文中完成初始化
-- **渲染流程（每帧）**：
-  1. `pollInput()` — 将 borealis `ControllerState` 映射为 retro joypad 按键
-  2. `m_core.run()` — 执行 `retro_run()` 推进一帧模拟
-  3. 排空音频样本 → `AudioManager::pushSamples()`
-  4. `uploadFrame()` — 将 XRGB8888 像素上传至 GL 纹理（`GL_BGRA` 格式）
-  5. `nvglCreateImageFromHandleGL3/GL2/GLES2/GLES3` — 将 GL 纹理包装为 NanoVG 图像句柄
-  6. `nvgImagePattern` + `nvgFillPaint` — 通过 NanoVG 绘制游戏画面
-- **DisplayConfig** 支持 `Fit / Fill / Original / IntegerScale / Custom` 五种缩放模式
-- **按键映射**（桌面键盘 GLFW 模式）：通过 borealis `ControllerState` 统一处理
-
-#### 4. CMakeLists.txt 变更
-
-- 暴露 `${CMAKE_CURRENT_SOURCE_DIR}` 为 include 路径，使 `LibretroLoader.hpp` 可引用 libretro.h
-- 平台自动检测音频后端并链接对应系统库
-- 新增 POST_BUILD 步骤：将 `mgba_libretro.so/.dll/.dylib` 拷贝至可执行文件同目录，供运行时相对路径加载
+| **libretro 核心加载** | 运行时动态加载（Linux/macOS/Windows），Switch 平台静态链接 |
+| **游戏画面渲染** | OpenGL 纹理上传 + NanoVG 绘制，支持 XRGB8888 格式 |
+| **多种画面缩放模式** | Fit / Fill / Original / IntegerScale / Custom |
+| **纹理过滤模式** | Nearest（像素风格）/ Linear（平滑插值） |
+| **跨平台音频输出** | ALSA（Linux）/ WinMM（Windows）/ CoreAudio（macOS）/ audout（Switch） |
+| **手柄输入** | 通过 borealis ControllerState 统一抽象，支持自定义按键映射 |
+| **键盘输入** | 自动检测键盘模式，支持字符串名称或数值方式配置 |
+| **快进（Fast-Forward）** | 可配置倍率、静音、按住或切换模式 |
+| **倒带（Rewind）** | 可选功能，支持配置缓冲帧数、倒带步长及静音 |
+| **FPS 显示** | 可在画面上叠加实时帧率 |
+| **状态叠加层** | 快进和倒带时显示状态提示 |
+| **存档序列化接口** | `LibretroLoader` 已暴露 `serialize` / `unserialize` 接口 |
+| **后处理着色器链** | OpenGL 着色器通道（ShaderChain）框架，可串联多道后处理效果 |
+| **配置文件管理** | 基于 ConfigManager，所有参数持久化存储，首次运行自动生成默认配置 |
 
 ---
 
-### 构建方式
+## 环境依赖
+
+### 通用依赖
+
+| 依赖项 | 版本要求 | 说明 |
+|--------|----------|------|
+| CMake | ≥ 3.10 | 构建系统 |
+| C++17 | — | 编译器需支持 C++17 标准 |
+| OpenGL | — | 渲染后端 |
+
+### Linux
 
 ```bash
-# Linux
-./linuxbuild.sh
-
-# 产物目录 build_linux/
-#   BKStation           —— 主程序
-#   mgba_libretro.so    —— libretro 核心（自动拷贝至同目录）
+sudo apt install \
+    cmake build-essential \
+    libgl1-mesa-dev libglu1-mesa-dev \
+    libx11-dev libxrandr-dev libxinerama-dev \
+    libxcursor-dev libxi-dev libdbus-1-dev \
+    libasound2-dev
 ```
 
-```bat
-rem Windows (MSYS2 MinGW64)
-windowsbuild.bat
+### macOS
 
-rem 产物目录 build_windows\
-rem   BKStation.exe
-rem   mgba_libretro.dll
+- Xcode Command Line Tools
+- CMake（推荐通过 [Homebrew](https://brew.sh/) 安装）：`brew install cmake`
+- CoreAudio 由系统框架提供，无需额外安装
+
+### Windows
+
+- [MSYS2](https://www.msys2.org/) 与 MinGW64 工具链
+- Ninja 构建工具：`pacman -S mingw-w64-x86_64-ninja`
+- CMake：`pacman -S mingw-w64-x86_64-cmake`
+- WinMM 由系统提供，无需额外安装
+
+### Nintendo Switch
+
+- [devkitPro](https://devkitpro.org/) 工具链（devkitA64）
+- libnx（由 devkitPro 提供）
+- 参照 `switchbuild.sh` 配置交叉编译环境
+
+---
+
+## 构建说明
+
+所有平台均使用 CMake 构建，提供各平台专用脚本简化操作。
+
+### Linux
+
+```bash
+./linuxbuild.sh
+```
+
+产物目录：`build_linux/`
+
+```
+build_linux/
+├── BKStation            # 主程序
+└── mgba_libretro.so     # libretro 核心（构建后自动复制至此）
+```
+
+### macOS
+
+```bash
+# 普通可执行文件
+./macosbuild.sh
+
+# 打包为 .app Bundle
+./macosbuild.sh --bundle
+```
+
+产物目录：`build_macos/`
+
+```
+build_macos/
+├── BKStation            # 主程序
+└── mgba_libretro.dylib  # libretro 核心
+```
+
+### Windows（MSYS2 MinGW64 终端）
+
+```bat
+windowsbuild.bat
+```
+
+产物目录：`build_windows\`
+
+```
+build_windows\
+├── BKStation.exe        # 主程序
+└── mgba_libretro.dll    # libretro 核心
+```
+
+### Nintendo Switch
+
+```bash
+./switchbuild.sh
+```
+
+产物：`build_switch/BKStation.nro`
+
+---
+
+## 运行方式
+
+将 ROM 文件（`.gba`）放置于任意目录，启动主程序后通过界面文件浏览器选择 ROM 即可开始游戏。
+
+> **注意**：`mgba_libretro.so/.dll/.dylib` 必须与主程序位于同一目录（构建脚本已自动处理）。
+
+---
+
+## 配置参考
+
+配置文件在首次运行时自动生成，路径位于程序工作目录。所有配置项均以 `key = value` 格式存储，支持热重载。
+
+### 画面显示（`display.*`）
+
+| 配置键 | 默认值 | 可选值 | 说明 |
+|--------|--------|--------|------|
+| `display.mode` | `original` | `fit` / `fill` / `original` / `integer` / `custom` | 画面缩放模式 |
+| `display.filter` | `nearest` | `nearest` / `linear` | 纹理过滤模式 |
+| `display.integer_scale_mult` | `0` | 整数 ≥ 0 | 整数倍率（`0` = 自动最大整数倍） |
+| `display.custom_scale` | `1.0` | 浮点数 | Custom 模式下的缩放倍数 |
+| `display.x_offset` | `0.0` | 浮点数（像素） | 相对居中位置的水平偏移 |
+| `display.y_offset` | `0.0` | 浮点数（像素） | 相对居中位置的垂直偏移 |
+| `display.showFps` | `false` | `true` / `false` | 是否显示 FPS 叠加层 |
+| `display.showFfOverlay` | `true` | `true` / `false` | 是否显示快进状态提示 |
+| `display.showRewindOverlay` | `true` | `true` / `false` | 是否显示倒带状态提示 |
+
+### 快进（`fastforward.*`）
+
+| 配置键 | 默认值 | 说明 |
+|--------|--------|------|
+| `fastforward.multiplier` | `4.0` | 快进速度倍率（相对正常速度） |
+| `fastforward.mute` | `true` | 快进期间是否静音 |
+| `fastforward.mode` | `hold` | `hold`（按住触发）/ `toggle`（切换触发） |
+
+### 倒带（`rewind.*`）
+
+| 配置键 | 默认值 | 说明 |
+|--------|--------|------|
+| `rewind.enabled` | `false` | 是否启用倒带功能 |
+| `rewind.bufferSize` | `3600` | 保存的最大历史帧数 |
+| `rewind.step` | `2` | 每次倒带回退的帧数 |
+| `rewind.mute` | `false` | 倒带期间是否静音 |
+| `rewind.mode` | `hold` | `hold`（按住触发）/ `toggle`（切换触发） |
+
+### 手柄按键映射（`handle.*`）
+
+| 配置键 | 默认值 | 说明 |
+|--------|--------|------|
+| `handle.fastforward` | `RT` | 触发快进的手柄按键 |
+| `handle.rewind` | `LT` | 触发倒带的手柄按键 |
+| `handle.<retro_button>` | — | 将手柄按键映射至 libretro 按键（如 `handle.a = A`） |
+
+支持的按键名称：`A`、`B`、`X`、`Y`、`LB`、`RB`、`LT`、`RT`、`START`、`BACK`、`UP`、`DOWN`、`LEFT`、`RIGHT` 等。
+
+### 键盘按键映射（`keyboard.*`）
+
+| 配置键 | 说明 |
+|--------|------|
+| `keyboard.<retro_button>` | 将键盘按键映射至 libretro 按键（如 `keyboard.a = X`） |
+| `keyboard.exit` | 游戏内退出键（如 `keyboard.exit = ESC`） |
+
+支持字符串名称（`A`–`Z`、`0`–`9`、`ENTER`、`ESC`、`TAB`、`SPACE`、`UP`、`DOWN`、`LEFT`、`RIGHT`、`F1`–`F12` 等）或数值形式。
+
+**默认键盘映射：**
+
+| 键盘键 | 模拟器按键 |
+|--------|-----------|
+| `X` | A |
+| `Z` | B |
+| `A` | Y |
+| `S` | Select |
+| `Enter` | Start |
+| `Q` | L |
+| `W` | R |
+| `E` | L2 |
+| `R` | R2 |
+| 方向键 | 十字键 |
+
+---
+
+## 项目结构
+
+```
+BeikLiveStation/
+├── main.cpp                    # 程序入口
+├── CMakeLists.txt              # 主构建配置
+├── linuxbuild.sh               # Linux 构建脚本
+├── macosbuild.sh               # macOS 构建脚本
+├── windowsbuild.bat            # Windows 构建脚本
+├── switchbuild.sh              # Nintendo Switch 构建脚本
+├── include/
+│   ├── Audio/
+│   │   └── AudioManager.hpp   # 跨平台音频管理器接口
+│   ├── Game/
+│   │   ├── LibretroLoader.hpp # libretro 动态库加载器接口
+│   │   ├── DisplayConfig.hpp  # 画面缩放与过滤配置
+│   │   └── ShaderChain.hpp    # 后处理着色器链接口
+│   ├── UI/
+│   │   └── game_view.hpp      # 游戏视图（渲染 + 输入 + 游戏线程）
+│   └── Utils/
+│       ├── ConfigManager.hpp  # 配置文件读写管理
+│       ├── fileUtils.hpp      # 文件路径工具
+│       └── strUtils.hpp       # 字符串工具
+├── src/
+│   ├── Audio/
+│   │   └── AudioManager.cpp   # 多平台音频后端实现
+│   ├── Game/
+│   │   └── LibretroLoader.cpp # 跨平台动态加载实现
+│   ├── UI/
+│   │   └── game_view.cpp      # 游戏主循环、渲染与输入处理
+│   └── XMLUI/                 # borealis XML UI 页面实现
+├── resources/                 # 资源文件（字体、图标、XML 布局等）
+└── third_party/
+    ├── borealis/              # UI 框架
+    └── mgba/                  # mGBA 模拟器核心（libretro 接口）
 ```
 
 ---
 
-### 已知限制 / 后续工作
+## 许可证
 
-- 重采样为最近邻算法，Switch 平台 48 kHz 输出质量有限；后续可引入线性插值重采样
-- 桌面平台按键映射基于 borealis 抽象层；GLFW 模式下键盘映射需依赖 borealis 的键盘→手柄映射逻辑
-- 存档（serialize/unserialize）接口已暴露于 `LibretroLoader`，UI 层尚未集成
+本项目以 [LICENSE](LICENSE) 文件中声明的许可证发布。所使用的第三方库（borealis、mGBA）各自遵循其原始许可证。
 
