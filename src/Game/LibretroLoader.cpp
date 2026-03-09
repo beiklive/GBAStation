@@ -387,7 +387,7 @@ bool LibretroLoader::s_environmentCallback(unsigned cmd, void* data)
         case RETRO_ENVIRONMENT_SET_VARIABLES: {
             const retro_variable* vars = static_cast<const retro_variable*>(data);
             if (!vars || !s_current->m_configManager) return false;
-            ConfigManager* cfg = s_current->m_configManager;
+            beiklive::ConfigManager* cfg = s_current->m_configManager;
             for (const retro_variable* v = vars; v->key; ++v) {
                 if (!v->value) continue;
                 // Format: "Description text; default_val|opt2|opt3..."

@@ -178,7 +178,7 @@ void GameView::initialize()
     // SetDefault() only writes the value when the key is not already present,
     // so user-saved values in the config file take precedence.
     if (gameRunner && gameRunner->settingConfig) {
-        ConfigManager* cfg = gameRunner->settingConfig;
+        beiklive::ConfigManager* cfg = gameRunner->settingConfig;
         using CV = beiklive::ConfigValue;
         cfg->SetDefault("core.mgba_gb_model",                  CV(std::string("Autodetect")));
         cfg->SetDefault("core.mgba_use_bios",                   CV(std::string("ON")));

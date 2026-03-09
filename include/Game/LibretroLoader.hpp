@@ -83,7 +83,7 @@ public:
 
     /// Provide a ConfigManager from which core variable values are read.
     /// Call before load() so that retro_set_environment() picks them up.
-    void setConfigManager(ConfigManager* cfg) { m_configManager = cfg; }
+    void setConfigManager(beiklive::ConfigManager* cfg) { m_configManager = cfg; }
 
 private:
     // ---- Dynamic library handle -------------------------------------
@@ -131,7 +131,7 @@ private:
     // ---- Core variable / settings storage ---------------------------
     // ConfigManager provides user-saved values; m_coreVarStorage holds
     // c_str() pointers that remain valid for the lifetime of the loader.
-    ConfigManager*                        m_configManager = nullptr;
+    beiklive::ConfigManager*                        m_configManager = nullptr;
     std::unordered_map<std::string, std::string> m_coreVarStorage;
 
     // ---- Static singleton for callbacks -----------------------------
