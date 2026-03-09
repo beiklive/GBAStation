@@ -6,7 +6,6 @@
 
 
 #include "common.hpp"
-#include "Game/GameRuntime.hpp"
 
 
 class GameView : public brls::Box
@@ -24,7 +23,6 @@ class GameView : public brls::Box
 
   private:
     std::string m_gameName;
-    beiklive::GameRuntime* m_gameRuntime;
     bool m_exitRequested = false;
 
     void initialize();
