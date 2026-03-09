@@ -217,3 +217,11 @@ if (TARGET mgba_libretro)
         COMMENT "Copying mgba_libretro to output directory"
     )
 endif ()
+
+if (PLATFORM_SWITCH)
+    # 静态链接，不能用 dlopen
+    target_link_libraries(${PROJECT_NAME} PRIVATE mgba_libretro)
+else()
+    # 桌面平台用动态加载
+    # LibretroLoader 用 dlopen/LoadLibrary 加载 .so/.dll
+endif()

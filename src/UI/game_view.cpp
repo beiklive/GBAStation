@@ -74,13 +74,15 @@ static const ButtonMap k_buttonMap[] = {
 // ============================================================
 std::string GameView::resolveCoreLibPath()
 {
-    // The build scripts place mgba_libretro.{dll,so,dylib} in the same
-    // directory as the BKStation executable.
-#if defined(_WIN32)
+#if defined(__SWITCH__)
+    // On Switch, mgba_libretro.a is statically linked into the binary.
+    // LibretroLoader::load() ignores the path in this case.
+    return "";
+#elif defined(_WIN32)
     return std::string(BK_GAME_CORE_DIR) + std::string("mgba_libretro.dll");
 #elif defined(__APPLE__)
     return std::string(BK_GAME_CORE_DIR) + std::string("mgba_libretro.dylib");
-#elif defined(__SWITCH__)
+#else
     return std::string(BK_GAME_CORE_DIR) + std::string("mgba_libretro.so");
 #endif
 }

@@ -98,6 +98,32 @@ bool LibretroLoader::load(const std::string& libPath)
 {
     unload();
 
+#ifdef __SWITCH__
+    // On Switch, mgba_libretro.a is statically linked into the binary.
+    // The retro_* symbols are resolved at link time – no dlopen needed.
+    // libretro.h (included via LibretroLoader.hpp) already provides the
+    // extern "C" declarations for all entry points.
+    fn_set_environment        = retro_set_environment;
+    fn_set_video_refresh      = retro_set_video_refresh;
+    fn_set_audio_sample       = retro_set_audio_sample;
+    fn_set_audio_sample_batch = retro_set_audio_sample_batch;
+    fn_set_input_poll         = retro_set_input_poll;
+    fn_set_input_state        = retro_set_input_state;
+    fn_init                   = retro_init;
+    fn_deinit                 = retro_deinit;
+    fn_api_version            = retro_api_version;
+    fn_get_system_info        = retro_get_system_info;
+    fn_get_system_av_info     = retro_get_system_av_info;
+    fn_set_controller_port_device = retro_set_controller_port_device;
+    fn_reset                  = retro_reset;
+    fn_run                    = retro_run;
+    fn_serialize_size         = retro_serialize_size;
+    fn_serialize              = retro_serialize;
+    fn_unserialize            = retro_unserialize;
+    fn_load_game              = retro_load_game;
+    fn_unload_game            = retro_unload_game;
+    m_handle = reinterpret_cast<void*>(1); // sentinel: symbols are bound
+#else
     m_handle = dynOpen(libPath);
     if (!m_handle) {
         dynLoadError();
@@ -130,6 +156,7 @@ bool LibretroLoader::load(const std::string& libPath)
         m_handle = nullptr;
         return false;
     }
+#endif
 
     // Register static callbacks (must happen before retro_init)
     s_current = this;
