@@ -39,14 +39,16 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/borealis/library)
 # 强制启用 libretro 核心；通过 CACHE 方式写入以保证
 # 值能跨越 add_subdirectory() 的作用域边界生效。
 set(BUILD_LIBRETRO ON  CACHE BOOL "将 mGBA 构建为独立的 libretro 核心"  FORCE)
-set(M_CORE_GBA     ON  CACHE BOOL "构建 Game Boy Advance 核心"           FORCE)
-set(M_CORE_GB      ON  CACHE BOOL "构建 Game Boy / Game Boy Color 核心"   FORCE)
+set(BUILD_QT OFF  CACHE BOOL "禁用 mGBA 的 Qt 前端" FORCE)
+set(BUILD_SDL OFF CACHE BOOL "禁用 mGBA 的 SDL 前端" FORCE)
+
+
 
 # 禁止 mGBA 构建文档、性能分析及各类测试相关目标
-set(BUILD_PERF     OFF CACHE BOOL "" FORCE)
-set(BUILD_TEST     OFF CACHE BOOL "" FORCE)
-set(BUILD_SUITE    OFF CACHE BOOL "" FORCE)
-set(BUILD_CINEMA   OFF CACHE BOOL "" FORCE)
-set(BUILD_DOCGEN   OFF CACHE BOOL "" FORCE)
+# set(BUILD_PERF     OFF CACHE BOOL "" FORCE)
+# set(BUILD_TEST     OFF CACHE BOOL "" FORCE)
+# set(BUILD_SUITE    OFF CACHE BOOL "" FORCE)
+# set(BUILD_CINEMA   OFF CACHE BOOL "" FORCE)
+# set(BUILD_DOCGEN   OFF CACHE BOOL "" FORCE)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/mgba EXCLUDE_FROM_ALL)
