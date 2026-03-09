@@ -1,20 +1,9 @@
 #pragma once
-extern "C" {
-#include <mgba-util/circle-buffer.h>
-#include <mgba-util/gui.h>
-#include <mgba-util/gui/font.h>
-#include <mgba-util/gui/menu.h>
-#include <mgba-util/vfs.h>
-#include <mgba/core/blip_buf.h>
-#include <mgba/core/core.h>
-#include <mgba/core/rewind.h>
-#include <mgba/gba/interface.h>
-#include <mgba/internal/gba/gba.h>
-#include <mgba/internal/gb/video.h>
-#include <mgba/internal/gba/audio.h>
-#include <mgba/internal/gba/input.h>
-}
+#include <cstdint>
 #include <borealis.hpp>
+
+/// 像素颜色类型（XRGB8888，与 libretro RETRO_PIXEL_FORMAT_XRGB8888 一致）
+using color_t = uint32_t;
 using namespace brls::literals; // for _i18n
 
 #include "Utils/ConfigManager.hpp"
@@ -24,8 +13,6 @@ using namespace brls::literals; // for _i18n
 
 // FUNCTIONS DEFINITIONS
 
-#define BK_CoreConfigLoad(config) mCoreConfigLoadPath(config, BK_APP_CONFIG_FILE)
-#define BK_CoreConfigSave(config) mCoreConfigSavePath(config, BK_APP_CONFIG_FILE)
 #define BK_RES(path) beiklive::file::TransStrToRes(path)
 
 #define BK_APP_NAME "BKStation"
@@ -73,6 +60,8 @@ struct GameEntry {
     std::string cover;   ///< 封面图路径（可空，空则显示占位符）
 };
 
+/// ROM 平台类型（独立于任何模拟器后端）
+enum class EmuPlatform { None, GBA, GB };
 
 struct Gamefile {
 	// 游戏文件的路径
@@ -82,14 +71,10 @@ struct Gamefile {
 	// 游戏文件显示名称
 	std::string displayName;
 	// 游戏文件类型（例如：GBA、GB）
-	mPlatform type = mPLATFORM_NONE;
+	EmuPlatform type = EmuPlatform::None;
 	// 游戏输出分辨率
 	int width;
 	int height;
-};
-struct mGUIRunnerLux {
-	struct GBALuminanceSource d;
-	int luxLevel;
 };
 
 struct UIParams {
@@ -103,16 +88,11 @@ struct UIParams {
 
 // 游戏运行时环境
 struct GameRunner {
-	struct mCore* core;
-	struct mCoreConfig config;
 	beiklive::ConfigManager* settingConfig;
 	beiklive::ConfigManager* nameMappingConfig;
 	Gamefile gameFile;
 	std::string currentPath;
 
-	struct mGUIRunnerLux luminanceSource; // 亮度信息来源
-
-	struct mCoreRewindContext rewind; // 倒带上下文
 	bool rewinding; // 当前是否正在倒带
 	bool rewindEnabled; // 倒带功能是否启用
 	bool rewindMuteEnabled; // 倒带静音功能是否启用
@@ -128,7 +108,6 @@ struct GameRunner {
 	float fps;
 	int64_t lastFpsCheck;
 	int32_t totalDelta;
-	struct CircleBuffer fpsBuffer;
 
 	struct UIParams *uiParams; // UI 相关参数
 

@@ -19,7 +19,6 @@
 #include <cstring>
 
 // ---- 模拟器常量 ----
-#define AUTO_INPUT    0x4E585031
 #define SAMPLES       0x200          // 每次音频回调 512 个采样
 #define N_BUFFERS     4
 #define ANALOG_DEADZONE 0x4000
@@ -32,33 +31,12 @@
 #endif
 
 // ============================================================
-// mGBA 输入平台信息（导出符号）
+// 文件作用域音频状态
 // ============================================================
-MGBA_EXPORT const struct mInputPlatformInfo GBAInputInfo = {
-    .platformName = "gba",
-    .keyId = (const char*[]) {
-        "A", "B", "Select", "Start",
-        "Right", "Left", "Up", "Down",
-        "R", "L"
-    },
-    .nKeys = GBA_KEY_MAX,
-    .hat = {
-        .up    = GBA_KEY_UP,
-        .right = GBA_KEY_RIGHT,
-        .down  = GBA_KEY_DOWN,
-        .left  = GBA_KEY_LEFT
-    }
-};
-
-// ============================================================
-// 文件作用域音频状态（供 C 回调访问）
-// ============================================================
-static struct mAVStream    stream;
-static struct mRotationSource rotation = {0};
+struct StereoSample { int16_t left; int16_t right; };
 static int    audioBufferActive = 0;
 static int    enqueuedBuffers   = 0;
-static float  gyroZ = 0;
-static struct mStereoSample audioBuffer[N_BUFFERS][BUFFER_SIZE / 4]
+static StereoSample audioBuffer[N_BUFFERS][BUFFER_SIZE / 4]
     __attribute__((__aligned__(0x1000)));
 
 #ifdef __SWITCH__
@@ -77,114 +55,31 @@ static int _audioWait(u64 timeout) {
 }
 #endif // __SWITCH__
 
-static void _postAudioBuffer(struct mAVStream* /*s*/, blip_t* left, blip_t* right) {
+// 供 libretro 音频回调写入当前 Switch 音频输出缓冲区
+// samples: 交错 int16_t 立体声，count: 帧数
+static void _pushAudio(const int16_t* samples, size_t count) {
 #ifdef __SWITCH__
     _audioWait(0);
-    // 只有在所有 N_BUFFERS 个槽都被占满时才阻塞等待，
-    // 而不是在 N_BUFFERS-1 时就阻塞，充分利用缓冲空间以免频繁卡顿。
     while (enqueuedBuffers >= N_BUFFERS - 1) {
-        if (!frameLimiter) { blip_clear(left); blip_clear(right); return; }
+        if (!frameLimiter) return;
         _audioWait(10000000);
     }
-    if (enqueuedBuffers >= N_BUFFERS) {
-		blip_clear(left);
-		blip_clear(right);
-		return;
-	}
+    if (enqueuedBuffers >= N_BUFFERS) return;
 
-
-    struct mStereoSample* samples = audioBuffer[audioBufferActive];
-    blip_read_samples(left,  &samples[0].left,  SAMPLES, true);
-    blip_read_samples(right, &samples[0].right, SAMPLES, true);
+    size_t toCopy = (count < SAMPLES) ? count : SAMPLES;
+    StereoSample* buf = audioBuffer[audioBufferActive];
+    for (size_t i = 0; i < toCopy; ++i) {
+        buf[i].left  = samples[i * 2];
+        buf[i].right = samples[i * 2 + 1];
+    }
+    audoutBuffer[audioBufferActive].data_size = toCopy * 4;
     audoutAppendAudioOutBuffer(&audoutBuffer[audioBufferActive]);
     ++audioBufferActive;
     audioBufferActive %= N_BUFFERS;
     ++enqueuedBuffers;
 #else
-    blip_clear(left);
-    blip_clear(right);
+    (void)samples; (void)count;
 #endif
-}
-
-// ============================================================
-// 亮度传感器回调
-// ============================================================
-static void _updateLux(struct GBALuminanceSource* /*lux*/) {}
-
-static uint8_t _readLux(struct GBALuminanceSource* lux) {
-    if (!lux) return static_cast<uint8_t>(0xFF - 0x16);
-    auto* runnerLux = reinterpret_cast<decltype(&gameRunner->luminanceSource)>(lux);
-    int value = 0x16;
-    if (runnerLux->luxLevel > 0)
-        value += GBA_LUX_LEVELS[runnerLux->luxLevel - 1];
-    return static_cast<uint8_t>(0xFF - value);
-}
-// ============================================================
-// ROM 加载进度回调
-// ============================================================
-static void _updateLoading(size_t read, size_t size, void* /*ctx*/) {
-    static size_t lastPercent = static_cast<size_t>(-1);
-    if (!size) return;
-    size_t pct = (read * 100) / size;
-    if (pct != lastPercent && (pct % 10 == 0 || pct == 100)) {
-        brls::Logger::debug("[GameRuntime] Loading ROM: {}%", pct);
-        lastPercent = pct;
-    }
-}
-// ============================================================
-// 按键映射辅助函数
-// ============================================================
-static void _mapKey(struct mInputMap* map, uint32_t binding, int nativeKey, int key) {
-    mInputBindKey(map, binding, __builtin_ctz(nativeKey), key);
-}
-
-// ============================================================
-// 核心初始化回调
-// ============================================================
-static void _setup() {
-    if (!gameRunner || !gameRunner->core) {
-        brls::Logger::error("[GameRuntime] _setup: core is null");
-        return;
-    }
-#ifdef __SWITCH__
-    _mapKey(&gameRunner->core->inputMap, AUTO_INPUT, HidNpadButton_A,     GBA_KEY_A);
-    _mapKey(&gameRunner->core->inputMap, AUTO_INPUT, HidNpadButton_B,     GBA_KEY_B);
-    _mapKey(&gameRunner->core->inputMap, AUTO_INPUT, HidNpadButton_Plus,  GBA_KEY_START);
-    _mapKey(&gameRunner->core->inputMap, AUTO_INPUT, HidNpadButton_Minus, GBA_KEY_SELECT);
-    _mapKey(&gameRunner->core->inputMap, AUTO_INPUT, HidNpadButton_Up,    GBA_KEY_UP);
-    _mapKey(&gameRunner->core->inputMap, AUTO_INPUT, HidNpadButton_Down,  GBA_KEY_DOWN);
-    _mapKey(&gameRunner->core->inputMap, AUTO_INPUT, HidNpadButton_Left,  GBA_KEY_LEFT);
-    _mapKey(&gameRunner->core->inputMap, AUTO_INPUT, HidNpadButton_Right, GBA_KEY_RIGHT);
-    _mapKey(&gameRunner->core->inputMap, AUTO_INPUT, HidNpadButton_L,     GBA_KEY_L);
-    _mapKey(&gameRunner->core->inputMap, AUTO_INPUT, HidNpadButton_R,     GBA_KEY_R);
-#endif
-    gameRunner->core->setAVStream(gameRunner->core, &stream);
-    gameRunner->core->setAudioBufferSize(gameRunner->core, SAMPLES);
-
-
-
-}
-
-static void _gameLoaded() {
-    if (!gameRunner || !gameRunner->core) {
-        brls::Logger::error("[GameRuntime] _gameLoaded: core is null");
-        return;
-    }
-#ifdef __SWITCH__
-    uint32_t samplerate = audoutGetSampleRate();
-#else
-    uint32_t samplerate = 44100;
-#endif
-    // 使用 60.0 与 main.c 保持一致，匹配 Borealis 60 Hz vsync 速率。
-    // 若使用 GBA 真实帧率（≈59.7275 Hz），blip 每帧会多产出约 2-3 个采样，
-    // 导致音频队列持续积压，_postAudioBuffer 在渲染线程上阻塞等待，
-    // 造成 vsync 丢失和游戏变慢（音频拖慢）。
-    double ratio = GBAAudioCalculateRatio(1, 60.0, 1);
-    blip_set_rates(gameRunner->core->getAudioChannel(gameRunner->core, 0),
-                   gameRunner->core->frequency(gameRunner->core), samplerate * ratio);
-    blip_set_rates(gameRunner->core->getAudioChannel(gameRunner->core, 1),
-                   gameRunner->core->frequency(gameRunner->core), samplerate * ratio);
-    brls::Logger::debug("[GameRuntime] Audio configured: rate={}, ratio={}", samplerate, ratio);
 }
 
 // ============================================================
@@ -200,17 +95,6 @@ GameRuntime::GameRuntime(const std::string& gamePath)
     : m_gamePath(gamePath)
 {
     brls::Logger::info("[GameRuntime] Constructing, path={}", m_gamePath);
-
-    // 亮度传感器
-    gameRunner->luminanceSource.d.readLuminance = _readLux;
-    gameRunner->luminanceSource.d.sample        = _updateLux;
-    gameRunner->luminanceSource.luxLevel        = 0;
-
-    // 音视频流
-    stream.videoDimensionsChanged = nullptr;
-    stream.postVideoFrame         = nullptr;
-    stream.postAudioFrame         = nullptr;
-    stream.postAudioBuffer        = _postAudioBuffer;
 
 #ifdef __SWITCH__
     audoutInitialize();
@@ -238,8 +122,7 @@ GameRuntime::~GameRuntime()
 {
     brls::Logger::info("[GameRuntime] Destroying, path={}", m_gamePath);
 
-    if (gameRunner->core)
-        gameRunner->core->unloadROM(gameRunner->core);
+    // TODO: libretro 卸载 ROM
     glDeinit();
 
 #ifdef __SWITCH__
@@ -255,54 +138,22 @@ bool GameRuntime::loadGame()
 {
     brls::Logger::info("[GameRuntime] loadGame: {}", m_gamePath);
 
-    gameRunner->core = mCoreFind(m_gamePath.c_str());
-    if (!gameRunner->core) {
-        brls::Logger::error("[GameRuntime] No core for: {}", m_gamePath);
-        m_wantsExit = true;
-        return false;
-    }
-
-    gameRunner->core->init(gameRunner->core);
-    mCoreInitConfig(gameRunner->core, gameRunner->port);
-    mInputMapInit(&gameRunner->core->inputMap, &GBAInputInfo);
-
-    struct VFile* rom = mDirectorySetOpenPath(
-        &gameRunner->core->dirs, m_gamePath.c_str(), gameRunner->core->isROM);
-
-    bool found = mCorePreloadVFCB(gameRunner->core, rom, _updateLoading, gameRunner);
-    if (!found) {
-        if (rom) rom->close(rom);
-        gameRunner->core->deinit(gameRunner->core);
-        brls::Logger::error("[GameRuntime] Failed to load ROM: {}", m_gamePath);
-        m_wantsExit = true;
-        return false;
-    }
+    // TODO: 通过 libretro 接口加载 ROM
+    // 1. dlopen/加载 libretro 核心 .nro/.so
+    // 2. retro_init()
+    // 3. retro_load_game() 传入 m_gamePath
+    // 4. 从 retro_system_av_info 获取 videoW/videoH 和音频采样率
+    brls::Logger::warning("[GameRuntime] loadGame: libretro backend not yet implemented");
+    m_wantsExit = false;
 
     m_softBuffer = new color_t[256 * 256]();
-    gameRunner->core->setVideoBuffer(gameRunner->core, m_softBuffer, 256);
-
-    if (gameRunner->core->platform(gameRunner->core) == mPLATFORM_GBA) {
-        gameRunner->core->setPeripheral(gameRunner->core, mPERIPH_GBA_LUMINANCE,
-                                        &gameRunner->luminanceSource.d);
-        gameRunner->gameFile.type = mPLATFORM_GBA;
-    } else {
-        gameRunner->gameFile.type = mPLATFORM_GB;
-    }
-
-    mCoreLoadForeignConfig(gameRunner->core, &gameRunner->config);
-    mCoreAutoloadSave(gameRunner->core);
-    mCoreAutoloadCheats(gameRunner->core);
-
-    _setup();
-    gameRunner->core->reset(gameRunner->core);
-    _gameLoaded();
 
     reloadDisplayConfig();
     if (gameRunner && gameRunner->settingConfig)
         m_display.save(*gameRunner->settingConfig);
 
     m_gameLoaded = true;
-    brls::Logger::info("[GameRuntime] loadGame success");
+    brls::Logger::info("[GameRuntime] loadGame stub success");
     return true;
 }
 
@@ -388,11 +239,6 @@ void GameRuntime::_invalidateNvgImage()
 // ============================================================
 // 桩实现（保留以备虚表或未来使用）
 // ============================================================
-void GameRuntime::mInputMapInit(struct mInputMap* map, const struct mInputPlatformInfo* info) {
-    map->maps    = 0;
-    map->numMaps = 0;
-    map->info    = info;
-}
 void GameRuntime::_clearScreen() {
     glClearColor(0.f, 0.f, 0.f, 1.f);
     glClear(GL_COLOR_BUFFER_BIT);
@@ -431,10 +277,6 @@ void GameRuntime::draw(NVGcontext* vg, float x, float y,
 
     // ----------------------------------------------------------------
     // 输入轮询（仅 Switch 平台）
-    // 每显示帧调用一次 padUpdate()，提取：
-    //   • 退出请求  – HidNpadButton_X  （取消键）
-    //   • 快进      – 按住 ZR          （禁用帧率限制器）
-    //   • 游戏按键  – 通过 mGBA 输入映射表
     // ----------------------------------------------------------------
     uint32_t gameKeys = 0;
 #ifdef __SWITCH__
@@ -448,52 +290,24 @@ void GameRuntime::draw(NVGcontext* vg, float x, float y,
 
     // 按住 ZR 快进；松开时恢复正常速度
     bool ffHeld = (padkeys & HidNpadButton_ZR) != 0;
-    if (ffHeld == m_frameLimiter) {   // 检测到状态切换
+    if (ffHeld == m_frameLimiter) {
         setFrameLimiter(!ffHeld);
     }
 
-    // 将硬件按键映射为 mGBA 按键位掩码
-    gameKeys = mInputMapKeyBits(&gameRunner->core->inputMap,
-                                AUTO_INPUT, padkeys, 0);
-
-    // 左摇杆模拟十字键输入
-    HidAnalogStickState js = padGetStickPos(&m_pad, 0);
-    int kl = mInputMapKey(&gameRunner->core->inputMap, AUTO_INPUT, __builtin_ctz(HidNpadButton_StickLLeft));
-    int kr = mInputMapKey(&gameRunner->core->inputMap, AUTO_INPUT, __builtin_ctz(HidNpadButton_StickLRight));
-    int ku = mInputMapKey(&gameRunner->core->inputMap, AUTO_INPUT, __builtin_ctz(HidNpadButton_StickLUp));
-    int kd = mInputMapKey(&gameRunner->core->inputMap, AUTO_INPUT, __builtin_ctz(HidNpadButton_StickLDown));
-    if (kl == -1) kl = mInputMapKey(&gameRunner->core->inputMap, AUTO_INPUT, __builtin_ctz(HidNpadButton_Left));
-    if (kr == -1) kr = mInputMapKey(&gameRunner->core->inputMap, AUTO_INPUT, __builtin_ctz(HidNpadButton_Right));
-    if (ku == -1) ku = mInputMapKey(&gameRunner->core->inputMap, AUTO_INPUT, __builtin_ctz(HidNpadButton_Up));
-    if (kd == -1) kd = mInputMapKey(&gameRunner->core->inputMap, AUTO_INPUT, __builtin_ctz(HidNpadButton_Down));
-    if (js.x < -ANALOG_DEADZONE && kl != -1) gameKeys |= (1u << kl);
-    if (js.x >  ANALOG_DEADZONE && kr != -1) gameKeys |= (1u << kr);
-    if (js.y < -ANALOG_DEADZONE && kd != -1) gameKeys |= (1u << kd);
-    if (js.y >  ANALOG_DEADZONE && ku != -1) gameKeys |= (1u << ku);
+    // TODO: 将 padkeys 转换为 libretro 按键掩码后传给 retro_set_input_state 回调
+    (void)gameKeys;
 #endif
 
     // ----------------------------------------------------------------
-    // 推进模拟器。
-    // 普通模式：每显示帧执行 1 次 runFrame（约 60 fps）。
-    // 快进模式：每显示帧执行 m_framecap 次 runFrame（×N 速度）。
-    // 在所有 runFrame 调用前后保存/恢复 FBO 绑定，
-    // 防止模拟器自身的 GL 渲染器（如有）破坏当前状态。
+    // 推进模拟器
+    // TODO: 调用 retro_run() 以推进一帧；libretro video_refresh 回调
+    //       将新帧写入 m_softBuffer
     // ----------------------------------------------------------------
     unsigned runsThisFrame = m_frameLimiter ? 1u : m_framecap;
+    (void)runsThisFrame;
 
-    {
-        GLint savedFbo = 0;
-        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &savedFbo);
-        for (unsigned i = 0; i < runsThisFrame; ++i) {
-            gameRunner->core->setKeys(gameRunner->core, gameKeys);
-            gameRunner->core->runFrame(gameRunner->core);
-        }
-        glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)savedFbo);
-    }
-
-    // ---- 查询实际游戏分辨率 ----
+    // ---- 固定 GBA 游戏分辨率 ----
     unsigned videoW = 240, videoH = 160;
-    gameRunner->core->desiredVideoDimensions(gameRunner->core, &videoW, &videoH);
 
     // ---- 若过滤模式发生变化，更新源纹理参数并重建 NVG 图像 ----
     if (m_display.filterMode != m_activeFilter) {

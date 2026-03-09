@@ -84,7 +84,6 @@ private:
     // 使包装着色器链输出的 NVG 图像失效（下一帧重新创建）
     void _invalidateNvgImage();
 
-    void mInputMapInit(struct mInputMap* map, const struct mInputPlatformInfo* info);
     void _clearScreen();
     void _drawFrame();
 
