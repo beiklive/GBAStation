@@ -4,9 +4,13 @@
 #include <cstdio>
 #include <algorithm>
 
-#ifdef _WIN32
+#if defined(_WIN32)
 #  define WIN32_LEAN_AND_MEAN
 #  include <windows.h>
+#elif defined(__PSV__) || defined(__psp2__) || defined(__SWITCH__)
+// PSVita / Nintendo Switch have no POSIX dynamic linker.
+// All dynXxx helpers return nullptr / no-op so LibretroLoader::load() fails
+// gracefully at runtime.
 #else
 #  include <dlfcn.h>
 #endif
@@ -22,8 +26,11 @@ LibretroLoader* LibretroLoader::s_current = nullptr;
 
 static void* dynOpen(const std::string& path)
 {
-#ifdef _WIN32
+#if defined(_WIN32)
     return reinterpret_cast<void*>(LoadLibraryA(path.c_str()));
+#elif defined(__PSV__) || defined(__psp2__) || defined(__SWITCH__)
+    (void)path;
+    return nullptr; // dynamic loading not supported on PSVita / Switch
 #else
     return dlopen(path.c_str(), RTLD_LAZY | RTLD_LOCAL);
 #endif
@@ -31,12 +38,14 @@ static void* dynOpen(const std::string& path)
 
 static void dynLoadError()
 {
-#ifdef _WIN32
+#if defined(_WIN32)
     DWORD err = GetLastError();
     char msg[256] = {};
     FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
                    nullptr, err, 0, msg, sizeof(msg) - 1, nullptr);
     fprintf(stderr, "[LibretroLoader] LoadLibrary failed (%lu): %s\n", err, msg);
+#elif defined(__PSV__) || defined(__psp2__) || defined(__SWITCH__)
+    fprintf(stderr, "[LibretroLoader] dynamic loading not supported on this platform\n");
 #else
     fprintf(stderr, "[LibretroLoader] dlopen failed: %s\n", dlerror());
 #endif
@@ -45,8 +54,10 @@ static void dynLoadError()
 static void dynClose(void* handle)
 {
     if (!handle) return;
-#ifdef _WIN32
+#if defined(_WIN32)
     FreeLibrary(reinterpret_cast<HMODULE>(handle));
+#elif defined(__PSV__) || defined(__psp2__) || defined(__SWITCH__)
+    (void)handle; // no-op on PSVita / Switch
 #else
     dlclose(handle);
 #endif
@@ -54,9 +65,12 @@ static void dynClose(void* handle)
 
 static void* dynSym(void* handle, const char* name)
 {
-#ifdef _WIN32
+#if defined(_WIN32)
     return reinterpret_cast<void*>(
         GetProcAddress(reinterpret_cast<HMODULE>(handle), name));
+#elif defined(__PSV__) || defined(__psp2__) || defined(__SWITCH__)
+    (void)handle; (void)name;
+    return nullptr; // no-op on PSVita / Switch
 #else
     return dlsym(handle, name);
 #endif

@@ -46,7 +46,7 @@ void StartPageView::Init()
         {
             AppPage* app_page = new AppPage();
             app_page->addGame({ "/mGBA/roms/haogou.gba", "好狗狗星系", BK_RES("img/thumb/209.png") });
-            app_page->addGame({ "/mGBA/roms/gba/jiezou.gba", "节奏天国", BK_RES("img/thumb/209.png") });
+            app_page->addGame({ "./1.gba", "win测试", BK_RES("img/thumb/209.png") });
             app_page->addGame({ "/mGBA/roms/gba/Mother 3.gba", "地球冒险3", BK_RES("img/thumb/210.png") });
             app_page->addGame({ "/mGBA/roms/gba/MuChangWuYu.gba", "牧场物语", "" });
             app_page->addGame({ "/mGBA/roms/gba/Mother 3.gba", "地球冒险3", BK_RES("img/thumb/212.png") });
