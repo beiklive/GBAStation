@@ -764,21 +764,20 @@ void GameView::startGameThread()
                         : 1u;
                 }
 
-                // Save state for rewind buffer (before running)
-                if (m_rewindEnabled && !ff) {
-                    size_t sz = m_core.serializeSize();
-                    if (sz > 0) {
-                        std::vector<uint8_t> state(sz);
-                        if (m_core.serialize(state.data(), sz)) {
-                            std::lock_guard<std::mutex> lk(m_rewindMutex);
-                            m_rewindBuffer.push_front(std::move(state));
-                            while (m_rewindBuffer.size() > m_rewindBufSize)
-                                m_rewindBuffer.pop_back();
+                for (unsigned i = 0; i < framesThisIter; ++i) {
+                    // Save state for rewind buffer before each frame (including fast-forward)
+                    if (m_rewindEnabled) {
+                        size_t sz = m_core.serializeSize();
+                        if (sz > 0) {
+                            std::vector<uint8_t> state(sz);
+                            if (m_core.serialize(state.data(), sz)) {
+                                std::lock_guard<std::mutex> lk(m_rewindMutex);
+                                m_rewindBuffer.push_front(std::move(state));
+                                while (m_rewindBuffer.size() > m_rewindBufSize)
+                                    m_rewindBuffer.pop_back();
+                            }
                         }
                     }
-                }
-
-                for (unsigned i = 0; i < framesThisIter; ++i) {
                     m_core.run();
                 }
 
@@ -1081,6 +1080,12 @@ void GameView::pollInput()
         }
     }
 
+    // Disable fast-forward while rewinding; it resumes automatically when rewind ends
+    // (hold mode: FF key still held → resumes; toggle mode: m_ffToggled preserved → resumes)
+    if (m_rewinding.load(std::memory_order_relaxed)) {
+        m_fastForward.store(false, std::memory_order_relaxed);
+    }
+
     // ---- Game buttons -----------------------------------------------
     if (m_useKeyboard && !m_kbButtonMap.empty()) {
         // Keyboard mode: use raw keyboard key states
@@ -1236,8 +1241,9 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
 
     // ---- Fast-forward overlay (configurable) -------------------------
     if (m_showFfOverlay && m_fastForward.load(std::memory_order_relaxed)) {
-        const char* ffText = ">> FF";
-        float fw = 70.0f, fh = 22.0f;
+        char ffBuf[32];
+        snprintf(ffBuf, sizeof(ffBuf), ">> %.4gx", static_cast<double>(m_ffMultiplier));
+        float fw = 80.0f, fh = 22.0f;
         float fx = x + width - fw - 4.0f;
         float fy = y + 4.0f;
         nvgBeginPath(vg);
@@ -1249,13 +1255,15 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
         nvgFontFace(vg, "regular");
         nvgFillColor(vg, nvgRGBA(100, 220, 255, 230));
         nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-        nvgText(vg, fx + fw * 0.5f, fy + fh * 0.5f, ffText, nullptr);
+        nvgText(vg, fx + fw * 0.5f, fy + fh * 0.5f, ffBuf, nullptr);
     }
 
     // ---- Rewind status overlay (configurable) ------------------------
     if (m_showRewindOverlay && m_rewindEnabled && m_rewinding.load(std::memory_order_relaxed)) {
-        const char* rewText = "<<< REWIND";
-        float rw = 110.0f, rh = 22.0f;
+        char rewBuf[32];
+        // m_rewindStep = frames popped from buffer per rewind trigger (rewind speed)
+        snprintf(rewBuf, sizeof(rewBuf), "<<< %u", m_rewindStep);
+        float rw = 90.0f, rh = 22.0f;
         float rx = x + width * 0.5f - rw * 0.5f;
         float ry = y + 4.0f;
         nvgBeginPath(vg);
@@ -1267,7 +1275,7 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
         nvgFontFace(vg, "regular");
         nvgFillColor(vg, nvgRGBA(255, 200, 0, 230));
         nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-        nvgText(vg, rx + rw * 0.5f, ry + rh * 0.5f, rewText, nullptr);
+        nvgText(vg, rx + rw * 0.5f, ry + rh * 0.5f, rewBuf, nullptr);
     }
 
     this->invalidate();
