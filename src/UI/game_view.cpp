@@ -77,11 +77,11 @@ std::string GameView::resolveCoreLibPath()
     // The build scripts place mgba_libretro.{dll,so,dylib} in the same
     // directory as the BKStation executable.
 #if defined(_WIN32)
-    return "./mgba_libretro.dll";
+    return std::string(BK_GAME_CORE_DIR) + std::string("mgba_libretro.dll");
 #elif defined(__APPLE__)
-    return "./mgba_libretro.dylib";
-#else
-    return "./mgba_libretro.so";
+    return std::string(BK_GAME_CORE_DIR) + std::string("mgba_libretro.dylib");
+#elif defined(__SWITCH__)
+    return std::string(BK_GAME_CORE_DIR) + std::string("mgba_libretro.so");
 #endif
 }
 

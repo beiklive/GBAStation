@@ -22,12 +22,14 @@ using namespace brls::literals; // for _i18n
 #define BK_APP_LOG_FILE "/BKStation/log/BKStation.log"
 #define BK_APP_CONFIG_DIR "/BKStation/config/"
 #define BK_APP_CONFIG_FILE "/BKStation/config/config.ini"
+#define BK_GAME_CORE_DIR "/BKStation/cores/"
 #else
 #define BK_APP_ROOT_DIR "./BKStation/"
 #define BK_APP_LOG_DIR "./BKStation/log/"
 #define BK_APP_LOG_FILE "./BKStation/log/BKStation.log"
 #define BK_APP_CONFIG_DIR "./BKStation/config/"
 #define BK_APP_CONFIG_FILE "./BKStation/config/config.ini"
+#define BK_GAME_CORE_DIR "./BKStation/cores/"
 #endif
 
 // 应用默认图标

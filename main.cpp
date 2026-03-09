@@ -100,6 +100,8 @@ int main(int argc, char* argv[]) {
     std::filesystem::create_directories(BK_APP_ROOT_DIR);
     std::filesystem::create_directories(BK_APP_LOG_DIR);
     std::filesystem::create_directories(BK_APP_CONFIG_DIR);
+    std::filesystem::create_directories(BK_GAME_CORE_DIR);
+	
 	ConfigManagerInit();
 	// We recommend to use INFO for real apps
 	for (int i = 1; i < argc; i++) {
