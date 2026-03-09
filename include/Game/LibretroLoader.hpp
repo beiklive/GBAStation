@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include <functional>
 #include <atomic>
@@ -10,6 +11,7 @@
 
 // libretro public API types
 #include "third_party/mgba/src/platform/libretro/libretro.h"
+#include "Utils/ConfigManager.hpp"
 
 namespace beiklive {
 
@@ -77,6 +79,12 @@ public:
     unsigned gameHeight() const { return m_avInfo.geometry.base_height; }
     double   fps()        const { return m_avInfo.timing.fps; }
 
+    // ---- Settings (core variables via libretro environment) ---------
+
+    /// Provide a ConfigManager from which core variable values are read.
+    /// Call before load() so that retro_set_environment() picks them up.
+    void setConfigManager(ConfigManager* cfg) { m_configManager = cfg; }
+
 private:
     // ---- Dynamic library handle -------------------------------------
     void* m_handle = nullptr;
@@ -119,6 +127,12 @@ private:
 
     // ---- Input state ------------------------------------------------
     bool m_buttons[RETRO_DEVICE_ID_JOYPAD_R3 + 1] = {};
+
+    // ---- Core variable / settings storage ---------------------------
+    // ConfigManager provides user-saved values; m_coreVarStorage holds
+    // c_str() pointers that remain valid for the lifetime of the loader.
+    ConfigManager*                        m_configManager = nullptr;
+    std::unordered_map<std::string, std::string> m_coreVarStorage;
 
     // ---- Static singleton for callbacks -----------------------------
     // libretro callbacks are plain C function pointers, so we route them

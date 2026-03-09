@@ -2,7 +2,11 @@
 
 ## 修复概述
 
-本次修复针对项目中发现的四个主要问题，对以下文件进行了改动：
+本次修复包含两轮改动。
+
+### 第一轮修复
+
+针对项目中发现的四个主要问题，对以下文件进行了改动：
 
 - `include/Game/LibretroLoader.hpp`
 - `src/Game/LibretroLoader.cpp`
@@ -11,9 +15,31 @@
 - `resources/i18n/zh-Hans/beiklive.json`
 - `resources/i18n/en-US/beiklive.json` (新增)
 
+### 第二轮修复
+
+针对以下五个问题的修复：
+
+1. Release 编译下游戏音频拖慢爆音
+2. 根据 mGBA libretro 接口设计 SettingManager
+3. DisplayConfig display 相关设置项实际生效
+4. 游戏 ROM 读取失败界面提示按 A 键关闭
+5. 按 ZR 没有倍速效果
+
+修改文件：
+- `src/Audio/AudioManager.cpp`
+- `include/Game/LibretroLoader.hpp`
+- `src/Game/LibretroLoader.cpp`
+- `include/UI/game_view.hpp`
+- `src/UI/game_view.cpp`
+- `resources/i18n/zh-Hans/beiklive.json`
+- `resources/i18n/en-US/beiklive.json`
+- `report/settings_report.md` (新增)
+
 ---
 
-## 问题一：游戏帧率被 Borealis 绘制循环限制
+## 第一轮问题
+
+### 问题一：游戏帧率被 Borealis 绘制循环限制
 
 ### 问题描述
 
@@ -37,7 +63,7 @@
 
 ---
 
-## 问题二：无法退出游戏回到主界面
+### 问题二：无法退出游戏回到主界面
 
 ### 问题描述
 
@@ -66,7 +92,7 @@ registerAction("beiklive/hints/exit_game"_i18n, brls::BUTTON_X,
 
 ---
 
-## 问题三：缺少帧率控制器
+### 问题三：缺少帧率控制器
 
 ### 问题描述
 
@@ -99,7 +125,7 @@ while (m_running) {
 
 ---
 
-## 问题四：游戏画面渲染异常
+### 问题四：游戏画面渲染异常
 
 ### 问题描述
 
@@ -161,13 +187,86 @@ libretro XRGB8888 格式在小端内存中为 `[B, G, R, X]`（4 字节），原
 
 ---
 
-## 修改文件汇总
+## 第二轮问题
+
+### 问题一：Release 编译游戏音频拖慢爆音
+
+**根本原因**
+
+Switch 音频线程每次回调读取 `SWITCH_FRAMES = 1024` 帧（32768 Hz）输入后重采样到 48000 Hz 输出 1024 帧。但：
+
+- 每次 `audoutPlayBuffer` 回调消耗 `1024 × 32768 = 32,768 输入样本/秒 × (48000/48000)` ≠
+- 实际每次应消耗 `1024 × 32768/48000 ≈ 699` 帧输入
+
+导致每秒从 ring buffer 取走 `1024 × 46.88 = 48000` 个样本，而 GBA 核心仅以 `32768` 个/秒速率写入，ring buffer 持续欠载，持续补零，造成音频断断续续爆音。
+
+**修复方案**（`src/Audio/AudioManager.cpp`）
+
+```cpp
+double ratio = (double)m_sampleRate / SWITCH_OUT_RATE;
+size_t inputFrames = (size_t)(SWITCH_FRAMES * ratio + 0.5); // ≈ 699
+```
+
+每次从 ring buffer 精确读取 `inputFrames` 帧，再通过最近邻插值扩展到 `SWITCH_FRAMES` 帧输出。这使输入消耗速率与核心产出速率精确匹配，消除爆音。
+
+---
+
+### 问题二：SettingManager / 设置项管理
+
+**修改文件**：`LibretroLoader.hpp`、`LibretroLoader.cpp`、`game_view.cpp`
+
+**实现**：
+
+1. `LibretroLoader` 持有 `ConfigManager* m_configManager`，通过 `setConfigManager()` 注入。
+2. `RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION` 返回版本 0，迫使 mgba 使用 `RETRO_ENVIRONMENT_SET_VARIABLES`（旧式接口）。
+3. `RETRO_ENVIRONMENT_SET_VARIABLES`：解析 `"描述; 默认值|选项..."` 格式，调用 `ConfigManager::SetDefault()` 写入默认值。
+4. `RETRO_ENVIRONMENT_GET_VARIABLE`：从 `ConfigManager` 查询键值，若存在则通过持久 `m_coreVarStorage` map 返回 `c_str()` 指针。
+5. `GameView::initialize()` 在加载核心前预注册所有已知 mgba 变量的默认值。
+
+详见 `report/settings_report.md`。
+
+---
+
+### 问题三：DisplayConfig 过滤模式实际生效
+
+**修改文件**：`game_view.cpp`、`game_view.hpp`
+
+1. `initialize()` 读取 `m_display.filterMode` 并据此设置 GL 纹理参数（`GL_NEAREST` 或 `GL_LINEAR`），同时保存到 `m_activeFilter`。
+2. `nvgImageFromGLTexture()` 接受新的 `FilterMode` 参数，对 `FilterMode::Nearest` 附加 `NVG_IMAGE_NEAREST` 标志，确保 NanoVG 也使用正确的过滤模式。
+3. `draw()` 在每帧检测 `m_display.filterMode != m_activeFilter`，若变化则更新 GL 参数并重建 NVG 图像句柄。
+
+---
+
+### 问题四：ROM 加载失败界面提示按 A 键关闭
+
+**修改文件**：`game_view.cpp`、`i18n` 文件
+
+1. 错误界面在错误文字下方增加一行提示（使用 i18n key `beiklive/hints/close_on_a`）。
+2. 构造函数将 `beiklive::swallow(this, brls::BUTTON_A)` 改为 `registerAction()`，当 `m_coreFailed == true` 时调用 `brls::Application::popActivity()` 关闭界面。
+3. 中英文 i18n 文件均新增 `"close_on_a"` 键。
+
+---
+
+### 问题五：ZR 按键实现倍速效果
+
+**修改文件**：`game_view.hpp`、`game_view.cpp`
+
+1. `game_view.hpp` 新增 `std::atomic<bool> m_fastForward{false}` 和常量 `FAST_FORWARD_MULT = 4`。
+2. `pollInput()` 检测 `state.buttons[brls::BUTTON_RT]`（= ZR）并更新 `m_fastForward`。
+3. `startGameThread()` 中：按住 ZR 时每次循环运行 `FAST_FORWARD_MULT`（4）帧，跳过帧率限制 sleep，并丢弃当次音频样本（防止 ring buffer 溢出）。
+
+---
+
+## 修改文件汇总（两轮合计）
 
 | 文件 | 修改内容 |
 |------|---------|
-| `include/Game/LibretroLoader.hpp` | 添加 `m_pixelFormat` 字段；`VideoFrame::pixels` 语义改为 RGBA8888；移除 `pitch` 字段 |
-| `src/Game/LibretroLoader.cpp` | 跟踪核心像素格式；`s_videoRefreshCallback` 中执行 XRGB8888/RGB565→RGBA8888 转换 |
-| `include/UI/game_view.hpp` | 添加 `m_gameThread`、`m_running`、`startGameThread()`、`stopGameThread()` |
-| `src/UI/game_view.cpp` | 修正 NanoVG 后端检测；BUTTON_X 注册为退出键；游戏逻辑移至独立线程；纹理上传改用 GL_RGBA |
-| `resources/i18n/zh-Hans/beiklive.json` | 添加 `hints.exit_game` 中文翻译 |
-| `resources/i18n/en-US/beiklive.json` | 新增英文翻译文件（含 `hints.exit_game`） |
+| `src/Audio/AudioManager.cpp` | 修正 Switch 音频重采样输入帧数计算，消除爆音 |
+| `include/Game/LibretroLoader.hpp` | 引入 `ConfigManager.hpp`；添加 `m_configManager`、`m_coreVarStorage`、`setConfigManager()` |
+| `src/Game/LibretroLoader.cpp` | 处理 `GET_CORE_OPTIONS_VERSION`、`SET_VARIABLES`、`GET_VARIABLE` 环境回调 |
+| `include/UI/game_view.hpp` | 添加 `m_fastForward`、`m_activeFilter`、`FAST_FORWARD_MULT` |
+| `src/UI/game_view.cpp` | 注册 mgba 变量默认值；GL 过滤模式应用；NVG 过滤标志；ZR 快进；A 键关闭失败界面；错误界面提示 |
+| `resources/i18n/zh-Hans/beiklive.json` | 添加 `hints.close_on_a` |
+| `resources/i18n/en-US/beiklive.json` | 添加 `hints.close_on_a` |
+| `report/settings_report.md` | 新增：mGBA 及显示设置项完整说明文档 |
+

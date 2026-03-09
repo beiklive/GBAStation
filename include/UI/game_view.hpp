@@ -41,11 +41,16 @@ class GameView : public brls::Box
     int  m_nvgImage = -1;
 
     // ---- Display configuration (scaling / filtering) ----------------
-    beiklive::DisplayConfig m_display;
+    beiklive::DisplayConfig  m_display;
+    beiklive::FilterMode     m_activeFilter = beiklive::FilterMode::Nearest;
 
     // ---- Independent game thread ------------------------------------
     std::thread       m_gameThread;
     std::atomic<bool> m_running{false};
+    std::atomic<bool> m_fastForward{false};
+
+    /// Multiplier applied when ZR is held: runsThisIter = FAST_FORWARD_MULT
+    static constexpr unsigned FAST_FORWARD_MULT = 4u;
 
     // ---- Helper methods ---------------------------------------------
     void initialize();
