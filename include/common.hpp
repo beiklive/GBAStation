@@ -28,19 +28,19 @@ using namespace brls::literals; // for _i18n
 #define BK_CoreConfigSave(config) mCoreConfigSavePath(config, BK_APP_CONFIG_FILE)
 #define BK_RES(path) beiklive::file::TransStrToRes(path)
 
-#define BK_APP_NAME "mGBA-NX"
+#define BK_APP_NAME "BKStation"
 #ifdef __SWITCH__
-#define BK_APP_ROOT_DIR "/mGBA-NX/"
-#define BK_APP_LOG_DIR "/mGBA-NX/log/"
-#define BK_APP_LOG_FILE "/mGBA-NX/log/mGBA-NX.log"
-#define BK_APP_CONFIG_DIR "/mGBA-NX/config/"
-#define BK_APP_CONFIG_FILE "/mGBA-NX/config/config.ini"
+#define BK_APP_ROOT_DIR "/BKStation/"
+#define BK_APP_LOG_DIR "/BKStation/log/"
+#define BK_APP_LOG_FILE "/BKStation/log/BKStation.log"
+#define BK_APP_CONFIG_DIR "/BKStation/config/"
+#define BK_APP_CONFIG_FILE "/BKStation/config/config.ini"
 #else
-#define BK_APP_ROOT_DIR "./mGBA-NX/"
-#define BK_APP_LOG_DIR "./mGBA-NX/log/"
-#define BK_APP_LOG_FILE "./mGBA-NX/log/mGBA-NX.log"
-#define BK_APP_CONFIG_DIR "./mGBA-NX/config/"
-#define BK_APP_CONFIG_FILE "./mGBA-NX/config/config.ini"
+#define BK_APP_ROOT_DIR "./BKStation/"
+#define BK_APP_LOG_DIR "./BKStation/log/"
+#define BK_APP_LOG_FILE "./BKStation/log/BKStation.log"
+#define BK_APP_CONFIG_DIR "./BKStation/config/"
+#define BK_APP_CONFIG_FILE "./BKStation/config/config.ini"
 #endif
 
 // 应用默认图标
