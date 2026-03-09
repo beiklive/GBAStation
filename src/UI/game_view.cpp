@@ -18,16 +18,25 @@
 #  include <nanovg/nanovg_gl.h>
 #endif
 
+#include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <deque>
+#include <string>
 #include <vector>
 #include <filesystem>
 
 #ifdef __SWITCH__
 #  include <switch.h>
+#endif
+
+#ifdef _WIN32
+#  define WIN32_LEAN_AND_MEAN
+#  include <windows.h>
+#  include <mmsystem.h>   // timeBeginPeriod / timeEndPeriod
 #endif
 
 // ============================================================
@@ -36,6 +45,8 @@
 static constexpr double MAX_REASONABLE_FPS = 240.0; ///< Safety cap for core-reported FPS
 static constexpr size_t STEREO_CHANNELS    = 2;     ///< Samples per audio frame (L + R)
 static constexpr double FPS_UPDATE_INTERVAL = 1.0;  ///< Seconds between FPS counter updates
+// Spin-wait guard (subtract from sleep to ensure we don't overshoot)
+static constexpr double SPIN_GUARD_SEC = 0.002;     ///< 2 ms spin-wait budget per frame
 
 // ============================================================
 // NanoVG helper: create NVG image from an existing GL texture.
@@ -141,6 +152,72 @@ static unsigned retroNameToId(const std::string& name)
     for (auto& m : k_retroNames)
         if (name == m.name) return m.id;
     return RETRO_DEVICE_ID_JOYPAD_MASK; // sentinel = not found
+}
+
+// ============================================================
+// Keyboard scancode name ↔ BrlsKeyboardScancode lookup
+// Allows config entries like   keyboard.a = X
+// instead of numeric values    keyboard.a = 88
+// ============================================================
+struct KbdKeyName { const char* name; int scancode; };
+static const KbdKeyName k_kbdKeyNames[] = {
+    // Printable letters
+    { "A", brls::BRLS_KBD_KEY_A }, { "B", brls::BRLS_KBD_KEY_B },
+    { "C", brls::BRLS_KBD_KEY_C }, { "D", brls::BRLS_KBD_KEY_D },
+    { "E", brls::BRLS_KBD_KEY_E }, { "F", brls::BRLS_KBD_KEY_F },
+    { "G", brls::BRLS_KBD_KEY_G }, { "H", brls::BRLS_KBD_KEY_H },
+    { "I", brls::BRLS_KBD_KEY_I }, { "J", brls::BRLS_KBD_KEY_J },
+    { "K", brls::BRLS_KBD_KEY_K }, { "L", brls::BRLS_KBD_KEY_L },
+    { "M", brls::BRLS_KBD_KEY_M }, { "N", brls::BRLS_KBD_KEY_N },
+    { "O", brls::BRLS_KBD_KEY_O }, { "P", brls::BRLS_KBD_KEY_P },
+    { "Q", brls::BRLS_KBD_KEY_Q }, { "R", brls::BRLS_KBD_KEY_R },
+    { "S", brls::BRLS_KBD_KEY_S }, { "T", brls::BRLS_KBD_KEY_T },
+    { "U", brls::BRLS_KBD_KEY_U }, { "V", brls::BRLS_KBD_KEY_V },
+    { "W", brls::BRLS_KBD_KEY_W }, { "X", brls::BRLS_KBD_KEY_X },
+    { "Y", brls::BRLS_KBD_KEY_Y }, { "Z", brls::BRLS_KBD_KEY_Z },
+    // Digits
+    { "0", brls::BRLS_KBD_KEY_0 }, { "1", brls::BRLS_KBD_KEY_1 },
+    { "2", brls::BRLS_KBD_KEY_2 }, { "3", brls::BRLS_KBD_KEY_3 },
+    { "4", brls::BRLS_KBD_KEY_4 }, { "5", brls::BRLS_KBD_KEY_5 },
+    { "6", brls::BRLS_KBD_KEY_6 }, { "7", brls::BRLS_KBD_KEY_7 },
+    { "8", brls::BRLS_KBD_KEY_8 }, { "9", brls::BRLS_KBD_KEY_9 },
+    // Special / control keys
+    { "SPACE",        brls::BRLS_KBD_KEY_SPACE         },
+    { "ENTER",        brls::BRLS_KBD_KEY_ENTER         },
+    { "BACKSPACE",    brls::BRLS_KBD_KEY_BACKSPACE      },
+    { "TAB",          brls::BRLS_KBD_KEY_TAB            },
+    { "ESC",          brls::BRLS_KBD_KEY_ESCAPE         },
+    { "ESCAPE",       brls::BRLS_KBD_KEY_ESCAPE         },
+    { "GRAVE",        brls::BRLS_KBD_KEY_GRAVE_ACCENT   },
+    { "GRAVE_ACCENT", brls::BRLS_KBD_KEY_GRAVE_ACCENT   },
+    // Arrow keys
+    { "UP",    brls::BRLS_KBD_KEY_UP    },
+    { "DOWN",  brls::BRLS_KBD_KEY_DOWN  },
+    { "LEFT",  brls::BRLS_KBD_KEY_LEFT  },
+    { "RIGHT", brls::BRLS_KBD_KEY_RIGHT },
+    // Function keys
+    { "F1",  brls::BRLS_KBD_KEY_F1  }, { "F2",  brls::BRLS_KBD_KEY_F2  },
+    { "F3",  brls::BRLS_KBD_KEY_F3  }, { "F4",  brls::BRLS_KBD_KEY_F4  },
+    { "F5",  brls::BRLS_KBD_KEY_F5  }, { "F6",  brls::BRLS_KBD_KEY_F6  },
+    { "F7",  brls::BRLS_KBD_KEY_F7  }, { "F8",  brls::BRLS_KBD_KEY_F8  },
+    { "F9",  brls::BRLS_KBD_KEY_F9  }, { "F10", brls::BRLS_KBD_KEY_F10 },
+    { "F11", brls::BRLS_KBD_KEY_F11 }, { "F12", brls::BRLS_KBD_KEY_F12 },
+};
+
+/// Parse a keyboard scancode from a config value: accepts integer strings
+/// (e.g. "88") or named strings (e.g. "x", "TAB", "enter") – case-insensitive.
+static int parseKbdScancode(const std::string& s)
+{
+    // Convert input to uppercase for case-insensitive comparison
+    std::string upper(s.size(), '\0');
+    std::transform(s.begin(), s.end(), upper.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+    for (auto& kn : k_kbdKeyNames) {
+        if (upper == kn.name) return kn.scancode;
+    }
+    // Fall back to integer parse
+    try { return std::stoi(s); } catch (...) {}
+    return -1;
 }
 
 // ============================================================
@@ -284,23 +361,23 @@ void GameView::initialize()
         cfg->SetDefault("handle.fastforward", CV(static_cast<int>(brls::BUTTON_RT)));
         cfg->SetDefault("handle.rewind",      CV(static_cast<int>(brls::BUTTON_LT)));
 
-        // ---- Keyboard mapping defaults (BrlsKeyboardScancode values) -
-        cfg->SetDefault("keyboard.a",      CV(static_cast<int>(brls::BRLS_KBD_KEY_X)));
-        cfg->SetDefault("keyboard.b",      CV(static_cast<int>(brls::BRLS_KBD_KEY_Z)));
-        cfg->SetDefault("keyboard.x",      CV(static_cast<int>(brls::BRLS_KBD_KEY_C)));
-        cfg->SetDefault("keyboard.y",      CV(static_cast<int>(brls::BRLS_KBD_KEY_A)));
-        cfg->SetDefault("keyboard.up",     CV(static_cast<int>(brls::BRLS_KBD_KEY_UP)));
-        cfg->SetDefault("keyboard.down",   CV(static_cast<int>(brls::BRLS_KBD_KEY_DOWN)));
-        cfg->SetDefault("keyboard.left",   CV(static_cast<int>(brls::BRLS_KBD_KEY_LEFT)));
-        cfg->SetDefault("keyboard.right",  CV(static_cast<int>(brls::BRLS_KBD_KEY_RIGHT)));
-        cfg->SetDefault("keyboard.start",  CV(static_cast<int>(brls::BRLS_KBD_KEY_ENTER)));
-        cfg->SetDefault("keyboard.select", CV(static_cast<int>(brls::BRLS_KBD_KEY_S)));
-        cfg->SetDefault("keyboard.l",      CV(static_cast<int>(brls::BRLS_KBD_KEY_Q)));
-        cfg->SetDefault("keyboard.r",      CV(static_cast<int>(brls::BRLS_KBD_KEY_W)));
-        cfg->SetDefault("keyboard.l2",     CV(static_cast<int>(brls::BRLS_KBD_KEY_E)));
-        cfg->SetDefault("keyboard.r2",     CV(static_cast<int>(brls::BRLS_KBD_KEY_R)));
-        cfg->SetDefault("keyboard.fastforward", CV(static_cast<int>(brls::BRLS_KBD_KEY_TAB)));
-        cfg->SetDefault("keyboard.rewind",      CV(static_cast<int>(brls::BRLS_KBD_KEY_GRAVE_ACCENT)));
+        // ---- Keyboard mapping defaults (use readable key names) -----------
+        cfg->SetDefault("keyboard.a",           CV(std::string("X")));
+        cfg->SetDefault("keyboard.b",           CV(std::string("Z")));
+        cfg->SetDefault("keyboard.x",           CV(std::string("C")));
+        cfg->SetDefault("keyboard.y",           CV(std::string("A")));
+        cfg->SetDefault("keyboard.up",          CV(std::string("UP")));
+        cfg->SetDefault("keyboard.down",        CV(std::string("DOWN")));
+        cfg->SetDefault("keyboard.left",        CV(std::string("LEFT")));
+        cfg->SetDefault("keyboard.right",       CV(std::string("RIGHT")));
+        cfg->SetDefault("keyboard.start",       CV(std::string("ENTER")));
+        cfg->SetDefault("keyboard.select",      CV(std::string("S")));
+        cfg->SetDefault("keyboard.l",           CV(std::string("Q")));
+        cfg->SetDefault("keyboard.r",           CV(std::string("W")));
+        cfg->SetDefault("keyboard.l2",          CV(std::string("E")));
+        cfg->SetDefault("keyboard.r2",          CV(std::string("R")));
+        cfg->SetDefault("keyboard.fastforward", CV(std::string("TAB")));
+        cfg->SetDefault("keyboard.rewind",      CV(std::string("GRAVE")));
 
         cfg->Save();
         m_core.setConfigManager(cfg);
@@ -486,7 +563,15 @@ void GameView::loadButtonMaps()
         for (auto& rn : k_retroNames) {
             if (rn.id == retroId) {
                 std::string cfgKey = std::string("keyboard.") + rn.name;
-                int sc = getCfgInt(cfg, cfgKey, def.scancode);
+                int sc = def.scancode; // fallback default
+                if (cfg) {
+                    auto v = cfg->Get(cfgKey);
+                    if (v) {
+                        // Support both numeric (e.g. 88) and named (e.g. "X") values
+                        if (auto i = v->AsInt())   sc = *i;
+                        else if (auto s = v->AsString()) sc = parseKbdScancode(*s);
+                    }
+                }
                 m_kbButtonMap.push_back({sc, retroId});
                 break;
             }
@@ -504,6 +589,15 @@ void GameView::startGameThread()
     m_fpsFrameCount  = 0;
     m_currentFps     = 0.0f;
 
+    // Configure audio backpressure threshold: ~4 game-frames worth of audio.
+    // This keeps the ring buffer lean so latency cannot build up over time.
+    {
+        double coreFps = m_core.fps();
+        if (coreFps <= 0.0 || coreFps > MAX_REASONABLE_FPS) coreFps = 60.0;
+        size_t maxLatencyFrames = static_cast<size_t>(32768.0 / coreFps * 4.0 + 0.5);
+        beiklive::AudioManager::instance().setMaxLatencyFrames(maxLatencyFrames);
+    }
+
     m_running.store(true, std::memory_order_release);
     m_gameThread = std::thread([this]() {
         double fps = m_core.fps();
@@ -512,6 +606,13 @@ void GameView::startGameThread()
         using Clock    = std::chrono::steady_clock;
         using Duration = std::chrono::duration<double>;
         const Duration frameDuration(1.0 / fps);
+        // Guard duration: subtract from coarse sleep so spin-wait finishes on time
+        const Duration spinGuard(SPIN_GUARD_SEC);
+
+#ifdef _WIN32
+        // Request 1 ms Windows timer resolution for accurate sleep_for()
+        timeBeginPeriod(1);
+#endif
 
         // Per-thread FPS counter
         Clock::time_point fpsTimerStart = Clock::now();
@@ -527,14 +628,22 @@ void GameView::startGameThread()
             bool rew     = m_rewinding.load(std::memory_order_relaxed);
 
             if (rew && m_rewindEnabled) {
-                // ---- Rewind: restore from buffer -------------------------
-                std::lock_guard<std::mutex> lk(m_rewindMutex);
-                for (unsigned step = 0; step < m_rewindStep && !m_rewindBuffer.empty(); ++step) {
-                    const auto& state = m_rewindBuffer.front();
-                    m_core.unserialize(state.data(), state.size());
-                    m_rewindBuffer.pop_front();
+                // ---- Rewind: restore from buffer then run to update video ----
+                bool didRestore = false;
+                {
+                    std::lock_guard<std::mutex> lk(m_rewindMutex);
+                    for (unsigned step = 0; step < m_rewindStep && !m_rewindBuffer.empty(); ++step) {
+                        const auto& state = m_rewindBuffer.front();
+                        m_core.unserialize(state.data(), state.size());
+                        m_rewindBuffer.pop_front();
+                        didRestore = true;
+                    }
                 }
-                // Drain audio during rewind (mute or pass through based on config)
+                // Run core after restoring state to produce a fresh video frame.
+                if (didRestore) {
+                    m_core.run();
+                }
+                // Drain audio (mute or pass through based on config)
                 {
                     std::vector<int16_t> dummy;
                     bool hasSamples = m_core.drainAudio(dummy) && !dummy.empty();
@@ -546,11 +655,11 @@ void GameView::startGameThread()
             } else {
                 // ---- Normal or fast-forward: run core --------------------
                 // Compute how many frames to run this iteration.
-                // For fast-forward, use the multiplier (supports fractional: e.g. 0.5x)
+                // For fast-forward with multiplier = N, run N frames per normal
+                // frame-period so effective speed = N × fps (exact multiplier).
+                // For sub-1x, run 1 frame but stretch the sleep duration.
                 unsigned runsThisIter = 1u;
                 if (ff) {
-                    // Convert multiplier to integer runs: at minimum 1
-                    // For sub-1x (e.g. 0.5), we still run 1 frame but sleep more
                     runsThisIter = (m_ffMultiplier >= 1.0f)
                         ? static_cast<unsigned>(std::round(m_ffMultiplier))
                         : 1u;
@@ -584,6 +693,8 @@ void GameView::startGameThread()
                     bool mute = (ff && m_ffMute) || !hasSamples;
                     if (!mute) {
                         size_t frames = samples.size() / STEREO_CHANNELS;
+                        // pushSamples() blocks if ring is too full, which
+                        // naturally synchronises game speed to audio output rate.
                         beiklive::AudioManager::instance().pushSamples(
                             samples.data(), frames);
                     }
@@ -606,24 +717,43 @@ void GameView::startGameThread()
             }
 
             // ---- Frame-rate control -------------------------------------
-            // During fast-forward with multiplier >= 1x: no sleep, run as fast as possible.
-            // During fast-forward with sub-1x speed: sleep longer to slow down.
-            // During rewind: use normal frame time.
-            // During normal play: sleep remaining frame time.
-            if (ff && m_ffMultiplier >= 1.0f) {
-                // Run as fast as possible
-            } else if (ff && m_ffMultiplier < 1.0f) {
-                // Slow down: sleep 1/multiplier frame durations
-                Duration slowDur(1.0 / (fps * m_ffMultiplier));
-                auto slowElapsed = Clock::now() - frameStart;
-                if (slowElapsed < slowDur)
-                    std::this_thread::sleep_for(slowDur - slowElapsed);
-            } else {
-                auto elapsed2 = Clock::now() - frameStart;
-                if (elapsed2 < frameDuration)
-                    std::this_thread::sleep_for(frameDuration - elapsed2);
+            // Target: complete one 'frameDuration' period per iteration.
+            //
+            // fast-forward (multiplier >= 1x):
+            //   runsThisIter frames were run; sleep for the same frameDuration.
+            //   Effective speed = runsThisIter / frameDuration = multiplier × fps. ✓
+            //
+            // fast-forward (sub-1x):
+            //   Stretch to 1/(fps*multiplier) per frame.
+            //
+            // normal / rewind:
+            //   Sleep for frameDuration.
+            //
+            // Hybrid sleep: coarse sleep for (target − spinGuard), then
+            // spin-wait for the remainder to compensate for OS timer
+            // granularity (up to ~15 ms on Windows without timeBeginPeriod).
+            {
+                Duration targetDur = frameDuration;
+                if (ff && m_ffMultiplier < 1.0f) {
+                    targetDur = Duration(1.0 / (fps * static_cast<double>(m_ffMultiplier)));
+                }
+
+                auto sleepTarget = frameStart + targetDur;
+                auto nowPre = Clock::now();
+                if (nowPre < sleepTarget) {
+                    // Coarse sleep (leave spinGuard for spin-wait)
+                    auto coarseDur = (sleepTarget - nowPre) - spinGuard;
+                    if (coarseDur.count() > 0)
+                        std::this_thread::sleep_for(coarseDur);
+                    // Spin-wait for precise deadline
+                    while (Clock::now() < sleepTarget) { /* busy spin */ }
+                }
             }
         }
+
+#ifdef _WIN32
+        timeEndPeriod(1);
+#endif
     });
 }
 
@@ -645,7 +775,13 @@ void GameView::stopGameThread()
 
 void GameView::cleanup()
 {
-    // Stop the emulation thread first (before destroying core/GL resources)
+    // Signal AudioManager to stop and wake any pushSamples() waiter BEFORE
+    // joining the game thread.  Without this, the game thread may be blocked
+    // inside pushSamples() waiting for ring space, causing a deadlock when
+    // stopGameThread() tries to join it.
+    beiklive::AudioManager::instance().deinit();
+
+    // Now safe to stop and join the emulation thread
     stopGameThread();
 
     // Clear rewind buffer
@@ -673,8 +809,6 @@ void GameView::cleanup()
         m_core.deinitCore();
         m_core.unload();
     }
-
-    beiklive::AudioManager::instance().deinit();
 
     m_initialized = false;
 }
@@ -775,11 +909,14 @@ void GameView::pollInput()
         if (platform2) {
             auto* im2 = platform2->getInputManager();
             if (im2) {
-                // keyboard.fastforward (default: TAB)
+                // keyboard.fastforward (default: TAB) – supports named or numeric values
                 int kbFfKey = static_cast<int>(brls::BRLS_KBD_KEY_TAB);
                 if (gameRunner && gameRunner->settingConfig) {
                     auto v = gameRunner->settingConfig->Get("keyboard.fastforward");
-                    if (v) { if (auto i = v->AsInt()) kbFfKey = *i; }
+                    if (v) {
+                        if (auto i = v->AsInt())   kbFfKey = *i;
+                        else if (auto s = v->AsString()) kbFfKey = parseKbdScancode(*s);
+                    }
                 }
                 ffKey = im2->getKeyboardKeyState(static_cast<brls::BrlsKeyboardScancode>(kbFfKey));
             }
@@ -810,10 +947,14 @@ void GameView::pollInput()
             if (platform3) {
                 auto* im3 = platform3->getInputManager();
                 if (im3) {
+                    // keyboard.rewind (default: GRAVE) – supports named or numeric values
                     int kbRewKey = static_cast<int>(brls::BRLS_KBD_KEY_GRAVE_ACCENT);
                     if (gameRunner && gameRunner->settingConfig) {
                         auto v = gameRunner->settingConfig->Get("keyboard.rewind");
-                        if (v) { if (auto i = v->AsInt()) kbRewKey = *i; }
+                        if (v) {
+                            if (auto i = v->AsInt())   kbRewKey = *i;
+                            else if (auto s = v->AsString()) kbRewKey = parseKbdScancode(*s);
+                        }
                     }
                     rewKey = im3->getKeyboardKeyState(static_cast<brls::BrlsKeyboardScancode>(kbRewKey));
                 }
