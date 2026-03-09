@@ -61,6 +61,24 @@ endif ()
 
 add_subdirectory(third_party)
 
+# mGBA: 目标创建后再补充编译宏（Switch/newlib + POSIX/GNU 扩展）
+foreach(_mgba_tgt IN ITEMS mgba mgba_libretro)
+    if (TARGET ${_mgba_tgt} AND NOT WIN32)
+        target_compile_definitions(${_mgba_tgt} PRIVATE
+            _POSIX_C_SOURCE=200809L
+            _GNU_SOURCE
+        )
+    endif ()
+
+    if (TARGET ${_mgba_tgt} AND PLATFORM_SWITCH)
+        target_compile_definitions(${_mgba_tgt} PRIVATE
+            HAVE_LOCALE
+            HAVE_STRTOF_L
+            HAVE_LOCALTIME_R
+        )
+    endif ()
+endforeach()
+
 find_package(Threads REQUIRED)
 list(APPEND APP_PLATFORM_LIB ${CMAKE_THREAD_LIBS_INIT})
 
