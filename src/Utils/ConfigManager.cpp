@@ -1,5 +1,6 @@
 #include "Utils/ConfigManager.hpp"
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <limits>
@@ -117,9 +118,14 @@ bool ConfigManager::Save() const {
 	std::ofstream out(filePath_, std::ios::trunc);
 	if (!out.is_open()) return false;
 
+	std::vector<std::string> keys;
+	keys.reserve(entries_.size());
 	for (const auto& [key, entry] : entries_) {
-		if (!entry.persist) continue;
-		out << key << "=" << SerializeValue(entry.value) << "\n";
+		if (entry.persist) keys.push_back(key);
+	}
+	std::sort(keys.begin(), keys.end());
+	for (const auto& key : keys) {
+		out << key << "=" << SerializeValue(entries_.at(key).value) << "\n";
 	}
 	return true;
 }
