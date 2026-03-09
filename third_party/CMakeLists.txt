@@ -45,10 +45,14 @@ set(BUILD_SDL OFF CACHE BOOL "禁用 mGBA 的 SDL 前端" FORCE)
 
 # mGBA 内部通过 `DEFINED SWITCH`（CMake 变量）检测 Switch 平台；
 # borealis 工具链设置的是 PLATFORM_SWITCH，不会触发 mGBA 的逻辑。
-# 在此手动对齐，使 mGBA 能正确进入嵌入式平台分支：
-#   set(USE_SQLITE3 OFF) / set(IS_EMBEDDED ON) 等。
+# 但该版本的 mGBA 没有 src/platform/switch 目录，直接设置 SWITCH=TRUE
+# 会导致 add_subdirectory 找不到目录而报错。
+# 因此手动复制 mGBA IS_EMBEDDED 分支中实际需要的 OFF 项：
 if (PLATFORM_SWITCH)
-    set(SWITCH TRUE CACHE BOOL "Nintendo Switch platform (for mGBA detection)" FORCE)
+    set(USE_SQLITE3     OFF CACHE BOOL "" FORCE)
+    set(USE_DEBUGGERS   OFF CACHE BOOL "" FORCE)
+    set(USE_DISCORD_RPC OFF CACHE BOOL "" FORCE)
+    set(USE_LIBZIP      OFF CACHE BOOL "" FORCE)
 endif ()
 
 # 禁止 mGBA 构建文档、性能分析及各类测试相关目标
