@@ -1,0 +1,24 @@
+{
+    "title": "BKStation",
+    "tabs": {
+        "select":  "Home",
+        "settings": "Settings",
+        "about": "About"
+    },
+    "select": {
+        "file": "File List",
+        "recent": "Recent",
+        "favorites": "Favorites"
+    },
+    "hints":{
+        "APP" : "Game Library",
+        "FILE" : "File List",
+        "start" : "Launch",
+        "set" : "Settings",
+        "UP" : "Parent Directory",
+        "exit" : "Exit",
+        "exit_game" : "Exit Game",
+        "back" : "Back"
+
+    }
+}

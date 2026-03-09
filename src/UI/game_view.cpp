@@ -4,14 +4,21 @@
 #include <borealis.hpp>
 #include <borealis/core/application.hpp>
 
-// Include all NanoVG GL variant declarations (without implementations)
-// so nvglCreateImageFromHandle* functions are visible in this translation unit.
-#define NANOVG_GL2
-#define NANOVG_GL3
-#define NANOVG_GLES2
-#define NANOVG_GLES3
-#include <nanovg/nanovg_gl.h>
+// ---- NanoVG GL backend include (must match the active borealis backend) ----
+#ifdef BOREALIS_USE_OPENGL
+#  ifdef USE_GLES3
+#    define NANOVG_GLES3
+#  elif defined(USE_GLES2)
+#    define NANOVG_GLES2
+#  elif defined(USE_GL2)
+#    define NANOVG_GL2
+#  else
+#    define NANOVG_GL3
+#  endif
+#  include <nanovg/nanovg_gl.h>
+#endif
 
+#include <chrono>
 #include <cstring>
 #include <vector>
 #include <filesystem>
@@ -19,6 +26,12 @@
 #ifdef __SWITCH__
 #  include <switch.h>
 #endif
+
+// ============================================================
+// Game thread constants
+// ============================================================
+static constexpr double MAX_REASONABLE_FPS = 240.0; ///< Safety cap for core-reported FPS
+static constexpr size_t STEREO_CHANNELS    = 2;     ///< Samples per audio frame (L + R)
 
 // ============================================================
 // NanoVG helper: create NVG image from an existing GL texture.
@@ -42,6 +55,7 @@ static int nvgImageFromGLTexture(NVGcontext* vg, GLuint tex,
 
 // ============================================================
 // Button mapping: borealis ControllerButton → retro joypad ID
+// BUTTON_X is reserved as the in-game exit key (not mapped to game).
 // ============================================================
 struct ButtonMap {
     brls::ControllerButton brl;
@@ -51,7 +65,6 @@ struct ButtonMap {
 static const ButtonMap k_buttonMap[] = {
     { brls::BUTTON_A,          RETRO_DEVICE_ID_JOYPAD_A      },
     { brls::BUTTON_B,          RETRO_DEVICE_ID_JOYPAD_B      },
-    { brls::BUTTON_X,          RETRO_DEVICE_ID_JOYPAD_X      },
     { brls::BUTTON_Y,          RETRO_DEVICE_ID_JOYPAD_Y      },
     { brls::BUTTON_UP,         RETRO_DEVICE_ID_JOYPAD_UP     },
     { brls::BUTTON_DOWN,       RETRO_DEVICE_ID_JOYPAD_DOWN   },
@@ -101,11 +114,9 @@ GameView::GameView()
     setFocusable(true);
     setHideHighlight(true);
 
-    // Prevent Borealis from intercepting navigation / face buttons while
-    // the game has focus.  The game reads input via pollInput() each frame.
+    // Swallow all game buttons so Borealis doesn't process them as navigation.
     beiklive::swallow(this, brls::BUTTON_A);
     beiklive::swallow(this, brls::BUTTON_B);
-    beiklive::swallow(this, brls::BUTTON_X);
     beiklive::swallow(this, brls::BUTTON_Y);
     beiklive::swallow(this, brls::BUTTON_UP);
     beiklive::swallow(this, brls::BUTTON_DOWN);
@@ -121,6 +132,14 @@ GameView::GameView()
     beiklive::swallow(this, brls::BUTTON_RT);
     beiklive::swallow(this, brls::BUTTON_START);
     beiklive::swallow(this, brls::BUTTON_BACK);
+
+    // BUTTON_X: exit game and return to main menu.
+    registerAction("beiklive/hints/exit_game"_i18n, brls::BUTTON_X, [this](brls::View*) {
+        bklog::info("GameView: exit requested via BUTTON_X");
+        stopGameThread();
+        brls::Application::popActivity();
+        return true;
+    }, false, false, brls::SOUND_CLICK);
 }
 
 GameView::~GameView()
@@ -193,12 +212,12 @@ void GameView::initialize()
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-    // Pre-allocate with game dimensions
+    // Pre-allocate with game dimensions using GL_RGBA (universally supported)
     unsigned gw = m_core.gameWidth()  > 0 ? m_core.gameWidth()  : 256;
     unsigned gh = m_core.gameHeight() > 0 ? m_core.gameHeight() : 224;
     std::vector<uint32_t> blank(gw * gh, 0xFF000000u);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, static_cast<GLsizei>(gw),
-                 static_cast<GLsizei>(gh), 0, GL_BGRA, GL_UNSIGNED_BYTE,
+                 static_cast<GLsizei>(gh), 0, GL_RGBA, GL_UNSIGNED_BYTE,
                  blank.data());
     glBindTexture(GL_TEXTURE_2D, 0);
 
@@ -212,6 +231,64 @@ void GameView::initialize()
 
     m_initialized = true;
     bklog::info("GameView initialized successfully");
+
+    // ---- Start independent emulation thread ---------------------------
+    startGameThread();
+}
+
+// ============================================================
+// startGameThread – launches the emulation loop in a new thread
+// ============================================================
+
+void GameView::startGameThread()
+{
+    m_running.store(true, std::memory_order_release);
+    m_gameThread = std::thread([this]() {
+        double fps = m_core.fps();
+        if (fps <= 0.0 || fps > MAX_REASONABLE_FPS) fps = 60.0;
+
+        using Clock    = std::chrono::steady_clock;
+        using Duration = std::chrono::duration<double>;
+        const Duration frameDuration(1.0 / fps);
+
+        while (m_running.load(std::memory_order_acquire)) {
+            auto frameStart = Clock::now();
+
+            // Poll controller input and forward to the core
+            pollInput();
+
+            // Run one emulation frame
+            m_core.run();
+
+            // Drain audio samples and push to AudioManager
+            {
+                std::vector<int16_t> samples;
+                if (m_core.drainAudio(samples) && !samples.empty()) {
+                    size_t frames = samples.size() / STEREO_CHANNELS;
+                    beiklive::AudioManager::instance().pushSamples(
+                        samples.data(), frames);
+                }
+            }
+
+            // Frame-rate control: sleep for the remainder of the frame budget
+            auto elapsed = Clock::now() - frameStart;
+            if (elapsed < frameDuration) {
+                std::this_thread::sleep_for(frameDuration - elapsed);
+            }
+        }
+    });
+}
+
+// ============================================================
+// stopGameThread – signals and joins the emulation thread
+// ============================================================
+
+void GameView::stopGameThread()
+{
+    m_running.store(false, std::memory_order_release);
+    if (m_gameThread.joinable()) {
+        m_gameThread.join();
+    }
 }
 
 // ============================================================
@@ -220,6 +297,9 @@ void GameView::initialize()
 
 void GameView::cleanup()
 {
+    // Stop the emulation thread first (before destroying core/GL resources)
+    stopGameThread();
+
     if (m_nvgImage >= 0) {
         // NVG_IMAGE_NODELETE is set, so NanoVG won't delete the GL texture
         // itself; we only need to free the NVG handle.
@@ -246,7 +326,7 @@ void GameView::cleanup()
 }
 
 // ============================================================
-// uploadFrame – copy XRGB8888 pixels from libretro into the GL texture
+// uploadFrame – copy RGBA8888 pixels from libretro into the GL texture
 // ============================================================
 
 void GameView::uploadFrame(NVGcontext* vg,
@@ -259,11 +339,11 @@ void GameView::uploadFrame(NVGcontext* vg,
     bool sizeChanged = (frame.width  != m_texWidth ||
                         frame.height != m_texHeight);
     if (sizeChanged) {
-        // Resize the texture
+        // Resize the texture (pixels are RGBA8888)
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
                      static_cast<GLsizei>(frame.width),
                      static_cast<GLsizei>(frame.height),
-                     0, GL_BGRA, GL_UNSIGNED_BYTE,
+                     0, GL_RGBA, GL_UNSIGNED_BYTE,
                      frame.pixels.data());
         m_texWidth  = frame.width;
         m_texHeight = frame.height;
@@ -279,7 +359,7 @@ void GameView::uploadFrame(NVGcontext* vg,
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
                         static_cast<GLsizei>(frame.width),
                         static_cast<GLsizei>(frame.height),
-                        GL_BGRA, GL_UNSIGNED_BYTE,
+                        GL_RGBA, GL_UNSIGNED_BYTE,
                         frame.pixels.data());
     }
 
@@ -303,7 +383,7 @@ void GameView::pollInput()
 }
 
 // ============================================================
-// draw – main per-frame render entry point
+// draw – per-frame render entry point (GL upload + NVG render only)
 // ============================================================
 
 void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
@@ -330,22 +410,8 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
         return;
     }
 
-    // ---- Poll controller input ----------------------------------------
-    pollInput();
-
-    // ---- Run one emulation frame --------------------------------------
-    m_core.run();
-
-    // ---- Feed audio samples to AudioManager --------------------------
-    {
-        std::vector<int16_t> samples;
-        if (m_core.drainAudio(samples) && !samples.empty()) {
-            size_t frames = samples.size() / 2; // stereo
-            beiklive::AudioManager::instance().pushSamples(samples.data(), frames);
-        }
-    }
-
-    // ---- Upload video frame to GL texture ----------------------------
+    // ---- Upload the latest video frame to the GL texture -------------
+    // (The emulation runs in a separate thread; we only consume the result.)
     {
         auto frame = m_core.getVideoFrame();
         if (!frame.pixels.empty()) {
@@ -398,3 +464,4 @@ void GameView::onLayout()
 {
     Box::onLayout();
 }
+
