@@ -82,13 +82,47 @@ endforeach()
 find_package(Threads REQUIRED)
 list(APPEND APP_PLATFORM_LIB ${CMAKE_THREAD_LIBS_INIT})
 
-# mGBA 相关=============
-# 链接 third_party/ 目录中构建的静态库目标 'mgba'。
-# mGBA 以 PUBLIC 方式导出头文件路径，链接后会自动传播
-# 至所有依赖它的目标，无需手动添加 include 路径。
+# mGBA libretro core – expose the mGBA header path so LibretroLoader.hpp
+# can include third_party/mgba/src/platform/libretro/libretro.h
+include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR})
 message(STATUS "Building mGBA from source (third_party/mgba)")
-# list(APPEND APP_PLATFORM_LIB mgba)
-# mGBA 相关=============
+
+# ============================================================
+# Audio: use native platform audio APIs.
+#   Linux   → ALSA  (libasound)
+#   Windows → WinMM (mmsystem)
+#   macOS   → CoreAudio (AudioUnit)
+#   Switch  → libnx audout
+# ============================================================
+if (PLATFORM_DESKTOP)
+    if (UNIX AND NOT APPLE)
+        # Linux – ALSA
+        find_library(ALSA_LIB asound)
+        if (ALSA_LIB)
+            list(APPEND APP_PLATFORM_LIB ${ALSA_LIB})
+            add_compile_definitions(BK_AUDIO_ALSA)
+            message(STATUS "Audio backend: ALSA (${ALSA_LIB})")
+        else()
+            message(STATUS "Audio backend: none (libasound not found, samples discarded)")
+        endif()
+    elseif (WIN32)
+        list(APPEND APP_PLATFORM_LIB winmm)
+        add_compile_definitions(BK_AUDIO_WINMM)
+        message(STATUS "Audio backend: WinMM")
+    elseif (APPLE)
+        list(APPEND APP_PLATFORM_LIB
+             "-framework AudioUnit"
+             "-framework CoreAudio"
+             "-framework CoreServices")
+        add_compile_definitions(BK_AUDIO_COREAUDIO)
+        message(STATUS "Audio backend: CoreAudio")
+    endif()
+elseif (PLATFORM_SWITCH)
+    # audout is provided by libnx – already linked via borealis/toolchain
+    message(STATUS "Audio backend: libnx audout")
+else()
+    message(STATUS "Audio backend: none (samples will be discarded)")
+endif ()
 
 include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/include)
 file(GLOB_RECURSE MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
@@ -169,3 +203,17 @@ endif ()
 target_include_directories(${PROJECT_NAME} PRIVATE ${APP_PLATFORM_INCLUDE})
 target_compile_options(${PROJECT_NAME} PRIVATE -ffunction-sections -fdata-sections ${APP_PLATFORM_OPTION})
 target_link_libraries(${PROJECT_NAME} PRIVATE borealis ${APP_PLATFORM_LIB})
+
+# ============================================================
+# Post-build: copy mgba_libretro shared library next to the
+# BKStation executable so that LibretroLoader can find it
+# via a relative "./mgba_libretro.*" path.
+# ============================================================
+if (TARGET mgba_libretro)
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:mgba_libretro>
+            $<TARGET_FILE_DIR:${PROJECT_NAME}>/$<TARGET_FILE_NAME:mgba_libretro>
+        COMMENT "Copying mgba_libretro to output directory"
+    )
+endif ()
