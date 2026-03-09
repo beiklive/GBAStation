@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.10)
 
 
 
-set(BOREALIS_LIBRARY ${CMAKE_CURRENT_SOURCE_DIR}/extern/borealis/library)
-set(MGBA_PATH        ${CMAKE_CURRENT_SOURCE_DIR}/extern/mgba)
+set(BOREALIS_LIBRARY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/borealis/library)
+set(MGBA_PATH        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mgba)
 
 # 构建选项
 include(${BOREALIS_LIBRARY}/cmake/commonOption.cmake)
@@ -40,7 +40,7 @@ if (USE_LIBROMFS)
     add_libromfs(${PROJECT_NAME} ${PROJECT_RESOURCES})
 endif ()
 
-add_subdirectory(extern)
+add_subdirectory(third_party)
 
 find_package(Threads REQUIRED)
 list(APPEND APP_PLATFORM_LIB ${CMAKE_THREAD_LIBS_INIT})
@@ -50,10 +50,10 @@ list(APPEND APP_PLATFORM_LIB ${CMAKE_THREAD_LIBS_INIT})
 # file(GLOB_RECURSE MAIN_SRC demo/*.cpp)
 
 # mGBA 相关=============
-# 链接 extern/ 目录中构建的静态库目标 'mgba'。
+# 链接 third_party/ 目录中构建的静态库目标 'mgba'。
 # mGBA 以 PUBLIC 方式导出头文件路径，链接后会自动传播
 # 至所有依赖它的目标，无需手动添加 include 路径。
-message(STATUS "Building mGBA from source (extern/mgba)")
+message(STATUS "Building mGBA from source (third_party/mgba)")
 list(APPEND APP_PLATFORM_LIB mgba)
 # mGBA 相关=============
 
@@ -80,7 +80,7 @@ if (PLATFORM_DESKTOP)
         endif ()
     endif ()
 elseif (PLATFORM_SWITCH)
-    list(APPEND MAIN_SRC ${CMAKE_SOURCE_DIR}/extern/borealis/library/lib/platforms/switch/switch_wrapper.c)
+    list(APPEND MAIN_SRC ${CMAKE_SOURCE_DIR}/third_party/borealis/library/lib/platforms/switch/switch_wrapper.c)
 endif ()
 
 
