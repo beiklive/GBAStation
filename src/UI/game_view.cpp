@@ -859,7 +859,7 @@ void GameView::startGameThread()
                 }
 
                 // Advance accumulated target by one frame.
-                nextFrameTarget += targetDur;
+                nextFrameTarget += std::chrono::duration_cast<Clock::duration>(targetDur);
 
                 // Anti-drift: if the frame ran over budget, sync nextFrameTarget
                 // to now so the next frame gets a fresh full budget instead of
