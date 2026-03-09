@@ -695,12 +695,27 @@ void GameView::startGameThread()
         // frameDuration budget starting from the current wall-clock instant.
         auto nextFrameTarget = Clock::now();
 
+#ifdef __SWITCH__
+        // Track fast-forward state to detect the fast-forward→normal transition.
+        bool prevFastForward = false;
+#endif
+
         while (m_running.load(std::memory_order_acquire)) {
             // Poll controller input and forward to the core
             pollInput();
 
             bool ff      = m_fastForward.load(std::memory_order_relaxed);
             bool rew     = m_rewinding.load(std::memory_order_relaxed);
+
+#ifdef __SWITCH__
+            // When fast-forward ends, flush any stale audio samples from the ring
+            // buffer so they are not played back at normal speed (which would
+            // sound like noise or a brief burst of sped-up audio).
+            if (prevFastForward && !ff) {
+                beiklive::AudioManager::instance().flushRingBuffer();
+            }
+            prevFastForward = ff;
+#endif
 
             // framesThisIter tracks how many logical frames were rendered,
             // used by the FPS counter below.

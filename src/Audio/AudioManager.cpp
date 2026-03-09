@@ -89,6 +89,18 @@ void AudioManager::pushSamples(const int16_t* data, size_t frames)
 }
 
 // ============================================================
+// flushRingBuffer – discard all buffered samples
+// ============================================================
+
+void AudioManager::flushRingBuffer()
+{
+    std::lock_guard<std::mutex> lk(m_mutex);
+    m_available = 0;
+    m_writePos  = m_readPos; // collapse read/write pointers: nothing to read
+    m_spaceCV.notify_all();  // wake any blocked pushSamples() caller
+}
+
+// ============================================================
 // ============================================================
 // SWITCH – libnx audout backend
 // ============================================================
@@ -99,12 +111,16 @@ static constexpr int    SWITCH_OUT_RATE   = 48000;
 // Reduced from 1024 to 512 for lower hardware latency (~21ms per buffer)
 static constexpr size_t SWITCH_FRAMES     = 512;
 static constexpr size_t SWITCH_BYTES      = SWITCH_FRAMES * 2 * sizeof(int16_t);
+// Number of hardware audio buffers to keep in flight simultaneously.
+// More buffers = more pre-buffered audio = fewer gaps under load, at the
+// cost of slightly higher total audio latency.
+static constexpr int    SWITCH_N_BUFFERS  = 4;
 
 struct SwitchAudioState {
-    alignas(0x1000) int16_t bufData[2][SWITCH_FRAMES * 2];
-    AudioOutBuffer outBuf[2];
-    int            curBuf = 0;
-    AudioOutBuffer* released = nullptr;
+    alignas(0x1000) int16_t bufData[SWITCH_N_BUFFERS][SWITCH_FRAMES * 2];
+    AudioOutBuffer outBuf[SWITCH_N_BUFFERS];
+    int            curBuf         = 0;
+    u32            enqueuedBuffers = 0;
 };
 
 bool AudioManager::init(int sampleRate, int channels)
@@ -119,13 +135,19 @@ bool AudioManager::init(int sampleRate, int channels)
     if (R_FAILED(audoutInitialize())) { delete sw; m_platformState = nullptr; return false; }
     if (R_FAILED(audoutStartAudioOut())) { audoutExit(); delete sw; m_platformState = nullptr; return false; }
 
-    for (int i = 0; i < 2; ++i) {
+    for (int i = 0; i < SWITCH_N_BUFFERS; ++i) {
+        memset(sw->bufData[i], 0, SWITCH_FRAMES * 2 * sizeof(int16_t));
         sw->outBuf[i].next        = nullptr;
         sw->outBuf[i].buffer      = sw->bufData[i];
         sw->outBuf[i].buffer_size = SWITCH_BYTES;
         sw->outBuf[i].data_size   = SWITCH_BYTES;
         sw->outBuf[i].data_offset = 0;
+        // Pre-queue all buffers filled with silence so hardware playback
+        // starts immediately and runs gaplessly from the first frame.
+        audoutAppendAudioOutBuffer(&sw->outBuf[i]);
     }
+    sw->enqueuedBuffers = SWITCH_N_BUFFERS;
+    sw->curBuf          = 0;
 
     m_ring.resize(RING_CAPACITY);
     m_running = true;
@@ -143,13 +165,34 @@ void AudioManager::audioThreadFunc()
 #endif
     auto* sw = static_cast<SwitchAudioState*>(m_platformState);
     while (m_running) {
+        // Non-blocking drain: reclaim any buffers the hardware already finished.
+        {
+            AudioOutBuffer* released = nullptr;
+            u32 relCount = 0;
+            audoutWaitPlayFinish(&released, &relCount, 0);
+            if (relCount > 0 && sw->enqueuedBuffers >= relCount)
+                sw->enqueuedBuffers -= relCount;
+        }
+
+        // If all hardware buffer slots are occupied, wait for at least one to
+        // be released before we can reuse it.  Use a short timeout so we can
+        // exit cleanly when m_running is cleared.
+        while (sw->enqueuedBuffers >= SWITCH_N_BUFFERS && m_running) {
+            AudioOutBuffer* released = nullptr;
+            u32 relCount = 0;
+            // 10 ms timeout – keeps CPU usage low while still reacting quickly
+            audoutWaitPlayFinish(&released, &relCount, 10000000);
+            if (relCount > 0 && sw->enqueuedBuffers >= relCount)
+                sw->enqueuedBuffers -= relCount;
+        }
+
+        if (!m_running) break;
+
+        // --- Fill the next buffer slot with (resampled) PCM data -----------
         int16_t* dst = sw->bufData[sw->curBuf];
 
         // Calculate the exact number of core-rate input frames needed to produce
         // SWITCH_FRAMES output frames at SWITCH_OUT_RATE via resampling.
-        // inputFrames = round(SWITCH_FRAMES * coreSampleRate / 48000)
-        // This avoids over-draining the ring buffer (which caused audio glitches
-        // in release builds where emulation ran faster than expected).
         double ratio = static_cast<double>(m_sampleRate) / SWITCH_OUT_RATE;
         size_t inputFrames = static_cast<size_t>(SWITCH_FRAMES * ratio + 0.5);
         if (inputFrames == 0) inputFrames = 1;
@@ -175,8 +218,10 @@ void AudioManager::audioThreadFunc()
             memcpy(dst, tmp, SWITCH_FRAMES * 2 * sizeof(int16_t));
         }
 
-        audoutPlayBuffer(&sw->outBuf[sw->curBuf], &sw->released);
-        sw->curBuf ^= 1;
+        // Append the filled buffer to the hardware queue (non-blocking).
+        audoutAppendAudioOutBuffer(&sw->outBuf[sw->curBuf]);
+        sw->curBuf = (sw->curBuf + 1) % SWITCH_N_BUFFERS;
+        ++sw->enqueuedBuffers;
     }
 }
 

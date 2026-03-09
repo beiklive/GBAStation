@@ -57,6 +57,11 @@ public:
     /// Default: RING_CAPACITY / 2.
     void setMaxLatencyFrames(size_t frames) { m_maxLatencySamples = frames * static_cast<size_t>(m_channels); }
 
+    /// Discard all samples currently held in the ring buffer and wake any
+    /// pushSamples() caller that is blocked.  Use this when switching from
+    /// fast-forward back to normal speed to prevent stale audio being played.
+    void flushRingBuffer();
+
 private:
     AudioManager()  = default;
     ~AudioManager() = default;
