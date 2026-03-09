@@ -40,7 +40,7 @@ if (USE_LIBROMFS)
     add_libromfs(${PROJECT_NAME} ${PROJECT_RESOURCES})
 endif ()
 
-add_subdirectory(third_party)
+
 
 # 为 mGBA 打开 POSIX/GNU 扩展，确保 strdup 有声明
 if (TARGET mgba AND NOT WIN32)
@@ -59,12 +59,10 @@ if (TARGET mgba AND PLATFORM_SWITCH)
     )
 endif ()
 
+add_subdirectory(third_party)
+
 find_package(Threads REQUIRED)
 list(APPEND APP_PLATFORM_LIB ${CMAKE_THREAD_LIBS_INIT})
-
-# 设置源文件与头文件路径
-# list(APPEND APP_PLATFORM_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/demo/include)
-# file(GLOB_RECURSE MAIN_SRC demo/*.cpp)
 
 # mGBA 相关=============
 # 链接 third_party/ 目录中构建的静态库目标 'mgba'。

@@ -41,20 +41,22 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/borealis/library)
 
 set(BUILD_LIBRETRO ON  CACHE BOOL "" FORCE)
 # set(SKIP_LIBRARY   ON  CACHE BOOL "" FORCE)   # 只构建核心，跳过 libmgba
-# set(BUILD_SDL      OFF CACHE BOOL "" FORCE)
-# set(BUILD_QT       OFF CACHE BOOL "" FORCE)
+set(BUILD_SDL      OFF CACHE BOOL "" FORCE)
+set(BUILD_QT       OFF CACHE BOOL "" FORCE)
 
 # mGBA 内部通过 `DEFINED SWITCH`（CMake 变量）检测 Switch 平台；
 # borealis 工具链设置的是 PLATFORM_SWITCH，不会触发 mGBA 的逻辑。
 # 但该版本的 mGBA 没有 src/platform/switch 目录，直接设置 SWITCH=TRUE
 # 会导致 add_subdirectory 找不到目录而报错。
 # 因此手动复制 mGBA IS_EMBEDDED 分支中实际需要的 OFF 项：
-# if (PLATFORM_SWITCH)
-#     set(USE_SQLITE3     OFF CACHE BOOL "" FORCE)
+if (PLATFORM_SWITCH)
+    set(CMAKE_TOOLCHAIN_FILE   "mgba/src/platform/switch/CMakeToolchain.txt")
+
+    set(USE_SQLITE3     OFF CACHE BOOL "" FORCE)
 #     set(USE_DEBUGGERS   OFF CACHE BOOL "" FORCE)
 #     set(USE_DISCORD_RPC OFF CACHE BOOL "" FORCE)
 #     set(USE_LIBZIP      OFF CACHE BOOL "" FORCE)
-# endif ()
+endif ()
 
 # 禁止 mGBA 构建文档、性能分析及各类测试相关目标
 set(BUILD_PERF     OFF CACHE BOOL "" FORCE)
