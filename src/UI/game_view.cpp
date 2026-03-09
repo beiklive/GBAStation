@@ -785,6 +785,20 @@ void GameView::startGameThread()
                     bool mute = (ff && m_ffMute) || !hasSamples;
                     if (!mute) {
                         size_t frames = samples.size() / STEREO_CHANNELS;
+                        // During fast-forward (multiplier > 1) with audio not muted,
+                        // limit the audio pushed to one normal frame's worth of samples.
+                        // Running N frames per loop iteration generates N× the usual
+                        // audio, which would saturate the ring buffer and cause
+                        // pushSamples() to block indefinitely, freezing the game thread.
+                        if (ff && m_ffMultiplier > 1.0f) {
+                            // Divide in floating-point first for precision, then round to
+                            // the nearest integer sample-frame count.
+                            size_t limit = static_cast<size_t>(
+                                std::round(static_cast<double>(frames) / m_ffMultiplier));
+                            // If limit rounds to zero the total is already tiny; push all.
+                            if (limit > 0)
+                                frames = limit;
+                        }
                         beiklive::AudioManager::instance().pushSamples(samples.data(), frames);
                     }
                 }
