@@ -19,7 +19,19 @@
         "exit" : "Exit",
         "exit_game" : "Exit Game",
         "back" : "Back",
-        "close_on_a" : "Press A to close"
-
+        "close_on_a" : "Press A to close",
+        "confirm" : "Confirm",
+        "operate" : "Options"
+    },
+    "file": {
+        "file_select" : "File Browser"
+    },
+    "sidebar": {
+        "rename" : "Rename",
+        "set_mapping" : "Set Display Name",
+        "cut" : "Cut",
+        "paste" : "Paste",
+        "delete" : "Delete",
+        "delete_confirm" : "Confirm delete?"
     }
 }
