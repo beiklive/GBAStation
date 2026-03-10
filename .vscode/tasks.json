@@ -1,0 +1,65 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "生成win",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "-B",
+                "build_windows",
+                "-G",
+                "Ninja",
+                "-DCMAKE_BUILD_TYPE=Release",
+                "-DCMAKE_POLICY_VERSION_MINIMUM=3.5",
+                "-DPLATFORM_DESKTOP=ON"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build"
+        },
+        {
+            "label": "cmake编译",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "build_windows",
+                "--config",
+                "Release"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build"
+        },
+        {
+            "label": "运行app",
+            "type": "process",
+            "command": ".\\BKStation.exe",
+            "args": [
+                "-d",
+                "-v",
+                "-o"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}\\build_windows"
+            },
+            "group": "test"
+        },
+        {
+            "label": "构建并运行Windows版本",
+            "dependsOn": [
+                "生成win",
+                "cmake编译",
+                "运行app"
+            ],
+            "dependsOrder": "sequence",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
+    ]
+}

@@ -1,0 +1,7 @@
+{
+    "cmake.generator": "Ninja",                     // 对应 -G Ninja
+    "cmake.configureArgs": [
+        "-DCMAKE_POLICY_VERSION_MINIMUM=3.5",
+        "-DPLATFORM_DESKTOP=ON"
+    ]
+}
