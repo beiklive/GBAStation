@@ -42,10 +42,13 @@ static const std::vector<std::string> k_zipExtensions = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Returns the resource path of the icon that should represent @p item.
-static std::string getFileIconPath(const FileListItem& item)
+/// The icon variant (_light / _dark) is selected based on @p theme.
+static std::string getFileIconPath(const FileListItem& item, brls::ThemeVariant theme)
 {
+    const std::string variant = (theme == brls::ThemeVariant::LIGHT) ? "_light" : "_dark";
+
     if (item.isDir)
-        return BK_RES("/img/file/up_light.png");
+        return BK_RES(std::string("/img/file/up") + variant + ".png");
 
     const std::string suffix = beiklive::string::getFileSuffix(item.fileName);
 
@@ -56,12 +59,12 @@ static std::string getFileIconPath(const FileListItem& item)
         return false;
     };
 
-    if (matchesSuffix(k_gbExtensions))    return BK_RES("/img/file/gb_light.png");
-    if (matchesSuffix(k_gbaExtensions))   return BK_RES("/img/file/gba_light.png");
-    if (matchesSuffix(k_imageExtensions)) return BK_RES("/img/file/image_light.png");
-    if (matchesSuffix(k_zipExtensions))   return BK_RES("/img/file/zip_light.png");
+    if (matchesSuffix(k_gbExtensions))    return BK_RES(std::string("/img/file/gb")    + variant + ".png");
+    if (matchesSuffix(k_gbaExtensions))   return BK_RES(std::string("/img/file/gba")   + variant + ".png");
+    if (matchesSuffix(k_imageExtensions)) return BK_RES(std::string("/img/file/image") + variant + ".png");
+    if (matchesSuffix(k_zipExtensions))   return BK_RES(std::string("/img/file/zip")   + variant + ".png");
 
-    return BK_RES("/img/file/file_light.png");
+    return BK_RES(std::string("/img/file/file") + variant + ".png");
 }
 
 
@@ -179,7 +182,8 @@ void FileListCell::setItem(const FileListItem& item, int index)
 {
     m_index = index;
     m_nameLabel->setText(item.displayName());
-    m_icon->setImageFromFile(getFileIconPath(item));
+    auto theme = brls::Application::getPlatform()->getThemeVariant();
+    m_icon->setImageFromFile(getFileIconPath(item, theme));
 
     if (item.isDir)
     {
