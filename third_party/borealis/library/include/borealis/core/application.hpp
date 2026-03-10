@@ -83,6 +83,14 @@ class Application
     static Platform* getPlatform();
     static AudioPlayer* getAudioPlayer();
 
+    /**
+     * Override the platform's default AudioPlayer with a custom implementation.
+     * The caller retains ownership of the player; it must remain valid for the
+     * lifetime of the Application. Passing nullptr restores the platform default.
+     * All sounds are re-loaded with the new player.
+     */
+    static void setAudioPlayer(AudioPlayer* player);
+
     static NVGcontext* getNVGContext();
     inline static float contentWidth, contentHeight;
 
@@ -366,6 +374,8 @@ class Application
     inline static bool drawCoursor          = false;
 
     inline static Platform* platform = nullptr;
+
+    inline static AudioPlayer* customAudioPlayer = nullptr; ///< optional override set by setAudioPlayer()
 
     inline static std::string title;
 
