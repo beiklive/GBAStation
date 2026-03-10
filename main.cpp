@@ -3,6 +3,7 @@
 #include <string>
 
 #include "common.hpp"
+#include "Audio/BKAudioPlayer.hpp"
 #include "UI/Img_text_cell.hpp"
 #include "UI/List_view.hpp"
 #include "UI/game_view.hpp"
@@ -129,6 +130,14 @@ int main(int argc, char* argv[]) {
 		return EXIT_FAILURE;
 	}
 	brls::Application::createWindow("beiklive/title"_i18n);
+
+	// On desktop platforms, inject BeikLive's own audio player so that
+	// borealis UI sound effects (button clicks, navigation, etc.) are played
+	// via native OS audio rather than the built-in NullAudioPlayer stub.
+#ifndef __SWITCH__
+	static beiklive::BKAudioPlayer g_bkAudioPlayer;
+	brls::Application::setAudioPlayer(&g_bkAudioPlayer);
+#endif
 
 	RunnerInit();
 

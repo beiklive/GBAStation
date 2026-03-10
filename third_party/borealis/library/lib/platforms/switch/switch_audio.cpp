@@ -128,21 +128,21 @@ bool SwitchAudioPlayer::play(enum Sound sound, float pitch)
     if (sound == SOUND_NONE)
         return true;
 
-//    // Load the sound if needed
-//    if (this->sounds[sound] == PLSR_PLAYER_INVALID_SOUND)
-//    {
-//        if (!this->load(sound))
-//            return false;
-//    }
-//
-//    // Play the sound
-//    plsrPlayerSetPitch(this->sounds[sound], pitch);
-//    PLSR_RC rc = plsrPlayerPlay(this->sounds[sound]);
-//    if (PLSR_RC_FAILED(rc))
-//    {
-//        Logger::error("Unable to play sound {}: {:#x}", sound, rc);
-//        return false;
-//    }
+    // Load the sound if needed
+    if (this->sounds[sound] == PLSR_PLAYER_INVALID_SOUND)
+    {
+        if (!this->load(sound))
+            return false;
+    }
+
+    // Play the sound
+    plsrPlayerSetPitch(this->sounds[sound], pitch);
+    PLSR_RC rc = plsrPlayerPlay(this->sounds[sound]);
+    if (PLSR_RC_FAILED(rc))
+    {
+        Logger::error("Unable to play sound {}: {:#x}", sound, rc);
+        return false;
+    }
 
     return true;
 }
