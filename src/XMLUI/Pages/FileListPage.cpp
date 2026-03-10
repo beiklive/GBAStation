@@ -617,6 +617,7 @@ void FileListPage::refreshList(const std::string& path)
     // Determine the logo load mode from settings:
     // 0 = do not display; 1 = load on focus (default); 2 = prefetch
     int logoMode = 1;
+    SettingManager->SetDefault("UI.logoLoadMode", 1);
     if (SettingManager && SettingManager->Contains("UI.logoLoadMode"))
         logoMode = *SettingManager->Get("UI.logoLoadMode")->AsInt();
 
