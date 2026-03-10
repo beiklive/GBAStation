@@ -7,6 +7,10 @@
 #include "Utils/fileUtils.hpp"
 #include "Utils/strUtils.hpp"
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 using namespace brls::literals; // for _i18n
 
 namespace fs = std::filesystem;
@@ -113,6 +117,29 @@ static int countChildren(const std::string& path)
     }
     return n;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Windows: enumerate available drive letters (A: … Z:)
+// ─────────────────────────────────────────────────────────────────────────────
+#ifdef _WIN32
+/// Returns a list of available drive root paths such as {"C:\\", "D:\\", "F:\\"}.
+static std::vector<std::string> getWindowsDrives()
+{
+    std::vector<std::string> drives;
+    DWORD mask = GetLogicalDrives();
+    for (int i = 0; i < 26; ++i)
+    {
+        if (mask & (1u << i))
+        {
+            std::string drive;
+            drive += static_cast<char>('A' + i);
+            drive += ":\\";
+            drives.push_back(drive);
+        }
+    }
+    return drives;
+}
+#endif
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  FileListCell
@@ -286,6 +313,9 @@ FileListPage::FileListPage()
 
     const std::string key = "UI.fileListLayoutMode";
     SettingManager->SetDefault(key, static_cast<int>(LayoutMode::ListOnly));
+
+    // Initialise logo load mode setting default (1 = load on focus)
+    SettingManager->SetDefault("UI.logoLoadMode", 1);
 
     int layoutModeInt = *SettingManager->Get(key)->AsInt();
     setLayoutMode(static_cast<LayoutMode>(layoutModeInt));
@@ -476,6 +506,27 @@ std::string FileListPage::lookupMappedName(const std::string& name, bool isDir) 
     return {};
 }
 
+std::string FileListPage::lookupLogoPath(const std::string& name, bool isDir) const
+{
+    if (!logoManager)
+        return {};
+
+    std::string key;
+    if (isDir)
+    {
+        key = name;
+    }
+    else
+    {
+        auto dot = name.rfind('.');
+        key      = (dot != std::string::npos) ? name.substr(0, dot) : name;
+    }
+
+    if (auto val = logoManager->Get(key); val && val->AsString())
+        return *val->AsString();
+    return {};
+}
+
 bool FileListPage::passesFilter(const std::string& suffix) const
 {
     if (!m_filterEnabled || m_filterSuffixes.empty())
@@ -497,12 +548,19 @@ bool FileListPage::passesFilter(const std::string& suffix) const
 void FileListPage::refreshList(const std::string& path)
 {
     m_currentPath = path;
+    m_inDriveListMode = false;
     updateHeader();
     clearDetailPanel();
 
     auto rawList = beiklive::file::listDir(path, beiklive::file::SortBy::TypeThenName);
 
     m_dataSource->items.clear();
+
+    // Determine the logo load mode from settings:
+    // 0 = do not display; 1 = load on focus (default); 2 = prefetch
+    int logoMode = 1;
+    if (SettingManager && SettingManager->Contains("UI.logoLoadMode"))
+        logoMode = *SettingManager->Get("UI.logoLoadMode")->AsInt();
 
     for (const auto& fullPath : rawList)
     {
@@ -524,6 +582,11 @@ void FileListPage::refreshList(const std::string& path)
         item.isDir      = isDir;
         item.mappedName = lookupMappedName(name, isDir);
 
+        // Prefetch logo path when logoMode == 2 (prefetch) or 1 (on-focus will
+        // also do the lookup in updateDetailPanel, but we store the key here)
+        if (logoMode != 0)
+            item.logoPath = lookupLogoPath(name, isDir);
+
         if (isDir)
         {
             item.childCount = countChildren(fullPath);
@@ -541,6 +604,18 @@ void FileListPage::refreshList(const std::string& path)
         }
 
         m_dataSource->items.push_back(std::move(item));
+    }
+
+    // When the filtered list is empty and we are NOT at the root, add a ".."
+    // entry so the user can navigate back even when all files are hidden by filter.
+    if (m_dataSource->items.empty() && !beiklive::file::is_root_directory(m_currentPath))
+    {
+        FileListItem dotdot;
+        dotdot.fileName   = "..";
+        dotdot.fullPath   = beiklive::file::getParentPath(m_currentPath);
+        dotdot.isDir      = true;
+        dotdot.childCount = 0;
+        m_dataSource->items.push_back(std::move(dotdot));
     }
 
     m_recycler->reloadData();
@@ -582,7 +657,15 @@ void FileListPage::updateDetailPanel(const FileListItem& item)
     else
         m_detailInfo->setText(formatFileSize(item.fileSize));
 
-    // Try to find a thumbnail image with the same base name next to the file
+    // Priority 1: logo path from logoManager
+    if (!item.logoPath.empty() &&
+        beiklive::file::getPathType(item.logoPath) == beiklive::file::PathType::File)
+    {
+        m_detailThumb->setImageFromFile(item.logoPath);
+        return;
+    }
+
+    // Priority 2: thumbnail image next to the file (same base name)
     if (!item.isDir)
     {
         auto dot = item.fullPath.rfind('.');
@@ -596,13 +679,64 @@ void FileListPage::updateDetailPanel(const FileListItem& item)
             }
         }
     }
+
+    // Priority 3: default logo
     m_detailThumb->setImageFromFile(BK_APP_DEFAULT_LOGO);
+}
+
+void FileListPage::showDriveList()
+{
+#ifdef _WIN32
+    m_inDriveListMode = true;
+    m_currentPath     = "";
+
+    if (m_header)
+    {
+        m_header->setPath("beiklive/file/drives"_i18n);
+        m_header->setInfo("");
+    }
+    clearDetailPanel();
+
+    m_dataSource->items.clear();
+
+    for (const auto& drivePath : getWindowsDrives())
+    {
+        FileListItem item;
+        item.fileName   = drivePath.substr(0, 2); // e.g. "C:"
+        item.fullPath   = drivePath;              // e.g. "C:\\"
+        item.isDir      = true;
+        item.childCount = 0;
+        m_dataSource->items.push_back(std::move(item));
+    }
+
+    m_recycler->reloadData();
+
+    if (m_header)
+    {
+        int total = static_cast<int>(m_dataSource->items.size());
+        m_header->setInfo(std::to_string(total) + "/" + std::to_string(total));
+    }
+#endif
 }
 
 void FileListPage::navigateUp()
 {
+#ifdef _WIN32
+    // When in drive-list mode, there is nowhere to go further up – silently ignore
+    if (m_inDriveListMode)
+        return;
+
+    // When at a drive root (e.g. "C:\"), go up to the drive-letter list
+    if (beiklive::file::is_root_directory(m_currentPath))
+    {
+        showDriveList();
+        return;
+    }
+#else
     if (beiklive::file::is_root_directory(m_currentPath))
         return;
+#endif
+
     std::string parent = beiklive::file::getParentPath(m_currentPath);
     if (parent.empty())
         parent = "/";
@@ -614,6 +748,7 @@ void FileListPage::openItem(const FileListItem& item)
     if (item.isDir)
     {
         refreshList(item.fullPath);
+        return;
     }
 
     // File: find and invoke the appropriate callback
@@ -628,6 +763,30 @@ void FileListPage::openItem(const FileListItem& item)
     }
     if (m_defaultFileCallback)
         m_defaultFileCallback(item);
+}
+
+void FileListPage::doNewFolder()
+{
+    brls::Application::getPlatform()->getImeManager()->openForText(
+        [this](const std::string& folderName) {
+            if (folderName.empty())
+                return;
+            try
+            {
+                fs::path newDir = fs::path(m_currentPath) / folderName;
+                fs::create_directory(newDir);
+                bklog::info("Created folder: {}", newDir.string());
+                refreshList(m_currentPath);
+            }
+            catch (const std::exception& e)
+            {
+                bklog::error("Create folder failed: {}", e.what());
+            }
+        },
+        "beiklive/sidebar/new_folder"_i18n,
+        "",
+        128,
+        "");
 }
 
 // ─────────── Callbacks from DataSource/Cell ──────────────────────────────────
@@ -659,34 +818,53 @@ void FileListPage::openSidebar(int itemIndex)
     if (itemIndex < 0 || itemIndex >= static_cast<int>(m_dataSource->items.size()))
         return;
 
+    // If an external settings panel handler is set, delegate to it (StartPageView)
+    if (onOpenSettings)
+    {
+        onOpenSettings(m_dataSource->items[itemIndex], itemIndex);
+        return;
+    }
+
+    // Fallback: use a built-in Dropdown (should not normally be reached when
+    // the host correctly sets onOpenSettings)
     const FileListItem& item = m_dataSource->items[itemIndex];
 
-    // Build option list and record which index maps to paste/delete
-    std::vector<std::string> options = {
-        "beiklive/sidebar/rename"_i18n,    // 0
-        "beiklive/sidebar/set_mapping"_i18n, // 1
-        "beiklive/sidebar/cut"_i18n          // 2
+    // Build option list – use a struct so we avoid index-arithmetic bugs when
+    // rename is conditionally excluded on non-Switch platforms.
+    struct Option {
+        std::string label;
+        std::function<void()> action;
     };
+    std::vector<Option> opts;
 
-    const bool hasPaste  = m_hasClipboard;
-    const int  pasteIdx  = hasPaste ? 3 : -1;
-    const int  deleteIdx = hasPaste ? 4 : 3;
+#ifdef __SWITCH__
+    // Rename is only supported on Switch (IME + filesystem write access)
+    opts.push_back({ "beiklive/sidebar/rename"_i18n,
+                     [this, itemIndex]() { doRename(itemIndex); } });
+#endif
 
-    if (hasPaste)
-        options.push_back("beiklive/sidebar/paste"_i18n);
-    options.push_back("beiklive/sidebar/delete"_i18n);
+    opts.push_back({ "beiklive/sidebar/set_mapping"_i18n,
+                     [this, itemIndex]() { doSetMapping(itemIndex); } });
+    opts.push_back({ "beiklive/sidebar/cut"_i18n,
+                     [this, itemIndex]() { doCut(itemIndex); } });
+
+    if (m_hasClipboard)
+        opts.push_back({ "beiklive/sidebar/paste"_i18n,
+                         [this]() { doPaste(); } });
+
+    opts.push_back({ "beiklive/sidebar/delete"_i18n,
+                     [this, itemIndex]() { doDelete(itemIndex); } });
+
+    std::vector<std::string> labels;
+    for (const auto& o : opts)
+        labels.push_back(o.label);
 
     auto* dropdown = new brls::Dropdown(
         item.displayName(),
-        options,
-        [this, itemIndex, pasteIdx, deleteIdx](int sel) {
-            if (sel < 0)
-                return;
-            if (sel == 0)           doRename(itemIndex);
-            else if (sel == 1)      doSetMapping(itemIndex);
-            else if (sel == 2)      doCut(itemIndex);
-            else if (sel == pasteIdx && pasteIdx >= 0) doPaste();
-            else if (sel == deleteIdx) doDelete(itemIndex);
+        labels,
+        [opts](int sel) {
+            if (sel >= 0 && sel < static_cast<int>(opts.size()))
+                opts[sel].action();
         });
 
     brls::Application::pushActivity(new brls::Activity(dropdown));

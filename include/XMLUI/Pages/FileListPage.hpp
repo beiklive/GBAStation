@@ -22,6 +22,7 @@ struct FileListItem
     std::string fullPath;   ///< absolute path
     std::uintmax_t fileSize = 0; ///< bytes (files only)
     int         childCount  = 0; ///< direct-child count (dirs only)
+    std::string logoPath;   ///< logo image path from logoManager (may be empty)
 
     /// Returns mappedName when available, else fileName
     const std::string& displayName() const
@@ -127,6 +128,19 @@ class FileListPage : public brls::Box
     void onItemActivated(int index);
     void openSidebar(int itemIndex);
 
+    // ── Settings panel callback (set by StartPageView) ───────────────────────
+    /// Called when the user presses BUTTON_X to open the settings / operation panel.
+    /// The host (StartPageView) should display its own overlay panel.
+    std::function<void(const FileListItem&, int)> onOpenSettings;
+
+    // ── File-operation helpers exposed for external callers ──────────────────
+    void doRenamePublic(int itemIndex)    { doRename(itemIndex); }
+    void doSetMappingPublic(int itemIndex){ doSetMapping(itemIndex); }
+    void doCutPublic(int itemIndex)       { doCut(itemIndex); }
+    void doPastePublic()                  { doPaste(); }
+    void doDeletePublic(int itemIndex)    { doDelete(itemIndex); }
+    void doNewFolder();
+
   private:
     // ── UI components ────────────────────────────────────────────────────────
     beiklive::UI::BrowserHeader*    m_header      = nullptr;
@@ -146,6 +160,9 @@ class FileListPage : public brls::Box
     // ── Data ─────────────────────────────────────────────────────────────────
     std::string         m_currentPath;
     FileListDataSource* m_dataSource = nullptr;
+
+    // ── Drive-list mode (Windows only) ───────────────────────────────────────
+    bool m_inDriveListMode = false; ///< true when showing Windows drive letters
 
     // ── Clipboard ────────────────────────────────────────────────────────────
     FileListItem m_clipboardItem;
@@ -174,6 +191,10 @@ class FileListPage : public brls::Box
     void updateDetailPanel(const FileListItem& item);
     void clearDetailPanel();
     std::string lookupMappedName(const std::string& name, bool isDir) const;
+    std::string lookupLogoPath(const std::string& name, bool isDir) const;
+
+    // Drive-list helpers (Windows)
+    void showDriveList();
 
     // Sidebar actions
     void doRename(int itemIndex);

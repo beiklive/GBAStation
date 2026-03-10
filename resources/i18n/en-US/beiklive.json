@@ -21,10 +21,15 @@
         "back" : "Back",
         "close_on_a" : "Press A to close",
         "confirm" : "Confirm",
-        "operate" : "Options"
+        "operate" : "Options",
+        "close" : "Close",
+        "zoom_in" : "Zoom In",
+        "zoom_out" : "Zoom Out",
+        "reset" : "Reset View"
     },
     "file": {
-        "file_select" : "File Browser"
+        "file_select" : "File Browser",
+        "drives" : "Drive List"
     },
     "sidebar": {
         "rename" : "Rename",
@@ -32,6 +37,8 @@
         "cut" : "Cut",
         "paste" : "Paste",
         "delete" : "Delete",
-        "delete_confirm" : "Confirm delete?"
+        "delete_confirm" : "Confirm delete?",
+        "new_folder" : "New Folder",
+        "close_panel" : "Close"
     }
 }
