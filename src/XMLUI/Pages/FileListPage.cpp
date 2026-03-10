@@ -21,10 +21,51 @@ static constexpr float NAME_FONT_SIZE  = 26.f;
 static constexpr float DETAIL_THUMB_SZ = 180.f;
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  File-type extension tables
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Game Boy / Game Boy Color ROM extensions
+static const std::vector<std::string> k_gbExtensions  = { "gb", "gbc" };
+/// Game Boy Advance ROM extensions
+static const std::vector<std::string> k_gbaExtensions = { "gba" };
+/// Common image file extensions
+static const std::vector<std::string> k_imageExtensions = {
+    "png", "jpg", "jpeg", "bmp", "gif", "webp", "tga"
+};
+/// Common archive / compressed-file extensions
+static const std::vector<std::string> k_zipExtensions = {
+    "zip", "rar", "7z", "gz", "tar", "bz2", "xz", "zst"
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Returns the resource path of the icon that should represent @p item.
+/// The icon variant (_light / _dark) is selected based on @p theme.
+static std::string getFileIconPath(const FileListItem& item, brls::ThemeVariant theme)
+{
+    const std::string variant = (theme == brls::ThemeVariant::LIGHT) ? "_light" : "_dark";
 
+    if (item.isDir)
+        return BK_RES(std::string("/img/file/up") + variant + ".png");
+
+    const std::string suffix = beiklive::string::getFileSuffix(item.fileName);
+
+    auto matchesSuffix = [&suffix](const std::vector<std::string>& exts) {
+        for (const auto& ext : exts)
+            if (beiklive::string::iequals(ext, suffix))
+                return true;
+        return false;
+    };
+
+    if (matchesSuffix(k_gbExtensions))    return BK_RES(std::string("/img/file/gb")    + variant + ".png");
+    if (matchesSuffix(k_gbaExtensions))   return BK_RES(std::string("/img/file/gba")   + variant + ".png");
+    if (matchesSuffix(k_imageExtensions)) return BK_RES(std::string("/img/file/image") + variant + ".png");
+    if (matchesSuffix(k_zipExtensions))   return BK_RES(std::string("/img/file/zip")   + variant + ".png");
+
+    return BK_RES(std::string("/img/file/file") + variant + ".png");
+}
 
 
 /// Format a file size in bytes as a human-readable string (KB / MB / GB).
@@ -141,6 +182,8 @@ void FileListCell::setItem(const FileListItem& item, int index)
 {
     m_index = index;
     m_nameLabel->setText(item.displayName());
+    auto theme = brls::Application::getPlatform()->getThemeVariant();
+    m_icon->setImageFromFile(getFileIconPath(item, theme));
 
     if (item.isDir)
     {
@@ -273,7 +316,7 @@ void FileListPage::buildUI()
     m_header = new beiklive::UI::BrowserHeader();
     m_header->setTitle("beiklive/file/file_select"_i18n);
     m_header->setPath("/");
-    m_header->setInfo("1/200");
+    m_header->setInfo("");
     addView(m_header);
 
     // ── Content row (list + optional detail panel) ────────────────────────
@@ -501,6 +544,12 @@ void FileListPage::refreshList(const std::string& path)
     }
 
     m_recycler->reloadData();
+
+    if (m_header)
+    {
+        int total = static_cast<int>(m_dataSource->items.size());
+        m_header->setInfo("0/" + std::to_string(total));
+    }
 }
 
 void FileListPage::updateHeader()
@@ -585,6 +634,12 @@ void FileListPage::openItem(const FileListItem& item)
 
 void FileListPage::onItemFocused(int index)
 {
+    if (m_header && index >= 0)
+    {
+        int total = static_cast<int>(m_dataSource->items.size());
+        m_header->setInfo(std::to_string(index + 1) + "/" + std::to_string(total));
+    }
+
     if (m_layoutMode != LayoutMode::ListAndDetail)
         return;
     if (index < 0 || index >= static_cast<int>(m_dataSource->items.size()))
