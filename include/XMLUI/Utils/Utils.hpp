@@ -24,6 +24,9 @@ class BrowserHeader : public brls::Box
     brls::Box* m_titleBox = nullptr;
     brls::Box* m_subtitleBox = nullptr;
 
+
+    
+
 };
 
 

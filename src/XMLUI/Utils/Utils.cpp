@@ -1,38 +1,53 @@
 #include "XMLUI/Utils/Utils.hpp"
 #include "common.hpp"
 
+void beiklive::swallow(brls::View* v, brls::ControllerButton btn)
+{
+    v->registerAction("", btn, [](brls::View*) { return true; },
+                      /*hidden=*/true);
+}
+
+
 beiklive::UI::BrowserHeader::BrowserHeader()
 {
-    this->setJustifyContent(brls::JustifyContent::FLEX_START);
-    this->setHeight(beiklive::getStyle().getMetric("beiklive/header/header_height"));
-    this->setPaddingLeft(beiklive::getStyle().getMetric("beiklive/body/padding_left"));
-    this->setPaddingRight(beiklive::getStyle().getMetric("beiklive/body/padding_right"));
+    
+    this->setJustifyContent(brls::JustifyContent::CENTER);
+
+    this->setHeight(GET_STYLE("brls/applet_frame/header_height"));
+    this->setPaddingTop(GET_STYLE("brls/applet_frame/header_padding_top_bottom"));
+    this->setPaddingBottom(GET_STYLE("brls/applet_frame/header_padding_top_bottom"));
+    this->setMarginRight(GET_STYLE("brls/applet_frame/padding_sides"));
+    this->setMarginLeft(GET_STYLE("brls/applet_frame/padding_sides"));
+    
+    this->setLineColor(GET_THEME_COLOR("beiklive/line"));
+    this->setLineBottom(1.f);
+    
 
     m_titleBox = new brls::Box();
-    m_titleBox->setMarginRight(8.f);
 
     m_titleLabel = new brls::Label();
-    float FontSize = beiklive::getStyle().getMetric("beiklive/header/font_size");
+    float FontSize = GET_STYLE("brls/applet_frame/header_title_font_size");
     m_titleLabel->setFontSize(FontSize + 2);
     
     m_titleBox->addView(m_titleLabel);
     this->addView(m_titleBox);
 
     m_subtitleBox = new brls::Box(brls::Axis::COLUMN);
-    m_titleBox->setMarginRight(2.f);
+    m_titleBox->setMarginRight(GET_STYLE("brls/applet_frame/header_title_top_offset"));
     m_subtitleBox->setJustifyContent(brls::JustifyContent::CENTER);
 
     m_pathLabel = new brls::Label();
-    m_pathLabel->setFontSize(FontSize/2);
-    m_pathLabel->setTextColor(beiklive::getTheme().getColor("beiklive/subtitle"));
+    m_pathLabel->setFontSize(FontSize/2 + 2);
+    m_pathLabel->setTextColor(GET_THEME_COLOR("beiklive/subtitle"));
 
     m_fileNameLabel = new brls::Label();
     m_fileNameLabel->setFontSize(FontSize/2);
-    m_fileNameLabel->setTextColor(beiklive::getTheme().getColor("beiklive/subtitle"));
+    m_fileNameLabel->setTextColor(GET_THEME_COLOR("beiklive/subtitle"));
     m_subtitleBox->addView(m_fileNameLabel);
     m_subtitleBox->addView(m_pathLabel);
     this->addView(m_subtitleBox);
 
+    this->addView(new brls::Padding());
 
 }
 

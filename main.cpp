@@ -123,15 +123,20 @@ int main(int argc, char* argv[]) {
 	brls::Application::createWindow("beiklive/title"_i18n);
 
 	RunnerInit();
+
+	beiklive::RegisterStyles();
+	beiklive::RegisterThemes();
+
+
 	// brls::Application::getPlatform()->setThemeVariant(brls::ThemeVariant::DARK);
 
 	// brls::Application::setGlobalQuit(true);
 
-	brls::Application::registerXMLView("HomeMenuListView", HomeMenuListView::create);
-	brls::Application::registerXMLView("Img_text_cell", Img_text_cell::create);
+	// brls::Application::registerXMLView("HomeMenuListView", HomeMenuListView::create);
+	// brls::Application::registerXMLView("Img_text_cell", Img_text_cell::create);
 
-	brls::Application::registerXMLView("CaptionedImage", CaptionedImage::create);
-	brls::Application::registerXMLView("StartPageView", StartPageView::create);
+	// brls::Application::registerXMLView("CaptionedImage", CaptionedImage::create);
+	// brls::Application::registerXMLView("StartPageView", StartPageView::create);
 
 	auto* t_StartPageView = new StartPageView();
 	gameRunner->uiParams->StartPageframe = new brls::AppletFrame(t_StartPageView);
@@ -142,7 +147,6 @@ int main(int argc, char* argv[]) {
 	gameRunner->uiParams->StartPageframe->setTitle("beiklive/title"_i18n);
     gameRunner->uiParams->StartPageframe->setHeaderVisibility(brls::Visibility::GONE);
     gameRunner->uiParams->StartPageframe->setFooterVisibility(brls::Visibility::GONE);
-	// gameRunner->uiParams->StartPageframe->getFooter()->setBackgroundColor(nvgRGBA(89, 164, 249, 100));
 	brls::Application::pushActivity(new brls::Activity(gameRunner->uiParams->StartPageframe));
 
 	// Run the app

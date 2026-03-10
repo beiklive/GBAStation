@@ -24,17 +24,40 @@ StartPageView::StartPageView()
     setAxis(brls::Axis::COLUMN);
 
     // Background image (absolute positioning, does not participate in layout)
-    m_bgImage = new brls::Image();
-    m_bgImage->setFocusable(false);
-    m_bgImage->setPositionType(brls::PositionType::ABSOLUTE);
-    m_bgImage->setPositionTop(0);
-    m_bgImage->setPositionLeft(0);
-    m_bgImage->setWidthPercentage(100);
-    m_bgImage->setHeightPercentage(100);
-    m_bgImage->setScalingType(brls::ImageScalingType::FIT);
-    m_bgImage->setInterpolation(brls::ImageInterpolation::LINEAR);
-    m_bgImage->setImageFromFile(BK_APP_DEFAULT_BG);
-    addView(m_bgImage);
+    // m_bgImage = new brls::Image();
+    // m_bgImage->setFocusable(false);
+    // m_bgImage->setPositionType(brls::PositionType::ABSOLUTE);
+    // m_bgImage->setPositionTop(0);
+    // m_bgImage->setPositionLeft(0);
+    // m_bgImage->setWidthPercentage(100);
+    // m_bgImage->setHeightPercentage(100);
+    // m_bgImage->setScalingType(brls::ImageScalingType::FIT);
+    // m_bgImage->setInterpolation(brls::ImageInterpolation::LINEAR);
+    // m_bgImage->setImageFromFile(BK_APP_DEFAULT_BG);
+    // addView(m_bgImage);
+}
+void StartPageView::ActionInit()
+{
+    // 移除默认操作
+    beiklive::swallow(gameRunner->uiParams->StartPageframe, brls::BUTTON_X);
+    beiklive::swallow(gameRunner->uiParams->StartPageframe, brls::BUTTON_Y);
+    beiklive::swallow(gameRunner->uiParams->StartPageframe, brls::BUTTON_B);
+    beiklive::swallow(gameRunner->uiParams->StartPageframe, brls::BUTTON_LT);
+    beiklive::swallow(gameRunner->uiParams->StartPageframe, brls::BUTTON_RT);
+
+    // Quit action
+    gameRunner->uiParams->StartPageframe->registerAction(
+        "beiklive/hints/exit"_i18n,
+        brls::BUTTON_START,
+        [](brls::View*) {
+            auto dialog = new brls::Dialog("hints/exit_hint"_i18n);
+            dialog->addButton("hints/cancel"_i18n, []() {});
+            dialog->addButton("hints/ok"_i18n, []()
+                { brls::Application::quit(); });
+            dialog->open();
+            return true;
+        });
+
 }
 
 void StartPageView::Init()
@@ -44,18 +67,7 @@ void StartPageView::Init()
     if (!gameRunner)
         return;
 
-    // Swallow BUTTON_B so it never triggers a back-navigation on this page.
-    beiklive::swallow(gameRunner->uiParams->StartPageframe, brls::BUTTON_B);
-
-    // Quit action
-    gameRunner->uiParams->StartPageframe->registerAction(
-        "beiklive/hints/exit"_i18n,
-        brls::BUTTON_START,
-        [](brls::View*) {
-            bklog::debug("Exit app");
-            brls::Application::quit();
-            return true;
-        });
+    ActionInit();
 
     // Choose initial page based on the start_page_index setting
     int startPageIndex = 0;
@@ -112,16 +124,13 @@ void StartPageView::createFileListPage()
 
     // Default file callback: launch the game
     m_fileListPage->setDefaultFileCallback([](const FileListItem& item) {
-#ifdef __SWITCH__
         auto* frame = new brls::AppletFrame(new GameView(item.fullPath));
         frame->setHeaderVisibility(brls::Visibility::GONE);
         frame->setFooterVisibility(brls::Visibility::GONE);
         frame->setBackground(brls::ViewBackground::NONE);
         brls::Application::pushActivity(new brls::Activity(frame));
-#endif
     });
-
-    m_fileListPage->navigateTo(ROOT_PATH);
+    SettingManager->Contains("last_game_path") ? m_fileListPage->navigateTo(*gameRunner->settingConfig->Get("last_game_path")->AsString()) : m_fileListPage->navigateTo(ROOT_PATH);
 }
 
 // ─────────── Page switching ──────────────────────────────────────────────────
@@ -138,17 +147,19 @@ void StartPageView::showAppPage()
         addView(m_appPage);
     m_appPage->setVisibility(brls::Visibility::VISIBLE);
     m_activeIndex = 0;
-
+    beiklive::swallow(this, brls::BUTTON_RT);
     // Bind LT → switch to FileListPage
     registerAction("beiklive/hints/FILE"_i18n,
                    brls::ControllerButton::BUTTON_LT,
                    [this](brls::View*) {
                        bklog::debug("Switching to FileListPage");
+                       removeView(m_appPage, false); // keep AppPage alive but detached
                        createFileListPage();
                        showFileListPage();
                        return true;
                    },
                    /*hidden=*/false);
+
 }
 
 void StartPageView::showFileListPage()
@@ -163,12 +174,13 @@ void StartPageView::showFileListPage()
         addView(m_fileListPage);
     m_fileListPage->setVisibility(brls::Visibility::VISIBLE);
     m_activeIndex = 1;
-
+    beiklive::swallow(this, brls::BUTTON_LT);
     // Bind RT → switch to AppPage
     registerAction("beiklive/hints/APP"_i18n,
                    brls::ControllerButton::BUTTON_RT,
                    [this](brls::View*) {
                        bklog::debug("Switching to AppPage");
+                       removeView(m_fileListPage, false); // keep FileListPage alive but detached
                        createAppPage();
                        showAppPage();
                        return true;

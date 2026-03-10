@@ -14,7 +14,16 @@ using namespace brls::literals; // for _i18n
 // FUNCTIONS DEFINITIONS
 
 #define BK_RES(path) beiklive::file::TransStrToRes(path)
+#define ADD_STYLE(name, value) \
+    brls::Application::getStyle().addMetric(name, value)
+#define ADD_THEME_COLOR(name, color) \
+    brls::Application::getTheme().addColor(name, color)
+#define GET_STYLE(name) \
+    brls::Application::getStyle().getMetric(name)
+#define GET_THEME_COLOR(name) \
+    brls::Application::getTheme().getColor(name)
 
+	
 #define BK_APP_NAME "BKStation"
 #ifdef __SWITCH__
 #define BK_APP_ROOT_DIR "/BKStation/"
@@ -46,16 +55,12 @@ using bklog = brls::Logger;
 
 namespace beiklive {
 
-brls::Style getStyle();
-brls::Theme getTheme();
-// ---- Swallow helper: register a no-op action that consumes a button ----
-// This prevents Borealis from acting on navigation / face buttons while the
-// game is running (e.g. BUTTON_B would otherwise trigger a back-navigation).
-static void swallow(brls::View* v, brls::ControllerButton btn)
-{
-    v->registerAction("", btn, [](brls::View*) { return true; },
-                      /*hidden=*/true);
-}
+void RegisterStyles();
+void RegisterThemes();
+
+// 吞噬一个按钮事件，使其不再被后续处理
+void swallow(brls::View* v, brls::ControllerButton btn);
+
 
 struct GameEntry {
     std::string path;    ///< ROM 文件完整路径

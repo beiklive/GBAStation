@@ -285,6 +285,7 @@ std::string GameView::resolveCoreLibPath()
 GameView::GameView(std::string romPath) : GameView()
 {
     m_romPath = std::move(romPath);
+    SettingManager->Set("last_game_path", beiklive::file::getParentPath(m_romPath));
 }
 
 GameView::GameView()

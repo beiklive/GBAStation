@@ -11,6 +11,7 @@ class StartPageView : public brls::Box
   public:
     StartPageView();
     ~StartPageView();
+    void ActionInit();
     void Init();
     void onFocusGained() override;
     void onFocusLost() override;
