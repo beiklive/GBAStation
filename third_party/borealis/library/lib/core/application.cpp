@@ -503,7 +503,31 @@ Platform* Application::getPlatform()
 
 AudioPlayer* Application::getAudioPlayer()
 {
+    if (Application::customAudioPlayer != nullptr)
+        return Application::customAudioPlayer;
     return Application::platform->getAudioPlayer();
+}
+
+void Application::setAudioPlayer(AudioPlayer* player)
+{
+    Application::customAudioPlayer = player;
+    // Preload commonly used sounds with the new player
+    if (player != nullptr)
+    {
+        for (enum Sound sound : {
+                 SOUND_FOCUS_CHANGE,
+                 SOUND_FOCUS_ERROR,
+                 SOUND_CLICK,
+                 SOUND_BACK,
+                 SOUND_FOCUS_SIDEBAR,
+                 SOUND_CLICK_ERROR,
+                 SOUND_CLICK_SIDEBAR,
+                 SOUND_TOUCH,
+                 SOUND_SLIDER_TICK,
+                 SOUND_SLIDER_RELEASE,
+             })
+            player->load(sound);
+    }
 }
 
 void Application::quit()
