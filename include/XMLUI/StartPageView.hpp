@@ -51,7 +51,7 @@ class StartPageView : public brls::Box
     void Init();
     void onFocusGained() override;
     void onFocusLost() override;
-    void onLayout() override;
+    // void onLayout() override;
 
     static brls::View* create();
 

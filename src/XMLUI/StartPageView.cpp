@@ -29,7 +29,7 @@ FileSettingsPanel::FileSettingsPanel()
 {
     // Absolute-positioned overlay – kept GONE until shown
     setPositionType(brls::PositionType::ABSOLUTE);
-    setBackgroundColor(nvgRGBA(20, 20, 20, 230));
+    setBackgroundColor(nvgRGBA(20, 20, 20, 255));
     setAxis(brls::Axis::COLUMN);
     setVisibility(brls::Visibility::GONE);
     setFocusable(true);
@@ -199,28 +199,13 @@ StartPageView::StartPageView()
 
     // Settings overlay panel (absolute positioning, initially hidden)
     m_settingsPanel = new FileSettingsPanel();
+    float panelW = 1280 * 0.70f;
+    float panelH = 720 * 0.70f;
+    m_settingsPanel->setWidth(panelW);
+    m_settingsPanel->setHeight(panelH);
+    m_settingsPanel->setPositionLeft((1280 - panelW) * 0.5f);
+    m_settingsPanel->setPositionTop((720 - panelH) * 0.5f);
     addView(m_settingsPanel);
-}
-
-void StartPageView::onLayout()
-{
-    Box::onLayout();
-
-    // Keep the settings panel centred at 70% of our dimensions
-    if (m_settingsPanel)
-    {
-        float w = getWidth();
-        float h = getHeight();
-        if (w > 0 && h > 0)
-        {
-            float panelW = w * 0.70f;
-            float panelH = h * 0.70f;
-            m_settingsPanel->setWidth(panelW);
-            m_settingsPanel->setHeight(panelH);
-            m_settingsPanel->setPositionLeft((w - panelW) * 0.5f);
-            m_settingsPanel->setPositionTop((h - panelH) * 0.5f);
-        }
-    }
 }
 
 void StartPageView::ActionInit()
@@ -307,8 +292,8 @@ void StartPageView::createFileListPage()
     std::vector<std::string> IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "bmp", "gif",};
     std::vector<std::string> ROM_EXTENSIONS = {"zip", "gba", "gbc", "gb"};
     // Set default filter (GBA / GB / GBC roms)
-    m_fileListPage->setFilter(ROM_EXTENSIONS, FileListPage::FilterMode::Whitelist);
-    m_fileListPage->setFilterEnabled(true);
+    // m_fileListPage->setFilter(ROM_EXTENSIONS, FileListPage::FilterMode::Whitelist);
+    // m_fileListPage->setFilterEnabled(true);
 
     // Register settings panel callback
     m_fileListPage->onOpenSettings = [this](const FileListItem& item, int idx) {

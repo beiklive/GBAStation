@@ -606,10 +606,23 @@ void FileListPage::refreshList(const std::string& path)
         m_dataSource->items.push_back(std::move(item));
     }
 
-    // When the filtered list is empty and we are NOT at the root, add a ".."
-    // entry so the user can navigate back even when all files are hidden by filter.
-    if (m_dataSource->items.empty() && !beiklive::file::is_root_directory(m_currentPath))
+    // When the filtered list is empty we must ensure at least one item is present.
+    // borealis RecyclerFrame's selectRowAt(IndexPath(0,0)) always accesses
+    // cacheFramesData[1], which requires ≥2 entries (header + 1 item). With 0
+    // data items only the section header exists (size==1), causing an OOB assert.
+    if (m_dataSource->items.empty())
     {
+#ifdef _WIN32
+        // On Windows root directories, show the drive-letter list instead so the
+        // user can navigate elsewhere.  showDriveList() always populates items.
+        if (beiklive::file::is_root_directory(m_currentPath))
+        {
+            showDriveList();
+            return; // showDriveList handles reloadData and header update
+        }
+#endif
+        // Non-root (or non-Windows root): add a ".." entry so the user can
+        // navigate back even when every file is hidden by the active filter.
         FileListItem dotdot;
         dotdot.fileName   = "..";
         dotdot.fullPath   = beiklive::file::getParentPath(m_currentPath);
