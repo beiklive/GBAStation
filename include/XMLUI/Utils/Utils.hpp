@@ -14,12 +14,12 @@ class BrowserHeader : public brls::Box
     BrowserHeader();
     void setTitle(const std::string& title);
     void setPath(const std::string& path);
-    void setFileName(const std::string& fileName);
+    void setInfo(const std::string& info);
 
   private:
     brls::Label* m_titleLabel = nullptr;
     brls::Label* m_pathLabel = nullptr;
-    brls::Label* m_fileNameLabel = nullptr;
+    brls::Label* m_infoLabel = nullptr;
 
     brls::Box* m_titleBox = nullptr;
     brls::Box* m_subtitleBox = nullptr;

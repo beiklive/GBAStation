@@ -62,6 +62,8 @@ void RegisterThemes();
 void swallow(brls::View* v, brls::ControllerButton btn);
 
 
+
+
 struct GameEntry {
     std::string path;    ///< ROM 文件完整路径
     std::string title;   ///< 显示标题

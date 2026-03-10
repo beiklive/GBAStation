@@ -24,6 +24,9 @@ static constexpr float DETAIL_THUMB_SZ = 180.f;
 //  Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
+
+
+
 /// Format a file size in bytes as a human-readable string (KB / MB / GB).
 static std::string formatFileSize(std::uintmax_t bytes)
 {
@@ -76,11 +79,14 @@ static int countChildren(const std::string& path)
 
 FileListCell::FileListCell()
 {
+    setMarginTop(5.0f);
     setFocusable(true);
     setAxis(brls::Axis::ROW);
     setAlignItems(brls::AlignItems::CENTER);
     setHeight(CELL_HEIGHT);
     setWidth(brls::View::AUTO);
+    setHideHighlightBackground(true);
+    setBackground(brls::ViewBackground::NONE);
 
     // Accent rectangle on the left
     m_accent = new brls::Rectangle();
@@ -108,7 +114,7 @@ FileListCell::FileListCell()
     m_nameLabel->setSingleLine(true);
     m_nameLabel->setGrow(1.0f);
     m_nameLabel->setMarginRight(CELL_PAD_H);
-    m_nameLabel->setMarginTop(12.f);
+    m_nameLabel->setMarginTop(8.f);
 
     addView(m_nameLabel);
 
@@ -235,6 +241,12 @@ FileListPage::FileListPage()
 
     buildUI();
 
+    const std::string key = "UI.fileListLayoutMode";
+    SettingManager->SetDefault(key, static_cast<int>(LayoutMode::ListOnly));
+
+    int layoutModeInt = *SettingManager->Get(key)->AsInt();
+    setLayoutMode(static_cast<LayoutMode>(layoutModeInt));
+
     // B → navigate up
     registerAction("beiklive/hints/UP"_i18n,
                    brls::BUTTON_B,
@@ -261,7 +273,7 @@ void FileListPage::buildUI()
     m_header = new beiklive::UI::BrowserHeader();
     m_header->setTitle("beiklive/file/file_select"_i18n);
     m_header->setPath("/");
-    m_header->setFileName(" ");
+    m_header->setInfo("1/200");
     addView(m_header);
 
     // ── Content row (list + optional detail panel) ────────────────────────
@@ -298,6 +310,7 @@ void FileListPage::buildUI()
 
     // ── Detail panel (hidden initially) ──────────────────────────────────
     buildDetailPanel();
+    m_detailPanel->setMarginLeft(20.f);
     m_detailPanel->setVisibility(brls::Visibility::GONE);
     m_contentBox->addView(m_detailPanel);
 
@@ -311,7 +324,7 @@ void FileListPage::buildDetailPanel()
     m_detailPanel = new brls::Box(brls::Axis::COLUMN);
     m_detailPanel->setAlignItems(brls::AlignItems::CENTER);
     m_detailPanel->setPadding(20.f, 12.f, 20.f, 12.f);
-    m_detailPanel->setBackgroundColor(nvgRGBA(40, 40, 40, 80));
+    m_detailPanel->setBackgroundColor(nvgRGBA(40, 40, 40, 20));
     // Width will be set to ~33% in setLayoutMode()
 
     m_detailThumb = new brls::Image();
@@ -390,8 +403,8 @@ void FileListPage::setLayoutMode(LayoutMode mode)
     else // ListAndDetail
     {
         // List occupies ~2/3; detail panel ~1/3
-        m_listBox->setWidthPercentage(66.67f);
-        m_detailPanel->setWidthPercentage(33.33f);
+        m_listBox->setWidthPercentage(65.f);
+        m_detailPanel->setWidthPercentage(30.f);
         m_detailPanel->setVisibility(brls::Visibility::VISIBLE);
     }
 }

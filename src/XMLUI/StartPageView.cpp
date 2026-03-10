@@ -24,17 +24,17 @@ StartPageView::StartPageView()
     setAxis(brls::Axis::COLUMN);
 
     // Background image (absolute positioning, does not participate in layout)
-    // m_bgImage = new brls::Image();
-    // m_bgImage->setFocusable(false);
-    // m_bgImage->setPositionType(brls::PositionType::ABSOLUTE);
-    // m_bgImage->setPositionTop(0);
-    // m_bgImage->setPositionLeft(0);
-    // m_bgImage->setWidthPercentage(100);
-    // m_bgImage->setHeightPercentage(100);
-    // m_bgImage->setScalingType(brls::ImageScalingType::FIT);
-    // m_bgImage->setInterpolation(brls::ImageInterpolation::LINEAR);
-    // m_bgImage->setImageFromFile(BK_APP_DEFAULT_BG);
-    // addView(m_bgImage);
+    m_bgImage = new brls::Image();
+    m_bgImage->setFocusable(false);
+    m_bgImage->setPositionType(brls::PositionType::ABSOLUTE);
+    m_bgImage->setPositionTop(0);
+    m_bgImage->setPositionLeft(0);
+    m_bgImage->setWidthPercentage(100);
+    m_bgImage->setHeightPercentage(100);
+    m_bgImage->setScalingType(brls::ImageScalingType::FIT);
+    m_bgImage->setInterpolation(brls::ImageInterpolation::LINEAR);
+    m_bgImage->setImageFromFile(BK_APP_DEFAULT_BG);
+    addView(m_bgImage);
 }
 void StartPageView::ActionInit()
 {
@@ -117,19 +117,36 @@ void StartPageView::createFileListPage()
         return;
 
     m_fileListPage = new FileListPage();
-
+    std::vector<std::string> IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "bmp", "gif",};
+    std::vector<std::string> ROM_EXTENSIONS = {"zip", "gba", "gbc", "gb"};
     // Set default filter (GBA / GB / GBC roms)
-    m_fileListPage->setFilter({ "gba", "gb", "gbc", "zip" }, FileListPage::FilterMode::Whitelist);
+    m_fileListPage->setFilter(ROM_EXTENSIONS, FileListPage::FilterMode::Whitelist);
     m_fileListPage->setFilterEnabled(true);
 
+    for (const auto& ext : IMAGE_EXTENSIONS)
+    {
+        m_fileListPage->setFileCallback(ext, [](const FileListItem& item) {
+            // auto* frame = new brls::AppletFrame(new ImageView(item.fullPath));
+            // frame->setHeaderVisibility(brls::Visibility::GONE);
+            // frame->setFooterVisibility(brls::Visibility::GONE);
+            // frame->setBackground(brls::ViewBackground::NONE);
+            // brls::Application::pushActivity(new brls::Activity(frame));
+            bklog::info("Open Image : {}", item.fullPath );
+        
+        });
+    }
     // Default file callback: launch the game
-    m_fileListPage->setDefaultFileCallback([](const FileListItem& item) {
-        auto* frame = new brls::AppletFrame(new GameView(item.fullPath));
-        frame->setHeaderVisibility(brls::Visibility::GONE);
-        frame->setFooterVisibility(brls::Visibility::GONE);
-        frame->setBackground(brls::ViewBackground::NONE);
-        brls::Application::pushActivity(new brls::Activity(frame));
-    });
+    for (const auto& ext : ROM_EXTENSIONS)
+    {
+        m_fileListPage->setFileCallback(ext, [](const FileListItem& item) {
+            auto* frame = new brls::AppletFrame(new GameView(item.fullPath));
+            frame->setHeaderVisibility(brls::Visibility::GONE);
+            frame->setFooterVisibility(brls::Visibility::GONE);
+            frame->setBackground(brls::ViewBackground::NONE);
+            brls::Application::pushActivity(new brls::Activity(frame));
+        });
+    }
+
     SettingManager->Contains("last_game_path") ? m_fileListPage->navigateTo(*gameRunner->settingConfig->Get("last_game_path")->AsString()) : m_fileListPage->navigateTo(ROOT_PATH);
 }
 
@@ -148,6 +165,7 @@ void StartPageView::showAppPage()
     m_appPage->setVisibility(brls::Visibility::VISIBLE);
     m_activeIndex = 0;
     beiklive::swallow(this, brls::BUTTON_RT);
+    beiklive::swallow(this, brls::BUTTON_A);
     // Bind LT → switch to FileListPage
     registerAction("beiklive/hints/FILE"_i18n,
                    brls::ControllerButton::BUTTON_LT,
@@ -174,6 +192,7 @@ void StartPageView::showFileListPage()
         addView(m_fileListPage);
     m_fileListPage->setVisibility(brls::Visibility::VISIBLE);
     m_activeIndex = 1;
+    beiklive::swallow(this, brls::BUTTON_A);
     beiklive::swallow(this, brls::BUTTON_LT);
     // Bind RT → switch to AppPage
     registerAction("beiklive/hints/APP"_i18n,

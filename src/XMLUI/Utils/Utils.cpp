@@ -43,14 +43,15 @@ beiklive::UI::BrowserHeader::BrowserHeader()
     m_pathLabel->setFontSize(FontSize/2 + 2);
     m_pathLabel->setTextColor(GET_THEME_COLOR("beiklive/subtitle"));
 
-    m_fileNameLabel = new brls::Label();
-    m_fileNameLabel->setFontSize(FontSize/2);
-    m_fileNameLabel->setTextColor(GET_THEME_COLOR("beiklive/subtitle"));
-    m_subtitleBox->addView(m_fileNameLabel);
+    m_subtitleBox->addView(new brls::Padding());
     m_subtitleBox->addView(m_pathLabel);
     this->addView(m_subtitleBox);
-
+    
     this->addView(new brls::Padding());
+
+    m_infoLabel = new brls::Label();
+    m_infoLabel->setFontSize(FontSize);
+    this->addView(m_infoLabel);
 
 }
 
@@ -64,8 +65,8 @@ void beiklive::UI::BrowserHeader::setPath(const std::string& path)
     if (m_pathLabel)
         m_pathLabel->setText(path);
 }
-void beiklive::UI::BrowserHeader::setFileName(const std::string& fileName)
+void beiklive::UI::BrowserHeader::setInfo(const std::string& info)
 {
-    if (m_fileNameLabel)
-        m_fileNameLabel->setText(fileName);
+    if (m_infoLabel)
+        m_infoLabel->setText(info);
 }
