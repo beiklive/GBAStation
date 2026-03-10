@@ -56,6 +56,7 @@ class FileListCell : public brls::RecyclerCell
 
   private:
     brls::Rectangle* m_accent    = nullptr;
+    brls::Image*     m_icon      = nullptr;
     brls::Label*     m_nameLabel = nullptr;
     brls::Label*     m_infoLabel = nullptr;
     int              m_index     = -1;

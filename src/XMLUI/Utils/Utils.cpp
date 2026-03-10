@@ -13,17 +13,21 @@ beiklive::UI::BrowserHeader::BrowserHeader()
     
     this->setJustifyContent(brls::JustifyContent::CENTER);
 
-    this->setHeight(GET_STYLE("brls/applet_frame/header_height"));
+    this->setHeight(GET_STYLE("beiklive/header/header_height"));
     this->setPaddingTop(GET_STYLE("brls/applet_frame/header_padding_top_bottom"));
     this->setPaddingBottom(GET_STYLE("brls/applet_frame/header_padding_top_bottom"));
     this->setMarginRight(GET_STYLE("brls/applet_frame/padding_sides"));
     this->setMarginLeft(GET_STYLE("brls/applet_frame/padding_sides"));
-    
-    this->setLineColor(GET_THEME_COLOR("beiklive/line"));
+
+    this->setPaddingRight(GET_STYLE("brls/applet_frame/header_padding_sides"));
+    this->setPaddingLeft(GET_STYLE("brls/applet_frame/header_padding_sides"));
+
+    this->setLineColor(GET_THEME_COLOR("brls/applet_frame/separator"));
     this->setLineBottom(1.f);
     
 
     m_titleBox = new brls::Box();
+    m_titleBox->setMarginRight(GET_STYLE("brls/applet_frame/header_image_title_spacing"));
 
     m_titleLabel = new brls::Label();
     float FontSize = GET_STYLE("brls/applet_frame/header_title_font_size");
@@ -33,7 +37,6 @@ beiklive::UI::BrowserHeader::BrowserHeader()
     this->addView(m_titleBox);
 
     m_subtitleBox = new brls::Box(brls::Axis::COLUMN);
-    m_titleBox->setMarginRight(GET_STYLE("brls/applet_frame/header_title_top_offset"));
     m_subtitleBox->setJustifyContent(brls::JustifyContent::CENTER);
 
     m_pathLabel = new brls::Label();

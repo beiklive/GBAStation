@@ -12,10 +12,11 @@ using namespace brls::literals; // for _i18n
 namespace fs = std::filesystem;
 
 static constexpr float CELL_HEIGHT     = 66.f;
+static constexpr float ICON_HEIGHT     = 50.f;
 static constexpr float ACCENT_W        = 4.f;
 static constexpr float CELL_PAD_H      = 12.f;
 static constexpr float CELL_PAD_V      = 10.f;
-static constexpr float INFO_FONT_SIZE  = 24.f;
+static constexpr float INFO_FONT_SIZE  = 16.f;
 static constexpr float NAME_FONT_SIZE  = 26.f;
 static constexpr float DETAIL_THUMB_SZ = 180.f;
 
@@ -91,14 +92,28 @@ FileListCell::FileListCell()
     m_accent->setVisibility(brls::Visibility::INVISIBLE);
     addView(m_accent);
 
+
+    m_icon = new brls::Image();
+    m_icon->setWidth(ICON_HEIGHT);
+    m_icon->setHeight(ICON_HEIGHT);
+    m_icon->setMarginRight(CELL_PAD_H);
+    m_icon->setScalingType(brls::ImageScalingType::FIT);
+    m_icon->setInterpolation(brls::ImageInterpolation::LINEAR);
+    m_icon->setImageFromFile(BK_RES("/img/file/file_light.png"));
+    addView(m_icon);
+
     // Name label (grows to fill space)
     m_nameLabel = new brls::Label();
     m_nameLabel->setFontSize(NAME_FONT_SIZE);
     m_nameLabel->setSingleLine(true);
     m_nameLabel->setGrow(1.0f);
     m_nameLabel->setMarginRight(CELL_PAD_H);
+    m_nameLabel->setMarginTop(12.f);
+
     addView(m_nameLabel);
 
+    auto* box = new brls::Box(brls::Axis::COLUMN);
+    box->setHeight(CELL_HEIGHT);
     // Info label on the right (gray)
     m_infoLabel = new brls::Label();
     m_infoLabel->setFontSize(INFO_FONT_SIZE);
@@ -106,7 +121,9 @@ FileListCell::FileListCell()
     m_infoLabel->setTextColor(nvgRGBA(160, 160, 160, 255));
     m_infoLabel->setHorizontalAlign(brls::HorizontalAlign::RIGHT);
     m_infoLabel->setMarginRight(CELL_PAD_H * 2);
-    addView(m_infoLabel);
+    box->addView(new brls::Padding());
+    box->addView(m_infoLabel);
+    addView(box);
 }
 
 FileListCell* FileListCell::create()
@@ -251,6 +268,14 @@ void FileListPage::buildUI()
     m_contentBox = new brls::Box(brls::Axis::ROW);
     m_contentBox->setGrow(1.0f);
     m_contentBox->setWidth(brls::View::AUTO);
+    m_contentBox->setPaddingTop(GET_STYLE("brls/applet_frame/header_padding_top_bottom"));
+    m_contentBox->setPaddingBottom(GET_STYLE("brls/applet_frame/header_padding_top_bottom"));
+    m_contentBox->setMarginRight(GET_STYLE("brls/applet_frame/padding_sides"));
+    m_contentBox->setMarginLeft(GET_STYLE("brls/applet_frame/padding_sides"));
+
+    m_contentBox->setPaddingRight(GET_STYLE("brls/applet_frame/header_padding_sides"));
+    m_contentBox->setPaddingLeft(GET_STYLE("brls/applet_frame/header_padding_sides"));
+
     addView(m_contentBox);
 
     // List container
