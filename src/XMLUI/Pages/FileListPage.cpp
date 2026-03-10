@@ -438,6 +438,7 @@ void FileListPage::buildDetailPanel()
 void FileListPage::navigateTo(const std::string& path)
 {
     refreshList(path);
+
 }
 
 void FileListPage::resetFocusToTop()
@@ -477,6 +478,7 @@ void FileListPage::resetFocusIfPageActive()
         }
         parent = parent->getParent();
     }
+    
 }
 
 void FileListPage::setFilter(const std::vector<std::string>& suffixes, FilterMode mode)

@@ -14,6 +14,11 @@ ImageView::ImageView(const std::string& imagePath)
     setGrow(1.0f);
     setBackground(brls::ViewBackground::NONE);
 
+    setHideHighlight(true);
+    setHideHighlightBorder(true);
+    setHideHighlightBackground(true);
+
+
     // BUTTON_B – close (pop this activity)
     registerAction("beiklive/hints/close"_i18n,
                    brls::BUTTON_B,
@@ -23,16 +28,16 @@ ImageView::ImageView(const std::string& imagePath)
                    },
                    false, false, brls::SOUND_CLICK);
 
-    // BUTTON_A – zoom in
-    registerAction("beiklive/hints/zoom_in"_i18n,
-                   brls::BUTTON_A,
-                   [this](brls::View*) { zoomIn(); return true; },
-                   false, false, brls::SOUND_CLICK);
-
-    // BUTTON_Y – zoom out
+    // BUTTON_L – zoom out
     registerAction("beiklive/hints/zoom_out"_i18n,
-                   brls::BUTTON_Y,
-                   [this](brls::View*) { zoomOut(); return true; },
+                    brls::BUTTON_LB,
+                    [this](brls::View*) { zoomOut(); return true; },
+                    false, false, brls::SOUND_CLICK);
+
+    // BUTTON_R – zoom in
+    registerAction("beiklive/hints/zoom_in"_i18n,
+                   brls::BUTTON_RB,
+                   [this](brls::View*) { zoomIn(); return true; },
                    false, false, brls::SOUND_CLICK);
 
     // BUTTON_X – reset
@@ -54,8 +59,8 @@ ImageView::ImageView(const std::string& imagePath)
     // Swallow unused buttons so they don't propagate
     beiklive::swallow(this, brls::BUTTON_LT);
     beiklive::swallow(this, brls::BUTTON_RT);
-    beiklive::swallow(this, brls::BUTTON_LB);
-    beiklive::swallow(this, brls::BUTTON_RB);
+    beiklive::swallow(this, brls::BUTTON_A);
+    beiklive::swallow(this, brls::BUTTON_Y);
     beiklive::swallow(this, brls::BUTTON_START);
     beiklive::swallow(this, brls::BUTTON_BACK);
 }
@@ -65,7 +70,7 @@ void ImageView::draw(NVGcontext* vg, float x, float y, float w, float h,
 {
     // ── Black background ────────────────────────────────────────────────────
     nvgBeginPath(vg);
-    nvgFillColor(vg, nvgRGBA(0, 0, 0, 255));
+    // nvgFillColor(vg, nvgRGBA(0, 0, 0, 0));
     nvgRect(vg, x, y, w, h);
     nvgFill(vg);
 

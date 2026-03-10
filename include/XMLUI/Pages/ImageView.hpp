@@ -32,8 +32,8 @@ class ImageView : public brls::Box
     float m_offsetX = 0.0f;
     float m_offsetY = 0.0f;
 
-    static constexpr float ZOOM_STEP = 0.25f;
-    static constexpr float ZOOM_MIN  = 0.25f;
+    static constexpr float ZOOM_STEP = 0.10f;
+    static constexpr float ZOOM_MIN  = 0.10f;
     static constexpr float ZOOM_MAX  = 8.0f;
     static constexpr float PAN_STEP  = 40.0f;
 

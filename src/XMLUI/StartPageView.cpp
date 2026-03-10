@@ -317,7 +317,7 @@ void StartPageView::createFileListPage()
             auto* imageView = new ImageView(item.fullPath);
             auto* frame = new brls::AppletFrame(imageView);
             frame->setHeaderVisibility(brls::Visibility::GONE);
-            frame->setFooterVisibility(brls::Visibility::GONE);
+            // frame->setFooterVisibility(brls::Visibility::GONE);
             frame->setBackground(brls::ViewBackground::NONE);
             brls::Application::pushActivity(new brls::Activity(frame));
         });
