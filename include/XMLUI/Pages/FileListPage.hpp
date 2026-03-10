@@ -97,6 +97,9 @@ class FileListPage : public brls::Box
     /// Enter the given directory and refresh the list.
     void navigateTo(const std::string& path);
 
+    /// Reset focus to the first item in the list (used after page switches).
+    void resetFocusToTop();
+
     // ── Filter ──────────────────────────────────────────────────────────────
     /// Set the suffix filter list and mode.
     /// In Whitelist mode only listed suffixes are shown.
@@ -202,4 +205,10 @@ class FileListPage : public brls::Box
     void doCut(int itemIndex);
     void doPaste();
     void doDelete(int itemIndex);
+
+    // Focus helpers
+    /// Give application focus to the first item in the recycler, but only
+    /// when this page currently holds the application focus.  Safe to call
+    /// even before the recycler has been laid out.
+    void resetFocusIfPageActive();
 };

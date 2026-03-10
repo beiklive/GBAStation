@@ -440,6 +440,45 @@ void FileListPage::navigateTo(const std::string& path)
     refreshList(path);
 }
 
+void FileListPage::resetFocusToTop()
+{
+    // Guard: if the recycler has not been laid out yet (no cells in view),
+    // getDefaultFocus returns null – skip to avoid crashing in selectRowAt.
+    brls::View* probe = m_recycler->getDefaultFocus();
+    if (!probe)
+        return;
+
+    // Reset the recycler's internal last-focused pointer to the first row
+    // (false = no scroll animation), then transfer application focus there.
+    m_recycler->selectRowAt(brls::IndexPath(0, 0), /*animated=*/false);
+    brls::View* firstFocus = m_recycler->getDefaultFocus();
+    if (firstFocus)
+        brls::Application::giveFocus(firstFocus);
+}
+
+void FileListPage::resetFocusIfPageActive()
+{
+    // Only give focus to the first recycler item when this page currently holds
+    // the application focus (i.e. the user is actively browsing).  We check by
+    // walking up the parent chain from the currently focused view.
+    brls::View* curFocus = brls::Application::getCurrentFocus();
+    if (!curFocus)
+        return;
+
+    brls::Box* parent = curFocus->getParent();
+    while (parent)
+    {
+        if (parent == this)
+        {
+            brls::View* firstFocus = m_recycler->getDefaultFocus();
+            if (firstFocus)
+                brls::Application::giveFocus(firstFocus);
+            break;
+        }
+        parent = parent->getParent();
+    }
+}
+
 void FileListPage::setFilter(const std::vector<std::string>& suffixes, FilterMode mode)
 {
     m_filterSuffixes = suffixes;
@@ -638,6 +677,12 @@ void FileListPage::refreshList(const std::string& path)
         int total = static_cast<int>(m_dataSource->items.size());
         m_header->setInfo("0/" + std::to_string(total));
     }
+
+    // Reset focus to the first item when this page currently holds application
+    // focus (i.e. the user is actively browsing). This handles both entering a
+    // sub-directory and navigating back up, so focus never lingers at the
+    // previously-selected row after the list content changes.
+    resetFocusIfPageActive();
 }
 
 void FileListPage::updateHeader()
@@ -729,6 +774,9 @@ void FileListPage::showDriveList()
         int total = static_cast<int>(m_dataSource->items.size());
         m_header->setInfo(std::to_string(total) + "/" + std::to_string(total));
     }
+
+    // Reset focus to the first drive entry if this page currently holds focus.
+    resetFocusIfPageActive();
 #endif
 }
 
