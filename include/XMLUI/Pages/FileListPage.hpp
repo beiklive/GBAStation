@@ -37,23 +37,24 @@ struct FileListItem
 class FileListPage;
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  FileListCell  –  one row in the recycler
+//  FileListItemView  –  one row in the scroll list (no recycling)
+//  Extends brls::Box directly so focus management is straightforward and
+//  never suffers from the LIFO cell-reuse ordering of RecyclerFrame.
 // ─────────────────────────────────────────────────────────────────────────────
-class FileListCell : public brls::RecyclerCell
+class FileListItemView : public brls::Box
 {
   public:
-    FileListCell();
+    FileListItemView();
 
-    /// Populate the cell with item data.  index is stored for callbacks.
+    /// Populate the view with item data.  index is stored for callbacks.
     void setItem(const FileListItem& item, int index);
 
-    /// Called when an item gains focus (cell notifies the page)
     std::function<void(int)> onItemFocused;
+    std::function<void(int)> onItemActivated;
+    std::function<void(int)> onItemOptions;
 
     void onFocusGained() override;
     void onFocusLost() override;
-
-    static FileListCell* create();
 
   private:
     brls::Rectangle* m_accent    = nullptr;
@@ -61,24 +62,6 @@ class FileListCell : public brls::RecyclerCell
     brls::Label*     m_nameLabel = nullptr;
     brls::Label*     m_infoLabel = nullptr;
     int              m_index     = -1;
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  FileListDataSource  –  feeds data into RecyclerFrame
-// ─────────────────────────────────────────────────────────────────────────────
-class FileListDataSource : public brls::RecyclerDataSource
-{
-  public:
-    explicit FileListDataSource(FileListPage* page);
-
-    int                  numberOfRows(brls::RecyclerFrame* recycler, int section) override;
-    brls::RecyclerCell*  cellForRow(brls::RecyclerFrame* recycler, brls::IndexPath index) override;
-    void                 didSelectRowAt(brls::RecyclerFrame* recycler, brls::IndexPath index) override;
-
-    std::vector<FileListItem> items;
-
-  private:
-    FileListPage* m_page;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -126,7 +109,7 @@ class FileListPage : public brls::Box
     // ── State ────────────────────────────────────────────────────────────────
     const std::string& getCurrentPath() const { return m_currentPath; }
 
-    // ── Called by DataSource / Cell ──────────────────────────────────────────
+    // ── Called by ItemView ───────────────────────────────────────────────────
     void onItemFocused(int index);
     void onItemActivated(int index);
     void openSidebar(int itemIndex);
@@ -148,8 +131,9 @@ class FileListPage : public brls::Box
     // ── UI components ────────────────────────────────────────────────────────
     beiklive::UI::BrowserHeader*    m_header      = nullptr;
     brls::Box*       m_contentBox  = nullptr; ///< row box: list + optional detail
-    brls::Box*       m_listBox     = nullptr; ///< contains recycler
-    brls::RecyclerFrame* m_recycler = nullptr;
+    brls::Box*       m_listBox     = nullptr; ///< contains scroll frame
+    brls::ScrollingFrame* m_scrollFrame = nullptr; ///< vertical scroll container
+    brls::Box*            m_itemsBox    = nullptr; ///< direct parent of FileListItemViews
 
     // Detail panel (LayoutMode::ListAndDetail)
     brls::Box*   m_detailPanel      = nullptr;
@@ -162,7 +146,7 @@ class FileListPage : public brls::Box
 
     // ── Data ─────────────────────────────────────────────────────────────────
     std::string         m_currentPath;
-    FileListDataSource* m_dataSource = nullptr;
+    std::vector<FileListItem> m_items; ///< current directory entries
 
     // ── Drive-list mode (Windows only) ───────────────────────────────────────
     bool m_inDriveListMode = false; ///< true when showing Windows drive letters
@@ -206,9 +190,6 @@ class FileListPage : public brls::Box
     void doPaste();
     void doDelete(int itemIndex);
 
-    // Focus helpers
-    /// Give application focus to the first item in the recycler, but only
-    /// when this page currently holds the application focus.  Safe to call
-    /// even before the recycler has been laid out.
-    void resetFocusIfPageActive();
+    /// Rebuild FileListItemViews from m_items, scroll to top, and focus first item.
+    void rebuildItemViews();
 };
