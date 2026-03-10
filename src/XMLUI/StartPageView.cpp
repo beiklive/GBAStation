@@ -27,11 +27,10 @@ static constexpr float PANEL_TITLE_HEIGHT  = 48.f;
 
 FileSettingsPanel::FileSettingsPanel()
 {
-    // Absolute-positioned overlay – kept GONE until shown
+    // Absolute-positioned overlay – added to / removed from tree on demand
     setPositionType(brls::PositionType::ABSOLUTE);
     setBackgroundColor(nvgRGBA(20, 20, 20, 255));
     setAxis(brls::Axis::COLUMN);
-    setVisibility(brls::Visibility::GONE);
     setFocusable(true);
 
     // ── Title bar ──────────────────────────────────────────────────────────
@@ -156,8 +155,6 @@ void FileSettingsPanel::showForItem(const FileListItem& item,
     // Give focus to the first option button
     if (!m_optionsBox->getChildren().empty())
         brls::Application::giveFocus(m_optionsBox->getChildren()[0]);
-
-    // BUTTON_B closes the panel
     registerAction("beiklive/hints/close"_i18n,
                    brls::BUTTON_B,
                    [this](brls::View*) {
@@ -169,7 +166,10 @@ void FileSettingsPanel::showForItem(const FileListItem& item,
 
 void FileSettingsPanel::close()
 {
-    setVisibility(brls::Visibility::GONE);
+    // Remove from view tree instead of hiding.
+    // Guard against close() being called before the panel was ever added.
+    if (getParent())
+        getParent()->removeView(this, false);
 
     // Return focus to the file list
     if (m_fileListPage)
@@ -197,7 +197,7 @@ StartPageView::StartPageView()
     m_bgImage->setImageFromFile(BK_APP_DEFAULT_BG);
     addView(m_bgImage);
 
-    // Settings overlay panel (absolute positioning, initially hidden)
+    // Settings overlay panel (absolute positioning, added/removed on demand)
     m_settingsPanel = new FileSettingsPanel();
     float panelW = 1280 * 0.70f;
     float panelH = 720 * 0.70f;
@@ -205,7 +205,7 @@ StartPageView::StartPageView()
     m_settingsPanel->setHeight(panelH);
     m_settingsPanel->setPositionLeft((1280 - panelW) * 0.5f);
     m_settingsPanel->setPositionTop((720 - panelH) * 0.5f);
-    addView(m_settingsPanel);
+    // Do NOT addView here; it will be added when X is pressed
 }
 
 void StartPageView::ActionInit()
@@ -331,21 +331,21 @@ void StartPageView::createFileListPage()
 void StartPageView::onFileSettingsRequested(const FileListItem& item, int itemIndex)
 {
     if (m_settingsPanel)
+    {
+        // Remove first (no-op if not already in tree), then add so it renders on top
+        removeView(m_settingsPanel, false);
+        addView(m_settingsPanel);
         m_settingsPanel->showForItem(item, itemIndex, m_fileListPage);
+    }
 }
 
 // ─────────── Page switching ──────────────────────────────────────────────────
 
 void StartPageView::showAppPage()
 {
-    // Hide FileListPage if visible
-    if (m_fileListPage)
-        m_fileListPage->setVisibility(brls::Visibility::GONE);
-
     // Create AppPage if needed and add to view tree
     createAppPage();
-    if (m_appPage->getParent() == nullptr)
-        addView(m_appPage);
+    addView(m_appPage);
     m_appPage->setVisibility(brls::Visibility::VISIBLE);
     m_activeIndex = 0;
     beiklive::swallow(this, brls::BUTTON_RT);
@@ -366,14 +366,9 @@ void StartPageView::showAppPage()
 
 void StartPageView::showFileListPage()
 {
-    // Hide AppPage if visible
-    if (m_appPage)
-        m_appPage->setVisibility(brls::Visibility::GONE);
-
     // Create FileListPage if needed and add to view tree
     createFileListPage();
-    if (m_fileListPage->getParent() == nullptr)
-        addView(m_fileListPage);
+    addView(m_fileListPage);
     m_fileListPage->setVisibility(brls::Visibility::VISIBLE);
     m_activeIndex = 1;
     beiklive::swallow(this, brls::BUTTON_A);
