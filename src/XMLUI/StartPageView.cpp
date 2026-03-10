@@ -155,6 +155,17 @@ void FileSettingsPanel::showForItem(const FileListItem& item,
     // Give focus to the first option button
     if (!m_optionsBox->getChildren().empty())
         brls::Application::giveFocus(m_optionsBox->getChildren()[0]);
+
+    // Wrap vertical focus navigation so it cannot escape the panel.
+    // Without this, pressing UP from the first button would let Borealis
+    // traverse the parent (StartPageView) and land on the file list.
+    const auto& opts = m_optionsBox->getChildren();
+    if (opts.size() > 1)
+    {
+        opts.front()->setCustomNavigationRoute(brls::FocusDirection::UP,   opts.back());
+        opts.back()->setCustomNavigationRoute(brls::FocusDirection::DOWN,  opts.front());
+    }
+
     registerAction("beiklive/hints/close"_i18n,
                    brls::BUTTON_B,
                    [this](brls::View*) {
@@ -348,6 +359,11 @@ void StartPageView::showAppPage()
     addView(m_appPage);
     m_appPage->setVisibility(brls::Visibility::VISIBLE);
     m_activeIndex = 0;
+
+    // Transfer focus to AppPage's first focusable child so it doesn't linger
+    // on the FileListPage that was just removed from the tree.
+    brls::Application::giveFocus(m_appPage->getDefaultFocus());
+
     beiklive::swallow(this, brls::BUTTON_RT);
     beiklive::swallow(this, brls::BUTTON_A);
     // Bind LT → switch to FileListPage
@@ -371,6 +387,11 @@ void StartPageView::showFileListPage()
     addView(m_fileListPage);
     m_fileListPage->setVisibility(brls::Visibility::VISIBLE);
     m_activeIndex = 1;
+
+    // Reset focus to the first item in the file list so it never lingers at
+    // the position from the previous visit (or on the removed AppPage).
+    m_fileListPage->resetFocusToTop();
+
     beiklive::swallow(this, brls::BUTTON_A);
     beiklive::swallow(this, brls::BUTTON_LT);
     // Bind RT → switch to AppPage
