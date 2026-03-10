@@ -25,6 +25,7 @@
     <brls:Label id="title"
         width="auto"
         height="auto"
-        grow="1.0" />
-
+        grow="1.0"
+        singleLine="true"
+        autoAnimate="true" />
 </brls:Box>

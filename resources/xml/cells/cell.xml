@@ -17,6 +17,8 @@
         width="auto"
         height="auto"
         grow="1.0"
+        singleLine="true"
+        autoAnimate="true"
         fontSize="@style/brls/sidebar/item_font_size"
         marginTop="@style/brls/sidebar/item_accent_margin_top_bottom"
         marginBottom="@style/brls/sidebar/item_accent_margin_top_bottom"
