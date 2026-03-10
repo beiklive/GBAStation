@@ -16,8 +16,8 @@
 
 #elif defined(BK_AUDIO_WINMM)
 #define WIN32_LEAN_AND_MEAN
-#include <mmsystem.h>
 #include <windows.h>
+#include <mmsystem.h>
 
 #elif defined(BK_AUDIO_COREAUDIO)
 #include <AudioUnit/AudioUnit.h>
