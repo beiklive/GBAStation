@@ -415,7 +415,8 @@ void FileListPage::buildDetailPanel()
     m_detailName->setFontSize(22.f);
     m_detailName->setMarginTop(12.f);
     m_detailName->setHorizontalAlign(brls::HorizontalAlign::CENTER);
-    m_detailName->setSingleLine(false);
+    m_detailName->setSingleLine(true);
+    m_detailName->setAutoAnimate(true);
     m_detailName->setTextColor(nvgRGBA(220, 220, 220, 255));
     m_detailPanel->addView(m_detailName);
 
@@ -423,7 +424,8 @@ void FileListPage::buildDetailPanel()
     m_detailMappedName->setFontSize(20.f);
     m_detailMappedName->setMarginTop(6.f);
     m_detailMappedName->setHorizontalAlign(brls::HorizontalAlign::CENTER);
-    m_detailMappedName->setSingleLine(false);
+    m_detailMappedName->setSingleLine(true);
+    m_detailMappedName->setAutoAnimate(true);
     m_detailMappedName->setTextColor(nvgRGBA(120, 190, 255, 255));
     m_detailPanel->addView(m_detailMappedName);
 
