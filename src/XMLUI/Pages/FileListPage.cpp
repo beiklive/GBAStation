@@ -142,10 +142,10 @@ static std::vector<std::string> getWindowsDrives()
 #endif
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  FileListCell
+//  FileListItemView
 // ─────────────────────────────────────────────────────────────────────────────
 
-FileListCell::FileListCell()
+FileListItemView::FileListItemView()
 {
     setMarginTop(5.0f);
     setFocusable(true);
@@ -166,7 +166,6 @@ FileListCell::FileListCell()
     m_accent->setVisibility(brls::Visibility::INVISIBLE);
     addView(m_accent);
 
-
     m_icon = new brls::Image();
     m_icon->setWidth(ICON_HEIGHT);
     m_icon->setHeight(ICON_HEIGHT);
@@ -180,12 +179,11 @@ FileListCell::FileListCell()
     m_nameLabel = new brls::Label();
     m_nameLabel->setFontSize(NAME_FONT_SIZE);
     m_nameLabel->setSingleLine(true);
-    // Scroll (marquee) the label when the cell is focused and text overflows.
+    // Scroll (marquee) the label when the item is focused and text overflows.
     m_nameLabel->setAutoAnimate(true);
     m_nameLabel->setGrow(1.0f);
     m_nameLabel->setMarginRight(CELL_PAD_H);
     m_nameLabel->setMarginTop(8.f);
-
     addView(m_nameLabel);
 
     auto* box = new brls::Box(brls::Axis::COLUMN);
@@ -202,17 +200,12 @@ FileListCell::FileListCell()
     addView(box);
 }
 
-FileListCell* FileListCell::create()
-{
-    return new FileListCell();
-}
-
-void FileListCell::setItem(const FileListItem& item, int index)
+void FileListItemView::setItem(const FileListItem& item, int index)
 {
     m_index = index;
     m_nameLabel->setText(item.displayName());
     auto theme = brls::Application::getPlatform()->getThemeVariant();
-    
+
     if (item.isDir)
     {
         m_icon->setImageFromFile(BK_RES("/img/ui/icon_folder.png"));
@@ -223,82 +216,39 @@ void FileListCell::setItem(const FileListItem& item, int index)
         m_icon->setImageFromFile(getFileIconPath(item, theme));
         m_infoLabel->setText(formatFileSize(item.fileSize));
     }
+
+    // ButtonA → activate item
+    registerAction("beiklive/hints/confirm"_i18n,
+                   brls::BUTTON_A,
+                   [this](brls::View*) {
+                       if (onItemActivated)
+                           onItemActivated(m_index);
+                       return true;
+                   },
+                   false, false, brls::SOUND_CLICK);
+
+    // ButtonX → open options/sidebar
+    registerAction("beiklive/hints/operate"_i18n,
+                   brls::BUTTON_X,
+                   [this](brls::View*) {
+                       if (onItemOptions)
+                           onItemOptions(m_index);
+                       return true;
+                   });
 }
 
-void FileListCell::onFocusGained()
+void FileListItemView::onFocusGained()
 {
-    brls::RecyclerCell::onFocusGained();
+    brls::Box::onFocusGained();
     m_accent->setVisibility(brls::Visibility::VISIBLE);
     if (onItemFocused)
         onItemFocused(m_index);
 }
 
-void FileListCell::onFocusLost()
+void FileListItemView::onFocusLost()
 {
-    brls::RecyclerCell::onFocusLost();
+    brls::Box::onFocusLost();
     m_accent->setVisibility(brls::Visibility::INVISIBLE);
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  FileListDataSource
-// ─────────────────────────────────────────────────────────────────────────────
-
-static const std::string CELL_ID = "FileListCell";
-
-FileListDataSource::FileListDataSource(FileListPage* page)
-    : m_page(page)
-{
-}
-
-int FileListDataSource::numberOfRows(brls::RecyclerFrame* /*recycler*/, int /*section*/)
-{
-    return static_cast<int>(items.size());
-}
-
-brls::RecyclerCell* FileListDataSource::cellForRow(brls::RecyclerFrame* recycler,
-                                                    brls::IndexPath      indexPath)
-{
-    auto* cell = dynamic_cast<FileListCell*>(recycler->dequeueReusableCell(CELL_ID));
-    if (!cell)
-        return nullptr;
-
-    const int row = indexPath.row;
-    if (row < 0 || row >= static_cast<int>(items.size()))
-        return cell;
-
-    cell->setItem(items[row], row);
-    cell->onItemFocused = [this](int idx) {
-        if (m_page)
-            m_page->onItemFocused(idx);
-    };
-
-    // ButtonA → activate item
-    cell->registerAction("beiklive/hints/confirm"_i18n,
-                         brls::BUTTON_A,
-                         [this, row](brls::View*) {
-                             if (m_page)
-                                 m_page->onItemActivated(row);
-                             return true;
-                         },
-                         false, false, brls::SOUND_CLICK);
-
-    // ButtonX → open sidebar
-    cell->registerAction("beiklive/hints/operate"_i18n,
-                         brls::BUTTON_X,
-                         [this, row](brls::View*) {
-                             if (m_page)
-                                 m_page->openSidebar(row);
-                             return true;
-                         });
-
-    return cell;
-}
-
-void FileListDataSource::didSelectRowAt(brls::RecyclerFrame* /*recycler*/,
-                                         brls::IndexPath       indexPath)
-{
-    // Handled via registerAction in cellForRow
-    (void)indexPath;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -334,10 +284,6 @@ FileListPage::FileListPage()
 
 FileListPage::~FileListPage()
 {
-    // m_recycler (child view) is destroyed before this destructor body runs.
-    // Since we passed deleteDataSource=false, we must free m_dataSource here.
-    delete m_dataSource;
-    m_dataSource = nullptr;
     bklog::debug("FileListPage destroyed.");
 }
 
@@ -371,18 +317,22 @@ void FileListPage::buildUI()
     m_listBox->setGrow(1.0f);
     m_contentBox->addView(m_listBox);
 
-    // RecyclerFrame
-    m_recycler = new brls::RecyclerFrame();
-    m_recycler->setWidth(brls::View::AUTO);
-    m_recycler->setHeight(brls::View::AUTO);
-    m_recycler->setGrow(1.0f);
-    m_recycler->estimatedRowHeight = CELL_HEIGHT;
-    m_recycler->registerCell(CELL_ID, FileListCell::create);
-    m_listBox->addView(m_recycler);
+    // ScrollingFrame replaces RecyclerFrame.
+    // Items are added as direct children of m_itemsBox (no recycling) so that
+    // focus management is straightforward and never suffers from the LIFO
+    // cell-reuse ordering bug of RecyclerFrame.
+    m_scrollFrame = new brls::ScrollingFrame();
+    m_scrollFrame->setWidth(brls::View::AUTO);
+    m_scrollFrame->setGrow(1.0f);
+    m_scrollFrame->setScrollingBehavior(brls::ScrollingBehavior::NATURAL);
 
-    // DataSource (RecyclerFrame takes ownership)
-    m_dataSource = new FileListDataSource(this);
-    m_recycler->setDataSource(m_dataSource, false); // we manage lifetime via m_dataSource
+    m_itemsBox = new brls::Box(brls::Axis::COLUMN);
+    m_itemsBox->setWidth(brls::View::AUTO);
+    m_scrollFrame->setContentView(m_itemsBox);
+
+    m_listBox->addView(m_scrollFrame);
+
+    // DataSource is no longer needed; items are managed directly in m_items.
 
     // ── Detail panel (hidden initially) ──────────────────────────────────
     buildDetailPanel();
@@ -448,54 +398,41 @@ void FileListPage::navigateTo(const std::string& path)
 
 void FileListPage::resetFocusToTop()
 {
-    // Guard: if the recycler has not been laid out yet (no cells in view),
-    // getDefaultFocus returns null – skip to avoid crashing in selectRowAt.
-    brls::View* probe = m_recycler->getDefaultFocus();
-    if (!probe)
+    const auto& children = m_itemsBox->getChildren();
+    if (children.empty())
         return;
 
-    // Reset the recycler's internal last-focused pointer to the first row
-    // (false = no scroll animation), then transfer application focus there.
-    m_recycler->selectRowAt(brls::IndexPath(0, 0), /*animated=*/false);
-    brls::View* firstFocus = m_recycler->getDefaultFocus();
-    if (firstFocus)
-        brls::Application::giveFocus(firstFocus);
+    m_scrollFrame->setContentOffsetY(0, /*animated=*/false);
+    brls::Application::giveFocus(children[0]);
 }
 
-void FileListPage::resetFocusIfPageActive()
+void FileListPage::rebuildItemViews()
 {
-    // Only give focus to the first recycler item when this page currently holds
-    // the application focus (i.e. the user is actively browsing).  We check by
-    // walking up the parent chain from the currently focused view.
-    brls::View* curFocus = brls::Application::getCurrentFocus();
-    if (!curFocus)
-        return;
+    // clearViews(true) schedules old views for deferred deletion via borealis'
+    // deletionPool, so Application::currentFocus remains a valid pointer until
+    // the end of the current frame even if it pointed to one of the removed
+    // views.  We immediately give focus to the first new item, ensuring the
+    // focus is safe before the old views are eventually freed.
+    m_itemsBox->clearViews(/*free=*/true);
+    m_scrollFrame->setContentOffsetY(0, /*animated=*/false);
 
-    brls::Box* parent = curFocus->getParent();
-    while (parent)
+    FileListItemView* firstItem = nullptr;
+    for (int i = 0; i < static_cast<int>(m_items.size()); ++i)
     {
-        if (parent == this)
-        {
-            // Guard: recycler must have at least one cell already laid out.
-            brls::View* existingFocus = m_recycler->getDefaultFocus();
-            if (!existingFocus)
-                break;
+        auto* itemView = new FileListItemView();
+        itemView->setItem(m_items[i], i);
 
-            // Explicitly select row 0 so that RecyclerFrame's internal
-            // lastFocusedView is reset to the first item.  Without this call
-            // the LIFO cell-reuse stack can leave lastFocusedView pointing at
-            // a cell that was reused from the bottom of the previous list,
-            // causing focus to land on the last visible row instead of the
-            // first one after a directory change.
-            m_recycler->selectRowAt(brls::IndexPath(0, 0), /*animated=*/false);
+        itemView->onItemFocused   = [this](int idx) { onItemFocused(idx); };
+        itemView->onItemActivated = [this](int idx) { onItemActivated(idx); };
+        itemView->onItemOptions   = [this](int idx) { openSidebar(idx); };
 
-            brls::View* firstFocus = m_recycler->getDefaultFocus();
-            if (firstFocus)
-                brls::Application::giveFocus(firstFocus);
-            break;
-        }
-        parent = parent->getParent();
+        m_itemsBox->addView(itemView);
+        if (i == 0)
+            firstItem = itemView;
     }
+
+    if (firstItem)
+        brls::Application::giveFocus(firstItem);
 }
 
 void FileListPage::setFilter(const std::vector<std::string>& suffixes, FilterMode mode)
@@ -612,7 +549,7 @@ void FileListPage::refreshList(const std::string& path)
 
     auto rawList = beiklive::file::listDir(path, beiklive::file::SortBy::TypeThenName);
 
-    m_dataSource->items.clear();
+    m_items.clear();
 
     // Determine the logo load mode from settings:
     // 0 = do not display; 1 = load on focus (default); 2 = prefetch
@@ -662,14 +599,11 @@ void FileListPage::refreshList(const std::string& path)
             }
         }
 
-        m_dataSource->items.push_back(std::move(item));
+        m_items.push_back(std::move(item));
     }
 
-    // When the filtered list is empty we must ensure at least one item is present.
-    // borealis RecyclerFrame's selectRowAt(IndexPath(0,0)) always accesses
-    // cacheFramesData[1], which requires ≥2 entries (header + 1 item). With 0
-    // data items only the section header exists (size==1), causing an OOB assert.
-    if (m_dataSource->items.empty())
+    // When the filtered list is empty, ensure there is at least one item.
+    if (m_items.empty())
     {
 #ifdef _WIN32
         // On Windows root directories, show the drive-letter list instead so the
@@ -677,7 +611,7 @@ void FileListPage::refreshList(const std::string& path)
         if (beiklive::file::is_root_directory(m_currentPath))
         {
             showDriveList();
-            return; // showDriveList handles reloadData and header update
+            return; // showDriveList handles rebuild and header update
         }
 #endif
         // Non-root (or non-Windows root): add a ".." entry so the user can
@@ -687,22 +621,20 @@ void FileListPage::refreshList(const std::string& path)
         dotdot.fullPath   = beiklive::file::getParentPath(m_currentPath);
         dotdot.isDir      = true;
         dotdot.childCount = 0;
-        m_dataSource->items.push_back(std::move(dotdot));
+        m_items.push_back(std::move(dotdot));
     }
-
-    m_recycler->reloadData();
 
     if (m_header)
     {
-        int total = static_cast<int>(m_dataSource->items.size());
+        int total = static_cast<int>(m_items.size());
         m_header->setInfo("0/" + std::to_string(total));
     }
 
-    // Reset focus to the first item when this page currently holds application
-    // focus (i.e. the user is actively browsing). This handles both entering a
-    // sub-directory and navigating back up, so focus never lingers at the
-    // previously-selected row after the list content changes.
-    resetFocusIfPageActive();
+    // Rebuild item views and reset focus to the first item.
+    // Unlike RecyclerFrame::reloadData(), this directly sets focus to the
+    // first view, which is completely reliable regardless of any internal
+    // recycler ordering or layout timing.
+    rebuildItemViews();
 }
 
 void FileListPage::updateHeader()
@@ -775,7 +707,7 @@ void FileListPage::showDriveList()
     }
     clearDetailPanel();
 
-    m_dataSource->items.clear();
+    m_items.clear();
 
     for (const auto& drivePath : getWindowsDrives())
     {
@@ -784,19 +716,16 @@ void FileListPage::showDriveList()
         item.fullPath   = drivePath;              // e.g. "C:\\"
         item.isDir      = true;
         item.childCount = 0;
-        m_dataSource->items.push_back(std::move(item));
+        m_items.push_back(std::move(item));
     }
-
-    m_recycler->reloadData();
 
     if (m_header)
     {
-        int total = static_cast<int>(m_dataSource->items.size());
+        int total = static_cast<int>(m_items.size());
         m_header->setInfo(std::to_string(total) + "/" + std::to_string(total));
     }
 
-    // Reset focus to the first drive entry if this page currently holds focus.
-    resetFocusIfPageActive();
+    rebuildItemViews();
 #endif
 }
 
@@ -870,45 +799,45 @@ void FileListPage::doNewFolder()
         "");
 }
 
-// ─────────── Callbacks from DataSource/Cell ──────────────────────────────────
+// ─────────── Callbacks from ItemView ─────────────────────────────────────────
 
 void FileListPage::onItemFocused(int index)
 {
     if (m_header && index >= 0)
     {
-        int total = static_cast<int>(m_dataSource->items.size());
+        int total = static_cast<int>(m_items.size());
         m_header->setInfo(std::to_string(index + 1) + "/" + std::to_string(total));
     }
 
     if (m_layoutMode != LayoutMode::ListAndDetail)
         return;
-    if (index < 0 || index >= static_cast<int>(m_dataSource->items.size()))
+    if (index < 0 || index >= static_cast<int>(m_items.size()))
         return;
-    updateDetailPanel(m_dataSource->items[index]);
+    updateDetailPanel(m_items[index]);
 }
 
 void FileListPage::onItemActivated(int index)
 {
-    if (index < 0 || index >= static_cast<int>(m_dataSource->items.size()))
+    if (index < 0 || index >= static_cast<int>(m_items.size()))
         return;
-    openItem(m_dataSource->items[index]);
+    openItem(m_items[index]);
 }
 
 void FileListPage::openSidebar(int itemIndex)
 {
-    if (itemIndex < 0 || itemIndex >= static_cast<int>(m_dataSource->items.size()))
+    if (itemIndex < 0 || itemIndex >= static_cast<int>(m_items.size()))
         return;
 
     // If an external settings panel handler is set, delegate to it (StartPageView)
     if (onOpenSettings)
     {
-        onOpenSettings(m_dataSource->items[itemIndex], itemIndex);
+        onOpenSettings(m_items[itemIndex], itemIndex);
         return;
     }
 
     // Fallback: use a built-in Dropdown (should not normally be reached when
     // the host correctly sets onOpenSettings)
-    const FileListItem& item = m_dataSource->items[itemIndex];
+    const FileListItem& item = m_items[itemIndex];
 
     // Build option list – use a struct so we avoid index-arithmetic bugs when
     // rename is conditionally excluded on non-Switch platforms.
@@ -955,12 +884,12 @@ void FileListPage::openSidebar(int itemIndex)
 
 void FileListPage::doRename(int itemIndex)
 {
-    if (itemIndex < 0 || itemIndex >= static_cast<int>(m_dataSource->items.size()))
+    if (itemIndex < 0 || itemIndex >= static_cast<int>(m_items.size()))
         return;
     // Capture the data we need by value — the IME callback runs asynchronously
-    // and `m_dataSource->items` may be reallocated before it fires.
-    const std::string oldFullPath = m_dataSource->items[itemIndex].fullPath;
-    const std::string oldFileName = m_dataSource->items[itemIndex].fileName;
+    // and `m_items` may be reallocated before it fires.
+    const std::string oldFullPath = m_items[itemIndex].fullPath;
+    const std::string oldFileName = m_items[itemIndex].fileName;
 
     brls::Application::getPlatform()->getImeManager()->openForText(
         [this, oldFullPath](const std::string& newName) {
@@ -987,10 +916,10 @@ void FileListPage::doRename(int itemIndex)
 
 void FileListPage::doSetMapping(int itemIndex)
 {
-    if (itemIndex < 0 || itemIndex >= static_cast<int>(m_dataSource->items.size()))
+    if (itemIndex < 0 || itemIndex >= static_cast<int>(m_items.size()))
         return;
     // Capture necessary data by value for the async callback
-    const FileListItem itemCopy = m_dataSource->items[itemIndex];
+    const FileListItem itemCopy = m_items[itemIndex];
 
     // Build the config key (base name without extension for files)
     std::string key;
@@ -1024,9 +953,9 @@ void FileListPage::doSetMapping(int itemIndex)
 
 void FileListPage::doCut(int itemIndex)
 {
-    if (itemIndex < 0 || itemIndex >= static_cast<int>(m_dataSource->items.size()))
+    if (itemIndex < 0 || itemIndex >= static_cast<int>(m_items.size()))
         return;
-    m_clipboardItem = m_dataSource->items[itemIndex];
+    m_clipboardItem = m_items[itemIndex];
     m_hasClipboard  = true;
     bklog::info("Cut: {}", m_clipboardItem.fullPath);
 }
@@ -1053,9 +982,9 @@ void FileListPage::doPaste()
 
 void FileListPage::doDelete(int itemIndex)
 {
-    if (itemIndex < 0 || itemIndex >= static_cast<int>(m_dataSource->items.size()))
+    if (itemIndex < 0 || itemIndex >= static_cast<int>(m_items.size()))
         return;
-    const FileListItem& item = m_dataSource->items[itemIndex];
+    const FileListItem& item = m_items[itemIndex];
 
     // Confirm via a second Dropdown
     auto* confirm = new brls::Dropdown(
