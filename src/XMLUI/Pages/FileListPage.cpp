@@ -49,10 +49,10 @@ static const std::vector<std::string> k_zipExtensions = {
 /// The icon variant (_light / _dark) is selected based on @p theme.
 static std::string getFileIconPath(const FileListItem& item, brls::ThemeVariant theme)
 {
-    const std::string variant = (theme == brls::ThemeVariant::LIGHT) ? "_light" : "_dark";
+    // const std::string variant = (theme == brls::ThemeVariant::LIGHT) ? "_light" : "_dark";
 
     if (item.isDir)
-        return BK_RES(std::string("/img/file/up") + variant + ".png");
+        return BK_RES(std::string("/img/ui/icon_folder.png"));
 
     const std::string suffix = beiklive::string::getFileSuffix(item.fileName);
 
@@ -63,12 +63,12 @@ static std::string getFileIconPath(const FileListItem& item, brls::ThemeVariant 
         return false;
     };
 
-    if (matchesSuffix(k_gbExtensions))    return BK_RES(std::string("/img/file/gb")    + variant + ".png");
-    if (matchesSuffix(k_gbaExtensions))   return BK_RES(std::string("/img/file/gba")   + variant + ".png");
-    if (matchesSuffix(k_imageExtensions)) return BK_RES(std::string("/img/file/image") + variant + ".png");
-    if (matchesSuffix(k_zipExtensions))   return BK_RES(std::string("/img/file/zip")   + variant + ".png");
+    if (matchesSuffix(k_gbExtensions))    return BK_RES(std::string("/img/ui/icon_gb.png"));
+    if (matchesSuffix(k_gbaExtensions))   return BK_RES(std::string("/img/ui/icon_gba.png"));
+    if (matchesSuffix(k_imageExtensions)) return BK_RES(std::string("/img/ui/icon_image.png"));
+    if (matchesSuffix(k_zipExtensions))   return BK_RES(std::string("/img/ui/icon_zip.png"));
 
-    return BK_RES(std::string("/img/file/file") + variant + ".png");
+    return BK_RES(std::string("/img/ui/icon_file.png"));
 }
 
 
@@ -212,14 +212,15 @@ void FileListCell::setItem(const FileListItem& item, int index)
     m_index = index;
     m_nameLabel->setText(item.displayName());
     auto theme = brls::Application::getPlatform()->getThemeVariant();
-    m_icon->setImageFromFile(getFileIconPath(item, theme));
-
+    
     if (item.isDir)
     {
+        m_icon->setImageFromFile(BK_RES("/img/ui/icon_folder.png"));
         m_infoLabel->setText(std::to_string(item.childCount) + " items");
     }
     else
     {
+        m_icon->setImageFromFile(getFileIconPath(item, theme));
         m_infoLabel->setText(formatFileSize(item.fileSize));
     }
 }
