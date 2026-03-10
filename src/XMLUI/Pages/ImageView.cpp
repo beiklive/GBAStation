@@ -60,12 +60,6 @@ ImageView::ImageView(const std::string& imagePath)
     beiklive::swallow(this, brls::BUTTON_BACK);
 }
 
-ImageView::~ImageView()
-{
-    // NVG image handle is destroyed together with the NVGcontext when the
-    // application exits; no manual cleanup required here.
-}
-
 void ImageView::draw(NVGcontext* vg, float x, float y, float w, float h,
                      brls::Style /*style*/, brls::FrameContext* /*ctx*/)
 {

@@ -26,8 +26,6 @@ class FileSettingsPanel : public brls::Box
     /// Hide the panel and restore focus to the file list.
     void close();
 
-    void onLayout() override;
-
   private:
     brls::Box*   m_titleBar    = nullptr;
     brls::Label* m_titleLabel  = nullptr;

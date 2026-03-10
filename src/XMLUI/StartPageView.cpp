@@ -57,11 +57,6 @@ FileSettingsPanel::FileSettingsPanel()
     addView(m_optionsBox);
 }
 
-void FileSettingsPanel::onLayout()
-{
-    brls::Box::onLayout();
-}
-
 void FileSettingsPanel::clearOptions()
 {
     // Remove all option buttons from the options box

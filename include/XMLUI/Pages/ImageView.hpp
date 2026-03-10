@@ -15,7 +15,6 @@ class ImageView : public brls::Box
 {
   public:
     explicit ImageView(const std::string& imagePath);
-    ~ImageView() override;
 
     void draw(NVGcontext* vg, float x, float y, float w, float h,
               brls::Style style, brls::FrameContext* ctx) override;

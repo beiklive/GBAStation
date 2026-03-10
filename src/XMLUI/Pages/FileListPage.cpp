@@ -712,7 +712,10 @@ void FileListPage::showDriveList()
     m_recycler->reloadData();
 
     if (m_header)
-        m_header->setInfo(std::to_string(m_dataSource->items.size()) + " drives");
+    {
+        int total = static_cast<int>(m_dataSource->items.size());
+        m_header->setInfo(std::to_string(total) + "/" + std::to_string(total));
+    }
 #endif
 }
 
