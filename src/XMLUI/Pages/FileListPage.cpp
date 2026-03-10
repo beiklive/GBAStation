@@ -180,6 +180,8 @@ FileListCell::FileListCell()
     m_nameLabel = new brls::Label();
     m_nameLabel->setFontSize(NAME_FONT_SIZE);
     m_nameLabel->setSingleLine(true);
+    // Scroll (marquee) the label when the cell is focused and text overflows.
+    m_nameLabel->setAutoAnimate(true);
     m_nameLabel->setGrow(1.0f);
     m_nameLabel->setMarginRight(CELL_PAD_H);
     m_nameLabel->setMarginTop(8.f);
@@ -471,6 +473,19 @@ void FileListPage::resetFocusIfPageActive()
     {
         if (parent == this)
         {
+            // Guard: recycler must have at least one cell already laid out.
+            brls::View* existingFocus = m_recycler->getDefaultFocus();
+            if (!existingFocus)
+                break;
+
+            // Explicitly select row 0 so that RecyclerFrame's internal
+            // lastFocusedView is reset to the first item.  Without this call
+            // the LIFO cell-reuse stack can leave lastFocusedView pointing at
+            // a cell that was reused from the bottom of the previous list,
+            // causing focus to land on the last visible row instead of the
+            // first one after a directory change.
+            m_recycler->selectRowAt(brls::IndexPath(0, 0), /*animated=*/false);
+
             brls::View* firstFocus = m_recycler->getDefaultFocus();
             if (firstFocus)
                 brls::Application::giveFocus(firstFocus);
@@ -478,7 +493,6 @@ void FileListPage::resetFocusIfPageActive()
         }
         parent = parent->getParent();
     }
-    
 }
 
 void FileListPage::setFilter(const std::vector<std::string>& suffixes, FilterMode mode)
