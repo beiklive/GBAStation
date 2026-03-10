@@ -241,9 +241,10 @@ FileListPage::~FileListPage()
 void FileListPage::buildUI()
 {
     // ── Header ────────────────────────────────────────────────────────────
-    m_header = new brls::Header();
+    m_header = new beiklive::UI::BrowserHeader();
     m_header->setTitle("beiklive/file/file_select"_i18n);
-    m_header->setSubtitle("");
+    m_header->setPath("/");
+    m_header->setFileName(" ");
     addView(m_header);
 
     // ── Content row (list + optional detail panel) ────────────────────────
@@ -422,17 +423,6 @@ void FileListPage::refreshList(const std::string& path)
 
     m_dataSource->items.clear();
 
-    // ".." entry (navigate up)
-    if (!beiklive::file::is_root_directory(path))
-    {
-        FileListItem up;
-        up.fileName  = "..";
-        up.isDir     = true;
-        up.fullPath  = beiklive::file::getParentPath(path);
-        up.childCount = 0;
-        m_dataSource->items.push_back(std::move(up));
-    }
-
     for (const auto& fullPath : rawList)
     {
         auto pathType = beiklive::file::getPathType(fullPath);
@@ -478,7 +468,7 @@ void FileListPage::refreshList(const std::string& path)
 void FileListPage::updateHeader()
 {
     if (m_header)
-        m_header->setSubtitle(m_currentPath);
+        m_header->setPath(m_currentPath);
 }
 
 void FileListPage::clearDetailPanel()
@@ -536,11 +526,7 @@ void FileListPage::openItem(const FileListItem& item)
 {
     if (item.isDir)
     {
-        if (item.fileName == "..")
-            navigateUp();
-        else
-            refreshList(item.fullPath);
-        return;
+        refreshList(item.fullPath);
     }
 
     // File: find and invoke the appropriate callback

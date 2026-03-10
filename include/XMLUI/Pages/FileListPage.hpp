@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "common.hpp"
+#include "XMLUI/Utils/Utils.hpp"
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  FileListItem  –  describes one entry in the file list
@@ -127,7 +128,7 @@ class FileListPage : public brls::Box
 
   private:
     // ── UI components ────────────────────────────────────────────────────────
-    brls::Header*    m_header      = nullptr;
+    beiklive::UI::BrowserHeader*    m_header      = nullptr;
     brls::Box*       m_contentBox  = nullptr; ///< row box: list + optional detail
     brls::Box*       m_listBox     = nullptr; ///< contains recycler
     brls::RecyclerFrame* m_recycler = nullptr;

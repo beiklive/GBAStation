@@ -38,8 +38,8 @@ if %ERRORLEVEL% neq 0 (
     cd ..
     exit /b 1
 )
-
 cd ..
 echo.
 echo [完成] 产物目录：%BUILD_DIR%\
 endlocal
+

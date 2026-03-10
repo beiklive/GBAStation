@@ -12,7 +12,7 @@ using namespace brls::literals; // for _i18n
 #if defined(__SWITCH__)
 #define ROOT_PATH "/"
 #elif defined(WIN32)
-#define ROOT_PATH "F:/games/GBA"
+#define ROOT_PATH "F:\\games\\GBA"
 #else
 #define ROOT_PATH "/Users/beiklive"
 #endif

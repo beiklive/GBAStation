@@ -46,7 +46,8 @@ using bklog = brls::Logger;
 
 namespace beiklive {
 
-
+brls::Style getStyle();
+brls::Theme getTheme();
 // ---- Swallow helper: register a no-op action that consumes a button ----
 // This prevents Borealis from acting on navigation / face buttons while the
 // game is running (e.g. BUTTON_B would otherwise trigger a back-navigation).
