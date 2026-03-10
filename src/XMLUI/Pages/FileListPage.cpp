@@ -63,12 +63,12 @@ static std::string getFileIconPath(const FileListItem& item, brls::ThemeVariant 
         return false;
     };
 
-    if (matchesSuffix(k_gbExtensions))    return BK_RES(std::string("/img/ui/icon_gb.png"));
-    if (matchesSuffix(k_gbaExtensions))   return BK_RES(std::string("/img/ui/icon_gba.png"));
-    if (matchesSuffix(k_imageExtensions)) return BK_RES(std::string("/img/ui/icon_image.png"));
-    if (matchesSuffix(k_zipExtensions))   return BK_RES(std::string("/img/ui/icon_zip.png"));
+    if (matchesSuffix(k_gbExtensions))    return BK_RES(std::string("img/ui/icon_gb.png"));
+    if (matchesSuffix(k_gbaExtensions))   return BK_RES(std::string("img/ui/icon_gba.png"));
+    if (matchesSuffix(k_imageExtensions)) return BK_RES(std::string("img/ui/icon_image.png"));
+    if (matchesSuffix(k_zipExtensions))   return BK_RES(std::string("img/ui/icon_zip.png"));
 
-    return BK_RES(std::string("/img/ui/icon_file.png"));
+    return BK_RES(std::string("img/ui/icon_file.png"));
 }
 
 
@@ -172,7 +172,7 @@ FileListItemView::FileListItemView()
     m_icon->setMarginRight(CELL_PAD_H);
     m_icon->setScalingType(brls::ImageScalingType::FIT);
     m_icon->setInterpolation(brls::ImageInterpolation::LINEAR);
-    m_icon->setImageFromFile(BK_RES("/img/file/file_light.png"));
+    m_icon->setImageFromFile(BK_RES("img/file/file_light.png"));
     addView(m_icon);
 
     // Name label (grows to fill space)
@@ -208,7 +208,7 @@ void FileListItemView::setItem(const FileListItem& item, int index)
 
     if (item.isDir)
     {
-        m_icon->setImageFromFile(BK_RES("/img/ui/icon_folder.png"));
+        m_icon->setImageFromFile(BK_RES("img/ui/icon_folder.png"));
         m_infoLabel->setText(std::to_string(item.childCount) + " items");
     }
     else
