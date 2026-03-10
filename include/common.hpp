@@ -129,4 +129,6 @@ struct GameRunner {
 // 全局配置管理器实例
 extern beiklive::ConfigManager* SettingManager;
 extern beiklive::ConfigManager* NameMappingManager;
+/// Logo 路径映射：key = 文件名(不含后缀), value = logo 图片路径
+extern beiklive::ConfigManager* logoManager;
 extern beiklive::GameRunner* gameRunner;

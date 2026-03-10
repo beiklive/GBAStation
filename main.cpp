@@ -26,6 +26,7 @@ extern "C" unsigned int sceLibcHeapSize = 2 * 1024 * 1024;
 beiklive::GameRunner* gameRunner = nullptr;
 beiklive::ConfigManager* SettingManager = nullptr;
 beiklive::ConfigManager* NameMappingManager = nullptr;
+beiklive::ConfigManager* logoManager = nullptr;
 
 
 
@@ -62,6 +63,8 @@ void ConfigManagerInit() {
 	SettingManager = new beiklive::ConfigManager((std::string(BK_APP_CONFIG_DIR) + std::string("setting.cfg")));
 	NameMappingManager =
 	    new beiklive::ConfigManager((std::string(BK_APP_CONFIG_DIR) + std::string("name_mapping.cfg")));
+	logoManager =
+	    new beiklive::ConfigManager((std::string(BK_APP_CONFIG_DIR) + std::string("logo_mapping.cfg")));
 	if (!SettingManager->Load()) {
 		brls::Logger::warning("Failed to load setting.cfg, using default configuration.");
 	} else {
@@ -86,6 +89,11 @@ void ConfigManagerInit() {
 		brls::Logger::warning("Failed to load name_mapping.cfg, using default name mapping.");
 	} else {
 		brls::Logger::info("Name mapping loaded successfully from name_mapping.cfg.");
+	}
+	if (!logoManager->Load()) {
+		brls::Logger::warning("Failed to load logo_mapping.cfg, using empty logo mapping.");
+	} else {
+		brls::Logger::info("Logo mapping loaded successfully from logo_mapping.cfg.");
 	}
 	// 打印当前平台信息
 	std::string platform = "unknown";

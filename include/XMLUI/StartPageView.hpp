@@ -1,11 +1,49 @@
 #pragma once
 
 #include <borealis.hpp>
+#include <functional>
+#include <string>
+#include <vector>
 
 #include "common.hpp"
 #include "XMLUI/Pages/AppPage.hpp"
 #include "XMLUI/Pages/FileListPage.hpp"
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  FileSettingsPanel – absolute-positioned overlay for file operations
+// ─────────────────────────────────────────────────────────────────────────────
+class FileSettingsPanel : public brls::Box
+{
+  public:
+    FileSettingsPanel();
+
+    /// Show the panel for a specific item.
+    /// @param item        The file/dir the operations act on.
+    /// @param itemIndex   Index in the FileListPage data source.
+    /// @param page        Pointer to the owning FileListPage (for callbacks).
+    void showForItem(const FileListItem& item, int itemIndex, FileListPage* page);
+
+    /// Hide the panel and restore focus to the file list.
+    void close();
+
+    void onLayout() override;
+
+  private:
+    brls::Box*   m_titleBar    = nullptr;
+    brls::Label* m_titleLabel  = nullptr;
+    brls::Box*   m_optionsBox  = nullptr;
+    brls::Box*   m_bottomHints = nullptr;
+
+    FileListPage* m_fileListPage   = nullptr;
+    int           m_currentItemIdx = -1;
+
+    void addOptionButton(const std::string& label, std::function<void()> action);
+    void clearOptions();
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  StartPageView
+// ─────────────────────────────────────────────────────────────────────────────
 class StartPageView : public brls::Box
 {
   public:
@@ -22,13 +60,17 @@ class StartPageView : public brls::Box
   private:
     brls::Image* m_bgImage = nullptr;
 
-    AppPage*      m_appPage      = nullptr;
-    FileListPage* m_fileListPage = nullptr;
-    int           m_activeIndex  = 0; ///< 0 = AppPage, 1 = FileListPage
+    AppPage*           m_appPage        = nullptr;
+    FileListPage*      m_fileListPage   = nullptr;
+    FileSettingsPanel* m_settingsPanel  = nullptr;
+    int                m_activeIndex    = 0; ///< 0 = AppPage, 1 = FileListPage
 
     void showAppPage();
     void showFileListPage();
     void createAppPage();
     void createFileListPage();
+
+    /// Called by the FileListPage callback when BUTTON_X is pressed.
+    void onFileSettingsRequested(const FileListItem& item, int itemIndex);
 };
 
