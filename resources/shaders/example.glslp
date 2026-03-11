@@ -1,0 +1,17 @@
+// example.glslp – BeikLive 多通道着色器预设示例
+// 渲染链：锐化 → 扫描线
+//
+// 第 0 通道（内置）：颜色校正直通
+// 第 1 通道（sharpen）：Unsharp Mask 锐化
+// 第 2 通道（scanlines）：CRT 扫描线效果
+//
+// 使用方法：在配置文件中设置
+//   shader.preset=resources/shaders/example.glslp
+
+shaders = 2
+
+shader0 = sharpen.glsl
+filter_linear0 = false
+
+shader1 = scanlines.glsl
+filter_linear1 = false

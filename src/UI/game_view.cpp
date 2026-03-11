@@ -1,5 +1,6 @@
 #include "UI/game_view.hpp"
 #include "Audio/AudioManager.hpp"
+#include "Game/GlslpLoader.hpp"
 
 #include <borealis.hpp>
 #include <borealis/core/application.hpp>
@@ -386,6 +387,13 @@ void GameView::initialize()
         cfg->SetDefault("display.showFfOverlay",    CV(std::string("true")));
         cfg->SetDefault("display.showRewindOverlay",CV(std::string("true")));
 
+        // ---- Shader chain defaults -----------------------------------
+        // shader.preset: 留空表示不加载额外着色器，仅使用内置直通通道。
+        // 支持绝对路径或相对于当前工作目录的路径。
+        // 示例: shader.preset=resources/shaders/scanlines.glsl
+        //       shader.preset=resources/shaders/example.glslp
+        cfg->SetDefault("shader.preset", CV(std::string("")));
+
         // ---- Handle (gamepad) button mapping defaults ----------------
         // Values use readable button names (e.g. "A", "LB", "RT").
         cfg->SetDefault("handle.a",           CV(std::string("A")));
@@ -565,6 +573,44 @@ void GameView::initialize()
 
     m_texWidth  = gw;
     m_texHeight = gh;
+
+    // ---- Initialise shader chain (always; user passes added below) ----
+    if (!m_shaderChain.initBuiltin()) {
+        bklog::warning("ShaderChain initBuiltin failed; using direct texture rendering");
+    } else {
+        m_shaderEnabled = false;
+
+        // Load shader preset from config
+        std::string presetPath;
+        if (gameRunner && gameRunner->settingConfig) {
+            auto v = gameRunner->settingConfig->Get("shader.preset");
+            if (v) { if (auto s = v->AsString()) presetPath = *s; }
+        }
+        if (!presetPath.empty()) {
+            // Choose loader by file extension (.glslp = multi-pass preset, .glsl = single pass)
+            bool isPreset = false;
+            if (presetPath.size() >= 6) {
+                std::string tail = presetPath.substr(presetPath.size() - 6);
+                std::transform(tail.begin(), tail.end(), tail.begin(),
+                               [](unsigned char c){ return static_cast<char>(std::tolower(c)); });
+                isPreset = (tail == ".glslp");
+            }
+
+            bool ok = false;
+            if (isPreset) {
+                ok = beiklive::GlslpLoader::loadGlslpIntoChain(m_shaderChain, presetPath);
+            } else {
+                // Treat as .glsl single-pass shader
+                ok = beiklive::GlslpLoader::loadGlslIntoChain(m_shaderChain, presetPath);
+            }
+            if (ok) {
+                m_shaderEnabled = true;
+                bklog::info("Shader preset loaded: {}", presetPath);
+            } else {
+                bklog::warning("Failed to load shader preset: {}", presetPath);
+            }
+        }
+    }
 
     // ---- Start audio manager ------------------------------------------
     if (!beiklive::AudioManager::instance().init(32768, 2)) {
@@ -907,13 +953,15 @@ void GameView::cleanup()
     }
 
     if (m_nvgImage >= 0) {
-        // NVG_IMAGE_NODELETE is set, so NanoVG won't delete the GL texture
-        // itself; we only need to free the NVG handle.
-        // We can't call nvgDeleteImage here because we may not have a valid
-        // NVGcontext.  Setting to -1 is sufficient – the texture lifetime is
-        // managed by m_texture below.
         m_nvgImage = -1;
     }
+    if (m_nvgShaderImage >= 0) {
+        m_nvgShaderImage = -1;
+    }
+
+    // Deinit shader chain (releases GL FBOs/textures/programs)
+    m_shaderChain.deinit();
+    m_shaderEnabled = false;
 
     if (m_texture) {
         glDeleteTextures(1, &m_texture);
@@ -1194,26 +1242,82 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
             nvgDeleteImage(vg, m_nvgImage);
             m_nvgImage = -1;
         }
+        m_shaderChain.setFilter(glFilter);
+        if (m_nvgShaderImage >= 0) {
+            nvgDeleteImage(vg, m_nvgShaderImage);
+            m_nvgShaderImage = -1;
+        }
     }
 
-    // ---- Create NVG image handle on first valid frame ----------------
-    if (m_nvgImage < 0 && m_texWidth > 0 && m_texHeight > 0) {
-        m_nvgImage = nvgImageFromGLTexture(vg, m_texture,
-                                           static_cast<int>(m_texWidth),
-                                           static_cast<int>(m_texHeight),
-                                           m_activeFilter);
+    // ---- Run shader chain and determine the display texture ----------
+    // The shader chain always has at least the built-in pass 0 which:
+    //   • normalises colour (forces alpha = 1)
+    //   • outputs to an exactly-sized FBO (videoW × videoH)
+    // Additional user passes perform post-processing effects.
+    GLuint displayTex  = m_texture;
+    int    displayW    = static_cast<int>(m_texWidth);
+    int    displayH    = static_cast<int>(m_texHeight);
+    bool   useShaderTex = false;
+
+    if (m_texWidth > 0 && m_texHeight > 0) {
+        GLuint chainOut = m_shaderChain.run(m_texture, m_texWidth, m_texHeight);
+        if (chainOut != m_texture && chainOut != 0) {
+            // Shader chain returned a processed texture
+            displayTex   = chainOut;
+            displayW     = static_cast<int>(m_shaderChain.outputW());
+            displayH     = static_cast<int>(m_shaderChain.outputH());
+            useShaderTex = true;
+        }
+    }
+
+    // ---- Manage NVG image handles ------------------------------------
+    // We keep two handles: one for the raw texture (fallback) and one for the
+    // shader chain output.  Only the active one is used for rendering.
+    if (!useShaderTex) {
+        // Use raw texture path
+        if (m_nvgImage < 0 && m_texWidth > 0 && m_texHeight > 0) {
+            m_nvgImage = nvgImageFromGLTexture(vg, m_texture,
+                                               static_cast<int>(m_texWidth),
+                                               static_cast<int>(m_texHeight),
+                                               m_activeFilter);
+        }
+        if (m_nvgShaderImage >= 0) {
+            nvgDeleteImage(vg, m_nvgShaderImage);
+            m_nvgShaderImage = -1;
+        }
+    } else {
+        // Use shader output texture path
+        if (m_nvgImage >= 0) {
+            nvgDeleteImage(vg, m_nvgImage);
+            m_nvgImage = -1;
+        }
+        // Recreate NVG handle when output dimensions change
+        if (m_nvgShaderImage < 0 ||
+            static_cast<unsigned>(displayW) != m_shaderDisplayW ||
+            static_cast<unsigned>(displayH) != m_shaderDisplayH) {
+            if (m_nvgShaderImage >= 0) {
+                nvgDeleteImage(vg, m_nvgShaderImage);
+            }
+            m_nvgShaderImage = nvgImageFromGLTexture(vg, displayTex,
+                                                      displayW, displayH,
+                                                      m_activeFilter);
+            m_shaderDisplayW = static_cast<unsigned>(displayW);
+            m_shaderDisplayH = static_cast<unsigned>(displayH);
+        }
     }
 
     // ---- Render the game texture using NanoVG ------------------------
-    if (m_nvgImage >= 0) {
+    int renderNvgImg = useShaderTex ? m_nvgShaderImage : m_nvgImage;
+    if (renderNvgImg >= 0) {
         beiklive::DisplayRect rect = m_display.computeRect(x, y, width, height,
-                                                            m_texWidth, m_texHeight);
+                                                            static_cast<unsigned>(displayW),
+                                                            static_cast<unsigned>(displayH));
 
         NVGpaint imgPaint = nvgImagePattern(vg,
                                             rect.x, rect.y,
                                             rect.w, rect.h,
                                             0.0f,
-                                            m_nvgImage,
+                                            renderNvgImg,
                                             1.0f);
         nvgBeginPath(vg);
         nvgRect(vg, rect.x, rect.y, rect.w, rect.h);

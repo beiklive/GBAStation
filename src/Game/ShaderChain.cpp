@@ -103,6 +103,28 @@ static const GLfloat k_quadOffsets[] = {
 namespace beiklive {
 
 // ============================================================
+// ShaderChain：查询单个通道的所有 uniform / attrib 位置
+// ============================================================
+void ShaderChain::_lookupUniforms(ShaderPass& p)
+{
+    p.texLoc    = glGetUniformLocation(p.program, "tex");
+    p.dimsLoc   = glGetUniformLocation(p.program, "dims");
+    p.insizeLoc = glGetUniformLocation(p.program, "insize");
+    p.colorLoc  = glGetUniformLocation(p.program, "color");
+    p.offsetLoc = glGetAttribLocation (p.program, "offset");
+
+    // RetroArch 兼容 uniforms（不存在时 glGetUniformLocation 返回 -1，安全忽略）
+    p.sourceLoc     = glGetUniformLocation(p.program, "Source");
+    if (p.sourceLoc < 0)
+        p.sourceLoc = glGetUniformLocation(p.program, "Texture");
+    p.sourceSizeLoc = glGetUniformLocation(p.program, "SourceSize");
+    if (p.sourceSizeLoc < 0)
+        p.sourceSizeLoc = glGetUniformLocation(p.program, "TextureSize");
+    p.outputSizeLoc = glGetUniformLocation(p.program, "OutputSize");
+    p.frameCountLoc = glGetUniformLocation(p.program, "FrameCount");
+}
+
+// ============================================================
 // ShaderChain：构建第 0 通道及四边形几何体
 // ============================================================
 bool ShaderChain::init(const std::string& vertSrc, const std::string& fragSrc)
@@ -124,11 +146,7 @@ bool ShaderChain::init(const std::string& vertSrc, const std::string& fragSrc)
         brls::Logger::error("[ShaderChain] Built-in shader compilation FAILED");
         return false;
     }
-    pass0.texLoc    = glGetUniformLocation(pass0.program, "tex");
-    pass0.dimsLoc   = glGetUniformLocation(pass0.program, "dims");
-    pass0.insizeLoc = glGetUniformLocation(pass0.program, "insize");
-    pass0.colorLoc  = glGetUniformLocation(pass0.program, "color");
-    pass0.offsetLoc = glGetAttribLocation(pass0.program, "offset");
+    _lookupUniforms(pass0);
     _bindPassAttrib(pass0);
 
     // FBO 在首次调用 run() 时延迟创建（需要视频尺寸）
@@ -164,6 +182,7 @@ void ShaderChain::deinit()
 
     m_lastVideoW = 0;
     m_lastVideoH = 0;
+    m_frameCount = 0;
     brls::Logger::debug("[ShaderChain] All GL resources released");
 }
 
@@ -176,11 +195,7 @@ bool ShaderChain::addPass(const std::string& vert, const std::string& frag)
     p.program = buildProgram(vert.c_str(), frag.c_str());
     if (!p.program) return false;
 
-    p.texLoc    = glGetUniformLocation(p.program, "tex");
-    p.dimsLoc   = glGetUniformLocation(p.program, "dims");
-    p.insizeLoc = glGetUniformLocation(p.program, "insize");
-    p.colorLoc  = glGetUniformLocation(p.program, "color");
-    p.offsetLoc = glGetAttribLocation(p.program, "offset");
+    _lookupUniforms(p);
     _bindPassAttrib(p);
 
     // 强制下次 run() 时重建 FBO——最终输出纹理将发生变化
@@ -299,18 +314,31 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
         glUseProgram(p.program);
 
         if (p.texLoc    >= 0) glUniform1i(p.texLoc,   0);
+        if (p.sourceLoc >= 0) glUniform1i(p.sourceLoc, 0);
         if (p.colorLoc  >= 0) glUniform4f(p.colorLoc,  1.f, 1.f, 1.f, 1.f);
         if (p.dimsLoc   >= 0) glUniform2f(p.dimsLoc,   1.f, 1.f);
-        if (p.insizeLoc >= 0) {
-            if (i == 0) {
-                // 第 0 通道：映射 256×256 源纹理中的有效区域
-                glUniform2f(p.insizeLoc,
-                            (float)videoW / 256.f,
-                            (float)videoH / 256.f);
-            } else {
-                // 用户通道：全纹理 UV（FBO 尺寸恰好为 videoW×videoH）
-                glUniform2f(p.insizeLoc, 1.f, 1.f);
-            }
+        // insize: UV 覆盖整张纹理（源纹理已是 videoW×videoH，无填充）
+        if (p.insizeLoc >= 0) glUniform2f(p.insizeLoc, 1.f, 1.f);
+
+        // RetroArch 兼容 uniforms
+        if (p.sourceSizeLoc >= 0) {
+            float invW = (videoW > 0) ? 1.f / (float)videoW : 0.f;
+            float invH = (videoH > 0) ? 1.f / (float)videoH : 0.f;
+            glUniform4f(p.sourceSizeLoc,
+                        (float)videoW, (float)videoH, invW, invH);
+        }
+        if (p.outputSizeLoc >= 0) {
+            float invW = (p.outW > 0) ? 1.f / (float)p.outW : 0.f;
+            float invH = (p.outH > 0) ? 1.f / (float)p.outH : 0.f;
+            glUniform4f(p.outputSizeLoc,
+                        (float)p.outW, (float)p.outH, invW, invH);
+        }
+        if (p.frameCountLoc >= 0) {
+#if defined(NANOVG_GLES3) || defined(NANOVG_GL3)
+            glUniform1ui(p.frameCountLoc, m_frameCount);
+#else
+            glUniform1i(p.frameCountLoc, (GLint)m_frameCount);
+#endif
         }
 
         glBindVertexArray(m_vao);
@@ -321,6 +349,8 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
 
         inputTex = p.outputTex;
     }
+
+    ++m_frameCount;
 
     // ----------------------------------------------------------------
     // 恢复所有已保存的 GL 状态

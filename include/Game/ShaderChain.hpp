@@ -15,11 +15,18 @@ struct ShaderPass {
     int    outW      = 0;       ///< outputTex / FBO 的宽高
     int    outH      = 0;
 
+    // 内置 uniforms（可选，未找到时为 -1）
     GLint  texLoc    = -1;      ///< uniform sampler2D  tex
     GLint  dimsLoc   = -1;      ///< uniform vec2       dims
     GLint  insizeLoc = -1;      ///< uniform vec2       insize
     GLint  colorLoc  = -1;      ///< uniform vec4       color
     GLint  offsetLoc = -1;      ///< attribute          offset (vec2)
+
+    // RetroArch 兼容 uniforms（可选，未找到时为 -1）
+    GLint  sourceLoc      = -1; ///< uniform sampler2D  Source / Texture
+    GLint  sourceSizeLoc  = -1; ///< uniform vec4       SourceSize / TextureSize
+    GLint  outputSizeLoc  = -1; ///< uniform vec4       OutputSize
+    GLint  frameCountLoc  = -1; ///< uniform uint       FrameCount
 };
 
 /// 管理有序的 OpenGL 着色器通道链。
@@ -92,9 +99,11 @@ private:
     unsigned m_lastVideoW = 0;
     unsigned m_lastVideoH = 0;
     GLenum   m_glFilter   = GL_NEAREST;  ///< FBO 输出纹理的过滤模式
+    uint32_t m_frameCount = 0;           ///< 已渲染帧数（传递给 FrameCount uniform）
 
     bool _initPassFbo(ShaderPass& p, int w, int h);
     void _bindPassAttrib(ShaderPass& p);
+    void _lookupUniforms(ShaderPass& p);
 };
 
 } // namespace beiklive
