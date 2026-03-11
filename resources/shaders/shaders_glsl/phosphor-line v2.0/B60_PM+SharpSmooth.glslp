@@ -1,0 +1,18 @@
+shaders = "4"
+
+shader0 = "passes/color-adjust.glsl"
+
+
+shader1 = "passes/fsr-fixed.glsl"
+scale_type1 = "source"
+scale1 = "2.000000"
+
+shader2 = "../deblur/shaders/deblur.glsl"
+
+
+shader3 = "passes/shadowmask.glsl"
+filter_linear3 = "true"
+
+parameters = "NTSCintensity; GAMMA;HT;HEADER;SAT;BLK;EXPOSURE;CT;CORNER;CPOY;PPOY;MASK_INTENSITY;MASK_TYPE;MASK_SIZE;OFFSET;DEBLUR;SMART"
+
+OFFSET = "1.0"

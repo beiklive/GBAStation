@@ -1,0 +1,13 @@
+shaders = "3"
+shader0 = "passes/color-adjust.glsl"
+
+shader1 = "passes/phosphor-line.glsl"
+scale_type1 = "viewport"
+scale1 = "1.000000"
+
+shader2 = "passes/post-process.glsl"
+filter_linear2 = "true"
+
+parameters = "NTSCintensity; GAMMA;HT;HEADER;SAT;BLK;EXPOSURE;CT;CORNER;CPOY;PPOY;MASK_INTENSITY;MASK_TYPE;MASK_SIZE;OFFSET;DEBLUR;SMART;LINE_PITCH_COEF;LINE_THICKNESS;LINE_OPACITY;LINEAR_X;PIC_SCALE_X;PIC_SCALE_Y;INT_TOL;INT_SCALE;CURVE_X;CURVE_Y;MASK_SIZE;MASK_TYPE;MASK_INTENSITY;"
+
+EXPOSURE = "0.7"

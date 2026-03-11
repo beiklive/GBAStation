@@ -1,0 +1,67 @@
+shaders = "13"
+
+shader0 = "../stock.glsl"
+alias0 = mdapt_refpass
+
+shader1 = ../dithering/shaders/mdapt/passes/mdapt-pass0.glsl
+filter_linear1 = false
+scale_type1 = source
+scale1 = 1.0
+
+shader2 = ../dithering/shaders/mdapt/passes/mdapt-pass1.glsl
+filter_linear2 = false
+scale_type2 = source
+scale2 = 1.0
+
+shader3 = ../dithering/shaders/mdapt/passes/mdapt-pass2.glsl
+filter_linear3 = false
+scale_type3 = source
+scale3 = 1.0
+
+shader4 = ../dithering/shaders/mdapt/passes/mdapt-pass3.glsl
+filter_linear4 = false
+scale_type4 = source
+scale4 = 1.0
+
+shader5 = ../dithering/shaders/mdapt/passes/mdapt-pass4.glsl
+filter_linear5 = false
+scale_type5 = source
+scale5 = 1.0
+
+shader6 = "passes/color-adjust.glsl"
+alias6 = "ColorAdj"
+
+shader7 = "passes/fsr-fixed.glsl"
+scale_type_x7 = "source"
+scale_x7 = "2.000000"
+scale_type_y7 = "source"
+scale_y7 = "2.000000"
+
+shader8 = "../deblur/shaders/deblur.glsl"
+
+shader9 = "passes/phosphor-line.glsl"
+alias9 = "PhosphorLine"
+scale_type9 = "viewport"
+scale9 = "1.000000"
+
+shader10 = "passes/diffusion-h.glsl"
+filter_linear10 = "true"
+scale_type_x10 = "absolute"
+scale_x10 = "320"
+scale_type_y10 = "absolute"
+scale_y10 = "240"
+
+shader11 = "passes/diffusion-v.glsl"
+
+shader12 = "passes/PP-reflex.glsl"
+filter_linear12 = "true"
+
+parameters = "NTSCintensity; GAMMA;HT;HEADER;SAT;BLK;EXPOSURE;CT;CORNER;CPOY;PPOY;MASK_INTENSITY;MASK_TYPE;MASK_SIZE;OFFSET;DEBLUR;SMART;LINE_PITCH_COEF;LINE_THICKNESS;LINE_OPACITY;LINEAR_X;PIC_SCALE_X;PIC_SCALE_Y;INT_TOL;INT_SCALE;CURVE_X;CURVE_Y;MASK_SIZE;MASK_TYPE;MASK_INTENSITY;SOFTEN;DIFFUSION;DIFF_OVEREXP;"
+
+OFFSET = "1.0"
+CORNER = "0.3"
+PIC_SCALE_X = "0.9"
+PIC_SCALE_Y = "0.9"
+CURVE_X = "0.1"
+CURVE_Y = "0.1"
+

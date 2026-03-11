@@ -1,0 +1,25 @@
+shaders = "5"
+shader0 = "passes/dither-filter.glsl"
+
+shader1 = "passes/CA-sharpen.glsl"
+scale_type1 = "source"
+scale1 = "1.000000"
+
+shader2 = "passes/fsr-fixed.glsl"
+scale_type_x2 = "source"
+scale_x2 = "2.000000"
+scale_type_y2 = "source"
+scale_y2 = "1.000000"
+
+shader3 = "passes/phosphor-line.glsl"
+scale_type3 = "viewport"
+scale3 = "1.000000"
+
+shader4 = "passes/post-process.glsl"
+filter_linear4 = "true"
+
+parameters = "NTSCintensity; GAMMA;HT;HEADER;SAT;BLK;EXPOSURE;CT;CORNER;CPOY;PPOY;MASK_INTENSITY;MASK_TYPE;MASK_SIZE;OFFSET;DEBLUR;SMART;LINE_PITCH_COEF;LINE_THICKNESS;LINE_OPACITY;LINEAR_X;PIC_SCALE_X;PIC_SCALE_Y;INT_TOL;INT_SCALE;CURVE_X;CURVE_Y;MASK_SIZE;MASK_TYPE;MASK_INTENSITY;SOFTEN;"
+
+NTSCintensity = "1.000000"
+
+GAMMA = "2.0"

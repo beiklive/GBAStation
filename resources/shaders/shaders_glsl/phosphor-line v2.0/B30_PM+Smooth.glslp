@@ -1,0 +1,11 @@
+shaders = "2"
+shader0 = "passes/fsr-fixed.glsl"
+scale_type_x0 = "source"
+scale_x0 = "2.000000"
+scale_type_y0 = "source"
+scale_y0 = "2.000000"
+
+shader1 = "passes/shadowmask.glsl"
+filter_linear1 = "true"
+
+parameters = "NTSCintensity; GAMMA;HT;HEADER;SAT;BLK;EXPOSURE;CT;CORNER;CPOY;PPOY;MASK_INTENSITY;MASK_TYPE;MASK_SIZE"

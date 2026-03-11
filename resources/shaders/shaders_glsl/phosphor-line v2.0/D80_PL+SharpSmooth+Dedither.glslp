@@ -1,0 +1,50 @@
+shaders = "10"
+
+shader0 = "passes/color-adjust.glsl"
+alias0 = mdapt_refpass
+
+shader1 = ../dithering/shaders/mdapt/passes/mdapt-pass0.glsl
+filter_linear1 = false
+scale_type1 = source
+scale1 = 1.0
+
+shader2 = ../dithering/shaders/mdapt/passes/mdapt-pass1.glsl
+filter_linear2 = false
+scale_type2 = source
+scale2 = 1.0
+
+shader3 = ../dithering/shaders/mdapt/passes/mdapt-pass2.glsl
+filter_linear3 = false
+scale_type3 = source
+scale3 = 1.0
+
+shader4 = ../dithering/shaders/mdapt/passes/mdapt-pass3.glsl
+filter_linear4 = false
+scale_type4 = source
+scale4 = 1.0
+
+shader5 = ../dithering/shaders/mdapt/passes/mdapt-pass4.glsl
+filter_linear5 = false
+scale_type5 = source
+scale5 = 1.0
+
+shader6 = "passes/fsr-fixed.glsl"
+scale_type_x6 = "source"
+scale_x6 = "2.000000"
+scale_type_y6 = "source"
+scale_y6 = "2.000000"
+
+shader7 = "../deblur/shaders/deblur.glsl"
+
+shader8 = "passes/phosphor-line.glsl"
+filter_linear8 = "true"
+scale_type8 = "viewport"
+scale8 = "1.000000"
+
+
+shader9 = "passes/post-process.glsl"
+filter_linear9 = "true"
+
+parameters = "NTSCintensity; GAMMA;HT;HEADER;SAT;BLK;EXPOSURE;CT;CORNER;CPOY;PPOY;MASK_INTENSITY;MASK_TYPE;MASK_SIZE;OFFSET;DEBLUR;SMART;LINE_PITCH_COEF;LINE_THICKNESS;LINE_OPACITY;LINEAR_X;PIC_SCALE_X;PIC_SCALE_Y;INT_TOL;INT_SCALE;CURVE_X;CURVE_Y;MASK_SIZE;MASK_TYPE;MASK_INTENSITY;SOFTEN;"
+
+OFFSET = "1.0"
