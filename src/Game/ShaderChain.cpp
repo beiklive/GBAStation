@@ -120,13 +120,39 @@ void ShaderChain::_lookupUniforms(ShaderPass& p)
     p.sourceLoc     = glGetUniformLocation(p.program, "Source");
     if (p.sourceLoc < 0)
         p.sourceLoc = glGetUniformLocation(p.program, "Texture");
-    p.sourceSizeLoc = glGetUniformLocation(p.program, "SourceSize");
-    if (p.sourceSizeLoc < 0)
+
+    // SourceSize：优先查找 vec4 版（新式），回退到 vec2 版（旧式 TextureSize）。
+    // 需要根据实际类型选择 glUniform4f 还是 glUniform2f。
+    p.sourceSizeLoc    = glGetUniformLocation(p.program, "SourceSize");
+    p.sourceSizeIsVec2 = false;
+    if (p.sourceSizeLoc < 0) {
         p.sourceSizeLoc = glGetUniformLocation(p.program, "TextureSize");
-    p.outputSizeLoc = glGetUniformLocation(p.program, "OutputSize");
-    p.frameCountLoc = glGetUniformLocation(p.program, "FrameCount");
-    p.inputSizeLoc  = glGetUniformLocation(p.program, "InputSize");
-    p.finalVpSizeLoc= glGetUniformLocation(p.program, "FinalViewportSize");
+        if (p.sourceSizeLoc >= 0) {
+            // 用 glGetActiveUniform 检查实际类型（兼容 GL2/GLES2）
+            // 先查询最大 uniform 名称长度以分配合适缓冲区
+            GLint numUniforms = 0;
+            GLint maxNameLen  = 64;
+            glGetProgramiv(p.program, GL_ACTIVE_UNIFORMS,          &numUniforms);
+            glGetProgramiv(p.program, GL_ACTIVE_UNIFORM_MAX_LENGTH, &maxNameLen);
+            std::vector<char> unameBuf(static_cast<size_t>(maxNameLen + 1), '\0');
+            for (GLint j = 0; j < numUniforms; ++j) {
+                GLint  usize = 0;
+                GLenum utype = 0;
+                glGetActiveUniform(p.program, (GLuint)j,
+                                   (GLsizei)unameBuf.size() - 1,
+                                   nullptr, &usize, &utype, unameBuf.data());
+                if (std::string(unameBuf.data()) == "TextureSize") {
+                    p.sourceSizeIsVec2 = (utype == GL_FLOAT_VEC2);
+                    break;
+                }
+            }
+        }
+    }
+
+    p.outputSizeLoc  = glGetUniformLocation(p.program, "OutputSize");
+    p.frameCountLoc  = glGetUniformLocation(p.program, "FrameCount");
+    p.inputSizeLoc   = glGetUniformLocation(p.program, "InputSize");
+    p.finalVpSizeLoc = glGetUniformLocation(p.program, "FinalViewportSize");
 }
 
 // ============================================================
@@ -264,7 +290,8 @@ void ShaderChain::deinit()
 bool ShaderChain::addPass(const std::string& vert, const std::string& frag,
                           GLenum filter, GLenum wrapMode,
                           const ShaderPassScale& scale, int fcMod,
-                          const std::string& alias)
+                          const std::string& alias,
+                          const std::unordered_map<std::string, float>& paramDefaults)
 {
     ShaderPass p;
     p.program = buildProgram(vert.c_str(), frag.c_str());
@@ -280,6 +307,18 @@ bool ShaderChain::addPass(const std::string& vert, const std::string& frag,
     _lookupLutUniforms(p);
     _lookupPassTextures(p, (int)m_passes.size());
     _bindPassAttrib(p);
+
+    // 将 #pragma parameter 参数 uniform 初始化为默认值。
+    // 若不设置，GLSL uniform 默认为 0，而着色器可能用 1/param 计算，
+    // 导致除零（INF），进而使画面全白。
+    if (!paramDefaults.empty()) {
+        glUseProgram(p.program);
+        for (const auto& kv : paramDefaults) {
+            GLint loc = glGetUniformLocation(p.program, kv.first.c_str());
+            if (loc >= 0) glUniform1f(loc, kv.second);
+        }
+        glUseProgram(0);
+    }
 
     // 强制下次 run() 时重建 FBO
     m_lastVideoW = 0;
@@ -436,7 +475,16 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
     glDisable(GL_BLEND);
 
     // ---- 依次执行每个通道 ----
+    // 辅助 lambda：将整数尺寸打包为 RetroArch 兼容的 vec4（w, h, 1/w, 1/h）
+    auto makeSizeVec4 = [](int w, int h, float& invW, float& invH) {
+        invW = (w > 0) ? 1.f / (float)w : 0.f;
+        invH = (h > 0) ? 1.f / (float)h : 0.f;
+    };
+
     GLuint inputTex = srcTex;
+    // 跟踪当前输入纹理的实际尺寸（用于为每个通道正确设置 SourceSize）
+    int inputW = (int)videoW;
+    int inputH = (int)videoH;
     for (size_t i = 0; i < m_passes.size(); ++i) {
         const ShaderPass& p = m_passes[i];
         if (!p.program || !p.fbo) continue;
@@ -458,29 +506,35 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
         if (p.insizeLoc >= 0) glUniform2f(p.insizeLoc, 1.f, 1.f);
 
         // RetroArch 兼容 uniforms
+        // SourceSize：使用当前通道实际输入纹理的尺寸（而非始终使用原始视频尺寸）
         if (p.sourceSizeLoc >= 0) {
-            float invW = (videoW > 0) ? 1.f / (float)videoW : 0.f;
-            float invH = (videoH > 0) ? 1.f / (float)videoH : 0.f;
-            glUniform4f(p.sourceSizeLoc,
-                        (float)videoW, (float)videoH, invW, invH);
+            float invW, invH;
+            makeSizeVec4(inputW, inputH, invW, invH);
+            if (p.sourceSizeIsVec2)
+                // 旧式着色器：TextureSize 为 vec2（仅含 width, height）
+                glUniform2f(p.sourceSizeLoc, (float)inputW, (float)inputH);
+            else
+                // 新式着色器：SourceSize 为 vec4（width, height, 1/width, 1/height）
+                glUniform4f(p.sourceSizeLoc,
+                            (float)inputW, (float)inputH, invW, invH);
         }
         if (p.inputSizeLoc >= 0) {
-            // InputSize = 上一通道输出尺寸（对第一通道等于源视频尺寸）
-            float invW = (videoW > 0) ? 1.f / (float)videoW : 0.f;
-            float invH = (videoH > 0) ? 1.f / (float)videoH : 0.f;
+            // InputSize = 当前通道的实际输入尺寸（同 SourceSize）
+            float invW, invH;
+            makeSizeVec4(inputW, inputH, invW, invH);
             glUniform4f(p.inputSizeLoc,
-                        (float)videoW, (float)videoH, invW, invH);
+                        (float)inputW, (float)inputH, invW, invH);
         }
         if (p.outputSizeLoc >= 0) {
-            float invW = (p.outW > 0) ? 1.f / (float)p.outW : 0.f;
-            float invH = (p.outH > 0) ? 1.f / (float)p.outH : 0.f;
+            float invW, invH;
+            makeSizeVec4(p.outW, p.outH, invW, invH);
             glUniform4f(p.outputSizeLoc,
                         (float)p.outW, (float)p.outH, invW, invH);
         }
         if (p.finalVpSizeLoc >= 0) {
-            // FinalViewportSize = 最终视频输出尺寸（用源视频尺寸近似）
-            float invW = (videoW > 0) ? 1.f / (float)videoW : 0.f;
-            float invH = (videoH > 0) ? 1.f / (float)videoH : 0.f;
+            // FinalViewportSize = 最终视频输出尺寸（用原始视频尺寸近似）
+            float invW, invH;
+            makeSizeVec4((int)videoW, (int)videoH, invW, invH);
             glUniform4f(p.finalVpSizeLoc,
                         (float)videoW, (float)videoH, invW, invH);
         }
@@ -529,7 +583,10 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
         glUseProgram(0);
         glBindTexture(GL_TEXTURE_2D, 0);
 
+        // 更新下一通道的输入纹理及其尺寸
         inputTex = p.outputTex;
+        inputW   = p.outW;
+        inputH   = p.outH;
     }
 
     ++m_frameCount;

@@ -2,6 +2,7 @@
 
 #include <glad/glad.h>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace beiklive {
@@ -41,12 +42,13 @@ struct ShaderPass {
     GLint  offsetLoc = -1;      ///< attribute          offset (vec2)
 
     // RetroArch 兼容 uniforms（可选，未找到时为 -1）
-    GLint  sourceLoc      = -1; ///< uniform sampler2D  Source / Texture
-    GLint  sourceSizeLoc  = -1; ///< uniform vec4       SourceSize / TextureSize
-    GLint  outputSizeLoc  = -1; ///< uniform vec4       OutputSize
-    GLint  frameCountLoc  = -1; ///< uniform int        FrameCount
-    GLint  inputSizeLoc   = -1; ///< uniform vec4       InputSize
-    GLint  finalVpSizeLoc = -1; ///< uniform vec4       FinalViewportSize
+    GLint  sourceLoc         = -1; ///< uniform sampler2D  Source / Texture
+    GLint  sourceSizeLoc     = -1; ///< uniform vec4/vec2  SourceSize / TextureSize
+    bool   sourceSizeIsVec2  = false; ///< true 表示 sourceSizeLoc 指向 vec2（旧式 TextureSize）
+    GLint  outputSizeLoc     = -1; ///< uniform vec4       OutputSize
+    GLint  frameCountLoc     = -1; ///< uniform int        FrameCount
+    GLint  inputSizeLoc      = -1; ///< uniform vec4       InputSize
+    GLint  finalVpSizeLoc    = -1; ///< uniform vec4       FinalViewportSize
 
     // LUT uniform 位置（与 ShaderChain::m_luts 对应）
     std::vector<GLint> lutLocs;
@@ -93,19 +95,23 @@ public:
     void deinit();
 
     /// 追加一个用户自定义后处理通道（索引 >= 1）。
-    /// @param vert      完整顶点着色器源码
-    /// @param frag      完整片段着色器源码
-    /// @param filter    GL_NEAREST / GL_LINEAR
-    /// @param wrapMode  GL_CLAMP_TO_EDGE / GL_REPEAT / GL_MIRRORED_REPEAT
-    /// @param scale     FBO 缩放设置
-    /// @param fcMod     FrameCount 模数（0 = 不取模）
-    /// @param alias     通道别名
+    /// @param vert         完整顶点着色器源码
+    /// @param frag         完整片段着色器源码
+    /// @param filter       GL_NEAREST / GL_LINEAR
+    /// @param wrapMode     GL_CLAMP_TO_EDGE / GL_REPEAT / GL_MIRRORED_REPEAT
+    /// @param scale        FBO 缩放设置
+    /// @param fcMod        FrameCount 模数（0 = 不取模）
+    /// @param alias        通道别名
+    /// @param paramDefaults #pragma parameter 行解析得到的参数默认值映射（参数名 → 默认值）。
+    ///                      链接后会将每个参数 uniform 初始化为对应的默认值，
+    ///                      避免未设置时默认为 0 导致除零等错误（如全白画面）。
     bool addPass(const std::string& vert, const std::string& frag,
                  GLenum filter   = GL_NEAREST,
                  GLenum wrapMode = GL_CLAMP_TO_EDGE,
                  const ShaderPassScale& scale = ShaderPassScale{},
                  int fcMod = 0,
-                 const std::string& alias = {});
+                 const std::string& alias = {},
+                 const std::unordered_map<std::string, float>& paramDefaults = {});
 
     /// 移除所有用户通道（索引 >= 1），保留第 0 通道。
     void clearPasses();
