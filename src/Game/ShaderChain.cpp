@@ -376,9 +376,33 @@ bool ShaderChain::addPass(const std::string& vert, const std::string& frag,
     _lookupLutUniforms(p);
     _lookupPassTextures(p, (int)m_passes.size());
 
-    // 初始化采样器到单元 0
+    // 初始化所有采样器 uniform 及常量 uniform，确保程序创建后即处于完全就绪状态。
+    // 这样即使 run() 尚未被调用，着色器程序也能正确工作。
     glUseProgram(p.program);
+
+    // Source/Texture 采样器 → 纹理单元 0
     if (p.sourceLoc >= 0) glUniform1i(p.sourceLoc, 0);
+
+    // LUT 采样器 → 纹理单元 1, 2, ...
+    for (size_t li = 0; li < m_luts.size() && li < p.lutLocs.size(); ++li) {
+        if (p.lutLocs[li] >= 0)
+            glUniform1i(p.lutLocs[li], (GLint)(1 + li));
+    }
+
+    // 前序通道纹理采样器 → 单元 1 + lutCount + texUnitOffset
+    {
+        int lutCount = (int)m_luts.size();
+        for (const auto& binding : p.passTexBindings) {
+            if (binding.texUnitOffset < 0)
+                glUniform1i(binding.loc, 0);  // 无帧历史时回退到源纹理（单元 0）
+            else
+                glUniform1i(binding.loc, 1 + lutCount + binding.texUnitOffset);
+        }
+    }
+
+    // OrigTexture 采样器 → 固定纹理单元 k_origTexUnitOffset
+    if (p.origTexLoc >= 0)
+        glUniform1i(p.origTexLoc, k_origTexUnitOffset);
 
     // MVPMatrix：设为单位矩阵（RetroArch 着色器将顶点坐标已为 NDC，直通即可）
     if (p.mvpMatrixLoc >= 0)
