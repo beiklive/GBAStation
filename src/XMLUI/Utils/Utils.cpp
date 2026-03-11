@@ -1,11 +1,7 @@
 #include "XMLUI/Utils/Utils.hpp"
 #include "common.hpp"
 
-void beiklive::swallow(brls::View* v, brls::ControllerButton btn)
-{
-    v->registerAction("", btn, [](brls::View*) { return true; },
-                      /*hidden=*/true);
-}
+
 
 
 beiklive::UI::BrowserHeader::BrowserHeader()

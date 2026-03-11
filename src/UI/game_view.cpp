@@ -293,6 +293,7 @@ GameView::GameView()
 {
     setFocusable(true);
     setHideHighlight(true);
+	beiklive::CheckGLSupport();
 
     // Swallow all game buttons so Borealis doesn't process them as navigation.
     // BUTTON_A: swallow during gameplay; pop activity if core failed to load.
