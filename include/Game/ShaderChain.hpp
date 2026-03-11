@@ -1,6 +1,7 @@
 #pragma once
 
 #include <glad/glad.h>
+#include <deque>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -204,6 +205,7 @@ public:
     bool setParam(const std::string& name, float val);
 
 private:
+    /// 历史帧缓存槽位：保存一张上一帧纹理及其尺寸，供 PrevTexture/PrevNTexture 绑定使用。
     struct FrameHistorySlot {
         GLuint tex = 0;
         int    w   = 0;
@@ -213,7 +215,7 @@ private:
     std::vector<ShaderPass>     m_passes;
     std::vector<ShaderLut>      m_luts;    ///< LUT 纹理列表
     std::vector<ShaderParamDef> m_params;  ///< 所有通道合并的参数定义（含当前值）
-    std::vector<FrameHistorySlot> m_frameHistory;
+    std::deque<FrameHistorySlot> m_frameHistory;
 
     GLuint   m_vao        = 0;
     GLuint   m_vbo        = 0;

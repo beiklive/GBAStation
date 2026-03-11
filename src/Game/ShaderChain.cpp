@@ -22,6 +22,7 @@
 // OrigTexture 固定纹理单元偏移量
 static constexpr int k_origTexUnitOffset = 32;
 static constexpr int k_maxFrameHistory   = 6;
+static constexpr GLint k_defaultUniformNameLen = 64;
 
 // ============================================================
 // 着色器调试日志开关（独立于其他功能调试，默认关闭）
@@ -152,7 +153,7 @@ namespace beiklive {
 static GLenum lookupUniformType(GLuint program, const char* name)
 {
     GLint numUniforms = 0;
-    GLint maxNameLen  = 64;
+    GLint maxNameLen  = k_defaultUniformNameLen;
     glGetProgramiv(program, GL_ACTIVE_UNIFORMS,           &numUniforms);
     glGetProgramiv(program, GL_ACTIVE_UNIFORM_MAX_LENGTH, &maxNameLen);
     if (numUniforms <= 0 || maxNameLen <= 0)
@@ -263,14 +264,20 @@ void ShaderChain::_lookupPassTextures(ShaderPass& p, int passIdx)
         binding.loc          = loc;
         binding.texUnitOffset = (reusedOffset >= 0) ? reusedOffset : unitOffset++;
 
-        const std::string textureSizeName =
-            textureName.substr(0, textureName.size() - std::strlen("Texture")) + "TextureSize";
-        const std::string inputSizeName =
-            textureName.substr(0, textureName.size() - std::strlen("Texture")) + "InputSize";
-        lookupSizeUniform(p.program, textureSizeName.c_str(),
-                          binding.textureSizeLoc, binding.textureSizeIsVec2);
-        lookupSizeUniform(p.program, inputSizeName.c_str(),
-                          binding.inputSizeLoc, binding.inputSizeIsVec2);
+        constexpr const char* kTextureSuffix = "Texture";
+        constexpr size_t kTextureSuffixLen = sizeof("Texture") - 1;
+        if (textureName.size() >= kTextureSuffixLen &&
+            textureName.compare(textureName.size() - kTextureSuffixLen,
+                                kTextureSuffixLen, kTextureSuffix) == 0) {
+            const std::string stem =
+                textureName.substr(0, textureName.size() - kTextureSuffixLen);
+            const std::string textureSizeName = stem + "TextureSize";
+            const std::string inputSizeName   = stem + "InputSize";
+            lookupSizeUniform(p.program, textureSizeName.c_str(),
+                              binding.textureSizeLoc, binding.textureSizeIsVec2);
+            lookupSizeUniform(p.program, inputSizeName.c_str(),
+                              binding.inputSizeLoc, binding.inputSizeIsVec2);
+        }
         p.passTexBindings.push_back(binding);
     };
 
@@ -628,6 +635,10 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
         else
             glUniform4f(loc, (float)w, (float)h, invW, invH);
     };
+    auto resolvePassInputSize = [](const ShaderPass& refPass, int& w, int& h) {
+        w = (refPass.inputW > 0) ? refPass.inputW : refPass.outW;
+        h = (refPass.inputH > 0) ? refPass.inputH : refPass.outH;
+    };
 
     // ---- 节流调试日志（前 3 帧 + 每 300 帧 + 尺寸变化时输出）----
     const bool logThisFrame = s_shaderDebugLog &&
@@ -711,8 +722,7 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
                         passTex = refPass.outputTex;
                         texW = refPass.outW;
                         texH = refPass.outH;
-                        inputRefW = (refPass.inputW > 0) ? refPass.inputW : refPass.outW;
-                        inputRefH = (refPass.inputH > 0) ? refPass.inputH : refPass.outH;
+                        resolvePassInputSize(refPass, inputRefW, inputRefH);
                     }
                 }
             } else if (binding.historyIndex >= 0 &&
@@ -1042,22 +1052,26 @@ void ShaderChain::_captureFrameHistory(const ShaderPass& sourcePass)
 
     FrameHistorySlot slot;
     if (m_frameHistory.size() >= k_maxFrameHistory) {
-        slot = m_frameHistory.back();
+        slot = m_frameHistory.back(); // Reuse the oldest slot to avoid reallocating GL texture objects.
         m_frameHistory.pop_back();
     }
 
     if (!_ensureHistoryTexture(slot, sourcePass.outW, sourcePass.outH))
         return;
 
+    // Use glCopyTexSubImage2D here because it works across the current
+    // GL2/GLES2/GL3 compatibility layer with the existing FBO/texture setup.
+    // If frame-history copies ever become a bottleneck, this is the obvious
+    // place to switch to a platform-specific blit/copy-image fast path.
     glBindFramebuffer(GL_FRAMEBUFFER, sourcePass.fbo);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, slot.tex);
     glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, sourcePass.outW, sourcePass.outH);
     glBindTexture(GL_TEXTURE_2D, 0);
 
-    m_frameHistory.insert(m_frameHistory.begin(), slot);
+    m_frameHistory.push_front(slot);
     if (m_frameHistory.size() > k_maxFrameHistory)
-        m_frameHistory.resize(k_maxFrameHistory);
+        m_frameHistory.pop_back();
 }
 
 // ============================================================
