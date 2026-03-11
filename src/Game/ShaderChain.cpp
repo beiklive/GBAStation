@@ -567,7 +567,7 @@ bool ShaderChain::_initPassFbo(ShaderPass& p, int srcW, int srcH,
     // 计算 FBO 尺寸（ported from RetroArch video_shader_parse.c scale logic）
     int w = srcW, h = srcH;
     switch (p.scale.typeX) {
-        case ShaderPassScale::ABSOLUTE:
+        case ShaderPassScale::SCALE_ABSOLUTE:
             w = (p.scale.absX > 0) ? p.scale.absX : srcW;
             break;
         case ShaderPassScale::VIEWPORT:
@@ -579,7 +579,7 @@ bool ShaderChain::_initPassFbo(ShaderPass& p, int srcW, int srcH,
             break;
     }
     switch (p.scale.typeY) {
-        case ShaderPassScale::ABSOLUTE:
+        case ShaderPassScale::SCALE_ABSOLUTE:
             h = (p.scale.absY > 0) ? p.scale.absY : srcH;
             break;
         case ShaderPassScale::VIEWPORT:

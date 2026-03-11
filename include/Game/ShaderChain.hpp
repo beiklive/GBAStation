@@ -8,12 +8,12 @@ namespace beiklive {
 
 /// 每个通道的 FBO 缩放设置（ported from RetroArch video_shader_parse.h）
 struct ShaderPassScale {
-    enum Type { SOURCE = 0, ABSOLUTE, VIEWPORT };
+    enum Type { SOURCE = 0, SCALE_ABSOLUTE, VIEWPORT };
     Type  typeX    = SOURCE;
     Type  typeY    = SOURCE;
     float scaleX   = 1.0f;   ///< 当 type==SOURCE 或 VIEWPORT 时的乘数
     float scaleY   = 1.0f;
-    int   absX     = 0;      ///< 当 type==ABSOLUTE 时的固定像素尺寸
+    int   absX     = 0;      ///< 当 type==SCALE_ABSOLUTE 时的固定像素尺寸
     int   absY     = 0;
 };
 
