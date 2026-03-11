@@ -201,6 +201,7 @@ void ShaderChain::_lookupUniforms(ShaderPass& p)
         p.inputSizeIsVec2 = isUniformVec2("InputSize");
 
     p.frameCountLoc  = glGetUniformLocation(p.program, "FrameCount");
+    p.frameDirectionLoc = glGetUniformLocation(p.program, "FrameDirection");
     p.finalVpSizeLoc = glGetUniformLocation(p.program, "FinalViewportSize");
     p.origTexLoc     = glGetUniformLocation(p.program, "OrigTexture");
     p.origInputSizeLoc = glGetUniformLocation(p.program, "OrigInputSize");
@@ -208,13 +209,13 @@ void ShaderChain::_lookupUniforms(ShaderPass& p)
 
     SC_DLOG("[ShaderChain::_lookupUniforms] prog={}: "
             "source={} sourceSize={}(vec2={}) outputSize={}(vec2={}) "
-            "inputSize={}(vec2={}) frameCount={} mvpMatrix={} "
+            "inputSize={}(vec2={}) frameCount={} frameDir={} mvpMatrix={} "
             "finalVpSize={} origTex={} origInputSize={}",
             p.program,
             p.sourceLoc, p.sourceSizeLoc, p.sourceSizeIsVec2,
             p.outputSizeLoc, p.outputSizeIsVec2,
             p.inputSizeLoc, p.inputSizeIsVec2,
-            p.frameCountLoc, p.mvpMatrixLoc,
+            p.frameCountLoc, p.frameDirectionLoc, p.mvpMatrixLoc,
             p.finalVpSizeLoc, p.origTexLoc, p.origInputSizeLoc);
 }
 
@@ -542,6 +543,7 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
     GLint     prevBlendSrcRGB   = GL_ONE,  prevBlendDstRGB   = GL_ZERO;
     GLint     prevBlendSrcAlpha = GL_ONE,  prevBlendDstAlpha = GL_ZERO;
     GLfloat   prevClearColor[4] = {};
+    GLboolean prevColorMask[4]  = {GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE};
 
     glGetIntegerv(GL_FRAMEBUFFER_BINDING,  &prevFbo);
     glGetIntegerv(GL_VIEWPORT,              prevViewport);
@@ -559,11 +561,17 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
     glGetIntegerv(GL_BLEND_SRC_ALPHA,       &prevBlendSrcAlpha);
     glGetIntegerv(GL_BLEND_DST_ALPHA,       &prevBlendDstAlpha);
     glGetFloatv(GL_COLOR_CLEAR_VALUE,       prevClearColor);
+    glGetBooleanv(GL_COLOR_WRITEMASK,       prevColorMask);
 
     glDisable(GL_SCISSOR_TEST);
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_STENCIL_TEST);
     glDisable(GL_BLEND);
+    // 禁止着色器写入 alpha 通道：许多 RetroArch 着色器（如 gba-color）的矩阵变换
+    // 会将 FragColor.a 置为 0。若让该 0 写入 FBO，NanoVG 的预乘 Alpha 混合
+    // (GL_ONE, 1-srcAlpha) 会把白色背景叠加进来，导致全白画面。
+    // 保持 FBO alpha = glClearColor 设定的 1.0，确保最终输出对 NanoVG 完全不透明。
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);
 
     // ---- 辅助函数：构建 RetroArch vec4 尺寸 ----
     auto makeSizeVec4 = [](int w, int h, float& invW, float& invH) {
@@ -645,6 +653,9 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
             uint32_t fc = (p.fcMod > 0) ? (m_frameCount % (uint32_t)p.fcMod) : m_frameCount;
             glUniform1i(p.frameCountLoc, (GLint)fc);
         }
+        // FrameDirection: +1 正向播放，-1 倒带（此处始终为正向）
+        if (p.frameDirectionLoc >= 0)
+            glUniform1i(p.frameDirectionLoc, 1);
 
         // LUT 纹理（从单元 1 开始）
         for (size_t li = 0; li < m_luts.size() && li < p.lutLocs.size(); ++li) {
@@ -700,10 +711,11 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
                                 inputTex, inputW, inputH,
                                 p.outW, p.outH, p.outputTex);
             brls::Logger::debug("[ShaderChain::run]   pass[{}] uniforms: "
-                                "source={} sourceSize={} outputSize={} frameCount={} "
+                                "source={} sourceSize={} outputSize={} frameCount={} frameDir={} "
                                 "origTex={} origInputSize={} mvp={}",
                                 i, p.sourceLoc, p.sourceSizeLoc, p.outputSizeLoc,
-                                p.frameCountLoc, p.origTexLoc, p.origInputSizeLoc,
+                                p.frameCountLoc, p.frameDirectionLoc,
+                                p.origTexLoc, p.origInputSizeLoc,
                                 p.mvpMatrixLoc);
         }
 
@@ -756,6 +768,7 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
                         (GLenum)prevBlendSrcAlpha, (GLenum)prevBlendDstAlpha);
     glClearColor(prevClearColor[0], prevClearColor[1],
                  prevClearColor[2], prevClearColor[3]);
+    glColorMask(prevColorMask[0], prevColorMask[1], prevColorMask[2], prevColorMask[3]);
 
     return inputTex;
 }

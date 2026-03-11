@@ -477,8 +477,9 @@ void LibretroLoader::s_videoRefreshCallback(const void* data,
                     static_cast<uint8_t>( px        & 0xFF));
             }
         }
-    } else {
+    } else if (s_current->m_pixelFormat == RETRO_PIXEL_FORMAT_RGB565) {
         // RGB565: 16-bit pixels — expand to RGBA8888 using bit-shift approximation
+        // Bit layout: RRRRR_GGGGGG_BBBBB (bits 15-11=R, 10-5=G, 4-0=B)
         for (unsigned row = 0; row < height; ++row) {
             const uint16_t* srcRow = reinterpret_cast<const uint16_t*>(src + row * pitch);
             uint32_t*       dstRow = vf.pixels.data() + row * width;
@@ -492,6 +493,24 @@ void LibretroLoader::s_videoRefreshCallback(const void* data,
                 dstRow[col] = makeRGBA8888(
                     static_cast<uint8_t>((r5 << 3) | (r5 >> 2)),
                     static_cast<uint8_t>((g6 << 2) | (g6 >> 4)),
+                    static_cast<uint8_t>((b5 << 3) | (b5 >> 2)));
+            }
+        }
+    } else {
+        // RETRO_PIXEL_FORMAT_0RGB1555 (default libretro format):
+        // 16-bit pixels, bit layout: 0_RRRRR_GGGGG_BBBBB (bit15=0, 14-10=R, 9-5=G, 4-0=B)
+        for (unsigned row = 0; row < height; ++row) {
+            const uint16_t* srcRow = reinterpret_cast<const uint16_t*>(src + row * pitch);
+            uint32_t*       dstRow = vf.pixels.data() + row * width;
+            for (unsigned col = 0; col < width; ++col) {
+                uint16_t px = srcRow[col];
+                uint8_t r5 = (px >> 10) & 0x1F;  // bits 14-10
+                uint8_t g5 = (px >>  5) & 0x1F;  // bits 9-5
+                uint8_t b5 =  px        & 0x1F;  // bits 4-0
+                // Expand 5-bit → 8-bit: (v << 3) | (v >> 2)
+                dstRow[col] = makeRGBA8888(
+                    static_cast<uint8_t>((r5 << 3) | (r5 >> 2)),
+                    static_cast<uint8_t>((g5 << 3) | (g5 >> 2)),
                     static_cast<uint8_t>((b5 << 3) | (b5 >> 2)));
             }
         }
