@@ -81,8 +81,8 @@ std::string GlslpLoader::resolvePath(const std::string& baseDir,
 /// 判断某行是否为 RetroArch 属性/uniform 声明（需要剥除）
 static bool isRaAttributeDecl(const std::string& t)
 {
-    // 匹配: [attribute|in] [qualifiers] vecN Name;
-    // 目标: VertexCoord, TexCoord
+    // 匹配: [attribute|in|COMPAT_ATTRIBUTE] [qualifiers] vecN Name;
+    // 目标: VertexCoord, TexCoord, COLOR
     auto startsWithKw = [&](const char* kw) {
         size_t n = std::strlen(kw);
         if (t.size() < n) return false;
@@ -90,10 +90,13 @@ static bool isRaAttributeDecl(const std::string& t)
         // 紧跟空白或换行
         return t.size() == n || t[n] == ' ' || t[n] == '\t';
     };
-    bool isAttrib = startsWithKw("attribute") || startsWithKw("in");
+    // 也处理 COMPAT_ATTRIBUTE（RetroArch 着色器用宏定义的属性关键字）
+    bool isAttrib = startsWithKw("attribute") || startsWithKw("in")
+                 || startsWithKw("COMPAT_ATTRIBUTE");
     if (!isAttrib) return false;
     return t.find("VertexCoord") != std::string::npos
-        || t.find("TexCoord")    != std::string::npos;
+        || t.find("TexCoord")    != std::string::npos
+        || t.find("COLOR")       != std::string::npos;
 }
 
 /// 判断某行是否为需要剥除的 uniform 声明
@@ -123,6 +126,18 @@ static bool isRaUniformDecl(const std::string& t)
 
 static std::string preprocessVertSource(const std::string& src)
 {
+    // 字符串全局替换辅助函数（在 GL3 与 GL2 路径中共用）
+    auto replaceAll = [](std::string s,
+                         const std::string& from,
+                         const std::string& to) {
+        size_t pos = 0;
+        while ((pos = s.find(from, pos)) != std::string::npos) {
+            s.replace(pos, from.size(), to);
+            pos += to.size();
+        }
+        return s;
+    };
+
     std::istringstream iss(src);
     std::ostringstream oss;
     std::string line;
@@ -132,7 +147,7 @@ static std::string preprocessVertSource(const std::string& src)
         // 删除版本声明
         if (t.rfind("#version", 0) == 0) continue;
 
-        // 删除 VertexCoord / TexCoord 的 attribute/in 声明
+        // 删除 VertexCoord / TexCoord / COLOR 的 attribute/in/COMPAT_ATTRIBUTE 声明
         if (isRaAttributeDecl(t)) continue;
 
         // 删除 MVPMatrix / Texture / Source uniform 声明
@@ -141,23 +156,17 @@ static std::string preprocessVertSource(const std::string& src)
 #if defined(NANOVG_GLES3) || defined(NANOVG_GL3)
         // 在 #version 330 / 300 es 下：
         // attribute → in，varying → out，texture2D → texture
-        {
-            auto replaceAll = [](std::string s,
-                                 const std::string& from,
-                                 const std::string& to) {
-                size_t pos = 0;
-                while ((pos = s.find(from, pos)) != std::string::npos) {
-                    s.replace(pos, from.size(), to);
-                    pos += to.size();
-                }
-                return s;
-            };
-            line = replaceAll(line, "attribute ", "in ");
-            line = replaceAll(line, "varying ",   "out ");
-            line = replaceAll(line, "texture2D(", "texture(");
-            line = replaceAll(line, "texture2DLod(", "textureLod(");
-        }
+        line = replaceAll(line, "attribute ", "in ");
+        line = replaceAll(line, "varying ",   "out ");
+        line = replaceAll(line, "texture2D(", "texture(");
+        line = replaceAll(line, "texture2DLod(", "textureLod(");
 #endif
+        // RetroArch 着色器常用 'MVPMatrix * VertexCoord'，
+        // 其中 VertexCoord 被视为 vec4。但我们的兼容块将其定义为 vec2，
+        // 需要将其提升为 vec4 以避免 mat4*vec2 的类型错误。
+        line = replaceAll(line, "MVPMatrix * VertexCoord",
+                          "MVPMatrix * vec4(VertexCoord, 0.0, 1.0)");
+
         oss << line << "\n";
     }
     return oss.str();
@@ -175,6 +184,13 @@ static std::string preprocessFragSource(const std::string& src)
 
         // 删除 Texture / Source 的 sampler uniform 声明
         if (isRaUniformDecl(t)) continue;
+
+        // 删除 RetroArch 片段着色器输出声明 'out ... vec4 FragColor;'
+        // 兼容块已经提供了 'out vec4 fragColor;' 以及 '#define FragColor fragColor'
+        if (t.rfind("out ", 0) == 0 && t.find("FragColor") != std::string::npos
+            && t.find("#define") == std::string::npos) {
+            continue;
+        }
 
 #if defined(NANOVG_GLES3) || defined(NANOVG_GL3)
         {
@@ -278,13 +294,18 @@ std::string GlslpLoader::wrapFragSource(const std::string& body)
         "out vec4 fragColor;\n"
         "#define Texture tex\n"
         "#define Source  tex\n"
+        // RetroArch 着色器在 GL3 路径中将输出定义为 FragColor（大写 F），
+        // 映射到我们的 fragColor 输出变量，避免重复声明冲突。
+        "#define FragColor fragColor\n"
         "// gl_FragColor → fragColor（已在 preprocessFragSource 中替换）\n";
 #else
     static const char* kCompat =
         "// == BeikLive RetroArch 兼容块 ==\n"
         "uniform sampler2D tex;\n"
         "#define Texture tex\n"
-        "#define Source  tex\n";
+        "#define Source  tex\n"
+        // GL2/GLES2 模式：FragColor 保持使用 gl_FragColor 内置变量
+        "#define FragColor gl_FragColor\n";
 #endif
 
     return std::string(kHeader) + kCompat + preprocessFragSource(body);
@@ -346,25 +367,93 @@ bool GlslpLoader::parseGlslFile(const std::string& path,
         }
     }
 
-    // ---- 尝试 #ifdef VERTEX / FRAGMENT 分割 ----
+    // ---- 尝试 #ifdef VERTEX / FRAGMENT 分割（支持 #elif 和嵌套 #if）----
+    // 正确处理 RetroArch 典型格式：
+    //   #if defined(VERTEX) ... #elif defined(FRAGMENT) ... #endif
+    // 以及经典格式：
+    //   #ifdef VERTEX ... #ifdef FRAGMENT ... 或 #else
     {
         std::string vertBody, fragBody;
-        bool inVert = false, inFrag = false;
-        std::istringstream iss(src);
         std::ostringstream vss, fss;
         std::string line;
+
+        bool inStage   = false;   // 是否在某个已识别的 VERTEX/FRAGMENT 块中
+        bool inVert    = false;
+        bool inFrag    = false;
+        int  nestedDepth = 0;     // 当前阶段内部嵌套 #if 的深度
+
+        // 检测是否为 VERTEX 阶段标记（#if defined(VERTEX) / #ifdef VERTEX / #elif defined(VERTEX)）
+        auto isVertMarker = [](const std::string& t) {
+            return t == "#ifdef VERTEX"
+                || t == "#if defined(VERTEX)"
+                || t == "#elif defined(VERTEX)";
+        };
+        // 检测是否为 FRAGMENT 阶段标记
+        auto isFragMarker = [](const std::string& t) {
+            return t == "#ifdef FRAGMENT"
+                || t == "#if defined(FRAGMENT)"
+                || t == "#elif defined(FRAGMENT)";
+        };
+
+        std::istringstream iss(src);
         while (std::getline(iss, line)) {
             std::string t = trimStr(line);
-            if (t == "#ifdef VERTEX" || t == "#if defined(VERTEX)") {
-                inVert = true; inFrag = false; continue;
+
+            if (!inStage) {
+                // 尚未进入任何阶段：寻找起始标记
+                if (isVertMarker(t)) {
+                    inStage = true; inVert = true; inFrag = false; nestedDepth = 0;
+                    continue;
+                }
+                if (isFragMarker(t)) {
+                    inStage = true; inFrag = true; inVert = false; nestedDepth = 0;
+                    continue;
+                }
+                // 阶段外的行（前导注释、#pragma parameter 等）直接忽略
+                continue;
             }
-            if (t == "#ifdef FRAGMENT" || t == "#if defined(FRAGMENT)") {
-                inFrag = true; inVert = false; continue;
+
+            // 已在某个阶段内部
+            // 首先在深度为 0 时处理阶段级控制指令
+            if (nestedDepth == 0) {
+                if (isFragMarker(t)) {
+                    // 切换到 FRAGMENT 阶段（例如 #elif defined(FRAGMENT)）
+                    inFrag = true; inVert = false;
+                    continue;
+                }
+                if (isVertMarker(t)) {
+                    // 切换到 VERTEX 阶段
+                    inVert = true; inFrag = false;
+                    continue;
+                }
+                if (t == "#endif") {
+                    // 外层 #if defined(VERTEX/FRAGMENT) 的终止
+                    inStage = false; inVert = false; inFrag = false;
+                    continue;
+                }
+                if (t == "#else") {
+                    // 深度 0 的 #else：通常意味着 #ifdef VERTEX / #else (fragment) / #endif 格式
+                    if (inVert) { inFrag = true; inVert = false; }
+                    else        { inStage = false; inVert = false; inFrag = false; }
+                    continue;
+                }
+                // 其他深度 0 的行：属于当前阶段内容，继续执行深度跟踪
             }
-            if (t == "#endif") { inVert = false; inFrag = false; continue; }
+
+            // 跟踪嵌套 #if 深度
+            if (t.rfind("#ifdef", 0) == 0 || t.rfind("#ifndef", 0) == 0
+                || t.rfind("#if ", 0) == 0 || t == "#if") {
+                nestedDepth++;
+            } else if (t == "#endif") {
+                // nestedDepth > 0（否则上面的 depth==0 分支已处理）
+                nestedDepth--;
+            }
+            // 深度 > 0 内的 #elif / #else 直接输出，不做阶段切换
+
             if (inVert) vss << line << "\n";
             else if (inFrag) fss << line << "\n";
         }
+
         vertBody = vss.str();
         fragBody = fss.str();
         if (!vertBody.empty() && !fragBody.empty()) {

@@ -334,11 +334,9 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
                         (float)p.outW, (float)p.outH, invW, invH);
         }
         if (p.frameCountLoc >= 0) {
-#if defined(NANOVG_GLES3) || defined(NANOVG_GL3)
-            glUniform1ui(p.frameCountLoc, m_frameCount);
-#else
+            // 大多数 RetroArch 着色器将 FrameCount 声明为 int，
+            // 使用 glUniform1i 可同时兼容 int 和 uint 类型（正数范围内比特模式相同）
             glUniform1i(p.frameCountLoc, (GLint)m_frameCount);
-#endif
         }
 
         glBindVertexArray(m_vao);
