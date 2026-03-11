@@ -19,6 +19,10 @@
 // stb_image 声明（实现由 borealis/nanovg.c 提供，此处仅引入函数声明）
 #include <borealis/extern/nanovg/stb_image.h>
 
+// OrigTexture 固定纹理单元偏移量（相对于纹理单元 0）
+// 选择一个较大的偏移（32）以避免与 LUT 和前序通道纹理单元冲突
+static constexpr int k_origTexUnitOffset = 32;
+
 // ============================================================
 // GLSL 着色器源码
 // 版本/精度前缀在运行时拼接，使同一段着色器体
@@ -121,38 +125,55 @@ void ShaderChain::_lookupUniforms(ShaderPass& p)
     if (p.sourceLoc < 0)
         p.sourceLoc = glGetUniformLocation(p.program, "Texture");
 
+    // 收集所有 active uniform 的 名称→类型 映射，供后续类型检测使用
+    GLint numUniforms = 0;
+    GLint maxNameLen  = 64;
+    glGetProgramiv(p.program, GL_ACTIVE_UNIFORMS,           &numUniforms);
+    glGetProgramiv(p.program, GL_ACTIVE_UNIFORM_MAX_LENGTH, &maxNameLen);
+    std::vector<char> unameBuf(static_cast<size_t>(maxNameLen + 1), '\0');
+
+    // 帮助函数：判断某个 uniform 名称是否为 vec2 类型
+    auto isUniformVec2 = [&](const char* name) -> bool {
+        for (GLint j = 0; j < numUniforms; ++j) {
+            GLint  usize = 0;
+            GLenum utype = 0;
+            std::fill(unameBuf.begin(), unameBuf.end(), '\0');
+            glGetActiveUniform(p.program, (GLuint)j,
+                               (GLsizei)unameBuf.size() - 1,
+                               nullptr, &usize, &utype, unameBuf.data());
+            if (std::strcmp(unameBuf.data(), name) == 0)
+                return (utype == GL_FLOAT_VEC2);
+        }
+        return false;
+    };
+
     // SourceSize：优先查找 vec4 版（新式），回退到 vec2 版（旧式 TextureSize）。
     // 需要根据实际类型选择 glUniform4f 还是 glUniform2f。
     p.sourceSizeLoc    = glGetUniformLocation(p.program, "SourceSize");
     p.sourceSizeIsVec2 = false;
     if (p.sourceSizeLoc < 0) {
         p.sourceSizeLoc = glGetUniformLocation(p.program, "TextureSize");
-        if (p.sourceSizeLoc >= 0) {
-            // 用 glGetActiveUniform 检查实际类型（兼容 GL2/GLES2）
-            // 先查询最大 uniform 名称长度以分配合适缓冲区
-            GLint numUniforms = 0;
-            GLint maxNameLen  = 64;
-            glGetProgramiv(p.program, GL_ACTIVE_UNIFORMS,          &numUniforms);
-            glGetProgramiv(p.program, GL_ACTIVE_UNIFORM_MAX_LENGTH, &maxNameLen);
-            std::vector<char> unameBuf(static_cast<size_t>(maxNameLen + 1), '\0');
-            for (GLint j = 0; j < numUniforms; ++j) {
-                GLint  usize = 0;
-                GLenum utype = 0;
-                glGetActiveUniform(p.program, (GLuint)j,
-                                   (GLsizei)unameBuf.size() - 1,
-                                   nullptr, &usize, &utype, unameBuf.data());
-                if (std::string(unameBuf.data()) == "TextureSize") {
-                    p.sourceSizeIsVec2 = (utype == GL_FLOAT_VEC2);
-                    break;
-                }
-            }
-        }
+        if (p.sourceSizeLoc >= 0)
+            p.sourceSizeIsVec2 = isUniformVec2("TextureSize");
     }
 
-    p.outputSizeLoc  = glGetUniformLocation(p.program, "OutputSize");
+    // OutputSize：同样支持 vec2（旧式）和 vec4（新式）
+    p.outputSizeLoc    = glGetUniformLocation(p.program, "OutputSize");
+    p.outputSizeIsVec2 = false;
+    if (p.outputSizeLoc >= 0)
+        p.outputSizeIsVec2 = isUniformVec2("OutputSize");
+
+    // InputSize：同样支持 vec2（旧式）和 vec4（新式）
+    p.inputSizeLoc    = glGetUniformLocation(p.program, "InputSize");
+    p.inputSizeIsVec2 = false;
+    if (p.inputSizeLoc >= 0)
+        p.inputSizeIsVec2 = isUniformVec2("InputSize");
+
     p.frameCountLoc  = glGetUniformLocation(p.program, "FrameCount");
-    p.inputSizeLoc   = glGetUniformLocation(p.program, "InputSize");
     p.finalVpSizeLoc = glGetUniformLocation(p.program, "FinalViewportSize");
+
+    // OrigTexture：RetroArch 着色器用此引用原始（链入前）源纹理
+    p.origTexLoc     = glGetUniformLocation(p.program, "OrigTexture");
 }
 
 // ============================================================
@@ -522,14 +543,20 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
             // InputSize = 当前通道的实际输入尺寸（同 SourceSize）
             float invW, invH;
             makeSizeVec4(inputW, inputH, invW, invH);
-            glUniform4f(p.inputSizeLoc,
-                        (float)inputW, (float)inputH, invW, invH);
+            if (p.inputSizeIsVec2)
+                glUniform2f(p.inputSizeLoc, (float)inputW, (float)inputH);
+            else
+                glUniform4f(p.inputSizeLoc,
+                            (float)inputW, (float)inputH, invW, invH);
         }
         if (p.outputSizeLoc >= 0) {
             float invW, invH;
             makeSizeVec4(p.outW, p.outH, invW, invH);
-            glUniform4f(p.outputSizeLoc,
-                        (float)p.outW, (float)p.outH, invW, invH);
+            if (p.outputSizeIsVec2)
+                glUniform2f(p.outputSizeLoc, (float)p.outW, (float)p.outH);
+            else
+                glUniform4f(p.outputSizeLoc,
+                            (float)p.outW, (float)p.outH, invW, invH);
         }
         if (p.finalVpSizeLoc >= 0) {
             // FinalViewportSize = 最终视频输出尺寸（用原始视频尺寸近似）
@@ -557,7 +584,7 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
         int lutCount = (int)m_luts.size();
         for (const auto& binding : p.passTexBindings) {
             if (binding.texUnitOffset < 0) {
-                // Prev 系列：无帧历史，回退到当前输入纹理（单元 0）
+                // Prev 系列：无帧历史缓存，回退到原始源纹理（单元 0）
                 glUniform1i(binding.loc, 0);
                 continue;
             }
@@ -572,6 +599,15 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
             glActiveTexture((GLenum)(GL_TEXTURE0 + unit));
             glBindTexture(GL_TEXTURE_2D, passTex);
             glUniform1i(binding.loc, unit);
+        }
+
+        // OrigTexture：绑定原始源纹理（着色器链入前的帧纹理）
+        // 一些着色器（如 hqx-pass2）使用 OrigTexture 访问原始视频帧
+        if (p.origTexLoc >= 0) {
+            int origUnit = k_origTexUnitOffset; // 固定使用独立单元（避免与 LUT/Pass 冲突）
+            glActiveTexture((GLenum)(GL_TEXTURE0 + origUnit));
+            glBindTexture(GL_TEXTURE_2D, srcTex);
+            glUniform1i(p.origTexLoc, origUnit);
         }
 
         // 恢复活动纹理单元到 0
@@ -592,7 +628,7 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
     ++m_frameCount;
 
     // ----------------------------------------------------------------
-    // 恢复所有已保存的 GL 状态（包括 LUT 和前序通道纹理使用的纹理单元）
+    // 恢复所有已保存的 GL 状态（包括 LUT、前序通道纹理、OrigTexture 使用的纹理单元）
     // ----------------------------------------------------------------
     // 计算本帧各通道使用过的最大纹理单元数
     int maxPassTexOffset = 0;
@@ -600,6 +636,11 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
         for (const auto& b : pass.passTexBindings) {
             if (b.texUnitOffset + 1 > maxPassTexOffset)
                 maxPassTexOffset = b.texUnitOffset + 1;
+        }
+        if (pass.origTexLoc >= 0) {
+            // OrigTexture 使用固定单元 k_origTexUnitOffset
+            if (k_origTexUnitOffset + 1 > maxPassTexOffset)
+                maxPassTexOffset = k_origTexUnitOffset + 1;
         }
     }
     int totalExtraUnits = (int)m_luts.size() + maxPassTexOffset;

@@ -859,7 +859,30 @@ bool GlslpLoader::loadGlslpIntoChain(ShaderChain& chain, const std::string& path
         }
     }
 
-    // ---- 加载每个着色器通道 ----
+    // ---- 第一轮：收集所有通道的 #pragma parameter 默认值（全局合并）----
+    // RetroArch 中，所有通道共享同一参数命名空间；参数可以在任意通道文件中声明，
+    // 但需要在所有引用该参数的通道中均能正确初始化，否则会因未初始化 uniform
+    // 默认值为 0 而产生除零错误（如全白画面）。
+    // 合并策略：若同一参数名在多个通道文件中均有声明，以最后出现的定义为准，
+    // 这与 RetroArch 的行为一致（预设文件中的全局覆盖值具有最高优先级，
+    // 通道文件中的 #pragma parameter 仅作为后备默认值使用）。
+    std::unordered_map<std::string, float> allParamDefaults;
+    for (int i = 0; i < shaderCount; ++i) {
+        std::string shaderKey = "shader" + std::to_string(i);
+        auto it = kv.find(shaderKey);
+        if (it == kv.end() || it->second.empty()) continue;
+        std::string shaderPath = resolvePath(baseDir, it->second);
+        std::string rawSrc = readFile(shaderPath);
+        if (rawSrc.empty()) continue;
+        auto passDefaults = extractParamDefaults(rawSrc);
+        for (const auto& kv2 : passDefaults)
+            allParamDefaults[kv2.first] = kv2.second;
+    }
+    // 将预设文件中的全局参数覆盖值应用到全局默认值（最高优先级）
+    for (const auto& ov : globalParamOverrides)
+        allParamDefaults[ov.first] = ov.second;
+
+    // ---- 第二轮：加载每个着色器通道 ----
     int loaded = 0;
     for (int i = 0; i < shaderCount; ++i) {
         std::string siStr   = std::to_string(i);
@@ -915,21 +938,14 @@ bool GlslpLoader::loadGlslpIntoChain(ShaderChain& chain, const std::string& path
         if (kv.count("alias" + siStr)) alias = kv["alias" + siStr];
 
         // 编译并添加通道
-        // 先读取原始源码以提取 #pragma parameter 默认值（在编译前）
-        std::string rawShaderSrc = readFile(shaderPath);
-        auto paramDefaults = extractParamDefaults(rawShaderSrc);
-        // 将预设文件中的全局参数覆盖值合并到该通道的默认值映射
-        // （仅覆盖该通道着色器中实际声明的参数，避免向无关通道传递多余值）
-        for (const auto& ov : globalParamOverrides)
-            paramDefaults[ov.first] = ov.second;
-
+        // 使用全局合并后的参数默认值，确保跨通道参数共享能正确初始化
         std::string vert, frag;
         if (!parseGlslFile(shaderPath, vert, frag)) {
             brls::Logger::warning("[GlslpLoader] Failed to parse {}", shaderPath);
             continue;
         }
         if (!chain.addPass(vert, frag, glFilter, wrapMode, scale, fcMod, alias,
-                           paramDefaults)) {
+                           allParamDefaults)) {
             brls::Logger::warning("[GlslpLoader] Failed to compile {}", shaderPath);
             continue;
         }
