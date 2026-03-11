@@ -90,6 +90,56 @@ static std::string stripPragmaParameters(const std::string& src)
     return result;
 }
 
+/// 从 GLSL 源码中解析 #pragma parameter 行，提取参数名及其默认值。
+///
+/// #pragma parameter 格式（RetroArch 标准）：
+///   #pragma parameter NAME "描述" 默认值 最小值 最大值 步进
+///
+/// 本函数在着色器被编译前调用（剥除 #pragma 行之前），
+/// 返回值用于在链接后将 uniform 初始化为默认值，
+/// 避免 uniform 默认为 0 导致除零（1/0 = INF）进而全白画面。
+static std::unordered_map<std::string, float> extractParamDefaults(const std::string& src)
+{
+    std::unordered_map<std::string, float> defaults;
+    const std::string kPragma = "#pragma parameter";
+    if (src.find(kPragma) == std::string::npos) return defaults;
+
+    std::istringstream iss(src);
+    std::string line;
+    while (std::getline(iss, line)) {
+        std::string t = trimStr(line);
+        if (t.rfind(kPragma, 0) != 0) continue;
+
+        // 跳过 "#pragma parameter" 前缀，读取参数名
+        std::istringstream ls(t.substr(kPragma.size()));
+        std::string name;
+        if (!(ls >> name) || name.empty()) continue;
+
+        // 跳过带引号的描述字符串（可能含空格）
+        std::string rest;
+        std::getline(ls, rest);
+        size_t q1 = rest.find('"');
+        if (q1 != std::string::npos) {
+            size_t q2 = rest.find('"', q1 + 1);
+            if (q2 != std::string::npos)
+                rest = rest.substr(q2 + 1);
+            else
+                rest = rest.substr(q1 + 1);
+        }
+
+        // 解析第一个浮点数（默认值）
+        std::istringstream vs(rest);
+        float defVal = 0.f;
+        if (vs >> defVal) {
+            defaults[name] = defVal;
+        } else {
+            brls::Logger::warning("[GlslpLoader] 无法解析 #pragma parameter '{}' 的默认值，"
+                                  "将跳过（uniform 保持 GL 默认值 0.0）", name);
+        }
+    }
+    return defaults;
+}
+
 /// 剥除 #pragma stage 标记行（已被分割逻辑消费，不应进入着色器源码）
 static std::string stripStagePragmas(const std::string& src)
 {
@@ -637,10 +687,16 @@ bool GlslpLoader::parseGlslFile(const std::string& path,
 // ============================================================
 bool GlslpLoader::loadGlslIntoChain(ShaderChain& chain, const std::string& path)
 {
+    // 先读取原始源码以提取 #pragma parameter 默认值（编译前）
+    std::string rawSrc = readFile(path);
+    auto paramDefaults = extractParamDefaults(rawSrc);
+
     std::string vert, frag;
     if (!parseGlslFile(path, vert, frag)) return false;
 
-    if (!chain.addPass(vert, frag)) {
+    if (!chain.addPass(vert, frag,
+                       GL_NEAREST, GL_CLAMP_TO_EDGE, ShaderPassScale{}, 0, {},
+                       paramDefaults)) {
         brls::Logger::error("[GlslpLoader] Failed to compile pass from: {}", path);
         return false;
     }
@@ -741,6 +797,34 @@ bool GlslpLoader::loadGlslpIntoChain(ShaderChain& chain, const std::string& path
     // 清除现有用户通道，重新加载
     chain.clearPasses();
 
+    // ---- 解析预设文件中的全局参数覆盖值 ----
+    // 格式: parameters = "PARAM1;PARAM2" 及对应的 PARAM1 = value 行
+    std::unordered_map<std::string, float> globalParamOverrides;
+    {
+        auto paramIt = kv.find("parameters");
+        if (paramIt != kv.end() && !paramIt->second.empty()) {
+            std::string paramList = paramIt->second;
+            // 去掉可能存在的引号
+            if (paramList.size() >= 2 && paramList.front() == '"' && paramList.back() == '"')
+                paramList = paramList.substr(1, paramList.size() - 2);
+            // 支持分号或空格分隔
+            std::replace(paramList.begin(), paramList.end(), ';', ' ');
+            std::istringstream piss(paramList);
+            std::string pname;
+            while (piss >> pname) {
+                auto pit = kv.find(pname);
+                if (pit != kv.end()) {
+                    try {
+                        globalParamOverrides[pname] = std::stof(pit->second);
+                    } catch (...) {
+                        brls::Logger::warning("[GlslpLoader] 预设全局参数 '{}' 的值 '{}' 无法解析为浮点数，已跳过",
+                                              pname, pit->second);
+                    }
+                }
+            }
+        }
+    }
+
     // ---- 解析并加载 LUT 纹理 ----
     {
         auto texIt = kv.find("textures");
@@ -831,12 +915,21 @@ bool GlslpLoader::loadGlslpIntoChain(ShaderChain& chain, const std::string& path
         if (kv.count("alias" + siStr)) alias = kv["alias" + siStr];
 
         // 编译并添加通道
+        // 先读取原始源码以提取 #pragma parameter 默认值（在编译前）
+        std::string rawShaderSrc = readFile(shaderPath);
+        auto paramDefaults = extractParamDefaults(rawShaderSrc);
+        // 将预设文件中的全局参数覆盖值合并到该通道的默认值映射
+        // （仅覆盖该通道着色器中实际声明的参数，避免向无关通道传递多余值）
+        for (const auto& ov : globalParamOverrides)
+            paramDefaults[ov.first] = ov.second;
+
         std::string vert, frag;
         if (!parseGlslFile(shaderPath, vert, frag)) {
             brls::Logger::warning("[GlslpLoader] Failed to parse {}", shaderPath);
             continue;
         }
-        if (!chain.addPass(vert, frag, glFilter, wrapMode, scale, fcMod, alias)) {
+        if (!chain.addPass(vert, frag, glFilter, wrapMode, scale, fcMod, alias,
+                           paramDefaults)) {
             brls::Logger::warning("[GlslpLoader] Failed to compile {}", shaderPath);
             continue;
         }
