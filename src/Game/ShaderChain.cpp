@@ -16,123 +16,116 @@
 #include <borealis.hpp>  // brls::Logger
 #include <cstring>
 
-// stb_image 声明（实现由 borealis/nanovg.c 提供，此处仅引入函数声明）
+// stb_image 声明
 #include <borealis/extern/nanovg/stb_image.h>
 
-// OrigTexture 固定纹理单元偏移量（相对于纹理单元 0）
-// 选择一个较大的偏移（32）以避免与 LUT 和前序通道纹理单元冲突
+// OrigTexture 固定纹理单元偏移量
 static constexpr int k_origTexUnitOffset = 32;
 
 // ============================================================
-// GLSL 着色器源码
-// 版本/精度前缀在运行时拼接，使同一段着色器体
-// 可在 GLES2、GLES3 及桌面 GL3/GL4 下正常编译。
+// 顶点缓冲区布局（RetroArch 兼容）
+// 每顶点 10 个 float：VertexCoord(4) + TexCoord(2) + COLOR(4)
+// 全屏四边形，TRIANGLE_FAN，逆时针绕序
 // ============================================================
+static constexpr int k_vertStride = 10;  // floats per vertex
+
+static const GLfloat k_quadVerts[] = {
+    // VertexCoord (vec4 NDC)      TexCoord (vec2 UV)  COLOR (vec4)
+    -1.0f, -1.0f, 0.0f, 1.0f,   0.0f, 0.0f,         1.0f, 1.0f, 1.0f, 1.0f,  // BL
+     1.0f, -1.0f, 0.0f, 1.0f,   1.0f, 0.0f,         1.0f, 1.0f, 1.0f, 1.0f,  // BR
+     1.0f,  1.0f, 0.0f, 1.0f,   1.0f, 1.0f,         1.0f, 1.0f, 1.0f, 1.0f,  // TR
+    -1.0f,  1.0f, 0.0f, 1.0f,   0.0f, 1.0f,         1.0f, 1.0f, 1.0f, 1.0f,  // TL
+};
+
+// ============================================================
+// 内置直通着色器（RetroArch 兼容顶点格式）
+// 使用 VertexCoord / TexCoord / Texture 标准命名
+// ============================================================
+
 #if defined(NANOVG_GLES3) || defined(NANOVG_GL3)
 
-static const char* const k_glslHeader =
+static const char* const k_builtinVert =
 #  if defined(NANOVG_GLES3)
-    "#version 300 es\nprecision mediump float;\n";
+    "#version 300 es\n"
+    "precision mediump float;\n"
 #  else
-    "#version 330 core\n";
+    "#version 330 core\n"
 #  endif
-
-// 现代 GLSL（使用 in/out、texture()）
-static const char* const k_vertBody =
-    "in  vec2 offset;\n"
-    "uniform vec2 dims;\n"
-    "uniform vec2 insize;\n"
-    "out vec2 texCoord;\n"
+    "in vec4 VertexCoord;\n"
+    "in vec2 TexCoord;\n"
+    "in vec4 COLOR;\n"
+    "out vec2 vTexCoord;\n"
     "void main() {\n"
-    "    vec2 scaledOffset = offset * dims;\n"
-    // x: 将 [0,1] 映射到 [-1,+1]（从左到右）
-    // y: 将 [0,1] 映射到 [-1,+1]（从上到下，使 NVG 读取时 y=0 为图像顶部）
-    "    gl_Position = vec4(scaledOffset.x * 2.0 - dims.x,\n"
-    "                       scaledOffset.y * 2.0 - dims.y,\n"
-    "                       0.0, 1.0);\n"
-    "    texCoord = offset * insize;\n"
+    "    gl_Position = VertexCoord;\n"
+    "    vTexCoord   = TexCoord;\n"
     "}\n";
 
-static const char* const k_fragBody =
-    "in  vec2 texCoord;\n"
-    "uniform sampler2D tex;\n"
-    "uniform vec4 color;\n"
+static const char* const k_builtinFrag =
+#  if defined(NANOVG_GLES3)
+    "#version 300 es\n"
+    "precision mediump float;\n"
+#  else
+    "#version 330 core\n"
+#  endif
+    "uniform sampler2D Texture;\n"
+    "in  vec2 vTexCoord;\n"
     "out vec4 fragColor;\n"
     "void main() {\n"
-    // 强制 alpha=1，丢弃 XBGR 像素格式中的零 alpha 字节
-    "    vec4 c = vec4(texture(tex, texCoord).rgb, 1.0);\n"
-    "    fragColor = c * color;\n"
+    "    fragColor = vec4(texture(Texture, vTexCoord).rgb, 1.0);\n"
     "}\n";
 
-#else  // GLES2 / GL2
+#else  // GL2 / GLES2
 
-static const char* const k_glslHeader =
+static const char* const k_builtinVert =
 #  if defined(NANOVG_GLES2)
-    "#version 100\nprecision mediump float;\n";
+    "#version 100\n"
+    "precision mediump float;\n"
 #  else
-    "#version 120\n";
+    "#version 120\n"
 #  endif
-
-// 旧版 GLSL（使用 attribute/varying、texture2D()、gl_FragColor）
-static const char* const k_vertBody =
-    "attribute vec2 offset;\n"
-    "uniform vec2 dims;\n"
-    "uniform vec2 insize;\n"
-    "varying vec2 texCoord;\n"
+    "attribute vec4 VertexCoord;\n"
+    "attribute vec2 TexCoord;\n"
+    "attribute vec4 COLOR;\n"
+    "varying vec2 vTexCoord;\n"
     "void main() {\n"
-    "    vec2 scaledOffset = offset * dims;\n"
-    "    gl_Position = vec4(scaledOffset.x * 2.0 - dims.x,\n"
-    "                       scaledOffset.y * 2.0 - dims.y,\n"
-    "                       0.0, 1.0);\n"
-    "    texCoord = offset * insize;\n"
+    "    gl_Position = VertexCoord;\n"
+    "    vTexCoord   = TexCoord;\n"
     "}\n";
 
-static const char* const k_fragBody =
-    "varying vec2 texCoord;\n"
-    "uniform sampler2D tex;\n"
-    "uniform vec4 color;\n"
+static const char* const k_builtinFrag =
+#  if defined(NANOVG_GLES2)
+    "#version 100\n"
+    "precision mediump float;\n"
+#  else
+    "#version 120\n"
+#  endif
+    "uniform sampler2D Texture;\n"
+    "varying vec2 vTexCoord;\n"
     "void main() {\n"
-    "    vec4 c = vec4(texture2D(tex, texCoord).rgb, 1.0);\n"
-    "    gl_FragColor = c * color;\n"
+    "    gl_FragColor = vec4(texture2D(Texture, vTexCoord).rgb, 1.0);\n"
     "}\n";
 
-#endif // 着色器版本选择
-
-// 全屏四边形角点偏移量（两个三角形，通过 TRIANGLE_FAN 绘制）。
-// 与原始 Switch main.c 中的布局一致。
-static const GLfloat k_quadOffsets[] = {
-    0.f, 0.f,
-    1.f, 0.f,
-    1.f, 1.f,
-    0.f, 1.f,
-};
+#endif
 
 namespace beiklive {
 
 // ============================================================
-// ShaderChain：查询单个通道的所有 uniform / attrib 位置
+// ShaderChain：查询单个通道的所有 uniform 位置
 // ============================================================
 void ShaderChain::_lookupUniforms(ShaderPass& p)
 {
-    p.texLoc    = glGetUniformLocation(p.program, "tex");
-    p.dimsLoc   = glGetUniformLocation(p.program, "dims");
-    p.insizeLoc = glGetUniformLocation(p.program, "insize");
-    p.colorLoc  = glGetUniformLocation(p.program, "color");
-    p.offsetLoc = glGetAttribLocation (p.program, "offset");
-
-    // RetroArch 兼容 uniforms
-    p.sourceLoc     = glGetUniformLocation(p.program, "Source");
+    // Source / Texture 采样器
+    p.sourceLoc = glGetUniformLocation(p.program, "Source");
     if (p.sourceLoc < 0)
         p.sourceLoc = glGetUniformLocation(p.program, "Texture");
 
-    // 收集所有 active uniform 的 名称→类型 映射，供后续类型检测使用
+    // 收集所有 active uniform 的名称→类型映射，供后续类型检测
     GLint numUniforms = 0;
     GLint maxNameLen  = 64;
     glGetProgramiv(p.program, GL_ACTIVE_UNIFORMS,           &numUniforms);
     glGetProgramiv(p.program, GL_ACTIVE_UNIFORM_MAX_LENGTH, &maxNameLen);
     std::vector<char> unameBuf(static_cast<size_t>(maxNameLen + 1), '\0');
 
-    // 帮助函数：判断某个 uniform 名称是否为 vec2 类型
     auto isUniformVec2 = [&](const char* name) -> bool {
         for (GLint j = 0; j < numUniforms; ++j) {
             GLint  usize = 0;
@@ -147,8 +140,7 @@ void ShaderChain::_lookupUniforms(ShaderPass& p)
         return false;
     };
 
-    // SourceSize：优先查找 vec4 版（新式），回退到 vec2 版（旧式 TextureSize）。
-    // 需要根据实际类型选择 glUniform4f 还是 glUniform2f。
+    // SourceSize（vec4 或 vec2 TextureSize）
     p.sourceSizeLoc    = glGetUniformLocation(p.program, "SourceSize");
     p.sourceSizeIsVec2 = false;
     if (p.sourceSizeLoc < 0) {
@@ -157,13 +149,13 @@ void ShaderChain::_lookupUniforms(ShaderPass& p)
             p.sourceSizeIsVec2 = isUniformVec2("TextureSize");
     }
 
-    // OutputSize：同样支持 vec2（旧式）和 vec4（新式）
+    // OutputSize
     p.outputSizeLoc    = glGetUniformLocation(p.program, "OutputSize");
     p.outputSizeIsVec2 = false;
     if (p.outputSizeLoc >= 0)
         p.outputSizeIsVec2 = isUniformVec2("OutputSize");
 
-    // InputSize：同样支持 vec2（旧式）和 vec4（新式）
+    // InputSize
     p.inputSizeLoc    = glGetUniformLocation(p.program, "InputSize");
     p.inputSizeIsVec2 = false;
     if (p.inputSizeLoc >= 0)
@@ -171,18 +163,12 @@ void ShaderChain::_lookupUniforms(ShaderPass& p)
 
     p.frameCountLoc  = glGetUniformLocation(p.program, "FrameCount");
     p.finalVpSizeLoc = glGetUniformLocation(p.program, "FinalViewportSize");
-
-    // OrigTexture：RetroArch 着色器用此引用原始（链入前）源纹理
     p.origTexLoc     = glGetUniformLocation(p.program, "OrigTexture");
-
-    // OrigInputSize：原始视频分辨率（链入前的帧尺寸），始终等于 videoW × videoH
-    // 部分着色器（如 phosphor-line）用 1/OrigInputSize 计算缩放因子；
-    // 若未设置则默认为 (0,0)，导致 1/0 = INF，进而产生全白画面
     p.origInputSizeLoc = glGetUniformLocation(p.program, "OrigInputSize");
 }
 
 // ============================================================
-// ShaderChain：查询 LUT uniform 位置（每次 addPass 后调用）
+// ShaderChain：查询 LUT uniform 位置
 // ============================================================
 void ShaderChain::_lookupLutUniforms(ShaderPass& p)
 {
@@ -193,15 +179,12 @@ void ShaderChain::_lookupLutUniforms(ShaderPass& p)
 
 // ============================================================
 // ShaderChain：查询前序通道纹理 uniform 位置
-// 包括 PassNTexture、{alias}Texture（来自前序通道）以及 PrevNTexture（帧历史）
 // ============================================================
 void ShaderChain::_lookupPassTextures(ShaderPass& p, int passIdx)
 {
-    // 纹理单元从 (1 + LUT 数量) 开始，依次递增
     int unitOffset = 0;
 
-    // --- PassNTexture：N 从 0 到 passIdx-2（0 索引的用户通道）---
-    // 在 m_passes 中，用户通道 N 存储于索引 N+1（索引 0 为内置通道）
+    // PassNTexture：N 从 0 到 passIdx-2
     for (int n = 0; n < passIdx - 1; ++n) {
         std::string name = "Pass" + std::to_string(n) + "Texture";
         GLint loc = glGetUniformLocation(p.program, name.c_str());
@@ -209,14 +192,12 @@ void ShaderChain::_lookupPassTextures(ShaderPass& p, int passIdx)
             p.passTexBindings.push_back({ n + 1, loc, unitOffset++ });
     }
 
-    // --- {alias}Texture：遍历所有前序通道的别名 ---
+    // {alias}Texture
     for (int n = 1; n < passIdx; ++n) {
         if (m_passes[n].alias.empty()) continue;
         std::string name = m_passes[n].alias + "Texture";
         GLint loc = glGetUniformLocation(p.program, name.c_str());
         if (loc < 0) continue;
-
-        // 若该源通道已通过 PassNTexture 绑定，复用其纹理单元偏移；否则新分配
         int reusedOffset = -1;
         for (const auto& b : p.passTexBindings) {
             if (b.srcPassIdx == n && b.texUnitOffset >= 0) {
@@ -230,7 +211,7 @@ void ShaderChain::_lookupPassTextures(ShaderPass& p, int passIdx)
             p.passTexBindings.push_back({ n, loc, unitOffset++ });
     }
 
-    // --- PrevNTexture：帧历史纹理（本实现无帧历史，回退到原始源纹理单元 0）---
+    // PrevNTexture（无帧历史缓存，回退到单元 0）
     static const char* kPrevNames[] = {
         "PrevTexture",  "Prev1Texture", "Prev2Texture",
         "Prev3Texture", "Prev4Texture", "Prev5Texture", "Prev6Texture"
@@ -238,7 +219,6 @@ void ShaderChain::_lookupPassTextures(ShaderPass& p, int passIdx)
     for (const char* name : kPrevNames) {
         GLint loc = glGetUniformLocation(p.program, name);
         if (loc >= 0)
-            // srcPassIdx = -1 表示使用当前帧原始源纹理（纹理单元 0）
             p.passTexBindings.push_back({ -1, loc, -1 });
     }
 }
@@ -248,13 +228,22 @@ void ShaderChain::_lookupPassTextures(ShaderPass& p, int passIdx)
 // ============================================================
 bool ShaderChain::init(const std::string& vertSrc, const std::string& fragSrc)
 {
-    // ---- 全屏四边形 VAO / VBO ----
+    // ---- 全屏四边形 VAO / VBO（RetroArch 兼容顶点格式）----
     glGenBuffers(1, &m_vbo);
     glGenVertexArrays(1, &m_vao);
     glBindVertexArray(m_vao);
     glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(k_quadOffsets), k_quadOffsets, GL_STATIC_DRAW);
-    // 属性 0（"offset"）的绑定推迟到第 0 通道就绪后进行
+    glBufferData(GL_ARRAY_BUFFER, sizeof(k_quadVerts), k_quadVerts, GL_STATIC_DRAW);
+
+    // 属性绑定（固定位置：0=VertexCoord, 1=TexCoord, 2=COLOR）
+    static constexpr GLsizei kStride = k_vertStride * sizeof(GLfloat);
+    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, kStride, (void*)(0));
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, kStride, (void*)(4 * sizeof(GLfloat)));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, kStride, (void*)(6 * sizeof(GLfloat)));
+    glEnableVertexAttribArray(2);
+
     glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
@@ -266,22 +255,23 @@ bool ShaderChain::init(const std::string& vertSrc, const std::string& fragSrc)
         return false;
     }
     _lookupUniforms(pass0);
-    _bindPassAttrib(pass0);
 
-    // FBO 在首次调用 run() 时延迟创建（需要视频尺寸）
+    // 初始化 Source/Texture 采样器到纹理单元 0
+    glUseProgram(pass0.program);
+    if (pass0.sourceLoc >= 0) glUniform1i(pass0.sourceLoc, 0);
+    glUseProgram(0);
+
     m_passes.push_back(std::move(pass0));
     brls::Logger::debug("[ShaderChain] Initialised, built-in pass 0 ready");
     return true;
 }
 
 // ============================================================
-// ShaderChain：默认内置初始化（使用内置 GLSL 源码）
+// ShaderChain：默认内置初始化
 // ============================================================
 bool ShaderChain::initBuiltin()
 {
-    std::string vertSrc = std::string(k_glslHeader) + k_vertBody;
-    std::string fragSrc = std::string(k_glslHeader) + k_fragBody;
-    return init(vertSrc, fragSrc);
+    return init(std::string(k_builtinVert), std::string(k_builtinFrag));
 }
 
 // ============================================================
@@ -332,21 +322,18 @@ bool ShaderChain::addPass(const std::string& vert, const std::string& frag,
     _lookupUniforms(p);
     _lookupLutUniforms(p);
     _lookupPassTextures(p, (int)m_passes.size());
-    _bindPassAttrib(p);
 
-    // 将 #pragma parameter 参数 uniform 初始化为默认值。
-    // 若不设置，GLSL uniform 默认为 0，而着色器可能用 1/param 计算，
-    // 导致除零（INF），进而使画面全白。
-    if (!paramDefaults.empty()) {
-        glUseProgram(p.program);
-        for (const auto& kv : paramDefaults) {
-            GLint loc = glGetUniformLocation(p.program, kv.first.c_str());
-            if (loc >= 0) glUniform1f(loc, kv.second);
-        }
-        glUseProgram(0);
+    // 初始化采样器到单元 0
+    glUseProgram(p.program);
+    if (p.sourceLoc >= 0) glUniform1i(p.sourceLoc, 0);
+
+    // 初始化 #pragma parameter 参数默认值（避免除零→全白画面）
+    for (const auto& kv : paramDefaults) {
+        GLint loc = glGetUniformLocation(p.program, kv.first.c_str());
+        if (loc >= 0) glUniform1f(loc, kv.second);
     }
+    glUseProgram(0);
 
-    // 强制下次 run() 时重建 FBO
     m_lastVideoW = 0;
     m_lastVideoH = 0;
 
@@ -368,7 +355,6 @@ void ShaderChain::clearPasses()
         if (p.program)   glDeleteProgram(p.program);
         m_passes.pop_back();
     }
-    // 同时清除 LUT 纹理
     for (auto& lut : m_luts) {
         if (lut.tex) glDeleteTextures(1, &lut.tex);
     }
@@ -385,8 +371,6 @@ void ShaderChain::clearPasses()
 bool ShaderChain::addLut(const std::string& id, const std::string& path,
                           bool linear, bool mipmap, GLenum wrap)
 {
-    // stbi_load implementation is provided by borealis/nanovg.c (STB_IMAGE_IMPLEMENTATION).
-    // stb_image.h included at the top of this file is declaration-only.
     int w = 0, h = 0, comp = 0;
     unsigned char* data = stbi_load(path.c_str(), &w, &h, &comp, 4);
     if (!data) {
@@ -415,7 +399,6 @@ bool ShaderChain::addLut(const std::string& id, const std::string& path,
     lut.tex = tex;
     m_luts.push_back(lut);
 
-    // 更新所有已有用户通道的 LUT uniform 位置
     for (size_t pi = 1; pi < m_passes.size(); ++pi) {
         m_passes[pi].lutLocs.resize(m_luts.size(), -1);
         size_t idx = m_luts.size() - 1;
@@ -423,7 +406,7 @@ bool ShaderChain::addLut(const std::string& id, const std::string& path,
             glGetUniformLocation(m_passes[pi].program, id.c_str());
     }
 
-    brls::Logger::info("[ShaderChain] LUT loaded: id='{}', {}×{}, path={}", id, w, h, path);
+    brls::Logger::info("[ShaderChain] LUT loaded: id='{}', {}x{}, path={}", id, w, h, path);
     return true;
 }
 
@@ -443,7 +426,6 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
 {
     if (m_passes.empty()) return srcTex;
 
-    // 当分辨率变化时（重新）创建 FBO
     bool dimsChanged = (videoW != m_lastVideoW || videoH != m_lastVideoH);
     if (dimsChanged) {
         m_lastVideoW = videoW;
@@ -456,13 +438,7 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
         }
     }
 
-    // ----------------------------------------------------------------
-    // 保存 Borealis/NVG 依赖的所有 GL 状态。
-    // NVG 使用了模板（裁剪路径）、裁剪测试、混合、自有着色器程序、
-    // VAO、活动纹理单元及纹理绑定。
-    // 必须在退出时将上下文恢复原状，
-    // 以确保 nvgEndFrame() 的延迟刷新正常工作。
-    // ----------------------------------------------------------------
+    // ---- 保存 GL 状态 ----
     GLint     prevFbo           = 0;
     GLint     prevViewport[4]   = {};
     GLint     prevProgram       = 0;
@@ -494,23 +470,21 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
     glGetIntegerv(GL_BLEND_DST_ALPHA,       &prevBlendDstAlpha);
     glGetFloatv(GL_COLOR_CLEAR_VALUE,       prevClearColor);
 
-    // 为我们的渲染通道设置干净的 GL 状态
     glDisable(GL_SCISSOR_TEST);
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_STENCIL_TEST);
     glDisable(GL_BLEND);
 
-    // ---- 依次执行每个通道 ----
-    // 辅助 lambda：将整数尺寸打包为 RetroArch 兼容的 vec4（w, h, 1/w, 1/h）
+    // ---- 辅助函数：构建 RetroArch vec4 尺寸 ----
     auto makeSizeVec4 = [](int w, int h, float& invW, float& invH) {
         invW = (w > 0) ? 1.f / (float)w : 0.f;
         invH = (h > 0) ? 1.f / (float)h : 0.f;
     };
 
     GLuint inputTex = srcTex;
-    // 跟踪当前输入纹理的实际尺寸（用于为每个通道正确设置 SourceSize）
     int inputW = (int)videoW;
     int inputH = (int)videoH;
+
     for (size_t i = 0; i < m_passes.size(); ++i) {
         const ShaderPass& p = m_passes[i];
         if (!p.program || !p.fbo) continue;
@@ -520,32 +494,25 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
         glClearColor(0.f, 0.f, 0.f, 1.f);
         glClear(GL_COLOR_BUFFER_BIT);
 
+        // 绑定输入纹理到单元 0
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, inputTex);
         glUseProgram(p.program);
 
-        if (p.texLoc    >= 0) glUniform1i(p.texLoc,   0);
+        // Source/Texture 采样器（纹理单元 0）
         if (p.sourceLoc >= 0) glUniform1i(p.sourceLoc, 0);
-        if (p.colorLoc  >= 0) glUniform4f(p.colorLoc,  1.f, 1.f, 1.f, 1.f);
-        if (p.dimsLoc   >= 0) glUniform2f(p.dimsLoc,   1.f, 1.f);
-        // insize: UV 覆盖整张纹理（源纹理已是 videoW×videoH，无填充）
-        if (p.insizeLoc >= 0) glUniform2f(p.insizeLoc, 1.f, 1.f);
 
         // RetroArch 兼容 uniforms
-        // SourceSize：使用当前通道实际输入纹理的尺寸（而非始终使用原始视频尺寸）
         if (p.sourceSizeLoc >= 0) {
             float invW, invH;
             makeSizeVec4(inputW, inputH, invW, invH);
             if (p.sourceSizeIsVec2)
-                // 旧式着色器：TextureSize 为 vec2（仅含 width, height）
                 glUniform2f(p.sourceSizeLoc, (float)inputW, (float)inputH);
             else
-                // 新式着色器：SourceSize 为 vec4（width, height, 1/width, 1/height）
                 glUniform4f(p.sourceSizeLoc,
                             (float)inputW, (float)inputH, invW, invH);
         }
         if (p.inputSizeLoc >= 0) {
-            // InputSize = 当前通道的实际输入尺寸（同 SourceSize）
             float invW, invH;
             makeSizeVec4(inputW, inputH, invW, invH);
             if (p.inputSizeIsVec2)
@@ -564,7 +531,6 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
                             (float)p.outW, (float)p.outH, invW, invH);
         }
         if (p.finalVpSizeLoc >= 0) {
-            // FinalViewportSize = 最终视频输出尺寸（用原始视频尺寸近似）
             float invW, invH;
             makeSizeVec4((int)videoW, (int)videoH, invW, invH);
             glUniform4f(p.finalVpSizeLoc,
@@ -572,24 +538,21 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
         }
         if (p.frameCountLoc >= 0) {
             uint32_t fc = (p.fcMod > 0) ? (m_frameCount % (uint32_t)p.fcMod) : m_frameCount;
-            // 使用 glUniform1i 以同时兼容 int 和 uint 声明
             glUniform1i(p.frameCountLoc, (GLint)fc);
         }
 
-        // 绑定 LUT 纹理（从纹理单元 1 开始）
+        // LUT 纹理（从单元 1 开始）
         for (size_t li = 0; li < m_luts.size() && li < p.lutLocs.size(); ++li) {
             if (p.lutLocs[li] < 0 || !m_luts[li].tex) continue;
-            GLenum unit = (GLenum)(GL_TEXTURE1 + li);
-            glActiveTexture(unit);
+            glActiveTexture((GLenum)(GL_TEXTURE1 + li));
             glBindTexture(GL_TEXTURE_2D, m_luts[li].tex);
             glUniform1i(p.lutLocs[li], (GLint)(1 + li));
         }
 
-        // 绑定前序通道输出纹理（PassNTexture / aliasTexture / PrevNTexture）
+        // 前序通道纹理
         int lutCount = (int)m_luts.size();
         for (const auto& binding : p.passTexBindings) {
             if (binding.texUnitOffset < 0) {
-                // Prev 系列：无帧历史缓存，回退到原始源纹理（单元 0）
                 glUniform1i(binding.loc, 0);
                 continue;
             }
@@ -600,27 +563,23 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
                 && m_passes[binding.srcPassIdx].outputTex) {
                 passTex = m_passes[binding.srcPassIdx].outputTex;
             }
-            if (!passTex) passTex = srcTex;  // 回退到原始源纹理
+            if (!passTex) passTex = srcTex;
             glActiveTexture((GLenum)(GL_TEXTURE0 + unit));
             glBindTexture(GL_TEXTURE_2D, passTex);
             glUniform1i(binding.loc, unit);
         }
 
-        // OrigTexture：绑定原始源纹理（着色器链入前的帧纹理）
-        // 一些着色器（如 hqx-pass2）使用 OrigTexture 访问原始视频帧
+        // OrigTexture（固定单元 k_origTexUnitOffset）
         if (p.origTexLoc >= 0) {
-            int origUnit = k_origTexUnitOffset; // 固定使用独立单元（避免与 LUT/Pass 冲突）
-            glActiveTexture((GLenum)(GL_TEXTURE0 + origUnit));
+            glActiveTexture((GLenum)(GL_TEXTURE0 + k_origTexUnitOffset));
             glBindTexture(GL_TEXTURE_2D, srcTex);
-            glUniform1i(p.origTexLoc, origUnit);
+            glUniform1i(p.origTexLoc, k_origTexUnitOffset);
         }
 
-        // OrigInputSize：原始视频分辨率，始终等于链入前的帧尺寸（videoW × videoH）
-        // 着色器用 1/OrigInputSize 计算缩放因子；若未设置则默认 (0,0) → 1/0 = INF → 全白
+        // OrigInputSize
         if (p.origInputSizeLoc >= 0)
             glUniform2f(p.origInputSizeLoc, (float)videoW, (float)videoH);
 
-        // 恢复活动纹理单元到 0
         glActiveTexture(GL_TEXTURE0);
 
         glBindVertexArray(m_vao);
@@ -629,7 +588,6 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
         glUseProgram(0);
         glBindTexture(GL_TEXTURE_2D, 0);
 
-        // 更新下一通道的输入纹理及其尺寸
         inputTex = p.outputTex;
         inputW   = p.outW;
         inputH   = p.outH;
@@ -637,10 +595,7 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
 
     ++m_frameCount;
 
-    // ----------------------------------------------------------------
-    // 恢复所有已保存的 GL 状态（包括 LUT、前序通道纹理、OrigTexture 使用的纹理单元）
-    // ----------------------------------------------------------------
-    // 计算本帧各通道使用过的最大纹理单元数
+    // ---- 恢复 GL 状态 ----
     int maxPassTexOffset = 0;
     for (const auto& pass : m_passes) {
         for (const auto& b : pass.passTexBindings) {
@@ -648,7 +603,6 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
                 maxPassTexOffset = b.texUnitOffset + 1;
         }
         if (pass.origTexLoc >= 0) {
-            // OrigTexture 使用固定单元 k_origTexUnitOffset
             if (k_origTexUnitOffset + 1 > maxPassTexOffset)
                 maxPassTexOffset = k_origTexUnitOffset + 1;
         }
@@ -692,9 +646,13 @@ GLuint ShaderChain::buildProgram(const char* vertSrc, const char* fragSrc)
         GLint ok = 0;
         glGetShaderiv(s, GL_COMPILE_STATUS, &ok);
         if (!ok) {
-            char log[512];
-            glGetShaderInfoLog(s, sizeof(log), nullptr, log);
-            brls::Logger::error("[ShaderChain] Shader compile error: {}", log);
+            GLint logLen = 0;
+            glGetShaderiv(s, GL_INFO_LOG_LENGTH, &logLen);
+            std::string log(logLen > 0 ? logLen : 512, '\0');
+            glGetShaderInfoLog(s, (GLsizei)log.size(), nullptr, &log[0]);
+            const char* typeName = (type == GL_VERTEX_SHADER) ? "vertex" : "fragment";
+            brls::Logger::error("[ShaderChain] {} shader compile error:\n{}", typeName, log);
+            brls::Logger::debug("[ShaderChain] Source:\n{}", src);
             glDeleteShader(s);
             return 0u;
         }
@@ -712,8 +670,12 @@ GLuint ShaderChain::buildProgram(const char* vertSrc, const char* fragSrc)
     GLuint prog = glCreateProgram();
     glAttachShader(prog, vs);
     glAttachShader(prog, fs);
-    // 将 "offset" 固定到位置 0，使所有通道共享同一 VAO 绑定
-    glBindAttribLocation(prog, 0, "offset");
+
+    // 固定顶点属性位置（必须在 link 之前）
+    glBindAttribLocation(prog, 0, "VertexCoord");
+    glBindAttribLocation(prog, 1, "TexCoord");
+    glBindAttribLocation(prog, 2, "COLOR");
+
     glLinkProgram(prog);
     glDeleteShader(vs);
     glDeleteShader(fs);
@@ -721,8 +683,10 @@ GLuint ShaderChain::buildProgram(const char* vertSrc, const char* fragSrc)
     GLint ok = 0;
     glGetProgramiv(prog, GL_LINK_STATUS, &ok);
     if (!ok) {
-        char log[512];
-        glGetProgramInfoLog(prog, sizeof(log), nullptr, log);
+        GLint logLen = 0;
+        glGetProgramiv(prog, GL_INFO_LOG_LENGTH, &logLen);
+        std::string log(logLen > 0 ? logLen : 512, '\0');
+        glGetProgramInfoLog(prog, (GLsizei)log.size(), nullptr, &log[0]);
         brls::Logger::error("[ShaderChain] Program link error: {}", log);
         glDeleteProgram(prog);
         return 0;
@@ -735,7 +699,6 @@ GLuint ShaderChain::buildProgram(const char* vertSrc, const char* fragSrc)
 // ============================================================
 void ShaderChain::setFilter(GLenum glFilter)
 {
-    // 更新全局默认过滤模式（作用于内置第 0 通道）
     if (m_glFilter == glFilter) return;
     m_glFilter = glFilter;
     if (!m_passes.empty() && m_passes[0].outputTex) {
@@ -755,7 +718,6 @@ bool ShaderChain::_initPassFbo(ShaderPass& p, int srcW, int srcH,
     if (p.fbo)       { glDeleteFramebuffers(1, &p.fbo);       p.fbo       = 0; }
     if (p.outputTex) { glDeleteTextures(1,      &p.outputTex); p.outputTex = 0; }
 
-    // 计算 FBO 尺寸（ported from RetroArch video_shader_parse.c scale logic）
     int w = srcW, h = srcH;
     switch (p.scale.typeX) {
         case ShaderPassScale::SCALE_ABSOLUTE:
@@ -764,7 +726,6 @@ bool ShaderChain::_initPassFbo(ShaderPass& p, int srcW, int srcH,
         case ShaderPassScale::VIEWPORT:
             w = (int)((float)viewW * p.scale.scaleX);
             break;
-        case ShaderPassScale::SOURCE:
         default:
             w = (int)((float)srcW * p.scale.scaleX);
             break;
@@ -776,7 +737,6 @@ bool ShaderChain::_initPassFbo(ShaderPass& p, int srcW, int srcH,
         case ShaderPassScale::VIEWPORT:
             h = (int)((float)viewH * p.scale.scaleY);
             break;
-        case ShaderPassScale::SOURCE:
         default:
             h = (int)((float)srcH * p.scale.scaleY);
             break;
@@ -812,23 +772,16 @@ bool ShaderChain::_initPassFbo(ShaderPass& p, int srcW, int srcH,
 
     p.outW = w;
     p.outH = h;
-    brls::Logger::debug("[ShaderChain] FBO created: {}×{}, tex={}, fbo={}", w, h,
-                        p.outputTex, p.fbo);
+    brls::Logger::debug("[ShaderChain] FBO created: {}x{}", w, h);
     return true;
 }
 
 // ============================================================
-// ShaderChain：在共享 VAO 中绑定 "offset" 顶点属性
+// ShaderChain：_bindPassAttrib（已内联到 init()，此处保留为空）
 // ============================================================
-void ShaderChain::_bindPassAttrib(ShaderPass& p)
+void ShaderChain::_bindPassAttrib(ShaderPass& /*p*/)
 {
-    if (p.offsetLoc < 0 || !m_vao || !m_vbo) return;
-    glBindVertexArray(m_vao);
-    glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
-    glVertexAttribPointer((GLuint)p.offsetLoc, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
-    glEnableVertexAttribArray((GLuint)p.offsetLoc);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    // 顶点属性绑定已在 init() 的 VAO 初始化中完成（所有通道共享同一 VAO）
 }
 
 // ============================================================
@@ -836,7 +789,6 @@ void ShaderChain::_bindPassAttrib(ShaderPass& p)
 // ============================================================
 bool ShaderChain::setParam(const std::string& name, float val)
 {
-    // 更新参数定义中的当前值
     bool found = false;
     for (auto& d : m_params) {
         if (d.name == name) {
@@ -846,7 +798,6 @@ bool ShaderChain::setParam(const std::string& name, float val)
         }
     }
 
-    // 保存当前 GL 程序，遍历所有通道并更新 uniform
     GLint prevProg = 0;
     glGetIntegerv(GL_CURRENT_PROGRAM, &prevProg);
     int applied = 0;
