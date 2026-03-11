@@ -4,10 +4,7 @@
 
 #include "common.hpp"
 #include "Audio/BKAudioPlayer.hpp"
-#include "UI/Img_text_cell.hpp"
-#include "UI/List_view.hpp"
 #include "UI/game_view.hpp"
-#include "UI/tab_select_game.hpp"
 
 #include "XMLUI/StartPageView.hpp"
 #include "XMLUI/Utils/captioned_image.hpp"
@@ -149,11 +146,6 @@ int main(int argc, char* argv[]) {
 
 	// brls::Application::setGlobalQuit(true);
 
-	// brls::Application::registerXMLView("HomeMenuListView", HomeMenuListView::create);
-	// brls::Application::registerXMLView("Img_text_cell", Img_text_cell::create);
-
-	// brls::Application::registerXMLView("CaptionedImage", CaptionedImage::create);
-	// brls::Application::registerXMLView("StartPageView", StartPageView::create);
 
 	auto* t_StartPageView = new StartPageView();
 	gameRunner->uiParams->StartPageframe = new brls::AppletFrame(t_StartPageView);
