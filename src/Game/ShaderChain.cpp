@@ -140,6 +140,58 @@ void ShaderChain::_lookupLutUniforms(ShaderPass& p)
 }
 
 // ============================================================
+// ShaderChain：查询前序通道纹理 uniform 位置
+// 包括 PassNTexture、{alias}Texture（来自前序通道）以及 PrevNTexture（帧历史）
+// ============================================================
+void ShaderChain::_lookupPassTextures(ShaderPass& p, int passIdx)
+{
+    // 纹理单元从 (1 + LUT 数量) 开始，依次递增
+    int unitOffset = 0;
+
+    // --- PassNTexture：N 从 0 到 passIdx-2（0 索引的用户通道）---
+    // 在 m_passes 中，用户通道 N 存储于索引 N+1（索引 0 为内置通道）
+    for (int n = 0; n < passIdx - 1; ++n) {
+        std::string name = "Pass" + std::to_string(n) + "Texture";
+        GLint loc = glGetUniformLocation(p.program, name.c_str());
+        if (loc >= 0)
+            p.passTexBindings.push_back({ n + 1, loc, unitOffset++ });
+    }
+
+    // --- {alias}Texture：遍历所有前序通道的别名 ---
+    for (int n = 1; n < passIdx; ++n) {
+        if (m_passes[n].alias.empty()) continue;
+        std::string name = m_passes[n].alias + "Texture";
+        GLint loc = glGetUniformLocation(p.program, name.c_str());
+        if (loc < 0) continue;
+
+        // 若该源通道已通过 PassNTexture 绑定，复用其纹理单元偏移；否则新分配
+        int reusedOffset = -1;
+        for (const auto& b : p.passTexBindings) {
+            if (b.srcPassIdx == n && b.texUnitOffset >= 0) {
+                reusedOffset = b.texUnitOffset;
+                break;
+            }
+        }
+        if (reusedOffset >= 0)
+            p.passTexBindings.push_back({ n, loc, reusedOffset });
+        else
+            p.passTexBindings.push_back({ n, loc, unitOffset++ });
+    }
+
+    // --- PrevNTexture：帧历史纹理（本实现无帧历史，回退到原始源纹理单元 0）---
+    static const char* kPrevNames[] = {
+        "PrevTexture",  "Prev1Texture", "Prev2Texture",
+        "Prev3Texture", "Prev4Texture", "Prev5Texture", "Prev6Texture"
+    };
+    for (const char* name : kPrevNames) {
+        GLint loc = glGetUniformLocation(p.program, name);
+        if (loc >= 0)
+            // srcPassIdx = -1 表示使用当前帧原始源纹理（纹理单元 0）
+            p.passTexBindings.push_back({ -1, loc, -1 });
+    }
+}
+
+// ============================================================
 // ShaderChain：构建第 0 通道及四边形几何体
 // ============================================================
 bool ShaderChain::init(const std::string& vertSrc, const std::string& fragSrc)
@@ -226,6 +278,7 @@ bool ShaderChain::addPass(const std::string& vert, const std::string& frag,
 
     _lookupUniforms(p);
     _lookupLutUniforms(p);
+    _lookupPassTextures(p, (int)m_passes.size());
     _bindPassAttrib(p);
 
     // 强制下次 run() 时重建 FBO
@@ -445,7 +498,29 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
             glBindTexture(GL_TEXTURE_2D, m_luts[li].tex);
             glUniform1i(p.lutLocs[li], (GLint)(1 + li));
         }
-        // 恢复活动纹理单元到 0（绑定过 LUT 后）
+
+        // 绑定前序通道输出纹理（PassNTexture / aliasTexture / PrevNTexture）
+        int lutCount = (int)m_luts.size();
+        for (const auto& binding : p.passTexBindings) {
+            if (binding.texUnitOffset < 0) {
+                // Prev 系列：无帧历史，回退到当前输入纹理（单元 0）
+                glUniform1i(binding.loc, 0);
+                continue;
+            }
+            int unit = 1 + lutCount + binding.texUnitOffset;
+            GLuint passTex = 0;
+            if (binding.srcPassIdx >= 0
+                && binding.srcPassIdx < (int)m_passes.size()
+                && m_passes[binding.srcPassIdx].outputTex) {
+                passTex = m_passes[binding.srcPassIdx].outputTex;
+            }
+            if (!passTex) passTex = srcTex;  // 回退到原始源纹理
+            glActiveTexture((GLenum)(GL_TEXTURE0 + unit));
+            glBindTexture(GL_TEXTURE_2D, passTex);
+            glUniform1i(binding.loc, unit);
+        }
+
+        // 恢复活动纹理单元到 0
         glActiveTexture(GL_TEXTURE0);
 
         glBindVertexArray(m_vao);
@@ -460,11 +535,19 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
     ++m_frameCount;
 
     // ----------------------------------------------------------------
-    // 恢复所有已保存的 GL 状态（包括 LUT 使用的纹理单元）
+    // 恢复所有已保存的 GL 状态（包括 LUT 和前序通道纹理使用的纹理单元）
     // ----------------------------------------------------------------
-    // 恢复 LUT 绑定的纹理单元
-    for (size_t li = 0; li < m_luts.size(); ++li) {
-        glActiveTexture((GLenum)(GL_TEXTURE1 + li));
+    // 计算本帧各通道使用过的最大纹理单元数
+    int maxPassTexOffset = 0;
+    for (const auto& pass : m_passes) {
+        for (const auto& b : pass.passTexBindings) {
+            if (b.texUnitOffset + 1 > maxPassTexOffset)
+                maxPassTexOffset = b.texUnitOffset + 1;
+        }
+    }
+    int totalExtraUnits = (int)m_luts.size() + maxPassTexOffset;
+    for (int u = 1; u <= totalExtraUnits; ++u) {
+        glActiveTexture((GLenum)(GL_TEXTURE0 + u));
         glBindTexture(GL_TEXTURE_2D, 0);
     }
     glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)prevFbo);

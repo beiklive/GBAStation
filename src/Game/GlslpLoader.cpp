@@ -16,6 +16,7 @@
 #include <borealis.hpp>   // brls::Logger
 
 #include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -161,16 +162,23 @@ static bool isRaUniformDecl(const std::string& t)
     if (t.find("MVPMatrix") != std::string::npos) return true;
 
     if (t.find("sampler2D") != std::string::npos) {
-        auto hasToken = [&](const char* tok) {
+        // 仅剥除 "Texture" 和 "Source" 作为独立标识符（不是其他名称的后缀/前缀）
+        // 例如：剥除 "uniform sampler2D Texture;"，但保留 "uniform sampler2D PrevTexture;"
+        auto hasExactToken = [&](const char* tok) {
             size_t pos = t.find(tok);
             if (pos == std::string::npos) return false;
+            // 左边界：必须是空白字符（非字母数字/下划线）
+            if (pos > 0) {
+                char prev = t[pos - 1];
+                if (std::isalnum((unsigned char)prev) || prev == '_') return false;
+            }
             size_t end = pos + std::strlen(tok);
             if (end >= t.size()) return true;
+            // 右边界：必须是非标识符字符
             char next = t[end];
-            return next == ';' || next == ' ' || next == '\t'
-                || next == '[' || next == ')';
+            return !std::isalnum((unsigned char)next) && next != '_';
         };
-        if (hasToken("Texture") || hasToken("Source")) return true;
+        if (hasExactToken("Texture") || hasExactToken("Source")) return true;
     }
     return false;
 }
@@ -214,7 +222,7 @@ static std::string preprocessVertSource(const std::string& rawSrc)
     static const char* kVertWrapperMacros[] = {
         "COMPAT_ATTRIBUTE", "COMPAT_VARYING", "COMPAT_TEXTURE",
         "COMPAT_TEXTURE_2D", "COMPAT_PRECISION", "VertexCoord",
-        "TexCoord", "MVPMatrix"
+        "TexCoord", "MVPMatrix", "COLOR"
     };
     static const size_t kVertWrapperMacroCount =
         sizeof(kVertWrapperMacros) / sizeof(kVertWrapperMacros[0]);
@@ -343,11 +351,14 @@ std::string GlslpLoader::wrapVertSource(const std::string& body)
         "layout(location = 0) in vec2 offset;\n"
         "uniform vec2 dims;\n"
         "uniform vec2 insize;\n"
-        "vec2 _bkVertexCoord() { return vec2(offset.x * 2.0 - 1.0, offset.y * 2.0 - 1.0); }\n"
-        "vec2 _bkTexCoord()    { return offset * insize; }\n"
+        // VertexCoord / TexCoord must be vec4 so shaders can swizzle .z/.w
+        "vec4 _bkVertexCoord() { return vec4(offset.x * 2.0 - 1.0, offset.y * 2.0 - 1.0, 0.0, 1.0); }\n"
+        "vec4 _bkTexCoord()    { return vec4(offset * insize, 0.0, 0.0); }\n"
         "#define VertexCoord _bkVertexCoord()\n"
         "#define TexCoord    _bkTexCoord()\n"
-        "#define MVPMatrix   mat4(1.0)\n";
+        "#define MVPMatrix   mat4(1.0)\n"
+        // COLOR is a per-vertex attribute in RetroArch (typically white); provide constant fallback
+        "#define COLOR       vec4(1.0, 1.0, 1.0, 1.0)\n";
 #else
     // 旧版 GLSL：attribute/varying 语法
     static const char* kCompat =
@@ -366,11 +377,14 @@ std::string GlslpLoader::wrapVertSource(const std::string& body)
         "attribute vec2 offset;\n"
         "uniform vec2 dims;\n"
         "uniform vec2 insize;\n"
-        "vec2 _bkVertexCoord() { return vec2(offset.x * 2.0 - 1.0, offset.y * 2.0 - 1.0); }\n"
-        "vec2 _bkTexCoord()    { return offset * insize; }\n"
+        // VertexCoord / TexCoord must be vec4 so shaders can swizzle .z/.w
+        "vec4 _bkVertexCoord() { return vec4(offset.x * 2.0 - 1.0, offset.y * 2.0 - 1.0, 0.0, 1.0); }\n"
+        "vec4 _bkTexCoord()    { return vec4(offset * insize, 0.0, 0.0); }\n"
         "#define VertexCoord _bkVertexCoord()\n"
         "#define TexCoord    _bkTexCoord()\n"
-        "#define MVPMatrix   mat4(1.0)\n";
+        "#define MVPMatrix   mat4(1.0)\n"
+        // COLOR is a per-vertex attribute in RetroArch (typically white); provide constant fallback
+        "#define COLOR       vec4(1.0, 1.0, 1.0, 1.0)\n";
 #endif
 
     return std::string(kHeader) + kCompat + preprocessVertSource(body);
@@ -496,13 +510,14 @@ bool GlslpLoader::parseGlslFile(const std::string& path,
     //   #ifdef VERTEX ... #ifdef FRAGMENT ... 或 #else
     {
         std::string vertBody, fragBody;
-        std::ostringstream vss, fss;
+        std::ostringstream vss, fss, preStageSS;
         std::string line;
 
-        bool inStage   = false;   // 是否在某个已识别的 VERTEX/FRAGMENT 块中
-        bool inVert    = false;
-        bool inFrag    = false;
-        int  nestedDepth = 0;     // 当前阶段内部嵌套 #if 的深度
+        bool inStage    = false;   // 是否在某个已识别的 VERTEX/FRAGMENT 块中
+        bool inVert     = false;
+        bool inFrag     = false;
+        bool foundStage = false;   // 是否已找到至少一个阶段标记
+        int  nestedDepth = 0;      // 当前阶段内部嵌套 #if 的深度
 
         // 检测是否为 VERTEX 阶段标记（#if defined(VERTEX) / #ifdef VERTEX / #elif defined(VERTEX)）
         auto isVertMarker = [](const std::string& t) {
@@ -525,13 +540,17 @@ bool GlslpLoader::parseGlslFile(const std::string& path,
                 // 尚未进入任何阶段：寻找起始标记
                 if (isVertMarker(t)) {
                     inStage = true; inVert = true; inFrag = false; nestedDepth = 0;
+                    foundStage = true;
                     continue;
                 }
                 if (isFragMarker(t)) {
                     inStage = true; inFrag = true; inVert = false; nestedDepth = 0;
+                    foundStage = true;
                     continue;
                 }
-                // 阶段外的行（前导注释、#pragma parameter 等）直接忽略
+                // 阶段外的行（前导注释、#pragma parameter、全局 #define 等）
+                // 收集到 preStageSS，以便稍后同时前置到 vert 和 frag body
+                preStageSS << line << "\n";
                 continue;
             }
 
@@ -576,8 +595,15 @@ bool GlslpLoader::parseGlslFile(const std::string& path,
             else if (inFrag) fss << line << "\n";
         }
 
-        vertBody = vss.str();
-        fragBody = fss.str();
+        if (foundStage) {
+            // 将阶段外的全局声明（#define target_gamma 等）前置到两个着色器 body
+            std::string preStage = preStageSS.str();
+            vertBody = preStage + vss.str();
+            fragBody = preStage + fss.str();
+        } else {
+            vertBody = vss.str();
+            fragBody = fss.str();
+        }
         if (!vertBody.empty() && !fragBody.empty()) {
             outVert = wrapVertSource(vertBody);
             outFrag = wrapFragSource(fragBody);
