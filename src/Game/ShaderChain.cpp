@@ -16,6 +16,9 @@
 #include <borealis.hpp>  // brls::Logger
 #include <cstring>
 
+// stb_image 声明（实现由 borealis/nanovg.c 提供，此处仅引入函数声明）
+#include <borealis/extern/nanovg/stb_image.h>
+
 // ============================================================
 // GLSL 着色器源码
 // 版本/精度前缀在运行时拼接，使同一段着色器体
@@ -113,7 +116,7 @@ void ShaderChain::_lookupUniforms(ShaderPass& p)
     p.colorLoc  = glGetUniformLocation(p.program, "color");
     p.offsetLoc = glGetAttribLocation (p.program, "offset");
 
-    // RetroArch 兼容 uniforms（不存在时 glGetUniformLocation 返回 -1，安全忽略）
+    // RetroArch 兼容 uniforms
     p.sourceLoc     = glGetUniformLocation(p.program, "Source");
     if (p.sourceLoc < 0)
         p.sourceLoc = glGetUniformLocation(p.program, "Texture");
@@ -122,6 +125,18 @@ void ShaderChain::_lookupUniforms(ShaderPass& p)
         p.sourceSizeLoc = glGetUniformLocation(p.program, "TextureSize");
     p.outputSizeLoc = glGetUniformLocation(p.program, "OutputSize");
     p.frameCountLoc = glGetUniformLocation(p.program, "FrameCount");
+    p.inputSizeLoc  = glGetUniformLocation(p.program, "InputSize");
+    p.finalVpSizeLoc= glGetUniformLocation(p.program, "FinalViewportSize");
+}
+
+// ============================================================
+// ShaderChain：查询 LUT uniform 位置（每次 addPass 后调用）
+// ============================================================
+void ShaderChain::_lookupLutUniforms(ShaderPass& p)
+{
+    p.lutLocs.resize(m_luts.size(), -1);
+    for (size_t i = 0; i < m_luts.size(); ++i)
+        p.lutLocs[i] = glGetUniformLocation(p.program, m_luts[i].id.c_str());
 }
 
 // ============================================================
@@ -177,6 +192,11 @@ void ShaderChain::deinit()
     }
     m_passes.clear();
 
+    for (auto& lut : m_luts) {
+        if (lut.tex) glDeleteTextures(1, &lut.tex);
+    }
+    m_luts.clear();
+
     if (m_vao) { glDeleteVertexArrays(1, &m_vao); m_vao = 0; }
     if (m_vbo) { glDeleteBuffers(1,      &m_vbo); m_vbo = 0; }
 
@@ -189,21 +209,32 @@ void ShaderChain::deinit()
 // ============================================================
 // ShaderChain：追加用户自定义通道
 // ============================================================
-bool ShaderChain::addPass(const std::string& vert, const std::string& frag)
+bool ShaderChain::addPass(const std::string& vert, const std::string& frag,
+                          GLenum filter, GLenum wrapMode,
+                          const ShaderPassScale& scale, int fcMod,
+                          const std::string& alias)
 {
     ShaderPass p;
     p.program = buildProgram(vert.c_str(), frag.c_str());
     if (!p.program) return false;
 
+    p.glFilter = filter;
+    p.wrapMode = wrapMode;
+    p.scale    = scale;
+    p.fcMod    = fcMod;
+    p.alias    = alias;
+
     _lookupUniforms(p);
+    _lookupLutUniforms(p);
     _bindPassAttrib(p);
 
-    // 强制下次 run() 时重建 FBO——最终输出纹理将发生变化
+    // 强制下次 run() 时重建 FBO
     m_lastVideoW = 0;
     m_lastVideoH = 0;
 
     m_passes.push_back(std::move(p));
-    brls::Logger::info("[ShaderChain] User pass {} added", m_passes.size() - 1);
+    brls::Logger::info("[ShaderChain] User pass {} added (alias='{}')",
+                       m_passes.size() - 1, alias);
     return true;
 }
 
@@ -219,10 +250,63 @@ void ShaderChain::clearPasses()
         if (p.program)   glDeleteProgram(p.program);
         m_passes.pop_back();
     }
-    // 强制重建 FBO，使第 0 通道的输出纹理按正确尺寸重新分配
+    // 同时清除 LUT 纹理
+    for (auto& lut : m_luts) {
+        if (lut.tex) glDeleteTextures(1, &lut.tex);
+    }
+    m_luts.clear();
+
     m_lastVideoW = 0;
     m_lastVideoH = 0;
     brls::Logger::info("[ShaderChain] User passes cleared");
+}
+
+// ============================================================
+// ShaderChain：加载 LUT 纹理
+// ============================================================
+bool ShaderChain::addLut(const std::string& id, const std::string& path,
+                          bool linear, bool mipmap, GLenum wrap)
+{
+    // stbi_load implementation is provided by borealis/nanovg.c (STB_IMAGE_IMPLEMENTATION).
+    // stb_image.h included at the top of this file is declaration-only.
+    int w = 0, h = 0, comp = 0;
+    unsigned char* data = stbi_load(path.c_str(), &w, &h, &comp, 4);
+    if (!data) {
+        brls::Logger::error("[ShaderChain] Failed to load LUT: {}", path);
+        return false;
+    }
+
+    GLuint tex = 0;
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, (GLint)wrap);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, (GLint)wrap);
+    GLenum filter = linear ? GL_LINEAR : GL_NEAREST;
+    GLenum minFilter = (mipmap && linear) ? GL_LINEAR_MIPMAP_LINEAR
+                     : (mipmap)           ? GL_NEAREST_MIPMAP_NEAREST
+                     : filter;
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, (GLint)minFilter);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, (GLint)filter);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    if (mipmap) glGenerateMipmap(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    stbi_image_free(data);
+
+    ShaderLut lut;
+    lut.id  = id;
+    lut.tex = tex;
+    m_luts.push_back(lut);
+
+    // 更新所有已有用户通道的 LUT uniform 位置
+    for (size_t pi = 1; pi < m_passes.size(); ++pi) {
+        m_passes[pi].lutLocs.resize(m_luts.size(), -1);
+        size_t idx = m_luts.size() - 1;
+        m_passes[pi].lutLocs[idx] =
+            glGetUniformLocation(m_passes[pi].program, id.c_str());
+    }
+
+    brls::Logger::info("[ShaderChain] LUT loaded: id='{}', {}×{}, path={}", id, w, h, path);
+    return true;
 }
 
 // ============================================================
@@ -249,7 +333,7 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
     }
     for (auto& p : m_passes) {
         if (!p.fbo || dimsChanged) {
-            if (!_initPassFbo(p, (int)videoW, (int)videoH))
+            if (!_initPassFbo(p, (int)videoW, (int)videoH, videoW, videoH))
                 return srcTex;
         }
     }
@@ -327,17 +411,42 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
             glUniform4f(p.sourceSizeLoc,
                         (float)videoW, (float)videoH, invW, invH);
         }
+        if (p.inputSizeLoc >= 0) {
+            // InputSize = 上一通道输出尺寸（对第一通道等于源视频尺寸）
+            float invW = (videoW > 0) ? 1.f / (float)videoW : 0.f;
+            float invH = (videoH > 0) ? 1.f / (float)videoH : 0.f;
+            glUniform4f(p.inputSizeLoc,
+                        (float)videoW, (float)videoH, invW, invH);
+        }
         if (p.outputSizeLoc >= 0) {
             float invW = (p.outW > 0) ? 1.f / (float)p.outW : 0.f;
             float invH = (p.outH > 0) ? 1.f / (float)p.outH : 0.f;
             glUniform4f(p.outputSizeLoc,
                         (float)p.outW, (float)p.outH, invW, invH);
         }
-        if (p.frameCountLoc >= 0) {
-            // 大多数 RetroArch 着色器将 FrameCount 声明为 int，
-            // 使用 glUniform1i 可同时兼容 int 和 uint 类型（正数范围内比特模式相同）
-            glUniform1i(p.frameCountLoc, (GLint)m_frameCount);
+        if (p.finalVpSizeLoc >= 0) {
+            // FinalViewportSize = 最终视频输出尺寸（用源视频尺寸近似）
+            float invW = (videoW > 0) ? 1.f / (float)videoW : 0.f;
+            float invH = (videoH > 0) ? 1.f / (float)videoH : 0.f;
+            glUniform4f(p.finalVpSizeLoc,
+                        (float)videoW, (float)videoH, invW, invH);
         }
+        if (p.frameCountLoc >= 0) {
+            uint32_t fc = (p.fcMod > 0) ? (m_frameCount % (uint32_t)p.fcMod) : m_frameCount;
+            // 使用 glUniform1i 以同时兼容 int 和 uint 声明
+            glUniform1i(p.frameCountLoc, (GLint)fc);
+        }
+
+        // 绑定 LUT 纹理（从纹理单元 1 开始）
+        for (size_t li = 0; li < m_luts.size() && li < p.lutLocs.size(); ++li) {
+            if (p.lutLocs[li] < 0 || !m_luts[li].tex) continue;
+            GLenum unit = (GLenum)(GL_TEXTURE1 + li);
+            glActiveTexture(unit);
+            glBindTexture(GL_TEXTURE_2D, m_luts[li].tex);
+            glUniform1i(p.lutLocs[li], (GLint)(1 + li));
+        }
+        // 恢复活动纹理单元到 0（绑定过 LUT 后）
+        glActiveTexture(GL_TEXTURE0);
 
         glBindVertexArray(m_vao);
         glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
@@ -351,8 +460,13 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
     ++m_frameCount;
 
     // ----------------------------------------------------------------
-    // 恢复所有已保存的 GL 状态
+    // 恢复所有已保存的 GL 状态（包括 LUT 使用的纹理单元）
     // ----------------------------------------------------------------
+    // 恢复 LUT 绑定的纹理单元
+    for (size_t li = 0; li < m_luts.size(); ++li) {
+        glActiveTexture((GLenum)(GL_TEXTURE1 + li));
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
     glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)prevFbo);
     glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
     glUseProgram((GLuint)prevProgram);
@@ -430,11 +544,11 @@ GLuint ShaderChain::buildProgram(const char* vertSrc, const char* fragSrc)
 // ============================================================
 void ShaderChain::setFilter(GLenum glFilter)
 {
+    // 更新全局默认过滤模式（作用于内置第 0 通道）
     if (m_glFilter == glFilter) return;
     m_glFilter = glFilter;
-    for (auto& p : m_passes) {
-        if (!p.outputTex) continue;
-        glBindTexture(GL_TEXTURE_2D, p.outputTex);
+    if (!m_passes.empty() && m_passes[0].outputTex) {
+        glBindTexture(GL_TEXTURE_2D, m_passes[0].outputTex);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, m_glFilter);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, m_glFilter);
         glBindTexture(GL_TEXTURE_2D, 0);
@@ -444,17 +558,50 @@ void ShaderChain::setFilter(GLenum glFilter)
 // ============================================================
 // ShaderChain：为单个通道（重新）创建 FBO 及颜色纹理
 // ============================================================
-bool ShaderChain::_initPassFbo(ShaderPass& p, int w, int h)
+bool ShaderChain::_initPassFbo(ShaderPass& p, int srcW, int srcH,
+                                unsigned viewW, unsigned viewH)
 {
     if (p.fbo)       { glDeleteFramebuffers(1, &p.fbo);       p.fbo       = 0; }
     if (p.outputTex) { glDeleteTextures(1,      &p.outputTex); p.outputTex = 0; }
 
+    // 计算 FBO 尺寸（ported from RetroArch video_shader_parse.c scale logic）
+    int w = srcW, h = srcH;
+    switch (p.scale.typeX) {
+        case ShaderPassScale::ABSOLUTE:
+            w = (p.scale.absX > 0) ? p.scale.absX : srcW;
+            break;
+        case ShaderPassScale::VIEWPORT:
+            w = (int)((float)viewW * p.scale.scaleX);
+            break;
+        case ShaderPassScale::SOURCE:
+        default:
+            w = (int)((float)srcW * p.scale.scaleX);
+            break;
+    }
+    switch (p.scale.typeY) {
+        case ShaderPassScale::ABSOLUTE:
+            h = (p.scale.absY > 0) ? p.scale.absY : srcH;
+            break;
+        case ShaderPassScale::VIEWPORT:
+            h = (int)((float)viewH * p.scale.scaleY);
+            break;
+        case ShaderPassScale::SOURCE:
+        default:
+            h = (int)((float)srcH * p.scale.scaleY);
+            break;
+    }
+    if (w <= 0) w = srcW;
+    if (h <= 0) h = srcH;
+
+    GLenum filter   = p.glFilter;
+    GLenum wrapMode = p.wrapMode;
+
     glGenTextures(1, &p.outputTex);
     glBindTexture(GL_TEXTURE_2D, p.outputTex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, m_glFilter);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, m_glFilter);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, (GLint)wrapMode);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, (GLint)wrapMode);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, (GLint)filter);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, (GLint)filter);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
     glBindTexture(GL_TEXTURE_2D, 0);
 
