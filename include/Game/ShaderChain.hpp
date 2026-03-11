@@ -45,10 +45,13 @@ struct ShaderPass {
     GLint  sourceLoc         = -1; ///< uniform sampler2D  Source / Texture
     GLint  sourceSizeLoc     = -1; ///< uniform vec4/vec2  SourceSize / TextureSize
     bool   sourceSizeIsVec2  = false; ///< true 表示 sourceSizeLoc 指向 vec2（旧式 TextureSize）
-    GLint  outputSizeLoc     = -1; ///< uniform vec4       OutputSize
+    GLint  outputSizeLoc     = -1; ///< uniform vec4/vec2  OutputSize
+    bool   outputSizeIsVec2  = false; ///< true 表示 outputSizeLoc 指向 vec2（旧式 OutputSize）
     GLint  frameCountLoc     = -1; ///< uniform int        FrameCount
-    GLint  inputSizeLoc      = -1; ///< uniform vec4       InputSize
+    GLint  inputSizeLoc      = -1; ///< uniform vec4/vec2  InputSize
+    bool   inputSizeIsVec2   = false; ///< true 表示 inputSizeLoc 指向 vec2（旧式 InputSize）
     GLint  finalVpSizeLoc    = -1; ///< uniform vec4       FinalViewportSize
+    GLint  origTexLoc        = -1; ///< uniform sampler2D  OrigTexture（原始源纹理引用）
 
     // LUT uniform 位置（与 ShaderChain::m_luts 对应）
     std::vector<GLint> lutLocs;
@@ -135,8 +138,16 @@ public:
     /// 当前最终输出的 GL 纹理 ID。
     GLuint outputTex() const;
 
-    unsigned outputW() const { return m_lastVideoW; }
-    unsigned outputH() const { return m_lastVideoH; }
+    unsigned outputW() const {
+        if (!m_passes.empty() && m_passes.back().outW > 0)
+            return static_cast<unsigned>(m_passes.back().outW);
+        return m_lastVideoW;
+    }
+    unsigned outputH() const {
+        if (!m_passes.empty() && m_passes.back().outH > 0)
+            return static_cast<unsigned>(m_passes.back().outH);
+        return m_lastVideoH;
+    }
 
     /// 设置所有 FBO 输出纹理的过滤模式。
     void setFilter(GLenum glFilter);
