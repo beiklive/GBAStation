@@ -7,6 +7,18 @@
 
 namespace beiklive {
 
+/// 着色器参数定义（对应 #pragma parameter 行）
+/// 用于运行时着色器参数面板的实时调整
+struct ShaderParamDef {
+    std::string name;        ///< 参数名称（对应 GLSL uniform 名）
+    std::string desc;        ///< 用户可读描述字符串
+    float       defaultVal;  ///< 着色器文件中声明的默认值
+    float       minVal;      ///< 最小允许值
+    float       maxVal;      ///< 最大允许值
+    float       step;        ///< UI 滑块步进值
+    float       currentVal;  ///< 当前运行时值（可通过 setParam 修改）
+};
+
 /// 每个通道的 FBO 缩放设置（ported from RetroArch video_shader_parse.h）
 struct ShaderPassScale {
     enum Type { SOURCE = 0, SCALE_ABSOLUTE, VIEWPORT };
@@ -52,6 +64,7 @@ struct ShaderPass {
     bool   inputSizeIsVec2   = false; ///< true 表示 inputSizeLoc 指向 vec2（旧式 InputSize）
     GLint  finalVpSizeLoc    = -1; ///< uniform vec4       FinalViewportSize
     GLint  origTexLoc        = -1; ///< uniform sampler2D  OrigTexture（原始源纹理引用）
+    GLint  origInputSizeLoc  = -1; ///< uniform vec2       OrigInputSize（原始视频分辨率）
 
     // LUT uniform 位置（与 ShaderChain::m_luts 对应）
     std::vector<GLint> lutLocs;
@@ -155,9 +168,25 @@ public:
     /// 编译并链接 GLSL 程序。
     GLuint buildProgram(const char* vertSrc, const char* fragSrc);
 
+    // ---- 着色器参数 API（用于运行时参数面板）----
+
+    /// 返回所有通道合并后的参数定义列表（只读）。
+    const std::vector<ShaderParamDef>& params() const { return m_params; }
+
+    /// 批量设置参数定义（由 GlslpLoader 在加载完所有通道后调用）。
+    void setParamDefs(const std::vector<ShaderParamDef>& defs) { m_params = defs; }
+
+    /// 设置单个参数的当前值，并立即更新所有包含该 uniform 的通道。
+    /// 调用此函数需要有效的 OpenGL 上下文。
+    /// @param name  参数名（对应 GLSL uniform 名）
+    /// @param val   新值
+    /// @return 如果参数定义存在或至少更新了一个通道，返回 true
+    bool setParam(const std::string& name, float val);
+
 private:
-    std::vector<ShaderPass> m_passes;
-    std::vector<ShaderLut>  m_luts;          ///< LUT 纹理列表
+    std::vector<ShaderPass>     m_passes;
+    std::vector<ShaderLut>      m_luts;    ///< LUT 纹理列表
+    std::vector<ShaderParamDef> m_params;  ///< 所有通道合并的参数定义（含当前值）
 
     GLuint   m_vao        = 0;
     GLuint   m_vbo        = 0;

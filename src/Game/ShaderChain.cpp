@@ -174,6 +174,11 @@ void ShaderChain::_lookupUniforms(ShaderPass& p)
 
     // OrigTexture：RetroArch 着色器用此引用原始（链入前）源纹理
     p.origTexLoc     = glGetUniformLocation(p.program, "OrigTexture");
+
+    // OrigInputSize：原始视频分辨率（链入前的帧尺寸），始终等于 videoW × videoH
+    // 部分着色器（如 phosphor-line）用 1/OrigInputSize 计算缩放因子；
+    // 若未设置则默认为 (0,0)，导致 1/0 = INF，进而产生全白画面
+    p.origInputSizeLoc = glGetUniformLocation(p.program, "OrigInputSize");
 }
 
 // ============================================================
@@ -610,6 +615,11 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
             glUniform1i(p.origTexLoc, origUnit);
         }
 
+        // OrigInputSize：原始视频分辨率，始终等于链入前的帧尺寸（videoW × videoH）
+        // 着色器用 1/OrigInputSize 计算缩放因子；若未设置则默认 (0,0) → 1/0 = INF → 全白
+        if (p.origInputSizeLoc >= 0)
+            glUniform2f(p.origInputSizeLoc, (float)videoW, (float)videoH);
+
         // 恢复活动纹理单元到 0
         glActiveTexture(GL_TEXTURE0);
 
@@ -819,6 +829,37 @@ void ShaderChain::_bindPassAttrib(ShaderPass& p)
     glEnableVertexAttribArray((GLuint)p.offsetLoc);
     glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+// ============================================================
+// ShaderChain：设置单个参数的运行时值
+// ============================================================
+bool ShaderChain::setParam(const std::string& name, float val)
+{
+    // 更新参数定义中的当前值
+    bool found = false;
+    for (auto& d : m_params) {
+        if (d.name == name) {
+            d.currentVal = val;
+            found = true;
+            break;
+        }
+    }
+
+    // 保存当前 GL 程序，遍历所有通道并更新 uniform
+    GLint prevProg = 0;
+    glGetIntegerv(GL_CURRENT_PROGRAM, &prevProg);
+    int applied = 0;
+    for (const auto& pass : m_passes) {
+        if (!pass.program) continue;
+        GLint loc = glGetUniformLocation(pass.program, name.c_str());
+        if (loc < 0) continue;
+        glUseProgram(pass.program);
+        glUniform1f(loc, val);
+        ++applied;
+    }
+    glUseProgram((GLuint)prevProg);
+    return found || (applied > 0);
 }
 
 } // namespace beiklive
