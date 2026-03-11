@@ -267,7 +267,7 @@ static std::string buildRetroArchSrc(const std::string& source, bool isVertex)
 
     if (versionPtr) {
         char* endPtr = nullptr;
-        vno = (unsigned)std::strtoul(versionPtr + 8, &endPtr, 10);
+        vno = static_cast<unsigned>(std::strtoul(versionPtr + 8, &endPtr, 10));
         // 跳到 #version 行尾的换行符之后
         afterVer = endPtr ? endPtr : versionPtr + 8;
         while (*afterVer && *afterVer != '\n') ++afterVer;
