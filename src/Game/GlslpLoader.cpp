@@ -20,7 +20,11 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <vector>
+
+// stb_image for LUT texture loading (implementation provided by borealis/nanovg.c)
+#include <borealis/extern/nanovg/stb_image.h>
 
 namespace beiklive {
 
@@ -45,6 +49,64 @@ static std::string trimStr(const std::string& s)
     if (b == std::string::npos) return {};
     size_t e = s.find_last_not_of(" \t\r\n");
     return s.substr(b, e - b + 1);
+}
+
+/// 字符串全局替换
+static std::string replaceAll(std::string s,
+                               const std::string& from,
+                               const std::string& to)
+{
+    size_t pos = 0;
+    while ((pos = s.find(from, pos)) != std::string::npos) {
+        s.replace(pos, from.size(), to);
+        pos += to.size();
+    }
+    return s;
+}
+
+/// 从 RetroArch GLSL 源码中剥除 #pragma parameter 行。
+/// 这些行含有 " 字符（合法 C 预处理器，但非法 GLSL），
+/// 必须在编译前移除（参考 RetroArch shader_glsl.c::gl_glsl_strip_parameter_pragmas）。
+static std::string stripPragmaParameters(const std::string& src)
+{
+    const std::string kPragma = "#pragma parameter";
+    if (src.find(kPragma) == std::string::npos) return src;
+
+    std::string result;
+    result.reserve(src.size());
+    std::istringstream iss(src);
+    std::string line;
+    while (std::getline(iss, line)) {
+        std::string t = trimStr(line);
+        if (t.rfind(kPragma, 0) == 0) {
+            // 保留换行以维持行号不变（用空格替换整行内容）
+            result += '\n';
+        } else {
+            result += line;
+            result += '\n';
+        }
+    }
+    return result;
+}
+
+/// 剥除 #pragma stage 标记行（已被分割逻辑消费，不应进入着色器源码）
+static std::string stripStagePragmas(const std::string& src)
+{
+    if (src.find("#pragma stage") == std::string::npos) return src;
+    std::string result;
+    result.reserve(src.size());
+    std::istringstream iss(src);
+    std::string line;
+    while (std::getline(iss, line)) {
+        std::string t = trimStr(line);
+        if (t.rfind("#pragma stage", 0) == 0)
+            result += '\n';
+        else {
+            result += line;
+            result += '\n';
+        }
+    }
+    return result;
 }
 
 // ============================================================
@@ -74,23 +136,15 @@ std::string GlslpLoader::resolvePath(const std::string& baseDir,
 // GLSL 兼容性包装
 // ============================================================
 
-/// 对 GLSL 源码进行行级预处理：
-///  - 删除 #version 声明（由兼容头统一提供）
-///  - 删除已知 RetroArch 属性/变量声明（由兼容头替代）
-///  - 对现代语法进行必要转换
 /// 判断某行是否为 RetroArch 属性/uniform 声明（需要剥除）
 static bool isRaAttributeDecl(const std::string& t)
 {
-    // 匹配: [attribute|in|COMPAT_ATTRIBUTE] [qualifiers] vecN Name;
-    // 目标: VertexCoord, TexCoord, COLOR
     auto startsWithKw = [&](const char* kw) {
         size_t n = std::strlen(kw);
         if (t.size() < n) return false;
         if (t.substr(0, n) != kw) return false;
-        // 紧跟空白或换行
         return t.size() == n || t[n] == ' ' || t[n] == '\t';
     };
-    // 也处理 COMPAT_ATTRIBUTE（RetroArch 着色器用宏定义的属性关键字）
     bool isAttrib = startsWithKw("attribute") || startsWithKw("in")
                  || startsWithKw("COMPAT_ATTRIBUTE");
     if (!isAttrib) return false;
@@ -104,12 +158,9 @@ static bool isRaUniformDecl(const std::string& t)
 {
     if (t.find("uniform") == std::string::npos) return false;
 
-    // MVPMatrix
     if (t.find("MVPMatrix") != std::string::npos) return true;
 
-    // sampler2D Texture; / sampler2D Source;
     if (t.find("sampler2D") != std::string::npos) {
-        // 使用词边界检查：Texture 或 Source 后跟 ; 或空白或数组 [
         auto hasToken = [&](const char* tok) {
             size_t pos = t.find(tok);
             if (pos == std::string::npos) return false;
@@ -124,19 +175,10 @@ static bool isRaUniformDecl(const std::string& t)
     return false;
 }
 
-static std::string preprocessVertSource(const std::string& src)
+static std::string preprocessVertSource(const std::string& rawSrc)
 {
-    // 字符串全局替换辅助函数（在 GL3 与 GL2 路径中共用）
-    auto replaceAll = [](std::string s,
-                         const std::string& from,
-                         const std::string& to) {
-        size_t pos = 0;
-        while ((pos = s.find(from, pos)) != std::string::npos) {
-            s.replace(pos, from.size(), to);
-            pos += to.size();
-        }
-        return s;
-    };
+    // 先剥除 #pragma parameter 和 #pragma stage 行
+    std::string src = stripPragmaParameters(stripStagePragmas(rawSrc));
 
     std::istringstream iss(src);
     std::ostringstream oss;
@@ -144,26 +186,25 @@ static std::string preprocessVertSource(const std::string& src)
     while (std::getline(iss, line)) {
         std::string t = trimStr(line);
 
-        // 删除版本声明
         if (t.rfind("#version", 0) == 0) continue;
-
-        // 删除 VertexCoord / TexCoord / COLOR 的 attribute/in/COMPAT_ATTRIBUTE 声明
         if (isRaAttributeDecl(t)) continue;
-
-        // 删除 MVPMatrix / Texture / Source uniform 声明
         if (isRaUniformDecl(t)) continue;
 
 #if defined(NANOVG_GLES3) || defined(NANOVG_GL3)
-        // 在 #version 330 / 300 es 下：
-        // attribute → in，varying → out，texture2D → texture
         line = replaceAll(line, "attribute ", "in ");
         line = replaceAll(line, "varying ",   "out ");
         line = replaceAll(line, "texture2D(", "texture(");
         line = replaceAll(line, "texture2DLod(", "textureLod(");
+        line = replaceAll(line, "COMPAT_ATTRIBUTE ", "in ");
+        line = replaceAll(line, "COMPAT_VARYING ",   "out ");
+        line = replaceAll(line, "COMPAT_TEXTURE_2D(", "texture(");
+        line = replaceAll(line, "COMPAT_TEXTURE(",    "texture(");
+#else
+        line = replaceAll(line, "COMPAT_ATTRIBUTE ",   "attribute ");
+        line = replaceAll(line, "COMPAT_VARYING ",     "varying ");
+        line = replaceAll(line, "COMPAT_TEXTURE_2D(", "texture2D(");
+        line = replaceAll(line, "COMPAT_TEXTURE(",    "texture2D(");
 #endif
-        // RetroArch 着色器常用 'MVPMatrix * VertexCoord'，
-        // 其中 VertexCoord 被视为 vec4。但我们的兼容块将其定义为 vec2，
-        // 需要将其提升为 vec4 以避免 mat4*vec2 的类型错误。
         line = replaceAll(line, "MVPMatrix * VertexCoord",
                           "MVPMatrix * vec4(VertexCoord, 0.0, 1.0)");
 
@@ -172,8 +213,10 @@ static std::string preprocessVertSource(const std::string& src)
     return oss.str();
 }
 
-static std::string preprocessFragSource(const std::string& src)
+static std::string preprocessFragSource(const std::string& rawSrc)
 {
+    std::string src = stripPragmaParameters(stripStagePragmas(rawSrc));
+
     std::istringstream iss(src);
     std::ostringstream oss;
     std::string line;
@@ -181,34 +224,26 @@ static std::string preprocessFragSource(const std::string& src)
         std::string t = trimStr(line);
 
         if (t.rfind("#version", 0) == 0) continue;
-
-        // 删除 Texture / Source 的 sampler uniform 声明
         if (isRaUniformDecl(t)) continue;
 
-        // 删除 RetroArch 片段着色器输出声明 'out ... vec4 FragColor;'
-        // 兼容块已经提供了 'out vec4 fragColor;' 以及 '#define FragColor fragColor'
+        // 剥除 RetroArch 片段输出声明（兼容块已提供 out vec4 fragColor）
         if (t.rfind("out ", 0) == 0 && t.find("FragColor") != std::string::npos
             && t.find("#define") == std::string::npos) {
             continue;
         }
 
 #if defined(NANOVG_GLES3) || defined(NANOVG_GL3)
-        {
-            auto replaceAll = [](std::string s,
-                                 const std::string& from,
-                                 const std::string& to) {
-                size_t pos = 0;
-                while ((pos = s.find(from, pos)) != std::string::npos) {
-                    s.replace(pos, from.size(), to);
-                    pos += to.size();
-                }
-                return s;
-            };
-            line = replaceAll(line, "varying ",      "in ");
-            line = replaceAll(line, "gl_FragColor",  "fragColor");
-            line = replaceAll(line, "texture2D(",    "texture(");
-            line = replaceAll(line, "texture2DLod(", "textureLod(");
-        }
+        line = replaceAll(line, "varying ",      "in ");
+        line = replaceAll(line, "gl_FragColor",  "fragColor");
+        line = replaceAll(line, "texture2D(",    "texture(");
+        line = replaceAll(line, "texture2DLod(", "textureLod(");
+        line = replaceAll(line, "COMPAT_VARYING ",    "in ");
+        line = replaceAll(line, "COMPAT_TEXTURE_2D(", "texture(");
+        line = replaceAll(line, "COMPAT_TEXTURE(",    "texture(");
+#else
+        line = replaceAll(line, "COMPAT_VARYING ",     "varying ");
+        line = replaceAll(line, "COMPAT_TEXTURE_2D(", "texture2D(");
+        line = replaceAll(line, "COMPAT_TEXTURE(",    "texture2D(");
 #endif
         oss << line << "\n";
     }
@@ -237,22 +272,39 @@ std::string GlslpLoader::wrapVertSource(const std::string& body)
 #endif
 
 #if defined(NANOVG_GLES3) || defined(NANOVG_GL3)
-    // 现代 GLSL：用 in/out 和 layout qualifier
+    // 现代 GLSL：in/out + 完整 RetroArch COMPAT_* 宏
     static const char* kCompat =
-        "// == BeikLive RetroArch 兼容块 ==\n"
+        "// == BeikLive RetroArch 兼容块（GL3/GLES3）==\n"
+        "#define PARAMETER_UNIFORM\n"
+        "#define VERTEX\n"
+        "#define COMPAT_ATTRIBUTE in\n"
+        "#define COMPAT_VARYING out\n"
+        "#define COMPAT_PRECISION\n"
+        "#define COMPAT_TEXTURE texture\n"
+        "#define COMPAT_TEXTURE_2D texture\n"
         "layout(location = 0) in vec2 offset;\n"
         "uniform vec2 dims;\n"
         "uniform vec2 insize;\n"
-        "// RetroArch 标准属性的别名函数\n"
         "vec2 _bkVertexCoord() { return vec2(offset.x * 2.0 - 1.0, offset.y * 2.0 - 1.0); }\n"
         "vec2 _bkTexCoord()    { return offset * insize; }\n"
         "#define VertexCoord _bkVertexCoord()\n"
         "#define TexCoord    _bkTexCoord()\n"
         "#define MVPMatrix   mat4(1.0)\n";
 #else
-    // 旧版 GLSL：attribute / varying 语法
+    // 旧版 GLSL：attribute/varying 语法
     static const char* kCompat =
-        "// == BeikLive RetroArch 兼容块 ==\n"
+        "// == BeikLive RetroArch 兼容块（GL2/GLES2）==\n"
+        "#define PARAMETER_UNIFORM\n"
+        "#define VERTEX\n"
+        "#define COMPAT_ATTRIBUTE attribute\n"
+        "#define COMPAT_VARYING varying\n"
+#  if defined(NANOVG_GLES2)
+        "#define COMPAT_PRECISION mediump\n"
+#  else
+        "#define COMPAT_PRECISION\n"
+#  endif
+        "#define COMPAT_TEXTURE texture2D\n"
+        "#define COMPAT_TEXTURE_2D texture2D\n"
         "attribute vec2 offset;\n"
         "uniform vec2 dims;\n"
         "uniform vec2 insize;\n"
@@ -289,22 +341,34 @@ std::string GlslpLoader::wrapFragSource(const std::string& body)
 
 #if defined(NANOVG_GLES3) || defined(NANOVG_GL3)
     static const char* kCompat =
-        "// == BeikLive RetroArch 兼容块 ==\n"
+        "// == BeikLive RetroArch 兼容块（GL3/GLES3）==\n"
+        "#define PARAMETER_UNIFORM\n"
+        "#define FRAGMENT\n"
+        "#define COMPAT_VARYING in\n"
+        "#define COMPAT_PRECISION\n"
+        "#define COMPAT_TEXTURE texture\n"
+        "#define COMPAT_TEXTURE_2D texture\n"
         "uniform sampler2D tex;\n"
         "out vec4 fragColor;\n"
         "#define Texture tex\n"
         "#define Source  tex\n"
-        // RetroArch 着色器在 GL3 路径中将输出定义为 FragColor（大写 F），
-        // 映射到我们的 fragColor 输出变量，避免重复声明冲突。
-        "#define FragColor fragColor\n"
-        "// gl_FragColor → fragColor（已在 preprocessFragSource 中替换）\n";
+        "#define FragColor fragColor\n";
 #else
     static const char* kCompat =
-        "// == BeikLive RetroArch 兼容块 ==\n"
+        "// == BeikLive RetroArch 兼容块（GL2/GLES2）==\n"
+        "#define PARAMETER_UNIFORM\n"
+        "#define FRAGMENT\n"
+        "#define COMPAT_VARYING varying\n"
+#  if defined(NANOVG_GLES2)
+        "#define COMPAT_PRECISION mediump\n"
+#  else
+        "#define COMPAT_PRECISION\n"
+#  endif
+        "#define COMPAT_TEXTURE texture2D\n"
+        "#define COMPAT_TEXTURE_2D texture2D\n"
         "uniform sampler2D tex;\n"
         "#define Texture tex\n"
         "#define Source  tex\n"
-        // GL2/GLES2 模式：FragColor 保持使用 gl_FragColor 内置变量
         "#define FragColor gl_FragColor\n";
 #endif
 
@@ -521,51 +585,120 @@ bool GlslpLoader::loadGlslpIntoChain(ShaderChain& chain, const std::string& path
         baseDir = ".";
     }
 
-    // 解析 key=value 行
-    std::unordered_map<std::string, std::string> kv;
-    std::istringstream iss(src);
-    std::string line;
-    while (std::getline(iss, line)) {
-        std::string t = trimStr(line);
-        if (t.empty() || t[0] == '#' || t[0] == ';') continue;
-        size_t eq = t.find('=');
-        if (eq == std::string::npos) continue;
-        std::string k = trimStr(t.substr(0, eq));
-        std::string v = trimStr(t.substr(eq + 1));
-        // 去掉引号
-        if (v.size() >= 2 && v.front() == '"' && v.back() == '"')
-            v = v.substr(1, v.size() - 2);
-        kv[k] = v;
+    // ---- 检查 #reference 指令（RetroArch 简单预设格式）----
+    // #reference 行直接引用另一个预设文件，本文件中的其他设置覆盖引用预设
+    {
+        std::istringstream refiss(src);
+        std::string refLine;
+        while (std::getline(refiss, refLine)) {
+            std::string t = trimStr(refLine);
+            if (t.rfind("#reference", 0) == 0) {
+                // 格式: #reference "path/to/preset.glslp"
+                size_t q1 = t.find('"');
+                size_t q2 = (q1 != std::string::npos) ? t.find('"', q1 + 1) : std::string::npos;
+                std::string refPath;
+                if (q1 != std::string::npos && q2 != std::string::npos)
+                    refPath = t.substr(q1 + 1, q2 - q1 - 1);
+                else {
+                    // 无引号格式
+                    size_t sp = t.find(' ');
+                    if (sp != std::string::npos)
+                        refPath = trimStr(t.substr(sp + 1));
+                }
+                if (!refPath.empty()) {
+                    refPath = resolvePath(baseDir, refPath);
+                    brls::Logger::info("[GlslpLoader] Following #reference → {}", refPath);
+                    return loadGlslpIntoChain(chain, refPath);
+                }
+            }
+        }
     }
 
-    // 读取着色器数量
-    int shaderCount = 0;
+    // 解析 key=value 行（忽略注释行，但保留 #reference 已单独处理）
+    std::unordered_map<std::string, std::string> kv;
     {
-        auto it = kv.find("shaders");
-        if (it == kv.end()) {
-            brls::Logger::error("[GlslpLoader] Preset missing 'shaders' key: {}", path);
-            return false;
-        }
-        try {
-            shaderCount = std::stoi(it->second);
-        } catch (const std::exception& e) {
-            brls::Logger::error("[GlslpLoader] Preset 'shaders' value '{}' is invalid: {}",
-                                it->second, e.what());
-            return false;
+        std::istringstream iss(src);
+        std::string line;
+        while (std::getline(iss, line)) {
+            std::string t = trimStr(line);
+            if (t.empty() || t[0] == '#' || t[0] == ';') continue;
+            size_t eq = t.find('=');
+            if (eq == std::string::npos) continue;
+            std::string k = trimStr(t.substr(0, eq));
+            std::string v = trimStr(t.substr(eq + 1));
+            // 去掉引号
+            if (v.size() >= 2 && v.front() == '"' && v.back() == '"')
+                v = v.substr(1, v.size() - 2);
+            kv[k] = v;
         }
     }
+
+    // ---- 辅助函数：安全读取 bool / float / int ----
+    auto kvBool = [&](const std::string& key, bool def) -> bool {
+        auto it = kv.find(key);
+        if (it == kv.end()) return def;
+        return it->second == "true" || it->second == "1";
+    };
+    auto kvFloat = [&](const std::string& key, float def) -> float {
+        auto it = kv.find(key);
+        if (it == kv.end()) return def;
+        try { return std::stof(it->second); } catch (...) { return def; }
+    };
+    auto kvInt = [&](const std::string& key, int def) -> int {
+        auto it = kv.find(key);
+        if (it == kv.end()) return def;
+        try { return std::stoi(it->second); } catch (...) { return def; }
+    };
+
+    // ---- 读取着色器数量 ----
+    int shaderCount = kvInt("shaders", -1);
     if (shaderCount <= 0) {
-        brls::Logger::error("[GlslpLoader] Preset shaders={} is not positive: {}",
-                            shaderCount, path);
+        brls::Logger::error("[GlslpLoader] Preset missing/invalid 'shaders' key: {}", path);
         return false;
     }
 
     // 清除现有用户通道，重新加载
     chain.clearPasses();
 
+    // ---- 解析并加载 LUT 纹理 ----
+    {
+        auto texIt = kv.find("textures");
+        if (texIt != kv.end() && !texIt->second.empty()) {
+            // textures=id1;id2;id3  （分号或逗号分隔）
+            std::string texList = texIt->second;
+            std::replace(texList.begin(), texList.end(), ';', ' ');
+            std::replace(texList.begin(), texList.end(), ',', ' ');
+            std::istringstream tiss(texList);
+            std::string texId;
+            while (tiss >> texId) {
+                std::string pathKey  = texId + "_path";
+                std::string linKey   = texId + "_linear";
+                std::string mipKey   = texId + "_mipmap";
+                std::string wrapKey  = texId + "_wrap_mode";
+
+                auto pathIt = kv.find(pathKey);
+                if (pathIt == kv.end() || pathIt->second.empty()) continue;
+
+                std::string lutPath = resolvePath(baseDir, pathIt->second);
+                bool linear  = kvBool(linKey,  false);
+                bool mipmap  = kvBool(mipKey,  false);
+                std::string wrapStr = (kv.count(wrapKey)) ? kv[wrapKey] : "clamp_to_edge";
+
+                GLenum wrap = GL_CLAMP_TO_EDGE;
+                if (wrapStr == "repeat")           wrap = GL_REPEAT;
+                else if (wrapStr == "mirrored_repeat") wrap = GL_MIRRORED_REPEAT;
+                else if (wrapStr == "clamp_to_border") wrap = GL_CLAMP_TO_EDGE; // GL_CLAMP_TO_BORDER not available in GLES; fallback to GL_CLAMP_TO_EDGE
+
+                chain.addLut(texId, lutPath, linear, mipmap, wrap);
+            }
+        }
+    }
+
+    // ---- 加载每个着色器通道 ----
     int loaded = 0;
     for (int i = 0; i < shaderCount; ++i) {
-        std::string shaderKey = "shader" + std::to_string(i);
+        std::string siStr   = std::to_string(i);
+        std::string shaderKey = "shader" + siStr;
         auto it = kv.find(shaderKey);
         if (it == kv.end() || it->second.empty()) {
             brls::Logger::warning("[GlslpLoader] Missing {} in preset", shaderKey);
@@ -573,18 +706,61 @@ bool GlslpLoader::loadGlslpIntoChain(ShaderChain& chain, const std::string& path
         }
         std::string shaderPath = resolvePath(baseDir, it->second);
 
-        // 读取该通道的过滤设置（可选）
-        std::string filterKey = "filter_linear" + std::to_string(i);
-        auto fit = kv.find(filterKey);
-        if (fit != kv.end()) {
-            bool linear = (fit->second == "true" || fit->second == "1");
-            chain.setFilter(linear ? GL_LINEAR : GL_NEAREST);
-        }
+        // 过滤模式
+        bool linear = kvBool("filter_linear" + siStr, false);
+        GLenum glFilter = linear ? GL_LINEAR : GL_NEAREST;
 
-        if (loadGlslIntoChain(chain, shaderPath))
-            ++loaded;
-        else
-            brls::Logger::warning("[GlslpLoader] Failed to load {}", shaderPath);
+        // Wrap 模式（用于 FBO 输出纹理）
+        std::string wrapStr = kv.count("wrap_mode" + siStr) ? kv["wrap_mode" + siStr] : "clamp_to_edge";
+        GLenum wrapMode = GL_CLAMP_TO_EDGE;
+        if (wrapStr == "repeat")               wrapMode = GL_REPEAT;
+        else if (wrapStr == "mirrored_repeat") wrapMode = GL_MIRRORED_REPEAT;
+
+        // Scale 类型和因子（ported from video_shader_parse.c::video_shader_parse_pass）
+        std::string scaleTypeStr  = kv.count("scale_type"   + siStr) ? kv["scale_type"   + siStr] : "";
+        std::string scaleTypeXStr = kv.count("scale_type_x" + siStr) ? kv["scale_type_x" + siStr] : scaleTypeStr;
+        std::string scaleTypeYStr = kv.count("scale_type_y" + siStr) ? kv["scale_type_y" + siStr] : scaleTypeStr;
+
+        float scaleXf = kvFloat("scale_x" + siStr, kvFloat("scale" + siStr, 1.0f));
+        float scaleYf = kvFloat("scale_y" + siStr, kvFloat("scale" + siStr, 1.0f));
+        int   absX    = kvInt("scale_x"   + siStr, kvInt("scale" + siStr, 0));
+        int   absY    = kvInt("scale_y"   + siStr, kvInt("scale" + siStr, 0));
+
+        ShaderPassScale scale;
+        scale.typeX = ShaderPassScale::SOURCE;
+        scale.typeY = ShaderPassScale::SOURCE;
+        scale.scaleX = scaleXf;
+        scale.scaleY = scaleYf;
+        scale.absX   = absX;
+        scale.absY   = absY;
+
+        auto parseScaleType = [](const std::string& s) {
+            if (s == "absolute") return ShaderPassScale::ABSOLUTE;
+            if (s == "viewport") return ShaderPassScale::VIEWPORT;
+            return ShaderPassScale::SOURCE;
+        };
+        if (!scaleTypeXStr.empty()) scale.typeX = parseScaleType(scaleTypeXStr);
+        if (!scaleTypeYStr.empty()) scale.typeY = parseScaleType(scaleTypeYStr);
+
+        // frame_count_mod
+        int fcMod = kvInt("frame_count_mod" + siStr, 0);
+
+        // Pass alias
+        std::string alias;
+        if (kv.count("alias" + siStr)) alias = kv["alias" + siStr];
+
+        // 编译并添加通道
+        std::string vert, frag;
+        if (!parseGlslFile(shaderPath, vert, frag)) {
+            brls::Logger::warning("[GlslpLoader] Failed to parse {}", shaderPath);
+            continue;
+        }
+        if (!chain.addPass(vert, frag, glFilter, wrapMode, scale, fcMod, alias)) {
+            brls::Logger::warning("[GlslpLoader] Failed to compile {}", shaderPath);
+            continue;
+        }
+        brls::Logger::info("[GlslpLoader] Loaded pass {}: {}", i, shaderPath);
+        ++loaded;
     }
 
     if (loaded > 0) {
