@@ -46,13 +46,6 @@ struct ShaderPass {
     int    outW      = 0;       ///< outputTex / FBO 的宽高
     int    outH      = 0;
 
-    // 内置 uniforms（可选，未找到时为 -1）
-    GLint  texLoc    = -1;      ///< uniform sampler2D  tex
-    GLint  dimsLoc   = -1;      ///< uniform vec2       dims
-    GLint  insizeLoc = -1;      ///< uniform vec2       insize
-    GLint  colorLoc  = -1;      ///< uniform vec4       color
-    GLint  offsetLoc = -1;      ///< attribute          offset (vec2)
-
     // RetroArch 兼容 uniforms（可选，未找到时为 -1）
     GLint  sourceLoc         = -1; ///< uniform sampler2D  Source / Texture
     GLint  sourceSizeLoc     = -1; ///< uniform vec4/vec2  SourceSize / TextureSize

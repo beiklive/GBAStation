@@ -9,14 +9,15 @@ namespace beiklive {
 /// RetroArch GLSL / GLSLP 着色器加载器。
 ///
 /// 支持：
-///  - 单文件 .glsl（#pragma stage vertex/fragment 或 #ifdef VERTEX/FRAGMENT 格式）
+///  - 单文件 .glsl（#pragma stage vertex/fragment 格式）
+///  - 单文件 .glsl（RetroArch 标准 #if defined(VERTEX)/#elif defined(FRAGMENT) 格式）
 ///  - 多通道预设 .glslp（RetroArch 格式：shaders=N, shader0=..., textures=..., #reference）
 ///
-/// 兼容性特性（移植自 RetroArch shader_glsl.c / video_shader_parse.c）：
-///  - 自动剥除 #pragma parameter 行（含 " 字符，非法 GLSL，但 RetroArch C 预处理器合法）
-///  - 注入 COMPAT_* 宏（COMPAT_ATTRIBUTE, COMPAT_VARYING, COMPAT_TEXTURE,
-///    COMPAT_PRECISION, PARAMETER_UNIFORM, VERTEX/FRAGMENT）
-///  - legacy 语法转换（attribute/varying/texture2D → in/out/texture）
+/// 编译策略（移植自 RetroArch shader_glsl.c / video_shader_parse.c）：
+///  - RetroArch 格式：整个文件编译两次，前置 #define VERTEX/#define FRAGMENT
+///    着色器自身的 #if __VERSION__ >= 130 + COMPAT_* 宏处理新旧 GLSL 语法
+///  - #pragma stage 格式：按阶段拆分后注入兼容声明（VertexCoord/TexCoord/Texture 等）
+///  - 自动去除 #pragma parameter 行（含引号，非法 GLSL）
 ///  - #reference 指令链式跟随
 ///  - 每通道 scale 因子、wrap 模式、LUT 纹理加载
 class GlslpLoader {
@@ -35,8 +36,6 @@ public:
 
 private:
     static std::string resolvePath(const std::string& base, const std::string& rel);
-    static std::string wrapVertSource(const std::string& body);
-    static std::string wrapFragSource(const std::string& body);
 };
 
 } // namespace beiklive
