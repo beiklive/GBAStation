@@ -58,6 +58,7 @@ struct ShaderPass {
     GLint  finalVpSizeLoc    = -1; ///< uniform vec4       FinalViewportSize
     GLint  origTexLoc        = -1; ///< uniform sampler2D  OrigTexture（原始源纹理引用）
     GLint  origInputSizeLoc  = -1; ///< uniform vec2       OrigInputSize（原始视频分辨率）
+    GLint  mvpMatrixLoc      = -1; ///< uniform mat4       MVPMatrix（RetroArch 兼容 MVP 矩阵，初始化为单位矩阵）
 
     // LUT uniform 位置（与 ShaderChain::m_luts 对应）
     std::vector<GLint> lutLocs;

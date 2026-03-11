@@ -22,6 +22,15 @@
 // OrigTexture 固定纹理单元偏移量
 static constexpr int k_origTexUnitOffset = 32;
 
+// RetroArch 兼容 MVP 单位矩阵（列主序）
+// 顶点坐标已为 NDC，MVPMatrix 设为单位矩阵使 gl_Position = VertexCoord 直通
+static constexpr GLfloat k_mvpIdentity[16] = {
+    1.f, 0.f, 0.f, 0.f,
+    0.f, 1.f, 0.f, 0.f,
+    0.f, 0.f, 1.f, 0.f,
+    0.f, 0.f, 0.f, 1.f,
+};
+
 // ============================================================
 // 顶点缓冲区布局（RetroArch 兼容）
 // 每顶点 10 个 float：VertexCoord(4) + TexCoord(2) + COLOR(4)
@@ -165,6 +174,7 @@ void ShaderChain::_lookupUniforms(ShaderPass& p)
     p.finalVpSizeLoc = glGetUniformLocation(p.program, "FinalViewportSize");
     p.origTexLoc     = glGetUniformLocation(p.program, "OrigTexture");
     p.origInputSizeLoc = glGetUniformLocation(p.program, "OrigInputSize");
+    p.mvpMatrixLoc   = glGetUniformLocation(p.program, "MVPMatrix");
 }
 
 // ============================================================
@@ -259,6 +269,8 @@ bool ShaderChain::init(const std::string& vertSrc, const std::string& fragSrc)
     // 初始化 Source/Texture 采样器到纹理单元 0
     glUseProgram(pass0.program);
     if (pass0.sourceLoc >= 0) glUniform1i(pass0.sourceLoc, 0);
+    if (pass0.mvpMatrixLoc >= 0)
+        glUniformMatrix4fv(pass0.mvpMatrixLoc, 1, GL_FALSE, k_mvpIdentity);
     glUseProgram(0);
 
     m_passes.push_back(std::move(pass0));
@@ -326,6 +338,10 @@ bool ShaderChain::addPass(const std::string& vert, const std::string& frag,
     // 初始化采样器到单元 0
     glUseProgram(p.program);
     if (p.sourceLoc >= 0) glUniform1i(p.sourceLoc, 0);
+
+    // MVPMatrix：设为单位矩阵（RetroArch 着色器将顶点坐标已为 NDC，直通即可）
+    if (p.mvpMatrixLoc >= 0)
+        glUniformMatrix4fv(p.mvpMatrixLoc, 1, GL_FALSE, k_mvpIdentity);
 
     // 初始化 #pragma parameter 参数默认值（避免除零→全白画面）
     for (const auto& kv : paramDefaults) {
