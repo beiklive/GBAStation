@@ -175,10 +175,49 @@ static bool isRaUniformDecl(const std::string& t)
     return false;
 }
 
+/// 判断某行是否为包装器已提供的宏重定义（避免 "Macro X redefined" 编译错误）。
+/// 包装器（wrapVertSource / wrapFragSource）已注入这些宏，
+/// 若着色器源码中再次 #define 相同名称则会触发编译错误。
+static bool isRaWrapperMacroRedef(const std::string& t,
+                                   const char* const macros[],
+                                   size_t count)
+{
+    // 行必须含 #define
+    size_t definePos = t.find("#define");
+    if (definePos == std::string::npos) return false;
+
+    // 跳过 "#define" 及其后的空白，定位宏名起始位置
+    size_t nameStart = definePos + 7;
+    while (nameStart < t.size() && (t[nameStart] == ' ' || t[nameStart] == '\t'))
+        ++nameStart;
+
+    for (size_t i = 0; i < count; ++i) {
+        size_t mlen = std::strlen(macros[i]);
+        if (t.size() < nameStart + mlen) continue;
+        if (t.substr(nameStart, mlen) != macros[i]) continue;
+        // 宏名之后必须是空白、'('（函数式宏）或行尾，否则可能是另一个宏名的前缀
+        size_t afterName = nameStart + mlen;
+        if (afterName >= t.size()
+                || t[afterName] == ' ' || t[afterName] == '\t'
+                || t[afterName] == '(')
+            return true;
+    }
+    return false;
+}
+
 static std::string preprocessVertSource(const std::string& rawSrc)
 {
     // 先剥除 #pragma parameter 和 #pragma stage 行
     std::string src = stripPragmaParameters(stripStagePragmas(rawSrc));
+
+    // 包装器已注入的顶点着色器宏（着色器源码中的同名 #define 会引发重定义错误）
+    static const char* kVertWrapperMacros[] = {
+        "COMPAT_ATTRIBUTE", "COMPAT_VARYING", "COMPAT_TEXTURE",
+        "COMPAT_TEXTURE_2D", "COMPAT_PRECISION", "VertexCoord",
+        "TexCoord", "MVPMatrix"
+    };
+    static const size_t kVertWrapperMacroCount =
+        sizeof(kVertWrapperMacros) / sizeof(kVertWrapperMacros[0]);
 
     std::istringstream iss(src);
     std::ostringstream oss;
@@ -189,6 +228,11 @@ static std::string preprocessVertSource(const std::string& rawSrc)
         if (t.rfind("#version", 0) == 0) continue;
         if (isRaAttributeDecl(t)) continue;
         if (isRaUniformDecl(t)) continue;
+        // 剥除包装器已提供的宏重定义（避免 "Macro X redefined" 编译错误）
+        if (isRaWrapperMacroRedef(t, kVertWrapperMacros, kVertWrapperMacroCount)) {
+            oss << "\n"; // 保留行号
+            continue;
+        }
 
 #if defined(NANOVG_GLES3) || defined(NANOVG_GL3)
         line = replaceAll(line, "attribute ", "in ");
@@ -217,6 +261,14 @@ static std::string preprocessFragSource(const std::string& rawSrc)
 {
     std::string src = stripPragmaParameters(stripStagePragmas(rawSrc));
 
+    // 包装器已注入的片段着色器宏（着色器源码中的同名 #define 会引发重定义错误）
+    static const char* kFragWrapperMacros[] = {
+        "COMPAT_VARYING", "COMPAT_TEXTURE", "COMPAT_TEXTURE_2D",
+        "COMPAT_PRECISION", "Texture", "Source", "FragColor", "texture"
+    };
+    static const size_t kFragWrapperMacroCount =
+        sizeof(kFragWrapperMacros) / sizeof(kFragWrapperMacros[0]);
+
     std::istringstream iss(src);
     std::ostringstream oss;
     std::string line;
@@ -229,6 +281,12 @@ static std::string preprocessFragSource(const std::string& rawSrc)
         // 剥除 RetroArch 片段输出声明（兼容块已提供 out vec4 fragColor）
         if (t.rfind("out ", 0) == 0 && t.find("FragColor") != std::string::npos
             && t.find("#define") == std::string::npos) {
+            continue;
+        }
+
+        // 剥除包装器已提供的宏重定义（避免 "Macro X redefined" 编译错误）
+        if (isRaWrapperMacroRedef(t, kFragWrapperMacros, kFragWrapperMacroCount)) {
+            oss << "\n"; // 保留行号
             continue;
         }
 
