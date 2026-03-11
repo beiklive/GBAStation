@@ -51,6 +51,14 @@ struct ShaderPass {
     // LUT uniform 位置（与 ShaderChain::m_luts 对应）
     std::vector<GLint> lutLocs;
 
+    /// 前序通道纹理绑定（PassNTexture / {alias}Texture / PrevNTexture）
+    struct PassTexBinding {
+        int   srcPassIdx;    ///< m_passes 中源通道的索引（-1 = 使用原始源纹理）
+        GLint loc;           ///< 该 uniform 在本通道程序中的位置
+        int   texUnitOffset; ///< 从 (1 + luts.size()) 起的纹理单元偏移量
+    };
+    std::vector<PassTexBinding> passTexBindings;
+
     // 渲染配置
     GLenum         glFilter  = GL_NEAREST;
     GLenum         wrapMode  = GL_CLAMP_TO_EDGE;
@@ -146,6 +154,8 @@ private:
     void _bindPassAttrib(ShaderPass& p);
     void _lookupUniforms(ShaderPass& p);
     void _lookupLutUniforms(ShaderPass& p);
+    /// 查询前序通道纹理 uniform 位置（PassNTexture / aliasTexture / PrevNTexture）
+    void _lookupPassTextures(ShaderPass& p, int passIdx);
 };
 
 } // namespace beiklive
