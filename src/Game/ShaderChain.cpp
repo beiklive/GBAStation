@@ -22,6 +22,36 @@
 // OrigTexture 固定纹理单元偏移量
 static constexpr int k_origTexUnitOffset = 32;
 
+// ============================================================
+// 着色器调试日志开关（独立于其他功能调试，默认关闭）
+//
+// 用途：帮助排查着色器相关问题（如全白画面、坐标错误等）。
+// 开关：通过 ShaderChain::setDebugLog(true) 或配置项
+//       render.shaderDebugLog=true 开启。
+// 节流：run() 中的逐帧日志仅在前 3 帧 + 每 300 帧输出一次，
+//       避免海量日志影响其他功能调试。
+// ============================================================
+static bool s_shaderDebugLog = false;
+
+/// 条件调试日志宏：只在 s_shaderDebugLog 为 true 时触发，
+/// 开关关闭时零开销（不求值参数）。
+#define SC_DLOG(...) do { if (s_shaderDebugLog) brls::Logger::debug(__VA_ARGS__); } while(0)
+
+/// 将 C 字符串截断为最多 maxLen 个字符，超出部分追加省略提示。
+static std::string sc_truncate(const char* s, size_t maxLen = 800)
+{
+    if (!s) return "(null)";
+    size_t n = std::strlen(s);
+    if (n <= maxLen) return std::string(s, n);
+    char buf[64];
+    std::snprintf(buf, sizeof(buf), "...[%zu more chars]", n - maxLen);
+    std::string result;
+    result.reserve(maxLen + 64);
+    result.append(s, maxLen);
+    result.append(buf);
+    return result;
+}
+
 // RetroArch 兼容 MVP 单位矩阵（列主序）
 // 顶点坐标已为 NDC，MVPMatrix 设为单位矩阵使 gl_Position = VertexCoord 直通
 static constexpr GLfloat k_mvpIdentity[16] = {
@@ -175,6 +205,17 @@ void ShaderChain::_lookupUniforms(ShaderPass& p)
     p.origTexLoc     = glGetUniformLocation(p.program, "OrigTexture");
     p.origInputSizeLoc = glGetUniformLocation(p.program, "OrigInputSize");
     p.mvpMatrixLoc   = glGetUniformLocation(p.program, "MVPMatrix");
+
+    SC_DLOG("[ShaderChain::_lookupUniforms] prog={}: "
+            "source={} sourceSize={}(vec2={}) outputSize={}(vec2={}) "
+            "inputSize={}(vec2={}) frameCount={} mvpMatrix={} "
+            "finalVpSize={} origTex={} origInputSize={}",
+            p.program,
+            p.sourceLoc, p.sourceSizeLoc, p.sourceSizeIsVec2,
+            p.outputSizeLoc, p.outputSizeIsVec2,
+            p.inputSizeLoc, p.inputSizeIsVec2,
+            p.frameCountLoc, p.mvpMatrixLoc,
+            p.finalVpSizeLoc, p.origTexLoc, p.origInputSizeLoc);
 }
 
 // ============================================================
@@ -356,6 +397,15 @@ bool ShaderChain::addPass(const std::string& vert, const std::string& frag,
     m_passes.push_back(std::move(p));
     brls::Logger::info("[ShaderChain] User pass {} added (alias='{}')",
                        m_passes.size() - 1, alias);
+    {
+        const auto& added = m_passes.back();
+        SC_DLOG("[ShaderChain::addPass] passIdx={} alias='{}' program={} "
+                "filter={:#x} wrap={:#x} fcMod={} paramDefaults={}",
+                m_passes.size() - 1, alias, added.program,
+                filter, wrapMode, fcMod, paramDefaults.size());
+        SC_DLOG("[ShaderChain::addPass]   lutLocs={} passTexBindings={}",
+                added.lutLocs.size(), added.passTexBindings.size());
+    }
     return true;
 }
 
@@ -497,6 +547,21 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
         invH = (h > 0) ? 1.f / (float)h : 0.f;
     };
 
+    // ---- 节流调试日志（前 3 帧 + 每 300 帧 + 尺寸变化时输出）----
+    const bool logThisFrame = s_shaderDebugLog &&
+        (m_frameCount < 3 || m_frameCount % 300 == 0 || dimsChanged);
+    if (logThisFrame) {
+        brls::Logger::debug("[ShaderChain::run] frame={} srcTex={} videoW={} videoH={} "
+                            "passes={} luts={} dimsChanged={}",
+                            m_frameCount, srcTex, videoW, videoH,
+                            m_passes.size(), m_luts.size(), dimsChanged);
+        brls::Logger::debug("[ShaderChain::run]   savedGL: fbo={} vp=[{},{},{},{}] "
+                            "prog={} blend={} scissor={}",
+                            prevFbo, prevViewport[0], prevViewport[1],
+                            prevViewport[2], prevViewport[3],
+                            prevProgram, (int)prevBlend, (int)prevScissor);
+    }
+
     GLuint inputTex = srcTex;
     int inputW = (int)videoW;
     int inputH = (int)videoH;
@@ -604,9 +669,30 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
         glUseProgram(0);
         glBindTexture(GL_TEXTURE_2D, 0);
 
+        if (logThisFrame) {
+            brls::Logger::debug("[ShaderChain::run]   pass[{}]: prog={} fbo={} "
+                                "inputTex={} in={}x{} -> out={}x{} outputTex={}",
+                                i, p.program, p.fbo,
+                                inputTex, inputW, inputH,
+                                p.outW, p.outH, p.outputTex);
+            brls::Logger::debug("[ShaderChain::run]   pass[{}] uniforms: "
+                                "source={} sourceSize={} outputSize={} frameCount={} "
+                                "origTex={} origInputSize={} mvp={}",
+                                i, p.sourceLoc, p.sourceSizeLoc, p.outputSizeLoc,
+                                p.frameCountLoc, p.origTexLoc, p.origInputSizeLoc,
+                                p.mvpMatrixLoc);
+        }
+
         inputTex = p.outputTex;
         inputW   = p.outW;
         inputH   = p.outH;
+    }
+
+    if (logThisFrame) {
+        brls::Logger::debug("[ShaderChain::run] -> finalTex={} ({}x{})",
+                            inputTex,
+                            m_passes.empty() ? 0 : m_passes.back().outW,
+                            m_passes.empty() ? 0 : m_passes.back().outH);
     }
 
     ++m_frameCount;
@@ -655,6 +741,14 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
 // ============================================================
 GLuint ShaderChain::buildProgram(const char* vertSrc, const char* fragSrc)
 {
+    // 调试日志：记录着色器源码（截断至 800 字符）及编译结果
+    if (s_shaderDebugLog) {
+        brls::Logger::debug("[ShaderChain::buildProgram] vertSrc (len={}):\n{}",
+                            std::strlen(vertSrc), sc_truncate(vertSrc));
+        brls::Logger::debug("[ShaderChain::buildProgram] fragSrc (len={}):\n{}",
+                            std::strlen(fragSrc), sc_truncate(fragSrc));
+    }
+
     auto compileShader = [](GLenum type, const char* src) -> GLuint {
         GLuint s = glCreateShader(type);
         glShaderSource(s, 1, &src, nullptr);
@@ -676,7 +770,9 @@ GLuint ShaderChain::buildProgram(const char* vertSrc, const char* fragSrc)
     };
 
     GLuint vs = compileShader(GL_VERTEX_SHADER,   vertSrc);
+    if (vs) SC_DLOG("[ShaderChain::buildProgram] vertex shader compiled OK (id={})", vs);
     GLuint fs = compileShader(GL_FRAGMENT_SHADER, fragSrc);
+    if (fs) SC_DLOG("[ShaderChain::buildProgram] fragment shader compiled OK (id={})", fs);
     if (!vs || !fs) {
         if (vs) glDeleteShader(vs);
         if (fs) glDeleteShader(fs);
@@ -707,6 +803,7 @@ GLuint ShaderChain::buildProgram(const char* vertSrc, const char* fragSrc)
         glDeleteProgram(prog);
         return 0;
     }
+    SC_DLOG("[ShaderChain::buildProgram] program linked OK (id={})", prog);
     return prog;
 }
 
@@ -789,6 +886,17 @@ bool ShaderChain::_initPassFbo(ShaderPass& p, int srcW, int srcH,
     p.outW = w;
     p.outH = h;
     brls::Logger::debug("[ShaderChain] FBO created: {}x{}", w, h);
+    SC_DLOG("[ShaderChain::_initPassFbo] src={}x{} view={}x{} "
+            "scaleX(type={} val={:.3f}) scaleY(type={} val={:.3f}) "
+            "-> outW={} outH={} fbo={} outputTex={} filter={:#x} wrap={:#x}",
+            srcW, srcH, viewW, viewH,
+            (int)p.scale.typeX,
+            (p.scale.typeX == ShaderPassScale::SCALE_ABSOLUTE
+                ? static_cast<float>(p.scale.absX) : p.scale.scaleX),
+            (int)p.scale.typeY,
+            (p.scale.typeY == ShaderPassScale::SCALE_ABSOLUTE
+                ? static_cast<float>(p.scale.absY) : p.scale.scaleY),
+            w, h, p.fbo, p.outputTex, filter, wrapMode);
     return true;
 }
 
@@ -827,6 +935,19 @@ bool ShaderChain::setParam(const std::string& name, float val)
     }
     glUseProgram((GLuint)prevProg);
     return found || (applied > 0);
+}
+
+// ============================================================
+// ShaderChain：调试日志开关（独立控制，默认关闭）
+// ============================================================
+void ShaderChain::setDebugLog(bool enable)
+{
+    s_shaderDebugLog = enable;
+}
+
+bool ShaderChain::debugLogEnabled()
+{
+    return s_shaderDebugLog;
 }
 
 } // namespace beiklive

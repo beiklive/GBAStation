@@ -395,6 +395,12 @@ void GameView::initialize()
         //       shader.preset=resources/shaders/example.glslp
         cfg->SetDefault("shader.preset", CV(std::string("")));
 
+        // render.shaderDebugLog: 着色器调试日志开关（默认关闭）。
+        // 设为 true/1/yes 后将在编译、链接、FBO 创建及逐帧渲染关键路径
+        // 输出详细 debug 日志，以辅助排查着色器问题（如全白画面）。
+        // 逐帧日志已节流（前 3 帧 + 每 300 帧），不影响其他功能调试。
+        cfg->SetDefault("render.shaderDebugLog", CV(0));
+
         // ---- Handle (gamepad) button mapping defaults ----------------
         // Values use readable button names (e.g. "A", "LB", "RT").
         cfg->SetDefault("handle.a",           CV(std::string("A")));
@@ -482,6 +488,15 @@ void GameView::initialize()
         m_showFps           = getBool("display.showFps",          false);
         m_showFfOverlay     = getBool("display.showFfOverlay",    true);
         m_showRewindOverlay = getBool("display.showRewindOverlay",true);
+
+        // 着色器调试日志开关（独立控制，默认关闭，避免影响其他功能调试）
+        {
+            bool shaderDbg = getBool("render.shaderDebugLog", false);
+            beiklive::ShaderChain::setDebugLog(shaderDbg);
+            if (shaderDbg)
+                bklog::info("[GameView::initialize] Shader debug logging ENABLED "
+                            "(render.shaderDebugLog=true)");
+        }
 
         // Fast-forward and rewind buttons from config (named string or int)
         {
@@ -991,6 +1006,20 @@ void GameView::uploadFrame(NVGcontext* vg,
 
     bool sizeChanged = (frame.width  != m_texWidth ||
                         frame.height != m_texHeight);
+
+    // 着色器调试日志：记录纹理上传信息（节流：前 3 次 + 每 300 次 + 尺寸变化时）
+    {
+        static uint32_t s_uploadDebugCount = 0;
+        if (beiklive::ShaderChain::debugLogEnabled() &&
+            (s_uploadDebugCount < 3 || s_uploadDebugCount % 300 == 0 || sizeChanged)) {
+            bklog::debug("[GameView::uploadFrame] count={} tex={} frame={}x{} "
+                         "sizeChanged={} pixelBytes={}",
+                         s_uploadDebugCount, m_texture,
+                         frame.width, frame.height, sizeChanged,
+                         frame.pixels.size() * sizeof(frame.pixels[0]));
+        }
+        ++s_uploadDebugCount;
+    }
     if (sizeChanged) {
         // Resize the texture (pixels are RGBA8888)
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
@@ -1271,6 +1300,21 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
         }
     }
 
+    // 着色器调试日志：记录渲染管线状态（节流：前 3 帧 + 每 300 帧）
+    {
+        static uint32_t s_drawDebugCount = 0;
+        if (beiklive::ShaderChain::debugLogEnabled() &&
+            (s_drawDebugCount < 3 || s_drawDebugCount % 300 == 0)) {
+            bklog::debug("[GameView::draw] frame={} tex={} texW={} texH={} "
+                         "useShader={} displayTex={} displayW={} displayH={} "
+                         "nvgImage={} nvgShaderImage={}",
+                         s_drawDebugCount, m_texture, m_texWidth, m_texHeight,
+                         useShaderTex, displayTex, displayW, displayH,
+                         m_nvgImage, m_nvgShaderImage);
+        }
+        ++s_drawDebugCount;
+    }
+
     // ---- Manage NVG image handles ------------------------------------
     // We keep two handles: one for the raw texture (fallback) and one for the
     // shader chain output.  Only the active one is used for rendering.
@@ -1304,6 +1348,12 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
                                                       m_activeFilter);
             m_shaderDisplayW = static_cast<unsigned>(displayW);
             m_shaderDisplayH = static_cast<unsigned>(displayH);
+            if (beiklive::ShaderChain::debugLogEnabled()) {
+                bklog::debug("[GameView::draw] NVG shader image (re)created: "
+                             "handle={} tex={} {}x{} filter={}",
+                             m_nvgShaderImage, displayTex,
+                             displayW, displayH, static_cast<int>(m_activeFilter));
+            }
         }
     }
 

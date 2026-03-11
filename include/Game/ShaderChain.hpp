@@ -162,6 +162,18 @@ public:
     /// 编译并链接 GLSL 程序。
     GLuint buildProgram(const char* vertSrc, const char* fragSrc);
 
+    // ---- 着色器调试日志开关 ----------------------------------------
+    /// 启用/禁用着色器专项调试日志（独立开关，默认关闭）。
+    /// 启用后会在编译、链接、FBO 创建及逐帧渲染的关键路径
+    /// 输出 debug 级别日志，以辅助排查着色器问题（如全白画面）。
+    /// run() 中的逐帧日志已做节流处理（前 3 帧 + 每 300 帧一次），
+    /// 不会淹没其他功能的调试输出。
+    /// 可通过配置项 render.shaderDebugLog=true 在启动时自动开启。
+    static void setDebugLog(bool enable);
+
+    /// 返回着色器调试日志当前是否已启用。
+    static bool debugLogEnabled();
+
     // ---- 着色器参数 API（用于运行时参数面板）----
 
     /// 返回所有通道合并后的参数定义列表（只读）。
