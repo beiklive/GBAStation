@@ -277,9 +277,14 @@ static std::string buildRetroArchSrc(const std::string& source, bool isVertex)
     std::string versionStr = computeVersionStr(vno);
 
     // 阶段定义块（与 RetroArch 完全一致）
+    // 参考 shader_glsl.c::gl_glsl_compile_program():
+    //   "#define VERTEX\n#define PARAMETER_UNIFORM\n
+    //    #define _HAS_ORIGINALASPECT_UNIFORMS\n#define _HAS_FRAMETIME_UNIFORMS\n"
     std::string defineStr = isVertex
         ? "#define VERTEX\n#define PARAMETER_UNIFORM\n"
-        : "#define FRAGMENT\n#define PARAMETER_UNIFORM\n";
+          "#define _HAS_ORIGINALASPECT_UNIFORMS\n#define _HAS_FRAMETIME_UNIFORMS\n"
+        : "#define FRAGMENT\n#define PARAMETER_UNIFORM\n"
+          "#define _HAS_ORIGINALASPECT_UNIFORMS\n#define _HAS_FRAMETIME_UNIFORMS\n";
 
     return versionStr + defineStr + afterVer;
 }

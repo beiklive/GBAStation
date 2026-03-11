@@ -53,6 +53,7 @@ struct ShaderPass {
     GLint  outputSizeLoc     = -1; ///< uniform vec4/vec2  OutputSize
     bool   outputSizeIsVec2  = false; ///< true 表示 outputSizeLoc 指向 vec2（旧式 OutputSize）
     GLint  frameCountLoc     = -1; ///< uniform int        FrameCount
+    GLint  frameDirectionLoc = -1; ///< uniform int        FrameDirection（+1=正向 -1=倒带）
     GLint  inputSizeLoc      = -1; ///< uniform vec4/vec2  InputSize
     bool   inputSizeIsVec2   = false; ///< true 表示 inputSizeLoc 指向 vec2（旧式 InputSize）
     GLint  finalVpSizeLoc    = -1; ///< uniform vec4       FinalViewportSize
