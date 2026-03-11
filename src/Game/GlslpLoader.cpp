@@ -22,6 +22,7 @@
 #include <sstream>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 // stb_image for LUT texture loading (implementation provided by borealis/nanovg.c)
@@ -90,20 +91,22 @@ static std::string stripPragmaParameters(const std::string& src)
     return result;
 }
 
-/// 从 GLSL 源码中解析 #pragma parameter 行，提取参数名及其默认值。
+/// 从 GLSL 源码中解析 #pragma parameter 行，提取完整的参数定义。
 ///
 /// #pragma parameter 格式（RetroArch 标准）：
 ///   #pragma parameter NAME "描述" 默认值 最小值 最大值 步进
 ///
 /// 本函数在着色器被编译前调用（剥除 #pragma 行之前），
-/// 返回值用于在链接后将 uniform 初始化为默认值，
-/// 避免 uniform 默认为 0 导致除零（1/0 = INF）进而全白画面。
-static std::unordered_map<std::string, float> extractParamDefaults(const std::string& src)
+/// 返回值用于：
+///  1. 在链接后将 uniform 初始化为默认值，避免 uniform 默认为 0 导致除零（全白画面）
+///  2. 为着色器参数面板提供完整的参数元数据（用于 UI 实时调整）
+static std::vector<beiklive::ShaderParamDef> extractParamDefs(const std::string& src)
 {
-    std::unordered_map<std::string, float> defaults;
+    std::vector<beiklive::ShaderParamDef> defs;
     const std::string kPragma = "#pragma parameter";
-    if (src.find(kPragma) == std::string::npos) return defaults;
+    if (src.find(kPragma) == std::string::npos) return defs;
 
+    std::unordered_set<std::string> seen; // O(1) 重复检测
     std::istringstream iss(src);
     std::string line;
     while (std::getline(iss, line)) {
@@ -118,26 +121,45 @@ static std::unordered_map<std::string, float> extractParamDefaults(const std::st
         // 跳过带引号的描述字符串（可能含空格）
         std::string rest;
         std::getline(ls, rest);
+        std::string desc;
         size_t q1 = rest.find('"');
         if (q1 != std::string::npos) {
             size_t q2 = rest.find('"', q1 + 1);
-            if (q2 != std::string::npos)
+            if (q2 != std::string::npos) {
+                desc = rest.substr(q1 + 1, q2 - q1 - 1);
                 rest = rest.substr(q2 + 1);
-            else
-                rest = rest.substr(q1 + 1);
+            } else {
+                desc = rest.substr(q1 + 1);
+                rest = {};
+            }
         }
 
-        // 解析第一个浮点数（默认值）
+        // 解析 默认值 最小值 最大值 步进（均为浮点数）
         std::istringstream vs(rest);
-        float defVal = 0.f;
-        if (vs >> defVal) {
-            defaults[name] = defVal;
-        } else {
+        float defVal = 0.f, minVal = 0.f, maxVal = 1.f, step = 0.01f;
+        if (!(vs >> defVal)) {
             brls::Logger::warning("[GlslpLoader] 无法解析 #pragma parameter '{}' 的默认值，"
                                   "将跳过（uniform 保持 GL 默认值 0.0）", name);
+            continue;
         }
+        vs >> minVal;
+        vs >> maxVal;
+        vs >> step;
+
+        // 跳过重复定义（同一着色器文件中的第二次声明）：O(1) 查找
+        if (!seen.insert(name).second) continue;
+
+        beiklive::ShaderParamDef d;
+        d.name       = name;
+        d.desc       = desc;
+        d.defaultVal = defVal;
+        d.minVal     = minVal;
+        d.maxVal     = maxVal;
+        d.step       = step;
+        d.currentVal = defVal;
+        defs.push_back(d);
     }
-    return defaults;
+    return defs;
 }
 
 /// 剥除 #pragma stage 标记行（已被分割逻辑消费，不应进入着色器源码）
@@ -687,9 +709,14 @@ bool GlslpLoader::parseGlslFile(const std::string& path,
 // ============================================================
 bool GlslpLoader::loadGlslIntoChain(ShaderChain& chain, const std::string& path)
 {
-    // 先读取原始源码以提取 #pragma parameter 默认值（编译前）
+    // 先读取原始源码以提取 #pragma parameter 完整定义（编译前）
     std::string rawSrc = readFile(path);
-    auto paramDefaults = extractParamDefaults(rawSrc);
+    auto paramDefs = extractParamDefs(rawSrc);
+
+    // 构建 addPass 所需的默认值映射
+    std::unordered_map<std::string, float> paramDefaults;
+    for (const auto& d : paramDefs)
+        paramDefaults[d.name] = d.currentVal;
 
     std::string vert, frag;
     if (!parseGlslFile(path, vert, frag)) return false;
@@ -700,6 +727,10 @@ bool GlslpLoader::loadGlslIntoChain(ShaderChain& chain, const std::string& path)
         brls::Logger::error("[GlslpLoader] Failed to compile pass from: {}", path);
         return false;
     }
+
+    // 将完整参数定义存入着色器链（供 UI 参数面板使用）
+    chain.setParamDefs(paramDefs);
+
     brls::Logger::info("[GlslpLoader] Loaded GLSL pass: {}", path);
     return true;
 }
@@ -859,13 +890,14 @@ bool GlslpLoader::loadGlslpIntoChain(ShaderChain& chain, const std::string& path
         }
     }
 
-    // ---- 第一轮：收集所有通道的 #pragma parameter 默认值（全局合并）----
+    // ---- 第一轮：收集所有通道的 #pragma parameter 完整定义（全局合并）----
     // RetroArch 中，所有通道共享同一参数命名空间；参数可以在任意通道文件中声明，
     // 但需要在所有引用该参数的通道中均能正确初始化，否则会因未初始化 uniform
     // 默认值为 0 而产生除零错误（如全白画面）。
-    // 合并策略：若同一参数名在多个通道文件中均有声明，以最后出现的定义为准，
-    // 这与 RetroArch 的行为一致（预设文件中的全局覆盖值具有最高优先级，
-    // 通道文件中的 #pragma parameter 仅作为后备默认值使用）。
+    // 合并策略：若同一参数名在多个通道文件中均有声明，以最先出现的定义为准
+    // （保留最完整的元数据），currentVal 会在后续由预设文件的全局覆盖值更新。
+    std::vector<ShaderParamDef> allParamDefs;
+    std::unordered_set<std::string> seenParams; // O(1) 跨通道重复检测
     std::unordered_map<std::string, float> allParamDefaults;
     for (int i = 0; i < shaderCount; ++i) {
         std::string shaderKey = "shader" + std::to_string(i);
@@ -874,13 +906,28 @@ bool GlslpLoader::loadGlslpIntoChain(ShaderChain& chain, const std::string& path
         std::string shaderPath = resolvePath(baseDir, it->second);
         std::string rawSrc = readFile(shaderPath);
         if (rawSrc.empty()) continue;
-        auto passDefaults = extractParamDefaults(rawSrc);
-        for (const auto& kv2 : passDefaults)
-            allParamDefaults[kv2.first] = kv2.second;
+        auto passDefs = extractParamDefs(rawSrc);
+        for (const auto& d : passDefs) {
+            // 全局默认值映射：同名参数以最后出现的定义为准（与旧行为兼容）
+            allParamDefaults[d.name] = d.defaultVal;
+            // 参数定义列表：以最先出现的定义为准（保留最完整的元数据，避免重复）
+            if (seenParams.insert(d.name).second)
+                allParamDefs.push_back(d);
+        }
     }
-    // 将预设文件中的全局参数覆盖值应用到全局默认值（最高优先级）
-    for (const auto& ov : globalParamOverrides)
+    // 将预设文件中的全局参数覆盖值应用到全局默认值和参数定义的当前值（最高优先级）
+    for (const auto& ov : globalParamOverrides) {
         allParamDefaults[ov.first] = ov.second;
+        for (auto& def : allParamDefs) {
+            if (def.name == ov.first) {
+                def.currentVal = ov.second;
+                break;
+            }
+        }
+    }
+    // 同步 allParamDefaults 使用 currentVal（包含预设覆盖值）
+    for (const auto& def : allParamDefs)
+        allParamDefaults[def.name] = def.currentVal;
 
     // ---- 第二轮：加载每个着色器通道 ----
     int loaded = 0;
@@ -956,6 +1003,8 @@ bool GlslpLoader::loadGlslpIntoChain(ShaderChain& chain, const std::string& path
     if (loaded > 0) {
         brls::Logger::info("[GlslpLoader] Loaded {}/{} passes from: {}",
                            loaded, shaderCount, path);
+        // 将完整参数定义存入着色器链（供 UI 参数面板实时调整使用）
+        chain.setParamDefs(allParamDefs);
         return true;
     }
     return false;
