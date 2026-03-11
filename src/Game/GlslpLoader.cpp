@@ -257,9 +257,6 @@ static std::string preprocessVertSource(const std::string& rawSrc)
         line = replaceAll(line, "COMPAT_TEXTURE_2D(", "texture2D(");
         line = replaceAll(line, "COMPAT_TEXTURE(",    "texture2D(");
 #endif
-        line = replaceAll(line, "MVPMatrix * VertexCoord",
-                          "MVPMatrix * vec4(VertexCoord, 0.0, 1.0)");
-
         oss << line << "\n";
     }
     return oss.str();
@@ -625,8 +622,8 @@ bool GlslpLoader::parseGlslFile(const std::string& path,
             "varying vec2 vTexCoord;\n"
 #endif
             "void main() {\n"
-            "    gl_Position = MVPMatrix * vec4(VertexCoord, 0.0, 1.0);\n"
-            "    vTexCoord = TexCoord;\n"
+            "    gl_Position = MVPMatrix * VertexCoord;\n"
+            "    vTexCoord = TexCoord.xy;\n"
             "}\n";
 
         outVert = wrapVertSource(kDefaultVertBody);

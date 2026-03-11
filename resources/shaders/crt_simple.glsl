@@ -11,8 +11,8 @@
 #pragma stage vertex
 varying vec2 vTexCoord;
 void main() {
-    gl_Position = MVPMatrix * vec4(VertexCoord, 0.0, 1.0);
-    vTexCoord   = TexCoord;
+    gl_Position = MVPMatrix * VertexCoord;
+    vTexCoord   = TexCoord.xy;
 }
 
 #pragma stage fragment
