@@ -13,6 +13,7 @@
 #include "common.hpp"
 #include "Game/LibretroLoader.hpp"
 #include "Game/DisplayConfig.hpp"
+#include "Game/ShaderChain.hpp"
 
 class GameView : public brls::Box
 {
@@ -47,6 +48,13 @@ class GameView : public brls::Box
     // ---- Display configuration (scaling / filtering) ----------------
     beiklive::DisplayConfig  m_display;
     beiklive::FilterMode     m_activeFilter = beiklive::FilterMode::Nearest;
+
+    // ---- ShaderChain (post-processing pass chain) -------------------
+    beiklive::ShaderChain    m_shaderChain;
+    bool                     m_shaderEnabled  = false; ///< true when at least one user pass loaded
+    int                      m_nvgShaderImage = -1;    ///< NVG handle wrapping shader output tex
+    unsigned                 m_shaderDisplayW = 0;     ///< Last known shader output width
+    unsigned                 m_shaderDisplayH = 0;     ///< Last known shader output height
 
     // ---- Independent game thread ------------------------------------
     std::thread       m_gameThread;
