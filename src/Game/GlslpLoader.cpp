@@ -735,7 +735,7 @@ bool GlslpLoader::loadGlslpIntoChain(ShaderChain& chain, const std::string& path
         scale.absY   = absY;
 
         auto parseScaleType = [](const std::string& s) {
-            if (s == "absolute") return ShaderPassScale::ABSOLUTE;
+            if (s == "absolute") return ShaderPassScale::SCALE_ABSOLUTE;
             if (s == "viewport") return ShaderPassScale::VIEWPORT;
             return ShaderPassScale::SOURCE;
         };
