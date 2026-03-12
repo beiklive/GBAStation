@@ -72,7 +72,7 @@ private:
     void onCardActivated(const GameEntry& entry);
 
     brls::Box*             m_titleRow     = nullptr;
-    brls::Box*             m_ButtonRow     = nullptr;
+    beiklive::UI::ButtonBar*             m_ButtonRow     = nullptr;
 
     brls::BottomBar*             m_bottomRow     = nullptr;
 

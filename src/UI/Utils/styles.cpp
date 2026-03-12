@@ -5,6 +5,9 @@ namespace beiklive
 
 void RegisterStyles()
 {
+    ADD_STYLE("brls/highlight/stroke_width", 3.0f);
+
+
     ADD_STYLE("beiklive/header/header_height", 70.0f);
     ADD_STYLE("beiklive/header/font_size", 24.0f);
     ADD_STYLE("beiklive/file_list_page/margin_bottom", 24.0f);

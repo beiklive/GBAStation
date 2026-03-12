@@ -31,16 +31,16 @@ namespace beiklive {
 // ============================================================
 static const char* SOUND_FILE_NAMES[brls::_SOUND_MAX] = {
     nullptr,              // SOUND_NONE
-    "focus_change.wav",   // SOUND_FOCUS_CHANGE
-    "focus_error.wav",    // SOUND_FOCUS_ERROR
+    "SeNtfBtnDecide.wav",   // SOUND_FOCUS_CHANGE
+    "SeRefreshIn.wav",    // SOUND_FOCUS_ERROR
     "click.wav",          // SOUND_CLICK
     "back.wav",           // SOUND_BACK
     "focus_sidebar.wav",  // SOUND_FOCUS_SIDEBAR
-    "click_error.wav",    // SOUND_CLICK_ERROR
+    "SeRefreshIn.wav",    // SOUND_CLICK_ERROR
     "honk.wav",           // SOUND_HONK
     "click_sidebar.wav",  // SOUND_CLICK_SIDEBAR
-    "touch_unfocus.wav",  // SOUND_TOUCH_UNFOCUS
-    "touch.wav",          // SOUND_TOUCH
+    "StartupNso.wav",  // SOUND_TOUCH_UNFOCUS
+    "StartupNso.wav",          // SOUND_TOUCH
     "slider_tick.wav",    // SOUND_SLIDER_TICK
     "slider_release.wav", // SOUND_SLIDER_RELEASE
 };
@@ -150,7 +150,7 @@ bool BKAudioPlayer::loadWav(const std::string& path, WavData& out)
 
 std::string BKAudioPlayer::soundsDir()
 {
-    return "resources/sounds/";
+    return "resources/sounds/ui/";
 }
 
 std::string BKAudioPlayer::soundFileName(brls::Sound sound)

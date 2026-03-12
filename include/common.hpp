@@ -9,7 +9,7 @@ using namespace brls::literals; // for _i18n
 #include "Utils/ConfigManager.hpp"
 #include "Utils/fileUtils.hpp"
 #include "Utils/strUtils.hpp"
-
+#include "UI/Utils/Utils.hpp"
 
 // FUNCTIONS DEFINITIONS
 

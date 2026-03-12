@@ -25,7 +25,7 @@ GameCard::GameCard(const GameEntry& entry)
     m_titleLabel->setFontSize(30.f);
     m_titleLabel->setSingleLine(true);
     m_titleLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
-    m_titleLabel->setTextColor(nvgRGBA(79, 193, 255, 255));
+    m_titleLabel->setTextColor(GET_THEME_COLOR("brls/text"));
     m_titleLabel->setVisibility(brls::Visibility::INVISIBLE);
 
     addView(m_titleLabel);
@@ -84,7 +84,7 @@ void GameCard::onChildFocusGained(brls::View* directChild, brls::View* focusedVi
 
     Box::onChildFocusGained(directChild, focusedView);
 
-    brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_CHANGE);
+    // brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_CHANGE);
 
     m_titleLabel->setVisibility(brls::Visibility::VISIBLE);
     m_focused = true;
@@ -189,14 +189,30 @@ AppPage::AppPage()
 
     addView(m_scroll);
 
-    m_ButtonRow = new brls::Box(brls::Axis::ROW);
+    m_ButtonRow = new beiklive::UI::ButtonBar();
     m_ButtonRow->setGrow(1.0f);
+    m_ButtonRow->addButton(BK_RES("img/ui/icon_folder.png"), "文件列表", []() {
+        brls::Logger::debug("文件列表");
+    });
+    m_ButtonRow->addButton(BK_RES("img/ui/icon_folder.png"), "文件列表", []() {
+        brls::Logger::debug("数据管理");
+    });
+        m_ButtonRow->addButton(BK_RES("img/ui/icon_folder.png"), "文件列表", []() {
+        brls::Logger::debug("设置");
+    });
+        m_ButtonRow->addButton(BK_RES("img/ui/icon_folder.png"), "文件列表", []() {
+        brls::Logger::debug("关于");
+    });
+        m_ButtonRow->addButton(BK_RES("img/ui/icon_folder.png"), "文件列表", []() {
+        brls::Logger::debug("退出程序");
+    });
+
     addView(m_ButtonRow);
 
     // 填充
     m_bottomRow = new brls::BottomBar();
     // m_bottomRow->setGrow(1.0f);
-    addView(m_bottomRow);
+    // addView(m_bottomRow);
 
 }
 

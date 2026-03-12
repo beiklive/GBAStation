@@ -206,7 +206,7 @@ StartPageView::StartPageView()
     m_bgImage->setScalingType(brls::ImageScalingType::FIT);
     m_bgImage->setInterpolation(brls::ImageInterpolation::LINEAR);
     m_bgImage->setImageFromFile(BK_APP_DEFAULT_BG);
-    addView(m_bgImage);
+    // addView(m_bgImage);
 
     // Settings overlay panel (absolute positioning, added/removed on demand)
     m_settingsPanel = new FileSettingsPanel();
@@ -360,6 +360,11 @@ void StartPageView::showAppPage()
     m_appPage->setVisibility(brls::Visibility::VISIBLE);
     m_activeIndex = 0;
 
+    gameRunner->uiParams->StartPageframe->setHeaderVisibility(brls::Visibility::VISIBLE);
+    gameRunner->uiParams->StartPageframe->setFooterVisibility(brls::Visibility::VISIBLE);
+
+
+
     // Transfer focus to AppPage's first focusable child so it doesn't linger
     // on the FileListPage that was just removed from the tree.
     brls::Application::giveFocus(m_appPage->getDefaultFocus());
@@ -387,6 +392,10 @@ void StartPageView::showFileListPage()
     addView(m_fileListPage);
     m_fileListPage->setVisibility(brls::Visibility::VISIBLE);
     m_activeIndex = 1;
+
+    gameRunner->uiParams->StartPageframe->setHeaderVisibility(brls::Visibility::GONE);
+    gameRunner->uiParams->StartPageframe->setFooterVisibility(brls::Visibility::GONE);
+
 
     // Reset focus to the first item in the file list so it never lingers at
     // the position from the previous visit (or on the removed AppPage).
