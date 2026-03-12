@@ -63,6 +63,8 @@ public:
     /// 游戏被激活时调用（启动游戏的回调）
     std::function<void(const GameEntry&)> onGameSelected;
 
+    /// 用户点击"文件列表"按钮时调用
+    std::function<void()> onOpenFileList;
 
 private:
     brls::HScrollingFrame* m_scroll      = nullptr;

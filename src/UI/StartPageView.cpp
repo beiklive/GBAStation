@@ -252,23 +252,11 @@ void StartPageView::Init()
 
     ActionInit();
 
-    // Choose initial page based on the start_page_index setting
-    int startPageIndex = 0;
-    if (SettingManager && SettingManager->Contains(KEY_UI_START_PAGE))
-        startPageIndex = *gameRunner->settingConfig->Get(KEY_UI_START_PAGE)->AsInt();
+    // 启动页面始终显示 AppPage
+    createAppPage();
+    showAppPage();
 
-    if (startPageIndex == 0)
-    {
-        createAppPage();
-        showAppPage();
-    }
-    else
-    {
-        createFileListPage();
-        showFileListPage();
-    }
-
-    bklog::debug("Startup Page: {}", startPageIndex);
+    bklog::debug("Startup Page: AppPage");
 }
 
 // ─────────── Page creation ───────────────────────────────────────────────────
@@ -291,6 +279,10 @@ void StartPageView::createAppPage()
         frame->setFooterVisibility(brls::Visibility::GONE);
         frame->setBackground(brls::ViewBackground::NONE);
         brls::Application::pushActivity(new brls::Activity(frame));
+    };
+    // 文件列表按钮回调：打开文件列表页
+    m_appPage->onOpenFileList = [this]() {
+        openFileListPage();
     };
 }
 
@@ -354,62 +346,42 @@ void StartPageView::onFileSettingsRequested(const FileListItem& item, int itemIn
 
 void StartPageView::showAppPage()
 {
-    // Create AppPage if needed and add to view tree
+    // Add AppPage to view tree
     createAppPage();
     addView(m_appPage);
     m_appPage->setVisibility(brls::Visibility::VISIBLE);
-    m_activeIndex = 0;
 
     gameRunner->uiParams->StartPageframe->setHeaderVisibility(brls::Visibility::VISIBLE);
     gameRunner->uiParams->StartPageframe->setFooterVisibility(brls::Visibility::VISIBLE);
 
-
-
-    // Transfer focus to AppPage's first focusable child so it doesn't linger
-    // on the FileListPage that was just removed from the tree.
+    // Transfer focus to AppPage's first focusable child
     brls::Application::giveFocus(m_appPage->getDefaultFocus());
-
-    beiklive::swallow(this, brls::BUTTON_RT);
-    beiklive::swallow(this, brls::BUTTON_A);
-    // Bind LT → switch to FileListPage
-    registerAction("beiklive/hints/FILE"_i18n,
-                   brls::ControllerButton::BUTTON_LT,
-                   [this](brls::View*) {
-                       bklog::debug("Switching to FileListPage");
-                       removeView(m_appPage, false); // keep AppPage alive but detached
-                       createFileListPage();
-                       showFileListPage();
-                       return true;
-                   },
-                   /*hidden=*/false);
-
 }
 
-void StartPageView::showFileListPage()
+void StartPageView::openFileListPage()
 {
+    // Remove AppPage from tree (keep it alive)
+    if (m_appPage)
+        removeView(m_appPage, false);
+
     // Create FileListPage if needed and add to view tree
     createFileListPage();
     addView(m_fileListPage);
     m_fileListPage->setVisibility(brls::Visibility::VISIBLE);
-    m_activeIndex = 1;
 
     gameRunner->uiParams->StartPageframe->setHeaderVisibility(brls::Visibility::GONE);
     gameRunner->uiParams->StartPageframe->setFooterVisibility(brls::Visibility::GONE);
 
-
-    // Reset focus to the first item in the file list so it never lingers at
-    // the position from the previous visit (or on the removed AppPage).
+    // Reset focus to the first item in the file list
     m_fileListPage->resetFocusToTop();
 
     beiklive::swallow(this, brls::BUTTON_A);
-    beiklive::swallow(this, brls::BUTTON_LT);
-    // Bind RT → switch to AppPage
+    // Bind B → return to AppPage
     registerAction("beiklive/hints/APP"_i18n,
-                   brls::ControllerButton::BUTTON_RT,
+                   brls::ControllerButton::BUTTON_B,
                    [this](brls::View*) {
-                       bklog::debug("Switching to AppPage");
-                       removeView(m_fileListPage, false); // keep FileListPage alive but detached
-                       createAppPage();
+                       bklog::debug("Returning to AppPage");
+                       removeView(m_fileListPage, false);
                        showAppPage();
                        return true;
                    },
