@@ -1,6 +1,5 @@
 #include "UI/game_view.hpp"
 #include "Audio/AudioManager.hpp"
-#include "Game/GlslpLoader.hpp"
 
 #include <borealis.hpp>
 #include <borealis/core/application.hpp>
@@ -388,19 +387,6 @@ void GameView::initialize()
         cfg->SetDefault("display.showFfOverlay",    CV(std::string("true")));
         cfg->SetDefault("display.showRewindOverlay",CV(std::string("true")));
 
-        // ---- Shader chain defaults -----------------------------------
-        // shader.preset: 留空表示不加载额外着色器，仅使用内置直通通道。
-        // 支持绝对路径或相对于当前工作目录的路径。
-        // 示例: shader.preset=resources/shaders/scanlines.glsl
-        //       shader.preset=resources/shaders/example.glslp
-        cfg->SetDefault("shader.preset", CV(std::string("")));
-
-        // render.shaderDebugLog: 着色器调试日志开关（默认关闭）。
-        // 设为 true/1/yes 后将在编译、链接、FBO 创建及逐帧渲染关键路径
-        // 输出详细 debug 日志，以辅助排查着色器问题（如全白画面）。
-        // 逐帧日志已节流（前 3 帧 + 每 300 帧），不影响其他功能调试。
-        cfg->SetDefault("render.shaderDebugLog", CV(0));
-
         // ---- Handle (gamepad) button mapping defaults ----------------
         // Values use readable button names (e.g. "A", "LB", "RT").
         cfg->SetDefault("handle.a",           CV(std::string("A")));
@@ -488,15 +474,6 @@ void GameView::initialize()
         m_showFps           = getBool("display.showFps",          false);
         m_showFfOverlay     = getBool("display.showFfOverlay",    true);
         m_showRewindOverlay = getBool("display.showRewindOverlay",true);
-
-        // 着色器调试日志开关（独立控制，默认关闭，避免影响其他功能调试）
-        {
-            bool shaderDbg = getBool("render.shaderDebugLog", false);
-            beiklive::ShaderChain::setDebugLog(shaderDbg);
-            if (shaderDbg)
-                bklog::info("[GameView::initialize] Shader debug logging ENABLED "
-                            "(render.shaderDebugLog=true)");
-        }
 
         // Fast-forward and rewind buttons from config (named string or int)
         {
@@ -590,42 +567,9 @@ void GameView::initialize()
     m_texWidth  = gw;
     m_texHeight = gh;
 
-    // ---- Initialise shader chain (always; user passes added below) ----
-    if (!m_shaderChain.initBuiltin()) {
-        bklog::warning("ShaderChain initBuiltin failed; using direct texture rendering");
-    } else {
-        m_shaderEnabled = false;
-
-        // Load shader preset from config
-        std::string presetPath;
-        if (gameRunner && gameRunner->settingConfig) {
-            auto v = gameRunner->settingConfig->Get("shader.preset");
-            if (v) { if (auto s = v->AsString()) presetPath = *s; }
-        }
-        if (!presetPath.empty()) {
-            // Choose loader by file extension (.glslp = multi-pass preset, .glsl = single pass)
-            bool isPreset = false;
-            if (presetPath.size() >= 6) {
-                std::string tail = presetPath.substr(presetPath.size() - 6);
-                std::transform(tail.begin(), tail.end(), tail.begin(),
-                               [](unsigned char c){ return static_cast<char>(std::tolower(c)); });
-                isPreset = (tail == ".glslp");
-            }
-
-            bool ok = false;
-            if (isPreset) {
-                ok = beiklive::GlslpLoader::loadGlslpIntoChain(m_shaderChain, presetPath);
-            } else {
-                // Treat as .glsl single-pass shader
-                ok = beiklive::GlslpLoader::loadGlslIntoChain(m_shaderChain, presetPath);
-            }
-            if (ok) {
-                m_shaderEnabled = true;
-                bklog::info("Shader preset loaded: {}", presetPath);
-            } else {
-                bklog::warning("Failed to load shader preset: {}", presetPath);
-            }
-        }
+    // ---- Initialise render chain -------------------------------------
+    if (!m_renderChain.init()) {
+        bklog::warning("RenderChain init failed; using direct texture rendering");
     }
 
     // ---- Start audio manager ------------------------------------------
@@ -971,13 +915,9 @@ void GameView::cleanup()
     if (m_nvgImage >= 0) {
         m_nvgImage = -1;
     }
-    if (m_nvgShaderImage >= 0) {
-        m_nvgShaderImage = -1;
-    }
 
-    // Deinit shader chain (releases GL FBOs/textures/programs)
-    m_shaderChain.deinit();
-    m_shaderEnabled = false;
+    // Deinit render chain (releases any GL resources)
+    m_renderChain.deinit();
 
     if (m_texture) {
         glDeleteTextures(1, &m_texture);
@@ -1007,19 +947,6 @@ void GameView::uploadFrame(NVGcontext* vg,
     bool sizeChanged = (frame.width  != m_texWidth ||
                         frame.height != m_texHeight);
 
-    // 着色器调试日志：记录纹理上传信息（节流：前 3 次 + 每 300 次 + 尺寸变化时）
-    {
-        static uint32_t s_uploadDebugCount = 0;
-        if (beiklive::ShaderChain::debugLogEnabled() &&
-            (s_uploadDebugCount < 3 || s_uploadDebugCount % 300 == 0 || sizeChanged)) {
-            bklog::debug("[GameView::uploadFrame] count={} tex={} frame={}x{} "
-                         "sizeChanged={} pixelBytes={}",
-                         s_uploadDebugCount, m_texture,
-                         frame.width, frame.height, sizeChanged,
-                         frame.pixels.size() * sizeof(frame.pixels[0]));
-        }
-        ++s_uploadDebugCount;
-    }
     if (sizeChanged) {
         // Resize the texture (pixels are RGBA8888)
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
@@ -1258,8 +1185,6 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
     }
 
     // ---- Handle run-time filter mode changes -------------------------
-    // If the display config filter changes (e.g. user updates settings),
-    // update the GL texture parameters and recreate the NVG image.
     if (m_display.filterMode != m_activeFilter && m_texture) {
         m_activeFilter  = m_display.filterMode;
         GLenum glFilter = (m_activeFilter == beiklive::FilterMode::Nearest)
@@ -1272,94 +1197,31 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
             nvgDeleteImage(vg, m_nvgImage);
             m_nvgImage = -1;
         }
-        m_shaderChain.setFilter(glFilter);
-        if (m_nvgShaderImage >= 0) {
-            nvgDeleteImage(vg, m_nvgShaderImage);
-            m_nvgShaderImage = -1;
-        }
     }
 
-    // ---- Run shader chain and determine the display texture ----------
-    // The shader chain always has at least the built-in pass 0 which:
-    //   • normalises colour (forces alpha = 1)
-    //   • outputs to an exactly-sized FBO (videoW × videoH)
-    // Additional user passes perform post-processing effects.
-    GLuint displayTex  = m_texture;
-    int    displayW    = static_cast<int>(m_texWidth);
-    int    displayH    = static_cast<int>(m_texHeight);
-    bool   useShaderTex = false;
+    // ---- Run render chain and determine the display texture ----------
+    // RenderChain::run() currently acts as a pass-through and returns srcTex.
+    // Future custom rendering implementations replace this pipeline.
+    GLuint displayTex = m_texture;
+    int    displayW   = static_cast<int>(m_texWidth);
+    int    displayH   = static_cast<int>(m_texHeight);
 
     if (m_texWidth > 0 && m_texHeight > 0) {
-        GLuint chainOut = m_shaderChain.run(m_texture, m_texWidth, m_texHeight);
-        if (chainOut != m_texture && chainOut != 0) {
-            // Shader chain returned a processed texture
-            displayTex   = chainOut;
-            displayW     = static_cast<int>(m_shaderChain.outputW());
-            displayH     = static_cast<int>(m_shaderChain.outputH());
-            useShaderTex = true;
+        GLuint chainOut = m_renderChain.run(m_texture, m_texWidth, m_texHeight);
+        if (chainOut != 0) {
+            displayTex = chainOut;
         }
     }
 
-    // 着色器调试日志：记录渲染管线状态（节流：前 3 帧 + 每 300 帧）
-    {
-        static uint32_t s_drawDebugCount = 0;
-        if (beiklive::ShaderChain::debugLogEnabled() &&
-            (s_drawDebugCount < 3 || s_drawDebugCount % 300 == 0)) {
-            bklog::debug("[GameView::draw] frame={} tex={} texW={} texH={} "
-                         "useShader={} displayTex={} displayW={} displayH={} "
-                         "nvgImage={} nvgShaderImage={}",
-                         s_drawDebugCount, m_texture, m_texWidth, m_texHeight,
-                         useShaderTex, displayTex, displayW, displayH,
-                         m_nvgImage, m_nvgShaderImage);
-        }
-        ++s_drawDebugCount;
-    }
-
-    // ---- Manage NVG image handles ------------------------------------
-    // We keep two handles: one for the raw texture (fallback) and one for the
-    // shader chain output.  Only the active one is used for rendering.
-    if (!useShaderTex) {
-        // Use raw texture path
-        if (m_nvgImage < 0 && m_texWidth > 0 && m_texHeight > 0) {
-            m_nvgImage = nvgImageFromGLTexture(vg, m_texture,
-                                               static_cast<int>(m_texWidth),
-                                               static_cast<int>(m_texHeight),
-                                               m_activeFilter);
-        }
-        if (m_nvgShaderImage >= 0) {
-            nvgDeleteImage(vg, m_nvgShaderImage);
-            m_nvgShaderImage = -1;
-        }
-    } else {
-        // Use shader output texture path
-        if (m_nvgImage >= 0) {
-            nvgDeleteImage(vg, m_nvgImage);
-            m_nvgImage = -1;
-        }
-        // Recreate NVG handle when output dimensions change
-        if (m_nvgShaderImage < 0 ||
-            static_cast<unsigned>(displayW) != m_shaderDisplayW ||
-            static_cast<unsigned>(displayH) != m_shaderDisplayH) {
-            if (m_nvgShaderImage >= 0) {
-                nvgDeleteImage(vg, m_nvgShaderImage);
-            }
-            m_nvgShaderImage = nvgImageFromGLTexture(vg, displayTex,
-                                                      displayW, displayH,
-                                                      m_activeFilter);
-            m_shaderDisplayW = static_cast<unsigned>(displayW);
-            m_shaderDisplayH = static_cast<unsigned>(displayH);
-            if (beiklive::ShaderChain::debugLogEnabled()) {
-                bklog::debug("[GameView::draw] NVG shader image (re)created: "
-                             "handle={} tex={} {}x{} filter={}",
-                             m_nvgShaderImage, displayTex,
-                             displayW, displayH, static_cast<int>(m_activeFilter));
-            }
-        }
+    // ---- Manage NVG image handle -------------------------------------
+    if (m_nvgImage < 0 && m_texWidth > 0 && m_texHeight > 0) {
+        m_nvgImage = nvgImageFromGLTexture(vg, displayTex,
+                                           displayW, displayH,
+                                           m_activeFilter);
     }
 
     // ---- Render the game texture using NanoVG ------------------------
-    int renderNvgImg = useShaderTex ? m_nvgShaderImage : m_nvgImage;
-    if (renderNvgImg >= 0) {
+    if (m_nvgImage >= 0) {
         beiklive::DisplayRect rect = m_display.computeRect(x, y, width, height,
                                                             static_cast<unsigned>(displayW),
                                                             static_cast<unsigned>(displayH));
@@ -1368,7 +1230,7 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
                                             rect.x, rect.y,
                                             rect.w, rect.h,
                                             0.0f,
-                                            renderNvgImg,
+                                            m_nvgImage,
                                             1.0f);
         nvgBeginPath(vg);
         nvgRect(vg, rect.x, rect.y, rect.w, rect.h);
