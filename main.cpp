@@ -49,6 +49,21 @@ void RunnerInit() {
 
     gameRunner->settingConfig->SetDefault(KEY_UI_START_PAGE, 0); 
 
+    // UI / background settings
+    gameRunner->settingConfig->SetDefault(KEY_UI_SHOW_BG_IMAGE,  beiklive::ConfigValue(std::string("false")));
+    gameRunner->settingConfig->SetDefault(KEY_UI_BG_IMAGE_PATH,  beiklive::ConfigValue(std::string("")));
+    gameRunner->settingConfig->SetDefault(KEY_UI_SHOW_XMB_BG,    beiklive::ConfigValue(std::string("false")));
+    gameRunner->settingConfig->SetDefault(KEY_UI_PSPXMB_COLOR,   beiklive::ConfigValue(std::string("blue")));
+    gameRunner->settingConfig->SetDefault(KEY_UI_TEXT_COLOR,      beiklive::ConfigValue(std::string("white")));
+
+    // Audio settings
+    gameRunner->settingConfig->SetDefault(KEY_AUDIO_BUTTON_SFX,  beiklive::ConfigValue(std::string("false")));
+
+    // Debug settings
+    gameRunner->settingConfig->SetDefault(KEY_DEBUG_LOG_LEVEL,   beiklive::ConfigValue(std::string("info")));
+    gameRunner->settingConfig->SetDefault(KEY_DEBUG_LOG_FILE,    beiklive::ConfigValue(std::string("false")));
+    gameRunner->settingConfig->SetDefault(KEY_DEBUG_LOG_OVERLAY, beiklive::ConfigValue(std::string("false")));
+
 
 	// 保存默认值到配置文件
 	gameRunner->settingConfig->Save();

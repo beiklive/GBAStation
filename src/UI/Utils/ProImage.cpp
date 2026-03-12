@@ -62,6 +62,7 @@ static const char* k_xmbFragSrc = GLSL_VER
 R"(
 uniform float uTime;
 uniform vec2  uResolution;
+uniform vec3  uBgColor;
 in  vec2 vUV;
 out vec4 FragColor;
 
@@ -69,8 +70,8 @@ void main()
 {
     vec2 p = vUV;
 
-    // Dark blue background
-    vec3 color = vec3(0.74, 0.86, 0.14);
+    // Configurable background colour
+    vec3 color = uBgColor;
 
     // Two lines centred vertically, interleaving with sine/cosine waves
     float amplitude = 0.06;
@@ -262,6 +263,14 @@ void ProImage::setShaderAnimation(ShaderAnimationType type)
 
 ShaderAnimationType ProImage::getShaderAnimation() const { return m_shaderAnimation; }
 
+void ProImage::setXmbBgColor(float r, float g, float b)
+{
+    m_xmbBgR = r;
+    m_xmbBgG = g;
+    m_xmbBgB = b;
+    invalidate();
+}
+
 // ── Draw ─────────────────────────────────────────────────────────────────────
 
 void ProImage::draw(NVGcontext* vg, float x, float y, float w, float h,
@@ -428,6 +437,7 @@ void ProImage::initXmbShader()
     // Uniform locations
     m_xmbUTime       = glGetUniformLocation(prog, "uTime");
     m_xmbUResolution = glGetUniformLocation(prog, "uResolution");
+    m_xmbUBgColor    = glGetUniformLocation(prog, "uBgColor");
 
     // ── Create VAO/VBO for a fullscreen quad (NDC [-1,+1]) ────────────────────
     // Will be updated per-draw with the actual widget NDC coordinates.
@@ -557,6 +567,8 @@ void ProImage::drawPspXmbShader(NVGcontext* vg, float x, float y, float w, float
         glUniform1f(m_xmbUTime, m_animTime);
     if (m_xmbUResolution >= 0)
         glUniform2f(m_xmbUResolution, static_cast<float>(iw), static_cast<float>(ih));
+    if (m_xmbUBgColor >= 0)
+        glUniform3f(m_xmbUBgColor, m_xmbBgR, m_xmbBgG, m_xmbBgB);
 
     // The quad covers NDC [-1,+1] within the FBO (which IS the widget area)
     const float quad[8] = {

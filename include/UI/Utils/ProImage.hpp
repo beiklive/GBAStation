@@ -58,6 +58,10 @@ class ProImage : public brls::Image
     void setShaderAnimation(ShaderAnimationType type);
     ShaderAnimationType getShaderAnimation() const;
 
+    /// Set the background base colour for the PSP XMB ripple shader.
+    /// r, g, b are in the [0, 1] range. Default is a dark navy blue.
+    void setXmbBgColor(float r, float g, float b);
+
     // ── Override ─────────────────────────────────────────────────────────────
 
     void draw(NVGcontext* vg, float x, float y, float w, float h,
@@ -89,6 +93,11 @@ class ProImage : public brls::Image
     std::chrono::steady_clock::time_point m_shaderLastTime;
     bool m_shaderTimerStarted = false;
 
+    // PSP XMB background colour (RGB, [0,1])
+    float m_xmbBgR = 0.05f;
+    float m_xmbBgG = 0.10f;
+    float m_xmbBgB = 0.25f;
+
 #ifdef BOREALIS_USE_OPENGL
     // ── PSP XMB GL shader resources ──────────────────────────────────────────
     GLuint m_xmbProgram  = 0;  ///< compiled GLSL shader program
@@ -103,6 +112,7 @@ class ProImage : public brls::Image
 
     GLint  m_xmbUTime       = -1;
     GLint  m_xmbUResolution = -1;
+    GLint  m_xmbUBgColor    = -1;
 
     void   initXmbShader();
     void   resizeXmbFbo(int w, int h, NVGcontext* vg);
