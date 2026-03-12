@@ -539,6 +539,16 @@ void GameView::stopGameThread()
 
 void GameView::cleanup()
 {
+    // Release UI input block if it's still held (e.g. when the destructor
+    // is invoked without a prior onFocusLost, which should not normally
+    // happen but guards against unusual destruction order).
+#ifndef __SWITCH__
+    if (m_uiBlocked) {
+        brls::Application::unblockInputs();
+        m_uiBlocked = false;
+    }
+#endif
+
     // Signal AudioManager to stop and wake any pushSamples() waiter BEFORE
     // joining the game thread.
     beiklive::AudioManager::instance().deinit();
@@ -628,7 +638,28 @@ void GameView::uploadFrame(NVGcontext* vg,
 
 void GameView::pollInput()
 {
-    const brls::ControllerState& state = brls::Application::getControllerState();
+    // ---- Get fresh controller state ------------------------------------
+    // When UI inputs are blocked (game is running), borealis skips its
+    // processInput() loop and the shared controllerState becomes stale.
+    // To keep gamepad input working we call updateUnifiedControllerState()
+    // directly from this thread so the game always sees the current button
+    // state regardless of the UI block status.
+    // Local copy required: conditional initialization below prevents use of
+    // a const reference (which would require a single initialiser expression).
+    brls::ControllerState state = {};
+#ifndef __SWITCH__
+    {
+        auto* platform = brls::Application::getPlatform();
+        auto* inputMgr = platform ? platform->getInputManager() : nullptr;
+        if (inputMgr && brls::Application::isInputBlocks()) {
+            inputMgr->updateUnifiedControllerState(&state);
+        } else {
+            state = brls::Application::getControllerState();
+        }
+    }
+#else
+    state = brls::Application::getControllerState();
+#endif
 
     // ---- Detect keyboard vs gamepad input type -----------------------
     // Borealis InputType is GAMEPAD for both keyboard and gamepad on PC;
@@ -959,11 +990,28 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
 void GameView::onFocusGained()
 {
     Box::onFocusGained();
+#ifndef __SWITCH__
+    // Block all borealis UI input processing while the game has focus.
+    // This prevents arrow-key navigation, button hints, and other UI
+    // interactions from interfering with in-game keyboard/gamepad input.
+    if (!m_uiBlocked) {
+        brls::Application::blockInputs(true); // true = mute UI click-error sounds
+        m_uiBlocked = true;
+    }
+#endif
 }
 
 void GameView::onFocusLost()
 {
     Box::onFocusLost();
+#ifndef __SWITCH__
+    // Restore UI input processing when the game loses focus (e.g. a menu
+    // activity is pushed on top, or the user exits the game).
+    if (m_uiBlocked) {
+        brls::Application::unblockInputs();
+        m_uiBlocked = false;
+    }
+#endif
 }
 
 void GameView::onLayout()

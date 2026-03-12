@@ -89,6 +89,12 @@ class GameView : public brls::Box
     // ---- Input source tracking ------------------------------------
     bool m_useKeyboard = false; ///< true when keyboard is the active input source
 
+    // ---- UI input block tracking ----------------------------------
+    /// true when we have an outstanding blockInputs() token (desktop only).
+    /// Prevents borealis UI navigation from stealing keyboard/gamepad inputs
+    /// while a game is running.
+    bool m_uiBlocked = false;
+
     // ---- Helper methods ---------------------------------------------
     void initialize();
     void cleanup();
