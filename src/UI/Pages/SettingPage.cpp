@@ -915,6 +915,7 @@ brls::ScrollingFrame* SettingPage::buildDebugTab()
 SettingPage::SettingPage()
 {
     m_tabframe = new brls::TabFrame();
+    m_tabframe->setGrow(1.0f);
     Init();
     addView(m_tabframe);
 }
