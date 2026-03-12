@@ -1,5 +1,6 @@
 #include "Audio/BKAudioPlayer.hpp"
 
+#include "common.hpp"
 #include <borealis/core/logger.hpp>
 
 #include <algorithm>
@@ -214,6 +215,20 @@ bool BKAudioPlayer::play(brls::Sound sound, float pitch)
     int idx = static_cast<int>(sound);
     if (idx <= 0 || idx >= brls::_SOUND_MAX)
         return true;
+
+    // Respect the "audio.buttonSfx" setting: when disabled, suppress all
+    // UI sound effects (button clicks, navigation sounds, etc.).
+    if (SettingManager) {
+        auto v = SettingManager->Get(KEY_AUDIO_BUTTON_SFX);
+        if (v) {
+            if (auto s = v->AsString()) {
+                if (*s == "false" || *s == "0" || *s == "no")
+                    return true; // silently suppressed
+            } else if (auto i = v->AsInt()) {
+                if (*i == 0) return true;
+            }
+        }
+    }
 
     // Load on demand if not yet loaded
     if (!m_sounds[idx].loaded)
