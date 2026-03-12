@@ -1,9 +1,14 @@
 #pragma once
 
 #include <borealis/views/image.hpp>
+#include <chrono>
 #include <functional>
 #include <string>
 #include <vector>
+
+#ifdef BOREALIS_USE_OPENGL
+#  include <glad/glad.h>
+#endif
 
 namespace beiklive::UI
 {
@@ -11,8 +16,8 @@ namespace beiklive::UI
 /// Shader animation types supported by ProImage
 enum class ShaderAnimationType
 {
-    NONE,       ///< No animation
-    PSP_LINES,  ///< PSP XMB-style flowing diagonal line animation
+    NONE,           ///< No animation
+    PSP_XMB_RIPPLE, ///< PSP XMB-style wavy ribbon ripple background (GL shader)
 };
 
 /**
@@ -20,8 +25,9 @@ enum class ShaderAnimationType
  *
  * Features:
  *  - Kawase Blur: optional multi-pass box-blur approximation drawn via NanoVG.
- *  - Animated GIF: decodes all frames with stb_image and cycles through them.
- *  - Shader Animation: built-in NanoVG-drawn animations (e.g. PSP_LINES).
+ *  - Animated GIF: decodes all frames with stb_image and cycles through them,
+ *    with frame timing driven by std::chrono for accurate playback speed.
+ *  - Shader Animation: PSP XMB ripple waves rendered via OpenGL GLSL shaders.
  */
 class ProImage : public brls::Image
 {
@@ -72,14 +78,40 @@ class ProImage : public brls::Image
     int   m_gifCurrentFrame = 0;
     float m_gifElapsedMs    = 0.0f;
     bool  m_isGif           = false;
+    /// Timestamp of last GIF frame-advance check (for delta-time calculation).
+    std::chrono::steady_clock::time_point m_gifLastTime;
+    bool m_gifTimerStarted = false;
 
     // Shader animation
     ShaderAnimationType m_shaderAnimation = ShaderAnimationType::NONE;
-    float m_animTime = 0.0f;  ///< elapsed time in seconds (advances each draw)
+    float m_animTime = 0.0f; ///< elapsed time in seconds (advances by real delta)
+    /// Timestamp of last shader time update.
+    std::chrono::steady_clock::time_point m_shaderLastTime;
+    bool m_shaderTimerStarted = false;
+
+#ifdef BOREALIS_USE_OPENGL
+    // ── PSP XMB GL shader resources ──────────────────────────────────────────
+    GLuint m_xmbProgram  = 0;  ///< compiled GLSL shader program
+    GLuint m_xmbVAO      = 0;  ///< vertex array object for fullscreen quad
+    GLuint m_xmbVBO      = 0;  ///< vertex buffer for fullscreen quad
+    GLuint m_xmbFbo      = 0;  ///< framebuffer object for off-screen render
+    GLuint m_xmbFboTex   = 0;  ///< colour attachment texture
+    int    m_xmbFboW     = 0;  ///< current FBO texture width
+    int    m_xmbFboH     = 0;  ///< current FBO texture height
+    int    m_xmbNvgImage = -1; ///< NanoVG image handle for m_xmbFboTex
+    bool   m_xmbInited   = false;
+
+    GLint  m_xmbUTime       = -1;
+    GLint  m_xmbUResolution = -1;
+
+    void   initXmbShader();
+    void   resizeXmbFbo(int w, int h, NVGcontext* vg);
+    void   drawPspXmbShader(NVGcontext* vg, float x, float y, float w, float h);
+    void   freeXmbResources(NVGcontext* vg);
+#endif
 
     void freeGifFrames();
     void drawBlur(NVGcontext* vg, float x, float y, float w, float h, NVGpaint basePaint);
-    void drawPspLines(NVGcontext* vg, float x, float y, float w, float h);
 };
 
 } // namespace beiklive::UI
