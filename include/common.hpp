@@ -77,6 +77,11 @@ void CheckGLSupport();
 void InsertBackground(brls::Box* view);
 /// Apply the XMB colour preset (UI.pspxmb.color) from SettingManager to @a img.
 void ApplyXmbColor(beiklive::UI::ProImage* img);
+/// Apply the XMB colour preset to ALL registered background ProImage instances.
+void ApplyXmbColorToAll();
+/// Register/unregister a background ProImage instance so ApplyXmbColorToAll() can reach it.
+void RegisterXmbBackground(beiklive::UI::ProImage* img);
+void UnregisterXmbBackground(beiklive::UI::ProImage* img);
 // 吞噬一个按钮事件，使其不再被后续处理
 void swallow(brls::View* v, brls::ControllerButton btn);
 

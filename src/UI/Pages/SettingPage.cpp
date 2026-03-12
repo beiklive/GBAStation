@@ -106,6 +106,7 @@ static void addSaveButton(brls::Box* box)
     btn->setHeight(50.f);
     btn->registerAction("确认", brls::BUTTON_A, [](brls::View*) {
         if (SettingManager) SettingManager->Save();
+        beiklive::ApplyXmbColorToAll();
         auto* dialog = new brls::Dialog("设置已保存");
         dialog->addButton("确定", []{});
         dialog->open();
@@ -230,20 +231,34 @@ public:
     {
         if (!m_done)
         {
-            auto now = std::chrono::steady_clock::now();
-            float elapsed = std::chrono::duration<float>(now - m_startTime).count();
-            float remaining = 5.0f - elapsed;
-
-            if (remaining <= 0.0f)
+            // Wait for all buttons/keys to be released before starting capture.
+            // This prevents the button that opened the dialog from being
+            // immediately captured as the new binding.
+            if (m_waitingForRelease)
             {
-                finish("");
+                if (m_isKeyboard) checkKeyboardRelease();
+                else              checkGamepadRelease();
+                // Reset the countdown while waiting for release so the user
+                // gets the full 5 seconds once input capture actually starts.
+                m_startTime = std::chrono::steady_clock::now();
             }
             else
             {
-        int secs = static_cast<int>(std::ceil(remaining));
-                m_countdownLabel->setText(std::to_string(secs) + " 秒");
-                if (m_isKeyboard) pollKeyboard();
-                else              pollGamepad();
+                auto now = std::chrono::steady_clock::now();
+                float elapsed = std::chrono::duration<float>(now - m_startTime).count();
+                float remaining = 5.0f - elapsed;
+
+                if (remaining <= 0.0f)
+                {
+                    finish("");
+                }
+                else
+                {
+                    int secs = static_cast<int>(std::ceil(remaining));
+                    m_countdownLabel->setText(std::to_string(secs) + " 秒");
+                    if (m_isKeyboard) pollKeyboard();
+                    else              pollGamepad();
+                }
             }
         }
         brls::Box::draw(vg, x, y, w, h, style, ctx);
@@ -259,6 +274,8 @@ private:
     brls::Label* m_countdownLabel = nullptr;
     std::chrono::steady_clock::time_point m_startTime;
     bool m_done = false;
+    /// True while waiting for all buttons/keys to be released before capture starts.
+    bool m_waitingForRelease = true;
 
     void finish(const std::string& result)
     {
@@ -267,6 +284,46 @@ private:
         if (!result.empty()) m_keyLabel->setText(result);
         if (m_onDone) m_onDone(result);
         if (m_dialog) m_dialog->close();
+    }
+
+    /// Returns true when all tracked keys are released; clears m_waitingForRelease.
+    void checkKeyboardRelease()
+    {
+#ifndef __SWITCH__
+        auto* platform = brls::Application::getPlatform();
+        auto* im = platform ? platform->getInputManager() : nullptr;
+        if (!im) { m_waitingForRelease = false; return; }
+
+        for (int i = 0; i < k_capKbdKeyCount; ++i)
+        {
+            if (im->getKeyboardKeyState(k_capKbdKeys[i].sc))
+                return; // still pressed
+        }
+        // Check modifier keys too
+        if (im->getKeyboardKeyState(brls::BRLS_KBD_KEY_LEFT_CONTROL)  ||
+            im->getKeyboardKeyState(brls::BRLS_KBD_KEY_RIGHT_CONTROL) ||
+            im->getKeyboardKeyState(brls::BRLS_KBD_KEY_LEFT_SHIFT)    ||
+            im->getKeyboardKeyState(brls::BRLS_KBD_KEY_RIGHT_SHIFT)   ||
+            im->getKeyboardKeyState(brls::BRLS_KBD_KEY_LEFT_ALT)      ||
+            im->getKeyboardKeyState(brls::BRLS_KBD_KEY_RIGHT_ALT))
+            return; // modifier still pressed
+        m_waitingForRelease = false;
+#else
+        m_waitingForRelease = false;
+#endif
+    }
+
+    void checkGamepadRelease()
+    {
+        auto state = brls::Application::getControllerState();
+        for (int i = 0; i < k_capPadKeyCount; ++i)
+        {
+            int idx = static_cast<int>(k_capPadKeys[i].btn);
+            if (idx >= 0 && idx < static_cast<int>(brls::_BUTTON_MAX) &&
+                state.buttons[idx])
+                return; // still pressed
+        }
+        m_waitingForRelease = false;
     }
 
     void pollKeyboard()
@@ -437,8 +494,10 @@ brls::ScrollingFrame* SettingPage::buildUITab()
         auto* xmbColorCell = new brls::SelectorCell();
         xmbColorCell->init("颜色设置", colorLabels, curIdx,
             [](int idx){
-                if (idx >= 0 && idx < k_xmbColorCount)
+                if (idx >= 0 && idx < k_xmbColorCount) {
                     cfgSetStr(KEY_UI_PSPXMB_COLOR, k_xmbColorIds[idx]);
+                    beiklive::ApplyXmbColorToAll();
+                }
             });
         box->addView(xmbColorCell);
     }

@@ -664,21 +664,39 @@ void GameView::pollInput()
     // ---- Detect keyboard vs gamepad input type -----------------------
     // Borealis InputType is GAMEPAD for both keyboard and gamepad on PC;
     // we distinguish by checking if the platform input manager reports any
-    // active keyboard key.
+    // active keyboard key that is part of the current input mapping.
+    // Obtain the button map early so it can be used for both detection and
+    // game-button polling below.
+    const auto& btnMap = m_inputMap.gameButtonMap();
     bool keyboardActive = false;
 #ifndef __SWITCH__
     auto* platform = brls::Application::getPlatform();
     auto* im = platform ? platform->getInputManager() : nullptr;
     if (im) {
-        // Sample a few common movement/action keys
-        keyboardActive =
-            im->getKeyboardKeyState(brls::BRLS_KBD_KEY_UP)    ||
-            im->getKeyboardKeyState(brls::BRLS_KBD_KEY_DOWN)  ||
-            im->getKeyboardKeyState(brls::BRLS_KBD_KEY_LEFT)  ||
-            im->getKeyboardKeyState(brls::BRLS_KBD_KEY_RIGHT) ||
-            im->getKeyboardKeyState(brls::BRLS_KBD_KEY_X)     ||
-            im->getKeyboardKeyState(brls::BRLS_KBD_KEY_Z)     ||
-            im->getKeyboardKeyState(brls::BRLS_KBD_KEY_ENTER);
+        // Check all keyboard-mapped game buttons so that any configured key
+        // activates keyboard mode, including custom bindings set by the user.
+        for (const auto& entry : btnMap) {
+            if (entry.kbdScancode >= 0 &&
+                im->getKeyboardKeyState(
+                    static_cast<brls::BrlsKeyboardScancode>(entry.kbdScancode))) {
+                keyboardActive = true;
+                break;
+            }
+        }
+        // Also check keyboard hotkey bindings (fast-forward, rewind, etc.)
+        if (!keyboardActive) {
+            using Hotkey = beiklive::InputMappingConfig::Hotkey;
+            for (int h = 0; h < static_cast<int>(Hotkey::_Count); ++h) {
+                const auto& hk = m_inputMap.hotkeyBinding(static_cast<Hotkey>(h));
+                if (hk.kbdCombo.isBound()) {
+                    auto sc = static_cast<brls::BrlsKeyboardScancode>(hk.kbdCombo.scancode);
+                    if (im->getKeyboardKeyState(sc)) {
+                        keyboardActive = true;
+                        break;
+                    }
+                }
+            }
+        }
     }
     if (keyboardActive) m_useKeyboard = true;
     else {
@@ -778,7 +796,7 @@ void GameView::pollInput()
     }
 
     // ---- Game buttons -----------------------------------------------
-    const auto& btnMap = m_inputMap.gameButtonMap();
+    // btnMap was already obtained above for keyboard detection
     if (m_useKeyboard) {
         // Keyboard mode: use raw keyboard key states.
         // Entries with kbdScancode < 0 have no keyboard binding and are
