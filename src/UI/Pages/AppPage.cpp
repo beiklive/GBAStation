@@ -1,4 +1,4 @@
-#include "XMLUI/Pages/AppPage.hpp"
+#include "UI/Pages/AppPage.hpp"
 
 static constexpr float CARD_SIZE     = 270.f;  // 封面图区域边长
 static constexpr float CARD_MARGIN   = 2.f;   // 卡片右间距

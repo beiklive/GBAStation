@@ -4,10 +4,10 @@
 
 #include "common.hpp"
 #include "Audio/BKAudioPlayer.hpp"
-#include "UI/game_view.hpp"
+#include "Game/game_view.hpp"
 
-#include "XMLUI/StartPageView.hpp"
-#include "XMLUI/Utils/captioned_image.hpp"
+#include "UI/StartPageView.hpp"
+#include "UI/Utils/captioned_image.hpp"
 
 
 #if defined(BOREALIS_USE_OPENGL)

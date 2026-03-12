@@ -1,7 +1,7 @@
-#include "XMLUI/StartPageView.hpp"
+#include "UI/StartPageView.hpp"
 
-#include "UI/game_view.hpp"
-#include "XMLUI/Pages/ImageView.hpp"
+#include "Game/game_view.hpp"
+#include "UI/Pages/ImageView.hpp"
 
 #undef ABSOLUTE // avoid conflict with brls::PositionType::ABSOLUTE
 

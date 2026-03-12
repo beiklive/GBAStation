@@ -6,8 +6,8 @@
 #include <vector>
 
 #include "common.hpp"
-#include "XMLUI/Pages/AppPage.hpp"
-#include "XMLUI/Pages/FileListPage.hpp"
+#include "UI/Pages/AppPage.hpp"
+#include "UI/Pages/FileListPage.hpp"
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  FileSettingsPanel – absolute-positioned overlay for file operations

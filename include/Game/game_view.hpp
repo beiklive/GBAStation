@@ -11,7 +11,7 @@
 #include <vector>
 
 #include "common.hpp"
-#include "Game/LibretroLoader.hpp"
+#include "Retro/LibretroLoader.hpp"
 #include "Video/DisplayConfig.hpp"
 #include "Video/RenderChain.hpp"
 

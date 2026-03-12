@@ -1,4 +1,4 @@
-#include "XMLUI/Pages/ImageView.hpp"
+#include "UI/Pages/ImageView.hpp"
 
 #include "common.hpp"
 

@@ -14,7 +14,7 @@
     limitations under the License.
 */
 
-#include "XMLUI/Utils/captioned_image.hpp"
+#include "UI/Utils/captioned_image.hpp"
 
 CaptionedImage::CaptionedImage()
 {

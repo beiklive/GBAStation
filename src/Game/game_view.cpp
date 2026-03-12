@@ -1,4 +1,4 @@
-#include "UI/game_view.hpp"
+#include "Game/game_view.hpp"
 #include "Audio/AudioManager.hpp"
 
 #include <borealis.hpp>

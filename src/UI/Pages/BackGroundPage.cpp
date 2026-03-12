@@ -1,4 +1,4 @@
-#include "XMLUI/Pages/BackGroundPage.hpp"
+#include "UI/Pages/BackGroundPage.hpp"
 
 BackGroundPage::BackGroundPage()
 {
