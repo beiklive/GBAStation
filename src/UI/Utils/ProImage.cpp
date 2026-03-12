@@ -70,7 +70,7 @@ void main()
     vec2 p = vUV;
 
     // Dark blue background
-    vec3 color = vec3(0.02, 0.03, 0.14);
+    vec3 color = vec3(0.74, 0.86, 0.14);
 
     // Two lines centred vertically, interleaving with sine/cosine waves
     float amplitude = 0.06;

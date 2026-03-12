@@ -199,8 +199,9 @@ AppPage::AppPage()
     m_ButtonRow->addButton(BK_RES(path_prefix + "jifen_64.png"), "数据管理", []() {
         brls::Logger::debug("数据管理");
     });
-    m_ButtonRow->addButton(BK_RES(path_prefix + "shezhi_64.png"), "设置", []() {
+    m_ButtonRow->addButton(BK_RES(path_prefix + "shezhi_64.png"), "设置", [this]() {
         brls::Logger::debug("设置");
+        if(onOpenSettings) onOpenSettings();
     });
     m_ButtonRow->addButton(BK_RES(path_prefix + "bangzhu_64.png"), "关于", []() {
         brls::Logger::debug("关于");

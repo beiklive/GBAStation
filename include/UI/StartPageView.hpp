@@ -8,6 +8,7 @@
 #include "common.hpp"
 #include "UI/Pages/AppPage.hpp"
 #include "UI/Pages/FileListPage.hpp"
+#include "UI/Pages/SettingPage.hpp"
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  FileSettingsPanel – absolute-positioned overlay for file operations
@@ -42,7 +43,7 @@ class FileSettingsPanel : public brls::Box
 // ─────────────────────────────────────────────────────────────────────────────
 //  StartPageView
 // ─────────────────────────────────────────────────────────────────────────────
-class StartPageView : public brls::Box
+class StartPageView : public beiklive::UI::BBox
 {
   public:
     StartPageView();
@@ -61,6 +62,7 @@ class StartPageView : public brls::Box
 
     void showAppPage();
     void openFileListPage();
+    void openSettingsPage();
     void createAppPage();
 };
 

@@ -4,6 +4,21 @@
 
 namespace beiklive::UI
 {
+        
+    BBox::BBox()
+    {
+        beiklive::InsertBackground(this);
+    }
+
+    BBox::BBox(brls::Axis flexDirection)
+    {
+        beiklive::InsertBackground(this);
+        
+    }
+
+
+
+
     BrowserHeader::BrowserHeader()
     {
         

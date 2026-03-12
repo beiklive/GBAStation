@@ -65,6 +65,8 @@ public:
 
     /// 用户点击"文件列表"按钮时调用
     std::function<void()> onOpenFileList;
+    /// 用户点击"设置"按钮时调用
+    std::function<void()> onOpenSettings;
 
 private:
     brls::HScrollingFrame* m_scroll      = nullptr;

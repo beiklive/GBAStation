@@ -8,6 +8,14 @@
 namespace beiklive::UI
 {
 
+class BBox : public brls::Box
+{
+  public:
+    BBox(brls::Axis flexDirection);
+    BBox();
+};
+
+
 // A common header for file browsers, with a title, a path and an info label
 class BrowserHeader : public brls::Box
 {

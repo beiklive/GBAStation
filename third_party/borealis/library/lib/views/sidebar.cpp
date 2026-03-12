@@ -60,7 +60,6 @@ SidebarItem::SidebarItem()
     : Box(Axis::ROW)
 {
     this->inflateFromXMLString(sidebarItemXML);
-
     this->registerStringXMLAttribute("label", [this](std::string value)
         { this->setLabel(value); });
 

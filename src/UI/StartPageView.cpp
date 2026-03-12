@@ -201,7 +201,7 @@ StartPageView::StartPageView()
     setAxis(brls::Axis::COLUMN);
 
     // Background image (absolute positioning, does not participate in layout)
-    beiklive::InsertBackground(this);
+    // beiklive::InsertBackground(this);
 
     
 }
@@ -272,6 +272,12 @@ void StartPageView::createAppPage()
     m_appPage->onOpenFileList = [this]() {
         openFileListPage();
     };
+
+    m_appPage->onOpenSettings = [this]() {
+        openSettingsPage();
+    };
+
+
 }
 
 // ─────────── Page switching ──────────────────────────────────────────────────
@@ -297,12 +303,16 @@ void StartPageView::openFileListPage()
 
     // ── Create a fresh FileListPage ───────────────────────────────────────────
     auto* fileListPage = new FileListPage();
+    // fileListPage->setFilter(ROM_EXTENSIONS, FileListPage::FilterMode::Whitelist);
 
     // ── Create a fresh settings panel and a container that holds both ─────────
     // The container is absolute-positioned so the panel can overlay the list.
     auto* container = new brls::Box(brls::Axis::COLUMN);
     container->setGrow(1.0f);
     container->setBackground(brls::ViewBackground::NONE);
+
+    
+
 
     auto* settingsPanel = new FileSettingsPanel();
     settingsPanel->setWidthPercentage(30.f);
@@ -374,6 +384,20 @@ void StartPageView::openFileListPage()
     frame->setBackground(brls::ViewBackground::NONE);
     brls::Application::pushActivity(new brls::Activity(frame));
 }
+
+void StartPageView::openSettingsPage()
+{
+    auto* m_SettingPage = new SettingPage();
+    auto* frame = new brls::AppletFrame(m_SettingPage);
+    frame->setBackground(brls::ViewBackground::NONE);
+    frame->setHeaderVisibility(brls::Visibility::GONE);
+    frame->setFooterVisibility(brls::Visibility::GONE);
+    frame->setTitle("设置");
+    brls::Application::pushActivity(new brls::Activity(frame));
+
+}
+
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 

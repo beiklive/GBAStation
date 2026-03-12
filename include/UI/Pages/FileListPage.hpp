@@ -67,7 +67,7 @@ class FileListItemView : public brls::Box
 // ─────────────────────────────────────────────────────────────────────────────
 //  FileListPage  –  pure-code file-browser page
 // ─────────────────────────────────────────────────────────────────────────────
-class FileListPage : public brls::Box
+class FileListPage : public beiklive::UI::BBox
 {
   public:
     enum class FilterMode { Whitelist, Blacklist };

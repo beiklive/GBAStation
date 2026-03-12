@@ -138,11 +138,11 @@ int main(int argc, char* argv[]) {
 
 	RunnerInit();
 
+	brls::Application::getPlatform()->setThemeVariant(brls::ThemeVariant::DARK);
 	beiklive::RegisterStyles();
 	beiklive::RegisterThemes();
 
 
-	// brls::Application::getPlatform()->setThemeVariant(brls::ThemeVariant::DARK);
 
 	// brls::Application::setGlobalQuit(true);
 

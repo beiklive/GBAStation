@@ -271,7 +271,7 @@ FileListPage::FileListPage()
     setHeight(brls::View::AUTO);
     setGrow(1.0f);
 
-    beiklive::InsertBackground(this);
+    // beiklive::InsertBackground(this);
 
     buildUI();
 
