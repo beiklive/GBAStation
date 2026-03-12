@@ -23,6 +23,22 @@ namespace beiklive {
         #else
             brls::Logger::info("Using non-OpenGL backend");
         #endif
-    }                                              
+    }
 
+    void InsertBackground(brls::Box *view)
+    {
+        #undef ABSOLUTE // avoid conflict with brls::PositionType::ABSOLUTE
+
+        auto *m_bgImage = new beiklive::UI::ProImage();
+        m_bgImage->setFocusable(false);
+        m_bgImage->setPositionType(brls::PositionType::ABSOLUTE);
+        m_bgImage->setPositionTop(0);
+        m_bgImage->setPositionLeft(0);
+        m_bgImage->setWidthPercentage(100);
+        m_bgImage->setHeightPercentage(100);
+        m_bgImage->setScalingType(brls::ImageScalingType::FIT);
+        m_bgImage->setInterpolation(brls::ImageInterpolation::LINEAR);
+        m_bgImage->setShaderAnimation(beiklive::UI::ShaderAnimationType::PSP_XMB_RIPPLE);
+        view->addView(m_bgImage);
+    }
 };

@@ -20,6 +20,7 @@ void RegisterThemes()
 
 
 
+    ADD_THEME_COLOR("beiklive/sidePanel", nvgRGBA(20, 20, 20, 128));
     ADD_THEME_COLOR("beiklive/subtitle", nvgRGBA(31, 31, 31, 128));
     ADD_THEME_COLOR("beiklive/line", nvgRGBA(31, 31, 31, 256));
 }

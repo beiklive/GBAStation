@@ -59,6 +59,7 @@ namespace beiklive {
 void RegisterStyles();
 void RegisterThemes();
 void CheckGLSupport();
+void InsertBackground(brls::Box* view);
 // 吞噬一个按钮事件，使其不再被后续处理
 void swallow(brls::View* v, brls::ControllerButton btn);
 

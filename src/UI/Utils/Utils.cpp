@@ -70,7 +70,7 @@ namespace beiklive::UI
 
 
     // ── RoundButton constants ────────────────────────────────────────────────
-    static constexpr float ROUND_BTN_IMAGE_SIZE = 60.0f;  // diameter of the circle
+    static constexpr float ROUND_BTN_IMAGE_SIZE = 80.0f;  // diameter of the circle
     static constexpr float ROUND_BTN_PADDING    = 10.0f;  // padding around the whole widget
     static constexpr float ROUND_BTN_GAP        =  6.0f;  // gap between circle and label
     static constexpr float ROUND_BTN_LABEL_FS   = 14.0f;  // label font size
@@ -117,9 +117,11 @@ namespace beiklive::UI
 
         m_image = new brls::Image();
         m_image->setImageFromFile(imagePath);
-        m_image->setWidth(ROUND_BTN_IMAGE_SIZE-25);
-        m_image->setHeight(ROUND_BTN_IMAGE_SIZE-25);
+        m_image->setWidth(ROUND_BTN_IMAGE_SIZE-35);
+        m_image->setHeight(ROUND_BTN_IMAGE_SIZE-35);
         m_image->setScalingType(brls::ImageScalingType::FIT);
+        m_image->setInterpolation(brls::ImageInterpolation::NEAREST);
+
         m_imageWrapper->addView(m_image);
         this->addView(m_imageWrapper);
 

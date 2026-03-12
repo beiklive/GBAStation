@@ -56,7 +56,6 @@ class StartPageView : public brls::Box
     static brls::View* create();
 
   private:
-    beiklive::UI::ProImage* m_bgImage = nullptr;
 
     AppPage* m_appPage = nullptr;
 

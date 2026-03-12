@@ -15,13 +15,13 @@ using namespace brls::literals; // for _i18n
 
 namespace fs = std::filesystem;
 
-static constexpr float CELL_HEIGHT     = 66.f;
-static constexpr float ICON_HEIGHT     = 50.f;
-static constexpr float ACCENT_W        = 4.f;
-static constexpr float CELL_PAD_H      = 12.f;
-static constexpr float CELL_PAD_V      = 10.f;
-static constexpr float INFO_FONT_SIZE  = 16.f;
-static constexpr float NAME_FONT_SIZE  = 26.f;
+static constexpr float CELL_HEIGHT = 66.f;
+static constexpr float ICON_HEIGHT = 50.f;
+static constexpr float ACCENT_W = 4.f;
+static constexpr float CELL_PAD_H = 12.f;
+static constexpr float CELL_PAD_V = 10.f;
+static constexpr float INFO_FONT_SIZE = 16.f;
+static constexpr float NAME_FONT_SIZE = 26.f;
 static constexpr float DETAIL_THUMB_SZ = 180.f;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -29,17 +29,15 @@ static constexpr float DETAIL_THUMB_SZ = 180.f;
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Game Boy / Game Boy Color ROM extensions
-static const std::vector<std::string> k_gbExtensions  = { "gb", "gbc" };
+static const std::vector<std::string> k_gbExtensions = {"gb", "gbc"};
 /// Game Boy Advance ROM extensions
-static const std::vector<std::string> k_gbaExtensions = { "gba" };
+static const std::vector<std::string> k_gbaExtensions = {"gba"};
 /// Common image file extensions
 static const std::vector<std::string> k_imageExtensions = {
-    "png", "jpg", "jpeg", "bmp", "gif", "webp", "tga"
-};
+    "png", "jpg", "jpeg", "bmp", "gif", "webp", "tga"};
 /// Common archive / compressed-file extensions
 static const std::vector<std::string> k_zipExtensions = {
-    "zip", "rar", "7z", "gz", "tar", "bz2", "xz", "zst"
-};
+    "zip", "rar", "7z", "gz", "tar", "bz2", "xz", "zst"};
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Helpers
@@ -47,30 +45,36 @@ static const std::vector<std::string> k_zipExtensions = {
 
 /// Returns the resource path of the icon that should represent @p item.
 /// The icon variant (_light / _dark) is selected based on @p theme.
-static std::string getFileIconPath(const FileListItem& item, brls::ThemeVariant theme)
+static std::string getFileIconPath(const FileListItem &item, brls::ThemeVariant theme)
 {
     // const std::string variant = (theme == brls::ThemeVariant::LIGHT) ? "_light" : "_dark";
+    std::string path_prefix = "img/ui/" + 
+    std::string((brls::Application::getPlatform()->getThemeVariant() == brls::ThemeVariant::DARK) ? "light/" : "dark/");
 
     if (item.isDir)
-        return BK_RES(std::string("/img/ui/icon_folder.png"));
+        return BK_RES(path_prefix + "wenjianjia.png");
 
     const std::string suffix = beiklive::string::getFileSuffix(item.fileName);
 
-    auto matchesSuffix = [&suffix](const std::vector<std::string>& exts) {
-        for (const auto& ext : exts)
+    auto matchesSuffix = [&suffix](const std::vector<std::string> &exts)
+    {
+        for (const auto &ext : exts)
             if (beiklive::string::iequals(ext, suffix))
                 return true;
         return false;
     };
 
-    if (matchesSuffix(k_gbExtensions))    return BK_RES(std::string("img/ui/icon_gb.png"));
-    if (matchesSuffix(k_gbaExtensions))   return BK_RES(std::string("img/ui/icon_gba.png"));
-    if (matchesSuffix(k_imageExtensions)) return BK_RES(std::string("img/ui/icon_image.png"));
-    if (matchesSuffix(k_zipExtensions))   return BK_RES(std::string("img/ui/icon_zip.png"));
+    if (matchesSuffix(k_gbExtensions))
+        return BK_RES(path_prefix + "icon_gb.png");
+    if (matchesSuffix(k_gbaExtensions))
+        return BK_RES(path_prefix + "icon_gba.png");
+    if (matchesSuffix(k_imageExtensions))
+        return BK_RES(path_prefix + "tupian.png");
+    if (matchesSuffix(k_zipExtensions))
+        return BK_RES(path_prefix + "zip.png");
 
-    return BK_RES(std::string("img/ui/icon_file.png"));
+    return BK_RES(path_prefix + "wenjian.png");
 }
-
 
 /// Format a file size in bytes as a human-readable string (KB / MB / GB).
 static std::string formatFileSize(std::uintmax_t bytes)
@@ -100,12 +104,12 @@ static std::string formatFileSize(std::uintmax_t bytes)
 }
 
 /// Count the direct children of a directory (0 if it cannot be read).
-static int countChildren(const std::string& path)
+static int countChildren(const std::string &path)
 {
     int n = 0;
     try
     {
-        for (const auto& e : fs::directory_iterator(path))
+        for (const auto &e : fs::directory_iterator(path))
         {
             (void)e;
             ++n;
@@ -154,7 +158,7 @@ FileListItemView::FileListItemView()
     setHeight(CELL_HEIGHT);
     setWidth(brls::View::AUTO);
     setHideHighlightBackground(true);
-    setBackground(brls::ViewBackground::NONE);
+    // setBackground(brls::ViewBackground::NONE);
 
     // Accent rectangle on the left
     m_accent = new brls::Rectangle();
@@ -172,12 +176,13 @@ FileListItemView::FileListItemView()
     m_icon->setMarginRight(CELL_PAD_H);
     m_icon->setScalingType(brls::ImageScalingType::FIT);
     m_icon->setInterpolation(brls::ImageInterpolation::LINEAR);
-    m_icon->setImageFromFile(BK_RES("img/file/file_light.png"));
+    // m_icon->setImageFromFile(BK_RES("img/file/file_light.png"));
     addView(m_icon);
 
     // Name label (grows to fill space)
     m_nameLabel = new brls::Label();
     m_nameLabel->setFontSize(NAME_FONT_SIZE);
+    m_nameLabel->setTextColor(GET_THEME_COLOR("brls/text"));
     m_nameLabel->setSingleLine(true);
     // Scroll (marquee) the label when the item is focused and text overflows.
     m_nameLabel->setAutoAnimate(true);
@@ -186,21 +191,25 @@ FileListItemView::FileListItemView()
     m_nameLabel->setMarginTop(8.f);
     addView(m_nameLabel);
 
-    auto* box = new brls::Box(brls::Axis::COLUMN);
+    auto *box = new brls::Box(brls::Axis::COLUMN);
     box->setHeight(CELL_HEIGHT);
     // Info label on the right (gray)
     m_infoLabel = new brls::Label();
     m_infoLabel->setFontSize(INFO_FONT_SIZE);
     m_infoLabel->setSingleLine(true);
-    m_infoLabel->setTextColor(nvgRGBA(160, 160, 160, 255));
+    m_infoLabel->setTextColor(GET_THEME_COLOR("brls/text"));
     m_infoLabel->setHorizontalAlign(brls::HorizontalAlign::RIGHT);
     m_infoLabel->setMarginRight(CELL_PAD_H * 2);
     box->addView(new brls::Padding());
     box->addView(m_infoLabel);
     addView(box);
+
+
+    addGestureRecognizer(new brls::TapGestureRecognizer(this));
+
 }
 
-void FileListItemView::setItem(const FileListItem& item, int index)
+void FileListItemView::setItem(const FileListItem &item, int index)
 {
     m_index = index;
     m_nameLabel->setText(item.displayName());
@@ -208,7 +217,9 @@ void FileListItemView::setItem(const FileListItem& item, int index)
 
     if (item.isDir)
     {
-        m_icon->setImageFromFile(BK_RES("img/ui/icon_folder.png"));
+        std::string path_prefix = "img/ui/" + 
+        std::string((brls::Application::getPlatform()->getThemeVariant() == brls::ThemeVariant::DARK) ? "light/" : "dark/");
+        m_icon->setImageFromFile(BK_RES(path_prefix + "wenjianjia.png"));
         m_infoLabel->setText(std::to_string(item.childCount) + " items");
     }
     else
@@ -218,19 +229,17 @@ void FileListItemView::setItem(const FileListItem& item, int index)
     }
 
     // ButtonA → activate item
-    registerAction("beiklive/hints/confirm"_i18n,
-                   brls::BUTTON_A,
-                   [this](brls::View*) {
+    registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A, [this](brls::View *)
+                   {
                        if (onItemActivated)
                            onItemActivated(m_index);
-                       return true;
-                   },
-                   false, false, brls::SOUND_CLICK);
+                       return true; }, false, false, brls::SOUND_CLICK);
 
     // ButtonX → open options/sidebar
     registerAction("beiklive/hints/operate"_i18n,
                    brls::BUTTON_X,
-                   [this](brls::View*) {
+                   [this](brls::View *)
+                   {
                        if (onItemOptions)
                            onItemOptions(m_index);
                        return true;
@@ -262,6 +271,8 @@ FileListPage::FileListPage()
     setHeight(brls::View::AUTO);
     setGrow(1.0f);
 
+    beiklive::InsertBackground(this);
+
     buildUI();
 
     const std::string key = "UI.fileListLayoutMode";
@@ -276,7 +287,8 @@ FileListPage::FileListPage()
     // B → navigate up
     registerAction("beiklive/hints/UP"_i18n,
                    brls::BUTTON_B,
-                   [this](brls::View*) {
+                   [this](brls::View *)
+                   {
                        navigateUp();
                        return true;
                    });
@@ -390,15 +402,14 @@ void FileListPage::buildDetailPanel()
 
 // ─────────── Public API ──────────────────────────────────────────────────────
 
-void FileListPage::navigateTo(const std::string& path)
+void FileListPage::navigateTo(const std::string &path)
 {
     refreshList(path);
-
 }
 
 void FileListPage::resetFocusToTop()
 {
-    const auto& children = m_itemsBox->getChildren();
+    const auto &children = m_itemsBox->getChildren();
     if (children.empty())
         return;
 
@@ -416,15 +427,18 @@ void FileListPage::rebuildItemViews()
     m_itemsBox->clearViews(/*free=*/true);
     m_scrollFrame->setContentOffsetY(0, /*animated=*/false);
 
-    FileListItemView* firstItem = nullptr;
+    FileListItemView *firstItem = nullptr;
     for (int i = 0; i < static_cast<int>(m_items.size()); ++i)
     {
-        auto* itemView = new FileListItemView();
+        auto *itemView = new FileListItemView();
         itemView->setItem(m_items[i], i);
 
-        itemView->onItemFocused   = [this](int idx) { onItemFocused(idx); };
-        itemView->onItemActivated = [this](int idx) { onItemActivated(idx); };
-        itemView->onItemOptions   = [this](int idx) { openSidebar(idx); };
+        itemView->onItemFocused = [this](int idx)
+        { onItemFocused(idx); };
+        itemView->onItemActivated = [this](int idx)
+        { onItemActivated(idx); };
+        itemView->onItemOptions = [this](int idx)
+        { openSidebar(idx); };
 
         m_itemsBox->addView(itemView);
         if (i == 0)
@@ -435,11 +449,11 @@ void FileListPage::rebuildItemViews()
         brls::Application::giveFocus(firstItem);
 }
 
-void FileListPage::setFilter(const std::vector<std::string>& suffixes, FilterMode mode)
+void FileListPage::setFilter(const std::vector<std::string> &suffixes, FilterMode mode)
 {
     m_filterSuffixes = suffixes;
-    m_filterMode     = mode;
-    m_filterEnabled  = !suffixes.empty();
+    m_filterMode = mode;
+    m_filterEnabled = !suffixes.empty();
 }
 
 void FileListPage::setFilterEnabled(bool enabled)
@@ -447,13 +461,13 @@ void FileListPage::setFilterEnabled(bool enabled)
     m_filterEnabled = enabled;
 }
 
-void FileListPage::setFileCallback(const std::string& suffix,
-                                    std::function<void(const FileListItem&)> cb)
+void FileListPage::setFileCallback(const std::string &suffix,
+                                   std::function<void(const FileListItem &)> cb)
 {
     m_fileCallbacks[suffix] = std::move(cb);
 }
 
-void FileListPage::setDefaultFileCallback(std::function<void(const FileListItem&)> cb)
+void FileListPage::setDefaultFileCallback(std::function<void(const FileListItem &)> cb)
 {
     m_defaultFileCallback = std::move(cb);
 }
@@ -479,7 +493,7 @@ void FileListPage::setLayoutMode(LayoutMode mode)
 
 // ─────────── Internal helpers ────────────────────────────────────────────────
 
-std::string FileListPage::lookupMappedName(const std::string& name, bool isDir) const
+std::string FileListPage::lookupMappedName(const std::string &name, bool isDir) const
 {
     if (!NameMappingManager)
         return {};
@@ -493,7 +507,7 @@ std::string FileListPage::lookupMappedName(const std::string& name, bool isDir) 
     else
     {
         auto dot = name.rfind('.');
-        key      = (dot != std::string::npos) ? name.substr(0, dot) : name;
+        key = (dot != std::string::npos) ? name.substr(0, dot) : name;
     }
 
     if (auto val = NameMappingManager->Get(key); val && val->AsString())
@@ -501,7 +515,7 @@ std::string FileListPage::lookupMappedName(const std::string& name, bool isDir) 
     return {};
 }
 
-std::string FileListPage::lookupLogoPath(const std::string& name, bool isDir) const
+std::string FileListPage::lookupLogoPath(const std::string &name, bool isDir) const
 {
     if (!logoManager)
         return {};
@@ -514,7 +528,7 @@ std::string FileListPage::lookupLogoPath(const std::string& name, bool isDir) co
     else
     {
         auto dot = name.rfind('.');
-        key      = (dot != std::string::npos) ? name.substr(0, dot) : name;
+        key = (dot != std::string::npos) ? name.substr(0, dot) : name;
     }
 
     if (auto val = logoManager->Get(key); val && val->AsString())
@@ -522,13 +536,13 @@ std::string FileListPage::lookupLogoPath(const std::string& name, bool isDir) co
     return {};
 }
 
-bool FileListPage::passesFilter(const std::string& suffix) const
+bool FileListPage::passesFilter(const std::string &suffix) const
 {
     if (!m_filterEnabled || m_filterSuffixes.empty())
         return true;
 
     bool found = false;
-    for (const auto& s : m_filterSuffixes)
+    for (const auto &s : m_filterSuffixes)
     {
         if (beiklive::string::iequals(s, suffix))
         {
@@ -540,7 +554,7 @@ bool FileListPage::passesFilter(const std::string& suffix) const
     return (m_filterMode == FilterMode::Whitelist) ? found : !found;
 }
 
-void FileListPage::refreshList(const std::string& path)
+void FileListPage::refreshList(const std::string &path)
 {
     m_currentPath = path;
     m_inDriveListMode = false;
@@ -558,10 +572,10 @@ void FileListPage::refreshList(const std::string& path)
     if (SettingManager && SettingManager->Contains("UI.logoLoadMode"))
         logoMode = *SettingManager->Get("UI.logoLoadMode")->AsInt();
 
-    for (const auto& fullPath : rawList)
+    for (const auto &fullPath : rawList)
     {
         auto pathType = beiklive::file::getPathType(fullPath);
-        bool isDir    = (pathType == beiklive::file::PathType::Directory);
+        bool isDir = (pathType == beiklive::file::PathType::Directory);
 
         std::string name = beiklive::string::extractFileName(fullPath);
 
@@ -573,9 +587,9 @@ void FileListPage::refreshList(const std::string& path)
         }
 
         FileListItem item;
-        item.fileName   = name;
-        item.fullPath   = fullPath;
-        item.isDir      = isDir;
+        item.fileName = name;
+        item.fullPath = fullPath;
+        item.isDir = isDir;
         item.mappedName = lookupMappedName(name, isDir);
 
         // Prefetch logo path when logoMode == 2 (prefetch) or 1 (on-focus will
@@ -617,9 +631,9 @@ void FileListPage::refreshList(const std::string& path)
         // Non-root (or non-Windows root): add a ".." entry so the user can
         // navigate back even when every file is hidden by the active filter.
         FileListItem dotdot;
-        dotdot.fileName   = "..";
-        dotdot.fullPath   = beiklive::file::getParentPath(m_currentPath);
-        dotdot.isDir      = true;
+        dotdot.fileName = "..";
+        dotdot.fullPath = beiklive::file::getParentPath(m_currentPath);
+        dotdot.isDir = true;
         dotdot.childCount = 0;
         m_items.push_back(std::move(dotdot));
     }
@@ -654,7 +668,7 @@ void FileListPage::clearDetailPanel()
     m_detailInfo->setText("");
 }
 
-void FileListPage::updateDetailPanel(const FileListItem& item)
+void FileListPage::updateDetailPanel(const FileListItem &item)
 {
     if (!m_detailPanel || m_layoutMode == LayoutMode::ListOnly)
         return;
@@ -698,7 +712,7 @@ void FileListPage::showDriveList()
 {
 #ifdef _WIN32
     m_inDriveListMode = true;
-    m_currentPath     = "";
+    m_currentPath = "";
 
     if (m_header)
     {
@@ -709,12 +723,12 @@ void FileListPage::showDriveList()
 
     m_items.clear();
 
-    for (const auto& drivePath : getWindowsDrives())
+    for (const auto &drivePath : getWindowsDrives())
     {
         FileListItem item;
-        item.fileName   = drivePath.substr(0, 2); // e.g. "C:"
-        item.fullPath   = drivePath;              // e.g. "C:\\"
-        item.isDir      = true;
+        item.fileName = drivePath.substr(0, 2); // e.g. "C:"
+        item.fullPath = drivePath;              // e.g. "C:\\"
+        item.isDir = true;
         item.childCount = 0;
         m_items.push_back(std::move(item));
     }
@@ -753,7 +767,7 @@ void FileListPage::navigateUp()
     refreshList(parent);
 }
 
-void FileListPage::openItem(const FileListItem& item)
+void FileListPage::openItem(const FileListItem &item)
 {
     if (item.isDir)
     {
@@ -763,7 +777,7 @@ void FileListPage::openItem(const FileListItem& item)
 
     // File: find and invoke the appropriate callback
     std::string suffix = beiklive::string::getFileSuffix(item.fileName);
-    for (auto& kv : m_fileCallbacks)
+    for (auto &kv : m_fileCallbacks)
     {
         if (beiklive::string::iequals(kv.first, suffix))
         {
@@ -778,7 +792,8 @@ void FileListPage::openItem(const FileListItem& item)
 void FileListPage::doNewFolder()
 {
     brls::Application::getPlatform()->getImeManager()->openForText(
-        [this](const std::string& folderName) {
+        [this](const std::string &folderName)
+        {
             if (folderName.empty())
                 return;
             try
@@ -788,7 +803,7 @@ void FileListPage::doNewFolder()
                 bklog::info("Created folder: {}", newDir.string());
                 refreshList(m_currentPath);
             }
-            catch (const std::exception& e)
+            catch (const std::exception &e)
             {
                 bklog::error("Create folder failed: {}", e.what());
             }
@@ -837,11 +852,12 @@ void FileListPage::openSidebar(int itemIndex)
 
     // Fallback: use a built-in Dropdown (should not normally be reached when
     // the host correctly sets onOpenSettings)
-    const FileListItem& item = m_items[itemIndex];
+    const FileListItem &item = m_items[itemIndex];
 
     // Build option list – use a struct so we avoid index-arithmetic bugs when
     // rename is conditionally excluded on non-Switch platforms.
-    struct Option {
+    struct Option
+    {
         std::string label;
         std::function<void()> action;
     };
@@ -849,30 +865,36 @@ void FileListPage::openSidebar(int itemIndex)
 
 #ifdef __SWITCH__
     // Rename is only supported on Switch (IME + filesystem write access)
-    opts.push_back({ "beiklive/sidebar/rename"_i18n,
-                     [this, itemIndex]() { doRename(itemIndex); } });
+    opts.push_back({"beiklive/sidebar/rename"_i18n,
+                    [this, itemIndex]()
+                    { doRename(itemIndex); }});
 #endif
 
-    opts.push_back({ "beiklive/sidebar/set_mapping"_i18n,
-                     [this, itemIndex]() { doSetMapping(itemIndex); } });
-    opts.push_back({ "beiklive/sidebar/cut"_i18n,
-                     [this, itemIndex]() { doCut(itemIndex); } });
+    opts.push_back({"beiklive/sidebar/set_mapping"_i18n,
+                    [this, itemIndex]()
+                    { doSetMapping(itemIndex); }});
+    opts.push_back({"beiklive/sidebar/cut"_i18n,
+                    [this, itemIndex]()
+                    { doCut(itemIndex); }});
 
     if (m_hasClipboard)
-        opts.push_back({ "beiklive/sidebar/paste"_i18n,
-                         [this]() { doPaste(); } });
+        opts.push_back({"beiklive/sidebar/paste"_i18n,
+                        [this]()
+                        { doPaste(); }});
 
-    opts.push_back({ "beiklive/sidebar/delete"_i18n,
-                     [this, itemIndex]() { doDelete(itemIndex); } });
+    opts.push_back({"beiklive/sidebar/delete"_i18n,
+                    [this, itemIndex]()
+                    { doDelete(itemIndex); }});
 
     std::vector<std::string> labels;
-    for (const auto& o : opts)
+    for (const auto &o : opts)
         labels.push_back(o.label);
 
-    auto* dropdown = new brls::Dropdown(
+    auto *dropdown = new brls::Dropdown(
         item.displayName(),
         labels,
-        [opts](int sel) {
+        [opts](int sel)
+        {
             if (sel >= 0 && sel < static_cast<int>(opts.size()))
                 opts[sel].action();
         });
@@ -892,7 +914,8 @@ void FileListPage::doRename(int itemIndex)
     const std::string oldFileName = m_items[itemIndex].fileName;
 
     brls::Application::getPlatform()->getImeManager()->openForText(
-        [this, oldFullPath](const std::string& newName) {
+        [this, oldFullPath](const std::string &newName)
+        {
             if (newName.empty())
                 return;
             try
@@ -903,7 +926,7 @@ void FileListPage::doRename(int itemIndex)
                 bklog::info("Renamed: {} → {}", oldFullPath, newPath.string());
                 refreshList(m_currentPath);
             }
-            catch (const std::exception& e)
+            catch (const std::exception &e)
             {
                 bklog::error("Rename failed: {}", e.what());
             }
@@ -930,11 +953,12 @@ void FileListPage::doSetMapping(int itemIndex)
     else
     {
         auto dot = itemCopy.fileName.rfind('.');
-        key      = (dot != std::string::npos) ? itemCopy.fileName.substr(0, dot) : itemCopy.fileName;
+        key = (dot != std::string::npos) ? itemCopy.fileName.substr(0, dot) : itemCopy.fileName;
     }
 
     brls::Application::getPlatform()->getImeManager()->openForText(
-        [this, key, fullPath = itemCopy.fullPath](const std::string& mapped) {
+        [this, key, fullPath = itemCopy.fullPath](const std::string &mapped)
+        {
             if (!NameMappingManager)
                 return;
             if (mapped.empty())
@@ -956,7 +980,7 @@ void FileListPage::doCut(int itemIndex)
     if (itemIndex < 0 || itemIndex >= static_cast<int>(m_items.size()))
         return;
     m_clipboardItem = m_items[itemIndex];
-    m_hasClipboard  = true;
+    m_hasClipboard = true;
     bklog::info("Cut: {}", m_clipboardItem.fullPath);
 }
 
@@ -974,7 +998,7 @@ void FileListPage::doPaste()
         m_hasClipboard = false;
         refreshList(m_currentPath);
     }
-    catch (const std::exception& e)
+    catch (const std::exception &e)
     {
         bklog::error("Paste failed: {}", e.what());
     }
@@ -984,13 +1008,14 @@ void FileListPage::doDelete(int itemIndex)
 {
     if (itemIndex < 0 || itemIndex >= static_cast<int>(m_items.size()))
         return;
-    const FileListItem& item = m_items[itemIndex];
+    const FileListItem &item = m_items[itemIndex];
 
     // Confirm via a second Dropdown
-    auto* confirm = new brls::Dropdown(
+    auto *confirm = new brls::Dropdown(
         "beiklive/sidebar/delete_confirm"_i18n,
-        { "beiklive/hints/confirm"_i18n, "brls/hints/cancel"_i18n },
-        [this, path = item.fullPath](int sel) {
+        {"beiklive/hints/confirm"_i18n, "brls/hints/cancel"_i18n},
+        [this, path = item.fullPath](int sel)
+        {
             if (sel != 0)
                 return;
             try
@@ -999,7 +1024,7 @@ void FileListPage::doDelete(int itemIndex)
                 bklog::info("Deleted: {}", path);
                 refreshList(m_currentPath);
             }
-            catch (const std::exception& e)
+            catch (const std::exception &e)
             {
                 bklog::error("Delete failed: {}", e.what());
             }
@@ -1007,4 +1032,3 @@ void FileListPage::doDelete(int itemIndex)
 
     brls::Application::pushActivity(new brls::Activity(confirm));
 }
-

@@ -22,14 +22,14 @@ using namespace brls::literals; // for _i18n
 //  FileSettingsPanel
 // ─────────────────────────────────────────────────────────────────────────────
 
-static constexpr float PANEL_OPTION_HEIGHT = 54.f;
-static constexpr float PANEL_TITLE_HEIGHT  = 48.f;
+static constexpr float PANEL_OPTION_HEIGHT = 64.f;
+static constexpr float PANEL_TITLE_HEIGHT  = 64.f;
 
 FileSettingsPanel::FileSettingsPanel()
 {
     // Absolute-positioned overlay – added to / removed from tree on demand
     setPositionType(brls::PositionType::ABSOLUTE);
-    setBackgroundColor(nvgRGBA(20, 20, 20, 255));
+    setBackgroundColor(GET_THEME_COLOR("beiklive/sidePanel"));
     setAxis(brls::Axis::COLUMN);
     setFocusable(true);
 
@@ -37,13 +37,16 @@ FileSettingsPanel::FileSettingsPanel()
     m_titleBar = new brls::Box(brls::Axis::ROW);
     m_titleBar->setHeight(PANEL_TITLE_HEIGHT);
     m_titleBar->setWidth(brls::View::AUTO);
-    m_titleBar->setBackgroundColor(nvgRGBA(40, 40, 40, 255));
-    m_titleBar->setPadding(8.f, 16.f, 8.f, 16.f);
+    // m_titleBar->setPadding(8.f, 16.f, 8.f, 16.f);
     m_titleBar->setAlignItems(brls::AlignItems::CENTER);
 
     m_titleLabel = new brls::Label();
     m_titleLabel->setFontSize(24.f);
-    m_titleLabel->setTextColor(nvgRGBA(220, 220, 220, 255));
+    m_titleLabel->setSingleLine(true);
+    m_titleLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+    // Scroll (marquee) the label when the item is focused and text overflows.
+    m_titleLabel->setAutoAnimate(true);
+    m_titleLabel->setTextColor(GET_THEME_COLOR("brls/text"));
     m_titleLabel->setGrow(1.0f);
     m_titleBar->addView(m_titleLabel);
     addView(m_titleBar);
@@ -54,6 +57,7 @@ FileSettingsPanel::FileSettingsPanel()
     m_optionsBox->setGrow(1.0f);
     m_optionsBox->setPadding(8.f, 0.f, 8.f, 0.f);
     addView(m_optionsBox);
+
 }
 
 void FileSettingsPanel::clearOptions()
@@ -71,7 +75,8 @@ void FileSettingsPanel::addOptionButton(const std::string& label,
     btn->setWidth(brls::View::AUTO);
     btn->setAlignItems(brls::AlignItems::CENTER);
     btn->setPadding(0.f, 20.f, 0.f, 20.f);
-    btn->setHideHighlightBackground(false);
+    btn->setHideHighlightBackground(true);
+    btn->setHideClickAnimation(true);
 
     auto* lbl = new brls::Label();
     lbl->setText(label);
@@ -110,7 +115,6 @@ void FileSettingsPanel::showForItem(const FileListItem& item,
         if (m_fileListPage)
             m_fileListPage->doRenamePublic(m_currentItemIdx);
     });
-#endif
 
     // ── Set mapping ────────────────────────────────────────────────────────
     addOptionButton("beiklive/sidebar/set_mapping"_i18n, [this]() {
@@ -118,6 +122,7 @@ void FileSettingsPanel::showForItem(const FileListItem& item,
         if (m_fileListPage)
             m_fileListPage->doSetMappingPublic(m_currentItemIdx);
     });
+#endif
 
     // ── Cut ────────────────────────────────────────────────────────────────
     addOptionButton("beiklive/sidebar/cut"_i18n, [this]() {
@@ -196,19 +201,9 @@ StartPageView::StartPageView()
     setAxis(brls::Axis::COLUMN);
 
     // Background image (absolute positioning, does not participate in layout)
-    m_bgImage = new beiklive::UI::ProImage();
-    m_bgImage->setFocusable(false);
-    m_bgImage->setPositionType(brls::PositionType::ABSOLUTE);
-    m_bgImage->setPositionTop(0);
-    m_bgImage->setPositionLeft(0);
-    m_bgImage->setWidthPercentage(100);
-    m_bgImage->setHeightPercentage(100);
-    m_bgImage->setScalingType(brls::ImageScalingType::FIT);
-    m_bgImage->setInterpolation(brls::ImageInterpolation::LINEAR);
-    // m_bgImage->setImageFromFile(BK_APP_DEFAULT_BG);
-    // m_bgImage->setImageFromGif(BK_RES("img/test.gif"));
-    m_bgImage->setShaderAnimation(beiklive::UI::ShaderAnimationType::PSP_XMB_RIPPLE);
-    addView(m_bgImage);
+    beiklive::InsertBackground(this);
+
+    
 }
 
 void StartPageView::ActionInit()
@@ -237,7 +232,7 @@ void StartPageView::ActionInit()
 
 void StartPageView::Init()
 {
-    setBackground(brls::ViewBackground::NONE);
+    // setBackground(brls::ViewBackground::NONE);
 
     if (!gameRunner)
         return;
@@ -248,6 +243,7 @@ void StartPageView::Init()
     createAppPage();
     showAppPage();
 
+    addView(new brls::BottomBar());
     bklog::debug("Startup Page: AppPage");
 }
 
@@ -270,7 +266,7 @@ void StartPageView::createAppPage()
         frame->setHeaderVisibility(brls::Visibility::GONE);
         frame->setFooterVisibility(brls::Visibility::GONE);
         frame->setBackground(brls::ViewBackground::NONE);
-        brls::Application::pushActivity(new brls::Activity(frame));
+        brls::Application::pushActivity(new brls::Activity(frame), brls::TransitionAnimation::LINEAR);
     };
     // 文件列表按钮回调：打开文件列表页
     m_appPage->onOpenFileList = [this]() {
@@ -309,12 +305,10 @@ void StartPageView::openFileListPage()
     container->setBackground(brls::ViewBackground::NONE);
 
     auto* settingsPanel = new FileSettingsPanel();
-    float panelW = 1280 * 0.70f;
-    float panelH = 720  * 0.70f;
-    settingsPanel->setWidth(panelW);
-    settingsPanel->setHeight(panelH);
-    settingsPanel->setPositionLeft((1280 - panelW) * 0.5f);
-    settingsPanel->setPositionTop ((720  - panelH) * 0.5f);
+    settingsPanel->setWidthPercentage(30.f);
+    settingsPanel->setHeightPercentage(100.f);
+    settingsPanel->setPositionRight(0.f);
+    settingsPanel->setPositionTop (0.f);
     settingsPanel->setVisibility(brls::Visibility::GONE);
     // Add to container now (GONE) so it is always owned and freed with the Activity
     container->addView(settingsPanel);
