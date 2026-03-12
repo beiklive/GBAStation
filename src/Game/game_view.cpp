@@ -18,8 +18,6 @@
 #  include <nanovg/nanovg_gl.h>
 #endif
 
-#include <algorithm>
-#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -72,193 +70,7 @@ static int nvgImageFromGLTexture(NVGcontext* vg, GLuint tex,
 #endif
 }
 
-// ============================================================
-// Default button mapping: borealis ControllerButton → retro joypad ID
-// Used as fallback when config does not override individual buttons.
-// BUTTON_X is reserved as the in-game exit key (not mapped to game).
-// ============================================================
-struct DefaultButtonMap {
-    brls::ControllerButton brl;
-    unsigned               retroId;
-};
 
-// Default keyboard mapping: BrlsKeyboardScancode → retro joypad ID
-// Keys: Z=B, X=A, A=Select, S=Start, arrows=Dpad, Q=L, W=R
-struct DefaultKbMap {
-    int      scancode;  // BrlsKeyboardScancode value
-    unsigned retroId;
-};
-
-static const DefaultButtonMap k_defaultButtonMap[] = {
-    { brls::BUTTON_A,          RETRO_DEVICE_ID_JOYPAD_A      },
-    { brls::BUTTON_B,          RETRO_DEVICE_ID_JOYPAD_B      },
-    { brls::BUTTON_Y,          RETRO_DEVICE_ID_JOYPAD_Y      },
-    { brls::BUTTON_UP,         RETRO_DEVICE_ID_JOYPAD_UP     },
-    { brls::BUTTON_DOWN,       RETRO_DEVICE_ID_JOYPAD_DOWN   },
-    { brls::BUTTON_LEFT,       RETRO_DEVICE_ID_JOYPAD_LEFT   },
-    { brls::BUTTON_RIGHT,      RETRO_DEVICE_ID_JOYPAD_RIGHT  },
-    { brls::BUTTON_LB,         RETRO_DEVICE_ID_JOYPAD_L      },
-    { brls::BUTTON_RB,         RETRO_DEVICE_ID_JOYPAD_R      },
-    { brls::BUTTON_LT,         RETRO_DEVICE_ID_JOYPAD_L2     },
-    { brls::BUTTON_RT,         RETRO_DEVICE_ID_JOYPAD_R2     },
-    { brls::BUTTON_START,      RETRO_DEVICE_ID_JOYPAD_START  },
-    { brls::BUTTON_BACK,       RETRO_DEVICE_ID_JOYPAD_SELECT },
-    { brls::BUTTON_NAV_UP,     RETRO_DEVICE_ID_JOYPAD_UP     },
-    { brls::BUTTON_NAV_DOWN,   RETRO_DEVICE_ID_JOYPAD_DOWN   },
-    { brls::BUTTON_NAV_LEFT,   RETRO_DEVICE_ID_JOYPAD_LEFT   },
-    { brls::BUTTON_NAV_RIGHT,  RETRO_DEVICE_ID_JOYPAD_RIGHT  },
-};
-
-// Default keyboard mapping: Z→B, X→A, A→Y, S→Select, arrows→Dpad, Q→L, W→R, E→L2, R→R2
-static const DefaultKbMap k_defaultKbMap[] = {
-    { brls::BRLS_KBD_KEY_X,     RETRO_DEVICE_ID_JOYPAD_A      },
-    { brls::BRLS_KBD_KEY_Z,     RETRO_DEVICE_ID_JOYPAD_B      },
-    { brls::BRLS_KBD_KEY_A,     RETRO_DEVICE_ID_JOYPAD_Y      },
-    { brls::BRLS_KBD_KEY_UP,    RETRO_DEVICE_ID_JOYPAD_UP     },
-    { brls::BRLS_KBD_KEY_DOWN,  RETRO_DEVICE_ID_JOYPAD_DOWN   },
-    { brls::BRLS_KBD_KEY_LEFT,  RETRO_DEVICE_ID_JOYPAD_LEFT   },
-    { brls::BRLS_KBD_KEY_RIGHT, RETRO_DEVICE_ID_JOYPAD_RIGHT  },
-    { brls::BRLS_KBD_KEY_Q,     RETRO_DEVICE_ID_JOYPAD_L      },
-    { brls::BRLS_KBD_KEY_W,     RETRO_DEVICE_ID_JOYPAD_R      },
-    { brls::BRLS_KBD_KEY_E,     RETRO_DEVICE_ID_JOYPAD_L2     },
-    { brls::BRLS_KBD_KEY_R,     RETRO_DEVICE_ID_JOYPAD_R2     },
-    { brls::BRLS_KBD_KEY_ENTER, RETRO_DEVICE_ID_JOYPAD_START  },
-    { brls::BRLS_KBD_KEY_S,     RETRO_DEVICE_ID_JOYPAD_SELECT },
-};
-
-// retro button name → RETRO_DEVICE_ID_JOYPAD_* (for config parsing)
-struct RetroNameMap { const char* name; unsigned id; };
-static const RetroNameMap k_retroNames[] = {
-    { "a",      RETRO_DEVICE_ID_JOYPAD_A      },
-    { "b",      RETRO_DEVICE_ID_JOYPAD_B      },
-    { "x",      RETRO_DEVICE_ID_JOYPAD_X      },
-    { "y",      RETRO_DEVICE_ID_JOYPAD_Y      },
-    { "up",     RETRO_DEVICE_ID_JOYPAD_UP     },
-    { "down",   RETRO_DEVICE_ID_JOYPAD_DOWN   },
-    { "left",   RETRO_DEVICE_ID_JOYPAD_LEFT   },
-    { "right",  RETRO_DEVICE_ID_JOYPAD_RIGHT  },
-    { "l",      RETRO_DEVICE_ID_JOYPAD_L      },
-    { "r",      RETRO_DEVICE_ID_JOYPAD_R      },
-    { "l2",     RETRO_DEVICE_ID_JOYPAD_L2     },
-    { "r2",     RETRO_DEVICE_ID_JOYPAD_R2     },
-    { "l3",     RETRO_DEVICE_ID_JOYPAD_L3     },
-    { "r3",     RETRO_DEVICE_ID_JOYPAD_R3     },
-    { "start",  RETRO_DEVICE_ID_JOYPAD_START  },
-    { "select", RETRO_DEVICE_ID_JOYPAD_SELECT },
-};
-
-static unsigned retroNameToId(const std::string& name)
-{
-    for (auto& m : k_retroNames)
-        if (name == m.name) return m.id;
-    return RETRO_DEVICE_ID_JOYPAD_MASK; // sentinel = not found
-}
-
-// ============================================================
-// Keyboard scancode name ↔ BrlsKeyboardScancode lookup
-// Allows config entries like   keyboard.a = X
-// instead of numeric values    keyboard.a = 88
-// ============================================================
-struct KbdKeyName { const char* name; int scancode; };
-static const KbdKeyName k_kbdKeyNames[] = {
-    // Printable letters
-    { "A", brls::BRLS_KBD_KEY_A }, { "B", brls::BRLS_KBD_KEY_B },
-    { "C", brls::BRLS_KBD_KEY_C }, { "D", brls::BRLS_KBD_KEY_D },
-    { "E", brls::BRLS_KBD_KEY_E }, { "F", brls::BRLS_KBD_KEY_F },
-    { "G", brls::BRLS_KBD_KEY_G }, { "H", brls::BRLS_KBD_KEY_H },
-    { "I", brls::BRLS_KBD_KEY_I }, { "J", brls::BRLS_KBD_KEY_J },
-    { "K", brls::BRLS_KBD_KEY_K }, { "L", brls::BRLS_KBD_KEY_L },
-    { "M", brls::BRLS_KBD_KEY_M }, { "N", brls::BRLS_KBD_KEY_N },
-    { "O", brls::BRLS_KBD_KEY_O }, { "P", brls::BRLS_KBD_KEY_P },
-    { "Q", brls::BRLS_KBD_KEY_Q }, { "R", brls::BRLS_KBD_KEY_R },
-    { "S", brls::BRLS_KBD_KEY_S }, { "T", brls::BRLS_KBD_KEY_T },
-    { "U", brls::BRLS_KBD_KEY_U }, { "V", brls::BRLS_KBD_KEY_V },
-    { "W", brls::BRLS_KBD_KEY_W }, { "X", brls::BRLS_KBD_KEY_X },
-    { "Y", brls::BRLS_KBD_KEY_Y }, { "Z", brls::BRLS_KBD_KEY_Z },
-    // Digits
-    { "0", brls::BRLS_KBD_KEY_0 }, { "1", brls::BRLS_KBD_KEY_1 },
-    { "2", brls::BRLS_KBD_KEY_2 }, { "3", brls::BRLS_KBD_KEY_3 },
-    { "4", brls::BRLS_KBD_KEY_4 }, { "5", brls::BRLS_KBD_KEY_5 },
-    { "6", brls::BRLS_KBD_KEY_6 }, { "7", brls::BRLS_KBD_KEY_7 },
-    { "8", brls::BRLS_KBD_KEY_8 }, { "9", brls::BRLS_KBD_KEY_9 },
-    // Special / control keys
-    { "SPACE",        brls::BRLS_KBD_KEY_SPACE         },
-    { "ENTER",        brls::BRLS_KBD_KEY_ENTER         },
-    { "BACKSPACE",    brls::BRLS_KBD_KEY_BACKSPACE      },
-    { "TAB",          brls::BRLS_KBD_KEY_TAB            },
-    { "ESC",          brls::BRLS_KBD_KEY_ESCAPE         },
-    { "ESCAPE",       brls::BRLS_KBD_KEY_ESCAPE         },
-    { "GRAVE",        brls::BRLS_KBD_KEY_GRAVE_ACCENT   },
-    { "GRAVE_ACCENT", brls::BRLS_KBD_KEY_GRAVE_ACCENT   },
-    // Arrow keys
-    { "UP",    brls::BRLS_KBD_KEY_UP    },
-    { "DOWN",  brls::BRLS_KBD_KEY_DOWN  },
-    { "LEFT",  brls::BRLS_KBD_KEY_LEFT  },
-    { "RIGHT", brls::BRLS_KBD_KEY_RIGHT },
-    // Function keys
-    { "F1",  brls::BRLS_KBD_KEY_F1  }, { "F2",  brls::BRLS_KBD_KEY_F2  },
-    { "F3",  brls::BRLS_KBD_KEY_F3  }, { "F4",  brls::BRLS_KBD_KEY_F4  },
-    { "F5",  brls::BRLS_KBD_KEY_F5  }, { "F6",  brls::BRLS_KBD_KEY_F6  },
-    { "F7",  brls::BRLS_KBD_KEY_F7  }, { "F8",  brls::BRLS_KBD_KEY_F8  },
-    { "F9",  brls::BRLS_KBD_KEY_F9  }, { "F10", brls::BRLS_KBD_KEY_F10 },
-    { "F11", brls::BRLS_KBD_KEY_F11 }, { "F12", brls::BRLS_KBD_KEY_F12 },
-};
-
-/// Parse a keyboard scancode from a config value: accepts integer strings
-/// (e.g. "88") or named strings (e.g. "x", "TAB", "enter") – case-insensitive.
-static int parseKbdScancode(const std::string& s)
-{
-    // Convert input to uppercase for case-insensitive comparison
-    std::string upper(s.size(), '\0');
-    std::transform(s.begin(), s.end(), upper.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
-    for (auto& kn : k_kbdKeyNames) {
-        if (upper == kn.name) return kn.scancode;
-    }
-    // Fall back to integer parse
-    try { return std::stoi(s); } catch (...) {}
-    return -1;
-}
-
-// ============================================================
-// ControllerButton name ↔ brls::ControllerButton lookup
-// Allows config entries like   handle.a = A
-// instead of numeric values    handle.a = 13
-// ============================================================
-struct BrlsBtnName { const char* name; brls::ControllerButton btn; };
-static const BrlsBtnName k_brlsBtnNames[] = {
-    { "LT",    brls::BUTTON_LT    },
-    { "LB",    brls::BUTTON_LB    },
-    { "LSB",   brls::BUTTON_LSB   },
-    { "UP",    brls::BUTTON_UP    },
-    { "RIGHT", brls::BUTTON_RIGHT },
-    { "DOWN",  brls::BUTTON_DOWN  },
-    { "LEFT",  brls::BUTTON_LEFT  },
-    { "BACK",  brls::BUTTON_BACK  },
-    { "GUIDE", brls::BUTTON_GUIDE },
-    { "START", brls::BUTTON_START },
-    { "RSB",   brls::BUTTON_RSB   },
-    { "Y",     brls::BUTTON_Y     },
-    { "B",     brls::BUTTON_B     },
-    { "A",     brls::BUTTON_A     },
-    { "X",     brls::BUTTON_X     },
-    { "RB",    brls::BUTTON_RB    },
-    { "RT",    brls::BUTTON_RT    },
-};
-
-/// Parse a ControllerButton from a config value: accepts named strings
-/// (e.g. "A", "LB", "RT") or numeric integer strings – case-insensitive.
-static int parseBrlsButton(const std::string& s)
-{
-    std::string upper(s.size(), '\0');
-    std::transform(s.begin(), s.end(), upper.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
-    for (auto& bn : k_brlsBtnNames) {
-        if (upper == bn.name) return static_cast<int>(bn.btn);
-    }
-    try { return std::stoi(s); } catch (...) {}
-    return -1;
-}
 
 // ============================================================
 // Resolve the mgba_libretro shared library path
@@ -370,81 +182,18 @@ void GameView::initialize()
         cfg->SetDefault("core.mgba_idle_optimization",          CV(std::string("Remove Known")));
         cfg->SetDefault("core.mgba_frameskip",                  CV(std::string("0")));
 
-        // ---- Fast-forward defaults -----------------------------------
-        cfg->SetDefault("fastforward.multiplier", CV(4.0f));
-        cfg->SetDefault("fastforward.mute",       CV(std::string("true")));
-        cfg->SetDefault("fastforward.mode",       CV(std::string("hold")));
+        // ---- FPS display defaults ------------------------------------
+        cfg->SetDefault("display.showFps",           CV(std::string("false")));
+        cfg->SetDefault("display.showFfOverlay",     CV(std::string("true")));
+        cfg->SetDefault("display.showRewindOverlay", CV(std::string("true")));
 
-        // ---- Rewind defaults -----------------------------------------
-        cfg->SetDefault("rewind.enabled",    CV(std::string("false")));
-        cfg->SetDefault("rewind.bufferSize", CV(3600));
-        cfg->SetDefault("rewind.step",       CV(2));
-        cfg->SetDefault("rewind.mute",       CV(std::string("false")));
-        cfg->SetDefault("rewind.mode",       CV(std::string("hold")));
-
-        // ---- FPS display default -------------------------------------
-        cfg->SetDefault("display.showFps",          CV(std::string("false")));
-        cfg->SetDefault("display.showFfOverlay",    CV(std::string("true")));
-        cfg->SetDefault("display.showRewindOverlay",CV(std::string("true")));
-
-        // ---- Handle (gamepad) button mapping defaults ----------------
-        // Values use readable button names (e.g. "A", "LB", "RT").
-        cfg->SetDefault("handle.a",           CV(std::string("A")));
-        cfg->SetDefault("handle.b",           CV(std::string("B")));
-        cfg->SetDefault("handle.x",           CV(std::string("X")));
-        cfg->SetDefault("handle.y",           CV(std::string("Y")));
-        cfg->SetDefault("handle.up",          CV(std::string("UP")));
-        cfg->SetDefault("handle.down",        CV(std::string("DOWN")));
-        cfg->SetDefault("handle.left",        CV(std::string("LEFT")));
-        cfg->SetDefault("handle.right",       CV(std::string("RIGHT")));
-        cfg->SetDefault("handle.start",       CV(std::string("START")));
-        cfg->SetDefault("handle.select",      CV(std::string("BACK")));
-        cfg->SetDefault("handle.l",           CV(std::string("LB")));
-        cfg->SetDefault("handle.r",           CV(std::string("RB")));
-        cfg->SetDefault("handle.l2",          CV(std::string("LT")));
-        cfg->SetDefault("handle.r2",          CV(std::string("RT")));
-        cfg->SetDefault("handle.fastforward", CV(std::string("RT")));
-        cfg->SetDefault("handle.rewind",      CV(std::string("LT")));
-
-        // ---- Keyboard mapping defaults (use readable key names) -----------
-        cfg->SetDefault("keyboard.a",           CV(std::string("X")));
-        cfg->SetDefault("keyboard.b",           CV(std::string("Z")));
-        cfg->SetDefault("keyboard.x",           CV(std::string("C")));
-        cfg->SetDefault("keyboard.y",           CV(std::string("A")));
-        cfg->SetDefault("keyboard.up",          CV(std::string("UP")));
-        cfg->SetDefault("keyboard.down",        CV(std::string("DOWN")));
-        cfg->SetDefault("keyboard.left",        CV(std::string("LEFT")));
-        cfg->SetDefault("keyboard.right",       CV(std::string("RIGHT")));
-        cfg->SetDefault("keyboard.start",       CV(std::string("ENTER")));
-        cfg->SetDefault("keyboard.select",      CV(std::string("S")));
-        cfg->SetDefault("keyboard.l",           CV(std::string("Q")));
-        cfg->SetDefault("keyboard.r",           CV(std::string("W")));
-        cfg->SetDefault("keyboard.l2",          CV(std::string("E")));
-        cfg->SetDefault("keyboard.r2",          CV(std::string("R")));
-        cfg->SetDefault("keyboard.fastforward", CV(std::string("TAB")));
-        cfg->SetDefault("keyboard.rewind",      CV(std::string("GRAVE")));
-        cfg->SetDefault("keyboard.exit",        CV(std::string("ESC")));
+        // ---- Input mapping defaults (delegated to InputMappingConfig) ----
+        m_inputMap.setDefaults(*cfg);
 
         cfg->Save();
         m_core.setConfigManager(cfg);
 
-        // ---- Read runtime config values ----------------------------------
-        auto getFloat = [&](const std::string& key, float def) -> float {
-            auto v = cfg->Get(key);
-            if (v) {
-                if (auto f = v->AsFloat()) return *f;
-                if (auto i = v->AsInt())   return static_cast<float>(*i);
-            }
-            return def;
-        };
-        auto getInt = [&](const std::string& key, int def) -> int {
-            auto v = cfg->Get(key);
-            if (v) {
-                if (auto i = v->AsInt()) return *i;
-                if (auto f = v->AsFloat()) return static_cast<int>(*f);
-            }
-            return def;
-        };
+        // ---- Load display overlay flags ----------------------------------
         auto getBool = [&](const std::string& key, bool def) -> bool {
             auto v = cfg->Get(key);
             if (v) {
@@ -453,55 +202,13 @@ void GameView::initialize()
             }
             return def;
         };
-        auto getString = [&](const std::string& key, const std::string& def) -> std::string {
-            auto v = cfg->Get(key);
-            if (v) { if (auto s = v->AsString()) return *s; }
-            return def;
-        };
+        m_showFps           = getBool("display.showFps",           false);
+        m_showFfOverlay     = getBool("display.showFfOverlay",     true);
+        m_showRewindOverlay = getBool("display.showRewindOverlay", true);
 
-        m_ffMultiplier    = getFloat("fastforward.multiplier", 4.0f);
-        if (m_ffMultiplier <= 0.0f) m_ffMultiplier = 4.0f;
-        m_ffMute          = getBool("fastforward.mute", true);
-        m_ffToggleMode    = (getString("fastforward.mode", "hold") == "toggle");
-
-        m_rewindEnabled    = getBool("rewind.enabled", false);
-        m_rewindBufSize    = static_cast<unsigned>(getInt("rewind.bufferSize", 3600));
-        m_rewindStep       = static_cast<unsigned>(getInt("rewind.step", 2));
-        if (m_rewindStep == 0) m_rewindStep = 1;
-        m_rewindMute       = getBool("rewind.mute", false);
-        m_rewindToggleMode = (getString("rewind.mode", "hold") == "toggle");
-
-        m_showFps           = getBool("display.showFps",          false);
-        m_showFfOverlay     = getBool("display.showFfOverlay",    true);
-        m_showRewindOverlay = getBool("display.showRewindOverlay",true);
-
-        // Fast-forward and rewind buttons from config (named string or int)
-        {
-            auto readBtn = [&](const std::string& key, brls::ControllerButton def) -> int {
-                auto v = cfg->Get(key);
-                if (v) {
-                    if (auto i = v->AsInt())    return *i;
-                    if (auto s = v->AsString()) return parseBrlsButton(*s);
-                }
-                return static_cast<int>(def);
-            };
-            m_ffButton     = readBtn("handle.fastforward", brls::BUTTON_RT);
-            m_rewindButton = readBtn("handle.rewind",      brls::BUTTON_LT);
-        }
-
-        // Keyboard exit key from config
-        {
-            auto v = cfg->Get("keyboard.exit");
-            if (v) {
-                if (auto i = v->AsInt())    m_kbExitKey = *i;
-                else if (auto s = v->AsString()) m_kbExitKey = parseKbdScancode(*s);
-            }
-            if (m_kbExitKey < 0) m_kbExitKey = static_cast<int>(brls::BRLS_KBD_KEY_ESCAPE);
-        }
+        // ---- Load all input bindings and FF/rewind settings --------------
+        m_inputMap.load(*cfg);
     } // end if (gameRunner && gameRunner->settingConfig)
-
-    // ---- Load configurable button maps ----------------------------------
-    loadButtonMaps();
 
     // ---- Load libretro core -------------------------------------------
     std::string corePath = resolveCoreLibPath();
@@ -585,73 +292,6 @@ void GameView::initialize()
 }
 
 // ============================================================
-// loadButtonMaps – build m_buttonMap / m_kbButtonMap from config
-// ============================================================
-
-void GameView::loadButtonMaps()
-{
-    beiklive::ConfigManager* cfg = gameRunner ? gameRunner->settingConfig : nullptr;
-
-    // Helper: read a ControllerButton value from config (named string or int)
-    auto getCfgBtn = [&](const std::string& key, brls::ControllerButton def) -> int {
-        if (!cfg) return static_cast<int>(def);
-        auto v = cfg->Get(key);
-        if (v) {
-            if (auto i = v->AsInt())    return *i;
-            if (auto s = v->AsString()) return parseBrlsButton(*s);
-        }
-        return static_cast<int>(def);
-    };
-
-    // Build handle (gamepad) button map from config
-    m_buttonMap.clear();
-    for (auto& def : k_defaultButtonMap) {
-        // Find which retro button this corresponds to
-        unsigned retroId = def.retroId;
-        // Look up which handle.X config key maps to this retro button
-        // We do it by reverse lookup: find the retro name for this ID
-        for (auto& rn : k_retroNames) {
-            if (rn.id == retroId) {
-                std::string cfgKey = std::string("handle.") + rn.name;
-                int brlsBtn = getCfgBtn(cfgKey, def.brl);
-                if (brlsBtn >= 0 && brlsBtn < static_cast<int>(brls::_BUTTON_MAX)) {
-                    m_buttonMap.push_back({brlsBtn, retroId});
-                }
-                break;
-            }
-        }
-    }
-    // Add NAV buttons (always mapped to dpad)
-    m_buttonMap.push_back({static_cast<int>(brls::BUTTON_NAV_UP),    RETRO_DEVICE_ID_JOYPAD_UP});
-    m_buttonMap.push_back({static_cast<int>(brls::BUTTON_NAV_DOWN),  RETRO_DEVICE_ID_JOYPAD_DOWN});
-    m_buttonMap.push_back({static_cast<int>(brls::BUTTON_NAV_LEFT),  RETRO_DEVICE_ID_JOYPAD_LEFT});
-    m_buttonMap.push_back({static_cast<int>(brls::BUTTON_NAV_RIGHT), RETRO_DEVICE_ID_JOYPAD_RIGHT});
-
-    // Build keyboard button map from config
-    m_kbButtonMap.clear();
-    for (auto& def : k_defaultKbMap) {
-        // Find retro ID for this default keyboard key
-        unsigned retroId = def.retroId;
-        for (auto& rn : k_retroNames) {
-            if (rn.id == retroId) {
-                std::string cfgKey = std::string("keyboard.") + rn.name;
-                int sc = def.scancode; // fallback default
-                if (cfg) {
-                    auto v = cfg->Get(cfgKey);
-                    if (v) {
-                        // Support both numeric (e.g. 88) and named (e.g. "X") values
-                        if (auto i = v->AsInt())   sc = *i;
-                        else if (auto s = v->AsString()) sc = parseKbdScancode(*s);
-                    }
-                }
-                m_kbButtonMap.push_back({sc, retroId});
-                break;
-            }
-        }
-    }
-}
-
-// ============================================================
 // startGameThread – launches the emulation loop in a new thread
 // ============================================================
 
@@ -728,12 +368,12 @@ void GameView::startGameThread()
             // used by the FPS counter below.
             unsigned framesThisIter = 1u;
 
-            if (rew && m_rewindEnabled) {
+            if (rew && m_inputMap.rewindEnabled) {
                 // ---- Rewind: restore from buffer then run to update video ----
                 bool didRestore = false;
                 {
                     std::lock_guard<std::mutex> lk(m_rewindMutex);
-                    for (unsigned step = 0; step < m_rewindStep && !m_rewindBuffer.empty(); ++step) {
+                    for (unsigned step = 0; step < m_inputMap.rewindStep && !m_rewindBuffer.empty(); ++step) {
                         const auto& state = m_rewindBuffer.front();
                         m_core.unserialize(state.data(), state.size());
                         m_rewindBuffer.pop_front();
@@ -748,7 +388,7 @@ void GameView::startGameThread()
                 {
                     std::vector<int16_t> dummy;
                     bool hasSamples = m_core.drainAudio(dummy) && !dummy.empty();
-                    if (!m_rewindMute && hasSamples) {
+                    if (!m_inputMap.rewindMute && hasSamples) {
                         size_t frames = dummy.size() / STEREO_CHANNELS;
                         beiklive::AudioManager::instance().pushSamples(dummy.data(), frames);
                     }
@@ -760,21 +400,21 @@ void GameView::startGameThread()
                 // frame-period so effective speed = N × fps (exact multiplier).
                 // For sub-1x, run 1 frame but stretch the sleep duration.
                 if (ff) {
-                    framesThisIter = (m_ffMultiplier >= 1.0f)
-                        ? static_cast<unsigned>(std::round(m_ffMultiplier))
+                    framesThisIter = (m_inputMap.ffMultiplier >= 1.0f)
+                        ? static_cast<unsigned>(std::round(m_inputMap.ffMultiplier))
                         : 1u;
                 }
 
                 for (unsigned i = 0; i < framesThisIter; ++i) {
                     // Save state for rewind buffer before each frame (including fast-forward)
-                    if (m_rewindEnabled) {
+                    if (m_inputMap.rewindEnabled) {
                         size_t sz = m_core.serializeSize();
                         if (sz > 0) {
                             std::vector<uint8_t> state(sz);
                             if (m_core.serialize(state.data(), sz)) {
                                 std::lock_guard<std::mutex> lk(m_rewindMutex);
                                 m_rewindBuffer.push_front(std::move(state));
-                                while (m_rewindBuffer.size() > m_rewindBufSize)
+                                while (m_rewindBuffer.size() > m_inputMap.rewindBufSize)
                                     m_rewindBuffer.pop_back();
                             }
                         }
@@ -789,7 +429,7 @@ void GameView::startGameThread()
                     // Mute conditions:
                     //   - fast-forward with mute enabled
                     //   - no samples available
-                    bool mute = (ff && m_ffMute) || !hasSamples;
+                    bool mute = (ff && m_inputMap.ffMute) || !hasSamples;
                     if (!mute) {
                         size_t frames = samples.size() / STEREO_CHANNELS;
                         // During fast-forward (multiplier > 1) with audio not muted,
@@ -797,11 +437,11 @@ void GameView::startGameThread()
                         // Running N frames per loop iteration generates N× the usual
                         // audio, which would saturate the ring buffer and cause
                         // pushSamples() to block indefinitely, freezing the game thread.
-                        if (ff && m_ffMultiplier > 1.0f) {
+                        if (ff && m_inputMap.ffMultiplier > 1.0f) {
                             // Divide in floating-point first for precision, then round to
                             // the nearest integer sample-frame count.
                             size_t limit = static_cast<size_t>(
-                                std::round(static_cast<double>(frames) / m_ffMultiplier));
+                                std::round(static_cast<double>(frames) / m_inputMap.ffMultiplier));
                             // If limit rounds to zero the total is already tiny; push all.
                             if (limit > 0)
                                 frames = limit;
@@ -850,8 +490,8 @@ void GameView::startGameThread()
             // scheduling it in the past (which would cause a catch-up burst).
             {
                 Duration targetDur = frameDuration;
-                if (ff && m_ffMultiplier < 1.0f) {
-                    targetDur = Duration(1.0 / (fps * static_cast<double>(m_ffMultiplier)));
+                if (ff && m_inputMap.ffMultiplier < 1.0f) {
+                    targetDur = Duration(1.0 / (fps * static_cast<double>(m_inputMap.ffMultiplier)));
                 }
 
                 // Advance accumulated target by one frame.
@@ -979,10 +619,11 @@ void GameView::uploadFrame(NVGcontext* vg,
 // ============================================================
 // pollInput – map borealis controller state to libretro buttons
 // Supports:
-//   - Configurable handle (gamepad) button mapping
+//   - Configurable handle (gamepad) button mapping via m_inputMap
 //   - Raw keyboard mapping via platform input manager
 //   - Toggle / hold mode for fast-forward and rewind
 //   - Auto-detection of keyboard vs gamepad input
+//   - Emulator hotkeys (fast-forward, rewind, exit game)
 // ============================================================
 
 void GameView::pollInput()
@@ -996,19 +637,17 @@ void GameView::pollInput()
     bool keyboardActive = false;
 #ifndef __SWITCH__
     auto* platform = brls::Application::getPlatform();
-    if (platform) {
-        auto* im = platform->getInputManager();
-        if (im) {
-            // Sample a few common movement/action keys
-            keyboardActive =
-                im->getKeyboardKeyState(brls::BRLS_KBD_KEY_UP)    ||
-                im->getKeyboardKeyState(brls::BRLS_KBD_KEY_DOWN)  ||
-                im->getKeyboardKeyState(brls::BRLS_KBD_KEY_LEFT)  ||
-                im->getKeyboardKeyState(brls::BRLS_KBD_KEY_RIGHT) ||
-                im->getKeyboardKeyState(brls::BRLS_KBD_KEY_X)     ||
-                im->getKeyboardKeyState(brls::BRLS_KBD_KEY_Z)     ||
-                im->getKeyboardKeyState(brls::BRLS_KBD_KEY_ENTER);
-        }
+    auto* im = platform ? platform->getInputManager() : nullptr;
+    if (im) {
+        // Sample a few common movement/action keys
+        keyboardActive =
+            im->getKeyboardKeyState(brls::BRLS_KBD_KEY_UP)    ||
+            im->getKeyboardKeyState(brls::BRLS_KBD_KEY_DOWN)  ||
+            im->getKeyboardKeyState(brls::BRLS_KBD_KEY_LEFT)  ||
+            im->getKeyboardKeyState(brls::BRLS_KBD_KEY_RIGHT) ||
+            im->getKeyboardKeyState(brls::BRLS_KBD_KEY_X)     ||
+            im->getKeyboardKeyState(brls::BRLS_KBD_KEY_Z)     ||
+            im->getKeyboardKeyState(brls::BRLS_KBD_KEY_ENTER);
     }
     if (keyboardActive) m_useKeyboard = true;
     else {
@@ -1019,76 +658,85 @@ void GameView::pollInput()
     }
 #endif
 
-    // ---- Fast-forward: hold or toggle mode ---------------------------
-    bool ffKey = false;
-    if (m_ffButton >= 0 && m_ffButton < static_cast<int>(brls::_BUTTON_MAX))
-        ffKey = state.buttons[m_ffButton];
-    // Also check keyboard fast-forward key
+    // Helper: check if a hotkey is currently pressed (keyboard or gamepad).
+    // Combo keys require modifier keys to also be held.
+    using Hotkey = beiklive::InputMappingConfig::Hotkey;
+
+    auto isHotkeyPressed = [&](Hotkey h) -> bool {
+        const auto& hk = m_inputMap.hotkeyBinding(h);
+        // --- gamepad side ---
+        if (hk.isPadBound() && hk.padButton < static_cast<int>(brls::_BUTTON_MAX)) {
+            if (state.buttons[hk.padButton]) return true;
+        }
+        // --- keyboard side ---
 #ifndef __SWITCH__
-    if (!ffKey) {
-        auto* platform2 = brls::Application::getPlatform();
-        if (platform2) {
-            auto* im2 = platform2->getInputManager();
-            if (im2) {
-                // keyboard.fastforward (default: TAB) – supports named or numeric values
-                int kbFfKey = static_cast<int>(brls::BRLS_KBD_KEY_TAB);
-                if (gameRunner && gameRunner->settingConfig) {
-                    auto v = gameRunner->settingConfig->Get("keyboard.fastforward");
-                    if (v) {
-                        if (auto i = v->AsInt())   kbFfKey = *i;
-                        else if (auto s = v->AsString()) kbFfKey = parseKbdScancode(*s);
-                    }
-                }
-                ffKey = im2->getKeyboardKeyState(static_cast<brls::BrlsKeyboardScancode>(kbFfKey));
+        if (im && hk.kbdCombo.isBound()) {
+            auto sc = static_cast<brls::BrlsKeyboardScancode>(hk.kbdCombo.scancode);
+            if (im->getKeyboardKeyState(sc)) {
+                // Check modifiers
+                bool ctrlOk  = !hk.kbdCombo.ctrl  ||
+                    im->getKeyboardKeyState(brls::BRLS_KBD_KEY_LEFT_CONTROL) ||
+                    im->getKeyboardKeyState(brls::BRLS_KBD_KEY_RIGHT_CONTROL);
+                bool shiftOk = !hk.kbdCombo.shift ||
+                    im->getKeyboardKeyState(brls::BRLS_KBD_KEY_LEFT_SHIFT) ||
+                    im->getKeyboardKeyState(brls::BRLS_KBD_KEY_RIGHT_SHIFT);
+                bool altOk   = !hk.kbdCombo.alt   ||
+                    im->getKeyboardKeyState(brls::BRLS_KBD_KEY_LEFT_ALT) ||
+                    im->getKeyboardKeyState(brls::BRLS_KBD_KEY_RIGHT_ALT);
+                if (ctrlOk && shiftOk && altOk) return true;
             }
         }
-    }
 #endif
+        return false;
+    };
 
-    if (m_ffToggleMode) {
-        // Toggle: fire on rising edge
-        if (ffKey && !m_ffPrevKey)
+    // ---- Fast-forward -----------------------------------------------
+    // FastForwardHold:    hold-mode by default; respects ffToggleMode for
+    //                     backward compatibility (hold key acts as toggle).
+    // FastForwardToggle:  always edge-detected toggle, independent of mode.
+    {
+        bool ffHoldKey   = isHotkeyPressed(Hotkey::FastForwardHold);
+        bool ffToggleKey = isHotkeyPressed(Hotkey::FastForwardToggle);
+
+        // Dedicated toggle hotkey: fire on rising edge (always toggle)
+        if (ffToggleKey && !m_ffTogglePrevKey)
             m_ffToggled = !m_ffToggled;
-        m_ffPrevKey = ffKey;
-        m_fastForward.store(m_ffToggled, std::memory_order_relaxed);
-    } else {
-        // Hold mode
-        m_fastForward.store(ffKey, std::memory_order_relaxed);
+        m_ffTogglePrevKey = ffToggleKey;
+
+        // Hold hotkey: respects ffToggleMode config
+        if (m_inputMap.ffToggleMode) {
+            // Toggle mode: fire on rising edge
+            if (ffHoldKey && !m_ffPrevKey)
+                m_ffToggled = !m_ffToggled;
+            m_ffPrevKey = ffHoldKey;
+            m_fastForward.store(m_ffToggled, std::memory_order_relaxed);
+        } else {
+            // Hold mode: active while key is held; toggle-key state is OR'd in
+            m_ffPrevKey = ffHoldKey;
+            m_fastForward.store(ffHoldKey || m_ffToggled, std::memory_order_relaxed);
+        }
     }
 
-    // ---- Rewind: hold or toggle mode ---------------------------------
-    bool rewKey = false;
-    if (m_rewindEnabled) {
-        if (m_rewindButton >= 0 && m_rewindButton < static_cast<int>(brls::_BUTTON_MAX))
-            rewKey = state.buttons[m_rewindButton];
-        // Also check keyboard rewind key
-#ifndef __SWITCH__
-        if (!rewKey) {
-            auto* platform3 = brls::Application::getPlatform();
-            if (platform3) {
-                auto* im3 = platform3->getInputManager();
-                if (im3) {
-                    // keyboard.rewind (default: GRAVE) – supports named or numeric values
-                    int kbRewKey = static_cast<int>(brls::BRLS_KBD_KEY_GRAVE_ACCENT);
-                    if (gameRunner && gameRunner->settingConfig) {
-                        auto v = gameRunner->settingConfig->Get("keyboard.rewind");
-                        if (v) {
-                            if (auto i = v->AsInt())   kbRewKey = *i;
-                            else if (auto s = v->AsString()) kbRewKey = parseKbdScancode(*s);
-                        }
-                    }
-                    rewKey = im3->getKeyboardKeyState(static_cast<brls::BrlsKeyboardScancode>(kbRewKey));
-                }
-            }
-        }
-#endif
-        if (m_rewindToggleMode) {
-            if (rewKey && !m_rewindPrevKey)
+    // ---- Rewind -----------------------------------------------------
+    // Same pattern as fast-forward: RewindHold respects rewindToggleMode,
+    // RewindToggle is always edge-detected.
+    if (m_inputMap.rewindEnabled) {
+        bool rewHoldKey   = isHotkeyPressed(Hotkey::RewindHold);
+        bool rewToggleKey = isHotkeyPressed(Hotkey::RewindToggle);
+
+        // Dedicated toggle hotkey: fire on rising edge
+        if (rewToggleKey && !m_rewindTogglePrevKey)
+            m_rewindToggled = !m_rewindToggled;
+        m_rewindTogglePrevKey = rewToggleKey;
+
+        if (m_inputMap.rewindToggleMode) {
+            if (rewHoldKey && !m_rewindPrevKey)
                 m_rewindToggled = !m_rewindToggled;
-            m_rewindPrevKey = rewKey;
+            m_rewindPrevKey = rewHoldKey;
             m_rewinding.store(m_rewindToggled, std::memory_order_relaxed);
         } else {
-            m_rewinding.store(rewKey, std::memory_order_relaxed);
+            m_rewindPrevKey = rewHoldKey;
+            m_rewinding.store(rewHoldKey || m_rewindToggled, std::memory_order_relaxed);
         }
     }
 
@@ -1099,34 +747,33 @@ void GameView::pollInput()
     }
 
     // ---- Game buttons -----------------------------------------------
-    if (m_useKeyboard && !m_kbButtonMap.empty()) {
+    const auto& btnMap = m_inputMap.gameButtonMap();
+    if (m_useKeyboard) {
         // Keyboard mode: use raw keyboard key states
-        auto* platform4 = brls::Application::getPlatform();
-        auto* im4 = platform4 ? platform4->getInputManager() : nullptr;
-        for (const auto& mapping : m_kbButtonMap) {
+        for (const auto& entry : btnMap) {
             bool pressed = false;
-            if (im4 && mapping.scancode >= 0)
-                pressed = im4->getKeyboardKeyState(
-                    static_cast<brls::BrlsKeyboardScancode>(mapping.scancode));
-            m_core.setButtonState(mapping.retroId, pressed);
+#ifndef __SWITCH__
+            if (im && entry.kbdScancode >= 0)
+                pressed = im->getKeyboardKeyState(
+                    static_cast<brls::BrlsKeyboardScancode>(entry.kbdScancode));
+#endif
+            m_core.setButtonState(entry.retroId, pressed);
         }
 
-        // ---- Keyboard exit key -------------------------------------------
-        // Check exit key (default: ESC) in keyboard mode and request exit.
+        // ---- Keyboard exit key (ExitGame hotkey) ----------------------
 #ifndef __SWITCH__
-        if (m_kbExitKey >= 0 && im4 && !m_requestExit.load(std::memory_order_relaxed)) {
-            if (im4->getKeyboardKeyState(static_cast<brls::BrlsKeyboardScancode>(m_kbExitKey))) {
+        if (im && !m_requestExit.load(std::memory_order_relaxed)) {
+            if (isHotkeyPressed(Hotkey::ExitGame))
                 m_requestExit.store(true, std::memory_order_relaxed);
-            }
         }
 #endif
     } else {
         // Gamepad mode: use ControllerState buttons
-        for (const auto& mapping : m_buttonMap) {
+        for (const auto& entry : btnMap) {
             bool pressed = false;
-            if (mapping.brlsBtn >= 0 && mapping.brlsBtn < static_cast<int>(brls::_BUTTON_MAX))
-                pressed = state.buttons[mapping.brlsBtn];
-            m_core.setButtonState(mapping.retroId, pressed);
+            if (entry.padButton >= 0 && entry.padButton < static_cast<int>(brls::_BUTTON_MAX))
+                pressed = state.buttons[entry.padButton];
+            m_core.setButtonState(entry.retroId, pressed);
         }
     }
 }
@@ -1266,7 +913,7 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
     // ---- Fast-forward overlay (configurable) -------------------------
     if (m_showFfOverlay && m_fastForward.load(std::memory_order_relaxed)) {
         char ffBuf[32];
-        snprintf(ffBuf, sizeof(ffBuf), ">> %.4gx", static_cast<double>(m_ffMultiplier));
+        snprintf(ffBuf, sizeof(ffBuf), ">> %.4gx", static_cast<double>(m_inputMap.ffMultiplier));
         float fw = 80.0f, fh = 22.0f;
         float fx = x + width - fw - 4.0f;
         float fy = y + 4.0f;
@@ -1283,10 +930,10 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
     }
 
     // ---- Rewind status overlay (configurable) ------------------------
-    if (m_showRewindOverlay && m_rewindEnabled && m_rewinding.load(std::memory_order_relaxed)) {
+    if (m_showRewindOverlay && m_inputMap.rewindEnabled && m_rewinding.load(std::memory_order_relaxed)) {
         char rewBuf[32];
-        // m_rewindStep = frames popped from buffer per rewind trigger (rewind speed)
-        snprintf(rewBuf, sizeof(rewBuf), "<<< %u", m_rewindStep);
+        // rewindStep = frames popped from buffer per rewind trigger (rewind speed)
+        snprintf(rewBuf, sizeof(rewBuf), "<<< %u", m_inputMap.rewindStep);
         float rw = 90.0f, rh = 22.0f;
         float rx = x + width * 0.5f - rw * 0.5f;
         float ry = y + 4.0f;
