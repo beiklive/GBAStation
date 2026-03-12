@@ -65,79 +65,29 @@ uniform vec2  uResolution;
 in  vec2 vUV;
 out vec4 FragColor;
 
-// Simple value-noise helpers (from RetroArch XMB ribbon shader)
-float iqhash(float n)
-{
-    return fract(sin(n) * 43758.5453);
-}
-
-float noise3(vec3 x)
-{
-    vec3 p = floor(x);
-    vec3 f = fract(x);
-    f = f * f * (3.0 - 2.0 * f);
-    float n = p.x + p.y * 57.0 + 113.0 * p.z;
-    return mix(
-        mix(mix(iqhash(n +   0.0), iqhash(n +   1.0), f.x),
-            mix(iqhash(n +  57.0), iqhash(n +  58.0), f.x), f.y),
-        mix(mix(iqhash(n + 113.0), iqhash(n + 114.0), f.x),
-            mix(iqhash(n + 170.0), iqhash(n + 171.0), f.x), f.y),
-        f.z);
-}
-
-// XMB wave function – the heart of the PSP ribbon effect
-float xmbWave(float x, float z)
-{
-    return cos(z * 4.0) * cos(z + uTime / 10.0 + x);
-}
-
 void main()
 {
     vec2 p = vUV;
 
-    // Dark blue gradient background
-    vec3 color = mix(vec3(0.02, 0.03, 0.14),
-                     vec3(0.04, 0.06, 0.25),
-                     p.y);
+    // Dark blue background
+    vec3 color = vec3(0.02, 0.03, 0.14);
 
-    const int N = 24; // number of ribbons
-    for (int i = 0; i < N; i++)
-    {
-        float fi = float(i);
-        float t  = fi / float(N);
+    // Two lines centred vertically, interleaving with sine/cosine waves
+    float amplitude = 0.06;
+    float freq      = 6.28318; // one full cycle across the width
+    float speed     = 1.2;
 
-        // Ribbon centre Y, scrolling slowly downward
-        float cy = fract(t + uTime * 0.025);
+    // Red line: sine wave around y = 0.5
+    float waveRed  = amplitude * sin(p.x * freq - uTime * speed);
+    float distRed  = abs(p.y - 0.5 - waveRed);
+    float alphaRed = smoothstep(0.008, 0.0, distRed);
+    color += vec3(1.0, 0.15, 0.10) * alphaRed;
 
-        // Wave displacement (XMB formula)
-        float wave = xmbWave(p.x * 3.0, cy * 3.14159) * 0.04;
-
-        // Additional noise turbulence (makes waves more organic)
-        vec3 npos = vec3(p.x * 0.4 + uTime / 5.0,
-                         cy  * 3.0  + uTime / 10.0,
-                         p.y * 2.0  + uTime / 100.0);
-        wave += noise3(npos * 7.0) * 0.012;
-
-        float dist = abs(p.y - cy - wave);
-
-        // Soft ribbon profile (smooth edge falloff)
-        float ribbonW = 0.0025 + 0.0010 * sin(fi * 1.3 + uTime * 0.5);
-        float alpha   = smoothstep(ribbonW * 4.0, 0.0, dist);
-
-        // Colour: blend blue → purple based on ribbon index
-        vec3 rc = mix(vec3(0.25, 0.55, 1.00),
-                      vec3(0.65, 0.30, 1.00),
-                      fract(t * 2.5));
-
-        // Brighten ribbons near the bottom for variety
-        rc *= 0.6 + 0.4 * p.y;
-
-        color += rc * alpha * 0.5;
-    }
-
-    // Subtle horizontal scanline vignette
-    float vig = 1.0 - 0.35 * pow(abs(p.y - 0.5) * 2.0, 2.5);
-    color *= vig;
+    // Blue line: cosine wave (phase-shifted by π/2) around y = 0.5
+    float waveBlue  = amplitude * cos(p.x * freq - uTime * speed);
+    float distBlue  = abs(p.y - 0.5 - waveBlue);
+    float alphaBlue = smoothstep(0.008, 0.0, distBlue);
+    color += vec3(0.10, 0.40, 1.00) * alphaBlue;
 
     FragColor = vec4(clamp(color, 0.0, 1.0), 0.90);
 }
