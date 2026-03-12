@@ -1,6 +1,55 @@
 #include "common.hpp"
 
 namespace beiklive {
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  XMB colour preset table
+// ─────────────────────────────────────────────────────────────────────────────
+
+struct XmbColorPreset { const char* name; float r, g, b; };
+
+static const XmbColorPreset k_xmbColorPresets[] = {
+    { "blue",     0.05f, 0.10f, 0.25f },   // 深蓝
+    { "purple",   0.15f, 0.05f, 0.30f },   // 紫色
+    { "green",    0.05f, 0.20f, 0.10f },   // 绿色
+    { "orange",   0.30f, 0.15f, 0.05f },   // 橙色
+    { "red",      0.25f, 0.05f, 0.05f },   // 红色
+    { "cyan",     0.05f, 0.20f, 0.25f },   // 青色
+    { "black",    0.02f, 0.02f, 0.05f },   // 黑色
+    { "original", 0.74f, 0.86f, 0.14f },   // 原版
+};
+static constexpr int k_xmbColorPresetCount =
+    static_cast<int>(sizeof(k_xmbColorPresets) / sizeof(k_xmbColorPresets[0]));
+
+// Returns display names (in order matching k_xmbColorPresets)
+static const char* k_xmbColorNames[] = {
+    "深蓝", "紫色", "绿色", "橙色", "红色", "青色", "黑色", "原版"
+};
+
+/// Apply the XMB colour preset stored in SettingManager to @a img.
+/// Falls back to "blue" if the key is absent or unknown.
+void ApplyXmbColor(beiklive::UI::ProImage* img)
+{
+    if (!img) return;
+    std::string preset = "blue";
+    if (SettingManager) {
+        auto v = SettingManager->Get("UI.pspxmb.color");
+        if (v) {
+            if (auto s = v->AsString()) preset = *s;
+        }
+    }
+    for (int i = 0; i < k_xmbColorPresetCount; ++i) {
+        if (preset == k_xmbColorPresets[i].name) {
+            img->setXmbBgColor(k_xmbColorPresets[i].r,
+                               k_xmbColorPresets[i].g,
+                               k_xmbColorPresets[i].b);
+            return;
+        }
+    }
+    // fallback to "blue"
+    img->setXmbBgColor(0.05f, 0.10f, 0.25f);
+}
+
     void swallow(brls::View* v, brls::ControllerButton btn)
     {
         v->registerAction("", btn, [](brls::View*) { return true; },
@@ -39,6 +88,7 @@ namespace beiklive {
         m_bgImage->setScalingType(brls::ImageScalingType::FIT);
         m_bgImage->setInterpolation(brls::ImageInterpolation::LINEAR);
         m_bgImage->setShaderAnimation(beiklive::UI::ShaderAnimationType::PSP_XMB_RIPPLE);
+        ApplyXmbColor(m_bgImage);
         view->addView(m_bgImage);
     }
 };

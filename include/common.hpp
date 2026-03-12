@@ -52,6 +52,21 @@ using namespace brls::literals; // for _i18n
 #define KEY_UI_LANGUAGE "UI.language" // 语言
 #define KEY_UI_THEME "UI.theme" // 主题
 
+// UI / background settings
+#define KEY_UI_SHOW_BG_IMAGE  "UI.showBgImage"
+#define KEY_UI_BG_IMAGE_PATH  "UI.bgImagePath"
+#define KEY_UI_SHOW_XMB_BG    "UI.showXmbBg"
+#define KEY_UI_PSPXMB_COLOR   "UI.pspxmb.color"
+#define KEY_UI_TEXT_COLOR     "UI.textColor"
+
+// Audio settings
+#define KEY_AUDIO_BUTTON_SFX  "audio.buttonSfx"
+
+// Debug settings
+#define KEY_DEBUG_LOG_LEVEL   "debug.logLevel"
+#define KEY_DEBUG_LOG_FILE    "debug.logFile"
+#define KEY_DEBUG_LOG_OVERLAY "debug.logOverlay"
+
 using bklog = brls::Logger;
 
 namespace beiklive {
@@ -60,6 +75,8 @@ void RegisterStyles();
 void RegisterThemes();
 void CheckGLSupport();
 void InsertBackground(brls::Box* view);
+/// Apply the XMB colour preset (UI.pspxmb.color) from SettingManager to @a img.
+void ApplyXmbColor(beiklive::UI::ProImage* img);
 // 吞噬一个按钮事件，使其不再被后续处理
 void swallow(brls::View* v, brls::ControllerButton btn);
 

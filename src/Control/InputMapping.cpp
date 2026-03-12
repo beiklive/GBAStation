@@ -378,6 +378,7 @@ void InputMappingConfig::setDefaults(ConfigManager& cfg)
     using CV = ConfigValue;
 
     // ---- Fast-forward -----------------------------------------------
+    cfg.SetDefault("fastforward.enabled",    CV(std::string("true")));
     cfg.SetDefault("fastforward.multiplier", CV(4.0f));
     cfg.SetDefault("fastforward.mute",       CV(std::string("true")));
     cfg.SetDefault("fastforward.mode",       CV(std::string("hold")));
