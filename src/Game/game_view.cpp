@@ -780,11 +780,18 @@ void GameView::pollInput()
     // ---- Game buttons -----------------------------------------------
     const auto& btnMap = m_inputMap.gameButtonMap();
     if (m_useKeyboard) {
-        // Keyboard mode: use raw keyboard key states
+        // Keyboard mode: use raw keyboard key states.
+        // Entries with kbdScancode < 0 have no keyboard binding and are
+        // skipped entirely.  Without this guard the gamepad-only NAV alias
+        // entries (BUTTON_NAV_UP/DOWN/LEFT/RIGHT, kbdScancode == -1) that are
+        // appended after the primary direction entries would call
+        // setButtonState(<retroId>, false) and overwrite the true value that
+        // the primary entry just set, making arrow keys appear non-functional.
         for (const auto& entry : btnMap) {
+            if (entry.kbdScancode < 0) continue;
             bool pressed = false;
 #ifndef __SWITCH__
-            if (im && entry.kbdScancode >= 0)
+            if (im)
                 pressed = im->getKeyboardKeyState(
                     static_cast<brls::BrlsKeyboardScancode>(entry.kbdScancode));
 #endif
