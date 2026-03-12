@@ -166,7 +166,7 @@ AppPage::AppPage()
 
     m_titleRow = new brls::Box(brls::Axis::ROW);
     m_titleRow->setHeight(100.f);
-    m_titleRow->setBackgroundColor(nvgRGBA(31, 31, 31, 50));
+    // m_titleRow->setBackgroundColor(nvgRGBA(31, 31, 31, 50));
     addView(m_titleRow);
 
 

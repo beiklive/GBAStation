@@ -206,7 +206,7 @@ StartPageView::StartPageView()
     m_bgImage->setScalingType(brls::ImageScalingType::FIT);
     m_bgImage->setInterpolation(brls::ImageInterpolation::LINEAR);
     // m_bgImage->setImageFromFile(BK_APP_DEFAULT_BG);
-    m_bgImage->setImageFromGif(BK_RES("img/test.gif"));
+    // m_bgImage->setImageFromGif(BK_RES("img/test.gif"));
     m_bgImage->setShaderAnimation(beiklive::UI::ShaderAnimationType::PSP_XMB_RIPPLE);
     addView(m_bgImage);
 }
