@@ -21,6 +21,8 @@
 
 // OrigTexture 固定纹理单元偏移量
 static constexpr int k_origTexUnitOffset = 32;
+static constexpr int k_maxFrameHistory   = 6;
+static constexpr GLint k_defaultUniformNameLen = 64;
 
 // ============================================================
 // 着色器调试日志开关（独立于其他功能调试，默认关闭）
@@ -148,6 +150,38 @@ static const char* const k_builtinFrag =
 
 namespace beiklive {
 
+static GLenum lookupUniformType(GLuint program, const char* name)
+{
+    GLint numUniforms = 0;
+    GLint maxNameLen  = k_defaultUniformNameLen;
+    glGetProgramiv(program, GL_ACTIVE_UNIFORMS,           &numUniforms);
+    glGetProgramiv(program, GL_ACTIVE_UNIFORM_MAX_LENGTH, &maxNameLen);
+    if (numUniforms <= 0 || maxNameLen <= 0)
+        return 0;
+
+    std::vector<char> unameBuf(static_cast<size_t>(maxNameLen + 1), '\0');
+    for (GLint i = 0; i < numUniforms; ++i) {
+        GLint  usize = 0;
+        GLenum utype = 0;
+        std::fill(unameBuf.begin(), unameBuf.end(), '\0');
+        glGetActiveUniform(program, (GLuint)i,
+                           (GLsizei)unameBuf.size() - 1,
+                           nullptr, &usize, &utype, unameBuf.data());
+        if (std::strcmp(unameBuf.data(), name) == 0)
+            return utype;
+    }
+    return 0;
+}
+
+static void lookupSizeUniform(GLuint program, const char* name,
+                              GLint& loc, bool& isVec2)
+{
+    loc = glGetUniformLocation(program, name);
+    isVec2 = false;
+    if (loc >= 0)
+        isVec2 = (lookupUniformType(program, name) == GL_FLOAT_VEC2);
+}
+
 // ============================================================
 // ShaderChain：查询单个通道的所有 uniform 位置
 // ============================================================
@@ -158,47 +192,17 @@ void ShaderChain::_lookupUniforms(ShaderPass& p)
     if (p.sourceLoc < 0)
         p.sourceLoc = glGetUniformLocation(p.program, "Texture");
 
-    // 收集所有 active uniform 的名称→类型映射，供后续类型检测
-    GLint numUniforms = 0;
-    GLint maxNameLen  = 64;
-    glGetProgramiv(p.program, GL_ACTIVE_UNIFORMS,           &numUniforms);
-    glGetProgramiv(p.program, GL_ACTIVE_UNIFORM_MAX_LENGTH, &maxNameLen);
-    std::vector<char> unameBuf(static_cast<size_t>(maxNameLen + 1), '\0');
-
-    auto isUniformVec2 = [&](const char* name) -> bool {
-        for (GLint j = 0; j < numUniforms; ++j) {
-            GLint  usize = 0;
-            GLenum utype = 0;
-            std::fill(unameBuf.begin(), unameBuf.end(), '\0');
-            glGetActiveUniform(p.program, (GLuint)j,
-                               (GLsizei)unameBuf.size() - 1,
-                               nullptr, &usize, &utype, unameBuf.data());
-            if (std::strcmp(unameBuf.data(), name) == 0)
-                return (utype == GL_FLOAT_VEC2);
-        }
-        return false;
-    };
-
     // SourceSize（vec4 或 vec2 TextureSize）
-    p.sourceSizeLoc    = glGetUniformLocation(p.program, "SourceSize");
-    p.sourceSizeIsVec2 = false;
+    lookupSizeUniform(p.program, "SourceSize", p.sourceSizeLoc, p.sourceSizeIsVec2);
     if (p.sourceSizeLoc < 0) {
-        p.sourceSizeLoc = glGetUniformLocation(p.program, "TextureSize");
-        if (p.sourceSizeLoc >= 0)
-            p.sourceSizeIsVec2 = isUniformVec2("TextureSize");
+        lookupSizeUniform(p.program, "TextureSize", p.sourceSizeLoc, p.sourceSizeIsVec2);
     }
 
     // OutputSize
-    p.outputSizeLoc    = glGetUniformLocation(p.program, "OutputSize");
-    p.outputSizeIsVec2 = false;
-    if (p.outputSizeLoc >= 0)
-        p.outputSizeIsVec2 = isUniformVec2("OutputSize");
+    lookupSizeUniform(p.program, "OutputSize", p.outputSizeLoc, p.outputSizeIsVec2);
 
     // InputSize
-    p.inputSizeLoc    = glGetUniformLocation(p.program, "InputSize");
-    p.inputSizeIsVec2 = false;
-    if (p.inputSizeLoc >= 0)
-        p.inputSizeIsVec2 = isUniformVec2("InputSize");
+    lookupSizeUniform(p.program, "InputSize", p.inputSizeLoc, p.inputSizeIsVec2);
 
     p.frameCountLoc  = glGetUniformLocation(p.program, "FrameCount");
     p.frameDirectionLoc = glGetUniformLocation(p.program, "FrameDirection");
@@ -235,43 +239,84 @@ void ShaderChain::_lookupLutUniforms(ShaderPass& p)
 void ShaderChain::_lookupPassTextures(ShaderPass& p, int passIdx)
 {
     int unitOffset = 0;
+    auto addBinding = [&](const std::string& textureName,
+                          ShaderPass::PassTexBinding::Kind kind,
+                          int srcPassIdx,
+                          int historyIndex) {
+        GLint loc = glGetUniformLocation(p.program, textureName.c_str());
+        if (loc < 0) return;
+
+        int reusedOffset = -1;
+        for (const auto& b : p.passTexBindings) {
+            if (b.kind == kind &&
+                b.srcPassIdx == srcPassIdx &&
+                b.historyIndex == historyIndex &&
+                b.texUnitOffset >= 0) {
+                reusedOffset = b.texUnitOffset;
+                break;
+            }
+        }
+
+        ShaderPass::PassTexBinding binding;
+        binding.kind         = kind;
+        binding.srcPassIdx   = srcPassIdx;
+        binding.historyIndex = historyIndex;
+        binding.loc          = loc;
+        binding.texUnitOffset = (reusedOffset >= 0) ? reusedOffset : unitOffset++;
+
+        constexpr const char* kTextureSuffix = "Texture";
+        constexpr size_t kTextureSuffixLen = sizeof("Texture") - 1;
+        if (textureName.size() >= kTextureSuffixLen &&
+            textureName.compare(textureName.size() - kTextureSuffixLen,
+                                kTextureSuffixLen, kTextureSuffix) == 0) {
+            const std::string stem =
+                textureName.substr(0, textureName.size() - kTextureSuffixLen);
+            const std::string textureSizeName = stem + "TextureSize";
+            const std::string inputSizeName   = stem + "InputSize";
+            lookupSizeUniform(p.program, textureSizeName.c_str(),
+                              binding.textureSizeLoc, binding.textureSizeIsVec2);
+            lookupSizeUniform(p.program, inputSizeName.c_str(),
+                              binding.inputSizeLoc, binding.inputSizeIsVec2);
+        }
+        p.passTexBindings.push_back(binding);
+    };
 
     // PassNTexture：N 从 0 到 passIdx-2
     for (int n = 0; n < passIdx - 1; ++n) {
-        std::string name = "Pass" + std::to_string(n) + "Texture";
-        GLint loc = glGetUniformLocation(p.program, name.c_str());
-        if (loc >= 0)
-            p.passTexBindings.push_back({ n + 1, loc, unitOffset++ });
+        addBinding("Pass" + std::to_string(n) + "Texture",
+                   ShaderPass::PassTexBinding::Kind::PassOutput,
+                   n + 1, -1);
+    }
+
+    // PassPrevNTexture：相对当前通道回溯到更早的通道输出
+    for (int prev = 1; prev < passIdx; ++prev) {
+        const int srcPassIdx = passIdx - prev;
+        if (prev == 1) {
+            addBinding("PassPrevTexture",
+                       ShaderPass::PassTexBinding::Kind::PassOutput,
+                       srcPassIdx, -1);
+        }
+        addBinding("PassPrev" + std::to_string(prev) + "Texture",
+                   ShaderPass::PassTexBinding::Kind::PassOutput,
+                   srcPassIdx, -1);
     }
 
     // {alias}Texture
     for (int n = 1; n < passIdx; ++n) {
         if (m_passes[n].alias.empty()) continue;
-        std::string name = m_passes[n].alias + "Texture";
-        GLint loc = glGetUniformLocation(p.program, name.c_str());
-        if (loc < 0) continue;
-        int reusedOffset = -1;
-        for (const auto& b : p.passTexBindings) {
-            if (b.srcPassIdx == n && b.texUnitOffset >= 0) {
-                reusedOffset = b.texUnitOffset;
-                break;
-            }
-        }
-        if (reusedOffset >= 0)
-            p.passTexBindings.push_back({ n, loc, reusedOffset });
-        else
-            p.passTexBindings.push_back({ n, loc, unitOffset++ });
+        addBinding(m_passes[n].alias + "Texture",
+                   ShaderPass::PassTexBinding::Kind::PassOutput,
+                   n, -1);
     }
 
-    // PrevNTexture（无帧历史缓存，回退到单元 0）
-    static const char* kPrevNames[] = {
-        "PrevTexture",  "Prev1Texture", "Prev2Texture",
-        "Prev3Texture", "Prev4Texture", "Prev5Texture", "Prev6Texture"
-    };
-    for (const char* name : kPrevNames) {
-        GLint loc = glGetUniformLocation(p.program, name);
-        if (loc >= 0)
-            p.passTexBindings.push_back({ -1, loc, -1 });
+    // PrevNTexture：上一帧/更早帧的原始输入（由 pass0 输出快照维护）
+    addBinding("PrevTexture",
+               ShaderPass::PassTexBinding::Kind::FrameHistory,
+               -1, 0);
+    for (int n = 1; n <= k_maxFrameHistory; ++n) {
+        addBinding("Prev" + std::to_string(n) + "Texture",
+                   ShaderPass::PassTexBinding::Kind::FrameHistory,
+                   -1, n - 1);
     }
 }
 
@@ -344,6 +389,7 @@ void ShaderChain::deinit()
         if (lut.tex) glDeleteTextures(1, &lut.tex);
     }
     m_luts.clear();
+    _clearFrameHistory();
 
     if (m_vao) { glDeleteVertexArrays(1, &m_vao); m_vao = 0; }
     if (m_vbo) { glDeleteBuffers(1,      &m_vbo); m_vbo = 0; }
@@ -450,6 +496,7 @@ void ShaderChain::clearPasses()
         if (lut.tex) glDeleteTextures(1, &lut.tex);
     }
     m_luts.clear();
+    _clearFrameHistory();
 
     m_lastVideoW = 0;
     m_lastVideoH = 0;
@@ -521,6 +568,7 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
     if (dimsChanged) {
         m_lastVideoW = videoW;
         m_lastVideoH = videoH;
+        _clearFrameHistory();
     }
     for (auto& p : m_passes) {
         if (!p.fbo || dimsChanged) {
@@ -578,6 +626,19 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
         invW = (w > 0) ? 1.f / (float)w : 0.f;
         invH = (h > 0) ? 1.f / (float)h : 0.f;
     };
+    auto setSizeUniform = [&](GLint loc, bool isVec2, int w, int h) {
+        if (loc < 0) return;
+        float invW = 0.f, invH = 0.f;
+        makeSizeVec4(w, h, invW, invH);
+        if (isVec2)
+            glUniform2f(loc, (float)w, (float)h);
+        else
+            glUniform4f(loc, (float)w, (float)h, invW, invH);
+    };
+    auto resolvePassInputSize = [](const ShaderPass& refPass, int& w, int& h) {
+        w = (refPass.inputW > 0) ? refPass.inputW : refPass.outW;
+        h = (refPass.inputH > 0) ? refPass.inputH : refPass.outH;
+    };
 
     // ---- 节流调试日志（前 3 帧 + 每 300 帧 + 尺寸变化时输出）----
     const bool logThisFrame = s_shaderDebugLog &&
@@ -599,8 +660,11 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
     int inputH = (int)videoH;
 
     for (size_t i = 0; i < m_passes.size(); ++i) {
-        const ShaderPass& p = m_passes[i];
+        ShaderPass& p = m_passes[i];
         if (!p.program || !p.fbo) continue;
+
+        p.inputW = inputW;
+        p.inputH = inputH;
 
         glBindFramebuffer(GL_FRAMEBUFFER, p.fbo);
         glViewport(0, 0, p.outW, p.outH);
@@ -616,33 +680,9 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
         if (p.sourceLoc >= 0) glUniform1i(p.sourceLoc, 0);
 
         // RetroArch 兼容 uniforms
-        if (p.sourceSizeLoc >= 0) {
-            float invW, invH;
-            makeSizeVec4(inputW, inputH, invW, invH);
-            if (p.sourceSizeIsVec2)
-                glUniform2f(p.sourceSizeLoc, (float)inputW, (float)inputH);
-            else
-                glUniform4f(p.sourceSizeLoc,
-                            (float)inputW, (float)inputH, invW, invH);
-        }
-        if (p.inputSizeLoc >= 0) {
-            float invW, invH;
-            makeSizeVec4(inputW, inputH, invW, invH);
-            if (p.inputSizeIsVec2)
-                glUniform2f(p.inputSizeLoc, (float)inputW, (float)inputH);
-            else
-                glUniform4f(p.inputSizeLoc,
-                            (float)inputW, (float)inputH, invW, invH);
-        }
-        if (p.outputSizeLoc >= 0) {
-            float invW, invH;
-            makeSizeVec4(p.outW, p.outH, invW, invH);
-            if (p.outputSizeIsVec2)
-                glUniform2f(p.outputSizeLoc, (float)p.outW, (float)p.outH);
-            else
-                glUniform4f(p.outputSizeLoc,
-                            (float)p.outW, (float)p.outH, invW, invH);
-        }
+        setSizeUniform(p.sourceSizeLoc, p.sourceSizeIsVec2, inputW, inputH);
+        setSizeUniform(p.inputSizeLoc, p.inputSizeIsVec2, inputW, inputH);
+        setSizeUniform(p.outputSizeLoc, p.outputSizeIsVec2, p.outW, p.outH);
         if (p.finalVpSizeLoc >= 0) {
             float invW, invH;
             makeSizeVec4((int)videoW, (int)videoH, invW, invH);
@@ -668,21 +708,39 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
         // 前序通道纹理
         int lutCount = (int)m_luts.size();
         for (const auto& binding : p.passTexBindings) {
-            if (binding.texUnitOffset < 0) {
-                glUniform1i(binding.loc, 0);
-                continue;
-            }
             int unit = 1 + lutCount + binding.texUnitOffset;
-            GLuint passTex = 0;
-            if (binding.srcPassIdx >= 0
-                && binding.srcPassIdx < (int)m_passes.size()
-                && m_passes[binding.srcPassIdx].outputTex) {
-                passTex = m_passes[binding.srcPassIdx].outputTex;
+            GLuint passTex = srcTex;
+            int texW = (int)videoW;
+            int texH = (int)videoH;
+            int inputRefW = texW;
+            int inputRefH = texH;
+
+            if (binding.kind == ShaderPass::PassTexBinding::Kind::PassOutput) {
+                if (binding.srcPassIdx >= 0 && binding.srcPassIdx < (int)m_passes.size()) {
+                    const ShaderPass& refPass = m_passes[binding.srcPassIdx];
+                    if (refPass.outputTex) {
+                        passTex = refPass.outputTex;
+                        texW = refPass.outW;
+                        texH = refPass.outH;
+                        resolvePassInputSize(refPass, inputRefW, inputRefH);
+                    }
+                }
+            } else if (binding.historyIndex >= 0 &&
+                       binding.historyIndex < (int)m_frameHistory.size() &&
+                       m_frameHistory[binding.historyIndex].tex) {
+                const auto& history = m_frameHistory[binding.historyIndex];
+                passTex = history.tex;
+                texW = history.w;
+                texH = history.h;
+                inputRefW = history.w;
+                inputRefH = history.h;
             }
-            if (!passTex) passTex = srcTex;
+
             glActiveTexture((GLenum)(GL_TEXTURE0 + unit));
             glBindTexture(GL_TEXTURE_2D, passTex);
             glUniform1i(binding.loc, unit);
+            setSizeUniform(binding.textureSizeLoc, binding.textureSizeIsVec2, texW, texH);
+            setSizeUniform(binding.inputSizeLoc, binding.inputSizeIsVec2, inputRefW, inputRefH);
         }
 
         // OrigTexture（固定单元 k_origTexUnitOffset）
@@ -723,6 +781,9 @@ GLuint ShaderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH)
         inputW   = p.outW;
         inputH   = p.outH;
     }
+
+    if (!m_passes.empty())
+        _captureFrameHistory(m_passes.front());
 
     if (logThisFrame) {
         brls::Logger::debug("[ShaderChain::run] -> finalTex={} ({}x{})",
@@ -857,6 +918,13 @@ void ShaderChain::setFilter(GLenum glFilter)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, m_glFilter);
         glBindTexture(GL_TEXTURE_2D, 0);
     }
+    for (auto& slot : m_frameHistory) {
+        if (!slot.tex) continue;
+        glBindTexture(GL_TEXTURE_2D, slot.tex);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, m_glFilter);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, m_glFilter);
+    }
+    glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 // ============================================================
@@ -935,6 +1003,75 @@ bool ShaderChain::_initPassFbo(ShaderPass& p, int srcW, int srcH,
                 ? static_cast<float>(p.scale.absY) : p.scale.scaleY),
             w, h, p.fbo, p.outputTex, filter, wrapMode);
     return true;
+}
+
+// ============================================================
+// ShaderChain：帧历史纹理管理
+// ============================================================
+void ShaderChain::_clearFrameHistory()
+{
+    for (auto& slot : m_frameHistory) {
+        if (slot.tex) glDeleteTextures(1, &slot.tex);
+        slot.tex = 0;
+        slot.w   = 0;
+        slot.h   = 0;
+    }
+    m_frameHistory.clear();
+}
+
+bool ShaderChain::_ensureHistoryTexture(FrameHistorySlot& slot, int w, int h)
+{
+    if (w <= 0 || h <= 0)
+        return false;
+
+    if (slot.tex && slot.w == w && slot.h == h)
+        return true;
+
+    if (slot.tex) {
+        glDeleteTextures(1, &slot.tex);
+        slot.tex = 0;
+    }
+
+    glGenTextures(1, &slot.tex);
+    glBindTexture(GL_TEXTURE_2D, slot.tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, (GLint)m_glFilter);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, (GLint)m_glFilter);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    slot.w = w;
+    slot.h = h;
+    return true;
+}
+
+void ShaderChain::_captureFrameHistory(const ShaderPass& sourcePass)
+{
+    if (!sourcePass.fbo || sourcePass.outW <= 0 || sourcePass.outH <= 0)
+        return;
+
+    FrameHistorySlot slot;
+    if (m_frameHistory.size() >= k_maxFrameHistory) {
+        slot = m_frameHistory.back(); // Reuse the oldest slot to avoid reallocating GL texture objects.
+        m_frameHistory.pop_back();
+    }
+
+    if (!_ensureHistoryTexture(slot, sourcePass.outW, sourcePass.outH))
+        return;
+
+    // Use glCopyTexSubImage2D here because it works across the current
+    // GL2/GLES2/GL3 compatibility layer with the existing FBO/texture setup.
+    // If frame-history copies ever become a bottleneck, this is the obvious
+    // place to switch to a platform-specific blit/copy-image fast path.
+    glBindFramebuffer(GL_FRAMEBUFFER, sourcePass.fbo);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, slot.tex);
+    glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, sourcePass.outW, sourcePass.outH);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    m_frameHistory.push_front(slot);
+    if (m_frameHistory.size() > k_maxFrameHistory)
+        m_frameHistory.pop_back();
 }
 
 // ============================================================

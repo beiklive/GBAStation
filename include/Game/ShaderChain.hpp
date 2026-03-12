@@ -1,6 +1,7 @@
 #pragma once
 
 #include <glad/glad.h>
+#include <deque>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -45,6 +46,8 @@ struct ShaderPass {
 
     int    outW      = 0;       ///< outputTex / FBO 的宽高
     int    outH      = 0;
+    int    inputW    = 0;       ///< 最近一次渲染到该 pass 时的输入尺寸
+    int    inputH    = 0;
 
     // RetroArch 兼容 uniforms（可选，未找到时为 -1）
     GLint  sourceLoc         = -1; ///< uniform sampler2D  Source / Texture
@@ -64,11 +67,22 @@ struct ShaderPass {
     // LUT uniform 位置（与 ShaderChain::m_luts 对应）
     std::vector<GLint> lutLocs;
 
-    /// 前序通道纹理绑定（PassNTexture / {alias}Texture / PrevNTexture）
+    /// 前序/历史纹理绑定（PassNTexture / PassPrevNTexture / {alias}Texture / PrevNTexture）
     struct PassTexBinding {
-        int   srcPassIdx;    ///< m_passes 中源通道的索引（-1 = 使用原始源纹理）
-        GLint loc;           ///< 该 uniform 在本通道程序中的位置
-        int   texUnitOffset; ///< 从 (1 + luts.size()) 起的纹理单元偏移量
+        enum class Kind {
+            PassOutput,
+            FrameHistory,
+        };
+
+        Kind  kind           = Kind::PassOutput;
+        int   srcPassIdx     = -1;  ///< kind=PassOutput 时，m_passes 中源通道的索引
+        int   historyIndex   = -1;  ///< kind=FrameHistory 时，0=上一帧，1=上上帧...
+        GLint loc            = -1;  ///< sampler uniform 位置
+        GLint textureSizeLoc = -1;  ///< xxxTextureSize uniform 位置
+        bool  textureSizeIsVec2 = false;
+        GLint inputSizeLoc   = -1;  ///< xxxInputSize uniform 位置
+        bool  inputSizeIsVec2 = false;
+        int   texUnitOffset  = 0;   ///< 从 (1 + luts.size()) 起的纹理单元偏移量
     };
     std::vector<PassTexBinding> passTexBindings;
 
@@ -191,9 +205,17 @@ public:
     bool setParam(const std::string& name, float val);
 
 private:
+    /// 历史帧缓存槽位：保存一张上一帧纹理及其尺寸，供 PrevTexture/PrevNTexture 绑定使用。
+    struct FrameHistorySlot {
+        GLuint tex = 0;
+        int    w   = 0;
+        int    h   = 0;
+    };
+
     std::vector<ShaderPass>     m_passes;
     std::vector<ShaderLut>      m_luts;    ///< LUT 纹理列表
     std::vector<ShaderParamDef> m_params;  ///< 所有通道合并的参数定义（含当前值）
+    std::deque<FrameHistorySlot> m_frameHistory;
 
     GLuint   m_vao        = 0;
     GLuint   m_vbo        = 0;
@@ -207,8 +229,11 @@ private:
     void _bindPassAttrib(ShaderPass& p);
     void _lookupUniforms(ShaderPass& p);
     void _lookupLutUniforms(ShaderPass& p);
-    /// 查询前序通道纹理 uniform 位置（PassNTexture / aliasTexture / PrevNTexture）
+    /// 查询前序/历史纹理 uniform 位置（PassNTexture / PassPrevNTexture / aliasTexture / PrevNTexture）
     void _lookupPassTextures(ShaderPass& p, int passIdx);
+    void _clearFrameHistory();
+    bool _ensureHistoryTexture(FrameHistorySlot& slot, int w, int h);
+    void _captureFrameHistory(const ShaderPass& sourcePass);
 };
 
 } // namespace beiklive
