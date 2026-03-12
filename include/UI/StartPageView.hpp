@@ -58,13 +58,12 @@ class StartPageView : public brls::Box
   private:
     brls::Image* m_bgImage = nullptr;
 
-    AppPage*           m_appPage        = nullptr;
-    FileListPage*      m_fileListPage   = nullptr;
-    FileSettingsPanel* m_settingsPanel  = nullptr;
-    int                m_activeIndex    = 0; ///< 0 = AppPage, 1 = FileListPage
+    AppPage*           m_appPage       = nullptr;
+    FileListPage*      m_fileListPage  = nullptr;
+    FileSettingsPanel* m_settingsPanel = nullptr;
 
     void showAppPage();
-    void showFileListPage();
+    void openFileListPage();
     void createAppPage();
     void createFileListPage();
 
