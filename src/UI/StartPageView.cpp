@@ -207,18 +207,8 @@ StartPageView::StartPageView()
     m_bgImage->setInterpolation(brls::ImageInterpolation::LINEAR);
     // m_bgImage->setImageFromFile(BK_APP_DEFAULT_BG);
     m_bgImage->setImageFromGif(BK_RES("img/test.gif"));
-    // m_bgImage->setBlurEnabled(true);
+    m_bgImage->setShaderAnimation(beiklive::UI::ShaderAnimationType::PSP_XMB_RIPPLE);
     addView(m_bgImage);
-
-    // Settings overlay panel (absolute positioning, added/removed on demand)
-    m_settingsPanel = new FileSettingsPanel();
-    float panelW = 1280 * 0.70f;
-    float panelH = 720 * 0.70f;
-    m_settingsPanel->setWidth(panelW);
-    m_settingsPanel->setHeight(panelH);
-    m_settingsPanel->setPositionLeft((1280 - panelW) * 0.5f);
-    m_settingsPanel->setPositionTop((720 - panelH) * 0.5f);
-    // Do NOT addView here; it will be added when X is pressed
 }
 
 void StartPageView::ActionInit()
@@ -288,62 +278,6 @@ void StartPageView::createAppPage()
     };
 }
 
-void StartPageView::createFileListPage()
-{
-    if (m_fileListPage)
-        return;
-
-    m_fileListPage = new FileListPage();
-    std::vector<std::string> IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "bmp", "gif",};
-    std::vector<std::string> ROM_EXTENSIONS = {"zip", "gba", "gbc", "gb"};
-    // Set default filter (GBA / GB / GBC roms)
-    // m_fileListPage->setFilter(ROM_EXTENSIONS, FileListPage::FilterMode::Whitelist);
-    // m_fileListPage->setFilterEnabled(true);
-
-    // Register settings panel callback
-    m_fileListPage->onOpenSettings = [this](const FileListItem& item, int idx) {
-        onFileSettingsRequested(item, idx);
-    };
-
-    for (const auto& ext : IMAGE_EXTENSIONS)
-    {
-        m_fileListPage->setFileCallback(ext, [](const FileListItem& item) {
-            auto* imageView = new ImageView(item.fullPath);
-            auto* frame = new brls::AppletFrame(imageView);
-            // frame->setHeaderVisibility(brls::Visibility::GONE);
-            // frame->setFooterVisibility(brls::Visibility::GONE);
-            frame->setBackground(brls::ViewBackground::NONE);
-            brls::Application::pushActivity(new brls::Activity(frame));
-        });
-    }
-    // Default file callback: launch the game
-    for (const auto& ext : ROM_EXTENSIONS)
-    {
-        m_fileListPage->setFileCallback(ext, [](const FileListItem& item) {
-            auto* frame = new brls::AppletFrame(new GameView(item.fullPath));
-            frame->setHeaderVisibility(brls::Visibility::GONE);
-            frame->setFooterVisibility(brls::Visibility::GONE);
-            frame->setBackground(brls::ViewBackground::NONE);
-            brls::Application::pushActivity(new brls::Activity(frame));
-        });
-    }
-
-    SettingManager->Contains("last_game_path") ? m_fileListPage->navigateTo(*gameRunner->settingConfig->Get("last_game_path")->AsString()) : m_fileListPage->navigateTo(ROOT_PATH);
-}
-
-// ─────────── Settings panel ──────────────────────────────────────────────────
-
-void StartPageView::onFileSettingsRequested(const FileListItem& item, int itemIndex)
-{
-    if (m_settingsPanel)
-    {
-        // Remove first (no-op if not already in tree), then add so it renders on top
-        removeView(m_settingsPanel, false);
-        addView(m_settingsPanel);
-        m_settingsPanel->showForItem(item, itemIndex, m_fileListPage);
-    }
-}
-
 // ─────────── Page switching ──────────────────────────────────────────────────
 
 void StartPageView::showAppPage()
@@ -362,32 +296,89 @@ void StartPageView::showAppPage()
 
 void StartPageView::openFileListPage()
 {
-    // Remove AppPage from tree (keep it alive)
-    if (m_appPage)
-        removeView(m_appPage, false);
+    static const std::vector<std::string> IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "bmp", "gif"};
+    static const std::vector<std::string> ROM_EXTENSIONS   = {"zip", "gba", "gbc", "gb"};
 
-    // Create FileListPage if needed and add to view tree
-    createFileListPage();
-    addView(m_fileListPage);
-    m_fileListPage->setVisibility(brls::Visibility::VISIBLE);
+    // ── Create a fresh FileListPage ───────────────────────────────────────────
+    auto* fileListPage = new FileListPage();
 
-    gameRunner->uiParams->StartPageframe->setHeaderVisibility(brls::Visibility::GONE);
-    gameRunner->uiParams->StartPageframe->setFooterVisibility(brls::Visibility::GONE);
+    // ── Create a fresh settings panel and a container that holds both ─────────
+    // The container is absolute-positioned so the panel can overlay the list.
+    auto* container = new brls::Box(brls::Axis::COLUMN);
+    container->setGrow(1.0f);
+    container->setBackground(brls::ViewBackground::NONE);
 
-    // Reset focus to the first item in the file list
-    m_fileListPage->resetFocusToTop();
+    auto* settingsPanel = new FileSettingsPanel();
+    float panelW = 1280 * 0.70f;
+    float panelH = 720  * 0.70f;
+    settingsPanel->setWidth(panelW);
+    settingsPanel->setHeight(panelH);
+    settingsPanel->setPositionLeft((1280 - panelW) * 0.5f);
+    settingsPanel->setPositionTop ((720  - panelH) * 0.5f);
+    settingsPanel->setVisibility(brls::Visibility::GONE);
+    // Add to container now (GONE) so it is always owned and freed with the Activity
+    container->addView(settingsPanel);
 
-    beiklive::swallow(this, brls::BUTTON_A);
-    // Bind B → return to AppPage
-    registerAction("beiklive/hints/APP"_i18n,
-                   brls::ControllerButton::BUTTON_B,
-                   [this](brls::View*) {
-                       bklog::debug("Returning to AppPage");
-                       removeView(m_fileListPage, false);
-                       showAppPage();
-                       return true;
-                   },
-                   /*hidden=*/false);
+    // ── Wire the settings-panel callback ─────────────────────────────────────
+    // Safety: This lambda is stored in fileListPage->onOpenSettings, which is a
+    // member of fileListPage.  fileListPage is a child of container, so all
+    // three objects (container, settingsPanel, fileListPage) share the same
+    // lifetime.  The lambda cannot outlive the objects it captures.
+    fileListPage->onOpenSettings = [container, settingsPanel, fileListPage]
+        (const FileListItem& item, int idx)
+    {
+        // Bring panel to top by re-inserting it (addView while GONE keeps it hidden)
+        container->removeView(settingsPanel, /*free=*/false);
+        container->addView(settingsPanel);
+        settingsPanel->showForItem(item, idx, fileListPage);
+    };
+
+    // ── Wire file-open callbacks ──────────────────────────────────────────────
+    for (const auto& ext : IMAGE_EXTENSIONS)
+    {
+        fileListPage->setFileCallback(ext, [](const FileListItem& item) {
+            auto* imageView = new ImageView(item.fullPath);
+            auto* frame = new brls::AppletFrame(imageView);
+            frame->setBackground(brls::ViewBackground::NONE);
+            brls::Application::pushActivity(new brls::Activity(frame));
+        });
+    }
+    for (const auto& ext : ROM_EXTENSIONS)
+    {
+        fileListPage->setFileCallback(ext, [](const FileListItem& item) {
+            auto* frame = new brls::AppletFrame(new GameView(item.fullPath));
+            frame->setHeaderVisibility(brls::Visibility::GONE);
+            frame->setFooterVisibility(brls::Visibility::GONE);
+            frame->setBackground(brls::ViewBackground::NONE);
+            brls::Application::pushActivity(new brls::Activity(frame));
+        });
+    }
+
+    // ── Navigate to last (or default) path ───────────────────────────────────
+    if (SettingManager->Contains("last_game_path"))
+        fileListPage->navigateTo(*gameRunner->settingConfig->Get("last_game_path")->AsString());
+    else
+        fileListPage->navigateTo(ROOT_PATH);
+
+    // ── Assemble: fileListPage inside container ───────────────────────────────
+    container->addView(fileListPage);
+
+    // ── Bind + (BUTTON_START) → pop this activity ─────────────────────────────
+    container->registerAction(
+        "beiklive/hints/close"_i18n,
+        brls::BUTTON_START,
+        [](brls::View*) {
+            brls::Application::popActivity();
+            return true;
+        },
+        /*hidden=*/false, /*repeat=*/false, brls::SOUND_CLICK);
+
+    // ── Push as a new Activity ────────────────────────────────────────────────
+    auto* frame = new brls::AppletFrame(container);
+    frame->setHeaderVisibility(brls::Visibility::GONE);
+    frame->setFooterVisibility(brls::Visibility::GONE);
+    frame->setBackground(brls::ViewBackground::NONE);
+    brls::Application::pushActivity(new brls::Activity(frame));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

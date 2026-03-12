@@ -58,16 +58,10 @@ class StartPageView : public brls::Box
   private:
     beiklive::UI::ProImage* m_bgImage = nullptr;
 
-    AppPage*           m_appPage       = nullptr;
-    FileListPage*      m_fileListPage  = nullptr;
-    FileSettingsPanel* m_settingsPanel = nullptr;
+    AppPage* m_appPage = nullptr;
 
     void showAppPage();
     void openFileListPage();
     void createAppPage();
-    void createFileListPage();
-
-    /// Called by the FileListPage callback when BUTTON_X is pressed.
-    void onFileSettingsRequested(const FileListItem& item, int itemIndex);
 };
 
