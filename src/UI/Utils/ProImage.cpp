@@ -29,7 +29,7 @@ static constexpr double PI = 3.14159265358979323846;
 static constexpr float ASSUMED_FRAME_MS = 1000.0f / 60.0f;
 
 /// Assumed seconds per frame (used for shader animation speed).
-static constexpr float ASSUMED_FRAME_SEC = 1.0f / 60.0f;
+static constexpr float ASSUMED_FRAME_SEC = 1.0f / 120.0f;
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  ProImage
@@ -101,7 +101,6 @@ void ProImage::setImageFromGif(const std::string& path)
     unsigned char* pixels = stbi_load_gif_from_memory(
         buf.data(), static_cast<int>(buf.size()),
         &delays, &frameW, &frameH, &frameCount, &comp, 4 /*RGBA*/);
-
     if (!pixels || frameCount <= 0)
     {
         brls::Logger::warning("ProImage: not an animated GIF or decode failed: {}", path);

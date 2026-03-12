@@ -196,7 +196,7 @@ StartPageView::StartPageView()
     setAxis(brls::Axis::COLUMN);
 
     // Background image (absolute positioning, does not participate in layout)
-    m_bgImage = new brls::Image();
+    m_bgImage = new beiklive::UI::ProImage();
     m_bgImage->setFocusable(false);
     m_bgImage->setPositionType(brls::PositionType::ABSOLUTE);
     m_bgImage->setPositionTop(0);
@@ -205,8 +205,10 @@ StartPageView::StartPageView()
     m_bgImage->setHeightPercentage(100);
     m_bgImage->setScalingType(brls::ImageScalingType::FIT);
     m_bgImage->setInterpolation(brls::ImageInterpolation::LINEAR);
-    m_bgImage->setImageFromFile(BK_APP_DEFAULT_BG);
-    // addView(m_bgImage);
+    // m_bgImage->setImageFromFile(BK_APP_DEFAULT_BG);
+    m_bgImage->setImageFromGif(BK_RES("img/test.gif"));
+    // m_bgImage->setBlurEnabled(true);
+    addView(m_bgImage);
 
     // Settings overlay panel (absolute positioning, added/removed on demand)
     m_settingsPanel = new FileSettingsPanel();
@@ -308,7 +310,7 @@ void StartPageView::createFileListPage()
         m_fileListPage->setFileCallback(ext, [](const FileListItem& item) {
             auto* imageView = new ImageView(item.fullPath);
             auto* frame = new brls::AppletFrame(imageView);
-            frame->setHeaderVisibility(brls::Visibility::GONE);
+            // frame->setHeaderVisibility(brls::Visibility::GONE);
             // frame->setFooterVisibility(brls::Visibility::GONE);
             frame->setBackground(brls::ViewBackground::NONE);
             brls::Application::pushActivity(new brls::Activity(frame));

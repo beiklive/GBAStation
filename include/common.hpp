@@ -10,6 +10,7 @@ using namespace brls::literals; // for _i18n
 #include "Utils/fileUtils.hpp"
 #include "Utils/strUtils.hpp"
 #include "UI/Utils/Utils.hpp"
+#include "UI/Utils/ProImage.hpp"
 
 // FUNCTIONS DEFINITIONS
 

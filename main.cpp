@@ -154,8 +154,8 @@ int main(int argc, char* argv[]) {
 
 
 	gameRunner->uiParams->StartPageframe->setTitle("beiklive/title"_i18n);
-    // gameRunner->uiParams->StartPageframe->setHeaderVisibility(brls::Visibility::GONE);
-    // gameRunner->uiParams->StartPageframe->setFooterVisibility(brls::Visibility::GONE);
+    gameRunner->uiParams->StartPageframe->setHeaderVisibility(brls::Visibility::GONE);
+    gameRunner->uiParams->StartPageframe->setFooterVisibility(brls::Visibility::GONE);
 	brls::Application::pushActivity(new brls::Activity(gameRunner->uiParams->StartPageframe));
 
 	// Run the app
