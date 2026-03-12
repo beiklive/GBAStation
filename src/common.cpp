@@ -1,6 +1,31 @@
 #include "common.hpp"
+#include <set>
 
 namespace beiklive {
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  XMB background registry
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// All ProImage instances created by InsertBackground() are tracked here
+/// so that ApplyXmbColorToAll() can update them when the color setting changes.
+static std::set<beiklive::UI::ProImage*> s_xmbBackgrounds;
+
+void RegisterXmbBackground(beiklive::UI::ProImage* img)
+{
+    if (img) s_xmbBackgrounds.insert(img);
+}
+
+void UnregisterXmbBackground(beiklive::UI::ProImage* img)
+{
+    if (img) s_xmbBackgrounds.erase(img);
+}
+
+void ApplyXmbColorToAll()
+{
+    for (auto* img : s_xmbBackgrounds)
+        ApplyXmbColor(img);
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  XMB colour preset table
@@ -89,6 +114,7 @@ void ApplyXmbColor(beiklive::UI::ProImage* img)
         m_bgImage->setInterpolation(brls::ImageInterpolation::LINEAR);
         m_bgImage->setShaderAnimation(beiklive::UI::ShaderAnimationType::PSP_XMB_RIPPLE);
         ApplyXmbColor(m_bgImage);
+        RegisterXmbBackground(m_bgImage);
         view->addView(m_bgImage);
     }
 };

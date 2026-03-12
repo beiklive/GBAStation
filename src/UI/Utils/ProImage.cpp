@@ -1,4 +1,5 @@
 #include "UI/Utils/ProImage.hpp"
+#include "common.hpp"
 
 #include <borealis/core/application.hpp>
 #include <borealis/core/logger.hpp>
@@ -146,6 +147,7 @@ ProImage::ProImage() = default;
 
 ProImage::~ProImage()
 {
+    beiklive::UnregisterXmbBackground(this);
     freeGifFrames();
 #ifdef BOREALIS_USE_OPENGL
     NVGcontext* vg = brls::Application::getNVGContext();
