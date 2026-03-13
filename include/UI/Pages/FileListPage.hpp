@@ -128,6 +128,9 @@ class FileListPage : public beiklive::UI::BBox
     void doDeletePublic(int itemIndex)    { doDelete(itemIndex); }
     void doNewFolder();
 
+    /// Determine EmuPlatform for a file based on its extension.
+    static beiklive::EmuPlatform detectPlatform(const std::string& fileName);
+
   private:
     // ── UI components ────────────────────────────────────────────────────────
     beiklive::UI::BrowserHeader*    m_header      = nullptr;
@@ -142,6 +145,9 @@ class FileListPage : public beiklive::UI::BBox
     brls::Label*            m_detailName       = nullptr;
     brls::Label*            m_detailMappedName = nullptr;
     brls::Label*            m_detailInfo       = nullptr;
+    brls::Label*            m_detailLastOpen   = nullptr; ///< gamedataManager: lastopen
+    brls::Label*            m_detailTotalTime  = nullptr; ///< gamedataManager: totaltime
+    brls::Label*            m_detailPlatform   = nullptr; ///< gamedataManager: platform
 
     brls::BottomBar* m_bottomBar = nullptr;
 
@@ -179,7 +185,7 @@ class FileListPage : public beiklive::UI::BBox
     void updateDetailPanel(const FileListItem& item);
     void clearDetailPanel();
     std::string lookupMappedName(const std::string& name, bool isDir) const;
-    std::string lookupLogoPath(const std::string& name, bool isDir) const;
+    std::string lookupLogoPath(const std::string& name) const;
 
     // Drive-list helpers (Windows)
     void showDriveList();

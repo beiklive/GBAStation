@@ -705,6 +705,162 @@ brls::ScrollingFrame* SettingPage::buildGameTab()
         box->addView(idleCell);
     }
 
+    // ── 存档设置 ──────────────────────────────────────────────────────────────
+    box->addView(makeHeader("存档设置"));
+
+    auto* autoSaveCell = new brls::BooleanCell();
+    autoSaveCell->init("自动存档（退出时保存 SRAM）",
+                       cfgGetBool("save.autoSave", true),
+                       [](bool v){ cfgSetBool("save.autoSave", v); });
+    box->addView(autoSaveCell);
+
+    {
+        auto* sramDirCell = new brls::DetailCell();
+        sramDirCell->setText("SRAM 存档目录");
+        std::string curSramDir = cfgGetStr("save.sramDir", "");
+        sramDirCell->setDetailText(curSramDir.empty() ? "与游戏同目录" : curSramDir);
+        sramDirCell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A,
+            [sramDirCell](brls::View*) {
+                auto* flPage = new FileListPage();
+                // Browse directories only (no filter = show all, user navigates to dir and activates)
+                flPage->setDefaultFileCallback([sramDirCell](const FileListItem& dirItem) {
+                    if (!dirItem.isDir) return;
+                    cfgSetStr("save.sramDir", dirItem.fullPath);
+                    sramDirCell->setDetailText(dirItem.fullPath);
+                    brls::Application::popActivity();
+                });
+                std::string startPath = cfgGetStr("save.sramDir", "");
+                if (startPath.empty()) startPath = "/";
+                flPage->navigateTo(startPath);
+
+                auto* container = new brls::Box(brls::Axis::COLUMN);
+                container->setGrow(1.0f);
+                container->addView(flPage);
+                container->registerAction("beiklive/hints/close"_i18n, brls::BUTTON_START, [](brls::View*) {
+                    brls::Application::popActivity(); return true;
+                });
+                auto* frame = new brls::AppletFrame(container);
+                frame->setHeaderVisibility(brls::Visibility::GONE);
+                frame->setFooterVisibility(brls::Visibility::GONE);
+                frame->setBackground(brls::ViewBackground::NONE);
+                brls::Application::pushActivity(new brls::Activity(frame));
+                return true;
+            }, false, false, brls::SOUND_CLICK);
+        sramDirCell->registerAction("清空（与游戏同目录）", brls::BUTTON_X,
+            [sramDirCell](brls::View*) {
+                cfgSetStr("save.sramDir", "");
+                sramDirCell->setDetailText("与游戏同目录");
+                return true;
+            }, false, false, brls::SOUND_CLICK);
+        box->addView(sramDirCell);
+    }
+
+    {
+        auto* stateDirCell = new brls::DetailCell();
+        stateDirCell->setText("即时存档目录");
+        std::string curStateDir = cfgGetStr("save.stateDir", "");
+        stateDirCell->setDetailText(curStateDir.empty() ? "与游戏同目录" : curStateDir);
+        stateDirCell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A,
+            [stateDirCell](brls::View*) {
+                auto* flPage = new FileListPage();
+                flPage->setDefaultFileCallback([stateDirCell](const FileListItem& dirItem) {
+                    if (!dirItem.isDir) return;
+                    cfgSetStr("save.stateDir", dirItem.fullPath);
+                    stateDirCell->setDetailText(dirItem.fullPath);
+                    brls::Application::popActivity();
+                });
+                std::string startPath = cfgGetStr("save.stateDir", "");
+                if (startPath.empty()) startPath = "/";
+                flPage->navigateTo(startPath);
+
+                auto* container = new brls::Box(brls::Axis::COLUMN);
+                container->setGrow(1.0f);
+                container->addView(flPage);
+                container->registerAction("beiklive/hints/close"_i18n, brls::BUTTON_START, [](brls::View*) {
+                    brls::Application::popActivity(); return true;
+                });
+                auto* frame = new brls::AppletFrame(container);
+                frame->setHeaderVisibility(brls::Visibility::GONE);
+                frame->setFooterVisibility(brls::Visibility::GONE);
+                frame->setBackground(brls::ViewBackground::NONE);
+                brls::Application::pushActivity(new brls::Activity(frame));
+                return true;
+            }, false, false, brls::SOUND_CLICK);
+        stateDirCell->registerAction("清空（与游戏同目录）", brls::BUTTON_X,
+            [stateDirCell](brls::View*) {
+                cfgSetStr("save.stateDir", "");
+                stateDirCell->setDetailText("与游戏同目录");
+                return true;
+            }, false, false, brls::SOUND_CLICK);
+        box->addView(stateDirCell);
+    }
+
+    // ── 金手指设置 ────────────────────────────────────────────────────────────
+    box->addView(makeHeader("金手指设置"));
+
+    auto* cheatEnableCell = new brls::BooleanCell();
+    cheatEnableCell->init("启用金手指功能",
+                          cfgGetBool("cheat.enabled", false),
+                          [](bool v){ cfgSetBool("cheat.enabled", v); });
+    box->addView(cheatEnableCell);
+
+    {
+        static const char* cheatDirIds[]    = { "rom", "emu" };
+        static const char* cheatDirLabels[] = { "游戏同目录", "模拟器目录" };
+        std::string curCheatLoc = cfgGetStr("cheat.location", "rom");
+        int cheatLocIdx = 0;
+        for (int i = 0; i < 2; ++i)
+            if (curCheatLoc == cheatDirIds[i]) { cheatLocIdx = i; break; }
+        std::vector<std::string> cheatLocLabels(cheatDirLabels, cheatDirLabels + 2);
+        auto* cheatLocCell = new brls::SelectorCell();
+        cheatLocCell->init("金手指文件位置", cheatLocLabels, cheatLocIdx,
+            [](int idx){
+                if (idx >= 0 && idx < 2)
+                    cfgSetStr("cheat.location", cheatDirIds[idx]);
+            });
+        box->addView(cheatLocCell);
+    }
+
+    {
+        auto* cheatDirCell = new brls::DetailCell();
+        cheatDirCell->setText("金手指自定义目录");
+        std::string curCheatDir = cfgGetStr("cheat.dir", "");
+        cheatDirCell->setDetailText(curCheatDir.empty() ? "（自动，见上选项）" : curCheatDir);
+        cheatDirCell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A,
+            [cheatDirCell](brls::View*) {
+                auto* flPage = new FileListPage();
+                flPage->setDefaultFileCallback([cheatDirCell](const FileListItem& dirItem) {
+                    if (!dirItem.isDir) return;
+                    cfgSetStr("cheat.dir", dirItem.fullPath);
+                    cheatDirCell->setDetailText(dirItem.fullPath);
+                    brls::Application::popActivity();
+                });
+                std::string startPath = cfgGetStr("cheat.dir", "");
+                if (startPath.empty()) startPath = "/";
+                flPage->navigateTo(startPath);
+
+                auto* container = new brls::Box(brls::Axis::COLUMN);
+                container->setGrow(1.0f);
+                container->addView(flPage);
+                container->registerAction("beiklive/hints/close"_i18n, brls::BUTTON_START, [](brls::View*) {
+                    brls::Application::popActivity(); return true;
+                });
+                auto* frame = new brls::AppletFrame(container);
+                frame->setHeaderVisibility(brls::Visibility::GONE);
+                frame->setFooterVisibility(brls::Visibility::GONE);
+                frame->setBackground(brls::ViewBackground::NONE);
+                brls::Application::pushActivity(new brls::Activity(frame));
+                return true;
+            }, false, false, brls::SOUND_CLICK);
+        cheatDirCell->registerAction("清空（自动）", brls::BUTTON_X,
+            [cheatDirCell](brls::View*) {
+                cfgSetStr("cheat.dir", "");
+                cheatDirCell->setDetailText("（自动，见上选项）");
+                return true;
+            }, false, false, brls::SOUND_CLICK);
+        box->addView(cheatDirCell);
+    }
+
     scroll->setContentView(box);
     return scroll;
 }
