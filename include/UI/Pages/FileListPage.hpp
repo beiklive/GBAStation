@@ -10,6 +10,7 @@
 
 #include "common.hpp"
 #include "UI/Utils/Utils.hpp"
+#include "UI/Utils/ProImage.hpp"
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  FileListItem  –  describes one entry in the file list
@@ -136,11 +137,11 @@ class FileListPage : public beiklive::UI::BBox
     brls::Box*            m_itemsBox    = nullptr; ///< direct parent of FileListItemViews
 
     // Detail panel (LayoutMode::ListAndDetail)
-    brls::Box*   m_detailPanel      = nullptr;
-    brls::Image* m_detailThumb      = nullptr;
-    brls::Label* m_detailName       = nullptr;
-    brls::Label* m_detailMappedName = nullptr;
-    brls::Label* m_detailInfo       = nullptr;
+    brls::Box*              m_detailPanel      = nullptr;
+    beiklive::UI::ProImage* m_detailThumb      = nullptr;
+    brls::Label*            m_detailName       = nullptr;
+    brls::Label*            m_detailMappedName = nullptr;
+    brls::Label*            m_detailInfo       = nullptr;
 
     brls::BottomBar* m_bottomBar = nullptr;
 

@@ -262,6 +262,8 @@ void StartPageView::createAppPage()
     m_appPage->addGame({ "/mGBA/roms/gba/Mother 3.gba",    "地球冒险3",    BK_RES("img/thumb/212.png") });
     m_appPage->addGame({ "/mGBA/roms/gba/MuChangWuYu.gba", "牧场物语",     "" });
     m_appPage->onGameSelected = [](const GameEntry& e) {
+        // Free UI image cache before launching the emulator to reclaim memory.
+        beiklive::clearUIImageCache();
         auto* frame = new brls::AppletFrame(new GameView(e.path));
         frame->setHeaderVisibility(brls::Visibility::GONE);
         frame->setFooterVisibility(brls::Visibility::GONE);
@@ -350,6 +352,8 @@ void StartPageView::openFileListPage()
     for (const auto& ext : ROM_EXTENSIONS)
     {
         fileListPage->setFileCallback(ext, [](const FileListItem& item) {
+            // Free UI image cache before launching the emulator.
+            beiklive::clearUIImageCache();
             auto* frame = new brls::AppletFrame(new GameView(item.fullPath));
             frame->setHeaderVisibility(brls::Visibility::GONE);
             frame->setFooterVisibility(brls::Visibility::GONE);

@@ -383,12 +383,18 @@ void FileListPage::buildDetailPanel()
     m_detailPanel->setBackgroundColor(nvgRGBA(40, 40, 40, 20));
     // Width will be set to ~33% in setLayoutMode()
 
-    m_detailThumb = new brls::Image();
+    // Use ProImage so animated GIFs and async loading are supported.
+    // setClipsToBounds(false) fixes edge-pixel stretching: the image is drawn
+    // only in its exact aspect-ratio-correct rect (CONTAIN / FIT behaviour),
+    // so no clamped edge pixels bleed into the surrounding empty space.
+    m_detailThumb = new beiklive::UI::ProImage();
     m_detailThumb->setWidth(DETAIL_THUMB_SZ);
     m_detailThumb->setHeight(DETAIL_THUMB_SZ);
     m_detailThumb->setScalingType(brls::ImageScalingType::FIT);
     m_detailThumb->setInterpolation(brls::ImageInterpolation::LINEAR);
     m_detailThumb->setCornerRadius(8.f);
+    m_detailThumb->setClipsToBounds(false); // prevents edge-pixel stretching
+    m_detailThumb->setGifScalingMode(beiklive::UI::ProImage::GifScalingMode::CONTAIN);
     m_detailThumb->setImageFromFile(BK_APP_DEFAULT_LOGO);
     m_detailPanel->addView(m_detailThumb);
 
@@ -703,7 +709,7 @@ void FileListPage::updateDetailPanel(const FileListItem &item)
     if (!item.logoPath.empty() &&
         beiklive::file::getPathType(item.logoPath) == beiklive::file::PathType::File)
     {
-        m_detailThumb->setImageFromFile(item.logoPath);
+        m_detailThumb->setImageFromFileAsync(item.logoPath);
         return;
     }
 
@@ -716,7 +722,7 @@ void FileListPage::updateDetailPanel(const FileListItem &item)
             std::string thumbPath = item.fullPath.substr(0, dot) + ".png";
             if (beiklive::file::getPathType(thumbPath) == beiklive::file::PathType::File)
             {
-                m_detailThumb->setImageFromFile(thumbPath);
+                m_detailThumb->setImageFromFileAsync(thumbPath);
                 return;
             }
         }

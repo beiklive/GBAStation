@@ -1,8 +1,10 @@
 #include "UI/Utils/ProImage.hpp"
+#include "UI/Utils/ImageFileCache.hpp"
 #include "common.hpp"
 
 #include <borealis/core/application.hpp>
 #include <borealis/core/logger.hpp>
+#include <borealis/core/thread.hpp>
 #include <chrono>
 #include <cmath>
 #include <cstring>
@@ -261,6 +263,177 @@ void ProImage::setImageFromGif(const std::string& path)
     }
 }
 
+// ── Async image loading ───────────────────────────────────────────────────────
+
+void ProImage::setImageFromFileAsync(const std::string& path)
+{
+    if (path.empty())
+        return;
+
+    // Increment the generation counter to cancel any pending async load.
+    int gen = ++m_asyncGen;
+
+    // Check the file-byte cache first (main thread only).
+    auto& byteCache = beiklive::UI::ImageFileCache::instance();
+    if (const auto* cached = byteCache.getBytes(path))
+    {
+        // Cache hit – decode/load from cached bytes synchronously (no disk I/O).
+        m_asyncLoading = false;
+
+        const std::vector<uint8_t>& bytes = *cached;
+        std::string suffix = beiklive::string::getFileSuffix(path);
+        if (beiklive::string::iequals(suffix, "gif"))
+        {
+            // Use the cached bytes for GIF decoding (avoids re-reading the file).
+            // stbi_load_gif_from_memory works on raw bytes.
+            freeGifFrames();
+            int fw = 0, fh = 0, fc = 0, comp = 0;
+            int* delays = nullptr;
+            unsigned char* pixels = stbi_load_gif_from_memory(
+                bytes.data(), static_cast<int>(bytes.size()),
+                &delays, &fw, &fh, &fc, &comp, 4);
+            if (pixels && fc > 0)
+            {
+                NVGcontext* vg2 = brls::Application::getNVGContext();
+                const size_t frameBytes = static_cast<size_t>(fw) * fh * 4;
+                for (int i = 0; i < fc; ++i)
+                {
+                    GifFrame gf;
+                    gf.delay_ms = (delays && delays[i] > 0) ? delays[i] : 100;
+                    gf.texture  = nvgCreateImageRGBA(vg2, fw, fh, 0, pixels + i * frameBytes);
+                    m_gifFrames.push_back(gf);
+                }
+                if (!m_gifFrames.empty())
+                {
+                    m_isGif           = true;
+                    m_gifCurrentFrame = 0;
+                    m_gifTimerStarted = false;
+                    innerSetImage(m_gifFrames[0].texture);
+                    originalImageWidth  = static_cast<float>(fw);
+                    originalImageHeight = static_cast<float>(fh);
+                    invalidate();
+                }
+                stbi_image_free(pixels);
+                if (delays) stbi_image_free(delays);
+            }
+            else
+            {
+                if (pixels) stbi_image_free(pixels);
+                if (delays) stbi_image_free(delays);
+                // Fallback: treat as static image
+                NVGcontext* vg2 = brls::Application::getNVGContext();
+                int tex = nvgCreateImageMem(vg2, getImageFlags(),
+                    const_cast<unsigned char*>(bytes.data()), static_cast<int>(bytes.size()));
+                if (tex > 0) innerSetImage(tex);
+            }
+        }
+        else
+        {
+            NVGcontext* vg2 = brls::Application::getNVGContext();
+            int tex = nvgCreateImageMem(vg2, getImageFlags(),
+                const_cast<unsigned char*>(bytes.data()), static_cast<int>(bytes.size()));
+            if (tex > 0) innerSetImage(tex);
+        }
+        return;
+    }
+
+    // Cache miss – start async file read.
+    m_asyncLoading = true;
+    invalidate();
+
+    ASYNC_RETAIN
+    std::string capturedPath = path;
+    brls::async([ASYNC_TOKEN, capturedPath, gen]()
+    {
+        // Background thread: read the file into memory.
+        std::vector<uint8_t> bytes;
+        {
+            std::ifstream f(capturedPath, std::ios::binary | std::ios::ate);
+            if (f.is_open())
+            {
+                auto size = static_cast<std::streamsize>(f.tellg());
+                f.seekg(0);
+                bytes.resize(static_cast<size_t>(size));
+                f.read(reinterpret_cast<char*>(bytes.data()), size);
+                // Discard partial reads
+                if (f.gcount() != size)
+                    bytes.clear();
+            }
+        }
+
+        // Marshal result back to the main thread.
+        brls::sync([ASYNC_TOKEN, bytes = std::move(bytes), capturedPath, gen]()
+        {
+            ASYNC_RELEASE
+            // If another load request was issued after this one, discard.
+            if (gen != this->m_asyncGen.load())
+                return;
+
+            this->m_asyncLoading = false;
+
+            if (bytes.empty())
+                return;
+
+            // Store in byte cache for future fast access.
+            beiklive::UI::ImageFileCache::instance().storeBytes(capturedPath, bytes);
+
+            // Determine if it's a GIF.
+            std::string suffix = beiklive::string::getFileSuffix(capturedPath);
+            if (beiklive::string::iequals(suffix, "gif"))
+            {
+                // Decode all GIF frames.
+                freeGifFrames();
+                int fw = 0, fh = 0, fc = 0, comp = 0;
+                int* delays = nullptr;
+                unsigned char* pixels = stbi_load_gif_from_memory(
+                    bytes.data(), static_cast<int>(bytes.size()),
+                    &delays, &fw, &fh, &fc, &comp, 4);
+                if (pixels && fc > 0)
+                {
+                    NVGcontext* vg2 = brls::Application::getNVGContext();
+                    const size_t frameBytes = static_cast<size_t>(fw) * fh * 4;
+                    for (int i = 0; i < fc; ++i)
+                    {
+                        GifFrame gf;
+                        gf.delay_ms = (delays && delays[i] > 0) ? delays[i] : 100;
+                        gf.texture  = nvgCreateImageRGBA(vg2, fw, fh, 0, pixels + i * frameBytes);
+                        m_gifFrames.push_back(gf);
+                    }
+                    if (!m_gifFrames.empty())
+                    {
+                        m_isGif           = true;
+                        m_gifCurrentFrame = 0;
+                        m_gifTimerStarted = false;
+                        innerSetImage(m_gifFrames[0].texture);
+                        originalImageWidth  = static_cast<float>(fw);
+                        originalImageHeight = static_cast<float>(fh);
+                        invalidate();
+                    }
+                    stbi_image_free(pixels);
+                    if (delays) stbi_image_free(delays);
+                }
+                else
+                {
+                    if (pixels) stbi_image_free(pixels);
+                    if (delays) stbi_image_free(delays);
+                    // Fallback: static image
+                    NVGcontext* vg2 = brls::Application::getNVGContext();
+                    int tex = nvgCreateImageMem(vg2, getImageFlags(),
+                        const_cast<unsigned char*>(bytes.data()), static_cast<int>(bytes.size()));
+                    if (tex > 0) innerSetImage(tex);
+                }
+            }
+            else
+            {
+                NVGcontext* vg2 = brls::Application::getNVGContext();
+                int tex = nvgCreateImageMem(vg2, getImageFlags(),
+                    const_cast<unsigned char*>(bytes.data()), static_cast<int>(bytes.size()));
+                if (tex > 0) innerSetImage(tex);
+            }
+        });
+    });
+}
+
 // ── Shader Animation ─────────────────────────────────────────────────────────
 
 void ProImage::setShaderAnimation(ShaderAnimationType type)
@@ -286,6 +459,19 @@ void ProImage::setXmbBgColor(float r, float g, float b)
 void ProImage::draw(NVGcontext* vg, float x, float y, float w, float h,
                     brls::Style style, brls::FrameContext* ctx)
 {
+    // ── Show loading placeholder while async load is in progress ─────────────
+    if (m_asyncLoading)
+    {
+        nvgSave(vg);
+        nvgFontSize(vg, 20.0f);
+        nvgFillColor(vg, nvgRGBA(180, 180, 180, 200));
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgText(vg, x + w * 0.5f, y + h * 0.5f, "加载中...", nullptr);
+        nvgRestore(vg);
+        invalidate(); // keep ticking so we notice when loading completes
+        return;
+    }
+
     using Clock = std::chrono::steady_clock;
     const auto now = Clock::now();
 

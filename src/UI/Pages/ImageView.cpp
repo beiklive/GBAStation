@@ -1,6 +1,10 @@
 #include "UI/Pages/ImageView.hpp"
 
 #include "common.hpp"
+#include "UI/Utils/ImageFileCache.hpp"
+
+#include <borealis/core/thread.hpp>
+#include <fstream>
 
 using namespace brls::literals; // for _i18n
 
@@ -63,6 +67,70 @@ ImageView::ImageView(const std::string& imagePath)
     beiklive::swallow(this, brls::BUTTON_Y);
     beiklive::swallow(this, brls::BUTTON_START);
     beiklive::swallow(this, brls::BUTTON_BACK);
+
+    // ── Start async image load ────────────────────────────────────────────────
+    auto& byteCache = beiklive::UI::ImageFileCache::instance();
+    if (const auto* cached = byteCache.getBytes(m_imagePath))
+    {
+        // Cache hit: bytes already in RAM.
+        // Copy into m_asyncBytes; the NVG image is created in draw() once
+        // an NVGcontext is guaranteed to be available.
+        std::lock_guard<std::mutex> lock(m_asyncMutex);
+        m_asyncBytes   = *cached;
+        m_asyncReady.store(true);
+        m_asyncLoading = false;
+    }
+    else
+    {
+        // Cache miss – read file in background, using ASYNC_RETAIN/RELEASE so
+        // that the callback is safely discarded if this view is destroyed first.
+        m_asyncLoading = true;
+        std::string path = m_imagePath;
+
+        ASYNC_RETAIN
+        brls::async([ASYNC_TOKEN, path]()
+        {
+            // Background: read file bytes.
+            std::string data;
+            {
+                std::ifstream f(path, std::ios::binary | std::ios::ate);
+                if (f.is_open())
+                {
+                    auto size = static_cast<std::streamsize>(f.tellg());
+                    f.seekg(0);
+                    data.resize(static_cast<size_t>(size));
+                    f.read(data.data(), size);
+                    // Discard partial reads
+                    if (f.gcount() != size)
+                        data.clear();
+                }
+            }
+
+            // Main thread: store bytes and signal draw() to create the texture.
+            brls::sync([ASYNC_TOKEN, data = std::move(data), path]()
+            {
+                ASYNC_RELEASE
+                this->m_asyncLoading = false;
+
+                if (data.empty())
+                {
+                    this->m_loaded = true; // mark as done (failed)
+                    return;
+                }
+
+                // Store in byte cache.
+                std::vector<uint8_t> bytes(data.begin(), data.end());
+                beiklive::UI::ImageFileCache::instance().storeBytes(path, bytes);
+
+                // Hand off bytes to draw() for NVG image creation.
+                {
+                    std::lock_guard<std::mutex> lock(this->m_asyncMutex);
+                    this->m_asyncBytes = std::move(bytes);
+                }
+                this->m_asyncReady.store(true);
+            });
+        });
+    }
 }
 
 void ImageView::draw(NVGcontext* vg, float x, float y, float w, float h,
@@ -70,18 +138,43 @@ void ImageView::draw(NVGcontext* vg, float x, float y, float w, float h,
 {
     // ── Black background ────────────────────────────────────────────────────
     nvgBeginPath(vg);
-    // nvgFillColor(vg, nvgRGBA(0, 0, 0, 0));
     nvgRect(vg, x, y, w, h);
     nvgFill(vg);
 
-    // ── Lazy-load the NVG image on first draw ───────────────────────────────
-    if (!m_loaded)
+    // ── Consume completed async load ────────────────────────────────────────
+    if (m_asyncReady.load())
     {
-        m_nvgImage = nvgCreateImage(vg, m_imagePath.c_str(), 0);
-        if (m_nvgImage >= 0)
-            nvgImageSize(vg, m_nvgImage, &m_imgW, &m_imgH);
+        m_asyncReady.store(false);
+        m_asyncLoading = false;
+
+        std::vector<uint8_t> bytes;
+        {
+            std::lock_guard<std::mutex> lock(m_asyncMutex);
+            bytes = std::move(m_asyncBytes);
+        }
+
+        if (!bytes.empty())
+        {
+            m_nvgImage = nvgCreateImageMem(vg, 0, bytes.data(),
+                                           static_cast<int>(bytes.size()));
+            if (m_nvgImage >= 0)
+                nvgImageSize(vg, m_nvgImage, &m_imgW, &m_imgH);
+        }
         m_loaded = true;
     }
+
+    // ── Show loading placeholder ─────────────────────────────────────────────
+    if (m_asyncLoading)
+    {
+        nvgFontSize(vg, 28.0f);
+        nvgFillColor(vg, nvgRGBA(200, 200, 200, 200));
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgText(vg, x + w * 0.5f, y + h * 0.5f, "加载中...", nullptr);
+        return;
+    }
+
+    if (!m_loaded)
+        return; // draw() might be called before the async thread completes
 
     if (m_nvgImage < 0 || m_imgW == 0 || m_imgH == 0)
     {
