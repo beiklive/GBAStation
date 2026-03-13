@@ -233,12 +233,12 @@ public:
         //     which fires once per press, not every frame like draw()-polling.
         if (!isKeyboard) {
             for (int i = 0; i < k_capPadKeyCount; ++i) {
-                const char* name = k_capPadKeys[i].name;
+                std::string name = k_capPadKeys[i].name;
                 brls::ControllerButton btn = k_capPadKeys[i].btn;
                 registerAction("", btn,
                     [this, name](brls::View*) -> bool {
                         if (!m_done && !m_waitingForRelease)
-                            finish(std::string(name));
+                            finish(name);
                         return true; // always consume – never propagate to parent
                     },
                     /*hidden=*/true);

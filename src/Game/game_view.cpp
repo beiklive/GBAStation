@@ -837,10 +837,6 @@ void GameView::pollInput()
 }
 
 // ============================================================
-// draw – per-frame render entry point (GL upload + NVG render only)
-// ============================================================
-
-// ============================================================
 // refreshInputSnapshot – capture input state on the main thread
 // ============================================================
 // GLFW functions (glfwGetKey, glfwGetWindowAttrib, glfwGetGamepadState, ...)
