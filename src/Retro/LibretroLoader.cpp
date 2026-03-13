@@ -133,6 +133,10 @@ bool LibretroLoader::load(const std::string& libPath)
     fn_unserialize            = retro_unserialize;
     fn_load_game              = retro_load_game;
     fn_unload_game            = retro_unload_game;
+    fn_cheat_reset            = retro_cheat_reset;
+    fn_cheat_set              = retro_cheat_set;
+    fn_get_memory_data        = retro_get_memory_data;
+    fn_get_memory_size        = retro_get_memory_size;
     m_handle = reinterpret_cast<void*>(1); // sentinel: symbols are bound
 #else
     m_handle = dynOpen(libPath);
@@ -161,6 +165,11 @@ bool LibretroLoader::load(const std::string& libPath)
     ok &= resolveSymbol(fn_unserialize,             "retro_unserialize");
     ok &= resolveSymbol(fn_load_game,               "retro_load_game");
     ok &= resolveSymbol(fn_unload_game,             "retro_unload_game");
+    // Optional symbols: do not fail if absent
+    resolveSymbol(fn_cheat_reset,               "retro_cheat_reset");
+    resolveSymbol(fn_cheat_set,                 "retro_cheat_set");
+    resolveSymbol(fn_get_memory_data,           "retro_get_memory_data");
+    resolveSymbol(fn_get_memory_size,           "retro_get_memory_size");
 
     if (!ok) {
         dynClose(m_handle);
@@ -218,6 +227,10 @@ void LibretroLoader::unload()
     fn_unserialize             = nullptr;
     fn_load_game               = nullptr;
     fn_unload_game             = nullptr;
+    fn_cheat_reset             = nullptr;
+    fn_cheat_set               = nullptr;
+    fn_get_memory_data         = nullptr;
+    fn_get_memory_size         = nullptr;
 }
 
 // ============================================================
@@ -338,6 +351,36 @@ bool LibretroLoader::getButtonState(unsigned id) const
 }
 
 // ============================================================
+// Memory (SRAM)
+// ============================================================
+
+void* LibretroLoader::getMemoryData(unsigned id) const
+{
+    if (!m_gameLoaded || !fn_get_memory_data) return nullptr;
+    return fn_get_memory_data(id);
+}
+
+size_t LibretroLoader::getMemorySize(unsigned id) const
+{
+    if (!m_gameLoaded || !fn_get_memory_size) return 0;
+    return fn_get_memory_size(id);
+}
+
+// ============================================================
+// Cheats
+// ============================================================
+
+void LibretroLoader::cheatReset()
+{
+    if (m_gameLoaded && fn_cheat_reset) fn_cheat_reset();
+}
+
+void LibretroLoader::cheatSet(unsigned index, bool enabled, const std::string& code)
+{
+    if (m_gameLoaded && fn_cheat_set) fn_cheat_set(index, enabled, code.c_str());
+}
+
+// ============================================================
 // Static callbacks (libretro C interface)
 // ============================================================
 
@@ -360,8 +403,22 @@ bool LibretroLoader::s_environmentCallback(unsigned cmd, void* data)
             }
             return false;
         }
-        case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY:
-        case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY:
+        case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY: {
+            const char** dir = static_cast<const char**>(data);
+            if (dir) {
+                *dir = s_current->m_systemDirectory.empty()
+                     ? "." : s_current->m_systemDirectory.c_str();
+            }
+            return true;
+        }
+        case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY: {
+            const char** dir = static_cast<const char**>(data);
+            if (dir) {
+                *dir = s_current->m_saveDirectory.empty()
+                     ? "." : s_current->m_saveDirectory.c_str();
+            }
+            return true;
+        }
         case RETRO_ENVIRONMENT_GET_LIBRETRO_PATH: {
             // Return current directory
             const char** dir = static_cast<const char**>(data);

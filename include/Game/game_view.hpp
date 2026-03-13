@@ -63,6 +63,22 @@ class GameView : public brls::Box
     // ---- Keyboard exit ----------------------------------------------
     std::atomic<bool> m_requestExit{false}; ///< Set by game thread; consumed by draw()
 
+    // ---- Quick save / load state ------------------------------------
+    /// Slot number to save to (game thread reads, main thread also writes).
+    std::atomic<int>  m_pendingQuickSave{-1};
+    /// Slot number to load from (game thread reads, main thread also writes).
+    std::atomic<int>  m_pendingQuickLoad{-1};
+    /// Current active quick-save slot (0-based).
+    int  m_saveSlot = 0;
+    /// Previous keyboard quick-save key state (game thread only, edge detection).
+    bool m_kbdQsSavePrev = false;
+    /// Previous keyboard quick-load key state (game thread only, edge detection).
+    bool m_kbdQlLoadPrev = false;
+    /// Status message for save/load overlay (set from game thread, read in draw).
+    mutable std::mutex  m_saveMsgMutex;
+    std::string         m_saveMsg;
+    std::chrono::steady_clock::time_point m_saveMsgTime;
+
     // ---- Input mapping (key bindings + FF/rewind settings) ----------
     beiklive::InputMappingConfig m_inputMap;
 
@@ -133,6 +149,36 @@ class GameView : public brls::Box
     /// Register all gamepad hotkey actions with m_inputCtrl.
     /// Called from initialize() after m_inputMap is loaded.
     void registerGamepadHotkeys();
+
+    /// Resolve the directory where save files (SRAM / state / cheat) are stored.
+    /// Returns @a customDir if non-empty, otherwise the directory of @a romPath.
+    static std::string resolveSaveDir(const std::string& romPath,
+                                       const std::string& customDir);
+
+    /// Compute the full path for a quick-save state file.
+    /// Slot -1 → base name without slot suffix (used for per-game state).
+    std::string quickSaveStatePath(int slot) const;
+
+    /// Compute the full path for the SRAM (.sav) file.
+    std::string sramSavePath() const;
+
+    /// Compute the full path for the cheat (.cht) file.
+    std::string cheatFilePath() const;
+
+    /// Load SRAM data from disk into the core's save-RAM region.
+    void loadSram();
+
+    /// Save SRAM data from the core's save-RAM region to disk.
+    void saveSram();
+
+    /// Save quick-save state to @a slot.
+    void doQuickSave(int slot);
+
+    /// Load quick-save state from @a slot.
+    void doQuickLoad(int slot);
+
+    /// Load cheats from the .cht file associated with the current ROM.
+    void loadCheats();
 
     /// Start the independent emulation thread (called from initialize()).
     void startGameThread();
