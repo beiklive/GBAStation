@@ -57,7 +57,7 @@ using namespace brls::literals; // for _i18n
 #define KEY_UI_BG_IMAGE_PATH  "UI.bgImagePath"
 #define KEY_UI_SHOW_XMB_BG    "UI.showXmbBg"
 #define KEY_UI_PSPXMB_COLOR   "UI.pspxmb.color"
-#define KEY_UI_TEXT_COLOR     "UI.textColor"
+// #define KEY_UI_TEXT_COLOR     "UI.textColor"
 
 // Audio settings
 #define KEY_AUDIO_BUTTON_SFX  "audio.buttonSfx"

@@ -100,9 +100,9 @@ static void addSaveButton(brls::Box* box)
     box->addView(padding);
 
     auto* btn = new brls::Button();
-    btn->setStyle(&brls::BUTTONSTYLE_PRIMARY);
+    // btn->setStyle(&brls::BUTTONSTYLE_PRIMARY);
     btn->setText("保存");
-    btn->setWidth(200.f);
+    // btn->setWidth(200.f);
     btn->setHeight(50.f);
     btn->registerAction("确认", brls::BUTTON_A, [](brls::View*) {
         if (SettingManager) SettingManager->Save();
@@ -426,9 +426,9 @@ static const char* k_xmbColorIds[]    = { "blue","purple","green","orange","red"
 static const char* k_xmbColorLabels[] = { "深蓝","紫色","绿色","橙色","红色","青色","黑色","原版" };
 static constexpr int k_xmbColorCount  = 8;
 
-static const char* k_textColorIds[]    = { "white","yellow","cyan","green","red","gray" };
-static const char* k_textColorLabels[] = { "白色","黄色","青色","绿色","红色","灰色" };
-static constexpr int k_textColorCount  = 6;
+// static const char* k_textColorIds[]    = { "white","yellow","cyan","green","red","gray" };
+// static const char* k_textColorLabels[] = { "白色","黄色","青色","绿色","红色","灰色" };
+// static constexpr int k_textColorCount  = 6;
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Shared constants
@@ -525,24 +525,24 @@ brls::ScrollingFrame* SettingPage::buildUITab()
     }
 
     // ── 文字 ──────────────────────────────────────────────────────────────────
-    box->addView(makeHeader("文字"));
+    // box->addView(makeHeader("文字"));
 
-    {
-        std::vector<std::string> textColorLabels(k_textColorLabels,
-                                                  k_textColorLabels + k_textColorCount);
-        std::string curId = cfgGetStr(KEY_UI_TEXT_COLOR, "white");
-        int curIdx = 0;
-        for (int i = 0; i < k_textColorCount; ++i)
-            if (curId == k_textColorIds[i]) { curIdx = i; break; }
+    // {
+    //     std::vector<std::string> textColorLabels(k_textColorLabels,
+    //                                               k_textColorLabels + k_textColorCount);
+    //     std::string curId = cfgGetStr(KEY_UI_TEXT_COLOR, "white");
+    //     int curIdx = 0;
+    //     for (int i = 0; i < k_textColorCount; ++i)
+    //         if (curId == k_textColorIds[i]) { curIdx = i; break; }
 
-        auto* textColorCell = new brls::SelectorCell();
-        textColorCell->init("文字颜色", textColorLabels, curIdx,
-            [](int idx){
-                if (idx >= 0 && idx < k_textColorCount)
-                    cfgSetStr(KEY_UI_TEXT_COLOR, k_textColorIds[idx]);
-            });
-        box->addView(textColorCell);
-    }
+    //     auto* textColorCell = new brls::SelectorCell();
+    //     textColorCell->init("文字颜色", textColorLabels, curIdx,
+    //         [](int idx){
+    //             if (idx >= 0 && idx < k_textColorCount)
+    //                 cfgSetStr(KEY_UI_TEXT_COLOR, k_textColorIds[idx]);
+    //         });
+    //     box->addView(textColorCell);
+    // }
 
     addSaveButton(box);
     scroll->setContentView(box);
@@ -764,6 +764,8 @@ brls::ScrollingFrame* SettingPage::buildDisplayTab()
             [](int idx){ cfgSetStr("display.filter", idx == 1 ? "linear" : "nearest"); });
         box->addView(filterCell);
     }
+
+    box->addView(makeHeader("状态显示"));
 
     auto* showFpsCell = new brls::BooleanCell();
     showFpsCell->init("显示帧率 (FPS)",

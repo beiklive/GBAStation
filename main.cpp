@@ -54,7 +54,7 @@ void RunnerInit() {
     gameRunner->settingConfig->SetDefault(KEY_UI_BG_IMAGE_PATH,  beiklive::ConfigValue(std::string("")));
     gameRunner->settingConfig->SetDefault(KEY_UI_SHOW_XMB_BG,    beiklive::ConfigValue(std::string("false")));
     gameRunner->settingConfig->SetDefault(KEY_UI_PSPXMB_COLOR,   beiklive::ConfigValue(std::string("blue")));
-    gameRunner->settingConfig->SetDefault(KEY_UI_TEXT_COLOR,      beiklive::ConfigValue(std::string("white")));
+    // gameRunner->settingConfig->SetDefault(KEY_UI_TEXT_COLOR,      beiklive::ConfigValue(std::string("white")));
 
     // Audio settings
     gameRunner->settingConfig->SetDefault(KEY_AUDIO_BUTTON_SFX,  beiklive::ConfigValue(std::string("false")));
