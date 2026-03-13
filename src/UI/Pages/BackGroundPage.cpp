@@ -15,7 +15,6 @@ void BackGroundPage::setImagePath(const std::string &path)
     m_bgImage->setScalingType(brls::ImageScalingType::FIT);
     m_bgImage->setInterpolation(brls::ImageInterpolation::LINEAR);
     if (!path.empty()) {
-        // GIF is not supported as background; always load as static image.
         m_bgImage->setImageFromFile(path);
         addView(m_bgImage);
     } else {

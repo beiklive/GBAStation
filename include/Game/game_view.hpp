@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "common.hpp"
+#include "Control/GameInputController.hpp"
 #include "Control/InputMapping.hpp"
 #include "Retro/LibretroLoader.hpp"
 #include "Video/DisplayConfig.hpp"
@@ -65,16 +66,35 @@ class GameView : public brls::Box
     // ---- Input mapping (key bindings + FF/rewind settings) ----------
     beiklive::InputMappingConfig m_inputMap;
 
+    // ---- Low-level gamepad input controller -------------------------
+    /// Registered gamepad combo actions; updated from the game thread via pollInput().
+    /// Actions are registered once in initialize() before the game thread starts.
+    beiklive::GameInputController m_inputCtrl;
+
     // ---- Fast-forward runtime state ---------------------------------
-    bool m_ffToggled       = false;  ///< Combined toggle state (hold-key toggle mode + toggle-key)
-    bool m_ffPrevKey       = false;  ///< Previous hold-key state for edge detection
-    bool m_ffTogglePrevKey = false;  ///< Previous toggle-key state for edge detection
+    /// Whether the gamepad hold-key is currently held (hold mode, game thread only).
+    bool m_ffPadHeld       = false;
+    /// Whether the keyboard hold-key is currently held (hold mode, game thread only).
+    bool m_ffKbdHeld       = false;
+    /// Toggle state set by dedicated toggle keys (game thread only).
+    bool m_ffToggled       = false;
+    /// Previous keyboard hold-key state for edge detection (game thread only).
+    bool m_ffKbdHoldPrev   = false;
+    /// Previous keyboard toggle-key state for edge detection (game thread only).
+    bool m_ffKbdTogglePrev = false;
 
     // ---- Rewind runtime state ---------------------------------------
     std::atomic<bool>            m_rewinding{false};
-    bool                         m_rewindToggled       = false;
-    bool                         m_rewindPrevKey       = false;
-    bool                         m_rewindTogglePrevKey = false;
+    /// Whether the gamepad rewind hold-key is currently held (game thread only).
+    bool m_rewPadHeld       = false;
+    /// Whether the keyboard rewind hold-key is currently held (game thread only).
+    bool m_rewKbdHeld       = false;
+    /// Rewind toggle state (game thread only).
+    bool m_rewindToggled    = false;
+    /// Previous keyboard rewind hold-key state for edge detection (game thread only).
+    bool m_rewKbdHoldPrev   = false;
+    /// Previous keyboard rewind toggle-key state for edge detection (game thread only).
+    bool m_rewKbdTogglePrev = false;
     std::deque<std::vector<uint8_t>> m_rewindBuffer; ///< Circular save-state buffer
     mutable std::mutex           m_rewindMutex;
 
@@ -92,16 +112,9 @@ class GameView : public brls::Box
 
     // ---- UI input block tracking ----------------------------------
     /// true when we have an outstanding blockInputs() token (desktop only).
-    /// Prevents borealis UI navigation from stealing keyboard/gamepad inputs
-    /// while a game is running.
     bool m_uiBlocked = false;
 
     // ---- Main-thread input snapshot (thread-safe GLFW access) ------
-    // GLFW functions (glfwGetKey, glfwGetWindowAttrib, etc.) must only be
-    // called from the main thread.  The game thread calls pollInput() which
-    // would otherwise call those functions directly.  Instead, draw() (main
-    // thread) captures fresh input state into m_inputSnap every frame; the
-    // game thread reads from this snapshot under the mutex.
     struct InputSnapshot {
         brls::ControllerState ctrlState{};
         /// Keyboard key states: scancode → pressed (for all mapped scancodes)
@@ -115,9 +128,11 @@ class GameView : public brls::Box
     void cleanup();
 
     /// Refresh m_inputSnap from the main thread (called inside draw()).
-    /// Must be called from the main (render) thread so that GLFW functions
-    /// are invoked safely.
     void refreshInputSnapshot();
+
+    /// Register all gamepad hotkey actions with m_inputCtrl.
+    /// Called from initialize() after m_inputMap is loaded.
+    void registerGamepadHotkeys();
 
     /// Start the independent emulation thread (called from initialize()).
     void startGameThread();
