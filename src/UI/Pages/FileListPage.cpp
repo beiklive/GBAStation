@@ -978,12 +978,12 @@ void FileListPage::openSidebar(int itemIndex)
     };
     std::vector<Option> opts;
 
-#ifdef __SWITCH__
+// #ifdef __SWITCH__
     // Rename is only supported on Switch (IME + filesystem write access)
     opts.push_back({"beiklive/sidebar/rename"_i18n,
                     [this, itemIndex]()
                     { doRename(itemIndex); }});
-#endif
+// #endif
 
     opts.push_back({"beiklive/sidebar/set_mapping"_i18n,
                     [this, itemIndex]()
