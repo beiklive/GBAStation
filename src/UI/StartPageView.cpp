@@ -5,6 +5,7 @@
 
 #include <chrono>
 #include <ctime>
+#include <filesystem>
 
 #undef ABSOLUTE // avoid conflict with brls::PositionType::ABSOLUTE
 
@@ -131,7 +132,8 @@ void FileSettingsPanel::showForItem(const FileListItem& item,
     if (!item.isDir && FileListPage::detectPlatform(item.fileName) != beiklive::EmuPlatform::None)
     {
         std::string captureFileName = item.fileName;
-        addOptionButton("选择 Logo", [captureFileName]() {
+        std::string captureFullPath = item.fullPath;
+        addOptionButton("选择 Logo", [captureFileName, captureFullPath]() {
             auto* flPage = new FileListPage();
             flPage->setFilter({"png"}, FileListPage::FilterMode::Whitelist);
             flPage->setDefaultFileCallback([captureFileName](const FileListItem& imgItem) {
@@ -139,11 +141,15 @@ void FileSettingsPanel::showForItem(const FileListItem& item,
                 setGameDataStr(captureFileName, GAMEDATA_FIELD_LOGOPATH, imgItem.fullPath);
                 brls::Application::popActivity();
             });
-            // Start at home/root path
-            std::string startPath = "/";
+            // Start at the game file's parent directory
+            std::string startPath = beiklive::file::getParentPath(captureFullPath);
+            if (startPath.empty() ||
+                beiklive::file::getPathType(startPath) != beiklive::file::PathType::Directory) {
+                startPath = "/";
 #ifdef _WIN32
-            startPath = "C:\\";
+                startPath = "C:\\";
 #endif
+            }
             flPage->navigateTo(startPath);
 
             auto* container = new brls::Box(brls::Axis::COLUMN);
@@ -230,6 +236,168 @@ void FileSettingsPanel::close()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  AppGameSettingsPanel
+// ─────────────────────────────────────────────────────────────────────────────
+
+AppGameSettingsPanel::AppGameSettingsPanel()
+{
+    setPositionType(brls::PositionType::ABSOLUTE);
+    setBackgroundColor(GET_THEME_COLOR("beiklive/sidePanel"));
+    setAxis(brls::Axis::COLUMN);
+    setFocusable(true);
+
+    // ── Title bar ──────────────────────────────────────────────────────────
+    m_titleBar = new brls::Box(brls::Axis::ROW);
+    m_titleBar->setHeight(PANEL_TITLE_HEIGHT);
+    m_titleBar->setWidth(brls::View::AUTO);
+    m_titleBar->setAlignItems(brls::AlignItems::CENTER);
+
+    m_titleLabel = new brls::Label();
+    m_titleLabel->setFontSize(24.f);
+    m_titleLabel->setSingleLine(true);
+    m_titleLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+    m_titleLabel->setAutoAnimate(true);
+    m_titleLabel->setTextColor(GET_THEME_COLOR("brls/text"));
+    m_titleLabel->setGrow(1.0f);
+    m_titleBar->addView(m_titleLabel);
+    addView(m_titleBar);
+
+    // ── Option buttons container ───────────────────────────────────────────
+    m_optionsBox = new brls::Box(brls::Axis::COLUMN);
+    m_optionsBox->setWidth(brls::View::AUTO);
+    m_optionsBox->setGrow(1.0f);
+    m_optionsBox->setPadding(8.f, 0.f, 8.f, 0.f);
+    addView(m_optionsBox);
+}
+
+void AppGameSettingsPanel::clearOptions()
+{
+    m_optionsBox->clearViews(true);
+}
+
+void AppGameSettingsPanel::addOptionButton(const std::string& label,
+                                            std::function<void()> action)
+{
+    auto* btn = new brls::Box(brls::Axis::ROW);
+    btn->setFocusable(true);
+    btn->setHeight(PANEL_OPTION_HEIGHT);
+    btn->setWidth(brls::View::AUTO);
+    btn->setAlignItems(brls::AlignItems::CENTER);
+    btn->setPadding(0.f, 20.f, 0.f, 20.f);
+    btn->setHideHighlightBackground(true);
+    btn->setHideClickAnimation(true);
+
+    auto* lbl = new brls::Label();
+    lbl->setText(label);
+    lbl->setFontSize(22.f);
+    lbl->setTextColor(nvgRGBA(220, 220, 220, 255));
+    lbl->setGrow(1.0f);
+    btn->addView(lbl);
+
+    btn->registerAction("beiklive/hints/confirm"_i18n,
+                        brls::BUTTON_A,
+                        [action](brls::View*) {
+                            action();
+                            return true;
+                        },
+                        false, false, brls::SOUND_CLICK);
+
+    m_optionsBox->addView(btn);
+}
+
+void AppGameSettingsPanel::showForEntry(const GameEntry& entry, AppPage* page)
+{
+    m_appPage = page;
+    m_entry   = entry;
+
+    m_titleLabel->setText(entry.title.empty() ? entry.path : entry.title);
+    clearOptions();
+
+    // ── Set Logo ───────────────────────────────────────────────────────────
+    addOptionButton("选择 Logo", [this]() {
+        GameEntry captureEntry = m_entry;
+        AppPage*  capturePage  = m_appPage;
+
+        // Determine start path: parent directory of the game file
+        std::string startPath = beiklive::file::getParentPath(captureEntry.path);
+        if (startPath.empty() ||
+            beiklive::file::getPathType(startPath) != beiklive::file::PathType::Directory) {
+            startPath = "/";
+#ifdef _WIN32
+            startPath = "C:\\";
+#endif
+        }
+
+        auto* flPage = new FileListPage();
+        flPage->setFilter({"png"}, FileListPage::FilterMode::Whitelist);
+        flPage->setDefaultFileCallback([captureEntry, capturePage](const FileListItem& imgItem) {
+            std::string fileName = std::filesystem::path(captureEntry.path).filename().string();
+            setGameDataStr(fileName, GAMEDATA_FIELD_LOGOPATH, imgItem.fullPath);
+            if (capturePage)
+                capturePage->updateGameLogo(captureEntry.path, imgItem.fullPath);
+            brls::Application::popActivity();
+        });
+        flPage->navigateTo(startPath);
+
+        auto* container = new brls::Box(brls::Axis::COLUMN);
+        container->setGrow(1.0f);
+        container->addView(flPage);
+        container->registerAction("beiklive/hints/close"_i18n, brls::BUTTON_START,
+                                  [](brls::View*) {
+                                      brls::Application::popActivity();
+                                      return true;
+                                  });
+        auto* frame = new brls::AppletFrame(container);
+        frame->setHeaderVisibility(brls::Visibility::GONE);
+        frame->setFooterVisibility(brls::Visibility::GONE);
+        frame->setBackground(brls::ViewBackground::NONE);
+        brls::Application::pushActivity(new brls::Activity(frame));
+    });
+
+    // ── Remove from list ───────────────────────────────────────────────────
+    addOptionButton("从列表移除", [this]() {
+        std::string fileName = std::filesystem::path(m_entry.path).filename().string();
+        removeRecentGame(fileName);
+        if (m_appPage)
+            m_appPage->removeGame(m_entry.path);
+        close();
+    });
+
+    setVisibility(brls::Visibility::VISIBLE);
+
+    // Give focus to the first option button
+    if (!m_optionsBox->getChildren().empty())
+        brls::Application::giveFocus(m_optionsBox->getChildren()[0]);
+
+    // Wrap vertical focus navigation so it cannot escape the panel
+    const auto& opts = m_optionsBox->getChildren();
+    if (opts.size() > 1) {
+        opts.front()->setCustomNavigationRoute(brls::FocusDirection::UP,   opts.back());
+        opts.back()->setCustomNavigationRoute(brls::FocusDirection::DOWN,  opts.front());
+    }
+
+    registerAction("beiklive/hints/close"_i18n,
+                   brls::BUTTON_B,
+                   [this](brls::View*) {
+                       close();
+                       return true;
+                   },
+                   false, false, brls::SOUND_CLICK);
+}
+
+void AppGameSettingsPanel::close()
+{
+    if (getParent())
+        getParent()->removeView(this, false);
+
+    if (m_appPage) {
+        auto* focus = m_appPage->getDefaultFocus();
+        if (focus)
+            brls::Application::giveFocus(focus);
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  StartPageView
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -292,12 +460,25 @@ void StartPageView::createAppPage()
         return;
 
     m_appPage = new AppPage();
-    // m_appPage->addGame({ "/mGBA/roms/haogou.gba",          "好狗狗星系",   BK_RES("img/thumb/209.png") });
-    // m_appPage->addGame({ "./1.gba",                         "win测试",      BK_RES("img/thumb/209.png") });
-    // m_appPage->addGame({ "/mGBA/roms/gba/seaglass.gba",    "海镜",         BK_RES("img/thumb/210.png") });
-    // m_appPage->addGame({ "./2.gbc",                         "gbc口袋要管",  "" });
-    // m_appPage->addGame({ "/mGBA/roms/gba/Mother 3.gba",    "地球冒险3",    BK_RES("img/thumb/212.png") });
-    // m_appPage->addGame({ "/mGBA/roms/gba/MuChangWuYu.gba", "牧场物语",     "" });
+
+    // ── Load recent games from SettingManager ─────────────────────────────
+    if (SettingManager) {
+        for (int i = 0; i < RECENT_GAME_COUNT; ++i) {
+            std::string key = std::string(RECENT_GAME_KEY_PREFIX) + std::to_string(i);
+            auto v = SettingManager->Get(key);
+            if (!v || !v->AsString() || v->AsString()->empty())
+                continue;
+            std::string fileName = *v->AsString();
+            std::string gamePath = getGameDataStr(fileName, GAMEDATA_FIELD_GAMEPATH, "");
+            if (gamePath.empty())
+                continue;
+            std::string logoPath = getGameDataStr(fileName, GAMEDATA_FIELD_LOGOPATH, "");
+            // Use the file stem (name without extension) as the display title
+            std::string title    = std::filesystem::path(fileName).stem().string();
+            m_appPage->addGame({ gamePath, title, logoPath });
+        }
+    }
+
     m_appPage->onGameSelected = [](const GameEntry& e) {
         // Free UI image cache before launching the emulator to reclaim memory.
         beiklive::clearUIImageCache();
@@ -316,6 +497,24 @@ void StartPageView::createAppPage()
         openSettingsPage();
     };
 
+    // ── Create settings panel for game cards ──────────────────────────────
+    m_appSettingsPanel = new AppGameSettingsPanel();
+    m_appSettingsPanel->setWidthPercentage(30.f);
+    m_appSettingsPanel->setHeightPercentage(100.f);
+    m_appSettingsPanel->setPositionRight(0.f);
+    m_appSettingsPanel->setPositionTop(0.f);
+    m_appSettingsPanel->setVisibility(brls::Visibility::GONE);
+    // Add to this (StartPageView) so it is always owned and freed with us.
+    addView(m_appSettingsPanel);
+
+    // ── Wire X-button callback on game cards ──────────────────────────────
+    m_appPage->onGameOptions = [this](const GameEntry& entry) {
+        // Bring panel to top by re-inserting it
+        if (m_appSettingsPanel->getParent())
+            m_appSettingsPanel->getParent()->removeView(m_appSettingsPanel, false);
+        addView(m_appSettingsPanel);
+        m_appSettingsPanel->showForEntry(entry, m_appPage);
+    };
 
 }
 

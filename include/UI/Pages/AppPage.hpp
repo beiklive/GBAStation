@@ -23,7 +23,13 @@ public:
     /// 按下 A / 触屏点击时触发（用于启动游戏）
     std::function<void(const GameEntry&)> onActivated;
 
+    /// 按下 X 键时触发（用于显示设置面板）
+    std::function<void(const GameEntry&)> onOptions;
+
     const GameEntry& getEntry() const { return m_entry; }
+
+    /// 更新卡片封面图片
+    void updateCover(const std::string& newCoverPath);
 
     // ── Borealis 虚函数 ──
 
@@ -63,10 +69,19 @@ public:
     /// 游戏被激活时调用（启动游戏的回调）
     std::function<void(const GameEntry&)> onGameSelected;
 
+    /// 用户按 X 键时调用（用于显示游戏设置面板）
+    std::function<void(const GameEntry&)> onGameOptions;
+
     /// 用户点击"文件列表"按钮时调用
     std::function<void()> onOpenFileList;
     /// 用户点击"设置"按钮时调用
     std::function<void()> onOpenSettings;
+
+    /// 从卡片行中移除指定游戏路径的卡片
+    void removeGame(const std::string& gamePath);
+
+    /// 更新指定游戏路径的卡片封面
+    void updateGameLogo(const std::string& gamePath, const std::string& newLogoPath);
 
 private:
     brls::HScrollingFrame* m_scroll      = nullptr;
