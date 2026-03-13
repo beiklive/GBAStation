@@ -130,8 +130,8 @@ public:
 
         m_promptLabel = new brls::Label();
         m_promptLabel->setText(isKeyboard
-            ? "请按下键盘按键（支持 CTRL/SHIFT/ALT 组合键）"
-            : "请按下手柄按键");
+            ? "beiklive/settings/keybind/press_kbd"_i18n
+            : "beiklive/settings/keybind/press_pad"_i18n);
         m_promptLabel->setFontSize(20.f);
         m_promptLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
         addView(m_promptLabel);
@@ -141,7 +141,7 @@ public:
         addView(spacer1);
 
         m_keyLabel = new brls::Label();
-        m_keyLabel->setText("---");
+        m_keyLabel->setText("beiklive/settings/keybind/waiting"_i18n);
         m_keyLabel->setFontSize(36.f);
         m_keyLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
         addView(m_keyLabel);
@@ -151,7 +151,7 @@ public:
         addView(spacer2);
 
         m_countdownLabel = new brls::Label();
-        m_countdownLabel->setText("5 秒");
+        m_countdownLabel->setText("5" + std::string("beiklive/settings/keybind/countdown_suffix"_i18n));
         m_countdownLabel->setFontSize(18.f);
         m_countdownLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
         addView(m_countdownLabel);
@@ -168,12 +168,24 @@ public:
         //     which fires once per press, not every frame like draw()-polling.
         if (!isKeyboard) {
             for (int i = 0; i < k_capPadKeyCount; ++i) {
-                std::string name = k_capPadKeys[i].name;
                 brls::ControllerButton btn = k_capPadKeys[i].btn;
                 registerAction("", btn,
-                    [this, name](brls::View*) -> bool {
-                        if (!m_done && !m_waitingForRelease)
-                            finish(name);
+                    [this](brls::View*) -> bool {
+                        if (!m_done && !m_waitingForRelease) {
+                            // Collect all currently held buttons to support combos.
+                            auto state = brls::Application::getControllerState();
+                            std::string combo;
+                            for (int j = 0; j < k_capPadKeyCount; ++j) {
+                                int idx = static_cast<int>(k_capPadKeys[j].btn);
+                                if (idx >= 0 && idx < static_cast<int>(brls::_BUTTON_MAX) &&
+                                    state.buttons[idx]) {
+                                    if (!combo.empty()) combo += "+";
+                                    combo += k_capPadKeys[j].name;
+                                }
+                            }
+                            if (!combo.empty())
+                                finish(combo);
+                        }
                         return true; // always consume – never propagate to parent
                     },
                     /*hidden=*/true);
@@ -212,7 +224,7 @@ public:
                 else
                 {
                     int secs = static_cast<int>(std::ceil(remaining));
-                    m_countdownLabel->setText(std::to_string(secs) + " 秒");
+                    m_countdownLabel->setText(std::to_string(secs) + "beiklive/settings/keybind/countdown_suffix"_i18n);
                     if (m_isKeyboard) pollKeyboard();
                     else              pollGamepad();
                 }
@@ -317,12 +329,12 @@ private:
             if (ctrl)  mod += "CTRL+";
             if (shift) mod += "SHIFT+";
             if (alt)   mod += "ALT+";
-            mod += "?";
+            mod += "beiklive/settings/keybind/combo_more"_i18n;
             m_keyLabel->setText(mod);
         }
         else
         {
-            m_keyLabel->setText("---");
+            m_keyLabel->setText("beiklive/settings/keybind/waiting"_i18n);
         }
 #endif
     }
@@ -330,16 +342,21 @@ private:
     void pollGamepad()
     {
         auto state = brls::Application::getControllerState();
+        std::string hint;
         for (int i = 0; i < k_capPadKeyCount; ++i)
         {
             int idx = static_cast<int>(k_capPadKeys[i].btn);
             if (idx >= 0 && idx < static_cast<int>(brls::_BUTTON_MAX) &&
                 state.buttons[idx])
             {
-                finish(std::string(k_capPadKeys[i].name));
-                return;
+                if (!hint.empty()) hint += "+";
+                hint += k_capPadKeys[i].name;
             }
         }
+        if (!hint.empty())
+            m_keyLabel->setText(hint + "beiklive/settings/keybind/combo_more"_i18n);
+        else
+            m_keyLabel->setText("beiklive/settings/keybind/waiting"_i18n);
     }
 };
 
@@ -378,20 +395,20 @@ brls::ScrollingFrame* SettingPage::buildUITab()
     auto* box    = makeContentBox();
 
     // ── 背景图片 ──────────────────────────────────────────────────────────────
-    box->addView(makeHeader("背景图片"));
+    box->addView(makeHeader("beiklive/settings/ui/header_bg"_i18n));
 
     auto* showBgCell = new brls::BooleanCell();
-    showBgCell->init("显示背景图片",
+    showBgCell->init("beiklive/settings/ui/show_bg"_i18n,
                      cfgGetBool(KEY_UI_SHOW_BG_IMAGE, false),
                      [](bool v){ cfgSetBool(KEY_UI_SHOW_BG_IMAGE, v); beiklive::ApplyXmbColorToAll(); });
     box->addView(showBgCell);
 
     auto* bgPathCell = new brls::DetailCell();
-    bgPathCell->setText("背景图片路径 (PNG)");
-    bgPathCell->setDetailText(beiklive::string::extractFileName(cfgGetStr(KEY_UI_BG_IMAGE_PATH, "未设置")));
-    bgPathCell->registerAction("确认", brls::BUTTON_A, [bgPathCell](brls::View*) {
+    bgPathCell->setText("beiklive/settings/ui/bg_path"_i18n);
+    bgPathCell->setDetailText(beiklive::string::extractFileName(cfgGetStr(KEY_UI_BG_IMAGE_PATH, "beiklive/settings/ui/bg_not_set"_i18n)));
+    bgPathCell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A, [bgPathCell](brls::View*) {
         auto* flPage = new FileListPage();
-        flPage->setFilter({"png"}, FileListPage::FilterMode::Whitelist);
+        flPage->setFilter({"png", "gif"}, FileListPage::FilterMode::Whitelist);
         flPage->setDefaultFileCallback([bgPathCell](const FileListItem& item) {
             cfgSetStr(KEY_UI_BG_IMAGE_PATH, item.fullPath);
             bgPathCell->setDetailText(beiklive::string::extractFileName(item.fullPath));
@@ -417,7 +434,7 @@ brls::ScrollingFrame* SettingPage::buildUITab()
         auto* container = new brls::Box(brls::Axis::COLUMN);
         container->setGrow(1.0f);
         container->addView(flPage);
-        container->registerAction("关闭", brls::BUTTON_START, [](brls::View*) {
+        container->registerAction("beiklive/hints/close"_i18n, brls::BUTTON_START, [](brls::View*) {
             brls::Application::popActivity();
             return true;
         });
@@ -430,11 +447,39 @@ brls::ScrollingFrame* SettingPage::buildUITab()
     }, false, false, brls::SOUND_CLICK);
     box->addView(bgPathCell);
 
+    // ── 背景图片模糊 ──────────────────────────────────────────────────────────
+    auto* bgBlurCell = new brls::BooleanCell();
+    bgBlurCell->init("beiklive/settings/ui/bg_blur"_i18n,
+                     cfgGetBool(KEY_UI_BG_BLUR_ENABLED, false),
+                     [](bool v){ cfgSetBool(KEY_UI_BG_BLUR_ENABLED, v); beiklive::ApplyXmbColorToAll(); });
+    box->addView(bgBlurCell);
+
+    {
+        static const float k_blurRadii[] = { 8.0f, 10.0f, 12.0f, 14.0f, 16.0f, 18.0f, 20.0f };
+        static constexpr int k_blurRadiiCount = static_cast<int>(sizeof(k_blurRadii) / sizeof(k_blurRadii[0]));
+        std::vector<std::string> blurLabels = { "8","10","12","14","16","18","20" };
+        float curRadius = cfgGetFloat(KEY_UI_BG_BLUR_RADIUS, 12.0f);
+        int blurIdx = 2; // default to 12
+        for (int i = 0; i < k_blurRadiiCount; ++i)
+            if (std::fabs(curRadius - k_blurRadii[i]) < 0.01f) { blurIdx = i; break; }
+        auto* blurRadiusCell = new brls::SelectorCell();
+        blurRadiusCell->init("beiklive/settings/ui/bg_blur_level"_i18n, blurLabels, blurIdx,
+            [](int idx){
+                if (idx >= 0 && idx < k_blurRadiiCount && SettingManager) {
+                    SettingManager->Set(KEY_UI_BG_BLUR_RADIUS,
+                                        beiklive::ConfigValue(k_blurRadii[idx]));
+                    SettingManager->Save();
+                    beiklive::ApplyXmbColorToAll();
+                }
+            });
+        box->addView(blurRadiusCell);
+    }
+
     // ── PSP XMB 风格背景 ──────────────────────────────────────────────────────
-    box->addView(makeHeader("PSP XMB 风格背景"));
+    box->addView(makeHeader("beiklive/settings/ui/header_xmb"_i18n));
 
     auto* showXmbCell = new brls::BooleanCell();
-    showXmbCell->init("显示 XMB 背景",
+    showXmbCell->init("beiklive/settings/ui/show_xmb"_i18n,
                       cfgGetBool(KEY_UI_SHOW_XMB_BG, false),
                       [](bool v){ cfgSetBool(KEY_UI_SHOW_XMB_BG, v); beiklive::ApplyXmbColorToAll(); });
     box->addView(showXmbCell);
@@ -448,7 +493,7 @@ brls::ScrollingFrame* SettingPage::buildUITab()
             if (curId == k_xmbColorIds[i]) { curIdx = i; break; }
 
         auto* xmbColorCell = new brls::SelectorCell();
-        xmbColorCell->init("颜色设置", colorLabels, curIdx,
+        xmbColorCell->init("beiklive/settings/ui/xmb_color"_i18n, colorLabels, curIdx,
             [](int idx){
                 if (idx >= 0 && idx < k_xmbColorCount) {
                     cfgSetStr(KEY_UI_PSPXMB_COLOR, k_xmbColorIds[idx]);
@@ -778,7 +823,7 @@ brls::ScrollingFrame* SettingPage::buildKeyBindTab()
     auto* box    = makeContentBox();
 
     // ── 手柄 ──────────────────────────────────────────────────────────────────
-    box->addView(makeHeader("手柄"));
+    box->addView(makeHeader("beiklive/settings/keybind/header_pad"_i18n));
 
     for (int i = 0; i < k_gameBtnCount; ++i)
     {
@@ -787,11 +832,17 @@ brls::ScrollingFrame* SettingPage::buildKeyBindTab()
         cell->setText(k_gameBtns[i].label);
         cell->setDetailText(cfgGetStr(cfgKey, "none"));
         std::string captureKey = cfgKey;
-        cell->registerAction("确认", brls::BUTTON_A,
+        cell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A,
             [cell, captureKey](brls::View*) {
                 openKeyCapture(false, [cell, captureKey](const std::string& r) {
                     if (!r.empty()) { cfgSetStr(captureKey, r); cell->setDetailText(r); }
                 });
+                return true;
+            }, false, false, brls::SOUND_CLICK);
+        cell->registerAction("beiklive/hints/clear_binding"_i18n, brls::BUTTON_X,
+            [cell, captureKey](brls::View*) {
+                cfgSetStr(captureKey, "none");
+                cell->setDetailText("none");
                 return true;
             }, false, false, brls::SOUND_CLICK);
         box->addView(cell);
@@ -802,16 +853,22 @@ brls::ScrollingFrame* SettingPage::buildKeyBindTab()
         auto hk = static_cast<InputMappingConfig::Hotkey>(i);
         std::string padKey = InputMappingConfig::hotkeyPadConfigKey(hk);
         std::string label  = std::string(InputMappingConfig::hotkeyDisplayName(hk))
-                             + " (手柄)";
+                             + "beiklive/settings/keybind/pad_suffix"_i18n;
         auto* cell = new brls::DetailCell();
         cell->setText(label);
         cell->setDetailText(cfgGetStr(padKey, "none"));
         std::string captureKey = padKey;
-        cell->registerAction("确认", brls::BUTTON_A,
+        cell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A,
             [cell, captureKey](brls::View*) {
                 openKeyCapture(false, [cell, captureKey](const std::string& r) {
                     if (!r.empty()) { cfgSetStr(captureKey, r); cell->setDetailText(r); }
                 });
+                return true;
+            }, false, false, brls::SOUND_CLICK);
+        cell->registerAction("beiklive/hints/clear_binding"_i18n, brls::BUTTON_X,
+            [cell, captureKey](brls::View*) {
+                cfgSetStr(captureKey, "none");
+                cell->setDetailText("none");
                 return true;
             }, false, false, brls::SOUND_CLICK);
         box->addView(cell);
@@ -819,7 +876,7 @@ brls::ScrollingFrame* SettingPage::buildKeyBindTab()
 
 #ifndef __SWITCH__
     // ── 键盘 ──────────────────────────────────────────────────────────────────
-    box->addView(makeHeader("键盘"));
+    box->addView(makeHeader("beiklive/settings/keybind/header_kbd"_i18n));
 
     for (int i = 0; i < k_gameBtnCount; ++i)
     {
@@ -828,11 +885,17 @@ brls::ScrollingFrame* SettingPage::buildKeyBindTab()
         cell->setText(k_gameBtns[i].label);
         cell->setDetailText(cfgGetStr(cfgKey, "none"));
         std::string captureKey = cfgKey;
-        cell->registerAction("确认", brls::BUTTON_A,
+        cell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A,
             [cell, captureKey](brls::View*) {
                 openKeyCapture(true, [cell, captureKey](const std::string& r) {
                     if (!r.empty()) { cfgSetStr(captureKey, r); cell->setDetailText(r); }
                 });
+                return true;
+            }, false, false, brls::SOUND_CLICK);
+        cell->registerAction("beiklive/hints/clear_binding"_i18n, brls::BUTTON_X,
+            [cell, captureKey](brls::View*) {
+                cfgSetStr(captureKey, "none");
+                cell->setDetailText("none");
                 return true;
             }, false, false, brls::SOUND_CLICK);
         box->addView(cell);
@@ -843,16 +906,22 @@ brls::ScrollingFrame* SettingPage::buildKeyBindTab()
         auto hk = static_cast<InputMappingConfig::Hotkey>(i);
         std::string kbdKey = InputMappingConfig::hotkeyKbdConfigKey(hk);
         std::string label  = std::string(InputMappingConfig::hotkeyDisplayName(hk))
-                             + " (键盘)";
+                             + "beiklive/settings/keybind/kbd_suffix"_i18n;
         auto* cell = new brls::DetailCell();
         cell->setText(label);
         cell->setDetailText(cfgGetStr(kbdKey, "none"));
         std::string captureKey = kbdKey;
-        cell->registerAction("确认", brls::BUTTON_A,
+        cell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A,
             [cell, captureKey](brls::View*) {
                 openKeyCapture(true, [cell, captureKey](const std::string& r) {
                     if (!r.empty()) { cfgSetStr(captureKey, r); cell->setDetailText(r); }
                 });
+                return true;
+            }, false, false, brls::SOUND_CLICK);
+        cell->registerAction("beiklive/hints/clear_binding"_i18n, brls::BUTTON_X,
+            [cell, captureKey](brls::View*) {
+                cfgSetStr(captureKey, "none");
+                cell->setDetailText("none");
                 return true;
             }, false, false, brls::SOUND_CLICK);
         box->addView(cell);
@@ -954,10 +1023,10 @@ SettingPage::~SettingPage()
 
 void SettingPage::Init()
 {
-    m_tabframe->addTab("界面设置", [this]() { return buildUITab(); });
-    m_tabframe->addTab("游戏设置", [this]() { return buildGameTab(); });
-    m_tabframe->addTab("画面设置", [this]() { return buildDisplayTab(); });
-    m_tabframe->addTab("声音设置", [this]() { return buildAudioTab(); });
-    m_tabframe->addTab("按键预设", [this]() { return buildKeyBindTab(); });
-    m_tabframe->addTab("调试工具", [this]() { return buildDebugTab(); });
+    m_tabframe->addTab("beiklive/settings/tab/ui"_i18n,      [this]() { return buildUITab(); });
+    m_tabframe->addTab("beiklive/settings/tab/game"_i18n,    [this]() { return buildGameTab(); });
+    m_tabframe->addTab("beiklive/settings/tab/display"_i18n, [this]() { return buildDisplayTab(); });
+    m_tabframe->addTab("beiklive/settings/tab/audio"_i18n,   [this]() { return buildAudioTab(); });
+    m_tabframe->addTab("beiklive/settings/tab/keybind"_i18n, [this]() { return buildKeyBindTab(); });
+    m_tabframe->addTab("beiklive/settings/tab/debug"_i18n,   [this]() { return buildDebugTab(); });
 }

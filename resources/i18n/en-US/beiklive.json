@@ -25,7 +25,9 @@
         "close" : "Close",
         "zoom_in" : "Zoom In",
         "zoom_out" : "Zoom Out",
-        "reset" : "Reset View"
+        "reset" : "Reset View",
+        "clear_binding" : "Clear",
+        "toggle_detail" : "Detail Info"
     },
     "file": {
         "file_select" : "File Browser",
@@ -40,5 +42,37 @@
         "delete_confirm" : "Confirm delete?",
         "new_folder" : "New Folder",
         "close_panel" : "Close"
+    },
+    "settings": {
+        "tab": {
+            "ui"      : "UI Settings",
+            "game"    : "Game",
+            "display" : "Display",
+            "audio"   : "Audio",
+            "keybind" : "Key Bindings",
+            "debug"   : "Debug"
+        },
+        "ui": {
+            "header_bg"    : "Background Image",
+            "show_bg"      : "Show Background Image",
+            "bg_path"      : "BG Image Path (PNG/GIF)",
+            "bg_not_set"   : "Not Set",
+            "bg_blur"      : "Background Blur",
+            "bg_blur_level": "Blur Level",
+            "header_xmb"   : "PSP XMB Background",
+            "show_xmb"     : "Show XMB Background",
+            "xmb_color"    : "Color Theme"
+        },
+        "keybind": {
+            "header_pad"       : "Gamepad",
+            "header_kbd"       : "Keyboard",
+            "pad_suffix"       : " (Gamepad)",
+            "kbd_suffix"       : " (Keyboard)",
+            "press_kbd"        : "Press keyboard key (CTRL/SHIFT/ALT combos supported)",
+            "press_pad"        : "Press gamepad button (combo keys supported)",
+            "countdown_suffix" : " sec",
+            "waiting"          : "---",
+            "combo_more"       : "+?"
+        }
     }
 }

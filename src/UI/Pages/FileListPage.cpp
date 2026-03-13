@@ -292,6 +292,24 @@ FileListPage::FileListPage()
                        navigateUp();
                        return true;
                    });
+
+    // ZR (BUTTON_RT) → toggle detail panel
+    registerAction("beiklive/hints/toggle_detail"_i18n,
+                   brls::BUTTON_RT,
+                   [this](brls::View *)
+                   {
+                       LayoutMode newMode = (m_layoutMode == LayoutMode::ListOnly)
+                           ? LayoutMode::ListAndDetail
+                           : LayoutMode::ListOnly;
+                       setLayoutMode(newMode);
+                       if (SettingManager) {
+                           SettingManager->Set("UI.fileListLayoutMode",
+                               beiklive::ConfigValue(static_cast<int>(newMode)));
+                           SettingManager->Save();
+                       }
+                       return true;
+                   },
+                   false, false, brls::SOUND_CLICK);
 }
 
 FileListPage::~FileListPage()

@@ -55,6 +55,8 @@ using namespace brls::literals; // for _i18n
 // UI / background settings
 #define KEY_UI_SHOW_BG_IMAGE  "UI.showBgImage"
 #define KEY_UI_BG_IMAGE_PATH  "UI.bgImagePath"
+#define KEY_UI_BG_BLUR_ENABLED "UI.bgBlurEnabled"
+#define KEY_UI_BG_BLUR_RADIUS  "UI.bgBlurRadius"
 #define KEY_UI_SHOW_XMB_BG    "UI.showXmbBg"
 #define KEY_UI_PSPXMB_COLOR   "UI.pspxmb.color"
 // #define KEY_UI_TEXT_COLOR     "UI.textColor"
