@@ -80,7 +80,8 @@ class StartPageView : public beiklive::UI::BBox
     void Init();
     void onFocusGained() override;
     void onFocusLost() override;
-    // void onLayout() override;
+    void draw(NVGcontext* vg, float x, float y, float width, float height,
+              brls::Style style, brls::FrameContext* ctx) override;
 
     static brls::View* create();
 
@@ -93,5 +94,7 @@ class StartPageView : public beiklive::UI::BBox
     void openFileListPage();
     void openSettingsPage();
     void createAppPage();
+    /// Re-read recent games from SettingManager and update the AppPage game list.
+    void refreshRecentGames();
 };
 

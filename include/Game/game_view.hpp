@@ -34,6 +34,7 @@ class GameView : public brls::Box
 
   private:
     std::string  m_romPath;
+    std::string  m_romFileName;  ///< File name (with extension) extracted from m_romPath
     bool         m_initialized  = false;
     bool         m_coreFailed   = false;
 

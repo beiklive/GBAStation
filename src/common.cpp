@@ -2,6 +2,10 @@
 #include <borealis/core/cache_helper.hpp>
 #include <set>
 
+/// Set this to true whenever the recent-games queue changes.
+/// StartPageView checks this flag each frame and refreshes the AppPage game list.
+bool g_recentGamesDirty = false;
+
 namespace beiklive {
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -151,6 +155,10 @@ void ApplyXmbBg(beiklive::UI::ProImage* img)
     // Apply background image (drawn first, under any XMB shader overlay).
     if (showBg && !bgPath.empty()) {
         img->setImageFromFile(bgPath);
+    } else {
+        // Background image disabled or path not set: clear any previously loaded texture
+        // so the image disappears immediately when the setting is turned off.
+        img->clear();
     }
 
     // Apply blur settings.

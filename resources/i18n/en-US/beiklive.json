@@ -36,12 +36,21 @@
     "sidebar": {
         "rename" : "Rename",
         "set_mapping" : "Set Display Name",
+        "select_logo" : "Select Logo",
+        "remove_from_list" : "Remove from List",
         "cut" : "Cut",
         "paste" : "Paste",
         "delete" : "Delete",
         "delete_confirm" : "Confirm delete?",
         "new_folder" : "New Folder",
         "close_panel" : "Close"
+    },
+    "app": {
+        "btn_file_list" : "File List",
+        "btn_data_mgr"  : "Data Manager",
+        "btn_settings"  : "Settings",
+        "btn_about"     : "About",
+        "btn_exit"      : "Exit"
     },
     "settings": {
         "tab": {
@@ -62,6 +71,66 @@
             "header_xmb"   : "PSP XMB Background",
             "show_xmb"     : "Show XMB Background",
             "xmb_color"    : "Color Theme"
+        },
+        "game": {
+            "header_ff"        : "Fast Forward (max speed depends on hardware)",
+            "ff_enable"        : "Enable Fast Forward",
+            "key_mode"         : "Key Mode",
+            "mode_hold"        : "Hold",
+            "mode_toggle"      : "Toggle",
+            "ff_rate"          : "FF Multiplier",
+            "header_rewind"    : "Rewind",
+            "rewind_enable"    : "Enable Rewind",
+            "rewind_buf_size"  : "Rewind Buffer Size",
+            "rewind_buf_300"   : "300 frames (5s)",
+            "rewind_buf_600"   : "600 frames (10s)",
+            "rewind_buf_1200"  : "1200 frames (20s)",
+            "rewind_buf_3600"  : "3600 frames (60s)",
+            "rewind_step"      : "Rewind Step",
+            "header_gba"       : "GBA/GBC Games",
+            "gb_model"         : "GB Model",
+            "use_bios"         : "Use BIOS",
+            "skip_bios"        : "Skip BIOS Intro",
+            "gb_colors"        : "GB Color Palette",
+            "idle_opt"         : "Idle Optimization",
+            "header_save"      : "Save Settings",
+            "auto_save"        : "Auto Save (SRAM on exit)",
+            "sram_dir"         : "SRAM Save Directory",
+            "state_dir"        : "Save State Directory",
+            "same_as_rom"      : "Same as ROM directory",
+            "clear_same_as_rom": "Clear (same as ROM dir)",
+            "header_cheat"     : "Cheat Settings",
+            "cheat_enable"     : "Enable Cheats",
+            "cheat_loc"        : "Cheat File Location",
+            "cheat_loc_rom"    : "ROM directory",
+            "cheat_loc_emu"    : "Emulator directory",
+            "cheat_dir"        : "Custom Cheat Directory",
+            "cheat_auto"       : "(Auto, see option above)",
+            "cheat_clear_auto" : "Clear (auto)"
+        },
+        "display": {
+            "header_video" : "Video (easier to adjust in-game)",
+            "mode"         : "Display Mode",
+            "int_scale"    : "Integer Scale (integer mode only)",
+            "filter"       : "Texture Filter",
+            "header_status": "Status Display",
+            "show_fps"     : "Show FPS",
+            "show_ff"      : "Show Fast Forward Indicator",
+            "show_rewind"  : "Show Rewind Indicator"
+        },
+        "audio": {
+            "header_emu"  : "Emulator Audio",
+            "btn_sfx"     : "UI Button Sound Effects",
+            "header_game" : "Game Audio",
+            "ff_mute"     : "Mute During Fast Forward",
+            "rewind_mute" : "Mute During Rewind",
+            "lpf"         : "Low-Pass Filter"
+        },
+        "debug": {
+            "header_log" : "Log Settings",
+            "log_level"  : "Log Level",
+            "log_file"   : "Log to File",
+            "log_overlay": "Log Overlay"
         },
         "keybind": {
             "header_pad"       : "Gamepad",
