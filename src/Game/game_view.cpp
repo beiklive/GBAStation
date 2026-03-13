@@ -23,6 +23,8 @@
 #include <cstdio>
 #include <cstring>
 #include <deque>
+#include <fstream>
+#include <sstream>
 #include <string>
 #include <vector>
 #include <filesystem>
@@ -173,6 +175,12 @@ void GameView::initialize()
         cfg->SetDefault("core.mgba_idle_optimization",          CV(std::string("Remove Known")));
         cfg->SetDefault("core.mgba_frameskip",                  CV(std::string("0")));
 
+        // ---- Save / state directory defaults --------------------------------
+        cfg->SetDefault("save.sramDir",   CV(std::string("")));
+        cfg->SetDefault("save.stateDir",  CV(std::string("")));
+        cfg->SetDefault("save.slotCount", CV(9));
+        cfg->SetDefault("cheat.dir",      CV(std::string("")));
+
         // ---- FPS display defaults ------------------------------------
         cfg->SetDefault("display.showFps",           CV(std::string("false")));
         cfg->SetDefault("display.showFfOverlay",     CV(std::string("true")));
@@ -208,6 +216,26 @@ void GameView::initialize()
     std::string corePath = resolveCoreLibPath();
     bklog::info("Loading libretro core: {}", corePath);
 
+    // ---- Configure save directory for the core -----------------------
+    {
+        std::string sramCustomDir;
+        if (gameRunner && gameRunner->settingConfig) {
+            auto v = gameRunner->settingConfig->Get("save.sramDir");
+            if (v) { if (auto s = v->AsString()) sramCustomDir = *s; }
+        }
+        std::string sramDir = resolveSaveDir(m_romPath, sramCustomDir);
+        if (!sramDir.empty()) {
+            // Ensure the directory exists
+            std::error_code ec;
+            std::filesystem::create_directories(sramDir, ec);
+            if (ec) {
+                bklog::warning("GameView: failed to create save directory '{}': {}",
+                               sramDir, ec.message());
+            }
+            m_core.setSaveDirectory(sramDir);
+        }
+    }
+
     if (!m_core.load(corePath)) {
         bklog::error("Failed to load libretro core from: {}", corePath);
         m_coreFailed = true;
@@ -242,6 +270,10 @@ void GameView::initialize()
                     m_romPath,
                     m_core.gameWidth(), m_core.gameHeight(),
                     m_core.fps());
+
+        // ---- Load SRAM (battery save) and cheats after ROM is loaded --------
+        loadSram();
+        loadCheats();
     }
 
     // ---- Create GL texture for video output ----------------------------
@@ -461,6 +493,16 @@ void GameView::startGameThread()
                 fpsTimerStart = nowPost;
             }
 
+            // ---- Pending quick save / load (triggered by hotkeys) --------
+            {
+                int slot = m_pendingQuickSave.exchange(-1, std::memory_order_relaxed);
+                if (slot >= 0) doQuickSave(slot);
+            }
+            {
+                int slot = m_pendingQuickLoad.exchange(-1, std::memory_order_relaxed);
+                if (slot >= 0) doQuickLoad(slot);
+            }
+
             // ---- Frame-rate control (accumulated ideal-time approach) ----
             // nextFrameTarget advances by exactly one frame period each
             // iteration, independent of actual execution time.  This prevents
@@ -569,6 +611,10 @@ void GameView::cleanup()
     }
 
     if (m_core.isLoaded()) {
+        // Save SRAM (battery save) before unloading the game
+        if (!m_romPath.empty()) {
+            saveSram();
+        }
         m_core.unloadGame();
         m_core.deinitCore();
         m_core.unload();
@@ -663,11 +709,469 @@ void GameView::registerGamepadHotkeys()
         if (evt == KeyEvent::Press && !m_requestExit.load(std::memory_order_relaxed))
             m_requestExit.store(true, std::memory_order_relaxed);
     });
+
+    // ── Quick save state ─────────────────────────────────────────────────────
+    reg(Hotkey::QuickSave, [this](KeyEvent evt)
+    {
+        if (evt == KeyEvent::Press)
+            m_pendingQuickSave.store(m_saveSlot, std::memory_order_relaxed);
+    });
+
+    // ── Quick load state ─────────────────────────────────────────────────────
+    reg(Hotkey::QuickLoad, [this](KeyEvent evt)
+    {
+        if (evt == KeyEvent::Press)
+            m_pendingQuickLoad.store(m_saveSlot, std::memory_order_relaxed);
+    });
 }
 
 // ============================================================
-// uploadFrame – copy RGBA8888 pixels from libretro into the GL texture
+// resolveSaveDir – determine the directory for save files
 // ============================================================
+
+std::string GameView::resolveSaveDir(const std::string& romPath,
+                                      const std::string& customDir)
+{
+    if (!customDir.empty()) return customDir;
+    // Default: same directory as the ROM
+    if (!romPath.empty()) {
+        return beiklive::file::getParentPath(romPath);
+    }
+    return BK_APP_ROOT_DIR + std::string("saves");
+}
+
+// ============================================================
+// quickSaveStatePath – compute path for a quick-save state file
+// ============================================================
+
+std::string GameView::quickSaveStatePath(int slot) const
+{
+    std::string stateCustomDir;
+    if (gameRunner && gameRunner->settingConfig) {
+        auto v = gameRunner->settingConfig->Get("save.stateDir");
+        if (v) { if (auto s = v->AsString()) stateCustomDir = *s; }
+    }
+    std::string dir = resolveSaveDir(m_romPath, stateCustomDir);
+
+    // Extract base ROM name without extension
+    std::string base;
+    if (!m_romPath.empty()) {
+        std::filesystem::path p(m_romPath);
+        base = p.stem().string();
+    } else {
+        base = "game";
+    }
+
+    // Ensure directory exists
+    if (!dir.empty()) {
+        std::error_code ec;
+        std::filesystem::create_directories(dir, ec);
+        if (ec)
+            bklog::warning("GameView: failed to create state directory '{}': {}", dir, ec.message());
+    }
+
+    std::string sep = (!dir.empty() && dir.back() != '/' && dir.back() != '\\')
+                      ? "/" : "";
+    if (slot < 0)
+        return dir + sep + base + ".state";
+    return dir + sep + base + ".state" + std::to_string(slot);
+}
+
+// ============================================================
+// sramSavePath – compute path for the battery-save (.sav) file
+// ============================================================
+
+std::string GameView::sramSavePath() const
+{
+    std::string customDir;
+    if (gameRunner && gameRunner->settingConfig) {
+        auto v = gameRunner->settingConfig->Get("save.sramDir");
+        if (v) { if (auto s = v->AsString()) customDir = *s; }
+    }
+    std::string dir = resolveSaveDir(m_romPath, customDir);
+
+    std::string base;
+    if (!m_romPath.empty()) {
+        std::filesystem::path p(m_romPath);
+        base = p.stem().string();
+    } else {
+        base = "game";
+    }
+
+    // Ensure directory exists
+    if (!dir.empty()) {
+        std::error_code ec;
+        std::filesystem::create_directories(dir, ec);
+        if (ec)
+            bklog::warning("GameView: failed to create SRAM directory '{}': {}", dir, ec.message());
+    }
+
+    std::string sep = (!dir.empty() && dir.back() != '/' && dir.back() != '\\')
+                      ? "/" : "";
+    return dir + sep + base + ".sav";
+}
+
+// ============================================================
+// cheatFilePath – compute path for the cheat (.cht) file
+// ============================================================
+
+std::string GameView::cheatFilePath() const
+{
+    std::string customDir;
+    if (gameRunner && gameRunner->settingConfig) {
+        auto v = gameRunner->settingConfig->Get("cheat.dir");
+        if (v) { if (auto s = v->AsString()) customDir = *s; }
+    }
+    std::string dir = resolveSaveDir(m_romPath, customDir);
+
+    std::string base;
+    if (!m_romPath.empty()) {
+        std::filesystem::path p(m_romPath);
+        base = p.stem().string();
+    } else {
+        base = "game";
+    }
+
+    std::string sep = (!dir.empty() && dir.back() != '/' && dir.back() != '\\')
+                      ? "/" : "";
+    return dir + sep + base + ".cht";
+}
+
+// ============================================================
+// loadSram – load SRAM from disk into the core
+// ============================================================
+
+void GameView::loadSram()
+{
+    size_t sz = m_core.getMemorySize(RETRO_MEMORY_SAVE_RAM);
+    if (sz == 0) {
+        bklog::info("GameView: no SRAM region in core, skipping SRAM load");
+        return;
+    }
+
+    std::string path = sramSavePath();
+    if (!std::filesystem::exists(path)) {
+        bklog::info("GameView: no SRAM file found at {}", path);
+        return;
+    }
+
+    std::ifstream f(path, std::ios::binary);
+    if (!f) {
+        bklog::warning("GameView: failed to open SRAM file: {}", path);
+        return;
+    }
+
+    std::vector<uint8_t> buf(sz, 0);
+    f.read(reinterpret_cast<char*>(buf.data()), static_cast<std::streamsize>(sz));
+    std::streamsize got = f.gcount();
+
+    void* sramPtr = m_core.getMemoryData(RETRO_MEMORY_SAVE_RAM);
+    if (sramPtr) {
+        std::memcpy(sramPtr, buf.data(), static_cast<size_t>(got));
+        bklog::info("GameView: SRAM loaded from {} ({} bytes)", path, got);
+    } else {
+        bklog::warning("GameView: SRAM pointer is null, cannot load SRAM");
+    }
+}
+
+// ============================================================
+// saveSram – save SRAM from the core to disk
+// ============================================================
+
+void GameView::saveSram()
+{
+    size_t sz = m_core.getMemorySize(RETRO_MEMORY_SAVE_RAM);
+    if (sz == 0) return;
+
+    const void* sramPtr = m_core.getMemoryData(RETRO_MEMORY_SAVE_RAM);
+    if (!sramPtr) {
+        bklog::warning("GameView: SRAM pointer is null, cannot save SRAM");
+        return;
+    }
+
+    std::string path = sramSavePath();
+    std::ofstream f(path, std::ios::binary | std::ios::trunc);
+    if (!f) {
+        bklog::warning("GameView: failed to open SRAM file for writing: {}", path);
+        return;
+    }
+
+    f.write(reinterpret_cast<const char*>(sramPtr), static_cast<std::streamsize>(sz));
+    if (!f) {
+        bklog::warning("GameView: failed to write SRAM file: {}", path);
+        return;
+    }
+    bklog::info("GameView: SRAM saved to {} ({} bytes)", path, sz);
+}
+
+// ============================================================
+// doQuickSave – serialize core state to a slot file
+// ============================================================
+
+void GameView::doQuickSave(int slot)
+{
+    size_t sz = m_core.serializeSize();
+    if (sz == 0) {
+        bklog::warning("GameView: core does not support serialize (slot {})", slot);
+        std::lock_guard<std::mutex> lk(m_saveMsgMutex);
+        m_saveMsg     = "Save failed (unsupported)";
+        m_saveMsgTime = std::chrono::steady_clock::now();
+        return;
+    }
+
+    std::vector<uint8_t> buf(sz);
+    if (!m_core.serialize(buf.data(), sz)) {
+        bklog::warning("GameView: serialize failed (slot {})", slot);
+        std::lock_guard<std::mutex> lk(m_saveMsgMutex);
+        m_saveMsg     = "Save failed";
+        m_saveMsgTime = std::chrono::steady_clock::now();
+        return;
+    }
+
+    std::string path = quickSaveStatePath(slot);
+    std::ofstream f(path, std::ios::binary | std::ios::trunc);
+    if (!f) {
+        bklog::warning("GameView: cannot open state file for writing: {}", path);
+        std::lock_guard<std::mutex> lk(m_saveMsgMutex);
+        m_saveMsg     = "Save failed (I/O)";
+        m_saveMsgTime = std::chrono::steady_clock::now();
+        return;
+    }
+
+    f.write(reinterpret_cast<const char*>(buf.data()), static_cast<std::streamsize>(sz));
+    if (!f) {
+        bklog::warning("GameView: write error on state file: {}", path);
+        std::lock_guard<std::mutex> lk(m_saveMsgMutex);
+        m_saveMsg     = "Save failed (I/O)";
+        m_saveMsgTime = std::chrono::steady_clock::now();
+        return;
+    }
+
+    bklog::info("GameView: state saved to {} ({} bytes)", path, sz);
+    char msg[64];
+    snprintf(msg, sizeof(msg), "Saved (slot %d)", slot);
+    std::lock_guard<std::mutex> lk(m_saveMsgMutex);
+    m_saveMsg     = msg;
+    m_saveMsgTime = std::chrono::steady_clock::now();
+}
+
+// ============================================================
+// doQuickLoad – deserialize core state from a slot file
+// ============================================================
+
+void GameView::doQuickLoad(int slot)
+{
+    std::string path = quickSaveStatePath(slot);
+    if (!std::filesystem::exists(path)) {
+        bklog::warning("GameView: no state file at {} (slot {})", path, slot);
+        std::lock_guard<std::mutex> lk(m_saveMsgMutex);
+        m_saveMsg     = "No save in slot " + std::to_string(slot);
+        m_saveMsgTime = std::chrono::steady_clock::now();
+        return;
+    }
+
+    std::ifstream f(path, std::ios::binary);
+    if (!f) {
+        bklog::warning("GameView: cannot open state file: {}", path);
+        std::lock_guard<std::mutex> lk(m_saveMsgMutex);
+        m_saveMsg     = "Load failed (I/O)";
+        m_saveMsgTime = std::chrono::steady_clock::now();
+        return;
+    }
+
+    f.seekg(0, std::ios::end);
+    std::streampos fileSize = f.tellg();
+    f.seekg(0, std::ios::beg);
+    if (fileSize <= 0) {
+        bklog::warning("GameView: state file is empty: {}", path);
+        std::lock_guard<std::mutex> lk(m_saveMsgMutex);
+        m_saveMsg     = "Load failed (empty)";
+        m_saveMsgTime = std::chrono::steady_clock::now();
+        return;
+    }
+
+    std::vector<uint8_t> buf(static_cast<size_t>(fileSize));
+    f.read(reinterpret_cast<char*>(buf.data()), fileSize);
+    std::streamsize got = f.gcount();
+
+    if (!m_core.unserialize(buf.data(), static_cast<size_t>(got))) {
+        bklog::warning("GameView: unserialize failed (slot {})", slot);
+        std::lock_guard<std::mutex> lk(m_saveMsgMutex);
+        m_saveMsg     = "Load failed";
+        m_saveMsgTime = std::chrono::steady_clock::now();
+        return;
+    }
+
+    // Clear the rewind buffer to avoid confusion after a state restore
+    {
+        std::lock_guard<std::mutex> lk(m_rewindMutex);
+        m_rewindBuffer.clear();
+    }
+
+    bklog::info("GameView: state loaded from {} ({} bytes)", path, got);
+    char msg[64];
+    snprintf(msg, sizeof(msg), "Loaded (slot %d)", slot);
+    std::lock_guard<std::mutex> lk(m_saveMsgMutex);
+    m_saveMsg     = msg;
+    m_saveMsgTime = std::chrono::steady_clock::now();
+}
+
+// ============================================================
+// loadCheats – parse and apply cheats from the .cht file
+//
+// Supported formats:
+//
+// 1. RetroArch .cht:
+//    cheats = N
+//    cheat0_desc = "Name"
+//    cheat0_enable = true
+//    cheat0_code = XXXXXXXX+YYYYYYYY
+//
+// 2. Simple one-code-per-line (enabled by default):
+//    # comment
+//    +XXXXXXXX YYYYYYYY   ('+' prefix = enabled)
+//    -XXXXXXXX YYYYYYYY   ('-' prefix = disabled)
+//    XXXXXXXX YYYYYYYY    (no prefix  = enabled)
+// ============================================================
+
+void GameView::loadCheats()
+{
+    std::string path = cheatFilePath();
+    if (!std::filesystem::exists(path)) {
+        bklog::info("GameView: no cheat file found at {}", path);
+        return;
+    }
+
+    std::ifstream f(path);
+    if (!f) {
+        bklog::warning("GameView: failed to open cheat file: {}", path);
+        return;
+    }
+
+    m_core.cheatReset();
+
+    // Detect RetroArch format by checking for "cheats = " line
+    std::string content;
+    {
+        std::ostringstream oss;
+        oss << f.rdbuf();
+        content = oss.str();
+    }
+
+    unsigned cheatCount = 0;
+
+    if (content.find("cheats = ") != std::string::npos ||
+        content.find("cheats=")   != std::string::npos)
+    {
+        // ---- RetroArch .cht format ----
+        // Build a map of key → value
+        std::unordered_map<std::string, std::string> kv;
+        std::istringstream iss(content);
+        std::string line;
+        while (std::getline(iss, line)) {
+            // Remove carriage return (Windows line endings)
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            // Strip inline comments
+            auto hash = line.find('#');
+            if (hash != std::string::npos) line = line.substr(0, hash);
+            auto eq = line.find('=');
+            if (eq == std::string::npos) continue;
+            std::string key   = line.substr(0, eq);
+            std::string value = line.substr(eq + 1);
+            // Trim whitespace
+            auto trim = [](std::string s) -> std::string {
+                size_t b = s.find_first_not_of(" \t\"");
+                size_t e = s.find_last_not_of(" \t\"");
+                if (b == std::string::npos) return "";
+                return s.substr(b, e - b + 1);
+            };
+            kv[trim(key)] = trim(value);
+        }
+
+        // Parse cheat count
+        unsigned total = 0;
+        {
+            auto it = kv.find("cheats");
+            if (it != kv.end()) {
+                try { total = static_cast<unsigned>(std::stoi(it->second)); } catch (...) {}
+            }
+        }
+
+        for (unsigned i = 0; i < total; ++i) {
+            std::string iStr = std::to_string(i);
+            std::string descKey    = "cheat" + iStr + "_desc";
+            std::string enableKey  = "cheat" + iStr + "_enable";
+            std::string codeKey    = "cheat" + iStr + "_code";
+
+            std::string code;
+            bool        enabled = true;
+
+            auto cit = kv.find(codeKey);
+            if (cit == kv.end()) continue;
+            code = cit->second;
+
+            auto eit = kv.find(enableKey);
+            if (eit != kv.end()) {
+                std::string ev = eit->second;
+                // lowercase
+                for (char& c : ev) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                enabled = (ev == "true" || ev == "1" || ev == "yes");
+            }
+
+            std::string desc = "cheat" + iStr;
+            auto dit = kv.find(descKey);
+            if (dit != kv.end()) desc = dit->second;
+
+            bklog::info("GameView: cheat[{}] \"{}\" {} code={}", i, desc,
+                        enabled ? "enabled" : "disabled", code);
+            m_core.cheatSet(i, enabled, code);
+            ++cheatCount;
+        }
+    }
+    else
+    {
+        // ---- Simple one-code-per-line format ----
+        std::istringstream iss(content);
+        std::string line;
+        unsigned idx = 0;
+        while (std::getline(iss, line)) {
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            // Strip inline comments
+            auto hash = line.find('#');
+            if (hash != std::string::npos) line = line.substr(0, hash);
+            // Trim whitespace
+            size_t b = line.find_first_not_of(" \t");
+            if (b == std::string::npos) continue;
+            line = line.substr(b);
+            if (line.empty()) continue;
+
+            bool enabled = true;
+            if (line[0] == '+') {
+                enabled = true;
+                line = line.substr(1);
+            } else if (line[0] == '-') {
+                enabled = false;
+                line = line.substr(1);
+            }
+            // Trim again after stripping prefix
+            b = line.find_first_not_of(" \t");
+            if (b == std::string::npos) continue;
+            line = line.substr(b);
+            if (line.empty()) continue;
+
+            bklog::info("GameView: cheat[{}] {} code={}", idx,
+                        enabled ? "enabled" : "disabled", line);
+            m_core.cheatSet(idx, enabled, line);
+            ++idx;
+            ++cheatCount;
+        }
+    }
+
+    if (cheatCount > 0)
+        bklog::info("GameView: {} cheat(s) loaded from {}", cheatCount, path);
+    else
+        bklog::info("GameView: cheat file {} contained no valid cheats", path);
+}
 
 void GameView::uploadFrame(NVGcontext* vg,
                             const beiklive::LibretroLoader::VideoFrame& frame)
@@ -861,6 +1365,23 @@ void GameView::pollInput()
     if (!m_requestExit.load(std::memory_order_relaxed)) {
         if (isKbdHotkeyPressed(Hotkey::ExitGame))
             m_requestExit.store(true, std::memory_order_relaxed);
+    }
+#endif
+
+    // ── Keyboard quick save / load ────────────────────────────────────────
+#ifndef __SWITCH__
+    {
+        bool kbdQs = isKbdHotkeyPressed(Hotkey::QuickSave);
+        // Edge-detect: only trigger on the rising edge (key just pressed)
+        if (kbdQs && !m_kbdQsSavePrev)
+            m_pendingQuickSave.store(m_saveSlot, std::memory_order_relaxed);
+        m_kbdQsSavePrev = kbdQs;
+    }
+    {
+        bool kbdQl = isKbdHotkeyPressed(Hotkey::QuickLoad);
+        if (kbdQl && !m_kbdQlLoadPrev)
+            m_pendingQuickLoad.store(m_saveSlot, std::memory_order_relaxed);
+        m_kbdQlLoadPrev = kbdQl;
     }
 #endif
 
@@ -1174,12 +1695,44 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
         nvgText(vg, rx + rw * 0.5f, ry + rh * 0.5f, rewBuf, nullptr);
     }
 
+    // ---- Save / load status overlay ---------------------------------
+    // Shows a brief message after quick-save or quick-load operations.
+    // The message fades out after 2 seconds.
+    {
+        std::string msg;
+        bool showMsg = false;
+        {
+            std::lock_guard<std::mutex> lk(m_saveMsgMutex);
+            if (!m_saveMsg.empty()) {
+                auto now = std::chrono::steady_clock::now();
+                double age = std::chrono::duration<double>(now - m_saveMsgTime).count();
+                if (age < 2.0) {
+                    msg     = m_saveMsg;
+                    showMsg = true;
+                } else {
+                    m_saveMsg.clear(); // expired
+                }
+            }
+        }
+        if (showMsg && !msg.empty()) {
+            float mw = 200.0f, mh = 26.0f;
+            float mx = x + width  * 0.5f - mw * 0.5f;
+            float my = y + height - mh - 8.0f;
+            nvgBeginPath(vg);
+            nvgRoundedRect(vg, mx, my, mw, mh, 5.0f);
+            nvgFillColor(vg, nvgRGBA(0, 0, 0, 180));
+            nvgFill(vg);
+
+            nvgFontSize(vg, 14.0f);
+            nvgFontFace(vg, "regular");
+            nvgFillColor(vg, nvgRGBA(255, 255, 255, 230));
+            nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+            nvgText(vg, mx + mw * 0.5f, my + mh * 0.5f, msg.c_str(), nullptr);
+        }
+    }
+
     this->invalidate();
 }
-
-// ============================================================
-// Focus / Layout callbacks
-// ============================================================
 
 void GameView::onFocusGained()
 {

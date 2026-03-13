@@ -51,6 +51,36 @@ public:
     bool        serialize(void* data, size_t size)  const;
     bool        unserialize(const void* data, size_t size);
 
+    // ---- Memory (SRAM / battery save) ---------------------------------------
+
+    /// Returns a pointer to the core's memory region (e.g. RETRO_MEMORY_SAVE_RAM).
+    /// Valid only while a game is loaded; nullptr if unsupported.
+    void*  getMemoryData(unsigned id) const;
+
+    /// Returns the size in bytes of a core memory region.
+    size_t getMemorySize(unsigned id) const;
+
+    // ---- Cheats -------------------------------------------------------------
+
+    /// Reset / clear all cheats registered with the core.
+    void cheatReset();
+
+    /// Set (add or update) a single cheat entry.
+    /// @param index   Position in the cheat list (0-based).
+    /// @param enabled Whether the cheat is active.
+    /// @param code    Cheat code string (format depends on core, e.g. GameShark).
+    void cheatSet(unsigned index, bool enabled, const std::string& code);
+
+    // ---- Save directory -----------------------------------------------------
+
+    /// Set the directory that the core should use for saves.
+    /// Called before loadGame() so that RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY
+    /// returns this path.
+    void setSaveDirectory(const std::string& dir) { m_saveDirectory = dir; }
+
+    /// Set the system/BIOS directory for the core.
+    void setSystemDirectory(const std::string& dir) { m_systemDirectory = dir; }
+
     // ---- Video frame ------------------------------------------------
 
     struct VideoFrame {
@@ -110,6 +140,11 @@ private:
     bool (*fn_load_game)(const retro_game_info*)             = nullptr;
     void (*fn_unload_game)()                                 = nullptr;
     void (*fn_get_region)()                                  = nullptr;
+    // ---- Cheat / memory API -------------------------------------------------
+    void (*fn_cheat_reset)()                                 = nullptr;
+    void (*fn_cheat_set)(unsigned, bool, const char*)        = nullptr;
+    void* (*fn_get_memory_data)(unsigned)                    = nullptr;
+    size_t (*fn_get_memory_size)(unsigned)                   = nullptr;
 
     // ---- State ------------------------------------------------------
     retro_system_av_info m_avInfo{};
@@ -133,6 +168,10 @@ private:
     // c_str() pointers that remain valid for the lifetime of the loader.
     beiklive::ConfigManager*                        m_configManager = nullptr;
     std::unordered_map<std::string, std::string> m_coreVarStorage;
+
+    // ---- Save / system directory -------------------------------------
+    std::string m_saveDirectory;    ///< Returned to core via GET_SAVE_DIRECTORY
+    std::string m_systemDirectory;  ///< Returned to core via GET_SYSTEM_DIRECTORY
 
     // ---- Static singleton for callbacks -----------------------------
     // libretro callbacks are plain C function pointers, so we route them
