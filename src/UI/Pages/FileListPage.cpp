@@ -20,8 +20,8 @@ static constexpr float ICON_HEIGHT = 50.f;
 static constexpr float ACCENT_W = 4.f;
 static constexpr float CELL_PAD_H = 12.f;
 static constexpr float CELL_PAD_V = 10.f;
-static constexpr float INFO_FONT_SIZE = 16.f;
-static constexpr float NAME_FONT_SIZE = 26.f;
+static constexpr float INFO_FONT_SIZE = 12.f;
+static constexpr float NAME_FONT_SIZE = 22.f;
 static constexpr float DETAIL_PANEL_WIDTH = 400.f;
 static constexpr float DETAIL_THUMB_SZ = DETAIL_PANEL_WIDTH - 40.f; // panel width minus horizontal padding
 

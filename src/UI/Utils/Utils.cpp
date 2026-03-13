@@ -42,7 +42,7 @@ namespace beiklive::UI
     
         m_titleLabel = new brls::Label();
         float FontSize = GET_STYLE("brls/applet_frame/header_title_font_size");
-        m_titleLabel->setFontSize(FontSize + 2);
+        m_titleLabel->setFontSize(FontSize + 15);
         
         m_titleBox->addView(m_titleLabel);
         this->addView(m_titleBox);
@@ -52,7 +52,7 @@ namespace beiklive::UI
     
         m_pathLabel = new brls::Label();
         m_pathLabel->setFontSize(FontSize/2 + 2);
-        m_pathLabel->setTextColor(GET_THEME_COLOR("beiklive/subtitle"));
+        m_pathLabel->setTextColor(GET_THEME_COLOR("brls/text"));
     
         m_subtitleBox->addView(new brls::Padding());
         m_subtitleBox->addView(m_pathLabel);
