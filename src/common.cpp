@@ -56,13 +56,7 @@ static const char* k_xmbColorNames[] = {
 void ApplyXmbColor(beiklive::UI::ProImage* img)
 {
     if (!img) return;
-    std::string preset = "blue";
-    if (SettingManager) {
-        auto v = SettingManager->Get("UI.pspxmb.color");
-        if (v) {
-            if (auto s = v->AsString()) preset = *s;
-        }
-    }
+    std::string preset = cfgGetStr("UI.pspxmb.color", "blue");
     for (int i = 0; i < k_xmbColorPresetCount; ++i) {
         if (preset == k_xmbColorPresets[i].name) {
             img->setXmbBgColor(k_xmbColorPresets[i].r,
@@ -75,8 +69,11 @@ void ApplyXmbColor(beiklive::UI::ProImage* img)
     img->setXmbBgColor(0.05f, 0.10f, 0.25f);
 }
 
-/// Helper: read a bool setting from SettingManager.
-static bool cfgBool(const std::string& key, bool def)
+// ─────────────────────────────────────────────────────────────────────────────
+//  Config read/write helpers (public – declared in common.hpp)
+// ─────────────────────────────────────────────────────────────────────────────
+
+bool cfgGetBool(const std::string& key, bool def)
 {
     if (!SettingManager) return def;
     auto v = SettingManager->Get(key);
@@ -86,14 +83,46 @@ static bool cfgBool(const std::string& key, bool def)
     return def;
 }
 
-/// Helper: read a string setting from SettingManager.
-static std::string cfgStr(const std::string& key, const std::string& def)
+std::string cfgGetStr(const std::string& key, const std::string& def)
 {
     if (!SettingManager) return def;
     auto v = SettingManager->Get(key);
     if (!v) return def;
     if (auto s = v->AsString()) return *s;
     return def;
+}
+
+float cfgGetFloat(const std::string& key, float def)
+{
+    if (!SettingManager) return def;
+    auto v = SettingManager->Get(key);
+    if (!v) return def;
+    if (auto f = v->AsFloat()) return *f;
+    if (auto i = v->AsInt())   return static_cast<float>(*i);
+    return def;
+}
+
+int cfgGetInt(const std::string& key, int def)
+{
+    if (!SettingManager) return def;
+    auto v = SettingManager->Get(key);
+    if (!v) return def;
+    if (auto i = v->AsInt())   return *i;
+    if (auto f = v->AsFloat()) return static_cast<int>(*f);
+    return def;
+}
+
+void cfgSetStr(const std::string& key, const std::string& val)
+{
+    if (SettingManager) {
+        SettingManager->Set(key, beiklive::ConfigValue(val));
+        SettingManager->Save();
+    }
+}
+
+void cfgSetBool(const std::string& key, bool val)
+{
+    cfgSetStr(key, val ? "true" : "false");
 }
 
 /// Apply ALL background settings to @a img based on SettingManager:
@@ -105,9 +134,9 @@ void ApplyXmbBg(beiklive::UI::ProImage* img)
 {
     if (!img) return;
 
-    bool showXmb = cfgBool("UI.showXmbBg",    false);
-    bool showBg  = cfgBool("UI.showBgImage",   false);
-    std::string bgPath = cfgStr("UI.bgImagePath", "");
+    bool showXmb = cfgGetBool("UI.showXmbBg",    false);
+    bool showBg  = cfgGetBool("UI.showBgImage",   false);
+    std::string bgPath = cfgGetStr("UI.bgImagePath", "");
 
     // If neither feature is enabled, hide the background widget entirely.
     if (!showXmb && !showBg) {

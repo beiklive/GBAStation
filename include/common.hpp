@@ -88,6 +88,15 @@ void UnregisterXmbBackground(beiklive::UI::ProImage* img);
 // 吞噬一个按钮事件，使其不再被后续处理
 void swallow(brls::View* v, brls::ControllerButton btn);
 
+// ─── Config 读写辅助函数 ──────────────────────────────────────────────────────
+// 从 SettingManager 读取/写入配置项，写入后自动保存
+bool        cfgGetBool(const std::string& key, bool def);
+std::string cfgGetStr(const std::string& key, const std::string& def);
+float       cfgGetFloat(const std::string& key, float def);
+int         cfgGetInt(const std::string& key, int def);
+void        cfgSetStr(const std::string& key, const std::string& val);
+void        cfgSetBool(const std::string& key, bool val);
+
 
 
 
