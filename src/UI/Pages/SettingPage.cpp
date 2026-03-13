@@ -222,6 +222,28 @@ public:
         addView(m_countdownLabel);
 
         m_startTime = std::chrono::steady_clock::now();
+
+        // For gamepad capture mode: register borealis action handlers for every
+        // capturable button.  This achieves two things:
+        //  1. The press is CONSUMED by this view (returns true), so it never
+        //     propagates to the parent DetailCell.  Without this, the same
+        //     button press that closes the dialog would immediately re-open it
+        //     (e.g., pressing A to map it re-triggers the cell's A action).
+        //  2. The mapping result is set through the borealis action system,
+        //     which fires once per press, not every frame like draw()-polling.
+        if (!isKeyboard) {
+            for (int i = 0; i < k_capPadKeyCount; ++i) {
+                std::string name = k_capPadKeys[i].name;
+                brls::ControllerButton btn = k_capPadKeys[i].btn;
+                registerAction("", btn,
+                    [this, name](brls::View*) -> bool {
+                        if (!m_done && !m_waitingForRelease)
+                            finish(name);
+                        return true; // always consume – never propagate to parent
+                    },
+                    /*hidden=*/true);
+            }
+        }
     }
 
     void setDialog(brls::Dialog* dlg) { m_dialog = dlg; }
@@ -496,7 +518,7 @@ brls::ScrollingFrame* SettingPage::buildUITab()
             [](int idx){
                 if (idx >= 0 && idx < k_xmbColorCount) {
                     cfgSetStr(KEY_UI_PSPXMB_COLOR, k_xmbColorIds[idx]);
-                    beiklive::ApplyXmbColorToAll();
+                    // Color will be applied when save button is clicked.
                 }
             });
         box->addView(xmbColorCell);
@@ -708,6 +730,30 @@ brls::ScrollingFrame* SettingPage::buildDisplayTab()
         dispModeCell->init("显示模式", dispModes, dispModeIdx,
             [](int idx){ if (idx >= 0 && idx < 5) cfgSetStr("display.mode", dispModeIds[idx]); });
         box->addView(dispModeCell);
+    }
+
+    // ── 整数倍缩放倍率（仅在整数倍模式下生效） ────────────────────────────
+    {
+        // 0 = 自动最大整数倍; 1–6 = 固定倍率
+        static const int k_intScaleVals[] = { 0, 1, 2, 3, 4, 5, 6 };
+        static const char* k_intScaleLabels[] = {
+            "自动 (Auto)", "1x", "2x", "3x", "4x", "5x", "6x"
+        };
+        static constexpr int k_intScaleCount = 7;
+        int curMult = cfgGetInt("display.integer_scale_mult", 0);
+        int multIdx = 0;
+        for (int i = 0; i < k_intScaleCount; ++i)
+            if (curMult == k_intScaleVals[i]) { multIdx = i; break; }
+        std::vector<std::string> intScaleLabels(k_intScaleLabels,
+                                                 k_intScaleLabels + k_intScaleCount);
+        auto* intScaleCell = new brls::SelectorCell();
+        intScaleCell->init("整数倍缩放倍率（整数倍模式下生效）", intScaleLabels, multIdx,
+            [](int idx){
+                if (idx >= 0 && idx < k_intScaleCount && SettingManager)
+                    SettingManager->Set("display.integer_scale_mult",
+                                        beiklive::ConfigValue(k_intScaleVals[idx]));
+            });
+        box->addView(intScaleCell);
     }
 
     {
