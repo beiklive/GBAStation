@@ -24,7 +24,7 @@ void UnregisterXmbBackground(beiklive::UI::ProImage* img)
 void ApplyXmbColorToAll()
 {
     for (auto* img : s_xmbBackgrounds)
-        ApplyXmbColor(img);
+        ApplyXmbBg(img);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -75,6 +75,62 @@ void ApplyXmbColor(beiklive::UI::ProImage* img)
     img->setXmbBgColor(0.05f, 0.10f, 0.25f);
 }
 
+/// Helper: read a bool setting from SettingManager.
+static bool cfgBool(const std::string& key, bool def)
+{
+    if (!SettingManager) return def;
+    auto v = SettingManager->Get(key);
+    if (!v) return def;
+    if (auto s = v->AsString()) return (*s == "true" || *s == "1" || *s == "yes");
+    if (auto i = v->AsInt())    return (*i != 0);
+    return def;
+}
+
+/// Helper: read a string setting from SettingManager.
+static std::string cfgStr(const std::string& key, const std::string& def)
+{
+    if (!SettingManager) return def;
+    auto v = SettingManager->Get(key);
+    if (!v) return def;
+    if (auto s = v->AsString()) return *s;
+    return def;
+}
+
+/// Apply ALL background settings to @a img based on SettingManager:
+///  - UI.showXmbBg  → enable/disable PSP XMB ripple shader
+///  - UI.pspxmb.color → XMB background colour
+///  - UI.showBgImage + UI.bgImagePath → background image
+///  - Visibility is set to GONE when both features are disabled.
+void ApplyXmbBg(beiklive::UI::ProImage* img)
+{
+    if (!img) return;
+
+    bool showXmb = cfgBool("UI.showXmbBg",    false);
+    bool showBg  = cfgBool("UI.showBgImage",   false);
+    std::string bgPath = cfgStr("UI.bgImagePath", "");
+
+    // If neither feature is enabled, hide the background widget entirely.
+    if (!showXmb && !showBg) {
+        img->setVisibility(brls::Visibility::GONE);
+        return;
+    }
+
+    img->setVisibility(brls::Visibility::VISIBLE);
+
+    // Apply background image (drawn first, under any XMB shader overlay).
+    if (showBg && !bgPath.empty()) {
+        img->setImageFromFile(bgPath);
+    }
+
+    // Apply XMB shader animation and colour.
+    if (showXmb) {
+        img->setShaderAnimation(beiklive::UI::ShaderAnimationType::PSP_XMB_RIPPLE);
+        ApplyXmbColor(img);
+    } else {
+        img->setShaderAnimation(beiklive::UI::ShaderAnimationType::NONE);
+    }
+}
+
     void swallow(brls::View* v, brls::ControllerButton btn)
     {
         v->registerAction("", btn, [](brls::View*) { return true; },
@@ -112,8 +168,9 @@ void ApplyXmbColor(beiklive::UI::ProImage* img)
         m_bgImage->setHeightPercentage(100);
         m_bgImage->setScalingType(brls::ImageScalingType::FIT);
         m_bgImage->setInterpolation(brls::ImageInterpolation::LINEAR);
-        m_bgImage->setShaderAnimation(beiklive::UI::ShaderAnimationType::PSP_XMB_RIPPLE);
-        ApplyXmbColor(m_bgImage);
+        // Apply all background settings (visibility, image, XMB shader & color)
+        // based on the current configuration.
+        ApplyXmbBg(m_bgImage);
         RegisterXmbBackground(m_bgImage);
         view->addView(m_bgImage);
     }

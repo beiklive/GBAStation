@@ -8,6 +8,7 @@
 #include <deque>
 #include <mutex>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 #include "common.hpp"
@@ -95,9 +96,28 @@ class GameView : public brls::Box
     /// while a game is running.
     bool m_uiBlocked = false;
 
+    // ---- Main-thread input snapshot (thread-safe GLFW access) ------
+    // GLFW functions (glfwGetKey, glfwGetWindowAttrib, etc.) must only be
+    // called from the main thread.  The game thread calls pollInput() which
+    // would otherwise call those functions directly.  Instead, draw() (main
+    // thread) captures fresh input state into m_inputSnap every frame; the
+    // game thread reads from this snapshot under the mutex.
+    struct InputSnapshot {
+        brls::ControllerState ctrlState{};
+        /// Keyboard key states: scancode → pressed (for all mapped scancodes)
+        std::unordered_map<int, bool> kbdState;
+    };
+    mutable std::mutex m_inputSnapMutex;
+    InputSnapshot      m_inputSnap;
+
     // ---- Helper methods ---------------------------------------------
     void initialize();
     void cleanup();
+
+    /// Refresh m_inputSnap from the main thread (called inside draw()).
+    /// Must be called from the main (render) thread so that GLFW functions
+    /// are invoked safely.
+    void refreshInputSnapshot();
 
     /// Start the independent emulation thread (called from initialize()).
     void startGameThread();

@@ -634,66 +634,53 @@ void GameView::uploadFrame(NVGcontext* vg,
 //   - Toggle / hold mode for fast-forward and rewind
 //   - Auto-detection of keyboard vs gamepad input
 //   - Emulator hotkeys (fast-forward, rewind, exit game)
+//
+// NOTE: All actual GLFW/input-manager calls happen in refreshInputSnapshot()
+// on the main thread.  pollInput() only reads from the thread-safe snapshot.
 // ============================================================
 
 void GameView::pollInput()
 {
-    // ---- Get fresh controller state ------------------------------------
-    // When UI inputs are blocked (game is running), borealis skips its
-    // processInput() loop and the shared controllerState becomes stale.
-    // To keep gamepad input working we call updateUnifiedControllerState()
-    // directly from this thread so the game always sees the current button
-    // state regardless of the UI block status.
-    // Local copy required: conditional initialization below prevents use of
-    // a const reference (which would require a single initialiser expression).
-    brls::ControllerState state = {};
-#ifndef __SWITCH__
+    // ---- Obtain input state from the main-thread snapshot ---------------
+    // refreshInputSnapshot() is called from draw() (main thread) every frame.
+    // Here we take a consistent copy under the mutex so the game thread reads
+    // a coherent state even while the main thread might be updating it.
+    InputSnapshot snap;
     {
-        auto* platform = brls::Application::getPlatform();
-        auto* inputMgr = platform ? platform->getInputManager() : nullptr;
-        if (inputMgr && brls::Application::isInputBlocks()) {
-            inputMgr->updateUnifiedControllerState(&state);
-        } else {
-            state = brls::Application::getControllerState();
-        }
+        std::lock_guard<std::mutex> lk(m_inputSnapMutex);
+        snap = m_inputSnap;
     }
-#else
-    state = brls::Application::getControllerState();
-#endif
+    const brls::ControllerState& state = snap.ctrlState;
+
+    // Helper: look up a keyboard key state from the snapshot.
+    auto kbdState = [&](brls::BrlsKeyboardScancode sc) -> bool {
+        auto it = snap.kbdState.find(static_cast<int>(sc));
+        return (it != snap.kbdState.end()) && it->second;
+    };
 
     // ---- Detect keyboard vs gamepad input type -----------------------
-    // Borealis InputType is GAMEPAD for both keyboard and gamepad on PC;
-    // we distinguish by checking if the platform input manager reports any
-    // active keyboard key that is part of the current input mapping.
-    // Obtain the button map early so it can be used for both detection and
-    // game-button polling below.
     const auto& btnMap = m_inputMap.gameButtonMap();
     bool keyboardActive = false;
 #ifndef __SWITCH__
-    auto* platform = brls::Application::getPlatform();
-    auto* im = platform ? platform->getInputManager() : nullptr;
-    if (im) {
-        // Check all keyboard-mapped game buttons so that any configured key
-        // activates keyboard mode, including custom bindings set by the user.
-        for (const auto& entry : btnMap) {
-            if (entry.kbdScancode >= 0 &&
-                im->getKeyboardKeyState(
-                    static_cast<brls::BrlsKeyboardScancode>(entry.kbdScancode))) {
-                keyboardActive = true;
-                break;
-            }
+    // Check all keyboard-mapped game buttons so that any configured key
+    // activates keyboard mode, including custom bindings set by the user.
+    for (const auto& entry : btnMap) {
+        if (entry.kbdScancode >= 0 &&
+            kbdState(static_cast<brls::BrlsKeyboardScancode>(entry.kbdScancode))) {
+            keyboardActive = true;
+            break;
         }
-        // Also check keyboard hotkey bindings (fast-forward, rewind, etc.)
-        if (!keyboardActive) {
-            using Hotkey = beiklive::InputMappingConfig::Hotkey;
-            for (int h = 0; h < static_cast<int>(Hotkey::_Count); ++h) {
-                const auto& hk = m_inputMap.hotkeyBinding(static_cast<Hotkey>(h));
-                if (hk.kbdCombo.isBound()) {
-                    auto sc = static_cast<brls::BrlsKeyboardScancode>(hk.kbdCombo.scancode);
-                    if (im->getKeyboardKeyState(sc)) {
-                        keyboardActive = true;
-                        break;
-                    }
+    }
+    // Also check keyboard hotkey bindings (fast-forward, rewind, etc.)
+    if (!keyboardActive) {
+        using Hotkey = beiklive::InputMappingConfig::Hotkey;
+        for (int h = 0; h < static_cast<int>(Hotkey::_Count); ++h) {
+            const auto& hk = m_inputMap.hotkeyBinding(static_cast<Hotkey>(h));
+            if (hk.kbdCombo.isBound()) {
+                auto sc = static_cast<brls::BrlsKeyboardScancode>(hk.kbdCombo.scancode);
+                if (kbdState(sc)) {
+                    keyboardActive = true;
+                    break;
                 }
             }
         }
@@ -719,19 +706,19 @@ void GameView::pollInput()
         }
         // --- keyboard side ---
 #ifndef __SWITCH__
-        if (im && hk.kbdCombo.isBound()) {
+        if (hk.kbdCombo.isBound()) {
             auto sc = static_cast<brls::BrlsKeyboardScancode>(hk.kbdCombo.scancode);
-            if (im->getKeyboardKeyState(sc)) {
+            if (kbdState(sc)) {
                 // Check modifiers
                 bool ctrlOk  = !hk.kbdCombo.ctrl  ||
-                    im->getKeyboardKeyState(brls::BRLS_KBD_KEY_LEFT_CONTROL) ||
-                    im->getKeyboardKeyState(brls::BRLS_KBD_KEY_RIGHT_CONTROL);
+                    kbdState(brls::BRLS_KBD_KEY_LEFT_CONTROL) ||
+                    kbdState(brls::BRLS_KBD_KEY_RIGHT_CONTROL);
                 bool shiftOk = !hk.kbdCombo.shift ||
-                    im->getKeyboardKeyState(brls::BRLS_KBD_KEY_LEFT_SHIFT) ||
-                    im->getKeyboardKeyState(brls::BRLS_KBD_KEY_RIGHT_SHIFT);
+                    kbdState(brls::BRLS_KBD_KEY_LEFT_SHIFT) ||
+                    kbdState(brls::BRLS_KBD_KEY_RIGHT_SHIFT);
                 bool altOk   = !hk.kbdCombo.alt   ||
-                    im->getKeyboardKeyState(brls::BRLS_KBD_KEY_LEFT_ALT) ||
-                    im->getKeyboardKeyState(brls::BRLS_KBD_KEY_RIGHT_ALT);
+                    kbdState(brls::BRLS_KBD_KEY_LEFT_ALT) ||
+                    kbdState(brls::BRLS_KBD_KEY_RIGHT_ALT);
                 if (ctrlOk && shiftOk && altOk) return true;
             }
         }
@@ -809,16 +796,14 @@ void GameView::pollInput()
             if (entry.kbdScancode < 0) continue;
             bool pressed = false;
 #ifndef __SWITCH__
-            if (im)
-                pressed = im->getKeyboardKeyState(
-                    static_cast<brls::BrlsKeyboardScancode>(entry.kbdScancode));
+            pressed = kbdState(static_cast<brls::BrlsKeyboardScancode>(entry.kbdScancode));
 #endif
             m_core.setButtonState(entry.retroId, pressed);
         }
 
         // ---- Keyboard exit key (ExitGame hotkey) ----------------------
 #ifndef __SWITCH__
-        if (im && !m_requestExit.load(std::memory_order_relaxed)) {
+        if (!m_requestExit.load(std::memory_order_relaxed)) {
             if (isHotkeyPressed(Hotkey::ExitGame))
                 m_requestExit.store(true, std::memory_order_relaxed);
         }
@@ -832,6 +817,89 @@ void GameView::pollInput()
             m_core.setButtonState(entry.retroId, pressed);
         }
     }
+
+    // ---- Debug logging (only at DEBUG level to avoid spam) ──────────────
+#ifndef __SWITCH__
+    if (brls::Logger::getLogLevel() <= brls::LogLevel::LOG_DEBUG) {
+        // Log pressed game buttons once when they first appear
+        for (const auto& entry : btnMap) {
+            bool pressed = false;
+            if (m_useKeyboard && entry.kbdScancode >= 0)
+                pressed = kbdState(static_cast<brls::BrlsKeyboardScancode>(entry.kbdScancode));
+            else if (!m_useKeyboard && entry.padButton >= 0)
+                pressed = state.buttons[entry.padButton];
+            if (pressed)
+                bklog::debug("pollInput: retroId={} pressed ({})",
+                             entry.retroId, m_useKeyboard ? "kbd" : "pad");
+        }
+    }
+#endif
+}
+
+// ============================================================
+// refreshInputSnapshot – capture input state on the main thread
+// ============================================================
+// GLFW functions (glfwGetKey, glfwGetWindowAttrib, glfwGetGamepadState, ...)
+// must only be called from the main thread.  The game emulation thread calls
+// pollInput() which would otherwise invoke these functions from a non-main
+// thread, leading to undefined behaviour (GLFW is NOT thread-safe for window
+// and input queries).
+//
+// This function is called once per rendered frame from draw() (main thread).
+// It writes a fresh snapshot of all relevant input states into m_inputSnap
+// under m_inputSnapMutex, and pollInput() on the game thread reads from that
+// snapshot, thereby completely avoiding any off-thread GLFW calls.
+//
+void GameView::refreshInputSnapshot()
+{
+#ifndef __SWITCH__
+    auto* platform = brls::Application::getPlatform();
+    auto* im       = platform ? platform->getInputManager() : nullptr;
+    if (!im) return;
+
+    InputSnapshot snap;
+
+    // ── Gamepad / controller state ───────────────────────────────────────────
+    // updateUnifiedControllerState() calls glfwGetWindowAttrib(FOCUSED) and
+    // glfwGetGamepadState() – both require the main thread.
+    im->updateUnifiedControllerState(&snap.ctrlState);
+
+    // ── Keyboard state ───────────────────────────────────────────────────────
+    // Collect all scancodes we need to track: game button map + hotkeys +
+    // modifier keys.
+    const auto& btnMap = m_inputMap.gameButtonMap();
+    for (const auto& entry : btnMap) {
+        if (entry.kbdScancode >= 0)
+            snap.kbdState[entry.kbdScancode] =
+                im->getKeyboardKeyState(
+                    static_cast<brls::BrlsKeyboardScancode>(entry.kbdScancode));
+    }
+
+    // Modifier keys (used for hotkey combo detection)
+    static const brls::BrlsKeyboardScancode k_mods[] = {
+        brls::BRLS_KBD_KEY_LEFT_CONTROL,  brls::BRLS_KBD_KEY_RIGHT_CONTROL,
+        brls::BRLS_KBD_KEY_LEFT_SHIFT,    brls::BRLS_KBD_KEY_RIGHT_SHIFT,
+        brls::BRLS_KBD_KEY_LEFT_ALT,      brls::BRLS_KBD_KEY_RIGHT_ALT,
+    };
+    for (auto sc : k_mods)
+        snap.kbdState[static_cast<int>(sc)] = im->getKeyboardKeyState(sc);
+
+    // Hotkey keyboard bindings
+    using Hotkey = beiklive::InputMappingConfig::Hotkey;
+    for (int h = 0; h < static_cast<int>(Hotkey::_Count); ++h) {
+        const auto& hk = m_inputMap.hotkeyBinding(static_cast<Hotkey>(h));
+        if (hk.kbdCombo.isBound() && hk.kbdCombo.scancode >= 0) {
+            int sc = hk.kbdCombo.scancode;
+            snap.kbdState[sc] =
+                im->getKeyboardKeyState(
+                    static_cast<brls::BrlsKeyboardScancode>(sc));
+        }
+    }
+
+    // Publish the snapshot
+    std::lock_guard<std::mutex> lk(m_inputSnapMutex);
+    m_inputSnap = std::move(snap);
+#endif
 }
 
 // ============================================================
@@ -844,6 +912,13 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
     // Deferred initialization (GL context guaranteed to exist at this point)
     if (!m_initialized && !m_coreFailed) {
         initialize();
+    }
+
+    // ── Refresh input snapshot from the main thread (GLFW thread safety) ──
+    // Must be called every frame so pollInput() (game thread) always has a
+    // fresh view of the hardware input state without touching GLFW directly.
+    if (m_initialized) {
+        refreshInputSnapshot();
     }
 
     // ---- Keyboard exit: game thread sets this flag; handle on main thread -----
