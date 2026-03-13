@@ -6,12 +6,13 @@
 #include <borealis/views/cells/cell_detail.hpp>
 #include <borealis/views/header.hpp>
 #include <borealis/views/scrolling_frame.hpp>
-#include <borealis/views/dialog.hpp>
 #include <borealis/views/label.hpp>
+#include <borealis/views/applet_frame.hpp>
 
 #include <chrono>
 #include <string>
 #include <vector>
+#include <algorithm>
 #include <cmath>
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -59,7 +60,7 @@ static int findIndex(const std::vector<std::string>& options,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  KeyCaptureView
+//  KeyCaptureView  (Activity-page based key capture)
 // ─────────────────────────────────────────────────────────────────────────────
 
 struct CapKbdKey { const char* name; brls::BrlsKeyboardScancode sc; };
@@ -113,9 +114,12 @@ static const CapPadKey k_capPadKeys[] = {
 static constexpr int k_capPadKeyCount =
     static_cast<int>(sizeof(k_capPadKeys) / sizeof(k_capPadKeys[0]));
 
-/// Content view embedded inside a key-capture Dialog.
+static constexpr int k_capMaxKeys = 2; ///< Maximum number of keys in a captured combo
+
+/// Full-screen key-capture page pushed as a new Activity.
 /// Polls for keyboard / gamepad input every frame (via draw()) and fires
 /// onDone(result) when a key is detected or the 5-second countdown expires.
+/// All borealis navigation actions are consumed so they don't interfere.
 class KeyCaptureView : public brls::Box
 {
 public:
@@ -123,86 +127,77 @@ public:
                             std::function<void(const std::string&)> onDone)
         : m_isKeyboard(isKeyboard), m_onDone(std::move(onDone))
     {
+        setFocusable(true);
         setAxis(brls::Axis::COLUMN);
         setAlignItems(brls::AlignItems::CENTER);
-        setPadding(30.f, 60.f, 30.f, 60.f);
-        setWidth(500.f);
+        setJustifyContent(brls::JustifyContent::CENTER);
+        setGrow(1.0f);
 
         m_promptLabel = new brls::Label();
         m_promptLabel->setText(isKeyboard
             ? "beiklive/settings/keybind/press_kbd"_i18n
             : "beiklive/settings/keybind/press_pad"_i18n);
-        m_promptLabel->setFontSize(20.f);
+        m_promptLabel->setFontSize(24.f);
         m_promptLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
         addView(m_promptLabel);
 
         auto* spacer1 = new brls::Padding();
-        spacer1->setHeight(16.f);
+        spacer1->setHeight(30.f);
         addView(spacer1);
 
         m_keyLabel = new brls::Label();
         m_keyLabel->setText("beiklive/settings/keybind/waiting"_i18n);
-        m_keyLabel->setFontSize(36.f);
+        m_keyLabel->setFontSize(48.f);
         m_keyLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
         addView(m_keyLabel);
 
         auto* spacer2 = new brls::Padding();
-        spacer2->setHeight(20.f);
+        spacer2->setHeight(30.f);
         addView(spacer2);
 
         m_countdownLabel = new brls::Label();
         m_countdownLabel->setText("5" + std::string("beiklive/settings/keybind/countdown_suffix"_i18n));
-        m_countdownLabel->setFontSize(18.f);
+        m_countdownLabel->setFontSize(22.f);
         m_countdownLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
         addView(m_countdownLabel);
 
         m_startTime = std::chrono::steady_clock::now();
 
-        // For gamepad capture mode: register borealis action handlers for every
-        // capturable button.  This achieves two things:
-        //  1. The press is CONSUMED by this view (returns true), so it never
-        //     propagates to the parent DetailCell.  Without this, the same
-        //     button press that closes the dialog would immediately re-open it
-        //     (e.g., pressing A to map it re-triggers the cell's A action).
-        //  2. The mapping result is set through the borealis action system,
-        //     which fires once per press, not every frame like draw()-polling.
-        if (!isKeyboard) {
-            for (int i = 0; i < k_capPadKeyCount; ++i) {
-                brls::ControllerButton btn = k_capPadKeys[i].btn;
-                registerAction("", btn,
-                    [this](brls::View*) -> bool {
-                        if (!m_done && !m_waitingForRelease) {
-                            // Collect all currently held buttons to support combos.
-                            auto state = brls::Application::getControllerState();
-                            std::string combo;
-                            for (int j = 0; j < k_capPadKeyCount; ++j) {
-                                int idx = static_cast<int>(k_capPadKeys[j].btn);
-                                if (idx >= 0 && idx < static_cast<int>(brls::_BUTTON_MAX) &&
-                                    state.buttons[idx]) {
-                                    if (!combo.empty()) combo += "+";
-                                    combo += k_capPadKeys[j].name;
-                                }
-                            }
-                            if (!combo.empty())
-                                finish(combo);
-                        }
-                        return true; // always consume – never propagate to parent
-                    },
-                    /*hidden=*/true);
-            }
+        // Consume all gamepad navigation buttons so they don't trigger
+        // any parent-view actions or close this page prematurely.
+        // For gamepad mode, each button press also captures the binding.
+        static const brls::ControllerButton k_swallowBtns[] = {
+            brls::BUTTON_A, brls::BUTTON_B, brls::BUTTON_X, brls::BUTTON_Y,
+            brls::BUTTON_LB, brls::BUTTON_RB, brls::BUTTON_LT, brls::BUTTON_RT,
+            brls::BUTTON_LSB, brls::BUTTON_RSB,
+            brls::BUTTON_UP, brls::BUTTON_DOWN, brls::BUTTON_LEFT, brls::BUTTON_RIGHT,
+            brls::BUTTON_NAV_UP, brls::BUTTON_NAV_DOWN,
+            brls::BUTTON_NAV_LEFT, brls::BUTTON_NAV_RIGHT,
+            brls::BUTTON_START, brls::BUTTON_BACK,
+        };
+        for (auto btn : k_swallowBtns) {
+            registerAction("", btn,
+                [this, btn](brls::View*) -> bool {
+                    if (!m_done && !m_waitingForRelease && !m_isKeyboard) {
+                        captureGamepadButton(btn);
+                    }
+                    return true; // always consume
+                },
+                /*hidden=*/true);
         }
     }
-
-    void setDialog(brls::Dialog* dlg) { m_dialog = dlg; }
 
     void draw(NVGcontext* vg, float x, float y, float w, float h,
               brls::Style style, brls::FrameContext* ctx) override
     {
+        // Semi-transparent dark background covering the full page
+        nvgBeginPath(vg);
+        nvgRect(vg, x, y, w, h);
+        nvgFillColor(vg, nvgRGBA(0, 0, 0, 200));
+        nvgFill(vg);
+
         if (!m_done)
         {
-            // Wait for all buttons/keys to be released before starting capture.
-            // This prevents the button that opened the dialog from being
-            // immediately captured as the new binding.
             if (m_waitingForRelease)
             {
                 if (m_isKeyboard) checkKeyboardRelease();
@@ -219,14 +214,16 @@ public:
 
                 if (remaining <= 0.0f)
                 {
-                    finish("");
+                    // Countdown expired: use whatever was collected (may be empty)
+                    finish(m_captured);
                 }
                 else
                 {
                     int secs = static_cast<int>(std::ceil(remaining));
-                    m_countdownLabel->setText(std::to_string(secs) + "beiklive/settings/keybind/countdown_suffix"_i18n);
+                    m_countdownLabel->setText(std::to_string(secs) +
+                        "beiklive/settings/keybind/countdown_suffix"_i18n);
                     if (m_isKeyboard) pollKeyboard();
-                    else              pollGamepad();
+                    // Gamepad capture is handled via registerAction callbacks above
                 }
             }
         }
@@ -237,7 +234,6 @@ public:
 private:
     bool m_isKeyboard;
     std::function<void(const std::string&)> m_onDone;
-    brls::Dialog* m_dialog = nullptr;
     brls::Label* m_promptLabel    = nullptr;
     brls::Label* m_keyLabel       = nullptr;
     brls::Label* m_countdownLabel = nullptr;
@@ -245,55 +241,39 @@ private:
     bool m_done = false;
     /// True while waiting for all buttons/keys to be released before capture starts.
     bool m_waitingForRelease = true;
+    /// Currently captured key names (ordered, deduplication enforced, max k_capMaxKeys)
+    std::vector<std::string> m_capturedKeys;
+    /// Final combo string built from m_capturedKeys
+    std::string m_captured;
 
-    void finish(const std::string& result)
+    // ── Gamepad capture (via action callback) ──────────────────────────────
+
+    void captureGamepadButton(brls::ControllerButton btn)
     {
-        if (m_done) return;
-        m_done = true;
-        if (!result.empty()) m_keyLabel->setText(result);
-        if (m_onDone) m_onDone(result);
-        if (m_dialog) m_dialog->close();
-    }
-
-    /// Returns true when all tracked keys are released; clears m_waitingForRelease.
-    void checkKeyboardRelease()
-    {
-#ifndef __SWITCH__
-        auto* platform = brls::Application::getPlatform();
-        auto* im = platform ? platform->getInputManager() : nullptr;
-        if (!im) { m_waitingForRelease = false; return; }
-
-        for (int i = 0; i < k_capKbdKeyCount; ++i)
-        {
-            if (im->getKeyboardKeyState(k_capKbdKeys[i].sc))
-                return; // still pressed
+        // Find the name for this button
+        const char* name = nullptr;
+        for (int i = 0; i < k_capPadKeyCount; ++i) {
+            if (k_capPadKeys[i].btn == btn) { name = k_capPadKeys[i].name; break; }
         }
-        // Check modifier keys too
-        if (im->getKeyboardKeyState(brls::BRLS_KBD_KEY_LEFT_CONTROL)  ||
-            im->getKeyboardKeyState(brls::BRLS_KBD_KEY_RIGHT_CONTROL) ||
-            im->getKeyboardKeyState(brls::BRLS_KBD_KEY_LEFT_SHIFT)    ||
-            im->getKeyboardKeyState(brls::BRLS_KBD_KEY_RIGHT_SHIFT)   ||
-            im->getKeyboardKeyState(brls::BRLS_KBD_KEY_LEFT_ALT)      ||
-            im->getKeyboardKeyState(brls::BRLS_KBD_KEY_RIGHT_ALT))
-            return; // modifier still pressed
-        m_waitingForRelease = false;
-#else
-        m_waitingForRelease = false;
-#endif
+        if (!name) return;
+
+        // Ignore duplicates
+        if (std::find(m_capturedKeys.begin(), m_capturedKeys.end(), name) != m_capturedKeys.end())
+            return;
+
+        // Cap at k_capMaxKeys
+        if (static_cast<int>(m_capturedKeys.size()) >= k_capMaxKeys)
+            return;
+
+        m_capturedKeys.push_back(name);
+        m_captured = buildCombo(m_capturedKeys);
+        m_keyLabel->setText(m_captured);
+
+        // Commit immediately once we have at least one key
+        finish(m_captured);
     }
 
-    void checkGamepadRelease()
-    {
-        auto state = brls::Application::getControllerState();
-        for (int i = 0; i < k_capPadKeyCount; ++i)
-        {
-            int idx = static_cast<int>(k_capPadKeys[i].btn);
-            if (idx >= 0 && idx < static_cast<int>(brls::_BUTTON_MAX) &&
-                state.buttons[idx])
-                return; // still pressed
-        }
-        m_waitingForRelease = false;
-    }
+    // ── Keyboard capture (polled every frame) ──────────────────────────────
 
     void pollKeyboard()
     {
@@ -309,22 +289,39 @@ private:
         bool alt   = im->getKeyboardKeyState(brls::BRLS_KBD_KEY_LEFT_ALT) ||
                      im->getKeyboardKeyState(brls::BRLS_KBD_KEY_RIGHT_ALT);
 
-        for (int i = 0; i < k_capKbdKeyCount; ++i)
-        {
+        // Collect all currently pressed non-modifier keys
+        std::vector<std::string> pressed;
+        for (int i = 0; i < k_capKbdKeyCount; ++i) {
             if (im->getKeyboardKeyState(k_capKbdKeys[i].sc))
-            {
-                std::string combo;
-                if (ctrl)  combo += "CTRL+";
-                if (shift) combo += "SHIFT+";
-                if (alt)   combo += "ALT+";
-                combo += k_capKbdKeys[i].name;
-                finish(combo);
-                return;
-            }
+                pressed.push_back(k_capKbdKeys[i].name);
         }
-        // Show live modifier hints while waiting
-        if (ctrl || shift || alt)
+
+        if (!pressed.empty()) {
+            // Build the new captured set: modifiers first, then regular keys
+            // Ignore keys already in m_capturedKeys; stop at k_capMaxKeys
+            std::vector<std::string> newKeys = m_capturedKeys;
+            for (const auto& key : pressed) {
+                // Duplicate check
+                if (std::find(newKeys.begin(), newKeys.end(), key) != newKeys.end()) continue;
+                if (static_cast<int>(newKeys.size()) >= k_capMaxKeys) break;
+                newKeys.push_back(key);
+            }
+
+            // Prepend modifier prefix to the combo string
+            std::string combo;
+            if (ctrl)  combo += "CTRL+";
+            if (shift) combo += "SHIFT+";
+            if (alt)   combo += "ALT+";
+            combo += buildCombo(newKeys);
+
+            m_capturedKeys = newKeys;
+            m_captured     = combo;
+            m_keyLabel->setText(combo);
+            finish(combo);
+        }
+        else if (ctrl || shift || alt)
         {
+            // Show live modifier hint while waiting for a regular key
             std::string mod;
             if (ctrl)  mod += "CTRL+";
             if (shift) mod += "SHIFT+";
@@ -339,35 +336,77 @@ private:
 #endif
     }
 
-    void pollGamepad()
+    // ── Release detection ────────────────────────────────────────────────────
+
+    void checkKeyboardRelease()
+    {
+#ifndef __SWITCH__
+        auto* platform = brls::Application::getPlatform();
+        auto* im = platform ? platform->getInputManager() : nullptr;
+        if (!im) { m_waitingForRelease = false; return; }
+
+        for (int i = 0; i < k_capKbdKeyCount; ++i)
+            if (im->getKeyboardKeyState(k_capKbdKeys[i].sc)) return;
+
+        if (im->getKeyboardKeyState(brls::BRLS_KBD_KEY_LEFT_CONTROL)  ||
+            im->getKeyboardKeyState(brls::BRLS_KBD_KEY_RIGHT_CONTROL) ||
+            im->getKeyboardKeyState(brls::BRLS_KBD_KEY_LEFT_SHIFT)    ||
+            im->getKeyboardKeyState(brls::BRLS_KBD_KEY_RIGHT_SHIFT)   ||
+            im->getKeyboardKeyState(brls::BRLS_KBD_KEY_LEFT_ALT)      ||
+            im->getKeyboardKeyState(brls::BRLS_KBD_KEY_RIGHT_ALT))
+            return;
+        m_waitingForRelease = false;
+#else
+        m_waitingForRelease = false;
+#endif
+    }
+
+    void checkGamepadRelease()
     {
         auto state = brls::Application::getControllerState();
-        std::string hint;
-        for (int i = 0; i < k_capPadKeyCount; ++i)
-        {
+        for (int i = 0; i < k_capPadKeyCount; ++i) {
             int idx = static_cast<int>(k_capPadKeys[i].btn);
             if (idx >= 0 && idx < static_cast<int>(brls::_BUTTON_MAX) &&
                 state.buttons[idx])
-            {
-                if (!hint.empty()) hint += "+";
-                hint += k_capPadKeys[i].name;
-            }
+                return;
         }
-        if (!hint.empty())
-            m_keyLabel->setText(hint + "beiklive/settings/keybind/combo_more"_i18n);
-        else
-            m_keyLabel->setText("beiklive/settings/keybind/waiting"_i18n);
+        m_waitingForRelease = false;
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    static std::string buildCombo(const std::vector<std::string>& keys)
+    {
+        std::string result;
+        for (const auto& k : keys) {
+            if (!result.empty()) result += "+";
+            result += k;
+        }
+        return result;
+    }
+
+    void finish(const std::string& result)
+    {
+        if (m_done) return;
+        m_done = true;
+        if (!result.empty()) m_keyLabel->setText(result);
+        if (m_onDone) m_onDone(result);
+        brls::Application::popActivity(brls::TransitionAnimation::NONE);
     }
 };
 
+/// Push a full-screen key-capture page as a new Activity.
+/// Clears all borealis navigation actions for the duration of the capture.
 static void openKeyCapture(bool isKeyboard,
                             std::function<void(const std::string&)> onDone)
 {
     auto* content = new KeyCaptureView(isKeyboard, std::move(onDone));
-    auto* dlg = new brls::Dialog(content);
-    dlg->setCancelable(true);
-    content->setDialog(dlg);
-    dlg->open();
+    auto* frame = new brls::AppletFrame(content);
+    frame->setHeaderVisibility(brls::Visibility::GONE);
+    frame->setFooterVisibility(brls::Visibility::GONE);
+    frame->setBackground(brls::ViewBackground::NONE);
+    brls::Application::pushActivity(new brls::Activity(frame),
+                                    brls::TransitionAnimation::NONE);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

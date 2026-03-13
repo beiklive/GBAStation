@@ -860,7 +860,6 @@ void GameView::pollInput()
 //
 void GameView::refreshInputSnapshot()
 {
-#ifndef __SWITCH__
     auto* platform = brls::Application::getPlatform();
     auto* im       = platform ? platform->getInputManager() : nullptr;
     if (!im) return;
@@ -868,13 +867,16 @@ void GameView::refreshInputSnapshot()
     InputSnapshot snap;
 
     // ── Gamepad / controller state ───────────────────────────────────────────
-    // updateUnifiedControllerState() calls glfwGetWindowAttrib(FOCUSED) and
-    // glfwGetGamepadState() – both require the main thread.
+    // updateUnifiedControllerState() reads the current hardware controller state.
+    // On desktop this calls GLFW functions that must run on the main thread.
+    // On Switch this reads hidGetNpadStates which is safe on any thread but we
+    // still call it from draw() (main thread) to keep a consistent pattern.
     im->updateUnifiedControllerState(&snap.ctrlState);
 
+#ifndef __SWITCH__
     // ── Keyboard state ───────────────────────────────────────────────────────
     // Collect all scancodes we need to track: game button map + hotkeys +
-    // modifier keys.
+    // modifier keys.  Keyboard input only exists on non-Switch platforms.
     const auto& btnMap = m_inputMap.gameButtonMap();
     for (const auto& entry : btnMap) {
         if (entry.kbdScancode >= 0)
@@ -903,11 +905,11 @@ void GameView::refreshInputSnapshot()
                     static_cast<brls::BrlsKeyboardScancode>(sc));
         }
     }
+#endif
 
     // Publish the snapshot
     std::lock_guard<std::mutex> lk(m_inputSnapMutex);
     m_inputSnap = std::move(snap);
-#endif
 }
 
 // ============================================================
