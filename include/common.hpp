@@ -11,6 +11,7 @@ using namespace brls::literals; // for _i18n
 #include "Utils/strUtils.hpp"
 #include "UI/Utils/Utils.hpp"
 #include "UI/Utils/ProImage.hpp"
+#include "UI/Utils/ImageFileCache.hpp"
 
 // FUNCTIONS DEFINITIONS
 
@@ -87,6 +88,9 @@ void ApplyXmbColorToAll();
 /// Register/unregister a background ProImage instance so ApplyXmbColorToAll() can reach it.
 void RegisterXmbBackground(beiklive::UI::ProImage* img);
 void UnregisterXmbBackground(beiklive::UI::ProImage* img);
+/// Clear the file-byte image cache and mark all brls TextureCache entries dirty.
+/// Call before opening GameView to free memory for the emulator.
+void clearUIImageCache();
 // 吞噬一个按钮事件，使其不再被后续处理
 void swallow(brls::View* v, brls::ControllerButton btn);
 

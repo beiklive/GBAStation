@@ -1,4 +1,5 @@
 #include "common.hpp"
+#include <borealis/core/cache_helper.hpp>
 #include <set>
 
 namespace beiklive {
@@ -148,13 +149,9 @@ void ApplyXmbBg(beiklive::UI::ProImage* img)
     img->setVisibility(brls::Visibility::VISIBLE);
 
     // Apply background image (drawn first, under any XMB shader overlay).
-    // Load GIF or static image based on file extension.
+    // GIF is not supported for the background – use a static image only.
     if (showBg && !bgPath.empty()) {
-        std::string suffix = beiklive::string::getFileSuffix(bgPath);
-        if (beiklive::string::iequals(suffix, "gif"))
-            img->setImageFromGif(bgPath);
-        else
-            img->setImageFromFile(bgPath);
+        img->setImageFromFile(bgPath);
     }
 
     // Apply blur settings.
@@ -176,6 +173,16 @@ void ApplyXmbBg(beiklive::UI::ProImage* img)
     {
         v->registerAction("", btn, [](brls::View*) { return true; },
                           /*hidden=*/true);
+    }
+
+    void clearUIImageCache()
+    {
+        // Free all cached raw file bytes.
+        beiklive::UI::ImageFileCache::instance().clear();
+        // Invalidate all brls TextureCache entries so that subsequent image
+        // loads (after returning from the game) reload from disk rather than
+        // using stale GPU texture handles.
+        brls::TextureCache::instance().cache.markAllDirty();
     }
 
 
