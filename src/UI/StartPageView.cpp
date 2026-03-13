@@ -475,6 +475,7 @@ void StartPageView::Init()
     if (!gameRunner)
         return;
 
+    bklog::debug("StartPageView::Init: initializing");
     ActionInit();
 
     // 启动页面始终显示 AppPage
@@ -482,7 +483,7 @@ void StartPageView::Init()
     showAppPage();
 
     addView(new brls::BottomBar());
-    bklog::debug("Startup Page: AppPage");
+    bklog::debug("StartPageView::Init: done, AppPage visible");
 }
 
 // ─────────── Page creation ───────────────────────────────────────────────────
@@ -491,6 +492,7 @@ void StartPageView::refreshRecentGames()
 {
     if (!m_appPage || !SettingManager) return;
 
+    bklog::debug("StartPageView::refreshRecentGames: rebuilding game list");
     std::vector<GameEntry> games;
     for (int i = 0; i < RECENT_GAME_COUNT; ++i) {
         std::string key = std::string(RECENT_GAME_KEY_PREFIX) + std::to_string(i);
@@ -512,8 +514,10 @@ void StartPageView::refreshRecentGames()
         }
         if (title.empty())
             title = std::filesystem::path(fileName).stem().string();
+        bklog::debug("StartPageView::refreshRecentGames: adding '{}' -> '{}'", fileName, gamePath);
         games.push_back({ gamePath, title, logoPath });
     }
+    bklog::debug("StartPageView::refreshRecentGames: total {} game(s)", static_cast<int>(games.size()));
     m_appPage->setGames(games);
 }
 
@@ -528,6 +532,7 @@ void StartPageView::createAppPage()
     refreshRecentGames();
 
     m_appPage->onGameSelected = [](const GameEntry& e) {
+        bklog::info("StartPageView: launching game '{}'", e.path);
         // Update game metadata before launching
         std::string fileName = std::filesystem::path(e.path).filename().string();
         // Record last opened time
@@ -547,6 +552,7 @@ void StartPageView::createAppPage()
         pushRecentGame(fileName);
         // Free UI image cache before launching the emulator to reclaim memory.
         beiklive::clearUIImageCache();
+        bklog::info("StartPageView: pushing GameView activity for '{}'", fileName);
         auto* frame = new brls::AppletFrame(new GameView(e.path));
         frame->setHeaderVisibility(brls::Visibility::GONE);
         frame->setFooterVisibility(brls::Visibility::GONE);
@@ -694,8 +700,17 @@ void StartPageView::openFileListPage()
     container->registerAction(
         "beiklive/hints/close"_i18n,
         brls::BUTTON_START,
-        [](brls::View*) {
+        [this](brls::View*) {
+            bklog::debug("StartPageView: BUTTON_START pressed, closing file list");
             brls::Application::popActivity();
+            // Explicitly restore focus to the AppPage game cards.
+            // Without this, borealis may try to restore a stale focus that
+            // points into the now-destroyed file-list activity, causing a crash.
+            if (m_appPage) {
+                auto* focus = m_appPage->getDefaultFocus();
+                if (focus)
+                    brls::Application::giveFocus(focus);
+            }
             return true;
         },
         /*hidden=*/false, /*repeat=*/false, brls::SOUND_CLICK);
@@ -738,6 +753,21 @@ void StartPageView::onFocusLost()
     Box::onFocusLost();
 }
 
+brls::View* StartPageView::getDefaultFocus()
+{
+    // Always guide borealis focus back to the AppPage game cards so that
+    // returning from any child activity (game, file list, settings) lands
+    // on a valid, focusable view instead of whatever was last focused.
+    if (m_appPage) {
+        auto* focus = m_appPage->getDefaultFocus();
+        if (focus) {
+            bklog::debug("StartPageView::getDefaultFocus -> AppPage card");
+            return focus;
+        }
+    }
+    return Box::getDefaultFocus();
+}
+
 void StartPageView::draw(NVGcontext* vg, float x, float y, float width, float height,
                           brls::Style style, brls::FrameContext* ctx)
 {
@@ -745,7 +775,13 @@ void StartPageView::draw(NVGcontext* vg, float x, float y, float width, float he
     // (e.g. after returning from a game launched via the file list).
     if (g_recentGamesDirty && m_appPage) {
         g_recentGamesDirty = false;
+        bklog::debug("StartPageView::draw: refreshing recent games list");
         refreshRecentGames();
+        // The card row was rebuilt – give focus to the new first card so
+        // borealis doesn't try to restore the now-deleted old card focus.
+        auto* focus = m_appPage->getDefaultFocus();
+        if (focus)
+            brls::Application::giveFocus(focus);
     }
     Box::draw(vg, x, y, width, height, style, ctx);
 }

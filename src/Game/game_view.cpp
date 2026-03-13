@@ -1609,8 +1609,13 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
     // ---- ExitGame hotkey: game thread sets this flag; handle on main thread -----
 #ifndef __SWITCH__
     if (m_requestExit.exchange(false, std::memory_order_relaxed)) {
-        bklog::info("GameView: exit requested via hotkey");
+        bklog::info("GameView: exit requested, stopping game thread...");
+        // Must deinit audio BEFORE joining game thread to unblock any
+        // pushSamples() call that may be waiting on m_spaceCV – otherwise
+        // stopGameThread() would deadlock.
+        beiklive::AudioManager::instance().deinit();
         stopGameThread();
+        bklog::info("GameView: game thread stopped, popping activity");
         brls::Application::popActivity();
         return;
     }

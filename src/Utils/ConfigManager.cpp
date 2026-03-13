@@ -6,6 +6,8 @@
 #include <limits>
 #include <sstream>
 
+#include <borealis/core/logger.hpp>
+
 namespace beiklive {
 
 // -------------------- ConfigValue --------------------
@@ -80,10 +82,14 @@ ConfigManager::ConfigManager(std::string filePath) : filePath_(std::move(filePat
 
 bool ConfigManager::Load() {
 	std::ifstream in(filePath_);
-	if (!in.is_open()) return false;
+	if (!in.is_open()) {
+		brls::Logger::warning("ConfigManager::Load: cannot open file '{}'", filePath_);
+		return false;
+	}
 
 	std::unordered_map<std::string, Entry> loaded;
 	std::string line;
+	int count = 0;
 	while (std::getline(in, line)) {
 		const std::string trimmed = Trim(line);
 		if (trimmed.empty() || trimmed[0] == '#') continue;
@@ -99,12 +105,14 @@ bool ConfigManager::Load() {
 		if (!value.has_value()) continue;
 
 		loaded[key] = Entry{ *value, true };
+		++count;
 	}
 
 	for (const auto& [k, v] : entries_) {
 		if (!v.persist) loaded[k] = v;
 	}
 	entries_ = std::move(loaded);
+	brls::Logger::debug("ConfigManager::Load: loaded {} keys from '{}'", count, filePath_);
 	return true;
 }
 
@@ -116,7 +124,10 @@ bool ConfigManager::Save() const {
 	}
 
 	std::ofstream out(filePath_, std::ios::trunc);
-	if (!out.is_open()) return false;
+	if (!out.is_open()) {
+		brls::Logger::error("ConfigManager::Save: cannot open file '{}' for writing", filePath_);
+		return false;
+	}
 
 	std::vector<std::string> keys;
 	keys.reserve(entries_.size());
@@ -127,23 +138,30 @@ bool ConfigManager::Save() const {
 	for (const auto& key : keys) {
 		out << key << "=" << SerializeValue(entries_.at(key).value) << "\n";
 	}
+	brls::Logger::debug("ConfigManager::Save: saved {} keys to '{}'", static_cast<int>(keys.size()), filePath_);
 	return true;
 }
 
 void ConfigManager::SetDefault(const std::string& key, const ConfigValue& value) {
 	if (!Contains(key)) {
+		brls::Logger::debug("ConfigManager::SetDefault [{}]: setting default", key);
 		Set(key, value, true);
 	}
 }
 
 void ConfigManager::Set(const std::string& key, const ConfigValue& value, bool persist) {
 	if (key.empty()) return;
+	brls::Logger::debug("ConfigManager::Set [{}] persist={}", key, persist);
 	entries_[key] = Entry{ value, persist };
 }
 
 std::optional<ConfigValue> ConfigManager::Get(const std::string& key) const {
 	auto it = entries_.find(key);
-	if (it == entries_.end()) return std::nullopt;
+	if (it == entries_.end()) {
+		brls::Logger::debug("ConfigManager::Get [{}]: not found", key);
+		return std::nullopt;
+	}
+	brls::Logger::debug("ConfigManager::Get [{}]: found", key);
 	return it->second.value;
 }
 
