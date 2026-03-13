@@ -126,7 +126,7 @@ namespace beiklive::UI
 
         m_imageWrapper->setAlignItems(brls::AlignItems::CENTER);
         m_imageWrapper->setJustifyContent(brls::JustifyContent::CENTER);
-        m_imageWrapper->setBackgroundColor(nvgRGBA(40, 40, 40, 210));
+        m_imageWrapper->setBackgroundColor(nvgRGBA(40, 40, 40, 10));
 
 
 

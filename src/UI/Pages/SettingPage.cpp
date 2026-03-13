@@ -388,14 +388,16 @@ brls::ScrollingFrame* SettingPage::buildUITab()
 
     auto* bgPathCell = new brls::DetailCell();
     bgPathCell->setText("背景图片路径 (PNG)");
-    bgPathCell->setDetailText(cfgGetStr(KEY_UI_BG_IMAGE_PATH, "未设置"));
+    bgPathCell->setDetailText(beiklive::string::extractFileName(cfgGetStr(KEY_UI_BG_IMAGE_PATH, "未设置")));
     bgPathCell->registerAction("确认", brls::BUTTON_A, [bgPathCell](brls::View*) {
         auto* flPage = new FileListPage();
         flPage->setFilter({"png"}, FileListPage::FilterMode::Whitelist);
         flPage->setDefaultFileCallback([bgPathCell](const FileListItem& item) {
             cfgSetStr(KEY_UI_BG_IMAGE_PATH, item.fullPath);
-            bgPathCell->setDetailText(item.fullPath);
+            bgPathCell->setDetailText(beiklive::string::extractFileName(item.fullPath));
             beiklive::ApplyXmbColorToAll();
+
+            
             brls::Application::popActivity();
         });
         // Start at directory of current path, or root
