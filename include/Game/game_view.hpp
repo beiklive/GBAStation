@@ -140,6 +140,15 @@ class GameView : public brls::Box
     mutable std::mutex m_inputSnapMutex;
     InputSnapshot      m_inputSnap;
 
+    // ---- Overlay (遮罩) -----------------------------------------------
+    bool        m_overlayEnabled   = false; ///< display.overlay.enabled
+    std::string m_overlayPath;              ///< resolved overlay PNG path for this game
+    int         m_overlayNvgImage  = -1;    ///< NVG image handle for overlay texture
+
+    /// Load (or reload) the overlay texture into m_overlayNvgImage.
+    /// Frees the previous image if any. Clears m_overlayNvgImage on failure.
+    void loadOverlayImage(NVGcontext* vg);
+
     // ---- Helper methods ---------------------------------------------
     void initialize();
     void cleanup();

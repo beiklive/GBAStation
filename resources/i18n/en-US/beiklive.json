@@ -116,7 +116,12 @@
             "header_status": "Status Display",
             "show_fps"     : "Show FPS",
             "show_ff"      : "Show Fast Forward Indicator",
-            "show_rewind"  : "Show Rewind Indicator"
+            "show_rewind"  : "Show Rewind Indicator",
+            "header_overlay"   : "Overlay Settings",
+            "overlay_enable"   : "Enable Overlay",
+            "overlay_gba_path" : "Global GBA Overlay Path (PNG)",
+            "overlay_gbc_path" : "Global GBC Overlay Path (PNG)",
+            "overlay_not_set"  : "Not Set"
         },
         "audio": {
             "header_emu"  : "Emulator Audio",
