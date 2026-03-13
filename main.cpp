@@ -23,7 +23,7 @@ extern "C" unsigned int sceLibcHeapSize = 2 * 1024 * 1024;
 beiklive::GameRunner* gameRunner = nullptr;
 beiklive::ConfigManager* SettingManager = nullptr;
 beiklive::ConfigManager* NameMappingManager = nullptr;
-beiklive::ConfigManager* logoManager = nullptr;
+beiklive::ConfigManager* gamedataManager = nullptr;
 
 
 
@@ -64,6 +64,12 @@ void RunnerInit() {
     gameRunner->settingConfig->SetDefault(KEY_DEBUG_LOG_FILE,    beiklive::ConfigValue(std::string("false")));
     gameRunner->settingConfig->SetDefault(KEY_DEBUG_LOG_OVERLAY, beiklive::ConfigValue(std::string("false")));
 
+    // Recent games queue (0 = most recent)
+    for (int i = 0; i < RECENT_GAME_COUNT; ++i) {
+        std::string key = std::string(RECENT_GAME_KEY_PREFIX) + std::to_string(i);
+        gameRunner->settingConfig->SetDefault(key, beiklive::ConfigValue(std::string("")));
+    }
+
 
 	// 保存默认值到配置文件
 	gameRunner->settingConfig->Save();
@@ -75,8 +81,8 @@ void ConfigManagerInit() {
 	SettingManager = new beiklive::ConfigManager((std::string(BK_APP_CONFIG_DIR) + std::string("setting.cfg")));
 	NameMappingManager =
 	    new beiklive::ConfigManager((std::string(BK_APP_CONFIG_DIR) + std::string("name_mapping.cfg")));
-	logoManager =
-	    new beiklive::ConfigManager((std::string(BK_APP_CONFIG_DIR) + std::string("logo_mapping.cfg")));
+	gamedataManager =
+	    new beiklive::ConfigManager((std::string(BK_APP_CONFIG_DIR) + std::string("gamedata.cfg")));
 	if (!SettingManager->Load()) {
 		brls::Logger::warning("Failed to load setting.cfg, using default configuration.");
 	} else {
@@ -102,10 +108,10 @@ void ConfigManagerInit() {
 	} else {
 		brls::Logger::info("Name mapping loaded successfully from name_mapping.cfg.");
 	}
-	if (!logoManager->Load()) {
-		brls::Logger::warning("Failed to load logo_mapping.cfg, using empty logo mapping.");
+	if (!gamedataManager->Load()) {
+		brls::Logger::warning("Failed to load gamedata.cfg, using empty game data.");
 	} else {
-		brls::Logger::info("Logo mapping loaded successfully from logo_mapping.cfg.");
+		brls::Logger::info("Game data loaded successfully from gamedata.cfg.");
 	}
 	// 打印当前平台信息
 	std::string platform = "unknown";

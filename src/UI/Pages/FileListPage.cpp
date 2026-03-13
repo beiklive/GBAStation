@@ -424,6 +424,28 @@ void FileListPage::buildDetailPanel()
     m_detailInfo->setHorizontalAlign(brls::HorizontalAlign::CENTER);
     m_detailInfo->setTextColor(nvgRGBA(160, 160, 160, 255));
     m_detailPanel->addView(m_detailInfo);
+
+    // ── Game-data extra labels ────────────────────────────────────────────
+    m_detailLastOpen = new brls::Label();
+    m_detailLastOpen->setFontSize(16.f);
+    m_detailLastOpen->setMarginTop(6.f);
+    m_detailLastOpen->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+    m_detailLastOpen->setTextColor(nvgRGBA(140, 200, 140, 255));
+    m_detailPanel->addView(m_detailLastOpen);
+
+    m_detailTotalTime = new brls::Label();
+    m_detailTotalTime->setFontSize(16.f);
+    m_detailTotalTime->setMarginTop(4.f);
+    m_detailTotalTime->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+    m_detailTotalTime->setTextColor(nvgRGBA(200, 200, 140, 255));
+    m_detailPanel->addView(m_detailTotalTime);
+
+    m_detailPlatform = new brls::Label();
+    m_detailPlatform->setFontSize(16.f);
+    m_detailPlatform->setMarginTop(4.f);
+    m_detailPlatform->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+    m_detailPlatform->setTextColor(nvgRGBA(140, 160, 220, 255));
+    m_detailPanel->addView(m_detailPlatform);
 }
 
 // ─────────── Public API ──────────────────────────────────────────────────────
@@ -541,25 +563,26 @@ std::string FileListPage::lookupMappedName(const std::string &name, bool isDir) 
     return {};
 }
 
-std::string FileListPage::lookupLogoPath(const std::string &name, bool isDir) const
+std::string FileListPage::lookupLogoPath(const std::string &name) const
 {
-    if (!logoManager)
+    if (!gamedataManager)
         return {};
 
-    std::string key;
-    if (isDir)
-    {
-        key = name;
-    }
-    else
-    {
-        auto dot = name.rfind('.');
-        key = (dot != std::string::npos) ? name.substr(0, dot) : name;
-    }
-
-    if (auto val = logoManager->Get(key); val && val->AsString())
+    // Key format: filename_without_suffix.logopath
+    std::string key = gamedataKeyPrefix(name) + "." + GAMEDATA_FIELD_LOGOPATH;
+    if (auto val = gamedataManager->Get(key); val && val->AsString())
         return *val->AsString();
     return {};
+}
+
+beiklive::EmuPlatform FileListPage::detectPlatform(const std::string &fileName)
+{
+    const std::string suffix = beiklive::string::getFileSuffix(fileName);
+    for (const auto &ext : k_gbExtensions)
+        if (beiklive::string::iequals(ext, suffix)) return beiklive::EmuPlatform::GB;
+    for (const auto &ext : k_gbaExtensions)
+        if (beiklive::string::iequals(ext, suffix)) return beiklive::EmuPlatform::GBA;
+    return beiklive::EmuPlatform::None;
 }
 
 bool FileListPage::passesFilter(const std::string &suffix) const
@@ -620,8 +643,13 @@ void FileListPage::refreshList(const std::string &path)
 
         // Prefetch logo path when logoMode == 2 (prefetch) or 1 (on-focus will
         // also do the lookup in updateDetailPanel, but we store the key here)
-        if (logoMode != 0)
-            item.logoPath = lookupLogoPath(name, isDir);
+        if (!isDir && logoMode != 0) {
+            // Initialize gamedataManager entry with defaults if needed
+            beiklive::EmuPlatform platform = detectPlatform(name);
+            if (platform != beiklive::EmuPlatform::None)
+                initGameData(name, platform);
+            item.logoPath = lookupLogoPath(name);
+        }
 
         if (isDir)
         {
@@ -692,6 +720,9 @@ void FileListPage::clearDetailPanel()
     m_detailName->setText("");
     m_detailMappedName->setText("");
     m_detailInfo->setText("");
+    if (m_detailLastOpen)  m_detailLastOpen->setText("");
+    if (m_detailTotalTime) m_detailTotalTime->setText("");
+    if (m_detailPlatform)  m_detailPlatform->setText("");
 }
 
 void FileListPage::updateDetailPanel(const FileListItem &item)
@@ -702,12 +733,56 @@ void FileListPage::updateDetailPanel(const FileListItem &item)
     m_detailName->setText(item.fileName);
     m_detailMappedName->setText(item.mappedName.empty() ? "" : item.mappedName);
 
-    if (item.isDir)
-        m_detailInfo->setText(std::to_string(item.childCount) + " items");
-    else
-        m_detailInfo->setText(formatFileSize(item.fileSize));
+    // ── Game-data extra labels ─────────────────────────────────────────────
+    beiklive::EmuPlatform platform = detectPlatform(item.fileName);
+    bool isGameFile = (!item.isDir && platform != beiklive::EmuPlatform::None);
 
-    // Priority 1: logo path from logoManager
+    if (isGameFile) {
+        // Ensure entry exists in gamedataManager
+        initGameData(item.fileName, platform);
+
+        std::string lastOpen  = getGameDataStr(item.fileName, GAMEDATA_FIELD_LASTOPEN, "从未游玩");
+        std::string totalSec  = getGameDataStr(item.fileName, GAMEDATA_FIELD_TOTALTIME, "0");
+        std::string platStr   = getGameDataStr(item.fileName, GAMEDATA_FIELD_PLATFORM, "");
+
+        if (m_detailLastOpen)  m_detailLastOpen->setText("上次游玩: " + lastOpen);
+        if (m_detailPlatform)  m_detailPlatform->setText("平台: " + platStr);
+
+        // Format total time as Xh Ym Zs
+        int totalSeconds = 0;
+        try { totalSeconds = std::stoi(totalSec); }
+        catch (const std::invalid_argument&) { totalSeconds = 0; }
+        catch (const std::out_of_range&) { totalSeconds = 0; }
+        int h = totalSeconds / 3600;
+        int m = (totalSeconds % 3600) / 60;
+        int s = totalSeconds % 60;
+        std::string timeStr;
+        if (h > 0) timeStr += std::to_string(h) + "h ";
+        if (h > 0 || m > 0) timeStr += std::to_string(m) + "m ";
+        timeStr += std::to_string(s) + "s";
+        if (m_detailTotalTime) m_detailTotalTime->setText("游玩时长: " + timeStr);
+    } else {
+        if (m_detailLastOpen)  m_detailLastOpen->setText("");
+        if (m_detailTotalTime) m_detailTotalTime->setText("");
+        if (m_detailPlatform)  m_detailPlatform->setText("");
+    }
+
+    if (item.isDir) {
+        m_detailInfo->setText(std::to_string(item.childCount) + " items");
+    } else {
+        m_detailInfo->setText(formatFileSize(item.fileSize));
+    }
+
+    // ── Thumbnail image ────────────────────────────────────────────────────
+    // Priority 1: directory → folder icon
+    if (item.isDir) {
+        std::string path_prefix = "img/ui/" +
+            std::string((brls::Application::getPlatform()->getThemeVariant() == brls::ThemeVariant::DARK) ? "light/" : "dark/");
+        m_detailThumb->setImageFromFile(BK_RES(path_prefix + "wenjianjia.png"));
+        return;
+    }
+
+    // Priority 2: logo path from gamedataManager (game files)
     if (!item.logoPath.empty() &&
         beiklive::file::getPathType(item.logoPath) == beiklive::file::PathType::File)
     {
@@ -715,9 +790,18 @@ void FileListPage::updateDetailPanel(const FileListItem &item)
         return;
     }
 
-    // Priority 2: thumbnail image next to the file (same base name).
-    // Check common image extensions in priority order.
-    if (!item.isDir)
+    // Re-check gamedataManager in case logoPath was set but not yet in item
+    if (isGameFile) {
+        std::string storedLogo = getGameDataStr(item.fileName, GAMEDATA_FIELD_LOGOPATH, "");
+        if (!storedLogo.empty() &&
+            beiklive::file::getPathType(storedLogo) == beiklive::file::PathType::File)
+        {
+            m_detailThumb->setImageFromFileAsync(storedLogo);
+            return;
+        }
+    }
+
+    // Priority 3: thumbnail image next to the file (same base name).
     {
         auto dot = item.fullPath.rfind('.');
         if (dot != std::string::npos)
@@ -735,7 +819,7 @@ void FileListPage::updateDetailPanel(const FileListItem &item)
         }
     }
 
-    // Priority 3: default logo
+    // Priority 4: default logo
     m_detailThumb->setImageFromFile(BK_APP_DEFAULT_LOGO);
 }
 

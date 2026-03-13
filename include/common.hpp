@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include <cstdint>
 #include <borealis.hpp>
 
@@ -171,6 +172,103 @@ struct GameRunner {
 // 全局配置管理器实例
 extern beiklive::ConfigManager* SettingManager;
 extern beiklive::ConfigManager* NameMappingManager;
-/// Logo 路径映射：key = 文件名(不含后缀), value = logo 图片路径
-extern beiklive::ConfigManager* logoManager;
+/// 游戏数据管理器：key = 文件名(不含后缀).字段名，例如 pokemon.logopath
+extern beiklive::ConfigManager* gamedataManager;
 extern beiklive::GameRunner* gameRunner;
+
+// ─── gamedataManager 字段名常量 ──────────────────────────────────────────────
+#define GAMEDATA_FIELD_LOGOPATH   "logopath"   ///< logo 图片路径（空=未设置）
+#define GAMEDATA_FIELD_GAMEPATH   "gamepath"   ///< 游戏文件路径
+#define GAMEDATA_FIELD_TOTALTIME  "totaltime"  ///< 游玩总时长（秒，默认 0）
+#define GAMEDATA_FIELD_LASTOPEN   "lastopen"   ///< 上次游玩时间（默认"从未游玩"）
+#define GAMEDATA_FIELD_PLATFORM   "platform"   ///< 游戏平台（EmuPlatform 名称字符串）
+
+/// 返回 gamedata key 的前缀（文件名不含后缀）
+inline std::string gamedataKeyPrefix(const std::string& fileName)
+{
+    auto dot = fileName.rfind('.');
+    return (dot != std::string::npos) ? fileName.substr(0, dot) : fileName;
+}
+
+/// 初始化 gamedataManager 中某个游戏条目的默认值（若已存在则不覆盖）。
+/// @param fileName  文件名（含后缀），用来推导 key 前缀。
+/// @param platform  游戏平台枚举。
+inline void initGameData(const std::string& fileName, beiklive::EmuPlatform platform)
+{
+    if (!gamedataManager) return;
+    std::string prefix = gamedataKeyPrefix(fileName);
+
+    auto setIfAbsent = [&](const std::string& field, const beiklive::ConfigValue& defVal) {
+        std::string k = prefix + "." + field;
+        if (!gamedataManager->Contains(k))
+            gamedataManager->Set(k, defVal);
+    };
+
+    setIfAbsent(GAMEDATA_FIELD_LOGOPATH,  beiklive::ConfigValue(std::string("")));
+    setIfAbsent(GAMEDATA_FIELD_GAMEPATH,  beiklive::ConfigValue(std::string("")));
+    setIfAbsent(GAMEDATA_FIELD_TOTALTIME, beiklive::ConfigValue(0));
+    setIfAbsent(GAMEDATA_FIELD_LASTOPEN,  beiklive::ConfigValue(std::string("从未游玩")));
+
+    // Platform: convert enum to string
+    std::string platformStr;
+    switch (platform) {
+        case beiklive::EmuPlatform::GBA: platformStr = "GBA"; break;
+        case beiklive::EmuPlatform::GB:  platformStr = "GB";  break;
+        default:                          platformStr = "None"; break;
+    }
+    setIfAbsent(GAMEDATA_FIELD_PLATFORM, beiklive::ConfigValue(platformStr));
+}
+
+/// 读取 gamedataManager 中某个游戏字段的字符串值。
+inline std::string getGameDataStr(const std::string& fileName, const std::string& field,
+                                   const std::string& def = "")
+{
+    if (!gamedataManager) return def;
+    std::string k = gamedataKeyPrefix(fileName) + "." + field;
+    auto v = gamedataManager->Get(k);
+    if (!v) return def;
+    if (auto s = v->AsString()) return *s;
+    return def;
+}
+
+/// 设置 gamedataManager 中某个游戏字段并保存。
+inline void setGameDataStr(const std::string& fileName, const std::string& field,
+                            const std::string& val)
+{
+    if (!gamedataManager) return;
+    std::string k = gamedataKeyPrefix(fileName) + "." + field;
+    gamedataManager->Set(k, beiklive::ConfigValue(val));
+    gamedataManager->Save();
+}
+
+// ─── 近期游戏队列辅助 ─────────────────────────────────────────────────────────
+#define RECENT_GAME_COUNT 10
+#define RECENT_GAME_KEY_PREFIX "recent.game."
+
+/// 将 gameName 推入近期游戏队列（队首为最新）并保存到 SettingManager。
+inline void pushRecentGame(const std::string& gameName)
+{
+    if (!SettingManager || gameName.empty()) return;
+    // Read existing queue
+    std::vector<std::string> queue;
+    for (int i = 0; i < RECENT_GAME_COUNT; ++i) {
+        std::string key = std::string(RECENT_GAME_KEY_PREFIX) + std::to_string(i);
+        auto v = SettingManager->Get(key);
+        if (v && v->AsString()) queue.push_back(*v->AsString());
+        else queue.push_back("");
+    }
+    // Remove existing entry to avoid duplicates
+    queue.erase(std::remove(queue.begin(), queue.end(), gameName), queue.end());
+    // Push to front
+    queue.insert(queue.begin(), gameName);
+    // Trim to RECENT_GAME_COUNT
+    if (static_cast<int>(queue.size()) > RECENT_GAME_COUNT)
+        queue.resize(RECENT_GAME_COUNT);
+    // Write back
+    for (int i = 0; i < RECENT_GAME_COUNT; ++i) {
+        std::string key = std::string(RECENT_GAME_KEY_PREFIX) + std::to_string(i);
+        std::string val = (i < static_cast<int>(queue.size())) ? queue[i] : "";
+        SettingManager->Set(key, beiklive::ConfigValue(val));
+    }
+    SettingManager->Save();
+}

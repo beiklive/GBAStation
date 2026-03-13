@@ -3,6 +3,9 @@
 #include "Game/game_view.hpp"
 #include "UI/Pages/ImageView.hpp"
 
+#include <chrono>
+#include <ctime>
+
 #undef ABSOLUTE // avoid conflict with brls::PositionType::ABSOLUTE
 
 using namespace brls::literals; // for _i18n
@@ -123,6 +126,40 @@ void FileSettingsPanel::showForItem(const FileListItem& item,
             m_fileListPage->doSetMappingPublic(m_currentItemIdx);
     });
 #endif
+
+    // ── Select logo (game files only) ─────────────────────────────────────
+    if (!item.isDir && FileListPage::detectPlatform(item.fileName) != beiklive::EmuPlatform::None)
+    {
+        std::string captureFileName = item.fileName;
+        addOptionButton("选择 Logo", [captureFileName]() {
+            auto* flPage = new FileListPage();
+            flPage->setFilter({"png"}, FileListPage::FilterMode::Whitelist);
+            flPage->setDefaultFileCallback([captureFileName](const FileListItem& imgItem) {
+                // Save logo path to gamedataManager
+                setGameDataStr(captureFileName, GAMEDATA_FIELD_LOGOPATH, imgItem.fullPath);
+                brls::Application::popActivity();
+            });
+            // Start at home/root path
+            std::string startPath = "/";
+#ifdef _WIN32
+            startPath = "C:\\";
+#endif
+            flPage->navigateTo(startPath);
+
+            auto* container = new brls::Box(brls::Axis::COLUMN);
+            container->setGrow(1.0f);
+            container->addView(flPage);
+            container->registerAction("beiklive/hints/close"_i18n, brls::BUTTON_START, [](brls::View*) {
+                brls::Application::popActivity();
+                return true;
+            });
+            auto* frame = new brls::AppletFrame(container);
+            frame->setHeaderVisibility(brls::Visibility::GONE);
+            frame->setFooterVisibility(brls::Visibility::GONE);
+            frame->setBackground(brls::ViewBackground::NONE);
+            brls::Application::pushActivity(new brls::Activity(frame));
+        });
+    }
 
     // ── Cut ────────────────────────────────────────────────────────────────
     addOptionButton("beiklive/sidebar/cut"_i18n, [this]() {
@@ -352,6 +389,24 @@ void StartPageView::openFileListPage()
     for (const auto& ext : ROM_EXTENSIONS)
     {
         fileListPage->setFileCallback(ext, [](const FileListItem& item) {
+            // Update gamedataManager: gamepath, lastopen
+            beiklive::EmuPlatform platform = FileListPage::detectPlatform(item.fileName);
+            initGameData(item.fileName, platform);
+            setGameDataStr(item.fileName, GAMEDATA_FIELD_GAMEPATH, item.fullPath);
+            // Record last opened time
+            auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+            char timeBuf[64] = "未知时间";
+            struct tm tmInfo;
+#ifdef _WIN32
+            if (localtime_s(&tmInfo, &now) == 0)
+                std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%d %H:%M", &tmInfo);
+#else
+            if (localtime_r(&now, &tmInfo))
+                std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%d %H:%M", &tmInfo);
+#endif
+            setGameDataStr(item.fileName, GAMEDATA_FIELD_LASTOPEN, timeBuf);
+            // Push to recent games queue
+            pushRecentGame(item.fileName);
             // Free UI image cache before launching the emulator.
             beiklive::clearUIImageCache();
             auto* frame = new brls::AppletFrame(new GameView(item.fullPath));
