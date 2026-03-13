@@ -205,6 +205,8 @@ AppPage::AppPage()
     });
     m_ButtonRow->addButton(BK_RES(path_prefix + "bangzhu_64.png"), "关于", []() {
         brls::Logger::debug("关于");
+        auto* aboutPage = new beiklive::UI::BBox();
+        
     });
     m_ButtonRow->addButton(BK_RES(path_prefix + "tuichu_64.png"), "退出程序", []() {
             auto dialog = new brls::Dialog("hints/exit_hint"_i18n);
