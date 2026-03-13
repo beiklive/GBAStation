@@ -447,7 +447,7 @@ brls::ScrollingFrame* SettingPage::buildUITab()
     bgPathCell->setDetailText(beiklive::string::extractFileName(cfgGetStr(KEY_UI_BG_IMAGE_PATH, "beiklive/settings/ui/bg_not_set"_i18n)));
     bgPathCell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A, [bgPathCell](brls::View*) {
         auto* flPage = new FileListPage();
-        flPage->setFilter({"png", "gif"}, FileListPage::FilterMode::Whitelist);
+        flPage->setFilter({"png"}, FileListPage::FilterMode::Whitelist);
         flPage->setDefaultFileCallback([bgPathCell](const FileListItem& item) {
             cfgSetStr(KEY_UI_BG_IMAGE_PATH, item.fullPath);
             bgPathCell->setDetailText(beiklive::string::extractFileName(item.fullPath));

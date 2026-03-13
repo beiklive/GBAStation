@@ -55,7 +55,7 @@
         "ui": {
             "header_bg"    : "背景图片",
             "show_bg"      : "显示背景图片",
-            "bg_path"      : "背景图片路径 (PNG/GIF)",
+            "bg_path"      : "背景图片路径 (PNG)",
             "bg_not_set"   : "未设置",
             "bg_blur"      : "背景图片模糊",
             "bg_blur_level": "模糊等级",

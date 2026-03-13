@@ -19,6 +19,7 @@ ImageView::ImageView(const std::string& imagePath)
     setBackground(brls::ViewBackground::NONE);
 
     setHideHighlight(true);
+    setHideClickAnimation(true);
     setHideHighlightBorder(true);
     setHideHighlightBackground(true);
 

@@ -55,7 +55,7 @@
         "ui": {
             "header_bg"    : "Background Image",
             "show_bg"      : "Show Background Image",
-            "bg_path"      : "BG Image Path (PNG/GIF)",
+            "bg_path"      : "BG Image Path (PNG)",
             "bg_not_set"   : "Not Set",
             "bg_blur"      : "Background Blur",
             "bg_blur_level": "Blur Level",
