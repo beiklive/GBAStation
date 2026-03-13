@@ -245,6 +245,9 @@ inline void setGameDataStr(const std::string& fileName, const std::string& field
 #define RECENT_GAME_COUNT 10
 #define RECENT_GAME_KEY_PREFIX "recent.game."
 
+/// Set to true whenever the recent-games list changes; checked by StartPageView each frame.
+extern bool g_recentGamesDirty;
+
 /// 从近期游戏队列中移除 gameFileName 并保存到 SettingManager。
 /// @param gameFileName  文件名（含后缀），与 pushRecentGame 传入的值保持一致。
 inline void removeRecentGame(const std::string& gameFileName)
@@ -292,4 +295,5 @@ inline void pushRecentGame(const std::string& gameName)
         SettingManager->Set(key, beiklive::ConfigValue(val));
     }
     SettingManager->Save();
+    g_recentGamesDirty = true;
 }

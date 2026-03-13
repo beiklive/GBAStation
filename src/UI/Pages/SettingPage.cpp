@@ -556,13 +556,16 @@ brls::ScrollingFrame* SettingPage::buildGameTab()
     auto* scroll = makeScrollTab();
     auto* box    = makeContentBox();
 
-    std::vector<std::string> holdModes = { "按住", "切换" };
+    std::vector<std::string> holdModes = {
+        "beiklive/settings/game/mode_hold"_i18n,
+        "beiklive/settings/game/mode_toggle"_i18n
+    };
 
     // ── 加速 ──────────────────────────────────────────────────────────────────
-    box->addView(makeHeader("加速（最大速度依赖机器性能）"));
+    box->addView(makeHeader("beiklive/settings/game/header_ff"_i18n));
 
     auto* ffEnableCell = new brls::BooleanCell();
-    ffEnableCell->init("启用加速",
+    ffEnableCell->init("beiklive/settings/game/ff_enable"_i18n,
                        cfgGetBool("fastforward.enabled", true),
                        [](bool v){ cfgSetBool("fastforward.enabled", v); });
     box->addView(ffEnableCell);
@@ -570,7 +573,7 @@ brls::ScrollingFrame* SettingPage::buildGameTab()
     {
         std::string ffModeStr = cfgGetStr("fastforward.mode", "hold");
         auto* ffModeCell = new brls::SelectorCell();
-        ffModeCell->init("按键模式", holdModes,
+        ffModeCell->init("beiklive/settings/game/key_mode"_i18n, holdModes,
                          (ffModeStr == "toggle") ? 1 : 0,
             [](int idx){ cfgSetStr("fastforward.mode", idx == 1 ? "toggle" : "hold"); });
         box->addView(ffModeCell);
@@ -583,7 +586,7 @@ brls::ScrollingFrame* SettingPage::buildGameTab()
         for (int i = 0; i < 5; ++i)
             if (std::fabs(curMult - ffRateVals[i]) < 0.01f) { ffMultIdx = i; break; }
         auto* ffMultCell = new brls::SelectorCell();
-        ffMultCell->init("加速倍率", ffRateLabels, ffMultIdx,
+        ffMultCell->init("beiklive/settings/game/ff_rate"_i18n, ffRateLabels, ffMultIdx,
             [](int idx){
                 if (idx >= 0 && idx < 5 && SettingManager) {
                     SettingManager->Set("fastforward.multiplier",
@@ -595,10 +598,10 @@ brls::ScrollingFrame* SettingPage::buildGameTab()
     }
 
     // ── 倒带 ──────────────────────────────────────────────────────────────────
-    box->addView(makeHeader("倒带"));
+    box->addView(makeHeader("beiklive/settings/game/header_rewind"_i18n));
 
     auto* rewindEnCell = new brls::BooleanCell();
-    rewindEnCell->init("启用倒带",
+    rewindEnCell->init("beiklive/settings/game/rewind_enable"_i18n,
                        cfgGetBool("rewind.enabled", false),
                        [](bool v){ cfgSetBool("rewind.enabled", v); });
     box->addView(rewindEnCell);
@@ -606,7 +609,7 @@ brls::ScrollingFrame* SettingPage::buildGameTab()
     {
         std::string rewModeStr = cfgGetStr("rewind.mode", "hold");
         auto* rewModeCell = new brls::SelectorCell();
-        rewModeCell->init("按键模式", holdModes,
+        rewModeCell->init("beiklive/settings/game/key_mode"_i18n, holdModes,
                           (rewModeStr == "toggle") ? 1 : 0,
             [](int idx){ cfgSetStr("rewind.mode", idx == 1 ? "toggle" : "hold"); });
         box->addView(rewModeCell);
@@ -614,14 +617,17 @@ brls::ScrollingFrame* SettingPage::buildGameTab()
 
     {
         std::vector<std::string> bufSizeLabels = {
-            "300 帧 (5秒)","600 帧 (10秒)","1200 帧 (20秒)","3600 帧 (60秒)"
+            "beiklive/settings/game/rewind_buf_300"_i18n,
+            "beiklive/settings/game/rewind_buf_600"_i18n,
+            "beiklive/settings/game/rewind_buf_1200"_i18n,
+            "beiklive/settings/game/rewind_buf_3600"_i18n
         };
         int curBuf = cfgGetInt("rewind.bufferSize", 3600);
         int bufIdx = 3;
         for (int i = 0; i < 4; ++i)
             if (curBuf == k_bufSizeInts[i]) { bufIdx = i; break; }
         auto* bufCell = new brls::SelectorCell();
-        bufCell->init("倒带缓存数量", bufSizeLabels, bufIdx,
+        bufCell->init("beiklive/settings/game/rewind_buf_size"_i18n, bufSizeLabels, bufIdx,
             [](int idx){
                 if (idx >= 0 && idx < 4 && SettingManager) {
                     SettingManager->Set("rewind.bufferSize",
@@ -637,7 +643,7 @@ brls::ScrollingFrame* SettingPage::buildGameTab()
         int curStep = cfgGetInt("rewind.step", 2);
         int stepIdx = (curStep >= 1 && curStep <= 5) ? curStep - 1 : 1;
         auto* stepCell = new brls::SelectorCell();
-        stepCell->init("倒带步数", rewSteps, stepIdx,
+        stepCell->init("beiklive/settings/game/rewind_step"_i18n, rewSteps, stepIdx,
             [](int idx){
                 if (SettingManager) {
                     SettingManager->Set("rewind.step", beiklive::ConfigValue(idx + 1));
@@ -648,7 +654,7 @@ brls::ScrollingFrame* SettingPage::buildGameTab()
     }
 
     // ── GBA/GBC 游戏 ──────────────────────────────────────────────────────────
-    box->addView(makeHeader("GBA/GBC 游戏"));
+    box->addView(makeHeader("beiklive/settings/game/header_gba"_i18n));
 
     {
         std::vector<std::string> gbModels = {
@@ -656,7 +662,7 @@ brls::ScrollingFrame* SettingPage::buildGameTab()
         };
         std::string curModel = cfgGetStr("core.mgba_gb_model","Autodetect");
         auto* gbModelCell = new brls::SelectorCell();
-        gbModelCell->init("GB 机型", gbModels, findIndex(gbModels, curModel),
+        gbModelCell->init("beiklive/settings/game/gb_model"_i18n, gbModels, findIndex(gbModels, curModel),
             [gbModels](int idx){
                 if (idx >= 0 && idx < (int)gbModels.size())
                     cfgSetStr("core.mgba_gb_model", gbModels[idx]);
@@ -665,13 +671,13 @@ brls::ScrollingFrame* SettingPage::buildGameTab()
     }
 
     auto* biosCell = new brls::BooleanCell();
-    biosCell->init("使用 BIOS",
+    biosCell->init("beiklive/settings/game/use_bios"_i18n,
                    cfgGetStr("core.mgba_use_bios","ON") == "ON",
                    [](bool v){ cfgSetStr("core.mgba_use_bios", v ? "ON" : "OFF"); });
     box->addView(biosCell);
 
     auto* skipBiosCell = new brls::BooleanCell();
-    skipBiosCell->init("跳过 BIOS 画面",
+    skipBiosCell->init("beiklive/settings/game/skip_bios"_i18n,
                        cfgGetStr("core.mgba_skip_bios","OFF") == "ON",
                        [](bool v){ cfgSetStr("core.mgba_skip_bios", v ? "ON" : "OFF"); });
     box->addView(skipBiosCell);
@@ -683,7 +689,7 @@ brls::ScrollingFrame* SettingPage::buildGameTab()
         };
         std::string curGbColor = cfgGetStr("core.mgba_gb_colors","Grayscale");
         auto* gbColorCell = new brls::SelectorCell();
-        gbColorCell->init("GB 调色板", gbColors, findIndex(gbColors, curGbColor),
+        gbColorCell->init("beiklive/settings/game/gb_colors"_i18n, gbColors, findIndex(gbColors, curGbColor),
             [gbColors](int idx){
                 if (idx >= 0 && idx < (int)gbColors.size())
                     cfgSetStr("core.mgba_gb_colors", gbColors[idx]);
@@ -697,7 +703,7 @@ brls::ScrollingFrame* SettingPage::buildGameTab()
         };
         std::string curIdle = cfgGetStr("core.mgba_idle_optimization","Remove Known");
         auto* idleCell = new brls::SelectorCell();
-        idleCell->init("空闲优化", idleOpts, findIndex(idleOpts, curIdle),
+        idleCell->init("beiklive/settings/game/idle_opt"_i18n, idleOpts, findIndex(idleOpts, curIdle),
             [idleOpts](int idx){
                 if (idx >= 0 && idx < (int)idleOpts.size())
                     cfgSetStr("core.mgba_idle_optimization", idleOpts[idx]);
@@ -706,19 +712,19 @@ brls::ScrollingFrame* SettingPage::buildGameTab()
     }
 
     // ── 存档设置 ──────────────────────────────────────────────────────────────
-    box->addView(makeHeader("存档设置"));
+    box->addView(makeHeader("beiklive/settings/game/header_save"_i18n));
 
     auto* autoSaveCell = new brls::BooleanCell();
-    autoSaveCell->init("自动存档（退出时保存 SRAM）",
+    autoSaveCell->init("beiklive/settings/game/auto_save"_i18n,
                        cfgGetBool("save.autoSave", true),
                        [](bool v){ cfgSetBool("save.autoSave", v); });
     box->addView(autoSaveCell);
 
     {
         auto* sramDirCell = new brls::DetailCell();
-        sramDirCell->setText("SRAM 存档目录");
+        sramDirCell->setText("beiklive/settings/game/sram_dir"_i18n);
         std::string curSramDir = cfgGetStr("save.sramDir", "");
-        sramDirCell->setDetailText(curSramDir.empty() ? "与游戏同目录" : curSramDir);
+        sramDirCell->setDetailText(curSramDir.empty() ? "beiklive/settings/game/same_as_rom"_i18n : curSramDir);
         sramDirCell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A,
             [sramDirCell](brls::View*) {
                 auto* flPage = new FileListPage();
@@ -746,10 +752,10 @@ brls::ScrollingFrame* SettingPage::buildGameTab()
                 brls::Application::pushActivity(new brls::Activity(frame));
                 return true;
             }, false, false, brls::SOUND_CLICK);
-        sramDirCell->registerAction("清空（与游戏同目录）", brls::BUTTON_X,
+        sramDirCell->registerAction("beiklive/settings/game/clear_same_as_rom"_i18n, brls::BUTTON_X,
             [sramDirCell](brls::View*) {
                 cfgSetStr("save.sramDir", "");
-                sramDirCell->setDetailText("与游戏同目录");
+                sramDirCell->setDetailText("beiklive/settings/game/same_as_rom"_i18n);
                 return true;
             }, false, false, brls::SOUND_CLICK);
         box->addView(sramDirCell);
@@ -757,9 +763,9 @@ brls::ScrollingFrame* SettingPage::buildGameTab()
 
     {
         auto* stateDirCell = new brls::DetailCell();
-        stateDirCell->setText("即时存档目录");
+        stateDirCell->setText("beiklive/settings/game/state_dir"_i18n);
         std::string curStateDir = cfgGetStr("save.stateDir", "");
-        stateDirCell->setDetailText(curStateDir.empty() ? "与游戏同目录" : curStateDir);
+        stateDirCell->setDetailText(curStateDir.empty() ? "beiklive/settings/game/same_as_rom"_i18n : curStateDir);
         stateDirCell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A,
             [stateDirCell](brls::View*) {
                 auto* flPage = new FileListPage();
@@ -786,34 +792,36 @@ brls::ScrollingFrame* SettingPage::buildGameTab()
                 brls::Application::pushActivity(new brls::Activity(frame));
                 return true;
             }, false, false, brls::SOUND_CLICK);
-        stateDirCell->registerAction("清空（与游戏同目录）", brls::BUTTON_X,
+        stateDirCell->registerAction("beiklive/settings/game/clear_same_as_rom"_i18n, brls::BUTTON_X,
             [stateDirCell](brls::View*) {
                 cfgSetStr("save.stateDir", "");
-                stateDirCell->setDetailText("与游戏同目录");
+                stateDirCell->setDetailText("beiklive/settings/game/same_as_rom"_i18n);
                 return true;
             }, false, false, brls::SOUND_CLICK);
         box->addView(stateDirCell);
     }
 
     // ── 金手指设置 ────────────────────────────────────────────────────────────
-    box->addView(makeHeader("金手指设置"));
+    box->addView(makeHeader("beiklive/settings/game/header_cheat"_i18n));
 
     auto* cheatEnableCell = new brls::BooleanCell();
-    cheatEnableCell->init("启用金手指功能",
+    cheatEnableCell->init("beiklive/settings/game/cheat_enable"_i18n,
                           cfgGetBool("cheat.enabled", false),
                           [](bool v){ cfgSetBool("cheat.enabled", v); });
     box->addView(cheatEnableCell);
 
     {
-        static const char* cheatDirIds[]    = { "rom", "emu" };
-        static const char* cheatDirLabels[] = { "游戏同目录", "模拟器目录" };
+        static const char* cheatDirIds[] = { "rom", "emu" };
         std::string curCheatLoc = cfgGetStr("cheat.location", "rom");
         int cheatLocIdx = 0;
         for (int i = 0; i < 2; ++i)
             if (curCheatLoc == cheatDirIds[i]) { cheatLocIdx = i; break; }
-        std::vector<std::string> cheatLocLabels(cheatDirLabels, cheatDirLabels + 2);
+        std::vector<std::string> cheatLocLabels = {
+            "beiklive/settings/game/cheat_loc_rom"_i18n,
+            "beiklive/settings/game/cheat_loc_emu"_i18n
+        };
         auto* cheatLocCell = new brls::SelectorCell();
-        cheatLocCell->init("金手指文件位置", cheatLocLabels, cheatLocIdx,
+        cheatLocCell->init("beiklive/settings/game/cheat_loc"_i18n, cheatLocLabels, cheatLocIdx,
             [](int idx){
                 if (idx >= 0 && idx < 2)
                     cfgSetStr("cheat.location", cheatDirIds[idx]);
@@ -823,9 +831,9 @@ brls::ScrollingFrame* SettingPage::buildGameTab()
 
     {
         auto* cheatDirCell = new brls::DetailCell();
-        cheatDirCell->setText("金手指自定义目录");
+        cheatDirCell->setText("beiklive/settings/game/cheat_dir"_i18n);
         std::string curCheatDir = cfgGetStr("cheat.dir", "");
-        cheatDirCell->setDetailText(curCheatDir.empty() ? "（自动，见上选项）" : curCheatDir);
+        cheatDirCell->setDetailText(curCheatDir.empty() ? "beiklive/settings/game/cheat_auto"_i18n : curCheatDir);
         cheatDirCell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A,
             [cheatDirCell](brls::View*) {
                 auto* flPage = new FileListPage();
@@ -852,10 +860,10 @@ brls::ScrollingFrame* SettingPage::buildGameTab()
                 brls::Application::pushActivity(new brls::Activity(frame));
                 return true;
             }, false, false, brls::SOUND_CLICK);
-        cheatDirCell->registerAction("清空（自动）", brls::BUTTON_X,
+        cheatDirCell->registerAction("beiklive/settings/game/cheat_clear_auto"_i18n, brls::BUTTON_X,
             [cheatDirCell](brls::View*) {
                 cfgSetStr("cheat.dir", "");
-                cheatDirCell->setDetailText("（自动，见上选项）");
+                cheatDirCell->setDetailText("beiklive/settings/game/cheat_auto"_i18n);
                 return true;
             }, false, false, brls::SOUND_CLICK);
         box->addView(cheatDirCell);
@@ -874,7 +882,7 @@ brls::ScrollingFrame* SettingPage::buildDisplayTab()
     auto* scroll = makeScrollTab();
     auto* box    = makeContentBox();
 
-    box->addView(makeHeader("画面显示（在游戏中调整更方便）"));
+    box->addView(makeHeader("beiklive/settings/display/header_video"_i18n));
 
     {
         std::vector<std::string> dispModes = {
@@ -886,7 +894,7 @@ brls::ScrollingFrame* SettingPage::buildDisplayTab()
         for (int i = 0; i < 5; ++i)
             if (curMode == dispModeIds[i]) { dispModeIdx = i; break; }
         auto* dispModeCell = new brls::SelectorCell();
-        dispModeCell->init("显示模式", dispModes, dispModeIdx,
+        dispModeCell->init("beiklive/settings/display/mode"_i18n, dispModes, dispModeIdx,
             [](int idx){ if (idx >= 0 && idx < 5) cfgSetStr("display.mode", dispModeIds[idx]); });
         box->addView(dispModeCell);
     }
@@ -906,7 +914,7 @@ brls::ScrollingFrame* SettingPage::buildDisplayTab()
         std::vector<std::string> intScaleLabels(k_intScaleLabels,
                                                  k_intScaleLabels + k_intScaleCount);
         auto* intScaleCell = new brls::SelectorCell();
-        intScaleCell->init("整数倍缩放倍率（整数倍模式下生效）", intScaleLabels, multIdx,
+        intScaleCell->init("beiklive/settings/display/int_scale"_i18n, intScaleLabels, multIdx,
             [](int idx){
                 if (idx >= 0 && idx < k_intScaleCount && SettingManager) {
                     SettingManager->Set("display.integer_scale_mult",
@@ -921,27 +929,27 @@ brls::ScrollingFrame* SettingPage::buildDisplayTab()
         std::vector<std::string> filters = { "最近邻 (Nearest)","双线性 (Linear)" };
         std::string curFilter = cfgGetStr("display.filter","nearest");
         auto* filterCell = new brls::SelectorCell();
-        filterCell->init("纹理过滤", filters, (curFilter == "linear") ? 1 : 0,
+        filterCell->init("beiklive/settings/display/filter"_i18n, filters, (curFilter == "linear") ? 1 : 0,
             [](int idx){ cfgSetStr("display.filter", idx == 1 ? "linear" : "nearest"); });
         box->addView(filterCell);
     }
 
-    box->addView(makeHeader("状态显示"));
+    box->addView(makeHeader("beiklive/settings/display/header_status"_i18n));
 
     auto* showFpsCell = new brls::BooleanCell();
-    showFpsCell->init("显示帧率 (FPS)",
+    showFpsCell->init("beiklive/settings/display/show_fps"_i18n,
                       cfgGetBool("display.showFps", false),
                       [](bool v){ cfgSetBool("display.showFps", v); });
     box->addView(showFpsCell);
 
     auto* showFfCell = new brls::BooleanCell();
-    showFfCell->init("显示快进提示",
+    showFfCell->init("beiklive/settings/display/show_ff"_i18n,
                      cfgGetBool("display.showFfOverlay", true),
                      [](bool v){ cfgSetBool("display.showFfOverlay", v); });
     box->addView(showFfCell);
 
     auto* showRewCell = new brls::BooleanCell();
-    showRewCell->init("显示倒带提示",
+    showRewCell->init("beiklive/settings/display/show_rewind"_i18n,
                       cfgGetBool("display.showRewindOverlay", true),
                       [](bool v){ cfgSetBool("display.showRewindOverlay", v); });
     box->addView(showRewCell);
@@ -959,24 +967,24 @@ brls::ScrollingFrame* SettingPage::buildAudioTab()
     auto* scroll = makeScrollTab();
     auto* box    = makeContentBox();
 
-    box->addView(makeHeader("模拟器声音"));
+    box->addView(makeHeader("beiklive/settings/audio/header_emu"_i18n));
 
     auto* sfxCell = new brls::BooleanCell();
-    sfxCell->init("模拟器按键音效",
+    sfxCell->init("beiklive/settings/audio/btn_sfx"_i18n,
                   cfgGetBool(KEY_AUDIO_BUTTON_SFX, false),
                   [](bool v){ cfgSetBool(KEY_AUDIO_BUTTON_SFX, v); });
     box->addView(sfxCell);
 
-    box->addView(makeHeader("游戏声音"));
+    box->addView(makeHeader("beiklive/settings/audio/header_game"_i18n));
 
     auto* ffMuteCell = new brls::BooleanCell();
-    ffMuteCell->init("快进时静音",
+    ffMuteCell->init("beiklive/settings/audio/ff_mute"_i18n,
                      cfgGetBool("fastforward.mute", true),
                      [](bool v){ cfgSetBool("fastforward.mute", v); });
     box->addView(ffMuteCell);
 
     auto* rewMuteCell = new brls::BooleanCell();
-    rewMuteCell->init("倒带时静音",
+    rewMuteCell->init("beiklive/settings/audio/rewind_mute"_i18n,
                       cfgGetBool("rewind.mute", false),
                       [](bool v){ cfgSetBool("rewind.mute", v); });
     box->addView(rewMuteCell);
@@ -985,7 +993,7 @@ brls::ScrollingFrame* SettingPage::buildAudioTab()
         std::vector<std::string> lpfOpts = { "关闭 (disabled)","开启 (enabled)" };
         std::string curLpf = cfgGetStr("core.mgba_audio_low_pass_filter","disabled");
         auto* lpfCell = new brls::SelectorCell();
-        lpfCell->init("低通滤波器", lpfOpts, (curLpf == "enabled") ? 1 : 0,
+        lpfCell->init("beiklive/settings/audio/lpf"_i18n, lpfOpts, (curLpf == "enabled") ? 1 : 0,
             [](int idx){
                 cfgSetStr("core.mgba_audio_low_pass_filter",
                           idx == 1 ? "enabled" : "disabled");
@@ -1137,7 +1145,7 @@ brls::ScrollingFrame* SettingPage::buildDebugTab()
     auto* scroll = makeScrollTab();
     auto* box    = makeContentBox();
 
-    box->addView(makeHeader("日志设置"));
+    box->addView(makeHeader("beiklive/settings/debug/header_log"_i18n));
 
     {
         static const char* logLevelIds[] = { "debug","info","warning","error" };
@@ -1149,7 +1157,7 @@ brls::ScrollingFrame* SettingPage::buildDebugTab()
         for (int i = 0; i < 4; ++i)
             if (curLevel == logLevelIds[i]) { levelIdx = i; break; }
         auto* logLevelCell = new brls::SelectorCell();
-        logLevelCell->init("日志等级", logLevels, levelIdx,
+        logLevelCell->init("beiklive/settings/debug/log_level"_i18n, logLevels, levelIdx,
             [](int idx){
                 if (idx >= 0 && idx < 4) {
                     cfgSetStr(KEY_DEBUG_LOG_LEVEL, logLevelIds[idx]);
@@ -1166,7 +1174,7 @@ brls::ScrollingFrame* SettingPage::buildDebugTab()
     }
 
     auto* logFileCell = new brls::BooleanCell();
-    logFileCell->init("日志文件写入",
+    logFileCell->init("beiklive/settings/debug/log_file"_i18n,
                       cfgGetBool(KEY_DEBUG_LOG_FILE, false),
                       [](bool v){
                           cfgSetBool(KEY_DEBUG_LOG_FILE, v);
@@ -1184,7 +1192,7 @@ brls::ScrollingFrame* SettingPage::buildDebugTab()
     box->addView(logFileCell);
 
     auto* logOverlayCell = new brls::BooleanCell();
-    logOverlayCell->init("日志浮窗",
+    logOverlayCell->init("beiklive/settings/debug/log_overlay"_i18n,
                          cfgGetBool(KEY_DEBUG_LOG_OVERLAY, false),
                          [](bool v){
                              cfgSetBool(KEY_DEBUG_LOG_OVERLAY, v);

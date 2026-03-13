@@ -98,7 +98,8 @@ std::string GameView::resolveCoreLibPath()
 
 GameView::GameView(std::string romPath) : GameView()
 {
-    m_romPath = std::move(romPath);
+    m_romPath     = std::move(romPath);
+    m_romFileName = std::filesystem::path(m_romPath).filename().string();
     SettingManager->Set("last_game_path", beiklive::file::getParentPath(m_romPath));
 }
 
@@ -361,6 +362,9 @@ void GameView::startGameThread()
         Clock::time_point fpsTimerStart = Clock::now();
         unsigned          fpsCounter    = 0;
 
+        // Per-thread play-time tracker: save total play time every 60 seconds.
+        Clock::time_point playtimeTimer = Clock::now();
+
         // Accumulated ideal frame-end time for drift-free 60fps timing.
         // Advancing by frameDuration each iteration prevents timing errors from
         // compounding: one slow frame does not shrink the next frame's budget.
@@ -491,6 +495,29 @@ void GameView::startGameThread()
                 }
                 fpsCounter   = 0;
                 fpsTimerStart = nowPost;
+            }
+
+            // ---- Periodic play-time update (every 60 seconds) -----------
+            // Accumulate run time to GAMEDATA_FIELD_TOTALTIME in gamedataManager.
+            if (gamedataManager && !m_romFileName.empty()) {
+                auto playtimeElapsed = std::chrono::duration_cast<std::chrono::seconds>(
+                    nowPost - playtimeTimer).count();
+                if (playtimeElapsed >= 60) {
+                    // Advance the timer by exactly one minute so each interval
+                    // adds a fixed 60 seconds (prevents over-counting if the
+                    // thread was suspended or the check was delayed).
+                    playtimeTimer += std::chrono::seconds(60);
+                    std::string prefix = gamedataKeyPrefix(m_romFileName);
+                    std::string k = prefix + "." + GAMEDATA_FIELD_TOTALTIME;
+                    int currentTotal = 0;
+                    auto tv = gamedataManager->Get(k);
+                    if (tv) {
+                        if (auto iv = tv->AsInt()) currentTotal = *iv;
+                    }
+                    currentTotal += 60;
+                    gamedataManager->Set(k, beiklive::ConfigValue(currentTotal));
+                    gamedataManager->Save();
+                }
             }
 
             // ---- Pending quick save / load (triggered by hotkeys) --------

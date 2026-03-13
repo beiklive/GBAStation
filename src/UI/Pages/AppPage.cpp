@@ -193,22 +193,21 @@ AppPage::AppPage()
 
     m_ButtonRow = new beiklive::UI::ButtonBar();
     m_ButtonRow->setGrow(1.0f);
-    m_ButtonRow->addButton(BK_RES(path_prefix + "wenjianjia_64.png"), "文件列表", [this]() {
+    m_ButtonRow->addButton(BK_RES(path_prefix + "wenjianjia_64.png"), "beiklive/app/btn_file_list"_i18n, [this]() {
         if (onOpenFileList) onOpenFileList();
     });
-    m_ButtonRow->addButton(BK_RES(path_prefix + "jifen_64.png"), "数据管理", []() {
+    m_ButtonRow->addButton(BK_RES(path_prefix + "jifen_64.png"), "beiklive/app/btn_data_mgr"_i18n, []() {
         brls::Logger::debug("数据管理");
     });
-    m_ButtonRow->addButton(BK_RES(path_prefix + "shezhi_64.png"), "设置", [this]() {
-        brls::Logger::debug("设置");
+    m_ButtonRow->addButton(BK_RES(path_prefix + "shezhi_64.png"), "beiklive/app/btn_settings"_i18n, [this]() {
         if(onOpenSettings) onOpenSettings();
     });
-    m_ButtonRow->addButton(BK_RES(path_prefix + "bangzhu_64.png"), "关于", []() {
-        brls::Logger::debug("关于");
+    m_ButtonRow->addButton(BK_RES(path_prefix + "bangzhu_64.png"), "beiklive/app/btn_about"_i18n, []() {
+        brls::Logger::debug("about");
         auto* aboutPage = new beiklive::UI::BBox();
         
     });
-    m_ButtonRow->addButton(BK_RES(path_prefix + "tuichu_64.png"), "退出程序", []() {
+    m_ButtonRow->addButton(BK_RES(path_prefix + "tuichu_64.png"), "beiklive/app/btn_exit"_i18n, []() {
             auto dialog = new brls::Dialog("hints/exit_hint"_i18n);
             dialog->addButton("hints/cancel"_i18n, []() {});
             dialog->addButton("hints/ok"_i18n, []()

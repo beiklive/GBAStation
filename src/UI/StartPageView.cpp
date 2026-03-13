@@ -133,7 +133,7 @@ void FileSettingsPanel::showForItem(const FileListItem& item,
     {
         std::string captureFileName = item.fileName;
         std::string captureFullPath = item.fullPath;
-        addOptionButton("选择 Logo", [captureFileName, captureFullPath]() {
+        addOptionButton("beiklive/sidebar/select_logo"_i18n, [captureFileName, captureFullPath]() {
             auto* flPage = new FileListPage();
             flPage->setFilter({"png"}, FileListPage::FilterMode::Whitelist);
             flPage->setDefaultFileCallback([captureFileName](const FileListItem& imgItem) {
@@ -313,8 +313,41 @@ void AppGameSettingsPanel::showForEntry(const GameEntry& entry, AppPage* page)
     m_titleLabel->setText(entry.title.empty() ? entry.path : entry.title);
     clearOptions();
 
+    // ── Set Mapping Name ───────────────────────────────────────────────────
+    addOptionButton("beiklive/sidebar/set_mapping"_i18n, [this]() {
+        std::string fileName = std::filesystem::path(m_entry.path).filename().string();
+        std::string key = gamedataKeyPrefix(fileName);
+        std::string currentMapped;
+        if (NameMappingManager) {
+            auto mv = NameMappingManager->Get(key);
+            if (mv && mv->AsString() && !mv->AsString()->empty())
+                currentMapped = *mv->AsString();
+        }
+        brls::Application::getPlatform()->getImeManager()->openForText(
+            [this, key](const std::string& mapped) {
+                if (!NameMappingManager) return;
+                if (mapped.empty())
+                    NameMappingManager->Remove(key);
+                else
+                    NameMappingManager->Set(key, mapped);
+                NameMappingManager->Save();
+                // Update the title in the entry if AppPage is available
+                if (m_appPage) {
+                    std::string newTitle = mapped.empty()
+                        ? std::filesystem::path(m_entry.path).stem().string()
+                        : mapped;
+                    m_entry.title = newTitle;
+                    m_titleLabel->setText(newTitle);
+                }
+            },
+            "beiklive/sidebar/set_mapping"_i18n,
+            "",
+            128,
+            currentMapped);
+    });
+
     // ── Set Logo ───────────────────────────────────────────────────────────
-    addOptionButton("选择 Logo", [this]() {
+    addOptionButton("beiklive/sidebar/select_logo"_i18n, [this]() {
         GameEntry captureEntry = m_entry;
         AppPage*  capturePage  = m_appPage;
 
@@ -355,7 +388,7 @@ void AppGameSettingsPanel::showForEntry(const GameEntry& entry, AppPage* page)
     });
 
     // ── Remove from list ───────────────────────────────────────────────────
-    addOptionButton("从列表移除", [this]() {
+    addOptionButton("beiklive/sidebar/remove_from_list"_i18n, [this]() {
         std::string fileName = std::filesystem::path(m_entry.path).filename().string();
         removeRecentGame(fileName);
         if (m_appPage)
@@ -454,6 +487,36 @@ void StartPageView::Init()
 
 // ─────────── Page creation ───────────────────────────────────────────────────
 
+void StartPageView::refreshRecentGames()
+{
+    if (!m_appPage || !SettingManager) return;
+
+    std::vector<GameEntry> games;
+    for (int i = 0; i < RECENT_GAME_COUNT; ++i) {
+        std::string key = std::string(RECENT_GAME_KEY_PREFIX) + std::to_string(i);
+        auto v = SettingManager->Get(key);
+        if (!v || !v->AsString() || v->AsString()->empty())
+            continue;
+        std::string fileName = *v->AsString();
+        std::string gamePath = getGameDataStr(fileName, GAMEDATA_FIELD_GAMEPATH, "");
+        if (gamePath.empty())
+            continue;
+        std::string logoPath = getGameDataStr(fileName, GAMEDATA_FIELD_LOGOPATH, "");
+        // Prefer mapped display name from NameMappingManager, fall back to file stem
+        std::string title;
+        if (NameMappingManager) {
+            std::string mapKey = gamedataKeyPrefix(fileName);
+            auto mv = NameMappingManager->Get(mapKey);
+            if (mv && mv->AsString() && !mv->AsString()->empty())
+                title = *mv->AsString();
+        }
+        if (title.empty())
+            title = std::filesystem::path(fileName).stem().string();
+        games.push_back({ gamePath, title, logoPath });
+    }
+    m_appPage->setGames(games);
+}
+
 void StartPageView::createAppPage()
 {
     if (m_appPage)
@@ -462,24 +525,26 @@ void StartPageView::createAppPage()
     m_appPage = new AppPage();
 
     // ── Load recent games from SettingManager ─────────────────────────────
-    if (SettingManager) {
-        for (int i = 0; i < RECENT_GAME_COUNT; ++i) {
-            std::string key = std::string(RECENT_GAME_KEY_PREFIX) + std::to_string(i);
-            auto v = SettingManager->Get(key);
-            if (!v || !v->AsString() || v->AsString()->empty())
-                continue;
-            std::string fileName = *v->AsString();
-            std::string gamePath = getGameDataStr(fileName, GAMEDATA_FIELD_GAMEPATH, "");
-            if (gamePath.empty())
-                continue;
-            std::string logoPath = getGameDataStr(fileName, GAMEDATA_FIELD_LOGOPATH, "");
-            // Use the file stem (name without extension) as the display title
-            std::string title    = std::filesystem::path(fileName).stem().string();
-            m_appPage->addGame({ gamePath, title, logoPath });
-        }
-    }
+    refreshRecentGames();
 
     m_appPage->onGameSelected = [](const GameEntry& e) {
+        // Update game metadata before launching
+        std::string fileName = std::filesystem::path(e.path).filename().string();
+        // Record last opened time
+        auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+        char timeBuf[64] = "";
+        struct tm tmInfo;
+#ifdef _WIN32
+        if (localtime_s(&tmInfo, &now) == 0)
+            std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%d %H:%M", &tmInfo);
+#else
+        if (localtime_r(&now, &tmInfo))
+            std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%d %H:%M", &tmInfo);
+#endif
+        if (timeBuf[0] != '\0')
+            setGameDataStr(fileName, GAMEDATA_FIELD_LASTOPEN, timeBuf);
+        // Push to recent games queue
+        pushRecentGame(fileName);
         // Free UI image cache before launching the emulator to reclaim memory.
         beiklive::clearUIImageCache();
         auto* frame = new brls::AppletFrame(new GameView(e.path));
@@ -671,6 +736,18 @@ void StartPageView::onFocusGained()
 void StartPageView::onFocusLost()
 {
     Box::onFocusLost();
+}
+
+void StartPageView::draw(NVGcontext* vg, float x, float y, float width, float height,
+                          brls::Style style, brls::FrameContext* ctx)
+{
+    // Refresh recent games list whenever the queue has been updated
+    // (e.g. after returning from a game launched via the file list).
+    if (g_recentGamesDirty && m_appPage) {
+        g_recentGamesDirty = false;
+        refreshRecentGames();
+    }
+    Box::draw(vg, x, y, width, height, style, ctx);
 }
 
 brls::View* StartPageView::create()
