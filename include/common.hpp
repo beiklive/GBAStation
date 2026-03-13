@@ -176,12 +176,18 @@ extern beiklive::ConfigManager* NameMappingManager;
 extern beiklive::ConfigManager* gamedataManager;
 extern beiklive::GameRunner* gameRunner;
 
+// Display overlay settings
+#define KEY_DISPLAY_OVERLAY_ENABLED  "display.overlay.enabled"   ///< 遮罩总开关
+#define KEY_DISPLAY_OVERLAY_GBA_PATH "display.overlay.gbaPath"   ///< 全局 GBA 遮罩 PNG 路径
+#define KEY_DISPLAY_OVERLAY_GBC_PATH "display.overlay.gbcPath"   ///< 全局 GBC 遮罩 PNG 路径
+
 // ─── gamedataManager 字段名常量 ──────────────────────────────────────────────
 #define GAMEDATA_FIELD_LOGOPATH   "logopath"   ///< logo 图片路径（空=未设置）
 #define GAMEDATA_FIELD_GAMEPATH   "gamepath"   ///< 游戏文件路径
 #define GAMEDATA_FIELD_TOTALTIME  "totaltime"  ///< 游玩总时长（秒，默认 0）
 #define GAMEDATA_FIELD_LASTOPEN   "lastopen"   ///< 上次游玩时间（默认"从未游玩"）
 #define GAMEDATA_FIELD_PLATFORM   "platform"   ///< 游戏平台（EmuPlatform 名称字符串）
+#define GAMEDATA_FIELD_OVERLAY    "overlay"    ///< 游戏专属遮罩 PNG 路径（空=使用全局）
 
 /// 返回 gamedata key 的前缀（文件名不含后缀）
 inline std::string gamedataKeyPrefix(const std::string& fileName)
@@ -217,6 +223,24 @@ inline void initGameData(const std::string& fileName, beiklive::EmuPlatform plat
         default:                          platformStr = "None"; break;
     }
     setIfAbsent(GAMEDATA_FIELD_PLATFORM, beiklive::ConfigValue(platformStr));
+
+    // Overlay: default to the global overlay path for this platform
+    {
+        std::string globalOverlay;
+        if (SettingManager) {
+            std::string key;
+            switch (platform) {
+                case beiklive::EmuPlatform::GBA: key = KEY_DISPLAY_OVERLAY_GBA_PATH; break;
+                case beiklive::EmuPlatform::GB:  key = KEY_DISPLAY_OVERLAY_GBC_PATH; break;
+                default: break;
+            }
+            if (!key.empty()) {
+                auto v = SettingManager->Get(key);
+                if (v) { if (auto s = v->AsString()) globalOverlay = *s; }
+            }
+        }
+        setIfAbsent(GAMEDATA_FIELD_OVERLAY, beiklive::ConfigValue(globalOverlay));
+    }
 }
 
 /// 读取 gamedataManager 中某个游戏字段的字符串值。

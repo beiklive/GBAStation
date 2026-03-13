@@ -954,6 +954,62 @@ brls::ScrollingFrame* SettingPage::buildDisplayTab()
                       [](bool v){ cfgSetBool("display.showRewindOverlay", v); });
     box->addView(showRewCell);
 
+    // ── 遮罩设置 ────────────────────────────────────────────────────────────
+    box->addView(makeHeader("beiklive/settings/display/header_overlay"_i18n));
+
+    auto* overlayEnCell = new brls::BooleanCell();
+    overlayEnCell->init("beiklive/settings/display/overlay_enable"_i18n,
+                        cfgGetBool(KEY_DISPLAY_OVERLAY_ENABLED, false),
+                        [](bool v){ cfgSetBool(KEY_DISPLAY_OVERLAY_ENABLED, v); });
+    box->addView(overlayEnCell);
+
+    // Helper: build a PNG path picker DetailCell for a given config key and i18n label.
+    auto makeOverlayPathCell = [&](const std::string& cfgKey, const std::string& labelKey) {
+        auto* cell = new brls::DetailCell();
+        cell->setText(labelKey);
+        cell->setDetailText(beiklive::string::extractFileName(
+            cfgGetStr(cfgKey, "beiklive/settings/display/overlay_not_set"_i18n)));
+        cell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A,
+            [cell, cfgKey](brls::View*) {
+                auto* flPage = new FileListPage();
+                flPage->setFilter({"png"}, FileListPage::FilterMode::Whitelist);
+                flPage->setDefaultFileCallback([cell, cfgKey](const FileListItem& item) {
+                    cfgSetStr(cfgKey, item.fullPath);
+                    cell->setDetailText(beiklive::string::extractFileName(item.fullPath));
+                    brls::Application::popActivity();
+                });
+                std::string startPath = cfgGetStr(cfgKey, "");
+                if (!startPath.empty()) {
+                    auto pos = startPath.rfind('/');
+#ifdef _WIN32
+                    auto posW = startPath.rfind('\\');
+                    if (posW != std::string::npos && (pos == std::string::npos || posW > pos))
+                        pos = posW;
+#endif
+                    if (pos != std::string::npos) startPath = startPath.substr(0, pos);
+                }
+                if (startPath.empty()) startPath = "/";
+                flPage->navigateTo(startPath);
+                auto* container = new brls::Box(brls::Axis::COLUMN);
+                container->setGrow(1.0f);
+                container->addView(flPage);
+                container->registerAction("beiklive/hints/close"_i18n, brls::BUTTON_START,
+                    [](brls::View*) { brls::Application::popActivity(); return true; });
+                auto* frame = new brls::AppletFrame(container);
+                frame->setHeaderVisibility(brls::Visibility::GONE);
+                frame->setFooterVisibility(brls::Visibility::GONE);
+                frame->setBackground(brls::ViewBackground::NONE);
+                brls::Application::pushActivity(new brls::Activity(frame));
+                return true;
+            }, false, false, brls::SOUND_CLICK);
+        return cell;
+    };
+
+    box->addView(makeOverlayPathCell(KEY_DISPLAY_OVERLAY_GBA_PATH,
+                                    "beiklive/settings/display/overlay_gba_path"_i18n));
+    box->addView(makeOverlayPathCell(KEY_DISPLAY_OVERLAY_GBC_PATH,
+                                    "beiklive/settings/display/overlay_gbc_path"_i18n));
+
     scroll->setContentView(box);
     return scroll;
 }

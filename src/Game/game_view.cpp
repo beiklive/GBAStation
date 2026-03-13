@@ -186,6 +186,9 @@ void GameView::initialize()
         cfg->SetDefault("display.showFps",           CV(std::string("false")));
         cfg->SetDefault("display.showFfOverlay",     CV(std::string("true")));
         cfg->SetDefault("display.showRewindOverlay", CV(std::string("true")));
+        cfg->SetDefault(KEY_DISPLAY_OVERLAY_ENABLED,  CV(std::string("false")));
+        cfg->SetDefault(KEY_DISPLAY_OVERLAY_GBA_PATH, CV(std::string("")));
+        cfg->SetDefault(KEY_DISPLAY_OVERLAY_GBC_PATH, CV(std::string("")));
 
         // ---- Input mapping defaults (delegated to InputMappingConfig) ----
         m_inputMap.setDefaults(*cfg);
@@ -205,6 +208,32 @@ void GameView::initialize()
         m_showFps           = getBool("display.showFps",           false);
         m_showFfOverlay     = getBool("display.showFfOverlay",     true);
         m_showRewindOverlay = getBool("display.showRewindOverlay", true);
+        m_overlayEnabled    = getBool(KEY_DISPLAY_OVERLAY_ENABLED, false);
+
+        // ---- Resolve overlay path for this game --------------------------
+        // 1. Try per-game overlay from gamedataManager.
+        // 2. Fall back to global GBA / GBC path depending on ROM extension.
+        if (m_overlayEnabled && !m_romFileName.empty()) {
+            std::string perGame = getGameDataStr(m_romFileName, GAMEDATA_FIELD_OVERLAY, "");
+            if (!perGame.empty()) {
+                m_overlayPath = perGame;
+            } else {
+                // Determine platform from file extension
+                std::string ext;
+                auto dot = m_romFileName.rfind('.');
+                if (dot != std::string::npos) {
+                    ext = m_romFileName.substr(dot + 1);
+                    for (auto& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                }
+                std::string pathKey;
+                if (ext == "gba")       pathKey = KEY_DISPLAY_OVERLAY_GBA_PATH;
+                else if (ext == "gb" || ext == "gbc") pathKey = KEY_DISPLAY_OVERLAY_GBC_PATH;
+                if (!pathKey.empty()) {
+                    auto v = cfg->Get(pathKey);
+                    if (v) { if (auto s = v->AsString()) m_overlayPath = *s; }
+                }
+            }
+        }
 
         // ---- Load all input bindings and FF/rewind settings --------------
         m_inputMap.load(*cfg);
@@ -627,6 +656,12 @@ void GameView::cleanup()
 
     if (m_nvgImage >= 0) {
         m_nvgImage = -1;
+    }
+
+    // Release overlay NVG image handle (actual deletion happens when the NVG
+    // context is destroyed; we just reset our handle here).
+    if (m_overlayNvgImage >= 0) {
+        m_overlayNvgImage = -1;
     }
 
     // Deinit render chain (releases any GL resources)
@@ -1240,6 +1275,30 @@ void GameView::uploadFrame(NVGcontext* vg,
 }
 
 // ============================================================
+// loadOverlayImage – load the overlay PNG into an NVG image.
+// Called lazily from draw() the first time the overlay is needed,
+// and whenever m_overlayPath changes.
+// ============================================================
+
+void GameView::loadOverlayImage(NVGcontext* vg)
+{
+    // Release any existing overlay image
+    if (m_overlayNvgImage >= 0) {
+        nvgDeleteImage(vg, m_overlayNvgImage);
+        m_overlayNvgImage = -1;
+    }
+
+    if (m_overlayPath.empty()) return;
+
+    m_overlayNvgImage = nvgCreateImage(vg, m_overlayPath.c_str(), 0);
+    if (m_overlayNvgImage < 0) {
+        bklog::warning("GameView: failed to load overlay image: {}", m_overlayPath);
+    } else {
+        bklog::info("GameView: loaded overlay image: {}", m_overlayPath);
+    }
+}
+
+// ============================================================
 // pollInput – map controller/keyboard state to libretro buttons
 // and fire emulator hotkeys via GameInputController.
 //
@@ -1656,6 +1715,26 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
         nvgRect(vg, rect.x, rect.y, rect.w, rect.h);
         nvgFillPaint(vg, imgPaint);
         nvgFill(vg);
+    }
+
+    // ---- Overlay (遮罩) drawing – full-screen, drawn on top of game frame
+    if (m_overlayEnabled && !m_overlayPath.empty()) {
+        // Lazy load: create NVG image handle on first use
+        if (m_overlayNvgImage < 0) {
+            loadOverlayImage(vg);
+        }
+        if (m_overlayNvgImage >= 0) {
+            NVGpaint overlayPaint = nvgImagePattern(vg,
+                                                    x, y,
+                                                    width, height,
+                                                    0.0f,
+                                                    m_overlayNvgImage,
+                                                    1.0f);
+            nvgBeginPath(vg);
+            nvgRect(vg, x, y, width, height);
+            nvgFillPaint(vg, overlayPaint);
+            nvgFill(vg);
+        }
     }
 
     // ---- FPS overlay -------------------------------------------------

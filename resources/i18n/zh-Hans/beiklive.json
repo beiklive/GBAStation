@@ -116,7 +116,12 @@
             "header_status": "状态显示",
             "show_fps"     : "显示帧率 (FPS)",
             "show_ff"      : "显示快进提示",
-            "show_rewind"  : "显示倒带提示"
+            "show_rewind"  : "显示倒带提示",
+            "header_overlay"   : "遮罩设置",
+            "overlay_enable"   : "启用遮罩",
+            "overlay_gba_path" : "全局 GBA 遮罩路径 (PNG)",
+            "overlay_gbc_path" : "全局 GBC 遮罩路径 (PNG)",
+            "overlay_not_set"  : "未设置"
         },
         "audio": {
             "header_emu"  : "模拟器声音",
