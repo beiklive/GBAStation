@@ -818,6 +818,14 @@ void GameView::pollInput()
         }
     }
 
+    // ---- ExitGame hotkey (keyboard and gamepad) ----------------------
+#ifndef __SWITCH__
+    if (!m_requestExit.load(std::memory_order_relaxed)) {
+        if (isHotkeyPressed(Hotkey::ExitGame))
+            m_requestExit.store(true, std::memory_order_relaxed);
+    }
+#endif
+
     // ---- Debug logging (only at DEBUG level to avoid spam) ──────────────
 #ifndef __SWITCH__
     if (brls::Logger::getLogLevel() <= brls::LogLevel::LOG_DEBUG) {
@@ -921,10 +929,10 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
         refreshInputSnapshot();
     }
 
-    // ---- Keyboard exit: game thread sets this flag; handle on main thread -----
+    // ---- ExitGame hotkey: game thread sets this flag; handle on main thread -----
 #ifndef __SWITCH__
     if (m_requestExit.exchange(false, std::memory_order_relaxed)) {
-        bklog::info("GameView: exit requested via keyboard");
+        bklog::info("GameView: exit requested via hotkey");
         stopGameThread();
         brls::Application::popActivity();
         return;

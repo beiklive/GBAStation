@@ -5,7 +5,6 @@
 #include <borealis/views/cells/cell_selector.hpp>
 #include <borealis/views/cells/cell_detail.hpp>
 #include <borealis/views/header.hpp>
-#include <borealis/views/button.hpp>
 #include <borealis/views/scrolling_frame.hpp>
 #include <borealis/views/dialog.hpp>
 #include <borealis/views/label.hpp>
@@ -16,57 +15,15 @@
 #include <cmath>
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Config read helpers
+//  Config helpers (declared in common.hpp / implemented in common.cpp)
 // ─────────────────────────────────────────────────────────────────────────────
 
-static bool cfgGetBool(const std::string& key, bool def)
-{
-    if (!SettingManager) return def;
-    auto v = SettingManager->Get(key);
-    if (!v) return def;
-    if (auto s = v->AsString()) return (*s == "true" || *s == "1" || *s == "yes");
-    if (auto i = v->AsInt())    return *i != 0;
-    return def;
-}
-
-static std::string cfgGetStr(const std::string& key, const std::string& def)
-{
-    if (!SettingManager) return def;
-    auto v = SettingManager->Get(key);
-    if (!v) return def;
-    if (auto s = v->AsString()) return *s;
-    return def;
-}
-
-static float cfgGetFloat(const std::string& key, float def)
-{
-    if (!SettingManager) return def;
-    auto v = SettingManager->Get(key);
-    if (!v) return def;
-    if (auto f = v->AsFloat()) return *f;
-    if (auto i = v->AsInt())   return static_cast<float>(*i);
-    return def;
-}
-
-static int cfgGetInt(const std::string& key, int def)
-{
-    if (!SettingManager) return def;
-    auto v = SettingManager->Get(key);
-    if (!v) return def;
-    if (auto i = v->AsInt())   return *i;
-    if (auto f = v->AsFloat()) return static_cast<int>(*f);
-    return def;
-}
-
-static void cfgSetStr(const std::string& key, const std::string& val)
-{
-    if (SettingManager) SettingManager->Set(key, beiklive::ConfigValue(val));
-}
-
-static void cfgSetBool(const std::string& key, bool val)
-{
-    cfgSetStr(key, val ? "true" : "false");
-}
+using beiklive::cfgGetBool;
+using beiklive::cfgGetStr;
+using beiklive::cfgGetFloat;
+using beiklive::cfgGetInt;
+using beiklive::cfgSetStr;
+using beiklive::cfgSetBool;
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Layout helpers
@@ -91,28 +48,6 @@ static brls::Header* makeHeader(const std::string& title)
     auto* h = new brls::Header();
     h->setTitle(title);
     return h;
-}
-
-static void addSaveButton(brls::Box* box)
-{
-    auto* padding = new brls::Padding();
-    padding->setHeight(20.f);
-    box->addView(padding);
-
-    auto* btn = new brls::Button();
-    // btn->setStyle(&brls::BUTTONSTYLE_PRIMARY);
-    btn->setText("保存");
-    // btn->setWidth(200.f);
-    btn->setHeight(50.f);
-    btn->registerAction("确认", brls::BUTTON_A, [](brls::View*) {
-        if (SettingManager) SettingManager->Save();
-        beiklive::ApplyXmbColorToAll();
-        auto* dialog = new brls::Dialog("设置已保存");
-        dialog->addButton("确定", []{});
-        dialog->open();
-        return true;
-    });
-    box->addView(btn);
 }
 
 static int findIndex(const std::vector<std::string>& options,
@@ -426,10 +361,6 @@ static const char* k_xmbColorIds[]    = { "blue","purple","green","orange","red"
 static const char* k_xmbColorLabels[] = { "深蓝","紫色","绿色","橙色","红色","青色","黑色","原版" };
 static constexpr int k_xmbColorCount  = 8;
 
-// static const char* k_textColorIds[]    = { "white","yellow","cyan","green","red","gray" };
-// static const char* k_textColorLabels[] = { "白色","黄色","青色","绿色","红色","灰色" };
-// static constexpr int k_textColorCount  = 6;
-
 // ─────────────────────────────────────────────────────────────────────────────
 //  Shared constants
 // ─────────────────────────────────────────────────────────────────────────────
@@ -452,7 +383,7 @@ brls::ScrollingFrame* SettingPage::buildUITab()
     auto* showBgCell = new brls::BooleanCell();
     showBgCell->init("显示背景图片",
                      cfgGetBool(KEY_UI_SHOW_BG_IMAGE, false),
-                     [](bool v){ cfgSetBool(KEY_UI_SHOW_BG_IMAGE, v); });
+                     [](bool v){ cfgSetBool(KEY_UI_SHOW_BG_IMAGE, v); beiklive::ApplyXmbColorToAll(); });
     box->addView(showBgCell);
 
     auto* bgPathCell = new brls::DetailCell();
@@ -464,6 +395,7 @@ brls::ScrollingFrame* SettingPage::buildUITab()
         flPage->setDefaultFileCallback([bgPathCell](const FileListItem& item) {
             cfgSetStr(KEY_UI_BG_IMAGE_PATH, item.fullPath);
             bgPathCell->setDetailText(item.fullPath);
+            beiklive::ApplyXmbColorToAll();
             brls::Application::popActivity();
         });
         // Start at directory of current path, or root
@@ -502,7 +434,7 @@ brls::ScrollingFrame* SettingPage::buildUITab()
     auto* showXmbCell = new brls::BooleanCell();
     showXmbCell->init("显示 XMB 背景",
                       cfgGetBool(KEY_UI_SHOW_XMB_BG, false),
-                      [](bool v){ cfgSetBool(KEY_UI_SHOW_XMB_BG, v); });
+                      [](bool v){ cfgSetBool(KEY_UI_SHOW_XMB_BG, v); beiklive::ApplyXmbColorToAll(); });
     box->addView(showXmbCell);
 
     {
@@ -518,33 +450,12 @@ brls::ScrollingFrame* SettingPage::buildUITab()
             [](int idx){
                 if (idx >= 0 && idx < k_xmbColorCount) {
                     cfgSetStr(KEY_UI_PSPXMB_COLOR, k_xmbColorIds[idx]);
-                    // Color will be applied when save button is clicked.
+                    beiklive::ApplyXmbColorToAll();
                 }
             });
         box->addView(xmbColorCell);
     }
 
-    // ── 文字 ──────────────────────────────────────────────────────────────────
-    // box->addView(makeHeader("文字"));
-
-    // {
-    //     std::vector<std::string> textColorLabels(k_textColorLabels,
-    //                                               k_textColorLabels + k_textColorCount);
-    //     std::string curId = cfgGetStr(KEY_UI_TEXT_COLOR, "white");
-    //     int curIdx = 0;
-    //     for (int i = 0; i < k_textColorCount; ++i)
-    //         if (curId == k_textColorIds[i]) { curIdx = i; break; }
-
-    //     auto* textColorCell = new brls::SelectorCell();
-    //     textColorCell->init("文字颜色", textColorLabels, curIdx,
-    //         [](int idx){
-    //             if (idx >= 0 && idx < k_textColorCount)
-    //                 cfgSetStr(KEY_UI_TEXT_COLOR, k_textColorIds[idx]);
-    //         });
-    //     box->addView(textColorCell);
-    // }
-
-    addSaveButton(box);
     scroll->setContentView(box);
     return scroll;
 }
@@ -587,9 +498,11 @@ brls::ScrollingFrame* SettingPage::buildGameTab()
         auto* ffMultCell = new brls::SelectorCell();
         ffMultCell->init("加速倍率", ffRateLabels, ffMultIdx,
             [](int idx){
-                if (idx >= 0 && idx < 5 && SettingManager)
+                if (idx >= 0 && idx < 5 && SettingManager) {
                     SettingManager->Set("fastforward.multiplier",
                                         beiklive::ConfigValue(ffRateVals[idx]));
+                    SettingManager->Save();
+                }
             });
         box->addView(ffMultCell);
     }
@@ -623,9 +536,11 @@ brls::ScrollingFrame* SettingPage::buildGameTab()
         auto* bufCell = new brls::SelectorCell();
         bufCell->init("倒带缓存数量", bufSizeLabels, bufIdx,
             [](int idx){
-                if (idx >= 0 && idx < 4 && SettingManager)
+                if (idx >= 0 && idx < 4 && SettingManager) {
                     SettingManager->Set("rewind.bufferSize",
                                         beiklive::ConfigValue(k_bufSizeInts[idx]));
+                    SettingManager->Save();
+                }
             });
         box->addView(bufCell);
     }
@@ -637,8 +552,10 @@ brls::ScrollingFrame* SettingPage::buildGameTab()
         auto* stepCell = new brls::SelectorCell();
         stepCell->init("倒带步数", rewSteps, stepIdx,
             [](int idx){
-                if (SettingManager)
+                if (SettingManager) {
                     SettingManager->Set("rewind.step", beiklive::ConfigValue(idx + 1));
+                    SettingManager->Save();
+                }
             });
         box->addView(stepCell);
     }
@@ -701,7 +618,6 @@ brls::ScrollingFrame* SettingPage::buildGameTab()
         box->addView(idleCell);
     }
 
-    addSaveButton(box);
     scroll->setContentView(box);
     return scroll;
 }
@@ -749,9 +665,11 @@ brls::ScrollingFrame* SettingPage::buildDisplayTab()
         auto* intScaleCell = new brls::SelectorCell();
         intScaleCell->init("整数倍缩放倍率（整数倍模式下生效）", intScaleLabels, multIdx,
             [](int idx){
-                if (idx >= 0 && idx < k_intScaleCount && SettingManager)
+                if (idx >= 0 && idx < k_intScaleCount && SettingManager) {
                     SettingManager->Set("display.integer_scale_mult",
                                         beiklive::ConfigValue(k_intScaleVals[idx]));
+                    SettingManager->Save();
+                }
             });
         box->addView(intScaleCell);
     }
@@ -785,7 +703,6 @@ brls::ScrollingFrame* SettingPage::buildDisplayTab()
                       [](bool v){ cfgSetBool("display.showRewindOverlay", v); });
     box->addView(showRewCell);
 
-    addSaveButton(box);
     scroll->setContentView(box);
     return scroll;
 }
@@ -833,7 +750,6 @@ brls::ScrollingFrame* SettingPage::buildAudioTab()
         box->addView(lpfCell);
     }
 
-    addSaveButton(box);
     scroll->setContentView(box);
     return scroll;
 }
@@ -941,7 +857,6 @@ brls::ScrollingFrame* SettingPage::buildKeyBindTab()
     }
 #endif
 
-    addSaveButton(box);
     scroll->setContentView(box);
     return scroll;
 }
@@ -1010,7 +925,6 @@ brls::ScrollingFrame* SettingPage::buildDebugTab()
                          });
     box->addView(logOverlayCell);
 
-    addSaveButton(box);
     scroll->setContentView(box);
     return scroll;
 }
