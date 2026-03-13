@@ -716,17 +716,23 @@ void FileListPage::updateDetailPanel(const FileListItem &item)
         return;
     }
 
-    // Priority 2: thumbnail image next to the file (same base name)
+    // Priority 2: thumbnail image next to the file (same base name).
+    // Check common image extensions in priority order; GIF is included so
+    // that animated thumbnails are displayed when available.
     if (!item.isDir)
     {
         auto dot = item.fullPath.rfind('.');
         if (dot != std::string::npos)
         {
-            std::string thumbPath = item.fullPath.substr(0, dot) + ".png";
-            if (beiklive::file::getPathType(thumbPath) == beiklive::file::PathType::File)
+            static const char* k_thumbExts[] = { ".png", ".gif", ".jpg", ".jpeg" };
+            for (const char* ext : k_thumbExts)
             {
-                m_detailThumb->setImageFromFileAsync(thumbPath);
-                return;
+                std::string thumbPath = item.fullPath.substr(0, dot) + ext;
+                if (beiklive::file::getPathType(thumbPath) == beiklive::file::PathType::File)
+                {
+                    m_detailThumb->setImageFromFileAsync(thumbPath);
+                    return;
+                }
             }
         }
     }

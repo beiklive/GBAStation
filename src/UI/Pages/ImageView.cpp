@@ -4,9 +4,26 @@
 #include "UI/Utils/ImageFileCache.hpp"
 
 #include <borealis/core/thread.hpp>
+
+// Use the stb_image bundled with borealis/nanovg for GIF decoding.
+// The header guard avoids re-defining the implementation since image.cpp
+// already does STB_IMAGE_IMPLEMENTATION in a separate translation unit.
+#include <borealis/extern/nanovg/stb_image.h>
+
+#include <chrono>
 #include <fstream>
 
 using namespace brls::literals; // for _i18n
+
+/// Extract the lowercase extension (without leading dot) from a file path.
+static std::string getImageFileExt(const std::string& path)
+{
+    auto dot = path.rfind('.');
+    if (dot == std::string::npos) return "";
+    std::string ext = path.substr(dot + 1);
+    for (auto& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return ext;
+}
 
 ImageView::ImageView(const std::string& imagePath)
     : m_imagePath(imagePath)
@@ -134,6 +151,25 @@ ImageView::ImageView(const std::string& imagePath)
     }
 }
 
+ImageView::~ImageView()
+{
+    freeGifFrames();
+    // NVG images (both static and GIF frames) are cleaned up during NVG
+    // context teardown by borealis; the NVG context is not available here.
+    m_nvgImage = -1;
+}
+
+void ImageView::freeGifFrames()
+{
+    // NVG context may not be valid when this is called (e.g. in destructor).
+    // GIF textures will be cleaned up by the NVG context teardown.
+    m_gifFrames.clear();
+    m_gifCurrentFrame = 0;
+    m_gifElapsedMs    = 0.0f;
+    m_isGif           = false;
+    m_gifTimerStarted = false;
+}
+
 void ImageView::draw(NVGcontext* vg, float x, float y, float w, float h,
                      brls::Style /*style*/, brls::FrameContext* /*ctx*/)
 {
@@ -156,10 +192,62 @@ void ImageView::draw(NVGcontext* vg, float x, float y, float w, float h,
 
         if (!bytes.empty())
         {
-            m_nvgImage = nvgCreateImageMem(vg, 0, bytes.data(),
-                                           static_cast<int>(bytes.size()));
-            if (m_nvgImage >= 0)
-                nvgImageSize(vg, m_nvgImage, &m_imgW, &m_imgH);
+            // Detect animated GIF by file extension.
+            bool isGifFile = (getImageFileExt(m_imagePath) == "gif");
+
+            if (isGifFile)
+            {
+                // Decode all GIF frames.
+                int  frameW = 0, frameH = 0, frameCount = 0, comp = 0;
+                int* delays  = nullptr;
+                unsigned char* pixels = stbi_load_gif_from_memory(
+                    bytes.data(), static_cast<int>(bytes.size()),
+                    &delays, &frameW, &frameH, &frameCount, &comp, 4 /*RGBA*/);
+
+                if (pixels && frameCount > 0)
+                {
+                    const size_t frameSz =
+                        static_cast<size_t>(frameW) *
+                        static_cast<size_t>(frameH) * 4;
+                    for (int i = 0; i < frameCount; ++i)
+                    {
+                        GifFrame gf;
+                        gf.delay_ms = (delays && delays[i] > 0) ? delays[i] : GifFrame::DEFAULT_DELAY_MS;
+                        gf.nvgTex   = nvgCreateImageRGBA(vg, frameW, frameH, 0,
+                                                         pixels + i * frameSz);
+                        m_gifFrames.push_back(gf);
+                    }
+                    stbi_image_free(pixels);
+                    if (delays) stbi_image_free(delays);
+
+                    if (!m_gifFrames.empty())
+                    {
+                        m_isGif           = true;
+                        m_gifCurrentFrame = 0;
+                        m_gifElapsedMs    = 0.0f;
+                        m_gifTimerStarted = false;
+                        m_nvgImage        = m_gifFrames[0].nvgTex;
+                        nvgImageSize(vg, m_nvgImage, &m_imgW, &m_imgH);
+                    }
+                }
+                else
+                {
+                    if (pixels) stbi_image_free(pixels);
+                    if (delays) stbi_image_free(delays);
+                    // Fallback: load as static image
+                    m_nvgImage = nvgCreateImageMem(vg, 0, bytes.data(),
+                                                   static_cast<int>(bytes.size()));
+                    if (m_nvgImage >= 0)
+                        nvgImageSize(vg, m_nvgImage, &m_imgW, &m_imgH);
+                }
+            }
+            else
+            {
+                m_nvgImage = nvgCreateImageMem(vg, 0, bytes.data(),
+                                               static_cast<int>(bytes.size()));
+                if (m_nvgImage >= 0)
+                    nvgImageSize(vg, m_nvgImage, &m_imgW, &m_imgH);
+            }
         }
         m_loaded = true;
     }
@@ -185,6 +273,40 @@ void ImageView::draw(NVGcontext* vg, float x, float y, float w, float h,
         nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
         nvgText(vg, x + w * 0.5f, y + h * 0.5f, m_imagePath.c_str(), nullptr);
         return;
+    }
+
+    // ── Advance GIF frame ────────────────────────────────────────────────────
+    if (m_isGif && !m_gifFrames.empty())
+    {
+        using Clock = std::chrono::steady_clock;
+        const auto now = Clock::now();
+        if (!m_gifTimerStarted)
+        {
+            m_gifLastTime     = now;
+            m_gifTimerStarted = true;
+        }
+        else
+        {
+            float deltaMs = std::chrono::duration<float, std::milli>(
+                                now - m_gifLastTime).count();
+            m_gifLastTime   = now;
+            m_gifElapsedMs += deltaMs;
+
+            float threshold = static_cast<float>(
+                m_gifFrames[m_gifCurrentFrame].delay_ms);
+            while (m_gifElapsedMs >= threshold)
+            {
+                m_gifElapsedMs -= threshold;
+                m_gifCurrentFrame =
+                    (m_gifCurrentFrame + 1) %
+                    static_cast<int>(m_gifFrames.size());
+                threshold = static_cast<float>(
+                    m_gifFrames[m_gifCurrentFrame].delay_ms);
+            }
+        }
+        m_nvgImage = m_gifFrames[m_gifCurrentFrame].nvgTex;
+        // Request continuous redraw for animation.
+        invalidate();
     }
 
     // ── Draw image centered with current scale / offset ─────────────────────

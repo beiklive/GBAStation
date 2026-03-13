@@ -269,8 +269,8 @@ private:
         m_captured = buildCombo(m_capturedKeys);
         m_keyLabel->setText(m_captured);
 
-        // Commit immediately once we have at least one key
-        finish(m_captured);
+        // Do NOT call finish() here – wait for the 5-second countdown to
+        // expire so the user has time to enter a combo (second button).
     }
 
     // ── Keyboard capture (polled every frame) ──────────────────────────────
@@ -317,7 +317,8 @@ private:
             m_capturedKeys = newKeys;
             m_captured     = combo;
             m_keyLabel->setText(combo);
-            finish(combo);
+            // Do NOT call finish() here – wait for the 5-second countdown to
+            // expire so the user has time to enter a combo (second key).
         }
         else if (ctrl || shift || alt)
         {
