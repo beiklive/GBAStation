@@ -1,11 +1,20 @@
 #include "Control/GameInputController.hpp"
+#include <borealis/core/logger.hpp>
 
 namespace beiklive {
 
 void GameInputController::registerAction(std::vector<int> buttons, Callback callback)
 {
-    if (buttons.empty() || !callback)
+    if (buttons.empty())
+    {
+        brls::Logger::warning("GameInputController: registerAction called with empty buttons array – ignored");
         return;
+    }
+    if (!callback)
+    {
+        brls::Logger::warning("GameInputController: registerAction called with null callback – ignored");
+        return;
+    }
     Action a;
     a.buttons  = std::move(buttons);
     a.callback = std::move(callback);

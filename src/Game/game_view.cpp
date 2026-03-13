@@ -1031,13 +1031,15 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
 
         // Handle BUTTON_A press to dismiss core-failure screen.
         // Since all borealis actions are disabled we check the raw snapshot.
+        // Edge detection via m_requestExit prevents repeated calls when held.
         if (m_coreFailed) {
             InputSnapshot snap;
             {
                 std::lock_guard<std::mutex> lk(m_inputSnapMutex);
                 snap = m_inputSnap;
             }
-            if (snap.ctrlState.buttons[static_cast<int>(brls::BUTTON_A)]) {
+            bool btnA = snap.ctrlState.buttons[static_cast<int>(brls::BUTTON_A)];
+            if (btnA && !m_requestExit.exchange(true, std::memory_order_relaxed)) {
                 brls::Application::popActivity();
                 return;
             }

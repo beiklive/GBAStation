@@ -6,7 +6,8 @@
 #include <string>
 #include <vector>
 
-/// Full-screen image viewer with zoom/pan support (PNG images).
+/// Full-screen image viewer with zoom/pan support.
+/// Supports static images (PNG, JPG, JPEG, BMP, WEBP, TGA).
 /// - Black background
 /// - BUTTON_B  : close (pop activity)
 /// - BUTTON_LB : zoom out
