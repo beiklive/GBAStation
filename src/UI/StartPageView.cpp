@@ -292,12 +292,12 @@ void StartPageView::createAppPage()
         return;
 
     m_appPage = new AppPage();
-    m_appPage->addGame({ "/mGBA/roms/haogou.gba",          "好狗狗星系",   BK_RES("img/thumb/209.png") });
-    m_appPage->addGame({ "./1.gba",                         "win测试",      BK_RES("img/thumb/209.png") });
-    m_appPage->addGame({ "/mGBA/roms/gba/seaglass.gba",    "海镜",         BK_RES("img/thumb/210.png") });
-    m_appPage->addGame({ "./2.gbc",                         "gbc口袋要管",  "" });
-    m_appPage->addGame({ "/mGBA/roms/gba/Mother 3.gba",    "地球冒险3",    BK_RES("img/thumb/212.png") });
-    m_appPage->addGame({ "/mGBA/roms/gba/MuChangWuYu.gba", "牧场物语",     "" });
+    // m_appPage->addGame({ "/mGBA/roms/haogou.gba",          "好狗狗星系",   BK_RES("img/thumb/209.png") });
+    // m_appPage->addGame({ "./1.gba",                         "win测试",      BK_RES("img/thumb/209.png") });
+    // m_appPage->addGame({ "/mGBA/roms/gba/seaglass.gba",    "海镜",         BK_RES("img/thumb/210.png") });
+    // m_appPage->addGame({ "./2.gbc",                         "gbc口袋要管",  "" });
+    // m_appPage->addGame({ "/mGBA/roms/gba/Mother 3.gba",    "地球冒险3",    BK_RES("img/thumb/212.png") });
+    // m_appPage->addGame({ "/mGBA/roms/gba/MuChangWuYu.gba", "牧场物语",     "" });
     m_appPage->onGameSelected = [](const GameEntry& e) {
         // Free UI image cache before launching the emulator to reclaim memory.
         beiklive::clearUIImageCache();
@@ -342,7 +342,7 @@ void StartPageView::openFileListPage()
 
     // ── Create a fresh FileListPage ───────────────────────────────────────────
     auto* fileListPage = new FileListPage();
-    // fileListPage->setFilter(ROM_EXTENSIONS, FileListPage::FilterMode::Whitelist);
+    fileListPage->setFilter({"png", "gba", "gbc", "gb"}, FileListPage::FilterMode::Whitelist);
 
     // ── Create a fresh settings panel and a container that holds both ─────────
     // The container is absolute-positioned so the panel can overlay the list.
