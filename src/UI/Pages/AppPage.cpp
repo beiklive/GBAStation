@@ -31,8 +31,8 @@ GameCard::GameCard(const GameEntry& entry)
     addView(m_titleLabel);
 
     m_coverImage = new brls::Image();
-    m_coverImage->setCornerRadius(13.f);
-    m_coverImage->setBackgroundColor(nvgRGBA(252, 255, 248, 255));
+    m_coverImage->setCornerRadius(10.f);
+    m_coverImage->setBackgroundColor(nvgRGBA(31, 31, 31, 50));
     m_coverImage->setHighlightPadding(3.f);
     m_coverImage->setHideHighlightBackground(true);
     m_coverImage->setShadowVisibility(true);
@@ -207,7 +207,12 @@ AppPage::AppPage()
         brls::Logger::debug("关于");
     });
     m_ButtonRow->addButton(BK_RES(path_prefix + "tuichu_64.png"), "退出程序", []() {
-        brls::Logger::debug("退出程序");
+            auto dialog = new brls::Dialog("hints/exit_hint"_i18n);
+            dialog->addButton("hints/cancel"_i18n, []() {});
+            dialog->addButton("hints/ok"_i18n, []()
+                { brls::Application::quit(); });
+            dialog->open();
+            return true;
     });
 
     addView(m_ButtonRow);

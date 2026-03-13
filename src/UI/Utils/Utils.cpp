@@ -88,7 +88,7 @@ namespace beiklive::UI
     static constexpr float ROUND_BTN_IMAGE_SIZE = 80.0f;  // diameter of the circle
     static constexpr float ROUND_BTN_PADDING    = 10.0f;  // padding around the whole widget
     static constexpr float ROUND_BTN_GAP        =  6.0f;  // gap between circle and label
-    static constexpr float ROUND_BTN_LABEL_FS   = 14.0f;  // label font size
+    static constexpr float ROUND_BTN_LABEL_FS   = 20.0f;  // label font size
     static constexpr float ROUND_BTN_LABEL_H    = 20.0f;  // reserved height for the label row
 
     // ── RoundButton ──────────────────────────────────────────────────────────
