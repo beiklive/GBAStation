@@ -245,6 +245,27 @@ inline void setGameDataStr(const std::string& fileName, const std::string& field
 #define RECENT_GAME_COUNT 10
 #define RECENT_GAME_KEY_PREFIX "recent.game."
 
+/// 从近期游戏队列中移除 gameFileName 并保存到 SettingManager。
+/// @param gameFileName  文件名（含后缀），与 pushRecentGame 传入的值保持一致。
+inline void removeRecentGame(const std::string& gameFileName)
+{
+    if (!SettingManager || gameFileName.empty()) return;
+    std::vector<std::string> queue;
+    for (int i = 0; i < RECENT_GAME_COUNT; ++i) {
+        std::string key = std::string(RECENT_GAME_KEY_PREFIX) + std::to_string(i);
+        auto v = SettingManager->Get(key);
+        if (v && v->AsString() && !v->AsString()->empty())
+            queue.push_back(*v->AsString());
+    }
+    queue.erase(std::remove(queue.begin(), queue.end(), gameFileName), queue.end());
+    for (int i = 0; i < RECENT_GAME_COUNT; ++i) {
+        std::string key = std::string(RECENT_GAME_KEY_PREFIX) + std::to_string(i);
+        std::string val = (i < static_cast<int>(queue.size())) ? queue[i] : "";
+        SettingManager->Set(key, beiklive::ConfigValue(val));
+    }
+    SettingManager->Save();
+}
+
 /// 将 gameName 推入近期游戏队列（队首为最新）并保存到 SettingManager。
 inline void pushRecentGame(const std::string& gameName)
 {

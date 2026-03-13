@@ -63,7 +63,7 @@ GameCard::GameCard(const GameEntry& entry)
         return true;
     }, false, false, brls::SOUND_CLICK);
     registerAction("beiklive/hints/set"_i18n, brls::BUTTON_X, [this](brls::View*) {
-        brls::Logger::debug("设置");
+        if (onOptions) onOptions(m_entry);
         return true;
     });
 
@@ -231,6 +231,7 @@ void AppPage::addGame(const GameEntry& entry)
     auto* card = new GameCard(entry);
     card->onFocused   = [this](const GameEntry& e) { onCardFocused(e);   };
     card->onActivated = [this](const GameEntry& e) { onCardActivated(e); };
+    card->onOptions   = [this](const GameEntry& e) { if (onGameOptions) onGameOptions(e); };
     m_cardRow->addView(card);
 }
 
@@ -251,4 +252,36 @@ void AppPage::onCardActivated(const GameEntry& entry)
 {
     if (onGameSelected)
         onGameSelected(entry);
+}
+
+void AppPage::removeGame(const std::string& gamePath)
+{
+    auto& children = m_cardRow->getChildren();
+    for (auto it = children.begin(); it != children.end(); ++it) {
+        auto* card = dynamic_cast<GameCard*>(*it);
+        if (card && card->getEntry().path == gamePath) {
+            m_cardRow->removeView(card, true);
+            break;
+        }
+    }
+}
+
+void AppPage::updateGameLogo(const std::string& gamePath, const std::string& newLogoPath)
+{
+    for (auto* child : m_cardRow->getChildren()) {
+        auto* card = dynamic_cast<GameCard*>(child);
+        if (card && card->getEntry().path == gamePath) {
+            card->updateCover(newLogoPath);
+            break;
+        }
+    }
+}
+
+void GameCard::updateCover(const std::string& newCoverPath)
+{
+    m_entry.cover = newCoverPath;
+    if (!newCoverPath.empty())
+        m_coverImage->setImageFromFile(newCoverPath);
+    else
+        m_coverImage->setImageFromFile(BK_APP_DEFAULT_LOGO);
 }
