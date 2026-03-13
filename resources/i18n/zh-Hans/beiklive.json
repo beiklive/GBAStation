@@ -25,7 +25,9 @@
         "close" : "关闭",
         "zoom_in" : "放大",
         "zoom_out" : "缩小",
-        "reset" : "重置视图"
+        "reset" : "重置视图",
+        "clear_binding" : "清除",
+        "toggle_detail" : "详细信息"
     },
     "file": {
         "file_select" : "文件选择",
@@ -40,5 +42,37 @@
         "delete_confirm" : "确认删除？",
         "new_folder" : "新建文件夹",
         "close_panel" : "关闭"
+    },
+    "settings": {
+        "tab": {
+            "ui"      : "界面设置",
+            "game"    : "游戏设置",
+            "display" : "画面设置",
+            "audio"   : "声音设置",
+            "keybind" : "按键预设",
+            "debug"   : "调试工具"
+        },
+        "ui": {
+            "header_bg"    : "背景图片",
+            "show_bg"      : "显示背景图片",
+            "bg_path"      : "背景图片路径 (PNG/GIF)",
+            "bg_not_set"   : "未设置",
+            "bg_blur"      : "背景图片模糊",
+            "bg_blur_level": "模糊等级",
+            "header_xmb"   : "PSP XMB 风格背景",
+            "show_xmb"     : "显示 XMB 背景",
+            "xmb_color"    : "颜色设置"
+        },
+        "keybind": {
+            "header_pad"       : "手柄",
+            "header_kbd"       : "键盘",
+            "pad_suffix"       : " (手柄)",
+            "kbd_suffix"       : " (键盘)",
+            "press_kbd"        : "请按下键盘按键（支持 CTRL/SHIFT/ALT 组合键）",
+            "press_pad"        : "请按下手柄按键（支持组合键）",
+            "countdown_suffix" : " 秒",
+            "waiting"          : "---",
+            "combo_more"       : "+?"
+        }
     }
 }

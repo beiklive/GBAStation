@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "common.hpp"
+#include "UI/Utils/ProImage.hpp"
 
 using namespace beiklive;
 
@@ -19,7 +20,7 @@ public:
     void setImagePath(const std::string& path);
 
 private:
-    brls::Image* m_bgImage = nullptr;
+    beiklive::UI::ProImage* m_bgImage = nullptr;
     // brls::Label*           m_titleLabel  = nullptr;
 
 };

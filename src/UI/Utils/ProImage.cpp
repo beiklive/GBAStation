@@ -190,6 +190,14 @@ float ProImage::getBlurRadius() const { return m_blurRadius; }
 
 // ── Animated GIF ──────────────────────────────────────────────────────────────
 
+void ProImage::setGifScalingMode(GifScalingMode mode)
+{
+    m_gifScalingMode = mode;
+    invalidate();
+}
+
+ProImage::GifScalingMode ProImage::getGifScalingMode() const { return m_gifScalingMode; }
+
 void ProImage::setImageFromGif(const std::string& path)
 {
     // Release previous GIF frames (if any)
@@ -314,17 +322,32 @@ void ProImage::draw(NVGcontext* vg, float x, float y, float w, float h,
         invalidate(); // keep redrawing
     }
 
-    if (m_blurEnabled && texture)
+    if (m_isGif && !m_gifFrames.empty() &&
+        m_gifScalingMode == GifScalingMode::CONTAIN &&
+        originalImageWidth > 0.0f && originalImageHeight > 0.0f)
     {
-        brls::Image::draw(vg, x, y, w, h, style, ctx);
-        drawBlur(vg, x, y, w, h, paint);
+        // CONTAIN mode: draw the GIF frame only in the aspect-ratio-correct
+        // rectangle; the surrounding area stays transparent (no edge bleed).
+        int curTex = m_gifFrames[m_gifCurrentFrame].texture;
+        drawGifFrame(vg, x, y, w, h, curTex);
+        if (m_blurEnabled)
+        {
+            NVGpaint blurPaint = nvgImagePattern(vg, x, y, w, h, 0.0f, curTex, 1.0f);
+            drawBlur(vg, x, y, w, h, blurPaint);
+        }
     }
     else
     {
-        brls::Image::draw(vg, x, y, w, h, style, ctx);
+        if (m_blurEnabled && texture)
+        {
+            brls::Image::draw(vg, x, y, w, h, style, ctx);
+            drawBlur(vg, x, y, w, h, paint);
+        }
+        else
+        {
+            brls::Image::draw(vg, x, y, w, h, style, ctx);
+        }
     }
-
-    // ── Shader animation overlay (clock-based time) ───────────────────────────
     if (m_shaderAnimation != ShaderAnimationType::NONE)
     {
         if (!m_shaderTimerStarted)
@@ -396,7 +419,47 @@ void ProImage::drawBlur(NVGcontext* vg, float x, float y, float w, float h,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  PSP XMB ripple — OpenGL shader rendering
+//  GIF frame drawing (CONTAIN mode)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Draw a single GIF frame texture (@p nvgTex) with CONTAIN scaling:
+ * the frame fills as much of the widget area as possible while preserving
+ * its original aspect ratio; the surrounding space is left transparent
+ * (no edge-pixel bleed from clamp-to-edge texture sampling).
+ */
+void ProImage::drawGifFrame(NVGcontext* vg, float x, float y, float w, float h, int nvgTex)
+{
+    if (nvgTex < 0 || originalImageWidth <= 0.0f || originalImageHeight <= 0.0f)
+        return;
+
+    const float imgAspect = originalImageWidth / originalImageHeight;
+    const float boxAspect = w / h;
+
+    float drawW, drawH;
+    if (imgAspect > boxAspect)
+    {
+        // Image is wider than the box: fit by width
+        drawW = w;
+        drawH = w / imgAspect;
+    }
+    else
+    {
+        // Image is taller than (or same as) the box: fit by height
+        drawH = h;
+        drawW = h * imgAspect;
+    }
+
+    const float drawX = x + (w - drawW) * 0.5f;
+    const float drawY = y + (h - drawH) * 0.5f;
+
+    NVGpaint p = nvgImagePattern(vg, drawX, drawY, drawW, drawH, 0.0f, nvgTex, 1.0f);
+    nvgBeginPath(vg);
+    nvgRect(vg, drawX, drawY, drawW, drawH);
+    nvgFillPaint(vg, p);
+    nvgFill(vg);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 #ifdef BOREALIS_USE_OPENGL
