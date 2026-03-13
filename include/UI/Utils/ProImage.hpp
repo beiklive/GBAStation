@@ -5,6 +5,8 @@
 #include <functional>
 #include <string>
 #include <vector>
+#include <atomic>
+#include <mutex>
 
 #ifdef BOREALIS_USE_OPENGL
 #  include <glad/glad.h>
@@ -62,6 +64,20 @@ class ProImage : public brls::Image
     /// Set the scaling mode used when drawing GIF frames. Default is FILL.
     void setGifScalingMode(GifScalingMode mode);
     GifScalingMode getGifScalingMode() const;
+
+    // ── Async image loading ───────────────────────────────────────────────────
+
+    /**
+     * Load an image file asynchronously.
+     * - Checks the ImageFileCache first (main-thread byte cache).
+     * - On a cache miss, reads the file on a background thread, stores the
+     *   bytes in the cache, then creates the NVG texture on the main thread.
+     * - While loading, draw() shows a "加载中..." placeholder text.
+     * - Calling this again before a previous load completes cancels the
+     *   previous load (the result is discarded via a generation counter).
+     * - Animated GIFs are decoded and played back as with setImageFromGif().
+     */
+    void setImageFromFileAsync(const std::string& path);
 
     // ── Shader Animation ─────────────────────────────────────────────────────
 
@@ -134,6 +150,10 @@ class ProImage : public brls::Image
     void freeGifFrames();
     void drawGifFrame(NVGcontext* vg, float x, float y, float w, float h, int nvgTex);
     void drawBlur(NVGcontext* vg, float x, float y, float w, float h, NVGpaint basePaint);
+
+    // ── Async loading state ──────────────────────────────────────────────────
+    bool               m_asyncLoading = false; ///< true while an async load is in progress
+    std::atomic<int>   m_asyncGen{0};           ///< incremented on each new async request
 };
 
 } // namespace beiklive::UI

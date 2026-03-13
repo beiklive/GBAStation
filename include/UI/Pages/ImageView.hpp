@@ -1,7 +1,10 @@
 #pragma once
 
 #include <borealis.hpp>
+#include <atomic>
+#include <mutex>
 #include <string>
+#include <vector>
 
 /// Full-screen image viewer with zoom/pan support.
 /// - Black background
@@ -27,6 +30,12 @@ class ImageView : public brls::Box
     int  m_imgW      = 0;
     int  m_imgH      = 0;
     bool m_loaded    = false;
+
+    // Async loading
+    bool                  m_asyncLoading = false;
+    std::atomic<bool>     m_asyncReady{false};
+    std::vector<uint8_t>  m_asyncBytes;
+    std::mutex            m_asyncMutex;
 
     float m_scale   = 1.0f;
     float m_offsetX = 0.0f;
