@@ -267,6 +267,7 @@ void FileListItemView::onFocusLost()
 
 FileListPage::FileListPage()
 {
+    bklog::debug("FileListPage: constructing");
     setAxis(brls::Axis::COLUMN);
     setWidth(brls::View::AUTO);
     setHeight(brls::View::AUTO);
@@ -283,6 +284,7 @@ FileListPage::FileListPage()
     SettingManager->SetDefault("UI.logoLoadMode", 1);
 
     int layoutModeInt = *SettingManager->Get(key)->AsInt();
+    bklog::debug("FileListPage: layout mode = {}", layoutModeInt);
     setLayoutMode(static_cast<LayoutMode>(layoutModeInt));
 
     // B → navigate up
@@ -290,6 +292,7 @@ FileListPage::FileListPage()
                    brls::BUTTON_B,
                    [this](brls::View *)
                    {
+                       bklog::debug("FileListPage: BUTTON_B pressed, navigating up");
                        navigateUp();
                        return true;
                    });
@@ -302,6 +305,7 @@ FileListPage::FileListPage()
                        LayoutMode newMode = (m_layoutMode == LayoutMode::ListOnly)
                            ? LayoutMode::ListAndDetail
                            : LayoutMode::ListOnly;
+                       bklog::debug("FileListPage: toggling layout mode to {}", static_cast<int>(newMode));
                        setLayoutMode(newMode);
                        if (SettingManager) {
                            SettingManager->Set("UI.fileListLayoutMode",
@@ -311,6 +315,7 @@ FileListPage::FileListPage()
                        return true;
                    },
                    false, false, brls::SOUND_CLICK);
+    bklog::debug("FileListPage: construction complete");
 }
 
 FileListPage::~FileListPage()
@@ -452,6 +457,7 @@ void FileListPage::buildDetailPanel()
 
 void FileListPage::navigateTo(const std::string &path)
 {
+    bklog::debug("FileListPage::navigateTo: '{}'", path);
     refreshList(path);
 }
 
@@ -467,6 +473,7 @@ void FileListPage::resetFocusToTop()
 
 void FileListPage::rebuildItemViews()
 {
+    bklog::debug("FileListPage::rebuildItemViews: {} items", static_cast<int>(m_items.size()));
     // clearViews(true) schedules old views for deferred deletion via borealis'
     // deletionPool, so Application::currentFocus remains a valid pointer until
     // the end of the current frame even if it pointed to one of the removed
@@ -493,8 +500,10 @@ void FileListPage::rebuildItemViews()
             firstItem = itemView;
     }
 
-    if (firstItem)
+    if (firstItem) {
+        bklog::debug("FileListPage::rebuildItemViews: giving focus to first item");
         brls::Application::giveFocus(firstItem);
+    }
 }
 
 void FileListPage::setFilter(const std::vector<std::string> &suffixes, FilterMode mode)
@@ -605,12 +614,14 @@ bool FileListPage::passesFilter(const std::string &suffix) const
 
 void FileListPage::refreshList(const std::string &path)
 {
+    bklog::debug("FileListPage::refreshList: path='{}'", path);
     m_currentPath = path;
     m_inDriveListMode = false;
     updateHeader();
     clearDetailPanel();
 
     auto rawList = beiklive::file::listDir(path, beiklive::file::SortBy::TypeThenName);
+    bklog::debug("FileListPage::refreshList: listDir returned {} entries", static_cast<int>(rawList.size()));
 
     m_items.clear();
 
@@ -684,6 +695,7 @@ void FileListPage::refreshList(const std::string &path)
 #endif
         // Non-root (or non-Windows root): add a ".." entry so the user can
         // navigate back even when every file is hidden by the active filter.
+        bklog::debug("FileListPage::refreshList: empty, adding '..' entry");
         FileListItem dotdot;
         dotdot.fileName = "..";
         dotdot.fullPath = beiklive::file::getParentPath(m_currentPath);
@@ -698,6 +710,7 @@ void FileListPage::refreshList(const std::string &path)
         m_header->setInfo("0/" + std::to_string(total));
     }
 
+    bklog::debug("FileListPage::refreshList: {} items after filter, rebuilding views", static_cast<int>(m_items.size()));
     // Rebuild item views and reset focus to the first item.
     // Unlike RecyclerFrame::reloadData(), this directly sets focus to the
     // first view, which is completely reliable regardless of any internal
@@ -860,6 +873,7 @@ void FileListPage::showDriveList()
 
 void FileListPage::navigateUp()
 {
+    bklog::debug("FileListPage::navigateUp: currentPath='{}'", m_currentPath);
 #ifdef _WIN32
     // When in drive-list mode, there is nowhere to go further up – silently ignore
     if (m_inDriveListMode)
@@ -879,11 +893,13 @@ void FileListPage::navigateUp()
     std::string parent = beiklive::file::getParentPath(m_currentPath);
     if (parent.empty())
         parent = "/";
+    bklog::debug("FileListPage::navigateUp: going to '{}'", parent);
     refreshList(parent);
 }
 
 void FileListPage::openItem(const FileListItem &item)
 {
+    bklog::debug("FileListPage::openItem: '{}' isDir={}", item.fileName, item.isDir);
     if (item.isDir)
     {
         refreshList(item.fullPath);
@@ -892,16 +908,20 @@ void FileListPage::openItem(const FileListItem &item)
 
     // File: find and invoke the appropriate callback
     std::string suffix = beiklive::string::getFileSuffix(item.fileName);
+    bklog::debug("FileListPage::openItem: suffix='{}'", suffix);
     for (auto &kv : m_fileCallbacks)
     {
         if (beiklive::string::iequals(kv.first, suffix))
         {
+            bklog::info("FileListPage::openItem: invoking callback for suffix '{}'", suffix);
             kv.second(item);
             return;
         }
     }
-    if (m_defaultFileCallback)
+    if (m_defaultFileCallback) {
+        bklog::info("FileListPage::openItem: invoking default callback for '{}'", item.fileName);
         m_defaultFileCallback(item);
+    }
 }
 
 void FileListPage::doNewFolder()
@@ -933,6 +953,7 @@ void FileListPage::doNewFolder()
 
 void FileListPage::onItemFocused(int index)
 {
+    bklog::debug("FileListPage::onItemFocused: index={}", index);
     if (m_header && index >= 0)
     {
         int total = static_cast<int>(m_items.size());
@@ -948,8 +969,11 @@ void FileListPage::onItemFocused(int index)
 
 void FileListPage::onItemActivated(int index)
 {
-    if (index < 0 || index >= static_cast<int>(m_items.size()))
+    bklog::debug("FileListPage::onItemActivated: index={}", index);
+    if (index < 0 || index >= static_cast<int>(m_items.size())) {
+        bklog::warning("FileListPage::onItemActivated: index {} out of range (size={})", index, static_cast<int>(m_items.size()));
         return;
+    }
     openItem(m_items[index]);
 }
 

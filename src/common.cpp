@@ -82,18 +82,30 @@ bool cfgGetBool(const std::string& key, bool def)
 {
     if (!SettingManager) return def;
     auto v = SettingManager->Get(key);
-    if (!v) return def;
-    if (auto s = v->AsString()) return (*s == "true" || *s == "1" || *s == "yes");
-    if (auto i = v->AsInt())    return (*i != 0);
-    return def;
+    if (!v) {
+        brls::Logger::debug("cfgGetBool [{}]: missing, returning default={}", key, def);
+        return def;
+    }
+    bool result = def;
+    if (auto s = v->AsString())      result = (*s == "true" || *s == "1" || *s == "yes");
+    else if (auto i = v->AsInt())    result = (*i != 0);
+    else                             result = def;
+    brls::Logger::debug("cfgGetBool [{}] = {}", key, result);
+    return result;
 }
 
 std::string cfgGetStr(const std::string& key, const std::string& def)
 {
     if (!SettingManager) return def;
     auto v = SettingManager->Get(key);
-    if (!v) return def;
-    if (auto s = v->AsString()) return *s;
+    if (!v) {
+        brls::Logger::debug("cfgGetStr [{}]: missing, returning default", key);
+        return def;
+    }
+    if (auto s = v->AsString()) {
+        brls::Logger::debug("cfgGetStr [{}] = '{}'", key, *s);
+        return *s;
+    }
     return def;
 }
 
@@ -101,9 +113,19 @@ float cfgGetFloat(const std::string& key, float def)
 {
     if (!SettingManager) return def;
     auto v = SettingManager->Get(key);
-    if (!v) return def;
-    if (auto f = v->AsFloat()) return *f;
-    if (auto i = v->AsInt())   return static_cast<float>(*i);
+    if (!v) {
+        brls::Logger::debug("cfgGetFloat [{}]: missing, returning default={}", key, def);
+        return def;
+    }
+    if (auto f = v->AsFloat()) {
+        brls::Logger::debug("cfgGetFloat [{}] = {}", key, *f);
+        return *f;
+    }
+    if (auto i = v->AsInt()) {
+        float result = static_cast<float>(*i);
+        brls::Logger::debug("cfgGetFloat [{}] = {} (from int)", key, result);
+        return result;
+    }
     return def;
 }
 
@@ -111,14 +133,25 @@ int cfgGetInt(const std::string& key, int def)
 {
     if (!SettingManager) return def;
     auto v = SettingManager->Get(key);
-    if (!v) return def;
-    if (auto i = v->AsInt())   return *i;
-    if (auto f = v->AsFloat()) return static_cast<int>(*f);
+    if (!v) {
+        brls::Logger::debug("cfgGetInt [{}]: missing, returning default={}", key, def);
+        return def;
+    }
+    if (auto i = v->AsInt()) {
+        brls::Logger::debug("cfgGetInt [{}] = {}", key, *i);
+        return *i;
+    }
+    if (auto f = v->AsFloat()) {
+        int result = static_cast<int>(*f);
+        brls::Logger::debug("cfgGetInt [{}] = {} (from float)", key, result);
+        return result;
+    }
     return def;
 }
 
 void cfgSetStr(const std::string& key, const std::string& val)
 {
+    brls::Logger::debug("cfgSetStr [{}] = '{}'", key, val);
     if (SettingManager) {
         SettingManager->Set(key, beiklive::ConfigValue(val));
         SettingManager->Save();
@@ -127,6 +160,7 @@ void cfgSetStr(const std::string& key, const std::string& val)
 
 void cfgSetBool(const std::string& key, bool val)
 {
+    brls::Logger::debug("cfgSetBool [{}] = {}", key, val);
     cfgSetStr(key, val ? "true" : "false");
 }
 
