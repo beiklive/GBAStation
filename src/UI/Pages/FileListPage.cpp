@@ -22,7 +22,8 @@ static constexpr float CELL_PAD_H = 12.f;
 static constexpr float CELL_PAD_V = 10.f;
 static constexpr float INFO_FONT_SIZE = 16.f;
 static constexpr float NAME_FONT_SIZE = 26.f;
-static constexpr float DETAIL_THUMB_SZ = 180.f;
+static constexpr float DETAIL_PANEL_WIDTH = 400.f;
+static constexpr float DETAIL_THUMB_SZ = DETAIL_PANEL_WIDTH - 40.f; // panel width minus horizontal padding
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  File-type extension tables
@@ -344,6 +345,7 @@ void FileListPage::buildUI()
 
     // List container
     m_listBox = new brls::Box(brls::Axis::COLUMN);
+    m_listBox->setWidth(brls::View::AUTO);
     m_listBox->setGrow(1.0f);
     m_contentBox->addView(m_listBox);
 
@@ -379,13 +381,14 @@ void FileListPage::buildDetailPanel()
 {
     m_detailPanel = new brls::Box(brls::Axis::COLUMN);
     m_detailPanel->setAlignItems(brls::AlignItems::CENTER);
+    m_detailPanel->setWidth(DETAIL_PANEL_WIDTH);
     m_detailPanel->setPadding(20.f, 12.f, 20.f, 12.f);
     m_detailPanel->setBackgroundColor(nvgRGBA(40, 40, 40, 20));
     // Width will be set to ~33% in setLayoutMode()
 
     m_detailThumb = new brls::Image();
-    m_detailThumb->setWidth(DETAIL_THUMB_SZ);
-    m_detailThumb->setHeight(DETAIL_THUMB_SZ);
+    m_detailThumb->setWidth(DETAIL_THUMB_SZ*0.8);
+    m_detailThumb->setHeight(DETAIL_THUMB_SZ*0.6);
     m_detailThumb->setScalingType(brls::ImageScalingType::FIT);
     m_detailThumb->setInterpolation(brls::ImageInterpolation::LINEAR);
     m_detailThumb->setCornerRadius(8.f);
@@ -497,14 +500,14 @@ void FileListPage::setLayoutMode(LayoutMode mode)
     if (m_layoutMode == LayoutMode::ListOnly)
     {
         // List takes full width; detail panel is hidden
-        m_listBox->setWidthPercentage(100.f);
+        // m_listBox->setWidthPercentage(100.f);
         m_detailPanel->setVisibility(brls::Visibility::GONE);
     }
     else // ListAndDetail
     {
         // List occupies ~2/3; detail panel ~1/3
-        m_listBox->setWidthPercentage(65.f);
-        m_detailPanel->setWidthPercentage(30.f);
+        // m_listBox->setWidthPercentage(65.f);
+        // m_detailPanel->setWidthPercentage(30.f);
         m_detailPanel->setVisibility(brls::Visibility::VISIBLE);
     }
 }
