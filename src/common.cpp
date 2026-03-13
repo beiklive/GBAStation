@@ -129,7 +129,7 @@ void cfgSetBool(const std::string& key, bool val)
 /// Apply ALL background settings to @a img based on SettingManager:
 ///  - UI.showXmbBg  → enable/disable PSP XMB ripple shader
 ///  - UI.pspxmb.color → XMB background colour
-///  - UI.showBgImage + UI.bgImagePath → background image (PNG or GIF)
+///  - UI.showBgImage + UI.bgImagePath → background image (PNG/JPG/etc.)
 ///  - UI.bgBlurEnabled / UI.bgBlurRadius → Kawase blur overlay
 ///  - Visibility is set to GONE when both features are disabled.
 void ApplyXmbBg(beiklive::UI::ProImage* img)
@@ -149,7 +149,6 @@ void ApplyXmbBg(beiklive::UI::ProImage* img)
     img->setVisibility(brls::Visibility::VISIBLE);
 
     // Apply background image (drawn first, under any XMB shader overlay).
-    // GIF is not supported for the background – use a static image only.
     if (showBg && !bgPath.empty()) {
         img->setImageFromFile(bgPath);
     }

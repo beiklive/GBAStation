@@ -35,7 +35,7 @@ static const std::vector<std::string> k_gbExtensions = {"gb", "gbc"};
 static const std::vector<std::string> k_gbaExtensions = {"gba"};
 /// Common image file extensions
 static const std::vector<std::string> k_imageExtensions = {
-    "png", "jpg", "jpeg", "bmp", "gif", "webp", "tga"};
+    "png", "jpg", "jpeg", "bmp", "webp", "tga"};
 /// Common archive / compressed-file extensions
 static const std::vector<std::string> k_zipExtensions = {
     "zip", "rar", "7z", "gz", "tar", "bz2", "xz", "zst"};
@@ -386,7 +386,7 @@ void FileListPage::buildDetailPanel()
     m_detailPanel->setBackgroundColor(nvgRGBA(40, 40, 40, 20));
     // Width will be set to ~33% in setLayoutMode()
 
-    // Use ProImage so animated GIFs and async loading are supported.
+    // Use ProImage for async PNG loading.
     // setClipsToBounds(false) fixes edge-pixel stretching: the image is drawn
     // only in its exact aspect-ratio-correct rect (CONTAIN / FIT behaviour),
     // so no clamped edge pixels bleed into the surrounding empty space.
@@ -397,7 +397,6 @@ void FileListPage::buildDetailPanel()
     m_detailThumb->setInterpolation(brls::ImageInterpolation::LINEAR);
     m_detailThumb->setCornerRadius(8.f);
     m_detailThumb->setClipsToBounds(false); // prevents edge-pixel stretching
-    m_detailThumb->setGifScalingMode(beiklive::UI::ProImage::GifScalingMode::CONTAIN);
     m_detailThumb->setImageFromFile(BK_APP_DEFAULT_LOGO);
     m_detailPanel->addView(m_detailThumb);
 
@@ -717,14 +716,13 @@ void FileListPage::updateDetailPanel(const FileListItem &item)
     }
 
     // Priority 2: thumbnail image next to the file (same base name).
-    // Check common image extensions in priority order; GIF is included so
-    // that animated thumbnails are displayed when available.
+    // Check common image extensions in priority order.
     if (!item.isDir)
     {
         auto dot = item.fullPath.rfind('.');
         if (dot != std::string::npos)
         {
-            static const char* k_thumbExts[] = { ".png", ".gif", ".jpg", ".jpeg" };
+            static const char* k_thumbExts[] = { ".png", ".jpg", ".jpeg" };
             for (const char* ext : k_thumbExts)
             {
                 std::string thumbPath = item.fullPath.substr(0, dot) + ext;

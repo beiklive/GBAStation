@@ -300,7 +300,7 @@ void StartPageView::showAppPage()
 
 void StartPageView::openFileListPage()
 {
-    static const std::vector<std::string> IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "bmp", "gif"};
+    static const std::vector<std::string> IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "bmp"};
     static const std::vector<std::string> ROM_EXTENSIONS   = {"zip", "gba", "gbc", "gb"};
 
     // ── Create a fresh FileListPage ───────────────────────────────────────────

@@ -106,15 +106,14 @@ GameView::GameView()
     setHideHighlight(true);
 	beiklive::CheckGLSupport();
 
-    // Swallow all game buttons so Borealis doesn't process them as navigation.
-    // BUTTON_A: swallow during gameplay; pop activity if core failed to load.
-    registerAction("", brls::BUTTON_A, [this](brls::View*) {
-        if (m_coreFailed) {
-            brls::Application::popActivity();
-        }
-        return true;
-    }, true);
+    // ── Disable all borealis key handling while the game is running ───────────
+    // Swallow every controller button so borealis navigation, hints, and click
+    // animations never interfere with in-game input.  All actual input
+    // processing is handled by the low-level GameInputController (gamepad) and
+    // the keyboard snapshot in pollInput() (keyboard).
+    beiklive::swallow(this, brls::BUTTON_A);
     beiklive::swallow(this, brls::BUTTON_B);
+    beiklive::swallow(this, brls::BUTTON_X);
     beiklive::swallow(this, brls::BUTTON_Y);
     beiklive::swallow(this, brls::BUTTON_UP);
     beiklive::swallow(this, brls::BUTTON_DOWN);
@@ -130,28 +129,6 @@ GameView::GameView()
     beiklive::swallow(this, brls::BUTTON_RT);
     beiklive::swallow(this, brls::BUTTON_START);
     beiklive::swallow(this, brls::BUTTON_BACK);
-
-    // BUTTON_X: exit game and return to main menu.
-    // The action only exits when BUTTON_X is NOT mapped to any game joypad
-    // button (via handle.x config).  If the user has mapped BUTTON_X to a
-    // game button, the action swallows the press without exiting so the game
-    // thread can process it via pollInput().
-    registerAction("beiklive/hints/exit_game"_i18n, brls::BUTTON_X, [this](brls::View*) {
-        // Check at invocation time whether BUTTON_X is currently mapped to
-        // any game joypad button.  m_inputMap is populated during initialize()
-        // (which runs on first draw), so by the time the user can press X
-        // the map is always loaded.
-        for (const auto& entry : m_inputMap.gameButtonMap()) {
-            if (entry.padButton == static_cast<int>(brls::BUTTON_X)) {
-                // BUTTON_X is a game button – swallow without exiting.
-                return true;
-            }
-        }
-        bklog::info("GameView: exit requested via BUTTON_X");
-        stopGameThread();
-        brls::Application::popActivity();
-        return true;
-    }, false, false, brls::SOUND_CLICK);
 }
 
 GameView::~GameView()
@@ -222,6 +199,9 @@ void GameView::initialize()
 
         // ---- Load all input bindings and FF/rewind settings --------------
         m_inputMap.load(*cfg);
+
+        // ---- Register gamepad hotkey actions with GameInputController ----
+        registerGamepadHotkeys();
     } // end if (gameRunner && gameRunner->settingConfig)
 
     // ---- Load libretro core -------------------------------------------
@@ -598,6 +578,94 @@ void GameView::cleanup()
 }
 
 // ============================================================
+// registerGamepadHotkeys – wire m_inputCtrl to emulator hotkeys
+//
+// Called from initialize() after m_inputMap is loaded.
+// Each gamepad hotkey binding is registered as a GameInputController
+// action so that press/release/long-press events are automatically
+// tracked without any borealis action handlers.
+// ============================================================
+
+void GameView::registerGamepadHotkeys()
+{
+    m_inputCtrl.clear();
+
+    using Hotkey = beiklive::InputMappingConfig::Hotkey;
+    using KeyEvent = beiklive::GameInputController::KeyEvent;
+
+    // Helper: register one gamepad button combo if it is bound.
+    auto reg = [&](Hotkey h, beiklive::GameInputController::Callback cb)
+    {
+        const auto& hk = m_inputMap.hotkeyBinding(h);
+        if (hk.isPadBound())
+            m_inputCtrl.registerAction({hk.padButton}, std::move(cb));
+    };
+
+    // ── Fast-forward (hold key) ──────────────────────────────────────────────
+    reg(Hotkey::FastForwardHold, [this](KeyEvent evt)
+    {
+        if (!m_inputMap.ffToggleMode)
+        {
+            // Hold mode: FF active while key is held.
+            m_ffPadHeld = (evt == KeyEvent::Press);
+        }
+        else
+        {
+            // Toggle mode: each press flips the toggle state.
+            if (evt == KeyEvent::Press)
+                m_ffToggled = !m_ffToggled;
+        }
+        m_fastForward.store(m_ffPadHeld || m_ffKbdHeld || m_ffToggled,
+                            std::memory_order_relaxed);
+    });
+
+    // ── Fast-forward (dedicated toggle key) ─────────────────────────────────
+    reg(Hotkey::FastForwardToggle, [this](KeyEvent evt)
+    {
+        if (evt == KeyEvent::Press)
+        {
+            m_ffToggled = !m_ffToggled;
+            m_fastForward.store(m_ffPadHeld || m_ffKbdHeld || m_ffToggled,
+                                std::memory_order_relaxed);
+        }
+    });
+
+    // ── Rewind (hold key) ────────────────────────────────────────────────────
+    reg(Hotkey::RewindHold, [this](KeyEvent evt)
+    {
+        if (!m_inputMap.rewindToggleMode)
+        {
+            m_rewPadHeld = (evt == KeyEvent::Press);
+        }
+        else
+        {
+            if (evt == KeyEvent::Press)
+                m_rewindToggled = !m_rewindToggled;
+        }
+        m_rewinding.store(m_rewPadHeld || m_rewKbdHeld || m_rewindToggled,
+                          std::memory_order_relaxed);
+    });
+
+    // ── Rewind (dedicated toggle key) ───────────────────────────────────────
+    reg(Hotkey::RewindToggle, [this](KeyEvent evt)
+    {
+        if (evt == KeyEvent::Press)
+        {
+            m_rewindToggled = !m_rewindToggled;
+            m_rewinding.store(m_rewPadHeld || m_rewKbdHeld || m_rewindToggled,
+                              std::memory_order_relaxed);
+        }
+    });
+
+    // ── Exit game ────────────────────────────────────────────────────────────
+    reg(Hotkey::ExitGame, [this](KeyEvent evt)
+    {
+        if (evt == KeyEvent::Press && !m_requestExit.load(std::memory_order_relaxed))
+            m_requestExit.store(true, std::memory_order_relaxed);
+    });
+}
+
+// ============================================================
 // uploadFrame – copy RGBA8888 pixels from libretro into the GL texture
 // ============================================================
 
@@ -641,13 +709,12 @@ void GameView::uploadFrame(NVGcontext* vg,
 }
 
 // ============================================================
-// pollInput – map borealis controller state to libretro buttons
-// Supports:
-//   - Configurable handle (gamepad) button mapping via m_inputMap
-//   - Raw keyboard mapping via platform input manager
-//   - Toggle / hold mode for fast-forward and rewind
-//   - Auto-detection of keyboard vs gamepad input
-//   - Emulator hotkeys (fast-forward, rewind, exit game)
+// pollInput – map controller/keyboard state to libretro buttons
+// and fire emulator hotkeys via GameInputController.
+//
+// Gamepad hotkeys: handled by m_inputCtrl (registered in initialize())
+// Keyboard hotkeys: handled inline using the keyboard snapshot
+// Game buttons: mapped to libretro joypad IDs via m_inputMap
 //
 // NOTE: All actual GLFW/input-manager calls happen in refreshInputSnapshot()
 // on the main thread.  pollInput() only reads from the thread-safe snapshot.
@@ -656,9 +723,6 @@ void GameView::uploadFrame(NVGcontext* vg,
 void GameView::pollInput()
 {
     // ---- Obtain input state from the main-thread snapshot ---------------
-    // refreshInputSnapshot() is called from draw() (main thread) every frame.
-    // Here we take a consistent copy under the mutex so the game thread reads
-    // a coherent state even while the main thread might be updating it.
     InputSnapshot snap;
     {
         std::lock_guard<std::mutex> lk(m_inputSnapMutex);
@@ -672,12 +736,15 @@ void GameView::pollInput()
         return (it != snap.kbdState.end()) && it->second;
     };
 
-    // ---- Detect keyboard vs gamepad input type -----------------------
+    // ── GameInputController: process all registered gamepad hotkey combos ──
+    // This handles FF hold/toggle, rewind hold/toggle, and exit-game actions
+    // for the gamepad side. Callbacks write to atomics and game-thread booleans.
+    m_inputCtrl.update(state);
+
+    // ── Keyboard detection and mode switch ────────────────────────────────
     const auto& btnMap = m_inputMap.gameButtonMap();
-    bool keyboardActive = false;
 #ifndef __SWITCH__
-    // Check all keyboard-mapped game buttons so that any configured key
-    // activates keyboard mode, including custom bindings set by the user.
+    bool keyboardActive = false;
     for (const auto& entry : btnMap) {
         if (entry.kbdScancode >= 0 &&
             kbdState(static_cast<brls::BrlsKeyboardScancode>(entry.kbdScancode))) {
@@ -685,36 +752,27 @@ void GameView::pollInput()
             break;
         }
     }
-    // Also check keyboard hotkey bindings (fast-forward, rewind, etc.)
     if (!keyboardActive) {
         using Hotkey = beiklive::InputMappingConfig::Hotkey;
         for (int h = 0; h < static_cast<int>(Hotkey::_Count); ++h) {
             const auto& hk = m_inputMap.hotkeyBinding(static_cast<Hotkey>(h));
             if (hk.kbdCombo.isBound()) {
-                auto sc = static_cast<brls::BrlsKeyboardScancode>(hk.kbdCombo.scancode);
-                if (kbdState(sc)) {
+                if (kbdState(static_cast<brls::BrlsKeyboardScancode>(hk.kbdCombo.scancode))) {
                     keyboardActive = true;
                     break;
                 }
             }
         }
     }
-    if (keyboardActive) m_useKeyboard = true;
-    else {
-        // Check if any gamepad button is pressed (switch back to gamepad mode).
-        // Borealis maps certain keyboard navigation keys to controller buttons
-        // (e.g. ENTER/KP_ENTER → BUTTON_A, ESC → BUTTON_B) in the unified
-        // controller state.  We must not let those keyboard-aliased buttons
-        // falsely trigger a switch to gamepad mode.  The states of ENTER,
-        // KP_ENTER, and ESC are always captured in refreshInputSnapshot() for
-        // exactly this purpose.
+    if (keyboardActive) {
+        m_useKeyboard = true;
+    } else {
         const bool enterPressed =
             kbdState(brls::BRLS_KBD_KEY_ENTER) ||
             kbdState(brls::BRLS_KBD_KEY_KP_ENTER);
         const bool escPressed = kbdState(brls::BRLS_KBD_KEY_ESCAPE);
         for (int i = 0; i < static_cast<int>(brls::_BUTTON_MAX); ++i) {
             if (!state.buttons[i]) continue;
-            // Skip BUTTON_A/BUTTON_B if they are sourced from keyboard keys
             if (i == static_cast<int>(brls::BUTTON_A) && enterPressed) continue;
             if (i == static_cast<int>(brls::BUTTON_B) && escPressed)   continue;
             m_useKeyboard = false;
@@ -723,22 +781,16 @@ void GameView::pollInput()
     }
 #endif
 
-    // Helper: check if a hotkey is currently pressed (keyboard or gamepad).
-    // Combo keys require modifier keys to also be held.
+    // ── Keyboard-only hotkey helper ───────────────────────────────────────
+    // Returns true when the keyboard side of a hotkey is currently active.
+    // Modifier keys are checked as required by the binding.
     using Hotkey = beiklive::InputMappingConfig::Hotkey;
-
-    auto isHotkeyPressed = [&](Hotkey h) -> bool {
-        const auto& hk = m_inputMap.hotkeyBinding(h);
-        // --- gamepad side ---
-        if (hk.isPadBound() && hk.padButton < static_cast<int>(brls::_BUTTON_MAX)) {
-            if (state.buttons[hk.padButton]) return true;
-        }
-        // --- keyboard side ---
+    auto isKbdHotkeyPressed = [&](Hotkey h) -> bool {
 #ifndef __SWITCH__
+        const auto& hk = m_inputMap.hotkeyBinding(h);
         if (hk.kbdCombo.isBound()) {
             auto sc = static_cast<brls::BrlsKeyboardScancode>(hk.kbdCombo.scancode);
             if (kbdState(sc)) {
-                // Check modifiers
                 bool ctrlOk  = !hk.kbdCombo.ctrl  ||
                     kbdState(brls::BRLS_KBD_KEY_LEFT_CONTROL) ||
                     kbdState(brls::BRLS_KBD_KEY_RIGHT_CONTROL);
@@ -755,72 +807,65 @@ void GameView::pollInput()
         return false;
     };
 
-    // ---- Fast-forward -----------------------------------------------
-    // FastForwardHold:    hold-mode by default; respects ffToggleMode for
-    //                     backward compatibility (hold key acts as toggle).
-    // FastForwardToggle:  always edge-detected toggle, independent of mode.
+    // ── Keyboard fast-forward ─────────────────────────────────────────────
+#ifndef __SWITCH__
     {
-        bool ffHoldKey   = isHotkeyPressed(Hotkey::FastForwardHold);
-        bool ffToggleKey = isHotkeyPressed(Hotkey::FastForwardToggle);
+        bool kbdFfHold   = isKbdHotkeyPressed(Hotkey::FastForwardHold);
+        bool kbdFfToggle = isKbdHotkeyPressed(Hotkey::FastForwardToggle);
 
-        // Dedicated toggle hotkey: fire on rising edge (always toggle)
-        if (ffToggleKey && !m_ffTogglePrevKey)
+        // Dedicated keyboard toggle: edge-detected
+        if (kbdFfToggle && !m_ffKbdTogglePrev)
             m_ffToggled = !m_ffToggled;
-        m_ffTogglePrevKey = ffToggleKey;
+        m_ffKbdTogglePrev = kbdFfToggle;
 
-        // Hold hotkey: respects ffToggleMode config
         if (m_inputMap.ffToggleMode) {
-            // Toggle mode: fire on rising edge
-            if (ffHoldKey && !m_ffPrevKey)
+            if (kbdFfHold && !m_ffKbdHoldPrev)
                 m_ffToggled = !m_ffToggled;
-            m_ffPrevKey = ffHoldKey;
-            m_fastForward.store(m_ffToggled, std::memory_order_relaxed);
+            m_ffKbdHoldPrev = kbdFfHold;
         } else {
-            // Hold mode: active while key is held; toggle-key state is OR'd in
-            m_ffPrevKey = ffHoldKey;
-            m_fastForward.store(ffHoldKey || m_ffToggled, std::memory_order_relaxed);
+            m_ffKbdHeld     = kbdFfHold;
+            m_ffKbdHoldPrev = kbdFfHold;
         }
+        m_fastForward.store(m_ffPadHeld || m_ffKbdHeld || m_ffToggled,
+                            std::memory_order_relaxed);
     }
 
-    // ---- Rewind -----------------------------------------------------
-    // Same pattern as fast-forward: RewindHold respects rewindToggleMode,
-    // RewindToggle is always edge-detected.
+    // ── Keyboard rewind ───────────────────────────────────────────────────
     if (m_inputMap.rewindEnabled) {
-        bool rewHoldKey   = isHotkeyPressed(Hotkey::RewindHold);
-        bool rewToggleKey = isHotkeyPressed(Hotkey::RewindToggle);
+        bool kbdRewHold   = isKbdHotkeyPressed(Hotkey::RewindHold);
+        bool kbdRewToggle = isKbdHotkeyPressed(Hotkey::RewindToggle);
 
-        // Dedicated toggle hotkey: fire on rising edge
-        if (rewToggleKey && !m_rewindTogglePrevKey)
+        if (kbdRewToggle && !m_rewKbdTogglePrev)
             m_rewindToggled = !m_rewindToggled;
-        m_rewindTogglePrevKey = rewToggleKey;
+        m_rewKbdTogglePrev = kbdRewToggle;
 
         if (m_inputMap.rewindToggleMode) {
-            if (rewHoldKey && !m_rewindPrevKey)
+            if (kbdRewHold && !m_rewKbdHoldPrev)
                 m_rewindToggled = !m_rewindToggled;
-            m_rewindPrevKey = rewHoldKey;
-            m_rewinding.store(m_rewindToggled, std::memory_order_relaxed);
+            m_rewKbdHoldPrev = kbdRewHold;
         } else {
-            m_rewindPrevKey = rewHoldKey;
-            m_rewinding.store(rewHoldKey || m_rewindToggled, std::memory_order_relaxed);
+            m_rewKbdHeld     = kbdRewHold;
+            m_rewKbdHoldPrev = kbdRewHold;
         }
+        m_rewinding.store(m_rewPadHeld || m_rewKbdHeld || m_rewindToggled,
+                          std::memory_order_relaxed);
     }
+#endif
 
-    // Disable fast-forward while rewinding; it resumes automatically when rewind ends
-    // (hold mode: FF key still held → resumes; toggle mode: m_ffToggled preserved → resumes)
-    if (m_rewinding.load(std::memory_order_relaxed)) {
+    // Disable fast-forward while rewinding
+    if (m_rewinding.load(std::memory_order_relaxed))
         m_fastForward.store(false, std::memory_order_relaxed);
-    }
 
-    // ---- Game buttons -----------------------------------------------
-    // btnMap was already obtained above for keyboard detection
+    // ── Keyboard exit ─────────────────────────────────────────────────────
+#ifndef __SWITCH__
+    if (!m_requestExit.load(std::memory_order_relaxed)) {
+        if (isKbdHotkeyPressed(Hotkey::ExitGame))
+            m_requestExit.store(true, std::memory_order_relaxed);
+    }
+#endif
+
+    // ── Game button mapping ───────────────────────────────────────────────
     if (m_useKeyboard) {
-        // Keyboard mode: use raw keyboard key states.
-        // Entries with kbdScancode < 0 have no keyboard binding and are
-        // skipped entirely.  Without this guard the gamepad-only NAV alias
-        // entries (BUTTON_NAV_UP/DOWN/LEFT/RIGHT, kbdScancode == -1) that are
-        // appended after the primary direction entries would call
-        // setButtonState(<retroId>, false) and overwrite the true value that
-        // the primary entry just set, making arrow keys appear non-functional.
         for (const auto& entry : btnMap) {
             if (entry.kbdScancode < 0) continue;
             bool pressed = false;
@@ -829,16 +874,7 @@ void GameView::pollInput()
 #endif
             m_core.setButtonState(entry.retroId, pressed);
         }
-
-        // ---- Keyboard exit key (ExitGame hotkey) ----------------------
-#ifndef __SWITCH__
-        if (!m_requestExit.load(std::memory_order_relaxed)) {
-            if (isHotkeyPressed(Hotkey::ExitGame))
-                m_requestExit.store(true, std::memory_order_relaxed);
-        }
-#endif
     } else {
-        // Gamepad mode: use ControllerState buttons
         for (const auto& entry : btnMap) {
             bool pressed = false;
             if (entry.padButton >= 0 && entry.padButton < static_cast<int>(brls::_BUTTON_MAX))
@@ -847,18 +883,9 @@ void GameView::pollInput()
         }
     }
 
-    // ---- ExitGame hotkey (keyboard and gamepad) ----------------------
-#ifndef __SWITCH__
-    if (!m_requestExit.load(std::memory_order_relaxed)) {
-        if (isHotkeyPressed(Hotkey::ExitGame))
-            m_requestExit.store(true, std::memory_order_relaxed);
-    }
-#endif
-
-    // ---- Debug logging (only at DEBUG level to avoid spam) ──────────────
+    // ── Debug logging ─────────────────────────────────────────────────────
 #ifndef __SWITCH__
     if (brls::Logger::getLogLevel() <= brls::LogLevel::LOG_DEBUG) {
-        // Log pressed game buttons once when they first appear
         for (const auto& entry : btnMap) {
             bool pressed = false;
             if (m_useKeyboard && entry.kbdScancode >= 0)
@@ -1001,6 +1028,22 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
         nvgFillColor(vg, nvgRGBA(200, 200, 200, 200));
         nvgText(vg, x + width * 0.5f, y + height * 0.5f + 15.0f,
                 "beiklive/hints/close_on_a"_i18n.c_str(), nullptr);
+
+        // Handle BUTTON_A press to dismiss core-failure screen.
+        // Since all borealis actions are disabled we check the raw snapshot.
+        // Edge detection via m_requestExit prevents repeated calls when held.
+        if (m_coreFailed) {
+            InputSnapshot snap;
+            {
+                std::lock_guard<std::mutex> lk(m_inputSnapMutex);
+                snap = m_inputSnap;
+            }
+            bool btnA = snap.ctrlState.buttons[static_cast<int>(brls::BUTTON_A)];
+            if (btnA && !m_requestExit.exchange(true, std::memory_order_relaxed)) {
+                brls::Application::popActivity();
+                return;
+            }
+        }
         return;
     }
 

@@ -27,9 +27,8 @@ enum class ShaderAnimationType
  *
  * Features:
  *  - Kawase Blur: optional multi-pass box-blur approximation drawn via NanoVG.
- *  - Animated GIF: decodes all frames with stb_image and cycles through them,
- *    with frame timing driven by std::chrono for accurate playback speed.
  *  - Shader Animation: PSP XMB ripple waves rendered via OpenGL GLSL shaders.
+ *  - Async PNG image loading with file-byte cache support.
  */
 class ProImage : public brls::Image
 {
@@ -47,35 +46,16 @@ class ProImage : public brls::Image
     void setBlurRadius(float radius);
     float getBlurRadius() const;
 
-    // ── Animated GIF ─────────────────────────────────────────────────────────
-
-    /// Scaling mode for animated GIF frames.
-    /// FILL    – stretch the frame to fill the entire widget area (default).
-    /// CONTAIN – scale the frame to fit within the widget while preserving
-    ///           aspect ratio; empty space is left transparent.
-    enum class GifScalingMode { FILL, CONTAIN };
-
-    /**
-     * Load an animated GIF from the given file path.
-     * If the file is a static image, falls back to the standard setImageFromFile().
-     */
-    void setImageFromGif(const std::string& path);
-
-    /// Set the scaling mode used when drawing GIF frames. Default is FILL.
-    void setGifScalingMode(GifScalingMode mode);
-    GifScalingMode getGifScalingMode() const;
-
     // ── Async image loading ───────────────────────────────────────────────────
 
     /**
-     * Load an image file asynchronously.
+     * Load an image file asynchronously (PNG only).
      * - Checks the ImageFileCache first (main-thread byte cache).
      * - On a cache miss, reads the file on a background thread, stores the
      *   bytes in the cache, then creates the NVG texture on the main thread.
      * - While loading, draw() shows a "加载中..." placeholder text.
      * - Calling this again before a previous load completes cancels the
      *   previous load (the result is discarded via a generation counter).
-     * - Animated GIFs are decoded and played back as with setImageFromGif().
      */
     void setImageFromFileAsync(const std::string& path);
 
@@ -97,21 +77,6 @@ class ProImage : public brls::Image
     // Blur
     bool  m_blurEnabled = false;
     float m_blurRadius  = 8.0f;
-
-    // GIF animation
-    struct GifFrame
-    {
-        int texture   = 0;
-        int delay_ms  = 100; ///< frame duration in milliseconds
-    };
-    std::vector<GifFrame> m_gifFrames;
-    int   m_gifCurrentFrame = 0;
-    float m_gifElapsedMs    = 0.0f;
-    bool  m_isGif           = false;
-    GifScalingMode m_gifScalingMode = GifScalingMode::FILL;
-    /// Timestamp of last GIF frame-advance check (for delta-time calculation).
-    std::chrono::steady_clock::time_point m_gifLastTime;
-    bool m_gifTimerStarted = false;
 
     // Shader animation
     ShaderAnimationType m_shaderAnimation = ShaderAnimationType::NONE;
@@ -147,8 +112,6 @@ class ProImage : public brls::Image
     void   freeXmbResources(NVGcontext* vg);
 #endif
 
-    void freeGifFrames();
-    void drawGifFrame(NVGcontext* vg, float x, float y, float w, float h, int nvgTex);
     void drawBlur(NVGcontext* vg, float x, float y, float w, float h, NVGpaint basePaint);
 
     // ── Async loading state ──────────────────────────────────────────────────
