@@ -937,10 +937,15 @@ brls::ScrollingFrame* SettingPage::buildDebugTab()
 
 SettingPage::SettingPage()
 {
+    // this->setAlignItems(brls::AlignItems::CENTER);
+    this->setAxis(brls::Axis::COLUMN);
+    this->setWidth(brls::View::AUTO);
+
     m_tabframe = new brls::TabFrame();
     m_tabframe->setGrow(1.0f);
     Init();
     addView(m_tabframe);
+    addView(new brls::BottomBar());
 }
 
 SettingPage::~SettingPage()
