@@ -132,7 +132,21 @@ GameView::GameView()
     beiklive::swallow(this, brls::BUTTON_BACK);
 
     // BUTTON_X: exit game and return to main menu.
+    // The action only exits when BUTTON_X is NOT mapped to any game joypad
+    // button (via handle.x config).  If the user has mapped BUTTON_X to a
+    // game button, the action swallows the press without exiting so the game
+    // thread can process it via pollInput().
     registerAction("beiklive/hints/exit_game"_i18n, brls::BUTTON_X, [this](brls::View*) {
+        // Check at invocation time whether BUTTON_X is currently mapped to
+        // any game joypad button.  m_inputMap is populated during initialize()
+        // (which runs on first draw), so by the time the user can press X
+        // the map is always loaded.
+        for (const auto& entry : m_inputMap.gameButtonMap()) {
+            if (entry.padButton == static_cast<int>(brls::BUTTON_X)) {
+                // BUTTON_X is a game button – swallow without exiting.
+                return true;
+            }
+        }
         bklog::info("GameView: exit requested via BUTTON_X");
         stopGameThread();
         brls::Application::popActivity();
@@ -687,9 +701,24 @@ void GameView::pollInput()
     }
     if (keyboardActive) m_useKeyboard = true;
     else {
-        // Check if any gamepad button is pressed (switch back to gamepad mode)
+        // Check if any gamepad button is pressed (switch back to gamepad mode).
+        // Borealis maps certain keyboard navigation keys to controller buttons
+        // (e.g. ENTER/KP_ENTER → BUTTON_A, ESC → BUTTON_B) in the unified
+        // controller state.  We must not let those keyboard-aliased buttons
+        // falsely trigger a switch to gamepad mode.  The states of ENTER,
+        // KP_ENTER, and ESC are always captured in refreshInputSnapshot() for
+        // exactly this purpose.
+        const bool enterPressed =
+            kbdState(brls::BRLS_KBD_KEY_ENTER) ||
+            kbdState(brls::BRLS_KBD_KEY_KP_ENTER);
+        const bool escPressed = kbdState(brls::BRLS_KBD_KEY_ESCAPE);
         for (int i = 0; i < static_cast<int>(brls::_BUTTON_MAX); ++i) {
-            if (state.buttons[i]) { m_useKeyboard = false; break; }
+            if (!state.buttons[i]) continue;
+            // Skip BUTTON_A/BUTTON_B if they are sourced from keyboard keys
+            if (i == static_cast<int>(brls::BUTTON_A) && enterPressed) continue;
+            if (i == static_cast<int>(brls::BUTTON_B) && escPressed)   continue;
+            m_useKeyboard = false;
+            break;
         }
     }
 #endif
@@ -892,6 +921,18 @@ void GameView::refreshInputSnapshot()
         brls::BRLS_KBD_KEY_LEFT_ALT,      brls::BRLS_KBD_KEY_RIGHT_ALT,
     };
     for (auto sc : k_mods)
+        snap.kbdState[static_cast<int>(sc)] = im->getKeyboardKeyState(sc);
+
+    // Always capture borealis keyboard-navigation keys (ENTER/KP_ENTER/ESC).
+    // Borealis maps these to BUTTON_A / BUTTON_B in updateUnifiedControllerState,
+    // so we need their raw keyboard states to distinguish between "keyboard key
+    // pressed" and "physical gamepad button pressed" in pollInput().
+    static const brls::BrlsKeyboardScancode k_navKeys[] = {
+        brls::BRLS_KBD_KEY_ENTER,
+        brls::BRLS_KBD_KEY_KP_ENTER,
+        brls::BRLS_KBD_KEY_ESCAPE,
+    };
+    for (auto sc : k_navKeys)
         snap.kbdState[static_cast<int>(sc)] = im->getKeyboardKeyState(sc);
 
     // Hotkey keyboard bindings

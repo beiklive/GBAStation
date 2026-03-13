@@ -393,7 +393,7 @@ void InputMappingConfig::setDefaults(ConfigManager& cfg)
     // ---- Game button map: gamepad -----------------------------------
     cfg.SetDefault("handle.a",      CV(std::string("A")));
     cfg.SetDefault("handle.b",      CV(std::string("B")));
-    cfg.SetDefault("handle.x",      CV(std::string("X")));
+    cfg.SetDefault("handle.x",      CV(std::string("none")));
     cfg.SetDefault("handle.y",      CV(std::string("Y")));
     cfg.SetDefault("handle.up",     CV(std::string("UP")));
     cfg.SetDefault("handle.down",   CV(std::string("DOWN")));
@@ -550,6 +550,29 @@ void InputMappingConfig::loadGameButtonMap(const ConfigManager& cfg)
         static_cast<int>(brls::BUTTON_NAV_LEFT),  -1 });
     m_gameButtonMap.push_back({ RETRO_DEVICE_ID_JOYPAD_RIGHT,
         static_cast<int>(brls::BUTTON_NAV_RIGHT), -1 });
+
+    // ---- JOYPAD_X (configurable via handle.x / keyboard.x) ----------------
+    // Historically BUTTON_X was reserved as the in-game exit key and
+    // JOYPAD_X was never emitted.  Now that the exit action is conditional
+    // (it only exits when BUTTON_X is NOT mapped here), we must process
+    // handle.x so users can remap BUTTON_X to game joypad X.
+    // Default is "none" (-1) so existing behaviour (BUTTON_X = exit) is
+    // preserved unless the user explicitly sets handle.x in their config.
+    {
+        int padBtn = -1;
+        auto v = cfg.Get("handle.x");
+        if (v) {
+            if (auto i = v->AsInt())    padBtn = *i;
+            if (auto s = v->AsString()) padBtn = parseGamepadButton(*s);
+        }
+        int kbdSc = getCfgKbd("keyboard.x", -1); // no default keyboard binding
+        const bool isPadBtnValid = (padBtn >= 0 && padBtn < static_cast<int>(brls::_BUTTON_MAX));
+        if (isPadBtnValid || kbdSc >= 0) {
+            m_gameButtonMap.push_back({ RETRO_DEVICE_ID_JOYPAD_X,
+                isPadBtnValid ? padBtn : -1,
+                kbdSc });
+        }
+    }
 }
 
 void InputMappingConfig::loadHotkeyBindings(const ConfigManager& cfg)
