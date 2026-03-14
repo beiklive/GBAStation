@@ -23,6 +23,8 @@ void GameInputController::registerAction(std::vector<int> buttons, Callback call
 
 void GameInputController::update(const brls::ControllerState& state)
 {
+    if (!m_enabled) return;
+
     const auto now = std::chrono::steady_clock::now();
 
     for (auto& action : m_actions)
@@ -65,11 +67,35 @@ void GameInputController::update(const brls::ControllerState& state)
         {
             if (action.active)
             {
-                // Falling edge: fire Release.
-                action.active         = false;
+                // Falling edge: fire ShortPress if no LongPress occurred,
+                // then fire Release unconditionally.
+                action.active = false;
+                if (!action.longPressFired)
+                {
+                    action.callback(KeyEvent::ShortPress);
+                }
                 action.longPressFired = false;
                 action.callback(KeyEvent::Release);
             }
+        }
+    }
+}
+
+void GameInputController::setEnabled(bool enabled)
+{
+    if (m_enabled == enabled) return;
+    m_enabled = enabled;
+
+    if (!enabled)
+    {
+        // Reset all action states so that no stale "active" press lingers.
+        // This prevents a spurious Release/ShortPress firing when the
+        // controller is re-enabled after the hardware buttons have been
+        // released while we were suspended.
+        for (auto& action : m_actions)
+        {
+            action.active         = false;
+            action.longPressFired = false;
         }
     }
 }
