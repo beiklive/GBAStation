@@ -982,19 +982,10 @@ void FileListPage::openSidebar(int itemIndex)
     if (itemIndex < 0 || itemIndex >= static_cast<int>(m_items.size()))
         return;
 
-    // If an external settings panel handler is set, delegate to it (StartPageView)
-    if (onOpenSettings)
-    {
-        onOpenSettings(m_items[itemIndex], itemIndex);
-        return;
-    }
-
-    // Fallback: use a built-in Dropdown (should not normally be reached when
-    // the host correctly sets onOpenSettings)
     const FileListItem &item = m_items[itemIndex];
 
     // Build option list – use a struct so we avoid index-arithmetic bugs when
-    // rename is conditionally excluded on non-Switch platforms.
+    // options are conditionally excluded.
     struct Option
     {
         std::string label;
@@ -1002,16 +993,59 @@ void FileListPage::openSidebar(int itemIndex)
     };
     std::vector<Option> opts;
 
-// #ifdef __SWITCH__
+#ifdef __SWITCH__
     // Rename is only supported on Switch (IME + filesystem write access)
     opts.push_back({"beiklive/sidebar/rename"_i18n,
                     [this, itemIndex]()
                     { doRename(itemIndex); }});
-// #endif
 
     opts.push_back({"beiklive/sidebar/set_mapping"_i18n,
                     [this, itemIndex]()
                     { doSetMapping(itemIndex); }});
+#endif
+
+    // Select logo (game files only)
+    if (!item.isDir && detectPlatform(item.fileName) != beiklive::EmuPlatform::None)
+    {
+        std::string captureFileName = item.fileName;
+        std::string captureFullPath = item.fullPath;
+        opts.push_back({"beiklive/sidebar/select_logo"_i18n,
+                        [captureFileName, captureFullPath]()
+                        {
+                            auto *flPage = new FileListPage();
+                            flPage->setFilter({"png"}, FileListPage::FilterMode::Whitelist);
+                            flPage->setDefaultFileCallback([captureFileName](const FileListItem &imgItem)
+                                                           {
+                                                               setGameDataStr(captureFileName, GAMEDATA_FIELD_LOGOPATH, imgItem.fullPath);
+                                                               brls::Application::popActivity();
+                                                           });
+                            std::string startPath = beiklive::file::getParentPath(captureFullPath);
+                            if (startPath.empty() ||
+                                beiklive::file::getPathType(startPath) != beiklive::file::PathType::Directory)
+                            {
+                                startPath = "/";
+#ifdef _WIN32
+                                startPath = "C:\\";
+#endif
+                            }
+                            flPage->navigateTo(startPath);
+
+                            auto *container = new brls::Box(brls::Axis::COLUMN);
+                            container->setGrow(1.0f);
+                            container->addView(flPage);
+                            container->registerAction("beiklive/hints/close"_i18n, brls::BUTTON_START,
+                                                      [](brls::View *) {
+                                                          brls::Application::popActivity();
+                                                          return true;
+                                                      });
+                            auto *frame = new brls::AppletFrame(container);
+                            frame->setHeaderVisibility(brls::Visibility::GONE);
+                            frame->setFooterVisibility(brls::Visibility::GONE);
+                            frame->setBackground(brls::ViewBackground::NONE);
+                            brls::Application::pushActivity(new brls::Activity(frame));
+                        }});
+    }
+
     opts.push_back({"beiklive/sidebar/cut"_i18n,
                     [this, itemIndex]()
                     { doCut(itemIndex); }});
@@ -1024,6 +1058,10 @@ void FileListPage::openSidebar(int itemIndex)
     opts.push_back({"beiklive/sidebar/delete"_i18n,
                     [this, itemIndex]()
                     { doDelete(itemIndex); }});
+
+    opts.push_back({"beiklive/sidebar/new_folder"_i18n,
+                    [this]()
+                    { doNewFolder(); }});
 
     std::vector<std::string> labels;
     for (const auto &o : opts)
