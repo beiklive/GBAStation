@@ -232,6 +232,7 @@ void StartPageView::createAppPage()
             }
             auto* flPage = new FileListPage();
             flPage->setFilter({"png"}, FileListPage::FilterMode::Whitelist);
+            flPage->setLayoutMode(FileListPage::LayoutMode::ListOnly);
             flPage->setDefaultFileCallback([entry, capturePage](const FileListItem& imgItem) {
                 std::string fileName = std::filesystem::path(entry.path).filename().string();
                 setGameDataStr(fileName, GAMEDATA_FIELD_LOGOPATH, imgItem.fullPath);

@@ -362,6 +362,7 @@ void FileListPage::buildUI()
     m_scrollFrame->setWidth(brls::View::AUTO);
     m_scrollFrame->setGrow(1.0f);
     m_scrollFrame->setScrollingBehavior(brls::ScrollingBehavior::NATURAL);
+    m_scrollFrame->setScrollingIndicatorVisible(false);
 
     m_itemsBox = new brls::Box(brls::Axis::COLUMN);
     m_itemsBox->setWidth(brls::View::AUTO);
@@ -1014,9 +1015,11 @@ void FileListPage::openSidebar(int itemIndex)
                         {
                             auto *flPage = new FileListPage();
                             flPage->setFilter({"png"}, FileListPage::FilterMode::Whitelist);
+                            flPage->setLayoutMode(FileListPage::LayoutMode::ListOnly);
                             flPage->setDefaultFileCallback([captureFileName](const FileListItem &imgItem)
                                                            {
                                                                setGameDataStr(captureFileName, GAMEDATA_FIELD_LOGOPATH, imgItem.fullPath);
+                                                               g_recentGamesDirty = true;
                                                                brls::Application::popActivity();
                                                            });
                             std::string startPath = beiklive::file::getParentPath(captureFullPath);
