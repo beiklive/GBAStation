@@ -106,6 +106,10 @@ class GameView : public brls::Box
     /// Actions are registered once in initialize() before the game thread starts.
     beiklive::GameInputController m_inputCtrl;
 
+    // ---- 静音状态 ---------------------------------------------------
+    /// 用户通过热键触发的静音开关（游戏线程读，主线程绘制覆盖层）
+    std::atomic<bool> m_muted{false};
+
     // ---- Fast-forward runtime state ---------------------------------
     /// Whether the gamepad hold-key is currently held (hold mode, game thread only).
     bool m_ffPadHeld       = false;

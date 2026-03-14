@@ -162,10 +162,11 @@ void GameView::initialize()
         cfg->SetDefault("core.mgba_frameskip",                  CV(std::string("0")));
 
         // ---- Save / state directory defaults --------------------------------
-        cfg->SetDefault("save.sramDir",   CV(std::string("")));
-        cfg->SetDefault("save.stateDir",  CV(std::string("")));
-        cfg->SetDefault("save.slotCount", CV(9));
-        cfg->SetDefault("cheat.dir",      CV(std::string("")));
+        cfg->SetDefault("save.sramDir",         CV(std::string("")));
+        cfg->SetDefault("save.stateDir",         CV(std::string("")));
+        cfg->SetDefault("save.slotCount",        CV(9));
+        cfg->SetDefault("save.autoLoadState0",   CV(std::string("false")));
+        cfg->SetDefault("cheat.dir",             CV(std::string("")));
 
         // ---- FPS display defaults ------------------------------------
         cfg->SetDefault("display.showFps",           CV(std::string("false")));
@@ -293,6 +294,18 @@ void GameView::initialize()
         loadCheats();
 
         m_core.reset(); // Ensure the core starts in a clean state after loading saves/cheats
+
+        // ---- 自动读取即时存档0（如果开启） ----------------------
+        // 使用 cfgGetBool 读取配置（gameRunner->settingConfig 与 SettingManager 指向同一对象）
+        if (beiklive::cfgGetBool("save.autoLoadState0", false)) {
+            std::string state0Path = quickSaveStatePath(0);
+            if (std::filesystem::exists(state0Path)) {
+                bklog::info("GameView: 自动读取即时存档0: {}", state0Path);
+                doQuickLoad(0);
+            } else {
+                bklog::info("GameView: 自动读取即时存档0已开启, 但 slot0 存档文件不存在: {}", state0Path);
+            }
+        }
     }
 
     // ---- 创建用于视频输出的 GL 纹理 ----------------------------
@@ -481,10 +494,13 @@ void GameView::startGameThread()
                 {
                     std::vector<int16_t> samples;
                     bool hasSamples = m_core.drainAudio(samples) && !samples.empty();
-                    // Mute conditions:
-                    //   - fast-forward with mute enabled
-                    //   - no samples available
-                    bool mute = (ff && m_inputMap.ffMute) || !hasSamples;
+                    // 静音条件：
+                    //   - 快进时静音（fastforward.mute）
+                    //   - 用户手动静音（m_muted）
+                    //   - 没有可用的音频样本
+                    bool mute = (ff && m_inputMap.ffMute)
+                                || m_muted.load(std::memory_order_relaxed)
+                                || !hasSamples;
                     if (!mute) {
                         size_t frames = samples.size() / STEREO_CHANNELS;
                         // During fast-forward (multiplier > 1) with audio not muted,
@@ -818,6 +834,13 @@ void GameView::registerGamepadHotkeys()
         if (evt == KeyEvent::ShortPress)
             m_pendingQuickLoad.store(m_saveSlot, std::memory_order_relaxed);
     });
+
+    // ── 静音切换 ──────────────────────────────────────────────────────────────
+    reg(Hotkey::Mute, [this](KeyEvent evt)
+    {
+        if (evt == KeyEvent::ShortPress)
+            m_muted.store(!m_muted.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    });
 }
 
 // ============================================================
@@ -868,8 +891,8 @@ std::string GameView::quickSaveStatePath(int slot) const
     std::string sep = (!dir.empty() && dir.back() != '/' && dir.back() != '\\')
                       ? "/" : "";
     if (slot < 0)
-        return dir + sep + base + ".state";
-    return dir + sep + base + ".state" + std::to_string(slot);
+        return dir + sep + base + ".ss";
+    return dir + sep + base + ".ss" + std::to_string(slot);
 }
 
 // ============================================================
@@ -1596,28 +1619,25 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
         refreshInputSnapshot();
     }
 
-    // ---- ExitGame hotkey: game thread sets this flag; handle on main thread -----
-#ifndef __SWITCH__
+    // ---- ExitGame 热键：游戏线程设置此标志，在主线程处理 -----
+    // 注意：所有平台均支持，Switch 平台不使用 blockInputs/unblockInputs
     if (m_requestExit.exchange(false, std::memory_order_relaxed)) {
-        bklog::info("GameView: exit requested, stopping game thread...");
-        // Must deinit audio BEFORE joining game thread to unblock any
-        // pushSamples() call that may be waiting on m_spaceCV – otherwise
-        // stopGameThread() would deadlock.
+        bklog::info("GameView: 收到退出请求，停止游戏线程...");
+        // 必须在 join 游戏线程之前先反初始化音频，以解除可能阻塞在
+        // pushSamples() 中的等待，否则 stopGameThread() 会死锁。
         beiklive::AudioManager::instance().deinit();
         stopGameThread();
-        // Unblock UI inputs immediately so the restored view is interactive
-        // even during any transition animation triggered by popActivity().
-        // Without this, inputs stay blocked until the GameView destructor
-        // runs, which may be deferred by several frames (e.g. slide-out).
+#ifndef __SWITCH__
+        // 立即解除 UI 输入封锁，使 popActivity() 后的视图可立即交互。
         if (m_uiBlocked) {
             brls::Application::unblockInputs();
             m_uiBlocked = false;
         }
-        bklog::info("GameView: game thread stopped, popping activity");
+#endif
+        bklog::info("GameView: 游戏线程已停止，弹出 Activity");
         brls::Application::popActivity();
         return;
     }
-#endif
 
     if (!m_initialized) {
         // Draw error/placeholder rectangle
@@ -1842,6 +1862,25 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
             nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
             nvgText(vg, mx + mw * 0.5f, my + mh * 0.5f, msg.c_str(), nullptr);
         }
+    }
+
+    // ---- 静音状态覆盖层 --------------------------------------
+    // 游戏静音时在屏幕右下角显示静音提示。
+    if (m_muted.load(std::memory_order_relaxed)) {
+        const char* muteText = "MUTE";
+        float nw = 60.0f, nh = 22.0f;
+        float nx = x + width  - nw - 4.0f;
+        float ny = y + height - nh - 8.0f;
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, nx, ny, nw, nh, 4.0f);
+        nvgFillColor(vg, nvgRGBA(180, 30, 30, 200));
+        nvgFill(vg);
+
+        nvgFontSize(vg, 14.0f);
+        nvgFontFace(vg, "regular");
+        nvgFillColor(vg, nvgRGBA(255, 255, 255, 230));
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgText(vg, nx + nw * 0.5f, ny + nh * 0.5f, muteText, nullptr);
     }
 
     this->invalidate();
