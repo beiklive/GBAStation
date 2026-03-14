@@ -2,6 +2,7 @@
 
 #include <cstring>
 #include <cstdio>
+#include <cstdarg>
 #include <algorithm>
 
 #if defined(_WIN32)
@@ -24,6 +25,22 @@ static inline uint32_t makeRGBA8888(uint8_t r, uint8_t g, uint8_t b)
          | (static_cast<uint32_t>(g) << 8)
          | (static_cast<uint32_t>(b) << 16)
          | 0xFF000000u;
+}
+
+// ---- Libretro log interface callback --------------------------------
+
+/// Forwards core log messages to stderr so clock/RTC errors are visible.
+static void RETRO_CALLCONV s_coreLogCallback(enum retro_log_level level,
+                                              const char* fmt, ...)
+{
+    static const char* const levelStr[] = { "DEBUG", "INFO", "WARN", "ERROR" };
+    const char* tag = (level >= RETRO_LOG_DEBUG && level <= RETRO_LOG_ERROR)
+                      ? levelStr[level] : "?";
+    va_list args;
+    va_start(args, fmt);
+    fprintf(stderr, "[Core/%s] ", tag);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
 }
 
 namespace beiklive {
@@ -493,7 +510,6 @@ bool LibretroLoader::s_environmentCallback(unsigned cmd, void* data)
         case RETRO_ENVIRONMENT_SET_GEOMETRY:
         case RETRO_ENVIRONMENT_SET_ROTATION:
         case RETRO_ENVIRONMENT_GET_FASTFORWARDING:
-        case RETRO_ENVIRONMENT_GET_LOG_INTERFACE:
         case RETRO_ENVIRONMENT_GET_PERF_INTERFACE:
         case RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE:
         case RETRO_ENVIRONMENT_GET_SENSOR_INTERFACE:
@@ -501,6 +517,11 @@ bool LibretroLoader::s_environmentCallback(unsigned cmd, void* data)
         case RETRO_ENVIRONMENT_GET_LOCATION_INTERFACE:
         case RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS:
             return false;
+        case RETRO_ENVIRONMENT_GET_LOG_INTERFACE: {
+            retro_log_callback* log = static_cast<retro_log_callback*>(data);
+            if (log) log->log = s_coreLogCallback;
+            return true;
+        }
         default:
             return false;
     }
