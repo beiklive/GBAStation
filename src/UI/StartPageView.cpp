@@ -23,6 +23,41 @@ using namespace brls::literals; // for _i18n
 #endif
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  Internal helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Record the current local time as the "last opened" timestamp for @p fileName
+/// in gamedataManager.
+static void recordGameOpenTime(const std::string& fileName)
+{
+    auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+    char timeBuf[64] = "";
+    struct tm tmInfo;
+#ifdef _WIN32
+    if (localtime_s(&tmInfo, &now) == 0)
+        std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%d %H:%M", &tmInfo);
+#else
+    if (localtime_r(&now, &tmInfo))
+        std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%d %H:%M", &tmInfo);
+#endif
+    if (timeBuf[0] != '\0')
+        setGameDataStr(fileName, GAMEDATA_FIELD_LASTOPEN, timeBuf);
+}
+
+/// Clear the UI image cache and push a GameView activity for @p romPath.
+/// All game launch paths should go through this helper to stay consistent.
+static void launchGameActivity(const std::string& romPath)
+{
+    beiklive::clearUIImageCache();
+    auto* frame = new brls::AppletFrame(new GameView(romPath));
+    frame->setHeaderVisibility(brls::Visibility::GONE);
+    frame->setFooterVisibility(brls::Visibility::GONE);
+    frame->setBackground(brls::ViewBackground::NONE);
+    brls::Application::pushActivity(new brls::Activity(frame),
+                                    brls::TransitionAnimation::LINEAR);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  FileSettingsPanel
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -533,31 +568,12 @@ void StartPageView::createAppPage()
 
     m_appPage->onGameSelected = [](const GameEntry& e) {
         bklog::info("StartPageView: launching game '{}'", e.path);
-        // Update game metadata before launching
         std::string fileName = std::filesystem::path(e.path).filename().string();
-        // Record last opened time
-        auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-        char timeBuf[64] = "";
-        struct tm tmInfo;
-#ifdef _WIN32
-        if (localtime_s(&tmInfo, &now) == 0)
-            std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%d %H:%M", &tmInfo);
-#else
-        if (localtime_r(&now, &tmInfo))
-            std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%d %H:%M", &tmInfo);
-#endif
-        if (timeBuf[0] != '\0')
-            setGameDataStr(fileName, GAMEDATA_FIELD_LASTOPEN, timeBuf);
-        // Push to recent games queue
+        // Record last opened time and push to recent games queue
+        recordGameOpenTime(fileName);
         pushRecentGame(fileName);
-        // Free UI image cache before launching the emulator to reclaim memory.
-        beiklive::clearUIImageCache();
         bklog::info("StartPageView: pushing GameView activity for '{}'", fileName);
-        auto* frame = new brls::AppletFrame(new GameView(e.path));
-        frame->setHeaderVisibility(brls::Visibility::GONE);
-        frame->setFooterVisibility(brls::Visibility::GONE);
-        frame->setBackground(brls::ViewBackground::NONE);
-        brls::Application::pushActivity(new brls::Activity(frame), brls::TransitionAnimation::LINEAR);
+        launchGameActivity(e.path);
     };
     // 文件列表按钮回调：打开文件列表页
     m_appPage->onOpenFileList = [this]() {
@@ -659,31 +675,14 @@ void StartPageView::openFileListPage()
     for (const auto& ext : ROM_EXTENSIONS)
     {
         fileListPage->setFileCallback(ext, [](const FileListItem& item) {
-            // Update gamedataManager: gamepath, lastopen
+            // Update gamedataManager: gamepath, lastopen, platform
             beiklive::EmuPlatform platform = FileListPage::detectPlatform(item.fileName);
             initGameData(item.fileName, platform);
             setGameDataStr(item.fileName, GAMEDATA_FIELD_GAMEPATH, item.fullPath);
-            // Record last opened time
-            auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-            char timeBuf[64] = "未知时间";
-            struct tm tmInfo;
-#ifdef _WIN32
-            if (localtime_s(&tmInfo, &now) == 0)
-                std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%d %H:%M", &tmInfo);
-#else
-            if (localtime_r(&now, &tmInfo))
-                std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%d %H:%M", &tmInfo);
-#endif
-            setGameDataStr(item.fileName, GAMEDATA_FIELD_LASTOPEN, timeBuf);
-            // Push to recent games queue
+            // Record last opened time and push to recent games queue
+            recordGameOpenTime(item.fileName);
             pushRecentGame(item.fileName);
-            // Free UI image cache before launching the emulator.
-            beiklive::clearUIImageCache();
-            auto* frame = new brls::AppletFrame(new GameView(item.fullPath));
-            frame->setHeaderVisibility(brls::Visibility::GONE);
-            frame->setFooterVisibility(brls::Visibility::GONE);
-            frame->setBackground(brls::ViewBackground::NONE);
-            brls::Application::pushActivity(new brls::Activity(frame));
+            launchGameActivity(item.fullPath);
         });
     }
 

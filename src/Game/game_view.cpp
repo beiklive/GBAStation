@@ -1615,6 +1615,14 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
         // stopGameThread() would deadlock.
         beiklive::AudioManager::instance().deinit();
         stopGameThread();
+        // Unblock UI inputs immediately so the restored view is interactive
+        // even during any transition animation triggered by popActivity().
+        // Without this, inputs stay blocked until the GameView destructor
+        // runs, which may be deferred by several frames (e.g. slide-out).
+        if (m_uiBlocked) {
+            brls::Application::unblockInputs();
+            m_uiBlocked = false;
+        }
         bklog::info("GameView: game thread stopped, popping activity");
         brls::Application::popActivity();
         return;
@@ -1652,6 +1660,10 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
             }
             bool btnA = snap.ctrlState.buttons[static_cast<int>(brls::BUTTON_A)];
             if (btnA && !m_requestExit.exchange(true, std::memory_order_relaxed)) {
+                if (m_uiBlocked) {
+                    brls::Application::unblockInputs();
+                    m_uiBlocked = false;
+                }
                 brls::Application::popActivity();
                 return;
             }
