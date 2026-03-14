@@ -115,6 +115,12 @@ public:
     /// Call before load() so that retro_set_environment() picks them up.
     void setConfigManager(beiklive::ConfigManager* cfg) { m_configManager = cfg; }
 
+    // ---- Fast-forward state -----------------------------------------
+
+    /// Notify the core whether the host is currently fast-forwarding.
+    /// Used to answer RETRO_ENVIRONMENT_GET_FASTFORWARDING queries from cores.
+    void setFastForwarding(bool ff) { m_fastForwarding.store(ff, std::memory_order_relaxed); }
+
 private:
     // ---- Dynamic library handle -------------------------------------
     void* m_handle = nullptr;
@@ -172,6 +178,9 @@ private:
     // ---- Save / system directory -------------------------------------
     std::string m_saveDirectory;    ///< Returned to core via GET_SAVE_DIRECTORY
     std::string m_systemDirectory;  ///< Returned to core via GET_SYSTEM_DIRECTORY
+
+    // ---- Host state communicated to core ----------------------------
+    std::atomic<bool> m_fastForwarding{false};  ///< Tracks host fast-forward state
 
     // ---- Static singleton for callbacks -----------------------------
     // libretro callbacks are plain C function pointers, so we route them

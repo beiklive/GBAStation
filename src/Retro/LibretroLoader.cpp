@@ -3,6 +3,7 @@
 #include <cstring>
 #include <cstdio>
 #include <cstdarg>
+#include <ctime>
 #include <algorithm>
 
 #if defined(_WIN32)
@@ -42,6 +43,74 @@ static void RETRO_CALLCONV s_coreLogCallback(enum retro_log_level level,
     vfprintf(stderr, fmt, args);
     va_end(args);
 }
+
+// ---- Libretro performance interface callbacks -----------------------
+// Provided to cores via RETRO_ENVIRONMENT_GET_PERF_INTERFACE.
+// get_time_usec is the primary clock used by cores for RTC and timing;
+// the counter/register/start/stop callbacks support optional profiling.
+
+/// Returns the current wall-clock time as microseconds since the Unix epoch.
+static retro_time_t RETRO_CALLCONV s_perfGetTimeUsec(void)
+{
+#if defined(_WIN32)
+    FILETIME ft;
+    GetSystemTimeAsFileTime(&ft);
+    // FILETIME counts 100-nanosecond intervals since 1601-01-01.
+    // Convert to microseconds since the Unix epoch (1970-01-01).
+    // 134774 days × 86400 s/day = 11644473600 seconds between the two epochs.
+    static const uint64_t k_fileTimeToUnixEpochSeconds = 11644473600ULL;
+    uint64_t t = ((uint64_t)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
+    return (retro_time_t)(t / 10LL - (int64_t)(k_fileTimeToUnixEpochSeconds * 1000000ULL));
+#else
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    return (retro_time_t)ts.tv_sec * 1000000LL + (retro_time_t)(ts.tv_nsec / 1000LL);
+#endif
+}
+
+/// Returns a high-resolution monotonic counter tick.
+static retro_perf_tick_t RETRO_CALLCONV s_perfGetCounter(void)
+{
+#if defined(_WIN32)
+    LARGE_INTEGER li;
+    QueryPerformanceCounter(&li);
+    return (retro_perf_tick_t)li.QuadPart;
+#else
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (retro_perf_tick_t)ts.tv_sec * 1000000000ULL
+         + (retro_perf_tick_t)ts.tv_nsec;
+#endif
+}
+
+/// Marks a performance counter as registered so the core knows it is valid.
+static void RETRO_CALLCONV s_perfRegister(struct retro_perf_counter* counter)
+{
+    if (counter) counter->registered = true;
+}
+
+/// Records the start tick and increments the call count of a counter.
+static void RETRO_CALLCONV s_perfStart(struct retro_perf_counter* counter)
+{
+    if (counter) {
+        counter->start = s_perfGetCounter();
+        ++counter->call_cnt;
+    }
+}
+
+/// Accumulates elapsed ticks into the counter total.
+static void RETRO_CALLCONV s_perfStop(struct retro_perf_counter* counter)
+{
+    if (counter) {
+        counter->total += s_perfGetCounter() - counter->start;
+    }
+}
+
+/// No-op perf log: host does not print core profiling data.
+static void RETRO_CALLCONV s_perfLog(void) {}
+
+/// Returns 0 – no special CPU features are advertised by the host.
+static uint64_t RETRO_CALLCONV s_perfGetCpuFeatures(void) { return 0; }
 
 namespace beiklive {
 
@@ -509,8 +578,25 @@ bool LibretroLoader::s_environmentCallback(unsigned cmd, void* data)
         case RETRO_ENVIRONMENT_SET_MEMORY_MAPS:
         case RETRO_ENVIRONMENT_SET_GEOMETRY:
         case RETRO_ENVIRONMENT_SET_ROTATION:
-        case RETRO_ENVIRONMENT_GET_FASTFORWARDING:
-        case RETRO_ENVIRONMENT_GET_PERF_INTERFACE:
+            return false;
+        case RETRO_ENVIRONMENT_GET_FASTFORWARDING: {
+            bool* ff = static_cast<bool*>(data);
+            if (ff) *ff = s_current->m_fastForwarding.load(std::memory_order_relaxed);
+            return true;
+        }
+        case RETRO_ENVIRONMENT_GET_PERF_INTERFACE: {
+            retro_perf_callback* cb = static_cast<retro_perf_callback*>(data);
+            if (cb) {
+                cb->get_time_usec    = s_perfGetTimeUsec;
+                cb->get_cpu_features = s_perfGetCpuFeatures;
+                cb->get_perf_counter = s_perfGetCounter;
+                cb->perf_register    = s_perfRegister;
+                cb->perf_start       = s_perfStart;
+                cb->perf_stop        = s_perfStop;
+                cb->perf_log         = s_perfLog;
+            }
+            return true;
+        }
         case RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE:
         case RETRO_ENVIRONMENT_GET_SENSOR_INTERFACE:
         case RETRO_ENVIRONMENT_GET_CAMERA_INTERFACE:
