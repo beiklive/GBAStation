@@ -725,6 +725,12 @@ brls::ScrollingFrame* SettingPage::buildGameTab()
                        [](bool v){ cfgSetBool("save.autoSave", v); });
     box->addView(autoSaveCell);
 
+    auto* autoLoadState0Cell = new brls::BooleanCell();
+    autoLoadState0Cell->init("beiklive/settings/game/auto_load_state0"_i18n,
+                             cfgGetBool("save.autoLoadState0", false),
+                             [](bool v){ cfgSetBool("save.autoLoadState0", v); });
+    box->addView(autoLoadState0Cell);
+
     {
         auto* sramDirCell = new brls::SelectorCell();
         sramDirCell->init(
