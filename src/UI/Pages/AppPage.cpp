@@ -255,13 +255,31 @@ void AppPage::onCardActivated(const GameEntry& entry)
 
 void AppPage::removeGame(const std::string& gamePath)
 {
-    auto& children = m_cardRow->getChildren();
-    for (auto it = children.begin(); it != children.end(); ++it) {
-        auto* card = dynamic_cast<GameCard*>(*it);
+    brls::View* toRemove = nullptr;
+    for (auto* child : m_cardRow->getChildren()) {
+        auto* card = dynamic_cast<GameCard*>(child);
         if (card && card->getEntry().path == gamePath) {
-            m_cardRow->removeView(card, true);
+            toRemove = card;
             break;
         }
+    }
+    if (!toRemove)
+        return;
+
+    m_cardRow->removeView(toRemove, true);
+
+    // Restore focus to a valid view after removal
+    const auto& remaining = m_cardRow->getChildren();
+    if (!remaining.empty()) {
+        auto* nextCard = remaining.front();
+        auto* focus = nextCard->getDefaultFocus();
+        if (!focus)
+            focus = nextCard;
+        brls::Application::giveFocus(focus);
+    } else {
+        auto* focus = getDefaultFocus();
+        if (focus)
+            brls::Application::giveFocus(focus);
     }
 }
 
