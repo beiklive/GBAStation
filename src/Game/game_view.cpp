@@ -413,6 +413,10 @@ void GameView::startGameThread()
             bool ff      = m_fastForward.load(std::memory_order_relaxed);
             bool rew     = m_rewinding.load(std::memory_order_relaxed);
 
+            // Keep the core aware of the current fast-forward state so it can
+            // answer RETRO_ENVIRONMENT_GET_FASTFORWARDING correctly.
+            m_core.setFastForwarding(ff);
+
 #ifdef __SWITCH__
             // When fast-forward ends, flush any stale audio samples from the ring
             // buffer so they are not played back at normal speed (which would
