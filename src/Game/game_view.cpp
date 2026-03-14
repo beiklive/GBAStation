@@ -544,20 +544,29 @@ void GameView::startGameThread()
                 }
             }
 
-            // RTC real-time sync: write current Unix time to the core's RTC memory once per
-            // second to keep the game clock in sync with the system clock.  Required for
-            // GB/GBC MBC3 games (e.g. Pokémon) whose RTC is driven by the frontend.
+            // RTC real-time sync: keep the unixTime field in the GB MBC3
+            // RTC save-buffer up to date.  GBMBCRTCSaveBuffer::unixTime is
+            // at byte offset 40 (10 × uint32_t) – this is the field that
+            // GBMBCRTCRead loads into rtcLastLatch on the next game load.
+            // Keeping it current ensures that elapsed-time is calculated
+            // correctly after a save-reload cycle.
             {
                 auto rtcElapsed = std::chrono::duration_cast<std::chrono::seconds>(
                     nowPost - rtcSyncTimer).count();
                 if (rtcElapsed >= 1) {
                     rtcSyncTimer += std::chrono::seconds(1);
+                    // GBMBCRTCSaveBuffer::unixTime is at byte offset 40.
+                    static constexpr size_t k_rtcUnixTimeOffset = 10 * sizeof(uint32_t);
                     size_t rtcSz = m_core.getMemorySize(RETRO_MEMORY_RTC);
-                    if (rtcSz >= sizeof(int64_t)) {
+                    if (rtcSz >= k_rtcUnixTimeOffset + sizeof(uint64_t)) {
                         void* rtcPtr = m_core.getMemoryData(RETRO_MEMORY_RTC);
                         if (rtcPtr) {
-                            int64_t nowUnix = static_cast<int64_t>(std::time(nullptr));
-                            std::memcpy(rtcPtr, &nowUnix, sizeof(int64_t));
+                            std::time_t t = std::time(nullptr);
+                            if (t != static_cast<std::time_t>(-1)) {
+                                uint64_t nowUnix = static_cast<uint64_t>(t);
+                                std::memcpy(static_cast<uint8_t*>(rtcPtr) + k_rtcUnixTimeOffset,
+                                            &nowUnix, sizeof(uint64_t));
+                            }
                         }
                     }
                 }
@@ -1035,9 +1044,38 @@ void GameView::loadRtc()
         return; // core has no RTC region (not a GB MBC3 game)
     }
 
+    // GBMBCRTCSaveBuffer layout (mGBA):
+    //   offset  0: sec         (uint32)
+    //   offset  4: min         (uint32)
+    //   offset  8: hour        (uint32)
+    //   offset 12: days        (uint32)
+    //   offset 16: daysHi      (uint32)
+    //   offset 20: latchedSec  (uint32)
+    //   offset 24: latchedMin  (uint32)
+    //   offset 28: latchedHour (uint32)
+    //   offset 32: latchedDays (uint32)
+    //   offset 36: latchedDaysHi (uint32)
+    //   offset 40: unixTime    (uint64)  ← GBMBCRTCRead loads this into rtcLastLatch
+    static constexpr size_t k_rtcUnixTimeOffset = 10 * sizeof(uint32_t); // = 40
+
     std::string path = rtcSavePath();
     if (!std::filesystem::exists(path)) {
-        bklog::info("GameView: no RTC file found at {}, starting from current time", path);
+        // No save file yet.  Seed unixTime with the current wall-clock time so
+        // GBMBCRTCRead (called from _doDeferredSetup on the first retro_run)
+        // initialises rtcLastLatch correctly and _latchRtc computes 0 elapsed
+        // time rather than a huge spurious value from the 0xFF-filled buffer.
+        if (sz >= k_rtcUnixTimeOffset + sizeof(uint64_t)) {
+            void* rtcPtr = m_core.getMemoryData(RETRO_MEMORY_RTC);
+            if (rtcPtr) {
+                std::time_t t = std::time(nullptr);
+                if (t != static_cast<std::time_t>(-1)) {
+                    uint64_t nowUnix = static_cast<uint64_t>(t);
+                    std::memcpy(static_cast<uint8_t*>(rtcPtr) + k_rtcUnixTimeOffset,
+                                &nowUnix, sizeof(uint64_t));
+                    bklog::info("GameView: RTC – no save file, seeded unixTime={}", nowUnix);
+                }
+            }
+        }
         return;
     }
 
@@ -1434,10 +1472,10 @@ void GameView::loadOverlayImage(NVGcontext* vg)
 // on the main thread, ensuring no platform input-manager calls are
 // made from the game thread.
 //
-// Keyboard is intentionally not handled here; the control system is
-// gamepad-only.  All hotkey logic flows through GameInputController
-// which fires Press / ShortPress / LongPress / Release callbacks that
-// were registered in registerGamepadHotkeys().
+// Both gamepad and keyboard (keyboard.* config keys) game button bindings
+// are processed here.  Emulator hotkey logic flows through
+// GameInputController which fires Press / ShortPress / LongPress / Release
+// callbacks registered in registerGamepadHotkeys().
 // ============================================================
 
 void GameView::pollInput()
@@ -1461,13 +1499,20 @@ void GameView::pollInput()
         m_fastForward.store(false, std::memory_order_relaxed);
 
     // ── Game button mapping ───────────────────────────────────────────────
-    // Map each configured gamepad button to its libretro joypad ID.
+    // Map each configured gamepad/keyboard button to its libretro joypad ID.
     const auto& btnMap = m_inputMap.gameButtonMap();
     for (const auto& entry : btnMap)
     {
         bool pressed = false;
+        // Gamepad
         if (entry.padButton >= 0 && entry.padButton < static_cast<int>(brls::_BUTTON_MAX))
             pressed = state.buttons[entry.padButton];
+        // Keyboard (OR with gamepad so either input works)
+        if (!pressed && entry.kbScancode >= 0) {
+            auto it = snap.kbState.find(entry.kbScancode);
+            if (it != snap.kbState.end())
+                pressed = it->second;
+        }
         m_core.setButtonState(entry.retroId, pressed);
     }
 
@@ -1476,11 +1521,17 @@ void GameView::pollInput()
     {
         for (const auto& entry : btnMap)
         {
-            bool pressed = (entry.padButton >= 0 &&
-                            entry.padButton < static_cast<int>(brls::_BUTTON_MAX) &&
-                            state.buttons[entry.padButton]);
-            if (pressed)
-                bklog::debug("pollInput: retroId={} pressed (pad)", entry.retroId);
+            bool padPressed = (entry.padButton >= 0 &&
+                               entry.padButton < static_cast<int>(brls::_BUTTON_MAX) &&
+                               state.buttons[entry.padButton]);
+            bool kbPressed  = false;
+            if (entry.kbScancode >= 0) {
+                auto it = snap.kbState.find(entry.kbScancode);
+                if (it != snap.kbState.end()) kbPressed = it->second;
+            }
+            if (padPressed || kbPressed)
+                bklog::debug("pollInput: retroId={} pressed ({})",
+                             entry.retroId, padPressed ? "pad" : "kbd");
         }
     }
 }
@@ -1509,6 +1560,17 @@ void GameView::refreshInputSnapshot()
     // state via the platform's input manager (GLFW on desktop, HID on Switch).
     // Must run on the main thread.
     im->updateUnifiedControllerState(&snap.ctrlState);
+
+    // ── Keyboard state for game buttons ──────────────────────────────────────
+    // Poll only the scancodes referenced by the current button map so we don't
+    // hammer getKeyboardKeyState for every possible key every frame.
+    for (const auto& entry : m_inputMap.gameButtonMap()) {
+        if (entry.kbScancode >= 0) {
+            snap.kbState[entry.kbScancode] =
+                im->getKeyboardKeyState(
+                    static_cast<brls::BrlsKeyboardScancode>(entry.kbScancode));
+        }
+    }
 
     // Publish the snapshot
     std::lock_guard<std::mutex> lk(m_inputSnapMutex);

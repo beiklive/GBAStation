@@ -1067,9 +1067,16 @@ void FileListPage::openSidebar(int itemIndex)
     for (const auto &o : opts)
         labels.push_back(o.label);
 
+    // Bug fix: pass opts action as dismissCb (5th arg) so it executes AFTER
+    // the Dropdown activity has been popped from the stack.  Using cb (3rd arg)
+    // causes Dropdown::didSelectRowAt to call pushActivity first and then
+    // popActivity, which incorrectly pops the newly-pushed activity instead
+    // of the Dropdown itself.
     auto *dropdown = new brls::Dropdown(
         item.displayName(),
         labels,
+        [](int) {},   // cb: no-op – action executes after dismiss
+        -1,
         [opts](int sel)
         {
             if (sel >= 0 && sel < static_cast<int>(opts.size()))
