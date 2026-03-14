@@ -54,6 +54,8 @@ void userAppInit()
     psmInitialize();
     nifmInitialize(NifmServiceType_User);
     lblInitialize();
+    // System clock: required for POSIX time() / localtime() used by emulator RTC
+    timeInitialize();
 }
 
 void userAppExit()
@@ -72,6 +74,8 @@ void userAppExit()
     setsysExit();
     // system font
     plExit();
+    // system clock
+    timeExit();
 
     romfsExit();
 
