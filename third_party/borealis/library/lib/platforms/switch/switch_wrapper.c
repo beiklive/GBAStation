@@ -22,6 +22,12 @@
 
 static int nxlink_sock = -1;
 
+// Use the user-facing system clock so that POSIX time() returns the correct
+// wall-clock time needed by mGBA's RTC emulation (GBA cartridge RTC and
+// GB MBC3 RTC).  Without this override libnx defaults to
+// TimeType_LocalSystemClock which may not reflect user-adjustable time.
+TimeType __nx_time_type = TimeType_UserSystemClock;
+
 void userAppInit()
 {
     printf("userAppInit\n");
