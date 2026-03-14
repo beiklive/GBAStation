@@ -276,6 +276,17 @@ void AppPage::updateGameLogo(const std::string& gamePath, const std::string& new
     }
 }
 
+void AppPage::updateGameTitle(const std::string& gamePath, const std::string& newTitle)
+{
+    for (auto* child : m_cardRow->getChildren()) {
+        auto* card = dynamic_cast<GameCard*>(child);
+        if (card && card->getEntry().path == gamePath) {
+            card->updateTitle(newTitle);
+            break;
+        }
+    }
+}
+
 void GameCard::updateCover(const std::string& newCoverPath)
 {
     m_entry.cover = newCoverPath;
@@ -283,4 +294,10 @@ void GameCard::updateCover(const std::string& newCoverPath)
         m_coverImage->setImageFromFile(newCoverPath);
     else
         m_coverImage->setImageFromFile(BK_APP_DEFAULT_LOGO);
+}
+
+void GameCard::updateTitle(const std::string& newTitle)
+{
+    m_entry.title = newTitle;
+    m_titleLabel->setText(newTitle.empty() ? "—" : newTitle);
 }

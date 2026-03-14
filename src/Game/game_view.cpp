@@ -22,6 +22,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 #include <deque>
 #include <fstream>
 #include <sstream>
@@ -382,6 +383,9 @@ void GameView::startGameThread()
         // Per-thread play-time tracker: save total play time every 60 seconds.
         Clock::time_point playtimeTimer = Clock::now();
 
+        // RTC sync timer: write current Unix time to core's RTC memory once per second.
+        Clock::time_point rtcSyncTimer = Clock::now();
+
         // Accumulated ideal frame-end time for drift-free 60fps timing.
         // Advancing by frameDuration each iteration prevents timing errors from
         // compounding: one slow frame does not shrink the next frame's budget.
@@ -537,6 +541,25 @@ void GameView::startGameThread()
                     currentTotal += 60;
                     gamedataManager->Set(k, beiklive::ConfigValue(currentTotal));
                     gamedataManager->Save();
+                }
+            }
+
+            // RTC real-time sync: write current Unix time to the core's RTC memory once per
+            // second to keep the game clock in sync with the system clock.  Required for
+            // GB/GBC MBC3 games (e.g. Pokémon) whose RTC is driven by the frontend.
+            {
+                auto rtcElapsed = std::chrono::duration_cast<std::chrono::seconds>(
+                    nowPost - rtcSyncTimer).count();
+                if (rtcElapsed >= 1) {
+                    rtcSyncTimer += std::chrono::seconds(1);
+                    size_t rtcSz = m_core.getMemorySize(RETRO_MEMORY_RTC);
+                    if (rtcSz >= sizeof(int64_t)) {
+                        void* rtcPtr = m_core.getMemoryData(RETRO_MEMORY_RTC);
+                        if (rtcPtr) {
+                            int64_t nowUnix = static_cast<int64_t>(std::time(nullptr));
+                            std::memcpy(rtcPtr, &nowUnix, sizeof(int64_t));
+                        }
+                    }
                 }
             }
 
