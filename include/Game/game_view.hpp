@@ -172,6 +172,9 @@ class GameView : public brls::Box
     /// Compute the full path for the SRAM (.sav) file.
     std::string sramSavePath() const;
 
+    /// Compute the full path for the GB MBC3 RTC (.rtc) file.
+    std::string rtcSavePath() const;
+
     /// Compute the full path for the cheat (.cht) file.
     std::string cheatFilePath() const;
 
@@ -180,6 +183,12 @@ class GameView : public brls::Box
 
     /// Save SRAM data from the core's save-RAM region to disk.
     void saveSram();
+
+    /// Load GB MBC3 RTC data from disk into the core's RTC memory region.
+    void loadRtc();
+
+    /// Save GB MBC3 RTC data from the core's RTC memory region to disk.
+    void saveRtc();
 
     /// Save quick-save state to @a slot.
     void doQuickSave(int slot);

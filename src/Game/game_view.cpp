@@ -874,6 +874,35 @@ std::string GameView::sramSavePath() const
 }
 
 // ============================================================
+// rtcSavePath – compute path for the GB MBC3 RTC (.rtc) file
+// ============================================================
+// RTC files are stored alongside SRAM files (same directory, .rtc extension).
+
+std::string GameView::rtcSavePath() const
+{
+    std::string customDir;
+    if (gameRunner && gameRunner->settingConfig) {
+        // Intentionally reuses save.sramDir: .rtc files live in the same
+        // directory as .sav files so all per-game save data stays together.
+        auto v = gameRunner->settingConfig->Get("save.sramDir");
+        if (v) { if (auto s = v->AsString()) customDir = *s; }
+    }
+    std::string dir = resolveSaveDir(m_romPath, customDir);
+
+    std::string base;
+    if (!m_romPath.empty()) {
+        std::filesystem::path p(m_romPath);
+        base = p.stem().string();
+    } else {
+        base = "game";
+    }
+
+    std::string sep = (!dir.empty() && dir.back() != '/' && dir.back() != '\\')
+                      ? "/" : "";
+    return dir + sep + base + ".rtc";
+}
+
+// ============================================================
 // cheatFilePath – compute path for the cheat (.cht) file
 // ============================================================
 
@@ -912,28 +941,32 @@ void GameView::loadSram()
     }
 
     std::string path = sramSavePath();
+
     if (!std::filesystem::exists(path)) {
         bklog::info("GameView: no SRAM file found at {}", path);
-        return;
-    }
-
-    std::ifstream f(path, std::ios::binary);
-    if (!f) {
-        bklog::warning("GameView: failed to open SRAM file: {}", path);
-        return;
-    }
-
-    std::vector<uint8_t> buf(sz, 0);
-    f.read(reinterpret_cast<char*>(buf.data()), static_cast<std::streamsize>(sz));
-    std::streamsize got = f.gcount();
-
-    void* sramPtr = m_core.getMemoryData(RETRO_MEMORY_SAVE_RAM);
-    if (sramPtr) {
-        std::memcpy(sramPtr, buf.data(), static_cast<size_t>(got));
-        bklog::info("GameView: SRAM loaded from {} ({} bytes)", path, got);
     } else {
-        bklog::warning("GameView: SRAM pointer is null, cannot load SRAM");
+        std::ifstream f(path, std::ios::binary);
+        if (!f) {
+            bklog::warning("GameView: failed to open SRAM file: {}", path);
+        } else {
+            std::vector<uint8_t> buf(sz, 0);
+            f.read(reinterpret_cast<char*>(buf.data()), static_cast<std::streamsize>(sz));
+            std::streamsize got = f.gcount();
+
+            void* sramPtr = m_core.getMemoryData(RETRO_MEMORY_SAVE_RAM);
+            if (sramPtr) {
+                std::memcpy(sramPtr, buf.data(), static_cast<size_t>(got));
+                bklog::info("GameView: SRAM loaded from {} ({} bytes)", path, got);
+            } else {
+                bklog::warning("GameView: SRAM pointer is null, cannot load SRAM");
+            }
+        }
     }
+
+    // Always attempt to load RTC data: GB MBC3 games store RTC registers
+    // separately and need the saved unixTime to calculate elapsed time on resume.
+    // loadRtc() is a no-op for cores that have no RTC memory region.
+    loadRtc();
 }
 
 // ============================================================
@@ -964,6 +997,76 @@ void GameView::saveSram()
         return;
     }
     bklog::info("GameView: SRAM saved to {} ({} bytes)", path, sz);
+
+    saveRtc();
+}
+
+// ============================================================
+// loadRtc – load GB MBC3 RTC data from disk into the core
+// ============================================================
+
+void GameView::loadRtc()
+{
+    size_t sz = m_core.getMemorySize(RETRO_MEMORY_RTC);
+    if (sz == 0) {
+        return; // core has no RTC region (not a GB MBC3 game)
+    }
+
+    std::string path = rtcSavePath();
+    if (!std::filesystem::exists(path)) {
+        bklog::info("GameView: no RTC file found at {}, starting from current time", path);
+        return;
+    }
+
+    std::ifstream f(path, std::ios::binary);
+    if (!f) {
+        bklog::warning("GameView: failed to open RTC file: {}", path);
+        return;
+    }
+
+    std::vector<uint8_t> buf(sz, 0);
+    f.read(reinterpret_cast<char*>(buf.data()), static_cast<std::streamsize>(sz));
+    std::streamsize got = f.gcount();
+
+    void* rtcPtr = m_core.getMemoryData(RETRO_MEMORY_RTC);
+    if (rtcPtr) {
+        std::memcpy(rtcPtr, buf.data(), static_cast<size_t>(got));
+        bklog::info("GameView: RTC loaded from {} ({} bytes)", path, got);
+    } else {
+        bklog::warning("GameView: RTC pointer is null, cannot load RTC data");
+    }
+}
+
+// ============================================================
+// saveRtc – save GB MBC3 RTC data from the core to disk
+// ============================================================
+
+void GameView::saveRtc()
+{
+    size_t sz = m_core.getMemorySize(RETRO_MEMORY_RTC);
+    if (sz == 0) {
+        return; // core has no RTC region (not a GB MBC3 game)
+    }
+
+    const void* rtcPtr = m_core.getMemoryData(RETRO_MEMORY_RTC);
+    if (!rtcPtr) {
+        bklog::warning("GameView: RTC pointer is null, cannot save RTC data");
+        return;
+    }
+
+    std::string path = rtcSavePath();
+    std::ofstream f(path, std::ios::binary | std::ios::trunc);
+    if (!f) {
+        bklog::warning("GameView: failed to open RTC file for writing: {}", path);
+        return;
+    }
+
+    f.write(reinterpret_cast<const char*>(rtcPtr), static_cast<std::streamsize>(sz));
+    if (!f) {
+        bklog::warning("GameView: failed to write RTC file: {}", path);
+        return;
+    }
+    bklog::info("GameView: RTC saved to {} ({} bytes)", path, sz);
 }
 
 // ============================================================
