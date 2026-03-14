@@ -189,7 +189,7 @@ void StartPageView::createAppPage()
         std::vector<Option> opts;
 
         // Set display name
-        opts.push_back({"beiklive/sidebar/set_mapping"_i18n, [entry]() {
+        opts.push_back({"beiklive/sidebar/set_mapping"_i18n, [entry, capturePage]() {
             std::string fileName = std::filesystem::path(entry.path).filename().string();
             std::string key = gamedataKeyPrefix(fileName);
             std::string currentMapped;
@@ -199,13 +199,20 @@ void StartPageView::createAppPage()
                     currentMapped = *mv->AsString();
             }
             brls::Application::getPlatform()->getImeManager()->openForText(
-                [key, entry](const std::string& mapped) {
+                [key, entry, capturePage](const std::string& mapped) {
                     if (!NameMappingManager) return;
                     if (mapped.empty())
                         NameMappingManager->Remove(key);
                     else
                         NameMappingManager->Set(key, mapped);
                     NameMappingManager->Save();
+                    // Immediately update the card's displayed title
+                    if (capturePage) {
+                        std::string newTitle = mapped.empty()
+                            ? std::filesystem::path(entry.path).stem().string()
+                            : mapped;
+                        capturePage->updateGameTitle(entry.path, newTitle);
+                    }
                 },
                 "beiklive/sidebar/set_mapping"_i18n,
                 "",
@@ -262,9 +269,15 @@ void StartPageView::createAppPage()
             labels.push_back(o.label);
 
         std::string title = entry.title.empty() ? std::filesystem::path(entry.path).stem().string() : entry.title;
+        // Bug fix: pass opts action as dismissCb (5th arg) so it runs AFTER the
+        // Dropdown activity has been popped.  Passing it as cb (3rd arg) causes
+        // the Dropdown to call popActivity() on the newly-pushed activity instead
+        // of on itself, making the file-list close immediately.
         auto* dropdown = new brls::Dropdown(
             title,
             labels,
+            [](int) {},   // cb: no-op (action executes after dismiss)
+            -1,
             [opts](int sel) {
                 if (sel >= 0 && sel < static_cast<int>(opts.size()))
                     opts[sel].action();

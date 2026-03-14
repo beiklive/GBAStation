@@ -31,6 +31,9 @@ public:
     /// 更新卡片封面图片
     void updateCover(const std::string& newCoverPath);
 
+    /// 更新卡片显示标题
+    void updateTitle(const std::string& newTitle);
+
     // ── Borealis 虚函数 ──
 
     void onChildFocusGained(brls::View* directChild, brls::View* focusedView) override;
@@ -82,6 +85,9 @@ public:
 
     /// 更新指定游戏路径的卡片封面
     void updateGameLogo(const std::string& gamePath, const std::string& newLogoPath);
+
+    /// 更新指定游戏路径的卡片显示标题
+    void updateGameTitle(const std::string& gamePath, const std::string& newTitle);
 
 private:
     brls::HScrollingFrame* m_scroll      = nullptr;
