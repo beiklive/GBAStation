@@ -372,6 +372,21 @@ void InputMappingConfig::setDefaults(ConfigManager& cfg)
     cfg.SetDefault("handle.l2",     CV(std::string("LT")));
     cfg.SetDefault("handle.r2",     CV(std::string("RT")));
 
+    // ---- Game button map: keyboard ----------------------------------
+    // Populate only when the key is absent so user settings are preserved.
+    static constexpr int k_kbMapCount =
+        static_cast<int>(sizeof(k_defaultKbMap) / sizeof(k_defaultKbMap[0]));
+    for (int i = 0; i < k_kbMapCount; ++i) {
+        // Find the retro button name for this mapping.
+        for (const auto& rn : k_retroNames) {
+            if (rn.id == k_defaultKbMap[i].retroId) {
+                std::string kbKey = std::string("keyboard.") + rn.name;
+                cfg.SetDefault(kbKey, CV(k_defaultKbMap[i].scancode));
+                break;
+            }
+        }
+    }
+
     // ---- Emulator hotkeys ------------------------------------------
     for (int i = 0; i < static_cast<int>(Hotkey::_Count); ++i) {
         cfg.SetDefault(k_hotkeyMeta[i].padKey,
@@ -439,7 +454,7 @@ void InputMappingConfig::loadFfRewindSettings(const ConfigManager& cfg)
 
 void InputMappingConfig::loadGameButtonMap(const ConfigManager& cfg)
 {
-    // 读取手柄键位
+    // Read gamepad button binding: integer or named string value.
     auto getCfgPad = [&](const std::string& key, brls::ControllerButton def) -> int {
         auto v = cfg.Get(key);
         if (v) {
@@ -449,9 +464,23 @@ void InputMappingConfig::loadGameButtonMap(const ConfigManager& cfg)
         return static_cast<int>(def);
     };
 
+    // Read keyboard scancode binding – returns the configured scancode for a retro button,
+    // or -1 if the key is absent or set to "none".
+    auto getCfgKb = [&](const std::string& key, int def) -> int {
+        auto v = cfg.Get(key);
+        if (v) {
+            if (auto s = v->AsString()) {
+                if (toUpper(*s) == "NONE" || s->empty()) return -1;
+                return parseKeyboardScancode(*s);
+            }
+            if (auto i = v->AsInt()) return *i;
+        }
+        return def;
+    };
+
     m_gameButtonMap.clear();
 
-    // 读取默认的手柄键位映射，并覆盖为配置项的值（如果有的话）。
+    // Read default gamepad button map and override with config values (if any).
     for (const auto& defPad : k_defaultButtonMap) {
         unsigned retroId = defPad.retroId;
 
@@ -459,12 +488,22 @@ void InputMappingConfig::loadGameButtonMap(const ConfigManager& cfg)
         for (const auto& rn : k_retroNames) {
             if (rn.id != retroId) continue;
 
-            // --- 设置为配置项 ---
+            // Gamepad binding
             std::string padKey = std::string("handle.") + rn.name;
             int padBtn = getCfgPad(padKey, defPad.brl);
 
+            // Keyboard binding
+            // Look up the default keyboard scancode from k_defaultKbMap.
+            int kbDef = -1;
+            for (const auto& dm : k_defaultKbMap) {
+                if (dm.retroId == retroId) { kbDef = dm.scancode; break; }
+            }
+            std::string kbKey = std::string("keyboard.") + rn.name;
+            int kbScan = getCfgKb(kbKey, kbDef);
+
             m_gameButtonMap.push_back({ retroId,
                 (padBtn >= 0 && padBtn < static_cast<int>(brls::_BUTTON_MAX)) ? padBtn : -1,
+                kbScan,
                 });
             break;
         }

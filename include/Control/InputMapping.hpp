@@ -64,8 +64,9 @@ public:
     // ----------------------------------------------------------------
     struct GameButtonEntry
     {
-        unsigned retroId     = 0;   ///< RETRO_DEVICE_ID_JOYPAD_*
-        int      padButton   = -1;  ///< brls::ControllerButton; -1 = unbound
+        unsigned retroId    = 0;   ///< RETRO_DEVICE_ID_JOYPAD_*
+        int      padButton  = -1;  ///< brls::ControllerButton; -1 = unbound
+        int      kbScancode = -1;  ///< BrlsKeyboardScancode; -1 = unbound
     };
 
     // ----------------------------------------------------------------
