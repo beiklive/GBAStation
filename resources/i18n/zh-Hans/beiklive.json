@@ -58,7 +58,7 @@
             "game"    : "游戏设置",
             "display" : "画面设置",
             "audio"   : "声音设置",
-            "keybind" : "按键预设",
+            "keybind" : "按键映射",
             "debug"   : "调试工具"
         },
         "ui": {
@@ -104,7 +104,7 @@
             "cheat_loc"        : "金手指文件位置",
             "cheat_loc_rom"    : "游戏同目录",
             "cheat_loc_emu"    : "模拟器目录",
-            "cheat_dir"        : "金手指自定义目录",
+            "cheat_dir"        : "金手指目录",
             "cheat_auto"       : "（自动，见上选项）",
             "cheat_clear_auto" : "清空（自动）"
         },

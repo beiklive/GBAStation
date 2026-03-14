@@ -126,8 +126,7 @@ struct DefaultButtonMap { brls::ControllerButton brl; unsigned retroId; };
 static const DefaultButtonMap k_defaultButtonMap[] = {
     { brls::BUTTON_A,          RETRO_DEVICE_ID_JOYPAD_A      },
     { brls::BUTTON_B,          RETRO_DEVICE_ID_JOYPAD_B      },
-    // NOTE: BUTTON_X is reserved as the in-game exit key; JOYPAD_X is not
-    //       mapped by default.  Users can configure it via handle.x = <key>.
+    { brls::BUTTON_X,          RETRO_DEVICE_ID_JOYPAD_X      },
     { brls::BUTTON_Y,          RETRO_DEVICE_ID_JOYPAD_Y      },
     { brls::BUTTON_UP,         RETRO_DEVICE_ID_JOYPAD_UP     },
     { brls::BUTTON_DOWN,       RETRO_DEVICE_ID_JOYPAD_DOWN   },
@@ -166,90 +165,76 @@ static const DefaultKbMap k_defaultKbMap[] = {
 // ---- Hotkey metadata table ----------------------------------
 // Maps each Hotkey enum to its config key names and default values.
 struct HotkeyMeta {
-    const char* kbdKey;     ///< Config key for keyboard binding
     const char* padKey;     ///< Config key for gamepad binding
-    const char* kbdDefault; ///< Default keyboard value ("none" = unbound)
     const char* padDefault; ///< Default gamepad value  ("none" = unbound)
     const char* displayName; ///< Human-readable name (UTF-8)
 };
 
 static const HotkeyMeta k_hotkeyMeta[] = {
-    // FastForwardToggle
-    {
-        "hotkey.fastforward_toggle.kbd", "hotkey.fastforward_toggle.pad",
-        "none",                          "none",
-        "\xe5\xbf\xab\xe8\xbf\x9b\xef\xbc\x88\xe5\x88\x87\xe6\x8d\xa2\xef\xbc\x89"  // 快进（切换）
-    },
     // FastForwardHold  – kbd: keyboard.fastforward, pad: handle.fastforward (legacy keys)
     {
-        "keyboard.fastforward", "handle.fastforward",
-        "TAB",                  "RT",
-        "\xe5\xbf\xab\xe8\xbf\x9b\xef\xbc\x88\xe4\xbf\x9d\xe6\x8c\x81\xef\xbc\x89"  // 快进（保持）
-    },
-    // RewindToggle
-    {
-        "hotkey.rewind_toggle.kbd", "hotkey.rewind_toggle.pad",
-        "none",                     "none",
-        "\xe5\x80\x92\xe5\xb8\xa6\xef\xbc\x88\xe5\x88\x87\xe6\x8d\xa2\xef\xbc\x89"  // 倒带（切换）
+        "handle.fastforward",
+        "none",
+        "\xe5\xbf\xab\xe8\xbf\x9b\xef\xbc\x88\xe4\xbf\x9d\xe6\x8c\x81\xef\xbc\x89"  // 快进
     },
     // RewindHold  – kbd: keyboard.rewind, pad: handle.rewind (legacy keys)
     {
-        "keyboard.rewind", "handle.rewind",
-        "GRAVE",           "LT",
-        "\xe5\x80\x92\xe5\xb8\xa6\xef\xbc\x88\xe4\xbf\x9d\xe6\x8c\x81\xef\xbc\x89"  // 倒带（保持）
+        "handle.rewind",
+        "none",
+        "\xe5\x80\x92\xe5\xb8\xa6\xef\xbc\x88\xe4\xbf\x9d\xe6\x8c\x81\xef\xbc\x89"  // 倒带
     },
     // QuickSave
     {
-        "hotkey.quicksave.kbd", "hotkey.quicksave.pad",
-        "F5",                   "none",
+        "hotkey.quicksave.pad",
+        "none",
         "\xe5\xbf\xab\xe9\x80\x9f\xe4\xbf\x9d\xe5\xad\x98"  // 快速保存
     },
     // QuickLoad
     {
-        "hotkey.quickload.kbd", "hotkey.quickload.pad",
-        "F8",                   "none",
+        "hotkey.quickload.pad",
+        "none",
         "\xe5\xbf\xab\xe9\x80\x9f\xe8\xaf\xbb\xe5\x8f\x96"  // 快速读取
     },
     // OpenMenu
     {
-        "hotkey.menu.kbd", "hotkey.menu.pad",
-        "F1",              "none",
+        "hotkey.menu.pad",
+        "none",
         "\xe6\x89\x93\xe5\xbc\x80\xe8\x8f\x9c\xe5\x8d\x95"  // 打开菜单
     },
     // Mute
     {
-        "hotkey.mute.kbd", "hotkey.mute.pad",
-        "F9",              "none",
+        "hotkey.mute.pad",
+        "none",
         "\xe9\x9d\x99\xe9\x9f\xb3"  // 静音
     },
     // Pause
     {
-        "hotkey.pause.kbd", "hotkey.pause.pad",
-        "F10",              "none",
+        "hotkey.pause.pad",
+        "none",
         "\xe6\x9a\x82\xe5\x81\x9c"  // 暂停
     },
     // OpenCheatMenu
     {
-        "hotkey.cheat_menu.kbd", "hotkey.cheat_menu.pad",
-        "F2",                    "none",
+        "hotkey.cheat_menu.pad",
+        "none",
         "\xe6\x89\x93\xe5\xbc\x80\xe9\x87\x91\xe6\x89\x8b\xe6\x8c\x87\xe8\x8f\x9c\xe5\x8d\x95"  // 打开金手指菜单
     },
     // OpenShaderMenu
     {
-        "hotkey.shader_menu.kbd", "hotkey.shader_menu.pad",
-        "F3",                     "none",
+        "hotkey.shader_menu.pad",
+        "none",
         "\xe6\x89\x93\xe5\xbc\x80\xe7\x9d\x80\xe8\x89\xb2\xe5\x99\xa8\xe8\x8f\x9c\xe5\x8d\x95"  // 打开着色器菜单
     },
     // Screenshot
     {
-        "hotkey.screenshot.kbd", "hotkey.screenshot.pad",
-        "F12",                   "none",
+        "hotkey.screenshot.pad",
+        "none",
         "\xe6\x88\xaa\xe5\xb1\x8f"  // 截屏
     },
     // ExitGame  – kbd: keyboard.exit (legacy key)
     {
-        "keyboard.exit", "hotkey.exit_game.pad",
-        "ESC",           "none",
+        "hotkey.exit_game.pad",
+        "none",
         "\xe9\x80\x80\xe5\x87\xba\xe6\xb8\xb8\xe6\x88\x8f"  // 退出游戏
     },
 };
@@ -316,31 +301,12 @@ InputMappingConfig::parseKeyCombo(const std::string& s)
         if (!part.empty()) parts.push_back(part);
     }
 
-    // Walk parts: treat CTRL/SHIFT/ALT as modifiers, the rest as the key.
-    for (const auto& p : parts) {
-        std::string up = toUpper(p);
-        if (up == "CTRL" || up == "CONTROL" || up == "LCTRL" || up == "RCTRL")
-            result.ctrl = true;
-        else if (up == "SHIFT" || up == "LSHIFT" || up == "RSHIFT")
-            result.shift = true;
-        else if (up == "ALT" || up == "LALT" || up == "RALT")
-            result.alt = true;
-        else
-            result.scancode = parseKeyboardScancode(p);
-    }
     return result;
 }
 
 // ============================================================
 // Hotkey metadata accessors
 // ============================================================
-
-const char* InputMappingConfig::hotkeyKbdConfigKey(Hotkey h)
-{
-    int i = static_cast<int>(h);
-    if (i < 0 || i >= static_cast<int>(Hotkey::_Count)) return "";
-    return k_hotkeyMeta[i].kbdKey;
-}
 
 const char* InputMappingConfig::hotkeyPadConfigKey(Hotkey h)
 {
@@ -406,26 +372,8 @@ void InputMappingConfig::setDefaults(ConfigManager& cfg)
     cfg.SetDefault("handle.l2",     CV(std::string("LT")));
     cfg.SetDefault("handle.r2",     CV(std::string("RT")));
 
-    // ---- Game button map: keyboard ----------------------------------
-    cfg.SetDefault("keyboard.a",      CV(std::string("X")));
-    cfg.SetDefault("keyboard.b",      CV(std::string("Z")));
-    cfg.SetDefault("keyboard.x",      CV(std::string("C")));
-    cfg.SetDefault("keyboard.y",      CV(std::string("A")));
-    cfg.SetDefault("keyboard.up",     CV(std::string("UP")));
-    cfg.SetDefault("keyboard.down",   CV(std::string("DOWN")));
-    cfg.SetDefault("keyboard.left",   CV(std::string("LEFT")));
-    cfg.SetDefault("keyboard.right",  CV(std::string("RIGHT")));
-    cfg.SetDefault("keyboard.start",  CV(std::string("ENTER")));
-    cfg.SetDefault("keyboard.select", CV(std::string("S")));
-    cfg.SetDefault("keyboard.l",      CV(std::string("Q")));
-    cfg.SetDefault("keyboard.r",      CV(std::string("W")));
-    cfg.SetDefault("keyboard.l2",     CV(std::string("E")));
-    cfg.SetDefault("keyboard.r2",     CV(std::string("R")));
-
     // ---- Emulator hotkeys ------------------------------------------
     for (int i = 0; i < static_cast<int>(Hotkey::_Count); ++i) {
-        cfg.SetDefault(k_hotkeyMeta[i].kbdKey,
-                       CV(std::string(k_hotkeyMeta[i].kbdDefault)));
         cfg.SetDefault(k_hotkeyMeta[i].padKey,
                        CV(std::string(k_hotkeyMeta[i].padDefault)));
     }
@@ -437,9 +385,9 @@ void InputMappingConfig::setDefaults(ConfigManager& cfg)
 
 void InputMappingConfig::load(const ConfigManager& cfg)
 {
-    loadFfRewindSettings(cfg);
-    loadGameButtonMap(cfg);
-    loadHotkeyBindings(cfg);
+    loadFfRewindSettings(cfg);  // 读取倒带和快进的设置
+    loadGameButtonMap(cfg);     // 读取游戏按键映射设置
+    loadHotkeyBindings(cfg);    // 读取功能热键绑定设置
 }
 
 // ---- Private helpers ----------------------------------------
@@ -491,7 +439,7 @@ void InputMappingConfig::loadFfRewindSettings(const ConfigManager& cfg)
 
 void InputMappingConfig::loadGameButtonMap(const ConfigManager& cfg)
 {
-    // Helper: read gamepad button from config key, fall back to default.
+    // 读取手柄键位
     auto getCfgPad = [&](const std::string& key, brls::ControllerButton def) -> int {
         auto v = cfg.Get(key);
         if (v) {
@@ -501,19 +449,9 @@ void InputMappingConfig::loadGameButtonMap(const ConfigManager& cfg)
         return static_cast<int>(def);
     };
 
-    // Helper: read keyboard scancode from config key.
-    auto getCfgKbd = [&](const std::string& key, int def) -> int {
-        auto v = cfg.Get(key);
-        if (v) {
-            if (auto i = v->AsInt())    return *i;
-            if (auto s = v->AsString()) return parseKeyboardScancode(*s);
-        }
-        return def;
-    };
-
     m_gameButtonMap.clear();
 
-    // Build one entry per retro joypad button.
+    // 读取默认的手柄键位映射，并覆盖为配置项的值（如果有的话）。
     for (const auto& defPad : k_defaultButtonMap) {
         unsigned retroId = defPad.retroId;
 
@@ -521,80 +459,38 @@ void InputMappingConfig::loadGameButtonMap(const ConfigManager& cfg)
         for (const auto& rn : k_retroNames) {
             if (rn.id != retroId) continue;
 
-            // --- gamepad binding ---
+            // --- 设置为配置项 ---
             std::string padKey = std::string("handle.") + rn.name;
             int padBtn = getCfgPad(padKey, defPad.brl);
 
-            // --- keyboard binding ---
-            // Find matching default keyboard entry for this retroId.
-            int kbdDefault = -1;
-            for (const auto& defKb : k_defaultKbMap)
-                if (defKb.retroId == retroId) { kbdDefault = defKb.scancode; break; }
-
-            std::string kbdKey = std::string("keyboard.") + rn.name;
-            int kbdSc = getCfgKbd(kbdKey, kbdDefault);
-
             m_gameButtonMap.push_back({ retroId,
                 (padBtn >= 0 && padBtn < static_cast<int>(brls::_BUTTON_MAX)) ? padBtn : -1,
-                kbdSc });
+                });
             break;
         }
     }
 
     // Also emit entries for NAV buttons (dpad aliases, gamepad only).
     m_gameButtonMap.push_back({ RETRO_DEVICE_ID_JOYPAD_UP,
-        static_cast<int>(brls::BUTTON_NAV_UP),    -1 });
+        static_cast<int>(brls::BUTTON_NAV_UP)});
     m_gameButtonMap.push_back({ RETRO_DEVICE_ID_JOYPAD_DOWN,
-        static_cast<int>(brls::BUTTON_NAV_DOWN),  -1 });
+        static_cast<int>(brls::BUTTON_NAV_DOWN)});
     m_gameButtonMap.push_back({ RETRO_DEVICE_ID_JOYPAD_LEFT,
-        static_cast<int>(brls::BUTTON_NAV_LEFT),  -1 });
+        static_cast<int>(brls::BUTTON_NAV_LEFT)});
     m_gameButtonMap.push_back({ RETRO_DEVICE_ID_JOYPAD_RIGHT,
-        static_cast<int>(brls::BUTTON_NAV_RIGHT), -1 });
+        static_cast<int>(brls::BUTTON_NAV_RIGHT)});
 
-    // ---- JOYPAD_X (configurable via handle.x / keyboard.x) ----------------
-    // Historically BUTTON_X was reserved as the in-game exit key and
-    // JOYPAD_X was never emitted.  Now that the exit action is conditional
-    // (it only exits when BUTTON_X is NOT mapped here), we must process
-    // handle.x so users can remap BUTTON_X to game joypad X.
-    // Default is "none" (-1) so existing behaviour (BUTTON_X = exit) is
-    // preserved unless the user explicitly sets handle.x in their config.
-    {
-        int padBtn = -1;
-        auto v = cfg.Get("handle.x");
-        if (v) {
-            if (auto i = v->AsInt())    padBtn = *i;
-            if (auto s = v->AsString()) padBtn = parseGamepadButton(*s);
-        }
-        int kbdSc = getCfgKbd("keyboard.x", -1); // no default keyboard binding
-        const bool isPadBtnValid = (padBtn >= 0 && padBtn < static_cast<int>(brls::_BUTTON_MAX));
-        if (isPadBtnValid || kbdSc >= 0) {
-            m_gameButtonMap.push_back({ RETRO_DEVICE_ID_JOYPAD_X,
-                isPadBtnValid ? padBtn : -1,
-                kbdSc });
-        }
-    }
 }
 
 void InputMappingConfig::loadHotkeyBindings(const ConfigManager& cfg)
 {
     for (int i = 0; i < static_cast<int>(Hotkey::_Count); ++i) {
         HotkeyBinding& hk = m_hotkeys[i];
-
-        // --- keyboard binding ---
-        {
-            std::string val = k_hotkeyMeta[i].kbdDefault;
-            auto v = cfg.Get(k_hotkeyMeta[i].kbdKey);
-            if (v) {
-                if (auto s = v->AsString()) val = *s;
-                else if (auto n = v->AsInt()) val = std::to_string(*n);
-            }
-            hk.kbdCombo = parseKeyCombo(val);
-        }
-
         // --- gamepad binding ---
         {
             std::string val = k_hotkeyMeta[i].padDefault;
             auto v = cfg.Get(k_hotkeyMeta[i].padKey);
+
             if (v) {
                 if (auto s = v->AsString()) val = *s;
                 else if (auto n = v->AsInt()) val = std::to_string(*n);

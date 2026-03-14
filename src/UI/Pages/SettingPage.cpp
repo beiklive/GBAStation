@@ -714,6 +714,11 @@ brls::ScrollingFrame* SettingPage::buildGameTab()
     // ── 存档设置 ──────────────────────────────────────────────────────────────
     box->addView(makeHeader("beiklive/settings/game/header_save"_i18n));
 
+    std::vector<std::string> saveDirs = {
+            "beiklive/settings/game/cheat_loc_rom"_i18n,
+            "beiklive/settings/game/cheat_loc_emu"_i18n
+    };
+
     auto* autoSaveCell = new brls::BooleanCell();
     autoSaveCell->init("beiklive/settings/game/auto_save"_i18n,
                        cfgGetBool("save.autoSave", true),
@@ -721,83 +726,36 @@ brls::ScrollingFrame* SettingPage::buildGameTab()
     box->addView(autoSaveCell);
 
     {
-        auto* sramDirCell = new brls::DetailCell();
-        sramDirCell->setText("beiklive/settings/game/sram_dir"_i18n);
-        std::string curSramDir = cfgGetStr("save.sramDir", "");
-        sramDirCell->setDetailText(curSramDir.empty() ? "beiklive/settings/game/same_as_rom"_i18n : curSramDir);
-        sramDirCell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A,
-            [sramDirCell](brls::View*) {
-                auto* flPage = new FileListPage();
-                // Browse directories only (no filter = show all, user navigates to dir and activates)
-                flPage->setDefaultFileCallback([sramDirCell](const FileListItem& dirItem) {
-                    if (!dirItem.isDir) return;
-                    cfgSetStr("save.sramDir", dirItem.fullPath);
-                    sramDirCell->setDetailText(dirItem.fullPath);
-                    brls::Application::popActivity();
-                });
-                std::string startPath = cfgGetStr("save.sramDir", "");
-                if (startPath.empty()) startPath = "/";
-                flPage->navigateTo(startPath);
-
-                auto* container = new brls::Box(brls::Axis::COLUMN);
-                container->setGrow(1.0f);
-                container->addView(flPage);
-                container->registerAction("beiklive/hints/close"_i18n, brls::BUTTON_START, [](brls::View*) {
-                    brls::Application::popActivity(); return true;
-                });
-                auto* frame = new brls::AppletFrame(container);
-                frame->setHeaderVisibility(brls::Visibility::GONE);
-                frame->setFooterVisibility(brls::Visibility::GONE);
-                frame->setBackground(brls::ViewBackground::NONE);
-                brls::Application::pushActivity(new brls::Activity(frame));
-                return true;
-            }, false, false, brls::SOUND_CLICK);
-        sramDirCell->registerAction("beiklive/settings/game/clear_same_as_rom"_i18n, brls::BUTTON_X,
-            [sramDirCell](brls::View*) {
-                cfgSetStr("save.sramDir", "");
-                sramDirCell->setDetailText("beiklive/settings/game/same_as_rom"_i18n);
-                return true;
-            }, false, false, brls::SOUND_CLICK);
+        auto* sramDirCell = new brls::SelectorCell();
+        sramDirCell->init(
+            "beiklive/settings/game/sram_dir"_i18n,
+            saveDirs,
+            cfgGetStr("save.sramDir", "").empty() ? 0 : 1,
+            [](int idx) {
+                if (idx == 0) {
+                    cfgSetStr("save.sramDir", "");
+                } else if (idx == 1) {
+                    cfgSetStr("save.sramDir", BK_APP_ROOT_DIR + std::string("saves"));
+                }
+            }
+        );
         box->addView(sramDirCell);
     }
 
     {
-        auto* stateDirCell = new brls::DetailCell();
-        stateDirCell->setText("beiklive/settings/game/state_dir"_i18n);
-        std::string curStateDir = cfgGetStr("save.stateDir", "");
-        stateDirCell->setDetailText(curStateDir.empty() ? "beiklive/settings/game/same_as_rom"_i18n : curStateDir);
-        stateDirCell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A,
-            [stateDirCell](brls::View*) {
-                auto* flPage = new FileListPage();
-                flPage->setDefaultFileCallback([stateDirCell](const FileListItem& dirItem) {
-                    if (!dirItem.isDir) return;
-                    cfgSetStr("save.stateDir", dirItem.fullPath);
-                    stateDirCell->setDetailText(dirItem.fullPath);
-                    brls::Application::popActivity();
-                });
-                std::string startPath = cfgGetStr("save.stateDir", "");
-                if (startPath.empty()) startPath = "/";
-                flPage->navigateTo(startPath);
-
-                auto* container = new brls::Box(brls::Axis::COLUMN);
-                container->setGrow(1.0f);
-                container->addView(flPage);
-                container->registerAction("beiklive/hints/close"_i18n, brls::BUTTON_START, [](brls::View*) {
-                    brls::Application::popActivity(); return true;
-                });
-                auto* frame = new brls::AppletFrame(container);
-                frame->setHeaderVisibility(brls::Visibility::GONE);
-                frame->setFooterVisibility(brls::Visibility::GONE);
-                frame->setBackground(brls::ViewBackground::NONE);
-                brls::Application::pushActivity(new brls::Activity(frame));
-                return true;
-            }, false, false, brls::SOUND_CLICK);
-        stateDirCell->registerAction("beiklive/settings/game/clear_same_as_rom"_i18n, brls::BUTTON_X,
-            [stateDirCell](brls::View*) {
-                cfgSetStr("save.stateDir", "");
-                stateDirCell->setDetailText("beiklive/settings/game/same_as_rom"_i18n);
-                return true;
-            }, false, false, brls::SOUND_CLICK);
+        auto* stateDirCell = new brls::SelectorCell();
+        stateDirCell->init(
+            "beiklive/settings/game/state_dir"_i18n,
+            saveDirs,
+            cfgGetStr("save.stateDir", "").empty() ? 0 : 1,
+            [](int idx) {
+                if (idx == 0) {
+                    cfgSetStr("save.stateDir", "");
+                } else if (idx == 1) {
+                    cfgSetStr("save.stateDir", BK_APP_ROOT_DIR + std::string("saves"));
+                }
+            }
+        );
         box->addView(stateDirCell);
     }
 
@@ -811,63 +769,22 @@ brls::ScrollingFrame* SettingPage::buildGameTab()
     box->addView(cheatEnableCell);
 
     {
-        static const char* cheatDirIds[] = { "rom", "emu" };
-        std::string curCheatLoc = cfgGetStr("cheat.location", "rom");
-        int cheatLocIdx = 0;
-        for (int i = 0; i < 2; ++i)
-            if (curCheatLoc == cheatDirIds[i]) { cheatLocIdx = i; break; }
-        std::vector<std::string> cheatLocLabels = {
-            "beiklive/settings/game/cheat_loc_rom"_i18n,
-            "beiklive/settings/game/cheat_loc_emu"_i18n
-        };
-        auto* cheatLocCell = new brls::SelectorCell();
-        cheatLocCell->init("beiklive/settings/game/cheat_loc"_i18n, cheatLocLabels, cheatLocIdx,
-            [](int idx){
-                if (idx >= 0 && idx < 2)
-                    cfgSetStr("cheat.location", cheatDirIds[idx]);
-            });
-        box->addView(cheatLocCell);
-    }
-
-    {
-        auto* cheatDirCell = new brls::DetailCell();
-        cheatDirCell->setText("beiklive/settings/game/cheat_dir"_i18n);
-        std::string curCheatDir = cfgGetStr("cheat.dir", "");
-        cheatDirCell->setDetailText(curCheatDir.empty() ? "beiklive/settings/game/cheat_auto"_i18n : curCheatDir);
-        cheatDirCell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A,
-            [cheatDirCell](brls::View*) {
-                auto* flPage = new FileListPage();
-                flPage->setDefaultFileCallback([cheatDirCell](const FileListItem& dirItem) {
-                    if (!dirItem.isDir) return;
-                    cfgSetStr("cheat.dir", dirItem.fullPath);
-                    cheatDirCell->setDetailText(dirItem.fullPath);
-                    brls::Application::popActivity();
-                });
-                std::string startPath = cfgGetStr("cheat.dir", "");
-                if (startPath.empty()) startPath = "/";
-                flPage->navigateTo(startPath);
-
-                auto* container = new brls::Box(brls::Axis::COLUMN);
-                container->setGrow(1.0f);
-                container->addView(flPage);
-                container->registerAction("beiklive/hints/close"_i18n, brls::BUTTON_START, [](brls::View*) {
-                    brls::Application::popActivity(); return true;
-                });
-                auto* frame = new brls::AppletFrame(container);
-                frame->setHeaderVisibility(brls::Visibility::GONE);
-                frame->setFooterVisibility(brls::Visibility::GONE);
-                frame->setBackground(brls::ViewBackground::NONE);
-                brls::Application::pushActivity(new brls::Activity(frame));
-                return true;
-            }, false, false, brls::SOUND_CLICK);
-        cheatDirCell->registerAction("beiklive/settings/game/cheat_clear_auto"_i18n, brls::BUTTON_X,
-            [cheatDirCell](brls::View*) {
-                cfgSetStr("cheat.dir", "");
-                cheatDirCell->setDetailText("beiklive/settings/game/cheat_auto"_i18n);
-                return true;
-            }, false, false, brls::SOUND_CLICK);
+        auto* cheatDirCell = new brls::SelectorCell();
+        cheatDirCell->init(
+            "beiklive/settings/game/cheat_dir"_i18n,
+            saveDirs,
+            cfgGetStr("cheat.dir", "").empty() ? 0 : 1,
+            [](int idx) {
+                if (idx == 0) {
+                    cfgSetStr("cheat.dir", "");
+                } else if (idx == 1) {
+                    cfgSetStr("cheat.dir", BK_APP_ROOT_DIR + std::string("cheats"));
+                }
+            }
+        );
         box->addView(cheatDirCell);
     }
+
 
     scroll->setContentView(box);
     return scroll;
@@ -1134,59 +1051,6 @@ brls::ScrollingFrame* SettingPage::buildKeyBindTab()
         box->addView(cell);
     }
 
-#ifndef __SWITCH__
-    // ── 键盘 ──────────────────────────────────────────────────────────────────
-    box->addView(makeHeader("beiklive/settings/keybind/header_kbd"_i18n));
-
-    for (int i = 0; i < k_gameBtnCount; ++i)
-    {
-        std::string cfgKey = std::string("keyboard.") + k_gameBtns[i].suffix;
-        auto* cell = new brls::DetailCell();
-        cell->setText(k_gameBtns[i].label);
-        cell->setDetailText(cfgGetStr(cfgKey, "none"));
-        std::string captureKey = cfgKey;
-        cell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A,
-            [cell, captureKey](brls::View*) {
-                openKeyCapture(true, [cell, captureKey](const std::string& r) {
-                    if (!r.empty()) { cfgSetStr(captureKey, r); cell->setDetailText(r); }
-                });
-                return true;
-            }, false, false, brls::SOUND_CLICK);
-        cell->registerAction("beiklive/hints/clear_binding"_i18n, brls::BUTTON_X,
-            [cell, captureKey](brls::View*) {
-                cfgSetStr(captureKey, "none");
-                cell->setDetailText("none");
-                return true;
-            }, false, false, brls::SOUND_CLICK);
-        box->addView(cell);
-    }
-
-    for (int i = 0; i < static_cast<int>(InputMappingConfig::Hotkey::_Count); ++i)
-    {
-        auto hk = static_cast<InputMappingConfig::Hotkey>(i);
-        std::string kbdKey = InputMappingConfig::hotkeyKbdConfigKey(hk);
-        std::string label  = std::string(InputMappingConfig::hotkeyDisplayName(hk))
-                             + "beiklive/settings/keybind/kbd_suffix"_i18n;
-        auto* cell = new brls::DetailCell();
-        cell->setText(label);
-        cell->setDetailText(cfgGetStr(kbdKey, "none"));
-        std::string captureKey = kbdKey;
-        cell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A,
-            [cell, captureKey](brls::View*) {
-                openKeyCapture(true, [cell, captureKey](const std::string& r) {
-                    if (!r.empty()) { cfgSetStr(captureKey, r); cell->setDetailText(r); }
-                });
-                return true;
-            }, false, false, brls::SOUND_CLICK);
-        cell->registerAction("beiklive/hints/clear_binding"_i18n, brls::BUTTON_X,
-            [cell, captureKey](brls::View*) {
-                cfgSetStr(captureKey, "none");
-                cell->setDetailText("none");
-                return true;
-            }, false, false, brls::SOUND_CLICK);
-        box->addView(cell);
-    }
-#endif
 
     scroll->setContentView(box);
     return scroll;

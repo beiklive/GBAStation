@@ -29,10 +29,8 @@ public:
     // ----------------------------------------------------------------
     enum class Hotkey : int
     {
-        FastForwardToggle = 0,  ///< 快进（切换）
-        FastForwardHold,        ///< 快进（保持）
-        RewindToggle,           ///< 倒带（切换）
-        RewindHold,             ///< 倒带（保持）
+        FastForward,        ///< 快进（保持）
+        Rewind,             ///< 倒带（保持）
         QuickSave,              ///< 快速保存
         QuickLoad,              ///< 快速读取
         OpenMenu,               ///< 打开菜单
@@ -68,7 +66,6 @@ public:
     {
         unsigned retroId     = 0;   ///< RETRO_DEVICE_ID_JOYPAD_*
         int      padButton   = -1;  ///< brls::ControllerButton; -1 = unbound
-        int      kbdScancode = -1;  ///< BrlsKeyboardScancode;   -1 = unbound
     };
 
     // ----------------------------------------------------------------
@@ -77,7 +74,6 @@ public:
     // ----------------------------------------------------------------
     struct HotkeyBinding
     {
-        KeyCombo kbdCombo;
         int      padButton = -1;    ///< brls::ControllerButton; -1 = unbound
 
         bool isPadBound() const { return padButton >= 0; }
@@ -126,10 +122,6 @@ public:
 
     /// Parse a key-combo string: "F5", "CTRL+F5", "SHIFT+Z", "none".
     static KeyCombo parseKeyCombo(const std::string& s);
-
-    /// Return the config key name for a hotkey's keyboard binding.
-    /// e.g. Hotkey::QuickSave  → "hotkey.quicksave.kbd"
-    static const char* hotkeyKbdConfigKey(Hotkey h);
 
     /// Return the config key name for a hotkey's gamepad binding.
     /// e.g. Hotkey::QuickSave  → "hotkey.quicksave.pad"

@@ -127,6 +127,8 @@ int main(int argc, char* argv[]) {
     std::filesystem::create_directories(BK_APP_LOG_DIR);
     std::filesystem::create_directories(BK_APP_CONFIG_DIR);
     std::filesystem::create_directories(BK_GAME_CORE_DIR);
+    std::filesystem::create_directories(BK_APP_ROOT_DIR + std::string("saves"));
+    std::filesystem::create_directories(BK_APP_ROOT_DIR + std::string("cheats"));
 	
 	ConfigManagerInit();
 	// We recommend to use INFO for real apps

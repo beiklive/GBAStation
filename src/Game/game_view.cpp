@@ -34,7 +34,9 @@
 #endif
 
 #ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
 #  define WIN32_LEAN_AND_MEAN
+#endif
 #  include <windows.h>
 #  include <mmsystem.h>   // timeBeginPeriod / timeEndPeriod
 #endif
@@ -80,21 +82,11 @@ static int nvgImageFromGLTexture(NVGcontext* vg, GLuint tex,
 std::string GameView::resolveCoreLibPath()
 {
 #if defined(__SWITCH__)
-    // On Switch, mgba_libretro.a is statically linked into the binary.
-    // LibretroLoader::load() ignores the path in this case.
-    return "";
+    return "";  // switch平台直接静态链接
 #elif defined(_WIN32)
     return std::string(BK_GAME_CORE_DIR) + std::string("mgba_libretro.dll");
-#elif defined(__APPLE__)
-    return std::string(BK_GAME_CORE_DIR) + std::string("mgba_libretro.dylib");
-#else
-    return std::string(BK_GAME_CORE_DIR) + std::string("mgba_libretro.so");
 #endif
 }
-
-// ============================================================
-// Constructors / Destructor
-// ============================================================
 
 GameView::GameView(std::string romPath) : GameView()
 {
@@ -109,10 +101,6 @@ GameView::GameView()
     setHideHighlight(true);
 	beiklive::CheckGLSupport();
 
-    // ── Disable all borealis key handling while the game is running ───────────
-    // Swallow every controller button so borealis navigation, hints, and click
-    // animations never interfere with in-game input.  All actual gamepad input
-    // processing is handled by the low-level GameInputController in pollInput().
     beiklive::swallow(this, brls::BUTTON_A);
     beiklive::swallow(this, brls::BUTTON_B);
     beiklive::swallow(this, brls::BUTTON_X);
@@ -151,13 +139,10 @@ void GameView::initialize()
     setHideHighlightBackground(true);
     setHideHighlightBorder(true);
 
-    // ---- Load display settings from config
+    // ---- 读取画面配置
     if (gameRunner && gameRunner->settingConfig)
         m_display.load(*gameRunner->settingConfig);
 
-    // Register mgba core variable defaults and wire up SettingManager.
-    // SetDefault() only writes the value when the key is not already present,
-    // so user-saved values in the config file take precedence.
     if (gameRunner && gameRunner->settingConfig) {
         beiklive::ConfigManager* cfg = gameRunner->settingConfig;
         using CV = beiklive::ConfigValue;
@@ -183,8 +168,8 @@ void GameView::initialize()
 
         // ---- FPS display defaults ------------------------------------
         cfg->SetDefault("display.showFps",           CV(std::string("false")));
-        cfg->SetDefault("display.showFfOverlay",     CV(std::string("true")));
-        cfg->SetDefault("display.showRewindOverlay", CV(std::string("true")));
+        cfg->SetDefault("display.showFfOverlay",     CV(std::string("false")));
+        cfg->SetDefault("display.showRewindOverlay", CV(std::string("false")));
         cfg->SetDefault(KEY_DISPLAY_OVERLAY_ENABLED,  CV(std::string("false")));
         cfg->SetDefault(KEY_DISPLAY_OVERLAY_GBA_PATH, CV(std::string("")));
         cfg->SetDefault(KEY_DISPLAY_OVERLAY_GBC_PATH, CV(std::string("")));
@@ -205,8 +190,8 @@ void GameView::initialize()
             return def;
         };
         m_showFps           = getBool("display.showFps",           false);
-        m_showFfOverlay     = getBool("display.showFfOverlay",     true);
-        m_showRewindOverlay = getBool("display.showRewindOverlay", true);
+        m_showFfOverlay     = getBool("display.showFfOverlay",     false);
+        m_showRewindOverlay = getBool("display.showRewindOverlay", false);
         m_overlayEnabled    = getBool(KEY_DISPLAY_OVERLAY_ENABLED, false);
 
         // ---- Resolve overlay path for this game --------------------------
@@ -214,10 +199,11 @@ void GameView::initialize()
         // 2. Fall back to global GBA / GBC path depending on ROM extension.
         if (m_overlayEnabled && !m_romFileName.empty()) {
             std::string perGame = getGameDataStr(m_romFileName, GAMEDATA_FIELD_OVERLAY, "");
-            if (!perGame.empty()) {
+            if (!perGame.empty()) { 
+                // 每个游戏独立遮罩
                 m_overlayPath = perGame;
             } else {
-                // Determine platform from file extension
+                // 使用通用遮罩
                 std::string ext;
                 auto dot = m_romFileName.rfind('.');
                 if (dot != std::string::npos) {
@@ -234,10 +220,10 @@ void GameView::initialize()
             }
         }
 
-        // ---- Load all input bindings and FF/rewind settings --------------
+        // ---- 读取按键映射 --------------
         m_inputMap.load(*cfg);
 
-        // ---- Register gamepad hotkey actions with GameInputController ----
+        // ---- 绑定功能键以及回调函数 ----
         registerGamepadHotkeys();
     } // end if (gameRunner && gameRunner->settingConfig)
 
@@ -245,13 +231,14 @@ void GameView::initialize()
     std::string corePath = resolveCoreLibPath();
     bklog::info("Loading libretro core: {}", corePath);
 
-    // ---- Configure save directory for the core -----------------------
+    // ---- 配置存档位置core -----------------------
     {
         std::string sramCustomDir;
         if (gameRunner && gameRunner->settingConfig) {
             auto v = gameRunner->settingConfig->Get("save.sramDir");
             if (v) { if (auto s = v->AsString()) sramCustomDir = *s; }
         }
+        // 读取用户自定义SRAM目录（如果有），并确保它存在。然后将其路径传递给核心，核心会在该目录下为每个游戏创建子目录来存储SRAM文件。
         std::string sramDir = resolveSaveDir(m_romPath, sramCustomDir);
         if (!sramDir.empty()) {
             // Ensure the directory exists
@@ -264,13 +251,13 @@ void GameView::initialize()
             m_core.setSaveDirectory(sramDir);
         }
     }
-
+    // 初始化核心
     if (!m_core.load(corePath)) {
         bklog::error("Failed to load libretro core from: {}", corePath);
         m_coreFailed = true;
         return;
     }
-
+    // 检查核心状态
     if (!m_core.initCore()) {
         bklog::error("retro_init() failed");
         m_core.unload();
@@ -278,7 +265,7 @@ void GameView::initialize()
         return;
     }
 
-    // ---- Load ROM -------------------------------------------------------
+    // ---- 读取 ROM -------------------------------------------------------
     if (!m_romPath.empty()) {
         if (!std::filesystem::exists(m_romPath)) {
             bklog::error("ROM not found: {}", m_romPath);
@@ -300,12 +287,14 @@ void GameView::initialize()
                     m_core.gameWidth(), m_core.gameHeight(),
                     m_core.fps());
 
-        // ---- Load SRAM (battery save) and cheats after ROM is loaded --------
+        // ---- 读取 SRAM（电池保存）和金手指在 ROM 加载后 --------
         loadSram();
         loadCheats();
+
+        m_core.reset(); // Ensure the core starts in a clean state after loading saves/cheats
     }
 
-    // ---- Create GL texture for video output ----------------------------
+    // ---- 创建用于视频输出的 GL 纹理 ----------------------------
     glGenTextures(1, &m_texture);
     glBindTexture(GL_TEXTURE_2D, m_texture);
     // Apply filter mode from display config (Nearest or Linear)
@@ -407,7 +396,7 @@ void GameView::startGameThread()
 
         while (m_running.load(std::memory_order_acquire)) {
             // Poll controller input and forward to the core
-            pollInput();
+            pollInput();  // 处理输入事件
 
             bool ff      = m_fastForward.load(std::memory_order_relaxed);
             bool rew     = m_rewinding.load(std::memory_order_relaxed);
@@ -431,7 +420,7 @@ void GameView::startGameThread()
             unsigned framesThisIter = 1u;
 
             if (rew && m_inputMap.rewindEnabled) {
-                // ---- Rewind: restore from buffer then run to update video ----
+                // ---- 存储倒带状态
                 bool didRestore = false;
                 {
                     std::lock_guard<std::mutex> lk(m_rewindMutex);
@@ -442,9 +431,9 @@ void GameView::startGameThread()
                         didRestore = true;
                     }
                 }
-                // Run core after restoring state to produce a fresh video frame.
+
                 if (didRestore) {
-                    m_core.run();
+                    m_core.run();  // 核心运行以更新视频输出，保证倒带的流畅性。
                 }
                 // Drain audio (mute or pass through based on config)
                 {
@@ -529,8 +518,7 @@ void GameView::startGameThread()
                 fpsTimerStart = nowPost;
             }
 
-            // ---- Periodic play-time update (every 60 seconds) -----------
-            // Accumulate run time to GAMEDATA_FIELD_TOTALTIME in gamedataManager.
+            // 更新游戏运行时间长 1分钟一次
             if (gamedataManager && !m_romFileName.empty()) {
                 auto playtimeElapsed = std::chrono::duration_cast<std::chrono::seconds>(
                     nowPost - playtimeTimer).count();
@@ -552,7 +540,10 @@ void GameView::startGameThread()
                 }
             }
 
-            // ---- Pending quick save / load (triggered by hotkeys) --------
+            // ---- 存读即时存档 --------
+            // exchange(-1, std::memory_order_relaxed) 的作用是：
+            // 取出当前请求槽位（slot）；
+            // 同时把原子变量重置为 -1（表示“无待处理请求”）。
             {
                 int slot = m_pendingQuickSave.exchange(-1, std::memory_order_relaxed);
                 if (slot >= 0) doQuickSave(slot);
@@ -562,27 +553,7 @@ void GameView::startGameThread()
                 if (slot >= 0) doQuickLoad(slot);
             }
 
-            // ---- Frame-rate control (accumulated ideal-time approach) ----
-            // nextFrameTarget advances by exactly one frame period each
-            // iteration, independent of actual execution time.  This prevents
-            // timing errors from accumulating across frames (e.g. one slow
-            // frame no longer shrinks the next frame's sleep budget).
-            //
-            // fast-forward (multiplier >= 1x):
-            //   Run N frames per period; sleep for same frameDuration.
-            //   Effective speed = N / frameDuration = multiplier × fps. ✓
-            //
-            // fast-forward (sub-1x):
-            //   Stretch period to 1/(fps*multiplier) per frame.
-            //
-            // normal / rewind:
-            //   Sleep for frameDuration.
-            //
-            // Hybrid sleep: coarse sleep for (remaining − spinGuard), then
-            // spin-wait for precise deadline.  Anti-drift guard resets the
-            // accumulated target to now whenever a frame runs over budget,
-            // giving the next frame a fresh full-period budget instead of
-            // scheduling it in the past (which would cause a catch-up burst).
+            // 帧率限制器
             {
                 Duration targetDur = frameDuration;
                 if (ff && m_inputMap.ffMultiplier < 1.0f) {
@@ -750,65 +721,48 @@ void GameView::registerGamepadHotkeys()
     };
 
     // ── Fast-forward (hold key) ──────────────────────────────────────────────
-    reg(Hotkey::FastForwardHold, [this](KeyEvent evt)
+    reg(Hotkey::FastForward, [this](KeyEvent evt)
     {
-        if (!m_inputMap.ffToggleMode)
+        if(beiklive::cfgGetBool("fastforward.enabled", false))
         {
-            // Hold mode: FF active while key is held.
-            // Use Press (rising edge) and Release (falling edge) for hold detection.
-            if (evt == KeyEvent::Press)
-                m_ffPadHeld = true;
-            else if (evt == KeyEvent::Release)
-                m_ffPadHeld = false;
-        }
-        else
-        {
-            // Toggle mode: ShortPress flips the toggle state.
-            if (evt == KeyEvent::ShortPress)
-                m_ffToggled = !m_ffToggled;
-        }
-        m_fastForward.store(m_ffPadHeld || m_ffToggled,
-                            std::memory_order_relaxed);
-    });
-
-    // ── Fast-forward (dedicated toggle key) ─────────────────────────────────
-    reg(Hotkey::FastForwardToggle, [this](KeyEvent evt)
-    {
-        if (evt == KeyEvent::ShortPress)
-        {
-            m_ffToggled = !m_ffToggled;
+            if (!m_inputMap.ffToggleMode)
+            {
+                // 按住模式：Press 开始快进，Release 结束快进。
+                if (evt == KeyEvent::Press)
+                    m_ffPadHeld = true;
+                else if (evt == KeyEvent::Release)
+                    m_ffPadHeld = false;
+            }
+            else
+            {
+                // 切换模式：ShortPress 切换快进状态。
+                if (evt == KeyEvent::ShortPress)
+                    m_ffToggled = !m_ffToggled;
+            }
             m_fastForward.store(m_ffPadHeld || m_ffToggled,
                                 std::memory_order_relaxed);
         }
     });
 
     // ── Rewind (hold key) ────────────────────────────────────────────────────
-    reg(Hotkey::RewindHold, [this](KeyEvent evt)
+    reg(Hotkey::Rewind, [this](KeyEvent evt)
     {
-        if (!m_inputMap.rewindToggleMode)
-        {
-            if (evt == KeyEvent::Press)
-                m_rewPadHeld = true;
-            else if (evt == KeyEvent::Release)
-                m_rewPadHeld = false;
-        }
-        else
-        {
-            if (evt == KeyEvent::ShortPress)
-                m_rewindToggled = !m_rewindToggled;
-        }
-        m_rewinding.store(m_rewPadHeld || m_rewindToggled,
-                          std::memory_order_relaxed);
-    });
-
-    // ── Rewind (dedicated toggle key) ───────────────────────────────────────
-    reg(Hotkey::RewindToggle, [this](KeyEvent evt)
-    {
-        if (evt == KeyEvent::ShortPress)
-        {
-            m_rewindToggled = !m_rewindToggled;
+        if(beiklive::cfgGetBool("rewind.enabled", false)){
+            if (!m_inputMap.rewindToggleMode)
+            {
+                if (evt == KeyEvent::Press)
+                    m_rewPadHeld = true;
+                else if (evt == KeyEvent::Release)
+                    m_rewPadHeld = false;
+            }
+            else
+            {
+                if (evt == KeyEvent::ShortPress)
+                    m_rewindToggled = !m_rewindToggled;
+            }
             m_rewinding.store(m_rewPadHeld || m_rewindToggled,
                               std::memory_order_relaxed);
+
         }
     });
 
@@ -1001,6 +955,7 @@ void GameView::loadSram()
             std::streamsize got = f.gcount();
 
             void* sramPtr = m_core.getMemoryData(RETRO_MEMORY_SAVE_RAM);
+            // 加载存档到核心的 SRAM 区域
             if (sramPtr) {
                 std::memcpy(sramPtr, buf.data(), static_cast<size_t>(got));
                 bklog::info("GameView: SRAM loaded from {} ({} bytes)", path, got);
@@ -1010,9 +965,7 @@ void GameView::loadSram()
         }
     }
 
-    // Always attempt to load RTC data: GB MBC3 games store RTC registers
-    // separately and need the saved unixTime to calculate elapsed time on resume.
-    // loadRtc() is a no-op for cores that have no RTC memory region.
+    // 读取时钟信息
     loadRtc();
 }
 
