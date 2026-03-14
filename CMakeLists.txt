@@ -33,7 +33,7 @@ set(VERSION_ALTER "0")
 set(VERSION_BUILD "0")
 set(PACKAGE_NAME "com.beiklive.bkstation")
 set(PROJECT_AUTHOR "beiklive")
-set(PROJECT_ICON ${CMAKE_CURRENT_SOURCE_DIR}/resources/icon/logo128.png)
+set(PROJECT_ICON ${CMAKE_CURRENT_SOURCE_DIR}/resources/icon/default.png)
 set(PROJECT_RESOURCES ${CMAKE_CURRENT_SOURCE_DIR}/resources)
 
 if (USE_LIBROMFS)

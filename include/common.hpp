@@ -45,7 +45,7 @@ using namespace brls::literals; // for _i18n
 #endif
 
 // 应用默认图标
-#define BK_APP_DEFAULT_LOGO BK_RES("img/ui/gba-icon-256.png")
+#define BK_APP_DEFAULT_LOGO BK_RES("icon/default.png")
 #define BK_APP_DEFAULT_BG BK_RES("img/bg2.png")
 
 
