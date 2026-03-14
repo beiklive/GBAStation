@@ -115,11 +115,6 @@ class FileListPage : public beiklive::UI::BBox
     void onItemActivated(int index);
     void openSidebar(int itemIndex);
 
-    // ── Settings panel callback (set by StartPageView) ───────────────────────
-    /// Called when the user presses BUTTON_X to open the settings / operation panel.
-    /// The host (StartPageView) should display its own overlay panel.
-    std::function<void(const FileListItem&, int)> onOpenSettings;
-
     // ── File-operation helpers exposed for external callers ──────────────────
     void doRenamePublic(int itemIndex)    { doRename(itemIndex); }
     void doSetMappingPublic(int itemIndex){ doSetMapping(itemIndex); }
