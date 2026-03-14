@@ -8,7 +8,6 @@
 #include <deque>
 #include <mutex>
 #include <thread>
-#include <unordered_map>
 #include <vector>
 
 #include "common.hpp"
@@ -31,6 +30,28 @@ class GameView : public brls::Box
     void onFocusGained() override;
     void onFocusLost() override;
     void onLayout() override;
+
+    /**
+     * Enable or disable the borealis input system for this view.
+     *
+     * When @a enabled is true, borealis UI event dispatching is blocked so
+     * that no navigation, hint, or click-animation events reach the UI while
+     * the game is running.  The low-level GameInputController is also enabled
+     * so gamepad hotkeys are processed.
+     *
+     * When @a enabled is false, borealis input is unblocked and the
+     * GameInputController is suspended.  Use this to hand control back to the
+     * UI when a menu is pushed on top of the game.
+     *
+     * This is a one-click toggle: calling it multiple times with the same
+     * value is idempotent.
+     *
+     * @note Must be called from the main (UI) thread.
+     *       `brls::Application::blockInputs` / `unblockInputs` are
+     *       main-thread-only APIs, and `m_uiBlocked` is only touched on
+     *       the main thread.
+     */
+    void setGameInputEnabled(bool enabled);
 
   private:
     std::string  m_romPath;
@@ -61,7 +82,7 @@ class GameView : public brls::Box
     std::atomic<bool> m_running{false};
     std::atomic<bool> m_fastForward{false};
 
-    // ---- Keyboard exit ----------------------------------------------
+    // ---- Exit request -----------------------------------------------
     std::atomic<bool> m_requestExit{false}; ///< Set by game thread; consumed by draw()
 
     // ---- Quick save / load state ------------------------------------
@@ -71,10 +92,6 @@ class GameView : public brls::Box
     std::atomic<int>  m_pendingQuickLoad{-1};
     /// Current active quick-save slot (0-based).
     int  m_saveSlot = 0;
-    /// Previous keyboard quick-save key state (game thread only, edge detection).
-    bool m_kbdQsSavePrev = false;
-    /// Previous keyboard quick-load key state (game thread only, edge detection).
-    bool m_kbdQlLoadPrev = false;
     /// Status message for save/load overlay (set from game thread, read in draw).
     mutable std::mutex  m_saveMsgMutex;
     std::string         m_saveMsg;
@@ -91,27 +108,15 @@ class GameView : public brls::Box
     // ---- Fast-forward runtime state ---------------------------------
     /// Whether the gamepad hold-key is currently held (hold mode, game thread only).
     bool m_ffPadHeld       = false;
-    /// Whether the keyboard hold-key is currently held (hold mode, game thread only).
-    bool m_ffKbdHeld       = false;
     /// Toggle state set by dedicated toggle keys (game thread only).
     bool m_ffToggled       = false;
-    /// Previous keyboard hold-key state for edge detection (game thread only).
-    bool m_ffKbdHoldPrev   = false;
-    /// Previous keyboard toggle-key state for edge detection (game thread only).
-    bool m_ffKbdTogglePrev = false;
 
     // ---- Rewind runtime state ---------------------------------------
     std::atomic<bool>            m_rewinding{false};
     /// Whether the gamepad rewind hold-key is currently held (game thread only).
     bool m_rewPadHeld       = false;
-    /// Whether the keyboard rewind hold-key is currently held (game thread only).
-    bool m_rewKbdHeld       = false;
     /// Rewind toggle state (game thread only).
     bool m_rewindToggled    = false;
-    /// Previous keyboard rewind hold-key state for edge detection (game thread only).
-    bool m_rewKbdHoldPrev   = false;
-    /// Previous keyboard rewind toggle-key state for edge detection (game thread only).
-    bool m_rewKbdTogglePrev = false;
     std::deque<std::vector<uint8_t>> m_rewindBuffer; ///< Circular save-state buffer
     mutable std::mutex           m_rewindMutex;
 
@@ -124,18 +129,13 @@ class GameView : public brls::Box
     float    m_currentFps    = 0.0f;
     std::chrono::steady_clock::time_point m_fpsLastTime;
 
-    // ---- Input source tracking ------------------------------------
-    bool m_useKeyboard = false; ///< true when keyboard is the active input source
-
     // ---- UI input block tracking ----------------------------------
     /// true when we have an outstanding blockInputs() token (desktop only).
     bool m_uiBlocked = false;
 
-    // ---- Main-thread input snapshot (thread-safe GLFW access) ------
+    // ---- Main-thread input snapshot (thread-safe access) -----------
     struct InputSnapshot {
         brls::ControllerState ctrlState{};
-        /// Keyboard key states: scancode → pressed (for all mapped scancodes)
-        std::unordered_map<int, bool> kbdState;
     };
     mutable std::mutex m_inputSnapMutex;
     InputSnapshot      m_inputSnap;
