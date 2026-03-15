@@ -432,24 +432,30 @@ void GameView::startGameThread()
 
             bool ff      = m_fastForward.load(std::memory_order_relaxed);
             bool rew     = m_rewinding.load(std::memory_order_relaxed);
+            bool paused  = m_paused.load(std::memory_order_relaxed);
 
             // 通知核心当前快进状态，使其能正确响应
             // RETRO_ENVIRONMENT_GET_FASTFORWARDING 查询。
-            m_core.setFastForwarding(ff);
+            m_core.setFastForwarding(ff && !paused);
 
 #ifdef __SWITCH__
             // 快进结束时，清空环形缓冲区中的残留音频样本，
             // 防止它们以正常速度回放（会产生噪音或突发的加速音频）。
-            if (prevFastForward && !ff) {
+            if (!paused && prevFastForward && !ff) {
                 beiklive::AudioManager::instance().flushRingBuffer();
             }
-            prevFastForward = ff;
+            prevFastForward = paused ? false : ff;
 #endif
 
             // framesThisIter：本次迭代渲染的逻辑帧数，用于 FPS 计数。
             unsigned framesThisIter = 1u;
 
-            if (rew && m_inputMap.rewindEnabled) {
+            if (paused) {
+                // ---- 暂停状态：清空所有游戏按键，跳过核心运行和音频推送 ----
+                // 清空游戏按键状态，防止恢复后残留按键触发游戏操作。
+                for (unsigned id = 0; id <= RETRO_DEVICE_ID_JOYPAD_R3; ++id)
+                    m_core.setButtonState(id, false);
+            } else if (rew && m_inputMap.rewindEnabled) {
                 // ---- 存储倒带状态
                 bool didRestore = false;
                 {
@@ -532,99 +538,108 @@ void GameView::startGameThread()
             }
 
             // ---- FPS 计数器（游戏线程侧）-------------------------
-            // 统计所有渲染帧数（含快进倍增的帧）。
-            fpsCounter += framesThisIter;
+            // 暂停时不计帧数，保持 FPS 覆盖层显示上一次的有效值。
             auto nowPost = Clock::now(); // 捕获一次，供后续睡眠复用
-            double elapsed = std::chrono::duration<double>(nowPost - fpsTimerStart).count();
-            if (elapsed >= FPS_UPDATE_INTERVAL) {
-                float newFps = static_cast<float>(static_cast<double>(fpsCounter) / elapsed);
-                {
-                    std::lock_guard<std::mutex> lk(m_fpsMutex);
-                    m_currentFps    = newFps;
-                    m_fpsFrameCount = fpsCounter;
-                }
-                fpsCounter   = 0;
-                fpsTimerStart = nowPost;
-            }
-
-            // 更新游戏运行时长，每 1 分钟保存一次
-            if (gamedataManager && !m_romFileName.empty()) {
-                auto playtimeElapsed = std::chrono::duration_cast<std::chrono::seconds>(
-                    nowPost - playtimeTimer).count();
-                if (playtimeElapsed >= 60) {
-                    // 精确推进 60 秒，防止线程挂起或检查延迟导致多计时间。
-                    playtimeTimer += std::chrono::seconds(60);
-                    std::string prefix = gamedataKeyPrefix(m_romFileName);
-                    std::string k = prefix + "." + GAMEDATA_FIELD_TOTALTIME;
-                    int currentTotal = 0;
-                    auto tv = gamedataManager->Get(k);
-                    if (tv) {
-                        if (auto iv = tv->AsInt()) currentTotal = *iv;
+            if (!paused) {
+                // 统计所有渲染帧数（含快进倍增的帧）。
+                fpsCounter += framesThisIter;
+                double elapsed = std::chrono::duration<double>(nowPost - fpsTimerStart).count();
+                if (elapsed >= FPS_UPDATE_INTERVAL) {
+                    float newFps = static_cast<float>(static_cast<double>(fpsCounter) / elapsed);
+                    {
+                        std::lock_guard<std::mutex> lk(m_fpsMutex);
+                        m_currentFps    = newFps;
+                        m_fpsFrameCount = fpsCounter;
                     }
-                    currentTotal += 60;
-                    gamedataManager->Set(k, beiklive::ConfigValue(currentTotal));
-                    gamedataManager->Save();
+                    fpsCounter   = 0;
+                    fpsTimerStart = nowPost;
                 }
-            }
 
-            // RTC 实时同步：保持 GB MBC3 RTC 存档缓冲区中的 unixTime 字段最新。
-            // GBMBCRTCSaveBuffer::unixTime 位于字节偏移 40（10 × uint32_t），
-            // GBMBCRTCRead 在下次游戏加载时会将其读入 rtcLastLatch。
-            // 保持此字段更新可确保存档重载后经过时间计算正确。
-            {
-                auto rtcElapsed = std::chrono::duration_cast<std::chrono::seconds>(
-                    nowPost - rtcSyncTimer).count();
-                if (rtcElapsed >= 1) {
-                    rtcSyncTimer += std::chrono::seconds(1);
-                    // GBMBCRTCSaveBuffer::unixTime 偏移量为 40 字节。
-                    static constexpr size_t k_rtcUnixTimeOffset = 10 * sizeof(uint32_t);
-                    size_t rtcSz = m_core.getMemorySize(RETRO_MEMORY_RTC);
-                    if (rtcSz >= k_rtcUnixTimeOffset + sizeof(uint64_t)) {
-                        void* rtcPtr = m_core.getMemoryData(RETRO_MEMORY_RTC);
-                        if (rtcPtr) {
-                            std::time_t t = std::time(nullptr);
-                            if (t != static_cast<std::time_t>(-1)) {
-                                uint64_t nowUnix = static_cast<uint64_t>(t);
-                                std::memcpy(static_cast<uint8_t*>(rtcPtr) + k_rtcUnixTimeOffset,
-                                            &nowUnix, sizeof(uint64_t));
+                // 更新游戏运行时长，每 1 分钟保存一次
+                if (gamedataManager && !m_romFileName.empty()) {
+                    auto playtimeElapsed = std::chrono::duration_cast<std::chrono::seconds>(
+                        nowPost - playtimeTimer).count();
+                    if (playtimeElapsed >= 60) {
+                        // 精确推进 60 秒，防止线程挂起或检查延迟导致多计时间。
+                        playtimeTimer += std::chrono::seconds(60);
+                        std::string prefix = gamedataKeyPrefix(m_romFileName);
+                        std::string k = prefix + "." + GAMEDATA_FIELD_TOTALTIME;
+                        int currentTotal = 0;
+                        auto tv = gamedataManager->Get(k);
+                        if (tv) {
+                            if (auto iv = tv->AsInt()) currentTotal = *iv;
+                        }
+                        currentTotal += 60;
+                        gamedataManager->Set(k, beiklive::ConfigValue(currentTotal));
+                        gamedataManager->Save();
+                    }
+                }
+
+                // RTC 实时同步：保持 GB MBC3 RTC 存档缓冲区中的 unixTime 字段最新。
+                // GBMBCRTCSaveBuffer::unixTime 位于字节偏移 40（10 × uint32_t），
+                // GBMBCRTCRead 在下次游戏加载时会将其读入 rtcLastLatch。
+                // 保持此字段更新可确保存档重载后经过时间计算正确。
+                {
+                    auto rtcElapsed = std::chrono::duration_cast<std::chrono::seconds>(
+                        nowPost - rtcSyncTimer).count();
+                    if (rtcElapsed >= 1) {
+                        rtcSyncTimer += std::chrono::seconds(1);
+                        // GBMBCRTCSaveBuffer::unixTime 偏移量为 40 字节。
+                        static constexpr size_t k_rtcUnixTimeOffset = 10 * sizeof(uint32_t);
+                        size_t rtcSz = m_core.getMemorySize(RETRO_MEMORY_RTC);
+                        if (rtcSz >= k_rtcUnixTimeOffset + sizeof(uint64_t)) {
+                            void* rtcPtr = m_core.getMemoryData(RETRO_MEMORY_RTC);
+                            if (rtcPtr) {
+                                std::time_t t = std::time(nullptr);
+                                if (t != static_cast<std::time_t>(-1)) {
+                                    uint64_t nowUnix = static_cast<uint64_t>(t);
+                                    std::memcpy(static_cast<uint8_t*>(rtcPtr) + k_rtcUnixTimeOffset,
+                                                &nowUnix, sizeof(uint64_t));
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            // ---- 存读即时存档 --------
-            // exchange(-1, std::memory_order_relaxed) 的作用是：
-            // 取出当前请求槽位（slot）；
-            // 同时把原子变量重置为 -1（表示“无待处理请求”）。
-            {
-                int slot = m_pendingQuickSave.exchange(-1, std::memory_order_relaxed);
-                if (slot >= 0) doQuickSave(slot);
-            }
-            {
-                int slot = m_pendingQuickLoad.exchange(-1, std::memory_order_relaxed);
-                if (slot >= 0) doQuickLoad(slot);
-            }
+                // ---- 存读即时存档 --------
+                // exchange(-1, std::memory_order_relaxed) 的作用是：
+                // 取出当前请求槽位（slot）；
+                // 同时把原子变量重置为 -1（表示"无待处理请求"）。
+                {
+                    int slot = m_pendingQuickSave.exchange(-1, std::memory_order_relaxed);
+                    if (slot >= 0) doQuickSave(slot);
+                }
+                {
+                    int slot = m_pendingQuickLoad.exchange(-1, std::memory_order_relaxed);
+                    if (slot >= 0) doQuickLoad(slot);
+                }
 
-            // ---- 自动定时存档（定期保存到即时存档0 .ss0） --------
-            {
-                int autoSaveIntervalSec = beiklive::cfgGetInt("save.autoSaveInterval", 0);
-                if (autoSaveIntervalSec > 0) {
-                    auto autoSaveElapsed = std::chrono::duration_cast<std::chrono::seconds>(
-                        nowPost - autoSaveTimer).count();
-                    if (autoSaveElapsed >= autoSaveIntervalSec) {
-                        // 重置计时器（以自动存档间隔为单位推进，避免漂移）
-                        autoSaveTimer += std::chrono::seconds(autoSaveIntervalSec);
-                        // 静默模式：自动存档不在游戏界面显示保存 overlay
-                        doQuickSave(0, /*silent=*/true);
+                // ---- 自动定时存档（定期保存到即时存档0 .ss0） --------
+                {
+                    int autoSaveIntervalSec = beiklive::cfgGetInt("save.autoSaveInterval", 0);
+                    if (autoSaveIntervalSec > 0) {
+                        auto autoSaveElapsed = std::chrono::duration_cast<std::chrono::seconds>(
+                            nowPost - autoSaveTimer).count();
+                        if (autoSaveElapsed >= autoSaveIntervalSec) {
+                            // 重置计时器（以自动存档间隔为单位推进，避免漂移）
+                            autoSaveTimer += std::chrono::seconds(autoSaveIntervalSec);
+                            // 静默模式：自动存档不在游戏界面显示保存 overlay
+                            doQuickSave(0, /*silent=*/true);
+                        }
                     }
                 }
+            } else {
+                // 暂停时推进各计时器基准点，避免恢复后触发积压的时间操作
+                playtimeTimer = nowPost;
+                rtcSyncTimer  = nowPost;
+                autoSaveTimer = nowPost;
+                fpsTimerStart = nowPost;
             }
 
             // 帧率限制器
             {
                 Duration targetDur = frameDuration;
-                if (ff && m_inputMap.ffMultiplier < 1.0f) {
+                if (!paused && ff && m_inputMap.ffMultiplier < 1.0f) {
                     targetDur = Duration(1.0 / (fps * static_cast<double>(m_inputMap.ffMultiplier)));
                 }
 
@@ -736,7 +751,8 @@ void GameView::setGameMenu(GameMenu* menu)
     m_gameMenu = menu;
     if (m_gameMenu) {
         m_gameMenu->setCloseCallback([this]() {
-            // 菜单关闭：启用游戏输入封锁（阻止 UI 事件），将焦点返回给 GameView
+            // 菜单关闭：恢复游戏运行，启用游戏输入封锁（阻止 UI 事件），将焦点返回给 GameView
+            setPaused(false);
             setGameInputEnabled(true);
             brls::Application::giveFocus(this);
         });
@@ -770,6 +786,20 @@ void GameView::setGameInputEnabled(bool enabled)
     }
 #endif
     m_inputCtrl.setEnabled(enabled);
+}
+
+// ============================================================
+// setPaused – 暂停或恢复游戏运行
+// ============================================================
+// 暂停时游戏线程跳过核心执行和音频推送，所有游戏按键状态清零。
+// 主要供打开/关闭 GameMenu 时调用，防止菜单导航输入影响游戏核心。
+//
+// 线程安全：必须在主（UI）线程调用。
+// ============================================================
+
+void GameView::setPaused(bool paused)
+{
+    m_paused.store(paused, std::memory_order_relaxed);
 }
 
 
@@ -1817,6 +1847,8 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
             bklog::warning("GameView: 收到打开菜单请求，但 m_gameMenu 未设置");
         } else if (m_gameMenu->getVisibility() == brls::Visibility::GONE) {
             m_gameMenu->setVisibility(brls::Visibility::VISIBLE);
+            // 暂停游戏：防止菜单导航输入被传递到游戏核心
+            setPaused(true);
             // 解除 borealis 输入封锁，使菜单能接收手柄导航和点击事件
             setGameInputEnabled(false);
             // 将焦点转移到菜单（borealis 会找到第一个可聚焦子控件）
@@ -2065,6 +2097,25 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
         nvgFillColor(vg, nvgRGBA(255, 255, 255, 230));
         nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
         nvgText(vg, nx + nw * 0.5f, ny + nh * 0.5f, muteText, nullptr);
+    }
+
+    // ---- 暂停状态覆盖层 --------------------------------------
+    // 游戏暂停（打开菜单）时在屏幕顶部中央显示暂停提示。
+    if (m_paused.load(std::memory_order_relaxed)) {
+        const char* pauseText = "PAUSED";
+        float pw = 90.0f, ph = 22.0f;
+        float px = x + width  * 0.5f - pw * 0.5f;
+        float py = y + 4.0f;
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, px, py, pw, ph, 4.0f);
+        nvgFillColor(vg, nvgRGBA(0, 0, 0, 180));
+        nvgFill(vg);
+
+        nvgFontSize(vg, 14.0f);
+        nvgFontFace(vg, "regular");
+        nvgFillColor(vg, nvgRGBA(255, 220, 60, 230));
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgText(vg, px + pw * 0.5f, py + ph * 0.5f, pauseText, nullptr);
     }
 
     // ---- 截图处理（主线程，在所有渲染完成后从 GL 帧缓冲抓取）--------

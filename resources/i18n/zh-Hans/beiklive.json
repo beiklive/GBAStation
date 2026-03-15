@@ -152,9 +152,7 @@
         },
         "keybind": {
             "header_pad": "手柄",
-            "header_kbd": "键盘",
             "pad_suffix": " (手柄)",
-            "kbd_suffix": " (键盘)",
             "press_kbd": "请按下键盘按键（支持 CTRL/SHIFT/ALT 组合键）",
             "press_pad": "请按下手柄按键（支持组合键）",
             "countdown_suffix": " 秒",

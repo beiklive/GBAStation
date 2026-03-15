@@ -49,6 +49,18 @@ class GameView : public brls::Box
      */
     void setGameInputEnabled(bool enabled);
 
+    /**
+     * 暂停或恢复游戏运行。
+     *
+     * 暂停时：游戏线程跳过核心执行和音频推送，所有游戏按键状态清零。
+     * 恢复时：游戏线程继续正常运行。
+     *
+     * 线程安全：可在主（UI）线程调用。
+     *
+     * @param paused true 暂停游戏，false 恢复运行。
+     */
+    void setPaused(bool paused);
+
   private:
     std::string  m_romPath;
     std::string  m_romFileName;  ///< 从m_romPath提取的文件名（含扩展名）
@@ -108,6 +120,11 @@ class GameView : public brls::Box
     // ---- 低层手柄输入控制器 -----------------------------------------
     /// 手柄组合键动作，在initialize()中注册，游戏线程通过pollInput()调用。
     beiklive::GameInputController m_inputCtrl;
+
+    // ---- 暂停状态 ---------------------------------------------------
+    /// 游戏暂停标志：打开 GameMenu 时置 true，关闭菜单时置 false。
+    /// 主线程写入，游戏线程读取。
+    std::atomic<bool> m_paused{false};
 
     // ---- 静音状态 ---------------------------------------------------
     /// 用户通过热键触发的静音开关（游戏线程读，主线程绘制覆盖层）
