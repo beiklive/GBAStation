@@ -21,7 +21,7 @@
 class GameView : public brls::Box
 {
   public:
-    /// Construct with path to the ROM file that will be loaded automatically.
+    /// 使用ROM文件路径构造，自动加载。
     explicit GameView(std::string romPath);
     GameView();
     ~GameView() override;
@@ -33,63 +33,56 @@ class GameView : public brls::Box
     void onLayout() override;
 
     /**
-     * Enable or disable the borealis input system for this view.
+     * 启用或禁用该视图的borealis输入系统。
      *
-     * When @a enabled is true, borealis UI event dispatching is blocked so
-     * that no navigation, hint, or click-animation events reach the UI while
-     * the game is running.  The low-level GameInputController is also enabled
-     * so gamepad hotkeys are processed.
+     * 启用时，屏蔽borealis UI事件分发（导航、提示、点击动画等），
+     * 同时启用低层GameInputController以处理手柄热键。
      *
-     * When @a enabled is false, borealis input is unblocked and the
-     * GameInputController is suspended.  Use this to hand control back to the
-     * UI when a menu is pushed on top of the game.
+     * 禁用时，解除borealis输入屏蔽，暂停GameInputController。
+     * 用于菜单覆盖在游戏之上时将控制权交还UI。
      *
-     * This is a one-click toggle: calling it multiple times with the same
-     * value is idempotent.
+     * 幂等操作：多次以相同值调用无副作用。
      *
-     * @note Must be called from the main (UI) thread.
-     *       `brls::Application::blockInputs` / `unblockInputs` are
-     *       main-thread-only APIs, and `m_uiBlocked` is only touched on
-     *       the main thread.
+     * @note 须在主（UI）线程调用。
      */
     void setGameInputEnabled(bool enabled);
 
   private:
     std::string  m_romPath;
-    std::string  m_romFileName;  ///< File name (with extension) extracted from m_romPath
+    std::string  m_romFileName;  ///< 从m_romPath提取的文件名（含扩展名）
     bool         m_initialized  = false;
     bool         m_coreFailed   = false;
 
-    // ---- libretro core ----------------------------------------------
+    // ---- libretro核心 -----------------------------------------------
     beiklive::LibretroLoader m_core;
 
-    // ---- OpenGL texture for game frame ------------------------------
+    // ---- 游戏帧OpenGL纹理 ------------------------------------------
     GLuint   m_texture   = 0;
     unsigned m_texWidth  = 0;
     unsigned m_texHeight = 0;
 
-    // ---- NanoVG image handle wrapping the GL texture ----------------
+    // ---- 封装GL纹理的NanoVG图像句柄 --------------------------------
     int  m_nvgImage = -1;
 
-    // ---- Display configuration (scaling / filtering) ----------------
+    // ---- 显示配置（缩放/滤波） --------------------------------------
     beiklive::DisplayConfig  m_display;
     beiklive::FilterMode     m_activeFilter = beiklive::FilterMode::Nearest;
 
-    // ---- RenderChain (video post-processing pipeline) ---------------
+    // ---- RenderChain（视频后处理管线） ------------------------------
     beiklive::RenderChain    m_renderChain;
 
-    // ---- Independent game thread ------------------------------------
+    // ---- 独立游戏线程 -----------------------------------------------
     std::thread       m_gameThread;
     std::atomic<bool> m_running{false};
     std::atomic<bool> m_fastForward{false};
 
-    // ---- Exit request -----------------------------------------------
-    std::atomic<bool> m_requestExit{false}; ///< Set by game thread; consumed by draw()
+    // ---- 退出请求 ---------------------------------------------------
+    std::atomic<bool> m_requestExit{false}; ///< 由游戏线程设置，draw()消费
 
-    // ---- Quick save / load state ------------------------------------
-    /// Slot number to save to (game thread reads, main thread also writes).
+    // ---- 快速存读档 -------------------------------------------------
+    /// 待存档槽号（游戏线程读取，主线程写入）。
     std::atomic<int>  m_pendingQuickSave{-1};
-    /// Slot number to load from (game thread reads, main thread also writes).
+    /// 待读档槽号（游戏线程读取，主线程写入）。
     std::atomic<int>  m_pendingQuickLoad{-1};
     /// Current active quick-save slot (默认1，对应 .ss1).
     int  m_saveSlot = 1;
@@ -97,39 +90,38 @@ class GameView : public brls::Box
     // ---- 截图请求 ---------------------------------------------------
     /// 截图请求标志（游戏线程检测后截图）
     std::atomic<bool> m_pendingScreenshot{false};
-    /// Status message for save/load overlay (set from game thread, read in draw).
+    /// 存读档状态覆盖层消息（游戏线程写入，draw()读取）。
     mutable std::mutex  m_saveMsgMutex;
     std::string         m_saveMsg;
     std::chrono::steady_clock::time_point m_saveMsgTime;
 
-    // ---- Input mapping (key bindings + FF/rewind settings) ----------
+    // ---- 按键绑定（按键映射 + 快进/倒带设置）-----------------------
     beiklive::InputMappingConfig m_inputMap;
 
-    // ---- Low-level gamepad input controller -------------------------
-    /// Registered gamepad combo actions; updated from the game thread via pollInput().
-    /// Actions are registered once in initialize() before the game thread starts.
+    // ---- 低层手柄输入控制器 -----------------------------------------
+    /// 手柄组合键动作，在initialize()中注册，游戏线程通过pollInput()调用。
     beiklive::GameInputController m_inputCtrl;
 
     // ---- 静音状态 ---------------------------------------------------
     /// 用户通过热键触发的静音开关（游戏线程读，主线程绘制覆盖层）
     std::atomic<bool> m_muted{false};
 
-    // ---- Fast-forward runtime state ---------------------------------
-    /// Whether the gamepad hold-key is currently held (hold mode, game thread only).
+    // ---- 快进运行状态 -----------------------------------------------
+    /// 手柄保持键是否当前被按下（保持模式，仅游戏线程）。
     bool m_ffPadHeld       = false;
-    /// Toggle state set by dedicated toggle keys (game thread only).
+    /// 专用切换键设置的快进切换状态（仅游戏线程）。
     bool m_ffToggled       = false;
 
-    // ---- Rewind runtime state ---------------------------------------
+    // ---- 倒带运行状态 -----------------------------------------------
     std::atomic<bool>            m_rewinding{false};
-    /// Whether the gamepad rewind hold-key is currently held (game thread only).
+    /// 手柄倒带保持键是否当前被按下（仅游戏线程）。
     bool m_rewPadHeld       = false;
-    /// Rewind toggle state (game thread only).
+    /// 倒带切换状态（仅游戏线程）。
     bool m_rewindToggled    = false;
-    std::deque<std::vector<uint8_t>> m_rewindBuffer; ///< Circular save-state buffer
+    std::deque<std::vector<uint8_t>> m_rewindBuffer; ///< 循环存档状态缓冲区
     mutable std::mutex           m_rewindMutex;
 
-    // ---- FPS display ------------------------------------------------
+    // ---- FPS显示 ----------------------------------------------------
     bool     m_showFps           = false; ///< display.showFps
     bool     m_showFfOverlay     = true;  ///< display.showFfOverlay
     bool     m_showRewindOverlay = true;  ///< display.showRewindOverlay
@@ -139,14 +131,14 @@ class GameView : public brls::Box
     float    m_currentFps    = 0.0f;
     std::chrono::steady_clock::time_point m_fpsLastTime;
 
-    // ---- UI input block tracking ----------------------------------
-    /// true when we have an outstanding blockInputs() token (desktop only).
+    // ---- UI输入屏蔽跟踪 --------------------------------------------
+    /// 为true时表示有未解除的blockInputs()令牌（仅桌面端）。
     bool m_uiBlocked = false;
 
-    // ---- Main-thread input snapshot (thread-safe access) -----------
+    // ---- 主线程输入快照（线程安全访问） ----------------------------
     struct InputSnapshot {
         brls::ControllerState           ctrlState{};
-        std::unordered_map<int, bool>   kbState;   ///< BrlsKeyboardScancode → pressed
+        std::unordered_map<int, bool>   kbState;   ///< 键盘扫描码 → 是否按下
     };
     mutable std::mutex m_inputSnapMutex;
     InputSnapshot      m_inputSnap;
@@ -156,78 +148,75 @@ class GameView : public brls::Box
     std::string m_overlayPath;              ///< resolved overlay PNG path for this game
     int         m_overlayNvgImage  = -1;    ///< NVG image handle for overlay texture
 
-    /// Load (or reload) the overlay texture into m_overlayNvgImage.
-    /// Frees the previous image if any. Clears m_overlayNvgImage on failure.
+    /// 加载（或重新加载）覆盖层纹理到m_overlayNvgImage。
+    /// 若有旧图像则释放，失败时清空m_overlayNvgImage。
     void loadOverlayImage(NVGcontext* vg);
 
-    // ---- Helper methods ---------------------------------------------
+    // ---- 辅助方法 ---------------------------------------------------
     void initialize();
     void cleanup();
 
-    /// Refresh m_inputSnap from the main thread (called inside draw()).
+    /// 在draw()内从主线程刷新m_inputSnap。
     void refreshInputSnapshot();
 
-    /// Register all gamepad hotkey actions with m_inputCtrl.
-    /// Called from initialize() after m_inputMap is loaded.
+    /// 向m_inputCtrl注册所有手柄热键动作，在initialize()中调用。
     void registerGamepadHotkeys();
 
-    /// Resolve the directory where save files (SRAM / state / cheat) are stored.
-    /// Returns @a customDir if non-empty, otherwise the directory of @a romPath.
+    /// 解析存档文件（SRAM/状态/金手指）目录。
+    /// @a customDir非空时返回该目录，否则返回 @a romPath 所在目录。
     static std::string resolveSaveDir(const std::string& romPath,
                                        const std::string& customDir);
 
-    /// Compute the full path for a quick-save state file.
-    /// Slot -1 → base name without slot suffix (used for per-game state).
+    /// 计算快速存档文件的完整路径。
+    /// slot为-1时返回不含槽号后缀的基础路径（用于单游戏存档）。
     std::string quickSaveStatePath(int slot) const;
 
-    /// Compute the full path for the SRAM (.sav) file.
+    /// 计算SRAM（.sav）文件的完整路径。
     std::string sramSavePath() const;
 
-    /// Compute the full path for the GB MBC3 RTC (.rtc) file.
+    /// 计算GB MBC3 RTC（.rtc）文件的完整路径。
     std::string rtcSavePath() const;
 
-    /// Compute the full path for the cheat (.cht) file.
+    /// 计算金手指（.cht）文件的完整路径。
     std::string cheatFilePath() const;
 
-    /// Load SRAM data from disk into the core's save-RAM region.
+    /// 从磁盘加载SRAM数据到核心的存档RAM区域。
     void loadSram();
 
-    /// Save SRAM data from the core's save-RAM region to disk.
+    /// 将核心存档RAM区域的SRAM数据保存到磁盘。
     void saveSram();
 
-    /// Load GB MBC3 RTC data from disk into the core's RTC memory region.
+    /// 从磁盘加载GB MBC3 RTC数据到核心的RTC内存区域。
     void loadRtc();
 
-    /// Save GB MBC3 RTC data from the core's RTC memory region to disk.
+    /// 将核心RTC内存区域的GB MBC3 RTC数据保存到磁盘。
     void saveRtc();
 
-    /// Save quick-save state to @a slot.
-    /// If @a silent is true, do not show the save/load status overlay message.
+    /// 保存快速存档到 @a slot。silent为true时不显示状态覆盖层消息。
     void doQuickSave(int slot, bool silent = false);
 
-    /// Load quick-save state from @a slot.
+    /// 从 @a slot 读取快速存档。
     void doQuickLoad(int slot);
 
-    /// Capture the current GL framebuffer (game frame + overlay) and save as PNG.
-    /// Must be called from the main (draw) thread after all rendering is complete.
-    /// Uses the full window pixel dimensions (brls::Application::windowWidth/Height).
+    /// 截取当前GL帧缓冲（游戏帧+覆盖层）并保存为PNG。
+    /// 须在主（draw）线程上、所有渲染完成后调用。
     void doScreenshot();
 
-    /// Load cheats from the .cht file associated with the current ROM.
+    /// 从当前ROM关联的.cht文件加载金手指。
     void loadCheats();
 
-    /// Start the independent emulation thread (called from initialize()).
+    /// 启动独立模拟线程（在initialize()中调用）。
     void startGameThread();
 
-    /// Stop and join the emulation thread (called from cleanup()).
+    /// 停止并等待模拟线程退出（在cleanup()中调用）。
     void stopGameThread();
 
-    /// Resolve path to mgba_libretro shared library (.dll/.so/.dylib).
+    /// 解析mgba_libretro共享库路径（.dll/.so/.dylib）。
     static std::string resolveCoreLibPath();
 
-    /// Upload the latest video frame from the libretro core to m_texture.
+    /// 将libretro核心最新视频帧上传到m_texture。
     void uploadFrame(NVGcontext* vg, const beiklive::LibretroLoader::VideoFrame& frame);
 
-    /// Map borealis controller state to libretro button states.
+    /// 将borealis手柄状态映射到libretro按钮状态。
     void pollInput();
 };

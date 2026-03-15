@@ -2,18 +2,17 @@
 #include <borealis/core/cache_helper.hpp>
 #include <set>
 
-/// Set this to true whenever the recent-games queue changes.
-/// StartPageView checks this flag each frame and refreshes the AppPage game list.
+/// 每当最近游戏队列变化时置为 true，StartPageView 每帧检查此标志并刷新游戏列表
 bool g_recentGamesDirty = false;
 
 namespace beiklive {
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  XMB background registry
+//  XMB 背景注册表
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// All ProImage instances created by InsertBackground() are tracked here
-/// so that ApplyXmbColorToAll() can update them when the color setting changes.
+/// 所有由 InsertBackground() 创建的 ProImage 实例均在此跟踪，
+/// 以便颜色设置变化时 ApplyXmbColorToAll() 统一更新
 static std::set<beiklive::UI::ProImage*> s_xmbBackgrounds;
 
 void RegisterXmbBackground(beiklive::UI::ProImage* img)
@@ -51,13 +50,12 @@ static const XmbColorPreset k_xmbColorPresets[] = {
 static constexpr int k_xmbColorPresetCount =
     static_cast<int>(sizeof(k_xmbColorPresets) / sizeof(k_xmbColorPresets[0]));
 
-// Returns display names (in order matching k_xmbColorPresets)
+// 返回各预设的显示名称（顺序与 k_xmbColorPresets 一致）
 static const char* k_xmbColorNames[] = {
     "深蓝", "紫色", "绿色", "橙色", "红色", "青色", "黑色", "原版"
 };
 
-/// Apply the XMB colour preset stored in SettingManager to @a img.
-/// Falls back to "blue" if the key is absent or unknown.
+/// 将 SettingManager 中存储的 XMB 颜色预设应用到 img，未知预设回退为 "blue"
 void ApplyXmbColor(beiklive::UI::ProImage* img)
 {
     if (!img) return;
@@ -70,12 +68,12 @@ void ApplyXmbColor(beiklive::UI::ProImage* img)
             return;
         }
     }
-    // fallback to "blue"
+    // 回退为 "blue"
     img->setXmbBgColor(0.05f, 0.10f, 0.25f);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Config read/write helpers (public – declared in common.hpp)
+//  配置读写辅助函数（声明于 common.hpp，实现于 common.cpp）
 // ─────────────────────────────────────────────────────────────────────────────
 
 bool cfgGetBool(const std::string& key, bool def)
@@ -164,12 +162,12 @@ void cfgSetBool(const std::string& key, bool val)
     cfgSetStr(key, val ? "true" : "false");
 }
 
-/// Apply ALL background settings to @a img based on SettingManager:
-///  - UI.showXmbBg  → enable/disable PSP XMB ripple shader
-///  - UI.pspxmb.color → XMB background colour
-///  - UI.showBgImage + UI.bgImagePath → background image (PNG/JPG/etc.)
-///  - UI.bgBlurEnabled / UI.bgBlurRadius → Kawase blur overlay
-///  - Visibility is set to GONE when both features are disabled.
+/// 根据 SettingManager 配置将所有背景设置应用到 img：
+///  - UI.showXmbBg       → 启用/禁用 PSP XMB 波纹着色器
+///  - UI.pspxmb.color    → XMB 背景颜色
+///  - UI.showBgImage + UI.bgImagePath → 背景图片
+///  - UI.bgBlurEnabled / UI.bgBlurRadius → Kawase 模糊
+///  - 两项均禁用时设为 GONE
 void ApplyXmbBg(beiklive::UI::ProImage* img)
 {
     if (!img) return;
@@ -178,7 +176,7 @@ void ApplyXmbBg(beiklive::UI::ProImage* img)
     bool showBg  = cfgGetBool("UI.showBgImage",   false);
     std::string bgPath = cfgGetStr("UI.bgImagePath", "");
 
-    // If neither feature is enabled, hide the background widget entirely.
+    // 两项功能均未启用时隐藏背景控件
     if (!showXmb && !showBg) {
         img->setVisibility(brls::Visibility::GONE);
         return;
@@ -186,22 +184,21 @@ void ApplyXmbBg(beiklive::UI::ProImage* img)
 
     img->setVisibility(brls::Visibility::VISIBLE);
 
-    // Apply background image (drawn first, under any XMB shader overlay).
+    // 先绘制背景图片，XMB 着色器叠加其上
     if (showBg && !bgPath.empty()) {
         img->setImageFromFile(bgPath);
     } else {
-        // Background image disabled or path not set: clear any previously loaded texture
-        // so the image disappears immediately when the setting is turned off.
+        // 背景图片已禁用或路径未设置：清除纹理使其立即消失
         img->clear();
     }
 
-    // Apply blur settings.
+    // 应用模糊设置
     bool blurEnabled = cfgGetBool("UI.bgBlurEnabled", false);
     float blurRadius = cfgGetFloat("UI.bgBlurRadius",  12.0f);
     img->setBlurEnabled(blurEnabled);
     img->setBlurRadius(blurRadius);
 
-    // Apply XMB shader animation and colour.
+    // 应用 XMB 着色器动画与颜色
     if (showXmb) {
         img->setShaderAnimation(beiklive::UI::ShaderAnimationType::PSP_XMB_RIPPLE);
         ApplyXmbColor(img);
@@ -218,11 +215,9 @@ void ApplyXmbBg(beiklive::UI::ProImage* img)
 
     void clearUIImageCache()
     {
-        // Free all cached raw file bytes.
+        // 释放所有缓存的文件字节
         beiklive::UI::ImageFileCache::instance().clear();
-        // Invalidate all brls TextureCache entries so that subsequent image
-        // loads (after returning from the game) reload from disk rather than
-        // using stale GPU texture handles.
+        // 标记所有 brls TextureCache 条目为脏，确保后续加载从磁盘重新读取而非使用旧 GPU 纹理句柄
         brls::TextureCache::instance().cache.markAllDirty();
     }
 
@@ -257,8 +252,7 @@ void ApplyXmbBg(beiklive::UI::ProImage* img)
         m_bgImage->setHeightPercentage(100);
         m_bgImage->setScalingType(brls::ImageScalingType::FIT);
         m_bgImage->setInterpolation(brls::ImageInterpolation::LINEAR);
-        // Apply all background settings (visibility, image, XMB shader & color)
-        // based on the current configuration.
+        // 应用所有背景设置（可见性、图片、XMB着色器与颜色）
         ApplyXmbBg(m_bgImage);
         RegisterXmbBackground(m_bgImage);
         view->addView(m_bgImage);

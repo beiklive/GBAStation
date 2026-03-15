@@ -11,7 +11,7 @@
 #include <fstream>
 #include <vector>
 
-// ── OpenGL / NanoVG GL backend (needed for FBO and shader rendering) ─────────
+// ── OpenGL / NanoVG GL 后端（FBO 和着色器渲染所需） ──────────────────────────
 #ifdef BOREALIS_USE_OPENGL
 #  ifdef USE_GLES3
 #    define NANOVG_GLES3
@@ -29,15 +29,14 @@ namespace beiklive::UI
 {
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  PSP XMB Ripple — GLSL shader sources
-//  Vertex shader: outputs a fullscreen quad (two NDC triangles).
-//  Fragment shader: renders the PSP XMB wave-ribbon pattern.
+//  PSP XMB 波纹 — GLSL 着色器源码
+//  顶点着色器：输出全屏四边形（两个 NDC 三角形）
+//  片元着色器：渲染 PSP XMB 波浪带图案
 // ─────────────────────────────────────────────────────────────────────────────
 
 #ifdef BOREALIS_USE_OPENGL
 
-// GLSL version header chosen at compile time so the shader compiles on both
-// desktop OpenGL 3.x (core) and OpenGL ES 3.0 (Switch / mobile).
+// 编译时选择 GLSL 版本头，使着色器同时兼容桌面 OpenGL 3.x 和 OpenGL ES 3.0（Switch/移动端）
 #if defined(USE_GLES3) || defined(USE_GLES2)
 #  define GLSL_VER "#version 300 es\nprecision mediump float;\n"
 #else
@@ -50,7 +49,7 @@ in  vec2 aPos;
 out vec2 vUV;
 void main()
 {
-    // aPos is in [-1,+1] NDC for the region; UV maps to [0,1]
+    // aPos 为区域内 [-1,+1] NDC 坐标；UV 映射到 [0,1]
     vUV = aPos * 0.5 + 0.5;
     gl_Position = vec4(aPos, 0.0, 1.0);
 }
@@ -68,21 +67,21 @@ void main()
 {
     vec2 p = vUV;
 
-    // Configurable background colour
+    // 可配置的背景颜色
     vec3 color = uBgColor;
 
-    // Two lines centred vertically, interleaving with sine/cosine waves
+    // 两条以正弦/余弦波交织的中心线
     float amplitude = 0.06;
-    float freq      = 6.28318; // one full cycle across the width
+    float freq      = 6.28318; // 宽度方向一个完整周期
     float speed     = 1.2;
 
-    // Red line: sine wave around y = 0.5
+    // 红线：以 y=0.5 为中心的正弦波
     float waveRed  = amplitude * sin(p.x * freq - uTime * speed);
     float distRed  = abs(p.y - 0.5 - waveRed);
     float alphaRed = smoothstep(0.008, 0.0, distRed);
     color += vec3(1.0, 0.15, 0.10) * alphaRed;
 
-    // Blue line: cosine wave (phase-shifted by π/2) around y = 0.5
+    // 蓝线：以 y=0.5 为中心的余弦波（相移 π/2）
     float waveBlue  = amplitude * cos(p.x * freq - uTime * speed);
     float distBlue  = abs(p.y - 0.5 - waveBlue);
     float alphaBlue = smoothstep(0.008, 0.0, distBlue);
@@ -93,10 +92,10 @@ void main()
 )";
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  GL helpers
+//  GL 辅助函数
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Compile a single GL shader stage and return the shader handle (or 0 on error).
+/// 编译单个 GL 着色器阶段并返回句柄（失败时返回 0）
 static GLuint compileShader(GLenum type, const char* src)
 {
     GLuint sh = glCreateShader(type);
@@ -116,13 +115,12 @@ static GLuint compileShader(GLenum type, const char* src)
 }
 
 /**
- * Import a raw GL texture into NanoVG without transferring ownership.
- * Selects the correct nvglCreateImageFromHandle* variant based on the
- * active GL backend (GL2 / GL3 / GLES2 / GLES3).
+ * 将原始 GL 纹理导入 NanoVG，不转移所有权。
+ * 根据当前 GL 后端（GL2/GL3/GLES2/GLES3）选择对应的 nvglCreateImageFromHandle* 变体。
  */
 static int nvgImageFromRawTexture(NVGcontext* vg, GLuint tex, int w, int h)
 {
-    constexpr int kFlags = NVG_IMAGE_NODELETE; // NVG must not free our texture
+    constexpr int kFlags = NVG_IMAGE_NODELETE; // NVG 不释放此纹理
 #if defined(USE_GLES2)
     return nvglCreateImageFromHandleGLES2(vg, tex, w, h, kFlags);
 #elif defined(USE_GLES3)
@@ -151,7 +149,7 @@ ProImage::~ProImage()
 #endif
 }
 
-// ── Kawase Blur ───────────────────────────────────────────────────────────────
+// ── Kawase 模糊 ──────────────────────────────────────────────────────────────
 
 void ProImage::setBlurEnabled(bool enabled)
 {
@@ -169,21 +167,21 @@ void ProImage::setBlurRadius(float radius)
 
 float ProImage::getBlurRadius() const { return m_blurRadius; }
 
-// ── Async image loading ───────────────────────────────────────────────────────
+// ── 异步图片加载 ──────────────────────────────────────────────────────────────
 
 void ProImage::setImageFromFileAsync(const std::string& path)
 {
     if (path.empty())
         return;
 
-    // Increment the generation counter to cancel any pending async load.
+    // 递增生成计数器以取消待处理的异步加载
     int gen = ++m_asyncGen;
 
-    // Check the file-byte cache first (main thread only).
+    // 优先从文件字节缓存中查找（仅主线程）
     auto& byteCache = beiklive::UI::ImageFileCache::instance();
     if (const auto* cached = byteCache.getBytes(path))
     {
-        // Cache hit – decode/load from cached bytes synchronously (no disk I/O).
+        // 缓存命中：同步解码（无磁盘 I/O）
         m_asyncLoading = false;
 
         const std::vector<uint8_t>& bytes = *cached;
@@ -194,7 +192,7 @@ void ProImage::setImageFromFileAsync(const std::string& path)
         return;
     }
 
-    // Cache miss – start async file read.
+    // 缓存未命中：启动异步文件读取
     m_asyncLoading = true;
     invalidate();
 
@@ -202,7 +200,7 @@ void ProImage::setImageFromFileAsync(const std::string& path)
     std::string capturedPath = path;
     brls::async([ASYNC_TOKEN, capturedPath, gen]()
     {
-        // Background thread: read the file into memory.
+        // 后台线程：将文件读入内存
         std::vector<uint8_t> bytes;
         {
             std::ifstream f(capturedPath, std::ios::binary | std::ios::ate);
@@ -212,17 +210,17 @@ void ProImage::setImageFromFileAsync(const std::string& path)
                 f.seekg(0);
                 bytes.resize(static_cast<size_t>(size));
                 f.read(reinterpret_cast<char*>(bytes.data()), size);
-                // Discard partial reads
+                // 丢弃不完整读取
                 if (f.gcount() != size)
                     bytes.clear();
             }
         }
 
-        // Marshal result back to the main thread.
+        // 将结果回传主线程
         brls::sync([ASYNC_TOKEN, bytes = std::move(bytes), capturedPath, gen]()
         {
             ASYNC_RELEASE
-            // If another load request was issued after this one, discard.
+            // 若此后又发起了新的加载请求则丢弃当前结果
             if (gen != this->m_asyncGen.load())
                 return;
 
@@ -231,7 +229,7 @@ void ProImage::setImageFromFileAsync(const std::string& path)
             if (bytes.empty())
                 return;
 
-            // Store in byte cache for future fast access.
+            // 存入字节缓存以便后续快速访问
             beiklive::UI::ImageFileCache::instance().storeBytes(capturedPath, bytes);
 
             NVGcontext* vg2 = brls::Application::getNVGContext();
@@ -242,7 +240,7 @@ void ProImage::setImageFromFileAsync(const std::string& path)
     });
 }
 
-// ── Shader Animation ─────────────────────────────────────────────────────────
+// ── 着色器动画 ────────────────────────────────────────────────────────────────
 
 void ProImage::setShaderAnimation(ShaderAnimationType type)
 {
@@ -262,12 +260,12 @@ void ProImage::setXmbBgColor(float r, float g, float b)
     invalidate();
 }
 
-// ── Draw ─────────────────────────────────────────────────────────────────────
+// ── 绘制 ──────────────────────────────────────────────────────────────────────
 
 void ProImage::draw(NVGcontext* vg, float x, float y, float w, float h,
                     brls::Style style, brls::FrameContext* ctx)
 {
-    // ── Show loading placeholder while async load is in progress ─────────────
+    // ── 异步加载中时显示占位符 ───────────────────────────────────────────────
     if (m_asyncLoading)
     {
         nvgSave(vg);
@@ -276,7 +274,7 @@ void ProImage::draw(NVGcontext* vg, float x, float y, float w, float h,
         nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
         nvgText(vg, x + w * 0.5f, y + h * 0.5f, "加载中...", nullptr);
         nvgRestore(vg);
-        invalidate(); // keep ticking so we notice when loading completes
+        invalidate(); // 持续触发重绘以检测加载完成
         return;
     }
 
@@ -316,12 +314,12 @@ void ProImage::draw(NVGcontext* vg, float x, float y, float w, float h,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Kawase Blur
+//  Kawase 模糊
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Kawase Blur approximation via multiple semi-transparent NanoVG draws.
- * Each pass samples at small pixel offsets to approximate a Gaussian blur.
+ * 基于多次半透明 NanoVG 绘制的 Kawase 模糊近似。
+ * 每次采样在小像素偏移处叠加以近似高斯模糊。
  */
 void ProImage::drawBlur(NVGcontext* vg, float x, float y, float w, float h,
                         NVGpaint basePaint)
@@ -370,9 +368,9 @@ void ProImage::initXmbShader()
 {
     if (m_xmbInited)
         return;
-    m_xmbInited = true; // mark even on failure to avoid repeated retries
+    m_xmbInited = true; // 即使失败也标记，避免重复初始化
 
-    // ── Compile and link shader program ──────────────────────────────────────
+    // ── 编译并链接着色器程序 ──────────────────────────────────────────────────
     GLuint vert = compileShader(GL_VERTEX_SHADER,   k_xmbVertSrc);
     GLuint frag = compileShader(GL_FRAGMENT_SHADER, k_xmbFragSrc);
     if (!vert || !frag)
@@ -401,19 +399,18 @@ void ProImage::initXmbShader()
     }
     m_xmbProgram = prog;
 
-    // Uniform locations
+    // Uniform 位置
     m_xmbUTime       = glGetUniformLocation(prog, "uTime");
     m_xmbUResolution = glGetUniformLocation(prog, "uResolution");
     m_xmbUBgColor    = glGetUniformLocation(prog, "uBgColor");
 
-    // ── Create VAO/VBO for a fullscreen quad (NDC [-1,+1]) ────────────────────
-    // Will be updated per-draw with the actual widget NDC coordinates.
+    // ── 创建全屏四边形 VAO/VBO（NDC [-1,+1]），每帧更新实际控件坐标 ──────────
     glGenVertexArrays(1, &m_xmbVAO);
     glGenBuffers(1, &m_xmbVBO);
 
     glBindVertexArray(m_xmbVAO);
     glBindBuffer(GL_ARRAY_BUFFER, m_xmbVBO);
-    // Reserve space; data is filled in drawPspXmbShader each frame
+    // 预留空间；数据在每帧 drawPspXmbShader 中填充
     glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 8, nullptr, GL_DYNAMIC_DRAW);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
@@ -428,19 +425,18 @@ void ProImage::resizeXmbFbo(int w, int h, NVGcontext* vg)
     if (m_xmbFboW == w && m_xmbFboH == h)
         return;
 
-    // Delete old NVG image handle (so NVG forgets the old texture)
+    // 删除旧 NVG 图像句柄（使 NVG 忘记旧纹理）
     if (m_xmbNvgImage >= 0 && vg)
     {
         nvgDeleteImage(vg, m_xmbNvgImage);
         m_xmbNvgImage = -1;
     }
 
-    // Delete old FBO / texture
+    // 删除旧 FBO / 纹理
     if (m_xmbFbo)    { glDeleteFramebuffers(1, &m_xmbFbo);  m_xmbFbo    = 0; }
     if (m_xmbFboTex) { glDeleteTextures(1, &m_xmbFboTex);   m_xmbFboTex = 0; }
 
-    // Create new texture
-    // GL_RGBA8 is unavailable in GLES2; use GL_RGBA there (same bits, different token).
+    // 创建新纹理（GLES2 中 GL_RGBA8 不可用，使用 GL_RGBA）
     glGenTextures(1, &m_xmbFboTex);
     glBindTexture(GL_TEXTURE_2D, m_xmbFboTex);
 #if defined(USE_GLES2)
@@ -454,7 +450,7 @@ void ProImage::resizeXmbFbo(int w, int h, NVGcontext* vg)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glBindTexture(GL_TEXTURE_2D, 0);
 
-    // Create FBO and attach texture
+    // 创建 FBO 并附加纹理
     glGenFramebuffers(1, &m_xmbFbo);
     glBindFramebuffer(GL_FRAMEBUFFER, m_xmbFbo);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
@@ -483,11 +479,10 @@ void ProImage::freeXmbResources(NVGcontext* vg)
 }
 
 /**
- * Render the PSP XMB ripple wave effect:
- *  1. Render the GLSL shader to an off-screen FBO texture.
- *  2. Save / restore all GL state touched (FBO binding, viewport,
- *     shader program, VAO, VBO) so NanoVG is not disturbed.
- *  3. Import the FBO texture into NanoVG and draw it as a NVG paint.
+ * 渲染 PSP XMB 波纹效果：
+ *  1. 将 GLSL 着色器渲染到离屏 FBO 纹理
+ *  2. 保存/恢复所有接触到的 GL 状态（FBO、视口、着色器、VAO、VBO）以免干扰 NanoVG
+ *  3. 将 FBO 纹理导入 NanoVG 并用 NVG 画刷绘制
  */
 void ProImage::drawPspXmbShader(NVGcontext* vg, float x, float y, float w, float h)
 {
@@ -516,7 +511,7 @@ void ProImage::drawPspXmbShader(NVGcontext* vg, float x, float y, float w, float
     glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &prevVAO);
     glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prevVBO);
 
-    // ── Render XMB pattern to FBO ─────────────────────────────────────────────
+    // ── 将 XMB 图案渲染到 FBO ─────────────────────────────────────────────────
     glBindFramebuffer(GL_FRAMEBUFFER, m_xmbFbo);
     glViewport(0, 0, iw, ih);
 
@@ -537,19 +532,19 @@ void ProImage::drawPspXmbShader(NVGcontext* vg, float x, float y, float w, float
     if (m_xmbUBgColor >= 0)
         glUniform3f(m_xmbUBgColor, m_xmbBgR, m_xmbBgG, m_xmbBgB);
 
-    // The quad covers NDC [-1,+1] within the FBO (which IS the widget area)
+    // 四边形覆盖 FBO 内的 NDC [-1,+1]（即控件区域）
     const float quad[8] = {
-        -1.0f,  1.0f,   // top-left
-         1.0f,  1.0f,   // top-right
-        -1.0f, -1.0f,   // bottom-left
-         1.0f, -1.0f,   // bottom-right
+        -1.0f,  1.0f,   // 左上
+         1.0f,  1.0f,   // 右上
+        -1.0f, -1.0f,   // 左下
+         1.0f, -1.0f,   // 右下
     };
     glBindVertexArray(m_xmbVAO);
     glBindBuffer(GL_ARRAY_BUFFER, m_xmbVBO);
     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(quad), quad);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
-    // ── Restore GL state ──────────────────────────────────────────────────────
+    // ── 恢复 GL 状态 ──────────────────────────────────────────────────────────
     glBindBuffer(GL_ARRAY_BUFFER,      prevVBO);
     glBindVertexArray(prevVAO);
     glUseProgram(prevProgram);
@@ -557,11 +552,11 @@ void ProImage::drawPspXmbShader(NVGcontext* vg, float x, float y, float w, float
                prevViewport[2], prevViewport[3]);
     glBindFramebuffer(GL_FRAMEBUFFER,  prevFBO);
 
-    // ── Import FBO texture into NanoVG (lazy, one-time per size) ─────────────
+    // ── 将 FBO 纹理导入 NanoVG（懒初始化，尺寸变化时重建） ───────────────────
     if (m_xmbNvgImage < 0)
         m_xmbNvgImage = nvgImageFromRawTexture(vg, m_xmbFboTex, iw, ih);
 
-    // ── Draw FBO texture via NanoVG (blended on top of the base image) ────────
+    // ── 通过 NanoVG 绘制 FBO 纹理（叠加在底图之上） ───────────────────────────
     if (m_xmbNvgImage >= 0)
     {
         NVGpaint paint = nvgImagePattern(vg, x, y, w, h,

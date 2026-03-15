@@ -4,7 +4,7 @@
 #include <borealis.hpp>
 #include <borealis/core/application.hpp>
 
-// ---- NanoVG GL backend include (must match the active borealis backend) ----
+// ---- NanoVG GL 后端头文件（需与激活的 borealis 后端匹配）----
 #ifdef BOREALIS_USE_OPENGL
 #  ifdef USE_GLES3
 #    define NANOVG_GLES3
@@ -47,24 +47,24 @@
 #endif
 
 // ============================================================
-// Game thread constants
+// 游戏线程常量
 // ============================================================
-static constexpr double MAX_REASONABLE_FPS = 240.0; ///< Safety cap for core-reported FPS
-static constexpr size_t STEREO_CHANNELS    = 2;     ///< Samples per audio frame (L + R)
-static constexpr double FPS_UPDATE_INTERVAL = 1.0;  ///< Seconds between FPS counter updates
-// Spin-wait guard (subtract from sleep to ensure we don't overshoot)
-static constexpr double SPIN_GUARD_SEC = 0.002;     ///< 2 ms spin-wait budget per frame
+static constexpr double MAX_REASONABLE_FPS = 240.0; ///< 核心上报 FPS 的安全上限
+static constexpr size_t STEREO_CHANNELS    = 2;     ///< 每音频帧采样数（左+右声道）
+static constexpr double FPS_UPDATE_INTERVAL = 1.0;  ///< FPS 计数器更新间隔（秒）
+// 自旋等待保护（从睡眠时间中减去，防止超时）
+static constexpr double SPIN_GUARD_SEC = 0.002;     ///< 每帧 2ms 自旋等待预算
 
 // ============================================================
-// NanoVG helper: create NVG image from an existing GL texture.
-// Selects the correct function based on the active GL backend.
+// NanoVG 辅助函数：从已有 GL 纹理创建 NVG 图像。
+// 根据激活的 GL 后端选择对应函数。
 // ============================================================
 static int nvgImageFromGLTexture(NVGcontext* vg, GLuint tex,
                                   int w, int h,
                                   beiklive::FilterMode filter = beiklive::FilterMode::Nearest)
 {
-    // NVG_IMAGE_NODELETE ensures NanoVG won't delete our texture.
-    // NVG_IMAGE_NEAREST selects nearest-neighbor sampling in NanoVG.
+    // NVG_IMAGE_NODELETE：阻止 NanoVG 删除我们的纹理。
+    // NVG_IMAGE_NEAREST：在 NanoVG 中使用最近邻采样。
     int flags = NVG_IMAGE_NODELETE;
     if (filter == beiklive::FilterMode::Nearest)
         flags |= NVG_IMAGE_NEAREST;
@@ -82,7 +82,7 @@ static int nvgImageFromGLTexture(NVGcontext* vg, GLuint tex,
 
 
 // ============================================================
-// Resolve the mgba_libretro shared library path
+// 解析 mgba_libretro 共享库路径
 // ============================================================
 std::string GameView::resolveCoreLibPath()
 {
@@ -132,7 +132,7 @@ GameView::~GameView()
 }
 
 // ============================================================
-// initialize – deferred to first draw so GL context is ready
+// initialize – 延迟到首次 draw 时执行，确保 GL 上下文已就绪
 // ============================================================
 
 void GameView::initialize()
@@ -165,7 +165,7 @@ void GameView::initialize()
         cfg->SetDefault("core.mgba_idle_optimization",          CV(std::string("Remove Known")));
         cfg->SetDefault("core.mgba_frameskip",                  CV(std::string("0")));
 
-        // ---- Save / state directory defaults --------------------------------
+        // ---- 存档/即时存档目录默认值 --------------------------------
         cfg->SetDefault("save.sramDir",         CV(std::string("")));
         cfg->SetDefault("save.stateDir",         CV(std::string("")));
         cfg->SetDefault("save.slotCount",        CV(9));
@@ -173,7 +173,7 @@ void GameView::initialize()
         cfg->SetDefault("save.autoSaveInterval", CV(0));
         cfg->SetDefault("cheat.dir",             CV(std::string("")));
 
-        // ---- FPS display defaults ------------------------------------
+        // ---- FPS 显示默认值 ------------------------------------
         cfg->SetDefault("display.showFps",           CV(std::string("false")));
         cfg->SetDefault("display.showFfOverlay",     CV(std::string("false")));
         cfg->SetDefault("display.showRewindOverlay", CV(std::string("false")));
@@ -182,13 +182,13 @@ void GameView::initialize()
         cfg->SetDefault(KEY_DISPLAY_OVERLAY_GBA_PATH, CV(std::string("")));
         cfg->SetDefault(KEY_DISPLAY_OVERLAY_GBC_PATH, CV(std::string("")));
 
-        // ---- Input mapping defaults (delegated to InputMappingConfig) ----
+        // ---- 按键映射默认值（委托给 InputMappingConfig）----
         m_inputMap.setDefaults(*cfg);
 
         cfg->Save();
         m_core.setConfigManager(cfg);
 
-        // ---- Load display overlay flags ----------------------------------
+        // ---- 读取显示覆盖层开关标志 ----------------------------------
         auto getBool = [&](const std::string& key, bool def) -> bool {
             auto v = cfg->Get(key);
             if (v) {
@@ -203,9 +203,9 @@ void GameView::initialize()
         m_showMuteOverlay   = getBool("display.showMuteOverlay",   true);
         m_overlayEnabled    = getBool(KEY_DISPLAY_OVERLAY_ENABLED, false);
 
-        // ---- Resolve overlay path for this game --------------------------
-        // 1. Try per-game overlay from gamedataManager.
-        // 2. Fall back to global GBA / GBC path depending on ROM extension.
+        // ---- 解析当前游戏的覆盖层路径 --------------------------
+        // 1. 优先使用 gamedataManager 中的逐游戏覆盖层路径。
+        // 2. 回退到全局 GBA / GBC 路径（根据 ROM 扩展名选择）。
         if (m_overlayEnabled && !m_romFileName.empty()) {
             std::string perGame = getGameDataStr(m_romFileName, GAMEDATA_FIELD_OVERLAY, "");
             if (!perGame.empty()) { 
@@ -236,7 +236,7 @@ void GameView::initialize()
         registerGamepadHotkeys();
     } // end if (gameRunner && gameRunner->settingConfig)
 
-    // ---- Load libretro core -------------------------------------------
+    // ---- 加载 libretro 核心 -------------------------------------------
     std::string corePath = resolveCoreLibPath();
     bklog::info("Loading libretro core: {}", corePath);
 
@@ -247,10 +247,11 @@ void GameView::initialize()
             auto v = gameRunner->settingConfig->Get("save.sramDir");
             if (v) { if (auto s = v->AsString()) sramCustomDir = *s; }
         }
-        // 读取用户自定义SRAM目录（如果有），并确保它存在。然后将其路径传递给核心，核心会在该目录下为每个游戏创建子目录来存储SRAM文件。
+        // 读取用户自定义 SRAM 目录并确保其存在，然后传给核心。
+        // 核心会在该目录下按游戏名创建子目录来存储 SRAM 文件。
         std::string sramDir = resolveSaveDir(m_romPath, sramCustomDir);
         if (!sramDir.empty()) {
-            // Ensure the directory exists
+            // 确保目录存在
             std::error_code ec;
             std::filesystem::create_directories(sramDir, ec);
             if (ec) {
@@ -300,7 +301,7 @@ void GameView::initialize()
         loadSram();
         loadCheats();
 
-        m_core.reset(); // Ensure the core starts in a clean state after loading saves/cheats
+        m_core.reset(); // 加载存档/金手指后确保核心从干净状态启动
 
         // ---- 自动读取即时存档1（如果开启） ----------------------
         // 使用 cfgGetBool 读取配置（gameRunner->settingConfig 与 SettingManager 指向同一对象）
@@ -315,10 +316,10 @@ void GameView::initialize()
         }
     }
 
-    // ---- 创建用于视频输出的 GL 纹理 ----------------------------
+    // ---- 创建视频输出 GL 纹理 ----------------------------
     glGenTextures(1, &m_texture);
     glBindTexture(GL_TEXTURE_2D, m_texture);
-    // Apply filter mode from display config (Nearest or Linear)
+    // 根据显示配置应用过滤模式（最近邻或线性）
     m_activeFilter     = m_display.filterMode;
     GLenum glFilter    = (m_activeFilter == beiklive::FilterMode::Nearest)
                          ? GL_NEAREST : GL_LINEAR;
@@ -327,7 +328,7 @@ void GameView::initialize()
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-    // Pre-allocate with game dimensions using GL_RGBA (universally supported)
+    // 用游戏尺寸预分配纹理，使用 GL_RGBA（通用兼容格式）
     unsigned gw = m_core.gameWidth()  > 0 ? m_core.gameWidth()  : 256;
     unsigned gh = m_core.gameHeight() > 0 ? m_core.gameHeight() : 224;
     std::vector<uint32_t> blank(gw * gh, 0xFF000000u);
@@ -339,12 +340,12 @@ void GameView::initialize()
     m_texWidth  = gw;
     m_texHeight = gh;
 
-    // ---- Initialise render chain -------------------------------------
+    // ---- 初始化渲染链 -------------------------------------
     if (!m_renderChain.init()) {
         bklog::warning("RenderChain init failed; using direct texture rendering");
     }
 
-    // ---- Start audio manager ------------------------------------------
+    // ---- 启动音频管理器 ------------------------------------------
     if (!beiklive::AudioManager::instance().init(32768, 2)) {
         bklog::warning("AudioManager init failed; game will run without audio");
     }
@@ -352,12 +353,12 @@ void GameView::initialize()
     m_initialized = true;
     bklog::info("GameView initialized successfully");
 
-    // ---- Start independent emulation thread ---------------------------
+    // ---- 启动独立的模拟器线程 ---------------------------
     startGameThread();
 }
 
 // ============================================================
-// startGameThread – launches the emulation loop in a new thread
+// startGameThread – 在新线程中启动模拟循环
 // ============================================================
 
 void GameView::startGameThread()
@@ -366,8 +367,8 @@ void GameView::startGameThread()
     m_fpsFrameCount  = 0;
     m_currentFps     = 0.0f;
 
-    // Configure audio backpressure threshold: ~4 game-frames worth of audio.
-    // This keeps the ring buffer lean so latency cannot build up over time.
+    // 配置音频背压阈值：约 4 帧音频量。
+    // 保持环形缓冲区轻量，防止延迟随时间累积。
     {
         double coreFps = m_core.fps();
         if (coreFps <= 0.0 || coreFps > MAX_REASONABLE_FPS) coreFps = 60.0;
@@ -378,8 +379,8 @@ void GameView::startGameThread()
     m_running.store(true, std::memory_order_release);
     m_gameThread = std::thread([this]() {
 #ifdef __SWITCH__
-        // Pin game-emulation thread to Core 1 (dedicated core).
-        // Core 0 = UI/main thread.  Core 1 = game emulation (audio inline).
+        // 将游戏模拟线程绑定到核心 1（专用核心）。
+        // 核心 0 = UI/主线程，核心 1 = 游戏模拟（含音频）。
         svcSetThreadCoreMask(CUR_THREAD_HANDLE, 1, 1ULL << 1);
 #endif
         double fps = m_core.fps();
@@ -388,62 +389,58 @@ void GameView::startGameThread()
         using Clock    = std::chrono::steady_clock;
         using Duration = std::chrono::duration<double>;
         const Duration frameDuration(1.0 / fps);
-        // Guard duration: subtract from coarse sleep so spin-wait finishes on time
+        // 保护时长：从粗粒度睡眠中减去，让自旋等待准时结束
         const Duration spinGuard(SPIN_GUARD_SEC);
 
 #ifdef _WIN32
-        // Request 1 ms Windows timer resolution for accurate sleep_for()
+        // 请求 1ms Windows 定时器精度，确保 sleep_for() 准确
         timeBeginPeriod(1);
 #endif
 
-        // Per-thread FPS counter
+        // 线程内 FPS 计数器
         Clock::time_point fpsTimerStart = Clock::now();
         unsigned          fpsCounter    = 0;
 
-        // Per-thread play-time tracker: save total play time every 60 seconds.
+        // 线程内游戏时长追踪：每 60 秒保存一次总游戏时长。
         Clock::time_point playtimeTimer = Clock::now();
 
-        // RTC sync timer: write current Unix time to core's RTC memory once per second.
+        // RTC 同步计时器：每秒向核心 RTC 内存写入当前 Unix 时间。
         Clock::time_point rtcSyncTimer = Clock::now();
 
         // 自动存档计时器：定时保存到即时存档0（.ss0）
         Clock::time_point autoSaveTimer = Clock::now();
 
-        // Accumulated ideal frame-end time for drift-free 60fps timing.
-        // Advancing by frameDuration each iteration prevents timing errors from
-        // compounding: one slow frame does not shrink the next frame's budget.
-        // Initialised to Clock::now() so the very first frame gets a full
-        // frameDuration budget starting from the current wall-clock instant.
+        // 累积理想帧结束时间，用于无漂移的帧率控制。
+        // 每次迭代加一个 frameDuration，防止慢帧压缩下一帧预算。
+        // 初始化为 Clock::now()，确保第一帧获得完整的帧时长预算。
         auto nextFrameTarget = Clock::now();
 
 #ifdef __SWITCH__
-        // Track fast-forward state to detect the fast-forward→normal transition.
+        // 追踪快进状态，用于检测快进→正常的切换时机。
         bool prevFastForward = false;
 #endif
 
         while (m_running.load(std::memory_order_acquire)) {
-            // Poll controller input and forward to the core
+            // 轮询手柄输入并转发给核心
             pollInput();  // 处理输入事件
 
             bool ff      = m_fastForward.load(std::memory_order_relaxed);
             bool rew     = m_rewinding.load(std::memory_order_relaxed);
 
-            // Keep the core aware of the current fast-forward state so it can
-            // answer RETRO_ENVIRONMENT_GET_FASTFORWARDING correctly.
+            // 通知核心当前快进状态，使其能正确响应
+            // RETRO_ENVIRONMENT_GET_FASTFORWARDING 查询。
             m_core.setFastForwarding(ff);
 
 #ifdef __SWITCH__
-            // When fast-forward ends, flush any stale audio samples from the ring
-            // buffer so they are not played back at normal speed (which would
-            // sound like noise or a brief burst of sped-up audio).
+            // 快进结束时，清空环形缓冲区中的残留音频样本，
+            // 防止它们以正常速度回放（会产生噪音或突发的加速音频）。
             if (prevFastForward && !ff) {
                 beiklive::AudioManager::instance().flushRingBuffer();
             }
             prevFastForward = ff;
 #endif
 
-            // framesThisIter tracks how many logical frames were rendered,
-            // used by the FPS counter below.
+            // framesThisIter：本次迭代渲染的逻辑帧数，用于 FPS 计数。
             unsigned framesThisIter = 1u;
 
             if (rew && m_inputMap.rewindEnabled) {
@@ -460,9 +457,9 @@ void GameView::startGameThread()
                 }
 
                 if (didRestore) {
-                    m_core.run();  // 核心运行以更新视频输出，保证倒带的流畅性。
+                    m_core.run();  // 运行核心以更新视频输出，保证倒带流畅。
                 }
-                // Drain audio (mute or pass through based on config)
+                // 排空音频（根据配置决定静音或透传）
                 {
                     std::vector<int16_t> dummy;
                     bool hasSamples = m_core.drainAudio(dummy) && !dummy.empty();
@@ -472,11 +469,10 @@ void GameView::startGameThread()
                     }
                 }
             } else {
-                // ---- Normal or fast-forward: run core --------------------
-                // Compute how many frames to run this iteration.
-                // For fast-forward with multiplier = N, run N frames per normal
-                // frame-period so effective speed = N × fps (exact multiplier).
-                // For sub-1x, run 1 frame but stretch the sleep duration.
+                // ---- 正常或快进：运行核心 --------------------
+                // 计算本次迭代运行的帧数。
+                // 快进倍率 N 时，每个正常帧周期运行 N 帧，实现精确 N 倍速。
+                // 倍率 < 1 时，仍运行 1 帧但拉长睡眠时间。
                 if (ff) {
                     framesThisIter = (m_inputMap.ffMultiplier >= 1.0f)
                         ? static_cast<unsigned>(std::round(m_inputMap.ffMultiplier))
@@ -484,7 +480,7 @@ void GameView::startGameThread()
                 }
 
                 for (unsigned i = 0; i < framesThisIter; ++i) {
-                    // Save state for rewind buffer before each frame (including fast-forward)
+                    // 每帧前保存状态到倒带缓冲区（快进时同样保存）
                     if (m_inputMap.rewindEnabled) {
                         size_t sz = m_core.serializeSize();
                         if (sz > 0) {
@@ -500,7 +496,7 @@ void GameView::startGameThread()
                     m_core.run();
                 }
 
-                // Drain audio samples and push directly to AudioManager.
+                // 排空音频样本并直接推送到 AudioManager。
                 {
                     std::vector<int16_t> samples;
                     bool hasSamples = m_core.drainAudio(samples) && !samples.empty();
@@ -513,17 +509,14 @@ void GameView::startGameThread()
                                 || !hasSamples;
                     if (!mute) {
                         size_t frames = samples.size() / STEREO_CHANNELS;
-                        // During fast-forward (multiplier > 1) with audio not muted,
-                        // limit the audio pushed to one normal frame's worth of samples.
-                        // Running N frames per loop iteration generates N× the usual
-                        // audio, which would saturate the ring buffer and cause
-                        // pushSamples() to block indefinitely, freezing the game thread.
+                        // 快进（倍率 > 1）且不静音时，限制推送的音频量为一正常帧的量。
+                        // 每次循环运行 N 帧会产生 N 倍音频，否则会撑满环形缓冲区，
+                        // 导致 pushSamples() 永久阻塞，冻结游戏线程。
                         if (ff && m_inputMap.ffMultiplier > 1.0f) {
-                            // Divide in floating-point first for precision, then round to
-                            // the nearest integer sample-frame count.
+                            // 先用浮点计算再取整，保证精度。
                             size_t limit = static_cast<size_t>(
                                 std::round(static_cast<double>(frames) / m_inputMap.ffMultiplier));
-                            // If limit rounds to zero the total is already tiny; push all.
+                            // 若取整为零说明总量极小，直接全部推送。
                             if (limit > 0)
                                 frames = limit;
                         }
@@ -532,10 +525,10 @@ void GameView::startGameThread()
                 }
             }
 
-            // ---- FPS counter (game-thread side) -------------------------
-            // Count all rendered frames (including fast-forward multiplied frames).
+            // ---- FPS 计数器（游戏线程侧）-------------------------
+            // 统计所有渲染帧数（含快进倍增的帧）。
             fpsCounter += framesThisIter;
-            auto nowPost = Clock::now(); // captured once, reused for sleep below
+            auto nowPost = Clock::now(); // 捕获一次，供后续睡眠复用
             double elapsed = std::chrono::duration<double>(nowPost - fpsTimerStart).count();
             if (elapsed >= FPS_UPDATE_INTERVAL) {
                 float newFps = static_cast<float>(static_cast<double>(fpsCounter) / elapsed);
@@ -548,14 +541,12 @@ void GameView::startGameThread()
                 fpsTimerStart = nowPost;
             }
 
-            // 更新游戏运行时间长 1分钟一次
+            // 更新游戏运行时长，每 1 分钟保存一次
             if (gamedataManager && !m_romFileName.empty()) {
                 auto playtimeElapsed = std::chrono::duration_cast<std::chrono::seconds>(
                     nowPost - playtimeTimer).count();
                 if (playtimeElapsed >= 60) {
-                    // Advance the timer by exactly one minute so each interval
-                    // adds a fixed 60 seconds (prevents over-counting if the
-                    // thread was suspended or the check was delayed).
+                    // 精确推进 60 秒，防止线程挂起或检查延迟导致多计时间。
                     playtimeTimer += std::chrono::seconds(60);
                     std::string prefix = gamedataKeyPrefix(m_romFileName);
                     std::string k = prefix + "." + GAMEDATA_FIELD_TOTALTIME;
@@ -570,18 +561,16 @@ void GameView::startGameThread()
                 }
             }
 
-            // RTC real-time sync: keep the unixTime field in the GB MBC3
-            // RTC save-buffer up to date.  GBMBCRTCSaveBuffer::unixTime is
-            // at byte offset 40 (10 × uint32_t) – this is the field that
-            // GBMBCRTCRead loads into rtcLastLatch on the next game load.
-            // Keeping it current ensures that elapsed-time is calculated
-            // correctly after a save-reload cycle.
+            // RTC 实时同步：保持 GB MBC3 RTC 存档缓冲区中的 unixTime 字段最新。
+            // GBMBCRTCSaveBuffer::unixTime 位于字节偏移 40（10 × uint32_t），
+            // GBMBCRTCRead 在下次游戏加载时会将其读入 rtcLastLatch。
+            // 保持此字段更新可确保存档重载后经过时间计算正确。
             {
                 auto rtcElapsed = std::chrono::duration_cast<std::chrono::seconds>(
                     nowPost - rtcSyncTimer).count();
                 if (rtcElapsed >= 1) {
                     rtcSyncTimer += std::chrono::seconds(1);
-                    // GBMBCRTCSaveBuffer::unixTime is at byte offset 40.
+                    // GBMBCRTCSaveBuffer::unixTime 偏移量为 40 字节。
                     static constexpr size_t k_rtcUnixTimeOffset = 10 * sizeof(uint32_t);
                     size_t rtcSz = m_core.getMemorySize(RETRO_MEMORY_RTC);
                     if (rtcSz >= k_rtcUnixTimeOffset + sizeof(uint64_t)) {
@@ -633,23 +622,22 @@ void GameView::startGameThread()
                     targetDur = Duration(1.0 / (fps * static_cast<double>(m_inputMap.ffMultiplier)));
                 }
 
-                // Advance accumulated target by one frame.
+                // 向前推进一帧的目标时间。
                 nextFrameTarget += std::chrono::duration_cast<Clock::duration>(targetDur);
 
-                // Anti-drift: if the frame ran over budget, sync nextFrameTarget
-                // to now so the next frame gets a fresh full budget instead of
-                // trying to schedule itself in the past.
+                // 防漂移：若帧超时，将目标重置为 now，
+                // 使下一帧获得全新的完整预算，而非调度到过去的时刻。
                 if (nextFrameTarget < nowPost) {
                     nextFrameTarget = nowPost;
                 }
 
                 if (nowPost < nextFrameTarget) {
-                    // Coarse sleep (leave spinGuard for spin-wait)
+                    // 粗粒度睡眠（预留自旋等待时间）
                     auto coarseDur = (nextFrameTarget - nowPost) - spinGuard;
                     if (coarseDur.count() > 0)
                         std::this_thread::sleep_for(coarseDur);
-                    // Spin-wait for precise deadline
-                    while (Clock::now() < nextFrameTarget) { /* busy spin */ }
+                    // 精确等待截止时间
+                    while (Clock::now() < nextFrameTarget) { /* 忙等待 */ }
                 }
             }
         }
@@ -661,7 +649,7 @@ void GameView::startGameThread()
 }
 
 // ============================================================
-// stopGameThread – signals and joins the emulation thread
+// stopGameThread – 通知并等待模拟线程退出
 // ============================================================
 
 void GameView::stopGameThread()
@@ -673,14 +661,13 @@ void GameView::stopGameThread()
 }
 
 // ============================================================
-// cleanup
+// cleanup – 释放所有资源
 // ============================================================
 
 void GameView::cleanup()
 {
-    // Release UI input block if it's still held (e.g. when the destructor
-    // is invoked without a prior onFocusLost, which should not normally
-    // happen but guards against unusual destruction order).
+    // 若 UI 输入封锁仍持有（如析构时未经 onFocusLost），则释放。
+    // 正常情况不应发生，此处防御异常析构顺序。
 #ifndef __SWITCH__
     if (m_uiBlocked) {
         brls::Application::unblockInputs();
@@ -688,14 +675,14 @@ void GameView::cleanup()
     }
 #endif
 
-    // Signal AudioManager to stop and wake any pushSamples() waiter BEFORE
-    // joining the game thread.
+    // 在 join 游戏线程前先通知 AudioManager 停止，唤醒可能阻塞在
+    // pushSamples() 的等待者，避免 stopGameThread() 死锁。
     beiklive::AudioManager::instance().deinit();
 
-    // Stop and join the emulation thread (audio is called inline)
+    // 停止并等待模拟线程退出（音频在线程内调用）
     stopGameThread();
 
-    // Clear rewind buffer
+    // 清空倒带缓冲区
     {
         std::lock_guard<std::mutex> lk(m_rewindMutex);
         m_rewindBuffer.clear();
@@ -705,13 +692,12 @@ void GameView::cleanup()
         m_nvgImage = -1;
     }
 
-    // Release overlay NVG image handle (actual deletion happens when the NVG
-    // context is destroyed; we just reset our handle here).
+    // 释放覆盖层 NVG 图像句柄（NVG 上下文销毁时自动删除纹理，此处仅重置句柄）。
     if (m_overlayNvgImage >= 0) {
         m_overlayNvgImage = -1;
     }
 
-    // Deinit render chain (releases any GL resources)
+    // 反初始化渲染链（释放 GL 资源）
     m_renderChain.deinit();
 
     if (m_texture) {
@@ -720,7 +706,7 @@ void GameView::cleanup()
     }
 
     if (m_core.isLoaded()) {
-        // Save SRAM (battery save) before unloading the game
+        // 卸载游戏前保存 SRAM（电池存档）
         if (!m_romPath.empty()) {
             saveSram();
         }
@@ -733,22 +719,14 @@ void GameView::cleanup()
 }
 
 // ============================================================
-// setGameInputEnabled – one-click toggle for borealis input block
+// setGameInputEnabled – 一键切换 borealis 输入封锁
 // ============================================================
-// When enabled = true:  borealis UI event dispatching is blocked so no
-//   navigation, hint, or animation events interfere with the game.
-//   GameInputController is enabled and ready to dispatch hotkey events.
-// When enabled = false: borealis input is unblocked and GameInputController
-//   is suspended (action states are reset to prevent spurious events).
-// Calling with the same value as the current state is idempotent.
+// enabled = true：封锁 borealis UI 事件分发，防止导航/提示/动画干扰游戏；
+//   GameInputController 启用，可分发热键事件。
+// enabled = false：解除封锁，GameInputController 暂停（重置按键状态，防止误触）。
+// 传入与当前状态相同的值时为幂等操作。
 //
-// THREADING: Must be called from the main (UI) thread.
-//   brls::Application::blockInputs / unblockInputs are main-thread APIs.
-//   m_uiBlocked is accessed exclusively on the main thread
-//   (onFocusGained, onFocusLost, draw, and this method).
-//   m_inputCtrl.setEnabled() is safe to call from the main thread before
-//   the game thread starts, or at any time if setEnabled is called before
-//   the game thread reads from the controller.
+// 线程安全：必须在主（UI）线程调用。
 // ============================================================
 
 void GameView::setGameInputEnabled(bool enabled)
@@ -756,7 +734,7 @@ void GameView::setGameInputEnabled(bool enabled)
 #ifndef __SWITCH__
     if (enabled && !m_uiBlocked)
     {
-        brls::Application::blockInputs(true); // true = mute UI click-error sounds
+        brls::Application::blockInputs(true); // true = 静音 UI 点击错误音效
         m_uiBlocked = true;
     }
     else if (!enabled && m_uiBlocked)
@@ -770,12 +748,11 @@ void GameView::setGameInputEnabled(bool enabled)
 
 
 // ============================================================
-// registerGamepadHotkeys – wire m_inputCtrl to emulator hotkeys
+// registerGamepadHotkeys – 将 m_inputCtrl 绑定到模拟器热键
 //
-// Called from initialize() after m_inputMap is loaded.
-// Each gamepad hotkey binding is registered as a GameInputController
-// action so that Press / ShortPress / LongPress / Release events are
-// automatically tracked without any borealis action handlers.
+// 在 initialize() 加载 m_inputMap 后调用。
+// 每个热键绑定注册为 GameInputController 动作，
+// 自动追踪 Press/ShortPress/LongPress/Release 事件，无需 borealis 动作处理器。
 // ============================================================
 
 void GameView::registerGamepadHotkeys()
@@ -785,7 +762,7 @@ void GameView::registerGamepadHotkeys()
     using Hotkey = beiklive::InputMappingConfig::Hotkey;
     using KeyEvent = beiklive::GameInputController::KeyEvent;
 
-    // Helper: register one gamepad button combo if it is bound.
+    // 辅助函数：若热键已绑定则注册手柄按键组合。
     auto reg = [&](Hotkey h, beiklive::GameInputController::Callback cb)
     {
         const auto& hk = m_inputMap.hotkeyBinding(h);
@@ -793,7 +770,7 @@ void GameView::registerGamepadHotkeys()
             m_inputCtrl.registerAction({hk.padButton}, std::move(cb));
     };
 
-    // ── Fast-forward (hold key) ──────────────────────────────────────────────
+    // ── 快进（按住键）──────────────────────────────────────────────────────
     reg(Hotkey::FastForward, [this](KeyEvent evt)
     {
         if(beiklive::cfgGetBool("fastforward.enabled", false))
@@ -817,7 +794,7 @@ void GameView::registerGamepadHotkeys()
         }
     });
 
-    // ── Rewind (hold key) ────────────────────────────────────────────────────
+    // ── 倒带（按住键）────────────────────────────────────────────────────────
     reg(Hotkey::Rewind, [this](KeyEvent evt)
     {
         if(beiklive::cfgGetBool("rewind.enabled", false)){
@@ -839,21 +816,21 @@ void GameView::registerGamepadHotkeys()
         }
     });
 
-    // ── Exit game ────────────────────────────────────────────────────────────
+    // ── 退出游戏 ────────────────────────────────────────────────────────────
     reg(Hotkey::ExitGame, [this](KeyEvent evt)
     {
         if (evt == KeyEvent::ShortPress && !m_requestExit.load(std::memory_order_relaxed))
             m_requestExit.store(true, std::memory_order_relaxed);
     });
 
-    // ── Quick save state ─────────────────────────────────────────────────────
+    // ── 快速保存即时存档 ─────────────────────────────────────────────────────
     reg(Hotkey::QuickSave, [this](KeyEvent evt)
     {
         if (evt == KeyEvent::ShortPress)
             m_pendingQuickSave.store(m_saveSlot, std::memory_order_relaxed);
     });
 
-    // ── Quick load state ─────────────────────────────────────────────────────
+    // ── 快速读取即时存档 ─────────────────────────────────────────────────────
     reg(Hotkey::QuickLoad, [this](KeyEvent evt)
     {
         if (evt == KeyEvent::ShortPress)
@@ -876,14 +853,14 @@ void GameView::registerGamepadHotkeys()
 }
 
 // ============================================================
-// resolveSaveDir – determine the directory for save files
+// resolveSaveDir – 确定存档文件目录
 // ============================================================
 
 std::string GameView::resolveSaveDir(const std::string& romPath,
                                       const std::string& customDir)
 {
     if (!customDir.empty()) return customDir;
-    // Default: same directory as the ROM
+    // 默认：与 ROM 同目录
     if (!romPath.empty()) {
         return beiklive::file::getParentPath(romPath);
     }
@@ -891,7 +868,7 @@ std::string GameView::resolveSaveDir(const std::string& romPath,
 }
 
 // ============================================================
-// quickSaveStatePath – compute path for a quick-save state file
+// quickSaveStatePath – 计算即时存档文件路径
 // ============================================================
 
 std::string GameView::quickSaveStatePath(int slot) const
@@ -903,7 +880,7 @@ std::string GameView::quickSaveStatePath(int slot) const
     }
     std::string dir = resolveSaveDir(m_romPath, stateCustomDir);
 
-    // Extract base ROM name without extension
+    // 提取不含扩展名的 ROM 文件名
     std::string base;
     if (!m_romPath.empty()) {
         std::filesystem::path p(m_romPath);
@@ -912,7 +889,7 @@ std::string GameView::quickSaveStatePath(int slot) const
         base = "game";
     }
 
-    // Ensure directory exists
+    // 确保目录存在
     if (!dir.empty()) {
         std::error_code ec;
         std::filesystem::create_directories(dir, ec);
@@ -928,7 +905,7 @@ std::string GameView::quickSaveStatePath(int slot) const
 }
 
 // ============================================================
-// sramSavePath – compute path for the battery-save (.sav) file
+// sramSavePath – 计算电池存档（.sav）文件路径
 // ============================================================
 
 std::string GameView::sramSavePath() const
@@ -948,7 +925,7 @@ std::string GameView::sramSavePath() const
         base = "game";
     }
 
-    // Ensure directory exists
+    // 确保目录存在
     if (!dir.empty()) {
         std::error_code ec;
         std::filesystem::create_directories(dir, ec);
@@ -962,16 +939,15 @@ std::string GameView::sramSavePath() const
 }
 
 // ============================================================
-// rtcSavePath – compute path for the GB MBC3 RTC (.rtc) file
+// rtcSavePath – 计算 GB MBC3 RTC（.rtc）文件路径
 // ============================================================
-// RTC files are stored alongside SRAM files (same directory, .rtc extension).
+// RTC 文件与 SRAM 文件存放在同一目录，方便集中管理。
 
 std::string GameView::rtcSavePath() const
 {
     std::string customDir;
     if (gameRunner && gameRunner->settingConfig) {
-        // Intentionally reuses save.sramDir: .rtc files live in the same
-        // directory as .sav files so all per-game save data stays together.
+        // 复用 save.sramDir：.rtc 文件与 .sav 文件同目录，保持存档集中。
         auto v = gameRunner->settingConfig->Get("save.sramDir");
         if (v) { if (auto s = v->AsString()) customDir = *s; }
     }
@@ -991,7 +967,7 @@ std::string GameView::rtcSavePath() const
 }
 
 // ============================================================
-// cheatFilePath – compute path for the cheat (.cht) file
+// cheatFilePath – 计算金手指（.cht）文件路径
 // ============================================================
 
 std::string GameView::cheatFilePath() const
@@ -1017,7 +993,7 @@ std::string GameView::cheatFilePath() const
 }
 
 // ============================================================
-// loadSram – load SRAM from disk into the core
+// loadSram – 从磁盘加载 SRAM 到核心
 // ============================================================
 
 void GameView::loadSram()
@@ -1057,7 +1033,7 @@ void GameView::loadSram()
 }
 
 // ============================================================
-// saveSram – save SRAM from the core to disk
+// saveSram – 将核心 SRAM 保存到磁盘
 // ============================================================
 
 void GameView::saveSram()
@@ -1089,36 +1065,35 @@ void GameView::saveSram()
 }
 
 // ============================================================
-// loadRtc – load GB MBC3 RTC data from disk into the core
+// loadRtc – 从磁盘加载 GB MBC3 RTC 数据到核心
 // ============================================================
 
 void GameView::loadRtc()
 {
     size_t sz = m_core.getMemorySize(RETRO_MEMORY_RTC);
     if (sz == 0) {
-        return; // core has no RTC region (not a GB MBC3 game)
+        return; // 核心无 RTC 区域（非 GB MBC3 游戏）
     }
 
-    // GBMBCRTCSaveBuffer layout (mGBA):
-    //   offset  0: sec         (uint32)
-    //   offset  4: min         (uint32)
-    //   offset  8: hour        (uint32)
-    //   offset 12: days        (uint32)
-    //   offset 16: daysHi      (uint32)
-    //   offset 20: latchedSec  (uint32)
-    //   offset 24: latchedMin  (uint32)
-    //   offset 28: latchedHour (uint32)
-    //   offset 32: latchedDays (uint32)
-    //   offset 36: latchedDaysHi (uint32)
-    //   offset 40: unixTime    (uint64)  ← GBMBCRTCRead loads this into rtcLastLatch
+    // GBMBCRTCSaveBuffer 内存布局（mGBA）：
+    //   偏移  0: sec         (uint32)
+    //   偏移  4: min         (uint32)
+    //   偏移  8: hour        (uint32)
+    //   偏移 12: days        (uint32)
+    //   偏移 16: daysHi      (uint32)
+    //   偏移 20: latchedSec  (uint32)
+    //   偏移 24: latchedMin  (uint32)
+    //   偏移 28: latchedHour (uint32)
+    //   偏移 32: latchedDays (uint32)
+    //   偏移 36: latchedDaysHi (uint32)
+    //   偏移 40: unixTime    (uint64)  ← GBMBCRTCRead 将其读入 rtcLastLatch
     static constexpr size_t k_rtcUnixTimeOffset = 10 * sizeof(uint32_t); // = 40
 
     std::string path = rtcSavePath();
     if (!std::filesystem::exists(path)) {
-        // No save file yet.  Seed unixTime with the current wall-clock time so
-        // GBMBCRTCRead (called from _doDeferredSetup on the first retro_run)
-        // initialises rtcLastLatch correctly and _latchRtc computes 0 elapsed
-        // time rather than a huge spurious value from the 0xFF-filled buffer.
+        // 无存档文件时，以当前墙钟时间初始化 unixTime，
+        // 确保 GBMBCRTCRead 正确初始化 rtcLastLatch，
+        // 避免从 0xFF 填充缓冲区计算出巨大的错误经过时间。
         if (sz >= k_rtcUnixTimeOffset + sizeof(uint64_t)) {
             void* rtcPtr = m_core.getMemoryData(RETRO_MEMORY_RTC);
             if (rtcPtr) {
@@ -1154,14 +1129,14 @@ void GameView::loadRtc()
 }
 
 // ============================================================
-// saveRtc – save GB MBC3 RTC data from the core to disk
+// saveRtc – 将核心 GB MBC3 RTC 数据保存到磁盘
 // ============================================================
 
 void GameView::saveRtc()
 {
     size_t sz = m_core.getMemorySize(RETRO_MEMORY_RTC);
     if (sz == 0) {
-        return; // core has no RTC region (not a GB MBC3 game)
+        return; // 核心无 RTC 区域（非 GB MBC3 游戏）
     }
 
     const void* rtcPtr = m_core.getMemoryData(RETRO_MEMORY_RTC);
@@ -1186,7 +1161,7 @@ void GameView::saveRtc()
 }
 
 // ============================================================
-// doQuickSave – serialize core state to a slot file
+// doQuickSave – 将核心状态序列化到指定槽位文件
 // ============================================================
 
 void GameView::doQuickSave(int slot, bool silent)
@@ -1247,7 +1222,7 @@ void GameView::doQuickSave(int slot, bool silent)
 }
 
 // ============================================================
-// doQuickLoad – deserialize core state from a slot file
+// doQuickLoad – 从指定槽位文件反序列化核心状态
 // ============================================================
 
 void GameView::doQuickLoad(int slot)
@@ -1293,7 +1268,7 @@ void GameView::doQuickLoad(int slot)
         return;
     }
 
-    // Clear the rewind buffer to avoid confusion after a state restore
+    // 状态恢复后清空倒带缓冲区，避免混乱
     {
         std::lock_guard<std::mutex> lk(m_rewindMutex);
         m_rewindBuffer.clear();
@@ -1440,19 +1415,19 @@ void GameView::doScreenshot()
 }
 
 //
-// Supported formats:
+// 支持的格式：
 //
-// 1. RetroArch .cht:
+// 1. RetroArch .cht 格式：
 //    cheats = N
 //    cheat0_desc = "Name"
 //    cheat0_enable = true
 //    cheat0_code = XXXXXXXX+YYYYYYYY
 //
-// 2. Simple one-code-per-line (enabled by default):
-//    # comment
-//    +XXXXXXXX YYYYYYYY   ('+' prefix = enabled)
-//    -XXXXXXXX YYYYYYYY   ('-' prefix = disabled)
-//    XXXXXXXX YYYYYYYY    (no prefix  = enabled)
+// 2. 简单逐行格式（默认启用）：
+//    # 注释
+//    +XXXXXXXX YYYYYYYY   （'+' 前缀 = 启用）
+//    -XXXXXXXX YYYYYYYY   （'-' 前缀 = 禁用）
+//    XXXXXXXX YYYYYYYY    （无前缀  = 启用）
 // ============================================================
 
 void GameView::loadCheats()
@@ -1471,7 +1446,7 @@ void GameView::loadCheats()
 
     m_core.cheatReset();
 
-    // Detect RetroArch format by checking for "cheats = " line
+    // 通过检测 "cheats = " 行来识别 RetroArch 格式
     std::string content;
     {
         std::ostringstream oss;
@@ -1484,23 +1459,19 @@ void GameView::loadCheats()
     if (content.find("cheats = ") != std::string::npos ||
         content.find("cheats=")   != std::string::npos)
     {
-        // ---- RetroArch .cht format ----
-        // Build a map of key → value
+        // ---- RetroArch .cht 格式 ----
+        // 构建 key → value 映射
         std::unordered_map<std::string, std::string> kv;
         std::istringstream iss(content);
         std::string line;
         while (std::getline(iss, line)) {
-            // Remove carriage return (Windows line endings)
+            // 去除回车符（Windows 行尾兼容）
             if (!line.empty() && line.back() == '\r') line.pop_back();
-            // Strip inline comments
-            auto hash = line.find('#');
-            if (hash != std::string::npos) line = line.substr(0, hash);
-            auto eq = line.find('=');
+            // 去除行内注释
             if (eq == std::string::npos) continue;
             std::string key   = line.substr(0, eq);
             std::string value = line.substr(eq + 1);
-            // Trim whitespace
-            auto trim = [](std::string s) -> std::string {
+            // 去除首尾空白和引号
                 size_t b = s.find_first_not_of(" \t\"");
                 size_t e = s.find_last_not_of(" \t\"");
                 if (b == std::string::npos) return "";
@@ -1509,7 +1480,7 @@ void GameView::loadCheats()
             kv[trim(key)] = trim(value);
         }
 
-        // Parse cheat count
+        // 解析金手指总数
         unsigned total = 0;
         {
             auto it = kv.find("cheats");
@@ -1534,7 +1505,7 @@ void GameView::loadCheats()
             auto eit = kv.find(enableKey);
             if (eit != kv.end()) {
                 std::string ev = eit->second;
-                // lowercase
+                // 转小写
                 for (char& c : ev) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
                 enabled = (ev == "true" || ev == "1" || ev == "yes");
             }
@@ -1551,16 +1522,16 @@ void GameView::loadCheats()
     }
     else
     {
-        // ---- Simple one-code-per-line format ----
+        // ---- 简单逐行格式 ----
         std::istringstream iss(content);
         std::string line;
         unsigned idx = 0;
         while (std::getline(iss, line)) {
             if (!line.empty() && line.back() == '\r') line.pop_back();
-            // Strip inline comments
+            // 去除行内注释
             auto hash = line.find('#');
             if (hash != std::string::npos) line = line.substr(0, hash);
-            // Trim whitespace
+            // 去除首尾空白
             size_t b = line.find_first_not_of(" \t");
             if (b == std::string::npos) continue;
             line = line.substr(b);
@@ -1574,7 +1545,7 @@ void GameView::loadCheats()
                 enabled = false;
                 line = line.substr(1);
             }
-            // Trim again after stripping prefix
+            // 去除前缀后再次去空白
             b = line.find_first_not_of(" \t");
             if (b == std::string::npos) continue;
             line = line.substr(b);
@@ -1605,7 +1576,7 @@ void GameView::uploadFrame(NVGcontext* vg,
                         frame.height != m_texHeight);
 
     if (sizeChanged) {
-        // Resize the texture (pixels are RGBA8888)
+        // 调整纹理大小（像素格式为 RGBA8888）
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
                      static_cast<GLsizei>(frame.width),
                      static_cast<GLsizei>(frame.height),
@@ -1614,7 +1585,7 @@ void GameView::uploadFrame(NVGcontext* vg,
         m_texWidth  = frame.width;
         m_texHeight = frame.height;
 
-        // Recreate the NanoVG image handle with new dimensions
+        // 以新尺寸重建 NanoVG 图像句柄
         if (m_nvgImage >= 0) {
             nvgDeleteImage(vg, m_nvgImage);
         }
@@ -1634,14 +1605,13 @@ void GameView::uploadFrame(NVGcontext* vg,
 }
 
 // ============================================================
-// loadOverlayImage – load the overlay PNG into an NVG image.
-// Called lazily from draw() the first time the overlay is needed,
-// and whenever m_overlayPath changes.
+// loadOverlayImage – 将覆盖层 PNG 加载为 NVG 图像。
+// 首次需要时从 draw() 懒加载，m_overlayPath 变化时重新加载。
 // ============================================================
 
 void GameView::loadOverlayImage(NVGcontext* vg)
 {
-    // Release any existing overlay image
+    // 释放已有的覆盖层图像
     if (m_overlayNvgImage >= 0) {
         nvgDeleteImage(vg, m_overlayNvgImage);
         m_overlayNvgImage = -1;
@@ -1658,24 +1628,21 @@ void GameView::loadOverlayImage(NVGcontext* vg)
 }
 
 // ============================================================
-// pollInput – map gamepad state to libretro buttons and fire
-//             emulator hotkeys via GameInputController.
+// pollInput – 将手柄状态映射到 libretro 按键，
+//             并通过 GameInputController 触发模拟器热键。
 //
-// This function is the sole input processing path for the gamepad
-// control system.  It runs on the game thread and reads exclusively
-// from the thread-safe snapshot populated by refreshInputSnapshot()
-// on the main thread, ensuring no platform input-manager calls are
-// made from the game thread.
+// 本函数是手柄控制系统唯一的输入处理路径，运行于游戏线程，
+// 仅读取主线程通过 refreshInputSnapshot() 填充的线程安全快照，
+// 确保不在游戏线程直接调用平台输入管理器接口。
 //
-// Both gamepad and keyboard (keyboard.* config keys) game button bindings
-// are processed here.  Emulator hotkey logic flows through
-// GameInputController which fires Press / ShortPress / LongPress / Release
-// callbacks registered in registerGamepadHotkeys().
+// 手柄和键盘（keyboard.* 配置键）的游戏按键绑定均在此处理。
+// 模拟器热键逻辑通过 GameInputController 流转，触发
+// registerGamepadHotkeys() 中注册的 Press/ShortPress/LongPress/Release 回调。
 // ============================================================
 
 void GameView::pollInput()
 {
-    // ---- Obtain input state from the main-thread snapshot ---------------
+    // ---- 从主线程快照获取输入状态 ---------------
     InputSnapshot snap;
     {
         std::lock_guard<std::mutex> lk(m_inputSnapMutex);
@@ -1683,26 +1650,26 @@ void GameView::pollInput()
     }
     const brls::ControllerState& state = snap.ctrlState;
 
-    // ── GameInputController: process all registered gamepad hotkey combos ──
-    // This handles FF hold/toggle, rewind hold/toggle, exit-game, and
-    // quick-save/load actions via Press/ShortPress/LongPress/Release events.
-    // Callbacks write to atomics and game-thread booleans.
+    // ── GameInputController：处理所有注册的手柄热键组合 ──
+    // 处理快进按住/切换、倒带按住/切换、退出游戏、
+    // 即时存读档等 Press/ShortPress/LongPress/Release 事件。
+    // 回调写入原子变量和游戏线程布尔值。
     m_inputCtrl.update(state);
 
-    // Disable fast-forward while rewinding
+    // 倒带时禁用快进
     if (m_rewinding.load(std::memory_order_relaxed))
         m_fastForward.store(false, std::memory_order_relaxed);
 
-    // ── Game button mapping ───────────────────────────────────────────────
-    // Map each configured gamepad/keyboard button to its libretro joypad ID.
+    // ── 游戏按键映射 ───────────────────────────────────────────────────────
+    // 将每个已配置的手柄/键盘按键映射到对应的 libretro 手柄 ID。
     const auto& btnMap = m_inputMap.gameButtonMap();
     for (const auto& entry : btnMap)
     {
         bool pressed = false;
-        // Gamepad
+        // 手柄按键
         if (entry.padButton >= 0 && entry.padButton < static_cast<int>(brls::_BUTTON_MAX))
             pressed = state.buttons[entry.padButton];
-        // Keyboard (OR with gamepad so either input works)
+        // 键盘（与手柄 OR，任一输入有效）
         if (!pressed && entry.kbScancode >= 0) {
             auto it = snap.kbState.find(entry.kbScancode);
             if (it != snap.kbState.end())
@@ -1711,7 +1678,7 @@ void GameView::pollInput()
         m_core.setButtonState(entry.retroId, pressed);
     }
 
-    // ── Debug logging ─────────────────────────────────────────────────────
+    // ── 调试日志 ─────────────────────────────────────────────────────────
     if (brls::Logger::getLogLevel() <= brls::LogLevel::LOG_DEBUG)
     {
         for (const auto& entry : btnMap)
@@ -1732,15 +1699,11 @@ void GameView::pollInput()
 }
 
 // ============================================================
-// refreshInputSnapshot – capture gamepad state on the main thread
+// refreshInputSnapshot – 在主线程捕获手柄状态快照
 // ============================================================
-// Platform input-manager functions (updateUnifiedControllerState, etc.)
-// must only be called from the main thread.  The game emulation thread
-// calls pollInput() which reads from this thread-safe snapshot, thereby
-// completely avoiding any off-thread input-manager calls.
-//
-// Only gamepad/controller state is captured here; keyboard is not part
-// of the gamepad-only control system.
+// 平台输入管理器接口（updateUnifiedControllerState 等）只能在主线程调用。
+// 游戏模拟线程通过 pollInput() 读取此线程安全快照，
+// 彻底避免在非主线程调用输入管理器。
 //
 void GameView::refreshInputSnapshot()
 {
@@ -1750,15 +1713,13 @@ void GameView::refreshInputSnapshot()
 
     InputSnapshot snap;
 
-    // ── Gamepad / controller state ───────────────────────────────────────────
-    // updateUnifiedControllerState() reads the current hardware controller
-    // state via the platform's input manager (GLFW on desktop, HID on Switch).
-    // Must run on the main thread.
+    // ── 手柄/控制器状态 ───────────────────────────────────────────────────
+    // updateUnifiedControllerState() 通过平台输入管理器读取当前硬件状态
+    // （桌面平台用 GLFW，Switch 用 HID），必须在主线程调用。
     im->updateUnifiedControllerState(&snap.ctrlState);
 
-    // ── Keyboard state for game buttons ──────────────────────────────────────
-    // Poll only the scancodes referenced by the current button map so we don't
-    // hammer getKeyboardKeyState for every possible key every frame.
+    // ── 游戏按键的键盘状态 ──────────────────────────────────────────────────
+    // 仅轮询当前按键映射中用到的扫描码，避免每帧为所有按键调用 getKeyboardKeyState。
     for (const auto& entry : m_inputMap.gameButtonMap()) {
         if (entry.kbScancode >= 0) {
             snap.kbState[entry.kbScancode] =
@@ -1767,26 +1728,26 @@ void GameView::refreshInputSnapshot()
         }
     }
 
-    // Publish the snapshot
+    // 发布快照
     std::lock_guard<std::mutex> lk(m_inputSnapMutex);
     m_inputSnap = std::move(snap);
 }
 
 // ============================================================
-// draw – per-frame render entry point (GL upload + NVG render only)
+// draw – 每帧渲染入口（GL 上传 + NVG 渲染）
 // ============================================================
 
 void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
                     brls::Style style, brls::FrameContext* ctx)
 {
-    // Deferred initialization (GL context guaranteed to exist at this point)
+    // 延迟初始化（此时 GL 上下文已就绪）
     if (!m_initialized && !m_coreFailed) {
         initialize();
     }
 
-    // ── Refresh input snapshot from the main thread (GLFW thread safety) ──
-    // Must be called every frame so pollInput() (game thread) always has a
-    // fresh view of the hardware input state without touching GLFW directly.
+    // ── 在主线程刷新输入快照（GLFW 线程安全要求）──
+    // 每帧必须调用，确保 pollInput()（游戏线程）始终获得最新的硬件输入状态，
+    // 而无需直接访问 GLFW。
     if (m_initialized) {
         refreshInputSnapshot();
     }
@@ -1812,7 +1773,7 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
     }
 
     if (!m_initialized) {
-        // Draw error/placeholder rectangle
+        // 绘制错误/占位矩形
         nvgBeginPath(vg);
         nvgRect(vg, x, y, width, height);
         nvgFillColor(vg, nvgRGBA(30, 30, 30, 255));
@@ -1825,15 +1786,15 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
         nvgText(vg, x + width * 0.5f, y + height * 0.5f - 15.0f,
                 "Failed to load emulator core", nullptr);
 
-        // Hint: press A to dismiss the screen
+        // 提示：按 A 键关闭当前页面
         nvgFontSize(vg, 16.0f);
         nvgFillColor(vg, nvgRGBA(200, 200, 200, 200));
         nvgText(vg, x + width * 0.5f, y + height * 0.5f + 15.0f,
                 "beiklive/hints/close_on_a"_i18n.c_str(), nullptr);
 
-        // Handle BUTTON_A press to dismiss core-failure screen.
-        // Since all borealis actions are disabled we check the raw snapshot.
-        // Edge detection via m_requestExit prevents repeated calls when held.
+        // 处理 BUTTON_A 按下以关闭核心加载失败页面。
+        // 所有 borealis 动作被禁用，直接检查原始快照。
+        // 用 m_requestExit 边沿检测防止长按重复触发。
         if (m_coreFailed) {
             InputSnapshot snap;
             {
@@ -1853,8 +1814,8 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
         return;
     }
 
-    // ---- Upload the latest video frame to the GL texture -------------
-    // (The emulation runs in a separate thread; we only consume the result.)
+    // ---- 将最新视频帧上传到 GL 纹理 -------------
+    // （模拟在独立线程运行，此处仅消费结果。）
     {
         auto frame = m_core.getVideoFrame();
         if (!frame.pixels.empty()) {
@@ -1862,7 +1823,7 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
         }
     }
 
-    // ---- Handle run-time filter mode changes -------------------------
+    // ---- 处理运行时过滤模式变更 -------------------------
     if (m_display.filterMode != m_activeFilter && m_texture) {
         m_activeFilter  = m_display.filterMode;
         GLenum glFilter = (m_activeFilter == beiklive::FilterMode::Nearest)
@@ -1877,9 +1838,9 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
         }
     }
 
-    // ---- Run render chain and determine the display texture ----------
-    // RenderChain::run() currently acts as a pass-through and returns srcTex.
-    // Future custom rendering implementations replace this pipeline.
+    // ---- 运行渲染链并确定显示纹理 ----------
+    // RenderChain::run() 当前作为直通并返回 srcTex。
+    // 未来自定义渲染实现可替换此管线。
     GLuint displayTex = m_texture;
     int    displayW   = static_cast<int>(m_texWidth);
     int    displayH   = static_cast<int>(m_texHeight);
@@ -1891,14 +1852,14 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
         }
     }
 
-    // ---- Manage NVG image handle -------------------------------------
+    // ---- 管理 NVG 图像句柄 -------------------------------------
     if (m_nvgImage < 0 && m_texWidth > 0 && m_texHeight > 0) {
         m_nvgImage = nvgImageFromGLTexture(vg, displayTex,
                                            displayW, displayH,
                                            m_activeFilter);
     }
 
-    // ---- Render the game texture using NanoVG ------------------------
+    // ---- 使用 NanoVG 渲染游戏纹理 ------------------------
     if (m_nvgImage >= 0) {
         beiklive::DisplayRect rect = m_display.computeRect(x, y, width, height,
                                                             static_cast<unsigned>(displayW),
@@ -1916,9 +1877,9 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
         nvgFill(vg);
     }
 
-    // ---- Overlay (遮罩) drawing – full-screen, drawn on top of game frame
+    // ---- 遮罩绘制 – 全屏，叠加在游戏画面之上
     if (m_overlayEnabled && !m_overlayPath.empty()) {
-        // Lazy load: create NVG image handle on first use
+        // 懒加载：首次使用时创建 NVG 图像句柄
         if (m_overlayNvgImage < 0) {
             loadOverlayImage(vg);
         }
@@ -1936,7 +1897,7 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
         }
     }
 
-    // ---- FPS overlay -------------------------------------------------
+    // ---- FPS 覆盖层 -------------------------------------------------
     if (m_showFps) {
         float currentFps = 0.0f;
         {
@@ -1946,7 +1907,7 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
         char fpsBuf[32];
         snprintf(fpsBuf, sizeof(fpsBuf), "FPS: %.1f", currentFps);
 
-        // Semi-transparent background
+        // 半透明背景
         float fw = 90.0f, fh = 22.0f;
         float fx = x + 4.0f, fy = y + 4.0f;
         nvgBeginPath(vg);
@@ -1961,7 +1922,7 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
         nvgText(vg, fx + 6.0f, fy + fh * 0.5f, fpsBuf, nullptr);
     }
 
-    // ---- Fast-forward overlay (configurable) -------------------------
+    // ---- 快进覆盖层（可配置）-----------------------------------------
     if (m_showFfOverlay && m_fastForward.load(std::memory_order_relaxed)) {
         char ffBuf[32];
         snprintf(ffBuf, sizeof(ffBuf), ">> %.4gx", static_cast<double>(m_inputMap.ffMultiplier));
@@ -1980,10 +1941,10 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
         nvgText(vg, fx + fw * 0.5f, fy + fh * 0.5f, ffBuf, nullptr);
     }
 
-    // ---- Rewind status overlay (configurable) ------------------------
+    // ---- 倒带状态覆盖层（可配置）------------------------------------
     if (m_showRewindOverlay && m_inputMap.rewindEnabled && m_rewinding.load(std::memory_order_relaxed)) {
         char rewBuf[32];
-        // rewindStep = frames popped from buffer per rewind trigger (rewind speed)
+        // rewindStep = 每次倒带弹出的帧数（倒带速度）
         snprintf(rewBuf, sizeof(rewBuf), "<<< %u", m_inputMap.rewindStep);
         float rw = 90.0f, rh = 22.0f;
         float rx = x + width * 0.5f - rw * 0.5f;
@@ -2000,9 +1961,8 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
         nvgText(vg, rx + rw * 0.5f, ry + rh * 0.5f, rewBuf, nullptr);
     }
 
-    // ---- Save / load status overlay ---------------------------------
-    // Shows a brief message after quick-save or quick-load operations.
-    // The message fades out after 2 seconds.
+    // ---- 存读档状态覆盖层 ---------------------------------
+    // 快速存读档操作后短暂显示提示消息，2 秒后淡出。
     {
         std::string msg;
         bool showMsg = false;
@@ -2015,7 +1975,7 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
                     msg     = m_saveMsg;
                     showMsg = true;
                 } else {
-                    m_saveMsg.clear(); // expired
+                    m_saveMsg.clear(); // 已过期
                 }
             }
         }

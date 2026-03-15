@@ -16,7 +16,7 @@ class BBox : public brls::Box
 };
 
 
-// A common header for file browsers, with a title, a path and an info label
+// 文件浏览器通用头部，包含标题、路径和信息标签
 class BrowserHeader : public brls::Box
 {
   public:
@@ -39,7 +39,7 @@ class BrowserHeader : public brls::Box
 class RoundButton : public brls::Box
 {
   public:
-    // imagePath: path to the button image; text: label below the circle; onClick: callback fired after bounce
+    // imagePath：按钮图片路径；text：圆形下方标签；onClick：弹跳动画结束后触发的回调
     RoundButton(const std::string& imagePath, const std::string& text, std::function<void()> onClick);
 
     void draw(NVGcontext* vg, float x, float y, float w, float h,
@@ -52,16 +52,16 @@ class RoundButton : public brls::Box
     void setText(const std::string& text);
 
   private:
-    brls::Box*            m_imageWrapper = nullptr; // circular-radius container for the image
+    brls::Box*            m_imageWrapper = nullptr; // 圆形圆角图片容器
     brls::Image*          m_image        = nullptr;
     brls::Label*          m_label        = nullptr;
     std::function<void()> m_onClick;
 
-    // Focus + hover scale animation
+    // 焦点/悬停缩放动画
     bool  m_focused = false;
     float m_scale   = 1.0f;
 
-    // Click bounce animation
+    // 点击弹跳动画
     bool  m_clickAnimating = false;
     float m_clickT         = 0.0f;
     float m_clickScale     = 1.0f;

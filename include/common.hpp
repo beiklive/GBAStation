@@ -14,7 +14,7 @@ using namespace brls::literals; // for _i18n
 #include "UI/Utils/ProImage.hpp"
 #include "UI/Utils/ImageFileCache.hpp"
 
-// FUNCTIONS DEFINITIONS
+// 函数宏定义
 
 #define BK_RES(path) beiklive::file::TransStrToRes(path)
 #define ADD_STYLE(name, value) \
@@ -54,7 +54,7 @@ using namespace brls::literals; // for _i18n
 #define KEY_UI_LANGUAGE "UI.language" // 语言
 #define KEY_UI_THEME "UI.theme" // 主题
 
-// UI / background settings
+// UI / 背景设置
 #define KEY_UI_SHOW_BG_IMAGE  "UI.showBgImage"
 #define KEY_UI_BG_IMAGE_PATH  "UI.bgImagePath"
 #define KEY_UI_BG_BLUR_ENABLED "UI.bgBlurEnabled"
@@ -63,10 +63,10 @@ using namespace brls::literals; // for _i18n
 #define KEY_UI_PSPXMB_COLOR   "UI.pspxmb.color"
 // #define KEY_UI_TEXT_COLOR     "UI.textColor"
 
-// Audio settings
+// 音频设置
 #define KEY_AUDIO_BUTTON_SFX  "audio.buttonSfx"
 
-// Debug settings
+// 调试设置
 #define KEY_DEBUG_LOG_LEVEL   "debug.logLevel"
 #define KEY_DEBUG_LOG_FILE    "debug.logFile"
 #define KEY_DEBUG_LOG_OVERLAY "debug.logOverlay"
@@ -79,18 +79,17 @@ void RegisterStyles();
 void RegisterThemes();
 void CheckGLSupport();
 void InsertBackground(brls::Box* view);
-/// Apply the XMB colour preset (UI.pspxmb.color) from SettingManager to @a img.
+/// 应用 XMB 颜色预设（UI.pspxmb.color）到指定 img。
 void ApplyXmbColor(beiklive::UI::ProImage* img);
-/// Apply ALL background settings (visibility, image, XMB shader, color) to @a img
-/// based on the current SettingManager values (UI.showXmbBg, UI.showBgImage, etc.).
+/// 根据当前 SettingManager 配置将所有背景设置应用到 img。
 void ApplyXmbBg(beiklive::UI::ProImage* img);
-/// Apply ALL background settings to ALL registered background ProImage instances.
+/// 将所有背景设置应用到所有已注册的背景 ProImage 实例。
 void ApplyXmbColorToAll();
-/// Register/unregister a background ProImage instance so ApplyXmbColorToAll() can reach it.
+/// 注册/注销背景 ProImage 实例，供 ApplyXmbColorToAll() 访问。
 void RegisterXmbBackground(beiklive::UI::ProImage* img);
 void UnregisterXmbBackground(beiklive::UI::ProImage* img);
-/// Clear the file-byte image cache and mark all brls TextureCache entries dirty.
-/// Call before opening GameView to free memory for the emulator.
+/// 清空文件字节图片缓存并标记所有 brls TextureCache 为脏。
+/// 在打开 GameView 前调用以释放内存。
 void clearUIImageCache();
 // 吞噬一个按钮事件，使其不再被后续处理
 void swallow(brls::View* v, brls::ControllerButton btn);
@@ -215,7 +214,7 @@ inline void initGameData(const std::string& fileName, beiklive::EmuPlatform plat
     setIfAbsent(GAMEDATA_FIELD_TOTALTIME, beiklive::ConfigValue(0));
     setIfAbsent(GAMEDATA_FIELD_LASTOPEN,  beiklive::ConfigValue(std::string("从未游玩")));
 
-    // Platform: convert enum to string
+    // Platform: 将枚举转为字符串
     std::string platformStr;
     switch (platform) {
         case beiklive::EmuPlatform::GBA: platformStr = "GBA"; break;
@@ -224,7 +223,7 @@ inline void initGameData(const std::string& fileName, beiklive::EmuPlatform plat
     }
     setIfAbsent(GAMEDATA_FIELD_PLATFORM, beiklive::ConfigValue(platformStr));
 
-    // Overlay: default to the global overlay path for this platform
+    // Overlay：默认使用该平台的全局遮罩路径
     {
         std::string globalOverlay;
         if (SettingManager) {
@@ -269,7 +268,7 @@ inline void setGameDataStr(const std::string& fileName, const std::string& field
 #define RECENT_GAME_COUNT 10
 #define RECENT_GAME_KEY_PREFIX "recent.game."
 
-/// Set to true whenever the recent-games list changes; checked by StartPageView each frame.
+/// 近期游戏列表变更时置 true，由 StartPageView 每帧检查。
 extern bool g_recentGamesDirty;
 
 /// 从近期游戏队列中移除 gameFileName 并保存到 SettingManager。
@@ -297,7 +296,7 @@ inline void removeRecentGame(const std::string& gameFileName)
 inline void pushRecentGame(const std::string& gameName)
 {
     if (!SettingManager || gameName.empty()) return;
-    // Read existing queue
+    // 读取现有队列
     std::vector<std::string> queue;
     for (int i = 0; i < RECENT_GAME_COUNT; ++i) {
         std::string key = std::string(RECENT_GAME_KEY_PREFIX) + std::to_string(i);
@@ -305,14 +304,14 @@ inline void pushRecentGame(const std::string& gameName)
         if (v && v->AsString()) queue.push_back(*v->AsString());
         else queue.push_back("");
     }
-    // Remove existing entry to avoid duplicates
+    // 去重
     queue.erase(std::remove(queue.begin(), queue.end(), gameName), queue.end());
-    // Push to front
+    // 插入队首
     queue.insert(queue.begin(), gameName);
-    // Trim to RECENT_GAME_COUNT
+    // 截断到 RECENT_GAME_COUNT
     if (static_cast<int>(queue.size()) > RECENT_GAME_COUNT)
         queue.resize(RECENT_GAME_COUNT);
-    // Write back
+    // 回写
     for (int i = 0; i < RECENT_GAME_COUNT; ++i) {
         std::string key = std::string(RECENT_GAME_KEY_PREFIX) + std::to_string(i);
         std::string val = (i < static_cast<int>(queue.size())) ? queue[i] : "";

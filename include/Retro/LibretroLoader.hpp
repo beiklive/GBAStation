@@ -15,8 +15,8 @@
 
 namespace beiklive {
 
-/// Encapsulates a single loaded libretro core.
-/// Handles dynamic library loading, callback registration and lifetime.
+/// 封装单个已加载的libretro核心。
+/// 处理动态库加载、回调注册和生命周期管理。
 class LibretroLoader {
 public:
     LibretroLoader()  = default;
@@ -25,18 +25,18 @@ public:
     LibretroLoader(const LibretroLoader&)            = delete;
     LibretroLoader& operator=(const LibretroLoader&) = delete;
 
-    // ---- Lifecycle --------------------------------------------------
+    // ---- 生命周期 ---------------------------------------------------
 
-    /// Load the shared library at @a path and resolve all required symbols.
-    /// @return true on success.
+    /// 加载 @a path 处的共享库并解析所有必需符号。
+    /// @return 成功时返回true。
     bool load(const std::string& libPath);
 
-    /// Unload the shared library.  Safe to call even if load() was not called.
+    /// 卸载共享库。即使未调用load()也可安全调用。
     void unload();
 
     bool isLoaded() const { return m_handle != nullptr; }
 
-    // ---- Libretro API forwarding ------------------------------------
+    // ---- libretro API转发 ------------------------------------------
 
     bool        initCore();
     void        deinitCore();
@@ -51,81 +51,78 @@ public:
     bool        serialize(void* data, size_t size)  const;
     bool        unserialize(const void* data, size_t size);
 
-    // ---- Memory (SRAM / battery save) ---------------------------------------
+    // ---- 内存（SRAM/电池存档）--------------------------------------
 
-    /// Returns a pointer to the core's memory region (e.g. RETRO_MEMORY_SAVE_RAM).
-    /// Valid only while a game is loaded; nullptr if unsupported.
+    /// 返回核心内存区域指针（如RETRO_MEMORY_SAVE_RAM）。
+    /// 仅在游戏加载期间有效；不支持时返回nullptr。
     void*  getMemoryData(unsigned id) const;
 
-    /// Returns the size in bytes of a core memory region.
+    /// 返回核心内存区域的字节大小。
     size_t getMemorySize(unsigned id) const;
 
-    // ---- Cheats -------------------------------------------------------------
+    // ---- 金手指 -----------------------------------------------------
 
-    /// Reset / clear all cheats registered with the core.
+    /// 重置/清除所有已注册到核心的金手指。
     void cheatReset();
 
-    /// Set (add or update) a single cheat entry.
-    /// @param index   Position in the cheat list (0-based).
-    /// @param enabled Whether the cheat is active.
-    /// @param code    Cheat code string (format depends on core, e.g. GameShark).
+    /// 设置（添加或更新）单条金手指。
+    /// @param index   金手指列表位置（从0开始）。
+    /// @param enabled 金手指是否激活。
+    /// @param code    金手指代码字符串（格式取决于核心，如GameShark）。
     void cheatSet(unsigned index, bool enabled, const std::string& code);
 
-    // ---- Save directory -----------------------------------------------------
+    // ---- 存档目录 ---------------------------------------------------
 
-    /// Set the directory that the core should use for saves.
-    /// Called before loadGame() so that RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY
-    /// returns this path.
+    /// 设置核心使用的存档目录。
+    /// 在loadGame()之前调用，使RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY返回该路径。
     void setSaveDirectory(const std::string& dir) { m_saveDirectory = dir; }
 
-    /// Set the system/BIOS directory for the core.
+    /// 设置核心的系统/BIOS目录。
     void setSystemDirectory(const std::string& dir) { m_systemDirectory = dir; }
 
-    // ---- Video frame ------------------------------------------------
+    // ---- 视频帧 -----------------------------------------------------
 
     struct VideoFrame {
-        std::vector<uint32_t> pixels;  ///< RGBA8888 pixels (converted from core output)
+        std::vector<uint32_t> pixels;  ///< RGBA8888像素（从核心输出转换而来）
         unsigned width  = 0;
         unsigned height = 0;
     };
 
-    /// Returns a snapshot of the most-recently delivered video frame.
-    /// Thread-safe.
+    /// 返回最近一帧视频快照，线程安全。
     VideoFrame getVideoFrame() const;
 
-    // ---- Audio sample ring buffer -----------------------------------
-    // Consumed by AudioManager; samples are int16_t stereo interleaved.
+    // ---- 音频样本环形缓冲区 -----------------------------------------
+    // 由AudioManager消费；样本为int16_t立体声交错格式。
     bool drainAudio(std::vector<int16_t>& out);
 
-    // ---- Input ------------------------------------------------------
+    // ---- 输入 -------------------------------------------------------
 
-    /// Per-button pressed state.  Index = RETRO_DEVICE_ID_JOYPAD_*
+    /// 各按钮按下状态，索引 = RETRO_DEVICE_ID_JOYPAD_*
     void setButtonState(unsigned id, bool pressed);
     bool getButtonState(unsigned id) const;
 
-    // ---- Geometry ---------------------------------------------------
+    // ---- 几何信息 ---------------------------------------------------
 
     unsigned gameWidth()  const { return m_avInfo.geometry.base_width; }
     unsigned gameHeight() const { return m_avInfo.geometry.base_height; }
     double   fps()        const { return m_avInfo.timing.fps; }
 
-    // ---- Settings (core variables via libretro environment) ---------
+    // ---- 设置（通过libretro环境的核心变量）-------------------------
 
-    /// Provide a ConfigManager from which core variable values are read.
-    /// Call before load() so that retro_set_environment() picks them up.
+    /// 提供ConfigManager以读取核心变量值。
+    /// 在load()之前调用，使retro_set_environment()能获取到配置。
     void setConfigManager(beiklive::ConfigManager* cfg) { m_configManager = cfg; }
 
-    // ---- Fast-forward state -----------------------------------------
+    // ---- 快进状态 ---------------------------------------------------
 
-    /// Notify the core whether the host is currently fast-forwarding.
-    /// Used to answer RETRO_ENVIRONMENT_GET_FASTFORWARDING queries from cores.
+    /// 通知核心宿主是否正在快进，用于响应RETRO_ENVIRONMENT_GET_FASTFORWARDING查询。
     void setFastForwarding(bool ff) { m_fastForwarding.store(ff, std::memory_order_relaxed); }
 
 private:
-    // ---- Dynamic library handle -------------------------------------
+    // ---- 动态库句柄 -------------------------------------------------
     void* m_handle = nullptr;
 
-    // ---- Function pointers ------------------------------------------
+    // ---- 函数指针 ---------------------------------------------------
     void (*fn_set_environment)(retro_environment_t)          = nullptr;
     void (*fn_set_video_refresh)(retro_video_refresh_t)      = nullptr;
     void (*fn_set_audio_sample)(retro_audio_sample_t)        = nullptr;
@@ -146,48 +143,47 @@ private:
     bool (*fn_load_game)(const retro_game_info*)             = nullptr;
     void (*fn_unload_game)()                                 = nullptr;
     void (*fn_get_region)()                                  = nullptr;
-    // ---- Cheat / memory API -------------------------------------------------
+    // ---- 金手指/内存API ---------------------------------------------
     void (*fn_cheat_reset)()                                 = nullptr;
     void (*fn_cheat_set)(unsigned, bool, const char*)        = nullptr;
     void* (*fn_get_memory_data)(unsigned)                    = nullptr;
     size_t (*fn_get_memory_size)(unsigned)                   = nullptr;
 
-    // ---- State ------------------------------------------------------
+    // ---- 运行状态 ---------------------------------------------------
     retro_system_av_info m_avInfo{};
     retro_pixel_format   m_pixelFormat = RETRO_PIXEL_FORMAT_0RGB1555;
     bool m_coreReady  = false;
     bool m_gameLoaded = false;
 
-    // ---- Video frame storage ----------------------------------------
+    // ---- 视频帧存储 -------------------------------------------------
     mutable std::mutex   m_videoMutex;
     VideoFrame           m_videoFrame;
 
-    // ---- Audio ring buffer ------------------------------------------
+    // ---- 音频环形缓冲区 ---------------------------------------------
     mutable std::mutex       m_audioMutex;
     std::vector<int16_t>     m_audioBuffer;
 
-    // ---- Input state ------------------------------------------------
+    // ---- 输入状态 ---------------------------------------------------
     bool m_buttons[RETRO_DEVICE_ID_JOYPAD_R3 + 1] = {};
 
-    // ---- Core variable / settings storage ---------------------------
-    // ConfigManager provides user-saved values; m_coreVarStorage holds
-    // c_str() pointers that remain valid for the lifetime of the loader.
+    // ---- 核心变量/设置存储 ------------------------------------------
+    // ConfigManager提供用户保存的值；m_coreVarStorage保存c_str()指针，
+    // 在loader生命周期内保持有效。
     beiklive::ConfigManager*                        m_configManager = nullptr;
     std::unordered_map<std::string, std::string> m_coreVarStorage;
 
-    // ---- Save / system directory -------------------------------------
-    std::string m_saveDirectory;    ///< Returned to core via GET_SAVE_DIRECTORY
-    std::string m_systemDirectory;  ///< Returned to core via GET_SYSTEM_DIRECTORY
+    // ---- 存档/系统目录 ----------------------------------------------
+    std::string m_saveDirectory;    ///< 通过GET_SAVE_DIRECTORY返回给核心
+    std::string m_systemDirectory;  ///< 通过GET_SYSTEM_DIRECTORY返回给核心
 
-    // ---- Host state communicated to core ----------------------------
-    std::atomic<bool> m_fastForwarding{false};  ///< Tracks host fast-forward state
+    // ---- 传递给核心的宿主状态 ----------------------------------------
+    std::atomic<bool> m_fastForwarding{false};  ///< 跟踪宿主快进状态
 
-    // ---- Static singleton for callbacks -----------------------------
-    // libretro callbacks are plain C function pointers, so we route them
-    // through a static instance pointer.
+    // ---- 回调用静态单例 ---------------------------------------------
+    // libretro回调为纯C函数指针，通过静态实例指针路由。
     static LibretroLoader* s_current;
 
-    // ---- Static C callbacks -----------------------------------------
+    // ---- 静态C回调 --------------------------------------------------
     static bool  s_environmentCallback(unsigned cmd, void* data);
     static void  s_videoRefreshCallback(const void* data, unsigned width,
                                         unsigned height, size_t pitch);
@@ -197,7 +193,7 @@ private:
     static int16_t s_inputStateCallback(unsigned port, unsigned device,
                                          unsigned index, unsigned id);
 
-    // ---- Helper -----------------------------------------------------
+    // ---- 辅助函数 ---------------------------------------------------
     template<typename T>
     bool resolveSymbol(T& fnPtr, const char* name);
 };

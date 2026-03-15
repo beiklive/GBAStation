@@ -80,7 +80,7 @@ void GameCard::triggerClickBounce()
 }
 void GameCard::onChildFocusGained(brls::View* directChild, brls::View* focusedView)
 {
-    // Called when a child of ours gets focused, in that case it's the Image
+    // 子节点（图片）获得焦点时调用
 
     Box::onChildFocusGained(directChild, focusedView);
 
@@ -94,7 +94,7 @@ void GameCard::onChildFocusGained(brls::View* directChild, brls::View* focusedVi
 
 void GameCard::onChildFocusLost(brls::View* directChild, brls::View* focusedView)
 {
-    // Called when a child of ours losts focused, in that case it's the Image
+    // 子节点（图片）失去焦点时调用
 
     Box::onChildFocusLost(directChild, focusedView);
 
@@ -268,7 +268,7 @@ void AppPage::removeGame(const std::string& gamePath)
 
     m_cardRow->removeView(toRemove, true);
 
-    // Restore focus to a valid view after removal
+    // 移除后将焦点恢复到有效视图
     const auto& remaining = m_cardRow->getChildren();
     if (!remaining.empty()) {
         auto* nextCard = remaining.front();

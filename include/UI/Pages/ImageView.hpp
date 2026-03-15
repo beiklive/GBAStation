@@ -6,15 +6,14 @@
 #include <string>
 #include <vector>
 
-/// Full-screen image viewer with zoom/pan support.
-/// Supports static images (PNG, JPG, JPEG, BMP, WEBP, TGA).
-/// - Black background
-/// - BUTTON_B  : close (pop activity)
-/// - BUTTON_LB : zoom out
-/// - BUTTON_RB : zoom in
-/// - BUTTON_X  : reset zoom / pan
-/// - D-pad     : pan image
-/// - All other buttons are swallowed (disabled)
+/// 全屏图片查看器，支持缩放/平移。
+/// 支持 PNG、JPG、JPEG、BMP、WEBP、TGA 格式。
+/// - 黑色背景
+/// - B 键：关闭
+/// - LB：缩小；RB：放大
+/// - X 键：重置缩放/平移
+/// - 方向键：平移图片
+/// - 其余按键全部吞噬
 class ImageView : public brls::Box
 {
   public:
@@ -27,13 +26,13 @@ class ImageView : public brls::Box
   private:
     std::string m_imagePath;
 
-    // NVG image handle for static images (-1 = not loaded yet)
+    // NVG 图像句柄（-1 = 未加载）
     int  m_nvgImage  = -1;
     int  m_imgW      = 0;
     int  m_imgH      = 0;
     bool m_loaded    = false;
 
-    // Async loading
+    // 异步加载
     bool                  m_asyncLoading = false;
     std::atomic<bool>     m_asyncReady{false};
     std::vector<uint8_t>  m_asyncBytes;
