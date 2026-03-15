@@ -726,15 +726,15 @@ brls::ScrollingFrame* SettingPage::buildGameTab()
     box->addView(autoSaveStateCell);
 
     {
-        // 自动存档间隔选择（0=关闭, 30, 60, 120, 300 秒）
-        static const int k_autoSaveIntervals[] = { 0, 30, 60, 120, 300 };
+        // 自动存档间隔选择（0=关闭, 60, 180, 300, 600 秒）
+        static const int k_autoSaveIntervals[] = { 0, 60, 180, 300, 600 };
         static constexpr int k_autoSaveIntervalCount = 5;
         std::vector<std::string> intervalLabels = {
             "beiklive/settings/game/auto_save_interval_off"_i18n,
-            "beiklive/settings/game/auto_save_interval_30s"_i18n,
-            "beiklive/settings/game/auto_save_interval_60s"_i18n,
-            "beiklive/settings/game/auto_save_interval_120s"_i18n,
-            "beiklive/settings/game/auto_save_interval_300s"_i18n,
+            "beiklive/settings/game/auto_save_interval_1min"_i18n,
+            "beiklive/settings/game/auto_save_interval_3min"_i18n,
+            "beiklive/settings/game/auto_save_interval_5min"_i18n,
+            "beiklive/settings/game/auto_save_interval_10min"_i18n,
         };
         int curInterval = cfgGetInt("save.autoSaveInterval", 0);
         int intervalIdx = 0;

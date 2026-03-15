@@ -202,12 +202,15 @@ class GameView : public brls::Box
     void saveRtc();
 
     /// Save quick-save state to @a slot.
-    void doQuickSave(int slot);
+    /// If @a silent is true, do not show the save/load status overlay message.
+    void doQuickSave(int slot, bool silent = false);
 
     /// Load quick-save state from @a slot.
     void doQuickLoad(int slot);
 
-    /// Capture the current video frame and save it as a PNG screenshot.
+    /// Capture the current GL framebuffer (game frame + overlay) and save as PNG.
+    /// Must be called from the main (draw) thread after all rendering is complete.
+    /// Uses the full window pixel dimensions (brls::Application::windowWidth/Height).
     void doScreenshot();
 
     /// Load cheats from the .cht file associated with the current ROM.

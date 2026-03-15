@@ -620,14 +620,10 @@ void GameView::startGameThread()
                     if (autoSaveElapsed >= autoSaveIntervalSec) {
                         // 重置计时器（以自动存档间隔为单位推进，避免漂移）
                         autoSaveTimer += std::chrono::seconds(autoSaveIntervalSec);
-                        doQuickSave(0);
+                        // 静默模式：自动存档不在游戏界面显示保存 overlay
+                        doQuickSave(0, /*silent=*/true);
                     }
                 }
-            }
-
-            // ---- 截图处理 --------
-            if (m_pendingScreenshot.exchange(false, std::memory_order_relaxed)) {
-                doScreenshot();
             }
 
             // 帧率限制器
@@ -1193,23 +1189,27 @@ void GameView::saveRtc()
 // doQuickSave – serialize core state to a slot file
 // ============================================================
 
-void GameView::doQuickSave(int slot)
+void GameView::doQuickSave(int slot, bool silent)
 {
     size_t sz = m_core.serializeSize();
     if (sz == 0) {
         bklog::warning("GameView: core does not support serialize (slot {})", slot);
-        std::lock_guard<std::mutex> lk(m_saveMsgMutex);
-        m_saveMsg     = "Save failed (unsupported)";
-        m_saveMsgTime = std::chrono::steady_clock::now();
+        if (!silent) {
+            std::lock_guard<std::mutex> lk(m_saveMsgMutex);
+            m_saveMsg     = "Save failed (unsupported)";
+            m_saveMsgTime = std::chrono::steady_clock::now();
+        }
         return;
     }
 
     std::vector<uint8_t> buf(sz);
     if (!m_core.serialize(buf.data(), sz)) {
         bklog::warning("GameView: serialize failed (slot {})", slot);
-        std::lock_guard<std::mutex> lk(m_saveMsgMutex);
-        m_saveMsg     = "Save failed";
-        m_saveMsgTime = std::chrono::steady_clock::now();
+        if (!silent) {
+            std::lock_guard<std::mutex> lk(m_saveMsgMutex);
+            m_saveMsg     = "Save failed";
+            m_saveMsgTime = std::chrono::steady_clock::now();
+        }
         return;
     }
 
@@ -1217,27 +1217,33 @@ void GameView::doQuickSave(int slot)
     std::ofstream f(path, std::ios::binary | std::ios::trunc);
     if (!f) {
         bklog::warning("GameView: cannot open state file for writing: {}", path);
-        std::lock_guard<std::mutex> lk(m_saveMsgMutex);
-        m_saveMsg     = "Save failed (I/O)";
-        m_saveMsgTime = std::chrono::steady_clock::now();
+        if (!silent) {
+            std::lock_guard<std::mutex> lk(m_saveMsgMutex);
+            m_saveMsg     = "Save failed (I/O)";
+            m_saveMsgTime = std::chrono::steady_clock::now();
+        }
         return;
     }
 
     f.write(reinterpret_cast<const char*>(buf.data()), static_cast<std::streamsize>(sz));
     if (!f) {
         bklog::warning("GameView: write error on state file: {}", path);
-        std::lock_guard<std::mutex> lk(m_saveMsgMutex);
-        m_saveMsg     = "Save failed (I/O)";
-        m_saveMsgTime = std::chrono::steady_clock::now();
+        if (!silent) {
+            std::lock_guard<std::mutex> lk(m_saveMsgMutex);
+            m_saveMsg     = "Save failed (I/O)";
+            m_saveMsgTime = std::chrono::steady_clock::now();
+        }
         return;
     }
 
     bklog::info("GameView: state saved to {} ({} bytes)", path, sz);
-    char msg[64];
-    snprintf(msg, sizeof(msg), "Saved (slot %d)", slot);
-    std::lock_guard<std::mutex> lk(m_saveMsgMutex);
-    m_saveMsg     = msg;
-    m_saveMsgTime = std::chrono::steady_clock::now();
+    if (!silent) {
+        char msg[64];
+        snprintf(msg, sizeof(msg), "Saved (slot %d)", slot);
+        std::lock_guard<std::mutex> lk(m_saveMsgMutex);
+        m_saveMsg     = msg;
+        m_saveMsgTime = std::chrono::steady_clock::now();
+    }
 }
 
 // ============================================================
@@ -1304,6 +1310,9 @@ void GameView::doQuickLoad(int slot)
 // ============================================================
 // doScreenshot – 截图并保存为 PNG
 //
+// 从 OpenGL 帧缓冲读取当前渲染帧（包含游戏画面+遮罩），
+// 并保存为 PNG 文件。必须在主线程（draw 函数）中调用。
+//
 // 截图保存位置由 screenshot.dir 配置决定：
 //   0（默认）= 与游戏 ROM 同目录
 //   1        = BK_APP_ROOT_DIR/albums/{游戏文件名（无后缀）}/
@@ -1313,14 +1322,39 @@ void GameView::doQuickLoad(int slot)
 
 void GameView::doScreenshot()
 {
-    // 获取当前帧
-    beiklive::LibretroLoader::VideoFrame frame = m_core.getVideoFrame();
-    if (frame.pixels.empty() || frame.width == 0 || frame.height == 0) {
-        bklog::warning("GameView: 截图失败，帧数据为空");
+    // 使用实际窗口像素尺寸进行截图，确保与渲染输出完全一致
+    unsigned captW = brls::Application::windowWidth;
+    unsigned captH = brls::Application::windowHeight;
+
+    if (captW == 0 || captH == 0) {
+        // 回退到内容逻辑尺寸
+        captW = static_cast<unsigned>(brls::Application::contentWidth);
+        captH = static_cast<unsigned>(brls::Application::contentHeight);
+    }
+
+    if (captW == 0 || captH == 0) {
+        bklog::warning("GameView: 截图失败，窗口尺寸为零");
         std::lock_guard<std::mutex> lk(m_saveMsgMutex);
         m_saveMsg     = "Screenshot failed (no frame)";
         m_saveMsgTime = std::chrono::steady_clock::now();
         return;
+    }
+
+    // 从 GL 帧缓冲读取像素（RGBA8888）
+    // OpenGL 坐标系原点在左下角，y 轴与屏幕坐标系相反
+    std::vector<uint8_t> pixels(captW * captH * 4);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glReadPixels(0, 0,
+                 static_cast<GLsizei>(captW),
+                 static_cast<GLsizei>(captH),
+                 GL_RGBA, GL_UNSIGNED_BYTE,
+                 pixels.data());
+
+    // 垂直翻转（OpenGL 行序与 PNG 行序相反）
+    for (unsigned row = 0; row < captH / 2; ++row) {
+        uint8_t* top = pixels.data() + row * captW * 4;
+        uint8_t* bot = pixels.data() + (captH - 1u - row) * captW * 4;
+        std::swap_ranges(top, top + captW * 4, bot);
     }
 
     // 决定保存目录
@@ -1382,14 +1416,13 @@ void GameView::doScreenshot()
     std::string filePath = saveDir + sep + gameStem + "_" + timeBuf + ".png";
 
     // 将 RGBA8888 像素数据写入 PNG（stbi_write_png）
-    // stbi_write_png 需要 RGBA 格式（4通道），stride = width * 4
     int result = stbi_write_png(
         filePath.c_str(),
-        static_cast<int>(frame.width),
-        static_cast<int>(frame.height),
+        static_cast<int>(captW),
+        static_cast<int>(captH),
         4,  // RGBA
-        frame.pixels.data(),
-        static_cast<int>(frame.width * 4)
+        pixels.data(),
+        static_cast<int>(captW * 4)
     );
 
     if (result == 0) {
@@ -1405,6 +1438,7 @@ void GameView::doScreenshot()
     m_saveMsg     = "Screenshot saved";
     m_saveMsgTime = std::chrono::steady_clock::now();
 }
+
 //
 // Supported formats:
 //
@@ -2019,6 +2053,17 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
         nvgFillColor(vg, nvgRGBA(255, 255, 255, 230));
         nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
         nvgText(vg, nx + nw * 0.5f, ny + nh * 0.5f, muteText, nullptr);
+    }
+
+    // ---- 截图处理（主线程，在所有渲染完成后从 GL 帧缓冲抓取）--------
+    // 截图包含游戏画面+遮罩（整个屏幕）。
+    // 调用 nvgEndFrame 将本帧全部 NanoVG 绘制命令提交到 GL 后缓冲区，
+    // 随后 glReadPixels 可读取完整的游戏渲染帧（游戏画面 + 遮罩 PNG）。
+    // NanoVG 的 nvgEndFrame 仅刷新并清空待提交命令队列，不影响上下文状态，
+    // 因此框架后续的焦点高亮、通知等 NVG 绘制仍会被框架自身的 nvgEndFrame 正确提交。
+    if (m_pendingScreenshot.exchange(false, std::memory_order_relaxed)) {
+        nvgEndFrame(vg);
+        doScreenshot();
     }
 
     this->invalidate();
