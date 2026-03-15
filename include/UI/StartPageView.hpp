@@ -34,7 +34,6 @@ class StartPageView : public beiklive::UI::BBox
   private:
 
     AppPage*             m_appPage            = nullptr;
-
     void showAppPage();
     void openFileListPage();
     void openSettingsPage();

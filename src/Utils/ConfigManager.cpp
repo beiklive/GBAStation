@@ -144,14 +144,14 @@ bool ConfigManager::Save() const {
 
 void ConfigManager::SetDefault(const std::string& key, const ConfigValue& value) {
 	if (!Contains(key)) {
-		brls::Logger::debug("ConfigManager::SetDefault [{}]: setting default", key);
+		// brls::Logger::debug("ConfigManager::SetDefault [{}]: setting default", key);
 		Set(key, value, true);
 	}
 }
 
 void ConfigManager::Set(const std::string& key, const ConfigValue& value, bool persist) {
 	if (key.empty()) return;
-	brls::Logger::debug("ConfigManager::Set [{}] persist={}", key, persist);
+	// brls::Logger::debug("ConfigManager::Set [{}] persist={}", key, persist);
 	entries_[key] = Entry{ value, persist };
 }
 
@@ -161,7 +161,7 @@ std::optional<ConfigValue> ConfigManager::Get(const std::string& key) const {
 		brls::Logger::debug("ConfigManager::Get [{}]: not found", key);
 		return std::nullopt;
 	}
-	brls::Logger::debug("ConfigManager::Get [{}]: found", key);
+	// brls::Logger::debug("ConfigManager::Get [{}]: found", key);
 	return it->second.value;
 }
 

@@ -13,6 +13,7 @@ using namespace brls::literals; // for _i18n
 #include "UI/Utils/Utils.hpp"
 #include "UI/Utils/ProImage.hpp"
 #include "UI/Utils/ImageFileCache.hpp"
+#include "UI/Utils/GameMenu.hpp"
 
 // 函数宏定义
 

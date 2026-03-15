@@ -102,6 +102,12 @@ GameView::GameView(std::string romPath) : GameView()
 
 GameView::GameView()
 {
+    #undef ABSOLUTE
+    setPositionType(brls::PositionType::ABSOLUTE);
+    setPositionTop(0);
+    setPositionLeft(0);
+    setWidthPercentage(100);
+    setHeightPercentage(100);
     setFocusable(true);
     setHideHighlight(true);
 	beiklive::CheckGLSupport();
@@ -769,8 +775,27 @@ void GameView::registerGamepadHotkeys()
         if (hk.isPadBound())
             m_inputCtrl.registerAction({hk.padButton}, std::move(cb));
     };
+    // -- 打开菜单
+    reg(Hotkey::OpenMenu, [this](KeyEvent evt)
+    {
+        if (evt == KeyEvent::ShortPress) {
+            if (m_gameMenu) {
+                if(m_gameMenu->getVisibility() == brls::Visibility::GONE) {
+                    m_gameMenu->setVisibility(brls::Visibility::VISIBLE);
+                }
+            }
+            // auto* menu = new GameMenu();
+            // this->addView(menu);
 
-    // ── 快进（按住键）──────────────────────────────────────────────────────
+            // // 切换菜单显示状态
+            // bool shouldShow = !m_menuVisible.load(std::memory_order_relaxed);
+            // m_menuVisible.store(shouldShow, std::memory_order_relaxed);
+            // // 同步更新输入封锁状态：显示菜单时封锁输入，隐藏菜单时解除封锁。
+            // setGameInputEnabled(!shouldShow);
+        }
+    });
+
+    // ── 快进──────────────────────────────────────────────────────
     reg(Hotkey::FastForward, [this](KeyEvent evt)
     {
         if(beiklive::cfgGetBool("fastforward.enabled", false))
@@ -794,7 +819,7 @@ void GameView::registerGamepadHotkeys()
         }
     });
 
-    // ── 倒带（按住键）────────────────────────────────────────────────────────
+    // ── 倒带────────────────────────────────────────────────────────
     reg(Hotkey::Rewind, [this](KeyEvent evt)
     {
         if(beiklive::cfgGetBool("rewind.enabled", false)){

@@ -32,6 +32,7 @@ class GameView : public brls::Box
     void onFocusLost() override;
     void onLayout() override;
 
+    void setGameMenu(GameMenu* menu) { m_gameMenu = menu; }
     /**
      * 启用或禁用该视图的borealis输入系统。
      *
@@ -52,6 +53,8 @@ class GameView : public brls::Box
     std::string  m_romFileName;  ///< 从m_romPath提取的文件名（含扩展名）
     bool         m_initialized  = false;
     bool         m_coreFailed   = false;
+    // ---- 游戏内菜单
+    GameMenu*    m_gameMenu     = nullptr;
 
     // ---- libretro核心 -----------------------------------------------
     beiklive::LibretroLoader m_core;

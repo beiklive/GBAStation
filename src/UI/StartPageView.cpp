@@ -48,7 +48,17 @@ static void recordGameOpenTime(const std::string& fileName)
 static void launchGameActivity(const std::string& romPath)
 {
     beiklive::clearUIImageCache();
-    auto* frame = new brls::AppletFrame(new GameView(romPath));
+
+    auto* box = new brls::Box(brls::Axis::COLUMN);
+    auto *gameView = new GameView(romPath);
+    auto *gameMenu = new GameMenu();
+    gameView->setGameMenu(gameMenu);
+    box->addView(gameView);
+    box->addView(gameMenu);
+
+    gameMenu->setVisibility(brls::Visibility::GONE); // 默认隐藏，游戏线程根据需要显示
+
+    auto* frame = new brls::AppletFrame(box);
     frame->setHeaderVisibility(brls::Visibility::GONE);
     frame->setFooterVisibility(brls::Visibility::GONE);
     frame->setBackground(brls::ViewBackground::NONE);
@@ -107,7 +117,6 @@ void StartPageView::Init()
     // 启动页面始终显示 AppPage
     createAppPage();
     showAppPage();
-
     addView(new brls::BottomBar());
     bklog::debug("StartPageView::Init: done, AppPage visible");
 }
