@@ -725,6 +725,26 @@ void GameView::cleanup()
 }
 
 // ============================================================
+// setGameMenu – 绑定游戏内菜单并设置关闭回调
+//
+// 当菜单的"返回游戏"按钮被触发时，关闭回调将恢复游戏输入并将焦点返回给 GameView。
+// 必须在主（UI）线程调用（通常在 initialize() 之前）。
+// ============================================================
+
+void GameView::setGameMenu(GameMenu* menu)
+{
+    m_gameMenu = menu;
+    if (m_gameMenu) {
+        m_gameMenu->setCloseCallback([this]() {
+            // 菜单关闭：启用游戏输入封锁（阻止 UI 事件），将焦点返回给 GameView
+            setGameInputEnabled(true);
+            brls::Application::giveFocus(this);
+        });
+    }
+}
+
+
+// ============================================================
 // setGameInputEnabled – 一键切换 borealis 输入封锁
 // ============================================================
 // enabled = true：封锁 borealis UI 事件分发，防止导航/提示/动画干扰游戏；
@@ -773,25 +793,15 @@ void GameView::registerGamepadHotkeys()
     {
         const auto& hk = m_inputMap.hotkeyBinding(h);
         if (hk.isPadBound())
-            m_inputCtrl.registerAction({hk.padButton}, std::move(cb));
+            m_inputCtrl.registerAction(hk.padButtons, std::move(cb));
     };
     // -- 打开菜单
     reg(Hotkey::OpenMenu, [this](KeyEvent evt)
     {
         if (evt == KeyEvent::ShortPress) {
-            if (m_gameMenu) {
-                if(m_gameMenu->getVisibility() == brls::Visibility::GONE) {
-                    m_gameMenu->setVisibility(brls::Visibility::VISIBLE);
-                }
-            }
-            // auto* menu = new GameMenu();
-            // this->addView(menu);
-
-            // // 切换菜单显示状态
-            // bool shouldShow = !m_menuVisible.load(std::memory_order_relaxed);
-            // m_menuVisible.store(shouldShow, std::memory_order_relaxed);
-            // // 同步更新输入封锁状态：显示菜单时封锁输入，隐藏菜单时解除封锁。
-            // setGameInputEnabled(!shouldShow);
+            // 菜单操作须在主线程执行（涉及 UI 输入封锁和焦点切换），
+            // 通过原子标志将请求传递给 draw() 处理。
+            m_requestOpenMenu.store(true, std::memory_order_relaxed);
         }
     });
 
@@ -1799,6 +1809,19 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
         bklog::info("GameView: 游戏线程已停止，弹出 Activity");
         brls::Application::popActivity();
         return;
+    }
+
+    // ---- OpenMenu 热键：游戏线程设置此标志，在主线程处理 -----
+    if (m_requestOpenMenu.exchange(false, std::memory_order_relaxed)) {
+        if (!m_gameMenu) {
+            bklog::warning("GameView: 收到打开菜单请求，但 m_gameMenu 未设置");
+        } else if (m_gameMenu->getVisibility() == brls::Visibility::GONE) {
+            m_gameMenu->setVisibility(brls::Visibility::VISIBLE);
+            // 解除 borealis 输入封锁，使菜单能接收手柄导航和点击事件
+            setGameInputEnabled(false);
+            // 将焦点转移到菜单（borealis 会找到第一个可聚焦子控件）
+            brls::Application::giveFocus(m_gameMenu);
+        }
     }
 
     if (!m_initialized) {
