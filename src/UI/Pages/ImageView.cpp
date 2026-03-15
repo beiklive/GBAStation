@@ -25,7 +25,7 @@ ImageView::ImageView(const std::string& imagePath)
     setHideHighlightBackground(true);
 
 
-    // BUTTON_B – close (pop this activity)
+    // B键：关闭（弹出当前活动）
     registerAction("beiklive/hints/close"_i18n,
                    brls::BUTTON_B,
                    [](brls::View*) {
@@ -34,25 +34,25 @@ ImageView::ImageView(const std::string& imagePath)
                    },
                    false, false, brls::SOUND_CLICK);
 
-    // BUTTON_L – zoom out
+    // LB键：缩小
     registerAction("beiklive/hints/zoom_out"_i18n,
                     brls::BUTTON_LB,
                     [this](brls::View*) { zoomOut(); return true; },
                     false, false, brls::SOUND_CLICK);
 
-    // BUTTON_R – zoom in
+    // RB键：放大
     registerAction("beiklive/hints/zoom_in"_i18n,
                    brls::BUTTON_RB,
                    [this](brls::View*) { zoomIn(); return true; },
                    false, false, brls::SOUND_CLICK);
 
-    // BUTTON_X – reset
+    // X键：重置
     registerAction("beiklive/hints/reset"_i18n,
                    brls::BUTTON_X,
                    [this](brls::View*) { resetView(); return true; },
                    false, false, brls::SOUND_CLICK);
 
-    // D-pad – pan
+    // 方向键：平移
     registerAction("", brls::BUTTON_UP,
                    [this](brls::View*) { panUp();    return true; }, true);
     registerAction("", brls::BUTTON_DOWN,
@@ -62,7 +62,7 @@ ImageView::ImageView(const std::string& imagePath)
     registerAction("", brls::BUTTON_RIGHT,
                    [this](brls::View*) { panRight(); return true; }, true);
 
-    // Swallow unused buttons so they don't propagate
+    // 屏蔽未使用的按键，防止事件传播
     beiklive::swallow(this, brls::BUTTON_LT);
     beiklive::swallow(this, brls::BUTTON_RT);
     beiklive::swallow(this, brls::BUTTON_A);
@@ -70,13 +70,12 @@ ImageView::ImageView(const std::string& imagePath)
     beiklive::swallow(this, brls::BUTTON_START);
     beiklive::swallow(this, brls::BUTTON_BACK);
 
-    // ── Start async image load ────────────────────────────────────────────────
+    // ── 开始异步图片加载 ─────────────────────────────────────────────────────
     auto& byteCache = beiklive::UI::ImageFileCache::instance();
     if (const auto* cached = byteCache.getBytes(m_imagePath))
     {
-        // Cache hit: bytes already in RAM.
-        // Copy into m_asyncBytes; the NVG image is created in draw() once
-        // an NVGcontext is guaranteed to be available.
+        // 缓存命中：字节已在内存中，直接使用。
+        // 复制到 m_asyncBytes；NVG 图像在 draw() 首次可用时创建。
         std::lock_guard<std::mutex> lock(m_asyncMutex);
         m_asyncBytes   = *cached;
         m_asyncReady.store(true);
@@ -84,15 +83,14 @@ ImageView::ImageView(const std::string& imagePath)
     }
     else
     {
-        // Cache miss – read file in background, using ASYNC_RETAIN/RELEASE so
-        // that the callback is safely discarded if this view is destroyed first.
+        // 缓存未命中：后台读取文件，通过 ASYNC_RETAIN/RELEASE 确保视图销毁后回调安全丢弃
         m_asyncLoading = true;
         std::string path = m_imagePath;
 
         ASYNC_RETAIN
         brls::async([ASYNC_TOKEN, path]()
         {
-            // Background: read file bytes.
+            // 后台线程：读取文件字节
             std::string data;
             {
                 std::ifstream f(path, std::ios::binary | std::ios::ate);
@@ -102,13 +100,13 @@ ImageView::ImageView(const std::string& imagePath)
                     f.seekg(0);
                     data.resize(static_cast<size_t>(size));
                     f.read(data.data(), size);
-                    // Discard partial reads
+                    // 丢弃不完整读取
                     if (f.gcount() != size)
                         data.clear();
                 }
             }
 
-            // Main thread: store bytes and signal draw() to create the texture.
+            // 主线程：存储字节并通知 draw() 创建纹理
             brls::sync([ASYNC_TOKEN, data = std::move(data), path]()
             {
                 ASYNC_RELEASE
@@ -116,15 +114,15 @@ ImageView::ImageView(const std::string& imagePath)
 
                 if (data.empty())
                 {
-                    this->m_loaded = true; // mark as done (failed)
+                    this->m_loaded = true; // 标记完成（加载失败）
                     return;
                 }
 
-                // Store in byte cache.
+                // 存入字节缓存
                 std::vector<uint8_t> bytes(data.begin(), data.end());
                 beiklive::UI::ImageFileCache::instance().storeBytes(path, bytes);
 
-                // Hand off bytes to draw() for NVG image creation.
+                // 将字节交给 draw() 创建 NVG 图像
                 {
                     std::lock_guard<std::mutex> lock(this->m_asyncMutex);
                     this->m_asyncBytes = std::move(bytes);
@@ -137,19 +135,19 @@ ImageView::ImageView(const std::string& imagePath)
 
 ImageView::~ImageView()
 {
-    // NVG images are cleaned up during NVG context teardown by borealis.
+    // NVG 图像在 borealis 销毁上下文时统一清理
     m_nvgImage = -1;
 }
 
 void ImageView::draw(NVGcontext* vg, float x, float y, float w, float h,
                      brls::Style /*style*/, brls::FrameContext* /*ctx*/)
 {
-    // ── Black background ────────────────────────────────────────────────────
+    // ── 黑色背景 ───────────────────────────────────────────────────────────
     nvgBeginPath(vg);
     nvgRect(vg, x, y, w, h);
     nvgFill(vg);
 
-    // ── Consume completed async load ────────────────────────────────────────
+    // ── 处理异步加载完成的结果 ──────────────────────────────────────────────
     if (m_asyncReady.load())
     {
         m_asyncReady.store(false);
@@ -171,7 +169,7 @@ void ImageView::draw(NVGcontext* vg, float x, float y, float w, float h,
         m_loaded = true;
     }
 
-    // ── Show loading placeholder ─────────────────────────────────────────────
+    // ── 显示加载占位符 ──────────────────────────────────────────────────────
     if (m_asyncLoading)
     {
         nvgFontSize(vg, 28.0f);
@@ -182,11 +180,11 @@ void ImageView::draw(NVGcontext* vg, float x, float y, float w, float h,
     }
 
     if (!m_loaded)
-        return; // draw() might be called before the async thread completes
+        return; // 异步线程尚未完成时 draw() 可能被提前调用
 
     if (m_nvgImage < 0 || m_imgW == 0 || m_imgH == 0)
     {
-        // Draw a placeholder message if the image couldn't be loaded
+        // 图片加载失败时显示占位文字
         nvgFontSize(vg, 24.0f);
         nvgFillColor(vg, nvgRGBA(200, 200, 200, 200));
         nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
@@ -194,7 +192,7 @@ void ImageView::draw(NVGcontext* vg, float x, float y, float w, float h,
         return;
     }
 
-    // ── Draw image centered with current scale / offset ─────────────────────
+    // ── 以当前缩放/偏移居中绘制图像 ────────────────────────────────────────
     float scaledW = m_imgW * m_scale;
     float scaledH = m_imgH * m_scale;
     float imgX    = x + (w - scaledW) * 0.5f + m_offsetX;

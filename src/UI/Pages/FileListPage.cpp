@@ -23,29 +23,28 @@ static constexpr float CELL_PAD_V = 10.f;
 static constexpr float INFO_FONT_SIZE = 12.f;
 static constexpr float NAME_FONT_SIZE = 22.f;
 static constexpr float DETAIL_PANEL_WIDTH = 400.f;
-static constexpr float DETAIL_THUMB_SZ = DETAIL_PANEL_WIDTH - 40.f; // panel width minus horizontal padding
+static constexpr float DETAIL_THUMB_SZ = DETAIL_PANEL_WIDTH - 40.f; // 面板宽度减去水平内边距
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  File-type extension tables
+//  文件类型扩展名表
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Game Boy / Game Boy Color ROM extensions
+/// GB / GBC ROM 扩展名
 static const std::vector<std::string> k_gbExtensions = {"gb", "gbc"};
-/// Game Boy Advance ROM extensions
+/// GBA ROM 扩展名
 static const std::vector<std::string> k_gbaExtensions = {"gba"};
-/// Common image file extensions
+/// 常见图片扩展名
 static const std::vector<std::string> k_imageExtensions = {
     "png", "jpg", "jpeg", "bmp", "webp", "tga"};
-/// Common archive / compressed-file extensions
+/// 常见压缩包扩展名
 static const std::vector<std::string> k_zipExtensions = {
     "zip", "rar", "7z", "gz", "tar", "bz2", "xz", "zst"};
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Helpers
+//  辅助函数
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Returns the resource path of the icon that should represent @p item.
-/// The icon variant (_light / _dark) is selected based on @p theme.
+/// 返回代表 item 的图标资源路径，根据 theme 选择 _light/_dark 变体
 static std::string getFileIconPath(const FileListItem &item, brls::ThemeVariant theme)
 {
     // const std::string variant = (theme == brls::ThemeVariant::LIGHT) ? "_light" : "_dark";
@@ -77,7 +76,7 @@ static std::string getFileIconPath(const FileListItem &item, brls::ThemeVariant 
     return BK_RES(path_prefix + "wenjian.png");
 }
 
-/// Format a file size in bytes as a human-readable string (KB / MB / GB).
+/// 将文件大小（字节）格式化为可读字符串（KB/MB/GB）
 static std::string formatFileSize(std::uintmax_t bytes)
 {
     if (bytes < 1024)
@@ -104,7 +103,7 @@ static std::string formatFileSize(std::uintmax_t bytes)
     }
 }
 
-/// Count the direct children of a directory (0 if it cannot be read).
+/// 统计目录直接子项数量（无法读取时返回 0）
 static int countChildren(const std::string &path)
 {
     int n = 0;
@@ -118,16 +117,16 @@ static int countChildren(const std::string &path)
     }
     catch (...)
     {
-        // Ignore permission errors etc.
+        // 忽略权限错误等
     }
     return n;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Windows: enumerate available drive letters (A: … Z:)
+//  Windows：枚举可用驱动器盘符（A: … Z:）
 // ─────────────────────────────────────────────────────────────────────────────
 #ifdef _WIN32
-/// Returns a list of available drive root paths such as {"C:\\", "D:\\", "F:\\"}.
+/// 返回可用驱动器根路径列表，如 {"C:\\", "D:\\", "F:\\"}
 static std::vector<std::string> getWindowsDrives()
 {
     std::vector<std::string> drives;
@@ -161,7 +160,7 @@ FileListItemView::FileListItemView()
     setHideHighlightBackground(true);
     // setBackground(brls::ViewBackground::NONE);
 
-    // Accent rectangle on the left
+    // 左侧强调色矩形
     m_accent = new brls::Rectangle();
     m_accent->setWidth(ACCENT_W);
     m_accent->setHeight(CELL_HEIGHT - 2 * CELL_PAD_V);
@@ -180,12 +179,12 @@ FileListItemView::FileListItemView()
     // m_icon->setImageFromFile(BK_RES("img/file/file_light.png"));
     addView(m_icon);
 
-    // Name label (grows to fill space)
+    // 名称标签（自动填充剩余空间）
     m_nameLabel = new brls::Label();
     m_nameLabel->setFontSize(NAME_FONT_SIZE);
     m_nameLabel->setTextColor(GET_THEME_COLOR("brls/text"));
     m_nameLabel->setSingleLine(true);
-    // Scroll (marquee) the label when the item is focused and text overflows.
+    // 聚焦且文本溢出时滚动显示（跑马灯效果）
     m_nameLabel->setAutoAnimate(true);
     m_nameLabel->setGrow(1.0f);
     m_nameLabel->setMarginRight(CELL_PAD_H);
@@ -194,7 +193,7 @@ FileListItemView::FileListItemView()
 
     auto *box = new brls::Box(brls::Axis::COLUMN);
     box->setHeight(CELL_HEIGHT);
-    // Info label on the right (gray)
+    // 右侧信息标签（灰色）
     m_infoLabel = new brls::Label();
     m_infoLabel->setFontSize(INFO_FONT_SIZE);
     m_infoLabel->setSingleLine(true);
@@ -229,14 +228,14 @@ void FileListItemView::setItem(const FileListItem &item, int index)
         m_infoLabel->setText(formatFileSize(item.fileSize));
     }
 
-    // ButtonA → activate item
+    // A键：激活条目
     registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A, [this](brls::View *)
                    {
                        if (onItemActivated)
                            onItemActivated(m_index);
                        return true; }, false, false, brls::SOUND_CLICK);
 
-    // ButtonX → open options/sidebar
+    // X键：打开选项/侧边栏
     registerAction("beiklive/hints/operate"_i18n,
                    brls::BUTTON_X,
                    [this](brls::View *)
@@ -280,14 +279,14 @@ FileListPage::FileListPage()
     const std::string key = "UI.fileListLayoutMode";
     SettingManager->SetDefault(key, static_cast<int>(LayoutMode::ListOnly));
 
-    // Initialise logo load mode setting default (1 = load on focus)
+    // 初始化 logo 加载模式默认值（1=聚焦时加载）
     SettingManager->SetDefault("UI.logoLoadMode", 1);
 
     int layoutModeInt = *SettingManager->Get(key)->AsInt();
     bklog::debug("FileListPage: layout mode = {}", layoutModeInt);
     setLayoutMode(static_cast<LayoutMode>(layoutModeInt));
 
-    // B → navigate up
+    // B键：向上导航
     registerAction("beiklive/hints/UP"_i18n,
                    brls::BUTTON_B,
                    [this](brls::View *)
@@ -297,7 +296,7 @@ FileListPage::FileListPage()
                        return true;
                    });
 
-    // ZR (BUTTON_RT) → toggle detail panel
+    // ZR（BUTTON_RT）：切换详情面板
     registerAction("beiklive/hints/toggle_detail"_i18n,
                    brls::BUTTON_RT,
                    [this](brls::View *)
@@ -327,14 +326,14 @@ FileListPage::~FileListPage()
 
 void FileListPage::buildUI()
 {
-    // ── Header ────────────────────────────────────────────────────────────
+    // ── 头部 ──────────────────────────────────────────────────────────────
     m_header = new beiklive::UI::BrowserHeader();
     m_header->setTitle("beiklive/file/file_select"_i18n);
     m_header->setPath("/");
     m_header->setInfo("");
     addView(m_header);
 
-    // ── Content row (list + optional detail panel) ────────────────────────
+    // ── 内容行（列表 + 可选详情面板） ────────────────────────────────────────
     m_contentBox = new brls::Box(brls::Axis::ROW);
     m_contentBox->setGrow(1.0f);
     m_contentBox->setWidth(brls::View::AUTO);
@@ -348,16 +347,15 @@ void FileListPage::buildUI()
 
     addView(m_contentBox);
 
-    // List container
+    // 列表容器
     m_listBox = new brls::Box(brls::Axis::COLUMN);
     m_listBox->setWidth(brls::View::AUTO);
     m_listBox->setGrow(1.0f);
     m_contentBox->addView(m_listBox);
 
-    // ScrollingFrame replaces RecyclerFrame.
-    // Items are added as direct children of m_itemsBox (no recycling) so that
-    // focus management is straightforward and never suffers from the LIFO
-    // cell-reuse ordering bug of RecyclerFrame.
+    // 用 ScrollingFrame 替代 RecyclerFrame。
+    // 条目作为 m_itemsBox 的直接子节点管理（无回收），
+    // 焦点管理简单可靠，不受 RecyclerFrame LIFO 复用顺序缺陷影响。
     m_scrollFrame = new brls::ScrollingFrame();
     m_scrollFrame->setWidth(brls::View::AUTO);
     m_scrollFrame->setGrow(1.0f);
@@ -370,15 +368,15 @@ void FileListPage::buildUI()
 
     m_listBox->addView(m_scrollFrame);
 
-    // DataSource is no longer needed; items are managed directly in m_items.
+    // 条目直接在 m_items 中管理，无需 DataSource
 
-    // ── Detail panel (hidden initially) ──────────────────────────────────
+    // ── 详情面板（初始隐藏） ──────────────────────────────────────────────
     buildDetailPanel();
     m_detailPanel->setMarginLeft(20.f);
     m_detailPanel->setVisibility(brls::Visibility::GONE);
     m_contentBox->addView(m_detailPanel);
 
-    // ── Bottom bar ────────────────────────────────────────────────────────
+    // ── 底栏 ──────────────────────────────────────────────────────────────
     m_bottomBar = new brls::BottomBar();
     addView(m_bottomBar);
 }
@@ -390,19 +388,18 @@ void FileListPage::buildDetailPanel()
     m_detailPanel->setWidth(DETAIL_PANEL_WIDTH);
     m_detailPanel->setPadding(20.f, 12.f, 20.f, 12.f);
     m_detailPanel->setBackgroundColor(nvgRGBA(40, 40, 40, 20));
-    // Width will be set to ~33% in setLayoutMode()
+    // 宽度在 setLayoutMode() 中设为约 33%
 
-    // Use ProImage for async PNG loading.
-    // setClipsToBounds(false) fixes edge-pixel stretching: the image is drawn
-    // only in its exact aspect-ratio-correct rect (CONTAIN / FIT behaviour),
-    // so no clamped edge pixels bleed into the surrounding empty space.
+    // 使用 ProImage 异步加载 PNG。
+    // setClipsToBounds(false) 修复边缘像素拉伸问题：图像只在精确的宽高比矩形内绘制，
+    // 不会因边缘像素钳制而渗入周围空白区域。
     m_detailThumb = new beiklive::UI::ProImage();
     m_detailThumb->setWidth(DETAIL_THUMB_SZ*0.8);
     m_detailThumb->setHeight(DETAIL_THUMB_SZ*0.6);
     m_detailThumb->setScalingType(brls::ImageScalingType::FIT);
     m_detailThumb->setInterpolation(brls::ImageInterpolation::LINEAR);
     m_detailThumb->setCornerRadius(8.f);
-    m_detailThumb->setClipsToBounds(false); // prevents edge-pixel stretching
+    m_detailThumb->setClipsToBounds(false); // 防止边缘像素拉伸
     m_detailThumb->setImageFromFile(BK_APP_DEFAULT_LOGO);
     m_detailPanel->addView(m_detailThumb);
 
@@ -454,7 +451,7 @@ void FileListPage::buildDetailPanel()
     m_detailPanel->addView(m_detailPlatform);
 }
 
-// ─────────── Public API ──────────────────────────────────────────────────────
+// ─────────── 公共 API ─────────────────────────────────────────────────────────
 
 void FileListPage::navigateTo(const std::string &path)
 {
@@ -475,11 +472,9 @@ void FileListPage::resetFocusToTop()
 void FileListPage::rebuildItemViews()
 {
     bklog::debug("FileListPage::rebuildItemViews: {} items", static_cast<int>(m_items.size()));
-    // clearViews(true) schedules old views for deferred deletion via borealis'
-    // deletionPool, so Application::currentFocus remains a valid pointer until
-    // the end of the current frame even if it pointed to one of the removed
-    // views.  We immediately give focus to the first new item, ensuring the
-    // focus is safe before the old views are eventually freed.
+    // clearViews(true) 将旧视图加入 borealis 的延迟删除池，
+    // 当前帧结束前 Application::currentFocus 仍为有效指针。
+    // 立即将焦点转给第一个新条目，确保旧视图释放前焦点安全。
     m_itemsBox->clearViews(/*free=*/true);
     m_scrollFrame->setContentOffsetY(0, /*animated=*/false);
 
@@ -536,27 +531,27 @@ void FileListPage::setLayoutMode(LayoutMode mode)
 
     if (m_layoutMode == LayoutMode::ListOnly)
     {
-        // List takes full width; detail panel is hidden
+        // 列表占满宽度；隐藏详情面板
         // m_listBox->setWidthPercentage(100.f);
         m_detailPanel->setVisibility(brls::Visibility::GONE);
     }
     else // ListAndDetail
     {
-        // List occupies ~2/3; detail panel ~1/3
+        // 列表占约 2/3；详情面板约 1/3
         // m_listBox->setWidthPercentage(65.f);
         // m_detailPanel->setWidthPercentage(30.f);
         m_detailPanel->setVisibility(brls::Visibility::VISIBLE);
     }
 }
 
-// ─────────── Internal helpers ────────────────────────────────────────────────
+// ─────────── 内部辅助函数 ────────────────────────────────────────────────────
 
 std::string FileListPage::lookupMappedName(const std::string &name, bool isDir) const
 {
     if (!NameMappingManager)
         return {};
 
-    // Key = file name without extension for files; directory name for dirs
+    // key：文件取无扩展名的文件名，目录取目录名
     std::string key;
     if (isDir)
     {
@@ -578,7 +573,7 @@ std::string FileListPage::lookupLogoPath(const std::string &name) const
     if (!gamedataManager)
         return {};
 
-    // Key format: filename_without_suffix.logopath
+    // key 格式：filename_without_suffix.logopath
     std::string key = gamedataKeyPrefix(name) + "." + GAMEDATA_FIELD_LOGOPATH;
     if (auto val = gamedataManager->Get(key); val && val->AsString())
         return *val->AsString();
@@ -626,8 +621,7 @@ void FileListPage::refreshList(const std::string &path)
 
     m_items.clear();
 
-    // Determine the logo load mode from settings:
-    // 0 = do not display; 1 = load on focus (default); 2 = prefetch
+    // 从设置中获取 logo 加载模式：0=不显示；1=聚焦时加载（默认）；2=预加载
     int logoMode = 1;
     SettingManager->SetDefault("UI.logoLoadMode", 1);
     if (SettingManager && SettingManager->Contains("UI.logoLoadMode"))
@@ -656,7 +650,7 @@ void FileListPage::refreshList(const std::string &path)
         // Prefetch logo path when logoMode == 2 (prefetch) or 1 (on-focus will
         // also do the lookup in updateDetailPanel, but we store the key here)
         if (!isDir && logoMode != 0) {
-            // Initialize gamedataManager entry with defaults if needed
+            // 初始化 gamedataManager 条目（如有需要）
             beiklive::EmuPlatform platform = detectPlatform(name);
             if (platform != beiklive::EmuPlatform::None)
                 initGameData(name, platform);
@@ -682,20 +676,18 @@ void FileListPage::refreshList(const std::string &path)
         m_items.push_back(std::move(item));
     }
 
-    // When the filtered list is empty, ensure there is at least one item.
+    // 过滤后列表为空时确保至少存在一个条目
     if (m_items.empty())
     {
 #ifdef _WIN32
-        // On Windows root directories, show the drive-letter list instead so the
-        // user can navigate elsewhere.  showDriveList() always populates items.
+        // Windows 根目录下改为显示驱动器盘符列表，方便导航
         if (beiklive::file::is_root_directory(m_currentPath))
         {
             showDriveList();
-            return; // showDriveList handles rebuild and header update
+            return; // showDriveList 负责重建列表和更新头部
         }
 #endif
-        // Non-root (or non-Windows root): add a ".." entry so the user can
-        // navigate back even when every file is hidden by the active filter.
+        // 非根目录（或非 Windows 根）：添加 ".." 条目以便回退
         bklog::debug("FileListPage::refreshList: empty, adding '..' entry");
         FileListItem dotdot;
         dotdot.fileName = "..";
@@ -712,10 +704,9 @@ void FileListPage::refreshList(const std::string &path)
     }
 
     bklog::debug("FileListPage::refreshList: {} items after filter, rebuilding views", static_cast<int>(m_items.size()));
-    // Rebuild item views and reset focus to the first item.
-    // Unlike RecyclerFrame::reloadData(), this directly sets focus to the
-    // first view, which is completely reliable regardless of any internal
-    // recycler ordering or layout timing.
+    // 重建条目视图并将焦点重置到第一项。
+    // 与 RecyclerFrame::reloadData() 不同，此方法直接设置焦点，
+    // 不受回收器内部排序或布局时序影响，完全可靠。
     rebuildItemViews();
 }
 
@@ -752,7 +743,7 @@ void FileListPage::updateDetailPanel(const FileListItem &item)
     bool isGameFile = (!item.isDir && platform != beiklive::EmuPlatform::None);
 
     if (isGameFile) {
-        // Ensure entry exists in gamedataManager
+        // 确保 gamedataManager 中存在该条目
         initGameData(item.fileName, platform);
 
         std::string lastOpen  = getGameDataStr(item.fileName, GAMEDATA_FIELD_LASTOPEN, "从未游玩");
@@ -762,7 +753,7 @@ void FileListPage::updateDetailPanel(const FileListItem &item)
         if (m_detailLastOpen)  m_detailLastOpen->setText("上次游玩: " + lastOpen);
         if (m_detailPlatform)  m_detailPlatform->setText("平台: " + platStr);
 
-        // Format total time as Xh Ym Zs
+        // 格式化总游玩时长为 Xh Ym Zs
         int totalSeconds = 0;
         try { totalSeconds = std::stoi(totalSec); }
         catch (const std::invalid_argument&) { totalSeconds = 0; }
@@ -787,8 +778,8 @@ void FileListPage::updateDetailPanel(const FileListItem &item)
         m_detailInfo->setText(formatFileSize(item.fileSize));
     }
 
-    // ── Thumbnail image ────────────────────────────────────────────────────
-    // Priority 1: directory → folder icon
+    // ── 缩略图 ─────────────────────────────────────────────────────────────────
+    // 优先级1：目录 → 文件夹图标
     if (item.isDir) {
         std::string path_prefix = "img/ui/" +
             std::string((brls::Application::getPlatform()->getThemeVariant() == brls::ThemeVariant::DARK) ? "light/" : "dark/");
@@ -796,7 +787,7 @@ void FileListPage::updateDetailPanel(const FileListItem &item)
         return;
     }
 
-    // Priority 2: logo path from gamedataManager (game files)
+    // 优先级2：gamedataManager 中的 logo 路径（游戏文件）
     if (!item.logoPath.empty() &&
         beiklive::file::getPathType(item.logoPath) == beiklive::file::PathType::File)
     {
@@ -804,7 +795,7 @@ void FileListPage::updateDetailPanel(const FileListItem &item)
         return;
     }
 
-    // Re-check gamedataManager in case logoPath was set but not yet in item
+    // 再次检查 gamedataManager（可能 logoPath 已设置但未存入 item）
     if (isGameFile) {
         std::string storedLogo = getGameDataStr(item.fileName, GAMEDATA_FIELD_LOGOPATH, "");
         if (!storedLogo.empty() &&
@@ -815,7 +806,7 @@ void FileListPage::updateDetailPanel(const FileListItem &item)
         }
     }
 
-    // Priority 3: thumbnail image next to the file (same base name).
+    // 优先级3：与文件同名的缩略图（相同基础名）
     {
         auto dot = item.fullPath.rfind('.');
         if (dot != std::string::npos)
@@ -833,7 +824,7 @@ void FileListPage::updateDetailPanel(const FileListItem &item)
         }
     }
 
-    // Priority 4: default logo
+    // 优先级4：默认 logo
     m_detailThumb->setImageFromFile(BK_APP_DEFAULT_LOGO);
 }
 
@@ -855,8 +846,8 @@ void FileListPage::showDriveList()
     for (const auto &drivePath : getWindowsDrives())
     {
         FileListItem item;
-        item.fileName = drivePath.substr(0, 2); // e.g. "C:"
-        item.fullPath = drivePath;              // e.g. "C:\\"
+        item.fileName = drivePath.substr(0, 2); // 如 "C:"
+        item.fullPath = drivePath;              // 如 "C:\\"
         item.isDir = true;
         item.childCount = 0;
         m_items.push_back(std::move(item));
@@ -876,11 +867,11 @@ void FileListPage::navigateUp()
 {
     bklog::debug("FileListPage::navigateUp: currentPath='{}'", m_currentPath);
 #ifdef _WIN32
-    // When in drive-list mode, there is nowhere to go further up – silently ignore
+    // 驱动器列表模式下无处可向上导航，静默忽略
     if (m_inDriveListMode)
         return;
 
-    // When at a drive root (e.g. "C:\"), go up to the drive-letter list
+    // 在驱动器根目录（如 "C:\"）时，向上回到盘符列表
     if (beiklive::file::is_root_directory(m_currentPath))
     {
         showDriveList();

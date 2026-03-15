@@ -12,7 +12,7 @@
 using namespace brls::literals; // for _i18n
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Default ROM root (same as List_view.cpp)
+//  默认 ROM 根路径
 // ─────────────────────────────────────────────────────────────────────────────
 #if defined(__SWITCH__)
 #define ROOT_PATH "/"
@@ -23,11 +23,10 @@ using namespace brls::literals; // for _i18n
 #endif
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Internal helpers
+//  内部辅助函数
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Record the current local time as the "last opened" timestamp for @p fileName
-/// in gamedataManager.
+/// 将当前本地时间记录为 fileName 的"最近打开"时间戳
 static void recordGameOpenTime(const std::string& fileName)
 {
     auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
@@ -44,8 +43,8 @@ static void recordGameOpenTime(const std::string& fileName)
         setGameDataStr(fileName, GAMEDATA_FIELD_LASTOPEN, timeBuf);
 }
 
-/// Clear the UI image cache and push a GameView activity for @p romPath.
-/// All game launch paths should go through this helper to stay consistent.
+/// 清理 UI 图像缓存，并为 romPath 推送 GameView 活动。
+/// 所有启动游戏的路径均应经过此函数以保持一致。
 static void launchGameActivity(const std::string& romPath)
 {
     beiklive::clearUIImageCache();
@@ -65,7 +64,7 @@ StartPageView::StartPageView()
 {
     setAxis(brls::Axis::COLUMN);
 
-    // Background image (absolute positioning, does not participate in layout)
+    // 背景图片（绝对定位，不参与布局）
     // beiklive::InsertBackground(this);
 
     
@@ -80,7 +79,7 @@ void StartPageView::ActionInit()
     beiklive::swallow(gameRunner->uiParams->StartPageframe, brls::BUTTON_LT);
     beiklive::swallow(gameRunner->uiParams->StartPageframe, brls::BUTTON_RT);
 
-    // Quit action
+    // 退出操作
     gameRunner->uiParams->StartPageframe->registerAction(
         "beiklive/hints/exit"_i18n,
         brls::BUTTON_START,
@@ -113,7 +112,7 @@ void StartPageView::Init()
     bklog::debug("StartPageView::Init: done, AppPage visible");
 }
 
-// ─────────── Page creation ───────────────────────────────────────────────────
+// ─────────── 页面创建 ────────────────────────────────────────────────────────
 
 void StartPageView::refreshRecentGames()
 {
@@ -131,7 +130,7 @@ void StartPageView::refreshRecentGames()
         if (gamePath.empty())
             continue;
         std::string logoPath = getGameDataStr(fileName, GAMEDATA_FIELD_LOGOPATH, "");
-        // Prefer mapped display name from NameMappingManager, fall back to file stem
+        // 优先从 NameMappingManager 获取显示名，否则取文件名（不含扩展名）
         std::string title;
         if (NameMappingManager) {
             std::string mapKey = gamedataKeyPrefix(fileName);
@@ -155,13 +154,13 @@ void StartPageView::createAppPage()
 
     m_appPage = new AppPage();
 
-    // ── Load recent games from SettingManager ─────────────────────────────
+    // ── 从 SettingManager 加载最近游戏 ──────────────────────────────────
     refreshRecentGames();
 
     m_appPage->onGameSelected = [](const GameEntry& e) {
         bklog::info("StartPageView: launching game '{}'", e.path);
         std::string fileName = std::filesystem::path(e.path).filename().string();
-        // Record last opened time and push to recent games queue
+        // 记录最近打开时间并加入最近游戏队列
         recordGameOpenTime(fileName);
         pushRecentGame(fileName);
         bklog::info("StartPageView: pushing GameView activity for '{}'", fileName);
@@ -176,9 +175,8 @@ void StartPageView::createAppPage()
         openSettingsPage();
     };
 
-    // ── Wire X-button callback on game cards ──────────────────────────────
-    // Use a Dropdown to present game-card options (set mapping, select logo,
-    // remove from list).
+    // ── 绑定游戏卡片 X 键回调 ─────────────────────────────────────────────
+    // 使用 Dropdown 展示游戏卡片选项（设置映射名、选择封面、从列表移除）
     m_appPage->onGameOptions = [this](const GameEntry& entry) {
         AppPage* capturePage = m_appPage;
 
@@ -188,7 +186,7 @@ void StartPageView::createAppPage()
         };
         std::vector<Option> opts;
 
-        // Set display name
+        // 设置显示名
         opts.push_back({"beiklive/sidebar/set_mapping"_i18n, [entry, capturePage]() {
             std::string fileName = std::filesystem::path(entry.path).filename().string();
             std::string key = gamedataKeyPrefix(fileName);
@@ -206,7 +204,7 @@ void StartPageView::createAppPage()
                     else
                         NameMappingManager->Set(key, mapped);
                     NameMappingManager->Save();
-                    // Immediately update the card's displayed title
+                    // 立即更新卡片显示的标题
                     if (capturePage) {
                         std::string newTitle = mapped.empty()
                             ? std::filesystem::path(entry.path).stem().string()
@@ -220,7 +218,7 @@ void StartPageView::createAppPage()
                 currentMapped);
         }});
 
-        // Select logo
+        // 选择封面
         opts.push_back({"beiklive/sidebar/select_logo"_i18n, [entry, capturePage]() {
             std::string startPath = beiklive::file::getParentPath(entry.path);
             if (startPath.empty() ||
@@ -257,7 +255,7 @@ void StartPageView::createAppPage()
             brls::Application::pushActivity(new brls::Activity(frame));
         }});
 
-        // Remove from recent list
+        // 从最近列表移除
         opts.push_back({"beiklive/sidebar/remove_from_list"_i18n, [entry, capturePage]() {
             std::string fileName = std::filesystem::path(entry.path).filename().string();
             removeRecentGame(fileName);
@@ -270,14 +268,12 @@ void StartPageView::createAppPage()
             labels.push_back(o.label);
 
         std::string title = entry.title.empty() ? std::filesystem::path(entry.path).stem().string() : entry.title;
-        // Bug fix: pass opts action as dismissCb (5th arg) so it runs AFTER the
-        // Dropdown activity has been popped.  Passing it as cb (3rd arg) causes
-        // the Dropdown to call popActivity() on the newly-pushed activity instead
-        // of on itself, making the file-list close immediately.
+        // 修复：将 opts 动作传给 dismissCb（第5参数），确保在 Dropdown 弹出后再执行。
+        // 若传给 cb（第3参数），会导致 popActivity 误关刚推入的活动。
         auto* dropdown = new brls::Dropdown(
             title,
             labels,
-            [](int) {},   // cb: no-op (action executes after dismiss)
+            [](int) {},   // cb: 无操作（动作在关闭后执行）
             -1,
             [opts](int sel) {
                 if (sel >= 0 && sel < static_cast<int>(opts.size()))
@@ -288,11 +284,11 @@ void StartPageView::createAppPage()
 
 }
 
-// ─────────── Page switching ──────────────────────────────────────────────────
+// ─────────── 页面切换 ────────────────────────────────────────────────────────
 
 void StartPageView::showAppPage()
 {
-    // Add AppPage to view tree
+    // 将 AppPage 加入视图树
     createAppPage();
     addView(m_appPage);
     m_appPage->setVisibility(brls::Visibility::VISIBLE);
@@ -300,7 +296,7 @@ void StartPageView::showAppPage()
     gameRunner->uiParams->StartPageframe->setHeaderVisibility(brls::Visibility::VISIBLE);
     gameRunner->uiParams->StartPageframe->setFooterVisibility(brls::Visibility::VISIBLE);
 
-    // Transfer focus to AppPage's first focusable child
+    // 将焦点转移到 AppPage 的第一个可聚焦子节点
     brls::Application::giveFocus(m_appPage->getDefaultFocus());
 }
 
@@ -309,7 +305,7 @@ void StartPageView::openFileListPage()
     static const std::vector<std::string> IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "bmp"};
     static const std::vector<std::string> ROM_EXTENSIONS   = {"zip", "gba", "gbc", "gb"};
 
-    // ── Create a fresh FileListPage ───────────────────────────────────────────
+    // ── 创建 FileListPage ──────────────────────────────────────────────────
     auto* fileListPage = new FileListPage();
     fileListPage->setFilter({"png", "gba", "gbc", "gb"}, FileListPage::FilterMode::Whitelist);
 
@@ -317,7 +313,7 @@ void StartPageView::openFileListPage()
     container->setGrow(1.0f);
     container->setBackground(brls::ViewBackground::NONE);
 
-    // ── Wire file-open callbacks ──────────────────────────────────────────────
+    // ── 绑定文件打开回调 ──────────────────────────────────────────────────────
     for (const auto& ext : IMAGE_EXTENSIONS)
     {
         fileListPage->setFileCallback(ext, [](const FileListItem& item) {
@@ -330,36 +326,34 @@ void StartPageView::openFileListPage()
     for (const auto& ext : ROM_EXTENSIONS)
     {
         fileListPage->setFileCallback(ext, [](const FileListItem& item) {
-            // Update gamedataManager: gamepath, lastopen, platform
+            // 更新 gamedataManager：gamepath、lastopen、platform
             beiklive::EmuPlatform platform = FileListPage::detectPlatform(item.fileName);
             initGameData(item.fileName, platform);
             setGameDataStr(item.fileName, GAMEDATA_FIELD_GAMEPATH, item.fullPath);
-            // Record last opened time and push to recent games queue
+            // 记录最近打开时间并加入最近游戏队列
             recordGameOpenTime(item.fileName);
             pushRecentGame(item.fileName);
             launchGameActivity(item.fullPath);
         });
     }
 
-    // ── Navigate to last (or default) path ───────────────────────────────────
+    // ── 导航到上次（或默认）路径 ─────────────────────────────────────────────
     if (SettingManager->Contains("last_game_path"))
         fileListPage->navigateTo(*gameRunner->settingConfig->Get("last_game_path")->AsString());
     else
         fileListPage->navigateTo(ROOT_PATH);
 
-    // ── Assemble: fileListPage inside container ───────────────────────────────
+    // ── 将 fileListPage 放入 container ───────────────────────────────────────
     container->addView(fileListPage);
 
-    // ── Bind + (BUTTON_START) → pop this activity ─────────────────────────────
+    // ── 绑定 +（BUTTON_START）→ 弹出当前活动 ─────────────────────────────────
     container->registerAction(
         "beiklive/hints/close"_i18n,
         brls::BUTTON_START,
         [this](brls::View*) {
             bklog::debug("StartPageView: BUTTON_START pressed, closing file list");
             brls::Application::popActivity();
-            // Explicitly restore focus to the AppPage game cards.
-            // Without this, borealis may try to restore a stale focus that
-            // points into the now-destroyed file-list activity, causing a crash.
+            // 显式恢复 AppPage 游戏卡片的焦点，防止 borealis 尝试恢复已销毁的焦点导致崩溃
             if (m_appPage) {
                 auto* focus = m_appPage->getDefaultFocus();
                 if (focus)
@@ -369,7 +363,7 @@ void StartPageView::openFileListPage()
         },
         /*hidden=*/false, /*repeat=*/false, brls::SOUND_CLICK);
 
-    // ── Push as a new Activity ────────────────────────────────────────────────
+    // ── 作为新 Activity 推入 ──────────────────────────────────────────────────
     auto* frame = new brls::AppletFrame(container);
     frame->setHeaderVisibility(brls::Visibility::GONE);
     frame->setFooterVisibility(brls::Visibility::GONE);
@@ -409,9 +403,8 @@ void StartPageView::onFocusLost()
 
 brls::View* StartPageView::getDefaultFocus()
 {
-    // Always guide borealis focus back to the AppPage game cards so that
-    // returning from any child activity (game, file list, settings) lands
-    // on a valid, focusable view instead of whatever was last focused.
+    // 始终将 borealis 焦点引导到 AppPage 游戏卡片，
+    // 确保从任何子活动（游戏、文件列表、设置）返回时焦点落在有效视图上
     if (m_appPage) {
         auto* focus = m_appPage->getDefaultFocus();
         if (focus) {
@@ -425,14 +418,12 @@ brls::View* StartPageView::getDefaultFocus()
 void StartPageView::draw(NVGcontext* vg, float x, float y, float width, float height,
                           brls::Style style, brls::FrameContext* ctx)
 {
-    // Refresh recent games list whenever the queue has been updated
-    // (e.g. after returning from a game launched via the file list).
+    // 每帧检查最近游戏队列是否更新（如从文件列表启动游戏后返回）
     if (g_recentGamesDirty && m_appPage) {
         g_recentGamesDirty = false;
         bklog::debug("StartPageView::draw: refreshing recent games list");
         refreshRecentGames();
-        // The card row was rebuilt – give focus to the new first card so
-        // borealis doesn't try to restore the now-deleted old card focus.
+        // 重建了卡片行，将焦点转给新的第一张卡片，防止 borealis 尝试恢复已删除卡片的焦点
         auto* focus = m_appPage->getDefaultFocus();
         if (focus)
             brls::Application::giveFocus(focus);

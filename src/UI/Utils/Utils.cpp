@@ -84,12 +84,12 @@ namespace beiklive::UI
 
 
 
-    // ── RoundButton constants ────────────────────────────────────────────────
-    static constexpr float ROUND_BTN_IMAGE_SIZE = 80.0f;  // diameter of the circle
-    static constexpr float ROUND_BTN_PADDING    = 10.0f;  // padding around the whole widget
-    static constexpr float ROUND_BTN_GAP        =  6.0f;  // gap between circle and label
-    static constexpr float ROUND_BTN_LABEL_FS   = 20.0f;  // label font size
-    static constexpr float ROUND_BTN_LABEL_H    = 20.0f;  // reserved height for the label row
+    // ── RoundButton 常量 ─────────────────────────────────────────────────────
+    static constexpr float ROUND_BTN_IMAGE_SIZE = 80.0f;  // 圆形区域直径
+    static constexpr float ROUND_BTN_PADDING    = 10.0f;  // 控件整体内边距
+    static constexpr float ROUND_BTN_GAP        =  6.0f;  // 圆形与标签间距
+    static constexpr float ROUND_BTN_LABEL_FS   = 20.0f;  // 标签字号
+    static constexpr float ROUND_BTN_LABEL_H    = 20.0f;  // 标签行保留高度
 
     // ── RoundButton ──────────────────────────────────────────────────────────
 
@@ -110,8 +110,8 @@ namespace beiklive::UI
                         + ROUND_BTN_GAP
                         + ROUND_BTN_LABEL_H);
 
-        // ── Circular image wrapper ──
-        // setCornerRadius(radius) makes it appear as a circle and clips children
+        // ── 圆形图片容器 ──
+        // setCornerRadius(radius) 使其呈圆形并裁剪子视图
         m_imageWrapper = new brls::Box();
         
         m_imageWrapper->setWidth(ROUND_BTN_IMAGE_SIZE);
@@ -147,7 +147,7 @@ namespace beiklive::UI
         m_label->setFontSize(ROUND_BTN_LABEL_FS);
         m_label->setTextColor(GET_THEME_COLOR("brls/text"));
         m_label->setHorizontalAlign(brls::HorizontalAlign::CENTER);
-        m_label->setVisibility(brls::Visibility::INVISIBLE); // INVISIBLE keeps layout space
+        m_label->setVisibility(brls::Visibility::INVISIBLE); // INVISIBLE 保留布局空间
         this->addView(m_label);
 
         
@@ -201,7 +201,7 @@ namespace beiklive::UI
                            brls::Style style, brls::FrameContext* ctx)
     {
         
-        // ── 1. Hover/focus scale animation (lerp toward 1.0 focused / 0.9 unfocused) ──
+        // ── 1. 焦点缩放动画（向1.0聚焦/0.9未聚焦插值） ──
         float target = m_focused ? 1.0f : 0.9f;
         float delta  = target - m_scale;
         if (std::abs(delta) > 0.002f) {
@@ -211,15 +211,15 @@ namespace beiklive::UI
             m_scale = target;
         }
 
-        // ── 2. Click bounce animation ──
+        // ── 2. 点击弹性动画 ──
         if (m_clickAnimating) {
             m_clickT += 1.0f / 60.0f;
 
             if (m_clickT < 0.06f) {
-                // Compress phase: scale down to 0.88
+                // 压缩阶段：缩放至 0.88
                 m_clickScale = 1.0f - 0.12f * (m_clickT / 0.06f);
             } else {
-                // Damped spring release: A * e^(-bt) * sin(wt)
+                // 阻尼弹簧回弹：A * e^(-bt) * sin(wt)
                 float u      = m_clickT - 0.06f;
                 m_clickScale = 1.0f + 0.14f * std::exp(-14.0f * u) * std::sin(45.0f * u);
 
@@ -227,13 +227,13 @@ namespace beiklive::UI
                     m_clickScale     = 1.0f;
                     m_clickAnimating = false;
                     if (m_onClick)
-                        m_onClick(); // fire callback after animation completes
+                        m_onClick(); // 动画完成后触发回调
                 }
             }
             this->invalidate();
         }
 
-        // ── 3. Apply combined scale transform around the image circle centre ──
+        // ── 3. 以图片圆心为基准应用合并缩放变换 ──
         float finalScale = m_scale * m_clickScale;
         float cx         = x + w * 0.5f;
         float cy         = y + ROUND_BTN_PADDING + ROUND_BTN_IMAGE_SIZE * 0.5f;
@@ -244,11 +244,11 @@ namespace beiklive::UI
         nvgScale(vg, finalScale, finalScale);
         nvgTranslate(vg, -cx, -cy);
 
-        // ── 4. Draw borealis children (m_imageWrapper + m_label) ──
-        //       m_imageWrapper renders the brls::Image clipped by its corner radius
+        // ── 4. 绘制 borealis 子节点（m_imageWrapper + m_label） ──
+        //       m_imageWrapper 通过圆角半径裁剪渲染 brls::Image
         brls::Box::draw(vg, x, y, w, h, style, ctx);
 
-        // ── 5. Circle border overlay: accent cyan when focused, subtle grey otherwise ──
+        // ── 5. 圆形描边：聚焦时青色高亮，否则细灰边 ──
         nvgBeginPath(vg);
         nvgCircle(vg, cx, cy, radius);
         nvgStrokeWidth(vg, m_focused ? 2.5f : 1.5f);
@@ -260,9 +260,7 @@ namespace beiklive::UI
         nvgRestore(vg);
     }
 
-    // ── ButtonBar ────────────────────────────────────────────────────────────
-
-    ButtonBar::ButtonBar() : brls::Box(brls::Axis::ROW)
+    // ── ButtonBar ────────────────────────────────────────────────────────────    ButtonBar::ButtonBar() : brls::Box(brls::Axis::ROW)
     {
         this->setAlignItems(brls::AlignItems::CENTER);
         this->setJustifyContent(brls::JustifyContent::CENTER);

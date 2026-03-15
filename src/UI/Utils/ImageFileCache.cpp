@@ -13,7 +13,7 @@ const std::vector<uint8_t>* ImageFileCache::getBytes(const std::string& path) co
     auto it = m_cache.find(path);
     if (it == m_cache.end())
         return nullptr;
-    // Move to front of LRU list (most recently used)
+    // 移动到 LRU 链表头部（最近使用）
     m_lruList.splice(m_lruList.begin(), m_lruList, it->second.second);
     return &it->second.first;
 }
@@ -22,20 +22,20 @@ void ImageFileCache::storeBytes(const std::string& path, std::vector<uint8_t> by
 {
     auto it = m_cache.find(path);
     if (it != m_cache.end()) {
-        // Update existing entry and move to front
+        // 更新已有条目并移至链表头部
         it->second.first = std::move(bytes);
         m_lruList.splice(m_lruList.begin(), m_lruList, it->second.second);
         return;
     }
 
-    // Evict LRU entry if at capacity
+    // 容量已满时淘汰最久未使用的条目
     if (m_cache.size() >= MAX_ENTRIES) {
-        std::string lruKey = m_lruList.back(); // copy before pop_back invalidates the reference
+        std::string lruKey = m_lruList.back(); // 复制 key，防止 pop_back 后引用失效
         m_lruList.pop_back();
         m_cache.erase(lruKey);
     }
 
-    // Insert new entry at the front (most recently used)
+    // 在链表头部插入新条目（最近使用）
     m_lruList.push_front(path);
     m_cache.emplace(path, std::make_pair(std::move(bytes), m_lruList.begin()));
 }
