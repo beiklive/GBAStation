@@ -725,11 +725,45 @@ brls::ScrollingFrame* SettingPage::buildGameTab()
                        [](bool v){ cfgSetBool("save.autoSave", v); });
     box->addView(autoSaveCell);
 
-    auto* autoLoadState0Cell = new brls::BooleanCell();
-    autoLoadState0Cell->init("beiklive/settings/game/auto_load_state0"_i18n,
-                             cfgGetBool("save.autoLoadState0", false),
-                             [](bool v){ cfgSetBool("save.autoLoadState0", v); });
-    box->addView(autoLoadState0Cell);
+    auto* autoSaveStateCell = new brls::BooleanCell();
+    autoSaveStateCell->init("beiklive/settings/game/auto_save_state"_i18n,
+                            cfgGetBool("save.autoSaveState", false),
+                            [](bool v){ cfgSetBool("save.autoSaveState", v); });
+    box->addView(autoSaveStateCell);
+
+    {
+        // 自动存档间隔选择（0=关闭, 30, 60, 120, 300 秒）
+        static const int k_autoSaveIntervals[] = { 0, 30, 60, 120, 300 };
+        static constexpr int k_autoSaveIntervalCount = 5;
+        std::vector<std::string> intervalLabels = {
+            "beiklive/settings/game/auto_save_interval_off"_i18n,
+            "beiklive/settings/game/auto_save_interval_30s"_i18n,
+            "beiklive/settings/game/auto_save_interval_60s"_i18n,
+            "beiklive/settings/game/auto_save_interval_120s"_i18n,
+            "beiklive/settings/game/auto_save_interval_300s"_i18n,
+        };
+        int curInterval = cfgGetInt("save.autoSaveInterval", 0);
+        int intervalIdx = 0;
+        for (int i = 0; i < k_autoSaveIntervalCount; ++i)
+            if (curInterval == k_autoSaveIntervals[i]) { intervalIdx = i; break; }
+        auto* autoSaveIntervalCell = new brls::SelectorCell();
+        autoSaveIntervalCell->init("beiklive/settings/game/auto_save_interval"_i18n,
+            intervalLabels, intervalIdx,
+            [](int idx){
+                if (idx >= 0 && idx < k_autoSaveIntervalCount && SettingManager) {
+                    SettingManager->Set("save.autoSaveInterval",
+                                        beiklive::ConfigValue(k_autoSaveIntervals[idx]));
+                    SettingManager->Save();
+                }
+            });
+        box->addView(autoSaveIntervalCell);
+    }
+
+    auto* autoLoadState1Cell = new brls::BooleanCell();
+    autoLoadState1Cell->init("beiklive/settings/game/auto_load_state1"_i18n,
+                             cfgGetBool("save.autoLoadState1", false),
+                             [](bool v){ cfgSetBool("save.autoLoadState1", v); });
+    box->addView(autoLoadState1Cell);
 
     {
         auto* sramDirCell = new brls::SelectorCell();
@@ -763,6 +797,29 @@ brls::ScrollingFrame* SettingPage::buildGameTab()
             }
         );
         box->addView(stateDirCell);
+    }
+
+    // ── 截图设置 ──────────────────────────────────────────────────────────────
+    box->addView(makeHeader("beiklive/settings/game/header_screenshot"_i18n));
+
+    {
+        std::vector<std::string> screenshotDirs = {
+            "beiklive/settings/game/screenshot_dir_rom"_i18n,
+            "beiklive/settings/game/screenshot_dir_albums"_i18n,
+        };
+        auto* screenshotDirCell = new brls::SelectorCell();
+        screenshotDirCell->init(
+            "beiklive/settings/game/screenshot_dir"_i18n,
+            screenshotDirs,
+            cfgGetInt("screenshot.dir", 0),
+            [](int idx) {
+                if (SettingManager) {
+                    SettingManager->Set("screenshot.dir", beiklive::ConfigValue(idx));
+                    SettingManager->Save();
+                }
+            }
+        );
+        box->addView(screenshotDirCell);
     }
 
     // ── 金手指设置 ────────────────────────────────────────────────────────────
@@ -876,6 +933,12 @@ brls::ScrollingFrame* SettingPage::buildDisplayTab()
                       cfgGetBool("display.showRewindOverlay", true),
                       [](bool v){ cfgSetBool("display.showRewindOverlay", v); });
     box->addView(showRewCell);
+
+    auto* showMuteCell = new brls::BooleanCell();
+    showMuteCell->init("beiklive/settings/display/show_mute"_i18n,
+                       cfgGetBool("display.showMuteOverlay", true),
+                       [](bool v){ cfgSetBool("display.showMuteOverlay", v); });
+    box->addView(showMuteCell);
 
     // ── 遮罩设置 ────────────────────────────────────────────────────────────
     box->addView(makeHeader("beiklive/settings/display/header_overlay"_i18n));

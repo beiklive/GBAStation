@@ -54,7 +54,7 @@
     },
     "settings": {
         "tab": {
-            "ui": "界面设置",
+            "ui": "模拟器设置",
             "game": "游戏设置",
             "display": "画面设置",
             "audio": "声音设置",
@@ -95,6 +95,13 @@
             "idle_opt": "空闲优化",
             "header_save": "存档设置",
             "auto_save": "自动存档（退出时保存 SRAM）",
+            "auto_save_state": "自动存档（定时保存到即时存档0）",
+            "auto_save_interval": "自动存档间隔",
+            "auto_save_interval_off": "关闭",
+            "auto_save_interval_30s": "30 秒",
+            "auto_save_interval_60s": "60 秒",
+            "auto_save_interval_120s": "120 秒",
+            "auto_save_interval_300s": "300 秒",
             "sram_dir": "SRAM 存档目录",
             "state_dir": "即时存档目录",
             "same_as_rom": "与游戏同目录",
@@ -107,7 +114,11 @@
             "cheat_dir": "金手指目录",
             "cheat_auto": "（自动，见上选项）",
             "cheat_clear_auto": "清空（自动）",
-            "auto_load_state0": "启动时自动读取即时存档0 (ss0)"
+            "auto_load_state1": "启动时自动读取即时存档1 (ss1)",
+            "header_screenshot": "截图设置",
+            "screenshot_dir": "截图保存位置",
+            "screenshot_dir_rom": "游戏目录",
+            "screenshot_dir_albums": "模拟器相册"
         },
         "display": {
             "header_video": "画面显示（在游戏中调整更方便）",
@@ -118,6 +129,7 @@
             "show_fps": "显示帧率 (FPS)",
             "show_ff": "显示快进提示",
             "show_rewind": "显示倒带提示",
+            "show_mute": "显示静音提示",
             "header_overlay": "遮罩设置",
             "overlay_enable": "启用遮罩",
             "overlay_gba_path": "全局 GBA 遮罩路径 (PNG)",

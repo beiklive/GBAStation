@@ -54,7 +54,7 @@
     },
     "settings": {
         "tab": {
-            "ui": "UI Settings",
+            "ui": "Emulator Settings",
             "game": "Game",
             "display": "Display",
             "audio": "Audio",
@@ -95,6 +95,13 @@
             "idle_opt": "Idle Optimization",
             "header_save": "Save Settings",
             "auto_save": "Auto Save (SRAM on exit)",
+            "auto_save_state": "Auto Save State (periodic save to slot 0)",
+            "auto_save_interval": "Auto Save Interval",
+            "auto_save_interval_off": "Disabled",
+            "auto_save_interval_30s": "30 seconds",
+            "auto_save_interval_60s": "60 seconds",
+            "auto_save_interval_120s": "120 seconds",
+            "auto_save_interval_300s": "300 seconds",
             "sram_dir": "SRAM Save Directory",
             "state_dir": "Save State Directory",
             "same_as_rom": "Same as ROM directory",
@@ -107,7 +114,11 @@
             "cheat_dir": "Custom Cheat Directory",
             "cheat_auto": "(Auto, see option above)",
             "cheat_clear_auto": "Clear (auto)",
-            "auto_load_state0": "Auto load save state 0 (ss0) on startup"
+            "auto_load_state1": "Auto load save state 1 (ss1) on startup",
+            "header_screenshot": "Screenshot Settings",
+            "screenshot_dir": "Screenshot Save Location",
+            "screenshot_dir_rom": "Game Directory",
+            "screenshot_dir_albums": "Emulator Albums"
         },
         "display": {
             "header_video": "Video (easier to adjust in-game)",
@@ -118,6 +129,7 @@
             "show_fps": "Show FPS",
             "show_ff": "Show Fast Forward Indicator",
             "show_rewind": "Show Rewind Indicator",
+            "show_mute": "Show Mute Indicator",
             "header_overlay": "Overlay Settings",
             "overlay_enable": "Enable Overlay",
             "overlay_gba_path": "Global GBA Overlay Path (PNG)",

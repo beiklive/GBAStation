@@ -91,8 +91,12 @@ class GameView : public brls::Box
     std::atomic<int>  m_pendingQuickSave{-1};
     /// Slot number to load from (game thread reads, main thread also writes).
     std::atomic<int>  m_pendingQuickLoad{-1};
-    /// Current active quick-save slot (0-based).
-    int  m_saveSlot = 0;
+    /// Current active quick-save slot (默认1，对应 .ss1).
+    int  m_saveSlot = 1;
+
+    // ---- 截图请求 ---------------------------------------------------
+    /// 截图请求标志（游戏线程检测后截图）
+    std::atomic<bool> m_pendingScreenshot{false};
     /// Status message for save/load overlay (set from game thread, read in draw).
     mutable std::mutex  m_saveMsgMutex;
     std::string         m_saveMsg;
@@ -129,6 +133,7 @@ class GameView : public brls::Box
     bool     m_showFps           = false; ///< display.showFps
     bool     m_showFfOverlay     = true;  ///< display.showFfOverlay
     bool     m_showRewindOverlay = true;  ///< display.showRewindOverlay
+    bool     m_showMuteOverlay   = true;  ///< display.showMuteOverlay
     mutable std::mutex m_fpsMutex;
     unsigned m_fpsFrameCount = 0;
     float    m_currentFps    = 0.0f;
@@ -201,6 +206,9 @@ class GameView : public brls::Box
 
     /// Load quick-save state from @a slot.
     void doQuickLoad(int slot);
+
+    /// Capture the current video frame and save it as a PNG screenshot.
+    void doScreenshot();
 
     /// Load cheats from the .cht file associated with the current ROM.
     void loadCheats();
