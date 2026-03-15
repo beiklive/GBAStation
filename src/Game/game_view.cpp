@@ -1468,10 +1468,14 @@ void GameView::loadCheats()
             // 去除回车符（Windows 行尾兼容）
             if (!line.empty() && line.back() == '\r') line.pop_back();
             // 去除行内注释
+            auto hash = line.find('#');
+            if (hash != std::string::npos) line = line.substr(0, hash);
+            auto eq = line.find('=');
             if (eq == std::string::npos) continue;
             std::string key   = line.substr(0, eq);
             std::string value = line.substr(eq + 1);
             // 去除首尾空白和引号
+            auto trim = [](std::string s) -> std::string {
                 size_t b = s.find_first_not_of(" \t\"");
                 size_t e = s.find_last_not_of(" \t\"");
                 if (b == std::string::npos) return "";

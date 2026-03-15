@@ -38,13 +38,13 @@ ImageView::ImageView(const std::string& imagePath)
     registerAction("beiklive/hints/zoom_out"_i18n,
                     brls::BUTTON_LB,
                     [this](brls::View*) { zoomOut(); return true; },
-                    false, false, brls::SOUND_CLICK);
+                    false, true, brls::SOUND_CLICK);
 
     // RB键：放大
     registerAction("beiklive/hints/zoom_in"_i18n,
                    brls::BUTTON_RB,
                    [this](brls::View*) { zoomIn(); return true; },
-                   false, false, brls::SOUND_CLICK);
+                   false, true, brls::SOUND_CLICK);
 
     // X键：重置
     registerAction("beiklive/hints/reset"_i18n,

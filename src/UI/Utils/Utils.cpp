@@ -260,7 +260,8 @@ namespace beiklive::UI
         nvgRestore(vg);
     }
 
-    // ── ButtonBar ────────────────────────────────────────────────────────────    ButtonBar::ButtonBar() : brls::Box(brls::Axis::ROW)
+    // ── ButtonBar ────────────────────────────────────────────────────────────    
+    ButtonBar::ButtonBar() : brls::Box(brls::Axis::ROW)
     {
         this->setAlignItems(brls::AlignItems::CENTER);
         this->setJustifyContent(brls::JustifyContent::CENTER);

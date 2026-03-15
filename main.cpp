@@ -152,13 +152,8 @@ int main(int argc, char* argv[]) {
 	}
 	brls::Application::createWindow("beiklive/title"_i18n);
 
-	// On desktop platforms, inject BeikLive's own audio player so that
-	// borealis UI sound effects (button clicks, navigation, etc.) are played
-	// via native OS audio rather than the built-in NullAudioPlayer stub.
-#ifndef __SWITCH__
 	static beiklive::BKAudioPlayer g_bkAudioPlayer;
 	brls::Application::setAudioPlayer(&g_bkAudioPlayer);
-#endif
 
 	RunnerInit();
 
