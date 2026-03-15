@@ -29,7 +29,7 @@ void GameInputController::update(const brls::ControllerState& state)
 
     for (auto& action : m_actions)
     {
-        // Check whether ALL registered buttons are currently pressed.
+        // 检查所有注册按键是否同时按下
         bool allPressed = true;
         for (int btn : action.buttons)
         {
@@ -45,7 +45,7 @@ void GameInputController::update(const brls::ControllerState& state)
         {
             if (!action.active)
             {
-                // Rising edge: fire Press and record the press timestamp.
+                // 上升沿：触发 Press 并记录时间戳
                 action.active         = true;
                 action.longPressFired = false;
                 action.pressTime      = now;
@@ -53,7 +53,7 @@ void GameInputController::update(const brls::ControllerState& state)
             }
             else if (!action.longPressFired)
             {
-                // Still pressed – check for long-press threshold.
+                // 持续按下：检查长按阈值
                 auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
                                      now - action.pressTime).count();
                 if (elapsedMs >= LONG_PRESS_MS)
@@ -67,8 +67,7 @@ void GameInputController::update(const brls::ControllerState& state)
         {
             if (action.active)
             {
-                // Falling edge: fire ShortPress if no LongPress occurred,
-                // then fire Release unconditionally.
+                // 下降沿：若无长按则触发 ShortPress，然后触发 Release
                 action.active = false;
                 if (!action.longPressFired)
                 {
@@ -88,10 +87,7 @@ void GameInputController::setEnabled(bool enabled)
 
     if (!enabled)
     {
-        // Reset all action states so that no stale "active" press lingers.
-        // This prevents a spurious Release/ShortPress firing when the
-        // controller is re-enabled after the hardware buttons have been
-        // released while we were suspended.
+        // 重置所有动作状态，防止挂起期间按键释放后重新启用时触发误报
         for (auto& action : m_actions)
         {
             action.active         = false;

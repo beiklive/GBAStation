@@ -10,7 +10,7 @@
 #include <thread>
 
 // ============================================================
-// Platform-specific includes
+// 平台相关头文件
 // ============================================================
 #ifdef BK_AUDIO_ALSA
 #include <alsa/asoundlib.h>
@@ -28,26 +28,26 @@
 namespace beiklive {
 
 // ============================================================
-// Sound-name table: maps brls::Sound enum → WAV filename
+// 音效名称表：brls::Sound 枚举 → WAV 文件名映射
 // ============================================================
 static const char* SOUND_FILE_NAMES[brls::_SOUND_MAX] = {
-    nullptr,              // SOUND_NONE
-    "SeNtfBtnDecide.wav",   // SOUND_FOCUS_CHANGE
-    "SeRefreshIn.wav",    // SOUND_FOCUS_ERROR
-    "click.wav",          // SOUND_CLICK
-    "back.wav",           // SOUND_BACK
-    "focus_sidebar.wav",  // SOUND_FOCUS_SIDEBAR
-    "SeRefreshIn.wav",    // SOUND_CLICK_ERROR
-    "honk.wav",           // SOUND_HONK
-    "click_sidebar.wav",  // SOUND_CLICK_SIDEBAR
-    "StartupNso.wav",  // SOUND_TOUCH_UNFOCUS
-    "StartupNso.wav",          // SOUND_TOUCH
-    "slider_tick.wav",    // SOUND_SLIDER_TICK
-    "slider_release.wav", // SOUND_SLIDER_RELEASE
+    nullptr,              // 无音效
+    "SeNtfBtnDecide.wav",   // 焦点切换
+    "SeRefreshIn.wav",    // 焦点错误
+    "click.wav",          // 点击
+    "back.wav",           // 返回
+    "focus_sidebar.wav",  // 侧边栏焦点
+    "SeRefreshIn.wav",    // 点击错误
+    "honk.wav",           // 提示音
+    "click_sidebar.wav",  // 侧边栏点击
+    "StartupNso.wav",  // 触摸失焦
+    "StartupNso.wav",          // 触摸
+    "slider_tick.wav",    // 滑块刻度
+    "slider_release.wav", // 滑块释放
 };
 
 // ============================================================
-// Minimal WAV loader  (supports 16-bit PCM only)
+// 简易 WAV 加载器（仅支持 16-bit PCM）
 // ============================================================
 
 static uint16_t readU16LE(const uint8_t* p)
@@ -69,7 +69,7 @@ bool BKAudioPlayer::loadWav(const std::string& path, WavData& out)
     if (!f)
         return false;
 
-    // Read the whole file
+    // 读取整个文件
     fseek(f, 0, SEEK_END);
     long size = ftell(f);
     fseek(f, 0, SEEK_SET);
@@ -86,11 +86,11 @@ bool BKAudioPlayer::loadWav(const std::string& path, WavData& out)
     }
     fclose(f);
 
-    // Validate RIFF / WAVE header
+    // 验证 RIFF/WAVE 头
     if (memcmp(buf.data(), "RIFF", 4) != 0 || memcmp(buf.data() + 8, "WAVE", 4) != 0)
         return false;
 
-    // Walk chunks
+    // 遍历各块
     size_t pos = 12;
     uint16_t fmtTag = 0, channels = 0, bitsPerSample = 0;
     uint32_t sampleRate = 0;
@@ -114,7 +114,7 @@ bool BKAudioPlayer::loadWav(const std::string& path, WavData& out)
             break;
         }
         pos += 8 + chunkSize;
-        if (chunkSize & 1) ++pos; // word-align
+        if (chunkSize & 1) ++pos; // 字对齐
     }
 
     if (fmtTag != 1 || bitsPerSample != 16 || channels == 0 || sampleRate == 0
@@ -128,7 +128,7 @@ bool BKAudioPlayer::loadWav(const std::string& path, WavData& out)
     out.samples.resize(sampleCount);
     memcpy(out.samples.data(), pcmStart, pcmBytes);
 
-    // Convert mono → stereo so all paths can assume stereo output
+    // 单声道转双声道，统一输出格式
     if (channels == 1)
     {
         std::vector<int16_t> stereo(sampleCount * 2);
@@ -146,7 +146,7 @@ bool BKAudioPlayer::loadWav(const std::string& path, WavData& out)
 }
 
 // ============================================================
-// Helpers
+// 辅助函数
 // ============================================================
 
 std::string BKAudioPlayer::soundsDir()
@@ -166,7 +166,7 @@ std::string BKAudioPlayer::soundFileName(brls::Sound sound)
 }
 
 // ============================================================
-// Constructor / Destructor
+// 构造 / 析构
 // ============================================================
 
 BKAudioPlayer::BKAudioPlayer()
@@ -184,14 +184,14 @@ BKAudioPlayer::~BKAudioPlayer()
 }
 
 // ============================================================
-// AudioPlayer interface
+// AudioPlayer 接口
 // ============================================================
 
 bool BKAudioPlayer::load(brls::Sound sound)
 {
     int idx = static_cast<int>(sound);
     if (idx <= 0 || idx >= brls::_SOUND_MAX)
-        return true; // SOUND_NONE or out-of-range: silently skip
+        return true; // SOUND_NONE 或越界，静默跳过
 
     if (m_sounds[idx].loaded)
         return true;
@@ -216,30 +216,29 @@ bool BKAudioPlayer::play(brls::Sound sound, float pitch)
     if (idx <= 0 || idx >= brls::_SOUND_MAX)
         return true;
 
-    // Respect the "audio.buttonSfx" setting: when disabled, suppress all
-    // UI sound effects (button clicks, navigation sounds, etc.).
+    // 检查按键音效设置，若禁用则静默返回
     if (SettingManager) {
         auto v = SettingManager->Get(KEY_AUDIO_BUTTON_SFX);
         if (v) {
             if (auto s = v->AsString()) {
                 if (*s == "false" || *s == "0" || *s == "no")
-                    return true; // silently suppressed
+                    return true; // 已静默抑制
             } else if (auto i = v->AsInt()) {
                 if (*i == 0) return true;
             }
         }
     }
 
-    // Load on demand if not yet loaded
+    // 按需加载
     if (!m_sounds[idx].loaded)
         load(sound);
 
     if (!m_sounds[idx].loaded)
-        return false; // file missing, silently fail
+        return false; // 文件缺失，静默失败
 
     {
         std::lock_guard<std::mutex> lk(m_mutex);
-        // Overwrite any unplayed pending sound (latest-wins)
+        // 覆盖未播放的待播音效（最新优先）
         m_pendingIdx   = idx;
         m_pendingPitch = pitch;
         m_hasPending   = true;
@@ -249,7 +248,7 @@ bool BKAudioPlayer::play(brls::Sound sound, float pitch)
 }
 
 // ============================================================
-// Background playback thread
+// 后台播放线程
 // ============================================================
 
 void BKAudioPlayer::playbackThread()
@@ -272,10 +271,10 @@ void BKAudioPlayer::playbackThread()
 }
 
 // ============================================================
-// Platform-specific one-shot playback
+// 平台相关单次播放实现
 // ============================================================
 
-// ---- ALSA ---- -----------------------------------------------
+// ---- ALSA ----------------------------------------------------
 #ifdef BK_AUDIO_ALSA
 
 void BKAudioPlayer::playSoundDirect(const WavData& wav, float /*pitch*/)
@@ -311,7 +310,7 @@ void BKAudioPlayer::playSoundDirect(const WavData& wav, float /*pitch*/)
 
 void BKAudioPlayer::playSoundDirect(const WavData& wav, float /*pitch*/)
 {
-    // Build an in-memory WAV file (RIFF/fmt/data) and play via PlaySoundA.
+    // 构建内存 WAV 文件（RIFF/fmt/data）并通过 PlaySoundA 播放
     const uint32_t dataBytes  = static_cast<uint32_t>(wav.samples.size() * sizeof(int16_t));
     const uint32_t riffSize   = 36 + dataBytes;
     const uint16_t blockAlign = static_cast<uint16_t>(wav.channels * 2);
@@ -347,7 +346,7 @@ void BKAudioPlayer::playSoundDirect(const WavData& wav, float /*pitch*/)
     const uint8_t* pcm = reinterpret_cast<const uint8_t*>(wav.samples.data());
     buf.insert(buf.end(), pcm, pcm + dataBytes);
 
-    // SND_SYNC: blocks this background thread until playback completes.
+    // SND_SYNC：阻塞后台线程直到播放完成
     PlaySoundA(reinterpret_cast<LPCSTR>(buf.data()), nullptr,
                SND_MEMORY | SND_SYNC | SND_NODEFAULT);
 }
@@ -360,7 +359,7 @@ namespace {
 struct CAPlayState
 {
     const int16_t*   ptr       = nullptr;
-    size_t           remaining = 0; // stereo frames remaining
+    size_t           remaining = 0; // 剩余立体声帧数
     std::atomic<bool> done     { false };
 };
 
@@ -377,11 +376,11 @@ static OSStatus caRenderCallback(void*                       inRefCon,
     size_t toCopy = std::min(static_cast<size_t>(inNumFrames), s->remaining);
     if (toCopy > 0)
     {
-        memcpy(dst, s->ptr, toCopy * 4); // 2 channels × 2 bytes
+        memcpy(dst, s->ptr, toCopy * 4); // 2通道 × 2字节
         s->ptr       += toCopy * 2;
         s->remaining -= toCopy;
     }
-    // Silence the remainder of the callback buffer
+    // 填充回调缓冲区剩余部分为静音
     if (toCopy < inNumFrames)
     {
         memset(dst + toCopy * 2, 0,
@@ -410,7 +409,7 @@ void BKAudioPlayer::playSoundDirect(const WavData& wav, float /*pitch*/)
 
     CAPlayState state;
     state.ptr       = wav.samples.data();
-    state.remaining = wav.samples.size() / 2; // stereo frames
+    state.remaining = wav.samples.size() / 2; // 立体声帧数
 
     AURenderCallbackStruct cb { caRenderCallback, &state };
     AudioUnitSetProperty(au, kAudioUnitProperty_SetRenderCallback,
@@ -441,7 +440,7 @@ void BKAudioPlayer::playSoundDirect(const WavData& wav, float /*pitch*/)
         return;
     }
 
-    // Wait for the render callback to drain the buffer (max 5 s)
+    // 等待渲染回调耗尽缓冲区（最多5秒）
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     while (!state.done && std::chrono::steady_clock::now() < deadline)
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
@@ -451,14 +450,14 @@ void BKAudioPlayer::playSoundDirect(const WavData& wav, float /*pitch*/)
     AudioComponentInstanceDispose(au);
 }
 
-// ---- Fallback (no audio) ------------------------------------
+// ---- 无音频后端（空实现）----
 #else
 
 void BKAudioPlayer::playSoundDirect(const WavData& /*wav*/, float /*pitch*/)
 {
-    // No audio backend; silently do nothing.
+    // 无音频后端，静默空操作
 }
 
-#endif // platform backends
+#endif // 平台后端
 
 } // namespace beiklive
