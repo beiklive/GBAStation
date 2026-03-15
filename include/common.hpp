@@ -145,21 +145,8 @@ struct GameRunner {
 	Gamefile gameFile;
 	std::string currentPath;
 
-	bool rewinding; // 当前是否正在倒带
-	bool rewindEnabled; // 倒带功能是否启用
-	bool rewindMuteEnabled; // 倒带静音功能是否启用
-	int rewindBufferSize; // 倒带缓冲区大小（帧数）
-	int rewindSaveInterval; // 保存间隔（每N帧保存一次）
-	unsigned rewindFrames; // 已保存的帧数
-
-	// 用于倒带状态显示
-	bool rewindPaused; // 倒带时是否暂停
-	int rewindShowStatus; // 倒带状态显示
 
 	const char* port;
-	float fps;
-	int64_t lastFpsCheck;
-	int32_t totalDelta;
 
 	struct UIParams *uiParams; // UI 相关参数
 

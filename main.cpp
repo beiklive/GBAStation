@@ -34,18 +34,6 @@ void RunnerInit() {
 	gameRunner->nameMappingConfig = NameMappingManager;
 	gameRunner->uiParams = new beiklive::UIParams();
 	gameRunner->port = "switch";
-	gameRunner->fps = 0;
-	gameRunner->lastFpsCheck = 0;
-	gameRunner->totalDelta = 0;
-	gameRunner->rewinding = false;
-	gameRunner->rewindEnabled = false;
-	gameRunner->rewindMuteEnabled = false;
-	gameRunner->rewindBufferSize = REWIND_BUFFER_DEFAULT;
-	gameRunner->rewindSaveInterval = REWIND_SAVE_INTERVAL_DEFAULT;
-	gameRunner->rewindFrames = 0;
-	gameRunner->rewindPaused = false;
-	gameRunner->rewindShowStatus = 0;
-
 
     gameRunner->settingConfig->SetDefault(KEY_UI_START_PAGE, 0); 
 
@@ -88,17 +76,7 @@ void ConfigManagerInit() {
 	} else {
 		brls::Logger::info("Configuration loaded successfully from setting.cfg.");
 		if (!SettingManager->Contains("platform")) {
-#ifdef SWITCH
 			SettingManager->Set("platform", "switch");
-#elif defined(WIN32)
-			SettingManager->Set("platform", "windows");
-#elif defined(__linux__)
-			SettingManager->Set("platform", "linux");
-#elif defined(__APPLE__)
-			SettingManager->Set("platform", "macos");
-#else
-			SettingManager->Set("platform", "unknown");
-#endif
 			brls::Logger::info("Platform information saved to setting.cfg.");
 		}
 	}
