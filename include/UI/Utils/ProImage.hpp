@@ -15,20 +15,20 @@
 namespace beiklive::UI
 {
 
-/// Shader animation types supported by ProImage
+/// ProImage 支持的着色器动画类型
 enum class ShaderAnimationType
 {
-    NONE,           ///< No animation
-    PSP_XMB_RIPPLE, ///< PSP XMB-style wavy ribbon ripple background (GL shader)
+    NONE,           ///< 无动画
+    PSP_XMB_RIPPLE, ///< PSP XMB 风格波纹背景（GL 着色器）
 };
 
 /**
- * ProImage – an enhanced brls::Image widget.
+ * ProImage – 增强版 brls::Image 组件。
  *
- * Features:
- *  - Kawase Blur: optional multi-pass box-blur approximation drawn via NanoVG.
- *  - Shader Animation: PSP XMB ripple waves rendered via OpenGL GLSL shaders.
- *  - Async PNG image loading with file-byte cache support.
+ * 功能：
+ *  - Kawase 模糊：通过 NanoVG 实现的多遍盒式模糊。
+ *  - 着色器动画：通过 OpenGL GLSL 渲染 PSP XMB 波纹效果。
+ *  - 异步 PNG 图片加载，支持文件字节缓存。
  */
 class ProImage : public brls::Image
 {
@@ -36,70 +36,68 @@ class ProImage : public brls::Image
     ProImage();
     ~ProImage() override;
 
-    // ── Kawase Blur ──────────────────────────────────────────────────────────
+    // ── Kawase 模糊 ──────────────────────────────────────────────────────────
 
-    /// Enable/disable Kawase-style blur overlay on the image.
+    /// 启用/禁用图片上的 Kawase 模糊效果。
     void setBlurEnabled(bool enabled);
     bool isBlurEnabled() const;
 
-    /// Blur radius in pixels. Higher values produce stronger blur. Default 8.
+    /// 模糊半径（像素），值越大效果越强，默认 8。
     void setBlurRadius(float radius);
     float getBlurRadius() const;
 
-    // ── Async image loading ───────────────────────────────────────────────────
+    // ── 异步图片加载 ─────────────────────────────────────────────────────────
 
     /**
-     * Load an image file asynchronously (PNG only).
-     * - Checks the ImageFileCache first (main-thread byte cache).
-     * - On a cache miss, reads the file on a background thread, stores the
-     *   bytes in the cache, then creates the NVG texture on the main thread.
-     * - While loading, draw() shows a "加载中..." placeholder text.
-     * - Calling this again before a previous load completes cancels the
-     *   previous load (the result is discarded via a generation counter).
+     * 异步加载图片文件（仅 PNG）。
+     * - 优先检查 ImageFileCache（主线程字节缓存）。
+     * - 未命中时在后台线程读取文件，存入缓存，再在主线程创建 NVG 纹理。
+     * - 加载期间 draw() 显示"加载中..."占位文字。
+     * - 在上一次加载完成前再次调用会取消上次加载（通过生成计数器丢弃结果）。
      */
     void setImageFromFileAsync(const std::string& path);
 
-    // ── Shader Animation ─────────────────────────────────────────────────────
+    // ── 着色器动画 ───────────────────────────────────────────────────────────
 
     void setShaderAnimation(ShaderAnimationType type);
     ShaderAnimationType getShaderAnimation() const;
 
-    /// Set the background base colour for the PSP XMB ripple shader.
-    /// r, g, b are in the [0, 1] range. Default is a dark navy blue.
+    /// 设置 PSP XMB 波纹着色器的背景基色。
+    /// r、g、b 范围 [0, 1]，默认深海军蓝。
     void setXmbBgColor(float r, float g, float b);
 
-    // ── Override ─────────────────────────────────────────────────────────────
+    // ── 覆写 ─────────────────────────────────────────────────────────────────
 
     void draw(NVGcontext* vg, float x, float y, float w, float h,
               brls::Style style, brls::FrameContext* ctx) override;
 
   private:
-    // Blur
+    // 模糊
     bool  m_blurEnabled = false;
     float m_blurRadius  = 8.0f;
 
-    // Shader animation
+    // 着色器动画
     ShaderAnimationType m_shaderAnimation = ShaderAnimationType::NONE;
-    float m_animTime = 0.0f; ///< elapsed time in seconds (advances by real delta)
-    /// Timestamp of last shader time update.
+    float m_animTime = 0.0f; ///< 已流逝秒数（按真实帧间隔累加）
+    /// 上次着色器时间更新时间戳。
     std::chrono::steady_clock::time_point m_shaderLastTime;
     bool m_shaderTimerStarted = false;
 
-    // PSP XMB background colour (RGB, [0,1])
+    // PSP XMB 背景色（RGB，[0,1]）
     float m_xmbBgR = 0.05f;
     float m_xmbBgG = 0.10f;
     float m_xmbBgB = 0.25f;
 
 #ifdef BOREALIS_USE_OPENGL
-    // ── PSP XMB GL shader resources ──────────────────────────────────────────
-    GLuint m_xmbProgram  = 0;  ///< compiled GLSL shader program
-    GLuint m_xmbVAO      = 0;  ///< vertex array object for fullscreen quad
-    GLuint m_xmbVBO      = 0;  ///< vertex buffer for fullscreen quad
-    GLuint m_xmbFbo      = 0;  ///< framebuffer object for off-screen render
-    GLuint m_xmbFboTex   = 0;  ///< colour attachment texture
-    int    m_xmbFboW     = 0;  ///< current FBO texture width
-    int    m_xmbFboH     = 0;  ///< current FBO texture height
-    int    m_xmbNvgImage = -1; ///< NanoVG image handle for m_xmbFboTex
+    // ── PSP XMB GL 着色器资源 ────────────────────────────────────────────────
+    GLuint m_xmbProgram  = 0;  ///< 已编译的 GLSL 着色器程序
+    GLuint m_xmbVAO      = 0;  ///< 全屏四边形顶点数组对象
+    GLuint m_xmbVBO      = 0;  ///< 全屏四边形顶点缓冲
+    GLuint m_xmbFbo      = 0;  ///< 离屏渲染帧缓冲对象
+    GLuint m_xmbFboTex   = 0;  ///< 颜色附件纹理
+    int    m_xmbFboW     = 0;  ///< 当前 FBO 纹理宽度
+    int    m_xmbFboH     = 0;  ///< 当前 FBO 纹理高度
+    int    m_xmbNvgImage = -1; ///< m_xmbFboTex 的 NanoVG 图像句柄
     bool   m_xmbInited   = false;
 
     GLint  m_xmbUTime       = -1;
@@ -114,9 +112,9 @@ class ProImage : public brls::Image
 
     void drawBlur(NVGcontext* vg, float x, float y, float w, float h, NVGpaint basePaint);
 
-    // ── Async loading state ──────────────────────────────────────────────────
-    bool               m_asyncLoading = false; ///< true while an async load is in progress
-    std::atomic<int>   m_asyncGen{0};           ///< incremented on each new async request
+    // ── 异步加载状态 ──────────────────────────────────────────────────────────
+    bool               m_asyncLoading = false; ///< 异步加载进行中时为 true
+    std::atomic<int>   m_asyncGen{0};           ///< 每次新异步请求时递增
 };
 
 } // namespace beiklive::UI
