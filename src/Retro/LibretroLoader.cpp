@@ -10,16 +10,15 @@
 #  define WIN32_LEAN_AND_MEAN
 #  include <windows.h>
 #elif defined(__PSV__) || defined(__psp2__) || defined(__SWITCH__)
-// PSVita / Nintendo Switch have no POSIX dynamic linker.
-// All dynXxx helpers return nullptr / no-op so LibretroLoader::load() fails
-// gracefully at runtime.
+// PSVita / Nintendo Switch 不支持 POSIX 动态链接器。
+// dynXxx 函数均返回 nullptr 或空操作，load() 会在运行时优雅失败。
 #else
 #  include <dlfcn.h>
 #endif
 
-// ---- Pixel format helpers -------------------------------------------
+// ---- 像素格式辅助函数 -------------------------------------------
 
-/// Construct an RGBA8888 pixel (as little-endian uint32: bytes [R,G,B,A]).
+/// 构造 RGBA8888 像素（小端 uint32：字节序 [R,G,B,A]）。
 static inline uint32_t makeRGBA8888(uint8_t r, uint8_t g, uint8_t b)
 {
     return static_cast<uint32_t>(r)
@@ -28,9 +27,9 @@ static inline uint32_t makeRGBA8888(uint8_t r, uint8_t g, uint8_t b)
          | 0xFF000000u;
 }
 
-// ---- Libretro log interface callback --------------------------------
+// ---- Libretro 日志接口回调 --------------------------------
 
-/// Forwards core log messages to stderr so clock/RTC errors are visible.
+/// 将核心日志输出到 stderr，便于查看时钟/RTC 错误。
 static void RETRO_CALLCONV s_coreLogCallback(enum retro_log_level level,
                                               const char* fmt, ...)
 {
@@ -44,20 +43,20 @@ static void RETRO_CALLCONV s_coreLogCallback(enum retro_log_level level,
     va_end(args);
 }
 
-// ---- Libretro performance interface callbacks -----------------------
-// Provided to cores via RETRO_ENVIRONMENT_GET_PERF_INTERFACE.
-// get_time_usec is the primary clock used by cores for RTC and timing;
-// the counter/register/start/stop callbacks support optional profiling.
+// ---- Libretro 性能接口回调 -----------------------
+// 通过 RETRO_ENVIRONMENT_GET_PERF_INTERFACE 提供给核心。
+// get_time_usec 是核心用于 RTC 和计时的主时钟；
+// counter/register/start/stop 回调支持可选的性能分析。
 
-/// Returns the current wall-clock time as microseconds since the Unix epoch.
+/// 返回自 Unix 纪元以来的当前墙钟时间（微秒）。
 static retro_time_t RETRO_CALLCONV s_perfGetTimeUsec(void)
 {
 #if defined(_WIN32)
     FILETIME ft;
     GetSystemTimeAsFileTime(&ft);
-    // FILETIME counts 100-nanosecond intervals since 1601-01-01.
-    // Convert to microseconds since the Unix epoch (1970-01-01).
-    // 134774 days × 86400 s/day = 11644473600 seconds between the two epochs.
+    // FILETIME 以 100 纳秒为单位，起点为 1601-01-01。
+    // 换算为自 Unix 纪元（1970-01-01）起的微秒数。
+    // 两个纪元相差 134774 天 × 86400 秒 = 11644473600 秒。
     static const uint64_t k_fileTimeToUnixEpochSeconds = 11644473600ULL;
     uint64_t t = ((uint64_t)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
     return (retro_time_t)(t / 10LL - (int64_t)(k_fileTimeToUnixEpochSeconds * 1000000ULL));
@@ -68,7 +67,7 @@ static retro_time_t RETRO_CALLCONV s_perfGetTimeUsec(void)
 #endif
 }
 
-/// Returns a high-resolution monotonic counter tick.
+/// 返回高精度单调计数器的当前 tick 值。
 static retro_perf_tick_t RETRO_CALLCONV s_perfGetCounter(void)
 {
 #if defined(_WIN32)
@@ -83,13 +82,13 @@ static retro_perf_tick_t RETRO_CALLCONV s_perfGetCounter(void)
 #endif
 }
 
-/// Marks a performance counter as registered so the core knows it is valid.
+/// 将性能计数器标记为已注册。
 static void RETRO_CALLCONV s_perfRegister(struct retro_perf_counter* counter)
 {
     if (counter) counter->registered = true;
 }
 
-/// Records the start tick and increments the call count of a counter.
+/// 记录起始 tick 并递增调用次数。
 static void RETRO_CALLCONV s_perfStart(struct retro_perf_counter* counter)
 {
     if (counter) {
@@ -98,7 +97,7 @@ static void RETRO_CALLCONV s_perfStart(struct retro_perf_counter* counter)
     }
 }
 
-/// Accumulates elapsed ticks into the counter total.
+/// 将已用 tick 累加到计数器总量。
 static void RETRO_CALLCONV s_perfStop(struct retro_perf_counter* counter)
 {
     if (counter) {
@@ -106,19 +105,19 @@ static void RETRO_CALLCONV s_perfStop(struct retro_perf_counter* counter)
     }
 }
 
-/// No-op perf log: host does not print core profiling data.
+/// 空操作日志：宿主不打印核心性能数据。
 static void RETRO_CALLCONV s_perfLog(void) {}
 
-/// Returns 0 – no special CPU features are advertised by the host.
+/// 返回 0——宿主不向核心通告任何 CPU 特性。
 static uint64_t RETRO_CALLCONV s_perfGetCpuFeatures(void) { return 0; }
 
 namespace beiklive {
 
-// ---- Static instance pointer ----------------------------------------
+// ---- 静态实例指针 ----------------------------------------
 LibretroLoader* LibretroLoader::s_current = nullptr;
 
 // ============================================================
-// Dynamic library helpers
+// 动态库辅助函数
 // ============================================================
 
 static void* dynOpen(const std::string& path)
@@ -127,7 +126,7 @@ static void* dynOpen(const std::string& path)
     return reinterpret_cast<void*>(LoadLibraryA(path.c_str()));
 #elif defined(__PSV__) || defined(__psp2__) || defined(__SWITCH__)
     (void)path;
-    return nullptr; // dynamic loading not supported on PSVita / Switch
+    return nullptr; // PSVita / Switch 不支持动态加载
 #else
     return dlopen(path.c_str(), RTLD_LAZY | RTLD_LOCAL);
 #endif
@@ -154,7 +153,7 @@ static void dynClose(void* handle)
 #if defined(_WIN32)
     FreeLibrary(reinterpret_cast<HMODULE>(handle));
 #elif defined(__PSV__) || defined(__psp2__) || defined(__SWITCH__)
-    (void)handle; // no-op on PSVita / Switch
+    (void)handle; // PSVita / Switch 上为空操作
 #else
     dlclose(handle);
 #endif
@@ -167,14 +166,14 @@ static void* dynSym(void* handle, const char* name)
         GetProcAddress(reinterpret_cast<HMODULE>(handle), name));
 #elif defined(__PSV__) || defined(__psp2__) || defined(__SWITCH__)
     (void)handle; (void)name;
-    return nullptr; // no-op on PSVita / Switch
+    return nullptr; // PSVita / Switch 上为空操作
 #else
     return dlsym(handle, name);
 #endif
 }
 
 // ============================================================
-// Symbol resolution helper
+// 符号解析辅助函数
 // ============================================================
 
 template<typename T>
@@ -188,7 +187,7 @@ bool LibretroLoader::resolveSymbol(T& fnPtr, const char* name)
 }
 
 // ============================================================
-// load / unload
+// 加载 / 卸载
 // ============================================================
 
 bool LibretroLoader::load(const std::string& libPath)
@@ -196,10 +195,9 @@ bool LibretroLoader::load(const std::string& libPath)
     unload();
 
 #ifdef __SWITCH__
-    // On Switch, mgba_libretro.a is statically linked into the binary.
-    // The retro_* symbols are resolved at link time – no dlopen needed.
-    // libretro.h (included via LibretroLoader.hpp) already provides the
-    // extern "C" declarations for all entry points.
+    // Switch 上 mgba_libretro.a 静态链接到二进制文件中，
+    // retro_* 符号在链接期解析，无需 dlopen。
+    // libretro.h（通过 LibretroLoader.hpp 包含）已声明所有入口点。
     fn_set_environment        = retro_set_environment;
     fn_set_video_refresh      = retro_set_video_refresh;
     fn_set_audio_sample       = retro_set_audio_sample;
@@ -223,7 +221,7 @@ bool LibretroLoader::load(const std::string& libPath)
     fn_cheat_set              = retro_cheat_set;
     fn_get_memory_data        = retro_get_memory_data;
     fn_get_memory_size        = retro_get_memory_size;
-    m_handle = reinterpret_cast<void*>(1); // sentinel: symbols are bound
+    m_handle = reinterpret_cast<void*>(1); // 哨兵值：符号已绑定
 #else
     m_handle = dynOpen(libPath);
     if (!m_handle) {
@@ -251,7 +249,7 @@ bool LibretroLoader::load(const std::string& libPath)
     ok &= resolveSymbol(fn_unserialize,             "retro_unserialize");
     ok &= resolveSymbol(fn_load_game,               "retro_load_game");
     ok &= resolveSymbol(fn_unload_game,             "retro_unload_game");
-    // Optional symbols: do not fail if absent
+    // 可选符号：缺失时不报错
     resolveSymbol(fn_cheat_reset,               "retro_cheat_reset");
     resolveSymbol(fn_cheat_set,                 "retro_cheat_set");
     resolveSymbol(fn_get_memory_data,           "retro_get_memory_data");
@@ -264,7 +262,7 @@ bool LibretroLoader::load(const std::string& libPath)
     }
 #endif
 
-    // Register static callbacks (must happen before retro_init)
+    // 注册静态回调（须在 retro_init 前调用）
     s_current = this;
     fn_set_environment        (s_environmentCallback);
     fn_set_video_refresh      (s_videoRefreshCallback);
@@ -293,7 +291,7 @@ void LibretroLoader::unload()
     if (s_current == this) {
         s_current = nullptr;
     }
-    // Reset function pointers
+    // 清空函数指针
     fn_set_environment         = nullptr;
     fn_set_video_refresh       = nullptr;
     fn_set_audio_sample        = nullptr;
@@ -320,7 +318,7 @@ void LibretroLoader::unload()
 }
 
 // ============================================================
-// Core lifecycle
+// 核心生命周期
 // ============================================================
 
 bool LibretroLoader::initCore()
@@ -403,7 +401,7 @@ bool LibretroLoader::unserialize(const void* data, size_t size)
 }
 
 // ============================================================
-// Video / Audio accessors
+// 视频 / 音频访问器
 // ============================================================
 
 LibretroLoader::VideoFrame LibretroLoader::getVideoFrame() const
@@ -422,7 +420,7 @@ bool LibretroLoader::drainAudio(std::vector<int16_t>& out)
 }
 
 // ============================================================
-// Input
+// 输入
 // ============================================================
 
 void LibretroLoader::setButtonState(unsigned id, bool pressed)
@@ -437,7 +435,7 @@ bool LibretroLoader::getButtonState(unsigned id) const
 }
 
 // ============================================================
-// Memory (SRAM)
+// 内存（SRAM）
 // ============================================================
 
 void* LibretroLoader::getMemoryData(unsigned id) const
@@ -453,7 +451,7 @@ size_t LibretroLoader::getMemorySize(unsigned id) const
 }
 
 // ============================================================
-// Cheats
+// 金手指
 // ============================================================
 
 void LibretroLoader::cheatReset()
@@ -467,7 +465,7 @@ void LibretroLoader::cheatSet(unsigned index, bool enabled, const std::string& c
 }
 
 // ============================================================
-// Static callbacks (libretro C interface)
+// 静态回调（libretro C 接口）
 // ============================================================
 
 bool LibretroLoader::s_environmentCallback(unsigned cmd, void* data)
@@ -506,7 +504,7 @@ bool LibretroLoader::s_environmentCallback(unsigned cmd, void* data)
             return true;
         }
         case RETRO_ENVIRONMENT_GET_LIBRETRO_PATH: {
-            // Return current directory
+            // 返回当前目录
             const char** dir = static_cast<const char**>(data);
             if (dir) *dir = ".";
             return true;
@@ -520,21 +518,21 @@ bool LibretroLoader::s_environmentCallback(unsigned cmd, void* data)
         }
         case RETRO_ENVIRONMENT_SHUTDOWN:
             return true;
-        // ---- Core options version: report 0 to use legacy SET_VARIABLES ----
+        // ---- 核心选项版本：返回 0 以使用旧版 SET_VARIABLES ----
         case RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION: {
             unsigned* ver = static_cast<unsigned*>(data);
             if (ver) *ver = 0;
             return true;
         }
-        // ---- Core declares its variables with defaults ----------------------
+        // ---- 核心声明变量及默认值 ----------------------
         case RETRO_ENVIRONMENT_SET_VARIABLES: {
             const retro_variable* vars = static_cast<const retro_variable*>(data);
             if (!vars || !s_current->m_configManager) return false;
             beiklive::ConfigManager* cfg = s_current->m_configManager;
             for (const retro_variable* v = vars; v->key; ++v) {
                 if (!v->value) continue;
-                // Format: "Description text; default_val|opt2|opt3..."
-                // The first option after "; " is the default value.
+                // 格式："描述文本; 默认值|选项2|选项3..."
+                // "; " 后的第一个选项为默认值。
                 std::string valStr(v->value);
                 size_t semiPos = valStr.find("; ");
                 if (semiPos == std::string::npos) continue;
@@ -549,7 +547,7 @@ bool LibretroLoader::s_environmentCallback(unsigned cmd, void* data)
             cfg->Save();
             return true;
         }
-        // ---- Core queries a variable value ---------------------------------
+        // ---- 核心查询变量值 ---------------------------------
         case RETRO_ENVIRONMENT_GET_VARIABLE: {
             retro_variable* var = static_cast<retro_variable*>(data);
             if (!var || !var->key) return false;
@@ -560,7 +558,7 @@ bool LibretroLoader::s_environmentCallback(unsigned cmd, void* data)
             if (!entry) return false;
             auto str = entry->AsString();
             if (!str) return false;
-            // Store in persistent map so the c_str() pointer remains valid.
+            // 存入持久 map，确保 c_str() 指针始终有效。
             auto& stored = s_current->m_coreVarStorage[var->key];
             stored = *str;
             var->value = stored.c_str();
@@ -628,13 +626,13 @@ void LibretroLoader::s_videoRefreshCallback(const void* data,
     const uint8_t* src = static_cast<const uint8_t*>(data);
 
     if (s_current->m_pixelFormat == RETRO_PIXEL_FORMAT_XRGB8888) {
-        // Source bytes per row: pitch (may be wider than width*4)
-        // Convert XRGB8888 [B,G,R,X] → RGBA8888 [R,G,B,0xFF]
+        // 源每行字节数为 pitch（可能宽于 width*4）
+        // 将 XRGB8888 [B,G,R,X] 转换为 RGBA8888 [R,G,B,0xFF]
         for (unsigned row = 0; row < height; ++row) {
             const uint32_t* srcRow = reinterpret_cast<const uint32_t*>(src + row * pitch);
             uint32_t*       dstRow = vf.pixels.data() + row * width;
             for (unsigned col = 0; col < width; ++col) {
-                uint32_t px = srcRow[col]; // little-endian: byte0=B, byte1=G, byte2=R, byte3=X
+                uint32_t px = srcRow[col]; // 小端：byte0=B, byte1=G, byte2=R, byte3=X
                 dstRow[col] = makeRGBA8888(
                     static_cast<uint8_t>((px >> 16) & 0xFF),
                     static_cast<uint8_t>((px >>  8) & 0xFF),
@@ -642,8 +640,8 @@ void LibretroLoader::s_videoRefreshCallback(const void* data,
             }
         }
     } else if (s_current->m_pixelFormat == RETRO_PIXEL_FORMAT_RGB565) {
-        // RGB565: 16-bit pixels — expand to RGBA8888 using bit-shift approximation
-        // Bit layout: RRRRR_GGGGGG_BBBBB (bits 15-11=R, 10-5=G, 4-0=B)
+        // RGB565：16 位像素，用位移近似扩展为 RGBA8888
+        // 位布局：RRRRR_GGGGGG_BBBBB（位 15-11=R，10-5=G，4-0=B）
         for (unsigned row = 0; row < height; ++row) {
             const uint16_t* srcRow = reinterpret_cast<const uint16_t*>(src + row * pitch);
             uint32_t*       dstRow = vf.pixels.data() + row * width;
@@ -652,8 +650,8 @@ void LibretroLoader::s_videoRefreshCallback(const void* data,
                 uint8_t r5 = (px >> 11) & 0x1F;
                 uint8_t g6 = (px >>  5) & 0x3F;
                 uint8_t b5 =  px        & 0x1F;
-                // Expand 5-bit → 8-bit: (v << 3) | (v >> 2)
-                // Expand 6-bit → 8-bit: (v << 2) | (v >> 4)
+                // 5 位扩展为 8 位：(v << 3) | (v >> 2)
+                // 6 位扩展为 8 位：(v << 2) | (v >> 4)
                 dstRow[col] = makeRGBA8888(
                     static_cast<uint8_t>((r5 << 3) | (r5 >> 2)),
                     static_cast<uint8_t>((g6 << 2) | (g6 >> 4)),
@@ -661,17 +659,17 @@ void LibretroLoader::s_videoRefreshCallback(const void* data,
             }
         }
     } else {
-        // RETRO_PIXEL_FORMAT_0RGB1555 (default libretro format):
-        // 16-bit pixels, bit layout: 0_RRRRR_GGGGG_BBBBB (bit15=0, 14-10=R, 9-5=G, 4-0=B)
+        // RETRO_PIXEL_FORMAT_0RGB1555（libretro 默认格式）：
+        // 16 位像素，位布局：0_RRRRR_GGGGG_BBBBB（位15=0，14-10=R，9-5=G，4-0=B）
         for (unsigned row = 0; row < height; ++row) {
             const uint16_t* srcRow = reinterpret_cast<const uint16_t*>(src + row * pitch);
             uint32_t*       dstRow = vf.pixels.data() + row * width;
             for (unsigned col = 0; col < width; ++col) {
                 uint16_t px = srcRow[col];
-                uint8_t r5 = (px >> 10) & 0x1F;  // bits 14-10
-                uint8_t g5 = (px >>  5) & 0x1F;  // bits 9-5
-                uint8_t b5 =  px        & 0x1F;  // bits 4-0
-                // Expand 5-bit → 8-bit: (v << 3) | (v >> 2)
+                uint8_t r5 = (px >> 10) & 0x1F;  // 位 14-10
+                uint8_t g5 = (px >>  5) & 0x1F;  // 位 9-5
+                uint8_t b5 =  px        & 0x1F;  // 位 4-0
+                // 5 位扩展为 8 位：(v << 3) | (v >> 2)
                 dstRow[col] = makeRGBA8888(
                     static_cast<uint8_t>((r5 << 3) | (r5 >> 2)),
                     static_cast<uint8_t>((g5 << 3) | (g5 >> 2)),
@@ -694,15 +692,14 @@ size_t LibretroLoader::s_audioSampleBatchCallback(const int16_t* data, size_t fr
     if (!s_current || !data) return frames;
     std::lock_guard<std::mutex> lk(s_current->m_audioMutex);
     auto& buf = s_current->m_audioBuffer;
-    const size_t samples = frames * 2; // stereo
+    const size_t samples = frames * 2; // 立体声
     buf.insert(buf.end(), data, data + samples);
     return frames;
 }
 
 void LibretroLoader::s_inputPollCallback()
 {
-    // Input state is updated from the main thread before retro_run();
-    // nothing to do here.
+    // 输入状态由主线程在 retro_run() 前更新，此处无需处理。
 }
 
 int16_t LibretroLoader::s_inputStateCallback(unsigned port, unsigned device,
