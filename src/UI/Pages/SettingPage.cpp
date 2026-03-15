@@ -16,7 +16,7 @@
 #include <cmath>
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Config helpers (declared in common.hpp / implemented in common.cpp)
+//  配置辅助函数（声明于 common.hpp）
 // ─────────────────────────────────────────────────────────────────────────────
 
 using beiklive::cfgGetBool;
@@ -27,7 +27,7 @@ using beiklive::cfgSetStr;
 using beiklive::cfgSetBool;
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Layout helpers
+//  布局辅助函数
 // ─────────────────────────────────────────────────────────────────────────────
 
 static brls::ScrollingFrame* makeScrollTab()
@@ -60,7 +60,7 @@ static int findIndex(const std::vector<std::string>& options,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  KeyCaptureView  (Activity-page based key capture)
+//  KeyCaptureView（按键捕获全屏页）
 // ─────────────────────────────────────────────────────────────────────────────
 
 struct CapKbdKey { const char* name; brls::BrlsKeyboardScancode sc; };
@@ -114,12 +114,11 @@ static const CapPadKey k_capPadKeys[] = {
 static constexpr int k_capPadKeyCount =
     static_cast<int>(sizeof(k_capPadKeys) / sizeof(k_capPadKeys[0]));
 
-static constexpr int k_capMaxKeys = 2; ///< Maximum number of keys in a captured combo
+static constexpr int k_capMaxKeys = 2; ///< 组合键最大按键数
 
-/// Full-screen key-capture page pushed as a new Activity.
-/// Polls for keyboard / gamepad input every frame (via draw()) and fires
-/// onDone(result) when a key is detected or the 5-second countdown expires.
-/// All borealis navigation actions are consumed so they don't interfere.
+/// 按键捕获全屏页，以 Activity 形式推入。
+/// 每帧通过 draw() 轮询键盘/手柄输入，检测到按键或 5 秒倒计时结束后调用 onDone(result)。
+/// 所有 borealis 导航操作均被消费，避免干扰捕获过程。
 class KeyCaptureView : public brls::Box
 {
 public:
@@ -163,9 +162,8 @@ public:
 
         m_startTime = std::chrono::steady_clock::now();
 
-        // Consume all gamepad navigation buttons so they don't trigger
-        // any parent-view actions or close this page prematurely.
-        // For gamepad mode, each button press also captures the binding.
+        // 消费所有手柄导航键，防止触发父视图操作或提前关闭页面。
+        // 手柄模式下，每次按键也会同时捕获绑定。
         static const brls::ControllerButton k_swallowBtns[] = {
             brls::BUTTON_A, brls::BUTTON_B, brls::BUTTON_X, brls::BUTTON_Y,
             brls::BUTTON_LB, brls::BUTTON_RB, brls::BUTTON_LT, brls::BUTTON_RT,
@@ -190,7 +188,7 @@ public:
     void draw(NVGcontext* vg, float x, float y, float w, float h,
               brls::Style style, brls::FrameContext* ctx) override
     {
-        // Semi-transparent dark background covering the full page
+        // 半透明深色背景，覆盖整个页面
         nvgBeginPath(vg);
         nvgRect(vg, x, y, w, h);
         nvgFillColor(vg, nvgRGBA(0, 0, 0, 200));
@@ -202,8 +200,7 @@ public:
             {
                 if (m_isKeyboard) checkKeyboardRelease();
                 else              checkGamepadRelease();
-                // Reset the countdown while waiting for release so the user
-                // gets the full 5 seconds once input capture actually starts.
+                // 等待按键释放时重置倒计时，确保捕获开始后用户有完整 5 秒
                 m_startTime = std::chrono::steady_clock::now();
             }
             else
@@ -214,7 +211,7 @@ public:
 
                 if (remaining <= 0.0f)
                 {
-                    // Countdown expired: use whatever was collected (may be empty)
+                    // 倒计时结束：使用已收集到的按键（可能为空）
                     finish(m_captured);
                 }
                 else
@@ -223,7 +220,7 @@ public:
                     m_countdownLabel->setText(std::to_string(secs) +
                         "beiklive/settings/keybind/countdown_suffix"_i18n);
                     if (m_isKeyboard) pollKeyboard();
-                    // Gamepad capture is handled via registerAction callbacks above
+                    // 手柄捕获通过 registerAction 回调处理
                 }
             }
         }
@@ -239,29 +236,29 @@ private:
     brls::Label* m_countdownLabel = nullptr;
     std::chrono::steady_clock::time_point m_startTime;
     bool m_done = false;
-    /// True while waiting for all buttons/keys to be released before capture starts.
+    /// 等待按键释放标志（开始捕获前需全部松开）
     bool m_waitingForRelease = true;
-    /// Currently captured key names (ordered, deduplication enforced, max k_capMaxKeys)
+    /// 已捕获按键名称列表（有序，去重，上限 k_capMaxKeys）
     std::vector<std::string> m_capturedKeys;
-    /// Final combo string built from m_capturedKeys
+    /// 由 m_capturedKeys 构建的最终组合字符串
     std::string m_captured;
 
     // ── Gamepad capture (via action callback) ──────────────────────────────
 
     void captureGamepadButton(brls::ControllerButton btn)
     {
-        // Find the name for this button
+        // 查找按键名称
         const char* name = nullptr;
         for (int i = 0; i < k_capPadKeyCount; ++i) {
             if (k_capPadKeys[i].btn == btn) { name = k_capPadKeys[i].name; break; }
         }
         if (!name) return;
 
-        // Ignore duplicates
+        // 忽略重复按键
         if (std::find(m_capturedKeys.begin(), m_capturedKeys.end(), name) != m_capturedKeys.end())
             return;
 
-        // Cap at k_capMaxKeys
+        // 达到上限则不再添加
         if (static_cast<int>(m_capturedKeys.size()) >= k_capMaxKeys)
             return;
 
@@ -269,8 +266,7 @@ private:
         m_captured = buildCombo(m_capturedKeys);
         m_keyLabel->setText(m_captured);
 
-        // Do NOT call finish() here – wait for the 5-second countdown to
-        // expire so the user has time to enter a combo (second button).
+        // 不在此处调用 finish()，等待 5 秒倒计时结束以便用户输入组合键（第二个按钮）。
     }
 
     // ── Keyboard capture (polled every frame) ──────────────────────────────
@@ -289,7 +285,7 @@ private:
         bool alt   = im->getKeyboardKeyState(brls::BRLS_KBD_KEY_LEFT_ALT) ||
                      im->getKeyboardKeyState(brls::BRLS_KBD_KEY_RIGHT_ALT);
 
-        // Collect all currently pressed non-modifier keys
+        // 收集当前所有按下的非修饰键
         std::vector<std::string> pressed;
         for (int i = 0; i < k_capKbdKeyCount; ++i) {
             if (im->getKeyboardKeyState(k_capKbdKeys[i].sc))
@@ -297,8 +293,7 @@ private:
         }
 
         if (!pressed.empty()) {
-            // Build the new captured set: modifiers first, then regular keys
-            // Ignore keys already in m_capturedKeys; stop at k_capMaxKeys
+            // 构建新捕获集：修饰键在前，普通键在后，去重，上限 k_capMaxKeys
             std::vector<std::string> newKeys = m_capturedKeys;
             for (const auto& key : pressed) {
                 // Duplicate check
