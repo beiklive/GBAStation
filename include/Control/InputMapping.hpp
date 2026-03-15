@@ -73,8 +73,10 @@ public:
     struct HotkeyBinding
     {
         int      padButton = -1;    ///< 手柄按钮；-1表示未绑定
+        KeyCombo kbCombo;           ///< 键盘组合键绑定
 
         bool isPadBound() const { return padButton >= 0; }
+        bool isKbdBound() const { return kbCombo.isBound(); }
     };
 
     // ----------------------------------------------------------------
@@ -124,6 +126,10 @@ public:
     /// 返回热键手柄绑定对应的配置键名。
     /// 例如 Hotkey::QuickSave → "hotkey.quicksave.pad"
     static const char* hotkeyPadConfigKey(Hotkey h);
+
+    /// 返回热键键盘绑定对应的配置键名。
+    /// 例如 Hotkey::QuickSave → "hotkey.quicksave.kbd"
+    static const char* hotkeyKbdConfigKey(Hotkey h);
 
     /// 返回热键的可读显示名称（UTF-8）。
     static const char* hotkeyDisplayName(Hotkey h);

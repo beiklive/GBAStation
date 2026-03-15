@@ -102,6 +102,21 @@ class GameView : public brls::Box
     /// 手柄组合键动作，在initialize()中注册，游戏线程通过pollInput()调用。
     beiklive::GameInputController m_inputCtrl;
 
+    // ---- 热键回调（手柄和键盘共用）---------------------------------
+    /// 每个热键对应的统一回调，在registerGamepadHotkeys()中设置。
+    /// 键盘热键检测也使用相同的回调，保证行为一致。
+    using HotkeyCallback = beiklive::GameInputController::Callback;
+    HotkeyCallback m_hotkeyCallbacks[static_cast<int>(beiklive::InputMappingConfig::Hotkey::_Count)];
+
+    // ---- 键盘热键状态跟踪（仅游戏线程）-----------------------------
+    struct KbHotkeyState {
+        bool active         = false;  ///< 当前是否处于按下状态
+        bool longPressFired = false;  ///< 本次按压是否已触发长按
+        /// 按下时刻；仅在 active == true 时有效
+        std::chrono::steady_clock::time_point pressTime{};
+    };
+    KbHotkeyState m_kbHotkeyStates[static_cast<int>(beiklive::InputMappingConfig::Hotkey::_Count)]{};
+
     // ---- 静音状态 ---------------------------------------------------
     /// 用户通过热键触发的静音开关（游戏线程读，主线程绘制覆盖层）
     std::atomic<bool> m_muted{false};
@@ -139,6 +154,9 @@ class GameView : public brls::Box
     struct InputSnapshot {
         brls::ControllerState           ctrlState{};
         std::unordered_map<int, bool>   kbState;   ///< 键盘扫描码 → 是否按下
+        bool kbCtrl  = false;  ///< 任一 CTRL 键是否按下
+        bool kbShift = false;  ///< 任一 SHIFT 键是否按下
+        bool kbAlt   = false;  ///< 任一 ALT 键是否按下
     };
     mutable std::mutex m_inputSnapMutex;
     InputSnapshot      m_inputSnap;

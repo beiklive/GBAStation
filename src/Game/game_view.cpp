@@ -762,9 +762,12 @@ void GameView::registerGamepadHotkeys()
     using Hotkey = beiklive::InputMappingConfig::Hotkey;
     using KeyEvent = beiklive::GameInputController::KeyEvent;
 
-    // 辅助函数：若热键已绑定则注册手柄按键组合。
-    auto reg = [&](Hotkey h, beiklive::GameInputController::Callback cb)
+    // 辅助函数：设置热键回调，若手柄已绑定则同时注册到 GameInputController。
+    // 回调同时存入 m_hotkeyCallbacks，供键盘热键检测共用。
+    auto reg = [&](Hotkey h, HotkeyCallback cb)
     {
+        int idx = static_cast<int>(h);
+        m_hotkeyCallbacks[idx] = cb;   // 保存回调供键盘热键使用
         const auto& hk = m_inputMap.hotkeyBinding(h);
         if (hk.isPadBound())
             m_inputCtrl.registerAction({hk.padButton}, std::move(cb));
@@ -1660,6 +1663,74 @@ void GameView::pollInput()
     // 回调写入原子变量和游戏线程布尔值。
     m_inputCtrl.update(state);
 
+    // ── 键盘热键检测 ─────────────────────────────────────────────────────────
+    // 对每个已绑定键盘组合键的热键，检查组合键状态并触发与手柄热键相同的回调。
+    {
+        using Hotkey   = beiklive::InputMappingConfig::Hotkey;
+        using KeyEvent = beiklive::GameInputController::KeyEvent;
+        const auto now = std::chrono::steady_clock::now();
+
+        for (int i = 0; i < static_cast<int>(Hotkey::_Count); ++i)
+        {
+            const auto& hk = m_inputMap.hotkeyBinding(static_cast<Hotkey>(i));
+            if (!hk.isKbdBound()) continue;
+            if (!m_hotkeyCallbacks[i]) continue;
+
+            const auto& combo = hk.kbCombo;
+
+            // 检查修饰键是否精确匹配：所需修饰键必须按下，不需要的修饰键不能按下。
+            // 这样可以避免 "F5" 热键在按 "CTRL+F5" 时被误触发。
+            bool modMatch = (combo.ctrl  == snap.kbCtrl)  &&
+                            (combo.shift == snap.kbShift) &&
+                            (combo.alt   == snap.kbAlt);
+
+            // 检查主键是否按下
+            bool keyDown = false;
+            if (modMatch) {
+                auto it = snap.kbState.find(combo.scancode);
+                if (it != snap.kbState.end())
+                    keyDown = it->second;
+            }
+
+            KbHotkeyState& st = m_kbHotkeyStates[i];
+
+            if (keyDown)
+            {
+                if (!st.active)
+                {
+                    // 上升沿：触发 Press 并记录时间戳
+                    st.active         = true;
+                    st.longPressFired = false;
+                    st.pressTime      = now;
+                    m_hotkeyCallbacks[i](KeyEvent::Press);
+                }
+                else if (!st.longPressFired)
+                {
+                    // 持续按下：检查长按阈值
+                    auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                         now - st.pressTime).count();
+                    if (elapsedMs >= beiklive::GameInputController::LONG_PRESS_MS)
+                    {
+                        st.longPressFired = true;
+                        m_hotkeyCallbacks[i](KeyEvent::LongPress);
+                    }
+                }
+            }
+            else
+            {
+                if (st.active)
+                {
+                    // 下降沿：若无长按则触发 ShortPress，然后触发 Release
+                    st.active = false;
+                    if (!st.longPressFired)
+                        m_hotkeyCallbacks[i](KeyEvent::ShortPress);
+                    st.longPressFired = false;
+                    m_hotkeyCallbacks[i](KeyEvent::Release);
+                }
+            }
+        }
+    }
+
     // 倒带时禁用快进
     if (m_rewinding.load(std::memory_order_relaxed))
         m_fastForward.store(false, std::memory_order_relaxed);
@@ -1729,6 +1800,26 @@ void GameView::refreshInputSnapshot()
             snap.kbState[entry.kbScancode] =
                 im->getKeyboardKeyState(
                     static_cast<brls::BrlsKeyboardScancode>(entry.kbScancode));
+        }
+    }
+
+    // ── 修饰键状态（用于热键组合检查）──────────────────────────────────────
+    snap.kbCtrl  = im->getKeyboardKeyState(brls::BRLS_KBD_KEY_LEFT_CONTROL) ||
+                   im->getKeyboardKeyState(brls::BRLS_KBD_KEY_RIGHT_CONTROL);
+    snap.kbShift = im->getKeyboardKeyState(brls::BRLS_KBD_KEY_LEFT_SHIFT)   ||
+                   im->getKeyboardKeyState(brls::BRLS_KBD_KEY_RIGHT_SHIFT);
+    snap.kbAlt   = im->getKeyboardKeyState(brls::BRLS_KBD_KEY_LEFT_ALT)     ||
+                   im->getKeyboardKeyState(brls::BRLS_KBD_KEY_RIGHT_ALT);
+
+    // ── 热键键盘主键状态 ──────────────────────────────────────────────────
+    // 仅轮询已绑定了键盘组合键的热键的主键扫描码。
+    using Hotkey = beiklive::InputMappingConfig::Hotkey;
+    for (int i = 0; i < static_cast<int>(Hotkey::_Count); ++i) {
+        const auto& hk = m_inputMap.hotkeyBinding(static_cast<Hotkey>(i));
+        if (hk.isKbdBound()) {
+            snap.kbState[hk.kbCombo.scancode] =
+                im->getKeyboardKeyState(
+                    static_cast<brls::BrlsKeyboardScancode>(hk.kbCombo.scancode));
         }
     }
 

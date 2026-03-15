@@ -163,8 +163,10 @@ static const DefaultKbMap k_defaultKbMap[] = {
 // ---- 热键元数据表 ------------------------------------
 // 将 Hotkey 枚举映射到配置键名和默认值。
 struct HotkeyMeta {
-    const char* padKey;     ///< 手柄绑定的配置键名
-    const char* padDefault; ///< 手柄默认值（"none" 表示未绑定）
+    const char* padKey;      ///< 手柄绑定的配置键名
+    const char* padDefault;  ///< 手柄默认值（"none" 表示未绑定）
+    const char* kbdKey;      ///< 键盘组合键绑定的配置键名
+    const char* kbdDefault;  ///< 键盘默认值（"none" 表示未绑定）
     const char* displayName; ///< 显示名称（UTF-8）
 };
 
@@ -173,35 +175,47 @@ static const HotkeyMeta k_hotkeyMeta[] = {
     {
         "handle.fastforward",
         "none",
+        "hotkey.fastforward.kbd",
+        "TAB",
         "\xe5\xbf\xab\xe8\xbf\x9b\xef\xbc\x88\xe4\xbf\x9d\xe6\x8c\x81\xef\xbc\x89"  // 快进
     },
     // 倒带（保持）– 键盘: keyboard.rewind，手柄: handle.rewind
     {
         "handle.rewind",
         "none",
+        "hotkey.rewind.kbd",
+        "GRAVE",
         "\xe5\x80\x92\xe5\xb8\xa6\xef\xbc\x88\xe4\xbf\x9d\xe6\x8c\x81\xef\xbc\x89"  // 倒带
     },
     // 快速保存
     {
         "hotkey.quicksave.pad",
         "none",
+        "hotkey.quicksave.kbd",
+        "F5",
         "\xe5\xbf\xab\xe9\x80\x9f\xe4\xbf\x9d\xe5\xad\x98"  // 快速保存
     },
     // 快速读取
     {
         "hotkey.quickload.pad",
         "none",
+        "hotkey.quickload.kbd",
+        "F8",
         "\xe5\xbf\xab\xe9\x80\x9f\xe8\xaf\xbb\xe5\x8f\x96"  // 快速读取
     },
     // 打开菜单
     {
         "hotkey.menu.pad",
         "none",
+        "hotkey.menu.kbd",
+        "F1",
         "\xe6\x89\x93\xe5\xbc\x80\xe8\x8f\x9c\xe5\x8d\x95"  // 打开菜单
     },
     // 静音
     {
         "hotkey.mute.pad",
+        "none",
+        "hotkey.mute.kbd",
         "none",
         "\xe9\x9d\x99\xe9\x9f\xb3"  // 静音
     },
@@ -209,11 +223,15 @@ static const HotkeyMeta k_hotkeyMeta[] = {
     {
         "hotkey.pause.pad",
         "none",
+        "hotkey.pause.kbd",
+        "none",
         "\xe6\x9a\x82\xe5\x81\x9c"  // 暂停
     },
     // 打开金手指菜单
     {
         "hotkey.cheat_menu.pad",
+        "none",
+        "hotkey.cheat_menu.kbd",
         "none",
         "\xe6\x89\x93\xe5\xbc\x80\xe9\x87\x91\xe6\x89\x8b\xe6\x8c\x87\xe8\x8f\x9c\xe5\x8d\x95"  // 打开金手指菜单
     },
@@ -221,18 +239,24 @@ static const HotkeyMeta k_hotkeyMeta[] = {
     {
         "hotkey.shader_menu.pad",
         "none",
+        "hotkey.shader_menu.kbd",
+        "none",
         "\xe6\x89\x93\xe5\xbc\x80\xe7\x9d\x80\xe8\x89\xb2\xe5\x99\xa8\xe8\x8f\x9c\xe5\x8d\x95"  // 打开着色器菜单
     },
     // 截屏
     {
         "hotkey.screenshot.pad",
         "none",
+        "hotkey.screenshot.kbd",
+        "F12",
         "\xe6\x88\xaa\xe5\xb1\x8f"  // 截屏
     },
     // 退出游戏 – 键盘: keyboard.exit
     {
         "hotkey.exit_game.pad",
         "none",
+        "hotkey.exit_game.kbd",
+        "ESC",
         "\xe9\x80\x80\xe5\x87\xba\xe6\xb8\xb8\xe6\x88\x8f"  // 退出游戏
     },
 };
@@ -299,6 +323,22 @@ InputMappingConfig::parseKeyCombo(const std::string& s)
         if (!part.empty()) parts.push_back(part);
     }
 
+    // 解析各部分：识别修饰键名称，最后一个非修饰键部分作为主键。
+    for (const auto& p : parts) {
+        std::string upper = toUpper(p);
+        if (upper == "CTRL" || upper == "CONTROL")
+            result.ctrl = true;
+        else if (upper == "SHIFT")
+            result.shift = true;
+        else if (upper == "ALT")
+            result.alt = true;
+        else {
+            // 若已解析过主键，忽略后续多余的键名
+            if (result.scancode < 0)
+                result.scancode = parseKeyboardScancode(p);
+        }
+    }
+
     return result;
 }
 
@@ -311,6 +351,13 @@ const char* InputMappingConfig::hotkeyPadConfigKey(Hotkey h)
     int i = static_cast<int>(h);
     if (i < 0 || i >= static_cast<int>(Hotkey::_Count)) return "";
     return k_hotkeyMeta[i].padKey;
+}
+
+const char* InputMappingConfig::hotkeyKbdConfigKey(Hotkey h)
+{
+    int i = static_cast<int>(h);
+    if (i < 0 || i >= static_cast<int>(Hotkey::_Count)) return "";
+    return k_hotkeyMeta[i].kbdKey;
 }
 
 const char* InputMappingConfig::hotkeyDisplayName(Hotkey h)
@@ -389,6 +436,8 @@ void InputMappingConfig::setDefaults(ConfigManager& cfg)
     for (int i = 0; i < static_cast<int>(Hotkey::_Count); ++i) {
         cfg.SetDefault(k_hotkeyMeta[i].padKey,
                        CV(std::string(k_hotkeyMeta[i].padDefault)));
+        cfg.SetDefault(k_hotkeyMeta[i].kbdKey,
+                       CV(std::string(k_hotkeyMeta[i].kbdDefault)));
     }
 }
 
@@ -534,6 +583,15 @@ void InputMappingConfig::loadHotkeyBindings(const ConfigManager& cfg)
                 hk.padButton = -1;
             else
                 hk.padButton = parseGamepadButton(val);
+        }
+        // --- 键盘组合键绑定 ---
+        {
+            std::string val = k_hotkeyMeta[i].kbdDefault;
+            auto v = cfg.Get(k_hotkeyMeta[i].kbdKey);
+            if (v) {
+                if (auto s = v->AsString()) val = *s;
+            }
+            hk.kbCombo = parseKeyCombo(val);
         }
     }
 }

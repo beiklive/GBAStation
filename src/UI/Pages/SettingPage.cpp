@@ -1109,6 +1109,35 @@ brls::ScrollingFrame* SettingPage::buildKeyBindTab()
         box->addView(cell);
     }
 
+    // ── 键盘热键 ──────────────────────────────────────────────────────────────
+    box->addView(makeHeader("beiklive/settings/keybind/header_kbd"_i18n));
+
+    for (int i = 0; i < static_cast<int>(InputMappingConfig::Hotkey::_Count); ++i)
+    {
+        auto hk = static_cast<InputMappingConfig::Hotkey>(i);
+        std::string kbdKey = InputMappingConfig::hotkeyKbdConfigKey(hk);
+        std::string label  = std::string(InputMappingConfig::hotkeyDisplayName(hk))
+                             + "beiklive/settings/keybind/kbd_suffix"_i18n;
+        auto* cell = new brls::DetailCell();
+        cell->setText(label);
+        cell->setDetailText(cfgGetStr(kbdKey, "none"));
+        std::string captureKey = kbdKey;
+        cell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A,
+            [cell, captureKey](brls::View*) {
+                openKeyCapture(true, [cell, captureKey](const std::string& r) {
+                    if (!r.empty()) { cfgSetStr(captureKey, r); cell->setDetailText(r); }
+                });
+                return true;
+            }, false, false, brls::SOUND_CLICK);
+        cell->registerAction("beiklive/hints/clear_binding"_i18n, brls::BUTTON_X,
+            [cell, captureKey](brls::View*) {
+                cfgSetStr(captureKey, "none");
+                cell->setDetailText("none");
+                return true;
+            }, false, false, brls::SOUND_CLICK);
+        box->addView(cell);
+    }
+
 
     scroll->setContentView(box);
     return scroll;
