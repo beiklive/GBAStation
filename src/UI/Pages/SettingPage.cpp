@@ -719,12 +719,6 @@ brls::ScrollingFrame* SettingPage::buildGameTab()
             "beiklive/settings/game/cheat_loc_emu"_i18n
     };
 
-    auto* autoSaveCell = new brls::BooleanCell();
-    autoSaveCell->init("beiklive/settings/game/auto_save"_i18n,
-                       cfgGetBool("save.autoSave", true),
-                       [](bool v){ cfgSetBool("save.autoSave", v); });
-    box->addView(autoSaveCell);
-
     auto* autoSaveStateCell = new brls::BooleanCell();
     autoSaveStateCell->init("beiklive/settings/game/auto_save_state"_i18n,
                             cfgGetBool("save.autoSaveState", false),
