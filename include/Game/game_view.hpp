@@ -17,6 +17,7 @@
 #include "Retro/LibretroLoader.hpp"
 #include "Video/DisplayConfig.hpp"
 #include "Video/RenderChain.hpp"
+#include "UI/Utils/GameMenu.hpp"
 
 class GameView : public brls::Box
 {
@@ -32,7 +33,7 @@ class GameView : public brls::Box
     void onFocusLost() override;
     void onLayout() override;
 
-    void setGameMenu(GameMenu* menu) { m_gameMenu = menu; }
+    void setGameMenu(GameMenu* menu);
     /**
      * 启用或禁用该视图的borealis输入系统。
      *
@@ -81,6 +82,9 @@ class GameView : public brls::Box
 
     // ---- 退出请求 ---------------------------------------------------
     std::atomic<bool> m_requestExit{false}; ///< 由游戏线程设置，draw()消费
+
+    // ---- 打开菜单请求 -----------------------------------------------
+    std::atomic<bool> m_requestOpenMenu{false}; ///< 由游戏线程设置，draw()消费
 
     // ---- 快速存读档 -------------------------------------------------
     /// 待存档槽号（游戏线程读取，主线程写入）。

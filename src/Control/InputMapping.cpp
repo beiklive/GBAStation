@@ -521,7 +521,7 @@ void InputMappingConfig::loadHotkeyBindings(const ConfigManager& cfg)
 {
     for (int i = 0; i < static_cast<int>(Hotkey::_Count); ++i) {
         HotkeyBinding& hk = m_hotkeys[i];
-        // --- 手柄绑定 ---
+        // --- 手柄绑定（支持组合键，如 "LB+START"）---
         {
             std::string val = k_hotkeyMeta[i].padDefault;
             auto v = cfg.Get(k_hotkeyMeta[i].padKey);
@@ -530,10 +530,27 @@ void InputMappingConfig::loadHotkeyBindings(const ConfigManager& cfg)
                 if (auto s = v->AsString()) val = *s;
                 else if (auto n = v->AsInt()) val = std::to_string(*n);
             }
-            if (toUpper(val) == "NONE" || val.empty())
-                hk.padButton = -1;
-            else
-                hk.padButton = parseGamepadButton(val);
+
+            hk.padButtons.clear();
+            if (toUpper(val) != "NONE" && !val.empty()) {
+                // 按 '+' 分割，支持多键组合（如 "LB+START"）
+                std::vector<std::string> parts;
+                std::string part;
+                for (char c : val) {
+                    if (c == '+') {
+                        if (!part.empty()) { parts.push_back(part); part.clear(); }
+                    } else {
+                        part += c;
+                    }
+                }
+                if (!part.empty()) parts.push_back(part);
+
+                for (const auto& p : parts) {
+                    int btn = parseGamepadButton(p);
+                    if (btn >= 0)
+                        hk.padButtons.push_back(btn);
+                }
+            }
         }
     }
 }

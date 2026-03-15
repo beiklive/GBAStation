@@ -26,8 +26,10 @@ GameMenu::GameMenu()
 
     auto* btn = new brls::Button();
     btn->setText("返回游戏");
-    btn->registerAction("", brls::BUTTON_A, [](brls::View* v) {
-        v->setVisibility(brls::Visibility::GONE);
+    btn->registerAction("", brls::BUTTON_A, [this](brls::View* v) {
+        // 隐藏整个菜单（this 为 GameMenu，v 为按钮本身）
+        setVisibility(brls::Visibility::GONE);
+        if (m_closeCallback) m_closeCallback();
         return true;
     });
     addView(btn);
