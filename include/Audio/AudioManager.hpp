@@ -10,56 +10,52 @@
 
 namespace beiklive {
 
-/// Universal cross-platform audio manager.
+/// 通用跨平台音频管理器。
 ///
-/// Maintains a thread-safe ring buffer of int16_t stereo PCM samples.
-/// A background thread continuously drains the ring buffer and feeds it
-/// to the platform audio output.
+/// 维护一个线程安全的 int16_t 立体声PCM环形缓冲区，
+/// 后台线程持续从缓冲区读取数据并输出到平台音频接口。
 ///
-/// Platform backends:
+/// 平台后端：
 ///   - Nintendo Switch  : libnx audout
 ///   - Linux            : ALSA (libasound)
 ///   - Windows          : WinMM (waveOut)
-///   - macOS            : CoreAudio (AudioUnit, callback-driven)
-///   - Other / fallback : null output (samples discarded)
+///   - macOS            : CoreAudio (AudioUnit，回调驱动)
+///   - 其他/回退        : 空输出（丢弃样本）
 ///
-/// Typical usage:
+/// 典型用法：
 /// @code
 ///   AudioManager::instance().init(32768, 2);
-///   // ...in libretro audio callback:
+///   // libretro音频回调中：
 ///   AudioManager::instance().pushSamples(data, frames);
-///   // ...on shutdown:
+///   // 关闭时：
 ///   AudioManager::instance().deinit();
 /// @endcode
 class AudioManager {
 public:
     static AudioManager& instance();
 
-    /// Initialize audio subsystem.
-    /// @param sampleRate  Target sample rate in Hz  (mGBA default: 32768).
-    /// @param channels    Number of audio channels  (mGBA default: 2 stereo).
-    /// @return true if audio output was successfully opened.
+    /// 初始化音频子系统。
+    /// @param sampleRate  目标采样率（Hz，mGBA默认：32768）。
+    /// @param channels    声道数（mGBA默认：2立体声）。
+    /// @return 成功打开音频输出时返回true。
     bool init(int sampleRate = 32768, int channels = 2);
 
-    /// Push @a frames frames of interleaved stereo 16-bit PCM into the buffer.
-    /// Blocks if the ring buffer fill level exceeds the configured threshold,
-    /// which keeps game/audio in sync and prevents latency buildup.
-    /// Thread-safe – safe to call from the libretro audio callback.
+    /// 向缓冲区写入交错立体声16位PCM帧数据。
+    /// 若环形缓冲区超过阈值则阻塞，以保持游戏与音频同步、防止延迟累积。
+    /// 线程安全，可在libretro音频回调中调用。
     void pushSamples(const int16_t* data, size_t frames);
 
-    /// Shut down the audio subsystem and stop the background thread.
+    /// 关闭音频子系统并停止后台线程。
     void deinit();
 
     bool isRunning() const { return m_running.load(); }
 
-    /// Set maximum allowed ring-buffer fill (in stereo frames) before
-    /// pushSamples() starts blocking.  Call after init().
-    /// Default: RING_CAPACITY / 2.
+    /// 设置环形缓冲区最大填充量（立体声帧数），超过后pushSamples()开始阻塞。
+    /// 在init()之后调用，默认值为 RING_CAPACITY / 2。
     void setMaxLatencyFrames(size_t frames) { m_maxLatencySamples = frames * static_cast<size_t>(m_channels); }
 
-    /// Discard all samples currently held in the ring buffer and wake any
-    /// pushSamples() caller that is blocked.  Use this when switching from
-    /// fast-forward back to normal speed to prevent stale audio being played.
+    /// 清空环形缓冲区中的所有样本，并唤醒被阻塞的pushSamples()调用方。
+    /// 用于从快进切换回正常速度时，防止播放过时音频。
     void flushRingBuffer();
 
 private:
@@ -69,13 +65,13 @@ private:
     AudioManager(const AudioManager&)            = delete;
     AudioManager& operator=(const AudioManager&) = delete;
 
-    // ---- Ring buffer ------------------------------------------------
-    // Reduced from 32768*2 to 8192 to keep total latency below ~250ms
+    // ---- 环形缓冲区 -------------------------------------------------
+    // 从 32768*2 缩减至 8192，将总延迟控制在 ~250ms 以内
     static constexpr size_t RING_CAPACITY = 8192;
 
     std::mutex               m_mutex;
-    std::condition_variable  m_spaceCV;   ///< Notified when ring drains (space freed)
-    std::vector<int16_t>     m_ring;      ///< Circular PCM sample storage
+    std::condition_variable  m_spaceCV;   ///< 环形缓冲区排空（释放空间）时通知
+    std::vector<int16_t>     m_ring;      ///< 循环PCM样本存储
     size_t                   m_writePos   = 0;
     size_t                   m_readPos    = 0;
     size_t                   m_available  = 0;
@@ -84,7 +80,7 @@ private:
     void ringWrite(const int16_t* data, size_t count);
     size_t ringRead(int16_t* out, size_t maxCount);
 
-    // ---- Background audio thread ------------------------------------
+    // ---- 后台音频线程 -----------------------------------------------
     std::thread       m_thread;
     std::atomic<bool> m_running { false };
     int               m_sampleRate = 32768;
@@ -92,7 +88,7 @@ private:
 
     void audioThreadFunc();
 
-    // ---- Platform state (opaque pointers to keep header clean) ------
+    // ---- 平台状态（不透明指针，保持头文件简洁）---------------------
     void* m_platformState = nullptr;
 };
 

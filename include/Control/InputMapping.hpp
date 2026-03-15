@@ -10,14 +10,13 @@ namespace beiklive {
 // ============================================================
 // InputMappingConfig
 //
-// Centralises all key-binding configuration for the emulator:
-//   - Game button map  (gamepad + keyboard → retro joypad ID)
-//   - Emulator hotkeys (fast-forward, rewind, quick-save, …)
-//   - Fast-forward / rewind settings loaded together with bindings
+// 集中管理模拟器所有按键绑定配置：
+//   - 游戏按钮映射（手柄+键盘 → retro joypad ID）
+//   - 模拟器热键（快进、倒带、快速存档等）
+//   - 快进/倒带设置（与绑定一同加载）
 //
-// Lookup tables, scancode parsers and config I/O live in
-// src/Control/InputMapping.cpp.  GameView holds one instance and
-// delegates all config loading to this class.
+// 查找表、扫描码解析和配置读写位于 src/Control/InputMapping.cpp。
+// GameView 持有一个实例并委托所有配置加载给该类。
 // ============================================================
 
 class InputMappingConfig
@@ -25,7 +24,7 @@ class InputMappingConfig
 public:
 
     // ----------------------------------------------------------------
-    // Emulator system function-key identifiers
+    // 模拟器系统功能键标识符
     // ----------------------------------------------------------------
     enum class Hotkey : int
     {
@@ -41,16 +40,16 @@ public:
         Screenshot,             ///< 截屏
         ExitGame,               ///< 退出游戏
 
-        _Count                  ///< Sentinel – always last
+        _Count                  ///< 哨兵值，始终在末尾
     };
 
     // ----------------------------------------------------------------
-    // A keyboard key combo: primary scancode + optional modifier keys.
-    // Parsed from strings like "F5", "CTRL+F5", "SHIFT+Z".
+    // 键盘按键组合：主扫描码 + 可选修饰键。
+    // 解析格式如 "F5"、"CTRL+F5"、"SHIFT+Z"。
     // ----------------------------------------------------------------
     struct KeyCombo
     {
-        int  scancode = -1;     ///< BrlsKeyboardScancode; -1 = unbound
+        int  scancode = -1;     ///< 键盘扫描码；-1表示未绑定
         bool ctrl     = false;
         bool shift    = false;
         bool alt      = false;
@@ -59,29 +58,27 @@ public:
     };
 
     // ----------------------------------------------------------------
-    // One game-button binding: retro joypad ID mapped to a gamepad
-    // button and/or a keyboard key.
+    // 游戏按钮绑定：retro joypad ID 映射到手柄按钮和/或键盘按键。
     // ----------------------------------------------------------------
     struct GameButtonEntry
     {
         unsigned retroId    = 0;   ///< RETRO_DEVICE_ID_JOYPAD_*
-        int      padButton  = -1;  ///< brls::ControllerButton; -1 = unbound
-        int      kbScancode = -1;  ///< BrlsKeyboardScancode; -1 = unbound
+        int      padButton  = -1;  ///< 手柄按钮；-1表示未绑定
+        int      kbScancode = -1;  ///< 键盘扫描码；-1表示未绑定
     };
 
     // ----------------------------------------------------------------
-    // One emulator hotkey binding: keyboard combo + gamepad button.
-    // Both may be unbound (-1 / isBound() == false).
+    // 模拟器热键绑定：键盘组合键 + 手柄按钮，两者均可未绑定。
     // ----------------------------------------------------------------
     struct HotkeyBinding
     {
-        int      padButton = -1;    ///< brls::ControllerButton; -1 = unbound
+        int      padButton = -1;    ///< 手柄按钮；-1表示未绑定
 
         bool isPadBound() const { return padButton >= 0; }
     };
 
     // ----------------------------------------------------------------
-    // Fast-forward / rewind settings (loaded together with bindings)
+    // 快进/倒带设置（与绑定一同加载）
     // ----------------------------------------------------------------
     float    ffMultiplier     = 4.0f;   ///< Speed multiplier (fastforward.multiplier)
     bool     ffMute           = true;   ///< Mute audio during FF (fastforward.mute)
@@ -93,17 +90,17 @@ public:
     bool     rewindToggleMode = false;  ///< false = hold, true = toggle (rewind.mode)
 
     // ----------------------------------------------------------------
-    // Config I/O
+    // 配置读写
     // ----------------------------------------------------------------
 
-    /// Write defaults for all keys into @a cfg (only when key absent).
+    /// 将所有键的默认值写入 @a cfg（仅在键不存在时写入）。
     void setDefaults(ConfigManager& cfg);
 
-    /// Load all settings and bindings from @a cfg.
+    /// 从 @a cfg 加载所有设置和绑定。
     void load(const ConfigManager& cfg);
 
     // ----------------------------------------------------------------
-    // Accessors
+    // 访问器
     // ----------------------------------------------------------------
 
     const std::vector<GameButtonEntry>& gameButtonMap() const
@@ -112,23 +109,23 @@ public:
     const HotkeyBinding& hotkeyBinding(Hotkey h) const;
 
     // ----------------------------------------------------------------
-    // Static parsers – reusable by a future settings UI
+    // 静态解析器（可供未来设置UI复用）
     // ----------------------------------------------------------------
 
-    /// Parse a keyboard scancode: integer ("88") or named ("X", "TAB").
+    /// 解析键盘扫描码：整数（"88"）或名称（"X"、"TAB"）。
     static int     parseKeyboardScancode(const std::string& s);
 
-    /// Parse a gamepad button: integer or named ("A", "LB", "RT").
+    /// 解析手柄按钮：整数或名称（"A"、"LB"、"RT"）。
     static int     parseGamepadButton(const std::string& s);
 
-    /// Parse a key-combo string: "F5", "CTRL+F5", "SHIFT+Z", "none".
+    /// 解析按键组合字符串："F5"、"CTRL+F5"、"SHIFT+Z"、"none"。
     static KeyCombo parseKeyCombo(const std::string& s);
 
-    /// Return the config key name for a hotkey's gamepad binding.
-    /// e.g. Hotkey::QuickSave  → "hotkey.quicksave.pad"
+    /// 返回热键手柄绑定对应的配置键名。
+    /// 例如 Hotkey::QuickSave → "hotkey.quicksave.pad"
     static const char* hotkeyPadConfigKey(Hotkey h);
 
-    /// Return a human-readable display name for a hotkey (UTF-8).
+    /// 返回热键的可读显示名称（UTF-8）。
     static const char* hotkeyDisplayName(Hotkey h);
 
 private:

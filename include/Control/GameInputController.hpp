@@ -8,31 +8,23 @@
 namespace beiklive {
 
 /**
- * GameInputController – raw gamepad input registration system.
+ * GameInputController – 原始手柄输入注册系统。
  *
- * Bypasses the borealis navigation/event system entirely and operates
- * directly on the raw ControllerState snapshot captured each frame.
+ * 完全绕过borealis导航/事件系统，直接操作每帧捕获的原始ControllerState快照。
  *
- * Features:
- *  - Registration: registerAction(buttons, callback) binds a set of
- *    controller buttons to a callback function.
- *  - Event types:
- *      Press      – rising edge (button just pressed)
- *      Release    – falling edge (button released)
- *      ShortPress – fired on Release when no LongPress occurred this session
- *      LongPress  – held for >= LONG_PRESS_MS milliseconds (fires once)
- *  - Combo support: if the registered buttons array contains two or
- *    more entries, the action fires only when ALL listed buttons are
- *    simultaneously pressed.
- *  - update() must be called once per game-loop iteration with the
- *    current ControllerState.  It fires callbacks synchronously.
- *  - setEnabled(false) suspends all event dispatching without
- *    discarding registered actions; setEnabled(true) resumes it.
+ * 功能特性：
+ *  - 注册：registerAction(buttons, callback) 将一组按钮绑定到回调函数。
+ *  - 事件类型：
+ *      Press      – 上升沿（按钮刚被按下）
+ *      Release    – 下降沿（按钮松开）
+ *      ShortPress – 松开时触发（本次按压无长按则触发）
+ *      LongPress  – 持续按压 >= LONG_PRESS_MS 毫秒后触发一次
+ *  - 组合键支持：buttons数组含多个条目时，所有按钮同时按下才触发。
+ *  - update() 需在每帧游戏循环中以当前ControllerState调用，同步触发回调。
+ *  - setEnabled(false) 暂停所有事件分发但不丢弃已注册动作；
+ *    setEnabled(true) 恢复。
  *
- * Thread safety: NOT thread-safe. update() and registerAction() must
- * be called from the same thread (typically the game thread for update
- * and the main thread for registerAction during initialization, which
- * must complete before the game thread starts).
+ * 线程安全：非线程安全。update() 和 registerAction() 须在同一线程调用。
  */
 class GameInputController
 {
@@ -40,70 +32,61 @@ public:
     enum class KeyEvent { Press, Release, ShortPress, LongPress };
     using Callback = std::function<void(KeyEvent)>;
 
-    /// Hold duration required to trigger a LongPress event (milliseconds).
+    /// 触发长按事件所需的持续时间（毫秒）。
     static constexpr int LONG_PRESS_MS = 500;
 
     /**
-     * Register an action for one or more controller buttons.
+     * 注册一个或多个手柄按钮的动作。
      *
-     * @param buttons  Array of brls::ControllerButton values (cast to int).
-     *                 All buttons must be simultaneously pressed to trigger
-     *                 the action (combo detection).
-     * @param callback Function called with Press, Release, or LongPress.
+     * @param buttons  brls::ControllerButton值数组（转换为int）。
+     *                 所有按钮同时按下时触发（组合键检测）。
+     * @param callback 以 Press、Release 或 LongPress 调用的回调函数。
      *
-     * Single-button example:
+     * 单键示例：
      *   registerAction({brls::BUTTON_X}, cb);
      *
-     * Combo example (L + R together):
+     * 组合键示例（L + R 同时按下）：
      *   registerAction({brls::BUTTON_LB, brls::BUTTON_RB}, cb);
      */
     void registerAction(std::vector<int> buttons, Callback callback);
 
     /**
-     * Update key states and fire registered callbacks.
+     * 更新按键状态并触发已注册的回调。
      *
-     * Call once per game-loop frame with the current controller snapshot.
-     * Does nothing when the controller is disabled (setEnabled(false)).
+     * 每帧调用一次，传入当前手柄快照。控制器禁用时（setEnabled(false)）无操作。
      *
-     * For each registered action:
-     *   - If ALL buttons are newly pressed → fires Press callback.
-     *   - If all buttons are held for >= LONG_PRESS_MS → fires LongPress
-     *     callback (fires once per press session).
-     *   - If any button is released while the action was active:
-     *       * fires ShortPress  (only when no LongPress occurred this session)
-     *       * fires Release     (always, after ShortPress when applicable)
+     * 对每个已注册动作：
+     *   - 所有按钮刚被按下 → 触发Press回调。
+     *   - 所有按钮持续按压 >= LONG_PRESS_MS → 触发LongPress（每次按压仅触发一次）。
+     *   - 动作激活期间任意按钮松开：
+     *       * 触发ShortPress（本次按压无LongPress时）
+     *       * 触发Release（始终触发，在ShortPress之后）
      *
-     * Event ordering guarantee: when both ShortPress and Release fire in the
-     * same frame, ShortPress is always dispatched first.
+     * 事件顺序保证：同帧内ShortPress始终先于Release分发。
      */
     void update(const brls::ControllerState& state);
 
     /**
-     * Enable or disable event dispatching.
+     * 启用或禁用事件分发。
      *
-     * When disabled, update() is a no-op: no callbacks are fired and
-     * all action states are reset so no spurious events occur on re-enable.
-     * Registered actions are NOT discarded; they resume normally when
-     * re-enabled.
+     * 禁用时，update()为空操作：不触发回调，所有动作状态重置，
+     * 以防止重新启用时产生虚假事件。已注册动作不会被丢弃，重新启用后正常恢复。
      *
-     * This method must be called from the same thread as update()
-     * (typically the game thread) or before the game thread is started.
+     * 须与update()在同一线程调用，或在游戏线程启动前调用。
      *
-     * Event ordering note: when setEnabled(false) is called while a button
-     * is held, the in-flight action is silently discarded (no ShortPress or
-     * Release is fired).  This is the intended behavior: the caller should
-     * treat disabled transitions as a clean suspension.
+     * 注意：禁用时若有按钮处于按下状态，飞行中的动作将被静默丢弃
+     * （不触发ShortPress或Release），这是预期行为。
      *
-     * Typical usage:
-     *   setEnabled(false)  // suspend while a menu is open
-     *   setEnabled(true)   // resume when the game regains focus
+     * 典型用法：
+     *   setEnabled(false)  // 菜单打开时暂停
+     *   setEnabled(true)   // 游戏重新获得焦点时恢复
      */
     void setEnabled(bool enabled);
 
-    /// Returns true when the controller is currently enabled.
+    /// 返回控制器当前是否已启用。
     bool isEnabled() const { return m_enabled; }
 
-    /// Remove all registered actions.
+    /// 移除所有已注册的动作。
     void clear();
 
 private:
@@ -111,13 +94,13 @@ private:
     {
         std::vector<int> buttons;
         Callback         callback;
-        bool             active        = false; ///< true while all buttons pressed
-        bool             longPressFired = false; ///< LongPress already sent this press
-        std::chrono::steady_clock::time_point pressTime; ///< when Press was fired
+        bool             active        = false; ///< 所有按钮按下时为true
+        bool             longPressFired = false; ///< 本次按压已发送LongPress
+        std::chrono::steady_clock::time_point pressTime; ///< Press触发时刻
     };
 
     std::vector<Action> m_actions;
-    bool                m_enabled = true; ///< when false, update() is a no-op
+    bool                m_enabled = true; ///< 为false时update()为空操作
 };
 
 } // namespace beiklive
