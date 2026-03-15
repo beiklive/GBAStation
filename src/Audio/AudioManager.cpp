@@ -6,7 +6,7 @@
 #include <chrono>
 
 // ============================================================
-// Platform-specific includes
+// 各平台头文件
 // ============================================================
 
 #ifdef __SWITCH__
@@ -29,7 +29,7 @@
 namespace beiklive {
 
 // ============================================================
-// Singleton
+// 单例
 // ============================================================
 
 AudioManager& AudioManager::instance()
@@ -39,7 +39,7 @@ AudioManager& AudioManager::instance()
 }
 
 // ============================================================
-// Ring buffer helpers
+// 环形缓冲区辅助函数
 // ============================================================
 
 void AudioManager::ringWrite(const int16_t* data, size_t count)
@@ -50,7 +50,7 @@ void AudioManager::ringWrite(const int16_t* data, size_t count)
             m_writePos = (m_writePos + 1) % RING_CAPACITY;
             ++m_available;
         } else {
-            // Buffer full: overwrite oldest sample
+            // 缓冲区满：覆盖最旧样本
             m_ring[m_writePos] = data[i];
             m_writePos  = (m_writePos + 1) % RING_CAPACITY;
             m_readPos   = (m_readPos  + 1) % RING_CAPACITY;
@@ -72,7 +72,7 @@ size_t AudioManager::ringRead(int16_t* out, size_t maxCount)
 }
 
 // ============================================================
-// pushSamples – called from libretro audio callback
+// pushSamples – 由 libretro 音频回调调用
 // ============================================================
 
 void AudioManager::pushSamples(const int16_t* data, size_t frames)
@@ -80,7 +80,7 @@ void AudioManager::pushSamples(const int16_t* data, size_t frames)
     if (!m_running) return;
     const size_t count = frames * static_cast<size_t>(m_channels);
     std::unique_lock<std::mutex> lk(m_mutex);
-    // Block if ring is too full to keep game/audio in sync and avoid latency buildup.
+    // 环满时阻塞，保持游戏与音频同步，防止延迟累积
     m_spaceCV.wait(lk, [&] {
         return m_available + count <= m_maxLatencySamples || !m_running;
     });
@@ -89,31 +89,29 @@ void AudioManager::pushSamples(const int16_t* data, size_t frames)
 }
 
 // ============================================================
-// flushRingBuffer – discard all buffered samples
+// flushRingBuffer – 丢弃所有缓冲样本
 // ============================================================
 
 void AudioManager::flushRingBuffer()
 {
     std::lock_guard<std::mutex> lk(m_mutex);
     m_available = 0;
-    m_writePos  = m_readPos; // collapse read/write pointers: nothing to read
-    m_spaceCV.notify_all();  // wake any blocked pushSamples() caller
+    m_writePos  = m_readPos; // 读写指针归位，清空缓冲
+    m_spaceCV.notify_all();  // 唤醒阻塞的 pushSamples() 调用方
 }
 
 // ============================================================
 // ============================================================
-// SWITCH – libnx audout backend
+// SWITCH – libnx audout 后端
 // ============================================================
 // ============================================================
 #ifdef __SWITCH__
 
 static constexpr int    SWITCH_OUT_RATE   = 48000;
-// Reduced from 1024 to 512 for lower hardware latency (~21ms per buffer)
+// 从 1024 降至 512，降低硬件延迟（约 21ms/缓冲）
 static constexpr size_t SWITCH_FRAMES     = 512;
 static constexpr size_t SWITCH_BYTES      = SWITCH_FRAMES * 2 * sizeof(int16_t);
-// Number of hardware audio buffers to keep in flight simultaneously.
-// More buffers = more pre-buffered audio = fewer gaps under load, at the
-// cost of slightly higher total audio latency.
+// 同时在飞的硬件音频缓冲数。数量越多预缓冲越充足、欠载越少，但总延迟略增。
 static constexpr int    SWITCH_N_BUFFERS  = 4;
 
 struct SwitchAudioState {
@@ -142,8 +140,7 @@ bool AudioManager::init(int sampleRate, int channels)
         sw->outBuf[i].buffer_size = SWITCH_BYTES;
         sw->outBuf[i].data_size   = SWITCH_BYTES;
         sw->outBuf[i].data_offset = 0;
-        // Pre-queue all buffers filled with silence so hardware playback
-        // starts immediately and runs gaplessly from the first frame.
+        // 预填静音并入队，确保硬件立即开始无间隙播放
         audoutAppendAudioOutBuffer(&sw->outBuf[i]);
     }
     sw->enqueuedBuffers = SWITCH_N_BUFFERS;
@@ -158,14 +155,12 @@ bool AudioManager::init(int sampleRate, int channels)
 void AudioManager::audioThreadFunc()
 {
 #ifdef __SWITCH__
-    // Pin AudioManager output thread to Core 2.
-    // Core 0 = UI, Core 1 = game emulation, Core 2 = audio (this + feed thread).
-    // Both audio threads are mostly blocked on hardware I/O so sharing is fine.
+    // 将音频输出线程绑定到核心 2（核心 0=UI，核心 1=模拟，核心 2=音频，两个音频线程主要阻塞在硬件 I/O，共享无碍）
     svcSetThreadCoreMask(CUR_THREAD_HANDLE, 2, 1ULL << 2);
 #endif
     auto* sw = static_cast<SwitchAudioState*>(m_platformState);
     while (m_running) {
-        // Non-blocking drain: reclaim any buffers the hardware already finished.
+        // 非阻塞回收：取回硬件已播完的缓冲
         {
             AudioOutBuffer* released = nullptr;
             u32 relCount = 0;
@@ -174,13 +169,11 @@ void AudioManager::audioThreadFunc()
                 sw->enqueuedBuffers -= relCount;
         }
 
-        // If all hardware buffer slots are occupied, wait for at least one to
-        // be released before we can reuse it.  Use a short timeout so we can
-        // exit cleanly when m_running is cleared.
+        // 所有硬件槽占满时等待释放，短超时确保 m_running 清零后能及时退出
         while (sw->enqueuedBuffers >= SWITCH_N_BUFFERS && m_running) {
             AudioOutBuffer* released = nullptr;
             u32 relCount = 0;
-            // 10 ms timeout – keeps CPU usage low while still reacting quickly
+            // 10ms 超时，低 CPU 占用同时响应迅速
             audoutWaitPlayFinish(&released, &relCount, 10000000);
             if (relCount > 0 && sw->enqueuedBuffers >= relCount)
                 sw->enqueuedBuffers -= relCount;
@@ -188,11 +181,10 @@ void AudioManager::audioThreadFunc()
 
         if (!m_running) break;
 
-        // --- Fill the next buffer slot with (resampled) PCM data -----------
+        // --- 填充（重采样后的）PCM 数据到下一个缓冲槽 -------------------
         int16_t* dst = sw->bufData[sw->curBuf];
 
-        // Calculate the exact number of core-rate input frames needed to produce
-        // SWITCH_FRAMES output frames at SWITCH_OUT_RATE via resampling.
+        // 计算重采样所需的输入帧数（核心采样率 → SWITCH_OUT_RATE）
         double ratio = static_cast<double>(m_sampleRate) / SWITCH_OUT_RATE;
         size_t inputFrames = static_cast<size_t>(SWITCH_FRAMES * ratio + 0.5);
         if (inputFrames == 0) inputFrames = 1;
@@ -207,7 +199,7 @@ void AudioManager::audioThreadFunc()
         }
 
         if (m_sampleRate != SWITCH_OUT_RATE) {
-            // Nearest-neighbor resample: inputFrames → SWITCH_FRAMES output
+            // 最近邻重采样：inputFrames → SWITCH_FRAMES
             for (size_t i = 0; i < SWITCH_FRAMES; ++i) {
                 size_t s = static_cast<size_t>(i * ratio);
                 if (s >= inputFrames) s = inputFrames - 1;
@@ -218,7 +210,7 @@ void AudioManager::audioThreadFunc()
             memcpy(dst, tmp, SWITCH_FRAMES * 2 * sizeof(int16_t));
         }
 
-        // Append the filled buffer to the hardware queue (non-blocking).
+        // 将填充好的缓冲加入硬件队列（非阻塞）
         audoutAppendAudioOutBuffer(&sw->outBuf[sw->curBuf]);
         sw->curBuf = (sw->curBuf + 1) % SWITCH_N_BUFFERS;
         ++sw->enqueuedBuffers;
@@ -229,7 +221,7 @@ void AudioManager::deinit()
 {
     if (!m_running) return;
     m_running = false;
-    m_spaceCV.notify_all(); // unblock any pushSamples() waiter
+    m_spaceCV.notify_all(); // 唤醒阻塞的 pushSamples()
     if (m_thread.joinable()) m_thread.join();
     auto* sw = static_cast<SwitchAudioState*>(m_platformState);
     audoutStopAudioOut();
@@ -241,12 +233,12 @@ void AudioManager::deinit()
 
 // ============================================================
 // ============================================================
-// LINUX – ALSA backend
+// LINUX – ALSA 后端
 // ============================================================
 // ============================================================
 #elif defined(BK_AUDIO_ALSA)
 
-// Reduced from 512 to 256 for lower output latency
+// 从 512 降至 256，降低输出延迟
 static constexpr size_t ALSA_PERIOD_FRAMES = 256;
 
 struct AlsaState {
@@ -322,7 +314,7 @@ void AudioManager::deinit()
 {
     if (!m_running) return;
     m_running = false;
-    m_spaceCV.notify_all(); // unblock any pushSamples() waiter
+    m_spaceCV.notify_all(); // 唤醒阻塞的 pushSamples()
     if (m_thread.joinable()) m_thread.join();
     auto* st = static_cast<AlsaState*>(m_platformState);
     if (st->handle) {
@@ -336,12 +328,12 @@ void AudioManager::deinit()
 
 // ============================================================
 // ============================================================
-// WINDOWS – WinMM (waveOut) backend
+// WINDOWS – WinMM (waveOut) 后端
 // ============================================================
 // ============================================================
 #elif defined(BK_AUDIO_WINMM)
 
-// Reduced from 4×1024 to 3×512 for lower output latency (~47ms vs ~125ms)
+// 从 4×1024 降至 3×512，降低输出延迟（约 47ms vs 125ms）
 static constexpr int    WINMM_NUM_BUFS   = 3;
 static constexpr size_t WINMM_BUF_FRAMES = 512;
 static constexpr size_t WINMM_BUF_BYTES  = WINMM_BUF_FRAMES * 2 * sizeof(int16_t);
@@ -399,7 +391,7 @@ bool AudioManager::init(int sampleRate, int channels)
         st->hdrs[i].lpData         = reinterpret_cast<LPSTR>(st->data[i]);
         st->hdrs[i].dwBufferLength = static_cast<DWORD>(WINMM_BUF_BYTES);
         waveOutPrepareHeader(st->hwo, &st->hdrs[i], sizeof(WAVEHDR));
-        st->hdrs[i].dwFlags |= WHDR_DONE; // mark as available initially
+        st->hdrs[i].dwFlags |= WHDR_DONE; // 初始标记为可用
     }
 
     m_ring.resize(RING_CAPACITY);
@@ -415,7 +407,7 @@ void AudioManager::audioThreadFunc()
     while (m_running) {
         WAVEHDR& hdr = st->hdrs[st->nextBuf];
 
-        // Wait until this buffer is free
+        // 等待当前缓冲可用
         while (!(hdr.dwFlags & WHDR_DONE) && m_running)
             WaitForSingleObject(st->event, 10);
 
@@ -443,8 +435,8 @@ void AudioManager::deinit()
     if (!m_running) return;
     auto* st = static_cast<WinMMState*>(m_platformState);
     m_running = false;
-    m_spaceCV.notify_all(); // unblock any pushSamples() waiter
-    if (st && st->event) SetEvent(st->event); // unblock thread if waiting
+    m_spaceCV.notify_all(); // 唤醒阻塞的 pushSamples()
+    if (st && st->event) SetEvent(st->event); // 唤醒等待中的线程
     if (m_thread.joinable()) m_thread.join();
 
     if (st) {
@@ -463,7 +455,7 @@ void AudioManager::deinit()
 
 // ============================================================
 // ============================================================
-// macOS – CoreAudio (AudioUnit) backend
+// macOS – CoreAudio (AudioUnit) 后端
 // ============================================================
 // ============================================================
 #elif defined(BK_AUDIO_COREAUDIO)
@@ -482,7 +474,7 @@ static OSStatus s_coreAudioCallback(void*                        inRefCon,
 {
     auto* mgr = static_cast<AudioManager*>(inRefCon);
     auto* dst = static_cast<int16_t*>(ioData->mBuffers[0].mData);
-    size_t samples = inNumFrames * 2; // stereo
+    size_t samples = inNumFrames * 2; // 立体声
 
     std::lock_guard<std::mutex> lk(mgr->m_mutex);
     size_t got = mgr->ringRead(dst, samples);
@@ -542,13 +534,13 @@ bool AudioManager::init(int sampleRate, int channels)
 
     m_ring.resize(RING_CAPACITY);
     m_running = true;
-    // CoreAudio is callback-driven; no background thread needed
+    // CoreAudio 由回调驱动，无需后台线程
     return true;
 }
 
 void AudioManager::audioThreadFunc()
 {
-    // Not used in CoreAudio backend (callback-driven)
+    // CoreAudio 后端不使用此函数（回调驱动）
     while (m_running)
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
 }
@@ -557,8 +549,8 @@ void AudioManager::deinit()
 {
     if (!m_running) return;
     m_running = false;
-    m_spaceCV.notify_all(); // unblock any pushSamples() waiter
-    // No thread to join for CoreAudio backend
+    m_spaceCV.notify_all(); // 唤醒阻塞的 pushSamples()
+    // CoreAudio 无后台线程需等待
     auto* st = static_cast<CoreAudioState*>(m_platformState);
     if (st->audioUnit) {
         AudioOutputUnitStop(st->audioUnit);
@@ -572,7 +564,7 @@ void AudioManager::deinit()
 
 // ============================================================
 // ============================================================
-// FALLBACK – no audio output (samples discarded)
+// 兜底实现 – 无音频输出（丢弃样本）
 // ============================================================
 // ============================================================
 #else
@@ -603,12 +595,12 @@ void AudioManager::deinit()
 {
     if (!m_running) return;
     m_running = false;
-    m_spaceCV.notify_all(); // unblock any pushSamples() waiter
+    m_spaceCV.notify_all(); // 唤醒阻塞的 pushSamples()
     if (m_thread.joinable()) m_thread.join();
     m_ring.clear();
 }
 
-#endif // platform backends
+#endif // 各平台后端
 
 } // namespace beiklive
 
