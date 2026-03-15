@@ -18,6 +18,10 @@
 #  include <nanovg/nanovg_gl.h>
 #endif
 
+// ---- stb_image_write（用于截图 PNG 写入） -----------------------------------
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "third_party/borealis/library/lib/extern/glfw/deps/stb_image_write.h"
+
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -165,13 +169,15 @@ void GameView::initialize()
         cfg->SetDefault("save.sramDir",         CV(std::string("")));
         cfg->SetDefault("save.stateDir",         CV(std::string("")));
         cfg->SetDefault("save.slotCount",        CV(9));
-        cfg->SetDefault("save.autoLoadState0",   CV(std::string("false")));
+        cfg->SetDefault("save.autoLoadState1",   CV(std::string("false")));
+        cfg->SetDefault("save.autoSaveInterval", CV(0));
         cfg->SetDefault("cheat.dir",             CV(std::string("")));
 
         // ---- FPS display defaults ------------------------------------
         cfg->SetDefault("display.showFps",           CV(std::string("false")));
         cfg->SetDefault("display.showFfOverlay",     CV(std::string("false")));
         cfg->SetDefault("display.showRewindOverlay", CV(std::string("false")));
+        cfg->SetDefault("display.showMuteOverlay",   CV(std::string("true")));
         cfg->SetDefault(KEY_DISPLAY_OVERLAY_ENABLED,  CV(std::string("false")));
         cfg->SetDefault(KEY_DISPLAY_OVERLAY_GBA_PATH, CV(std::string("")));
         cfg->SetDefault(KEY_DISPLAY_OVERLAY_GBC_PATH, CV(std::string("")));
@@ -194,6 +200,7 @@ void GameView::initialize()
         m_showFps           = getBool("display.showFps",           false);
         m_showFfOverlay     = getBool("display.showFfOverlay",     false);
         m_showRewindOverlay = getBool("display.showRewindOverlay", false);
+        m_showMuteOverlay   = getBool("display.showMuteOverlay",   true);
         m_overlayEnabled    = getBool(KEY_DISPLAY_OVERLAY_ENABLED, false);
 
         // ---- Resolve overlay path for this game --------------------------
@@ -295,15 +302,15 @@ void GameView::initialize()
 
         m_core.reset(); // Ensure the core starts in a clean state after loading saves/cheats
 
-        // ---- 自动读取即时存档0（如果开启） ----------------------
+        // ---- 自动读取即时存档1（如果开启） ----------------------
         // 使用 cfgGetBool 读取配置（gameRunner->settingConfig 与 SettingManager 指向同一对象）
-        if (beiklive::cfgGetBool("save.autoLoadState0", false)) {
-            std::string state0Path = quickSaveStatePath(0);
-            if (std::filesystem::exists(state0Path)) {
-                bklog::info("GameView: 自动读取即时存档0: {}", state0Path);
-                doQuickLoad(0);
+        if (beiklive::cfgGetBool("save.autoLoadState1", false)) {
+            std::string state1Path = quickSaveStatePath(1);
+            if (std::filesystem::exists(state1Path)) {
+                bklog::info("GameView: 自动读取即时存档1: {}", state1Path);
+                doQuickLoad(1);
             } else {
-                bklog::info("GameView: 自动读取即时存档0已开启, 但 slot0 存档文件不存在: {}", state0Path);
+                bklog::info("GameView: 自动读取即时存档1已开启, 但 slot1 存档文件不存在: {}", state1Path);
             }
         }
     }
@@ -398,6 +405,9 @@ void GameView::startGameThread()
 
         // RTC sync timer: write current Unix time to core's RTC memory once per second.
         Clock::time_point rtcSyncTimer = Clock::now();
+
+        // 自动存档计时器：定时保存到即时存档0（.ss0）
+        Clock::time_point autoSaveTimer = Clock::now();
 
         // Accumulated ideal frame-end time for drift-free 60fps timing.
         // Advancing by frameDuration each iteration prevents timing errors from
@@ -599,6 +609,25 @@ void GameView::startGameThread()
             {
                 int slot = m_pendingQuickLoad.exchange(-1, std::memory_order_relaxed);
                 if (slot >= 0) doQuickLoad(slot);
+            }
+
+            // ---- 自动定时存档（定期保存到即时存档0 .ss0） --------
+            {
+                int autoSaveIntervalSec = beiklive::cfgGetInt("save.autoSaveInterval", 0);
+                if (autoSaveIntervalSec > 0) {
+                    auto autoSaveElapsed = std::chrono::duration_cast<std::chrono::seconds>(
+                        nowPost - autoSaveTimer).count();
+                    if (autoSaveElapsed >= autoSaveIntervalSec) {
+                        // 重置计时器（以自动存档间隔为单位推进，避免漂移）
+                        autoSaveTimer += std::chrono::seconds(autoSaveIntervalSec);
+                        doQuickSave(0);
+                    }
+                }
+            }
+
+            // ---- 截图处理 --------
+            if (m_pendingScreenshot.exchange(false, std::memory_order_relaxed)) {
+                doScreenshot();
             }
 
             // 帧率限制器
@@ -840,6 +869,13 @@ void GameView::registerGamepadHotkeys()
     {
         if (evt == KeyEvent::ShortPress)
             m_muted.store(!m_muted.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    });
+
+    // ── 截图 ─────────────────────────────────────────────────────────────────
+    reg(Hotkey::Screenshot, [this](KeyEvent evt)
+    {
+        if (evt == KeyEvent::ShortPress)
+            m_pendingScreenshot.store(true, std::memory_order_relaxed);
     });
 }
 
@@ -1266,7 +1302,109 @@ void GameView::doQuickLoad(int slot)
 }
 
 // ============================================================
-// loadCheats – parse and apply cheats from the .cht file
+// doScreenshot – 截图并保存为 PNG
+//
+// 截图保存位置由 screenshot.dir 配置决定：
+//   0（默认）= 与游戏 ROM 同目录
+//   1        = BK_APP_ROOT_DIR/albums/{游戏文件名（无后缀）}/
+//
+// 文件名格式：{游戏名}_{时间戳}.png
+// ============================================================
+
+void GameView::doScreenshot()
+{
+    // 获取当前帧
+    beiklive::LibretroLoader::VideoFrame frame = m_core.getVideoFrame();
+    if (frame.pixels.empty() || frame.width == 0 || frame.height == 0) {
+        bklog::warning("GameView: 截图失败，帧数据为空");
+        std::lock_guard<std::mutex> lk(m_saveMsgMutex);
+        m_saveMsg     = "Screenshot failed (no frame)";
+        m_saveMsgTime = std::chrono::steady_clock::now();
+        return;
+    }
+
+    // 决定保存目录
+    int screenshotDirMode = beiklive::cfgGetInt("screenshot.dir", 0);
+    std::string saveDir;
+    if (screenshotDirMode == 1) {
+        // 模拟器相册目录：BK_APP_ROOT_DIR/albums/{游戏文件名（无后缀）}/
+        std::string gameStem;
+        if (!m_romFileName.empty()) {
+            std::filesystem::path p(m_romFileName);
+            gameStem = p.stem().string();
+        } else {
+            gameStem = "unknown";
+        }
+        saveDir = std::string(BK_APP_ROOT_DIR) + "albums/" + gameStem;
+    } else {
+        // 与游戏 ROM 同目录
+        saveDir = beiklive::file::getParentPath(m_romPath);
+        if (saveDir.empty()) {
+            saveDir = std::string(BK_APP_ROOT_DIR) + "albums/screenshots";
+        }
+    }
+
+    // 确保目录存在
+    {
+        std::error_code ec;
+        std::filesystem::create_directories(saveDir, ec);
+        if (ec) {
+            bklog::warning("GameView: 截图目录创建失败 '{}': {}", saveDir, ec.message());
+            std::lock_guard<std::mutex> lk(m_saveMsgMutex);
+            m_saveMsg     = "Screenshot failed (mkdir)";
+            m_saveMsgTime = std::chrono::steady_clock::now();
+            return;
+        }
+    }
+
+    // 生成文件名：{游戏名}_{时间戳}.png
+    std::string gameStem;
+    if (!m_romFileName.empty()) {
+        std::filesystem::path p(m_romFileName);
+        gameStem = p.stem().string();
+    } else {
+        gameStem = "screenshot";
+    }
+    std::time_t t = std::time(nullptr);
+    char timeBuf[32];
+    // 使用线程安全的时间格式化接口
+#if defined(_WIN32)
+    struct tm tmBuf{};
+    localtime_s(&tmBuf, &t);
+    std::strftime(timeBuf, sizeof(timeBuf), "%Y%m%d_%H%M%S", &tmBuf);
+#else
+    struct tm tmBuf{};
+    localtime_r(&t, &tmBuf);
+    std::strftime(timeBuf, sizeof(timeBuf), "%Y%m%d_%H%M%S", &tmBuf);
+#endif
+    std::string sep = (!saveDir.empty() && saveDir.back() != '/' && saveDir.back() != '\\')
+                      ? "/" : "";
+    std::string filePath = saveDir + sep + gameStem + "_" + timeBuf + ".png";
+
+    // 将 RGBA8888 像素数据写入 PNG（stbi_write_png）
+    // stbi_write_png 需要 RGBA 格式（4通道），stride = width * 4
+    int result = stbi_write_png(
+        filePath.c_str(),
+        static_cast<int>(frame.width),
+        static_cast<int>(frame.height),
+        4,  // RGBA
+        frame.pixels.data(),
+        static_cast<int>(frame.width * 4)
+    );
+
+    if (result == 0) {
+        bklog::warning("GameView: 截图写入失败: {}", filePath);
+        std::lock_guard<std::mutex> lk(m_saveMsgMutex);
+        m_saveMsg     = "Screenshot failed (write)";
+        m_saveMsgTime = std::chrono::steady_clock::now();
+        return;
+    }
+
+    bklog::info("GameView: 截图已保存: {}", filePath);
+    std::lock_guard<std::mutex> lk(m_saveMsgMutex);
+    m_saveMsg     = "Screenshot saved";
+    m_saveMsgTime = std::chrono::steady_clock::now();
+}
 //
 // Supported formats:
 //
@@ -1865,8 +2003,8 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
     }
 
     // ---- 静音状态覆盖层 --------------------------------------
-    // 游戏静音时在屏幕右下角显示静音提示。
-    if (m_muted.load(std::memory_order_relaxed)) {
+    // 游戏静音时在屏幕右下角显示静音提示（由 display.showMuteOverlay 控制）。
+    if (m_showMuteOverlay && m_muted.load(std::memory_order_relaxed)) {
         const char* muteText = "MUTE";
         float nw = 60.0f, nh = 22.0f;
         float nx = x + width  - nw - 4.0f;
