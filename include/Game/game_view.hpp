@@ -95,6 +95,10 @@ class GameView : public brls::Box
     // ---- 退出请求 ---------------------------------------------------
     std::atomic<bool> m_requestExit{false}; ///< 由游戏线程设置，draw()消费
 
+    // ---- 退出时自动保存标志 -----------------------------------------
+    /// 由菜单退出回调设置，cleanup() 中在卸载游戏前执行一次 doQuickSave(0)。
+    std::atomic<bool> m_autoSaveOnExit{false};
+
     // ---- 打开菜单请求 -----------------------------------------------
     std::atomic<bool> m_requestOpenMenu{false}; ///< 由游戏线程设置，draw()消费
 

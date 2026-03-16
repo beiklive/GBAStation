@@ -363,9 +363,13 @@ GameMenu::GameMenu()
         btn3->getFocusEvent()->subscribe([hideAllPanels](brls::View*) {
             hideAllPanels();
         });
-        btn3->registerAction("", brls::BUTTON_A, [](brls::View* v) {
-            // 直接退出整个 Activity，返回游戏列表
-            brls::Application::popActivity();
+        btn3->registerAction("", brls::BUTTON_A, [this](brls::View* v) {
+            // 若已设置退出回调（如 GameView 中的自动保存逻辑），则调用回调；
+            // 否则直接退出整个 Activity，返回游戏列表
+            if (m_exitGameCallback)
+                m_exitGameCallback();
+            else
+                brls::Application::popActivity();
             return true;
         });
         // 无子面板，阻止右键导航

@@ -743,6 +743,12 @@ void GameView::cleanup()
     }
 
     if (m_core.isLoaded()) {
+        // 若从菜单退出且开启了自动保存（save.autoSaveState），在卸载前保存即时存档0。
+        // 使用 exchange 原子地读取并清除标志，防止重复执行（即使 cleanup 被多次调用）。
+        if (m_autoSaveOnExit.exchange(false, std::memory_order_relaxed)) {
+            bklog::info("GameView: cleanup 中执行退出自动保存 (slot 0)");
+            doQuickSave(0, /*silent=*/true);
+        }
         // 卸载游戏前保存 SRAM（电池存档）
         if (!m_romPath.empty()) {
             saveSram();
@@ -773,6 +779,15 @@ void GameView::setGameMenu(GameMenu* menu)
             setPaused(false);
             setGameInputEnabled(true);
             brls::Application::giveFocus(this);
+        });
+        // 退出游戏回调：若开启了 save.autoSaveState（每次退出游戏时自动保存即时存档0），
+        // 则标记退出时自动保存（cleanup() 中在停止游戏线程后执行），再弹出 Activity
+        m_gameMenu->setExitGameCallback([this]() {
+            if (beiklive::cfgGetBool("save.autoSaveState", false)) {
+                m_autoSaveOnExit.store(true, std::memory_order_relaxed);
+                bklog::info("GameView: 退出游戏时将自动保存即时存档0");
+            }
+            brls::Application::popActivity();
         });
         // 遮罩路径变更时立即更新 m_overlayPath 并标记重新加载，
         // draw() 下一帧将在菜单仍打开期间预加载新纹理，恢复游戏无卡顿

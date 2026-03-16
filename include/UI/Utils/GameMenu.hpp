@@ -30,6 +30,11 @@ public:
     /// 设置"返回游戏"回调。菜单关闭时在 UI 线程调用。
     void setCloseCallback(std::function<void()> cb) { m_closeCallback = std::move(cb); }
 
+    /// 设置"退出游戏"回调。用户点击退出游戏按钮时在 UI 线程调用。
+    /// 若已设置，则由回调负责实际退出（如先自动保存再 popActivity）；
+    /// 若未设置，退出按钮直接调用 brls::Application::popActivity()。
+    void setExitGameCallback(std::function<void()> cb) { m_exitGameCallback = std::move(cb); }
+
     /// 设置金手指列表并刷新 cheatbox 显示。
     /// 须在主（UI）线程调用。
     void setCheats(const std::vector<CheatEntry>& cheats);
@@ -68,6 +73,7 @@ private:
     void buildStatePanel(bool isSave, brls::Box* container);
 
     std::function<void()>               m_closeCallback;
+    std::function<void()>               m_exitGameCallback;
     std::function<void(const std::string&)> m_overlayChangedCallback;
     std::function<void(int, bool)>      m_cheatToggleCallback;
     std::function<void(int)>            m_saveStateCallback;     ///< 确认保存状态时调用
