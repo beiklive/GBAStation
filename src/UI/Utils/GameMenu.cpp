@@ -53,8 +53,20 @@ GameMenu::GameMenu()
         leftBox->addView(label);
         leftBox->addView(new brls::Padding());
 
+        // 隐藏所有右侧面板的辅助函数
+        auto hideAllPanels = [this]() {
+            if (m_cheatScrollFrame)
+                m_cheatScrollFrame->setVisibility(brls::Visibility::GONE);
+            if (m_displayScrollFrame)
+                m_displayScrollFrame->setVisibility(brls::Visibility::GONE);
+        };
+
         auto* btn = new brls::Button();
         btn->setText("返回游戏");
+        // 返回游戏按钮得到焦点时，隐藏所有面板
+        btn->getFocusEvent()->subscribe([hideAllPanels](brls::View*) {
+            hideAllPanels();
+        });
         btn->registerAction("", brls::BUTTON_A, [this](brls::View* v) {
             // 隐藏整个菜单（this 为 GameMenu，v 为按钮本身）
             setVisibility(brls::Visibility::GONE);
@@ -72,15 +84,16 @@ GameMenu::GameMenu()
         m_cheatScrollFrame->setScrollingBehavior(brls::ScrollingBehavior::CENTERED);
         m_cheatItemBox = new brls::Box(brls::Axis::COLUMN);
         m_cheatScrollFrame->setContentView(m_cheatItemBox);
-        btn2->registerAction("", brls::BUTTON_A, [this](brls::View* v) {
-            if (m_cheatScrollFrame->getVisibility() == brls::Visibility::GONE) {
-                // 关闭画面设置面板，打开金手指面板
-                if (m_displayScrollFrame)
-                    m_displayScrollFrame->setVisibility(brls::Visibility::GONE);
-                m_cheatScrollFrame->setVisibility(brls::Visibility::VISIBLE);
-            } else {
-                m_cheatScrollFrame->setVisibility(brls::Visibility::GONE);
-            }
+        // 金手指按钮得到焦点时，显示金手指面板并隐藏其他面板
+        btn2->getFocusEvent()->subscribe([this, hideAllPanels](brls::View*) {
+            hideAllPanels();
+            m_cheatScrollFrame->setVisibility(brls::Visibility::VISIBLE);
+        });
+        // A 键将焦点转入金手指面板，使用户可以操作面板内容
+        btn2->registerAction("", brls::BUTTON_A, [this](brls::View*) {
+            if (m_cheatScrollFrame &&
+                m_cheatScrollFrame->getVisibility() == brls::Visibility::VISIBLE)
+                brls::Application::giveFocus(m_cheatScrollFrame);
             return true;
         });
 
@@ -184,22 +197,26 @@ GameMenu::GameMenu()
         m_displayScrollFrame->setContentView(displayBox);
         rightBox->addView(m_displayScrollFrame);
 
-        // 绑定"画面设置"按钮动作
-        btnDisplay->registerAction("", brls::BUTTON_A, [this](brls::View* v) {
-            if (m_displayScrollFrame->getVisibility() == brls::Visibility::GONE) {
-                // 关闭金手指面板，打开画面设置面板
-                if (m_cheatScrollFrame)
-                    m_cheatScrollFrame->setVisibility(brls::Visibility::GONE);
-                m_displayScrollFrame->setVisibility(brls::Visibility::VISIBLE);
-            } else {
-                m_displayScrollFrame->setVisibility(brls::Visibility::GONE);
-            }
+        // 画面设置按钮得到焦点时，显示画面设置面板并隐藏其他面板
+        btnDisplay->getFocusEvent()->subscribe([this, hideAllPanels](brls::View*) {
+            hideAllPanels();
+            m_displayScrollFrame->setVisibility(brls::Visibility::VISIBLE);
+        });
+        // A 键将焦点转入画面设置面板，使用户可以操作面板内容
+        btnDisplay->registerAction("", brls::BUTTON_A, [this](brls::View*) {
+            if (m_displayScrollFrame &&
+                m_displayScrollFrame->getVisibility() == brls::Visibility::VISIBLE)
+                brls::Application::giveFocus(m_displayScrollFrame);
             return true;
         });
         leftBox->addView(btnDisplay);
 
         auto* btn3 = new brls::Button();
         btn3->setText("退出游戏");
+        // 退出游戏按钮得到焦点时，隐藏所有面板
+        btn3->getFocusEvent()->subscribe([hideAllPanels](brls::View*) {
+            hideAllPanels();
+        });
         btn3->registerAction("", brls::BUTTON_A, [](brls::View* v) {
             // 直接退出整个 Activity，返回游戏列表
             brls::Application::popActivity();
