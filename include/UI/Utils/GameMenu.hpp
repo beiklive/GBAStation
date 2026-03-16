@@ -55,6 +55,12 @@ public:
         m_overlayChangedCallback = std::move(cb);
     }
 
+    /// 设置遮罩开关变更回调。用户切换遮罩启用状态时在 UI 线程调用，参数为新的启用状态。
+    void setOverlayEnabledChangedCallback(std::function<void(bool)> cb)
+    {
+        m_overlayEnabledChangedCallback = std::move(cb);
+    }
+
     /// 设置保存状态回调。用户确认保存后在 UI 线程调用，参数为槽号（0-9）。
     void setSaveStateCallback(std::function<void(int)> cb) { m_saveStateCallback = std::move(cb); }
 
@@ -75,6 +81,7 @@ private:
     std::function<void()>               m_closeCallback;
     std::function<void()>               m_exitGameCallback;
     std::function<void(const std::string&)> m_overlayChangedCallback;
+    std::function<void(bool)>           m_overlayEnabledChangedCallback;
     std::function<void(int, bool)>      m_cheatToggleCallback;
     std::function<void(int)>            m_saveStateCallback;     ///< 确认保存状态时调用
     std::function<void(int)>            m_loadStateCallback;     ///< 确认读取状态时调用

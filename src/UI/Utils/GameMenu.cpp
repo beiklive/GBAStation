@@ -257,7 +257,12 @@ GameMenu::GameMenu()
         auto* overlayEnCell = new brls::BooleanCell();
         overlayEnCell->init("beiklive/settings/display/overlay_enable"_i18n,
                             cfgGetBool(KEY_DISPLAY_OVERLAY_ENABLED, false),
-                            [](bool v) { cfgSetBool(KEY_DISPLAY_OVERLAY_ENABLED, v); });
+                            [this](bool v) {
+                                cfgSetBool(KEY_DISPLAY_OVERLAY_ENABLED, v);
+                                // 立即通知 GameView 遮罩启用状态已变更
+                                if (m_overlayEnabledChangedCallback)
+                                    m_overlayEnabledChangedCallback(v);
+                            });
         displayBox->addView(overlayEnCell);
 
         // --- 遮罩路径选择（读/写 gamedataManager 的 overlay 字段）---
