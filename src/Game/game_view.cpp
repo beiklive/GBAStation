@@ -778,6 +778,24 @@ void GameView::setGameMenu(GameMenu* menu)
             m_overlayPath = newPath;
             m_overlayReloadPending.store(true, std::memory_order_release);
         });
+        // 保存状态回调：设置待处理槽号，游戏线程下一帧执行实际存档
+        m_gameMenu->setSaveStateCallback([this](int slot) {
+            m_pendingQuickSave.store(slot, std::memory_order_relaxed);
+        });
+        // 读取状态回调：设置待处理槽号，游戏线程下一帧执行实际读档
+        m_gameMenu->setLoadStateCallback([this](int slot) {
+            m_pendingQuickLoad.store(slot, std::memory_order_relaxed);
+        });
+        // 状态槽位信息查询回调：检查状态文件是否存在，返回缩略图路径
+        m_gameMenu->setStateInfoCallback([this](int slot) -> GameMenu::StateSlotInfo {
+            GameMenu::StateSlotInfo info;
+            std::string statePath = quickSaveStatePath(slot);
+            info.exists = std::filesystem::exists(statePath);
+            std::string thumbPath = statePath + ".png";
+            if (std::filesystem::exists(thumbPath))
+                info.thumbPath = thumbPath;
+            return info;
+        });
     }
 }
 
@@ -1299,6 +1317,27 @@ void GameView::doQuickSave(int slot, bool silent)
     }
 
     bklog::info("GameView: state saved to {} ({} bytes)", path, sz);
+
+    // 保存状态缩略图（与状态文件同目录，扩展名 .png）
+    {
+        auto frame = m_core.getVideoFrame();
+        if (!frame.pixels.empty() && frame.width > 0 && frame.height > 0) {
+            std::string thumbPath = path + ".png";
+            static constexpr int RGBA_CHANNELS = 4; // RGBA 像素通道数
+            int ret = stbi_write_png(
+                thumbPath.c_str(),
+                static_cast<int>(frame.width),
+                static_cast<int>(frame.height),
+                RGBA_CHANNELS,
+                frame.pixels.data(),
+                static_cast<int>(frame.width * RGBA_CHANNELS));
+            if (ret)
+                bklog::debug("GameView: 状态缩略图已保存: {}", thumbPath);
+            else
+                bklog::warning("GameView: 状态缩略图保存失败: {}", thumbPath);
+        }
+    }
+
     if (!silent) {
         char msg[64];
         snprintf(msg, sizeof(msg), "Saved (slot %d)", slot);

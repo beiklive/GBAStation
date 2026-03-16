@@ -143,7 +143,15 @@
             "not_implemented": "（功能待实现）"
         },
         "gamemenu": {
-            "btn_display": "画面设置"
+            "btn_display": "画面设置",
+            "btn_save_state": "保存状态",
+            "btn_load_state": "读取状态",
+            "save_slot_auto": "自动存储档位",
+            "load_slot_auto": "自动读取档位",
+            "save_slot_prefix": "保存到状态",
+            "load_slot_prefix": "读取状态",
+            "save_confirm": "确认保存到此档位？",
+            "load_confirm": "确认从此档位读取？"
         },
         "audio": {
             "header_emu": "模拟器声音",

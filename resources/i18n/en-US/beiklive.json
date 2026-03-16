@@ -143,7 +143,15 @@
             "not_implemented": "(Not Implemented)"
         },
         "gamemenu": {
-            "btn_display": "Display Settings"
+            "btn_display": "Display Settings",
+            "btn_save_state": "Save State",
+            "btn_load_state": "Load State",
+            "save_slot_auto": "Auto Save Slot",
+            "load_slot_auto": "Auto Load Slot",
+            "save_slot_prefix": "Save to Slot ",
+            "load_slot_prefix": "Load Slot ",
+            "save_confirm": "Confirm save to this slot?",
+            "load_confirm": "Confirm load from this slot?"
         },
         "audio": {
             "header_emu": "Emulator Audio",
