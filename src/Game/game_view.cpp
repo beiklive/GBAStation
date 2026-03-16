@@ -1664,13 +1664,17 @@ void GameView::loadCheats()
     m_cheats = parseChtFile(m_cheatPath);
 
     // 应用金手指到核心
+    // 注意：mGBA 的 retro_cheat_set 会忽略 enabled 参数（UNUSED），
+    // 因此只对已启用的金手指调用 cheatSet，禁用的金手指不传入核心。
     m_core.cheatReset();
     for (size_t i = 0; i < m_cheats.size(); ++i) {
         bklog::info("GameView: cheat[{}] \"{}\" {} code={}", i,
                     m_cheats[i].desc,
                     m_cheats[i].enabled ? "enabled" : "disabled",
                     m_cheats[i].code);
-        m_core.cheatSet(static_cast<unsigned>(i), m_cheats[i].enabled, m_cheats[i].code);
+        if (m_cheats[i].enabled) {
+            m_core.cheatSet(static_cast<unsigned>(i), true, m_cheats[i].code);
+        }
     }
 
     if (!m_cheats.empty())
@@ -1686,9 +1690,13 @@ void GameView::loadCheats()
 void GameView::updateCheats()
 {
     // 重置核心金手指状态，再逐条重新设置
+    // 注意：mGBA 的 retro_cheat_set 会忽略 enabled 参数（UNUSED），
+    // 因此只对已启用的金手指调用 cheatSet，禁用的金手指不传入核心。
     m_core.cheatReset();
     for (size_t i = 0; i < m_cheats.size(); ++i) {
-        m_core.cheatSet(static_cast<unsigned>(i), m_cheats[i].enabled, m_cheats[i].code);
+        if (m_cheats[i].enabled) {
+            m_core.cheatSet(static_cast<unsigned>(i), true, m_cheats[i].code);
+        }
     }
     // 将启用状态写回磁盘上的 .cht 文件
     if (!m_cheatPath.empty()) {
