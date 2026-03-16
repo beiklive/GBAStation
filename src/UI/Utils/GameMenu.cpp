@@ -48,16 +48,23 @@ GameMenu::GameMenu()
     mainbox->setGrow(1.0f);
     auto* leftBox = new brls::Box(brls::Axis::COLUMN);
     leftBox->setWidthPercentage(30.0f);
+    leftBox->setAlignItems(brls::AlignItems::CENTER);
     auto* rightBox = new brls::Box(brls::Axis::COLUMN);
     rightBox->setWidthPercentage(70.0f);
+    rightBox->setPadding(20.0f);
+
     mainbox->addView(leftBox);
     mainbox->addView(rightBox);
     // 左边栏
     {
+        leftBox->addView(new brls::Padding());
+
         auto* label = new brls::Label();
         label->setText("Game Menu");
+        label->setFontSize(40);
+        label->setMarginBottom(20.f);
+
         leftBox->addView(label);
-        leftBox->addView(new brls::Padding());
 
         // 隐藏所有右侧面板的辅助函数
         auto hideAllPanels = [this]() {
@@ -84,11 +91,13 @@ GameMenu::GameMenu()
             if (m_closeCallback) m_closeCallback();
             return true;
         });
+        btn->setWidthPercentage(80.0f);
         leftBox->addView(btn);
 
         // ---- 保存状态按钮 ----
         auto* btnSaveState = new brls::Button();
         btnSaveState->setText("beiklive/gamemenu/btn_save_state"_i18n);
+        btnSaveState->setWidthPercentage(80.0f);
 
         // 保存状态面板：ScrollingFrame 包含 10 个槽位行
         m_saveStateScrollFrame = new brls::ScrollingFrame();
@@ -118,6 +127,7 @@ GameMenu::GameMenu()
         // ---- 读取状态按钮 ----
         auto* btnLoadState = new brls::Button();
         btnLoadState->setText("beiklive/gamemenu/btn_load_state"_i18n);
+        btnLoadState->setWidthPercentage(80.0f);
 
         // 读取状态面板：ScrollingFrame 包含 10 个槽位行
         m_loadStateScrollFrame = new brls::ScrollingFrame();
@@ -147,6 +157,7 @@ GameMenu::GameMenu()
         // ---- 金手指按钮 ----
         auto* btn2 = new brls::Button();
         btn2->setText("金手指");
+        btn2->setWidthPercentage(80.0f);
         // 金手指面板：ScrollingFrame 限高，避免内容溢出后焦点丢失
         m_cheatScrollFrame = new brls::ScrollingFrame();
         m_cheatScrollFrame->setVisibility(brls::Visibility::GONE);
@@ -172,6 +183,7 @@ GameMenu::GameMenu()
 
         // ---- 画面设置按钮 ----
         auto* btnDisplay = new brls::Button();
+        btnDisplay->setWidthPercentage(80.0f);
         btnDisplay->setText("beiklive/gamemenu/btn_display"_i18n);
 
         // ---- 构建画面设置面板 ----
@@ -285,6 +297,8 @@ GameMenu::GameMenu()
         leftBox->addView(btnDisplay);
 
         auto* btn3 = new brls::Button();
+        btn3->setWidthPercentage(80.0f);
+        
         btn3->setText("退出游戏");
         // 退出游戏按钮得到焦点时，隐藏所有面板
         btn3->getFocusEvent()->subscribe([hideAllPanels](brls::View*) {
@@ -345,9 +359,10 @@ void GameMenu::buildStatePanel(bool isSave, brls::Box* container, brls::Image* t
 
         // 缩略图（初始隐藏，有状态文件时才显示）
         auto* thumb = new brls::Image();
-        thumb->setWidth(STATE_THUMB_WIDTH);
-        thumb->setMinWidth(STATE_THUMB_WIDTH);
-        thumb->setHeight(STATE_THUMB_HEIGHT);
+        thumb->setPositionType(brls::PositionType::ABSOLUTE);
+        // thumb->setWidth(STATE_THUMB_WIDTH);
+        // thumb->setMinWidth(STATE_THUMB_WIDTH);
+        // thumb->setHeight(STATE_THUMB_HEIGHT);
         thumb->setScalingType(brls::ImageScalingType::FIT);
         thumb->setVisibility(brls::Visibility::GONE);
         thumbImages[slot] = thumb;
