@@ -748,11 +748,11 @@ brls::ScrollingFrame* SettingPage::buildGameTab()
         box->addView(autoSaveIntervalCell);
     }
 
-    auto* autoLoadState1Cell = new brls::BooleanCell();
-    autoLoadState1Cell->init("beiklive/settings/game/auto_load_state1"_i18n,
-                             cfgGetBool("save.autoLoadState1", false),
-                             [](bool v){ cfgSetBool("save.autoLoadState1", v); });
-    box->addView(autoLoadState1Cell);
+    auto* autoLoadState0Cell = new brls::BooleanCell();
+    autoLoadState0Cell->init("beiklive/settings/game/auto_load_state0"_i18n,
+                             cfgGetBool("save.autoLoadState0", false),
+                             [](bool v){ cfgSetBool("save.autoLoadState0", v); });
+    box->addView(autoLoadState0Cell);
 
     {
         auto* sramDirCell = new brls::SelectorCell();

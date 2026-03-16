@@ -179,7 +179,7 @@ void GameView::initialize()
         cfg->SetDefault("save.sramDir",         CV(std::string("")));
         cfg->SetDefault("save.stateDir",         CV(std::string("")));
         cfg->SetDefault("save.slotCount",        CV(9));
-        cfg->SetDefault("save.autoLoadState1",   CV(std::string("false")));
+        cfg->SetDefault("save.autoLoadState0",   CV(std::string("false")));
         cfg->SetDefault("save.autoSaveInterval", CV(0));
         cfg->SetDefault("cheat.dir",             CV(std::string("")));
 
@@ -325,15 +325,15 @@ void GameView::initialize()
 
         m_core.reset(); // 加载存档/金手指后确保核心从干净状态启动
 
-        // ---- 自动读取即时存档1（如果开启） ----------------------
+        // ---- 自动读取即时存档0（如果开启） ----------------------
         // 使用 cfgGetBool 读取配置（gameRunner->settingConfig 与 SettingManager 指向同一对象）
-        if (beiklive::cfgGetBool("save.autoLoadState1", false)) {
-            std::string state1Path = quickSaveStatePath(1);
-            if (std::filesystem::exists(state1Path)) {
-                bklog::info("GameView: 自动读取即时存档1: {}", state1Path);
-                doQuickLoad(1);
+        if (beiklive::cfgGetBool("save.autoLoadState0", false)) {
+            std::string state0Path = quickSaveStatePath(0);
+            if (std::filesystem::exists(state0Path)) {
+                bklog::info("GameView: 自动读取即时存档0: {}", state0Path);
+                doQuickLoad(0);
             } else {
-                bklog::info("GameView: 自动读取即时存档1已开启, 但 slot1 存档文件不存在: {}", state1Path);
+                bklog::info("GameView: 自动读取即时存档0已开启, 但 slot0 存档文件不存在: {}", state0Path);
             }
         }
     }
@@ -743,6 +743,12 @@ void GameView::cleanup()
     }
 
     if (m_core.isLoaded()) {
+        // 若从菜单退出且开启了自动保存（save.autoSaveState），在卸载前保存即时存档0。
+        // 使用 exchange 原子地读取并清除标志，防止重复执行（即使 cleanup 被多次调用）。
+        if (m_autoSaveOnExit.exchange(false, std::memory_order_relaxed)) {
+            bklog::info("GameView: cleanup 中执行退出自动保存 (slot 0)");
+            doQuickSave(0, /*silent=*/true);
+        }
         // 卸载游戏前保存 SRAM（电池存档）
         if (!m_romPath.empty()) {
             saveSram();
@@ -773,6 +779,15 @@ void GameView::setGameMenu(GameMenu* menu)
             setPaused(false);
             setGameInputEnabled(true);
             brls::Application::giveFocus(this);
+        });
+        // 退出游戏回调：若开启了 save.autoSaveState（每次退出游戏时自动保存即时存档0），
+        // 则标记退出时自动保存（cleanup() 中在停止游戏线程后执行），再弹出 Activity
+        m_gameMenu->setExitGameCallback([this]() {
+            if (beiklive::cfgGetBool("save.autoSaveState", false)) {
+                m_autoSaveOnExit.store(true, std::memory_order_relaxed);
+                bklog::info("GameView: 退出游戏时将自动保存即时存档0");
+            }
+            brls::Application::popActivity();
         });
         // 遮罩路径变更时立即更新 m_overlayPath 并标记重新加载，
         // draw() 下一帧将在菜单仍打开期间预加载新纹理，恢复游戏无卡顿
