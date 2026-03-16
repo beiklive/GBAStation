@@ -19,22 +19,57 @@ GameMenu::GameMenu()
     setHideHighlightBorder(true);
     setHideHighlightBackground(true);
 
-    auto* label = new brls::Label();
-    label->setText("Game Menu");
-    addView(label);
-    addView(new brls::Padding());
+    auto* mainbox = new brls::Box(brls::Axis::ROW);
+    auto* leftBox = new brls::Box(brls::Axis::COLUMN);
+    auto* rightBox = new brls::Box(brls::Axis::COLUMN);
+    mainbox->addView(leftBox);
+    mainbox->addView(rightBox);
+    // 左边栏
+    {
+        auto* label = new brls::Label();
+        label->setText("Game Menu");
+        leftBox->addView(label);
+        leftBox->addView(new brls::Padding());
 
-    auto* btn = new brls::Button();
-    btn->setText("返回游戏");
-    btn->registerAction("", brls::BUTTON_A, [this](brls::View* v) {
-        // 隐藏整个菜单（this 为 GameMenu，v 为按钮本身）
-        setVisibility(brls::Visibility::GONE);
-        if (m_closeCallback) m_closeCallback();
-        return true;
-    });
-    addView(btn);
+        auto* btn = new brls::Button();
+        btn->setText("返回游戏");
+        btn->registerAction("", brls::BUTTON_A, [this](brls::View* v) {
+            // 隐藏整个菜单（this 为 GameMenu，v 为按钮本身）
+            setVisibility(brls::Visibility::GONE);
+            if (m_closeCallback) m_closeCallback();
+            return true;
+        });
+        leftBox->addView(btn);
 
-    addView(new brls::Padding());
+        auto* btn2 = new brls::Button();
+        btn2->setText("金手指");
+        auto* cheatbox = new brls::Box(brls::Axis::COLUMN);
+        cheatbox->setVisibility(brls::Visibility::GONE);
+        btn2->registerAction("", brls::BUTTON_A, [cheatbox](brls::View* v) {
+            if (cheatbox->getVisibility() == brls::Visibility::GONE) {
+                cheatbox->setVisibility(brls::Visibility::VISIBLE);
+            } else {
+                cheatbox->setVisibility(brls::Visibility::GONE);
+            }
+            return true;
+        });
+
+        leftBox->addView(btn2);
+        rightBox->addView(cheatbox);
+
+        auto* btn3 = new brls::Button();
+        btn3->setText("退出游戏");
+        btn3->registerAction("", brls::BUTTON_A, [](brls::View* v) {
+            // 直接退出整个 Activity，返回游戏列表
+            brls::Application::popActivity();
+            return true;
+        });
+        leftBox->addView(btn3);
+        leftBox->addView(new brls::Padding());
+    }
+
+    addView(mainbox);
+
     addView(new brls::BottomBar());
 
 }
