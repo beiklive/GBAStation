@@ -1701,6 +1701,7 @@ void GameView::updateCheats()
     // 将启用状态写回磁盘上的 .cht 文件
     if (!m_cheatPath.empty()) {
         saveChtFile(m_cheatPath, m_cheats);
+        brls::Logger::info("GameView: cheat file updated: {}", m_cheatPath);
     }
 }
 
