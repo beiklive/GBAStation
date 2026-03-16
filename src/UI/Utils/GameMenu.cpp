@@ -376,7 +376,7 @@ void GameMenu::buildStatePanel(bool isSave, brls::Box* container, brls::Image* t
                 ? "beiklive/gamemenu/save_confirm"_i18n
                 : "beiklive/gamemenu/load_confirm"_i18n;
             auto* dialog = new brls::Dialog(confirmMsg);
-            dialog->addButton("beiklive/hints/cancel"_i18n, []() {});
+            dialog->addButton("hints/cancel"_i18n, []() {});
             dialog->addButton("beiklive/hints/confirm"_i18n, [this, captSlot, captIsSave]() {
                 // 先触发存/读档回调（GameView 将设置待处理的槽号）
                 if (captIsSave) {
