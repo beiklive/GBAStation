@@ -20,6 +20,8 @@ GameMenu::GameMenu()
     setHideHighlightBackground(true);
 
     auto* mainbox = new brls::Box(brls::Axis::ROW);
+    mainbox->setWidthPercentage(100.0f);
+    // mainbox->setHeightPercentage(100.0f);
     auto* leftBox = new brls::Box(brls::Axis::COLUMN);
     auto* rightBox = new brls::Box(brls::Axis::COLUMN);
     mainbox->addView(leftBox);
@@ -70,7 +72,9 @@ GameMenu::GameMenu()
 
     addView(mainbox);
 
-    addView(new brls::BottomBar());
+    auto* bottomBar = new brls::BottomBar();
+    bottomBar->setWidthPercentage(100.0f);
+    addView(bottomBar);
 
 }
 
