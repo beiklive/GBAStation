@@ -4,10 +4,6 @@
 using beiklive::cfgGetBool;
 using beiklive::cfgSetBool;
 using namespace brls::literals; // for _i18n
-/// 金手指滚动面板最大高度（像素）。
-static constexpr float CHEAT_SCROLL_HEIGHT   = 400.0f;
-/// 画面设置面板最大高度（像素）。
-static constexpr float DISPLAY_SCROLL_HEIGHT = 400.0f;
 /// 状态槽位行高（像素）。
 static constexpr float STATE_ROW_HEIGHT   = 80.0f;
 /// 状态面板右侧预览图区域宽度百分比（相对于面板宽度）。
@@ -35,7 +31,7 @@ GameMenu::GameMenu()
     setHideHighlightBackground(true);
 
     // Button_B：隐藏菜单，返回游戏
-    registerAction("返回游戏", brls::BUTTON_B, [this](brls::View* v) {
+    registerAction("beiklive/gamemenu/btn_return_game"_i18n, brls::BUTTON_B, [this](brls::View* v) {
         setVisibility(brls::Visibility::GONE);
         if (m_closeCallback) m_closeCallback();
         return true;
@@ -58,7 +54,7 @@ GameMenu::GameMenu()
         leftBox->addView(new brls::Padding());
 
         auto* label = new brls::Label();
-        label->setText("Game Menu");
+        label->setText("beiklive/gamemenu/title"_i18n);
         label->setFontSize(40);
         label->setMarginBottom(20.f);
 
@@ -78,7 +74,8 @@ GameMenu::GameMenu()
 
         // ---- 返回游戏按钮 ----
         auto* btn = new brls::Button();
-        btn->setText("返回游戏");
+        btn->setText("beiklive/gamemenu/btn_return_game"_i18n);
+        btn->setHideHighlightBorder(true);
         // 返回游戏按钮得到焦点时，隐藏所有面板
         btn->getFocusEvent()->subscribe([hideAllPanels](brls::View*) {
             hideAllPanels();
@@ -89,6 +86,8 @@ GameMenu::GameMenu()
             if (m_closeCallback) m_closeCallback();
             return true;
         });
+        // 无子面板，阻止右键导航
+        btn->registerAction("", brls::BUTTON_NAV_RIGHT, [](brls::View*) { return true; }, true);
         btn->setWidthPercentage(80.0f);
         leftBox->addView(btn);
 
@@ -96,18 +95,16 @@ GameMenu::GameMenu()
         auto* btnSaveState = new brls::Button();
         btnSaveState->setText("beiklive/gamemenu/btn_save_state"_i18n);
         btnSaveState->setWidthPercentage(80.0f);
+        btnSaveState->setHideHighlightBorder(true);
 
-        // 保存状态面板：横向容器，左侧 ScrollFrame 列表 + 右侧预览图
+        // 保存状态面板：横向容器，左侧条目列表 + 右侧预览图
         m_saveStatePanel = new brls::Box(brls::Axis::ROW);
         m_saveStatePanel->setVisibility(brls::Visibility::GONE);
         m_saveStatePanel->setGrow(1.0f);
 
-        // 左侧：槽位滚动列表
-        m_saveStateScrollFrame = new brls::ScrollingFrame();
-        m_saveStateScrollFrame->setGrow(1.0f);
-        m_saveStateScrollFrame->setScrollingBehavior(brls::ScrollingBehavior::CENTERED);
+        // 左侧：槽位列表（普通 Box）
         m_saveStateItemBox = new brls::Box(brls::Axis::COLUMN);
-        m_saveStateScrollFrame->setContentView(m_saveStateItemBox);
+        m_saveStateItemBox->setGrow(1.0f);
 
         // 右侧：预览图区域
         auto* savePreviewBox = new brls::Box(brls::Axis::COLUMN);
@@ -119,14 +116,14 @@ GameMenu::GameMenu()
         m_savePreviewImage->setVisibility(brls::Visibility::GONE);
         m_saveNoDataLabel = new brls::Label();
         m_saveNoDataLabel->setText("beiklive/gamemenu/no_state_data"_i18n);
-        m_saveNoDataLabel->setVisibility(brls::Visibility::VISIBLE);
+        m_saveNoDataLabel->setVisibility(brls::Visibility::GONE);
         savePreviewBox->addView(m_savePreviewImage);
         savePreviewBox->addView(m_saveNoDataLabel);
 
         // 构建槽位按钮并绑定焦点事件
         buildStatePanel(true, m_saveStateItemBox);
 
-        m_saveStatePanel->addView(m_saveStateScrollFrame);
+        m_saveStatePanel->addView(m_saveStateItemBox);
         m_saveStatePanel->addView(savePreviewBox);
 
         // 保存状态按钮得到焦点时，显示保存状态面板并重置预览图
@@ -137,9 +134,9 @@ GameMenu::GameMenu()
         });
         // A 键将焦点转入保存状态槽位列表
         btnSaveState->registerAction("", brls::BUTTON_A, [this](brls::View*) {
-            if (m_saveStateScrollFrame &&
+            if (m_saveStateItemBox &&
                 m_saveStatePanel->getVisibility() == brls::Visibility::VISIBLE)
-                brls::Application::giveFocus(m_saveStateScrollFrame);
+                brls::Application::giveFocus(m_saveStateItemBox);
             return true;
         });
         leftBox->addView(btnSaveState);
@@ -149,18 +146,16 @@ GameMenu::GameMenu()
         auto* btnLoadState = new brls::Button();
         btnLoadState->setText("beiklive/gamemenu/btn_load_state"_i18n);
         btnLoadState->setWidthPercentage(80.0f);
+        btnLoadState->setHideHighlightBorder(true);
 
-        // 读取状态面板：横向容器，左侧 ScrollFrame 列表 + 右侧预览图
+        // 读取状态面板：横向容器，左侧条目列表 + 右侧预览图
         m_loadStatePanel = new brls::Box(brls::Axis::ROW);
         m_loadStatePanel->setVisibility(brls::Visibility::GONE);
         m_loadStatePanel->setGrow(1.0f);
 
-        // 左侧：槽位滚动列表
-        m_loadStateScrollFrame = new brls::ScrollingFrame();
-        m_loadStateScrollFrame->setGrow(1.0f);
-        m_loadStateScrollFrame->setScrollingBehavior(brls::ScrollingBehavior::CENTERED);
+        // 左侧：槽位列表（普通 Box）
         m_loadStateItemBox = new brls::Box(brls::Axis::COLUMN);
-        m_loadStateScrollFrame->setContentView(m_loadStateItemBox);
+        m_loadStateItemBox->setGrow(1.0f);
 
         // 右侧：预览图区域
         auto* loadPreviewBox = new brls::Box(brls::Axis::COLUMN);
@@ -172,14 +167,14 @@ GameMenu::GameMenu()
         m_loadPreviewImage->setVisibility(brls::Visibility::GONE);
         m_loadNoDataLabel = new brls::Label();
         m_loadNoDataLabel->setText("beiklive/gamemenu/no_state_data"_i18n);
-        m_loadNoDataLabel->setVisibility(brls::Visibility::VISIBLE);
+        m_loadNoDataLabel->setVisibility(brls::Visibility::GONE);
         loadPreviewBox->addView(m_loadPreviewImage);
         loadPreviewBox->addView(m_loadNoDataLabel);
 
         // 构建槽位按钮并绑定焦点事件
         buildStatePanel(false, m_loadStateItemBox);
 
-        m_loadStatePanel->addView(m_loadStateScrollFrame);
+        m_loadStatePanel->addView(m_loadStateItemBox);
         m_loadStatePanel->addView(loadPreviewBox);
 
         // 读取状态按钮得到焦点时，显示读取状态面板并重置预览图
@@ -190,9 +185,9 @@ GameMenu::GameMenu()
         });
         // A 键将焦点转入读取状态槽位列表
         btnLoadState->registerAction("", brls::BUTTON_A, [this](brls::View*) {
-            if (m_loadStateScrollFrame &&
+            if (m_loadStateItemBox &&
                 m_loadStatePanel->getVisibility() == brls::Visibility::VISIBLE)
-                brls::Application::giveFocus(m_loadStateScrollFrame);
+                brls::Application::giveFocus(m_loadStateItemBox);
             return true;
         });
         leftBox->addView(btnLoadState);
@@ -200,8 +195,9 @@ GameMenu::GameMenu()
 
         // ---- 金手指按钮 ----
         auto* btn2 = new brls::Button();
-        btn2->setText("金手指");
+        btn2->setText("beiklive/gamemenu/btn_cheats"_i18n);
         btn2->setWidthPercentage(80.0f);
+        btn2->setHideHighlightBorder(true);
         // 金手指面板：ScrollingFrame 限高，避免内容溢出后焦点丢失
         m_cheatScrollFrame = new brls::ScrollingFrame();
         m_cheatScrollFrame->setVisibility(brls::Visibility::GONE);
@@ -229,6 +225,7 @@ GameMenu::GameMenu()
         auto* btnDisplay = new brls::Button();
         btnDisplay->setWidthPercentage(80.0f);
         btnDisplay->setText("beiklive/gamemenu/btn_display"_i18n);
+        btnDisplay->setHideHighlightBorder(true);
 
         // ---- 构建画面设置面板 ----
         m_displayScrollFrame = new brls::ScrollingFrame();
@@ -343,7 +340,8 @@ GameMenu::GameMenu()
         auto* btn3 = new brls::Button();
         btn3->setWidthPercentage(80.0f);
         
-        btn3->setText("退出游戏");
+        btn3->setText("beiklive/gamemenu/btn_exit_game"_i18n);
+        btn3->setHideHighlightBorder(true);
         // 退出游戏按钮得到焦点时，隐藏所有面板
         btn3->getFocusEvent()->subscribe([hideAllPanels](brls::View*) {
             hideAllPanels();
@@ -353,6 +351,8 @@ GameMenu::GameMenu()
             brls::Application::popActivity();
             return true;
         });
+        // 无子面板，阻止右键导航
+        btn3->registerAction("", brls::BUTTON_NAV_RIGHT, [](brls::View*) { return true; }, true);
         leftBox->addView(btn3);
         leftBox->addView(new brls::Padding());
 
@@ -369,7 +369,7 @@ GameMenu::GameMenu()
 
     // 初始化 cheatItemBox：默认提示无金手指
     auto* noCheatLabel = new brls::Label();
-    noCheatLabel->setText("无金手指");
+    noCheatLabel->setText("beiklive/gamemenu/no_cheats"_i18n);
     m_cheatItemBox->addView(noCheatLabel);
 }
 
@@ -479,17 +479,17 @@ void GameMenu::buildStatePanel(bool isSave, brls::Box* container)
 
 void GameMenu::refreshStatePanels()
 {
-    // 重置保存状态预览
+    // 重置保存状态预览：焦点未进入列表时不显示任何内容
     if (m_savePreviewImage)
         m_savePreviewImage->setVisibility(brls::Visibility::GONE);
     if (m_saveNoDataLabel)
-        m_saveNoDataLabel->setVisibility(brls::Visibility::VISIBLE);
+        m_saveNoDataLabel->setVisibility(brls::Visibility::GONE);
 
-    // 重置读取状态预览
+    // 重置读取状态预览：焦点未进入列表时不显示任何内容
     if (m_loadPreviewImage)
         m_loadPreviewImage->setVisibility(brls::Visibility::GONE);
     if (m_loadNoDataLabel)
-        m_loadNoDataLabel->setVisibility(brls::Visibility::VISIBLE);
+        m_loadNoDataLabel->setVisibility(brls::Visibility::GONE);
 }
 
 void GameMenu::setGameFileName(const std::string& fileName)
@@ -526,7 +526,7 @@ void GameMenu::setCheats(const std::vector<CheatEntry>& cheats)
     if (m_cheats.empty()) {
         // 无金手指：显示提示标签
         auto* label = new brls::Label();
-        label->setText("无金手指");
+        label->setText("beiklive/gamemenu/no_cheats"_i18n);
         m_cheatItemBox->addView(label);
         return;
     }
