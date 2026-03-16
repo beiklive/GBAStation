@@ -167,6 +167,12 @@ class GameView : public brls::Box
     mutable std::mutex m_inputSnapMutex;
     InputSnapshot      m_inputSnap;
 
+    // ---- 金手指数据 --------------------------------------------------
+    /// 当前已解析的金手指列表（由 loadCheats() 填充）。
+    std::vector<CheatEntry> m_cheats;
+    /// 当前使用的金手指文件完整路径（由 loadCheats() 填充）。
+    std::string             m_cheatPath;
+
     // ---- Overlay (遮罩) -----------------------------------------------
     bool        m_overlayEnabled   = false; ///< display.overlay.enabled
     std::string m_overlayPath;              ///< resolved overlay PNG path for this game
@@ -226,8 +232,12 @@ class GameView : public brls::Box
     /// 须在主（draw）线程上、所有渲染完成后调用。
     void doScreenshot();
 
-    /// 从当前ROM关联的.cht文件加载金手指。
+    /// 从磁盘加载金手指到核心，并填充 m_cheats / m_cheatPath。
     void loadCheats();
+
+    /// 将 m_cheats 中所有条目的当前启用状态重新应用到核心，
+    /// 并将更新后的状态写回磁盘上的 .cht 文件。
+    void updateCheats();
 
     /// 启动独立模拟线程（在initialize()中调用）。
     void startGameThread();

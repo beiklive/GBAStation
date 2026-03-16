@@ -175,6 +175,7 @@ extern beiklive::GameRunner* gameRunner;
 #define GAMEDATA_FIELD_LASTOPEN   "lastopen"   ///< 上次游玩时间（默认"从未游玩"）
 #define GAMEDATA_FIELD_PLATFORM   "platform"   ///< 游戏平台（EmuPlatform 名称字符串）
 #define GAMEDATA_FIELD_OVERLAY    "overlay"    ///< 游戏专属遮罩 PNG 路径（空=使用全局）
+#define GAMEDATA_FIELD_CHEATPATH  "cheatpath"  ///< 金手指 .cht 文件路径（空=使用默认路径）
 
 /// 返回 gamedata key 的前缀（文件名不含后缀）
 inline std::string gamedataKeyPrefix(const std::string& fileName)
@@ -228,6 +229,8 @@ inline void initGameData(const std::string& fileName, beiklive::EmuPlatform plat
         }
         setIfAbsent(GAMEDATA_FIELD_OVERLAY, beiklive::ConfigValue(globalOverlay));
     }
+    // 金手指路径：默认为空（启动游戏时由 GameView 写入实际路径）
+    setIfAbsent(GAMEDATA_FIELD_CHEATPATH, beiklive::ConfigValue(std::string("")));
 }
 
 /// 读取 gamedataManager 中某个游戏字段的字符串值。
