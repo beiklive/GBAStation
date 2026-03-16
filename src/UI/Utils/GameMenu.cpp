@@ -358,13 +358,12 @@ void GameMenu::buildStatePanel(bool isSave, brls::Box* container, brls::Image* t
         // 槽0 为自动档位，槽1-9 显示序号
         std::string slotLabel;
         if (slot == 0) {
-            slotLabel = isSave
-                ? "beiklive/gamemenu/save_slot_auto"_i18n
-                : "beiklive/gamemenu/load_slot_auto"_i18n;
+            slotLabel = isSave ? "beiklive/gamemenu/save_slot_auto"_i18n
+                               : "beiklive/gamemenu/load_slot_auto"_i18n;
         } else {
-            slotLabel = isSave
-                ? ("beiklive/gamemenu/save_slot_prefix"_i18n + std::to_string(slot))
-                : ("beiklive/gamemenu/load_slot_prefix"_i18n + std::to_string(slot));
+            const std::string prefix = isSave ? "beiklive/gamemenu/save_slot_prefix"_i18n
+                                              : "beiklive/gamemenu/load_slot_prefix"_i18n;
+            slotLabel = prefix + std::to_string(slot);
         }
         btn->setText(slotLabel);
         btn->setGrow(1.f);
