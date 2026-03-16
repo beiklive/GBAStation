@@ -144,7 +144,7 @@
         },
         "gamemenu": {
             "btn_display": "Display Settings"
-        }
+        },
         "audio": {
             "header_emu": "Emulator Audio",
             "btn_sfx": "UI Button Sound Effects",
