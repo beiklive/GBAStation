@@ -795,6 +795,18 @@ void GameView::setGameMenu(GameMenu* menu)
             m_overlayPath = newPath;
             m_overlayReloadPending.store(true, std::memory_order_release);
         });
+        // 遮罩开关变更时立即更新 m_overlayEnabled，确保设置立即生效无需重启游戏
+        m_gameMenu->setOverlayEnabledChangedCallback([this](bool enabled) {
+            m_overlayEnabled = enabled;
+            if (enabled && m_overlayPath.empty() && !m_romFileName.empty()) {
+                // 启用时若路径尚未加载，则尝试从 gamedataManager 读取
+                std::string perGame = getGameDataStr(m_romFileName, GAMEDATA_FIELD_OVERLAY, "");
+                if (!perGame.empty()) {
+                    m_overlayPath = perGame;
+                    m_overlayReloadPending.store(true, std::memory_order_release);
+                }
+            }
+        });
         // 保存状态回调：设置待处理槽号，游戏线程下一帧执行实际存档
         m_gameMenu->setSaveStateCallback([this](int slot) {
             m_pendingQuickSave.store(slot, std::memory_order_relaxed);
