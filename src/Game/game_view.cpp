@@ -988,7 +988,14 @@ void GameView::registerGamepadHotkeys()
 std::string GameView::resolveSaveDir(const std::string& romPath,
                                       const std::string& customDir)
 {
-    if (!customDir.empty()) return customDir;
+    if (!customDir.empty()) {
+        // 指定了模拟器目录时，在其下创建以游戏文件名命名的子目录，防止存档文件堆积
+        if (!romPath.empty()) {
+            std::filesystem::path p(romPath);
+            return (std::filesystem::path(customDir) / p.stem()).string();
+        }
+        return customDir;
+    }
     // 默认：与 ROM 同目录
     if (!romPath.empty()) {
         return beiklive::file::getParentPath(romPath);
