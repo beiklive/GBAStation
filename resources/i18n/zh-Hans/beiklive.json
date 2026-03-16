@@ -134,6 +134,7 @@
             "overlay_enable": "启用遮罩",
             "overlay_gba_path": "全局 GBA 遮罩路径 (PNG)",
             "overlay_gbc_path": "全局 GBC 遮罩路径 (PNG)",
+            "overlay_path": "游戏遮罩路径 (PNG)",
             "overlay_not_set": "未设置",
             "header_shader": "着色器设置",
             "shader_enable": "着色器开关",
