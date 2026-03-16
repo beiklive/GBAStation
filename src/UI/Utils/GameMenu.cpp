@@ -3,7 +3,7 @@
 
 using beiklive::cfgGetBool;
 using beiklive::cfgSetBool;
-
+using namespace brls::literals; // for _i18n
 /// 金手指滚动面板最大高度（像素）。
 static constexpr float CHEAT_SCROLL_HEIGHT   = 400.0f;
 /// 画面设置面板最大高度（像素）。
@@ -39,6 +39,7 @@ GameMenu::GameMenu()
 
     auto* mainbox = new brls::Box(brls::Axis::ROW);
     mainbox->setWidthPercentage(100.0f);
+    mainbox->setGrow(1.0f);
     auto* leftBox = new brls::Box(brls::Axis::COLUMN);
     leftBox->setWidthPercentage(30.0f);
     auto* rightBox = new brls::Box(brls::Axis::COLUMN);
@@ -67,7 +68,7 @@ GameMenu::GameMenu()
         // 金手指面板：ScrollingFrame 限高，避免内容溢出后焦点丢失
         m_cheatScrollFrame = new brls::ScrollingFrame();
         m_cheatScrollFrame->setVisibility(brls::Visibility::GONE);
-        m_cheatScrollFrame->setHeight(CHEAT_SCROLL_HEIGHT);
+        m_cheatScrollFrame->setGrow(1.0f);
         m_cheatScrollFrame->setScrollingBehavior(brls::ScrollingBehavior::CENTERED);
         m_cheatItemBox = new brls::Box(brls::Axis::COLUMN);
         m_cheatScrollFrame->setContentView(m_cheatItemBox);
@@ -93,7 +94,7 @@ GameMenu::GameMenu()
         // ---- 构建画面设置面板 ----
         m_displayScrollFrame = new brls::ScrollingFrame();
         m_displayScrollFrame->setVisibility(brls::Visibility::GONE);
-        m_displayScrollFrame->setHeight(DISPLAY_SCROLL_HEIGHT);
+        m_displayScrollFrame->setGrow(1.0f);
         m_displayScrollFrame->setScrollingBehavior(brls::ScrollingBehavior::NATURAL);
 
         auto* displayBox = new brls::Box(brls::Axis::COLUMN);
