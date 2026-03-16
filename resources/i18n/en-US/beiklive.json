@@ -53,16 +53,21 @@
         "btn_exit": "Exit"
     },
     "gamemenu": {
+        "title": "Game Menu",
+        "btn_return_game": "Return to Game",
         "btn_display": "Display Settings",
         "btn_save_state": "Save State",
         "btn_load_state": "Load State",
+        "btn_cheats": "Cheats",
+        "btn_exit_game": "Exit Game",
         "save_slot_auto": "Auto Save Slot",
         "load_slot_auto": "Auto Load Slot",
         "save_slot_prefix": "Save to Slot ",
         "load_slot_prefix": "Load Slot ",
         "save_confirm": "Confirm save to this slot?",
         "load_confirm": "Confirm load from this slot?",
-        "no_state_data": "No Save Data"
+        "no_state_data": "No Save Data",
+        "no_cheats": "No Cheats"
     },
     "settings": {
         "tab": {

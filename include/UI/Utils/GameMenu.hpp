@@ -81,10 +81,8 @@ private:
     brls::DetailCell*                   m_overlayPathCell        = nullptr;
     brls::Box*                          m_saveStatePanel         = nullptr; ///< 保存状态面板外层容器（横向：列表+预览）
     brls::Box*                          m_loadStatePanel         = nullptr; ///< 读取状态面板外层容器（横向：列表+预览）
-    brls::ScrollingFrame*               m_saveStateScrollFrame   = nullptr; ///< 保存状态槽位列表（左侧）
-    brls::ScrollingFrame*               m_loadStateScrollFrame   = nullptr; ///< 读取状态槽位列表（左侧）
-    brls::Box*                          m_saveStateItemBox       = nullptr; ///< 保存状态条目容器
-    brls::Box*                          m_loadStateItemBox       = nullptr; ///< 读取状态条目容器
+    brls::Box*                          m_saveStateItemBox       = nullptr; ///< 保存状态条目容器（直接用 Box，不用 ScrollingFrame）
+    brls::Box*                          m_loadStateItemBox       = nullptr; ///< 读取状态条目容器（直接用 Box，不用 ScrollingFrame）
     brls::Image*                        m_savePreviewImage       = nullptr; ///< 保存状态预览图（右侧）
     brls::Image*                        m_loadPreviewImage       = nullptr; ///< 读取状态预览图（右侧）
     brls::Label*                        m_saveNoDataLabel        = nullptr; ///< 保存状态无数据提示

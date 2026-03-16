@@ -53,16 +53,21 @@
         "btn_exit": "退出程序"
     },
     "gamemenu": {
+        "title": "游戏菜单",
+        "btn_return_game": "返回游戏",
         "btn_display": "画面设置",
         "btn_save_state": "保存状态",
         "btn_load_state": "读取状态",
+        "btn_cheats": "金手指",
+        "btn_exit_game": "退出游戏",
         "save_slot_auto": "自动存储档位",
         "load_slot_auto": "自动读取档位",
         "save_slot_prefix": "保存到状态",
         "load_slot_prefix": "读取状态",
         "save_confirm": "确认保存到此档位？",
         "load_confirm": "确认从此档位读取？",
-        "no_state_data": "无存档数据"
+        "no_state_data": "无存档数据",
+        "no_cheats": "无金手指"
     },
     "settings": {
         "tab": {
