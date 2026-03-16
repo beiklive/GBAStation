@@ -201,7 +201,8 @@ class GameView : public brls::Box
     void registerGamepadHotkeys();
 
     /// 解析存档文件（SRAM/状态/金手指）目录。
-    /// @a customDir非空时返回该目录，否则返回 @a romPath 所在目录。
+    /// @a customDir非空时返回 @a customDir/<游戏文件名> 子目录（防止存档堆积），
+    /// 否则返回 @a romPath 所在目录。
     static std::string resolveSaveDir(const std::string& romPath,
                                        const std::string& customDir);
 
