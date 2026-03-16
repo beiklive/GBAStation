@@ -250,7 +250,10 @@ void StartPageView::createAppPage()
                 setGameDataStr(fileName, GAMEDATA_FIELD_LOGOPATH, imgItem.fullPath);
                 if (capturePage)
                     capturePage->updateGameLogo(entry.path, imgItem.fullPath);
-                brls::Application::popActivity();
+                // 延迟到当前帧回调链结束后再执行，避免在多次目录跳转后
+                // handleAction 回调链内部直接调用 popActivity 导致焦点恢复时
+                // 访问已失效的 focusStack 指针而崩溃
+                brls::sync([]() { brls::Application::popActivity(); });
             });
             flPage->navigateTo(startPath);
 

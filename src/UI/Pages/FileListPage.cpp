@@ -1011,7 +1011,8 @@ void FileListPage::openSidebar(int itemIndex)
                                                            {
                                                                setGameDataStr(captureFileName, GAMEDATA_FIELD_LOGOPATH, imgItem.fullPath);
                                                                g_recentGamesDirty = true;
-                                                               brls::Application::popActivity();
+                                                               // 延迟到当前帧回调链结束后再执行，避免崩溃
+                                                               brls::sync([]() { brls::Application::popActivity(); });
                                                            });
                             std::string startPath = beiklive::file::getParentPath(captureFullPath);
                             if (startPath.empty() ||
