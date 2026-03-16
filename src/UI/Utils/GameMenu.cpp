@@ -25,7 +25,9 @@ GameMenu::GameMenu()
     auto* mainbox = new brls::Box(brls::Axis::ROW);
     mainbox->setWidthPercentage(100.0f);
     auto* leftBox = new brls::Box(brls::Axis::COLUMN);
+    leftBox->setWidthPercentage(30.0f);
     auto* rightBox = new brls::Box(brls::Axis::COLUMN);
+    rightBox->setWidthPercentage(70.0f);
     mainbox->addView(leftBox);
     mainbox->addView(rightBox);
     // 左边栏
