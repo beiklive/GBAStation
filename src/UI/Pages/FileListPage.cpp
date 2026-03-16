@@ -479,6 +479,7 @@ void FileListPage::rebuildItemViews()
     m_scrollFrame->setContentOffsetY(0, /*animated=*/false);
 
     FileListItemView *firstItem = nullptr;
+    FileListItemView *lastItem  = nullptr;
     for (int i = 0; i < static_cast<int>(m_items.size()); ++i)
     {
         auto *itemView = new FileListItemView();
@@ -494,6 +495,13 @@ void FileListPage::rebuildItemViews()
         m_itemsBox->addView(itemView);
         if (i == 0)
             firstItem = itemView;
+        lastItem = itemView;
+    }
+
+    // 列表首尾循环导航：首条按上键跳到末条，末条按下键跳到首条
+    if (firstItem && lastItem && firstItem != lastItem) {
+        firstItem->setCustomNavigationRoute(brls::FocusDirection::UP, lastItem);
+        lastItem->setCustomNavigationRoute(brls::FocusDirection::DOWN, firstItem);
     }
 
     if (firstItem) {
