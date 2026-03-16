@@ -179,7 +179,7 @@ void GameView::initialize()
         cfg->SetDefault("save.sramDir",         CV(std::string("")));
         cfg->SetDefault("save.stateDir",         CV(std::string("")));
         cfg->SetDefault("save.slotCount",        CV(9));
-        cfg->SetDefault("save.autoLoadState1",   CV(std::string("false")));
+        cfg->SetDefault("save.autoLoadState0",   CV(std::string("false")));
         cfg->SetDefault("save.autoSaveInterval", CV(0));
         cfg->SetDefault("cheat.dir",             CV(std::string("")));
 
@@ -325,15 +325,15 @@ void GameView::initialize()
 
         m_core.reset(); // 加载存档/金手指后确保核心从干净状态启动
 
-        // ---- 自动读取即时存档1（如果开启） ----------------------
+        // ---- 自动读取即时存档0（如果开启） ----------------------
         // 使用 cfgGetBool 读取配置（gameRunner->settingConfig 与 SettingManager 指向同一对象）
-        if (beiklive::cfgGetBool("save.autoLoadState1", false)) {
-            std::string state1Path = quickSaveStatePath(1);
-            if (std::filesystem::exists(state1Path)) {
-                bklog::info("GameView: 自动读取即时存档1: {}", state1Path);
-                doQuickLoad(1);
+        if (beiklive::cfgGetBool("save.autoLoadState0", false)) {
+            std::string state0Path = quickSaveStatePath(0);
+            if (std::filesystem::exists(state0Path)) {
+                bklog::info("GameView: 自动读取即时存档0: {}", state0Path);
+                doQuickLoad(0);
             } else {
-                bklog::info("GameView: 自动读取即时存档1已开启, 但 slot1 存档文件不存在: {}", state1Path);
+                bklog::info("GameView: 自动读取即时存档0已开启, 但 slot0 存档文件不存在: {}", state0Path);
             }
         }
     }

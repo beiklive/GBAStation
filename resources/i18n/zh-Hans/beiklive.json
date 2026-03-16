@@ -131,7 +131,7 @@
             "cheat_dir": "金手指目录",
             "cheat_auto": "（自动，见上选项）",
             "cheat_clear_auto": "清空（自动）",
-            "auto_load_state1": "启动时自动读取即时存档1",
+            "auto_load_state0": "启动时自动读取即时存档0",
             "header_screenshot": "截图设置",
             "screenshot_dir": "截图保存位置",
             "screenshot_dir_rom": "游戏目录",

@@ -131,7 +131,7 @@
             "cheat_dir": "Custom Cheat Directory",
             "cheat_auto": "(Auto, see option above)",
             "cheat_clear_auto": "Clear (auto)",
-            "auto_load_state1": "Auto load save state 1 (ss1) on startup",
+            "auto_load_state0": "Auto load save state 0 (ss0) on startup",
             "header_screenshot": "Screenshot Settings",
             "screenshot_dir": "Screenshot Save Location",
             "screenshot_dir_rom": "Game Directory",
