@@ -22,6 +22,13 @@ GameMenu::GameMenu()
     setHideHighlightBorder(true);
     setHideHighlightBackground(true);
 
+    // Button_B：隐藏菜单，返回游戏
+    registerAction("返回游戏", brls::BUTTON_B, [this](brls::View* v) {
+        setVisibility(brls::Visibility::GONE);
+        if (m_closeCallback) m_closeCallback();
+        return true;
+    });
+
     auto* mainbox = new brls::Box(brls::Axis::ROW);
     mainbox->setWidthPercentage(100.0f);
     auto* leftBox = new brls::Box(brls::Axis::COLUMN);
