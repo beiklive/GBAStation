@@ -8,12 +8,10 @@ using namespace brls::literals; // for _i18n
 static constexpr float CHEAT_SCROLL_HEIGHT   = 400.0f;
 /// 画面设置面板最大高度（像素）。
 static constexpr float DISPLAY_SCROLL_HEIGHT = 400.0f;
-/// 状态槽位缩略图宽度（像素）。
-static constexpr float STATE_THUMB_WIDTH  = 120.0f;
-/// 状态槽位缩略图高度（像素）。
-static constexpr float STATE_THUMB_HEIGHT = 75.0f;
 /// 状态槽位行高（像素）。
 static constexpr float STATE_ROW_HEIGHT   = 80.0f;
+/// 状态面板右侧预览图区域宽度百分比（相对于面板宽度）。
+static constexpr float STATE_PREVIEW_WIDTH_PCT = 50.0f;
 
 
 
@@ -72,10 +70,10 @@ GameMenu::GameMenu()
                 m_cheatScrollFrame->setVisibility(brls::Visibility::GONE);
             if (m_displayScrollFrame)
                 m_displayScrollFrame->setVisibility(brls::Visibility::GONE);
-            if (m_saveStateScrollFrame)
-                m_saveStateScrollFrame->setVisibility(brls::Visibility::GONE);
-            if (m_loadStateScrollFrame)
-                m_loadStateScrollFrame->setVisibility(brls::Visibility::GONE);
+            if (m_saveStatePanel)
+                m_saveStatePanel->setVisibility(brls::Visibility::GONE);
+            if (m_loadStatePanel)
+                m_loadStatePanel->setVisibility(brls::Visibility::GONE);
         };
 
         // ---- 返回游戏按钮 ----
@@ -99,60 +97,106 @@ GameMenu::GameMenu()
         btnSaveState->setText("beiklive/gamemenu/btn_save_state"_i18n);
         btnSaveState->setWidthPercentage(80.0f);
 
-        // 保存状态面板：ScrollingFrame 包含 10 个槽位行
+        // 保存状态面板：横向容器，左侧 ScrollFrame 列表 + 右侧预览图
+        m_saveStatePanel = new brls::Box(brls::Axis::ROW);
+        m_saveStatePanel->setVisibility(brls::Visibility::GONE);
+        m_saveStatePanel->setGrow(1.0f);
+
+        // 左侧：槽位滚动列表
         m_saveStateScrollFrame = new brls::ScrollingFrame();
-        m_saveStateScrollFrame->setVisibility(brls::Visibility::GONE);
         m_saveStateScrollFrame->setGrow(1.0f);
         m_saveStateScrollFrame->setScrollingBehavior(brls::ScrollingBehavior::CENTERED);
         m_saveStateItemBox = new brls::Box(brls::Axis::COLUMN);
-        buildStatePanel(true, m_saveStateItemBox, m_saveThumbImages);
         m_saveStateScrollFrame->setContentView(m_saveStateItemBox);
 
-        // 保存状态按钮得到焦点时，显示保存状态面板并刷新缩略图
+        // 右侧：预览图区域
+        auto* savePreviewBox = new brls::Box(brls::Axis::COLUMN);
+        savePreviewBox->setWidthPercentage(STATE_PREVIEW_WIDTH_PCT);
+        savePreviewBox->setAlignItems(brls::AlignItems::CENTER);
+        savePreviewBox->setJustifyContent(brls::JustifyContent::CENTER);
+        m_savePreviewImage = new brls::Image();
+        m_savePreviewImage->setScalingType(brls::ImageScalingType::FIT);
+        m_savePreviewImage->setVisibility(brls::Visibility::GONE);
+        m_saveNoDataLabel = new brls::Label();
+        m_saveNoDataLabel->setText("beiklive/gamemenu/no_state_data"_i18n);
+        m_saveNoDataLabel->setVisibility(brls::Visibility::VISIBLE);
+        savePreviewBox->addView(m_savePreviewImage);
+        savePreviewBox->addView(m_saveNoDataLabel);
+
+        // 构建槽位按钮并绑定焦点事件
+        buildStatePanel(true, m_saveStateItemBox);
+
+        m_saveStatePanel->addView(m_saveStateScrollFrame);
+        m_saveStatePanel->addView(savePreviewBox);
+
+        // 保存状态按钮得到焦点时，显示保存状态面板并重置预览图
         btnSaveState->getFocusEvent()->subscribe([this, hideAllPanels](brls::View*) {
             hideAllPanels();
-            m_saveStateScrollFrame->setVisibility(brls::Visibility::VISIBLE);
+            m_saveStatePanel->setVisibility(brls::Visibility::VISIBLE);
             refreshStatePanels();
         });
-        // A 键将焦点转入保存状态面板
+        // A 键将焦点转入保存状态槽位列表
         btnSaveState->registerAction("", brls::BUTTON_A, [this](brls::View*) {
             if (m_saveStateScrollFrame &&
-                m_saveStateScrollFrame->getVisibility() == brls::Visibility::VISIBLE)
+                m_saveStatePanel->getVisibility() == brls::Visibility::VISIBLE)
                 brls::Application::giveFocus(m_saveStateScrollFrame);
             return true;
         });
         leftBox->addView(btnSaveState);
-        rightBox->addView(m_saveStateScrollFrame);
+        rightBox->addView(m_saveStatePanel);
 
         // ---- 读取状态按钮 ----
         auto* btnLoadState = new brls::Button();
         btnLoadState->setText("beiklive/gamemenu/btn_load_state"_i18n);
         btnLoadState->setWidthPercentage(80.0f);
 
-        // 读取状态面板：ScrollingFrame 包含 10 个槽位行
+        // 读取状态面板：横向容器，左侧 ScrollFrame 列表 + 右侧预览图
+        m_loadStatePanel = new brls::Box(brls::Axis::ROW);
+        m_loadStatePanel->setVisibility(brls::Visibility::GONE);
+        m_loadStatePanel->setGrow(1.0f);
+
+        // 左侧：槽位滚动列表
         m_loadStateScrollFrame = new brls::ScrollingFrame();
-        m_loadStateScrollFrame->setVisibility(brls::Visibility::GONE);
         m_loadStateScrollFrame->setGrow(1.0f);
         m_loadStateScrollFrame->setScrollingBehavior(brls::ScrollingBehavior::CENTERED);
         m_loadStateItemBox = new brls::Box(brls::Axis::COLUMN);
-        buildStatePanel(false, m_loadStateItemBox, m_loadThumbImages);
         m_loadStateScrollFrame->setContentView(m_loadStateItemBox);
 
-        // 读取状态按钮得到焦点时，显示读取状态面板并刷新缩略图
+        // 右侧：预览图区域
+        auto* loadPreviewBox = new brls::Box(brls::Axis::COLUMN);
+        loadPreviewBox->setWidthPercentage(STATE_PREVIEW_WIDTH_PCT);
+        loadPreviewBox->setAlignItems(brls::AlignItems::CENTER);
+        loadPreviewBox->setJustifyContent(brls::JustifyContent::CENTER);
+        m_loadPreviewImage = new brls::Image();
+        m_loadPreviewImage->setScalingType(brls::ImageScalingType::FIT);
+        m_loadPreviewImage->setVisibility(brls::Visibility::GONE);
+        m_loadNoDataLabel = new brls::Label();
+        m_loadNoDataLabel->setText("beiklive/gamemenu/no_state_data"_i18n);
+        m_loadNoDataLabel->setVisibility(brls::Visibility::VISIBLE);
+        loadPreviewBox->addView(m_loadPreviewImage);
+        loadPreviewBox->addView(m_loadNoDataLabel);
+
+        // 构建槽位按钮并绑定焦点事件
+        buildStatePanel(false, m_loadStateItemBox);
+
+        m_loadStatePanel->addView(m_loadStateScrollFrame);
+        m_loadStatePanel->addView(loadPreviewBox);
+
+        // 读取状态按钮得到焦点时，显示读取状态面板并重置预览图
         btnLoadState->getFocusEvent()->subscribe([this, hideAllPanels](brls::View*) {
             hideAllPanels();
-            m_loadStateScrollFrame->setVisibility(brls::Visibility::VISIBLE);
+            m_loadStatePanel->setVisibility(brls::Visibility::VISIBLE);
             refreshStatePanels();
         });
-        // A 键将焦点转入读取状态面板
+        // A 键将焦点转入读取状态槽位列表
         btnLoadState->registerAction("", brls::BUTTON_A, [this](brls::View*) {
             if (m_loadStateScrollFrame &&
-                m_loadStateScrollFrame->getVisibility() == brls::Visibility::VISIBLE)
+                m_loadStatePanel->getVisibility() == brls::Visibility::VISIBLE)
                 brls::Application::giveFocus(m_loadStateScrollFrame);
             return true;
         });
         leftBox->addView(btnLoadState);
-        rightBox->addView(m_loadStateScrollFrame);
+        rightBox->addView(m_loadStatePanel);
 
         // ---- 金手指按钮 ----
         auto* btn2 = new brls::Button();
@@ -337,14 +381,15 @@ GameMenu::~GameMenu()
 // ============================================================
 // buildStatePanel – 构建保存/读取状态槽位面板
 //
-// 为 container 填充 10 个槽位行，每行包含：
-//   - 缩略图（初始隐藏，refreshStatePanels() 时更新）
-//   - 槽位按钮（槽0: 自动档位，槽1-9: 对应序号）
+// 为 container 填充 10 个槽位按钮。
 // isSave 为 true 时构建保存面板，false 时构建读取面板。
-// thumbImages[10] 存储各槽位缩略图指针供后续刷新使用。
+// 每个按钮获得焦点时，通过 m_stateInfoCallback 查询槽位信息
+// 并更新右侧预览图（m_save/loadPreviewImage）：
+//   - 存档存在且有缩略图 → 显示缩略图
+//   - 存档不存在或无缩略图 → 显示 NoData 标签
 // ============================================================
 
-void GameMenu::buildStatePanel(bool isSave, brls::Box* container, brls::Image* thumbImages[10])
+void GameMenu::buildStatePanel(bool isSave, brls::Box* container)
 {
     container->setPadding(5.f, 10.f, 5.f, 10.f);
 
@@ -352,24 +397,9 @@ void GameMenu::buildStatePanel(bool isSave, brls::Box* container, brls::Image* t
     brls::Button* lastBtn  = nullptr;
 
     for (int slot = 0; slot < 10; ++slot) {
-        // 每个槽位一行：缩略图（左）+ 按钮（右）
-        auto* row = new brls::Box(brls::Axis::ROW);
-        row->setHeight(STATE_ROW_HEIGHT);
-        row->setAlignItems(brls::AlignItems::CENTER);
-
-        // 缩略图（初始隐藏，有状态文件时才显示）
-        auto* thumb = new brls::Image();
-        thumb->setPositionType(brls::PositionType::ABSOLUTE);
-        // thumb->setWidth(STATE_THUMB_WIDTH);
-        // thumb->setMinWidth(STATE_THUMB_WIDTH);
-        // thumb->setHeight(STATE_THUMB_HEIGHT);
-        thumb->setScalingType(brls::ImageScalingType::FIT);
-        thumb->setVisibility(brls::Visibility::GONE);
-        thumbImages[slot] = thumb;
-        row->addView(thumb);
-
         // 槽位按钮
         auto* btn = new brls::Button();
+        btn->setHeight(STATE_ROW_HEIGHT);
         // 槽0 为自动档位，槽1-9 显示序号
         std::string slotLabel;
         if (slot == 0) {
@@ -383,18 +413,37 @@ void GameMenu::buildStatePanel(bool isSave, brls::Box* container, brls::Image* t
         btn->setText(slotLabel);
         btn->setGrow(1.f);
 
+        // 获得焦点时更新右侧预览图
+        int captSlot = slot;
+        btn->getFocusEvent()->subscribe([this, captSlot, isSave](brls::View*) {
+            brls::Image* previewImg  = isSave ? m_savePreviewImage  : m_loadPreviewImage;
+            brls::Label* noDataLabel = isSave ? m_saveNoDataLabel   : m_loadNoDataLabel;
+            if (!previewImg || !noDataLabel) return;
+
+            if (m_stateInfoCallback) {
+                auto info = m_stateInfoCallback(captSlot);
+                if (info.exists && !info.thumbPath.empty()) {
+                    previewImg->setImageFromFile(info.thumbPath);
+                    previewImg->setVisibility(brls::Visibility::VISIBLE);
+                    noDataLabel->setVisibility(brls::Visibility::GONE);
+                    return;
+                }
+            }
+            // 无存档或无缩略图：显示 NoData 标签
+            previewImg->setVisibility(brls::Visibility::GONE);
+            noDataLabel->setVisibility(brls::Visibility::VISIBLE);
+        });
+
         // A 键：弹出确认对话框，确认后执行存/读档并关闭菜单
-        int  captSlot   = slot;
-        bool captIsSave = isSave;
-        btn->registerAction("", brls::BUTTON_A, [this, captSlot, captIsSave](brls::View*) {
-            std::string confirmMsg = captIsSave
+        btn->registerAction("", brls::BUTTON_A, [this, captSlot, isSave](brls::View*) {
+            std::string confirmMsg = isSave
                 ? "beiklive/gamemenu/save_confirm"_i18n
                 : "beiklive/gamemenu/load_confirm"_i18n;
             auto* dialog = new brls::Dialog(confirmMsg);
             dialog->addButton("hints/cancel"_i18n, []() {});
-            dialog->addButton("beiklive/hints/confirm"_i18n, [this, captSlot, captIsSave]() {
+            dialog->addButton("beiklive/hints/confirm"_i18n, [this, captSlot, isSave]() {
                 // 先触发存/读档回调（GameView 将设置待处理的槽号）
-                if (captIsSave) {
+                if (isSave) {
                     if (m_saveStateCallback) m_saveStateCallback(captSlot);
                 } else {
                     if (m_loadStateCallback) m_loadStateCallback(captSlot);
@@ -407,8 +456,7 @@ void GameMenu::buildStatePanel(bool isSave, brls::Box* container, brls::Image* t
             return true;
         });
 
-        row->addView(btn);
-        container->addView(row);
+        container->addView(btn);
 
         if (slot == 0) firstBtn = btn;
         lastBtn = btn;
@@ -422,40 +470,26 @@ void GameMenu::buildStatePanel(bool isSave, brls::Box* container, brls::Image* t
 }
 
 // ============================================================
-// refreshStatePanels – 刷新保存/读取状态面板的缩略图显示
+// refreshStatePanels – 重置保存/读取状态面板预览图
 //
-// 调用 m_stateInfoCallback 查询各槽位信息，
-// 更新缩略图的显示/隐藏状态和图片内容。
+// 将两个面板的预览图重置为 NoData 状态（隐藏图片，显示提示标签）。
+// 当面板重新打开时调用，确保不残留上次的预览内容。
 // 须在 UI 线程调用。
 // ============================================================
 
 void GameMenu::refreshStatePanels()
 {
-    if (!m_stateInfoCallback) return;
+    // 重置保存状态预览
+    if (m_savePreviewImage)
+        m_savePreviewImage->setVisibility(brls::Visibility::GONE);
+    if (m_saveNoDataLabel)
+        m_saveNoDataLabel->setVisibility(brls::Visibility::VISIBLE);
 
-    for (int slot = 0; slot < 10; ++slot) {
-        auto info = m_stateInfoCallback(slot);
-
-        // 刷新保存状态面板缩略图
-        if (m_saveThumbImages[slot]) {
-            if (!info.thumbPath.empty()) {
-                m_saveThumbImages[slot]->setImageFromFile(info.thumbPath);
-                m_saveThumbImages[slot]->setVisibility(brls::Visibility::VISIBLE);
-            } else {
-                m_saveThumbImages[slot]->setVisibility(brls::Visibility::GONE);
-            }
-        }
-
-        // 刷新读取状态面板缩略图
-        if (m_loadThumbImages[slot]) {
-            if (!info.thumbPath.empty()) {
-                m_loadThumbImages[slot]->setImageFromFile(info.thumbPath);
-                m_loadThumbImages[slot]->setVisibility(brls::Visibility::VISIBLE);
-            } else {
-                m_loadThumbImages[slot]->setVisibility(brls::Visibility::GONE);
-            }
-        }
-    }
+    // 重置读取状态预览
+    if (m_loadPreviewImage)
+        m_loadPreviewImage->setVisibility(brls::Visibility::GONE);
+    if (m_loadNoDataLabel)
+        m_loadNoDataLabel->setVisibility(brls::Visibility::VISIBLE);
 }
 
 void GameMenu::setGameFileName(const std::string& fileName)
