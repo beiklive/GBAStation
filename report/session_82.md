@@ -38,14 +38,16 @@
 - `rebuildItemViews()` 中，当前无循环导航设置
 - 需要在首条添加 UP→末条，末条添加 DOWN→首条 的自定义导航
 
-## 实施方案
+## 实施结果
 
 ### GameMenu.hpp
+- 新增 `#include <borealis/views/cells/cell_bool.hpp>`
 - 将 `brls::Box* m_cheatbox` 替换为 `brls::ScrollingFrame* m_cheatScrollFrame` + `brls::Box* m_cheatItemBox`
 
 ### GameMenu.cpp
-- 将 cheatbox 创建改为 ScrollingFrame（限制高度，使用 CENTERED 行为）
-- `setCheats()` 中改用 `brls::BooleanCell`
+- 新增常量 `CHEAT_SCROLL_HEIGHT = 400.0f`
+- 将 cheatbox 创建改为 ScrollingFrame（限高 400px，CENTERED 滚动行为），内容使用 Box
+- `setCheats()` 中改用 `brls::BooleanCell`，`init(title, isOn, callback)` 正确初始化开关状态
 - 添加首尾循环导航：首条 UP→末条，末条 DOWN→首条
 
 ### FileListPage.cpp
@@ -54,8 +56,9 @@
 ## 进度追踪
 
 - [x] 分析任务需求
-- [ ] 修改 GameMenu.hpp（成员变量升级）
-- [ ] 修改 GameMenu.cpp（ScrollingFrame + BooleanCell + 焦点循环）
-- [ ] 修改 FileListPage.cpp（列表循环导航）
-- [ ] 代码审查与验证
-- [ ] 更新工作汇报
+- [x] 修改 GameMenu.hpp（成员变量升级）
+- [x] 修改 GameMenu.cpp（ScrollingFrame + BooleanCell + 焦点循环）
+- [x] 修改 FileListPage.cpp（列表循环导航）
+- [x] 代码审查与验证
+- [x] 更新工作汇报
+

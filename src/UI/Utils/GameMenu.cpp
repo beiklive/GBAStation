@@ -1,5 +1,8 @@
 #include "UI/Utils/GameMenu.hpp"
 
+/// 金手指滚动面板最大高度（像素）。
+static constexpr float CHEAT_SCROLL_HEIGHT = 400.0f;
+
 GameMenu::GameMenu()
 {
     bklog::debug("GameMenu constructor");
@@ -44,19 +47,24 @@ GameMenu::GameMenu()
 
         auto* btn2 = new brls::Button();
         btn2->setText("金手指");
-        m_cheatbox = new brls::Box(brls::Axis::COLUMN);
-        m_cheatbox->setVisibility(brls::Visibility::GONE);
+        // 金手指面板：ScrollingFrame 限高，避免内容溢出后焦点丢失
+        m_cheatScrollFrame = new brls::ScrollingFrame();
+        m_cheatScrollFrame->setVisibility(brls::Visibility::GONE);
+        m_cheatScrollFrame->setHeight(CHEAT_SCROLL_HEIGHT);
+        m_cheatScrollFrame->setScrollingBehavior(brls::ScrollingBehavior::CENTERED);
+        m_cheatItemBox = new brls::Box(brls::Axis::COLUMN);
+        m_cheatScrollFrame->setContentView(m_cheatItemBox);
         btn2->registerAction("", brls::BUTTON_A, [this](brls::View* v) {
-            if (m_cheatbox->getVisibility() == brls::Visibility::GONE) {
-                m_cheatbox->setVisibility(brls::Visibility::VISIBLE);
+            if (m_cheatScrollFrame->getVisibility() == brls::Visibility::GONE) {
+                m_cheatScrollFrame->setVisibility(brls::Visibility::VISIBLE);
             } else {
-                m_cheatbox->setVisibility(brls::Visibility::GONE);
+                m_cheatScrollFrame->setVisibility(brls::Visibility::GONE);
             }
             return true;
         });
 
         leftBox->addView(btn2);
-        rightBox->addView(m_cheatbox);
+        rightBox->addView(m_cheatScrollFrame);
 
         auto* btn3 = new brls::Button();
         btn3->setText("退出游戏");
@@ -79,10 +87,10 @@ GameMenu::GameMenu()
     bottomBar->setWidthPercentage(100.0f);
     addView(bottomBar);
 
-    // 初始化 cheatbox：默认提示无金手指
+    // 初始化 cheatItemBox：默认提示无金手指
     auto* noCheatLabel = new brls::Label();
     noCheatLabel->setText("无金手指");
-    m_cheatbox->addView(noCheatLabel);
+    m_cheatItemBox->addView(noCheatLabel);
 }
 
 GameMenu::~GameMenu()
@@ -94,40 +102,40 @@ void GameMenu::setCheats(const std::vector<CheatEntry>& cheats)
 {
     m_cheats = cheats;
 
-    if (!m_cheatbox) return;
+    if (!m_cheatItemBox) return;
 
     // 清空旧内容
-    m_cheatbox->clearViews(true);
+    m_cheatItemBox->clearViews(true);
 
     if (m_cheats.empty()) {
         // 无金手指：显示提示标签
         auto* label = new brls::Label();
         label->setText("无金手指");
-        m_cheatbox->addView(label);
+        m_cheatItemBox->addView(label);
         return;
     }
 
-    // 逐条添加金手指切换按钮
+    // 逐条添加金手指 BooleanCell
+    brls::BooleanCell* firstCell = nullptr;
+    brls::BooleanCell* lastCell  = nullptr;
+
     for (int i = 0; i < static_cast<int>(m_cheats.size()); ++i) {
-        auto* toggleBtn = new brls::Button();
-        const std::string onText  = m_cheats[i].desc + " (开)";
-        const std::string offText = m_cheats[i].desc + " (关)";
-        toggleBtn->setText(m_cheats[i].enabled ? onText : offText);
-
-        toggleBtn->registerAction("", brls::BUTTON_A,
-            [this, i, onText, offText](brls::View* v) {
-                // 切换启用状态
-                m_cheats[i].enabled = !m_cheats[i].enabled;
-                // 更新按钮文字
-                static_cast<brls::Button*>(v)->setText(
-                    m_cheats[i].enabled ? onText : offText);
-                // 通知 GameView 应用更改
+        auto* cell = new brls::BooleanCell();
+        cell->init(m_cheats[i].desc, m_cheats[i].enabled,
+            [this, i](bool v) {
+                m_cheats[i].enabled = v;
                 if (m_cheatToggleCallback)
-                    m_cheatToggleCallback(i, m_cheats[i].enabled);
-                return true;
+                    m_cheatToggleCallback(i, v);
             });
+        m_cheatItemBox->addView(cell);
+        if (i == 0) firstCell = cell;
+        lastCell = cell;
+    }
 
-        m_cheatbox->addView(toggleBtn);
+    // 循环导航：首条按上键到末条，末条按下键到首条
+    if (firstCell && lastCell && firstCell != lastCell) {
+        firstCell->setCustomNavigationRoute(brls::FocusDirection::UP, lastCell);
+        lastCell->setCustomNavigationRoute(brls::FocusDirection::DOWN, firstCell);
     }
 }
 

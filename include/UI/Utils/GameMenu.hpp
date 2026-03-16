@@ -2,6 +2,7 @@
 
 #include "common.hpp"
 #include <borealis.hpp>
+#include <borealis/views/cells/cell_bool.hpp>
 #include <functional>
 #include <string>
 #include <vector>
@@ -35,6 +36,7 @@ public:
 private:
     std::function<void()>         m_closeCallback;
     std::function<void(int, bool)> m_cheatToggleCallback;
-    std::vector<CheatEntry>      m_cheats;     ///< 当前金手指列表（副本，用于 UI 显示）
-    brls::Box*                   m_cheatbox = nullptr; ///< 金手指内容区域
+    std::vector<CheatEntry>      m_cheats;            ///< 当前金手指列表（副本，用于 UI 显示）
+    brls::ScrollingFrame*        m_cheatScrollFrame = nullptr; ///< 金手指滚动容器
+    brls::Box*                   m_cheatItemBox     = nullptr; ///< 金手指条目容器（ScrollingFrame 内容）
 };
