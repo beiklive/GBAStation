@@ -140,7 +140,7 @@ void TopTabFrame::addTab(const std::string& label, std::function<brls::View*()> 
     btn->setText(label);
     btn->setMarginRight(8.f);
     btn->setFocusable(true);
-
+    btn->setGrow(1.0f);
     // 点击或 A 键切换到此选项卡
     btn->registerAction("", brls::BUTTON_A, [this, idx](brls::View*) -> bool {
         activateTab(idx);
@@ -227,6 +227,8 @@ DataPage::DataPage()
             return buildGamePanel(captFileName, captGamePath);
         });
     }
+
+    addView(new brls::BottomBar());
 }
 
 TopTabFrame* DataPage::buildGamePanel(const std::string& fileName, const std::string& /*gamePath*/)
@@ -278,7 +280,7 @@ brls::View* DataPage::buildSavesPanel(const std::string& gameStem)
         contentBox->addView(lbl);
     } else {
         static constexpr int COLS      = 3;
-        static constexpr float IMG_SZ  = 200.f;
+        static constexpr float IMG_SZ  = 300.f;
         static constexpr float IMG_GAP = 10.f;
 
         brls::Box* rowBox = nullptr;
@@ -293,8 +295,8 @@ brls::View* DataPage::buildSavesPanel(const std::string& gameStem)
             const std::string imgPath = images[i];
 
             auto* img = new beiklive::UI::ProImage();
-            img->setWidth(IMG_SZ);
-            img->setHeight(IMG_SZ);
+            img->setWidth(IMG_SZ*0.8f);
+            img->setHeight(IMG_SZ*0.6f);
             img->setCornerRadius(8.f);
             img->setMarginRight(IMG_GAP);
             img->setFocusable(true);
@@ -363,7 +365,7 @@ brls::View* DataPage::buildAlbumPanel(const std::string& gameStem)
         contentBox->addView(lbl);
     } else {
         static constexpr int COLS      = 3;
-        static constexpr float IMG_SZ  = 200.f;
+        static constexpr float IMG_SZ  = 300.f;
         static constexpr float IMG_GAP = 10.f;
 
         brls::Box* rowBox = nullptr;
@@ -378,13 +380,13 @@ brls::View* DataPage::buildAlbumPanel(const std::string& gameStem)
             const std::string imgPath = images[i];
 
             auto* img = new beiklive::UI::ProImage();
-            img->setWidth(IMG_SZ);
-            img->setHeight(IMG_SZ);
+            img->setWidth(IMG_SZ*0.8f);
+            img->setHeight(IMG_SZ*0.6f);
             img->setCornerRadius(8.f);
             img->setMarginRight(IMG_GAP);
             img->setFocusable(true);
             img->setHideHighlightBackground(true);
-            img->setScalingType(brls::ImageScalingType::FIT);
+            img->setScalingType(brls::ImageScalingType::FILL);
             img->setImageFromFileAsync(imgPath);
 
             // A 键：打开图片查看器
@@ -538,9 +540,8 @@ brls::View* DataPage::buildCheatPanel(const std::string& fileName)
         contentBox->addView(lbl);
     } else {
         for (int i = 0; i < static_cast<int>(cheats.size()); ++i) {
-            auto* cell = new brls::DetailCell();
+            auto* cell = new brls::Button();
             cell->setText(cheats[i].desc);
-            cell->setDetailText(cheats[i].code);
             cell->setFocusable(true);
 
             // A 键：弹出文本输入框，修改 code
@@ -559,7 +560,6 @@ brls::View* DataPage::buildCheatPanel(const std::string& fileName)
                                 entries[captIdx].code = newCode;
                                 saveCheatFile(captPath, entries);
                                 // 更新 UI 显示
-                                cell->setDetailText(newCode);
                             }
                         },
                         "beiklive/datapage/edit_code"_i18n,
