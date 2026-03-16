@@ -59,14 +59,13 @@ public:
     /// 设置状态槽位信息查询回调。参数为槽号（0-9），返回槽位信息（是否存在、缩略图路径）。
     void setStateInfoCallback(std::function<StateSlotInfo(int)> cb) { m_stateInfoCallback = std::move(cb); }
 
-    /// 刷新保存/读取状态面板（更新槽位存在标记和缩略图）。须在 UI 线程调用。
+    /// 重置保存/读取状态面板预览图为 NoData 状态。须在 UI 线程调用。
     void refreshStatePanels();
 
 private:
-    /// 构建保存/读取状态槽位面板内容（10个槽位按钮+缩略图）。
-    void buildStatePanel(bool isSave,
-                         brls::Box* container,
-                         brls::Image* thumbImages[10]);
+    /// 构建保存/读取状态槽位面板内容（10个槽位按钮）。
+    /// 槽位按钮获得焦点时，自动更新对应预览图（m_save/loadPreviewImage）。
+    void buildStatePanel(bool isSave, brls::Box* container);
 
     std::function<void()>               m_closeCallback;
     std::function<void(const std::string&)> m_overlayChangedCallback;
@@ -80,12 +79,14 @@ private:
     brls::Box*                          m_cheatItemBox           = nullptr;
     brls::ScrollingFrame*               m_displayScrollFrame     = nullptr;
     brls::DetailCell*                   m_overlayPathCell        = nullptr;
-    brls::ScrollingFrame*               m_saveStateScrollFrame   = nullptr; ///< 保存状态槽位容器
-    brls::ScrollingFrame*               m_loadStateScrollFrame   = nullptr; ///< 读取状态槽位容器
+    brls::Box*                          m_saveStatePanel         = nullptr; ///< 保存状态面板外层容器（横向：列表+预览）
+    brls::Box*                          m_loadStatePanel         = nullptr; ///< 读取状态面板外层容器（横向：列表+预览）
+    brls::ScrollingFrame*               m_saveStateScrollFrame   = nullptr; ///< 保存状态槽位列表（左侧）
+    brls::ScrollingFrame*               m_loadStateScrollFrame   = nullptr; ///< 读取状态槽位列表（左侧）
     brls::Box*                          m_saveStateItemBox       = nullptr; ///< 保存状态条目容器
     brls::Box*                          m_loadStateItemBox       = nullptr; ///< 读取状态条目容器
-    /// 保存状态面板缩略图（10个槽位，nullptr 表示未初始化）
-    brls::Image*                        m_saveThumbImages[10]    = {};
-    /// 读取状态面板缩略图（10个槽位，nullptr 表示未初始化）
-    brls::Image*                        m_loadThumbImages[10]    = {};
+    brls::Image*                        m_savePreviewImage       = nullptr; ///< 保存状态预览图（右侧）
+    brls::Image*                        m_loadPreviewImage       = nullptr; ///< 读取状态预览图（右侧）
+    brls::Label*                        m_saveNoDataLabel        = nullptr; ///< 保存状态无数据提示
+    brls::Label*                        m_loadNoDataLabel        = nullptr; ///< 读取状态无数据提示
 };

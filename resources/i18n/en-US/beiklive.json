@@ -61,7 +61,8 @@
         "save_slot_prefix": "Save to Slot ",
         "load_slot_prefix": "Load Slot ",
         "save_confirm": "Confirm save to this slot?",
-        "load_confirm": "Confirm load from this slot?"
+        "load_confirm": "Confirm load from this slot?",
+        "no_state_data": "No Save Data"
     },
     "settings": {
         "tab": {

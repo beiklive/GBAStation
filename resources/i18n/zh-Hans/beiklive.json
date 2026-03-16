@@ -61,7 +61,8 @@
         "save_slot_prefix": "保存到状态",
         "load_slot_prefix": "读取状态",
         "save_confirm": "确认保存到此档位？",
-        "load_confirm": "确认从此档位读取？"
+        "load_confirm": "确认从此档位读取？",
+        "no_state_data": "无存档数据"
     },
     "settings": {
         "tab": {
