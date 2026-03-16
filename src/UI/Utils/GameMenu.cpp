@@ -21,7 +21,6 @@ GameMenu::GameMenu()
 
     auto* mainbox = new brls::Box(brls::Axis::ROW);
     mainbox->setWidthPercentage(100.0f);
-    // mainbox->setHeightPercentage(100.0f);
     auto* leftBox = new brls::Box(brls::Axis::COLUMN);
     auto* rightBox = new brls::Box(brls::Axis::COLUMN);
     mainbox->addView(leftBox);
@@ -45,19 +44,19 @@ GameMenu::GameMenu()
 
         auto* btn2 = new brls::Button();
         btn2->setText("金手指");
-        auto* cheatbox = new brls::Box(brls::Axis::COLUMN);
-        cheatbox->setVisibility(brls::Visibility::GONE);
-        btn2->registerAction("", brls::BUTTON_A, [cheatbox](brls::View* v) {
-            if (cheatbox->getVisibility() == brls::Visibility::GONE) {
-                cheatbox->setVisibility(brls::Visibility::VISIBLE);
+        m_cheatbox = new brls::Box(brls::Axis::COLUMN);
+        m_cheatbox->setVisibility(brls::Visibility::GONE);
+        btn2->registerAction("", brls::BUTTON_A, [this](brls::View* v) {
+            if (m_cheatbox->getVisibility() == brls::Visibility::GONE) {
+                m_cheatbox->setVisibility(brls::Visibility::VISIBLE);
             } else {
-                cheatbox->setVisibility(brls::Visibility::GONE);
+                m_cheatbox->setVisibility(brls::Visibility::GONE);
             }
             return true;
         });
 
         leftBox->addView(btn2);
-        rightBox->addView(cheatbox);
+        rightBox->addView(m_cheatbox);
 
         auto* btn3 = new brls::Button();
         btn3->setText("退出游戏");
@@ -68,6 +67,10 @@ GameMenu::GameMenu()
         });
         leftBox->addView(btn3);
         leftBox->addView(new brls::Padding());
+
+        // ---- 修复焦点越界问题：最顶部按钮按上键循环到最底部按钮，反之亦然 ----
+        btn->setCustomNavigationRoute(brls::FocusDirection::UP, btn3);
+        btn3->setCustomNavigationRoute(brls::FocusDirection::DOWN, btn);
     }
 
     addView(mainbox);
@@ -76,10 +79,55 @@ GameMenu::GameMenu()
     bottomBar->setWidthPercentage(100.0f);
     addView(bottomBar);
 
+    // 初始化 cheatbox：默认提示无金手指
+    auto* noCheatLabel = new brls::Label();
+    noCheatLabel->setText("无金手指");
+    m_cheatbox->addView(noCheatLabel);
 }
 
 GameMenu::~GameMenu()
 {
     bklog::debug("GameMenu destructor");
+}
+
+void GameMenu::setCheats(const std::vector<CheatEntry>& cheats)
+{
+    m_cheats = cheats;
+
+    if (!m_cheatbox) return;
+
+    // 清空旧内容
+    m_cheatbox->clearViews(true);
+
+    if (m_cheats.empty()) {
+        // 无金手指：显示提示标签
+        auto* label = new brls::Label();
+        label->setText("无金手指");
+        m_cheatbox->addView(label);
+        return;
+    }
+
+    // 逐条添加金手指切换按钮
+    for (int i = 0; i < static_cast<int>(m_cheats.size()); ++i) {
+        auto* toggleBtn = new brls::Button();
+        const std::string onText  = m_cheats[i].desc + " (开)";
+        const std::string offText = m_cheats[i].desc + " (关)";
+        toggleBtn->setText(m_cheats[i].enabled ? onText : offText);
+
+        toggleBtn->registerAction("", brls::BUTTON_A,
+            [this, i, onText, offText](brls::View* v) {
+                // 切换启用状态
+                m_cheats[i].enabled = !m_cheats[i].enabled;
+                // 更新按钮文字
+                static_cast<brls::Button*>(v)->setText(
+                    m_cheats[i].enabled ? onText : offText);
+                // 通知 GameView 应用更改
+                if (m_cheatToggleCallback)
+                    m_cheatToggleCallback(i, m_cheats[i].enabled);
+                return true;
+            });
+
+        m_cheatbox->addView(toggleBtn);
+    }
 }
 

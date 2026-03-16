@@ -307,6 +307,18 @@ void GameView::initialize()
         loadSram();
         loadCheats();
 
+        // ---- 将金手指列表传递给 GameMenu 并注册切换回调 --------
+        if (m_gameMenu) {
+            m_gameMenu->setCheats(m_cheats);
+            m_gameMenu->setCheatToggleCallback([this](int idx, bool enabled) {
+                // 由 GameMenu（UI 线程）在游戏暂停时调用，直接更新核心
+                if (idx >= 0 && idx < static_cast<int>(m_cheats.size())) {
+                    m_cheats[idx].enabled = enabled;
+                    updateCheats();
+                }
+            });
+        }
+
         m_core.reset(); // 加载存档/金手指后确保核心从干净状态启动
 
         // ---- 自动读取即时存档1（如果开启） ----------------------
@@ -1495,23 +1507,23 @@ void GameView::doScreenshot()
 //    XXXXXXXX YYYYYYYY    （无前缀  = 启用）
 // ============================================================
 
-void GameView::loadCheats()
+/// 解析 .cht 金手指文件，返回金手指条目列表。
+/// 若文件不存在或解析失败，返回空列表。
+static std::vector<CheatEntry> parseChtFile(const std::string& path)
 {
-    std::string path = cheatFilePath();
+    std::vector<CheatEntry> result;
+
     if (!std::filesystem::exists(path)) {
         bklog::info("GameView: no cheat file found at {}", path);
-        return;
+        return result;
     }
 
     std::ifstream f(path);
     if (!f) {
         bklog::warning("GameView: failed to open cheat file: {}", path);
-        return;
+        return result;
     }
 
-    m_core.cheatReset();
-
-    // 通过检测 "cheats = " 行来识别 RetroArch 格式
     std::string content;
     {
         std::ostringstream oss;
@@ -1519,27 +1531,21 @@ void GameView::loadCheats()
         content = oss.str();
     }
 
-    unsigned cheatCount = 0;
-
     if (content.find("cheats = ") != std::string::npos ||
         content.find("cheats=")   != std::string::npos)
     {
         // ---- RetroArch .cht 格式 ----
-        // 构建 key → value 映射
         std::unordered_map<std::string, std::string> kv;
         std::istringstream iss(content);
         std::string line;
         while (std::getline(iss, line)) {
-            // 去除回车符（Windows 行尾兼容）
             if (!line.empty() && line.back() == '\r') line.pop_back();
-            // 去除行内注释
             auto hash = line.find('#');
             if (hash != std::string::npos) line = line.substr(0, hash);
             auto eq = line.find('=');
             if (eq == std::string::npos) continue;
             std::string key   = line.substr(0, eq);
             std::string value = line.substr(eq + 1);
-            // 去除首尾空白和引号
             auto trim = [](std::string s) -> std::string {
                 size_t b = s.find_first_not_of(" \t\"");
                 size_t e = s.find_last_not_of(" \t\"");
@@ -1549,7 +1555,6 @@ void GameView::loadCheats()
             kv[trim(key)] = trim(value);
         }
 
-        // 解析金手指总数
         unsigned total = 0;
         {
             auto it = kv.find("cheats");
@@ -1559,34 +1564,30 @@ void GameView::loadCheats()
         }
 
         for (unsigned i = 0; i < total; ++i) {
-            std::string iStr = std::to_string(i);
-            std::string descKey    = "cheat" + iStr + "_desc";
-            std::string enableKey  = "cheat" + iStr + "_enable";
-            std::string codeKey    = "cheat" + iStr + "_code";
-
-            std::string code;
-            bool        enabled = true;
+            std::string iStr      = std::to_string(i);
+            std::string descKey   = "cheat" + iStr + "_desc";
+            std::string enableKey = "cheat" + iStr + "_enable";
+            std::string codeKey   = "cheat" + iStr + "_code";
 
             auto cit = kv.find(codeKey);
             if (cit == kv.end()) continue;
-            code = cit->second;
+
+            CheatEntry entry;
+            entry.code    = cit->second;
+            entry.enabled = true;
+            entry.desc    = "cheat" + iStr;
 
             auto eit = kv.find(enableKey);
             if (eit != kv.end()) {
                 std::string ev = eit->second;
-                // 转小写
                 for (char& c : ev) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-                enabled = (ev == "true" || ev == "1" || ev == "yes");
+                entry.enabled = (ev == "true" || ev == "1" || ev == "yes");
             }
 
-            std::string desc = "cheat" + iStr;
             auto dit = kv.find(descKey);
-            if (dit != kv.end()) desc = dit->second;
+            if (dit != kv.end()) entry.desc = dit->second;
 
-            bklog::info("GameView: cheat[{}] \"{}\" {} code={}", i, desc,
-                        enabled ? "enabled" : "disabled", code);
-            m_core.cheatSet(i, enabled, code);
-            ++cheatCount;
+            result.push_back(std::move(entry));
         }
     }
     else
@@ -1594,45 +1595,108 @@ void GameView::loadCheats()
         // ---- 简单逐行格式 ----
         std::istringstream iss(content);
         std::string line;
-        unsigned idx = 0;
         while (std::getline(iss, line)) {
             if (!line.empty() && line.back() == '\r') line.pop_back();
-            // 去除行内注释
             auto hash = line.find('#');
             if (hash != std::string::npos) line = line.substr(0, hash);
-            // 去除首尾空白
             size_t b = line.find_first_not_of(" \t");
             if (b == std::string::npos) continue;
             line = line.substr(b);
             if (line.empty()) continue;
 
-            bool enabled = true;
+            CheatEntry entry;
+            entry.enabled = true;
             if (line[0] == '+') {
-                enabled = true;
+                entry.enabled = true;
                 line = line.substr(1);
             } else if (line[0] == '-') {
-                enabled = false;
+                entry.enabled = false;
                 line = line.substr(1);
             }
-            // 去除前缀后再次去空白
             b = line.find_first_not_of(" \t");
             if (b == std::string::npos) continue;
             line = line.substr(b);
             if (line.empty()) continue;
 
-            bklog::info("GameView: cheat[{}] {} code={}", idx,
-                        enabled ? "enabled" : "disabled", line);
-            m_core.cheatSet(idx, enabled, line);
-            ++idx;
-            ++cheatCount;
+            entry.code = line;
+            entry.desc = line; // 简单格式无名称，使用代码作为描述
+            result.push_back(std::move(entry));
         }
     }
 
-    if (cheatCount > 0)
-        bklog::info("GameView: {} cheat(s) loaded from {}", cheatCount, path);
-    else
-        bklog::info("GameView: cheat file {} contained no valid cheats", path);
+    return result;
 }
+
+/// 将金手指列表以 RetroArch .cht 格式写入文件。
+/// 返回 true 表示成功。
+static bool saveChtFile(const std::string& path,
+                        const std::vector<CheatEntry>& entries)
+{
+    std::ofstream f(path);
+    if (!f) {
+        bklog::warning("GameView: 无法写入金手指文件: {}", path);
+        return false;
+    }
+
+    f << "cheats = " << entries.size() << "\n\n";
+    for (size_t i = 0; i < entries.size(); ++i) {
+        const auto& e = entries[i];
+        f << "cheat" << i << "_desc = \"" << e.desc << "\"\n";
+        f << "cheat" << i << "_enable = " << (e.enabled ? "true" : "false") << "\n";
+        f << "cheat" << i << "_code = " << e.code << "\n\n";
+    }
+
+    return true;
+}
+
+void GameView::loadCheats()
+{
+    // 优先读取 gamedata 中保存的金手指路径，回退到配置目录路径
+    m_cheatPath = getGameDataStr(m_romFileName, GAMEDATA_FIELD_CHEATPATH, "");
+    if (m_cheatPath.empty()) {
+        m_cheatPath = cheatFilePath();
+        // 首次启动时将默认路径写入 gamedata，方便用户查看和自定义
+        if (!m_romFileName.empty()) {
+            setGameDataStr(m_romFileName, GAMEDATA_FIELD_CHEATPATH, m_cheatPath);
+        }
+    }
+
+    m_cheats = parseChtFile(m_cheatPath);
+
+    // 应用金手指到核心
+    m_core.cheatReset();
+    for (size_t i = 0; i < m_cheats.size(); ++i) {
+        bklog::info("GameView: cheat[{}] \"{}\" {} code={}", i,
+                    m_cheats[i].desc,
+                    m_cheats[i].enabled ? "enabled" : "disabled",
+                    m_cheats[i].code);
+        m_core.cheatSet(static_cast<unsigned>(i), m_cheats[i].enabled, m_cheats[i].code);
+    }
+
+    if (!m_cheats.empty())
+        bklog::info("GameView: {} cheat(s) loaded from {}", m_cheats.size(), m_cheatPath);
+    else
+        bklog::info("GameView: cheat file {} contained no valid cheats", m_cheatPath);
+}
+
+// ============================================================
+// updateCheats – 将当前 m_cheats 状态重新应用到核心并保存到文件
+// ============================================================
+
+void GameView::updateCheats()
+{
+    // 重置核心金手指状态，再逐条重新设置
+    m_core.cheatReset();
+    for (size_t i = 0; i < m_cheats.size(); ++i) {
+        m_core.cheatSet(static_cast<unsigned>(i), m_cheats[i].enabled, m_cheats[i].code);
+    }
+    // 将启用状态写回磁盘上的 .cht 文件
+    if (!m_cheatPath.empty()) {
+        saveChtFile(m_cheatPath, m_cheats);
+    }
+}
+
+
 
 void GameView::uploadFrame(NVGcontext* vg,
                             const beiklive::LibretroLoader::VideoFrame& frame)
