@@ -67,6 +67,8 @@ public:
 	bool Contains(const std::string& key) const;
 	bool Remove(const std::string& key);
 	void Clear();
+	/// 返回所有持久化 key 列表（用于遍历数据）
+	std::vector<std::string> GetAllKeys() const;
 
 private:
 	struct Entry {

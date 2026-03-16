@@ -2,6 +2,7 @@
 
 #include "Game/game_view.hpp"
 #include "UI/Pages/ImageView.hpp"
+#include "UI/Pages/DataPage.hpp"
 
 #include <chrono>
 #include <ctime>
@@ -187,6 +188,10 @@ void StartPageView::createAppPage()
 
     m_appPage->onOpenSettings = [this]() {
         openSettingsPage();
+    };
+
+    m_appPage->onOpenDataPage = [this]() {
+        openDataPage();
     };
 
     // ── 绑定游戏卡片 X 键回调 ─────────────────────────────────────────────
@@ -398,6 +403,29 @@ void StartPageView::openSettingsPage()
     frame->setTitle("设置");
     brls::Application::pushActivity(new brls::Activity(frame));
 
+}
+
+void StartPageView::openDataPage()
+{
+    auto* dataPage = new DataPage();
+    auto* container = new brls::Box(brls::Axis::COLUMN);
+    container->setGrow(1.0f);
+    container->setBackground(brls::ViewBackground::NONE);
+    container->addView(dataPage);
+    container->registerAction(
+        "beiklive/hints/close"_i18n,
+        brls::BUTTON_START,
+        [](brls::View*) {
+            brls::Application::popActivity();
+            return true;
+        },
+        /*hidden=*/false, /*repeat=*/false, brls::SOUND_CLICK);
+
+    auto* frame = new brls::AppletFrame(container);
+    frame->setHeaderVisibility(brls::Visibility::GONE);
+    frame->setFooterVisibility(brls::Visibility::GONE);
+    frame->setBackground(brls::ViewBackground::NONE);
+    brls::Application::pushActivity(new brls::Activity(frame));
 }
 
 
