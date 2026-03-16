@@ -152,9 +152,7 @@
         },
         "keybind": {
             "header_pad": "Gamepad",
-            "header_kbd": "Keyboard",
             "pad_suffix": " (Gamepad)",
-            "kbd_suffix": " (Keyboard)",
             "press_kbd": "Press keyboard key (CTRL/SHIFT/ALT combos supported)",
             "press_pad": "Press gamepad button (combo keys supported)",
             "countdown_suffix": " sec",
