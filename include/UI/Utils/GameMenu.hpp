@@ -18,6 +18,12 @@ struct CheatEntry {
 class GameMenu: public brls::Box
 {
 public:
+    /// 状态槽位信息（用于面板显示）
+    struct StateSlotInfo {
+        bool        exists    = false; ///< 状态文件是否存在
+        std::string thumbPath;         ///< 缩略图路径（存在时非空）
+    };
+
     GameMenu();
     ~GameMenu();
 
@@ -44,14 +50,42 @@ public:
         m_overlayChangedCallback = std::move(cb);
     }
 
+    /// 设置保存状态回调。用户确认保存后在 UI 线程调用，参数为槽号（0-9）。
+    void setSaveStateCallback(std::function<void(int)> cb) { m_saveStateCallback = std::move(cb); }
+
+    /// 设置读取状态回调。用户确认读取后在 UI 线程调用，参数为槽号（0-9）。
+    void setLoadStateCallback(std::function<void(int)> cb) { m_loadStateCallback = std::move(cb); }
+
+    /// 设置状态槽位信息查询回调。参数为槽号（0-9），返回槽位信息（是否存在、缩略图路径）。
+    void setStateInfoCallback(std::function<StateSlotInfo(int)> cb) { m_stateInfoCallback = std::move(cb); }
+
+    /// 刷新保存/读取状态面板（更新槽位存在标记和缩略图）。须在 UI 线程调用。
+    void refreshStatePanels();
+
 private:
-    std::function<void()>         m_closeCallback;
+    /// 构建保存/读取状态槽位面板内容（10个槽位按钮+缩略图）。
+    void buildStatePanel(bool isSave,
+                         brls::Box* container,
+                         brls::Image* thumbImages[10]);
+
+    std::function<void()>               m_closeCallback;
     std::function<void(const std::string&)> m_overlayChangedCallback;
-    std::function<void(int, bool)> m_cheatToggleCallback;
-    std::vector<CheatEntry>      m_cheats;            ///< 当前金手指列表（副本，用于 UI 显示）
-    std::string                  m_romFileName;       ///< 当前游戏文件名（含后缀）
-    brls::ScrollingFrame*        m_cheatScrollFrame  = nullptr; ///< 金手指滚动容器
-    brls::Box*                   m_cheatItemBox      = nullptr; ///< 金手指条目容器（ScrollingFrame 内容）
-    brls::ScrollingFrame*        m_displayScrollFrame = nullptr; ///< 画面设置滚动容器
-    brls::DetailCell*            m_overlayPathCell   = nullptr; ///< 游戏专属遮罩路径选择项
+    std::function<void(int, bool)>      m_cheatToggleCallback;
+    std::function<void(int)>            m_saveStateCallback;     ///< 确认保存状态时调用
+    std::function<void(int)>            m_loadStateCallback;     ///< 确认读取状态时调用
+    std::function<StateSlotInfo(int)>   m_stateInfoCallback;     ///< 查询槽位信息
+    std::vector<CheatEntry>             m_cheats;
+    std::string                         m_romFileName;
+    brls::ScrollingFrame*               m_cheatScrollFrame       = nullptr;
+    brls::Box*                          m_cheatItemBox           = nullptr;
+    brls::ScrollingFrame*               m_displayScrollFrame     = nullptr;
+    brls::DetailCell*                   m_overlayPathCell        = nullptr;
+    brls::ScrollingFrame*               m_saveStateScrollFrame   = nullptr; ///< 保存状态槽位容器
+    brls::ScrollingFrame*               m_loadStateScrollFrame   = nullptr; ///< 读取状态槽位容器
+    brls::Box*                          m_saveStateItemBox       = nullptr; ///< 保存状态条目容器
+    brls::Box*                          m_loadStateItemBox       = nullptr; ///< 读取状态条目容器
+    /// 保存状态面板缩略图（10个槽位，nullptr 表示未初始化）
+    brls::Image*                        m_saveThumbImages[10]    = {};
+    /// 读取状态面板缩略图（10个槽位，nullptr 表示未初始化）
+    brls::Image*                        m_loadThumbImages[10]    = {};
 };
