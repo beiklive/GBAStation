@@ -134,6 +134,7 @@
             "overlay_enable": "Enable Overlay",
             "overlay_gba_path": "Global GBA Overlay Path (PNG)",
             "overlay_gbc_path": "Global GBC Overlay Path (PNG)",
+            "overlay_path": "Game Overlay Path (PNG)",
             "overlay_not_set": "Not Set",
             "header_shader": "Shader Settings",
             "shader_enable": "Shader",

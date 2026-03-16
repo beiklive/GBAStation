@@ -2,8 +2,6 @@
 #include "UI/Pages/FileListPage.hpp"
 
 using beiklive::cfgGetBool;
-using beiklive::cfgGetStr;
-using beiklive::cfgSetStr;
 using beiklive::cfgSetBool;
 
 /// 金手指滚动面板最大高度（像素）。
@@ -11,53 +9,7 @@ static constexpr float CHEAT_SCROLL_HEIGHT   = 400.0f;
 /// 画面设置面板最大高度（像素）。
 static constexpr float DISPLAY_SCROLL_HEIGHT = 400.0f;
 
-/// 创建 PNG 路径选择 DetailCell，打开文件浏览器选择文件。
-/// @param cfgKey  配置键名，用于读取/写入路径
-/// @param label   单元格显示文本（i18n 字符串）
-static brls::DetailCell* makeOverlayPathCell(const std::string& cfgKey,
-                                              const std::string& label)
-{
-    auto* cell = new brls::DetailCell();
-    cell->setText(label);
-    cell->setDetailText(beiklive::string::extractFileName(
-        cfgGetStr(cfgKey, "beiklive/settings/display/overlay_not_set"_i18n)));
-    cell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A,
-        [cell, cfgKey](brls::View*) {
-            auto* flPage = new FileListPage();
-            flPage->setFilter({"png"}, FileListPage::FilterMode::Whitelist);
-            flPage->setDefaultFileCallback([cell, cfgKey](const FileListItem& item) {
-                cfgSetStr(cfgKey, item.fullPath);
-                cell->setDetailText(beiklive::string::extractFileName(item.fullPath));
-                brls::Application::popActivity();
-            });
-            std::string startPath = cfgGetStr(cfgKey, "");
-            if (!startPath.empty()) {
-                auto pos = startPath.rfind('/');
-#ifdef _WIN32
-                auto posW = startPath.rfind('\\');
-                if (posW != std::string::npos &&
-                    (pos == std::string::npos || posW > pos))
-                    pos = posW;
-#endif
-                if (pos != std::string::npos)
-                    startPath = startPath.substr(0, pos);
-            }
-            if (startPath.empty()) startPath = "/";
-            flPage->navigateTo(startPath);
-            auto* container = new brls::Box(brls::Axis::COLUMN);
-            container->setGrow(1.0f);
-            container->addView(flPage);
-            container->registerAction("beiklive/hints/close"_i18n, brls::BUTTON_START,
-                [](brls::View*) { brls::Application::popActivity(); return true; });
-            auto* frame = new brls::AppletFrame(container);
-            frame->setHeaderVisibility(brls::Visibility::GONE);
-            frame->setFooterVisibility(brls::Visibility::GONE);
-            frame->setBackground(brls::ViewBackground::NONE);
-            brls::Application::pushActivity(new brls::Activity(frame));
-            return true;
-        }, false, false, brls::SOUND_CLICK);
-    return cell;
-}
+
 
 GameMenu::GameMenu()
 {
@@ -159,16 +111,52 @@ GameMenu::GameMenu()
                             [](bool v) { cfgSetBool(KEY_DISPLAY_OVERLAY_ENABLED, v); });
         displayBox->addView(overlayEnCell);
 
-        // --- 遮罩路径选择（GBA / GBC，根据平台由 setPlatform() 控制可见性）---
-        m_overlayGbaPathCell = makeOverlayPathCell(
-            KEY_DISPLAY_OVERLAY_GBA_PATH,
-            "beiklive/settings/display/overlay_gba_path"_i18n);
-        displayBox->addView(m_overlayGbaPathCell);
-
-        m_overlayGbcPathCell = makeOverlayPathCell(
-            KEY_DISPLAY_OVERLAY_GBC_PATH,
-            "beiklive/settings/display/overlay_gbc_path"_i18n);
-        displayBox->addView(m_overlayGbcPathCell);
+        // --- 遮罩路径选择（读/写 gamedataManager 的 overlay 字段）---
+        m_overlayPathCell = new brls::DetailCell();
+        m_overlayPathCell->setText("beiklive/settings/display/overlay_path"_i18n);
+        m_overlayPathCell->setDetailText("beiklive/settings/display/overlay_not_set"_i18n);
+        m_overlayPathCell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A,
+            [this](brls::View*) {
+                auto* flPage = new FileListPage();
+                flPage->setFilter({"png"}, FileListPage::FilterMode::Whitelist);
+                flPage->setDefaultFileCallback([this](const FileListItem& item) {
+                    if (!m_romFileName.empty()) {
+                        setGameDataStr(m_romFileName, GAMEDATA_FIELD_OVERLAY, item.fullPath);
+                    } else {
+                        bklog::warning("GameMenu: 游戏文件名未设置，无法保存遮罩路径");
+                    }
+                    m_overlayPathCell->setDetailText(
+                        beiklive::string::extractFileName(item.fullPath));
+                    brls::Application::popActivity();
+                });
+                std::string startPath = m_romFileName.empty() ? "" :
+                    getGameDataStr(m_romFileName, GAMEDATA_FIELD_OVERLAY, "");
+                if (!startPath.empty()) {
+                    auto pos = startPath.rfind('/');
+#ifdef _WIN32
+                    auto posW = startPath.rfind('\\');
+                    if (posW != std::string::npos &&
+                        (pos == std::string::npos || posW > pos))
+                        pos = posW;
+#endif
+                    if (pos != std::string::npos)
+                        startPath = startPath.substr(0, pos);
+                }
+                if (startPath.empty()) startPath = "/";
+                flPage->navigateTo(startPath);
+                auto* container = new brls::Box(brls::Axis::COLUMN);
+                container->setGrow(1.0f);
+                container->addView(flPage);
+                container->registerAction("beiklive/hints/close"_i18n, brls::BUTTON_START,
+                    [](brls::View*) { brls::Application::popActivity(); return true; });
+                auto* frame = new brls::AppletFrame(container);
+                frame->setHeaderVisibility(brls::Visibility::GONE);
+                frame->setFooterVisibility(brls::Visibility::GONE);
+                frame->setBackground(brls::ViewBackground::NONE);
+                brls::Application::pushActivity(new brls::Activity(frame));
+                return true;
+            }, false, false, brls::SOUND_CLICK);
+        displayBox->addView(m_overlayPathCell);
 
         // --- 着色器设置 header ---
         auto* shaderHeader = new brls::Header();
@@ -241,27 +229,26 @@ GameMenu::~GameMenu()
     bklog::debug("GameMenu destructor");
 }
 
-void GameMenu::setPlatform(beiklive::EmuPlatform platform)
+void GameMenu::setGameFileName(const std::string& fileName)
 {
-    m_platform = platform;
-    if (!m_overlayGbaPathCell || !m_overlayGbcPathCell) return;
+    m_romFileName = fileName;
+    if (!m_overlayPathCell) return;
 
-    // 根据游戏平台显示对应遮罩路径选择项
-    switch (m_platform) {
-        case beiklive::EmuPlatform::GBA:
-            m_overlayGbaPathCell->setVisibility(brls::Visibility::VISIBLE);
-            m_overlayGbcPathCell->setVisibility(brls::Visibility::GONE);
-            break;
-        case beiklive::EmuPlatform::GB:
-            m_overlayGbaPathCell->setVisibility(brls::Visibility::GONE);
-            m_overlayGbcPathCell->setVisibility(brls::Visibility::VISIBLE);
-            break;
-        default:
-            // 平台未知时两者均不显示
-            m_overlayGbaPathCell->setVisibility(brls::Visibility::GONE);
-            m_overlayGbcPathCell->setVisibility(brls::Visibility::GONE);
-            break;
+    if (fileName.empty()) {
+        // 文件名为空时重置显示，避免显示旧游戏的遮罩信息
+        m_overlayPathCell->setDetailText(
+            "beiklive/settings/display/overlay_not_set"_i18n);
+        return;
     }
+
+    // 从 gamedataManager 读取游戏专属遮罩路径并刷新显示
+    std::string overlayPath = getGameDataStr(fileName, GAMEDATA_FIELD_OVERLAY, "");
+    if (!overlayPath.empty())
+        m_overlayPathCell->setDetailText(
+            beiklive::string::extractFileName(overlayPath));
+    else
+        m_overlayPathCell->setDetailText(
+            "beiklive/settings/display/overlay_not_set"_i18n);
 }
 
 void GameMenu::setCheats(const std::vector<CheatEntry>& cheats)
