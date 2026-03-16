@@ -134,8 +134,16 @@
             "overlay_enable": "Enable Overlay",
             "overlay_gba_path": "Global GBA Overlay Path (PNG)",
             "overlay_gbc_path": "Global GBC Overlay Path (PNG)",
-            "overlay_not_set": "Not Set"
+            "overlay_not_set": "Not Set",
+            "header_shader": "Shader Settings",
+            "shader_enable": "Shader",
+            "shader_select": "Shader Selection",
+            "shader_params": "Shader Parameters",
+            "not_implemented": "(Not Implemented)"
         },
+        "gamemenu": {
+            "btn_display": "Display Settings"
+        }
         "audio": {
             "header_emu": "Emulator Audio",
             "btn_sfx": "UI Button Sound Effects",

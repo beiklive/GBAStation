@@ -134,8 +134,16 @@
             "overlay_enable": "启用遮罩",
             "overlay_gba_path": "全局 GBA 遮罩路径 (PNG)",
             "overlay_gbc_path": "全局 GBC 遮罩路径 (PNG)",
-            "overlay_not_set": "未设置"
+            "overlay_not_set": "未设置",
+            "header_shader": "着色器设置",
+            "shader_enable": "着色器开关",
+            "shader_select": "着色器选择",
+            "shader_params": "着色器参数设置",
+            "not_implemented": "（功能待实现）"
         },
+        "gamemenu": {
+            "btn_display": "画面设置"
+        }
         "audio": {
             "header_emu": "模拟器声音",
             "btn_sfx": "模拟器按键音效",
