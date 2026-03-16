@@ -11,6 +11,54 @@ static constexpr float CHEAT_SCROLL_HEIGHT   = 400.0f;
 /// 画面设置面板最大高度（像素）。
 static constexpr float DISPLAY_SCROLL_HEIGHT = 400.0f;
 
+/// 创建 PNG 路径选择 DetailCell，打开文件浏览器选择文件。
+/// @param cfgKey  配置键名，用于读取/写入路径
+/// @param label   单元格显示文本（i18n 字符串）
+static brls::DetailCell* makeOverlayPathCell(const std::string& cfgKey,
+                                              const std::string& label)
+{
+    auto* cell = new brls::DetailCell();
+    cell->setText(label);
+    cell->setDetailText(beiklive::string::extractFileName(
+        cfgGetStr(cfgKey, "beiklive/settings/display/overlay_not_set"_i18n)));
+    cell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A,
+        [cell, cfgKey](brls::View*) {
+            auto* flPage = new FileListPage();
+            flPage->setFilter({"png"}, FileListPage::FilterMode::Whitelist);
+            flPage->setDefaultFileCallback([cell, cfgKey](const FileListItem& item) {
+                cfgSetStr(cfgKey, item.fullPath);
+                cell->setDetailText(beiklive::string::extractFileName(item.fullPath));
+                brls::Application::popActivity();
+            });
+            std::string startPath = cfgGetStr(cfgKey, "");
+            if (!startPath.empty()) {
+                auto pos = startPath.rfind('/');
+#ifdef _WIN32
+                auto posW = startPath.rfind('\\');
+                if (posW != std::string::npos &&
+                    (pos == std::string::npos || posW > pos))
+                    pos = posW;
+#endif
+                if (pos != std::string::npos)
+                    startPath = startPath.substr(0, pos);
+            }
+            if (startPath.empty()) startPath = "/";
+            flPage->navigateTo(startPath);
+            auto* container = new brls::Box(brls::Axis::COLUMN);
+            container->setGrow(1.0f);
+            container->addView(flPage);
+            container->registerAction("beiklive/hints/close"_i18n, brls::BUTTON_START,
+                [](brls::View*) { brls::Application::popActivity(); return true; });
+            auto* frame = new brls::AppletFrame(container);
+            frame->setHeaderVisibility(brls::Visibility::GONE);
+            frame->setFooterVisibility(brls::Visibility::GONE);
+            frame->setBackground(brls::ViewBackground::NONE);
+            brls::Application::pushActivity(new brls::Activity(frame));
+            return true;
+        }, false, false, brls::SOUND_CLICK);
+    return cell;
+}
+
 GameMenu::GameMenu()
 {
     bklog::debug("GameMenu constructor");
@@ -88,7 +136,7 @@ GameMenu::GameMenu()
 
         // ---- 画面设置按钮 ----
         auto* btnDisplay = new brls::Button();
-        btnDisplay->setText("画面设置");
+        btnDisplay->setText("beiklive/gamemenu/btn_display"_i18n);
 
         // ---- 构建画面设置面板 ----
         m_displayScrollFrame = new brls::ScrollingFrame();
@@ -111,98 +159,15 @@ GameMenu::GameMenu()
                             [](bool v) { cfgSetBool(KEY_DISPLAY_OVERLAY_ENABLED, v); });
         displayBox->addView(overlayEnCell);
 
-        // --- GBA 遮罩路径选择（平台为 GBA 时显示） ---
-        m_overlayGbaPathCell = new brls::DetailCell();
-        m_overlayGbaPathCell->setText("beiklive/settings/display/overlay_gba_path"_i18n);
-        m_overlayGbaPathCell->setDetailText(beiklive::string::extractFileName(
-            cfgGetStr(KEY_DISPLAY_OVERLAY_GBA_PATH,
-                      "beiklive/settings/display/overlay_not_set"_i18n)));
-        {
-            auto* cell    = m_overlayGbaPathCell;
-            const std::string cfgKey = KEY_DISPLAY_OVERLAY_GBA_PATH;
-            cell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A,
-                [cell, cfgKey](brls::View*) {
-                    auto* flPage = new FileListPage();
-                    flPage->setFilter({"png"}, FileListPage::FilterMode::Whitelist);
-                    flPage->setDefaultFileCallback([cell, cfgKey](const FileListItem& item) {
-                        cfgSetStr(cfgKey, item.fullPath);
-                        cell->setDetailText(beiklive::string::extractFileName(item.fullPath));
-                        brls::Application::popActivity();
-                    });
-                    std::string startPath = cfgGetStr(cfgKey, "");
-                    if (!startPath.empty()) {
-                        auto pos = startPath.rfind('/');
-#ifdef _WIN32
-                        auto posW = startPath.rfind('\\');
-                        if (posW != std::string::npos &&
-                            (pos == std::string::npos || posW > pos))
-                            pos = posW;
-#endif
-                        if (pos != std::string::npos)
-                            startPath = startPath.substr(0, pos);
-                    }
-                    if (startPath.empty()) startPath = "/";
-                    flPage->navigateTo(startPath);
-                    auto* container = new brls::Box(brls::Axis::COLUMN);
-                    container->setGrow(1.0f);
-                    container->addView(flPage);
-                    container->registerAction("beiklive/hints/close"_i18n, brls::BUTTON_START,
-                        [](brls::View*) { brls::Application::popActivity(); return true; });
-                    auto* frame = new brls::AppletFrame(container);
-                    frame->setHeaderVisibility(brls::Visibility::GONE);
-                    frame->setFooterVisibility(brls::Visibility::GONE);
-                    frame->setBackground(brls::ViewBackground::NONE);
-                    brls::Application::pushActivity(new brls::Activity(frame));
-                    return true;
-                }, false, false, brls::SOUND_CLICK);
-        }
+        // --- 遮罩路径选择（GBA / GBC，根据平台由 setPlatform() 控制可见性）---
+        m_overlayGbaPathCell = makeOverlayPathCell(
+            KEY_DISPLAY_OVERLAY_GBA_PATH,
+            "beiklive/settings/display/overlay_gba_path"_i18n);
         displayBox->addView(m_overlayGbaPathCell);
 
-        // --- GBC 遮罩路径选择（平台为 GB 时显示） ---
-        m_overlayGbcPathCell = new brls::DetailCell();
-        m_overlayGbcPathCell->setText("beiklive/settings/display/overlay_gbc_path"_i18n);
-        m_overlayGbcPathCell->setDetailText(beiklive::string::extractFileName(
-            cfgGetStr(KEY_DISPLAY_OVERLAY_GBC_PATH,
-                      "beiklive/settings/display/overlay_not_set"_i18n)));
-        {
-            auto* cell    = m_overlayGbcPathCell;
-            const std::string cfgKey = KEY_DISPLAY_OVERLAY_GBC_PATH;
-            cell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A,
-                [cell, cfgKey](brls::View*) {
-                    auto* flPage = new FileListPage();
-                    flPage->setFilter({"png"}, FileListPage::FilterMode::Whitelist);
-                    flPage->setDefaultFileCallback([cell, cfgKey](const FileListItem& item) {
-                        cfgSetStr(cfgKey, item.fullPath);
-                        cell->setDetailText(beiklive::string::extractFileName(item.fullPath));
-                        brls::Application::popActivity();
-                    });
-                    std::string startPath = cfgGetStr(cfgKey, "");
-                    if (!startPath.empty()) {
-                        auto pos = startPath.rfind('/');
-#ifdef _WIN32
-                        auto posW = startPath.rfind('\\');
-                        if (posW != std::string::npos &&
-                            (pos == std::string::npos || posW > pos))
-                            pos = posW;
-#endif
-                        if (pos != std::string::npos)
-                            startPath = startPath.substr(0, pos);
-                    }
-                    if (startPath.empty()) startPath = "/";
-                    flPage->navigateTo(startPath);
-                    auto* container = new brls::Box(brls::Axis::COLUMN);
-                    container->setGrow(1.0f);
-                    container->addView(flPage);
-                    container->registerAction("beiklive/hints/close"_i18n, brls::BUTTON_START,
-                        [](brls::View*) { brls::Application::popActivity(); return true; });
-                    auto* frame = new brls::AppletFrame(container);
-                    frame->setHeaderVisibility(brls::Visibility::GONE);
-                    frame->setFooterVisibility(brls::Visibility::GONE);
-                    frame->setBackground(brls::ViewBackground::NONE);
-                    brls::Application::pushActivity(new brls::Activity(frame));
-                    return true;
-                }, false, false, brls::SOUND_CLICK);
-        }
+        m_overlayGbcPathCell = makeOverlayPathCell(
+            KEY_DISPLAY_OVERLAY_GBC_PATH,
+            "beiklive/settings/display/overlay_gbc_path"_i18n);
         displayBox->addView(m_overlayGbcPathCell);
 
         // --- 着色器设置 header ---
