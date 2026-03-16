@@ -141,6 +141,9 @@ GameMenu::GameMenu()
                     }
                     m_overlayPathCell->setDetailText(
                         beiklive::string::extractFileName(item.fullPath));
+                    // 通知 GameView 遮罩路径已变更，立即预加载新纹理
+                    if (m_overlayChangedCallback)
+                        m_overlayChangedCallback(item.fullPath);
                     brls::Application::popActivity();
                 });
                 std::string startPath = m_romFileName.empty() ? "" :

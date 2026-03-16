@@ -772,6 +772,12 @@ void GameView::setGameMenu(GameMenu* menu)
             setGameInputEnabled(true);
             brls::Application::giveFocus(this);
         });
+        // 遮罩路径变更时立即更新 m_overlayPath 并标记重新加载，
+        // draw() 下一帧将在菜单仍打开期间预加载新纹理，恢复游戏无卡顿
+        m_gameMenu->setOverlayChangedCallback([this](const std::string& newPath) {
+            m_overlayPath = newPath;
+            m_overlayReloadPending.store(true, std::memory_order_release);
+        });
     }
 }
 
@@ -2054,6 +2060,10 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
     }
 
     // ---- 遮罩绘制 – 全屏，叠加在游戏画面之上
+    // 若遮罩路径已变更（菜单中用户重新选择），立即重新加载纹理（菜单打开时即完成，恢复游戏无卡顿）
+    if (m_overlayReloadPending.exchange(false, std::memory_order_acquire)) {
+        loadOverlayImage(vg);
+    }
     if (m_overlayEnabled && !m_overlayPath.empty()) {
         // 懒加载：首次使用时创建 NVG 图像句柄
         if (m_overlayNvgImage < 0) {

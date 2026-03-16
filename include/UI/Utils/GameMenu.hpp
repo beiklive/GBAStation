@@ -38,8 +38,15 @@ public:
     /// 须在菜单首次显示之前调用。
     void setGameFileName(const std::string& fileName);
 
+    /// 设置遮罩路径变更回调。用户选择新遮罩后在 UI 线程调用，参数为新的完整遮罩路径。
+    void setOverlayChangedCallback(std::function<void(const std::string&)> cb)
+    {
+        m_overlayChangedCallback = std::move(cb);
+    }
+
 private:
     std::function<void()>         m_closeCallback;
+    std::function<void(const std::string&)> m_overlayChangedCallback;
     std::function<void(int, bool)> m_cheatToggleCallback;
     std::vector<CheatEntry>      m_cheats;            ///< 当前金手指列表（副本，用于 UI 显示）
     std::string                  m_romFileName;       ///< 当前游戏文件名（含后缀）

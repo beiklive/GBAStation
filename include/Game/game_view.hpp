@@ -183,6 +183,8 @@ class GameView : public brls::Box
     bool        m_overlayEnabled   = false; ///< display.overlay.enabled
     std::string m_overlayPath;              ///< resolved overlay PNG path for this game
     int         m_overlayNvgImage  = -1;    ///< NVG image handle for overlay texture
+    /// 遮罩路径变更后需要重新加载纹理的标志（主线程写入，draw() 消费）。
+    std::atomic<bool> m_overlayReloadPending{false};
 
     /// 加载（或重新加载）覆盖层纹理到m_overlayNvgImage。
     /// 若有旧图像则释放，失败时清空m_overlayNvgImage。
