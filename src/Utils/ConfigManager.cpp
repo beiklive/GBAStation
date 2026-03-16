@@ -177,6 +177,15 @@ void ConfigManager::Clear() {
 	entries_.clear();
 }
 
+std::vector<std::string> ConfigManager::GetAllKeys() const {
+	std::vector<std::string> keys;
+	keys.reserve(entries_.size());
+	for (const auto& pair : entries_) {
+		keys.push_back(pair.first);
+	}
+	return keys;
+}
+
 std::string ConfigManager::Trim(std::string_view text) {
 	size_t begin = 0;
 	while (begin < text.size() && std::isspace(static_cast<unsigned char>(text[begin]))) ++begin;

@@ -182,5 +182,18 @@
             "waiting": "---",
             "combo_more": "+?"
         }
+    },
+    "datapage": {
+        "title": "Game Data",
+        "tab_saves": "Saves",
+        "tab_album": "Album",
+        "tab_cheats": "Cheats",
+        "no_games": "No Game Data",
+        "no_saves": "No Saves",
+        "no_album": "No Screenshots",
+        "no_cheats": "No Cheats",
+        "delete_confirm": "Confirm delete?",
+        "delete_hint": "Delete",
+        "edit_code": "Edit Code"
     }
 }
