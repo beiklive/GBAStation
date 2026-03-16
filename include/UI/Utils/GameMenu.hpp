@@ -3,6 +3,7 @@
 #include "common.hpp"
 #include <borealis.hpp>
 #include <borealis/views/cells/cell_bool.hpp>
+#include <borealis/views/cells/cell_detail.hpp>
 #include <functional>
 #include <string>
 #include <vector>
@@ -33,10 +34,18 @@ public:
         m_cheatToggleCallback = std::move(cb);
     }
 
+    /// 设置当前游戏平台，用于决定显示 GBA 还是 GBC 遮罩路径选择项。
+    /// 须在菜单首次显示之前调用。
+    void setPlatform(beiklive::EmuPlatform platform);
+
 private:
     std::function<void()>         m_closeCallback;
     std::function<void(int, bool)> m_cheatToggleCallback;
     std::vector<CheatEntry>      m_cheats;            ///< 当前金手指列表（副本，用于 UI 显示）
-    brls::ScrollingFrame*        m_cheatScrollFrame = nullptr; ///< 金手指滚动容器
-    brls::Box*                   m_cheatItemBox     = nullptr; ///< 金手指条目容器（ScrollingFrame 内容）
+    brls::ScrollingFrame*        m_cheatScrollFrame  = nullptr; ///< 金手指滚动容器
+    brls::Box*                   m_cheatItemBox      = nullptr; ///< 金手指条目容器（ScrollingFrame 内容）
+    brls::ScrollingFrame*        m_displayScrollFrame = nullptr; ///< 画面设置滚动容器
+    brls::DetailCell*            m_overlayGbaPathCell = nullptr; ///< GBA 遮罩路径选择项
+    brls::DetailCell*            m_overlayGbcPathCell = nullptr; ///< GBC 遮罩路径选择项
+    beiklive::EmuPlatform        m_platform = beiklive::EmuPlatform::None; ///< 当前游戏平台
 };

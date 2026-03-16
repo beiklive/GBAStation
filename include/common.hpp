@@ -13,7 +13,6 @@ using namespace brls::literals; // for _i18n
 #include "UI/Utils/Utils.hpp"
 #include "UI/Utils/ProImage.hpp"
 #include "UI/Utils/ImageFileCache.hpp"
-#include "UI/Utils/GameMenu.hpp"
 
 // 函数宏定义
 
@@ -155,6 +154,9 @@ struct GameRunner {
 };
 
 };
+
+// GameMenu 依赖 beiklive::EmuPlatform，须在此命名空间定义之后包含
+#include "UI/Utils/GameMenu.hpp"
 
 // 全局配置管理器实例
 extern beiklive::ConfigManager* SettingManager;

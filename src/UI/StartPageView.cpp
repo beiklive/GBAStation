@@ -53,6 +53,12 @@ static void launchGameActivity(const std::string& romPath)
     auto *gameView = new GameView(romPath);
     auto *gameMenu = new GameMenu();
     gameView->setGameMenu(gameMenu);
+
+    // 检测游戏平台并告知 GameMenu（用于决定显示 GBA/GBC 遮罩路径选择项）
+    std::string fileName = std::filesystem::path(romPath).filename().string();
+    beiklive::EmuPlatform platform = FileListPage::detectPlatform(fileName);
+    gameMenu->setPlatform(platform);
+
     box->addView(gameView);
     box->addView(gameMenu);
 
