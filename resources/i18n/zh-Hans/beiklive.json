@@ -182,5 +182,18 @@
             "waiting": "---",
             "combo_more": "+?"
         }
+    },
+    "datapage": {
+        "title": "游戏数据",
+        "tab_saves": "存档",
+        "tab_album": "相册",
+        "tab_cheats": "金手指",
+        "no_games": "无游戏数据",
+        "no_saves": "无存档",
+        "no_album": "无截图",
+        "no_cheats": "无金手指",
+        "delete_confirm": "确认删除？",
+        "delete_hint": "删除",
+        "edit_code": "修改代码"
     }
 }

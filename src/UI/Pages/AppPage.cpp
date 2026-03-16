@@ -196,8 +196,8 @@ AppPage::AppPage()
     m_ButtonRow->addButton(BK_RES(path_prefix + "wenjianjia_64.png"), "beiklive/app/btn_file_list"_i18n, [this]() {
         if (onOpenFileList) onOpenFileList();
     });
-    m_ButtonRow->addButton(BK_RES(path_prefix + "jifen_64.png"), "beiklive/app/btn_data_mgr"_i18n, []() {
-        brls::Logger::debug("数据管理");
+    m_ButtonRow->addButton(BK_RES(path_prefix + "jifen_64.png"), "beiklive/app/btn_data_mgr"_i18n, [this]() {
+        if (onOpenDataPage) onOpenDataPage();
     });
     m_ButtonRow->addButton(BK_RES(path_prefix + "shezhi_64.png"), "beiklive/app/btn_settings"_i18n, [this]() {
         if(onOpenSettings) onOpenSettings();

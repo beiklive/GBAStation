@@ -37,6 +37,7 @@ class StartPageView : public beiklive::UI::BBox
     void showAppPage();
     void openFileListPage();
     void openSettingsPage();
+    void openDataPage();
     void createAppPage();
     /// Re-read recent games from SettingManager and update the AppPage game list.
     void refreshRecentGames();
