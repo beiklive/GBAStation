@@ -1,443 +1,239 @@
-你现在已经拿到 **`frame.pixels`（游戏原始帧）**，接下来要实现的是一条完整的 **GPU 渲染 + RetroArch Shader Pipeline + UI 显示链**。
-整体目标是：**CPU帧 → GPU纹理 → 多Pass Shader → 最终纹理 → NanoVG显示**。
+GBA 的 **240×160** 画面在进入渲染链前**最好做一次简单的预处理**，但**不要在 CPU 上缩放**。正确做法是：
 
-下面给你一条**完整处理链（也是大多数模拟器的架构）**。
+**保持原始分辨率上传 GPU → shader pipeline 决定如何放大**。
 
----
+如果你直接把 `frame.pixels` 丢进 shader pipeline，很多 RetroArch shader 会出现比例或滤波问题，因为它们依赖一些 **正确的尺寸信息（SourceSize / OutputSize）**。
 
-# 一、完整渲染处理链
-
-```
-mGBA / libretro
-        │
-        ▼
-frame.pixels (CPU内存)
-        │
-        ▼
-上传到 OpenGL Texture
-        │
-        ▼
-Game FBO
-        │
-        ▼
-RetroArch Shader Pass0
-        │
-        ▼
-RetroArch Shader Pass1
-        │
-        ▼
-RetroArch Shader PassN
-        │
-        ▼
-Final Texture
-        │
-        ▼
-NanoVG UI / 显示
-```
-
-对应模块：
-
-| 阶段              | 功能                |
-| --------------- | ----------------- |
-| CPU帧            | `frame.pixels`    |
-| 纹理上传            | `glTexSubImage2D` |
-| 原始FBO           | 游戏画面输入            |
-| shader pipeline | RetroArch多pass    |
-| 最终纹理            | Shader输出          |
-| UI显示            | NanoVG绘制          |
+下面是推荐的处理方式。
 
 ---
 
-# 二、第一步：CPU帧 → GPU纹理
+# 一、正确处理原则
 
-你现在拿到：
+### 1 保持原始分辨率
+
+GBA 原始：
 
 ```
-frame.pixels
-width
-height
+240 x 160
 ```
 
-创建游戏纹理：
+上传 GPU 时保持不变：
 
 ```cpp
-GLuint gameTexture;
-
-glGenTextures(1, &gameTexture);
-glBindTexture(GL_TEXTURE_2D, gameTexture);
-
 glTexImage2D(
     GL_TEXTURE_2D,
     0,
     GL_RGBA,
-    width,
-    height,
+    240,
+    160,
     0,
-    GL_RGBA,
-    GL_UNSIGNED_BYTE,
-    nullptr
-);
-
-glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-```
-
-每一帧更新：
-
-```cpp
-glBindTexture(GL_TEXTURE_2D, gameTexture);
-
-glTexSubImage2D(
-    GL_TEXTURE_2D,
-    0,
-    0,
-    0,
-    width,
-    height,
     GL_RGBA,
     GL_UNSIGNED_BYTE,
     frame.pixels
 );
 ```
 
----
+不要做：
 
-# 三、第二步：创建 Game FBO
-
-很多 RetroArch shader 需要 **原始帧FBO**。
-
-```cpp
-GLuint gameFBO;
-
-glGenFramebuffers(1, &gameFBO);
-glBindFramebuffer(GL_FRAMEBUFFER, gameFBO);
-
-glFramebufferTexture2D(
-    GL_FRAMEBUFFER,
-    GL_COLOR_ATTACHMENT0,
-    GL_TEXTURE_2D,
-    gameTexture,
-    0
-);
 ```
+240x160 → 1920x1080
+```
+
+这种放大应该由 **shader pipeline 完成**。
 
 ---
 
-# 四、第三步：RetroArch Shader Pipeline
+# 二、渲染链推荐结构
 
-核心结构：
-
-```cpp
-struct ShaderPass
-{
-    GLuint program;
-
-    GLuint fbo;
-    GLuint texture;
-
-    int width;
-    int height;
-};
 ```
-
-Pipeline：
-
-```cpp
-class RetroShaderPipeline
-{
-public:
-
-    GLuint process(GLuint inputTexture);
-
-    std::vector<ShaderPass> passes;
-};
+frame.pixels (240x160)
+        │
+        ▼
+Game Texture (240x160)
+        │
+        ▼
+Shader Pass0
+        │
+        ▼
+Shader Pass1
+        │
+        ▼
+Final Texture (例如1280x720)
+        │
+        ▼
+NanoVG UI
 ```
 
 ---
 
-# 五、第四步：执行 Shader Pass
+# 三、关键处理：比例
 
-核心流程：
+GBA 的比例：
 
 ```
-inputTexture = gameTexture
-
-for pass in passes
-    bind(pass.fbo)
-    bind(pass.program)
-
-    glBindTexture(inputTexture)
-
-    draw_fullscreen_quad()
-
-    inputTexture = pass.texture
+240 / 160 = 1.5
 ```
 
-代码示例：
+即：
 
-```cpp
-GLuint RetroShaderPipeline::process(GLuint input)
-{
-    GLuint current = input;
+```
+3 : 2
+```
 
-    for(auto& pass : passes)
-    {
-        glBindFramebuffer(GL_FRAMEBUFFER, pass.fbo);
+而屏幕一般：
 
-        glUseProgram(pass.program);
+```
+16 : 9
+```
 
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, current);
+所以你需要选择一种策略：
 
-        drawFullscreenQuad();
+| 策略   | 效果   |
+| ---- | ---- |
+| 保持比例 | 两侧黑边 |
+| 填满屏幕 | 拉伸   |
+| 整数缩放 | 最清晰  |
 
-        current = pass.texture;
-    }
+推荐：**整数缩放 + 居中**。
 
-    return current;
-}
+---
+
+# 四、整数缩放计算
+
+假设 Switch 或窗口：
+
+```
+1280 x 720
+```
+
+计算：
+
+```
+1280 / 240 = 5.33
+720  / 160 = 4.5
+```
+
+取最小整数：
+
+```
+scale = 4
+```
+
+最终画面：
+
+```
+240 * 4 = 960
+160 * 4 = 640
+```
+
+显示区域：
+
+```
+960 x 640
+```
+
+居中：
+
+```
+x = (1280 - 960)/2 = 160
+y = (720 - 640)/2 = 40
 ```
 
 ---
 
-# 六、第五步：全屏 Quad
+# 五、shader pipeline 输入尺寸
 
-shader pass 本质就是：
-
-```
-输入纹理 → shader → 输出纹理
-```
-
-所以需要一个 full screen quad：
-
-```cpp
-void drawFullscreenQuad()
-{
-    static float quad[] =
-    {
-        -1, -1, 0,0,
-         1, -1, 1,0,
-         1,  1, 1,1,
-        -1,  1, 0,1
-    };
-
-    glDrawArrays(GL_TRIANGLE_FAN,0,4);
-}
-```
-
----
-
-# 七、第六步：最终纹理交给 NanoVG
-
-NanoVG 可以直接用 OpenGL 纹理。
-
-```cpp
-int image = nvglCreateImageFromHandleGL3(
-        vg,
-        finalTexture,
-        width,
-        height,
-        NVG_IMAGE_FLIPY
-);
-```
-
-绘制：
-
-```cpp
-NVGpaint paint = nvgImagePattern(
-        vg,
-        0,
-        0,
-        width,
-        height,
-        0,
-        image,
-        1.0f
-);
-
-nvgBeginPath(vg);
-nvgRect(vg,0,0,width,height);
-nvgFillPaint(vg,paint);
-nvgFill(vg);
-```
-
----
-
-# 八、第七步：GLSLP解析
-
-RetroArch shader 实际是：
+RetroArch shader 依赖以下 uniform：
 
 ```
-shader.glslp
-```
-
-例子：
-
-```
-shaders = 2
-
-shader0 = crt-pass0.glsl
-shader1 = crt-pass1.glsl
-
-scale_type0 = source
-scale0 = 2.0
-```
-
-解析后生成：
-
-```
-vector<ShaderPass>
-```
-
----
-
-# 九、第八步：Shader Uniform
-
-RetroArch shader 会用到：
-
-常见 uniform：
-
-```
-Source
 SourceSize
 OutputSize
-FrameCount
 ```
 
 例如：
 
 ```cpp
-glUniform2f(sourceSizeLoc, width, height);
-glUniform2f(outputSizeLoc, outW, outH);
-glUniform1i(frameCountLoc, frameCount);
+glUniform2f(sourceSizeLoc, 240,160);
+glUniform2f(outputSizeLoc, 960,640);
 ```
 
 ---
 
-# 十、完整运行流程
+# 六、推荐 FBO 设计
 
-每帧：
+不要让 pass0 直接输出到屏幕。
+
+推荐：
 
 ```
-1 CPU生成 frame.pixels
-2 上传到 gameTexture
-3 shaderPipeline.process(gameTexture)
-4 得到 finalTexture
-5 NanoVG 显示 finalTexture
+GameTexture      240x160
+Pass0 FBO        240x160
+Pass1 FBO        960x640
+FinalTexture     960x640
 ```
 
-伪代码：
+很多 CRT shader 需要：
+
+```
+240x160 → 放大 → 再处理
+```
+
+---
+
+# 七、GPU 过滤设置
+
+像素游戏必须：
 
 ```cpp
-void renderFrame()
-{
-    updateGameTexture(frame.pixels);
+glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+```
 
-    GLuint finalTexture =
-        shaderPipeline.process(gameTexture);
+否则会变模糊。
 
-    drawWithNanoVG(finalTexture);
-}
+---
+
+# 八、推荐最终渲染链
+
+```
+CPU frame (240x160)
+        │
+        ▼
+GameTexture (240x160)
+        │
+        ▼
+RetroShaderPipeline
+        │
+        ▼
+FinalTexture (整数缩放)
+        │
+        ▼
+NanoVG绘制
 ```
 
 ---
 
-# 十一、Switch开发特别注意
+# 九、一个非常重要的优化（很多人会忽略）
 
-Switch GLES：
+**不要每帧重新创建 NanoVG image**
 
-```
-GLSL ES 300
-```
-
-RetroArch shader：
+错误：
 
 ```
-GLSL 130
+nvglCreateImageFromHandleGL3
 ```
 
-必须转换。
+每帧调用。
 
-例如：
-
-```
-#version 130
-```
-
-改为：
+正确：
 
 ```
-#version 300 es
-precision mediump float;
+初始化时创建一次
+之后只更新texture
 ```
+
+否则性能会掉很多。
 
 ---
 
-# 十二、你接下来需要实现的模块
-
-建议顺序：
-
-### 1
-
-游戏纹理上传
-
-### 2
-
-FBO管理
-
-### 3
-
-shader编译器
-
-### 4
-
-glslp解析
-
-### 5
-
-shader pipeline
-
-### 6
-
-NanoVG显示
-
----
-
-# 十三、推荐最终架构
-
-你的项目结构建议：
-
-```
-renderer/
-
-    GameTexture.cpp
-    GameTexture.h
-
-    FrameUploader.cpp
-    FrameUploader.h
-
-    ShaderCompiler.cpp
-    ShaderCompiler.h
-
-    GLSLPParser.cpp
-    GLSLPParser.h
-
-    RetroShaderPipeline.cpp
-    RetroShaderPipeline.h
-
-    FullscreenQuad.cpp
-    FullscreenQuad.h
-```
-
----
-
-如果你愿意，我可以**给你一套完整的 RetroArch Shader Pipeline 实现（约2000行代码）**，包含：
-
-* glslp解析器
-* shader编译
-* FBO管理
-* multi-pass pipeline
-* GLES兼容
-* NanoVG显示
-
-而且可以 **100% 直接接入你现在的 GameRuntime**。
