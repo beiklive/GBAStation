@@ -43,7 +43,8 @@ static ShaderPassDesc::ScaleType parseScaleType(const std::string& val)
 // ============================================================
 
 bool GLSLPParser::parse(const std::string& glslpPath,
-                        std::vector<ShaderPassDesc>& outPasses)
+                        std::vector<ShaderPassDesc>& outPasses,
+                        std::vector<GLSLPTextureDesc>* outTextures)
 {
     outPasses.clear();
 
@@ -161,7 +162,54 @@ bool GLSLPParser::parse(const std::string& glslpPath,
             }
         }
 
+        // alias（通道别名，供后续通道以 <alias>Texture 形式引用本通道输出）
+        {
+            auto al = kv.find("alias" + idx);
+            if (al != kv.end()) {
+                pass.alias = al->second;
+            }
+        }
+
         outPasses.push_back(std::move(pass));
+    }
+
+    // ---- 解析外部纹理声明（textures = NAME1;NAME2;...）----
+    if (outTextures) {
+        outTextures->clear();
+        auto tit = kv.find("textures");
+        if (tit != kv.end()) {
+            std::istringstream ss(tit->second);
+            std::string texName;
+            while (std::getline(ss, texName, ';')) {
+                texName = trimValue(texName);
+                if (texName.empty()) continue;
+
+                GLSLPTextureDesc td;
+                td.name = texName;
+
+                // 路径（键名为纹理名称的原始形式，已在 kv 中以小写存储）
+                auto pathIt = kv.find(toLower(texName));
+                if (pathIt != kv.end() && !pathIt->second.empty()) {
+                    std::filesystem::path texRel(pathIt->second);
+                    if (texRel.is_absolute()) {
+                        td.path = texRel.string();
+                    } else {
+                        td.path = (baseDir / texRel).lexically_normal().string();
+                    }
+                }
+
+                // 线性过滤标志（键名 = <texname>_linear，小写查找）
+                auto linIt = kv.find(toLower(texName) + "_linear");
+                if (linIt != kv.end()) {
+                    std::string v = toLower(linIt->second);
+                    td.filterLinear = (v == "true" || v == "1" || v == "yes");
+                }
+
+                if (!td.path.empty()) {
+                    outTextures->push_back(std::move(td));
+                }
+            }
+        }
     }
 
     return !outPasses.empty();

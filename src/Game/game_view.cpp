@@ -2149,22 +2149,6 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
         }
     }
 
-    // ---- 处理运行时过滤模式变更 -------------------------
-    if (m_display.filterMode != m_activeFilter && m_texture) {
-        m_activeFilter  = m_display.filterMode;
-        GLenum glFilter = (m_activeFilter == beiklive::FilterMode::Nearest)
-                          ? GL_NEAREST : GL_LINEAR;
-        glBindTexture(GL_TEXTURE_2D, m_texture);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, glFilter);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, glFilter);
-        glBindTexture(GL_TEXTURE_2D, 0);
-        if (m_nvgImage >= 0) {
-            nvgDeleteImage(vg, m_nvgImage);
-            m_nvgImage    = -1;
-            m_nvgImageSrc = 0;
-        }
-    }
-
     // ---- 运行渲染链并确定显示纹理 ----------
     // 若已加载着色器管线，将游戏纹理经过多通道 Shader 处理后作为显示纹理；
     // 否则直通（pass-through）返回原始游戏纹理。
@@ -2187,6 +2171,22 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
             // 使用着色器管线实际输出尺寸（可能因缩放不同于输入）
             if (m_renderChain.outputW() > 0) displayW = static_cast<int>(m_renderChain.outputW());
             if (m_renderChain.outputH() > 0) displayH = static_cast<int>(m_renderChain.outputH());
+        }
+    }
+
+    // ---- 处理运行时过滤模式变更（在渲染链处理之后执行）----
+    if (m_display.filterMode != m_activeFilter && m_texture) {
+        m_activeFilter  = m_display.filterMode;
+        GLenum glFilter = (m_activeFilter == beiklive::FilterMode::Nearest)
+                          ? GL_NEAREST : GL_LINEAR;
+        glBindTexture(GL_TEXTURE_2D, m_texture);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, glFilter);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, glFilter);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        if (m_nvgImage >= 0) {
+            nvgDeleteImage(vg, m_nvgImage);
+            m_nvgImage    = -1;
+            m_nvgImageSrc = 0;
         }
     }
 
