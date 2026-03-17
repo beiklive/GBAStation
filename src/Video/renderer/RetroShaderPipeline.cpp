@@ -193,7 +193,7 @@ void RetroShaderPipeline::setUniforms(GLuint program,
         GLint loc = glGetUniformLocation(program, name);
         if (loc >= 0) glUniformMatrix4fv(loc, 1, GL_FALSE, m);
     };
-    auto setUniform1 = [&](const char* name, GLuint v) {
+    auto setUniformSampler = [&](const char* name, GLuint v) {
         GLint loc = glGetUniformLocation(program, name);
         if (loc >= 0) glUniform1i(loc, static_cast<int>(v));
     };
@@ -219,10 +219,10 @@ void RetroShaderPipeline::setUniforms(GLuint program,
                  1.f / static_cast<float>(outW), 1.f / static_cast<float>(outH));
 
     // 纹理采样器（unit 0）
-    setUniform1("Texture",  0u);
-    setUniform1("Source",   0u);
-    setUniform1("tex",      0u);
-    setUniform1("texture",  0u); // 部分着色器用小写
+    setUniformSampler("Texture",  0u);
+    setUniformSampler("Source",   0u);
+    setUniformSampler("tex",      0u);
+    setUniformSampler("texture",  0u); // 部分着色器用小写
 }
 
 // ============================================================
@@ -237,12 +237,17 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
     if (!m_quad.isInitialized()) return inputTex;
 
     // 保存 GL 状态，管线结束后恢复
-    GLint prevFBO      = 0;
-    GLint prevViewport[4] = {};
-    GLint prevProg     = 0;
-    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFBO);
+    GLuint prevFBO      = 0;
+    GLint  prevViewport[4] = {};
+    GLuint prevProg     = 0;
+    {
+        GLint tmp = 0;
+        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &tmp);
+        prevFBO = static_cast<GLuint>(tmp);
+        glGetIntegerv(GL_CURRENT_PROGRAM, &tmp);
+        prevProg = static_cast<GLuint>(tmp);
+    }
     glGetIntegerv(GL_VIEWPORT, prevViewport);
-    glGetIntegerv(GL_CURRENT_PROGRAM, &prevProg);
 
     GLuint currentTex = inputTex;
     unsigned currentW = videoW;
@@ -297,8 +302,8 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
     m_lastOutH = currentH;
 
     // 恢复 GL 状态
-    glUseProgram(static_cast<GLuint>(prevProg));
-    glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(prevFBO));
+    glUseProgram(prevProg);
+    glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
     glViewport(prevViewport[0], prevViewport[1],
                prevViewport[2], prevViewport[3]);
     glBindTexture(GL_TEXTURE_2D, 0);

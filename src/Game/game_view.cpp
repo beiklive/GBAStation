@@ -1857,7 +1857,7 @@ void GameView::uploadFrame(NVGcontext* vg,
         m_texWidth  = frame.width;
         m_texHeight = frame.height;
 
-        // 尺寸改变时使 NVG 图像句柄失效，由 draw() 重新为正确的显示纹理创建
+        // 尺寸改变时使 NVG 图像句柄失效, 由 draw() 重新为正确的显示纹理创建
         if (m_nvgImage >= 0) {
             nvgDeleteImage(vg, m_nvgImage);
             m_nvgImage    = -1;

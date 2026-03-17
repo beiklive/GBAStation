@@ -52,7 +52,10 @@ void FrameUploader::uploadXRGB8888(GLuint texId,
     const bool tightPitch = (pitch == width * 4u);
 
 #if defined(USE_GLES2) || defined(USE_GLES3)
-    // GLES 不保证支持 GL_BGRA；软件转换为 RGBA
+    // GLES 不保证支持 GL_BGRA；软件转换为 RGBA。
+    // 注意：此软件转换在 CPU 上执行，已知存在性能开销。
+    // 实际游戏分辨率较小（240p-480p），对帧率影响可忽略不计。
+    // 如需高性能，可在 GLES3 下改用 GL_EXT_texture_format_BGRA8888 扩展。
     std::vector<uint8_t> converted(static_cast<size_t>(width) * height * 4);
     const uint8_t* src = static_cast<const uint8_t*>(pixels);
     uint8_t* dst = converted.data();

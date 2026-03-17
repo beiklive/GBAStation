@@ -11,7 +11,7 @@ bool RenderChain::init(const std::string& shaderPath)
 {
     if (!shaderPath.empty()) {
         if (!m_pipeline.init(shaderPath)) {
-            brls::Logger::warning("RenderChain: 着色器管线加载失败: {}，切换为直通模式",
+            brls::Logger::warning("RenderChain: 着色器管线加载失败: {}, 切换为直通模式",
                                   shaderPath);
             // 仍然返回 true：直通模式下仍然可用
         } else {
