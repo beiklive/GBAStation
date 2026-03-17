@@ -2227,7 +2227,8 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
     }
 
     // ---- 处理运行时过滤模式变更（在渲染链处理之后执行）----
-    if (m_display.filterMode != m_activeFilter && m_texture) {
+    // 使用着色器时跳过：过滤由各 pass 的 FBO 纹理参数控制，不作用于原始游戏纹理
+    if (!m_renderChain.hasShader() && m_display.filterMode != m_activeFilter && m_texture) {
         m_activeFilter  = m_display.filterMode;
         GLenum glFilter = (m_activeFilter == beiklive::FilterMode::Nearest)
                           ? GL_NEAREST : GL_LINEAR;
