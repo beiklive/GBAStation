@@ -2163,9 +2163,9 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
         if (chainOut != 0) {
             if (chainOut != m_texture) {
                 // 着色器管线输出：使用管线结果纹理
-                bklog::debug("GameView: 着色器输出纹理 id={} {}×{}",
-                             chainOut,
-                             m_renderChain.outputW(), m_renderChain.outputH());
+                // bklog::debug("GameView: 着色器输出纹理 id={} {}×{}",
+                //              chainOut,
+                //              m_renderChain.outputW(), m_renderChain.outputH());
             }
             displayTex = chainOut;
             // 使用着色器管线实际输出尺寸（可能因缩放不同于输入）

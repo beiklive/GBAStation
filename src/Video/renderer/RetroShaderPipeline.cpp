@@ -101,8 +101,8 @@ bool RetroShaderPipeline::init(const std::string& glslpPath)
         et.name  = td.name;
         et.texId = loadTextureFromFile(td.path, td.filterLinear);
         if (et.texId) {
-            brls::Logger::info("RetroShaderPipeline: 加载外部纹理 \"{}\" id={} 来自 {}",
-                               et.name, et.texId, td.path);
+            //brls::Logger::info("RetroShaderPipeline: 加载外部纹理 \"{}\" id={} 来自 {}",
+                            //    et.name, et.texId, td.path);
             m_textures.push_back(std::move(et));
         } else {
             brls::Logger::warning("RetroShaderPipeline: 外部纹理加载失败: {}", td.path);
@@ -187,7 +187,7 @@ bool RetroShaderPipeline::allocateFBO(ShaderPass& pass, int w, int h)
 
     pass.width  = w;
     pass.height = h;
-    brls::Logger::debug("RetroShaderPipeline: 分配 FBO id={} {}×{}", pass.fbo, w, h);
+    //brls::Logger::debug("RetroShaderPipeline: 分配 FBO id={} {}×{}", pass.fbo, w, h);
     return true;
 }
 
@@ -349,12 +349,12 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
 {
     if (m_passes.empty()) return inputTex;
     if (!m_quad.isInitialized()) {
-        brls::Logger::warning("RetroShaderPipeline::process: FullscreenQuad 未初始化，直通返回");
+        //brls::Logger::warning("RetroShaderPipeline::process: FullscreenQuad 未初始化，直通返回");
         return inputTex;
     }
 
-    brls::Logger::debug("RetroShaderPipeline::process: 输入 tex={} {}×{} 视口 {}×{} 帧={}",
-                        inputTex, videoW, videoH, viewW, viewH, frameCount);
+    // //brls::Logger::debug("RetroShaderPipeline::process: 输入 tex={} {}×{} 视口 {}×{} 帧={}",
+    //                     inputTex, videoW, videoH, viewW, viewH, frameCount);
 
     // 保存 GL 状态，管线结束后恢复
     GLuint prevFBO      = 0;
@@ -395,8 +395,8 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
         int outH = static_cast<int>(currentH);
         computePassSize(pass.desc, currentW, currentH, viewW, viewH, outW, outH);
 
-        brls::Logger::debug("RetroShaderPipeline: 通道 {}: 输入 tex={} {}×{} → 输出 {}×{}",
-                            idx, currentTex, currentW, currentH, outW, outH);
+        //brls::Logger::debug("RetroShaderPipeline: 通道 {}: 输入 tex={} {}×{} → 输出 {}×{}",
+                            // idx, currentTex, currentW, currentH, outW, outH);
 
         // 确保 FBO 已分配且尺寸正确
         if (!allocateFBO(pass, outW, outH)) {
@@ -510,17 +510,7 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
         // 绘制全屏四边形
         m_quad.draw();
 
-#ifndef NDEBUG
-        // GL 错误检查（仅在调试构建中启用，正式构建使用 -DNDEBUG 跳过以避免 GPU/CPU 同步开销）
-        {
-            GLenum err = glGetError();
-            if (err != GL_NO_ERROR) {
-                brls::Logger::error("RetroShaderPipeline: 通道 {} 绘制后 GL 错误 0x{:X}", idx, err);
-            }
-        }
-#endif
-
-        brls::Logger::debug("RetroShaderPipeline: 通道 {} 完成，输出 tex={}", idx, pass.texture);
+        // //brls::Logger::debug("RetroShaderPipeline: 通道 {} 完成，输出 tex={}", idx, pass.texture);
 
         // 本通道输出成为下一通道输入
         currentTex = pass.texture;
@@ -531,8 +521,8 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
     m_lastOutW = currentW;
     m_lastOutH = currentH;
 
-    brls::Logger::debug("RetroShaderPipeline::process: 最终输出 tex={} {}×{}",
-                        currentTex, m_lastOutW, m_lastOutH);
+    // //brls::Logger::debug("RetroShaderPipeline::process: 最终输出 tex={} {}×{}",
+    //                     currentTex, m_lastOutW, m_lastOutH);
 
     // 恢复 GL 状态（精确解绑实际使用过的额外纹理单元）
     for (GLuint u = 1; u <= maxTexUnit; ++u) {
