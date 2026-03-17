@@ -258,7 +258,7 @@ void GLSLPParser::parseParamMeta(const std::string& shaderPath,
         std::string trimmed = line.substr(s);
 
         // 匹配 #pragma parameter
-        if (trimmed.substr(0, 17) != "#pragma parameter") continue;
+        if (trimmed.size() < 17 || trimmed.substr(0, 17) != "#pragma parameter") continue;
         std::string rest = trimmed.substr(17);
 
         // 解析 NAME（空白分隔的第一个词）
