@@ -7,6 +7,9 @@
 #include <cmath>
 #include <filesystem>
 
+// stb_image：仅声明，实现已在 nanovg.c 中通过 STB_IMAGE_IMPLEMENTATION 编译
+#include "stb_image.h"
+
 namespace beiklive {
 
 // ============================================================
@@ -34,7 +37,8 @@ bool RetroShaderPipeline::init(const std::string& glslpPath)
     }
 
     // 1. 根据文件扩展名选择解析方式
-    std::vector<ShaderPassDesc> descs;
+    std::vector<ShaderPassDesc>    descs;
+    std::vector<GLSLPTextureDesc>  texDescs;
     std::string ext = std::filesystem::path(glslpPath).extension().string();
     // 将扩展名转为小写以兼容大小写差异
     std::transform(ext.begin(), ext.end(), ext.begin(),
@@ -52,8 +56,8 @@ bool RetroShaderPipeline::init(const std::string& glslpPath)
         descs.push_back(std::move(single));
         brls::Logger::info("RetroShaderPipeline: 单 .glsl 文件，构建单通道管线: {}", glslpPath);
     } else {
-        // .glslp 预设文件：使用解析器读取多通道配置
-        if (!GLSLPParser::parse(glslpPath, descs) || descs.empty()) {
+        // .glslp 预设文件：使用解析器读取多通道配置及外部纹理声明
+        if (!GLSLPParser::parse(glslpPath, descs, &texDescs) || descs.empty()) {
             brls::Logger::error("RetroShaderPipeline: 解析 .glslp 失败: {}", glslpPath);
             return false;
         }
@@ -69,8 +73,9 @@ bool RetroShaderPipeline::init(const std::string& glslpPath)
     bool anyOk = false;
     for (const auto& desc : descs) {
         ShaderPass pass;
-        pass.desc        = desc;
+        pass.desc         = desc;
         pass.filterLinear = desc.filterLinear;
+        pass.alias        = desc.alias;
 
         pass.program = ShaderCompiler::compileRetroShader(desc.shaderPath);
         if (!pass.program) {
@@ -89,8 +94,22 @@ bool RetroShaderPipeline::init(const std::string& glslpPath)
         return false;
     }
 
-    brls::Logger::info("RetroShaderPipeline: 加载完成，共 {} 个通道",
-                       m_passes.size());
+    // 4. 加载 .glslp 中声明的外部纹理
+    for (const auto& td : texDescs) {
+        ExternalTexture et;
+        et.name  = td.name;
+        et.texId = loadTextureFromFile(td.path, td.filterLinear);
+        if (et.texId) {
+            brls::Logger::info("RetroShaderPipeline: 加载外部纹理 \"{}\" id={} 来自 {}",
+                               et.name, et.texId, td.path);
+            m_textures.push_back(std::move(et));
+        } else {
+            brls::Logger::warning("RetroShaderPipeline: 外部纹理加载失败: {}", td.path);
+        }
+    }
+
+    brls::Logger::info("RetroShaderPipeline: 加载完成，共 {} 个通道，{} 个外部纹理",
+                       m_passes.size(), m_textures.size());
     return true;
 }
 
@@ -107,6 +126,11 @@ void RetroShaderPipeline::deinit()
         pass.height = 0;
     }
     m_passes.clear();
+    // 释放外部纹理 GL 对象
+    for (auto& et : m_textures) {
+        if (et.texId) { glDeleteTextures(1, &et.texId); et.texId = 0; }
+    }
+    m_textures.clear();
     m_quad.deinit();
     m_lastOutW = m_lastOutH = 0;
 }
@@ -189,12 +213,13 @@ void RetroShaderPipeline::computePassSize(const ShaderPassDesc& desc,
 }
 
 // ============================================================
-// setUniforms – 设置标准 RetroArch uniform 变量
+// setUniforms – 设置标准 RetroArch uniform 变量及额外纹理单元
 // ============================================================
 void RetroShaderPipeline::setUniforms(GLuint program,
                                        unsigned inW, unsigned inH,
                                        unsigned outW, unsigned outH,
-                                       unsigned frameCount)
+                                       unsigned frameCount,
+                                       const std::vector<std::pair<std::string,GLuint>>& extraTexUnits)
 {
     auto setUniform1i = [&](const char* name, int v) {
         GLint loc = glGetUniformLocation(program, name);
@@ -237,11 +262,51 @@ void RetroShaderPipeline::setUniforms(GLuint program,
                  static_cast<float>(outW), static_cast<float>(outH),
                  1.f / static_cast<float>(outW), 1.f / static_cast<float>(outH));
 
-    // 纹理采样器（unit 0）
+    // 主输入纹理采样器（unit 0）
     setUniformSampler("Texture",  0u);
     setUniformSampler("Source",   0u);
     setUniformSampler("tex",      0u);
     setUniformSampler("texture",  0u); // 部分着色器用小写
+
+    // 额外纹理采样器（外部纹理和历史 Pass 输出）
+    for (const auto& kv : extraTexUnits) {
+        setUniformSampler(kv.first.c_str(), kv.second);
+    }
+}
+
+// ============================================================
+// loadTextureFromFile – 从图像文件加载 GL 纹理
+// ============================================================
+GLuint RetroShaderPipeline::loadTextureFromFile(const std::string& path, bool filterLinear)
+{
+    if (path.empty()) return 0;
+
+    int w = 0, h = 0, channels = 0;
+    unsigned char* data = stbi_load(path.c_str(), &w, &h, &channels, STBI_rgb_alpha);
+    if (!data) {
+        brls::Logger::warning("RetroShaderPipeline: 图像加载失败: {} (原因: {})",
+                              path, stbi_failure_reason());
+        return 0;
+    }
+
+    GLuint tex = 0;
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+
+    GLenum glFilter = filterLinear ? GL_LINEAR : GL_NEAREST;
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, glFilter);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, glFilter);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
+                 static_cast<GLsizei>(w), static_cast<GLsizei>(h),
+                 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+    stbi_image_free(data);
+
+    return tex;
 }
 
 // ============================================================
@@ -285,6 +350,7 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
     GLuint currentTex = inputTex;
     unsigned currentW = videoW;
     unsigned currentH = videoH;
+    GLuint   maxTexUnit = 0; // 记录实际使用的最大纹理单元编号，用于恢复时精确解绑
 
     for (size_t idx = 0; idx < m_passes.size(); ++idx) {
         auto& pass = m_passes[idx];
@@ -317,16 +383,50 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
         // 激活着色器
         glUseProgram(pass.program);
 
-        // 绑定输入纹理到纹理单元 0
+        // 绑定主输入纹理到纹理单元 0
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, currentTex);
+
+        // 构建额外纹理单元列表（外部纹理 + 已完成通道的输出）
+        // 纹理单元 1..N：外部纹理（COLOR_PALETTE、BACKGROUND 等）
+        // 纹理单元 N+1..：历史 Pass 输出（Pass0Texture、Pass1Texture 等）
+        std::vector<std::pair<std::string, GLuint>> extraTexUnits;
+        {
+            GLuint unit = 1;
+            // 外部纹理
+            for (const auto& et : m_textures) {
+                if (et.texId) {
+                    glActiveTexture(GL_TEXTURE0 + unit);
+                    glBindTexture(GL_TEXTURE_2D, et.texId);
+                    extraTexUnits.emplace_back(et.name, unit);
+                    ++unit;
+                }
+            }
+            // 已完成通道的输出（PassNTexture 和 <alias>Texture 两种命名）
+            for (size_t pi = 0; pi < idx; ++pi) {
+                const auto& prev = m_passes[pi];
+                if (!prev.texture) continue;
+                glActiveTexture(GL_TEXTURE0 + unit);
+                glBindTexture(GL_TEXTURE_2D, prev.texture);
+                // RetroArch GLSL 旧格式：PassNTexture（N 为通道索引）
+                extraTexUnits.emplace_back("Pass" + std::to_string(pi) + "Texture", unit);
+                // 若该通道定义了 alias，也以 <alias>Texture 绑定
+                if (!prev.alias.empty()) {
+                    extraTexUnits.emplace_back(prev.alias + "Texture", unit);
+                }
+                ++unit;
+            }
+            if (unit - 1 > maxTexUnit) maxTexUnit = unit - 1;
+        }
+        glActiveTexture(GL_TEXTURE0); // 恢复活动纹理单元到 0
 
         // 设置 uniform
         setUniforms(pass.program,
                     currentW, currentH,
                     static_cast<unsigned>(outW),
                     static_cast<unsigned>(outH),
-                    frameCount);
+                    frameCount,
+                    extraTexUnits);
 
         // 绘制全屏四边形
         m_quad.draw();
@@ -355,7 +455,11 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
     brls::Logger::debug("RetroShaderPipeline::process: 最终输出 tex={} {}×{}",
                         currentTex, m_lastOutW, m_lastOutH);
 
-    // 恢复 GL 状态
+    // 恢复 GL 状态（精确解绑实际使用过的额外纹理单元）
+    for (GLuint u = 1; u <= maxTexUnit; ++u) {
+        glActiveTexture(GL_TEXTURE0 + u);
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
     glUseProgram(prevProg);
     glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
     glViewport(prevViewport[0], prevViewport[1],

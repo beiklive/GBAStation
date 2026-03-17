@@ -17,7 +17,14 @@ struct ShaderPass {
     int    width       = 0; ///< 输出纹理宽度（像素）
     int    height      = 0; ///< 输出纹理高度（像素）
     bool   filterLinear = false; ///< 纹理过滤：true=线性，false=最近邻
+    std::string alias;           ///< 通道别名，供后续通道以 <alias>Texture 引用
     ShaderPassDesc desc;         ///< 来自 .glslp 的原始描述（用于尺寸重算）
+};
+
+/// .glslp 预设中声明的外部纹理（已加载到 GPU）
+struct ExternalTexture {
+    std::string name;         ///< uniform sampler2D 变量名
+    GLuint      texId = 0;    ///< GL 纹理对象 ID（0 = 未加载）
 };
 
 /// RetroArch 多通道着色器管线
@@ -36,6 +43,8 @@ struct ShaderPass {
 /// 兼容 RetroArch 着色器标准 uniform：
 ///   Texture, MVPMatrix, FrameCount, FrameDirection,
 ///   OutputSize, TextureSize, InputSize
+///
+/// 支持外部纹理（.glslp textures 字段）和历史 Pass 输出引用（PassNTexture）。
 class RetroShaderPipeline {
 public:
     RetroShaderPipeline()  = default;
@@ -74,10 +83,11 @@ public:
     unsigned outputH()  const { return m_lastOutH; }
 
 private:
-    std::vector<ShaderPass> m_passes;
-    FullscreenQuad          m_quad;
-    unsigned                m_lastOutW = 0;
-    unsigned                m_lastOutH = 0;
+    std::vector<ShaderPass>     m_passes;
+    std::vector<ExternalTexture> m_textures;  ///< 从 .glslp textures 字段加载的外部纹理
+    FullscreenQuad              m_quad;
+    unsigned                    m_lastOutW = 0;
+    unsigned                    m_lastOutH = 0;
 
     /// 为通道分配或调整 FBO + 颜色纹理。
     bool allocateFBO(ShaderPass& pass, int w, int h);
@@ -88,11 +98,22 @@ private:
                          unsigned viewW,  unsigned viewH,
                          int& outW, int& outH);
 
-    /// 设置当前通道所需的 uniform 变量。
+    /// 设置当前通道所需的 uniform 变量（单元0=主输入，单元1+= 外部/历史 pass 纹理）。
+    ///
+    /// @param program      当前通道着色器程序 ID
+    /// @param inW/inH      输入纹理尺寸
+    /// @param outW/outH    输出 FBO 尺寸
+    /// @param frameCount   帧计数
+    /// @param extraTextures 额外纹理绑定列表（name=uniform名称, texId=已绑定的 GL 纹理单元索引）
     void setUniforms(GLuint program,
                      unsigned inW, unsigned inH,
                      unsigned outW, unsigned outH,
-                     unsigned frameCount);
+                     unsigned frameCount,
+                     const std::vector<std::pair<std::string,GLuint>>& extraTexUnits);
+
+    /// 从图像文件加载纹理到 GPU。
+    /// @return 创建的 GL 纹理 ID，失败返回 0。
+    static GLuint loadTextureFromFile(const std::string& path, bool filterLinear);
 };
 
 } // namespace beiklive
