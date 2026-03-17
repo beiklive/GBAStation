@@ -116,9 +116,9 @@ GameLibraryItem::GameLibraryItem(const GameLibraryEntry& entry)
     beiklive::swallow(this, brls::BUTTON_A);
     beiklive::swallow(this, brls::BUTTON_X);
 
-    // A 键：启动游戏
+    // A 键：触发点击弹性动画，动画结束后回调 onActivated
     registerAction("beiklive/hints/start"_i18n, brls::BUTTON_A, [this](brls::View*) {
-        if (onActivated) onActivated(m_entry);
+        triggerClickBounce();
         return true;
     }, false, false, brls::SOUND_CLICK);
 
@@ -131,16 +131,73 @@ GameLibraryItem::GameLibraryItem(const GameLibraryEntry& entry)
     addGestureRecognizer(new brls::TapGestureRecognizer(this));
 }
 
+void GameLibraryItem::triggerClickBounce()
+{
+    m_clickAnimating = true;
+    m_clickT         = 0.0f;
+    m_clickScale     = 1.0f;
+    invalidate();
+}
+
 void GameLibraryItem::onChildFocusGained(brls::View* directChild, brls::View* focusedView)
 {
     Box::onChildFocusGained(directChild, focusedView);
     if (m_label) m_label->setVisibility(brls::Visibility::VISIBLE);
+    m_focused = true;
+    invalidate(); // 触发 draw() 启动缩放动画
 }
 
 void GameLibraryItem::onChildFocusLost(brls::View* directChild, brls::View* focusedView)
 {
     Box::onChildFocusLost(directChild, focusedView);
     if (m_label) m_label->setVisibility(brls::Visibility::INVISIBLE);
+    m_focused = false;
+    invalidate(); // 触发 draw() 启动恢复动画
+}
+
+void GameLibraryItem::draw(NVGcontext* vg,
+                           float x, float y, float w, float h,
+                           brls::Style style, brls::FrameContext* ctx)
+{
+    // 聚焦缩放动画：聚焦时 1.0，失焦时 0.9，平滑插值
+    float target = m_focused ? 1.0f : 0.9f;
+    float delta  = target - m_scale;
+    if (std::abs(delta) > 0.002f) {
+        m_scale += delta * 0.3f;
+        invalidate();
+    } else {
+        m_scale = target;
+    }
+
+    // 点击弹性动画（先线性压缩，再指数衰减阻尼回弹）
+    if (m_clickAnimating) {
+        m_clickT += 1.0f / 60.0f; // 近似按 60fps 推进
+        if (m_clickT < 0.06f) {
+            float t      = m_clickT / 0.06f;        // 归一化进度 0~1
+            m_clickScale = 1.0f - 0.10f * t;        // 线性压缩到 0.90
+        } else {
+            float u      = m_clickT - 0.06f;
+            m_clickScale = 1.0f + 0.12f * std::exp(-14.0f * u) * std::sin(45.0f * u);
+            // 动画结束判定
+            if (u > 0.28f && std::abs(m_clickScale - 1.0f) < 0.003f) {
+                m_clickScale     = 1.0f;
+                m_clickAnimating = false;
+                if (onActivated) onActivated(m_entry); // 动画完成后触发回调
+            }
+        }
+        invalidate();
+    }
+
+    float finalScale = m_scale * m_clickScale;
+
+    const float cx = x + w * 0.5f;
+    const float cy = y + h * 0.5f;
+    nvgSave(vg);
+    nvgTranslate(vg,  cx,  cy);
+    nvgScale(vg, finalScale, finalScale);
+    nvgTranslate(vg, -cx, -cy);
+    brls::Box::draw(vg, x, y, w, h, style, ctx);
+    nvgRestore(vg);
 }
 
 void GameLibraryItem::updateCover(const std::string& newLogoPath)
