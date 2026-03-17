@@ -2174,8 +2174,8 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
 
     if (m_texWidth > 0 && m_texHeight > 0) {
         GLuint chainOut = m_renderChain.run(m_texture, m_texWidth, m_texHeight,
-                                            static_cast<unsigned>(width),
-                                            static_cast<unsigned>(height));
+                                            static_cast<unsigned>(std::lround(width)),
+                                            static_cast<unsigned>(std::lround(height)));
         if (chainOut != 0) {
             if (chainOut != m_texture) {
                 // 着色器管线输出：使用管线结果纹理

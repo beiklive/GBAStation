@@ -996,7 +996,7 @@ brls::ScrollingFrame* SettingPage::buildDisplayTab()
         shaderPathCell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A,
             [shaderPathCell](brls::View*) {
                 auto* flPage = new FileListPage();
-                flPage->setFilter({"glslp"}, FileListPage::FilterMode::Whitelist);
+                flPage->setFilter({"glslp", "glsl"}, FileListPage::FilterMode::Whitelist);
                 flPage->setDefaultFileCallback([shaderPathCell](const FileListItem& item) {
                     cfgSetStr(KEY_DISPLAY_SHADER_PATH, item.fullPath);
                     shaderPathCell->setDetailText(
