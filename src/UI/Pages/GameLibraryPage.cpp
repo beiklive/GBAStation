@@ -14,11 +14,11 @@ using namespace brls::literals; // for _i18n
 // ─────────────────────────────────────────────────────────────────────────────
 //  布局常量
 // ─────────────────────────────────────────────────────────────────────────────
-static constexpr int   GRID_COLS     = 5;      ///< 每行列数
-static constexpr float ITEM_W        = 210.f;  ///< 每个元素宽度
-static constexpr float ITEM_H        = 250.f;  ///< 每个元素高度（图片 + 标签）
+static constexpr int   GRID_COLS     = 6;      ///< 每行列数
+static constexpr float ITEM_W        = 190.f;  ///< 每个元素宽度
+static constexpr float ITEM_H        = 210.f;  ///< 每个元素高度（图片 + 标签）
 static constexpr float ITEM_IMG_SZ   = 180.f;  ///< 封面图尺寸
-static constexpr float ITEM_MARGIN   = 10.f;   ///< 元素间距
+static constexpr float ITEM_MARGIN   = 3.f;   ///< 元素间距
 static constexpr float ITEM_LABEL_H  = 40.f;   ///< 标题标签区域高度
 static constexpr float ITEM_LABEL_FS = 18.f;   ///< 标题标签字号
 
@@ -108,7 +108,7 @@ GameLibraryItem::GameLibraryItem(const GameLibraryEntry& entry)
     m_label->setTextColor(GET_THEME_COLOR("brls/text"));
     m_label->setWidth(ITEM_W - 8.f);
     m_label->setHeight(ITEM_LABEL_H);
-    m_label->setMarginTop(6.f);
+    m_label->setMarginTop(3.f);
     m_label->setVisibility(brls::Visibility::INVISIBLE);
     addView(m_label);
 
@@ -259,11 +259,12 @@ void GameLibraryPage::rebuildGrid()
         auto* lbl = new brls::Label();
         lbl->setText("beiklive/library/empty"_i18n);
         lbl->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+
         lbl->setMarginTop(40.f);
         m_gridBox->addView(lbl);
         return;
     }
-
+    m_gridBox->setMarginLeft(25.f); // 左侧额外内边距，视觉上让第一列和左边界有点距离
     GameLibraryItem* firstItem = nullptr;
     brls::Box* rowBox = nullptr;
 
@@ -271,7 +272,8 @@ void GameLibraryPage::rebuildGrid()
         // 每 GRID_COLS 个元素新建一行
         if (i % GRID_COLS == 0) {
             rowBox = new brls::Box(brls::Axis::ROW);
-            rowBox->setAlignItems(brls::AlignItems::FLEX_START);
+            rowBox->setAlignItems(brls::AlignItems::CENTER);
+            rowBox->setJustifyContent(brls::JustifyContent::FLEX_START);
             m_gridBox->addView(rowBox);
         }
 
