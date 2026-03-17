@@ -8,6 +8,7 @@
 #include "common.hpp"
 #include "UI/Pages/AppPage.hpp"
 #include "UI/Pages/FileListPage.hpp"
+#include "UI/Pages/GameLibraryPage.hpp"
 #include "UI/Pages/SettingPage.hpp"
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -38,6 +39,7 @@ class StartPageView : public beiklive::UI::BBox
     void openFileListPage();
     void openSettingsPage();
     void openDataPage();
+    void openGameLibraryPage();
     void createAppPage();
     /// Re-read recent games from SettingManager and update the AppPage game list.
     void refreshRecentGames();

@@ -194,7 +194,7 @@ AppPage::AppPage()
     m_ButtonRow = new beiklive::UI::ButtonBar();
     m_ButtonRow->setGrow(1.0f);
     m_ButtonRow->addButton(BK_RES(path_prefix + "GameList_64.png"), "游戏库", [this]() {
-        if (onOpenFileList) onOpenFileList();
+        if (onOpenGameLibrary) onOpenGameLibrary();
     });
     m_ButtonRow->addButton(BK_RES(path_prefix + "wenjianjia_64.png"), "beiklive/app/btn_file_list"_i18n, [this]() {
         if (onOpenFileList) onOpenFileList();

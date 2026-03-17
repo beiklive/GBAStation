@@ -197,5 +197,16 @@
         "delete_confirm": "确认删除？",
         "delete_hint": "删除",
         "edit_code": "修改代码"
+    },
+    "library": {
+        "title": "游戏库",
+        "empty": "游戏库为空",
+        "game_singular": "款游戏",
+        "game_plural": "款游戏",
+        "sort": "排序方式",
+        "sort_lastopen": "按游玩顺序排序",
+        "sort_totaltime": "按游玩时长排序",
+        "sort_name": "按游戏名称排序",
+        "remove_from_library": "从游戏库移除"
     }
 }
