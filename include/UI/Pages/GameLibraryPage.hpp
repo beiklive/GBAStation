@@ -1,6 +1,7 @@
 #pragma once
 
 #include <borealis.hpp>
+#include <cmath>
 #include <functional>
 #include <string>
 #include <vector>
@@ -45,11 +46,22 @@ public:
 
     void onChildFocusGained(brls::View* directChild, brls::View* focusedView) override;
     void onChildFocusLost(brls::View* directChild, brls::View* focusedView) override;
+    void draw(NVGcontext* vg, float x, float y, float w, float h,
+              brls::Style style, brls::FrameContext* ctx) override;
 
 private:
     GameLibraryEntry          m_entry;
     beiklive::UI::ProImage*   m_coverImage = nullptr;
     brls::Label*              m_label      = nullptr;
+
+    bool  m_focused        = false;  ///< 当前是否处于焦点状态
+    float m_scale          = 1.0f;   ///< 聚焦缩放比，由 draw() 平滑插值
+
+    bool  m_clickAnimating = false;  ///< 是否正在播放点击弹性动画
+    float m_clickT         = 0.0f;   ///< 点击动画已播放时间（秒）
+    float m_clickScale     = 1.0f;   ///< 点击动画缩放比
+
+    void triggerClickBounce();
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
