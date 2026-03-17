@@ -1041,6 +1041,38 @@ void FileListPage::openSidebar(int itemIndex)
                         }});
     }
 
+    // 添加到游戏库（仅限已识别平台的游戏文件）
+    {
+        beiklive::EmuPlatform platform = detectPlatform(item.fileName);
+        if (!item.isDir && platform != beiklive::EmuPlatform::None)
+        {
+            std::string captureFileName = item.fileName;
+            std::string captureFullPath = item.fullPath;
+            opts.push_back({"beiklive/sidebar/add_to_library"_i18n,
+                            [captureFileName, captureFullPath, platform]()
+                            {
+                                auto *confirm = new brls::Dropdown(
+                                    "beiklive/sidebar/add_to_library_confirm"_i18n,
+                                    {"beiklive/hints/confirm"_i18n, "brls/hints/cancel"_i18n},
+                                    [captureFileName, captureFullPath, platform](int sel)
+                                    {
+                                        if (sel != 0)
+                                            return;
+                                        // 初始化游戏数据条目（如不存在则创建）
+                                        initGameData(captureFileName, platform);
+                                        // 更新 gamepath 字段
+                                        setGameDataStr(captureFileName, GAMEDATA_FIELD_GAMEPATH, captureFullPath);
+                                        // 加入最近游戏队列并标记 AppPage 刷新
+                                        pushRecentGame(captureFileName);
+                                        g_recentGamesDirty = true;
+                                        bklog::info("FileListPage: '{}' 已添加到游戏库，路径: {}",
+                                                    captureFileName, captureFullPath);
+                                    });
+                                brls::Application::pushActivity(new brls::Activity(confirm));
+                            }});
+        }
+    }
+
     opts.push_back({"beiklive/sidebar/cut"_i18n,
                     [this, itemIndex]()
                     { doCut(itemIndex); }});
