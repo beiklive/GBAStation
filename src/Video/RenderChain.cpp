@@ -44,12 +44,16 @@ GLuint RenderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH,
         return srcTex;
     }
 
+    brls::Logger::debug("RenderChain::run: 着色器管线处理 srcTex={} {}×{}", srcTex, videoW, videoH);
+
     GLuint out = m_pipeline.process(srcTex, videoW, videoH,
                                     viewW, viewH, m_frameCount);
     ++m_frameCount;
 
     m_lastW = m_pipeline.outputW() > 0 ? m_pipeline.outputW() : videoW;
     m_lastH = m_pipeline.outputH() > 0 ? m_pipeline.outputH() : videoH;
+
+    brls::Logger::debug("RenderChain::run: 输出 tex={} {}×{}", out, m_lastW, m_lastH);
 
     return out;
 }

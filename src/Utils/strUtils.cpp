@@ -58,4 +58,22 @@ std::string extractFileName(const std::string& path) {
 }
 
 
+std::string extractDirPath(const std::string& path) {
+    size_t last_slash = path.find_last_of('/');
+    size_t last_backslash = path.find_last_of('\\');
+    size_t pos = std::string::npos;
+
+    if (last_slash != std::string::npos && last_backslash != std::string::npos) {
+        pos = (last_slash > last_backslash) ? last_slash : last_backslash;
+    } else if (last_slash != std::string::npos) {
+        pos = last_slash;
+    } else if (last_backslash != std::string::npos) {
+        pos = last_backslash;
+    }
+
+    if (pos == std::string::npos) return "";
+    return path.substr(0, pos);
+}
+
+
 } // namespace beiklive

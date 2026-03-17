@@ -157,6 +157,7 @@
             "overlay_not_set": "Not Set",
             "header_shader": "Shader Settings",
             "shader_enable": "Shader",
+            "shader_path": "Shader Path (.glslp)",
             "shader_select": "Shader Selection",
             "shader_params": "Shader Parameters",
             "not_implemented": "(Not Implemented)"

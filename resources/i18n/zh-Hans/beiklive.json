@@ -157,6 +157,7 @@
             "overlay_not_set": "未设置",
             "header_shader": "着色器设置",
             "shader_enable": "着色器开关",
+            "shader_path": "着色器路径 (.glslp)",
             "shader_select": "着色器选择",
             "shader_params": "着色器参数设置",
             "not_implemented": "（功能待实现）"

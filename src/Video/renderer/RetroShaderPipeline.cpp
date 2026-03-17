@@ -234,18 +234,32 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
                                      unsigned frameCount)
 {
     if (m_passes.empty()) return inputTex;
-    if (!m_quad.isInitialized()) return inputTex;
+    if (!m_quad.isInitialized()) {
+        brls::Logger::warning("RetroShaderPipeline::process: FullscreenQuad 未初始化，直通返回");
+        return inputTex;
+    }
+
+    brls::Logger::debug("RetroShaderPipeline::process: 输入 tex={} {}×{} 视口 {}×{} 帧={}",
+                        inputTex, videoW, videoH, viewW, viewH, frameCount);
 
     // 保存 GL 状态，管线结束后恢复
     GLuint prevFBO      = 0;
     GLint  prevViewport[4] = {};
     GLuint prevProg     = 0;
+    GLuint prevVAO      = 0;
+    GLuint prevTex      = 0;
     {
         GLint tmp = 0;
         glGetIntegerv(GL_FRAMEBUFFER_BINDING, &tmp);
         prevFBO = static_cast<GLuint>(tmp);
         glGetIntegerv(GL_CURRENT_PROGRAM, &tmp);
         prevProg = static_cast<GLuint>(tmp);
+#if !defined(USE_GLES2)
+        glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &tmp);
+        prevVAO = static_cast<GLuint>(tmp);
+#endif
+        glGetIntegerv(GL_TEXTURE_BINDING_2D, &tmp);
+        prevTex = static_cast<GLuint>(tmp);
     }
     glGetIntegerv(GL_VIEWPORT, prevViewport);
 
@@ -253,9 +267,11 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
     unsigned currentW = videoW;
     unsigned currentH = videoH;
 
-    for (auto& pass : m_passes) {
+    for (size_t idx = 0; idx < m_passes.size(); ++idx) {
+        auto& pass = m_passes[idx];
         if (!pass.program) {
             // 跳过编译失败的通道，直接传入输出
+            brls::Logger::debug("RetroShaderPipeline: 跳过通道 {} (无程序)", idx);
             continue;
         }
 
@@ -264,15 +280,19 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
         int outH = static_cast<int>(currentH);
         computePassSize(pass.desc, currentW, currentH, viewW, viewH, outW, outH);
 
+        brls::Logger::debug("RetroShaderPipeline: 通道 {}: 输入 tex={} {}×{} → 输出 {}×{}",
+                            idx, currentTex, currentW, currentH, outW, outH);
+
         // 确保 FBO 已分配且尺寸正确
         if (!allocateFBO(pass, outW, outH)) {
-            brls::Logger::warning("RetroShaderPipeline: 跳过通道（FBO 分配失败）");
+            brls::Logger::warning("RetroShaderPipeline: 跳过通道 {}（FBO 分配失败）", idx);
             continue;
         }
 
         // 绑定输出 FBO 和视口
         glBindFramebuffer(GL_FRAMEBUFFER, pass.fbo);
         glViewport(0, 0, outW, outH);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
         // 激活着色器
@@ -292,6 +312,18 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
         // 绘制全屏四边形
         m_quad.draw();
 
+#ifndef NDEBUG
+        // GL 错误检查（仅在调试构建中启用，正式构建使用 -DNDEBUG 跳过以避免 GPU/CPU 同步开销）
+        {
+            GLenum err = glGetError();
+            if (err != GL_NO_ERROR) {
+                brls::Logger::error("RetroShaderPipeline: 通道 {} 绘制后 GL 错误 0x{:X}", idx, err);
+            }
+        }
+#endif
+
+        brls::Logger::debug("RetroShaderPipeline: 通道 {} 完成，输出 tex={}", idx, pass.texture);
+
         // 本通道输出成为下一通道输入
         currentTex = pass.texture;
         currentW   = static_cast<unsigned>(outW);
@@ -301,12 +333,19 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
     m_lastOutW = currentW;
     m_lastOutH = currentH;
 
+    brls::Logger::debug("RetroShaderPipeline::process: 最终输出 tex={} {}×{}",
+                        currentTex, m_lastOutW, m_lastOutH);
+
     // 恢复 GL 状态
     glUseProgram(prevProg);
     glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
     glViewport(prevViewport[0], prevViewport[1],
                prevViewport[2], prevViewport[3]);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, prevTex);
+#if !defined(USE_GLES2)
+    glBindVertexArray(prevVAO);
+#endif
 
     return currentTex;
 }
