@@ -46,6 +46,9 @@ static void recordGameOpenTime(const std::string& fileName)
     // 启动次数加一
     int count = getGameDataInt(fileName, GAMEDATA_FIELD_PLAYCOUNT, 0);
     setGameDataInt(fileName, GAMEDATA_FIELD_PLAYCOUNT, count + 1);
+
+    // 若游戏尚未在播放列表中，则记录到 PlaylistManager
+    pushPlaylistGame(fileName);
 }
 
 /// 清理 UI 图像缓存，并为 romPath 推送 GameView 活动。

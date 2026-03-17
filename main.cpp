@@ -24,6 +24,7 @@ beiklive::GameRunner* gameRunner = nullptr;
 beiklive::ConfigManager* SettingManager = nullptr;
 beiklive::ConfigManager* NameMappingManager = nullptr;
 beiklive::ConfigManager* gamedataManager = nullptr;
+beiklive::ConfigManager* PlaylistManager = nullptr;
 
 
 
@@ -71,6 +72,10 @@ void ConfigManagerInit() {
 	    new beiklive::ConfigManager((std::string(BK_APP_CONFIG_DIR) + std::string("name_mapping.cfg")));
 	gamedataManager =
 	    new beiklive::ConfigManager((std::string(BK_APP_CONFIG_DIR) + std::string("gamedata.cfg")));
+	PlaylistManager =
+	    new beiklive::ConfigManager((std::string(BK_APP_CONFIG_DIR) + std::string("playlist.cfg")));
+	// 设置 listcount 默认值（文件首次创建时为 0），无需立即保存；首次记录游戏时会触发保存
+	PlaylistManager->SetDefault("listcount", beiklive::ConfigValue(0));
 	if (!SettingManager->Load()) {
 		brls::Logger::warning("Failed to load setting.cfg, using default configuration.");
 	} else {

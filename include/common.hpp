@@ -163,6 +163,8 @@ extern beiklive::ConfigManager* SettingManager;
 extern beiklive::ConfigManager* NameMappingManager;
 /// 游戏数据管理器：key = 文件名(不含后缀).字段名，例如 pokemon.logopath
 extern beiklive::ConfigManager* gamedataManager;
+/// 游戏列表管理器：统计所有打开过的游戏文件，listcount 为总数，game0/game1/... 为文件名
+extern beiklive::ConfigManager* PlaylistManager;
 extern beiklive::GameRunner* gameRunner;
 
 // Display overlay settings
@@ -337,4 +339,32 @@ inline void pushRecentGame(const std::string& gameName)
     }
     SettingManager->Save();
     g_recentGamesDirty = true;
+}
+
+// ─── 游戏列表（PlaylistManager）辅助函数 ──────────────────────────────────────
+
+/// 若 gameFileName 尚未在游戏列表中，则将其追加并将 listcount 加一。
+/// 列表存储在 PlaylistManager 中：key "listcount" 记录总数，
+/// "game0"/"game1"/... 记录对应游戏文件名。
+inline void pushPlaylistGame(const std::string& gameFileName)
+{
+    if (!PlaylistManager || gameFileName.empty()) return;
+
+    // 读取当前列表数量
+    int count = 0;
+    auto v = PlaylistManager->Get("listcount");
+    if (v && v->AsInt()) count = *v->AsInt();
+
+    // 检查游戏是否已在列表中
+    for (int i = 0; i < count; ++i) {
+        std::string key = "game" + std::to_string(i);
+        auto gv = PlaylistManager->Get(key);
+        if (gv && gv->AsString() && *gv->AsString() == gameFileName)
+            return; // 已存在，不重复添加
+    }
+
+    // 追加新游戏并更新计数
+    PlaylistManager->Set("game" + std::to_string(count), beiklive::ConfigValue(gameFileName));
+    PlaylistManager->Set("listcount", beiklive::ConfigValue(count + 1));
+    PlaylistManager->Save();
 }
