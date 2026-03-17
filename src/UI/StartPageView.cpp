@@ -79,6 +79,17 @@ static void launchGameActivity(const std::string& romPath)
                                     brls::TransitionAnimation::LINEAR);
 }
 
+/// 通用打开游戏接口：记录游玩时间、更新近期游戏队列，然后启动游戏。
+/// 适用于 AppPage（最近游戏）和 GameLibraryPage（游戏库）中打开已注册游戏的场景。
+/// @param romPath  游戏 ROM 文件的完整路径
+static void openGameFromLibrary(const std::string& romPath)
+{
+    std::string fileName = std::filesystem::path(romPath).filename().string();
+    recordGameOpenTime(fileName);
+    pushRecentGame(fileName);
+    launchGameActivity(romPath);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  StartPageView
 // ─────────────────────────────────────────────────────────────────────────────
@@ -181,16 +192,16 @@ void StartPageView::createAppPage()
 
     m_appPage->onGameSelected = [](const GameEntry& e) {
         bklog::info("StartPageView: launching game '{}'", e.path);
-        std::string fileName = std::filesystem::path(e.path).filename().string();
-        // 记录最近打开时间并加入最近游戏队列
-        recordGameOpenTime(fileName);
-        pushRecentGame(fileName);
-        bklog::info("StartPageView: pushing GameView activity for '{}'", fileName);
-        launchGameActivity(e.path);
+        openGameFromLibrary(e.path);
     };
     // 文件列表按钮回调：打开文件列表页
     m_appPage->onOpenFileList = [this]() {
         openFileListPage();
+    };
+
+    // 游戏库按钮回调：打开游戏库页
+    m_appPage->onOpenGameLibrary = [this]() {
+        openGameLibraryPage();
     };
 
     m_appPage->onOpenSettings = [this]() {
@@ -424,6 +435,43 @@ void StartPageView::openDataPage()
         brls::BUTTON_START,
         [](brls::View*) {
             brls::Application::popActivity();
+            return true;
+        },
+        /*hidden=*/false, /*repeat=*/false, brls::SOUND_CLICK);
+
+    auto* frame = new brls::AppletFrame(container);
+    frame->setHeaderVisibility(brls::Visibility::GONE);
+    frame->setFooterVisibility(brls::Visibility::GONE);
+    frame->setBackground(brls::ViewBackground::NONE);
+    brls::Application::pushActivity(new brls::Activity(frame));
+}
+
+void StartPageView::openGameLibraryPage()
+{
+    auto* libraryPage = new GameLibraryPage();
+
+    // 启动游戏的统一回调
+    libraryPage->onGameSelected = [](const GameLibraryEntry& e) {
+        bklog::info("StartPageView: launching game from library '{}'", e.gamePath);
+        openGameFromLibrary(e.gamePath);
+    };
+
+    auto* container = new brls::Box(brls::Axis::COLUMN);
+    container->setGrow(1.0f);
+    container->setBackground(brls::ViewBackground::NONE);
+    container->addView(libraryPage);
+
+    // + 键关闭游戏库页
+    container->registerAction(
+        "beiklive/hints/close"_i18n,
+        brls::BUTTON_START,
+        [this](brls::View*) {
+            brls::Application::popActivity();
+            if (m_appPage) {
+                auto* focus = m_appPage->getDefaultFocus();
+                if (focus)
+                    brls::Application::giveFocus(focus);
+            }
             return true;
         },
         /*hidden=*/false, /*repeat=*/false, brls::SOUND_CLICK);
