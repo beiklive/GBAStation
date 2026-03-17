@@ -3,6 +3,8 @@
 
 using beiklive::cfgGetBool;
 using beiklive::cfgSetBool;
+using beiklive::cfgGetStr;
+using beiklive::cfgSetStr;
 using namespace brls::literals; // for _i18n
 /// 状态槽位行高（像素）。
 static constexpr float STATE_ROW_HEIGHT   = 80.0f;
@@ -286,19 +288,9 @@ GameMenu::GameMenu()
                         m_overlayChangedCallback(item.fullPath);
                     brls::Application::popActivity();
                 });
-                std::string startPath = m_romFileName.empty() ? "" :
+                std::string overlayForDir = m_romFileName.empty() ? "" :
                     getGameDataStr(m_romFileName, GAMEDATA_FIELD_OVERLAY, "");
-                if (!startPath.empty()) {
-                    auto pos = startPath.rfind('/');
-#ifdef _WIN32
-                    auto posW = startPath.rfind('\\');
-                    if (posW != std::string::npos &&
-                        (pos == std::string::npos || posW > pos))
-                        pos = posW;
-#endif
-                    if (pos != std::string::npos)
-                        startPath = startPath.substr(0, pos);
-                }
+                std::string startPath = beiklive::string::extractDirPath(overlayForDir);
                 if (startPath.empty()) startPath = "/";
                 flPage->navigateTo(startPath);
                 auto* container = new brls::Box(brls::Axis::COLUMN);
@@ -320,22 +312,55 @@ GameMenu::GameMenu()
         shaderHeader->setTitle("beiklive/settings/display/header_shader"_i18n);
         displayBox->addView(shaderHeader);
 
-        // --- 着色器开关（占位） ---
+        // --- 着色器开关（读取配置，即时回调 GameView）---
         auto* shaderEnCell = new brls::BooleanCell();
-        shaderEnCell->init("beiklive/settings/display/shader_enable"_i18n, false,
-                           [](bool) { /* 功能待实现 */ });
+        shaderEnCell->init("beiklive/settings/display/shader_enable"_i18n,
+                           cfgGetBool(KEY_DISPLAY_SHADER_ENABLED, false),
+                           [this](bool v) {
+                               cfgSetBool(KEY_DISPLAY_SHADER_ENABLED, v);
+                               if (m_shaderEnabledChangedCallback)
+                                   m_shaderEnabledChangedCallback(v);
+                           });
         displayBox->addView(shaderEnCell);
 
-        // --- 着色器选择（占位） ---
-        auto* shaderSelectCell = new brls::DetailCell();
-        shaderSelectCell->setText("beiklive/settings/display/shader_select"_i18n);
-        shaderSelectCell->setDetailText("beiklive/settings/display/not_implemented"_i18n);
-        displayBox->addView(shaderSelectCell);
-
-        // --- 着色器参数设置（占位） ---
-        auto* shaderParamsBtn = new brls::Button();
-        shaderParamsBtn->setText("beiklive/settings/display/shader_params"_i18n);
-        displayBox->addView(shaderParamsBtn);
+        // --- 着色器路径选择（读取 display.shader 配置，即时回调 GameView）---
+        m_shaderPathCell = new brls::DetailCell();
+        m_shaderPathCell->setText("beiklive/settings/display/shader_path"_i18n);
+        {
+            std::string cur = cfgGetStr(KEY_DISPLAY_SHADER_PATH, "");
+            m_shaderPathCell->setDetailText(cur.empty()
+                ? "beiklive/settings/display/overlay_not_set"_i18n
+                : beiklive::string::extractFileName(cur));
+        }
+        m_shaderPathCell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A,
+            [this](brls::View*) {
+                auto* flPage = new FileListPage();
+                flPage->setFilter({"glslp"}, FileListPage::FilterMode::Whitelist);
+                flPage->setDefaultFileCallback([this](const FileListItem& item) {
+                    cfgSetStr(KEY_DISPLAY_SHADER_PATH, item.fullPath);
+                    m_shaderPathCell->setDetailText(
+                        beiklive::string::extractFileName(item.fullPath));
+                    if (m_shaderPathChangedCallback)
+                        m_shaderPathChangedCallback(item.fullPath);
+                    brls::Application::popActivity();
+                });
+                std::string startPath = beiklive::string::extractDirPath(
+                    cfgGetStr(KEY_DISPLAY_SHADER_PATH, ""));
+                if (startPath.empty()) startPath = "/";
+                flPage->navigateTo(startPath);
+                auto* container = new brls::Box(brls::Axis::COLUMN);
+                container->setGrow(1.0f);
+                container->addView(flPage);
+                container->registerAction("beiklive/hints/close"_i18n, brls::BUTTON_START,
+                    [](brls::View*) { brls::Application::popActivity(); return true; });
+                auto* frame = new brls::AppletFrame(container);
+                frame->setHeaderVisibility(brls::Visibility::GONE);
+                frame->setFooterVisibility(brls::Visibility::GONE);
+                frame->setBackground(brls::ViewBackground::NONE);
+                brls::Application::pushActivity(new brls::Activity(frame));
+                return true;
+            }, false, false, brls::SOUND_CLICK);
+        displayBox->addView(m_shaderPathCell);
 
         m_displayScrollFrame->setContentView(displayBox);
         rightBox->addView(m_displayScrollFrame);

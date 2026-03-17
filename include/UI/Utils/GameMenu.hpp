@@ -61,6 +61,18 @@ public:
         m_overlayEnabledChangedCallback = std::move(cb);
     }
 
+    /// 设置着色器开关变更回调。用户切换着色器启用状态时在 UI 线程调用，参数为新的启用状态。
+    void setShaderEnabledChangedCallback(std::function<void(bool)> cb)
+    {
+        m_shaderEnabledChangedCallback = std::move(cb);
+    }
+
+    /// 设置着色器路径变更回调。用户选择新着色器后在 UI 线程调用，参数为新的完整路径（或空串=清空）。
+    void setShaderPathChangedCallback(std::function<void(const std::string&)> cb)
+    {
+        m_shaderPathChangedCallback = std::move(cb);
+    }
+
     /// 设置保存状态回调。用户确认保存后在 UI 线程调用，参数为槽号（0-9）。
     void setSaveStateCallback(std::function<void(int)> cb) { m_saveStateCallback = std::move(cb); }
 
@@ -82,6 +94,8 @@ private:
     std::function<void()>               m_exitGameCallback;
     std::function<void(const std::string&)> m_overlayChangedCallback;
     std::function<void(bool)>           m_overlayEnabledChangedCallback;
+    std::function<void(bool)>           m_shaderEnabledChangedCallback;
+    std::function<void(const std::string&)> m_shaderPathChangedCallback;
     std::function<void(int, bool)>      m_cheatToggleCallback;
     std::function<void(int)>            m_saveStateCallback;     ///< 确认保存状态时调用
     std::function<void(int)>            m_loadStateCallback;     ///< 确认读取状态时调用
@@ -92,6 +106,7 @@ private:
     brls::Box*                          m_cheatItemBox           = nullptr;
     brls::ScrollingFrame*               m_displayScrollFrame     = nullptr;
     brls::DetailCell*                   m_overlayPathCell        = nullptr;
+    brls::DetailCell*                   m_shaderPathCell         = nullptr; ///< 着色器路径显示单元格
     brls::Box*                          m_saveStatePanel         = nullptr; ///< 保存状态面板外层容器（横向：列表+预览）
     brls::Box*                          m_loadStatePanel         = nullptr; ///< 读取状态面板外层容器（横向：列表+预览）
     brls::Box*                          m_saveStateItemBox       = nullptr; ///< 保存状态条目容器（直接用 Box，不用 ScrollingFrame）

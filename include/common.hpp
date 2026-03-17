@@ -172,6 +172,10 @@ extern beiklive::GameRunner* gameRunner;
 #define KEY_DISPLAY_OVERLAY_GBA_PATH "display.overlay.gbaPath"   ///< 全局 GBA 遮罩 PNG 路径
 #define KEY_DISPLAY_OVERLAY_GBC_PATH "display.overlay.gbcPath"   ///< 全局 GBC 遮罩 PNG 路径
 
+// 着色器设置
+#define KEY_DISPLAY_SHADER_ENABLED   "display.shaderEnabled"     ///< 着色器总开关（true=启用）
+#define KEY_DISPLAY_SHADER_PATH      "display.shader"            ///< 着色器预设路径（.glslp）
+
 // ─── gamedataManager 字段名常量 ──────────────────────────────────────────────
 #define GAMEDATA_FIELD_LOGOPATH   "logopath"   ///< logo 图片路径（空=未设置）
 #define GAMEDATA_FIELD_GAMEPATH   "gamepath"   ///< 游戏文件路径

@@ -23,5 +23,11 @@ bool isPathString(const std::string& str);
  */
 std::string extractFileName(const std::string& path);
 
+/**
+ * 从完整路径字符串中提取目录部分（不含末尾分隔符）。
+ * 支持 '/' 和 '\\' 作为分隔符。
+ * 若路径不含分隔符，返回空字符串。
+ */
+std::string extractDirPath(const std::string& path);
 
 } // namespace beiklive

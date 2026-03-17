@@ -191,8 +191,9 @@ void GameView::initialize()
         cfg->SetDefault(KEY_DISPLAY_OVERLAY_ENABLED,  CV(std::string("false")));
         cfg->SetDefault(KEY_DISPLAY_OVERLAY_GBA_PATH, CV(std::string("")));
         cfg->SetDefault(KEY_DISPLAY_OVERLAY_GBC_PATH, CV(std::string("")));
-        // ---- 着色器预设路径（空=直通，不使用着色器）---------------
-        cfg->SetDefault("display.shader",             CV(std::string("")));
+        // ---- 着色器预设路径（空=直通，不使用着色器）与开关 --------
+        cfg->SetDefault(KEY_DISPLAY_SHADER_PATH,    CV(std::string("")));
+        cfg->SetDefault(KEY_DISPLAY_SHADER_ENABLED, CV(std::string("false")));
 
         // ---- 按键映射默认值（委托给 InputMappingConfig）----
         m_inputMap.setDefaults(*cfg);
@@ -367,11 +368,18 @@ void GameView::initialize()
     // ---- 初始化渲染链（含可选着色器管线） --------------------------
     {
         std::string shaderPath;
+        bool shaderEnabled = false;
         if (gameRunner && gameRunner->settingConfig) {
-            auto v = gameRunner->settingConfig->Get("display.shader");
-            if (v) { if (auto s = v->AsString()) shaderPath = *s; }
+            auto v = gameRunner->settingConfig->Get(KEY_DISPLAY_SHADER_ENABLED);
+            if (v) { if (auto s = v->AsString()) shaderEnabled = (*s == "true" || *s == "1"); }
+            auto vp = gameRunner->settingConfig->Get(KEY_DISPLAY_SHADER_PATH);
+            if (vp) { if (auto s = vp->AsString()) shaderPath = *s; }
         }
-        if (!m_renderChain.init(shaderPath)) {
+        // 仅当开关开启且路径非空时加载着色器
+        std::string effectivePath = (shaderEnabled && !shaderPath.empty()) ? shaderPath : "";
+        bklog::info("GameView: 着色器开关={}, 路径='{}', 生效路径='{}'",
+                    shaderEnabled, shaderPath, effectivePath);
+        if (!m_renderChain.init(effectivePath)) {
             bklog::warning("RenderChain init failed; using direct texture rendering");
         }
     }
@@ -815,6 +823,24 @@ void GameView::setGameMenu(GameMenu* menu)
                     m_overlayReloadPending.store(true, std::memory_order_release);
                 }
             }
+        });
+        // 着色器开关变更时立即更新渲染链（即时生效）
+        m_gameMenu->setShaderEnabledChangedCallback([this](bool enabled) {
+            bklog::info("GameView: 着色器开关变更 → {}", enabled);
+            std::string path = beiklive::cfgGetStr(KEY_DISPLAY_SHADER_PATH, "");
+            std::string effectivePath = (enabled && !path.empty()) ? path : "";
+            m_renderChain.setShader(effectivePath);
+            // 强制 draw() 重建 NVG 图像句柄（将 src 置零让 draw() 检测到纹理变化）
+            m_nvgImageSrc = 0;
+        });
+        // 着色器路径变更时立即更新渲染链（即时生效）
+        m_gameMenu->setShaderPathChangedCallback([this](const std::string& newPath) {
+            bklog::info("GameView: 着色器路径变更 → '{}'", newPath);
+            bool enabled = beiklive::cfgGetBool(KEY_DISPLAY_SHADER_ENABLED, false);
+            std::string effectivePath = (enabled && !newPath.empty()) ? newPath : "";
+            m_renderChain.setShader(effectivePath);
+            // 强制 draw() 重建 NVG 图像句柄
+            m_nvgImageSrc = 0;
         });
         // 保存状态回调：设置待处理槽号，游戏线程下一帧执行实际存档
         m_gameMenu->setSaveStateCallback([this](int slot) {
@@ -2151,6 +2177,12 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
                                             static_cast<unsigned>(width),
                                             static_cast<unsigned>(height));
         if (chainOut != 0) {
+            if (chainOut != m_texture) {
+                // 着色器管线输出：使用管线结果纹理
+                bklog::debug("GameView: 着色器输出纹理 id={} {}×{}",
+                             chainOut,
+                             m_renderChain.outputW(), m_renderChain.outputH());
+            }
             displayTex = chainOut;
             // 使用着色器管线实际输出尺寸（可能因缩放不同于输入）
             if (m_renderChain.outputW() > 0) displayW = static_cast<int>(m_renderChain.outputW());
