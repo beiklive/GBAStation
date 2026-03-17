@@ -2206,9 +2206,15 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
 
     // ---- 使用 NanoVG 渲染游戏纹理 ------------------------
     if (m_nvgImage >= 0) {
+        // 始终使用原始游戏视频尺寸（而非着色器输出尺寸）计算显示矩形。
+        // 部分着色器（如全视口扫描线着色器）会将 FBO 输出尺寸设为视口大小，
+        // 若使用着色器输出尺寸则 computeRect() 会计算出全屏矩形，导致
+        // 过滤/缩放模式设置完全失效。NanoVG 会自动将纹理拉伸填充到显示矩形，
+        // 故无需让显示矩形尺寸与纹理尺寸一致。
+        unsigned contentW = (m_texWidth  > 0) ? m_texWidth  : static_cast<unsigned>(displayW);
+        unsigned contentH = (m_texHeight > 0) ? m_texHeight : static_cast<unsigned>(displayH);
         beiklive::DisplayRect rect = m_display.computeRect(x, y, width, height,
-                                                            static_cast<unsigned>(displayW),
-                                                            static_cast<unsigned>(displayH));
+                                                            contentW, contentH);
 
         NVGpaint imgPaint = nvgImagePattern(vg,
                                             rect.x, rect.y,
