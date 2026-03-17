@@ -335,7 +335,7 @@ GameMenu::GameMenu()
         m_shaderPathCell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A,
             [this](brls::View*) {
                 auto* flPage = new FileListPage();
-                flPage->setFilter({"glslp"}, FileListPage::FilterMode::Whitelist);
+                flPage->setFilter({"glslp", "glsl"}, FileListPage::FilterMode::Whitelist);
                 flPage->setDefaultFileCallback([this](const FileListItem& item) {
                     cfgSetStr(KEY_DISPLAY_SHADER_PATH, item.fullPath);
                     m_shaderPathCell->setDetailText(

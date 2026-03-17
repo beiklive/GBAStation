@@ -29,15 +29,34 @@ bool RetroShaderPipeline::init(const std::string& glslpPath)
     if (glslpPath.empty()) return false;
 
     if (!std::filesystem::exists(glslpPath)) {
-        brls::Logger::warning("RetroShaderPipeline: 着色器预设文件不存在: {}", glslpPath);
+        brls::Logger::warning("RetroShaderPipeline: 着色器文件不存在: {}", glslpPath);
         return false;
     }
 
-    // 1. 解析 .glslp
+    // 1. 根据文件扩展名选择解析方式
     std::vector<ShaderPassDesc> descs;
-    if (!GLSLPParser::parse(glslpPath, descs) || descs.empty()) {
-        brls::Logger::error("RetroShaderPipeline: 解析 .glslp 失败: {}", glslpPath);
-        return false;
+    std::string ext = std::filesystem::path(glslpPath).extension().string();
+    // 将扩展名转为小写以兼容大小写差异
+    std::transform(ext.begin(), ext.end(), ext.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+
+    if (ext == ".glsl") {
+        // 单个 .glsl 文件：自动构建单通道描述符，使用视口缩放填满屏幕
+        ShaderPassDesc single;
+        single.shaderPath  = glslpPath;
+        single.filterLinear = true;
+        single.scaleTypeX  = ShaderPassDesc::ScaleType::Viewport;
+        single.scaleTypeY  = ShaderPassDesc::ScaleType::Viewport;
+        single.scaleX      = 1.0f;
+        single.scaleY      = 1.0f;
+        descs.push_back(std::move(single));
+        brls::Logger::info("RetroShaderPipeline: 单 .glsl 文件，构建单通道管线: {}", glslpPath);
+    } else {
+        // .glslp 预设文件：使用解析器读取多通道配置
+        if (!GLSLPParser::parse(glslpPath, descs) || descs.empty()) {
+            brls::Logger::error("RetroShaderPipeline: 解析 .glslp 失败: {}", glslpPath);
+            return false;
+        }
     }
 
     // 2. 初始化全屏四边形
