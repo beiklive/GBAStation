@@ -185,6 +185,9 @@ extern beiklive::GameRunner* gameRunner;
 #define GAMEDATA_FIELD_OVERLAY    "overlay"    ///< 游戏专属遮罩 PNG 路径（空=使用全局）
 #define GAMEDATA_FIELD_CHEATPATH  "cheatpath"  ///< 金手指 .cht 文件路径（空=使用默认路径）
 #define GAMEDATA_FIELD_PLAYCOUNT  "playcount"  ///< 游戏启动次数（每次启动加一，默认 0）
+#define GAMEDATA_FIELD_X_OFFSET   "xoffset"    ///< 游戏专属 X 坐标偏移（像素，浮点）
+#define GAMEDATA_FIELD_Y_OFFSET   "yoffset"    ///< 游戏专属 Y 坐标偏移（像素，浮点）
+#define GAMEDATA_FIELD_CUSTOM_SCALE "customscale" ///< 游戏专属自定义缩放倍率（浮点）
 
 /// 返回 gamedata key 的前缀（文件名不含后缀）
 inline std::string gamedataKeyPrefix(const std::string& fileName)
@@ -281,6 +284,29 @@ inline int getGameDataInt(const std::string& fileName, const std::string& field,
 /// 设置 gamedataManager 中某个游戏整数字段并保存。
 inline void setGameDataInt(const std::string& fileName, const std::string& field,
                             int val)
+{
+    if (!gamedataManager) return;
+    std::string k = gamedataKeyPrefix(fileName) + "." + field;
+    gamedataManager->Set(k, beiklive::ConfigValue(val));
+    gamedataManager->Save();
+}
+
+/// 读取 gamedataManager 中某个游戏字段的浮点值。
+inline float getGameDataFloat(const std::string& fileName, const std::string& field,
+                               float def = 0.0f)
+{
+    if (!gamedataManager) return def;
+    std::string k = gamedataKeyPrefix(fileName) + "." + field;
+    auto v = gamedataManager->Get(k);
+    if (!v) return def;
+    if (auto f = v->AsFloat()) return *f;
+    if (auto i = v->AsInt())   return static_cast<float>(*i);
+    return def;
+}
+
+/// 设置 gamedataManager 中某个游戏浮点字段并保存。
+inline void setGameDataFloat(const std::string& fileName, const std::string& field,
+                              float val)
 {
     if (!gamedataManager) return;
     std::string k = gamedataKeyPrefix(fileName) + "." + field;

@@ -1,10 +1,13 @@
 #include "UI/Utils/GameMenu.hpp"
 #include "UI/Pages/FileListPage.hpp"
+#include "Video/DisplayConfig.hpp"
 
 using beiklive::cfgGetBool;
 using beiklive::cfgSetBool;
 using beiklive::cfgGetStr;
 using beiklive::cfgSetStr;
+using beiklive::cfgGetFloat;
+using beiklive::cfgGetInt;
 using namespace brls::literals; // for _i18n
 /// 状态槽位行高（像素）。
 static constexpr float STATE_ROW_HEIGHT   = 80.0f;
@@ -250,6 +253,153 @@ GameMenu::GameMenu()
         auto* displayBox = new brls::Box(brls::Axis::COLUMN);
         displayBox->setPadding(10.f, 20.f, 10.f, 20.f);
 
+        // --- 画面设置 header ---
+        auto* displayHeader = new brls::Header();
+        displayHeader->setTitle("beiklive/gamemenu/header_display"_i18n);
+        displayBox->addView(displayHeader);
+
+        // --- 显示模式 ---
+        {
+            std::vector<std::string> dispModes = {
+                "适应 (Fit)","填充 (Fill)","原始 (Original)","整数倍 (Integer)","自定义 (Custom)"
+            };
+            static const char* dispModeIds[] = { "fit","fill","original","integer","custom" };
+            std::string curMode = cfgGetStr("display.mode","original");
+            int dispModeIdx = 2;
+            for (int i = 0; i < 5; ++i)
+                if (curMode == dispModeIds[i]) { dispModeIdx = i; break; }
+            auto* dispModeCell = new brls::SelectorCell();
+            dispModeCell->init("beiklive/settings/display/mode"_i18n, dispModes, dispModeIdx,
+                [this](int idx) {
+                    static const char* ids[] = { "fit","fill","original","integer","custom" };
+                    if (idx >= 0 && idx < 5) {
+                        cfgSetStr("display.mode", ids[idx]);
+                        if (m_displayModeChangedCallback)
+                            m_displayModeChangedCallback(beiklive::DisplayConfig::stringToMode(ids[idx]));
+                    }
+                });
+            displayBox->addView(dispModeCell);
+        }
+
+        // --- 整数倍缩放倍率 ---
+        {
+            static const int k_intScaleVals[] = { 0, 1, 2, 3, 4, 5, 6 };
+            static const char* k_intScaleLabels[] = {
+                "自动 (Auto)", "1x", "2x", "3x", "4x", "5x", "6x"
+            };
+            static constexpr int k_intScaleCount = 7;
+            int curMult = cfgGetInt("display.integer_scale_mult", 0);
+            int multIdx = 0;
+            for (int i = 0; i < k_intScaleCount; ++i)
+                if (curMult == k_intScaleVals[i]) { multIdx = i; break; }
+            std::vector<std::string> intScaleLabels(k_intScaleLabels, k_intScaleLabels + k_intScaleCount);
+            auto* intScaleCell = new brls::SelectorCell();
+            intScaleCell->init("beiklive/settings/display/int_scale"_i18n, intScaleLabels, multIdx,
+                [this](int idx) {
+                    static const int vals[] = { 0, 1, 2, 3, 4, 5, 6 };
+                    static constexpr int cnt = 7;
+                    if (idx >= 0 && idx < cnt && SettingManager) {
+                        SettingManager->Set("display.integer_scale_mult",
+                                            beiklive::ConfigValue(vals[idx]));
+                        SettingManager->Save();
+                        if (m_displayIntScaleChangedCallback)
+                            m_displayIntScaleChangedCallback(vals[idx]);
+                    }
+                });
+            displayBox->addView(intScaleCell);
+        }
+
+        // --- 纹理过滤 ---
+        {
+            std::vector<std::string> filters = { "最近邻 (Nearest)","双线性 (Linear)" };
+            std::string curFilter = cfgGetStr("display.filter","nearest");
+            auto* filterCell = new brls::SelectorCell();
+            filterCell->init("beiklive/settings/display/filter"_i18n, filters,
+                (curFilter == "linear") ? 1 : 0,
+                [this](int idx) {
+                    const char* fStr = (idx == 1) ? "linear" : "nearest";
+                    cfgSetStr("display.filter", fStr);
+                    if (m_displayFilterChangedCallback)
+                        m_displayFilterChangedCallback(beiklive::DisplayConfig::stringToFilterMode(fStr));
+                });
+            displayBox->addView(filterCell);
+        }
+
+        // --- 位置与缩放 header ---
+        auto* posScaleHeader = new brls::Header();
+        posScaleHeader->setTitle("beiklive/gamemenu/header_pos_scale"_i18n);
+        displayBox->addView(posScaleHeader);
+
+        // --- X 坐标偏移滑条 ---
+        m_xOffsetSlider = new brls::SliderCell();
+        {
+            float initX = cfgGetFloat("display.x_offset", 0.f);
+            m_xOffsetSlider->init("beiklive/gamemenu/x_offset"_i18n,
+                offsetToProgress(initX),
+                [this](float p) {
+                    float v = progressToOffset(p);
+                    if (m_displayXOffsetChangedCallback)
+                        m_displayXOffsetChangedCallback(v);
+                });
+            // 失去焦点时保存到 gamedata 和 SettingManager
+            m_xOffsetSlider->slider->getFocusLostEvent()->subscribe([this](brls::View*) {
+                float v = progressToOffset(m_xOffsetSlider->slider->getProgress());
+                if (SettingManager) {
+                    SettingManager->Set("display.x_offset", beiklive::ConfigValue(v));
+                    SettingManager->Save();
+                }
+                if (!m_romFileName.empty())
+                    setGameDataFloat(m_romFileName, GAMEDATA_FIELD_X_OFFSET, v);
+            });
+        }
+        displayBox->addView(m_xOffsetSlider);
+
+        // --- Y 坐标偏移滑条 ---
+        m_yOffsetSlider = new brls::SliderCell();
+        {
+            float initY = cfgGetFloat("display.y_offset", 0.f);
+            m_yOffsetSlider->init("beiklive/gamemenu/y_offset"_i18n,
+                offsetToProgress(initY),
+                [this](float p) {
+                    float v = progressToOffset(p);
+                    if (m_displayYOffsetChangedCallback)
+                        m_displayYOffsetChangedCallback(v);
+                });
+            m_yOffsetSlider->slider->getFocusLostEvent()->subscribe([this](brls::View*) {
+                float v = progressToOffset(m_yOffsetSlider->slider->getProgress());
+                if (SettingManager) {
+                    SettingManager->Set("display.y_offset", beiklive::ConfigValue(v));
+                    SettingManager->Save();
+                }
+                if (!m_romFileName.empty())
+                    setGameDataFloat(m_romFileName, GAMEDATA_FIELD_Y_OFFSET, v);
+            });
+        }
+        displayBox->addView(m_yOffsetSlider);
+
+        // --- 自定义缩放滑条 ---
+        m_customScaleSlider = new brls::SliderCell();
+        {
+            float initScale = cfgGetFloat("display.custom_scale", 1.f);
+            m_customScaleSlider->init("beiklive/gamemenu/custom_scale"_i18n,
+                scaleToProgress(initScale),
+                [this](float p) {
+                    float v = progressToScale(p);
+                    if (m_displayCustomScaleChangedCallback)
+                        m_displayCustomScaleChangedCallback(v);
+                });
+            m_customScaleSlider->slider->getFocusLostEvent()->subscribe([this](brls::View*) {
+                float v = progressToScale(m_customScaleSlider->slider->getProgress());
+                if (SettingManager) {
+                    SettingManager->Set("display.custom_scale", beiklive::ConfigValue(v));
+                    SettingManager->Save();
+                }
+                if (!m_romFileName.empty())
+                    setGameDataFloat(m_romFileName, GAMEDATA_FIELD_CUSTOM_SCALE, v);
+            });
+        }
+        displayBox->addView(m_customScaleSlider);
+
         // --- 遮罩设置 header ---
         auto* overlayHeader = new brls::Header();
         overlayHeader->setTitle("beiklive/settings/display/header_overlay"_i18n);
@@ -365,6 +515,19 @@ GameMenu::GameMenu()
                 return true;
             }, false, false, brls::SOUND_CLICK);
         displayBox->addView(m_shaderPathCell);
+
+        // --- 着色器参数 box（在着色器路径单元格后，动态填充参数滑条）---
+        m_shaderParamBox = new brls::Box(brls::Axis::COLUMN);
+        // 默认显示"无可调整参数"提示标签
+        {
+            auto* noParamLabel = new brls::Label();
+            noParamLabel->setText("beiklive/gamemenu/shader_no_params"_i18n);
+            noParamLabel->setFontSize(16.f);
+            noParamLabel->setMarginTop(4.f);
+            noParamLabel->setMarginBottom(4.f);
+            m_shaderParamBox->addView(noParamLabel);
+        }
+        displayBox->addView(m_shaderParamBox);
 
         m_displayScrollFrame->setContentView(displayBox);
         rightBox->addView(m_displayScrollFrame);
@@ -613,3 +776,66 @@ void GameMenu::setCheats(const std::vector<CheatEntry>& cheats)
     }
 }
 
+
+// ============================================================
+// updateShaderParams – 更新着色器参数滑条区域
+//
+// 清空 m_shaderParamBox 中的旧内容，然后根据 params 列表
+// 重新填充 SliderCell 滑条。若 params 为空，则显示"无可调整参数"提示。
+// 须在 UI（主）线程调用。
+// ============================================================
+
+void GameMenu::updateShaderParams(const std::vector<beiklive::ShaderParamInfo>& params)
+{
+    if (!m_shaderParamBox) return;
+
+    // 清空旧内容
+    m_shaderParamBox->clearViews(true);
+
+    if (params.empty()) {
+        auto* label = new brls::Label();
+        label->setText("beiklive/gamemenu/shader_no_params"_i18n);
+        label->setFontSize(16.f);
+        label->setMarginTop(4.f);
+        label->setMarginBottom(4.f);
+        m_shaderParamBox->addView(label);
+        return;
+    }
+
+    for (const auto& p : params) {
+        // 范围检查：若 min == max 则无意义，跳过
+        if (p.maxValue <= p.minValue) continue;
+
+        float initProgress = (p.value - p.minValue) / (p.maxValue - p.minValue);
+        // clamp to [0, 1]
+        if (initProgress < 0.f) initProgress = 0.f;
+        if (initProgress > 1.f) initProgress = 1.f;
+
+        auto* cell = new brls::SliderCell();
+        // 使用参数的显示名称作为标签
+        std::string label = p.desc.empty() ? p.name : p.desc;
+        std::string paramName = p.name; // capture by value for lambda
+
+        cell->init(label, initProgress,
+            [this, paramName, minV = p.minValue, maxV = p.maxValue](float progress) {
+                float v = minV + progress * (maxV - minV);
+                if (m_shaderParamChangedCallback)
+                    m_shaderParamChangedCallback(paramName, v);
+            });
+        m_shaderParamBox->addView(cell);
+    }
+}
+
+// ============================================================
+// updateDisplayOffsetSliders – 更新 X/Y 偏移和自定义缩放滑条的显示值
+// ============================================================
+
+void GameMenu::updateDisplayOffsetSliders(float xOffset, float yOffset, float customScale)
+{
+    if (m_xOffsetSlider)
+        m_xOffsetSlider->slider->setProgress(offsetToProgress(xOffset));
+    if (m_yOffsetSlider)
+        m_yOffsetSlider->slider->setProgress(offsetToProgress(yOffset));
+    if (m_customScaleSlider)
+        m_customScaleSlider->slider->setProgress(scaleToProgress(customScale));
+}

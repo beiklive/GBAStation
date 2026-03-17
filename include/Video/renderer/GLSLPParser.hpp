@@ -47,6 +47,18 @@ struct GLSLPParamOverride {
     float       value;  ///< 覆盖默认值（来自 .glslp 文件的 NAME = value 键值对）
 };
 
+/// 着色器参数完整元数据
+/// 来源：从 .glsl 源文件中解析 #pragma parameter 指令，并结合 .glslp 中的覆盖值
+struct ShaderParamInfo {
+    std::string name;         ///< GLSL uniform 变量名（区分大小写）
+    std::string desc;         ///< 参数显示名称（来自 #pragma parameter 中的引号字符串）
+    float       defaultValue; ///< 默认值（来自 #pragma parameter）
+    float       minValue;     ///< 最小值（来自 #pragma parameter）
+    float       maxValue;     ///< 最大值（来自 #pragma parameter）
+    float       step;         ///< 步进值（来自 #pragma parameter；0 表示连续）
+    float       value;        ///< 当前值（初始为 defaultValue，可被 .glslp 覆盖）
+};
+
 /// RetroArch .glslp 着色器预设解析器
 ///
 /// 支持的 .glslp 键：
@@ -79,6 +91,16 @@ public:
                       std::vector<ShaderPassDesc>& outPasses,
                       std::vector<GLSLPTextureDesc>* outTextures = nullptr,
                       std::vector<GLSLPParamOverride>* outParams = nullptr);
+
+    /// 从单个 .glsl 着色器源文件中解析 #pragma parameter 指令并输出参数元数据。
+    ///
+    /// #pragma parameter 格式：
+    ///   #pragma parameter NAME "Display Name" DEFAULT MIN MAX STEP
+    ///
+    /// @param shaderPath  .glsl 文件路径。
+    /// @param outMeta     输出：解析到的参数元数据列表（已去重，后出现的覆盖先出现的）。
+    static void parseParamMeta(const std::string& shaderPath,
+                               std::vector<ShaderParamInfo>& outMeta);
 };
 
 } // namespace beiklive

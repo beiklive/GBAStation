@@ -69,7 +69,13 @@
         "save_confirm": "确认保存到此档位？",
         "load_confirm": "确认从此档位读取？",
         "no_state_data": "无存档数据",
-        "no_cheats": "无金手指"
+        "no_cheats": "无金手指",
+        "header_display": "画面设置",
+        "x_offset": "X 坐标偏移",
+        "y_offset": "Y 坐标偏移",
+        "custom_scale": "自定义缩放",
+        "header_pos_scale": "位置与缩放",
+        "shader_no_params": "此着色器无可调整参数"
     },
     "settings": {
         "tab": {

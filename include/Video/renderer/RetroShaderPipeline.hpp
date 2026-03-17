@@ -83,10 +83,17 @@ public:
     unsigned outputW()  const { return m_lastOutW; }
     unsigned outputH()  const { return m_lastOutH; }
 
+    /// 返回当前管线中所有参数的完整元数据（含当前值）。
+    const std::vector<ShaderParamInfo>& getParams() const { return m_params; }
+
+    /// 更新指定名称参数的当前值（区分大小写）。
+    /// 仅在内存中修改；下一次 process() 时生效。
+    void setParamValue(const std::string& name, float value);
+
 private:
     std::vector<ShaderPass>     m_passes;
     std::vector<ExternalTexture> m_textures;  ///< 从 .glslp textures 字段加载的外部纹理
-    std::vector<std::pair<std::string,float>> m_params; ///< 从 .glslp parameters 字段解析的参数默认值
+    std::vector<ShaderParamInfo> m_params;    ///< 着色器参数完整元数据（含当前值）
     FullscreenQuad              m_quad;
     unsigned                    m_lastOutW = 0;
     unsigned                    m_lastOutH = 0;
