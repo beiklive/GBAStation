@@ -238,4 +238,71 @@ bool GLSLPParser::parse(const std::string& glslpPath,
     return !outPasses.empty();
 }
 
+// ============================================================
+// GLSLPParser::parseParamMeta
+// 从 .glsl 着色器源文件中解析 #pragma parameter 指令
+// ============================================================
+
+void GLSLPParser::parseParamMeta(const std::string& shaderPath,
+                                  std::vector<ShaderParamInfo>& outMeta)
+{
+    outMeta.clear();
+    std::ifstream f(shaderPath);
+    if (!f.is_open()) return;
+
+    std::string line;
+    while (std::getline(f, line)) {
+        // 去除首尾空白
+        size_t s = line.find_first_not_of(" \t");
+        if (s == std::string::npos) continue;
+        std::string trimmed = line.substr(s);
+
+        // 匹配 #pragma parameter
+        if (trimmed.substr(0, 17) != "#pragma parameter") continue;
+        std::string rest = trimmed.substr(17);
+
+        // 解析 NAME（空白分隔的第一个词）
+        std::istringstream ss(rest);
+        std::string name;
+        ss >> name;
+        if (name.empty()) continue;
+
+        // 解析引号包裹的显示名称
+        std::string desc;
+        {
+            size_t q1 = rest.find('"');
+            size_t q2 = (q1 != std::string::npos) ? rest.find('"', q1 + 1) : std::string::npos;
+            if (q1 != std::string::npos && q2 != std::string::npos)
+                desc = rest.substr(q1 + 1, q2 - q1 - 1);
+            else
+                desc = name; // 无引号时用变量名代替
+        }
+
+        // 在显示名称后继续解析四个浮点数：DEFAULT MIN MAX STEP
+        std::string afterQuote;
+        {
+            size_t q2 = rest.rfind('"');
+            if (q2 != std::string::npos && q2 + 1 < rest.size())
+                afterQuote = rest.substr(q2 + 1);
+            else
+                afterQuote = rest; // 无引号，从整个 rest 解析
+        }
+        std::istringstream nums(afterQuote);
+        float defVal = 0.f, minVal = 0.f, maxVal = 1.f, stepVal = 0.f;
+        nums >> defVal >> minVal >> maxVal >> stepVal;
+
+        // 去重：若同名参数已存在则覆盖（某些着色器在多个 pass 重复声明）
+        bool found = false;
+        for (auto& p : outMeta) {
+            if (p.name == name) {
+                p = { name, desc, defVal, minVal, maxVal, stepVal, defVal };
+                found = true;
+                break;
+            }
+        }
+        if (!found)
+            outMeta.push_back({ name, desc, defVal, minVal, maxVal, stepVal, defVal });
+    }
+}
+
 } // namespace beiklive

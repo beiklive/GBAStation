@@ -69,7 +69,13 @@
         "save_confirm": "Confirm save to this slot?",
         "load_confirm": "Confirm load from this slot?",
         "no_state_data": "No Save Data",
-        "no_cheats": "No Cheats"
+        "no_cheats": "No Cheats",
+        "header_display": "Display Settings",
+        "x_offset": "X Offset",
+        "y_offset": "Y Offset",
+        "custom_scale": "Custom Scale",
+        "header_pos_scale": "Position & Scale",
+        "shader_no_params": "No adjustable parameters for this shader"
     },
     "settings": {
         "tab": {

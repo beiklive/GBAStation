@@ -109,14 +109,45 @@ bool RetroShaderPipeline::init(const std::string& glslpPath)
         }
     }
 
-    // 5. 存储 .glslp 参数默认值（用于渲染时作为 uniform float 传入各通道）
+    // 5. 从各 .glsl 通道源文件中解析 #pragma parameter 元数据，构建完整参数列表
+    //    顺序：先扫描所有 pass 文件取得元数据（name/desc/min/max/step/default），
+    //    再将 .glslp 中的覆盖值（paramDescs）应用到对应参数的 value 字段
     m_params.clear();
+    for (const auto& pass : m_passes) {
+        if (pass.desc.shaderPath.empty()) continue;
+        std::vector<ShaderParamInfo> passMeta;
+        GLSLPParser::parseParamMeta(pass.desc.shaderPath, passMeta);
+        for (auto& pm : passMeta) {
+            // 去重：若参数已存在则跳过（后续通道相同 uniform 名视为同一参数）
+            bool dup = false;
+            for (const auto& existing : m_params)
+                if (existing.name == pm.name) { dup = true; break; }
+            if (!dup) m_params.push_back(pm);
+        }
+    }
+    // 将 .glslp 中的覆盖值应用到对应参数
     for (const auto& p : paramDescs) {
-        m_params.emplace_back(p.name, p.value);
-        brls::Logger::debug("RetroShaderPipeline: 参数 \"{}\" = {}", p.name, p.value);
+        bool applied = false;
+        for (auto& pm : m_params) {
+            if (pm.name == p.name) {
+                pm.value = p.value;
+                applied = true;
+                brls::Logger::debug("RetroShaderPipeline: 参数覆盖 \"{}\" = {}", p.name, p.value);
+                break;
+            }
+        }
+        // 若参数名不在 .glsl #pragma parameter 列表中，仍添加（无元数据版本）
+        if (!applied) {
+            ShaderParamInfo pm;
+            pm.name = p.name; pm.desc = p.name;
+            pm.defaultValue = p.value; pm.minValue = 0.f; pm.maxValue = 1.f;
+            pm.step = 0.f; pm.value = p.value;
+            m_params.push_back(pm);
+            brls::Logger::debug("RetroShaderPipeline: 无元数据参数 \"{}\" = {}", p.name, p.value);
+        }
     }
 
-    brls::Logger::info("RetroShaderPipeline: 加载完成，共 {} 个通道，{} 个外部纹理，{} 个参数覆盖",
+    brls::Logger::info("RetroShaderPipeline: 加载完成，共 {} 个通道，{} 个外部纹理，{} 个参数",
                        m_passes.size(), m_textures.size(), m_params.size());
     return true;
 }
@@ -299,8 +330,8 @@ void RetroShaderPipeline::setUniforms(GLuint program,
 
     // .glslp parameters 参数覆盖值（作为 float uniform 传入，优先于 #pragma parameter 默认值）
     for (const auto& param : m_params) {
-        GLint loc = glGetUniformLocation(program, param.first.c_str());
-        if (loc >= 0) glUniform1f(loc, param.second);
+        GLint loc = glGetUniformLocation(program, param.name.c_str());
+        if (loc >= 0) glUniform1f(loc, param.value);
     }
 }
 
@@ -540,6 +571,20 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
 #endif
 
     return currentTex;
+}
+
+// ============================================================
+// setParamValue – 更新指定参数的当前值
+// ============================================================
+void RetroShaderPipeline::setParamValue(const std::string& name, float value)
+{
+    for (auto& p : m_params) {
+        if (p.name == name) {
+            p.value = value;
+            return;
+        }
+    }
+    // 若参数不存在，忽略（可能是着色器未声明的参数）
 }
 
 } // namespace beiklive

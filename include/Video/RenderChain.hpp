@@ -63,6 +63,14 @@ public:
     /// 返回当前是否已加载着色器管线。
     bool hasShader() const { return m_pipeline.isLoaded(); }
 
+    /// 返回当前着色器管线的参数列表（含完整元数据和当前值）。
+    /// 若无着色器管线，返回空列表。
+    const std::vector<ShaderParamInfo>& getShaderParams() const { return m_pipeline.getParams(); }
+
+    /// 更新指定名称的着色器参数当前值。
+    /// 若无着色器或参数不存在，则忽略。
+    void setShaderParam(const std::string& name, float value) { m_pipeline.setParamValue(name, value); }
+
 private:
     RetroShaderPipeline m_pipeline;
     unsigned            m_frameCount = 0; ///< 累计帧计数，传入着色器 FrameCount uniform

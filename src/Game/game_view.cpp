@@ -29,6 +29,7 @@
 #include <ctime>
 #include <deque>
 #include <fstream>
+#include <limits>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -157,6 +158,18 @@ void GameView::initialize()
     // ---- 读取画面配置
     if (gameRunner && gameRunner->settingConfig)
         m_display.load(*gameRunner->settingConfig);
+
+    // ---- 优先从 gamedataManager 加载每游戏专属的偏移/缩放设置 ----
+    // 若 gamedataManager 中存在对应字段，则覆盖 SettingManager 中的全局配置
+    if (!m_romFileName.empty() && gamedataManager) {
+        float xOff = getGameDataFloat(m_romFileName, GAMEDATA_FIELD_X_OFFSET, std::numeric_limits<float>::quiet_NaN());
+        float yOff = getGameDataFloat(m_romFileName, GAMEDATA_FIELD_Y_OFFSET, std::numeric_limits<float>::quiet_NaN());
+        float cs   = getGameDataFloat(m_romFileName, GAMEDATA_FIELD_CUSTOM_SCALE, std::numeric_limits<float>::quiet_NaN());
+        // 仅当 gamedataManager 中有记录时才覆盖（以 NaN 表示"未设置"）
+        if (!std::isnan(xOff)) m_display.xOffset    = xOff;
+        if (!std::isnan(yOff)) m_display.yOffset    = yOff;
+        if (!std::isnan(cs))   m_display.customScale = cs;
+    }
 
     if (gameRunner && gameRunner->settingConfig) {
         beiklive::ConfigManager* cfg = gameRunner->settingConfig;
@@ -833,7 +846,7 @@ void GameView::setGameMenu(GameMenu* menu)
             // 强制 draw() 重建 NVG 图像句柄（将 src 置零让 draw() 检测到纹理变化）
             m_nvgImageSrc = 0;
         });
-        // 着色器路径变更时立即更新渲染链（即时生效）
+        // 着色器路径变更时立即更新渲染链（即时生效）并更新菜单中的参数滑条
         m_gameMenu->setShaderPathChangedCallback([this](const std::string& newPath) {
             bklog::info("GameView: 着色器路径变更 → '{}'", newPath);
             bool enabled = beiklive::cfgGetBool(KEY_DISPLAY_SHADER_ENABLED, false);
@@ -841,6 +854,37 @@ void GameView::setGameMenu(GameMenu* menu)
             m_renderChain.setShader(effectivePath);
             // 强制 draw() 重建 NVG 图像句柄
             m_nvgImageSrc = 0;
+            // 更新菜单中的着色器参数滑条
+            if (m_gameMenu)
+                m_gameMenu->updateShaderParams(m_renderChain.getShaderParams());
+        });
+        // 显示模式变更时立即更新 m_display
+        m_gameMenu->setDisplayModeChangedCallback([this](beiklive::ScreenMode mode) {
+            m_display.mode = mode;
+        });
+        // 纹理过滤变更时立即更新 m_display（draw() 会在下一帧应用）
+        m_gameMenu->setDisplayFilterChangedCallback([this](beiklive::FilterMode filter) {
+            m_display.filterMode = filter;
+        });
+        // 整数缩放倍率变更时立即更新 m_display
+        m_gameMenu->setDisplayIntScaleChangedCallback([this](int mult) {
+            m_display.integerScaleMult = mult;
+        });
+        // X 坐标偏移实时更新 m_display（拖动滑条时连续调用）
+        m_gameMenu->setDisplayXOffsetChangedCallback([this](float v) {
+            m_display.xOffset = v;
+        });
+        // Y 坐标偏移实时更新 m_display
+        m_gameMenu->setDisplayYOffsetChangedCallback([this](float v) {
+            m_display.yOffset = v;
+        });
+        // 自定义缩放实时更新 m_display
+        m_gameMenu->setDisplayCustomScaleChangedCallback([this](float v) {
+            m_display.customScale = v;
+        });
+        // 着色器参数实时更新渲染链
+        m_gameMenu->setShaderParamChangedCallback([this](const std::string& name, float value) {
+            m_renderChain.setShaderParam(name, value);
         });
         // 保存状态回调：设置待处理槽号，游戏线程下一帧执行实际存档
         m_gameMenu->setSaveStateCallback([this](int slot) {
@@ -882,6 +926,11 @@ void GameView::setGameMenu(GameMenu* menu)
                 info.thumbPath = thumbPath;
             return info;
         });
+        // 初始化着色器参数滑条（使用当前已加载的着色器参数）
+        m_gameMenu->updateShaderParams(m_renderChain.getShaderParams());
+        // 初始化 X/Y 偏移和自定义缩放滑条（使用 m_display 当前值）
+        m_gameMenu->updateDisplayOffsetSliders(
+            m_display.xOffset, m_display.yOffset, m_display.customScale);
     }
 }
 
