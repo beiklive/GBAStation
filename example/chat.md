@@ -1,229 +1,443 @@
-`RETRO_MEMORY_RTC` 是 **libretro API** 中定义的一种特殊内存类型，用于让前端（如 RetroArch）访问核心中的 **RTC（Real Time Clock）数据**。典型用途：
+你现在已经拿到 **`frame.pixels`（游戏原始帧）**，接下来要实现的是一条完整的 **GPU 渲染 + RetroArch Shader Pipeline + UI 显示链**。
+整体目标是：**CPU帧 → GPU纹理 → 多Pass Shader → 最终纹理 → NanoVG显示**。
 
-* 宝可梦等游戏的 **实时时钟**
-* 模拟器 RTC 状态保存
-* 支持 **savestate / rewind / netplay** 时同步 RTC
-
-它通过 `retro_get_memory_data()` 和 `retro_get_memory_size()` 暴露给前端。
+下面给你一条**完整处理链（也是大多数模拟器的架构）**。
 
 ---
 
-## 一、RETRO_MEMORY_RTC 的定义
+# 一、完整渲染处理链
 
-在 `libretro.h` 中：
-
-```c
-#define RETRO_MEMORY_RTC 6
+```
+mGBA / libretro
+        │
+        ▼
+frame.pixels (CPU内存)
+        │
+        ▼
+上传到 OpenGL Texture
+        │
+        ▼
+Game FBO
+        │
+        ▼
+RetroArch Shader Pass0
+        │
+        ▼
+RetroArch Shader Pass1
+        │
+        ▼
+RetroArch Shader PassN
+        │
+        ▼
+Final Texture
+        │
+        ▼
+NanoVG UI / 显示
 ```
 
-前端会调用：
+对应模块：
 
-```c
-void* retro_get_memory_data(unsigned id);
-size_t retro_get_memory_size(unsigned id);
-```
-
-当 `id == RETRO_MEMORY_RTC` 时，你需要返回 **RTC 内存指针和大小**。
+| 阶段              | 功能                |
+| --------------- | ----------------- |
+| CPU帧            | `frame.pixels`    |
+| 纹理上传            | `glTexSubImage2D` |
+| 原始FBO           | 游戏画面输入            |
+| shader pipeline | RetroArch多pass    |
+| 最终纹理            | Shader输出          |
+| UI显示            | NanoVG绘制          |
 
 ---
 
-## 二、核心实现方式
+# 二、第一步：CPU帧 → GPU纹理
 
-### 1 定义 RTC 结构
+你现在拿到：
 
-一般模拟器都会有 RTC 状态，例如：
+```
+frame.pixels
+width
+height
+```
 
-```c
-struct CoreRTC {
-    uint64_t unix_time;
-    uint32_t subsecond;
-    uint8_t control;
+创建游戏纹理：
+
+```cpp
+GLuint gameTexture;
+
+glGenTextures(1, &gameTexture);
+glBindTexture(GL_TEXTURE_2D, gameTexture);
+
+glTexImage2D(
+    GL_TEXTURE_2D,
+    0,
+    GL_RGBA,
+    width,
+    height,
+    0,
+    GL_RGBA,
+    GL_UNSIGNED_BYTE,
+    nullptr
+);
+
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+```
+
+每一帧更新：
+
+```cpp
+glBindTexture(GL_TEXTURE_2D, gameTexture);
+
+glTexSubImage2D(
+    GL_TEXTURE_2D,
+    0,
+    0,
+    0,
+    width,
+    height,
+    GL_RGBA,
+    GL_UNSIGNED_BYTE,
+    frame.pixels
+);
+```
+
+---
+
+# 三、第二步：创建 Game FBO
+
+很多 RetroArch shader 需要 **原始帧FBO**。
+
+```cpp
+GLuint gameFBO;
+
+glGenFramebuffers(1, &gameFBO);
+glBindFramebuffer(GL_FRAMEBUFFER, gameFBO);
+
+glFramebufferTexture2D(
+    GL_FRAMEBUFFER,
+    GL_COLOR_ATTACHMENT0,
+    GL_TEXTURE_2D,
+    gameTexture,
+    0
+);
+```
+
+---
+
+# 四、第三步：RetroArch Shader Pipeline
+
+核心结构：
+
+```cpp
+struct ShaderPass
+{
+    GLuint program;
+
+    GLuint fbo;
+    GLuint texture;
+
+    int width;
+    int height;
 };
+```
 
-static struct CoreRTC g_rtc;
+Pipeline：
+
+```cpp
+class RetroShaderPipeline
+{
+public:
+
+    GLuint process(GLuint inputTexture);
+
+    std::vector<ShaderPass> passes;
+};
 ```
 
 ---
 
-### 2 实现 memory 接口
+# 五、第四步：执行 Shader Pass
 
-```c
-void* retro_get_memory_data(unsigned id)
+核心流程：
+
+```
+inputTexture = gameTexture
+
+for pass in passes
+    bind(pass.fbo)
+    bind(pass.program)
+
+    glBindTexture(inputTexture)
+
+    draw_fullscreen_quad()
+
+    inputTexture = pass.texture
+```
+
+代码示例：
+
+```cpp
+GLuint RetroShaderPipeline::process(GLuint input)
 {
-    switch (id)
+    GLuint current = input;
+
+    for(auto& pass : passes)
     {
-        case RETRO_MEMORY_RTC:
-            return &g_rtc;
+        glBindFramebuffer(GL_FRAMEBUFFER, pass.fbo);
 
-        default:
-            return NULL;
+        glUseProgram(pass.program);
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, current);
+
+        drawFullscreenQuad();
+
+        current = pass.texture;
     }
-}
 
-size_t retro_get_memory_size(unsigned id)
+    return current;
+}
+```
+
+---
+
+# 六、第五步：全屏 Quad
+
+shader pass 本质就是：
+
+```
+输入纹理 → shader → 输出纹理
+```
+
+所以需要一个 full screen quad：
+
+```cpp
+void drawFullscreenQuad()
 {
-    switch (id)
+    static float quad[] =
     {
-        case RETRO_MEMORY_RTC:
-            return sizeof(g_rtc);
+        -1, -1, 0,0,
+         1, -1, 1,0,
+         1,  1, 1,1,
+        -1,  1, 0,1
+    };
 
-        default:
-            return 0;
-    }
-}
-```
-
-这样 **前端就能访问 RTC 数据**。
-
----
-
-## 三、运行时更新 RTC
-
-核心需要在每帧更新 RTC，例如：
-
-```c
-void rtc_update(void)
-{
-    g_rtc.unix_time = time(NULL);
-}
-```
-
-在 `retro_run()` 中：
-
-```c
-void retro_run(void)
-{
-    rtc_update();
-
-    emulate_frame();
+    glDrawArrays(GL_TRIANGLE_FAN,0,4);
 }
 ```
 
 ---
 
-## 四、RetroArch 使用 RTC 的用途
+# 七、第六步：最终纹理交给 NanoVG
 
-如果核心实现了 `RETRO_MEMORY_RTC`：
+NanoVG 可以直接用 OpenGL 纹理。
 
-RetroArch 可以：
-
-1. **保存状态**
-2. **回放 rewind**
-3. **网络同步**
-4. **RTC 校正**
-
-否则 RTC 可能在 **load state 后错误**。
-
----
-
-## 五、mGBA / melonDS 的做法
-
-例如 **mGBA libretro**：
-
-```c
-case RETRO_MEMORY_RTC:
-    return gba->rtc.sram;
+```cpp
+int image = nvglCreateImageFromHandleGL3(
+        vg,
+        finalTexture,
+        width,
+        height,
+        NVG_IMAGE_FLIPY
+);
 ```
 
-size:
+绘制：
 
-```c
-case RETRO_MEMORY_RTC:
-    return sizeof(gba->rtc.sram);
+```cpp
+NVGpaint paint = nvgImagePattern(
+        vg,
+        0,
+        0,
+        width,
+        height,
+        0,
+        image,
+        1.0f
+);
+
+nvgBeginPath(vg);
+nvgRect(vg,0,0,width,height);
+nvgFillPaint(vg,paint);
+nvgFill(vg);
 ```
 
-melonDS 也是类似实现。
-
 ---
 
-## 六、Switch 自制前端（你这种情况）
+# 八、第七步：GLSLP解析
 
-如果你在 **Switch 上自己写前端 + libretro 核心**：
-
-你也可以主动读取 RTC：
-
-```c
-void* rtc = core.retro_get_memory_data(RETRO_MEMORY_RTC);
-size_t rtc_size = core.retro_get_memory_size(RETRO_MEMORY_RTC);
-```
-
-这样可以：
-
-* 保存 RTC
-* 写入 RTC
-* 修正 RTC
-
----
-
-## 七、常见错误
-
-### 1 没实现接口
-
-前端会得到：
+RetroArch shader 实际是：
 
 ```
-NULL
-size = 0
+shader.glslp
 ```
 
-RTC 不工作。
+例子：
+
+```
+shaders = 2
+
+shader0 = crt-pass0.glsl
+shader1 = crt-pass1.glsl
+
+scale_type0 = source
+scale0 = 2.0
+```
+
+解析后生成：
+
+```
+vector<ShaderPass>
+```
 
 ---
 
-### 2 RTC 不参与 savestate
+# 九、第八步：Shader Uniform
 
-RTC 应该 **参与状态保存**，否则：
+RetroArch shader 会用到：
 
-* load state
-* 时间会跳变
+常见 uniform：
+
+```
+Source
+SourceSize
+OutputSize
+FrameCount
+```
+
+例如：
+
+```cpp
+glUniform2f(sourceSizeLoc, width, height);
+glUniform2f(outputSizeLoc, outW, outH);
+glUniform1i(frameCountLoc, frameCount);
+```
 
 ---
 
-### 3 RTC 大小不固定
+# 十、完整运行流程
 
-RTC memory 必须 **固定大小结构体**。
+每帧：
 
----
+```
+1 CPU生成 frame.pixels
+2 上传到 gameTexture
+3 shaderPipeline.process(gameTexture)
+4 得到 finalTexture
+5 NanoVG 显示 finalTexture
+```
 
-## 八、推荐 RTC 结构
+伪代码：
 
-推荐这样：
-
-```c
-typedef struct
+```cpp
+void renderFrame()
 {
-    int64_t unix_time;
-    int32_t offset;
-    uint8_t flags;
-} RetroRTC;
-```
+    updateGameTexture(frame.pixels);
 
-然后：
+    GLuint finalTexture =
+        shaderPipeline.process(gameTexture);
 
-```
-RETRO_MEMORY_RTC -> &rtc
+    drawWithNanoVG(finalTexture);
+}
 ```
 
 ---
 
-## 九、如果你是做 Switch + libretro + mGBA
+# 十一、Switch开发特别注意
 
-你 **其实不用自己实现 RTC**，因为：
-
-mGBA 核心已经实现：
+Switch GLES：
 
 ```
-RETRO_MEMORY_RTC
+GLSL ES 300
 ```
 
-你只需要：
+RetroArch shader：
 
-```c
-core.retro_get_memory_data(RETRO_MEMORY_RTC);
+```
+GLSL 130
 ```
 
-即可。
+必须转换。
+
+例如：
+
+```
+#version 130
+```
+
+改为：
+
+```
+#version 300 es
+precision mediump float;
+```
 
 ---
 
-如果你愿意，我可以再给你一份 **完整的 libretro 内存接口实现模板（含 SAVE / SYSTEM / RTC）**，这是 **所有 libretro 核心通用的标准实现**，直接复制就能用。
+# 十二、你接下来需要实现的模块
+
+建议顺序：
+
+### 1
+
+游戏纹理上传
+
+### 2
+
+FBO管理
+
+### 3
+
+shader编译器
+
+### 4
+
+glslp解析
+
+### 5
+
+shader pipeline
+
+### 6
+
+NanoVG显示
+
+---
+
+# 十三、推荐最终架构
+
+你的项目结构建议：
+
+```
+renderer/
+
+    GameTexture.cpp
+    GameTexture.h
+
+    FrameUploader.cpp
+    FrameUploader.h
+
+    ShaderCompiler.cpp
+    ShaderCompiler.h
+
+    GLSLPParser.cpp
+    GLSLPParser.h
+
+    RetroShaderPipeline.cpp
+    RetroShaderPipeline.h
+
+    FullscreenQuad.cpp
+    FullscreenQuad.h
+```
+
+---
+
+如果你愿意，我可以**给你一套完整的 RetroArch Shader Pipeline 实现（约2000行代码）**，包含：
+
+* glslp解析器
+* shader编译
+* FBO管理
+* multi-pass pipeline
+* GLES兼容
+* NanoVG显示
+
+而且可以 **100% 直接接入你现在的 GameRuntime**。
