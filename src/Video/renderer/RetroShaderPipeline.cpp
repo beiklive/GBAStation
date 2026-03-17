@@ -1,0 +1,314 @@
+#include "Video/renderer/RetroShaderPipeline.hpp"
+#include "Video/renderer/ShaderCompiler.hpp"
+#include "Video/renderer/GLSLPParser.hpp"
+
+#include <borealis.hpp>
+#include <algorithm>
+#include <cmath>
+#include <filesystem>
+
+namespace beiklive {
+
+// ============================================================
+// MVP 单位矩阵（列主序，RetroArch 顶点着色器所需）
+// ============================================================
+static const float k_identity4x4[16] = {
+    1.f, 0.f, 0.f, 0.f,
+    0.f, 1.f, 0.f, 0.f,
+    0.f, 0.f, 1.f, 0.f,
+    0.f, 0.f, 0.f, 1.f,
+};
+
+// ============================================================
+// init
+// ============================================================
+bool RetroShaderPipeline::init(const std::string& glslpPath)
+{
+    deinit();
+
+    if (glslpPath.empty()) return false;
+
+    if (!std::filesystem::exists(glslpPath)) {
+        brls::Logger::warning("RetroShaderPipeline: 着色器预设文件不存在: {}", glslpPath);
+        return false;
+    }
+
+    // 1. 解析 .glslp
+    std::vector<ShaderPassDesc> descs;
+    if (!GLSLPParser::parse(glslpPath, descs) || descs.empty()) {
+        brls::Logger::error("RetroShaderPipeline: 解析 .glslp 失败: {}", glslpPath);
+        return false;
+    }
+
+    // 2. 初始化全屏四边形
+    if (!m_quad.init()) {
+        brls::Logger::error("RetroShaderPipeline: FullscreenQuad 初始化失败");
+        return false;
+    }
+
+    // 3. 逐通道编译着色器（FBO 在 process 中按需分配）
+    bool anyOk = false;
+    for (const auto& desc : descs) {
+        ShaderPass pass;
+        pass.desc        = desc;
+        pass.filterLinear = desc.filterLinear;
+
+        pass.program = ShaderCompiler::compileRetroShader(desc.shaderPath);
+        if (!pass.program) {
+            brls::Logger::warning("RetroShaderPipeline: 跳过通道: {}", desc.shaderPath);
+            // 仍然加入列表（会在 process 中被跳过），保持通道索引一致
+        } else {
+            anyOk = true;
+            brls::Logger::info("RetroShaderPipeline: 编译通道: {}", desc.shaderPath);
+        }
+        m_passes.push_back(std::move(pass));
+    }
+
+    if (!anyOk) {
+        brls::Logger::error("RetroShaderPipeline: 所有通道编译失败，管线未加载");
+        deinit();
+        return false;
+    }
+
+    brls::Logger::info("RetroShaderPipeline: 加载完成，共 {} 个通道",
+                       m_passes.size());
+    return true;
+}
+
+// ============================================================
+// deinit
+// ============================================================
+void RetroShaderPipeline::deinit()
+{
+    for (auto& pass : m_passes) {
+        if (pass.fbo)     { glDeleteFramebuffers(1, &pass.fbo);  pass.fbo = 0; }
+        if (pass.texture) { glDeleteTextures(1, &pass.texture);  pass.texture = 0; }
+        if (pass.program) { glDeleteProgram(pass.program);       pass.program = 0; }
+        pass.width  = 0;
+        pass.height = 0;
+    }
+    m_passes.clear();
+    m_quad.deinit();
+    m_lastOutW = m_lastOutH = 0;
+}
+
+// ============================================================
+// allocateFBO – 为通道分配或调整 FBO + 颜色纹理
+// ============================================================
+bool RetroShaderPipeline::allocateFBO(ShaderPass& pass, int w, int h)
+{
+    if (w <= 0 || h <= 0) return false;
+    if (pass.fbo && pass.width == w && pass.height == h) return true;
+
+    // 释放旧 FBO / 纹理
+    if (pass.fbo)     { glDeleteFramebuffers(1, &pass.fbo);  pass.fbo = 0; }
+    if (pass.texture) { glDeleteTextures(1, &pass.texture);  pass.texture = 0; }
+
+    // 创建颜色纹理
+    glGenTextures(1, &pass.texture);
+    glBindTexture(GL_TEXTURE_2D, pass.texture);
+    GLenum glFilter = pass.filterLinear ? GL_LINEAR : GL_NEAREST;
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, glFilter);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, glFilter);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
+                 static_cast<GLsizei>(w), static_cast<GLsizei>(h),
+                 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    // 创建 FBO 并附加颜色纹理
+    glGenFramebuffers(1, &pass.fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, pass.fbo);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                           GL_TEXTURE_2D, pass.texture, 0);
+
+    GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    if (status != GL_FRAMEBUFFER_COMPLETE) {
+        brls::Logger::error("RetroShaderPipeline: FBO 不完整 (status={})", status);
+        glDeleteFramebuffers(1, &pass.fbo);  pass.fbo = 0;
+        glDeleteTextures(1, &pass.texture);  pass.texture = 0;
+        return false;
+    }
+
+    pass.width  = w;
+    pass.height = h;
+    brls::Logger::debug("RetroShaderPipeline: 分配 FBO id={} {}×{}", pass.fbo, w, h);
+    return true;
+}
+
+// ============================================================
+// computePassSize – 计算通道输出 FBO 尺寸
+// ============================================================
+void RetroShaderPipeline::computePassSize(const ShaderPassDesc& desc,
+                                           unsigned videoW, unsigned videoH,
+                                           unsigned viewW,  unsigned viewH,
+                                           int& outW, int& outH)
+{
+    auto calcAxis = [](ShaderPassDesc::ScaleType type,
+                       float scale, unsigned src, unsigned vp) -> int {
+        switch (type) {
+            case ShaderPassDesc::ScaleType::Viewport:
+                return std::max(1, static_cast<int>(std::round(
+                    static_cast<float>(vp) * scale)));
+            case ShaderPassDesc::ScaleType::Absolute:
+                return std::max(1, static_cast<int>(std::round(scale)));
+            case ShaderPassDesc::ScaleType::Source:
+            default:
+                return std::max(1, static_cast<int>(std::round(
+                    static_cast<float>(src) * scale)));
+        }
+    };
+
+    unsigned vpW = (viewW > 0) ? viewW : videoW;
+    unsigned vpH = (viewH > 0) ? viewH : videoH;
+
+    outW = calcAxis(desc.scaleTypeX, desc.scaleX, videoW, vpW);
+    outH = calcAxis(desc.scaleTypeY, desc.scaleY, videoH, vpH);
+}
+
+// ============================================================
+// setUniforms – 设置标准 RetroArch uniform 变量
+// ============================================================
+void RetroShaderPipeline::setUniforms(GLuint program,
+                                       unsigned inW, unsigned inH,
+                                       unsigned outW, unsigned outH,
+                                       unsigned frameCount)
+{
+    auto setUniform1i = [&](const char* name, int v) {
+        GLint loc = glGetUniformLocation(program, name);
+        if (loc >= 0) glUniform1i(loc, v);
+    };
+    auto setUniform2f = [&](const char* name, float x, float y) {
+        GLint loc = glGetUniformLocation(program, name);
+        if (loc >= 0) glUniform2f(loc, x, y);
+    };
+    auto setUniform4f = [&](const char* name, float x, float y, float z, float w) {
+        GLint loc = glGetUniformLocation(program, name);
+        if (loc >= 0) glUniform4f(loc, x, y, z, w);
+    };
+    auto setUniformMat4 = [&](const char* name, const float* m) {
+        GLint loc = glGetUniformLocation(program, name);
+        if (loc >= 0) glUniformMatrix4fv(loc, 1, GL_FALSE, m);
+    };
+    auto setUniformSampler = [&](const char* name, GLuint v) {
+        GLint loc = glGetUniformLocation(program, name);
+        if (loc >= 0) glUniform1i(loc, static_cast<int>(v));
+    };
+
+    // MVP 单位矩阵
+    setUniformMat4("MVPMatrix", k_identity4x4);
+
+    // 帧计数 / 方向
+    setUniform1i("FrameCount",     static_cast<int>(frameCount));
+    setUniform1i("FrameDirection", 1);
+
+    // 输入纹理尺寸（TextureSize / InputSize 均指输入）
+    setUniform2f("TextureSize", static_cast<float>(inW), static_cast<float>(inH));
+    setUniform2f("InputSize",   static_cast<float>(inW), static_cast<float>(inH));
+    setUniform4f("SourceSize",
+                 static_cast<float>(inW),  static_cast<float>(inH),
+                 1.f / static_cast<float>(inW), 1.f / static_cast<float>(inH));
+
+    // 输出尺寸
+    setUniform2f("OutputSize", static_cast<float>(outW), static_cast<float>(outH));
+    setUniform4f("OutputSize4",
+                 static_cast<float>(outW), static_cast<float>(outH),
+                 1.f / static_cast<float>(outW), 1.f / static_cast<float>(outH));
+
+    // 纹理采样器（unit 0）
+    setUniformSampler("Texture",  0u);
+    setUniformSampler("Source",   0u);
+    setUniformSampler("tex",      0u);
+    setUniformSampler("texture",  0u); // 部分着色器用小写
+}
+
+// ============================================================
+// process – 执行多通道着色器管线
+// ============================================================
+GLuint RetroShaderPipeline::process(GLuint inputTex,
+                                     unsigned videoW, unsigned videoH,
+                                     unsigned viewW,  unsigned viewH,
+                                     unsigned frameCount)
+{
+    if (m_passes.empty()) return inputTex;
+    if (!m_quad.isInitialized()) return inputTex;
+
+    // 保存 GL 状态，管线结束后恢复
+    GLuint prevFBO      = 0;
+    GLint  prevViewport[4] = {};
+    GLuint prevProg     = 0;
+    {
+        GLint tmp = 0;
+        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &tmp);
+        prevFBO = static_cast<GLuint>(tmp);
+        glGetIntegerv(GL_CURRENT_PROGRAM, &tmp);
+        prevProg = static_cast<GLuint>(tmp);
+    }
+    glGetIntegerv(GL_VIEWPORT, prevViewport);
+
+    GLuint currentTex = inputTex;
+    unsigned currentW = videoW;
+    unsigned currentH = videoH;
+
+    for (auto& pass : m_passes) {
+        if (!pass.program) {
+            // 跳过编译失败的通道，直接传入输出
+            continue;
+        }
+
+        // 计算本通道输出尺寸
+        int outW = static_cast<int>(currentW);
+        int outH = static_cast<int>(currentH);
+        computePassSize(pass.desc, currentW, currentH, viewW, viewH, outW, outH);
+
+        // 确保 FBO 已分配且尺寸正确
+        if (!allocateFBO(pass, outW, outH)) {
+            brls::Logger::warning("RetroShaderPipeline: 跳过通道（FBO 分配失败）");
+            continue;
+        }
+
+        // 绑定输出 FBO 和视口
+        glBindFramebuffer(GL_FRAMEBUFFER, pass.fbo);
+        glViewport(0, 0, outW, outH);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        // 激活着色器
+        glUseProgram(pass.program);
+
+        // 绑定输入纹理到纹理单元 0
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, currentTex);
+
+        // 设置 uniform
+        setUniforms(pass.program,
+                    currentW, currentH,
+                    static_cast<unsigned>(outW),
+                    static_cast<unsigned>(outH),
+                    frameCount);
+
+        // 绘制全屏四边形
+        m_quad.draw();
+
+        // 本通道输出成为下一通道输入
+        currentTex = pass.texture;
+        currentW   = static_cast<unsigned>(outW);
+        currentH   = static_cast<unsigned>(outH);
+    }
+
+    m_lastOutW = currentW;
+    m_lastOutH = currentH;
+
+    // 恢复 GL 状态
+    glUseProgram(prevProg);
+    glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
+    glViewport(prevViewport[0], prevViewport[1],
+               prevViewport[2], prevViewport[3]);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    return currentTex;
+}
+
+} // namespace beiklive

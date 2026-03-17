@@ -191,6 +191,8 @@ void GameView::initialize()
         cfg->SetDefault(KEY_DISPLAY_OVERLAY_ENABLED,  CV(std::string("false")));
         cfg->SetDefault(KEY_DISPLAY_OVERLAY_GBA_PATH, CV(std::string("")));
         cfg->SetDefault(KEY_DISPLAY_OVERLAY_GBC_PATH, CV(std::string("")));
+        // ---- 着色器预设路径（空=直通，不使用着色器）---------------
+        cfg->SetDefault("display.shader",             CV(std::string("")));
 
         // ---- 按键映射默认值（委托给 InputMappingConfig）----
         m_inputMap.setDefaults(*cfg);
@@ -362,9 +364,16 @@ void GameView::initialize()
     m_texWidth  = gw;
     m_texHeight = gh;
 
-    // ---- 初始化渲染链 -------------------------------------
-    if (!m_renderChain.init()) {
-        bklog::warning("RenderChain init failed; using direct texture rendering");
+    // ---- 初始化渲染链（含可选着色器管线） --------------------------
+    {
+        std::string shaderPath;
+        if (gameRunner && gameRunner->settingConfig) {
+            auto v = gameRunner->settingConfig->Get("display.shader");
+            if (v) { if (auto s = v->AsString()) shaderPath = *s; }
+        }
+        if (!m_renderChain.init(shaderPath)) {
+            bklog::warning("RenderChain init failed; using direct texture rendering");
+        }
     }
 
     // ---- 启动音频管理器 ------------------------------------------
@@ -1848,14 +1857,12 @@ void GameView::uploadFrame(NVGcontext* vg,
         m_texWidth  = frame.width;
         m_texHeight = frame.height;
 
-        // 以新尺寸重建 NanoVG 图像句柄
+        // 尺寸改变时使 NVG 图像句柄失效, 由 draw() 重新为正确的显示纹理创建
         if (m_nvgImage >= 0) {
             nvgDeleteImage(vg, m_nvgImage);
+            m_nvgImage    = -1;
+            m_nvgImageSrc = 0;
         }
-        m_nvgImage = nvgImageFromGLTexture(vg, m_texture,
-                                           static_cast<int>(m_texWidth),
-                                           static_cast<int>(m_texHeight),
-                                           m_activeFilter);
     } else {
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
                         static_cast<GLsizei>(frame.width),
@@ -2127,29 +2134,42 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
         glBindTexture(GL_TEXTURE_2D, 0);
         if (m_nvgImage >= 0) {
             nvgDeleteImage(vg, m_nvgImage);
-            m_nvgImage = -1;
+            m_nvgImage    = -1;
+            m_nvgImageSrc = 0;
         }
     }
 
     // ---- 运行渲染链并确定显示纹理 ----------
-    // RenderChain::run() 当前作为直通并返回 srcTex。
-    // 未来自定义渲染实现可替换此管线。
+    // 若已加载着色器管线，将游戏纹理经过多通道 Shader 处理后作为显示纹理；
+    // 否则直通（pass-through）返回原始游戏纹理。
     GLuint displayTex = m_texture;
     int    displayW   = static_cast<int>(m_texWidth);
     int    displayH   = static_cast<int>(m_texHeight);
 
     if (m_texWidth > 0 && m_texHeight > 0) {
-        GLuint chainOut = m_renderChain.run(m_texture, m_texWidth, m_texHeight);
+        GLuint chainOut = m_renderChain.run(m_texture, m_texWidth, m_texHeight,
+                                            static_cast<unsigned>(width),
+                                            static_cast<unsigned>(height));
         if (chainOut != 0) {
             displayTex = chainOut;
+            // 使用着色器管线实际输出尺寸（可能因缩放不同于输入）
+            if (m_renderChain.outputW() > 0) displayW = static_cast<int>(m_renderChain.outputW());
+            if (m_renderChain.outputH() > 0) displayH = static_cast<int>(m_renderChain.outputH());
         }
     }
 
     // ---- 管理 NVG 图像句柄 -------------------------------------
-    if (m_nvgImage < 0 && m_texWidth > 0 && m_texHeight > 0) {
-        m_nvgImage = nvgImageFromGLTexture(vg, displayTex,
-                                           displayW, displayH,
-                                           m_activeFilter);
+    // 若显示纹理已切换（着色器输出变化或首次创建），重建 NVG 图像句柄
+    if (m_nvgImage >= 0 && m_nvgImageSrc != displayTex) {
+        nvgDeleteImage(vg, m_nvgImage);
+        m_nvgImage    = -1;
+        m_nvgImageSrc = 0;
+    }
+    if (m_nvgImage < 0 && displayW > 0 && displayH > 0) {
+        m_nvgImage    = nvgImageFromGLTexture(vg, displayTex,
+                                              displayW, displayH,
+                                              m_activeFilter);
+        m_nvgImageSrc = displayTex;
     }
 
     // ---- 使用 NanoVG 渲染游戏纹理 ------------------------

@@ -78,7 +78,8 @@ class GameView : public brls::Box
     unsigned m_texHeight = 0;
 
     // ---- 封装GL纹理的NanoVG图像句柄 --------------------------------
-    int  m_nvgImage = -1;
+    int    m_nvgImage    = -1;
+    GLuint m_nvgImageSrc = 0; ///< m_nvgImage 当前封装的 GL 纹理 ID（用于检测切换）
 
     // ---- 显示配置（缩放/滤波） --------------------------------------
     beiklive::DisplayConfig  m_display;
