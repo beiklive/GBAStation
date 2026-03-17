@@ -27,7 +27,7 @@ using namespace brls::literals; // for _i18n
 //  内部辅助函数
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// 将当前本地时间记录为 fileName 的"最近打开"时间戳
+/// 将当前本地时间记录为 fileName 的"最近打开"时间戳，并将启动次数加一
 static void recordGameOpenTime(const std::string& fileName)
 {
     auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
@@ -42,6 +42,10 @@ static void recordGameOpenTime(const std::string& fileName)
 #endif
     if (timeBuf[0] != '\0')
         setGameDataStr(fileName, GAMEDATA_FIELD_LASTOPEN, timeBuf);
+
+    // 启动次数加一
+    int count = getGameDataInt(fileName, GAMEDATA_FIELD_PLAYCOUNT, 0);
+    setGameDataInt(fileName, GAMEDATA_FIELD_PLAYCOUNT, count + 1);
 }
 
 /// 清理 UI 图像缓存，并为 romPath 推送 GameView 活动。
