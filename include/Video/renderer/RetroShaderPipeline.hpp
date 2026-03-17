@@ -2,6 +2,7 @@
 
 #include <glad/glad.h>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "Video/renderer/GLSLPParser.hpp"
@@ -85,6 +86,7 @@ public:
 private:
     std::vector<ShaderPass>     m_passes;
     std::vector<ExternalTexture> m_textures;  ///< 从 .glslp textures 字段加载的外部纹理
+    std::vector<std::pair<std::string,float>> m_params; ///< 从 .glslp parameters 字段解析的参数默认值
     FullscreenQuad              m_quad;
     unsigned                    m_lastOutW = 0;
     unsigned                    m_lastOutH = 0;
@@ -103,11 +105,13 @@ private:
     /// @param program      当前通道着色器程序 ID
     /// @param inW/inH      输入纹理尺寸
     /// @param outW/outH    输出 FBO 尺寸
+    /// @param origW/origH  原始视频尺寸（整个管线输入，用于 OrigInputSize uniform）
     /// @param frameCount   帧计数
     /// @param extraTextures 额外纹理绑定列表（name=uniform名称, texId=已绑定的 GL 纹理单元索引）
     void setUniforms(GLuint program,
                      unsigned inW, unsigned inH,
                      unsigned outW, unsigned outH,
+                     unsigned origW, unsigned origH,
                      unsigned frameCount,
                      const std::vector<std::pair<std::string,GLuint>>& extraTexUnits);
 

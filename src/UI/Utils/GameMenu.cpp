@@ -287,6 +287,8 @@ GameMenu::GameMenu()
                     if (m_overlayChangedCallback)
                         m_overlayChangedCallback(item.fullPath);
                     brls::Application::popActivity();
+                    // 显式恢复焦点到遮罩路径单元格，防止焦点残留在文件列表
+                    brls::Application::giveFocus(m_overlayPathCell);
                 });
                 std::string overlayForDir = m_romFileName.empty() ? "" :
                     getGameDataStr(m_romFileName, GAMEDATA_FIELD_OVERLAY, "");
@@ -343,6 +345,8 @@ GameMenu::GameMenu()
                     if (m_shaderPathChangedCallback)
                         m_shaderPathChangedCallback(item.fullPath);
                     brls::Application::popActivity();
+                    // 显式恢复焦点到着色器路径单元格，防止焦点残留在文件列表
+                    brls::Application::giveFocus(m_shaderPathCell);
                 });
                 std::string startPath = beiklive::string::extractDirPath(
                     cfgGetStr(KEY_DISPLAY_SHADER_PATH, ""));

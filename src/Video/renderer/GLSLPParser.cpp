@@ -44,7 +44,8 @@ static ShaderPassDesc::ScaleType parseScaleType(const std::string& val)
 
 bool GLSLPParser::parse(const std::string& glslpPath,
                         std::vector<ShaderPassDesc>& outPasses,
-                        std::vector<GLSLPTextureDesc>* outTextures)
+                        std::vector<GLSLPTextureDesc>* outTextures,
+                        std::vector<GLSLPParamOverride>* outParams)
 {
     outPasses.clear();
 
@@ -207,6 +208,28 @@ bool GLSLPParser::parse(const std::string& glslpPath,
 
                 if (!td.path.empty()) {
                     outTextures->push_back(std::move(td));
+                }
+            }
+        }
+    }
+
+    // ---- 解析参数默认值覆盖（parameters = PARAM1;PARAM2;...）----
+    if (outParams) {
+        outParams->clear();
+        auto pit = kv.find("parameters");
+        if (pit != kv.end()) {
+            std::istringstream ss(pit->second);
+            std::string paramName;
+            while (std::getline(ss, paramName, ';')) {
+                paramName = trimValue(paramName);
+                if (paramName.empty()) continue;
+
+                // 以小写查找参数值（键在 kv 中已全部小写化）
+                auto valIt = kv.find(toLower(paramName));
+                if (valIt != kv.end() && !valIt->second.empty()) {
+                    float val = 0.0f;
+                    try { val = std::stof(valIt->second); } catch (...) { continue; }
+                    outParams->push_back({ paramName, val });
                 }
             }
         }

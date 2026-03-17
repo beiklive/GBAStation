@@ -39,6 +39,7 @@ bool RetroShaderPipeline::init(const std::string& glslpPath)
     // 1. 根据文件扩展名选择解析方式
     std::vector<ShaderPassDesc>    descs;
     std::vector<GLSLPTextureDesc>  texDescs;
+    std::vector<GLSLPParamOverride> paramDescs;
     std::string ext = std::filesystem::path(glslpPath).extension().string();
     // 将扩展名转为小写以兼容大小写差异
     std::transform(ext.begin(), ext.end(), ext.begin(),
@@ -57,7 +58,7 @@ bool RetroShaderPipeline::init(const std::string& glslpPath)
         brls::Logger::info("RetroShaderPipeline: 单 .glsl 文件，构建单通道管线: {}", glslpPath);
     } else {
         // .glslp 预设文件：使用解析器读取多通道配置及外部纹理声明
-        if (!GLSLPParser::parse(glslpPath, descs, &texDescs) || descs.empty()) {
+        if (!GLSLPParser::parse(glslpPath, descs, &texDescs, &paramDescs) || descs.empty()) {
             brls::Logger::error("RetroShaderPipeline: 解析 .glslp 失败: {}", glslpPath);
             return false;
         }
@@ -108,8 +109,15 @@ bool RetroShaderPipeline::init(const std::string& glslpPath)
         }
     }
 
-    brls::Logger::info("RetroShaderPipeline: 加载完成，共 {} 个通道，{} 个外部纹理",
-                       m_passes.size(), m_textures.size());
+    // 5. 存储 .glslp 参数默认值（用于渲染时作为 uniform float 传入各通道）
+    m_params.clear();
+    for (const auto& p : paramDescs) {
+        m_params.emplace_back(p.name, p.value);
+        brls::Logger::debug("RetroShaderPipeline: 参数 \"{}\" = {}", p.name, p.value);
+    }
+
+    brls::Logger::info("RetroShaderPipeline: 加载完成，共 {} 个通道，{} 个外部纹理，{} 个参数覆盖",
+                       m_passes.size(), m_textures.size(), m_params.size());
     return true;
 }
 
@@ -131,6 +139,7 @@ void RetroShaderPipeline::deinit()
         if (et.texId) { glDeleteTextures(1, &et.texId); et.texId = 0; }
     }
     m_textures.clear();
+    m_params.clear();
     m_quad.deinit();
     m_lastOutW = m_lastOutH = 0;
 }
@@ -218,6 +227,7 @@ void RetroShaderPipeline::computePassSize(const ShaderPassDesc& desc,
 void RetroShaderPipeline::setUniforms(GLuint program,
                                        unsigned inW, unsigned inH,
                                        unsigned outW, unsigned outH,
+                                       unsigned origW, unsigned origH,
                                        unsigned frameCount,
                                        const std::vector<std::pair<std::string,GLuint>>& extraTexUnits)
 {
@@ -262,6 +272,20 @@ void RetroShaderPipeline::setUniforms(GLuint program,
                  static_cast<float>(outW), static_cast<float>(outH),
                  1.f / static_cast<float>(outW), 1.f / static_cast<float>(outH));
 
+    // 原始视频输入尺寸（RetroArch 标准 OrigInputSize / OrigSize uniform）
+    // 在多通道管线中，各通道的 OrigInputSize 始终指向第一个通道的输入（原始游戏帧）
+    if (origW > 0 && origH > 0) {
+        setUniform2f("OrigInputSize", static_cast<float>(origW), static_cast<float>(origH));
+        setUniform4f("OrigSize",
+                     static_cast<float>(origW), static_cast<float>(origH),
+                     1.f / static_cast<float>(origW), 1.f / static_cast<float>(origH));
+        // 部分着色器使用 OriginalSize 别名
+        setUniform2f("OriginalSize", static_cast<float>(origW), static_cast<float>(origH));
+        setUniform4f("OriginalSize4",
+                     static_cast<float>(origW), static_cast<float>(origH),
+                     1.f / static_cast<float>(origW), 1.f / static_cast<float>(origH));
+    }
+
     // 主输入纹理采样器（unit 0）
     setUniformSampler("Texture",  0u);
     setUniformSampler("Source",   0u);
@@ -271,6 +295,12 @@ void RetroShaderPipeline::setUniforms(GLuint program,
     // 额外纹理采样器（外部纹理和历史 Pass 输出）
     for (const auto& kv : extraTexUnits) {
         setUniformSampler(kv.first.c_str(), kv.second);
+    }
+
+    // .glslp parameters 参数覆盖值（作为 float uniform 传入，优先于 #pragma parameter 默认值）
+    for (const auto& param : m_params) {
+        GLint loc = glGetUniformLocation(program, param.first.c_str());
+        if (loc >= 0) glUniform1f(loc, param.second);
     }
 }
 
@@ -389,7 +419,7 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
 
         // 构建额外纹理单元列表（外部纹理 + 已完成通道的输出）
         // 纹理单元 1..N：外部纹理（COLOR_PALETTE、BACKGROUND 等）
-        // 纹理单元 N+1..：历史 Pass 输出（Pass0Texture、Pass1Texture 等）
+        // 纹理单元 N+1..：历史 Pass 输出（Pass0Texture / PassPrevNTexture / <alias>Texture）
         std::vector<std::pair<std::string, GLuint>> extraTexUnits;
         {
             GLuint unit = 1;
@@ -402,14 +432,19 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
                     ++unit;
                 }
             }
-            // 已完成通道的输出（PassNTexture 和 <alias>Texture 两种命名）
+            // 已完成通道的输出
+            // PassNTexture（绝对索引）+ PassPrevMTexture（相对索引，M = idx-pi）
+            // + <alias>Texture（通道别名）
             for (size_t pi = 0; pi < idx; ++pi) {
                 const auto& prev = m_passes[pi];
                 if (!prev.texture) continue;
                 glActiveTexture(GL_TEXTURE0 + unit);
                 glBindTexture(GL_TEXTURE_2D, prev.texture);
-                // RetroArch GLSL 旧格式：PassNTexture（N 为通道索引）
+                // 绝对索引：PassNTexture
                 extraTexUnits.emplace_back("Pass" + std::to_string(pi) + "Texture", unit);
+                // 相对索引：PassPrevNTexture（N = 当前通道索引 - 历史通道索引）
+                size_t prevN = idx - pi;
+                extraTexUnits.emplace_back("PassPrev" + std::to_string(prevN) + "Texture", unit);
                 // 若该通道定义了 alias，也以 <alias>Texture 绑定
                 if (!prev.alias.empty()) {
                     extraTexUnits.emplace_back(prev.alias + "Texture", unit);
@@ -420,13 +455,57 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
         }
         glActiveTexture(GL_TEXTURE0); // 恢复活动纹理单元到 0
 
-        // 设置 uniform
+        // 设置 uniform（含 OrigInputSize / OrigSize 和参数覆盖值）
         setUniforms(pass.program,
                     currentW, currentH,
                     static_cast<unsigned>(outW),
                     static_cast<unsigned>(outH),
+                    videoW, videoH,
                     frameCount,
                     extraTexUnits);
+
+        // 设置历史通道的尺寸 uniform（PassNSize / PassPrevNTextureSize / PassPrevNInputSize）
+        for (size_t pi = 0; pi < idx; ++pi) {
+            const auto& prev = m_passes[pi];
+            if (!prev.texture) continue;
+            float fw = static_cast<float>(prev.width);
+            float fh = static_cast<float>(prev.height);
+            float inv_w = (prev.width  > 0) ? 1.f / fw : 0.f;
+            float inv_h = (prev.height > 0) ? 1.f / fh : 0.f;
+            // 绝对索引尺寸：PassNTextureSize / PassNInputSize
+            std::string absPrefix = "Pass" + std::to_string(pi);
+            {
+                GLint loc;
+                loc = glGetUniformLocation(pass.program, (absPrefix + "TextureSize").c_str());
+                if (loc >= 0) glUniform2f(loc, fw, fh);
+                loc = glGetUniformLocation(pass.program, (absPrefix + "InputSize").c_str());
+                if (loc >= 0) glUniform2f(loc, fw, fh);
+                loc = glGetUniformLocation(pass.program, (absPrefix + "Size").c_str());
+                if (loc >= 0) glUniform4f(loc, fw, fh, inv_w, inv_h);
+            }
+            // 相对索引尺寸：PassPrevNTextureSize / PassPrevNInputSize
+            size_t prevN = idx - pi;
+            std::string prevPrefix = "PassPrev" + std::to_string(prevN);
+            {
+                GLint loc;
+                loc = glGetUniformLocation(pass.program, (prevPrefix + "TextureSize").c_str());
+                if (loc >= 0) glUniform2f(loc, fw, fh);
+                loc = glGetUniformLocation(pass.program, (prevPrefix + "InputSize").c_str());
+                if (loc >= 0) glUniform2f(loc, fw, fh);
+                loc = glGetUniformLocation(pass.program, (prevPrefix + "Size").c_str());
+                if (loc >= 0) glUniform4f(loc, fw, fh, inv_w, inv_h);
+            }
+            // 别名尺寸：<alias>Size / <alias>TextureSize / <alias>InputSize
+            if (!prev.alias.empty()) {
+                GLint loc;
+                loc = glGetUniformLocation(pass.program, (prev.alias + "TextureSize").c_str());
+                if (loc >= 0) glUniform2f(loc, fw, fh);
+                loc = glGetUniformLocation(pass.program, (prev.alias + "InputSize").c_str());
+                if (loc >= 0) glUniform2f(loc, fw, fh);
+                loc = glGetUniformLocation(pass.program, (prev.alias + "Size").c_str());
+                if (loc >= 0) glUniform4f(loc, fw, fh, inv_w, inv_h);
+            }
+        }
 
         // 绘制全屏四边形
         m_quad.draw();
