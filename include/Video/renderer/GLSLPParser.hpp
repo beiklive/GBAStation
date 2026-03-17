@@ -40,6 +40,13 @@ struct GLSLPTextureDesc {
     bool        filterLinear = false; ///< 采样过滤模式：true = 线性，false = 最近邻
 };
 
+/// .glslp 预设中声明的参数默认值覆盖
+/// 用于向各通道着色器传递 #pragma parameter 对应的 uniform float 值
+struct GLSLPParamOverride {
+    std::string name;   ///< 参数名（对应 GLSL uniform float 变量名，大小写与 GLSL 一致）
+    float       value;  ///< 覆盖默认值（来自 .glslp 文件的 NAME = value 键值对）
+};
+
 /// RetroArch .glslp 着色器预设解析器
 ///
 /// 支持的 .glslp 键：
@@ -56,18 +63,22 @@ struct GLSLPTextureDesc {
 ///   textures = NAME1;NAME2
 ///   NAME1 = path/to/image.png
 ///   NAME1_linear = true|false
+///   parameters = PARAM1;PARAM2           （参数名列表，分号分隔）
+///   PARAM1 = 0.5                          （参数默认值覆盖）
 class GLSLPParser {
 public:
-    /// 解析 .glslp 文件，将结果填入 @a outPasses 和 @a outTextures。
+    /// 解析 .glslp 文件，将结果填入 @a outPasses、@a outTextures 和 @a outParams。
     ///
     /// @param glslpPath   .glslp 文件的绝对或相对路径。
     ///                    shader 和纹理路径均相对于此文件目录解析为绝对路径。
     /// @param outPasses   输出：每个通道的描述列表（按顺序）。
     /// @param outTextures 输出：预设中声明的外部纹理列表（可为 nullptr 时忽略）。
+    /// @param outParams   输出：预设中声明的参数默认值覆盖列表（可为 nullptr 时忽略）。
     /// @return true = 解析成功；false = 文件无法打开或 shaders 键缺失。
     static bool parse(const std::string& glslpPath,
                       std::vector<ShaderPassDesc>& outPasses,
-                      std::vector<GLSLPTextureDesc>* outTextures = nullptr);
+                      std::vector<GLSLPTextureDesc>* outTextures = nullptr,
+                      std::vector<GLSLPParamOverride>* outParams = nullptr);
 };
 
 } // namespace beiklive
