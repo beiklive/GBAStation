@@ -155,17 +155,21 @@ GLuint ShaderCompiler::compileRetroShader(const std::string& glslPath)
     const char* ver      = glslVersionString();
     const char* fragPrec = fragPrecisionPrefix();
 
-    // 顶点着色器：注入版本 + VERTEX 宏
+    // 顶点着色器：注入版本 + VERTEX 宏 + PARAMETER_UNIFORM 宏
+    // PARAMETER_UNIFORM 宏告知着色器使用 uniform float 而非 #define 常量，
+    // 使运行时通过 glUniform1f 设置的参数值能正确生效。
     std::string vertSrc =
         std::string(ver) +
-        "#define VERTEX\n" +
+        "#define VERTEX\n"
+        "#define PARAMETER_UNIFORM\n" +
         cleanBody;
 
-    // 片段着色器：注入版本 + 精度 + FRAGMENT 宏
+    // 片段着色器：注入版本 + 精度 + FRAGMENT 宏 + PARAMETER_UNIFORM 宏
     std::string fragSrc =
         std::string(ver) +
         std::string(fragPrec) +
-        "#define FRAGMENT\n" +
+        "#define FRAGMENT\n"
+        "#define PARAMETER_UNIFORM\n" +
         cleanBody;
 
     GLuint prog = compileProgram(vertSrc, fragSrc);

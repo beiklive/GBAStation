@@ -482,6 +482,15 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
                 }
                 ++unit;
             }
+            // 原始输入纹理（管线入口帧）作为 OrigTexture / PassPrev{idx+1}Texture 暴露。
+            // RetroArch 规范：对于当前 pass idx（0-based），原始输入距当前 pass 共 idx+1 步，
+            // 因此以 PassPrev{idx+1}Texture 命名。许多多通道着色器（如 xbrz-freescale-pass1）
+            // 需要此纹理来读取原始像素颜色。
+            glActiveTexture(GL_TEXTURE0 + unit);
+            glBindTexture(GL_TEXTURE_2D, inputTex);
+            extraTexUnits.emplace_back("OrigTexture", unit);
+            extraTexUnits.emplace_back("PassPrev" + std::to_string(idx + 1) + "Texture", unit);
+            ++unit;
             if (unit - 1 > maxTexUnit) maxTexUnit = unit - 1;
         }
         glActiveTexture(GL_TEXTURE0); // 恢复活动纹理单元到 0
@@ -536,6 +545,25 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
                 loc = glGetUniformLocation(pass.program, (prev.alias + "Size").c_str());
                 if (loc >= 0) glUniform4f(loc, fw, fh, inv_w, inv_h);
             }
+        }
+
+        // 原始输入尺寸 uniform（OrigTextureSize / PassPrev{idx+1}TextureSize 等）
+        // 对应上方绑定的 OrigTexture / PassPrev{idx+1}Texture
+        {
+            float fw    = static_cast<float>(videoW);
+            float fh    = static_cast<float>(videoH);
+            float inv_w = (videoW > 0) ? 1.f / fw : 0.f;
+            float inv_h = (videoH > 0) ? 1.f / fh : 0.f;
+            std::string origPrevPrefix = "PassPrev" + std::to_string(idx + 1);
+            GLint loc;
+            loc = glGetUniformLocation(pass.program, "OrigTextureSize");
+            if (loc >= 0) glUniform2f(loc, fw, fh);
+            loc = glGetUniformLocation(pass.program, (origPrevPrefix + "TextureSize").c_str());
+            if (loc >= 0) glUniform2f(loc, fw, fh);
+            loc = glGetUniformLocation(pass.program, (origPrevPrefix + "InputSize").c_str());
+            if (loc >= 0) glUniform2f(loc, fw, fh);
+            loc = glGetUniformLocation(pass.program, (origPrevPrefix + "Size").c_str());
+            if (loc >= 0) glUniform4f(loc, fw, fh, inv_w, inv_h);
         }
 
         // 绘制全屏四边形

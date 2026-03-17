@@ -837,7 +837,7 @@ void GameView::setGameMenu(GameMenu* menu)
                 }
             }
         });
-        // 着色器开关变更时立即更新渲染链（即时生效）
+        // 着色器开关变更时立即更新渲染链（即时生效）并同步参数滑条
         m_gameMenu->setShaderEnabledChangedCallback([this](bool enabled) {
             bklog::info("GameView: 着色器开关变更 → {}", enabled);
             std::string path = beiklive::cfgGetStr(KEY_DISPLAY_SHADER_PATH, "");
@@ -845,6 +845,9 @@ void GameView::setGameMenu(GameMenu* menu)
             m_renderChain.setShader(effectivePath);
             // 强制 draw() 重建 NVG 图像句柄（将 src 置零让 draw() 检测到纹理变化）
             m_nvgImageSrc = 0;
+            // 同步参数滑条（切换后管线重建，参数列表已变更）
+            if (m_gameMenu)
+                m_gameMenu->updateShaderParams(m_renderChain.getShaderParams());
         });
         // 着色器路径变更时立即更新渲染链（即时生效）并更新菜单中的参数滑条
         m_gameMenu->setShaderPathChangedCallback([this](const std::string& newPath) {
