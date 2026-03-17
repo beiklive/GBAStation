@@ -37,6 +37,8 @@
         "rename": "重命名",
         "set_mapping": "设置映射名称",
         "select_logo": "选择 Logo",
+        "add_to_library": "添加到游戏库",
+        "add_to_library_confirm": "确认添加到游戏库？",
         "remove_from_list": "从列表移除",
         "cut": "剪切",
         "paste": "粘贴",

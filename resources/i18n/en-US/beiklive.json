@@ -37,6 +37,8 @@
         "rename": "Rename",
         "set_mapping": "Set Display Name",
         "select_logo": "Select Logo",
+        "add_to_library": "Add to Game Library",
+        "add_to_library_confirm": "Add to Game Library?",
         "remove_from_list": "Remove from List",
         "cut": "Cut",
         "paste": "Paste",
