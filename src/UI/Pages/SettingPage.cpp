@@ -632,6 +632,37 @@ brls::ScrollingFrame* SettingPage::buildUITab()
         box->addView(screenshotDirCell);
     }
 
+    // ── 金手指设置 ────────────────────────────────────────────────────────────
+    box->addView(makeHeader("beiklive/settings/game/header_cheat"_i18n));
+
+    {
+        std::vector<std::string> cheatDirs = {
+            "beiklive/settings/game/cheat_loc_rom"_i18n,
+            "beiklive/settings/game/cheat_loc_emu"_i18n
+        };
+
+        auto* cheatEnableCell = new brls::BooleanCell();
+        cheatEnableCell->init("beiklive/settings/game/cheat_enable"_i18n,
+                              cfgGetBool("cheat.enabled", false),
+                              [](bool v){ cfgSetBool("cheat.enabled", v); });
+        box->addView(cheatEnableCell);
+
+        auto* cheatDirCell = new brls::SelectorCell();
+        cheatDirCell->init(
+            "beiklive/settings/game/cheat_dir"_i18n,
+            cheatDirs,
+            cfgGetStr("cheat.dir", "").empty() ? 0 : 1,
+            [](int idx) {
+                if (idx == 0) {
+                    cfgSetStr("cheat.dir", "");
+                } else if (idx == 1) {
+                    cfgSetStr("cheat.dir", BK_APP_ROOT_DIR + std::string("cheats"));
+                }
+            }
+        );
+        box->addView(cheatDirCell);
+    }
+
     scroll->setContentView(box);
     return scroll;
 }
@@ -800,37 +831,6 @@ brls::ScrollingFrame* SettingPage::buildGameTab()
         box->addView(idleCell);
     }
 
-    // ── 金手指设置 ────────────────────────────────────────────────────────────
-    box->addView(makeHeader("beiklive/settings/game/header_cheat"_i18n));
-
-    std::vector<std::string> saveDirs = {
-        "beiklive/settings/game/cheat_loc_rom"_i18n,
-        "beiklive/settings/game/cheat_loc_emu"_i18n
-    };
-
-    auto* cheatEnableCell = new brls::BooleanCell();
-    cheatEnableCell->init("beiklive/settings/game/cheat_enable"_i18n,
-                          cfgGetBool("cheat.enabled", false),
-                          [](bool v){ cfgSetBool("cheat.enabled", v); });
-    box->addView(cheatEnableCell);
-
-    {
-        auto* cheatDirCell = new brls::SelectorCell();
-        cheatDirCell->init(
-            "beiklive/settings/game/cheat_dir"_i18n,
-            saveDirs,
-            cfgGetStr("cheat.dir", "").empty() ? 0 : 1,
-            [](int idx) {
-                if (idx == 0) {
-                    cfgSetStr("cheat.dir", "");
-                } else if (idx == 1) {
-                    cfgSetStr("cheat.dir", BK_APP_ROOT_DIR + std::string("cheats"));
-                }
-            }
-        );
-        box->addView(cheatDirCell);
-    }
-
 
     scroll->setContentView(box);
     return scroll;
@@ -973,18 +973,16 @@ brls::ScrollingFrame* SettingPage::buildDisplayTab()
     // ── 着色器设置 ──────────────────────────────────────────────────────────────
     box->addView(makeHeader("beiklive/settings/display/header_shader"_i18n));
 
-    // Helper: 构建着色器路径选择 DetailCell
-    auto makeShaderPathCell = [&](const std::string& enableKey,
-                                   const std::string& pathKey,
-                                   const std::string& enableLabel,
-                                   const std::string& pathLabel) {
-        // 着色器开关
-        auto* enCell = new brls::BooleanCell();
-        enCell->init(enableLabel, cfgGetBool(enableKey, false),
-                     [enableKey](bool v){ cfgSetBool(enableKey, v); });
-        box->addView(enCell);
+    // 着色器总开关（GBA/GBC 共用一个开关）
+    auto* shaderEnCell = new brls::BooleanCell();
+    shaderEnCell->init("beiklive/settings/display/shader_enable"_i18n,
+                       cfgGetBool(KEY_DISPLAY_SHADER_ENABLED, false),
+                       [](bool v){ cfgSetBool(KEY_DISPLAY_SHADER_ENABLED, v); });
+    box->addView(shaderEnCell);
 
-        // 着色器路径
+    // Helper: 构建着色器路径选择 DetailCell（仅路径，不含开关）
+    auto makeShaderPathCell = [&](const std::string& pathKey,
+                                   const std::string& pathLabel) {
         auto* pathCell = new brls::DetailCell();
         pathCell->setText(pathLabel);
         std::string cur = cfgGetStr(pathKey, "");
@@ -1018,14 +1016,12 @@ brls::ScrollingFrame* SettingPage::buildDisplayTab()
         box->addView(pathCell);
     };
 
-    // GBA 着色器
-    makeShaderPathCell(KEY_DISPLAY_SHADER_GBA_ENABLED, KEY_DISPLAY_SHADER_GBA_PATH,
-                       "beiklive/settings/display/shader_gba_enable"_i18n,
+    // GBA 着色器路径
+    makeShaderPathCell(KEY_DISPLAY_SHADER_GBA_PATH,
                        "beiklive/settings/display/shader_gba_path"_i18n);
 
-    // GBC 着色器
-    makeShaderPathCell(KEY_DISPLAY_SHADER_GBC_ENABLED, KEY_DISPLAY_SHADER_GBC_PATH,
-                       "beiklive/settings/display/shader_gbc_enable"_i18n,
+    // GBC 着色器路径
+    makeShaderPathCell(KEY_DISPLAY_SHADER_GBC_PATH,
                        "beiklive/settings/display/shader_gbc_path"_i18n);
 
     scroll->setContentView(box);

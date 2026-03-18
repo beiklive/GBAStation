@@ -260,6 +260,10 @@ GameMenu::GameMenu()
         displayHeader->setTitle("beiklive/gamemenu/header_display"_i18n);
         displayBox->addView(displayHeader);
 
+        // 记录初始显示模式索引，供构造末尾统一更新可见性使用
+        // 默认值 2 对应 "original"（索引: 0=fit, 1=fill, 2=original, 3=integer, 4=custom）
+        int initDispModeIdx = 2;
+
         // --- 显示模式 ---
         {
             std::vector<std::string> dispModes = {
@@ -270,6 +274,7 @@ GameMenu::GameMenu()
             int dispModeIdx = 2;
             for (int i = 0; i < 5; ++i)
                 if (curMode == dispModeIds[i]) { dispModeIdx = i; break; }
+            initDispModeIdx = dispModeIdx;
             m_dispModeCell = new brls::SelectorCell();
             m_dispModeCell->init("beiklive/settings/display/mode"_i18n, dispModes, dispModeIdx,
                 [this](int idx) {
@@ -280,6 +285,8 @@ GameMenu::GameMenu()
                             setGameDataStr(m_romFileName, GAMEDATA_FIELD_DISPLAY_MODE, ids[idx]);
                         if (m_displayModeChangedCallback)
                             m_displayModeChangedCallback(beiklive::DisplayConfig::stringToMode(ids[idx]));
+                        // 根据新模式更新位置/缩放区域和整数倍率选项的可见性
+                        updateDisplayModeVisibility(idx);
                     }
                 });
             displayBox->addView(m_dispModeCell);
@@ -334,9 +341,9 @@ GameMenu::GameMenu()
         }
 
         // --- 位置与缩放 header ---
-        auto* posScaleHeader = new brls::Header();
-        posScaleHeader->setTitle("beiklive/gamemenu/header_pos_scale"_i18n);
-        displayBox->addView(posScaleHeader);
+        m_posScaleHeader = new brls::Header();
+        m_posScaleHeader->setTitle("beiklive/gamemenu/header_pos_scale"_i18n);
+        displayBox->addView(m_posScaleHeader);
 
         // --- X 坐标偏移滑条 ---
         m_xOffsetSlider = new brls::SliderCell();
@@ -537,6 +544,9 @@ GameMenu::GameMenu()
         }
         displayBox->addView(m_shaderParamBox);
 
+        // 根据初始显示模式设置可见性（位置/缩放区域和整数倍率选项）
+        updateDisplayModeVisibility(initDispModeIdx);
+
         m_displayScrollFrame->setContentView(displayBox);
         rightBox->addView(m_displayScrollFrame);
 
@@ -602,6 +612,30 @@ GameMenu::GameMenu()
 GameMenu::~GameMenu()
 {
     bklog::debug("GameMenu destructor");
+}
+
+// ============================================================
+// updateDisplayModeVisibility – 根据显示模式索引更新相关设置项可见性
+//
+// modeIdx: 0=fit, 1=fill, 2=original, 3=integer, 4=custom
+// - custom  模式：显示位置与缩放区域（header + 三个滑条）
+// - integer 模式：显示整数倍率选项
+// - 其他模式：隐藏上述选项
+// ============================================================
+
+void GameMenu::updateDisplayModeVisibility(int modeIdx)
+{
+    bool isCustom  = (modeIdx == 4); // "custom"
+    bool isInteger = (modeIdx == 3); // "integer"
+
+    auto customVis  = isCustom  ? brls::Visibility::VISIBLE : brls::Visibility::GONE;
+    auto intVis     = isInteger ? brls::Visibility::VISIBLE : brls::Visibility::GONE;
+
+    if (m_posScaleHeader)    m_posScaleHeader->setVisibility(customVis);
+    if (m_xOffsetSlider)     m_xOffsetSlider->setVisibility(customVis);
+    if (m_yOffsetSlider)     m_yOffsetSlider->setVisibility(customVis);
+    if (m_customScaleSlider) m_customScaleSlider->setVisibility(customVis);
+    if (m_intScaleCell)      m_intScaleCell->setVisibility(intVis);
 }
 
 // ============================================================
@@ -750,7 +784,9 @@ void GameMenu::setGameFileName(const std::string& fileName)
         int idx = 2;
         for (int i = 0; i < 5; ++i)
             if (mode == dispModeIds[i]) { idx = i; break; }
-        m_dispModeCell->setSelection(idx, true);
+        m_dispModeCell->setSelection(idx, false);
+        // 根据加载到的显示模式更新位置/缩放区域和整数倍率选项的可见性
+        updateDisplayModeVisibility(idx);
     }
 
     if (m_filterCell) {
