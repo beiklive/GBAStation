@@ -415,6 +415,9 @@ void GameView::initialize()
         if (!m_renderChain.init(effectivePath)) {
             bklog::warning("RenderChain init failed; using direct texture rendering");
         }
+        // 渲染链初始化完成后立即刷新菜单中的着色器参数列表（含游戏重启场景）
+        if (m_gameMenu)
+            m_gameMenu->updateShaderParams(m_renderChain.getShaderParams());
     }
 
     // ---- 启动音频管理器 ------------------------------------------

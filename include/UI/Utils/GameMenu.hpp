@@ -149,6 +149,10 @@ private:
     /// 槽位按钮获得焦点时，自动更新对应预览图（m_save/loadPreviewImage）。
     void buildStatePanel(bool isSave, brls::Box* container);
 
+    /// 根据显示模式索引更新位置/缩放设置区域和整数倍率选项的可见性。
+    /// modeIdx：0=fit, 1=fill, 2=original, 3=integer, 4=custom
+    void updateDisplayModeVisibility(int modeIdx);
+
     std::function<void()>               m_closeCallback;
     std::function<void()>               m_exitGameCallback;
     std::function<void(const std::string&)> m_overlayChangedCallback;
@@ -189,6 +193,7 @@ private:
     brls::Image*                        m_loadPreviewImage       = nullptr; ///< 读取状态预览图（右侧）
     brls::Label*                        m_saveNoDataLabel        = nullptr; ///< 保存状态无数据提示
     brls::Label*                        m_loadNoDataLabel        = nullptr; ///< 读取状态无数据提示
+    brls::Header*                       m_posScaleHeader         = nullptr; ///< 位置与缩放设置分区标题
 
     /// 将滑条进度值（[0,1]）映射到 X/Y 坐标偏移实际像素值（[-500, 500]）
     static constexpr float k_offsetMin  = -500.f;
