@@ -195,9 +195,23 @@ bool RetroShaderPipeline::allocateFBO(ShaderPass& pass, int w, int h)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, glFilter);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    // float_framebuffer = true → GL_RGBA16F（HDR / bloom 着色器所需）
+#if !defined(USE_GLES2)
+    if (pass.desc.floatFramebuffer) {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F,
+                     static_cast<GLsizei>(w), static_cast<GLsizei>(h),
+                     0, GL_RGBA, GL_FLOAT, nullptr);
+    } else {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
+                     static_cast<GLsizei>(w), static_cast<GLsizei>(h),
+                     0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    }
+#else
+    // GLES2 不支持 GL_RGBA16F，降级为 RGBA8
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
                  static_cast<GLsizei>(w), static_cast<GLsizei>(h),
                  0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+#endif
     glBindTexture(GL_TEXTURE_2D, 0);
 
     // 创建 FBO 并附加颜色纹理
