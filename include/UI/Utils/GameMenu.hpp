@@ -168,12 +168,16 @@ private:
     std::function<StateSlotInfo(int)>   m_stateInfoCallback;     ///< 查询槽位信息
     std::vector<CheatEntry>             m_cheats;
     std::string                         m_romFileName;
+    std::vector<beiklive::ShaderParamInfo> m_shaderParams; ///< 当前着色器参数（含实时值）
     brls::ScrollingFrame*               m_cheatScrollFrame       = nullptr;
     brls::Box*                          m_cheatItemBox           = nullptr;
     brls::ScrollingFrame*               m_displayScrollFrame     = nullptr;
     brls::DetailCell*                   m_overlayPathCell        = nullptr;
     brls::DetailCell*                   m_shaderPathCell         = nullptr; ///< 着色器路径显示单元格
-    brls::Box*                          m_shaderParamBox         = nullptr; ///< 着色器参数滑条容器
+    brls::Box*                          m_shaderParamBox         = nullptr; ///< 着色器参数区域容器
+    brls::SelectorCell*                 m_dispModeCell           = nullptr; ///< 显示模式选择器
+    brls::SelectorCell*                 m_filterCell             = nullptr; ///< 纹理过滤选择器
+    brls::SelectorCell*                 m_intScaleCell           = nullptr; ///< 整数倍缩放选择器
     brls::SliderCell*                   m_xOffsetSlider          = nullptr; ///< X 坐标偏移滑条
     brls::SliderCell*                   m_yOffsetSlider          = nullptr; ///< Y 坐标偏移滑条
     brls::SliderCell*                   m_customScaleSlider      = nullptr; ///< 自定义缩放滑条

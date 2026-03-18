@@ -172,22 +172,39 @@ extern beiklive::GameRunner* gameRunner;
 #define KEY_DISPLAY_OVERLAY_GBA_PATH "display.overlay.gbaPath"   ///< 全局 GBA 遮罩 PNG 路径
 #define KEY_DISPLAY_OVERLAY_GBC_PATH "display.overlay.gbcPath"   ///< 全局 GBC 遮罩 PNG 路径
 
-// 着色器设置
+// 着色器设置（全局默认）
 #define KEY_DISPLAY_SHADER_ENABLED   "display.shaderEnabled"     ///< 着色器总开关（true=启用）
 #define KEY_DISPLAY_SHADER_PATH      "display.shader"            ///< 着色器预设路径（.glslp）
+// GBA 专属着色器设置
+#define KEY_DISPLAY_SHADER_GBA_ENABLED "display.shader.gba.enabled" ///< GBA 着色器开关
+#define KEY_DISPLAY_SHADER_GBA_PATH    "display.shader.gba"         ///< GBA 着色器预设路径
+// GBC 专属着色器设置
+#define KEY_DISPLAY_SHADER_GBC_ENABLED "display.shader.gbc.enabled" ///< GBC 着色器开关
+#define KEY_DISPLAY_SHADER_GBC_PATH    "display.shader.gbc"         ///< GBC 着色器预设路径
 
 // ─── gamedataManager 字段名常量 ──────────────────────────────────────────────
-#define GAMEDATA_FIELD_LOGOPATH   "logopath"   ///< logo 图片路径（空=未设置）
-#define GAMEDATA_FIELD_GAMEPATH   "gamepath"   ///< 游戏文件路径
-#define GAMEDATA_FIELD_TOTALTIME  "totaltime"  ///< 游玩总时长（秒，默认 0）
-#define GAMEDATA_FIELD_LASTOPEN   "lastopen"   ///< 上次游玩时间（默认"从未游玩"）
-#define GAMEDATA_FIELD_PLATFORM   "platform"   ///< 游戏平台（EmuPlatform 名称字符串）
-#define GAMEDATA_FIELD_OVERLAY    "overlay"    ///< 游戏专属遮罩 PNG 路径（空=使用全局）
-#define GAMEDATA_FIELD_CHEATPATH  "cheatpath"  ///< 金手指 .cht 文件路径（空=使用默认路径）
-#define GAMEDATA_FIELD_PLAYCOUNT  "playcount"  ///< 游戏启动次数（每次启动加一，默认 0）
-#define GAMEDATA_FIELD_X_OFFSET   "xoffset"    ///< 游戏专属 X 坐标偏移（像素，浮点）
-#define GAMEDATA_FIELD_Y_OFFSET   "yoffset"    ///< 游戏专属 Y 坐标偏移（像素，浮点）
-#define GAMEDATA_FIELD_CUSTOM_SCALE "customscale" ///< 游戏专属自定义缩放倍率（浮点）
+#define GAMEDATA_FIELD_LOGOPATH        "logopath"             ///< logo 图片路径（空=未设置）
+#define GAMEDATA_FIELD_GAMEPATH        "gamepath"             ///< 游戏文件路径
+#define GAMEDATA_FIELD_TOTALTIME       "totaltime"            ///< 游玩总时长（秒，默认 0）
+#define GAMEDATA_FIELD_LASTOPEN        "lastopen"             ///< 上次游玩时间（默认"从未游玩"）
+#define GAMEDATA_FIELD_PLATFORM        "platform"             ///< 游戏平台（EmuPlatform 名称字符串）
+#define GAMEDATA_FIELD_OVERLAY         "overlay"              ///< 游戏专属遮罩 PNG 路径（空=使用全局）
+#define GAMEDATA_FIELD_CHEATPATH       "cheatpath"            ///< 金手指 .cht 文件路径（空=使用默认路径）
+#define GAMEDATA_FIELD_PLAYCOUNT       "playcount"            ///< 游戏启动次数（每次启动加一，默认 0）
+#define GAMEDATA_FIELD_X_OFFSET        "xoffset"              ///< 游戏专属 X 坐标偏移（像素，浮点）
+#define GAMEDATA_FIELD_Y_OFFSET        "yoffset"              ///< 游戏专属 Y 坐标偏移（像素，浮点）
+#define GAMEDATA_FIELD_CUSTOM_SCALE    "customscale"          ///< 游戏专属自定义缩放倍率（浮点）
+// 新增：画面显示参数（可按游戏覆盖全局设置）
+#define GAMEDATA_FIELD_DISPLAY_FILTER  "display.filter"       ///< 纹理过滤模式（"nearest"/"linear"）
+#define GAMEDATA_FIELD_DISPLAY_INT_SCALE "display.integer_scale_mult" ///< 整数倍缩放倍率
+#define GAMEDATA_FIELD_DISPLAY_MODE    "display.mode"         ///< 显示模式（"fit"/"fill"/...）
+#define GAMEDATA_FIELD_DISPLAY_X_OFFSET "display.x_offset"   ///< X 坐标偏移（与 xoffset 别名兼容）
+#define GAMEDATA_FIELD_DISPLAY_Y_OFFSET "display.y_offset"   ///< Y 坐标偏移
+#define GAMEDATA_FIELD_DISPLAY_CUSTOM_SCALE "display.custom_scale" ///< 自定义缩放倍率
+// 着色器 per-game 字段
+#define GAMEDATA_FIELD_SHADER_PATH     "shader.path"          ///< 游戏专属着色器路径（.glslp）
+#define GAMEDATA_FIELD_SHADER_PARAM_NAMES  "shader.params.name"  ///< 参数名列表（StringArray）
+#define GAMEDATA_FIELD_SHADER_PARAM_VALUES "shader.params.value" ///< 参数值列表（FloatArray）
 
 /// 返回 gamedata key 的前缀（文件名不含后缀）
 inline std::string gamedataKeyPrefix(const std::string& fileName)
@@ -314,7 +331,113 @@ inline void setGameDataFloat(const std::string& fileName, const std::string& fie
     gamedataManager->Save();
 }
 
-// ─── 近期游戏队列辅助 ─────────────────────────────────────────────────────────
+/// 从 gamedataManager 读取游戏专属字符串字段，若不存在则从 SettingManager 读取全局配置。
+/// @param fileName    游戏文件名（含后缀）
+/// @param gamedataField  gamedata 字段名（如 GAMEDATA_FIELD_DISPLAY_MODE）
+/// @param settingKey  SettingManager 全局配置键名（如 "display.mode"）
+/// @param def         两者均不存在时的默认值
+inline std::string getGamedataOrSettingStr(const std::string& fileName,
+                                            const std::string& gamedataField,
+                                            const std::string& settingKey,
+                                            const std::string& def)
+{
+    if (!fileName.empty() && gamedataManager) {
+        std::string k = gamedataKeyPrefix(fileName) + "." + gamedataField;
+        auto v = gamedataManager->Get(k);
+        if (v) {
+            if (auto s = v->AsString()) return *s;
+        }
+    }
+    if (SettingManager) {
+        auto v = SettingManager->Get(settingKey);
+        if (v) {
+            if (auto s = v->AsString()) return *s;
+        }
+    }
+    return def;
+}
+
+/// 从 gamedataManager 读取游戏专属整数字段，若不存在则从 SettingManager 读取全局配置。
+inline int getGamedataOrSettingInt(const std::string& fileName,
+                                    const std::string& gamedataField,
+                                    const std::string& settingKey,
+                                    int def)
+{
+    if (!fileName.empty() && gamedataManager) {
+        std::string k = gamedataKeyPrefix(fileName) + "." + gamedataField;
+        auto v = gamedataManager->Get(k);
+        if (v) {
+            if (auto i = v->AsInt())   return *i;
+            if (auto f = v->AsFloat()) return static_cast<int>(*f);
+        }
+    }
+    if (SettingManager) {
+        auto v = SettingManager->Get(settingKey);
+        if (v) {
+            if (auto i = v->AsInt())   return *i;
+            if (auto f = v->AsFloat()) return static_cast<int>(*f);
+        }
+    }
+    return def;
+}
+
+/// 从 gamedataManager 读取游戏专属浮点字段，若不存在则从 SettingManager 读取全局配置。
+inline float getGamedataOrSettingFloat(const std::string& fileName,
+                                        const std::string& gamedataField,
+                                        const std::string& settingKey,
+                                        float def)
+{
+    if (!fileName.empty() && gamedataManager) {
+        std::string k = gamedataKeyPrefix(fileName) + "." + gamedataField;
+        auto v = gamedataManager->Get(k);
+        if (v) {
+            if (auto f = v->AsFloat()) return *f;
+            if (auto i = v->AsInt())   return static_cast<float>(*i);
+        }
+    }
+    if (SettingManager) {
+        auto v = SettingManager->Get(settingKey);
+        if (v) {
+            if (auto f = v->AsFloat()) return *f;
+            if (auto i = v->AsInt())   return static_cast<float>(*i);
+        }
+    }
+    return def;
+}
+
+/// 保存着色器参数列表到 gamedataManager（shader.params.name / shader.params.value）。
+/// 若 fileName 为空则仅写入 SettingManager（不写 gamedata）。
+inline void saveShaderParams(const std::string& fileName,
+                              const std::vector<std::string>& names,
+                              const std::vector<float>& values)
+{
+    if (fileName.empty() || !gamedataManager) return;
+    std::string prefix = gamedataKeyPrefix(fileName);
+    gamedataManager->Set(prefix + "." + GAMEDATA_FIELD_SHADER_PARAM_NAMES,
+                         beiklive::ConfigValue(names));
+    gamedataManager->Set(prefix + "." + GAMEDATA_FIELD_SHADER_PARAM_VALUES,
+                         beiklive::ConfigValue(values));
+    gamedataManager->Save();
+}
+
+/// 从 gamedataManager 读取着色器参数列表（名称和值）。
+/// 返回 false 表示未找到或列表为空。
+inline bool loadShaderParams(const std::string& fileName,
+                              std::vector<std::string>& outNames,
+                              std::vector<float>&        outValues)
+{
+    if (fileName.empty() || !gamedataManager) return false;
+    std::string prefix = gamedataKeyPrefix(fileName);
+    auto vn = gamedataManager->Get(prefix + "." + GAMEDATA_FIELD_SHADER_PARAM_NAMES);
+    auto vv = gamedataManager->Get(prefix + "." + GAMEDATA_FIELD_SHADER_PARAM_VALUES);
+    if (!vn || !vv) return false;
+    auto sa = vn->AsStringArray();
+    auto fa = vv->AsFloatArray();
+    if (!sa || !fa || sa->empty()) return false;
+    outNames  = *sa;
+    outValues = *fa;
+    return true;
+}
 #define RECENT_GAME_COUNT 10
 #define RECENT_GAME_KEY_PREFIX "recent.game."
 

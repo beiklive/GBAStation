@@ -166,7 +166,11 @@
             "shader_path": "Shader Path (.glslp)",
             "shader_select": "Shader Selection",
             "shader_params": "Shader Parameters",
-            "not_implemented": "(Not Implemented)"
+            "not_implemented": "(Not Implemented)",
+            "shader_gba_enable": "GBA Shader",
+            "shader_gba_path": "GBA Shader Path (.glslp)",
+            "shader_gbc_enable": "GBC Shader",
+            "shader_gbc_path": "GBC Shader Path (.glslp)"
         },
         "audio": {
             "header_emu": "Emulator Audio",

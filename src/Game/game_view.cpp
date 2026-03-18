@@ -169,6 +169,26 @@ void GameView::initialize()
         if (!std::isnan(xOff)) m_display.xOffset    = xOff;
         if (!std::isnan(yOff)) m_display.yOffset    = yOff;
         if (!std::isnan(cs))   m_display.customScale = cs;
+
+        // 从 gamedataManager 读取 display.mode / filter / integer_scale_mult（若存在则覆盖全局配置）
+        {
+            std::string modeStr = getGamedataOrSettingStr(m_romFileName,
+                GAMEDATA_FIELD_DISPLAY_MODE, "display.mode", "");
+            if (!modeStr.empty())
+                m_display.mode = beiklive::DisplayConfig::stringToMode(modeStr);
+        }
+        {
+            std::string filtStr = getGamedataOrSettingStr(m_romFileName,
+                GAMEDATA_FIELD_DISPLAY_FILTER, "display.filter", "");
+            if (!filtStr.empty())
+                m_display.filterMode = beiklive::DisplayConfig::stringToFilterMode(filtStr);
+        }
+        {
+            int mult = getGamedataOrSettingInt(m_romFileName,
+                GAMEDATA_FIELD_DISPLAY_INT_SCALE, "display.integer_scale_mult", -1);
+            if (mult >= 0)
+                m_display.integerScaleMult = mult;
+        }
     }
 
     if (gameRunner && gameRunner->settingConfig) {

@@ -538,6 +538,100 @@ brls::ScrollingFrame* SettingPage::buildUITab()
         box->addView(xmbColorCell);
     }
 
+    // ── 存档设置 ──────────────────────────────────────────────────────────────
+    box->addView(makeHeader("beiklive/settings/game/header_save"_i18n));
+
+    {
+        std::vector<std::string> saveDirs = {
+            "beiklive/settings/game/cheat_loc_rom"_i18n,
+            "beiklive/settings/game/cheat_loc_emu"_i18n
+        };
+
+        auto* autoSaveStateCell = new brls::BooleanCell();
+        autoSaveStateCell->init("beiklive/settings/game/auto_save_state"_i18n,
+                                cfgGetBool("save.autoSaveState", false),
+                                [](bool v){ cfgSetBool("save.autoSaveState", v); });
+        box->addView(autoSaveStateCell);
+
+        {
+            static const int k_autoSaveIntervals[] = { 0, 60, 180, 300, 600 };
+            static constexpr int k_autoSaveIntervalCount = 5;
+            std::vector<std::string> intervalLabels = {
+                "beiklive/settings/game/auto_save_interval_off"_i18n,
+                "beiklive/settings/game/auto_save_interval_1min"_i18n,
+                "beiklive/settings/game/auto_save_interval_3min"_i18n,
+                "beiklive/settings/game/auto_save_interval_5min"_i18n,
+                "beiklive/settings/game/auto_save_interval_10min"_i18n,
+            };
+            int curInterval = cfgGetInt("save.autoSaveInterval", 0);
+            int intervalIdx = 0;
+            for (int i = 0; i < k_autoSaveIntervalCount; ++i)
+                if (curInterval == k_autoSaveIntervals[i]) { intervalIdx = i; break; }
+            auto* autoSaveIntervalCell = new brls::SelectorCell();
+            autoSaveIntervalCell->init("beiklive/settings/game/auto_save_interval"_i18n,
+                intervalLabels, intervalIdx,
+                [](int idx){
+                    if (idx >= 0 && idx < k_autoSaveIntervalCount && SettingManager) {
+                        SettingManager->Set("save.autoSaveInterval",
+                                            beiklive::ConfigValue(k_autoSaveIntervals[idx]));
+                        SettingManager->Save();
+                    }
+                });
+            box->addView(autoSaveIntervalCell);
+        }
+
+        auto* autoLoadState0Cell = new brls::BooleanCell();
+        autoLoadState0Cell->init("beiklive/settings/game/auto_load_state0"_i18n,
+                                 cfgGetBool("save.autoLoadState0", false),
+                                 [](bool v){ cfgSetBool("save.autoLoadState0", v); });
+        box->addView(autoLoadState0Cell);
+
+        {
+            auto* sramDirCell = new brls::SelectorCell();
+            sramDirCell->init(
+                "beiklive/settings/game/sram_dir"_i18n, saveDirs,
+                cfgGetStr("save.sramDir", "").empty() ? 0 : 1,
+                [](int idx) {
+                    if (idx == 0) cfgSetStr("save.sramDir", "");
+                    else cfgSetStr("save.sramDir", BK_APP_ROOT_DIR + std::string("saves"));
+                });
+            box->addView(sramDirCell);
+        }
+
+        {
+            auto* stateDirCell = new brls::SelectorCell();
+            stateDirCell->init(
+                "beiklive/settings/game/state_dir"_i18n, saveDirs,
+                cfgGetStr("save.stateDir", "").empty() ? 0 : 1,
+                [](int idx) {
+                    if (idx == 0) cfgSetStr("save.stateDir", "");
+                    else cfgSetStr("save.stateDir", BK_APP_ROOT_DIR + std::string("saves"));
+                });
+            box->addView(stateDirCell);
+        }
+    }
+
+    // ── 截图设置 ──────────────────────────────────────────────────────────────
+    box->addView(makeHeader("beiklive/settings/game/header_screenshot"_i18n));
+
+    {
+        std::vector<std::string> screenshotDirs = {
+            "beiklive/settings/game/screenshot_dir_rom"_i18n,
+            "beiklive/settings/game/screenshot_dir_albums"_i18n,
+        };
+        auto* screenshotDirCell = new brls::SelectorCell();
+        screenshotDirCell->init(
+            "beiklive/settings/game/screenshot_dir"_i18n, screenshotDirs,
+            cfgGetInt("screenshot.dir", 0),
+            [](int idx) {
+                if (SettingManager) {
+                    SettingManager->Set("screenshot.dir", beiklive::ConfigValue(idx));
+                    SettingManager->Save();
+                }
+            });
+        box->addView(screenshotDirCell);
+    }
+
     scroll->setContentView(box);
     return scroll;
 }
@@ -706,113 +800,13 @@ brls::ScrollingFrame* SettingPage::buildGameTab()
         box->addView(idleCell);
     }
 
-    // ── 存档设置 ──────────────────────────────────────────────────────────────
-    box->addView(makeHeader("beiklive/settings/game/header_save"_i18n));
-
-    std::vector<std::string> saveDirs = {
-            "beiklive/settings/game/cheat_loc_rom"_i18n,
-            "beiklive/settings/game/cheat_loc_emu"_i18n
-    };
-
-    auto* autoSaveStateCell = new brls::BooleanCell();
-    autoSaveStateCell->init("beiklive/settings/game/auto_save_state"_i18n,
-                            cfgGetBool("save.autoSaveState", false),
-                            [](bool v){ cfgSetBool("save.autoSaveState", v); });
-    box->addView(autoSaveStateCell);
-
-    {
-        // 自动存档间隔选择（0=关闭, 60, 180, 300, 600 秒）
-        static const int k_autoSaveIntervals[] = { 0, 60, 180, 300, 600 };
-        static constexpr int k_autoSaveIntervalCount = 5;
-        std::vector<std::string> intervalLabels = {
-            "beiklive/settings/game/auto_save_interval_off"_i18n,
-            "beiklive/settings/game/auto_save_interval_1min"_i18n,
-            "beiklive/settings/game/auto_save_interval_3min"_i18n,
-            "beiklive/settings/game/auto_save_interval_5min"_i18n,
-            "beiklive/settings/game/auto_save_interval_10min"_i18n,
-        };
-        int curInterval = cfgGetInt("save.autoSaveInterval", 0);
-        int intervalIdx = 0;
-        for (int i = 0; i < k_autoSaveIntervalCount; ++i)
-            if (curInterval == k_autoSaveIntervals[i]) { intervalIdx = i; break; }
-        auto* autoSaveIntervalCell = new brls::SelectorCell();
-        autoSaveIntervalCell->init("beiklive/settings/game/auto_save_interval"_i18n,
-            intervalLabels, intervalIdx,
-            [](int idx){
-                if (idx >= 0 && idx < k_autoSaveIntervalCount && SettingManager) {
-                    SettingManager->Set("save.autoSaveInterval",
-                                        beiklive::ConfigValue(k_autoSaveIntervals[idx]));
-                    SettingManager->Save();
-                }
-            });
-        box->addView(autoSaveIntervalCell);
-    }
-
-    auto* autoLoadState0Cell = new brls::BooleanCell();
-    autoLoadState0Cell->init("beiklive/settings/game/auto_load_state0"_i18n,
-                             cfgGetBool("save.autoLoadState0", false),
-                             [](bool v){ cfgSetBool("save.autoLoadState0", v); });
-    box->addView(autoLoadState0Cell);
-
-    {
-        auto* sramDirCell = new brls::SelectorCell();
-        sramDirCell->init(
-            "beiklive/settings/game/sram_dir"_i18n,
-            saveDirs,
-            cfgGetStr("save.sramDir", "").empty() ? 0 : 1,
-            [](int idx) {
-                if (idx == 0) {
-                    cfgSetStr("save.sramDir", "");
-                } else if (idx == 1) {
-                    cfgSetStr("save.sramDir", BK_APP_ROOT_DIR + std::string("saves"));
-                }
-            }
-        );
-        box->addView(sramDirCell);
-    }
-
-    {
-        auto* stateDirCell = new brls::SelectorCell();
-        stateDirCell->init(
-            "beiklive/settings/game/state_dir"_i18n,
-            saveDirs,
-            cfgGetStr("save.stateDir", "").empty() ? 0 : 1,
-            [](int idx) {
-                if (idx == 0) {
-                    cfgSetStr("save.stateDir", "");
-                } else if (idx == 1) {
-                    cfgSetStr("save.stateDir", BK_APP_ROOT_DIR + std::string("saves"));
-                }
-            }
-        );
-        box->addView(stateDirCell);
-    }
-
-    // ── 截图设置 ──────────────────────────────────────────────────────────────
-    box->addView(makeHeader("beiklive/settings/game/header_screenshot"_i18n));
-
-    {
-        std::vector<std::string> screenshotDirs = {
-            "beiklive/settings/game/screenshot_dir_rom"_i18n,
-            "beiklive/settings/game/screenshot_dir_albums"_i18n,
-        };
-        auto* screenshotDirCell = new brls::SelectorCell();
-        screenshotDirCell->init(
-            "beiklive/settings/game/screenshot_dir"_i18n,
-            screenshotDirs,
-            cfgGetInt("screenshot.dir", 0),
-            [](int idx) {
-                if (SettingManager) {
-                    SettingManager->Set("screenshot.dir", beiklive::ConfigValue(idx));
-                    SettingManager->Save();
-                }
-            }
-        );
-        box->addView(screenshotDirCell);
-    }
-
     // ── 金手指设置 ────────────────────────────────────────────────────────────
     box->addView(makeHeader("beiklive/settings/game/header_cheat"_i18n));
+
+    std::vector<std::string> saveDirs = {
+        "beiklive/settings/game/cheat_loc_rom"_i18n,
+        "beiklive/settings/game/cheat_loc_emu"_i18n
+    };
 
     auto* cheatEnableCell = new brls::BooleanCell();
     cheatEnableCell->init("beiklive/settings/game/cheat_enable"_i18n,
@@ -979,32 +973,34 @@ brls::ScrollingFrame* SettingPage::buildDisplayTab()
     // ── 着色器设置 ──────────────────────────────────────────────────────────────
     box->addView(makeHeader("beiklive/settings/display/header_shader"_i18n));
 
-    auto* shaderEnCell = new brls::BooleanCell();
-    shaderEnCell->init("beiklive/settings/display/shader_enable"_i18n,
-                       cfgGetBool(KEY_DISPLAY_SHADER_ENABLED, false),
-                       [](bool v){ cfgSetBool(KEY_DISPLAY_SHADER_ENABLED, v); });
-    box->addView(shaderEnCell);
+    // Helper: 构建着色器路径选择 DetailCell
+    auto makeShaderPathCell = [&](const std::string& enableKey,
+                                   const std::string& pathKey,
+                                   const std::string& enableLabel,
+                                   const std::string& pathLabel) {
+        // 着色器开关
+        auto* enCell = new brls::BooleanCell();
+        enCell->init(enableLabel, cfgGetBool(enableKey, false),
+                     [enableKey](bool v){ cfgSetBool(enableKey, v); });
+        box->addView(enCell);
 
-    // 着色器路径选择（.glslp 文件）
-    {
-        auto* shaderPathCell = new brls::DetailCell();
-        shaderPathCell->setText("beiklive/settings/display/shader_path"_i18n);
-        std::string curShader = cfgGetStr(KEY_DISPLAY_SHADER_PATH, "");
-        shaderPathCell->setDetailText(curShader.empty()
+        // 着色器路径
+        auto* pathCell = new brls::DetailCell();
+        pathCell->setText(pathLabel);
+        std::string cur = cfgGetStr(pathKey, "");
+        pathCell->setDetailText(cur.empty()
             ? "beiklive/settings/display/overlay_not_set"_i18n
-            : beiklive::string::extractFileName(curShader));
-        shaderPathCell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A,
-            [shaderPathCell](brls::View*) {
+            : beiklive::string::extractFileName(cur));
+        pathCell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A,
+            [pathCell, pathKey](brls::View*) {
                 auto* flPage = new FileListPage();
                 flPage->setFilter({"glslp", "glsl"}, FileListPage::FilterMode::Whitelist);
-                flPage->setDefaultFileCallback([shaderPathCell](const FileListItem& item) {
-                    cfgSetStr(KEY_DISPLAY_SHADER_PATH, item.fullPath);
-                    shaderPathCell->setDetailText(
-                        beiklive::string::extractFileName(item.fullPath));
+                flPage->setDefaultFileCallback([pathCell, pathKey](const FileListItem& item) {
+                    cfgSetStr(pathKey, item.fullPath);
+                    pathCell->setDetailText(beiklive::string::extractFileName(item.fullPath));
                     brls::Application::popActivity();
                 });
-                std::string startPath = beiklive::string::extractDirPath(
-                    cfgGetStr(KEY_DISPLAY_SHADER_PATH, ""));
+                std::string startPath = beiklive::string::extractDirPath(cfgGetStr(pathKey, ""));
                 if (startPath.empty()) startPath = "/";
                 flPage->navigateTo(startPath);
                 auto* container = new brls::Box(brls::Axis::COLUMN);
@@ -1019,8 +1015,18 @@ brls::ScrollingFrame* SettingPage::buildDisplayTab()
                 brls::Application::pushActivity(new brls::Activity(frame));
                 return true;
             }, false, false, brls::SOUND_CLICK);
-        box->addView(shaderPathCell);
-    }
+        box->addView(pathCell);
+    };
+
+    // GBA 着色器
+    makeShaderPathCell(KEY_DISPLAY_SHADER_GBA_ENABLED, KEY_DISPLAY_SHADER_GBA_PATH,
+                       "beiklive/settings/display/shader_gba_enable"_i18n,
+                       "beiklive/settings/display/shader_gba_path"_i18n);
+
+    // GBC 着色器
+    makeShaderPathCell(KEY_DISPLAY_SHADER_GBC_ENABLED, KEY_DISPLAY_SHADER_GBC_PATH,
+                       "beiklive/settings/display/shader_gbc_enable"_i18n,
+                       "beiklive/settings/display/shader_gbc_path"_i18n);
 
     scroll->setContentView(box);
     return scroll;
@@ -1034,14 +1040,6 @@ brls::ScrollingFrame* SettingPage::buildAudioTab()
 {
     auto* scroll = makeScrollTab();
     auto* box    = makeContentBox();
-
-    box->addView(makeHeader("beiklive/settings/audio/header_emu"_i18n));
-
-    auto* sfxCell = new brls::BooleanCell();
-    sfxCell->init("beiklive/settings/audio/btn_sfx"_i18n,
-                  cfgGetBool(KEY_AUDIO_BUTTON_SFX, false),
-                  [](bool v){ cfgSetBool(KEY_AUDIO_BUTTON_SFX, v); });
-    box->addView(sfxCell);
 
     box->addView(makeHeader("beiklive/settings/audio/header_game"_i18n));
 
@@ -1123,6 +1121,11 @@ brls::ScrollingFrame* SettingPage::buildKeyBindTab()
     for (int i = 0; i < static_cast<int>(InputMappingConfig::Hotkey::_Count); ++i)
     {
         auto hk = static_cast<InputMappingConfig::Hotkey>(i);
+        // 跳过：打开金手指菜单、打开着色器菜单、退出游戏（这三个不暴露给用户配置）
+        if (hk == InputMappingConfig::Hotkey::OpenCheatMenu  ||
+            hk == InputMappingConfig::Hotkey::OpenShaderMenu ||
+            hk == InputMappingConfig::Hotkey::ExitGame)
+            continue;
         std::string padKey = InputMappingConfig::hotkeyPadConfigKey(hk);
         std::string label  = std::string(InputMappingConfig::hotkeyDisplayName(hk))
                              + "beiklive/settings/keybind/pad_suffix"_i18n;
