@@ -2280,13 +2280,28 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
 
     // ---- 使用 NanoVG 渲染游戏纹理 ------------------------
     if (m_nvgImage >= 0) {
-        // 始终使用原始游戏视频尺寸（而非着色器输出尺寸）计算显示矩形。
-        // 部分着色器（如全视口扫描线着色器）会将 FBO 输出尺寸设为视口大小，
-        // 若使用着色器输出尺寸则 computeRect() 会计算出全屏矩形，导致
-        // 过滤/缩放模式设置完全失效。NanoVG 会自动将纹理拉伸填充到显示矩形，
-        // 故无需让显示矩形尺寸与纹理尺寸一致。
+        // 计算显示矩形的参考内容尺寸：
+        // - 无着色器或视口缩放着色器（FBO 输出 == 视口大小）：使用原始游戏尺寸，
+        //   保证宽高比及缩放模式正常工作，NanoVG 自动拉伸纹理填充矩形。
+        // - source/absolute 缩放着色器（FBO 输出 ≠ 视口大小，如 scalefx 3×）：
+        //   使用着色器实际输出尺寸，确保 computeRect（尤其整数缩放模式）计算出
+        //   与着色器 FBO 等比例的显示矩形，NanoVG 以整数或精确比例映射纹理，
+        //   避免非整数缩放破坏多通道着色器精心构造的子像素网格。
         unsigned contentW = (m_texWidth  > 0) ? m_texWidth  : static_cast<unsigned>(displayW);
         unsigned contentH = (m_texHeight > 0) ? m_texHeight : static_cast<unsigned>(displayH);
+        if (m_renderChain.hasShader()) {
+            unsigned shOutW = m_renderChain.outputW();
+            unsigned shOutH = m_renderChain.outputH();
+            unsigned viewW  = static_cast<unsigned>(std::lround(width));
+            unsigned viewH  = static_cast<unsigned>(std::lround(height));
+            // 若着色器输出有效且不等于视口（非 viewport-scale 着色器），
+            // 使用着色器输出尺寸计算显示矩形
+            if (shOutW > 0 && shOutH > 0 &&
+                !(shOutW == viewW && shOutH == viewH)) {
+                contentW = shOutW;
+                contentH = shOutH;
+            }
+        }
         beiklive::DisplayRect rect = m_display.computeRect(x, y, width, height,
                                                             contentW, contentH);
 
