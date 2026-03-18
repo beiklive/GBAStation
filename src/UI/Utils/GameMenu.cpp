@@ -1,6 +1,8 @@
 #include "UI/Utils/GameMenu.hpp"
 #include "UI/Pages/FileListPage.hpp"
 #include "Video/DisplayConfig.hpp"
+#include <cmath>
+#include <cstdio>
 
 using beiklive::cfgGetBool;
 using beiklive::cfgSetBool;
@@ -268,17 +270,19 @@ GameMenu::GameMenu()
             int dispModeIdx = 2;
             for (int i = 0; i < 5; ++i)
                 if (curMode == dispModeIds[i]) { dispModeIdx = i; break; }
-            auto* dispModeCell = new brls::SelectorCell();
-            dispModeCell->init("beiklive/settings/display/mode"_i18n, dispModes, dispModeIdx,
+            m_dispModeCell = new brls::SelectorCell();
+            m_dispModeCell->init("beiklive/settings/display/mode"_i18n, dispModes, dispModeIdx,
                 [this](int idx) {
                     static const char* ids[] = { "fit","fill","original","integer","custom" };
                     if (idx >= 0 && idx < 5) {
                         cfgSetStr("display.mode", ids[idx]);
+                        if (!m_romFileName.empty())
+                            setGameDataStr(m_romFileName, GAMEDATA_FIELD_DISPLAY_MODE, ids[idx]);
                         if (m_displayModeChangedCallback)
                             m_displayModeChangedCallback(beiklive::DisplayConfig::stringToMode(ids[idx]));
                     }
                 });
-            displayBox->addView(dispModeCell);
+            displayBox->addView(m_dispModeCell);
         }
 
         // --- 整数倍缩放倍率 ---
@@ -293,8 +297,8 @@ GameMenu::GameMenu()
             for (int i = 0; i < k_intScaleCount; ++i)
                 if (curMult == k_intScaleVals[i]) { multIdx = i; break; }
             std::vector<std::string> intScaleLabels(k_intScaleLabels, k_intScaleLabels + k_intScaleCount);
-            auto* intScaleCell = new brls::SelectorCell();
-            intScaleCell->init("beiklive/settings/display/int_scale"_i18n, intScaleLabels, multIdx,
+            m_intScaleCell = new brls::SelectorCell();
+            m_intScaleCell->init("beiklive/settings/display/int_scale"_i18n, intScaleLabels, multIdx,
                 [this](int idx) {
                     static const int vals[] = { 0, 1, 2, 3, 4, 5, 6 };
                     static constexpr int cnt = 7;
@@ -302,27 +306,31 @@ GameMenu::GameMenu()
                         SettingManager->Set("display.integer_scale_mult",
                                             beiklive::ConfigValue(vals[idx]));
                         SettingManager->Save();
+                        if (!m_romFileName.empty())
+                            setGameDataInt(m_romFileName, GAMEDATA_FIELD_DISPLAY_INT_SCALE, vals[idx]);
                         if (m_displayIntScaleChangedCallback)
                             m_displayIntScaleChangedCallback(vals[idx]);
                     }
                 });
-            displayBox->addView(intScaleCell);
+            displayBox->addView(m_intScaleCell);
         }
 
         // --- 纹理过滤 ---
         {
             std::vector<std::string> filters = { "最近邻 (Nearest)","双线性 (Linear)" };
             std::string curFilter = cfgGetStr("display.filter","nearest");
-            auto* filterCell = new brls::SelectorCell();
-            filterCell->init("beiklive/settings/display/filter"_i18n, filters,
+            m_filterCell = new brls::SelectorCell();
+            m_filterCell->init("beiklive/settings/display/filter"_i18n, filters,
                 (curFilter == "linear") ? 1 : 0,
                 [this](int idx) {
                     const char* fStr = (idx == 1) ? "linear" : "nearest";
                     cfgSetStr("display.filter", fStr);
+                    if (!m_romFileName.empty())
+                        setGameDataStr(m_romFileName, GAMEDATA_FIELD_DISPLAY_FILTER, fStr);
                     if (m_displayFilterChangedCallback)
                         m_displayFilterChangedCallback(beiklive::DisplayConfig::stringToFilterMode(fStr));
                 });
-            displayBox->addView(filterCell);
+            displayBox->addView(m_filterCell);
         }
 
         // --- 位置与缩放 header ---
@@ -733,6 +741,33 @@ void GameMenu::setGameFileName(const std::string& fileName)
     else
         m_overlayPathCell->setDetailText(
             "beiklive/settings/display/overlay_not_set"_i18n);
+
+    // ── 从 gamedataManager 刷新显示设置（优先 gamedata，回退全局 setting）──
+    static const char* dispModeIds[] = { "fit","fill","original","integer","custom" };
+    if (m_dispModeCell) {
+        std::string mode = getGamedataOrSettingStr(fileName,
+            GAMEDATA_FIELD_DISPLAY_MODE, "display.mode", "original");
+        int idx = 2;
+        for (int i = 0; i < 5; ++i)
+            if (mode == dispModeIds[i]) { idx = i; break; }
+        m_dispModeCell->setSelection(idx, true);
+    }
+
+    if (m_filterCell) {
+        std::string filt = getGamedataOrSettingStr(fileName,
+            GAMEDATA_FIELD_DISPLAY_FILTER, "display.filter", "nearest");
+        m_filterCell->setSelection((filt == "linear") ? 1 : 0, true);
+    }
+
+    if (m_intScaleCell) {
+        static const int k_vals[] = { 0, 1, 2, 3, 4, 5, 6 };
+        int mult = getGamedataOrSettingInt(fileName,
+            GAMEDATA_FIELD_DISPLAY_INT_SCALE, "display.integer_scale_mult", 0);
+        int idx = 0;
+        for (int i = 0; i < 7; ++i)
+            if (mult == k_vals[i]) { idx = i; break; }
+        m_intScaleCell->setSelection(idx, true);
+    }
 }
 
 void GameMenu::setCheats(const std::vector<CheatEntry>& cheats)
@@ -778,10 +813,11 @@ void GameMenu::setCheats(const std::vector<CheatEntry>& cheats)
 
 
 // ============================================================
-// updateShaderParams – 更新着色器参数滑条区域
+// updateShaderParams – 更新着色器参数区域（DetailCell + Dropdown）
 //
 // 清空 m_shaderParamBox 中的旧内容，然后根据 params 列表
-// 重新填充 SliderCell 滑条。若 params 为空，则显示"无可调整参数"提示。
+// 重新填充 DetailCell。每个 DetailCell 点击后弹出 Dropdown，
+// 选项由参数的 min/max/step 计算生成；选择后立即保存并生效。
 // 须在 UI（主）线程调用。
 // ============================================================
 
@@ -789,10 +825,27 @@ void GameMenu::updateShaderParams(const std::vector<beiklive::ShaderParamInfo>& 
 {
     if (!m_shaderParamBox) return;
 
+    // 保存参数元数据，同时从 gamedataManager 恢复上次保存的值
+    m_shaderParams = params;
+    if (!m_romFileName.empty()) {
+        std::vector<std::string> savedNames;
+        std::vector<float>       savedVals;
+        if (loadShaderParams(m_romFileName, savedNames, savedVals)) {
+            for (size_t si = 0; si < savedNames.size() && si < savedVals.size(); ++si) {
+                for (auto& sp : m_shaderParams) {
+                    if (sp.name == savedNames[si]) {
+                        sp.value = savedVals[si];
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
     // 清空旧内容
     m_shaderParamBox->clearViews(true);
 
-    if (params.empty()) {
+    if (m_shaderParams.empty()) {
         auto* label = new brls::Label();
         label->setText("beiklive/gamemenu/shader_no_params"_i18n);
         label->setFontSize(16.f);
@@ -802,26 +855,89 @@ void GameMenu::updateShaderParams(const std::vector<beiklive::ShaderParamInfo>& 
         return;
     }
 
-    for (const auto& p : params) {
-        // 范围检查：若 min == max 则无意义，跳过
+    for (size_t pi = 0; pi < m_shaderParams.size(); ++pi) {
+        const auto& p = m_shaderParams[pi];
+        // 范围检查：若 min >= max 则无意义，跳过
         if (p.maxValue <= p.minValue) continue;
 
-        float initProgress = (p.value - p.minValue) / (p.maxValue - p.minValue);
-        // clamp to [0, 1]
-        if (initProgress < 0.f) initProgress = 0.f;
-        if (initProgress > 1.f) initProgress = 1.f;
+        // 计算步长：若 step <= 0 则默认拆分为 20 步
+        float step = (p.step > 0.f) ? p.step : (p.maxValue - p.minValue) / 20.f;
 
-        auto* cell = new brls::SliderCell();
-        // 使用参数的显示名称作为标签
-        std::string label = p.desc.empty() ? p.name : p.desc;
-        std::string paramName = p.name; // capture by value for lambda
+        // 生成选项列表（使用整数计数器避免浮点累积误差，格式化保留4位小数并去除末尾零）
+        std::vector<std::string> opts;
+        std::vector<float>       optVals;
+        {
+            int nSteps = static_cast<int>(std::round((p.maxValue - p.minValue) / step)) + 1;
+            if (nSteps < 2) nSteps = 2;
+            for (int si = 0; si < nSteps; ++si) {
+                float v = p.minValue + si * step;
+                if (v > p.maxValue + step * 0.001f) break;
+                float clamped = std::min(v, p.maxValue);
+                char buf[32];
+                std::snprintf(buf, sizeof(buf), "%.4f", clamped);
+                std::string s(buf);
+                auto dot = s.find('.');
+                if (dot != std::string::npos) {
+                    auto last = s.find_last_not_of('0');
+                    if (last != std::string::npos && last > dot)
+                        s = s.substr(0, last + 1);
+                    else if (last == dot)
+                        s = s.substr(0, dot);
+                }
+                opts.push_back(s);
+                optVals.push_back(clamped);
+            }
+        }
+        if (opts.empty()) continue;
 
-        cell->init(label, initProgress,
-            [this, paramName, minV = p.minValue, maxV = p.maxValue](float progress) {
-                float v = minV + progress * (maxV - minV);
-                if (m_shaderParamChangedCallback)
-                    m_shaderParamChangedCallback(paramName, v);
-            });
+        // 找到当前值对应的选项索引（最近邻匹配）
+        int curIdx = 0;
+        float minDiff = std::fabs(optVals[0] - p.value);
+        for (int oi = 1; oi < static_cast<int>(optVals.size()); ++oi) {
+            float d = std::fabs(optVals[oi] - p.value);
+            if (d < minDiff) { minDiff = d; curIdx = oi; }
+        }
+
+        auto* cell = new brls::DetailCell();
+        std::string labelStr = p.desc.empty() ? p.name : p.desc;
+        cell->setText(labelStr);
+        cell->setDetailText(opts[static_cast<size_t>(curIdx)]);
+
+        std::string paramName = p.name;
+        size_t      paramIdx  = pi;
+
+        cell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A,
+            [this, cell, paramName, paramIdx, opts, optVals, curIdx](brls::View*) mutable {
+                auto* dropdown = new brls::Dropdown(
+                    paramName,
+                    opts,
+                    [](int) {}, // 即时选择回调（暂不用）
+                    curIdx,
+                    [this, cell, paramName, paramIdx, opts, optVals](int sel) {
+                        if (sel < 0 || sel >= static_cast<int>(optVals.size())) return;
+                        float newVal = optVals[static_cast<size_t>(sel)];
+                        cell->setDetailText(opts[static_cast<size_t>(sel)]);
+                        // 更新本地参数缓存
+                        if (paramIdx < m_shaderParams.size())
+                            m_shaderParams[paramIdx].value = newVal;
+                        // 立即通知 GameView 应用参数变更
+                        if (m_shaderParamChangedCallback)
+                            m_shaderParamChangedCallback(paramName, newVal);
+                        // 将全部参数保存到 gamedataManager
+                        if (!m_romFileName.empty()) {
+                            std::vector<std::string> names;
+                            std::vector<float>       vals;
+                            for (const auto& sp : m_shaderParams) {
+                                names.push_back(sp.name);
+                                vals.push_back(sp.value);
+                            }
+                            saveShaderParams(m_romFileName, names, vals);
+                        }
+                    });
+                brls::Application::pushActivity(new brls::Activity(dropdown));
+                return true;
+            }, false, false, brls::SOUND_CLICK);
+
         m_shaderParamBox->addView(cell);
     }
 }

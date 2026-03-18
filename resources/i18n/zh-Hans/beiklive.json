@@ -166,7 +166,11 @@
             "shader_path": "着色器路径 (.glslp)",
             "shader_select": "着色器选择",
             "shader_params": "着色器参数设置",
-            "not_implemented": "（功能待实现）"
+            "not_implemented": "（功能待实现）",
+            "shader_gba_enable": "GBA 着色器开关",
+            "shader_gba_path": "GBA 着色器路径 (.glslp)",
+            "shader_gbc_enable": "GBC 着色器开关",
+            "shader_gbc_path": "GBC 着色器路径 (.glslp)"
         },
         "audio": {
             "header_emu": "模拟器声音",
