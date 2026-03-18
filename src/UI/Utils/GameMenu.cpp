@@ -480,15 +480,18 @@ GameMenu::GameMenu()
         displayBox->addView(shaderHeader);
 
         // --- 着色器开关（读取配置，即时回调 GameView）---
-        auto* shaderEnCell = new brls::BooleanCell();
-        shaderEnCell->init("beiklive/settings/display/shader_enable"_i18n,
+        m_shaderEnCell = new brls::BooleanCell();
+        m_shaderEnCell->init("beiklive/settings/display/shader_enable"_i18n,
                            cfgGetBool(KEY_DISPLAY_SHADER_ENABLED, false),
                            [this](bool v) {
                                cfgSetBool(KEY_DISPLAY_SHADER_ENABLED, v);
+                               if (!m_romFileName.empty())
+                                   setGameDataStr(m_romFileName, GAMEDATA_FIELD_SHADER_ENABLED,
+                                                  v ? "true" : "false");
                                if (m_shaderEnabledChangedCallback)
                                    m_shaderEnabledChangedCallback(v);
                            });
-        displayBox->addView(shaderEnCell);
+        displayBox->addView(m_shaderEnCell);
 
         // --- 着色器路径选择（读取 display.shader 配置，即时回调 GameView）---
         m_shaderPathCell = new brls::DetailCell();
@@ -505,6 +508,8 @@ GameMenu::GameMenu()
                 flPage->setFilter({"glslp", "glsl"}, FileListPage::FilterMode::Whitelist);
                 flPage->setDefaultFileCallback([this](const FileListItem& item) {
                     cfgSetStr(KEY_DISPLAY_SHADER_PATH, item.fullPath);
+                    if (!m_romFileName.empty())
+                        setGameDataStr(m_romFileName, GAMEDATA_FIELD_SHADER_PATH, item.fullPath);
                     m_shaderPathCell->setDetailText(
                         beiklive::string::extractFileName(item.fullPath));
                     if (m_shaderPathChangedCallback)
@@ -632,9 +637,22 @@ void GameMenu::updateDisplayModeVisibility(int modeIdx)
     auto intVis     = isInteger ? brls::Visibility::VISIBLE : brls::Visibility::GONE;
 
     if (m_posScaleHeader)    m_posScaleHeader->setVisibility(customVis);
-    if (m_xOffsetSlider)     m_xOffsetSlider->setVisibility(customVis);
-    if (m_yOffsetSlider)     m_yOffsetSlider->setVisibility(customVis);
-    if (m_customScaleSlider) m_customScaleSlider->setVisibility(customVis);
+    // SliderCell 本身不可聚焦，但其内部 slider 子视图可聚焦。
+    // 若仅设置 SliderCell 为 GONE，内部 slider 仍为 VISIBLE，
+    // Box::getDefaultFocus() 通过 lastFocusedView 缓存仍可将焦点定向到隐藏的 slider。
+    // 因此在隐藏时同步禁用 slider 的可聚焦性，显示时再恢复。
+    if (m_xOffsetSlider) {
+        m_xOffsetSlider->setVisibility(customVis);
+        m_xOffsetSlider->slider->setFocusable(isCustom);
+    }
+    if (m_yOffsetSlider) {
+        m_yOffsetSlider->setVisibility(customVis);
+        m_yOffsetSlider->slider->setFocusable(isCustom);
+    }
+    if (m_customScaleSlider) {
+        m_customScaleSlider->setVisibility(customVis);
+        m_customScaleSlider->slider->setFocusable(isCustom);
+    }
     if (m_intScaleCell)      m_intScaleCell->setVisibility(intVis);
 }
 
@@ -803,6 +821,20 @@ void GameMenu::setGameFileName(const std::string& fileName)
         for (int i = 0; i < 7; ++i)
             if (mult == k_vals[i]) { idx = i; break; }
         m_intScaleCell->setSelection(idx, true);
+    }
+
+    // ── 从 gamedataManager 刷新着色器设置（优先 gamedata，回退全局 setting）──
+    if (m_shaderEnCell) {
+        std::string en = getGamedataOrSettingStr(fileName,
+            GAMEDATA_FIELD_SHADER_ENABLED, KEY_DISPLAY_SHADER_ENABLED, "false");
+        m_shaderEnCell->setOn(en == "true" || en == "1", false);
+    }
+    if (m_shaderPathCell) {
+        std::string path = getGamedataOrSettingStr(fileName,
+            GAMEDATA_FIELD_SHADER_PATH, KEY_DISPLAY_SHADER_PATH, "");
+        m_shaderPathCell->setDetailText(path.empty()
+            ? "beiklive/settings/display/overlay_not_set"_i18n
+            : beiklive::string::extractFileName(path));
     }
 }
 

@@ -181,6 +181,7 @@ private:
     brls::Box*                          m_shaderParamBox         = nullptr; ///< 着色器参数区域容器
     brls::SelectorCell*                 m_dispModeCell           = nullptr; ///< 显示模式选择器
     brls::SelectorCell*                 m_filterCell             = nullptr; ///< 纹理过滤选择器
+    brls::BooleanCell*                  m_shaderEnCell           = nullptr; ///< 着色器开关单元格
     brls::SelectorCell*                 m_intScaleCell           = nullptr; ///< 整数倍缩放选择器
     brls::SliderCell*                   m_xOffsetSlider          = nullptr; ///< X 坐标偏移滑条
     brls::SliderCell*                   m_yOffsetSlider          = nullptr; ///< Y 坐标偏移滑条

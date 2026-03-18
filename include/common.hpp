@@ -202,6 +202,7 @@ extern beiklive::GameRunner* gameRunner;
 #define GAMEDATA_FIELD_DISPLAY_Y_OFFSET "display.y_offset"   ///< Y 坐标偏移
 #define GAMEDATA_FIELD_DISPLAY_CUSTOM_SCALE "display.custom_scale" ///< 自定义缩放倍率
 // 着色器 per-game 字段
+#define GAMEDATA_FIELD_SHADER_ENABLED  "shader.enabled"       ///< 游戏专属着色器开关（"true"/"false"）
 #define GAMEDATA_FIELD_SHADER_PATH     "shader.path"          ///< 游戏专属着色器路径（.glslp）
 #define GAMEDATA_FIELD_SHADER_PARAM_NAMES  "shader.params.name"  ///< 参数名列表（StringArray）
 #define GAMEDATA_FIELD_SHADER_PARAM_VALUES "shader.params.value" ///< 参数值列表（FloatArray）
