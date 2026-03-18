@@ -16,6 +16,37 @@ static constexpr float STATE_ROW_HEIGHT   = 80.0f;
 /// 状态面板右侧预览图区域宽度百分比（相对于面板宽度）。
 static constexpr float STATE_PREVIEW_WIDTH_PCT = 50.0f;
 
+// ============================================================
+// HideableSliderCell – 修复 SliderCell::getDefaultFocus() 不检查可见性的问题
+//
+// 问题根因：
+//   brls::SliderCell::getDefaultFocus() 直接调用
+//   slider->getDefaultFocus()，后者返回内部 pointer Rectangle 指针本身，
+//   而不调用 pointer->getDefaultFocus()（不检查 isFocusable()）。
+//   因此即使 SliderCell 被设置为 GONE，getDefaultFocus() 仍会返回非 nullptr，
+//   导致 Box::getNextFocus() 遍历到隐藏的 SliderCell 就停止，
+//   无法继续向上找到 m_filterCell（纹理过滤选项）。
+//
+// 修复方案：
+//   子类化 SliderCell，在 getDefaultFocus() 中先检查自身可见性，
+//   若已隐藏（GONE/INVISIBLE）则返回 nullptr，
+//   使 Box::getNextFocus() 能跳过隐藏的滑条并正确找到下一个可聚焦视图。
+// ============================================================
+namespace {
+/// 可见性感知滑条单元格：当自身不可见时返回 nullptr，
+/// 确保焦点遍历能正确跳过隐藏的滑条。
+class HideableSliderCell : public brls::SliderCell
+{
+public:
+    brls::View* getDefaultFocus() override
+    {
+        if (getVisibility() != brls::Visibility::VISIBLE)
+            return nullptr;
+        return brls::SliderCell::getDefaultFocus();
+    }
+};
+} // namespace
+
 
 
 GameMenu::GameMenu()
@@ -346,7 +377,7 @@ GameMenu::GameMenu()
         displayBox->addView(m_posScaleHeader);
 
         // --- X 坐标偏移滑条 ---
-        m_xOffsetSlider = new brls::SliderCell();
+        m_xOffsetSlider = new HideableSliderCell();
         {
             float initX = cfgGetFloat("display.x_offset", 0.f);
             m_xOffsetSlider->init("beiklive/gamemenu/x_offset"_i18n,
@@ -370,7 +401,7 @@ GameMenu::GameMenu()
         displayBox->addView(m_xOffsetSlider);
 
         // --- Y 坐标偏移滑条 ---
-        m_yOffsetSlider = new brls::SliderCell();
+        m_yOffsetSlider = new HideableSliderCell();
         {
             float initY = cfgGetFloat("display.y_offset", 0.f);
             m_yOffsetSlider->init("beiklive/gamemenu/y_offset"_i18n,
@@ -393,7 +424,7 @@ GameMenu::GameMenu()
         displayBox->addView(m_yOffsetSlider);
 
         // --- 自定义缩放滑条 ---
-        m_customScaleSlider = new brls::SliderCell();
+        m_customScaleSlider = new HideableSliderCell();
         {
             float initScale = cfgGetFloat("display.custom_scale", 1.f);
             m_customScaleSlider->init("beiklive/gamemenu/custom_scale"_i18n,
@@ -637,10 +668,10 @@ void GameMenu::updateDisplayModeVisibility(int modeIdx)
     auto intVis     = isInteger ? brls::Visibility::VISIBLE : brls::Visibility::GONE;
 
     if (m_posScaleHeader)    m_posScaleHeader->setVisibility(customVis);
-    // SliderCell 本身不可聚焦，但其内部 slider 子视图可聚焦。
-    // 若仅设置 SliderCell 为 GONE，内部 slider 仍为 VISIBLE，
-    // Box::getDefaultFocus() 通过 lastFocusedView 缓存仍可将焦点定向到隐藏的 slider。
-    // 因此在隐藏时同步禁用 slider 的可聚焦性，显示时再恢复。
+    // HideableSliderCell 已在 getDefaultFocus() 中检查自身可见性（GONE 时返回 nullptr），
+    // 确保 Box::getNextFocus() 遍历时能跳过隐藏的滑条，正确找到相邻的可聚焦视图。
+    // 额外保留 slider->setFocusable() 调用作为安全措施，
+    // 防止外部通过 giveFocus(slider) 直接将焦点交给隐藏的滑条内部视图。
     if (m_xOffsetSlider) {
         m_xOffsetSlider->setVisibility(customVis);
         m_xOffsetSlider->slider->setFocusable(isCustom);
