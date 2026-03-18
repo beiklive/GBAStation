@@ -400,14 +400,12 @@ void GameView::initialize()
 
     // ---- 初始化渲染链（含可选着色器管线） --------------------------
     {
-        std::string shaderPath;
-        bool shaderEnabled = false;
-        if (gameRunner && gameRunner->settingConfig) {
-            auto v = gameRunner->settingConfig->Get(KEY_DISPLAY_SHADER_ENABLED);
-            if (v) { if (auto s = v->AsString()) shaderEnabled = (*s == "true" || *s == "1"); }
-            auto vp = gameRunner->settingConfig->Get(KEY_DISPLAY_SHADER_PATH);
-            if (vp) { if (auto s = vp->AsString()) shaderPath = *s; }
-        }
+        // 优先从 gamedataManager 读取游戏专属着色器设置，回退到全局配置
+        std::string enabledStr = getGamedataOrSettingStr(m_romFileName,
+            GAMEDATA_FIELD_SHADER_ENABLED, KEY_DISPLAY_SHADER_ENABLED, "false");
+        bool shaderEnabled = (enabledStr == "true" || enabledStr == "1");
+        std::string shaderPath = getGamedataOrSettingStr(m_romFileName,
+            GAMEDATA_FIELD_SHADER_PATH, KEY_DISPLAY_SHADER_PATH, "");
         // 仅当开关开启且路径非空时加载着色器
         std::string effectivePath = (shaderEnabled && !shaderPath.empty()) ? shaderPath : "";
         bklog::info("GameView: 着色器开关={}, 路径='{}', 生效路径='{}'",
