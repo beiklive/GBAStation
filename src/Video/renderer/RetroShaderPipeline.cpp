@@ -458,9 +458,9 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
         // 激活着色器
         glUseProgram(pass.program);
 
-        // 根据通道的 wrap_mode 配置，在绑定输入纹理前设置其环绕模式。
-        // 部分着色器（如 phosphor-dot）在 UV 超出 [0,1] 时期望返回黑色（clamp_to_border），
-        // 而非拉伸边缘像素（clamp_to_edge）。
+        // 根据通道的 wrap_mode 和 filter_linear 配置，在绑定输入纹理前设置其采样参数。
+        // RetroArch 规范：filter_linearN 决定通道 N 的输入纹理（即前一通道 FBO 输出）的过滤方式；
+        // 部分着色器在 UV 超出 [0,1] 时期望返回黑色（clamp_to_border），而非拉伸边缘像素。
         {
             GLenum wrapGL = GL_CLAMP_TO_EDGE;
             switch (pass.desc.wrapMode) {
@@ -482,10 +482,15 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
                     break;
             }
 
-            // 设置输入纹理（currentTex）的环绕模式
+            // 按当前通道的 filter_linear 决定输入纹理过滤模式
+            GLenum filterGL = pass.filterLinear ? GL_LINEAR : GL_NEAREST;
+
+            // 设置输入纹理（currentTex）的环绕模式和过滤模式
             glBindTexture(GL_TEXTURE_2D, currentTex);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, static_cast<GLint>(wrapGL));
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, static_cast<GLint>(wrapGL));
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, static_cast<GLint>(filterGL));
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, static_cast<GLint>(filterGL));
 #if !defined(USE_GLES2)
             // clamp_to_border 时设置边框颜色为黑色透明
             if (wrapGL == GL_CLAMP_TO_BORDER) {
@@ -650,14 +655,13 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
     glBindVertexArray(prevVAO);
 #endif
 
-    // 恢复原始输入纹理（游戏帧 m_texture）的环绕模式为默认值（clamp_to_edge），
-    // 防止管线修改的 wrap_mode 影响 NanoVG 后续对该纹理的直通渲染。
-    // 注：此处 prevTex 在函数开头已定义（调用前的 GL_TEXTURE0 绑定对象），
-    //     需在修改 inputTex wrap mode 后将 GL_TEXTURE0 恢复到调用前的状态。
+    // 恢复原始输入纹理（游戏帧 m_texture）的采样参数为默认值，
+    // 防止管线修改的 wrap_mode/filter_mode 影响 NanoVG 后续对该纹理的直通渲染。
     if (inputTex) {
         glBindTexture(GL_TEXTURE_2D, inputTex);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        // 注：不重置 MIN/MAG_FILTER，游戏纹理过滤由 GameTexture::setFilter() 管理
         // 将 GL_TEXTURE0 恢复为调用前绑定的纹理（已在上方 state restore 中保存）
         glBindTexture(GL_TEXTURE_2D, prevTex);
     }

@@ -142,40 +142,58 @@ GLuint ShaderCompiler::compileRetroShader(const std::string& glslPath)
     oss << f.rdbuf();
     const std::string body = oss.str();
 
-    // 去除文件中已有的 #version 指令（由我们统一注入）
+    // 从文件中提取 #version 声明，并构建去除 #version 的主体。
+    // 策略：保留着色器声明的版本（如 #version 330），若无声明则回退到平台默认值。
+    // 这样可兼容 nnedi3（需要 #version 330）、ScaleFX（#version 130）等不同着色器。
     std::string cleanBody;
+    std::string extractedVersionLine; // 来自着色器的 "#version XXX" 行（去掉换行符）
     {
         std::istringstream iss(body);
         std::string line;
         while (std::getline(iss, line)) {
             // 去行尾 \r
             if (!line.empty() && line.back() == '\r') line.pop_back();
-            // 跳过现有 #version 行（由我们统一注入）
+            // 识别并提取 #version 行
             std::string trimLine = line;
             size_t firstNonSpace = trimLine.find_first_not_of(" \t");
             if (firstNonSpace != std::string::npos &&
                 trimLine.substr(firstNonSpace, 8) == "#version") {
-                continue;
+                // 保留着色器声明的第一个 #version 行（后续重复行发出警告）
+                if (extractedVersionLine.empty()) {
+                    extractedVersionLine = trimLine.substr(firstNonSpace);
+                } else {
+                    brls::Logger::warning("ShaderCompiler: 着色器含多个 #version 声明，忽略重复行: {}",
+                                          trimLine.substr(firstNonSpace));
+                }
+                continue; // 从 cleanBody 中移除，稍后统一注入到最前面
             }
             cleanBody += line + "\n";
         }
     }
 
-    const char* ver      = glslVersionString();
+    // 确定最终使用的 #version 行：
+    //   - 若着色器声明了版本，使用该版本（如 "#version 330"）
+    //   - 否则使用平台默认版本（如 "#version 130"）
+    std::string versionLine;
+    if (!extractedVersionLine.empty()) {
+        versionLine = extractedVersionLine + "\n";
+    } else {
+        versionLine = glslVersionString();
+    }
     const char* fragPrec = fragPrecisionPrefix();
 
     // 顶点着色器：注入版本 + VERTEX 宏 + PARAMETER_UNIFORM 宏
     // PARAMETER_UNIFORM 宏告知着色器使用 uniform float 而非 #define 常量，
     // 使运行时通过 glUniform1f 设置的参数值能正确生效。
     std::string vertSrc =
-        std::string(ver) +
+        versionLine +
         "#define VERTEX\n"
         "#define PARAMETER_UNIFORM\n" +
         cleanBody;
 
     // 片段着色器：注入版本 + 精度 + FRAGMENT 宏 + PARAMETER_UNIFORM 宏
     std::string fragSrc =
-        std::string(ver) +
+        versionLine +
         std::string(fragPrec) +
         "#define FRAGMENT\n"
         "#define PARAMETER_UNIFORM\n" +

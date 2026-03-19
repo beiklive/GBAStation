@@ -2280,30 +2280,42 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
 
     // ---- 使用 NanoVG 渲染游戏纹理 ------------------------
     if (m_nvgImage >= 0) {
-        // 计算显示矩形的参考内容尺寸：
-        // - 无着色器或视口缩放着色器（FBO 输出 == 视口大小）：使用原始游戏尺寸，
-        //   保证宽高比及缩放模式正常工作，NanoVG 自动拉伸纹理填充矩形。
+        // 计算显示矩形：
+        // - 视口缩放着色器（FBO 输出 == 视口大小）：着色器自行处理宽高比（如居中/裁剪），
+        //   直接填充整个视口，不额外进行 NanoVG 宽高比缩放，避免双重缩放导致画面变形。
         // - source/absolute 缩放着色器（FBO 输出 ≠ 视口大小，如 scalefx 3×）：
         //   使用着色器实际输出尺寸，确保 computeRect（尤其整数缩放模式）计算出
         //   与着色器 FBO 等比例的显示矩形，NanoVG 以整数或精确比例映射纹理，
         //   避免非整数缩放破坏多通道着色器精心构造的子像素网格。
+        // - 无着色器：使用原始游戏尺寸，保证宽高比及缩放模式正常工作。
         unsigned contentW = (m_texWidth  > 0) ? m_texWidth  : static_cast<unsigned>(displayW);
         unsigned contentH = (m_texHeight > 0) ? m_texHeight : static_cast<unsigned>(displayH);
+        bool fillFullViewport = false;
         if (m_renderChain.hasShader()) {
             unsigned shOutW = m_renderChain.outputW();
             unsigned shOutH = m_renderChain.outputH();
             unsigned viewW  = static_cast<unsigned>(std::lround(width));
             unsigned viewH  = static_cast<unsigned>(std::lround(height));
-            // 若着色器输出有效且不等于视口（非 viewport-scale 着色器），
-            // 使用着色器输出尺寸计算显示矩形
-            if (shOutW > 0 && shOutH > 0 &&
-                !(shOutW == viewW && shOutH == viewH)) {
-                contentW = shOutW;
-                contentH = shOutH;
+            if (shOutW > 0 && shOutH > 0) {
+                if (shOutW == viewW && shOutH == viewH) {
+                    // 视口缩放着色器：直接填充整个视口
+                    fillFullViewport = true;
+                } else {
+                    // source/absolute 缩放着色器：使用着色器输出尺寸
+                    contentW = shOutW;
+                    contentH = shOutH;
+                }
             }
         }
-        beiklive::DisplayRect rect = m_display.computeRect(x, y, width, height,
-                                                            contentW, contentH);
+
+        beiklive::DisplayRect rect;
+        if (fillFullViewport) {
+            // 视口缩放着色器：着色器已按 OutputSize 自行处理宽高比（居中/裁剪/填充），
+            // 不再通过 computeRect() 做额外的 NanoVG 宽高比缩放，否则会二次扭曲画面。
+            rect = { x, y, width, height };
+        } else {
+            rect = m_display.computeRect(x, y, width, height, contentW, contentH);
+        }
 
         NVGpaint imgPaint = nvgImagePattern(vg,
                                             rect.x, rect.y,
