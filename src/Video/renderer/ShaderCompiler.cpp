@@ -95,6 +95,15 @@ GLuint ShaderCompiler::compileProgram(const std::string& vertSrc,
     glBindAttribLocation(prog, 1, "COLOR");
     glBindAttribLocation(prog, 2, "TexCoord");
 
+    // PassPrevNTexCoord 属性（RetroArch 规范：第 N 个历史通道的纹理坐标）
+    // 在本实现中所有 FBO 纹理的 UV 均为 [0,1]，与 TexCoord 完全一致，
+    // 因此将这些属性绑定到与 TexCoord 相同的顶点位置（2），
+    // 使着色器能正确采样历史通道纹理（如 diffusion-sampler/mixer 等）。
+    for (int n = 1; n <= 8; ++n) {
+        std::string attrName = "PassPrev" + std::to_string(n) + "TexCoord";
+        glBindAttribLocation(prog, 2, attrName.c_str());
+    }
+
     glLinkProgram(prog);
 
     glDetachShader(prog, vert);
