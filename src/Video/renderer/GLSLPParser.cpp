@@ -1,5 +1,6 @@
 #include "Video/renderer/GLSLPParser.hpp"
 
+#include <borealis.hpp>
 #include <fstream>
 #include <sstream>
 #include <algorithm>
@@ -36,6 +37,20 @@ static ShaderPassDesc::ScaleType parseScaleType(const std::string& val)
     if (v == "viewport") return ShaderPassDesc::ScaleType::Viewport;
     if (v == "absolute") return ShaderPassDesc::ScaleType::Absolute;
     return ShaderPassDesc::ScaleType::Source; // 默认 source
+}
+
+/// 将 wrap_mode 字符串转换为 WrapMode 枚举。
+static ShaderPassDesc::WrapMode parseWrapMode(const std::string& val)
+{
+    std::string v = toLower(trimValue(val));
+    if (v == "clamp_to_border") return ShaderPassDesc::WrapMode::ClampToBorder;
+    if (v == "repeat")          return ShaderPassDesc::WrapMode::Repeat;
+    if (v == "mirrored_repeat") return ShaderPassDesc::WrapMode::MirroredRepeat;
+    if (v != "clamp_to_edge" && !v.empty()) {
+        // 未识别的 wrap_mode 值，降级到默认（clamp_to_edge）并输出警告
+        brls::Logger::warning("GLSLPParser: 未识别的 wrap_mode 值 \"{}\"，使用默认 clamp_to_edge", v);
+    }
+    return ShaderPassDesc::WrapMode::ClampToEdge; // 默认 clamp_to_edge
 }
 
 // ============================================================
@@ -106,6 +121,14 @@ bool GLSLPParser::parse(const std::string& glslpPath,
             if (flt != kv.end()) {
                 std::string v = toLower(flt->second);
                 pass.filterLinear = (v == "true" || v == "1" || v == "yes");
+            }
+        }
+
+        // wrap_mode（输入纹理环绕模式）
+        {
+            auto wm = kv.find("wrap_mode" + idx);
+            if (wm != kv.end()) {
+                pass.wrapMode = parseWrapMode(wm->second);
             }
         }
 

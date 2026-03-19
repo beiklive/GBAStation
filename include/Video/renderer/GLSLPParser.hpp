@@ -31,6 +31,18 @@ struct ShaderPassDesc {
 
     bool floatFramebuffer = false; ///< 是否使用浮点 FBO（暂未使用，保留兼容性）
     bool srgbFramebuffer  = false; ///< 是否使用 sRGB FBO（暂未使用，保留兼容性）
+
+    /// 输入纹理的环绕（wrap）模式（对应 .glslp 的 wrap_mode 字段）
+    /// ClampToBorder：超出 [0,1] 的坐标返回边框色（黑色），用于避免边缘像素拉伸。
+    /// ClampToEdge：超出部分钳制到边缘像素（默认，兼容性最好）。
+    enum class WrapMode {
+        ClampToEdge,      ///< GL_CLAMP_TO_EDGE（默认）
+        ClampToBorder,    ///< GL_CLAMP_TO_BORDER（black border）
+        Repeat,           ///< GL_REPEAT
+        MirroredRepeat,   ///< GL_MIRRORED_REPEAT
+    };
+
+    WrapMode wrapMode = WrapMode::ClampToEdge; ///< 输入纹理环绕模式
 };
 
 /// .glslp 预设中声明的外部纹理描述
@@ -66,6 +78,7 @@ struct ShaderParamInfo {
 ///   shader0 = path/to/shader.glsl
 ///   alias0 = "NAME"
 ///   filter_linear0 = true|false
+///   wrap_mode0 = clamp_to_border|clamp_to_edge|repeat|mirrored_repeat
 ///   scale_type_x0 = source|viewport|absolute
 ///   scale_type_y0 = source|viewport|absolute
 ///   scale_x0 = 1.0
