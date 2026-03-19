@@ -137,14 +137,21 @@ bool GLSLPParser::parse(const std::string& glslpPath,
             auto st = kv.find("scale_type" + idx);
             if (st != kv.end()) {
                 pass.scaleTypeX = pass.scaleTypeY = parseScaleType(st->second);
+                pass.hasExplicitScale = true;
             }
         }
         // scale_type_x / scale_type_y（单独覆盖）
         {
             auto stx = kv.find("scale_type_x" + idx);
-            if (stx != kv.end()) pass.scaleTypeX = parseScaleType(stx->second);
+            if (stx != kv.end()) {
+                pass.scaleTypeX = parseScaleType(stx->second);
+                pass.hasExplicitScale = true;
+            }
             auto sty = kv.find("scale_type_y" + idx);
-            if (sty != kv.end()) pass.scaleTypeY = parseScaleType(sty->second);
+            if (sty != kv.end()) {
+                pass.scaleTypeY = parseScaleType(sty->second);
+                pass.hasExplicitScale = true;
+            }
         }
 
         // scale（同时设置 X 和 Y）
@@ -154,6 +161,7 @@ bool GLSLPParser::parse(const std::string& glslpPath,
                 try {
                     float v = std::stof(sc->second);
                     pass.scaleX = pass.scaleY = v;
+                    pass.hasExplicitScale = true;
                 } catch (...) {}
             }
         }
@@ -161,11 +169,17 @@ bool GLSLPParser::parse(const std::string& glslpPath,
         {
             auto sx = kv.find("scale_x" + idx);
             if (sx != kv.end()) {
-                try { pass.scaleX = std::stof(sx->second); } catch (...) {}
+                try {
+                    pass.scaleX = std::stof(sx->second);
+                    pass.hasExplicitScale = true;
+                } catch (...) {}
             }
             auto sy = kv.find("scale_y" + idx);
             if (sy != kv.end()) {
-                try { pass.scaleY = std::stof(sy->second); } catch (...) {}
+                try {
+                    pass.scaleY = std::stof(sy->second);
+                    pass.hasExplicitScale = true;
+                } catch (...) {}
             }
         }
 
@@ -195,6 +209,20 @@ bool GLSLPParser::parse(const std::string& glslpPath,
         }
 
         outPasses.push_back(std::move(pass));
+    }
+
+    // ---- 最后一个通道的缩放默认值处理 ----
+    // 按 RetroArch 着色器预设规范：
+    //   非最后通道无显式缩放时：默认为 source×1.0（已在 ShaderPassDesc 中初始化）
+    //   最后一个通道无显式缩放时：默认为 viewport×1.0（输出填满屏幕）
+    if (!outPasses.empty() && !outPasses.back().hasExplicitScale) {
+        auto& last = outPasses.back();
+        last.scaleTypeX = ShaderPassDesc::ScaleType::Viewport;
+        last.scaleTypeY = ShaderPassDesc::ScaleType::Viewport;
+        last.scaleX = 1.0f;
+        last.scaleY = 1.0f;
+        brls::Logger::debug("GLSLPParser: 共 {} 个通道，最后通道（索引 {}）无显式缩放，默认设置为 viewport×1.0",
+                             outPasses.size(), outPasses.size() - 1);
     }
 
     // ---- 解析外部纹理声明（textures = NAME1;NAME2;...）----

@@ -29,6 +29,10 @@ struct ShaderPassDesc {
     float scaleX = 1.0f; ///< X 轴缩放系数（ScaleType::Source/Viewport）或像素数（Absolute）
     float scaleY = 1.0f; ///< Y 轴缩放系数
 
+    /// 是否在 .glslp 中显式指定了缩放设置（scale_type/scale 等键存在）。
+    /// 若为 false，则最后一个通道需按 RetroArch 规范默认为 viewport×1.0。
+    bool hasExplicitScale = false;
+
     bool floatFramebuffer = false; ///< 是否使用浮点 FBO（暂未使用，保留兼容性）
     bool srgbFramebuffer  = false; ///< 是否使用 sRGB FBO（暂未使用，保留兼容性）
 
