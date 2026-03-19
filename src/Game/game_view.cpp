@@ -2222,6 +2222,16 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
         }
     }
 
+    // ---- 预先按显示模式计算目标矩形 ----------
+    // 用原始游戏尺寸先算出显示区域，将其宽高作为 viewport 类着色器的渲染目标尺寸，
+    // 保证着色器只渲染到"应该显示的区域"，从而使显示模式在着色器开启时同样生效。
+    beiklive::DisplayRect preRect = { x, y, width, height };
+    if (m_texWidth > 0 && m_texHeight > 0) {
+        preRect = m_display.computeRect(x, y, width, height, m_texWidth, m_texHeight);
+    }
+    unsigned passViewW = std::max(1u, static_cast<unsigned>(std::lround(preRect.w)));
+    unsigned passViewH = std::max(1u, static_cast<unsigned>(std::lround(preRect.h)));
+
     // ---- 运行渲染链并确定显示纹理 ----------
     // 若已加载着色器管线，将游戏纹理经过多通道 Shader 处理后作为显示纹理；
     // 否则直通（pass-through）返回原始游戏纹理。
@@ -2231,15 +2241,8 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
 
     if (m_texWidth > 0 && m_texHeight > 0) {
         GLuint chainOut = m_renderChain.run(m_texture, m_texWidth, m_texHeight,
-                                            static_cast<unsigned>(std::lround(width)),
-                                            static_cast<unsigned>(std::lround(height)));
+                                            passViewW, passViewH);
         if (chainOut != 0) {
-            if (chainOut != m_texture) {
-                // 着色器管线输出：使用管线结果纹理
-                // bklog::debug("GameView: 着色器输出纹理 id={} {}×{}",
-                //              chainOut,
-                //              m_renderChain.outputW(), m_renderChain.outputH());
-            }
             displayTex = chainOut;
             // 使用着色器管线实际输出尺寸（可能因缩放不同于输入）
             if (m_renderChain.outputW() > 0) displayW = static_cast<int>(m_renderChain.outputW());
@@ -2280,41 +2283,22 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
 
     // ---- 使用 NanoVG 渲染游戏纹理 ------------------------
     if (m_nvgImage >= 0) {
-        // 计算显示矩形：
-        // - 视口缩放着色器（FBO 输出 == 视口大小）：着色器自行处理宽高比（如居中/裁剪），
-        //   直接填充整个视口，不额外进行 NanoVG 宽高比缩放，避免双重缩放导致画面变形。
-        // - source/absolute 缩放着色器（FBO 输出 ≠ 视口大小，如 scalefx 3×）：
-        //   使用着色器实际输出尺寸，确保 computeRect（尤其整数缩放模式）计算出
-        //   与着色器 FBO 等比例的显示矩形，NanoVG 以整数或精确比例映射纹理，
+        // 确定最终显示矩形：
+        // - 视口缩放着色器（FBO 输出尺寸 == passViewW×passViewH）：
+        //   着色器已按 preRect 尺寸渲染，直接使用预计算的 preRect，
+        //   显示模式（Fit/Original/IntegerScale/Custom）在渲染链传参时已生效。
+        // - source/absolute 缩放着色器（FBO 输出尺寸 ≠ passViewW×passViewH，如 scalefx 3×）：
+        //   以着色器实际输出尺寸重新调用 computeRect()，保持宽高比缩放正确，
         //   避免非整数缩放破坏多通道着色器精心构造的子像素网格。
-        // - 无着色器：使用原始游戏尺寸，保证宽高比及缩放模式正常工作。
-        unsigned contentW = (m_texWidth  > 0) ? m_texWidth  : static_cast<unsigned>(displayW);
-        unsigned contentH = (m_texHeight > 0) ? m_texHeight : static_cast<unsigned>(displayH);
-        bool fillFullViewport = false;
+        // - 无着色器：直接使用预计算的 preRect。
+        beiklive::DisplayRect rect = preRect;
         if (m_renderChain.hasShader()) {
             unsigned shOutW = m_renderChain.outputW();
             unsigned shOutH = m_renderChain.outputH();
-            unsigned viewW  = static_cast<unsigned>(std::lround(width));
-            unsigned viewH  = static_cast<unsigned>(std::lround(height));
-            if (shOutW > 0 && shOutH > 0) {
-                if (shOutW == viewW && shOutH == viewH) {
-                    // 视口缩放着色器：直接填充整个视口
-                    fillFullViewport = true;
-                } else {
-                    // source/absolute 缩放着色器：使用着色器输出尺寸
-                    contentW = shOutW;
-                    contentH = shOutH;
-                }
+            if (shOutW > 0 && shOutH > 0 && (shOutW != passViewW || shOutH != passViewH)) {
+                // source/absolute 缩放着色器：输出尺寸与传入视口不同，重新计算显示矩形
+                rect = m_display.computeRect(x, y, width, height, shOutW, shOutH);
             }
-        }
-
-        beiklive::DisplayRect rect;
-        if (fillFullViewport) {
-            // 视口缩放着色器：着色器已按 OutputSize 自行处理宽高比（居中/裁剪/填充），
-            // 不再通过 computeRect() 做额外的 NanoVG 宽高比缩放，否则会二次扭曲画面。
-            rect = { x, y, width, height };
-        } else {
-            rect = m_display.computeRect(x, y, width, height, contentW, contentH);
         }
 
         NVGpaint imgPaint = nvgImagePattern(vg,
