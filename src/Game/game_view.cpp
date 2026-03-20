@@ -225,8 +225,14 @@ void GameView::initialize()
         cfg->SetDefault(KEY_DISPLAY_OVERLAY_GBA_PATH, CV(std::string("")));
         cfg->SetDefault(KEY_DISPLAY_OVERLAY_GBC_PATH, CV(std::string("")));
         // ---- 着色器预设路径（空=直通，不使用着色器）与开关 --------
-        cfg->SetDefault(KEY_DISPLAY_SHADER_PATH,    CV(std::string("")));
-        cfg->SetDefault(KEY_DISPLAY_SHADER_ENABLED, CV(std::string("false")));
+        cfg->SetDefault(KEY_DISPLAY_SHADER_PATH,        CV(std::string("")));
+        cfg->SetDefault(KEY_DISPLAY_SHADER_ENABLED,     CV(std::string("false")));
+        cfg->SetDefault(KEY_DISPLAY_SHADER_GBA_PATH,    CV(std::string("")));
+        cfg->SetDefault(KEY_DISPLAY_SHADER_GBA_ENABLED, CV(std::string("false")));
+        cfg->SetDefault(KEY_DISPLAY_SHADER_GBC_PATH,    CV(std::string("")));
+        cfg->SetDefault(KEY_DISPLAY_SHADER_GBC_ENABLED, CV(std::string("false")));
+        cfg->SetDefault(KEY_DISPLAY_SHADER_GB_PATH,     CV(std::string("")));
+        cfg->SetDefault(KEY_DISPLAY_SHADER_GB_ENABLED,  CV(std::string("false")));
 
         // ---- 按键映射默认值（委托给 InputMappingConfig）----
         m_inputMap.setDefaults(*cfg);
@@ -400,12 +406,28 @@ void GameView::initialize()
 
     // ---- 初始化渲染链（含可选着色器管线） --------------------------
     {
-        // 优先从 gamedataManager 读取游戏专属着色器设置，回退到全局配置
+        // 优先从 gamedataManager 读取游戏专属着色器设置
         std::string enabledStr = getGamedataOrSettingStr(m_romFileName,
             GAMEDATA_FIELD_SHADER_ENABLED, KEY_DISPLAY_SHADER_ENABLED, "false");
         bool shaderEnabled = (enabledStr == "true" || enabledStr == "1");
-        std::string shaderPath = getGamedataOrSettingStr(m_romFileName,
-            GAMEDATA_FIELD_SHADER_PATH, KEY_DISPLAY_SHADER_PATH, "");
+        std::string shaderPath = getGameDataStr(m_romFileName, GAMEDATA_FIELD_SHADER_PATH, "");
+
+        // 若游戏无专属着色器路径，根据 ROM 扩展名选择平台对应的全局着色器
+        if (shaderPath.empty() && !m_romFileName.empty()) {
+            const std::string ext = beiklive::string::getFileSuffix(m_romFileName);
+            if (beiklive::string::iequals(ext, "gba")) {
+                shaderPath = beiklive::cfgGetStr(KEY_DISPLAY_SHADER_GBA_PATH, "");
+            } else if (beiklive::string::iequals(ext, "gbc")) {
+                shaderPath = beiklive::cfgGetStr(KEY_DISPLAY_SHADER_GBC_PATH, "");
+            } else if (beiklive::string::iequals(ext, "gb")) {
+                shaderPath = beiklive::cfgGetStr(KEY_DISPLAY_SHADER_GB_PATH, "");
+            }
+            // 若平台路径也为空，回退到全局通用着色器路径
+            if (shaderPath.empty()) {
+                shaderPath = beiklive::cfgGetStr(KEY_DISPLAY_SHADER_PATH, "");
+            }
+        }
+
         // 仅当开关开启且路径非空时加载着色器
         std::string effectivePath = (shaderEnabled && !shaderPath.empty()) ? shaderPath : "";
         bklog::info("GameView: 着色器开关={}, 路径='{}', 生效路径='{}'",

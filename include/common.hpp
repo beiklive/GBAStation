@@ -181,6 +181,9 @@ extern beiklive::GameRunner* gameRunner;
 // GBC 专属着色器设置
 #define KEY_DISPLAY_SHADER_GBC_ENABLED "display.shader.gbc.enabled" ///< GBC 着色器开关
 #define KEY_DISPLAY_SHADER_GBC_PATH    "display.shader.gbc"         ///< GBC 着色器预设路径
+// GB（原版 Game Boy）专属着色器设置
+#define KEY_DISPLAY_SHADER_GB_ENABLED  "display.shader.gb.enabled"  ///< GB 着色器开关
+#define KEY_DISPLAY_SHADER_GB_PATH     "display.shader.gb"          ///< GB 着色器预设路径
 
 // ─── gamedataManager 字段名常量 ──────────────────────────────────────────────
 #define GAMEDATA_FIELD_LOGOPATH        "logopath"             ///< logo 图片路径（空=未设置）
