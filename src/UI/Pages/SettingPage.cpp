@@ -1024,6 +1024,10 @@ brls::ScrollingFrame* SettingPage::buildDisplayTab()
     makeShaderPathCell(KEY_DISPLAY_SHADER_GBC_PATH,
                        "beiklive/settings/display/shader_gbc_path"_i18n);
 
+    // GB 着色器路径
+    makeShaderPathCell(KEY_DISPLAY_SHADER_GB_PATH,
+                       "beiklive/settings/display/shader_gb_path"_i18n);
+
     scroll->setContentView(box);
     return scroll;
 }

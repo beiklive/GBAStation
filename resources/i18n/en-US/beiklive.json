@@ -170,7 +170,9 @@
             "shader_gba_enable": "GBA Shader",
             "shader_gba_path": "GBA Shader Path (.glslp)",
             "shader_gbc_enable": "GBC Shader",
-            "shader_gbc_path": "GBC Shader Path (.glslp)"
+            "shader_gbc_path": "GBC Shader Path (.glslp)",
+            "shader_gb_enable": "GB Shader",
+            "shader_gb_path": "GB Shader Path (.glslp)"
         },
         "audio": {
             "header_emu": "Emulator Audio",
