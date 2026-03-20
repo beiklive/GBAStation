@@ -11,7 +11,7 @@ namespace beiklive {
 // InputMappingConfig
 //
 // 集中管理模拟器所有按键绑定配置：
-//   - 游戏按钮映射（手柄+键盘 → retro joypad ID）
+//   - 游戏按钮映射（手柄 → retro joypad ID）
 //   - 模拟器热键（快进、倒带、快速存档等）
 //   - 快进/倒带设置（与绑定一同加载）
 //
@@ -44,27 +44,12 @@ public:
     };
 
     // ----------------------------------------------------------------
-    // 键盘按键组合：主扫描码 + 可选修饰键。
-    // 解析格式如 "F5"、"CTRL+F5"、"SHIFT+Z"。
-    // ----------------------------------------------------------------
-    struct KeyCombo
-    {
-        int  scancode = -1;     ///< 键盘扫描码；-1表示未绑定
-        bool ctrl     = false;
-        bool shift    = false;
-        bool alt      = false;
-
-        bool isBound() const { return scancode >= 0; }
-    };
-
-    // ----------------------------------------------------------------
-    // 游戏按钮绑定：retro joypad ID 映射到手柄按钮和/或键盘按键。
+    // 游戏按钮绑定：retro joypad ID 映射到手柄按钮。
     // ----------------------------------------------------------------
     struct GameButtonEntry
     {
-        unsigned retroId    = 0;   ///< RETRO_DEVICE_ID_JOYPAD_*
-        int      padButton  = -1;  ///< 手柄按钮；-1表示未绑定
-        int      kbScancode = -1;  ///< 键盘扫描码；-1表示未绑定
+        unsigned retroId   = 0;   ///< RETRO_DEVICE_ID_JOYPAD_*
+        int      padButton = -1;  ///< 手柄按钮；-1表示未绑定
     };
 
     // ----------------------------------------------------------------
@@ -114,14 +99,8 @@ public:
     // 静态解析器（可供未来设置UI复用）
     // ----------------------------------------------------------------
 
-    /// 解析键盘扫描码：整数（"88"）或名称（"X"、"TAB"）。
-    static int     parseKeyboardScancode(const std::string& s);
-
     /// 解析手柄按钮：整数或名称（"A"、"LB"、"RT"）。
     static int     parseGamepadButton(const std::string& s);
-
-    /// 解析按键组合字符串："F5"、"CTRL+F5"、"SHIFT+Z"、"none"。
-    static KeyCombo parseKeyCombo(const std::string& s);
 
     /// 返回热键手柄绑定对应的配置键名。
     /// 例如 Hotkey::QuickSave → "hotkey.quicksave.pad"

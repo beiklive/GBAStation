@@ -8,7 +8,6 @@
 #include <deque>
 #include <mutex>
 #include <thread>
-#include <unordered_map>
 #include <vector>
 
 #include "common.hpp"
@@ -172,8 +171,7 @@ class GameView : public brls::Box
 
     // ---- 主线程输入快照（线程安全访问） ----------------------------
     struct InputSnapshot {
-        brls::ControllerState           ctrlState{};
-        std::unordered_map<int, bool>   kbState;   ///< 键盘扫描码 → 是否按下
+        brls::ControllerState ctrlState{};
     };
     mutable std::mutex m_inputSnapMutex;
     InputSnapshot      m_inputSnap;

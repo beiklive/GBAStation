@@ -63,44 +63,6 @@ static int findIndex(const std::vector<std::string>& options,
 //  KeyCaptureView（按键捕获全屏页）
 // ─────────────────────────────────────────────────────────────────────────────
 
-struct CapKbdKey { const char* name; brls::BrlsKeyboardScancode sc; };
-static const CapKbdKey k_capKbdKeys[] = {
-    {"A",brls::BRLS_KBD_KEY_A},{"B",brls::BRLS_KBD_KEY_B},
-    {"C",brls::BRLS_KBD_KEY_C},{"D",brls::BRLS_KBD_KEY_D},
-    {"E",brls::BRLS_KBD_KEY_E},{"F",brls::BRLS_KBD_KEY_F},
-    {"G",brls::BRLS_KBD_KEY_G},{"H",brls::BRLS_KBD_KEY_H},
-    {"I",brls::BRLS_KBD_KEY_I},{"J",brls::BRLS_KBD_KEY_J},
-    {"K",brls::BRLS_KBD_KEY_K},{"L",brls::BRLS_KBD_KEY_L},
-    {"M",brls::BRLS_KBD_KEY_M},{"N",brls::BRLS_KBD_KEY_N},
-    {"O",brls::BRLS_KBD_KEY_O},{"P",brls::BRLS_KBD_KEY_P},
-    {"Q",brls::BRLS_KBD_KEY_Q},{"R",brls::BRLS_KBD_KEY_R},
-    {"S",brls::BRLS_KBD_KEY_S},{"T",brls::BRLS_KBD_KEY_T},
-    {"U",brls::BRLS_KBD_KEY_U},{"V",brls::BRLS_KBD_KEY_V},
-    {"W",brls::BRLS_KBD_KEY_W},{"X",brls::BRLS_KBD_KEY_X},
-    {"Y",brls::BRLS_KBD_KEY_Y},{"Z",brls::BRLS_KBD_KEY_Z},
-    {"0",brls::BRLS_KBD_KEY_0},{"1",brls::BRLS_KBD_KEY_1},
-    {"2",brls::BRLS_KBD_KEY_2},{"3",brls::BRLS_KBD_KEY_3},
-    {"4",brls::BRLS_KBD_KEY_4},{"5",brls::BRLS_KBD_KEY_5},
-    {"6",brls::BRLS_KBD_KEY_6},{"7",brls::BRLS_KBD_KEY_7},
-    {"8",brls::BRLS_KBD_KEY_8},{"9",brls::BRLS_KBD_KEY_9},
-    {"SPACE",brls::BRLS_KBD_KEY_SPACE},
-    {"ENTER",brls::BRLS_KBD_KEY_ENTER},
-    {"BACKSPACE",brls::BRLS_KBD_KEY_BACKSPACE},
-    {"TAB",brls::BRLS_KBD_KEY_TAB},
-    {"ESC",brls::BRLS_KBD_KEY_ESCAPE},
-    {"GRAVE",brls::BRLS_KBD_KEY_GRAVE_ACCENT},
-    {"UP",brls::BRLS_KBD_KEY_UP},{"DOWN",brls::BRLS_KBD_KEY_DOWN},
-    {"LEFT",brls::BRLS_KBD_KEY_LEFT},{"RIGHT",brls::BRLS_KBD_KEY_RIGHT},
-    {"F1",brls::BRLS_KBD_KEY_F1},{"F2",brls::BRLS_KBD_KEY_F2},
-    {"F3",brls::BRLS_KBD_KEY_F3},{"F4",brls::BRLS_KBD_KEY_F4},
-    {"F5",brls::BRLS_KBD_KEY_F5},{"F6",brls::BRLS_KBD_KEY_F6},
-    {"F7",brls::BRLS_KBD_KEY_F7},{"F8",brls::BRLS_KBD_KEY_F8},
-    {"F9",brls::BRLS_KBD_KEY_F9},{"F10",brls::BRLS_KBD_KEY_F10},
-    {"F11",brls::BRLS_KBD_KEY_F11},{"F12",brls::BRLS_KBD_KEY_F12},
-};
-static constexpr int k_capKbdKeyCount =
-    static_cast<int>(sizeof(k_capKbdKeys) / sizeof(k_capKbdKeys[0]));
-
 struct CapPadKey { const char* name; brls::ControllerButton btn; };
 static const CapPadKey k_capPadKeys[] = {
     {"LT",brls::BUTTON_LT},{"LB",brls::BUTTON_LB},{"LSB",brls::BUTTON_LSB},
@@ -117,14 +79,13 @@ static constexpr int k_capPadKeyCount =
 static constexpr int k_capMaxKeys = 2; ///< 组合键最大按键数
 
 /// 按键捕获全屏页，以 Activity 形式推入。
-/// 每帧通过 draw() 轮询键盘/手柄输入，检测到按键或 5 秒倒计时结束后调用 onDone(result)。
+/// 通过 registerAction 回调处理手柄输入，5 秒倒计时结束后调用 onDone(result)。
 /// 所有 borealis 导航操作均被消费，避免干扰捕获过程。
 class KeyCaptureView : public brls::Box
 {
 public:
-    explicit KeyCaptureView(bool isKeyboard,
-                            std::function<void(const std::string&)> onDone)
-        : m_isKeyboard(isKeyboard), m_onDone(std::move(onDone))
+    explicit KeyCaptureView(std::function<void(const std::string&)> onDone)
+        : m_onDone(std::move(onDone))
     {
         setFocusable(true);
         setAxis(brls::Axis::COLUMN);
@@ -133,9 +94,7 @@ public:
         setGrow(1.0f);
 
         m_promptLabel = new brls::Label();
-        m_promptLabel->setText(isKeyboard
-            ? "beiklive/settings/keybind/press_kbd"_i18n
-            : "beiklive/settings/keybind/press_pad"_i18n);
+        m_promptLabel->setText("beiklive/settings/keybind/press_pad"_i18n);
         m_promptLabel->setFontSize(24.f);
         m_promptLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
         addView(m_promptLabel);
@@ -163,7 +122,7 @@ public:
         m_startTime = std::chrono::steady_clock::now();
 
         // 消费所有手柄导航键，防止触发父视图操作或提前关闭页面。
-        // 手柄模式下，每次按键也会同时捕获绑定。
+        // 每次按键也会同时捕获绑定。
         static const brls::ControllerButton k_swallowBtns[] = {
             brls::BUTTON_A, brls::BUTTON_B, brls::BUTTON_X, brls::BUTTON_Y,
             brls::BUTTON_LB, brls::BUTTON_RB, brls::BUTTON_LT, brls::BUTTON_RT,
@@ -176,7 +135,7 @@ public:
         for (auto btn : k_swallowBtns) {
             registerAction("", btn,
                 [this, btn](brls::View*) -> bool {
-                    if (!m_done && !m_waitingForRelease && !m_isKeyboard) {
+                    if (!m_done && !m_waitingForRelease) {
                         captureGamepadButton(btn);
                     }
                     return true; // always consume
@@ -198,8 +157,7 @@ public:
         {
             if (m_waitingForRelease)
             {
-                if (m_isKeyboard) checkKeyboardRelease();
-                else              checkGamepadRelease();
+                checkGamepadRelease();
                 // 等待按键释放时重置倒计时，确保捕获开始后用户有完整 5 秒
                 m_startTime = std::chrono::steady_clock::now();
             }
@@ -219,7 +177,6 @@ public:
                     int secs = static_cast<int>(std::ceil(remaining));
                     m_countdownLabel->setText(std::to_string(secs) +
                         "beiklive/settings/keybind/countdown_suffix"_i18n);
-                    if (m_isKeyboard) pollKeyboard();
                     // 手柄捕获通过 registerAction 回调处理
                 }
             }
@@ -229,7 +186,6 @@ public:
     }
 
 private:
-    bool m_isKeyboard;
     std::function<void(const std::string&)> m_onDone;
     brls::Label* m_promptLabel    = nullptr;
     brls::Label* m_keyLabel       = nullptr;
@@ -269,93 +225,7 @@ private:
         // 不在此处调用 finish()，等待 5 秒倒计时结束以便用户输入组合键（第二个按钮）。
     }
 
-    // ── Keyboard capture (polled every frame) ──────────────────────────────
-
-    void pollKeyboard()
-    {
-#ifndef __SWITCH__
-        auto* platform = brls::Application::getPlatform();
-        auto* im = platform ? platform->getInputManager() : nullptr;
-        if (!im) return;
-
-        bool ctrl  = im->getKeyboardKeyState(brls::BRLS_KBD_KEY_LEFT_CONTROL) ||
-                     im->getKeyboardKeyState(brls::BRLS_KBD_KEY_RIGHT_CONTROL);
-        bool shift = im->getKeyboardKeyState(brls::BRLS_KBD_KEY_LEFT_SHIFT) ||
-                     im->getKeyboardKeyState(brls::BRLS_KBD_KEY_RIGHT_SHIFT);
-        bool alt   = im->getKeyboardKeyState(brls::BRLS_KBD_KEY_LEFT_ALT) ||
-                     im->getKeyboardKeyState(brls::BRLS_KBD_KEY_RIGHT_ALT);
-
-        // 收集当前所有按下的非修饰键
-        std::vector<std::string> pressed;
-        for (int i = 0; i < k_capKbdKeyCount; ++i) {
-            if (im->getKeyboardKeyState(k_capKbdKeys[i].sc))
-                pressed.push_back(k_capKbdKeys[i].name);
-        }
-
-        if (!pressed.empty()) {
-            // 构建新捕获集：修饰键在前，普通键在后，去重，上限 k_capMaxKeys
-            std::vector<std::string> newKeys = m_capturedKeys;
-            for (const auto& key : pressed) {
-                // Duplicate check
-                if (std::find(newKeys.begin(), newKeys.end(), key) != newKeys.end()) continue;
-                if (static_cast<int>(newKeys.size()) >= k_capMaxKeys) break;
-                newKeys.push_back(key);
-            }
-
-            // Prepend modifier prefix to the combo string
-            std::string combo;
-            if (ctrl)  combo += "CTRL+";
-            if (shift) combo += "SHIFT+";
-            if (alt)   combo += "ALT+";
-            combo += buildCombo(newKeys);
-
-            m_capturedKeys = newKeys;
-            m_captured     = combo;
-            m_keyLabel->setText(combo);
-            // Do NOT call finish() here – wait for the 5-second countdown to
-            // expire so the user has time to enter a combo (second key).
-        }
-        else if (ctrl || shift || alt)
-        {
-            // Show live modifier hint while waiting for a regular key
-            std::string mod;
-            if (ctrl)  mod += "CTRL+";
-            if (shift) mod += "SHIFT+";
-            if (alt)   mod += "ALT+";
-            mod += "beiklive/settings/keybind/combo_more"_i18n;
-            m_keyLabel->setText(mod);
-        }
-        else
-        {
-            m_keyLabel->setText("beiklive/settings/keybind/waiting"_i18n);
-        }
-#endif
-    }
-
     // ── Release detection ────────────────────────────────────────────────────
-
-    void checkKeyboardRelease()
-    {
-#ifndef __SWITCH__
-        auto* platform = brls::Application::getPlatform();
-        auto* im = platform ? platform->getInputManager() : nullptr;
-        if (!im) { m_waitingForRelease = false; return; }
-
-        for (int i = 0; i < k_capKbdKeyCount; ++i)
-            if (im->getKeyboardKeyState(k_capKbdKeys[i].sc)) return;
-
-        if (im->getKeyboardKeyState(brls::BRLS_KBD_KEY_LEFT_CONTROL)  ||
-            im->getKeyboardKeyState(brls::BRLS_KBD_KEY_RIGHT_CONTROL) ||
-            im->getKeyboardKeyState(brls::BRLS_KBD_KEY_LEFT_SHIFT)    ||
-            im->getKeyboardKeyState(brls::BRLS_KBD_KEY_RIGHT_SHIFT)   ||
-            im->getKeyboardKeyState(brls::BRLS_KBD_KEY_LEFT_ALT)      ||
-            im->getKeyboardKeyState(brls::BRLS_KBD_KEY_RIGHT_ALT))
-            return;
-        m_waitingForRelease = false;
-#else
-        m_waitingForRelease = false;
-#endif
-    }
 
     void checkGamepadRelease()
     {
@@ -393,10 +263,9 @@ private:
 
 /// Push a full-screen key-capture page as a new Activity.
 /// Clears all borealis navigation actions for the duration of the capture.
-static void openKeyCapture(bool isKeyboard,
-                            std::function<void(const std::string&)> onDone)
+static void openKeyCapture(std::function<void(const std::string&)> onDone)
 {
-    auto* content = new KeyCaptureView(isKeyboard, std::move(onDone));
+    auto* content = new KeyCaptureView(std::move(onDone));
     auto* frame = new brls::AppletFrame(content);
     frame->setHeaderVisibility(brls::Visibility::GONE);
     frame->setFooterVisibility(brls::Visibility::GONE);
@@ -1104,7 +973,7 @@ brls::ScrollingFrame* SettingPage::buildKeyBindTab()
         std::string captureKey = cfgKey;
         cell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A,
             [cell, captureKey](brls::View*) {
-                openKeyCapture(false, [cell, captureKey](const std::string& r) {
+                openKeyCapture([cell, captureKey](const std::string& r) {
                     if (!r.empty()) { cfgSetStr(captureKey, r); cell->setDetailText(r); }
                 });
                 return true;
@@ -1135,7 +1004,7 @@ brls::ScrollingFrame* SettingPage::buildKeyBindTab()
         std::string captureKey = padKey;
         cell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A,
             [cell, captureKey](brls::View*) {
-                openKeyCapture(false, [cell, captureKey](const std::string& r) {
+                openKeyCapture([cell, captureKey](const std::string& r) {
                     if (!r.empty()) { cfgSetStr(captureKey, r); cell->setDetailText(r); }
                 });
                 return true;

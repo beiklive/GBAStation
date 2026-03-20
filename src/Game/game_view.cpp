@@ -2026,7 +2026,6 @@ void GameView::loadOverlayImage(NVGcontext* vg)
 // 仅读取主线程通过 refreshInputSnapshot() 填充的线程安全快照，
 // 确保不在游戏线程直接调用平台输入管理器接口。
 //
-// 手柄和键盘（keyboard.* 配置键）的游戏按键绑定均在此处理。
 // 模拟器热键逻辑通过 GameInputController 流转，触发
 // registerGamepadHotkeys() 中注册的 Press/ShortPress/LongPress/Release 回调。
 // ============================================================
@@ -2067,7 +2066,7 @@ void GameView::pollInput()
     }
 
     // ── 游戏按键映射 ───────────────────────────────────────────────────────
-    // 将每个已配置的手柄/键盘按键映射到对应的 libretro 手柄 ID。
+    // 将每个已配置的手柄按键映射到对应的 libretro 手柄 ID。
     const auto& btnMap = m_inputMap.gameButtonMap();
     for (const auto& entry : btnMap)
     {
@@ -2075,12 +2074,6 @@ void GameView::pollInput()
         // 手柄按键
         if (entry.padButton >= 0 && entry.padButton < static_cast<int>(brls::_BUTTON_MAX))
             pressed = state.buttons[entry.padButton];
-        // 键盘（与手柄 OR，任一输入有效）
-        if (!pressed && entry.kbScancode >= 0) {
-            auto it = snap.kbState.find(entry.kbScancode);
-            if (it != snap.kbState.end())
-                pressed = it->second;
-        }
         m_core.setButtonState(entry.retroId, pressed);
     }
 
@@ -2092,14 +2085,9 @@ void GameView::pollInput()
             bool padPressed = (entry.padButton >= 0 &&
                                entry.padButton < static_cast<int>(brls::_BUTTON_MAX) &&
                                state.buttons[entry.padButton]);
-            bool kbPressed  = false;
-            if (entry.kbScancode >= 0) {
-                auto it = snap.kbState.find(entry.kbScancode);
-                if (it != snap.kbState.end()) kbPressed = it->second;
-            }
-            if (padPressed || kbPressed)
-                bklog::debug("pollInput: retroId={} pressed ({})",
-                             entry.retroId, padPressed ? "pad" : "kbd");
+            if (padPressed)
+                bklog::debug("pollInput: retroId={} pressed (pad)",
+                             entry.retroId);
         }
     }
 }
@@ -2123,16 +2111,6 @@ void GameView::refreshInputSnapshot()
     // updateUnifiedControllerState() 通过平台输入管理器读取当前硬件状态
     // （桌面平台用 GLFW，Switch 用 HID），必须在主线程调用。
     im->updateUnifiedControllerState(&snap.ctrlState);
-
-    // ── 游戏按键的键盘状态 ──────────────────────────────────────────────────
-    // 仅轮询当前按键映射中用到的扫描码，避免每帧为所有按键调用 getKeyboardKeyState。
-    for (const auto& entry : m_inputMap.gameButtonMap()) {
-        if (entry.kbScancode >= 0) {
-            snap.kbState[entry.kbScancode] =
-                im->getKeyboardKeyState(
-                    static_cast<brls::BrlsKeyboardScancode>(entry.kbScancode));
-        }
-    }
 
     // 发布快照
     std::lock_guard<std::mutex> lk(m_inputSnapMutex);

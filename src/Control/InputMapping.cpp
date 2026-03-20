@@ -17,61 +17,6 @@ namespace beiklive {
 // 内部查找表
 // ============================================================
 
-// ---- 键盘扫描码名称表 ---------------------------
-// 支持配置项如 keyboard.a = X 或 keyboard.a = 88
-struct KbdKeyName { const char* name; int scancode; };
-
-static const KbdKeyName k_kbdKeyNames[] = {
-    // 字母键
-    { "A", brls::BRLS_KBD_KEY_A }, { "B", brls::BRLS_KBD_KEY_B },
-    { "C", brls::BRLS_KBD_KEY_C }, { "D", brls::BRLS_KBD_KEY_D },
-    { "E", brls::BRLS_KBD_KEY_E }, { "F", brls::BRLS_KBD_KEY_F },
-    { "G", brls::BRLS_KBD_KEY_G }, { "H", brls::BRLS_KBD_KEY_H },
-    { "I", brls::BRLS_KBD_KEY_I }, { "J", brls::BRLS_KBD_KEY_J },
-    { "K", brls::BRLS_KBD_KEY_K }, { "L", brls::BRLS_KBD_KEY_L },
-    { "M", brls::BRLS_KBD_KEY_M }, { "N", brls::BRLS_KBD_KEY_N },
-    { "O", brls::BRLS_KBD_KEY_O }, { "P", brls::BRLS_KBD_KEY_P },
-    { "Q", brls::BRLS_KBD_KEY_Q }, { "R", brls::BRLS_KBD_KEY_R },
-    { "S", brls::BRLS_KBD_KEY_S }, { "T", brls::BRLS_KBD_KEY_T },
-    { "U", brls::BRLS_KBD_KEY_U }, { "V", brls::BRLS_KBD_KEY_V },
-    { "W", brls::BRLS_KBD_KEY_W }, { "X", brls::BRLS_KBD_KEY_X },
-    { "Y", brls::BRLS_KBD_KEY_Y }, { "Z", brls::BRLS_KBD_KEY_Z },
-    // 数字键
-    { "0", brls::BRLS_KBD_KEY_0 }, { "1", brls::BRLS_KBD_KEY_1 },
-    { "2", brls::BRLS_KBD_KEY_2 }, { "3", brls::BRLS_KBD_KEY_3 },
-    { "4", brls::BRLS_KBD_KEY_4 }, { "5", brls::BRLS_KBD_KEY_5 },
-    { "6", brls::BRLS_KBD_KEY_6 }, { "7", brls::BRLS_KBD_KEY_7 },
-    { "8", brls::BRLS_KBD_KEY_8 }, { "9", brls::BRLS_KBD_KEY_9 },
-    // 特殊/控制键
-    { "SPACE",        brls::BRLS_KBD_KEY_SPACE         },
-    { "ENTER",        brls::BRLS_KBD_KEY_ENTER         },
-    { "BACKSPACE",    brls::BRLS_KBD_KEY_BACKSPACE      },
-    { "TAB",          brls::BRLS_KBD_KEY_TAB            },
-    { "ESC",          brls::BRLS_KBD_KEY_ESCAPE         },
-    { "ESCAPE",       brls::BRLS_KBD_KEY_ESCAPE         },
-    { "GRAVE",        brls::BRLS_KBD_KEY_GRAVE_ACCENT   },
-    { "GRAVE_ACCENT", brls::BRLS_KBD_KEY_GRAVE_ACCENT   },
-    // 方向键
-    { "UP",    brls::BRLS_KBD_KEY_UP    },
-    { "DOWN",  brls::BRLS_KBD_KEY_DOWN  },
-    { "LEFT",  brls::BRLS_KBD_KEY_LEFT  },
-    { "RIGHT", brls::BRLS_KBD_KEY_RIGHT },
-    // 功能键
-    { "F1",  brls::BRLS_KBD_KEY_F1  }, { "F2",  brls::BRLS_KBD_KEY_F2  },
-    { "F3",  brls::BRLS_KBD_KEY_F3  }, { "F4",  brls::BRLS_KBD_KEY_F4  },
-    { "F5",  brls::BRLS_KBD_KEY_F5  }, { "F6",  brls::BRLS_KBD_KEY_F6  },
-    { "F7",  brls::BRLS_KBD_KEY_F7  }, { "F8",  brls::BRLS_KBD_KEY_F8  },
-    { "F9",  brls::BRLS_KBD_KEY_F9  }, { "F10", brls::BRLS_KBD_KEY_F10 },
-    { "F11", brls::BRLS_KBD_KEY_F11 }, { "F12", brls::BRLS_KBD_KEY_F12 },
-    // 修饰键
-    { "LSHIFT",   brls::BRLS_KBD_KEY_LEFT_SHIFT    },
-    { "RSHIFT",   brls::BRLS_KBD_KEY_RIGHT_SHIFT   },
-    { "LCTRL",    brls::BRLS_KBD_KEY_LEFT_CONTROL  },
-    { "RCTRL",    brls::BRLS_KBD_KEY_RIGHT_CONTROL },
-    { "LALT",     brls::BRLS_KBD_KEY_LEFT_ALT      },
-    { "RALT",     brls::BRLS_KBD_KEY_RIGHT_ALT     },
-};
-
 // ---- 手柄按键名称表 ------------------------------
 // 支持配置项如 handle.a = A 或 handle.a = 13
 struct BrlsBtnName { const char* name; brls::ControllerButton btn; };
@@ -120,6 +65,7 @@ static const RetroNameMap k_retroNames[] = {
 
 // ---- 默认游戏按键映射表（手柄）-----------------------
 // borealis ControllerButton → retro joypad ID
+
 struct DefaultButtonMap { brls::ControllerButton brl; unsigned retroId; };
 
 static const DefaultButtonMap k_defaultButtonMap[] = {
@@ -139,27 +85,6 @@ static const DefaultButtonMap k_defaultButtonMap[] = {
     { brls::BUTTON_BACK,       RETRO_DEVICE_ID_JOYPAD_SELECT },
 };
 
-// ---- 默认游戏按键映射表（键盘）-----------------------
-// BrlsKeyboardScancode → retro joypad ID
-// 注：JOYPAD_X 无默认键盘绑定，用户可通过 keyboard.x 配置。
-struct DefaultKbMap { int scancode; unsigned retroId; };
-
-static const DefaultKbMap k_defaultKbMap[] = {
-    { brls::BRLS_KBD_KEY_X,     RETRO_DEVICE_ID_JOYPAD_A      },
-    { brls::BRLS_KBD_KEY_Z,     RETRO_DEVICE_ID_JOYPAD_B      },
-    { brls::BRLS_KBD_KEY_A,     RETRO_DEVICE_ID_JOYPAD_Y      },
-    { brls::BRLS_KBD_KEY_UP,    RETRO_DEVICE_ID_JOYPAD_UP     },
-    { brls::BRLS_KBD_KEY_DOWN,  RETRO_DEVICE_ID_JOYPAD_DOWN   },
-    { brls::BRLS_KBD_KEY_LEFT,  RETRO_DEVICE_ID_JOYPAD_LEFT   },
-    { brls::BRLS_KBD_KEY_RIGHT, RETRO_DEVICE_ID_JOYPAD_RIGHT  },
-    { brls::BRLS_KBD_KEY_Q,     RETRO_DEVICE_ID_JOYPAD_L      },
-    { brls::BRLS_KBD_KEY_W,     RETRO_DEVICE_ID_JOYPAD_R      },
-    { brls::BRLS_KBD_KEY_E,     RETRO_DEVICE_ID_JOYPAD_L2     },
-    { brls::BRLS_KBD_KEY_R,     RETRO_DEVICE_ID_JOYPAD_R2     },
-    { brls::BRLS_KBD_KEY_ENTER, RETRO_DEVICE_ID_JOYPAD_START  },
-    { brls::BRLS_KBD_KEY_S,     RETRO_DEVICE_ID_JOYPAD_SELECT },
-};
-
 // ---- 热键元数据表 ------------------------------------
 // 将 Hotkey 枚举映射到配置键名和默认值。
 struct HotkeyMeta {
@@ -169,13 +94,13 @@ struct HotkeyMeta {
 };
 
 static const HotkeyMeta k_hotkeyMeta[] = {
-    // 快进（保持）– 键盘: keyboard.fastforward，手柄: handle.fastforward
+    // 快进（保持）
     {
         "handle.fastforward",
         "none",
         "\xe5\xbf\xab\xe8\xbf\x9b\xef\xbc\x88\xe4\xbf\x9d\xe6\x8c\x81\xef\xbc\x89"  // 快进
     },
-    // 倒带（保持）– 键盘: keyboard.rewind，手柄: handle.rewind
+    // 倒带（保持）
     {
         "handle.rewind",
         "none",
@@ -229,7 +154,7 @@ static const HotkeyMeta k_hotkeyMeta[] = {
         "none",
         "\xe6\x88\xaa\xe5\xb1\x8f"  // 截屏
     },
-    // 退出游戏 – 键盘: keyboard.exit
+    // 退出游戏
     {
         "hotkey.exit_game.pad",
         "none",
@@ -259,16 +184,6 @@ static std::string toUpper(const std::string& s)
 // InputMappingConfig – 静态公共解析函数
 // ============================================================
 
-int InputMappingConfig::parseKeyboardScancode(const std::string& s)
-{
-    std::string upper = toUpper(s);
-    for (const auto& kn : k_kbdKeyNames)
-        if (upper == kn.name) return kn.scancode;
-    // 回退为整数解析
-    try { return std::stoi(s); } catch (...) {}
-    return -1;
-}
-
 int InputMappingConfig::parseGamepadButton(const std::string& s)
 {
     std::string upper = toUpper(s);
@@ -276,30 +191,6 @@ int InputMappingConfig::parseGamepadButton(const std::string& s)
         if (upper == bn.name) return static_cast<int>(bn.btn);
     try { return std::stoi(s); } catch (...) {}
     return -1;
-}
-
-InputMappingConfig::KeyCombo
-InputMappingConfig::parseKeyCombo(const std::string& s)
-{
-    KeyCombo result;
-    if (s.empty() || toUpper(s) == "NONE") return result; // 未绑定
-
-    // 按 '+' 分割，解析修饰键和主键。
-    // 例如 "CTRL+SHIFT+F5" → ["CTRL", "SHIFT", "F5"]
-    std::vector<std::string> parts;
-    {
-        std::string part;
-        for (char c : s) {
-            if (c == '+') {
-                if (!part.empty()) { parts.push_back(part); part.clear(); }
-            } else {
-                part += c;
-            }
-        }
-        if (!part.empty()) parts.push_back(part);
-    }
-
-    return result;
 }
 
 // ============================================================
@@ -369,21 +260,6 @@ void InputMappingConfig::setDefaults(ConfigManager& cfg)
     cfg.SetDefault("handle.r",      CV(std::string("RB")));
     cfg.SetDefault("handle.l2",     CV(std::string("LT")));
     cfg.SetDefault("handle.r2",     CV(std::string("RT")));
-
-    // ---- 游戏按键映射：键盘 ----------------------------------
-    // 仅在配置项不存在时写入默认值，保留用户设置。
-    static constexpr int k_kbMapCount =
-        static_cast<int>(sizeof(k_defaultKbMap) / sizeof(k_defaultKbMap[0]));
-    for (int i = 0; i < k_kbMapCount; ++i) {
-        // 查找该映射对应的 retro 按键名称。
-        for (const auto& rn : k_retroNames) {
-            if (rn.id == k_defaultKbMap[i].retroId) {
-                std::string kbKey = std::string("keyboard.") + rn.name;
-                cfg.SetDefault(kbKey, CV(k_defaultKbMap[i].scancode));
-                break;
-            }
-        }
-    }
 
     // ---- 模拟器热键 -----------------------------------------
     for (int i = 0; i < static_cast<int>(Hotkey::_Count); ++i) {
@@ -462,19 +338,6 @@ void InputMappingConfig::loadGameButtonMap(const ConfigManager& cfg)
         return static_cast<int>(def);
     };
 
-    // 读取键盘扫描码绑定，配置缺失或值为 "none" 时返回 -1。
-    auto getCfgKb = [&](const std::string& key, int def) -> int {
-        auto v = cfg.Get(key);
-        if (v) {
-            if (auto s = v->AsString()) {
-                if (toUpper(*s) == "NONE" || s->empty()) return -1;
-                return parseKeyboardScancode(*s);
-            }
-            if (auto i = v->AsInt()) return *i;
-        }
-        return def;
-    };
-
     m_gameButtonMap.clear();
 
     // 读取默认手柄映射，并用配置值覆盖。
@@ -489,17 +352,8 @@ void InputMappingConfig::loadGameButtonMap(const ConfigManager& cfg)
             std::string padKey = std::string("handle.") + rn.name;
             int padBtn = getCfgPad(padKey, defPad.brl);
 
-            // 键盘绑定：从 k_defaultKbMap 查找默认扫描码。
-            int kbDef = -1;
-            for (const auto& dm : k_defaultKbMap) {
-                if (dm.retroId == retroId) { kbDef = dm.scancode; break; }
-            }
-            std::string kbKey = std::string("keyboard.") + rn.name;
-            int kbScan = getCfgKb(kbKey, kbDef);
-
             m_gameButtonMap.push_back({ retroId,
                 (padBtn >= 0 && padBtn < static_cast<int>(brls::_BUTTON_MAX)) ? padBtn : -1,
-                kbScan,
                 });
             break;
         }
