@@ -2170,26 +2170,14 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
     }
 
     // ---- 预先按显示模式计算目标矩形 ----------
-    // 无着色器时：用原始游戏尺寸按显示模式算出游戏显示区域，直接用于渲染。
-    // 着色器激活时：使用完整视图区域（width×height 转为物理像素）作为 viewport，
-    // 让着色器自行控制游戏内容位置（如 console-border 类着色器通过 video_scale
-    // 将游戏置于边框中央）；source/absolute 缩放着色器的输出尺寸会与视口不同，
-    // 届时再以输出尺寸重新计算显示矩形。
+    // 用原始游戏尺寸先算出显示区域，将其宽高作为 viewport 类着色器的渲染目标尺寸，
+    // 保证着色器只渲染到"应该显示的区域"，从而使显示模式在着色器开启时同样生效。
     beiklive::DisplayRect preRect = { x, y, width, height };
     if (m_texWidth > 0 && m_texHeight > 0) {
         preRect = m_display.computeRect(x, y, width, height, m_texWidth, m_texHeight);
     }
-    float wndScale = brls::Application::windowScale;
-    unsigned passViewW, passViewH;
-    if (m_renderChain.hasShader()) {
-        // 着色器模式：使用完整视图物理像素作为视口，让着色器自行控制内容布局
-        passViewW = std::max(1u, static_cast<unsigned>(std::lround(width  * wndScale)));
-        passViewH = std::max(1u, static_cast<unsigned>(std::lround(height * wndScale)));
-    } else {
-        // 无着色器：使用游戏显示矩形尺寸（虚拟像素；windowScale=1 时等于物理像素）
-        passViewW = std::max(1u, static_cast<unsigned>(std::lround(preRect.w)));
-        passViewH = std::max(1u, static_cast<unsigned>(std::lround(preRect.h)));
-    }
+    unsigned passViewW = std::max(1u, static_cast<unsigned>(std::lround(preRect.w)));
+    unsigned passViewH = std::max(1u, static_cast<unsigned>(std::lround(preRect.h)));
 
     // ---- 运行渲染链并确定显示纹理 ----------
     // 若已加载着色器管线，将游戏纹理经过多通道 Shader 处理后作为显示纹理；
@@ -2224,10 +2212,11 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
     // ---- 直接以 OpenGL 渲染游戏帧到屏幕（不经过 NanoVG 批量渲染）----
     // 确定最终显示矩形：
     // - 视口缩放着色器（FBO 输出尺寸 == passViewW×passViewH）：
-    //   着色器已按完整视图尺寸渲染，直接使用全视图区域显示（含 border 着色器）。
+    //   着色器已按 preRect 尺寸渲染，直接使用预计算的 preRect，
+    //   显示模式（Fit/Original/IntegerScale/Custom）在渲染链传参时已生效。
     // - source/absolute 缩放着色器（FBO 输出尺寸 ≠ passViewW×passViewH，如 scalefx 3×）：
     //   以着色器实际输出尺寸重新调用 computeRect()，保持宽高比缩放正确。
-    // - 无着色器：直接使用预计算的 preRect（显示模式生效）。
+    // - 无着色器：直接使用预计算的 preRect。
     if (displayW > 0 && displayH > 0) {
         beiklive::DisplayRect rect = preRect;
         if (m_renderChain.hasShader()) {
@@ -2236,18 +2225,16 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
             if (shOutW > 0 && shOutH > 0 && (shOutW != passViewW || shOutH != passViewH)) {
                 // source/absolute 缩放着色器：输出尺寸与传入视口不同，重新计算显示矩形
                 rect = m_display.computeRect(x, y, width, height, shOutW, shOutH);
-            } else {
-                // 视口缩放着色器：输出填满视口，显示到完整视图区域
-                rect = { x, y, width, height };
             }
         }
 
+        float scale   = brls::Application::windowScale;
         int   screenW = static_cast<int>(brls::Application::windowWidth);
         int   screenH = static_cast<int>(brls::Application::windowHeight);
         // 使用直接 GL 路径绘制游戏帧；NanoVG UI 叠加层继续在 nvgEndFrame 时渲染于其上
         m_renderChain.drawToScreen(displayTex,
                                    rect.x, rect.y, rect.w, rect.h,
-                                   wndScale, screenW, screenH);
+                                   scale, screenW, screenH);
     }
 
     // ---- 遮罩绘制 – 全屏，叠加在游戏画面之上
