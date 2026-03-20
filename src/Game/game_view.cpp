@@ -4,19 +4,7 @@
 #include <borealis.hpp>
 #include <borealis/core/application.hpp>
 
-// ---- NanoVG GL 后端头文件（需与激活的 borealis 后端匹配）----
-#ifdef BOREALIS_USE_OPENGL
-#  ifdef USE_GLES3
-#    define NANOVG_GLES3
-#  elif defined(USE_GLES2)
-#    define NANOVG_GLES2
-#  elif defined(USE_GL2)
-#    define NANOVG_GL2
-#  else
-#    define NANOVG_GL3
-#  endif
-#  include <nanovg/nanovg_gl.h>
-#endif
+// ---- NanoVG 主头文件（通过 borealis.hpp 间接引入，此处无需额外包含 GL 扩展头文件）----
 
 // ---- stb_image_write（用于截图 PNG 写入） -----------------------------------
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -59,32 +47,6 @@ static constexpr double SPIN_GUARD_SEC = 0.002;     ///< 每帧 2ms 自旋等待
 static constexpr int INPUT_IGNORE_FRAMES_ON_MENU_CLOSE = 13;
 /// RGBA 像素格式的通道数（红、绿、蓝、透明度）。
 static constexpr int RGBA_CHANNELS = 4;
-
-// ============================================================
-// NanoVG 辅助函数：从已有 GL 纹理创建 NVG 图像。
-// 根据激活的 GL 后端选择对应函数。
-// ============================================================
-static int nvgImageFromGLTexture(NVGcontext* vg, GLuint tex,
-                                  int w, int h,
-                                  beiklive::FilterMode filter = beiklive::FilterMode::Nearest)
-{
-    // NVG_IMAGE_NODELETE：阻止 NanoVG 删除我们的纹理。
-    // NVG_IMAGE_NEAREST：在 NanoVG 中使用最近邻采样。
-    int flags = NVG_IMAGE_NODELETE;
-    if (filter == beiklive::FilterMode::Nearest)
-        flags |= NVG_IMAGE_NEAREST;
-#if defined(USE_GLES2)
-    return nvglCreateImageFromHandleGLES2(vg, tex, w, h, flags);
-#elif defined(USE_GLES3)
-    return nvglCreateImageFromHandleGLES3(vg, tex, w, h, flags);
-#elif defined(USE_GL2)
-    return nvglCreateImageFromHandleGL2(vg, tex, w, h, flags);
-#else
-    return nvglCreateImageFromHandleGL3(vg, tex, w, h, flags);
-#endif
-}
-
-
 
 // ============================================================
 // 解析 mgba_libretro 共享库路径
@@ -798,10 +760,6 @@ void GameView::cleanup()
         m_rewindBuffer.clear();
     }
 
-    if (m_nvgImage >= 0) {
-        m_nvgImage = -1;
-    }
-
     // 释放覆盖层 NVG 图像句柄（NVG 上下文销毁时自动删除纹理，此处仅重置句柄）。
     if (m_overlayNvgImage >= 0) {
         m_overlayNvgImage = -1;
@@ -886,8 +844,6 @@ void GameView::setGameMenu(GameMenu* menu)
             std::string path = beiklive::cfgGetStr(KEY_DISPLAY_SHADER_PATH, "");
             std::string effectivePath = (enabled && !path.empty()) ? path : "";
             m_renderChain.setShader(effectivePath);
-            // 强制 draw() 重建 NVG 图像句柄（将 src 置零让 draw() 检测到纹理变化）
-            m_nvgImageSrc = 0;
             // 同步参数滑条（切换后管线重建，参数列表已变更）
             if (m_gameMenu)
                 m_gameMenu->updateShaderParams(m_renderChain.getShaderParams());
@@ -898,8 +854,6 @@ void GameView::setGameMenu(GameMenu* menu)
             bool enabled = beiklive::cfgGetBool(KEY_DISPLAY_SHADER_ENABLED, false);
             std::string effectivePath = (enabled && !newPath.empty()) ? newPath : "";
             m_renderChain.setShader(effectivePath);
-            // 强制 draw() 重建 NVG 图像句柄
-            m_nvgImageSrc = 0;
             // 更新菜单中的着色器参数滑条
             if (m_gameMenu)
                 m_gameMenu->updateShaderParams(m_renderChain.getShaderParams());
@@ -1977,13 +1931,6 @@ void GameView::uploadFrame(NVGcontext* vg,
                      frame.pixels.data());
         m_texWidth  = frame.width;
         m_texHeight = frame.height;
-
-        // 尺寸改变时使 NVG 图像句柄失效, 由 draw() 重新为正确的显示纹理创建
-        if (m_nvgImage >= 0) {
-            nvgDeleteImage(vg, m_nvgImage);
-            m_nvgImage    = -1;
-            m_nvgImageSrc = 0;
-        }
     } else {
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
                         static_cast<GLsizei>(frame.width),
@@ -2260,37 +2207,17 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, glFilter);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, glFilter);
         glBindTexture(GL_TEXTURE_2D, 0);
-        if (m_nvgImage >= 0) {
-            nvgDeleteImage(vg, m_nvgImage);
-            m_nvgImage    = -1;
-            m_nvgImageSrc = 0;
-        }
     }
 
-    // ---- 管理 NVG 图像句柄 -------------------------------------
-    // 若显示纹理已切换（着色器输出变化或首次创建），重建 NVG 图像句柄
-    if (m_nvgImage >= 0 && m_nvgImageSrc != displayTex) {
-        nvgDeleteImage(vg, m_nvgImage);
-        m_nvgImage    = -1;
-        m_nvgImageSrc = 0;
-    }
-    if (m_nvgImage < 0 && displayW > 0 && displayH > 0) {
-        m_nvgImage    = nvgImageFromGLTexture(vg, displayTex,
-                                              displayW, displayH,
-                                              m_activeFilter);
-        m_nvgImageSrc = displayTex;
-    }
-
-    // ---- 使用 NanoVG 渲染游戏纹理 ------------------------
-    if (m_nvgImage >= 0) {
-        // 确定最终显示矩形：
-        // - 视口缩放着色器（FBO 输出尺寸 == passViewW×passViewH）：
-        //   着色器已按 preRect 尺寸渲染，直接使用预计算的 preRect，
-        //   显示模式（Fit/Original/IntegerScale/Custom）在渲染链传参时已生效。
-        // - source/absolute 缩放着色器（FBO 输出尺寸 ≠ passViewW×passViewH，如 scalefx 3×）：
-        //   以着色器实际输出尺寸重新调用 computeRect()，保持宽高比缩放正确，
-        //   避免非整数缩放破坏多通道着色器精心构造的子像素网格。
-        // - 无着色器：直接使用预计算的 preRect。
+    // ---- 直接以 OpenGL 渲染游戏帧到屏幕（不经过 NanoVG 批量渲染）----
+    // 确定最终显示矩形：
+    // - 视口缩放着色器（FBO 输出尺寸 == passViewW×passViewH）：
+    //   着色器已按 preRect 尺寸渲染，直接使用预计算的 preRect，
+    //   显示模式（Fit/Original/IntegerScale/Custom）在渲染链传参时已生效。
+    // - source/absolute 缩放着色器（FBO 输出尺寸 ≠ passViewW×passViewH，如 scalefx 3×）：
+    //   以着色器实际输出尺寸重新调用 computeRect()，保持宽高比缩放正确。
+    // - 无着色器：直接使用预计算的 preRect。
+    if (displayW > 0 && displayH > 0) {
         beiklive::DisplayRect rect = preRect;
         if (m_renderChain.hasShader()) {
             unsigned shOutW = m_renderChain.outputW();
@@ -2301,16 +2228,13 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
             }
         }
 
-        NVGpaint imgPaint = nvgImagePattern(vg,
-                                            rect.x, rect.y,
-                                            rect.w, rect.h,
-                                            0.0f,
-                                            m_nvgImage,
-                                            1.0f);
-        nvgBeginPath(vg);
-        nvgRect(vg, rect.x, rect.y, rect.w, rect.h);
-        nvgFillPaint(vg, imgPaint);
-        nvgFill(vg);
+        float scale   = brls::Application::windowScale;
+        int   screenW = static_cast<int>(brls::Application::windowWidth);
+        int   screenH = static_cast<int>(brls::Application::windowHeight);
+        // 使用直接 GL 路径绘制游戏帧；NanoVG UI 叠加层继续在 nvgEndFrame 时渲染于其上
+        m_renderChain.drawToScreen(displayTex,
+                                   rect.x, rect.y, rect.w, rect.h,
+                                   scale, screenW, screenH);
     }
 
     // ---- 遮罩绘制 – 全屏，叠加在游戏画面之上
