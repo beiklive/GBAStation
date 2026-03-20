@@ -402,11 +402,21 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
     //                     inputTex, videoW, videoH, viewW, viewH, frameCount);
 
     // 保存 GL 状态，管线结束后恢复
-    GLuint prevFBO      = 0;
-    GLint  prevViewport[4] = {};
-    GLuint prevProg     = 0;
-    GLuint prevVAO      = 0;
-    GLuint prevTex      = 0;
+    GLuint    prevFBO         = 0;
+    GLint     prevViewport[4] = {};
+    GLuint    prevProg        = 0;
+    GLuint    prevVAO         = 0;
+    GLuint    prevTex         = 0;
+    // 混合、深度、模板、裁剪、面剔除等可能被外部（如 NanoVG 前一帧）设置的状态
+    GLboolean prevBlendEn     = GL_FALSE;
+    GLboolean prevDepthEn     = GL_FALSE;
+    GLboolean prevStencilEn   = GL_FALSE;
+    GLboolean prevScissorEn   = GL_FALSE;
+    GLboolean prevCullEn      = GL_FALSE;
+    GLint     prevBlendSrcRGB   = GL_ONE;
+    GLint     prevBlendDstRGB   = GL_ZERO;
+    GLint     prevBlendSrcAlpha = GL_ONE;
+    GLint     prevBlendDstAlpha = GL_ZERO;
     {
         GLint tmp = 0;
         glGetIntegerv(GL_FRAMEBUFFER_BINDING, &tmp);
@@ -421,6 +431,27 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
         prevTex = static_cast<GLuint>(tmp);
     }
     glGetIntegerv(GL_VIEWPORT, prevViewport);
+
+    // 保存并禁用可能干扰中间 FBO 渲染的 GL 状态。
+    // NanoVG 在每帧渲染后会保持 GL_BLEND=enabled（混合模式 GL_ONE, GL_ONE_MINUS_SRC_ALPHA），
+    // 若不在此处禁用，pass0 的点阵 alpha 通道会被混合污染（所有像素 alpha 变为 1），
+    // 导致后续通道无法区分"亮点"与"暗点"，游戏画面变为不可见的暗色。
+    prevBlendEn   = glIsEnabled(GL_BLEND);
+    prevDepthEn   = glIsEnabled(GL_DEPTH_TEST);
+    prevStencilEn = glIsEnabled(GL_STENCIL_TEST);
+    prevScissorEn = glIsEnabled(GL_SCISSOR_TEST);
+    prevCullEn    = glIsEnabled(GL_CULL_FACE);
+    glGetIntegerv(GL_BLEND_SRC_RGB,   &prevBlendSrcRGB);
+    glGetIntegerv(GL_BLEND_DST_RGB,   &prevBlendDstRGB);
+    glGetIntegerv(GL_BLEND_SRC_ALPHA, &prevBlendSrcAlpha);
+    glGetIntegerv(GL_BLEND_DST_ALPHA, &prevBlendDstAlpha);
+
+    // 着色器中间 FBO 渲染：直接覆写，不做 alpha 混合
+    glDisable(GL_BLEND);
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_STENCIL_TEST);
+    glDisable(GL_SCISSOR_TEST);
+    glDisable(GL_CULL_FACE);
 
     GLuint currentTex = inputTex;
     unsigned currentW = videoW;
@@ -654,6 +685,17 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
 #if !defined(USE_GLES2)
     glBindVertexArray(prevVAO);
 #endif
+
+    // 恢复混合、深度、模板、裁剪、面剔除状态
+    if (prevBlendEn)   glEnable(GL_BLEND);   else glDisable(GL_BLEND);
+    if (prevDepthEn)   glEnable(GL_DEPTH_TEST);   else glDisable(GL_DEPTH_TEST);
+    if (prevStencilEn) glEnable(GL_STENCIL_TEST); else glDisable(GL_STENCIL_TEST);
+    if (prevScissorEn) glEnable(GL_SCISSOR_TEST); else glDisable(GL_SCISSOR_TEST);
+    if (prevCullEn)    glEnable(GL_CULL_FACE);    else glDisable(GL_CULL_FACE);
+    glBlendFuncSeparate(static_cast<GLenum>(prevBlendSrcRGB),
+                        static_cast<GLenum>(prevBlendDstRGB),
+                        static_cast<GLenum>(prevBlendSrcAlpha),
+                        static_cast<GLenum>(prevBlendDstAlpha));
 
     // 恢复原始输入纹理（游戏帧 m_texture）的采样参数为默认值，
     // 防止管线修改的 wrap_mode/filter_mode 影响 NanoVG 后续对该纹理的直通渲染。
