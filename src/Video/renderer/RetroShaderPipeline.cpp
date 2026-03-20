@@ -246,16 +246,17 @@ void RetroShaderPipeline::computePassSize(const ShaderPassDesc& desc,
 {
     auto calcAxis = [](ShaderPassDesc::ScaleType type,
                        float scale, unsigned src, unsigned vp) -> int {
+        const double dScale = static_cast<double>(scale);
         switch (type) {
             case ShaderPassDesc::ScaleType::Viewport:
-                return std::max(1, static_cast<int>(std::round(
-                    static_cast<float>(vp) * scale)));
+                return std::max(1, static_cast<int>(std::llround(
+                    static_cast<double>(vp) * dScale)));
             case ShaderPassDesc::ScaleType::Absolute:
-                return std::max(1, static_cast<int>(std::round(scale)));
+                return std::max(1, static_cast<int>(std::llround(dScale)));
             case ShaderPassDesc::ScaleType::Source:
             default:
-                return std::max(1, static_cast<int>(std::round(
-                    static_cast<float>(src) * scale)));
+                return std::max(1, static_cast<int>(std::llround(
+                    static_cast<double>(src) * dScale)));
         }
     };
 
@@ -456,23 +457,51 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
     GLuint currentTex = inputTex;
     unsigned currentW = videoW;
     unsigned currentH = videoH;
-    GLuint   maxTexUnit = 0; // 记录实际使用的最大纹理单元编号，用于恢复时精确解绑
+    // 逻辑尺寸：用于链式 Source 缩放，避免每一跳都基于整数 round 后尺寸继续计算
+    double currentLogicalW = static_cast<double>(videoW);
+    double currentLogicalH = static_cast<double>(videoH);
+    GLuint   maxTexUnit = 0;
 
     for (size_t idx = 0; idx < m_passes.size(); ++idx) {
         auto& pass = m_passes[idx];
         if (!pass.program) {
-            // 跳过编译失败的通道，直接传入输出
             brls::Logger::debug("RetroShaderPipeline: 跳过通道 {} (无程序)", idx);
             continue;
         }
 
-        // 计算本通道输出尺寸
+        // 计算本通道输出尺寸（基于逻辑尺寸，最终输出再取整）
+        auto calcAxisFromLogical = [](ShaderPassDesc::ScaleType type,
+                                      float scale, double logicalSrc, unsigned vp,
+                                      int& outInt, double& outLogical) {
+            const double dScale = static_cast<double>(scale);
+            double scaled = 1.0;
+            switch (type) {
+                case ShaderPassDesc::ScaleType::Viewport:
+                    scaled = static_cast<double>(vp) * dScale;
+                    break;
+                case ShaderPassDesc::ScaleType::Absolute:
+                    scaled = dScale;
+                    break;
+                case ShaderPassDesc::ScaleType::Source:
+                default:
+                    scaled = logicalSrc * dScale;
+                    break;
+            }
+            if (scaled < 1.0) scaled = 1.0;
+            outLogical = scaled;
+            outInt = std::max(1, static_cast<int>(std::llround(scaled)));
+        };
+
         int outW = static_cast<int>(currentW);
         int outH = static_cast<int>(currentH);
-        computePassSize(pass.desc, currentW, currentH, viewW, viewH, outW, outH);
+        double nextLogicalW = currentLogicalW;
+        double nextLogicalH = currentLogicalH;
 
-        //brls::Logger::debug("RetroShaderPipeline: 通道 {}: 输入 tex={} {}×{} → 输出 {}×{}",
-                            // idx, currentTex, currentW, currentH, outW, outH);
+        const unsigned vpW = (viewW > 0) ? viewW : currentW;
+        const unsigned vpH = (viewH > 0) ? viewH : currentH;
+
+        calcAxisFromLogical(pass.desc.scaleTypeX, pass.desc.scaleX, currentLogicalW, vpW, outW, nextLogicalW);
+        calcAxisFromLogical(pass.desc.scaleTypeY, pass.desc.scaleY, currentLogicalH, vpH, outH, nextLogicalH);
 
         // 确保 FBO 已分配且尺寸正确
         if (!allocateFBO(pass, outW, outH)) {
@@ -663,6 +692,8 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
         currentTex = pass.texture;
         currentW   = static_cast<unsigned>(outW);
         currentH   = static_cast<unsigned>(outH);
+        currentLogicalW = nextLogicalW;
+        currentLogicalH = nextLogicalH;
     }
 
     m_lastOutW = currentW;

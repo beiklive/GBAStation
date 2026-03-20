@@ -112,6 +112,8 @@ GameMenu::GameMenu()
 
         // ---- 返回游戏按钮 ----
         auto* btn = new brls::Button();
+        btn->setShadowVisibility(false);
+        
         btn->setText("beiklive/gamemenu/btn_return_game"_i18n);
         // 返回游戏按钮得到焦点时，隐藏所有面板
         btn->getFocusEvent()->subscribe([hideAllPanels](brls::View*) {
@@ -132,7 +134,7 @@ GameMenu::GameMenu()
         auto* btnSaveState = new brls::Button();
         btnSaveState->setText("beiklive/gamemenu/btn_save_state"_i18n);
         btnSaveState->setWidthPercentage(80.0f);
-
+        btnSaveState->setShadowVisibility(false);
         // 保存状态面板：横向容器，左侧条目列表 + 右侧预览图
         m_saveStatePanel = new brls::Box(brls::Axis::ROW);
         m_saveStatePanel->setVisibility(brls::Visibility::GONE);
@@ -187,6 +189,7 @@ GameMenu::GameMenu()
         auto* btnLoadState = new brls::Button();
         btnLoadState->setText("beiklive/gamemenu/btn_load_state"_i18n);
         btnLoadState->setWidthPercentage(80.0f);
+        btnLoadState->setShadowVisibility(false);
 
         // 读取状态面板：横向容器，左侧条目列表 + 右侧预览图
         m_loadStatePanel = new brls::Box(brls::Axis::ROW);
@@ -243,6 +246,7 @@ GameMenu::GameMenu()
         auto* btn2 = new brls::Button();
         btn2->setText("beiklive/gamemenu/btn_cheats"_i18n);
         btn2->setWidthPercentage(80.0f);
+        btn2->setShadowVisibility(false);
         // 金手指面板：ScrollingFrame 限高，避免内容溢出后焦点丢失
         m_cheatScrollFrame = new brls::ScrollingFrame();
         m_cheatScrollFrame->setVisibility(brls::Visibility::GONE);
@@ -275,7 +279,7 @@ GameMenu::GameMenu()
         auto* btnDisplay = new brls::Button();
         btnDisplay->setWidthPercentage(80.0f);
         btnDisplay->setText("beiklive/gamemenu/btn_display"_i18n);
-
+        btnDisplay->setShadowVisibility(false);
 
         // ---- 构建画面设置面板 ----
         m_displayScrollFrame = new brls::ScrollingFrame();
@@ -608,7 +612,7 @@ GameMenu::GameMenu()
 
         auto* btn3 = new brls::Button();
         btn3->setWidthPercentage(80.0f);
-        
+        btn3->setShadowVisibility(false);
         btn3->setText("beiklive/gamemenu/btn_exit_game"_i18n);
         // 退出游戏按钮得到焦点时，隐藏所有面板
         btn3->getFocusEvent()->subscribe([hideAllPanels](brls::View*) {
@@ -711,6 +715,7 @@ void GameMenu::buildStatePanel(bool isSave, brls::Box* container)
     for (int slot = 0; slot < 10; ++slot) {
         // 槽位按钮
         auto* btn = new brls::Button();
+        btn->setShadowVisibility(false);
         // btn->setHeight(STATE_ROW_HEIGHT);
         // 槽0 为自动档位，槽1-9 显示序号
         std::string slotLabel;
