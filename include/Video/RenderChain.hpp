@@ -4,12 +4,15 @@
 #include <string>
 
 #include "Video/renderer/RetroShaderPipeline.hpp"
+#include "Video/renderer/DirectQuadRenderer.hpp"
 
 namespace beiklive {
 
 /// 视频渲染链
 ///
-/// 将游戏原始帧纹理经过可选的 RetroArch 多通道着色器管线处理后返回最终纹理。
+/// 将游戏原始帧纹理经过可选的 RetroArch 多通道着色器管线处理后返回最终纹理，
+/// 并支持将最终纹理直接以 OpenGL 绘制到屏幕矩形（不经过 NanoVG），
+/// 以降低游戏帧渲染开销；UI 叠加层继续由 NanoVG 负责。
 ///
 /// 着色器管线通过 init(shaderPath) 或 setShader(path) 加载；
 /// 若未加载着色器则直通（pass-through）返回原始纹理。
@@ -71,11 +74,36 @@ public:
     /// 若无着色器或参数不存在，则忽略。
     void setShaderParam(const std::string& name, float value) { m_pipeline.setParamValue(name, value); }
 
+    /// 将纹理 @a tex 直接以 OpenGL 绘制到屏幕上的虚拟坐标矩形（不经过 NanoVG）。
+    ///
+    /// 坐标系说明：@a virtX/@a virtY/@a virtW/@a virtH 使用 NanoVG 虚拟坐标（原点在左上角，
+    /// Y 轴向下，单位为"虚拟像素" = 物理像素 / @a windowScale）。
+    /// 方法内部将其转换为 OpenGL NDC 坐标后调用 DirectQuadRenderer 完成绘制。
+    ///
+    /// 调用时会保存并恢复所有修改的 GL 状态，可在 nvgBeginFrame/nvgEndFrame 帧内安全调用。
+    /// NanoVG UI 叠加层在 nvgEndFrame 时仍会正确渲染在游戏帧之上。
+    ///
+    /// @param tex         待绘制的 GL 2D 纹理 ID
+    /// @param virtX       显示矩形左边（虚拟坐标）
+    /// @param virtY       显示矩形上边（虚拟坐标）
+    /// @param virtW       显示矩形宽度（虚拟坐标）
+    /// @param virtH       显示矩形高度（虚拟坐标）
+    /// @param windowScale NanoVG 窗口缩放比例（brls::Application::windowScale）
+    /// @param windowW     窗口物理宽度（像素，brls::Application::windowWidth）
+    /// @param windowH     窗口物理高度（像素，brls::Application::windowHeight）
+    void drawToScreen(GLuint tex,
+                      float virtX, float virtY, float virtW, float virtH,
+                      float windowScale, int windowW, int windowH);
+
+    /// 返回直接渲染器是否已初始化并可用。
+    bool isDirectRendererReady() const { return m_directRenderer.isInitialized(); }
+
 private:
-    RetroShaderPipeline m_pipeline;
-    unsigned            m_frameCount = 0; ///< 累计帧计数，传入着色器 FrameCount uniform
-    unsigned            m_lastW      = 0;
-    unsigned            m_lastH      = 0;
+    RetroShaderPipeline  m_pipeline;
+    DirectQuadRenderer   m_directRenderer; ///< 直接 GL 纹理绘制器（游戏帧快速通路）
+    unsigned             m_frameCount = 0; ///< 累计帧计数，传入着色器 FrameCount uniform
+    unsigned             m_lastW      = 0;
+    unsigned             m_lastH      = 0;
 };
 
 } // namespace beiklive
