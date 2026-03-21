@@ -1,6 +1,6 @@
 # BeikLiveStation
 
-基于 [libretro](https://www.libretro.com/) 核心与 [borealis](https://github.com/xfangfang/borealis) UI 框架构建的跨平台模拟器前端，当前内置 mGBA（Game Boy Advance）libretro 核心，支持 Linux、macOS、Windows 及 Nintendo Switch 平台。
+基于 [libretro](https://www.libretro.com/) 核心与 [borealis](https://github.com/xfangfang/borealis) UI 框架构建的跨平台模拟器前端，当前内置 mGBA（Game Boy Advance）libretro 核心，支持 Nintendo Switch 平台。
 
 ![](resources/img/mgba.png)
 
