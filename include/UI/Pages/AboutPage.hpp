@@ -12,7 +12,6 @@ class AboutPage : public beiklive::UI::BBox
 
   private:
     brls::Image*  m_topImage    = nullptr;  ///< 顶部 mgba 图片
-    brls::Label*  m_descLabel   = nullptr;  ///< 中部项目描述文字
     brls::Image*  m_authorImage = nullptr;  ///< 底部作者圆形头像
     brls::Label*  m_authorName  = nullptr;  ///< 底部作者名称
     brls::Label*  m_githubLabel = nullptr;  ///< Github 链接

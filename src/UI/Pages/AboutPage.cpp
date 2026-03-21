@@ -3,7 +3,7 @@
 AboutPage::AboutPage()
 {
     setAxis(brls::Axis::COLUMN);
-    setAlignItems(brls::AlignItems::CENTER);
+    setAlignItems(brls::AlignItems::STRETCH);
     setJustifyContent(brls::JustifyContent::CENTER);
     setBackground(brls::ViewBackground::NONE);
     setGrow(1.0f);
@@ -13,50 +13,72 @@ AboutPage::AboutPage()
 
 void AboutPage::buildUI()
 {
+    auto* m_header = new beiklive::UI::BrowserHeader();
+    m_header->setTitle("GBAStation");
+    m_header->setPath("version 0.1.0");
+    addView(m_header);
+
     // ──────────────────────────────────────────────────────────────────────────
     // 顶部：mgba.png 图片
     // ──────────────────────────────────────────────────────────────────────────
-    auto* topBox = new brls::Box(brls::Axis::COLUMN);
-    topBox->setAlignItems(brls::AlignItems::CENTER);
-    topBox->setJustifyContent(brls::JustifyContent::CENTER);
-    topBox->setHeight(200.f);
-    topBox->setWidth(View::AUTO);
-    topBox->setMarginBottom(20.f);
-    topBox->setFocusable(false);
+    // auto* topBox = new brls::Box(brls::Axis::COLUMN);
+    // topBox->setAlignItems(brls::AlignItems::CENTER);
+    // topBox->setJustifyContent(brls::JustifyContent::CENTER);
+    // topBox->setHeight(200.f);
+    // topBox->setWidth(View::AUTO);
+    // topBox->setMarginBottom(20.f);
+    // topBox->setFocusable(false);
 
-    m_topImage = new brls::Image();
-    m_topImage->setImageFromFile(BK_RES("img/mgba.png"));
-    m_topImage->setScalingType(brls::ImageScalingType::FIT);
-    m_topImage->setInterpolation(brls::ImageInterpolation::LINEAR);
-    m_topImage->setHeight(160.f);
-    m_topImage->setWidth(View::AUTO);
-    m_topImage->setFocusable(false);
-    topBox->addView(m_topImage);
+    // m_topImage = new brls::Image();
+    // m_topImage->setImageFromFile(BK_RES("img/mgba.png"));
+    // m_topImage->setScalingType(brls::ImageScalingType::FIT);
+    // m_topImage->setInterpolation(brls::ImageInterpolation::LINEAR);
+    // m_topImage->setHeight(160.f);
+    // m_topImage->setWidth(View::AUTO);
+    // m_topImage->setFocusable(false);
+    // topBox->addView(m_topImage);
 
-    addView(topBox);
+    // addView(topBox);
 
     // ──────────────────────────────────────────────────────────────────────────
     // 中部：项目描述文字
     // ──────────────────────────────────────────────────────────────────────────
     auto* midBox = new brls::Box(brls::Axis::COLUMN);
-    midBox->setAlignItems(brls::AlignItems::CENTER);
+
+    midBox->setAlignItems(brls::AlignItems::FLEX_START);
     midBox->setJustifyContent(brls::JustifyContent::CENTER);
-    midBox->setWidth(View::AUTO);
     midBox->setGrow(1.0f);
     midBox->setPadding(10.f, 80.f, 10.f, 80.f);
-    midBox->setFocusable(false);
+    midBox->setFocusable(true);
 
-    m_descLabel = new brls::Label();
-    m_descLabel->setText(
-        "本项目基于 libretro 核心接口构建，当前内置 mGBA 模拟器核心。\n"
-        "未来计划支持更多游戏平台，为玩家提供一站式复古游戏体验。");
-    m_descLabel->setFontSize(28.f);
-    m_descLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
-    m_descLabel->setTextColor(GET_THEME_COLOR("brls/text"));
-    m_descLabel->setFocusable(false);
-    midBox->addView(m_descLabel);
 
-    addView(midBox);
+    std::vector<std::string> descLines = {
+        "本项目基于 libretro 核心接口构建，目前内置 mGBA 模拟器核心。",
+        "目前已实现功能:",
+        "    - 游戏库功能（运行过的游戏会被自动添加到游戏库中）",
+        "    - 存档/截图浏览",
+        "    - 定时存档功能",
+        "    - 键位自定义",
+        "    - 金手指功能",
+        "    - 封面设置",
+        "    - 游戏时间统计",
+        "    - RA着色器及参数修改支持（还不完善）",
+        "    - 遮罩功能",
+        "    - 快进倒带"
+    };
+
+    for(const auto& line : descLines) {
+        auto* m_descLabel = new brls::Label();
+        m_descLabel->setText(line);
+        m_descLabel->setFontSize(20.f);
+        m_descLabel->setHeight(24.f);
+        m_descLabel->setWidth(brls::View::AUTO);
+        m_descLabel->setTextColor(GET_THEME_COLOR("brls/text"));
+        m_descLabel->setFocusable(false);
+        midBox->addView(m_descLabel);
+    }
+
+
 
     // ──────────────────────────────────────────────────────────────────────────
     // 底部：作者信息 Box（左：头像+名称，右：Github/BiliBili）
@@ -67,10 +89,10 @@ void AboutPage::buildUI()
     bottomBox->setWidth(View::AUTO);
     bottomBox->setHeight(160.f);
     bottomBox->setMarginTop(20.f);
-    bottomBox->setMarginBottom(30.f);
-    bottomBox->setPadding(10.f, 40.f, 10.f, 40.f);
+    bottomBox->setMarginBottom(5.f);
+    bottomBox->setPadding(10.f, 80.f, 10.f, 80.f);
     bottomBox->setCornerRadius(12.f);
-    bottomBox->setBackgroundColor(nvgRGBA(40, 40, 40, 120));
+    bottomBox->setBackgroundColor(nvgRGBA(40, 40, 40, 0));
     bottomBox->setFocusable(false);
 
     // 左侧：圆形头像 + 作者名称（纵向布局）
@@ -116,13 +138,17 @@ void AboutPage::buildUI()
     linksBox->addView(m_githubLabel);
 
     m_biliLabel = new brls::Label();
-    m_biliLabel->setText("BiliBili: BEIKLIVE");
+    m_biliLabel->setText("BiliBili:   BEIKLIVE");
     m_biliLabel->setFontSize(24.f);
     m_biliLabel->setTextColor(GET_THEME_COLOR("brls/text"));
     m_biliLabel->setFocusable(false);
     linksBox->addView(m_biliLabel);
 
     bottomBox->addView(linksBox);
-
+    bottomBox->addView(new brls::Padding());
     addView(bottomBox);
+    addView(midBox);
+
+
+    addView(new brls::BottomBar());
 }

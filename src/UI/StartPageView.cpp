@@ -413,6 +413,7 @@ void StartPageView::openFileListPage()
     frame->setFooterVisibility(brls::Visibility::GONE);
     frame->setBackground(brls::ViewBackground::NONE);
     brls::Application::pushActivity(new brls::Activity(frame));
+        brls::Application::giveFocus(fileListPage->getDefaultFocus());
 }
 
 void StartPageView::openSettingsPage()
@@ -424,7 +425,7 @@ void StartPageView::openSettingsPage()
     frame->setFooterVisibility(brls::Visibility::GONE);
     frame->setTitle("设置");
     brls::Application::pushActivity(new brls::Activity(frame));
-
+    brls::Application::giveFocus(m_SettingPage->getDefaultFocus());
 }
 
 void StartPageView::openDataPage()
@@ -448,6 +449,7 @@ void StartPageView::openDataPage()
     frame->setFooterVisibility(brls::Visibility::GONE);
     frame->setBackground(brls::ViewBackground::NONE);
     brls::Application::pushActivity(new brls::Activity(frame));
+    brls::Application::giveFocus(dataPage->getDefaultFocus());
 }
 
 void StartPageView::openGameLibraryPage()
@@ -485,18 +487,15 @@ void StartPageView::openGameLibraryPage()
     frame->setFooterVisibility(brls::Visibility::GONE);
     frame->setBackground(brls::ViewBackground::NONE);
     brls::Application::pushActivity(new brls::Activity(frame));
+    brls::Application::giveFocus(libraryPage->getDefaultFocus());
 }
 
 void StartPageView::openAboutPage()
 {
     auto* aboutPage = new AboutPage();
-    auto* container = new brls::Box(brls::Axis::COLUMN);
-    container->setGrow(1.0f);
-    container->setBackground(brls::ViewBackground::NONE);
-    container->addView(aboutPage);
 
     // START 键（+）关闭关于页
-    container->registerAction(
+    aboutPage->registerAction(
         "beiklive/hints/close"_i18n,
         brls::BUTTON_START,
         [this](brls::View*) {
@@ -510,11 +509,12 @@ void StartPageView::openAboutPage()
         },
         /*hidden=*/false, /*repeat=*/false, brls::SOUND_CLICK);
 
-    auto* aboutFrame = new brls::AppletFrame(container);
+    auto* aboutFrame = new brls::AppletFrame(aboutPage);
     aboutFrame->setHeaderVisibility(brls::Visibility::GONE);
     aboutFrame->setFooterVisibility(brls::Visibility::GONE);
     aboutFrame->setBackground(brls::ViewBackground::NONE);
     brls::Application::pushActivity(new brls::Activity(aboutFrame));
+    brls::Application::giveFocus(aboutPage->getDefaultFocus());
 }
 
 
