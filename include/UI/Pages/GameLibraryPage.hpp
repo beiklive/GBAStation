@@ -24,49 +24,39 @@ struct GameLibraryEntry {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  GameLibraryItem  –  游戏库网格的单个元素
-//  纵向 Box：封面图（ProImage 异步加载）+ 标题 Label
+//  GameLibraryListItem  –  游戏库列表的单行视图（类似 FileListItemView）
+//  横向 Box：左侧强调色 + 封面图标 + 游戏名称 + 右侧时间信息
 // ─────────────────────────────────────────────────────────────────────────────
-class GameLibraryItem : public brls::Box
+class GameLibraryListItem : public brls::Box
 {
 public:
-    explicit GameLibraryItem(const GameLibraryEntry& entry);
+    explicit GameLibraryListItem(const GameLibraryEntry& entry, int index);
 
     /// 按 A 键 / 点击激活时触发
-    std::function<void(const GameLibraryEntry&)> onActivated;
+    std::function<void(int)> onActivated;
     /// 按 X 键时触发（显示选项菜单）
-    std::function<void(const GameLibraryEntry&)> onOptions;
-    /// 获得焦点时触发（用于更新详情面板）
-    std::function<void(const GameLibraryEntry&)> onFocused;
+    std::function<void(int)> onOptions;
+    /// 获得焦点时触发（用于更新详情面板和标题栏）
+    std::function<void(int)> onFocused;
 
     const GameLibraryEntry& getEntry() const { return m_entry; }
+    int getIndex() const { return m_index; }
 
     /// 更新封面图片路径并重新加载
     void updateCover(const std::string& newLogoPath);
     /// 更新标题显示
     void updateTitle(const std::string& newTitle);
 
-    void onChildFocusGained(brls::View* directChild, brls::View* focusedView) override;
-    void onChildFocusLost(brls::View* directChild, brls::View* focusedView) override;
-    void draw(NVGcontext* vg, float x, float y, float w, float h,
-              brls::Style style, brls::FrameContext* ctx) override;
-
-    /// 返回该元素内部实际可聚焦的视图（封面图），用于设置自定义方向导航路由
-    brls::View* getFocusTarget() const;
+    void onFocusGained() override;
+    void onFocusLost() override;
 
 private:
     GameLibraryEntry          m_entry;
-    beiklive::UI::ProImage*   m_coverImage = nullptr;
-    brls::Label*              m_label      = nullptr;
-
-    bool  m_focused        = false;  ///< 当前是否处于焦点状态
-    float m_scale          = 1.0f;   ///< 聚焦缩放比，由 draw() 平滑插值
-
-    bool  m_clickAnimating = false;  ///< 是否正在播放点击弹性动画
-    float m_clickT         = 0.0f;   ///< 点击动画已播放时间（秒）
-    float m_clickScale     = 1.0f;   ///< 点击动画缩放比
-
-    void triggerClickBounce();
+    int                       m_index      = -1;
+    brls::Rectangle*          m_accent     = nullptr;  ///< 左侧焦点强调色矩形
+    beiklive::UI::ProImage*   m_icon       = nullptr;  ///< 封面图标（小图）
+    brls::Label*              m_nameLabel  = nullptr;  ///< 游戏显示名称
+    brls::Label*              m_infoLabel  = nullptr;  ///< 右侧游玩时间信息
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -94,7 +84,7 @@ public:
 private:
     beiklive::UI::BrowserHeader* m_header      = nullptr;
     brls::ScrollingFrame*        m_scroll      = nullptr;
-    brls::Box*                   m_gridBox     = nullptr;
+    brls::Box*                   m_itemsBox    = nullptr;  ///< 列表条目直接父容器
 
     // ── 右侧详情面板组件 ─────────────────────────────────────────────────────
     brls::Box*                   m_detailPanel     = nullptr;  ///< 详情面板容器
@@ -119,12 +109,14 @@ private:
     void loadEntries();
     /// 按当前 m_sortMode 对 m_entries 排序
     void sortEntries();
-    /// 清空并重建网格，焦点移到第一个元素
-    void rebuildGrid();
+    /// 清空并重建列表，焦点移到第一个元素
+    void rebuildList();
     /// 弹出排序方式 Dropdown
     void showSortDropdown();
     /// 更新标题栏游戏数量显示
     void updateHeader();
+    /// 切换条目时实时更新标题栏显示游戏名
+    void updateHeaderFocused(const GameLibraryEntry& entry);
 
     /// 单个游戏被激活时的内部处理
     void onItemActivated(const GameLibraryEntry& entry);

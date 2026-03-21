@@ -285,6 +285,8 @@ void main()
     vec2 ss = vec2(oo,0.5);
     ss.y *= 1.0+CPOY*0.01;
     vec2 tt = ss+E_OFFSET*0.01;
+    // 画面边界以外（ss 之外）变为黑色，避免触发边界和画面边界之间出现游戏画面残影
+    mm *= step(rr.x, ss.x) * step(rr.y, ss.y);
     if(pp.x>tt.x||pp.y>tt.y){
         vec2 uu = (pp-tt)*vec2(PIC_SCALE_X,PIC_SCALE_Y)*OutputSize.xy;
         if(pp.x>tt.x)pp.x = x(pp.x,tt.x,-1.5);
