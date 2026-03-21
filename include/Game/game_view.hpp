@@ -103,6 +103,8 @@ class GameView : public brls::Box
     std::atomic<int>  m_pendingQuickSave{-1};
     /// 待读档槽号（游戏线程读取，主线程写入）。
     std::atomic<int>  m_pendingQuickLoad{-1};
+    /// 重置游戏请求标志（主线程写入，游戏线程读取执行 core.reset()）。
+    std::atomic<bool> m_pendingReset{false};
     /// Current active quick-save slot (默认1，对应 .ss1).
     int  m_saveSlot = 1;
 

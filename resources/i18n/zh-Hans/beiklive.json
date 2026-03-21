@@ -62,6 +62,7 @@
         "btn_load_state": "读取状态",
         "btn_cheats": "金手指",
         "btn_exit_game": "退出游戏",
+        "btn_reset_game": "重置游戏",
         "save_slot_auto": "自动存储档位",
         "load_slot_auto": "自动读取档位",
         "save_slot_prefix": "保存到状态",

@@ -618,6 +618,25 @@ GameMenu::GameMenu()
         });
         leftBox->addView(btnDisplay);
 
+        auto* btnReset = new brls::Button();
+        btnReset->setWidthPercentage(80.0f);
+        btnReset->setShadowVisibility(false);
+        btnReset->setText("beiklive/gamemenu/btn_reset_game"_i18n);
+        // 重置游戏按钮得到焦点时，隐藏所有面板
+        btnReset->getFocusEvent()->subscribe([hideAllPanels](brls::View*) {
+            hideAllPanels();
+        });
+        btnReset->registerAction("", brls::BUTTON_A, [this](brls::View* v) {
+            // 关闭菜单并触发游戏核心重置
+            setVisibility(brls::Visibility::GONE);
+            if (m_closeCallback) m_closeCallback();
+            if (m_resetGameCallback) m_resetGameCallback();
+            return true;
+        });
+        // 无子面板，阻止右键导航
+        btnReset->registerAction("", brls::BUTTON_NAV_RIGHT, [](brls::View*) { return true; }, true);
+        leftBox->addView(btnReset);
+
         auto* btn3 = new brls::Button();
         btn3->setWidthPercentage(80.0f);
         btn3->setShadowVisibility(false);
