@@ -7,6 +7,7 @@
 
 #include "UI/Pages/FileListPage.hpp"
 #include "Utils/strUtils.hpp"
+#include "Utils/fileUtils.hpp"
 
 namespace fs = std::filesystem;
 using namespace brls::literals; // for _i18n
@@ -145,6 +146,7 @@ void GameLibraryItem::onChildFocusGained(brls::View* directChild, brls::View* fo
     if (m_label) m_label->setVisibility(brls::Visibility::VISIBLE);
     m_focused = true;
     invalidate(); // 触发 draw() 启动缩放动画
+    if (onFocused) onFocused(m_entry); // 通知详情面板更新
 }
 
 void GameLibraryItem::onChildFocusLost(brls::View* directChild, brls::View* focusedView)
@@ -219,6 +221,11 @@ void GameLibraryItem::updateTitle(const std::string& newTitle)
 //  GameLibraryPage
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// 详情面板固定宽度（逻辑像素）
+static constexpr float LIB_DETAIL_PANEL_W  = 320.f;
+/// 详情面板缩略图尺寸
+static constexpr float LIB_DETAIL_THUMB_SZ = 260.f;
+
 GameLibraryPage::GameLibraryPage()
 {
     setAxis(brls::Axis::COLUMN);
@@ -229,7 +236,12 @@ GameLibraryPage::GameLibraryPage()
     m_header->setTitle("beiklive/library/title"_i18n);
     addView(m_header);
 
-    // ── 主体：垂直滚动区 ─────────────────────────────────────────────────────
+    // ── 主体：横向内容区（网格 + 右侧详情面板） ──────────────────────────────
+    auto* contentBox = new brls::Box(brls::Axis::ROW);
+    contentBox->setGrow(1.0f);
+    contentBox->setWidth(brls::View::AUTO);
+
+    // 网格滚动区（自适应宽度）
     m_scroll = new brls::ScrollingFrame();
     m_scroll->setGrow(1.0f);
     m_scroll->setScrollingBehavior(brls::ScrollingBehavior::NATURAL);
@@ -243,7 +255,13 @@ GameLibraryPage::GameLibraryPage()
         GET_STYLE("brls/applet_frame/header_padding_sides")
     );
     m_scroll->setContentView(m_gridBox);
-    addView(m_scroll);
+    contentBox->addView(m_scroll);
+
+    // 右侧详情面板（固定宽度，常驻显示）
+    buildDetailPanel();
+    contentBox->addView(m_detailPanel);
+
+    addView(contentBox);
 
     // ── 底栏 ─────────────────────────────────────────────────────────────────
     addView(new brls::BottomBar());
@@ -259,6 +277,120 @@ GameLibraryPage::GameLibraryPage()
     sortEntries();
     rebuildGrid();
     updateHeader();
+}
+
+void GameLibraryPage::buildDetailPanel()
+{
+    m_detailPanel = new brls::Box(brls::Axis::COLUMN);
+    m_detailPanel->setAlignItems(brls::AlignItems::CENTER);
+    m_detailPanel->setWidth(LIB_DETAIL_PANEL_W);
+    m_detailPanel->setPadding(20.f, 12.f, 20.f, 12.f);
+    m_detailPanel->setMarginLeft(8.f);
+    m_detailPanel->setBackgroundColor(nvgRGBA(40, 40, 40, 20));
+
+    // 封面缩略图
+    m_detailThumb = new beiklive::UI::ProImage();
+    m_detailThumb->setWidth(LIB_DETAIL_THUMB_SZ);
+    m_detailThumb->setHeight(LIB_DETAIL_THUMB_SZ);
+    m_detailThumb->setCornerRadius(8.f);
+    m_detailThumb->setScalingType(brls::ImageScalingType::FIT);
+    m_detailThumb->setInterpolation(brls::ImageInterpolation::LINEAR);
+    m_detailThumb->setClipsToBounds(false);
+    m_detailThumb->setImageFromFile(BK_APP_DEFAULT_LOGO);
+    m_detailPanel->addView(m_detailThumb);
+
+    // 显示名称
+    m_detailName = new brls::Label();
+    m_detailName->setFontSize(22.f);
+    m_detailName->setMarginTop(12.f);
+    m_detailName->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+    m_detailName->setSingleLine(true);
+    m_detailName->setAutoAnimate(true);
+    m_detailName->setTextColor(nvgRGBA(220, 220, 220, 255));
+    m_detailPanel->addView(m_detailName);
+
+    // 文件名
+    m_detailFileName = new brls::Label();
+    m_detailFileName->setFontSize(14.f);
+    m_detailFileName->setMarginTop(6.f);
+    m_detailFileName->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+    m_detailFileName->setSingleLine(true);
+    m_detailFileName->setAutoAnimate(true);
+    m_detailFileName->setTextColor(nvgRGBA(160, 160, 160, 255));
+    m_detailPanel->addView(m_detailFileName);
+
+    // 上次游玩时间
+    m_detailLastOpen = new brls::Label();
+    m_detailLastOpen->setFontSize(16.f);
+    m_detailLastOpen->setMarginTop(10.f);
+    m_detailLastOpen->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+    m_detailLastOpen->setTextColor(nvgRGBA(140, 200, 140, 255));
+    m_detailPanel->addView(m_detailLastOpen);
+
+    // 游玩总时长
+    m_detailTotalTime = new brls::Label();
+    m_detailTotalTime->setFontSize(16.f);
+    m_detailTotalTime->setMarginTop(4.f);
+    m_detailTotalTime->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+    m_detailTotalTime->setTextColor(nvgRGBA(200, 200, 140, 255));
+    m_detailPanel->addView(m_detailTotalTime);
+
+    // 平台名称
+    m_detailPlatform = new brls::Label();
+    m_detailPlatform->setFontSize(16.f);
+    m_detailPlatform->setMarginTop(4.f);
+    m_detailPlatform->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+    m_detailPlatform->setTextColor(nvgRGBA(140, 160, 220, 255));
+    m_detailPanel->addView(m_detailPlatform);
+}
+
+void GameLibraryPage::updateDetailPanel(const GameLibraryEntry& entry)
+{
+    if (!m_detailPanel) return;
+
+    // 封面图
+    if (!entry.logoPath.empty() &&
+        beiklive::file::getPathType(entry.logoPath) == beiklive::file::PathType::File)
+    {
+        m_detailThumb->setImageFromFileAsync(entry.logoPath);
+    } else {
+        m_detailThumb->setImageFromFile(BK_APP_DEFAULT_LOGO);
+    }
+
+    // 显示名称
+    m_detailName->setText(entry.displayName.empty() ? "—" : entry.displayName);
+
+    // 文件名
+    m_detailFileName->setText(entry.fileName);
+
+    // 上次游玩时间
+    m_detailLastOpen->setText("上次游玩: " + entry.lastOpen);
+
+    // 游玩总时长（格式化为 Xh Ym Zs）
+    int totalSeconds = entry.totalTime;
+    int h = totalSeconds / 3600;
+    int m = (totalSeconds % 3600) / 60;
+    int s = totalSeconds % 60;
+    std::string timeStr;
+    if (h > 0) timeStr += std::to_string(h) + "h ";
+    if (h > 0 || m > 0) timeStr += std::to_string(m) + "m ";
+    timeStr += std::to_string(s) + "s";
+    m_detailTotalTime->setText("游玩时长: " + timeStr);
+
+    // 平台名称
+    std::string platStr = getGameDataStr(entry.fileName, GAMEDATA_FIELD_PLATFORM, "");
+    m_detailPlatform->setText(platStr.empty() ? "" : "平台: " + platStr);
+}
+
+void GameLibraryPage::clearDetailPanel()
+{
+    if (!m_detailPanel) return;
+    m_detailThumb->setImageFromFile(BK_APP_DEFAULT_LOGO);
+    m_detailName->setText("");
+    m_detailFileName->setText("");
+    m_detailLastOpen->setText("");
+    m_detailTotalTime->setText("");
+    m_detailPlatform->setText("");
 }
 
 void GameLibraryPage::loadEntries()
@@ -313,6 +445,7 @@ void GameLibraryPage::rebuildGrid()
     m_scroll->setContentOffsetY(0, /*animated=*/false);
 
     if (m_entries.empty()) {
+        clearDetailPanel();
         auto* lbl = new brls::Label();
         lbl->setText("beiklive/library/empty"_i18n);
         lbl->setHorizontalAlign(brls::HorizontalAlign::CENTER);
@@ -339,16 +472,18 @@ void GameLibraryPage::rebuildGrid()
 
         item->onActivated = [this](const GameLibraryEntry& e) { onItemActivated(e); };
         item->onOptions   = [this](const GameLibraryEntry& e) { onItemOptions(e); };
+        item->onFocused   = [this](const GameLibraryEntry& e) { updateDetailPanel(e); };
 
         rowBox->addView(item);
         if (i == 0) firstItem = item;
     }
 
-    // 重建后将焦点移到第一个元素
+    // 重建后将焦点移到第一个元素，并更新详情面板
     if (firstItem) {
         brls::View* focus = firstItem->getDefaultFocus();
         if (!focus) focus = firstItem;
         brls::Application::giveFocus(focus);
+        updateDetailPanel(m_entries[0]);
     }
 }
 
