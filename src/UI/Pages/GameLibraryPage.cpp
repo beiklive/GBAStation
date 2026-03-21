@@ -15,7 +15,7 @@ using namespace brls::literals; // for _i18n
 // ─────────────────────────────────────────────────────────────────────────────
 //  布局常量
 // ─────────────────────────────────────────────────────────────────────────────
-static constexpr int   GRID_COLS     = 6;      ///< 每行列数
+static constexpr int   GRID_COLS     = 4;      ///< 每行列数
 static constexpr float ITEM_W        = 190.f;  ///< 每个元素宽度
 static constexpr float ITEM_H        = 210.f;  ///< 每个元素高度（图片 + 标签）
 static constexpr float ITEM_IMG_SZ   = 180.f;  ///< 封面图尺寸
@@ -222,7 +222,7 @@ void GameLibraryItem::updateTitle(const std::string& newTitle)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// 详情面板固定宽度（逻辑像素）
-static constexpr float LIB_DETAIL_PANEL_W  = 320.f;
+static constexpr float LIB_DETAIL_PANEL_W  = 400.f;
 /// 详情面板缩略图尺寸
 static constexpr float LIB_DETAIL_THUMB_SZ = 260.f;
 
@@ -283,6 +283,7 @@ void GameLibraryPage::buildDetailPanel()
 {
     m_detailPanel = new brls::Box(brls::Axis::COLUMN);
     m_detailPanel->setAlignItems(brls::AlignItems::CENTER);
+    m_detailPanel->setJustifyContent(brls::JustifyContent::CENTER);
     m_detailPanel->setWidth(LIB_DETAIL_PANEL_W);
     m_detailPanel->setPadding(20.f, 12.f, 20.f, 12.f);
     m_detailPanel->setMarginLeft(8.f);
