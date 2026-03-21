@@ -760,17 +760,15 @@ void FileListPage::updateDetailPanel(const FileListItem &item)
         initGameData(item.fileName, platform);
 
         std::string lastOpen  = getGameDataStr(item.fileName, GAMEDATA_FIELD_LASTOPEN, "从未游玩");
-        std::string totalSec  = getGameDataStr(item.fileName, GAMEDATA_FIELD_TOTALTIME, "0");
-        std::string platStr   = getGameDataStr(item.fileName, GAMEDATA_FIELD_PLATFORM, "   ");
+        // totaltime 字段以整数形式存储，须用 getGameDataInt 读取，
+        // 使用 getGameDataStr 会因类型不匹配而始终返回默认值 "0"
+        int totalSeconds      = getGameDataInt(item.fileName, GAMEDATA_FIELD_TOTALTIME, 0);
+        std::string platStr   = getGameDataStr(item.fileName, GAMEDATA_FIELD_PLATFORM, "");
 
         if (m_detailLastOpen)  m_detailLastOpen->setText("上次游玩: " + lastOpen);
         if (m_detailPlatform)  m_detailPlatform->setText("平台: " + platStr);
 
         // 格式化总游玩时长为 Xh Ym Zs
-        int totalSeconds = 0;
-        try { totalSeconds = std::stoi(totalSec); }
-        catch (const std::invalid_argument&) { totalSeconds = 0; }
-        catch (const std::out_of_range&) { totalSeconds = 0; }
         int h = totalSeconds / 3600;
         int m = (totalSeconds % 3600) / 60;
         int s = totalSeconds % 60;
