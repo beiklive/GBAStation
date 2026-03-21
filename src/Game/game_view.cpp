@@ -2181,18 +2181,12 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
     // ---- 计算传入渲染链的视口尺寸（物理像素）----
     // 对比 RetroArch example/gfx 渲染链（gl2/gl3）：viewport 缩放使用完整输出视口尺寸
     // （gl->video_width × gl->video_height = 整个游戏渲染区域的物理像素）。
-    // 着色器激活时：使用完整视图物理像素，确保 viewport-scale 着色器（如 console-border）
-    // 能以整个游戏区域为视口，正确将游戏内容定位在边框中央。
-    // 无着色器时：使用游戏显示矩形尺寸（preRect）即可，此值不影响直通模式。
+    // 使用 preRect（已应用显示模式的宽高比校正矩形）×windowScale 作为着色器视口，
+    // 确保 FBO 尺寸与最终显示矩形物理尺寸一致，避免宽高比不匹配导致画面压扁。
+    // 在 FullScreen/Fill 模式下 preRect == 完整视图矩形，行为与原来相同。
     float windowScale = brls::Application::windowScale;
-    unsigned passViewW, passViewH;
-    if (m_renderChain.hasShader()) {
-        passViewW = std::max(1u, static_cast<unsigned>(std::lround(width  * windowScale)));
-        passViewH = std::max(1u, static_cast<unsigned>(std::lround(height * windowScale)));
-    } else {
-        passViewW = std::max(1u, static_cast<unsigned>(std::lround(preRect.w)));
-        passViewH = std::max(1u, static_cast<unsigned>(std::lround(preRect.h)));
-    }
+    unsigned passViewW = std::max(1u, static_cast<unsigned>(std::lround(preRect.w * windowScale)));
+    unsigned passViewH = std::max(1u, static_cast<unsigned>(std::lround(preRect.h * windowScale)));
 
     // ---- 运行渲染链并确定显示纹理 ----------
     // 若已加载着色器管线，将游戏纹理经过多通道 Shader 处理后作为显示纹理；

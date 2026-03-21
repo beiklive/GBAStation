@@ -36,6 +36,8 @@ public:
     std::function<void(const GameLibraryEntry&)> onActivated;
     /// 按 X 键时触发（显示选项菜单）
     std::function<void(const GameLibraryEntry&)> onOptions;
+    /// 获得焦点时触发（用于更新详情面板）
+    std::function<void(const GameLibraryEntry&)> onFocused;
 
     const GameLibraryEntry& getEntry() const { return m_entry; }
 
@@ -66,7 +68,7 @@ private:
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  GameLibraryPage  –  游戏库主页面
-//  结构：BrowserHeader（游戏数量） + ScrollingFrame（5列网格） + BottomBar
+//  结构：BrowserHeader + 横向内容区（网格 + 右侧详情面板）+ BottomBar
 //  Y 键：弹出排序方式 Dropdown
 // ─────────────────────────────────────────────────────────────────────────────
 class GameLibraryPage : public beiklive::UI::BBox
@@ -87,12 +89,28 @@ public:
     std::function<void(const GameLibraryEntry&)> onGameOptions;
 
 private:
-    beiklive::UI::BrowserHeader* m_header   = nullptr;
-    brls::ScrollingFrame*        m_scroll   = nullptr;
-    brls::Box*                   m_gridBox  = nullptr;
+    beiklive::UI::BrowserHeader* m_header      = nullptr;
+    brls::ScrollingFrame*        m_scroll      = nullptr;
+    brls::Box*                   m_gridBox     = nullptr;
+
+    // ── 右侧详情面板组件 ─────────────────────────────────────────────────────
+    brls::Box*                   m_detailPanel     = nullptr;  ///< 详情面板容器
+    beiklive::UI::ProImage*      m_detailThumb     = nullptr;  ///< 封面缩略图
+    brls::Label*                 m_detailName      = nullptr;  ///< 显示名称
+    brls::Label*                 m_detailFileName  = nullptr;  ///< 文件名
+    brls::Label*                 m_detailLastOpen  = nullptr;  ///< 上次游玩时间
+    brls::Label*                 m_detailTotalTime = nullptr;  ///< 游玩总时长
+    brls::Label*                 m_detailPlatform  = nullptr;  ///< 平台名称
 
     std::vector<GameLibraryEntry> m_entries; ///< 游戏数据列表
     SortMode m_sortMode = SortMode::ByLastOpen;
+
+    /// 构建右侧详情面板
+    void buildDetailPanel();
+    /// 用指定游戏条目更新详情面板内容
+    void updateDetailPanel(const GameLibraryEntry& entry);
+    /// 清空详情面板（无焦点时）
+    void clearDetailPanel();
 
     /// 从 gamedataManager / NameMappingManager 收集所有游戏条目
     void loadEntries();
