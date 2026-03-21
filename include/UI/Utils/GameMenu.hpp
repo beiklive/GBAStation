@@ -45,6 +45,9 @@ public:
     /// 若未设置，退出按钮直接调用 brls::Application::popActivity()。
     void setExitGameCallback(std::function<void()> cb) { m_exitGameCallback = std::move(cb); }
 
+    /// 设置"重置游戏"回调。用户点击重置游戏按钮时在 UI 线程调用，触发游戏核心重置。
+    void setResetGameCallback(std::function<void()> cb) { m_resetGameCallback = std::move(cb); }
+
     /// 设置金手指列表并刷新 cheatbox 显示。
     /// 须在主（UI）线程调用。
     void setCheats(const std::vector<CheatEntry>& cheats);
@@ -155,6 +158,7 @@ private:
 
     std::function<void()>               m_closeCallback;
     std::function<void()>               m_exitGameCallback;
+    std::function<void()>               m_resetGameCallback;
     std::function<void(const std::string&)> m_overlayChangedCallback;
     std::function<void(bool)>           m_overlayEnabledChangedCallback;
     std::function<void(bool)>           m_shaderEnabledChangedCallback;

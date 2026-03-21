@@ -665,6 +665,12 @@ void GameView::startGameThread()
                     if (slot >= 0) doQuickLoad(slot);
                 }
 
+                // ---- 重置游戏核心 --------
+                if (m_pendingReset.exchange(false, std::memory_order_relaxed)) {
+                    bklog::info("GameView: 执行游戏核心重置");
+                    m_core.reset();
+                }
+
                 // ---- 自动定时存档（定期保存到即时存档0 .ss0） --------
                 {
                     int autoSaveIntervalSec = beiklive::cfgGetInt("save.autoSaveInterval", 0);
@@ -819,6 +825,10 @@ void GameView::setGameMenu(GameMenu* menu)
                 bklog::info("GameView: 退出游戏时将自动保存即时存档0");
             }
             brls::Application::popActivity();
+        });
+        // 重置游戏回调：标记游戏线程在下一帧执行 core.reset()
+        m_gameMenu->setResetGameCallback([this]() {
+            m_pendingReset.store(true, std::memory_order_relaxed);
         });
         // 遮罩路径变更时立即更新 m_overlayPath 并标记重新加载，
         // draw() 下一帧将在菜单仍打开期间预加载新纹理，恢复游戏无卡顿

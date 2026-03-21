@@ -62,6 +62,7 @@
         "btn_load_state": "Load State",
         "btn_cheats": "Cheats",
         "btn_exit_game": "Exit Game",
+        "btn_reset_game": "Reset Game",
         "save_slot_auto": "Auto Save Slot",
         "load_slot_auto": "Auto Load Slot",
         "save_slot_prefix": "Save to Slot ",
