@@ -212,6 +212,10 @@ void StartPageView::createAppPage()
         openDataPage();
     };
 
+    m_appPage->onOpenAboutPage = [this]() {
+        openAboutPage();
+    };
+
     // ── 绑定游戏卡片 X 键回调 ─────────────────────────────────────────────
     // 使用 Dropdown 展示游戏卡片选项（设置映射名、选择封面、从列表移除）
     m_appPage->onGameOptions = [this](const GameEntry& entry) {
@@ -481,6 +485,36 @@ void StartPageView::openGameLibraryPage()
     frame->setFooterVisibility(brls::Visibility::GONE);
     frame->setBackground(brls::ViewBackground::NONE);
     brls::Application::pushActivity(new brls::Activity(frame));
+}
+
+void StartPageView::openAboutPage()
+{
+    auto* aboutPage = new AboutPage();
+    auto* container = new brls::Box(brls::Axis::COLUMN);
+    container->setGrow(1.0f);
+    container->setBackground(brls::ViewBackground::NONE);
+    container->addView(aboutPage);
+
+    // START 键（+）关闭关于页
+    container->registerAction(
+        "beiklive/hints/close"_i18n,
+        brls::BUTTON_START,
+        [this](brls::View*) {
+            brls::Application::popActivity();
+            if (m_appPage) {
+                auto* focus = m_appPage->getDefaultFocus();
+                if (focus)
+                    brls::Application::giveFocus(focus);
+            }
+            return true;
+        },
+        /*hidden=*/false, /*repeat=*/false, brls::SOUND_CLICK);
+
+    auto* aboutFrame = new brls::AppletFrame(container);
+    aboutFrame->setHeaderVisibility(brls::Visibility::GONE);
+    aboutFrame->setFooterVisibility(brls::Visibility::GONE);
+    aboutFrame->setBackground(brls::ViewBackground::NONE);
+    brls::Application::pushActivity(new brls::Activity(aboutFrame));
 }
 
 
