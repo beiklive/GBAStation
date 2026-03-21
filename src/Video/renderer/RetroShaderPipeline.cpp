@@ -78,6 +78,9 @@ bool RetroShaderPipeline::init(const std::string& glslpPath)
         pass.filterLinear = desc.filterLinear;
         pass.alias        = desc.alias;
 
+        brls::Logger::debug("Pass alias='{}' shader='{}' filterLinear={}",
+                        pass.alias, pass.desc.shaderPath, pass.filterLinear ? 1 : 0);
+
         pass.program = ShaderCompiler::compileRetroShader(desc.shaderPath);
         if (!pass.program) {
             brls::Logger::warning("RetroShaderPipeline: 跳过通道: {}", desc.shaderPath);
@@ -518,62 +521,71 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
         // 激活着色器
         glUseProgram(pass.program);
 
-        // 根据通道的 wrap_mode 和 filter_linear 配置，在绑定输入纹理前设置其采样参数。
-        // RetroArch 规范：filter_linearN 决定通道 N 的输入纹理（即前一通道 FBO 输出）的过滤方式；
-        // 部分着色器在 UV 超出 [0,1] 时期望返回黑色（clamp_to_border），而非拉伸边缘像素。
-        {
-            GLenum wrapGL = GL_CLAMP_TO_EDGE;
-            switch (pass.desc.wrapMode) {
-                case ShaderPassDesc::WrapMode::ClampToBorder:
-#if !defined(USE_GLES2)
-                    wrapGL = GL_CLAMP_TO_BORDER;
-#else
-                    wrapGL = GL_CLAMP_TO_EDGE; // GLES2 无 clamp_to_border，降级
-#endif
-                    break;
-                case ShaderPassDesc::WrapMode::Repeat:
-                    wrapGL = GL_REPEAT;
-                    break;
-                case ShaderPassDesc::WrapMode::MirroredRepeat:
-                    wrapGL = GL_MIRRORED_REPEAT;
-                    break;
-                default:
-                    wrapGL = GL_CLAMP_TO_EDGE;
-                    break;
+        // 统一纹理采样状态设置：避免越界采样时边缘像素拉伸
+        auto applyTextureSamplingState = [&](GLuint tex, GLenum wrap, bool updateFilter, GLenum filter) {
+            if (!tex) return;
+            glBindTexture(GL_TEXTURE_2D, tex);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, static_cast<GLint>(wrap));
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, static_cast<GLint>(wrap));
+            if (updateFilter) {
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, static_cast<GLint>(filter));
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, static_cast<GLint>(filter));
             }
-
-            // 按当前通道的 filter_linear 决定输入纹理过滤模式
-            GLenum filterGL = pass.filterLinear ? GL_LINEAR : GL_NEAREST;
-
-            // 设置输入纹理（currentTex）的环绕模式和过滤模式
-            glBindTexture(GL_TEXTURE_2D, currentTex);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, static_cast<GLint>(wrapGL));
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, static_cast<GLint>(wrapGL));
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, static_cast<GLint>(filterGL));
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, static_cast<GLint>(filterGL));
 #if !defined(USE_GLES2)
-            // clamp_to_border 时设置边框颜色为黑色透明
-            if (wrapGL == GL_CLAMP_TO_BORDER) {
-                static const GLfloat s_borderColor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+            if (wrap == GL_CLAMP_TO_BORDER) {
+                static const GLfloat s_borderColor[4] = {0.0f, 0.0f, 0.0f, 0.0f};
                 glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, s_borderColor);
             }
 #endif
             glBindTexture(GL_TEXTURE_2D, 0);
+        };
+
+        GLenum wrapGL = GL_CLAMP_TO_EDGE;
+        switch (pass.desc.wrapMode) {
+            case ShaderPassDesc::WrapMode::ClampToBorder:
+#if !defined(USE_GLES2)
+                wrapGL = GL_CLAMP_TO_BORDER;
+#else
+                // GLES2 不支持 GL_CLAMP_TO_BORDER，降级
+                wrapGL = GL_CLAMP_TO_EDGE;
+#endif
+                break;
+            case ShaderPassDesc::WrapMode::Repeat:
+                wrapGL = GL_REPEAT;
+                break;
+            case ShaderPassDesc::WrapMode::MirroredRepeat:
+                wrapGL = GL_MIRRORED_REPEAT;
+                break;
+            default:
+                wrapGL = GL_CLAMP_TO_EDGE;
+                break;
         }
+
+#if !defined(USE_GLES2)
+        // 自动防拉伸：当本 pass 是放大且仍为边缘钳制时，改为透明边框钳制
+        // 仅应用在主输入纹理，避免影响 LUT/历史纹理语义
+        if (wrapGL == GL_CLAMP_TO_EDGE &&
+            (outW > static_cast<int>(currentW) || outH > static_cast<int>(currentH))) {
+            wrapGL = GL_CLAMP_TO_BORDER;
+        }
+#endif
+
+        // 仅主输入沿用当前 pass 的 filter_linear
+        GLenum filterGL = pass.filterLinear ? GL_LINEAR : GL_NEAREST;
+        applyTextureSamplingState(currentTex, wrapGL, true, filterGL);
 
         // 绑定主输入纹理到纹理单元 0
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, currentTex);
 
         // 构建额外纹理单元列表（外部纹理 + 已完成通道的输出）
-        // 纹理单元 1..N：外部纹理（COLOR_PALETTE、BACKGROUND 等）
-        // 纹理单元 N+1..：历史 Pass 输出（Pass0Texture / PassPrevNTexture / <alias>Texture）
         std::vector<std::pair<std::string, GLuint>> extraTexUnits;
         {
             GLuint unit = 1;
             // 外部纹理
             for (const auto& et : m_textures) {
                 if (et.texId) {
+                    // 兼容性修复：不再强制覆盖外部纹理采样状态
                     glActiveTexture(GL_TEXTURE0 + unit);
                     glBindTexture(GL_TEXTURE_2D, et.texId);
                     extraTexUnits.emplace_back(et.name, unit);
@@ -581,28 +593,22 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
                 }
             }
             // 已完成通道的输出
-            // PassNTexture（绝对索引）+ PassPrevMTexture（相对索引，M = idx-pi）
-            // + <alias>Texture（通道别名）
             for (size_t pi = 0; pi < idx; ++pi) {
                 const auto& prev = m_passes[pi];
                 if (!prev.texture) continue;
+                // 兼容性修复：不再强制覆盖历史 pass 纹理采样状态
                 glActiveTexture(GL_TEXTURE0 + unit);
                 glBindTexture(GL_TEXTURE_2D, prev.texture);
-                // 绝对索引：PassNTexture
                 extraTexUnits.emplace_back("Pass" + std::to_string(pi) + "Texture", unit);
-                // 相对索引：PassPrevNTexture（N = 当前通道索引 - 历史通道索引）
                 size_t prevN = idx - pi;
                 extraTexUnits.emplace_back("PassPrev" + std::to_string(prevN) + "Texture", unit);
-                // 若该通道定义了 alias，也以 <alias>Texture 绑定
                 if (!prev.alias.empty()) {
                     extraTexUnits.emplace_back(prev.alias + "Texture", unit);
                 }
                 ++unit;
             }
-            // 原始输入纹理（管线入口帧）作为 OrigTexture / PassPrev{idx+1}Texture 暴露。
-            // RetroArch 规范：对于当前 pass idx（0-based），原始输入距当前 pass 共 idx+1 步，
-            // 因此以 PassPrev{idx+1}Texture 命名。许多多通道着色器（如 xbrz-freescale-pass1）
-            // 需要此纹理来读取原始像素颜色。
+
+            // 原始输入纹理保持原采样状态，避免与主输入策略冲突
             glActiveTexture(GL_TEXTURE0 + unit);
             glBindTexture(GL_TEXTURE_2D, inputTex);
             extraTexUnits.emplace_back("OrigTexture", unit);
@@ -610,7 +616,7 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
             ++unit;
             if (unit - 1 > maxTexUnit) maxTexUnit = unit - 1;
         }
-        glActiveTexture(GL_TEXTURE0); // 恢复活动纹理单元到 0
+        glActiveTexture(GL_TEXTURE0);
 
         // 设置 uniform（含 OrigInputSize / OrigSize 和参数覆盖值）
         setUniforms(pass.program,
