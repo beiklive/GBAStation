@@ -21,9 +21,9 @@ static constexpr float ACCENT_W = 4.f;
 static constexpr float CELL_PAD_H = 12.f;
 static constexpr float CELL_PAD_V = 10.f;
 static constexpr float INFO_FONT_SIZE = 12.f;
-static constexpr float NAME_FONT_SIZE = 22.f;
+static constexpr float NAME_FONT_SIZE = 20.f;
 static constexpr float DETAIL_PANEL_WIDTH = 400.f;
-static constexpr float DETAIL_THUMB_SZ = DETAIL_PANEL_WIDTH - 40.f; // 面板宽度减去水平内边距
+static constexpr float DETAIL_THUMB_SZ = DETAIL_PANEL_WIDTH - 100.f; // 面板宽度减去水平内边距
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  文件类型扩展名表
@@ -385,6 +385,7 @@ void FileListPage::buildDetailPanel()
 {
     m_detailPanel = new brls::Box(brls::Axis::COLUMN);
     m_detailPanel->setAlignItems(brls::AlignItems::CENTER);
+    m_detailPanel->setJustifyContent(brls::JustifyContent::FLEX_START);
     m_detailPanel->setWidth(DETAIL_PANEL_WIDTH);
     m_detailPanel->setPadding(20.f, 12.f, 20.f, 12.f);
     m_detailPanel->setBackgroundColor(nvgRGBA(40, 40, 40, 20));
@@ -394,8 +395,8 @@ void FileListPage::buildDetailPanel()
     // setClipsToBounds(false) 修复边缘像素拉伸问题：图像只在精确的宽高比矩形内绘制，
     // 不会因边缘像素钳制而渗入周围空白区域。
     m_detailThumb = new beiklive::UI::ProImage();
-    m_detailThumb->setWidth(DETAIL_THUMB_SZ*0.8);
-    m_detailThumb->setHeight(DETAIL_THUMB_SZ*0.6);
+    m_detailThumb->setWidth(DETAIL_THUMB_SZ);
+    m_detailThumb->setHeight(DETAIL_THUMB_SZ);
     m_detailThumb->setScalingType(brls::ImageScalingType::FIT);
     m_detailThumb->setInterpolation(brls::ImageInterpolation::LINEAR);
     m_detailThumb->setCornerRadius(8.f);
@@ -405,20 +406,28 @@ void FileListPage::buildDetailPanel()
 
     m_detailName = new brls::Label();
     m_detailName->setFontSize(22.f);
+    m_detailName->setWidth(DETAIL_PANEL_WIDTH - 40.f); // 减去水平内边距
     m_detailName->setMarginTop(12.f);
     m_detailName->setHorizontalAlign(brls::HorizontalAlign::CENTER);
     m_detailName->setSingleLine(true);
     m_detailName->setAutoAnimate(true);
     m_detailName->setTextColor(nvgRGBA(220, 220, 220, 255));
+    m_detailName->setGrow(1.0f);
+    m_detailName->setAutoAnimate(true);
     m_detailPanel->addView(m_detailName);
 
     m_detailMappedName = new brls::Label();
-    m_detailMappedName->setFontSize(20.f);
+    m_detailMappedName->setWidth(DETAIL_PANEL_WIDTH - 40.f); // 减去水平内边距
+
+    m_detailMappedName->setFontSize(22.f);
     m_detailMappedName->setMarginTop(6.f);
     m_detailMappedName->setHorizontalAlign(brls::HorizontalAlign::CENTER);
     m_detailMappedName->setSingleLine(true);
     m_detailMappedName->setAutoAnimate(true);
     m_detailMappedName->setTextColor(nvgRGBA(120, 190, 255, 255));
+    m_detailMappedName->setGrow(1.0f);
+    m_detailMappedName->setAutoAnimate(true);
+
     m_detailPanel->addView(m_detailMappedName);
 
     m_detailInfo = new brls::Label();
@@ -426,6 +435,7 @@ void FileListPage::buildDetailPanel()
     m_detailInfo->setMarginTop(8.f);
     m_detailInfo->setHorizontalAlign(brls::HorizontalAlign::CENTER);
     m_detailInfo->setTextColor(nvgRGBA(160, 160, 160, 255));
+    m_detailInfo->setGrow(1.0f);
     m_detailPanel->addView(m_detailInfo);
 
     // ── Game-data extra labels ────────────────────────────────────────────
@@ -434,6 +444,7 @@ void FileListPage::buildDetailPanel()
     m_detailLastOpen->setMarginTop(6.f);
     m_detailLastOpen->setHorizontalAlign(brls::HorizontalAlign::CENTER);
     m_detailLastOpen->setTextColor(nvgRGBA(140, 200, 140, 255));
+    m_detailLastOpen->setGrow(1.0f);
     m_detailPanel->addView(m_detailLastOpen);
 
     m_detailTotalTime = new brls::Label();
@@ -441,6 +452,7 @@ void FileListPage::buildDetailPanel()
     m_detailTotalTime->setMarginTop(4.f);
     m_detailTotalTime->setHorizontalAlign(brls::HorizontalAlign::CENTER);
     m_detailTotalTime->setTextColor(nvgRGBA(200, 200, 140, 255));
+    m_detailTotalTime->setGrow(1.0f);
     m_detailPanel->addView(m_detailTotalTime);
 
     m_detailPlatform = new brls::Label();
@@ -448,7 +460,8 @@ void FileListPage::buildDetailPanel()
     m_detailPlatform->setMarginTop(4.f);
     m_detailPlatform->setHorizontalAlign(brls::HorizontalAlign::CENTER);
     m_detailPlatform->setTextColor(nvgRGBA(140, 160, 220, 255));
-    m_detailPanel->addView(m_detailPlatform);
+    m_detailPlatform->setGrow(1.0f);
+    m_detailPanel->addView(m_detailPlatform); 
 }
 
 // ─────────── 公共 API ─────────────────────────────────────────────────────────
@@ -722,12 +735,12 @@ void FileListPage::clearDetailPanel()
         return;
 
     m_detailThumb->setImageFromFile(BK_APP_DEFAULT_LOGO);
-    m_detailName->setText("");
-    m_detailMappedName->setText("");
-    m_detailInfo->setText("");
-    if (m_detailLastOpen)  m_detailLastOpen->setText("");
-    if (m_detailTotalTime) m_detailTotalTime->setText("");
-    if (m_detailPlatform)  m_detailPlatform->setText("");
+    m_detailName->setText("  ");
+    m_detailMappedName->setText("  ");
+    m_detailInfo->setText("   ");
+    if (m_detailLastOpen)  m_detailLastOpen->setText("   ");
+    if (m_detailTotalTime) m_detailTotalTime->setText("   ");
+    if (m_detailPlatform)  m_detailPlatform->setText("   ");
 }
 
 void FileListPage::updateDetailPanel(const FileListItem &item)
@@ -736,7 +749,7 @@ void FileListPage::updateDetailPanel(const FileListItem &item)
         return;
 
     m_detailName->setText(item.fileName);
-    m_detailMappedName->setText(item.mappedName.empty() ? "" : item.mappedName);
+    m_detailMappedName->setText(item.mappedName.empty() ? "    " : item.mappedName);
 
     // ── Game-data extra labels ─────────────────────────────────────────────
     beiklive::EmuPlatform platform = detectPlatform(item.fileName);
@@ -748,7 +761,7 @@ void FileListPage::updateDetailPanel(const FileListItem &item)
 
         std::string lastOpen  = getGameDataStr(item.fileName, GAMEDATA_FIELD_LASTOPEN, "从未游玩");
         std::string totalSec  = getGameDataStr(item.fileName, GAMEDATA_FIELD_TOTALTIME, "0");
-        std::string platStr   = getGameDataStr(item.fileName, GAMEDATA_FIELD_PLATFORM, "");
+        std::string platStr   = getGameDataStr(item.fileName, GAMEDATA_FIELD_PLATFORM, "   ");
 
         if (m_detailLastOpen)  m_detailLastOpen->setText("上次游玩: " + lastOpen);
         if (m_detailPlatform)  m_detailPlatform->setText("平台: " + platStr);
@@ -767,9 +780,9 @@ void FileListPage::updateDetailPanel(const FileListItem &item)
         timeStr += std::to_string(s) + "s";
         if (m_detailTotalTime) m_detailTotalTime->setText("游玩时长: " + timeStr);
     } else {
-        if (m_detailLastOpen)  m_detailLastOpen->setText("");
-        if (m_detailTotalTime) m_detailTotalTime->setText("");
-        if (m_detailPlatform)  m_detailPlatform->setText("");
+        if (m_detailLastOpen)  m_detailLastOpen->setText("  ");
+        if (m_detailTotalTime) m_detailTotalTime->setText("   ");
+        if (m_detailPlatform)  m_detailPlatform->setText("   ");
     }
 
     if (item.isDir) {
@@ -803,6 +816,9 @@ void FileListPage::updateDetailPanel(const FileListItem &item)
         {
             m_detailThumb->setImageFromFileAsync(storedLogo);
             return;
+        }else{
+            m_detailThumb->setImageFromFileAsync(BK_APP_DEFAULT_LOGO);
+             return;
         }
     }
 
@@ -825,7 +841,9 @@ void FileListPage::updateDetailPanel(const FileListItem &item)
     }
 
     // 优先级4：默认 logo
-    m_detailThumb->setImageFromFile(BK_APP_DEFAULT_LOGO);
+    std::string path_prefix = "img/ui/" +
+            std::string((brls::Application::getPlatform()->getThemeVariant() == brls::ThemeVariant::DARK) ? "light/" : "dark/");
+    m_detailThumb->setImageFromFile(BK_RES(path_prefix + "wenjian.png"));
 }
 
 void FileListPage::showDriveList()
