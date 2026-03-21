@@ -174,7 +174,7 @@ std::string defineStr = isVertex
 
 ## 验证
 
-- Linux Desktop 编译通过，无新增错误（`BKStation` 可执行文件生成成功）
+- Linux Desktop 编译通过，无新增错误（`GBAStation` 可执行文件生成成功）
 - `glColorMask(R,G,B, GL_FALSE)` 屏蔽 Alpha 写入后，gba-color.glsl 等颜色矩阵着色器
   的 FBO 输出 alpha 将保持清除值 1.0，NanoVG 混合正确输出游戏颜色
 - 0RGB1555 格式 R 分量从 bit10 而非 bit11 读取，G 分量为 5 位而非 6 位，颜色精度更准确

@@ -156,4 +156,4 @@
 
 ## 编译验证
 
-Linux 平台（`PLATFORM_DESKTOP=ON`）编译成功：`[100%] Built target BKStation`
+Linux 平台（`PLATFORM_DESKTOP=ON`）编译成功：`[100%] Built target GBAStation`

@@ -112,7 +112,7 @@ sudo apt install \
 
 ```
 build_linux/
-├── BKStation            # 主程序
+├── GBAStation            # 主程序
 └── mgba_libretro.so     # libretro 核心（构建后自动复制至此）
 ```
 
@@ -130,7 +130,7 @@ build_linux/
 
 ```
 build_macos/
-├── BKStation            # 主程序
+├── GBAStation            # 主程序
 └── mgba_libretro.dylib  # libretro 核心
 ```
 
@@ -144,7 +144,7 @@ windowsbuild.bat
 
 ```
 build_windows\
-├── BKStation.exe        # 主程序
+├── GBAStation.exe        # 主程序
 └── mgba_libretro.dll    # libretro 核心
 ```
 
@@ -154,7 +154,7 @@ build_windows\
 ./switchbuild.sh
 ```
 
-产物：`build_switch/BKStation.nro`
+产物：`build_switch/GBAStation.nro`
 
 ---
 

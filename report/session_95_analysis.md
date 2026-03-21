@@ -15,7 +15,7 @@
 
 ## 输出
 
-- 新配置文件：`BKStation/config/playlist.cfg`，格式与现有 ConfigManager 文件一致
+- 新配置文件：`GBAStation/config/playlist.cfg`，格式与现有 ConfigManager 文件一致
 - 新增全局变量 `PlaylistManager`
 - 新增内联函数 `pushPlaylistGame()`
 

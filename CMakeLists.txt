@@ -26,12 +26,12 @@ endif ()
 include(${BOREALIS_LIBRARY}/cmake/toolchain.cmake)
 
 # 项目信息
-project(BKStation)
+project(GBAStation)
 set(VERSION_MAJOR "1")
 set(VERSION_MINOR "0")
 set(VERSION_ALTER "0")
 set(VERSION_BUILD "0")
-set(PACKAGE_NAME "com.beiklive.bkstation")
+set(PACKAGE_NAME "com.beiklive.GBAStation")
 set(PROJECT_AUTHOR "beiklive")
 set(PROJECT_ICON ${CMAKE_CURRENT_SOURCE_DIR}/resources/icon/default.png)
 set(PROJECT_RESOURCES ${CMAKE_CURRENT_SOURCE_DIR}/resources)
@@ -206,7 +206,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE borealis ${APP_PLATFORM_LIB})
 
 # ============================================================
 # Post-build: copy mgba_libretro shared library next to the
-# BKStation executable so that LibretroLoader can find it
+# GBAStation executable so that LibretroLoader can find it
 # via a relative "./mgba_libretro.*" path.
 # ============================================================
 if (TARGET mgba_libretro)

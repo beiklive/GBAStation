@@ -98,13 +98,13 @@ static const HotkeyMeta k_hotkeyMeta[] = {
     {
         "handle.fastforward",
         "none",
-        "\xe5\xbf\xab\xe8\xbf\x9b\xef\xbc\x88\xe4\xbf\x9d\xe6\x8c\x81\xef\xbc\x89"  // 快进
+        "\xe5\xbf\xab\xe8\xbf\x9b"  // 快进
     },
     // 倒带（保持）
     {
         "handle.rewind",
         "none",
-        "\xe5\x80\x92\xe5\xb8\xa6\xef\xbc\x88\xe4\xbf\x9d\xe6\x8c\x81\xef\xbc\x89"  // 倒带
+        "\xe5\x80\x92\xe5\xb8\xa6"  // 倒带
     },
     // 快速保存
     {

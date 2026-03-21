@@ -14,7 +14,7 @@
 
 **2. `main.cpp`**
 - 新增 `beiklive::ConfigManager* PlaylistManager = nullptr` 全局变量定义
-- 在 `ConfigManagerInit()` 中初始化，对应配置文件 `BKStation/config/playlist.cfg`
+- 在 `ConfigManagerInit()` 中初始化，对应配置文件 `GBAStation/config/playlist.cfg`
 - 设置 `listcount` 默认值为 0，无需立即保存（首次记录游戏时才触发保存）
 
 **3. `src/UI/StartPageView.cpp`**

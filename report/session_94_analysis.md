@@ -10,14 +10,14 @@
 - 玩家在 StartPageView 中选择并启动任意游戏
 
 **输出**：
-- `BKStation/config/gamedata.cfg` 中，对应游戏的 `playcount` 字段每次启动时自增 1
+- `GBAStation/config/gamedata.cfg` 中，对应游戏的 `playcount` 字段每次启动时自增 1
 - 示例：`pokemon.playcount=i|5`
 
 ## 代码结构分析
 
 ### GameData 存储机制
 
-- **位置**：`./BKStation/config/gamedata.cfg`
+- **位置**：`./GBAStation/config/gamedata.cfg`
 - **格式**：INI 键值对，整数用 `i|` 前缀（例：`pokemon.totaltime=i|3600`）
 - **管理器**：全局 `gamedataManager`（`beiklive::ConfigManager*`）
 - **字段常量**：定义在 `include/common.hpp`（第 173-180 行）

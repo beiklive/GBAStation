@@ -33,7 +33,7 @@
 
 #### 数据格式
 
-配置文件：`BKStation/config/gamedata.cfg`
+配置文件：`GBAStation/config/gamedata.cfg`
 
 key 格式：`<文件名（不含后缀）>.<字段名>`
 

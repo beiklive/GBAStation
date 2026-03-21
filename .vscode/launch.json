@@ -8,7 +8,7 @@
             "name": "(gdb) Windows 上的 Bash 启动",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/BKStation.exe",
+            "program": "${workspaceFolder}/build/GBAStation.exe",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${fileDirname}",

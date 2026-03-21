@@ -2,7 +2,7 @@
 :: ============================================================
 :: Windows 编译脚本（MinGW / MSYS2 环境）
 :: 编译后产物：
-::   build_windows\BKStation.exe          —— 主程序
+::   build_windows\GBAStation.exe          —— 主程序
 ::   build_windows\mgba_libretro.dll     —— libretro 核心
 :: 使用方式：在 MSYS2 MinGW64 终端或已配置好 MinGW 环境的
 ::   cmd / PowerShell 中直接运行本脚本即可。

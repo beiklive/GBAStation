@@ -27,25 +27,25 @@ using namespace brls::literals; // for _i18n
     brls::Application::getTheme().getColor(name)
 
 	
-#define BK_APP_NAME "BKStation"
+#define BK_APP_NAME "GBAStation"
 #ifdef __SWITCH__
-#define BK_APP_ROOT_DIR "/BKStation/"
-#define BK_APP_LOG_DIR "/BKStation/log/"
-#define BK_APP_LOG_FILE "/BKStation/log/BKStation.log"
-#define BK_APP_CONFIG_DIR "/BKStation/config/"
-#define BK_APP_CONFIG_FILE "/BKStation/config/config.ini"
-#define BK_GAME_CORE_DIR "/BKStation/cores/"
+#define BK_APP_ROOT_DIR "/GBAStation/"
+#define BK_APP_LOG_DIR "/GBAStation/log/"
+#define BK_APP_LOG_FILE "/GBAStation/log/GBAStation.log"
+#define BK_APP_CONFIG_DIR "/GBAStation/config/"
+#define BK_APP_CONFIG_FILE "/GBAStation/config/config.ini"
+#define BK_GAME_CORE_DIR "/GBAStation/cores/"
 #else
-#define BK_APP_ROOT_DIR "./BKStation/"
-#define BK_APP_LOG_DIR "./BKStation/log/"
-#define BK_APP_LOG_FILE "./BKStation/log/BKStation.log"
-#define BK_APP_CONFIG_DIR "./BKStation/config/"
-#define BK_APP_CONFIG_FILE "./BKStation/config/config.ini"
-#define BK_GAME_CORE_DIR "./BKStation/cores/"
+#define BK_APP_ROOT_DIR "./GBAStation/"
+#define BK_APP_LOG_DIR "./GBAStation/log/"
+#define BK_APP_LOG_FILE "./GBAStation/log/GBAStation.log"
+#define BK_APP_CONFIG_DIR "./GBAStation/config/"
+#define BK_APP_CONFIG_FILE "./GBAStation/config/config.ini"
+#define BK_GAME_CORE_DIR "./GBAStation/cores/"
 #endif
 
 // 应用默认图标
-#define BK_APP_DEFAULT_LOGO BK_RES("icon/default.png")
+#define BK_APP_DEFAULT_LOGO BK_RES("img/ui/icon_gba.png")
 #define BK_APP_DEFAULT_BG BK_RES("img/bg2.png")
 
 

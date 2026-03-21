@@ -165,4 +165,4 @@ void FileListPage::resetFocusToTop()
 - ✅ 从 AppPage 切换到 FileListPage，焦点定位在第一项
 - ✅ 文件名过长时，FileListItemView 获焦后名称以走马灯形式滚动
 - ✅ 侧边栏操作（rename/cut/paste/delete）通过 `m_items` 正常访问数据
-- ✅ 构建无编译错误（`make BKStation` 通过）
+- ✅ 构建无编译错误（`make GBAStation` 通过）

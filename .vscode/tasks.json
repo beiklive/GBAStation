@@ -37,7 +37,7 @@
         {
             "label": "运行app",
             "type": "process",
-            "command": ".\\BKStation.exe",
+            "command": ".\\GBAStation.exe",
             "args": [
                 "-d",
                 "-v",

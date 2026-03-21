@@ -74,8 +74,8 @@
 在 Linux 桌面平台编译通过（仅有已有 warning，无新增 error）。
 
 ```
-[100%] Linking CXX executable BKStation
-[100%] Built target BKStation
+[100%] Linking CXX executable GBAStation
+[100%] Built target GBAStation
 ```
 
 ---

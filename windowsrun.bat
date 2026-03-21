@@ -1,3 +1,3 @@
 cd build_windows
-start BKStation.exe -v -o -d
+start GBAStation.exe -v -o -d
 cd ..

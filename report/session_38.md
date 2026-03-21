@@ -146,7 +146,7 @@ src/
 
 当前 `LibretroLoader` 采用动态加载（`dlopen`/`LoadLibrary`）方式，与具体核心完全解耦：
 
-- 新增核心只需将 `.so`/`.dll`/`.dylib` 放入 `BKStation/cores/` 目录，
+- 新增核心只需将 `.so`/`.dll`/`.dylib` 放入 `GBAStation/cores/` 目录，
   修改 `GameView::resolveCoreLibPath()` 或通过配置指定路径即可加载
 - `LibretroLoader` 接口遵循 libretro API 规范，对所有 libretro 兼容核心通用
 
