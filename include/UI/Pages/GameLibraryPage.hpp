@@ -51,6 +51,9 @@ public:
     void draw(NVGcontext* vg, float x, float y, float w, float h,
               brls::Style style, brls::FrameContext* ctx) override;
 
+    /// 返回该元素内部实际可聚焦的视图（封面图），用于设置自定义方向导航路由
+    brls::View* getFocusTarget() const;
+
 private:
     GameLibraryEntry          m_entry;
     beiklive::UI::ProImage*   m_coverImage = nullptr;

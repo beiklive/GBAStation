@@ -217,6 +217,11 @@ void GameLibraryItem::updateTitle(const std::string& newTitle)
     if (m_label) m_label->setText(newTitle.empty() ? "—" : newTitle);
 }
 
+brls::View* GameLibraryItem::getFocusTarget() const
+{
+    return m_coverImage;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  GameLibraryPage
 // ─────────────────────────────────────────────────────────────────────────────
@@ -459,6 +464,9 @@ void GameLibraryPage::rebuildGrid()
     GameLibraryItem* firstItem = nullptr;
     brls::Box* rowBox = nullptr;
 
+    std::vector<GameLibraryItem*> allItems;
+    allItems.reserve(m_entries.size()); // 预分配与游戏条目数相同的容量，避免多次扩容
+
     for (int i = 0; i < static_cast<int>(m_entries.size()); ++i) {
         // 每 GRID_COLS 个元素新建一行
         if (i % GRID_COLS == 0) {
@@ -476,7 +484,25 @@ void GameLibraryPage::rebuildGrid()
         item->onFocused   = [this](const GameLibraryEntry& e) { updateDetailPanel(e); };
 
         rowBox->addView(item);
+        allItems.push_back(item);
         if (i == 0) firstItem = item;
+    }
+
+    // 为相邻行相同列位置的元素设置自定义上下导航路由，
+    // 解决多 rowBox 布局下按下移动时焦点跳到下一行首元素的问题
+    int total = static_cast<int>(allItems.size());
+    for (int i = 0; i < total; ++i) {
+        // getFocusTarget() 理论上不会为空（m_coverImage 在构造时初始化），保守起见仍检查
+        brls::View* cur = allItems[i]->getFocusTarget();
+        if (!cur) continue;
+        int downIdx = i + GRID_COLS;
+        if (downIdx < total) {
+            brls::View* below = allItems[downIdx]->getFocusTarget();
+            if (below) {
+                cur->setCustomNavigationRoute(brls::FocusDirection::DOWN, below);
+                below->setCustomNavigationRoute(brls::FocusDirection::UP, cur);
+            }
+        }
     }
 
     // 重建后将焦点移到第一个元素，并更新详情面板
