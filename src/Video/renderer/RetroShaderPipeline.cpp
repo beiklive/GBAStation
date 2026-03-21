@@ -599,7 +599,8 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
                 // 兼容性修复：不再强制覆盖历史 pass 纹理采样状态
                 glActiveTexture(GL_TEXTURE0 + unit);
                 glBindTexture(GL_TEXTURE_2D, prev.texture);
-                extraTexUnits.emplace_back("Pass" + std::to_string(pi) + "Texture", unit);
+                // RetroArch 约定：PassN 使用 1-based 绝对索引（Pass1=第1个通道输出，Pass2=第2个，…）
+                extraTexUnits.emplace_back("Pass" + std::to_string(pi + 1) + "Texture", unit);
                 size_t prevN = idx - pi;
                 extraTexUnits.emplace_back("PassPrev" + std::to_string(prevN) + "Texture", unit);
                 if (!prev.alias.empty()) {
@@ -635,8 +636,8 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
             float fh = static_cast<float>(prev.height);
             float inv_w = (prev.width  > 0) ? 1.f / fw : 0.f;
             float inv_h = (prev.height > 0) ? 1.f / fh : 0.f;
-            // 绝对索引尺寸：PassNTextureSize / PassNInputSize
-            std::string absPrefix = "Pass" + std::to_string(pi);
+            // 绝对索引尺寸：PassNTextureSize / PassNInputSize（RetroArch 1-based：Pass1=第1通道）
+            std::string absPrefix = "Pass" + std::to_string(pi + 1);
             {
                 GLint loc;
                 loc = glGetUniformLocation(pass.program, (absPrefix + "TextureSize").c_str());
