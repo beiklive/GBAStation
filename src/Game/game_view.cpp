@@ -841,7 +841,10 @@ void GameView::setGameMenu(GameMenu* menu)
         // 着色器开关变更时立即更新渲染链（即时生效）并同步参数滑条
         m_gameMenu->setShaderEnabledChangedCallback([this](bool enabled) {
             bklog::info("GameView: 着色器开关变更 → {}", enabled);
-            std::string path = beiklive::cfgGetStr(KEY_DISPLAY_SHADER_PATH, "");
+            // 优先使用游戏专属着色器路径，回退到全局配置，避免跨游戏路径污染
+            std::string path = getGameDataStr(m_romFileName, GAMEDATA_FIELD_SHADER_PATH, "");
+            if (path.empty())
+                path = beiklive::cfgGetStr(KEY_DISPLAY_SHADER_PATH, "");
             std::string effectivePath = (enabled && !path.empty()) ? path : "";
             m_renderChain.setShader(effectivePath);
             // 同步参数滑条（切换后管线重建，参数列表已变更）
@@ -2224,7 +2227,7 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
     // ---- 直接以 OpenGL 渲染游戏帧到屏幕（不经过 NanoVG 批量渲染）----
     // 确定最终显示矩形：
     // - 视口缩放着色器（FBO 输出尺寸 == passViewW×passViewH）：
-    //   着色器已按完整视图物理像素渲染，输出填满整个游戏区域，直接使用 {x, y, width, height}。
+    //   使用 preRect（已根据显示模式计算），确保显示模式设置仍然有效。
     // - source/absolute 缩放着色器（FBO 输出尺寸 ≠ passViewW×passViewH，如 scalefx 3×）：
     //   以着色器实际输出尺寸重新调用 computeRect()，保持宽高比缩放正确。
     // - 无着色器：直接使用预计算的 preRect。
@@ -2237,8 +2240,9 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
                 // source/absolute 缩放着色器：输出尺寸与传入视口不同，重新计算显示矩形
                 rect = m_display.computeRect(x, y, width, height, shOutW, shOutH);
             } else {
-                // viewport 缩放着色器：输出已填满完整视图，直接使用整个游戏视图区域
-                rect = { x, y, width, height };
+                // viewport 缩放着色器（或尺寸未知）：使用 preRect（已应用显示模式）
+                // 确保显示模式（Fit/Fill/Original等）在着色器激活时仍生效
+                rect = preRect;
             }
         }
 
