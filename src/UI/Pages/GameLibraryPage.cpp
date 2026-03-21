@@ -91,10 +91,13 @@ GameLibraryListItem::GameLibraryListItem(const GameLibraryEntry& entry, int inde
     m_icon->setInterpolation(brls::ImageInterpolation::LINEAR);
     m_icon->setMarginRight(LIST_PAD_H);
     m_icon->setBackgroundColor(nvgRGBA(31, 31, 31, 50));
-    if (!entry.logoPath.empty()) {
-        m_icon->setImageFromFileAsync(entry.logoPath);
-    } else {
-        m_icon->setImageFromFile(BK_APP_DEFAULT_LOGO);
+    {
+        // 使用 resolveGameCoverPath 统一处理无封面时的回退逻辑
+        std::string cover = beiklive::resolveGameCoverPath(entry.logoPath, entry.gamePath);
+        if (!cover.empty())
+            m_icon->setImageFromFileAsync(cover);
+        else
+            m_icon->setImageFromFile(BK_APP_DEFAULT_LOGO);
     }
     addView(m_icon);
 
@@ -309,12 +312,13 @@ void GameLibraryPage::updateDetailPanel(const GameLibraryEntry& entry)
     if (!m_detailPanel) return;
 
     // 封面图
-    if (!entry.logoPath.empty() &&
-        beiklive::file::getPathType(entry.logoPath) == beiklive::file::PathType::File)
     {
-        m_detailThumb->setImageFromFileAsync(entry.logoPath);
-    } else {
-        m_detailThumb->setImageFromFile(BK_APP_DEFAULT_LOGO);
+        // 使用 resolveGameCoverPath 统一处理无封面时的回退逻辑
+        std::string cover = beiklive::resolveGameCoverPath(entry.logoPath, entry.gamePath);
+        if (!cover.empty())
+            m_detailThumb->setImageFromFileAsync(cover);
+        else
+            m_detailThumb->setImageFromFile(BK_APP_DEFAULT_LOGO);
     }
 
     m_detailName->setText(entry.displayName.empty() ? "—" : entry.displayName);

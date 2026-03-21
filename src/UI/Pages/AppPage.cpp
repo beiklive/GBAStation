@@ -42,13 +42,13 @@ GameCard::GameCard(const GameEntry& entry)
     m_coverImage->setMarginTop(20.f);
     m_coverImage->setScalingType(brls::ImageScalingType::FIT);
     m_coverImage->setInterpolation(brls::ImageInterpolation::LINEAR);
-    if (!entry.cover.empty()) {
-        // 有封面：直接显示图片
-        m_coverImage->setImageFromFile(entry.cover);
-        addView(m_coverImage);
-    } else {
-        // 无封面：显示默认图片
-        m_coverImage->setImageFromFile(BK_APP_DEFAULT_LOGO);
+    {
+        // 使用 resolveGameCoverPath 统一处理无封面时的回退逻辑
+        std::string cover = beiklive::resolveGameCoverPath(entry.cover, entry.path);
+        if (!cover.empty())
+            m_coverImage->setImageFromFile(cover);
+        else
+            m_coverImage->setImageFromFile(BK_APP_DEFAULT_LOGO);
         addView(m_coverImage);
     }
 
