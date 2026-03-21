@@ -12,23 +12,19 @@
 namespace fs = std::filesystem;
 using namespace brls::literals; // for _i18n
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  布局常量
-// ─────────────────────────────────────────────────────────────────────────────
-static constexpr int   GRID_COLS     = 4;      ///< 每行列数
-static constexpr float ITEM_W        = 190.f;  ///< 每个元素宽度
-static constexpr float ITEM_H        = 210.f;  ///< 每个元素高度（图片 + 标签）
-static constexpr float ITEM_IMG_SZ   = 180.f;  ///< 封面图尺寸
-static constexpr float ITEM_MARGIN   = 3.f;   ///< 元素间距
-static constexpr float ITEM_LABEL_H  = 40.f;   ///< 标题标签区域高度
-static constexpr float ITEM_LABEL_FS = 18.f;   ///< 标题标签字号
+// 布局常量
+static constexpr float LIST_CELL_HEIGHT  = 66.f;   ///< 列表行高
+static constexpr float LIST_ICON_SZ      = 50.f;   ///< 封面图标尺寸
+static constexpr float LIST_ACCENT_W     = 4.f;    ///< 左侧强调色矩形宽度
+static constexpr float LIST_PAD_H        = 12.f;   ///< 水平内边距
+static constexpr float LIST_PAD_V        = 10.f;   ///< 垂直内边距
+static constexpr float LIST_NAME_FS      = 20.f;   ///< 名称标签字号
+static constexpr float LIST_INFO_FS      = 12.f;   ///< 信息标签字号
 
 /// gamedataManager 中 lastopen 字段的"从未游玩"占位值（与 common.hpp initGameData 保持一致）
 static const std::string LASTOPEN_UNPLAYED = "从未游玩";
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  辅助函数
-// ─────────────────────────────────────────────────────────────────────────────
+// 辅助函数
 
 /// 从 gamedataManager 收集所有 gamepath 条目，返回 (fileName, gamePath) 对列表
 static std::vector<std::pair<std::string, std::string>> collectLibraryGameEntries()
@@ -62,169 +58,120 @@ static std::string getLibDisplayName(const std::string& fileName)
     return fs::path(fileName).stem().string();
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  GameLibraryItem
-// ─────────────────────────────────────────────────────────────────────────────
+// GameLibraryListItem
 
-GameLibraryItem::GameLibraryItem(const GameLibraryEntry& entry)
-    : brls::Box(brls::Axis::COLUMN)
+GameLibraryListItem::GameLibraryListItem(const GameLibraryEntry& entry, int index)
+    : brls::Box(brls::Axis::ROW)
     , m_entry(entry)
+    , m_index(index)
 {
+    setMarginTop(5.f);
+    setFocusable(true);
     setAlignItems(brls::AlignItems::CENTER);
-    setWidth(ITEM_W);
-    setHeight(ITEM_H);
-    setMarginRight(ITEM_MARGIN);
-    setMarginBottom(ITEM_MARGIN);
+    setHeight(LIST_CELL_HEIGHT);
+    setWidth(brls::View::AUTO);
     setHideHighlightBackground(true);
-    setHideClickAnimation(true);
 
-    // ── 封面图（ProImage 异步加载） ──
-    m_coverImage = new beiklive::UI::ProImage();
-    m_coverImage->setWidth(ITEM_IMG_SZ);
-    m_coverImage->setHeight(ITEM_IMG_SZ);
-    m_coverImage->setCornerRadius(8.f);
-    m_coverImage->setScalingType(brls::ImageScalingType::FIT);
-    m_coverImage->setInterpolation(brls::ImageInterpolation::LINEAR);
-    m_coverImage->setBackgroundColor(nvgRGBA(31, 31, 31, 50));
-    m_coverImage->setHideHighlightBackground(true);
-    m_coverImage->setShadowVisibility(true);
-    m_coverImage->setShadowType(brls::ShadowType::GENERIC);
-    m_coverImage->setHighlightCornerRadius(10.f);
-    m_coverImage->setFocusable(true);
+    // 左侧强调色矩形（焦点时显示）
+    m_accent = new brls::Rectangle();
+    m_accent->setWidth(LIST_ACCENT_W);
+    m_accent->setHeight(LIST_CELL_HEIGHT - 2 * LIST_PAD_V);
+    m_accent->setMarginLeft(LIST_PAD_H);
+    m_accent->setMarginRight(LIST_PAD_H);
+    m_accent->setColor(nvgRGBA(79, 193, 255, 255));
+    m_accent->setVisibility(brls::Visibility::INVISIBLE);
+    addView(m_accent);
 
+    // 封面图标（小图）
+    m_icon = new beiklive::UI::ProImage();
+    m_icon->setWidth(LIST_ICON_SZ);
+    m_icon->setHeight(LIST_ICON_SZ);
+    m_icon->setCornerRadius(4.f);
+    m_icon->setScalingType(brls::ImageScalingType::FIT);
+    m_icon->setInterpolation(brls::ImageInterpolation::LINEAR);
+    m_icon->setMarginRight(LIST_PAD_H);
+    m_icon->setBackgroundColor(nvgRGBA(31, 31, 31, 50));
     if (!entry.logoPath.empty()) {
-        m_coverImage->setImageFromFileAsync(entry.logoPath);
+        m_icon->setImageFromFileAsync(entry.logoPath);
     } else {
-        m_coverImage->setImageFromFile(BK_APP_DEFAULT_LOGO);
+        m_icon->setImageFromFile(BK_APP_DEFAULT_LOGO);
     }
-    addView(m_coverImage);
+    addView(m_icon);
 
-    // ── 标题标签（默认隐藏，焦点时显示） ──
-    m_label = new brls::Label();
-    m_label->setText(entry.displayName.empty() ? "—" : entry.displayName);
-    m_label->setFontSize(ITEM_LABEL_FS);
-    m_label->setSingleLine(true);
-    m_label->setAutoAnimate(true);
-    m_label->setHorizontalAlign(brls::HorizontalAlign::CENTER);
-    m_label->setTextColor(GET_THEME_COLOR("brls/text"));
-    m_label->setWidth(ITEM_W - 8.f);
-    m_label->setHeight(ITEM_LABEL_H);
-    m_label->setMarginTop(3.f);
-    m_label->setVisibility(brls::Visibility::INVISIBLE);
-    addView(m_label);
+    // 游戏显示名称（自动填充剩余空间）
+    m_nameLabel = new brls::Label();
+    m_nameLabel->setFontSize(LIST_NAME_FS);
+    m_nameLabel->setTextColor(GET_THEME_COLOR("brls/text"));
+    m_nameLabel->setSingleLine(true);
+    m_nameLabel->setAutoAnimate(true);
+    m_nameLabel->setGrow(1.0f);
+    m_nameLabel->setMarginRight(LIST_PAD_H);
+    m_nameLabel->setMarginTop(8.f);
+    m_nameLabel->setText(entry.displayName.empty() ? "—" : entry.displayName);
+    addView(m_nameLabel);
 
-    // ── 按键注册 ──
-    beiklive::swallow(this, brls::BUTTON_A);
-    beiklive::swallow(this, brls::BUTTON_X);
+    // 右侧信息（上次游玩时间）
+    auto* infoBox = new brls::Box(brls::Axis::COLUMN);
+    infoBox->setHeight(LIST_CELL_HEIGHT);
+    m_infoLabel = new brls::Label();
+    m_infoLabel->setFontSize(LIST_INFO_FS);
+    m_infoLabel->setSingleLine(true);
+    m_infoLabel->setTextColor(GET_THEME_COLOR("brls/text"));
+    m_infoLabel->setHorizontalAlign(brls::HorizontalAlign::RIGHT);
+    m_infoLabel->setMarginRight(LIST_PAD_H * 2);
+    if (entry.lastOpen == LASTOPEN_UNPLAYED || entry.lastOpen.empty()) {
+        m_infoLabel->setText("从未游玩");
+    } else {
+        m_infoLabel->setText(entry.lastOpen);
+    }
+    infoBox->addView(new brls::Padding());
+    infoBox->addView(m_infoLabel);
+    addView(infoBox);
 
-    // A 键：触发点击弹性动画，动画结束后回调 onActivated
+    addGestureRecognizer(new brls::TapGestureRecognizer(this));
+
+    // A 键：激活游戏
     registerAction("beiklive/hints/start"_i18n, brls::BUTTON_A, [this](brls::View*) {
-        triggerClickBounce();
+        if (onActivated) onActivated(m_index);
         return true;
     }, false, false, brls::SOUND_CLICK);
 
     // X 键：选项菜单
     registerAction("beiklive/hints/set"_i18n, brls::BUTTON_X, [this](brls::View*) {
-        if (onOptions) onOptions(m_entry);
+        if (onOptions) onOptions(m_index);
         return true;
     });
-
-    addGestureRecognizer(new brls::TapGestureRecognizer(this));
 }
 
-void GameLibraryItem::triggerClickBounce()
+void GameLibraryListItem::onFocusGained()
 {
-    m_clickAnimating = true;
-    m_clickT         = 0.0f;
-    m_clickScale     = 1.0f;
-    invalidate();
+    brls::Box::onFocusGained();
+    if (m_accent) m_accent->setVisibility(brls::Visibility::VISIBLE);
+    if (onFocused) onFocused(m_index);
 }
 
-void GameLibraryItem::onChildFocusGained(brls::View* directChild, brls::View* focusedView)
+void GameLibraryListItem::onFocusLost()
 {
-    Box::onChildFocusGained(directChild, focusedView);
-    if (m_label) m_label->setVisibility(brls::Visibility::VISIBLE);
-    m_focused = true;
-    invalidate(); // 触发 draw() 启动缩放动画
-    if (onFocused) onFocused(m_entry); // 通知详情面板更新
+    brls::Box::onFocusLost();
+    if (m_accent) m_accent->setVisibility(brls::Visibility::INVISIBLE);
 }
 
-void GameLibraryItem::onChildFocusLost(brls::View* directChild, brls::View* focusedView)
-{
-    Box::onChildFocusLost(directChild, focusedView);
-    if (m_label) m_label->setVisibility(brls::Visibility::INVISIBLE);
-    m_focused = false;
-    invalidate(); // 触发 draw() 启动恢复动画
-}
-
-void GameLibraryItem::draw(NVGcontext* vg,
-                           float x, float y, float w, float h,
-                           brls::Style style, brls::FrameContext* ctx)
-{
-    // 聚焦缩放动画：聚焦时 1.0，失焦时 0.9，平滑插值
-    float target = m_focused ? 1.0f : 0.9f;
-    float delta  = target - m_scale;
-    if (std::abs(delta) > 0.002f) {
-        m_scale += delta * 0.3f;
-        invalidate();
-    } else {
-        m_scale = target;
-    }
-
-    // 点击弹性动画（先线性压缩，再指数衰减阻尼回弹）
-    if (m_clickAnimating) {
-        m_clickT += 1.0f / 60.0f; // 近似按 60fps 推进
-        if (m_clickT < 0.06f) {
-            float t      = m_clickT / 0.06f;        // 归一化进度 0~1
-            m_clickScale = 1.0f - 0.10f * t;        // 线性压缩到 0.90
-        } else {
-            float u      = m_clickT - 0.06f;
-            m_clickScale = 1.0f + 0.12f * std::exp(-14.0f * u) * std::sin(45.0f * u);
-            // 动画结束判定
-            if (u > 0.28f && std::abs(m_clickScale - 1.0f) < 0.003f) {
-                m_clickScale     = 1.0f;
-                m_clickAnimating = false;
-                if (onActivated) onActivated(m_entry); // 动画完成后触发回调
-            }
-        }
-        invalidate();
-    }
-
-    float finalScale = m_scale * m_clickScale;
-
-    const float cx = x + w * 0.5f;
-    const float cy = y + h * 0.5f;
-    nvgSave(vg);
-    nvgTranslate(vg,  cx,  cy);
-    nvgScale(vg, finalScale, finalScale);
-    nvgTranslate(vg, -cx, -cy);
-    brls::Box::draw(vg, x, y, w, h, style, ctx);
-    nvgRestore(vg);
-}
-
-void GameLibraryItem::updateCover(const std::string& newLogoPath)
+void GameLibraryListItem::updateCover(const std::string& newLogoPath)
 {
     m_entry.logoPath = newLogoPath;
     if (!newLogoPath.empty())
-        m_coverImage->setImageFromFileAsync(newLogoPath);
+        m_icon->setImageFromFileAsync(newLogoPath);
     else
-        m_coverImage->setImageFromFile(BK_APP_DEFAULT_LOGO);
+        m_icon->setImageFromFile(BK_APP_DEFAULT_LOGO);
 }
 
-void GameLibraryItem::updateTitle(const std::string& newTitle)
+void GameLibraryListItem::updateTitle(const std::string& newTitle)
 {
     m_entry.displayName = newTitle;
-    if (m_label) m_label->setText(newTitle.empty() ? "—" : newTitle);
+    if (m_nameLabel) m_nameLabel->setText(newTitle.empty() ? "—" : newTitle);
 }
 
-brls::View* GameLibraryItem::getFocusTarget() const
-{
-    return m_coverImage;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  GameLibraryPage
-// ─────────────────────────────────────────────────────────────────────────────
+// GameLibraryPage
 
 /// 详情面板固定宽度（逻辑像素）
 static constexpr float LIB_DETAIL_PANEL_W  = 400.f;
@@ -236,31 +183,38 @@ GameLibraryPage::GameLibraryPage()
     setAxis(brls::Axis::COLUMN);
     setGrow(1.0f);
 
-    // ── 标题栏 ────────────────────────────────────────────────────────────────
+    // 标题栏
     m_header = new beiklive::UI::BrowserHeader();
     m_header->setTitle("beiklive/library/title"_i18n);
     addView(m_header);
 
-    // ── 主体：横向内容区（网格 + 右侧详情面板） ──────────────────────────────
+    // 主体：横向内容区（列表 + 右侧详情面板）
     auto* contentBox = new brls::Box(brls::Axis::ROW);
     contentBox->setGrow(1.0f);
     contentBox->setWidth(brls::View::AUTO);
 
-    // 网格滚动区（自适应宽度）
+    // 列表滚动区（自适应宽度）
+    auto* listBox = new brls::Box(brls::Axis::COLUMN);
+    listBox->setGrow(1.0f);
+    listBox->setWidth(brls::View::AUTO);
+
     m_scroll = new brls::ScrollingFrame();
     m_scroll->setGrow(1.0f);
+    m_scroll->setWidth(brls::View::AUTO);
     m_scroll->setScrollingBehavior(brls::ScrollingBehavior::NATURAL);
     m_scroll->setScrollingIndicatorVisible(false);
 
-    m_gridBox = new brls::Box(brls::Axis::COLUMN);
-    m_gridBox->setPadding(
+    m_itemsBox = new brls::Box(brls::Axis::COLUMN);
+    m_itemsBox->setWidth(brls::View::AUTO);
+    m_itemsBox->setPadding(
         GET_STYLE("brls/applet_frame/header_padding_top_bottom"),
         GET_STYLE("brls/applet_frame/header_padding_sides"),
         GET_STYLE("brls/applet_frame/header_padding_top_bottom"),
         GET_STYLE("brls/applet_frame/header_padding_sides")
     );
-    m_scroll->setContentView(m_gridBox);
-    contentBox->addView(m_scroll);
+    m_scroll->setContentView(m_itemsBox);
+    listBox->addView(m_scroll);
+    contentBox->addView(listBox);
 
     // 右侧详情面板（固定宽度，常驻显示）
     buildDetailPanel();
@@ -268,19 +222,19 @@ GameLibraryPage::GameLibraryPage()
 
     addView(contentBox);
 
-    // ── 底栏 ─────────────────────────────────────────────────────────────────
+    // 底栏
     addView(new brls::BottomBar());
 
-    // ── Y 键：弹出排序菜单 ──────────────────────────────────────────────────
+    // Y 键：弹出排序菜单
     registerAction("beiklive/library/sort"_i18n, brls::BUTTON_Y, [this](brls::View*) {
         showSortDropdown();
         return true;
     });
 
-    // ── 加载并显示游戏数据 ──────────────────────────────────────────────────
+    // 加载并显示游戏数据
     loadEntries();
     sortEntries();
-    rebuildGrid();
+    rebuildList();
     updateHeader();
 }
 
@@ -363,13 +317,8 @@ void GameLibraryPage::updateDetailPanel(const GameLibraryEntry& entry)
         m_detailThumb->setImageFromFile(BK_APP_DEFAULT_LOGO);
     }
 
-    // 显示名称
     m_detailName->setText(entry.displayName.empty() ? "—" : entry.displayName);
-
-    // 文件名
     m_detailFileName->setText(entry.fileName);
-
-    // 上次游玩时间
     m_detailLastOpen->setText("上次游玩: " + entry.lastOpen);
 
     // 游玩总时长（格式化为 Xh Ym Zs）
@@ -383,7 +332,6 @@ void GameLibraryPage::updateDetailPanel(const GameLibraryEntry& entry)
     timeStr += std::to_string(s) + "s";
     m_detailTotalTime->setText("游玩时长: " + timeStr);
 
-    // 平台名称
     std::string platStr = getGameDataStr(entry.fileName, GAMEDATA_FIELD_PLATFORM, "");
     m_detailPlatform->setText(platStr.empty() ? "" : "平台: " + platStr);
 }
@@ -420,34 +368,32 @@ void GameLibraryPage::sortEntries()
 {
     switch (m_sortMode) {
     case SortMode::ByLastOpen:
-        // "从未游玩" 排最后，其余按字典序降序（YYYY-MM-DD HH:MM 格式可直接比较）
         std::sort(m_entries.begin(), m_entries.end(),
             [](const GameLibraryEntry& a, const GameLibraryEntry& b) {
-        // LASTOPEN_UNPLAYED 与 common.hpp initGameData 中初始化的值保持一致
                 bool aUnplayed = (a.lastOpen == LASTOPEN_UNPLAYED || a.lastOpen.empty());
                 bool bUnplayed = (b.lastOpen == LASTOPEN_UNPLAYED || b.lastOpen.empty());
-                if (aUnplayed != bUnplayed) return !aUnplayed; // 未玩过的排后
-                return a.lastOpen > b.lastOpen; // 时间字符串降序
+                if (aUnplayed != bUnplayed) return !aUnplayed;
+                return a.lastOpen > b.lastOpen;
             });
         break;
     case SortMode::ByTotalTime:
         std::sort(m_entries.begin(), m_entries.end(),
             [](const GameLibraryEntry& a, const GameLibraryEntry& b) {
-                return a.totalTime > b.totalTime; // 时长降序
+                return a.totalTime > b.totalTime;
             });
         break;
     case SortMode::ByName:
         std::sort(m_entries.begin(), m_entries.end(),
             [](const GameLibraryEntry& a, const GameLibraryEntry& b) {
-                return a.displayName < b.displayName; // 名称升序
+                return a.displayName < b.displayName;
             });
         break;
     }
 }
 
-void GameLibraryPage::rebuildGrid()
+void GameLibraryPage::rebuildList()
 {
-    m_gridBox->clearViews(/*free=*/true);
+    m_itemsBox->clearViews(/*free=*/true);
     m_scroll->setContentOffsetY(0, /*animated=*/false);
 
     if (m_entries.empty()) {
@@ -455,62 +401,39 @@ void GameLibraryPage::rebuildGrid()
         auto* lbl = new brls::Label();
         lbl->setText("beiklive/library/empty"_i18n);
         lbl->setHorizontalAlign(brls::HorizontalAlign::CENTER);
-
         lbl->setMarginTop(40.f);
-        m_gridBox->addView(lbl);
+        m_itemsBox->addView(lbl);
         return;
     }
-    m_gridBox->setMarginLeft(25.f); // 左侧额外内边距，视觉上让第一列和左边界有点距离
-    GameLibraryItem* firstItem = nullptr;
-    brls::Box* rowBox = nullptr;
 
-    std::vector<GameLibraryItem*> allItems;
-    allItems.reserve(m_entries.size()); // 预分配与游戏条目数相同的容量，避免多次扩容
-
+    GameLibraryListItem* firstItem = nullptr;
     for (int i = 0; i < static_cast<int>(m_entries.size()); ++i) {
-        // 每 GRID_COLS 个元素新建一行
-        if (i % GRID_COLS == 0) {
-            rowBox = new brls::Box(brls::Axis::ROW);
-            rowBox->setAlignItems(brls::AlignItems::CENTER);
-            rowBox->setJustifyContent(brls::JustifyContent::FLEX_START);
-            m_gridBox->addView(rowBox);
-        }
+        auto* item = new GameLibraryListItem(m_entries[i], i);
 
-        const auto& entry = m_entries[i];
-        auto* item = new GameLibraryItem(entry);
+        item->onActivated = [this](int idx) {
+            if (idx >= 0 && idx < static_cast<int>(m_entries.size()))
+                onItemActivated(m_entries[idx]);
+        };
+        item->onOptions = [this](int idx) {
+            if (idx >= 0 && idx < static_cast<int>(m_entries.size()))
+                onItemOptions(m_entries[idx]);
+        };
+        item->onFocused = [this](int idx) {
+            if (idx >= 0 && idx < static_cast<int>(m_entries.size())) {
+                updateDetailPanel(m_entries[idx]);
+                updateHeaderFocused(m_entries[idx]);
+            }
+        };
 
-        item->onActivated = [this](const GameLibraryEntry& e) { onItemActivated(e); };
-        item->onOptions   = [this](const GameLibraryEntry& e) { onItemOptions(e); };
-        item->onFocused   = [this](const GameLibraryEntry& e) { updateDetailPanel(e); };
-
-        rowBox->addView(item);
-        allItems.push_back(item);
+        m_itemsBox->addView(item);
         if (i == 0) firstItem = item;
     }
 
-    // 为相邻行相同列位置的元素设置自定义上下导航路由，
-    // 解决多 rowBox 布局下按下移动时焦点跳到下一行首元素的问题
-    int total = static_cast<int>(allItems.size());
-    for (int i = 0; i < total; ++i) {
-        // getFocusTarget() 理论上不会为空（m_coverImage 在构造时初始化），保守起见仍检查
-        brls::View* cur = allItems[i]->getFocusTarget();
-        if (!cur) continue;
-        int downIdx = i + GRID_COLS;
-        if (downIdx < total) {
-            brls::View* below = allItems[downIdx]->getFocusTarget();
-            if (below) {
-                cur->setCustomNavigationRoute(brls::FocusDirection::DOWN, below);
-                below->setCustomNavigationRoute(brls::FocusDirection::UP, cur);
-            }
-        }
-    }
-
-    // 重建后将焦点移到第一个元素，并更新详情面板
+    // 重建后将焦点移到第一个元素，并更新详情面板和标题栏
     if (firstItem) {
-        brls::View* focus = firstItem->getDefaultFocus();
-        if (!focus) focus = firstItem;
-        brls::Application::giveFocus(focus);
+        brls::Application::giveFocus(firstItem);
         updateDetailPanel(m_entries[0]);
+        updateHeaderFocused(m_entries[0]);
     }
 }
 
@@ -520,6 +443,12 @@ void GameLibraryPage::updateHeader()
     m_header->setInfo(std::to_string(count) + " "
         + (count == 1 ? "beiklive/library/game_singular"_i18n
                       : "beiklive/library/game_plural"_i18n));
+}
+
+void GameLibraryPage::updateHeaderFocused(const GameLibraryEntry& entry)
+{
+    // 在标题栏路径区实时显示当前聚焦的游戏名
+    m_header->setPath(entry.displayName.empty() ? entry.fileName : entry.displayName);
 }
 
 void GameLibraryPage::showSortDropdown()
@@ -541,7 +470,7 @@ void GameLibraryPage::showSortDropdown()
             if (sel < 0 || sel > 2) return;
             m_sortMode = static_cast<SortMode>(sel);
             sortEntries();
-            rebuildGrid();
+            rebuildList();
             updateHeader();
         });
     brls::Application::pushActivity(new brls::Activity(dropdown));
@@ -555,13 +484,11 @@ void GameLibraryPage::onItemActivated(const GameLibraryEntry& entry)
 
 void GameLibraryPage::onItemOptions(const GameLibraryEntry& entry)
 {
-    // 若外部设置了回调，则由外部处理；否则走内部默认菜单
     if (onGameOptions) {
         onGameOptions(entry);
         return;
     }
 
-    // ── 默认选项菜单（与 AppPage GameCard 相同结构） ──────────────────────
     struct Option {
         std::string label;
         std::function<void()> action;
@@ -585,24 +512,20 @@ void GameLibraryPage::onItemOptions(const GameLibraryEntry& entry)
                 else
                     NameMappingManager->Set(key, mapped);
                 NameMappingManager->Save();
-                // 更新当前网格中对应条目的标题
                 std::string newTitle = mapped.empty()
                     ? fs::path(entry.fileName).stem().string()
                     : mapped;
-                // 同步更新 m_entries 中的 displayName
                 for (auto& e : m_entries) {
-                    if (e.fileName == entry.fileName)
+                    if (e.fileName == entry.fileName) {
                         e.displayName = newTitle;
+                        break; // fileName 唯一
+                    }
                 }
-                // 更新网格中已存在的 GameLibraryItem
-                for (auto* rowView : m_gridBox->getChildren()) {
-                    auto* row = dynamic_cast<brls::Box*>(rowView);
-                    if (!row) continue;
-                    for (auto* child : row->getChildren()) {
-                        auto* item = dynamic_cast<GameLibraryItem*>(child);
-                        if (item && item->getEntry().fileName == entry.fileName) {
-                            item->updateTitle(newTitle);
-                        }
+                for (auto* child : m_itemsBox->getChildren()) {
+                    auto* item = dynamic_cast<GameLibraryListItem*>(child);
+                    if (item && item->getEntry().fileName == entry.fileName) {
+                        item->updateTitle(newTitle);
+                        break; // fileName 唯一，找到后无需继续遍历
                     }
                 }
             },
@@ -627,20 +550,17 @@ void GameLibraryPage::onItemOptions(const GameLibraryEntry& entry)
         flPage->setLayoutMode(FileListPage::LayoutMode::ListOnly);
         flPage->setDefaultFileCallback([entry, this](const FileListItem& imgItem) {
             setGameDataStr(entry.fileName, GAMEDATA_FIELD_LOGOPATH, imgItem.fullPath);
-            // 更新内存中的 logoPath
             for (auto& e : m_entries) {
-                if (e.fileName == entry.fileName)
+                if (e.fileName == entry.fileName) {
                     e.logoPath = imgItem.fullPath;
+                    break; // fileName 唯一
+                }
             }
-            // 更新网格中对应 GameLibraryItem 的封面
-            for (auto* rowView : m_gridBox->getChildren()) {
-                auto* row = dynamic_cast<brls::Box*>(rowView);
-                if (!row) continue;
-                for (auto* child : row->getChildren()) {
-                    auto* item = dynamic_cast<GameLibraryItem*>(child);
-                    if (item && item->getEntry().fileName == entry.fileName) {
-                        item->updateCover(imgItem.fullPath);
-                    }
+            for (auto* child : m_itemsBox->getChildren()) {
+                auto* item = dynamic_cast<GameLibraryListItem*>(child);
+                if (item && item->getEntry().fileName == entry.fileName) {
+                    item->updateCover(imgItem.fullPath);
+                    break; // fileName 唯一，找到后无需继续遍历
                 }
             }
             brls::sync([]() { brls::Application::popActivity(); });
@@ -662,18 +582,15 @@ void GameLibraryPage::onItemOptions(const GameLibraryEntry& entry)
         brls::Application::pushActivity(new brls::Activity(frame));
     }});
 
-    // 从游戏库移除（清除 gamedataManager 中的 gamepath，并从当前列表移除）
+    // 从游戏库移除
     opts.push_back({"beiklive/library/remove_from_library"_i18n, [entry, this]() {
-        // 清除 gamepath 字段（保留其他字段）
         setGameDataStr(entry.fileName, GAMEDATA_FIELD_GAMEPATH, "");
-        // 同时从最近游戏队列中移除
         removeRecentGame(entry.fileName);
-        // 从内存列表中移除并重建网格
         m_entries.erase(
             std::remove_if(m_entries.begin(), m_entries.end(),
                 [&entry](const GameLibraryEntry& e) { return e.fileName == entry.fileName; }),
             m_entries.end());
-        rebuildGrid();
+        rebuildList();
         updateHeader();
     }});
 
