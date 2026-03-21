@@ -542,9 +542,13 @@ GameMenu::GameMenu()
                 auto* flPage = new FileListPage();
                 flPage->setFilter({"glslp", "glsl"}, FileListPage::FilterMode::Whitelist);
                 flPage->setDefaultFileCallback([this](const FileListItem& item) {
-                    cfgSetStr(KEY_DISPLAY_SHADER_PATH, item.fullPath);
-                    if (!m_romFileName.empty())
+                    if (!m_romFileName.empty()) {
+                        // 游戏运行中：仅更新游戏专属数据，不污染全局默认路径
                         setGameDataStr(m_romFileName, GAMEDATA_FIELD_SHADER_PATH, item.fullPath);
+                    } else {
+                        // 无游戏时：更新全局默认着色器路径
+                        cfgSetStr(KEY_DISPLAY_SHADER_PATH, item.fullPath);
+                    }
                     m_shaderPathCell->setDetailText(
                         beiklive::string::extractFileName(item.fullPath));
                     if (m_shaderPathChangedCallback)
@@ -553,8 +557,12 @@ GameMenu::GameMenu()
                     // 显式恢复焦点到着色器路径单元格，防止焦点残留在文件列表
                     brls::Application::giveFocus(m_shaderPathCell);
                 });
-                std::string startPath = beiklive::string::extractDirPath(
-                    cfgGetStr(KEY_DISPLAY_SHADER_PATH, ""));
+                // 使用游戏专属路径确定文件浏览器起始目录，避免跨游戏路径污染
+                std::string curShaderPath = getGameDataStr(m_romFileName, GAMEDATA_FIELD_SHADER_PATH, "");
+                // 无游戏专属路径时：无游戏运行则回退全局配置，有游戏则从根目录开始
+                if (curShaderPath.empty() && m_romFileName.empty())
+                    curShaderPath = cfgGetStr(KEY_DISPLAY_SHADER_PATH, "");
+                std::string startPath = beiklive::string::extractDirPath(curShaderPath);
                 if (startPath.empty()) startPath = "/";
                 flPage->navigateTo(startPath);
                 auto* container = new brls::Box(brls::Axis::COLUMN);
