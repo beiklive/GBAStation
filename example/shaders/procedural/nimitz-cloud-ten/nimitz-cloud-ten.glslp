@@ -1,7 +1,0 @@
-shaders = 1
-
-shader0 = nimitz-cloud-ten.glsl
-
-textures = "iChannel0"
-iChannel0 = iChannel0.png
-iChannel0_wrap_mode = repeat
