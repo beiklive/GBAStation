@@ -62,6 +62,7 @@ using namespace brls::literals; // for _i18n
 #define KEY_UI_SHOW_XMB_BG    "UI.showXmbBg"
 #define KEY_UI_PSPXMB_COLOR   "UI.pspxmb.color"
 // #define KEY_UI_TEXT_COLOR     "UI.textColor"
+#define KEY_UI_USE_SAVESTATE_THUMB "UI.useSavestateThumbnail" ///< 无logo时使用存档0截图作为缩略图
 
 // 音频设置
 #define KEY_AUDIO_BUTTON_SFX  "audio.buttonSfx"
@@ -102,6 +103,20 @@ float       cfgGetFloat(const std::string& key, float def);
 int         cfgGetInt(const std::string& key, int def);
 void        cfgSetStr(const std::string& key, const std::string& val);
 void        cfgSetBool(const std::string& key, bool val);
+
+/// 计算指定 ROM 的即时存档槽截图路径（格式：{saveDir}/{romStem}.ss{slot}.png）。
+/// saveDir 根据 save.stateDir 配置确定：空则与 ROM 同目录，否则在配置目录下以游戏名建子目录。
+/// @param romPath  ROM 文件完整路径
+/// @param slot     存档槽号（默认 0）
+/// @return         截图文件路径（不保证文件存在）
+std::string getSaveStateThumbPath(const std::string& romPath, int slot = 0);
+
+/// 根据 logo 路径和回退设置计算应显示的封面/缩略图路径。
+/// 优先级：logoPath（若有效）> 存档0截图（若 KEY_UI_USE_SAVESTATE_THUMB 已启用且文件存在）> 空串。
+/// @param logoPath  已保存的 logo 路径（可为空）
+/// @param gamePath  ROM 文件完整路径（用于推导存档截图路径）
+/// @return          应显示的图片路径；为空时调用方应使用默认图标
+std::string resolveGameCoverPath(const std::string& logoPath, const std::string& gamePath);
 
 
 

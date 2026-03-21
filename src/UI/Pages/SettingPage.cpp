@@ -478,6 +478,13 @@ brls::ScrollingFrame* SettingPage::buildUITab()
                 });
             box->addView(stateDirCell);
         }
+
+        // 无封面时使用存档0截图作为缩略图
+        auto* savethumbCell = new brls::BooleanCell();
+        savethumbCell->init("beiklive/settings/game/use_savestate_thumb"_i18n,
+                            cfgGetBool(KEY_UI_USE_SAVESTATE_THUMB, false),
+                            [](bool v){ cfgSetBool(KEY_UI_USE_SAVESTATE_THUMB, v); });
+        box->addView(savethumbCell);
     }
 
     // ── 截图设置 ──────────────────────────────────────────────────────────────

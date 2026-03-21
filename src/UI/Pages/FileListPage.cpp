@@ -809,15 +809,12 @@ void FileListPage::updateDetailPanel(const FileListItem &item)
     // 再次检查 gamedataManager（可能 logoPath 已设置但未存入 item）
     if (isGameFile) {
         std::string storedLogo = getGameDataStr(item.fileName, GAMEDATA_FIELD_LOGOPATH, "");
-        if (!storedLogo.empty() &&
-            beiklive::file::getPathType(storedLogo) == beiklive::file::PathType::File)
-        {
-            m_detailThumb->setImageFromFileAsync(storedLogo);
-            return;
-        }else{
+        std::string cover = beiklive::resolveGameCoverPath(storedLogo, item.fullPath);
+        if (!cover.empty())
+            m_detailThumb->setImageFromFileAsync(cover);
+        else
             m_detailThumb->setImageFromFileAsync(BK_APP_DEFAULT_LOGO);
-             return;
-        }
+        return;
     }
 
     // 优先级3：与文件同名的缩略图（相同基础名）

@@ -1,5 +1,6 @@
 #include "common.hpp"
 #include <borealis/core/cache_helper.hpp>
+#include <filesystem>
 #include <set>
 
 /// 每当最近游戏队列变化时置为 true，StartPageView 每帧检查此标志并刷新游戏列表
@@ -160,6 +161,57 @@ void cfgSetBool(const std::string& key, bool val)
 {
     // brls::Logger::debug("cfgSetBool [{}] = {}", key, val);
     cfgSetStr(key, val ? "true" : "false");
+}
+
+std::string getSaveStateThumbPath(const std::string& romPath, int slot)
+{
+    if (romPath.empty()) return {};
+
+    // 读取 save.stateDir 配置，逻辑与 GameView::resolveSaveDir() 保持一致
+    std::string stateDir;
+    if (SettingManager) {
+        auto v = SettingManager->Get("save.stateDir");
+        if (v) { if (auto s = v->AsString()) stateDir = *s; }
+    }
+
+    std::filesystem::path rp(romPath);
+    std::string romStem = rp.stem().string();
+
+    std::filesystem::path saveDir;
+    if (!stateDir.empty()) {
+        // 指定了模拟器目录：在其下以游戏名建子目录
+        saveDir = std::filesystem::path(stateDir) / romStem;
+    } else {
+        // 默认：与 ROM 同目录
+        saveDir = rp.parent_path();
+    }
+
+    // 路径格式：{saveDir}/{romStem}.ss{slot}.png
+    return (saveDir / (romStem + ".ss" + std::to_string(slot) + ".png")).string();
+}
+
+/// 根据 logo 路径和回退设置计算应显示的封面/缩略图路径。
+/// 优先级：logoPath（若有效）> 存档0截图（若"无封面时使用存档0截图"已启用且文件存在）> 空串。
+/// @param logoPath  已保存的 logo 路径（可为空）
+/// @param gamePath  ROM 文件完整路径（用于推导存档截图路径）
+/// @return          应显示的图片路径；为空时调用方应使用默认图标
+std::string resolveGameCoverPath(const std::string& logoPath, const std::string& gamePath)
+{
+    // 优先：已设置的 logo 文件
+    if (!logoPath.empty() &&
+        beiklive::file::getPathType(logoPath) == beiklive::file::PathType::File)
+        return logoPath;
+
+    // 回退：存档0截图（若功能已启用）
+    if (cfgGetBool(KEY_UI_USE_SAVESTATE_THUMB, false)) {
+        std::string thumbPath = getSaveStateThumbPath(gamePath, 0);
+        if (!thumbPath.empty() &&
+            beiklive::file::getPathType(thumbPath) == beiklive::file::PathType::File)
+            return thumbPath;
+    }
+
+    // 无有效封面
+    return {};
 }
 
 /// 根据 SettingManager 配置将所有背景设置应用到 img：
