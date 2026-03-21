@@ -205,10 +205,8 @@ AppPage::AppPage()
     m_ButtonRow->addButton(BK_RES(path_prefix + "shezhi_64.png"), "beiklive/app/btn_settings"_i18n, [this]() {
         if(onOpenSettings) onOpenSettings();
     });
-    m_ButtonRow->addButton(BK_RES(path_prefix + "bangzhu_64.png"), "beiklive/app/btn_about"_i18n, []() {
-        brls::Logger::debug("about");
-        auto* aboutPage = new beiklive::UI::BBox();
-        
+    m_ButtonRow->addButton(BK_RES(path_prefix + "bangzhu_64.png"), "beiklive/app/btn_about"_i18n, [this]() {
+        if (onOpenAboutPage) onOpenAboutPage();
     });
     m_ButtonRow->addButton(BK_RES(path_prefix + "tuichu_64.png"), "beiklive/app/btn_exit"_i18n, []() {
             auto dialog = new brls::Dialog("hints/exit_hint"_i18n);

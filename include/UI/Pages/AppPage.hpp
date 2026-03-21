@@ -84,6 +84,9 @@ public:
     /// 用户点击"数据管理"按钮时调用
     std::function<void()> onOpenDataPage;
 
+    /// 用户点击"关于"按钮时调用
+    std::function<void()> onOpenAboutPage;
+
     /// 从卡片行中移除指定游戏路径的卡片
     void removeGame(const std::string& gamePath);
 
