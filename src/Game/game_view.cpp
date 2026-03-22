@@ -384,6 +384,10 @@ void GameView::initialize()
             } else if (beiklive::string::iequals(ext, "gb")) {
                 shaderPath = beiklive::cfgGetStr(KEY_DISPLAY_SHADER_GB_PATH, "");
             }
+            // 将平台对应的着色器路径回写到 gamedata，使游戏拥有专属路径记录
+            if (!shaderPath.empty()) {
+                setGameDataStr(m_romFileName, GAMEDATA_FIELD_SHADER_PATH, shaderPath);
+            }
             // 若平台路径也为空，回退到全局通用着色器路径
             if (shaderPath.empty()) {
                 shaderPath = beiklive::cfgGetStr(KEY_DISPLAY_SHADER_PATH, "");
