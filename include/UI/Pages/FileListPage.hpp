@@ -101,10 +101,6 @@ class FileListPage : public beiklive::UI::BBox
     void      setLayoutMode(LayoutMode mode);
     LayoutMode getLayoutMode() const { return m_layoutMode; }
 
-    // ── 剪贴板 ──────────────────────────────────────────────────────────────
-    bool             hasClipboardItem() const { return m_hasClipboard; }
-    const FileListItem& getClipboardItem() const { return m_clipboardItem; }
-
     // ── 状态 ────────────────────────────────────────────────────────────────
     const std::string& getCurrentPath() const { return m_currentPath; }
 
@@ -116,9 +112,6 @@ class FileListPage : public beiklive::UI::BBox
     // ── 对外暴露的文件操作接口 ───────────────────────────────────────────────
     void doRenamePublic(int itemIndex)    { doRename(itemIndex); }
     void doSetMappingPublic(int itemIndex){ doSetMapping(itemIndex); }
-    void doCutPublic(int itemIndex)       { doCut(itemIndex); }
-    void doPastePublic()                  { doPaste(); }
-    void doDeletePublic(int itemIndex)    { doDelete(itemIndex); }
     void doNewFolder();
 
     /// 根据文件扩展名判断 EmuPlatform。
@@ -151,10 +144,6 @@ class FileListPage : public beiklive::UI::BBox
     // ── 驱动器列表模式（仅 Windows）──────────────────────────────────────────
     bool m_inDriveListMode = false; ///< 正在显示 Windows 驱动器列表时为 true
 
-    // ── 剪贴板 ──────────────────────────────────────────────────────────────
-    FileListItem m_clipboardItem;
-    bool         m_hasClipboard = false;
-
     // ── 过滤器 ──────────────────────────────────────────────────────────────
     std::vector<std::string> m_filterSuffixes;
     FilterMode               m_filterMode    = FilterMode::Whitelist;
@@ -186,9 +175,6 @@ class FileListPage : public beiklive::UI::BBox
     // 侧栏操作
     void doRename(int itemIndex);
     void doSetMapping(int itemIndex);
-    void doCut(int itemIndex);
-    void doPaste();
-    void doDelete(int itemIndex);
 
     /// 从 m_items 重建 FileListItemView，滚动到顶部并聚焦第一项。
     void rebuildItemViews();

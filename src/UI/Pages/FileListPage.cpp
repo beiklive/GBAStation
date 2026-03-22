@@ -1068,8 +1068,7 @@ void FileListPage::openSidebar(int itemIndex)
                             flPage->setDefaultFileCallback([captureFileName](const FileListItem &chtItem)
                                                            {
                                                                setGameDataStr(captureFileName, GAMEDATA_FIELD_CHEATPATH, chtItem.fullPath);
-                                                               // 延迟到当前帧回调链结束后再执行，避免崩溃
-                                                               brls::sync([]() { brls::Application::popActivity(); });
+                                                               brls::Application::popActivity();
                                                            });
                             std::string startPath = beiklive::file::getParentPath(captureFullPath);
                             if (startPath.empty() ||
@@ -1129,19 +1128,6 @@ void FileListPage::openSidebar(int itemIndex)
                             }});
         }
     }
-
-    opts.push_back({"beiklive/sidebar/cut"_i18n,
-                    [this, itemIndex]()
-                    { doCut(itemIndex); }});
-
-    if (m_hasClipboard)
-        opts.push_back({"beiklive/sidebar/paste"_i18n,
-                        [this]()
-                        { doPaste(); }});
-
-    opts.push_back({"beiklive/sidebar/delete"_i18n,
-                    [this, itemIndex]()
-                    { doDelete(itemIndex); }});
 
     opts.push_back({"beiklive/sidebar/new_folder"_i18n,
                     [this]()
@@ -1241,62 +1227,4 @@ void FileListPage::doSetMapping(int itemIndex)
         "",
         128,
         itemCopy.mappedName);
-}
-
-void FileListPage::doCut(int itemIndex)
-{
-    if (itemIndex < 0 || itemIndex >= static_cast<int>(m_items.size()))
-        return;
-    m_clipboardItem = m_items[itemIndex];
-    m_hasClipboard = true;
-    bklog::info("Cut: {}", m_clipboardItem.fullPath);
-}
-
-void FileListPage::doPaste()
-{
-    if (!m_hasClipboard)
-        return;
-
-    try
-    {
-        fs::path src(m_clipboardItem.fullPath);
-        fs::path dst = fs::path(m_currentPath) / src.filename();
-        fs::rename(src, dst);
-        bklog::info("Pasted: {} → {}", src.string(), dst.string());
-        m_hasClipboard = false;
-        refreshList(m_currentPath);
-    }
-    catch (const std::exception &e)
-    {
-        bklog::error("Paste failed: {}", e.what());
-    }
-}
-
-void FileListPage::doDelete(int itemIndex)
-{
-    if (itemIndex < 0 || itemIndex >= static_cast<int>(m_items.size()))
-        return;
-    const FileListItem &item = m_items[itemIndex];
-
-    // Confirm via a second Dropdown
-    auto *confirm = new brls::Dropdown(
-        "beiklive/sidebar/delete_confirm"_i18n,
-        {"beiklive/hints/confirm"_i18n, "brls/hints/cancel"_i18n},
-        [this, path = item.fullPath](int sel)
-        {
-            if (sel != 0)
-                return;
-            try
-            {
-                fs::remove_all(path);
-                bklog::info("Deleted: {}", path);
-                refreshList(m_currentPath);
-            }
-            catch (const std::exception &e)
-            {
-                bklog::error("Delete failed: {}", e.what());
-            }
-        });
-
-    brls::Application::pushActivity(new brls::Activity(confirm));
 }

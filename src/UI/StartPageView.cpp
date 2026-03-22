@@ -315,7 +315,7 @@ void StartPageView::createAppPage()
             flPage->setDefaultFileCallback([entry](const FileListItem& chtItem) {
                 std::string fileName = std::filesystem::path(entry.path).filename().string();
                 setGameDataStr(fileName, GAMEDATA_FIELD_CHEATPATH, chtItem.fullPath);
-                brls::sync([]() { brls::Application::popActivity(); });
+                brls::Application::popActivity();
             });
             flPage->navigateTo(startPath);
 
