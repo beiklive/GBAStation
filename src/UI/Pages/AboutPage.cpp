@@ -50,7 +50,8 @@ void AboutPage::buildUI()
     midBox->setGrow(1.0f);
     midBox->setPadding(10.f, 80.f, 10.f, 80.f);
     midBox->setFocusable(true);
-
+    midBox->setHideHighlightBackground(true);
+    midBox->setHideHighlightBorder(true);
 
     std::vector<std::string> descLines = {
         "本项目基于 libretro 核心接口构建，目前内置 mGBA 模拟器核心。",
