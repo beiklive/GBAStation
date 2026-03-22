@@ -63,10 +63,11 @@ class GameView : public brls::Box
   private:
     std::string  m_romPath;
     std::string  m_romFileName;  ///< 从m_romPath提取的文件名（含扩展名）
-    bool         m_initialized  = false;
-    bool         m_coreFailed   = false;
+    bool         m_initialized     = false;
+    bool         m_coreFailed      = false;
+    bool         m_failDialogShown = false; ///< ROM加载失败对话框已弹出标志，防止重复弹出
     // ---- 游戏内菜单
-    GameMenu*    m_gameMenu     = nullptr;
+    GameMenu*    m_gameMenu        = nullptr;
 
     // ---- libretro核心 -----------------------------------------------
     beiklive::LibretroLoader m_core;

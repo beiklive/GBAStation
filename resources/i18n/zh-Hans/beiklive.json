@@ -27,7 +27,8 @@
         "zoom_out": "缩小",
         "reset": "重置视图",
         "clear_binding": "清除",
-        "toggle_detail": "详细信息"
+        "toggle_detail": "详细信息",
+        "rom_load_failed": "ROM 打开失败，请确认文件路径正确且格式受支持。"
     },
     "file": {
         "file_select": "文件选择",
