@@ -586,6 +586,40 @@ void GameLibraryPage::onItemOptions(const GameLibraryEntry& entry)
         brls::Application::pushActivity(new brls::Activity(frame));
     }});
 
+    // 选择金手指文件
+    opts.push_back({"beiklive/sidebar/select_cheat"_i18n, [entry, this]() {
+        std::string startPath = beiklive::file::getParentPath(entry.gamePath);
+        if (startPath.empty() ||
+            beiklive::file::getPathType(startPath) != beiklive::file::PathType::Directory) {
+            startPath = "/";
+#ifdef _WIN32
+            startPath = "C:\\";
+#endif
+        }
+        auto* flPage = new FileListPage();
+        flPage->setFilter({"cht"}, FileListPage::FilterMode::Whitelist);
+        flPage->setLayoutMode(FileListPage::LayoutMode::ListOnly);
+        flPage->setDefaultFileCallback([entry](const FileListItem& chtItem) {
+            setGameDataStr(entry.fileName, GAMEDATA_FIELD_CHEATPATH, chtItem.fullPath);
+            brls::sync([]() { brls::Application::popActivity(); });
+        });
+        flPage->navigateTo(startPath);
+
+        auto* container = new brls::Box(brls::Axis::COLUMN);
+        container->setGrow(1.0f);
+        container->addView(flPage);
+        container->registerAction("beiklive/hints/close"_i18n, brls::BUTTON_START,
+                                  [](brls::View*) {
+                                      brls::Application::popActivity();
+                                      return true;
+                                  });
+        auto* frame = new brls::AppletFrame(container);
+        frame->setHeaderVisibility(brls::Visibility::GONE);
+        frame->setFooterVisibility(brls::Visibility::GONE);
+        frame->setBackground(brls::ViewBackground::NONE);
+        brls::Application::pushActivity(new brls::Activity(frame));
+    }});
+
     // 从游戏库移除
     opts.push_back({"beiklive/library/remove_from_library"_i18n, [entry, this]() {
         setGameDataStr(entry.fileName, GAMEDATA_FIELD_GAMEPATH, "");

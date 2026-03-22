@@ -38,6 +38,7 @@
         "rename": "重命名",
         "set_mapping": "设置映射名称",
         "select_logo": "选择 Logo",
+        "select_cheat": "选择金手指文件",
         "add_to_library": "添加到游戏库",
         "add_to_library_confirm": "确认添加到游戏库？",
         "remove_from_list": "从列表移除",
