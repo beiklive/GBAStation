@@ -792,9 +792,12 @@ void GameMenu::buildStatePanel(bool isSave, brls::Box* container)
                 } else {
                     if (m_loadStateCallback) m_loadStateCallback(captSlot);
                 }
-                // 关闭菜单并返回游戏
-                setVisibility(brls::Visibility::GONE);
-                if (m_closeCallback) m_closeCallback();
+                // 延迟关闭菜单并返回游戏：defer 到下一帧确保对话框 Activity 完全弹出
+                // 后，焦点能正确还给 GameView，避免概率性焦点丢失。
+                brls::sync([this]() {
+                    setVisibility(brls::Visibility::GONE);
+                    if (m_closeCallback) m_closeCallback();
+                });
             });
             dialog->open();
             return true;

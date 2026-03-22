@@ -2132,43 +2132,16 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
     }
 
     if (!m_initialized) {
-        // 绘制错误/占位矩形
-        nvgBeginPath(vg);
-        nvgRect(vg, x, y, width, height);
-        nvgFillColor(vg, nvgRGBA(30, 30, 30, 255));
-        nvgFill(vg);
-
-        nvgFontSize(vg, 20.0f);
-        nvgFontFace(vg, "regular");
-        nvgFillColor(vg, nvgRGBA(200, 60, 60, 255));
-        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-        nvgText(vg, x + width * 0.5f, y + height * 0.5f - 15.0f,
-                "Failed to load emulator core", nullptr);
-
-        // 提示：按 A 键关闭当前页面
-        nvgFontSize(vg, 16.0f);
-        nvgFillColor(vg, nvgRGBA(200, 200, 200, 200));
-        nvgText(vg, x + width * 0.5f, y + height * 0.5f + 15.0f,
-                "beiklive/hints/close_on_a"_i18n.c_str(), nullptr);
-
-        // 处理 BUTTON_A 按下以关闭核心加载失败页面。
-        // 所有 borealis 动作被禁用，直接检查原始快照。
-        // 用 m_requestExit 边沿检测防止长按重复触发。
-        if (m_coreFailed) {
-            InputSnapshot snap;
-            {
-                std::lock_guard<std::mutex> lk(m_inputSnapMutex);
-                snap = m_inputSnap;
-            }
-            bool btnA = snap.ctrlState.buttons[static_cast<int>(brls::BUTTON_A)];
-            if (btnA && !m_requestExit.exchange(true, std::memory_order_relaxed)) {
-                if (m_uiBlocked) {
-                    brls::Application::unblockInputs();
-                    m_uiBlocked = false;
-                }
+        // ROM 加载失败：首次检测到时弹出对话框，确定后自动关闭 GameView
+        if (m_coreFailed && !m_failDialogShown) {
+            m_failDialogShown = true;
+            auto* dlg = new brls::Dialog("beiklive/hints/rom_load_failed"_i18n);
+            dlg->setCancelable(false);
+            dlg->addButton("hints/ok"_i18n, []() {
+                // 对话框关闭后，其 Activity 已弹出，此时弹出 GameView 所在的 Activity
                 brls::Application::popActivity();
-                return;
-            }
+            });
+            dlg->open();
         }
         return;
     }

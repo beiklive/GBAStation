@@ -27,7 +27,8 @@
         "zoom_out": "Zoom Out",
         "reset": "Reset View",
         "clear_binding": "Clear",
-        "toggle_detail": "Detail Info"
+        "toggle_detail": "Detail Info",
+        "rom_load_failed": "Failed to open ROM. Please check the file path and format."
     },
     "file": {
         "file_select": "File Browser",
