@@ -27,9 +27,9 @@ include(${BOREALIS_LIBRARY}/cmake/toolchain.cmake)
 
 # 项目信息
 project(GBAStation)
-set(VERSION_MAJOR "1")
+set(VERSION_MAJOR "0")
 set(VERSION_MINOR "0")
-set(VERSION_ALTER "0")
+set(VERSION_ALTER "1")
 set(VERSION_BUILD "0")
 set(PACKAGE_NAME "com.beiklive.GBAStation")
 set(PROJECT_AUTHOR "beiklive")

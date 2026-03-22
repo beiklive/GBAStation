@@ -15,7 +15,7 @@ void AboutPage::buildUI()
 {
     auto* m_header = new beiklive::UI::BrowserHeader();
     m_header->setTitle("GBAStation");
-    m_header->setPath("version 0.1.0");
+    m_header->setPath("version 0.0.1");
     addView(m_header);
 
     // ──────────────────────────────────────────────────────────────────────────
