@@ -1054,6 +1054,50 @@ void FileListPage::openSidebar(int itemIndex)
                         }});
     }
 
+    // 选择金手指文件（仅限已识别平台的游戏文件）
+    if (!item.isDir && detectPlatform(item.fileName) != beiklive::EmuPlatform::None)
+    {
+        std::string captureFileName = item.fileName;
+        std::string captureFullPath = item.fullPath;
+        opts.push_back({"beiklive/sidebar/select_cheat"_i18n,
+                        [captureFileName, captureFullPath]()
+                        {
+                            auto *flPage = new FileListPage();
+                            flPage->setFilter({"cht"}, FileListPage::FilterMode::Whitelist);
+                            flPage->setLayoutMode(FileListPage::LayoutMode::ListOnly);
+                            flPage->setDefaultFileCallback([captureFileName](const FileListItem &chtItem)
+                                                           {
+                                                               setGameDataStr(captureFileName, GAMEDATA_FIELD_CHEATPATH, chtItem.fullPath);
+                                                               // 延迟到当前帧回调链结束后再执行，避免崩溃
+                                                               brls::sync([]() { brls::Application::popActivity(); });
+                                                           });
+                            std::string startPath = beiklive::file::getParentPath(captureFullPath);
+                            if (startPath.empty() ||
+                                beiklive::file::getPathType(startPath) != beiklive::file::PathType::Directory)
+                            {
+                                startPath = "/";
+#ifdef _WIN32
+                                startPath = "C:\\";
+#endif
+                            }
+                            flPage->navigateTo(startPath);
+
+                            auto *container = new brls::Box(brls::Axis::COLUMN);
+                            container->setGrow(1.0f);
+                            container->addView(flPage);
+                            container->registerAction("beiklive/hints/close"_i18n, brls::BUTTON_START,
+                                                      [](brls::View *) {
+                                                          brls::Application::popActivity();
+                                                          return true;
+                                                      });
+                            auto *frame = new brls::AppletFrame(container);
+                            frame->setHeaderVisibility(brls::Visibility::GONE);
+                            frame->setFooterVisibility(brls::Visibility::GONE);
+                            frame->setBackground(brls::ViewBackground::NONE);
+                            brls::Application::pushActivity(new brls::Activity(frame));
+                        }});
+    }
+
     // 添加到游戏库（仅限已识别平台的游戏文件）
     {
         beiklive::EmuPlatform platform = detectPlatform(item.fileName);
