@@ -601,7 +601,7 @@ void GameLibraryPage::onItemOptions(const GameLibraryEntry& entry)
         flPage->setLayoutMode(FileListPage::LayoutMode::ListOnly);
         flPage->setDefaultFileCallback([entry](const FileListItem& chtItem) {
             setGameDataStr(entry.fileName, GAMEDATA_FIELD_CHEATPATH, chtItem.fullPath);
-            brls::sync([]() { brls::Application::popActivity(); });
+            brls::Application::popActivity();
         });
         flPage->navigateTo(startPath);
 
