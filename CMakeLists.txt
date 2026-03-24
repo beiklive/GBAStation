@@ -124,7 +124,7 @@ else()
     message(STATUS "Audio backend: none (samples will be discarded)")
 endif ()
 
-include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/include)
+include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/src)
 file(GLOB_RECURSE MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
 list(APPEND MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp)
 
