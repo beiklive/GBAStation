@@ -14,11 +14,6 @@
 extern "C" unsigned int sceLibcHeapSize = 2 * 1024 * 1024;
 #endif
 
-#define AUTOSAVE_GRANULARITY 600
-#define FPS_GRANULARITY 30
-#define FPS_BUFFER_SIZE 4
-#define REWIND_BUFFER_DEFAULT 300 // 默认倒带缓冲区
-#define REWIND_SAVE_INTERVAL_DEFAULT 1 // 默认每帧保存
 
 beiklive::GameRunner* gameRunner = nullptr;
 beiklive::ConfigManager* SettingManager = nullptr;

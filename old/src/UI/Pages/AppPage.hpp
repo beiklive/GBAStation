@@ -1,0 +1,113 @@
+#pragma once
+
+#include <borealis.hpp>
+#include <cmath>
+#include <cctype>
+#include <functional>
+#include <string>
+#include <vector>
+
+#include "common.hpp"
+
+using namespace beiklive;
+
+
+class GameCard : public brls::Box
+{
+public:
+    explicit GameCard(const GameEntry& entry);
+
+    /// 卡片获得焦点时触发（可用于更新底部信息区）
+    std::function<void(const GameEntry&)> onFocused;
+
+    /// 按下 A / 触屏点击时触发（用于启动游戏）
+    std::function<void(const GameEntry&)> onActivated;
+
+    /// 按下 X 键时触发（用于显示设置面板）
+    std::function<void(const GameEntry&)> onOptions;
+
+    const GameEntry& getEntry() const { return m_entry; }
+
+    /// 更新卡片封面图片
+    void updateCover(const std::string& newCoverPath);
+
+    /// 更新卡片显示标题
+    void updateTitle(const std::string& newTitle);
+
+    // ── Borealis 虚函数 ──
+
+    void onChildFocusGained(brls::View* directChild, brls::View* focusedView) override;
+    void onChildFocusLost(brls::View* directChild, brls::View* focusedView) override;
+    void draw(NVGcontext* vg,
+              float x, float y, float w, float h,
+              brls::Style style, brls::FrameContext* ctx) override;
+
+private:
+    GameEntry  m_entry;
+    bool       m_focused = false;
+    float      m_scale   = 1.0f;   ///< 当前渲染缩放比，由 draw() 平滑插值
+    std::string m_title;
+    brls::Label*           m_titleLabel  = nullptr;
+    brls::Image*           m_coverImage  = nullptr;
+
+    bool  m_clickAnimating = false;
+    float m_clickT         = 0.0f;
+    float m_clickScale     = 1.0f;
+
+    void triggerClickBounce();
+
+};
+
+
+class AppPage : public brls::Box {
+public:
+    AppPage();
+
+    /// 批量设置游戏列表（清除旧卡片）
+    void setGames(const std::vector<GameEntry>& games);
+
+    /// 追加单个游戏卡片
+    void addGame(const GameEntry& entry);
+
+    /// 游戏被激活时调用（启动游戏的回调）
+    std::function<void(const GameEntry&)> onGameSelected;
+
+    /// 用户按 X 键时调用（用于显示游戏设置面板）
+    std::function<void(const GameEntry&)> onGameOptions;
+
+    /// 用户点击"文件列表"按钮时调用
+    std::function<void()> onOpenFileList;
+    /// 用户点击"游戏库"按钮时调用
+    std::function<void()> onOpenGameLibrary;
+    /// 用户点击"设置"按钮时调用
+    std::function<void()> onOpenSettings;
+    /// 用户点击"数据管理"按钮时调用
+    std::function<void()> onOpenDataPage;
+
+    /// 用户点击"关于"按钮时调用
+    std::function<void()> onOpenAboutPage;
+
+    /// 从卡片行中移除指定游戏路径的卡片
+    void removeGame(const std::string& gamePath);
+
+    /// 更新指定游戏路径的卡片封面
+    void updateGameLogo(const std::string& gamePath, const std::string& newLogoPath);
+
+    /// 更新指定游戏路径的卡片显示标题
+    void updateGameTitle(const std::string& gamePath, const std::string& newTitle);
+
+private:
+    brls::HScrollingFrame* m_scroll      = nullptr;
+    brls::Box*             m_cardRow     = nullptr;
+
+    void onCardFocused(const GameEntry& entry);
+    void onCardActivated(const GameEntry& entry);
+
+    brls::Box*             m_titleRow     = nullptr;
+    beiklive::UI::ButtonBar*             m_ButtonRow     = nullptr;
+
+    brls::BottomBar*             m_bottomRow     = nullptr;
+
+    // brls::Label*           m_titleLabel  = nullptr;
+
+};
