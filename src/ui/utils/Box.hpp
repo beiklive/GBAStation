@@ -1,0 +1,41 @@
+#pragma once
+
+#include <borealis.hpp>
+#include "Header.hpp"
+
+namespace beiklive
+{
+    class HeaderBar; // forward declaration to break circular dependency
+
+    class Box : public brls::Box
+    {
+    public:
+        Box();
+        Box(brls::Axis flexDirection);
+        ~Box();
+    
+        void showHeader(bool show);
+        void showFooter(bool show);
+        void showBackground(bool show);
+        void showShader(bool show);
+
+
+    private:
+        // 背景层
+        void setupBackgroundLayer();
+        brls::Image* backgroundLayer;
+        // Shader层
+        void setupShaderLayer();
+        brls::Rectangle* shaderLayer;
+        brls::Box *mainBox;
+        brls::Box *contentBox; // 内容层，页头和页脚之间的部分
+        void setupMainBox();
+        // 页头
+        void setupHeader();
+        beiklive::HeaderBar* header;
+        // 页脚
+        void setupFooter();
+        brls::BottomBar* bottomBar;
+    };
+
+}
