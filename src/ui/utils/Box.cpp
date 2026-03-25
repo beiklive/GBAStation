@@ -5,18 +5,18 @@ namespace beiklive
 {
     Box::Box() : brls::Box()
     {
-        setupMainBox();
         setupBackgroundLayer();
         setupShaderLayer();
+        setupMainBox();
         setupHeader();
         setupFooter();
     }
 
     Box::Box(brls::Axis flexDirection) : brls::Box(flexDirection)
     {
-        setupMainBox();
         setupBackgroundLayer();
         setupShaderLayer();
+        setupMainBox();
         setupHeader();
         setupFooter();
     }
@@ -64,9 +64,11 @@ namespace beiklive
         backgroundLayer->setHeightPercentage(100);
         backgroundLayer->setScalingType(brls::ImageScalingType::FIT);
         backgroundLayer->setInterpolation(brls::ImageInterpolation::LINEAR);
+
+        backgroundLayer->setImageFromFile("resources\\img\\bg2.png"); // 默认背景图，用户设置的背景会覆盖它
         // 应用所有背景设置（可见性、图片、XMB着色器与颜色）
         this->addView(backgroundLayer);
-        showBackground(false); // 默认隐藏背景
+        // showBackground(false); // 默认隐藏背景
     }
 
     void Box::setupShaderLayer()
@@ -91,6 +93,8 @@ namespace beiklive
         mainBox->setPositionType(brls::PositionType::RELATIVE);
         mainBox->setWidthPercentage(100);
         mainBox->setHeightPercentage(100);
+        // HIDE_BRLS_BACKGROUND(mainBox);
+
         this->addView(mainBox);
     }
 
@@ -98,6 +102,7 @@ namespace beiklive
     {
         if(header) return; // already setup
         header = new beiklive::HeaderBar();
+        // HIDE_BRLS_BACKGROUND(header);
 
         header->setTitle("");
         mainBox->addView(header);
@@ -113,6 +118,7 @@ namespace beiklive
         bottomBar->setPositionBottom(0);
         bottomBar->setPositionLeft(0);
         bottomBar->setWidthPercentage(100);
+        // HIDE_BRLS_BACKGROUND(bottomBar);
         mainBox->addView(bottomBar);
     }
 }

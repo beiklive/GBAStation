@@ -27,7 +27,7 @@ int main(int argc, char* argv[]) {
 	}
 	brls::Application::createWindow("beiklive/title"_i18n);
 
-	brls::Application::getPlatform()->setThemeVariant(brls::ThemeVariant::DARK);
+	brls::Application::getPlatform()->setThemeVariant(brls::ThemeVariant::LIGHT);
 	beiklive::RegisterStyles();
 	beiklive::RegisterThemes();
 	

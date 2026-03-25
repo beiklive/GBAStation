@@ -15,7 +15,7 @@ void RegisterStyles()
 
 void RegisterThemes()
 {
-    ADD_THEME_COLOR("brls/text", nvgRGB(244, 249, 253));
+    // ADD_THEME_COLOR("brls/text", nvgRGB(244, 249, 253));
     ADD_THEME_COLOR("brls/highlight/color2", nvgRGB(248, 81, 73));
     ADD_THEME_COLOR("brls/highlight/background", nvgRGBA(0, 0, 0, 0));
 

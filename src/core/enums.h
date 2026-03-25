@@ -23,8 +23,10 @@ namespace beiklive::enums
 
     };
 
-
-
+    enum class ThemeLayout
+    {
+        SWITCH,
+    };
 
 
 
