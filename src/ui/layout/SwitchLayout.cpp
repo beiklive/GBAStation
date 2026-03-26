@@ -43,9 +43,6 @@ namespace beiklive
         m_cardRow->clearViews(true);
         for (auto &gameEntry : *gameList)
         {
-            // auto GameEntry1 = gameList.size() > i ? &gameList[i] : new beiklive::GameEntry();
-            // GameEntry1->title = "Game " + std::to_string(i + 1) + " - The Legend of Zelda: Breath of the Wild";
-            // GameEntry1->logoPath = "resources\\img\\test\\test.png";
             auto *gameCard = new beiklive::GameCard(beiklive::enums::ThemeLayout::SWITCH, &gameEntry);
             gameCard->applyThemeLayout();
             gameCard->setMarginRight(10.f);
@@ -56,6 +53,16 @@ namespace beiklive
                 if (onGameActivated)
                     onGameActivated(entry);
             };
+            gameCard->registerAction(
+                "游戏选项",
+                brls::BUTTON_X,
+                [this, &gameEntry](brls::View *)
+                {
+                    if (onGameOptions)
+                        onGameOptions(gameEntry);
+                    return true;
+                });
+
             m_cardRow->addView(gameCard);
         }
     }
@@ -76,8 +83,8 @@ namespace beiklive
                                                         { if(onSettingsOpened) onSettingsOpened(); });
         auto AboutButton = new beiklive::RoundButton(BK_RES(path_prefix + "bangzhu_64.png"), "关于", [this]()
                                                      { if (onAboutOpened) onAboutOpened(); });
-        auto ExitButton = new beiklive::RoundButton(BK_RES(path_prefix + "tuichu_64.png"), "退出", []()
-                                                    { brls::sync([](){ brls::Application::quit(); }); });
+        auto ExitButton = new beiklive::RoundButton(BK_RES(path_prefix + "tuichu_64.png"), "退出", [this]()
+                                                    { if (onExitRequested) onExitRequested(); });
 
         m_functionArea->addView(GameDataBaseButton);
         m_functionArea->addView(FileListButton);

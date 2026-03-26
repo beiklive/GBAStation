@@ -34,10 +34,16 @@ void StartPageFrame::Init()
 
     if (theme == (int)beiklive::enums::ThemeLayout::SWITCH)
     {
-        brls::Logger::debug("Using SWITCH theme layout");
+        _useSwitchLayout();
+    }
+}
+
+void StartPageFrame::_useSwitchLayout()
+{
+      brls::Logger::debug("Using SWITCH theme layout");
         auto switchLayout = new beiklive::SwitchLayout();
         switchLayout->setGrow(1.f);
-
+        // TODO: 后续改为从数据库读取数据 参数为  游戏路径、标题、封面路径
         beiklive::GameList gameList = {
             {"path/to/game1.exe", "Game 1", "resources/img/test/test.png"},
             {"path/to/game2.exe", "Game 2", "resources/img/test/test.png"},
@@ -51,7 +57,14 @@ void StartPageFrame::Init()
             {"path/to/game10.exe", "Game 10", "resources/img/test/test.png"}
         };
         switchLayout->refreshGameList(&gameList);
-
+        switchLayout->onGameActivated = [](const beiklive::GameEntry& entry)
+        {
+            brls::Logger::info("Game activated: " + entry.title);
+        };
+        switchLayout->onGameOptions = [](const beiklive::GameEntry& entry)
+        {
+            brls::Logger::info("Game options opened: " + entry.title);
+        };
 
         switchLayout->onGameLibraryOpened = [this, switchLayout]() {
             brls::Logger::info("Game Library opened");
@@ -70,7 +83,23 @@ void StartPageFrame::Init()
             switchLayout->refreshGameList(&gameList2);
         };
 
-
+        switchLayout->onFileBrowserOpened = [this](){
+            brls::Logger::info("File Browser opened");
+        };
+        switchLayout->onDataManagementOpened = [this](){
+            brls::Logger::info("Data Management opened");
+        };
+        switchLayout->onSettingsOpened = [this](){
+            brls::Logger::info("Settings opened");
+        };
+        switchLayout->onAboutOpened = [this](){
+            brls::Logger::info("About opened");
+        };
+        switchLayout->onExitRequested = [this](){
+            brls::Logger::info("Exit requested");
+            brls::sync([this](){
+                brls::Application::quit();
+            });
+        };
         this->getContentBox()->addView(switchLayout);
-    }
 }

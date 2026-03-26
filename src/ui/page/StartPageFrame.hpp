@@ -11,4 +11,8 @@ public:
 
     void Init();
 
+
+private:
+    void _useSwitchLayout();
+
 };
