@@ -18,7 +18,6 @@ public:
 private:
     void _useSwitchLayout();
     void _openFileList();
-    brls::AudioPlayer* audioPlayer = nullptr;
 
     beiklive::FileListPage* m_fileListPage = nullptr;
     beiklive::SwitchLayout* switchLayout = nullptr;
