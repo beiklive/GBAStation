@@ -3,6 +3,7 @@
 #include "core/common.h"
 #include "UI/layout/SwitchLayout.hpp"
 #include "UI/page/FileListPage.hpp"
+#include "UI/utils/Box.hpp"
 
 
 class StartPage : public beiklive::Box

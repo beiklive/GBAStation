@@ -6,7 +6,6 @@
 #include "enums.h"     // 枚举类型定义
 
 #include "Utils/ConfigManager.hpp"
-#include "../UI/utils/Box.hpp"
 
 
 using namespace brls::literals; // for _i18n
