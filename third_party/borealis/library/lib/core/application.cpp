@@ -631,7 +631,7 @@ void Application::onControllerButtonPressed(enum ControllerButton button, bool r
     }
 
     // Only play the error sound if no action applied
-    Application::getAudioPlayer()->play(SOUND_CLICK_ERROR);
+    // Application::getAudioPlayer()->play(SOUND_CLICK_ERROR);
 }
 
 void Application::onKeyboardPressed(BrlsKeyCombination key, bool repeating)
