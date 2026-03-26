@@ -20,5 +20,5 @@ private:
     void _openFileList();
 
     beiklive::FileListPage* m_fileListPage = nullptr;
-
+    beiklive::SwitchLayout* switchLayout = nullptr;
 };

@@ -36,20 +36,20 @@ void StartPage::Init()
 void StartPage::_useSwitchLayout()
 {
     brls::Logger::debug("Using SWITCH theme layout");
-    auto* switchLayout = new beiklive::SwitchLayout();
+    switchLayout = new beiklive::SwitchLayout();
     switchLayout->setGrow(1.f);
     // TODO: 后续改为从数据库读取数据 参数为  游戏路径、标题、封面路径
     beiklive::GameList gameList = {
-        {"path/to/game1.exe", "Game 1", "resources/img/test/test.png"},
-        {"path/to/game2.exe", "Game 2", "resources/img/test/test.png"},
-        {"path/to/game3.exe", "Game 3", "resources/img/test/test.png"},
-        {"path/to/game4.exe", "Game 4", "resources/img/test/test.png"},
-        {"path/to/game5.exe", "Game 5", "resources/img/test/test.png"},
-        {"path/to/game6.exe", "Game 6", "resources/img/test/test.png"},
-        {"path/to/game7.exe", "Game 7", "resources/img/test/test.png"},
-        {"path/to/game8.exe", "Game 8", "resources/img/test/test.png"},
-        {"path/to/game9.exe", "Game 9", "resources/img/test/test.png"},
-        {"path/to/game10.exe", "Game 10", "resources/img/test/test.png"}};
+        {"path/to/game1.exe", "Game 1", BK_RES("img/test/test.png")},
+        {"path/to/game2.exe", "Game 2", BK_RES("img/test/test.png")},
+        {"path/to/game3.exe", "Game 3", BK_RES("img/test/test.png")},
+        {"path/to/game4.exe", "Game 4", BK_RES("img/test/test.png")},
+        {"path/to/game5.exe", "Game 5", BK_RES("img/test/test.png")},
+        {"path/to/game6.exe", "Game 6", BK_RES("img/test/test.png")},
+        {"path/to/game7.exe", "Game 7", BK_RES("img/test/test.png")},
+        {"path/to/game8.exe", "Game 8", BK_RES("img/test/test.png")},
+        {"path/to/game9.exe", "Game 9", BK_RES("img/test/test.png")},
+        {"path/to/game10.exe", "Game 10", BK_RES("img/test/test.png")}};
     switchLayout->refreshGameList(&gameList);
     switchLayout->onGameActivated = [](const beiklive::GameEntry &entry)
     {
@@ -60,20 +60,20 @@ void StartPage::_useSwitchLayout()
         brls::Logger::info("Game options opened: " + entry.title);
     };
 
-    switchLayout->onGameLibraryOpened = [this, switchLayout]()
+    switchLayout->onGameLibraryOpened = [this]()
     {
         brls::Logger::info("Game Library opened");
         beiklive::GameList gameList2 = {
-            {"path/to/game1.exe", "subGame 1", "resources/img/test/test2.png"},
-            {"path/to/game2.exe", "subGame 2", "resources/img/test/test2.png"},
-            {"path/to/game3.exe", "subGame 3", "resources/img/test/test2.png"},
-            {"path/to/game4.exe", "subGame 4", "resources/img/test/test2.png"},
-            {"path/to/game5.exe", "subGame 5", "resources/img/test/test2.png"},
-            {"path/to/game6.exe", "subGame 6", "resources/img/test/test2.png"},
-            {"path/to/game7.exe", "subGame 7", "resources/img/test/test2.png"},
-            {"path/to/game8.exe", "subGame 8", "resources/img/test/test2.png"},
-            {"path/to/game9.exe", "subGame 9", "resources/img/test/test2.png"},
-            {"path/to/game10.exe", "subGame 10", "resources/img/test/test2.png"}};
+            {"path/to/game1.exe", "subGame 1", BK_RES("img/test/test2.png")},
+            {"path/to/game2.exe", "subGame 2", BK_RES("img/test/test2.png")},
+            {"path/to/game3.exe", "subGame 3", BK_RES("img/test/test2.png")},
+            {"path/to/game4.exe", "subGame 4", BK_RES("img/test/test2.png")},
+            {"path/to/game5.exe", "subGame 5", BK_RES("img/test/test2.png")},
+            {"path/to/game6.exe", "subGame 6", BK_RES("img/test/test2.png")},
+            {"path/to/game7.exe", "subGame 7", BK_RES("img/test/test2.png")},
+            {"path/to/game8.exe", "subGame 8", BK_RES("img/test/test2.png")},
+            {"path/to/game9.exe", "subGame 9", BK_RES("img/test/test2.png")},
+            {"path/to/game10.exe", "subGame 10", BK_RES("img/test/test2.png")}};
         switchLayout->refreshGameList(&gameList2);
     };
 
@@ -107,13 +107,25 @@ void StartPage::_openFileList()
 {
     brls::Logger::debug("Opening File List Page");
     m_fileListPage = new beiklive::FileListPage();
+
+    m_fileListPage->registerAction(
+        "关闭列表",
+        brls::BUTTON_X,
+        [this](brls::View *)
+        {
+            // 此处设置按键功能
+            brls::sync([this]()
+                       { brls::Application::popActivity(); });
+
+            return true;
+        });
     m_fileListPage->setFliter(beiklive::enums::FilterMode::None, {".gba", ".gbc", ".gb"});
     auto *frame = new brls::AppletFrame(m_fileListPage);
     HIDE_BRLS_BAR(frame);
     brls::sync([this, frame]()
                {
-        brls::Logger::info("Pushing FileListPage activity");
-        brls::Application::pushActivity(new brls::Activity(frame));
-        m_fileListPage->showDriveList(); // Activity 入栈后再加载，确保 recycler 已在视图树中
-    });
+                   brls::Logger::info("Pushing FileListPage activity");
+                   brls::Application::pushActivity(new brls::Activity(frame));
+                   m_fileListPage->showDriveList(); // Activity 入栈后再加载，确保 recycler 已在视图树中
+               });
 }

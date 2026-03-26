@@ -33,12 +33,13 @@ namespace beiklive
             // 为每个列表项绑定一个设置按键（例如 X 键， 不要给A键设置， A键使用setItemClickListener）
             cell.registerAction(
                 "返回上一级",
-                brls::BUTTON_X,
+                brls::BUTTON_B,
                 [this](brls::View*) {
                     // 此处设置按键功能
                     navigateUp();
                     return true;
                 });
+
         };
 
 
