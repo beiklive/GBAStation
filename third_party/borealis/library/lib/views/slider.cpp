@@ -144,7 +144,7 @@ void Slider::buttonsProcessing()
             {
                 repeat = true;
                 pointer->shakeHighlight(FocusDirection::RIGHT);
-                // Application::getAudioPlayer()->play(SOUND_FOCUS_ERROR);
+                Application::getAudioPlayer()->play(SOUND_FOCUS_ERROR);
             }
         }
 
@@ -155,7 +155,7 @@ void Slider::buttonsProcessing()
             {
                 repeat = true;
                 pointer->shakeHighlight(FocusDirection::LEFT);
-                // Application::getAudioPlayer()->play(SOUND_FOCUS_ERROR);
+                Application::getAudioPlayer()->play(SOUND_FOCUS_ERROR);
             }
         }
 
