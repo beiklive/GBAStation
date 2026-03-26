@@ -12,7 +12,7 @@ namespace beiklive
     public:
         Layout();
         ~Layout() = default;
-        virtual void refreshGameList(const GameList& gameList) = 0; // 刷新游戏列表显示
+        virtual void refreshGameList(GameList* gameList) = 0; // 刷新游戏列表显示
 
 
 

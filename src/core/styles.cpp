@@ -7,6 +7,11 @@ void RegisterStyles()
 {
     ADD_STYLE("brls/highlight/stroke_width", 3.0f);
 
+    // ADD_STYLE("brls/shadow/width", 8.0f);
+    // ADD_STYLE("brls/shadow/feather", 20.0f);
+    // ADD_STYLE("brls/shadow/opacity", 93.0f);
+    // ADD_STYLE("brls/shadow/offset", 10.0f);
+
     ADD_STYLE("beiklive/header/header_height", 70.0f);
     ADD_STYLE("beiklive/header/font_size", 24.0f);
     ADD_STYLE("beiklive/file_list_page/margin_bottom", 24.0f);
@@ -16,6 +21,7 @@ void RegisterStyles()
 void RegisterThemes()
 {
     // ADD_THEME_COLOR("brls/text", nvgRGB(244, 249, 253));
+    ADD_THEME_COLOR("beiklive/CardText/color", nvgRGB(156, 220, 218));
     ADD_THEME_COLOR("brls/highlight/color2", nvgRGB(248, 81, 73));
     ADD_THEME_COLOR("brls/highlight/background", nvgRGBA(0, 0, 0, 0));
 

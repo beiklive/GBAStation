@@ -23,6 +23,23 @@ namespace beiklive // 全局变量
 }
 namespace beiklive // 全局功能函数
 {
+inline std::string res_path(const std::string& path)
+{
+    #ifdef __SWITCH__
+        return "romfs:/" + path;
+    #else
+        return "./resources/" + path;
+    #endif
+}
+
+
+/// 检查是否存在某个键
+inline bool hasKey(beiklive::ConfigManager* manager, const std::string& key)
+{
+    if (!manager) return false;
+    return manager->Contains(key);
+}
+
 /// 读取 SettingManager 中某个游戏字段的字符串值。
 inline std::string getKeyStr( beiklive::ConfigManager* manager, const std::string& key, const std::string& def = "")
 {
@@ -78,20 +95,21 @@ inline void setKeyFloat( beiklive::ConfigManager* manager, const std::string& ke
     manager->Save();
 }
 
+#define BK_RES(path)                        beiklive::res_path(path)
+#define CHECK_KEY(key)                      beiklive::hasKey(beiklive::SettingManager, key)
+#define GET_SETTING_KEY_STR(key, def)       beiklive::getKeyStr(beiklive::SettingManager, key, def)
+#define SET_SETTING_KEY_STR(key, val)       beiklive::setKeyStr(beiklive::SettingManager, key, val)
+#define GET_SETTING_KEY_INT(key, def)       beiklive::getKeyInt(beiklive::SettingManager, key, def)
+#define SET_SETTING_KEY_INT(key, val)       beiklive::setKeyInt(beiklive::SettingManager, key, val)
+#define GET_SETTING_KEY_FLOAT(key, def)     beiklive::getKeyFloat(beiklive::SettingManager, key, def)
+#define SET_SETTING_KEY_FLOAT(key, val)     beiklive::setKeyFloat(beiklive::SettingManager, key, val)
 
-#define GET_SETTING_KEY_STR(key, def)       getKeyStr(SettingManager, key, def)
-#define SET_SETTING_KEY_STR(key, val)       setKeyStr(SettingManager, key, val)
-#define GET_SETTING_KEY_INT(key, def)       getKeyInt(SettingManager, key, def)
-#define SET_SETTING_KEY_INT(key, val)       setKeyInt(SettingManager, key, val)
-#define GET_SETTING_KEY_FLOAT(key, def)     getKeyFloat(SettingManager, key, def)
-#define SET_SETTING_KEY_FLOAT(key, val)     setKeyFloat(SettingManager, key, val)
-
-#define GET_MAPPING_KEY_STR(key, def)       getKeyStr(NameMappingManager, key, def)
-#define SET_MAPPING_KEY_STR(key, val)       setKeyStr(NameMappingManager, key, val)
-#define GET_MAPPING_KEY_INT(key, def)       getKeyInt(NameMappingManager, key, def)
-#define SET_MAPPING_KEY_INT(key, val)       setKeyInt(NameMappingManager, key, val)
-#define GET_MAPPING_KEY_FLOAT(key, def)     getKeyFloat(NameMappingManager, key, def)
-#define SET_MAPPING_KEY_FLOAT(key, val)     setKeyFloat(NameMappingManager, key, val)
+#define GET_MAPPING_KEY_STR(key, def)       beiklive::getKeyStr(beiklive::NameMappingManager, key, def)
+#define SET_MAPPING_KEY_STR(key, val)       beiklive::setKeyStr(beiklive::NameMappingManager, key, val)
+#define GET_MAPPING_KEY_INT(key, def)       beiklive::getKeyInt(beiklive::NameMappingManager, key, def)
+#define SET_MAPPING_KEY_INT(key, val)       beiklive::setKeyInt(beiklive::NameMappingManager, key, val)
+#define GET_MAPPING_KEY_FLOAT(key, def)     beiklive::getKeyFloat(beiklive::NameMappingManager, key, def)
+#define SET_MAPPING_KEY_FLOAT(key, val)     beiklive::setKeyFloat(beiklive::NameMappingManager, key, val)
 
 
 #define HIDE_BRLS_HIGHLIGHT(view) \
@@ -104,6 +122,7 @@ inline void setKeyFloat( beiklive::ConfigManager* manager, const std::string& ke
 #define HIDE_BRLS_BACKGROUND(view) \
     do { \
         (view)->setBackgroundColor(nvgRGBA(31, 31, 31, 50)); \
+        (view)->setBackground(brls::ViewBackground::NONE); \
     } while(0)
     
 #define HIDE_BRLS_BAR(frame) \

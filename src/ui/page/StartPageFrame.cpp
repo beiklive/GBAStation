@@ -1,14 +1,19 @@
 #include "StartPageFrame.hpp"
 
 #include "UI/utils/FileListView.hpp"
-
-StartPageFrame::StartPageFrame()
+#include "UI/layout/SwitchLayout.hpp"
+StartPageFrame::StartPageFrame() : beiklive::Box()
 {
-    // this->showHeader(false);
-    // this->showFooter(false);
-    // this->showBackground(false);
-    // this->showShader(false);
-    Init();
+    brls::Logger::debug("StartPageFrame initialized");
+    brls::sync([this]()
+    {
+        this->showHeader(false);
+        // this->showFooter(false);
+        // this->showBackground(false);`
+        // this->showShader(false);
+        Init();
+        brls::Application::giveFocus(this);
+    });
 }
 
 StartPageFrame::~StartPageFrame()
@@ -17,6 +22,55 @@ StartPageFrame::~StartPageFrame()
 
 void StartPageFrame::Init()
 {
-    brls::Logger::info("StartPageFrame initialized");
+    // 读取主题配置
+    if(!CHECK_KEY("theme"))
+    {
+        SET_SETTING_KEY_INT("theme", (int)beiklive::enums::ThemeLayout::SWITCH);
 
+    }
+    int theme = GET_SETTING_KEY_INT("theme", (int)beiklive::enums::ThemeLayout::SWITCH);
+    brls::Logger::debug("Current theme: " + std::to_string(theme));
+
+
+    if (theme == (int)beiklive::enums::ThemeLayout::SWITCH)
+    {
+        brls::Logger::debug("Using SWITCH theme layout");
+        auto switchLayout = new beiklive::SwitchLayout();
+        switchLayout->setGrow(1.f);
+
+        beiklive::GameList gameList = {
+            {"path/to/game1.exe", "Game 1", "resources/img/test/test.png"},
+            {"path/to/game2.exe", "Game 2", "resources/img/test/test.png"},
+            {"path/to/game3.exe", "Game 3", "resources/img/test/test.png"},
+            {"path/to/game4.exe", "Game 4", "resources/img/test/test.png"},
+            {"path/to/game5.exe", "Game 5", "resources/img/test/test.png"},
+            {"path/to/game6.exe", "Game 6", "resources/img/test/test.png"},
+            {"path/to/game7.exe", "Game 7", "resources/img/test/test.png"},
+            {"path/to/game8.exe", "Game 8", "resources/img/test/test.png"},
+            {"path/to/game9.exe", "Game 9", "resources/img/test/test.png"},
+            {"path/to/game10.exe", "Game 10", "resources/img/test/test.png"}
+        };
+        switchLayout->refreshGameList(&gameList);
+
+
+        switchLayout->onGameLibraryOpened = [this, switchLayout]() {
+            brls::Logger::info("Game Library opened");
+            beiklive::GameList gameList2 = {
+            {"path/to/game1.exe", "subGame 1", "resources/img/test/test2.png"},
+            {"path/to/game2.exe", "subGame 2", "resources/img/test/test2.png"},
+            {"path/to/game3.exe", "subGame 3", "resources/img/test/test2.png"},
+            {"path/to/game4.exe", "subGame 4", "resources/img/test/test2.png"},
+            {"path/to/game5.exe", "subGame 5", "resources/img/test/test2.png"},
+            {"path/to/game6.exe", "subGame 6", "resources/img/test/test2.png"},
+            {"path/to/game7.exe", "subGame 7", "resources/img/test/test2.png"},
+            {"path/to/game8.exe", "subGame 8", "resources/img/test/test2.png"},
+            {"path/to/game9.exe", "subGame 9", "resources/img/test/test2.png"},
+            {"path/to/game10.exe", "subGame 10", "resources/img/test/test2.png"}
+            };
+            switchLayout->refreshGameList(&gameList2);
+        };
+
+
+        this->getContentBox()->addView(switchLayout);
+    }
 }

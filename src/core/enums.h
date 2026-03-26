@@ -25,6 +25,7 @@ namespace beiklive::enums
 
     enum class ThemeLayout
     {
+        DEFAULT,
         SWITCH,
     };
 
