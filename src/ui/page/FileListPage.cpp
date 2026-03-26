@@ -5,6 +5,8 @@ namespace beiklive
 
     FileListPage::FileListPage()
     {
+        audioPlayer = brls::Application::getAudioPlayer();
+        brls::Application::setAudioPlayer(nullptr); // 切换音频播放器以停止当前播放的音乐
         brls::Logger::debug("FileListPage initialized");
         fileListView = new beiklive::FileListView();
         fileListView->setItemClickListener([this](const beiklive::ListItem& item){
@@ -57,6 +59,8 @@ namespace beiklive
         // 设置过滤模式和扩展名
         m_filterMode = mode;
         m_filterExtensions = extensions;
+
+        brls::Application::setAudioPlayer(audioPlayer);
     }
 
     FileListPage::~FileListPage()

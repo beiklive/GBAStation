@@ -10,6 +10,8 @@ namespace beiklive
     class FileListPage : public beiklive::Box
     {
     private:
+        brls::AudioPlayer* audioPlayer = nullptr;
+
         beiklive::enums::FilterMode m_filterMode = beiklive::enums::FilterMode::None;
         std::vector<std::string> m_filterExtensions;
 

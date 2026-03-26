@@ -2,6 +2,8 @@
 
 StartPage::StartPage()
 {
+    auto *audioPlayer = brls::Application::getAudioPlayer();
+    brls::Application::setAudioPlayer(nullptr); // 切换音频播放器以停止当前播放的音乐
     brls::Logger::debug("StartPage initialized");
     brls::sync([this]()
                {
@@ -101,6 +103,8 @@ void StartPage::_useSwitchLayout()
                    { brls::Application::quit(); });
     };
     this->getContentBox()->addView(switchLayout);
+
+    brls::Application::setAudioPlayer(audioPlayer);
 }
 
 void StartPage::_openFileList()
