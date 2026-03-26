@@ -187,8 +187,8 @@ bool Application::internalMainLoop()
     else
     {
         Logger::verbose("input blocked (tokens={})", Application::blockInputsTokens);
-        // if (!muteSounds)
-        //     Application::getAudioPlayer()->play(Sound::SOUND_CLICK_ERROR);
+        if (!muteSounds)
+            Application::getAudioPlayer()->play(Sound::SOUND_CLICK_ERROR);
     }
 
     // Animations
