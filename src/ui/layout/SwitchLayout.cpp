@@ -29,11 +29,14 @@ namespace beiklive
 
     void SwitchLayout::refreshGameList(beiklive::GameList *gameList)
     {
+        auto *audioPlayer = brls::Application::getAudioPlayer();
+        brls::Application::setAudioPlayer(nullptr); // 切换音频播放器以停止当前播放的音乐
         beiklive::GameList copy = *gameList;
-        brls::sync([this, copy = std::move(copy)]() mutable
+        brls::sync([this,audioPlayer, copy = std::move(copy)]() mutable
         {
             buildCardRow(&copy);
             brls::Application::giveFocus(m_cardRow->getDefaultFocus());
+            brls::Application::setAudioPlayer(audioPlayer);
         });
     }
 
