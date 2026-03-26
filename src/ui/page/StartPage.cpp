@@ -22,12 +22,12 @@ void StartPage::Init()
     // 读取主题配置
     if (!CHECK_KEY("theme"))
     {
-        SET_SETTING_KEY_INT("theme", (int)beiklive::enums::ThemeLayout::SWITCH);
+        SET_SETTING_KEY_INT("theme", (int)beiklive::enums::ThemeLayout::SWITCH_THEME);
     }
-    int theme = GET_SETTING_KEY_INT("theme", (int)beiklive::enums::ThemeLayout::SWITCH);
+    int theme = GET_SETTING_KEY_INT("theme", (int)beiklive::enums::ThemeLayout::SWITCH_THEME);
     brls::Logger::debug("Current theme: " + std::to_string(theme));
 
-    if (theme == (int)beiklive::enums::ThemeLayout::SWITCH)
+    if (theme == (int)beiklive::enums::ThemeLayout::SWITCH_THEME)
     {
         _useSwitchLayout();
     }

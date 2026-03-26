@@ -27,8 +27,8 @@ namespace beiklive::enums
     // 主题布局类型 默认为switch布局，后续会添加天马布局
     enum class ThemeLayout
     {
-        DEFAULT,
-        SWITCH
+        DEFAULT_THEME,
+        SWITCH_THEME
     };
 
     // 白名单/黑名单过滤模式

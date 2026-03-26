@@ -11,7 +11,7 @@ namespace beiklive
     {
     private:
         /* data */
-        beiklive::enums::ThemeLayout m_layoutType = beiklive::enums::ThemeLayout::DEFAULT;
+        beiklive::enums::ThemeLayout m_layoutType = beiklive::enums::ThemeLayout::DEFAULT_THEME;
         beiklive::GameEntry* m_gameEntry;
 
         brls::Label* m_titleLabel = nullptr;

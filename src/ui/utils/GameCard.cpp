@@ -27,8 +27,8 @@ namespace beiklive
     {
         switch (m_layoutType)
         {
-        case beiklive::enums::ThemeLayout::DEFAULT:
-        case beiklive::enums::ThemeLayout::SWITCH:
+        case beiklive::enums::ThemeLayout::DEFAULT_THEME:
+        case beiklive::enums::ThemeLayout::SWITCH_THEME:
             _switchCardLayout();
             break;
 
@@ -91,8 +91,8 @@ namespace beiklive
         brls::Box::onChildFocusGained(directChild, focusedView);
         switch (m_layoutType)
         {
-        case beiklive::enums::ThemeLayout::DEFAULT:
-        case beiklive::enums::ThemeLayout::SWITCH:
+        case beiklive::enums::ThemeLayout::DEFAULT_THEME:
+        case beiklive::enums::ThemeLayout::SWITCH_THEME:
             if (m_titleLabel)
                 m_titleLabel->setVisibility(brls::Visibility::VISIBLE);
             break;
@@ -107,8 +107,8 @@ namespace beiklive
         brls::Box::onChildFocusLost(directChild, focusedView);
         switch (m_layoutType)
         {
-        case beiklive::enums::ThemeLayout::DEFAULT:
-        case beiklive::enums::ThemeLayout::SWITCH:
+        case beiklive::enums::ThemeLayout::DEFAULT_THEME:
+        case beiklive::enums::ThemeLayout::SWITCH_THEME:
             if (m_titleLabel)
                 m_titleLabel->setVisibility(brls::Visibility::INVISIBLE);
             break;
@@ -123,8 +123,8 @@ namespace beiklive
 
         switch (m_layoutType)
         {
-        case beiklive::enums::ThemeLayout::DEFAULT:
-        case beiklive::enums::ThemeLayout::SWITCH:
+        case beiklive::enums::ThemeLayout::DEFAULT_THEME:
+        case beiklive::enums::ThemeLayout::SWITCH_THEME:
         {
             // 点击弹性动画（先压缩，再阻尼回弹）
             if (m_clickAnimating)

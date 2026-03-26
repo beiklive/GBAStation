@@ -42,7 +42,7 @@ namespace beiklive
         m_cardRow->clearViews(true);
         for (auto &gameEntry : *gameList)
         {
-            auto *gameCard = new beiklive::GameCard(beiklive::enums::ThemeLayout::SWITCH, &gameEntry);
+            auto *gameCard = new beiklive::GameCard(beiklive::enums::ThemeLayout::SWITCH_THEME, &gameEntry);
             gameCard->applyThemeLayout();
             gameCard->setMarginRight(10.f);
             gameCard->setMarginLeft(10.f);
