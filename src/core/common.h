@@ -140,6 +140,22 @@ struct GameEntry
 
 typedef std::vector<GameEntry> GameList; // 游戏列表类型定义
 
+// 列表元素数据
+struct ListItem
+{
+    std::string text;      // 标题
+    std::string subText;   // 子标题
+    std::string iconPath;  // 图标路径
+    std::string data;      // 额外数据（如游戏路径）
+};
+
+typedef std::vector<ListItem> ListItemList; // 列表数据类型定义
+
+
+
+
+
+
 } // namespace beiklive
 
 

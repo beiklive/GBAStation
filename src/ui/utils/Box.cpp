@@ -9,7 +9,9 @@ namespace beiklive
         setupShaderLayer();
         setupMainBox();
         setupHeader();
+        setupContentBox();
         setupFooter();
+        brls::Logger::info("Box initialized");
     }
 
     Box::Box(brls::Axis flexDirection) : brls::Box(flexDirection)
@@ -18,7 +20,10 @@ namespace beiklive
         setupShaderLayer();
         setupMainBox();
         setupHeader();
+        setupContentBox();
         setupFooter();
+        brls::Logger::info("Box initialized");
+
     }
 
     Box::~Box()
@@ -93,9 +98,28 @@ namespace beiklive
         mainBox->setPositionType(brls::PositionType::RELATIVE);
         mainBox->setWidthPercentage(100);
         mainBox->setHeightPercentage(100);
-        // HIDE_BRLS_BACKGROUND(mainBox);
 
+
+        // HIDE_BRLS_BACKGROUND(mainBox);
         this->addView(mainBox);
+
+    }
+
+    void Box::setupContentBox()
+    {
+        if(contentBox) return; // already setup
+
+        contentBox = new brls::Box(brls::Axis::COLUMN);
+        contentBox->setFocusable(false);
+        contentBox->setPositionType(brls::PositionType::RELATIVE);
+        contentBox->setGrow(1.0f);
+        contentBox->setMarginRight(GET_STYLE("brls/applet_frame/padding_sides"));
+        contentBox->setMarginLeft(GET_STYLE("brls/applet_frame/padding_sides"));
+        // contentBox->setPaddingRight(GET_STYLE("brls/applet_frame/header_padding_sides"));
+        // contentBox->setPaddingLeft(GET_STYLE("brls/applet_frame/header_padding_sides"));
+
+        // HIDE_BRLS_BACKGROUND(contentBox);
+        mainBox->addView(contentBox);
     }
 
     void Box::setupHeader()
@@ -114,9 +138,6 @@ namespace beiklive
 
         #undef ABSOLUTE
         bottomBar = new brls::BottomBar();
-        bottomBar->setPositionType(brls::PositionType::ABSOLUTE);
-        bottomBar->setPositionBottom(0);
-        bottomBar->setPositionLeft(0);
         bottomBar->setWidthPercentage(100);
         // HIDE_BRLS_BACKGROUND(bottomBar);
         mainBox->addView(bottomBar);

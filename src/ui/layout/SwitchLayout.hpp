@@ -12,7 +12,7 @@ namespace beiklive
     {
     public:
         SwitchLayout();
-        ~SwitchLayout();
+        ~SwitchLayout() = default;
 
         void refreshGameList(const GameList& gameList) override;
 

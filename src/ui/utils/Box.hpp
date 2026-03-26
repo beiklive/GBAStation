@@ -18,7 +18,7 @@ namespace beiklive
         void showFooter(bool show);
         void showBackground(bool show);
         void showShader(bool show);
-
+        brls::Box* getContentBox() { return contentBox; }
 
     private:
         // 背景层
@@ -30,6 +30,7 @@ namespace beiklive
         brls::Box *mainBox;
         brls::Box *contentBox; // 内容层，页头和页脚之间的部分
         void setupMainBox();
+        void setupContentBox();
         // 页头
         void setupHeader();
         beiklive::HeaderBar* header;
