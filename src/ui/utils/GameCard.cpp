@@ -11,8 +11,6 @@ namespace beiklive
     {
         m_layoutType = type;
         m_gameEntry = gameEntry;
-
-        brls::Application::getAudioPlayer()
     }
 
     GameCard::~GameCard()
