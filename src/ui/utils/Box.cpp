@@ -58,7 +58,6 @@ namespace beiklive
 
     void Box::setupBackgroundLayer()
     {
-        if(backgroundLayer) return; // already setup
         #undef ABSOLUTE
         backgroundLayer = new brls::Image();
         backgroundLayer->setFocusable(false);
@@ -91,7 +90,6 @@ namespace beiklive
 
     void Box::setupMainBox()
     {
-        if(mainBox) return; // already setup
 
         mainBox = new brls::Box(brls::Axis::COLUMN);
         mainBox->setFocusable(false);
@@ -107,7 +105,6 @@ namespace beiklive
 
     void Box::setupContentBox()
     {
-        if(contentBox) return; // already setup
 
         contentBox = new brls::Box(brls::Axis::COLUMN);
         contentBox->setFocusable(false);
@@ -124,22 +121,16 @@ namespace beiklive
 
     void Box::setupHeader()
     {
-        if(header) return; // already setup
         header = new beiklive::HeaderBar();
-        // HIDE_BRLS_BACKGROUND(header);
-
         header->setTitle("");
         mainBox->addView(header);
     }
 
     void Box::setupFooter()
     {
-        if(bottomBar) return; // already setup
 
-        #undef ABSOLUTE
         bottomBar = new brls::BottomBar();
         bottomBar->setWidthPercentage(100);
-        // HIDE_BRLS_BACKGROUND(bottomBar);
         mainBox->addView(bottomBar);
     }
 }

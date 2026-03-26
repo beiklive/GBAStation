@@ -75,25 +75,16 @@ namespace beiklive
 
     void FileListView::setListItems(ListItemList *items)
     {
-        ASYNC_RETAIN
-        brls::async([ASYNC_TOKEN, items]()
+        if (m_dataSource)
+            m_dataSource->setListItems(items);
+
+        // UI 更新需要在主线程执行，使用 brls::sync 确保这一点
+        brls::sync([this]()
         {
-            // 模拟后台线程处理数据（如文件扫描）
-            // std::this_thread::sleep_for(std::chrono::milliseconds(100)); // 模拟延迟
-
-            ASYNC_RELEASE
-            // 更新数据源
-            if (m_dataSource)
-                m_dataSource->setListItems(items);
-
-            // UI 更新需要在主线程执行，使用 brls::sync 确保这一点
-            brls::sync([this]()
-            {
-                if (m_recycler)
-                    m_recycler->reloadData();
-                // 防止焦点乱飞
-                brls::Application::giveFocus(m_recycler);
-            });
+            if (m_recycler)
+                m_recycler->reloadData();
+            // 防止焦点乱飞
+            brls::Application::giveFocus(m_recycler);
         });
     }
 

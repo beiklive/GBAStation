@@ -6,8 +6,8 @@
 #include "enums.h"     // 枚举类型定义
 
 #include "Utils/ConfigManager.hpp"
-
 #include "UI/utils/Box.hpp"
+
 
 using namespace brls::literals; // for _i18n
 
@@ -177,6 +177,17 @@ namespace beiklive // 结构体
     };
 
     typedef std::vector<ListItem> ListItemList; // 列表数据类型定义
+
+
+    struct DirListData
+    {
+        std::string fileName; // 文件名（不含路径）
+        std::string fullPath; // 完整路径
+        std::string iconPath; // 图标路径
+        beiklive::enums::FileType itemType; // 文件类型
+        std::string fileSize;  // 文件大小（字节），目录为0
+        size_t childCount;      // 子项数量，仅目录有效，文件为0
+    };
 
 } // namespace beiklive
 

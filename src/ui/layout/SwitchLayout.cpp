@@ -17,7 +17,6 @@ namespace beiklive
         m_cardRow->setGrow(0.0f);
         m_cardRow->setHeight(300.f);
         m_frame->setContentView(m_cardRow);
-        m_frame->setGrow(1.0f);
 
         m_functionArea = new brls::Box(brls::Axis::ROW);
         m_functionArea->setGrow(1.0f);
@@ -28,9 +27,9 @@ namespace beiklive
         buildFunctionArea();
     }
 
-    void SwitchLayout::refreshGameList(GameList *gameList)
+    void SwitchLayout::refreshGameList(beiklive::GameList *gameList)
     {
-        GameList copy = *gameList;
+        beiklive::GameList copy = *gameList;
         brls::sync([this, copy = std::move(copy)]() mutable
         {
             buildCardRow(&copy);
@@ -38,7 +37,7 @@ namespace beiklive
         });
     }
 
-    void SwitchLayout::buildCardRow(GameList *gameList)
+    void SwitchLayout::buildCardRow(beiklive::GameList *gameList)
     {
         m_cardRow->clearViews(true);
         for (auto &gameEntry : *gameList)

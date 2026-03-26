@@ -23,20 +23,20 @@ namespace beiklive
     private:
         // 背景层
         void setupBackgroundLayer();
-        brls::Image* backgroundLayer;
+        brls::Image* backgroundLayer = nullptr;
         // Shader层
         void setupShaderLayer();
-        brls::Rectangle* shaderLayer;
-        brls::Box *mainBox;
-        brls::Box *contentBox; // 内容层，页头和页脚之间的部分
+        brls::Rectangle* shaderLayer = nullptr;
+        brls::Box *mainBox = nullptr;
+        brls::Box *contentBox = nullptr; // 内容层，页头和页脚之间的部分
         void setupMainBox();
         void setupContentBox();
         // 页头
         void setupHeader();
-        beiklive::HeaderBar* header;
+        beiklive::HeaderBar* header = nullptr;
         // 页脚
         void setupFooter();
-        brls::BottomBar* bottomBar;
+        brls::BottomBar* bottomBar = nullptr;
     };
 
 }

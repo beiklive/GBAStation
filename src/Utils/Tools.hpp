@@ -1,0 +1,35 @@
+#pragma once
+
+#include "core/common.h"
+#include <filesystem>
+#include <string>
+
+namespace fs = std::filesystem;
+
+namespace beiklive::tools {
+
+// 获取文件扩展名（小写形式，不含点号）
+std::string getFileExtension(const fs::path& path);
+
+// 主函数：根据文件路径判断类型
+beiklive::enums::FileType getFileType(const fs::path& path);
+
+// 传入文件路径，提取文件名（包含扩展名）
+std::string getFileName(const fs::path& path);
+
+// 传入“文件名+后缀”，提取文件名称部分（去除最后一个扩展名）
+std::string getFileNameWithoutExtension(const std::string& filenameWithExt);
+
+// 统计目录下所有直接子项（文件和目录）的总数量
+size_t countEntries(const fs::path& path);
+
+// 获取文件大小并转换为可读的字符串（B/KB/MB/GB等）
+std::string getFileSizeString(const fs::path& path);
+
+// 返回给定路径的父路径（字符串形式）
+std::string getParentPath(const std::string& path);
+
+// 根据文件类型返回对应的图标资源路径
+std::string getIconPath(const std::string& path);
+
+} // namespace beiklive::tools
