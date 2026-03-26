@@ -7,10 +7,10 @@ namespace beiklive
     static constexpr float COVER_WIDTH_SWITCH = 220.f;  // 卡片图片宽度
     static constexpr float COVER_HEIGHT_SWITCH = 220.f; // 卡片图片高度
 
-    GameCard::GameCard(beiklive::enums::ThemeLayout type, GameEntry *gameEntry)
+    GameCard::GameCard(beiklive::enums::ThemeLayout type, beiklive::GameEntry gameEntry)
     {
         m_layoutType = type;
-        m_gameEntry = gameEntry;
+        m_gameEntry = std::move(gameEntry);
     }
 
     GameCard::~GameCard()
@@ -53,7 +53,7 @@ namespace beiklive
         m_coverImage->setHeight(COVER_HEIGHT_SWITCH);
         m_coverImage->setScalingType(brls::ImageScalingType::FILL);
         m_coverImage->setInterpolation(brls::ImageInterpolation::LINEAR);
-        m_coverImage->setImageFromFile(m_gameEntry->logoPath);
+        m_coverImage->setImageFromFile(m_gameEntry.logoPath);
         m_coverImage->setHighlightPadding(3.f);
         m_coverImage->setHideHighlightBackground(true);
         m_coverImage->setShadowVisibility(true);
@@ -64,7 +64,7 @@ namespace beiklive
         m_titleLabel = new brls::Label();
         m_titleLabel->setWidth(CARD_WIDTH_SWITCH * 1.5f); // 标题宽度略大于卡片宽度，避免过早截断
         m_titleLabel->setFontSize(26.f);
-        m_titleLabel->setText(m_gameEntry->title);
+        m_titleLabel->setText(m_gameEntry.title);
         m_titleLabel->setTextColor(GET_THEME_COLOR("beiklive/CardText/color"));
         m_titleLabel->setSingleLine(true);
         m_titleLabel->setAnimated(true);
@@ -81,6 +81,7 @@ namespace beiklive
             brls::BUTTON_A,
             [this](brls::View *)
             {
+                brls::Application::notify("正在启动 " + m_gameEntry.title + "...");
                 triggerClickBounce();
                 return true;
             }, /*hidden=*/false, /*repeat=*/false, brls::SOUND_CLICK);
@@ -145,7 +146,7 @@ namespace beiklive
                         m_clickScale = 1.0f;
                         m_clickAnimating = false;
                         if (onCardClicked)
-                            onCardClicked(*m_gameEntry);
+                            onCardClicked(m_gameEntry);
                     }
                 }
                 invalidate();

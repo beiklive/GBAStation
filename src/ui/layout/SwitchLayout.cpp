@@ -42,20 +42,19 @@ namespace beiklive
         m_cardRow->clearViews(true);
         for (auto &gameEntry : *gameList)
         {
-            auto *gameCard = new beiklive::GameCard(beiklive::enums::ThemeLayout::SWITCH_THEME, &gameEntry);
+            auto *gameCard = new beiklive::GameCard(beiklive::enums::ThemeLayout::SWITCH_THEME, gameEntry);
             gameCard->applyThemeLayout();
             gameCard->setMarginRight(10.f);
             gameCard->setMarginLeft(10.f);
             gameCard->onCardClicked = [this](beiklive::GameEntry &entry)
             {
-                brls::Application::notify("正在启动 " + entry.title + "...");
                 if (onGameActivated)
                     onGameActivated(entry);
             };
             gameCard->registerAction(
                 "游戏选项",
                 brls::BUTTON_X,
-                [this, &gameEntry](brls::View *)
+                [this, gameEntry](brls::View *)
                 {
                     if (onGameOptions)
                         onGameOptions(gameEntry);
