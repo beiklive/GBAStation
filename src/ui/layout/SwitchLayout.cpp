@@ -48,7 +48,7 @@ namespace beiklive
             gameCard->setMarginLeft(10.f);
             gameCard->onCardClicked = [this](beiklive::GameEntry &entry)
             {
-                brls::Logger::info("Game card clicked: " + entry.title);
+                brls::Application::notify("正在启动 " + entry.title + "...");
                 if (onGameActivated)
                     onGameActivated(entry);
             };
