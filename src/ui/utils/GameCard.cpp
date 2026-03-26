@@ -83,7 +83,7 @@ namespace beiklive
             {
                 triggerClickBounce();
                 return true;
-            });
+            }, /*hidden=*/false, /*repeat=*/false, brls::SOUND_CLICK);
     }
 
     void GameCard::onChildFocusGained(brls::View *directChild, brls::View *focusedView)

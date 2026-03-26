@@ -75,9 +75,9 @@ namespace beiklive
                 m_clickT         = 0.0f;
                 m_clickScale     = 1.0f;
                 this->invalidate();
-            }
+            } 
             return true;
-        });
+        },/*hidden=*/false, /*repeat=*/false, brls::SOUND_CLICK);
         addGestureRecognizer(new brls::TapGestureRecognizer(this));
     }
 
