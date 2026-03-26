@@ -1,5 +1,5 @@
 #include "core/common.h"
-#include "UI/page/StartPage.hpp"
+#include "ui/page/StartPage.hpp"
 #if defined(BOREALIS_USE_OPENGL)
 // Needed for the OpenGL driver to work
 extern "C" unsigned int sceLibcHeapSize = 2 * 1024 * 1024;

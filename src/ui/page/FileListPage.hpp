@@ -1,8 +1,8 @@
 #pragma once
 #include "core/common.h"
-#include "UI/utils/Box.hpp"
+#include "ui/utils/Box.hpp"
 
-#include "UI/utils/FileListView.hpp"
+#include "ui/utils/FileListView.hpp"
 #include "Utils/Tools.hpp"
 namespace beiklive
 {

@@ -1,9 +1,9 @@
 #pragma once 
 
 #include "core/common.h"
-#include "UI/layout/SwitchLayout.hpp"
-#include "UI/page/FileListPage.hpp"
-#include "UI/utils/Box.hpp"
+#include "ui/layout/SwitchLayout.hpp"
+#include "ui/page/FileListPage.hpp"
+#include "ui/utils/Box.hpp"
 
 
 class StartPage : public beiklive::Box

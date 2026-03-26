@@ -3,8 +3,8 @@
 #include <borealis.hpp>
 #include "core/common.h"
 #include "Layout.hpp"
-#include "UI/utils/GameCard.hpp"
-#include "UI/utils/RoundButton.hpp"
+#include "ui/utils/GameCard.hpp"
+#include "ui/utils/RoundButton.hpp"
 
 // switch 风格布局，模仿 Switch 主界面设计，顶部为横向游戏列表，底部为功能区域
 
