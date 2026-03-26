@@ -21,14 +21,14 @@ namespace beiklive::enums
         ZIP_FILE,   // ZIP后缀
         GBA_ROM,    // GBA文件
         GBC_ROM,    // GBC文件
-        GB_ROM,     // GB文件
+        GB_ROM     // GB文件
 
     };
     // 主题布局类型 默认为switch布局，后续会添加天马布局
     enum class ThemeLayout
     {
         DEFAULT,
-        SWITCH,
+        SWITCH
     };
 
     // 白名单/黑名单过滤模式
