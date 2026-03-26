@@ -584,7 +584,7 @@ void Application::navigate(FocusDirection direction, bool repeating)
     // No view to focus at the end of the traversal: wiggle and return
     if (!nextFocus)
     {
-        Application::getAudioPlayer()->play(SOUND_FOCUS_ERROR);
+        // Application::getAudioPlayer()->play(SOUND_FOCUS_ERROR);
         Application::currentFocus->shakeHighlight(direction);
         return;
     }

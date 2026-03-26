@@ -281,7 +281,7 @@ void ScrollingFrame::naturalScrollingButtonProcessing(FocusDirection focusDirect
     {
         *repeat = true;
         Application::getCurrentFocus()->shakeHighlight(focusDirection);
-        Application::getAudioPlayer()->play(SOUND_FOCUS_ERROR);
+        // Application::getAudioPlayer()->play(SOUND_FOCUS_ERROR);
     }
 }
 
