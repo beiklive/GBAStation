@@ -78,14 +78,10 @@ namespace beiklive
         if (m_dataSource)
             m_dataSource->setListItems(items);
 
-        // UI 更新需要在主线程执行，使用 brls::sync 确保这一点
-        brls::sync([this]()
-        {
-            if (m_recycler)
-                m_recycler->reloadData();
-            // 防止焦点乱飞
-            brls::Application::giveFocus(m_recycler);
-        });
+        // 调用方已保证在主线程（brls::sync）中调用此函数，直接刷新
+        if (m_recycler)
+            m_recycler->reloadData();
+        brls::Application::giveFocus(m_recycler);
     }
 
     void FileListView::Init()

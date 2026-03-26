@@ -29,7 +29,12 @@ std::string getFileSizeString(const fs::path& path);
 // 返回给定路径的父路径（字符串形式）
 std::string getParentPath(const std::string& path);
 
-// 根据文件类型返回对应的图标资源路径
+// 根据文件类型返回对应的图标资源路径（已知类型时直接传入，跳过文件系统探测）
+std::string getIconPath(beiklive::enums::FileType type);
+// 根据文件路径自动检测类型并返回图标资源路径
 std::string getIconPath(const std::string& path);
+
+// 获取系统逻辑磁盘驱动器列表（Windows: C:\、D:\ 等；其他平台: {"/"}）
+std::vector<std::string> getLogicalDrives();
 
 } // namespace beiklive::tools

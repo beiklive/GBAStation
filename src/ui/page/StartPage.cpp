@@ -108,11 +108,12 @@ void StartPage::_openFileList()
     brls::Logger::debug("Opening File List Page");
     m_fileListPage = new beiklive::FileListPage();
     m_fileListPage->setFliter(beiklive::enums::FilterMode::None, {".gba", ".gbc", ".gb"});
-    m_fileListPage->setPath("E:\\BaiduNetdiskDownload");
     auto *frame = new brls::AppletFrame(m_fileListPage);
     HIDE_BRLS_BAR(frame);
     brls::sync([this, frame]()
                {
         brls::Logger::info("Pushing FileListPage activity");
-        brls::Application::pushActivity(new brls::Activity(frame)); });
+        brls::Application::pushActivity(new brls::Activity(frame));
+        m_fileListPage->showDriveList(); // Activity 入栈后再加载，确保 recycler 已在视图树中
+    });
 }

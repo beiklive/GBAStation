@@ -14,6 +14,7 @@ namespace beiklive::enums
     enum class FileType
     {
         NONE,
+        DRIVE,      // 磁盘驱动器（Windows: C:\、D:\ 等）
         DIRECTORY,
         NORMAL_FILE,
         IMAGE_FILE, // PNG后缀

@@ -1,5 +1,9 @@
 #include "Tools.hpp"
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 #include <algorithm>
 #include <cctype>
 #include <iomanip>
@@ -52,11 +56,15 @@ std::string getFileNameWithoutExtension(const std::string& filenameWithExt) {
 }
 
 size_t countEntries(const fs::path& path) {
-    if (!fs::exists(path) || !fs::is_directory(path))
+    std::error_code ec;
+    if (!fs::exists(path, ec) || !fs::is_directory(path, ec))
         return 0;
     size_t count = 0;
-    for ([[maybe_unused]] const auto& entry : fs::directory_iterator(path))
+    for ([[maybe_unused]] const auto& entry : fs::directory_iterator(path, fs::directory_options::skip_permission_denied, ec))
+    {
+        if (ec) break;
         ++count;
+    }
     return count;
 }
 
@@ -84,12 +92,12 @@ std::string getParentPath(const std::string& path) {
     return p.parent_path().string();
 }
 
-std::string getIconPath(const std::string& path) {
-    beiklive::enums::FileType type = getFileType(path);
+std::string getIconPath(beiklive::enums::FileType type) {
     std::string path_prefix = "img/ui/" +
                                std::string((brls::Application::getPlatform()->getThemeVariant() == brls::ThemeVariant::DARK) ? "light/" : "dark/");
-
     switch (type) {
+        case beiklive::enums::FileType::DRIVE:
+            return BK_RES(path_prefix + "wenjianjia_64.png");
         case beiklive::enums::FileType::DIRECTORY:
             return BK_RES(path_prefix + "wenjianjia_64.png");
         case beiklive::enums::FileType::IMAGE_FILE:
@@ -105,6 +113,23 @@ std::string getIconPath(const std::string& path) {
         default:
             return BK_RES(path_prefix + "wenjian.png");
     }
+}
+
+std::string getIconPath(const std::string& path) {
+    return getIconPath(getFileType(path));
+}
+
+std::vector<std::string> getLogicalDrives() {
+#ifdef _WIN32
+    char buffer[256] = {};
+    DWORD len = GetLogicalDriveStringsA(sizeof(buffer) - 1, buffer);
+    std::vector<std::string> drives;
+    for (char* p = buffer; len && *p; p += std::strlen(p) + 1)
+        drives.push_back(std::string(p));
+    return drives;
+#else
+    return {"/"};
+#endif
 }
 
 } // namespace beiklive::tools
