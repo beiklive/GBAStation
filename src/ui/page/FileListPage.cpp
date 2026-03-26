@@ -7,7 +7,43 @@ namespace beiklive
     {
         brls::Logger::debug("FileListPage initialized");
         fileListView = new beiklive::FileListView();
-        this->addView(fileListView);
+        fileListView->setItemClickListener([this](const beiklive::ListItem& item){
+            for(const auto& dirItem : m_dirItems)
+            {
+                if(dirItem.fullPath == item.data)
+                {
+                    if(dirItem.itemType == beiklive::enums::FileType::DIRECTORY)
+                    {
+                        // 目录项，进入目录
+                        setPath(item.data);
+                        brls::Logger::info("Directory selected: " + item.data);
+                    }
+                    else
+                    {
+                        // 文件项，执行操作（如启动游戏）
+                        brls::Logger::info("File selected: " + item.data);
+                    }
+                }
+
+            }
+        });
+        fileListView->onItemActionBind = [this](beiklive::ListItemCell& cell)
+        {
+            // 为每个列表项绑定一个设置按键（例如 X 键， 不要给A键设置， A键使用setItemClickListener）
+            cell.registerAction(
+                "返回上一级",
+                brls::BUTTON_X,
+                [this](brls::View*) {
+                    // 此处设置按键功能
+                    navigateUp();
+                    return true;
+                });
+        };
+
+
+
+        fileListView->Init();
+        this->getContentBox()->addView(fileListView);
         this->showHeader(true);
         this->showFooter(true);
         // this->showBackground(false);
@@ -30,7 +66,7 @@ namespace beiklive
     {
         m_currentPath = path;
         m_previousPath = m_currentPath;
-
+        brls::Logger::info("Setting path: " + path);
         ASYNC_RETAIN
         brls::async([ASYNC_TOKEN, path]()
         {

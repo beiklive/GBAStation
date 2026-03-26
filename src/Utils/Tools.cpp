@@ -103,7 +103,7 @@ std::string getIconPath(const std::string& path) {
         case beiklive::enums::FileType::GB_ROM:
             return BK_RES(path_prefix + "icon_gb.png");
         default:
-            return BK_RES(path_prefix + "wenjian_64.png");
+            return BK_RES(path_prefix + "wenjian.png");
     }
 }
 

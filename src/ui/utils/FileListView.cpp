@@ -51,7 +51,7 @@ namespace beiklive
 
     FileListView::FileListView()
     {
-        this->setWireframeEnabled(true);
+        // this->setWireframeEnabled(true);
         this->setAxis(brls::Axis::COLUMN);
         this->setWidthPercentage(100);
         this->setGrow(1.f);
