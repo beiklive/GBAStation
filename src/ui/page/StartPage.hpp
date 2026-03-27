@@ -16,6 +16,7 @@ public:
     ~StartPage();
 
     void Init();
+    void onResume();
 
 
 private:

@@ -17,7 +17,6 @@ namespace beiklive
         ~SwitchLayout() = default;
 
         void refreshGameList(beiklive::GameList gameList) override;
-
         void buildCardRow(beiklive::GameList gameList);
         void buildFunctionArea(); // 构建功能区域，包含游戏库、设置等功能入口
     private:
