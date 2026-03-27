@@ -121,12 +121,19 @@ void StartPage::_openFileList()
             return true;
         });
     m_fileListPage->setFliter(beiklive::enums::FilterMode::None, {".gba", ".gbc", ".gb"});
+
+    m_fileListPage->onFileSelected = [this](beiklive::DirListData dirItem)
+    {
+        brls::Application::notify("选择文件：" + dirItem.fileName);
+    };
+
+
     auto *frame = new brls::AppletFrame(m_fileListPage);
     HIDE_BRLS_BAR(frame);
     brls::sync([this, frame]()
-               {
-                   brls::Logger::info("Pushing FileListPage activity");
-                   brls::Application::pushActivity(new brls::Activity(frame));
-                   m_fileListPage->showDriveList(); // Activity 入栈后再加载，确保 recycler 已在视图树中
-               });
+    {
+        brls::Logger::info("Pushing FileListPage activity");
+        brls::Application::pushActivity(new brls::Activity(frame));
+        m_fileListPage->showDriveList(); // Activity 入栈后再加载，确保 recycler 已在视图树中
+    });
 }

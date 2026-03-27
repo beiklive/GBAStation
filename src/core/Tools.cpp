@@ -70,7 +70,7 @@ size_t countEntries(const fs::path& path) {
 
 std::string getFileSizeString(const fs::path& path) {
     if (!fs::exists(path) || !fs::is_regular_file(path))
-        return "0 B";
+        return " ";
 
     std::uintmax_t size = fs::file_size(path);
     const char* units[] = {"B", "KB", "MB", "GB", "TB", "PB"};
@@ -96,8 +96,8 @@ std::string getIconPath(beiklive::enums::FileType type) {
     std::string path_prefix = "img/ui/" +
                                std::string((brls::Application::getPlatform()->getThemeVariant() == brls::ThemeVariant::DARK) ? "light/" : "dark/");
     switch (type) {
+        case beiklive::enums::FileType::NONE:
         case beiklive::enums::FileType::DRIVE:
-            return BK_RES(path_prefix + "wenjianjia_64.png");
         case beiklive::enums::FileType::DIRECTORY:
             return BK_RES(path_prefix + "wenjianjia_64.png");
         case beiklive::enums::FileType::IMAGE_FILE:

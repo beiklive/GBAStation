@@ -6,6 +6,8 @@
 #include "ui/utils/Box.hpp"
 
 
+// 起始页，所有页面的通用接口在这里定义调用
+
 class StartPage : public beiklive::Box
 {
 public:

@@ -16,12 +16,19 @@ namespace beiklive
                        dirItem.itemType == beiklive::enums::FileType::DRIVE)
                     {
                         setPath(item.data);
-                        brls::Logger::info("Entering: " + item.data);
+                        brls::Logger::debug("Entering: " + item.data);
+                    }else if(dirItem.itemType == beiklive::enums::FileType::NONE)
+                    {
+                        // 这是返回上一级的特殊项
+                        navigateUp();
+                        brls::Logger::debug("Navigating up from: " + item.data);
                     }
                     else
                     {
-                        // 文件项，执行操作（如启动游戏）
-                        brls::Logger::info("File selected: " + item.data);
+                        // 文件项，执行操作（如启动游戏、查看图片）
+                        brls::Logger::debug("File selected: " + item.data);
+                        if(onFileSelected)
+                            onFileSelected(dirItem);
                     }
                     break;
                 }
@@ -67,28 +74,35 @@ namespace beiklive
 
     void FileListPage::setPath(const std::string path)
     {
-        m_currentPath = path;
         m_previousPath = m_currentPath;
+        m_currentPath = path;
         m_isAtDriveList = false;
-        brls::Logger::info("Setting path: " + path);
-        brls::Application::notify("正在加载目录: " + path);
+        brls::Logger::debug("Setting path: " + m_currentPath);
+        brls::Logger::debug("Previous path: " + m_previousPath);
         ASYNC_RETAIN
         brls::async([ASYNC_TOKEN, path]()
         {
             try {
-            refreshDirList(path);
-            beiklive::ListItemList *items = new beiklive::ListItemList();
-            for (const auto &dirItem : m_dirItems)
-            {
-                items->push_back({dirItem.fileName, dirItem.fileSize, dirItem.iconPath, dirItem.fullPath});
-            }
-            
-            ASYNC_RELEASE
-            brls::sync([this, items]()
-            {
-                // 构建新的列表数据
-                fileListView->setListItems(items);
-            });
+                refreshDirList(path);
+                beiklive::ListItemList *items = new beiklive::ListItemList();
+                for (const auto &dirItem : m_dirItems)
+                {
+                    // if(dirItem.itemType == beiklive::enums::FileType::NONE)
+                    // {
+                    //     items->push_back({dirItem.fileName, dirItem.fileSize, dirItem.iconPath, dirItem.fullPath});
+                    //     continue;
+                    // }
+
+                    bool isDir = (dirItem.itemType == beiklive::enums::FileType::DIRECTORY);
+                    items->push_back({dirItem.fileName, isDir? std::to_string(dirItem.childCount) + " items" : dirItem.fileSize, dirItem.iconPath, dirItem.fullPath});
+                }
+
+                ASYNC_RELEASE
+                brls::sync([this, items]()
+                {
+                    // 构建新的列表数据
+                    fileListView->setListItems(items);
+                });
             } catch (const std::exception& e) {
                 brls::Logger::error("refreshDirList exception: " + std::string(e.what()));
                 brls::Application::notify("refreshDirList exception: " + std::string(e.what()));
@@ -189,6 +203,19 @@ namespace beiklive
         m_currentPath = dirPath;
         // 刷新目录列表
         m_dirItems.clear();
+        std::string parentPath = fs::path(m_currentPath).parent_path().string();
+        if (parentPath != m_currentPath)
+        {
+            m_dirItems.push_back(
+                beiklive::DirListData{
+                    "..",
+                    m_currentPath,
+                    beiklive::tools::getIconPath(beiklive::enums::FileType::NONE),
+                    beiklive::enums::FileType::NONE,
+                    "返回上一级",
+                    0,
+                });
+        }
         for (const auto &entry : fs::directory_iterator(dirPath, fs::directory_options::skip_permission_denied, ec))
         {
             if (ec) { ec.clear(); continue; }
@@ -209,12 +236,14 @@ namespace beiklive
                 beiklive::DirListData{
                     name,
                     fullPath,
-                    beiklive::tools::getIconPath(fullPath),
+                    beiklive::tools::getIconPath(beiklive::tools::getFileType(fullPath)),
                     beiklive::tools::getFileType(fullPath),
                     beiklive::tools::getFileSizeString(fullPath),
                     beiklive::tools::countEntries(fullPath),
                 });
         }
+
+
     }
 
 } // namespace beiklive

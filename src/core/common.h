@@ -5,7 +5,7 @@
 #include "constexpr.h" // 一些常量定义
 #include "enums.h"     // 枚举类型定义
 
-#include "Utils/ConfigManager.hpp"
+#include "ConfigManager.hpp"
 
 
 using namespace brls::literals; // for _i18n

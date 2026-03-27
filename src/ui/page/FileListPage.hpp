@@ -3,7 +3,8 @@
 #include "ui/utils/Box.hpp"
 
 #include "ui/utils/FileListView.hpp"
-#include "Utils/Tools.hpp"
+#include "core/Tools.hpp"
+#include <functional>
 namespace beiklive
 {
 
@@ -35,7 +36,8 @@ namespace beiklive
         void setPath(const std::string path);
         void showDriveList(); // 显示磁盘/驱动器列表
 
-
+        //打开文件时的回调
+        std::function<void(beiklive::DirListData)> onFileSelected;
 
 
 
