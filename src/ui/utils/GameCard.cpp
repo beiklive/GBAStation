@@ -12,6 +12,8 @@ namespace beiklive
         m_layoutType = type;
         m_gameEntry = std::move(gameEntry);
         brls::Logger::debug("GameCard created for game: " + m_gameEntry.title);
+        addGestureRecognizer(new brls::TapGestureRecognizer(this));
+    
     }
 
     GameCard::~GameCard()
