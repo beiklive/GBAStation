@@ -39,21 +39,24 @@ void StartPage::_useSwitchLayout()
     switchLayout = new beiklive::SwitchLayout();
     switchLayout->setGrow(1.f);
     // TODO: 后续改为从数据库读取数据 参数为  游戏路径、标题、封面路径
-    beiklive::GameList gameList = {
-        {"path/to/game1.exe", "Game 1", BK_RES("img/test/test.png")},
-        {"path/to/game2.exe", "Game 2", BK_RES("img/test/test.png")},
-        {"path/to/game3.exe", "Game 3", BK_RES("img/test/test.png")},
-        {"path/to/game4.exe", "Game 4", BK_RES("img/test/test.png")},
-        {"path/to/game5.exe", "Game 5", BK_RES("img/test/test.png")},
-        {"path/to/game6.exe", "Game 6", BK_RES("img/test/test.png")},
-        {"path/to/game7.exe", "Game 7", BK_RES("img/test/test.png")},
-        {"path/to/game8.exe", "Game 8", BK_RES("img/test/test.png")},
-        {"path/to/game9.exe", "Game 9", BK_RES("img/test/test.png")},
-        {"path/to/game10.exe", "Game 10", BK_RES("img/test/test.png")}};
-    switchLayout->refreshGameList(&gameList);
-    switchLayout->onGameActivated = [](const beiklive::GameEntry &entry)
+
+
+    beiklive::GameList recent = beiklive::GameDB->getRecentPlayed(10); // 获取最近玩过的10款游戏
+
+    switchLayout->refreshGameList(recent);
+    switchLayout->onGameActivated = [this](const beiklive::GameEntry &entry)
     {
         brls::Logger::info("Game activated: " + entry.title);
+        {
+            m_gamePage = new beiklive::GamePage(entry);
+            auto *frame = new brls::AppletFrame(m_gamePage);
+            HIDE_BRLS_BAR(frame);
+            brls::Logger::info("Pushing GamePage activity for: " + entry.title);
+            brls::sync([this, frame]()
+            {
+                brls::Application::pushActivity(new brls::Activity(frame));
+            });
+        }
     };
     switchLayout->onGameOptions = [](const beiklive::GameEntry &entry)
     {
@@ -63,18 +66,18 @@ void StartPage::_useSwitchLayout()
     switchLayout->onGameLibraryOpened = [this]()
     {
         brls::Logger::info("Game Library opened");
-        beiklive::GameList gameList2 = {
-            {"path/to/game1.exe", "subGame 1", BK_RES("img/test/test2.png")},
-            {"path/to/game2.exe", "subGame 2", BK_RES("img/test/test2.png")},
-            {"path/to/game3.exe", "subGame 3", BK_RES("img/test/test2.png")},
-            {"path/to/game4.exe", "subGame 4", BK_RES("img/test/test2.png")},
-            {"path/to/game5.exe", "subGame 5", BK_RES("img/test/test2.png")},
-            {"path/to/game6.exe", "subGame 6", BK_RES("img/test/test2.png")},
-            {"path/to/game7.exe", "subGame 7", BK_RES("img/test/test2.png")},
-            {"path/to/game8.exe", "subGame 8", BK_RES("img/test/test2.png")},
-            {"path/to/game9.exe", "subGame 9", BK_RES("img/test/test2.png")},
-            {"path/to/game10.exe", "subGame 10", BK_RES("img/test/test2.png")}};
-        switchLayout->refreshGameList(&gameList2);
+        // beiklive::GameList gameList2 = {
+        //     {"path/to/game1.exe", "subGame 1", BK_RES("img/test/test2.png")},
+        //     {"path/to/game2.exe", "subGame 2", BK_RES("img/test/test2.png")},
+        //     {"path/to/game3.exe", "subGame 3", BK_RES("img/test/test2.png")},
+        //     {"path/to/game4.exe", "subGame 4", BK_RES("img/test/test2.png")},
+        //     {"path/to/game5.exe", "subGame 5", BK_RES("img/test/test2.png")},
+        //     {"path/to/game6.exe", "subGame 6", BK_RES("img/test/test2.png")},
+        //     {"path/to/game7.exe", "subGame 7", BK_RES("img/test/test2.png")},
+        //     {"path/to/game8.exe", "subGame 8", BK_RES("img/test/test2.png")},
+        //     {"path/to/game9.exe", "subGame 9", BK_RES("img/test/test2.png")},
+        //     {"path/to/game10.exe", "subGame 10", BK_RES("img/test/test2.png")}};
+        // switchLayout->refreshGameList(&gameList2);
     };
 
     switchLayout->onFileBrowserOpened = [this]()

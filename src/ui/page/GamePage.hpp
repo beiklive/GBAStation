@@ -14,10 +14,12 @@ namespace beiklive
     {
     public:
     GamePage(beiklive::DirListData gameData);
+    GamePage(beiklive::GameEntry gameEntry);
     ~GamePage();
     
     void PageInit();
-    void GameEntryInitialize(); // 根据 GameEntry 数据初始化游戏视图，如加载游戏资源等
+    void GameEntryInitialize();
+    void updateGameCount();
     void GameViewInitialize();
     void GameMenuInitialize();
     

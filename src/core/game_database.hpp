@@ -77,6 +77,9 @@ namespace beiklive
         // 设置数据库文件路径
         void setFilePath(const std::string &filepath);
 
+        // 获取最近玩的游戏列表，按 lastPlayed 降序排序，返回前 count 个条目
+        std::vector<GameEntry> getRecentPlayed(int count) const;
+
     private:
         // 内部非线程安全的操作，调用时需持有写锁
         void doUpsert(const GameEntry &entry);

@@ -160,7 +160,7 @@ uint32_t crc32(const std::string& path)
 
     while (file.read(buffer, sizeof(buffer)) || file.gcount())
     {
-        for (size_t i = 0; i < file.gcount(); i++)
+        for (long long int i = 0; i < file.gcount(); i++)
         {
             crc ^= (uint8_t)buffer[i];
             for (int j = 0; j < 8; j++)

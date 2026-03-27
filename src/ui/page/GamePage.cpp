@@ -23,10 +23,44 @@ namespace beiklive
         }
     }
 
+    GamePage::GamePage(beiklive::GameEntry gameEntry)
+    {
+        m_gameEntry = std::move(gameEntry);
+        // 检查文件是否存在
+        if (!beiklive::tools::isFileExists(m_gameEntry.path)) {
+            brls::Application::notify("文件不存在: " + m_gameEntry.title);
+            // 这里可以选择返回上一级或显示错误界面
+            brls::sync([this]()
+            {
+                brls::Application::popActivity();
+            });
+        }else{
+            PageInit();
+            // GameEntry 已经包含了游戏的完整信息，可以直接使用，无需再处理一次
+            updateGameCount();
+            GameViewInitialize();
+            GameMenuInitialize();
+        }
+    }
+
+
     GamePage::~GamePage()
     {
-
+        brls::Logger::info("GamePage destructor called for game: " + m_gameEntry.title);
     }
+
+    void GamePage::updateGameCount()
+    {
+        auto& db = beiklive::GameDB; // 获取全局游戏数据库实例
+        // 更新运行时间戳
+        m_gameEntry.lastPlayed = beiklive::tools::getTimestampString();
+        m_gameEntry.playCount += 1; // 玩过的次数加1
+        brls::Logger::info("GamePage 更新游戏条目：lastPlayed={}, playCount={}", m_gameEntry.lastPlayed, m_gameEntry.playCount);
+        // 提交一次数据库更改，确保在游戏过程中数据被保存，即使中途崩溃也不会丢失
+        db->upsert(m_gameEntry);
+        db->flush();
+    }
+
     void GamePage::GameEntryInitialize()
     {
         auto& db = beiklive::GameDB; // 获取全局游戏数据库实例
@@ -49,13 +83,7 @@ namespace beiklive
             m_gameEntry = foundByCrc.value();
         }
 
-        // 更新运行时间戳
-        m_gameEntry.lastPlayed = beiklive::tools::getTimestampString();
-        m_gameEntry.playCount += 1; // 玩过的次数加1
-        brls::Logger::info("GamePage 更新游戏条目：lastPlayed={}, playCount={}", m_gameEntry.lastPlayed, m_gameEntry.playCount);
-        // 提交一次数据库更改，确保在游戏过程中数据被保存，即使中途崩溃也不会丢失
-        db->upsert(m_gameEntry);
-        db->flush();
+        updateGameCount();
         brls::Logger::info("GamePage 游戏条目已保存到数据库: {}", m_gameData.fullPath);
     }
 

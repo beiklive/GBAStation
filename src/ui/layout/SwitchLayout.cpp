@@ -27,21 +27,19 @@ namespace beiklive
         buildFunctionArea();
     }
 
-    void SwitchLayout::refreshGameList(beiklive::GameList *gameList)
+    void SwitchLayout::refreshGameList(beiklive::GameList gameList)
     {
-
-        beiklive::GameList copy = *gameList;
-        brls::sync([this, copy = std::move(copy)]() mutable
+        brls::sync([this, gameList]() mutable
         {
-            buildCardRow(&copy);
+            buildCardRow(gameList);
             brls::Application::giveFocus(m_cardRow->getDefaultFocus());
         });
     }
 
-    void SwitchLayout::buildCardRow(beiklive::GameList *gameList)
+    void SwitchLayout::buildCardRow(beiklive::GameList gameList)
     {
         m_cardRow->clearViews(true);
-        for (auto &gameEntry : *gameList)
+        for (auto gameEntry : gameList)
         {
             auto *gameCard = new beiklive::GameCard(beiklive::enums::ThemeLayout::SWITCH_THEME, gameEntry);
             gameCard->applyThemeLayout();

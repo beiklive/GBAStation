@@ -26,7 +26,7 @@ namespace beiklive
 
     void FileListDataSource::didSelectRowAt(brls::RecyclerFrame *recycler, brls::IndexPath indexPath)
     {
-        if(onItemClicked && m_items && indexPath.row < m_items->size())
+        if(onItemClicked && m_items && indexPath.row < (int)m_items->size())
         {
             const ListItem &item = m_items->at(indexPath.row);
             onItemClicked(item);

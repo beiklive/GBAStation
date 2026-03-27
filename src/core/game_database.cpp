@@ -4,7 +4,6 @@
 
 namespace beiklive
 {
-    // JSON 转换函数实现（保持不变）
     void to_json(nlohmann::json &j, const GameEntry &entry)
     {
         j = nlohmann::json{
@@ -15,19 +14,44 @@ namespace beiklive
             {"playTime", entry.playTime},
             {"platform", entry.platform},
             {"lastPlayed", entry.lastPlayed},
-            {"crc32", entry.crc32}};
+            {"crc32", entry.crc32},
+            {"cheatPath", entry.cheatPath},
+            {"overlayPath", entry.overlayPath},
+            {"shaderPath", entry.shaderPath},
+            {"overlayEnabled", entry.overlayEnabled},
+            {"shaderEnabled", entry.shaderEnabled},
+            {"displayMode", entry.displayMode},
+            {"integerAspectRatio", entry.integerAspectRatio},
+            {"customScale", entry.customScale},
+            {"customOffsetX", entry.customOffsetX},
+            {"customOffsetY", entry.customOffsetY},
+            {"shaderParaNames", entry.shaderParaNames},
+            {"shaderParaValues", entry.shaderParaValues}};
     }
 
     void from_json(const nlohmann::json &j, GameEntry &entry)
     {
-        j.at("path").get_to(entry.path);
-        j.at("title").get_to(entry.title);
-        j.at("logoPath").get_to(entry.logoPath);
-        j.at("playCount").get_to(entry.playCount);
-        j.at("playTime").get_to(entry.playTime);
-        j.at("platform").get_to(entry.platform);
-        j.at("lastPlayed").get_to(entry.lastPlayed);
-        j.at("crc32").get_to(entry.crc32);
+        // 统一使用 value() 并提供默认值，兼容新旧数据
+        entry.path = j.value("path", "");
+        entry.title = j.value("title", "");
+        entry.logoPath = j.value("logoPath", "");
+        entry.playCount = j.value("playCount", 0);
+        entry.playTime = j.value("playTime", 0);
+        entry.platform = j.value("platform", (int)beiklive::enums::EmuPlatform::NONE);
+        entry.lastPlayed = j.value("lastPlayed", "");
+        entry.crc32 = j.value("crc32", 0);
+        entry.cheatPath = j.value("cheatPath", "");
+        entry.overlayPath = j.value("overlayPath", "");
+        entry.shaderPath = j.value("shaderPath", "");
+        entry.overlayEnabled = j.value("overlayEnabled", false);
+        entry.shaderEnabled = j.value("shaderEnabled", false);
+        entry.displayMode = j.value("displayMode", 0);
+        entry.integerAspectRatio = j.value("integerAspectRatio", 1.0f);
+        entry.customScale = j.value("customScale", 1.0f);
+        entry.customOffsetX = j.value("customOffsetX", 0.0f);
+        entry.customOffsetY = j.value("customOffsetY", 0.0f);
+        entry.shaderParaNames = j.value("shaderParaNames", std::vector<std::string>());
+        entry.shaderParaValues = j.value("shaderParaValues", std::vector<float>());
     }
 
     // ==================== GameDatabase 实现（单线程版） ====================
@@ -36,6 +60,7 @@ namespace beiklive
           dirty_(false)
     {
         // 自动保存不再使用后台线程，仅根据模式决定行为
+        loadFromFile(filepath_);
     }
 
     GameDatabase::~GameDatabase()
@@ -178,6 +203,22 @@ namespace beiklive
         filepath_ = filepath;
     }
 
+    std::vector<GameEntry> GameDatabase::getRecentPlayed(int count) const {
+        // 复制所有数据
+        std::vector<GameEntry> result = data_;
+        
+        // 按 lastPlayed 降序排序（字符串格式 "yy-mm-dd hh-mm-ss" 直接比较即可）
+        std::sort(result.begin(), result.end(),
+                [](const GameEntry& a, const GameEntry& b) {
+                    return a.lastPlayed > b.lastPlayed; // 降序，最近的在前面
+                });
+        
+        // 取前 count 条，若不足则全部返回
+        if (result.size() > static_cast<size_t>(count)) {
+            result.resize(count);
+        }
+        return result;
+    }
     // ==================== 私有实现（无锁） ====================
     void GameDatabase::doUpsert(const GameEntry &entry)
     {
