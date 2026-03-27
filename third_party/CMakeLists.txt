@@ -84,24 +84,28 @@ endif ()
 # =========================
 # SQLite（底层 C 库）
 # =========================
-add_library(sqlite3 STATIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/SQLiteCpp/sqlite3/sqlite3.c
-)
+if(PLATFORM_SWITCH)
+    add_library(sqlite3 STATIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/SQLiteCpp/sqlite3/sqlite3.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/SQLiteCpp/sqlite3/sqlite_devkit.cpp
+    )
+else()
+    add_library(sqlite3 STATIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/SQLiteCpp/sqlite3/sqlite3.c
+    )
+endif()
 
 target_include_directories(sqlite3 PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/SQLiteCpp/sqlite3
 )
 
 if(PLATFORM_SWITCH)
-    add_library(sqlite3 STATIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/SQLiteCpp/sqlite3/sqlite_devkit.cpp
-    )
-
     target_compile_definitions(sqlite3 PRIVATE
     SQLITE_THREADSAFE=1          # 保持线程安全
     SQLITE_OS_OTHER=1
     )
 else()
+
     target_compile_definitions(sqlite3 PRIVATE
         SQLITE_THREADSAFE=1
     )
