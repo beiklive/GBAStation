@@ -1,24 +1,33 @@
 #include "GameCard.hpp"
+#include <cmath>
 
 namespace beiklive
 {
-    static constexpr float CARD_WIDTH_SWITCH = 220.f;   // switch卡片宽度
-    static constexpr float CARD_HEIGHT_SWITCH = 270.f;  // switch卡片高度
-    static constexpr float COVER_WIDTH_SWITCH = 220.f;  // 卡片图片宽度
-    static constexpr float COVER_HEIGHT_SWITCH = 220.f; // 卡片图片高度
+    static constexpr float CARD_WIDTH_SWITCH = 220.f;
+    static constexpr float CARD_HEIGHT_SWITCH = 270.f;
+    static constexpr float COVER_WIDTH_SWITCH = 220.f;
+    static constexpr float COVER_HEIGHT_SWITCH = 220.f;
 
-    GameCard::GameCard(beiklive::enums::ThemeLayout type, beiklive::GameEntry gameEntry)
+    GameCard::GameCard(beiklive::enums::ThemeLayout type, beiklive::GameEntry gameEntry, int index)
     {
         m_layoutType = type;
         m_gameEntry = std::move(gameEntry);
+
         brls::Logger::debug("GameCard created for game: " + m_gameEntry.title);
+
         addGestureRecognizer(new brls::TapGestureRecognizer(this));
-    
+
+        // ✅ 入场动画初始化
+        m_enterT = -index * 0.04f;
+        m_enterScale = 0.5f;
+        m_enterAnimating = true;
+
     }
 
     GameCard::~GameCard()
     {
     }
+
     void GameCard::triggerClickBounce()
     {
         m_clickAnimating = true;
@@ -26,6 +35,7 @@ namespace beiklive
         m_clickScale = 1.0f;
         invalidate();
     }
+
     void GameCard::applyThemeLayout()
     {
         switch (m_layoutType)
@@ -39,7 +49,8 @@ namespace beiklive
             break;
         }
     }
-    // 使用switch卡片布局， 上下布局，封面在上，标题在下，标题显影
+
+    // Switch卡片布局
     void GameCard::_switchCardLayout()
     {
         this->setAxis(brls::Axis::COLUMN);
@@ -50,6 +61,7 @@ namespace beiklive
         this->setHideClickAnimation(true);
         this->setHeight(CARD_HEIGHT_SWITCH);
         this->setWidth(CARD_WIDTH_SWITCH);
+
         m_coverImage = new brls::Image();
         m_coverImage->setFocusable(true);
         m_coverImage->setWidth(COVER_WIDTH_SWITCH);
@@ -65,7 +77,7 @@ namespace beiklive
         m_coverImage->setCornerRadius(10.f);
 
         m_titleLabel = new brls::Label();
-        m_titleLabel->setWidth(CARD_WIDTH_SWITCH * 1.5f); // 标题宽度略大于卡片宽度，避免过早截断
+        m_titleLabel->setWidth(CARD_WIDTH_SWITCH * 1.5f);
         m_titleLabel->setFontSize(26.f);
         m_titleLabel->setText(m_gameEntry.title);
         m_titleLabel->setTextColor(GET_THEME_COLOR("beiklive/CardText/color"));
@@ -73,7 +85,7 @@ namespace beiklive
         m_titleLabel->setAnimated(true);
         m_titleLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
         m_titleLabel->setVerticalAlign(brls::VerticalAlign::CENTER);
-        m_titleLabel->setVisibility(brls::Visibility::INVISIBLE); // 默认隐藏标题，获得焦点时才显示
+        m_titleLabel->setVisibility(brls::Visibility::INVISIBLE);
         m_titleLabel->setMarginBottom(10.f);
 
         this->addView(m_titleLabel);
@@ -87,90 +99,101 @@ namespace beiklive
                 brls::Application::notify("正在启动 " + m_gameEntry.title + "...");
                 triggerClickBounce();
                 return true;
-            }, /*hidden=*/false, /*repeat=*/false, brls::SOUND_CLICK);
+            },
+            false,
+            false,
+            brls::SOUND_CLICK);
     }
 
     void GameCard::onChildFocusGained(brls::View *directChild, brls::View *focusedView)
     {
         brls::Box::onChildFocusGained(directChild, focusedView);
-        switch (m_layoutType)
-        {
-        case beiklive::enums::ThemeLayout::DEFAULT_THEME:
-        case beiklive::enums::ThemeLayout::SWITCH_THEME:
-            if (m_titleLabel)
-                m_titleLabel->setVisibility(brls::Visibility::VISIBLE);
-            break;
 
-        default:
-            break;
-        }
+        if (m_titleLabel)
+            m_titleLabel->setVisibility(brls::Visibility::VISIBLE);
     }
 
     void GameCard::onChildFocusLost(brls::View *directChild, brls::View *focusedView)
     {
         brls::Box::onChildFocusLost(directChild, focusedView);
-        switch (m_layoutType)
-        {
-        case beiklive::enums::ThemeLayout::DEFAULT_THEME:
-        case beiklive::enums::ThemeLayout::SWITCH_THEME:
-            if (m_titleLabel)
-                m_titleLabel->setVisibility(brls::Visibility::INVISIBLE);
-            break;
-        default:
-            break;
-        }
+
+        if (m_titleLabel)
+            m_titleLabel->setVisibility(brls::Visibility::INVISIBLE);
     }
+
     void GameCard::draw(NVGcontext *vg, float x, float y, float w, float h,
                         brls::Style style, brls::FrameContext *ctx)
     {
-        brls::Box::draw(vg, x, y, w, h, style, ctx);
+        // ===== ✅ 入场动画 =====
+        if (m_enterAnimating)
+        {
+            m_enterT += 1.0f / 60.0f; // 用60更稳定
 
-        switch (m_layoutType)
-        {
-        case beiklive::enums::ThemeLayout::DEFAULT_THEME:
-        case beiklive::enums::ThemeLayout::SWITCH_THEME:
-        {
-            // 点击弹性动画（先压缩，再阻尼回弹）
-            if (m_clickAnimating)
+            float duration = 0.35f;
+            float t = m_enterT / duration;
+
+            if (t >= 1.0f)
             {
-                m_clickT += 1.0f / 120.0f; // 近似按 60fps 推进
-                if (m_clickT < 0.06f)
-                {
-                    float t = m_clickT / 0.06f;      // 0~1
-                    m_clickScale = 1.0f - 0.10f * t; // 压到 0.90
-                }
-                else
-                {
-                    float u = m_clickT - 0.06f;
-                    m_clickScale = 1.0f + 0.12f * std::exp(-14.0f * u) * std::sin(45.0f * u);
+                m_enterScale = 1.0f;
+                m_enterAnimating = false;
+            }
+            else
+            {
+                // 弹性 easing（关键：t ∈ [0,1]）
+                float overshoot = 1.2f;
+                float p = t - 1.0f;
 
-                    if (u > 0.28f && std::abs(m_clickScale - 1.0f) < 0.003f)
-                    {
-                        m_clickScale = 1.0f;
-                        m_clickAnimating = false;
-                        if (onCardClicked)
-                            onCardClicked(m_gameEntry);
-                    }
-                }
-                invalidate();
+                float ease = 1.0f + overshoot * (p * p * p + p * p);
+
+                float start = 0.75f;
+                m_enterScale = start + (1.0f - start) * ease;
             }
 
-            float finalScale = m_scale * m_clickScale;
-
-            const float cx = x + w * 0.5f;
-            const float cy = y + h * 0.5f;
-            nvgSave(vg);
-            nvgTranslate(vg, cx, cy);
-            nvgScale(vg, finalScale, finalScale);
-            nvgTranslate(vg, -cx, -cy);
-            brls::Box::draw(vg, x, y, w, h, style, ctx);
-            nvgRestore(vg);
+            invalidate();
         }
-        break;
 
-        default:
-            break;
+        // ===== ✅ 点击动画 =====
+        if (m_clickAnimating)
+        {
+            m_clickT += 1.0f / 120.0f;
+
+            if (m_clickT < 0.06f)
+            {
+                float t = m_clickT / 0.06f;
+                m_clickScale = 1.0f - 0.10f * t;
+            }
+            else
+            {
+                float u = m_clickT - 0.06f;
+                m_clickScale = 1.0f + 0.12f * std::exp(-14.0f * u) * std::sin(45.0f * u);
+
+                if (u > 0.28f && std::abs(m_clickScale - 1.0f) < 0.003f)
+                {
+                    m_clickScale = 1.0f;
+                    m_clickAnimating = false;
+
+                    if (onCardClicked)
+                        onCardClicked(m_gameEntry);
+                }
+            }
+
+            invalidate();
         }
+
+        // ===== ✅ 合并缩放 =====
+        float finalScale = m_scale * m_clickScale * m_enterScale;
+
+        const float cx = x + w * 0.5f;
+        const float cy = y + h * 0.5f;
+
+        nvgSave(vg);
+        nvgTranslate(vg, cx, cy);
+        nvgScale(vg, finalScale, finalScale);
+        nvgTranslate(vg, -cx, -cy);
+
+        brls::Box::draw(vg, x, y, w, h, style, ctx);
+
+        nvgRestore(vg);
     }
 
 } // namespace beiklive

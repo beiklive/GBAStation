@@ -22,12 +22,17 @@ namespace beiklive
         float m_clickT = 0.0f;
         float m_clickScale = 1.0f;
 
+        // 入场动画
+        bool m_enterAnimating = false;
+        float m_enterT = 0.0f;
+        float m_enterScale = 1.0f;
+
         void triggerClickBounce();
 
         void _switchCardLayout();
 
     public:
-        GameCard(beiklive::enums::ThemeLayout type, beiklive::GameEntry gameEntry);
+        GameCard(beiklive::enums::ThemeLayout type, beiklive::GameEntry gameEntry, int index = 0);
         ~GameCard();
         void applyThemeLayout();
 

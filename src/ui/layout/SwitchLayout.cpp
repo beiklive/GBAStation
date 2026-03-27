@@ -39,9 +39,11 @@ namespace beiklive
     void SwitchLayout::buildCardRow(beiklive::GameList gameList)
     {
         m_cardRow->clearViews(true);
+        int index = 0;
         for (auto gameEntry : gameList)
         {
-            auto *gameCard = new beiklive::GameCard(beiklive::enums::ThemeLayout::SWITCH_THEME, gameEntry);
+            index++;
+            auto *gameCard = new beiklive::GameCard(beiklive::enums::ThemeLayout::SWITCH_THEME, gameEntry, index);
             gameCard->applyThemeLayout();
             gameCard->setMarginRight(10.f);
             gameCard->setMarginLeft(10.f);

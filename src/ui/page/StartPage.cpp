@@ -52,9 +52,8 @@ void StartPage::_useSwitchLayout()
     // TODO: 后续改为从数据库读取数据 参数为  游戏路径、标题、封面路径
 
 
-    beiklive::GameList recent = beiklive::GameDB->getRecentPlayed(10); // 获取最近玩过的10款游戏
-
-    switchLayout->refreshGameList(recent);
+    onResume(); // 刷新游戏列表显示
+    
     switchLayout->onGameActivated = [this](const beiklive::GameEntry &entry)
     {
         brls::Logger::info("Game activated: " + entry.title);
