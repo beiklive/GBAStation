@@ -95,10 +95,7 @@ target_include_directories(sqlite3 PUBLIC
 if(PLATFORM_SWITCH)
     target_compile_definitions(sqlite3 PRIVATE
     SQLITE_THREADSAFE=1          # 保持线程安全
-    SQLITE_OMIT_WAL=1            # 禁用 WAL
-    SQLITE_MAX_MMAP_SIZE=0       # 禁用 mmap
-    SQLITE_OMIT_LOAD_EXTENSION=1 # 禁用动态扩展
-    SQLITE_OMIT_POSIX=1          # 禁用 POSIX 文件权限函数 (fchown, geteuid 等)
+    SQLITE_OS_OTHER=1
     )
 else()
     target_compile_definitions(sqlite3 PRIVATE
