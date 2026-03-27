@@ -92,11 +92,19 @@ target_include_directories(sqlite3 PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/SQLiteCpp/sqlite3
 )
 
-# 推荐：开启线程安全
-target_compile_definitions(sqlite3 PRIVATE
-    SQLITE_THREADSAFE=1
-    SQLITE_DISABLE_MMAP=1
-)
+if(PLATFORM_SWITCH)
+    target_compile_definitions(sqlite3 PRIVATE
+        SQLITE_THREADSAFE=1
+        SQLITE_OMIT_WAL=1
+        SQLITE_MAX_MMAP_SIZE=0
+    )
+else()
+    target_compile_definitions(sqlite3 PRIVATE
+        SQLITE_THREADSAFE=1
+    )
+endif()
+
+
 
 # =========================
 # SQLiteCpp（C++封装）
