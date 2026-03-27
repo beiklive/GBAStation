@@ -93,6 +93,10 @@ target_include_directories(sqlite3 PUBLIC
 )
 
 if(PLATFORM_SWITCH)
+    add_library(sqlite3 STATIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/SQLiteCpp/sqlite3/sqlite_devkit.cpp
+    )
+
     target_compile_definitions(sqlite3 PRIVATE
     SQLITE_THREADSAFE=1          # 保持线程安全
     SQLITE_OS_OTHER=1
