@@ -14,14 +14,19 @@ namespace beiklive::enums
     enum class FileType
     {
         NONE,
+        GBA_ROM,    // GBA文件
+        GBC_ROM,    // GBC文件
+        GB_ROM,     // GB文件
+
+
+        // 上面的顺序必须与EmuPlatform保持一致，方便后续通过平台类型直接转换为文件类型
+
+
         DRIVE,      // 磁盘驱动器（Windows: C:\、D:\ 等）
         DIRECTORY,
         NORMAL_FILE,
         IMAGE_FILE, // PNG后缀
-        ZIP_FILE,   // ZIP后缀
-        GBA_ROM,    // GBA文件
-        GBC_ROM,    // GBC文件
-        GB_ROM     // GB文件
+        ZIP_FILE    // ZIP后缀
 
     };
     // 主题布局类型 默认为switch布局，后续会添加天马布局

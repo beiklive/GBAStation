@@ -267,7 +267,51 @@ namespace beiklive // 全局功能函数
         }
     }
 
+    inline bool game_db_delete_by_crc32(SQLite::Database &db, uint32_t crc32)
+        {
+            const char *sql = "DELETE FROM game_entry WHERE crc32 = ?;";
+            try
+            {
+                SQLite::Statement stmt(db, sql);
+                stmt.bind(1, static_cast<int>(crc32));
+                return stmt.exec() > 0;
+            }
+            catch (const SQLite::Exception &)
+            {
+                return false;
+            }
+        }
 
+    inline bool game_db_select_by_crc32(SQLite::Database &db, uint32_t crc32, GameEntry &outEntry)
+        {
+            const char *sql = R"(
+            SELECT path, title, logoPath, playCount, playTime, platform, lastPlayed, crc32
+            FROM game_entry
+            WHERE crc32 = ?;
+        )";
+            try
+            {
+                SQLite::Statement stmt(db, sql);
+                stmt.bind(1, static_cast<int>(crc32));
+                if (stmt.executeStep())
+                {
+                    outEntry.path = stmt.getColumn(0).getText();
+                    outEntry.title = stmt.getColumn(1).getText();
+                    outEntry.logoPath = stmt.getColumn(2).getText();
+                    outEntry.playCount = stmt.getColumn(3).getInt();
+                    outEntry.playTime = stmt.getColumn(4).getInt();
+                    outEntry.platform = stmt.getColumn(5).getInt();
+                    outEntry.lastPlayed = stmt.getColumn(6).getText();
+                    outEntry.crc32 = stmt.getColumn(7).getInt();
+                    return true;
+                }
+                return false;
+            }
+            catch (const SQLite::Exception &)
+            {
+                return false;
+            }
+        }
 
 #define BK_RES(path) beiklive::res_path(path)
 #define CHECK_KEY(key) beiklive::hasKey(beiklive::SettingManager, key)
@@ -280,10 +324,6 @@ namespace beiklive // 全局功能函数
 
 #define GET_MAPPING_KEY_STR(key, def) beiklive::getKeyStr(beiklive::NameMappingManager, key, def)
 #define SET_MAPPING_KEY_STR(key, val) beiklive::setKeyStr(beiklive::NameMappingManager, key, val)
-#define GET_MAPPING_KEY_INT(key, def) beiklive::getKeyInt(beiklive::NameMappingManager, key, def)
-#define SET_MAPPING_KEY_INT(key, val) beiklive::setKeyInt(beiklive::NameMappingManager, key, val)
-#define GET_MAPPING_KEY_FLOAT(key, def) beiklive::getKeyFloat(beiklive::NameMappingManager, key, def)
-#define SET_MAPPING_KEY_FLOAT(key, val) beiklive::setKeyFloat(beiklive::NameMappingManager, key, val)
 
 #define HIDE_BRLS_HIGHLIGHT(view)                 \
     do                                            \

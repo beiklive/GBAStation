@@ -11,6 +11,8 @@ namespace beiklive
             GameView(beiklive::GameEntry gameData);
             ~GameView();
 
+            // 数据库操作
+
 
         };
     }

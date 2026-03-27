@@ -114,7 +114,20 @@ std::string getIconPath(beiklive::enums::FileType type) {
             return BK_RES(path_prefix + "wenjian.png");
     }
 }
-
+std::string getDefaultLogoPath(beiklive::enums::EmuPlatform platform)
+{
+    std::string path_prefix = "img/ui/";
+    switch (platform)
+    {
+        case beiklive::enums::EmuPlatform::EmuGBA:
+            return BK_RES(path_prefix + "icon_gba.png");
+        case beiklive::enums::EmuPlatform::EmuGBC:
+        case beiklive::enums::EmuPlatform::EmuGB:
+            return BK_RES(path_prefix + "icon_gb.png");
+        default:
+            return BK_RES(path_prefix + "icon_gba.png");
+    }
+}
 std::string getIconPath(const std::string& path) {
     return getIconPath(getFileType(path));
 }
@@ -157,5 +170,16 @@ uint32_t crc32(const std::string& path)
 
     return ~crc;
 }
+
+
+std::string getTimestampString() {
+    auto now = std::chrono::system_clock::now();
+    std::time_t now_time_t = std::chrono::system_clock::to_time_t(now);
+    std::tm* now_tm = std::localtime(&now_time_t);
+    std::ostringstream oss;
+    oss << std::put_time(now_tm, "%y-%m-%d %H-%M-%S");
+    return oss.str();
+}
+
 
 } // namespace beiklive::tools

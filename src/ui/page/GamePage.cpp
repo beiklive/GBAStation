@@ -17,6 +17,7 @@ namespace beiklive
         }else{
             PageInit();
             // 此处将 DirListData 处理为 GameEntry 以供游戏使用
+            GameEntryInitialize();
             GameViewInitialize();
             GameMenuInitialize();
         }
@@ -25,6 +26,34 @@ namespace beiklive
     GamePage::~GamePage()
     {
 
+    }
+    void GamePage::GameEntryInitialize()
+    {
+        auto& db = beiklive::DB::get();
+        auto dcrc32 = tools::crc32(m_gameData.fullPath); // 计算 CRC32 校验值
+        // 记录日志：开始处理游戏条目
+        brls::Logger::info("GamePage", "开始处理游戏条目，路径: {}, CRC32: {}", m_gameData.fullPath, dcrc32);
+
+        // 如果数据库中没有此游戏的记录 ,插入一条新记录，等到游戏结束时再插入一次
+        if (!beiklive::game_db_select_by_crc32(db, dcrc32, m_gameEntry)) {
+            brls::Logger::info("GamePage", "数据库中没有此游戏的记录，插入新记录: {}", m_gameData.fullPath);
+            // 数据库中没有此游戏的记录，创建一个新的 GameEntry 并插入数据库
+            m_gameEntry.path = m_gameData.fullPath;
+            m_gameEntry.title = GET_MAPPING_KEY_STR(beiklive::tools::getFileNameWithoutExtension(m_gameData.fileName), beiklive::tools::getFileNameWithoutExtension(m_gameData.fileName));
+            m_gameEntry.platform = (int)m_gameData.itemType; // 设置平台类型
+            m_gameEntry.crc32 = dcrc32; // 设置 CRC32 校验值
+            m_gameEntry.logoPath = beiklive::tools::getDefaultLogoPath((beiklive::enums::EmuPlatform)m_gameEntry.platform); // 设置默认封面路径
+        } else {
+            brls::Logger::info("GamePage", "数据库中已存在此游戏记录: {}", m_gameData.fullPath);
+        }
+
+        // 更新运行时间戳
+        m_gameEntry.lastPlayed = beiklive::tools::getTimestampString();
+        m_gameEntry.playCount += 1; // 玩过的次数加1
+        brls::Logger::info("GamePage", "更新游戏条目：lastPlayed={}, playCount={}", m_gameEntry.lastPlayed, m_gameEntry.playCount);
+        // 提交一次数据库更改，确保在游戏过程中数据被保存，即使中途崩溃也不会丢失
+        beiklive::game_db_insert_or_replace(db, m_gameEntry);
+        brls::Logger::info("GamePage", "游戏条目已保存到数据库: {}", m_gameData.fullPath);
     }
 
     void GamePage::PageInit()

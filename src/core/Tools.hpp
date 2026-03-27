@@ -35,7 +35,7 @@ std::string getParentPath(const std::string& path);
 std::string getIconPath(beiklive::enums::FileType type);
 // 根据文件路径自动检测类型并返回图标资源路径
 std::string getIconPath(const std::string& path);
-
+std::string getDefaultLogoPath(beiklive::enums::EmuPlatform platform);
 // 获取系统逻辑磁盘驱动器列表（Windows: C:\、D:\ 等；其他平台: {"/"}）
 std::vector<std::string> getLogicalDrives();
 
@@ -45,4 +45,6 @@ bool isFileExists(const std::string& path);
 // 计算文件的 CRC32 校验值
 uint32_t crc32(const std::string& path);
 
+// 获取当前时间戳字符串（格式：YYYY-MM-DD HH:MM:SS）
+std::string getTimestampString();
 } // namespace beiklive::tools
