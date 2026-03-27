@@ -55,30 +55,30 @@ namespace beiklive
 
     void GamePage::GameViewInitialize()
     {
-        #undef ABSOLUTE
-        m_gameView = new GameView();
-        m_gameView->setWidthPercentage(100.f);
-        m_gameView->setHeightPercentage(100.f);
-        m_gameView->setFocusable(false);
-        m_gameView->setPositionType(brls::PositionType::ABSOLUTE);
-        m_gameView->setPositionTop(0);
-        m_gameView->setPositionLeft(0);
-        this->addView(m_gameView);
+        // #undef ABSOLUTE
+        // m_gameView = new GameView();
+        // m_gameView->setWidthPercentage(100.f);
+        // m_gameView->setHeightPercentage(100.f);
+        // m_gameView->setFocusable(false);
+        // m_gameView->setPositionType(brls::PositionType::ABSOLUTE);
+        // m_gameView->setPositionTop(0);
+        // m_gameView->setPositionLeft(0);
+        // this->addView(m_gameView);
     }
 
     void GamePage::GameMenuInitialize()
     {
         // 游戏菜单初始化逻辑，如设置菜单选项、绑定按键等
-        #undef ABSOLUTE
-        m_gameMenuView = new GameMenuView();
-        m_gameMenuView->setWidthPercentage(100.f);
-        m_gameMenuView->setHeightPercentage(100.f);
-        m_gameMenuView->setFocusable(false);
-        m_gameMenuView->setPositionType(brls::PositionType::ABSOLUTE);
-        m_gameMenuView->setPositionTop(0);
-        m_gameMenuView->setPositionLeft(0);
-        this->addView(m_gameMenuView);
-        m_gameView->setVisibility(brls::Visibility::GONE); // 初始隐藏，加载完成后显示
+        // #undef ABSOLUTE
+        // m_gameMenuView = new GameMenuView();
+        // m_gameMenuView->setWidthPercentage(100.f);
+        // m_gameMenuView->setHeightPercentage(100.f);
+        // m_gameMenuView->setFocusable(false);
+        // m_gameMenuView->setPositionType(brls::PositionType::ABSOLUTE);
+        // m_gameMenuView->setPositionTop(0);
+        // m_gameMenuView->setPositionLeft(0);
+        // this->addView(m_gameMenuView);
+        // m_gameView->setVisibility(brls::Visibility::GONE); // 初始隐藏，加载完成后显示
     }
 
 

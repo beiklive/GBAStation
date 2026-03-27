@@ -6,7 +6,7 @@
 #include "enums.h"     // 枚举类型定义
 
 #include "ConfigManager.hpp"
-
+#include "DataBase.hpp"
 
 using namespace brls::literals; // for _i18n
 

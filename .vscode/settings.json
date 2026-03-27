@@ -3,5 +3,6 @@
     "cmake.configureArgs": [
         "-DCMAKE_POLICY_VERSION_MINIMUM=3.5",
         "-DPLATFORM_DESKTOP=ON"
-    ]
+    ],
+    "C_Cpp.errorSquiggles": "disabled"
 }

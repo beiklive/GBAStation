@@ -202,7 +202,7 @@ endif ()
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${APP_PLATFORM_INCLUDE})
 target_compile_options(${PROJECT_NAME} PRIVATE -ffunction-sections -fdata-sections ${APP_PLATFORM_OPTION})
-target_link_libraries(${PROJECT_NAME} PRIVATE borealis ${APP_PLATFORM_LIB})
+target_link_libraries(${PROJECT_NAME} PRIVATE borealis  SQLiteCpp ${APP_PLATFORM_LIB})
 
 # ============================================================
 # Post-build: copy mgba_libretro shared library next to the

@@ -78,3 +78,36 @@ if (PLATFORM_SWITCH AND TARGET mgba_libretro)
         ${CMAKE_CURRENT_SOURCE_DIR}/mgba/src/util/vfs/vfs-dirent.c
     )
 endif ()
+
+
+
+# =========================
+# SQLite（底层 C 库）
+# =========================
+add_library(sqlite3 STATIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/SQLiteCpp/sqlite3/sqlite3.c
+)
+
+target_include_directories(sqlite3 PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/SQLiteCpp/sqlite3
+)
+
+# 推荐：开启线程安全
+target_compile_definitions(sqlite3 PRIVATE
+    SQLITE_THREADSAFE=1
+)
+
+# =========================
+# SQLiteCpp（C++封装）
+# =========================
+file(GLOB SQLITECPP_SRC
+    ${CMAKE_CURRENT_SOURCE_DIR}/SQLiteCpp/src/*.cpp
+)
+
+add_library(SQLiteCpp STATIC ${SQLITECPP_SRC})
+
+target_include_directories(SQLiteCpp PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/SQLiteCpp/include
+)
+
+target_link_libraries(SQLiteCpp PUBLIC sqlite3) 
