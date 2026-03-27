@@ -16,7 +16,7 @@ public:
     ~StartPage();
 
     void Init();
-
+    void onResume();
 
 private:
     void _useSwitchLayout();

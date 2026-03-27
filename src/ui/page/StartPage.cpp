@@ -33,6 +33,17 @@ void StartPage::Init()
     }
 }
 
+void StartPage::onResume()
+{
+    brls::Logger::debug("StartPage onResume called");
+    // 每次回到起始页时刷新游戏列表，获取最新的最近玩过的10款游戏
+    if (switchLayout)
+    {
+        beiklive::GameList recent = beiklive::GameDB->getRecentPlayed(10);
+        switchLayout->refreshGameList(recent);
+    }
+}
+
 void StartPage::_useSwitchLayout()
 {
     brls::Logger::debug("Using SWITCH theme layout");

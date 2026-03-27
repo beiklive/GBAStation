@@ -1,5 +1,6 @@
 #include "core/common.h"
 #include "ui/page/StartPage.hpp"
+#include "ui/utils/MyActivity.hpp"
 #if defined(BOREALIS_USE_OPENGL)
 // Needed for the OpenGL driver to work
 extern "C" unsigned int sceLibcHeapSize = 2 * 1024 * 1024;
@@ -34,7 +35,9 @@ int main(int argc, char* argv[]) {
 	auto* mStartPage = new StartPage();
 	auto* frame = new brls::AppletFrame(mStartPage);
 	HIDE_BRLS_BAR(frame);
-	brls::Application::pushActivity(new brls::Activity(frame));
+	beiklive::MyActivity* activity = new beiklive::MyActivity(frame);
+	activity->setPageView(mStartPage);
+	brls::Application::pushActivity(activity);
 
 	// Run the app
 	while (brls::Application::mainLoop())
