@@ -8,7 +8,7 @@ namespace beiklive
 
 ConfigManager* SettingManager = nullptr; // 全局配置管理器实例
 ConfigManager* NameMappingManager = nullptr; // 全局名称映射管理器实例
-
+GameDatabase* GameDB = nullptr; // 全局游戏数据库实例
 
 void ConfigureInit(){
     // 确保必要的目录存在
@@ -29,14 +29,10 @@ void ConfigureInit(){
 
     // 数据库初始化
     if(SettingManager->Contains("db_path")){
-        beiklive::DB::setPath(GET_SETTING_KEY_STR("db_path", beiklive::path::databaseFilePath()));
+        GameDB = new beiklive::GameDatabase(GET_SETTING_KEY_STR("db_path", beiklive::path::databaseFilePath()), 2, 5);
     }else{
-        beiklive::DB::setPath(beiklive::path::databaseFilePath());
+        GameDB = new beiklive::GameDatabase(beiklive::path::databaseFilePath(), 2, 5);
         SettingManager->Set("db_path", beiklive::ConfigValue(beiklive::path::databaseFilePath()));
-    }
-    auto& db = beiklive::DB::get();
-    if (!beiklive::game_db_create_table(db)) {
-        return;
     }
 
 

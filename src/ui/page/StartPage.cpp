@@ -111,7 +111,7 @@ void StartPage::_openFileList()
 
     m_fileListPage->registerAction(
         "关闭列表",
-        brls::BUTTON_X,
+        brls::BUTTON_START,
         [this](brls::View *)
         {
             // 此处设置按键功能

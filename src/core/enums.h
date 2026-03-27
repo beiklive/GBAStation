@@ -49,3 +49,45 @@ namespace beiklive::enums
 
 
 } // namespace beiklive
+
+
+namespace beiklive // 结构体
+{
+
+    // 游戏条目结构体，包含游戏路径、显示标题、封面路径等字段, 用于在游戏列表中显示和管理游戏信息
+    struct GameEntry
+    {
+        std::string path;                                       // 游戏文件路径
+        std::string title;                                      // 显示标题（默认为映射名）
+        std::string logoPath;                                   // 游戏封面图片路径
+        int playCount = 0;                                      // 玩过的次数
+        int playTime = 0;                                       // 玩过的总时间（单位：秒）
+        int platform = (int)beiklive::enums::EmuPlatform::NONE; // 游戏平台（如 GBA、GBC、GB）
+        std::string lastPlayed;                                 // 上次玩的时间(时间戳字符串)
+        int crc32 = 0;                                          // 游戏文件的 CRC32 校验值（用于唯一标识游戏）
+    };
+
+    typedef std::vector<GameEntry> GameList; // 游戏列表类型定义
+
+    // 列表元素数据
+    struct ListItem
+    {
+        std::string text;     // 标题
+        std::string subText;  // 子标题
+        std::string iconPath; // 图标路径
+        std::string data;     // 额外数据（如游戏路径）
+    };
+
+    typedef std::vector<ListItem> ListItemList; // 列表数据类型定义
+
+    struct DirListData
+    {
+        std::string fileName;               // 文件名（不含路径）
+        std::string fullPath;               // 完整路径
+        std::string iconPath;               // 图标路径
+        beiklive::enums::FileType itemType; // 文件类型
+        std::string fileSize;               // 文件大小（字节），目录为0
+        size_t childCount;                  // 子项数量，仅目录有效，文件为0
+    };
+
+} // namespace beiklive

@@ -30,7 +30,7 @@ namespace beiklive::path
     constexpr const char *MAPPING_FILE       = "name_mapping.cfg";
 
     constexpr const char *LOG_FILE          = "GBAStation.log";
-    constexpr const char *DATA_BASE_FILE    = "database.db";
+    constexpr const char *DATA_BASE_FILE    = "GameData.json";
 
     namespace 
     {
