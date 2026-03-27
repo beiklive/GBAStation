@@ -6,9 +6,9 @@ namespace beiklive::enums
     enum class EmuPlatform
     {
         NONE,
-        GBA,
-        GBC,
-        GB
+        EmuGBA,
+        EmuGBC,
+        EmuGB
     };
     // 文件类型,用于文件浏览器
     enum class FileType

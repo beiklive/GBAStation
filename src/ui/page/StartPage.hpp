@@ -2,7 +2,8 @@
 
 #include "core/common.h"
 #include "ui/layout/SwitchLayout.hpp"
-#include "ui/page/FileListPage.hpp"
+#include "ui/page/FileListPage.hpp" 
+#include "ui/page/GamePage.hpp" 
 #include "ui/utils/Box.hpp"
 
 
@@ -23,4 +24,5 @@ private:
 
     beiklive::FileListPage* m_fileListPage = nullptr;
     beiklive::SwitchLayout* switchLayout = nullptr;
+    beiklive::GamePage* m_gamePage = nullptr;
 };

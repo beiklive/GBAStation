@@ -37,4 +37,6 @@ std::string getIconPath(const std::string& path);
 // 获取系统逻辑磁盘驱动器列表（Windows: C:\、D:\ 等；其他平台: {"/"}）
 std::vector<std::string> getLogicalDrives();
 
+// 检查文件或目录是否存在
+bool isFileExists(const std::string& path);
 } // namespace beiklive::tools

@@ -132,4 +132,9 @@ std::vector<std::string> getLogicalDrives() {
 #endif
 }
 
+bool isFileExists(const std::string& path) {
+    return fs::exists(fs::path(path));
+}
+
+
 } // namespace beiklive::tools

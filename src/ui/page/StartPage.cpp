@@ -124,7 +124,31 @@ void StartPage::_openFileList()
 
     m_fileListPage->onFileSelected = [this](beiklive::DirListData dirItem)
     {
-        brls::Application::notify("选择文件：" + dirItem.fileName);
+        
+        switch (dirItem.itemType)
+        {
+            case beiklive::enums::FileType::IMAGE_FILE:
+                brls::Application::notify("查看图片：" + dirItem.fileName);
+                break;
+            case beiklive::enums::FileType::GBA_ROM:
+            case beiklive::enums::FileType::GBC_ROM:
+            case beiklive::enums::FileType::GB_ROM:
+                 brls::Application::notify("启动游戏：" + dirItem.fileName);
+                {
+                    m_gamePage = new beiklive::GamePage(dirItem);
+                    auto *frame = new brls::AppletFrame(m_gamePage);
+                    HIDE_BRLS_BAR(frame);
+                    brls::Logger::info("Pushing GamePage activity for: " + dirItem.fileName);
+                    brls::sync([this, frame]()
+                    {
+                        brls::Application::pushActivity(new brls::Activity(frame));
+                    });
+                }
+                 break;
+            default:
+                brls::Logger::debug("Selected item: " + dirItem.fileName + ", type: " + std::to_string((int)dirItem.itemType));
+                break;
+        }
     };
 
 
