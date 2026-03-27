@@ -2,7 +2,7 @@
 
 namespace beiklive
 {
-    GameMenuView::GameMenuView()
+    GameMenuView::GameMenuView(beiklive::GameEntry gameData)
     {
         // 构造函数实现
     }

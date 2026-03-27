@@ -2,7 +2,7 @@
 
 namespace beiklive
 {
-    GameView::GameView()
+    GameView::GameView(beiklive::GameEntry gameData)
     {
         // 游戏视图初始化逻辑，如设置背景、输入处理等
     }

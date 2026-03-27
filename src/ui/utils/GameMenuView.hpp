@@ -8,7 +8,7 @@ namespace beiklive
     class GameMenuView : public brls::Box
     {
         public:
-            GameMenuView();
+            GameMenuView(beiklive::GameEntry gameData);
             ~GameMenuView();
 
 
