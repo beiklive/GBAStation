@@ -150,18 +150,3 @@ namespace beiklive::DefaultFile
 
 }
 
-
-namespace beiklive::SQL
-{
-    constexpr const char * game_entry_sql = R"(
-        CREATE TABLE IF NOT EXISTS game_entry (
-            path TEXT PRIMARY KEY,
-            title TEXT NOT NULL,
-            logoPath TEXT,
-            playCount INTEGER DEFAULT 0,
-            playTime INTEGER DEFAULT 0,
-            platform INTEGER DEFAULT 0,
-            lastPlayed TEXT
-        );
-    )";
-} // namespace beiklive::SQL
