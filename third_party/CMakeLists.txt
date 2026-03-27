@@ -95,6 +95,7 @@ target_include_directories(sqlite3 PUBLIC
 # 推荐：开启线程安全
 target_compile_definitions(sqlite3 PRIVATE
     SQLITE_THREADSAFE=1
+    SQLITE_DISABLE_MMAP=1
 )
 
 # =========================
