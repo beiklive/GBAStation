@@ -1,9 +1,9 @@
 #ifdef PLATFORM_SWITCH
-
 #include "sqlite3.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 
 // =========================
 // 内存分配（Memory）
@@ -11,7 +11,7 @@
 static void *devkit_malloc(int size){ return malloc(size); }
 static void devkit_free(void *ptr){ free(ptr); }
 static void *devkit_realloc(void *ptr,int size){ return realloc(ptr,size); }
-static int devkit_size(void *ptr){ return ptr ? malloc_usable_size(ptr) : 0; } // 或返回 0
+static int devkit_size(void *ptr){ return ptr ? malloc_usable_size(ptr) : 0; } // 可返回0
 static int devkit_roundup(int size){ return size; }
 static int devkit_init(void*){ return SQLITE_OK; }
 static void devkit_shutdown(void*){}
@@ -76,7 +76,7 @@ static int devkit_xDeviceCharacteristics(sqlite3_file*){ return 0; }
 
 // sqlite3_io_methods
 static sqlite3_io_methods devkit_io = {
-    1, // iVersion
+    1,
     devkit_xClose,
     devkit_xRead,
     devkit_xWrite,
@@ -96,7 +96,6 @@ static int devkit_xOpen(sqlite3_vfs*, const char *zName, sqlite3_file *pFile, in
     DevkitFile *f = new DevkitFile;
     f->fp = fopen(zName,"r+b");
     if(!f->fp) f->fp = fopen(zName,"w+b");
-    pFile->pMethods = (sqlite3_io_methods*)&devkit_io;
     pFile->pMethods = (sqlite3_io_methods*)f;
     return SQLITE_OK;
 }
@@ -120,12 +119,12 @@ static int devkit_xCurrentTime(sqlite3_vfs*, double *pTime){ *pTime=2440587.5; r
 
 // sqlite3_vfs
 static sqlite3_vfs devkit_vfs = {
-    1,              // iVersion
-    sizeof(DevkitFile), // szOsFile
-    4096,           // mxPathname
-    0,              // pNext
-    "devkitVFS",    // zName
-    0,              // pAppData
+    1,
+    sizeof(DevkitFile),
+    4096,
+    0,
+    "devkitVFS",
+    0,
     devkit_xOpen,
     devkit_xDelete,
     devkit_xAccess,
@@ -139,7 +138,15 @@ static sqlite3_vfs devkit_vfs = {
     devkit_xCurrentTime
 };
 
-// 初始化函数
+// =========================
+// sqlite3_os_init / sqlite3_os_end
+// =========================
+extern "C" int sqlite3_os_init(void){ return SQLITE_OK; }
+extern "C" int sqlite3_os_end(void){ return SQLITE_OK; }
+
+// =========================
+// 初始化入口
+// =========================
 extern "C" int sqlite3_devkit_initialize(){
     sqlite3_config(SQLITE_CONFIG_MALLOC, devkit_malloc, devkit_free, devkit_realloc, devkit_size, devkit_roundup, devkit_init, devkit_shutdown);
     sqlite3_config(SQLITE_CONFIG_MUTEX, devkit_mutex_alloc, devkit_mutex_free,
