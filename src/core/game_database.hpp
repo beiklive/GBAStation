@@ -6,11 +6,6 @@
 #include <vector>
 #include <unordered_map>
 #include <optional>
-#include <mutex>
-#include <shared_mutex>
-#include <atomic>
-#include <thread>
-#include <condition_variable>
 
 #include "enums.h"
 #include "constexpr.h"
@@ -95,22 +90,11 @@ namespace beiklive
         // 标记数据已修改，并触发自动保存（如果需要）
         void markDirtyAndAutoSave();
 
-        // 后台线程工作函数（定时保存）
-        void autoSaveWorker();
-
         // 数据存储
         std::vector<GameEntry> data_;
         std::unordered_map<int, size_t> crc32Index_;
         std::unordered_map<std::string, size_t> pathIndex_;
 
-        // 线程同步
-        mutable std::shared_mutex rwMutex_; // 读写锁，保护数据
-        mutable std::mutex dirtyMutex_;     // 保护 dirty_ 标志
-        mutable std::mutex fileMutex_;      // 保护 filepath_
-        std::mutex cvMutex_;                // 用于条件变量
-        std::condition_variable cv_;
-        std::atomic<bool> stopAutoSave_;
-        std::thread autoSaveThread_;
 
         // 自动保存相关
         std::string filepath_;

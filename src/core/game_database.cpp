@@ -1,13 +1,10 @@
-
 #include "game_database.hpp"
 #include <fstream>
-#include <filesystem>
 #include <stdexcept>
 
 namespace beiklive
 {
-
-    // JSON 转换函数实现
+    // JSON 转换函数实现（保持不变）
     void to_json(nlohmann::json &j, const GameEntry &entry)
     {
         j = nlohmann::json{
@@ -33,32 +30,17 @@ namespace beiklive
         j.at("crc32").get_to(entry.crc32);
     }
 
-    // GameDatabase 实现
+    // ==================== GameDatabase 实现（单线程版） ====================
     GameDatabase::GameDatabase(const std::string &filepath, int autoSaveMode, int autoSaveInterval)
         : filepath_(filepath), autoSaveMode_(autoSaveMode), autoSaveInterval_(autoSaveInterval),
-          dirty_(false), stopAutoSave_(false)
+          dirty_(false)
     {
-        if (autoSaveMode_ == 2)
-        {
-            autoSaveThread_ = std::thread(&GameDatabase::autoSaveWorker, this);
-        }
+        // 自动保存不再使用后台线程，仅根据模式决定行为
     }
 
     GameDatabase::~GameDatabase()
     {
-        if (autoSaveMode_ == 2)
-        {
-            {
-                std::lock_guard<std::mutex> lock(cvMutex_);
-                stopAutoSave_ = true;
-            }
-            cv_.notify_one();
-            if (autoSaveThread_.joinable())
-            {
-                autoSaveThread_.join();
-            }
-        }
-        // 析构前尝试保存最后一次修改（如果启用了自动保存且文件路径有效）
+        // 析构时若文件路径有效且自动保存模式非手动，则保存一次
         if (!filepath_.empty() && autoSaveMode_ != 0)
         {
             saveToFile(filepath_);
@@ -67,14 +49,12 @@ namespace beiklive
 
     void GameDatabase::upsert(const GameEntry &entry)
     {
-        std::unique_lock<std::shared_mutex> lock(rwMutex_);
         doUpsert(entry);
         markDirtyAndAutoSave();
     }
 
     bool GameDatabase::removeByCrc32(int crc32)
     {
-        std::unique_lock<std::shared_mutex> lock(rwMutex_);
         bool result = doRemoveByCrc32(crc32);
         if (result)
             markDirtyAndAutoSave();
@@ -83,7 +63,6 @@ namespace beiklive
 
     bool GameDatabase::removeByPath(const std::string &path)
     {
-        std::unique_lock<std::shared_mutex> lock(rwMutex_);
         bool result = doRemoveByPath(path);
         if (result)
             markDirtyAndAutoSave();
@@ -92,19 +71,16 @@ namespace beiklive
 
     std::optional<GameEntry> GameDatabase::findByCrc32(int crc32) const
     {
-        std::shared_lock<std::shared_mutex> lock(rwMutex_);
         return doFindByCrc32(crc32);
     }
 
     std::optional<GameEntry> GameDatabase::findByPath(const std::string &path) const
     {
-        std::shared_lock<std::shared_mutex> lock(rwMutex_);
         return doFindByPath(path);
     }
 
     bool GameDatabase::updatePlayStats(int crc32, int newPlayCount, int newPlayTime, const std::string &newLastPlayed)
     {
-        std::unique_lock<std::shared_mutex> lock(rwMutex_);
         bool result = doUpdatePlayStats(crc32, newPlayCount, newPlayTime, newLastPlayed);
         if (result)
             markDirtyAndAutoSave();
@@ -113,13 +89,11 @@ namespace beiklive
 
     std::vector<GameEntry> GameDatabase::getAll() const
     {
-        std::shared_lock<std::shared_mutex> lock(rwMutex_);
         return data_;
     }
 
     nlohmann::json GameDatabase::toJson() const
     {
-        std::shared_lock<std::shared_mutex> lock(rwMutex_);
         nlohmann::json j = nlohmann::json::array();
         for (const auto &entry : data_)
         {
@@ -130,7 +104,6 @@ namespace beiklive
 
     void GameDatabase::fromJson(const nlohmann::json &j)
     {
-        std::unique_lock<std::shared_mutex> lock(rwMutex_);
         doClear();
         if (!j.is_array())
             throw std::invalid_argument("JSON must be an array");
@@ -144,27 +117,15 @@ namespace beiklive
 
     void GameDatabase::clear()
     {
-        std::unique_lock<std::shared_mutex> lock(rwMutex_);
         doClear();
         markDirtyAndAutoSave();
     }
 
     bool GameDatabase::saveToFile(const std::string &filepath) const
     {
-        // 先复制数据
-        std::vector<GameEntry> snapshot;
-        {
-            std::shared_lock<std::shared_mutex> lock(rwMutex_);
-            snapshot = data_;
-        }
-        // 在锁外进行 JSON 序列化和文件写入
         try
         {
-            nlohmann::json j = nlohmann::json::array();
-            for (const auto &entry : snapshot)
-            {
-                j.push_back(entry);
-            }
+            nlohmann::json j = toJson();
             std::ofstream file(filepath);
             if (!file.is_open())
                 return false;
@@ -201,43 +162,23 @@ namespace beiklive
             return false;
         bool saved = saveToFile(filepath_);
         if (saved)
-        {
-            std::lock_guard<std::mutex> lock(dirtyMutex_);
             dirty_ = false;
-        }
         return saved;
     }
 
     void GameDatabase::setAutoSaveMode(int mode, int intervalSeconds)
     {
-        if (autoSaveMode_ == 2)
-        {
-            {
-                std::lock_guard<std::mutex> lock(cvMutex_);
-                stopAutoSave_ = true;
-            }
-            cv_.notify_one();
-            if (autoSaveThread_.joinable())
-            {
-                autoSaveThread_.join();
-            }
-        }
         autoSaveMode_ = mode;
         autoSaveInterval_ = intervalSeconds;
-        if (autoSaveMode_ == 2)
-        {
-            stopAutoSave_ = false;
-            autoSaveThread_ = std::thread(&GameDatabase::autoSaveWorker, this);
-        }
+        // 注意：此版本不再支持后台自动保存，仅手动模式或立即保存模式有效
     }
 
     void GameDatabase::setFilePath(const std::string &filepath)
     {
-        std::lock_guard<std::mutex> lock(fileMutex_);
         filepath_ = filepath;
     }
 
-    // 私有成员函数实现
+    // ==================== 私有实现（无锁） ====================
     void GameDatabase::doUpsert(const GameEntry &entry)
     {
         auto it = crc32Index_.find(entry.crc32);
@@ -337,36 +278,9 @@ namespace beiklive
     {
         if (autoSaveMode_ == 0)
             return;
-        {
-            std::lock_guard<std::mutex> lock(dirtyMutex_);
-            dirty_ = true;
-        }
-        if (autoSaveMode_ == 1)
-        {
-            flush();
-        }
-        else if (autoSaveMode_ == 2)
-        {
-            cv_.notify_one();
-        }
+        dirty_ = true;
+        // 立即保存模式（mode=1）或定时模式（mode=2）都直接调用 flush
+        // 注意：定时模式在单线程版本中无后台线程，因此也立即保存
+        flush();
     }
-
-    void GameDatabase::autoSaveWorker()
-    {
-        std::unique_lock<std::mutex> lock(cvMutex_);
-        while (!stopAutoSave_)
-        {
-            cv_.wait_for(lock, std::chrono::seconds(autoSaveInterval_), [this]
-                         { return stopAutoSave_ || (dirty_ && !filepath_.empty()); });
-            if (stopAutoSave_)
-                break;
-            if (dirty_ && !filepath_.empty())
-            {
-                lock.unlock();
-                flush();
-                lock.lock();
-            }
-        }
-    }
-
-}
+} // namespace beiklive

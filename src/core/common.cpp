@@ -29,9 +29,9 @@ void ConfigureInit(){
 
     // 数据库初始化
     if(SettingManager->Contains("db_path")){
-        GameDB = new beiklive::GameDatabase(GET_SETTING_KEY_STR("db_path", beiklive::path::databaseFilePath()), 2, 5);
+        GameDB = new beiklive::GameDatabase(GET_SETTING_KEY_STR("db_path", beiklive::path::databaseFilePath()));
     }else{
-        GameDB = new beiklive::GameDatabase(beiklive::path::databaseFilePath(), 2, 5);
+        GameDB = new beiklive::GameDatabase(beiklive::path::databaseFilePath());
         SettingManager->Set("db_path", beiklive::ConfigValue(beiklive::path::databaseFilePath()));
     }
 
