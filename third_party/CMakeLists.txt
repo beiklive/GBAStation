@@ -97,6 +97,7 @@ if(PLATFORM_SWITCH)
         SQLITE_THREADSAFE=1
         SQLITE_OMIT_WAL=1
         SQLITE_MAX_MMAP_SIZE=0
+        SQLITE_OMIT_LOAD_EXTENSION=1
     )
 else()
     target_compile_definitions(sqlite3 PRIVATE
