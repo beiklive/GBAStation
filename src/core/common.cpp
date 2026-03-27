@@ -27,10 +27,22 @@ void ConfigureInit(){
     SettingManager->Load();
     NameMappingManager->Load();
 
+    // 数据库初始化
+    if(SettingManager->Contains("db_path")){
+        beiklive::DB::setPath(GET_SETTING_KEY_STR("db_path", beiklive::path::databaseFilePath()));
+    }else{
+        beiklive::DB::setPath(beiklive::path::databaseFilePath());
+        SettingManager->Set("db_path", beiklive::ConfigValue(beiklive::path::databaseFilePath()));
+    }
+    auto& db = beiklive::DB::get();
+    if (!beiklive::game_db_create_table(db)) {
+        return;
+    }
 
 
 
-
+    SettingManager->Save();
+    NameMappingManager->Save();
 }
 
 

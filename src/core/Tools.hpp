@@ -3,6 +3,8 @@
 #include "common.h"
 #include <filesystem>
 #include <string>
+#include <cstdint>
+#include <fstream>
 
 namespace fs = std::filesystem;
 
@@ -39,4 +41,8 @@ std::vector<std::string> getLogicalDrives();
 
 // 检查文件或目录是否存在
 bool isFileExists(const std::string& path);
+
+// 计算文件的 CRC32 校验值
+uint32_t crc32(const std::string& path);
+
 } // namespace beiklive::tools

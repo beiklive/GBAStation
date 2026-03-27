@@ -137,4 +137,25 @@ bool isFileExists(const std::string& path) {
 }
 
 
+uint32_t crc32(const std::string& path)
+{
+    std::ifstream file(path, std::ios::binary);
+    if (!file) return 0;
+
+    uint32_t crc = 0xFFFFFFFF;
+    char buffer[4096];
+
+    while (file.read(buffer, sizeof(buffer)) || file.gcount())
+    {
+        for (size_t i = 0; i < file.gcount(); i++)
+        {
+            crc ^= (uint8_t)buffer[i];
+            for (int j = 0; j < 8; j++)
+                crc = (crc >> 1) ^ (0xEDB88320 & -(crc & 1));
+        }
+    }
+
+    return ~crc;
+}
+
 } // namespace beiklive::tools

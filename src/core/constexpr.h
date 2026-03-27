@@ -149,3 +149,19 @@ namespace beiklive::DefaultFile
     constexpr const char *DEFAULT_LOGO = ""; // 默认 logo 路径（空=未设置）
 
 }
+
+
+namespace beiklive::SQL
+{
+    constexpr const char * game_entry_sql = R"(
+        CREATE TABLE IF NOT EXISTS game_entry (
+            path TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            logoPath TEXT,
+            playCount INTEGER DEFAULT 0,
+            playTime INTEGER DEFAULT 0,
+            platform INTEGER DEFAULT 0,
+            lastPlayed TEXT
+        );
+    )";
+} // namespace beiklive::SQL
