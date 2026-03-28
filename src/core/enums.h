@@ -68,6 +68,8 @@ namespace beiklive // 结构体
         int crc32 = 0;                                          // 游戏文件的 CRC32 校验值（用于唯一标识游戏）
         
         // 游戏独立设置相关
+        std::string savePath;                                  // 游戏专属存档路径（空=使用全局默认） 
+        std::string screenShotPath;                             // 游戏截图路径
         std::string logoPath;                                   // 游戏封面图片路径
         std::string cheatPath;                                  // 金手指文件路径
         std::string overlayPath;                                // 游戏专属遮罩图片路径

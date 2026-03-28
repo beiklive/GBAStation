@@ -15,6 +15,8 @@ namespace beiklive
             {"platform", entry.platform},
             {"lastPlayed", entry.lastPlayed},
             {"crc32", entry.crc32},
+            {"savePath", entry.savePath},
+            {"screenShotPath", entry.screenShotPath},
             {"cheatPath", entry.cheatPath},
             {"overlayPath", entry.overlayPath},
             {"shaderPath", entry.shaderPath},
@@ -40,6 +42,8 @@ namespace beiklive
         entry.platform = j.value("platform", (int)beiklive::enums::EmuPlatform::NONE);
         entry.lastPlayed = j.value("lastPlayed", "");
         entry.crc32 = j.value("crc32", 0);
+        entry.savePath = j.value("savePath", "");
+        entry.screenShotPath = j.value("screenShotPath", "");
         entry.cheatPath = j.value("cheatPath", "");
         entry.overlayPath = j.value("overlayPath", "");
         entry.shaderPath = j.value("shaderPath", "");
