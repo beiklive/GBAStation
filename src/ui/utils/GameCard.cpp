@@ -18,7 +18,7 @@ namespace beiklive
         addGestureRecognizer(new brls::TapGestureRecognizer(this));
 
         // ✅ 入场动画初始化
-        m_enterT = -index * 0.04f;
+        m_enterT = -index * 0.07f;
         m_enterScale = 0.5f;
         m_enterAnimating = true;
 
@@ -127,7 +127,7 @@ namespace beiklive
         // ===== ✅ 入场动画 =====
         if (m_enterAnimating)
         {
-            m_enterT += 1.0f / 60.0f; // 用60更稳定
+            m_enterT += 1.0f / 120.0f; // 用60更稳定
 
             float duration = 0.35f;
             float t = m_enterT / duration;
