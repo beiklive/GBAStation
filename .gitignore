@@ -41,6 +41,7 @@
 *.dwo
 
 .vs/
+out/
 
 build
 build_*
