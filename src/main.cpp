@@ -19,6 +19,8 @@ int main(int argc, char* argv[]) {
 			brls::Application::enableDebuggingView(true);
 		}
 	}
+	brls::Logger::setLogLevel(brls::LogLevel::LOG_DEBUG);
+	brls::Application::enableDebuggingView(true);
 
 	brls::Platform::APP_LOCALE_DEFAULT = brls::LOCALE_AUTO;
 	// Init the app and i18n

@@ -96,7 +96,7 @@ namespace beiklive
                     bool isDir = (dirItem.itemType == beiklive::enums::FileType::DIRECTORY);
                     items->push_back({dirItem.fileName, isDir? std::to_string(dirItem.childCount) + " items" : dirItem.fileSize, dirItem.iconPath, dirItem.fullPath});
                 }
-
+				brls::Logger::debug("Directory items loaded: " + std::to_string(items->size()));
                 ASYNC_RELEASE
                 brls::sync([this, items]()
                 {
@@ -158,7 +158,6 @@ namespace beiklive
         setPath("/");
         return;
 #endif
-        brls::Logger::info("Showing drive list");
         m_isAtDriveList = true;
         m_currentPath = "";
 

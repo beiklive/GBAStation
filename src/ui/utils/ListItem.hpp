@@ -1,6 +1,6 @@
 #pragma once
 #include <borealis.hpp>
-
+#include <functional>
 #include "core/common.h"
 
 namespace beiklive
@@ -23,7 +23,9 @@ namespace beiklive
 
         static ListItemCell* create();
 
-
+		// 焦点事件回调
+        std::function<void()> onFocusGainedCallback;
+		std::function<void()> onFocusLostCallback;
 
 
 

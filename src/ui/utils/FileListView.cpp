@@ -82,6 +82,7 @@ namespace beiklive
         if (m_recycler)
             m_recycler->reloadData();
         brls::Application::giveFocus(m_recycler);
+		brls::Logger::info("List items set and UI reloaded.");
     }
 
     void FileListView::Init()

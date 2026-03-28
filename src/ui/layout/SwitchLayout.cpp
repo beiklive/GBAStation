@@ -16,6 +16,8 @@ namespace beiklive
         m_cardRow->setAlignItems(brls::AlignItems::CENTER);
         m_cardRow->setGrow(0.0f);
         m_cardRow->setHeight(300.f);
+        m_cardRow->setPaddingRight(20.f);
+        m_cardRow->setPaddingLeft(20.f);
         m_frame->setContentView(m_cardRow);
 
         m_functionArea = new brls::Box(brls::Axis::ROW);
