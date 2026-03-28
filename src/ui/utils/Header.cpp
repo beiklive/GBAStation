@@ -26,20 +26,22 @@ namespace beiklive
         float FontSize = GET_STYLE("brls/applet_frame/header_title_font_size");
         m_titleBox = new brls::Box();
         m_titleBox->setMarginRight(GET_STYLE("brls/applet_frame/header_image_title_spacing"));
-        m_titleBox->setHeight(FontSize);
+        m_titleBox->setHeight(FontSize+5);
         m_titleLabel = new brls::Label();
         m_titleLabel->setTextColor(GET_THEME_COLOR("brls/text"));
-        m_titleLabel->setFontSize(FontSize);
+        m_titleLabel->setFontSize(FontSize+5);
         
         m_titleBox->addView(m_titleLabel);
         this->addView(m_titleBox);
     
         m_subtitleBox = new brls::Box(brls::Axis::COLUMN);
-        m_subtitleBox->setHeight(FontSize);
+        m_subtitleBox->setWidth(500.f);
+        m_subtitleBox->setHeight(FontSize+5);
         m_subtitleBox->setJustifyContent(brls::JustifyContent::CENTER);
     
         m_pathLabel = new brls::Label();
         m_pathLabel->setWidth(500.f);
+        m_pathLabel->setHeight(FontSize+5);
         m_pathLabel->setSingleLine(true);
         m_pathLabel->setHorizontalAlign(brls::HorizontalAlign::LEFT);
         m_pathLabel->setVerticalAlign(brls::VerticalAlign::CENTER);

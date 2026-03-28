@@ -58,7 +58,7 @@ namespace beiklive
 
         m_recycler = new brls::RecyclerFrame();
         m_recycler->setPadding(20.f);
-
+        m_recycler->setScrollingIndicatorVisible(false);
         m_recycler->setGrow(1.f);
         m_dataSource = new FileListDataSource();
 
