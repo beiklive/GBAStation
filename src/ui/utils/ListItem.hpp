@@ -24,9 +24,8 @@ namespace beiklive
         static ListItemCell* create();
 
 		// 焦点事件回调
-        std::function<void()> onFocusGainedCallback;
-		std::function<void()> onFocusLostCallback;
-
+        std::function<void(std::string)> onFocusGainedCallback;
+		std::function<void(std::string)> onFocusLostCallback;
 
 
     private:

@@ -35,6 +35,7 @@ namespace beiklive
 
             }
         });
+        // 给item绑定按键
         fileListView->onItemActionBind = [this](beiklive::ListItemCell& cell)
         {
             // 为每个列表项绑定一个设置按键（例如 X 键， 不要给A键设置， A键使用setItemClickListener）
@@ -48,18 +49,49 @@ namespace beiklive
                 });
 
         };
-
+        // 给item绑定额外焦点事件
+        fileListView->onItemFocused = [this](std::string title)
+        {
+            brls::Logger::debug("Item focused: " + title);
+            updateIndex(title);
+            // TODO: 文件信息预览也在这里更新
+        };
+        fileListView->onItemFocusLost = [this](std::string title)
+        {
+            brls::Logger::debug("Item focus lost: " + title);
+        };
 
 
         fileListView->Init();
         this->getContentBox()->addView(fileListView);
         this->showHeader(true);
         this->showFooter(true);
+        this->getHeader()->setTitle("文件浏览");
+        this->getHeader()->setInfo("123456");
         // this->showBackground(false);
         // this->showShader(false);
     }
 
-    void FileListPage::setFliter(beiklive::enums::FilterMode mode, std::vector<std::string> extensions)
+void FileListPage::updatePath()
+{
+    this->getHeader()->setPath(m_currentPath);
+}
+void FileListPage::updateIndex(std::string fileName)
+{
+    // 更新索引逻辑
+    int index = 0;
+    for(auto& item : m_dirItems)
+    {
+
+        if(item.fileName == fileName)
+        {
+            this->getHeader()->setInfo(std::to_string(index + 1) + "/" + std::to_string(m_dirItems.size()));
+            break;
+        }
+        index++;
+    }
+}
+void FileListPage::setFliter(beiklive::enums::FilterMode mode, std::vector<std::string> extensions)
     {
         // 设置过滤模式和扩展名
         m_filterMode = mode;
@@ -91,6 +123,7 @@ namespace beiklive
                 {
                     // 构建新的列表数据
                     fileListView->setListItems(items);
+                    updatePath();
                 });
             } catch (const std::exception& e) {
                 brls::Logger::error("refreshDirList exception: " + std::string(e.what()));

@@ -85,12 +85,16 @@ void ListItemCell::onFocusGained()
 {
     brls::RecyclerCell::onFocusGained();
     m_accent->setVisibility(brls::Visibility::VISIBLE);
+    if(onFocusGainedCallback)
+        onFocusGainedCallback(m_text->getFullText());
 }
 
 void ListItemCell::onFocusLost()
 {
     brls::RecyclerCell::onFocusLost();
     m_accent->setVisibility(brls::Visibility::INVISIBLE);
+    if(onFocusLostCallback)
+        onFocusLostCallback(m_text->getFullText());
 }
 
 ListItemCell* ListItemCell::create()

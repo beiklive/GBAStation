@@ -92,8 +92,11 @@ namespace beiklive
         void setListItems(ListItemList* items);
         // 设置item的按键绑定
         std::function<void(beiklive::ListItemCell&)> onItemActionBind;
-
         void Init();
+
+        std::function<void(std::string)> onItemFocused; // 列表项获得焦点时的回调函数，参数为被聚焦的游戏条目标题
+        std::function<void(std::string)> onItemFocusLost; // 列表项失去焦点时的回调函数，参数为失去焦点的游戏条目标题
+
 
     private:
         brls::RecyclerFrame*  m_recycler = nullptr;

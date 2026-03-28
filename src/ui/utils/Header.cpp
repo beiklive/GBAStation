@@ -6,8 +6,10 @@ namespace beiklive
     
     HeaderBar::HeaderBar()
     {
+        // this->setWireframeEnabled(true);
+        this->setAxis(brls::Axis::ROW);
+        this->setAlignItems(brls::AlignItems::CENTER);
         this->setJustifyContent(brls::JustifyContent::CENTER);
-    
         this->setHeight(GET_STYLE("brls/applet_frame/header_height"));
         this->setPaddingTop(GET_STYLE("brls/applet_frame/header_padding_top_bottom"));
         this->setPaddingBottom(GET_STYLE("brls/applet_frame/header_padding_top_bottom"));
@@ -21,20 +23,27 @@ namespace beiklive
         this->setLineBottom(1.f);
         
     
+        float FontSize = GET_STYLE("brls/applet_frame/header_title_font_size");
         m_titleBox = new brls::Box();
         m_titleBox->setMarginRight(GET_STYLE("brls/applet_frame/header_image_title_spacing"));
-    
+        m_titleBox->setHeight(FontSize);
         m_titleLabel = new brls::Label();
-        float FontSize = GET_STYLE("brls/applet_frame/header_title_font_size");
-        m_titleLabel->setFontSize(FontSize + 15);
+        m_titleLabel->setTextColor(GET_THEME_COLOR("brls/text"));
+        m_titleLabel->setFontSize(FontSize);
         
         m_titleBox->addView(m_titleLabel);
         this->addView(m_titleBox);
     
         m_subtitleBox = new brls::Box(brls::Axis::COLUMN);
+        m_subtitleBox->setHeight(FontSize);
         m_subtitleBox->setJustifyContent(brls::JustifyContent::CENTER);
     
         m_pathLabel = new brls::Label();
+        m_pathLabel->setWidth(500.f);
+        m_pathLabel->setSingleLine(true);
+        m_pathLabel->setHorizontalAlign(brls::HorizontalAlign::LEFT);
+        m_pathLabel->setVerticalAlign(brls::VerticalAlign::CENTER);
+        m_pathLabel->setAnimated(true);
         m_pathLabel->setFontSize(FontSize/2 + 2);
         m_pathLabel->setTextColor(GET_THEME_COLOR("brls/text"));
     
@@ -46,6 +55,7 @@ namespace beiklive
     
         m_infoLabel = new brls::Label();
         m_infoLabel->setFontSize(FontSize);
+        m_infoLabel->setTextColor(GET_THEME_COLOR("brls/text"));
         this->addView(m_infoLabel);
     
     }

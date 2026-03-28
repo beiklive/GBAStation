@@ -32,6 +32,8 @@ namespace beiklive
         FileListPage();
         ~FileListPage();
 
+        void updatePath();
+        void updateIndex(std::string fileName);
         void setFliter(beiklive::enums::FilterMode mode, std::vector<std::string> extensions);
         void setPath(const std::string path);
         void showDriveList(); // 显示磁盘/驱动器列表

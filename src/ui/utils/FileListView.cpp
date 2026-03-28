@@ -91,8 +91,23 @@ namespace beiklive
         m_recycler->registerCell("Cell", [this]()
                                 {
                                     auto* cell = new beiklive::ListItemCell(); 
+                                    // 给item绑定按键事件
                                     if(onItemActionBind)
                                         onItemActionBind(*cell);
+                                    // 给item绑定额外焦点事件
+                                    cell->onFocusGainedCallback = [this](std::string title)
+                                    {
+                                        if(onItemFocused)
+                                            onItemFocused(title);
+                                    };
+                                    // 给item绑定失去焦点事件
+                                    cell->onFocusLostCallback = [this](std::string title)
+                                    {
+                                        if(onItemFocusLost)
+                                            onItemFocusLost(title);
+                                    };
+
+
                                     return cell; 
                                 });
 

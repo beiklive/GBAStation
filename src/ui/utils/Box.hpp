@@ -14,6 +14,7 @@ namespace beiklive
         Box(brls::Axis flexDirection);
         ~Box();
     
+        beiklive::HeaderBar* getHeader() { return header; }
         void showHeader(bool show);
         void showFooter(bool show);
         void showBackground(bool show);
