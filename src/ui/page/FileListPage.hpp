@@ -23,7 +23,7 @@ namespace beiklive
 
         beiklive::FileListView* fileListView;
 
-        void refreshDirList(const std::string dirPath);
+        void refreshDirList(const std::string dirPath, beiklive::ListItemList* items);
         bool passesFilter(const std::string suffix);
         void navigateUp();
 

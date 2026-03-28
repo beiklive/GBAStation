@@ -83,19 +83,8 @@ namespace beiklive
         brls::async([ASYNC_TOKEN, path]()
         {
             try {
-                refreshDirList(path);
                 beiklive::ListItemList *items = new beiklive::ListItemList();
-                for (const auto &dirItem : m_dirItems)
-                {
-                    // if(dirItem.itemType == beiklive::enums::FileType::NONE)
-                    // {
-                    //     items->push_back({dirItem.fileName, dirItem.fileSize, dirItem.iconPath, dirItem.fullPath});
-                    //     continue;
-                    // }
-
-                    bool isDir = (dirItem.itemType == beiklive::enums::FileType::DIRECTORY);
-                    items->push_back({dirItem.fileName, isDir? std::to_string(dirItem.childCount) + " items" : dirItem.fileSize, dirItem.iconPath, dirItem.fullPath});
-                }
+                refreshDirList(path, items);
 				brls::Logger::debug("Directory items loaded: " + std::to_string(items->size()));
                 ASYNC_RELEASE
                 brls::sync([this, items]()
@@ -167,8 +156,10 @@ namespace beiklive
             std::vector<std::string> drives = beiklive::tools::getLogicalDrives();
             const std::string driveIcon = beiklive::tools::getIconPath(beiklive::enums::FileType::DRIVE);
             m_dirItems.clear();
+            beiklive::ListItemList* items = new beiklive::ListItemList();
             for (const auto& drive : drives)
             {
+                // 填充 m_dirItems
                 m_dirItems.push_back(beiklive::DirListData{
                     drive,
                     drive,
@@ -176,13 +167,11 @@ namespace beiklive
                     beiklive::enums::FileType::DRIVE,
                     "",
                     0,
-                });
+                    });
+
+                // 直接添加到 items，避免二次遍历
+                items->push_back({ drive, "本地磁盘", driveIcon, drive });
             }
-
-            beiklive::ListItemList* items = new beiklive::ListItemList();
-            for (const auto& driveItem : m_dirItems)
-                items->push_back({driveItem.fileName, "本地磁盘", driveItem.iconPath, driveItem.fullPath});
-
             ASYNC_RELEASE
             brls::sync([this, items]()
             {
@@ -191,7 +180,7 @@ namespace beiklive
         });
     }
 
-    void FileListPage::refreshDirList(const std::string dirPath)
+    void FileListPage::refreshDirList(const std::string dirPath, beiklive::ListItemList* items)
     {
         std::error_code ec;
         if (!fs::exists(dirPath, ec) || !fs::is_directory(dirPath, ec))
@@ -214,6 +203,7 @@ namespace beiklive
                     "返回上一级",
                     0,
                 });
+            items->push_back({ "..", "返回上一级", beiklive::tools::getIconPath(beiklive::enums::FileType::NONE), m_currentPath });
         }
         for (const auto &entry : fs::directory_iterator(dirPath, fs::directory_options::skip_permission_denied, ec))
         {
@@ -240,6 +230,7 @@ namespace beiklive
                     beiklive::tools::getFileSizeString(fullPath),
                     beiklive::tools::countEntries(fullPath),
                 });
+            items->push_back({ name, isDir ? std::to_string(beiklive::tools::countEntries(fullPath)) + " items" : beiklive::tools::getFileSizeString(fullPath), beiklive::tools::getIconPath(beiklive::tools::getFileType(fullPath)), fullPath });
         }
 
 
