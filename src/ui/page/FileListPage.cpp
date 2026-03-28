@@ -261,7 +261,7 @@ void FileListPage::setFliter(beiklive::enums::FilterMode mode, std::vector<std::
 
             // 根据类型分别获取大小字符串和条目数（避免不必要的调用）
             std::string sizeStr;
-            int entryCount = 0;
+            size_t entryCount = 0;
             if (isDir)
             {
                 entryCount = beiklive::tools::countEntries(fullPath);

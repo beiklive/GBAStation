@@ -26,17 +26,18 @@ namespace beiklive
         void refreshDirList(const std::string dirPath, beiklive::ListItemList* items);
         bool passesFilter(const std::string suffix);
         void navigateUp();
-
-
-    public:
-        FileListPage();
-        ~FileListPage();
-
         void updatePath();
         void updateIndex(std::string fileName);
+        
+        
+        public:
+        FileListPage();
+        ~FileListPage();
+        
+        void showDriveList(); // 显示磁盘/驱动器列表
         void setFliter(beiklive::enums::FilterMode mode, std::vector<std::string> extensions);
         void setPath(const std::string path);
-        void showDriveList(); // 显示磁盘/驱动器列表
+
 
         //打开文件时的回调
         std::function<void(beiklive::DirListData)> onFileSelected;

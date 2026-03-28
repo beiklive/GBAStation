@@ -7,19 +7,18 @@ namespace beiklive
     {
         m_gameData = std::move(gameData);
         // 检查文件是否存在
-        if (!beiklive::tools::isFileExists(m_gameData.fullPath)) {
+        if (!beiklive::tools::isFileExists(m_gameData.fullPath))
+        {
             brls::Application::notify("文件不存在: " + m_gameData.fileName);
             // 这里可以选择返回上一级或显示错误界面
             brls::sync([this]()
-            {
-                brls::Application::popActivity();
-            });
-        }else{
-            PageInit();
+                       { brls::Application::popActivity(); });
+        }
+        else
+        {
             // 此处将 DirListData 处理为 GameEntry 以供游戏使用
             GameEntryInitialize();
-            GameViewInitialize();
-            GameMenuInitialize();
+            _setupGame();
         }
     }
 
@@ -27,35 +26,34 @@ namespace beiklive
     {
         m_gameEntry = std::move(gameEntry);
         // 检查文件是否存在
-        if (!beiklive::tools::isFileExists(m_gameEntry.path)) {
+        if (!beiklive::tools::isFileExists(m_gameEntry.path))
+        {
             brls::Application::notify("文件不存在: " + m_gameEntry.title);
             // 这里可以选择返回上一级或显示错误界面
             brls::sync([this]()
-            {
-                brls::Application::popActivity();
-            });
-        }else{
-            PageInit();
+                       { brls::Application::popActivity(); });
+        }
+        else
+        {
             // GameEntry 已经包含了游戏的完整信息，可以直接使用，无需再处理一次
             updateGameCount();
-            GameViewInitialize();
-            GameMenuInitialize();
+
+            _setupGame();
         }
     }
 
-
     GamePage::~GamePage()
     {
-        brls::Logger::info("GamePage destructor called for game: " + m_gameEntry.title);
+        brls::Logger::debug("GamePage destructor called for game: " + m_gameEntry.title);
     }
 
     void GamePage::updateGameCount()
     {
-        auto& db = beiklive::GameDB; // 获取全局游戏数据库实例
+        auto &db = beiklive::GameDB; // 获取全局游戏数据库实例
         // 更新运行时间戳
         m_gameEntry.lastPlayed = beiklive::tools::getTimestampString();
         m_gameEntry.playCount += 1; // 玩过的次数加1
-        brls::Logger::info("GamePage 更新游戏条目：lastPlayed={}, playCount={}", m_gameEntry.lastPlayed, m_gameEntry.playCount);
+        brls::Logger::debug("GamePage 更新游戏条目：lastPlayed={}, playCount={}", m_gameEntry.lastPlayed, m_gameEntry.playCount);
         // 提交一次数据库更改，确保在游戏过程中数据被保存，即使中途崩溃也不会丢失
         db->upsert(m_gameEntry);
         db->flush();
@@ -63,28 +61,31 @@ namespace beiklive
 
     void GamePage::GameEntryInitialize()
     {
-        auto& db = beiklive::GameDB; // 获取全局游戏数据库实例
+        auto &db = beiklive::GameDB;                     // 获取全局游戏数据库实例
         auto dcrc32 = tools::crc32(m_gameData.fullPath); // 计算 CRC32 校验值
         // 记录日志：开始处理游戏条目
-        brls::Logger::info("GamePage 开始处理游戏条目，路径: {}, CRC32: {}", m_gameData.fullPath, dcrc32);
+        brls::Logger::debug("GamePage 开始处理游戏条目，路径: {}, CRC32: {}", m_gameData.fullPath, dcrc32);
         auto foundByCrc = db->findByCrc32(dcrc32);
         // 如果数据库中没有此游戏的记录 ,插入一条新记录，等到游戏结束时再插入一次
-        if (!foundByCrc.has_value()) {
-            brls::Logger::info("GamePage 数据库中没有此游戏的记录，插入新记录: {}", m_gameData.fullPath);
+        if (!foundByCrc.has_value())
+        {
+            brls::Logger::debug("GamePage 数据库中没有此游戏的记录，插入新记录: {}", m_gameData.fullPath);
             // 数据库中没有此游戏的记录，创建一个新的 GameEntry 并插入数据库
             m_gameEntry.path = m_gameData.fullPath;
             m_gameEntry.title = GET_MAPPING_KEY_STR(beiklive::tools::getFileNameWithoutExtension(m_gameData.fileName), beiklive::tools::getFileNameWithoutExtension(m_gameData.fileName));
-            m_gameEntry.platform = (int)m_gameData.itemType; // 设置平台类型
-            m_gameEntry.crc32 = dcrc32; // 设置 CRC32 校验值
+            m_gameEntry.platform = (int)m_gameData.itemType;                                                                // 设置平台类型
+            m_gameEntry.crc32 = dcrc32;                                                                                     // 设置 CRC32 校验值
             m_gameEntry.logoPath = beiklive::tools::getDefaultLogoPath((beiklive::enums::EmuPlatform)m_gameEntry.platform); // 设置默认封面路径
-        } else {
-            brls::Logger::info("GamePage 数据库中已存在此游戏记录: {}", m_gameData.fullPath);
+        }
+        else
+        {
+            brls::Logger::debug("GamePage 数据库中已存在此游戏记录: {}", m_gameData.fullPath);
             // 数据库中已存在此游戏记录，使用数据库中的数据初始化 GameEntry
             m_gameEntry = foundByCrc.value();
         }
 
         updateGameCount();
-        brls::Logger::info("GamePage 游戏条目已保存到数据库: {}", m_gameData.fullPath);
+        brls::Logger::debug("GamePage 游戏条目已保存到数据库: {}", m_gameData.fullPath);
     }
 
     void GamePage::PageInit()
@@ -109,8 +110,8 @@ namespace beiklive
                 brls::sync([this]()
                            { brls::Application::popActivity(); });
                 return true;
-            }, /*hidden=*/false, /*repeat=*/false, brls::SOUND_BACK);
-
+            },
+            /*hidden=*/false, /*repeat=*/false, brls::SOUND_BACK);
     }
 
     void GamePage::GameViewInitialize()
@@ -141,6 +142,10 @@ namespace beiklive
         // m_gameView->setVisibility(brls::Visibility::GONE); // 初始隐藏，加载完成后显示
     }
 
-
-
+    void GamePage::_setupGame()
+    {
+        PageInit();
+        GameViewInitialize();
+        GameMenuInitialize();
+    }
 }
