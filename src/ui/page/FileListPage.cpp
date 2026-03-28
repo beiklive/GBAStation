@@ -184,56 +184,72 @@ namespace beiklive
     {
         std::error_code ec;
         if (!fs::exists(dirPath, ec) || !fs::is_directory(dirPath, ec))
-            return; // 路径无效，返回空
+            return;
 
-        // 更新当前路径和上一个路径
         m_previousPath = m_currentPath;
         m_currentPath = dirPath;
-        // 刷新目录列表
         m_dirItems.clear();
+
+        // 添加“返回上一级”条目（此部分无重复调用，无需优化）
         std::string parentPath = fs::path(m_currentPath).parent_path().string();
         if (parentPath != m_currentPath)
         {
-            m_dirItems.push_back(
-                beiklive::DirListData{
-                    "..",
-                    m_currentPath,
-                    beiklive::tools::getIconPath(beiklive::enums::FileType::NONE),
-                    beiklive::enums::FileType::NONE,
-                    "返回上一级",
-                    0,
+            std::string upIcon = beiklive::tools::getIconPath(beiklive::enums::FileType::NONE);
+            m_dirItems.push_back({
+                "..", m_currentPath, upIcon, beiklive::enums::FileType::NONE,
+                "返回上一级", 0
                 });
-            items->push_back({ "..", "返回上一级", beiklive::tools::getIconPath(beiklive::enums::FileType::NONE), m_currentPath });
+            items->push_back({ "..", "返回上一级", upIcon, m_currentPath });
         }
-        for (const auto &entry : fs::directory_iterator(dirPath, fs::directory_options::skip_permission_denied, ec))
+
+        // 遍历目录
+        for (const auto& entry : fs::directory_iterator(dirPath, fs::directory_options::skip_permission_denied, ec))
         {
             if (ec) { ec.clear(); continue; }
+
             std::error_code entryEc;
-            std::string fullPath = entry.path().string();
-            std::string name = entry.path().filename().string();
+            const auto& path = entry.path();               // 保存 path 对象，避免重复构造
+            std::string fullPath = path.string();
+            std::string name = path.filename().string();
             bool isDir = entry.is_directory(entryEc);
-            if (entryEc) continue; // 无法访问的条目，跳过
-            // 过滤文件
+            if (entryEc) continue;                         // 无法访问的条目跳过
+
+            // 文件过滤（仅对非目录生效）
             if (!isDir)
             {
-                std::string suffix = beiklive::tools::getFileExtension(entry.path());
+                std::string suffix = beiklive::tools::getFileExtension(path);
                 if (!passesFilter(suffix))
-                    continue; // 不通过过滤，跳过此项
+                    continue;
             }
-            // 补充数据
-            m_dirItems.push_back(
-                beiklive::DirListData{
-                    name,
-                    fullPath,
-                    beiklive::tools::getIconPath(beiklive::tools::getFileType(fullPath)),
-                    beiklive::tools::getFileType(fullPath),
-                    beiklive::tools::getFileSizeString(fullPath),
-                    beiklive::tools::countEntries(fullPath),
+
+            // --- 核心优化：只调用一次 getFileType，并复用结果 ---
+            beiklive::enums::FileType fileType = beiklive::tools::getFileType(fullPath);
+            std::string iconPath = beiklive::tools::getIconPath(fileType);
+
+            // 根据类型分别获取大小字符串和条目数（避免不必要的调用）
+            std::string sizeStr;
+            int entryCount = 0;
+            if (isDir)
+            {
+                entryCount = beiklive::tools::countEntries(fullPath);
+                sizeStr = "";          // 目录通常不显示大小，可根据实际需求调整
+            }
+            else
+            {
+                sizeStr = beiklive::tools::getFileSizeString(fullPath);
+                // entryCount 保持 0（文件无子条目）
+            }
+
+            // 添加到 m_dirItems
+            m_dirItems.push_back({
+                name, fullPath, iconPath, fileType,
+                sizeStr, entryCount
                 });
-            items->push_back({ name, isDir ? std::to_string(beiklive::tools::countEntries(fullPath)) + " items" : beiklive::tools::getFileSizeString(fullPath), beiklive::tools::getIconPath(beiklive::tools::getFileType(fullPath)), fullPath });
+
+            // 添加到 items（显示文本：目录显示条目数，文件显示大小）
+            std::string displayText = isDir ? (std::to_string(entryCount) + " items") : sizeStr;
+            items->push_back({ name, displayText, iconPath, fullPath });
         }
-
-
     }
 
 } // namespace beiklive
