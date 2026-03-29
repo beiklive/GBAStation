@@ -106,6 +106,8 @@ void FileListPage::setFliter(beiklive::enums::FilterMode mode, std::vector<std::
 
     void FileListPage::setPath(const std::string path)
     {
+        brls::Application::blockInputs();
+
         m_previousPath = m_currentPath;
         m_currentPath = path;
         m_isAtDriveList = false;
@@ -124,6 +126,7 @@ void FileListPage::setFliter(beiklive::enums::FilterMode mode, std::vector<std::
                     // 构建新的列表数据
                     fileListView->setListItems(items);
                     updatePath();
+                    brls::Application::unblockInputs();
                 });
             } catch (const std::exception& e) {
                 brls::Logger::error("refreshDirList exception: " + std::string(e.what()));
