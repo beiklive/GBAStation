@@ -14,15 +14,13 @@ namespace beiklive::enums
     enum class FileType
     {
         NONE,
-        GBA_ROM,    // GBA文件
-        GBC_ROM,    // GBC文件
-        GB_ROM,     // GB文件
-
+        GBA_ROM, // GBA文件
+        GBC_ROM, // GBC文件
+        GB_ROM,  // GB文件
 
         // 上面的顺序必须与EmuPlatform保持一致，方便后续通过平台类型直接转换为文件类型
 
-
-        DRIVE,      // 磁盘驱动器（Windows: C:\、D:\ 等）
+        DRIVE, // 磁盘驱动器（Windows: C:\、D:\ 等）
         DIRECTORY,
         NORMAL_FILE,
         IMAGE_FILE, // PNG后缀
@@ -44,17 +42,10 @@ namespace beiklive::enums
         Blacklist  // 显示所有文件和文件夹，但隐藏特定扩展名的文件
     };
 
-
-
-
-
 } // namespace beiklive
-
 
 namespace beiklive // 结构体
 {
-
-
 
     // 游戏条目结构体，包含游戏路径、显示标题、封面路径等字段, 用于在游戏列表中显示和管理游戏信息
     struct GameEntry
@@ -66,27 +57,26 @@ namespace beiklive // 结构体
         int platform = (int)beiklive::enums::EmuPlatform::NONE; // 游戏平台（如 GBA、GBC、GB）
         std::string lastPlayed;                                 // 上次玩的时间(时间戳字符串)
         int crc32 = 0;                                          // 游戏文件的 CRC32 校验值（用于唯一标识游戏）
-        
-        // 游戏独立设置相关
-        std::string savePath;                                  // 游戏专属存档路径（空=使用全局默认） 
-        std::string screenShotPath;                             // 游戏截图路径
-        std::string logoPath;                                   // 游戏封面图片路径
-        std::string cheatPath;                                  // 金手指文件路径
-        std::string overlayPath;                                // 游戏专属遮罩图片路径
-        std::string shaderPath;                                 // 游戏专属着色器预设路径
 
-        bool overlayEnabled = false;                                  // 是否启用游戏专属遮罩（使用全局设置初始化）
-        bool shaderEnabled = false;                                   // 是否启用游戏专属着色器（使用全局设置初始化）
+        // 游戏独立设置相关
+        std::string savePath;       // 游戏专属存档路径（空=使用全局默认）
+        std::string screenShotPath; // 游戏截图路径
+        std::string logoPath;       // 游戏封面图片路径
+        std::string cheatPath;      // 金手指文件路径
+        std::string overlayPath;    // 游戏专属遮罩图片路径
+        std::string shaderPath;     // 游戏专属着色器预设路径
+
+        bool overlayEnabled = false; // 是否启用游戏专属遮罩（使用全局设置初始化）
+        bool shaderEnabled = false;  // 是否启用游戏专属着色器（使用全局设置初始化）
 
         int displayMode = 0;
         float integerAspectRatio = 1.0f;
         float customScale = 1.0f;
         float customOffsetX = 0.0f;
         float customOffsetY = 0.0f;
-        
-        std::vector<std::string> shaderParaNames; // 着色器参数名称列表
-        std::vector<float> shaderParaValues;       // 着色器参数值列表
 
+        std::vector<std::string> shaderParaNames; // 着色器参数名称列表
+        std::vector<float> shaderParaValues;      // 着色器参数值列表
     };
 
     typedef std::vector<GameEntry> GameList; // 游戏列表类型定义
@@ -110,6 +100,12 @@ namespace beiklive // 结构体
         beiklive::enums::FileType itemType; // 文件类型
         std::string fileSize;               // 文件大小（字节），目录为0
         size_t childCount;                  // 子项数量，仅目录有效，文件为0
+    };
+
+    struct RetroNameMap
+    {
+        const char *name;
+        int id;
     };
 
 } // namespace beiklive

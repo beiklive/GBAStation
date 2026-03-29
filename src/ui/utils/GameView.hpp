@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/common.h"
+#include "game/control/InputMap.hpp"
 
 namespace beiklive
 {
