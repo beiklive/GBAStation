@@ -1,3 +1,8 @@
+#ifdef __SWITCH__
+#include <switch.h>
+#endif
+
+
 #include "core/common.h"
 #include "ui/page/StartPage.hpp"
 #include "ui/utils/MyActivity.hpp"
@@ -7,6 +12,11 @@ extern "C" unsigned int sceLibcHeapSize = 2 * 1024 * 1024;
 #endif
 
 int main(int argc, char* argv[]) {
+#ifdef __SWITCH__
+    appletInitializeGamePlayRecording();
+#endif
+
+
 	beiklive::ConfigureInit();
 
 	for (int i = 1; i < argc; i++) {
