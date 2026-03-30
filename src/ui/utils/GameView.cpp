@@ -90,26 +90,4 @@ namespace beiklive
         GameInputManager::instance().handleInput(); // 在绘制时处理输入，确保游戏逻辑能够及时响应输入事件
     }
 
-
-    void GameView::handleInput()
-    {
-        int i = 0;
-#ifdef __SWITCH__
-        int controllerCount = GameInputManager::instance().getControllerCount();
-        for (int i = 0; i < controllerCount; i++)
-        {
-#endif
-        auto inputState = GameInputManager::instance().getGamepadState(i);
-        // 功能键检测，检测设置里的按键
-        {
-            
-        }
-
-
-
-
-#ifdef __SWITCH__
-        }
-#endif
-    }
 }

@@ -91,7 +91,12 @@ namespace beiklive
 
         // 处理控制器的输入
         void handleControllerInput();
+        void checkHotkeys();
         GamepadState getControllerState(int controllerNum);
+        
+        
+        void printactiveInputs();
+
     };
 
     
