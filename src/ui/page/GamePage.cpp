@@ -101,17 +101,17 @@ namespace beiklive
         this->setWidthPercentage(100.f);
         this->setHeightPercentage(100.f);
 
-        this->registerAction(
-            "退出游戏",
-            brls::BUTTON_START,
-            [this](brls::View *)
-            {
-                // 此处设置按键功能
-                brls::sync([this]()
-                           { brls::Application::popActivity(); });
-                return true;
-            },
-            /*hidden=*/false, /*repeat=*/false, brls::SOUND_BACK);
+        // this->registerAction(
+        //     "退出游戏",
+        //     brls::BUTTON_START,
+        //     [this](brls::View *)
+        //     {
+        //         // 此处设置按键功能
+        //         brls::sync([this]()
+        //                    { brls::Application::popActivity(); });
+        //         return true;
+        //     },
+        //     /*hidden=*/false, /*repeat=*/false, brls::SOUND_BACK);
     }
 
     void GamePage::GameViewInitialize()
@@ -149,6 +149,7 @@ namespace beiklive
         GameViewInitialize();
         GameMenuInitialize();
 
-        brls::Application::giveFocus(m_gameView); // 游戏视图获得焦点，准备接受输入
+        brls::sync([this]()
+                   { brls::Application::giveFocus(m_gameView); }); // 游戏视图获得焦点，准备接受输入
     }
 }

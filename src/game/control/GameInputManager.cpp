@@ -2,13 +2,66 @@
 
 namespace beiklive
 {
-float fsqrt_(float f) {
-    int i = *(int *)&f;
-    i = (i >> 1) + 0x1fbb67ae;
-    float f1 = *(float *)&i;
-    return 0.5F * (f1 + f / f1);
+    float fsqrt_(float f)
+    {
+        int i = *(int *)&f;
+        i = (i >> 1) + 0x1fbb67ae;
+        float f1 = *(float *)&i;
+        return 0.5F * (f1 + f / f1);
+    }
 
-}
+    std::vector<brls::ControllerButton> parseButton(const GamepadState &state)
+    {
+        short code = state.buttonFlags;
+        std::vector<brls::ControllerButton> buttons;
+        if (code & UP_FLAG)
+            buttons.push_back(brls::BUTTON_UP);
+        if (code & DOWN_FLAG)
+            buttons.push_back(brls::BUTTON_DOWN);
+        if (code & LEFT_FLAG)
+            buttons.push_back(brls::BUTTON_LEFT);
+        if (code & RIGHT_FLAG)
+            buttons.push_back(brls::BUTTON_RIGHT);
+        if (code & A_FLAG)
+            buttons.push_back(brls::BUTTON_A);
+        if (code & B_FLAG)
+            buttons.push_back(brls::BUTTON_B);
+        if (code & X_FLAG)
+            buttons.push_back(brls::BUTTON_X);
+        if (code & Y_FLAG)
+            buttons.push_back(brls::BUTTON_Y);
+        if (code & BACK_FLAG)
+            buttons.push_back(brls::BUTTON_BACK);
+        if (code & PLAY_FLAG)
+            buttons.push_back(brls::BUTTON_START);
+        if (code & LB_FLAG)
+            buttons.push_back(brls::BUTTON_LB);
+        if (code & RB_FLAG)
+            buttons.push_back(brls::BUTTON_RB);
+
+        return buttons;
+    }
+
+    void printGamepadState(const GamepadState &state)
+    {
+        std::vector<brls::ControllerButton> buttons = parseButton(state);
+        std::string buttonStr;
+        for (auto button : buttons)
+        {
+            for (const auto& it : beiklive::input::k_brlsNames)
+            {
+                if (it.id == button)
+                {
+                    buttonStr += it.name;
+                    buttonStr.push_back(' ');
+                    break;
+                }
+            }
+        }
+        brls::Logger::debug("GamepadState: buttons: [{}]",
+                            buttonStr);
+    }
+
     GameInputManager::GameInputManager()
     {
         auto inputManager = brls::Application::getPlatform()->getInputManager();
@@ -54,6 +107,20 @@ float fsqrt_(float f) {
 
     void GameInputManager::dropInput()
     {
+        if (inputDropped)
+            return;
+        bool res = true;
+        // Drop gamepad state
+        GamepadState gamepadState;
+        auto controllersCount = brls::Application::getPlatform()
+                                    ->getInputManager()
+                                    ->getControllersConnectedCount();
+
+        for (int i = 0; i < controllersCount; i++)
+        {
+            // 全部清空
+            lastGamepadStates[i] = gamepadState;
+        }
     }
 
     void GameInputManager::handleInput(bool ignoreTouch)
@@ -73,6 +140,8 @@ float fsqrt_(float f) {
         //         &mouse);
 
         // 处理输入状态变化，转换为游戏逻辑需要的格式
+        if (!inputEnabled)
+            return;
         handleControllerInput();
     }
     void GameInputManager::handleControllerInput()
@@ -83,6 +152,7 @@ float fsqrt_(float f) {
         auto controllersCount = brls::Application::getPlatform()
                                     ->getInputManager()
                                     ->getControllersConnectedCount();
+        brls::Logger::debug("GameInputManager: {} controller(s) connected", controllersCount);
 
         // 遍历控制器获取状态并处理输入，最多GAMEPADS_MAX个控制器
         for (int i = 0; i < controllersCount; i++)
@@ -93,15 +163,19 @@ float fsqrt_(float f) {
             // 状态有变化
             if (!gamepadState.is_equal(lastGamepadStates[i]))
             {
+                // 更新对应控制器的状态
                 lastGamepadStates[i] = gamepadState;
-
+                printGamepadState(gamepadState);
+                // 检测手柄数量变化，发送特定消息通知游戏
                 if (lastControllerCount != controllersCount)
                 {
                     lastControllerCount = controllersCount;
 
                     for (int i = 0; i < controllersCount; i++)
                     {
-                        brls::Logger::debug("StreamingView: send features message for controller #{}", i);
+                        brls::Logger::debug("GameInputManager: Controller #{} connected", i);
+                        std::string buttonStr = "控制器" + std::to_string(i) + "已连接";
+                        brls::Application::notify(buttonStr);
                     }
                 }
             }
@@ -118,7 +192,7 @@ float fsqrt_(float f) {
 
         // 防止以后按键需要调整映射，先把原始输入状态保存下来，后续处理都基于这个状态进行转换
         controller = rawController;
-        
+
         // 开始处理控制器输入，转换为GamepadState格式
         // 处理线性触发器输入（LT和RT），如果轴值大于0则使用轴值，否则根据按钮状态设置为1或0
         float lzAxis = controller.axes[brls::LEFT_Z] > 0 ? controller.axes[brls::LEFT_Z] : (controller.buttons[brls::BUTTON_LT] ? 1.f : 0.f);
@@ -127,23 +201,27 @@ float fsqrt_(float f) {
         // 处理摇杆死区，TODO: 以后如果需要调整死区可以在这里修改
         float leftStickDeadzone = 0.0f;
         float rightStickDeadzone = 0.0f;
-        
+
         float leftXAxis = controller.axes[brls::LEFT_X];
         float leftYAxis = controller.axes[brls::LEFT_Y];
         float rightXAxis = controller.axes[brls::RIGHT_X];
         float rightYAxis = controller.axes[brls::RIGHT_Y];
 
-        if (leftStickDeadzone > 0) {
+        if (leftStickDeadzone > 0)
+        {
             float magnitude = fsqrt_(std::powf(leftXAxis, 2) + std::powf(leftYAxis, 2));
-            if (magnitude < leftStickDeadzone) {
+            if (magnitude < leftStickDeadzone)
+            {
                 leftXAxis = 0;
                 leftYAxis = 0;
             }
         }
 
-        if (rightStickDeadzone > 0) {
+        if (rightStickDeadzone > 0)
+        {
             float magnitude = fsqrt_(std::powf(rightXAxis, 2) + std::powf(rightYAxis, 2));
-            if (magnitude < rightStickDeadzone) {
+            if (magnitude < rightStickDeadzone)
+            {
                 rightXAxis = 0;
                 rightYAxis = 0;
             }
@@ -166,96 +244,33 @@ float fsqrt_(float f) {
                 -0x7FFF * rightYAxis),
         };
 
+        // 开始逐个处理按钮输入，根据按钮状态设置对应的位
 
+#define SET_GAME_PAD_STATE(LIMELIGHT_KEY, GAMEPAD_BUTTON) \
+    controller.buttons[GAMEPAD_BUTTON]                    \
+        ? (gamepadState.buttonFlags |= LIMELIGHT_KEY)     \
+        : (gamepadState.buttonFlags &= ~LIMELIGHT_KEY);
 
+        SET_GAME_PAD_STATE(UP_FLAG, brls::BUTTON_UP);
+        SET_GAME_PAD_STATE(DOWN_FLAG, brls::BUTTON_DOWN);
+        SET_GAME_PAD_STATE(LEFT_FLAG, brls::BUTTON_LEFT);
+        SET_GAME_PAD_STATE(RIGHT_FLAG, brls::BUTTON_RIGHT);
 
+        SET_GAME_PAD_STATE(A_FLAG, brls::BUTTON_A);
+        SET_GAME_PAD_STATE(B_FLAG, brls::BUTTON_B);
+        SET_GAME_PAD_STATE(X_FLAG, brls::BUTTON_X);
+        SET_GAME_PAD_STATE(Y_FLAG, brls::BUTTON_Y);
 
+        SET_GAME_PAD_STATE(BACK_FLAG, brls::BUTTON_BACK);
+        SET_GAME_PAD_STATE(PLAY_FLAG, brls::BUTTON_START);
 
+        SET_GAME_PAD_STATE(LB_FLAG, brls::BUTTON_LB);
+        SET_GAME_PAD_STATE(RB_FLAG, brls::BUTTON_RB);
 
-        return GamepadState();
-    }
+        SET_GAME_PAD_STATE(LS_CLK_FLAG, brls::BUTTON_LSB);
+        SET_GAME_PAD_STATE(RS_CLK_FLAG, brls::BUTTON_RSB);
 
-    bool GameInputManager::compareControllerState(const brls::ControllerState &a, const brls::ControllerState &b)
-    {
-        for (int i = 0; i < brls::ControllerButton::_BUTTON_MAX; i++)
-        {
-            if (a.buttons[i] != b.buttons[i])
-                return false;
-        }
-        for (int i = 0; i < brls::ControllerAxis::_AXES_MAX; i++)
-        {
-            if (a.axes[i] != b.axes[i])
-                return false;
-        }
-        return true;
-    }
-
-    const char *getPadEnumString(int value)
-    {
-        switch (value)
-        {
-        case 0:
-            return "BUTTON_LT";
-        case 1:
-            return "BUTTON_LB";
-        case 2:
-            return "BUTTON_LSB";
-        case 3:
-            return "BUTTON_UP";
-        case 4:
-            return "BUTTON_RIGHT";
-        case 5:
-            return "BUTTON_DOWN";
-        case 6:
-            return "BUTTON_LEFT";
-        case 7:
-            return "BUTTON_BACK";
-        case 8:
-            return "BUTTON_GUIDE";
-        case 9:
-            return "BUTTON_START";
-        case 10:
-            return "BUTTON_RSB";
-        case 11:
-            return "BUTTON_Y";
-        case 12:
-            return "BUTTON_B";
-        case 13:
-            return "BUTTON_A";
-        case 14:
-            return "BUTTON_X";
-        case 15:
-            return "BUTTON_RB";
-        case 16:
-            return "BUTTON_RT";
-        case 17:
-            return "BUTTON_NAV_UP";
-        case 18:
-            return "BUTTON_NAV_RIGHT";
-        case 19:
-            return "BUTTON_NAV_DOWN";
-        case 20:
-            return "BUTTON_NAV_LEFT";
-        }
-    }
-
-    const char *getAxisEnumString(int value)
-    {
-        switch (value)
-        {
-        case 0:
-            return "LEFT_X";
-        case 1:
-            return "LEFT_Y";
-        case 2:
-            return "RIGHT_X";
-        case 3:
-            return "RIGHT_Y";
-        case 4:
-            return "LEFT_Z";
-        case 5:
-            return "RIGHT_Z";
-        }
+        return gamepadState;
     }
 
 } // namespace beiklive

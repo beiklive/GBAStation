@@ -13,6 +13,33 @@ namespace beiklive
     updateUnifiedControllerState  获取当前所有手柄按键的状态
     */
 
+    // 方向键
+    #define UP_FLAG        0x00000001
+    #define DOWN_FLAG      0x00000002
+    #define LEFT_FLAG      0x00000004
+    #define RIGHT_FLAG     0x00000008
+
+    // ABXY
+    #define A_FLAG         0x00000010
+    #define B_FLAG         0x00000020
+    #define X_FLAG         0x00000040
+    #define Y_FLAG         0x00000080
+
+    // 功能键
+    #define BACK_FLAG      0x00000100
+    #define PLAY_FLAG      0x00000200   // START
+
+    // 肩键
+    #define LB_FLAG        0x00000400
+    #define RB_FLAG        0x00000800
+
+    // 摇杆按压
+    #define LS_CLK_FLAG    0x00001000
+    #define RS_CLK_FLAG    0x00002000
+
+
+
+
     // Moonlight ready gamepad
     struct GamepadState
     {
@@ -48,18 +75,19 @@ namespace beiklive
         void setInputEnabled(bool enabled) { inputEnabled = enabled; }
         bool isInputEnabled() const { return inputEnabled; }
 
-        bool compareControllerState(const brls::ControllerState &a, const brls::ControllerState &b);
-        const char *getPadEnumString(int value);
-        const char *getAxisEnumString(int value);
-
     private:
         bool inputDropped = false;
         bool inputEnabled = true;
 
+        std::vector<brls::ControllerButton> SPECIAL_FLAG_COMBO = {brls::BUTTON_LB, brls::BUTTON_RB, brls::BUTTON_BACK, brls::BUTTON_START};
         GamepadState lastGamepadStates[GAMEPADS_MAX];
 
         // 处理控制器的输入
         void handleControllerInput();
         GamepadState getControllerState(int controllerNum);
     };
+
+    
+    std::vector<brls::ControllerButton> parseButton(const GamepadState& state);
+    void printGamepadState(const GamepadState& state);
 }
