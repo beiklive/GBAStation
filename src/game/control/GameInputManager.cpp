@@ -295,7 +295,7 @@ namespace beiklive
     }
 
 
-    GamepadState GameInputManager::getControllerState(int controllerNum)
+    GamepadState GameInputManager::getGamepadState(int controllerNum)
     {
         return lastGamepadStates[controllerNum];
     }
