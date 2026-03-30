@@ -92,7 +92,6 @@ namespace beiklive
         // 处理控制器的输入
         void handleControllerInput();
         GamepadState getControllerState(int controllerNum);
-        int _transStringToButtonFlag(const std::string& buttonStr);
     };
 
     

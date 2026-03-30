@@ -2,7 +2,6 @@
 
 #include "core/common.h"
 #include "game/control/GameInputManager.hpp"
-#include 
 namespace beiklive
 {
     // 游戏视图，负责游戏的渲染显示，输入处理等功能

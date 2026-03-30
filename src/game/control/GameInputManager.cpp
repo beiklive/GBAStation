@@ -164,7 +164,7 @@ namespace beiklive
                 lastGamepadStates[i] = gamepadState;
                 if(gamepadState.buttonFlags)
                 {
-                    printGamepadState(gamepadState);
+                    // printGamepadState(gamepadState);
                 }
 #ifdef __SWITCH__
 
@@ -315,7 +315,7 @@ namespace beiklive
         SET_GAME_PAD_STATE(RS_CLK_FLAG, brls::BUTTON_RSB);
 
         // 热键检查，严格匹配模式
-        std::set<Button> activeSet(activeInputs.begin(), activeInputs.end());
+        std::set<int> activeSet(activeInputs.begin(), activeInputs.end());
 
         for (auto& hk : hotkeyBindings)
         {
@@ -327,7 +327,7 @@ namespace beiklive
                 bool match = true;
                 for (auto& btn : combo)
                 {
-                    if (!activeSet.contains(btn))
+                    if (activeSet.find(btn) == activeSet.end())
                     {
                         match = false;
                         break;
@@ -343,22 +343,6 @@ namespace beiklive
         }
 
         return gamepadState;
-    }
-
-    int GameInputManager::_transStringToButtonFlag(const std::string &buttonStr)
-    {
-        for(const auto &it : beiklive::input::k_gameInputNames)
-        {
-            if(it.id >= brls::_BUTTON_MAX)
-            {
-                break; // 超过手柄按钮范围的按键不处理
-            }
-            if(it.name == buttonStr)
-            {
-                return it.id;
-            }
-        }
-        return -1;
     }
 
     GamepadState GameInputManager::getGamepadState(int controllerNum)

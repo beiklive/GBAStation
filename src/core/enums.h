@@ -1,5 +1,5 @@
 #pragma once
-
+#include <borealis.hpp>
 namespace beiklive::enums
 {
     // ROM 平台类型
