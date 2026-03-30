@@ -8,7 +8,7 @@ namespace beiklive
     {
         // this->setWireframeEnabled(true);
         this->setAxis(brls::Axis::ROW);
-        this->setAlignItems(brls::AlignItems::CENTER);
+        this->setAlignItems(brls::AlignItems::FLEX_END);
         this->setJustifyContent(brls::JustifyContent::CENTER);
         this->setHeight(GET_STYLE("brls/applet_frame/header_height"));
         this->setPaddingTop(GET_STYLE("brls/applet_frame/header_padding_top_bottom"));
@@ -34,22 +34,20 @@ namespace beiklive
         m_titleBox->addView(m_titleLabel);
         this->addView(m_titleBox);
     
-        m_subtitleBox = new brls::Box(brls::Axis::COLUMN);
+        m_subtitleBox = new brls::Box(brls::Axis::ROW);
         m_subtitleBox->setWidth(500.f);
+        m_subtitleBox->setAlignItems(brls::AlignItems::FLEX_END);
         m_subtitleBox->setHeight(FontSize+5);
         m_subtitleBox->setJustifyContent(brls::JustifyContent::CENTER);
     
         m_pathLabel = new brls::Label();
         m_pathLabel->setWidth(500.f);
-        m_pathLabel->setHeight(FontSize+5);
+        // m_pathLabel->setHeight(FontSize);
         m_pathLabel->setSingleLine(true);
         m_pathLabel->setHorizontalAlign(brls::HorizontalAlign::LEFT);
-        m_pathLabel->setVerticalAlign(brls::VerticalAlign::CENTER);
-        m_pathLabel->setAnimated(true);
-        m_pathLabel->setFontSize(FontSize/2 + 2);
+        m_pathLabel->setFontSize(FontSize/2);
         m_pathLabel->setTextColor(GET_THEME_COLOR("brls/text"));
     
-        m_subtitleBox->addView(new brls::Padding());
         m_subtitleBox->addView(m_pathLabel);
         this->addView(m_subtitleBox);
         
