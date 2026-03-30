@@ -140,7 +140,7 @@ namespace beiklive
             return;
         handleControllerInput();
     }
-    
+
     void GameInputManager::handleControllerInput()
     {
         static int lastControllerCount = 0;
@@ -155,6 +155,7 @@ namespace beiklive
         for (i = 0; i < controllersCount; i++)
         {
 #endif
+
             // 获取指定控制器的状态
             GamepadState gamepadState = getControllerState(i);
             // 状态有变化
@@ -162,9 +163,56 @@ namespace beiklive
             {
                 // 更新对应控制器的状态
                 lastGamepadStates[i] = gamepadState;
-                if(gamepadState.buttonFlags)
+                // TODO: 按键检测机制可以再改进，目前为简单的严格判断，对摇杆输入处理不佳
+                if (!activeInputs.empty())
                 {
-                    // printGamepadState(gamepadState);
+
+                    // 热键检查，严格匹配模式
+                    std::set<int> activeSet(activeInputs.begin(), activeInputs.end());
+
+                    for (auto &hk : hotkeyBindings)
+                    {
+                        for (auto &combo : hk.buttons)
+                        {
+                            if (combo.size() != activeSet.size())
+                                continue;
+
+                            bool match = true;
+                            for (auto &btn : combo)
+                            {
+                                if (activeSet.find(btn) == activeSet.end())
+                                {
+                                    match = false;
+                                    break;
+                                }
+                            }
+
+                            if (match)
+                            {
+                                hk.callback();
+                                break;
+                            }
+                        }
+                    }
+
+                    auto printactiveInputs = [&]()
+                    {
+                        std::string activeStr;
+                        for (int input : activeInputs)
+                        {
+                            for (const auto &it : beiklive::k_gameInputNames)
+                            {
+                                if (it.id == input)
+                                {
+                                    activeStr += it.name;
+                                    activeStr.push_back(' ');
+                                    break;
+                                }
+                            }
+                        }
+                        brls::Logger::debug("Active Inputs: [{}]", activeStr);
+                    };
+                    printactiveInputs();
                 }
 #ifdef __SWITCH__
 
@@ -254,32 +302,32 @@ namespace beiklive
             .rightStickY = static_cast<short>(
                 -0x7FFF * rightYAxis),
         };
+
         // 存入手柄状态中，后续处理热键时会用到
-        if(gamepadState.leftTrigger != 0)
+        if (gamepadState.leftTrigger >= 0xFF)
         {
             activeInputs.push_back(STATE_PAD_LT);
         }
-        if(gamepadState.rightTrigger != 0)
+        if (gamepadState.rightTrigger >= 0xFF)
         {
             activeInputs.push_back(STATE_PAD_RT);
         }
-        if(gamepadState.leftStickX != 0)
+        if (gamepadState.leftStickX != 0)
         {
             activeInputs.push_back(STATE_PAD_LEFT_STICK_X);
         }
-        if(gamepadState.leftStickY != 0)
+        if (gamepadState.leftStickY != 0)
         {
             activeInputs.push_back(STATE_PAD_LEFT_STICK_Y);
         }
-        if(gamepadState.rightStickX != 0)
+        if (gamepadState.rightStickX != 0)
         {
             activeInputs.push_back(STATE_PAD_RIGHT_STICK_X);
         }
-        if(gamepadState.rightStickY != 0)
+        if (gamepadState.rightStickY != 0)
         {
             activeInputs.push_back(STATE_PAD_RIGHT_STICK_Y);
         }
-
 
         // 开始逐个处理按钮输入，根据按钮状态设置对应的位
         auto SET_GAME_PAD_STATE = [&](int LIMELIGHT_KEY, int GAMEPAD_BUTTON)
@@ -287,7 +335,7 @@ namespace beiklive
             if (controller.buttons[GAMEPAD_BUTTON])
             {
                 gamepadState.buttonFlags |= LIMELIGHT_KEY; // 设置对应位
-                activeInputs.push_back(LIMELIGHT_KEY); // 记录这个按键被按下了
+                activeInputs.push_back(GAMEPAD_BUTTON);     // 记录这个按键被按下了
             }
             else
             {
@@ -313,34 +361,6 @@ namespace beiklive
 
         SET_GAME_PAD_STATE(LS_CLK_FLAG, brls::BUTTON_LSB);
         SET_GAME_PAD_STATE(RS_CLK_FLAG, brls::BUTTON_RSB);
-
-        // 热键检查，严格匹配模式
-        std::set<int> activeSet(activeInputs.begin(), activeInputs.end());
-
-        for (auto& hk : hotkeyBindings)
-        {
-            for (auto& combo : hk.buttons)
-            {
-                if (combo.size() != activeSet.size())
-                    continue;
-
-                bool match = true;
-                for (auto& btn : combo)
-                {
-                    if (activeSet.find(btn) == activeSet.end())
-                    {
-                        match = false;
-                        break;
-                    }
-                }
-
-                if (match)
-                {
-                    hk.callback();
-                    break;
-                }
-            }
-        }
 
         return gamepadState;
     }
