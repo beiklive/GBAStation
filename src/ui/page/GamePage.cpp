@@ -93,7 +93,7 @@ namespace beiklive
         this->setAxis(brls::Axis::COLUMN);
         this->setAlignItems(brls::AlignItems::CENTER);
         this->setJustifyContent(brls::JustifyContent::CENTER);
-        this->setFocusable(true);
+        this->setFocusable(false);
         this->setHideHighlightBackground(true);
         this->setHideHighlightBorder(true);
         this->setHideClickAnimation(true);
@@ -116,15 +116,16 @@ namespace beiklive
 
     void GamePage::GameViewInitialize()
     {
-        // #undef ABSOLUTE
-        // m_gameView = new GameView();
-        // m_gameView->setWidthPercentage(100.f);
-        // m_gameView->setHeightPercentage(100.f);
-        // m_gameView->setFocusable(false);
-        // m_gameView->setPositionType(brls::PositionType::ABSOLUTE);
-        // m_gameView->setPositionTop(0);
-        // m_gameView->setPositionLeft(0);
-        // this->addView(m_gameView);
+        #undef ABSOLUTE
+        m_gameView = new GameView(m_gameEntry);
+        m_gameView->setWidthPercentage(100.f);
+        m_gameView->setHeightPercentage(100.f);
+        m_gameView->setBackgroundColor(NVGcolor{20, 133, 238, 255}); // 设置游戏视图背景为黑色
+        m_gameView->setFocusable(true);
+        m_gameView->setPositionType(brls::PositionType::ABSOLUTE);
+        m_gameView->setPositionTop(0);
+        m_gameView->setPositionLeft(0);
+        this->addView(m_gameView);
     }
 
     void GamePage::GameMenuInitialize()
@@ -147,5 +148,7 @@ namespace beiklive
         PageInit();
         GameViewInitialize();
         GameMenuInitialize();
+
+        brls::Application::giveFocus(m_gameView); // 游戏视图获得焦点，准备接受输入
     }
 }

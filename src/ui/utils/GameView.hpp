@@ -1,7 +1,7 @@
 #pragma once
 
 #include "core/common.h"
-#include "game/control/InputMap.hpp"
+#include "game/control/GameInputManager.hpp"
 
 namespace beiklive
 {
@@ -12,8 +12,15 @@ namespace beiklive
             GameView(beiklive::GameEntry gameData);
             ~GameView();
 
-            // 数据库操作
 
+            void onFocusGained() override;
+            void onFocusLost() override;
+
+            void draw(NVGcontext* vg, float x, float y, float width, float height, brls::Style style, brls::FrameContext* ctx) override;
+
+
+        private:
+            bool _brls_inputLocked = false; // 输入锁定状态，防止在游戏视图失去焦点时继续处理输入
 
         };
-    }
+}

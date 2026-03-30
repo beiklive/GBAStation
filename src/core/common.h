@@ -24,6 +24,10 @@ namespace beiklive // 全局变量
 
 namespace beiklive // 全局功能函数
 {
+
+
+
+
     inline std::string res_path(const std::string &path)
     {
 #ifdef __SWITCH__
