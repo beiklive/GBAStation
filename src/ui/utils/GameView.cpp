@@ -6,6 +6,7 @@ namespace beiklive
     {
         // 游戏视图初始化逻辑，如设置背景、输入处理等
         GameInputManager::instance().sayHello(); // 测试输入管理器是否正常工作
+        HIDE_BRLS_HIGHLIGHT(this); // 隐藏Borealis的默认高亮效果，避免与游戏视图的交互冲突
     }
 
     GameView::~GameView()
