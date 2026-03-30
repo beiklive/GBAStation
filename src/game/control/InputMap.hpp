@@ -169,14 +169,13 @@ static const RetroNameMap k_brlsNames[] = {
     { "brls_button_x",     brls::BUTTON_X     },
     { "brls_button_rb",    brls::BUTTON_RB    },
     { "brls_button_rt",    brls::BUTTON_RT    },
-    //     LEFT_X,
-    // LEFT_Y,
 
-    // RIGHT_X, // also called 5th axis
-    // RIGHT_Y, // also called 4th axis
-
-    // LEFT_Z, // LT
-    // RIGHT_Z, // RT
+    // { "brls_Axis_left_x", brls::LEFT_X },
+    // { "brls_Axis_left_y", brls::LEFT_Y },
+    // { "brls_Axis_right_x", brls::RIGHT_X },
+    // { "brls_Axis_right_y", brls::RIGHT_Y },
+    // { "brls_Axis_left_z", brls::LEFT_Z },
+    // { "brls_Axis_right_z", brls::RIGHT_Z },
 };
 
 

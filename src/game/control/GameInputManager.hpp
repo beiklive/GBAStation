@@ -75,6 +75,10 @@ namespace beiklive
         void setInputEnabled(bool enabled) { inputEnabled = enabled; }
         bool isInputEnabled() const { return inputEnabled; }
 
+        GamepadState getControllerState(int controllerNum);
+
+
+
     private:
         bool inputDropped = false;
         bool inputEnabled = true;

@@ -38,6 +38,10 @@ namespace beiklive
             buttons.push_back(brls::BUTTON_LB);
         if (code & RB_FLAG)
             buttons.push_back(brls::BUTTON_RB);
+        if(state.leftTrigger > 0)
+            buttons.push_back(brls::BUTTON_LT);
+        if(state.rightTrigger > 0)
+            buttons.push_back(brls::BUTTON_RT);
 
         return buttons;
     }
@@ -45,10 +49,14 @@ namespace beiklive
     void printGamepadState(const GamepadState &state)
     {
         std::vector<brls::ControllerButton> buttons = parseButton(state);
+        if(buttons.empty())
+        {
+            return;
+        }
         std::string buttonStr;
         for (auto button : buttons)
         {
-            for (const auto& it : beiklive::input::k_brlsNames)
+            for (const auto &it : beiklive::input::k_brlsNames)
             {
                 if (it.id == button)
                 {
@@ -152,20 +160,25 @@ namespace beiklive
         auto controllersCount = brls::Application::getPlatform()
                                     ->getInputManager()
                                     ->getControllersConnectedCount();
-        brls::Logger::debug("GameInputManager: {} controller(s) connected", controllersCount);
-
+        int i = 0;
+#ifdef __SWITCH__
         // 遍历控制器获取状态并处理输入，最多GAMEPADS_MAX个控制器
-        for (int i = 0; i < controllersCount; i++)
+        for (i = 0; i < controllersCount; i++)
         {
+#endif
             // 获取指定控制器的状态
             GamepadState gamepadState = getControllerState(i);
-
             // 状态有变化
             if (!gamepadState.is_equal(lastGamepadStates[i]))
             {
                 // 更新对应控制器的状态
                 lastGamepadStates[i] = gamepadState;
-                printGamepadState(gamepadState);
+                if(gamepadState.buttonFlags)
+                {
+                    printGamepadState(gamepadState);
+                }
+#ifdef __SWITCH__
+
                 // 检测手柄数量变化，发送特定消息通知游戏
                 if (lastControllerCount != controllersCount)
                 {
@@ -178,18 +191,26 @@ namespace beiklive
                         brls::Application::notify(buttonStr);
                     }
                 }
+#endif
             }
+#ifdef __SWITCH__
         }
+#endif
     }
     GamepadState GameInputManager::getControllerState(int controllerNum)
     {
         brls::ControllerState rawController{};
         brls::ControllerState controller{};
 
-        // brls::Application::setSwapHalfJoyconStickToDpad(Settings::instance().swap_joycon_stick_to_dpad());
+// brls::Application::setSwapHalfJoyconStickToDpad(Settings::instance().swap_joycon_stick_to_dpad());
+#ifdef __SWITCH__
         brls::Application::getPlatform()->getInputManager()->updateControllerState(
             &rawController, controllerNum);
-
+#else
+        brls::Application::getPlatform()
+            ->getInputManager()
+            ->updateUnifiedControllerState(&rawController);
+#endif
         // 防止以后按键需要调整映射，先把原始输入状态保存下来，后续处理都基于这个状态进行转换
         controller = rawController;
 
@@ -272,5 +293,15 @@ namespace beiklive
 
         return gamepadState;
     }
+
+
+    GamepadState GameInputManager::getControllerState(int controllerNum)
+    {
+        return lastGamepadStates[controllerNum];
+    }
+
+
+
+
 
 } // namespace beiklive
