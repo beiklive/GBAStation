@@ -120,7 +120,7 @@ namespace beiklive
         m_gameView = new GameView(m_gameEntry);
         m_gameView->setWidthPercentage(100.f);
         m_gameView->setHeightPercentage(100.f);
-        m_gameView->setBackgroundColor(NVGcolor{20, 133, 238, 255}); // 设置游戏视图背景为黑色
+        m_gameView->setBackgroundColor(nvgRGBA(114, 187, 255, 255)); // 设置游戏视图背景为黑色
         m_gameView->setFocusable(true);
         m_gameView->setPositionType(brls::PositionType::ABSOLUTE);
         m_gameView->setPositionTop(0);

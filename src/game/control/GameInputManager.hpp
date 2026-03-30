@@ -1,44 +1,35 @@
 #pragma once
 
 #include "core/Singleton.hpp"
-#include "InputMap.hpp"
+#include "core/enums.h"
+// 引入 libretro 手柄按键 ID。
+#include "third_party/mgba/src/platform/libretro/libretro.h"
 #include <borealis.hpp>
 #include <optional>
+#include <functional>
+
+
+using BrlsButtonMatrix = std::vector<std::vector<int>>;
 
 namespace beiklive
 {
 
-    /*
-    updateControllerState   获取指定按键索引的状态
-    updateUnifiedControllerState  获取当前所有手柄按键的状态
-    */
 
-    // 方向键
-    #define UP_FLAG        0x00000001
-    #define DOWN_FLAG      0x00000002
-    #define LEFT_FLAG      0x00000004
-    #define RIGHT_FLAG     0x00000008
+    struct InputMap 
+    {
+        // retro_btn
+        int retro_id;
+        // 对应的 borealis 按键列表（可能是多组组合键，如 "LB+START"和 "RB+BACK"同时对应一个 retro 按键）
+        BrlsButtonMatrix brls_buttons_list;
+        std::string displayName; // 显示名称
+    };
 
-    // ABXY
-    #define A_FLAG         0x00000010
-    #define B_FLAG         0x00000020
-    #define X_FLAG         0x00000040
-    #define Y_FLAG         0x00000080
-
-    // 功能键
-    #define BACK_FLAG      0x00000100
-    #define PLAY_FLAG      0x00000200   // START
-
-    // 肩键
-    #define LB_FLAG        0x00000400
-    #define RB_FLAG        0x00000800
-
-    // 摇杆按压
-    #define LS_CLK_FLAG    0x00001000
-    #define RS_CLK_FLAG    0x00002000
-
-
-
+    struct HotkeyBinding
+    {
+        EmuFunctionKey emuKey;
+        BrlsButtonMatrix buttons; // 可能是多组组合键，如 "LB+START"和 "RB+BACK"同时对应一个热键
+        std::function<void()> callback; // 热键触发时的回调函数
+    };
 
     // Moonlight ready gamepad
     struct GamepadState
@@ -76,22 +67,35 @@ namespace beiklive
         bool isInputEnabled() const { return inputEnabled; }
 
         GamepadState getGamepadState(int controllerNum);
+        int getControllerCount() const
+        {
+            return brls::Application::getPlatform()
+                ->getInputManager()
+                ->getControllersConnectedCount();
+        }
 
-
+        // 注册一个模拟器功能键的回调函数，当对应的按键组合被按下时调用回调函数
+        void registerEmuFunctionKey(
+                EmuFunctionKey emuKey, 
+                BrlsButtonMatrix buttons, 
+                std::function<void()> callback);
+        void clearEmuFunctionKeys();
 
     private:
         bool inputDropped = false;
         bool inputEnabled = true;
-
-        std::vector<brls::ControllerButton> SPECIAL_FLAG_COMBO = {brls::BUTTON_LB, brls::BUTTON_RB, brls::BUTTON_BACK, brls::BUTTON_START};
         GamepadState lastGamepadStates[GAMEPADS_MAX];
+
+        std::vector<HotkeyBinding> hotkeyBindings;
+        std::vector<int> activeInputs; // 当前正在按下的热键列表
 
         // 处理控制器的输入
         void handleControllerInput();
         GamepadState getControllerState(int controllerNum);
+        int _transStringToButtonFlag(const std::string& buttonStr);
     };
 
     
-    std::vector<brls::ControllerButton> parseButton(const GamepadState& state);
-    void printGamepadState(const GamepadState& state);
+    // std::vector<brls::ControllerButton> parseButton(const GamepadState& state);
+    // void printGamepadState(const GamepadState& state);
 }

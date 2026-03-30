@@ -47,7 +47,7 @@ namespace beiklive::enums
 namespace beiklive // 结构体
 {
 
-    // 游戏条目结构体，包含游戏路径、显示标题、封面路径等字段, 用于在游戏列表中显示和管理游戏信息
+    // 游戏 条目结构体，包含游戏路径、显示标题、封面路径等字段, 用于在游戏列表中显示和管理游戏信息
     struct GameEntry
     {
         std::string path;                                       // 游戏文件路径
@@ -107,5 +107,117 @@ namespace beiklive // 结构体
         const char *name;
         int id;
     };
+
+    // 方向键
+    #define UP_FLAG        0x00000001
+    #define DOWN_FLAG      0x00000002
+    #define LEFT_FLAG      0x00000004
+    #define RIGHT_FLAG     0x00000008
+
+    // ABXY
+    #define A_FLAG         0x00000010
+    #define B_FLAG         0x00000020
+    #define X_FLAG         0x00000040
+    #define Y_FLAG         0x00000080
+
+    // 功能键
+    #define BACK_FLAG      0x00000100
+    #define PLAY_FLAG      0x00000200
+
+    // 肩键
+    #define LB_FLAG        0x00000400
+    #define RB_FLAG        0x00000800
+
+    // 摇杆按压
+    #define LS_CLK_FLAG    0x00001000
+    #define RS_CLK_FLAG    0x00002000
+
+    // 存储键值 pad.retro.xxx  = [[], []]
+    static const RetroNameMap k_retroNames[] = {
+        { "a",      RETRO_DEVICE_ID_JOYPAD_A      },
+        { "b",      RETRO_DEVICE_ID_JOYPAD_B      },
+        { "x",      RETRO_DEVICE_ID_JOYPAD_X      },
+        { "y",      RETRO_DEVICE_ID_JOYPAD_Y      },
+        { "up",     RETRO_DEVICE_ID_JOYPAD_UP     },
+        { "down",   RETRO_DEVICE_ID_JOYPAD_DOWN   },
+        { "left",   RETRO_DEVICE_ID_JOYPAD_LEFT   },
+        { "right",  RETRO_DEVICE_ID_JOYPAD_RIGHT  },
+        { "l",      RETRO_DEVICE_ID_JOYPAD_L      },
+        { "r",      RETRO_DEVICE_ID_JOYPAD_R      },
+        { "l2",     RETRO_DEVICE_ID_JOYPAD_L2     },
+        { "r2",     RETRO_DEVICE_ID_JOYPAD_R2     },
+        { "l3",     RETRO_DEVICE_ID_JOYPAD_L3     },
+        { "r3",     RETRO_DEVICE_ID_JOYPAD_R3     },
+        { "start",  RETRO_DEVICE_ID_JOYPAD_START  },
+        { "select", RETRO_DEVICE_ID_JOYPAD_SELECT },
+    };
+    // 存储键值 pad.emu.xxx = [[], []]
+    enum EmuFunctionKey {
+        EMU_FAST_FORWARD,               // 快进
+        EMU_REWIND,                     // 倒带
+        EMU_QUICK_SAVE,                 // 快速保存
+        EMU_QUICK_LOAD,                 // 快速读取
+        EMU_OPEN_MENU,                  // 打开菜单
+        EMU_MUTE,                       // 静音
+        EMU_FUNCTION_KEY_COUNT
+    };
+
+    static const RetroNameMap k_emuNames[] = {
+        { "fastforward",    EMU_FAST_FORWARD    },
+        { "rewind",         EMU_REWIND          },
+        { "quicksave",      EMU_QUICK_SAVE      },
+        { "quickload",      EMU_QUICK_LOAD      },
+        { "menu",           EMU_OPEN_MENU       },
+        { "mute",           EMU_MUTE            },
+    };
+
+    enum GameInputPad
+    {
+        STATE_PAD_LT              = brls::BUTTON_LT    ,
+        STATE_PAD_LB              = brls::BUTTON_LB    ,
+        STATE_PAD_LSB             = brls::BUTTON_LSB   ,
+        STATE_PAD_UP              = brls::BUTTON_UP    ,
+        STATE_PAD_RIGHT           = brls::BUTTON_RIGHT ,
+        STATE_PAD_DOWN            = brls::BUTTON_DOWN  ,
+        STATE_PAD_LEFT            = brls::BUTTON_LEFT  ,
+        STATE_PAD_BACK            = brls::BUTTON_BACK  ,
+        STATE_PAD_START           = brls::BUTTON_START ,
+        STATE_PAD_RSB             = brls::BUTTON_RSB   ,
+        STATE_PAD_Y               = brls::BUTTON_Y     ,
+        STATE_PAD_B               = brls::BUTTON_B     ,
+        STATE_PAD_A               = brls::BUTTON_A     ,
+        STATE_PAD_X               = brls::BUTTON_X     ,
+        STATE_PAD_RB              = brls::BUTTON_RB    ,
+        STATE_PAD_RT              = brls::BUTTON_RT    ,
+        STATE_PAD_BUTTON_MAX      = brls::_BUTTON_MAX  ,
+        STATE_PAD_LEFT_STICK_X    ,
+        STATE_PAD_LEFT_STICK_Y    ,
+        STATE_PAD_RIGHT_STICK_X   ,
+        STATE_PAD_RIGHT_STICK_Y 
+    };
+    // 手柄字符值与 GameInputPad 的映射表
+    static const RetroNameMap k_gameInputNames[] = {
+        { "A",           STATE_PAD_A               },
+        { "B",           STATE_PAD_B               },
+        { "X",           STATE_PAD_X               },
+        { "Y",           STATE_PAD_Y               },
+        { "UP",          STATE_PAD_UP              },
+        { "DOWN",        STATE_PAD_DOWN            },
+        { "LEFT",        STATE_PAD_LEFT            },
+        { "RIGHT",       STATE_PAD_RIGHT           },
+        { "LB",          STATE_PAD_LB               },
+        { "RB",          STATE_PAD_RB               },
+        { "LT",          STATE_PAD_LT              },
+        { "RT",          STATE_PAD_RT              },
+        { "LSB",         STATE_PAD_LSB              },
+        { "RSB",         STATE_PAD_RSB              },
+        { "START",       STATE_PAD_START           },
+        { "BACK",        STATE_PAD_BACK          },
+        { "LEFTSTICKX",  STATE_PAD_LEFT_STICK_X    },
+        { "LEFTSTICKY",  STATE_PAD_LEFT_STICK_Y    },
+        { "RIGHTSTICKX", STATE_PAD_RIGHT_STICK_X   },
+        { "RIGHTSTICKY", STATE_PAD_RIGHT_STICK_Y   },
+    };
+
 
 } // namespace beiklive

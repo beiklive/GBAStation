@@ -27,7 +27,7 @@ namespace beiklive::path
     constexpr const char *SHADER_DIR        = "shaders";
 
     constexpr const char *CONFIG_FILE       = "config.cfg";
-    constexpr const char *MAPPING_FILE       = "name_mapping.cfg";
+    constexpr const char *MAPPING_FILE      = "name_mapping.cfg";
 
     constexpr const char *LOG_FILE          = "GBAStation.log";
     constexpr const char *DATA_BASE_FILE    = "GameData.json";

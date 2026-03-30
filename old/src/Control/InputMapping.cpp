@@ -30,7 +30,6 @@ static const BrlsBtnName k_brlsBtnNames[] = {
     { "DOWN",  brls::BUTTON_DOWN  },
     { "LEFT",  brls::BUTTON_LEFT  },
     { "BACK",  brls::BUTTON_BACK  },
-    { "GUIDE", brls::BUTTON_GUIDE },
     { "START", brls::BUTTON_START },
     { "RSB",   brls::BUTTON_RSB   },
     { "Y",     brls::BUTTON_Y     },

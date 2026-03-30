@@ -10,65 +10,65 @@ namespace beiklive
         return 0.5F * (f1 + f / f1);
     }
 
-    std::vector<brls::ControllerButton> parseButton(const GamepadState &state)
-    {
-        short code = state.buttonFlags;
-        std::vector<brls::ControllerButton> buttons;
-        if (code & UP_FLAG)
-            buttons.push_back(brls::BUTTON_UP);
-        if (code & DOWN_FLAG)
-            buttons.push_back(brls::BUTTON_DOWN);
-        if (code & LEFT_FLAG)
-            buttons.push_back(brls::BUTTON_LEFT);
-        if (code & RIGHT_FLAG)
-            buttons.push_back(brls::BUTTON_RIGHT);
-        if (code & A_FLAG)
-            buttons.push_back(brls::BUTTON_A);
-        if (code & B_FLAG)
-            buttons.push_back(brls::BUTTON_B);
-        if (code & X_FLAG)
-            buttons.push_back(brls::BUTTON_X);
-        if (code & Y_FLAG)
-            buttons.push_back(brls::BUTTON_Y);
-        if (code & BACK_FLAG)
-            buttons.push_back(brls::BUTTON_BACK);
-        if (code & PLAY_FLAG)
-            buttons.push_back(brls::BUTTON_START);
-        if (code & LB_FLAG)
-            buttons.push_back(brls::BUTTON_LB);
-        if (code & RB_FLAG)
-            buttons.push_back(brls::BUTTON_RB);
-        if(state.leftTrigger > 0)
-            buttons.push_back(brls::BUTTON_LT);
-        if(state.rightTrigger > 0)
-            buttons.push_back(brls::BUTTON_RT);
+    // std::vector<brls::ControllerButton> parseButton(const GamepadState &state)
+    // {
+    //     short code = state.buttonFlags;
+    //     std::vector<brls::ControllerButton> buttons;
+    //     if (code & UP_FLAG)
+    //         buttons.push_back(brls::BUTTON_UP);
+    //     if (code & DOWN_FLAG)
+    //         buttons.push_back(brls::BUTTON_DOWN);
+    //     if (code & LEFT_FLAG)
+    //         buttons.push_back(brls::BUTTON_LEFT);
+    //     if (code & RIGHT_FLAG)
+    //         buttons.push_back(brls::BUTTON_RIGHT);
+    //     if (code & A_FLAG)
+    //         buttons.push_back(brls::BUTTON_A);
+    //     if (code & B_FLAG)
+    //         buttons.push_back(brls::BUTTON_B);
+    //     if (code & X_FLAG)
+    //         buttons.push_back(brls::BUTTON_X);
+    //     if (code & Y_FLAG)
+    //         buttons.push_back(brls::BUTTON_Y);
+    //     if (code & BACK_FLAG)
+    //         buttons.push_back(brls::BUTTON_BACK);
+    //     if (code & PLAY_FLAG)
+    //         buttons.push_back(brls::BUTTON_START);
+    //     if (code & LB_FLAG)
+    //         buttons.push_back(brls::BUTTON_LB);
+    //     if (code & RB_FLAG)
+    //         buttons.push_back(brls::BUTTON_RB);
+    //     if(state.leftTrigger > 0)
+    //         buttons.push_back(brls::BUTTON_LT);
+    //     if(state.rightTrigger > 0)
+    //         buttons.push_back(brls::BUTTON_RT);
 
-        return buttons;
-    }
+    //     return buttons;
+    // }
 
-    void printGamepadState(const GamepadState &state)
-    {
-        std::vector<brls::ControllerButton> buttons = parseButton(state);
-        if(buttons.empty())
-        {
-            return;
-        }
-        std::string buttonStr;
-        for (auto button : buttons)
-        {
-            for (const auto &it : beiklive::input::k_brlsNames)
-            {
-                if (it.id == button)
-                {
-                    buttonStr += it.name;
-                    buttonStr.push_back(' ');
-                    break;
-                }
-            }
-        }
-        brls::Logger::debug("GamepadState: buttons: [{}]",
-                            buttonStr);
-    }
+    // void printGamepadState(const GamepadState &state)
+    // {
+    //     std::vector<brls::ControllerButton> buttons = parseButton(state);
+    //     if(buttons.empty())
+    //     {
+    //         return;
+    //     }
+    //     std::string buttonStr;
+    //     for (auto button : buttons)
+    //     {
+    //         for (const auto &it : beiklive::input::k_brlsNames)
+    //         {
+    //             if (it.id == button)
+    //             {
+    //                 buttonStr += it.name;
+    //                 buttonStr.push_back(' ');
+    //                 break;
+    //             }
+    //         }
+    //     }
+    //     brls::Logger::debug("GamepadState: buttons: [{}]",
+    //                         buttonStr);
+    // }
 
     GameInputManager::GameInputManager()
     {
@@ -134,24 +134,13 @@ namespace beiklive
     void GameInputManager::handleInput(bool ignoreTouch)
     {
         inputDropped = false;
-        // static brls::ControllerState rawController;
-        // static brls::ControllerState preController;
-        // static brls::ControllerState controller;
-        // // static brls::RawMouseState mouse;
-        // preController = rawController;
-        // 获取当前输入状态
-        // brls::Application::getPlatform()
-        //     ->getInputManager()
-        //     ->updateUnifiedControllerState(&rawController);
-        // // 获取鼠标状态， 以后如果需要处理鼠标输入可以使用这个接口（nds 3ds游戏）
-        // brls::Application::getPlatform()->getInputManager()->updateMouseStates(
-        //         &mouse);
 
         // 处理输入状态变化，转换为游戏逻辑需要的格式
         if (!inputEnabled)
             return;
         handleControllerInput();
     }
+    
     void GameInputManager::handleControllerInput()
     {
         static int lastControllerCount = 0;
@@ -199,6 +188,7 @@ namespace beiklive
     }
     GamepadState GameInputManager::getControllerState(int controllerNum)
     {
+        activeInputs.clear();
         brls::ControllerState rawController{};
         brls::ControllerState controller{};
 
@@ -264,13 +254,46 @@ namespace beiklive
             .rightStickY = static_cast<short>(
                 -0x7FFF * rightYAxis),
         };
+        // 存入手柄状态中，后续处理热键时会用到
+        if(gamepadState.leftTrigger != 0)
+        {
+            activeInputs.push_back(STATE_PAD_LT);
+        }
+        if(gamepadState.rightTrigger != 0)
+        {
+            activeInputs.push_back(STATE_PAD_RT);
+        }
+        if(gamepadState.leftStickX != 0)
+        {
+            activeInputs.push_back(STATE_PAD_LEFT_STICK_X);
+        }
+        if(gamepadState.leftStickY != 0)
+        {
+            activeInputs.push_back(STATE_PAD_LEFT_STICK_Y);
+        }
+        if(gamepadState.rightStickX != 0)
+        {
+            activeInputs.push_back(STATE_PAD_RIGHT_STICK_X);
+        }
+        if(gamepadState.rightStickY != 0)
+        {
+            activeInputs.push_back(STATE_PAD_RIGHT_STICK_Y);
+        }
+
 
         // 开始逐个处理按钮输入，根据按钮状态设置对应的位
-
-#define SET_GAME_PAD_STATE(LIMELIGHT_KEY, GAMEPAD_BUTTON) \
-    controller.buttons[GAMEPAD_BUTTON]                    \
-        ? (gamepadState.buttonFlags |= LIMELIGHT_KEY)     \
-        : (gamepadState.buttonFlags &= ~LIMELIGHT_KEY);
+        auto SET_GAME_PAD_STATE = [&](int LIMELIGHT_KEY, int GAMEPAD_BUTTON)
+        {
+            if (controller.buttons[GAMEPAD_BUTTON])
+            {
+                gamepadState.buttonFlags |= LIMELIGHT_KEY; // 设置对应位
+                activeInputs.push_back(LIMELIGHT_KEY); // 记录这个按键被按下了
+            }
+            else
+            {
+                gamepadState.buttonFlags &= ~LIMELIGHT_KEY;
+            }
+        };
 
         SET_GAME_PAD_STATE(UP_FLAG, brls::BUTTON_UP);
         SET_GAME_PAD_STATE(DOWN_FLAG, brls::BUTTON_DOWN);
@@ -291,17 +314,66 @@ namespace beiklive
         SET_GAME_PAD_STATE(LS_CLK_FLAG, brls::BUTTON_LSB);
         SET_GAME_PAD_STATE(RS_CLK_FLAG, brls::BUTTON_RSB);
 
+        // 热键检查，严格匹配模式
+        std::set<Button> activeSet(activeInputs.begin(), activeInputs.end());
+
+        for (auto& hk : hotkeyBindings)
+        {
+            for (auto& combo : hk.buttons)
+            {
+                if (combo.size() != activeSet.size())
+                    continue;
+
+                bool match = true;
+                for (auto& btn : combo)
+                {
+                    if (!activeSet.contains(btn))
+                    {
+                        match = false;
+                        break;
+                    }
+                }
+
+                if (match)
+                {
+                    hk.callback();
+                    break;
+                }
+            }
+        }
+
         return gamepadState;
     }
 
+    int GameInputManager::_transStringToButtonFlag(const std::string &buttonStr)
+    {
+        for(const auto &it : beiklive::input::k_gameInputNames)
+        {
+            if(it.id >= brls::_BUTTON_MAX)
+            {
+                break; // 超过手柄按钮范围的按键不处理
+            }
+            if(it.name == buttonStr)
+            {
+                return it.id;
+            }
+        }
+        return -1;
+    }
 
     GamepadState GameInputManager::getGamepadState(int controllerNum)
     {
         return lastGamepadStates[controllerNum];
     }
 
+    void GameInputManager::registerEmuFunctionKey(EmuFunctionKey emuKey, BrlsButtonMatrix buttons, std::function<void()> callback)
+    {
+        hotkeyBindings.push_back({emuKey, buttons, callback});
+    }
 
-
-
+    void GameInputManager::clearEmuFunctionKeys()
+    {
+        hotkeyBindings.clear();
+    }
 
 } // namespace beiklive

@@ -5,15 +5,16 @@ namespace beiklive
     GameView::GameView(beiklive::GameEntry gameData)
     {
         // 游戏视图初始化逻辑，如设置背景、输入处理等
+        _brls_inputLocked = false; // 初始化输入锁定状态
         GameInputManager::instance().sayHello(); // 测试输入管理器是否正常工作
-        HIDE_BRLS_HIGHLIGHT(this); // 隐藏Borealis的默认高亮效果，避免与游戏视图的交互冲突
+        HIDE_BRLS_HIGHLIGHT(this);               // 隐藏Borealis的默认高亮效果，避免与游戏视图的交互冲突
     }
 
     GameView::~GameView()
     {
         // 游戏视图清理逻辑，如释放资源等
+        GameInputManager::instance().clearEmuFunctionKeys(); // 清除所有注册的热键，确保在游戏视图销毁时不会留下无效的回调
     }
-
 
     void GameView::onFocusGained()
     {
@@ -23,8 +24,7 @@ namespace beiklive
         GameInputManager::instance().setInputEnabled(true); // 当游戏视图获得焦点时启用输入处理
         // 当游戏视图获得焦点时的处理逻辑，如暂停其他活动、调整输入等
 
-
-        if(!_brls_inputLocked)
+        if (!_brls_inputLocked)
         {
             _brls_inputLocked = true;
             brls::Application::blockInputs(true); // 锁定输入，防止其他视图处理输入
@@ -32,7 +32,6 @@ namespace beiklive
 
         // 锁定鼠标指针
         // brls::Application::getPlatform()->getInputManager()->setPointerLock(true);
-
     }
 
     void GameView::onFocusLost()
@@ -40,33 +39,48 @@ namespace beiklive
         Box::onFocusLost();
         // 当游戏视图失去焦点时的处理逻辑，如恢复其他活动、调整输入等
         brls::Logger::debug("GameView lost focus");
-        
-        GameInputManager::instance().setInputEnabled(false); // 当游戏视图失去焦点时禁用输入处理
-        GameInputManager::instance().dropInput(); // 清除当前输入状态，防止在游戏视图失去焦点时继续处理输入
 
-        if(_brls_inputLocked)
+        GameInputManager::instance().setInputEnabled(false); // 当游戏视图失去焦点时禁用输入处理
+        GameInputManager::instance().dropInput();            // 清除当前输入状态，防止在游戏视图失去焦点时继续处理输入
+
+        if (_brls_inputLocked)
         {
             _brls_inputLocked = false;
             brls::Application::unblockInputs(); // 解锁输入，允许其他视图处理输入
         }
-    
-    
+
         // 解锁鼠标指针
         // brls::Application::getPlatform()->getInputManager()->setPointerLock(false);
-    
-    
     }
 
-
-    void GameView::draw(NVGcontext* vg, float x, float y, float width, float height, brls::Style style, brls::FrameContext* ctx)
+    void GameView::draw(NVGcontext *vg, float x, float y, float width, float height, brls::Style style, brls::FrameContext *ctx)
     {
         // 游戏视图的绘制逻辑，如渲染游戏画面等
         Box::draw(vg, x, y, width, height, style, ctx);
-        
-    
+
         GameInputManager::instance().handleInput(); // 在绘制时处理输入，确保游戏逻辑能够及时响应输入事件
-    
     }
 
 
+    void GameView::handleInput()
+    {
+        int i = 0;
+#ifdef __SWITCH__
+        int controllerCount = GameInputManager::instance().getControllerCount();
+        for (int i = 0; i < controllerCount; i++)
+        {
+#endif
+        auto inputState = GameInputManager::instance().getGamepadState(i);
+        // 功能键检测，检测设置里的按键
+        {
+            
+        }
+
+
+
+
+#ifdef __SWITCH__
+        }
+#endif
+    }
 }
