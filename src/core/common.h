@@ -1,7 +1,24 @@
 #pragma once
 
 #include <borealis.hpp>
-
+#include <atomic>
+#include <chrono>
+#include <deque>
+#include <mutex>
+#include <thread>
+#include <vector>
+#include <chrono>
+#include <cmath>
+#include <cstdio>
+#include <cstring>
+#include <ctime>
+#include <deque>
+#include <fstream>
+#include <limits>
+#include <sstream>
+#include <string>
+#include <vector>
+#include <filesystem>
 #include "constexpr.h" // 一些常量定义
 #include "enums.h"     // 枚举类型定义
 
@@ -25,7 +42,21 @@ namespace beiklive // 全局变量
 namespace beiklive // 全局功能函数
 {
 
-
+     inline std::string GetCorePath(int platform){
+        switch (platform)
+        {
+        case (int)beiklive::enums::EmuPlatform::EmuGBA:
+        case (int)beiklive::enums::EmuPlatform::EmuGBC:
+        case (int)beiklive::enums::EmuPlatform::EmuGB:
+            #if defined(__SWITCH__)
+                return "";  // switch平台直接静态链接
+            #elif defined(_WIN32)
+                return  std::string("mgba_libretro.dll");
+            #endif
+        default:
+            return "";
+        }
+    }
 
 
     inline std::string res_path(const std::string &path)
@@ -164,5 +195,8 @@ namespace beiklive // 函数声明
     void ConfigureInit();  // 配置系统初始化，确保目录存在并加载配置文件
     void RegisterStyles(); // 注册全局样式
     void RegisterThemes(); // 注册全局主题色
+
+    std::vector<CheatEntry> parseChtFile(const std::string& path); // 解析 .cht 金手指文件，返回金手指条目列表
+    bool saveChtFile(const std::string& path, const std::vector<CheatEntry>& entries); // 将金手指列表以 .cht 格式写入文件
 
 } // namespace beiklive

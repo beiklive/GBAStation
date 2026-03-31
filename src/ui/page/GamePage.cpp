@@ -59,6 +59,7 @@ namespace beiklive
         db->flush();
     }
 
+    // TODO: 此处还要获取游戏的映射名称、 处理游戏独立设置以及路径等信息，后续完善
     void GamePage::GameEntryInitialize()
     {
         auto &db = beiklive::GameDB;                     // 获取全局游戏数据库实例
@@ -100,18 +101,6 @@ namespace beiklive
         this->setBackground(brls::ViewBackground::NONE);
         this->setWidthPercentage(100.f);
         this->setHeightPercentage(100.f);
-
-        // this->registerAction(
-        //     "退出游戏",
-        //     brls::BUTTON_START,
-        //     [this](brls::View *)
-        //     {
-        //         // 此处设置按键功能
-        //         brls::sync([this]()
-        //                    { brls::Application::popActivity(); });
-        //         return true;
-        //     },
-        //     /*hidden=*/false, /*repeat=*/false, brls::SOUND_BACK);
     }
 
     void GamePage::GameViewInitialize()

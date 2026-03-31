@@ -2,20 +2,20 @@
 
 namespace beiklive
 {
-    GameView::GameView(beiklive::GameEntry gameData)
+    GameView::GameView(beiklive::GameEntry gameData) : m_gameEntry(std::move(gameData))
     {
-        // 游戏视图初始化逻辑，如设置背景、输入处理等
         _brls_inputLocked = false;               // 初始化输入锁定状态
         GameInputManager::instance().sayHello(); // 测试输入管理器是否正常工作
         HIDE_BRLS_HIGHLIGHT(this);               // 隐藏Borealis的默认高亮效果，避免与游戏视图的交互冲突
 
         _registerGameInput(); // 注册游戏相关的输入
+        _registerGameRuntime();
     }
 
     GameView::~GameView()
     {
-        // 游戏视图清理逻辑，如释放资源等
         GameInputManager::instance().clearEmuFunctionKeys(); // 清除所有注册的热键，确保在游戏视图销毁时不会留下无效的回调
+        GameInputManager::instance().dropInput(); // 清除当前输入状态，防止在游戏视图销毁后继续处理输入
     }
 
     void GameView::onFocusGained()
@@ -70,11 +70,6 @@ namespace beiklive
             {{brls::BUTTON_LB, brls::BUTTON_START}, {brls::BUTTON_RT, brls::BUTTON_LT}},
             []()
             {
-                // brls::Application::notify("打开菜单热键触发！"); // 这里可以替换为实际的打开菜单逻辑
-                // brls::sync([]()
-                //            {
-                //                brls::Application::popActivity(brls::TransitionAnimation::FADE); // 示例：触发热键时关闭当前活动，返回上一级菜单
-                //            });
                 brls::Logger::debug("打开菜单热键触发！");
             },
             TriggerType::LONG_PRESS,
@@ -96,5 +91,26 @@ namespace beiklive
                brls::Logger::debug("倒带触发！");
             },
             TriggerType::HOLD);
+    }
+
+    void GameView::_registerGameRuntime()
+    {
+        // 判断游戏平台
+        if (m_gameEntry.platform == (int)beiklive::enums::EmuPlatform::EmuGBA ||
+            m_gameEntry.platform == (int)beiklive::enums::EmuPlatform::EmuGB || 
+            m_gameEntry.platform == (int)beiklive::enums::EmuPlatform::EmuGBC)
+        {
+
+            m_gba_core = new beiklive::gba::CoreMgba();
+            if(m_gba_core->SetupGame(m_gameEntry)) // 替换为实际的核心路径
+            {
+                brls::Logger::debug("GBA 核心已初始化，游戏路径：{}", m_gameEntry.path);
+            }
+        }
+        else
+        {
+            brls::Logger::warning("不支持的平台：{}", m_gameEntry.platform);
+        }
+
     }
 }

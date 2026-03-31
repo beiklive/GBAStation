@@ -101,7 +101,12 @@ namespace beiklive // 结构体
         std::string fileSize;               // 文件大小（字节），目录为0
         size_t childCount;                  // 子项数量，仅目录有效，文件为0
     };
-
+    /// 金手指条目
+    struct CheatEntry {
+        std::string desc;    ///< 金手指名称
+        std::string code;    ///< 金手指代码
+        bool        enabled = true; ///< 是否启用
+    };
     struct RetroNameMap
     {
         const char *name;
