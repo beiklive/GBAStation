@@ -153,6 +153,22 @@ namespace beiklive // 结构体
     };
     // 存储键值 pad.emu.xxx = [[], []]
     enum EmuFunctionKey {
+        EMU_A         , 
+        EMU_B         , 
+        EMU_X         , 
+        EMU_Y         , 
+        EMU_UP        , 
+        EMU_DOWN      , 
+        EMU_LEFT      , 
+        EMU_RIGHT     , 
+        EMU_L         , 
+        EMU_R         , 
+        EMU_L2        , 
+        EMU_R2        , 
+        EMU_L3        , 
+        EMU_R3        , 
+        EMU_START     , 
+        EMU_SELECT    , 
         EMU_FAST_FORWARD,               // 快进
         EMU_REWIND,                     // 倒带
         EMU_QUICK_SAVE,                 // 快速保存
@@ -161,7 +177,13 @@ namespace beiklive // 结构体
         EMU_MUTE,                       // 静音
         EMU_FUNCTION_KEY_COUNT
     };
-
+    enum class TriggerType
+    {
+        PRESS,        // 刚按下（默认触发一次）
+        LONG_PRESS,   // 长按触发一次
+        HOLD,         // 按住持续触发
+        RELEASE       // 松开触发一次
+    };
     static const RetroNameMap k_emuNames[] = {
         { "fastforward",    EMU_FAST_FORWARD    },
         { "rewind",         EMU_REWIND          },

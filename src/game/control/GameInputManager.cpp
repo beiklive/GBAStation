@@ -117,18 +117,25 @@ namespace beiklive
     {
         if (inputDropped)
             return;
-        bool res = true;
-        // Drop gamepad state
-        GamepadState gamepadState;
+
+        inputDropped = true;
+
+        // 清空手柄状态
+        GamepadState emptyState;
         auto controllersCount = brls::Application::getPlatform()
                                     ->getInputManager()
                                     ->getControllersConnectedCount();
 
         for (int i = 0; i < controllersCount; i++)
         {
-            // 全部清空
-            lastGamepadStates[i] = gamepadState;
+            lastGamepadStates[i] = emptyState;
         }
+
+        // 清空按键时间（LONG_PRESS 依赖这个）
+        longPressTriggered.clear();
+
+        currentTime = 0;
+        activeInputs.clear();
     }
 
     void GameInputManager::handleInput(bool ignoreTouch)
@@ -158,12 +165,17 @@ namespace beiklive
 
             // 获取指定控制器的状态
             GamepadState gamepadState = getControllerState(i);
+            // 更新对应控制器的状态
+            lastGamepadStates[i] = gamepadState;
+            // 更新时间（假设60FPS）
+            currentTime += 16;
+            // 更新输入状态
+            updateInputState();
+            checkHotkeys();
             // 状态有变化
             if (!gamepadState.is_equal(lastGamepadStates[i]))
             {
-                // 更新对应控制器的状态
-                lastGamepadStates[i] = gamepadState;
-                checkHotkeys();
+                printactiveInputs();
 #ifdef __SWITCH__
 
                 // 检测手柄数量变化，发送特定消息通知游戏
@@ -186,39 +198,62 @@ namespace beiklive
     }
     void GameInputManager::checkHotkeys()
     {
-        // TODO: 按键检测机制可以再改进，目前为简单的严格判断，对摇杆输入处理不佳
-        if (!activeInputs.empty())
+        for (auto &hk : hotkeyBindings)
         {
-
-            // 热键检查，严格匹配模式
-            std::set<int> activeSet(activeInputs.begin(), activeInputs.end());
-
-            for (auto &hk : hotkeyBindings)
+            for (auto &combo : hk.buttons)
             {
-                for (auto &combo : hk.buttons)
-                {
-                    if (combo.size() != activeSet.size())
-                        continue;
+                bool now = containsCombo(inputState.current, combo);
+                bool before = containsCombo(inputState.previous, combo);
 
-                    bool match = true;
-                    for (auto &btn : combo)
+                switch (hk.triggerType)
+                {
+                case TriggerType::PRESS:
+                    if (now && !before)
+                        hk.callback();
+                    break;
+
+                case TriggerType::RELEASE:
+                    if (!now && before)
+                        hk.callback();
+                    break;
+
+                case TriggerType::HOLD:
+                    if (now)
+                        hk.callback();
+                    break;
+
+                case TriggerType::LONG_PRESS:
+                {
+
+                    if (now)
                     {
-                        if (activeSet.find(btn) == activeSet.end())
+                        uint64_t latestPressTime = 0;
+                        for (int key : combo)
                         {
-                            match = false;
-                            break;
+                            // 获取组合键最后一个按下的时间，作为长按的起始时间
+                            latestPressTime = std::max(latestPressTime, pressTime[key]);
+                        }
+                        int comboId = hk.emuKey;
+
+                        if ((currentTime - latestPressTime) > static_cast<uint64_t>(hk.threshold * 1000))
+                        {
+                            if (!longPressTriggered[comboId])
+                            {
+                                hk.callback();
+                                longPressTriggered[comboId] = true;
+                            }
                         }
                     }
-
-                    if (match)
+                    
+                    if(!now && before) // 前后帧检测松开
                     {
-                        hk.callback();
-                        break;
+                        // 松开后重置
+                        longPressTriggered[hk.emuKey] = false;
                     }
+                    break;
+                }
                 }
             }
-
-            printactiveInputs();
         }
     }
     GamepadState GameInputManager::getControllerState(int controllerNum)
@@ -299,22 +334,13 @@ namespace beiklive
         {
             activeInputs.push_back(STATE_PAD_RT);
         }
-        if (gamepadState.leftStickX != 0)
-        {
-            activeInputs.push_back(STATE_PAD_LEFT_STICK_X);
-        }
-        if (gamepadState.leftStickY != 0)
-        {
-            activeInputs.push_back(STATE_PAD_LEFT_STICK_Y);
-        }
-        if (gamepadState.rightStickX != 0)
-        {
-            activeInputs.push_back(STATE_PAD_RIGHT_STICK_X);
-        }
-        if (gamepadState.rightStickY != 0)
-        {
-            activeInputs.push_back(STATE_PAD_RIGHT_STICK_Y);
-        }
+        processStick(leftXAxis, leftYAxis,
+                     STATE_PAD_LEFT_STICK_X,
+                     STATE_PAD_LEFT_STICK_Y);
+
+        processStick(rightXAxis, rightYAxis,
+                     STATE_PAD_RIGHT_STICK_X,
+                     STATE_PAD_RIGHT_STICK_Y);
 
         // 开始逐个处理按钮输入，根据按钮状态设置对应的位
         auto SET_GAME_PAD_STATE = [&](int LIMELIGHT_KEY, int GAMEPAD_BUTTON)
@@ -352,8 +378,82 @@ namespace beiklive
         return gamepadState;
     }
 
+    void GameInputManager::updateInputState()
+    {
+        inputState.previous = inputState.current;
+        inputState.current.clear();
+
+        for (int input : activeInputs)
+        {
+            inputState.current.insert(input);
+
+            if (!inputState.previous.count(input))
+            {
+                pressTime[input] = currentTime;
+            }
+        }
+    }
+
+    bool GameInputManager::containsCombo(const std::set<int> &active, const std::vector<int> &combo)
+    {
+        for (int key : combo)
+        {
+            if (!active.count(key))
+                return false;
+        }
+        return true;
+    }
+
+    bool GameInputManager::isComboJustTriggered(const std::vector<int> &combo)
+    {
+        bool now = containsCombo(inputState.current, combo);
+        bool before = containsCombo(inputState.previous, combo);
+
+        return now && !before;
+    }
+
+    void GameInputManager::processStick(float x, float y, int axisX, int axisY)
+    {
+        const float DEADZONE = 0.2f;
+        const float AXIS_DOMINANCE = 1.5f;
+
+        float absX = std::abs(x);
+        float absY = std::abs(y);
+
+        if (absX < DEADZONE && absY < DEADZONE)
+            return;
+
+        if (absX > absY * AXIS_DOMINANCE)
+        {
+            activeInputs.push_back(axisX);
+        }
+        else if (absY > absX * AXIS_DOMINANCE)
+        {
+            activeInputs.push_back(axisY);
+        }
+    }
+
+    bool GameInputManager::isLongPress(int key, float threshold)
+    {
+        if (!inputState.current.count(key))
+            return false;
+        return (currentTime - pressTime[key]) > threshold;
+    }
+
+    bool GameInputManager::isShortPress(int key, float threshold)
+    {
+        if (!inputState.previous.count(key) || inputState.current.count(key))
+            return false;
+
+        return (currentTime - pressTime[key]) < threshold;
+    }
+
     void GameInputManager::printactiveInputs()
     {
+        if (activeInputs.empty())
+        {
+            return;
+        }
         std::string activeStr;
         for (int input : activeInputs)
         {
@@ -375,9 +475,9 @@ namespace beiklive
         return lastGamepadStates[controllerNum];
     }
 
-    void GameInputManager::registerEmuFunctionKey(EmuFunctionKey emuKey, BrlsButtonMatrix buttons, std::function<void()> callback)
+    void GameInputManager::registerEmuFunctionKey(EmuFunctionKey emuKey, BrlsButtonMatrix buttons, std::function<void()> callback, TriggerType type, float threshold)
     {
-        hotkeyBindings.push_back({emuKey, buttons, callback});
+        hotkeyBindings.push_back({emuKey, buttons, callback, type, threshold});
     }
 
     void GameInputManager::clearEmuFunctionKeys()

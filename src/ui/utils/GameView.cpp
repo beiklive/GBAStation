@@ -5,38 +5,11 @@ namespace beiklive
     GameView::GameView(beiklive::GameEntry gameData)
     {
         // 游戏视图初始化逻辑，如设置背景、输入处理等
-        _brls_inputLocked = false; // 初始化输入锁定状态
+        _brls_inputLocked = false;               // 初始化输入锁定状态
         GameInputManager::instance().sayHello(); // 测试输入管理器是否正常工作
         HIDE_BRLS_HIGHLIGHT(this);               // 隐藏Borealis的默认高亮效果，避免与游戏视图的交互冲突
 
-
-        GameInputManager::instance().registerEmuFunctionKey(
-            EmuFunctionKey::EMU_OPEN_MENU, 
-            {{brls::BUTTON_LB, brls::BUTTON_START}, {brls::BUTTON_RT, brls::BUTTON_LT}}, 
-            []() {
-                brls::Application::notify("打开菜单热键触发！"); // 这里可以替换为实际的打开菜单逻辑
-                brls::sync([](){
-                    brls::Application::popActivity(brls::TransitionAnimation::FADE); // 示例：触发热键时关闭当前活动，返回上一级菜单
-                });
-            }
-        );
-        GameInputManager::instance().registerEmuFunctionKey(
-            EmuFunctionKey::EMU_FAST_FORWARD, 
-            {{brls::BUTTON_LSB}}, 
-            []() {
-                brls::Application::notify("快进触发！"); // 这里可以替换为实际的快进逻辑
-            }
-        );
-        GameInputManager::instance().registerEmuFunctionKey(
-            EmuFunctionKey::EMU_REWIND, 
-            {{brls::BUTTON_RSB}}, 
-            []() {
-                brls::Application::notify("倒带触发！"); // 这里可以替换为实际的打开菜单逻辑
-            }
-        );
-
-
-
+        _registerGameInput(); // 注册游戏相关的输入
     }
 
     GameView::~GameView()
@@ -90,4 +63,38 @@ namespace beiklive
         GameInputManager::instance().handleInput(); // 在绘制时处理输入，确保游戏逻辑能够及时响应输入事件
     }
 
+    void GameView::_registerGameInput()
+    {
+                GameInputManager::instance().registerEmuFunctionKey(
+            EmuFunctionKey::EMU_OPEN_MENU,
+            {{brls::BUTTON_LB, brls::BUTTON_START}, {brls::BUTTON_RT, brls::BUTTON_LT}},
+            []()
+            {
+                // brls::Application::notify("打开菜单热键触发！"); // 这里可以替换为实际的打开菜单逻辑
+                // brls::sync([]()
+                //            {
+                //                brls::Application::popActivity(brls::TransitionAnimation::FADE); // 示例：触发热键时关闭当前活动，返回上一级菜单
+                //            });
+                brls::Logger::debug("打开菜单热键触发！");
+            },
+            TriggerType::LONG_PRESS,
+            2.5f // 按住2.5秒
+        );
+        GameInputManager::instance().registerEmuFunctionKey(
+            EmuFunctionKey::EMU_FAST_FORWARD,
+            {{brls::BUTTON_LSB}},
+            []()
+            {
+                brls::Logger::debug("快进触发！");
+            }
+        );
+        GameInputManager::instance().registerEmuFunctionKey(
+            EmuFunctionKey::EMU_REWIND,
+            {{brls::BUTTON_RSB}},
+            []()
+            {
+               brls::Logger::debug("倒带触发！");
+            },
+            TriggerType::HOLD);
+    }
 }

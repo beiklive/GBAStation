@@ -20,5 +20,10 @@ namespace beiklive
 
         private:
             bool _brls_inputLocked = false; // 输入锁定状态，防止在游戏视图失去焦点时继续处理输入
+
+
+
+            void _registerGameInput();
+
         };
 }

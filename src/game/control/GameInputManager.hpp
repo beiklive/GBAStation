@@ -6,6 +6,9 @@
 #include "third_party/mgba/src/platform/libretro/libretro.h"
 #include <borealis.hpp>
 #include <optional>
+#include <set>
+#include <map>
+#include <vector>
 #include <functional>
 
 
@@ -24,11 +27,33 @@ namespace beiklive
         std::string displayName; // 显示名称
     };
 
+    struct InputState
+    {
+        std::set<int> current;
+        std::set<int> previous;
+
+        bool isPressed(int key) const
+        {
+            return current.count(key);
+        }
+
+        bool isJustPressed(int key) const
+        {
+            return current.count(key) && !previous.count(key);
+        }
+
+        bool isReleased(int key) const
+        {
+            return !current.count(key) && previous.count(key);
+        }
+    };
     struct HotkeyBinding
     {
         EmuFunctionKey emuKey;
         BrlsButtonMatrix buttons; // 可能是多组组合键，如 "LB+START"和 "RB+BACK"同时对应一个热键
         std::function<void()> callback; // 热键触发时的回调函数
+        TriggerType triggerType = TriggerType::PRESS;
+        float threshold = 0.5f; // 长按阈值
     };
 
     // Moonlight ready gamepad
@@ -76,15 +101,25 @@ namespace beiklive
 
         // 注册一个模拟器功能键的回调函数，当对应的按键组合被按下时调用回调函数
         void registerEmuFunctionKey(
-                EmuFunctionKey emuKey, 
-                BrlsButtonMatrix buttons, 
-                std::function<void()> callback);
+            EmuFunctionKey emuKey,
+            BrlsButtonMatrix buttons,
+            std::function<void()> callback,
+            TriggerType type = TriggerType::PRESS,
+            float threshold = 0.5f);
         void clearEmuFunctionKeys();
 
     private:
         bool inputDropped = false;
         bool inputEnabled = true;
         GamepadState lastGamepadStates[GAMEPADS_MAX];
+
+        InputState inputState;
+        std::map<int, uint64_t > pressTime;
+        uint64_t  currentTime = 0;
+        // 记录长按状态
+        // std::map<int, bool> longPressTriggered;
+        // 记录是否触发过长按，避免重复触发
+        std::unordered_map<int, bool> longPressTriggered;
 
         std::vector<HotkeyBinding> hotkeyBindings;
         std::vector<int> activeInputs; // 当前正在按下的热键列表
@@ -93,7 +128,15 @@ namespace beiklive
         void handleControllerInput();
         void checkHotkeys();
         GamepadState getControllerState(int controllerNum);
-        
+        void updateInputState();
+
+        bool containsCombo(const std::set<int>& active, const std::vector<int>& combo);
+        bool isComboJustTriggered(const std::vector<int>& combo);
+
+        void processStick(float x, float y, int axisX, int axisY);
+
+        bool isLongPress(int key, float threshold = 0.5f);
+        bool isShortPress(int key, float threshold = 0.5f);
         
         void printactiveInputs();
 
