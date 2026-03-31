@@ -2,8 +2,6 @@
 
 #include "core/Singleton.hpp"
 #include "core/enums.h"
-// 引入 libretro 手柄按键 ID。
-#include "third_party/mgba/src/platform/libretro/libretro.h"
 #include <borealis.hpp>
 #include <optional>
 #include <set>
