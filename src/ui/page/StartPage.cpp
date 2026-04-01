@@ -70,6 +70,35 @@ namespace beiklive
         switchLayout->onGameOptions = [](const beiklive::GameEntry &entry)
         {
             brls::Logger::info("Game options opened: " + entry.title);
+            static int i = 0;
+            i++;
+            switch (i % 4)
+            {
+            case 0:
+                brls::Application::getAudioPlayer()->play(brls::Sound::SOUND_FOCUS_CHANGE);
+                brls::Application::notify("Sound::SOUND_FOCUS_CHANGE");
+                break;
+            case 1:
+                brls::Application::getAudioPlayer()->play(brls::Sound::SOUND_FOCUS_CHANGE);
+                brls::Application::notify("Sound::SOUND_FOCUS_LOST");
+                break;
+            case 2:
+                brls::Application::getAudioPlayer()->play(brls::Sound::SOUND_FOCUS_ERROR);
+                brls::Application::notify("Sound::SOUND_FOCUS_ERROR");
+                break;
+            case 3:
+                brls::Application::getAudioPlayer()->play(brls::Sound::SOUND_SLIDER_TICK);
+                brls::Application::notify("Sound::SOUND_SLIDER_TICK");
+                break;
+
+            default:
+                break;
+            }
+
+            
+            
+
+
         };
 
         switchLayout->onGameLibraryOpened = [this]()
