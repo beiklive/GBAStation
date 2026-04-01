@@ -136,6 +136,7 @@ namespace beiklive
             {
                 brls::Logger::debug("打开菜单热键触发！");
                 GameSignal::instance().requestOpenMenu();
+                brls::sync([](){ brls::Application::popActivity(); });
             },
             TriggerType::LONG_PRESS,
             2.5f
