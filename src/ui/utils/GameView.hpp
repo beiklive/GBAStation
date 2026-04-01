@@ -2,18 +2,22 @@
 
 #include "core/common.h"
 #include "core/GameSignal.hpp"
+#include "core/GameTimer.hpp"
 #include "game/control/GameInputManager.hpp"
 #include "game/mgba/GameRun.hpp"
 #include "game/render/GameRenderer.hpp"
+#include "ui/utils/GameOverlayRenderer.hpp"
 
 #include <atomic>
+#include <chrono>
 #include <mutex>
 #include <thread>
-#include <chrono>
 #include <vector>
 
 namespace beiklive
 {
+    class GameMenuView; // 前置声明
+
     // 游戏视图，负责游戏的渲染显示，输入处理等功能
     class GameView : public brls::Box
     {
@@ -26,6 +30,9 @@ namespace beiklive
 
             void draw(NVGcontext* vg, float x, float y, float width, float height, brls::Style style, brls::FrameContext* ctx) override;
 
+            /// 设置关联的游戏菜单视图（由 GamePage 调用）
+            void setGameMenuView(GameMenuView* menuView) { m_gameMenuView = menuView; }
+
         private:
             bool _brls_inputLocked = false; ///< 输入锁定状态
             beiklive::GameEntry m_gameEntry; ///< 游戏条目数据
@@ -37,6 +44,9 @@ namespace beiklive
             beiklive::GameRenderer m_renderer; ///< 游戏帧渲染器（GL 纹理 + 直接绘制）
             bool m_rendererReady = false;      ///< 渲染器是否已初始化
 
+            // ---- 画面模式 ----------------------------------------------------
+            beiklive::ScreenMode m_screenMode = beiklive::ScreenMode::Fit; ///< 当前画面缩放模式
+
             // ---- 最新视频帧（游戏线程写，UI 线程读）--------------------------
             mutable std::mutex          m_frameMutex;
             LibretroLoader::VideoFrame  m_pendingFrame; ///< 等待上传的最新帧
@@ -45,6 +55,15 @@ namespace beiklive
             // ---- 游戏线程 -----------------------------------------------------
             std::thread       m_gameThread;
             std::atomic<bool> m_running{false}; ///< 游戏线程运行标志
+
+            // ---- FPS 统计（游戏线程写，UI 线程读）-----------------------------
+            mutable std::mutex m_fpsMutex;
+            unsigned m_fpsFrameCount = 0;
+            float    m_currentFps    = 0.0f;
+            std::chrono::steady_clock::time_point m_fpsLastTime;
+
+            // ---- 菜单视图（由 GamePage 注入）---------------------------------
+            GameMenuView* m_gameMenuView = nullptr;
 
             // ---- 辅助方法 ----------------------------------------------------
             void _registerGameInput();
@@ -61,5 +80,9 @@ namespace beiklive
 
             /// 将待上传帧数据提交到 GPU（在 UI/draw 线程调用）
             void _uploadPendingFrame();
+
+            /// 在视图上绘制状态覆盖层（FPS/快进/倒带/暂停/静音）
+            void _drawOverlays(NVGcontext* vg, float x, float y, float w, float h);
     };
 }
+

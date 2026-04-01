@@ -1,5 +1,6 @@
 #include "GamePage.hpp"
 #include "core/Tools.hpp"
+#include "core/GameSignal.hpp"
 
 namespace beiklive
 {
@@ -119,17 +120,33 @@ namespace beiklive
 
     void GamePage::GameMenuInitialize()
     {
-        // 游戏菜单初始化逻辑，如设置菜单选项、绑定按键等
-        // #undef ABSOLUTE
-        // m_gameMenuView = new GameMenuView();
-        // m_gameMenuView->setWidthPercentage(100.f);
-        // m_gameMenuView->setHeightPercentage(100.f);
-        // m_gameMenuView->setFocusable(false);
-        // m_gameMenuView->setPositionType(brls::PositionType::ABSOLUTE);
-        // m_gameMenuView->setPositionTop(0);
-        // m_gameMenuView->setPositionLeft(0);
-        // this->addView(m_gameMenuView);
-        // m_gameView->setVisibility(brls::Visibility::GONE); // 初始隐藏，加载完成后显示
+        #undef ABSOLUTE
+        m_gameMenuView = new GameMenuView(m_gameEntry);
+        m_gameMenuView->setWidthPercentage(100.f);
+        m_gameMenuView->setHeightPercentage(100.f);
+        m_gameMenuView->setFocusable(false);
+        m_gameMenuView->setPositionType(brls::PositionType::ABSOLUTE);
+        m_gameMenuView->setPositionTop(0);
+        m_gameMenuView->setPositionLeft(0);
+        m_gameMenuView->setVisibility(brls::Visibility::GONE); // 初始隐藏
+
+        // "返回游戏"回调：隐藏菜单，将焦点交还给 GameView
+        m_gameMenuView->setOnResume([this]() {
+            brls::sync([this]() {
+                m_gameMenuView->setVisibility(brls::Visibility::GONE);
+                brls::Application::giveFocus(m_gameView);
+            });
+        });
+
+        // "退出游戏"回调：触发退出信号
+        m_gameMenuView->setOnExit([this]() {
+            brls::sync([this]() {
+                m_gameMenuView->setVisibility(brls::Visibility::GONE);
+                GameSignal::instance().requestExit();
+            });
+        });
+
+        this->addView(m_gameMenuView);
     }
 
     void GamePage::_setupGame()
@@ -137,6 +154,10 @@ namespace beiklive
         PageInit();
         GameViewInitialize();
         GameMenuInitialize();
+
+        // 将菜单视图引用注入 GameView，以便菜单热键触发时可打开菜单
+        if (m_gameView && m_gameMenuView)
+            m_gameView->setGameMenuView(m_gameMenuView);
 
         brls::sync([this]()
                    { brls::Application::giveFocus(m_gameView); }); // 游戏视图获得焦点，准备接受输入
