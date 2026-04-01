@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/common.h"
+#include "core/GameSignal.hpp"
 #include "game/retro/LibretroLoader.hpp"
 
 namespace beiklive::gba
@@ -48,6 +49,13 @@ namespace beiklive::gba
 
         /// 设置按钮状态（RETRO_DEVICE_ID_JOYPAD_*）
         void SetButtonState(unsigned id, bool pressed) { m_core.setButtonState(id, pressed); }
+
+        /// 从 GameSignal 按键位掩码批量更新所有按钮状态（游戏线程每帧调用）
+        void SetButtonsFromSignal() {
+            uint32_t mask = GameSignal::instance().getGameButtonMask();
+            for (unsigned i = 0; i < 16; ++i)
+                m_core.setButtonState(i, (mask >> i) & 1u);
+        }
 
         // ---- 几何信息 --------------------------------------------------------
 

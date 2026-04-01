@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <cstdint>
 #include "core/Singleton.hpp"
 
 namespace beiklive {
@@ -114,6 +115,25 @@ public:
         return m_requestOpenMenu.exchange(false, std::memory_order_acq_rel);
     }
 
+    // ---- 游戏按键状态（位掩码，RETRO_DEVICE_ID_JOYPAD_* 对应位）----------
+
+    /// UI 线程调用：按下指定 retro 按钮（id < 16）。
+    void pressGameButton(unsigned id) {
+        if (id < 16)
+            m_gameButtonMask.fetch_or(1u << id, std::memory_order_release);
+    }
+
+    /// UI 线程调用：释放指定 retro 按钮（id < 16）。
+    void releaseGameButton(unsigned id) {
+        if (id < 16)
+            m_gameButtonMask.fetch_and(~(1u << id), std::memory_order_release);
+    }
+
+    /// 游戏线程调用：获取当前按键位掩码。
+    uint32_t getGameButtonMask() const {
+        return m_gameButtonMask.load(std::memory_order_acquire);
+    }
+
     // ---- 全部重置 -------------------------------------------------------
 
     /// 重置所有信号到初始状态（一般在游戏启动前调用）。
@@ -127,6 +147,7 @@ public:
         m_muted.store(false, std::memory_order_relaxed);
         m_requestExit.store(false, std::memory_order_relaxed);
         m_requestOpenMenu.store(false, std::memory_order_relaxed);
+        m_gameButtonMask.store(0, std::memory_order_relaxed);
     }
 
 private:
@@ -139,6 +160,7 @@ private:
     std::atomic<bool> m_muted{false};           ///< 静音标志
     std::atomic<bool> m_requestExit{false};     ///< 退出请求
     std::atomic<bool> m_requestOpenMenu{false}; ///< 打开菜单请求
+    std::atomic<uint32_t> m_gameButtonMask{0};  ///< 游戏按键位掩码（bit i = RETRO_DEVICE_ID_JOYPAD_* i）
 };
 
 } // namespace beiklive

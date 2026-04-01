@@ -105,3 +105,46 @@ GameSignal（原子信号桥梁）：
   UI 线程写入 → 游戏线程轮询读取
   pause / fastForward / rewind / quickSave / quickLoad / reset / mute
 ```
+
+---
+
+## 任务二：游戏输入、画面模式、计时、覆盖层、菜单功能完善
+
+### 任务分析
+
+**任务目标**：在现有 GameView 框架基础上，完善以下七项功能：
+1. 完整按键绑定（EMU_A~EMU_SELECT 映射到 brls 系统按键）
+2. 画面缩放模式（整数倍、自由缩放、FILL、比例）
+3. 游戏运行时长自动记录（每3分钟保存）
+4. 状态覆盖层绘制（FPS/快进/倒带/暂停/静音提示）
+5. 初步 GameMenuView（返回游戏/退出游戏）
+6. EMU_OPEN_MENU 热键打开 GameMenuView
+7. onFocusGained/Lost 控制游戏暂停/继续
+
+**输入**：现有 `src/` 代码架构、`old/src/Game/game_view.cpp` 参考实现
+
+**输出**：
+- 完善的 `GameView` 按键绑定与游戏循环
+- `ScreenMode` 枚举和 `computeDisplayRect()` 工具函数
+- `GameOverlayRenderer` 覆盖层绘制工具类
+- 功能完整的 `GameMenuView`
+
+**挑战**：
+- 游戏按键需 HOLD+RELEASE 双注册以正确维护按下/松开状态
+- 跨线程安全：使用 GameSignal 原子位掩码传递按键状态
+- 菜单与游戏视图的焦点切换需配合 onFocusGained/Lost 实现暂停控制
+
+### 变更说明
+
+| 文件 | 变更内容 |
+|------|---------|
+| `src/core/enums.h` | 新增 `ScreenMode` 枚举、`DisplayRect` 结构体、`computeDisplayRect()` 内联函数 |
+| `src/core/GameSignal.hpp` | 新增游戏按键位掩码（`m_gameButtonMask`）及操作方法 |
+| `src/game/mgba/GameRun.hpp` | 新增 `SetButtonsFromSignal()` 批量更新按键状态 |
+| `src/ui/utils/GameOverlayRenderer.hpp` | 新增通用覆盖层绘制工具类（FPS/快进/倒带/暂停/静音） |
+| `src/ui/utils/GameView.hpp` | 新增 `m_screenMode`、FPS 统计、`m_gameMenuView` 成员及 `_drawOverlays()` |
+| `src/ui/utils/GameView.cpp` | 完善按键绑定、游戏循环（计时+FPS）、draw（画面模式+覆盖层+菜单打开） |
+| `src/ui/utils/GameMenuView.hpp` | 完善类定义，添加按钮成员和回调接口 |
+| `src/ui/utils/GameMenuView.cpp` | 实现两按钮菜单（返回游戏/退出游戏）含半透明覆盖层 |
+| `src/ui/page/GamePage.cpp` | 启用 GameMenuInitialize，注入回调，关联 GameView 与 GameMenuView |
+
