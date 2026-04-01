@@ -207,3 +207,41 @@ AnimationHelper（新建）：
 | `src/ui/utils/GameMenuView.cpp` | 实现两按钮菜单（返回游戏/退出游戏）含半透明覆盖层 |
 | `src/ui/page/GamePage.cpp` | 启用 GameMenuInitialize，注入回调，关联 GameView 与 GameMenuView |
 
+
+---
+
+## 任务二：移植设置界面和关于界面
+
+### 任务分析
+
+#### 目标
+将 `old/` 目录下的 `SettingPage`（设置界面）和 `AboutPage`（关于界面）移植到 `src/` 目录，代码风格与现有 `src` 代码一致。
+
+#### 输入
+- `old/include/UI/Pages/SettingPage.hpp` / `old/src/UI/Pages/SettingPage.cpp` - 旧版设置页面
+- `old/include/UI/Pages/AboutPage.hpp` / `old/src/UI/Pages/AboutPage.cpp` - 旧版关于页面
+
+#### 输出
+- `src/ui/page/SettingPage.hpp/.cpp` - 新版设置页面
+- `src/ui/page/AboutPage.hpp/.cpp` - 新版关于页面
+- `src/core/constexpr.h` - 补充缺失的配置键常量
+- `src/ui/page/StartPage.hpp/.cpp` - 集成新页面
+
+#### 挑战与解决方案
+- **基类变更**：`beiklive::UI::BBox` → `beiklive::Box`，使用 `getContentBox()` 添加内容
+- **配置API差异**：旧版使用 `cfgGetBool/cfgSetBool` 自由函数，新版使用 `GET_SETTING_KEY_*` 宏；在文件内定义本地辅助函数进行适配
+- **FileListPage接口差异**：旧版使用 `setFilter`/`setDefaultFileCallback`，新版使用 `setFliter`/`onFileSelected`；封装 `openFilePicker` 通用辅助函数
+- **InputMappingConfig依赖**：简化为直接使用配置键字符串，避免引入旧版复杂依赖
+- **缺失配置键**：将旧版 `common.hpp` 中的配置键常量（背景图、XMB、音频、调试）添加到 `src/core/constexpr.h`
+
+### 变更说明
+
+| 文件 | 变更内容 |
+|------|---------|
+| `src/core/constexpr.h` | 添加 UI背景、XMB、缩略图、音频、调试等配置键常量 |
+| `src/ui/page/AboutPage.hpp` | 新增关于页面类定义，继承 `beiklive::Box` |
+| `src/ui/page/AboutPage.cpp` | 实现关于页面：页头、项目描述文字、作者信息（头像+链接） |
+| `src/ui/page/SettingPage.hpp` | 新增设置页面类定义，使用 TabFrame 多标签页 |
+| `src/ui/page/SettingPage.cpp` | 实现6个标签页：界面/游戏/画面/音频/按键绑定/调试 |
+| `src/ui/page/StartPage.hpp` | 新增对 SettingPage/AboutPage 的引用和私有方法 |
+| `src/ui/page/StartPage.cpp` | 补充 `_openSettings()` 和 `_openAbout()` 实现，连接 Layout 回调 |
