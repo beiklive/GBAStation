@@ -4,7 +4,7 @@ namespace beiklive
 {
     MyActivity::MyActivity(brls::View *view) : brls::Activity(view) {}
 
-    void MyActivity::setPageView(StartPage *view)
+    void MyActivity::setPageView(beiklive::StartPage *view)
     {
         m_pageView = view;
     }

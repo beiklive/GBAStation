@@ -10,7 +10,7 @@ namespace beiklive
         MyActivity(brls::View* view);
         ~MyActivity() = default;
 
-        void setPageView(StartPage* view);
+        void setPageView(beiklive::StartPage* view);
 
 
         void onResume() override;
@@ -18,7 +18,7 @@ namespace beiklive
     
     private:
         // 这里可以添加一些成员变量来管理页面状态
-        StartPage* m_pageView = nullptr;
+        beiklive::StartPage* m_pageView = nullptr;
     
     };
 

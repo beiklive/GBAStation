@@ -44,7 +44,7 @@ int main(int argc, char* argv[]) {
 	beiklive::RegisterStyles();
 	beiklive::RegisterThemes();
 	
-	auto* mStartPage = new StartPage();
+	auto* mStartPage = new beiklive::StartPage();
 	auto* frame = new brls::AppletFrame(mStartPage);
 	HIDE_BRLS_BAR(frame);
 	beiklive::MyActivity* activity = new beiklive::MyActivity(frame);
