@@ -2,20 +2,114 @@
 
 namespace beiklive::gba
 {
+    // ============================================================
+    // 析构函数
+    // ============================================================
+    CoreMgba::~CoreMgba()
+    {
+        if (m_ready)
+            Cleanup();
+    }
+
+    // ============================================================
+    // SetupGame – 加载核心与 ROM，完成初始化
+    // ============================================================
     bool CoreMgba::SetupGame(beiklive::GameEntry GameEntry)
     {
         m_gameEntry = std::move(GameEntry);
         if (_loadCore(beiklive::GetCorePath(m_gameEntry.platform)))
         {
+            _initConfig(); // 向核心注册默认配置项
             if (_loadRom(m_gameEntry.path))
             {
                 _loadSram();
                 _loadRtc();
                 _loadCheats();
+                m_core.reset(); // 加载存档/金手指后确保核心从干净状态启动
+                m_ready = true;
                 return true;
             }
         }
         return false;
+    }
+
+    // ============================================================
+    // Cleanup – 保存存档并卸载核心
+    // ============================================================
+    void CoreMgba::Cleanup()
+    {
+        if (!m_ready) return;
+        m_ready = false;
+        _saveSram();
+        _saveRtc();
+        m_core.unloadGame();
+        m_core.deinitCore();
+        m_core.unload();
+    }
+
+    // ============================================================
+    // RunFrame – 执行一帧游戏逻辑
+    // ============================================================
+    void CoreMgba::RunFrame()
+    {
+        if (!m_ready) return;
+        m_core.run();
+    }
+
+    // ============================================================
+    // Reset – 重置核心
+    // ============================================================
+    void CoreMgba::Reset()
+    {
+        if (!m_ready) return;
+        m_core.reset();
+    }
+
+    // ============================================================
+    // Serialize / Unserialize – 快速存读档
+    // ============================================================
+    bool CoreMgba::Serialize(std::vector<uint8_t>& outBuf) const
+    {
+        if (!m_ready) return false;
+        size_t sz = m_core.serializeSize();
+        if (sz == 0) return false;
+        outBuf.resize(sz);
+        return m_core.serialize(outBuf.data(), sz);
+    }
+
+    bool CoreMgba::Unserialize(const std::vector<uint8_t>& buf)
+    {
+        if (!m_ready || buf.empty()) return false;
+        return m_core.unserialize(buf.data(), buf.size());
+    }
+
+    // ============================================================
+    // _initConfig – 向核心注册 mgba 默认配置变量
+    // ============================================================
+    void CoreMgba::_initConfig()
+    {
+        beiklive::ConfigManager* cfg = beiklive::SettingManager;
+        if (!cfg) return;
+
+        // 核心配置变量默认值（配置键名遵循 mgba libretro core 原始变量名）
+        using CV = beiklive::ConfigValue;
+        cfg->SetDefault("core.mgba_gb_model",                 CV(std::string("Autodetect"))); // GB 型号（自动检测）
+        cfg->SetDefault("core.mgba_use_bios",                  CV(std::string("ON")));         // 使用 BIOS（开启）
+        cfg->SetDefault("core.mgba_skip_bios",                 CV(std::string("OFF")));        // 跳过 BIOS 开机画面（关闭）
+        cfg->SetDefault("core.mgba_gb_colors",                 CV(std::string("Grayscale")));  // GB 颜色方案（灰阶）
+        cfg->SetDefault("core.mgba_gb_colors_preset",          CV(std::string("0")));          // GB 颜色预设编号
+        cfg->SetDefault("core.mgba_sgb_borders",               CV(std::string("ON")));         // 超级 GB 边框（开启）
+        cfg->SetDefault("core.mgba_audio_low_pass_filter",     CV(std::string("disabled")));   // 音频低通滤波器（禁用）
+        cfg->SetDefault("core.mgba_audio_low_pass_range",      CV(std::string("60")));         // 低通滤波截止频率（60%）
+        cfg->SetDefault("core.mgba_allow_opposing_directions", CV(std::string("no")));         // 允许同时按反方向键（否）
+        cfg->SetDefault("core.mgba_solar_sensor_level",        CV(std::string("0")));          // 太阳传感器强度（0）
+        cfg->SetDefault("core.mgba_force_gbp",                 CV(std::string("OFF")));        // 强制 GBP 振动（关闭）
+        cfg->SetDefault("core.mgba_idle_optimization",         CV(std::string("Remove Known")));// 空闲循环优化（移除已知）
+        cfg->SetDefault("core.mgba_frameskip",                 CV(std::string("0")));          // 跳帧数量（0=不跳帧）
+        cfg->Save();
+
+        // 将全局配置管理器传入核心（用于响应 RETRO_ENVIRONMENT_GET_VARIABLE）
+        m_core.setConfigManager(cfg);
     }
 
     bool CoreMgba::_loadCore(const std::string &corePath)
