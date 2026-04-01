@@ -108,7 +108,66 @@ GameSignal（原子信号桥梁）：
 
 ---
 
-## 任务二：游戏输入、画面模式、计时、覆盖层、菜单功能完善
+## 任务三：移植倒带/快进、优化帧率控制、动画类、整理游戏主循环
+
+### 任务分析
+
+**任务目标**：
+1. 移植 `old` 版本的倒带和快进功能到 `GameView` 游戏线程
+2. 使用严格时钟累加模式解决非快进状态下帧率不足55fps的问题
+3. 制作 `AnimationHelper` 动画类，实现 View 显隐和 Activity 的出场/入场动画
+4. 整理 `_gameLoop` 代码，提取封装多个辅助方法防止代码过长
+
+**输入**：
+- `old/src/Game/game_view.cpp` - 旧版倒带/快进逻辑参考
+- 现有 `src/ui/utils/GameView.cpp` - 需要改进的游戏主循环
+- `third_party/borealis` - borealis 动画系统（Animatable/Ticking）
+
+**挑战与解决方案**：
+- **倒带状态缓冲区**：使用 `std::deque<std::vector<uint8_t>>` 环形缓冲区存储历史状态，最多600帧（约10秒），每帧序列化+存储
+- **帧率漂移**：原来使用 `frameStart = Clock::now()` 每帧都以实际时钟重置，导致 `sleep_for` 超时误差积累。改用 `nextFrameTarget += frameDurNs` 累加模式，将超时误差限制在单帧内
+- **动画生命周期**：`brls::Animatable` 作为成员变量的堆分配对象在 `endCallback` 中使用 `delete this` 自删除；通过分析 borealis `time.cpp` 的 `updateTickings()` 实现确认此模式安全
+
+### 变更说明
+
+| 文件 | 变更内容 |
+|------|---------|
+| `src/ui/utils/GameView.hpp` | 新增常量（REWIND_BUFFER_SIZE/REWIND_STEP/FF_MULTIPLIER）、倒带缓冲区成员、8个辅助方法声明 |
+| `src/ui/utils/GameView.cpp` | 重构游戏主循环：提取 8 个辅助方法；实现倒带/快进帧逻辑；改用 `nextFrameTarget` 累加帧率控制 |
+| `src/ui/utils/AnimationHelper.hpp` | 新建动画辅助类，提供 `fadeIn/fadeOut/slideInFromBottom/slideOutToBottom/pushActivity/popActivity` |
+| `src/ui/utils/AnimationHelper.cpp` | 实现动画方法，使用堆分配的 FadeAnim/SlideAnim 结构体管理 Animatable 生命周期 |
+| `src/ui/page/GamePage.cpp` | 引入 AnimationHelper，菜单显隐改为带动画效果（滑入/淡出） |
+
+### 架构说明（更新）
+
+```
+游戏线程 _gameLoop（已整理）：
+  ├─ 暂停：sleep 16ms，推进计时基准
+  ├─ 倒带模式（_stepRewind）：
+  │   ├─ 从 m_rewindBuffer 弹出 REWIND_STEP 帧
+  │   └─ Unserialize 状态 + RunFrame 刷新视频
+  ├─ 快进/正常模式（_stepFrame）：
+  │   ├─ _saveRewindState：序列化并存入环形缓冲区
+  │   └─ RunFrame × FF_MULTIPLIER（快进）或 × 1（正常）
+  ├─ _captureVideoFrame：取出视频帧，mutex 传 UI 线程
+  ├─ _pushFrameAudio：推送音频（快进时限量）
+  ├─ _updateFpsStats：每秒更新 FPS 显示
+  ├─ _updatePlayTime：每3分钟保存游戏时长
+  └─ _throttleFrameRate：
+      ├─ nextTarget += frameDurNs（累加目标时间）
+      ├─ 若 nextTarget < now → 重置（帧超时防护）
+      ├─ sleep_for(coarse)：粗粒度睡眠
+      └─ spin wait：精确等待至 nextTarget
+
+AnimationHelper（新建）：
+  ├─ fadeIn(view)：setVisibility(VISIBLE) + alpha 0→1
+  ├─ fadeOut(view)：alpha 1→0，完成后可设 GONE
+  ├─ slideInFromBottom(view)：translateY distance→0
+  ├─ slideOutToBottom(view)：translateY 0→distance
+  ├─ pushActivity(activity, transition)：封装 brls 推入
+  └─ popActivity(transition, cb)：封装 brls 弹出
+```
+
 
 ### 任务分析
 
