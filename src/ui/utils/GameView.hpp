@@ -10,6 +10,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <deque>
 #include <mutex>
 #include <thread>
 #include <vector>
@@ -34,6 +35,15 @@ namespace beiklive
             void setGameMenuView(GameMenuView* menuView) { m_gameMenuView = menuView; }
 
         private:
+            // ---- 游戏线程常量 ------------------------------------------------
+            static constexpr double   MAX_REASONABLE_FPS      = 240.0;  ///< 核心上报 FPS 的安全上限
+            static constexpr double   SPIN_GUARD_SEC           = 0.002;  ///< 每帧自旋等待预算（秒）
+            static constexpr double   FPS_UPDATE_INTERVAL      = 1.0;   ///< FPS 计数器更新间隔（秒）
+            static constexpr int      PLAY_TIME_SAVE_INTERVAL  = 180;   ///< 游戏时长保存间隔（秒，3分钟）
+            static constexpr unsigned REWIND_BUFFER_SIZE       = 600;   ///< 倒带缓冲区最大帧数（约10秒）
+            static constexpr unsigned REWIND_STEP              = 2;     ///< 每次倒带弹出的帧数
+            static constexpr unsigned FF_MULTIPLIER            = 4;     ///< 快进倍率（每迭代运行的帧数）
+
             bool _brls_inputLocked = false; ///< 输入锁定状态
             beiklive::GameEntry m_gameEntry; ///< 游戏条目数据
 
@@ -62,6 +72,9 @@ namespace beiklive
             float    m_currentFps    = 0.0f;
             std::chrono::steady_clock::time_point m_fpsLastTime;
 
+            // ---- 倒带缓冲区（仅游戏线程访问，无需互斥锁）--------------------
+            std::deque<std::vector<uint8_t>> m_rewindBuffer; ///< 倒带状态环形缓冲区（最新帧在队首）
+
             // ---- 菜单视图（由 GamePage 注入）---------------------------------
             GameMenuView* m_gameMenuView = nullptr;
 
@@ -83,6 +96,38 @@ namespace beiklive
 
             /// 在视图上绘制状态覆盖层（FPS/快进/倒带/暂停/静音）
             void _drawOverlays(NVGcontext* vg, float x, float y, float w, float h);
+
+            // ---- 游戏循环内部分段辅助方法（仅在游戏线程中调用）--------------
+
+            /// 将当前核心状态序列化并存入倒带缓冲区（超出上限时自动淘汰最旧帧）
+            void _saveRewindState();
+
+            /// 执行一次倒带操作：从缓冲区弹出 REWIND_STEP 帧并反序列化，返回是否成功
+            bool _stepRewind();
+
+            /// 执行正常或快进帧：保存倒带状态，运行核心（ff=true 时运行 FF_MULTIPLIER 帧）
+            /// @return 本次迭代实际运行的帧数
+            unsigned _stepFrame(bool ff);
+
+            /// 从核心取出最新视频帧并暂存，等待 UI 线程上传 GPU
+            void _captureVideoFrame();
+
+            /// 推送音频数据到 AudioManager（ff=true 时限制推送量，避免缓冲区溢出）
+            void _pushFrameAudio(bool ff, unsigned framesRan);
+
+            /// 更新 FPS 统计计数器（游戏线程侧）
+            void _updateFpsStats(unsigned framesRan,
+                                 std::chrono::steady_clock::time_point& lastTime,
+                                 unsigned& counter);
+
+            /// 更新游戏时长记录（每 PLAY_TIME_SAVE_INTERVAL 秒精确累加一次）
+            void _updatePlayTime(std::chrono::steady_clock::time_point& lastTime);
+
+            /// 帧率限制器：使用 nextFrameTarget 累加模式，严格对齐目标帧率，防止漂移
+            void _throttleFrameRate(bool ff,
+                                    std::chrono::steady_clock::time_point& nextTarget,
+                                    std::chrono::nanoseconds frameDurNs,
+                                    std::chrono::nanoseconds spinGuardNs);
     };
 }
 

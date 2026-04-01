@@ -1,9 +1,14 @@
 #include "GamePage.hpp"
 #include "core/Tools.hpp"
 #include "core/GameSignal.hpp"
+#include "ui/utils/AnimationHelper.hpp"
 
 namespace beiklive
 {
+    // 菜单动画时长常量（毫秒）
+    static constexpr int MENU_SLIDE_IN_MS  = 220; ///< 菜单入场滑动动画时长
+    static constexpr int MENU_FADE_OUT_MS  = 180; ///< 菜单关闭淡出动画时长
+    static constexpr int MENU_EXIT_FADE_MS = 150; ///< 退出游戏淡出动画时长
     GamePage::GamePage(beiklive::DirListData gameData)
     {
         m_gameData = std::move(gameData);
@@ -131,20 +136,22 @@ namespace beiklive
         m_gameMenuView->setPositionLeft(0);
         m_gameMenuView->setVisibility(brls::Visibility::GONE); // 初始隐藏
 
-        // "返回游戏"回调：隐藏菜单，将焦点交还给 GameView
+        // "返回游戏"回调：用淡出动画隐藏菜单，将焦点交还给 GameView
         m_gameMenuView->setOnResume([this]() {
             brls::sync([this]() {
                 m_gameView->setFocusable(true);
-                m_gameMenuView->setVisibility(brls::Visibility::GONE);
-                brls::Application::giveFocus(m_gameView);
+                AnimationHelper::fadeOut(m_gameMenuView, MENU_FADE_OUT_MS, true, [this]() {
+                    brls::Application::giveFocus(m_gameView);
+                });
             });
         });
 
         // "退出游戏"回调：触发退出信号
         m_gameMenuView->setOnExit([this]() {
             brls::sync([this]() {
-                m_gameMenuView->setVisibility(brls::Visibility::GONE);
-                GameSignal::instance().requestExit();
+                AnimationHelper::fadeOut(m_gameMenuView, MENU_EXIT_FADE_MS, true, []() {
+                    GameSignal::instance().requestExit();
+                });
             });
         });
 
