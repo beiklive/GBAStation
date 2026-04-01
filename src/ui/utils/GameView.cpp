@@ -82,7 +82,8 @@ namespace beiklive
 
         // 消费退出信号
         if (GameSignal::instance().consumeExit()) {
-            brls::sync([](){ brls::Application::popActivity(); });
+            brls::sync([this](){ 
+                brls::Application::popActivity(); });
             return;
         }
 

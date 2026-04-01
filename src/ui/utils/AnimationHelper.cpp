@@ -26,11 +26,12 @@ namespace beiklive
         std::function<void()> onComplete;
 
         /// 启动淡变动画
-        void start(float fromAlpha, float toAlpha, int durationMs)
+        void start(float fromAlpha, float toAlpha, int durationMs,
+                   brls::EasingFunction easing = brls::EasingFunction::quadraticOut)
         {
             targetAlpha = toAlpha;
             anim.reset(fromAlpha);
-            anim.addStep(toAlpha, durationMs, brls::EasingFunction::quadraticOut);
+            anim.addStep(toAlpha, durationMs, easing);
             anim.setTickCallback([this]() {
                 view->setAlpha(anim.getValue());
             });
@@ -53,11 +54,12 @@ namespace beiklive
         std::function<void()> onComplete;
 
         /// 启动平移动画
-        void start(float fromY, float targetY, int durationMs)
+        void start(float fromY, float targetY, int durationMs,
+                   brls::EasingFunction easing = brls::EasingFunction::quadraticOut)
         {
             toY = targetY;
             anim.reset(fromY);
-            anim.addStep(targetY, durationMs, brls::EasingFunction::quadraticOut);
+            anim.addStep(targetY, durationMs, easing);
             anim.setTickCallback([this]() {
                 view->setTranslationY(anim.getValue());
             });
@@ -87,7 +89,7 @@ namespace beiklive
         fa->view       = view;
         fa->goneAfter  = false;
         fa->onComplete = std::move(onComplete);
-        fa->start(0.0f, 1.0f, durationMs);
+        fa->start(0.0f, 1.0f, durationMs, brls::EasingFunction::backOut);
     }
 
     // ============================================================
@@ -103,7 +105,7 @@ namespace beiklive
         fa->view       = view;
         fa->goneAfter  = goneAfter;
         fa->onComplete = std::move(onComplete);
-        fa->start(1.0f, 0.0f, durationMs);
+        fa->start(1.0f, 0.0f, durationMs, brls::EasingFunction::backIn);
     }
 
     // ============================================================
@@ -116,13 +118,14 @@ namespace beiklive
         if (!view) return;
 
         view->setVisibility(brls::Visibility::VISIBLE);
+        view->setAlpha(1.0f);
         view->setTranslationY(distance);
 
         auto* sa       = new SlideAnim();
         sa->view       = view;
         sa->goneAfter  = false;
         sa->onComplete = std::move(onComplete);
-        sa->start(distance, 0.0f, durationMs);
+        sa->start(distance, 0.0f, durationMs, brls::EasingFunction::backOut);
     }
 
     // ============================================================
@@ -138,7 +141,7 @@ namespace beiklive
         sa->view       = view;
         sa->goneAfter  = goneAfter;
         sa->onComplete = std::move(onComplete);
-        sa->start(0.0f, distance, durationMs);
+        sa->start(0.0f, distance, durationMs, brls::EasingFunction::backIn);
     }
 
     // ============================================================
