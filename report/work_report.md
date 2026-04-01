@@ -210,6 +210,70 @@ AnimationHelper（新建）：
 
 ---
 
+## 任务四：移植渲染链及 GLSL/GLSLP 解析代码
+
+### 任务分析
+
+#### 目标
+将 `old/src/Video/` 目录下的渲染链代码（`RenderChain`）和 GLSL/GLSLP 解析代码移植到 `src/game/render/` 目录，并集成到 `GameRenderer` 与 `GameView` 中，使游戏运行时支持 RetroArch 风格的多通道着色器预设。
+
+#### 输入
+- `old/src/Video/renderer/FullscreenQuad.hpp/cpp` - 全屏四边形渲染辅助类
+- `old/src/Video/renderer/GLSLPParser.hpp/cpp` - .glslp 预设和 .glsl 文件解析器
+- `old/src/Video/renderer/ShaderCompiler.hpp/cpp` - RetroArch 风格 GLSL 着色器编译器
+- `old/src/Video/renderer/RetroShaderPipeline.hpp/cpp` - 多通道着色器管线
+- `old/src/Video/RenderChain.hpp/cpp` - 渲染链（管线+直接渲染器整合）
+- `src/game/render/GameRenderer.hpp/cpp` - 现有渲染器（需升级）
+- `src/ui/utils/GameView.cpp` - 现有游戏视图（需传入着色器路径）
+
+#### 输出
+- `src/game/render/FullscreenQuad.hpp/cpp` - 全屏四边形渲染辅助类
+- `src/game/render/GLSLPParser.hpp/cpp` - .glslp/.glsl 解析器及相关结构体
+- `src/game/render/ShaderCompiler.hpp/cpp` - RetroArch GLSL 着色器编译器
+- `src/game/render/RetroShaderPipeline.hpp/cpp` - 多通道着色器管线
+- `src/game/render/RenderChain.hpp/cpp` - 渲染链
+- 更新后的 `src/game/render/GameRenderer.hpp/cpp` - 集成 RenderChain
+- 更新后的 `src/ui/utils/GameView.cpp` - 传入 GameEntry.shaderPath 初始化渲染器
+
+#### 挑战与解决方案
+- **Include 路径变更**：旧代码使用 `"Video/renderer/XXX.hpp"` 风格路径，移植时统一改为 `"game/render/XXX.hpp"`
+- **stb_image 依赖**：通过 borealis 的 nanovg include 目录自动解析，可直接使用 `#include "stb_image.h"`
+- **GameRenderer 接口升级**：用 `RenderChain`（含着色器管线和直接渲染器）替换原有 `DirectQuadRenderer`，新增 `shaderPath` 初始化参数和着色器管理接口
+- **视口尺寸传递**：`drawToScreen()` 中将 `virtW * windowScale` 和 `virtH * windowScale` 作为视口物理尺寸传给 `RenderChain::run()`，供 viewport 缩放类型的着色器通道使用
+
+### 变更说明
+
+| 文件 | 说明 |
+|------|------|
+| `src/game/render/FullscreenQuad.hpp/cpp` | 新建：全屏四边形 VAO/VBO，供 RetroArch 着色器通道使用 |
+| `src/game/render/GLSLPParser.hpp/cpp` | 新建：.glslp 预设解析器（支持多通道、外部纹理、参数覆盖）；定义 ShaderPassDesc/ShaderParamInfo 等结构体 |
+| `src/game/render/ShaderCompiler.hpp/cpp` | 新建：合并 .glsl 文件编译器，自动注入 #version/VERTEX/FRAGMENT 宏，兼容 GL3/GLES3/GL2/GLES2 |
+| `src/game/render/RetroShaderPipeline.hpp/cpp` | 新建：多通道着色器管线，支持外部纹理加载、#pragma parameter 解析、OrigInputSize 等 RetroArch 标准 uniform |
+| `src/game/render/RenderChain.hpp/cpp` | 新建：渲染链，整合 RetroShaderPipeline 和 DirectQuadRenderer，提供统一的 run()/drawToScreen() 接口 |
+| `src/game/render/GameRenderer.hpp` | 更新：将 DirectQuadRenderer 替换为 RenderChain；新增 setShader/hasShader/getShaderParams/setShaderParam 接口 |
+| `src/game/render/GameRenderer.cpp` | 更新：init() 新增 shaderPath 参数；drawToScreen() 改为通过渲染链处理帧后绘制 |
+| `src/ui/utils/GameView.cpp` | 更新：初始化渲染器时根据 GameEntry.shaderEnabled 和 shaderPath 传入着色器路径 |
+
+### 渲染链架构
+
+```
+游戏帧 GPU 纹理 (m_texture)
+        │
+        ▼
+RenderChain::run()
+  ├─ [有着色器] RetroShaderPipeline::process()
+  │     ├─ Pass0：绑定 FBO0，运行着色器0，输出纹理A
+  │     ├─ Pass1：绑定 FBO1，运行着色器1，输出纹理B
+  │     └─ ...  → 最终输出纹理
+  └─ [无着色器] 直通，返回原始纹理
+        │
+        ▼
+RenderChain::drawToScreen()
+  └─ DirectQuadRenderer::render()  → OpenGL 直接绘制到屏幕
+```
+
+---
+
 ## 任务二：移植设置界面和关于界面
 
 ### 任务分析
