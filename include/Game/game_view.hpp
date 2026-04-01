@@ -164,6 +164,14 @@ class GameView : public brls::Box
     float    m_currentFps    = 0.0f;
     std::chrono::steady_clock::time_point m_fpsLastTime;
 
+    // ---- 游戏循环内部计时器（游戏线程访问，无需加锁）--------------
+    std::chrono::steady_clock::time_point m_loopFpsTimerStart;  ///< FPS计数器重置时刻
+    unsigned                               m_loopFpsCounter = 0; ///< 累计帧数
+    std::chrono::steady_clock::time_point m_loopPlaytimeTimer;  ///< 游戏时长累计基准点
+    std::chrono::steady_clock::time_point m_loopRtcSyncTimer;   ///< RTC同步计时基准点
+    std::chrono::steady_clock::time_point m_loopAutoSaveTimer;  ///< 自动存档计时基准点
+    bool                                   m_loopPrevFf = false; ///< 上帧快进状态（跨平台音频刷新用）
+
     // ---- UI输入屏蔽跟踪 --------------------------------------------
     /// 为true时表示有未解除的blockInputs()令牌（仅桌面端）。
     bool m_uiBlocked = false;
@@ -264,4 +272,32 @@ class GameView : public brls::Box
 
     /// 将borealis手柄状态映射到libretro按钮状态。
     void pollInput();
+
+    // ---- 游戏循环子函数（仅由 startGameThread 内的模拟线程调用）------
+
+    /// 执行游戏核心仿真：根据当前的快进/倒带/暂停状态运行核心并管理倒带缓冲区。
+    /// @return 本次迭代实际渲染的逻辑帧数（快进时可能 > 1）。
+    unsigned gameLoopRunSimulation(bool ff, bool rew, bool paused);
+
+    /// 排空核心音频缓冲区并将样本推送到 AudioManager。
+    /// 根据快进静音、用户静音等配置决定是否实际推送。
+    void gameLoopPushAudio(bool ff, bool paused);
+
+    /// 更新FPS计数器、游戏时长追踪、RTC同步及自动存档等定时任务。
+    /// @param paused      游戏当前是否处于暂停状态
+    /// @param now         本帧捕获的当前时刻
+    /// @param framesCount 本次迭代渲染的帧数（用于FPS累计）
+    void gameLoopUpdateTimers(bool paused,
+                              std::chrono::steady_clock::time_point now,
+                              unsigned framesCount);
+
+    /// 处理游戏线程内的待执行请求：即时存档、即时读档、游戏重置。
+    void gameLoopProcessPendingActions();
+
+    /// 帧率限制器：精确睡眠并忙等待直到 frameStart + targetDuration。
+    /// 若帧耗时已超出目标时长则立即返回（不补帧、不积累漂移）。
+    /// @param frameStart    本帧开始时刻
+    /// @param targetDuration 目标帧时长（秒）
+    void gameLoopWaitForDeadline(std::chrono::steady_clock::time_point frameStart,
+                                 std::chrono::duration<double> targetDuration);
 };

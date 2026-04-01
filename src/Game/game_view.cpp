@@ -1,5 +1,6 @@
 #include "Game/game_view.hpp"
 #include "Audio/AudioManager.hpp"
+#include "UI/Utils/BKAnimator.hpp"
 
 #include <borealis.hpp>
 #include <borealis/core/application.hpp>
@@ -57,6 +58,8 @@ std::string GameView::resolveCoreLibPath()
     return "";  // switch平台直接静态链接
 #elif defined(_WIN32)
     return std::string(BK_GAME_CORE_DIR) + std::string("mgba_libretro.dll");
+#else
+    return std::string(BK_GAME_CORE_DIR) + std::string("mgba_libretro.so");
 #endif
 }
 
@@ -428,6 +431,15 @@ void GameView::startGameThread()
     m_fpsFrameCount  = 0;
     m_currentFps     = 0.0f;
 
+    // 初始化游戏循环内部计时器（游戏线程访问，无需加锁）
+    auto now = std::chrono::steady_clock::now();
+    m_loopFpsTimerStart  = now;
+    m_loopFpsCounter     = 0;
+    m_loopPlaytimeTimer  = now;
+    m_loopRtcSyncTimer   = now;
+    m_loopAutoSaveTimer  = now;
+    m_loopPrevFf         = false;
+
     // 配置音频背压阈值：约 4 帧音频量。
     // 保持环形缓冲区轻量，防止延迟随时间累积。
     {
@@ -450,284 +462,312 @@ void GameView::startGameThread()
         using Clock    = std::chrono::steady_clock;
         using Duration = std::chrono::duration<double>;
         const Duration frameDuration(1.0 / fps);
-        // 保护时长：从粗粒度睡眠中减去，让自旋等待准时结束
-        const Duration spinGuard(SPIN_GUARD_SEC);
 
 #ifdef _WIN32
         // 请求 1ms Windows 定时器精度，确保 sleep_for() 准确
         timeBeginPeriod(1);
 #endif
 
-        // 线程内 FPS 计数器
-        Clock::time_point fpsTimerStart = Clock::now();
-        unsigned          fpsCounter    = 0;
-
-        // 线程内游戏时长追踪：每 60 秒保存一次总游戏时长。
-        Clock::time_point playtimeTimer = Clock::now();
-
-        // RTC 同步计时器：每秒向核心 RTC 内存写入当前 Unix 时间。
-        Clock::time_point rtcSyncTimer = Clock::now();
-
-        // 自动存档计时器：定时保存到即时存档0（.ss0）
-        Clock::time_point autoSaveTimer = Clock::now();
-
-        // 累积理想帧结束时间，用于无漂移的帧率控制。
-        // 每次迭代加一个 frameDuration，防止慢帧压缩下一帧预算。
-        // 初始化为 Clock::now()，确保第一帧获得完整的帧时长预算。
-        auto nextFrameTarget = Clock::now();
-
-#ifdef __SWITCH__
-        // 追踪快进状态，用于检测快进→正常的切换时机。
-        bool prevFastForward = false;
-#endif
-
         while (m_running.load(std::memory_order_acquire)) {
-            // 轮询手柄输入并转发给核心
-            pollInput();  // 处理输入事件
+            // ── 在每帧开始处记录帧起始时间，用于精确帧率控制 ──────────────
+            auto frameStart = Clock::now();
 
-            bool ff      = m_fastForward.load(std::memory_order_relaxed);
-            bool rew     = m_rewinding.load(std::memory_order_relaxed);
-            bool paused  = m_paused.load(std::memory_order_relaxed);
+            // ── 轮询手柄输入并转发给核心 ───────────────────────────────────
+            pollInput();
 
-            // 通知核心当前快进状态，使其能正确响应
-            // RETRO_ENVIRONMENT_GET_FASTFORWARDING 查询。
+            bool ff     = m_fastForward.load(std::memory_order_relaxed);
+            bool rew    = m_rewinding.load(std::memory_order_relaxed);
+            bool paused = m_paused.load(std::memory_order_relaxed);
+
+            // 通知核心当前快进状态
             m_core.setFastForwarding(ff && !paused);
 
-#ifdef __SWITCH__
-            // 快进结束时，清空环形缓冲区中的残留音频样本，
-            // 防止它们以正常速度回放（会产生噪音或突发的加速音频）。
-            if (!paused && prevFastForward && !ff) {
+            // ── 快进结束时刷新音频环形缓冲区（跨平台，防止残留音频回放异常）──
+            if (!paused && m_loopPrevFf && !ff) {
                 beiklive::AudioManager::instance().flushRingBuffer();
             }
-            prevFastForward = paused ? false : ff;
-#endif
+            m_loopPrevFf = paused ? false : ff;
 
-            // framesThisIter：本次迭代渲染的逻辑帧数，用于 FPS 计数。
-            unsigned framesThisIter = 1u;
+            // ── 执行仿真（快进/倒带/暂停逻辑） ─────────────────────────────
+            unsigned framesThisIter = gameLoopRunSimulation(ff, rew, paused);
 
-            if (paused) {
-                // ---- 暂停状态：清空所有游戏按键，跳过核心运行和音频推送 ----
-                // 清空游戏按键状态，防止恢复后残留按键触发游戏操作。
-                for (unsigned id = 0; id <= RETRO_DEVICE_ID_JOYPAD_R3; ++id)
-                    m_core.setButtonState(id, false);
-            } else if (rew && m_inputMap.rewindEnabled) {
-                // ---- 存储倒带状态
-                bool didRestore = false;
-                {
-                    std::lock_guard<std::mutex> lk(m_rewindMutex);
-                    for (unsigned step = 0; step < m_inputMap.rewindStep && !m_rewindBuffer.empty(); ++step) {
-                        const auto& state = m_rewindBuffer.front();
-                        m_core.unserialize(state.data(), state.size());
-                        m_rewindBuffer.pop_front();
-                        didRestore = true;
-                    }
-                }
+            // ── 推送音频样本 ─────────────────────────────────────────────
+            gameLoopPushAudio(ff, paused);
 
-                if (didRestore) {
-                    m_core.run();  // 运行核心以更新视频输出，保证倒带流畅。
-                }
-                // 排空音频（根据配置决定静音或透传）
-                {
-                    std::vector<int16_t> dummy;
-                    bool hasSamples = m_core.drainAudio(dummy) && !dummy.empty();
-                    if (!m_inputMap.rewindMute && hasSamples) {
-                        size_t frames = dummy.size() / STEREO_CHANNELS;
-                        beiklive::AudioManager::instance().pushSamples(dummy.data(), frames);
-                    }
-                }
-            } else {
-                // ---- 正常或快进：运行核心 --------------------
-                // 计算本次迭代运行的帧数。
-                // 快进倍率 N 时，每个正常帧周期运行 N 帧，实现精确 N 倍速。
-                // 倍率 < 1 时，仍运行 1 帧但拉长睡眠时间。
-                if (ff) {
-                    framesThisIter = (m_inputMap.ffMultiplier >= 1.0f)
-                        ? static_cast<unsigned>(std::round(m_inputMap.ffMultiplier))
-                        : 1u;
-                }
+            // ── 更新定时器与计数器 ──────────────────────────────────────────
+            auto nowPost = Clock::now();
+            gameLoopUpdateTimers(paused, nowPost, framesThisIter);
 
-                for (unsigned i = 0; i < framesThisIter; ++i) {
-                    // 每帧前保存状态到倒带缓冲区（快进时同样保存）
-                    if (m_inputMap.rewindEnabled) {
-                        size_t sz = m_core.serializeSize();
-                        if (sz > 0) {
-                            std::vector<uint8_t> state(sz);
-                            if (m_core.serialize(state.data(), sz)) {
-                                std::lock_guard<std::mutex> lk(m_rewindMutex);
-                                m_rewindBuffer.push_front(std::move(state));
-                                while (m_rewindBuffer.size() > m_inputMap.rewindBufSize)
-                                    m_rewindBuffer.pop_back();
-                            }
-                        }
-                    }
-                    m_core.run();
-                }
-
-                // 排空音频样本并直接推送到 AudioManager。
-                {
-                    std::vector<int16_t> samples;
-                    bool hasSamples = m_core.drainAudio(samples) && !samples.empty();
-                    // 静音条件：
-                    //   - 快进时静音（fastforward.mute）
-                    //   - 用户手动静音（m_muted）
-                    //   - 没有可用的音频样本
-                    bool mute = (ff && m_inputMap.ffMute)
-                                || m_muted.load(std::memory_order_relaxed)
-                                || !hasSamples;
-                    if (!mute) {
-                        size_t frames = samples.size() / STEREO_CHANNELS;
-                        // 快进（倍率 > 1）且不静音时，限制推送的音频量为一正常帧的量。
-                        // 每次循环运行 N 帧会产生 N 倍音频，否则会撑满环形缓冲区，
-                        // 导致 pushSamples() 永久阻塞，冻结游戏线程。
-                        if (ff && m_inputMap.ffMultiplier > 1.0f) {
-                            // 先用浮点计算再取整，保证精度。
-                            size_t limit = static_cast<size_t>(
-                                std::round(static_cast<double>(frames) / m_inputMap.ffMultiplier));
-                            // 若取整为零说明总量极小，直接全部推送。
-                            if (limit > 0)
-                                frames = limit;
-                        }
-                        beiklive::AudioManager::instance().pushSamples(samples.data(), frames);
-                    }
-                }
-            }
-
-            // ---- FPS 计数器（游戏线程侧）-------------------------
-            // 暂停时不计帧数，保持 FPS 覆盖层显示上一次的有效值。
-            auto nowPost = Clock::now(); // 捕获一次，供后续睡眠复用
+            // ── 处理待执行请求（存档/读档/重置） ───────────────────────────
             if (!paused) {
-                // 统计所有渲染帧数（含快进倍增的帧）。
-                fpsCounter += framesThisIter;
-                double elapsed = std::chrono::duration<double>(nowPost - fpsTimerStart).count();
-                if (elapsed >= FPS_UPDATE_INTERVAL) {
-                    float newFps = static_cast<float>(static_cast<double>(fpsCounter) / elapsed);
-                    {
-                        std::lock_guard<std::mutex> lk(m_fpsMutex);
-                        m_currentFps    = newFps;
-                        m_fpsFrameCount = fpsCounter;
-                    }
-                    fpsCounter   = 0;
-                    fpsTimerStart = nowPost;
-                }
-
-                // 更新游戏运行时长，每 1 分钟保存一次
-                if (gamedataManager && !m_romFileName.empty()) {
-                    auto playtimeElapsed = std::chrono::duration_cast<std::chrono::seconds>(
-                        nowPost - playtimeTimer).count();
-                    if (playtimeElapsed >= 60) {
-                        // 精确推进 60 秒，防止线程挂起或检查延迟导致多计时间。
-                        playtimeTimer += std::chrono::seconds(60);
-                        std::string prefix = gamedataKeyPrefix(m_romFileName);
-                        std::string k = prefix + "." + GAMEDATA_FIELD_TOTALTIME;
-                        int currentTotal = 0;
-                        auto tv = gamedataManager->Get(k);
-                        if (tv) {
-                            if (auto iv = tv->AsInt()) currentTotal = *iv;
-                        }
-                        currentTotal += 60;
-                        gamedataManager->Set(k, beiklive::ConfigValue(currentTotal));
-                        gamedataManager->Save();
-                    }
-                }
-
-                // RTC 实时同步：保持 GB MBC3 RTC 存档缓冲区中的 unixTime 字段最新。
-                // GBMBCRTCSaveBuffer::unixTime 位于字节偏移 40（10 × uint32_t），
-                // GBMBCRTCRead 在下次游戏加载时会将其读入 rtcLastLatch。
-                // 保持此字段更新可确保存档重载后经过时间计算正确。
-                {
-                    auto rtcElapsed = std::chrono::duration_cast<std::chrono::seconds>(
-                        nowPost - rtcSyncTimer).count();
-                    if (rtcElapsed >= 1) {
-                        rtcSyncTimer += std::chrono::seconds(1);
-                        // GBMBCRTCSaveBuffer::unixTime 偏移量为 40 字节。
-                        static constexpr size_t k_rtcUnixTimeOffset = 10 * sizeof(uint32_t);
-                        size_t rtcSz = m_core.getMemorySize(RETRO_MEMORY_RTC);
-                        if (rtcSz >= k_rtcUnixTimeOffset + sizeof(uint64_t)) {
-                            void* rtcPtr = m_core.getMemoryData(RETRO_MEMORY_RTC);
-                            if (rtcPtr) {
-                                std::time_t t = std::time(nullptr);
-                                if (t != static_cast<std::time_t>(-1)) {
-                                    uint64_t nowUnix = static_cast<uint64_t>(t);
-                                    std::memcpy(static_cast<uint8_t*>(rtcPtr) + k_rtcUnixTimeOffset,
-                                                &nowUnix, sizeof(uint64_t));
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // ---- 存读即时存档 --------
-                // exchange(-1, std::memory_order_relaxed) 的作用是：
-                // 取出当前请求槽位（slot）；
-                // 同时把原子变量重置为 -1（表示"无待处理请求"）。
-                {
-                    int slot = m_pendingQuickSave.exchange(-1, std::memory_order_relaxed);
-                    if (slot >= 0) doQuickSave(slot);
-                }
-                {
-                    int slot = m_pendingQuickLoad.exchange(-1, std::memory_order_relaxed);
-                    if (slot >= 0) doQuickLoad(slot);
-                }
-
-                // ---- 重置游戏核心 --------
-                if (m_pendingReset.exchange(false, std::memory_order_relaxed)) {
-                    bklog::info("GameView: 执行游戏核心重置");
-                    m_core.reset();
-                }
-
-                // ---- 自动定时存档（定期保存到即时存档0 .ss0） --------
-                {
-                    int autoSaveIntervalSec = beiklive::cfgGetInt("save.autoSaveInterval", 0);
-                    if (autoSaveIntervalSec > 0) {
-                        auto autoSaveElapsed = std::chrono::duration_cast<std::chrono::seconds>(
-                            nowPost - autoSaveTimer).count();
-                        if (autoSaveElapsed >= autoSaveIntervalSec) {
-                            // 重置计时器（以自动存档间隔为单位推进，避免漂移）
-                            autoSaveTimer += std::chrono::seconds(autoSaveIntervalSec);
-                            // 静默模式：自动存档不在游戏界面显示保存 overlay
-                            doQuickSave(0, /*silent=*/true);
-                        }
-                    }
-                }
-            } else {
-                // 暂停时推进各计时器基准点，避免恢复后触发积压的时间操作
-                playtimeTimer = nowPost;
-                rtcSyncTimer  = nowPost;
-                autoSaveTimer = nowPost;
-                fpsTimerStart = nowPost;
+                gameLoopProcessPendingActions();
             }
 
-            // 帧率限制器
-            {
-                Duration targetDur = frameDuration;
-                if (!paused && ff && m_inputMap.ffMultiplier < 1.0f) {
-                    targetDur = Duration(1.0 / (fps * static_cast<double>(m_inputMap.ffMultiplier)));
-                }
-
-                // 向前推进一帧的目标时间。
-                nextFrameTarget += std::chrono::duration_cast<Clock::duration>(targetDur);
-
-                // 防漂移：若帧超时，将目标重置为 now，
-                // 使下一帧获得全新的完整预算，而非调度到过去的时刻。
-                if (nextFrameTarget < nowPost) {
-                    nextFrameTarget = nowPost;
-                }
-
-                if (nowPost < nextFrameTarget) {
-                    // 粗粒度睡眠（预留自旋等待时间）
-                    auto coarseDur = (nextFrameTarget - nowPost) - spinGuard;
-                    if (coarseDur.count() > 0)
-                        std::this_thread::sleep_for(coarseDur);
-                    // 精确等待截止时间
-                    while (Clock::now() < nextFrameTarget) { /* 忙等待 */ }
-                }
+            // ── 帧率限制：精确等待到本帧截止时间 ───────────────────────────
+            // 目标时长：快进慢速模式（ffMultiplier < 1）时延长帧间隔；其余情况使用核心原生帧时长。
+            Duration targetDur = frameDuration;
+            if (!paused && ff && m_inputMap.ffMultiplier < 1.0f) {
+                targetDur = Duration(1.0 / (fps * static_cast<double>(m_inputMap.ffMultiplier)));
             }
+            gameLoopWaitForDeadline(frameStart, targetDur);
         }
 
 #ifdef _WIN32
         timeEndPeriod(1);
 #endif
     });
+}
+
+// ============================================================
+// gameLoopRunSimulation – 执行游戏核心仿真
+// ============================================================
+// 根据当前的快进/倒带/暂停状态运行核心：
+//   - 暂停：清空游戏按键，跳过仿真
+//   - 倒带（rewindEnabled=true）：从倒带缓冲区恢复状态并渲染
+//   - 正常/快进：按倍率运行若干帧，同时保存倒带状态（若已启用）
+// 返回本次迭代实际渲染的逻辑帧数。
+// ============================================================
+unsigned GameView::gameLoopRunSimulation(bool ff, bool rew, bool paused)
+{
+    unsigned framesThisIter = 1u;
+
+    if (paused) {
+        // 暂停状态：清空所有游戏按键，防止恢复后残留按键触发游戏操作
+        for (unsigned id = 0; id <= RETRO_DEVICE_ID_JOYPAD_R3; ++id)
+            m_core.setButtonState(id, false);
+        return framesThisIter;
+    }
+
+    if (rew && m_inputMap.rewindEnabled) {
+        // ── 倒带：从缓冲区弹出状态并恢复 ─────────────────────────────────
+        bool didRestore = false;
+        {
+            std::lock_guard<std::mutex> lk(m_rewindMutex);
+            for (unsigned step = 0; step < m_inputMap.rewindStep && !m_rewindBuffer.empty(); ++step) {
+                const auto& state = m_rewindBuffer.front();
+                m_core.unserialize(state.data(), state.size());
+                m_rewindBuffer.pop_front();
+                didRestore = true;
+            }
+        }
+        if (didRestore) {
+            // 运行核心一帧以刷新视频输出，保证倒带画面流畅
+            m_core.run();
+        }
+        return framesThisIter;
+    }
+
+    // ── 正常或快进：按倍率运行若干帧 ──────────────────────────────────────
+    // 快进倍率 N 时，每个正常帧周期运行 N 帧，实现精确 N 倍速。
+    // 倍率 < 1 时，仍运行 1 帧但通过延长帧间隔实现慢速。
+    if (ff) {
+        framesThisIter = (m_inputMap.ffMultiplier >= 1.0f)
+            ? static_cast<unsigned>(std::round(m_inputMap.ffMultiplier))
+            : 1u;
+    }
+
+    for (unsigned i = 0; i < framesThisIter; ++i) {
+        // 每帧运行前保存状态到倒带缓冲区（快进时同样保存）
+        if (m_inputMap.rewindEnabled) {
+            size_t sz = m_core.serializeSize();
+            if (sz > 0) {
+                std::vector<uint8_t> state(sz);
+                if (m_core.serialize(state.data(), sz)) {
+                    std::lock_guard<std::mutex> lk(m_rewindMutex);
+                    m_rewindBuffer.push_front(std::move(state));
+                    while (m_rewindBuffer.size() > m_inputMap.rewindBufSize)
+                        m_rewindBuffer.pop_back();
+                }
+            }
+        }
+        m_core.run();
+    }
+
+    return framesThisIter;
+}
+
+// ============================================================
+// gameLoopPushAudio – 排空核心音频缓冲区并推送样本
+// ============================================================
+// 根据快进静音、用户静音等配置决定是否实际推送。
+// 倒带模式下单独处理：根据 rewindMute 决定是否推送倒带时的音频。
+// ============================================================
+void GameView::gameLoopPushAudio(bool ff, bool paused)
+{
+    bool rew = m_rewinding.load(std::memory_order_relaxed);
+
+    if (rew && m_inputMap.rewindEnabled) {
+        // 倒带：排空音频，根据配置决定静音或透传
+        std::vector<int16_t> dummy;
+        bool hasSamples = m_core.drainAudio(dummy) && !dummy.empty();
+        if (!m_inputMap.rewindMute && hasSamples) {
+            size_t frames = dummy.size() / STEREO_CHANNELS;
+            beiklive::AudioManager::instance().pushSamples(dummy.data(), frames);
+        }
+        return;
+    }
+
+    if (paused) return; // 暂停时不推送音频
+
+    std::vector<int16_t> samples;
+    bool hasSamples = m_core.drainAudio(samples) && !samples.empty();
+
+    // 静音条件：快进静音、用户手动静音或没有样本
+    bool mute = (ff && m_inputMap.ffMute)
+                || m_muted.load(std::memory_order_relaxed)
+                || !hasSamples;
+    if (mute) return;
+
+    size_t frames = samples.size() / STEREO_CHANNELS;
+    // 快进（倍率 > 1）且不静音时，限制推送量为一正常帧的量，
+    // 防止 N 倍音频撑满环形缓冲区导致 pushSamples() 永久阻塞。
+    if (ff && m_inputMap.ffMultiplier > 1.0f) {
+        size_t limit = static_cast<size_t>(
+            std::round(static_cast<double>(frames) / m_inputMap.ffMultiplier));
+        if (limit > 0) frames = limit;
+    }
+    beiklive::AudioManager::instance().pushSamples(samples.data(), frames);
+}
+
+// ============================================================
+// gameLoopUpdateTimers – 更新FPS、游戏时长、RTC同步、自动存档
+// ============================================================
+void GameView::gameLoopUpdateTimers(bool paused,
+                                    std::chrono::steady_clock::time_point now,
+                                    unsigned framesCount)
+{
+    if (paused) {
+        // 暂停时推进各计时器基准点，避免恢复后触发积压的时间操作
+        m_loopPlaytimeTimer  = now;
+        m_loopRtcSyncTimer   = now;
+        m_loopAutoSaveTimer  = now;
+        m_loopFpsTimerStart  = now;
+        return;
+    }
+
+    // ── FPS 计数器（游戏线程侧）──────────────────────────────────────────
+    // 统计所有渲染帧数（含快进倍增的帧）
+    m_loopFpsCounter += framesCount;
+    double fpsElapsed = std::chrono::duration<double>(now - m_loopFpsTimerStart).count();
+    if (fpsElapsed >= FPS_UPDATE_INTERVAL) {
+        float newFps = static_cast<float>(static_cast<double>(m_loopFpsCounter) / fpsElapsed);
+        {
+            std::lock_guard<std::mutex> lk(m_fpsMutex);
+            m_currentFps    = newFps;
+            m_fpsFrameCount = m_loopFpsCounter;
+        }
+        m_loopFpsCounter   = 0;
+        m_loopFpsTimerStart = now;
+    }
+
+    // ── 游戏时长追踪：每 1 分钟保存一次 ────────────────────────────────
+    if (gamedataManager && !m_romFileName.empty()) {
+        auto playtimeElapsed = std::chrono::duration_cast<std::chrono::seconds>(
+            now - m_loopPlaytimeTimer).count();
+        if (playtimeElapsed >= 60) {
+            m_loopPlaytimeTimer += std::chrono::seconds(60);
+            std::string prefix = gamedataKeyPrefix(m_romFileName);
+            std::string k = prefix + "." + GAMEDATA_FIELD_TOTALTIME;
+            int currentTotal = 0;
+            auto tv = gamedataManager->Get(k);
+            if (tv) {
+                if (auto iv = tv->AsInt()) currentTotal = *iv;
+            }
+            currentTotal += 60;
+            gamedataManager->Set(k, beiklive::ConfigValue(currentTotal));
+            gamedataManager->Save();
+        }
+    }
+
+    // ── RTC 实时同步：每秒更新 GB MBC3 RTC unixTime 字段 ───────────────
+    // GBMBCRTCSaveBuffer::unixTime 位于字节偏移 40（10 × uint32_t），
+    // 保持最新确保存档重载后经过时间计算正确。
+    {
+        auto rtcElapsed = std::chrono::duration_cast<std::chrono::seconds>(
+            now - m_loopRtcSyncTimer).count();
+        if (rtcElapsed >= 1) {
+            m_loopRtcSyncTimer += std::chrono::seconds(1);
+            static constexpr size_t k_rtcUnixTimeOffset = 10 * sizeof(uint32_t);
+            size_t rtcSz = m_core.getMemorySize(RETRO_MEMORY_RTC);
+            if (rtcSz >= k_rtcUnixTimeOffset + sizeof(uint64_t)) {
+                void* rtcPtr = m_core.getMemoryData(RETRO_MEMORY_RTC);
+                if (rtcPtr) {
+                    std::time_t t = std::time(nullptr);
+                    if (t != static_cast<std::time_t>(-1)) {
+                        uint64_t nowUnix = static_cast<uint64_t>(t);
+                        std::memcpy(static_cast<uint8_t*>(rtcPtr) + k_rtcUnixTimeOffset,
+                                    &nowUnix, sizeof(uint64_t));
+                    }
+                }
+            }
+        }
+    }
+
+    // ── 自动定时存档（定期保存到即时存档0 .ss0） ───────────────────────
+    {
+        int autoSaveIntervalSec = beiklive::cfgGetInt("save.autoSaveInterval", 0);
+        if (autoSaveIntervalSec > 0) {
+            auto autoSaveElapsed = std::chrono::duration_cast<std::chrono::seconds>(
+                now - m_loopAutoSaveTimer).count();
+            if (autoSaveElapsed >= autoSaveIntervalSec) {
+                m_loopAutoSaveTimer += std::chrono::seconds(autoSaveIntervalSec);
+                doQuickSave(0, /*silent=*/true);
+            }
+        }
+    }
+}
+
+// ============================================================
+// gameLoopProcessPendingActions – 处理待执行请求
+// ============================================================
+// 处理游戏线程内的即时存档、即时读档、游戏重置请求。
+// exchange(-1) 原子地取出请求槽位并重置为 -1（"无待处理"）。
+// ============================================================
+void GameView::gameLoopProcessPendingActions()
+{
+    // 即时存档
+    {
+        int slot = m_pendingQuickSave.exchange(-1, std::memory_order_relaxed);
+        if (slot >= 0) doQuickSave(slot);
+    }
+    // 即时读档
+    {
+        int slot = m_pendingQuickLoad.exchange(-1, std::memory_order_relaxed);
+        if (slot >= 0) doQuickLoad(slot);
+    }
+    // 游戏重置
+    if (m_pendingReset.exchange(false, std::memory_order_relaxed)) {
+        bklog::info("GameView: 执行游戏核心重置");
+        m_core.reset();
+    }
+}
+
+// ============================================================
+// gameLoopWaitForDeadline – 帧率限制器
+// ============================================================
+// 以帧开始时间为基准，精确睡眠并自旋等待直到截止时间。
+// 每帧独立计算截止时间，不受前帧耗时影响，避免漂移和帧率积压。
+// 若帧耗时已超出目标时长则立即返回（跳帧策略，不追赶补帧）。
+// ============================================================
+void GameView::gameLoopWaitForDeadline(std::chrono::steady_clock::time_point frameStart,
+                                       std::chrono::duration<double> targetDuration)
+{
+    using Clock    = std::chrono::steady_clock;
+    using Duration = std::chrono::duration<double>;
+
+    auto deadline = frameStart + std::chrono::duration_cast<Clock::duration>(targetDuration);
+    auto now      = Clock::now();
+
+    if (now >= deadline) return; // 帧耗时已超出预算，立即进入下一帧
+
+    // 粗粒度睡眠：预留自旋等待时间，防止 sleep_for() 精度不足导致过冲
+    auto coarseDur = (deadline - now) - std::chrono::duration_cast<Clock::duration>(
+        Duration(SPIN_GUARD_SEC));
+    if (coarseDur.count() > 0)
+        std::this_thread::sleep_for(coarseDur);
+
+    // 精确自旋等待截止时间
+    while (Clock::now() < deadline) { /* 忙等待 */ }
 }
 
 // ============================================================
@@ -2125,13 +2165,14 @@ void GameView::draw(NVGcontext* vg, float x, float y, float width, float height,
         if (!m_gameMenu) {
             bklog::warning("GameView: 收到打开菜单请求，但 m_gameMenu 未设置");
         } else if (m_gameMenu->getVisibility() == brls::Visibility::GONE) {
-            m_gameMenu->setVisibility(brls::Visibility::VISIBLE);
             // 暂停游戏：防止菜单导航输入被传递到游戏核心
             setPaused(true);
             // 解除 borealis 输入封锁，使菜单能接收手柄导航和点击事件
             setGameInputEnabled(false);
-            // 将焦点转移到菜单（borealis 会找到第一个可聚焦子控件）
-            brls::Application::giveFocus(m_gameMenu);
+            // 使用淡入动画显示菜单，动画完成后将焦点转移到菜单
+            beiklive::BKAnimator::showView(m_gameMenu, [this]() {
+                brls::Application::giveFocus(m_gameMenu);
+            });
         }
     }
 

@@ -1,4 +1,5 @@
 #include "UI/Utils/GameMenu.hpp"
+#include "UI/Utils/BKAnimator.hpp"
 #include "UI/Pages/FileListPage.hpp"
 #include "Video/DisplayConfig.hpp"
 #include <cmath>
@@ -68,10 +69,11 @@ GameMenu::GameMenu()
     setHideHighlightBorder(true);
     setHideHighlightBackground(true);
 
-    // Button_B：隐藏菜单，返回游戏
+    // Button_B：淡出菜单，返回游戏
     registerAction("beiklive/gamemenu/btn_return_game"_i18n, brls::BUTTON_B, [this](brls::View* v) {
-        setVisibility(brls::Visibility::GONE);
-        if (m_closeCallback) m_closeCallback();
+        beiklive::BKAnimator::hideView(this, [this]() {
+            if (m_closeCallback) m_closeCallback();
+        });
         return true;
     });
 
@@ -120,9 +122,10 @@ GameMenu::GameMenu()
             hideAllPanels();
         });
         btn->registerAction("", brls::BUTTON_A, [this](brls::View* v) {
-            // 隐藏整个菜单（this 为 GameMenu，v 为按钮本身）
-            setVisibility(brls::Visibility::GONE);
-            if (m_closeCallback) m_closeCallback();
+            // 淡出整个菜单后调用关闭回调
+            beiklive::BKAnimator::hideView(this, [this]() {
+                if (m_closeCallback) m_closeCallback();
+            });
             return true;
         });
         // 无子面板，阻止右键导航
