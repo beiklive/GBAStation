@@ -1,0 +1,1224 @@
+#include "ui/page/SettingPage.hpp"
+#include "ui/page/FileListPage.hpp"
+
+#include <borealis/views/cells/cell_bool.hpp>
+#include <borealis/views/cells/cell_selector.hpp>
+#include <borealis/views/cells/cell_detail.hpp>
+#include <borealis/views/header.hpp>
+#include <borealis/views/scrolling_frame.hpp>
+#include <borealis/views/label.hpp>
+#include <borealis/views/applet_frame.hpp>
+
+#include "core/Tools.hpp"
+#include "core/constexpr.h"
+
+#include <chrono>
+#include <string>
+#include <vector>
+#include <algorithm>
+#include <cmath>
+
+namespace beiklive
+{
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  配置读写辅助函数（基于 src 的 ConfigManager 宏）
+// ─────────────────────────────────────────────────────────────────────────────
+
+static bool cfgGetBool(const std::string &key, bool def)
+{
+    return GET_SETTING_KEY_INT(key, def ? 1 : 0) != 0;
+}
+
+static void cfgSetBool(const std::string &key, bool val)
+{
+    SET_SETTING_KEY_INT(key, val ? 1 : 0);
+}
+
+static std::string cfgGetStr(const std::string &key, const std::string &def)
+{
+    return GET_SETTING_KEY_STR(key, def);
+}
+
+static void cfgSetStr(const std::string &key, const std::string &val)
+{
+    SET_SETTING_KEY_STR(key, val);
+}
+
+static float cfgGetFloat(const std::string &key, float def)
+{
+    return GET_SETTING_KEY_FLOAT(key, def);
+}
+
+static int cfgGetInt(const std::string &key, int def)
+{
+    return GET_SETTING_KEY_INT(key, def);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  布局辅助函数
+// ─────────────────────────────────────────────────────────────────────────────
+
+static brls::ScrollingFrame *makeScrollTab()
+{
+    auto *scroll = new brls::ScrollingFrame();
+    scroll->setScrollingBehavior(brls::ScrollingBehavior::NATURAL);
+    return scroll;
+}
+
+static brls::Box *makeContentBox()
+{
+    auto *box = new brls::Box(brls::Axis::COLUMN);
+    box->setPadding(20.f, 40.f, 30.f, 40.f);
+    return box;
+}
+
+static brls::Header *makeHeader(const std::string &title)
+{
+    auto *h = new brls::Header();
+    h->setTitle(title);
+    return h;
+}
+
+static int findIndex(const std::vector<std::string> &options,
+                     const std::string &val, int defaultIdx = 0)
+{
+    for (int i = 0; i < (int)options.size(); ++i)
+        if (options[i] == val)
+            return i;
+    return defaultIdx;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  路径选取辅助：推入一个仅显示指定扩展名文件的 FileListPage Activity
+//  @param extensions  允许的文件扩展名列表（不含点号，如 {"png"}）
+//  @param onSelected  选中文件时的回调，参数为完整路径
+//  @param startPath   初始目录（空时从驱动器列表开始）
+// ─────────────────────────────────────────────────────────────────────────────
+
+static void openFilePicker(const std::vector<std::string> &extensions,
+                           std::function<void(const std::string &)> onSelected,
+                           const std::string &startPath = "")
+{
+    auto *flPage = new beiklive::FileListPage();
+    flPage->setFliter(beiklive::enums::FilterMode::Whitelist, extensions);
+    flPage->onFileSelected = [onSelected](beiklive::DirListData item)
+    {
+        // 仅处理实际文件（非目录）
+        if (item.itemType != beiklive::enums::FileType::DRIVE &&
+            item.itemType != beiklive::enums::FileType::DIRECTORY)
+        {
+            onSelected(item.fullPath);
+            brls::Application::popActivity();
+        }
+    };
+    if (!startPath.empty())
+        flPage->setPath(startPath);
+
+    auto *container = new brls::Box(brls::Axis::COLUMN);
+    container->setGrow(1.0f);
+    container->addView(flPage);
+    container->registerAction("关闭"_i18n, brls::BUTTON_START,
+                              [](brls::View *) { brls::Application::popActivity(); return true; });
+
+    auto *frame = new brls::AppletFrame(container);
+    frame->setHeaderVisibility(brls::Visibility::GONE);
+    frame->setFooterVisibility(brls::Visibility::GONE);
+    frame->setBackground(brls::ViewBackground::NONE);
+    brls::Application::pushActivity(new brls::Activity(frame));
+
+    if (startPath.empty())
+        flPage->showDriveList();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  KeyCaptureView（按键捕获全屏页）
+// ─────────────────────────────────────────────────────────────────────────────
+
+struct CapPadKey
+{
+    const char *name;
+    brls::ControllerButton btn;
+};
+
+static const CapPadKey k_capPadKeys[] = {
+    {"LT", brls::BUTTON_LT}, {"LB", brls::BUTTON_LB}, {"LSB", brls::BUTTON_LSB},
+    {"UP", brls::BUTTON_UP}, {"RIGHT", brls::BUTTON_RIGHT},
+    {"DOWN", brls::BUTTON_DOWN}, {"LEFT", brls::BUTTON_LEFT},
+    {"BACK", brls::BUTTON_BACK}, {"START", brls::BUTTON_START},
+    {"RSB", brls::BUTTON_RSB}, {"Y", brls::BUTTON_Y},
+    {"B", brls::BUTTON_B}, {"A", brls::BUTTON_A}, {"X", brls::BUTTON_X},
+    {"RB", brls::BUTTON_RB}, {"RT", brls::BUTTON_RT},
+};
+static constexpr int k_capPadKeyCount =
+    static_cast<int>(sizeof(k_capPadKeys) / sizeof(k_capPadKeys[0]));
+
+static constexpr int k_capMaxKeys = 2; ///< 组合键最大按键数
+
+/// 按键捕获全屏页，5 秒倒计时结束后调用 onDone(result)。
+class KeyCaptureView : public brls::Box
+{
+public:
+    explicit KeyCaptureView(std::function<void(const std::string &)> onDone)
+        : m_onDone(std::move(onDone))
+    {
+        setFocusable(true);
+        setAxis(brls::Axis::COLUMN);
+        setAlignItems(brls::AlignItems::CENTER);
+        setJustifyContent(brls::JustifyContent::CENTER);
+        setGrow(1.0f);
+
+        m_promptLabel = new brls::Label();
+        m_promptLabel->setText("按下要绑定的按键...");
+        m_promptLabel->setFontSize(24.f);
+        m_promptLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+        addView(m_promptLabel);
+
+        auto *spacer1 = new brls::Padding();
+        spacer1->setHeight(30.f);
+        addView(spacer1);
+
+        m_keyLabel = new brls::Label();
+        m_keyLabel->setText("等待按键...");
+        m_keyLabel->setFontSize(48.f);
+        m_keyLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+        addView(m_keyLabel);
+
+        auto *spacer2 = new brls::Padding();
+        spacer2->setHeight(30.f);
+        addView(spacer2);
+
+        m_countdownLabel = new brls::Label();
+        m_countdownLabel->setText("5 秒");
+        m_countdownLabel->setFontSize(22.f);
+        m_countdownLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+        addView(m_countdownLabel);
+
+        m_startTime = std::chrono::steady_clock::now();
+
+        // 消费所有手柄导航键，防止触发父视图操作或提前关闭页面
+        static const brls::ControllerButton k_swallowBtns[] = {
+            brls::BUTTON_A, brls::BUTTON_B, brls::BUTTON_X, brls::BUTTON_Y,
+            brls::BUTTON_LB, brls::BUTTON_RB, brls::BUTTON_LT, brls::BUTTON_RT,
+            brls::BUTTON_LSB, brls::BUTTON_RSB,
+            brls::BUTTON_UP, brls::BUTTON_DOWN, brls::BUTTON_LEFT, brls::BUTTON_RIGHT,
+            brls::BUTTON_NAV_UP, brls::BUTTON_NAV_DOWN,
+            brls::BUTTON_NAV_LEFT, brls::BUTTON_NAV_RIGHT,
+            brls::BUTTON_START, brls::BUTTON_BACK,
+        };
+        for (auto btn : k_swallowBtns)
+        {
+            registerAction("", btn,
+                           [this, btn](brls::View *) -> bool
+                           {
+                               if (!m_done && !m_waitingForRelease)
+                                   captureGamepadButton(btn);
+                               return true;
+                           },
+                           /*hidden=*/true);
+        }
+    }
+
+    void draw(NVGcontext *vg, float x, float y, float w, float h,
+              brls::Style style, brls::FrameContext *ctx) override
+    {
+        // 半透明深色背景
+        nvgBeginPath(vg);
+        nvgRect(vg, x, y, w, h);
+        nvgFillColor(vg, nvgRGBA(0, 0, 0, 200));
+        nvgFill(vg);
+
+        if (!m_done)
+        {
+            if (m_waitingForRelease)
+            {
+                checkGamepadRelease();
+                m_startTime = std::chrono::steady_clock::now();
+            }
+            else
+            {
+                auto now     = std::chrono::steady_clock::now();
+                float elapsed   = std::chrono::duration<float>(now - m_startTime).count();
+                float remaining = 5.0f - elapsed;
+
+                if (remaining <= 0.0f)
+                {
+                    finish(m_captured);
+                }
+                else
+                {
+                    int secs = static_cast<int>(std::ceil(remaining));
+                    m_countdownLabel->setText(std::to_string(secs) + " 秒");
+                }
+            }
+        }
+        brls::Box::draw(vg, x, y, w, h, style, ctx);
+        if (!m_done)
+            invalidate();
+    }
+
+private:
+    std::function<void(const std::string &)> m_onDone;
+    brls::Label *m_promptLabel    = nullptr;
+    brls::Label *m_keyLabel       = nullptr;
+    brls::Label *m_countdownLabel = nullptr;
+    std::chrono::steady_clock::time_point m_startTime;
+    bool m_done              = false;
+    bool m_waitingForRelease = true; ///< 开始捕获前需全部松开
+    std::vector<std::string> m_capturedKeys;
+    std::string m_captured;
+
+    void captureGamepadButton(brls::ControllerButton btn)
+    {
+        const char *name = nullptr;
+        for (int i = 0; i < k_capPadKeyCount; ++i)
+            if (k_capPadKeys[i].btn == btn) { name = k_capPadKeys[i].name; break; }
+        if (!name)
+            return;
+
+        if (std::find(m_capturedKeys.begin(), m_capturedKeys.end(), name) != m_capturedKeys.end())
+            return;
+
+        if (static_cast<int>(m_capturedKeys.size()) >= k_capMaxKeys)
+            return;
+
+        m_capturedKeys.push_back(name);
+        m_captured = buildCombo(m_capturedKeys);
+        m_keyLabel->setText(m_captured);
+    }
+
+    void checkGamepadRelease()
+    {
+        auto state = brls::Application::getControllerState();
+        for (int i = 0; i < k_capPadKeyCount; ++i)
+        {
+            int idx = static_cast<int>(k_capPadKeys[i].btn);
+            if (idx >= 0 && idx < static_cast<int>(brls::_BUTTON_MAX) && state.buttons[idx])
+                return;
+        }
+        m_waitingForRelease = false;
+    }
+
+    static std::string buildCombo(const std::vector<std::string> &keys)
+    {
+        std::string result;
+        for (const auto &k : keys)
+        {
+            if (!result.empty())
+                result += "+";
+            result += k;
+        }
+        return result;
+    }
+
+    void finish(const std::string &result)
+    {
+        if (m_done)
+            return;
+        m_done = true;
+        if (!result.empty())
+            m_keyLabel->setText(result);
+        if (m_onDone)
+            m_onDone(result);
+        brls::Application::popActivity(brls::TransitionAnimation::NONE);
+    }
+};
+
+/// 推入全屏按键捕获页
+static void openKeyCapture(std::function<void(const std::string &)> onDone)
+{
+    auto *content = new KeyCaptureView(std::move(onDone));
+    auto *frame   = new brls::AppletFrame(content);
+    frame->setHeaderVisibility(brls::Visibility::GONE);
+    frame->setFooterVisibility(brls::Visibility::GONE);
+    frame->setBackground(brls::ViewBackground::NONE);
+    brls::Application::pushActivity(new brls::Activity(frame),
+                                    brls::TransitionAnimation::NONE);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  共享常量
+// ─────────────────────────────────────────────────────────────────────────────
+
+static const float ffRateVals[]    = {2.0f, 3.0f, 4.0f, 6.0f, 8.0f};
+static const int   k_bufSizeInts[] = {300, 600, 1200, 3600};
+
+// XMB 颜色预设
+static const char *k_xmbColorIds[]    = {"blue", "purple", "green", "orange", "red", "cyan", "black", "original"};
+static const char *k_xmbColorLabels[] = {"深蓝", "紫色", "绿色", "橙色", "红色", "青色", "黑色", "原版"};
+static constexpr int k_xmbColorCount  = 8;
+
+using namespace beiklive::SettingKey;
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Tab: 界面设置
+// ─────────────────────────────────────────────────────────────────────────────
+
+brls::ScrollingFrame *SettingPage::buildUITab()
+{
+    auto *scroll = makeScrollTab();
+    auto *box    = makeContentBox();
+
+    // ── 背景图片 ──────────────────────────────────────────────────────────────
+    box->addView(makeHeader("背景图片"));
+
+    auto *showBgCell = new brls::BooleanCell();
+    showBgCell->init("显示背景图片",
+                     cfgGetBool(KEY_UI_SHOW_BG_IMAGE, false),
+                     [](bool v) { cfgSetBool(KEY_UI_SHOW_BG_IMAGE, v); });
+    box->addView(showBgCell);
+
+    auto *bgPathCell = new brls::DetailCell();
+    bgPathCell->setText("背景图片路径");
+    std::string curBgPath = cfgGetStr(KEY_UI_BG_IMAGE_PATH, "");
+    bgPathCell->setDetailText(curBgPath.empty()
+                                  ? "未设置"
+                                  : beiklive::tools::getFileName(curBgPath));
+    bgPathCell->registerAction("确认"_i18n, brls::BUTTON_A,
+                               [bgPathCell](brls::View *)
+                               {
+                                   std::string dir = cfgGetStr(KEY_UI_BG_IMAGE_PATH, "");
+                                   // 取父目录
+                                   auto pos = dir.rfind('/');
+#ifdef _WIN32
+                                   auto posW = dir.rfind('\\');
+                                   if (posW != std::string::npos &&
+                                       (pos == std::string::npos || posW > pos))
+                                       pos = posW;
+#endif
+                                   if (pos != std::string::npos)
+                                       dir = dir.substr(0, pos);
+                                   else
+                                       dir = "";
+                                   openFilePicker({"png", "jpg", "jpeg"},
+                                                  [bgPathCell](const std::string &path)
+                                                  {
+                                                      cfgSetStr(KEY_UI_BG_IMAGE_PATH, path);
+                                                      bgPathCell->setDetailText(
+                                                          beiklive::tools::getFileName(path));
+                                                  },
+                                                  dir);
+                                   return true;
+                               },
+                               false, false, brls::SOUND_CLICK);
+    box->addView(bgPathCell);
+
+    auto *bgBlurCell = new brls::BooleanCell();
+    bgBlurCell->init("背景模糊",
+                     cfgGetBool(KEY_UI_BG_BLUR_ENABLED, false),
+                     [](bool v) { cfgSetBool(KEY_UI_BG_BLUR_ENABLED, v); });
+    box->addView(bgBlurCell);
+
+    {
+        static const float k_blurRadii[]    = {8.0f, 10.0f, 12.0f, 14.0f, 16.0f, 18.0f, 20.0f};
+        static constexpr int k_blurRadiiCount = 7;
+        std::vector<std::string> blurLabels   = {"8", "10", "12", "14", "16", "18", "20"};
+        float curRadius                        = cfgGetFloat(KEY_UI_BG_BLUR_RADIUS, 12.0f);
+        int blurIdx                            = 2;
+        for (int i = 0; i < k_blurRadiiCount; ++i)
+            if (std::fabs(curRadius - k_blurRadii[i]) < 0.01f) { blurIdx = i; break; }
+        auto *blurRadiusCell = new brls::SelectorCell();
+        blurRadiusCell->init("模糊程度", blurLabels, blurIdx,
+                             [](int idx)
+                             {
+                                 if (idx >= 0 && idx < k_blurRadiiCount && beiklive::SettingManager)
+                                 {
+                                     beiklive::SettingManager->Set(
+                                         KEY_UI_BG_BLUR_RADIUS,
+                                         beiklive::ConfigValue(k_blurRadii[idx]));
+                                     beiklive::SettingManager->Save();
+                                 }
+                             });
+        box->addView(blurRadiusCell);
+    }
+
+    // ── PSP XMB 风格背景 ──────────────────────────────────────────────────────
+    box->addView(makeHeader("XMB 风格背景"));
+
+    auto *showXmbCell = new brls::BooleanCell();
+    showXmbCell->init("显示 XMB 背景",
+                      cfgGetBool(KEY_UI_SHOW_XMB_BG, false),
+                      [](bool v) { cfgSetBool(KEY_UI_SHOW_XMB_BG, v); });
+    box->addView(showXmbCell);
+
+    {
+        std::vector<std::string> colorLabels(k_xmbColorLabels,
+                                             k_xmbColorLabels + k_xmbColorCount);
+        std::string curId = cfgGetStr(KEY_UI_PSPXMB_COLOR, "blue");
+        int curIdx        = 0;
+        for (int i = 0; i < k_xmbColorCount; ++i)
+            if (curId == k_xmbColorIds[i]) { curIdx = i; break; }
+
+        auto *xmbColorCell = new brls::SelectorCell();
+        xmbColorCell->init("XMB 颜色", colorLabels, curIdx,
+                           [](int idx)
+                           {
+                               if (idx >= 0 && idx < k_xmbColorCount)
+                                   cfgSetStr(KEY_UI_PSPXMB_COLOR, k_xmbColorIds[idx]);
+                           });
+        box->addView(xmbColorCell);
+    }
+
+    // ── 存档设置 ──────────────────────────────────────────────────────────────
+    box->addView(makeHeader("存档设置"));
+
+    {
+        std::vector<std::string> saveDirs = {"ROM 所在目录", "模拟器目录"};
+
+        auto *autoSaveStateCell = new brls::BooleanCell();
+        autoSaveStateCell->init("自动存档",
+                                cfgGetBool("save.autoSaveState", false),
+                                [](bool v) { cfgSetBool("save.autoSaveState", v); });
+        box->addView(autoSaveStateCell);
+
+        {
+            static const int k_autoSaveIntervals[]     = {0, 60, 180, 300, 600};
+            static constexpr int k_autoSaveIntervalCount = 5;
+            std::vector<std::string> intervalLabels    = {
+                "关闭", "1 分钟", "3 分钟", "5 分钟", "10 分钟"};
+            int curInterval = cfgGetInt("save.autoSaveInterval", 0);
+            int intervalIdx = 0;
+            for (int i = 0; i < k_autoSaveIntervalCount; ++i)
+                if (curInterval == k_autoSaveIntervals[i]) { intervalIdx = i; break; }
+            auto *autoSaveIntervalCell = new brls::SelectorCell();
+            autoSaveIntervalCell->init("自动存档间隔", intervalLabels, intervalIdx,
+                                       [](int idx)
+                                       {
+                                           if (idx >= 0 && idx < k_autoSaveIntervalCount &&
+                                               beiklive::SettingManager)
+                                           {
+                                               beiklive::SettingManager->Set(
+                                                   "save.autoSaveInterval",
+                                                   beiklive::ConfigValue(
+                                                       k_autoSaveIntervals[idx]));
+                                               beiklive::SettingManager->Save();
+                                           }
+                                       });
+            box->addView(autoSaveIntervalCell);
+        }
+
+        auto *autoLoadState0Cell = new brls::BooleanCell();
+        autoLoadState0Cell->init("启动时自动读取存档0",
+                                 cfgGetBool("save.autoLoadState0", false),
+                                 [](bool v) { cfgSetBool("save.autoLoadState0", v); });
+        box->addView(autoLoadState0Cell);
+
+        {
+            auto *sramDirCell = new brls::SelectorCell();
+            sramDirCell->init("SRAM 存档目录", saveDirs,
+                              cfgGetStr("save.sramDir", "").empty() ? 0 : 1,
+                              [](int idx)
+                              {
+                                  if (idx == 0)
+                                      cfgSetStr("save.sramDir", "");
+                                  else
+                                      cfgSetStr("save.sramDir",
+                                                beiklive::path::savePath());
+                              });
+            box->addView(sramDirCell);
+        }
+
+        {
+            auto *stateDirCell = new brls::SelectorCell();
+            stateDirCell->init("即时存档目录", saveDirs,
+                               cfgGetStr("save.stateDir", "").empty() ? 0 : 1,
+                               [](int idx)
+                               {
+                                   if (idx == 0)
+                                       cfgSetStr("save.stateDir", "");
+                                   else
+                                       cfgSetStr("save.stateDir",
+                                                 beiklive::path::savePath());
+                               });
+            box->addView(stateDirCell);
+        }
+
+        auto *savethumbCell = new brls::BooleanCell();
+        savethumbCell->init("无封面时使用存档截图",
+                            cfgGetBool(KEY_UI_USE_SAVESTATE_THUMB, false),
+                            [](bool v) { cfgSetBool(KEY_UI_USE_SAVESTATE_THUMB, v); });
+        box->addView(savethumbCell);
+    }
+
+    // ── 截图设置 ──────────────────────────────────────────────────────────────
+    box->addView(makeHeader("截图设置"));
+
+    {
+        std::vector<std::string> screenshotDirs = {"ROM 所在目录", "相册目录"};
+        auto *screenshotDirCell                  = new brls::SelectorCell();
+        screenshotDirCell->init("截图保存目录", screenshotDirs,
+                                cfgGetInt("screenshot.dir", 0),
+                                [](int idx)
+                                {
+                                    if (beiklive::SettingManager)
+                                    {
+                                        beiklive::SettingManager->Set(
+                                            "screenshot.dir",
+                                            beiklive::ConfigValue(idx));
+                                        beiklive::SettingManager->Save();
+                                    }
+                                });
+        box->addView(screenshotDirCell);
+    }
+
+    // ── 金手指设置 ────────────────────────────────────────────────────────────
+    box->addView(makeHeader("金手指设置"));
+
+    {
+        std::vector<std::string> cheatDirs = {"ROM 所在目录", "模拟器目录"};
+
+        auto *cheatEnableCell = new brls::BooleanCell();
+        cheatEnableCell->init("启用金手指",
+                              cfgGetBool("cheat.enabled", false),
+                              [](bool v) { cfgSetBool("cheat.enabled", v); });
+        box->addView(cheatEnableCell);
+
+        auto *cheatDirCell = new brls::SelectorCell();
+        cheatDirCell->init("金手指目录", cheatDirs,
+                           cfgGetStr("cheat.dir", "").empty() ? 0 : 1,
+                           [](int idx)
+                           {
+                               if (idx == 0)
+                                   cfgSetStr("cheat.dir", "");
+                               else
+                                   cfgSetStr("cheat.dir", beiklive::path::cheatPath());
+                           });
+        box->addView(cheatDirCell);
+    }
+
+    scroll->setContentView(box);
+    return scroll;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Tab: 游戏设置
+// ─────────────────────────────────────────────────────────────────────────────
+
+brls::ScrollingFrame *SettingPage::buildGameTab()
+{
+    auto *scroll = makeScrollTab();
+    auto *box    = makeContentBox();
+
+    std::vector<std::string> holdModes = {"按住生效", "切换模式"};
+
+    // ── 加速 ──────────────────────────────────────────────────────────────────
+    box->addView(makeHeader("快进"));
+
+    auto *ffEnableCell = new brls::BooleanCell();
+    ffEnableCell->init("启用快进",
+                       cfgGetBool("fastforward.enabled", true),
+                       [](bool v) { cfgSetBool("fastforward.enabled", v); });
+    box->addView(ffEnableCell);
+
+    {
+        std::string ffModeStr = cfgGetStr("fastforward.mode", "hold");
+        auto *ffModeCell      = new brls::SelectorCell();
+        ffModeCell->init("快进触发方式", holdModes,
+                         (ffModeStr == "toggle") ? 1 : 0,
+                         [](int idx)
+                         { cfgSetStr("fastforward.mode", idx == 1 ? "toggle" : "hold"); });
+        box->addView(ffModeCell);
+    }
+
+    {
+        std::vector<std::string> ffRateLabels = {"2x", "3x", "4x", "6x", "8x"};
+        float curMult                          = cfgGetFloat("fastforward.multiplier", 4.0f);
+        int ffMultIdx                          = 2;
+        for (int i = 0; i < 5; ++i)
+            if (std::fabs(curMult - ffRateVals[i]) < 0.01f) { ffMultIdx = i; break; }
+        auto *ffMultCell = new brls::SelectorCell();
+        ffMultCell->init("快进倍率", ffRateLabels, ffMultIdx,
+                         [](int idx)
+                         {
+                             if (idx >= 0 && idx < 5 && beiklive::SettingManager)
+                             {
+                                 beiklive::SettingManager->Set(
+                                     "fastforward.multiplier",
+                                     beiklive::ConfigValue(ffRateVals[idx]));
+                                 beiklive::SettingManager->Save();
+                             }
+                         });
+        box->addView(ffMultCell);
+    }
+
+    // ── 倒带 ──────────────────────────────────────────────────────────────────
+    box->addView(makeHeader("倒带"));
+
+    auto *rewindEnCell = new brls::BooleanCell();
+    rewindEnCell->init("启用倒带",
+                       cfgGetBool("rewind.enabled", false),
+                       [](bool v) { cfgSetBool("rewind.enabled", v); });
+    box->addView(rewindEnCell);
+
+    {
+        std::string rewModeStr = cfgGetStr("rewind.mode", "hold");
+        auto *rewModeCell      = new brls::SelectorCell();
+        rewModeCell->init("倒带触发方式", holdModes,
+                          (rewModeStr == "toggle") ? 1 : 0,
+                          [](int idx)
+                          { cfgSetStr("rewind.mode", idx == 1 ? "toggle" : "hold"); });
+        box->addView(rewModeCell);
+    }
+
+    {
+        std::vector<std::string> bufSizeLabels = {
+            "5 秒", "10 秒", "20 秒", "1 分钟"};
+        int curBuf = cfgGetInt("rewind.bufferSize", 3600);
+        int bufIdx = 3;
+        for (int i = 0; i < 4; ++i)
+            if (curBuf == k_bufSizeInts[i]) { bufIdx = i; break; }
+        auto *bufCell = new brls::SelectorCell();
+        bufCell->init("倒带缓冲大小", bufSizeLabels, bufIdx,
+                      [](int idx)
+                      {
+                          if (idx >= 0 && idx < 4 && beiklive::SettingManager)
+                          {
+                              beiklive::SettingManager->Set(
+                                  "rewind.bufferSize",
+                                  beiklive::ConfigValue(k_bufSizeInts[idx]));
+                              beiklive::SettingManager->Save();
+                          }
+                      });
+        box->addView(bufCell);
+    }
+
+    {
+        std::vector<std::string> rewSteps = {"1", "2", "3", "4", "5"};
+        int curStep                        = cfgGetInt("rewind.step", 2);
+        int stepIdx                        = (curStep >= 1 && curStep <= 5) ? curStep - 1 : 1;
+        auto *stepCell                     = new brls::SelectorCell();
+        stepCell->init("倒带步长", rewSteps, stepIdx,
+                       [](int idx)
+                       {
+                           if (beiklive::SettingManager)
+                           {
+                               beiklive::SettingManager->Set(
+                                   "rewind.step",
+                                   beiklive::ConfigValue(idx + 1));
+                               beiklive::SettingManager->Save();
+                           }
+                       });
+        box->addView(stepCell);
+    }
+
+    // ── GBA/GBC 游戏 ──────────────────────────────────────────────────────────
+    box->addView(makeHeader("GBA/GBC 核心设置"));
+
+    {
+        std::vector<std::string> gbModels = {
+            "Autodetect", "Game Boy", "Super Game Boy", "Game Boy Color", "Game Boy Advance"};
+        std::string curModel = cfgGetStr("core.mgba_gb_model", "Autodetect");
+        auto *gbModelCell    = new brls::SelectorCell();
+        gbModelCell->init("GB 机型", gbModels, findIndex(gbModels, curModel),
+                          [gbModels](int idx)
+                          {
+                              if (idx >= 0 && idx < (int)gbModels.size())
+                                  cfgSetStr("core.mgba_gb_model", gbModels[idx]);
+                          });
+        box->addView(gbModelCell);
+    }
+
+    auto *biosCell = new brls::BooleanCell();
+    biosCell->init("使用 BIOS",
+                   cfgGetStr("core.mgba_use_bios", "ON") == "ON",
+                   [](bool v) { cfgSetStr("core.mgba_use_bios", v ? "ON" : "OFF"); });
+    box->addView(biosCell);
+
+    auto *skipBiosCell = new brls::BooleanCell();
+    skipBiosCell->init("跳过 BIOS 动画",
+                       cfgGetStr("core.mgba_skip_bios", "OFF") == "ON",
+                       [](bool v) { cfgSetStr("core.mgba_skip_bios", v ? "ON" : "OFF"); });
+    box->addView(skipBiosCell);
+
+    {
+        std::vector<std::string> gbColors = {
+            "Grayscale", "Honey", "Lime", "Grapefruit", "Game Boy", "Burnt Orange",
+            "Mystic Blue", "Motocross Pink", "Gaiden Pink", "Blues", "Dark Knight",
+            "Solarized Gold"};
+        std::string curGbColor = cfgGetStr("core.mgba_gb_colors", "Grayscale");
+        auto *gbColorCell      = new brls::SelectorCell();
+        gbColorCell->init("GB 配色", gbColors, findIndex(gbColors, curGbColor),
+                          [gbColors](int idx)
+                          {
+                              if (idx >= 0 && idx < (int)gbColors.size())
+                                  cfgSetStr("core.mgba_gb_colors", gbColors[idx]);
+                          });
+        box->addView(gbColorCell);
+    }
+
+    {
+        std::vector<std::string> idleOpts = {
+            "Remove Known", "Detect and Remove", "Don't Remove"};
+        std::string curIdle = cfgGetStr("core.mgba_idle_optimization", "Remove Known");
+        auto *idleCell      = new brls::SelectorCell();
+        idleCell->init("空闲优化", idleOpts, findIndex(idleOpts, curIdle),
+                       [idleOpts](int idx)
+                       {
+                           if (idx >= 0 && idx < (int)idleOpts.size())
+                               cfgSetStr("core.mgba_idle_optimization", idleOpts[idx]);
+                       });
+        box->addView(idleCell);
+    }
+
+    scroll->setContentView(box);
+    return scroll;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Tab: 画面设置
+// ─────────────────────────────────────────────────────────────────────────────
+
+brls::ScrollingFrame *SettingPage::buildDisplayTab()
+{
+    auto *scroll = makeScrollTab();
+    auto *box    = makeContentBox();
+
+    box->addView(makeHeader("画面"));
+
+    {
+        std::vector<std::string> dispModes = {
+            "适应 (Fit)", "填充 (Fill)", "原始 (Original)", "整数倍 (Integer)", "自定义 (Custom)"};
+        static const char *dispModeIds[] = {"fit", "fill", "original", "integer", "custom"};
+        std::string curMode              = cfgGetStr("display.mode", "original");
+        int dispModeIdx                  = 2;
+        for (int i = 0; i < 5; ++i)
+            if (curMode == dispModeIds[i]) { dispModeIdx = i; break; }
+        auto *dispModeCell = new brls::SelectorCell();
+        dispModeCell->init("显示模式", dispModes, dispModeIdx,
+                           [](int idx)
+                           { if (idx >= 0 && idx < 5) cfgSetStr("display.mode", dispModeIds[idx]); });
+        box->addView(dispModeCell);
+    }
+
+    {
+        static const int k_intScaleVals[]  = {0, 1, 2, 3, 4, 5, 6};
+        static const char *k_intScaleLabels[] = {
+            "自动 (Auto)", "1x", "2x", "3x", "4x", "5x", "6x"};
+        static constexpr int k_intScaleCount = 7;
+        int curMult                          = cfgGetInt("display.integer_scale_mult", 0);
+        int multIdx                          = 0;
+        for (int i = 0; i < k_intScaleCount; ++i)
+            if (curMult == k_intScaleVals[i]) { multIdx = i; break; }
+        std::vector<std::string> intScaleLabels(k_intScaleLabels,
+                                                k_intScaleLabels + k_intScaleCount);
+        auto *intScaleCell = new brls::SelectorCell();
+        intScaleCell->init("整数倍缩放倍率", intScaleLabels, multIdx,
+                           [](int idx)
+                           {
+                               if (idx >= 0 && idx < k_intScaleCount &&
+                                   beiklive::SettingManager)
+                               {
+                                   beiklive::SettingManager->Set(
+                                       "display.integer_scale_mult",
+                                       beiklive::ConfigValue(k_intScaleVals[idx]));
+                                   beiklive::SettingManager->Save();
+                               }
+                           });
+        box->addView(intScaleCell);
+    }
+
+    {
+        std::vector<std::string> filters = {"最近邻 (Nearest)", "双线性 (Linear)"};
+        std::string curFilter            = cfgGetStr("display.filter", "nearest");
+        auto *filterCell                 = new brls::SelectorCell();
+        filterCell->init("纹理过滤", filters, (curFilter == "linear") ? 1 : 0,
+                         [](int idx)
+                         { cfgSetStr("display.filter", idx == 1 ? "linear" : "nearest"); });
+        box->addView(filterCell);
+    }
+
+    box->addView(makeHeader("状态显示"));
+
+    auto *showFpsCell = new brls::BooleanCell();
+    showFpsCell->init("显示帧率",
+                      cfgGetBool("display.showFps", false),
+                      [](bool v) { cfgSetBool("display.showFps", v); });
+    box->addView(showFpsCell);
+
+    auto *showFfCell = new brls::BooleanCell();
+    showFfCell->init("显示快进状态",
+                     cfgGetBool("display.showFfOverlay", true),
+                     [](bool v) { cfgSetBool("display.showFfOverlay", v); });
+    box->addView(showFfCell);
+
+    auto *showRewCell = new brls::BooleanCell();
+    showRewCell->init("显示倒带状态",
+                      cfgGetBool("display.showRewindOverlay", true),
+                      [](bool v) { cfgSetBool("display.showRewindOverlay", v); });
+    box->addView(showRewCell);
+
+    auto *showMuteCell = new brls::BooleanCell();
+    showMuteCell->init("显示静音状态",
+                       cfgGetBool("display.showMuteOverlay", true),
+                       [](bool v) { cfgSetBool("display.showMuteOverlay", v); });
+    box->addView(showMuteCell);
+
+    // ── 遮罩设置 ──────────────────────────────────────────────────────────────
+    box->addView(makeHeader("遮罩"));
+
+    auto *overlayEnCell = new brls::BooleanCell();
+    overlayEnCell->init("启用遮罩",
+                        cfgGetBool(KEY_DISPLAY_OVERLAY_ENABLED, false),
+                        [](bool v) { cfgSetBool(KEY_DISPLAY_OVERLAY_ENABLED, v); });
+    box->addView(overlayEnCell);
+
+    // 构建遮罩路径选取 DetailCell 的辅助 lambda
+    auto makeOverlayPathCell = [&](const std::string &cfgKey,
+                                   const std::string &labelText)
+    {
+        auto *cell = new brls::DetailCell();
+        cell->setText(labelText);
+        std::string cur = cfgGetStr(cfgKey, "");
+        cell->setDetailText(cur.empty() ? "未设置" : beiklive::tools::getFileName(cur));
+        cell->registerAction("确认"_i18n, brls::BUTTON_A,
+                             [cell, cfgKey](brls::View *)
+                             {
+                                 std::string dir = cfgGetStr(cfgKey, "");
+                                 auto pos        = dir.rfind('/');
+#ifdef _WIN32
+                                 auto posW = dir.rfind('\\');
+                                 if (posW != std::string::npos &&
+                                     (pos == std::string::npos || posW > pos))
+                                     pos = posW;
+#endif
+                                 if (pos != std::string::npos)
+                                     dir = dir.substr(0, pos);
+                                 else
+                                     dir = "";
+                                 openFilePicker({"png"},
+                                               [cell, cfgKey](const std::string &path)
+                                               {
+                                                   cfgSetStr(cfgKey, path);
+                                                   cell->setDetailText(
+                                                       beiklive::tools::getFileName(path));
+                                               },
+                                               dir);
+                                 return true;
+                             },
+                             false, false, brls::SOUND_CLICK);
+        return cell;
+    };
+
+    box->addView(makeOverlayPathCell(KEY_DISPLAY_OVERLAY_GBA_PATH, "GBA 遮罩路径"));
+    box->addView(makeOverlayPathCell(KEY_DISPLAY_OVERLAY_GBC_PATH, "GBC 遮罩路径"));
+    box->addView(makeOverlayPathCell(KEY_DISPLAY_OVERLAY_GB_PATH, "GB 遮罩路径"));
+
+    // ── 着色器设置 ────────────────────────────────────────────────────────────
+    box->addView(makeHeader("着色器"));
+
+    auto *shaderEnCell = new brls::BooleanCell();
+    shaderEnCell->init("启用着色器",
+                       cfgGetBool(KEY_DISPLAY_SHADER_ENABLED, false),
+                       [](bool v) { cfgSetBool(KEY_DISPLAY_SHADER_ENABLED, v); });
+    box->addView(shaderEnCell);
+
+    // 构建着色器路径选取 DetailCell 的辅助 lambda
+    auto makeShaderPathCell = [&](const std::string &pathKey,
+                                  const std::string &labelText)
+    {
+        auto *pathCell = new brls::DetailCell();
+        pathCell->setText(labelText);
+        std::string cur = cfgGetStr(pathKey, "");
+        pathCell->setDetailText(cur.empty() ? "未设置" : beiklive::tools::getFileName(cur));
+        pathCell->registerAction("确认"_i18n, brls::BUTTON_A,
+                                 [pathCell, pathKey](brls::View *)
+                                 {
+                                     std::string dir = cfgGetStr(pathKey, "");
+                                     auto pos        = dir.rfind('/');
+#ifdef _WIN32
+                                     auto posW = dir.rfind('\\');
+                                     if (posW != std::string::npos &&
+                                         (pos == std::string::npos || posW > pos))
+                                         pos = posW;
+#endif
+                                     if (pos != std::string::npos)
+                                         dir = dir.substr(0, pos);
+                                     else
+                                         dir = "";
+                                     openFilePicker({"glslp", "glsl"},
+                                                   [pathCell, pathKey](const std::string &path)
+                                                   {
+                                                       cfgSetStr(pathKey, path);
+                                                       pathCell->setDetailText(
+                                                           beiklive::tools::getFileName(path));
+                                                   },
+                                                   dir);
+                                     return true;
+                                 },
+                                 false, false, brls::SOUND_CLICK);
+        box->addView(pathCell);
+    };
+
+    makeShaderPathCell(KEY_DISPLAY_SHADER_GBA_PATH, "GBA 着色器路径");
+    makeShaderPathCell(KEY_DISPLAY_SHADER_GBC_PATH, "GBC 着色器路径");
+    makeShaderPathCell(KEY_DISPLAY_SHADER_GB_PATH, "GB 着色器路径");
+
+    scroll->setContentView(box);
+    return scroll;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Tab: 声音设置
+// ─────────────────────────────────────────────────────────────────────────────
+
+brls::ScrollingFrame *SettingPage::buildAudioTab()
+{
+    auto *scroll = makeScrollTab();
+    auto *box    = makeContentBox();
+
+    box->addView(makeHeader("游戏音频"));
+
+    auto *ffMuteCell = new brls::BooleanCell();
+    ffMuteCell->init("快进时静音",
+                     cfgGetBool("fastforward.mute", true),
+                     [](bool v) { cfgSetBool("fastforward.mute", v); });
+    box->addView(ffMuteCell);
+
+    auto *rewMuteCell = new brls::BooleanCell();
+    rewMuteCell->init("倒带时静音",
+                      cfgGetBool("rewind.mute", false),
+                      [](bool v) { cfgSetBool("rewind.mute", v); });
+    box->addView(rewMuteCell);
+
+    {
+        std::vector<std::string> lpfOpts = {"关闭 (disabled)", "开启 (enabled)"};
+        std::string curLpf               = cfgGetStr("core.mgba_audio_low_pass_filter", "disabled");
+        auto *lpfCell                    = new brls::SelectorCell();
+        lpfCell->init("低通滤波器", lpfOpts, (curLpf == "enabled") ? 1 : 0,
+                      [](int idx)
+                      {
+                          cfgSetStr("core.mgba_audio_low_pass_filter",
+                                    idx == 1 ? "enabled" : "disabled");
+                      });
+        box->addView(lpfCell);
+    }
+
+    scroll->setContentView(box);
+    return scroll;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Tab: 按键绑定
+// ─────────────────────────────────────────────────────────────────────────────
+
+struct GameBtnEntry
+{
+    const char *label;
+    const char *suffix;
+};
+
+static const GameBtnEntry k_gameBtns[] = {
+    {"A 键", "a"},       {"B 键", "b"},     {"X 键", "x"},      {"Y 键", "y"},
+    {"上", "up"},        {"下", "down"},     {"左", "left"},     {"右", "right"},
+    {"L1", "l"},         {"R1", "r"},        {"L2", "l2"},       {"R2", "r2"},
+    {"START", "start"},  {"SELECT", "select"},
+};
+static constexpr int k_gameBtnCount =
+    static_cast<int>(sizeof(k_gameBtns) / sizeof(k_gameBtns[0]));
+
+// 热键配置项（key=配置键, label=显示名称）
+struct HotkeyEntry
+{
+    const char *cfgKey;
+    const char *label;
+};
+static const HotkeyEntry k_hotkeys[] = {
+    {"handle.fastforward",    "快进"},
+    {"handle.rewind",         "倒带"},
+    {"hotkey.quicksave.pad",  "快速保存"},
+    {"hotkey.quickload.pad",  "快速读取"},
+    {"hotkey.menu.pad",       "打开菜单"},
+    {"hotkey.mute.pad",       "静音"},
+    {"hotkey.pause.pad",      "暂停"},
+    {"hotkey.screenshot.pad", "截屏"},
+};
+static constexpr int k_hotkeyCount =
+    static_cast<int>(sizeof(k_hotkeys) / sizeof(k_hotkeys[0]));
+
+brls::ScrollingFrame *SettingPage::buildKeyBindTab()
+{
+    auto *scroll = makeScrollTab();
+    auto *box    = makeContentBox();
+
+    // ── 游戏按键 ──────────────────────────────────────────────────────────────
+    box->addView(makeHeader("游戏按键映射（手柄）"));
+
+    for (int i = 0; i < k_gameBtnCount; ++i)
+    {
+        std::string cfgKey = std::string("handle.") + k_gameBtns[i].suffix;
+        auto *cell         = new brls::DetailCell();
+        cell->setText(k_gameBtns[i].label);
+        cell->setDetailText(cfgGetStr(cfgKey, "none"));
+        std::string captureKey = cfgKey;
+        cell->registerAction("确认"_i18n, brls::BUTTON_A,
+                             [cell, captureKey](brls::View *)
+                             {
+                                 openKeyCapture([cell, captureKey](const std::string &r)
+                                               {
+                                                   if (!r.empty())
+                                                   {
+                                                       cfgSetStr(captureKey, r);
+                                                       cell->setDetailText(r);
+                                                   }
+                                               });
+                                 return true;
+                             },
+                             false, false, brls::SOUND_CLICK);
+        cell->registerAction("清除绑定", brls::BUTTON_X,
+                             [cell, captureKey](brls::View *)
+                             {
+                                 cfgSetStr(captureKey, "none");
+                                 cell->setDetailText("none");
+                                 return true;
+                             },
+                             false, false, brls::SOUND_CLICK);
+        box->addView(cell);
+    }
+
+    // ── 热键 ──────────────────────────────────────────────────────────────────
+    box->addView(makeHeader("热键绑定（手柄）"));
+
+    for (int i = 0; i < k_hotkeyCount; ++i)
+    {
+        std::string cfgKey = k_hotkeys[i].cfgKey;
+        auto *cell         = new brls::DetailCell();
+        cell->setText(std::string(k_hotkeys[i].label) + "（手柄）");
+        cell->setDetailText(cfgGetStr(cfgKey, "none"));
+        std::string captureKey = cfgKey;
+        cell->registerAction("确认"_i18n, brls::BUTTON_A,
+                             [cell, captureKey](brls::View *)
+                             {
+                                 openKeyCapture([cell, captureKey](const std::string &r)
+                                               {
+                                                   if (!r.empty())
+                                                   {
+                                                       cfgSetStr(captureKey, r);
+                                                       cell->setDetailText(r);
+                                                   }
+                                               });
+                                 return true;
+                             },
+                             false, false, brls::SOUND_CLICK);
+        cell->registerAction("清除绑定", brls::BUTTON_X,
+                             [cell, captureKey](brls::View *)
+                             {
+                                 cfgSetStr(captureKey, "none");
+                                 cell->setDetailText("none");
+                                 return true;
+                             },
+                             false, false, brls::SOUND_CLICK);
+        box->addView(cell);
+    }
+
+    scroll->setContentView(box);
+    return scroll;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Tab: 调试工具
+// ─────────────────────────────────────────────────────────────────────────────
+
+brls::ScrollingFrame *SettingPage::buildDebugTab()
+{
+    auto *scroll = makeScrollTab();
+    auto *box    = makeContentBox();
+
+    box->addView(makeHeader("日志"));
+
+    {
+        static const char *logLevelIds[]        = {"debug", "info", "warning", "error"};
+        std::vector<std::string> logLevels      = {
+            "调试 (debug)", "信息 (info)", "警告 (warning)", "错误 (error)"};
+        std::string curLevel                     = cfgGetStr(KEY_DEBUG_LOG_LEVEL, "info");
+        int levelIdx                             = 1;
+        for (int i = 0; i < 4; ++i)
+            if (curLevel == logLevelIds[i]) { levelIdx = i; break; }
+        auto *logLevelCell = new brls::SelectorCell();
+        logLevelCell->init("日志级别", logLevels, levelIdx,
+                           [](int idx)
+                           {
+                               if (idx >= 0 && idx < 4)
+                               {
+                                   cfgSetStr(KEY_DEBUG_LOG_LEVEL, logLevelIds[idx]);
+                                   static const brls::LogLevel lvMap[] = {
+                                       brls::LogLevel::LOG_DEBUG,
+                                       brls::LogLevel::LOG_INFO,
+                                       brls::LogLevel::LOG_WARNING,
+                                       brls::LogLevel::LOG_ERROR,
+                                   };
+                                   brls::Logger::setLogLevel(lvMap[idx]);
+                               }
+                           });
+        box->addView(logLevelCell);
+    }
+
+    auto *logFileCell = new brls::BooleanCell();
+    logFileCell->init("输出日志到文件",
+                      cfgGetBool(KEY_DEBUG_LOG_FILE, false),
+                      [](bool v)
+                      {
+                          cfgSetBool(KEY_DEBUG_LOG_FILE, v);
+                          static FILE *s_logFile = nullptr;
+                          if (v)
+                          {
+                              if (s_logFile) { std::fclose(s_logFile); s_logFile = nullptr; }
+                              s_logFile = std::fopen(beiklive::path::logFilePath().c_str(), "a");
+                              if (s_logFile)
+                                  brls::Logger::setLogOutput(s_logFile);
+                          }
+                          else
+                          {
+                              brls::Logger::setLogOutput(nullptr);
+                              if (s_logFile) { std::fclose(s_logFile); s_logFile = nullptr; }
+                          }
+                      });
+    box->addView(logFileCell);
+
+    auto *logOverlayCell = new brls::BooleanCell();
+    logOverlayCell->init("显示调试信息覆盖层",
+                         cfgGetBool(KEY_DEBUG_LOG_OVERLAY, false),
+                         [](bool v)
+                         {
+                             cfgSetBool(KEY_DEBUG_LOG_OVERLAY, v);
+                             brls::Application::enableDebuggingView(v);
+                         });
+    box->addView(logOverlayCell);
+
+    scroll->setContentView(box);
+    return scroll;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  SettingPage
+// ─────────────────────────────────────────────────────────────────────────────
+
+SettingPage::SettingPage()
+{
+    brls::sync([this]()
+    {
+        this->showHeader(false);
+        this->showFooter(false);
+        this->showBackground(false);
+
+        m_tabframe = new brls::TabFrame();
+        m_tabframe->setGrow(1.0f);
+        init();
+        this->getContentBox()->addView(m_tabframe);
+    });
+}
+
+SettingPage::~SettingPage()
+{
+}
+
+void SettingPage::init()
+{
+    m_tabframe->addTab("界面",  [this]() { return buildUITab(); });
+    m_tabframe->addTab("游戏",  [this]() { return buildGameTab(); });
+    m_tabframe->addTab("画面",  [this]() { return buildDisplayTab(); });
+    m_tabframe->addTab("音频",  [this]() { return buildAudioTab(); });
+    m_tabframe->addTab("按键",  [this]() { return buildKeyBindTab(); });
+    m_tabframe->addTab("调试",  [this]() { return buildDebugTab(); });
+}
+
+} // namespace beiklive

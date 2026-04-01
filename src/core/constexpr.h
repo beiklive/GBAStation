@@ -92,22 +92,44 @@ namespace beiklive::path
 namespace beiklive::SettingKey
 {
     // UI 设置
-    constexpr const char *KEY_UI_START_PAGE     = "UI.startPage";   // 起始页面
-    constexpr const char *KEY_UI_LANGUAGE       = "UI.language";    // 语言
-    constexpr const char *KEY_UI_THEME          = "UI.theme";       // 主题
+    constexpr const char *KEY_UI_START_PAGE         = "UI.startPage";              // 起始页面
+    constexpr const char *KEY_UI_LANGUAGE           = "UI.language";               // 语言
+    constexpr const char *KEY_UI_THEME              = "UI.theme";                  // 主题
 
-    //遮罩设置
-    constexpr const char *KEY_DISPLAY_OVERLAY_ENABLED  ="display.overlay.enabled";  ///< 遮罩总开关
-    constexpr const char *KEY_DISPLAY_OVERLAY_GBA_PATH ="display.overlay.gbaPath";  ///< 全局 GBA 遮罩 PNG 路径
-    constexpr const char *KEY_DISPLAY_OVERLAY_GBC_PATH ="display.overlay.gbcPath";  ///< 全局 GBC 遮罩 PNG 路径
-    constexpr const char *KEY_DISPLAY_OVERLAY_GB_PATH  ="display.overlay.gbPath";   ///< 全局 GB 遮罩 PNG 路径
+    // UI 背景图片设置
+    constexpr const char *KEY_UI_SHOW_BG_IMAGE      = "UI.showBgImage";            ///< 是否显示背景图片
+    constexpr const char *KEY_UI_BG_IMAGE_PATH      = "UI.bgImagePath";            ///< 背景图片路径
+    constexpr const char *KEY_UI_BG_BLUR_ENABLED    = "UI.bgBlurEnabled";          ///< 是否开启背景模糊
+    constexpr const char *KEY_UI_BG_BLUR_RADIUS     = "UI.bgBlurRadius";           ///< 背景模糊半径
+
+    // UI XMB 风格背景设置
+    constexpr const char *KEY_UI_SHOW_XMB_BG        = "UI.showXmbBg";              ///< 是否显示 PSP XMB 风格背景
+    constexpr const char *KEY_UI_PSPXMB_COLOR       = "UI.pspxmb.color";           ///< XMB 颜色预设 ID
+
+    // UI 缩略图设置
+    constexpr const char *KEY_UI_USE_SAVESTATE_THUMB = "UI.useSavestateThumbnail"; ///< 无封面时使用存档0截图作为缩略图
+
+    // 遮罩设置
+    constexpr const char *KEY_DISPLAY_OVERLAY_ENABLED  ="display.overlay.enabled"; ///< 遮罩总开关
+    constexpr const char *KEY_DISPLAY_OVERLAY_GBA_PATH ="display.overlay.gbaPath"; ///< 全局 GBA 遮罩 PNG 路径
+    constexpr const char *KEY_DISPLAY_OVERLAY_GBC_PATH ="display.overlay.gbcPath"; ///< 全局 GBC 遮罩 PNG 路径
+    constexpr const char *KEY_DISPLAY_OVERLAY_GB_PATH  ="display.overlay.gbPath";  ///< 全局 GB 遮罩 PNG 路径
 
     // 着色器设置（全局默认）
-    constexpr const char *KEY_DISPLAY_SHADER_ENABLED   ="display.shaderEnabled";    ///< 着色器总开关（true=启用）
-    constexpr const char *KEY_DISPLAY_SHADER_PATH      ="display.shader";           ///< 着色器预设路径（.glslp）
-    constexpr const char *KEY_DISPLAY_SHADER_GBA_PATH  ="display.shader.gba";        ///< GBA 着色器预设路径
-    constexpr const char *KEY_DISPLAY_SHADER_GBC_PATH  ="display.shader.gbc";        ///< GBC 着色器预设路径
-    constexpr const char *KEY_DISPLAY_SHADER_GB_PATH   ="display.shader.gb";         ///< GB 着色器预设路径
+    constexpr const char *KEY_DISPLAY_SHADER_ENABLED   ="display.shaderEnabled";   ///< 着色器总开关（true=启用）
+    constexpr const char *KEY_DISPLAY_SHADER_PATH      ="display.shader";          ///< 着色器预设路径（.glslp）
+    constexpr const char *KEY_DISPLAY_SHADER_GBA_PATH  ="display.shader.gba";      ///< GBA 着色器预设路径
+    constexpr const char *KEY_DISPLAY_SHADER_GBC_PATH  ="display.shader.gbc";      ///< GBC 着色器预设路径
+    constexpr const char *KEY_DISPLAY_SHADER_GB_PATH   ="display.shader.gb";       ///< GB 着色器预设路径
+
+    // 音频设置
+    constexpr const char *KEY_AUDIO_BUTTON_SFX      = "audio.buttonSfx";           ///< 按钮音效开关
+
+    // 调试设置
+    constexpr const char *KEY_DEBUG_LOG_LEVEL       = "debug.logLevel";            ///< 日志级别
+    constexpr const char *KEY_DEBUG_LOG_FILE        = "debug.logFile";             ///< 是否输出日志到文件
+    constexpr const char *KEY_DEBUG_LOG_OVERLAY     = "debug.logOverlay";          ///< 是否显示调试覆盖层
+
 
 
 

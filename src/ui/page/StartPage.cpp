@@ -101,10 +101,12 @@ namespace beiklive
         switchLayout->onSettingsOpened = [this]()
         {
             brls::Logger::info("Settings opened");
+            _openSettings();
         };
         switchLayout->onAboutOpened = [this]()
         {
             brls::Logger::info("About opened");
+            _openAbout();
         };
         switchLayout->onExitRequested = [this]()
         {
@@ -167,5 +169,25 @@ namespace beiklive
                        brls::Application::pushActivity(new brls::Activity(frame));
                        m_fileListPage->showDriveList(); // Activity 入栈后再加载，确保 recycler 已在视图树中
                    });
+    }
+
+    void StartPage::_openSettings()
+    {
+        brls::Logger::debug("Opening Settings Page");
+        auto *settingPage = new beiklive::SettingPage();
+        auto *frame       = new brls::AppletFrame(settingPage);
+        HIDE_BRLS_BAR(frame);
+        brls::sync([frame]()
+                   { brls::Application::pushActivity(new brls::Activity(frame)); });
+    }
+
+    void StartPage::_openAbout()
+    {
+        brls::Logger::debug("Opening About Page");
+        auto *aboutPage = new beiklive::AboutPage();
+        auto *frame     = new brls::AppletFrame(aboutPage);
+        HIDE_BRLS_BAR(frame);
+        brls::sync([frame]()
+                   { brls::Application::pushActivity(new brls::Activity(frame)); });
     }
 }
