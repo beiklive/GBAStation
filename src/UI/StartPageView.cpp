@@ -3,7 +3,6 @@
 #include "Game/game_view.hpp"
 #include "UI/Pages/ImageView.hpp"
 #include "UI/Pages/DataPage.hpp"
-#include "UI/Utils/BKAnimator.hpp"
 
 #include <chrono>
 #include <ctime>
@@ -77,7 +76,7 @@ static void launchGameActivity(const std::string& romPath)
     frame->setFooterVisibility(brls::Visibility::GONE);
     frame->setBackground(brls::ViewBackground::NONE);
     brls::Application::pushActivity(new brls::Activity(frame),
-                                    brls::TransitionAnimation::FADE);
+                                    brls::TransitionAnimation::LINEAR);
 }
 
 /// 通用打开游戏接口：记录游玩时间、更新近期游戏队列，然后启动游戏。
@@ -448,7 +447,7 @@ void StartPageView::openFileListPage()
     frame->setHeaderVisibility(brls::Visibility::GONE);
     frame->setFooterVisibility(brls::Visibility::GONE);
     frame->setBackground(brls::ViewBackground::NONE);
-    beiklive::BKAnimator::pushActivity(new brls::Activity(frame));
+    brls::Application::pushActivity(new brls::Activity(frame));
         brls::Application::giveFocus(fileListPage->getDefaultFocus());
 }
 
@@ -460,7 +459,7 @@ void StartPageView::openSettingsPage()
     frame->setHeaderVisibility(brls::Visibility::GONE);
     frame->setFooterVisibility(brls::Visibility::GONE);
     frame->setTitle("设置");
-    beiklive::BKAnimator::pushActivity(new brls::Activity(frame));
+    brls::Application::pushActivity(new brls::Activity(frame));
     brls::Application::giveFocus(m_SettingPage->getDefaultFocus());
 }
 
@@ -484,7 +483,7 @@ void StartPageView::openDataPage()
     frame->setHeaderVisibility(brls::Visibility::GONE);
     frame->setFooterVisibility(brls::Visibility::GONE);
     frame->setBackground(brls::ViewBackground::NONE);
-    beiklive::BKAnimator::pushActivity(new brls::Activity(frame));
+    brls::Application::pushActivity(new brls::Activity(frame));
     brls::Application::giveFocus(dataPage->getDefaultFocus());
 }
 
@@ -522,7 +521,7 @@ void StartPageView::openGameLibraryPage()
     frame->setHeaderVisibility(brls::Visibility::GONE);
     frame->setFooterVisibility(brls::Visibility::GONE);
     frame->setBackground(brls::ViewBackground::NONE);
-    beiklive::BKAnimator::pushActivity(new brls::Activity(frame));
+    brls::Application::pushActivity(new brls::Activity(frame));
     brls::Application::giveFocus(libraryPage->getDefaultFocus());
 }
 
@@ -549,7 +548,7 @@ void StartPageView::openAboutPage()
     aboutFrame->setHeaderVisibility(brls::Visibility::GONE);
     aboutFrame->setFooterVisibility(brls::Visibility::GONE);
     aboutFrame->setBackground(brls::ViewBackground::NONE);
-    beiklive::BKAnimator::pushActivity(new brls::Activity(aboutFrame));
+    brls::Application::pushActivity(new brls::Activity(aboutFrame));
     brls::Application::giveFocus(aboutPage->getDefaultFocus());
 }
 
