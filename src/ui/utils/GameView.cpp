@@ -242,12 +242,13 @@ namespace beiklive
         // 打开菜单：LB+START 长按 2.5s 或 RT+LT 长按
         GameInputManager::instance().registerEmuFunctionKey(
             EmuFunctionKey::EMU_OPEN_MENU,
-            {{brls::BUTTON_LB, brls::BUTTON_START}, {brls::BUTTON_RT, brls::BUTTON_LT}},
-            []()
+            {{brls::BUTTON_RT, brls::BUTTON_LT}},
+            [this]()
             {
                 brls::Logger::debug("打开菜单热键触发！");
                 GameSignal::instance().requestOpenMenu();
-                brls::sync([](){ brls::Application::popActivity(); });
+                this->setFocusable(false);
+
             },
             TriggerType::LONG_PRESS,
             2.5f

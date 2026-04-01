@@ -134,6 +134,7 @@ namespace beiklive
         // "返回游戏"回调：隐藏菜单，将焦点交还给 GameView
         m_gameMenuView->setOnResume([this]() {
             brls::sync([this]() {
+                m_gameView->setFocusable(true);
                 m_gameMenuView->setVisibility(brls::Visibility::GONE);
                 brls::Application::giveFocus(m_gameView);
             });
