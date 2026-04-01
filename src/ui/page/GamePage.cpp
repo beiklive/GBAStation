@@ -140,7 +140,7 @@ namespace beiklive
         m_gameMenuView->setOnResume([this]() {
             brls::sync([this]() {
                 m_gameView->setFocusable(true);
-                AnimationHelper::fadeOut(m_gameMenuView, MENU_FADE_OUT_MS, true, [this]() {
+                AnimationHelper::slideOutToBottom(m_gameMenuView, MENU_FADE_OUT_MS, 60.f,true, [this]() {
                     brls::Application::giveFocus(m_gameView);
                 });
             });

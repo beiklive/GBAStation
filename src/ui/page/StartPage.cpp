@@ -75,18 +75,6 @@ namespace beiklive
         switchLayout->onGameLibraryOpened = [this]()
         {
             brls::Logger::info("Game Library opened");
-            // beiklive::GameList gameList2 = {
-            //     {"path/to/game1.exe", "subGame 1", BK_RES("img/test/test2.png")},
-            //     {"path/to/game2.exe", "subGame 2", BK_RES("img/test/test2.png")},
-            //     {"path/to/game3.exe", "subGame 3", BK_RES("img/test/test2.png")},
-            //     {"path/to/game4.exe", "subGame 4", BK_RES("img/test/test2.png")},
-            //     {"path/to/game5.exe", "subGame 5", BK_RES("img/test/test2.png")},
-            //     {"path/to/game6.exe", "subGame 6", BK_RES("img/test/test2.png")},
-            //     {"path/to/game7.exe", "subGame 7", BK_RES("img/test/test2.png")},
-            //     {"path/to/game8.exe", "subGame 8", BK_RES("img/test/test2.png")},
-            //     {"path/to/game9.exe", "subGame 9", BK_RES("img/test/test2.png")},
-            //     {"path/to/game10.exe", "subGame 10", BK_RES("img/test/test2.png")}};
-            // switchLayout->refreshGameList(&gameList2);
         };
 
         switchLayout->onFileBrowserOpened = [this]()
