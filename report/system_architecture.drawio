@@ -1,0 +1,266 @@
+<mxfile host="app.diagrams.net" modified="2026-04-02T05:00:00.000Z" agent="Copilot" version="21.0.0" type="device">
+  <diagram id="GBAStation-Architecture" name="GBAStation 系统架构">
+    <mxGraphModel dx="1800" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- ===== 标题 ===== -->
+        <mxCell id="title" value="GBAStation 系统架构图" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="500" y="20" width="600" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- ===== 层次标签 ===== -->
+        <mxCell id="layer-entry" value="入口层" style="text;html=1;strokeColor=none;fillColor=none;align=right;verticalAlign=middle;fontSize=12;fontStyle=1;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="20" y="80" width="80" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="layer-ui" value="UI 层" style="text;html=1;strokeColor=none;fillColor=none;align=right;verticalAlign=middle;fontSize=12;fontStyle=1;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="20" y="220" width="80" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="layer-game" value="游戏层" style="text;html=1;strokeColor=none;fillColor=none;align=right;verticalAlign=middle;fontSize=12;fontStyle=1;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="20" y="500" width="80" height="300" as="geometry" />
+        </mxCell>
+        <mxCell id="layer-core" value="核心层" style="text;html=1;strokeColor=none;fillColor=none;align=right;verticalAlign=middle;fontSize=12;fontStyle=1;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="20" y="870" width="80" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- ===== 入口层 ===== -->
+        <!-- main.cpp -->
+        <mxCell id="main" value="main.cpp&#xa;• Application::init()&#xa;• setAudioPlayer(BKAudioPlayer)&#xa;• pushActivity(MyActivity)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="620" y="75" width="220" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- ===== UI 层 ===== -->
+        <!-- MyActivity -->
+        <mxCell id="myactivity" value="MyActivity&#xa;(brls::Activity 子类)&#xa;• 持有 StartPage 引用" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="120" y="180" width="200" height="60" as="geometry" />
+        </mxCell>
+        <!-- StartPage -->
+        <mxCell id="startpage" value="StartPage&#xa;• 持有 SwitchLayout/FileListPage&#xa;• 响应游戏列表激活事件&#xa;• 创建并推入 GamePage Activity" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="360" y="175" width="220" height="75" as="geometry" />
+        </mxCell>
+        <!-- FileListPage / SwitchLayout -->
+        <mxCell id="listpage" value="FileListPage / SwitchLayout&#xa;• 游戏文件列表展示&#xa;• GridBox 瀑布流布局&#xa;• 触发 onGameActivated 回调" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="620" y="175" width="220" height="75" as="geometry" />
+        </mxCell>
+        <!-- GamePage -->
+        <mxCell id="gamepage" value="GamePage&#xa;• 初始化 GameEntry&#xa;• 更新数据库游戏记录&#xa;• 持有 GameView + GameMenuView" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="880" y="175" width="220" height="75" as="geometry" />
+        </mxCell>
+        <!-- SettingPage / AboutPage -->
+        <mxCell id="settingpage" value="SettingPage / AboutPage&#xa;• 设置项管理&#xa;• 关于页面展示" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1140" y="175" width="200" height="75" as="geometry" />
+        </mxCell>
+        <!-- BKAudioPlayer -->
+        <mxCell id="bkaudio" value="BKAudioPlayer&#xa;(brls::AudioPlayer 子类)&#xa;• UI 音效播放（非Switch平台）&#xa;• 后台线程懒加载+播放WAV&#xa;• 支持 ALSA/WinMM/CoreAudio" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1380" y="165" width="230" height="90" as="geometry" />
+        </mxCell>
+        <!-- GameView -->
+        <mxCell id="gameview" value="GameView (brls::Box 子类)&#xa;• 游戏主循环线程管理&#xa;• 帧间 pendingFrame 双缓冲传递&#xa;• 调用 GameRenderer::drawToScreen()&#xa;• 处理 GameSignal（退出/菜单/暂停）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="620" y="285" width="260" height="90" as="geometry" />
+        </mxCell>
+        <!-- GameMenuView -->
+        <mxCell id="gamemenuview" value="GameMenuView&#xa;• 游戏内菜单 UI&#xa;• 恢复/退出/设置/存读档按钮&#xa;• 动画入场/出场（slideIn/Out）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="920" y="285" width="220" height="90" as="geometry" />
+        </mxCell>
+        <!-- AnimationHelper -->
+        <mxCell id="animhelper" value="AnimationHelper&#xa;• slideInFromBottom / slideOutToBottom&#xa;• 统一封装 borealis 动画 API" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="295" width="220" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- ===== 游戏层 ===== -->
+        <!-- GameInputManager -->
+        <mxCell id="inputmgr" value="GameInputManager (Singleton)&#xa;• 注册/处理模拟器功能按键&#xa;• 映射 brls 输入→ GameSignal&#xa;• 支持 PRESS/HOLD/LONG_PRESS" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="120" y="500" width="240" height="80" as="geometry" />
+        </mxCell>
+        <!-- GameSignal -->
+        <mxCell id="gamesignal" value="GameSignal (Singleton)&#xa;• 原子信号：暂停/快进/倒带&#xa;• 原子信号：退出/打开菜单/重置&#xa;• UI线程写 → 游戏线程读" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="400" y="500" width="240" height="80" as="geometry" />
+        </mxCell>
+        <!-- AudioManager -->
+        <mxCell id="audiomgr" value="AudioManager (Singleton)&#xa;• 游戏音频输出（环形缓冲区）&#xa;• 平台后端：ALSA/WinMM/CoreAudio/Switch&#xa;• pushSamples() 由游戏线程调用" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="680" y="500" width="260" height="80" as="geometry" />
+        </mxCell>
+        <!-- GameTimer -->
+        <mxCell id="gametimer" value="GameTimer (Singleton)&#xa;• 累计游戏时长记录&#xa;• 定期写回数据库" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="980" y="500" width="220" height="80" as="geometry" />
+        </mxCell>
+        <!-- GameRenderer -->
+        <mxCell id="gamerenderer" value="GameRenderer&#xa;• 持有 GameTexture + RenderChain&#xa;• uploadFrame() 上传像素到GL纹理&#xa;• drawToScreen() 驱动渲染链" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="120" y="630" width="240" height="80" as="geometry" />
+        </mxCell>
+        <!-- RenderChain -->
+        <mxCell id="renderchain" value="RenderChain&#xa;• 管理 DirectQuadRenderer&#xa;• 管理 RetroShaderPipeline（可选）&#xa;• run() 输出最终纹理ID" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="400" y="630" width="240" height="80" as="geometry" />
+        </mxCell>
+        <!-- DirectQuadRenderer -->
+        <mxCell id="quadrenderer" value="DirectQuadRenderer&#xa;• 编译直通 GLSL 着色器&#xa;• 管理 VAO/VBO/EBO&#xa;• 保存/恢复 GL 状态后绘制四边形" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="680" y="630" width="240" height="80" as="geometry" />
+        </mxCell>
+        <!-- RetroShaderPipeline -->
+        <mxCell id="shaderpipe" value="RetroShaderPipeline&#xa;• 解析 .glslp/.glsl 预设文件&#xa;• 多通道 FBO 渲染链&#xa;• 支持着色器参数调节" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="960" y="630" width="240" height="80" as="geometry" />
+        </mxCell>
+        <!-- GameTexture -->
+        <mxCell id="gametex" value="GameTexture / FrameUploader&#xa;• 创建/更新 GL RGBA8888 纹理&#xa;• 支持 XRGB8888/RGB565/0RGB1555 输入&#xa;• 动态分辨率变化时重新分配" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1240" y="630" width="250" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- ===== 核心层 ===== -->
+        <!-- CoreMgba -->
+        <mxCell id="coremgba" value="CoreMgba (gba::CoreMgba)&#xa;• 封装 LibretroLoader(mgba核心)&#xa;• SetupGame / RunFrame / Reset&#xa;• GetVideoFrame / SetButtonsFromSignal" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="120" y="780" width="260" height="80" as="geometry" />
+        </mxCell>
+        <!-- LibretroLoader -->
+        <mxCell id="retro" value="LibretroLoader&#xa;• 动态加载 libretro 核心 (.so/.dll)&#xa;• 注册 video/audio/input 回调&#xa;• 帧像素格式转换→RGBA8888&#xa;• 通过 m_videoMutex 保护帧数据" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="420" y="780" width="260" height="80" as="geometry" />
+        </mxCell>
+        <!-- mgba third party -->
+        <mxCell id="mgba3rd" value="third_party/mgba&#xa;• mGBA 模拟器源码&#xa;• GBA/GB/GBC 模拟核心&#xa;• libretro API 实现" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="720" y="780" width="220" height="80" as="geometry" />
+        </mxCell>
+        <!-- ConfigManager / GameDB -->
+        <mxCell id="configmgr" value="ConfigManager / GameDB&#xa;• 配置项读写（JSON）&#xa;• 游戏数据库（元数据/存档记录）&#xa;• SettingManager 全局单例" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="980" y="780" width="250" height="80" as="geometry" />
+        </mxCell>
+        <!-- borealis -->
+        <mxCell id="borealis" value="third_party/borealis&#xa;• UI 框架（NanoVG + GLFW/Switch）&#xa;• 活动栈管理、布局系统&#xa;• 输入/音频/视频上下文抽象" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1270" y="780" width="230" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- ===== 游戏线程注释 ===== -->
+        <mxCell id="gamethread-note" value="游戏主循环线程 (_gameLoop)&#xa;——————————&#xa;RunFrame → captureVideoFrame → pushFrameAudio&#xa;→ throttleFrameRate（精确帧率控制）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="1260" y="500" width="280" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- ===== 连接线 ===== -->
+        <!-- main → MyActivity -->
+        <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="main" target="myactivity" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- main → BKAudioPlayer -->
+        <mxCell id="e1b" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="main" target="bkaudio" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- MyActivity → StartPage -->
+        <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="myactivity" target="startpage" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- StartPage → listpage -->
+        <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="startpage" target="listpage" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- StartPage → GamePage -->
+        <mxCell id="e4" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="startpage" target="gamepage" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- StartPage → SettingPage -->
+        <mxCell id="e4b" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="startpage" target="settingpage" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- GamePage → GameView -->
+        <mxCell id="e5" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="gamepage" target="gameview" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- GamePage → GameMenuView -->
+        <mxCell id="e6" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="gamepage" target="gamemenuview" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- GameMenuView → AnimationHelper -->
+        <mxCell id="e6b" style="edgeStyle=orthogonalEdgeStyle;dashed=1;" edge="1" source="gamemenuview" target="animhelper" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- GameView → GameSignal -->
+        <mxCell id="e7" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="gameview" target="gamesignal" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- GameView → GameInputManager -->
+        <mxCell id="e7b" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="gameview" target="inputmgr" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- GameView → AudioManager -->
+        <mxCell id="e8" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="gameview" target="audiomgr" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- GameView → GameTimer -->
+        <mxCell id="e8b" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="gameview" target="gametimer" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- GameView → GameRenderer -->
+        <mxCell id="e9" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="gameview" target="gamerenderer" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- GameRenderer → RenderChain -->
+        <mxCell id="e10" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="gamerenderer" target="renderchain" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- GameRenderer → GameTexture -->
+        <mxCell id="e10b" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="gamerenderer" target="gametex" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- RenderChain → DirectQuadRenderer -->
+        <mxCell id="e11" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="renderchain" target="quadrenderer" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- RenderChain → RetroShaderPipeline -->
+        <mxCell id="e12" style="edgeStyle=orthogonalEdgeStyle;dashed=1;" edge="1" source="renderchain" target="shaderpipe" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- GameView → CoreMgba -->
+        <mxCell id="e13" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="gameview" target="coremgba" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- CoreMgba → LibretroLoader -->
+        <mxCell id="e14" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="coremgba" target="retro" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- LibretroLoader → mgba3rd -->
+        <mxCell id="e15" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="retro" target="mgba3rd" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- GameInputManager → GameSignal -->
+        <mxCell id="e16" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="inputmgr" target="gamesignal" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- GameView → gamethread-note -->
+        <mxCell id="e17" style="edgeStyle=orthogonalEdgeStyle;dashed=1;" edge="1" source="gameview" target="gamethread-note" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- configmgr usage -->
+        <mxCell id="e18" style="edgeStyle=orthogonalEdgeStyle;dashed=1;" edge="1" source="coremgba" target="configmgr" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- borealis usage -->
+        <mxCell id="e19" style="edgeStyle=orthogonalEdgeStyle;dashed=1;" edge="1" source="bkaudio" target="borealis" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ===== 图例 ===== -->
+        <mxCell id="legend-title" value="图例" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="120" y="900" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="leg1" value="入口/配置" style="rounded=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="120" y="935" width="100" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="leg2" value="UI页面" style="rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="230" y="935" width="100" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="leg3" value="UI控件" style="rounded=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="340" y="935" width="100" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="leg4" value="游戏控制" style="rounded=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="450" y="935" width="100" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="leg5" value="渲染管线" style="rounded=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="560" y="935" width="100" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="leg6" value="UI音效" style="rounded=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="670" y="935" width="100" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="leg7" value="第三方/基础" style="rounded=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="780" y="935" width="100" height="30" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

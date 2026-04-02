@@ -309,3 +309,154 @@ RenderChain::drawToScreen()
 | `src/ui/page/SettingPage.cpp` | 实现6个标签页：界面/游戏/画面/音频/按键绑定/调试 |
 | `src/ui/page/StartPage.hpp` | 新增对 SettingPage/AboutPage 的引用和私有方法 |
 | `src/ui/page/StartPage.cpp` | 补充 `_openSettings()` 和 `_openAbout()` 实现，连接 Layout 回调 |
+
+---
+
+## 任务：修复#158画面闪烁 + 系统架构分析
+
+### 任务目标
+1. 修复 PR#158（BKAudioPlayer移植）引入的画面频繁闪烁问题
+2. 阅读 src 代码，绘制系统架构图，并提出设计遗漏和可优化的地方
+
+---
+
+### 任务分析
+
+#### 问题描述
+PR#158 为非Switch平台添加了 `BKAudioPlayer`（UI音效播放器），注册到 borealis 框架后，游戏画面出现频繁闪烁（频繁黑帧/背景色帧）。
+
+#### 根本原因分析（三个并发问题）
+
+**问题1：`GameView::draw()` 中的提前 `return`（最直接原因）**
+
+```cpp
+// 原代码：消费信号后直接 return，导致当帧不绘制游戏画面
+if (GameSignal::instance().consumeExit()) {
+    brls::sync([this](){ brls::Application::popActivity(); });
+    return;  // ← 这帧不绘制游戏，出现黑帧！
+}
+if (GameSignal::instance().consumeOpenMenu()) {
+    brls::sync([this](){ /* 打开菜单 */ });
+    return;  // ← 这帧不绘制游戏，出现黑帧！
+}
+```
+
+borealis 每帧先调用 `videoContext->clear()` 清除帧缓冲（背景色），再调用所有视图的 `draw()`。若 `draw()` 提前 return，该帧只有背景色，造成闪烁。BKAudioPlayer 引入后，`giveFocus()` 等操作触发的音效回调可能间接触发信号，使此问题更频繁暴露。
+
+**问题2：`BKAudioPlayer::play()` 在UI线程中进行文件 I/O**
+
+```cpp
+// 原代码：首次播放时在UI线程（draw调用链中）同步加载WAV文件
+if (!m_sounds[idx].loaded)
+    load(sound);  // ← 在UI渲染线程中执行文件 I/O！
+```
+
+文件 I/O 阻塞渲染线程（每个WAV文件约1-5ms），导致帧时间超过16ms（60fps），帧率下降、画面抖动。
+
+**问题3：`DirectQuadRenderer::render()` GL纹理单元恢复逻辑错误**
+
+```cpp
+// 原代码：prevTex 保存的是 prevActive 单元的纹理，但恢复时绑定到了 GL_TEXTURE0
+glGetIntegerv(GL_TEXTURE_BINDING_2D, &prevTex);  // 保存当前活跃单元的纹理
+// ...渲染时使用 GL_TEXTURE0...
+glActiveTexture(GL_TEXTURE0);
+glBindTexture(GL_TEXTURE_2D, prevTex);  // 错误！prevTex 可能来自其他单元
+```
+
+当 borealis/NanoVG 的活跃纹理单元不是 GL_TEXTURE0 时，GL_TEXTURE0 的原始绑定被错误恢复，导致 NanoVG 后续渲染出现纹理混乱，在某些情况下表现为画面闪烁。
+
+---
+
+#### 修复方案
+
+| 修复项 | 文件 | 修复内容 |
+|--------|------|---------|
+| 消除信号处理提前返回 | `src/ui/utils/GameView.cpp` | 消费信号后不再 `return`，继续绘制当帧游戏画面 |
+| 音效加载移至后台线程 | `src/ui/audio/BKAudioPlayer.cpp` | `play()` 只队列信号，`playbackThread` 负责按需加载和播放 |
+| 修复GL纹理状态恢复 | `src/game/render/DirectQuadRenderer.cpp` | 明确保存/恢复 GL_TEXTURE0 的纹理绑定，正确处理活跃纹理单元 |
+
+---
+
+### 系统架构图
+
+已生成 draw.io 格式架构图：`report/system_architecture.drawio`
+
+#### 架构层次说明
+
+```
+入口层:   main.cpp
+   ↓
+UI 层:    MyActivity → StartPage → GamePage → GameView/GameMenuView
+                                 → SettingPage / AboutPage
+   ↓
+游戏层:   GameInputManager | GameSignal | AudioManager | GameTimer
+          GameRenderer → RenderChain → DirectQuadRenderer / RetroShaderPipeline
+          GameTexture / FrameUploader
+   ↓
+核心层:   CoreMgba → LibretroLoader → third_party/mgba
+          ConfigManager / GameDB | third_party/borealis
+```
+
+---
+
+### 设计遗漏与可优化项
+
+#### 1. 单帧缓冲区设计（`m_pendingFrame`）
+
+**现状**：游戏线程与UI线程之间只有一个 `m_pendingFrame`（单缓冲）。游戏线程新帧覆盖旧帧时，UI线程可能在当帧没有可用的新数据，仍显示旧帧。
+
+**建议**：改为双缓冲（两个 `VideoFrame` 槽），游戏线程写入空闲槽，UI线程从就绪槽读取，减少等待时间。
+
+#### 2. `GameView` 职责过重
+
+**现状**：`GameView` 同时负责：游戏线程管理、帧缓冲传递、渲染器初始化、输入处理、信号消费、覆盖层绘制。违反单一职责原则，代码超过 400 行。
+
+**建议**：抽出 `GameSession` 类专门管理游戏线程和帧缓冲，`GameView` 只负责渲染调用和信号响应。
+
+#### 3. `AudioManager` 的 `pushSamples()` 会阻塞游戏线程
+
+**现状**：音频缓冲区满时，`pushSamples()` 调用 `m_spaceCV.wait()` 阻塞游戏线程，造成帧率不稳定。
+
+**建议**：改为非阻塞写入（丢弃最旧的音频帧），或适当增大缓冲区，减少等待概率。
+
+#### 4. `BKAudioPlayer` 每次播放重新打开 ALSA/CoreAudio 设备
+
+**现状**（Linux ALSA）：每次调用 `playSoundDirect()` 都执行 `snd_pcm_open → 配置 → 写入 → drain → close`，效率低，且与 `AudioManager` 共用 `"default"` 设备可能产生竞争。
+
+**建议**：持久持有 PCM 句柄，仅在配置变化时重新初始化；使用独立的 ALSA 设备名（如 `"plug:default"`）避免冲突。
+
+#### 5. 缺少着色器热切换和出错恢复机制
+
+**现状**：`RenderChain::setShader()` 若加载失败，直接打印日志返回，渲染链可能处于部分初始化状态。
+
+**建议**：失败时回退至直通模式（fallback），确保游戏画面始终可见。
+
+#### 6. 缺少游戏 ROM 校验和错误提示
+
+**现状**：`LibretroLoader::loadRom()` 失败时仅返回 false，`CoreMgba::SetupGame()` 不产生用户可见的错误提示。
+
+**建议**：向 `GamePage` 传递失败原因，弹出 borealis notify 告知用户。
+
+#### 7. `GameDB` 缺少事务支持
+
+**现状**：`GamePage` 在初始化和游戏结束时各调用一次 `db->upsert()` + `db->flush()`，若进程崩溃则数据可能丢失。
+
+**建议**：使用 SQLite（或原子文件写入）代替纯 JSON 存储，确保数据原子性。
+
+#### 8. 画面模式（ScreenMode）和自定义缩放未与着色器联动
+
+**现状**：`computeDisplayRect()` 计算的显示矩形传给 `drawToScreen()`，但着色器管线的 viewport 缩放类型（`source`/`viewport`）是独立计算的。二者可能不一致。
+
+**建议**：在 `RenderChain::drawToScreen()` 内部统一计算 viewport，避免二次计算偏差。
+
+---
+
+### 变更文件列表
+
+| 文件 | 变更内容 |
+|------|---------|
+| `src/ui/utils/GameView.cpp` | 移除 consumeExit/consumeOpenMenu 的提前 return，避免当帧跳过游戏画面绘制 |
+| `src/ui/audio/BKAudioPlayer.cpp` | play() 不再在UI线程加载音效；由 playbackThread 后台按需加载后再播放 |
+| `src/game/render/DirectQuadRenderer.cpp` | 修复 GL_TEXTURE0 纹理状态保存/恢复逻辑，防止恢复到错误的纹理单元 |
+| `report/system_architecture.drawio` | 新增系统架构图（drawio格式） |
+| `report/work_report.md` | 更新工作汇报，记录问题分析、修复方案、设计建议 |

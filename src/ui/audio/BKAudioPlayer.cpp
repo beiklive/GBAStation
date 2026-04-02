@@ -246,13 +246,8 @@ bool BKAudioPlayer::play(brls::Sound sound, float pitch)
     if (!isButtonSfxEnabled())
         return true;
 
-    // 按需加载
-    if (!m_sounds[idx].loaded)
-        load(sound);
-
-    if (!m_sounds[idx].loaded)
-        return false; // 文件缺失，静默失败
-
+    // 不在 UI 线程中加载音效文件，避免文件 I/O 阻塞渲染导致画面闪烁。
+    // 加载操作由后台播放线程（playbackThread）在第一次播放前完成。
     {
         std::lock_guard<std::mutex> lk(m_mutex);
         // 覆盖未播放的待播音效（最新优先）
@@ -283,7 +278,17 @@ void BKAudioPlayer::playbackThread()
             pitch        = m_pendingPitch;
             m_hasPending = false;
         }
-        playSoundDirect(m_sounds[idx], pitch);
+
+        // 在后台线程中按需加载音效，避免 UI 线程因文件 I/O 阻塞导致画面闪烁
+        if (!m_sounds[idx].loaded)
+        {
+            brls::Sound sound = static_cast<brls::Sound>(idx);
+            load(sound);
+        }
+
+        if (m_sounds[idx].loaded)
+            playSoundDirect(m_sounds[idx], pitch);
+        // 若文件缺失则静默跳过
     }
 }
 

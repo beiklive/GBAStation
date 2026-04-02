@@ -263,9 +263,12 @@ void DirectQuadRenderer::render(GLuint tex,
     glGetIntegerv(GL_CURRENT_PROGRAM,        &prevProg);
     glGetIntegerv(GL_ARRAY_BUFFER_BINDING,   &prevVBO);
     glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &prevEBO);
-    glGetIntegerv(GL_TEXTURE_BINDING_2D,     &prevTex);
     glGetIntegerv(GL_FRAMEBUFFER_BINDING,    &prevFBO);
     glGetIntegerv(GL_ACTIVE_TEXTURE,         &prevActive);
+    // 保存 GL_TEXTURE0 上的纹理绑定（渲染时会切换到此单元并绑定游戏帧纹理）
+    glActiveTexture(GL_TEXTURE0);
+    glGetIntegerv(GL_TEXTURE_BINDING_2D,     &prevTex);
+    glActiveTexture(static_cast<GLenum>(prevActive)); // 恢复活跃单元
 #if !defined(USE_GLES2)
     glGetIntegerv(GL_VERTEX_ARRAY_BINDING,   &prevVAO);
 #endif
@@ -323,6 +326,7 @@ void DirectQuadRenderer::render(GLuint tex,
 #endif
 
     // 恢复 GL 状态
+    // 将 GL_TEXTURE0 恢复为渲染前的绑定，并恢复活跃纹理单元
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(prevTex));
     glActiveTexture(static_cast<GLenum>(prevActive));
