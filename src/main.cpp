@@ -4,6 +4,7 @@
 
 
 #include "core/common.h"
+#include "ui/audio/BKAudioPlayer.hpp"
 #include "ui/page/StartPage.hpp"
 #include "ui/utils/MyActivity.hpp"
 #if defined(BOREALIS_USE_OPENGL)
@@ -39,6 +40,11 @@ int main(int argc, char* argv[]) {
 		return EXIT_FAILURE;
 	}
 	brls::Application::createWindow("beiklive/title"_i18n);
+
+#ifndef __SWITCH__
+	// Switch平台由borealis内置的SwitchAudioPlayer处理，其他平台使用BKAudioPlayer
+	brls::Application::setAudioPlayer(new beiklive::BKAudioPlayer());
+#endif
 
 	brls::Application::getPlatform()->setThemeVariant(brls::ThemeVariant::LIGHT);
 	beiklive::RegisterStyles();
