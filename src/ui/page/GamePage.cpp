@@ -4,8 +4,6 @@
 #include "ui/utils/AnimationHelper.hpp"
 
 #include <filesystem>
-#include <chrono>
-#include <ctime>
 
 namespace beiklive
 {
@@ -181,20 +179,8 @@ namespace beiklive
             if (info.exists) {
                 if (std::filesystem::exists(thumbPath, ec))
                     info.thumbPath = thumbPath;
-                // 读取文件修改时间
-                auto ftime = std::filesystem::last_write_time(statePath, ec);
-                if (!ec) {
-                    auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
-                        ftime - std::filesystem::file_time_type::clock::now() +
-                        std::chrono::system_clock::now());
-                    std::time_t tt = std::chrono::system_clock::to_time_t(sctp);
-                    char buf[64];
-                    std::tm* tm = std::localtime(&tt);
-                    if (tm) {
-                        std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", tm);
-                        info.timeStr = buf;
-                    }
-                }
+                // 使用公共工具函数读取文件修改时间字符串
+                info.timeStr = beiklive::tools::getFileModTimeStr(statePath);
             }
             return info;
         });

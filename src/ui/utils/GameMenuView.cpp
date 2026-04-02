@@ -1,27 +1,15 @@
 #include "GameMenuView.hpp"
+#include "core/Tools.hpp"
 #include <filesystem>
-#include <chrono>
-#include <ctime>
 
 namespace beiklive
 {
     // ============================================================
-    // 辅助函数：获取文件最后修改时间的字符串
+    // 辅助函数：获取文件最后修改时间的字符串（委托给 Tools 公共函数）
     // ============================================================
     static std::string getFileModTimeStr(const std::string& path)
     {
-        std::error_code ec;
-        auto ftime = std::filesystem::last_write_time(path, ec);
-        if (ec) return "";
-        auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
-            ftime - std::filesystem::file_time_type::clock::now() +
-            std::chrono::system_clock::now());
-        std::time_t tt = std::chrono::system_clock::to_time_t(sctp);
-        char buf[64];
-        std::tm* tm = std::localtime(&tt);
-        if (!tm) return "";
-        std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", tm);
-        return std::string(buf);
+        return beiklive::tools::getFileModTimeStr(path);
     }
 
     GameMenuView::GameMenuView(beiklive::GameEntry gameData)

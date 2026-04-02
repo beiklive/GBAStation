@@ -181,5 +181,20 @@ std::string getTimestampString() {
     return oss.str();
 }
 
+std::string getFileModTimeStr(const std::string& path) {
+    std::error_code ec;
+    auto ftime = fs::last_write_time(path, ec);
+    if (ec) return "";
+    // 将 file_time_type 转换为 system_clock::time_point
+    auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+        ftime - fs::file_time_type::clock::now() +
+        std::chrono::system_clock::now());
+    std::time_t tt = std::chrono::system_clock::to_time_t(sctp);
+    char buf[64];
+    std::tm* tm = std::localtime(&tt);
+    if (!tm) return "";
+    std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", tm);
+    return std::string(buf);
+}
 
 } // namespace beiklive::tools

@@ -220,6 +220,7 @@ void FileListPage::setFliter(beiklive::enums::FilterMode mode, std::vector<std::
     void FileListPage::refreshDirList(const std::string dirPath, beiklive::ListItemList* items)
     {
         std::error_code ec;
+        if (!fs::exists(dirPath, ec) || !fs::is_directory(dirPath, ec))
             return;
 
         m_previousPath = m_currentPath;
@@ -262,8 +263,10 @@ void FileListPage::setFliter(beiklive::enums::FilterMode mode, std::vector<std::
             std::string fullPath = path.string();
 
             // 文件过滤（仅对非目录生效）
+            if (!isDir)
             {
                 std::string suffix = beiklive::tools::getFileExtension(path);
+                if (!passesFilter(suffix))
                     continue;
             }
 

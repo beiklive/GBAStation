@@ -460,3 +460,65 @@ UI 层:    MyActivity → StartPage → GamePage → GameView/GameMenuView
 | `src/game/render/DirectQuadRenderer.cpp` | 修复 GL_TEXTURE0 纹理状态保存/恢复逻辑，防止恢复到错误的纹理单元 |
 | `report/system_architecture.drawio` | 新增系统架构图（drawio格式） |
 | `report/work_report.md` | 更新工作汇报，记录问题分析、修复方案、设计建议 |
+
+---
+
+## 任务：GridItem控件、存档功能、GameMenuView完善、游戏库页面、文件列表优化
+
+### 任务目标
+1. 制作 GridItem 通用网格控件（支持 GAME_LIBRARY 和 SAVE_STATE 两种模式）
+2. 移植保存/读取状态功能到 GameView
+3. 完善 GameMenuView 的 6 个菜单按钮
+4. 制作游戏菜单的保存/读取状态页面
+5. 制作游戏库页面 GameLibraryPage
+6. 文件列表排序优化
+
+### 任务分析
+
+#### 输入
+- `old/src/Game/game_view.cpp` - 旧版存档路径计算和存取逻辑
+- `old/src/UI/Utils/GameMenu.cpp` - 旧版菜单按钮创建逻辑
+- `src/ui/utils/GameMenuView.*` - 现有菜单视图骨架
+- `src/ui/utils/GridBox.*` - 现有 GridBox 控件
+- `src/core/GameSignal.hpp` - GameSignal 存档信号接口
+
+#### 输出
+- `src/ui/utils/GridItem.hpp/cpp` - 新建网格子项控件
+- `src/ui/utils/GameView.hpp/cpp` - 新增存档路径计算和存取方法
+- `src/ui/utils/GameMenuView.hpp/cpp` - 完善的 6 按钮菜单 + 存档面板
+- `src/ui/page/GamePage.cpp` - 注入存档回调和槽位信息回调
+- `src/ui/page/GameLibraryPage.hpp/cpp` - 新建游戏库页面
+- `src/ui/page/FileListPage.cpp` - 文件排序优化
+
+#### 关键设计决策
+
+**GridItem 设计**
+- 两种模式通过 `GridItemMode` 枚举区分
+- SAVE_STATE 模式：隐藏徽标框和第三行；空状态居中显示槽位名
+- GAME_LIBRARY 模式：显示平台徽标（GBA紫/GBC蓝/GB绿）、游戏名、上次游玩时间、游玩时长
+- 所有标签使用 `setSingleLine(true) + setAnimated(true)` 实现单行滚动
+
+**存档路径规则**（与旧版一致）
+- 文件名：`{romStem}.ss{slot}`（slot=0 为自动存档）
+- 缩略图：`{statePath}.png`
+- 目录：`GameEntry.savePath` 非空时使用，否则用全局 saves 目录
+
+**GameMenuView 按钮逻辑**
+- `_createMenuButton(text, onClick, sonPanel)` 统一创建
+- 有 sonPanel：focus 时调用 `_hideAllPanels()` 再显示 sonPanel 并设为可 focus；click 时 `giveFocus(sonPanel)`
+- 无 sonPanel：focus 时 `_hideAllPanels()`；click 时执行 onClick 回调
+- 保存/读取状态面板：focus 时额外触发 `_refreshStatePanel(isSave)` 异步扫描
+
+**文件列表排序**
+- 分别收集目录和文件到两个 vector
+- 按名称不区分大小写排序后，目录在前、文件在后写入结果
+- 使用 RawEntry 临时结构体减少字符串拷贝
+
+#### 挑战与解决方案
+- **GridBox/LazyCell 焦点剥夺**：GridItem 内部的 onItemClicked 由 LazyCell 的 `onClicked` 通过 GridBox 的 `onItemClicked` 路由触发，不依赖 GridItem 自身的 focusable 属性
+- **Borealis Dropdown API**：borealis 的 Dropdown 不是静态方法，需要 `new brls::Dropdown(...)` + `pushActivity`
+- **ASYNC_RETAIN/RELEASE 跨帧异步**：使用 borealis 提供的 ASYNC_RETAIN/RELEASE 宏确保异步操作期间 View 不被销毁
+- **预存在编译错误**：修复了 `GameInputManager.cpp` 中 `std::powf` 不存在的问题（改为 `std::pow`）
+
+### 结果
+所有 6 个子任务均已完成，构建成功（`[100%] Built target GBAStation`）。
