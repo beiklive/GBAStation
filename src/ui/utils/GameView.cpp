@@ -80,14 +80,14 @@ namespace beiklive
 
         GameInputManager::instance().handleInput(); // 每帧获取输入
 
-        // 消费退出信号
+        // 消费退出信号：异步弹出活动，本帧仍继续渲染避免闪烁
         if (GameSignal::instance().consumeExit()) {
             brls::sync([this](){ 
                 brls::Application::popActivity(); });
-            return;
+            // 不提前返回：继续渲染最后一帧，防止画面出现黑帧闪烁
         }
 
-        // 消费打开菜单信号
+        // 消费打开菜单信号：异步触发菜单入场，本帧仍继续渲染避免闪烁
         if (GameSignal::instance().consumeOpenMenu()) {
             if (m_gameMenuView) {
                 brls::sync([this](){
@@ -96,7 +96,7 @@ namespace beiklive
                     brls::Application::giveFocus(m_gameMenuView);
                 });
             }
-            return;
+            // 不提前返回：继续渲染当前游戏帧，防止菜单弹出时出现黑帧闪烁
         }
 
         // 初始化渲染器（首帧时，GL 上下文已就绪）
