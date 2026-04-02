@@ -128,6 +128,17 @@ namespace beiklive
         return btn;
     }
 
+    brls::View *GameMenuView::_createLoadStatePanel()
+    {
+
+        return nullptr;
+    }
+
+    brls::View *GameMenuView::_createSaveStatePanel()
+    {
+        return nullptr;
+    }
+
     void GameMenuView::draw(NVGcontext* vg, float x, float y, float w, float h,
                             brls::Style style, brls::FrameContext* ctx)
     {

@@ -4,6 +4,7 @@
 #include "core/GameSignal.hpp"
 #include <functional>
 #include "ButtonBox.hpp"
+#include "GridBox.hpp"
 namespace beiklive
 {
     /// 游戏菜单视图
@@ -44,6 +45,10 @@ namespace beiklive
 
             void _initLayout();
             beiklive::ButtonBox* _createMenuButton(const std::string& text, std::function<void()> onClick, brls::View* sonPanel = nullptr);
+
+
+            brls::View* _createLoadStatePanel();
+            brls::View* _createSaveStatePanel();
     };
 
 }
