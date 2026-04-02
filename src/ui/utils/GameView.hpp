@@ -39,10 +39,10 @@ namespace beiklive
             static constexpr double   MAX_REASONABLE_FPS      = 240.0;  ///< 核心上报 FPS 的安全上限
             static constexpr double   SPIN_GUARD_SEC           = 0.002;  ///< 每帧自旋等待预算（秒）
             static constexpr double   FPS_UPDATE_INTERVAL      = 1.0;   ///< FPS 计数器更新间隔（秒）
-            static constexpr int      PLAY_TIME_SAVE_INTERVAL  = 180;   ///< 游戏时长保存间隔（秒，3分钟）
-            static constexpr unsigned REWIND_BUFFER_SIZE       = 600;   ///< 倒带缓冲区最大帧数（约10秒）
-            static constexpr unsigned REWIND_STEP              = 2;     ///< 每次倒带弹出的帧数
-            static constexpr unsigned FF_MULTIPLIER            = 4;     ///< 快进倍率（每迭代运行的帧数）
+            static constexpr int      PLAY_TIME_SAVE_INTERVAL  = 180;   ///< 游戏时长保存间隔（秒，3分钟） TODO: 后续改为设置项读取
+            static constexpr unsigned REWIND_BUFFER_SIZE       = 600;   ///< 倒带缓冲区最大帧数（约10秒） TODO: 后续改为设置项读取
+            static constexpr unsigned REWIND_STEP              = 2;     ///< 每次倒带弹出的帧数         TODO: 后续改为设置项读取
+            static constexpr unsigned FF_MULTIPLIER            = 4;     ///< 快进倍率（每迭代运行的帧数） TODO: 后续改为设置项读取
 
             bool _brls_inputLocked = false; ///< 输入锁定状态
             beiklive::GameEntry m_gameEntry; ///< 游戏条目数据

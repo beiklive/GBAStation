@@ -78,7 +78,7 @@ namespace beiklive
     {
         Box::draw(vg, x, y, width, height, style, ctx);
 
-        GameInputManager::instance().handleInput();
+        GameInputManager::instance().handleInput(); // 每帧获取输入
 
         // 消费退出信号
         if (GameSignal::instance().consumeExit()) {
@@ -101,8 +101,8 @@ namespace beiklive
 
         // 初始化渲染器（首帧时，GL 上下文已就绪）
         if (!m_rendererReady && m_gba_core && m_gba_core->IsReady()) {
-            unsigned gw = m_gba_core->GameWidth()  > 0 ? m_gba_core->GameWidth()  : 240;
-            unsigned gh = m_gba_core->GameHeight() > 0 ? m_gba_core->GameHeight() : 160;
+            unsigned gw = m_gba_core->GameWidth()  > 0 ? m_gba_core->GameWidth()  : beiklive::GetGamePixelWidth(m_gameEntry.platform);
+            unsigned gh = m_gba_core->GameHeight() > 0 ? m_gba_core->GameHeight() : beiklive::GetGamePixelHeight(m_gameEntry.platform);
             // 若游戏条目启用了着色器且路径有效，则传入着色器路径初始化渲染链
             std::string shaderPath;
             if (m_gameEntry.shaderEnabled && !m_gameEntry.shaderPath.empty()) {
@@ -127,8 +127,8 @@ namespace beiklive
             int   windowW     = brls::Application::windowWidth;
             int   windowH     = brls::Application::windowHeight;
 
-            unsigned gw = m_renderer.texWidth()  > 0 ? m_renderer.texWidth()  : 240;
-            unsigned gh = m_renderer.texHeight() > 0 ? m_renderer.texHeight() : 160;
+            unsigned gw = m_renderer.texWidth()  > 0 ? m_renderer.texWidth()  : beiklive::GetGamePixelWidth(m_gameEntry.platform);
+            unsigned gh = m_renderer.texHeight() > 0 ? m_renderer.texHeight() : beiklive::GetGamePixelHeight(m_gameEntry.platform);
 
             beiklive::DisplayRect rect = beiklive::computeDisplayRect(
                 m_screenMode, x, y, width, height, gw, gh,
@@ -210,6 +210,7 @@ namespace beiklive
             int            brlsBtn;
             unsigned       retroId;
         };
+        // TODO: brlsBtn 后续改为使用接口获取设置的按键映射，而非固定死写死在这里
         static const GameBtnMap gameBtnMaps[] = {
             { EMU_A,      brls::BUTTON_A,     8  }, // RETRO_DEVICE_ID_JOYPAD_A
             { EMU_B,      brls::BUTTON_B,     0  }, // RETRO_DEVICE_ID_JOYPAD_B
@@ -244,7 +245,7 @@ namespace beiklive
 
         // ---- 功能热键绑定 ------------------------------------------------------
 
-        // 打开菜单：LB+START 长按 2.5s 或 RT+LT 长按
+        // 打开菜单：
         GameInputManager::instance().registerEmuFunctionKey(
             EmuFunctionKey::EMU_OPEN_MENU,
             {{brls::BUTTON_RT, brls::BUTTON_LT}},
@@ -252,14 +253,14 @@ namespace beiklive
             {
                 brls::Logger::debug("打开菜单热键触发！");
                 GameSignal::instance().requestOpenMenu();
-                this->setFocusable(false);
+                this->setFocusable(false); // 打开菜单时暂时取消 GameView 的焦点，避免输入冲突，菜单关闭后由 GamePage 恢复焦点
 
-            },
-            TriggerType::LONG_PRESS,
-            2.5f
+            }
+            // TriggerType::LONG_PRESS,
+            // 2.5f
         );
 
-        // 快进：LSB 切换
+        // 快进：LSB 切换  TODO: hold状态需要专门写press/release来控制，不能直接用HOLD，否则会导致按住时反复触发开关
         GameInputManager::instance().registerEmuFunctionKey(
             EmuFunctionKey::EMU_FAST_FORWARD,
             {{brls::BUTTON_LSB}},
@@ -271,7 +272,7 @@ namespace beiklive
             }
         );
 
-        // 倒带：RSB 切换
+        // 倒带：RSB 切换  TODO: hold状态需要专门写press/release来控制，不能直接用HOLD，否则会导致按住时反复触发开关
         GameInputManager::instance().registerEmuFunctionKey(
             EmuFunctionKey::EMU_REWIND,
             {{brls::BUTTON_RSB}},
@@ -337,7 +338,7 @@ namespace beiklive
     // ============================================================
     // _saveRewindState – 序列化当前核心状态并存入倒带缓冲区
     // ============================================================
-    void GameView::_saveRewindState()
+    void GameView::_saveRewindState() // TODO: 后续改为使用setting的倒带开关控制是否记录倒带
     {
         std::vector<uint8_t> state;
         if (m_gba_core->Serialize(state) && !state.empty()) {
@@ -385,7 +386,7 @@ namespace beiklive
 
         for (unsigned i = 0; i < frames; ++i) {
             // 第一帧前保存倒带状态（快进时也保存，保证倒带缓冲区持续更新）
-            if (i == 0) _saveRewindState();
+            if (i == 0) _saveRewindState();  
             m_gba_core->RunFrame();
         }
         return frames;

@@ -3,7 +3,7 @@
 #include "core/common.h"
 #include "core/GameSignal.hpp"
 #include <functional>
-
+#include "ButtonBox.hpp"
 namespace beiklive
 {
     /// 游戏菜单视图
@@ -33,12 +33,17 @@ namespace beiklive
             std::function<void()> m_onExit;
 
             brls::Box*   m_panel     = nullptr; ///< 居中面板容器
+
+            brls::Box*   m_contrlPanel = nullptr; ///< 按钮容器
+            brls::Box*   m_viewPanel   = nullptr; ///< 页面容器
+
+
             brls::Label* m_title     = nullptr; ///< 标题文字
-            brls::Box*   m_btnResume = nullptr; ///< "返回游戏"按钮
-            brls::Box*   m_btnExit   = nullptr; ///< "退出游戏"按钮
+            beiklive::ButtonBox*   m_btnResume = nullptr; ///< "返回游戏"按钮
+            beiklive::ButtonBox*   m_btnExit   = nullptr; ///< "退出游戏"按钮
 
             void _initLayout();
-            brls::Box* _createMenuButton(const std::string& text, std::function<void()> onClick);
+            beiklive::ButtonBox* _createMenuButton(const std::string& text, std::function<void()> onClick, brls::View* sonPanel = nullptr);
     };
 
 }

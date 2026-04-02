@@ -136,7 +136,8 @@ namespace beiklive
         m_gameMenuView->setPositionLeft(0);
         m_gameMenuView->setVisibility(brls::Visibility::GONE); // 初始隐藏
 
-        // "返回游戏"回调：用淡出动画隐藏菜单，将焦点交还给 GameView
+
+        // setOnResume和setOnExit回调由GamePage注入，触发时分别执行对应的动画和操作
         m_gameMenuView->setOnResume([this]() {
             brls::sync([this]() {
                 m_gameView->setFocusable(true);
@@ -149,7 +150,7 @@ namespace beiklive
         // "退出游戏"回调：触发退出信号
         m_gameMenuView->setOnExit([this]() {
             brls::sync([this]() {
-                AnimationHelper::slideOutToBottom(m_gameMenuView, MENU_EXIT_FADE_MS, 460.f,true, []() {
+                AnimationHelper::slideOutToBottom(m_gameMenuView, MENU_EXIT_FADE_MS, 460.f,true, [this]() {
                     GameSignal::instance().requestExit();
                 });
             });

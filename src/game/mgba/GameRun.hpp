@@ -65,7 +65,7 @@ namespace beiklive::gba
 
         // ---- 快进 -----------------------------------------------------------
 
-        void SetFastForwarding(bool ff) { m_core.setFastForwarding(ff); }
+        void SetFastForwarding(bool ff) { m_core.setFastForwarding(ff); } // 只是设置标志位，实际快进逻辑由 GameView 根据该标志控制每帧运行的次数
 
         // ---- 金手指管理（外部调用）------------------------------------------
 

@@ -5,9 +5,9 @@ namespace beiklive
     /// 游戏画面缩放模式
     enum class ScreenMode : int
     {
-        Fit          = 0,  ///< 保持宽高比（比例模式，默认）
+        Fit          = 0,  ///< 保持宽高比（比例模式，默认取最大比例）
         Fill         = 1,  ///< 拉伸填满，不保持宽高比
-        IntegerScale = 2,  ///< 整数倍率缩放
+        IntegerScale = 2,  ///< 整数倍率缩放，默认最大整数倍
         FreeScale    = 3,  ///< 自由缩放（使用 customScale）
     };
 
@@ -20,49 +20,6 @@ namespace beiklive
         float h = 0.f;
     };
 
-    /// 根据画面模式计算游戏帧在视图区域内的绘制矩形
-    inline DisplayRect computeDisplayRect(ScreenMode mode,
-                                          float viewX, float viewY,
-                                          float viewW, float viewH,
-                                          unsigned gameW, unsigned gameH,
-                                          float customScale = 1.0f,
-                                          float xOffset = 0.0f,
-                                          float yOffset = 0.0f)
-    {
-        DisplayRect r;
-        const float gw = static_cast<float>(gameW);
-        const float gh = static_cast<float>(gameH);
-        if (gw <= 0.f || gh <= 0.f) return r;
-
-        float scale = 1.0f;
-        switch (mode)
-        {
-            case ScreenMode::Fit:
-                scale = std::min(viewW / gw, viewH / gh);
-                break;
-            case ScreenMode::Fill:
-                r.w = viewW;
-                r.h = viewH;
-                r.x = viewX + xOffset;
-                r.y = viewY + yOffset;
-                return r;
-            case ScreenMode::IntegerScale:
-            {
-                float s = std::min(viewW / gw, viewH / gh);
-                scale = std::max(1.0f, std::floor(s));
-                break;
-            }
-            case ScreenMode::FreeScale:
-                scale = customScale;
-                break;
-        }
-
-        r.w = gw * scale;
-        r.h = gh * scale;
-        r.x = viewX + (viewW - r.w) * 0.5f + xOffset;
-        r.y = viewY + (viewH - r.h) * 0.5f + yOffset;
-        return r;
-    }
 
 } // namespace beiklive (ScreenMode)
 

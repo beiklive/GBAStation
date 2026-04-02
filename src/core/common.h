@@ -42,6 +42,52 @@ namespace beiklive // 全局变量
 namespace beiklive // 全局功能函数
 {
 
+
+    /// 根据画面模式计算游戏帧在视图区域内的绘制矩形
+    inline DisplayRect computeDisplayRect(ScreenMode mode,
+                                          float viewX, float viewY,
+                                          float viewW, float viewH,
+                                          unsigned gameW, unsigned gameH,
+                                          float customScale = 1.0f,
+                                          float xOffset = 0.0f,
+                                          float yOffset = 0.0f)
+    {
+        DisplayRect r;
+        const float gw = static_cast<float>(gameW);
+        const float gh = static_cast<float>(gameH);
+        if (gw <= 0.f || gh <= 0.f) return r;
+
+        float scale = 1.0f;
+        switch (mode)
+        {
+            case ScreenMode::Fit:
+                scale = std::min(viewW / gw, viewH / gh);
+                break;
+            case ScreenMode::Fill:
+                r.w = viewW;
+                r.h = viewH;
+                r.x = viewX + xOffset;
+                r.y = viewY + yOffset;
+                return r;
+            case ScreenMode::IntegerScale:
+            {
+                float s = std::min(viewW / gw, viewH / gh);
+                scale = std::max(1.0f, std::floor(s));
+                break;
+            }
+            case ScreenMode::FreeScale:
+                scale = customScale;
+                break;
+        }
+
+        r.w = gw * scale;
+        r.h = gh * scale;
+        r.x = viewX + (viewW - r.w) * 0.5f + xOffset;
+        r.y = viewY + (viewH - r.h) * 0.5f + yOffset;
+        return r;
+    }
+
+
      inline std::string GetCorePath(int platform){
         switch (platform)
         {
@@ -198,5 +244,10 @@ namespace beiklive // 函数声明
 
     std::vector<CheatEntry> parseChtFile(const std::string& path); // 解析 .cht 金手指文件，返回金手指条目列表
     bool saveChtFile(const std::string& path, const std::vector<CheatEntry>& entries); // 将金手指列表以 .cht 格式写入文件
+
+
+    int GetGamePixelHeight(int platform); // 获取游戏的原始像素高度（如 GBA 为 160）
+    int GetGamePixelWidth(int platform);  // 获取游戏的原始像素宽度（如 GBA 为 240）
+
 
 } // namespace beiklive

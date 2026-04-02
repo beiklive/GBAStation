@@ -200,5 +200,37 @@ bool saveChtFile(const std::string& path,
     return true;
 }
 
+int GetGamePixelHeight(int platform)
+{
+    switch ((beiklive::enums::EmuPlatform)platform)
+    {
+    case beiklive::enums::EmuPlatform::EmuGBA:
+        return 160;
+    case beiklive::enums::EmuPlatform::EmuGBC:
+        return 144;
+    case beiklive::enums::EmuPlatform::EmuGB:
+        return 144;
+    default:
+        break;
+    }
+    return 0;
+
+}
+
+int GetGamePixelWidth(int platform)
+{
+    switch ((beiklive::enums::EmuPlatform)platform)
+    {
+    case beiklive::enums::EmuPlatform::EmuGBA:
+        return 240;
+    case beiklive::enums::EmuPlatform::EmuGBC:
+        return 160;
+    case beiklive::enums::EmuPlatform::EmuGB:
+        return 160;
+    default:
+        break;
+    }
+    return 0;
+}
 
 } // namespace beiklive
