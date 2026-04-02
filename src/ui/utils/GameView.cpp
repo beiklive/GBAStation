@@ -103,9 +103,16 @@ namespace beiklive
         if (!m_rendererReady && m_gba_core && m_gba_core->IsReady()) {
             unsigned gw = m_gba_core->GameWidth()  > 0 ? m_gba_core->GameWidth()  : 240;
             unsigned gh = m_gba_core->GameHeight() > 0 ? m_gba_core->GameHeight() : 160;
-            if (m_renderer.init(gw, gh, false)) {
+            // 若游戏条目启用了着色器且路径有效，则传入着色器路径初始化渲染链
+            std::string shaderPath;
+            if (m_gameEntry.shaderEnabled && !m_gameEntry.shaderPath.empty()) {
+                shaderPath = m_gameEntry.shaderPath;
+            }
+            if (m_renderer.init(gw, gh, false, shaderPath)) {
                 m_rendererReady = true;
-                brls::Logger::info("GameView: 渲染器初始化完成 ({}x{})", gw, gh);
+                brls::Logger::info("GameView: 渲染器初始化完成 ({}x{} shader={})",
+                                   gw, gh,
+                                   shaderPath.empty() ? "无" : shaderPath);
                 // 初始化 FPS 计时
                 m_fpsLastTime = std::chrono::steady_clock::now();
             }

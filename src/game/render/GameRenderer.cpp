@@ -9,7 +9,8 @@ namespace beiklive {
 // ============================================================
 // init
 // ============================================================
-bool GameRenderer::init(unsigned width, unsigned height, bool linear)
+bool GameRenderer::init(unsigned width, unsigned height, bool linear,
+                         const std::string& shaderPath)
 {
     // 初始化 GL 纹理
     if (!m_texture.init(width, height, linear)) {
@@ -17,14 +18,16 @@ bool GameRenderer::init(unsigned width, unsigned height, bool linear)
         return false;
     }
 
-    // 初始化直接渲染器（编译直通着色器）
-    if (!m_quadRenderer.init()) {
-        brls::Logger::error("GameRenderer: DirectQuadRenderer 初始化失败");
+    // 初始化渲染链（含直接渲染器和可选的着色器管线）
+    if (!m_renderChain.init(shaderPath)) {
+        brls::Logger::error("GameRenderer: RenderChain 初始化失败");
         m_texture.deinit();
         return false;
     }
 
-    brls::Logger::info("GameRenderer: 初始化完成 ({}x{} linear={})", width, height, linear);
+    brls::Logger::info("GameRenderer: 初始化完成 ({}x{} linear={} shader={})",
+                       width, height, linear,
+                       shaderPath.empty() ? "无" : shaderPath);
     return true;
 }
 
@@ -33,7 +36,7 @@ bool GameRenderer::init(unsigned width, unsigned height, bool linear)
 // ============================================================
 void GameRenderer::deinit()
 {
-    m_quadRenderer.deinit();
+    m_renderChain.deinit();
     m_texture.deinit();
 }
 
@@ -67,29 +70,33 @@ void GameRenderer::setFilter(bool linear)
 }
 
 // ============================================================
-// drawToScreen – 将纹理绘制到屏幕指定矩形
+// setShader – 加载或切换着色器预设
+// ============================================================
+void GameRenderer::setShader(const std::string& shaderPath)
+{
+    m_renderChain.setShader(shaderPath);
+}
+
+// ============================================================
+// drawToScreen – 通过渲染链将游戏帧绘制到屏幕指定矩形
 // ============================================================
 void GameRenderer::drawToScreen(float virtX, float virtY, float virtW, float virtH,
                                  float windowScale, int windowW, int windowH)
 {
     if (!isReady()) return;
 
-    // 将虚拟坐标转换为物理像素坐标
-    const float physX = virtX * windowScale;
-    const float physY = virtY * windowScale;
-    const float physW = virtW * windowScale;
-    const float physH = virtH * windowScale;
+    // 计算视口物理尺寸（供着色器管线 viewport 缩放类型计算）
+    const auto viewW = static_cast<unsigned>(virtW * windowScale);
+    const auto viewH = static_cast<unsigned>(virtH * windowScale);
 
-    // 将物理坐标转换为 NDC（归一化设备坐标）
-    // NDC 范围：x ∈ [-1, 1]（左 → 右），y ∈ [-1, 1]（下 → 上）
-    const float ndcLeft   =  (physX / windowW) * 2.0f - 1.0f;
-    const float ndcRight  =  ((physX + physW) / windowW) * 2.0f - 1.0f;
-    const float ndcTop    =  1.0f - (physY / windowH) * 2.0f;
-    const float ndcBottom =  1.0f - ((physY + physH) / windowH) * 2.0f;
+    // 通过渲染链处理游戏帧纹理（着色器模式或直通模式）
+    GLuint finalTex = m_renderChain.run(m_texture.texId(),
+                                        m_texture.width(), m_texture.height(),
+                                        viewW, viewH);
 
-    m_quadRenderer.render(m_texture.texId(),
-                          ndcLeft, ndcRight,
-                          ndcTop, ndcBottom);
+    // 将最终纹理绘制到屏幕指定矩形
+    m_renderChain.drawToScreen(finalTex, virtX, virtY, virtW, virtH,
+                               windowScale, windowW, windowH);
 }
 
 } // namespace beiklive
