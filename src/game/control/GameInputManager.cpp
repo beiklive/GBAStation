@@ -290,7 +290,7 @@ namespace beiklive
 
         if (leftStickDeadzone > 0)
         {
-            float magnitude = fsqrt_(std::powf(leftXAxis, 2) + std::powf(leftYAxis, 2));
+            float magnitude = fsqrt_(std::pow(leftXAxis, 2) + std::pow(leftYAxis, 2));
             if (magnitude < leftStickDeadzone)
             {
                 leftXAxis = 0;
@@ -300,7 +300,7 @@ namespace beiklive
 
         if (rightStickDeadzone > 0)
         {
-            float magnitude = fsqrt_(std::powf(rightXAxis, 2) + std::powf(rightYAxis, 2));
+            float magnitude = fsqrt_(std::pow(rightXAxis, 2) + std::pow(rightYAxis, 2));
             if (magnitude < rightStickDeadzone)
             {
                 rightXAxis = 0;

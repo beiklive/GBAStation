@@ -3,6 +3,10 @@
 #include "core/GameSignal.hpp"
 #include "ui/utils/AnimationHelper.hpp"
 
+#include <filesystem>
+#include <chrono>
+#include <ctime>
+
 namespace beiklive
 {
     // 菜单动画时长常量（毫秒）
@@ -154,6 +158,45 @@ namespace beiklive
                     GameSignal::instance().requestExit();
                 });
             });
+        });
+
+        // 注入保存状态回调：通过 GameSignal 在游戏线程中执行实际存档
+        m_gameMenuView->setSaveStateCallback([this](int slot) {
+            GameSignal::instance().requestQuickSave(slot);
+        });
+
+        // 注入读取状态回调：通过 GameSignal 在游戏线程中执行实际读档
+        m_gameMenuView->setLoadStateCallback([this](int slot) {
+            GameSignal::instance().requestQuickLoad(slot);
+        });
+
+        // 注入槽位信息查询回调：供菜单面板异步扫描存档目录
+        m_gameMenuView->setStateInfoCallback([this](int slot) -> beiklive::StateSlotInfo {
+            beiklive::StateSlotInfo info;
+            if (!m_gameView) return info;
+            std::string statePath = m_gameView->getStatePath(slot);
+            std::string thumbPath = m_gameView->getStateThumbPath(slot);
+            std::error_code ec;
+            info.exists = std::filesystem::exists(statePath, ec);
+            if (info.exists) {
+                if (std::filesystem::exists(thumbPath, ec))
+                    info.thumbPath = thumbPath;
+                // 读取文件修改时间
+                auto ftime = std::filesystem::last_write_time(statePath, ec);
+                if (!ec) {
+                    auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+                        ftime - std::filesystem::file_time_type::clock::now() +
+                        std::chrono::system_clock::now());
+                    std::time_t tt = std::chrono::system_clock::to_time_t(sctp);
+                    char buf[64];
+                    std::tm* tm = std::localtime(&tt);
+                    if (tm) {
+                        std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", tm);
+                        info.timeStr = buf;
+                    }
+                }
+            }
+            return info;
         });
 
         this->addView(m_gameMenuView);

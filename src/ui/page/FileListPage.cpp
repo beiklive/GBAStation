@@ -1,4 +1,5 @@
 #include "FileListPage.hpp"
+#include <algorithm>
 
 namespace beiklive
 {
@@ -219,14 +220,13 @@ void FileListPage::setFliter(beiklive::enums::FilterMode mode, std::vector<std::
     void FileListPage::refreshDirList(const std::string dirPath, beiklive::ListItemList* items)
     {
         std::error_code ec;
-        if (!fs::exists(dirPath, ec) || !fs::is_directory(dirPath, ec))
             return;
 
         m_previousPath = m_currentPath;
         m_currentPath = dirPath;
         m_dirItems.clear();
 
-        // 添加“返回上一级”条目（此部分无重复调用，无需优化）
+        // "返回上一级"条目
         std::string parentPath = fs::path(m_currentPath).parent_path().string();
         if (parentPath != m_currentPath)
         {
@@ -234,58 +234,81 @@ void FileListPage::setFliter(beiklive::enums::FilterMode mode, std::vector<std::
             m_dirItems.push_back({
                 "..", m_currentPath, upIcon, beiklive::enums::FileType::NONE,
                 "返回上一级", 0
-                });
+            });
             items->push_back({ "..", "返回上一级", upIcon, m_currentPath });
         }
 
-        // 遍历目录
-        for (const auto& entry : fs::directory_iterator(dirPath, fs::directory_options::skip_permission_denied, ec))
+        // 使用临时结构体分别收集目录和文件，排序后再写入结果
+        struct RawEntry {
+            std::string name;
+            std::string fullPath;
+            bool        isDir;
+        };
+
+        std::vector<RawEntry> dirs;
+        std::vector<RawEntry> files;
+
+        for (const auto& entry : fs::directory_iterator(
+                dirPath, fs::directory_options::skip_permission_denied, ec))
         {
             if (ec) { ec.clear(); continue; }
 
             std::error_code entryEc;
-            const auto& path = entry.path();               // 保存 path 对象，避免重复构造
-            std::string fullPath = path.string();
-            std::string name = path.filename().string();
             bool isDir = entry.is_directory(entryEc);
-            if (entryEc) continue;                         // 无法访问的条目跳过
+            if (entryEc) continue;
+
+            const auto& path = entry.path();
+            std::string name     = path.filename().string();
+            std::string fullPath = path.string();
 
             // 文件过滤（仅对非目录生效）
-            if (!isDir)
             {
                 std::string suffix = beiklive::tools::getFileExtension(path);
-                if (!passesFilter(suffix))
                     continue;
             }
 
-            // --- 核心优化：只调用一次 getFileType，并复用结果 ---
-            beiklive::enums::FileType fileType = beiklive::tools::getFileType(fullPath);
+            if (isDir)
+                dirs.push_back({ std::move(name), std::move(fullPath), true });
+            else
+                files.push_back({ std::move(name), std::move(fullPath), false });
+        }
+
+        // 按名称排序（不区分大小写）
+        auto nameLess = [](const RawEntry& a, const RawEntry& b) {
+            std::string la = a.name, lb = b.name;
+            for (auto& c : la) c = static_cast<char>(std::tolower((unsigned char)c));
+            for (auto& c : lb) c = static_cast<char>(std::tolower((unsigned char)c));
+            return la < lb;
+        };
+        std::sort(dirs.begin(),  dirs.end(),  nameLess);
+        std::sort(files.begin(), files.end(), nameLess);
+
+        // 目录在前、文件在后写入结果
+        auto appendEntry = [&](const RawEntry& raw) {
+            beiklive::enums::FileType fileType = beiklive::tools::getFileType(raw.fullPath);
             std::string iconPath = beiklive::tools::getIconPath(fileType);
 
-            // 根据类型分别获取大小字符串和条目数（避免不必要的调用）
             std::string sizeStr;
             size_t entryCount = 0;
-            if (isDir)
-            {
-                entryCount = beiklive::tools::countEntries(fullPath);
-                sizeStr = "";          // 目录通常不显示大小，可根据实际需求调整
-            }
-            else
-            {
-                sizeStr = beiklive::tools::getFileSizeString(fullPath);
-                // entryCount 保持 0（文件无子条目）
+            if (raw.isDir) {
+                entryCount = beiklive::tools::countEntries(raw.fullPath);
+            } else {
+                sizeStr = beiklive::tools::getFileSizeString(raw.fullPath);
             }
 
-            // 添加到 m_dirItems
             m_dirItems.push_back({
-                name, fullPath, iconPath, fileType,
+                raw.name, raw.fullPath, iconPath, fileType,
                 sizeStr, entryCount
-                });
+            });
 
-            // 添加到 items（显示文本：目录显示条目数，文件显示大小）
-            std::string displayText = isDir ? (std::to_string(entryCount) + " items") : sizeStr;
-            items->push_back({ name, displayText, iconPath, fullPath });
-        }
+            std::string displayText = raw.isDir
+                ? (std::to_string(entryCount) + " items")
+                : sizeStr;
+            items->push_back({ raw.name, displayText, iconPath, raw.fullPath });
+        };
+
+        for (const auto& d : dirs)  appendEntry(d);
+        for (const auto& f : files) appendEntry(f);
     }
 
 } // namespace beiklive

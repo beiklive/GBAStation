@@ -34,6 +34,17 @@ namespace beiklive
             /// 设置关联的游戏菜单视图（由 GamePage 调用）
             void setGameMenuView(GameMenuView* menuView) { m_gameMenuView = menuView; }
 
+            // ---- 即时存档公共接口 -------------------------------------------
+
+            /// 计算即时存档文件路径（slot=0 为自动存档，slot=1~9 为手动存档）
+            std::string getStatePath(int slot) const;
+
+            /// 计算即时存档缩略图路径（存档路径 + ".png"）
+            std::string getStateThumbPath(int slot) const;
+
+            /// 检查指定槽位是否存在存档文件
+            bool stateExists(int slot) const;
+
         private:
             // ---- 游戏线程常量 ------------------------------------------------
             static constexpr double   MAX_REASONABLE_FPS      = 240.0;  ///< 核心上报 FPS 的安全上限
@@ -128,6 +139,14 @@ namespace beiklive
                                     std::chrono::steady_clock::time_point& nextTarget,
                                     std::chrono::nanoseconds frameDurNs,
                                     std::chrono::nanoseconds spinGuardNs);
+
+            // ---- 即时存档（仅在游戏线程中调用）------------------------------
+
+            /// 序列化核心状态到文件并保存缩略图（slot=0 为自动存档）
+            void _doSaveState(int slot);
+
+            /// 从文件反序列化核心状态（slot=0 为自动存档）
+            void _doLoadState(int slot);
     };
 }
 
