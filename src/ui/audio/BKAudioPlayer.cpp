@@ -43,18 +43,18 @@ constexpr auto PLAYBACK_TIMEOUT = std::chrono::seconds(5);
 // ============================================================
 static const char* SOUND_FILE_NAMES[brls::_SOUND_MAX] = {
     nullptr,          // SOUND_NONE
-    "Focus.wav",      // SOUND_FOCUS_CHANGE  - 焦点切换
-    "Limit.wav",      // SOUND_FOCUS_ERROR   - 焦点错误（边界限制）
-    "Focus.wav",      // SOUND_CLICK         - 点击
-    "Scroll.wav",     // SOUND_BACK          - 返回
-    "Focus.wav",      // SOUND_FOCUS_SIDEBAR - 侧边栏焦点
-    "Error.wav",      // SOUND_CLICK_ERROR   - 点击错误
-    "Startup.wav",    // SOUND_HONK          - 提示音
-    "Focus.wav",      // SOUND_CLICK_SIDEBAR - 侧边栏点击
-    "Scroll.wav",     // SOUND_TOUCH_UNFOCUS - 触摸失焦
-    "Focus.wav",      // SOUND_TOUCH         - 触摸
-    "Scroll.wav",     // SOUND_SLIDER_TICK   - 滑块刻度
-    "Focus.wav",      // SOUND_SLIDER_RELEASE- 滑块释放
+    "SeAlbumBtnFocus.wav", // SOUND_FOCUS_CHANGE
+    "SeKeyErrorCursor.wav", // SOUND_FOCUS_ERROR
+    "SeBtnDecide.wav", // SOUND_CLICK
+    "SeFooterDecideFinish.wav", // SOUND_BACK
+    "SeNaviFocus.wav", // SOUND_FOCUS_SIDEBAR
+    "SeKeyError.wav", // SOUND_CLICK_ERROR
+    "SeUnlockKeyZR.wav", // SOUND_HONK
+    "SeNaviDecide.wav", // SOUND_CLICK_SIDEBAR
+    "SeTouchUnfocus.wav", // SOUND_TOUCH_UNFOCUS
+    "SeTouch.wav", // SOUND_TOUCH
+    "SeSliderTickOver.wav", // SOUND_SLIDER_TICK
+    "SeSliderRelease.wav" // SOUND_SLIDER_RELEASE
 };
 
 // ============================================================
