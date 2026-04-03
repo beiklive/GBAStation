@@ -218,10 +218,11 @@ namespace beiklive
 
         // ---- 游戏按键绑定（从配置读取多 combo 按键映射）--------------------
         // 按住时持续置位，松开时清除，使用 GameSignal 按键位掩码传入游戏帧。
+        // GameBtnInfo：游戏按键配置项，存储模拟器功能键、配置后缀和 libretro 手柄 ID 的映射关系。
         struct GameBtnInfo {
-            EmuFunctionKey emuKey;
-            const char*    cfgSuffix;  ///< "handle.<suffix>" 为配置键
-            unsigned       retroId;
+            EmuFunctionKey emuKey;      ///< 模拟器功能键枚举值
+            const char*    cfgSuffix;   ///< 配置键后缀（"handle.<suffix>" 为完整键）
+            unsigned       retroId;     ///< libretro 手柄 ID（RETRO_DEVICE_ID_JOYPAD_*）
         };
         static const GameBtnInfo gameBtnInfos[] = {
             { EMU_A,      "a",      8  }, // RETRO_DEVICE_ID_JOYPAD_A
@@ -261,10 +262,11 @@ namespace beiklive
         // ---- 摇杆方向键映射（从配置读取，受 joystickEnabled 控制）---------
         // retroId 对应 RETRO_DEVICE_ID_JOYPAD：UP=4, DOWN=5, LEFT=6, RIGHT=7
         if (joystickEnabled) {
+            // StickBtnInfo：摇杆方向键配置项，存储功能键枚举、配置后缀和 libretro ID 的映射关系。
             struct StickBtnInfo {
-                EmuFunctionKey emuKey;
-                const char*    cfgSuffix;
-                unsigned       retroId;
+                EmuFunctionKey emuKey;      ///< 模拟器功能键枚举值
+                const char*    cfgSuffix;   ///< 配置键后缀（"handle.<suffix>"）
+                unsigned       retroId;     ///< libretro 手柄 ID
             };
             static const StickBtnInfo stickBtnInfos[] = {
                 { EMU_LEFT_STICK_UP,     "lstick_up",    4  }, // RETRO_DEVICE_ID_JOYPAD_UP
