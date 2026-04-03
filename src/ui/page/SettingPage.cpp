@@ -16,8 +16,6 @@
 #include <sstream>
 #include <string>
 #include <vector>
-#include <algorithm>
-#include <cmath>
 
 namespace beiklive
 {
@@ -44,16 +42,6 @@ static std::string cfgGetStr(const std::string &key, const std::string &def)
 static void cfgSetStr(const std::string &key, const std::string &val)
 {
     SET_SETTING_KEY_STR(key, val);
-}
-
-static float cfgGetFloat(const std::string &key, float def)
-{
-    return GET_SETTING_KEY_FLOAT(key, def);
-}
-
-static int cfgGetInt(const std::string &key, int def)
-{
-    return GET_SETTING_KEY_INT(key, def);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -341,14 +329,6 @@ static void openKeyCapture(std::function<void(const std::string &)> onDone)
 //  共享常量
 // ─────────────────────────────────────────────────────────────────────────────
 
-static const float ffRateVals[]    = {2.0f, 3.0f, 4.0f, 6.0f, 8.0f};
-static const int   k_bufSizeInts[] = {300, 600, 1200, 3600};
-
-// XMB 颜色预设
-static const char *k_xmbColorIds[]    = {"blue", "purple", "green", "orange", "red", "cyan", "black", "original"};
-static const char *k_xmbColorLabels[] = {"深蓝", "紫色", "绿色", "橙色", "红色", "青色", "黑色", "原版"};
-static constexpr int k_xmbColorCount  = 8;
-
 using namespace beiklive::SettingKey;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -360,206 +340,24 @@ brls::ScrollingFrame *SettingPage::buildUITab()
     auto *scroll = makeScrollTab();
     auto *box    = makeContentBox();
 
-    // ── 背景图片 ──────────────────────────────────────────────────────────────
-    box->addView(makeHeader("背景图片"));
-
-    auto *showBgCell = new brls::BooleanCell();
-    showBgCell->init("显示背景图片",
-                     cfgGetBool(KEY_UI_SHOW_BG_IMAGE, false),
-                     [](bool v) { cfgSetBool(KEY_UI_SHOW_BG_IMAGE, v); });
-    box->addView(showBgCell);
-
-    auto *bgPathCell = new brls::DetailCell();
-    bgPathCell->setText("背景图片路径");
-    std::string curBgPath = cfgGetStr(KEY_UI_BG_IMAGE_PATH, "");
-    bgPathCell->setDetailText(curBgPath.empty()
-                                  ? "未设置"
-                                  : beiklive::tools::getFileName(curBgPath));
-    bgPathCell->registerAction("确认"_i18n, brls::BUTTON_A,
-                               [bgPathCell](brls::View *)
-                               {
-                                   std::string dir = cfgGetStr(KEY_UI_BG_IMAGE_PATH, "");
-                                   // 取父目录
-                                   auto pos = dir.rfind('/');
-#ifdef _WIN32
-                                   auto posW = dir.rfind('\\');
-                                   if (posW != std::string::npos &&
-                                       (pos == std::string::npos || posW > pos))
-                                       pos = posW;
-#endif
-                                   if (pos != std::string::npos)
-                                       dir = dir.substr(0, pos);
-                                   else
-                                       dir = "";
-                                   openFilePicker({"png", "jpg", "jpeg"},
-                                                  [bgPathCell](const std::string &path)
-                                                  {
-                                                      cfgSetStr(KEY_UI_BG_IMAGE_PATH, path);
-                                                      bgPathCell->setDetailText(
-                                                          beiklive::tools::getFileName(path));
-                                                  },
-                                                  dir);
-                                   return true;
-                               },
-                               false, false, brls::SOUND_CLICK);
-    box->addView(bgPathCell);
-
-    auto *bgBlurCell = new brls::BooleanCell();
-    bgBlurCell->init("背景模糊",
-                     cfgGetBool(KEY_UI_BG_BLUR_ENABLED, false),
-                     [](bool v) { cfgSetBool(KEY_UI_BG_BLUR_ENABLED, v); });
-    box->addView(bgBlurCell);
-
-    {
-        static const float k_blurRadii[]    = {8.0f, 10.0f, 12.0f, 14.0f, 16.0f, 18.0f, 20.0f};
-        static constexpr int k_blurRadiiCount = 7;
-        std::vector<std::string> blurLabels   = {"8", "10", "12", "14", "16", "18", "20"};
-        float curRadius                        = cfgGetFloat(KEY_UI_BG_BLUR_RADIUS, 12.0f);
-        int blurIdx                            = 2;
-        for (int i = 0; i < k_blurRadiiCount; ++i)
-            if (std::fabs(curRadius - k_blurRadii[i]) < 0.01f) { blurIdx = i; break; }
-        auto *blurRadiusCell = new brls::SelectorCell();
-        blurRadiusCell->init("模糊程度", blurLabels, blurIdx,
-                             [](int idx)
-                             {
-                                 if (idx >= 0 && idx < k_blurRadiiCount && beiklive::SettingManager)
-                                 {
-                                     beiklive::SettingManager->Set(
-                                         KEY_UI_BG_BLUR_RADIUS,
-                                         beiklive::ConfigValue(k_blurRadii[idx]));
-                                     beiklive::SettingManager->Save();
-                                 }
-                             });
-        box->addView(blurRadiusCell);
-    }
-
-    // ── PSP XMB 风格背景 ──────────────────────────────────────────────────────
-    box->addView(makeHeader("XMB 风格背景"));
-
-    auto *showXmbCell = new brls::BooleanCell();
-    showXmbCell->init("显示 XMB 背景",
-                      cfgGetBool(KEY_UI_SHOW_XMB_BG, false),
-                      [](bool v) { cfgSetBool(KEY_UI_SHOW_XMB_BG, v); });
-    box->addView(showXmbCell);
-
-    {
-        std::vector<std::string> colorLabels(k_xmbColorLabels,
-                                             k_xmbColorLabels + k_xmbColorCount);
-        std::string curId = cfgGetStr(KEY_UI_PSPXMB_COLOR, "blue");
-        int curIdx        = 0;
-        for (int i = 0; i < k_xmbColorCount; ++i)
-            if (curId == k_xmbColorIds[i]) { curIdx = i; break; }
-
-        auto *xmbColorCell = new brls::SelectorCell();
-        xmbColorCell->init("XMB 颜色", colorLabels, curIdx,
-                           [](int idx)
-                           {
-                               if (idx >= 0 && idx < k_xmbColorCount)
-                                   cfgSetStr(KEY_UI_PSPXMB_COLOR, k_xmbColorIds[idx]);
-                           });
-        box->addView(xmbColorCell);
-    }
-
     // ── 存档设置 ──────────────────────────────────────────────────────────────
     box->addView(makeHeader("存档设置"));
 
     {
         std::vector<std::string> saveDirs = {"ROM 所在目录", "模拟器目录"};
 
-        auto *autoSaveStateCell = new brls::BooleanCell();
-        autoSaveStateCell->init("自动存档",
-                                cfgGetBool("save.autoSaveState", false),
-                                [](bool v) { cfgSetBool("save.autoSaveState", v); });
-        box->addView(autoSaveStateCell);
-
-        {
-            static const int k_autoSaveIntervals[]     = {0, 60, 180, 300, 600};
-            static constexpr int k_autoSaveIntervalCount = 5;
-            std::vector<std::string> intervalLabels    = {
-                "关闭", "1 分钟", "3 分钟", "5 分钟", "10 分钟"};
-            int curInterval = cfgGetInt("save.autoSaveInterval", 0);
-            int intervalIdx = 0;
-            for (int i = 0; i < k_autoSaveIntervalCount; ++i)
-                if (curInterval == k_autoSaveIntervals[i]) { intervalIdx = i; break; }
-            auto *autoSaveIntervalCell = new brls::SelectorCell();
-            autoSaveIntervalCell->init("自动存档间隔", intervalLabels, intervalIdx,
-                                       [](int idx)
-                                       {
-                                           if (idx >= 0 && idx < k_autoSaveIntervalCount &&
-                                               beiklive::SettingManager)
-                                           {
-                                               beiklive::SettingManager->Set(
-                                                   "save.autoSaveInterval",
-                                                   beiklive::ConfigValue(
-                                                       k_autoSaveIntervals[idx]));
-                                               beiklive::SettingManager->Save();
-                                           }
-                                       });
-            box->addView(autoSaveIntervalCell);
-        }
-
-        auto *autoLoadState0Cell = new brls::BooleanCell();
-        autoLoadState0Cell->init("启动时自动读取存档0",
-                                 cfgGetBool("save.autoLoadState0", false),
-                                 [](bool v) { cfgSetBool("save.autoLoadState0", v); });
-        box->addView(autoLoadState0Cell);
-
-        {
-            auto *sramDirCell = new brls::SelectorCell();
-            sramDirCell->init("SRAM 存档目录", saveDirs,
-                              cfgGetStr("save.sramDir", "").empty() ? 0 : 1,
-                              [](int idx)
-                              {
-                                  if (idx == 0)
-                                      cfgSetStr("save.sramDir", "");
-                                  else
-                                      cfgSetStr("save.sramDir",
-                                                beiklive::path::savePath());
-                              });
-            box->addView(sramDirCell);
-        }
-
-        {
-            auto *stateDirCell = new brls::SelectorCell();
-            stateDirCell->init("即时存档目录", saveDirs,
-                               cfgGetStr("save.stateDir", "").empty() ? 0 : 1,
-                               [](int idx)
-                               {
-                                   if (idx == 0)
-                                       cfgSetStr("save.stateDir", "");
-                                   else
-                                       cfgSetStr("save.stateDir",
-                                                 beiklive::path::savePath());
-                               });
-            box->addView(stateDirCell);
-        }
-
-        auto *savethumbCell = new brls::BooleanCell();
-        savethumbCell->init("无封面时使用存档截图",
-                            cfgGetBool(KEY_UI_USE_SAVESTATE_THUMB, false),
-                            [](bool v) { cfgSetBool(KEY_UI_USE_SAVESTATE_THUMB, v); });
-        box->addView(savethumbCell);
-    }
-
-    // ── 截图设置 ──────────────────────────────────────────────────────────────
-    box->addView(makeHeader("截图设置"));
-
-    {
-        std::vector<std::string> screenshotDirs = {"ROM 所在目录", "相册目录"};
-        auto *screenshotDirCell                  = new brls::SelectorCell();
-        screenshotDirCell->init("截图保存目录", screenshotDirs,
-                                cfgGetInt("screenshot.dir", 0),
-                                [](int idx)
-                                {
-                                    if (beiklive::SettingManager)
-                                    {
-                                        beiklive::SettingManager->Set(
-                                            "screenshot.dir",
-                                            beiklive::ConfigValue(idx));
-                                        beiklive::SettingManager->Save();
-                                    }
-                                });
-        box->addView(screenshotDirCell);
+        auto *sramDirCell = new brls::SelectorCell();
+        sramDirCell->init("SRAM 存档目录", saveDirs,
+                          cfgGetStr("save.sramDir", "").empty() ? 0 : 1,
+                          [](int idx)
+                          {
+                              if (idx == 0)
+                                  cfgSetStr("save.sramDir", "");
+                              else
+                                  cfgSetStr("save.sramDir",
+                                            beiklive::path::savePath());
+                          });
+        box->addView(sramDirCell);
     }
 
     // ── 金手指设置 ────────────────────────────────────────────────────────────
@@ -567,12 +365,6 @@ brls::ScrollingFrame *SettingPage::buildUITab()
 
     {
         std::vector<std::string> cheatDirs = {"ROM 所在目录", "模拟器目录"};
-
-        auto *cheatEnableCell = new brls::BooleanCell();
-        cheatEnableCell->init("启用金手指",
-                              cfgGetBool("cheat.enabled", false),
-                              [](bool v) { cfgSetBool("cheat.enabled", v); });
-        box->addView(cheatEnableCell);
 
         auto *cheatDirCell = new brls::SelectorCell();
         cheatDirCell->init("金手指目录", cheatDirs,
@@ -599,108 +391,6 @@ brls::ScrollingFrame *SettingPage::buildGameTab()
 {
     auto *scroll = makeScrollTab();
     auto *box    = makeContentBox();
-
-    std::vector<std::string> holdModes = {"按住生效", "切换模式"};
-
-    // ── 加速 ──────────────────────────────────────────────────────────────────
-    box->addView(makeHeader("快进"));
-
-    auto *ffEnableCell = new brls::BooleanCell();
-    ffEnableCell->init("启用快进",
-                       cfgGetBool("fastforward.enabled", true),
-                       [](bool v) { cfgSetBool("fastforward.enabled", v); });
-    box->addView(ffEnableCell);
-
-    {
-        std::string ffModeStr = cfgGetStr("fastforward.mode", "hold");
-        auto *ffModeCell      = new brls::SelectorCell();
-        ffModeCell->init("快进触发方式", holdModes,
-                         (ffModeStr == "toggle") ? 1 : 0,
-                         [](int idx)
-                         { cfgSetStr("fastforward.mode", idx == 1 ? "toggle" : "hold"); });
-        box->addView(ffModeCell);
-    }
-
-    {
-        std::vector<std::string> ffRateLabels = {"2x", "3x", "4x", "6x", "8x"};
-        float curMult                          = cfgGetFloat("fastforward.multiplier", 4.0f);
-        int ffMultIdx                          = 2;
-        for (int i = 0; i < 5; ++i)
-            if (std::fabs(curMult - ffRateVals[i]) < 0.01f) { ffMultIdx = i; break; }
-        auto *ffMultCell = new brls::SelectorCell();
-        ffMultCell->init("快进倍率", ffRateLabels, ffMultIdx,
-                         [](int idx)
-                         {
-                             if (idx >= 0 && idx < 5 && beiklive::SettingManager)
-                             {
-                                 beiklive::SettingManager->Set(
-                                     "fastforward.multiplier",
-                                     beiklive::ConfigValue(ffRateVals[idx]));
-                                 beiklive::SettingManager->Save();
-                             }
-                         });
-        box->addView(ffMultCell);
-    }
-
-    // ── 倒带 ──────────────────────────────────────────────────────────────────
-    box->addView(makeHeader("倒带"));
-
-    auto *rewindEnCell = new brls::BooleanCell();
-    rewindEnCell->init("启用倒带",
-                       cfgGetBool("rewind.enabled", false),
-                       [](bool v) { cfgSetBool("rewind.enabled", v); });
-    box->addView(rewindEnCell);
-
-    {
-        std::string rewModeStr = cfgGetStr("rewind.mode", "hold");
-        auto *rewModeCell      = new brls::SelectorCell();
-        rewModeCell->init("倒带触发方式", holdModes,
-                          (rewModeStr == "toggle") ? 1 : 0,
-                          [](int idx)
-                          { cfgSetStr("rewind.mode", idx == 1 ? "toggle" : "hold"); });
-        box->addView(rewModeCell);
-    }
-
-    {
-        std::vector<std::string> bufSizeLabels = {
-            "5 秒", "10 秒", "20 秒", "1 分钟"};
-        int curBuf = cfgGetInt("rewind.bufferSize", 3600);
-        int bufIdx = 3;
-        for (int i = 0; i < 4; ++i)
-            if (curBuf == k_bufSizeInts[i]) { bufIdx = i; break; }
-        auto *bufCell = new brls::SelectorCell();
-        bufCell->init("倒带缓冲大小", bufSizeLabels, bufIdx,
-                      [](int idx)
-                      {
-                          if (idx >= 0 && idx < 4 && beiklive::SettingManager)
-                          {
-                              beiklive::SettingManager->Set(
-                                  "rewind.bufferSize",
-                                  beiklive::ConfigValue(k_bufSizeInts[idx]));
-                              beiklive::SettingManager->Save();
-                          }
-                      });
-        box->addView(bufCell);
-    }
-
-    {
-        std::vector<std::string> rewSteps = {"1", "2", "3", "4", "5"};
-        int curStep                        = cfgGetInt("rewind.step", 2);
-        int stepIdx                        = (curStep >= 1 && curStep <= 5) ? curStep - 1 : 1;
-        auto *stepCell                     = new brls::SelectorCell();
-        stepCell->init("倒带步长", rewSteps, stepIdx,
-                       [](int idx)
-                       {
-                           if (beiklive::SettingManager)
-                           {
-                               beiklive::SettingManager->Set(
-                                   "rewind.step",
-                                   beiklive::ConfigValue(idx + 1));
-                               beiklive::SettingManager->Save();
-                           }
-                       });
-        box->addView(stepCell);
-    }
 
     // ── GBA/GBC 游戏 ──────────────────────────────────────────────────────────
     box->addView(makeHeader("GBA/GBC 核心设置"));
@@ -774,94 +464,8 @@ brls::ScrollingFrame *SettingPage::buildDisplayTab()
     auto *scroll = makeScrollTab();
     auto *box    = makeContentBox();
 
-    box->addView(makeHeader("画面"));
-
-    {
-        std::vector<std::string> dispModes = {
-            "适应 (Fit)", "填充 (Fill)", "原始 (Original)", "整数倍 (Integer)", "自定义 (Custom)"};
-        static const char *dispModeIds[] = {"fit", "fill", "original", "integer", "custom"};
-        std::string curMode              = cfgGetStr("display.mode", "original");
-        int dispModeIdx                  = 2;
-        for (int i = 0; i < 5; ++i)
-            if (curMode == dispModeIds[i]) { dispModeIdx = i; break; }
-        auto *dispModeCell = new brls::SelectorCell();
-        dispModeCell->init("显示模式", dispModes, dispModeIdx,
-                           [](int idx)
-                           { if (idx >= 0 && idx < 5) cfgSetStr("display.mode", dispModeIds[idx]); });
-        box->addView(dispModeCell);
-    }
-
-    {
-        static const int k_intScaleVals[]  = {0, 1, 2, 3, 4, 5, 6};
-        static const char *k_intScaleLabels[] = {
-            "自动 (Auto)", "1x", "2x", "3x", "4x", "5x", "6x"};
-        static constexpr int k_intScaleCount = 7;
-        int curMult                          = cfgGetInt("display.integer_scale_mult", 0);
-        int multIdx                          = 0;
-        for (int i = 0; i < k_intScaleCount; ++i)
-            if (curMult == k_intScaleVals[i]) { multIdx = i; break; }
-        std::vector<std::string> intScaleLabels(k_intScaleLabels,
-                                                k_intScaleLabels + k_intScaleCount);
-        auto *intScaleCell = new brls::SelectorCell();
-        intScaleCell->init("整数倍缩放倍率", intScaleLabels, multIdx,
-                           [](int idx)
-                           {
-                               if (idx >= 0 && idx < k_intScaleCount &&
-                                   beiklive::SettingManager)
-                               {
-                                   beiklive::SettingManager->Set(
-                                       "display.integer_scale_mult",
-                                       beiklive::ConfigValue(k_intScaleVals[idx]));
-                                   beiklive::SettingManager->Save();
-                               }
-                           });
-        box->addView(intScaleCell);
-    }
-
-    {
-        std::vector<std::string> filters = {"最近邻 (Nearest)", "双线性 (Linear)"};
-        std::string curFilter            = cfgGetStr("display.filter", "nearest");
-        auto *filterCell                 = new brls::SelectorCell();
-        filterCell->init("纹理过滤", filters, (curFilter == "linear") ? 1 : 0,
-                         [](int idx)
-                         { cfgSetStr("display.filter", idx == 1 ? "linear" : "nearest"); });
-        box->addView(filterCell);
-    }
-
-    box->addView(makeHeader("状态显示"));
-
-    auto *showFpsCell = new brls::BooleanCell();
-    showFpsCell->init("显示帧率",
-                      cfgGetBool("display.showFps", false),
-                      [](bool v) { cfgSetBool("display.showFps", v); });
-    box->addView(showFpsCell);
-
-    auto *showFfCell = new brls::BooleanCell();
-    showFfCell->init("显示快进状态",
-                     cfgGetBool("display.showFfOverlay", true),
-                     [](bool v) { cfgSetBool("display.showFfOverlay", v); });
-    box->addView(showFfCell);
-
-    auto *showRewCell = new brls::BooleanCell();
-    showRewCell->init("显示倒带状态",
-                      cfgGetBool("display.showRewindOverlay", true),
-                      [](bool v) { cfgSetBool("display.showRewindOverlay", v); });
-    box->addView(showRewCell);
-
-    auto *showMuteCell = new brls::BooleanCell();
-    showMuteCell->init("显示静音状态",
-                       cfgGetBool("display.showMuteOverlay", true),
-                       [](bool v) { cfgSetBool("display.showMuteOverlay", v); });
-    box->addView(showMuteCell);
-
     // ── 遮罩设置 ──────────────────────────────────────────────────────────────
     box->addView(makeHeader("遮罩"));
-
-    auto *overlayEnCell = new brls::BooleanCell();
-    overlayEnCell->init("启用遮罩",
-                        cfgGetBool(KEY_DISPLAY_OVERLAY_ENABLED, false),
-                        [](bool v) { cfgSetBool(KEY_DISPLAY_OVERLAY_ENABLED, v); });
-    box->addView(overlayEnCell);
 
     // 构建遮罩路径选取 DetailCell 的辅助 lambda
     auto makeOverlayPathCell = [&](const std::string &cfgKey,
@@ -904,56 +508,6 @@ brls::ScrollingFrame *SettingPage::buildDisplayTab()
     box->addView(makeOverlayPathCell(KEY_DISPLAY_OVERLAY_GBC_PATH, "GBC 遮罩路径"));
     box->addView(makeOverlayPathCell(KEY_DISPLAY_OVERLAY_GB_PATH, "GB 遮罩路径"));
 
-    // ── 着色器设置 ────────────────────────────────────────────────────────────
-    box->addView(makeHeader("着色器"));
-
-    auto *shaderEnCell = new brls::BooleanCell();
-    shaderEnCell->init("启用着色器",
-                       cfgGetBool(KEY_DISPLAY_SHADER_ENABLED, false),
-                       [](bool v) { cfgSetBool(KEY_DISPLAY_SHADER_ENABLED, v); });
-    box->addView(shaderEnCell);
-
-    // 构建着色器路径选取 DetailCell 的辅助 lambda
-    auto makeShaderPathCell = [&](const std::string &pathKey,
-                                  const std::string &labelText)
-    {
-        auto *pathCell = new brls::DetailCell();
-        pathCell->setText(labelText);
-        std::string cur = cfgGetStr(pathKey, "");
-        pathCell->setDetailText(cur.empty() ? "未设置" : beiklive::tools::getFileName(cur));
-        pathCell->registerAction("确认"_i18n, brls::BUTTON_A,
-                                 [pathCell, pathKey](brls::View *)
-                                 {
-                                     std::string dir = cfgGetStr(pathKey, "");
-                                     auto pos        = dir.rfind('/');
-#ifdef _WIN32
-                                     auto posW = dir.rfind('\\');
-                                     if (posW != std::string::npos &&
-                                         (pos == std::string::npos || posW > pos))
-                                         pos = posW;
-#endif
-                                     if (pos != std::string::npos)
-                                         dir = dir.substr(0, pos);
-                                     else
-                                         dir = "";
-                                     openFilePicker({"glslp", "glsl"},
-                                                   [pathCell, pathKey](const std::string &path)
-                                                   {
-                                                       cfgSetStr(pathKey, path);
-                                                       pathCell->setDetailText(
-                                                           beiklive::tools::getFileName(path));
-                                                   },
-                                                   dir);
-                                     return true;
-                                 },
-                                 false, false, brls::SOUND_CLICK);
-        box->addView(pathCell);
-    };
-
-    makeShaderPathCell(KEY_DISPLAY_SHADER_GBA_PATH, "GBA 着色器路径");
-    makeShaderPathCell(KEY_DISPLAY_SHADER_GBC_PATH, "GBC 着色器路径");
-    makeShaderPathCell(KEY_DISPLAY_SHADER_GB_PATH, "GB 着色器路径");
-
     scroll->setContentView(box);
     return scroll;
 }
@@ -968,18 +522,6 @@ brls::ScrollingFrame *SettingPage::buildAudioTab()
     auto *box    = makeContentBox();
 
     box->addView(makeHeader("游戏音频"));
-
-    auto *ffMuteCell = new brls::BooleanCell();
-    ffMuteCell->init("快进时静音",
-                     cfgGetBool("fastforward.mute", true),
-                     [](bool v) { cfgSetBool("fastforward.mute", v); });
-    box->addView(ffMuteCell);
-
-    auto *rewMuteCell = new brls::BooleanCell();
-    rewMuteCell->init("倒带时静音",
-                      cfgGetBool("rewind.mute", false),
-                      [](bool v) { cfgSetBool("rewind.mute", v); });
-    box->addView(rewMuteCell);
 
     {
         std::vector<std::string> lpfOpts = {"关闭 (disabled)", "开启 (enabled)"};
@@ -1034,8 +576,6 @@ static const HotkeyEntry k_hotkeys[] = {
     {"hotkey.quickload.pad",  "快速读取"},
     {"hotkey.menu.pad",       "打开菜单"},
     {"hotkey.mute.pad",       "静音"},
-    {"hotkey.pause.pad",      "暂停"},
-    {"hotkey.screenshot.pad", "截屏"},
 };
 static constexpr int k_hotkeyCount =
     static_cast<int>(sizeof(k_hotkeys) / sizeof(k_hotkeys[0]));
