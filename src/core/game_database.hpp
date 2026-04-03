@@ -80,7 +80,7 @@ namespace beiklive
         // 获取最近玩的游戏列表，按 lastPlayed 降序排序，返回前 count 个条目
         std::vector<GameEntry> getRecentPlayed(int count) const;
 
-        // 获取指定平台的所有游戏条目（线程安全）
+        // 获取指定平台的所有游戏条目（返回副本）
         std::vector<GameEntry> getByPlatform(beiklive::enums::EmuPlatform platform) const;
 
     private:

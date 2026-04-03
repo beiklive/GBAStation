@@ -343,16 +343,20 @@ void BKAudioPlayer::playbackThread()
 // ---- Switch (libnx audout + WAV) ----------------------------
 #ifdef __SWITCH__
 
-void BKAudioPlayer::playSoundDirect(int /*soundIdx*/, const WavData& wav, float /*pitch*/)
+void BKAudioPlayer::playSoundDirect(int /*soundIdx*/, const WavData& wav, float pitch)
 {
     if (!m_switchInit || wav.samples.empty())
         return;
 
+    // pitch 影响重采样比率：pitch > 1.0 表示升调（加速播放），< 1.0 表示降调（减速播放）
+    double effectivePitch = (pitch > 0.1f) ? static_cast<double>(pitch) : 1.0;
+
     // 计算输入帧数（输入可能是单/双声道）
     size_t inFrames = wav.samples.size() / static_cast<size_t>(wav.channels);
 
-    // 最近邻重采样：输入采样率 → 48000Hz（Switch audout固定输出率）
-    double ratio = static_cast<double>(SWITCH_OUT_RATE) / wav.sampleRate;
+    // 最近邻重采样：输入采样率 * pitch → 48000Hz（Switch audout固定输出率）
+    // pitch > 1 时采样更快（音调升高），< 1 时采样更慢（音调降低）
+    double ratio = static_cast<double>(SWITCH_OUT_RATE) / (wav.sampleRate * effectivePitch);
     size_t outFrames = static_cast<size_t>(inFrames * ratio + 0.5);
     if (outFrames == 0)
         return;
@@ -363,7 +367,10 @@ void BKAudioPlayer::playSoundDirect(int /*soundIdx*/, const WavData& wav, float 
 
     void* rawBuf = aligned_alloc(0x1000, alignedBytes);
     if (!rawBuf)
+    {
+        brls::Logger::error("BKAudioPlayer: Switch音效缓冲区内存分配失败（{}字节）", alignedBytes);
         return;
+    }
     memset(rawBuf, 0, alignedBytes);
 
     // 最近邻重采样并转换为双声道

@@ -224,7 +224,7 @@ namespace beiklive
         return result;
     }
     // ==================== 公开接口 ====================
-    // 获取指定平台的游戏列表（线程安全，返回副本）
+    // 获取指定平台的游戏列表（返回副本）
     std::vector<GameEntry> GameDatabase::getByPlatform(beiklive::enums::EmuPlatform platform) const
     {
         std::vector<GameEntry> result;
