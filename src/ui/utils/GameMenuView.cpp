@@ -56,10 +56,7 @@ namespace beiklive
         m_contrlPanel->setBackgroundColor(nvgRGBA(0, 0, 0, 10));
         m_contrlPanel->setPadding(24.f);
         m_panel->addView(m_contrlPanel);
-        m_contrlPanel->registerAction("返回", brls::BUTTON_B, [this](brls::View*) -> bool {
-            if (m_onResume) m_onResume();
-            return true;
-        });
+
 
         // 右侧视图栏
         m_viewPanel = new brls::Box();
@@ -97,7 +94,13 @@ namespace beiklive
             if (m_onResume) m_onResume();
         });
         m_contrlPanel->addView(m_btnResume);
-
+        m_contrlPanel->registerAction("返回", brls::BUTTON_B, [this](brls::View*) -> bool {
+            brls::sync([this]() {
+                brls::Application::giveFocus(m_btnResume);
+                if (m_onResume) m_onResume();
+            });
+            return true;
+        });
         // 2. 保存状态（绑定保存状态面板）
         brls::View* savePanel = _createSaveStatePanel();
         m_viewPanel->addView(savePanel);
@@ -296,6 +299,7 @@ namespace beiklive
             dialog->addButton("确认", [this, slot]() {
                 if (m_saveStateCallback) m_saveStateCallback(slot);
                 brls::sync([this]() {
+                    brls::Application::giveFocus(m_btnResume);
                     if (m_onResume) m_onResume();
                 });
             });
@@ -348,6 +352,7 @@ namespace beiklive
             dialog->addButton("确认", [this, slot]() {
                 if (m_loadStateCallback) m_loadStateCallback(slot);
                 brls::sync([this]() {
+                    brls::Application::giveFocus(m_btnResume);
                     if (m_onResume) m_onResume();
                 });
             });

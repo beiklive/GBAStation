@@ -9,10 +9,12 @@ namespace beiklive
         this->showHeader(true);
         this->showFooter(true);
         this->getHeader()->setTitle("游戏库");
-
+        this->setFocusable(false);
         // 主视图：3 列 GridBox
         m_grid = new beiklive::GridBox(3);
         m_grid->setGrow(1.f);
+        // m_grid->setFocusable(false); 
+
         this->getContentBox()->addView(m_grid);
 
         // Y 键：弹出排序方式 Dropdown
@@ -31,16 +33,18 @@ namespace beiklive
 
     void GameLibraryPage::_loadAndShowEntries()
     {
+        brls::Application::blockInputs(true);
         ASYNC_RETAIN
         brls::async([ASYNC_TOKEN]() {
             // 从全局游戏数据库获取所有游戏条目
-            auto entries = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
+            m_entries = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
+            _sortEntries();
             ASYNC_RELEASE
-            brls::sync([this, entries = std::move(entries)]() {
-                m_entries = std::move(entries);
-                _sortEntries();
+            brls::sync([this]() {
                 _rebuildGrid();
                 _updateHeader();
+                brls::Application::giveFocus(m_grid);
+                brls::Application::unblockInputs();
             });
         });
     }
@@ -139,6 +143,8 @@ namespace beiklive
             if (onGameSelected)
                 onGameSelected(m_entries[index]);
         };
+
+
     }
 
     // ============================================================

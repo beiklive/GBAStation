@@ -81,6 +81,8 @@ namespace beiklive
          */
         void addItem(std::function<brls::View*()> factory);
 
+        brls::View* getItemView(int index) const; ///< 获取指定索引单元格的内容视图（可能尚未加载，返回 nullptr）
+
         /// 清除所有单元格（同时销毁已加载的子视图）
         void clearItems();
 

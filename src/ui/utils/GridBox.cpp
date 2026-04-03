@@ -105,6 +105,17 @@ namespace beiklive
         rebuild();
     }
 
+    brls::View *GridBox::getItemView(int index) const
+    {
+        if (index < 0 || index >= static_cast<int>(m_factories.size()))
+            return nullptr;
+        int row = index / m_columns;
+        int col = index % m_columns;
+        if (row >= static_cast<int>(m_cells.size()) || col >= static_cast<int>(m_cells[row].size()))
+            return nullptr;
+        return m_cells[row][col];
+    }
+
     void GridBox::clearItems()
     {
         m_factories.clear();
