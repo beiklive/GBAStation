@@ -13,6 +13,7 @@
 #include "core/constexpr.h"
 
 #include <chrono>
+#include <sstream>
 #include <string>
 #include <vector>
 #include <algorithm>
@@ -1044,6 +1045,40 @@ brls::ScrollingFrame *SettingPage::buildKeyBindTab()
     auto *scroll = makeScrollTab();
     auto *box    = makeContentBox();
 
+    // 辅助函数：为 DetailCell 注册 A（追加 combo）和 X（清空）动作。
+    auto registerKeyBindActions = [](brls::DetailCell* cell, const std::string& cfgKey)
+    {
+        cell->registerAction("确认"_i18n, brls::BUTTON_A,
+            [cell, cfgKey](brls::View*) {
+                openKeyCapture([cell, cfgKey](const std::string& r) {
+                    if (r.empty()) return;
+                    // 追加新 combo（逗号分隔），去重后写回配置
+                    std::string cur = cfgGetStr(cfgKey, "none");
+                    if (cur.empty() || cur == "none") {
+                        cur = r;
+                    } else {
+                        // 检查是否已存在此 combo
+                        bool exists = false;
+                        std::istringstream iss(cur);
+                        std::string tok;
+                        while (std::getline(iss, tok, ',')) {
+                            if (tok == r) { exists = true; break; }
+                        }
+                        if (!exists) cur += "," + r;
+                    }
+                    cfgSetStr(cfgKey, cur);
+                    cell->setDetailText(cur);
+                });
+                return true;
+            }, false, false, brls::SOUND_CLICK);
+        cell->registerAction("清除绑定", brls::BUTTON_X,
+            [cell, cfgKey](brls::View*) {
+                cfgSetStr(cfgKey, "none");
+                cell->setDetailText("none");
+                return true;
+            }, false, false, brls::SOUND_CLICK);
+    };
+
     // ── 游戏按键 ──────────────────────────────────────────────────────────────
     box->addView(makeHeader("游戏按键映射（手柄）"));
 
@@ -1053,34 +1088,12 @@ brls::ScrollingFrame *SettingPage::buildKeyBindTab()
         auto *cell         = new brls::DetailCell();
         cell->setText(k_gameBtns[i].label);
         cell->setDetailText(cfgGetStr(cfgKey, "none"));
-        std::string captureKey = cfgKey;
-        cell->registerAction("确认"_i18n, brls::BUTTON_A,
-                             [cell, captureKey](brls::View *)
-                             {
-                                 openKeyCapture([cell, captureKey](const std::string &r)
-                                               {
-                                                   if (!r.empty())
-                                                   {
-                                                       cfgSetStr(captureKey, r);
-                                                       cell->setDetailText(r);
-                                                   }
-                                               });
-                                 return true;
-                             },
-                             false, false, brls::SOUND_CLICK);
-        cell->registerAction("清除绑定", brls::BUTTON_X,
-                             [cell, captureKey](brls::View *)
-                             {
-                                 cfgSetStr(captureKey, "none");
-                                 cell->setDetailText("none");
-                                 return true;
-                             },
-                             false, false, brls::SOUND_CLICK);
+        registerKeyBindActions(cell, cfgKey);
         box->addView(cell);
     }
 
-    // ── 热键 ──────────────────────────────────────────────────────────────────
-    box->addView(makeHeader("热键绑定（手柄）"));
+    // ── 功能热键 ──────────────────────────────────────────────────────────────
+    box->addView(makeHeader("功能热键绑定"));
 
     for (int i = 0; i < k_hotkeyCount; ++i)
     {
@@ -1088,31 +1101,24 @@ brls::ScrollingFrame *SettingPage::buildKeyBindTab()
         auto *cell         = new brls::DetailCell();
         cell->setText(std::string(k_hotkeys[i].label) + "（手柄）");
         cell->setDetailText(cfgGetStr(cfgKey, "none"));
-        std::string captureKey = cfgKey;
-        cell->registerAction("确认"_i18n, brls::BUTTON_A,
-                             [cell, captureKey](brls::View *)
-                             {
-                                 openKeyCapture([cell, captureKey](const std::string &r)
-                                               {
-                                                   if (!r.empty())
-                                                   {
-                                                       cfgSetStr(captureKey, r);
-                                                       cell->setDetailText(r);
-                                                   }
-                                               });
-                                 return true;
-                             },
-                             false, false, brls::SOUND_CLICK);
-        cell->registerAction("清除绑定", brls::BUTTON_X,
-                             [cell, captureKey](brls::View *)
-                             {
-                                 cfgSetStr(captureKey, "none");
-                                 cell->setDetailText("none");
-                                 return true;
-                             },
-                             false, false, brls::SOUND_CLICK);
+        registerKeyBindActions(cell, cfgKey);
         box->addView(cell);
     }
+
+    // ── 摇杆设置 ──────────────────────────────────────────────────────────────
+    box->addView(makeHeader("摇杆设置"));
+
+    auto *joystickCell = new brls::BooleanCell();
+    joystickCell->init("启用左摇杆方向键输入",
+                       cfgGetBool("input.joystick.enabled", true),
+                       [](bool v) { cfgSetBool("input.joystick.enabled", v); });
+    box->addView(joystickCell);
+
+    auto *diagonalCell = new brls::BooleanCell();
+    diagonalCell->init("允许斜向输入（同时触发 X 和 Y 方向）",
+                       cfgGetBool("input.joystick.diagonal", true),
+                       [](bool v) { cfgSetBool("input.joystick.diagonal", v); });
+    box->addView(diagonalCell);
 
     scroll->setContentView(box);
     return scroll;

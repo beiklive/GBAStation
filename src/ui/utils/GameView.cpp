@@ -211,116 +211,171 @@ namespace beiklive
     // ============================================================
     void GameView::_registerGameInput()
     {
-        // ---- 游戏按键绑定（EMU_A ~ EMU_SELECT 直接映射到 brls 按键）-----------
+        // ---- 读取摇杆模式配置 -------------------------------------------
+        bool joystickEnabled  = GET_SETTING_KEY_INT("input.joystick.enabled",  1) != 0;
+        bool joystickDiagonal = GET_SETTING_KEY_INT("input.joystick.diagonal", 1) != 0;
+        GameInputManager::instance().setDiagonalMode(joystickDiagonal);
+
+        // ---- 游戏按键绑定（从配置读取多 combo 按键映射）--------------------
         // 按住时持续置位，松开时清除，使用 GameSignal 按键位掩码传入游戏帧。
-        struct GameBtnMap {
+        struct GameBtnInfo {
             EmuFunctionKey emuKey;
-            int            brlsBtn;
+            const char*    cfgSuffix;  ///< "handle.<suffix>" 为配置键
             unsigned       retroId;
         };
-        // TODO: brlsBtn 后续改为使用接口获取设置的按键映射，而非固定死写死在这里
-        static const GameBtnMap gameBtnMaps[] = {
-            { EMU_A,      brls::BUTTON_A,     8  }, // RETRO_DEVICE_ID_JOYPAD_A
-            { EMU_B,      brls::BUTTON_B,     0  }, // RETRO_DEVICE_ID_JOYPAD_B
-            { EMU_X,      brls::BUTTON_X,     9  }, // RETRO_DEVICE_ID_JOYPAD_X
-            { EMU_Y,      brls::BUTTON_Y,     1  }, // RETRO_DEVICE_ID_JOYPAD_Y
-            { EMU_UP,     brls::BUTTON_UP,    4  }, // RETRO_DEVICE_ID_JOYPAD_UP
-            { EMU_DOWN,   brls::BUTTON_DOWN,  5  }, // RETRO_DEVICE_ID_JOYPAD_DOWN
-            { EMU_LEFT,   brls::BUTTON_LEFT,  6  }, // RETRO_DEVICE_ID_JOYPAD_LEFT
-            { EMU_RIGHT,  brls::BUTTON_RIGHT, 7  }, // RETRO_DEVICE_ID_JOYPAD_RIGHT
-            { EMU_L,      brls::BUTTON_LB,    10 }, // RETRO_DEVICE_ID_JOYPAD_L
-            { EMU_R,      brls::BUTTON_RB,    11 }, // RETRO_DEVICE_ID_JOYPAD_R
-            { EMU_L2,     brls::BUTTON_LT,    12 }, // RETRO_DEVICE_ID_JOYPAD_L2
-            { EMU_R2,     brls::BUTTON_RT,    13 }, // RETRO_DEVICE_ID_JOYPAD_R2
-            { EMU_L3,     brls::BUTTON_LSB,   14 }, // RETRO_DEVICE_ID_JOYPAD_L3
-            { EMU_R3,     brls::BUTTON_RSB,   15 }, // RETRO_DEVICE_ID_JOYPAD_R3
-            { EMU_START,  brls::BUTTON_START, 3  }, // RETRO_DEVICE_ID_JOYPAD_START
-            { EMU_SELECT, brls::BUTTON_BACK,  2  }, // RETRO_DEVICE_ID_JOYPAD_SELECT
+        static const GameBtnInfo gameBtnInfos[] = {
+            { EMU_A,      "a",      8  }, // RETRO_DEVICE_ID_JOYPAD_A
+            { EMU_B,      "b",      0  }, // RETRO_DEVICE_ID_JOYPAD_B
+            { EMU_X,      "x",      9  }, // RETRO_DEVICE_ID_JOYPAD_X
+            { EMU_Y,      "y",      1  }, // RETRO_DEVICE_ID_JOYPAD_Y
+            { EMU_UP,     "up",     4  }, // RETRO_DEVICE_ID_JOYPAD_UP
+            { EMU_DOWN,   "down",   5  }, // RETRO_DEVICE_ID_JOYPAD_DOWN
+            { EMU_LEFT,   "left",   6  }, // RETRO_DEVICE_ID_JOYPAD_LEFT
+            { EMU_RIGHT,  "right",  7  }, // RETRO_DEVICE_ID_JOYPAD_RIGHT
+            { EMU_L,      "l",      10 }, // RETRO_DEVICE_ID_JOYPAD_L
+            { EMU_R,      "r",      11 }, // RETRO_DEVICE_ID_JOYPAD_R
+            { EMU_L2,     "l2",     12 }, // RETRO_DEVICE_ID_JOYPAD_L2
+            { EMU_R2,     "r2",     13 }, // RETRO_DEVICE_ID_JOYPAD_R2
+            { EMU_L3,     "l3",     14 }, // RETRO_DEVICE_ID_JOYPAD_L3
+            { EMU_R3,     "r3",     15 }, // RETRO_DEVICE_ID_JOYPAD_R3
+            { EMU_START,  "start",  3  }, // RETRO_DEVICE_ID_JOYPAD_START
+            { EMU_SELECT, "select", 2  }, // RETRO_DEVICE_ID_JOYPAD_SELECT
         };
-        for (const auto& m : gameBtnMaps) {
-            unsigned rid = m.retroId;
-            // 按住持续置位
-            GameInputManager::instance().registerEmuFunctionKey(
-                m.emuKey, {{m.brlsBtn}},
-                [rid]() { GameSignal::instance().pressGameButton(rid); },
-                TriggerType::HOLD);
-            // 松开时清除
-            GameInputManager::instance().registerEmuFunctionKey(
-                m.emuKey, {{m.brlsBtn}},
-                [rid]() { GameSignal::instance().releaseGameButton(rid); },
-                TriggerType::RELEASE);
+        for (const auto& info : gameBtnInfos) {
+            std::string val = GET_SETTING_KEY_STR(std::string("handle.") + info.cfgSuffix, "none");
+            auto combos = beiklive::tools::parseMultiCombo(val);
+            if (combos.empty()) continue;
+            unsigned rid = info.retroId;
+            for (const auto& combo : combos) {
+                GameInputManager::instance().registerEmuFunctionKey(
+                    info.emuKey, {combo},
+                    [rid]() { GameSignal::instance().pressGameButton(rid); },
+                    TriggerType::HOLD);
+                GameInputManager::instance().registerEmuFunctionKey(
+                    info.emuKey, {combo},
+                    [rid]() { GameSignal::instance().releaseGameButton(rid); },
+                    TriggerType::RELEASE);
+            }
         }
 
-        // ---- 左右摇杆方向键映射（先映射为方向键功能，后续可调整）--------------------
-        struct StickBtnMap {
-            EmuFunctionKey emuKey;
-            int            stickPad;
-            unsigned       retroId;
-        };
+        // ---- 摇杆方向键映射（从配置读取，受 joystickEnabled 控制）---------
         // retroId 对应 RETRO_DEVICE_ID_JOYPAD：UP=4, DOWN=5, LEFT=6, RIGHT=7
-        static const StickBtnMap stickBtnMaps[] = {
-            { EMU_LEFT_STICK_UP,     STATE_PAD_LEFT_STICK_UP,     4  }, // RETRO_DEVICE_ID_JOYPAD_UP
-            { EMU_LEFT_STICK_DOWN,   STATE_PAD_LEFT_STICK_DOWN,   5  }, // RETRO_DEVICE_ID_JOYPAD_DOWN
-            { EMU_LEFT_STICK_LEFT,   STATE_PAD_LEFT_STICK_LEFT,   6  }, // RETRO_DEVICE_ID_JOYPAD_LEFT
-            { EMU_LEFT_STICK_RIGHT,  STATE_PAD_LEFT_STICK_RIGHT,  7  }, // RETRO_DEVICE_ID_JOYPAD_RIGHT
-            { EMU_RIGHT_STICK_UP,    STATE_PAD_RIGHT_STICK_UP,    4  }, // RETRO_DEVICE_ID_JOYPAD_UP
-            { EMU_RIGHT_STICK_DOWN,  STATE_PAD_RIGHT_STICK_DOWN,  5  }, // RETRO_DEVICE_ID_JOYPAD_DOWN
-            { EMU_RIGHT_STICK_LEFT,  STATE_PAD_RIGHT_STICK_LEFT,  6  }, // RETRO_DEVICE_ID_JOYPAD_LEFT
-            { EMU_RIGHT_STICK_RIGHT, STATE_PAD_RIGHT_STICK_RIGHT, 7  }, // RETRO_DEVICE_ID_JOYPAD_RIGHT
-        };
-        for (const auto& m : stickBtnMaps) {
-            unsigned rid = m.retroId;
-            // 按住持续置位
-            GameInputManager::instance().registerEmuFunctionKey(
-                m.emuKey, {{m.stickPad}},
-                [rid]() { GameSignal::instance().pressGameButton(rid); },
-                TriggerType::HOLD);
-            // 松开时清除
-            GameInputManager::instance().registerEmuFunctionKey(
-                m.emuKey, {{m.stickPad}},
-                [rid]() { GameSignal::instance().releaseGameButton(rid); },
-                TriggerType::RELEASE);
+        if (joystickEnabled) {
+            struct StickBtnInfo {
+                EmuFunctionKey emuKey;
+                const char*    cfgSuffix;
+                unsigned       retroId;
+            };
+            static const StickBtnInfo stickBtnInfos[] = {
+                { EMU_LEFT_STICK_UP,     "lstick_up",    4  }, // RETRO_DEVICE_ID_JOYPAD_UP
+                { EMU_LEFT_STICK_DOWN,   "lstick_down",  5  }, // RETRO_DEVICE_ID_JOYPAD_DOWN
+                { EMU_LEFT_STICK_LEFT,   "lstick_left",  6  }, // RETRO_DEVICE_ID_JOYPAD_LEFT
+                { EMU_LEFT_STICK_RIGHT,  "lstick_right", 7  }, // RETRO_DEVICE_ID_JOYPAD_RIGHT
+                { EMU_RIGHT_STICK_UP,    "rstick_up",    4  }, // RETRO_DEVICE_ID_JOYPAD_UP
+                { EMU_RIGHT_STICK_DOWN,  "rstick_down",  5  }, // RETRO_DEVICE_ID_JOYPAD_DOWN
+                { EMU_RIGHT_STICK_LEFT,  "rstick_left",  6  }, // RETRO_DEVICE_ID_JOYPAD_LEFT
+                { EMU_RIGHT_STICK_RIGHT, "rstick_right", 7  }, // RETRO_DEVICE_ID_JOYPAD_RIGHT
+            };
+            for (const auto& info : stickBtnInfos) {
+                std::string val = GET_SETTING_KEY_STR(std::string("handle.") + info.cfgSuffix, "none");
+                auto combos = beiklive::tools::parseMultiCombo(val);
+                if (combos.empty()) continue;
+                unsigned rid = info.retroId;
+                for (const auto& combo : combos) {
+                    GameInputManager::instance().registerEmuFunctionKey(
+                        info.emuKey, {combo},
+                        [rid]() { GameSignal::instance().pressGameButton(rid); },
+                        TriggerType::HOLD);
+                    GameInputManager::instance().registerEmuFunctionKey(
+                        info.emuKey, {combo},
+                        [rid]() { GameSignal::instance().releaseGameButton(rid); },
+                        TriggerType::RELEASE);
+                }
+            }
         }
 
-        // ---- 功能热键绑定 ------------------------------------------------------
+        // ---- 功能热键绑定（从配置读取多 combo）----------------------------
 
-        // 打开菜单：
-        GameInputManager::instance().registerEmuFunctionKey(
-            EmuFunctionKey::EMU_OPEN_MENU,
-            {{brls::BUTTON_RT, brls::BUTTON_LT}},
-            [this]()
-            {
-                brls::Logger::debug("打开菜单热键触发！");
-                GameSignal::instance().requestOpenMenu();
-                this->setFocusable(false); // 打开菜单时暂时取消 GameView 的焦点，避免输入冲突，菜单关闭后由 GamePage 恢复焦点
-
+        // 打开菜单
+        {
+            std::string val = GET_SETTING_KEY_STR("hotkey.menu.pad", "LT+RT");
+            auto combos = beiklive::tools::parseMultiCombo(val);
+            for (const auto& combo : combos) {
+                GameInputManager::instance().registerEmuFunctionKey(
+                    EmuFunctionKey::EMU_OPEN_MENU, {combo},
+                    [this]() {
+                        brls::Logger::debug("打开菜单热键触发！");
+                        GameSignal::instance().requestOpenMenu();
+                        this->setFocusable(false);
+                    });
             }
-            // TriggerType::LONG_PRESS,
-            // 2.5f
-        );
+        }
 
-        // 快进：LSB 切换  TODO: hold状态需要专门写press/release来控制，不能直接用HOLD，否则会导致按住时反复触发开关
-        GameInputManager::instance().registerEmuFunctionKey(
-            EmuFunctionKey::EMU_FAST_FORWARD,
-            {{brls::BUTTON_LSB}},
-            []()
-            {
-                bool cur = GameSignal::instance().isFastForward();
-                GameSignal::instance().requestFastForward(!cur);
-                brls::Logger::debug("快进切换：{}", !cur);
+        // 快进切换
+        {
+            std::string val = GET_SETTING_KEY_STR("handle.fastforward", "LSB");
+            auto combos = beiklive::tools::parseMultiCombo(val);
+            for (const auto& combo : combos) {
+                GameInputManager::instance().registerEmuFunctionKey(
+                    EmuFunctionKey::EMU_FAST_FORWARD, {combo},
+                    []() {
+                        bool cur = GameSignal::instance().isFastForward();
+                        GameSignal::instance().requestFastForward(!cur);
+                        brls::Logger::debug("快进切换：{}", !cur);
+                    });
             }
-        );
+        }
 
-        // 倒带：RSB 切换  TODO: hold状态需要专门写press/release来控制，不能直接用HOLD，否则会导致按住时反复触发开关
-        GameInputManager::instance().registerEmuFunctionKey(
-            EmuFunctionKey::EMU_REWIND,
-            {{brls::BUTTON_RSB}},
-            []()
-            {
-                bool cur = GameSignal::instance().isRewinding();
-                GameSignal::instance().requestRewind(!cur);
-                brls::Logger::debug("倒带切换：{}", !cur);
-            });
+        // 倒带切换
+        {
+            std::string val = GET_SETTING_KEY_STR("handle.rewind", "RSB");
+            auto combos = beiklive::tools::parseMultiCombo(val);
+            for (const auto& combo : combos) {
+                GameInputManager::instance().registerEmuFunctionKey(
+                    EmuFunctionKey::EMU_REWIND, {combo},
+                    []() {
+                        bool cur = GameSignal::instance().isRewinding();
+                        GameSignal::instance().requestRewind(!cur);
+                        brls::Logger::debug("倒带切换：{}", !cur);
+                    });
+            }
+        }
+
+        // 快速保存（默认槽位 1）
+        {
+            std::string val = GET_SETTING_KEY_STR("hotkey.quicksave.pad", "none");
+            auto combos = beiklive::tools::parseMultiCombo(val);
+            for (const auto& combo : combos) {
+                GameInputManager::instance().registerEmuFunctionKey(
+                    EmuFunctionKey::EMU_QUICK_SAVE, {combo},
+                    []() { GameSignal::instance().requestQuickSave(1); });
+            }
+        }
+
+        // 快速读取（默认槽位 1）
+        {
+            std::string val = GET_SETTING_KEY_STR("hotkey.quickload.pad", "none");
+            auto combos = beiklive::tools::parseMultiCombo(val);
+            for (const auto& combo : combos) {
+                GameInputManager::instance().registerEmuFunctionKey(
+                    EmuFunctionKey::EMU_QUICK_LOAD, {combo},
+                    []() { GameSignal::instance().requestQuickLoad(1); });
+            }
+        }
+
+        // 静音切换
+        {
+            std::string val = GET_SETTING_KEY_STR("hotkey.mute.pad", "none");
+            auto combos = beiklive::tools::parseMultiCombo(val);
+            for (const auto& combo : combos) {
+                GameInputManager::instance().registerEmuFunctionKey(
+                    EmuFunctionKey::EMU_MUTE, {combo},
+                    []() {
+                        bool cur = GameSignal::instance().isMuted();
+                        GameSignal::instance().requestMute(!cur);
+                    });
+            }
+        }
     }
 
     // ============================================================

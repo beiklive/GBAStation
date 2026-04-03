@@ -589,3 +589,45 @@ UI 层:    MyActivity → StartPage → GamePage → GameView/GameMenuView
   - `logoPath`：使用平台默认封面图标
   - `screenShotPath`：使用全局screenshots目录
 - 两种GamePage构造方式（DirListData和GameEntry）都调用此方法
+
+---
+
+## 2026-04-03 修复PR#162：旧代码混入src的逻辑混乱问题
+
+### 任务分析
+
+**任务目标**：PR #162在旧代码路径（`old/` 风格：`src/Control/`、`src/Game/`、`src/UI/Pages/`）实现了功能，而非新代码路径（`src/ui/`、`src/game/`、`src/core/`），导致新代码中的设置界面和游戏输入映射存在逻辑问题：设置保存后不生效、硬编码按键无法更改、摇杆斜向输入不支持配置。
+
+**输入**：新代码中GameView的`_registerGameInput()`硬编码按键，SettingPage的A键覆盖而非追加，无摇杆设置UI，processStick不支持斜向模式。
+
+**输出**：按键映射从配置动态读取、A键追加combo、X键清空、新增摇杆开关与斜向开关、`processStick`支持斜向模式配置。
+
+### 实现内容
+
+#### 1. 按键字符串解析工具（Tools.hpp / Tools.cpp）
+- 新增 `parsePadCombo(string)` → `vector<int>`：将"LB+START"解析为按键ID列表（大小写不敏感）
+- 新增 `parseMultiCombo(string)` → `vector<vector<int>>`：将"A,LB+A"解析为多组combo（逗号分隔）
+- 利用 `k_gameInputNames` 实现名称→ID映射
+
+#### 2. 配置默认值（common.cpp）
+- 新增 `handle.a/b/x/y/up/down/left/right/l/r/l2/r2/l3/r3/start/select` 默认值
+- 新增摇杆方向键默认值（lstick_*/rstick_*）
+- 新增功能热键默认值（fastforward/rewind/hotkey.menu.pad等）
+- 新增 `input.joystick.enabled=1`、`input.joystick.diagonal=1` 默认值
+
+#### 3. GameInputManager斜向模式（GameInputManager.hpp / .cpp）
+- 新增 `m_diagonalMode` 成员变量（默认true）
+- 新增 `setDiagonalMode(bool)` 公开接口
+- `processStick()` 根据 `m_diagonalMode` 决定是否同时激活X和Y轴
+
+#### 4. GameView从配置读取按键映射（GameView.cpp）
+- 移除硬编码的 `gameBtnMaps[]` 和 `stickBtnMaps[]`
+- `_registerGameInput()` 从 `handle.xxx` 配置动态读取多combo按键，注册HOLD/RELEASE回调
+- 摇杆映射根据 `input.joystick.enabled` 开关决定是否注册
+- 功能热键（menu/fastforward/rewind/quicksave/quickload/mute）从配置读取多combo
+
+#### 5. SettingPage按键UI重制（SettingPage.cpp）
+- 添加 `<sstream>` include
+- `buildKeyBindTab()`：重构为局部辅助lambda `registerKeyBindActions`：A键追加combo（逗号分隔，去重），X键清空
+- 新增"功能热键绑定"分区标题（原"热键绑定（手柄）"）
+- 新增"摇杆设置"分区：启用左摇杆输入开关、允许斜向输入开关

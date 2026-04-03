@@ -51,4 +51,16 @@ std::string getTimestampString();
 // 获取文件最后修改时间的字符串（格式：YYYY-MM-DD HH:MM:SS，失败时返回空字符串）
 std::string getFileModTimeStr(const std::string& path);
 
+// ── 按键字符串解析 ──────────────────────────────────────────────────────────
+
+/// 将按键名称字符串（如 "A"、"LB+START"）解析为 GameInputPad ID 列表。
+/// "+" 分隔表示组合键（同时按下），大小写不敏感。
+/// 若字符串为 "none" 或空，返回空列表。
+std::vector<int> parsePadCombo(const std::string& combo);
+
+/// 将多 combo 字符串（逗号分隔，如 "A,LB+A"）解析为多组 combo。
+/// 外层 vector 为各组合（OR 关系），内层为各按键（AND 关系）。
+/// "none" 或空字符串返回空列表。
+std::vector<std::vector<int>> parseMultiCombo(const std::string& val);
+
 } // namespace beiklive::tools
