@@ -44,6 +44,8 @@ namespace beiklive
         else
         {
             // GameEntry 已经包含了游戏的完整信息，可以直接使用，无需再处理一次
+            // 仍需检查并补全可能为空的路径字段
+            _initGameEntryPaths();
             updateGameCount();
 
             _setupGame();
@@ -93,8 +95,67 @@ namespace beiklive
             m_gameEntry = foundByCrc.value();
         }
 
+        // 初始化路径字段（优先使用已有记录，若为空则从配置中读取默认值）
+        _initGameEntryPaths();
+
         updateGameCount();
         brls::Logger::debug("GamePage 游戏条目已保存到数据库: {}", m_gameData.fullPath);
+    }
+
+    void GamePage::_initGameEntryPaths()
+    {
+        namespace sk = beiklive::SettingKey;
+        std::filesystem::path gamePath(m_gameEntry.path);
+        std::string baseName = gamePath.stem().string(); // 游戏文件名（不含扩展名）
+        std::string gameDir  = gamePath.parent_path().string();
+
+        // savePath：优先使用已有值，否则从设置读取 save.sramDir，为空时使用全局 saves 目录
+        if (m_gameEntry.savePath.empty())
+        {
+            std::string sramDir = GET_SETTING_KEY_STR("save.sramDir", "");
+            m_gameEntry.savePath = sramDir.empty() ? beiklive::path::savePath() : sramDir;
+        }
+
+        // cheatPath：优先使用已有值，否则构建为 <cheat目录>/<游戏名>.cht
+        if (m_gameEntry.cheatPath.empty())
+        {
+            std::string cheatDir = GET_SETTING_KEY_STR("cheat.dir", "");
+            if (cheatDir.empty())
+                cheatDir = beiklive::path::cheatPath();
+            m_gameEntry.cheatPath = cheatDir + beiklive::path::SPLIT_CHAR + baseName + ".cht";
+        }
+
+        // overlayPath：优先使用已有值，否则从设置读取平台对应的遮罩路径
+        if (m_gameEntry.overlayPath.empty())
+        {
+            std::string overlayKey;
+            switch (static_cast<beiklive::enums::EmuPlatform>(m_gameEntry.platform))
+            {
+                case beiklive::enums::EmuPlatform::EmuGBA: overlayKey = sk::KEY_DISPLAY_OVERLAY_GBA_PATH; break;
+                case beiklive::enums::EmuPlatform::EmuGBC: overlayKey = sk::KEY_DISPLAY_OVERLAY_GBC_PATH; break;
+                case beiklive::enums::EmuPlatform::EmuGB:  overlayKey = sk::KEY_DISPLAY_OVERLAY_GB_PATH;  break;
+                default: break;
+            }
+            if (!overlayKey.empty())
+                m_gameEntry.overlayPath = GET_SETTING_KEY_STR(overlayKey.c_str(), "");
+        }
+
+        // logoPath：优先使用已有值（包括自定义封面），否则使用平台默认图标
+        if (m_gameEntry.logoPath.empty())
+        {
+            m_gameEntry.logoPath = beiklive::tools::getDefaultLogoPath(
+                static_cast<beiklive::enums::EmuPlatform>(m_gameEntry.platform));
+        }
+
+        // screenShotPath：优先使用已有值，否则使用全局截图目录
+        if (m_gameEntry.screenShotPath.empty())
+        {
+            m_gameEntry.screenShotPath = beiklive::path::screenshotPath();
+        }
+
+        brls::Logger::debug("GamePage 路径初始化完成: savePath={}, cheatPath={}, overlayPath={}, logoPath={}, screenShotPath={}",
+            m_gameEntry.savePath, m_gameEntry.cheatPath, m_gameEntry.overlayPath,
+            m_gameEntry.logoPath, m_gameEntry.screenShotPath);
     }
 
     void GamePage::PageInit()

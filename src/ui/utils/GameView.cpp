@@ -251,6 +251,36 @@ namespace beiklive
                 TriggerType::RELEASE);
         }
 
+        // ---- 左右摇杆方向键映射（先映射为方向键功能，后续可调整）--------------------
+        struct StickBtnMap {
+            EmuFunctionKey emuKey;
+            int            stickPad;
+            unsigned       retroId;
+        };
+        static const StickBtnMap stickBtnMaps[] = {
+            { EMU_LEFT_STICK_UP,     STATE_PAD_LEFT_STICK_UP,     4  }, // UP
+            { EMU_LEFT_STICK_DOWN,   STATE_PAD_LEFT_STICK_DOWN,   5  }, // DOWN
+            { EMU_LEFT_STICK_LEFT,   STATE_PAD_LEFT_STICK_LEFT,   6  }, // LEFT
+            { EMU_LEFT_STICK_RIGHT,  STATE_PAD_LEFT_STICK_RIGHT,  7  }, // RIGHT
+            { EMU_RIGHT_STICK_UP,    STATE_PAD_RIGHT_STICK_UP,    4  }, // UP
+            { EMU_RIGHT_STICK_DOWN,  STATE_PAD_RIGHT_STICK_DOWN,  5  }, // DOWN
+            { EMU_RIGHT_STICK_LEFT,  STATE_PAD_RIGHT_STICK_LEFT,  6  }, // LEFT
+            { EMU_RIGHT_STICK_RIGHT, STATE_PAD_RIGHT_STICK_RIGHT, 7  }, // RIGHT
+        };
+        for (const auto& m : stickBtnMaps) {
+            unsigned rid = m.retroId;
+            // 按住持续置位
+            GameInputManager::instance().registerEmuFunctionKey(
+                m.emuKey, {{m.stickPad}},
+                [rid]() { GameSignal::instance().pressGameButton(rid); },
+                TriggerType::HOLD);
+            // 松开时清除
+            GameInputManager::instance().registerEmuFunctionKey(
+                m.emuKey, {{m.stickPad}},
+                [rid]() { GameSignal::instance().releaseGameButton(rid); },
+                TriggerType::RELEASE);
+        }
+
         // ---- 功能热键绑定 ------------------------------------------------------
 
         // 打开菜单：

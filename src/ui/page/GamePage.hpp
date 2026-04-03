@@ -20,6 +20,7 @@ namespace beiklive
     private:
         void PageInit();
         void GameEntryInitialize();
+        void _initGameEntryPaths();  // 初始化 GameEntry 中的各路径字段
         void updateGameCount();
         void GameViewInitialize();
         void GameMenuInitialize();

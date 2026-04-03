@@ -203,6 +203,14 @@ namespace beiklive // 结构体
         EMU_QUICK_LOAD,                 // 快速读取
         EMU_OPEN_MENU,                  // 打开菜单
         EMU_MUTE,                       // 静音
+        EMU_LEFT_STICK_UP,              // 左摇杆向上
+        EMU_LEFT_STICK_DOWN,            // 左摇杆向下
+        EMU_LEFT_STICK_LEFT,            // 左摇杆向左
+        EMU_LEFT_STICK_RIGHT,           // 左摇杆向右
+        EMU_RIGHT_STICK_UP,             // 右摇杆向上
+        EMU_RIGHT_STICK_DOWN,           // 右摇杆向下
+        EMU_RIGHT_STICK_LEFT,           // 右摇杆向左
+        EMU_RIGHT_STICK_RIGHT,          // 右摇杆向右
         EMU_FUNCTION_KEY_COUNT
     };
     enum class TriggerType
@@ -243,30 +251,46 @@ namespace beiklive // 结构体
         STATE_PAD_LEFT_STICK_X    ,
         STATE_PAD_LEFT_STICK_Y    ,
         STATE_PAD_RIGHT_STICK_X   ,
-        STATE_PAD_RIGHT_STICK_Y 
+        STATE_PAD_RIGHT_STICK_Y   ,
+        STATE_PAD_LEFT_STICK_UP   ,  // 左摇杆向上
+        STATE_PAD_LEFT_STICK_DOWN ,  // 左摇杆向下
+        STATE_PAD_LEFT_STICK_LEFT ,  // 左摇杆向左
+        STATE_PAD_LEFT_STICK_RIGHT,  // 左摇杆向右
+        STATE_PAD_RIGHT_STICK_UP  ,  // 右摇杆向上
+        STATE_PAD_RIGHT_STICK_DOWN,  // 右摇杆向下
+        STATE_PAD_RIGHT_STICK_LEFT,  // 右摇杆向左
+        STATE_PAD_RIGHT_STICK_RIGHT  // 右摇杆向右
     };
     // 手柄字符值与 GameInputPad 的映射表
     static const RetroNameMap k_gameInputNames[] = {
-        { "A",           STATE_PAD_A               },
-        { "B",           STATE_PAD_B               },
-        { "X",           STATE_PAD_X               },
-        { "Y",           STATE_PAD_Y               },
-        { "UP",          STATE_PAD_UP              },
-        { "DOWN",        STATE_PAD_DOWN            },
-        { "LEFT",        STATE_PAD_LEFT            },
-        { "RIGHT",       STATE_PAD_RIGHT           },
-        { "LB",          STATE_PAD_LB               },
-        { "RB",          STATE_PAD_RB               },
-        { "LT",          STATE_PAD_LT              },
-        { "RT",          STATE_PAD_RT              },
-        { "LSB",         STATE_PAD_LSB              },
-        { "RSB",         STATE_PAD_RSB              },
-        { "START",       STATE_PAD_START           },
-        { "BACK",        STATE_PAD_BACK          },
-        { "LEFTSTICKX",  STATE_PAD_LEFT_STICK_X    },
-        { "LEFTSTICKY",  STATE_PAD_LEFT_STICK_Y    },
-        { "RIGHTSTICKX", STATE_PAD_RIGHT_STICK_X   },
-        { "RIGHTSTICKY", STATE_PAD_RIGHT_STICK_Y   },
+        { "A",               STATE_PAD_A                 },
+        { "B",               STATE_PAD_B                 },
+        { "X",               STATE_PAD_X                 },
+        { "Y",               STATE_PAD_Y                 },
+        { "UP",              STATE_PAD_UP                },
+        { "DOWN",            STATE_PAD_DOWN              },
+        { "LEFT",            STATE_PAD_LEFT              },
+        { "RIGHT",           STATE_PAD_RIGHT             },
+        { "LB",              STATE_PAD_LB                },
+        { "RB",              STATE_PAD_RB                },
+        { "LT",              STATE_PAD_LT                },
+        { "RT",              STATE_PAD_RT                },
+        { "LSB",             STATE_PAD_LSB               },
+        { "RSB",             STATE_PAD_RSB               },
+        { "START",           STATE_PAD_START             },
+        { "BACK",            STATE_PAD_BACK              },
+        { "LEFTSTICKX",      STATE_PAD_LEFT_STICK_X      },
+        { "LEFTSTICKY",      STATE_PAD_LEFT_STICK_Y      },
+        { "RIGHTSTICKX",     STATE_PAD_RIGHT_STICK_X     },
+        { "RIGHTSTICKY",     STATE_PAD_RIGHT_STICK_Y     },
+        { "LEFTSTICKUP",     STATE_PAD_LEFT_STICK_UP     },
+        { "LEFTSTICKDOWN",   STATE_PAD_LEFT_STICK_DOWN   },
+        { "LEFTSTICKLEFT",   STATE_PAD_LEFT_STICK_LEFT   },
+        { "LEFTSTICKRIGHT",  STATE_PAD_LEFT_STICK_RIGHT  },
+        { "RIGHTSTICKUP",    STATE_PAD_RIGHT_STICK_UP    },
+        { "RIGHTSTICKDOWN",  STATE_PAD_RIGHT_STICK_DOWN  },
+        { "RIGHTSTICKLEFT",  STATE_PAD_RIGHT_STICK_LEFT  },
+        { "RIGHTSTICKRIGHT", STATE_PAD_RIGHT_STICK_RIGHT },
     };
 
 
