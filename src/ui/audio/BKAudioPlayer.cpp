@@ -235,9 +235,14 @@ void BKAudioPlayer::_initSwitch()
     }
 
     // 获取当前程序 ID，判断是否为 qlaunch 本体
-    char bfsarPath[64] = {};
+    char bfsarPath[128] = {};
     u64 programId = 0;
-    svcGetInfo(&programId, InfoType_ProgramId, CUR_PROCESS_HANDLE, 0);
+    Result infoRc = svcGetInfo(&programId, InfoType_ProgramId, CUR_PROCESS_HANDLE, 0);
+    if (!R_SUCCEEDED(infoRc))
+    {
+        brls::Logger::warning("BKAudioPlayer: 获取程序 ID 失败: {:#x}，将以非qlaunch模式处理", infoRc);
+        programId = 0; // 确保与 BK_QLAUNCH_PID 不同
+    }
 
     if (programId != BK_QLAUNCH_PID)
     {
@@ -249,13 +254,25 @@ void BKAudioPlayer::_initSwitch()
             plsrPlayerExit();
             return;
         }
-        snprintf(bfsarPath, sizeof(bfsarPath), "%s:%s",
-                 BK_QLAUNCH_MOUNT_POINT, BK_BFSAR_PATH);
+        int written = snprintf(bfsarPath, sizeof(bfsarPath), "%s:%s",
+                               BK_QLAUNCH_MOUNT_POINT, BK_BFSAR_PATH);
+        if (written < 0 || static_cast<size_t>(written) >= sizeof(bfsarPath))
+        {
+            brls::Logger::error("BKAudioPlayer: BFSAR 路径拼接失败（路径过长）");
+            plsrPlayerExit();
+            return;
+        }
     }
     else
     {
-        snprintf(bfsarPath, sizeof(bfsarPath), "%s:%s",
-                 BK_ROMFS_MOUNT_POINT, BK_BFSAR_PATH);
+        int written = snprintf(bfsarPath, sizeof(bfsarPath), "%s:%s",
+                               BK_ROMFS_MOUNT_POINT, BK_BFSAR_PATH);
+        if (written < 0 || static_cast<size_t>(written) >= sizeof(bfsarPath))
+        {
+            brls::Logger::error("BKAudioPlayer: BFSAR 路径拼接失败（路径过长）");
+            plsrPlayerExit();
+            return;
+        }
     }
 
     // 打开 qlaunch BFSAR 音效库
