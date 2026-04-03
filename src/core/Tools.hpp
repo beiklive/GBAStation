@@ -47,4 +47,8 @@ uint32_t crc32(const std::string& path);
 
 // 获取当前时间戳字符串（格式：YYYY-MM-DD HH:MM:SS）
 std::string getTimestampString();
+
+// 获取文件最后修改时间的字符串（格式：YYYY-MM-DD HH:MM:SS，失败时返回空字符串）
+std::string getFileModTimeStr(const std::string& path);
+
 } // namespace beiklive::tools

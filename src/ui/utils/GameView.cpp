@@ -2,6 +2,14 @@
 #include "GameMenuView.hpp"
 #include "game/audio/AudioManager.hpp"
 #include "ui/utils/AnimationHelper.hpp"
+#include "core/Tools.hpp"
+
+#include <filesystem>
+#include <fstream>
+
+// stb_image_write 用于保存存档缩略图（PNG 格式）
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "third_party/borealis/library/lib/extern/glfw/deps/stb_image_write.h"
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -575,6 +583,16 @@ namespace beiklive
                 m_rewindBuffer.clear(); // 重置后清空倒带缓冲区
             }
 
+            // ---- 快速存档 ----
+            int saveSlot = sig.consumeQuickSave();
+            if (saveSlot >= 0)
+                _doSaveState(saveSlot);
+
+            // ---- 快速读档 ----
+            int loadSlot = sig.consumeQuickLoad();
+            if (loadSlot >= 0)
+                _doLoadState(loadSlot);
+
             // ---- 从信号更新游戏按键状态 ----
             m_gba_core->SetButtonsFromSignal();
 
@@ -621,6 +639,165 @@ namespace beiklive
 #ifdef _WIN32
         timeEndPeriod(1);
 #endif
+    }
+
+    // ============================================================
+    // 即时存档路径计算
+    //
+    // 存档文件命名：{romStem}.ss{slot}  (slot=0 为自动存档)
+    // 缩略图：       {statePath}.png
+    // 存档目录优先级：GameEntry.savePath → 全局 saves 目录
+    // ============================================================
+
+    std::string GameView::getStatePath(int slot) const
+    {
+        namespace fs = std::filesystem;
+
+        // 确定存档目录
+        std::string dir = m_gameEntry.savePath.empty()
+                          ? beiklive::path::savePath()
+                          : m_gameEntry.savePath;
+
+        // 提取 ROM 文件名（不含扩展名）
+        std::string stem;
+        if (!m_gameEntry.path.empty())
+            stem = fs::path(m_gameEntry.path).stem().string();
+        else
+            stem = "game";
+
+        // 确保目录存在
+        if (!dir.empty()) {
+            std::error_code ec;
+            fs::create_directories(dir, ec);
+        }
+
+        // 路径分隔符
+        std::string sep;
+        if (!dir.empty() && dir.back() != '/' && dir.back() != '\\')
+            sep = "/";
+
+        return dir + sep + stem + ".ss" + std::to_string(slot);
+    }
+
+    std::string GameView::getStateThumbPath(int slot) const
+    {
+        return getStatePath(slot) + ".png";
+    }
+
+    bool GameView::stateExists(int slot) const
+    {
+        std::error_code ec;
+        return std::filesystem::exists(getStatePath(slot), ec);
+    }
+
+    // ============================================================
+    // _doSaveState – 序列化核心状态并保存截图（游戏线程调用）
+    // ============================================================
+
+    void GameView::_doSaveState(int slot)
+    {
+        if (!m_gba_core || !m_gba_core->IsReady()) return;
+
+        std::vector<uint8_t> buf;
+        if (!m_gba_core->Serialize(buf) || buf.empty()) {
+            brls::Logger::warning("GameView: 存档序列化失败 (slot {})", slot);
+            brls::sync([slot](){
+                brls::Application::notify("存档失败 (slot " + std::to_string(slot) + ")");
+            });
+            return;
+        }
+
+        std::string path = getStatePath(slot);
+        std::ofstream f(path, std::ios::binary | std::ios::trunc);
+        if (!f) {
+            brls::Logger::warning("GameView: 无法打开存档文件写入: {}", path);
+            brls::sync([slot](){
+                brls::Application::notify("存档失败：无法写入文件 (slot " + std::to_string(slot) + ")");
+            });
+            return;
+        }
+        f.write(reinterpret_cast<const char*>(buf.data()),
+                static_cast<std::streamsize>(buf.size()));
+        f.close();
+
+        brls::Logger::info("GameView: 已保存到 {} ({} bytes)", path, buf.size());
+
+        // 保存缩略图
+        auto frame = m_gba_core->GetVideoFrame();
+        if (!frame.pixels.empty() && frame.width > 0 && frame.height > 0) {
+            std::string thumbPath = getStateThumbPath(slot);
+            stbi_write_png(thumbPath.c_str(),
+                           static_cast<int>(frame.width),
+                           static_cast<int>(frame.height),
+                           4,   // RGBA
+                           frame.pixels.data(),
+                           static_cast<int>(frame.width * 4));
+        }
+
+        // UI 线程通知
+        brls::sync([slot](){
+            std::string msg = (slot == 0) ? "已保存到自动存档" : "已保存到槽位 " + std::to_string(slot);
+            brls::Application::notify(msg);
+        });
+    }
+
+    // ============================================================
+    // _doLoadState – 从文件反序列化核心状态（游戏线程调用）
+    // ============================================================
+
+    void GameView::_doLoadState(int slot)
+    {
+        if (!m_gba_core || !m_gba_core->IsReady()) return;
+
+        std::string path = getStatePath(slot);
+        if (!std::filesystem::exists(path)) {
+            brls::Logger::warning("GameView: 存档文件不存在: {}", path);
+            brls::sync([slot](){
+                brls::Application::notify("读取失败：槽位 " + std::to_string(slot) + " 无存档");
+            });
+            return;
+        }
+
+        std::ifstream f(path, std::ios::binary);
+        if (!f) {
+            brls::Logger::warning("GameView: 无法打开存档文件读取: {}", path);
+            brls::sync([slot](){
+                brls::Application::notify("读取失败：无法读取文件 (slot " + std::to_string(slot) + ")");
+            });
+            return;
+        }
+
+        f.seekg(0, std::ios::end);
+        std::streampos fileSize = f.tellg();
+        f.seekg(0, std::ios::beg);
+        if (fileSize <= 0) {
+            brls::sync([slot](){
+                brls::Application::notify("读取失败：存档文件为空 (slot " + std::to_string(slot) + ")");
+            });
+            return;
+        }
+
+        std::vector<uint8_t> buf(static_cast<size_t>(fileSize));
+        f.read(reinterpret_cast<char*>(buf.data()), fileSize);
+        std::streamsize got = f.gcount();
+        f.close();
+
+        if (!m_gba_core->Unserialize(buf)) {
+            brls::Logger::warning("GameView: 存档反序列化失败 (slot {})", slot);
+            brls::sync([slot](){
+                brls::Application::notify("读取失败 (slot " + std::to_string(slot) + ")");
+            });
+            return;
+        }
+
+        // 读档后清空倒带缓冲区，避免时序混乱
+        m_rewindBuffer.clear();
+
+        brls::Logger::info("GameView: 已从 {} 读取状态 ({} bytes)", path, got);
+        brls::sync([slot](){
+            std::string msg = (slot == 0) ? "已从自动存档读取" : "已从槽位 " + std::to_string(slot) + " 读取";
+            brls::Application::notify(msg);
+        });
     }
 
 } // namespace beiklive

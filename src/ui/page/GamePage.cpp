@@ -3,6 +3,8 @@
 #include "core/GameSignal.hpp"
 #include "ui/utils/AnimationHelper.hpp"
 
+#include <filesystem>
+
 namespace beiklive
 {
     // 菜单动画时长常量（毫秒）
@@ -154,6 +156,33 @@ namespace beiklive
                     GameSignal::instance().requestExit();
                 });
             });
+        });
+
+        // 注入保存状态回调：通过 GameSignal 在游戏线程中执行实际存档
+        m_gameMenuView->setSaveStateCallback([this](int slot) {
+            GameSignal::instance().requestQuickSave(slot);
+        });
+
+        // 注入读取状态回调：通过 GameSignal 在游戏线程中执行实际读档
+        m_gameMenuView->setLoadStateCallback([this](int slot) {
+            GameSignal::instance().requestQuickLoad(slot);
+        });
+
+        // 注入槽位信息查询回调：供菜单面板异步扫描存档目录
+        m_gameMenuView->setStateInfoCallback([this](int slot) -> beiklive::StateSlotInfo {
+            beiklive::StateSlotInfo info;
+            if (!m_gameView) return info;
+            std::string statePath = m_gameView->getStatePath(slot);
+            std::string thumbPath = m_gameView->getStateThumbPath(slot);
+            std::error_code ec;
+            info.exists = std::filesystem::exists(statePath, ec);
+            if (info.exists) {
+                if (std::filesystem::exists(thumbPath, ec))
+                    info.thumbPath = thumbPath;
+                // 使用公共工具函数读取文件修改时间字符串
+                info.timeStr = beiklive::tools::getFileModTimeStr(statePath);
+            }
+            return info;
         });
 
         this->addView(m_gameMenuView);
