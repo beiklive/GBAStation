@@ -104,6 +104,7 @@ namespace beiklive
         switchLayout->onGameLibraryOpened = [this]()
         {
             brls::Logger::info("Game Library opened");
+            _openGameLibrary();
         };
 
         switchLayout->onFileBrowserOpened = [this]()
@@ -132,6 +133,16 @@ namespace beiklive
                        { brls::Application::quit(); });
         };
         this->getContentBox()->addView(switchLayout);
+    }
+
+    void StartPage::_openGameLibrary()
+    {
+        brls::Logger::debug("Opening Game Library Page");
+        auto *gameLibraryPage = new beiklive::GameLibraryPage();
+        auto *frame           = new brls::AppletFrame(gameLibraryPage);
+        HIDE_BRLS_BAR(frame);
+        brls::sync([frame]()
+                   { brls::Application::pushActivity(new brls::Activity(frame)); });
     }
 
     void StartPage::_openFileList()

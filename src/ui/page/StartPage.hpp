@@ -6,6 +6,7 @@
 #include "ui/page/GamePage.hpp"
 #include "ui/page/SettingPage.hpp"
 #include "ui/page/AboutPage.hpp"
+#include "ui/page/GameLibraryPage.hpp"
 #include "ui/utils/Box.hpp"
 
 namespace beiklive
@@ -21,6 +22,7 @@ namespace beiklive
 
     private:
         void _useSwitchLayout();
+        void _openGameLibrary();
         void _openFileList();
         void _openSettings();
         void _openAbout();

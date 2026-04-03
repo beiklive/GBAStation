@@ -74,6 +74,8 @@ namespace beiklive
         : m_columns(columns)
     {
         this->setAxis(brls::Axis::COLUMN);
+        this->setWidthPercentage(100.f);
+        this->setHeightPercentage(100.f);
         this->setGrow(1.0f);
 
         // 垂直滚动容器，焦点移动时自动滚动保持聚焦单元格可见

@@ -18,7 +18,7 @@ namespace beiklive
         this->setAlignItems(brls::AlignItems::CENTER);
         this->setJustifyContent(brls::JustifyContent::CENTER);
         this->setFocusable(true);
-        HIDE_BRLS_HIGHLIGHT(this);
+        // HIDE_BRLS_HIGHLIGHT(this);
 
         // 注册 A 键点击动作
         this->registerAction(
@@ -48,6 +48,8 @@ namespace beiklive
         m_emptyLabel->setFontSize(16.f);
         m_emptyLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
         m_emptyLabel->setMarginTop(4.f);
+        m_emptyLabel->setHeightPercentage(100.f);
+        m_emptyLabel->setWidthPercentage(100.f);
         m_emptyLabel->setSingleLine(true);
         m_emptyLabel->setAnimated(true);
         m_emptyLabel->setAutoAnimate(true);
@@ -55,7 +57,7 @@ namespace beiklive
 
         // ─── 有数据主布局（横向）────────────────────────────────────────────
         m_dataLayout = new brls::Box(brls::Axis::ROW);
-        m_dataLayout->setGrow(1.f);
+        m_dataLayout->setWidthPercentage(100.f);
         m_dataLayout->setAlignItems(brls::AlignItems::CENTER);
         m_dataLayout->setJustifyContent(brls::JustifyContent::FLEX_START);
         m_dataLayout->setFocusable(false);

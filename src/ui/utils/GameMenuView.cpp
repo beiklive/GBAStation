@@ -33,10 +33,7 @@ namespace beiklive
         this->setJustifyContent(brls::JustifyContent::CENTER);
         this->setAlignItems(brls::AlignItems::CENTER);
 
-        this->registerAction("返回游戏", brls::BUTTON_B, [this](brls::View*) -> bool {
-            if (m_onResume) m_onResume();
-            return true;
-        });
+
 
         // 居中面板
         m_panel = new brls::Box();
@@ -54,11 +51,15 @@ namespace beiklive
         m_contrlPanel->setAxis(brls::Axis::COLUMN);
         m_contrlPanel->setJustifyContent(brls::JustifyContent::CENTER);
         m_contrlPanel->setAlignItems(brls::AlignItems::FLEX_END);
-        m_contrlPanel->setWidthPercentage(30.f);
+        m_contrlPanel->setWidthPercentage(40.f);
         m_contrlPanel->setHeightPercentage(100.f);
         m_contrlPanel->setBackgroundColor(nvgRGBA(0, 0, 0, 10));
         m_contrlPanel->setPadding(24.f);
         m_panel->addView(m_contrlPanel);
+        m_contrlPanel->registerAction("返回", brls::BUTTON_B, [this](brls::View*) -> bool {
+            if (m_onResume) m_onResume();
+            return true;
+        });
 
         // 右侧视图栏
         m_viewPanel = new brls::Box();
@@ -66,10 +67,20 @@ namespace beiklive
         m_viewPanel->setJustifyContent(brls::JustifyContent::CENTER);
         m_viewPanel->setAlignItems(brls::AlignItems::FLEX_START);
         m_viewPanel->setHeightPercentage(100.f);
+        // m_viewPanel->setWidthPercentage(70.f);
+        m_viewPanel->setFocusable(false);
         m_viewPanel->setGrow(1.f);
         m_viewPanel->setBackground(brls::ViewBackground::NONE);
         m_viewPanel->setPadding(16.f);
         m_panel->addView(m_viewPanel);
+
+        m_viewPanel->registerAction("返回", brls::BUTTON_B, [this](brls::View*) -> bool {
+            brls::sync([this]() {
+                brls::Application::giveFocus(m_contrlPanel->getDefaultFocus());
+            });
+            return true;
+        });
+
 
         // 标题
         m_title = new brls::Label();
@@ -92,6 +103,7 @@ namespace beiklive
         m_viewPanel->addView(savePanel);
         m_allPanels.push_back(savePanel);
         m_savePanel = savePanel;
+
         auto* btnSave = _createMenuButton("💾  保存状态", [](){}, savePanel);
         m_contrlPanel->addView(btnSave);
 
@@ -198,7 +210,7 @@ namespace beiklive
                 btn->setBackgroundColor(nvgRGBA(255, 255, 255, 20));
                 _hideAllPanels();
                 sonPanel->setVisibility(brls::Visibility::VISIBLE);
-                sonPanel->setFocusable(true);
+
                 // 保存/读取状态面板：异步刷新槽位信息
                 if (m_savePanel && sonPanel == m_savePanel)
                     _refreshStatePanel(true);
@@ -256,8 +268,10 @@ namespace beiklive
 
         auto* titleLabel = new brls::Label();
         titleLabel->setText("保存状态");
-        titleLabel->setFontSize(18.f);
+        titleLabel->setFontSize(24.f);
+        titleLabel->setMarginTop(8.f);
         titleLabel->setMarginBottom(8.f);
+        titleLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
         titleLabel->setFocusable(false);
         wrapper->addView(titleLabel);
 
@@ -306,8 +320,11 @@ namespace beiklive
 
         auto* titleLabel = new brls::Label();
         titleLabel->setText("读取状态");
-        titleLabel->setFontSize(18.f);
+        titleLabel->setFontSize(24.f);
         titleLabel->setMarginBottom(8.f);
+        titleLabel->setMarginTop(8.f);
+        titleLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+
         titleLabel->setFocusable(false);
         wrapper->addView(titleLabel);
 
