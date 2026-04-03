@@ -1012,6 +1012,10 @@ static const GameBtnEntry k_gameBtns[] = {
     {"上", "up"},        {"下", "down"},     {"左", "left"},     {"右", "right"},
     {"L1", "l"},         {"R1", "r"},        {"L2", "l2"},       {"R2", "r2"},
     {"START", "start"},  {"SELECT", "select"},
+    {"左摇杆上", "lstick_up"},   {"左摇杆下", "lstick_down"},
+    {"左摇杆左", "lstick_left"}, {"左摇杆右", "lstick_right"},
+    {"右摇杆上", "rstick_up"},   {"右摇杆下", "rstick_down"},
+    {"右摇杆左", "rstick_left"}, {"右摇杆右", "rstick_right"},
 };
 static constexpr int k_gameBtnCount =
     static_cast<int>(sizeof(k_gameBtns) / sizeof(k_gameBtns[0]));

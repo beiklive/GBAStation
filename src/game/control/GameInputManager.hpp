@@ -131,7 +131,8 @@ namespace beiklive
         bool containsCombo(const std::set<int>& active, const std::vector<int>& combo);
         bool isComboJustTriggered(const std::vector<int>& combo);
 
-        void processStick(float x, float y, int axisX, int axisY);
+        void processStick(float x, float y, int axisX, int axisY,
+                          int dirLeft, int dirRight, int dirUp, int dirDown);
 
         bool isLongPress(int key, float threshold = 0.5f);
         bool isShortPress(int key, float threshold = 0.5f);

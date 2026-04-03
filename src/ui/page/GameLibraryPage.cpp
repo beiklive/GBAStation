@@ -179,6 +179,7 @@ namespace beiklive
                         _sortEntries();
                         _rebuildGrid();
                         _updateHeader();
+                        brls::Application::giveFocus(m_grid);
                     });
                 });
             });
@@ -228,15 +229,14 @@ namespace beiklive
 
         int hours   = seconds / 3600;
         int minutes = (seconds % 3600) / 60;
-        int secs    = seconds % 60;
 
         char buf[64];
         if (hours > 0)
             std::snprintf(buf, sizeof(buf), "%d 小时 %d 分钟", hours, minutes);
         else if (minutes > 0)
-            std::snprintf(buf, sizeof(buf), "%d 分钟 %d 秒", minutes, secs);
+            std::snprintf(buf, sizeof(buf), "%d 分钟", minutes);
         else
-            std::snprintf(buf, sizeof(buf), "%d 秒", secs);
+            std::snprintf(buf, sizeof(buf), "不到 1 分钟");
 
         return std::string(buf);
     }

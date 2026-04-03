@@ -176,9 +176,9 @@ std::string getTimestampString() {
     auto now = std::chrono::system_clock::now();
     std::time_t now_time_t = std::chrono::system_clock::to_time_t(now);
     std::tm* now_tm = std::localtime(&now_time_t);
-    std::ostringstream oss;
-    oss << std::put_time(now_tm, "%y-%m-%d %H-%M-%S");
-    return oss.str();
+    char buf[64];
+    std::strftime(buf, sizeof(buf), "%y-%m-%d %H时%M分", now_tm);
+    return std::string(buf);
 }
 
 std::string getFileModTimeStr(const std::string& path) {

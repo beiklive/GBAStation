@@ -336,11 +336,19 @@ namespace beiklive
         }
         processStick(leftXAxis, leftYAxis,
                      STATE_PAD_LEFT_STICK_X,
-                     STATE_PAD_LEFT_STICK_Y);
+                     STATE_PAD_LEFT_STICK_Y,
+                     STATE_PAD_LEFT_STICK_LEFT,
+                     STATE_PAD_LEFT_STICK_RIGHT,
+                     STATE_PAD_LEFT_STICK_UP,
+                     STATE_PAD_LEFT_STICK_DOWN);
 
         processStick(rightXAxis, rightYAxis,
                      STATE_PAD_RIGHT_STICK_X,
-                     STATE_PAD_RIGHT_STICK_Y);
+                     STATE_PAD_RIGHT_STICK_Y,
+                     STATE_PAD_RIGHT_STICK_LEFT,
+                     STATE_PAD_RIGHT_STICK_RIGHT,
+                     STATE_PAD_RIGHT_STICK_UP,
+                     STATE_PAD_RIGHT_STICK_DOWN);
 
         // 开始逐个处理按钮输入，根据按钮状态设置对应的位
         auto SET_GAME_PAD_STATE = [&](int LIMELIGHT_KEY, int GAMEPAD_BUTTON)
@@ -412,7 +420,8 @@ namespace beiklive
         return now && !before;
     }
 
-    void GameInputManager::processStick(float x, float y, int axisX, int axisY)
+    void GameInputManager::processStick(float x, float y, int axisX, int axisY,
+                                        int dirLeft, int dirRight, int dirUp, int dirDown)
     {
         const float DEADZONE = 0.2f;
         const float AXIS_DOMINANCE = 1.5f;
@@ -425,11 +434,15 @@ namespace beiklive
 
         if (absX > absY * AXIS_DOMINANCE)
         {
+            // 水平方向为主
             activeInputs.push_back(axisX);
+            activeInputs.push_back(x > 0 ? dirRight : dirLeft);
         }
         else if (absY > absX * AXIS_DOMINANCE)
         {
+            // 垂直方向为主（brls Y轴：正值朝下，负值朝上）
             activeInputs.push_back(axisY);
+            activeInputs.push_back(y > 0 ? dirDown : dirUp);
         }
     }
 

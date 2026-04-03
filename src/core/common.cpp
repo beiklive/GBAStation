@@ -35,7 +35,79 @@ void ConfigureInit(){
         SettingManager->Set("db_path", beiklive::ConfigValue(beiklive::path::databaseFilePath()));
     }
 
+    // ── 预设所有设置项的默认值（仅当配置文件中不存在时才设置）──────────────
+    using namespace beiklive::SettingKey;
 
+    // UI 背景图片设置
+    SettingManager->SetDefault(KEY_UI_SHOW_BG_IMAGE,       ConfigValue(0));
+    SettingManager->SetDefault(KEY_UI_BG_IMAGE_PATH,        ConfigValue(std::string("")));
+    SettingManager->SetDefault(KEY_UI_BG_BLUR_ENABLED,      ConfigValue(0));
+    SettingManager->SetDefault(KEY_UI_BG_BLUR_RADIUS,       ConfigValue(12.0f));
+    SettingManager->SetDefault(KEY_UI_SHOW_XMB_BG,          ConfigValue(0));
+    SettingManager->SetDefault(KEY_UI_PSPXMB_COLOR,         ConfigValue(std::string("blue")));
+    SettingManager->SetDefault(KEY_UI_USE_SAVESTATE_THUMB,  ConfigValue(0));
+
+    // 遮罩设置
+    SettingManager->SetDefault(KEY_DISPLAY_OVERLAY_ENABLED,  ConfigValue(0));
+    SettingManager->SetDefault(KEY_DISPLAY_OVERLAY_GBA_PATH, ConfigValue(std::string("")));
+    SettingManager->SetDefault(KEY_DISPLAY_OVERLAY_GBC_PATH, ConfigValue(std::string("")));
+    SettingManager->SetDefault(KEY_DISPLAY_OVERLAY_GB_PATH,  ConfigValue(std::string("")));
+
+    // 着色器设置
+    SettingManager->SetDefault(KEY_DISPLAY_SHADER_ENABLED,  ConfigValue(0));
+    SettingManager->SetDefault(KEY_DISPLAY_SHADER_PATH,     ConfigValue(std::string("")));
+    SettingManager->SetDefault(KEY_DISPLAY_SHADER_GBA_PATH, ConfigValue(std::string("")));
+    SettingManager->SetDefault(KEY_DISPLAY_SHADER_GBC_PATH, ConfigValue(std::string("")));
+    SettingManager->SetDefault(KEY_DISPLAY_SHADER_GB_PATH,  ConfigValue(std::string("")));
+
+    // 调试设置
+    SettingManager->SetDefault(KEY_DEBUG_LOG_LEVEL,   ConfigValue(std::string("info")));
+    SettingManager->SetDefault(KEY_DEBUG_LOG_FILE,    ConfigValue(0));
+    SettingManager->SetDefault(KEY_DEBUG_LOG_OVERLAY, ConfigValue(0));
+
+    // 快进设置
+    SettingManager->SetDefault("fastforward.enabled",    ConfigValue(1));
+    SettingManager->SetDefault("fastforward.mode",       ConfigValue(std::string("hold")));
+    SettingManager->SetDefault("fastforward.multiplier", ConfigValue(4.0f));
+    SettingManager->SetDefault("fastforward.mute",       ConfigValue(1));
+
+    // 倒带设置
+    SettingManager->SetDefault("rewind.enabled",    ConfigValue(0));
+    SettingManager->SetDefault("rewind.mode",       ConfigValue(std::string("hold")));
+    SettingManager->SetDefault("rewind.bufferSize", ConfigValue(3600));
+    SettingManager->SetDefault("rewind.step",       ConfigValue(2));
+    SettingManager->SetDefault("rewind.mute",       ConfigValue(0));
+
+    // 核心设置
+    SettingManager->SetDefault("core.mgba_gb_model",              ConfigValue(std::string("Autodetect")));
+    SettingManager->SetDefault("core.mgba_use_bios",              ConfigValue(std::string("ON")));
+    SettingManager->SetDefault("core.mgba_skip_bios",             ConfigValue(std::string("OFF")));
+    SettingManager->SetDefault("core.mgba_gb_colors",             ConfigValue(std::string("Grayscale")));
+    SettingManager->SetDefault("core.mgba_idle_optimization",     ConfigValue(std::string("Remove Known")));
+    SettingManager->SetDefault("core.mgba_audio_low_pass_filter", ConfigValue(std::string("disabled")));
+
+    // 画面设置
+    SettingManager->SetDefault("display.mode",                ConfigValue(std::string("original")));
+    SettingManager->SetDefault("display.integer_scale_mult",  ConfigValue(0));
+    SettingManager->SetDefault("display.filter",              ConfigValue(std::string("nearest")));
+    SettingManager->SetDefault("display.showFps",             ConfigValue(0));
+    SettingManager->SetDefault("display.showFfOverlay",       ConfigValue(1));
+    SettingManager->SetDefault("display.showRewindOverlay",   ConfigValue(1));
+    SettingManager->SetDefault("display.showMuteOverlay",     ConfigValue(1));
+
+    // 存档设置
+    SettingManager->SetDefault("save.autoSaveState",    ConfigValue(0));
+    SettingManager->SetDefault("save.autoSaveInterval", ConfigValue(0));
+    SettingManager->SetDefault("save.autoLoadState0",   ConfigValue(0));
+    SettingManager->SetDefault("save.sramDir",          ConfigValue(std::string("")));
+    SettingManager->SetDefault("save.stateDir",         ConfigValue(std::string("")));
+
+    // 截图设置
+    SettingManager->SetDefault("screenshot.dir", ConfigValue(0));
+
+    // 金手指设置
+    SettingManager->SetDefault("cheat.enabled", ConfigValue(0));
+    SettingManager->SetDefault("cheat.dir",     ConfigValue(std::string("")));
 
     SettingManager->Save();
     NameMappingManager->Save();

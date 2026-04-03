@@ -150,9 +150,18 @@ namespace beiklive
             {
                 int idx = row * m_columns + col;
                 if (idx >= total)
-                    break;
+                {
+                    // 当最后一行不满时，添加透明占位符保持每列宽度一致
+                    auto* placeholder = new brls::Box();
+                    placeholder->setFocusable(false);
+                    placeholder->setGrow(1.0f);
+                    placeholder->setMargins(5.0f, 5.0f, 5.0f, 5.0f);
+                    rowBox->addView(placeholder);
+                    continue;
+                }
 
                 auto* cell = new LazyCell(m_factories[idx], idx);
+                cell->setGrow(1.0f);
                 cell->setMargins(5.0f, 5.0f, 5.0f, 5.0f);
 
                 // 注入 GridBox 级别的回调

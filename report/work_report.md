@@ -522,3 +522,70 @@ UI 层:    MyActivity → StartPage → GamePage → GameView/GameMenuView
 
 ### 结果
 所有 6 个子任务均已完成，构建成功（`[100%] Built target GBAStation`）。
+
+---
+
+## 任务二：多Bug修复与功能增强（2026-04-03）
+
+### 任务分析
+
+#### 目标
+修复7个已知问题并实现相关功能增强。
+
+#### 输入
+- `src/ui/utils/GridBox.cpp` - GridBox布局实现
+- `src/ui/page/GameLibraryPage.cpp` - 游戏库页面
+- `src/core/Tools.cpp` - 工具函数
+- `src/core/enums.h` - 枚举定义
+- `src/game/control/GameInputManager.*` - 输入管理器
+- `src/ui/utils/GameView.cpp` - 游戏视图
+- `src/ui/page/SettingPage.cpp` - 设置页面
+- `src/core/common.cpp` - 通用初始化
+- `src/ui/page/GamePage.cpp` - 游戏页面
+
+#### 可能的挑战与解决方案
+- **GridBox占位符方案**：最后一行不满时需要添加等宽透明占位符，避免最后一个item拉伸
+- **摇杆方向区分**：processStick原来不区分轴方向，需要修改签名传入4个方向ID
+- **路径初始化时机**：GamePage有两种构造路径（DirListData和GameEntry），都需要初始化路径
+
+### 完成工作
+
+#### 1. GridBox最后一行拉伸Bug修复
+**文件**: `src/ui/utils/GridBox.cpp`
+- 在 `rebuild()` 中，当最后一行不满列数时，为剩余位置添加透明的占位Box
+- 每个 LazyCell 设置 `setGrow(1.0f)` 确保等宽分配
+
+#### 2. Y键排序后焦点崩溃Bug修复
+**文件**: `src/ui/page/GameLibraryPage.cpp`
+- 在 `_showSortDropdown()` 的排序回调中，`_rebuildGrid()` 后添加 `brls::Application::giveFocus(m_grid)`
+
+#### 3. 日期格式和游玩时间修复
+**文件**: `src/core/Tools.cpp`, `src/ui/page/GameLibraryPage.cpp`
+- `getTimestampString()` 格式改为 `%y-%m-%d %H时%M分`（不含秒）
+- `_formatPlayTime()` 去掉秒的显示，不足1分钟显示"不到1分钟"
+
+#### 4. EmuFunctionKey增加左右摇杆映射
+**文件**: `src/core/enums.h`, `src/game/control/GameInputManager.hpp/.cpp`, `src/ui/utils/GameView.cpp`
+- `GameInputPad` 枚举添加8个摇杆方向值（UP/DOWN/LEFT/RIGHT × 左右摇杆）
+- `processStick()` 修改签名为接受4个方向参数，区分正负方向推入不同枚举值
+- `EmuFunctionKey` 枚举添加 `EMU_LEFT_STICK_*` 和 `EMU_RIGHT_STICK_*`（共8个）
+- `GameView::_registerGameInput()` 注册摇杆方向映射为RETRO方向键（UP/DOWN/LEFT/RIGHT）
+
+#### 5. SettingPage按键映射添加摇杆
+**文件**: `src/ui/page/SettingPage.cpp`
+- `k_gameBtns` 数组添加左右摇杆的8个方向映射项
+
+#### 6. ConfigureInit预设所有默认值
+**文件**: `src/core/common.cpp`
+- 使用 `SettingManager->SetDefault()` 为所有设置项预设默认值
+- 涵盖UI、遮罩、着色器、调试、快进、倒带、核心、画面、存档、截图、金手指等所有设置分组
+
+#### 7. GameEntryInitialize路径初始化
+**文件**: `src/ui/page/GamePage.cpp/.hpp`
+- 新增 `_initGameEntryPaths()` 方法，统一初始化5个路径字段：
+  - `savePath`：从 `save.sramDir` 设置读取，为空时使用全局saves目录
+  - `cheatPath`：从 `cheat.dir` 设置读取，构建为 `<目录>/<游戏名>.cht`（使用std::filesystem::path）
+  - `overlayPath`：根据平台从对应KEY_DISPLAY_OVERLAY_*读取
+  - `logoPath`：使用平台默认封面图标
+  - `screenShotPath`：使用全局screenshots目录
+- 两种GamePage构造方式（DirListData和GameEntry）都调用此方法
