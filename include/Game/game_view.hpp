@@ -139,6 +139,12 @@ class GameView : public brls::Box
     /// 用户通过热键触发的静音开关（游戏线程读，主线程绘制覆盖层）
     std::atomic<bool> m_muted{false};
 
+    // ---- 摇杆输入设置 -----------------------------------------------
+    /// 左摇杆轴输入是否启用（从配置读取）。
+    bool m_joystickEnabled  = false;
+    /// 摇杆斜向输入是否允许（同时触发 X 和 Y 方向）。
+    bool m_joystickDiagonal = true;
+
     // ---- 快进运行状态 -----------------------------------------------
     /// 手柄保持键是否当前被按下（保持模式，仅游戏线程）。
     bool m_ffPadHeld       = false;

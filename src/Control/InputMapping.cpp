@@ -180,6 +180,50 @@ static std::string toUpper(const std::string& s)
     return u;
 }
 
+/// 按分隔符 sep 分割字符串，忽略空段。
+static std::vector<std::string> splitStr(const std::string& s, char sep)
+{
+    std::vector<std::string> parts;
+    std::string part;
+    for (char c : s) {
+        if (c == sep) {
+            if (!part.empty()) { parts.push_back(part); part.clear(); }
+        } else {
+            part += c;
+        }
+    }
+    if (!part.empty()) parts.push_back(part);
+    return parts;
+}
+
+/// 解析单个 combo 字符串（如 "LB+START" → [BUTTON_LB, BUTTON_START]）。
+/// 返回空 vector 表示解析失败（none 或无效）。
+static std::vector<int> parseSingleCombo(const std::string& comboStr)
+{
+    std::string upper = toUpper(comboStr);
+    if (upper.empty() || upper == "NONE") return {};
+
+    // 使用大写字符串按 '+' 分割，保证大小写不敏感解析
+    std::vector<int> result;
+    for (const auto& part : splitStr(upper, '+')) {
+        int btn = InputMappingConfig::parseGamepadButton(part);
+        if (btn >= 0) result.push_back(btn);
+    }
+    return result;
+}
+
+/// 解析多 combo 字符串（逗号分隔，如 "A,LB+A"）。
+/// 返回每个有效 combo 的按键列表（外层 vector 为各 combo，内层为各按键）。
+static std::vector<std::vector<int>> parseMultiCombo(const std::string& val)
+{
+    std::vector<std::vector<int>> result;
+    for (const auto& comboStr : splitStr(val, ',')) {
+        auto combo = parseSingleCombo(comboStr);
+        if (!combo.empty()) result.push_back(std::move(combo));
+    }
+    return result;
+}
+
 // ============================================================
 // InputMappingConfig – 静态公共解析函数
 // ============================================================
@@ -266,6 +310,10 @@ void InputMappingConfig::setDefaults(ConfigManager& cfg)
         cfg.SetDefault(k_hotkeyMeta[i].padKey,
                        CV(std::string(k_hotkeyMeta[i].padDefault)));
     }
+
+    // ---- 摇杆输入设置 ----------------------------------------
+    cfg.SetDefault("input.joystick.enabled",  CV(std::string("false")));
+    cfg.SetDefault("input.joystick.diagonal", CV(std::string("true")));
 }
 
 // ============================================================
@@ -328,14 +376,22 @@ void InputMappingConfig::loadFfRewindSettings(const ConfigManager& cfg)
 
 void InputMappingConfig::loadGameButtonMap(const ConfigManager& cfg)
 {
-    // 读取手柄按键绑定：整数或命名字符串。
-    auto getCfgPad = [&](const std::string& key, brls::ControllerButton def) -> int {
+    // 从配置读取多 combo 手柄按键绑定（格式：A,LB+A）。
+    auto getCfgCombos = [&](const std::string& key,
+                            brls::ControllerButton def) -> std::vector<std::vector<int>> {
         auto v = cfg.Get(key);
+        std::string val;
         if (v) {
-            if (auto i = v->AsInt())    return *i;
-            if (auto s = v->AsString()) return parseGamepadButton(*s);
+            if (auto s = v->AsString()) val = *s;
+            else if (auto n = v->AsInt()) val = std::to_string(*n);
         }
-        return static_cast<int>(def);
+        if (!val.empty() && toUpper(val) != "NONE")
+            return parseMultiCombo(val);
+        // 使用默认按键（单个）
+        int defBtn = static_cast<int>(def);
+        if (defBtn >= 0 && defBtn < static_cast<int>(brls::_BUTTON_MAX))
+            return { { defBtn } };
+        return {};
     };
 
     m_gameButtonMap.clear();
@@ -348,34 +404,29 @@ void InputMappingConfig::loadGameButtonMap(const ConfigManager& cfg)
         for (const auto& rn : k_retroNames) {
             if (rn.id != retroId) continue;
 
-            // 手柄绑定
             std::string padKey = std::string("handle.") + rn.name;
-            int padBtn = getCfgPad(padKey, defPad.brl);
-
-            m_gameButtonMap.push_back({ retroId,
-                (padBtn >= 0 && padBtn < static_cast<int>(brls::_BUTTON_MAX)) ? padBtn : -1,
-                });
+            auto combos = getCfgCombos(padKey, defPad.brl);
+            m_gameButtonMap.push_back({ retroId, std::move(combos) });
             break;
         }
     }
 
-    // 同时为 NAV 按键（方向键别名，仅手柄）添加条目。
+    // 同时为 NAV 按键（方向键别名，摇杆/方向键导航）添加条目。
     m_gameButtonMap.push_back({ RETRO_DEVICE_ID_JOYPAD_UP,
-        static_cast<int>(brls::BUTTON_NAV_UP)});
+        { { static_cast<int>(brls::BUTTON_NAV_UP) } } });
     m_gameButtonMap.push_back({ RETRO_DEVICE_ID_JOYPAD_DOWN,
-        static_cast<int>(brls::BUTTON_NAV_DOWN)});
+        { { static_cast<int>(brls::BUTTON_NAV_DOWN) } } });
     m_gameButtonMap.push_back({ RETRO_DEVICE_ID_JOYPAD_LEFT,
-        static_cast<int>(brls::BUTTON_NAV_LEFT)});
+        { { static_cast<int>(brls::BUTTON_NAV_LEFT) } } });
     m_gameButtonMap.push_back({ RETRO_DEVICE_ID_JOYPAD_RIGHT,
-        static_cast<int>(brls::BUTTON_NAV_RIGHT)});
-
+        { { static_cast<int>(brls::BUTTON_NAV_RIGHT) } } });
 }
 
 void InputMappingConfig::loadHotkeyBindings(const ConfigManager& cfg)
 {
     for (int i = 0; i < static_cast<int>(Hotkey::_Count); ++i) {
         HotkeyBinding& hk = m_hotkeys[i];
-        // --- 手柄绑定（支持组合键，如 "LB+START"）---
+        // --- 手柄绑定（支持多组合键，逗号分隔；每组合内用 + 分隔）---
         {
             std::string val = k_hotkeyMeta[i].padDefault;
             auto v = cfg.Get(k_hotkeyMeta[i].padKey);
@@ -385,26 +436,7 @@ void InputMappingConfig::loadHotkeyBindings(const ConfigManager& cfg)
                 else if (auto n = v->AsInt()) val = std::to_string(*n);
             }
 
-            hk.padButtons.clear();
-            if (toUpper(val) != "NONE" && !val.empty()) {
-                // 按 '+' 分割，支持多键组合（如 "LB+START"）
-                std::vector<std::string> parts;
-                std::string part;
-                for (char c : val) {
-                    if (c == '+') {
-                        if (!part.empty()) { parts.push_back(part); part.clear(); }
-                    } else {
-                        part += c;
-                    }
-                }
-                if (!part.empty()) parts.push_back(part);
-
-                for (const auto& p : parts) {
-                    int btn = parseGamepadButton(p);
-                    if (btn >= 0)
-                        hk.padButtons.push_back(btn);
-                }
-            }
+            hk.padCombos = parseMultiCombo(val);
         }
     }
 }

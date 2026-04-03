@@ -193,7 +193,11 @@
             "log_overlay": "Log Overlay"
         },
         "keybind": {
-            "header_pad": "Gamepad",
+            "header_pad": "Game Buttons",
+            "header_hotkey": "Function Hotkeys",
+            "header_joystick": "Joystick Settings",
+            "joystick_enable": "Enable Left Joystick Input",
+            "joystick_diagonal": "Allow Diagonal Input (X and Y simultaneously)",
             "pad_suffix": " (Gamepad)",
             "press_kbd": "Press keyboard key (CTRL/SHIFT/ALT combos supported)",
             "press_pad": "Press gamepad button (combo keys supported)",

@@ -10,6 +10,7 @@
 #include <borealis/views/applet_frame.hpp>
 
 #include <chrono>
+#include <sstream>
 #include <string>
 #include <vector>
 #include <algorithm>
@@ -963,12 +964,50 @@ static constexpr int k_gameBtnCount =
 
 using beiklive::InputMappingConfig;
 
+/// 为一个 DetailCell 注册按键绑定动作（A=追加 combo，X=清空）。
+/// 点击 A 打开捕获页，将新 combo 追加到现有配置（逗号分隔）；X 键清空所有绑定。
+static void registerKeyBindActions(brls::DetailCell* cell,
+                                   const std::string& cfgKey)
+{
+    cell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A,
+        [cell, cfgKey](brls::View*) {
+            openKeyCapture([cell, cfgKey](const std::string& r) {
+                if (r.empty()) return;
+                // 追加新 combo（逗号分隔），去重
+                std::string cur = cfgGetStr(cfgKey, "none");
+                // 清理掉 "none"
+                if (cur == "none" || cur.empty()) {
+                    cur = r;
+                } else {
+                    // 检查是否已存在
+                    bool exists = false;
+                    std::string check = cur;
+                    std::string tok;
+                    std::istringstream iss(check);
+                    while (std::getline(iss, tok, ',')) {
+                        if (tok == r) { exists = true; break; }
+                    }
+                    if (!exists) cur += "," + r;
+                }
+                cfgSetStr(cfgKey, cur);
+                cell->setDetailText(cur);
+            });
+            return true;
+        }, false, false, brls::SOUND_CLICK);
+    cell->registerAction("beiklive/hints/clear_binding"_i18n, brls::BUTTON_X,
+        [cell, cfgKey](brls::View*) {
+            cfgSetStr(cfgKey, "none");
+            cell->setDetailText("none");
+            return true;
+        }, false, false, brls::SOUND_CLICK);
+}
+
 brls::ScrollingFrame* SettingPage::buildKeyBindTab()
 {
     auto* scroll = makeScrollTab();
     auto* box    = makeContentBox();
 
-    // ── 手柄 ──────────────────────────────────────────────────────────────────
+    // ── 游戏基本按键 ──────────────────────────────────────────────────────────
     box->addView(makeHeader("beiklive/settings/keybind/header_pad"_i18n));
 
     for (int i = 0; i < k_gameBtnCount; ++i)
@@ -976,23 +1015,14 @@ brls::ScrollingFrame* SettingPage::buildKeyBindTab()
         std::string cfgKey = std::string("handle.") + k_gameBtns[i].suffix;
         auto* cell = new brls::DetailCell();
         cell->setText(k_gameBtns[i].label);
+        // 游戏基本按键使用配置中的初始值（setDefaults 已设置实际按键默认值）
         cell->setDetailText(cfgGetStr(cfgKey, "none"));
-        std::string captureKey = cfgKey;
-        cell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A,
-            [cell, captureKey](brls::View*) {
-                openKeyCapture([cell, captureKey](const std::string& r) {
-                    if (!r.empty()) { cfgSetStr(captureKey, r); cell->setDetailText(r); }
-                });
-                return true;
-            }, false, false, brls::SOUND_CLICK);
-        cell->registerAction("beiklive/hints/clear_binding"_i18n, brls::BUTTON_X,
-            [cell, captureKey](brls::View*) {
-                cfgSetStr(captureKey, "none");
-                cell->setDetailText("none");
-                return true;
-            }, false, false, brls::SOUND_CLICK);
+        registerKeyBindActions(cell, cfgKey);
         box->addView(cell);
     }
+
+    // ── 功能热键 ──────────────────────────────────────────────────────────────
+    box->addView(makeHeader("beiklive/settings/keybind/header_hotkey"_i18n));
 
     for (int i = 0; i < static_cast<int>(InputMappingConfig::Hotkey::_Count); ++i)
     {
@@ -1007,24 +1037,26 @@ brls::ScrollingFrame* SettingPage::buildKeyBindTab()
                              + "beiklive/settings/keybind/pad_suffix"_i18n;
         auto* cell = new brls::DetailCell();
         cell->setText(label);
+        // 功能热键暂不设初始值，显示当前配置（默认 none）
         cell->setDetailText(cfgGetStr(padKey, "none"));
-        std::string captureKey = padKey;
-        cell->registerAction("beiklive/hints/confirm"_i18n, brls::BUTTON_A,
-            [cell, captureKey](brls::View*) {
-                openKeyCapture([cell, captureKey](const std::string& r) {
-                    if (!r.empty()) { cfgSetStr(captureKey, r); cell->setDetailText(r); }
-                });
-                return true;
-            }, false, false, brls::SOUND_CLICK);
-        cell->registerAction("beiklive/hints/clear_binding"_i18n, brls::BUTTON_X,
-            [cell, captureKey](brls::View*) {
-                cfgSetStr(captureKey, "none");
-                cell->setDetailText("none");
-                return true;
-            }, false, false, brls::SOUND_CLICK);
+        registerKeyBindActions(cell, padKey);
         box->addView(cell);
     }
 
+    // ── 摇杆设置 ──────────────────────────────────────────────────────────────
+    box->addView(makeHeader("beiklive/settings/keybind/header_joystick"_i18n));
+
+    auto* joystickCell = new brls::BooleanCell();
+    joystickCell->init("beiklive/settings/keybind/joystick_enable"_i18n,
+                       cfgGetBool("input.joystick.enabled", false),
+                       [](bool v){ cfgSetBool("input.joystick.enabled", v); });
+    box->addView(joystickCell);
+
+    auto* diagonalCell = new brls::BooleanCell();
+    diagonalCell->init("beiklive/settings/keybind/joystick_diagonal"_i18n,
+                       cfgGetBool("input.joystick.diagonal", true),
+                       [](bool v){ cfgSetBool("input.joystick.diagonal", v); });
+    box->addView(diagonalCell);
 
     scroll->setContentView(box);
     return scroll;
