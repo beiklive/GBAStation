@@ -631,3 +631,51 @@ UI 层:    MyActivity → StartPage → GamePage → GameView/GameMenuView
 - `buildKeyBindTab()`：重构为局部辅助lambda `registerKeyBindActions`：A键追加combo（逗号分隔，去重），X键清空
 - 新增"功能热键绑定"分区标题（原"热键绑定（手柄）"）
 - 新增"摇杆设置"分区：启用左摇杆输入开关、允许斜向输入开关
+
+---
+
+## 任务三：BKAudioPlayer Switch 支持 + SettingPage 清理（2026-04-03）
+
+### 任务分析
+
+#### 目标
+1. 为 `BKAudioPlayer` 添加 Nintendo Switch 平台支持，接管 borealis 原有 `SwitchAudioPlayer` 的音效
+2. 移除 `SettingPage` 中尚未实际生效的设置项
+3. 整理所有设置项状态到 `report/sets.md`
+
+#### 挑战与解决方案
+- **Switch 音频接管**：需要使用 libpulsar API 加载 qlaunch BFSAR 音效库，与非Switch平台的WAV加载路径完全不同
+- **C++ goto 跨初始化跳转**：将 Switch 初始化逻辑提取为单独的 `_initSwitch()` 私有方法，避免 goto 问题
+- **`playSoundDirect` 签名变更**：添加 `soundIdx` 参数供 Switch 平台查找 pulsar 句柄，非Switch平台忽略此参数
+- **设置项生效判断**：通过代码搜索确认每个配置键在 SettingPage 之外是否被实际读取
+
+### 实现内容
+
+#### 1. BKAudioPlayer Switch 平台支持（BKAudioPlayer.hpp / .cpp）
+- 头文件新增 `#ifdef __SWITCH__` 段落，引入 `pulsar.h` 并声明 Switch 专属成员
+  - `m_switchInit`：初始化成功标志
+  - `m_qlaunchBfsar`：qlaunch BFSAR 句柄
+  - `m_switchSounds[]`：各音效的 `PLSR_PlayerSoundId` 数组
+  - `_initSwitch()`：私有初始化方法
+- 新增 Switch 音效名称映射表 `SWITCH_SOUND_NAMES[]`，与 borealis `SwitchAudioPlayer` 保持一致
+- `BKAudioPlayer()` 构造函数中对 Switch 调用 `_initSwitch()`，挂载 qlaunch ROMFS 并打开 BFSAR
+- `~BKAudioPlayer()` 析构函数中释放所有音效句柄并调用 `plsrPlayerExit()`
+- `load()` 方法新增 Switch 分支：通过 `plsrPlayerLoadSoundByName()` 加载官方音效
+- `playSoundDirect()` 签名增加 `int soundIdx` 参数，Switch 分支调用 `plsrPlayerSetPitch()` + `plsrPlayerPlay()`
+- 平台判断顺序改为：`__SWITCH__` → `BK_AUDIO_ALSA` → `BK_AUDIO_WINMM` → `BK_AUDIO_COREAUDIO` → 空实现
+
+#### 2. SettingPage 清理（SettingPage.cpp）
+- **界面Tab** 移除：背景图片节、XMB风格背景节、自动存档/自动读档/即时存档目录/存档截图缩略图、截图目录、金手指启用开关
+- **游戏Tab** 移除：整个快进节（enabled/mode/multiplier）、整个倒带节（enabled/mode/bufferSize/step）
+- **画面Tab** 移除：显示模式/整数倍缩放/纹理过滤、状态显示节（showFps/showFfOverlay/showRewindOverlay/showMuteOverlay）、遮罩启用开关、整个着色器节
+- **音频Tab** 移除：快进时静音、倒带时静音（低通滤波器保留）
+- **按键Tab** 移除：暂停热键（`hotkey.pause.pad`）、截屏热键（`hotkey.screenshot.pad`）
+- 移除无用的局部常量（`ffRateVals`、`k_bufSizeInts`、`k_xmbColorIds/Labels/Count`）
+- 移除无用的辅助函数 `cfgGetFloat()`、`cfgGetInt()`
+- 移除无用的 `#include <algorithm>` 和 `#include <cmath>`
+
+#### 3. 设置项整理文档（report/sets.md）
+- 整理了所有已生效设置项（含读取位置）
+- 整理了所有已移除无效设置项（含移除原因）
+- 整理了待新增设置项（含涉及修改位置）
+- 整理了 BKAudioPlayer 各平台实现状态和 Switch 音效名称映射

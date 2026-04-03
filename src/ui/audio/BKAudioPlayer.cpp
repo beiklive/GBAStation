@@ -12,7 +12,11 @@
 // ============================================================
 // 平台相关头文件
 // ============================================================
-#ifdef BK_AUDIO_ALSA
+#ifdef __SWITCH__
+// Switch 平台：使用 libpulsar 播放官方 qlaunch 音效
+// （pulsar.h 已在 BKAudioPlayer.hpp 中引入）
+
+#elif defined(BK_AUDIO_ALSA)
 #include <alsa/asoundlib.h>
 
 #elif defined(BK_AUDIO_WINMM)
@@ -30,11 +34,35 @@ namespace beiklive {
 // ============================================================
 // 平台相关常量
 // ============================================================
-#ifdef BK_AUDIO_ALSA
-constexpr unsigned ALSA_LATENCY_US = 100000; // 100ms 延迟
-#endif
+#ifdef __SWITCH__
 
-#ifdef BK_AUDIO_COREAUDIO
+// Switch 平台：qlaunch BFSAR 路径和挂载点常量
+#define BK_QLAUNCH_PID         0x0100000000001000ULL
+#define BK_QLAUNCH_MOUNT_POINT "qlaunch"
+#define BK_ROMFS_MOUNT_POINT   "romfs"
+#define BK_BFSAR_PATH          "/sound/qlaunch.bfsar"
+
+// Switch 平台官方音效名称表（与 borealis SwitchAudioPlayer 对应）
+static const char* SWITCH_SOUND_NAMES[brls::_SOUND_MAX] = {
+    nullptr,               // SOUND_NONE
+    "SeGiftReceive",       // SOUND_FOCUS_CHANGE
+    "SeKeyErrorCursor",    // SOUND_FOCUS_ERROR
+    "SeBtnDecide",         // SOUND_CLICK
+    "SeFooterDecideFinish",// SOUND_BACK
+    "SeNaviFocus",         // SOUND_FOCUS_SIDEBAR
+    "SeKeyError",          // SOUND_CLICK_ERROR
+    "SeUnlockKeyZR",       // SOUND_HONK
+    "SeNaviDecide",        // SOUND_CLICK_SIDEBAR
+    "SeTouchUnfocus",      // SOUND_TOUCH_UNFOCUS
+    "SeTouch",             // SOUND_TOUCH
+    "SeSliderTickOver",    // SOUND_SLIDER_TICK
+    "SeSliderRelease",     // SOUND_SLIDER_RELEASE
+};
+
+#elif defined(BK_AUDIO_ALSA)
+constexpr unsigned ALSA_LATENCY_US = 100000; // 100ms 延迟
+
+#elif defined(BK_AUDIO_COREAUDIO)
 constexpr auto PLAYBACK_TIMEOUT = std::chrono::seconds(5);
 #endif
 
@@ -195,8 +223,82 @@ std::string BKAudioPlayer::soundFileName(brls::Sound sound)
 // 构造 / 析构
 // ============================================================
 
+#ifdef __SWITCH__
+void BKAudioPlayer::_initSwitch()
+{
+    // 初始化 libpulsar 播放器
+    PLSR_RC rc = plsrPlayerInit();
+    if (PLSR_RC_FAILED(rc))
+    {
+        brls::Logger::error("BKAudioPlayer: libpulsar 初始化失败: {:#x}", rc);
+        return;
+    }
+
+    // 获取当前程序 ID，判断是否为 qlaunch 本体
+    char bfsarPath[128] = {};
+    u64 programId = 0;
+    Result infoRc = svcGetInfo(&programId, InfoType_ProgramId, CUR_PROCESS_HANDLE, 0);
+    if (!R_SUCCEEDED(infoRc))
+    {
+        brls::Logger::warning("BKAudioPlayer: 获取程序 ID 失败: {:#x}，将以非qlaunch模式处理", infoRc);
+        programId = 0; // 确保与 BK_QLAUNCH_PID 不同
+    }
+
+    if (programId != BK_QLAUNCH_PID)
+    {
+        // 非 qlaunch，挂载 qlaunch ROMFS 以获取 BFSAR
+        Result result = romfsMountDataStorageFromProgram(BK_QLAUNCH_PID, BK_QLAUNCH_MOUNT_POINT);
+        if (!R_SUCCEEDED(result))
+        {
+            brls::Logger::error("BKAudioPlayer: 挂载 qlaunch ROMFS 失败: {:#x}", result);
+            plsrPlayerExit();
+            return;
+        }
+        int written = snprintf(bfsarPath, sizeof(bfsarPath), "%s:%s",
+                               BK_QLAUNCH_MOUNT_POINT, BK_BFSAR_PATH);
+        if (written < 0 || static_cast<size_t>(written) >= sizeof(bfsarPath))
+        {
+            brls::Logger::error("BKAudioPlayer: BFSAR 路径拼接失败（路径过长）");
+            plsrPlayerExit();
+            return;
+        }
+    }
+    else
+    {
+        int written = snprintf(bfsarPath, sizeof(bfsarPath), "%s:%s",
+                               BK_ROMFS_MOUNT_POINT, BK_BFSAR_PATH);
+        if (written < 0 || static_cast<size_t>(written) >= sizeof(bfsarPath))
+        {
+            brls::Logger::error("BKAudioPlayer: BFSAR 路径拼接失败（路径过长）");
+            plsrPlayerExit();
+            return;
+        }
+    }
+
+    // 打开 qlaunch BFSAR 音效库
+    rc = plsrBFSAROpen(bfsarPath, &m_qlaunchBfsar);
+    if (PLSR_RC_FAILED(rc))
+    {
+        brls::Logger::error("BKAudioPlayer: 打开 BFSAR 失败: {:#x}", rc);
+        plsrPlayerExit();
+        return;
+    }
+
+    m_switchInit = true;
+    brls::Logger::info("BKAudioPlayer: Switch libpulsar 初始化成功");
+}
+#endif // __SWITCH__
+
 BKAudioPlayer::BKAudioPlayer()
 {
+#ifdef __SWITCH__
+    // 初始化所有 Switch 音效句柄为无效状态
+    for (size_t i = 0; i < brls::_SOUND_MAX; ++i)
+        m_switchSounds[i] = PLSR_PLAYER_INVALID_SOUND;
+
+    _initSwitch();
+#endif // __SWITCH__
+
     m_running = true;
     m_thread  = std::thread(&BKAudioPlayer::playbackThread, this);
 }
@@ -207,6 +309,21 @@ BKAudioPlayer::~BKAudioPlayer()
     m_cv.notify_all();
     if (m_thread.joinable())
         m_thread.join();
+
+#ifdef __SWITCH__
+    if (m_switchInit)
+    {
+        // 释放所有已加载的音效句柄
+        for (size_t i = 0; i < brls::_SOUND_MAX; ++i)
+        {
+            if (m_switchSounds[i] != PLSR_PLAYER_INVALID_SOUND)
+                plsrPlayerFree(m_switchSounds[i]);
+        }
+        plsrBFSARClose(&m_qlaunchBfsar);
+        plsrPlayerExit();
+        m_switchInit = false;
+    }
+#endif // __SWITCH__
 }
 
 // ============================================================
@@ -222,6 +339,29 @@ bool BKAudioPlayer::load(brls::Sound sound)
     if (m_sounds[idx].loaded)
         return true;
 
+#ifdef __SWITCH__
+    // Switch 平台：从 BFSAR 加载官方音效
+    if (!m_switchInit)
+        return false;
+
+    const char* name = SWITCH_SOUND_NAMES[idx];
+    if (!name)
+        return false;
+
+    PLSR_RC rc = plsrPlayerLoadSoundByName(&m_qlaunchBfsar, name, &m_switchSounds[idx]);
+    if (PLSR_RC_FAILED(rc))
+    {
+        brls::Logger::warning("BKAudioPlayer: 无法加载 Switch 音效 '{}': {:#x}", name, rc);
+        m_switchSounds[idx] = PLSR_PLAYER_INVALID_SOUND;
+        return false;
+    }
+
+    brls::Logger::debug("BKAudioPlayer: 已加载 Switch 音效 '{}'", name);
+    m_sounds[idx].loaded = true;
+    return true;
+
+#else
+    // 非 Switch 平台：从 WAV 文件加载
     std::string path = soundFileName(sound);
     if (path.empty())
         return false;
@@ -234,6 +374,7 @@ bool BKAudioPlayer::load(brls::Sound sound)
 
     brls::Logger::debug("BKAudioPlayer: 已加载 '{}'", path);
     return true;
+#endif
 }
 
 bool BKAudioPlayer::play(brls::Sound sound, float pitch)
@@ -287,7 +428,7 @@ void BKAudioPlayer::playbackThread()
         }
 
         if (m_sounds[idx].loaded)
-            playSoundDirect(m_sounds[idx], pitch);
+            playSoundDirect(idx, m_sounds[idx], pitch);
         // 若文件缺失则静默跳过
     }
 }
@@ -296,10 +437,30 @@ void BKAudioPlayer::playbackThread()
 // 平台相关单次播放实现
 // ============================================================
 
-// ---- ALSA ----------------------------------------------------
-#ifdef BK_AUDIO_ALSA
+// ---- Switch (libpulsar) -------------------------------------
+#ifdef __SWITCH__
 
-void BKAudioPlayer::playSoundDirect(const WavData& wav, float /*pitch*/)
+void BKAudioPlayer::playSoundDirect(int soundIdx, const WavData& /*wav*/, float pitch)
+{
+    if (!m_switchInit)
+        return;
+
+    if (soundIdx <= 0 || soundIdx >= brls::_SOUND_MAX)
+        return;
+
+    if (m_switchSounds[soundIdx] == PLSR_PLAYER_INVALID_SOUND)
+        return;
+
+    plsrPlayerSetPitch(m_switchSounds[soundIdx], pitch);
+    PLSR_RC rc = plsrPlayerPlay(m_switchSounds[soundIdx]);
+    if (PLSR_RC_FAILED(rc))
+        brls::Logger::warning("BKAudioPlayer: Switch 播放音效失败: {:#x}", rc);
+}
+
+// ---- ALSA ---------------------------------------------------
+#elif defined(BK_AUDIO_ALSA)
+
+void BKAudioPlayer::playSoundDirect(int /*soundIdx*/, const WavData& wav, float /*pitch*/)
 {
     snd_pcm_t* handle = nullptr;
     if (snd_pcm_open(&handle, "default", SND_PCM_STREAM_PLAYBACK, 0) < 0)
@@ -330,7 +491,7 @@ void BKAudioPlayer::playSoundDirect(const WavData& wav, float /*pitch*/)
 // ---- WinMM ---------------------------------------------------
 #elif defined(BK_AUDIO_WINMM)
 
-void BKAudioPlayer::playSoundDirect(const WavData& wav, float /*pitch*/)
+void BKAudioPlayer::playSoundDirect(int /*soundIdx*/, const WavData& wav, float /*pitch*/)
 {
     // 构建内存 WAV 文件（RIFF/fmt/data）并通过 PlaySoundA 播放
     const uint32_t dataBytes  = static_cast<uint32_t>(wav.samples.size() * sizeof(int16_t));
@@ -414,7 +575,7 @@ static OSStatus caRenderCallback(void*                       inRefCon,
 
 } // anonymous namespace
 
-void BKAudioPlayer::playSoundDirect(const WavData& wav, float /*pitch*/)
+void BKAudioPlayer::playSoundDirect(int /*soundIdx*/, const WavData& wav, float /*pitch*/)
 {
     AudioComponentDescription desc{};
     desc.componentType         = kAudioUnitType_Output;
@@ -475,7 +636,7 @@ void BKAudioPlayer::playSoundDirect(const WavData& wav, float /*pitch*/)
 // ---- 无音频后端（空实现）-------------------------------------
 #else
 
-void BKAudioPlayer::playSoundDirect(const WavData& /*wav*/, float /*pitch*/)
+void BKAudioPlayer::playSoundDirect(int /*soundIdx*/, const WavData& /*wav*/, float /*pitch*/)
 {
     // 无音频后端，静默空操作
 }
