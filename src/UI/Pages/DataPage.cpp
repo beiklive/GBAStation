@@ -336,6 +336,20 @@ brls::View* DataPage::buildSavesPanel(const std::string& gameStem)
 
             rowBox->addView(img);
         }
+
+        // 末行不足 COLS 个时，用 Padding 占位，防止最后几项被拉伸填满行宽。
+        if (rowBox) {
+            int total = static_cast<int>(images.size());
+            int remainder = total % COLS;
+            int padCount  = (remainder == 0) ? 0 : (COLS - remainder);
+            for (int p = 0; p < padCount; ++p) {
+                auto* pad = new brls::Padding();
+                pad->setWidth(IMG_SZ * 0.8f);
+                pad->setHeight(IMG_SZ * 0.6f);
+                pad->setMarginRight(IMG_GAP);
+                rowBox->addView(pad);
+            }
+        }
     }
 
     scroll->setContentView(contentBox);
@@ -413,6 +427,20 @@ brls::View* DataPage::buildAlbumPanel(const std::string& gameStem)
             });
 
             rowBox->addView(img);
+        }
+
+        // 末行不足 COLS 个时，用 Padding 占位，防止最后几项被拉伸填满行宽。
+        if (rowBox) {
+            int total = static_cast<int>(images.size());
+            int remainder = total % COLS;
+            int padCount  = (remainder == 0) ? 0 : (COLS - remainder);
+            for (int p = 0; p < padCount; ++p) {
+                auto* pad = new brls::Padding();
+                pad->setWidth(IMG_SZ * 0.8f);
+                pad->setHeight(IMG_SZ * 0.6f);
+                pad->setMarginRight(IMG_GAP);
+                rowBox->addView(pad);
+            }
         }
     }
 

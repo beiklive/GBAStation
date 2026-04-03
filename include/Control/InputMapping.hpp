@@ -44,24 +44,32 @@ public:
     };
 
     // ----------------------------------------------------------------
-    // 游戏按钮绑定：retro joypad ID 映射到手柄按钮。
+    // 游戏按钮绑定：retro joypad ID 映射到若干手柄按键组合。
+    // padCombos 每个元素表示一组"同时按下才触发"的按键；
+    // 多个元素之间为 OR 关系（任一组合满足即触发）。
+    // 空列表表示未绑定。
+    // 配置格式示例：handle.a = A,LB+A（A 单键 或 LB+A 组合键）
     // ----------------------------------------------------------------
     struct GameButtonEntry
     {
-        unsigned retroId   = 0;   ///< RETRO_DEVICE_ID_JOYPAD_*
-        int      padButton = -1;  ///< 手柄按钮；-1表示未绑定
+        unsigned                      retroId   = 0;  ///< RETRO_DEVICE_ID_JOYPAD_*
+        std::vector<std::vector<int>> padCombos;      ///< 多组合键；空表示未绑定
+
+        bool isPadBound() const { return !padCombos.empty(); }
     };
 
     // ----------------------------------------------------------------
-    // 模拟器热键绑定：手柄按键组合（支持多键同时按下）。
-    // 空列表表示未绑定；多个按键表示组合键，所有键同时按下才触发。
-    // 示例配置：hotkey.menu.pad = LB+START（LB与START同时按下打开菜单）
+    // 模拟器热键绑定：支持多组手柄按键组合。
+    // padCombos 每个元素表示一组"同时按下才触发"的按键；
+    // 多个元素之间为 OR 关系。
+    // 空列表表示未绑定。
+    // 配置格式：hotkey.menu.pad = LB+START,X+START
     // ----------------------------------------------------------------
     struct HotkeyBinding
     {
-        std::vector<int> padButtons;  ///< 手柄按键列表；空表示未绑定
+        std::vector<std::vector<int>> padCombos;  ///< 多组手柄按键；空表示未绑定
 
-        bool isPadBound() const { return !padButtons.empty(); }
+        bool isPadBound() const { return !padCombos.empty(); }
     };
 
     // ----------------------------------------------------------------

@@ -193,7 +193,11 @@
             "log_overlay": "日志浮窗"
         },
         "keybind": {
-            "header_pad": "手柄",
+            "header_pad": "游戏按键",
+            "header_hotkey": "功能热键",
+            "header_joystick": "摇杆设置",
+            "joystick_enable": "启用左摇杆输入",
+            "joystick_diagonal": "允许斜向输入（同时触发 X 和 Y 方向）",
             "pad_suffix": "",
             "press_kbd": "请按下键盘按键（支持 CTRL/SHIFT/ALT 组合键）",
             "press_pad": "请按下手柄按键（支持组合键）",

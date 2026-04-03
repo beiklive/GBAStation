@@ -246,6 +246,10 @@ void GameView::initialize()
         // ---- 读取按键映射 --------------
         m_inputMap.load(*cfg);
 
+        // ---- 读取摇杆输入设置 ----------
+        m_joystickEnabled  = getBool("input.joystick.enabled",  false);
+        m_joystickDiagonal = getBool("input.joystick.diagonal", true);
+
         // ---- 绑定功能键以及回调函数 ----
         registerGamepadHotkeys();
     } // end if (gameRunner && gameRunner->settingConfig)
@@ -1010,12 +1014,12 @@ void GameView::registerGamepadHotkeys()
     using Hotkey = beiklive::InputMappingConfig::Hotkey;
     using KeyEvent = beiklive::GameInputController::KeyEvent;
 
-    // 辅助函数：若热键已绑定则注册手柄按键组合。
+    // 辅助函数：若热键已绑定则为每个 combo 注册手柄按键组合。
     auto reg = [&](Hotkey h, beiklive::GameInputController::Callback cb)
     {
         const auto& hk = m_inputMap.hotkeyBinding(h);
-        if (hk.isPadBound())
-            m_inputCtrl.registerAction(hk.padButtons, std::move(cb));
+        for (const auto& combo : hk.padCombos)
+            m_inputCtrl.registerAction(combo, cb);
     };
     // -- 打开菜单
     reg(Hotkey::OpenMenu, [this](KeyEvent evt)
@@ -2030,15 +2034,55 @@ void GameView::pollInput()
     }
 
     // ── 游戏按键映射 ───────────────────────────────────────────────────────
-    // 将每个已配置的手柄按键映射到对应的 libretro 手柄 ID。
+    // 将每个已配置的手柄按键组合映射到对应的 libretro 手柄 ID。
+    // 多 combo 格式：任一 combo 中的所有按键同时按下即触发。
     const auto& btnMap = m_inputMap.gameButtonMap();
     for (const auto& entry : btnMap)
     {
         bool pressed = false;
-        // 手柄按键
-        if (entry.padButton >= 0 && entry.padButton < static_cast<int>(brls::_BUTTON_MAX))
-            pressed = state.buttons[entry.padButton];
+        for (const auto& combo : entry.padCombos) {
+            bool allDown = !combo.empty();
+            for (int btn : combo) {
+                if (btn < 0 || btn >= static_cast<int>(brls::_BUTTON_MAX) ||
+                    !state.buttons[btn]) {
+                    allDown = false;
+                    break;
+                }
+            }
+            if (allDown) { pressed = true; break; }
+        }
         m_core.setButtonState(entry.retroId, pressed);
+    }
+
+    // ── 摇杆轴输入（左摇杆 → GBA 方向键）──────────────────────────────────
+    // 读取左摇杆轴值（-1.0 ~ 1.0），超过阈值时触发对应方向键。
+    // brls::LEFT_X（枚举值 0）= 左摇杆水平轴，负为左，正为右。
+    // brls::LEFT_Y（枚举值 1）= 左摇杆垂直轴，负为上，正为下。
+    // 斜向支持：m_joystickDiagonal 为 true 时允许同时触发 X 和 Y 方向；
+    //           否则仅触发绝对值较大的轴方向（水平/垂直优先）。
+    if (m_joystickEnabled) {
+        static constexpr float STICK_THRESHOLD = 0.5f;
+        float lx = state.axes[brls::LEFT_X];   // 左摇杆 X 轴（水平）
+        float ly = state.axes[brls::LEFT_Y];   // 左摇杆 Y 轴（垂直）
+
+        bool stickLeft  = lx < -STICK_THRESHOLD;
+        bool stickRight = lx >  STICK_THRESHOLD;
+        bool stickUp    = ly < -STICK_THRESHOLD;
+        bool stickDown  = ly >  STICK_THRESHOLD;
+
+        if (!m_joystickDiagonal && (stickLeft || stickRight) && (stickUp || stickDown)) {
+            // 非斜向模式：仅保留绝对值更大的轴方向。
+            if (std::fabs(lx) >= std::fabs(ly)) {
+                stickUp = stickDown = false;
+            } else {
+                stickLeft = stickRight = false;
+            }
+        }
+
+        if (stickLeft)  m_core.setButtonState(RETRO_DEVICE_ID_JOYPAD_LEFT,  true);
+        if (stickRight) m_core.setButtonState(RETRO_DEVICE_ID_JOYPAD_RIGHT, true);
+        if (stickUp)    m_core.setButtonState(RETRO_DEVICE_ID_JOYPAD_UP,    true);
+        if (stickDown)  m_core.setButtonState(RETRO_DEVICE_ID_JOYPAD_DOWN,  true);
     }
 
     // ── 调试日志 ─────────────────────────────────────────────────────────
@@ -2046,9 +2090,15 @@ void GameView::pollInput()
     {
         for (const auto& entry : btnMap)
         {
-            bool padPressed = (entry.padButton >= 0 &&
-                               entry.padButton < static_cast<int>(brls::_BUTTON_MAX) &&
-                               state.buttons[entry.padButton]);
+            bool padPressed = false;
+            for (const auto& combo : entry.padCombos) {
+                bool allDown = !combo.empty();
+                for (int btn : combo) {
+                    if (btn < 0 || btn >= static_cast<int>(brls::_BUTTON_MAX) ||
+                        !state.buttons[btn]) { allDown = false; break; }
+                }
+                if (allDown) { padPressed = true; break; }
+            }
             if (padPressed)
                 bklog::debug("pollInput: retroId={} pressed (pad)",
                              entry.retroId);
