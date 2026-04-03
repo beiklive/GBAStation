@@ -121,7 +121,11 @@ bool AudioManager::init(int sampleRate, int channels)
     m_platformState = sw;
 
     if (R_FAILED(audoutInitialize())) { delete sw; m_platformState = nullptr; return false; }
-    if (R_FAILED(audoutStartAudioOut())) { audoutExit(); delete sw; m_platformState = nullptr; return false; }
+    if (R_FAILED(audoutStartAudioOut()))
+    {
+        // 若BKAudioPlayer已先启动audout，此处可能返回错误，继续使用共享流
+        brls::Logger::warning("AudioManager: audoutStartAudioOut失败（可能已由BKAudioPlayer启动），继续使用共享audout流");
+    }
 
     for (int i = 0; i < SWITCH_N_BUFFERS; ++i) {
         memset(sw->bufData[i], 0, SWITCH_FRAMES * 2 * sizeof(int16_t));

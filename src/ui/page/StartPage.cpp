@@ -115,6 +115,7 @@ namespace beiklive
         switchLayout->onDataManagementOpened = [this]()
         {
             brls::Logger::info("Data Management opened");
+            _openDataManagement();
         };
         switchLayout->onSettingsOpened = [this]()
         {
@@ -214,6 +215,16 @@ namespace beiklive
         brls::Logger::debug("Opening About Page");
         auto *aboutPage = new beiklive::AboutPage();
         auto *frame     = new brls::AppletFrame(aboutPage);
+        HIDE_BRLS_BAR(frame);
+        brls::sync([frame]()
+                   { brls::Application::pushActivity(new brls::Activity(frame)); });
+    }
+
+    void StartPage::_openDataManagement()
+    {
+        brls::Logger::debug("Opening Data Management Page");
+        auto *dataPage = new beiklive::DataManagementPage();
+        auto *frame    = new brls::AppletFrame(dataPage);
         HIDE_BRLS_BAR(frame);
         brls::sync([frame]()
                    { brls::Application::pushActivity(new brls::Activity(frame)); });

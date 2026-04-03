@@ -13,8 +13,8 @@
 // 平台相关头文件
 // ============================================================
 #ifdef __SWITCH__
-// Switch 平台：使用 libpulsar 播放官方 qlaunch 音效
-// （pulsar.h 已在 BKAudioPlayer.hpp 中引入）
+// Switch 平台：使用 libnx audout 播放 WAV 音效
+#include <switch.h>
 
 #elif defined(BK_AUDIO_ALSA)
 #include <alsa/asoundlib.h>
@@ -35,29 +35,8 @@ namespace beiklive {
 // 平台相关常量
 // ============================================================
 #ifdef __SWITCH__
-
-// Switch 平台：qlaunch BFSAR 路径和挂载点常量
-#define BK_QLAUNCH_PID         0x0100000000001000ULL
-#define BK_QLAUNCH_MOUNT_POINT "qlaunch"
-#define BK_ROMFS_MOUNT_POINT   "romfs"
-#define BK_BFSAR_PATH          "/sound/qlaunch.bfsar"
-
-// Switch 平台官方音效名称表（与 borealis SwitchAudioPlayer 对应）
-static const char* SWITCH_SOUND_NAMES[brls::_SOUND_MAX] = {
-    nullptr,               // SOUND_NONE
-    "SeGiftReceive",       // SOUND_FOCUS_CHANGE
-    "SeKeyErrorCursor",    // SOUND_FOCUS_ERROR
-    "SeBtnDecide",         // SOUND_CLICK
-    "SeFooterDecideFinish",// SOUND_BACK
-    "SeNaviFocus",         // SOUND_FOCUS_SIDEBAR
-    "SeKeyError",          // SOUND_CLICK_ERROR
-    "SeUnlockKeyZR",       // SOUND_HONK
-    "SeNaviDecide",        // SOUND_CLICK_SIDEBAR
-    "SeTouchUnfocus",      // SOUND_TOUCH_UNFOCUS
-    "SeTouch",             // SOUND_TOUCH
-    "SeSliderTickOver",    // SOUND_SLIDER_TICK
-    "SeSliderRelease",     // SOUND_SLIDER_RELEASE
-};
+// Switch audout 固定输出采样率
+static constexpr int SWITCH_OUT_RATE = 48000;
 
 #elif defined(BK_AUDIO_ALSA)
 constexpr unsigned ALSA_LATENCY_US = 100000; // 100ms 延迟
@@ -220,82 +199,35 @@ std::string BKAudioPlayer::soundFileName(brls::Sound sound)
 }
 
 // ============================================================
-// 构造 / 析构
+// Switch 平台：初始化 audout 服务
 // ============================================================
 
 #ifdef __SWITCH__
 void BKAudioPlayer::_initSwitch()
 {
-    // 初始化 libpulsar 播放器
-    PLSR_RC rc = plsrPlayerInit();
-    if (PLSR_RC_FAILED(rc))
+    // 初始化 audout 服务（引用计数，允许多次调用）
+    Result rc = audoutInitialize();
+    if (R_FAILED(rc))
     {
-        brls::Logger::error("BKAudioPlayer: libpulsar 初始化失败: {:#x}", rc);
+        brls::Logger::warning("BKAudioPlayer: audout服务初始化失败: {:#x}", rc);
         return;
     }
 
-    // 获取当前程序 ID，判断是否为 qlaunch 本体
-    char bfsarPath[128] = {};
-    u64 programId = 0;
-    Result infoRc = svcGetInfo(&programId, InfoType_ProgramId, CUR_PROCESS_HANDLE, 0);
-    if (!R_SUCCEEDED(infoRc))
+    // 启动音频输出（若已由其他模块启动，忽略错误继续）
+    rc = audoutStartAudioOut();
+    if (R_FAILED(rc))
     {
-        brls::Logger::warning("BKAudioPlayer: 获取程序 ID 失败: {:#x}，将以非qlaunch模式处理", infoRc);
-        programId = 0; // 确保与 BK_QLAUNCH_PID 不同
-    }
-
-    if (programId != BK_QLAUNCH_PID)
-    {
-        // 非 qlaunch，挂载 qlaunch ROMFS 以获取 BFSAR
-        Result result = romfsMountDataStorageFromProgram(BK_QLAUNCH_PID, BK_QLAUNCH_MOUNT_POINT);
-        if (!R_SUCCEEDED(result))
-        {
-            brls::Logger::error("BKAudioPlayer: 挂载 qlaunch ROMFS 失败: {:#x}", result);
-            plsrPlayerExit();
-            return;
-        }
-        int written = snprintf(bfsarPath, sizeof(bfsarPath), "%s:%s",
-                               BK_QLAUNCH_MOUNT_POINT, BK_BFSAR_PATH);
-        if (written < 0 || static_cast<size_t>(written) >= sizeof(bfsarPath))
-        {
-            brls::Logger::error("BKAudioPlayer: BFSAR 路径拼接失败（路径过长）");
-            plsrPlayerExit();
-            return;
-        }
-    }
-    else
-    {
-        int written = snprintf(bfsarPath, sizeof(bfsarPath), "%s:%s",
-                               BK_ROMFS_MOUNT_POINT, BK_BFSAR_PATH);
-        if (written < 0 || static_cast<size_t>(written) >= sizeof(bfsarPath))
-        {
-            brls::Logger::error("BKAudioPlayer: BFSAR 路径拼接失败（路径过长）");
-            plsrPlayerExit();
-            return;
-        }
-    }
-
-    // 打开 qlaunch BFSAR 音效库
-    rc = plsrBFSAROpen(bfsarPath, &m_qlaunchBfsar);
-    if (PLSR_RC_FAILED(rc))
-    {
-        brls::Logger::error("BKAudioPlayer: 打开 BFSAR 失败: {:#x}", rc);
-        plsrPlayerExit();
-        return;
+        brls::Logger::debug("BKAudioPlayer: audout已由其他模块启动（{:#x}），使用共享流", rc);
     }
 
     m_switchInit = true;
-    brls::Logger::info("BKAudioPlayer: Switch libpulsar 初始化成功");
+    brls::Logger::info("BKAudioPlayer: Switch WAV播放器初始化成功（audout）");
 }
 #endif // __SWITCH__
 
 BKAudioPlayer::BKAudioPlayer()
 {
 #ifdef __SWITCH__
-    // 初始化所有 Switch 音效句柄为无效状态
-    for (size_t i = 0; i < brls::_SOUND_MAX; ++i)
-        m_switchSounds[i] = PLSR_PLAYER_INVALID_SOUND;
-
     _initSwitch();
 #endif // __SWITCH__
 
@@ -313,14 +245,8 @@ BKAudioPlayer::~BKAudioPlayer()
 #ifdef __SWITCH__
     if (m_switchInit)
     {
-        // 释放所有已加载的音效句柄
-        for (size_t i = 0; i < brls::_SOUND_MAX; ++i)
-        {
-            if (m_switchSounds[i] != PLSR_PLAYER_INVALID_SOUND)
-                plsrPlayerFree(m_switchSounds[i]);
-        }
-        plsrBFSARClose(&m_qlaunchBfsar);
-        plsrPlayerExit();
+        audoutStopAudioOut();
+        audoutExit();
         m_switchInit = false;
     }
 #endif // __SWITCH__
@@ -339,29 +265,7 @@ bool BKAudioPlayer::load(brls::Sound sound)
     if (m_sounds[idx].loaded)
         return true;
 
-#ifdef __SWITCH__
-    // Switch 平台：从 BFSAR 加载官方音效
-    if (!m_switchInit)
-        return false;
-
-    const char* name = SWITCH_SOUND_NAMES[idx];
-    if (!name)
-        return false;
-
-    PLSR_RC rc = plsrPlayerLoadSoundByName(&m_qlaunchBfsar, name, &m_switchSounds[idx]);
-    if (PLSR_RC_FAILED(rc))
-    {
-        brls::Logger::warning("BKAudioPlayer: 无法加载 Switch 音效 '{}': {:#x}", name, rc);
-        m_switchSounds[idx] = PLSR_PLAYER_INVALID_SOUND;
-        return false;
-    }
-
-    brls::Logger::debug("BKAudioPlayer: 已加载 Switch 音效 '{}'", name);
-    m_sounds[idx].loaded = true;
-    return true;
-
-#else
-    // 非 Switch 平台：从 WAV 文件加载
+    // 所有平台统一从 WAV 文件加载
     std::string path = soundFileName(sound);
     if (path.empty())
         return false;
@@ -374,7 +278,6 @@ bool BKAudioPlayer::load(brls::Sound sound)
 
     brls::Logger::debug("BKAudioPlayer: 已加载 '{}'", path);
     return true;
-#endif
 }
 
 bool BKAudioPlayer::play(brls::Sound sound, float pitch)
@@ -437,24 +340,70 @@ void BKAudioPlayer::playbackThread()
 // 平台相关单次播放实现
 // ============================================================
 
-// ---- Switch (libpulsar) -------------------------------------
+// ---- Switch (libnx audout + WAV) ----------------------------
 #ifdef __SWITCH__
 
-void BKAudioPlayer::playSoundDirect(int soundIdx, const WavData& /*wav*/, float pitch)
+void BKAudioPlayer::playSoundDirect(int /*soundIdx*/, const WavData& wav, float pitch)
 {
-    if (!m_switchInit)
+    if (!m_switchInit || wav.samples.empty())
         return;
 
-    if (soundIdx <= 0 || soundIdx >= brls::_SOUND_MAX)
+    // pitch 影响重采样比率：pitch > 1.0 表示升调（加速播放），< 1.0 表示降调（减速播放）
+    double effectivePitch = (pitch > 0.1f) ? static_cast<double>(pitch) : 1.0;
+
+    // 计算输入帧数（输入可能是单/双声道）
+    size_t inFrames = wav.samples.size() / static_cast<size_t>(wav.channels);
+
+    // 最近邻重采样：输入采样率 * pitch → 48000Hz（Switch audout固定输出率）
+    // pitch > 1 时采样更快（音调升高），< 1 时采样更慢（音调降低）
+    double ratio = static_cast<double>(SWITCH_OUT_RATE) / (wav.sampleRate * effectivePitch);
+    size_t outFrames = static_cast<size_t>(inFrames * ratio + 0.5);
+    if (outFrames == 0)
         return;
 
-    if (m_switchSounds[soundIdx] == PLSR_PLAYER_INVALID_SOUND)
-        return;
+    // Switch要求 AudioOutBuffer 的 buffer 字段按 0x1000 字节对齐
+    size_t dataBytes    = outFrames * 2 * sizeof(int16_t); // 固定双声道输出
+    size_t alignedBytes = (dataBytes + 0xFFF) & ~(size_t)0xFFF;
 
-    plsrPlayerSetPitch(m_switchSounds[soundIdx], pitch);
-    PLSR_RC rc = plsrPlayerPlay(m_switchSounds[soundIdx]);
-    if (PLSR_RC_FAILED(rc))
-        brls::Logger::warning("BKAudioPlayer: Switch 播放音效失败: {:#x}", rc);
+    void* rawBuf = aligned_alloc(0x1000, alignedBytes);
+    if (!rawBuf)
+    {
+        brls::Logger::error("BKAudioPlayer: Switch音效缓冲区内存分配失败（{}字节）", alignedBytes);
+        return;
+    }
+    memset(rawBuf, 0, alignedBytes);
+
+    // 最近邻重采样并转换为双声道
+    int16_t* dst = static_cast<int16_t*>(rawBuf);
+    for (size_t i = 0; i < outFrames; ++i)
+    {
+        size_t srcFrame = static_cast<size_t>(i / ratio);
+        if (srcFrame >= inFrames)
+            srcFrame = inFrames - 1;
+        int16_t L = wav.samples[srcFrame * wav.channels];
+        int16_t R = (wav.channels > 1) ? wav.samples[srcFrame * wav.channels + 1] : L;
+        dst[i * 2]     = L;
+        dst[i * 2 + 1] = R;
+    }
+
+    // 提交缓冲区到 audout 队列播放
+    AudioOutBuffer buf = {};
+    buf.next        = nullptr;
+    buf.buffer      = rawBuf;
+    buf.buffer_size = alignedBytes;
+    buf.data_size   = dataBytes;
+    buf.data_offset = 0;
+
+    if (R_SUCCEEDED(audoutAppendAudioOutBuffer(&buf)))
+    {
+        // 等待音频播放完成，超时为音频时长的2倍 + 200ms
+        u64 waitNs = static_cast<u64>(inFrames) * 2000000000ULL / wav.sampleRate + 200000000ULL;
+        AudioOutBuffer* released = nullptr;
+        u32 relCount = 0;
+        audoutWaitPlayFinish(&released, &relCount, waitNs);
+    }
+
+    free(rawBuf);
 }
 
 // ---- ALSA ---------------------------------------------------

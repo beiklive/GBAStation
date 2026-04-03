@@ -223,6 +223,20 @@ namespace beiklive
         }
         return result;
     }
+    // ==================== 公开接口 ====================
+    // 获取指定平台的游戏列表（返回副本）
+    std::vector<GameEntry> GameDatabase::getByPlatform(beiklive::enums::EmuPlatform platform) const
+    {
+        std::vector<GameEntry> result;
+        int platformInt = static_cast<int>(platform);
+        for (const auto& entry : data_)
+        {
+            if (entry.platform == platformInt)
+                result.push_back(entry);
+        }
+        return result;
+    }
+
     // ==================== 私有实现（无锁） ====================
     void GameDatabase::doUpsert(const GameEntry &entry)
     {
