@@ -122,7 +122,8 @@ namespace beiklive
             std::string cheatDir = GET_SETTING_KEY_STR("cheat.dir", "");
             if (cheatDir.empty())
                 cheatDir = beiklive::path::cheatPath();
-            m_gameEntry.cheatPath = cheatDir + beiklive::path::SPLIT_CHAR + baseName + ".cht";
+            // 使用 std::filesystem::path 拼接，自动处理平台路径分隔符
+            m_gameEntry.cheatPath = (std::filesystem::path(cheatDir) / (baseName + ".cht")).string();
         }
 
         // overlayPath：优先使用已有值，否则从设置读取平台对应的遮罩路径

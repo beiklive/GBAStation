@@ -257,15 +257,16 @@ namespace beiklive
             int            stickPad;
             unsigned       retroId;
         };
+        // retroId 对应 RETRO_DEVICE_ID_JOYPAD：UP=4, DOWN=5, LEFT=6, RIGHT=7
         static const StickBtnMap stickBtnMaps[] = {
-            { EMU_LEFT_STICK_UP,     STATE_PAD_LEFT_STICK_UP,     4  }, // UP
-            { EMU_LEFT_STICK_DOWN,   STATE_PAD_LEFT_STICK_DOWN,   5  }, // DOWN
-            { EMU_LEFT_STICK_LEFT,   STATE_PAD_LEFT_STICK_LEFT,   6  }, // LEFT
-            { EMU_LEFT_STICK_RIGHT,  STATE_PAD_LEFT_STICK_RIGHT,  7  }, // RIGHT
-            { EMU_RIGHT_STICK_UP,    STATE_PAD_RIGHT_STICK_UP,    4  }, // UP
-            { EMU_RIGHT_STICK_DOWN,  STATE_PAD_RIGHT_STICK_DOWN,  5  }, // DOWN
-            { EMU_RIGHT_STICK_LEFT,  STATE_PAD_RIGHT_STICK_LEFT,  6  }, // LEFT
-            { EMU_RIGHT_STICK_RIGHT, STATE_PAD_RIGHT_STICK_RIGHT, 7  }, // RIGHT
+            { EMU_LEFT_STICK_UP,     STATE_PAD_LEFT_STICK_UP,     4  }, // RETRO_DEVICE_ID_JOYPAD_UP
+            { EMU_LEFT_STICK_DOWN,   STATE_PAD_LEFT_STICK_DOWN,   5  }, // RETRO_DEVICE_ID_JOYPAD_DOWN
+            { EMU_LEFT_STICK_LEFT,   STATE_PAD_LEFT_STICK_LEFT,   6  }, // RETRO_DEVICE_ID_JOYPAD_LEFT
+            { EMU_LEFT_STICK_RIGHT,  STATE_PAD_LEFT_STICK_RIGHT,  7  }, // RETRO_DEVICE_ID_JOYPAD_RIGHT
+            { EMU_RIGHT_STICK_UP,    STATE_PAD_RIGHT_STICK_UP,    4  }, // RETRO_DEVICE_ID_JOYPAD_UP
+            { EMU_RIGHT_STICK_DOWN,  STATE_PAD_RIGHT_STICK_DOWN,  5  }, // RETRO_DEVICE_ID_JOYPAD_DOWN
+            { EMU_RIGHT_STICK_LEFT,  STATE_PAD_RIGHT_STICK_LEFT,  6  }, // RETRO_DEVICE_ID_JOYPAD_LEFT
+            { EMU_RIGHT_STICK_RIGHT, STATE_PAD_RIGHT_STICK_RIGHT, 7  }, // RETRO_DEVICE_ID_JOYPAD_RIGHT
         };
         for (const auto& m : stickBtnMaps) {
             unsigned rid = m.retroId;
