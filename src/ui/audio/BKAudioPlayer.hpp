@@ -10,18 +10,12 @@
 #include <thread>
 #include <vector>
 
-// Switch 平台：引入 libpulsar 头文件
-#ifdef __SWITCH__
-#include <pulsar.h>
-#endif
-
 namespace beiklive {
 
 /// borealis UI音效播放器，实现 AudioPlayer 接口。
 ///
 /// 多平台实现：
-///   - Nintendo Switch : 通过 libpulsar 加载并播放 qlaunch 官方音效，
-///                       完全接管 borealis 原本的 SwitchAudioPlayer。
+///   - Nintendo Switch : 加载 WAV 文件并通过 libnx audout 播放。
 ///   - Linux (ALSA)    : 加载 WAV 文件并通过 ALSA 播放。
 ///   - Windows (WinMM) : 加载 WAV 文件并通过 WinMM 播放。
 ///   - macOS (CoreAudio): 加载 WAV 文件并通过 CoreAudio 播放。
@@ -43,13 +37,13 @@ class BKAudioPlayer : public brls::AudioPlayer
     bool play(brls::Sound sound, float pitch = 1.0f) override;
 
   private:
-    /// 已加载WAV文件的内存表示（非Switch平台使用）。
+    /// 已加载WAV文件的内存表示（所有平台使用）。
     struct WavData
     {
         std::vector<int16_t> samples;   ///< 交错立体声16位PCM
         int  sampleRate = 44100;
         int  channels   = 2;
-        bool loaded     = false;        ///< 是否已加载（Switch平台也用此标志）
+        bool loaded     = false;        ///< 是否已加载
     };
 
     WavData m_sounds[brls::_SOUND_MAX];
@@ -67,8 +61,8 @@ class BKAudioPlayer : public brls::AudioPlayer
 
     void playbackThread();
     /// 实际播放音效（平台相关）
-    /// @param soundIdx  brls::Sound 对应的整数索引（Switch平台用于查找 pulsar 句柄）
-    /// @param wav       已加载的 WAV 数据（非Switch平台使用）
+    /// @param soundIdx  brls::Sound 对应的整数索引
+    /// @param wav       已加载的 WAV 数据
     /// @param pitch     播放音调倍率
     void playSoundDirect(int soundIdx, const WavData& wav, float pitch);
 
@@ -77,11 +71,8 @@ class BKAudioPlayer : public brls::AudioPlayer
     static std::string soundsDir();
 
 #ifdef __SWITCH__
-    void               _initSwitch();  ///< Switch 平台：初始化 libpulsar 和 BFSAR
-    // ---- Switch 平台 libpulsar 状态 ----
-    bool               m_switchInit = false;  ///< libpulsar 是否初始化成功
-    PLSR_BFSAR         m_qlaunchBfsar{};      ///< qlaunch BFSAR 存档句柄
-    PLSR_PlayerSoundId m_switchSounds[brls::_SOUND_MAX]; ///< 各音效的播放器句柄
+    void _initSwitch();         ///< Switch 平台：初始化 audout 服务
+    bool m_switchInit = false;  ///< audout 是否初始化成功
 #endif
 };
 

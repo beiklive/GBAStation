@@ -7,6 +7,7 @@
 #include "ui/page/SettingPage.hpp"
 #include "ui/page/AboutPage.hpp"
 #include "ui/page/GameLibraryPage.hpp"
+#include "ui/page/DataManagementPage.hpp"
 #include "ui/utils/Box.hpp"
 
 namespace beiklive
@@ -26,10 +27,12 @@ namespace beiklive
         void _openFileList();
         void _openSettings();
         void _openAbout();
+        void _openDataManagement();
 
         beiklive::FileListPage* m_fileListPage = nullptr;
         beiklive::SwitchLayout* switchLayout = nullptr;
         beiklive::GamePage* m_gamePage = nullptr;
     };
 } // namespace beiklive
+
 
