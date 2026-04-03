@@ -41,10 +41,10 @@ int main(int argc, char* argv[]) {
 	}
 	brls::Application::createWindow("beiklive/title"_i18n);
 
-#ifndef __SWITCH__
+// #ifndef __SWITCH__
 	// Switch平台由borealis内置的SwitchAudioPlayer处理，其他平台使用BKAudioPlayer
 	brls::Application::setAudioPlayer(new beiklive::BKAudioPlayer());
-#endif
+// #endif
 
 	brls::Application::getPlatform()->setThemeVariant(brls::ThemeVariant::LIGHT);
 	beiklive::RegisterStyles();
