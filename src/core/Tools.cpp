@@ -1,4 +1,5 @@
 #include "Tools.hpp"
+#include "enums.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -195,6 +196,58 @@ std::string getFileModTimeStr(const std::string& path) {
     if (!tm) return "";
     std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", tm);
     return std::string(buf);
+}
+
+// ── 按键字符串解析 ──────────────────────────────────────────────────────────
+
+/// 将单个 combo 字符串（如 "LB+START"）解析为 GameInputPad ID 列表。
+/// 按 '+' 分割各按键名，大小写不敏感。
+/// "none" 或空字符串返回空列表。
+std::vector<int> parsePadCombo(const std::string& combo)
+{
+    // 转大写以实现大小写不敏感
+    std::string upper;
+    upper.reserve(combo.size());
+    for (char c : combo)
+        upper.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
+
+    if (upper.empty() || upper == "NONE")
+        return {};
+
+    std::vector<int> result;
+    // 按 '+' 分割
+    std::istringstream iss(upper);
+    std::string part;
+    while (std::getline(iss, part, '+')) {
+        if (part.empty()) continue;
+        // 在 k_gameInputNames 中查找
+        for (const auto& entry : beiklive::k_gameInputNames) {
+            if (entry.name == part) {
+                result.push_back(entry.id);
+                break;
+            }
+        }
+    }
+    return result;
+}
+
+/// 将多 combo 字符串（逗号分隔，如 "A,LB+A"）解析为多组 combo。
+/// 外层 vector 为各组合（OR 关系），内层为各按键 ID（AND 关系）。
+/// "none" 或空字符串返回空列表。
+std::vector<std::vector<int>> parseMultiCombo(const std::string& val)
+{
+    if (val.empty()) return {};
+
+    std::vector<std::vector<int>> result;
+    std::istringstream iss(val);
+    std::string comboStr;
+    while (std::getline(iss, comboStr, ',')) {
+        if (comboStr.empty()) continue;
+        auto combo = parsePadCombo(comboStr);
+        if (!combo.empty())
+            result.push_back(std::move(combo));
+    }
+    return result;
 }
 
 } // namespace beiklive::tools

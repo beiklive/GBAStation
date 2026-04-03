@@ -106,9 +106,15 @@ namespace beiklive
             float threshold = 0.5f);
         void clearEmuFunctionKeys();
 
+        /// 设置摇杆斜向输入模式。
+        /// diagonal=true 时同时触发 X 和 Y 方向（斜向），
+        /// diagonal=false 时仅触发绝对值更大的轴方向。
+        void setDiagonalMode(bool diagonal) { m_diagonalMode = diagonal; }
+
     private:
         bool inputDropped = false;
         bool inputEnabled = true;
+        bool m_diagonalMode = true;  ///< 摇杆斜向模式：true=同时触发X+Y，false=仅触发主轴
         GamepadState lastGamepadStates[GAMEPADS_MAX];
 
         InputState inputState;

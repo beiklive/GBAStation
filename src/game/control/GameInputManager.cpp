@@ -432,17 +432,30 @@ namespace beiklive
         if (absX < DEADZONE && absY < DEADZONE)
             return;
 
-        if (absX > absY * AXIS_DOMINANCE)
-        {
-            // 水平方向为主
-            activeInputs.push_back(axisX);
-            activeInputs.push_back(x > 0 ? dirRight : dirLeft);
-        }
-        else if (absY > absX * AXIS_DOMINANCE)
-        {
-            // 垂直方向为主（brls Y轴：正值朝下，负值朝上）
-            activeInputs.push_back(axisY);
-            activeInputs.push_back(y > 0 ? dirDown : dirUp);
+        if (m_diagonalMode) {
+            // 斜向模式：允许 X 和 Y 轴同时激活
+            if (absX >= DEADZONE) {
+                activeInputs.push_back(axisX);
+                activeInputs.push_back(x > 0 ? dirRight : dirLeft);
+            }
+            if (absY >= DEADZONE) {
+                activeInputs.push_back(axisY);
+                activeInputs.push_back(y > 0 ? dirDown : dirUp);
+            }
+        } else {
+            // 非斜向模式：仅触发绝对值更大的轴方向
+            if (absX > absY * AXIS_DOMINANCE)
+            {
+                // 水平方向为主
+                activeInputs.push_back(axisX);
+                activeInputs.push_back(x > 0 ? dirRight : dirLeft);
+            }
+            else if (absY > absX * AXIS_DOMINANCE)
+            {
+                // 垂直方向为主（brls Y轴：正值朝下，负值朝上）
+                activeInputs.push_back(axisY);
+                activeInputs.push_back(y > 0 ? dirDown : dirUp);
+            }
         }
     }
 
