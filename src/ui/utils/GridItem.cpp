@@ -18,6 +18,14 @@ namespace beiklive
         this->setAlignItems(brls::AlignItems::CENTER);
         this->setJustifyContent(brls::JustifyContent::CENTER);
         this->setFocusable(true);
+        // 设置边框和阴影
+        this->setBorderColor(nvgRGBA(128, 128, 128, 120));
+        this->setBorderThickness(1.f);
+        this->setShadowVisibility(true);
+        this->setShadowType(brls::ShadowType::GENERIC);
+        this->setHideHighlightBackground(true);
+        this->setHighlightCornerRadius(0.f);
+        this->setBackground(brls::ViewBackground::NONE);
         // HIDE_BRLS_HIGHLIGHT(this);
 
         // 注册 A 键点击动作
@@ -35,6 +43,13 @@ namespace beiklive
             brls::SOUND_CLICK);
 
         _initLayout();
+    }
+
+    void GridItem::draw(NVGcontext *vg, float x, float y, float width, float height, brls::Style style, brls::FrameContext *ctx)
+    {
+        // 绘制背景（如果有的话）
+        brls::Box::draw(vg, x, y, width, height, style, ctx);
+        // 绘制边框
     }
 
     // ============================================================
@@ -63,19 +78,39 @@ namespace beiklive
         m_dataLayout->setFocusable(false);
         HIDE_BRLS_HIGHLIGHT(m_dataLayout);
 
+        #undef ABSOLUTE
         // 左侧：正方形封面图（宽 = 高 = ITEM_HEIGHT）
+        auto logobox = new brls::Box();
+        logobox->setWidth(ITEM_HEIGHT-10);
+        logobox->setHeight(ITEM_HEIGHT-10);
+        logobox->setMarginLeft(5.f);
+
         m_image = new brls::Image();
-        m_image->setWidth(ITEM_HEIGHT);
-        m_image->setHeight(ITEM_HEIGHT);
-        m_image->setScalingType(brls::ImageScalingType::FIT);
+        m_image->setWidth(ITEM_HEIGHT-10);
+        m_image->setHeight(ITEM_HEIGHT-10);
+        m_image->setScalingType(brls::ImageScalingType::FILL);
         m_image->setFocusable(false);
-        m_dataLayout->addView(m_image);
+
+        m_imageLayer = new brls::Image();
+        m_imageLayer->setWidth(ITEM_HEIGHT-10);
+        m_imageLayer->setHeight(ITEM_HEIGHT-10);        
+        m_imageLayer->setPositionTop(0.f);
+        m_imageLayer->setPositionLeft(0.f);
+        m_imageLayer->setPositionType(brls::PositionType::ABSOLUTE);
+        m_imageLayer->setScalingType(brls::ImageScalingType::FILL);
+        m_imageLayer->setFocusable(false);
+        m_imageLayer->setVisibility(brls::Visibility::GONE);
+
+        logobox->addView(m_image);
+        logobox->addView(m_imageLayer);
+        m_dataLayout->addView(logobox);
 
         // 右侧：纵向容器
         m_rightBox = new brls::Box(brls::Axis::COLUMN);
+
         m_rightBox->setGrow(1.f);
         m_rightBox->setAlignItems(brls::AlignItems::FLEX_START);
-        m_rightBox->setJustifyContent(brls::JustifyContent::CENTER);
+        // m_rightBox->setJustifyContent(brls::JustifyContent::CENTER);
         m_rightBox->setFocusable(false);
         m_rightBox->setPaddingLeft(10.f);
         m_rightBox->setPaddingRight(8.f);
@@ -88,6 +123,7 @@ namespace beiklive
         m_row1->setJustifyContent(brls::JustifyContent::FLEX_START);
         m_row1->setFocusable(false);
         m_row1->setWidthPercentage(100.f);
+        m_row1->setMarginBottom(10.f);
         HIDE_BRLS_HIGHLIGHT(m_row1);
 
         // 徽标背景框（SAVE_STATE 模式下初始隐藏）
@@ -131,28 +167,29 @@ namespace beiklive
         // Row2：时间文字
         m_subLabel = new brls::Label();
         m_subLabel->setFontSize(14.f);
-        m_subLabel->setTextColor(nvgRGBA(160, 160, 160, 255));
+        m_subLabel->setTextColor(nvgRGBA(130, 130, 130, 255));
         m_subLabel->setSingleLine(true);
         m_subLabel->setAnimated(true);
         m_subLabel->setAutoAnimate(true);
         m_subLabel->setGrow(0.f);
-        m_subLabel->setMarginTop(4.f);
-        m_subLabel->setFocusable(false);
-        m_rightBox->addView(m_subLabel);
+        // m_subLabel->setMarginBottom(5.f);
 
+        m_subLabel->setFocusable(false);
+        
         // Row3：游玩时长（SAVE_STATE 模式下恒为 GONE）
         m_playLabel = new brls::Label();
         m_playLabel->setFontSize(14.f);
-        m_playLabel->setTextColor(nvgRGBA(130, 130, 130, 255));
+        m_playLabel->setTextColor(nvgRGBA(121, 201, 249, 255));
         m_playLabel->setSingleLine(true);
         m_playLabel->setAnimated(true);
         m_playLabel->setAutoAnimate(true);
         m_playLabel->setGrow(0.f);
-        m_playLabel->setMarginTop(2.f);
+        m_playLabel->setMarginBottom(10.f);
         m_playLabel->setFocusable(false);
         if (m_mode == GridItemMode::SAVE_STATE)
-            m_playLabel->setVisibility(brls::Visibility::GONE);
+        m_playLabel->setVisibility(brls::Visibility::GONE);
         m_rightBox->addView(m_playLabel);
+        m_rightBox->addView(m_subLabel);
 
         m_dataLayout->addView(m_rightBox);
         this->addView(m_dataLayout);
@@ -198,14 +235,16 @@ namespace beiklive
     void GridItem::setSubText(const std::string& text)
     {
         if (m_subLabel)
-            m_subLabel->setText(text);
+            m_subLabel->setText(
+                m_mode == GridItemMode::GAME_LIBRARY ? "上次游玩: " + text : "存档时间: " +
+                text);
     }
 
     void GridItem::setPlayTime(const std::string& text)
     {
         if (!m_playLabel) return;
         if (m_mode == GridItemMode::SAVE_STATE) return; // SAVE_STATE 模式不显示
-        std::string display = text.empty() ? "未游玩" : text;
+        std::string display = text.empty() ? "未游玩" : "已游玩 " + text;
         m_playLabel->setText(display);
         m_playLabel->setVisibility(brls::Visibility::VISIBLE);
     }
@@ -232,16 +271,24 @@ namespace beiklive
     // 焦点回调（高亮效果）
     // ============================================================
 
+    void GridItem::setImageLayer(const std::string &path, bool visible)
+    {
+        if (!m_imageLayer) return;
+        if (visible && !path.empty())
+            m_imageLayer->setImageFromFile(path);
+        m_imageLayer->setVisibility(visible ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+    }
+
     void GridItem::onFocusGained()
     {
         brls::Box::onFocusGained();
-        this->setBackgroundColor(nvgRGBA(255, 255, 255, 20));
+        // this->setBackgroundColor(nvgRGBA(255, 255, 255, 20));
     }
 
     void GridItem::onFocusLost()
     {
         brls::Box::onFocusLost();
-        this->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
+        // this->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
     }
 
     // ============================================================

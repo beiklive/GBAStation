@@ -349,4 +349,19 @@ int GetGamePixelWidth(int platform)
     return 0;
 }
 
+std::string GetGameLogoLayerPath(int platform)
+{
+    switch ((beiklive::enums::EmuPlatform)platform)
+    {
+    case beiklive::enums::EmuPlatform::EmuGBA:
+        return BK_RES("img/LogoLayer/GBA_LOGOLAY.png");
+    case beiklive::enums::EmuPlatform::EmuGBC:
+        return BK_RES("img/LogoLayer/GBC_LOGOLAY.png");
+    case beiklive::enums::EmuPlatform::EmuGB:
+        return BK_RES("img/LogoLayer/GB_LOGOLAY.png");
+    default:
+        return BK_RES("img/LogoLayer/GBA_LOGOLAY.png");
+    }
+}
+
 } // namespace beiklive

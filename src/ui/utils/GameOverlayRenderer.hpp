@@ -51,7 +51,7 @@ public:
     /// 绘制快进覆盖层（右上角蓝色 >>）
     static void drawFastForward(NVGcontext* vg, float viewX, float viewY, float viewW)
     {
-        const char* text = ">>  快进";
+        const char* text = ">>>";
         float w = 90.f, h = 22.f;
         drawBadge(vg, viewX + viewW - w - 4.f, viewY + 4.f, w, h, text,
                   nvgRGBA(0, 0, 0, 160), nvgRGBA(100, 220, 255, 230));
@@ -60,8 +60,8 @@ public:
     /// 绘制倒带覆盖层（顶部居中橙色 <<<）
     static void drawRewind(NVGcontext* vg, float viewX, float viewY, float viewW)
     {
-        const char* text = "<<<  倒带";
-        float w = 100.f, h = 22.f;
+        const char* text = "<<<";
+        float w = 90.f, h = 22.f;
         drawBadge(vg, viewX + (viewW - w) * 0.5f, viewY + 4.f, w, h, text,
                   nvgRGBA(0, 0, 0, 160), nvgRGBA(255, 200, 0, 230));
     }
@@ -69,7 +69,7 @@ public:
     /// 绘制暂停覆盖层（顶部居中黄色 PAUSED）
     static void drawPaused(NVGcontext* vg, float viewX, float viewY, float viewW)
     {
-        const char* text = "  已暂停";
+        const char* text = "Paused";
         float w = 90.f, h = 22.f;
         drawBadge(vg, viewX + (viewW - w) * 0.5f, viewY + 4.f, w, h, text,
                   nvgRGBA(0, 0, 0, 180), nvgRGBA(255, 220, 60, 230));
@@ -78,7 +78,7 @@ public:
     /// 绘制静音覆盖层（右下角红色 MUTE）
     static void drawMute(NVGcontext* vg, float viewX, float viewY, float viewW, float viewH)
     {
-        const char* text = "静音";
+        const char* text = "Mute";
         float w = 60.f, h = 22.f;
         drawBadge(vg, viewX + viewW - w - 4.f, viewY + viewH - h - 8.f, w, h, text,
                   nvgRGBA(180, 30, 30, 200), nvgRGBA(255, 255, 255, 230));

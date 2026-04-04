@@ -44,7 +44,7 @@ int main(int argc, char* argv[]) {
 	// 所有平台统一使用BKAudioPlayer播放WAV音效文件
 	brls::Application::setAudioPlayer(new beiklive::BKAudioPlayer());
 
-	brls::Application::getPlatform()->setThemeVariant(brls::ThemeVariant::LIGHT);
+	brls::Application::getPlatform()->setThemeVariant(brls::ThemeVariant::DARK);
 	beiklive::RegisterStyles();
 	beiklive::RegisterThemes();
 	

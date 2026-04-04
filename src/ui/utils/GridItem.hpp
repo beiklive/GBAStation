@@ -45,7 +45,12 @@ namespace beiklive
         explicit GridItem(GridItemMode mode, int index = 0);
         ~GridItem() = default;
 
+        void draw(NVGcontext* vg, float x, float y, float width, float height, brls::Style style, brls::FrameContext* ctx) override;
+
         // ── 数据设置 ──────────────────────────────────────────────────────────
+
+        // 设置封面图片路径（GAME_LIBRARY 模式使用）
+        void setImageLayer(const std::string& path, bool visible);
 
         /// 设置左侧正方形封面图片路径
         void setImagePath(const std::string& path);
@@ -102,7 +107,7 @@ namespace beiklive
         GridItemMode m_mode;
         int          m_index;
         bool         m_isEmpty = true;
-
+        bool         m_showImageLayer = false;
         // ── 空状态 ────────────────────────────────────────────────────────────
         brls::Label* m_emptyLabel = nullptr;
 
@@ -111,7 +116,7 @@ namespace beiklive
 
         // 左侧：正方形封面图
         brls::Image* m_image       = nullptr;
-
+        brls::Image* m_imageLayer  = nullptr;
         // 右侧：纵向容器
         brls::Box*   m_rightBox    = nullptr;
 

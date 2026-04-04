@@ -249,5 +249,6 @@ namespace beiklive // 函数声明
     int GetGamePixelHeight(int platform); // 获取游戏的原始像素高度（如 GBA 为 160）
     int GetGamePixelWidth(int platform);  // 获取游戏的原始像素宽度（如 GBA 为 240）
 
+    std::string GetGameLogoLayerPath(int platform); // 获取平台默认封面图路径（如 GBA 的默认封面图）
 
 } // namespace beiklive

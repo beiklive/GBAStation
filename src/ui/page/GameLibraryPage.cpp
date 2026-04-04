@@ -113,6 +113,10 @@ namespace beiklive
                 }
                 if (!badgeText.empty())
                     item->setBadge(badgeText, badgeColor);
+                // 设置封面图层（如果有的话）
+                std::string logoLayerPath = GetGameLogoLayerPath(entry.platform);
+                if (!logoLayerPath.empty())
+                    item->setImageLayer(logoLayerPath, true);
 
                 // 设置游戏名称
                 item->setTitle(entry.title.empty() ? entry.path : entry.title);

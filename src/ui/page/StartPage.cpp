@@ -9,7 +9,7 @@ namespace beiklive
                    {
         this->showHeader(false);
         // this->showFooter(false);
-        // this->showBackground(false);`
+        // this->showBackground(false);
         // this->showShader(false);
         Init();
         brls::Application::giveFocus(this); });
