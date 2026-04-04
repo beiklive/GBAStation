@@ -50,6 +50,14 @@ namespace beiklive
         }
     }
 
+    void GameCard::setLogoLayer(const std::string &path, bool visible)
+    {
+        if (!m_imageLayer) return;
+        if (visible && !path.empty())
+            m_imageLayer->setImageFromFile(path);
+        m_imageLayer->setVisibility(visible ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+    }
+
     // Switch卡片布局
     void GameCard::_switchCardLayout()
     {
@@ -62,9 +70,16 @@ namespace beiklive
         this->setHeight(CARD_HEIGHT_SWITCH);
         this->setWidth(CARD_WIDTH_SWITCH);
 
+        auto logobox = new brls::Box();
+        logobox->setFocusable(true);
+        logobox->setWidth(COVER_WIDTH_SWITCH);
+        logobox->setHeight(COVER_HEIGHT_SWITCH);
+        logobox->setBorderColor(nvgRGBA(128, 128, 128, 120));
+        logobox->setCornerRadius(3.f);
+        logobox->setBorderThickness(1.f);
         m_coverImage = new brls::Image();
-        m_coverImage->setFocusable(true);
         m_coverImage->setWidth(COVER_WIDTH_SWITCH);
+        m_coverImage->setFocusable(false);
         m_coverImage->setHeight(COVER_HEIGHT_SWITCH);
         m_coverImage->setScalingType(brls::ImageScalingType::FILL);
         m_coverImage->setInterpolation(brls::ImageInterpolation::LINEAR);
@@ -74,7 +89,23 @@ namespace beiklive
         m_coverImage->setShadowVisibility(true);
         m_coverImage->setShadowType(brls::ShadowType::GENERIC);
         m_coverImage->setHighlightCornerRadius(12.f);
-        m_coverImage->setCornerRadius(10.f);
+        m_coverImage->setCornerRadius(3.f);
+        #undef ABSOLUTE
+
+        m_imageLayer = new brls::Image();
+        m_imageLayer->setWidth(COVER_WIDTH_SWITCH);
+        m_imageLayer->setHeight(COVER_HEIGHT_SWITCH);        
+        m_imageLayer->setFocusable(false);
+        m_imageLayer->setPositionTop(0.f);
+        m_imageLayer->setPositionLeft(0.f);
+        m_imageLayer->setPositionType(brls::PositionType::ABSOLUTE);
+        m_imageLayer->setScalingType(brls::ImageScalingType::FILL);
+        m_imageLayer->setFocusable(false);
+        m_imageLayer->setVisibility(brls::Visibility::GONE);
+        m_imageLayer->setCornerRadius(3.f);
+
+        logobox->addView(m_coverImage);
+        logobox->addView(m_imageLayer);
 
         m_titleLabel = new brls::Label();
         m_titleLabel->setWidth(CARD_WIDTH_SWITCH * 1.5f);
@@ -89,7 +120,7 @@ namespace beiklive
         m_titleLabel->setMarginBottom(10.f);
 
         this->addView(m_titleLabel);
-        this->addView(m_coverImage);
+        this->addView(logobox);
 
         this->registerAction(
             "打开",

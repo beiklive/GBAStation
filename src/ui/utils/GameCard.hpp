@@ -16,6 +16,7 @@ namespace beiklive
 
         brls::Label *m_titleLabel = nullptr;
         brls::Image *m_coverImage = nullptr;
+        brls::Image *m_imageLayer = nullptr;
 
         float m_scale = 1.0f; ///< 当前渲染缩放比，由 draw() 平滑插值
         bool m_clickAnimating = false;
@@ -36,6 +37,7 @@ namespace beiklive
         ~GameCard();
         void applyThemeLayout();
 
+        void setLogoLayer(const std::string &path, bool visible);
         void setLayoutType(beiklive::enums::ThemeLayout type) { m_layoutType = type; }
         beiklive::enums::ThemeLayout getLayoutType() const { return m_layoutType; }
 

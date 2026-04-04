@@ -21,6 +21,7 @@ namespace beiklive
         // 设置边框和阴影
         this->setBorderColor(nvgRGBA(128, 128, 128, 120));
         this->setBorderThickness(1.f);
+        this->setCornerRadius(3.f);
         this->setShadowVisibility(true);
         this->setShadowType(brls::ShadowType::GENERIC);
         this->setHideHighlightBackground(true);
@@ -90,6 +91,7 @@ namespace beiklive
         m_image->setHeight(ITEM_HEIGHT-10);
         m_image->setScalingType(brls::ImageScalingType::FILL);
         m_image->setFocusable(false);
+        m_image->setCornerRadius(3.f);
 
         m_imageLayer = new brls::Image();
         m_imageLayer->setWidth(ITEM_HEIGHT-10);
@@ -100,6 +102,7 @@ namespace beiklive
         m_imageLayer->setScalingType(brls::ImageScalingType::FILL);
         m_imageLayer->setFocusable(false);
         m_imageLayer->setVisibility(brls::Visibility::GONE);
+        m_imageLayer->setCornerRadius(3.f);
 
         logobox->addView(m_image);
         logobox->addView(m_imageLayer);
