@@ -499,6 +499,21 @@ brls::ScrollingFrame *SettingPage::buildGameTab()
         box->addView(countCell);
     }
 
+    {
+        // 缩略图降采样质量（影响图像清晰度和 CPU 开销）
+        std::vector<std::string> sampleOpts = {"最近邻（最快）", "区域平均（最佳质量）", "双线性（均衡）"};
+        int curSample = GET_SETTING_KEY_INT(KEY_REWIND_THUMB_SAMPLE, 0);
+        if (curSample < 0 || curSample > 2) curSample = 0;
+        auto *sampleCell = new brls::SelectorCell();
+        sampleCell->init("缩略图采样质量", sampleOpts, curSample,
+                         [](int idx)
+                         {
+                             if (idx >= 0 && idx <= 2)
+                                 SET_SETTING_KEY_INT(KEY_REWIND_THUMB_SAMPLE, idx);
+                         });
+        box->addView(sampleCell);
+    }
+
     scroll->setContentView(box);
     return scroll;
 }

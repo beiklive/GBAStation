@@ -20,13 +20,20 @@ namespace beiklive
     class GameMenuView;         // 前置声明
     class RewindSelectorView;   // 前置声明
 
+    /// 缩略图降采样质量枚举
+    enum class ThumbSampleMode : int {
+        Nearest     = 0, ///< 最近邻（最快，质量较低）
+        AreaAverage = 1, ///< 区域平均（盒式滤波，最佳质量，适合大图降采样）
+        Bilinear    = 2, ///< 双线性插值（质量均衡）
+    };
+
     /// 倒带帧：包含核心序列化状态和可选的缩略图（RGB565 格式）
     struct RewindFrame {
         std::vector<uint8_t>  state;  ///< 核心序列化状态（~128KB）
-        std::vector<uint16_t> thumb;  ///< RGB565 缩略图（60×40，可能为空）
+        std::vector<uint16_t> thumb;  ///< RGB565 缩略图（90×60，可能为空）
 
-        static constexpr unsigned THUMB_W = 60; ///< 缩略图宽度（像素）
-        static constexpr unsigned THUMB_H = 40; ///< 缩略图高度（像素）
+        static constexpr unsigned THUMB_W = 90; ///< 缩略图宽度（像素）
+        static constexpr unsigned THUMB_H = 60; ///< 缩略图高度（像素）
     };
 
     // 游戏视图，负责游戏的渲染显示，输入处理等功能
@@ -84,8 +91,9 @@ namespace beiklive
             beiklive::GameEntry m_gameEntry; ///< 游戏条目数据
 
             // ---- 倒带设置（从配置中读取，游戏启动时初始化）------------------
-            int  m_rewindSaveInterval = 1;     ///< 每 N 帧保存一次倒带状态
-            bool m_rewindShowUI       = false;  ///< 是否启用可视化倒带界面
+            int  m_rewindSaveInterval = 1;                              ///< 每 N 帧保存一次倒带状态
+            bool m_rewindShowUI       = false;                          ///< 是否启用可视化倒带界面
+            ThumbSampleMode m_thumbSampleMode = ThumbSampleMode::Nearest; ///< 缩略图降采样质量
 
             // ---- libretro 核心 -----------------------------------------------
             beiklive::gba::CoreMgba* m_gba_core = nullptr; ///< mgba 核心实例
@@ -188,9 +196,11 @@ namespace beiklive
             /// @param srcH   原始帧高度
             /// @param dstW   缩略图宽度
             /// @param dstH   缩略图高度
+            /// @param mode   降采样质量策略
             static std::vector<uint16_t> _downsampleToRGB565(
                 const std::vector<uint32_t>& src,
                 unsigned srcW, unsigned srcH,
-                unsigned dstW, unsigned dstH);
+                unsigned dstW, unsigned dstH,
+                ThumbSampleMode mode = ThumbSampleMode::Nearest);
     };
 }

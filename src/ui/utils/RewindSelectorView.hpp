@@ -14,8 +14,8 @@ namespace beiklive
     class RewindThumbItem : public brls::Box
     {
     public:
-        static constexpr float ITEM_W = 120.f; ///< 卡片宽度（像素）
-        static constexpr float ITEM_H = 100.f; ///< 卡片高度（像素）
+        static constexpr float ITEM_W = 160.f; ///< 卡片宽度（像素）
+        static constexpr float ITEM_H = 130.f; ///< 卡片高度（像素）
 
         /// @param frameIndex  对应 m_rewindBuffer 中的帧索引
         /// @param thumb       RGB565 缩略图数据（可能为空）
@@ -37,6 +37,9 @@ namespace beiklive
 
         /// RGBA8888 像素数据（由 RGB565 转换，首次 draw 时转为 NVG 图像）
         std::vector<uint8_t> m_rgbaData;
+
+        brls::Label* m_indexLabel  = nullptr; ///< 帧序号标签（底部）
+        brls::Label* m_noImgLabel  = nullptr; ///< 无缩略图占位标签（居中）
 
         void _createNvgImage(NVGcontext* vg); ///< 首次 draw 时创建 NVG 图像
 
@@ -63,6 +66,9 @@ namespace beiklive
         /// 打开倒带界面：用传入的缩略图快照重建卡片列表
         /// @param frames  (帧索引, RGB565缩略图) 对列表（最新帧在前）
         void openWithFrames(std::vector<std::pair<int, std::vector<uint16_t>>> frames);
+
+        /// 将焦点设置到最右侧卡片（最新帧）
+        void focusNewest();
 
         /// 设置"恢复帧"回调（由 GamePage 注入，参数为 m_rewindBuffer 帧索引）
         void setOnFrameSelected(std::function<void(int)> cb) { m_onFrameSelected = std::move(cb); }

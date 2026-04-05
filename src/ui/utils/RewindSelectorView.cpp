@@ -53,6 +53,37 @@ namespace beiklive
                 thumb, RewindFrame::THUMB_W, RewindFrame::THUMB_H);
         }
 
+        // 帧序号标签（绝对定位在卡片底部居中）
+        m_indexLabel = new brls::Label();
+        char buf[24];
+        std::snprintf(buf, sizeof(buf), "-%d帧", frameIndex);
+        m_indexLabel->setText(buf);
+        m_indexLabel->setFontSize(12.f);
+        m_indexLabel->setTextColor(nvgRGBA(200, 200, 200, 230));
+        m_indexLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+        m_indexLabel->setWidth(ITEM_W);
+#undef ABSOLUTE
+        m_indexLabel->setPositionType(brls::PositionType::ABSOLUTE);
+        m_indexLabel->setPositionBottom(6.f);
+        m_indexLabel->setPositionLeft(0.f);
+        this->addView(m_indexLabel);
+
+        // 无缩略图时的占位标签（绝对定位，垂直居中于图像区域）
+        if (thumb.empty()) {
+            m_noImgLabel = new brls::Label();
+            m_noImgLabel->setText("暂无画面");
+            m_noImgLabel->setFontSize(12.f);
+            m_noImgLabel->setTextColor(nvgRGBA(160, 160, 160, 200));
+            m_noImgLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+            m_noImgLabel->setWidth(ITEM_W);
+#undef ABSOLUTE
+            m_noImgLabel->setPositionType(brls::PositionType::ABSOLUTE);
+            // 在扣除底部序号标签高度（约22px）后的区域中垂直居中
+            m_noImgLabel->setPositionTop((ITEM_H - 22.f) * 0.45f);
+            m_noImgLabel->setPositionLeft(0.f);
+            this->addView(m_noImgLabel);
+        }
+
         // A 键确认：触发回调
         registerAction("确认", brls::BUTTON_A, [this](brls::View*) -> bool {
             if (onItemClicked)
@@ -97,38 +128,29 @@ namespace beiklive
         Box::draw(vg, x, y, w, h, style, ctx);
 
         if (m_nvgImage != 0) {
-            // 在卡片内居中显示缩略图，保持 GBA 宽高比（240:160 = 3:2）
+            // 在卡片内显示缩略图，保持 GBA 宽高比（240:160 = 3:2）
+            // 保留底部约 22px 给帧序号标签，图像居中于上方区域
+            static constexpr float kLabelH = 22.f;
+            float availH = h - kLabelH;
+
             float imgW = w - 16.f;
             float imgH = imgW * static_cast<float>(RewindFrame::THUMB_H)
-                              / static_cast<float>(RewindFrame::THUMB_W);
-            if (imgH > h - 24.f) {
-                imgH = h - 24.f;
+                               / static_cast<float>(RewindFrame::THUMB_W);
+            if (imgH > availH - 8.f) {
+                imgH = availH - 8.f;
                 imgW = imgH * static_cast<float>(RewindFrame::THUMB_W)
                             / static_cast<float>(RewindFrame::THUMB_H);
             }
             float imgX = x + (w - imgW) * 0.5f;
-            float imgY = y + (h - imgH) * 0.5f - 8.f;
+            float imgY = y + (availH - imgH) * 0.5f + 4.f;
 
             NVGpaint paint = nvgImagePattern(vg, imgX, imgY, imgW, imgH, 0.f, m_nvgImage, 1.f);
             nvgBeginPath(vg);
             nvgRoundedRect(vg, imgX, imgY, imgW, imgH, 2.f);
             nvgFillPaint(vg, paint);
             nvgFill(vg);
-        } else {
-            // 无缩略图时显示"暂无画面"占位文字
-            nvgFontSize(vg, 11.f);
-            nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-            nvgFillColor(vg, nvgRGBA(160, 160, 160, 200));
-            nvgText(vg, x + w * 0.5f, y + h * 0.5f - 10.f, "暂无画面", nullptr);
         }
-
-        // 在卡片底部绘制帧序号（0 = 最新帧）
-        char indexBuf[16];
-        std::snprintf(indexBuf, sizeof(indexBuf), "-%d帧", m_frameIndex);
-        nvgFontSize(vg, 10.f);
-        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
-        nvgFillColor(vg, nvgRGBA(200, 200, 200, 230));
-        nvgText(vg, x + w * 0.5f, y + h - 4.f, indexBuf, nullptr);
+        // "暂无画面"和帧序号均由 Label 子视图绘制，无需 NVG 文字
     }
 
     void RewindThumbItem::onFocusGained()
@@ -165,7 +187,7 @@ namespace beiklive
         // ── 半透明底部面板 ──────────────────────────────────────────────────
         m_panel = new brls::Box(brls::Axis::COLUMN);
         m_panel->setWidthPercentage(100.f);
-        m_panel->setHeight(220.f);
+        m_panel->setHeightPercentage(25.f); // 面板高度为屏幕高度的四分之一
         m_panel->setAlignItems(brls::AlignItems::CENTER);
         m_panel->setJustifyContent(brls::JustifyContent::FLEX_START);
         m_panel->setPadding(12.f, 16.f, 12.f, 16.f);
@@ -243,8 +265,9 @@ namespace beiklive
             return;
         }
 
-        // 逐一创建缩略图卡片（frames 中最新帧在最前，展示时从左到右由新到旧）
-        for (auto& [idx, thumb] : frames) {
+        // 逐一创建缩略图卡片（frames 中最新帧在最前，逆序排列使旧帧在左、新帧在右）
+        for (int i = static_cast<int>(frames.size()) - 1; i >= 0; --i) {
+            auto& [idx, thumb] = frames[i];
             auto* item = new RewindThumbItem(idx, thumb);
             item->onItemClicked = [this](int frameIndex) {
                 if (m_onFrameSelected)
@@ -253,10 +276,14 @@ namespace beiklive
             m_itemBox->addView(item);
             m_items.push_back(item);
         }
+        // 焦点由调用方通过 focusNewest() 设置到最右侧卡片（最新帧）
+    }
 
-        // 将焦点给到第一张卡片（最新帧）
+    void RewindSelectorView::focusNewest()
+    {
+        // 将焦点设置到最右侧卡片（最新帧）
         if (!m_items.empty())
-            brls::Application::giveFocus(m_items.front());
+            brls::Application::giveFocus(m_items.back());
     }
 
     void RewindSelectorView::draw(NVGcontext* vg, float x, float y, float w, float h,

@@ -821,3 +821,50 @@ UI 层:    MyActivity → StartPage → GamePage → GameView/GameMenuView
 - 新增 `RewindSelectorView* m_rewindSelectorView` 成员
 - 新增 `RewindSelectorViewInitialize()` 方法：设置回调（选帧恢复 + B键取消），注入到 `this`
 - `_setupGame()` 调用初始化并注入到 `GameView`
+
+---
+
+## 2026-04-05：修复可视化倒带页面问题（Issue #169）
+
+### 任务分析
+
+**目标：** 修复 PR#168 合并后可视化倒带功能的4个问题：
+1. 倒带页面弹出后焦点未切换到倒带页面（停留在 GameView）
+2. 缩略图压缩策略未提供枚举选择
+3. 缩略图顺序错误（旧帧应在左，新帧在右），焦点未在最新帧
+4. 面板高度不足，缩略图偏小，文字用 NVG 绘制
+
+**输入：** 已合并的 PR#168 代码（RewindSelectorView、GameView、GamePage等）
+
+**输出：** 修复后的代码，通过 PR 提交审核
+
+### 修改内容
+
+#### 问题1：焦点修复
+
+**根因：** `openWithFrames()` 内调用 `giveFocus(m_items.front())`，随后调用方又调用 `giveFocus(m_rewindSelectorView)`。由于 `RewindSelectorView` 设置了 `setFocusable(true)`，`Box::getDefaultFocus()` 直接返回容器本身，导致焦点停留在容器而非卡片。
+
+**修复：**
+- `openWithFrames()` 不再内部调用 `giveFocus`
+- 新增 `RewindSelectorView::focusNewest()` 方法直接给最后一个卡片（最新帧）设置焦点
+- `GameView.cpp` 中将 `giveFocus(m_rewindSelectorView)` 改为调用 `focusNewest()`
+
+#### 问题2：压缩策略枚举
+
+- `constexpr.h` 新增 `KEY_REWIND_THUMB_SAMPLE`（0=最近邻，1=区域平均，2=双线性）
+- `GameView.hpp` 新增 `ThumbSampleMode` 枚举和 `m_thumbSampleMode` 成员
+- `GameView.cpp` 实现三种降采样算法，读取配置并选择
+- `SettingPage.cpp` 新增"缩略图采样质量"SelectorCell
+
+#### 问题3：时间顺序 + 焦点在最右
+
+- `openWithFrames()` 改为逆序遍历 frames（原为 newest-first 顺序），使旧帧在左、新帧在右
+- `focusNewest()` 将焦点设置到 `m_items.back()`（最右侧/最新帧）
+
+#### 问题4：高度、尺寸、Label文字
+
+- 面板高度由固定 220px 改为 `setHeightPercentage(25.f)`（屏幕高度四分之一）
+- `RewindFrame::THUMB_W/H` 由 60×40 增大到 90×60（3:2 比例保持）
+- `RewindThumbItem::ITEM_W/H` 由 120×100 增大到 160×130
+- 构造函数中添加 `m_indexLabel`（帧序号）和 `m_noImgLabel`（无图占位）为 Label 子视图，绝对定位
+- `draw()` 中移除全部 NVG 文字绘制，图像定位逻辑适配底部标签预留空间

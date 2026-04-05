@@ -1,5 +1,6 @@
 #include "GameView.hpp"
 #include "GameMenuView.hpp"
+#include "RewindSelectorView.hpp"
 #include "game/audio/AudioManager.hpp"
 #include "ui/utils/AnimationHelper.hpp"
 #include "core/Tools.hpp"
@@ -37,6 +38,10 @@ namespace beiklive
         if (m_rewindSaveInterval < 1)  m_rewindSaveInterval = 1;
         if (m_rewindSaveInterval > 16) m_rewindSaveInterval = 16;
         m_rewindShowUI = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_REWIND_SHOW_UI, 0) != 0;
+        // 从配置读取缩略图降采样质量（0=最近邻，1=区域平均，2=双线性）
+        int thumbSampleVal = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_REWIND_THUMB_SAMPLE, 0);
+        if (thumbSampleVal < 0 || thumbSampleVal > 2) thumbSampleVal = 0;
+        m_thumbSampleMode = static_cast<ThumbSampleMode>(thumbSampleVal);
 
         _registerGameInput();
         _registerGameRuntime();
@@ -124,7 +129,8 @@ namespace beiklive
                 brls::sync([this, thumbs = std::move(thumbs)]() mutable {
                     m_rewindSelectorView->openWithFrames(std::move(thumbs));
                     AnimationHelper::slideInFromBottom(m_rewindSelectorView, 80.f, 220);
-                    brls::Application::giveFocus(m_rewindSelectorView);
+                    // 将焦点设置到最右侧卡片（最新帧），修复焦点留在 GameView 的问题
+                    m_rewindSelectorView->focusNewest();
                 });
             }
         }
@@ -489,7 +495,8 @@ namespace beiklive
             if (!videoFrame.pixels.empty() && videoFrame.width > 0 && videoFrame.height > 0) {
                 frame.thumb = _downsampleToRGB565(
                     videoFrame.pixels, videoFrame.width, videoFrame.height,
-                    RewindFrame::THUMB_W, RewindFrame::THUMB_H);
+                    RewindFrame::THUMB_W, RewindFrame::THUMB_H,
+                    m_thumbSampleMode);
             }
         }
 
@@ -1009,29 +1016,95 @@ namespace beiklive
 
     // ============================================================
     // _downsampleToRGB565 – RGBA8888 降采样并转换为 RGB565
+    // 支持三种质量模式：最近邻、区域平均（盒式滤波）、双线性插值
     // ============================================================
     std::vector<uint16_t> GameView::_downsampleToRGB565(
         const std::vector<uint32_t>& src,
         unsigned srcW, unsigned srcH,
-        unsigned dstW, unsigned dstH)
+        unsigned dstW, unsigned dstH,
+        ThumbSampleMode mode)
     {
         std::vector<uint16_t> dst(dstW * dstH, 0);
         if (src.empty() || srcW == 0 || srcH == 0) return dst;
 
-        for (unsigned y = 0; y < dstH; ++y) {
-            for (unsigned x = 0; x < dstW; ++x) {
-                // 最近邻采样
-                unsigned sx = x * srcW / dstW;
-                unsigned sy = y * srcH / dstH;
-                uint32_t px = src[sy * srcW + sx]; // RGBA8888
+        // 辅助 lambda：将 r/g/b 分量打包为 RGB565
+        auto packRgb565 = [](uint32_t r, uint32_t g, uint32_t b) -> uint16_t {
+            return static_cast<uint16_t>(
+                ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
+        };
 
-                uint8_t r = static_cast<uint8_t>((px >> 16) & 0xFF);
-                uint8_t g = static_cast<uint8_t>((px >> 8)  & 0xFF);
-                uint8_t b = static_cast<uint8_t>( px        & 0xFF);
+        if (mode == ThumbSampleMode::AreaAverage) {
+            // ── 区域平均（盒式滤波）──────────────────────────────────────────
+            // 对每个目标像素，计算其对应源区域内所有像素的平均值，降采样质量最好
+            for (unsigned dy = 0; dy < dstH; ++dy) {
+                unsigned sy0 = dy * srcH / dstH;
+                unsigned sy1 = (dy + 1) * srcH / dstH;
+                if (sy1 <= sy0) sy1 = sy0 + 1;
+                if (sy1 > srcH) sy1 = srcH;
 
-                // 打包为 RGB565：R(5) | G(6) | B(5)
-                dst[y * dstW + x] = static_cast<uint16_t>(
-                    ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
+                for (unsigned dx = 0; dx < dstW; ++dx) {
+                    unsigned sx0 = dx * srcW / dstW;
+                    unsigned sx1 = (dx + 1) * srcW / dstW;
+                    if (sx1 <= sx0) sx1 = sx0 + 1;
+                    if (sx1 > srcW) sx1 = srcW;
+
+                    uint32_t r = 0, g = 0, b = 0, count = 0;
+                    for (unsigned sy = sy0; sy < sy1; ++sy) {
+                        for (unsigned sx = sx0; sx < sx1; ++sx) {
+                            uint32_t px = src[sy * srcW + sx];
+                            r += (px >> 16) & 0xFF;
+                            g += (px >>  8) & 0xFF;
+                            b +=  px        & 0xFF;
+                            ++count;
+                        }
+                    }
+                    if (count > 0) {
+                        dst[dy * dstW + dx] = packRgb565(r / count, g / count, b / count);
+                    }
+                }
+            }
+        } else if (mode == ThumbSampleMode::Bilinear) {
+            // ── 双线性插值 ───────────────────────────────────────────────────
+            // 对每个目标像素，采用 2×2 双线性加权插值，质量均衡
+            for (unsigned dy = 0; dy < dstH; ++dy) {
+                float fy = (dy + 0.5f) * static_cast<float>(srcH) / static_cast<float>(dstH) - 0.5f;
+                unsigned y0 = (fy > 0.f) ? static_cast<unsigned>(fy) : 0u;
+                unsigned y1 = (y0 + 1 < srcH) ? y0 + 1 : y0;
+                float wy = fy - static_cast<float>(y0);
+                if (wy < 0.f) wy = 0.f;
+
+                for (unsigned dx = 0; dx < dstW; ++dx) {
+                    float fx = (dx + 0.5f) * static_cast<float>(srcW) / static_cast<float>(dstW) - 0.5f;
+                    unsigned x0 = (fx > 0.f) ? static_cast<unsigned>(fx) : 0u;
+                    unsigned x1 = (x0 + 1 < srcW) ? x0 + 1 : x0;
+                    float wx = fx - static_cast<float>(x0);
+                    if (wx < 0.f) wx = 0.f;
+
+                    // 双线性权重：(1-wx)(1-wy), wx(1-wy), (1-wx)wy, wx*wy
+                    auto getComp = [&](unsigned sx, unsigned sy, int shift) -> float {
+                        return static_cast<float>((src[sy * srcW + sx] >> shift) & 0xFF);
+                    };
+                    float r = getComp(x0,y0,16)*(1.f-wx)*(1.f-wy) + getComp(x1,y0,16)*wx*(1.f-wy)
+                            + getComp(x0,y1,16)*(1.f-wx)*wy       + getComp(x1,y1,16)*wx*wy;
+                    float g = getComp(x0,y0, 8)*(1.f-wx)*(1.f-wy) + getComp(x1,y0, 8)*wx*(1.f-wy)
+                            + getComp(x0,y1, 8)*(1.f-wx)*wy       + getComp(x1,y1, 8)*wx*wy;
+                    float b = getComp(x0,y0, 0)*(1.f-wx)*(1.f-wy) + getComp(x1,y0, 0)*wx*(1.f-wy)
+                            + getComp(x0,y1, 0)*(1.f-wx)*wy       + getComp(x1,y1, 0)*wx*wy;
+
+                    dst[dy * dstW + dx] = packRgb565(
+                        static_cast<uint32_t>(r), static_cast<uint32_t>(g), static_cast<uint32_t>(b));
+                }
+            }
+        } else {
+            // ── 最近邻（默认）──────────────────────────────────────────────
+            for (unsigned dy = 0; dy < dstH; ++dy) {
+                for (unsigned dx = 0; dx < dstW; ++dx) {
+                    unsigned sx = dx * srcW / dstW;
+                    unsigned sy = dy * srcH / dstH;
+                    uint32_t px = src[sy * srcW + sx]; // RGBA8888
+                    dst[dy * dstW + dx] = packRgb565(
+                        (px >> 16) & 0xFF, (px >> 8) & 0xFF, px & 0xFF);
+                }
             }
         }
         return dst;
