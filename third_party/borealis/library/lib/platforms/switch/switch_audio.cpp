@@ -28,7 +28,7 @@ namespace brls
 
 const std::string SOUNDS_MAP[_SOUND_MAX] = {
     "", // SOUND_NONE
-    "SeBtnFocus", // SOUND_FOCUS_CHANGE
+    "SeGiftReceive", // SOUND_FOCUS_CHANGE
     "SeKeyErrorCursor", // SOUND_FOCUS_ERROR
     "SeBtnDecide", // SOUND_CLICK
     "SeFooterDecideFinish", // SOUND_BACK
