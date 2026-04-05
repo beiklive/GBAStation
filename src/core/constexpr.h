@@ -59,13 +59,14 @@ namespace beiklive::path
             return std::string(ROOT) + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + DATA_BASE_DIR + SPLIT_CHAR + DATA_BASE_FILE;
         }
         /// 根据平台枚举返回对应的平台数据库文件名（不含路径）
+        /// platform: 1=EmuGBA, 2=EmuGBC, 3=EmuGB（与 enums.h 中 EmuPlatform 枚举值对应）
         inline std::string platformDatabaseFileName(int platform)
         {
             switch (platform)
             {
-            case 1: return DATA_BASE_FILE_GBA;
-            case 2: return DATA_BASE_FILE_GBC;
-            case 3: return DATA_BASE_FILE_GB;
+            case 1: return DATA_BASE_FILE_GBA;  // EmuPlatform::EmuGBA
+            case 2: return DATA_BASE_FILE_GBC;  // EmuPlatform::EmuGBC
+            case 3: return DATA_BASE_FILE_GB;   // EmuPlatform::EmuGB
             default: return DATA_BASE_FILE;
             }
         }

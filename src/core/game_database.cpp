@@ -63,7 +63,7 @@ namespace beiklive
 
     // ==================== GameDatabase 实现（单线程版） ====================
     GameDatabase::GameDatabase(const std::string &filepath, int autoSaveMode, int autoSaveInterval)
-        : filepath_(filepath), dbDir_(""), autoSaveMode_(autoSaveMode),
+        : filepath_(filepath), autoSaveMode_(autoSaveMode),
           autoSaveInterval_(autoSaveInterval), dirty_(false)
     {
         // 自动保存不再使用后台线程，仅根据模式决定行为
@@ -244,9 +244,13 @@ namespace beiklive
                 }
                 anyPlatformLoaded = true;
             }
+            catch (const std::exception &e)
+            {
+                brls::Logger::warning("GameDatabase: 加载平台文件 {} 失败: {}", filePath, e.what());
+            }
             catch (...)
             {
-                // 跳过解析失败的平台文件
+                brls::Logger::warning("GameDatabase: 加载平台文件 {} 时发生未知异常", filePath);
             }
         }
 
@@ -272,9 +276,13 @@ namespace beiklive
                     }
                 }
             }
+            catch (const std::exception &e)
+            {
+                brls::Logger::warning("GameDatabase: 迁移旧版数据库文件失败: {}", e.what());
+            }
             catch (...)
             {
-                // 旧版文件也不存在或解析失败，保持空数据库
+                brls::Logger::warning("GameDatabase: 迁移旧版数据库文件时发生未知异常");
             }
         }
 
@@ -309,8 +317,14 @@ namespace beiklive
                 }
                 file << j.dump(4);
             }
+            catch (const std::exception &e)
+            {
+                brls::Logger::warning("GameDatabase: 保存平台文件 {} 失败: {}", filePath, e.what());
+                allOk = false;
+            }
             catch (...)
             {
+                brls::Logger::warning("GameDatabase: 保存平台文件 {} 时发生未知异常", filePath);
                 allOk = false;
             }
         }

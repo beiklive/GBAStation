@@ -36,7 +36,8 @@ void ConfigureInit(){
             std::string savedPath = GET_SETTING_KEY_STR("db_path", dbFile);
             if (!savedPath.empty()) {
                 fs::path p(savedPath);
-                if (fs::is_directory(p)) {
+                std::error_code ec;
+                if (fs::exists(p, ec) && fs::is_directory(p, ec)) {
                     dbDir = savedPath;
                 } else {
                     std::string parentDir = p.parent_path().string();
