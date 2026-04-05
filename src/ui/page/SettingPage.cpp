@@ -499,6 +499,21 @@ brls::ScrollingFrame *SettingPage::buildGameTab()
         box->addView(countCell);
     }
 
+    {
+        // 缩略图压缩策略：最近邻（速度快）或双线性插值（质量高）
+        std::vector<std::string> compressionOpts = {"最近邻（速度优先）", "双线性（质量优先）"};
+        int curCompression = GET_SETTING_KEY_INT(KEY_REWIND_THUMB_COMPRESSION, 0);
+        if (curCompression < 0 || curCompression > 1) curCompression = 0;
+        auto *compressionCell = new brls::SelectorCell();
+        compressionCell->init("缩略图压缩策略", compressionOpts, curCompression,
+                              [](int idx)
+                              {
+                                  if (idx >= 0 && idx <= 1)
+                                      SET_SETTING_KEY_INT(KEY_REWIND_THUMB_COMPRESSION, idx);
+                              });
+        box->addView(compressionCell);
+    }
+
     scroll->setContentView(box);
     return scroll;
 }

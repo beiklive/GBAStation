@@ -11,6 +11,13 @@ namespace beiklive
         FreeScale    = 3,  ///< 自由缩放（使用 customScale）
     };
 
+    /// 可视化倒带缩略图压缩策略
+    enum class RewindThumbCompression : int
+    {
+        NearestNeighbor = 0, ///< 最近邻采样（速度快，质量较低）
+        Bilinear        = 1, ///< 双线性插值（速度适中，质量较高）
+    };
+
     /// 绘制矩形，用于 computeDisplayRect() 结果
     struct DisplayRect
     {

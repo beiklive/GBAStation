@@ -5,6 +5,7 @@
 #include "ui/utils/AnimationHelper.hpp"
 #include "core/Tools.hpp"
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 
@@ -997,6 +998,10 @@ namespace beiklive
                 result.emplace_back(idx, m_rewindBuffer[idx].thumb);
             }
         }
+
+        // 反转顺序：使最旧的帧排在最前，最新的帧排在最后
+        // 显示时最旧帧在左侧，最新帧在右侧，焦点默认放在最右边（最新帧）
+        std::reverse(result.begin(), result.end());
         return result;
     }
 
@@ -1010,6 +1015,7 @@ namespace beiklive
 
     // ============================================================
     // _downsampleToRGB565 – RGBA8888 降采样并转换为 RGB565
+    // 支持最近邻（NearestNeighbor）和双线性（Bilinear）两种压缩策略
     // ============================================================
     std::vector<uint16_t> GameView::_downsampleToRGB565(
         const std::vector<uint32_t>& src,
@@ -1019,16 +1025,58 @@ namespace beiklive
         std::vector<uint16_t> dst(dstW * dstH, 0);
         if (src.empty() || srcW == 0 || srcH == 0) return dst;
 
+        // 读取压缩策略设置
+        int compressionMode = GET_SETTING_KEY_INT(
+            beiklive::SettingKey::KEY_REWIND_THUMB_COMPRESSION, 0);
+        bool useBilinear = (compressionMode == static_cast<int>(
+            beiklive::RewindThumbCompression::Bilinear));
+
         for (unsigned y = 0; y < dstH; ++y) {
             for (unsigned x = 0; x < dstW; ++x) {
-                // 最近邻采样
-                unsigned sx = x * srcW / dstW;
-                unsigned sy = y * srcH / dstH;
-                uint32_t px = src[sy * srcW + sx]; // RGBA8888
+                uint8_t r, g, b;
 
-                uint8_t r = static_cast<uint8_t>((px >> 16) & 0xFF);
-                uint8_t g = static_cast<uint8_t>((px >> 8)  & 0xFF);
-                uint8_t b = static_cast<uint8_t>( px        & 0xFF);
+                if (useBilinear) {
+                    // 双线性插值：计算源坐标（浮点）并对四邻域加权
+                    float sx = (x + 0.5f) * static_cast<float>(srcW) / static_cast<float>(dstW) - 0.5f;
+                    float sy = (y + 0.5f) * static_cast<float>(srcH) / static_cast<float>(dstH) - 0.5f;
+                    int x0 = static_cast<int>(sx);
+                    int y0 = static_cast<int>(sy);
+                    int x1 = x0 + 1;
+                    int y1 = y0 + 1;
+                    // 钳位到边界
+                    if (x0 < 0) x0 = 0;
+                    if (y0 < 0) y0 = 0;
+                    if (x1 >= static_cast<int>(srcW)) x1 = static_cast<int>(srcW) - 1;
+                    if (y1 >= static_cast<int>(srcH)) y1 = static_cast<int>(srcH) - 1;
+                    float fx = sx - static_cast<float>(x0);
+                    float fy = sy - static_cast<float>(y0);
+                    // 双线性加权混合四个源像素
+                    auto getPixelAt = [&](int px, int py) -> uint32_t {
+                        return src[static_cast<unsigned>(py) * srcW + static_cast<unsigned>(px)];
+                    };
+                    uint32_t p00 = getPixelAt(x0, y0), p10 = getPixelAt(x1, y0);
+                    uint32_t p01 = getPixelAt(x0, y1), p11 = getPixelAt(x1, y1);
+                    auto extractChannel = [](uint32_t p, int shift) -> float {
+                        return static_cast<float>((p >> shift) & 0xFF);
+                    };
+                    r = static_cast<uint8_t>(
+                        extractChannel(p00,16)*(1-fx)*(1-fy) + extractChannel(p10,16)*fx*(1-fy) +
+                        extractChannel(p01,16)*(1-fx)*fy     + extractChannel(p11,16)*fx*fy);
+                    g = static_cast<uint8_t>(
+                        extractChannel(p00, 8)*(1-fx)*(1-fy) + extractChannel(p10, 8)*fx*(1-fy) +
+                        extractChannel(p01, 8)*(1-fx)*fy     + extractChannel(p11, 8)*fx*fy);
+                    b = static_cast<uint8_t>(
+                        extractChannel(p00, 0)*(1-fx)*(1-fy) + extractChannel(p10, 0)*fx*(1-fy) +
+                        extractChannel(p01, 0)*(1-fx)*fy     + extractChannel(p11, 0)*fx*fy);
+                } else {
+                    // 最近邻采样（默认）
+                    unsigned sx = x * srcW / dstW;
+                    unsigned sy = y * srcH / dstH;
+                    uint32_t px = src[sy * srcW + sx]; // RGBA8888
+                    r = static_cast<uint8_t>((px >> 16) & 0xFF);
+                    g = static_cast<uint8_t>((px >> 8)  & 0xFF);
+                    b = static_cast<uint8_t>( px        & 0xFF);
+                }
 
                 // 打包为 RGB565：R(5) | G(6) | B(5)
                 dst[y * dstW + x] = static_cast<uint16_t>(

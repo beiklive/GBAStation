@@ -821,3 +821,48 @@ UI 层:    MyActivity → StartPage → GamePage → GameView/GameMenuView
 - 新增 `RewindSelectorView* m_rewindSelectorView` 成员
 - 新增 `RewindSelectorViewInitialize()` 方法：设置回调（选帧恢复 + B键取消），注入到 `this`
 - `_setupGame()` 调用初始化并注入到 `GameView`
+
+---
+
+## 2026-04-05 可视化倒带改进（Issue #168 后续）
+
+### 任务分析
+- **目标**：修复并改进可视化倒带功能，共4个子任务
+- **输入**：现有 RewindSelectorView、GameView、GamePage、SettingPage 代码
+- **挑战**：焦点机制理解、压缩策略集成、顺序调整、UI 尺寸适配
+
+### 问题1：焦点修复
+**根本原因**：`RewindSelectorView::setFocusable(true)` 导致 `Box::getDefaultFocus()` 直接返回容器自身，焦点无法下沉到具体卡片。同时 `HScrollingFrame::getDefaultFocus()` 在 NATURAL 模式下依赖 frame 坐标检查（inscribed），在布局尚未完成时会失败。
+
+**修复方案**：
+- `RewindSelectorView` 设为 `setFocusable(false)`
+- 重写 `getDefaultFocus()` 直接返回 `m_items.back()`（最新帧卡片）
+- `HScrollingFrame` 改用 `CENTERED` 模式（不依赖坐标检查）
+- `GamePage::RewindSelectorViewInitialize()` 同步改为 `setFocusable(false)`
+- 移除 `openWithFrames()` 中冗余的 `giveFocus(m_items.front())`
+
+### 问题2：压缩策略枚举
+- `enums.h`：新增 `RewindThumbCompression`（NearestNeighbor=0, Bilinear=1）
+- `constexpr.h`：新增 `KEY_REWIND_THUMB_COMPRESSION = "rewind.thumbCompression"`
+- `GameView::_downsampleToRGB565()`：读取设置，支持双线性插值（Bilinear）模式
+- `SettingPage.cpp`：新增"缩略图压缩策略"SelectorCell
+
+### 问题3：时间顺序排列，焦点在最右
+- `GameView::snapshotRewindThumbs()`：结果末尾追加 `std::reverse()`，使最旧帧在前、最新帧在后
+- `RewindSelectorView::getDefaultFocus()`：返回 `m_items.back()`，即最右侧（最新帧）卡片
+
+### 问题4：高度、尺寸、Label 文字
+- 面板高度：`setHeight(220.f)` → `setHeightPercentage(25.f)`（屏幕四分之一）
+- 卡片尺寸：ITEM_W 120→180, ITEM_H 100→140
+- 缩略图捕获分辨率：THUMB_W 60→120, THUMB_H 40→80（更清晰）
+- 文字渲染：移除 NVG `nvgText` 绘制，改用 `brls::Label`（帧序号标签 + 无缩略图占位标签）
+
+### 修改文件
+- `src/core/enums.h`：新增 RewindThumbCompression 枚举
+- `src/core/constexpr.h`：新增压缩策略 key
+- `src/ui/utils/GameView.hpp`：THUMB_W/H 扩大为 120×80
+- `src/ui/utils/GameView.cpp`：snapshotRewindThumbs 顺序反转，_downsampleToRGB565 支持双线性
+- `src/ui/utils/RewindSelectorView.hpp`：卡片尺寸增大，新增 Label 成员，新增 getDefaultFocus()
+- `src/ui/utils/RewindSelectorView.cpp`：焦点逻辑修复，高度改为25%，Label 替代 NVG 文字
+- `src/ui/page/GamePage.cpp`：setFocusable 改为 false
+- `src/ui/page/SettingPage.cpp`：新增压缩策略选项
