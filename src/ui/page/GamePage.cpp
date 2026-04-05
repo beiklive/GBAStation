@@ -262,7 +262,8 @@ namespace beiklive
         m_rewindSelectorView = new RewindSelectorView();
         m_rewindSelectorView->setWidthPercentage(100.f);
         m_rewindSelectorView->setHeightPercentage(100.f);
-        m_rewindSelectorView->setFocusable(true);
+        // 不让容器自身接受焦点，由 RewindSelectorView::getDefaultFocus() 将焦点导向具体卡片
+        m_rewindSelectorView->setFocusable(false);
         m_rewindSelectorView->setPositionType(brls::PositionType::ABSOLUTE);
         m_rewindSelectorView->setPositionTop(0);
         m_rewindSelectorView->setPositionLeft(0);

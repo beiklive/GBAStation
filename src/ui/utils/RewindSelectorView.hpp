@@ -14,10 +14,10 @@ namespace beiklive
     class RewindThumbItem : public brls::Box
     {
     public:
-        static constexpr float ITEM_W = 120.f; ///< 卡片宽度（像素）
-        static constexpr float ITEM_H = 100.f; ///< 卡片高度（像素）
+        static constexpr float ITEM_W = 180.f; ///< 卡片宽度（像素）
+        static constexpr float ITEM_H = 140.f; ///< 卡片高度（像素）
 
-        /// @param frameIndex  对应 m_rewindBuffer 中的帧索引
+        /// @param frameIndex  对应 m_rewindBuffer 中的帧索引（0=最新帧）
         /// @param thumb       RGB565 缩略图数据（可能为空）
         RewindThumbItem(int frameIndex, const std::vector<uint16_t>& thumb);
         ~RewindThumbItem();
@@ -35,6 +35,9 @@ namespace beiklive
         int  m_nvgImage    = 0;    ///< NanoVG 图像句柄（0 表示无缩略图）
         bool m_imgCreated  = false;
 
+        brls::Label* m_indexLabel   = nullptr; ///< 帧序号标签（底部）
+        brls::Label* m_noThumbLabel = nullptr; ///< 无缩略图占位标签
+
         /// RGBA8888 像素数据（由 RGB565 转换，首次 draw 时转为 NVG 图像）
         std::vector<uint8_t> m_rgbaData;
 
@@ -49,8 +52,7 @@ namespace beiklive
     /// 可视化倒带选择界面
     ///
     /// 以横向滚动卡片列表展示倒带历史缩略图，供用户选择要恢复的历史时刻。
-    /// 由 GamePage 创建并注入 GameView 引用，当倒带键按下且"显示倒带界面"设置
-    /// 开启时，从底部弹出并获得焦点；用户选中后恢复对应状态并关闭界面。
+    /// 缩略图按时间顺序排列：最旧帧在左，最新帧在右；界面打开时焦点在最右边。
     class RewindSelectorView : public brls::Box
     {
     public:
@@ -61,7 +63,7 @@ namespace beiklive
                   brls::Style style, brls::FrameContext* ctx) override;
 
         /// 打开倒带界面：用传入的缩略图快照重建卡片列表
-        /// @param frames  (帧索引, RGB565缩略图) 对列表（最新帧在前）
+        /// @param frames  (帧索引, RGB565缩略图) 对列表（最旧帧在前，最新帧在后）
         void openWithFrames(std::vector<std::pair<int, std::vector<uint16_t>>> frames);
 
         /// 设置"恢复帧"回调（由 GamePage 注入，参数为 m_rewindBuffer 帧索引）
@@ -69,6 +71,9 @@ namespace beiklive
 
         /// 设置"关闭"回调（由 GamePage 注入，关闭时调用）
         void setOnClose(std::function<void()> cb) { m_onClose = std::move(cb); }
+
+        /// 重写焦点获取：返回最右侧卡片（最新帧）
+        brls::View* getDefaultFocus() override;
 
     private:
         brls::Box*            m_panel       = nullptr; ///< 半透明背景面板

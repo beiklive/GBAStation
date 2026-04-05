@@ -23,10 +23,10 @@ namespace beiklive
     /// 倒带帧：包含核心序列化状态和可选的缩略图（RGB565 格式）
     struct RewindFrame {
         std::vector<uint8_t>  state;  ///< 核心序列化状态（~128KB）
-        std::vector<uint16_t> thumb;  ///< RGB565 缩略图（60×40，可能为空）
+        std::vector<uint16_t> thumb;  ///< RGB565 缩略图（120×80，可能为空）
 
-        static constexpr unsigned THUMB_W = 60; ///< 缩略图宽度（像素）
-        static constexpr unsigned THUMB_H = 40; ///< 缩略图高度（像素）
+        static constexpr unsigned THUMB_W = 120; ///< 缩略图宽度（像素）
+        static constexpr unsigned THUMB_H = 80;  ///< 缩略图高度（像素）
     };
 
     // 游戏视图，负责游戏的渲染显示，输入处理等功能
