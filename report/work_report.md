@@ -679,3 +679,64 @@ UI 层:    MyActivity → StartPage → GamePage → GameView/GameMenuView
 - 整理了所有已移除无效设置项（含移除原因）
 - 整理了待新增设置项（含涉及修改位置）
 - 整理了 BKAudioPlayer 各平台实现状态和 Switch 音效名称映射
+
+---
+
+## 任务：游戏数据库优化（2026-04-05）
+
+### 任务分析
+
+#### 目标
+1. 游戏数据库按平台分文件存储（类似 RetroArch），减少 IO 和 CPU 压力
+2. 优化数据库接口，提供通用字段访问 API
+
+#### 输入
+- `src/core/game_database.hpp/cpp` - 游戏数据库类
+- `src/core/constexpr.h` - 路径常量
+- `src/core/common.cpp` - 数据库初始化
+
+#### 输出
+- 新增 `GameData_GBA.json`、`GameData_GBC.json`、`GameData_GB.json` 平台专属文件
+- 新增 `loadFromDir()`、`saveToDir()`、`setDbDir()` 方法
+- 新增 `set(crc32, key, value)` 和 `get(crc32, key, defaultValue)` 通用字段访问接口
+- 新增 `setDefault(crc32, key, defaultValue)` 仅在字段未设置时写入
+- 自动迁移旧版单一 `GameData.json` 到平台分文件
+- `flush()` 同时保存主文件（向后兼容）和平台分文件
+
+#### 可能的挑战与解决方案
+- **向后兼容**：旧版用户已有单一 `GameData.json`，迁移时 `loadFromDir()` 检测平台文件不存在时自动读旧文件并分组保存，一次性迁移
+- **新增字段支持**：通用 `set/get` 接口基于 JSON 中间层（`to_json`/`from_json`），新增字段只需修改序列化函数，无需修改所有调用点
+
+### 实施内容
+
+#### constexpr.h
+- 新增 `DATA_BASE_FILE_GBA/GBC/GB` 平台文件名常量
+- 新增 `platformDatabaseFileName(int)` 和 `platformDatabaseFilePath(int)` 辅助函数
+
+#### game_database.hpp
+- 新增 `dbDir_` 成员变量（数据库目录路径）
+- 新增接口：`setDbDir`、`loadFromDir`、`saveToDir`
+- 新增接口：`set(crc32, key, value)`、`set(path, key, value)`
+- 新增接口：`get(crc32, key, defaultValue)`、`get(path, key, defaultValue)`
+- 新增接口：`setDefault(crc32, key, defaultValue)`、`setDefault(path, key, defaultValue)`
+
+#### game_database.cpp
+- 实现 `loadFromDir()`：按 GBA/GBC/GB 顺序逐平台加载并合并，无平台文件则回退加载主文件并迁移
+- 实现 `saveToDir()`：按平台分组，分别保存到对应文件
+- 改进 `flush()`：同时保存合并主文件和平台分文件
+- 实现 `set/get/setDefault`：通过 `to_json`/`from_json` JSON 中间层访问任意字段
+- 新增 `getPlatformFileName(int)` 静态辅助函数
+
+#### common.cpp
+- 更新数据库初始化：读取 `db_path` 配置，智能判断路径是目录还是文件
+- 改为调用 `loadFromDir()` 代替 `loadFromFile()`
+- 将目录路径写回 `db_path` 配置（新版以目录为准）
+
+### 额外任务：倒带截图可行性探究
+
+详见 `report/rewind_screenshot_feasibility.md`。
+
+**结论摘要**：完全可行，推荐方案A（每帧随状态保存 60×40 RGB565 缩略图）：
+- 额外内存：600帧 × 4.7KB ≈ 2.8 MB（可忽略）
+- 额外 CPU：<0.15ms/帧，<1% 性能影响
+- 实施核心：修改 `RewindFrame` 结构体 + `_saveRewindState()` 捕获缩略图 + 新增 `RewindSelectorView` UI
