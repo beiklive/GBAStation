@@ -514,10 +514,11 @@ namespace beiklive
             for (unsigned x = 0; x < dstW; ++x) {
                 unsigned sx = x * srcW / dstW;
                 unsigned sy = y * srcH / dstH;
-                uint32_t px = src[sy * srcW + sx]; // RGBA8888（R在高位）
-                uint8_t r = (px >> 16) & 0xFF;
+                // 格式：makeRGBA8888 = R[7:0] | G[15:8] | B[23:16] | A[31:24]
+                uint32_t px = src[sy * srcW + sx];
+                uint8_t r =  px        & 0xFF;   // R 在低字节
                 uint8_t g = (px >>  8) & 0xFF;
-                uint8_t b =  px        & 0xFF;
+                uint8_t b = (px >> 16) & 0xFF;
                 // 打包为 RGB565：R5G6B5
                 dst[y * dstW + x] = static_cast<uint16_t>(
                     ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
