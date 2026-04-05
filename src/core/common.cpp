@@ -1,7 +1,7 @@
 #include "common.h"
 #include <filesystem>
 
-
+namespace fs = std::filesystem;
 
 namespace beiklive
 {
@@ -27,12 +27,33 @@ void ConfigureInit(){
     SettingManager->Load();
     NameMappingManager->Load();
 
-    // 数据库初始化
-    if(SettingManager->Contains("db_path")){
-        GameDB = new beiklive::GameDatabase(GET_SETTING_KEY_STR("db_path", beiklive::path::databaseFilePath()));
-    }else{
-        GameDB = new beiklive::GameDatabase(beiklive::path::databaseFilePath());
-        SettingManager->Set("db_path", beiklive::ConfigValue(beiklive::path::databaseFilePath()));
+    // 数据库初始化：优先使用平台分文件，回退到旧版单一文件（自动迁移）
+    {
+        std::string dbDir  = beiklive::path::databasePath();
+        std::string dbFile = beiklive::path::databaseFilePath();
+        if (SettingManager->Contains("db_path")) {
+            // 兼容旧配置：若 db_path 指向文件，则取其父目录；若指向目录则直接使用
+            std::string savedPath = GET_SETTING_KEY_STR("db_path", dbFile);
+            if (!savedPath.empty()) {
+                fs::path p(savedPath);
+                std::error_code ec;
+                if (fs::exists(p, ec) && fs::is_directory(p, ec)) {
+                    dbDir = savedPath;
+                } else {
+                    std::string parentDir = p.parent_path().string();
+                    if (!parentDir.empty())
+                        dbDir = parentDir;
+                }
+            }
+        }
+        dbFile = dbDir + beiklive::path::SPLIT_CHAR + beiklive::path::DATA_BASE_FILE;
+
+        GameDB = new beiklive::GameDatabase();
+        GameDB->setFilePath(dbFile);
+        GameDB->loadFromDir(dbDir);
+
+        // 将目录路径写入配置（新版本以目录为准）
+        SettingManager->Set("db_path", beiklive::ConfigValue(dbDir));
     }
 
     // ── 预设所有设置项的默认值（仅当配置文件中不存在时才设置）──────────────
