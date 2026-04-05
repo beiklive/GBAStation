@@ -40,6 +40,9 @@
 # debug information files
 *.dwo
 
+.vs/
+out/
+
 build
 build_*
 build-*
