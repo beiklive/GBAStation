@@ -740,3 +740,84 @@ UI 层:    MyActivity → StartPage → GamePage → GameView/GameMenuView
 - 额外内存：600帧 × 4.7KB ≈ 2.8 MB（可忽略）
 - 额外 CPU：<0.15ms/帧，<1% 性能影响
 - 实施核心：修改 `RewindFrame` 结构体 + `_saveRewindState()` 捕获缩略图 + 新增 `RewindSelectorView` UI
+
+---
+
+## 任务：GameEntryInitialize重构 + 倒带功能增强（2026-04-05）
+
+### 任务分析
+
+#### 任务目标
+1. **任务1**：将 `GameEntryInitialize` 中的数据库数据处理改用 #166 新增的 `set/get/setDefault` 接口，移除 `game_database` 中功能重复及无用的接口
+2. **任务2**：倒带功能添加"倒带保存间隔"和"是否显示倒带界面"两个设置项
+3. **任务3**：阅读 `rewind_screenshot_feasibility.md` 可行性报告，制作可视化倒带界面控件，并在 `GamePage` 中作为第三个 View 添加
+
+#### 输入
+- `src/ui/page/GamePage.cpp` - 游戏页面（含 `GameEntryInitialize`）
+- `src/core/game_database.hpp/cpp` - 数据库接口
+- `src/ui/utils/GameView.hpp/cpp` - 游戏视图（含倒带机制）
+- `src/core/GameSignal.hpp` - 跨线程信号
+- `report/rewind_screenshot_feasibility.md` - 可行性报告
+- `src/ui/page/SettingPage.cpp` - 设置页面
+
+#### 输出
+- 移除无用接口 `updatePlayStats()`/`doUpdatePlayStats()`
+- `GameEntryInitialize()` 使用 `setDefault()` + `findByCrc32()` 流程
+- `updateGameCount()` 使用 `set(crc32, key, val)` 替代 `upsert()`
+- 三个新设置键（倒带间隔/显示UI/Item数量）
+- `SettingPage` 新增倒带设置区块
+- `RewindFrame` 结构体（state + RGB565缩略图）替换原始 `vector<uint8_t>`
+- `GameView` 支持间隔保存和缩略图捕获
+- 新控件 `RewindSelectorView`（HScrollingFrame + 卡片列表）
+- `GamePage` 集成第三个视图 `RewindSelectorView`
+
+#### 可能的挑战与解决方案
+- **线程安全**：倒带缓冲区原本只在游戏线程访问，UI读取时新增 `m_rewindMutex` 互斥锁保护
+- **NVG图像生命周期**：析构时 NVG 上下文可能已失效，采用不手动删除策略（由上下文重置统一回收）
+- **均匀采样除零**：`maxItems==1` 时 `(maxItems-1)=0` 除零，单独处理
+
+### 实施内容
+
+#### game_database.hpp / game_database.cpp
+- 移除 `updatePlayStats()` 公有接口和 `doUpdatePlayStats()` 私有实现（未被任何调用点使用）
+
+#### GamePage.cpp
+- `updateGameCount()`：改用 `db->set(crc32, "lastPlayed", ...)` 和 `db->set(crc32, "playCount", ...)` + `flush()`
+- `GameEntryInitialize()`：新流程 → 新游戏先 `upsert` 最小条目，再 `setDefault(logoPath)` 设置默认封面，最后 `findByCrc32()` 取完整条目
+
+#### constexpr.h
+- 新增 `KEY_REWIND_SAVE_INTERVAL`、`KEY_REWIND_SHOW_UI`、`KEY_REWIND_UI_ITEM_COUNT`
+
+#### SettingPage.cpp
+- `buildGameTab()` 中新增"倒带设置"区块：开关/间隔（5档）/数量（5档）
+
+#### GameSignal.hpp
+- 新增 `requestOpenRewindUI()`/`consumeOpenRewindUI()` 打开倒带UI信号
+- 新增 `requestRewindRestore(int)`/`consumeRewindRestore()` 帧恢复信号
+- `resetAll()` 同步初始化新增原子变量
+
+#### GameView.hpp
+- 新增 `RewindFrame` 结构体（`state` + `thumb` RGB565 + `THUMB_W/H` 常量）
+- `m_rewindBuffer` 类型改为 `deque<RewindFrame>`，新增 `m_rewindMutex`
+- 新增 `m_rewindSaveInterval`、`m_rewindShowUI` 配置字段
+- 新增公有方法 `snapshotRewindThumbs()`、`requestRestoreRewindFrame()`、`setRewindSelectorView()`
+- 新增私有静态方法 `_downsampleToRGB565()`
+
+#### GameView.cpp
+- 构造函数读取倒带设置，校验上下限
+- `_registerGameInput()`：倒带键根据 `m_rewindShowUI` 选择传统倒带或打开UI模式
+- `draw()`：消费 `consumeOpenRewindUI()` 信号，暂停游戏，快照缩略图，滑入 `RewindSelectorView`
+- `_saveRewindState()`：间隔控制 + RGB565缩略图捕获（开关控制）+ 互斥锁保护
+- `_stepRewind()`：适配 `RewindFrame.state` 字段，加互斥锁
+- `_gameLoop()`：处理 `consumeRewindRestore()` 信号，锁定缓冲区恢复指定帧
+- 新增 `snapshotRewindThumbs()`：均匀采样（含 maxItems==1 边界处理）
+- 新增 `_downsampleToRGB565()`：最近邻降采样 + RGBA→RGB565 转换
+
+#### RewindSelectorView.hpp / RewindSelectorView.cpp（新文件）
+- `RewindThumbItem`：单张缩略图卡片，RGB565→RGBA8888 转换，NVG 延迟创建图像
+- `RewindSelectorView`：HScrollingFrame 横向滚动，`openWithFrames()` 重建卡片列表，B键关闭
+
+#### GamePage.hpp / GamePage.cpp
+- 新增 `RewindSelectorView* m_rewindSelectorView` 成员
+- 新增 `RewindSelectorViewInitialize()` 方法：设置回调（选帧恢复 + B键取消），注入到 `this`
+- `_setupGame()` 调用初始化并注入到 `GameView`

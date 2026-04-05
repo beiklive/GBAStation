@@ -63,9 +63,10 @@ namespace beiklive
 
     RewindThumbItem::~RewindThumbItem()
     {
-        // NVG 图像由 NanoVG 内部管理，在 draw 时传入正确的 vg 上下文才能安全删除。
-        // 此处仅记录 handle，实际删除在最后一次 draw 时或由 NanoVG 生命周期管理。
-        // 由于 borealis 会在销毁时重置 NVG 上下文，这里不做手动删除以避免野指针。
+        // NVG 图像需通过 nvgDeleteImage(vg, handle) 释放，但析构时 NVG 上下文可能已失效
+        // （borealis 会在 View 树销毁时重置渲染上下文）。强行调用 nvgDeleteImage 会访问
+        // 已释放的上下文，导致野指针问题。borealis 的 NVG 后端在上下文重置时会统一回收
+        // 所有已注册的图像资源，因此此处无需手动释放。
     }
 
     void RewindThumbItem::_createNvgImage(NVGcontext* vg)

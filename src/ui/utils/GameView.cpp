@@ -33,7 +33,9 @@ namespace beiklive
 
         // 从配置读取倒带相关设置
         m_rewindSaveInterval = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_REWIND_SAVE_INTERVAL, 1);
-        if (m_rewindSaveInterval < 1) m_rewindSaveInterval = 1;
+        // 确保间隔值在合法范围内（与设置页面的选项匹配：1/2/4/8/16）
+        if (m_rewindSaveInterval < 1)  m_rewindSaveInterval = 1;
+        if (m_rewindSaveInterval > 16) m_rewindSaveInterval = 16;
         m_rewindShowUI = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_REWIND_SHOW_UI, 0) != 0;
 
         _registerGameInput();
@@ -749,6 +751,7 @@ namespace beiklive
                         // 恢复后丢弃该帧之前的所有帧（比该帧更新的帧）
                         while (static_cast<int>(m_rewindBuffer.size()) > restoreIdx)
                             m_rewindBuffer.pop_front();
+                        // 运行一帧以刷新渲染缓冲区，确保 UI 线程能立即看到恢复后的画面
                         m_gba_core->RunFrame();
                     }
                 }
@@ -982,8 +985,11 @@ namespace beiklive
             result.reserve(total);
             for (int i = 0; i < total; ++i)
                 result.emplace_back(i, m_rewindBuffer[i].thumb);
+        } else if (maxItems == 1) {
+            // 只取最新帧
+            result.emplace_back(0, m_rewindBuffer[0].thumb);
         } else {
-            // 均匀采样：在 [0, total-1] 范围内选取 maxItems 个索引
+            // 均匀采样：在 [0, total-1] 范围内选取 maxItems 个索引（maxItems >= 2，不会除零）
             result.reserve(maxItems);
             for (int k = 0; k < maxItems; ++k) {
                 int idx = k * (total - 1) / (maxItems - 1);
