@@ -26,11 +26,14 @@ namespace beiklive::path
     constexpr const char *CHEATS_DIR        = "cheats";
     constexpr const char *SHADER_DIR        = "shaders";
 
-    constexpr const char *CONFIG_FILE       = "config.cfg";
-    constexpr const char *MAPPING_FILE      = "name_mapping.cfg";
+    constexpr const char *CONFIG_FILE          = "config.cfg";
+    constexpr const char *MAPPING_FILE         = "name_mapping.cfg";
 
-    constexpr const char *LOG_FILE          = "GBAStation.log";
-    constexpr const char *DATA_BASE_FILE    = "GameData.json";
+    constexpr const char *LOG_FILE             = "GBAStation.log";
+    constexpr const char *DATA_BASE_FILE       = "GameData.json";       ///< 合并主数据库文件（向后兼容）
+    constexpr const char *DATA_BASE_FILE_GBA   = "GameData_GBA.json";   ///< GBA 平台数据库文件
+    constexpr const char *DATA_BASE_FILE_GBC   = "GameData_GBC.json";   ///< GBC 平台数据库文件
+    constexpr const char *DATA_BASE_FILE_GB    = "GameData_GB.json";    ///< GB 平台数据库文件
 
     namespace 
     {
@@ -54,6 +57,22 @@ namespace beiklive::path
         inline std::string databaseFilePath()
         {
             return std::string(ROOT) + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + DATA_BASE_DIR + SPLIT_CHAR + DATA_BASE_FILE;
+        }
+        /// 根据平台枚举返回对应的平台数据库文件名（不含路径）
+        inline std::string platformDatabaseFileName(int platform)
+        {
+            switch (platform)
+            {
+            case 1: return DATA_BASE_FILE_GBA;
+            case 2: return DATA_BASE_FILE_GBC;
+            case 3: return DATA_BASE_FILE_GB;
+            default: return DATA_BASE_FILE;
+            }
+        }
+        /// 根据平台枚举返回对应的平台数据库完整路径
+        inline std::string platformDatabaseFilePath(int platform)
+        {
+            return std::string(ROOT) + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + DATA_BASE_DIR + SPLIT_CHAR + platformDatabaseFileName(platform);
         }
         inline std::string logPath()
         {

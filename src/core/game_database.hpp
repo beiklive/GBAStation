@@ -68,7 +68,42 @@ namespace beiklive
         // 从文件加载（线程安全）
         bool loadFromFile(const std::string &filepath);
 
+        // ── 按平台分文件的读写接口 ─────────────────────────────────────────────
+
+        /// 设置数据库目录（平台分文件存储时使用）
+        void setDbDir(const std::string &dir);
+
+        /// 从目录中按平台加载所有数据库文件并合并，若平台文件不存在则回退加载主文件。
+        /// 此函数会清空现有数据。
+        bool loadFromDir(const std::string &dir);
+
+        /// 将数据按平台分组，分别保存到目录下的平台数据库文件
+        bool saveToDir(const std::string &dir) const;
+
+        // ── 通用字段访问接口（基于 JSON 中间层，方便新增字段无需修改调用代码）──
+
+        /// 通过 crc32 设置游戏条目的某个字段（支持 GameEntry 中的所有 JSON 字段名）
+        bool set(int crc32, const std::string &key, const nlohmann::json &value);
+
+        /// 通过文件路径设置游戏条目的某个字段
+        bool set(const std::string &path, const std::string &key, const nlohmann::json &value);
+
+        /// 通过 crc32 获取游戏条目的某个字段，不存在则返回 defaultValue
+        nlohmann::json get(int crc32, const std::string &key, const nlohmann::json &defaultValue = nullptr) const;
+
+        /// 通过文件路径获取游戏条目的某个字段，不存在则返回 defaultValue
+        nlohmann::json get(const std::string &path, const std::string &key, const nlohmann::json &defaultValue = nullptr) const;
+
+        /// 通过 crc32 设置字段默认值：仅当该字段在 JSON 中不存在或为 null 时才写入
+        bool setDefault(int crc32, const std::string &key, const nlohmann::json &defaultValue);
+
+        /// 通过文件路径设置字段默认值：仅当该字段在 JSON 中不存在或为 null 时才写入
+        bool setDefault(const std::string &path, const std::string &key, const nlohmann::json &defaultValue);
+
+        // ─────────────────────────────────────────────────────────────────────
+
         // 手动触发保存（如果启用了自动保存，也会更新脏标记）
+        // 同时保存主文件（filepath_）和平台分文件（dbDir_ 下各平台文件）
         bool flush();
 
         // 设置自动保存模式（运行时动态修改）
@@ -93,6 +128,9 @@ namespace beiklive
         bool doUpdatePlayStats(int crc32, int newPlayCount, int newPlayTime, const std::string &newLastPlayed);
         void doClear();
 
+        /// 内部：根据平台 int 值返回平台数据库文件名
+        static std::string getPlatformFileName(int platform);
+
         // 标记数据已修改，并触发自动保存（如果需要）
         void markDirtyAndAutoSave();
 
@@ -103,7 +141,8 @@ namespace beiklive
 
 
         // 自动保存相关
-        std::string filepath_;
+        std::string filepath_;          ///< 合并主文件路径
+        std::string dbDir_;             ///< 数据库目录（用于按平台分文件存储）
         int autoSaveMode_;     // 0: manual, 1: immediate, 2: periodic
         int autoSaveInterval_; // seconds (for mode 2)
         bool dirty_;           // 是否有未保存的修改
