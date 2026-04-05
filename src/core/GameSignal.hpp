@@ -115,6 +115,26 @@ public:
         return m_requestOpenMenu.exchange(false, std::memory_order_acq_rel);
     }
 
+    // ---- 打开倒带UI信号 -------------------------------------------------
+
+    /// 输入处理调用：请求打开可视化倒带界面。
+    void requestOpenRewindUI() { m_requestOpenRewindUI.store(true, std::memory_order_release); }
+
+    /// UI 线程调用：检查并消费打开倒带UI请求。
+    bool consumeOpenRewindUI() {
+        return m_requestOpenRewindUI.exchange(false, std::memory_order_acq_rel);
+    }
+
+    // ---- 倒带帧恢复信号 -------------------------------------------------
+
+    /// UI 线程调用：请求游戏线程恢复到指定帧（-1表示无请求）。
+    void requestRewindRestore(int frameIndex) { m_pendingRewindRestore.store(frameIndex, std::memory_order_release); }
+
+    /// 游戏线程调用：获取并消费倒带恢复请求（返回帧索引，-1表示无请求）。
+    int consumeRewindRestore() {
+        return m_pendingRewindRestore.exchange(-1, std::memory_order_acq_rel);
+    }
+
     // ---- 游戏按键状态（位掩码，RETRO_DEVICE_ID_JOYPAD_* 对应位）----------
 
     /// UI 线程调用：按下指定 retro 按钮（id < 16）。
@@ -147,6 +167,8 @@ public:
         m_muted.store(false, std::memory_order_relaxed);
         m_requestExit.store(false, std::memory_order_relaxed);
         m_requestOpenMenu.store(false, std::memory_order_relaxed);
+        m_requestOpenRewindUI.store(false, std::memory_order_relaxed);
+        m_pendingRewindRestore.store(-1, std::memory_order_relaxed);
         m_gameButtonMask.store(0, std::memory_order_relaxed);
     }
 
@@ -160,6 +182,8 @@ private:
     std::atomic<bool> m_muted{false};           ///< 静音标志
     std::atomic<bool> m_requestExit{false};     ///< 退出请求
     std::atomic<bool> m_requestOpenMenu{false}; ///< 打开菜单请求
+    std::atomic<bool> m_requestOpenRewindUI{false}; ///< 打开倒带UI请求
+    std::atomic<int>  m_pendingRewindRestore{-1};   ///< 待恢复的倒带帧索引（-1=无）
     std::atomic<uint32_t> m_gameButtonMask{0};  ///< 游戏按键位掩码（bit i = RETRO_DEVICE_ID_JOYPAD_* i）
 };
 

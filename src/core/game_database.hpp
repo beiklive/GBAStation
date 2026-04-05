@@ -47,9 +47,6 @@ namespace beiklive
         // 根据 path 查询（线程安全）
         std::optional<GameEntry> findByPath(const std::string &path) const;
 
-        // 修改游玩统计（线程安全）
-        bool updatePlayStats(int crc32, int newPlayCount, int newPlayTime, const std::string &newLastPlayed);
-
         // 获取所有条目（线程安全，返回副本）
         std::vector<GameEntry> getAll() const;
 
@@ -125,7 +122,6 @@ namespace beiklive
         bool doRemoveByPath(const std::string &path);
         std::optional<GameEntry> doFindByCrc32(int crc32) const;
         std::optional<GameEntry> doFindByPath(const std::string &path) const;
-        bool doUpdatePlayStats(int crc32, int newPlayCount, int newPlayTime, const std::string &newLastPlayed);
         void doClear();
 
         /// 内部：根据平台 int 值返回平台数据库文件名

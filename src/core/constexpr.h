@@ -145,6 +145,11 @@ namespace beiklive::SettingKey
     // 音频设置
     constexpr const char *KEY_AUDIO_BUTTON_SFX      = "audio.buttonSfx";           ///< 按钮音效开关
 
+    // 倒带设置
+    constexpr const char *KEY_REWIND_SAVE_INTERVAL  = "rewind.saveInterval";        ///< 倒带状态保存间隔（每 N 帧保存一次，默认 1）
+    constexpr const char *KEY_REWIND_SHOW_UI        = "rewind.showUI";              ///< 是否启用可视化倒带界面（同时开启缩略图保存）
+    constexpr const char *KEY_REWIND_UI_ITEM_COUNT  = "rewind.uiItemCount";         ///< 倒带界面最多显示的缩略图数量（默认 10）
+
     // 调试设置
     constexpr const char *KEY_DEBUG_LOG_LEVEL       = "debug.logLevel";            ///< 日志级别
     constexpr const char *KEY_DEBUG_LOG_FILE        = "debug.logFile";             ///< 是否输出日志到文件
