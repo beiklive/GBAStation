@@ -490,10 +490,13 @@ namespace beiklive
             }
         }
 
-        m_rewindBuffer.push_front(std::move(frame));
-        // 超出最大缓冲帧数时淘汰最旧帧
-        while (m_rewindBuffer.size() > REWIND_BUFFER_SIZE)
-            m_rewindBuffer.pop_back();
+        {
+            std::lock_guard<std::mutex> lk(m_rewindMutex);
+            m_rewindBuffer.push_front(std::move(frame));
+            // 超出最大缓冲帧数时淘汰最旧帧
+            while (m_rewindBuffer.size() > REWIND_BUFFER_SIZE)
+                m_rewindBuffer.pop_back();
+        }
     }
 
     // ============================================================
@@ -528,6 +531,7 @@ namespace beiklive
     // ============================================================
     bool GameView::_stepRewind()
     {
+        std::lock_guard<std::mutex> lk(m_rewindMutex);
         if (m_rewindBuffer.empty()) return false;
 
         bool didRestore = false;
@@ -746,6 +750,7 @@ namespace beiklive
             // ---- 重置请求 ----
             if (sig.consumeReset()) {
                 m_gba_core->Reset();
+                std::lock_guard<std::mutex> lk(m_rewindMutex);
                 m_rewindBuffer.clear(); // 重置后清空倒带缓冲区
             }
 
@@ -957,7 +962,10 @@ namespace beiklive
         }
 
         // 读档后清空倒带缓冲区，避免时序混乱
-        m_rewindBuffer.clear();
+        {
+            std::lock_guard<std::mutex> lk(m_rewindMutex);
+            m_rewindBuffer.clear();
+        }
 
         brls::Logger::info("GameView: 已从 {} 读取状态 ({} bytes)", path, got);
         brls::sync([slot](){
@@ -967,25 +975,27 @@ namespace beiklive
     }
 
     // ============================================================
-    // sampleRewindFrames – 从倒带缓冲区中均匀采样，返回指向帧的指针列表
+    // sampleRewindFrames – 从倒带缓冲区中均匀采样，返回帧拷贝列表
     // 若缓冲区帧数不足 count，则全部返回（最新帧在前）
+    // 线程安全：持有互斥锁后拷贝数据，避免 UI 线程与游戏线程竞争
     // ============================================================
-    std::vector<const RewindFrame*> GameView::sampleRewindFrames(int count) const
+    std::vector<RewindFrame> GameView::sampleRewindFrames(int count) const
     {
-        std::vector<const RewindFrame*> result;
+        std::lock_guard<std::mutex> lk(m_rewindMutex);
+        std::vector<RewindFrame> result;
         if (m_rewindBuffer.empty() || count <= 0) return result;
 
         int total = static_cast<int>(m_rewindBuffer.size());
         if (total <= count) {
-            // 数量不足，全部返回
+            // 数量不足，全部返回（拷贝）
             for (const auto& frame : m_rewindBuffer)
-                result.push_back(&frame);
+                result.push_back(frame);
         } else {
-            // 均匀采样：从 0 到 total-1 等间隔取 count 个索引
+            // 均匀采样：从 0 到 total-1 等间隔取 count 个索引，拷贝对应帧
             result.reserve(count);
             for (int i = 0; i < count; ++i) {
                 int idx = i * (total - 1) / (count - 1);
-                result.push_back(&m_rewindBuffer[static_cast<size_t>(idx)]);
+                result.push_back(m_rewindBuffer[static_cast<size_t>(idx)]);
             }
         }
         return result;

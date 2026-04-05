@@ -1,5 +1,4 @@
 #include "RewindSelectorView.hpp"
-#include "ui/utils/AnimationHelper.hpp"
 #include "core/Tools.hpp"
 
 namespace beiklive
@@ -186,7 +185,6 @@ void RewindSelectorView::_buildScrollArea()
     m_cardBox = new brls::Box(brls::Axis::ROW);
     m_cardBox->setHeight(160.f);
     m_cardBox->setAlignItems(brls::AlignItems::CENTER);
-    m_cardBox->setItemSpacing(12.f);
     m_cardBox->setPadding(10.f, 20.f, 10.f, 20.f);
 
     m_scrollFrame->setContentView(m_cardBox);
@@ -216,7 +214,7 @@ void RewindSelectorView::refreshThumbnails()
     RewindThumbCard* firstCard = nullptr;
 
     for (int i = 0; i < total; ++i) {
-        const RewindFrame* frame = frames[i];
+        const RewindFrame& frame = frames[i];
 
         // 计算大致时间偏移（索引 0 = 最新帧，索引越大越旧）
         float secondsAgo = i * secondsPerFrame;
@@ -229,7 +227,8 @@ void RewindSelectorView::refreshThumbnails()
             timeHint = "-" + std::to_string(static_cast<int>(secondsAgo / 60.f)) + "m";
 
         int frameIdx = i;
-        auto* card = new RewindThumbCard(frame->thumb, frameIdx, timeHint);
+        auto* card = new RewindThumbCard(frame.thumb, frameIdx, timeHint);
+        card->setMarginRight(12.f); // 卡片间距
 
         // 注册 A 键：选择该帧并关闭倒带界面
         card->registerAction("确认"_i18n, brls::BUTTON_A,

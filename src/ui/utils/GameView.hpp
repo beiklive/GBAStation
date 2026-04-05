@@ -48,8 +48,8 @@ namespace beiklive
             void setRewindSelectorView(RewindSelectorView* view) { m_rewindSelectorView = view; }
 
             /// 获取倒带缓冲区快照（线程安全，供 RewindSelectorView 渲染缩略图）
-            /// 返回从最新到最旧按 step 均匀采样的缩略图列表（最多 count 个）
-            std::vector<const RewindFrame*> sampleRewindFrames(int count) const;
+            /// 返回从最新到最旧按 step 均匀采样的帧拷贝（最多 count 个）
+            std::vector<RewindFrame> sampleRewindFrames(int count) const;
 
             // ---- 即时存档公共接口 -------------------------------------------
 
@@ -100,7 +100,8 @@ namespace beiklive
             float    m_currentFps    = 0.0f;
             std::chrono::steady_clock::time_point m_fpsLastTime;
 
-            // ---- 倒带缓冲区（仅游戏线程访问，无需互斥锁）--------------------
+            // ---- 倒带缓冲区（游戏线程写，UI线程读，通过互斥锁保护）-----------
+            mutable std::mutex      m_rewindMutex;              ///< 保护倒带缓冲区的互斥锁
             std::deque<RewindFrame> m_rewindBuffer; ///< 倒带状态环形缓冲区（最新帧在队首）
             int  m_rewindSaveInterval = 1; ///< 每隔 N 帧保存一次倒带状态（从配置加载）
             bool m_rewindShowUI       = false; ///< 是否在倒带时显示可视化界面（从配置加载）
