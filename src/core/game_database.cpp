@@ -115,14 +115,6 @@ namespace beiklive
         return doFindByPath(path);
     }
 
-    bool GameDatabase::updatePlayStats(int crc32, int newPlayCount, int newPlayTime, const std::string &newLastPlayed)
-    {
-        bool result = doUpdatePlayStats(crc32, newPlayCount, newPlayTime, newLastPlayed);
-        if (result)
-            markDirtyAndAutoSave();
-        return result;
-    }
-
     std::vector<GameEntry> GameDatabase::getAll() const
     {
         return data_;
@@ -583,18 +575,6 @@ namespace beiklive
         if (it == pathIndex_.end())
             return std::nullopt;
         return data_[it->second];
-    }
-
-    bool GameDatabase::doUpdatePlayStats(int crc32, int newPlayCount, int newPlayTime, const std::string &newLastPlayed)
-    {
-        auto it = crc32Index_.find(crc32);
-        if (it == crc32Index_.end())
-            return false;
-        auto &entry = data_[it->second];
-        entry.playCount = newPlayCount;
-        entry.playTime = newPlayTime;
-        entry.lastPlayed = newLastPlayed;
-        return true;
     }
 
     void GameDatabase::doClear()

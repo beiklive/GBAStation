@@ -18,6 +18,16 @@
 namespace beiklive
 {
     class GameMenuView; // 前置声明
+    class RewindSelectorView; // 前置声明
+
+    /// 倒带帧结构体：同时存储核心序列化状态和视频帧缩略图（RGB565）
+    struct RewindFrame {
+        std::vector<uint8_t>  state; ///< 核心序列化状态数据
+        std::vector<uint16_t> thumb; ///< RGB565 缩略图像素（60×40）
+
+        static constexpr unsigned THUMB_W = 60; ///< 缩略图宽度（像素）
+        static constexpr unsigned THUMB_H = 40; ///< 缩略图高度（像素）
+    };
 
     // 游戏视图，负责游戏的渲染显示，输入处理等功能
     class GameView : public brls::Box
@@ -33,6 +43,13 @@ namespace beiklive
 
             /// 设置关联的游戏菜单视图（由 GamePage 调用）
             void setGameMenuView(GameMenuView* menuView) { m_gameMenuView = menuView; }
+
+            /// 设置关联的可视化倒带视图（由 GamePage 调用）
+            void setRewindSelectorView(RewindSelectorView* view) { m_rewindSelectorView = view; }
+
+            /// 获取倒带缓冲区快照（线程安全，供 RewindSelectorView 渲染缩略图）
+            /// 返回从最新到最旧按 step 均匀采样的缩略图列表（最多 count 个）
+            std::vector<const RewindFrame*> sampleRewindFrames(int count) const;
 
             // ---- 即时存档公共接口 -------------------------------------------
 
@@ -84,10 +101,14 @@ namespace beiklive
             std::chrono::steady_clock::time_point m_fpsLastTime;
 
             // ---- 倒带缓冲区（仅游戏线程访问，无需互斥锁）--------------------
-            std::deque<std::vector<uint8_t>> m_rewindBuffer; ///< 倒带状态环形缓冲区（最新帧在队首）
+            std::deque<RewindFrame> m_rewindBuffer; ///< 倒带状态环形缓冲区（最新帧在队首）
+            int  m_rewindSaveInterval = 1; ///< 每隔 N 帧保存一次倒带状态（从配置加载）
+            bool m_rewindShowUI       = false; ///< 是否在倒带时显示可视化界面（从配置加载）
+            int  m_rewindFrameCounter = 0;     ///< 用于 saveInterval 计数的帧计数器
 
             // ---- 菜单视图（由 GamePage 注入）---------------------------------
             GameMenuView* m_gameMenuView = nullptr;
+            RewindSelectorView* m_rewindSelectorView = nullptr; ///< 可视化倒带选择视图（由 GamePage 注入）
 
             // ---- 辅助方法 ----------------------------------------------------
             void _registerGameInput();
@@ -112,6 +133,11 @@ namespace beiklive
 
             /// 将当前核心状态序列化并存入倒带缓冲区（超出上限时自动淘汰最旧帧）
             void _saveRewindState();
+
+            /// 对视频帧进行降采样并转换为 RGB565 格式（供倒带缩略图使用）
+            static std::vector<uint16_t> _downsampleToRGB565(
+                const std::vector<uint32_t>& src, unsigned srcW, unsigned srcH,
+                unsigned dstW, unsigned dstH);
 
             /// 执行一次倒带操作：从缓冲区弹出 REWIND_STEP 帧并反序列化，返回是否成功
             bool _stepRewind();

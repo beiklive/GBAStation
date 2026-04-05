@@ -740,3 +740,68 @@ UI 层:    MyActivity → StartPage → GamePage → GameView/GameMenuView
 - 额外内存：600帧 × 4.7KB ≈ 2.8 MB（可忽略）
 - 额外 CPU：<0.15ms/帧，<1% 性能影响
 - 实施核心：修改 `RewindFrame` 结构体 + `_saveRewindState()` 捕获缩略图 + 新增 `RewindSelectorView` UI
+
+---
+
+## 2026-04-05 任务：三个功能任务实施
+
+### 任务分析
+
+#### 任务目标
+1. **任务1**：将 `GameEntryInitialize` 改为使用 #166 新增的 `set/get/setDefault` 接口，移除 `game_database` 中冗余的 `updatePlayStats` 接口
+2. **任务2**：添加倒带保存间隔（`rewind.saveInterval`）和可视化倒带界面开关（`rewind.showUI`/`rewind.thumbnailCount`）设置
+3. **任务3**：创建 `RewindSelectorView` 可视化倒带控件，添加为 `GamePage` 第三个视图
+
+#### 输入输出
+- 输入：已合并 dev 分支（含 #166 新数据库接口）的代码
+- 输出：完善的 `GameEntryInitialize`、新增倒带设置、可视化倒带 UI
+
+#### 可能的挑战与解决方案
+- **`setDefault` 前需要条目存在**：`setDefault(crc32, ...)` 要求条目已在 DB 中。新游戏先 `upsert` 基础条目，再调用 `setDefault` 补全字段
+- **NVG 图像创建时机**：NVG 只能在 `draw()` 调用时（GL 上下文活跃）创建图像，缩略图卡片在构造时准备 RGBA 数据，首次 `draw()` 时懒创建 NVG image handle
+- **倒带缓冲区线程安全**：`sampleRewindFrames` 在 UI 线程（draw）调用，`m_rewindBuffer` 仅在游戏线程写。实际场景中 UI 线程读是安全的（渲染期间游戏线程等待 VSync）
+
+### 实施内容
+
+#### game_database.hpp / game_database.cpp
+- 移除冗余接口 `updatePlayStats()` 和内部 `doUpdatePlayStats()`（已可通过通用 `set()` 接口替代）
+
+#### GamePage.cpp / GamePage.hpp
+- 完善 `GameEntryInitialize()`：
+  - 新游戏：先 `upsert` 基础条目，再用 `setDefault` 补全可选字段
+  - 旧游戏：`findByCrc32` 取出后用 `setDefault` 向后兼容新字段
+  - 使用 `set(crc32, "title", ...)` 在标题为空时写入映射名
+- 新增 `RewindSelectorInitialize()` 和 `m_rewindSelectorView` 成员
+- `_setupGame()` 中初始化倒带视图并注入到 `GameView`
+
+#### common.cpp
+- 新增配置默认值：`rewind.saveInterval`（1）、`rewind.showUI`（0）、`rewind.thumbnailCount`（7）
+
+#### SettingPage.cpp
+- 在"游戏设置"Tab 新增"倒带设置"分区：
+  - 启用倒带（Boolean）
+  - 倒带保存间隔（Selector：1/2/4/6/10 帧）
+  - 显示可视化倒带界面（Boolean）
+  - 倒带界面缩略图数量（Selector：3/5/7/9/11 个）
+
+#### GameSignal.hpp
+- 新增 `requestShowRewindUI()` / `consumeShowRewindUI()`
+- 新增 `requestHideRewindUI()` / `consumeHideRewindUI()`
+
+#### GameView.hpp / GameView.cpp
+- `RewindFrame` 结构体：`state` + `thumb`（RGB565 60×40）
+- `m_rewindBuffer` 类型从 `deque<vector<uint8_t>>` 改为 `deque<RewindFrame>`
+- 新增成员：`m_rewindSaveInterval`、`m_rewindShowUI`、`m_rewindFrameCounter`
+- `_saveRewindState()`：支持 saveInterval 间隔 + 条件性缩略图捕获
+- `_downsampleToRGB565()`：最近邻降采样（RGBA8888→RGB565）
+- `sampleRewindFrames(int count)`：均匀采样公共接口
+- 倒带热键回调：开启/关闭时发送 `showRewindUI`/`hideRewindUI` 信号
+- `draw()`：消费倒带UI信号，驱动动画
+
+#### src/ui/utils/RewindSelectorView.hpp / .cpp（新增）
+- `RewindThumbCard`：单张缩略图卡片，RGBA 懒上传 NVG image，焦点高亮
+- `RewindSelectorView`：水平滚动缩略图列表
+  - 使用 `HScrollingFrame + Box(ROW)` 布局
+  - `refreshThumbnails()`：调用 `sampleRewindFrames` 按配置数量均匀采样并构建卡片
+  - 绝对定位，初始 GONE，倒带开始时从底部滑入（250ms）
+  - A 键确认选帧并关闭界面

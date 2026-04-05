@@ -54,6 +54,24 @@ public:
     /// 游戏线程调用：查询是否启用倒带。
     bool isRewinding() const { return m_rewind.load(std::memory_order_acquire); }
 
+    // ---- 可视化倒带UI信号 -----------------------------------------------
+
+    /// 游戏线程/UI线程调用：请求显示可视化倒带界面。
+    void requestShowRewindUI() { m_showRewindUI.store(true, std::memory_order_release); }
+
+    /// UI 线程调用：消费显示倒带界面请求（true = 需要显示）。
+    bool consumeShowRewindUI() {
+        return m_showRewindUI.exchange(false, std::memory_order_acq_rel);
+    }
+
+    /// 游戏线程/UI线程调用：请求隐藏可视化倒带界面。
+    void requestHideRewindUI() { m_hideRewindUI.store(true, std::memory_order_release); }
+
+    /// UI 线程调用：消费隐藏倒带界面请求（true = 需要隐藏）。
+    bool consumeHideRewindUI() {
+        return m_hideRewindUI.exchange(false, std::memory_order_acq_rel);
+    }
+
     // ---- 快速存档信号 ---------------------------------------------------
 
     /// UI 线程调用：请求快速保存至指定槽号（-1 表示无请求）。
@@ -141,6 +159,8 @@ public:
         m_paused.store(false, std::memory_order_relaxed);
         m_fastForward.store(false, std::memory_order_relaxed);
         m_rewind.store(false, std::memory_order_relaxed);
+        m_showRewindUI.store(false, std::memory_order_relaxed);
+        m_hideRewindUI.store(false, std::memory_order_relaxed);
         m_pendingQuickSave.store(-1, std::memory_order_relaxed);
         m_pendingQuickLoad.store(-1, std::memory_order_relaxed);
         m_pendingReset.store(false, std::memory_order_relaxed);
@@ -154,6 +174,8 @@ private:
     std::atomic<bool> m_paused{false};          ///< 暂停标志
     std::atomic<bool> m_fastForward{false};     ///< 快进标志
     std::atomic<bool> m_rewind{false};          ///< 倒带标志
+    std::atomic<bool> m_showRewindUI{false};    ///< 显示可视化倒带界面请求
+    std::atomic<bool> m_hideRewindUI{false};    ///< 隐藏可视化倒带界面请求
     std::atomic<int>  m_pendingQuickSave{-1};   ///< 待存档槽号（-1=无）
     std::atomic<int>  m_pendingQuickLoad{-1};   ///< 待读档槽号（-1=无）
     std::atomic<bool> m_pendingReset{false};    ///< 重置请求

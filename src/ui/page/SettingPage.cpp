@@ -451,6 +451,62 @@ brls::ScrollingFrame *SettingPage::buildGameTab()
         box->addView(idleCell);
     }
 
+    // ── 倒带设置 ──────────────────────────────────────────────────────────────
+    box->addView(makeHeader("倒带设置"));
+
+    {
+        auto *rewindEnCell = new brls::BooleanCell();
+        rewindEnCell->init("启用倒带",
+                           cfgGetBool("rewind.enabled", false),
+                           [](bool v) { cfgSetBool("rewind.enabled", v); });
+        box->addView(rewindEnCell);
+    }
+
+    {
+        // 倒带保存间隔：每隔 N 帧保存一次状态（值越大内存越省，但倒带粒度变粗）
+        std::vector<std::string> intervalOpts = {"1（每帧）", "2", "4", "6", "10"};
+        std::vector<int>         intervalVals = {1, 2, 4, 6, 10};
+        int curInterval = GET_SETTING_KEY_INT("rewind.saveInterval", 1);
+        int curIntervalIdx = 0;
+        for (int i = 0; i < (int)intervalVals.size(); ++i)
+            if (intervalVals[i] == curInterval) { curIntervalIdx = i; break; }
+        auto *intervalCell = new brls::SelectorCell();
+        intervalCell->init("倒带保存间隔（帧）", intervalOpts, curIntervalIdx,
+                           [intervalVals](int idx)
+                           {
+                               if (idx >= 0 && idx < (int)intervalVals.size())
+                                   SET_SETTING_KEY_INT("rewind.saveInterval", intervalVals[idx]);
+                           });
+        box->addView(intervalCell);
+    }
+
+    {
+        // 是否显示可视化倒带界面（同时启用倒带缩略图保存功能）
+        auto *showUICell = new brls::BooleanCell();
+        showUICell->init("显示可视化倒带界面",
+                         cfgGetBool("rewind.showUI", false),
+                         [](bool v) { cfgSetBool("rewind.showUI", v); });
+        box->addView(showUICell);
+    }
+
+    {
+        // 可视化倒带界面中均匀显示的缩略图数量
+        std::vector<std::string> thumbCountOpts = {"3", "5", "7", "9", "11"};
+        std::vector<int>         thumbCountVals = {3, 5, 7, 9, 11};
+        int curCount = GET_SETTING_KEY_INT("rewind.thumbnailCount", 7);
+        int curCountIdx = 2; // 默认 7
+        for (int i = 0; i < (int)thumbCountVals.size(); ++i)
+            if (thumbCountVals[i] == curCount) { curCountIdx = i; break; }
+        auto *thumbCountCell = new brls::SelectorCell();
+        thumbCountCell->init("倒带界面缩略图数量", thumbCountOpts, curCountIdx,
+                             [thumbCountVals](int idx)
+                             {
+                                 if (idx >= 0 && idx < (int)thumbCountVals.size())
+                                     SET_SETTING_KEY_INT("rewind.thumbnailCount", thumbCountVals[idx]);
+                             });
+        box->addView(thumbCountCell);
+    }
+
     scroll->setContentView(box);
     return scroll;
 }

@@ -93,11 +93,14 @@ void ConfigureInit(){
     SettingManager->SetDefault("fastforward.mute",       ConfigValue(1));
 
     // 倒带设置
-    SettingManager->SetDefault("rewind.enabled",    ConfigValue(0));
-    SettingManager->SetDefault("rewind.mode",       ConfigValue(std::string("hold")));
-    SettingManager->SetDefault("rewind.bufferSize", ConfigValue(3600));
-    SettingManager->SetDefault("rewind.step",       ConfigValue(2));
-    SettingManager->SetDefault("rewind.mute",       ConfigValue(0));
+    SettingManager->SetDefault("rewind.enabled",       ConfigValue(0));
+    SettingManager->SetDefault("rewind.mode",          ConfigValue(std::string("hold")));
+    SettingManager->SetDefault("rewind.bufferSize",    ConfigValue(3600));
+    SettingManager->SetDefault("rewind.step",          ConfigValue(2));
+    SettingManager->SetDefault("rewind.mute",          ConfigValue(0));
+    SettingManager->SetDefault("rewind.saveInterval",  ConfigValue(1));   ///< 每隔N帧保存一次倒带状态（1=每帧）
+    SettingManager->SetDefault("rewind.showUI",        ConfigValue(0));   ///< 是否显示可视化倒带界面（同时启用缩略图保存）
+    SettingManager->SetDefault("rewind.thumbnailCount",ConfigValue(7));   ///< 可视化倒带界面中显示的缩略图数量
 
     // 核心设置
     SettingManager->SetDefault("core.mgba_gb_model",              ConfigValue(std::string("Autodetect")));
