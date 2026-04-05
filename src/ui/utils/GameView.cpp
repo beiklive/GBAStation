@@ -31,6 +31,11 @@ namespace beiklive
         // 从 GameEntry 加载画面模式（默认 Fit）
         m_screenMode = static_cast<beiklive::ScreenMode>(m_gameEntry.displayMode);
 
+        // 从配置读取倒带相关设置
+        m_rewindSaveInterval = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_REWIND_SAVE_INTERVAL, 1);
+        if (m_rewindSaveInterval < 1) m_rewindSaveInterval = 1;
+        m_rewindShowUI = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_REWIND_SHOW_UI, 0) != 0;
+
         _registerGameInput();
         _registerGameRuntime();
     }
@@ -105,6 +110,21 @@ namespace beiklive
                 });
             }
             // 不提前返回：继续渲染当前游戏帧，防止菜单弹出时出现黑帧闪烁
+        }
+
+        // 消费打开倒带UI信号：暂停游戏并弹出可视化倒带选择界面
+        if (GameSignal::instance().consumeOpenRewindUI()) {
+            if (m_rewindSelectorView) {
+                GameSignal::instance().requestPause(true);
+                // 取出缩略图快照（游戏已暂停，可安全读取缓冲区）
+                int maxItems = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_REWIND_UI_ITEM_COUNT, 10);
+                auto thumbs = snapshotRewindThumbs(maxItems);
+                brls::sync([this, thumbs = std::move(thumbs)]() mutable {
+                    m_rewindSelectorView->openWithFrames(std::move(thumbs));
+                    AnimationHelper::slideInFromBottom(m_rewindSelectorView, 80.f, 220);
+                    brls::Application::giveFocus(m_rewindSelectorView);
+                });
+            }
         }
 
         // 初始化渲染器（首帧时，GL 上下文已就绪）
@@ -328,18 +348,31 @@ namespace beiklive
             }
         }
 
-        // 倒带切换
+        // 倒带切换：若启用可视化倒带界面则打开UI，否则执行传统倒带
         {
             std::string val = GET_SETTING_KEY_STR("handle.rewind", "RSB");
             auto combos = beiklive::tools::parseMultiCombo(val);
+            bool showUI = m_rewindShowUI;
             for (const auto& combo : combos) {
-                GameInputManager::instance().registerEmuFunctionKey(
-                    EmuFunctionKey::EMU_REWIND, {combo},
-                    []() {
-                        bool cur = GameSignal::instance().isRewinding();
-                        GameSignal::instance().requestRewind(!cur);
-                        brls::Logger::debug("倒带切换：{}", !cur);
-                    });
+                if (showUI) {
+                    // 可视化倒带模式：按键触发时打开倒带选择界面
+                    GameInputManager::instance().registerEmuFunctionKey(
+                        EmuFunctionKey::EMU_REWIND, {combo},
+                        [this]() {
+                            brls::Logger::debug("倒带UI触发！");
+                            GameSignal::instance().requestOpenRewindUI();
+                            this->setFocusable(false);
+                        });
+                } else {
+                    // 传统倒带模式：按键切换倒带状态
+                    GameInputManager::instance().registerEmuFunctionKey(
+                        EmuFunctionKey::EMU_REWIND, {combo},
+                        []() {
+                            bool cur = GameSignal::instance().isRewinding();
+                            GameSignal::instance().requestRewind(!cur);
+                            brls::Logger::debug("倒带切换：{}", !cur);
+                        });
+                }
             }
         }
 
@@ -433,12 +466,34 @@ namespace beiklive
 
     // ============================================================
     // _saveRewindState – 序列化当前核心状态并存入倒带缓冲区
+    // 支持间隔保存（每 m_rewindSaveInterval 帧保存一次）
+    // 若 m_rewindShowUI 开启则同时捕获 RGB565 缩略图
     // ============================================================
-    void GameView::_saveRewindState() // TODO: 后续改为使用setting的倒带开关控制是否记录倒带
+    void GameView::_saveRewindState()
     {
-        std::vector<uint8_t> state;
-        if (m_gba_core->Serialize(state) && !state.empty()) {
-            m_rewindBuffer.push_front(std::move(state));
+        // 间隔控制：每 m_rewindSaveInterval 帧才保存一次
+        ++m_rewindFrameCounter;
+        if (m_rewindFrameCounter < static_cast<unsigned>(m_rewindSaveInterval))
+            return;
+        m_rewindFrameCounter = 0;
+
+        RewindFrame frame;
+        if (!m_gba_core->Serialize(frame.state) || frame.state.empty())
+            return;
+
+        // 若启用可视化倒带界面，则同时捕获并压缩缩略图
+        if (m_rewindShowUI) {
+            auto videoFrame = m_gba_core->GetVideoFrame();
+            if (!videoFrame.pixels.empty() && videoFrame.width > 0 && videoFrame.height > 0) {
+                frame.thumb = _downsampleToRGB565(
+                    videoFrame.pixels, videoFrame.width, videoFrame.height,
+                    RewindFrame::THUMB_W, RewindFrame::THUMB_H);
+            }
+        }
+
+        {
+            std::lock_guard<std::mutex> lk(m_rewindMutex);
+            m_rewindBuffer.push_front(std::move(frame));
             // 超出最大缓冲帧数时淘汰最旧帧
             while (m_rewindBuffer.size() > REWIND_BUFFER_SIZE)
                 m_rewindBuffer.pop_back();
@@ -450,12 +505,13 @@ namespace beiklive
     // ============================================================
     bool GameView::_stepRewind()
     {
+        std::lock_guard<std::mutex> lk(m_rewindMutex);
         if (m_rewindBuffer.empty()) return false;
 
         bool didRestore = false;
         // 每次弹出 REWIND_STEP 帧，实现比正常速度快的倒带
         for (unsigned step = 0; step < REWIND_STEP && !m_rewindBuffer.empty(); ++step) {
-            if (m_gba_core->Unserialize(m_rewindBuffer.front())) {
+            if (m_gba_core->Unserialize(m_rewindBuffer.front().state)) {
                 m_rewindBuffer.pop_front();
                 didRestore = true;
             } else {
@@ -668,6 +724,7 @@ namespace beiklive
             // ---- 重置请求 ----
             if (sig.consumeReset()) {
                 m_gba_core->Reset();
+                std::lock_guard<std::mutex> lk(m_rewindMutex);
                 m_rewindBuffer.clear(); // 重置后清空倒带缓冲区
             }
 
@@ -680,6 +737,22 @@ namespace beiklive
             int loadSlot = sig.consumeQuickLoad();
             if (loadSlot >= 0)
                 _doLoadState(loadSlot);
+
+            // ---- 倒带帧恢复（由可视化倒带UI触发）----
+            int restoreIdx = sig.consumeRewindRestore();
+            if (restoreIdx >= 0) {
+                std::lock_guard<std::mutex> lk(m_rewindMutex);
+                if (restoreIdx < static_cast<int>(m_rewindBuffer.size())) {
+                    if (!m_gba_core->Unserialize(m_rewindBuffer[restoreIdx].state)) {
+                        brls::Logger::warning("GameView: 倒带帧恢复失败 idx={}", restoreIdx);
+                    } else {
+                        // 恢复后丢弃该帧之前的所有帧（比该帧更新的帧）
+                        while (static_cast<int>(m_rewindBuffer.size()) > restoreIdx)
+                            m_rewindBuffer.pop_front();
+                        m_gba_core->RunFrame();
+                    }
+                }
+            }
 
             // ---- 从信号更新游戏按键状态 ----
             m_gba_core->SetButtonsFromSignal();
@@ -879,13 +952,83 @@ namespace beiklive
         }
 
         // 读档后清空倒带缓冲区，避免时序混乱
-        m_rewindBuffer.clear();
+        {
+            std::lock_guard<std::mutex> lk(m_rewindMutex);
+            m_rewindBuffer.clear();
+        }
 
         brls::Logger::info("GameView: 已从 {} 读取状态 ({} bytes)", path, got);
         brls::sync([slot](){
             std::string msg = (slot == 0) ? "已从自动存档读取" : "已从槽位 " + std::to_string(slot) + " 读取";
             brls::Application::notify(msg);
         });
+    }
+
+    // ============================================================
+    // snapshotRewindThumbs – 获取倒带缓冲区缩略图快照（UI 线程调用）
+    // 游戏已暂停时调用，均匀采样至多 maxItems 条
+    // ============================================================
+    std::vector<std::pair<int, std::vector<uint16_t>>>
+    GameView::snapshotRewindThumbs(int maxItems) const
+    {
+        std::lock_guard<std::mutex> lk(m_rewindMutex);
+        std::vector<std::pair<int, std::vector<uint16_t>>> result;
+
+        int total = static_cast<int>(m_rewindBuffer.size());
+        if (total == 0) return result;
+
+        // 若 maxItems <= 0 或缓冲帧数不超过限制，则全部返回
+        if (maxItems <= 0 || total <= maxItems) {
+            result.reserve(total);
+            for (int i = 0; i < total; ++i)
+                result.emplace_back(i, m_rewindBuffer[i].thumb);
+        } else {
+            // 均匀采样：在 [0, total-1] 范围内选取 maxItems 个索引
+            result.reserve(maxItems);
+            for (int k = 0; k < maxItems; ++k) {
+                int idx = k * (total - 1) / (maxItems - 1);
+                result.emplace_back(idx, m_rewindBuffer[idx].thumb);
+            }
+        }
+        return result;
+    }
+
+    // ============================================================
+    // requestRestoreRewindFrame – 通过 GameSignal 请求恢复指定帧
+    // ============================================================
+    void GameView::requestRestoreRewindFrame(int frameIndex)
+    {
+        GameSignal::instance().requestRewindRestore(frameIndex);
+    }
+
+    // ============================================================
+    // _downsampleToRGB565 – RGBA8888 降采样并转换为 RGB565
+    // ============================================================
+    std::vector<uint16_t> GameView::_downsampleToRGB565(
+        const std::vector<uint32_t>& src,
+        unsigned srcW, unsigned srcH,
+        unsigned dstW, unsigned dstH)
+    {
+        std::vector<uint16_t> dst(dstW * dstH, 0);
+        if (src.empty() || srcW == 0 || srcH == 0) return dst;
+
+        for (unsigned y = 0; y < dstH; ++y) {
+            for (unsigned x = 0; x < dstW; ++x) {
+                // 最近邻采样
+                unsigned sx = x * srcW / dstW;
+                unsigned sy = y * srcH / dstH;
+                uint32_t px = src[sy * srcW + sx]; // RGBA8888
+
+                uint8_t r = static_cast<uint8_t>((px >> 16) & 0xFF);
+                uint8_t g = static_cast<uint8_t>((px >> 8)  & 0xFF);
+                uint8_t b = static_cast<uint8_t>( px        & 0xFF);
+
+                // 打包为 RGB565：R(5) | G(6) | B(5)
+                dst[y * dstW + x] = static_cast<uint16_t>(
+                    ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
+            }
+        }
+        return dst;
     }
 
 } // namespace beiklive

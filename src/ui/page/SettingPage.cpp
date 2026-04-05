@@ -451,6 +451,54 @@ brls::ScrollingFrame *SettingPage::buildGameTab()
         box->addView(idleCell);
     }
 
+    // ── 倒带设置 ──────────────────────────────────────────────────────────────
+    box->addView(makeHeader("倒带设置"));
+
+    {
+        // 是否显示可视化倒带界面（同时开启缩略图捕获）
+        auto *showUiCell = new brls::BooleanCell();
+        showUiCell->init("显示可视化倒带界面",
+                         cfgGetBool(KEY_REWIND_SHOW_UI, false),
+                         [](bool v) { cfgSetBool(KEY_REWIND_SHOW_UI, v); });
+        box->addView(showUiCell);
+    }
+
+    {
+        // 倒带状态保存间隔：每 N 帧保存一次（数值越大，内存占用越少，但倒带精度越低）
+        std::vector<std::string> intervalOpts = {"每帧（最高精度）", "每2帧", "每4帧", "每8帧", "每16帧"};
+        static const int intervalVals[]       = {1, 2, 4, 8, 16};
+        int curInterval = GET_SETTING_KEY_INT(KEY_REWIND_SAVE_INTERVAL, 1);
+        int curIdx      = 0;
+        for (int i = 0; i < 5; ++i)
+            if (intervalVals[i] == curInterval) { curIdx = i; break; }
+        auto *intervalCell = new brls::SelectorCell();
+        intervalCell->init("倒带保存间隔", intervalOpts, curIdx,
+                           [intervalVals](int idx)
+                           {
+                               if (idx >= 0 && idx < 5)
+                                   SET_SETTING_KEY_INT(KEY_REWIND_SAVE_INTERVAL, intervalVals[idx]);
+                           });
+        box->addView(intervalCell);
+    }
+
+    {
+        // 可视化倒带界面显示的缩略图数量（每次均匀采样 m_rewindBuffer）
+        std::vector<std::string> countOpts = {"5 个", "8 个", "10 个", "15 个", "20 个"};
+        static const int countVals[]       = {5, 8, 10, 15, 20};
+        int curCount = GET_SETTING_KEY_INT(KEY_REWIND_UI_ITEM_COUNT, 10);
+        int curIdx   = 2; // 默认 10 个
+        for (int i = 0; i < 5; ++i)
+            if (countVals[i] == curCount) { curIdx = i; break; }
+        auto *countCell = new brls::SelectorCell();
+        countCell->init("界面缩略图数量", countOpts, curIdx,
+                        [countVals](int idx)
+                        {
+                            if (idx >= 0 && idx < 5)
+                                SET_SETTING_KEY_INT(KEY_REWIND_UI_ITEM_COUNT, countVals[idx]);
+                        });
+        box->addView(countCell);
+    }
+
     scroll->setContentView(box);
     return scroll;
 }

@@ -60,46 +60,52 @@ namespace beiklive
     void GamePage::updateGameCount()
     {
         auto &db = beiklive::GameDB; // 获取全局游戏数据库实例
-        // 更新运行时间戳
+        // 使用通用字段接口更新运行时间戳和启动次数
         m_gameEntry.lastPlayed = beiklive::tools::getTimestampString();
-        m_gameEntry.playCount += 1; // 玩过的次数加1
+        m_gameEntry.playCount += 1;
         brls::Logger::debug("GamePage 更新游戏条目：lastPlayed={}, playCount={}", m_gameEntry.lastPlayed, m_gameEntry.playCount);
-        // 提交一次数据库更改，确保在游戏过程中数据被保存，即使中途崩溃也不会丢失
-        db->upsert(m_gameEntry);
+        db->set(m_gameEntry.crc32, "lastPlayed", m_gameEntry.lastPlayed);
+        db->set(m_gameEntry.crc32, "playCount", m_gameEntry.playCount);
         db->flush();
     }
 
-    // TODO: 此处还要获取游戏的映射名称、 处理游戏独立设置以及路径等信息，后续完善
     void GamePage::GameEntryInitialize()
     {
         auto &db = beiklive::GameDB;                     // 获取全局游戏数据库实例
         auto dcrc32 = tools::crc32(m_gameData.fullPath); // 计算 CRC32 校验值
-        // 记录日志：开始处理游戏条目
         brls::Logger::debug("GamePage 开始处理游戏条目，路径: {}, CRC32: {}", m_gameData.fullPath, dcrc32);
-        auto foundByCrc = db->findByCrc32(dcrc32);
-        // 如果数据库中没有此游戏的记录 ,插入一条新记录，等到游戏结束时再插入一次
-        if (!foundByCrc.has_value())
+
+        // 若数据库中不存在此游戏记录，先插入含必要字段的最小条目
+        if (!db->findByCrc32(dcrc32).has_value())
         {
             brls::Logger::debug("GamePage 数据库中没有此游戏的记录，插入新记录: {}", m_gameData.fullPath);
-            // 数据库中没有此游戏的记录，创建一个新的 GameEntry 并插入数据库
-            m_gameEntry.path = m_gameData.fullPath;
-            m_gameEntry.title = GET_MAPPING_KEY_STR(beiklive::tools::getFileNameWithoutExtension(m_gameData.fileName), beiklive::tools::getFileNameWithoutExtension(m_gameData.fileName));
-            m_gameEntry.platform = (int)m_gameData.itemType;                                                                // 设置平台类型
-            m_gameEntry.crc32 = dcrc32;                                                                                     // 设置 CRC32 校验值
-            m_gameEntry.logoPath = beiklive::tools::getDefaultLogoPath((beiklive::enums::EmuPlatform)m_gameEntry.platform); // 设置默认封面路径
+            GameEntry minimal;
+            minimal.path     = m_gameData.fullPath;
+            minimal.crc32    = dcrc32;
+            minimal.platform = (int)m_gameData.itemType;
+            minimal.title    = GET_MAPPING_KEY_STR(
+                beiklive::tools::getFileNameWithoutExtension(m_gameData.fileName),
+                beiklive::tools::getFileNameWithoutExtension(m_gameData.fileName));
+            db->upsert(minimal);
         }
         else
         {
             brls::Logger::debug("GamePage 数据库中已存在此游戏记录: {}", m_gameData.fullPath);
-            // 数据库中已存在此游戏记录，使用数据库中的数据初始化 GameEntry
-            m_gameEntry = foundByCrc.value();
         }
+
+        // 使用 setDefault 为可选字段设置首次默认值（已有值时不覆盖）
+        std::string defaultLogo = beiklive::tools::getDefaultLogoPath(
+            static_cast<beiklive::enums::EmuPlatform>((int)m_gameData.itemType));
+        db->setDefault(dcrc32, "logoPath", defaultLogo);
+
+        // 从数据库取出完整条目（包含已有的用户自定义字段）
+        m_gameEntry = db->findByCrc32(dcrc32).value();
 
         // 初始化路径字段（优先使用已有记录，若为空则从配置中读取默认值）
         _initGameEntryPaths();
 
         updateGameCount();
-        brls::Logger::debug("GamePage 游戏条目已保存到数据库: {}", m_gameData.fullPath);
+        brls::Logger::debug("GamePage 游戏条目已处理完成: {}", m_gameData.fullPath);
     }
 
     void GamePage::_initGameEntryPaths()
@@ -250,15 +256,61 @@ namespace beiklive
         this->addView(m_gameMenuView);
     }
 
+    void GamePage::RewindSelectorViewInitialize()
+    {
+        #undef ABSOLUTE
+        m_rewindSelectorView = new RewindSelectorView();
+        m_rewindSelectorView->setWidthPercentage(100.f);
+        m_rewindSelectorView->setHeightPercentage(100.f);
+        m_rewindSelectorView->setFocusable(true);
+        m_rewindSelectorView->setPositionType(brls::PositionType::ABSOLUTE);
+        m_rewindSelectorView->setPositionTop(0);
+        m_rewindSelectorView->setPositionLeft(0);
+        m_rewindSelectorView->setVisibility(brls::Visibility::GONE); // 初始隐藏
+
+        // 选择帧后恢复状态：通过 GameView 向游戏线程发送恢复请求，然后关闭界面
+        m_rewindSelectorView->setOnFrameSelected([this](int frameIndex) {
+            if (m_gameView)
+                m_gameView->requestRestoreRewindFrame(frameIndex);
+            // 关闭倒带界面并恢复游戏
+            brls::sync([this]() {
+                AnimationHelper::slideOutToBottom(m_rewindSelectorView, 80.f, 180, true, [this]() {
+                    m_gameView->setFocusable(true);
+                    GameSignal::instance().requestPause(false);
+                    brls::Application::giveFocus(m_gameView);
+                });
+            });
+        });
+
+        // B 键取消：直接关闭倒带界面并恢复游戏
+        m_rewindSelectorView->setOnClose([this]() {
+            brls::sync([this]() {
+                AnimationHelper::slideOutToBottom(m_rewindSelectorView, 80.f, 180, true, [this]() {
+                    m_gameView->setFocusable(true);
+                    GameSignal::instance().requestPause(false);
+                    GameSignal::instance().requestRewind(false);
+                    brls::Application::giveFocus(m_gameView);
+                });
+            });
+        });
+
+        this->addView(m_rewindSelectorView);
+    }
+
     void GamePage::_setupGame()
     {
         PageInit();
         GameViewInitialize();
         GameMenuInitialize();
+        RewindSelectorViewInitialize();
 
         // 将菜单视图引用注入 GameView，以便菜单热键触发时可打开菜单
         if (m_gameView && m_gameMenuView)
             m_gameView->setGameMenuView(m_gameMenuView);
+
+        // 将倒带选择视图引用注入 GameView，以便倒带键触发时可打开可视化倒带界面
+        if (m_gameView && m_rewindSelectorView)
+            m_gameView->setRewindSelectorView(m_rewindSelectorView);
 
         brls::sync([this]()
                    { brls::Application::giveFocus(m_gameView); }); // 游戏视图获得焦点，准备接受输入
