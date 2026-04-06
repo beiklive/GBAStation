@@ -823,9 +823,7 @@ namespace beiklive
         namespace fs = std::filesystem;
 
         // 确定存档目录
-        std::string dir = m_gameEntry.savePath.empty()
-                          ? beiklive::path::savePath()
-                          : m_gameEntry.savePath;
+        std::string dir = m_gameEntry.savePath;
 
         // 提取 ROM 文件名（不含扩展名）
         std::string stem;

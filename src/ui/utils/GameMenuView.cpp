@@ -1,6 +1,7 @@
 #include "GameMenuView.hpp"
 #include "core/Tools.hpp"
 #include <filesystem>
+#include "borealis/core/cache_helper.hpp"
 
 namespace beiklive
 {
@@ -27,7 +28,7 @@ namespace beiklive
         this->setFocusable(false);
         this->setAxis(brls::Axis::COLUMN);
         HIDE_BRLS_HIGHLIGHT(this);
-        this->setBackgroundColor(nvgRGBA(0, 0, 0, 160));
+        this->setBackgroundColor(nvgRGBA(0, 0, 0, 240));
         this->setWidthPercentage(100.f);
         this->setHeightPercentage(100.f);
         this->setJustifyContent(brls::JustifyContent::CENTER);
@@ -83,8 +84,10 @@ namespace beiklive
         m_title = new brls::Label();
         m_title->setText("游戏菜单");
         m_title->setFontSize(24.f);
+        m_title->setFontQuality(2.f);
+        m_title->setWidth(100.f);
         m_title->setMarginBottom(24.f);
-        m_title->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+        m_title->setHorizontalAlign(brls::HorizontalAlign::LEFT);
         m_contrlPanel->addView(m_title);
 
         // ── 创建 6 个菜单按钮 ──────────────────────────────────────────────
@@ -259,8 +262,10 @@ namespace beiklive
                 btn->setBackgroundColor(nvgRGBA(255, 255, 255, 20));
                 _hideAllPanels();
             };
-            btn->onFocusLostCallback = [btn]() {
+            btn->onFocusLostCallback = [this,btn]() {
                 btn->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
+                _refreshStatePanel(true);
+                _refreshStatePanel(false);
             };
             btn->registerClickAction([onClick](brls::View*) -> bool {
                 onClick();
@@ -323,11 +328,12 @@ namespace beiklive
             // dialog->addButton("取消", []() {});
             // dialog->addButton("确认", [this, slot]() {
                 if (m_saveStateCallback) m_saveStateCallback(slot);
+
                 brls::sync([this]() {
                     brls::Application::giveFocus(m_btnResume);
                     if (m_onResume) m_onResume();
                 });
-            // });
+
             // dialog->open();
         };
 
@@ -435,7 +441,15 @@ namespace beiklive
                         item->setTitle(_slotName(slot));
                         item->setSubText(info.timeStr.empty() ? "时间未知" : info.timeStr);
                         if (!info.thumbPath.empty())
+                        {
+                            // 这里需要先清除旧缓存（如果有的话），否则同一路径的缩略图更新后可能无法刷新显示
+                            int oldTex = brls::TextureCache::instance().getCache(info.thumbPath);
+                            if (oldTex > 0) {
+                                brls::TextureCache::instance().removeCache(static_cast<size_t>(oldTex));
+                                brls::TextureCache::instance().markDirty(static_cast<size_t>(oldTex));
+                            }
                             item->setImagePath(info.thumbPath);
+                        }
                     }
                     else
                     {
