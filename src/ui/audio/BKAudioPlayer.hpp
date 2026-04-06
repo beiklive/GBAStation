@@ -54,6 +54,15 @@ class BKAudioPlayer : public brls::AudioPlayer
     std::condition_variable m_cv;
     std::atomic<bool>       m_running { false };
 
+    /// true 表示正在 playSoundDirect 内部（已提交 audout 缓冲区但尚未 free）
+    std::atomic<bool>       m_isPlaying { false };
+
+  public:
+    /// 返回是否有音效正在通过 audout 播放（用于外部系统等待音效完成）
+    bool isPlaying() const { return m_isPlaying.load(std::memory_order_acquire); }
+
+  private:
+
     // 最新优先的待处理槽（未播放的旧音效会被新音效替换）
     bool        m_hasPending   = false;
     int         m_pendingIdx   = 0;

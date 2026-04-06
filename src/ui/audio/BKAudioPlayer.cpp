@@ -1,6 +1,7 @@
 #include "ui/audio/BKAudioPlayer.hpp"
 
 #include "core/common.h"
+#include "game/audio/AudioManager.hpp"
 #include <borealis/core/logger.hpp>
 
 #include <algorithm>
@@ -348,6 +349,13 @@ void BKAudioPlayer::playSoundDirect(int /*soundIdx*/, const WavData& wav, float 
     if (!m_switchInit || wav.samples.empty())
         return;
 
+    // 游戏音频系统运行时跳过UI音效播放：
+    // AudioManager 与 BKAudioPlayer 共用同一 audout 设备，若同时向硬件队列提交缓冲区，
+    // AudioManager 的线程可能"偷走" BKAudioPlayer 的完成通知，导致 BKAudioPlayer 在
+    // 音频缓冲区仍被硬件 DMA 读取时提前 free()，产生 use-after-free，引发撕裂音或音调异常。
+    if (AudioManager::instance().isRunning())
+        return;
+
     // pitch 影响重采样比率：pitch > 1.0 表示升调（加速播放），< 1.0 表示降调（减速播放）
     double effectivePitch = (pitch > 0.1f) ? static_cast<double>(pitch) : 1.0;
 
@@ -396,11 +404,14 @@ void BKAudioPlayer::playSoundDirect(int /*soundIdx*/, const WavData& wav, float 
 
     if (R_SUCCEEDED(audoutAppendAudioOutBuffer(&buf)))
     {
+        // 标记正在播放：外部系统（如 AudioManager::init）可通过 isPlaying() 等待本缓冲区完成
+        m_isPlaying.store(true, std::memory_order_release);
         // 等待音频播放完成，超时为音频时长的2倍 + 200ms
         u64 waitNs = static_cast<u64>(inFrames) * 2000000000ULL / wav.sampleRate + 200000000ULL;
         AudioOutBuffer* released = nullptr;
         u32 relCount = 0;
         audoutWaitPlayFinish(&released, &relCount, waitNs);
+        m_isPlaying.store(false, std::memory_order_release);
     }
 
     free(rawBuf);

@@ -2,6 +2,7 @@
 #include "GameMenuView.hpp"
 #include "RewindSelectorView.hpp"
 #include "game/audio/AudioManager.hpp"
+#include "ui/audio/BKAudioPlayer.hpp"
 #include "ui/utils/AnimationHelper.hpp"
 #include "core/Tools.hpp"
 
@@ -433,6 +434,18 @@ namespace beiklive
             if (m_gba_core->SetupGame(m_gameEntry))
             {
                 brls::Logger::debug("GBA 核心已初始化，游戏路径：{}", m_gameEntry.path);
+                // 初始化音频系统前，等待 UI 音效（如启动点击音）播放完毕，
+                // 避免 BKAudioPlayer 与 AudioManager 共用 audout 设备时产生竞争，引发撕裂音
+                if (auto* player = dynamic_cast<beiklive::BKAudioPlayer*>(
+                        brls::Application::getAudioPlayer()))
+                {
+                    // 最长等待 500ms，一般 UI 音效（点击声）< 100ms，足够覆盖
+                    constexpr std::chrono::milliseconds kAudioPlayerWaitTimeout{500};
+                    auto deadline = std::chrono::steady_clock::now() + kAudioPlayerWaitTimeout;
+                    while (player->isPlaying()
+                           && std::chrono::steady_clock::now() < deadline)
+                        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                }
                 // 初始化音频系统
                 double fps = m_gba_core->Fps();
                 if (fps <= 0.0) fps = 59.7;
@@ -501,8 +514,14 @@ namespace beiklive
         {
             std::lock_guard<std::mutex> lk(m_rewindMutex);
             m_rewindBuffer.push_front(std::move(frame));
-            // 超出最大缓冲条目数时淘汰最旧帧
-            while (m_rewindBuffer.size() > m_rewindBufferSize)
+            // 根据保存间隔计算实际最大条目数：
+            // m_rewindBufferSize 表示"最多缓存多少帧游戏时间"（如 3600 = 60fps × 60s = 1分钟）。
+            // 每个条目覆盖 m_rewindSaveInterval 帧，因此最大条目数 = bufferSize / saveInterval。
+            // 这样无论 saveInterval 取何值，实际缓冲时长始终等于 bufferSize/60 秒。
+            // 使用 std::max(1u, ...) 避免 saveInterval 意外为 0 时的除零错误
+            unsigned saveInterval = static_cast<unsigned>(std::max(1, m_rewindSaveInterval));
+            unsigned maxEntries = std::max(1u, m_rewindBufferSize / saveInterval);
+            while (m_rewindBuffer.size() > maxEntries)
                 m_rewindBuffer.pop_back();
         }
     }
