@@ -109,7 +109,9 @@ namespace beiklive
         m_allPanels.push_back(savePanel);
         m_savePanel = savePanel;
 
-        auto* btnSave = _createMenuButton("保存状态", [](){}, savePanel);
+        // 传入 getItemView(0) 作为第一聚焦目标，确保每次进入面板都聚焦在第一格
+        auto* btnSave = _createMenuButton("保存状态", [](){}, savePanel,
+                                          m_saveGrid ? m_saveGrid->getItemView(0) : nullptr);
         m_contrlPanel->addView(btnSave);
 
         // 3. 读取状态（绑定读取状态面板）
@@ -117,7 +119,8 @@ namespace beiklive
         m_viewPanel->addView(loadPanel);
         m_allPanels.push_back(loadPanel);
         m_loadPanel = loadPanel;
-        auto* btnLoad = _createMenuButton("读取状态", [](){}, loadPanel);
+        auto* btnLoad = _createMenuButton("读取状态", [](){}, loadPanel,
+                                          m_loadGrid ? m_loadGrid->getItemView(0) : nullptr);
         m_contrlPanel->addView(btnLoad);
 
         // 4. 金手指设置（简单占位面板）
@@ -192,7 +195,8 @@ namespace beiklive
 
     beiklive::ButtonBox* GameMenuView::_createMenuButton(const std::string& text,
                                                           std::function<void()> onClick,
-                                                          brls::View* sonPanel)
+                                                          brls::View* sonPanel,
+                                                          brls::View* firstFocusView)
     {
         beiklive::ButtonBox* btn = new beiklive::ButtonBox();
         btn->setAxis(brls::Axis::ROW);
@@ -234,13 +238,15 @@ namespace beiklive
             btn->onFocusLostCallback = [btn]() {
                 btn->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
             };
-            // 点击时将焦点转入面板：giveFocus 会调用 sonPanel->getDefaultFocus()
-            // 递归找到第一个可聚焦子视图（LazyCell），直接跳到 GridItem 层
-            btn->registerClickAction([this, sonPanel](brls::View*) -> bool {
-                brls::Application::giveFocus(sonPanel);
+            // 点击时将焦点转入面板：若有指定第一聚焦视图则直接聚焦，
+            // 否则通过 giveFocus(sonPanel) 调用 getDefaultFocus() 递归查找
+            // （直接指定第一格可避免 ScrollingFrame 记忆上次焦点位置的问题）
+            brls::View* focusTarget = firstFocusView ? firstFocusView : sonPanel;
+            btn->registerClickAction([this, focusTarget](brls::View*) -> bool {
+                brls::Application::giveFocus(focusTarget);
                 return true;
             });
-            btn->setCustomNavigationRoute(brls::FocusDirection::RIGHT, sonPanel);
+            btn->setCustomNavigationRoute(brls::FocusDirection::RIGHT, focusTarget);
 
         }
         else
@@ -296,9 +302,9 @@ namespace beiklive
 
         auto* grid = new beiklive::GridBox(2);
         grid->setGrow(1.f);
+        m_saveGrid = grid;
 
         m_saveItems.clear();
-        for (int slot = 0; slot < 10; ++slot)
         {
             auto* item = new beiklive::GridItem(GridItemMode::SAVE_STATE, slot);
             item->setEmpty(_slotName(slot));
@@ -349,6 +355,7 @@ namespace beiklive
 
         auto* grid = new beiklive::GridBox(2);
         grid->setGrow(1.f);
+        m_loadGrid = grid;
 
         m_loadItems.clear();
         for (int slot = 0; slot < 10; ++slot)
