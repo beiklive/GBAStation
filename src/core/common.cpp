@@ -86,6 +86,9 @@ void ConfigureInit(){
     SettingManager->SetDefault(KEY_DEBUG_LOG_FILE,    ConfigValue(0));
     SettingManager->SetDefault(KEY_DEBUG_LOG_OVERLAY, ConfigValue(0));
 
+    // 音频设置
+    SettingManager->SetDefault(KEY_AUDIO_BUTTON_SFX, ConfigValue(1));
+
     // 快进设置
     SettingManager->SetDefault("fastforward.enabled",    ConfigValue(1));
     SettingManager->SetDefault("fastforward.mode",       ConfigValue(std::string("hold")));
@@ -95,9 +98,13 @@ void ConfigureInit(){
     // 倒带设置
     SettingManager->SetDefault("rewind.enabled",    ConfigValue(0));
     SettingManager->SetDefault("rewind.mode",       ConfigValue(std::string("hold")));
-    SettingManager->SetDefault("rewind.bufferSize", ConfigValue(3600));
+    SettingManager->SetDefault(KEY_REWIND_BUFFER_SIZE,    ConfigValue(600));
     SettingManager->SetDefault("rewind.step",       ConfigValue(2));
     SettingManager->SetDefault("rewind.mute",       ConfigValue(0));
+    SettingManager->SetDefault(KEY_REWIND_SAVE_INTERVAL,     ConfigValue(1));
+    SettingManager->SetDefault(KEY_REWIND_SHOW_UI,           ConfigValue(0));
+    SettingManager->SetDefault(KEY_REWIND_UI_ITEM_COUNT,     ConfigValue(10));
+    SettingManager->SetDefault(KEY_REWIND_THUMB_COMPRESSION, ConfigValue(0));
 
     // 核心设置
     SettingManager->SetDefault("core.mgba_gb_model",              ConfigValue(std::string("Autodetect")));

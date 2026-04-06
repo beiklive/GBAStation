@@ -35,9 +35,13 @@ namespace beiklive
 
         // 从配置读取倒带相关设置
         m_rewindSaveInterval = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_REWIND_SAVE_INTERVAL, 1);
-        // 确保间隔值在合法范围内（与设置页面的选项匹配：1/2/4/8/16）
-        if (m_rewindSaveInterval < 1)  m_rewindSaveInterval = 1;
-        if (m_rewindSaveInterval > 16) m_rewindSaveInterval = 16;
+        // 确保间隔值在合法范围内（与设置页面的选项匹配：1/2/4/8/16/60/120）
+        if (m_rewindSaveInterval < 1)   m_rewindSaveInterval = 1;
+        if (m_rewindSaveInterval > 120) m_rewindSaveInterval = 120;
+        m_rewindBufferSize = static_cast<unsigned>(
+            GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_REWIND_BUFFER_SIZE, 600));
+        if (m_rewindBufferSize < 10)   m_rewindBufferSize = 10;
+        if (m_rewindBufferSize > 3600) m_rewindBufferSize = 3600;
         m_rewindShowUI = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_REWIND_SHOW_UI, 0) != 0;
 
         _registerGameInput();
@@ -121,8 +125,7 @@ namespace beiklive
             if (m_rewindSelectorView) {
                 GameSignal::instance().requestPause(true);
                 // 取出缩略图快照（游戏已暂停，可安全读取缓冲区）
-                int maxItems = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_REWIND_UI_ITEM_COUNT, 10);
-                auto thumbs = snapshotRewindThumbs(maxItems);
+                auto thumbs = snapshotRewindThumbs();
                 brls::sync([this, thumbs = std::move(thumbs)]() mutable {
                     m_rewindSelectorView->openWithFrames(std::move(thumbs));
                     AnimationHelper::slideInFromBottom(m_rewindSelectorView, 80.f, 220);
@@ -498,8 +501,8 @@ namespace beiklive
         {
             std::lock_guard<std::mutex> lk(m_rewindMutex);
             m_rewindBuffer.push_front(std::move(frame));
-            // 超出最大缓冲帧数时淘汰最旧帧
-            while (m_rewindBuffer.size() > REWIND_BUFFER_SIZE)
+            // 超出最大缓冲条目数时淘汰最旧帧
+            while (m_rewindBuffer.size() > m_rewindBufferSize)
                 m_rewindBuffer.pop_back();
         }
     }
@@ -972,31 +975,50 @@ namespace beiklive
 
     // ============================================================
     // snapshotRewindThumbs – 获取倒带缓冲区缩略图快照（UI 线程调用）
-    // 游戏已暂停时调用，均匀采样至多 maxItems 条
+    // 游戏已暂停时调用，自动根据保存间隔计算 item 数量（每秒 1 个 item）
     // ============================================================
-    std::vector<std::pair<int, std::vector<uint16_t>>>
-    GameView::snapshotRewindThumbs(int maxItems) const
+    std::vector<RewindThumbSnapshot>
+    GameView::snapshotRewindThumbs() const
     {
         std::lock_guard<std::mutex> lk(m_rewindMutex);
-        std::vector<std::pair<int, std::vector<uint16_t>>> result;
+        std::vector<RewindThumbSnapshot> result;
 
         int total = static_cast<int>(m_rewindBuffer.size());
         if (total == 0) return result;
 
-        // 若 maxItems <= 0 或缓冲帧数不超过限制，则全部返回
+        // 根据保存间隔自动计算每秒对应 1 个 item 时所需 item 数量（上限 120）
+        // 公式：每条目代表 saveInterval 帧，60帧约1秒；缓冲总时长(秒) = total*saveInterval/60
+        // 当缓冲时长小于 1 秒时，clamp 为 1（至少显示最新帧）
+        int maxItems = std::max(1, std::min(120,
+            total * m_rewindSaveInterval / 60));
+
         if (maxItems <= 0 || total <= maxItems) {
+            // 条目数不超过限制，全部返回
             result.reserve(total);
-            for (int i = 0; i < total; ++i)
-                result.emplace_back(i, m_rewindBuffer[i].thumb);
+            for (int i = 0; i < total; ++i) {
+                RewindThumbSnapshot snap;
+                snap.bufferIdx  = i;
+                snap.secondsAgo = i * m_rewindSaveInterval / 60;
+                snap.thumb      = m_rewindBuffer[i].thumb;
+                result.push_back(std::move(snap));
+            }
         } else if (maxItems == 1) {
             // 只取最新帧
-            result.emplace_back(0, m_rewindBuffer[0].thumb);
+            RewindThumbSnapshot snap;
+            snap.bufferIdx  = 0;
+            snap.secondsAgo = 0;
+            snap.thumb      = m_rewindBuffer[0].thumb;
+            result.push_back(std::move(snap));
         } else {
             // 均匀采样：在 [0, total-1] 范围内选取 maxItems 个索引（maxItems >= 2，不会除零）
             result.reserve(maxItems);
             for (int k = 0; k < maxItems; ++k) {
                 int idx = k * (total - 1) / (maxItems - 1);
-                result.emplace_back(idx, m_rewindBuffer[idx].thumb);
+                RewindThumbSnapshot snap;
+                snap.bufferIdx  = idx;
+                snap.secondsAgo = idx * m_rewindSaveInterval / 60;
+                snap.thumb      = m_rewindBuffer[idx].thumb;
+                result.push_back(std::move(snap));
             }
         }
 

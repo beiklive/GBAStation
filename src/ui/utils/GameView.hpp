@@ -29,6 +29,13 @@ namespace beiklive
         static constexpr unsigned THUMB_H = 80;  ///< 缩略图高度（像素）
     };
 
+    /// 可视化倒带快照：包含缓冲区索引（用于恢复）、秒数（用于显示）和缩略图
+    struct RewindThumbSnapshot {
+        int bufferIdx;                ///< m_rewindBuffer 中的索引（0=最新帧）
+        int secondsAgo;               ///< 距当前的秒数（用于显示 "-X秒"）
+        std::vector<uint16_t> thumb;  ///< RGB565 缩略图数据（可能为空）
+    };
+
     // 游戏视图，负责游戏的渲染显示，输入处理等功能
     class GameView : public brls::Box
     {
@@ -61,10 +68,10 @@ namespace beiklive
             // ---- 倒带缓冲区快照（在游戏暂停后由 UI 线程调用）----------------
 
             /// 获取当前倒带缓冲区的快照（缩略图 + 帧索引），供 RewindSelectorView 使用。
-            /// @param maxItems 最大返回条目数（均匀采样），0 表示全部返回
-            /// @return (帧索引, RGB565缩略图) 对列表，最新帧在队首
-            std::vector<std::pair<int, std::vector<uint16_t>>>
-            snapshotRewindThumbs(int maxItems = 0) const;
+            /// 自动根据保存间隔计算 item 数量（每往前 1 秒对应一个 item）。
+            /// @return RewindThumbSnapshot 列表，最旧帧在前、最新帧在后
+            std::vector<RewindThumbSnapshot>
+            snapshotRewindThumbs() const;
 
             /// 恢复指定倒带帧（弹出缓冲区到该帧并反序列化），供 RewindSelectorView 调用。
             /// 需在游戏线程中调用（通过 GameSignal 传递请求）。
@@ -76,7 +83,6 @@ namespace beiklive
             static constexpr double   SPIN_GUARD_SEC           = 0.002;  ///< 每帧自旋等待预算（秒）
             static constexpr double   FPS_UPDATE_INTERVAL      = 1.0;   ///< FPS 计数器更新间隔（秒）
             static constexpr int      PLAY_TIME_SAVE_INTERVAL  = 180;   ///< 游戏时长保存间隔（秒，3分钟）
-            static constexpr unsigned REWIND_BUFFER_SIZE       = 600;   ///< 倒带缓冲区最大帧数（约10秒）
             static constexpr unsigned REWIND_STEP              = 2;     ///< 每次倒带弹出的帧数
             static constexpr unsigned FF_MULTIPLIER            = 4;     ///< 快进倍率（每迭代运行的帧数）
 
@@ -85,6 +91,7 @@ namespace beiklive
 
             // ---- 倒带设置（从配置中读取，游戏启动时初始化）------------------
             int  m_rewindSaveInterval = 1;     ///< 每 N 帧保存一次倒带状态
+            unsigned m_rewindBufferSize = 600; ///< 倒带缓冲区最大条目数（从配置读取）
             bool m_rewindShowUI       = false;  ///< 是否启用可视化倒带界面
 
             // ---- libretro 核心 -----------------------------------------------

@@ -94,6 +94,7 @@ std::string getParentPath(const std::string& path) {
 }
 
 std::string getIconPath(beiklive::enums::FileType type) {
+    // 注意：DARK 主题返回 "light/" 前缀（浅色图标适合暗色背景），LIGHT 主题返回 "dark/" 前缀
     std::string path_prefix = "img/ui/" +
                                std::string((brls::Application::getPlatform()->getThemeVariant() == brls::ThemeVariant::DARK) ? "light/" : "dark/");
     switch (type) {
@@ -113,6 +114,36 @@ std::string getIconPath(beiklive::enums::FileType type) {
             return BK_RES(path_prefix + "icon_gb.png");
         default:
             return BK_RES(path_prefix + "wenjian.png");
+    }
+}
+
+std::string getIconPathPrefix() {
+    // 必须在 UI 线程调用，返回主题相关图标路径前缀
+    // 注意：Switch 默认使用暗色主题（DARK），因此返回 "light/" 前缀（浅色图标适合暗色背景）
+    return "img/ui/" + std::string(
+        (brls::Application::getPlatform()->getThemeVariant() == brls::ThemeVariant::DARK)
+        ? "light/" : "dark/");
+}
+
+std::string getIconPathWithPrefix(beiklive::enums::FileType type, const std::string& prefix) {
+    // 使用预计算的前缀（可在后台线程调用，无需访问 UI API）
+    switch (type) {
+        case beiklive::enums::FileType::NONE:
+        case beiklive::enums::FileType::DRIVE:
+        case beiklive::enums::FileType::DIRECTORY:
+            return BK_RES(prefix + "wenjianjia_64.png");
+        case beiklive::enums::FileType::IMAGE_FILE:
+            return BK_RES(prefix + "tupian.png");
+        case beiklive::enums::FileType::ZIP_FILE:
+            return BK_RES(prefix + "zip.png");
+        case beiklive::enums::FileType::GBA_ROM:
+            return BK_RES(prefix + "icon_gba.png");
+        case beiklive::enums::FileType::GBC_ROM:
+            return BK_RES(prefix + "icon_gb.png");
+        case beiklive::enums::FileType::GB_ROM:
+            return BK_RES(prefix + "icon_gb.png");
+        default:
+            return BK_RES(prefix + "wenjian.png");
     }
 }
 std::string getDefaultLogoPath(beiklive::enums::EmuPlatform platform)
