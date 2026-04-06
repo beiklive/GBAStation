@@ -62,7 +62,7 @@ public:
     /// 用于从快进切换回正常速度时，防止播放过时音频。
     void flushRingBuffer();
 
-private:
+// private:
     // ---- 环形缓冲区 -------------------------------------------------
     // 将总延迟控制在约 250ms 以内
     static constexpr size_t RING_CAPACITY = 8192;

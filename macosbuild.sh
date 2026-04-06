@@ -35,6 +35,7 @@ echo "[2/3] 运行 CMake 配置（桌面平台 / Release）..."
 cmake .. \
     -DPLATFORM_DESKTOP=ON \
     -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
     ${BUNDLE_OPT}
 
 echo "[3/3] 开始编译（并行线程：${JOBS}）..."
