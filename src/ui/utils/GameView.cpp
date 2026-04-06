@@ -1051,6 +1051,8 @@ namespace beiklive
                     float fx = sx - static_cast<float>(x0);
                     float fy = sy - static_cast<float>(y0);
                     // 双线性加权混合四个源像素
+                    // makeRGBA8888 存储格式（字节序）：字节0=R，字节1=G，字节2=B，字节3=A
+                    // 对应 uint32 移位：R=(px>>0)&0xFF, G=(px>>8)&0xFF, B=(px>>16)&0xFF
                     auto getPixelAt = [&](int px, int py) -> uint32_t {
                         return src[static_cast<unsigned>(py) * srcW + static_cast<unsigned>(px)];
                     };
@@ -1060,22 +1062,24 @@ namespace beiklive
                         return static_cast<float>((p >> shift) & 0xFF);
                     };
                     r = static_cast<uint8_t>(
-                        extractChannel(p00,16)*(1-fx)*(1-fy) + extractChannel(p10,16)*fx*(1-fy) +
-                        extractChannel(p01,16)*(1-fx)*fy     + extractChannel(p11,16)*fx*fy);
+                        extractChannel(p00, 0)*(1-fx)*(1-fy) + extractChannel(p10, 0)*fx*(1-fy) +
+                        extractChannel(p01, 0)*(1-fx)*fy     + extractChannel(p11, 0)*fx*fy);
                     g = static_cast<uint8_t>(
                         extractChannel(p00, 8)*(1-fx)*(1-fy) + extractChannel(p10, 8)*fx*(1-fy) +
                         extractChannel(p01, 8)*(1-fx)*fy     + extractChannel(p11, 8)*fx*fy);
                     b = static_cast<uint8_t>(
-                        extractChannel(p00, 0)*(1-fx)*(1-fy) + extractChannel(p10, 0)*fx*(1-fy) +
-                        extractChannel(p01, 0)*(1-fx)*fy     + extractChannel(p11, 0)*fx*fy);
+                        extractChannel(p00,16)*(1-fx)*(1-fy) + extractChannel(p10,16)*fx*(1-fy) +
+                        extractChannel(p01,16)*(1-fx)*fy     + extractChannel(p11,16)*fx*fy);
                 } else {
                     // 最近邻采样（默认）
                     unsigned sx = x * srcW / dstW;
                     unsigned sy = y * srcH / dstH;
-                    uint32_t px = src[sy * srcW + sx]; // RGBA8888
-                    r = static_cast<uint8_t>((px >> 16) & 0xFF);
-                    g = static_cast<uint8_t>((px >> 8)  & 0xFF);
-                    b = static_cast<uint8_t>( px        & 0xFF);
+                    // makeRGBA8888 存储格式（字节序）：字节0=R，字节1=G，字节2=B，字节3=A
+                    // 对应 uint32 移位：R=(px>>0)&0xFF, G=(px>>8)&0xFF, B=(px>>16)&0xFF
+                    uint32_t px = src[sy * srcW + sx];
+                    r = static_cast<uint8_t>( px        & 0xFF);  // R：字节偏移 0
+                    g = static_cast<uint8_t>((px >> 8)  & 0xFF);  // G：字节偏移 1
+                    b = static_cast<uint8_t>((px >> 16) & 0xFF);  // B：字节偏移 2
                 }
 
                 // 打包为 RGB565：R(5) | G(6) | B(5)

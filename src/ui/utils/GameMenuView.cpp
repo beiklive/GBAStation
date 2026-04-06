@@ -217,12 +217,14 @@ namespace beiklive
 
         if (sonPanel)
         {
-            // 绑定面板：focus 时显示面板并设为可 focus，失焦时由其他按钮 focus 触发隐藏
+            // 绑定面板：focus 时显示面板，失焦时由其他按钮 focus 触发隐藏
+            // 注意：sonPanel 本身不设 setFocusable(true)，保持 false 状态。
+            // 这样 borealis 会通过 getDefaultFocus() 向下递归找到第一个可聚焦的 LazyCell，
+            // 而不会把焦点停在 wrapper Box 上（修复"焦点先停在 sonPanel"的问题）。
             btn->onFocusGainedCallback = [this, btn, sonPanel]() {
                 btn->setBackgroundColor(nvgRGBA(255, 255, 255, 20));
                 _hideAllPanels();
                 sonPanel->setVisibility(brls::Visibility::VISIBLE);
-                sonPanel->setFocusable(true);
                 // 保存/读取状态面板：异步刷新槽位信息
                 if (m_savePanel && sonPanel == m_savePanel)
                     _refreshStatePanel(true);
@@ -232,14 +234,11 @@ namespace beiklive
             btn->onFocusLostCallback = [btn]() {
                 btn->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
             };
-            // 点击时将焦点转入面板
+            // 点击时将焦点转入面板：giveFocus 会调用 sonPanel->getDefaultFocus()
+            // 递归找到第一个可聚焦子视图（LazyCell），直接跳到 GridItem 层
             btn->registerClickAction([this, sonPanel](brls::View*) -> bool {
                 brls::Application::giveFocus(sonPanel);
-                // if (m_savePanel && sonPanel == m_savePanel)
-                //     if(m_saveItems.size()>0) brls::Application::giveFocus(m_saveItems[0]);
-                // else if (m_loadPanel && sonPanel == m_loadPanel)
-                //     if(m_loadItems.size()>0) brls::Application::giveFocus(m_loadItems[0]);
-                // return true;
+                return true;
             });
             btn->setCustomNavigationRoute(brls::FocusDirection::RIGHT, sonPanel);
 
