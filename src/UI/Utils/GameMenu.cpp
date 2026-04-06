@@ -169,17 +169,23 @@ GameMenu::GameMenu()
             m_saveStatePanel->setVisibility(brls::Visibility::VISIBLE);
             refreshStatePanels();
         });
-        // A 键将焦点转入保存状态槽位列表
+        // A 键将焦点转入保存状态槽位列表（每次进入都聚焦第一个槽位）
         btnSaveState->registerAction("", brls::BUTTON_A, [this](brls::View*) {
             if (m_saveStateItemBox &&
-                m_saveStatePanel->getVisibility() == brls::Visibility::VISIBLE)
+                m_saveStatePanel->getVisibility() == brls::Visibility::VISIBLE) {
+                // 重置焦点记忆，确保每次进入都从第一个槽位开始
+                m_saveStateItemBox->setLastFocusedView(nullptr);
                 brls::Application::giveFocus(m_saveStateItemBox);
+            }
             return true;
         });
         btnSaveState->registerAction("", brls::BUTTON_NAV_RIGHT, [this](brls::View*) {
             if (m_saveStateItemBox &&
-                m_saveStatePanel->getVisibility() == brls::Visibility::VISIBLE)
+                m_saveStatePanel->getVisibility() == brls::Visibility::VISIBLE) {
+                // 重置焦点记忆，确保每次进入都从第一个槽位开始
+                m_saveStateItemBox->setLastFocusedView(nullptr);
                 brls::Application::giveFocus(m_saveStateItemBox);
+            }
             return true;
         });
         leftBox->addView(btnSaveState);
@@ -226,17 +232,23 @@ GameMenu::GameMenu()
             m_loadStatePanel->setVisibility(brls::Visibility::VISIBLE);
             refreshStatePanels();
         });
-        // A 键将焦点转入读取状态槽位列表
+        // A 键将焦点转入读取状态槽位列表（每次进入都聚焦第一个槽位）
         btnLoadState->registerAction("", brls::BUTTON_A, [this](brls::View*) {
             if (m_loadStateItemBox &&
-                m_loadStatePanel->getVisibility() == brls::Visibility::VISIBLE)
+                m_loadStatePanel->getVisibility() == brls::Visibility::VISIBLE) {
+                // 重置焦点记忆，确保每次进入都从第一个槽位开始
+                m_loadStateItemBox->setLastFocusedView(nullptr);
                 brls::Application::giveFocus(m_loadStateItemBox);
+            }
             return true;
         });
         btnLoadState->registerAction("", brls::BUTTON_NAV_RIGHT, [this](brls::View*) {
             if (m_loadStateItemBox &&
-                m_loadStatePanel->getVisibility() == brls::Visibility::VISIBLE)
+                m_loadStatePanel->getVisibility() == brls::Visibility::VISIBLE) {
+                // 重置焦点记忆，确保每次进入都从第一个槽位开始
+                m_loadStateItemBox->setLastFocusedView(nullptr);
                 brls::Application::giveFocus(m_loadStateItemBox);
+            }
             return true;
         });
         leftBox->addView(btnLoadState);
