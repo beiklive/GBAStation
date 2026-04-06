@@ -7,7 +7,7 @@
 #include <condition_variable>
 #include <atomic>
 #include <thread>
-
+#include <borealis.hpp>
 #include "core/Singleton.hpp"
 
 namespace beiklive {
