@@ -50,7 +50,7 @@ constexpr auto PLAYBACK_TIMEOUT = std::chrono::seconds(5);
 // ============================================================
 static const char* SOUND_FILE_NAMES[brls::_SOUND_MAX] = {
     nullptr,          // SOUND_NONE
-    "SeAlbumBtnFocus.wav", // SOUND_FOCUS_CHANGE
+    "SeGiftReceive.wav", // SOUND_FOCUS_CHANGE
     "SeKeyErrorCursor.wav", // SOUND_FOCUS_ERROR
     "SeBtnDecide.wav", // SOUND_CLICK
     "SeFooterDecideFinish.wav", // SOUND_BACK
