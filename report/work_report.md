@@ -152,3 +152,54 @@ while (static_cast<int>(m_rewindBuffer.size()) > restoreIdx)
 | `src/ui/audio/BKAudioPlayer.cpp` | Switch平台检测AudioManager运行状态跳过播放；追踪m_isPlaying状态 |
 | `src/ui/utils/GameView.cpp` | 启动AudioManager前等待BKAudioPlayer完成；倒带缓冲区按saveInterval修正 |
 | `src/game/audio/AudioManager.cpp` | deinit时排空硬件缓冲区后再停止 |
+
+---
+
+## 2026-04-06 修复音频撕裂与刺耳声问题
+
+### 任务分析
+
+#### 问题1：退出游戏再打开后声音撕裂
+
+**目标**：第二次及以后进入游戏时，音频应与第一次一样正常。
+
+**根因分析**：
+`AudioManager::deinit()` 中调用 `m_ring.clear()` 清空了环形缓冲区的数据，但 `m_writePos`、`m_readPos`、`m_available` 三个状态变量**未被重置**。第二次调用 `init()` 时，`m_ring.resize(RING_CAPACITY)` 重新分配全零的缓冲区，但三个变量依然保留上次会话末尾的旧值。
+
+若上次游戏退出时 `m_available > 0`（环中有未消费的数据），则：
+1. 音频线程在第二次启动后立即满足 `m_available >= needed` 条件，从 `m_readPos` 开始读取——此时读到的是全零的环内容（silence）
+2. 与此同时，游戏线程向 `m_writePos` 写入真实音频数据
+3. 当音频线程的 `m_readPos` 追上 `m_writePos` 时，同一批输出包含了零（静音）→真实音频的突变，产生不连续的撕裂声/刺耳声
+
+**修复**：在所有平台的 `init()` 中（Switch/ALSA/WinMM/CoreAudio/兜底），在 `m_ring.resize()` 之前显式重置：
+```cpp
+m_writePos          = 0;
+m_readPos           = 0;
+m_available         = 0;
+m_maxLatencySamples = RING_CAPACITY / 2;
+```
+
+#### 问题2：游戏启动时的刺耳声
+
+**根因分析**：
+- 同问题1：stale `m_available` 导致起始时音频帧含混合数据块
+- 另外，`retro_load_game` / `retro_reset` 阶段可能在 `LibretroLoader::m_audioBuffer` 中积累少量初始化音频（如 BIOS 启动音），这些数据会被游戏循环第一帧的 `DrainAudio()` 取出并推送到 `AudioManager`，引发起始噪音
+
+**修复**：`AudioManager::init()` 调用完成后，立即 drain 并丢弃任何初始化阶段积累的音频数据，确保游戏循环从干净状态开始推送音频：
+```cpp
+{
+    std::vector<int16_t> discard;
+    m_gba_core->DrainAudio(discard);
+}
+```
+
+#### 附加：ALSA `deinit()` 缺失 `m_dataCV.notify_all()`
+
+ALSA 平台的 `deinit()` 缺少 `m_dataCV.notify_all()`，与 Switch 平台不一致，补充该调用以保证一致性（防止未来添加等待逻辑时产生死锁）。
+
+### 修改文件
+
+| 文件 | 修改内容 |
+|------|---------|
+| `src/game/audio/AudioManager.cpp` | 所有平台 `init()` 中重置环形缓冲区状态变量；ALSA `deinit()` 添加 `m_dataCV.notify_all()`；兜底 `deinit()` 添加 `m_dataCV.notify_all()` |
+| `src/ui/utils/GameView.cpp` | `_registerGameRuntime()` 中 `AudioManager::init()` 后 drain 并丢弃初始化音频数据 |

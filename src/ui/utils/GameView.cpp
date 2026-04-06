@@ -450,6 +450,12 @@ namespace beiklive
                 double fps = m_gba_core->Fps();
                 if (fps <= 0.0) fps = 59.7;
                 AudioManager::instance().init(32768, 2);
+                // 丢弃核心初始化阶段（retro_load_game/retro_reset）可能积累的音频数据，
+                // 防止游戏启动初帧推送这些旧数据到硬件，导致刺耳的起始噪音
+                {
+                    std::vector<int16_t> initAudioDiscard;
+                    m_gba_core->DrainAudio(initAudioDiscard);
+                }
                 // 重置信号状态，准备开始游戏
                 GameSignal::instance().resetAll();
                 // 启动游戏线程
