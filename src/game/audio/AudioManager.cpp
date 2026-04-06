@@ -226,6 +226,21 @@ void AudioManager::deinit()
     m_dataCV.notify_all();  // 唤醒可能正在等待数据的音频线程
     if (m_thread.joinable()) m_thread.join();
     auto* sw = static_cast<SwitchAudioState*>(m_platformState);
+    // 音频线程退出后，硬件队列中可能仍有 1-3 个未播完的缓冲区。
+    // 直接调用 audoutStopAudioOut() 会强行截断这些缓冲区，产生爆音/撕裂音。
+    // 此处循环等待硬件释放全部已入队缓冲区，确保音频自然结束后再停止输出。
+    if (sw) {
+        while (sw->enqueuedBuffers > 0) {
+            AudioOutBuffer* released = nullptr;
+            u32 relCount = 0;
+            // 每次最多等待 200ms，防止硬件异常时无限阻塞
+            audoutWaitPlayFinish(&released, &relCount, 200000000);
+            if (relCount > 0 && sw->enqueuedBuffers >= relCount)
+                sw->enqueuedBuffers -= relCount;
+            else
+                break; // 超时或硬件返回异常，强制退出
+        }
+    }
     audoutStopAudioOut();
     audoutExit();
     delete sw;
