@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/common.h"
+#include "core/Tools.hpp"
 #include "ui/utils/Box.hpp"
 #include "ui/utils/GridBox.hpp"
 #include "ui/utils/GridItem.hpp"

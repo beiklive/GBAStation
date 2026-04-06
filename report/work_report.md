@@ -41,3 +41,66 @@ while (static_cast<int>(m_rewindBuffer.size()) > restoreIdx)
 **修复效果**：
 - 选中最新帧（restoreIdx=0）：缓冲区不变（不再错误清空）
 - 选中第 k 帧（restoreIdx=k）：正确删除 k 个更新的帧，保留第 k 帧及更旧的帧
+
+---
+
+## 2026-04-07 修复lastPlayed排序格式和GameMenuView崩溃
+
+### 任务分析
+
+#### 任务目标
+1. 修复 startpage 游戏排序顺序异常（lastPlayed 字段格式问题）
+2. 修复 GameMenuView 保存状态后退出游戏时程序崩溃
+
+#### 输入输出
+- 输入：问题报告及代码库
+- 输出：修复后的 Tools.cpp/hpp、GameLibraryPage.cpp/hpp、DataManagementPage.cpp/hpp、GamePage.cpp
+
+---
+
+### 问题1：lastPlayed 字段格式导致排序异常
+
+**根因分析**：
+- `getTimestampString()` 返回格式为 `"26-04-06 16时%M分"` 含中文字符且无秒
+- 字符串字典序排序时，中文字节（UTF-8 多字节）导致潜在平台兼容性问题
+- 同分钟内游玩多次时，时间戳完全相同，排序不稳定
+
+**修复方案**：
+- `getTimestampString()` 改为返回 `"%y-%m-%d %H-%M-%S"` 格式（如 `"26-03-31 09-38-11"`）
+  - 纯 ASCII 字符，字符串比较可靠
+  - 精确到秒，排序稳定
+- 新增 `formatTimestampForDisplay(ts)` 函数：将存储格式转换为 `"26-04-06 16时13分"` 显示格式
+  - 含输入范围验证（月/日/时/分/秒合法性检查）
+  - 解析失败时原样返回（向后兼容旧格式数据）
+- 更新 `GameLibraryPage.cpp` 和 `DataManagementPage.cpp` 在显示时调用 `formatTimestampForDisplay()`
+
+**修改文件**：
+- `src/core/Tools.hpp`：添加 `formatTimestampForDisplay()` 声明
+- `src/core/Tools.cpp`：修改 `getTimestampString()` 格式，实现 `formatTimestampForDisplay()`
+- `src/ui/page/GameLibraryPage.hpp`：添加 `#include "core/Tools.hpp"`
+- `src/ui/page/GameLibraryPage.cpp`：使用 `formatTimestampForDisplay()` 显示时间
+- `src/ui/page/DataManagementPage.hpp`：添加 `#include "core/Tools.hpp"`
+- `src/ui/page/DataManagementPage.cpp`：使用 `formatTimestampForDisplay()` 显示时间
+
+---
+
+### 问题2：GameMenuView 保存状态后退出崩溃
+
+**崩溃流程分析**：
+1. 用户聚焦"保存状态"按钮 → `onFocusGainedCallback` 触发 `_refreshStatePanel(true)`
+2. `_refreshStatePanel` 启动 `brls::async` 后台线程，循环调用 `infoCallback(0..9)`
+3. `infoCallback` 是在 `GamePage::GameMenuInitialize()` 中设置的 lambda，捕获了 `this`（GamePage 指针）和 `m_gameView`（GameView 原始指针）
+4. 用户保存存档 → `m_onResume()` 返回游戏 → 再次打开菜单 → 点击退出
+5. `GameSignal::requestExit()` → `GameView::draw()` 检测到退出信号 → `brls::sync([this]{ Application::popActivity() })` 
+6. 下一帧：`popActivity()` 销毁 Activity → GamePage 被删除 → 子视图 GameView 被删除
+7. **同时**：后台线程仍在调用 `infoCallback(slot)` 访问已销毁的 `m_gameView` → **Use-After-Free 崩溃**
+
+**修复方案**：
+在 `GamePage::GameMenuInitialize()` 中：
+- 在 UI 线程（构造时）预先计算所有 10 个槽位的存档路径和缩略图路径（`getStatePath(slot)` / `getStateThumbPath(slot)` 均为字符串操作）
+- 将路径通过 `std::vector<std::string>` 值捕获传入 `setStateInfoCallback` 的 lambda
+- 后台线程只对字符串路径做文件系统操作，不再持有任何 GameView/GamePage 原始指针
+
+**修改文件**：
+- `src/ui/page/GamePage.cpp`：`GameMenuInitialize()` 中预计算路径并值捕获
+

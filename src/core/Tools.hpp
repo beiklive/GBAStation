@@ -45,8 +45,12 @@ bool isFileExists(const std::string& path);
 // 计算文件的 CRC32 校验值
 uint32_t crc32(const std::string& path);
 
-// 获取当前时间戳字符串（格式：YYYY-MM-DD HH:MM:SS）
+// 获取当前时间戳字符串（存储格式：yy-mm-dd HH-MM-SS，适合字符串比较排序）
 std::string getTimestampString();
+
+// 将存储格式时间戳（"26-03-31 09-38-11"）转换为显示格式（"26-03-31 09时38分"）
+// 若解析失败则原样返回（兼容旧格式）
+std::string formatTimestampForDisplay(const std::string& ts);
 
 // 获取文件最后修改时间的字符串（格式：YYYY-MM-DD HH:MM:SS，失败时返回空字符串）
 std::string getFileModTimeStr(const std::string& path);

@@ -246,21 +246,35 @@ namespace beiklive
         });
 
         // 注入槽位信息查询回调：供菜单面板异步扫描存档目录
-        m_gameMenuView->setStateInfoCallback([this](int slot) -> beiklive::StateSlotInfo {
-            beiklive::StateSlotInfo info;
-            if (!m_gameView) return info;
-            std::string statePath = m_gameView->getStatePath(slot);
-            std::string thumbPath = m_gameView->getStateThumbPath(slot);
-            std::error_code ec;
-            info.exists = std::filesystem::exists(statePath, ec);
-            if (info.exists) {
-                if (std::filesystem::exists(thumbPath, ec))
-                    info.thumbPath = thumbPath;
-                // 使用公共工具函数读取文件修改时间字符串
-                info.timeStr = beiklive::tools::getFileModTimeStr(statePath);
+        // 预先在UI线程计算所有槽位路径（仅字符串操作），避免后台线程持有 GameView 原始指针，
+        // 防止游戏退出后 GameView 被销毁时后台线程仍访问其成员导致崩溃。
+        // 槽位数量 10 与 GameMenuView 内部的 _createSaveStatePanel/_createLoadStatePanel 保持一致
+        {
+            std::vector<std::string> statePaths, thumbPaths;
+            statePaths.reserve(10);
+            thumbPaths.reserve(10);
+            for (int slot = 0; slot < 10; ++slot) {
+                statePaths.push_back(m_gameView->getStatePath(slot));
+                thumbPaths.push_back(m_gameView->getStateThumbPath(slot));
             }
-            return info;
-        });
+            m_gameMenuView->setStateInfoCallback(
+                [statePaths = std::move(statePaths), thumbPaths = std::move(thumbPaths)](int slot) -> beiklive::StateSlotInfo {
+                    beiklive::StateSlotInfo info;
+                    if (slot < 0 || slot >= static_cast<int>(statePaths.size())) return info;
+                    const std::string& statePath = statePaths[slot];
+                    const std::string& thumbPath = thumbPaths[slot];
+                    if (statePath.empty()) return info;
+                    std::error_code ec;
+                    info.exists = std::filesystem::exists(statePath, ec);
+                    if (info.exists) {
+                        if (std::filesystem::exists(thumbPath, ec))
+                            info.thumbPath = thumbPath;
+                        // 使用公共工具函数读取文件修改时间字符串
+                        info.timeStr = beiklive::tools::getFileModTimeStr(statePath);
+                    }
+                    return info;
+                });
+        }
 
         this->addView(m_gameMenuView);
     }
