@@ -987,6 +987,8 @@ namespace beiklive
         if (total == 0) return result;
 
         // 根据保存间隔自动计算每秒对应 1 个 item 时所需 item 数量（上限 120）
+        // 公式：每条目代表 saveInterval 帧，60帧约1秒；缓冲总时长(秒) = total*saveInterval/60
+        // 当缓冲时长小于 1 秒时，clamp 为 1（至少显示最新帧）
         int maxItems = std::max(1, std::min(120,
             total * m_rewindSaveInterval / 60));
 

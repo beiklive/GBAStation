@@ -94,6 +94,7 @@ std::string getParentPath(const std::string& path) {
 }
 
 std::string getIconPath(beiklive::enums::FileType type) {
+    // 注意：DARK 主题返回 "light/" 前缀（浅色图标适合暗色背景），LIGHT 主题返回 "dark/" 前缀
     std::string path_prefix = "img/ui/" +
                                std::string((brls::Application::getPlatform()->getThemeVariant() == brls::ThemeVariant::DARK) ? "light/" : "dark/");
     switch (type) {
@@ -118,6 +119,7 @@ std::string getIconPath(beiklive::enums::FileType type) {
 
 std::string getIconPathPrefix() {
     // 必须在 UI 线程调用，返回主题相关图标路径前缀
+    // 注意：Switch 默认使用暗色主题（DARK），因此返回 "light/" 前缀（浅色图标适合暗色背景）
     return "img/ui/" + std::string(
         (brls::Application::getPlatform()->getThemeVariant() == brls::ThemeVariant::DARK)
         ? "light/" : "dark/");

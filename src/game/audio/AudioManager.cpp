@@ -188,7 +188,9 @@ void AudioManager::audioThreadFunc()
         {
             const size_t needed = inputFrames * static_cast<size_t>(m_channels);
             std::unique_lock<std::mutex> lk(m_mutex);
-            // 等待足够数据（最多 8ms），避免 underrun 导致的爆音
+            // 等待足够数据（最多 8ms）：8ms 约为一个 512帧/48000Hz 硬件缓冲区的播放时长，
+            // 在此窗口内等待游戏线程补充数据，可大幅减少 underrun 导致的静音爆音，
+            // 同时不会因等待过长而导致硬件缓冲区耗尽。
             m_dataCV.wait_for(lk, std::chrono::milliseconds(8), [&] {
                 return m_available >= needed ||
                        !m_running.load(std::memory_order_relaxed);
