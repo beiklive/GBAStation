@@ -78,3 +78,4 @@ if (PLATFORM_SWITCH AND TARGET mgba_libretro)
         ${CMAKE_CURRENT_SOURCE_DIR}/mgba/src/util/vfs/vfs-dirent.c
     )
 endif ()
+

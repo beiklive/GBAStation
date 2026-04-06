@@ -267,7 +267,8 @@ void RecyclerFrame::reloadData()
             }
         }
 
-        selectRowAt(defaultCellFocus, false);
+        if (dataSource->numberOfRows(this, defaultCellFocus.section) > (int)defaultCellFocus.row)
+            selectRowAt(defaultCellFocus, false);
     }
 }
 

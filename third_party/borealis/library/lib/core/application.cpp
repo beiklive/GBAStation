@@ -188,7 +188,7 @@ bool Application::internalMainLoop()
     {
         Logger::verbose("input blocked (tokens={})", Application::blockInputsTokens);
         if (!muteSounds)
-            Application::getAudioPlayer()->play(Sound::SOUND_CLICK_ERROR);
+            Application::getAudioPlayer()->play(Sound::SOUND_NONE);
     }
 
     // Animations
@@ -584,7 +584,7 @@ void Application::navigate(FocusDirection direction, bool repeating)
     // No view to focus at the end of the traversal: wiggle and return
     if (!nextFocus)
     {
-        Application::getAudioPlayer()->play(SOUND_FOCUS_ERROR);
+        Application::getAudioPlayer()->play(SOUND_NONE);
         Application::currentFocus->shakeHighlight(direction);
         return;
     }
@@ -631,7 +631,7 @@ void Application::onControllerButtonPressed(enum ControllerButton button, bool r
     }
 
     // Only play the error sound if no action applied
-    Application::getAudioPlayer()->play(SOUND_CLICK_ERROR);
+    // Application::getAudioPlayer()->play(SOUND_CLICK_ERROR);
 }
 
 void Application::onKeyboardPressed(BrlsKeyCombination key, bool repeating)
