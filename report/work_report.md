@@ -104,3 +104,51 @@ while (static_cast<int>(m_rewindBuffer.size()) > restoreIdx)
 **修改文件**：
 - `src/ui/page/GamePage.cpp`：`GameMenuInitialize()` 中预计算路径并值捕获
 
+
+---
+
+## 2026-04-06 修复音频撕裂音、倒带缓存计算错误和倒带UI音调偏高
+
+### 任务分析
+
+#### 问题1：游戏启动/退出时有严重撕裂音
+
+**目标**：消除游戏启动和退出时的音频撕裂噪声。
+
+**根因分析**：
+`BKAudioPlayer` 和 `AudioManager` 共用同一个 Switch audout 硬件设备，导致以下竞争问题：
+
+- **启动撕裂音**：用户点击游戏时 BKAudioPlayer 播放点击音，约 0-50ms 后 `AudioManager::init()` 开始初始化。AudioManager 的音频线程调用 `audoutWaitPlayFinish`（timeout=0）时可能"偷走" BKAudioPlayer 的完成通知。BKAudioPlayer 等待完整 `waitNs` 超时后才 `free(rawBuf)`，但此时内存可能已被 AudioManager 重用，硬件 DMA 读取新数据产生撕裂音（use-after-free）。
+
+- **退出撕裂音**：游戏退出时音频线程停止后，硬件队列中仍有 1-3 个未播完的 512帧缓冲区，`audoutStopAudioOut()` 直接截断这些缓冲区，产生爆音。
+
+**修改方案**：
+1. **`BKAudioPlayer::playSoundDirect` (Switch)**：检测 `AudioManager::instance().isRunning()`，若游戏音频系统运行中则跳过播放，彻底避免 audout 设备争用
+2. **`BKAudioPlayer`**：添加 `m_isPlaying` 原子标志 + `isPlaying()` 方法，用于外部等待
+3. **`GameView::_registerGameRuntime()`**：启动 `AudioManager` 前先等待 `BKAudioPlayer` 完成（最多 500ms），确保硬件队列清空
+4. **`AudioManager::deinit()` (Switch)**：join 音频线程后，循环调用 `audoutWaitPlayFinish` 排空硬件缓冲区（超时 200ms/次），再调用 `audoutStopAudioOut()`
+
+#### 问题2：可视化倒带可倒回两分钟，但最大缓存设置仅1分钟
+
+**目标**：确保"约1分钟"的倒带设置实际只缓存1分钟。
+
+**根因分析**：
+设置页面标签 `"3600（约1分钟）"` 假设 saveInterval=1（每帧保存一次，60fps × 60s = 3600帧）。但当用户将 `m_rewindSaveInterval` 设为 2 时，每个缓冲区条目覆盖 2 帧，实际存储时长变为 3600 × 2/60 = 120秒 = 2分钟，与标签不符。
+
+**修改方案**：
+- **`GameView::_saveRewindState()`**：改为 `maxEntries = m_rewindBufferSize / m_rewindSaveInterval` 限制条目数，确保实际缓冲时长始终为 `m_rewindBufferSize / 60` 秒。
+
+#### 问题3：运行游戏时可视化倒带界面item的音效音调偏高
+
+**根因分析**：与问题1相同的 use-after-free 问题。BKAudioPlayer 的音效缓冲区被 free 后内存被重用，硬件 DMA 读到新数据，播放速度异常，表现为音调偏高。
+
+**修改方案**：同问题1修复1（BKAudioPlayer 在游戏运行时跳过播放），彻底消除该问题。
+
+### 修改文件
+
+| 文件 | 修改内容 |
+|------|---------|
+| `src/ui/audio/BKAudioPlayer.hpp` | 添加 `m_isPlaying` 原子标志和 `isPlaying()` 方法 |
+| `src/ui/audio/BKAudioPlayer.cpp` | Switch平台检测AudioManager运行状态跳过播放；追踪m_isPlaying状态 |
+| `src/ui/utils/GameView.cpp` | 启动AudioManager前等待BKAudioPlayer完成；倒带缓冲区按saveInterval修正 |
+| `src/game/audio/AudioManager.cpp` | deinit时排空硬件缓冲区后再停止 |
