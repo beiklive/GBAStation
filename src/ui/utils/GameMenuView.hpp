@@ -73,6 +73,9 @@ namespace beiklive
             std::vector<beiklive::GridItem*> m_saveItems; ///< 保存状态面板 GridItem 列表
             std::vector<beiklive::GridItem*> m_loadItems; ///< 读取状态面板 GridItem 列表
 
+            beiklive::GridBox* m_saveGrid = nullptr; ///< 保存状态 GridBox（用于获取第一格焦点）
+            beiklive::GridBox* m_loadGrid = nullptr; ///< 读取状态 GridBox（用于获取第一格焦点）
+
             void _initLayout();
 
             /// 隐藏所有子面板
@@ -80,13 +83,15 @@ namespace beiklive
 
             /**
              * 创建菜单按钮
-             * @param text      按钮文字
-             * @param onClick   按钮点击回调（无 sonPanel 时直接调用）
-             * @param sonPanel  绑定的子面板（为空则为无面板按钮）
+             * @param text           按钮文字
+             * @param onClick        按钮点击回调（无 sonPanel 时直接调用）
+             * @param sonPanel       绑定的子面板（为空则为无面板按钮）
+             * @param firstFocusView 点击/右导航时优先聚焦的目标视图（为空则使用 sonPanel）
              */
             beiklive::ButtonBox* _createMenuButton(const std::string& text,
                                                    std::function<void()> onClick,
-                                                   brls::View* sonPanel = nullptr);
+                                                   brls::View* sonPanel = nullptr,
+                                                   brls::View* firstFocusView = nullptr);
 
             /// 创建保存状态面板（GridBox，2 列，10 个 GridItem）
             brls::View* _createSaveStatePanel();
