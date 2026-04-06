@@ -282,8 +282,6 @@ brls::View* DataPage::buildSavesPanel(const std::string& gameStem)
         static constexpr int COLS      = 3;
         static constexpr float IMG_SZ  = 300.f;
         static constexpr float IMG_GAP = 10.f;
-        // 根据列数自动计算每个网格项的百分比宽度
-        static constexpr float ITEM_WIDTH_PCT = 100.0f / COLS;
 
         brls::Box* rowBox = nullptr;
         for (int i = 0; i < static_cast<int>(images.size()); ++i) {
@@ -297,9 +295,10 @@ brls::View* DataPage::buildSavesPanel(const std::string& gameStem)
             const std::string imgPath = images[i];
 
             auto* img = new beiklive::UI::ProImage();
-            img->setWidthPercentage(ITEM_WIDTH_PCT);
+            img->setWidth(IMG_SZ*0.8f);
             img->setHeight(IMG_SZ*0.6f);
             img->setCornerRadius(8.f);
+            img->setMarginRight(IMG_GAP);
             img->setFocusable(true);
             img->setHideHighlightBackground(true);
             img->setScalingType(brls::ImageScalingType::FIT);
@@ -345,8 +344,9 @@ brls::View* DataPage::buildSavesPanel(const std::string& gameStem)
             int padCount  = (remainder == 0) ? 0 : (COLS - remainder);
             for (int p = 0; p < padCount; ++p) {
                 auto* pad = new brls::Padding();
-                pad->setWidthPercentage(ITEM_WIDTH_PCT);
+                pad->setWidth(IMG_SZ * 0.8f);
                 pad->setHeight(IMG_SZ * 0.6f);
+                pad->setMarginRight(IMG_GAP);
                 rowBox->addView(pad);
             }
         }
@@ -381,8 +381,6 @@ brls::View* DataPage::buildAlbumPanel(const std::string& gameStem)
         static constexpr int COLS      = 3;
         static constexpr float IMG_SZ  = 300.f;
         static constexpr float IMG_GAP = 10.f;
-        // 根据列数自动计算每个网格项的百分比宽度
-        static constexpr float ITEM_WIDTH_PCT = 100.0f / COLS;
 
         brls::Box* rowBox = nullptr;
         for (int i = 0; i < static_cast<int>(images.size()); ++i) {
@@ -396,9 +394,10 @@ brls::View* DataPage::buildAlbumPanel(const std::string& gameStem)
             const std::string imgPath = images[i];
 
             auto* img = new beiklive::UI::ProImage();
-            img->setWidthPercentage(ITEM_WIDTH_PCT);
+            img->setWidth(IMG_SZ*0.8f);
             img->setHeight(IMG_SZ*0.6f);
             img->setCornerRadius(8.f);
+            img->setMarginRight(IMG_GAP);
             img->setFocusable(true);
             img->setHideHighlightBackground(true);
             img->setScalingType(brls::ImageScalingType::FILL);
@@ -437,8 +436,9 @@ brls::View* DataPage::buildAlbumPanel(const std::string& gameStem)
             int padCount  = (remainder == 0) ? 0 : (COLS - remainder);
             for (int p = 0; p < padCount; ++p) {
                 auto* pad = new brls::Padding();
-                pad->setWidthPercentage(ITEM_WIDTH_PCT);
+                pad->setWidth(IMG_SZ * 0.8f);
                 pad->setHeight(IMG_SZ * 0.6f);
+                pad->setMarginRight(IMG_GAP);
                 rowBox->addView(pad);
             }
         }
