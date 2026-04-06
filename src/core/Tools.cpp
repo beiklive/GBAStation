@@ -178,8 +178,27 @@ std::string getTimestampString() {
     std::time_t now_time_t = std::chrono::system_clock::to_time_t(now);
     std::tm* now_tm = std::localtime(&now_time_t);
     char buf[64];
-    std::strftime(buf, sizeof(buf), "%y-%m-%d %H时%M分", now_tm);
+    // 存储格式使用 "yy-mm-dd HH-MM-SS"，便于字符串字典序排序
+    std::strftime(buf, sizeof(buf), "%y-%m-%d %H-%M-%S", now_tm);
     return std::string(buf);
+}
+
+std::string formatTimestampForDisplay(const std::string& ts) {
+    if (ts.empty()) return ts;
+    // 解析存储格式 "26-03-31 09-38-11"，转为显示格式 "26-03-31 09时38分"
+    int year, month, day, hour, min, sec;
+    if (std::sscanf(ts.c_str(), "%d-%d-%d %d-%d-%d", &year, &month, &day, &hour, &min, &sec) == 6
+        && month >= 1 && month <= 12
+        && day   >= 1 && day   <= 31
+        && hour  >= 0 && hour  <= 23
+        && min   >= 0 && min   <= 59
+        && sec   >= 0 && sec   <= 59) {
+        char buf[32];
+        std::snprintf(buf, sizeof(buf), "%02d-%02d-%02d %02d时%02d分", year, month, day, hour, min);
+        return std::string(buf);
+    }
+    // 解析失败时原样返回（兼容旧格式数据）
+    return ts;
 }
 
 std::string getFileModTimeStr(const std::string& path) {

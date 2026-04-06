@@ -168,7 +168,7 @@ namespace beiklive
                         item->setTitle(entry.title.empty() ? entry.path : entry.title);
 
                         // 设置上次游玩时间
-                        item->setSubText(entry.lastPlayed.empty() ? "从未游玩" : entry.lastPlayed);
+                        item->setSubText(entry.lastPlayed.empty() ? "从未游玩" : beiklive::tools::formatTimestampForDisplay(entry.lastPlayed));
 
                         // 设置游玩时长
                         item->setPlayTime(_formatPlayTime(entry.playTime));
