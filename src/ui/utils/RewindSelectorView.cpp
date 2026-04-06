@@ -271,6 +271,9 @@ namespace beiklive
                 if (m_onFrameSelected)
                     m_onFrameSelected(frameIndex);
             };
+            // 禁用 UP/DOWN 导航，保证焦点只在横向卡片列表内移动
+            item->setCustomNavigationRoute(brls::FocusDirection::UP,   item);
+            item->setCustomNavigationRoute(brls::FocusDirection::DOWN, item);
             m_itemBox->addView(item);
             m_items.push_back(item);
         }
