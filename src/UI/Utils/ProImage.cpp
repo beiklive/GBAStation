@@ -219,11 +219,6 @@ void ProImage::setImageFromFileAsync(const std::string& path)
         // 将结果回传主线程
         brls::sync([ASYNC_TOKEN, bytes = std::move(bytes), capturedPath, gen]()
         {
-            // 若字节非空，优先存入字节缓存，使后续加载可直接命中缓存，
-            // 即使当前视图已被销毁也不影响缓存的填充。
-            if (!bytes.empty())
-                beiklive::UI::ImageFileCache::instance().storeBytes(capturedPath, bytes);
-
             ASYNC_RELEASE
             // 若此后又发起了新的加载请求则丢弃当前结果
             if (gen != this->m_asyncGen.load())
@@ -233,6 +228,9 @@ void ProImage::setImageFromFileAsync(const std::string& path)
 
             if (bytes.empty())
                 return;
+
+            // 存入字节缓存以便后续快速访问
+            beiklive::UI::ImageFileCache::instance().storeBytes(capturedPath, bytes);
 
             NVGcontext* vg2 = brls::Application::getNVGContext();
             int tex = nvgCreateImageMem(vg2, this->getImageFlags(),
