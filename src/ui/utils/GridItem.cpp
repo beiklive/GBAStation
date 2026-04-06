@@ -26,7 +26,7 @@ namespace beiklive
         this->setShadowType(brls::ShadowType::GENERIC);
         this->setHideHighlightBackground(true);
         this->setHighlightCornerRadius(0.f);
-        this->setBackground(brls::ViewBackground::NONE);
+        // this->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
         // HIDE_BRLS_HIGHLIGHT(this);
 
         // 注册 A 键点击动作

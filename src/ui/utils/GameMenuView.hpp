@@ -92,6 +92,9 @@ namespace beiklive
             brls::View* _createSaveStatePanel();
             /// 创建读取状态面板（GridBox，2 列，10 个 GridItem）
             brls::View* _createLoadStatePanel();
+            /// 清理所有 GridItem, 防止焦点落在无效项上
+            void _clearGridItemsFocus();
+
 
             /// 异步扫描存档目录并更新指定面板的 GridItem
             void _refreshStatePanel(bool isSave);

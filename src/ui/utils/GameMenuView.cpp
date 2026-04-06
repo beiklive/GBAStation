@@ -90,13 +90,15 @@ namespace beiklive
         // ── 创建 6 个菜单按钮 ──────────────────────────────────────────────
 
         // 1. 返回游戏（无面板）
-        m_btnResume = _createMenuButton("▶  返回游戏", [this]() {
+        m_btnResume = _createMenuButton("返回游戏", [this]() {
             if (m_onResume) m_onResume();
         });
+
         m_contrlPanel->addView(m_btnResume);
         m_contrlPanel->registerAction("返回", brls::BUTTON_B, [this](brls::View*) -> bool {
             brls::sync([this]() {
                 brls::Application::giveFocus(m_btnResume);
+                _clearGridItemsFocus();
                 if (m_onResume) m_onResume();
             });
             return true;
@@ -107,7 +109,7 @@ namespace beiklive
         m_allPanels.push_back(savePanel);
         m_savePanel = savePanel;
 
-        auto* btnSave = _createMenuButton("💾  保存状态", [](){}, savePanel);
+        auto* btnSave = _createMenuButton("保存状态", [](){}, savePanel);
         m_contrlPanel->addView(btnSave);
 
         // 3. 读取状态（绑定读取状态面板）
@@ -115,7 +117,7 @@ namespace beiklive
         m_viewPanel->addView(loadPanel);
         m_allPanels.push_back(loadPanel);
         m_loadPanel = loadPanel;
-        auto* btnLoad = _createMenuButton("📂  读取状态", [](){}, loadPanel);
+        auto* btnLoad = _createMenuButton("读取状态", [](){}, loadPanel);
         m_contrlPanel->addView(btnLoad);
 
         // 4. 金手指设置（简单占位面板）
@@ -132,7 +134,7 @@ namespace beiklive
         cheatPanel->addView(cheatPlaceholder);
         m_viewPanel->addView(cheatPanel);
         m_allPanels.push_back(cheatPanel);
-        auto* btnCheat = _createMenuButton("🎮  金手指设置", [](){}, cheatPanel);
+        auto* btnCheat = _createMenuButton("金手指设置", [](){}, cheatPanel);
         m_contrlPanel->addView(btnCheat);
 
         // 5. 画面设置（简单占位面板）
@@ -149,13 +151,17 @@ namespace beiklive
         displayPanel->addView(displayPlaceholder);
         m_viewPanel->addView(displayPanel);
         m_allPanels.push_back(displayPanel);
-        auto* btnDisplay = _createMenuButton("🖥  画面设置", [](){}, displayPanel);
+        auto* btnDisplay = _createMenuButton("画面设置", [](){}, displayPanel);
         m_contrlPanel->addView(btnDisplay);
 
         // 6. 退出游戏（无面板）
-        m_btnExit = _createMenuButton("✕  退出游戏", [this]() {
+        m_btnExit = _createMenuButton("退出游戏", [this]() {
             if (m_onExit) m_onExit();
         });
+        m_btnExit->setCustomNavigationRoute(brls::FocusDirection::DOWN, m_btnResume);
+
+        m_btnResume->setCustomNavigationRoute(brls::FocusDirection::UP, m_btnExit);
+
         m_contrlPanel->addView(m_btnExit);
 
         this->addView(m_panel);
@@ -203,7 +209,10 @@ namespace beiklive
         brls::Label* lbl = new brls::Label();
         lbl->setText(text);
         lbl->setFontSize(18.f);
-        lbl->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+        lbl->setWidth(100.f);
+        // lbl->setWireframeEnabled(true);
+        lbl->setHorizontalAlign(brls::HorizontalAlign::LEFT);
+        btn->addView(new brls::Padding());
         btn->addView(lbl);
 
         if (sonPanel)
@@ -213,7 +222,7 @@ namespace beiklive
                 btn->setBackgroundColor(nvgRGBA(255, 255, 255, 20));
                 _hideAllPanels();
                 sonPanel->setVisibility(brls::Visibility::VISIBLE);
-
+                sonPanel->setFocusable(true);
                 // 保存/读取状态面板：异步刷新槽位信息
                 if (m_savePanel && sonPanel == m_savePanel)
                     _refreshStatePanel(true);
@@ -221,13 +230,19 @@ namespace beiklive
                     _refreshStatePanel(false);
             };
             btn->onFocusLostCallback = [btn]() {
-                btn->setBackgroundColor(nvgRGBA(0, 0, 0, 10));
+                btn->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
             };
             // 点击时将焦点转入面板
-            btn->registerClickAction([sonPanel](brls::View*) -> bool {
+            btn->registerClickAction([this, sonPanel](brls::View*) -> bool {
                 brls::Application::giveFocus(sonPanel);
-                return true;
+                // if (m_savePanel && sonPanel == m_savePanel)
+                //     if(m_saveItems.size()>0) brls::Application::giveFocus(m_saveItems[0]);
+                // else if (m_loadPanel && sonPanel == m_loadPanel)
+                //     if(m_loadItems.size()>0) brls::Application::giveFocus(m_loadItems[0]);
+                // return true;
             });
+            btn->setCustomNavigationRoute(brls::FocusDirection::RIGHT, sonPanel);
+
         }
         else
         {
@@ -237,12 +252,14 @@ namespace beiklive
                 _hideAllPanels();
             };
             btn->onFocusLostCallback = [btn]() {
-                btn->setBackgroundColor(nvgRGBA(0, 0, 0, 10));
+                btn->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
             };
             btn->registerClickAction([onClick](brls::View*) -> bool {
                 onClick();
                 return true;
             });
+            btn->setCustomNavigationRoute(brls::FocusDirection::RIGHT, btn);
+
         }
 
         return btn;
@@ -291,19 +308,18 @@ namespace beiklive
             beiklive::GridItem* captItem = item;
             grid->addItem([captItem]() -> brls::View* { return captItem; });
         }
-
         // GridBox 的 onItemClicked 触发确认对话框
         grid->onItemClicked = [this](int slot) {
-            auto* dialog = new brls::Dialog("确认保存到" + _slotName(slot) + "？");
-            dialog->addButton("取消", []() {});
-            dialog->addButton("确认", [this, slot]() {
+            // auto* dialog = new brls::Dialog("确认保存到" + _slotName(slot) + "？");
+            // dialog->addButton("取消", []() {});
+            // dialog->addButton("确认", [this, slot]() {
                 if (m_saveStateCallback) m_saveStateCallback(slot);
                 brls::sync([this]() {
                     brls::Application::giveFocus(m_btnResume);
                     if (m_onResume) m_onResume();
                 });
-            });
-            dialog->open();
+            // });
+            // dialog->open();
         };
 
         wrapper->addView(grid);
@@ -347,21 +363,35 @@ namespace beiklive
         }
 
         grid->onItemClicked = [this](int slot) {
-            auto* dialog = new brls::Dialog("确认从" + _slotName(slot) + "读取？");
-            dialog->addButton("取消", []() {});
-            dialog->addButton("确认", [this, slot]() {
+            // auto* dialog = new brls::Dialog("确认从" + _slotName(slot) + "读取？");
+            // dialog->addButton("取消", []() {});
+            // dialog->addButton("确认", [this, slot]() {
                 if (m_loadStateCallback) m_loadStateCallback(slot);
                 brls::sync([this]() {
                     brls::Application::giveFocus(m_btnResume);
                     if (m_onResume) m_onResume();
                 });
-            });
-            dialog->open();
+            // });
+            // dialog->open();
         };
 
         wrapper->addView(grid);
         return wrapper;
     }
+
+    void GameMenuView::_clearGridItemsFocus()
+    {
+        for (auto* item : m_saveItems)
+        {
+            if (item) item->setFocusable(false);
+        }
+        for (auto* item : m_loadItems)
+        {
+            if (item) item->setFocusable(false);
+        }
+    }
+
+
 
     // ============================================================
     // _refreshStatePanel – 异步扫描存档并更新 GridItem 显示
@@ -387,6 +417,7 @@ namespace beiklive
                 {
                     auto* item = items[slot];
                     if (!item) continue;
+                    item->setFocusable(true);
                     const auto& info = infos[slot];
                     if (info.exists)
                     {

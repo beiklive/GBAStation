@@ -108,8 +108,8 @@ namespace beiklive
         if (GameSignal::instance().consumeOpenMenu()) {
             if (m_gameMenuView) {
                 brls::sync([this](){
-                    // 菜单从底部滑入，入场动画（220ms）
-                    AnimationHelper::slideInFromBottom(m_gameMenuView, 60.f, 220);
+                    // 菜单从底部滑入，入场动画（120ms）
+                    AnimationHelper::slideInFromBottom(m_gameMenuView, 60.f, 120);
                     brls::Application::giveFocus(m_gameMenuView);
                 });
             }
