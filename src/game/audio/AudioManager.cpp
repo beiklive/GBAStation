@@ -142,6 +142,12 @@ bool AudioManager::init(int sampleRate, int channels)
     sw->enqueuedBuffers = SWITCH_N_BUFFERS;
     sw->curBuf          = 0;
 
+    // 每次初始化时重置环形缓冲区状态，防止上次会话的残留指针/计数导致第二次启动时读到
+    // 零数据与真实音频混合的数据块，产生撕裂或刺耳声
+    m_writePos          = 0;
+    m_readPos           = 0;
+    m_available         = 0;
+    m_maxLatencySamples = RING_CAPACITY / 2;
     m_ring.resize(RING_CAPACITY);
     m_running.store(true, std::memory_order_release);
     m_thread = std::thread(&AudioManager::audioThreadFunc, this);
@@ -298,6 +304,11 @@ bool AudioManager::init(int sampleRate, int channels)
         return false;
     }
 
+    // 重置环形缓冲区状态，防止上次会话残留导致第二次启动时音频撕裂
+    m_writePos          = 0;
+    m_readPos           = 0;
+    m_available         = 0;
+    m_maxLatencySamples = RING_CAPACITY / 2;
     m_ring.resize(RING_CAPACITY);
     m_running.store(true, std::memory_order_release);
     m_thread = std::thread(&AudioManager::audioThreadFunc, this);
@@ -332,6 +343,7 @@ void AudioManager::deinit()
     if (!m_running.load(std::memory_order_acquire)) return;
     m_running.store(false, std::memory_order_release);
     m_spaceCV.notify_all();
+    m_dataCV.notify_all();  // 唤醒可能正在等待数据的音频线程
     if (m_thread.joinable()) m_thread.join();
     auto* st = static_cast<AlsaState*>(m_platformState);
     if (st->handle) {
@@ -410,6 +422,11 @@ bool AudioManager::init(int sampleRate, int channels)
         st->hdrs[i].dwFlags |= WHDR_DONE; // 初始标记为可用
     }
 
+    // 重置环形缓冲区状态，防止上次会话残留导致第二次启动时音频撕裂
+    m_writePos          = 0;
+    m_readPos           = 0;
+    m_available         = 0;
+    m_maxLatencySamples = RING_CAPACITY / 2;
     m_ring.resize(RING_CAPACITY);
     m_running.store(true, std::memory_order_release);
     m_thread = std::thread(&AudioManager::audioThreadFunc, this);
@@ -551,6 +568,11 @@ bool AudioManager::init(int sampleRate, int channels)
         return false;
     }
 
+    // 重置环形缓冲区状态，防止上次会话残留导致第二次启动时音频撕裂
+    m_writePos          = 0;
+    m_readPos           = 0;
+    m_available         = 0;
+    m_maxLatencySamples = RING_CAPACITY / 2;
     m_ring.resize(RING_CAPACITY);
     m_running.store(true, std::memory_order_release);
     // CoreAudio 由回调驱动，无需后台线程
@@ -591,6 +613,11 @@ bool AudioManager::init(int sampleRate, int channels)
 {
     m_sampleRate = sampleRate;
     m_channels   = channels;
+    // 重置环形缓冲区状态，防止上次会话残留导致第二次启动时音频撕裂
+    m_writePos          = 0;
+    m_readPos           = 0;
+    m_available         = 0;
+    m_maxLatencySamples = RING_CAPACITY / 2;
     m_ring.resize(RING_CAPACITY);
     m_running.store(true, std::memory_order_release);
     m_thread = std::thread(&AudioManager::audioThreadFunc, this);
@@ -614,6 +641,7 @@ void AudioManager::deinit()
     if (!m_running.load(std::memory_order_acquire)) return;
     m_running.store(false, std::memory_order_release);
     m_spaceCV.notify_all();
+    m_dataCV.notify_all();
     if (m_thread.joinable()) m_thread.join();
     m_ring.clear();
 }
