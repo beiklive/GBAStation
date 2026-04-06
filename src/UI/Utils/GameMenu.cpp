@@ -1,6 +1,7 @@
 #include "UI/Utils/GameMenu.hpp"
 #include "UI/Pages/FileListPage.hpp"
 #include "Video/DisplayConfig.hpp"
+#include <borealis/core/cache_helper.hpp>
 #include <cmath>
 #include <cstdio>
 
@@ -767,6 +768,13 @@ void GameMenu::buildStatePanel(bool isSave, brls::Box* container)
             if (m_stateInfoCallback) {
                 auto info = m_stateInfoCallback(captSlot);
                 if (info.exists && !info.thumbPath.empty()) {
+                    // 无效化旧纹理缓存：覆盖保存后缩略图路径不变，NVG 纹理缓存会返回
+                    // 旧图片，需先将其标记为脏，强制下次 setImageFromFile 从磁盘重新加载。
+                    int oldTex = brls::TextureCache::instance().getCache(info.thumbPath);
+                    if (oldTex > 0) {
+                        brls::TextureCache::instance().removeCache(static_cast<size_t>(oldTex));
+                        brls::TextureCache::instance().markDirty(static_cast<size_t>(oldTex));
+                    }
                     previewImg->setImageFromFile(info.thumbPath);
                     previewImg->setVisibility(brls::Visibility::VISIBLE);
                     noDataLabel->setVisibility(brls::Visibility::GONE);
