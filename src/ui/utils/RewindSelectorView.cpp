@@ -30,8 +30,8 @@ namespace beiklive
     // RewindThumbItem 实现
     // =========================================================================
 
-    RewindThumbItem::RewindThumbItem(int frameIndex, const std::vector<uint16_t>& thumb)
-        : m_frameIndex(frameIndex)
+    RewindThumbItem::RewindThumbItem(int frameIndex, int secondsAgo, const std::vector<uint16_t>& thumb)
+        : m_frameIndex(frameIndex), m_secondsAgo(secondsAgo)
     {
         setAxis(brls::Axis::COLUMN);
         setAlignItems(brls::AlignItems::CENTER);
@@ -53,10 +53,10 @@ namespace beiklive
                 thumb, RewindFrame::THUMB_W, RewindFrame::THUMB_H);
         }
 
-        // 帧序号标签（底部居中）
+        // 时间标签（底部居中）：显示距当前多少秒
         m_indexLabel = new brls::Label();
         char frameIndexText[16];
-        std::snprintf(frameIndexText, sizeof(frameIndexText), "-%d帧", m_frameIndex);
+        std::snprintf(frameIndexText, sizeof(frameIndexText), "-%d秒", m_secondsAgo);
         m_indexLabel->setText(frameIndexText);
         m_indexLabel->setFontSize(12.f);
         m_indexLabel->setTextColor(nvgRGBA(200, 200, 200, 230));
@@ -254,7 +254,7 @@ namespace beiklive
     }
 
     void RewindSelectorView::openWithFrames(
-        std::vector<std::pair<int, std::vector<uint16_t>>> frames)
+        std::vector<RewindThumbSnapshot> frames)
     {
         _clearItems();
 
@@ -265,8 +265,8 @@ namespace beiklive
         }
 
         // frames 已按时间顺序排列（最旧帧在前，最新帧在后），逐一创建缩略图卡片
-        for (auto& [idx, thumb] : frames) {
-            auto* item = new RewindThumbItem(idx, thumb);
+        for (auto& snap : frames) {
+            auto* item = new RewindThumbItem(snap.bufferIdx, snap.secondsAgo, snap.thumb);
             item->onItemClicked = [this](int frameIndex) {
                 if (m_onFrameSelected)
                     m_onFrameSelected(frameIndex);

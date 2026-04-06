@@ -17,9 +17,10 @@ namespace beiklive
         static constexpr float ITEM_W = 180.f; ///< 卡片宽度（像素）
         static constexpr float ITEM_H = 140.f; ///< 卡片高度（像素）
 
-        /// @param frameIndex  对应 m_rewindBuffer 中的帧索引（0=最新帧）
+        /// @param frameIndex  对应 m_rewindBuffer 中的帧索引（0=最新帧，用于恢复）
+        /// @param secondsAgo  距当前的秒数（用于显示 "-X秒"）
         /// @param thumb       RGB565 缩略图数据（可能为空）
-        RewindThumbItem(int frameIndex, const std::vector<uint16_t>& thumb);
+        RewindThumbItem(int frameIndex, int secondsAgo, const std::vector<uint16_t>& thumb);
         ~RewindThumbItem();
 
         void draw(NVGcontext* vg, float x, float y, float w, float h,
@@ -32,6 +33,7 @@ namespace beiklive
 
     private:
         int  m_frameIndex;
+        int  m_secondsAgo;     ///< 距当前的秒数（用于显示 "-X秒"）
         int  m_nvgImage    = 0;    ///< NanoVG 图像句柄（0 表示无缩略图）
         bool m_imgCreated  = false;
 
@@ -63,8 +65,8 @@ namespace beiklive
                   brls::Style style, brls::FrameContext* ctx) override;
 
         /// 打开倒带界面：用传入的缩略图快照重建卡片列表
-        /// @param frames  (帧索引, RGB565缩略图) 对列表（最旧帧在前，最新帧在后）
-        void openWithFrames(std::vector<std::pair<int, std::vector<uint16_t>>> frames);
+        /// @param frames  RewindThumbSnapshot 列表（最旧帧在前，最新帧在后）
+        void openWithFrames(std::vector<RewindThumbSnapshot> frames);
 
         /// 设置"恢复帧"回调（由 GamePage 注入，参数为 m_rewindBuffer 帧索引）
         void setOnFrameSelected(std::function<void(int)> cb) { m_onFrameSelected = std::move(cb); }

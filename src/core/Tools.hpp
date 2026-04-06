@@ -32,9 +32,14 @@ std::string getFileSizeString(const fs::path& path);
 std::string getParentPath(const std::string& path);
 
 // 根据文件类型返回对应的图标资源路径（已知类型时直接传入，跳过文件系统探测）
+// 注意：此函数需要在 UI 线程调用，因为它依赖 brls::Application::getPlatform()
 std::string getIconPath(beiklive::enums::FileType type);
 // 根据文件路径自动检测类型并返回图标资源路径
 std::string getIconPath(const std::string& path);
+// 获取当前主题的图标路径前缀（如 "img/ui/light/"），必须在 UI 线程调用
+std::string getIconPathPrefix();
+// 根据文件类型和预先计算的图标前缀返回图标路径（可在后台线程调用）
+std::string getIconPathWithPrefix(beiklive::enums::FileType type, const std::string& prefix);
 std::string getDefaultLogoPath(beiklive::enums::EmuPlatform platform);
 // 获取系统逻辑磁盘驱动器列表（Windows: C:\、D:\ 等；其他平台: {"/"}）
 std::vector<std::string> getLogicalDrives();

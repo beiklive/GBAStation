@@ -47,6 +47,8 @@ void AudioManager::ringWrite(const int16_t* data, size_t count)
             m_readPos   = (m_readPos  + 1) % RING_CAPACITY;
         }
     }
+    // 通知音频线程有新数据可消费
+    m_dataCV.notify_one();
 }
 
 size_t AudioManager::ringRead(int16_t* out, size_t maxCount)
@@ -90,6 +92,7 @@ void AudioManager::flushRingBuffer()
     m_available = 0;
     m_writePos  = m_readPos; // 读写指针归位，清空缓冲
     m_spaceCV.notify_all();  // 唤醒阻塞的 pushSamples() 调用方
+    m_dataCV.notify_all();   // 唤醒阻塞的音频线程
 }
 
 // ============================================================
@@ -183,10 +186,16 @@ void AudioManager::audioThreadFunc()
 
         int16_t tmp[SWITCH_FRAMES * 2];
         {
-            std::lock_guard<std::mutex> lk(m_mutex);
-            size_t got = ringRead(tmp, inputFrames * 2);
-            if (got < inputFrames * 2)
-                memset(tmp + got, 0, (inputFrames * 2 - got) * sizeof(int16_t));
+            const size_t needed = inputFrames * static_cast<size_t>(m_channels);
+            std::unique_lock<std::mutex> lk(m_mutex);
+            // 等待足够数据（最多 8ms），避免 underrun 导致的爆音
+            m_dataCV.wait_for(lk, std::chrono::milliseconds(8), [&] {
+                return m_available >= needed ||
+                       !m_running.load(std::memory_order_relaxed);
+            });
+            size_t got = ringRead(tmp, needed);
+            if (got < needed)
+                memset(tmp + got, 0, (needed - got) * sizeof(int16_t));
         }
 
         if (m_sampleRate != SWITCH_OUT_RATE) {
@@ -212,6 +221,7 @@ void AudioManager::deinit()
     if (!m_running.load(std::memory_order_acquire)) return;
     m_running.store(false, std::memory_order_release);
     m_spaceCV.notify_all();
+    m_dataCV.notify_all();  // 唤醒可能正在等待数据的音频线程
     if (m_thread.joinable()) m_thread.join();
     auto* sw = static_cast<SwitchAudioState*>(m_platformState);
     audoutStopAudioOut();

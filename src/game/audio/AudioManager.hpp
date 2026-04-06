@@ -69,6 +69,7 @@ private:
 
     std::mutex               m_mutex;
     std::condition_variable  m_spaceCV;   ///< 环形缓冲区排空（释放空间）时通知
+    std::condition_variable  m_dataCV;    ///< 环形缓冲区有新数据时通知（唤醒音频线程）
     std::vector<int16_t>     m_ring;      ///< 循环 PCM 样本存储
     size_t                   m_writePos          = 0;
     size_t                   m_readPos           = 0;

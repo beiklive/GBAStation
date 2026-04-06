@@ -114,12 +114,14 @@ void FileListPage::setFliter(beiklive::enums::FilterMode mode, std::vector<std::
         m_isAtDriveList = false;
         brls::Logger::debug("Setting path: " + m_currentPath);
         brls::Logger::debug("Previous path: " + m_previousPath);
+        // 在主线程预计算图标路径前缀（依赖 UI API，不能在后台线程调用）
+        std::string iconPrefix = beiklive::tools::getIconPathPrefix();
         ASYNC_RETAIN
-        brls::async([ASYNC_TOKEN, path]()
+        brls::async([ASYNC_TOKEN, path, iconPrefix]()
         {
             try {
                 beiklive::ListItemList *items = new beiklive::ListItemList();
-                refreshDirList(path, items);
+                refreshDirList(path, items, iconPrefix);
 				brls::Logger::debug("Directory items loaded: " + std::to_string(items->size()));
                 ASYNC_RELEASE
                 brls::sync([this, items]()
@@ -187,11 +189,14 @@ void FileListPage::setFliter(beiklive::enums::FilterMode mode, std::vector<std::
         m_isAtDriveList = true;
         m_currentPath = "";
 
+        // 在主线程预计算图标路径前缀（依赖 UI API，不能在后台线程调用）
+        std::string iconPrefix = beiklive::tools::getIconPathPrefix();
         ASYNC_RETAIN
-        brls::async([ASYNC_TOKEN]()
+        brls::async([ASYNC_TOKEN, iconPrefix]()
         {
             std::vector<std::string> drives = beiklive::tools::getLogicalDrives();
-            const std::string driveIcon = beiklive::tools::getIconPath(beiklive::enums::FileType::DRIVE);
+            const std::string driveIcon = beiklive::tools::getIconPathWithPrefix(
+                beiklive::enums::FileType::DRIVE, iconPrefix);
             m_dirItems.clear();
             beiklive::ListItemList* items = new beiklive::ListItemList();
             for (const auto& drive : drives)
@@ -217,7 +222,8 @@ void FileListPage::setFliter(beiklive::enums::FilterMode mode, std::vector<std::
         });
     }
 
-    void FileListPage::refreshDirList(const std::string dirPath, beiklive::ListItemList* items)
+    void FileListPage::refreshDirList(const std::string dirPath, beiklive::ListItemList* items,
+                                      const std::string& iconPrefix)
     {
         std::error_code ec;
         if (!fs::exists(dirPath, ec) || !fs::is_directory(dirPath, ec))
@@ -231,7 +237,8 @@ void FileListPage::setFliter(beiklive::enums::FilterMode mode, std::vector<std::
         std::string parentPath = fs::path(m_currentPath).parent_path().string();
         if (parentPath != m_currentPath)
         {
-            std::string upIcon = beiklive::tools::getIconPath(beiklive::enums::FileType::NONE);
+            std::string upIcon = beiklive::tools::getIconPathWithPrefix(
+                beiklive::enums::FileType::NONE, iconPrefix);
             m_dirItems.push_back({
                 "..", m_currentPath, upIcon, beiklive::enums::FileType::NONE,
                 "返回上一级", 0
@@ -289,7 +296,8 @@ void FileListPage::setFliter(beiklive::enums::FilterMode mode, std::vector<std::
         // 目录在前、文件在后写入结果
         auto appendEntry = [&](const RawEntry& raw) {
             beiklive::enums::FileType fileType = beiklive::tools::getFileType(raw.fullPath);
-            std::string iconPath = beiklive::tools::getIconPath(fileType);
+            // 使用预计算的图标前缀，避免在后台线程调用 UI API
+            std::string iconPath = beiklive::tools::getIconPathWithPrefix(fileType, iconPrefix);
 
             std::string sizeStr;
             size_t entryCount = 0;

@@ -115,6 +115,35 @@ std::string getIconPath(beiklive::enums::FileType type) {
             return BK_RES(path_prefix + "wenjian.png");
     }
 }
+
+std::string getIconPathPrefix() {
+    // 必须在 UI 线程调用，返回主题相关图标路径前缀
+    return "img/ui/" + std::string(
+        (brls::Application::getPlatform()->getThemeVariant() == brls::ThemeVariant::DARK)
+        ? "light/" : "dark/");
+}
+
+std::string getIconPathWithPrefix(beiklive::enums::FileType type, const std::string& prefix) {
+    // 使用预计算的前缀（可在后台线程调用，无需访问 UI API）
+    switch (type) {
+        case beiklive::enums::FileType::NONE:
+        case beiklive::enums::FileType::DRIVE:
+        case beiklive::enums::FileType::DIRECTORY:
+            return BK_RES(prefix + "wenjianjia_64.png");
+        case beiklive::enums::FileType::IMAGE_FILE:
+            return BK_RES(prefix + "tupian.png");
+        case beiklive::enums::FileType::ZIP_FILE:
+            return BK_RES(prefix + "zip.png");
+        case beiklive::enums::FileType::GBA_ROM:
+            return BK_RES(prefix + "icon_gba.png");
+        case beiklive::enums::FileType::GBC_ROM:
+            return BK_RES(prefix + "icon_gb.png");
+        case beiklive::enums::FileType::GB_ROM:
+            return BK_RES(prefix + "icon_gb.png");
+        default:
+            return BK_RES(prefix + "wenjian.png");
+    }
+}
 std::string getDefaultLogoPath(beiklive::enums::EmuPlatform platform)
 {
     std::string path_prefix = "img/ui/";
