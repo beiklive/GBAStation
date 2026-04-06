@@ -104,6 +104,8 @@ namespace beiklive
             return true;
         });
         // 2. 保存状态（绑定保存状态面板）
+        // 注意：_createSaveStatePanel() 内部会设置 m_saveGrid，
+        // 因此下方调用 getItemView(0) 时 m_saveGrid 已有效。
         brls::View* savePanel = _createSaveStatePanel();
         m_viewPanel->addView(savePanel);
         m_allPanels.push_back(savePanel);
@@ -115,6 +117,7 @@ namespace beiklive
         m_contrlPanel->addView(btnSave);
 
         // 3. 读取状态（绑定读取状态面板）
+        // 同上：_createLoadStatePanel() 内部会设置 m_loadGrid。
         brls::View* loadPanel = _createLoadStatePanel();
         m_viewPanel->addView(loadPanel);
         m_allPanels.push_back(loadPanel);
