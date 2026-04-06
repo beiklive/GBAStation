@@ -232,24 +232,46 @@ void AudioManager::deinit()
     m_dataCV.notify_all();  // 唤醒可能正在等待数据的音频线程
     if (m_thread.joinable()) m_thread.join();
     auto* sw = static_cast<SwitchAudioState*>(m_platformState);
-    // 音频线程退出后，硬件队列中可能仍有 1-3 个未播完的缓冲区。
-    // 直接调用 audoutStopAudioOut() 会强行截断这些缓冲区，产生爆音/撕裂音。
-    // 此处循环等待硬件释放全部已入队缓冲区，确保音频自然结束后再停止输出。
+    // 音频线程退出后，硬件队列中可能仍有 1-3 个未播完的 AudioManager 缓冲区。
+    // 注意：此处【不调用 audoutStopAudioOut()】，原因如下：
+    //   - audout 流由 BKAudioPlayer 负责启动（audoutStartAudioOut）并持续保持，
+    //     AudioManager 只是向共享流提交缓冲区，不拥有流的生命周期。
+    //   - 若在此处调用 audoutStopAudioOut()，第二次启动游戏时 AudioManager::init()
+    //     的 audoutStartAudioOut() 会【成功】（而非失败），导致两次游戏运行的初始化
+    //     路径不一致。更严重的是：流被停止后再重启时，BKAudioPlayer 在间隙期提交的
+    //     音效缓冲区会残留在硬件队列中。第二次游戏音频线程的 audoutWaitPlayFinish()
+    //     会"拦截"该外来缓冲区的完成事件，使 enqueuedBuffers 计数错误（偏少 1），
+    //     导致线程向仍在硬件 DMA 中的缓冲区写入数据，产生全程爆音和撕裂音。
+    // 正确做法：等待本次 AudioManager 自身的缓冲区自然播完后释放资源，
+    //           让流继续由 BKAudioPlayer 管理，两次游戏看到完全相同的 audout 状态。
     if (sw) {
-        // 每次等待超时 200ms（约 SWITCH_FRAMES×4/48000 ≈ 42ms 的 5 倍），
-        // 足以覆盖正常缓冲区播放时长，同时避免硬件异常时无限阻塞
-        constexpr u64 kDrainTimeoutNs = 200000000ULL; // 200ms in nanoseconds
-        while (sw->enqueuedBuffers > 0) {
+        // 每次等待超时略超一个硬件缓冲区的播放时长
+        // （SWITCH_FRAMES / SWITCH_OUT_RATE = 512 / 48000 ≈ 10.7ms），
+        // 重试次数为 SWITCH_N_BUFFERS 的 5 倍，足以覆盖所有缓冲区并留有余量。
+        // 通过遍历返回指针链表，仅统计属于本 AudioManager 实例的缓冲区，
+        // 过滤掉 BKAudioPlayer 提交的外来缓冲区，避免计数错乱。
+        constexpr u64 kDrainTimeoutNs = 16000000ULL;         // ~16ms per iteration
+        constexpr int kMaxRetries     = SWITCH_N_BUFFERS * 5; // 安全系数 5，约 320ms 总超时
+        u32 ourEnqueued = sw->enqueuedBuffers;
+        for (int retry = 0; ourEnqueued > 0 && retry < kMaxRetries; ++retry) {
             AudioOutBuffer* released = nullptr;
             u32 relCount = 0;
             audoutWaitPlayFinish(&released, &relCount, kDrainTimeoutNs);
-            if (relCount > 0 && sw->enqueuedBuffers >= relCount)
-                sw->enqueuedBuffers -= relCount;
-            else
-                break; // 超时或硬件返回异常，强制退出
+            if (relCount == 0 || released == nullptr)
+                continue; // 超时，继续等待
+            // 遍历返回缓冲区链表，仅统计属于本 AudioManager 的缓冲区
+            // 若为外来缓冲区（BKAudioPlayer），丢弃完成事件并继续等待自身缓冲区
+            for (AudioOutBuffer* buf = released; buf != nullptr; buf = buf->next) {
+                for (int i = 0; i < SWITCH_N_BUFFERS; ++i) {
+                    if (buf == &sw->outBuf[i]) {
+                        if (ourEnqueued > 0) --ourEnqueued;
+                        break;
+                    }
+                }
+            }
         }
+        // 注意：不调用 audoutStopAudioOut()，保持流持续运行供 BKAudioPlayer 使用
     }
-    audoutStopAudioOut();
     audoutExit();
     delete sw;
     m_platformState = nullptr;

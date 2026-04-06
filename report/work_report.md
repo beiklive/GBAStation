@@ -203,3 +203,57 @@ ALSA 平台的 `deinit()` 缺少 `m_dataCV.notify_all()`，与 Switch 平台不�
 |------|---------|
 | `src/game/audio/AudioManager.cpp` | 所有平台 `init()` 中重置环形缓冲区状态变量；ALSA `deinit()` 添加 `m_dataCV.notify_all()`；兜底 `deinit()` 添加 `m_dataCV.notify_all()` |
 | `src/ui/utils/GameView.cpp` | `_registerGameRuntime()` 中 `AudioManager::init()` 后 drain 并丢弃初始化音频数据 |
+
+---
+
+## 2026-04-06 修复第二次运行游戏的全程爆音和撕裂（#182 未修复）
+
+### 任务分析
+
+**问题现象**：程序启动后第一次运行游戏声音正常，第二次运行游戏从一开始就出现爆音，且整个运行过程中持续有爆音和撕裂声。
+
+**输入**：`src/game/audio/AudioManager.cpp`（Switch 后端 `deinit()`）
+
+**输出**：修复第二次游戏运行时全程爆音和撕裂问题
+
+### 根本原因分析
+
+**核心问题：`audoutStopAudioOut()` 破坏第二次游戏的缓冲区计数**
+
+Switch 平台上，`BKAudioPlayer` 和 `AudioManager` 共享同一个 `audout` 服务会话（libnx 内部引用计数，同一 IPC 流）。两者的 `audoutWaitPlayFinish()` 调用竞争同一个完成事件队列。
+
+**问题触发流程**：
+
+1. 第一次游戏结束：`AudioManager::deinit()` 调用 `audoutStopAudioOut()` 停止了流
+2. 第一次结束后（间隙期）：`AudioManager::m_running = false`，`BKAudioPlayer::isRunning()` 返回 false → BKAudioPlayer 有机会向已停止的流提交音效缓冲区
+3. 第二次游戏 `init()` 调用 `audoutStartAudioOut()` **成功**（因为流已停止）→ 重启流
+4. 重启的流中包含：BKAudioPlayer 残留的音效缓冲区 + AudioManager 新提交的 4 个静音缓冲区
+5. 音频线程的非阻塞回收 `audoutWaitPlayFinish(0)` 得到 BKAudioPlayer 的缓冲区完成事件
+6. `sw->enqueuedBuffers` 错误减少 1（认为是自己的缓冲区被回收）
+7. `enqueuedBuffers(3) < SWITCH_N_BUFFERS(4)` → 跳过等待，直接向 `curBuf=0` 写入音频数据
+8. 但 `outBuf[0]` 此时**仍在硬件 DMA 队列中**！音频线程向 DMA 进行中的缓冲区写入 → **全程爆音/撕裂**
+9. `curBuf` 自此一直与硬件实际状态错位，问题持续整个游戏运行周期
+
+**第一次运行正常的原因**：
+- 第一次 `init()` 时 `audoutStartAudioOut()` **失败**（BKAudioPlayer 已启动流）→ 不存在"停止后重启"
+- 没有 BKAudioPlayer 残留缓冲区混入 AudioManager 的计数
+
+### 修复方案
+
+**移除 `deinit()` 中的 `audoutStopAudioOut()` 调用**：
+
+- `audout` 流的生命周期由 `BKAudioPlayer` 负责（它在程序启动时调用 `audoutStartAudioOut()`，退出时调用 `audoutStopAudioOut()`）
+- `AudioManager` 只是借用共享流提交缓冲区，不应控制流的启停
+- 移除后，两次游戏看到完全相同的 `audout` 状态（流持续运行，`audoutStartAudioOut()` 失败→继续）
+
+**同时改进 drain 循环**：
+
+- 使用独立计数器 `ourEnqueued`（而非 `sw->enqueuedBuffers`）
+- 遍历返回缓冲区链表，通过指针比对验证是否属于本 `AudioManager` 实例
+- 外来缓冲区（BKAudioPlayer 的）丢弃完成事件，继续等待自身缓冲区
+
+### 修改文件
+
+| 文件 | 修改内容 |
+|------|---------|
+| `src/game/audio/AudioManager.cpp` | Switch `deinit()`：移除 `audoutStopAudioOut()`，改进 drain 循环以正确过滤外来缓冲区 |
