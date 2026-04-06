@@ -308,6 +308,7 @@ namespace beiklive
         m_saveGrid = grid;
 
         m_saveItems.clear();
+        for (int slot = 0; slot < 10; ++slot)
         {
             auto* item = new beiklive::GridItem(GridItemMode::SAVE_STATE, slot);
             item->setEmpty(_slotName(slot));
