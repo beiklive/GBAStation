@@ -439,8 +439,9 @@ namespace beiklive
                 if (auto* player = dynamic_cast<beiklive::BKAudioPlayer*>(
                         brls::Application::getAudioPlayer()))
                 {
-                    auto deadline = std::chrono::steady_clock::now()
-                                  + std::chrono::milliseconds(500);
+                    // 最长等待 500ms，一般 UI 音效（点击声）< 100ms，足够覆盖
+                    constexpr std::chrono::milliseconds kAudioPlayerWaitTimeout{500};
+                    auto deadline = std::chrono::steady_clock::now() + kAudioPlayerWaitTimeout;
                     while (player->isPlaying()
                            && std::chrono::steady_clock::now() < deadline)
                         std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -517,8 +518,9 @@ namespace beiklive
             // m_rewindBufferSize 表示"最多缓存多少帧游戏时间"（如 3600 = 60fps × 60s = 1分钟）。
             // 每个条目覆盖 m_rewindSaveInterval 帧，因此最大条目数 = bufferSize / saveInterval。
             // 这样无论 saveInterval 取何值，实际缓冲时长始终等于 bufferSize/60 秒。
-            unsigned maxEntries = std::max(1u,
-                m_rewindBufferSize / static_cast<unsigned>(m_rewindSaveInterval));
+            // 使用 std::max(1u, ...) 避免 saveInterval 意外为 0 时的除零错误
+            unsigned saveInterval = static_cast<unsigned>(std::max(1, m_rewindSaveInterval));
+            unsigned maxEntries = std::max(1u, m_rewindBufferSize / saveInterval);
             while (m_rewindBuffer.size() > maxEntries)
                 m_rewindBuffer.pop_back();
         }

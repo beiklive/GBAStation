@@ -230,11 +230,13 @@ void AudioManager::deinit()
     // 直接调用 audoutStopAudioOut() 会强行截断这些缓冲区，产生爆音/撕裂音。
     // 此处循环等待硬件释放全部已入队缓冲区，确保音频自然结束后再停止输出。
     if (sw) {
+        // 每次等待超时 200ms（约 SWITCH_FRAMES×4/48000 ≈ 42ms 的 5 倍），
+        // 足以覆盖正常缓冲区播放时长，同时避免硬件异常时无限阻塞
+        constexpr u64 kDrainTimeoutNs = 200000000ULL; // 200ms in nanoseconds
         while (sw->enqueuedBuffers > 0) {
             AudioOutBuffer* released = nullptr;
             u32 relCount = 0;
-            // 每次最多等待 200ms，防止硬件异常时无限阻塞
-            audoutWaitPlayFinish(&released, &relCount, 200000000);
+            audoutWaitPlayFinish(&released, &relCount, kDrainTimeoutNs);
             if (relCount > 0 && sw->enqueuedBuffers >= relCount)
                 sw->enqueuedBuffers -= relCount;
             else
