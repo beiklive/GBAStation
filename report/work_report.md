@@ -1,5 +1,117 @@
 # GBAStation 工作汇报
 
+## 2026-04-07 修复 Cannot set texture 和返回主页崩溃 + 联机可行性研究
+
+### 任务分析
+
+#### 任务目标
+1. 修复每次页面都会有 `Cannot set texture: 0` 的错误日志
+2. 修复从游戏返回主页时程序经常崩溃的问题
+3. 研究基于 mgba libretro 实现联机功能的可行性
+
+#### 问题1：`Cannot set texture: 0` 每次页面都出现
+
+**根因分析**：
+
+错误来源于 borealis 的 `Image::innerSetImage(int tex)` 函数（`third_party/borealis/library/lib/views/image.cpp`），
+当 `nvgCreateImage()` 返回 0（文件不存在或加载失败）时记录该错误。
+
+追踪调用链：
+- `Box::setupBackgroundLayer()` (`src/ui/utils/Box.cpp:72`) 调用：
+  ```cpp
+  backgroundLayer->setImageFromFile("resources\\img\\bg2.png");
+  ```
+- 该路径使用了 **Windows 反斜杠硬编码路径**，在 Switch 平台（romfs）和 Linux 均无法找到文件
+- 正确做法是使用 `BK_RES("img/bg2.png")` 宏，它在 Switch 上展开为 `romfs:/img/bg2.png`，在 Windows 上展开为 `./resources/img/bg2.png`
+- `Box` 类作为所有页面的基础容器，每个页面实例化时都会触发此错误，因此"每次页面"都会出现
+
+**修复方案**：
+- 在 `Box.cpp` 中添加 `#include "core/common.h"` 以获得 `BK_RES` 宏
+- 将硬编码路径改为 `BK_RES("img/bg2.png")`
+
+**修改文件**：
+- `src/ui/utils/Box.cpp`：引入 `common.h`，修正背景图路径
+
+---
+
+#### 问题2：从游戏返回主页时程序崩溃
+
+**根因分析**：
+
+崩溃原因是 `GameMenuView::_refreshStatePanel()` 中存在**异步任务与 UI 线程之间的竞态条件**：
+
+```cpp
+ASYNC_RETAIN
+brls::async([ASYNC_TOKEN, infoCallback, isSave]() {
+    // ... 后台线程：查询存档信息 ...
+    ASYNC_RELEASE             // ← 在此处检查 this 是否已析构
+    brls::sync([this, ...]()  // ← 但投递 sync 时 this 可能已被释放！
+    {
+        // 访问 this 成员 → Use-After-Free 崩溃
+    });
+});
+```
+
+**竞态窗口**：
+1. 后台线程执行 `bool release = *token`（读到 false，视图存活）
+2. UI 线程析构 `GameMenuView`（`*deletionToken` 设为 true）
+3. 后台线程：`if (release) return;` → release 是旧的 false → **不返回**
+4. 后台线程投递 `brls::sync([this, ...]())`
+5. UI 线程在下一帧执行 sync 回调 → `this` 已被释放 → **崩溃**
+
+**触发场景**：
+- 用户打开"保存状态"面板 → 触发 `_refreshStatePanel` 异步扫描
+- 用户快速退出游戏（保存或不保存后点击"退出游戏"）
+- 退出动画结束 → `GamePage` 析构 → `GameMenuView` 析构
+- 后台扫描线程尚未完成，在竞态窗口内向 UI 队列投递含悬空 `this` 的 sync 回调
+
+**修复方案**：
+
+参考 borealis 官方示例（`Image::setImageAsync` 使用的模式），
+将 `ASYNC_RELEASE` **移入 `brls::sync` 回调内部**，在 UI 线程执行时检查视图状态：
+
+```cpp
+ASYNC_RETAIN
+brls::async([ASYNC_TOKEN, infoCallback, isSave]() {
+    // ... 后台扫描 ...
+    brls::sync([ASYNC_TOKEN, infos = std::move(infos), isSave]() {
+        ASYNC_RELEASE  // ← UI 线程执行：若视图已析构则提前 return
+        // 安全访问 this 和 m_saveItems/m_loadItems
+    });
+});
+```
+
+**正确性保证**：
+- `brls::sync` 回调在 UI 线程执行，视图析构也在 UI 线程执行
+- 两者不能并发运行：若 sync 回调开始执行时 `*token == false`（视图存活），
+  则视图**不可能在回调执行期间被析构**（UI 线程是单线程顺序执行的）
+- 因此 `ASYNC_RELEASE` 在 sync 回调内部提供了**正确且无竞态的析构检测**
+
+**修改文件**：
+- `src/ui/utils/GameMenuView.cpp`：`_refreshStatePanel()` 中将 `ASYNC_RELEASE` 移入 `brls::sync` lambda
+
+---
+
+#### 任务3：mgba libretro 联机功能可行性研究
+
+已完成研究并提交报告：`report/mgba_libretro_netplay_feasibility.md`
+
+**结论摘要**：
+- **技术上完全可行**，mgba 提供完善的 SIO/Lockstep 接口和跨平台 Socket 工具
+- **推荐方案 B**（libretro 层回滚联机）：不修改 mgba 核心，工作量较小
+- **方案 A**（真实 SIO 网络仿真）：兼容性更好，但延迟敏感（仅适合局域网）
+- 建议先实现局域网回滚输入共享，再逐步迭代
+
+### 修改文件汇总
+
+| 文件 | 修改内容 |
+|------|---------|
+| `src/ui/utils/Box.cpp` | 引入 `common.h`；修正背景图路径为 `BK_RES("img/bg2.png")` |
+| `src/ui/utils/GameMenuView.cpp` | `_refreshStatePanel()` 将 `ASYNC_RELEASE` 移入 `brls::sync` 回调内部，消除竞态条件 |
+| `report/mgba_libretro_netplay_feasibility.md` | 新增联机功能可行性分析报告 |
+
+---
+
 ## 2026-04-06 修复两个问题
 
 ### 任务分析

@@ -426,8 +426,10 @@ namespace beiklive
             for (int slot = 0; slot < 10; ++slot)
                 infos.push_back(infoCallback(slot));
 
-            ASYNC_RELEASE
-            brls::sync([this, infos = std::move(infos), isSave]() {
+            // 将 ASYNC_RELEASE 移入 brls::sync 回调内部，确保在 UI 线程执行时
+            // 检查视图是否已销毁，避免 View 析构与 brls::sync 投递之间的竞态条件。
+            brls::sync([ASYNC_TOKEN, infos = std::move(infos), isSave]() {
+                ASYNC_RELEASE
                 auto& items = isSave ? m_saveItems : m_loadItems;
                 for (int slot = 0; slot < 10 && slot < static_cast<int>(items.size()); ++slot)
                 {
