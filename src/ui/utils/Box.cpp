@@ -1,5 +1,6 @@
 #include "Box.hpp"
 #include "Header.hpp"
+#include "core/common.h"
 
 namespace beiklive
 {
@@ -69,7 +70,7 @@ namespace beiklive
         backgroundLayer->setScalingType(brls::ImageScalingType::FIT);
         backgroundLayer->setInterpolation(brls::ImageInterpolation::LINEAR);
 
-        backgroundLayer->setImageFromFile("resources\\img\\bg2.png"); // 默认背景图，用户设置的背景会覆盖它
+        backgroundLayer->setImageFromFile(BK_RES("img/bg2.png")); // 默认背景图，用户设置的背景会覆盖它
         // 应用所有背景设置（可见性、图片、XMB着色器与颜色）
         this->addView(backgroundLayer);
         // showBackground(false); // 默认隐藏背景
