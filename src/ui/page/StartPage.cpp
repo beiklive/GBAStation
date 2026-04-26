@@ -141,6 +141,20 @@ namespace beiklive
         brls::Logger::debug("Opening Game Library Page");
         auto *gameLibraryPage = new beiklive::GameLibraryPage();
         auto *frame           = new brls::AppletFrame(gameLibraryPage);
+
+        gameLibraryPage->onGameSelected = [this](const beiklive::GameEntry &entry)
+        {
+            brls::Logger::info("Game selected from library: " + entry.title);
+            {
+                m_gamePage = new beiklive::GamePage(entry);
+                auto *frame = new brls::AppletFrame(m_gamePage);
+                HIDE_BRLS_BAR(frame);
+                brls::Logger::info("Pushing GamePage activity for: " + entry.title);
+                brls::sync([this, frame]()
+                           { brls::Application::pushActivity(new brls::Activity(frame)); });
+            }
+        };
+
         HIDE_BRLS_BAR(frame);
         brls::sync([frame]()
                    { brls::Application::pushActivity(new brls::Activity(frame)); });
