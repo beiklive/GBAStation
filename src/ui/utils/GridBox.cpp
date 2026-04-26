@@ -135,12 +135,16 @@ namespace beiklive
         const int total   = static_cast<int>(m_factories.size());
         const int rowCount = (total + m_columns - 1) / m_columns;
 
+        const float widthPercent = 96.f / m_columns;
+
         for (int row = 0; row < rowCount; ++row)
         {
             // 每行使用 ROW 方向的盒子
             auto* rowBox = new brls::Box(brls::Axis::ROW);
+            rowBox->setGrow(1.0f);
             rowBox->setFocusable(false);
             rowBox->setAlignItems(brls::AlignItems::CENTER);
+            rowBox->setJustifyContent(brls::JustifyContent::CENTER);
             rowBox->setPaddingTop(5.0f);
             rowBox->setPaddingBottom(5.0f);
 
@@ -153,16 +157,18 @@ namespace beiklive
                 {
                     // 当最后一行不满时，添加透明占位符保持每列宽度一致
                     auto* placeholder = new brls::Box();
+                    placeholder->setWidthPercentage(widthPercent);
                     placeholder->setFocusable(false);
-                    placeholder->setGrow(1.0f);
+                    // placeholder->setGrow(1.0f);
                     placeholder->setMargins(5.0f, 5.0f, 5.0f, 5.0f);
                     rowBox->addView(placeholder);
                     continue;
                 }
 
                 auto* cell = new LazyCell(m_factories[idx], idx);
-                cell->setGrow(1.0f);
+                // cell->setGrow(1.0f);
                 cell->setMargins(5.0f, 5.0f, 5.0f, 5.0f);
+                cell->setWidthPercentage(widthPercent);
 
                 // 注入 GridBox 级别的回调
                 cell->onClicked = [this](int index)
