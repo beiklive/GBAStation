@@ -35,6 +35,22 @@ namespace beiklive // 全局变量
     extern beiklive::ConfigManager *NameMappingManager; // 全局名称映射管理器实例
     extern beiklive::GameDatabase *GameDB; // 全局游戏数据库实例
 
+    struct FloatingIcon
+    {
+        float x;
+        float y;
+        float speedX;
+        float speedY;
+        float size;
+        float rotation;
+        float rotateSpeed;
+        float alpha;
+        int symbolIndex;
+    };
+
+    extern std::vector<FloatingIcon> g_backgroundIcons;
+    extern float g_backgroundLastTime;
+
 }
 
 
@@ -239,6 +255,8 @@ namespace beiklive // 函数声明
 {
 
     void ConfigureInit();  // 配置系统初始化，确保目录存在并加载配置文件
+    void InitBackgroundIcons(); // 初始化全局背景图标
+    void UpdateBackgroundIcons(float dt, float width, float height); // 更新全局背景图标
     void RegisterStyles(); // 注册全局样式
     void RegisterThemes(); // 注册全局主题色
 

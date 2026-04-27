@@ -29,36 +29,12 @@ protected:
         brls::FrameContext* ctx) override;
 
 private:
-    struct FloatingIcon
-    {
-        float x;
-        float y;
-
-        float speedX;
-        float speedY;
-
-        float size;
-
-        float rotation;
-        float rotateSpeed;
-
-        float alpha;
-
-        int symbolIndex;
-    };
-
-private:
-    std::vector<FloatingIcon> icons;
-
-    float lastTime = 0.0f;
-
     // shake
     float shakeStrength = 0.0f;
     float shakeTimer = 0.0f;
     float shakeDuration = 0.0f;
 
 private:
-    void initIcons();
     void update(float dt, float width, float height);
 
     void drawGradient(NVGcontext* vg, float width, float height);

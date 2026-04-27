@@ -1,8 +1,8 @@
 #include "DynamicBackgroundBox.hpp"
+#include "core/common.h"
 
 #include <cmath>
 #include <cstdlib>
-#include <ctime>
 namespace beiklive
 {
 
@@ -14,42 +14,13 @@ namespace beiklive
 
     DynamicBackgroundBox::DynamicBackgroundBox()
     {
-        std::srand((unsigned int)std::time(nullptr));
         this->setGrow(1);
-        initIcons();
     }
 
     float DynamicBackgroundBox::randRange(float min, float max)
     {
         float t = (float)std::rand() / (float)RAND_MAX;
         return min + (max - min) * t;
-    }
-
-    void DynamicBackgroundBox::initIcons()
-    {
-        icons.clear();
-
-        for (int i = 0; i < 24; i++)
-        {
-            FloatingIcon icon;
-
-            icon.x = randRange(0.0f, 1280.0f);
-            icon.y = randRange(0.0f, 720.0f);
-
-            icon.speedX = randRange(-8.0f, 8.0f);
-            icon.speedY = randRange(-22.0f, -8.0f);
-
-            icon.size = randRange(24.0f, 60.0f);
-
-            icon.rotation = randRange(0.0f, 6.28f);
-            icon.rotateSpeed = randRange(-0.6f, 0.6f);
-
-            icon.alpha = randRange(0.05f, 0.16f);
-
-            icon.symbolIndex = std::rand() % 4;
-
-            icons.push_back(icon);
-        }
     }
 
     void DynamicBackgroundBox::shake(float strength, float duration)
@@ -61,25 +32,7 @@ namespace beiklive
 
     void DynamicBackgroundBox::update(float dt, float width, float height)
     {
-        for (auto &icon : icons)
-        {
-            icon.x += icon.speedX * dt;
-            icon.y += icon.speedY * dt;
-
-            icon.rotation += icon.rotateSpeed * dt;
-
-            if (icon.y < -80.0f)
-            {
-                icon.y = height + randRange(20.0f, 80.0f);
-                icon.x = randRange(0.0f, width);
-            }
-
-            if (icon.x < -80.0f)
-                icon.x = width + 40.0f;
-
-            if (icon.x > width + 80.0f)
-                icon.x = -40.0f;
-        }
+        beiklive::UpdateBackgroundIcons(dt, width, height);
 
         if (shakeTimer > 0.0f)
         {
@@ -106,7 +59,7 @@ namespace beiklive
 
     void DynamicBackgroundBox::drawIcons(NVGcontext *vg)
     {
-        for (auto &icon : icons)
+        for (auto &icon : beiklive::g_backgroundIcons)
         {
             nvgSave(vg);
 
@@ -134,11 +87,11 @@ namespace beiklive
     {
         float now = (float)brls::getCPUTimeUsec() / 1000000.0f;
 
-        if (lastTime == 0.0f)
-            lastTime = now;
+        if (beiklive::g_backgroundLastTime == 0.0f)
+            beiklive::g_backgroundLastTime = now;
 
-        float dt = now - lastTime;
-        lastTime = now;
+        float dt = now - beiklive::g_backgroundLastTime;
+        beiklive::g_backgroundLastTime = now;
 
         if (dt > 0.05f)
             dt = 0.05f;
