@@ -97,6 +97,8 @@ namespace beiklive
         std::string defaultLogo = beiklive::tools::getDefaultLogoPath(
             static_cast<beiklive::enums::EmuPlatform>((int)m_gameData.itemType));
         db->setDefault(dcrc32, "logoPath", defaultLogo);
+        // TODO: 当设置中指定使用存档截图作为封面时，默认 logoPath 应该设置为对应的存档截图路径，而不是平台默认图标
+
 
         // 从数据库取出完整条目（包含已有的用户自定义字段）
         m_gameEntry = db->findByCrc32(dcrc32).value();

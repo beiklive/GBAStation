@@ -395,8 +395,8 @@ namespace beiklive
         GameEntry &entry = data_[it->second];
         nlohmann::json j;
         to_json(j, entry);
-        // 仅在字段不存在或为 null 时才写入默认值
-        if (!j.contains(key) || j[key].is_null())
+        // 仅在字段不存在或为 null 时才写入默认值，或字段长度为0
+        if (!j.contains(key) || j[key].is_null() || (j[key].is_string() && j[key].get<std::string>().empty()))
         {
             j[key] = defaultValue;
             try
