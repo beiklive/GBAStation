@@ -581,11 +581,11 @@ void View::drawHighlight(NVGcontext* vg, Theme theme, float alpha, Style style, 
     if (background)
     {
         // Background
-        NVGcolor highlightBackgroundColor = theme["brls/highlight/background"];
-        nvgFillColor(vg, RGBAf(highlightBackgroundColor.r, highlightBackgroundColor.g, highlightBackgroundColor.b, this->highlightAlpha));
-        nvgBeginPath(vg);
-        nvgRoundedRect(vg, x, y, width, height, cornerRadius);
-        nvgFill(vg);
+        // NVGcolor highlightBackgroundColor = theme["brls/highlight/background"];
+        // nvgFillColor(vg, RGBAf(highlightBackgroundColor.r, highlightBackgroundColor.g, highlightBackgroundColor.b, this->highlightAlpha));
+        // nvgBeginPath(vg);
+        // nvgRoundedRect(vg, x, y, width, height, cornerRadius);
+        // nvgFill(vg);
     }
     else
     {
