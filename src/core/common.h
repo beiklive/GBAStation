@@ -51,6 +51,19 @@ namespace beiklive // 全局变量
     extern std::vector<FloatingIcon> g_backgroundIcons;
     extern float g_backgroundLastTime;
 
+    enum class GradientTheme
+    {
+        Midnight,      // 默认深夜蓝
+        LemonYellow,   // 柠檬黄
+        AvocadoGreen,  // 牛油果绿
+        StrawberryRed, // 草莓红
+        OceanBlue,     // 海洋蓝
+        SakuraPink,    // 樱花粉
+        VscodeBlack,     // VSCode 黑
+    };
+
+    extern GradientTheme g_gradientTheme;
+
 }
 
 
@@ -257,6 +270,7 @@ namespace beiklive // 函数声明
     void ConfigureInit();  // 配置系统初始化，确保目录存在并加载配置文件
     void InitBackgroundIcons(); // 初始化全局背景图标
     void UpdateBackgroundIcons(float dt, float width, float height); // 更新全局背景图标
+    void GetGradientColors(NVGcolor& top, NVGcolor& bottom); // 根据全局主题获取渐变色
     void RegisterStyles(); // 注册全局样式
     void RegisterThemes(); // 注册全局主题色
 

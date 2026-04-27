@@ -2,11 +2,10 @@
 
 #include <borealis.hpp>
 #include <vector>
+#include "core/common.h"
 
 namespace beiklive
 {
-    
-
 
 class DynamicBackgroundBox : public brls::Box
 {
@@ -17,6 +16,8 @@ public:
 public:
     // 外部主动调用：模拟器震动反馈 / 操作反馈
     void shake(float strength = 12.0f, float duration = 0.25f);
+    // 设置背景渐变色主题（全局生效）
+    void setGradientTheme(GradientTheme theme);
 
 protected:
     void draw(

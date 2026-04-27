@@ -11,6 +11,7 @@ namespace beiklive
         // this->showFooter(false);
         // this->showBackground(false);
         // this->showShader(false);
+        this->setGradientTheme(GradientTheme::VscodeBlack);
         Init();
         brls::Application::giveFocus(this); });
     }

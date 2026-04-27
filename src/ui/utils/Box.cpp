@@ -56,6 +56,12 @@ namespace beiklive
             shaderLayer->setVisibility(show ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
     }
 
+    void Box::setGradientTheme(GradientTheme theme)
+    {
+        if(shaderLayer)
+            shaderLayer->setGradientTheme(theme);
+    }
+
 
     void Box::setupBackgroundLayer()
     {

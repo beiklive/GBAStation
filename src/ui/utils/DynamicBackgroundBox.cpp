@@ -30,6 +30,11 @@ namespace beiklive
         shakeTimer = duration;
     }
 
+    void DynamicBackgroundBox::setGradientTheme(GradientTheme theme)
+    {
+        beiklive::g_gradientTheme = theme;
+    }
+
     void DynamicBackgroundBox::update(float dt, float width, float height)
     {
         beiklive::UpdateBackgroundIcons(dt, width, height);
@@ -44,12 +49,15 @@ namespace beiklive
 
     void DynamicBackgroundBox::drawGradient(NVGcontext *vg, float width, float height)
     {
+        NVGcolor topColor, bottomColor;
+        beiklive::GetGradientColors(topColor, bottomColor);
+
         NVGpaint bg = nvgLinearGradient(
             vg,
             0, 0,
             0, height,
-            nvgRGBA(20, 28, 60, 255),
-            nvgRGBA(8, 10, 22, 255));
+            topColor,
+            bottomColor);
 
         nvgBeginPath(vg);
         nvgRect(vg, 0, 0, width, height);
