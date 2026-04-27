@@ -73,20 +73,20 @@ namespace beiklive
         backgroundLayer->setImageFromFile(BK_RES("img/bg2.png")); // 默认背景图，用户设置的背景会覆盖它
         // 应用所有背景设置（可见性、图片、XMB着色器与颜色）
         this->addView(backgroundLayer);
-        // showBackground(false); // 默认隐藏背景
+        showBackground(false); // 默认隐藏背景
     }
 
     void Box::setupShaderLayer()
     {
-        // #undef ABSOLUTE
-        // shaderLayer = new brls::Rectangle();
-        // shaderLayer->setFocusable(false);
-        // shaderLayer->setPositionType(brls::PositionType::ABSOLUTE);
-        // shaderLayer->setPositionTop(0);
-        // shaderLayer->setPositionLeft(0);
-        // shaderLayer->setWidthPercentage(100);
-        // shaderLayer->setHeightPercentage(100);
-        // this->addView(shaderLayer);
+        #undef ABSOLUTE
+        shaderLayer = new beiklive::DynamicBackgroundBox();
+        shaderLayer->setFocusable(false);
+        shaderLayer->setPositionType(brls::PositionType::ABSOLUTE);
+        shaderLayer->setPositionTop(0);
+        shaderLayer->setPositionLeft(0);
+        shaderLayer->setWidthPercentage(100);
+        shaderLayer->setHeightPercentage(100);
+        this->addView(shaderLayer);
     }
 
     void Box::setupMainBox()

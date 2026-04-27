@@ -74,6 +74,8 @@ namespace beiklive
         logobox->setFocusable(true);
         logobox->setWidth(COVER_WIDTH_SWITCH);
         logobox->setHeight(COVER_HEIGHT_SWITCH);
+        logobox->setHideHighlightBackground(true);
+        
         logobox->setBorderColor(nvgRGBA(128, 128, 128, 120));
         logobox->setCornerRadius(3.f);
         logobox->setBorderThickness(1.f);

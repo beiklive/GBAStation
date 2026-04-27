@@ -2,6 +2,7 @@
 
 #include <borealis.hpp>
 #include "Header.hpp"
+#include "DynamicBackgroundBox.hpp"
 
 namespace beiklive
 {
@@ -27,7 +28,7 @@ namespace beiklive
         brls::Image* backgroundLayer = nullptr;
         // Shader层
         void setupShaderLayer();
-        brls::Rectangle* shaderLayer = nullptr;
+        beiklive::DynamicBackgroundBox* shaderLayer = nullptr;
         brls::Box *mainBox = nullptr;
         brls::Box *contentBox = nullptr; // 内容层，页头和页脚之间的部分
         void setupMainBox();

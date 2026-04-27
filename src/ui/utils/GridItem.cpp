@@ -69,6 +69,8 @@ namespace beiklive
         m_emptyLabel->setSingleLine(true);
         m_emptyLabel->setAnimated(true);
         m_emptyLabel->setAutoAnimate(true);
+        m_emptyLabel->setHideHighlightBackground(true);
+
         this->addView(m_emptyLabel);
 
         // ─── 有数据主布局（横向）────────────────────────────────────────────
