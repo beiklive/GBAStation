@@ -1,6 +1,6 @@
 #include "DynamicBackgroundBox.hpp"
 #include "core/common.h"
-
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 namespace beiklive
@@ -93,16 +93,18 @@ namespace beiklive
         brls::Style style,
         brls::FrameContext *ctx)
     {
-        float now = (float)brls::getCPUTimeUsec() / 1000000.0f;
+        // float now = std::chrono::duration<float>(
+        //     std::chrono::steady_clock::now().time_since_epoch()
+        // ).count();
 
-        if (beiklive::g_backgroundLastTime == 0.0f)
-            beiklive::g_backgroundLastTime = now;
+        // if (beiklive::g_backgroundLastTime == 0.0f)
+        //     beiklive::g_backgroundLastTime = now;
 
-        float dt = now - beiklive::g_backgroundLastTime;
-        beiklive::g_backgroundLastTime = now;
+        // float dt = now - beiklive::g_backgroundLastTime;
+        // beiklive::g_backgroundLastTime = now;
 
-        if (dt > 0.05f)
-            dt = 0.05f;
+        // if (dt > 0.05f)
+            float dt = 0.02f;
 
         update(dt, width, height);
 

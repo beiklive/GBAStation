@@ -127,6 +127,8 @@ namespace beiklive // 全局功能函数
                 return "";  // switch平台直接静态链接
             #elif defined(_WIN32)
                 return  std::string("mgba_libretro.dll");
+            #elif defined(__APPLE__)
+                return  beiklive::path::corePath() + beiklive::path::SPLIT_CHAR + std::string("mgba_libretro.dylib");
             #endif
         default:
             return "";
