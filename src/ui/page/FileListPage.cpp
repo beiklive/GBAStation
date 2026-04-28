@@ -267,6 +267,11 @@ void FileListPage::setFliter(beiklive::enums::FilterMode mode, std::vector<std::
 
             const auto& path = entry.path();
             std::string name     = path.filename().string();
+            // 获取映射名称
+            name    = GET_MAPPING_KEY_STR(
+                beiklive::tools::getFileNameWithoutExtension(name),
+                beiklive::tools::getFileNameWithoutExtension(name));
+
             std::string fullPath = path.string();
 
             // 文件过滤（仅对非目录生效）
@@ -312,6 +317,7 @@ void FileListPage::setFliter(beiklive::enums::FilterMode mode, std::vector<std::
                 sizeStr, entryCount
             });
 
+            // 显示文件大小或目录项数量
             std::string displayText = raw.isDir
                 ? (std::to_string(entryCount) + " items")
                 : sizeStr;
