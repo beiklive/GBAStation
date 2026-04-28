@@ -474,7 +474,7 @@ brls::ScrollingFrame *SettingPage::buildGameTab()
             if (intervalVals[i] == curInterval) { curIdx = i; break; }
         auto *intervalCell = new brls::SelectorCell();
         intervalCell->init("倒带保存间隔", intervalOpts, curIdx,
-                           [intervalVals, intervalCount](int idx)
+                           [](int idx)
                            {
                                if (idx >= 0 && idx < intervalCount)
                                    SET_SETTING_KEY_INT(KEY_REWIND_SAVE_INTERVAL, intervalVals[idx]);
@@ -493,7 +493,7 @@ brls::ScrollingFrame *SettingPage::buildGameTab()
             if (bufferVals[i] == curBuffer) { curIdx = i; break; }
         auto *bufferCell = new brls::SelectorCell();
         bufferCell->init("最大倒带缓存", bufferOpts, curIdx,
-                         [bufferVals, bufferCount](int idx)
+                         [](int idx)
                          {
                              if (idx >= 0 && idx < bufferCount)
                                  SET_SETTING_KEY_INT(KEY_REWIND_BUFFER_SIZE, bufferVals[idx]);

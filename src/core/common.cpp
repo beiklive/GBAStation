@@ -110,6 +110,7 @@ namespace beiklive
         std::filesystem::create_directories(beiklive::path::screenshotPath());
         std::filesystem::create_directories(beiklive::path::romPath());
         std::filesystem::create_directories(beiklive::path::savePath());
+        std::filesystem::create_directories(beiklive::path::corePath());
         std::filesystem::create_directories(beiklive::path::cheatPath());
         std::filesystem::create_directories(beiklive::path::shaderPath());
 

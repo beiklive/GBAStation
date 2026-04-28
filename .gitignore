@@ -46,3 +46,6 @@ out/
 build
 build_*
 build-*
+
+
+.DS_Store

@@ -30,8 +30,16 @@ int main(int argc, char* argv[]) {
 			brls::Application::enableDebuggingView(true);
 		}
 	}
+
 	brls::Logger::setLogLevel(brls::LogLevel::LOG_DEBUG);
-	brls::Application::enableDebuggingView(true);
+	#ifndef __SWITCH__
+		std::string logPath = beiklive::path::logFilePath();
+		FILE* fp = std::fopen(logPath.c_str(), "w+");
+
+		if (fp)
+			brls::Logger::setLogOutput(fp);
+		brls::Application::enableDebuggingView(true);
+	#endif
 
 	brls::Platform::APP_LOCALE_DEFAULT = brls::LOCALE_AUTO;
 	// Init the app and i18n

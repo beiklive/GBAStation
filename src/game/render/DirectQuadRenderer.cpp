@@ -13,6 +13,10 @@ namespace beiklive {
 // ============================================================
 
 #if defined(USE_GLES2)
+
+// ===============================
+// OpenGL ES 2.0
+// ===============================
 static const char* k_vertSrc =
     "#version 100\n"
     "attribute vec2 aPos;\n"
@@ -33,6 +37,10 @@ static const char* k_fragSrc =
     "}\n";
 
 #elif defined(USE_GL2)
+
+// ===============================
+// OpenGL 2.1
+// ===============================
 static const char* k_vertSrc =
     "#version 120\n"
     "attribute vec2 aPos;\n"
@@ -52,6 +60,10 @@ static const char* k_fragSrc =
     "}\n";
 
 #elif defined(USE_GLES3)
+
+// ===============================
+// OpenGL ES 3.0
+// ===============================
 static const char* k_vertSrc =
     "#version 300 es\n"
     "in vec2 aPos;\n"
@@ -72,7 +84,36 @@ static const char* k_fragSrc =
     "    fragColor = texture(uTex, vUV);\n"
     "}\n";
 
-#else // GL3（默认）
+#elif defined(__APPLE__)
+
+// ===============================
+// macOS OpenGL Core Profile
+// 推荐 GLSL 150
+// ===============================
+static const char* k_vertSrc =
+    "#version 150\n"
+    "in vec2 aPos;\n"
+    "in vec2 aUV;\n"
+    "out vec2 vUV;\n"
+    "void main() {\n"
+    "    gl_Position = vec4(aPos, 0.0, 1.0);\n"
+    "    vUV = aUV;\n"
+    "}\n";
+
+static const char* k_fragSrc =
+    "#version 150\n"
+    "in vec2 vUV;\n"
+    "out vec4 fragColor;\n"
+    "uniform sampler2D uTex;\n"
+    "void main() {\n"
+    "    fragColor = texture(uTex, vUV);\n"
+    "}\n";
+
+#else
+
+// ===============================
+// Windows / Linux OpenGL 3.x
+// ===============================
 static const char* k_vertSrc =
     "#version 130\n"
     "in vec2 aPos;\n"
@@ -91,8 +132,8 @@ static const char* k_fragSrc =
     "void main() {\n"
     "    fragColor = texture(uTex, vUV);\n"
     "}\n";
-#endif
 
+#endif
 // 顶点格式：每顶点 4 个 float（x, y, u, v）
 // GLES2 仅支持 GL_UNSIGNED_SHORT 索引，GL3/GLES3 支持 GL_UNSIGNED_INT
 #if defined(USE_GLES2)

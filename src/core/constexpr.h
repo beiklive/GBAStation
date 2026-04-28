@@ -1,18 +1,34 @@
 #pragma once
 
 #include <string>
+#include <cstdlib>
+#include <filesystem>
+
 
 namespace beiklive::path
 {
+namespace fs = std::filesystem;
+
+inline std::string GetRootPath()
+{
+#if defined(_WIN32)
+    return ".";
+#elif defined(__APPLE__)
+    const char* home = std::getenv("HOME");
+    return std::string(home) +
+           "/Library/Application Support/GBAStation";
+#else
+    return "";
+#endif
+}
 
 // 路径分隔符和根路径常量定义
 #if defined(_WIN32) || defined(__WIN32__) || defined(WIN32)
     constexpr const char *SPLIT_CHAR = "\\";
-    constexpr const char *ROOT = ".";  // Windows系统使用程序目录作为根路径
 #else
     constexpr const char *SPLIT_CHAR = "/";
-    constexpr const char *ROOT = "";   // 类Unix系统使用根目录作为根路径
 #endif
+    inline const std::string ROOT = GetRootPath();
 
     // 程序名和文件名常量定义
     constexpr const char *PROGRAM_NAME      = "GBAStation";
@@ -25,6 +41,7 @@ namespace beiklive::path
     constexpr const char *SAVE_DIR          = "saves";
     constexpr const char *CHEATS_DIR        = "cheats";
     constexpr const char *SHADER_DIR        = "shaders";
+    constexpr const char *CORE_DIR        = "cores";
 
     constexpr const char *CONFIG_FILE          = "config.cfg";
     constexpr const char *MAPPING_FILE         = "name_mapping.cfg";
@@ -40,23 +57,23 @@ namespace beiklive::path
         // 默认位置定义
         inline std::string configPath()
         {
-            return std::string(ROOT) + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + CONFIG_DIR;
+            return ROOT + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + CONFIG_DIR;
         }
         inline std::string configFilePath()
         {
-            return std::string(ROOT) + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + CONFIG_DIR + SPLIT_CHAR + CONFIG_FILE;
+            return ROOT + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + CONFIG_DIR + SPLIT_CHAR + CONFIG_FILE;
         }
         inline std::string mappingFilePath()
         {
-            return std::string(ROOT) + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + CONFIG_DIR + SPLIT_CHAR + MAPPING_FILE;
+            return ROOT + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + CONFIG_DIR + SPLIT_CHAR + MAPPING_FILE;
         }
         inline std::string databasePath()
         {
-            return std::string(ROOT) + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + DATA_BASE_DIR;
+            return ROOT + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + DATA_BASE_DIR;
         }
         inline std::string databaseFilePath()
         {
-            return std::string(ROOT) + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + DATA_BASE_DIR + SPLIT_CHAR + DATA_BASE_FILE;
+            return ROOT + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + DATA_BASE_DIR + SPLIT_CHAR + DATA_BASE_FILE;
         }
         /// 根据平台枚举返回对应的平台数据库文件名（不含路径）
         /// platform: 1=EmuGBA, 2=EmuGBC, 3=EmuGB（与 enums.h 中 EmuPlatform 枚举值对应）
@@ -73,35 +90,39 @@ namespace beiklive::path
         /// 根据平台枚举返回对应的平台数据库完整路径
         inline std::string platformDatabaseFilePath(int platform)
         {
-            return std::string(ROOT) + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + DATA_BASE_DIR + SPLIT_CHAR + platformDatabaseFileName(platform);
+            return ROOT + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + DATA_BASE_DIR + SPLIT_CHAR + platformDatabaseFileName(platform);
         }
         inline std::string logPath()
         {
-            return std::string(ROOT) + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + LOG_DIR;
+            return ROOT + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + LOG_DIR;
         }
         inline std::string logFilePath()
         {
-            return std::string(ROOT) + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + LOG_DIR + SPLIT_CHAR + LOG_FILE;
+            return ROOT + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + LOG_DIR + SPLIT_CHAR + LOG_FILE;
         }
         inline std::string screenshotPath()
         {
-            return std::string(ROOT) + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + SCREENSHOT_DIR;
+            return ROOT + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + SCREENSHOT_DIR;
         }
         inline std::string romPath()
         {
-            return std::string(ROOT) + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + ROM_DIR;
+            return ROOT + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + ROM_DIR;
         }
         inline std::string savePath()
         {
-            return std::string(ROOT) + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + SAVE_DIR;
+            return ROOT + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + SAVE_DIR;
         }
         inline std::string cheatPath()
         {
-            return std::string(ROOT) + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + CHEATS_DIR;
+            return ROOT + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + CHEATS_DIR;
         }
         inline std::string shaderPath()
         {
-            return std::string(ROOT) + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + SHADER_DIR;
+            return ROOT + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + SHADER_DIR;
+        }
+        inline std::string corePath()
+        {
+            return ROOT + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + CORE_DIR;
         }
 
     }
