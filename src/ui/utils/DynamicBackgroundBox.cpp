@@ -7,10 +7,13 @@ namespace beiklive
 {
 
     static const char *SYMBOLS[] = {
-        "△",
-        "○",
-        "□",
-        "×"};
+        "\uE000",
+        "\uE001",
+        "\uE002",
+        "\uE003",
+        "\uE004",
+        "\uE005"
+    };
 
     DynamicBackgroundBox::DynamicBackgroundBox()
     {
