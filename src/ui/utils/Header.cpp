@@ -30,7 +30,7 @@ namespace beiklive
         m_titleLabel = new brls::Label();
         m_titleLabel->setTextColor(GET_THEME_COLOR("brls/text"));
         m_titleLabel->setFontSize(FontSize+5);
-        
+        m_titleLabel->setWidth(FontSize*4.5f);
         m_titleBox->addView(m_titleLabel);
         this->addView(m_titleBox);
     
@@ -65,7 +65,12 @@ namespace beiklive
         if (m_titleLabel)
             m_titleLabel->setText(title);
     }
-    void HeaderBar::setPath(const std::string& path)
+    void HeaderBar::setTitleWidth(float width)
+    {
+        if (m_titleBox)
+            m_titleBox->setWidth(width);
+    }
+    void HeaderBar::setPath(const std::string &path)
     {
         if (m_pathLabel)
             m_pathLabel->setText(path);

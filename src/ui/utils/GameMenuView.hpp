@@ -5,6 +5,7 @@
 #include <functional>
 #include "ButtonBox.hpp"
 #include "GridBox.hpp"
+#include "Box.hpp"
 #include "GridItem.hpp"
 namespace beiklive
 {
@@ -26,7 +27,7 @@ namespace beiklive
     ///   - 退出游戏按钮（触发退出信号）
     ///
     /// 由 GamePage 创建并注入回调后使用。
-    class GameMenuView : public brls::Box
+    class GameMenuView : public beiklive::Box
     {
         public:
             GameMenuView(beiklive::GameEntry gameData);

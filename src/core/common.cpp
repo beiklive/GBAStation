@@ -21,33 +21,33 @@ namespace beiklive
         switch (g_gradientTheme)
         {
         case GradientTheme::LemonYellow:
-            top = nvgRGBA(255, 235, 59, 255);
-            bottom = nvgRGBA(251, 140, 0, 255);
+            top = nvgRGBA(255, 235, 59, 128);
+            bottom = nvgRGBA(251, 140, 0, 128);
             break;
         case GradientTheme::AvocadoGreen:
-            top = nvgRGBA(136, 189, 111, 255);
-            bottom = nvgRGBA(46, 88, 36, 255);
+            top = nvgRGBA(136, 189, 111, 128);
+            bottom = nvgRGBA(46, 88, 36, 128);
             break;
         case GradientTheme::StrawberryRed:
-            top = nvgRGBA(255, 107, 107, 255);
-            bottom = nvgRGBA(168, 28, 56, 255);
+            top = nvgRGBA(255, 107, 107, 128);
+            bottom = nvgRGBA(168, 28, 56, 128);
             break;
         case GradientTheme::OceanBlue:
-            top = nvgRGBA(79, 172, 254, 255);
-            bottom = nvgRGBA(0, 102, 204, 255);
+            top = nvgRGBA(79, 172, 254, 128);
+            bottom = nvgRGBA(0, 102, 204, 128);
             break;
         case GradientTheme::SakuraPink:
-            top = nvgRGBA(255, 183, 178, 255);
-            bottom = nvgRGBA(255, 105, 180, 255);
+            top = nvgRGBA(255, 183, 178, 128);
+            bottom = nvgRGBA(255, 105, 180, 128);
             break;
         case GradientTheme::VscodeBlack:
-            top = nvgRGBA(118, 118, 118, 255);
-            bottom = nvgRGBA(12, 12, 12, 255);
+            top = nvgRGBA(118, 118, 118, 128);
+            bottom = nvgRGBA(12, 12, 12, 128);
             break;
         case GradientTheme::Midnight:
         default:
-            top = nvgRGBA(20, 28, 60, 255);
-            bottom = nvgRGBA(8, 10, 22, 255);
+            top = nvgRGBA(20, 28, 60, 128);
+            bottom = nvgRGBA(8, 10, 22, 128);
             break;
         }
     }

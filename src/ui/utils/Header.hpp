@@ -10,6 +10,7 @@ namespace beiklive
     public:
         HeaderBar();
         void setTitle(const std::string &title);
+        void setTitleWidth(float width);
         void setPath(const std::string &path);
         void setInfo(const std::string &info);
 

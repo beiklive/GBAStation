@@ -52,9 +52,9 @@ namespace beiklive
         m_contrlPanel->setAxis(brls::Axis::COLUMN);
         m_contrlPanel->setJustifyContent(brls::JustifyContent::CENTER);
         m_contrlPanel->setAlignItems(brls::AlignItems::FLEX_END);
-        m_contrlPanel->setWidthPercentage(40.f);
+        m_contrlPanel->setWidthPercentage(25.f);
         m_contrlPanel->setHeightPercentage(100.f);
-        m_contrlPanel->setBackgroundColor(nvgRGBA(0, 0, 0, 10));
+        m_contrlPanel->setBackground(brls::ViewBackground::NONE);
         m_contrlPanel->setPadding(24.f);
         m_panel->addView(m_contrlPanel);
 
@@ -81,14 +81,7 @@ namespace beiklive
 
 
         // 标题
-        m_title = new brls::Label();
-        m_title->setText("游戏菜单");
-        m_title->setFontSize(24.f);
-        m_title->setFontQuality(2.f);
-        m_title->setWidth(100.f);
-        m_title->setMarginBottom(24.f);
-        m_title->setHorizontalAlign(brls::HorizontalAlign::LEFT);
-        m_contrlPanel->addView(m_title);
+        this->getHeader()->setTitle("游戏菜单");
 
         // ── 创建 6 个菜单按钮 ──────────────────────────────────────────────
 
@@ -173,11 +166,8 @@ namespace beiklive
 
         m_contrlPanel->addView(m_btnExit);
 
-        this->addView(m_panel);
+        this->getContentBox()->addView(m_panel);
 
-        auto *mBottonBar = new brls::BottomBar();
-        mBottonBar->setWidthPercentage(100.f);
-        this->addView(mBottonBar);
     }
 
     // ============================================================
@@ -212,8 +202,9 @@ namespace beiklive
         btn->setHeight(48.f);
         btn->setMarginBottom(16.f);
         btn->setFocusable(true);
+        btn->setBackground(brls::ViewBackground::NONE);
         btn->setHideHighlightBackground(true);
-        btn->setHideHighlightBorder(true);
+        // btn->setHideHighlightBorder(true);
         btn->setHideClickAnimation(false);
 
         brls::Label* lbl = new brls::Label();
@@ -232,7 +223,7 @@ namespace beiklive
             // 这样 borealis 会通过 getDefaultFocus() 向下递归找到第一个可聚焦的 LazyCell，
             // 而不会把焦点停在 wrapper Box 上（修复"焦点先停在 sonPanel"的问题）。
             btn->onFocusGainedCallback = [this, btn, sonPanel]() {
-                btn->setBackgroundColor(nvgRGBA(255, 255, 255, 20));
+                // btn->setBackgroundColor(nvgRGBA(255, 255, 255, 20));
                 _hideAllPanels();
                 sonPanel->setVisibility(brls::Visibility::VISIBLE);
                 // 保存/读取状态面板：异步刷新槽位信息
@@ -242,7 +233,7 @@ namespace beiklive
                     _refreshStatePanel(false);
             };
             btn->onFocusLostCallback = [btn]() {
-                btn->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
+                // btn->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
             };
             // 点击时将焦点转入面板：若有指定第一聚焦视图则直接聚焦，
             // 否则通过 giveFocus(sonPanel) 调用 getDefaultFocus() 递归查找
@@ -259,11 +250,11 @@ namespace beiklive
         {
             // 无面板按钮：focus 时隐藏所有面板，click 时执行回调
             btn->onFocusGainedCallback = [this, btn]() {
-                btn->setBackgroundColor(nvgRGBA(255, 255, 255, 20));
+                // btn->setBackgroundColor(nvgRGBA(255, 255, 255, 20));
                 _hideAllPanels();
             };
             btn->onFocusLostCallback = [this,btn]() {
-                btn->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
+                // btn->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
                 _refreshStatePanel(true);
                 _refreshStatePanel(false);
             };

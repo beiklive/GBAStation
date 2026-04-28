@@ -9,8 +9,8 @@ namespace beiklive
                    {
         this->showHeader(false);
         // this->showFooter(false);
-        // this->showBackground(false);
-        // this->showShader(false);
+        // this->showBackground(true);
+        this->showShader(true);
         this->setGradientTheme(GradientTheme::VscodeBlack);
         Init();
         brls::Application::giveFocus(this); });
