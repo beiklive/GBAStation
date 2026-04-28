@@ -90,6 +90,7 @@ namespace beiklive
              * @param firstFocusView 点击/右导航时优先聚焦的目标视图（为空则使用 sonPanel）
              */
             beiklive::ButtonBox* _createMenuButton(const std::string& text,
+                                                    const std::string& iconPath,
                                                    std::function<void()> onClick,
                                                    brls::View* sonPanel = nullptr,
                                                    brls::View* firstFocusView = nullptr);

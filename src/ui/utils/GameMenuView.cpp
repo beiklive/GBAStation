@@ -50,19 +50,22 @@ namespace beiklive
         // 左侧按钮栏
         m_contrlPanel = new brls::Box();
         m_contrlPanel->setAxis(brls::Axis::COLUMN);
-        m_contrlPanel->setJustifyContent(brls::JustifyContent::CENTER);
-        m_contrlPanel->setAlignItems(brls::AlignItems::FLEX_END);
+        m_contrlPanel->setJustifyContent(brls::JustifyContent::FLEX_START);
+        m_contrlPanel->setAlignItems(brls::AlignItems::FLEX_START);
         m_contrlPanel->setWidthPercentage(25.f);
         m_contrlPanel->setHeightPercentage(100.f);
         m_contrlPanel->setBackground(brls::ViewBackground::NONE);
-        m_contrlPanel->setPadding(24.f);
+        m_contrlPanel->setPadding(16.f);
+        m_contrlPanel->setMargins(10.f,10.f,10.f,10.f);
+        m_contrlPanel->setLineRight(1.f);
+        m_contrlPanel->setLineColor(nvgRGBA(255, 255, 255, 50));
         m_panel->addView(m_contrlPanel);
 
 
         // 右侧视图栏
         m_viewPanel = new brls::Box();
         m_viewPanel->setAxis(brls::Axis::COLUMN);
-        m_viewPanel->setJustifyContent(brls::JustifyContent::CENTER);
+        m_viewPanel->setJustifyContent(brls::JustifyContent::FLEX_START);
         m_viewPanel->setAlignItems(brls::AlignItems::FLEX_START);
         m_viewPanel->setHeightPercentage(100.f);
         // m_viewPanel->setWidthPercentage(70.f);
@@ -86,7 +89,7 @@ namespace beiklive
         // ── 创建 6 个菜单按钮 ──────────────────────────────────────────────
 
         // 1. 返回游戏（无面板）
-        m_btnResume = _createMenuButton("返回游戏", [this]() {
+        m_btnResume = _createMenuButton("返回游戏", "back.png", [this]() {
             if (m_onResume) m_onResume();
         });
 
@@ -108,7 +111,7 @@ namespace beiklive
         m_savePanel = savePanel;
 
         // 传入 getItemView(0) 作为第一聚焦目标，确保每次进入面板都聚焦在第一格
-        auto* btnSave = _createMenuButton("保存状态", [](){}, savePanel,
+        auto* btnSave = _createMenuButton("保存状态", "save.png",[](){}, savePanel,
                                           m_saveGrid ? m_saveGrid->getItemView(0) : nullptr);
         m_contrlPanel->addView(btnSave);
 
@@ -118,7 +121,7 @@ namespace beiklive
         m_viewPanel->addView(loadPanel);
         m_allPanels.push_back(loadPanel);
         m_loadPanel = loadPanel;
-        auto* btnLoad = _createMenuButton("读取状态", [](){}, loadPanel,
+        auto* btnLoad = _createMenuButton("读取状态", "load.png",[](){}, loadPanel,
                                           m_loadGrid ? m_loadGrid->getItemView(0) : nullptr);
         m_contrlPanel->addView(btnLoad);
 
@@ -136,7 +139,7 @@ namespace beiklive
         cheatPanel->addView(cheatPlaceholder);
         m_viewPanel->addView(cheatPanel);
         m_allPanels.push_back(cheatPanel);
-        auto* btnCheat = _createMenuButton("金手指设置", [](){}, cheatPanel);
+        auto* btnCheat = _createMenuButton("金手指设置", "cheat.png", [](){}, cheatPanel);
         m_contrlPanel->addView(btnCheat);
 
         // 5. 画面设置（简单占位面板）
@@ -153,11 +156,22 @@ namespace beiklive
         displayPanel->addView(displayPlaceholder);
         m_viewPanel->addView(displayPanel);
         m_allPanels.push_back(displayPanel);
-        auto* btnDisplay = _createMenuButton("画面设置", [](){}, displayPanel);
+        auto* btnDisplay = _createMenuButton("画面设置", "display.png", [](){}, displayPanel);
         m_contrlPanel->addView(btnDisplay);
 
+
+        //插入分割线
+        auto* divider = new brls::Rectangle();
+        divider->setWidthPercentage(100.f);
+        divider->setHeight(1.f);
+        divider->setColor(nvgRGBA(255, 255, 255, 50));
+        divider->setMarginBottom(16.f);
+        m_contrlPanel->addView(divider);
+
+
+
         // 6. 退出游戏（无面板）
-        m_btnExit = _createMenuButton("退出游戏", [this]() {
+        m_btnExit = _createMenuButton("退出游戏", "exit.png", [this]() {
             if (m_onExit) m_onExit();
         });
         m_btnExit->setCustomNavigationRoute(brls::FocusDirection::DOWN, m_btnResume);
@@ -190,6 +204,7 @@ namespace beiklive
     // ============================================================
 
     beiklive::ButtonBox* GameMenuView::_createMenuButton(const std::string& text,
+                                                          const std::string& iconPath,
                                                           std::function<void()> onClick,
                                                           brls::View* sonPanel,
                                                           brls::View* firstFocusView)
@@ -204,18 +219,35 @@ namespace beiklive
         btn->setFocusable(true);
         btn->setBackground(brls::ViewBackground::NONE);
         btn->setHideHighlightBackground(true);
-        // btn->setHideHighlightBorder(true);
         btn->setHideClickAnimation(false);
+
+        auto* m_accent = new brls::Rectangle();
+        m_accent->setWidth(5.f);
+        m_accent->setHeight(40.f);
+        m_accent->setMarginLeft(5.f);
+        m_accent->setColor(nvgRGBA(79, 193, 255, 255));
+        m_accent->setVisibility(brls::Visibility::INVISIBLE);
+        btn->addView(m_accent);
+
+
+        // 图标
+        auto* m_icon = new brls::Image();
+        m_icon->setWidth(30.f);
+        m_icon->setHeight(30.f);
+        m_icon->setMarginLeft(5.f);
+        m_icon->setMarginRight(25.f);
+        m_icon->setImageFromFile(BK_RES("img/ui/menu/" + iconPath));
+        m_icon->setScalingType(brls::ImageScalingType::FIT);
+        m_icon->setInterpolation(brls::ImageInterpolation::LINEAR);
+        btn->addView(m_icon);
 
         brls::Label* lbl = new brls::Label();
         lbl->setText(text);
         lbl->setFontSize(18.f);
-        lbl->setWidth(100.f);
-        // lbl->setWireframeEnabled(true);
+        lbl->setGrow(1.f);
         lbl->setHorizontalAlign(brls::HorizontalAlign::LEFT);
-        btn->addView(new brls::Padding());
         btn->addView(lbl);
-
+    
         if (sonPanel)
         {
             // 绑定面板：focus 时显示面板，失焦时由其他按钮 focus 触发隐藏
@@ -225,6 +257,7 @@ namespace beiklive
             btn->onFocusGainedCallback = [this, btn, sonPanel]() {
                 // btn->setBackgroundColor(nvgRGBA(255, 255, 255, 20));
                 _hideAllPanels();
+                btn->getChildren()[0]->setVisibility(brls::Visibility::VISIBLE); // 显示强调条
                 sonPanel->setVisibility(brls::Visibility::VISIBLE);
                 // 保存/读取状态面板：异步刷新槽位信息
                 if (m_savePanel && sonPanel == m_savePanel)
@@ -234,6 +267,8 @@ namespace beiklive
             };
             btn->onFocusLostCallback = [btn]() {
                 // btn->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
+                btn->getChildren()[0]->setVisibility(brls::Visibility::INVISIBLE); // 显示强调条
+
             };
             // 点击时将焦点转入面板：若有指定第一聚焦视图则直接聚焦，
             // 否则通过 giveFocus(sonPanel) 调用 getDefaultFocus() 递归查找
@@ -250,11 +285,11 @@ namespace beiklive
         {
             // 无面板按钮：focus 时隐藏所有面板，click 时执行回调
             btn->onFocusGainedCallback = [this, btn]() {
-                // btn->setBackgroundColor(nvgRGBA(255, 255, 255, 20));
+                btn->getChildren()[0]->setVisibility(brls::Visibility::VISIBLE); // 显示强调条
                 _hideAllPanels();
             };
             btn->onFocusLostCallback = [this,btn]() {
-                // btn->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
+                btn->getChildren()[0]->setVisibility(brls::Visibility::INVISIBLE); // 显示强调条
                 _refreshStatePanel(true);
                 _refreshStatePanel(false);
             };
@@ -292,10 +327,11 @@ namespace beiklive
 
         auto* titleLabel = new brls::Label();
         titleLabel->setText("保存状态");
-        titleLabel->setFontSize(24.f);
-        titleLabel->setMarginTop(8.f);
+        titleLabel->setFontSize(18.f);
         titleLabel->setMarginBottom(8.f);
-        titleLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+        titleLabel->setMarginTop(8.f);
+        titleLabel->setMarginLeft(18.f);
+        titleLabel->setHorizontalAlign(brls::HorizontalAlign::LEFT);
         titleLabel->setFocusable(false);
         wrapper->addView(titleLabel);
 
@@ -346,10 +382,11 @@ namespace beiklive
 
         auto* titleLabel = new brls::Label();
         titleLabel->setText("读取状态");
-        titleLabel->setFontSize(24.f);
+        titleLabel->setFontSize(18.f);
         titleLabel->setMarginBottom(8.f);
         titleLabel->setMarginTop(8.f);
-        titleLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+        titleLabel->setMarginLeft(18.f);
+        titleLabel->setHorizontalAlign(brls::HorizontalAlign::LEFT);
 
         titleLabel->setFocusable(false);
         wrapper->addView(titleLabel);
