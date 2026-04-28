@@ -74,7 +74,7 @@ namespace beiklive
             icon.rotation = randRange(0.0f, 6.28f);
             icon.rotateSpeed = randRange(-0.6f, 0.6f);
             icon.alpha = randRange(0.05f, 0.16f);
-            icon.symbolIndex = std::rand() % 6;
+            icon.symbolIndex = std::rand() % 4;
             g_backgroundIcons.push_back(icon);
         }
     }
