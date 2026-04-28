@@ -19,14 +19,6 @@ JOBS=$(sysctl -n hw.logicalcpu)
 # 构建目录
 BUILD_DIR="build_macos"
 
-# 解析参数
-BUNDLE_OPT="-DBUNDLE_MACOS_APP=OFF"
-for arg in "$@"; do
-    case $arg in
-        --bundle) BUNDLE_OPT="-DBUNDLE_MACOS_APP=ON" ;;
-    esac
-done
-
 echo "[1/3] 创建构建目录 ${BUILD_DIR} ..."
 mkdir -p "${BUILD_DIR}"
 cd "${BUILD_DIR}"
@@ -35,8 +27,9 @@ echo "[2/3] 运行 CMake 配置（桌面平台 / Release）..."
 cmake .. \
     -DPLATFORM_DESKTOP=ON \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
-    ${BUNDLE_OPT}
+    -DBUNDLE_MACOS_APP=ON \
+    -DUSE_GLFW=ON \
+    -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 
 echo "[3/3] 开始编译（并行线程：${JOBS}）..."
 cmake --build . -j "${JOBS}"
