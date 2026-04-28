@@ -35,6 +35,9 @@ namespace beiklive // 全局变量
     extern beiklive::ConfigManager *NameMappingManager; // 全局名称映射管理器实例
     extern beiklive::GameDatabase *GameDB; // 全局游戏数据库实例
 
+}
+namespace beiklive // 全局变量 动态背景
+{
     struct FloatingIcon
     {
         float x;
