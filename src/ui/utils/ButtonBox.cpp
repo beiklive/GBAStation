@@ -18,6 +18,7 @@ namespace beiklive
 
         m_accent = new brls::Rectangle();
         m_accent->setWidth(5.f);
+        m_accent->setCornerRadius(2.5f);
         m_accent->setHeight(40.f);
         m_accent->setMarginLeft(5.f);
         m_accent->setColor(nvgRGBA(79, 193, 255, 255));
