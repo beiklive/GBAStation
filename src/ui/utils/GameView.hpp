@@ -82,7 +82,7 @@ namespace beiklive
             static constexpr double   MAX_REASONABLE_FPS      = 240.0;  ///< 核心上报 FPS 的安全上限
             static constexpr double   SPIN_GUARD_SEC           = 0.002;  ///< 每帧自旋等待预算（秒）
             static constexpr double   FPS_UPDATE_INTERVAL      = 1.0;   ///< FPS 计数器更新间隔（秒）
-            static constexpr int      PLAY_TIME_SAVE_INTERVAL  = 180;   ///< 游戏时长保存间隔（秒，3分钟）
+            static constexpr int      PLAY_TIME_SAVE_INTERVAL  = 10;    ///< 游戏时长保存间隔（秒）
             static constexpr unsigned REWIND_STEP              = 2;     ///< 每次倒带弹出的帧数
             static constexpr unsigned FF_MULTIPLIER            = 4;     ///< 快进倍率（每迭代运行的帧数）
 
@@ -128,9 +128,20 @@ namespace beiklive
             GameMenuView*       m_gameMenuView       = nullptr;
             RewindSelectorView* m_rewindSelectorView = nullptr;
 
+            // ---- 杂项 --------------------------------------------------------
+            std::string m_playTimeTempPath;    ///< 时长临时文件路径，热路径轻量写入，退出时合并到 GameDB
+            int m_cachedThumbCompression = 0;  ///< 缓存缩略图压缩模式，避免每帧读取配置
+            double m_playTimeAccum = 0.0;       ///< 帧计数累积秒数（超过阈值后写入临时文件）
+
             // ---- 辅助方法 ----------------------------------------------------
             void _registerGameInput();
             void _registerGameRuntime();
+
+            /// 初始化游戏时长追踪（启动时检查并合并遗留的临时文件）
+            void _initPlayTimeTracking();
+
+            /// 最终化游戏时长（正常退出时提交 GameDB 并清理临时文件）
+            void _finalizePlayTime();
 
             /// 启动游戏主循环线程
             void _startGameThread();
@@ -170,8 +181,8 @@ namespace beiklive
                                  std::chrono::steady_clock::time_point& lastTime,
                                  unsigned& counter);
 
-            /// 更新游戏时长记录（每 PLAY_TIME_SAVE_INTERVAL 秒精确累加一次）
-            void _updatePlayTime(std::chrono::steady_clock::time_point& lastTime);
+            /// 更新游戏时长记录（基于实际运行帧数 + 核心帧率，比壁钟更精确）
+            void _updatePlayTime(unsigned framesRan, double coreFps);
 
             /// 帧率限制器：使用 nextFrameTarget 累加模式，严格对齐目标帧率，防止漂移
             void _throttleFrameRate(bool ff,
@@ -190,12 +201,7 @@ namespace beiklive
             // ---- 缩略图工具（仅在游戏线程中调用）----------------------------
 
             /// 将 RGBA8888 视频帧降采样并转换为 RGB565 缩略图
-            /// @param src    原始 RGBA8888 像素数据
-            /// @param srcW   原始帧宽度
-            /// @param srcH   原始帧高度
-            /// @param dstW   缩略图宽度
-            /// @param dstH   缩略图高度
-            static std::vector<uint16_t> _downsampleToRGB565(
+            std::vector<uint16_t> _downsampleToRGB565(
                 const std::vector<uint32_t>& src,
                 unsigned srcW, unsigned srcH,
                 unsigned dstW, unsigned dstH);

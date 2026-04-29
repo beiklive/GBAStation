@@ -45,6 +45,10 @@ namespace beiklive
         if (m_rewindBufferSize > 3600) m_rewindBufferSize = 3600;
         m_rewindShowUI = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_REWIND_SHOW_UI, 0) != 0;
 
+        // 缓存缩略图压缩模式（避免每帧读取配置）
+        m_cachedThumbCompression = GET_SETTING_KEY_INT(
+            beiklive::SettingKey::KEY_REWIND_THUMB_COMPRESSION, 0);
+
         _registerGameInput();
         _registerGameRuntime();
     }
@@ -461,6 +465,8 @@ namespace beiklive
                 GameSignal::instance().resetAll();
                 // 启动游戏线程
                 _startGameThread();
+                // 初始化时长追踪（检查并合并遗留临时文件）
+                _initPlayTimeTracking();
             }
             else
             {
@@ -535,30 +541,34 @@ namespace beiklive
 
     // ============================================================
     // _stepRewind – 从倒带缓冲区弹出状态并恢复，返回是否成功
+    // 优化：Unserialize（可能较慢）在锁外执行，减少临界区
     // ============================================================
     bool GameView::_stepRewind()
     {
-        std::lock_guard<std::mutex> lk(m_rewindMutex);
-        if (m_rewindBuffer.empty()) return false;
+        // 在锁内取出待恢复的状态副本，锁外执行反序列化
+        std::vector<uint8_t> stateToRestore;
+        {
+            std::lock_guard<std::mutex> lk(m_rewindMutex);
+            if (m_rewindBuffer.empty()) return false;
 
-        bool didRestore = false;
-        // 每次弹出 REWIND_STEP 帧，实现比正常速度快的倒带
-        for (unsigned step = 0; step < REWIND_STEP && !m_rewindBuffer.empty(); ++step) {
-            if (m_gba_core->Unserialize(m_rewindBuffer.front().state)) {
+            for (unsigned step = 0; step < REWIND_STEP && !m_rewindBuffer.empty(); ++step) {
+                stateToRestore = std::move(m_rewindBuffer.front().state);
                 m_rewindBuffer.pop_front();
-                didRestore = true;
-            } else {
-                // 状态数据异常，丢弃该帧并停止本次倒带
-                brls::Logger::warning("GameView: 倒带状态反序列化失败，丢弃该帧");
-                m_rewindBuffer.pop_front();
-                break;
+                // 仅保留最后弹出的帧用于恢复（快退效果：弹出多帧后恢复最后一帧 = 快退 REWIND_STEP 帧）
             }
         }
-        if (didRestore) {
-            // 运行一帧以刷新视频输出，保证倒带画面流畅
-            m_gba_core->RunFrame();
+
+        if (stateToRestore.empty()) return false;
+
+        // 锁外执行反序列化（可能涉及内存分配、状态重建，较耗时）
+        if (!m_gba_core->Unserialize(stateToRestore)) {
+            brls::Logger::warning("GameView: 倒带状态反序列化失败，丢弃该帧");
+            return false;
         }
-        return didRestore;
+
+        // 运行一帧以刷新视频输出，保证倒带画面流畅
+        m_gba_core->RunFrame();
+        return true;
     }
 
     // ============================================================
@@ -640,25 +650,106 @@ namespace beiklive
     }
 
     // ============================================================
-    // _updatePlayTime – 更新游戏时长（每 PLAY_TIME_SAVE_INTERVAL 秒保存一次）
+    // _updatePlayTime – 基于实际运行帧数累加时长
+    // 帧计数比壁钟更精确：不受系统调度抖动影响，暂停期间零帧 = 不计时
     // ============================================================
-    void GameView::_updatePlayTime(std::chrono::steady_clock::time_point& lastTime)
+    void GameView::_updatePlayTime(unsigned framesRan, double coreFps)
     {
-        using Clock = std::chrono::steady_clock;
+        if (coreFps <= 0.0) return;
 
-        auto now     = Clock::now();
-        double elapsed = std::chrono::duration<double>(now - lastTime).count();
-        while (elapsed >= static_cast<double>(PLAY_TIME_SAVE_INTERVAL)) {
-            elapsed -= static_cast<double>(PLAY_TIME_SAVE_INTERVAL);
-            lastTime += std::chrono::duration_cast<Clock::duration>(
-                std::chrono::duration<double>(PLAY_TIME_SAVE_INTERVAL));
+        m_playTimeAccum += static_cast<double>(framesRan) / coreFps;
+
+        while (m_playTimeAccum >= static_cast<double>(PLAY_TIME_SAVE_INTERVAL)) {
+            m_playTimeAccum -= static_cast<double>(PLAY_TIME_SAVE_INTERVAL);
             m_gameEntry.playTime += PLAY_TIME_SAVE_INTERVAL;
-            if (beiklive::GameDB) {
-                beiklive::GameDB->upsert(m_gameEntry);
-                beiklive::GameDB->flush();
-                brls::Logger::debug("游戏时长已保存：{} 秒", m_gameEntry.playTime);
+
+            if (!m_playTimeTempPath.empty()) {
+                std::ofstream f(m_playTimeTempPath, std::ios::trunc);
+                if (f) {
+                    f << m_gameEntry.playTime;
+                    f.close();
+                }
             }
         }
+    }
+
+    // ============================================================
+    // _initPlayTimeTracking – 启动时检查遗留临时文件并合并到 GameDB
+    // 处理上次异常退出（崩溃/未呼叫 _finalizePlayTime）的情况
+    // ============================================================
+    void GameView::_initPlayTimeTracking()
+    {
+        namespace fs = std::filesystem;
+
+        // 确定存档目录（与 getStatePath 逻辑一致）
+        std::string dir = m_gameEntry.savePath;
+        if (dir.empty()) dir = beiklive::path::savePath();
+
+        // 提取 ROM 文件名（不含扩展名）
+        std::string stem;
+        if (!m_gameEntry.path.empty())
+            stem = fs::path(m_gameEntry.path).stem().string();
+        else
+            stem = "game";
+
+        std::error_code ec;
+        fs::create_directories(dir, ec);
+
+        m_playTimeTempPath = dir + "/" + stem + ".playtime";
+
+        // 检查是否存在遗留的临时文件（上次异常退出或未正常终止）
+        if (fs::exists(m_playTimeTempPath, ec) && !ec) {
+            try {
+                std::ifstream f(m_playTimeTempPath);
+                if (f) {
+                    long long legacySeconds = 0;
+                    f >> legacySeconds;
+                    f.close();
+                    if (legacySeconds > 0) {
+                        // 取遗留值和当前 GameEntry 中保存值的最大值，避免数据倒退
+                        m_gameEntry.playTime = std::max(m_gameEntry.playTime, static_cast<int>(legacySeconds));
+                        if (beiklive::GameDB) {
+                            beiklive::GameDB->upsert(m_gameEntry);
+                            beiklive::GameDB->flush();
+                            brls::Logger::info("GameView: 已合并遗留时长 {} 秒到 GameDB，清理临时文件",
+                                               legacySeconds);
+                        }
+                        // 合并后删除临时文件，由热路径重新创建
+                        fs::remove(m_playTimeTempPath, ec);
+                    }
+                }
+            } catch (...) {
+                brls::Logger::warning("GameView: 读取遗留时长临时文件失败");
+            }
+        }
+    }
+
+    // ============================================================
+    // _finalizePlayTime – 游戏正常退出时提交到 GameDB 并清理临时文件
+    // ============================================================
+    void GameView::_finalizePlayTime()
+    {
+        if (m_playTimeTempPath.empty()) return;
+
+        // 将累积的不足一个间隔的零头帧秒数也计入 playTime
+        if (m_playTimeAccum > 0.0) {
+            int extra = static_cast<int>(m_playTimeAccum);
+            if (extra > 0) {
+                m_gameEntry.playTime += extra;
+                m_playTimeAccum -= extra;
+            }
+        }
+
+        // 提交最终时长到 GameDB（一次性 flush）
+        if (beiklive::GameDB && m_gameEntry.playTime > 0) {
+            beiklive::GameDB->upsert(m_gameEntry);
+            beiklive::GameDB->flush();
+            brls::Logger::info("GameView: 游戏时长已提交到 GameDB（{} 秒）", m_gameEntry.playTime);
+        }
+
+        // 清理临时文件
+        std::error_code ec;
+        std::filesystem::remove(m_playTimeTempPath, ec);
     }
 
     // ============================================================
@@ -734,9 +825,6 @@ namespace beiklive
         auto     fpsLastTime  = Clock::now();
         unsigned fpsCount     = 0u;
 
-        // 游戏时长记录
-        auto playTimeLast = Clock::now();
-
         GameTimer::instance().start();
 
         while (m_running.load(std::memory_order_acquire))
@@ -749,7 +837,6 @@ namespace beiklive
                 // 暂停期间统一推进计时基准，避免恢复后触发积压操作
                 auto now     = Clock::now();
                 nextFrameTarget = now;
-                playTimeLast    = now;
                 fpsLastTime     = now;
                 continue;
             }
@@ -824,12 +911,15 @@ namespace beiklive
             // ---- FPS 统计 ----
             _updateFpsStats(framesRan, fpsLastTime, fpsCount);
 
-            // ---- 游戏时长记录 ----
-            _updatePlayTime(playTimeLast);
+            // ---- 游戏时长记录（基于帧计数，暂停时零帧 = 不计时）----
+            _updatePlayTime(framesRan, coreFps);
 
             // ---- 帧率限制（快进时不限速）----
             _throttleFrameRate(ff, nextFrameTarget, frameDurNs, spinGuardNs);
         }
+
+        // ---- 最终化时长记录（提交到 GameDB 并清理临时文件）----
+        _finalizePlayTime();
 
         // ---- 音频清理 ----
         AudioManager::instance().deinit();
@@ -1074,10 +1164,8 @@ namespace beiklive
         std::vector<uint16_t> dst(dstW * dstH, 0);
         if (src.empty() || srcW == 0 || srcH == 0) return dst;
 
-        // 读取压缩策略设置
-        int compressionMode = GET_SETTING_KEY_INT(
-            beiklive::SettingKey::KEY_REWIND_THUMB_COMPRESSION, 0);
-        bool useBilinear = (compressionMode == static_cast<int>(
+        // 使用缓存的压缩策略设置
+        bool useBilinear = (m_cachedThumbCompression == static_cast<int>(
             beiklive::RewindThumbCompression::Bilinear));
 
         for (unsigned y = 0; y < dstH; ++y) {
