@@ -109,7 +109,7 @@ namespace beiklive
         m_imageLayer->setCornerRadius(3.f);
 
         logobox->addView(m_image);
-        logobox->addView(m_imageLayer);
+        // logobox->addView(m_imageLayer);
         m_dataLayout->addView(logobox);
 
         // 右侧：纵向容器

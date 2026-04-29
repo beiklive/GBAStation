@@ -36,6 +36,8 @@ namespace beiklive
         m_label = new brls::Label();
         m_label->setFontSize(18.f);
         m_label->setGrow(1.f);
+        m_label->setMarginTop(4.f);
+        m_label->setVerticalAlign(brls::VerticalAlign::BOTTOM);
         m_label->setHorizontalAlign(brls::HorizontalAlign::LEFT);
         this->addView(m_label);
     }

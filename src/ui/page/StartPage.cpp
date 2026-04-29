@@ -7,7 +7,7 @@ namespace beiklive
         brls::Logger::debug("StartPage initialized");
         brls::sync([this]()
                    {
-        this->showHeader(false);
+        this->showHeader(true);
         // this->showFooter(false);
         // this->showBackground(true);
         this->showShader(true);

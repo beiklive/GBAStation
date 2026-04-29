@@ -152,12 +152,13 @@ std::string getDefaultLogoPath(beiklive::enums::EmuPlatform platform)
     switch (platform)
     {
         case beiklive::enums::EmuPlatform::EmuGBA:
-            return BK_RES(path_prefix + "icon_gba.png");
+            return BK_RES(path_prefix + "gba.png");
         case beiklive::enums::EmuPlatform::EmuGBC:
+            return BK_RES(path_prefix + "gbc.png");
         case beiklive::enums::EmuPlatform::EmuGB:
-            return BK_RES(path_prefix + "icon_gb.png");
+            return BK_RES(path_prefix + "gb.png");
         default:
-            return BK_RES(path_prefix + "icon_gba.png");
+            return BK_RES(path_prefix + "gba.png");
     }
 }
 std::string getIconPath(const std::string& path) {

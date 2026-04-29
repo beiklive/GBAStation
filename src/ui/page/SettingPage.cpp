@@ -811,12 +811,12 @@ SettingPage::SettingPage()
 {
     brls::sync([this]()
     {
-        this->showHeader(false);
-        this->showFooter(false);
+        this->showHeader(true);
+        this->showFooter(true);
         this->showBackground(false);
+        this->showShader(true);
 
-        m_tabframe = new brls::TabFrame();
-        m_tabframe->setGrow(1.0f);
+        m_tabframe = new beiklive::TabFrame();
         init();
         this->getContentBox()->addView(m_tabframe);
     });
@@ -828,12 +828,48 @@ SettingPage::~SettingPage()
 
 void SettingPage::init()
 {
-    m_tabframe->addTab("界面",  [this]() { return buildUITab(); });
-    m_tabframe->addTab("游戏",  [this]() { return buildGameTab(); });
-    m_tabframe->addTab("画面",  [this]() { return buildDisplayTab(); });
-    m_tabframe->addTab("音频",  [this]() { return buildAudioTab(); });
-    m_tabframe->addTab("按键",  [this]() { return buildKeyBindTab(); });
-    m_tabframe->addTab("调试",  [this]() { return buildDebugTab(); });
+    m_tabframe->addTab(
+        "模拟器",  
+        BK_RES("img/ui/setting/emu.png"), 
+        nullptr, 
+        nullptr, 
+        nullptr,  
+        buildUITab()
+    );
+    m_tabframe->addDivider();
+    m_tabframe->addTab("按键",   
+        BK_RES("img/ui/setting/control.png"), 
+        nullptr, 
+        nullptr, 
+        nullptr,  
+        buildKeyBindTab());
+    m_tabframe->addTab("游戏",   
+        BK_RES("img/ui/setting/game.png"), 
+        nullptr, 
+        nullptr, 
+        nullptr,  
+        buildGameTab());
+    m_tabframe->addTab("显示",   
+        BK_RES("img/ui/setting/display.png"), 
+        nullptr, 
+        nullptr, 
+        nullptr,  
+        buildDisplayTab());
+    m_tabframe->addTab("声音",   
+        BK_RES("img/ui/setting/sound.png"), 
+        nullptr, 
+        nullptr, 
+        nullptr,  
+        buildAudioTab());
+    m_tabframe->addDivider();
+    m_tabframe->addTab("调试",   
+        BK_RES("img/ui/setting/debug.png"), 
+        nullptr, 
+        nullptr, 
+        nullptr,      
+        buildDebugTab());
+
+    m_tabframe->addFinish();
 }
 
 } // namespace beiklive

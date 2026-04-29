@@ -38,7 +38,7 @@ int main(int argc, char* argv[]) {
 
 		if (fp)
 			brls::Logger::setLogOutput(fp);
-		brls::Application::enableDebuggingView(true);
+		// brls::Application::enableDebuggingView(true);
 	#endif
 
 	brls::Platform::APP_LOCALE_DEFAULT = brls::LOCALE_AUTO;

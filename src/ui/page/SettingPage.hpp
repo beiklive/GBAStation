@@ -2,6 +2,7 @@
 
 #include "core/common.h"
 #include "ui/utils/Box.hpp"
+#include "ui/utils/TabFrame.hpp"
 
 namespace beiklive
 {
@@ -13,7 +14,7 @@ namespace beiklive
         ~SettingPage();
 
     private:
-        brls::TabFrame *m_tabframe = nullptr;
+        beiklive::TabFrame *m_tabframe = nullptr;
 
         // 构建各标签页
         brls::ScrollingFrame *buildUITab();

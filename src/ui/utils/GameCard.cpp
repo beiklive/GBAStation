@@ -107,7 +107,7 @@ namespace beiklive
         m_imageLayer->setCornerRadius(3.f);
 
         logobox->addView(m_coverImage);
-        logobox->addView(m_imageLayer);
+        // logobox->addView(m_imageLayer);
 
         m_titleLabel = new brls::Label();
         m_titleLabel->setWidth(CARD_WIDTH_SWITCH * 1.5f);
