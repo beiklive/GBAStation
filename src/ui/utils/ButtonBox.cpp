@@ -41,6 +41,9 @@ namespace beiklive
         m_label->setVerticalAlign(brls::VerticalAlign::BOTTOM);
         m_label->setHorizontalAlign(brls::HorizontalAlign::LEFT);
         this->addView(m_label);
+
+        addGestureRecognizer(new brls::TapGestureRecognizer(this));
+
     }
 
     void ButtonBox::setIcon(const std::string &iconPath)

@@ -51,7 +51,10 @@ static void cfgSetStr(const std::string &key, const std::string &val)
 static brls::ScrollingFrame *makeScrollTab()
 {
     auto *scroll = new brls::ScrollingFrame();
+    scroll->setGrow(1.0f);
     scroll->setScrollingBehavior(brls::ScrollingBehavior::NATURAL);
+    scroll->setScrollingIndicatorVisible(false);
+    scroll->setFocusable(false); // 滚动容器不参与焦点管理，焦点由单元格统一持有
     return scroll;
 }
 
@@ -335,7 +338,7 @@ using namespace beiklive::SettingKey;
 //  Tab: 界面设置
 // ─────────────────────────────────────────────────────────────────────────────
 
-brls::ScrollingFrame *SettingPage::buildUITab()
+brls::View *SettingPage::buildUITab()
 {
     auto *scroll = makeScrollTab();
     auto *box    = makeContentBox();
@@ -380,14 +383,21 @@ brls::ScrollingFrame *SettingPage::buildUITab()
     }
 
     scroll->setContentView(box);
-    return scroll;
+
+
+    auto *container = new brls::Box(brls::Axis::COLUMN);
+    container->setWidthPercentage(100.f);
+    container->setGrow(1.0f);
+    container->addView(scroll);
+
+    return container;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Tab: 游戏设置
 // ─────────────────────────────────────────────────────────────────────────────
 
-brls::ScrollingFrame *SettingPage::buildGameTab()
+brls::View *SettingPage::buildGameTab()
 {
     auto *scroll = makeScrollTab();
     auto *box    = makeContentBox();
@@ -517,14 +527,19 @@ brls::ScrollingFrame *SettingPage::buildGameTab()
     }
 
     scroll->setContentView(box);
-    return scroll;
+    auto *container = new brls::Box(brls::Axis::COLUMN);
+    container->setWidthPercentage(100.f);
+    container->setGrow(1.0f);
+    container->addView(scroll);
+
+    return container;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Tab: 画面设置
 // ─────────────────────────────────────────────────────────────────────────────
 
-brls::ScrollingFrame *SettingPage::buildDisplayTab()
+brls::View *SettingPage::buildDisplayTab()
 {
     auto *scroll = makeScrollTab();
     auto *box    = makeContentBox();
@@ -574,14 +589,19 @@ brls::ScrollingFrame *SettingPage::buildDisplayTab()
     box->addView(makeOverlayPathCell(KEY_DISPLAY_OVERLAY_GB_PATH, "GB 遮罩路径"));
 
     scroll->setContentView(box);
-    return scroll;
+    auto *container = new brls::Box(brls::Axis::COLUMN);
+    container->setWidthPercentage(100.f);
+    container->setGrow(1.0f);
+    container->addView(scroll);
+
+    return container;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Tab: 声音设置
 // ─────────────────────────────────────────────────────────────────────────────
 
-brls::ScrollingFrame *SettingPage::buildAudioTab()
+brls::View *SettingPage::buildAudioTab()
 {
     auto *scroll = makeScrollTab();
     auto *box    = makeContentBox();
@@ -602,7 +622,12 @@ brls::ScrollingFrame *SettingPage::buildAudioTab()
     }
 
     scroll->setContentView(box);
-    return scroll;
+    auto *container = new brls::Box(brls::Axis::COLUMN);
+    container->setGrow(1.0f);
+    container->setWidthPercentage(100.f);
+    container->addView(scroll);
+
+    return container;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -645,7 +670,7 @@ static const HotkeyEntry k_hotkeys[] = {
 static constexpr int k_hotkeyCount =
     static_cast<int>(sizeof(k_hotkeys) / sizeof(k_hotkeys[0]));
 
-brls::ScrollingFrame *SettingPage::buildKeyBindTab()
+brls::View *SettingPage::buildKeyBindTab()
 {
     auto *scroll = makeScrollTab();
     auto *box    = makeContentBox();
@@ -726,14 +751,18 @@ brls::ScrollingFrame *SettingPage::buildKeyBindTab()
     box->addView(diagonalCell);
 
     scroll->setContentView(box);
-    return scroll;
+    auto *container = new brls::Box(brls::Axis::COLUMN);
+    container->setGrow(1.0f);
+    container->setWidthPercentage(100.f);
+    container->addView(scroll);
+    return container;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Tab: 调试工具
 // ─────────────────────────────────────────────────────────────────────────────
 
-brls::ScrollingFrame *SettingPage::buildDebugTab()
+brls::View *SettingPage::buildDebugTab()
 {
     auto *scroll = makeScrollTab();
     auto *box    = makeContentBox();
@@ -800,7 +829,12 @@ brls::ScrollingFrame *SettingPage::buildDebugTab()
     box->addView(logOverlayCell);
 
     scroll->setContentView(box);
-    return scroll;
+    auto *container = new brls::Box(brls::Axis::COLUMN);
+    container->setGrow(1.0f);
+    container->setWidthPercentage(100.f);
+    container->addView(scroll);
+
+    return container;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -809,17 +843,15 @@ brls::ScrollingFrame *SettingPage::buildDebugTab()
 
 SettingPage::SettingPage()
 {
-    brls::sync([this]()
-    {
         this->showHeader(true);
+        this->getHeader()->setTitle("设置");
         this->showFooter(true);
         this->showBackground(false);
         this->showShader(true);
 
         m_tabframe = new beiklive::TabFrame();
-        init();
         this->getContentBox()->addView(m_tabframe);
-    });
+        init();
 }
 
 SettingPage::~SettingPage()

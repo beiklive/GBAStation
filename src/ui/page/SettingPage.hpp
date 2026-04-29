@@ -16,13 +16,14 @@ namespace beiklive
     private:
         beiklive::TabFrame *m_tabframe = nullptr;
 
+
         // 构建各标签页
-        brls::ScrollingFrame *buildUITab();
-        brls::ScrollingFrame *buildGameTab();
-        brls::ScrollingFrame *buildDisplayTab();
-        brls::ScrollingFrame *buildAudioTab();
-        brls::ScrollingFrame *buildKeyBindTab();
-        brls::ScrollingFrame *buildDebugTab();
+        brls::View *buildUITab();
+        brls::View *buildGameTab();
+        brls::View *buildDisplayTab();
+        brls::View *buildAudioTab();
+        brls::View *buildKeyBindTab();
+        brls::View *buildDebugTab();
 
         void init();
     };
