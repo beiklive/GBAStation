@@ -3,7 +3,7 @@
 #include "core/common.h"
 #include "core/GameSignal.hpp"
 #include <functional>
-#include "ButtonBox.hpp"
+#include "TabFrame.hpp"
 #include "GridBox.hpp"
 #include "Box.hpp"
 #include "GridItem.hpp"
@@ -56,17 +56,17 @@ namespace beiklive
             std::function<void(int)> m_loadStateCallback;
             std::function<StateSlotInfo(int)> m_stateInfoCallback;
 
-            brls::Box*   m_panel     = nullptr; ///< 居中面板容器
+            beiklive::TabFrame*   m_panel     = nullptr; ///< 居中面板容器
 
-            brls::Box*   m_contrlPanel = nullptr; ///< 按钮容器
-            brls::Box*   m_viewPanel   = nullptr; ///< 页面容器
+            // brls::Box*   m_contrlPanel = nullptr; ///< 按钮容器
+            // brls::Box*   m_viewPanel   = nullptr; ///< 页面容器
 
             brls::Label* m_title     = nullptr; ///< 标题文字
-            beiklive::ButtonBox*   m_btnResume = nullptr; ///< "返回游戏"按钮
-            beiklive::ButtonBox*   m_btnExit   = nullptr; ///< "退出游戏"按钮
+            // beiklive::ButtonBox*   m_btnResume = nullptr; ///< "返回游戏"按钮
+            // beiklive::ButtonBox*   m_btnExit   = nullptr; ///< "退出游戏"按钮
 
             /// 所有子面板（用于 focus 时统一隐藏其他面板）
-            std::vector<brls::View*> m_allPanels;
+            // std::vector<brls::View*> m_allPanels;
             brls::View* m_savePanel = nullptr; ///< 保存状态面板（用于 focus 时区分刷新）
             brls::View* m_loadPanel = nullptr; ///< 读取状态面板
 
@@ -80,20 +80,20 @@ namespace beiklive
             void _initLayout();
 
             /// 隐藏所有子面板
-            void _hideAllPanels();
+            // void _hideAllPanels();
 
-            /**
-             * 创建菜单按钮
-             * @param text           按钮文字
-             * @param onClick        按钮点击回调（无 sonPanel 时直接调用）
-             * @param sonPanel       绑定的子面板（为空则为无面板按钮）
-             * @param firstFocusView 点击/右导航时优先聚焦的目标视图（为空则使用 sonPanel）
-             */
-            beiklive::ButtonBox* _createMenuButton(const std::string& text,
-                                                    const std::string& iconPath,
-                                                   std::function<void()> onClick,
-                                                   brls::View* sonPanel = nullptr,
-                                                   brls::View* firstFocusView = nullptr);
+            // /**
+            //  * 创建菜单按钮
+            //  * @param text           按钮文字
+            //  * @param onClick        按钮点击回调（无 sonPanel 时直接调用）
+            //  * @param sonPanel       绑定的子面板（为空则为无面板按钮）
+            //  * @param firstFocusView 点击/右导航时优先聚焦的目标视图（为空则使用 sonPanel）
+            //  */
+            // beiklive::ButtonBox* _createMenuButton(const std::string& text,
+            //                                         const std::string& iconPath,
+            //                                        std::function<void()> onClick,
+            //                                        brls::View* sonPanel = nullptr,
+            //                                        brls::View* firstFocusView = nullptr);
 
             /// 创建保存状态面板（GridBox，2 列，10 个 GridItem）
             brls::View* _createSaveStatePanel();

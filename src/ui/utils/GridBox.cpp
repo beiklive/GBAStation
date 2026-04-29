@@ -82,7 +82,7 @@ namespace beiklive
         m_scrollFrame = new brls::ScrollingFrame();
         m_scrollFrame->setGrow(1.0f);
         m_scrollFrame->setScrollingBehavior(brls::ScrollingBehavior::CENTERED);
-
+        m_scrollFrame->setScrollingIndicatorVisible(false);
         // 网格内容：垂直堆叠的行盒子
         m_gridContent = new brls::Box(brls::Axis::COLUMN);
         m_gridContent->setPadding(5.0f);

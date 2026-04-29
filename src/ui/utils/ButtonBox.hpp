@@ -9,20 +9,18 @@ namespace beiklive
 class ButtonBox : public brls::Box
 {
 public:
-    void onFocusGained() override
-    {
-        Box::onFocusGained();
-        if (onFocusGainedCallback) onFocusGainedCallback();
-    }
+    ButtonBox();
+    void setIcon(const std::string& iconPath);
+    void setText(const std::string& text);
+    void onFocusGained() override;
+    void onFocusLost() override;
 
-    void onFocusLost() override
-    {
-        Box::onFocusLost();
-        if (onFocusLostCallback) onFocusLostCallback();
-    }
+    std::function<void()> onFocusGainedCallback = nullptr;
+    std::function<void()> onFocusLostCallback = nullptr;
 
-    std::function<void()> onFocusGainedCallback;
-    std::function<void()> onFocusLostCallback;
-
+private:
+    brls::Rectangle* m_accent = nullptr;
+    brls::Image* m_icon = nullptr;
+    brls::Label* m_label = nullptr; 
 };
 } // namespace beiklive
