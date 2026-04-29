@@ -204,22 +204,95 @@ NumberButton::NumberButton()
     this->addView(new brls::Padding());
     this->addView(m_valueLabel);
 
-    this->registerAction(
-        "", brls::BUTTON_LB, [this](brls::View*) -> bool {
-            decrement();
-            return true;
-        }, false, true, brls::SOUND_CLICK);
-
-    this->registerAction(
-        "", brls::BUTTON_RB, [this](brls::View*) -> bool {
-            increment();
-            return true;
-        }, false, true, brls::SOUND_CLICK);
-
     this->registerClickAction([this](brls::View*) -> bool {
         openEditDialog();
         return true;
     });
+}
+
+void NumberButton::frame(brls::FrameContext* ctx)
+{
+    brls::Box::frame(ctx);
+
+    if (!this->isFocused())
+    {
+        m_lbHeld = false;
+        m_rbHeld = false;
+        return;
+    }
+
+    auto now   = std::chrono::steady_clock::now();
+    auto state = brls::Application::getControllerState();
+    int  lbIdx = static_cast<int>(brls::BUTTON_LB);
+    int  rbIdx = static_cast<int>(brls::BUTTON_RB);
+
+    // 左肩键 (LB) — 递减
+    if (lbIdx >= 0 && lbIdx < static_cast<int>(brls::_BUTTON_MAX) && state.buttons[lbIdx])
+    {
+        if (!m_lbHeld)
+        {
+            m_lbHeld     = true;
+            m_lbHoldStart = now;
+            m_lbLastStep  = now;
+            decrement();
+        }
+        else
+        {
+            double holdElapsed  = std::chrono::duration<double>(now - m_lbHoldStart).count();
+            double stepInterval = getStepInterval(holdElapsed);
+            double sinceStep    = std::chrono::duration<double>(now - m_lbLastStep).count();
+            if (sinceStep >= stepInterval)
+            {
+                decrement();
+                m_lbLastStep = now;
+            }
+        }
+    }
+    else
+    {
+        m_lbHeld = false;
+    }
+
+    // 右肩键 (RB) — 递增
+    if (rbIdx >= 0 && rbIdx < static_cast<int>(brls::_BUTTON_MAX) && state.buttons[rbIdx])
+    {
+        if (!m_rbHeld)
+        {
+            m_rbHeld     = true;
+            m_rbHoldStart = now;
+            m_rbLastStep  = now;
+            increment();
+        }
+        else
+        {
+            double holdElapsed  = std::chrono::duration<double>(now - m_rbHoldStart).count();
+            double stepInterval = getStepInterval(holdElapsed);
+            double sinceStep    = std::chrono::duration<double>(now - m_rbLastStep).count();
+            if (sinceStep >= stepInterval)
+            {
+                increment();
+                m_rbLastStep = now;
+            }
+        }
+    }
+    else
+    {
+        m_rbHeld = false;
+    }
+}
+
+void NumberButton::onFocusLost()
+{
+    brls::Box::onFocusLost();
+    m_lbHeld = false;
+    m_rbHeld = false;
+}
+
+double NumberButton::getStepInterval(double holdSeconds)
+{
+    if (holdSeconds < 0.5)  return 0.30;
+    if (holdSeconds > 2.0)  return 0.05;
+    return 0.30 - (holdSeconds - 0.5) / 1.5 * 0.25;
 }
 
 void NumberButton::setText(const std::string& text) { m_label->setText(text); }

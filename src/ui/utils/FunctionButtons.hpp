@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/common.h"
+#include <chrono>
 #include <functional>
 #include <string>
 #include <vector>
@@ -71,6 +72,9 @@ namespace beiklive
         void   setDecimal(int precision);
         void   setOnChange(std::function<void(double)> callback);
 
+        void frame(brls::FrameContext* ctx) override;
+        void onFocusLost() override;
+
     private:
         brls::Label* m_label      = nullptr;
         brls::Label* m_valueLabel = nullptr;
@@ -79,10 +83,18 @@ namespace beiklive
         int    m_precision = 0;
         std::function<void(double)> m_onChange;
 
+        bool m_lbHeld = false;
+        bool m_rbHeld = false;
+        std::chrono::steady_clock::time_point m_lbHoldStart;
+        std::chrono::steady_clock::time_point m_rbHoldStart;
+        std::chrono::steady_clock::time_point m_lbLastStep;
+        std::chrono::steady_clock::time_point m_rbLastStep;
+
         void updateValue();
         void increment();
         void decrement();
         void openEditDialog();
+        static double getStepInterval(double holdSeconds);
     };
 
 } // namespace beiklive
