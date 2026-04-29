@@ -463,10 +463,10 @@ namespace beiklive
                 }
                 // 重置信号状态，准备开始游戏
                 GameSignal::instance().resetAll();
+                // 先加载遗留时长（避免与游戏线程的 playTime 累加产生竞态）
+                _initPlayTimeTracking();
                 // 启动游戏线程
                 _startGameThread();
-                // 初始化时长追踪（检查并合并遗留临时文件）
-                _initPlayTimeTracking();
             }
             else
             {
@@ -663,6 +663,9 @@ namespace beiklive
             m_playTimeAccum -= static_cast<double>(PLAY_TIME_SAVE_INTERVAL);
             m_gameEntry.playTime += PLAY_TIME_SAVE_INTERVAL;
 
+            brls::Logger::debug("GameView: playTime={} accum={:.3f} fps={:.2f}",
+                                m_gameEntry.playTime, m_playTimeAccum, coreFps);
+
             if (!m_playTimeTempPath.empty()) {
                 std::ofstream f(m_playTimeTempPath, std::ios::trunc);
                 if (f) {
@@ -827,6 +830,9 @@ namespace beiklive
 
         GameTimer::instance().start();
 
+        brls::Logger::info("GameView: 游戏循环开始 playTime={} coreFps={:.2f}",
+                           m_gameEntry.playTime, coreFps);
+
         while (m_running.load(std::memory_order_acquire))
         {
             auto& sig = GameSignal::instance();
@@ -920,6 +926,8 @@ namespace beiklive
 
         // ---- 最终化时长记录（提交到 GameDB 并清理临时文件）----
         _finalizePlayTime();
+        brls::Logger::info("GameView: 游戏循环结束 playTime={} accum={:.3f}",
+                           m_gameEntry.playTime, m_playTimeAccum);
 
         // ---- 音频清理 ----
         AudioManager::instance().deinit();
