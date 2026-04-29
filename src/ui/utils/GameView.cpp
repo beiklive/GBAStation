@@ -116,6 +116,7 @@ namespace beiklive
                     // 菜单从底部滑入，入场动画（120ms）
                     AnimationHelper::slideInFromBottom(m_gameMenuView, 60.f, 120);
                     brls::Application::giveFocus(m_gameMenuView);
+                    m_gameMenuView->onShow();
                 });
             }
             // 不提前返回：继续渲染当前游戏帧，防止菜单弹出时出现黑帧闪烁

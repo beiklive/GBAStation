@@ -72,7 +72,8 @@ namespace beiklive
             nullptr, 
             [this](){_refreshStatePanel(true);}, 
             nullptr, 
-            m_savePanel
+            m_savePanel,
+            m_saveGrid->getItemView(0) // 默认聚焦第一个槽位
         );
 
         // 3. 读取状态（绑定读取状态面板）
@@ -83,7 +84,8 @@ namespace beiklive
             nullptr, 
             [this](){_refreshStatePanel(false);},  
             nullptr, 
-            m_loadPanel
+            m_loadPanel,
+            m_loadGrid->getItemView(0) // 默认聚焦第一个槽位
         );
 
         // 4. 金手指设置（简单占位面板）
@@ -309,10 +311,10 @@ namespace beiklive
                     if (!item) continue;
                     item->setFocusable(true);
                     const auto& info = infos[slot];
+                    item->setDataLoaded();
+                    item->setTitle(_slotName(slot));
                     if (info.exists)
                     {
-                        item->setDataLoaded();
-                        item->setTitle(_slotName(slot));
                         item->setSubText(info.timeStr.empty() ? "时间未知" : info.timeStr);
                         if (!info.thumbPath.empty())
                         {
@@ -325,10 +327,13 @@ namespace beiklive
                             item->setImagePath(info.thumbPath);
                         }
                     }
-                    else
-                    {
-                        item->setEmpty(_slotName(slot));
-                    }
+                    // else
+                    // {
+                    //     // item->setEmpty(_slotName(slot));
+                    //     item->setDataLoaded();
+                    //     item->setTitle(_slotName(slot));
+                    //     item->setImagePath(BK_RES("img/ui/menu/empty.png"));
+                    // }
                 }
             });
         });
@@ -338,6 +343,11 @@ namespace beiklive
                             brls::Style style, brls::FrameContext* ctx)
     {
         Box::draw(vg, x, y, w, h, style, ctx);
+    }
+
+    void GameMenuView::onShow()
+    {
+        m_panel->onShow();
     }
 
 } // namespace beiklive

@@ -36,6 +36,8 @@ namespace beiklive
             void draw(NVGcontext* vg, float x, float y, float w, float h,
                       brls::Style style, brls::FrameContext* ctx) override;
 
+            void onShow();
+
             /// 设置"返回游戏"回调（由 GamePage 注入）
             void setOnResume(std::function<void()> cb) { m_onResume = std::move(cb); }
             /// 设置"退出游戏"回调（由 GamePage 注入）

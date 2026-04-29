@@ -77,12 +77,14 @@ namespace beiklive
         this->setWidthPercentage(100.f);
         this->setHeightPercentage(100.f);
         this->setGrow(1.0f);
+        this->setFocusable(false); // 滚动容器不参与焦点管理，焦点由单元格统一持有
 
         // 垂直滚动容器，焦点移动时自动滚动保持聚焦单元格可见
         m_scrollFrame = new brls::ScrollingFrame();
         m_scrollFrame->setGrow(1.0f);
         m_scrollFrame->setScrollingBehavior(brls::ScrollingBehavior::CENTERED);
         m_scrollFrame->setScrollingIndicatorVisible(false);
+        m_scrollFrame->setFocusable(false); // 滚动容器不参与焦点管理，焦点由单元格统一持有
         // 网格内容：垂直堆叠的行盒子
         m_gridContent = new brls::Box(brls::Axis::COLUMN);
         m_gridContent->setPadding(5.0f);
@@ -90,6 +92,7 @@ namespace beiklive
         m_scrollFrame->setContentView(m_gridContent);
         this->addView(m_scrollFrame);
     }
+
 
     void GridBox::setColumns(int columns)
     {

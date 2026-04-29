@@ -22,10 +22,12 @@ namespace beiklive
                 /* 点击回调 */ std::function<void()> onClick = nullptr,
                 /* 聚焦回调 */ std::function<void()> onFocus = nullptr,
                 /* 失焦回调 */ std::function<void()> onBlur = nullptr,
-                /* 关联的内容视图 */ brls::View* contentView = nullptr
+                /* 关联的内容视图 */ brls::View* contentView = nullptr,
+                /* 内容视图默认焦点 */ brls::View* contentDefaultFocus = nullptr
             );
             void addFinish();
 
+            void onShow();
         private:
             void _initLayout();
             brls::Box* m_tabBar = nullptr; ///< 标签栏容器

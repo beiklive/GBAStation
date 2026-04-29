@@ -87,6 +87,7 @@ namespace beiklive
         logobox->setWidth(ITEM_HEIGHT-10);
         logobox->setHeight(ITEM_HEIGHT-10);
         logobox->setMarginLeft(5.f);
+        logobox->setCornerRadius(3.f);
 
         m_image = new brls::Image();
         m_image->setWidth(ITEM_HEIGHT-10);
@@ -94,6 +95,7 @@ namespace beiklive
         m_image->setScalingType(brls::ImageScalingType::FILL);
         m_image->setFocusable(false);
         m_image->setCornerRadius(3.f);
+        m_image->setImageFromFile(BK_RES("img/ui/menu/empty.png"));
 
         m_imageLayer = new brls::Image();
         m_imageLayer->setWidth(ITEM_HEIGHT-10);
@@ -176,6 +178,7 @@ namespace beiklive
         m_subLabel->setSingleLine(true);
         m_subLabel->setAnimated(true);
         m_subLabel->setAutoAnimate(true);
+        m_subLabel->setText("  ");
         m_subLabel->setGrow(0.f);
         // m_subLabel->setMarginBottom(5.f);
 
