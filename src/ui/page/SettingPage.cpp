@@ -1,5 +1,6 @@
 #include "ui/page/SettingPage.hpp"
 #include "ui/page/FileListPage.hpp"
+#include "ui/utils/FunctionButtons.hpp"
 
 #include <borealis/views/cells/cell_bool.hpp>
 #include <borealis/views/cells/cell_selector.hpp>
@@ -838,6 +839,117 @@ brls::View *SettingPage::buildDebugTab()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  Tab: 功能演示 (FunctionButtons demo)
+// ─────────────────────────────────────────────────────────────────────────────
+
+brls::View *SettingPage::buildFunctionDemoTab()
+{
+    auto *scroll = makeScrollTab();
+    auto *box    = makeContentBox();
+
+    // ── 切换按钮 ──────────────────────────────────────────────────────────────
+    box->addView(makeHeader("切换按钮 (SwitchButton)"));
+
+    {
+        auto *btn = new SwitchButton();
+        btn->setText("启停快进功能");
+        btn->setState(false);
+        btn->setOnToggle([](bool on)
+        {
+            brls::Application::notify(std::string("快进功能: ") + (on ? "已开启" : "已关闭"));
+        });
+        box->addView(btn);
+    }
+
+    // ── 选择按钮 ──────────────────────────────────────────────────────────────
+    box->addView(makeHeader("选择按钮 (SelectorButton)"));
+
+    {
+        auto *btn = new SelectorButton();
+        btn->setText("画面缩放模式");
+        std::vector<std::string> options = {"Fit", "Fill", "Original", "IntegerScale", "Custom"};
+        btn->setOptions(options, 0);
+        btn->setOnSelect([options](int idx)
+        {
+            if (idx >= 0 && idx < (int)options.size())
+                brls::Application::notify("已选择: " + options[idx]);
+        });
+        box->addView(btn);
+    }
+
+    // ── 数字按钮 ──────────────────────────────────────────────────────────────
+    box->addView(makeHeader("数字按钮 (NumberButton)"));
+
+    {
+        auto *btn = new NumberButton();
+        btn->setText("音量百分比 (整数)");
+        btn->setValue(75);
+        btn->setStep(1);
+        btn->setDecimal(-1);
+        btn->setOnChange([](double val)
+        {
+            brls::Application::notify("音量: " + std::to_string((int)val) + "%");
+        });
+        box->addView(btn);
+    }
+
+    {
+        auto *btn = new NumberButton();
+        btn->setText("浮点数值 (小数)");
+        btn->setValue(1.5);
+        btn->setStep(0.1);
+        btn->setDecimal(1);
+        btn->setOnChange([](double val)
+        {
+            std::ostringstream oss;
+            oss << std::fixed << std::setprecision(1) << val;
+            brls::Application::notify("浮点值: " + oss.str());
+        });
+        box->addView(btn);
+    }
+
+    // ── 说明 ──────────────────────────────────────────────────────────────────
+    box->addView(makeHeader("操作说明"));
+
+    {
+        auto *hint = new brls::Label();
+        hint->setText("切换按钮: A 键切换开关状态");
+        hint->setFontSize(18.f);
+        hint->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
+        hint->setHeight(24.f);
+        hint->setFocusable(false);
+        box->addView(hint);
+    }
+
+    {
+        auto *hint = new brls::Label();
+        hint->setText("选择按钮: 方向键左右切换选项");
+        hint->setFontSize(18.f);
+        hint->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
+        hint->setHeight(24.f);
+        hint->setFocusable(false);
+        box->addView(hint);
+    }
+
+    {
+        auto *hint = new brls::Label();
+        hint->setText("数字按钮: L / R 键增减数值, A 键弹窗输入");
+        hint->setFontSize(18.f);
+        hint->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
+        hint->setHeight(24.f);
+        hint->setFocusable(false);
+        box->addView(hint);
+    }
+
+    scroll->setContentView(box);
+    auto *container = new brls::Box(brls::Axis::COLUMN);
+    container->setWidthPercentage(100.f);
+    container->setGrow(1.0f);
+    container->addView(scroll);
+    return container;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  SettingPage
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -900,6 +1012,13 @@ void SettingPage::init()
         nullptr, 
         nullptr,      
         buildDebugTab());
+    m_tabframe->addDivider();
+    m_tabframe->addTab("演示",   
+        BK_RES("img/ui/setting/control.png"), 
+        nullptr, 
+        nullptr, 
+        nullptr,      
+        buildFunctionDemoTab());
 
     m_tabframe->addFinish();
 }
