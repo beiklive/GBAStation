@@ -5,6 +5,7 @@
 #include "ui/utils/Box.hpp"
 #include "ui/utils/GridBox.hpp"
 #include "ui/utils/GridItem.hpp"
+#include "ui/utils/GameOptionsSidebar.hpp"
 
 namespace beiklive
 {
@@ -40,18 +41,27 @@ namespace beiklive
         beiklive::GridBox*    m_grid      = nullptr;
         std::vector<beiklive::GameEntry> m_entries;
         SortMode              m_sortMode  = SortMode::ByLastPlayed;
+        beiklive::GameOptionsSidebar* m_gameOptionsSidebar = nullptr;
 
         void _loadAndShowEntries();
         void _sortEntries();
         void _rebuildGrid();
+        void _reloadEntries();
         void _showSortDropdown();
         void _updateHeader();
+
+        /// 显示游戏选项侧边栏
+        void _showGameOptionsPanel(const beiklive::GameEntry& entry);
+        /// 关闭游戏选项侧边栏
+        void _hideGameOptionsPanel();
 
         /// 将 GameEntry 的平台字段转换为徽标颜色枚举
         static PlatformBadgeColor _platformBadge(int platform);
 
         /// 将游戏时长（秒）格式化为可读字符串
         static std::string _formatPlayTime(int seconds);
+
+        int _currentFocusedIndex = -1; // 当前焦点所在的游戏索引（-1 表示无焦点）
     };
 
 } // namespace beiklive

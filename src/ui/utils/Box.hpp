@@ -16,6 +16,7 @@ namespace beiklive
         ~Box();
     
         beiklive::HeaderBar* getHeader() { return header; }
+        brls::BottomBar* getBottomBar() { return bottomBar; }
         void showHeader(bool show);
         void showFooter(bool show);
         void showBackground(bool show);

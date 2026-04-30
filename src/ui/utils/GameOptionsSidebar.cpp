@@ -12,9 +12,10 @@ namespace beiklive
         this->setPositionType(brls::PositionType::ABSOLUTE);
         this->setPositionTop(0);
         this->setPositionLeft(0);
-        this->setWidth(1280);
-        this->setHeight(720);
-        this->setBackgroundColor(nvgRGBA(0, 0, 0, 120));
+        this->setWidth(1280.f);
+        this->setHeightPercentage(100.f);
+        this->setBackgroundColor(nvgRGBA(0, 0, 0, 10));
+        
     }
 
     void GameOptionsSidebar::addButton(const std::string& text,
@@ -58,13 +59,17 @@ namespace beiklive
         // ── 右侧选项面板 ──
         m_panel = new brls::Box(brls::Axis::COLUMN);
         m_panel->setFocusable(false);
-        m_panel->setWidth(320.f);
-        m_panel->setHeightPercentage(100);
-        m_panel->setBackgroundColor(nvgRGBA(30, 30, 32, 255));
-        m_panel->setCornerRadius(12.f);
+        m_panel->setWidth(400.f);
+        m_panel->setHeightPercentage(100.f);
+        m_panel->setBackgroundColor(nvgRGBA(0, 0, 0, 180));
         m_panel->setPadding(24.f, 20.f, 0.f, 20.f);
         m_panel->setAlignItems(brls::AlignItems::STRETCH);
 
+        auto* titlebox = new brls::Box(brls::Axis::ROW);
+        titlebox->setFocusable(false);
+        titlebox->setAlignItems(brls::AlignItems::CENTER);
+        // titlebox->setJustifyContent(brls::JustifyContent::FLEX_START);
+        m_panel->addView(titlebox);
         // 游戏图标
         m_iconImage = new brls::Image();
         m_iconImage->setWidth(48.f);
@@ -72,21 +77,23 @@ namespace beiklive
         m_iconImage->setCornerRadius(8.f);
         m_iconImage->setScalingType(brls::ImageScalingType::FIT);
         m_iconImage->setMarginBottom(10.f);
+        m_iconImage->setMarginRight(20.f);
         m_iconImage->setFocusable(false);
         if (!entry.logoPath.empty())
             m_iconImage->setImageFromFile(entry.logoPath);
-        m_panel->addView(m_iconImage);
+        titlebox->addView(m_iconImage);
 
         // 游戏标题
         m_titleLabel = new brls::Label();
         m_titleLabel->setText(entry.title.empty() ? "未知游戏" : entry.title);
         m_titleLabel->setFontSize(22.f);
         m_titleLabel->setTextColor(GET_THEME_COLOR("brls/text"));
+        m_titleLabel->setMarginTop(10.f);
         m_titleLabel->setFocusable(false);
         m_titleLabel->setSingleLine(true);
         m_titleLabel->setAnimated(true);
         m_titleLabel->setMarginBottom(20.f);
-        m_panel->addView(m_titleLabel);
+        titlebox->addView(m_titleLabel);
 
         // 分隔线
         auto* divider = new brls::Rectangle(nvgRGBA(255, 255, 255, 50));
@@ -166,6 +173,7 @@ namespace beiklive
         panelWrapper->setWidthPercentage(100);
         panelWrapper->setHeightPercentage(100);
         panelWrapper->setJustifyContent(brls::JustifyContent::FLEX_END);
+        panelWrapper->setBackground(brls::ViewBackground::NONE);
         panelWrapper->addView(m_panel);
 
         this->addView(panelWrapper);

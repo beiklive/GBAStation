@@ -230,6 +230,7 @@ namespace beiklive
         _hideGameOptionsPanel();
 
         m_gameOptionsSidebar = new beiklive::GameOptionsSidebar();
+        this->getBottomBar()->setVisibility(brls::Visibility::INVISIBLE);
 
         // ── 修改映射名称 ──
         m_gameOptionsSidebar->addButton("修改映射名称", BK_RES("img/ui/setting/emu.png"),
@@ -295,6 +296,8 @@ namespace beiklive
 
         m_gameOptionsSidebar->onClosed = [this, currentFocus]() {
             brls::Application::giveFocus(currentFocus);
+        this->getBottomBar()->setVisibility(brls::Visibility::VISIBLE);
+
         };
 
         this->addView(m_gameOptionsSidebar);
@@ -308,6 +311,8 @@ namespace beiklive
             m_gameOptionsSidebar->close();
             m_gameOptionsSidebar->removeFromSuperView(true);
             m_gameOptionsSidebar = nullptr;
+        this->getBottomBar()->setVisibility(brls::Visibility::VISIBLE);
+
         }
     }
 }

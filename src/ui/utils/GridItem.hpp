@@ -102,7 +102,6 @@ namespace beiklive
 
         /// 被点击（A键）时触发，参数为本控件的索引
         std::function<void(int index)> onItemClicked;
-
     private:
         GridItemMode m_mode;
         int          m_index;

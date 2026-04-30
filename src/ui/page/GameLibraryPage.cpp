@@ -1,4 +1,5 @@
 #include "GameLibraryPage.hpp"
+#include "ui/utils/FilePickerHelper.hpp"
 #include <algorithm>
 
 namespace beiklive
@@ -18,10 +19,20 @@ namespace beiklive
         this->getContentBox()->addView(m_grid);
 
         // Y 键：弹出排序方式 Dropdown
-        this->registerAction("排序", brls::BUTTON_Y, [this](brls::View*) -> bool {
+        m_grid->registerAction("排序", brls::BUTTON_Y, [this](brls::View*) -> bool {
             _showSortDropdown();
             return true;
         });
+
+        m_grid->registerAction("设置", brls::BUTTON_X, [this](brls::View*) -> bool {
+            if (_currentFocusedIndex < 0 || _currentFocusedIndex >= static_cast<int>(m_entries.size()))
+                return true; // 无效索引，忽略
+            const GameEntry& entry = m_entries[_currentFocusedIndex];
+            _showGameOptionsPanel(entry);
+
+            return true;
+        });
+
 
         // 加载并显示游戏数据
         _loadAndShowEntries();
@@ -131,11 +142,13 @@ namespace beiklive
                 // 切换到有数据状态
                 item->setDataLoaded();
 
-                // X 键：选项面板（暂时 log 占位）
-                item->registerAction("选项", brls::BUTTON_X, [this, entry](brls::View*) -> bool {
-                    brls::Logger::debug("GameLibraryPage: X 键触发，游戏: {}", entry.title);
-                    return true;
-                });
+
+                // // X 键：选项面板
+                // item->registerAction("选项", brls::BUTTON_LB, [this, entry](brls::View*) -> bool {
+                //     brls::Logger::debug("GameLibraryPage: X 键触发，游戏: {}", entry.title);
+                //     _showGameOptionsPanel(entry);
+                //     return true;
+                // });
 
                 return item;
             });
@@ -147,7 +160,10 @@ namespace beiklive
             if (onGameSelected)
                 onGameSelected(m_entries[index]);
         };
-
+        m_grid->onItemFocused = [this](int index) {
+            _currentFocusedIndex = index;
+            brls::Logger::debug("GameLibraryPage: 游戏聚焦，索引: {}, 游戏: {}", index, m_entries[index].title);
+        };
 
     }
 
@@ -243,6 +259,115 @@ namespace beiklive
             std::snprintf(buf, sizeof(buf), "不到 1 分钟");
 
         return std::string(buf);
+    }
+
+        // ============================================================
+    // _reloadEntries – 重新加载数据库并重建网格（操作后刷新用）
+    // ============================================================
+
+    void GameLibraryPage::_reloadEntries()
+    {
+        ASYNC_RETAIN
+        brls::async([ASYNC_TOKEN]() {
+            m_entries = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
+            _sortEntries();
+            ASYNC_RELEASE
+            brls::sync([this]() {
+                _rebuildGrid();
+                _updateHeader();
+                brls::Application::giveFocus(m_grid);
+            });
+        });
+    }
+
+    // ============================================================
+    // _showGameOptionsPanel – X 键游戏选项侧边栏
+    // ============================================================
+
+    void GameLibraryPage::_showGameOptionsPanel(const beiklive::GameEntry& entry)
+    {
+        int crc = entry.crc32;
+
+        _hideGameOptionsPanel();
+
+        m_gameOptionsSidebar = new beiklive::GameOptionsSidebar();
+        this->getBottomBar()->setVisibility(brls::Visibility::INVISIBLE);
+
+        // ── 修改映射名称 ──
+        m_gameOptionsSidebar->addButton("修改映射名称", BK_RES("img/ui/setting/emu.png"),
+            [this, crc, title = entry.title](const beiklive::GameEntry& e) {
+        _hideGameOptionsPanel();
+                auto* ime = brls::Application::getPlatform()->getImeManager();
+                if (!ime) return;
+                ime->openForText(
+                    [this, crc](std::string text) {
+                        if (!text.empty() && beiklive::GameDB) {
+                            beiklive::GameDB->set(crc, "title", nlohmann::json(text));
+                            _reloadEntries();
+                        }
+                    },
+                    "编辑游戏名称",
+                    "",
+                    128,
+                    title,
+                    brls::KeyboardKeyDisableBitmask::KEYBOARD_DISABLE_NONE);
+            });
+
+        // ── 设置封面图 ──
+        m_gameOptionsSidebar->addButton("设置封面图", BK_RES("img/ui/setting/display.png"),
+            [this, crc](const beiklive::GameEntry& e) {
+        _hideGameOptionsPanel();
+                std::string startDir;
+                if (!e.logoPath.empty())
+                    startDir = beiklive::tools::getParentPath(e.logoPath);
+                beiklive::openFilePicker({"png", "jpg"},
+                    [this, crc](const std::string& selectedPath) {
+                        if (beiklive::GameDB) {
+                            beiklive::GameDB->set(crc, "logoPath", nlohmann::json(selectedPath));
+                            _reloadEntries();
+                        }
+                    },
+                    startDir);
+            });
+
+        // ── 删除游戏 ──
+        m_gameOptionsSidebar->addButton("删除游戏", BK_RES("img/ui/menu/exit.png"),
+            [this, crc](const beiklive::GameEntry& e) {
+        _hideGameOptionsPanel();
+                auto* dialog = new brls::Dialog("确定要删除该游戏吗？\n此操作将清除游戏记录与存档数据。");
+                dialog->addButton("确认删除", [this, crc]() {
+                    _hideGameOptionsPanel();
+                    if (beiklive::GameDB && beiklive::GameDB->removeByCrc32(crc)) {
+                        brls::Application::notify("已删除游戏");
+                        _reloadEntries();
+                    } else {
+                        brls::Application::notify("删除失败");
+                    }
+                });
+                dialog->addButton("取消", [this]() {
+                });
+                dialog->open();
+            });
+
+        m_gameOptionsSidebar->onClosed = [this]() {
+            brls::Application::giveFocus(m_grid);
+        this->getBottomBar()->setVisibility(brls::Visibility::VISIBLE);
+
+        };
+
+        this->addView(m_gameOptionsSidebar);
+        m_gameOptionsSidebar->open(entry);
+    }
+
+    void GameLibraryPage::_hideGameOptionsPanel()
+    {
+        if (m_gameOptionsSidebar)
+        {
+            m_gameOptionsSidebar->close();
+            m_gameOptionsSidebar->removeFromSuperView(true);
+            m_gameOptionsSidebar = nullptr;
+            this->getBottomBar()->setVisibility(brls::Visibility::VISIBLE);
+        }
     }
 
 } // namespace beiklive
