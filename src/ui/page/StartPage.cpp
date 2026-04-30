@@ -244,9 +244,11 @@ namespace beiklive
                         if (!text.empty() && beiklive::GameDB) {
                             beiklive::GameDB->set(crc, "title", nlohmann::json(text));
                             onResume();
-                            beiklive::GameDB->flush();
                             beiklive::NameMappingManager->Set(filename, text, true);
-                            beiklive::NameMappingManager->Save();
+                            brls::async([filename]() {
+                                beiklive::GameDB->flush();
+                                beiklive::NameMappingManager->Save();
+                            });
                         }
                     },
                     "编辑游戏名称",     // header
@@ -270,7 +272,7 @@ namespace beiklive
                         if (beiklive::GameDB) {
                             beiklive::GameDB->set(crc, "logoPath", nlohmann::json(selectedPath));
                             onResume();
-                            beiklive::GameDB->flush();
+                            brls::async([]() { beiklive::GameDB->flush(); });
                         }
                     },
                     startDir);
@@ -286,7 +288,7 @@ namespace beiklive
                     if (beiklive::GameDB && beiklive::GameDB->removeByCrc32(crc)) {
                         brls::Application::notify("已删除游戏");
                         onResume();
-                        beiklive::GameDB->flush();
+                        brls::async([]() { beiklive::GameDB->flush(); });
                     } else {
                         brls::Application::notify("删除失败");
 
