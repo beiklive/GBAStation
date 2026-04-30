@@ -1,4 +1,6 @@
 #include "StartPage.hpp"
+#include "ui/utils/FilePickerHelper.hpp"
+#include "core/Tools.hpp"
 
 namespace beiklive
 {
@@ -220,40 +222,64 @@ namespace beiklive
     void StartPage::_showGameOptionsPanel(const beiklive::GameEntry& entry)
     {
         auto* currentFocus = brls::Application::getCurrentFocus();
+        int crc = entry.crc32;
+        std::string romPath = entry.path;
 
         _hideGameOptionsPanel();
 
         m_gameOptionsSidebar = new beiklive::GameOptionsSidebar();
 
-        m_gameOptionsSidebar->addButton(
-            "修改映射名称", 
-            BK_RES("img/ui/setting/emu.png"),
-            [](const beiklive::GameEntry& e) 
-            { 
-                brls::Application::notify("修改映射名称 (待实现)"); 
-                // 获取当前游戏文件名
-                std::string name = beiklive::tools::getFileNameWithoutExtension(e.path);
-                // TODO 打开输入法界面，允许用户输入新的映射名称
-                
-                // TODO 输入完成后更新NameMappingManager以及数据库中的title字段并刷新界面显示
-
-
+        // ── 修改映射名称 ──
+        m_gameOptionsSidebar->addButton("修改映射名称", BK_RES("img/ui/setting/emu.png"),
+            [this, crc, title = entry.title](const beiklive::GameEntry& e) {
+                auto* ime = brls::Application::getPlatform()->getImeManager();
+                if (!ime) return;
+                ime->openForText(
+                    [this, crc](std::string text) {
+                        if (!text.empty() && beiklive::GameDB) {
+                            beiklive::GameDB->set(crc, "title", nlohmann::json(text));
+                            onResume();
+                        }
+                    },
+                    "编辑游戏名称",     // header
+                    "",                  // subText
+                    128,                 // maxLength
+                    title,               // initialText (当前名称)
+                    brls::KeyboardKeyDisableBitmask::KEYBOARD_DISABLE_NONE);
             });
-        m_gameOptionsSidebar->addButton(
-            "设置封面图", 
-            BK_RES("img/ui/setting/display.png"),
-            [](const beiklive::GameEntry& e) 
-            { 
-                brls::Application::notify("设置封面图 (待实现)"); 
-                // TODO 打开FileListPage界面， 后缀白名单设置为 png ,允许用户选择新的封面图文件,选择完成后更新GameDB中logoPath字段并刷新界面显示
+
+        // ── 设置封面图 ──
+        m_gameOptionsSidebar->addButton("设置封面图", BK_RES("img/ui/setting/display.png"),
+            [this, crc, romPath](const beiklive::GameEntry& e) {
+                // 封面图的默认路径：获取当前 logoPath 所在目录作为起始目录
+                std::string startDir;
+                if (!e.logoPath.empty()) {
+                    startDir = beiklive::tools::getParentPath(e.logoPath);
+                }
+                beiklive::openFilePicker({"png", "jpg"},
+                    [this, crc](const std::string& selectedPath) {
+                        if (beiklive::GameDB) {
+                            beiklive::GameDB->set(crc, "logoPath", nlohmann::json(selectedPath));
+                            onResume();
+                        }
+                    },
+                    startDir);
             });
-        m_gameOptionsSidebar->addButton(
-            "从游戏库移除", 
-            BK_RES("img/ui/menu/exit.png"),
-            [](const beiklive::GameEntry& e) 
-            { 
-                brls::Application::notify("从游戏库移除 (待实现)"); 
-                // TODO 弹出对话框确认是否移除，确认后从GameDB中删除该游戏记录并刷新游戏库显示
+
+        // ── 删除游戏 ──
+        m_gameOptionsSidebar->addButton("删除游戏", BK_RES("img/ui/menu/exit.png"),
+            [this, crc](const beiklive::GameEntry& e) {
+                auto* dialog = new brls::Dialog("确定要删除该游戏吗？\n此操作将清除游戏记录与存档数据。");
+                dialog->addButton("确认删除", [this, crc]() {
+                    if (beiklive::GameDB && beiklive::GameDB->removeByCrc32(crc)) {
+                        brls::Application::notify("已删除游戏");
+                        onResume();
+                    } else {
+                        brls::Application::notify("删除失败");
+                    }
+                });
+                dialog->addButton("取消", []() {});
+                dialog->open();
             });
 
         m_gameOptionsSidebar->onClosed = [this, currentFocus]() {

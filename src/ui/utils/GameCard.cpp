@@ -19,8 +19,8 @@ namespace beiklive
 
         // ✅ 入场动画初始化
         m_enterT = -index * 0.01f;
-        m_enterScale = 0.5f;
-        m_enterAnimating = true;
+        m_enterScale = 1.0f;
+        m_enterAnimating = false;
 
     }
 

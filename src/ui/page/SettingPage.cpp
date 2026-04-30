@@ -1,6 +1,7 @@
 #include "ui/page/SettingPage.hpp"
 #include "ui/page/FileListPage.hpp"
 #include "ui/utils/FunctionButtons.hpp"
+#include "ui/utils/FilePickerHelper.hpp"
 
 #include <borealis/views/cells/cell_bool.hpp>
 #include <borealis/views/cells/cell_selector.hpp>
@@ -80,48 +81,6 @@ static int findIndex(const std::vector<std::string> &options,
         if (options[i] == val)
             return i;
     return defaultIdx;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  路径选取辅助：推入一个仅显示指定扩展名文件的 FileListPage Activity
-//  @param extensions  允许的文件扩展名列表（不含点号，如 {"png"}）
-//  @param onSelected  选中文件时的回调，参数为完整路径
-//  @param startPath   初始目录（空时从驱动器列表开始）
-// ─────────────────────────────────────────────────────────────────────────────
-
-static void openFilePicker(const std::vector<std::string> &extensions,
-                           std::function<void(const std::string &)> onSelected,
-                           const std::string &startPath = "")
-{
-    auto *flPage = new beiklive::FileListPage();
-    flPage->setFliter(beiklive::enums::FilterMode::Whitelist, extensions);
-    flPage->onFileSelected = [onSelected](beiklive::DirListData item)
-    {
-        // 仅处理实际文件（非目录）
-        if (item.itemType != beiklive::enums::FileType::DRIVE &&
-            item.itemType != beiklive::enums::FileType::DIRECTORY)
-        {
-            onSelected(item.fullPath);
-            brls::Application::popActivity();
-        }
-    };
-    if (!startPath.empty())
-        flPage->setPath(startPath);
-
-    auto *container = new brls::Box(brls::Axis::COLUMN);
-    container->setGrow(1.0f);
-    container->addView(flPage);
-    container->registerAction("关闭"_i18n, brls::BUTTON_START,
-                              [](brls::View *) { brls::Application::popActivity(); return true; });
-
-    auto *frame = new brls::AppletFrame(container);
-    frame->setHeaderVisibility(brls::Visibility::GONE);
-    frame->setFooterVisibility(brls::Visibility::GONE);
-    frame->setBackground(brls::ViewBackground::NONE);
-    brls::Application::pushActivity(new brls::Activity(frame));
-
-    if (startPath.empty())
-        flPage->showDriveList();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
