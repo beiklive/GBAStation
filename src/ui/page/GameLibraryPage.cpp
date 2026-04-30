@@ -323,8 +323,6 @@ namespace beiklive
             [this, crc](const beiklive::GameEntry& e) {
         _hideGameOptionsPanel();
                 std::string startDir;
-                if (!e.logoPath.empty())
-                    startDir = beiklive::tools::getParentPath(e.logoPath);
                 beiklive::openFilePicker({"png", "jpg"},
                     [this, crc](const std::string& selectedPath) {
                         if (beiklive::GameDB) {
@@ -333,7 +331,7 @@ namespace beiklive
                             brls::async([]() { beiklive::GameDB->flush(); });
                         }
                     },
-                    startDir);
+                    beiklive::path::GetRootPath());
             });
 
         // ── 删除游戏 ──

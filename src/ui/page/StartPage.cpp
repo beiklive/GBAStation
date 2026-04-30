@@ -263,10 +263,6 @@ namespace beiklive
             [this, crc, romPath](const beiklive::GameEntry& e) {
                 _hideGameOptionsPanel();
                 // 封面图的默认路径：获取当前 logoPath 所在目录作为起始目录
-                std::string startDir;
-                if (!e.logoPath.empty()) {
-                    startDir = beiklive::tools::getParentPath(e.logoPath);
-                }
                 beiklive::openFilePicker({"png", "jpg"},
                     [this, crc](const std::string& selectedPath) {
                         if (beiklive::GameDB) {
@@ -275,7 +271,7 @@ namespace beiklive
                             brls::async([]() { beiklive::GameDB->flush(); });
                         }
                     },
-                    startDir);
+                    beiklive::path::GetRootPath());
             });
 
         // ── 删除游戏 ──
