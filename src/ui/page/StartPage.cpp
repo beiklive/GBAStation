@@ -46,6 +46,8 @@ namespace beiklive
         {
             beiklive::GameList recent = beiklive::GameDB->getRecentPlayed(10);
             switchLayout->refreshGameList(recent);
+            brls::sync([this]()
+                       { brls::Application::giveFocus(switchLayout->getContentBox()->getChildren().empty() ? switchLayout->getDefaultFocus() : switchLayout->getContentBox()->getChildren()[0]->getDefaultFocus()); });
         }
     }
 
@@ -232,6 +234,7 @@ namespace beiklive
         // ── 修改映射名称 ──
         m_gameOptionsSidebar->addButton("修改映射名称", BK_RES("img/ui/setting/emu.png"),
             [this, crc, title = entry.title](const beiklive::GameEntry& e) {
+                _hideGameOptionsPanel();
                 auto* ime = brls::Application::getPlatform()->getImeManager();
                 if (!ime) return;
                 ime->openForText(
@@ -251,6 +254,7 @@ namespace beiklive
         // ── 设置封面图 ──
         m_gameOptionsSidebar->addButton("设置封面图", BK_RES("img/ui/setting/display.png"),
             [this, crc, romPath](const beiklive::GameEntry& e) {
+                _hideGameOptionsPanel();
                 // 封面图的默认路径：获取当前 logoPath 所在目录作为起始目录
                 std::string startDir;
                 if (!e.logoPath.empty()) {
@@ -261,6 +265,7 @@ namespace beiklive
                         if (beiklive::GameDB) {
                             beiklive::GameDB->set(crc, "logoPath", nlohmann::json(selectedPath));
                             onResume();
+
                         }
                     },
                     startDir);
@@ -269,16 +274,22 @@ namespace beiklive
         // ── 删除游戏 ──
         m_gameOptionsSidebar->addButton("删除游戏", BK_RES("img/ui/menu/exit.png"),
             [this, crc](const beiklive::GameEntry& e) {
+                _hideGameOptionsPanel();
                 auto* dialog = new brls::Dialog("确定要删除该游戏吗？\n此操作将清除游戏记录与存档数据。");
                 dialog->addButton("确认删除", [this, crc]() {
+                    _hideGameOptionsPanel();
                     if (beiklive::GameDB && beiklive::GameDB->removeByCrc32(crc)) {
                         brls::Application::notify("已删除游戏");
                         onResume();
+                        
                     } else {
                         brls::Application::notify("删除失败");
+
                     }
                 });
-                dialog->addButton("取消", []() {});
+                dialog->addButton("取消", [this]() {
+
+                });
                 dialog->open();
             });
 

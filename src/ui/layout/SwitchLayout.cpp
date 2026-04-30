@@ -34,7 +34,6 @@ namespace beiklive
         brls::sync([this, gameList]() mutable
         {
             buildCardRow(gameList);
-            brls::Application::giveFocus(m_cardRow->getDefaultFocus());
         });
     }
 

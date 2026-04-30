@@ -17,7 +17,7 @@ namespace beiklive
         ~SwitchLayout() = default;
 
         void refreshGameList(beiklive::GameList gameList) override;
-
+        brls::Box* getContentBox() { return m_cardRow; } // 获取游戏列表所在的容器，供 StartPage 在 onResume 时设置焦点
         void buildCardRow(beiklive::GameList gameList);
         void buildFunctionArea(); // 构建功能区域，包含游戏库、设置等功能入口
     private:
