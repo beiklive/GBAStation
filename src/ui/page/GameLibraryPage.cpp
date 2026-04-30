@@ -292,18 +292,21 @@ namespace beiklive
 
         m_gameOptionsSidebar = new beiklive::GameOptionsSidebar();
         this->getBottomBar()->setVisibility(brls::Visibility::INVISIBLE);
-
+        std::string filename = beiklive::tools::getFileNameWithoutExtension(entry.path);
         // ── 修改映射名称 ──
         m_gameOptionsSidebar->addButton("修改映射名称", BK_RES("img/ui/setting/emu.png"),
-            [this, crc, title = entry.title](const beiklive::GameEntry& e) {
-        _hideGameOptionsPanel();
+            [this, crc, title = entry.title, filename](const beiklive::GameEntry& e) {
+                _hideGameOptionsPanel();
                 auto* ime = brls::Application::getPlatform()->getImeManager();
                 if (!ime) return;
                 ime->openForText(
-                    [this, crc](std::string text) {
+                    [this, crc, filename](std::string text) {
                         if (!text.empty() && beiklive::GameDB) {
                             beiklive::GameDB->set(crc, "title", nlohmann::json(text));
                             _reloadEntries();
+                            beiklive::GameDB->flush();
+                            beiklive::NameMappingManager->Set(filename, text, true); // 同步更新名称映射
+                            beiklive::NameMappingManager->Save();
                         }
                     },
                     "编辑游戏名称",
@@ -325,6 +328,7 @@ namespace beiklive
                         if (beiklive::GameDB) {
                             beiklive::GameDB->set(crc, "logoPath", nlohmann::json(selectedPath));
                             _reloadEntries();
+                            beiklive::GameDB->flush();
                         }
                     },
                     startDir);
@@ -340,6 +344,7 @@ namespace beiklive
                     if (beiklive::GameDB && beiklive::GameDB->removeByCrc32(crc)) {
                         brls::Application::notify("已删除游戏");
                         _reloadEntries();
+                        beiklive::GameDB->flush();
                     } else {
                         brls::Application::notify("删除失败");
                     }
