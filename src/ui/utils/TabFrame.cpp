@@ -37,62 +37,57 @@ namespace beiklive
         brls::View *contentView,
         brls::View* contentDefaultFocus)
     {
-        // 创建标签按钮
         auto* tabButton = new beiklive::ButtonBox();
         tabButton->setText(text);
         tabButton->setIcon(iconPath);
-        tabButton->registerClickAction([text, onClick, contentDefaultFocus, contentView](brls::View*) -> bool {
-            if (contentView) {
-                brls::Logger::info("show contentView: {}", text);
-                brls::Application::giveFocus(contentDefaultFocus ? contentDefaultFocus : contentView);
-            }else{
-                if(onClick)
-                    onClick();
-            }
-            return true;
-        });
+
         m_tabBar->addView(tabButton);
         
-        if(contentView) {
+        if (contentView) {
             contentView->setVisibility(brls::Visibility::GONE);
             m_contentArea->addView(contentView);
-            // 聚焦时显示内容, 隐藏其他内容            
-            tabButton->onFocusGainedCallback = [this, contentView, onFocus]() {
-                for(auto* child : m_contentArea->getChildren()) {
-                    child->setVisibility(brls::Visibility::GONE);
-                }
-                contentView->setVisibility(brls::Visibility::VISIBLE);
-                if(onFocus) onFocus();
-            };
-            tabButton->onFocusLostCallback = [onBlur]() {
-                if(onBlur) onBlur();
-            };
-            tabButton->setCustomNavigationRoute(brls::FocusDirection::RIGHT, contentDefaultFocus ? contentDefaultFocus : contentView);
 
-        }else{
-            tabButton->onFocusGainedCallback = [this, onFocus]() {
-                for(auto* child : m_contentArea->getChildren()) {
-                    child->setVisibility(brls::Visibility::GONE);
+            tabButton->registerClickAction([contentView, contentDefaultFocus](brls::View*) -> bool {
+                brls::Application::giveFocus(contentDefaultFocus ? contentDefaultFocus : contentView);
+                return true;
+            });
+
+            tabButton->onFocusGainedCallback = [this, contentView, onFocus]() {
+                for (auto* child : m_contentArea->getChildren()) {
+                    child->setVisibility(
+                        child == contentView ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
                 }
-                if(onFocus) onFocus();
+                if (onFocus) onFocus();
             };
             tabButton->onFocusLostCallback = [onBlur]() {
-                if(onBlur) onBlur();
+                if (onBlur) onBlur();
             };
-            // 无子面板时禁止向右路由
+            tabButton->setCustomNavigationRoute(brls::FocusDirection::RIGHT,
+                contentDefaultFocus ? contentDefaultFocus : contentView);
+        } else {
+            tabButton->registerClickAction([onClick](brls::View*) -> bool {
+                if (onClick) onClick();
+                return true;
+            });
+
+            tabButton->onFocusGainedCallback = [this, onFocus]() {
+                for (auto* child : m_contentArea->getChildren())
+                    child->setVisibility(brls::Visibility::GONE);
+                if (onFocus) onFocus();
+            };
+            tabButton->onFocusLostCallback = [onBlur]() {
+                if (onBlur) onBlur();
+            };
             tabButton->setCustomNavigationRoute(brls::FocusDirection::RIGHT, tabButton);
         }
-
     }
 
     void TabFrame::addFinish()
     {
-        // 添加完成后默认聚焦第一个标签
         if (!m_tabBar->getChildren().empty()) {
             brls::Application::giveFocus(m_tabBar->getChildren()[0]);
         }
 
-        // 设置首尾路由
         if (!m_tabBar->getChildren().empty()) {
             auto* firstTab = m_tabBar->getChildren()[0];
             auto* lastTab = m_tabBar->getChildren().back();
@@ -125,7 +120,7 @@ namespace beiklive
         m_tabBar->setHeightPercentage(90.f);
         m_tabBar->setBackground(brls::ViewBackground::NONE);
         m_tabBar->setPadding(16.f);
-        m_tabBar->setMargins(10.f,10.f,10.f,10.f);
+        m_tabBar->setMargins(10.f, 10.f, 10.f, 10.f);
         m_tabBar->setLineRight(1.f);
         m_tabBar->setLineColor(nvgRGBA(255, 255, 255, 10));
         this->addView(m_tabBar);
@@ -148,7 +143,5 @@ namespace beiklive
             });
             return true;
         });
-
-
     }
 }
