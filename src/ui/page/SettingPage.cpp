@@ -108,43 +108,117 @@ static constexpr int k_capPadKeyCount =
 static constexpr int k_capMaxKeys = 2; ///< 组合键最大按键数
 
 /// 按键捕获全屏页，5 秒倒计时结束后调用 onDone(result)。
-class KeyCaptureView : public brls::Box
+class KeyCaptureView : public beiklive::Box
 {
 public:
     explicit KeyCaptureView(std::function<void(const std::string &)> onDone)
         : m_onDone(std::move(onDone))
     {
-        setFocusable(true);
-        setAxis(brls::Axis::COLUMN);
-        setAlignItems(brls::AlignItems::CENTER);
-        setJustifyContent(brls::JustifyContent::CENTER);
-        setGrow(1.0f);
+        this->showFooter(false);
+        this->showHeader(false);
+        
 
+        this->setFocusable(true);
+        this->getContentBox()->setAxis(brls::Axis::COLUMN);
+        this->getContentBox()->setAlignItems(brls::AlignItems::CENTER);
+        this->getContentBox()->setJustifyContent(brls::JustifyContent::CENTER);
+        this->getContentBox()->setGrow(1.0f);
+
+        // ── 圆角卡片 ──
+        auto* card = new brls::Box(brls::Axis::COLUMN);
+        card->setFocusable(false);
+        card->setCornerRadius(16.f);
+        card->setBackgroundColor(nvgRGBA(30, 30, 35, 230));
+        card->setShadowType(brls::ShadowType::GENERIC);
+        card->setShadowVisibility(true);
+        card->setAlignItems(brls::AlignItems::CENTER);
+        card->setPadding(40.f, 60.f, 40.f, 60.f);
+        card->setWidth(560.f);
+
+        // 图标区
+        auto* iconLabel = new brls::Label();
+        iconLabel->setText("\uF11C"); // gamepad icon (if font supports)
+        iconLabel->setFontSize(36.f);
+        iconLabel->setTextColor(nvgRGB(79, 193, 255));
+        iconLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+        iconLabel->setMarginBottom(12.f);
+        iconLabel->setFocusable(false);
+        card->addView(iconLabel);
+
+        // 标题
+        auto* titleLabel = new brls::Label();
+        titleLabel->setText("按键捕获");
+        titleLabel->setFontSize(26.f);
+        titleLabel->setTextColor(GET_THEME_COLOR("brls/text"));
+        titleLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+        titleLabel->setMarginBottom(6.f);
+        titleLabel->setFocusable(false);
+        card->addView(titleLabel);
+
+        // 分隔线
+        auto* div = new brls::Rectangle(nvgRGBA(79, 193, 255, 80));
+        div->setWidth(80.f);
+        div->setHeight(2.f);
+        div->setMarginBottom(20.f);
+        card->addView(div);
+
+        // 提示文字
         m_promptLabel = new brls::Label();
         m_promptLabel->setText("按下要绑定的按键...");
-        m_promptLabel->setFontSize(24.f);
+        m_promptLabel->setFontSize(17.f);
+        m_promptLabel->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
         m_promptLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
-        addView(m_promptLabel);
+        m_promptLabel->setMarginBottom(16.f);
+        m_promptLabel->setFocusable(false);
+        card->addView(m_promptLabel);
 
-        auto *spacer1 = new brls::Padding();
-        spacer1->setHeight(30.f);
-        addView(spacer1);
-
+        // 捕获的按键显示
         m_keyLabel = new brls::Label();
-        m_keyLabel->setText("等待按键...");
-        m_keyLabel->setFontSize(48.f);
+        m_keyLabel->setText("...");
+        m_keyLabel->setFontSize(42.f);
+        m_keyLabel->setTextColor(nvgRGBA(79, 193, 255,50));
         m_keyLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
-        addView(m_keyLabel);
+        m_keyLabel->setMarginBottom(20.f);
+        m_keyLabel->setFocusable(false);
+        card->addView(m_keyLabel);
 
-        auto *spacer2 = new brls::Padding();
-        spacer2->setHeight(30.f);
-        addView(spacer2);
+        // 进度条区域
+        auto* barRow = new brls::Box(brls::Axis::ROW);
+        barRow->setFocusable(false);
+        barRow->setAlignItems(brls::AlignItems::CENTER);
+        barRow->setJustifyContent(brls::JustifyContent::CENTER);
+        barRow->setMarginBottom(8.f);
 
+        m_progressBar = new brls::Rectangle(nvgRGBA(79, 193, 255, 50));
+        m_progressBar->setWidth(240.f);
+        m_progressBar->setHeight(6.f);
+        m_progressBar->setCornerRadius(3.f);
+        m_progressBar->setFocusable(false);
+        barRow->addView(m_progressBar);
+
+        card->addView(barRow);
+
+        // 倒计时文字
         m_countdownLabel = new brls::Label();
         m_countdownLabel->setText("5 秒");
-        m_countdownLabel->setFontSize(22.f);
+        m_countdownLabel->setFontSize(16.f);
+        m_countdownLabel->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
         m_countdownLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
-        addView(m_countdownLabel);
+        m_countdownLabel->setMarginBottom(14.f);
+        m_countdownLabel->setFocusable(false);
+        card->addView(m_countdownLabel);
+
+        // 提示
+        m_hintLabel = new brls::Label();
+        m_hintLabel->setText("松开所有按键以开始捕获  |  最多 2 个按键");
+        m_hintLabel->setFontSize(14.f);
+        m_hintLabel->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
+        m_hintLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+        m_hintLabel->setVisibility(brls::Visibility::INVISIBLE);
+        m_hintLabel->setFocusable(false);
+        card->addView(m_hintLabel);
+
+        this->getContentBox()->addView(card);
 
         m_startTime = std::chrono::steady_clock::now();
 
@@ -177,7 +251,7 @@ public:
         // 半透明深色背景
         nvgBeginPath(vg);
         nvgRect(vg, x, y, w, h);
-        nvgFillColor(vg, nvgRGBA(0, 0, 0, 200));
+        nvgFillColor(vg, nvgRGBA(0, 0, 0, 180));
         nvgFill(vg);
 
         if (!m_done)
@@ -186,10 +260,17 @@ public:
             {
                 checkGamepadRelease();
                 m_startTime = std::chrono::steady_clock::now();
+                m_promptLabel->setText("松开所有已按下的按键...");
+                m_promptLabel->setTextColor(nvgRGB(255, 183, 77));
+                m_hintLabel->setVisibility(brls::Visibility::VISIBLE);
             }
             else
             {
-                auto now     = std::chrono::steady_clock::now();
+                m_promptLabel->setText("按下要绑定的按键...");
+                m_promptLabel->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
+                m_hintLabel->setVisibility(brls::Visibility::GONE);
+
+                auto now        = std::chrono::steady_clock::now();
                 float elapsed   = std::chrono::duration<float>(now - m_startTime).count();
                 float remaining = 5.0f - elapsed;
 
@@ -200,7 +281,18 @@ public:
                 else
                 {
                     int secs = static_cast<int>(std::ceil(remaining));
-                    m_countdownLabel->setText(std::to_string(secs) + " 秒");
+                    m_countdownLabel->setText(std::to_string(secs) + " 秒后自动确认");
+
+                    // 更新进度条宽度
+                    float barProgress = remaining / 5.0f;
+                    float barWidth = 240.f * barProgress;
+                    m_progressBar->setWidth(barWidth);
+                    if (barProgress < 0.3f)
+                        m_progressBar->setColor(nvgRGB(255, 82, 82));  // 红色警告
+                    else if (barProgress < 0.6f)
+                        m_progressBar->setColor(nvgRGB(255, 183, 77)); // 橙色
+                    else
+                        m_progressBar->setColor(nvgRGB(79, 193, 255)); // 蓝色
                 }
             }
         }
@@ -214,9 +306,11 @@ private:
     brls::Label *m_promptLabel    = nullptr;
     brls::Label *m_keyLabel       = nullptr;
     brls::Label *m_countdownLabel = nullptr;
+    brls::Label *m_hintLabel      = nullptr;
+    brls::Rectangle *m_progressBar = nullptr;
     std::chrono::steady_clock::time_point m_startTime;
     bool m_done              = false;
-    bool m_waitingForRelease = true; ///< 开始捕获前需全部松开
+    bool m_waitingForRelease = true;
     std::vector<std::string> m_capturedKeys;
     std::string m_captured;
 
@@ -237,6 +331,8 @@ private:
         m_capturedKeys.push_back(name);
         m_captured = buildCombo(m_capturedKeys);
         m_keyLabel->setText(m_captured);
+        // 捕获到第一个按键后重置倒计时
+        m_startTime = std::chrono::steady_clock::now();
     }
 
     void checkGamepadRelease()
@@ -257,7 +353,7 @@ private:
         for (const auto &k : keys)
         {
             if (!result.empty())
-                result += "+";
+                result += " + ";
             result += k;
         }
         return result;
@@ -269,7 +365,14 @@ private:
             return;
         m_done = true;
         if (!result.empty())
+        {
             m_keyLabel->setText(result);
+            m_keyLabel->setTextColor(nvgRGB(79, 193, 255));
+            m_countdownLabel->setText("已确认");
+            m_countdownLabel->setTextColor(nvgRGB(129, 199, 132));
+            m_progressBar->setWidth(240.f);
+            m_progressBar->setColor(nvgRGB(129, 199, 132));
+        }
         if (m_onDone)
             m_onDone(result);
         brls::Application::popActivity(brls::TransitionAnimation::NONE);
