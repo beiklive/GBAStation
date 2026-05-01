@@ -67,9 +67,12 @@ std::string getFileModTimeStr(const std::string& path);
 /// 若字符串为 "none" 或空，返回空列表。
 std::vector<int> parsePadCombo(const std::string& combo);
 
+/// 将键盘按键字符串（如 "A"、"SPACE+ENTER"）解析为 BrlsKeyboardScancode 列表。
+/// "+" 分隔表示组合键，大小写不敏感。
+std::vector<int> parseKbdCombo(const std::string& combo);
+
 /// 将多 combo 字符串（逗号分隔，如 "A,LB+A"）解析为多组 combo。
 /// 外层 vector 为各组合（OR 关系），内层为各按键（AND 关系）。
 /// "none" 或空字符串返回空列表。
 std::vector<std::vector<int>> parseMultiCombo(const std::string& val);
-
 } // namespace beiklive::tools

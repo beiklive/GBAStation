@@ -277,6 +277,7 @@ namespace beiklive
         };
         for (const auto& info : gameBtnInfos) {
             std::string val = GET_SETTING_KEY_STR(std::string("handle.") + info.cfgSuffix, "none");
+            if (val == "none" || val.empty()) continue;
             auto combos = beiklive::tools::parseMultiCombo(val);
             if (combos.empty()) continue;
             unsigned rid = info.retroId;
@@ -1235,4 +1236,4 @@ namespace beiklive
         return dst;
     }
 
-} // namespace beiklive
+    } // namespace beiklive

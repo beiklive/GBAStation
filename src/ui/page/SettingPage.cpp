@@ -94,13 +94,22 @@ struct CapPadKey
 };
 
 static const CapPadKey k_capPadKeys[] = {
-    {"LT", brls::BUTTON_LT}, {"LB", brls::BUTTON_LB}, {"LSB", brls::BUTTON_LSB},
-    {"UP", brls::BUTTON_UP}, {"RIGHT", brls::BUTTON_RIGHT},
-    {"DOWN", brls::BUTTON_DOWN}, {"LEFT", brls::BUTTON_LEFT},
-    {"BACK", brls::BUTTON_BACK}, {"START", brls::BUTTON_START},
-    {"RSB", brls::BUTTON_RSB}, {"Y", brls::BUTTON_Y},
-    {"B", brls::BUTTON_B}, {"A", brls::BUTTON_A}, {"X", brls::BUTTON_X},
-    {"RB", brls::BUTTON_RB}, {"RT", brls::BUTTON_RT},
+    {"PAD_LT", brls::BUTTON_LT}, 
+    {"PAD_LB", brls::BUTTON_LB}, 
+    {"PAD_LSB", brls::BUTTON_LSB},
+    {"PAD_UP", brls::BUTTON_UP}, 
+    {"PAD_RIGHT", brls::BUTTON_RIGHT},
+    {"PAD_DOWN", brls::BUTTON_DOWN}, 
+    {"PAD_LEFT", brls::BUTTON_LEFT},
+    {"PAD_BACK", brls::BUTTON_BACK}, 
+    {"PAD_START", brls::BUTTON_START},
+    {"PAD_RSB", brls::BUTTON_RSB}, 
+    {"PAD_Y", brls::BUTTON_Y},
+    {"PAD_B", brls::BUTTON_B}, 
+    {"PAD_A", brls::BUTTON_A}, 
+    {"PAD_X", brls::BUTTON_X},
+    {"PAD_RB", brls::BUTTON_RB}, 
+    {"PAD_RT", brls::BUTTON_RT},
 };
 static constexpr int k_capPadKeyCount =
     static_cast<int>(sizeof(k_capPadKeys) / sizeof(k_capPadKeys[0]));
@@ -803,14 +812,24 @@ struct GameBtnEntry
 };
 
 static const GameBtnEntry k_gameBtns[] = {
-    {"A 键", "a"},       {"B 键", "b"},     {"X 键", "x"},      {"Y 键", "y"},
-    {"上", "up"},        {"下", "down"},     {"左", "left"},     {"右", "right"},
-    {"L1", "l"},         {"R1", "r"},        {"L2", "l2"},       {"R2", "r2"},
-    {"START", "start"},  {"SELECT", "select"},
-    {"左摇杆上", "lstick_up"},   {"左摇杆下", "lstick_down"},
-    {"左摇杆左", "lstick_left"}, {"左摇杆右", "lstick_right"},
-    {"右摇杆上", "rstick_up"},   {"右摇杆下", "rstick_down"},
-    {"右摇杆左", "rstick_left"}, {"右摇杆右", "rstick_right"},
+    {"\uE0E0", "a"},       
+    {"\uE0E1", "b"},     
+    {"\uE0E2", "x"},      
+    {"\uE0E3", "y"},
+    {"\uE0EB", "up"},        
+    {"\uE0EC", "down"},     
+    {"\uE0ED", "left"},     
+    {"\uE0EE", "right"},
+    {"\uE0E4", "l"},         
+    {"\uE0E5", "r"},        
+    {"\uE0E6", "l2"},       
+    {"\uE0E7", "r2"},
+    {"\uE0EF", "start"},  
+    {"\uE0F0", "select"},
+    // {"左摇杆上", "lstick_up"},   {"左摇杆下", "lstick_down"},
+    // {"左摇杆左", "lstick_left"}, {"左摇杆右", "lstick_right"},
+    // {"右摇杆上", "rstick_up"},   {"右摇杆下", "rstick_down"},
+    // {"右摇杆左", "rstick_left"}, {"右摇杆右", "rstick_right"},
 };
 static constexpr int k_gameBtnCount =
     static_cast<int>(sizeof(k_gameBtns) / sizeof(k_gameBtns[0]));
@@ -891,7 +910,7 @@ brls::View *SettingPage::buildKeyBindTab()
     {
         std::string cfgKey = k_hotkeys[i].cfgKey;
         auto *cell         = new brls::DetailCell();
-        cell->setText(std::string(k_hotkeys[i].label) + "（手柄）");
+        cell->setText(std::string(k_hotkeys[i].label));
         cell->setDetailText(cfgGetStr(cfgKey, "none"));
         registerKeyBindActions(cell, cfgKey);
         box->addView(cell);

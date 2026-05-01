@@ -158,31 +158,36 @@ namespace beiklive
                                     ->getControllersConnectedCount();
         int i = 0;
 #ifdef __SWITCH__
-        // 遍历控制器获取状态并处理输入，最多GAMEPADS_MAX个控制器
         for (i = 0; i < controllersCount; i++)
         {
 #endif
-
-            // 获取指定控制器的状态
             GamepadState gamepadState = getControllerState(i);
-            // 更新对应控制器的状态
             lastGamepadStates[i] = gamepadState;
-            // 更新时间（假设60FPS）
             currentTime += 16;
-            // 更新输入状态
+
+            // ── 键盘轮询（Switch 平台跳过）──
+#ifndef __SWITCH__
+            auto* im = brls::Application::getPlatform()->getInputManager();
+            if (im) {
+                for (const auto& hk : hotkeyBindings)
+                    for (const auto& combo : hk.buttons)
+                        for (int key : combo)
+                            if (key >= 32 && im->getKeyboardKeyState(
+                                    static_cast<brls::BrlsKeyboardScancode>(key)))
+                                activeInputs.push_back(key);
+            }
+#endif
+
             updateInputState();
             checkHotkeys();
-            // 状态有变化
+
             if (!gamepadState.is_equal(lastGamepadStates[i]))
             {
                 printactiveInputs();
 #ifdef __SWITCH__
-
-                // 检测手柄数量变化，发送特定消息通知游戏
                 if (lastControllerCount != controllersCount)
                 {
                     lastControllerCount = controllersCount;
-
                     for (int i = 0; i < controllersCount; i++)
                     {
                         brls::Logger::debug("GameInputManager: Controller #{} connected", i);
