@@ -142,14 +142,11 @@ namespace beiklive
         m_detailPanel->setPadding(12.f, 12.f, 12.f, 8.f);
 
         auto* detailCard = new brls::Box(brls::Axis::COLUMN);
-        detailCard->setCornerRadius(12.f);
         detailCard->setGrow(1.f);
         detailCard->setPadding(16.f);
         detailCard->setAlignItems(brls::AlignItems::CENTER);
         detailCard->setBackground(brls::ViewBackground::NONE);
-        detailCard->setShadowType(brls::ShadowType::GENERIC);
-        detailCard->setShadowVisibility(true);
-
+        detailCard->setClipsToBounds(true);
         // ── 缩略图（固定宽高，FIT 保持比例）──
         m_detailImage = new brls::Image();
         m_detailImage->setWidth(160.f);
@@ -173,7 +170,6 @@ namespace beiklive
         m_detailTitle->setAutoAnimate(true);
         m_detailTitle->setMarginBottom(10.f);
         m_detailTitle->setFocusable(false);
-        m_detailTitle->setCulled(true); // 启用裁剪，超出宽度时不渲染
 
         detailCard->addView(m_detailTitle);
 
@@ -241,12 +237,12 @@ namespace beiklive
         val->setText(value);
         val->setFontSize(16.f);
         val->setAnimated(true);
+        val->setAutoAnimate(true);
         val->setGrow(1.f);
         val->setTextColor(GET_THEME_COLOR("brls/text"));
         val->setHorizontalAlign(brls::HorizontalAlign::RIGHT);
         val->setFocusable(false);
         val->setSingleLine(true);
-        val->setCulled(true); // 启用裁剪，超出宽度时不渲染
         row->addView(val);
 
         m_detailInfoBox->addView(row);
