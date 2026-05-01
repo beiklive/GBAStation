@@ -172,6 +172,17 @@ static const CapKbdKey k_capKbdKeys[] = {
 static constexpr int k_capKbdKeyCount =
     static_cast<int>(sizeof(k_capKbdKeys) / sizeof(k_capKbdKeys[0]));
 
+const KeyCaptureView::StickDir KeyCaptureView::k_stickDirs[] = {
+    {"PAD_LEFTSTICKUP",    static_cast<int>(brls::LEFT_Y),  false},
+    {"PAD_LEFTSTICKDOWN",  static_cast<int>(brls::LEFT_Y),  true },
+    {"PAD_LEFTSTICKLEFT",  static_cast<int>(brls::LEFT_X),  false},
+    {"PAD_LEFTSTICKRIGHT", static_cast<int>(brls::LEFT_X),  true },
+    {"PAD_RIGHTSTICKUP",   static_cast<int>(brls::RIGHT_Y), false},
+    {"PAD_RIGHTSTICKDOWN", static_cast<int>(brls::RIGHT_Y), true },
+    {"PAD_RIGHTSTICKLEFT", static_cast<int>(brls::RIGHT_X), false},
+    {"PAD_RIGHTSTICKRIGHT",static_cast<int>(brls::RIGHT_X), true },
+};
+
 class KeyCaptureView : public beiklive::Box
 {
 public:
@@ -348,6 +359,9 @@ public:
                 m_promptLabel->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
                 m_hintLabel->setVisibility(brls::Visibility::GONE);
 
+                // 轮询摇杆方向
+                _pollSticks();
+
                 auto now        = std::chrono::steady_clock::now();
                 float elapsed   = std::chrono::duration<float>(now - m_startTime).count();
                 float remaining = 5.0f - elapsed;
@@ -426,6 +440,44 @@ private:
         if (static_cast<int>(m_capturedKeys.size()) >= k_capMaxKeys)
             return;
 
+        m_capturedKeys.push_back(name);
+        m_captured = buildCombo(m_capturedKeys);
+        m_keyLabel->setText(m_captured);
+        m_startTime = std::chrono::steady_clock::now();
+    }
+
+    // ── 摇杆捕获 ──
+    struct StickDir {
+        const char* name;
+        int         axis;
+        bool        positive;  // true=正方向, false=负方向
+    };
+    static const StickDir k_stickDirs[];
+    static constexpr int  k_stickDirCount = 8;
+
+    bool m_stickPrevActive[k_stickDirCount] = {};
+
+    void _pollSticks()
+    {
+        auto state = brls::Application::getControllerState();
+        for (int i = 0; i < k_stickDirCount; ++i)
+        {
+            float val = (k_stickDirs[i].axis < static_cast<int>(brls::_AXES_MAX))
+                ? state.axes[k_stickDirs[i].axis] : 0.f;
+            bool active = k_stickDirs[i].positive ? (val > 0.5f) : (val < -0.5f);
+            if (active && !m_stickPrevActive[i])
+                _captureStick(k_stickDirs[i].name);
+            m_stickPrevActive[i] = active;
+        }
+    }
+
+    void _captureStick(const char* name)
+    {
+        if (!name) return;
+        if (std::find(m_capturedKeys.begin(), m_capturedKeys.end(), name) != m_capturedKeys.end())
+            return;
+        if (static_cast<int>(m_capturedKeys.size()) >= k_capMaxKeys)
+            return;
         m_capturedKeys.push_back(name);
         m_captured = buildCombo(m_capturedKeys);
         m_keyLabel->setText(m_captured);
