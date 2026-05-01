@@ -292,7 +292,7 @@ std::vector<std::vector<int>> parseMultiCombo(const std::string& val)
     std::vector<std::vector<int>> result;
     std::istringstream iss(val);
     std::string comboStr;
-    while (std::getline(iss, comboStr, ',')) {
+    while (std::getline(iss, comboStr, '|')) {
         if (comboStr.empty()) continue;
         auto combo = parsePadCombo(comboStr);
         if (!combo.empty())

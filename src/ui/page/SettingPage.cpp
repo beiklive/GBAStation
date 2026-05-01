@@ -107,7 +107,62 @@ static constexpr int k_capPadKeyCount =
 
 static constexpr int k_capMaxKeys = 2; ///< 组合键最大按键数
 
-/// 按键捕获全屏页，5 秒倒计时结束后调用 onDone(result)。
+struct CapKbdKey
+{
+    brls::BrlsKeyboardScancode scancode;
+    const char* name;
+};
+
+static const CapKbdKey k_capKbdKeys[] = {
+    // 字母
+    { brls::BRLS_KBD_KEY_A, "A" }, { brls::BRLS_KBD_KEY_B, "B" },
+    { brls::BRLS_KBD_KEY_C, "C" }, { brls::BRLS_KBD_KEY_D, "D" },
+    { brls::BRLS_KBD_KEY_E, "E" }, { brls::BRLS_KBD_KEY_F, "F" },
+    { brls::BRLS_KBD_KEY_G, "G" }, { brls::BRLS_KBD_KEY_H, "H" },
+    { brls::BRLS_KBD_KEY_I, "I" }, { brls::BRLS_KBD_KEY_J, "J" },
+    { brls::BRLS_KBD_KEY_K, "K" }, { brls::BRLS_KBD_KEY_L, "L" },
+    { brls::BRLS_KBD_KEY_M, "M" }, { brls::BRLS_KBD_KEY_N, "N" },
+    { brls::BRLS_KBD_KEY_O, "O" }, { brls::BRLS_KBD_KEY_P, "P" },
+    { brls::BRLS_KBD_KEY_Q, "Q" }, { brls::BRLS_KBD_KEY_R, "R" },
+    { brls::BRLS_KBD_KEY_S, "S" }, { brls::BRLS_KBD_KEY_T, "T" },
+    { brls::BRLS_KBD_KEY_U, "U" }, { brls::BRLS_KBD_KEY_V, "V" },
+    { brls::BRLS_KBD_KEY_W, "W" }, { brls::BRLS_KBD_KEY_X, "X" },
+    { brls::BRLS_KBD_KEY_Y, "Y" }, { brls::BRLS_KBD_KEY_Z, "Z" },
+    // 数字
+    { brls::BRLS_KBD_KEY_0, "0" }, { brls::BRLS_KBD_KEY_1, "1" },
+    { brls::BRLS_KBD_KEY_2, "2" }, { brls::BRLS_KBD_KEY_3, "3" },
+    { brls::BRLS_KBD_KEY_4, "4" }, { brls::BRLS_KBD_KEY_5, "5" },
+    { brls::BRLS_KBD_KEY_6, "6" }, { brls::BRLS_KBD_KEY_7, "7" },
+    { brls::BRLS_KBD_KEY_8, "8" }, { brls::BRLS_KBD_KEY_9, "9" },
+    // 功能键
+    { brls::BRLS_KBD_KEY_F1,  "F1"  }, { brls::BRLS_KBD_KEY_F2,  "F2"  },
+    { brls::BRLS_KBD_KEY_F3,  "F3"  }, { brls::BRLS_KBD_KEY_F4,  "F4"  },
+    { brls::BRLS_KBD_KEY_F5,  "F5"  }, { brls::BRLS_KBD_KEY_F6,  "F6"  },
+    { brls::BRLS_KBD_KEY_F7,  "F7"  }, { brls::BRLS_KBD_KEY_F8,  "F8"  },
+    { brls::BRLS_KBD_KEY_F9,  "F9"  }, { brls::BRLS_KBD_KEY_F10, "F10" },
+    { brls::BRLS_KBD_KEY_F11, "F11" }, { brls::BRLS_KBD_KEY_F12, "F12" },
+    // 特殊键
+    { brls::BRLS_KBD_KEY_SPACE,     "Space"     },
+    { brls::BRLS_KBD_KEY_ENTER,     "Enter"     },
+    { brls::BRLS_KBD_KEY_TAB,       "Tab"       },
+    { brls::BRLS_KBD_KEY_ESCAPE,    "Esc"       },
+    { brls::BRLS_KBD_KEY_BACKSPACE, "Backspace" },
+    { brls::BRLS_KBD_KEY_DELETE,    "Del"       },
+    { brls::BRLS_KBD_KEY_UP,        "Up"        },
+    { brls::BRLS_KBD_KEY_DOWN,      "Down"      },
+    { brls::BRLS_KBD_KEY_LEFT,      "Left"      },
+    { brls::BRLS_KBD_KEY_RIGHT,     "Right"     },
+    // 修饰键
+    { brls::BRLS_KBD_KEY_LEFT_SHIFT,    "Shift"   },
+    { brls::BRLS_KBD_KEY_RIGHT_SHIFT,   "Shift"   },
+    { brls::BRLS_KBD_KEY_LEFT_CONTROL,  "Ctrl"    },
+    { brls::BRLS_KBD_KEY_RIGHT_CONTROL, "Ctrl"    },
+    { brls::BRLS_KBD_KEY_LEFT_ALT,      "Alt"     },
+    { brls::BRLS_KBD_KEY_RIGHT_ALT,     "Alt"     },
+};
+static constexpr int k_capKbdKeyCount =
+    static_cast<int>(sizeof(k_capKbdKeys) / sizeof(k_capKbdKeys[0]));
+
 class KeyCaptureView : public beiklive::Box
 {
 public:
@@ -137,7 +192,7 @@ public:
 
         // 图标区
         auto* iconLabel = new brls::Label();
-        iconLabel->setText("\uF11C"); // gamepad icon (if font supports)
+        iconLabel->setText("\uE041"); // gamepad icon (if font supports)
         iconLabel->setFontSize(36.f);
         iconLabel->setTextColor(nvgRGB(79, 193, 255));
         iconLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
@@ -243,6 +298,20 @@ public:
                            },
                            /*hidden=*/true);
         }
+
+        // 注册键盘按键捕获
+        for (int i = 0; i < k_capKbdKeyCount; ++i)
+        {
+            auto key = k_capKbdKeys[i].scancode;
+            registerAction(brls::BrlsKeyCombination(key),
+                           [this, key](brls::View *) -> bool
+                           {
+                               if (!m_done && !m_waitingForRelease)
+                                   captureKeyboardKey(key);
+                               return true;
+                           },
+                           /*allowRepeating=*/false);
+        }
     }
 
     void draw(NVGcontext *vg, float x, float y, float w, float h,
@@ -258,7 +327,7 @@ public:
         {
             if (m_waitingForRelease)
             {
-                checkGamepadRelease();
+                checkAllReleased();
                 m_startTime = std::chrono::steady_clock::now();
                 m_promptLabel->setText("松开所有已按下的按键...");
                 m_promptLabel->setTextColor(nvgRGB(255, 183, 77));
@@ -335,14 +404,44 @@ private:
         m_startTime = std::chrono::steady_clock::now();
     }
 
-    void checkGamepadRelease()
+    void captureKeyboardKey(brls::BrlsKeyboardScancode key)
     {
+        const char* name = nullptr;
+        for (int i = 0; i < k_capKbdKeyCount; ++i)
+            if (k_capKbdKeys[i].scancode == key) { name = k_capKbdKeys[i].name; break; }
+        if (!name) return;
+
+        if (std::find(m_capturedKeys.begin(), m_capturedKeys.end(), name) != m_capturedKeys.end())
+            return;
+
+        if (static_cast<int>(m_capturedKeys.size()) >= k_capMaxKeys)
+            return;
+
+        m_capturedKeys.push_back(name);
+        m_captured = buildCombo(m_capturedKeys);
+        m_keyLabel->setText(m_captured);
+        m_startTime = std::chrono::steady_clock::now();
+    }
+
+    void checkAllReleased()
+    {
+        // 检查手柄
         auto state = brls::Application::getControllerState();
         for (int i = 0; i < k_capPadKeyCount; ++i)
         {
             int idx = static_cast<int>(k_capPadKeys[i].btn);
             if (idx >= 0 && idx < static_cast<int>(brls::_BUTTON_MAX) && state.buttons[idx])
                 return;
+        }
+        // 检查键盘
+        auto* im = brls::Application::getPlatform()->getInputManager();
+        if (im)
+        {
+            for (int i = 0; i < k_capKbdKeyCount; ++i)
+            {
+                if (im->getKeyboardKeyState(k_capKbdKeys[i].scancode))
+                    return;
+            }
         }
         m_waitingForRelease = false;
     }
@@ -754,10 +853,10 @@ brls::View *SettingPage::buildKeyBindTab()
                         bool exists = false;
                         std::istringstream iss(cur);
                         std::string tok;
-                        while (std::getline(iss, tok, ',')) {
+                        while (std::getline(iss, tok, '|')) {
                             if (tok == r) { exists = true; break; }
                         }
-                        if (!exists) cur += "," + r;
+                        if (!exists) cur += "|" + r;
                     }
                     cfgSetStr(cfgKey, cur);
                     cell->setDetailText(cur);
