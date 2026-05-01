@@ -1,4 +1,5 @@
 #include "TabFrame.hpp"
+#include "ui/utils/AnimationHelper.hpp"
 
 
 namespace beiklive
@@ -53,11 +54,22 @@ namespace beiklive
             });
 
             tabButton->onFocusGainedCallback = [this, contentView, onFocus]() {
+                bool alreadyVisible = (contentView->getVisibility() == brls::Visibility::VISIBLE);
                 for (auto* child : m_contentArea->getChildren()) {
-                    child->setVisibility(
-                        child == contentView ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+                    if (child != contentView)
+                        child->setVisibility(brls::Visibility::GONE);
                 }
-                if (onFocus) onFocus();
+                if (alreadyVisible) {
+                    if (onFocus) onFocus();
+                } else if (m_animationEnabled) {
+                    float dist = m_contentArea->getWidth();
+                    if (dist <= 0.f) dist = 960.f;
+                    AnimationHelper::slideInFromRight(contentView, dist, 250,
+                        [onFocus]() { if (onFocus) onFocus(); });
+                } else {
+                    contentView->setVisibility(brls::Visibility::VISIBLE);
+                    if (onFocus) onFocus();
+                }
             };
             tabButton->onFocusLostCallback = [onBlur]() {
                 if (onBlur) onBlur();

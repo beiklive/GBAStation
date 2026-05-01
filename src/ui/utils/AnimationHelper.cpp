@@ -145,6 +145,56 @@ namespace beiklive
     }
 
     // ============================================================
+    // slideInFromRight – 从右侧滑入（X 轴）
+    // ============================================================
+    void AnimationHelper::slideInFromRight(brls::View* view, float distance,
+                                           int durationMs,
+                                           std::function<void()> onComplete)
+    {
+        if (!view) return;
+
+        view->setVisibility(brls::Visibility::VISIBLE);
+        view->setAlpha(1.0f);
+        view->setTranslationX(distance);
+
+        auto* anim = new brls::Animatable();
+        anim->reset(distance);
+        anim->addStep(0.0f, durationMs, brls::EasingFunction::quadraticOut);
+        anim->setTickCallback([view, anim]() {
+            view->setTranslationX(anim->getValue());
+        });
+        anim->setEndCallback([view, anim, cb = std::move(onComplete)](bool) {
+            view->setTranslationX(0.0f);
+            if (cb) cb();
+            delete anim;
+        });
+        anim->start();
+    }
+
+    // ============================================================
+    // slideOutToRight – 滑出到右侧（X 轴）
+    // ============================================================
+    void AnimationHelper::slideOutToRight(brls::View* view, float distance,
+                                          int durationMs, bool goneAfter,
+                                          std::function<void()> onComplete)
+    {
+        if (!view) return;
+
+        auto* anim = new brls::Animatable();
+        anim->reset(0.0f);
+        anim->addStep(distance, durationMs, brls::EasingFunction::backIn);
+        anim->setTickCallback([view, anim]() {
+            view->setTranslationX(anim->getValue());
+        });
+        anim->setEndCallback([view, distance, goneAfter, cb = std::move(onComplete)](bool) {
+            view->setTranslationX(0.0f);
+            if (goneAfter) view->setVisibility(brls::Visibility::GONE);
+            if (cb) cb();
+        });
+        anim->start();
+    }
+
+    // ============================================================
     // pushActivity – 推入 Activity（封装 brls::Application::pushActivity）
     // ============================================================
     void AnimationHelper::pushActivity(brls::Activity* activity,

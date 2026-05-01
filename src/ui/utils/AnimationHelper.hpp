@@ -54,6 +54,18 @@ namespace beiklive
                                      int durationMs = 250, bool goneAfter = true,
                                      std::function<void()> onComplete = {});
 
+        // ---- X 轴平移动画 -----------------------------------------------------
+
+        /// 从右侧滑入动画：先设置 visibility 为 VISIBLE，再将 translateX 从 +distance 滑至 0。
+        static void slideInFromRight(brls::View* view, float distance = 320.f,
+                                     int durationMs = 250,
+                                     std::function<void()> onComplete = {});
+
+        /// 滑出到右侧动画：将 translateX 从 0 滑至 +distance，完成后可选设为 GONE。
+        static void slideOutToRight(brls::View* view, float distance = 320.f,
+                                    int durationMs = 250, bool goneAfter = true,
+                                    std::function<void()> onComplete = {});
+
         // ---- Activity 过渡动画 -----------------------------------------------
 
         /// 推入 Activity（带过渡动画，默认淡入）。

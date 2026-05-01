@@ -28,9 +28,14 @@ namespace beiklive
             void addFinish();
 
             void onShow();
+
+            /// 开关 Tab 切换滑入动画（默认开启）
+            void setAnimationEnabled(bool enabled) { m_animationEnabled = enabled; }
+            bool isAnimationEnabled() const { return m_animationEnabled; }
         private:
             void _initLayout();
             brls::Box* m_tabBar = nullptr; ///< 标签栏容器
             brls::Box* m_contentArea = nullptr; ///< 内容区域容器
+            bool m_animationEnabled = true; ///< Tab 切换滑入动画开关
     };
 }
