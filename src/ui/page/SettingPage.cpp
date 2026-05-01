@@ -172,17 +172,6 @@ static const CapKbdKey k_capKbdKeys[] = {
 static constexpr int k_capKbdKeyCount =
     static_cast<int>(sizeof(k_capKbdKeys) / sizeof(k_capKbdKeys[0]));
 
-const KeyCaptureView::StickDir KeyCaptureView::k_stickDirs[] = {
-    {"PAD_LEFTSTICKUP",    static_cast<int>(brls::LEFT_Y),  false},
-    {"PAD_LEFTSTICKDOWN",  static_cast<int>(brls::LEFT_Y),  true },
-    {"PAD_LEFTSTICKLEFT",  static_cast<int>(brls::LEFT_X),  false},
-    {"PAD_LEFTSTICKRIGHT", static_cast<int>(brls::LEFT_X),  true },
-    {"PAD_RIGHTSTICKUP",   static_cast<int>(brls::RIGHT_Y), false},
-    {"PAD_RIGHTSTICKDOWN", static_cast<int>(brls::RIGHT_Y), true },
-    {"PAD_RIGHTSTICKLEFT", static_cast<int>(brls::RIGHT_X), false},
-    {"PAD_RIGHTSTICKRIGHT",static_cast<int>(brls::RIGHT_X), true },
-};
-
 class KeyCaptureView : public beiklive::Box
 {
 public:
@@ -537,6 +526,17 @@ private:
             m_onDone(result);
         brls::Application::popActivity(brls::TransitionAnimation::NONE);
     }
+};
+
+const KeyCaptureView::StickDir KeyCaptureView::k_stickDirs[] = {
+    {"PAD_LEFTSTICKUP",    static_cast<int>(brls::LEFT_Y),  false},
+    {"PAD_LEFTSTICKDOWN",  static_cast<int>(brls::LEFT_Y),  true },
+    {"PAD_LEFTSTICKLEFT",  static_cast<int>(brls::LEFT_X),  false},
+    {"PAD_LEFTSTICKRIGHT", static_cast<int>(brls::LEFT_X),  true },
+    {"PAD_RIGHTSTICKUP",   static_cast<int>(brls::RIGHT_Y), false},
+    {"PAD_RIGHTSTICKDOWN", static_cast<int>(brls::RIGHT_Y), true },
+    {"PAD_RIGHTSTICKLEFT", static_cast<int>(brls::RIGHT_X), false},
+    {"PAD_RIGHTSTICKRIGHT",static_cast<int>(brls::RIGHT_X), true },
 };
 
 /// 推入全屏按键捕获页
