@@ -271,9 +271,15 @@ std::vector<int> parsePadCombo(const std::string& combo)
     std::string part;
     while (std::getline(iss, part, '+')) {
         if (part.empty()) continue;
+        // trim 首尾空格
+        size_t s = 0, e = part.size();
+        while (s < e && part[s] == ' ') ++s;
+        while (e > s && part[e - 1] == ' ') --e;
+        if (s >= e) continue;
+        std::string name = part.substr(s, e - s);
         // 在 k_gameInputNames 中查找
         for (const auto& entry : beiklive::k_gameInputNames) {
-            if (entry.name == part) {
+            if (entry.name == name) {
                 result.push_back(entry.id);
                 break;
             }
