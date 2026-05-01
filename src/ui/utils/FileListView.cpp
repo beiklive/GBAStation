@@ -20,6 +20,7 @@ namespace beiklive
         cell->setTitle(item.text);
         cell->setSubTitle(item.subText);
         cell->setIcon(item.iconPath);
+        cell->setFullData(item.data);
         brls::Logger::info("Creating cell for row " + std::to_string(index.row) + ": " + item.text);
         return cell;
     }
@@ -95,16 +96,16 @@ namespace beiklive
                                     if(onItemActionBind)
                                         onItemActionBind(*cell);
                                     // 给item绑定额外焦点事件
-                                    cell->onFocusGainedCallback = [this](std::string title)
+                                    cell->onFocusGainedCallback = [this](std::string title, std::string data)
                                     {
                                         if(onItemFocused)
-                                            onItemFocused(title);
+                                            onItemFocused(title, data);
                                     };
                                     // 给item绑定失去焦点事件
-                                    cell->onFocusLostCallback = [this](std::string title)
+                                    cell->onFocusLostCallback = [this](std::string title, std::string data)
                                     {
                                         if(onItemFocusLost)
-                                            onItemFocusLost(title);
+                                            onItemFocusLost(title, data);
                                     };
 
 

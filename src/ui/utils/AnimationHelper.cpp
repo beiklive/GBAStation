@@ -186,10 +186,11 @@ namespace beiklive
         anim->setTickCallback([view, anim]() {
             view->setTranslationX(anim->getValue());
         });
-        anim->setEndCallback([view, distance, goneAfter, cb = std::move(onComplete)](bool) {
+        anim->setEndCallback([view, distance, goneAfter, anim, cb = std::move(onComplete)](bool) {
             view->setTranslationX(0.0f);
             if (goneAfter) view->setVisibility(brls::Visibility::GONE);
             if (cb) cb();
+            delete anim;
         });
         anim->start();
     }

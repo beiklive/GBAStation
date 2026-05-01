@@ -81,12 +81,17 @@ void ListItemCell::setIcon(const std::string& path)
     m_icon->setImageFromFile(path);
 }
 
+void ListItemCell::setFullData(const std::string& data)
+{
+    m_fullData = data;
+}
+
 void ListItemCell::onFocusGained()
 {
     brls::RecyclerCell::onFocusGained();
     m_accent->setVisibility(brls::Visibility::VISIBLE);
     if(onFocusGainedCallback)
-        onFocusGainedCallback(m_text->getFullText());
+        onFocusGainedCallback(m_text->getFullText(), m_fullData);
 }
 
 void ListItemCell::onFocusLost()
@@ -94,7 +99,7 @@ void ListItemCell::onFocusLost()
     brls::RecyclerCell::onFocusLost();
     m_accent->setVisibility(brls::Visibility::INVISIBLE);
     if(onFocusLostCallback)
-        onFocusLostCallback(m_text->getFullText());
+        onFocusLostCallback(m_text->getFullText(), m_fullData);
 }
 
 ListItemCell* ListItemCell::create()

@@ -1,50 +1,77 @@
 #pragma once
 #include "core/common.h"
 #include "ui/utils/Box.hpp"
-
 #include "ui/utils/FileListView.hpp"
 #include "core/Tools.hpp"
+#include <atomic>
 #include <functional>
+
 namespace beiklive
 {
 
     class FileListPage : public beiklive::Box
     {
     private:
-
         beiklive::enums::FilterMode m_filterMode = beiklive::enums::FilterMode::None;
-        std::vector<std::string> m_filterExtensions;
-
-        std::string m_currentPath;
-        std::string m_previousPath;
-        bool m_isAtDriveList = false; // 当前是否处于磁盘列表视图
-
+        std::vector<std::string>    m_filterExtensions;
+        std::string                 m_currentPath;
+        std::string                 m_previousPath;
+        bool                        m_isAtDriveList = false;
         std::vector<beiklive::DirListData> m_dirItems;
-
-        beiklive::FileListView* fileListView;
+        beiklive::FileListView*     fileListView;
 
         void refreshDirList(const std::string dirPath, beiklive::ListItemList* items,
                             const std::string& iconPrefix);
         bool passesFilter(const std::string suffix);
         void navigateUp();
         void updatePath();
-        void updateIndex(std::string fileName);
-        
-        
-        public:
+        void updateIndex(std::string fullPath);
+
+        // ── 右侧详情面板 ──
+        brls::Box*      m_detailPanel      = nullptr;
+        brls::Image*    m_detailImage      = nullptr;
+        brls::Label*    m_detailTitle      = nullptr;
+        brls::Label*    m_detailSubtitle   = nullptr;
+        brls::Box*      m_detailInfoBox    = nullptr;
+        bool            m_panelVisible     = true;
+        std::string     m_focusedFullPath; ///< 当前聚焦项的完整路径（面板隐藏时也更新）
+
+        void _setupDetailPanel();
+        void _updateDetailPanel(const beiklive::DirListData& data);
+        void _clearDetailInfo();
+
+        // 详情面板内容构建
+        void _showGameDBDetail(const beiklive::DirListData& data, const beiklive::GameEntry& entry);
+        void _showGameNoDBDetail(const beiklive::DirListData& data);
+        void _showImageDetail(const beiklive::DirListData& data);
+        void _showFolderDetail(const beiklive::DirListData& data);
+        void _showFileDetail(const beiklive::DirListData& data);
+
+        // 辅助
+        void _addInfoRow(const std::string& label, const std::string& value, NVGcolor labelColor = brls::TRANSPARENT);
+        void _addHighlightRow(const std::string& text, NVGcolor color);
+        void _addBadge(const std::string& text, NVGcolor bgColor, NVGcolor textColor);
+        std::string _platformName(int platform);
+        std::string _formatPlayTime(int seconds);
+        static std::string _formatFileSizeStr(const std::string& path);
+
+        // 异步缩略图加载
+        std::atomic<int>        m_thumbDelayId{0};
+        int                     m_thumbReqId   = 0;
+        std::string             m_thumbPendingPath;
+
+        void _requestThumbnail(const std::string& path);
+        void _cancelThumbnail();
+
+    public:
         FileListPage();
         ~FileListPage();
-        
-        void showDriveList(); // 显示磁盘/驱动器列表
+
+        void showDriveList();
         void setFliter(beiklive::enums::FilterMode mode, std::vector<std::string> extensions);
         void setPath(const std::string path);
 
-
-        //打开文件时的回调
         std::function<void(beiklive::DirListData)> onFileSelected;
-
-
-
     };
 
 } // namespace beiklive
