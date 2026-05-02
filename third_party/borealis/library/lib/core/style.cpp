@@ -28,7 +28,7 @@ static StyleValues styleValues = {
     { "brls/animations/show", 200.0f },
     { "brls/animations/show_slide", 125.0f },
 
-    { "brls/animations/highlight", 200.0f },
+    { "brls/animations/highlight", 300.0f },
     { "brls/animations/highlight_shake", 15.0f },
 
     { "brls/animations/label_scrolling_timer", 1500.0f },

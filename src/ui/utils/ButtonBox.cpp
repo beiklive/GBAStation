@@ -14,7 +14,7 @@ namespace beiklive
         this->setFocusable(true);
         this->setBackground(brls::ViewBackground::NONE);
         this->setHideHighlightBackground(true);
-        this->setHideClickAnimation(false);
+        this->setHideClickAnimation(true);
 
         m_accent = new brls::Rectangle();
         m_accent->setWidth(5.f);

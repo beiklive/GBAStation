@@ -228,7 +228,7 @@ public:
 
         // 提示文字
         m_promptLabel = new brls::Label();
-        m_promptLabel->setText("按下要绑定的按键...");
+        m_promptLabel->setText("按下要绑定的按键(支持组合键)");
         m_promptLabel->setFontSize(17.f);
         m_promptLabel->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
         m_promptLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
@@ -239,7 +239,7 @@ public:
         // 捕获的按键显示
         m_keyLabel = new brls::Label();
         m_keyLabel->setText("...");
-        m_keyLabel->setFontSize(42.f);
+        m_keyLabel->setFontSize(30.f);
         m_keyLabel->setTextColor(nvgRGBA(79, 193, 255,50));
         m_keyLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
         m_keyLabel->setMarginBottom(20.f);
