@@ -911,6 +911,8 @@ static constexpr int k_hotkeyCount =
 
 brls::View *SettingPage::buildKeyBindTab()
 {
+
+
     auto *scroll = makeScrollTab();
     auto *box    = makeContentBox();
 
@@ -948,7 +950,12 @@ brls::View *SettingPage::buildKeyBindTab()
 
     // ── 游戏按键 ──────────────────────────────────────────────────────────────
     box->addView(makeHeader("游戏按键映射（手柄）"));
-
+    // 一个按键容器
+    auto *mapcontainer = new brls::Box(brls::Axis::COLUMN);
+    mapcontainer->setPadding(10.f, 10.f, 10.f, 10.f);
+    mapcontainer->setCornerRadius(10.f);
+    mapcontainer->setBorderThickness(1.f);
+    mapcontainer->setBorderColor(nvgRGBA(255, 255, 255, 50));
     for (int i = 0; i < k_gameBtnCount; ++i)
     {
         std::string cfgKey = std::string("handle.") + k_gameBtns[i].suffix;
@@ -957,8 +964,9 @@ brls::View *SettingPage::buildKeyBindTab()
         cell->setLeftText(k_gameBtns[i].label);
         cell->setRightText(cfgGetStr(cfgKey, "none"));
         registerKeyBindActions(cell, cfgKey);
-        box->addView(cell);
+        mapcontainer->addView(cell);
     }
+    box->addView(mapcontainer);
 
     // ── 功能热键 ──────────────────────────────────────────────────────────────
     box->addView(makeHeader("功能热键绑定"));
