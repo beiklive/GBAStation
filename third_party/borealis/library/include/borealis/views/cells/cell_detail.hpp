@@ -30,6 +30,7 @@ class DetailCell : public RecyclerCell
     DetailCell();
 
     void setText(std::string title);
+    void setTextSize(float size);
     void setTextColor(NVGcolor color);
     void setDetailText(std::string title);
     void setDetailTextColor(NVGcolor color);

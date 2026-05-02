@@ -7,6 +7,7 @@
 #include <borealis/views/cells/cell_selector.hpp>
 #include <borealis/views/cells/cell_detail.hpp>
 #include <borealis/views/header.hpp>
+#include "ui/utils/DetailCell.hpp"
 #include <borealis/views/scrolling_frame.hpp>
 #include <borealis/views/label.hpp>
 #include <borealis/views/applet_frame.hpp>
@@ -16,6 +17,7 @@
 
 #include <chrono>
 #include <sstream>
+#include <iomanip>
 #include <string>
 #include <vector>
 
@@ -175,8 +177,8 @@ static constexpr int k_capKbdKeyCount =
 class KeyCaptureView : public beiklive::Box
 {
 public:
-    explicit KeyCaptureView(std::function<void(const std::string &)> onDone)
-        : m_onDone(std::move(onDone))
+    explicit KeyCaptureView(std::function<void(const std::string &)> onDone, float countdownSecs = 5.0f)
+        : m_onDone(std::move(onDone)), m_countdownSeconds(countdownSecs)
     {
         this->showFooter(false);
         this->showHeader(false);
@@ -192,7 +194,7 @@ public:
         auto* card = new brls::Box(brls::Axis::COLUMN);
         card->setFocusable(false);
         card->setCornerRadius(16.f);
-        card->setBackgroundColor(nvgRGBA(30, 30, 35, 230));
+        card->setBackgroundColor(nvgRGBA(30, 30, 35, 200));
         card->setShadowType(brls::ShadowType::GENERIC);
         card->setShadowVisibility(true);
         card->setAlignItems(brls::AlignItems::CENTER);
@@ -264,7 +266,9 @@ public:
 
         // 倒计时文字
         m_countdownLabel = new brls::Label();
-        m_countdownLabel->setText("5 秒");
+        std::ostringstream oss;
+        oss << std::fixed << std::setprecision(2) << m_countdownSeconds << " 秒";
+        m_countdownLabel->setText(oss.str());
         m_countdownLabel->setFontSize(16.f);
         m_countdownLabel->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
         m_countdownLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
@@ -353,7 +357,7 @@ public:
 
                 auto now        = std::chrono::steady_clock::now();
                 float elapsed   = std::chrono::duration<float>(now - m_startTime).count();
-                float remaining = 5.0f - elapsed;
+                float remaining = m_countdownSeconds - elapsed;
 
                 if (remaining <= 0.0f)
                 {
@@ -361,11 +365,12 @@ public:
                 }
                 else
                 {
-                    int secs = static_cast<int>(std::ceil(remaining));
-                    m_countdownLabel->setText(std::to_string(secs) + " 秒后自动确认");
+                    std::ostringstream oss;
+                    oss << std::fixed << std::setprecision(2) << remaining << " 秒后自动确认";
+                    m_countdownLabel->setText(oss.str());
 
                     // 更新进度条宽度
-                    float barProgress = remaining / 5.0f;
+                    float barProgress = remaining / m_countdownSeconds;
                     float barWidth = 240.f * barProgress;
                     m_progressBar->setWidth(barWidth);
                     if (barProgress < 0.3f)
@@ -384,6 +389,7 @@ public:
 
 private:
     std::function<void(const std::string &)> m_onDone;
+    float m_countdownSeconds = 5.0f;
     brls::Label *m_promptLabel    = nullptr;
     brls::Label *m_keyLabel       = nullptr;
     brls::Label *m_countdownLabel = nullptr;
@@ -909,18 +915,16 @@ brls::View *SettingPage::buildKeyBindTab()
     auto *box    = makeContentBox();
 
     // 辅助函数：为 DetailCell 注册 A（追加 combo）和 X（清空）动作。
-    auto registerKeyBindActions = [](brls::DetailCell* cell, const std::string& cfgKey)
+    auto registerKeyBindActions = [](beiklive::DetailCell* cell, const std::string& cfgKey)
     {
         cell->registerAction("确认"_i18n, brls::BUTTON_A,
             [cell, cfgKey](brls::View*) {
                 openKeyCapture([cell, cfgKey](const std::string& r) {
                     if (r.empty()) return;
-                    // 追加新 combo（逗号分隔），去重后写回配置
                     std::string cur = cfgGetStr(cfgKey, "none");
                     if (cur.empty() || cur == "none") {
                         cur = r;
                     } else {
-                        // 检查是否已存在此 combo
                         bool exists = false;
                         std::istringstream iss(cur);
                         std::string tok;
@@ -930,14 +934,14 @@ brls::View *SettingPage::buildKeyBindTab()
                         if (!exists) cur += "|" + r;
                     }
                     cfgSetStr(cfgKey, cur);
-                    cell->setDetailText(cur);
+                    cell->setRightText(cur);
                 });
                 return true;
             }, false, false, brls::SOUND_CLICK);
         cell->registerAction("清除绑定", brls::BUTTON_X,
             [cell, cfgKey](brls::View*) {
                 cfgSetStr(cfgKey, "none");
-                cell->setDetailText("none");
+                cell->setRightText("none");
                 return true;
             }, false, false, brls::SOUND_CLICK);
     };
@@ -948,9 +952,10 @@ brls::View *SettingPage::buildKeyBindTab()
     for (int i = 0; i < k_gameBtnCount; ++i)
     {
         std::string cfgKey = std::string("handle.") + k_gameBtns[i].suffix;
-        auto *cell         = new brls::DetailCell();
-        cell->setText(k_gameBtns[i].label);
-        cell->setDetailText(cfgGetStr(cfgKey, "none"));
+        auto *cell         = new beiklive::DetailCell();
+        cell->setLeftTextSize(28.f);
+        cell->setLeftText(k_gameBtns[i].label);
+        cell->setRightText(cfgGetStr(cfgKey, "none"));
         registerKeyBindActions(cell, cfgKey);
         box->addView(cell);
     }
@@ -961,9 +966,9 @@ brls::View *SettingPage::buildKeyBindTab()
     for (int i = 0; i < k_hotkeyCount; ++i)
     {
         std::string cfgKey = k_hotkeys[i].cfgKey;
-        auto *cell         = new brls::DetailCell();
-        cell->setText(std::string(k_hotkeys[i].label));
-        cell->setDetailText(cfgGetStr(cfgKey, "none"));
+        auto *cell         = new beiklive::DetailCell();
+        cell->setLeftText(std::string(k_hotkeys[i].label));
+        cell->setRightText(cfgGetStr(cfgKey, "none"));
         registerKeyBindActions(cell, cfgKey);
         box->addView(cell);
     }

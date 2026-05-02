@@ -63,6 +63,11 @@ void DetailCell::setText(std::string title)
     this->title->setText(title);
 }
 
+void DetailCell::setTextSize(float size)
+{
+    this->title->setFontSize(size);
+}
+
 void DetailCell::setTextColor(NVGcolor color)
 {
     this->title->setTextColor(color);
