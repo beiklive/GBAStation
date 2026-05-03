@@ -76,6 +76,19 @@ static brls::Header *makeHeader(const std::string &title)
     return h;
 }
 
+static brls::Label *makeHint(const std::string &text)
+{
+    auto *lbl = new brls::Label();
+    lbl->setText(text);
+    lbl->setFontSize(16.f);
+    lbl->setTextColor(nvgRGB(154, 154, 154));
+    lbl->setMarginBottom(10.f);
+    lbl->setMarginTop(10.f);
+    lbl->setMarginLeft(20.f);
+    lbl->setFocusable(false);
+    return lbl;
+}
+
 static int findIndex(const std::vector<std::string> &options,
                      const std::string &val, int defaultIdx = 0)
 {
@@ -564,7 +577,7 @@ static void openKeyCapture(std::function<void(const std::string &)> onDone)
 using namespace beiklive::SettingKey;
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Tab: 界面设置
+//  Tab: 模拟器设置
 // ─────────────────────────────────────────────────────────────────────────────
 
 brls::View *SettingPage::buildUITab()
@@ -572,53 +585,136 @@ brls::View *SettingPage::buildUITab()
     auto *scroll = makeScrollTab();
     auto *box    = makeContentBox();
 
+    // ── GBA/GBC 核心设置 ──────────────────────────────────────────────────────
+    box->addView(makeHeader("GBA/GBC 核心设置"));
+
+    {
+        std::vector<std::string> gbModels = {
+            "Autodetect", "Game Boy", "Super Game Boy", "Game Boy Color", "Game Boy Advance"};
+        std::string curModel = cfgGetStr("core.mgba_gb_model", "Autodetect");
+        auto *gbModelCell    = new brls::SelectorCell();
+        gbModelCell->init("GB 机型", gbModels, findIndex(gbModels, curModel),
+                          [gbModels](int idx) { if (idx >= 0 && idx < 5) cfgSetStr("core.mgba_gb_model", gbModels[idx]); });
+        box->addView(gbModelCell);
+        box->addView(makeHint("Autodetect: 根据 ROM 头自动检测硬件型号"));
+    }
+
+    auto *biosCell = new brls::BooleanCell();
+    biosCell->init("使用 BIOS", cfgGetStr("core.mgba_use_bios", "ON") == "ON",
+                   [](bool v) { cfgSetStr("core.mgba_use_bios", v ? "ON" : "OFF"); });
+    box->addView(biosCell);
+
+    auto *skipBiosCell = new brls::BooleanCell();
+    skipBiosCell->init("跳过 BIOS 动画",
+                       cfgGetStr("core.mgba_skip_bios", "OFF") == "ON",
+                       [](bool v) { cfgSetStr("core.mgba_skip_bios", v ? "ON" : "OFF"); });
+    box->addView(skipBiosCell);
+    box->addView(makeHint("使用真实 GBA 启动画面"));
+
+    {
+        std::vector<std::string> gbColors = {
+            "Grayscale", "Honey", "Lime", "Grapefruit", "Game Boy", "Burnt Orange",
+            "Mystic Blue", "Motocross Pink", "Gaiden Pink", "Blues", "Dark Knight",
+            "Solarized Gold"};
+        std::string curGbColor = cfgGetStr("core.mgba_gb_colors", "Grayscale");
+        auto *gbColorCell      = new brls::SelectorCell();
+        gbColorCell->init("GB 配色", gbColors, findIndex(gbColors, curGbColor),
+                          [gbColors](int idx) { if (idx >= 0 && idx < (int)gbColors.size()) cfgSetStr("core.mgba_gb_colors", gbColors[idx]); });
+        box->addView(gbColorCell);
+    }
+
+    {
+        std::vector<std::string> idleOpts = {"Remove Known", "Detect and Remove", "Don't Remove"};
+        std::string curIdle = cfgGetStr("core.mgba_idle_optimization", "Remove Known");
+        auto *idleCell = new brls::SelectorCell();
+        idleCell->init("空闲优化", idleOpts, findIndex(idleOpts, curIdle),
+                       [idleOpts](int idx) { if (idx >= 0 && idx < 3) cfgSetStr("core.mgba_idle_optimization", idleOpts[idx]); });
+        box->addView(idleCell);
+        box->addView(makeHint("减少无意义循环的 CPU 占用，大部分情况下使用 Remove Known"));
+    }
+
+    {
+        auto *cell = new brls::BooleanCell();
+        cell->init("允许同时按下反方向", cfgGetStr("core.mgba_allow_opposing_directions", "no") == "yes",
+                   [](bool v) { cfgSetStr("core.mgba_allow_opposing_directions", v ? "yes" : "no"); });
+        box->addView(cell);
+        box->addView(makeHint("允许同时按下左+右或上+下方向键"));
+    }
+
+    // ── GBA/GBC 高级 ──────────────────────────────────────────────────────────
+    box->addView(makeHeader("GBA/GBC 高级"));
+
+    {
+        auto *cell = new brls::BooleanCell();
+        cell->init("超级 GB 边框", cfgGetStr("core.mgba_sgb_borders", "ON") == "ON",
+                   [](bool v) { cfgSetStr("core.mgba_sgb_borders", v ? "ON" : "OFF"); });
+        box->addView(cell);
+    }
+
+    {
+        auto *cell = new brls::BooleanCell();
+        cell->init("强制 GBP 振动", cfgGetStr("core.mgba_force_gbp", "OFF") == "ON",
+                   [](bool v) { cfgSetStr("core.mgba_force_gbp", v ? "ON" : "OFF"); });
+        box->addView(cell);
+    }
+
     // ── 存档设置 ──────────────────────────────────────────────────────────────
     box->addView(makeHeader("存档设置"));
 
     {
         std::vector<std::string> saveDirs = {"ROM 所在目录", "模拟器目录"};
-
+        std::string curSram = cfgGetStr("save.sramDir", "");
         auto *sramDirCell = new brls::SelectorCell();
-        sramDirCell->init("SRAM 存档目录", saveDirs,
-                          cfgGetStr("save.sramDir", "").empty() ? 0 : 1,
-                          [](int idx)
-                          {
-                              if (idx == 0)
-                                  cfgSetStr("save.sramDir", "");
-                              else
-                                  cfgSetStr("save.sramDir",
-                                            beiklive::path::savePath());
-                          });
+        sramDirCell->init("SRAM 存档目录", saveDirs, curSram.empty() ? 0 : 1,
+                          [](int idx) { cfgSetStr("save.sramDir", idx == 0 ? "" : beiklive::path::savePath()); });
         box->addView(sramDirCell);
     }
+
+    auto *autoSaveCell = new brls::BooleanCell();
+    autoSaveCell->init("自动保存游戏状态", cfgGetBool("save.autoSaveState", false),
+                       [](bool v) { cfgSetBool("save.autoSaveState", v); });
+    box->addView(autoSaveCell);
+
+    {
+        std::vector<std::string> intervals = {"关闭", "1 分钟", "3 分钟", "5 分钟", "10 分钟"};
+        static const int intervalVals[] = {0, 60, 180, 300, 600};
+        int curVal = GET_SETTING_KEY_INT("save.autoSaveInterval", 0);
+        int idx = 0;
+        for (int i = 0; i < 5; ++i) if (intervalVals[i] == curVal) { idx = i; break; }
+        auto *cell = new brls::SelectorCell();
+        cell->init("自动保存间隔", intervals, idx,
+                   [](int i) { if (i >= 0 && i < 5) SET_SETTING_KEY_INT("save.autoSaveInterval", intervalVals[i]); });
+        box->addView(cell);
+        box->addView(makeHint("定时自动创建即时存档，防止意外丢失进度"));
+    }
+
+    auto *autoLoadCell = new brls::BooleanCell();
+    autoLoadCell->init("启动时自动加载存档槽 0", cfgGetBool("save.autoLoadState0", false),
+                        [](bool v) { cfgSetBool("save.autoLoadState0", v); });
+    box->addView(autoLoadCell);
 
     // ── 金手指设置 ────────────────────────────────────────────────────────────
     box->addView(makeHeader("金手指设置"));
 
+    auto *cheatEnabledCell = new brls::BooleanCell();
+    cheatEnabledCell->init("启用金手指", cfgGetBool("cheat.enabled", false),
+                           [](bool v) { cfgSetBool("cheat.enabled", v); });
+    box->addView(cheatEnabledCell);
+
     {
         std::vector<std::string> cheatDirs = {"ROM 所在目录", "模拟器目录"};
-
+        std::string curCheat = cfgGetStr("cheat.dir", "");
         auto *cheatDirCell = new brls::SelectorCell();
-        cheatDirCell->init("金手指目录", cheatDirs,
-                           cfgGetStr("cheat.dir", "").empty() ? 0 : 1,
-                           [](int idx)
-                           {
-                               if (idx == 0)
-                                   cfgSetStr("cheat.dir", "");
-                               else
-                                   cfgSetStr("cheat.dir", beiklive::path::cheatPath());
-                           });
+        cheatDirCell->init("金手指目录", cheatDirs, curCheat.empty() ? 0 : 1,
+                           [](int idx) { cfgSetStr("cheat.dir", idx == 0 ? "" : beiklive::path::cheatPath()); });
         box->addView(cheatDirCell);
     }
 
     scroll->setContentView(box);
-
-
     auto *container = new brls::Box(brls::Axis::COLUMN);
     container->setWidthPercentage(100.f);
     container->setGrow(1.0f);
     container->addView(scroll);
-
     return container;
 }
 
@@ -631,128 +727,117 @@ brls::View *SettingPage::buildGameTab()
     auto *scroll = makeScrollTab();
     auto *box    = makeContentBox();
 
-    // ── GBA/GBC 游戏 ──────────────────────────────────────────────────────────
-    box->addView(makeHeader("GBA/GBC 核心设置"));
+    // ── 快进设置 ──────────────────────────────────────────────────────────────
+    box->addView(makeHeader("快进设置"));
+
+    auto *ffEnabledCell = new brls::BooleanCell();
+    ffEnabledCell->init("启用快进", cfgGetBool("fastforward.enabled", true),
+                        [](bool v) { cfgSetBool("fastforward.enabled", v); });
+    box->addView(ffEnabledCell);
 
     {
-        std::vector<std::string> gbModels = {
-            "Autodetect", "Game Boy", "Super Game Boy", "Game Boy Color", "Game Boy Advance"};
-        std::string curModel = cfgGetStr("core.mgba_gb_model", "Autodetect");
-        auto *gbModelCell    = new brls::SelectorCell();
-        gbModelCell->init("GB 机型", gbModels, findIndex(gbModels, curModel),
-                          [gbModels](int idx)
-                          {
-                              if (idx >= 0 && idx < (int)gbModels.size())
-                                  cfgSetStr("core.mgba_gb_model", gbModels[idx]);
-                          });
-        box->addView(gbModelCell);
-    }
-
-    auto *biosCell = new brls::BooleanCell();
-    biosCell->init("使用 BIOS",
-                   cfgGetStr("core.mgba_use_bios", "ON") == "ON",
-                   [](bool v) { cfgSetStr("core.mgba_use_bios", v ? "ON" : "OFF"); });
-    box->addView(biosCell);
-
-    auto *skipBiosCell = new brls::BooleanCell();
-    skipBiosCell->init("跳过 BIOS 动画",
-                       cfgGetStr("core.mgba_skip_bios", "OFF") == "ON",
-                       [](bool v) { cfgSetStr("core.mgba_skip_bios", v ? "ON" : "OFF"); });
-    box->addView(skipBiosCell);
-
-    {
-        std::vector<std::string> gbColors = {
-            "Grayscale", "Honey", "Lime", "Grapefruit", "Game Boy", "Burnt Orange",
-            "Mystic Blue", "Motocross Pink", "Gaiden Pink", "Blues", "Dark Knight",
-            "Solarized Gold"};
-        std::string curGbColor = cfgGetStr("core.mgba_gb_colors", "Grayscale");
-        auto *gbColorCell      = new brls::SelectorCell();
-        gbColorCell->init("GB 配色", gbColors, findIndex(gbColors, curGbColor),
-                          [gbColors](int idx)
-                          {
-                              if (idx >= 0 && idx < (int)gbColors.size())
-                                  cfgSetStr("core.mgba_gb_colors", gbColors[idx]);
-                          });
-        box->addView(gbColorCell);
+        std::vector<std::string> modes = {"按住", "切换"};
+        std::string curMode = cfgGetStr("fastforward.mode", "hold");
+        auto *cell = new brls::SelectorCell();
+        cell->init("触发模式", modes, curMode == "toggle" ? 1 : 0,
+                   [](int idx) { cfgSetStr("fastforward.mode", idx == 1 ? "toggle" : "hold"); });
+        box->addView(cell);
     }
 
     {
-        std::vector<std::string> idleOpts = {
-            "Remove Known", "Detect and Remove", "Don't Remove"};
-        std::string curIdle = cfgGetStr("core.mgba_idle_optimization", "Remove Known");
-        auto *idleCell      = new brls::SelectorCell();
-        idleCell->init("空闲优化", idleOpts, findIndex(idleOpts, curIdle),
-                       [idleOpts](int idx)
-                       {
-                           if (idx >= 0 && idx < (int)idleOpts.size())
-                               cfgSetStr("core.mgba_idle_optimization", idleOpts[idx]);
-                       });
-        box->addView(idleCell);
+        std::vector<std::string> multis = {"2x", "3x", "4x", "5x", "8x", "无限"};
+        static const float multiVals[] = {2.0f, 3.0f, 4.0f, 5.0f, 8.0f, 99.0f};
+        float curMulti = GET_SETTING_KEY_FLOAT("fastforward.multiplier", 4.0f);
+        int idx = 2;
+        for (int i = 0; i < 6; ++i) if (multiVals[i] == curMulti) { idx = i; break; }
+        auto *cell = new brls::SelectorCell();
+        cell->init("快进倍率", multis, idx,
+                   [](int i) { if (i >= 0 && i < 6) SET_SETTING_KEY_FLOAT("fastforward.multiplier", multiVals[i]); });
+        box->addView(cell);
+        box->addView(makeHint("每次迭代运行的帧数，倍率越高速度越快但可能跳帧"));
     }
+
+    auto *ffMuteCell = new brls::BooleanCell();
+    ffMuteCell->init("快进时静音", cfgGetBool("fastforward.mute", true),
+                     [](bool v) { cfgSetBool("fastforward.mute", v); });
+    box->addView(ffMuteCell);
 
     // ── 倒带设置 ──────────────────────────────────────────────────────────────
     box->addView(makeHeader("倒带设置"));
 
+    auto *rewEnabledCell = new brls::BooleanCell();
+    rewEnabledCell->init("启用倒带", cfgGetBool("rewind.enabled", false),
+                         [](bool v) { cfgSetBool("rewind.enabled", v); });
+    box->addView(rewEnabledCell);
+
     {
-        // 是否显示可视化倒带界面（同时开启缩略图捕获）
+        std::vector<std::string> modes = {"按住", "切换"};
+        std::string curMode = cfgGetStr("rewind.mode", "hold");
+        auto *cell = new brls::SelectorCell();
+        cell->init("触发模式", modes, curMode == "toggle" ? 1 : 0,
+                   [](int idx) { cfgSetStr("rewind.mode", idx == 1 ? "toggle" : "hold"); });
+        box->addView(cell);
+    }
+
+    auto *rewMuteCell = new brls::BooleanCell();
+    rewMuteCell->init("倒带时静音", cfgGetBool("rewind.mute", false),
+                      [](bool v) { cfgSetBool("rewind.mute", v); });
+    box->addView(rewMuteCell);
+
+    {
+        std::vector<std::string> stepOpts = {"1 帧", "2 帧", "4 帧", "8 帧"};
+        static const int stepVals[] = {1, 2, 4, 8};
+        int curStep = GET_SETTING_KEY_INT("rewind.step", 2);
+        int idx = 1;
+        for (int i = 0; i < 4; ++i) if (stepVals[i] == curStep) { idx = i; break; }
+        auto *cell = new brls::SelectorCell();
+        cell->init("倒带步进", stepOpts, idx,
+                   [](int i) { if (i >= 0 && i < 4) SET_SETTING_KEY_INT("rewind.step", stepVals[i]); });
+        box->addView(cell);
+    }
+
+    {
+        bool showUI = cfgGetBool(beiklive::SettingKey::KEY_REWIND_SHOW_UI, false);
         auto *showUiCell = new brls::BooleanCell();
-        showUiCell->init("显示可视化倒带界面",
-                         cfgGetBool(KEY_REWIND_SHOW_UI, false),
-                         [](bool v) { cfgSetBool(KEY_REWIND_SHOW_UI, v); });
+        showUiCell->init("显示可视化倒带界面", showUI,
+                         [](bool v) { cfgSetBool(beiklive::SettingKey::KEY_REWIND_SHOW_UI, v); });
         box->addView(showUiCell);
     }
 
     {
-        // 倒带状态保存间隔：每 N 帧保存一次（数值越大，内存占用越少，但倒带精度越低）
-        std::vector<std::string> intervalOpts = {"每帧（最高精度）", "每2帧", "每4帧", "每8帧", "每16帧", "每60帧（约1秒）", "每120帧（约2秒）"};
-        static const int intervalVals[]       = {1, 2, 4, 8, 16, 60, 120};
-        static const int intervalCount        = 7;
-        int curInterval = GET_SETTING_KEY_INT(KEY_REWIND_SAVE_INTERVAL, 1);
-        int curIdx      = 0;
-        for (int i = 0; i < intervalCount; ++i)
-            if (intervalVals[i] == curInterval) { curIdx = i; break; }
-        auto *intervalCell = new brls::SelectorCell();
-        intervalCell->init("倒带保存间隔", intervalOpts, curIdx,
-                           [](int idx)
-                           {
-                               if (idx >= 0 && idx < intervalCount)
-                                   SET_SETTING_KEY_INT(KEY_REWIND_SAVE_INTERVAL, intervalVals[idx]);
-                           });
-        box->addView(intervalCell);
+        std::vector<std::string> intervalOpts = {"每帧", "每2帧", "每4帧", "每8帧", "每16帧", "每60帧(~1秒)", "每120帧(~2秒)"};
+        static const int intervalVals[] = {1, 2, 4, 8, 16, 60, 120};
+        static const int intervalCount = 7;
+        int curInterval = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_REWIND_SAVE_INTERVAL, 1);
+        int curIdx = 0;
+        for (int i = 0; i < intervalCount; ++i) if (intervalVals[i] == curInterval) { curIdx = i; break; }
+        auto *cell = new brls::SelectorCell();
+        cell->init("倒带保存间隔", intervalOpts, curIdx,
+                   [](int i) { if (i >= 0 && i < intervalCount) SET_SETTING_KEY_INT(beiklive::SettingKey::KEY_REWIND_SAVE_INTERVAL, intervalVals[i]); });
+        box->addView(cell);
+        box->addView(makeHint("间隔越短精度越高但内存占用越大"));
     }
 
     {
-        // 最大倒带缓存帧数：值越大可倒带越长，但内存占用越多
-        std::vector<std::string> bufferOpts = {"60（约1秒）", "120（约2秒）", "600（约10秒）", "3600（约1分钟）"};
-        static const int bufferVals[]       = {60, 120, 600, 3600};
-        static const int bufferCount        = 4;
-        int curBuffer = GET_SETTING_KEY_INT(KEY_REWIND_BUFFER_SIZE, 600);
-        int curIdx    = 2; // 默认 600
-        for (int i = 0; i < bufferCount; ++i)
-            if (bufferVals[i] == curBuffer) { curIdx = i; break; }
-        auto *bufferCell = new brls::SelectorCell();
-        bufferCell->init("最大倒带缓存", bufferOpts, curIdx,
-                         [](int idx)
-                         {
-                             if (idx >= 0 && idx < bufferCount)
-                                 SET_SETTING_KEY_INT(KEY_REWIND_BUFFER_SIZE, bufferVals[idx]);
-                         });
-        box->addView(bufferCell);
+        std::vector<std::string> bufferOpts = {"60 (~1秒)", "120 (~2秒)", "600 (~10秒)", "3600 (~1分钟)"};
+        static const int bufferVals[] = {60, 120, 600, 3600};
+        int curBuffer = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_REWIND_BUFFER_SIZE, 600);
+        int curIdx = 2;
+        for (int i = 0; i < 4; ++i) if (bufferVals[i] == curBuffer) { curIdx = i; break; }
+        auto *cell = new brls::SelectorCell();
+        cell->init("最大倒带缓存", bufferOpts, curIdx,
+                   [](int i) { if (i >= 0 && i < 4) SET_SETTING_KEY_INT(beiklive::SettingKey::KEY_REWIND_BUFFER_SIZE, bufferVals[i]); });
+        box->addView(cell);
+        box->addView(makeHint("缓冲帧越多可回退时间越长，但内存占用成倍增加"));
     }
 
     {
-        // 缩略图压缩策略：最近邻（速度快）或双线性插值（质量高）
+        int curCompression = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_REWIND_THUMB_COMPRESSION, 0);
         std::vector<std::string> compressionOpts = {"最近邻（速度优先）", "双线性（质量优先）"};
-        int curCompression = GET_SETTING_KEY_INT(KEY_REWIND_THUMB_COMPRESSION, 0);
-        if (curCompression < 0 || curCompression > 1) curCompression = 0;
-        auto *compressionCell = new brls::SelectorCell();
-        compressionCell->init("缩略图压缩策略", compressionOpts, curCompression,
-                              [](int idx)
-                              {
-                                  if (idx >= 0 && idx <= 1)
-                                      SET_SETTING_KEY_INT(KEY_REWIND_THUMB_COMPRESSION, idx);
-                              });
-        box->addView(compressionCell);
+        auto *cell = new brls::SelectorCell();
+        cell->init("缩略图压缩策略", compressionOpts, curCompression,
+                   [](int idx) { if (idx >= 0 && idx <= 1) SET_SETTING_KEY_INT(beiklive::SettingKey::KEY_REWIND_THUMB_COMPRESSION, idx); });
+        box->addView(cell);
     }
 
     scroll->setContentView(box);
@@ -760,12 +845,11 @@ brls::View *SettingPage::buildGameTab()
     container->setWidthPercentage(100.f);
     container->setGrow(1.0f);
     container->addView(scroll);
-
     return container;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Tab: 画面设置
+//  Tab: 显示设置
 // ─────────────────────────────────────────────────────────────────────────────
 
 brls::View *SettingPage::buildDisplayTab()
@@ -773,56 +857,131 @@ brls::View *SettingPage::buildDisplayTab()
     auto *scroll = makeScrollTab();
     auto *box    = makeContentBox();
 
-    // ── 遮罩设置 ──────────────────────────────────────────────────────────────
-    box->addView(makeHeader("遮罩"));
+    // ── 画面显示 ──────────────────────────────────────────────────────────────
+    box->addView(makeHeader("画面显示"));
 
-    // 构建遮罩路径选取 DetailCell 的辅助 lambda
-    auto makeOverlayPathCell = [&](const std::string &cfgKey,
-                                   const std::string &labelText)
     {
+        std::vector<std::string> modes = {"按比例 (Fit)", "拉伸 (Fill)", "原始 (Original)", "整数倍 (Integer)", "自定义 (Custom)"};
+        std::string curMode = cfgGetStr("display.mode", "original");
+        std::vector<std::string> modeIds = {"fit", "fill", "original", "integer", "custom"};
+        int idx = findIndex(modeIds, curMode);
+        auto *cell = new brls::SelectorCell();
+        cell->init("画面模式", modes, idx,
+                   [](int i) {
+                       static const char* vals[] = {"fit", "fill", "original", "integer", "custom"};
+                       if (i >= 0 && i < 5) cfgSetStr("display.mode", vals[i]);
+                   });
+        box->addView(cell);
+        box->addView(makeHint("画面缩放模式：Fit=保持比例最大化 Fill=拉伸填满"));
+    }
+
+    {
+        std::vector<std::string> filters = {"像素风格 (Nearest)", "平滑 (Linear)"};
+        std::string curFilter = cfgGetStr("display.filter", "nearest");
+        int idx = (curFilter == "linear") ? 1 : 0;
+        auto *cell = new brls::SelectorCell();
+        cell->init("纹理过滤", filters, idx,
+                   [](int i) { cfgSetStr("display.filter", i == 1 ? "linear" : "nearest"); });
+        box->addView(cell);
+
+    }
+
+    auto *fpsCell = new brls::BooleanCell();
+    fpsCell->init("显示 FPS 覆盖层", cfgGetBool("display.showFps", false),
+                   [](bool v) { cfgSetBool("display.showFps", v); });
+    box->addView(fpsCell);
+
+    auto *ffOverlayCell = new brls::BooleanCell();
+    ffOverlayCell->init("显示快进覆盖层", cfgGetBool("display.showFfOverlay", true),
+                         [](bool v) { cfgSetBool("display.showFfOverlay", v); });
+    box->addView(ffOverlayCell);
+
+    auto *rewOverlayCell = new brls::BooleanCell();
+    rewOverlayCell->init("显示倒带覆盖层", cfgGetBool("display.showRewindOverlay", true),
+                          [](bool v) { cfgSetBool("display.showRewindOverlay", v); });
+    box->addView(rewOverlayCell);
+
+    auto *muteOverlayCell = new brls::BooleanCell();
+    muteOverlayCell->init("显示静音覆盖层", cfgGetBool("display.showMuteOverlay", true),
+                           [](bool v) { cfgSetBool("display.showMuteOverlay", v); });
+    box->addView(muteOverlayCell);
+
+    // ── 遮罩设置 ──────────────────────────────────────────────────────────────
+    box->addView(makeHeader("遮罩设置"));
+
+    auto *overlayEnabledCell = new brls::BooleanCell();
+    overlayEnabledCell->init("启用遮罩", cfgGetBool(beiklive::SettingKey::KEY_DISPLAY_OVERLAY_ENABLED, false),
+                             [](bool v) { cfgSetBool(beiklive::SettingKey::KEY_DISPLAY_OVERLAY_ENABLED, v); });
+    box->addView(overlayEnabledCell);
+
+    auto makeOverlayPathCell = [&](const std::string &cfgKey, const std::string &labelText) {
         auto *cell = new brls::DetailCell();
         cell->setText(labelText);
         std::string cur = cfgGetStr(cfgKey, "");
         cell->setDetailText(cur.empty() ? "未设置" : beiklive::tools::getFileName(cur));
-        cell->registerAction("确认"_i18n, brls::BUTTON_A,
-                             [cell, cfgKey](brls::View *)
-                             {
-                                 std::string dir = cfgGetStr(cfgKey, "");
-                                 auto pos        = dir.rfind('/');
+        cell->registerAction(" 选择", brls::BUTTON_A,
+            [cell, cfgKey](brls::View *) {
+                std::string dir = cfgGetStr(cfgKey, "");
+                auto pos = dir.rfind('/');
 #ifdef _WIN32
-                                 auto posW = dir.rfind('\\');
-                                 if (posW != std::string::npos &&
-                                     (pos == std::string::npos || posW > pos))
-                                     pos = posW;
+                auto posW = dir.rfind('\\');
+                if (posW != std::string::npos && (pos == std::string::npos || posW > pos)) pos = posW;
 #endif
-                                 if (pos != std::string::npos)
-                                     dir = dir.substr(0, pos);
-                                 else
-                                     dir = "";
-                                 openFilePicker({"png"},
-                                               [cell, cfgKey](const std::string &path)
-                                               {
-                                                   cfgSetStr(cfgKey, path);
-                                                   cell->setDetailText(
-                                                       beiklive::tools::getFileName(path));
-                                               },
-                                               dir);
-                                 return true;
-                             },
-                             false, false, brls::SOUND_CLICK);
+                if (pos != std::string::npos) dir = dir.substr(0, pos); else dir = "";
+                openFilePicker({"png"}, [cell, cfgKey](const std::string &path) {
+                    cfgSetStr(cfgKey, path);
+                    cell->setDetailText(beiklive::tools::getFileName(path));
+                }, dir);
+                return true;
+            }, false, false, brls::SOUND_CLICK);
         return cell;
     };
 
-    box->addView(makeOverlayPathCell(KEY_DISPLAY_OVERLAY_GBA_PATH, "GBA 遮罩路径"));
-    box->addView(makeOverlayPathCell(KEY_DISPLAY_OVERLAY_GBC_PATH, "GBC 遮罩路径"));
-    box->addView(makeOverlayPathCell(KEY_DISPLAY_OVERLAY_GB_PATH, "GB 遮罩路径"));
+    box->addView(makeOverlayPathCell(beiklive::SettingKey::KEY_DISPLAY_OVERLAY_GBA_PATH, "GBA 遮罩"));
+    box->addView(makeOverlayPathCell(beiklive::SettingKey::KEY_DISPLAY_OVERLAY_GBC_PATH, "GBC 遮罩"));
+    box->addView(makeOverlayPathCell(beiklive::SettingKey::KEY_DISPLAY_OVERLAY_GB_PATH,  "GB 遮罩"));
+
+    // ── 着色器设置 ────────────────────────────────────────────────────────────
+    box->addView(makeHeader("着色器设置"));
+
+    auto *shaderEnabledCell = new brls::BooleanCell();
+    shaderEnabledCell->init("启用着色器", cfgGetBool(beiklive::SettingKey::KEY_DISPLAY_SHADER_ENABLED, false),
+                            [](bool v) { cfgSetBool(beiklive::SettingKey::KEY_DISPLAY_SHADER_ENABLED, v); });
+    box->addView(shaderEnabledCell);
+
+    auto makeShaderPathCell = [&](const std::string &cfgKey, const std::string &labelText) {
+        auto *cell = new brls::DetailCell();
+        cell->setText(labelText);
+        std::string cur = cfgGetStr(cfgKey, "");
+        cell->setDetailText(cur.empty() ? "未设置" : beiklive::tools::getFileName(cur));
+        cell->registerAction("选择", brls::BUTTON_A,
+            [cell, cfgKey](brls::View *) {
+                std::string dir = cfgGetStr(cfgKey, "");
+                auto pos = dir.rfind('/');
+#ifdef _WIN32
+                auto posW = dir.rfind('\\');
+                if (posW != std::string::npos && (pos == std::string::npos || posW > pos)) pos = posW;
+#endif
+                if (pos != std::string::npos) dir = dir.substr(0, pos); else dir = "";
+                openFilePicker({"glslp", "glsl"}, [cell, cfgKey](const std::string &path) {
+                    cfgSetStr(cfgKey, path);
+                    cell->setDetailText(beiklive::tools::getFileName(path));
+                }, dir);
+                return true;
+            }, false, false, brls::SOUND_CLICK);
+        return cell;
+    };
+
+    box->addView(makeShaderPathCell(beiklive::SettingKey::KEY_DISPLAY_SHADER_PATH,     "全局着色器"));
+    box->addView(makeShaderPathCell(beiklive::SettingKey::KEY_DISPLAY_SHADER_GBA_PATH, "GBA 着色器"));
+    box->addView(makeShaderPathCell(beiklive::SettingKey::KEY_DISPLAY_SHADER_GBC_PATH, "GBC 着色器"));
+    box->addView(makeShaderPathCell(beiklive::SettingKey::KEY_DISPLAY_SHADER_GB_PATH,  "GB 着色器"));
 
     scroll->setContentView(box);
     auto *container = new brls::Box(brls::Axis::COLUMN);
     container->setWidthPercentage(100.f);
     container->setGrow(1.0f);
     container->addView(scroll);
-
     return container;
 }
 
@@ -835,69 +994,71 @@ brls::View *SettingPage::buildAudioTab()
     auto *scroll = makeScrollTab();
     auto *box    = makeContentBox();
 
-    box->addView(makeHeader("游戏音频"));
+    // ── 音频设置 ──────────────────────────────────────────────────────────────
+    box->addView(makeHeader("音频设置"));
+
+    auto *sfxCell = new brls::BooleanCell();
+    sfxCell->init("按钮音效", cfgGetBool("audio.buttonSfx", true),
+                   [](bool v) { cfgSetBool("audio.buttonSfx", v); });
+    box->addView(sfxCell);
 
     {
-        std::vector<std::string> lpfOpts = {"关闭 (disabled)", "开启 (enabled)"};
-        std::string curLpf               = cfgGetStr("core.mgba_audio_low_pass_filter", "disabled");
-        auto *lpfCell                    = new brls::SelectorCell();
-        lpfCell->init("低通滤波器", lpfOpts, (curLpf == "enabled") ? 1 : 0,
-                      [](int idx)
-                      {
-                          cfgSetStr("core.mgba_audio_low_pass_filter",
-                                    idx == 1 ? "enabled" : "disabled");
-                      });
-        box->addView(lpfCell);
+        std::vector<std::string> lpfOpts = {"关闭", "开启"};
+        std::string curLpf = cfgGetStr("core.mgba_audio_low_pass_filter", "disabled");
+        auto *cell = new brls::SelectorCell();
+        cell->init("低通滤波器", lpfOpts, curLpf == "enabled" ? 1 : 0,
+                   [](int idx) { cfgSetStr("core.mgba_audio_low_pass_filter", idx == 1 ? "enabled" : "disabled"); });
+        box->addView(cell);
+        box->addView(makeHint("模拟 GBA 硬件低通滤波，降低高频噪音"));
     }
+
+    {
+        std::vector<std::string> rangeOpts = {"20%", "40%", "60%", "80%", "100%"};
+        static const char* rangeVals[] = {"20", "40", "60", "80", "100"};
+        std::string curRange = cfgGetStr("core.mgba_audio_low_pass_range", "60");
+        int idx = 2;
+        for (int i = 0; i < 5; ++i) if (rangeVals[i] == curRange) { idx = i; break; }
+        auto *cell = new brls::SelectorCell();
+        cell->init("低通滤波截止频率", rangeOpts, idx,
+                   [](int i) { if (i >= 0 && i < 5) cfgSetStr("core.mgba_audio_low_pass_range", rangeVals[i]); });
+        box->addView(cell);
+    }
+
+    // ── 游戏音频 ──────────────────────────────────────────────────────────────
+    box->addView(makeHeader("游戏音频"));
+
+    auto *ffMuteCell = new brls::BooleanCell();
+    ffMuteCell->init("快进时静音", cfgGetBool("fastforward.mute", true),
+                     [](bool v) { cfgSetBool("fastforward.mute", v); });
+    box->addView(ffMuteCell);
+
+    auto *rewMuteCell = new brls::BooleanCell();
+    rewMuteCell->init("倒带时静音", cfgGetBool("rewind.mute", false),
+                      [](bool v) { cfgSetBool("rewind.mute", v); });
+    box->addView(rewMuteCell);
 
     scroll->setContentView(box);
     auto *container = new brls::Box(brls::Axis::COLUMN);
     container->setGrow(1.0f);
     container->setWidthPercentage(100.f);
     container->addView(scroll);
-
     return container;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  Tab: 按键绑定
-// ─────────────────────────────────────────────────────────────────────────────
-
-struct GameBtnEntry
-{
-    const char *label;
-    const char *suffix;
-};
-
+struct GameBtnEntry { const char *label; const char *suffix; };
 static const GameBtnEntry k_gameBtns[] = {
-    {"\uE0E0", "a"},       
-    {"\uE0E1", "b"},     
-    {"\uE0E2", "x"},      
-    {"\uE0E3", "y"},
-    {"\uE0EB", "up"},        
-    {"\uE0EC", "down"},     
-    {"\uE0ED", "left"},     
-    {"\uE0EE", "right"},
-    {"\uE0E4", "l"},         
-    {"\uE0E5", "r"},        
-    {"\uE0E6", "l2"},       
-    {"\uE0E7", "r2"},
-    {"\uE0EF", "start"},  
-    {"\uE0F0", "select"},
-    // {"左摇杆上", "lstick_up"},   {"左摇杆下", "lstick_down"},
-    // {"左摇杆左", "lstick_left"}, {"左摇杆右", "lstick_right"},
-    // {"右摇杆上", "rstick_up"},   {"右摇杆下", "rstick_down"},
-    // {"右摇杆左", "rstick_left"}, {"右摇杆右", "rstick_right"},
+    {"\uE0E0", "a"}, {"\uE0E1", "b"}, {"\uE0E2", "x"}, {"\uE0E3", "y"},
+    {"\uE0EB", "up"}, {"\uE0EC", "down"}, {"\uE0ED", "left"}, {"\uE0EE", "right"},
+    {"\uE0E4", "l"}, {"\uE0E5", "r"}, {"\uE0E6", "l2"}, {"\uE0E7", "r2"},
+    {"\uE0EF", "start"}, {"\uE0F0", "select"},
+    {"左摇杆上", "lstick_up"}, {"左摇杆下", "lstick_down"},
+    {"左摇杆左", "lstick_left"}, {"左摇杆右", "lstick_right"},
+    {"右摇杆上", "rstick_up"}, {"右摇杆下", "rstick_down"},
+    {"右摇杆左", "rstick_left"}, {"右摇杆右", "rstick_right"},
 };
-static constexpr int k_gameBtnCount =
-    static_cast<int>(sizeof(k_gameBtns) / sizeof(k_gameBtns[0]));
+static constexpr int k_gameBtnCount = static_cast<int>(sizeof(k_gameBtns) / sizeof(k_gameBtns[0]));
 
-// 热键配置项（key=配置键, label=显示名称）
-struct HotkeyEntry
-{
-    const char *cfgKey;
-    const char *label;
-};
+struct HotkeyEntry { const char *cfgKey; const char *label; };
 static const HotkeyEntry k_hotkeys[] = {
     {"handle.fastforward",    "快进"},
     {"handle.rewind",         "倒带"},
@@ -905,9 +1066,10 @@ static const HotkeyEntry k_hotkeys[] = {
     {"hotkey.quickload.pad",  "快速读取"},
     {"hotkey.menu.pad",       "打开菜单"},
     {"hotkey.mute.pad",       "静音"},
+    {"hotkey.pause.pad",      "暂停"},
+    {"hotkey.screenshot.pad", "截图"},
 };
-static constexpr int k_hotkeyCount =
-    static_cast<int>(sizeof(k_hotkeys) / sizeof(k_hotkeys[0]));
+static constexpr int k_hotkeyCount = static_cast<int>(sizeof(k_hotkeys) / sizeof(k_hotkeys[0]));
 
 brls::View *SettingPage::buildKeyBindTab()
 {
