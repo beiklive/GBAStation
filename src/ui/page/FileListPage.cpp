@@ -405,9 +405,7 @@ namespace beiklive
         _addBadge(ext, nvgRGBA(79, 193, 255, 200), nvgRGBA(255,255,255,255));
         _addInfoRow("容量", data.fileSize, nvgRGB(255, 183, 77));
 
-        std::string crc = std::to_string(beiklive::tools::crc32(data.fullPath));
         _addInfoRow("文件名", beiklive::tools::getFileNameWithoutExtension(data.fullPath), nvgRGB(255, 183, 77));
-        _addInfoRow("CRC32", crc, nvgRGB(144, 164, 174));
         _addInfoRow("路径", data.fullPath, nvgRGB(129, 199, 132));
     }
 
