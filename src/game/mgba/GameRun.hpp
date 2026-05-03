@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/common.h"
+#include "core/Tools.hpp"
 #include "core/GameSignal.hpp"
 #include "game/retro/LibretroLoader.hpp"
 
@@ -75,7 +76,14 @@ namespace beiklive::gba
         // ---- 运行状态查询 ---------------------------------------------------
 
         bool IsReady() const { return m_ready; }
+        
+        // ---- SRAM -----------------------------------------------------------
 
+        /// 获取 SRAM 数据指针和大小
+        const void* getSramData() const { return m_core.getMemoryData(RETRO_MEMORY_SAVE_RAM); }
+        size_t      getSramSize() const { return m_core.getMemorySize(RETRO_MEMORY_SAVE_RAM); }
+        /// 保存 SRAM 到磁盘
+        bool saveSram() { return _saveSram(); }
     private:
         beiklive::GameEntry m_gameEntry; ///< 游戏条目数据，包含路径、标题等信息
         beiklive::LibretroLoader m_core; ///< libretro 核心封装

@@ -170,7 +170,7 @@ namespace beiklive::gba
             return true; // 核心无 SRAM 区域，非错误
         }
 
-        std::string path = m_gameEntry.savePath;
+        std::string path = m_gameEntry.savePath + beiklive::path::SPLIT_CHAR + beiklive::tools::getFileNameWithoutExtension(m_gameEntry.path) + ".sav";
         if (path.empty())
         {
             brls::Logger::warning("CoreMgba: no save path specified for game {}, skipping SRAM load", m_gameEntry.title);
@@ -315,13 +315,12 @@ namespace beiklive::gba
             return true; // 核心 SRAM 指针无效，不影响核心运行
         }
 
-        std::string path = m_gameEntry.savePath;
+        std::string path = m_gameEntry.savePath + beiklive::path::SPLIT_CHAR + beiklive::tools::getFileNameWithoutExtension(m_gameEntry.path) + ".sav";
         if (path.empty())
         {
             brls::Logger::warning("CoreMgba: no save path specified for game {}, cannot save SRAM", m_gameEntry.title);
             return true; // 没有指定存档路径，非错误
         }
-
         std::ofstream f(path, std::ios::binary);
         if (!f)
         {

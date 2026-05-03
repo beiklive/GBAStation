@@ -80,21 +80,21 @@ namespace beiklive // 结构体
     // 游戏 条目结构体，包含游戏路径、显示标题、封面路径等字段, 用于在游戏列表中显示和管理游戏信息
     struct GameEntry
     {
-        std::string path;                                       // 游戏文件路径
-        std::string title;                                      // 显示标题（默认为映射名）
+        std::string path = "";                                  // 游戏文件路径
+        std::string title = "";                                 // 显示标题（默认为映射名）
         int playCount = 0;                                      // 玩过的次数
         int playTime = 0;                                       // 玩过的总时间（单位：秒）
         int platform = (int)beiklive::enums::EmuPlatform::NONE; // 游戏平台（如 GBA、GBC、GB）
-        std::string lastPlayed;                                 // 上次玩的时间(时间戳字符串)
+        std::string lastPlayed = "";                            // 上次玩的时间(时间戳字符串)
         int crc32 = 0;                                          // 游戏文件的 CRC32 校验值（用于唯一标识游戏）
 
         // 游戏独立设置相关
-        std::string savePath;       // 游戏专属存档路径（空=使用全局默认）
-        std::string screenShotPath; // 游戏截图路径
-        std::string logoPath;       // 游戏封面图片路径
-        std::string cheatPath;      // 金手指文件路径
-        std::string overlayPath;    // 游戏专属遮罩图片路径
-        std::string shaderPath;     // 游戏专属着色器预设路径
+        std::string savePath = "";       // 游戏专属存档路径（空=使用全局默认）
+        std::string screenShotPath = ""; // 游戏截图路径
+        std::string logoPath = "";       // 游戏封面图片路径
+        std::string cheatPath = "";      // 金手指文件路径
+        std::string overlayPath = "";    // 游戏专属遮罩图片路径
+        std::string shaderPath = "";     // 游戏专属着色器预设路径
 
         bool overlayEnabled = false; // 是否启用游戏专属遮罩（使用全局设置初始化）
         bool shaderEnabled = false;  // 是否启用游戏专属着色器（使用全局设置初始化）
@@ -114,7 +114,7 @@ namespace beiklive // 结构体
     // 列表元素数据
     struct ListItem
     {
-        std::string text;     // 标题
+        std::string text ;     // 标题
         std::string subText;  // 子标题
         std::string iconPath; // 图标路径
         std::string data;     // 额外数据（如游戏路径）
