@@ -132,6 +132,17 @@ namespace beiklive
             int m_cachedThumbCompression = 0;  ///< 缓存缩略图压缩模式，避免每帧读取配置
             std::chrono::steady_clock::time_point m_playStartTime; ///< 计时起点
 
+            // ---- SRAM 自动落盘 -------------------------------------------------
+            uint32_t    m_sramLastCRC   = 0;    ///< 上次检测的 SRAM CRC32
+            bool        m_sramDirty     = false; ///< SRAM 是否有未保存变更
+            std::chrono::steady_clock::time_point m_sramLastCheck; ///< 上次 CRC 检查时间
+            std::chrono::steady_clock::time_point m_sramDirtyTime; ///< 标记 dirty 的时间
+            static constexpr double SRAM_CHECK_INTERVAL = 1.0;  ///< CRC 检查间隔（秒）
+            static constexpr double SRAM_FLUSH_DELAY    = 2.0;  ///< dirty 后延迟写盘（秒）
+
+            static uint32_t _crc32Sram(const void* data, size_t size);
+            void _checkAndAutoSaveSram();
+
             // ---- 辅助方法 ----------------------------------------------------
             void _registerGameInput();
             void _registerGameRuntime();
@@ -144,6 +155,9 @@ namespace beiklive
 
             /// 将当前累加时长写入临时文件（暂停/存档点调用）
             void _savePlayTimeCheckpoint();
+
+            /// 自动存档计时起点
+            std::chrono::steady_clock::time_point m_autoSaveTimer;
 
             /// 启动游戏主循环线程
             void _startGameThread();

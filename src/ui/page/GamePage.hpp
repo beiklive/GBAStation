@@ -22,6 +22,7 @@ namespace beiklive
         void PageInit();
         void GameEntryInitialize();
         void _initGameEntryPaths();  // 初始化 GameEntry 中的各路径字段
+        void _tryUpdateLogoFromThumbnail(); // 尝试将默认图标封面替换为即时存档截图
         void updateGameCount();
         void GameViewInitialize();
         void GameMenuInitialize();
