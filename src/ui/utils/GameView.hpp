@@ -82,7 +82,6 @@ namespace beiklive
             static constexpr double   MAX_REASONABLE_FPS      = 240.0;  ///< 核心上报 FPS 的安全上限
             static constexpr double   SPIN_GUARD_SEC           = 0.002;  ///< 每帧自旋等待预算（秒）
             static constexpr double   FPS_UPDATE_INTERVAL      = 1.0;   ///< FPS 计数器更新间隔（秒）
-            static constexpr int      PLAY_TIME_SAVE_INTERVAL  = 10;    ///< 游戏时长保存间隔（秒）
             static constexpr unsigned REWIND_STEP              = 2;     ///< 每次倒带弹出的帧数
             static constexpr unsigned FF_MULTIPLIER            = 4;     ///< 快进倍率（每迭代运行的帧数）
 
@@ -129,9 +128,9 @@ namespace beiklive
             RewindSelectorView* m_rewindSelectorView = nullptr;
 
             // ---- 杂项 --------------------------------------------------------
-            std::string m_playTimeTempPath;    ///< 时长临时文件路径，热路径轻量写入，退出时合并到 GameDB
+            std::string m_playTimeTempPath;    ///< 时长临时文件路径，退出时合并到 GameDB
             int m_cachedThumbCompression = 0;  ///< 缓存缩略图压缩模式，避免每帧读取配置
-            double m_playTimeAccum = 0.0;       ///< 帧计数累积秒数（超过阈值后写入临时文件）
+            std::chrono::steady_clock::time_point m_playStartTime; ///< 计时起点
 
             // ---- 辅助方法 ----------------------------------------------------
             void _registerGameInput();
@@ -140,8 +139,11 @@ namespace beiklive
             /// 初始化游戏时长追踪（启动时检查并合并遗留的临时文件）
             void _initPlayTimeTracking();
 
-            /// 最终化游戏时长（正常退出时提交 GameDB 并清理临时文件）
-            void _finalizePlayTime();
+            /// 将当前累加时长写入临时文件并提交到 GameDB（退出时调用）
+            void _saveAndCommitPlayTime();
+
+            /// 将当前累加时长写入临时文件（暂停/存档点调用）
+            void _savePlayTimeCheckpoint();
 
             /// 启动游戏主循环线程
             void _startGameThread();
@@ -180,9 +182,6 @@ namespace beiklive
             void _updateFpsStats(unsigned framesRan,
                                  std::chrono::steady_clock::time_point& lastTime,
                                  unsigned& counter);
-
-            /// 更新游戏时长记录（基于实际运行帧数 + 核心帧率，比壁钟更精确）
-            void _updatePlayTime(unsigned framesRan, double coreFps);
 
             /// 帧率限制器：使用 nextFrameTarget 累加模式，严格对齐目标帧率，防止漂移
             void _throttleFrameRate(bool ff,

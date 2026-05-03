@@ -651,35 +651,44 @@ namespace beiklive
     }
 
     // ============================================================
-    // _updatePlayTime – 基于实际运行帧数累加时长
-    // 帧计数比壁钟更精确：不受系统调度抖动影响，暂停期间零帧 = 不计时
+    // _savePlayTimeCheckpoint – 计时累加到 playTime 并写入临时文件
     // ============================================================
-    void GameView::_updatePlayTime(unsigned framesRan, double coreFps)
+    void GameView::_savePlayTimeCheckpoint()
     {
-        if (coreFps <= 0.0) return;
+        auto now = std::chrono::steady_clock::now();
+        double elapsed = std::chrono::duration<double>(now - m_playStartTime).count();
+        if (elapsed < 0.5) return; // 忽略极短间隔
 
-        m_playTimeAccum += static_cast<double>(framesRan) / coreFps;
+        m_gameEntry.playTime += static_cast<int>(elapsed);
+        m_playStartTime = now;
 
-        while (m_playTimeAccum >= static_cast<double>(PLAY_TIME_SAVE_INTERVAL)) {
-            m_playTimeAccum -= static_cast<double>(PLAY_TIME_SAVE_INTERVAL);
-            m_gameEntry.playTime += PLAY_TIME_SAVE_INTERVAL;
-
-            brls::Logger::debug("GameView: playTime={} accum={:.3f} fps={:.2f}",
-                                m_gameEntry.playTime, m_playTimeAccum, coreFps);
-
-            if (!m_playTimeTempPath.empty()) {
-                std::ofstream f(m_playTimeTempPath, std::ios::trunc);
-                if (f) {
-                    f << m_gameEntry.playTime;
-                    f.close();
-                }
-            }
+        if (!m_playTimeTempPath.empty()) {
+            std::ofstream f(m_playTimeTempPath, std::ios::trunc);
+            if (f) { f << m_gameEntry.playTime; f.close(); }
         }
     }
 
     // ============================================================
+    // _saveAndCommitPlayTime – 累加剩余时长并提交到 GameDB
+    // ============================================================
+    void GameView::_saveAndCommitPlayTime()
+    {
+        if (m_playTimeTempPath.empty()) return;
+
+        _savePlayTimeCheckpoint();
+
+        if (beiklive::GameDB && m_gameEntry.playTime > 0) {
+            brls::async([this]() {
+                beiklive::GameDB->upsert(m_gameEntry);
+                beiklive::GameDB->flush();
+            });
+        }
+        std::error_code ec;
+        std::filesystem::remove(m_playTimeTempPath, ec);
+    }
+
+    // ============================================================
     // _initPlayTimeTracking – 启动时检查遗留临时文件并合并到 GameDB
-    // 处理上次异常退出（崩溃/未呼叫 _finalizePlayTime）的情况
     // ============================================================
     void GameView::_initPlayTimeTracking()
     {
@@ -726,34 +735,6 @@ namespace beiklive
                 brls::Logger::warning("GameView: 读取遗留时长临时文件失败");
             }
         }
-    }
-
-    // ============================================================
-    // _finalizePlayTime – 游戏正常退出时提交到 GameDB 并清理临时文件
-    // ============================================================
-    void GameView::_finalizePlayTime()
-    {
-        if (m_playTimeTempPath.empty()) return;
-
-        // 将累积的不足一个间隔的零头帧秒数也计入 playTime
-        if (m_playTimeAccum > 0.0) {
-            int extra = static_cast<int>(m_playTimeAccum);
-            if (extra > 0) {
-                m_gameEntry.playTime += extra;
-                m_playTimeAccum -= extra;
-            }
-        }
-
-        // 提交最终时长到 GameDB（一次性 flush）
-        if (beiklive::GameDB && m_gameEntry.playTime > 0) {
-            beiklive::GameDB->upsert(m_gameEntry);
-            beiklive::GameDB->flush();
-            brls::Logger::info("GameView: 游戏时长已提交到 GameDB（{} 秒）", m_gameEntry.playTime);
-        }
-
-        // 清理临时文件
-        std::error_code ec;
-        std::filesystem::remove(m_playTimeTempPath, ec);
     }
 
     // ============================================================
@@ -834,18 +815,28 @@ namespace beiklive
         brls::Logger::info("GameView: 游戏循环开始 playTime={} coreFps={:.2f}",
                            m_gameEntry.playTime, coreFps);
 
+        m_playStartTime = Clock::now();
+        bool wasPaused  = false;
+
         while (m_running.load(std::memory_order_acquire))
         {
             auto& sig = GameSignal::instance();
 
             // ---- 暂停处理 ----
             if (sig.isPaused()) {
+                if (!wasPaused) {
+                    _savePlayTimeCheckpoint();
+                    wasPaused = true;
+                }
                 std::this_thread::sleep_for(std::chrono::milliseconds(16));
-                // 暂停期间统一推进计时基准，避免恢复后触发积压操作
                 auto now     = Clock::now();
                 nextFrameTarget = now;
                 fpsLastTime     = now;
                 continue;
+            }
+            if (wasPaused) {
+                m_playStartTime = Clock::now();
+                wasPaused = false;
             }
 
             // ---- 重置请求 ----
@@ -918,17 +909,14 @@ namespace beiklive
             // ---- FPS 统计 ----
             _updateFpsStats(framesRan, fpsLastTime, fpsCount);
 
-            // ---- 游戏时长记录（基于帧计数，暂停时零帧 = 不计时）----
-            _updatePlayTime(framesRan, coreFps);
-
             // ---- 帧率限制（快进时不限速）----
             _throttleFrameRate(ff, nextFrameTarget, frameDurNs, spinGuardNs);
         }
 
-        // ---- 最终化时长记录（提交到 GameDB 并清理临时文件）----
-        _finalizePlayTime();
-        brls::Logger::info("GameView: 游戏循环结束 playTime={} accum={:.3f}",
-                           m_gameEntry.playTime, m_playTimeAccum);
+        // ---- 提交时长记录 ----
+        _saveAndCommitPlayTime();
+        brls::Logger::info("GameView: 游戏循环结束 playTime={}",
+                           m_gameEntry.playTime);
 
         // ---- 音频清理 ----
         AudioManager::instance().deinit();
