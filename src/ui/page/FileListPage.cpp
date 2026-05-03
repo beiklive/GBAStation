@@ -64,7 +64,7 @@ namespace beiklive
                                 auto entryOpt = beiklive::GameDB ? beiklive::GameDB->findByPath(fullPath) : std::nullopt;
                                 if (entryOpt) {
                                     beiklive::GameDB->set(entryOpt->crc32, "title", nlohmann::json(text));
-                                    brls::async([]() { beiklive::GameDB->flush(); });
+                                    beiklive::GameDB->flush();
                                 }
                             }
                         },

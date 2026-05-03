@@ -678,10 +678,8 @@ namespace beiklive
         _savePlayTimeCheckpoint();
 
         if (beiklive::GameDB && m_gameEntry.playTime > 0) {
-            brls::async([this]() {
-                beiklive::GameDB->upsert(m_gameEntry);
-                beiklive::GameDB->flush();
-            });
+            beiklive::GameDB->upsert(m_gameEntry);
+            beiklive::GameDB->flush();
         }
         std::error_code ec;
         std::filesystem::remove(m_playTimeTempPath, ec);

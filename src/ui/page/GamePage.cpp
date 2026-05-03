@@ -379,7 +379,7 @@ namespace beiklive
             if (beiklive::GameDB)
             {
                 beiklive::GameDB->set(m_gameEntry.crc32, "logoPath", nlohmann::json(thumbPath));
-                brls::async([]() { beiklive::GameDB->flush(); });
+                beiklive::GameDB->flush();
             }
         }
     }
