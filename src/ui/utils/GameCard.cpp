@@ -51,17 +51,25 @@ namespace beiklive
         }
     }
 
+    void GameCard::updateLogo(const std::string &logoPath)
+    {
+        if (m_coverImage)
+        {
+            // 这里需要先清除旧缓存（如果有的话），否则同一路径的缩略图更新后可能无法刷新显示
+            int oldTex = brls::TextureCache::instance().getCache(logoPath);
+            if (oldTex > 0) {
+                brls::TextureCache::instance().removeCache(static_cast<size_t>(oldTex));
+                brls::TextureCache::instance().markDirty(static_cast<size_t>(oldTex));
+            }
+            m_coverImage->setImageFromFile(logoPath);
+        }
+    }
+
     void GameCard::setLogoLayer(const std::string &path, bool visible)
     {
         if (!m_imageLayer) return;
         if (visible && !path.empty())
         {
-            // 这里需要先清除旧缓存（如果有的话），否则同一路径的缩略图更新后可能无法刷新显示
-            int oldTex = brls::TextureCache::instance().getCache(path);
-            if (oldTex > 0) {
-                brls::TextureCache::instance().removeCache(static_cast<size_t>(oldTex));
-                brls::TextureCache::instance().markDirty(static_cast<size_t>(oldTex));
-            }
             m_imageLayer->setImageFromFile(path);
         }
         m_imageLayer->setVisibility(visible ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
