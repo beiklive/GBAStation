@@ -136,6 +136,18 @@ namespace beiklive
         //插入分割线
         m_panel->addDivider();
 
+
+        // TODO 添加重置游戏（重启游戏）功能
+        m_panel->addTab(
+            "重置游戏", 
+            BK_RES("img/ui/menu/reset.png"), 
+            [this]() {
+            if (m_onReset) m_onReset();
+            }
+        );
+
+
+
         // 6. 退出游戏（无面板）
         m_panel->addTab(
             "退出游戏", 

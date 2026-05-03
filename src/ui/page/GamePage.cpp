@@ -228,6 +228,19 @@ namespace beiklive
             });
         });
 
+        // "重置游戏"回调：触发重置信号
+        m_gameMenuView->setOnReset([this]() {
+            brls::sync([this]() {
+                m_gameView->setFocusable(true);
+                AnimationHelper::slideOutToBottom(m_gameMenuView, MENU_FADE_OUT_MS, 120.f,true, [this]() {
+                    GameSignal::instance().requestReset();
+                    brls::Application::giveFocus(m_gameView);
+
+                });
+            });
+        });
+
+
         // "退出游戏"回调：触发退出信号
         m_gameMenuView->setOnExit([this]() {
             brls::sync([this]() {
