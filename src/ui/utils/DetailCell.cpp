@@ -12,6 +12,8 @@ namespace beiklive
         this->setHideHighlightBackground(true);
         this->setHeight(60.f);
         this->setPadding(12.f, 20.f, 12.f, 20.f);
+        this->setLineBottom(1.f);
+        this->setLineColor(nvgRGBA(255, 255, 255, 20));
 
         // ── 左侧 Label ──
         m_leftLabel = new brls::Label();
