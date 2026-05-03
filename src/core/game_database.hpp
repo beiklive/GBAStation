@@ -6,6 +6,7 @@
 #include <vector>
 #include <unordered_map>
 #include <optional>
+#include <mutex>
 
 #include "enums.h"
 #include "constexpr.h"
@@ -142,6 +143,7 @@ namespace beiklive
         int autoSaveMode_;     // 0: manual, 1: immediate, 2: periodic
         int autoSaveInterval_; // seconds (for mode 2)
         bool dirty_;           // 是否有未保存的修改
+        mutable std::recursive_mutex m_mutex;  ///< 保护所有数据访问
     };
 
 }

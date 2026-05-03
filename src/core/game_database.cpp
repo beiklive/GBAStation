@@ -7,22 +7,52 @@ namespace fs = std::filesystem;
 
 namespace beiklive
 {
+    /// 确保字符串为合法 UTF-8（剔除非法字节）
+    static std::string sanitizeUtf8(const std::string& s)
+    {
+        std::string out;
+        out.reserve(s.size());
+        for (size_t i = 0; i < s.size();)
+        {
+            unsigned char c = static_cast<unsigned char>(s[i]);
+            if (c <= 0x7F) {
+                out.push_back(static_cast<char>(c)); ++i;
+            } else if (c >= 0xC2 && c <= 0xDF && i + 1 < s.size() &&
+                       (static_cast<unsigned char>(s[i+1]) & 0xC0) == 0x80) {
+                out.push_back(s[i]); out.push_back(s[i+1]); i += 2;
+            } else if (c >= 0xE0 && c <= 0xEF && i + 2 < s.size() &&
+                       (static_cast<unsigned char>(s[i+1]) & 0xC0) == 0x80 &&
+                       (static_cast<unsigned char>(s[i+2]) & 0xC0) == 0x80) {
+                out.push_back(s[i]); out.push_back(s[i+1]); out.push_back(s[i+2]); i += 3;
+            } else if (c >= 0xF0 && c <= 0xF4 && i + 3 < s.size() &&
+                       (static_cast<unsigned char>(s[i+1]) & 0xC0) == 0x80 &&
+                       (static_cast<unsigned char>(s[i+2]) & 0xC0) == 0x80 &&
+                       (static_cast<unsigned char>(s[i+3]) & 0xC0) == 0x80) {
+                out.push_back(s[i]); out.push_back(s[i+1]);
+                out.push_back(s[i+2]); out.push_back(s[i+3]); i += 4;
+            } else {
+                ++i; // 跳过非法字节
+            }
+        }
+        return out;
+    }
+
     void to_json(nlohmann::json &j, const GameEntry &entry)
     {
         j = nlohmann::json{
-            {"path", entry.path},
-            {"title", entry.title},
-            {"logoPath", entry.logoPath},
+            {"path", sanitizeUtf8(entry.path)},
+            {"title", sanitizeUtf8(entry.title)},
+            {"logoPath", sanitizeUtf8(entry.logoPath)},
             {"playCount", entry.playCount},
             {"playTime", entry.playTime},
             {"platform", entry.platform},
-            {"lastPlayed", entry.lastPlayed},
+            {"lastPlayed", sanitizeUtf8(entry.lastPlayed)},
             {"crc32", entry.crc32},
-            {"savePath", entry.savePath},
-            {"screenShotPath", entry.screenShotPath},
-            {"cheatPath", entry.cheatPath},
-            {"overlayPath", entry.overlayPath},
-            {"shaderPath", entry.shaderPath},
+            {"savePath", sanitizeUtf8(entry.savePath)},
+            {"screenShotPath", sanitizeUtf8(entry.screenShotPath)},
+            {"cheatPath", sanitizeUtf8(entry.cheatPath)},
+            {"overlayPath", sanitizeUtf8(entry.overlayPath)},
+            {"shaderPath", sanitizeUtf8(entry.shaderPath)},
             {"overlayEnabled", entry.overlayEnabled},
             {"shaderEnabled", entry.shaderEnabled},
             {"displayMode", entry.displayMode},
@@ -66,6 +96,7 @@ namespace beiklive
         : filepath_(filepath), autoSaveMode_(autoSaveMode),
           autoSaveInterval_(autoSaveInterval), dirty_(false)
     {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         // 自动保存不再使用后台线程，仅根据模式决定行为
         if (!filepath_.empty())
             loadFromFile(filepath_);
@@ -73,6 +104,7 @@ namespace beiklive
 
     GameDatabase::~GameDatabase()
     {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         // 析构时若自动保存模式非手动，则保存一次
         if (autoSaveMode_ != 0)
         {
@@ -85,12 +117,14 @@ namespace beiklive
 
     void GameDatabase::upsert(const GameEntry &entry)
     {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         doUpsert(entry);
         markDirtyAndAutoSave();
     }
 
     bool GameDatabase::removeByCrc32(int crc32)
     {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         bool result = doRemoveByCrc32(crc32);
         if (result)
             markDirtyAndAutoSave();
@@ -99,6 +133,7 @@ namespace beiklive
 
     bool GameDatabase::removeByPath(const std::string &path)
     {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         bool result = doRemoveByPath(path);
         if (result)
             markDirtyAndAutoSave();
@@ -107,21 +142,25 @@ namespace beiklive
 
     std::optional<GameEntry> GameDatabase::findByCrc32(int crc32) const
     {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         return doFindByCrc32(crc32);
     }
 
     std::optional<GameEntry> GameDatabase::findByPath(const std::string &path) const
     {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         return doFindByPath(path);
     }
 
     std::vector<GameEntry> GameDatabase::getAll() const
     {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         return data_;
     }
 
     nlohmann::json GameDatabase::toJson() const
     {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         nlohmann::json j = nlohmann::json::array();
         for (const auto &entry : data_)
         {
@@ -134,6 +173,7 @@ namespace beiklive
 
     void GameDatabase::fromJson(const nlohmann::json &j)
     {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         doClear();
         if (!j.is_array())
             throw std::invalid_argument("JSON must be an array");
@@ -147,19 +187,24 @@ namespace beiklive
 
     void GameDatabase::clear()
     {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         doClear();
         markDirtyAndAutoSave();
     }
 
     bool GameDatabase::saveToFile(const std::string &filepath) const
     {
+        // 原子写入：先写 .tmp，再 rename
         try
         {
             nlohmann::json j = toJson();
-            std::ofstream file(filepath);
+            std::string tmpPath = filepath + ".tmp";
+            std::ofstream file(tmpPath);
             if (!file.is_open())
                 return false;
             file << j.dump(4);
+            file.close();
+            std::filesystem::rename(tmpPath, filepath);
             return true;
         }
         catch (...)
@@ -170,6 +215,7 @@ namespace beiklive
 
     bool GameDatabase::loadFromFile(const std::string &filepath)
     {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         try
         {
             std::ifstream file(filepath);
@@ -190,6 +236,7 @@ namespace beiklive
 
     void GameDatabase::setDbDir(const std::string &dir)
     {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         dbDir_ = dir;
     }
 
@@ -206,6 +253,7 @@ namespace beiklive
 
     bool GameDatabase::loadFromDir(const std::string &dir)
     {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         doClear();
         dbDir_ = dir;
 
@@ -284,7 +332,7 @@ namespace beiklive
 
     bool GameDatabase::saveToDir(const std::string &dir) const
     {
-        // 按平台分组
+        // 按平台分组，原子写入
         std::unordered_map<int, nlohmann::json> platformData;
         for (const auto &entry : data_)
         {
@@ -299,15 +347,18 @@ namespace beiklive
         for (auto &[platform, j] : platformData)
         {
             std::string filePath = dir + beiklive::path::SPLIT_CHAR + getPlatformFileName(platform);
+            std::string tmpPath = filePath + ".tmp";
             try
             {
-                std::ofstream file(filePath);
+                std::ofstream file(tmpPath);
                 if (!file.is_open())
                 {
                     allOk = false;
                     continue;
                 }
                 file << j.dump(4);
+                file.close();
+                std::filesystem::rename(tmpPath, filePath);
             }
             catch (const std::exception &e)
             {
@@ -327,6 +378,7 @@ namespace beiklive
 
     bool GameDatabase::set(int crc32, const std::string &key, const nlohmann::json &value)
     {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         auto it = crc32Index_.find(crc32);
         if (it == crc32Index_.end())
             return false;
@@ -348,6 +400,7 @@ namespace beiklive
 
     bool GameDatabase::set(const std::string &path, const std::string &key, const nlohmann::json &value)
     {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         auto it = pathIndex_.find(path);
         if (it == pathIndex_.end())
             return false;
@@ -369,6 +422,7 @@ namespace beiklive
 
     nlohmann::json GameDatabase::get(int crc32, const std::string &key, const nlohmann::json &defaultValue) const
     {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         auto it = crc32Index_.find(crc32);
         if (it == crc32Index_.end())
             return defaultValue;
@@ -379,6 +433,7 @@ namespace beiklive
 
     nlohmann::json GameDatabase::get(const std::string &path, const std::string &key, const nlohmann::json &defaultValue) const
     {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         auto it = pathIndex_.find(path);
         if (it == pathIndex_.end())
             return defaultValue;
@@ -389,6 +444,7 @@ namespace beiklive
 
     bool GameDatabase::setDefault(int crc32, const std::string &key, const nlohmann::json &defaultValue)
     {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         auto it = crc32Index_.find(crc32);
         if (it == crc32Index_.end())
             return false;
@@ -414,6 +470,7 @@ namespace beiklive
 
     bool GameDatabase::setDefault(const std::string &path, const std::string &key, const nlohmann::json &defaultValue)
     {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         auto it = pathIndex_.find(path);
         if (it == pathIndex_.end())
             return false;
@@ -440,6 +497,7 @@ namespace beiklive
 
     bool GameDatabase::flush()
     {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         bool ok = true;
         // 保存合并主文件（向后兼容）
         if (!filepath_.empty())
@@ -460,36 +518,33 @@ namespace beiklive
 
     void GameDatabase::setAutoSaveMode(int mode, int intervalSeconds)
     {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         autoSaveMode_ = mode;
         autoSaveInterval_ = intervalSeconds;
-        // 注意：此版本不再支持后台自动保存，仅手动模式或立即保存模式有效
     }
 
     void GameDatabase::setFilePath(const std::string &filepath)
     {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         filepath_ = filepath;
     }
 
     std::vector<GameEntry> GameDatabase::getRecentPlayed(int count) const {
-        // 复制所有数据
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         std::vector<GameEntry> result = data_;
-        
-        // 按 lastPlayed 降序排序（字符串格式 "yy-mm-dd hh-mm-ss" 直接比较即可）
         std::sort(result.begin(), result.end(),
                 [](const GameEntry& a, const GameEntry& b) {
-                    return a.lastPlayed > b.lastPlayed; // 降序，最近的在前面
+                    return a.lastPlayed > b.lastPlayed;
                 });
-        
-        // 取前 count 条，若不足则全部返回
         if (result.size() > static_cast<size_t>(count)) {
             result.resize(count);
         }
         return result;
     }
-    // ==================== 公开接口 ====================
-    // 获取指定平台的游戏列表（返回副本）
+
     std::vector<GameEntry> GameDatabase::getByPlatform(beiklive::enums::EmuPlatform platform) const
     {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         std::vector<GameEntry> result;
         int platformInt = static_cast<int>(platform);
         for (const auto& entry : data_)
