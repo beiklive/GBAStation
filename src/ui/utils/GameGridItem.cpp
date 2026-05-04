@@ -18,21 +18,31 @@ namespace beiklive
         this->setMarginRight(8.f);
         this->setMarginTop(8.f);
         this->setMarginBottom(8.f);
+        
 
 
         // 封面图
-        auto imgBox = new brls::Box();
-        imgBox->setWidth(IMAGE_S);
-        imgBox->setHeight(IMAGE_S);
+        imgBox = new brls::Box();
+        imgBox->setWidth(IMAGE_S - 10.f);
+        imgBox->setHeight(IMAGE_S - 10.f);
         imgBox->setFocusable(true);
+        imgBox->setMarginTop(10.f);
+        imgBox->setBorderThickness(1.f);
+        imgBox->setCornerRadius(8.f);
+        imgBox->setShadowVisibility(true);
+        imgBox->setShadowType(brls::ShadowType::GENERIC);
+        imgBox->setBorderColor(nvgRGBA(128, 128, 128, 120));
+
 
         m_image = new brls::Image();
-        m_image->setWidth(IMAGE_S);
-        m_image->setHeight(IMAGE_S);
+        m_image->setWidth(IMAGE_S - 20.f);
+        m_image->setHeight(IMAGE_S - 20.f);
         m_image->setScalingType(brls::ImageScalingType::FILL);
         m_image->setInterpolation(brls::ImageInterpolation::LINEAR);
-        m_image->setCornerRadius(3.f);
+        m_image->setCornerRadius(5.f);
         m_image->setFocusable(false);
+        m_image->setMarginTop(5.f);
+        m_image->setMarginLeft(5.f);
 
         if (!entry.logoPath.empty())
             m_image->setImageFromFile(entry.logoPath);
@@ -42,7 +52,7 @@ namespace beiklive
 
         // 标题 Label（失焦隐藏）
         m_title = new brls::Label();
-        m_title->setWidth(IMAGE_S);
+        // m_title->setWidth(IMAGE_S - 10.f);
         m_title->setHeight(20.f);
         m_title->setFontSize(16.f);
         m_title->setText(entry.title.empty() ? entry.path : entry.title);
@@ -78,6 +88,9 @@ namespace beiklive
         brls::Box::onParentFocusGained(focusedView);
         if (m_title)
             m_title->setVisibility(brls::Visibility::VISIBLE);
+        imgBox->setBorderThickness(5.f);
+        imgBox->setBorderColor(nvgRGBA(128, 128, 255, 120));
+        
     }
 
     void GameGridItem::onParentFocusLost(brls::View *focusedView)
@@ -85,6 +98,8 @@ namespace beiklive
         brls::Box::onParentFocusLost(focusedView);
         if (m_title)
             m_title->setVisibility(brls::Visibility::INVISIBLE);
+        imgBox->setBorderColor(nvgRGBA(128, 128, 128, 120));
+        imgBox->setBorderThickness(1.f);
     }
 
 } // namespace beiklive

@@ -13,7 +13,8 @@ namespace beiklive
         // 4 列网格布局
         m_grid = new beiklive::GridBox(6);
         m_grid->setGrow(1.f);
-
+        m_grid->hideHighlight(true);
+        
         this->getContentBox()->addView(m_grid);
 
         _loadEntries();
@@ -47,22 +48,17 @@ namespace beiklive
 
             m_grid->addItem([this, entry]() -> brls::View* {
                 auto* item = new beiklive::GameGridItem(entry);
-
-
-
                 return item;
             });
         }
-                //         item->onItemClicked = [this](const beiklive::GameEntry& e) {
-                //     auto* detailPage = new beiklive::GameDetailPage(e);
-                //     auto* frame = new brls::AppletFrame(detailPage);
-                //     HIDE_BRLS_BAR(frame);
-                //     brls::sync([frame]() {
-                //         brls::Application::pushActivity(new brls::Activity(frame));
-                //     });
-                // };
         m_grid->onItemClicked = [this](int slot) {
-            
+            beiklive::GameEntry& entry = m_entries[slot];
+                    auto* detailPage = new beiklive::GameDetailPage(entry);
+                    auto* frame = new brls::AppletFrame(detailPage);
+                    HIDE_BRLS_BAR(frame);
+                    brls::sync([frame]() {
+                        brls::Application::pushActivity(new brls::Activity(frame));
+                    });
         };
 
         // 焦点

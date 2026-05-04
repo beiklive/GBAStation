@@ -169,6 +169,9 @@ namespace beiklive
                 }
 
                 auto* cell = new LazyCell(m_factories[idx], idx);
+                if(m_hideHightlight){
+                    HIDE_BRLS_HIGHLIGHT(cell);
+                }
                 // cell->setGrow(1.0f);
                 cell->setMargins(5.0f, 5.0f, 5.0f, 5.0f);
                 cell->setWidthPercentage(widthPercent);

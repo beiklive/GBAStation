@@ -67,7 +67,7 @@ namespace beiklive
         ~GridBox() = default;
 
         // ── 布局配置 ───────────────────────────────────────────
-
+        void hideHighlight(bool value) {m_hideHightlight = value;}
         /// 设置列数，调用后自动重建网格布局
         void setColumns(int columns);
         int  getColumns() const { return m_columns; }
@@ -99,7 +99,7 @@ namespace beiklive
 
     private:
         int m_columns = 4;
-
+        bool m_hideHightlight = false;
         brls::ScrollingFrame* m_scrollFrame = nullptr; ///< 垂直滚动容器
         brls::Box*            m_gridContent = nullptr; ///< COLUMN 方向网格内容盒子
 

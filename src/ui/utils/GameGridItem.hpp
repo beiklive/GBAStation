@@ -30,9 +30,11 @@ namespace beiklive
         beiklive::GameEntry m_entry;
         brls::Image* m_image = nullptr;
         brls::Label* m_title = nullptr;
+        brls::Box* imgBox = nullptr;
+
 
         static constexpr float ITEM_W = 180.f;
-        static constexpr float ITEM_H = 180.f;
+        static constexpr float ITEM_H = 210.f;
         static constexpr float IMAGE_S = 180.f;
     };
 
