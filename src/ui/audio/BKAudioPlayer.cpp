@@ -43,7 +43,8 @@ static constexpr int SWITCH_OUT_RATE = 48000;
 constexpr unsigned ALSA_LATENCY_US = 100000; // 100ms 延迟
 
 #elif defined(BK_AUDIO_COREAUDIO)
-constexpr auto PLAYBACK_TIMEOUT = std::chrono::seconds(5);
+constexpr auto    PLAYBACK_TIMEOUT       = std::chrono::seconds(5);
+constexpr double  kTrailSilenceSec       = 0.015;  // 尾部静音时长（秒），防止停止时的爆破音
 #endif
 
 // ============================================================
@@ -232,6 +233,10 @@ BKAudioPlayer::BKAudioPlayer()
     _initSwitch();
 #endif // __SWITCH__
 
+#ifdef BK_AUDIO_COREAUDIO
+    _setupCAUnit();
+#endif
+
     m_running = true;
     m_thread  = std::thread(&BKAudioPlayer::playbackThread, this);
 }
@@ -251,7 +256,75 @@ BKAudioPlayer::~BKAudioPlayer()
         m_switchInit = false;
     }
 #endif // __SWITCH__
+
+#ifdef BK_AUDIO_COREAUDIO
+    if (m_caUnit)
+    {
+        AudioUnitUninitialize(m_caUnit);
+        AudioComponentInstanceDispose(m_caUnit);
+        m_caUnit = nullptr;
+    }
+#endif
 }
+
+// ============================================================
+// CoreAudio AudioUnit 预初始化
+// ============================================================
+
+#ifdef BK_AUDIO_COREAUDIO
+void BKAudioPlayer::_setupCAUnit()
+{
+    AudioComponentDescription desc{};
+    desc.componentType         = kAudioUnitType_Output;
+    desc.componentSubType      = kAudioUnitSubType_DefaultOutput;
+    desc.componentManufacturer = kAudioUnitManufacturer_Apple;
+
+    AudioComponent comp = AudioComponentFindNext(nullptr, &desc);
+    if (!comp) {
+        brls::Logger::error("BKAudioPlayer: 找不到默认音频输出组件");
+        return;
+    }
+
+    OSStatus status = AudioComponentInstanceNew(comp, &m_caUnit);
+    if (status != noErr) {
+        brls::Logger::error("BKAudioPlayer: 创建AudioUnit实例失败 ({})", static_cast<int>(status));
+        m_caUnit = nullptr;
+        return;
+    }
+
+    // 设置默认流格式（实际播放时按需调整）
+    AudioStreamBasicDescription fmt{};
+    fmt.mSampleRate       = 44100.0;
+    fmt.mFormatID         = kAudioFormatLinearPCM;
+    fmt.mFormatFlags      = kLinearPCMFormatFlagIsSignedInteger
+                          | kLinearPCMFormatFlagIsPacked;
+    fmt.mFramesPerPacket  = 1;
+    fmt.mChannelsPerFrame = 2;
+    fmt.mBitsPerChannel   = 16;
+    fmt.mBytesPerFrame    = 4;
+    fmt.mBytesPerPacket   = 4;
+
+    status = AudioUnitSetProperty(m_caUnit, kAudioUnitProperty_StreamFormat,
+                                   kAudioUnitScope_Input, 0,
+                                   &fmt, sizeof(fmt));
+    if (status != noErr) {
+        brls::Logger::error("BKAudioPlayer: 设置AudioUnit流格式失败 ({})", static_cast<int>(status));
+        AudioComponentInstanceDispose(m_caUnit);
+        m_caUnit = nullptr;
+        return;
+    }
+
+    status = AudioUnitInitialize(m_caUnit);
+    if (status != noErr) {
+        brls::Logger::error("BKAudioPlayer: AudioUnit初始化失败 ({})", static_cast<int>(status));
+        AudioComponentInstanceDispose(m_caUnit);
+        m_caUnit = nullptr;
+        return;
+    }
+
+    brls::Logger::info("BKAudioPlayer: CoreAudio AudioUnit预初始化完成");
+}
+#endif // BK_AUDIO_COREAUDIO
 
 // ============================================================
 // AudioPlayer 接口
@@ -499,13 +572,25 @@ void BKAudioPlayer::playSoundDirect(int /*soundIdx*/, const WavData& wav, float 
 
 namespace {
 
+/// CoreAudio 渲染回调的播放状态
+///
+/// 渲染回调由 CoreAudio 高优先级实时线程调用，不可阻塞或加锁。
+/// 通过 std::atomic 标记完成状态，播放线程在 playSoundDirect 中轮询。
 struct CAPlayState
 {
-    const int16_t*    ptr       = nullptr;
-    size_t            remaining = 0; // 剩余立体声帧数
-    std::atomic<bool> done      { false };
+    const int16_t*    audioPtr    = nullptr;  ///< 当前读取位置
+    size_t            audioRemain = 0;        ///< 剩余音频立体声帧数
+    size_t            trailRemain = 0;        ///< 剩余尾部静音帧数
+    std::atomic<bool> finished{false};        ///< 音频 + 尾部静音均已输出完成
 };
 
+/// 尾部静音帧数（根据采样率计算）
+inline size_t trailSilenceFrames(double sampleRate)
+{
+    return static_cast<size_t>(sampleRate * kTrailSilenceSec);
+}
+
+/// CoreAudio 渲染回调：按需输出音频数据，耗尽后填充尾部静音再标记完成
 static OSStatus caRenderCallback(void*                       inRefCon,
                                   AudioUnitRenderActionFlags* /*ioFlags*/,
                                   const AudioTimeStamp*       /*inTS*/,
@@ -516,20 +601,32 @@ static OSStatus caRenderCallback(void*                       inRefCon,
     auto* s   = static_cast<CAPlayState*>(inRefCon);
     auto* dst = static_cast<int16_t*>(ioData->mBuffers[0].mData);
 
-    size_t toCopy = std::min(static_cast<size_t>(inNumFrames), s->remaining);
-    if (toCopy > 0)
-    {
-        memcpy(dst, s->ptr, toCopy * 4); // 2通道 × 2字节
-        s->ptr       += toCopy * 2;
-        s->remaining -= toCopy;
+    // 先写入剩余音频数据
+    size_t toCopy = std::min(static_cast<size_t>(inNumFrames), s->audioRemain);
+    if (toCopy > 0) {
+        memcpy(dst, s->audioPtr, toCopy * 4); // 2ch × 2B = 4B/frame
+        s->audioPtr    += toCopy * 2;
+        s->audioRemain -= toCopy;
     }
-    // 填充回调缓冲区剩余部分为静音
-    if (toCopy < inNumFrames)
-    {
-        memset(dst + toCopy * 2, 0,
-               (static_cast<size_t>(inNumFrames) - toCopy) * 4);
-        s->done = true;
+
+    size_t filled = toCopy;
+
+    // 音频耗尽后，填充尾部静音以平滑硬件管线末端
+    if (filled < inNumFrames) {
+        size_t silenceNeeded = inNumFrames - filled;
+        size_t trail = std::min(silenceNeeded, s->trailRemain);
+        if (trail > 0) {
+            memset(dst + filled * 2, 0, trail * 4);
+            filled += trail;
+            s->trailRemain -= trail;
+        }
+        // 尾部静音也已耗尽，剩余全部填充静音并标记完成
+        if (filled < inNumFrames) {
+            memset(dst + filled * 2, 0, (inNumFrames - filled) * 4);
+            s->finished.store(true, std::memory_order_release);
+        }
     }
+
     return noErr;
 }
 
@@ -537,27 +634,11 @@ static OSStatus caRenderCallback(void*                       inRefCon,
 
 void BKAudioPlayer::playSoundDirect(int /*soundIdx*/, const WavData& wav, float /*pitch*/)
 {
-    AudioComponentDescription desc{};
-    desc.componentType         = kAudioUnitType_Output;
-    desc.componentSubType      = kAudioUnitSubType_DefaultOutput;
-    desc.componentManufacturer = kAudioUnitManufacturer_Apple;
-
-    AudioComponent comp = AudioComponentFindNext(nullptr, &desc);
-    if (!comp)
+    // 复用预创建的 AudioUnit，避免每次播放重新创建导致延迟
+    if (!m_caUnit)
         return;
 
-    AudioUnit au = nullptr;
-    if (AudioComponentInstanceNew(comp, &au) != noErr)
-        return;
-
-    CAPlayState state;
-    state.ptr       = wav.samples.data();
-    state.remaining = wav.samples.size() / 2; // 立体声帧数
-
-    AURenderCallbackStruct cb { caRenderCallback, &state };
-    AudioUnitSetProperty(au, kAudioUnitProperty_SetRenderCallback,
-                         kAudioUnitScope_Input, 0, &cb, sizeof(cb));
-
+    // 设置当前音效的流格式（不同 WAV 文件采样率可能不同）
     AudioStreamBasicDescription fmt{};
     fmt.mSampleRate       = static_cast<Float64>(wav.sampleRate);
     fmt.mFormatID         = kAudioFormatLinearPCM;
@@ -568,29 +649,48 @@ void BKAudioPlayer::playSoundDirect(int /*soundIdx*/, const WavData& wav, float 
     fmt.mBitsPerChannel   = 16;
     fmt.mBytesPerFrame    = 4;
     fmt.mBytesPerPacket   = 4;
-    AudioUnitSetProperty(au, kAudioUnitProperty_StreamFormat,
-                         kAudioUnitScope_Input, 0, &fmt, sizeof(fmt));
 
-    if (AudioUnitInitialize(au) != noErr)
-    {
-        AudioComponentInstanceDispose(au);
-        return;
-    }
-    if (AudioOutputUnitStart(au) != noErr)
-    {
-        AudioUnitUninitialize(au);
-        AudioComponentInstanceDispose(au);
+    OSStatus status = AudioUnitSetProperty(m_caUnit,
+                                           kAudioUnitProperty_StreamFormat,
+                                           kAudioUnitScope_Input, 0,
+                                           &fmt, sizeof(fmt));
+    if (status != noErr) {
+        brls::Logger::warning("BKAudioPlayer: 设置流格式失败 ({})", static_cast<int>(status));
         return;
     }
 
-    // 等待渲染回调耗尽缓冲区
+    // 设置渲染回调与播放状态
+    CAPlayState state;
+    state.audioPtr    = wav.samples.data();
+    state.audioRemain = wav.samples.size() / 2; // 立体声帧数
+    state.trailRemain = trailSilenceFrames(static_cast<double>(wav.sampleRate));
+
+    AURenderCallbackStruct cb{ caRenderCallback, &state };
+    status = AudioUnitSetProperty(m_caUnit,
+                                  kAudioUnitProperty_SetRenderCallback,
+                                  kAudioUnitScope_Input, 0,
+                                  &cb, sizeof(cb));
+    if (status != noErr) {
+        brls::Logger::warning("BKAudioPlayer: 设置渲染回调失败 ({})", static_cast<int>(status));
+        return;
+    }
+
+    // 启动播放
+    status = AudioOutputUnitStart(m_caUnit);
+    if (status != noErr) {
+        brls::Logger::warning("BKAudioPlayer: 启动AudioUnit失败 ({})", static_cast<int>(status));
+        return;
+    }
+
+    // 等待音频数据与尾部静音全部输出完毕
     auto deadline = std::chrono::steady_clock::now() + PLAYBACK_TIMEOUT;
-    while (!state.done && std::chrono::steady_clock::now() < deadline)
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    while (!state.finished.load(std::memory_order_acquire)
+           && std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::yield();
+    }
 
-    AudioOutputUnitStop(au);
-    AudioUnitUninitialize(au);
-    AudioComponentInstanceDispose(au);
+    // 停止播放（保留 AudioUnit 实例供下次复用）
+    AudioOutputUnitStop(m_caUnit);
 }
 
 // ---- 无音频后端（空实现）-------------------------------------

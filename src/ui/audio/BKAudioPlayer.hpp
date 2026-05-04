@@ -10,6 +10,10 @@
 #include <thread>
 #include <vector>
 
+#ifdef BK_AUDIO_COREAUDIO
+#include <AudioUnit/AudioUnit.h>
+#endif
+
 namespace beiklive {
 
 /// borealis UI音效播放器，实现 AudioPlayer 接口。
@@ -82,6 +86,11 @@ class BKAudioPlayer : public brls::AudioPlayer
 #ifdef __SWITCH__
     void _initSwitch();         ///< Switch 平台：初始化 audout 服务
     bool m_switchInit = false;  ///< audout 是否初始化成功
+#endif
+
+#ifdef BK_AUDIO_COREAUDIO
+    AudioUnit m_caUnit = nullptr;  ///< 预创建的 AudioUnit 实例，避免每次播放重新创建
+    void _setupCAUnit();           ///< 创建并初始化 CoreAudio AudioUnit
 #endif
 };
 
