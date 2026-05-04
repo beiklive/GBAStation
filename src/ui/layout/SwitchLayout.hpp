@@ -20,6 +20,7 @@ namespace beiklive
         brls::Box* getContentBox() { return m_cardRow; } // 获取游戏列表所在的容器，供 StartPage 在 onResume 时设置焦点
         void buildCardRow(beiklive::GameList gameList);
         void buildFunctionArea(); // 构建功能区域，包含游戏库、设置等功能入口
+        void _buildEmptyCards();  // 构建默认空占位卡片
     private:
         brls::HScrollingFrame* m_frame;
         brls::Box* m_cardRow;

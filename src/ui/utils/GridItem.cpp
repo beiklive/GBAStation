@@ -43,6 +43,22 @@ namespace beiklive
             false,
             brls::SOUND_CLICK);
 
+        // 注册 ZR 键收藏动作（仅 GAME_LIBRARY 模式）
+        this->registerAction(
+            "收藏",
+            brls::BUTTON_RT,
+            [this](brls::View*) -> bool
+            {
+                if (m_mode != GridItemMode::GAME_LIBRARY) return true;
+                if (toggleFavourite)
+                    toggleFavourite(m_index);
+                _updateFavouriteHint();
+                return true;
+            },
+            false,
+            false,
+            brls::SOUND_CLICK);
+
         _initLayout();
     }
 
@@ -287,16 +303,30 @@ namespace beiklive
         m_imageLayer->setVisibility(visible ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
     }
 
+    void GridItem::_updateFavouriteHint()
+    {
+        if (m_mode != GridItemMode::GAME_LIBRARY) return;
+        bool fav = false;
+        if (isFavourite)
+            fav = isFavourite(m_index);
+        for (auto& action : this->getActions())
+        {
+            if (action->getButton() == brls::BUTTON_RT)
+            {
+                action->setHintText(fav ? "取消收藏" : "收藏");
+            }
+        }
+    }
+
     void GridItem::onFocusGained()
     {
         brls::Box::onFocusGained();
-        // this->setBackgroundColor(nvgRGBA(255, 255, 255, 20));
+        _updateFavouriteHint();
     }
 
     void GridItem::onFocusLost()
     {
         brls::Box::onFocusLost();
-        // this->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
     }
 
     // ============================================================

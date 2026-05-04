@@ -87,6 +87,7 @@ namespace beiklive // 结构体
         int platform = (int)beiklive::enums::EmuPlatform::NONE; // 游戏平台（如 GBA、GBC、GB）
         std::string lastPlayed = "";                            // 上次玩的时间(时间戳字符串)
         int crc32 = 0;                                          // 游戏文件的 CRC32 校验值（用于唯一标识游戏）
+        bool favourite = false;                                 // 是否收藏
 
         // 游戏独立设置相关
         std::string savePath = "";       // 游戏专属存档路径（空=使用全局默认）

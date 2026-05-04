@@ -102,6 +102,11 @@ namespace beiklive
 
         /// 被点击（A键）时触发，参数为本控件的索引
         std::function<void(int index)> onItemClicked;
+
+        /// 查询指定索引是否已收藏
+        std::function<bool(int index)> isFavourite;
+        /// 切换指定索引的收藏状态
+        std::function<void(int index)> toggleFavourite;
     private:
         GridItemMode m_mode;
         int          m_index;
@@ -138,6 +143,8 @@ namespace beiklive
 
         void onFocusGained() override;
         void onFocusLost()   override;
+
+        void _updateFavouriteHint();
     };
 
 } // namespace beiklive

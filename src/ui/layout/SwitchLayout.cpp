@@ -2,6 +2,8 @@
 
 namespace beiklive
 {
+    static constexpr int DEFAULT_EMPTY_CARDS = 10;
+
     SwitchLayout::SwitchLayout() : Layout()
     {
         HIDE_BRLS_BACKGROUND(this);
@@ -27,6 +29,24 @@ namespace beiklive
         addView(m_functionArea);
 
         buildFunctionArea();
+
+        // 先初始化默认空卡片
+        _buildEmptyCards();
+    }
+
+    void SwitchLayout::_buildEmptyCards()
+    {
+        m_cardRow->clearViews(true);
+        for (int i = 0; i < DEFAULT_EMPTY_CARDS; ++i)
+        {
+            beiklive::GameEntry emptyEntry;
+            auto *gameCard = new beiklive::GameCard(
+                beiklive::enums::ThemeLayout::SWITCH_THEME, emptyEntry, i);
+            gameCard->applyThemeLayout();
+            gameCard->setMarginRight(10.f);
+            gameCard->setMarginLeft(10.f);
+            m_cardRow->addView(gameCard);
+        }
     }
 
     void SwitchLayout::refreshGameList(beiklive::GameList gameList)
@@ -40,32 +60,57 @@ namespace beiklive
     void SwitchLayout::buildCardRow(beiklive::GameList gameList)
     {
         m_cardRow->clearViews(true);
-        int index = 0;
-        for (auto gameEntry : gameList)
-        {
-            index++;
-            auto *gameCard = new beiklive::GameCard(beiklive::enums::ThemeLayout::SWITCH_THEME, gameEntry, index);
-            gameCard->applyThemeLayout();
-            gameCard->setMarginRight(10.f);
-            gameCard->setMarginLeft(10.f);
-            gameCard->updateLogo(gameEntry.logoPath);
-            gameCard->setLogoLayer(GetGameLogoLayerPath(gameEntry.platform), true);
-            gameCard->onCardClicked = [this](beiklive::GameEntry &entry)
-            {
-                if (onGameActivated)
-                    onGameActivated(entry);
-            };
-            gameCard->registerAction(
-                "游戏选项",
-                brls::BUTTON_X,
-                [this, gameEntry](brls::View *)
-                {
-                    if (onGameOptions)
-                        onGameOptions(gameEntry);
-                    return true;
-                });
 
-            m_cardRow->addView(gameCard);
+        // 保证至少有 DEFAULT_EMPTY_CARDS 个位置
+        size_t totalSlots = std::max(static_cast<size_t>(DEFAULT_EMPTY_CARDS), gameList.size());
+
+        for (size_t i = 0; i < totalSlots; ++i)
+        {
+            if (i < gameList.size())
+            {
+                auto gameEntry = gameList[i];
+                auto *gameCard = new beiklive::GameCard(
+                    beiklive::enums::ThemeLayout::SWITCH_THEME, gameEntry, static_cast<int>(i));
+                gameCard->applyThemeLayout();
+                gameCard->setMarginRight(10.f);
+                gameCard->setMarginLeft(10.f);
+                gameCard->updateLogo(gameEntry.logoPath);
+                gameCard->setLogoLayer(GetGameLogoLayerPath(gameEntry.platform), true);
+                gameCard->onCardClicked = [this](beiklive::GameEntry &entry)
+                {
+                    if (onGameActivated)
+                        onGameActivated(entry);
+                };
+                gameCard->onFavouriteToggled = [this](beiklive::GameEntry &) {
+                    // 收藏状态变化后刷新整个列表
+                    beiklive::GameList recent = beiklive::GameDB
+                        ? beiklive::GameDB->getRecentPlayed(10)
+                        : beiklive::GameList{};
+                    refreshGameList(recent);
+                };
+                gameCard->registerAction(
+                    "游戏选项",
+                    brls::BUTTON_X,
+                    [this, gameEntry](brls::View *)
+                    {
+                        if (onGameOptions)
+                            onGameOptions(gameEntry);
+                        return true;
+                    });
+
+                m_cardRow->addView(gameCard);
+            }
+            else
+            {
+                // 空占位卡片
+                beiklive::GameEntry emptyEntry;
+                auto *gameCard = new beiklive::GameCard(
+                    beiklive::enums::ThemeLayout::SWITCH_THEME, emptyEntry, static_cast<int>(i));
+                gameCard->applyThemeLayout();
+                gameCard->setMarginRight(10.f);
+                gameCard->setMarginLeft(10.f);
+                m_cardRow->addView(gameCard);
+            }
         }
     }
 

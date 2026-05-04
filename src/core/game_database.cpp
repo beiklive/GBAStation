@@ -48,6 +48,7 @@ namespace beiklive
             {"platform", entry.platform},
             {"lastPlayed", sanitizeUtf8(entry.lastPlayed)},
             {"crc32", entry.crc32},
+            {"favourite", entry.favourite},
             {"savePath", sanitizeUtf8(entry.savePath)},
             {"screenShotPath", sanitizeUtf8(entry.screenShotPath)},
             {"cheatPath", sanitizeUtf8(entry.cheatPath)},
@@ -75,6 +76,7 @@ namespace beiklive
         entry.platform = j.value("platform", (int)beiklive::enums::EmuPlatform::NONE);
         entry.lastPlayed = j.value("lastPlayed", "");
         entry.crc32 = j.value("crc32", 0);
+        entry.favourite = j.value("favourite", false);
         entry.savePath = j.value("savePath", "");
         entry.screenShotPath = j.value("screenShotPath", "");
         entry.cheatPath = j.value("cheatPath", "");
