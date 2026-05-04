@@ -27,5 +27,3 @@ code Rules:
 - GameView类负责：1. 选择核心启动核心 2. 处理游戏输入 3. 控制游戏主循环线程，运行游戏帧
 - GamePage类负责：1. 处理游戏的GameEntry 2. 切换GameView和GameMenuView
 - GameMenuView类负责：1. 显示游戏菜单 2. 处理返回、设置等菜单操作
-- 所有对UI的操作都要在brls::sync[] 中进行
-- 所有耗时操作都要使用 brls::async[] 来进行，避免阻塞UI线程
