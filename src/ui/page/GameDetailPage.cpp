@@ -2,6 +2,7 @@
 #include "core/Tools.hpp"
 
 #include <filesystem>
+#include <fstream>
 
 namespace fs = std::filesystem;
 
@@ -19,7 +20,6 @@ namespace beiklive
 
     // ============================================================
     // _getStatePath / _getStateThumbPath
-    // 与 GameView 中相同的命名规则：{saveDir}/{stem}.ss{slot}
     // ============================================================
 
     std::string GameDetailPage::_getStatePath(int slot) const
@@ -27,23 +27,17 @@ namespace beiklive
         std::string dir = m_entry.savePath.empty()
                           ? beiklive::path::savePath()
                           : m_entry.savePath;
-
-        std::string stem;
-        if (!m_entry.path.empty())
-            stem = fs::path(m_entry.path).stem().string();
-        else
-            stem = "game";
-
+        std::string stem = !m_entry.path.empty()
+                           ? fs::path(m_entry.path).stem().string()
+                           : "game";
         if (!dir.empty())
         {
             std::error_code ec;
             fs::create_directories(dir, ec);
         }
-
         std::string sep;
         if (!dir.empty() && dir.back() != '/' && dir.back() != '\\')
             sep = "/";
-
         return dir + sep + stem + ".ss" + std::to_string(slot);
     }
 
@@ -63,13 +57,12 @@ namespace beiklive
 
     void GameDetailPage::_initLayout()
     {
-        // 主横向容器
         auto* mainRow = new brls::Box(brls::Axis::ROW);
         mainRow->setGrow(1.f);
         mainRow->setFocusable(false);
         HIDE_BRLS_HIGHLIGHT(mainRow);
 
-        // ── 左侧按钮栏 ───────────────────────────────────────────────────
+        // ── 左侧按钮栏 ──
         m_leftPanel = new brls::Box(brls::Axis::COLUMN);
         m_leftPanel->setWidthPercentage(25.f);
         m_leftPanel->setHeightPercentage(100.f);
@@ -80,7 +73,7 @@ namespace beiklive
         m_leftPanel->setFocusable(false);
         HIDE_BRLS_HIGHLIGHT(m_leftPanel);
 
-        // ── 右侧内容区 ───────────────────────────────────────────────────
+        // ── 右侧内容区 ──
         m_rightPanel = new brls::Box(brls::Axis::COLUMN);
         m_rightPanel->setGrow(1.f);
         m_rightPanel->setHeightPercentage(100.f);
@@ -90,7 +83,6 @@ namespace beiklive
         m_rightPanel->setFocusable(false);
         HIDE_BRLS_HIGHLIGHT(m_rightPanel);
 
-        // 注册 B 键：从右侧面板退回到左侧按钮
         m_rightPanel->registerAction("返回", brls::BUTTON_B, [this](brls::View*) -> bool {
             brls::sync([this]() {
                 brls::Application::giveFocus(m_leftPanel->getDefaultFocus());
@@ -98,47 +90,25 @@ namespace beiklive
             return true;
         });
 
-        // ── 创建三个右侧内容面板 ─────────────────────────────────────────
-
-        // 1. 存档面板
+        // ── 存档面板 ──
         m_savePanel = _createSavePanel();
         m_rightPanel->addView(m_savePanel);
         m_allPanels.push_back(m_savePanel);
 
-        // 2. 金手指面板（占位）
-        m_cheatPanel = new brls::Box(brls::Axis::COLUMN);
-        m_cheatPanel->setGrow(1.f);
-        m_cheatPanel->setAlignItems(brls::AlignItems::CENTER);
-        m_cheatPanel->setJustifyContent(brls::JustifyContent::CENTER);
-        m_cheatPanel->setVisibility(brls::Visibility::GONE);
-        m_cheatPanel->setFocusable(false);
-        auto* cheatLabel = new brls::Label();
-        cheatLabel->setText("金手指（待实现）");
-        cheatLabel->setFontSize(18.f);
-        cheatLabel->setFocusable(false);
-        m_cheatPanel->addView(cheatLabel);
-        m_rightPanel->addView(m_cheatPanel);
-        m_allPanels.push_back(m_cheatPanel);
+        // ── 金手指面板 ──
+        auto* cheatWrapper = _createCheatPanel();
+        m_rightPanel->addView(cheatWrapper);
+        m_allPanels.push_back(cheatWrapper);
 
-        // 3. 成就面板（占位）
-        m_achievePanel = new brls::Box(brls::Axis::COLUMN);
-        m_achievePanel->setGrow(1.f);
-        m_achievePanel->setAlignItems(brls::AlignItems::CENTER);
-        m_achievePanel->setJustifyContent(brls::JustifyContent::CENTER);
-        m_achievePanel->setVisibility(brls::Visibility::GONE);
-        m_achievePanel->setFocusable(false);
-        auto* achieveLabel = new brls::Label();
-        achieveLabel->setText("成就（待实现）");
-        achieveLabel->setFontSize(18.f);
-        achieveLabel->setFocusable(false);
-        m_achievePanel->addView(achieveLabel);
-        m_rightPanel->addView(m_achievePanel);
-        m_allPanels.push_back(m_achievePanel);
+        // ── 成就面板（占位）──
+        auto* achieveWrapper = _createAchievePanel();
+        m_rightPanel->addView(achieveWrapper);
+        m_allPanels.push_back(achieveWrapper);
 
-        // ── 创建左侧三个功能按钮 ─────────────────────────────────────────
+        // ── 左侧功能按钮 ──
         auto* btnSave    = _createMenuButton("存档",   m_savePanel);
-        auto* btnCheat   = _createMenuButton("金手指", m_cheatPanel);
-        auto* btnAchieve = _createMenuButton("成就",   m_achievePanel);
+        auto* btnCheat   = _createMenuButton("金手指", cheatWrapper);
+        auto* btnAchieve = _createMenuButton("成就",   achieveWrapper);
 
         m_leftPanel->addView(btnSave);
         m_leftPanel->addView(btnCheat);
@@ -149,7 +119,6 @@ namespace beiklive
 
         this->getContentBox()->addView(mainRow);
 
-        // 默认显示存档面板并将焦点给存档按钮
         brls::sync([this, btnSave]() {
             brls::Application::giveFocus(btnSave);
         });
@@ -197,19 +166,18 @@ namespace beiklive
         lbl->setFocusable(false);
         btn->addView(lbl);
 
-        // 焦点获得：高亮并显示对应面板
         btn->onFocusGainedCallback = [this, btn, panel]() {
             btn->setBackgroundColor(nvgRGBA(255, 255, 255, 30));
             _hideAllPanels();
             panel->setVisibility(brls::Visibility::VISIBLE);
-            // 存档面板：异步刷新存档列表
             if (panel == m_savePanel)
                 _refreshSaveList();
+            else if (panel == m_cheatPanel || panel == m_cheatPanel->getParent())
+                _refreshCheatList();
         };
         btn->onFocusLostCallback = [btn]() {
             btn->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
         };
-        // 点击：将焦点转入右侧面板
         btn->registerClickAction([panel](brls::View*) -> bool {
             brls::Application::giveFocus(panel);
             return true;
@@ -219,7 +187,7 @@ namespace beiklive
     }
 
     // ============================================================
-    // _createSavePanel – 创建存档面板（10 个槽位）
+    // 存档面板
     // ============================================================
 
     brls::View* GameDetailPage::_createSavePanel()
@@ -247,15 +215,12 @@ namespace beiklive
             item->setEmpty(_slotName(slot));
             m_saveItems.push_back(item);
 
-            // X 键：删除存档
             int captSlot = slot;
-            beiklive::GridItem* captItem = item;
-            item->registerAction("删除", brls::BUTTON_X, [this, captSlot, captItem](brls::View*) -> bool {
+            item->registerAction("删除", brls::BUTTON_X, [this, captSlot](brls::View*) -> bool {
                 std::string statePath = _getStatePath(captSlot);
                 std::error_code ec;
                 if (!fs::exists(statePath, ec))
                     return true;
-
                 auto* dialog = new brls::Dialog("确认删除" + _slotName(captSlot) + "？");
                 dialog->addButton("取消", []() {});
                 dialog->addButton("删除", [this, captSlot]() {
@@ -273,13 +238,8 @@ namespace beiklive
         return wrapper;
     }
 
-    // ============================================================
-    // _refreshSaveList – 异步扫描存档目录并刷新显示
-    // ============================================================
-
     void GameDetailPage::_refreshSaveList()
     {
-        // 保存 lambda 捕获所需的路径获取函数
         auto getStatePath = [this](int s) { return _getStatePath(s); };
         auto getThumbPath = [this](int s) { return _getStateThumbPath(s); };
 
@@ -328,10 +288,6 @@ namespace beiklive
         });
     }
 
-    // ============================================================
-    // _deleteSaveFile – 删除指定槽位的存档文件和缩略图
-    // ============================================================
-
     void GameDetailPage::_deleteSaveFile(int slot)
     {
         std::string statePath = _getStatePath(slot);
@@ -350,10 +306,214 @@ namespace beiklive
                     brls::Application::notify("已删除" + _slotName(slot));
                 else
                     brls::Application::notify("删除失败");
-                // 刷新存档列表
                 _refreshSaveList();
             });
         });
+    }
+
+    // ============================================================
+    // 金手指面板
+    // ============================================================
+
+    std::string GameDetailPage::_getCheatPath() const
+    {
+        if (!m_entry.cheatPath.empty())
+            return m_entry.cheatPath;
+
+        std::string stem;
+        if (!m_entry.path.empty())
+            stem = fs::path(m_entry.path).stem().string();
+        else
+            stem = "game";
+
+        return beiklive::path::cheatPath() + "/" + stem + ".cht";
+    }
+
+    brls::View* GameDetailPage::_createCheatPanel()
+    {
+        auto* wrapper = new brls::Box(brls::Axis::COLUMN);
+        wrapper->setGrow(1.f);
+        wrapper->setFocusable(false);
+        HIDE_BRLS_HIGHLIGHT(wrapper);
+
+        auto* titleLabel = new brls::Label();
+        titleLabel->setText("金手指");
+        titleLabel->setFontSize(24.f);
+        titleLabel->setMarginBottom(8.f);
+        titleLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+        titleLabel->setFocusable(false);
+        wrapper->addView(titleLabel);
+
+        m_cheatScroll = new brls::ScrollingFrame();
+        m_cheatScroll->setGrow(1.f);
+        m_cheatScroll->setFocusable(false);
+
+        m_cheatListBox = new brls::Box(brls::Axis::COLUMN);
+        m_cheatListBox->setGrow(1.f);
+        m_cheatListBox->setFocusable(false);
+        HIDE_BRLS_HIGHLIGHT(m_cheatListBox);
+
+        m_cheatScroll->setContentView(m_cheatListBox);
+        wrapper->addView(m_cheatScroll);
+
+        m_cheatPanel = wrapper;
+        return wrapper;
+    }
+
+    void GameDetailPage::_refreshCheatList()
+    {
+        if (!m_cheatListBox) return;
+        m_cheatListBox->clearViews(true);
+
+        std::string path = _getCheatPath();
+        m_cheatEntries = beiklive::parseChtFile(path);
+
+        if (m_cheatEntries.empty())
+        {
+            auto* emptyLbl = new brls::Label();
+            emptyLbl->setText("无金手指条目");
+            emptyLbl->setFontSize(16.f);
+            emptyLbl->setTextColor(nvgRGBA(150, 150, 150, 255));
+            emptyLbl->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+            emptyLbl->setFocusable(false);
+            emptyLbl->setMarginTop(20.f);
+            m_cheatListBox->addView(emptyLbl);
+            return;
+        }
+
+        for (size_t i = 0; i < m_cheatEntries.size(); ++i)
+        {
+            const auto& cheat = m_cheatEntries[i];
+            int idx = static_cast<int>(i);
+
+            auto* btn = new beiklive::ButtonBox();
+            btn->setAxis(brls::Axis::ROW);
+            btn->setJustifyContent(brls::JustifyContent::CENTER);
+            btn->setAlignItems(brls::AlignItems::CENTER);
+            btn->setWidthPercentage(95.f);
+            btn->setHeight(46.f);
+            btn->setMarginBottom(4.f);
+            btn->setFocusable(true);
+            btn->setHideHighlightBackground(true);
+            btn->setHideHighlightBorder(true);
+            btn->setHideClickAnimation(false);
+
+            std::string displayText = cheat.desc;
+            if (!cheat.enabled)
+                displayText = "[禁用] " + displayText;
+
+            auto* lbl = new brls::Label();
+            lbl->setText(displayText);
+            lbl->setFontSize(16.f);
+            lbl->setHorizontalAlign(brls::HorizontalAlign::LEFT);
+            lbl->setFocusable(false);
+            lbl->setSingleLine(true);
+            lbl->setAnimated(true);
+            lbl->setAutoAnimate(true);
+            lbl->setGrow(1.f);
+            btn->addView(lbl);
+
+            // X 键：修改金手指代码
+            btn->registerAction("修改代码", brls::BUTTON_X, [this, idx](brls::View*) -> bool {
+                if (idx < 0 || idx >= static_cast<int>(m_cheatEntries.size())) return true;
+                auto* ime = brls::Application::getPlatform()->getImeManager();
+                if (!ime) return true;
+                ime->openForText(
+                    [this, idx](std::string text) {
+                        if (text.empty() || idx >= static_cast<int>(m_cheatEntries.size())) return;
+                        m_cheatEntries[idx].code = text;
+                        _saveCheats();
+                        _refreshCheatList();
+                    },
+                    "修改金手指代码",
+                    "",
+                    256,
+                    m_cheatEntries[idx].code,
+                    brls::KeyboardKeyDisableBitmask::KEYBOARD_DISABLE_NONE);
+                return true;
+            });
+
+            // Y 键：删除金手指条目
+            btn->registerAction("删除条目", brls::BUTTON_Y, [this, idx](brls::View*) -> bool {
+                if (idx < 0 || idx >= static_cast<int>(m_cheatEntries.size())) return true;
+                auto* dialog = new brls::Dialog("确认删除金手指 \"" + m_cheatEntries[idx].desc + "\"？");
+                dialog->addButton("取消", []() {});
+                dialog->addButton("删除", [this, idx]() {
+                    _deleteCheat(idx);
+                });
+                dialog->open();
+                return true;
+            });
+
+            // ZR 键：修改金手指名称
+            btn->registerAction("修改名称", brls::BUTTON_RT, [this, idx](brls::View*) -> bool {
+                if (idx < 0 || idx >= static_cast<int>(m_cheatEntries.size())) return true;
+                auto* ime = brls::Application::getPlatform()->getImeManager();
+                if (!ime) return true;
+                ime->openForText(
+                    [this, idx](std::string text) {
+                        if (text.empty() || idx >= static_cast<int>(m_cheatEntries.size())) return;
+                        m_cheatEntries[idx].desc = text;
+                        _saveCheats();
+                        _refreshCheatList();
+                    },
+                    "修改金手指名称",
+                    "",
+                    128,
+                    m_cheatEntries[idx].desc,
+                    brls::KeyboardKeyDisableBitmask::KEYBOARD_DISABLE_NONE);
+                return true;
+            });
+
+            btn->onFocusGainedCallback = [btn]() {
+                btn->setBackgroundColor(nvgRGBA(255, 255, 255, 20));
+            };
+            btn->onFocusLostCallback = [btn]() {
+                btn->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
+            };
+
+            m_cheatListBox->addView(btn);
+        }
+    }
+
+    void GameDetailPage::_saveCheats()
+    {
+        std::string path = _getCheatPath();
+        std::string dir = fs::path(path).parent_path().string();
+        if (!dir.empty())
+        {
+            std::error_code ec;
+            fs::create_directories(dir, ec);
+        }
+        beiklive::saveChtFile(path, m_cheatEntries);
+    }
+
+    void GameDetailPage::_deleteCheat(int index)
+    {
+        if (index < 0 || index >= static_cast<int>(m_cheatEntries.size())) return;
+        m_cheatEntries.erase(m_cheatEntries.begin() + index);
+        _saveCheats();
+        _refreshCheatList();
+    }
+
+    // ============================================================
+    // 成就面板（占位）
+    // ============================================================
+
+    brls::View* GameDetailPage::_createAchievePanel()
+    {
+        m_achievePanel = new brls::Box(brls::Axis::COLUMN);
+        m_achievePanel->setGrow(1.f);
+        m_achievePanel->setAlignItems(brls::AlignItems::CENTER);
+        m_achievePanel->setJustifyContent(brls::JustifyContent::CENTER);
+        m_achievePanel->setVisibility(brls::Visibility::GONE);
+        m_achievePanel->setFocusable(false);
+        auto* label = new brls::Label();
+        label->setText("成就（待实现）");
+        label->setFontSize(18.f);
+        label->setFocusable(false);
+        m_achievePanel->addView(label);
+        return m_achievePanel;
     }
 
 } // namespace beiklive

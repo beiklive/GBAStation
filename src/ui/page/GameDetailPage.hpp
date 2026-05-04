@@ -31,7 +31,7 @@ namespace beiklive
      *   - 左侧：功能列表按钮（存档 / 金手指 / 成就）
      *   - 右侧：对应内容面板
      *     - 存档面板：GridBox，每项对应一个存档槽位，X 键删除
-     *     - 金手指面板：占位（待实现）
+     *     - 金手指面板：读取 .cht 文件，ButtonBox 列表展示，X 改代码/Y 删除/ZR 改名
      *     - 成就面板：占位（待实现）
      */
     class GameDetailPage : public beiklive::Box
@@ -49,12 +49,17 @@ namespace beiklive
 
         // ── 右侧面板 ──────────────────────────────────────────────────────
         brls::View* m_savePanel    = nullptr; ///< 存档面板
-        brls::Box*  m_cheatPanel   = nullptr; ///< 金手指面板（占位）
+        brls::Box*  m_cheatPanel   = nullptr; ///< 金手指面板
         brls::Box*  m_achievePanel = nullptr; ///< 成就面板（占位）
 
         std::vector<brls::View*>        m_allPanels;
         beiklive::GridBox*              m_saveGrid = nullptr;
         std::vector<beiklive::GridItem*> m_saveItems;
+
+        // ── 金手指面板组件 ────────────────────────────────────────────────
+        brls::Box*                      m_cheatListBox = nullptr; ///< 金手指按钮容器
+        brls::ScrollingFrame*           m_cheatScroll  = nullptr;
+        std::vector<beiklive::CheatEntry> m_cheatEntries;          ///< 当前解析的金手指条目
 
         void _initLayout();
         void _hideAllPanels();
@@ -78,6 +83,26 @@ namespace beiklive
 
         /// 格式化存档槽位名称
         static std::string _slotName(int slot);
+
+        // ── 金手指面板 ────────────────────────────────────────────────────
+
+        /// 确定金手指文件路径（优先使用 entry.cheatPath，否则使用默认路径）
+        std::string _getCheatPath() const;
+
+        /// 创建金手指面板
+        brls::View* _createCheatPanel();
+
+        /// 刷新金手指列表
+        void _refreshCheatList();
+
+        /// 保存金手指到文件
+        void _saveCheats();
+
+        /// 删除指定索引的金手指条目
+        void _deleteCheat(int index);
+
+        // ── 成就面板（占位）────────────────────────────────────────────────
+        brls::View* _createAchievePanel();
     };
 
 } // namespace beiklive
