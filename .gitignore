@@ -47,5 +47,5 @@ build
 build_*
 build-*
 
-
+AGENTS.md
 .DS_Store
