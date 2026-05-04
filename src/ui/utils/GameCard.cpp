@@ -6,7 +6,7 @@
 namespace beiklive
 {
     static constexpr float CARD_WIDTH_SWITCH     = 220.f;
-    static constexpr float CARD_HEIGHT_SWITCH    = 270.f;
+    static constexpr float CARD_HEIGHT_SWITCH    = 350.f;
     static constexpr float COVER_WIDTH_SWITCH    = 220.f;
     static constexpr float COVER_HEIGHT_SWITCH   = 220.f;
     static constexpr float INFO_ANIM_DURATION    = 0.25f;
@@ -109,10 +109,10 @@ namespace beiklive
         this->setHeight(CARD_HEIGHT_SWITCH);
         this->setWidth(CARD_WIDTH_SWITCH);
 
-        if (m_isEmpty)
-        {
-            this->setHeight(COVER_HEIGHT_SWITCH + 10.f);
-        }
+        // if (m_isEmpty)
+        // {
+        //     this->setHeight(COVER_HEIGHT_SWITCH + 10.f);
+        // }
 
         auto logobox = new brls::Box();
         logobox->setFocusable(true);
@@ -120,15 +120,8 @@ namespace beiklive
         logobox->setHeight(COVER_HEIGHT_SWITCH);
         logobox->setHideHighlightBackground(true);
 
-        if (m_isEmpty)
-        {
-            logobox->setBorderColor(nvgRGBA(255, 255, 255, 180));
-        }
-        else
-        {
             logobox->setBorderColor(nvgRGBA(128, 128, 128, 120));
-        }
-        logobox->setCornerRadius(3.f);
+        logobox->setCornerRadius(7.f);
         logobox->setBorderThickness(1.f);
 
         m_coverImage = new brls::Image();
@@ -142,7 +135,7 @@ namespace beiklive
         m_coverImage->setShadowVisibility(true);
         m_coverImage->setShadowType(brls::ShadowType::GENERIC);
         m_coverImage->setHighlightCornerRadius(12.f);
-        m_coverImage->setCornerRadius(3.f);
+        m_coverImage->setCornerRadius(7.f);
 
         if (!m_isEmpty && !m_gameEntry.logoPath.empty())
             m_coverImage->setImageFromFile(m_gameEntry.logoPath);
@@ -163,49 +156,53 @@ namespace beiklive
 
         logobox->addView(m_coverImage);
 
-        if (!m_isEmpty)
-        {
             m_titleLabel = new brls::Label();
-            m_titleLabel->setWidth(CARD_WIDTH_SWITCH * 1.5f);
+            m_titleLabel->setWidth(CARD_WIDTH_SWITCH * 2.5f);
+            m_titleLabel->setHeight(30.f);
             m_titleLabel->setFontSize(26.f);
-            m_titleLabel->setText(m_gameEntry.title);
+            m_titleLabel->setText(m_isEmpty? " " : m_gameEntry.title);
             m_titleLabel->setTextColor(GET_THEME_COLOR("beiklive/CardText/color"));
             m_titleLabel->setSingleLine(true);
             m_titleLabel->setAnimated(true);
             m_titleLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
             m_titleLabel->setVerticalAlign(brls::VerticalAlign::CENTER);
             m_titleLabel->setVisibility(brls::Visibility::INVISIBLE);
-            m_titleLabel->setMarginBottom(10.f);
+            m_titleLabel->setMarginBottom(20.f);
 
             this->addView(m_titleLabel);
-        }
 
         this->addView(logobox);
 
-        if (!m_isEmpty)
-        {
+        // if (!m_isEmpty)
             // 游玩时间标签（左对齐，焦点时从右滑入）
             m_playTimeLabel = new brls::Label();
             m_playTimeLabel->setWidth(CARD_WIDTH_SWITCH);
+            m_playTimeLabel->setHeight(20.f);
             m_playTimeLabel->setFontSize(16.f);
             m_playTimeLabel->setTextColor(nvgRGBA(200, 200, 200, 200));
             m_playTimeLabel->setSingleLine(true);
             m_playTimeLabel->setAnimated(true);
             m_playTimeLabel->setHorizontalAlign(brls::HorizontalAlign::LEFT);
             m_playTimeLabel->setVisibility(brls::Visibility::INVISIBLE);
+            m_playTimeLabel->setMarginTop(15.f);
             m_playTimeLabel->setMarginLeft(20.f);
+
             std::string playStr = "未游玩";
+        if (!m_isEmpty)
+        {
             if (m_gameEntry.playTime > 0)
             {
                 int h = m_gameEntry.playTime / 3600;
                 int min = (m_gameEntry.playTime % 3600) / 60;
                 playStr = "游玩时间: " + std::to_string(h) + "时" + std::to_string(min) + "分";
             }
-            m_playTimeLabel->setText(playStr);
-            this->addView(m_playTimeLabel);
+        }
+        m_playTimeLabel->setText(m_isEmpty ? " " : playStr);
+        this->addView(m_playTimeLabel);
 
             // 上次打开时间标签（左对齐，焦点时从右滑入）
             m_lastPlayedLabel = new brls::Label();
+            m_lastPlayedLabel->setHeight(20.f);
             m_lastPlayedLabel->setWidth(CARD_WIDTH_SWITCH);
             m_lastPlayedLabel->setFontSize(16.f);
             m_lastPlayedLabel->setTextColor(nvgRGBA(200, 200, 200, 200));
@@ -214,13 +211,13 @@ namespace beiklive
             m_lastPlayedLabel->setHorizontalAlign(brls::HorizontalAlign::LEFT);
             m_lastPlayedLabel->setVisibility(brls::Visibility::INVISIBLE);
             m_lastPlayedLabel->setMarginLeft(20.f);
+            m_lastPlayedLabel->setMarginTop(10.f);
             std::string timeStr = m_gameEntry.lastPlayed.empty()
                 ? "上次打开: 从未"
                 : "上次打开: " + beiklive::tools::formatTimestampForDisplay(m_gameEntry.lastPlayed);
-            m_lastPlayedLabel->setText(timeStr);
-            this->addView(m_lastPlayedLabel);
-        }
-
+        m_lastPlayedLabel->setText(m_isEmpty ? " " : timeStr);
+        this->addView(m_lastPlayedLabel);
+        
         this->registerAction(
             "打开",
             brls::BUTTON_A,
