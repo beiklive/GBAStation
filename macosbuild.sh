@@ -32,7 +32,13 @@ cmake .. \
     -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 
 echo "[3/3] 开始编译（并行线程：${JOBS}）..."
-cmake --build . -j "${JOBS}"
+if cmake --build . -j "${JOBS}"; then
+    echo "编译成功，打开应用..."
+    open "GBAStation.app"
+else
+    echo "编译失败，不打开应用"
+    exit 1
+fi
 
 cd ..
 echo ""
