@@ -75,7 +75,7 @@ namespace beiklive
     {
         this->setAxis(brls::Axis::COLUMN);
         this->setWidthPercentage(100.f);
-        this->setHeightPercentage(100.f);
+        // this->setHeightPercentage(100.f);
         this->setGrow(1.0f);
         this->setFocusable(false); // 滚动容器不参与焦点管理，焦点由单元格统一持有
 

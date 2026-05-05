@@ -60,7 +60,7 @@ namespace beiklive
             beiklive::GridBox* m_loadGrid = nullptr;
 
             // 金手指面板
-            brls::Box* m_cheatItemBox = nullptr;
+            beiklive::GridBox* m_cheatItemBox = nullptr;
             brls::Label* m_cheatCountLabel = nullptr;
             std::vector<beiklive::SwitchButton*> m_cheatSwitches;
             std::vector<CheatEntry> m_cheats;

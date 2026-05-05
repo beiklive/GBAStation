@@ -55,7 +55,9 @@ namespace beiklive
             BK_RES("img/ui/menu/back.png"), 
             [this]() {
                 if (m_onResume) m_onResume();
-            }
+            },
+            [this](){_refreshStatePanel(true);_refreshStatePanel(false);}
+
         );
 
         m_panel->registerAction("返回", brls::BUTTON_B, [this](brls::View*) -> bool {
@@ -342,18 +344,26 @@ namespace beiklive
     // ============================================================
     brls::View* GameMenuView::_createCheatPanel()
     {
+        // 子界面容器
         auto* wrapper = new brls::Box(brls::Axis::COLUMN);
         wrapper->setVisibility(brls::Visibility::GONE);
         wrapper->setGrow(1.f);
         wrapper->setFocusable(false);
+        wrapper->setWidthPercentage(100.f);
+        HIDE_BRLS_HIGHLIGHT(wrapper);
+        // wrapper->setWireframeEnabled(true);
 
+        // 顶栏
         auto* topRow = new brls::Box(brls::Axis::ROW);
         topRow->setFocusable(false);
         topRow->setAlignItems(brls::AlignItems::CENTER);
-        topRow->setPadding(12.f, 16.f, 8.f, 16.f);
+        // topRow->setPadding(12.f, 16.f, 8.f, 16.f);
+        topRow->setHeight(30.f);
+        topRow->setWidthPercentage(100.f);
+        topRow->setWireframeEnabled(true);
 
         auto* titleLabel = new brls::Label();
-        titleLabel->setText("金手指设置");
+        titleLabel->setText("当前金手指文件：");
         titleLabel->setFontSize(20.f);
         titleLabel->setTextColor(GET_THEME_COLOR("brls/text"));
         titleLabel->setMarginRight(10.f);
@@ -368,10 +378,13 @@ namespace beiklive
         m_cheatCountLabel->setFocusable(false);
         topRow->addView(m_cheatCountLabel);
 
-        auto* selectChtBtn = new beiklive::ButtonBox();
-        selectChtBtn->setText("选择CHT");
-        selectChtBtn->setIcon(BK_RES("img/ui/menu/cheat.png"));
+        topRow->addView(new brls::Padding());
+
+        auto* selectChtBtn = new brls::Button();
+        selectChtBtn->setText("选择金手指文件(cht)");
+        // selectChtBtn->setIcon(BK_RES("img/ui/menu/cheat.png"));
         selectChtBtn->setMarginRight(4.f);
+        // selectChtBtn->setWidth(80.f);
         selectChtBtn->registerClickAction([this](brls::View*) -> bool {
             beiklive::openFilePicker({"cht"},
                 [this](const std::string& path) {
@@ -382,9 +395,9 @@ namespace beiklive
         });
         topRow->addView(selectChtBtn);
 
-        auto* enableAllBtn = new beiklive::ButtonBox();
-        enableAllBtn->setText("全开");
-        enableAllBtn->setIcon(BK_RES("img/ui/setting/display.png"));
+        auto* enableAllBtn = new brls::Button();
+        enableAllBtn->setText("全部开启");
+        // enableAllBtn->setIcon(BK_RES("img/ui/setting/display.png"));
         enableAllBtn->setMarginRight(4.f);
         enableAllBtn->registerClickAction([this](brls::View*) -> bool {
             _setAllCheatsEnabled(true);
@@ -392,9 +405,9 @@ namespace beiklive
         });
         topRow->addView(enableAllBtn);
 
-        auto* disableAllBtn = new beiklive::ButtonBox();
-        disableAllBtn->setText("全关");
-        disableAllBtn->setIcon(BK_RES("img/ui/setting/display.png"));
+        auto* disableAllBtn = new brls::Button();
+        disableAllBtn->setText("全部关闭");
+        // disableAllBtn->setIcon(BK_RES("img/ui/setting/display.png"));
         disableAllBtn->registerClickAction([this](brls::View*) -> bool {
             _setAllCheatsEnabled(false);
             return true;
@@ -403,26 +416,11 @@ namespace beiklive
 
         wrapper->addView(topRow);
 
-        auto* scroll = new brls::ScrollingFrame();
-        scroll->setGrow(1.f);
-        scroll->setScrollingBehavior(brls::ScrollingBehavior::NATURAL);
-        scroll->setFocusable(false);
-
-        m_cheatItemBox = new brls::Box(brls::Axis::COLUMN);
-        m_cheatItemBox->setPadding(8.f, 16.f, 8.f, 16.f);
-        m_cheatItemBox->setFocusable(false);
-
-        auto* noCheatLabel = new brls::Label();
-        noCheatLabel->setText("未加载金手指文件");
-        noCheatLabel->setFontSize(14.f);
-        noCheatLabel->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
-        noCheatLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
-        noCheatLabel->setFocusable(false);
-        m_cheatItemBox->addView(noCheatLabel);
-
-        scroll->setContentView(m_cheatItemBox);
-        wrapper->addView(scroll);
-
+        // 金手指网格列表
+        m_cheatItemBox = new beiklive::GridBox(2);
+        m_cheatItemBox->setWireframeEnabled(true);
+        wrapper->addView(m_cheatItemBox);
+        // 读取金手指文件
         if (!m_gameEntry.cheatPath.empty())
             _loadCheatsFromPath(m_gameEntry.cheatPath);
 
@@ -433,7 +431,7 @@ namespace beiklive
     {
         m_cheats = beiklive::parseChtFile(path);
         m_gameEntry.cheatPath = path;
-        _rebuildCheatItems();
+        // _rebuildCheatItems();
     }
 
     void GameMenuView::_rebuildCheatItems()
