@@ -53,6 +53,14 @@ namespace beiklive
             else if (themeStr == "SakuraPink")    this->setGradientTheme(GradientTheme::SakuraPink);
             else                                   this->setGradientTheme(GradientTheme::VscodeBlack);
         }
+        // 重新读取背景图片配置
+        bool enableBg = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_UI_SHOW_BG_IMAGE, 0) != 0;
+        this->showBackground(enableBg);
+        if (enableBg) {
+            std::string bgPath = GET_SETTING_KEY_STR(beiklive::SettingKey::KEY_UI_BG_IMAGE_PATH, "");
+            if (!bgPath.empty())
+                this->setBackgroundImage(bgPath);
+        }
         // 每次回到起始页时刷新游戏列表，获取最新的最近玩过的10款游戏
         if (switchLayout)
         {

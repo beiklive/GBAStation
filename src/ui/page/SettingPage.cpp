@@ -747,6 +747,42 @@ brls::View *SettingPage::buildUITab()
         box->addView(themeCell);
     }
 
+    // ── 背景图片设置 ──
+    {
+        auto *bgSwitch = new brls::BooleanCell();
+        bgSwitch->init("启用背景图片",
+                      cfgGetBool(beiklive::SettingKey::KEY_UI_SHOW_BG_IMAGE, false),
+                      [this](bool v) {
+                          cfgSetBool(beiklive::SettingKey::KEY_UI_SHOW_BG_IMAGE, v);
+                          this->showBackground(v);
+                      });
+        box->addView(bgSwitch);
+
+        auto *bgPathCell = new brls::DetailCell();
+        bgPathCell->setText("背景图片路径");
+        std::string curPath = cfgGetStr(beiklive::SettingKey::KEY_UI_BG_IMAGE_PATH, "");
+        bgPathCell->setDetailText(curPath.empty() ? "未设置" : beiklive::tools::getFileName(curPath));
+        bgPathCell->registerAction("选择", brls::BUTTON_A,
+            [this, bgPathCell](brls::View*) -> bool {
+                std::string dir = cfgGetStr(beiklive::SettingKey::KEY_UI_BG_IMAGE_PATH, "");
+                auto pos = dir.rfind('/');
+#ifdef _WIN32
+                auto posW = dir.rfind('\\');
+                if (posW != std::string::npos && (pos == std::string::npos || posW > pos)) pos = posW;
+#endif
+                if (pos != std::string::npos) dir = dir.substr(0, pos); else dir = "";
+                beiklive::openFilePicker({"png"},
+                    [this, bgPathCell](const std::string& path) {
+                        cfgSetStr(beiklive::SettingKey::KEY_UI_BG_IMAGE_PATH, path);
+                        bgPathCell->setDetailText(beiklive::tools::getFileName(path));
+                        this->setBackgroundImage(path);
+                    },
+                    dir);
+                return true;
+            });
+        box->addView(bgPathCell);
+    }
+
     scroll->setContentView(box);
     auto *container = new brls::Box(brls::Axis::COLUMN);
     container->setWidthPercentage(100.f);
@@ -1402,7 +1438,6 @@ SettingPage::SettingPage()
         this->showHeader(true);
         this->getHeader()->setTitle("设置");
         this->showFooter(true);
-        this->showBackground(false);
 
         m_tabframe = new beiklive::TabFrame();
         this->getContentBox()->addView(m_tabframe);

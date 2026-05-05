@@ -20,6 +20,7 @@ namespace beiklive
         void showHeader(bool show);
         void showFooter(bool show);
         void showBackground(bool show);
+        void setBackgroundImage(const std::string& path);
         void showShader(bool show);
         void setGradientTheme(GradientTheme theme);
         brls::Box* getContentBox() { return contentBox; }

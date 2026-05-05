@@ -1,6 +1,7 @@
 #include "Box.hpp"
 #include "Header.hpp"
 #include "core/common.h"
+#include <filesystem>
 
 namespace beiklive
 {
@@ -50,6 +51,12 @@ namespace beiklive
             backgroundLayer->setVisibility(show ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
     }
 
+    void Box::setBackgroundImage(const std::string& path)
+    {
+        if(backgroundLayer && !path.empty())
+            backgroundLayer->setImageFromFileForce(path);
+    }
+
     void Box::showShader(bool show)
     {
         if(shaderLayer)
@@ -76,10 +83,15 @@ namespace beiklive
         backgroundLayer->setScalingType(brls::ImageScalingType::FIT);
         backgroundLayer->setInterpolation(brls::ImageInterpolation::LINEAR);
 
-        backgroundLayer->setImageFromFile(BK_RES("img/bg2.png")); // 默认背景图，用户设置的背景会覆盖它
+        backgroundLayer->setImageFromFile(BK_RES("img/bg2.png")); // 默认背景图
+        // 读取配置的背景图（如果有的话）
+        std::string bgPath = GET_SETTING_KEY_STR(beiklive::SettingKey::KEY_UI_BG_IMAGE_PATH, "");
+        if (!bgPath.empty() && std::filesystem::exists(bgPath))
+            backgroundLayer->setImageFromFile(bgPath);
         // 应用所有背景设置（可见性、图片、XMB着色器与颜色）
         this->addView(backgroundLayer);
-        showBackground(false); // 默认隐藏背景
+        bool showBg = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_UI_SHOW_BG_IMAGE, 0) != 0;
+        showBackground(showBg);
     }
 
     void Box::setupShaderLayer()

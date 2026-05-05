@@ -8,7 +8,6 @@ namespace beiklive
         {
             this->showFooter(true);
             this->showHeader(false);
-            this->showBackground(false);
             buildUI();
         });
     }
