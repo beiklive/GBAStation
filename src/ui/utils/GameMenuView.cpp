@@ -55,9 +55,7 @@ namespace beiklive
             BK_RES("img/ui/menu/back.png"), 
             [this]() {
                 if (m_onResume) m_onResume();
-            },
-            [this](){_refreshStatePanel(true);_refreshStatePanel(false);}
-
+            }
         );
 
         m_panel->registerAction("返回", brls::BUTTON_B, [this](brls::View*) -> bool {
@@ -73,7 +71,7 @@ namespace beiklive
             "保存状态", 
             BK_RES("img/ui/menu/save.png"),
             nullptr, 
-            [this](){_refreshStatePanel(true);}, 
+            nullptr, 
             nullptr, 
             m_savePanel,
             m_saveGrid->getItemView(0) // 默认聚焦第一个槽位
@@ -85,7 +83,7 @@ namespace beiklive
             "读取状态", 
             BK_RES("img/ui/menu/load.png"),
             nullptr, 
-            [this](){_refreshStatePanel(false);},  
+            nullptr, 
             nullptr, 
             m_loadPanel,
             m_loadGrid->getItemView(0) // 默认聚焦第一个槽位
@@ -307,12 +305,6 @@ namespace beiklive
                         item->setSubText(info.timeStr.empty() ? "时间未知" : info.timeStr);
                         if (!info.thumbPath.empty())
                         {
-                            // 这里需要先清除旧缓存（如果有的话），否则同一路径的缩略图更新后可能无法刷新显示
-                            int oldTex = brls::TextureCache::instance().getCache(info.thumbPath);
-                            if (oldTex > 0) {
-                                brls::TextureCache::instance().removeCache(static_cast<size_t>(oldTex));
-                                brls::TextureCache::instance().markDirty(static_cast<size_t>(oldTex));
-                            }
                             item->setImagePath(info.thumbPath);
                         }
                     }
@@ -336,6 +328,8 @@ namespace beiklive
 
     void GameMenuView::onShow()
     {
+        _refreshStatePanel(true);
+        _refreshStatePanel(false);
         m_panel->onShow();
     }
 

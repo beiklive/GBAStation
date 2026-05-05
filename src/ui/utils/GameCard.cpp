@@ -53,12 +53,7 @@ namespace beiklive
     {
         if (m_coverImage)
         {
-            int oldTex = brls::TextureCache::instance().getCache(logoPath);
-            if (oldTex > 0) {
-                brls::TextureCache::instance().removeCache(static_cast<size_t>(oldTex));
-                brls::TextureCache::instance().markDirty(static_cast<size_t>(oldTex));
-            }
-            m_coverImage->setImageFromFile(logoPath);
+            m_coverImage->setImageFromFileForce(logoPath);
         }
     }
 
@@ -66,7 +61,7 @@ namespace beiklive
     {
         if (!m_imageLayer) return;
         if (visible && !path.empty())
-            m_imageLayer->setImageFromFile(path);
+            m_imageLayer->setImageFromFileForce(path);
         m_imageLayer->setVisibility(visible ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
     }
 
@@ -138,9 +133,9 @@ namespace beiklive
         m_coverImage->setCornerRadius(7.f);
 
         if (!m_isEmpty && !m_gameEntry.logoPath.empty())
-            m_coverImage->setImageFromFile(m_gameEntry.logoPath);
+            m_coverImage->setImageFromFileForce(m_gameEntry.logoPath);
         else if (m_isEmpty)
-            m_coverImage->setImageFromFile(""); // 空卡片不加载图片
+            m_coverImage->clear(); // 空卡片不加载图片
 
         m_imageLayer = new brls::Image();
         m_imageLayer->setWidth(COVER_WIDTH_SWITCH);

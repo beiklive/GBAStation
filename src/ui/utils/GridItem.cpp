@@ -231,7 +231,10 @@ namespace beiklive
     {
         if (!m_image) return;
         if (!path.empty())
-            m_image->setImageFromFile(path);
+        {
+            m_image->setImageFromFileForce(path);
+
+        }
     }
 
     void GridItem::setBadge(const std::string& text, PlatformBadgeColor color)

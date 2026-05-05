@@ -17,6 +17,7 @@
 #pragma once
 
 #include <stdexcept>
+#include <vector>
 
 #include "borealis/core/singleton.hpp"
 
@@ -172,6 +173,16 @@ class LRUCache
         }
     }
 
+    void forceRemove(T value)
+    {
+        if (!isExisted(value))
+            return;
+        auto it = valueMap[value];
+        cacheMap.erase(it->key);
+        valueMap.erase(value);
+        cacheList.erase(it);
+    }
+
     std::list<Node<K, T>>& getCacheList() { return cacheList; }
 
     void debug()
@@ -291,6 +302,21 @@ class TextureCache : public Singleton<TextureCache>
         for (auto& i : cache.getCacheList())
         {
             nvgDeleteImage(vg, i.value);
+        }
+    }
+
+    void cleanDirty()
+    {
+        auto vg = brls::Application::getNVGContext();
+        if (!vg) return;
+        std::vector<size_t> dirtyVals;
+        for (auto& i : cache.getCacheList())
+            if (i.dirty)
+                dirtyVals.push_back(i.value);
+        for (auto v : dirtyVals)
+        {
+            nvgDeleteImage(vg, v);
+            cache.forceRemove(v);
         }
     }
 

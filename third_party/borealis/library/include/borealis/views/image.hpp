@@ -90,12 +90,20 @@ class Image : public View
     void setImageFromRes(const std::string& name);
 
     /**
-     * Sets the image from the given file path.
+     * Sets the image from the given file path, by cache.
      *
      * See Image class documentation for the list of supported
      * image formats.
      */
     void setImageFromFile(const std::string& path);
+    //  
+    /**
+     * Same as setImageFromFile but forces the image to be reloaded
+     *
+     * even if it's already in cache, useful for dynamic images that can change while the app is running
+     */
+    void setImageFromFileForce(const std::string& path);
+
 
     /**
      * Sets the image from memory.

@@ -345,6 +345,23 @@ void Image::setImageFromFile(const std::string& path)
     TextureCache::instance().addCache(path, tex);
 }
 
+void Image::setImageFromFileForce(const std::string& path)
+{
+    this->setFreeTexture(false);
+
+    // 仅标记旧缓存为 dirty，使 checkCache 不再命中，但不删除 GPU 纹理
+    // 避免影响其他引用同一纹理的 Image 控件
+    int oldTex = TextureCache::instance().getCache(path);
+    if (oldTex > 0)
+        TextureCache::instance().markDirty(static_cast<size_t>(oldTex));
+
+    // 强制从磁盘重载
+    int tex = nvgCreateImage(Application::getNVGContext(), path.c_str(), this->getImageFlags());
+    innerSetImage(tex);
+
+    TextureCache::instance().addCache(path, tex);
+}
+
 void Image::setImageFromMem(const unsigned char* data, int size)
 {
     NVGcontext* vg = Application::getNVGContext();

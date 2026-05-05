@@ -74,7 +74,7 @@ namespace beiklive
                 gameCard->setMarginRight(10.f);
                 gameCard->setMarginLeft(10.f);
                 gameCard->updateLogo(gameEntry.logoPath);
-                gameCard->setLogoLayer(GetGameLogoLayerPath(gameEntry.platform), true);
+                // gameCard->setLogoLayer(GetGameLogoLayerPath(gameEntry.platform), true);
                 gameCard->onCardClicked = [this](beiklive::GameEntry &entry)
                 {
                     if (onGameActivated)
