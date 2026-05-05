@@ -1,4 +1,6 @@
 #include "common.h"
+#include <algorithm>
+#include <cctype>
 #include <cstdlib>
 #include <filesystem>
 
@@ -405,44 +407,98 @@ namespace beiklive
         }
         else
         {
-            // ---- 简单逐行格式 ----
+            // ---- 简单逐行格式：支持 Raw / GameShark V3 / CodeBreaker ----
             std::istringstream iss(content);
             std::string line;
             while (std::getline(iss, line))
             {
                 if (!line.empty() && line.back() == '\r')
                     line.pop_back();
+
+                // 去掉尾注 # 之后的部分
                 auto hash = line.find('#');
                 if (hash != std::string::npos)
                     line = line.substr(0, hash);
+
+                // trim 首尾空白
                 size_t b = line.find_first_not_of(" \t");
-                if (b == std::string::npos)
-                    continue;
-                line = line.substr(b);
-                if (line.empty())
-                    continue;
+                if (b == std::string::npos) continue;
+                size_t e = line.find_last_not_of(" \t");
+                line = line.substr(b, e - b + 1);
+                if (line.empty()) continue;
+
+                // 提取前置注释中的描述名（可能被 # 切割后丢失，重新从原行提取）
+                // 这里仅用代码串作为默认描述，后续可覆盖
 
                 CheatEntry entry;
                 entry.enabled = true;
+
+                // +/- 前缀：启用/禁用
                 if (line[0] == '+')
                 {
                     entry.enabled = true;
                     line = line.substr(1);
+                    b = line.find_first_not_of(" \t");
+                    if (b == std::string::npos) continue;
+                    line = line.substr(b);
                 }
                 else if (line[0] == '-')
                 {
                     entry.enabled = false;
                     line = line.substr(1);
+                    b = line.find_first_not_of(" \t");
+                    if (b == std::string::npos) continue;
+                    line = line.substr(b);
                 }
-                b = line.find_first_not_of(" \t");
-                if (b == std::string::npos)
-                    continue;
-                line = line.substr(b);
-                if (line.empty())
-                    continue;
+
+                if (line.empty()) continue;
+
+                // 去掉可能残留的前后空白
+                e = line.find_last_not_of(" \t");
+                line = line.substr(0, e + 1);
+
+                // 跳过非代码行（描述头、空注释等）
+                if (line[0] == '[' || line[0] == ';') continue;
+
+                // 判断是否为合法金手指行：
+                // Raw:     AAAAAAAA:VVVV  或 AAAAAAAA+VVVV
+                // GS V3:   AAAAAAAA VVVVVVVV (8+8 hex)
+                // CB:      AAAAAAAA VVVV       (8+4 hex)
+                // RA code: AAAA:VV 或 AAAAAAAA+VVVV
+                bool validCheat = false;
+                // 含 : 或 + 即为 Raw/RA 格式
+                if (line.find(':') != std::string::npos ||
+                    line.find('+') != std::string::npos)
+                {
+                    validCheat = true;
+                }
+                else
+                {
+                    auto sp = line.find(' ');
+                    if (sp != std::string::npos)
+                    {
+                        std::string addr = line.substr(0, sp);
+                        std::string val  = line.substr(sp + 1);
+                        // trim val
+                        size_t vb = val.find_first_not_of(" \t");
+                        if (vb != std::string::npos)
+                            val = val.substr(vb);
+                        // 8位hex地址 + 4或8位hex值
+                        if (addr.size() == 8 &&
+                            std::all_of(addr.begin(), addr.end(),
+                                        [](char c) { return std::isxdigit(static_cast<unsigned char>(c)); }) &&
+                            (val.size() == 4 || val.size() == 8) &&
+                            std::all_of(val.begin(), val.end(),
+                                        [](char c) { return std::isxdigit(static_cast<unsigned char>(c)); }))
+                        {
+                            validCheat = true;
+                        }
+                    }
+                }
+                if (!validCheat) continue;
 
                 entry.code = line;
-                entry.desc = line; // 简单格式无名称，使用代码作为描述
+                entry.desc = line; // 默认描述，可从注释提取覆盖
                 result.push_back(std::move(entry));
             }
         }
