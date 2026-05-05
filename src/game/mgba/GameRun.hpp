@@ -70,8 +70,19 @@ namespace beiklive::gba
 
         // ---- 金手指管理（外部调用）------------------------------------------
 
+        void ApplyCheats(const std::vector<CheatEntry>& cheats){
+            m_cheats = cheats;
+            _updateCheats();}
         const std::vector<beiklive::CheatEntry>& GetCheats() const { return m_cheats; }
         void UpdateCheats() { _updateCheats(); }
+        /// 切换单个金手指并保存
+        void ToggleCheat(int idx, bool enabled) {
+            if (idx < 0 || idx >= (int)m_cheats.size()) return;
+            m_cheats[idx].enabled = enabled;
+            _updateCheats();
+        }
+        /// 重新从 cheatPath 加载金手指
+        void ReloadCheats() { _loadCheats(); }
 
         // ---- 运行状态查询 ---------------------------------------------------
 

@@ -840,7 +840,7 @@ namespace beiklive
             }
 
             // ---- 自动保存即时存档 ----
-            if (!sig.isPaused() && autoSaveEnabled && autoSaveSecs > 0) {
+            if (!sig.isPaused() && !wasPaused && autoSaveEnabled && autoSaveSecs > 0) {
                 auto now = Clock::now();
                 double sinceSave = std::chrono::duration<double>(now - m_autoSaveTimer).count();
                 if (sinceSave >= static_cast<double>(autoSaveSecs)) {
@@ -895,17 +895,17 @@ namespace beiklive
                     if (!m_gba_core->Unserialize(m_rewindBuffer[restoreIdx].state)) {
                         brls::Logger::warning("GameView: 倒带帧恢复失败 idx={}", restoreIdx);
                     } else {
-                        // 恢复后丢弃该帧之前的所有帧（比该帧更新的帧，即下标 0..restoreIdx-1）
-                        // 注意：deque 下标 0 为最新帧，下标越大越旧。
-                        // 需要 pop_front restoreIdx 次，而非 while(size>restoreIdx)——
-                        // 后者方向相反，在 restoreIdx==0 时会清空整个缓冲区。
                         for (int i = 0; i < restoreIdx && !m_rewindBuffer.empty(); ++i)
                             m_rewindBuffer.pop_front();
-                        // 运行一帧以刷新渲染缓冲区，确保 UI 线程能立即看到恢复后的画面
                         m_gba_core->RunFrame();
                     }
                 }
             }
+
+            // ---- 金手指切换 ----
+            auto cheatReq = sig.consumeCheatToggle();
+            if (cheatReq.pending && m_gba_core)
+                m_gba_core->ToggleCheat(cheatReq.idx, cheatReq.enabled);
 
             // ---- 从信号更新游戏按键状态 ----
             m_gba_core->SetButtonsFromSignal();
@@ -1187,6 +1187,15 @@ namespace beiklive
     void GameView::requestRestoreRewindFrame(int frameIndex)
     {
         GameSignal::instance().requestRewindRestore(frameIndex);
+    }
+
+    void GameView::requestCheatPathUpdate(const std::string& path)
+    {
+        if (m_gba_core)
+        {
+            m_gameEntry.cheatPath = path;
+            m_gba_core->ReloadCheats();
+        }
     }
 
     // ============================================================

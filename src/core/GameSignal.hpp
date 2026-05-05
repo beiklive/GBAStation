@@ -154,6 +154,24 @@ public:
         return m_gameButtonMask.load(std::memory_order_acquire);
     }
 
+    // ---- 金手指切换信号 -------------------------------------------------
+
+    /// UI 线程调用：请求切换指定金手指的启用状态。
+    void requestCheatToggle(int idx, bool enabled) {
+        m_pendingCheatIdx.store(idx, std::memory_order_release);
+        m_pendingCheatEnabled.store(enabled, std::memory_order_release);
+    }
+
+    /// 游戏线程调用：获取并消费金手指切换请求（返回 {idx, hasRequest}）。
+    /// 调用后自动清除请求。
+    struct CheatToggleReq { int idx = -1; bool enabled = false; bool pending = false; };
+    CheatToggleReq consumeCheatToggle() {
+        int idx = m_pendingCheatIdx.exchange(-1, std::memory_order_acq_rel);
+        if (idx < 0) return {};
+        bool en = m_pendingCheatEnabled.exchange(false, std::memory_order_acq_rel);
+        return {idx, en, true};
+    }
+
     // ---- 全部重置 -------------------------------------------------------
 
     /// 重置所有信号到初始状态（一般在游戏启动前调用）。
@@ -169,6 +187,7 @@ public:
         m_requestOpenMenu.store(false, std::memory_order_relaxed);
         m_requestOpenRewindUI.store(false, std::memory_order_relaxed);
         m_pendingRewindRestore.store(-1, std::memory_order_relaxed);
+        m_pendingCheatIdx.store(-1, std::memory_order_relaxed);
         m_gameButtonMask.store(0, std::memory_order_relaxed);
     }
 
@@ -184,6 +203,8 @@ private:
     std::atomic<bool> m_requestOpenMenu{false}; ///< 打开菜单请求
     std::atomic<bool> m_requestOpenRewindUI{false}; ///< 打开倒带UI请求
     std::atomic<int>  m_pendingRewindRestore{-1};   ///< 待恢复的倒带帧索引（-1=无）
+    std::atomic<int>  m_pendingCheatIdx{-1};          ///< 待切换的金手指索引
+    std::atomic<bool> m_pendingCheatEnabled{false};   ///< 待切换的金手指启用状态
     std::atomic<uint32_t> m_gameButtonMask{0};  ///< 游戏按键位掩码（bit i = RETRO_DEVICE_ID_JOYPAD_* i）
 };
 

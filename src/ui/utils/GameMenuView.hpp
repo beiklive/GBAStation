@@ -60,8 +60,9 @@ namespace beiklive
             beiklive::GridBox* m_loadGrid = nullptr;
 
             // 金手指面板
-            beiklive::GridBox* m_cheatItemBox = nullptr;
+            brls::Box* m_cheatItemBox = nullptr;
             brls::Label* m_cheatCountLabel = nullptr;
+            brls::Label* cheatPathLabel = nullptr;
             std::vector<beiklive::SwitchButton*> m_cheatSwitches;
             std::vector<CheatEntry> m_cheats;
 
@@ -76,7 +77,6 @@ namespace beiklive
             brls::View* _createCheatPanel();
             void _loadCheatsFromPath(const std::string& path);
             void _rebuildCheatItems();
-            void _setAllCheatsEnabled(bool enabled);
             void _updateCheatCount();
 
             /// 画面设置面板

@@ -259,6 +259,18 @@ namespace beiklive
             GameSignal::instance().requestQuickLoad(slot);
         });
 
+        // 注入金手指切换回调：通过 GameSignal 在游戏线程中执行实际切换
+        m_gameMenuView->setCheatToggleCallback([this](int idx, bool enabled) {
+            GameSignal::instance().requestCheatToggle(idx, enabled);
+        });
+
+        // 注入金手指文件变更回调：更新 GameEntry 的 cheatPath
+        m_gameMenuView->setCheatPathCallback([this](const std::string& path) {
+            m_gameEntry.cheatPath = path;
+            if (m_gameView)
+                m_gameView->requestCheatPathUpdate(path);
+        });
+
         // 注入槽位信息查询回调：供菜单面板异步扫描存档目录
         // 预先在UI线程计算所有槽位路径（仅字符串操作），避免后台线程持有 GameView 原始指针，
         // 防止游戏退出后 GameView 被销毁时后台线程仍访问其成员导致崩溃。

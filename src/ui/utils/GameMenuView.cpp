@@ -364,21 +364,27 @@ namespace beiklive
         titleLabel->setFocusable(false);
         topRow->addView(titleLabel);
 
+        cheatPathLabel = new brls::Label();
+        cheatPathLabel->setText(beiklive::tools::getFileName(m_gameEntry.cheatPath));
+        cheatPathLabel->setFontSize(14.f);
+        cheatPathLabel->setTextColor(GET_THEME_COLOR("brls/text"));
+        cheatPathLabel->setMarginRight(10.f);
+        cheatPathLabel->setFocusable(false);
+        topRow->addView(cheatPathLabel);
+
+        topRow->addView(new brls::Padding());
         m_cheatCountLabel = new brls::Label();
         m_cheatCountLabel->setText("共 0 项 | 已启用 0 项");
         m_cheatCountLabel->setFontSize(14.f);
-        m_cheatCountLabel->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
+        m_cheatCountLabel->setTextColor(GET_THEME_COLOR("brls/text"));
         m_cheatCountLabel->setGrow(1.f);
         m_cheatCountLabel->setFocusable(false);
         topRow->addView(m_cheatCountLabel);
 
-        topRow->addView(new brls::Padding());
 
         auto* selectChtBtn = new brls::Button();
         selectChtBtn->setText("选择金手指文件(cht)");
-        // selectChtBtn->setIcon(BK_RES("img/ui/menu/cheat.png"));
         selectChtBtn->setMarginRight(4.f);
-        // selectChtBtn->setWidth(80.f);
         selectChtBtn->registerClickAction([this](brls::View*) -> bool {
             beiklive::openFilePicker({"cht"},
                 [this](const std::string& path) {
@@ -389,31 +395,18 @@ namespace beiklive
         });
         topRow->addView(selectChtBtn);
 
-        auto* enableAllBtn = new brls::Button();
-        enableAllBtn->setText("全部开启");
-        // enableAllBtn->setIcon(BK_RES("img/ui/setting/display.png"));
-        enableAllBtn->setMarginRight(4.f);
-        enableAllBtn->registerClickAction([this](brls::View*) -> bool {
-            _setAllCheatsEnabled(true);
-            return true;
-        });
-        topRow->addView(enableAllBtn);
 
-        auto* disableAllBtn = new brls::Button();
-        disableAllBtn->setText("全部关闭");
-        // disableAllBtn->setIcon(BK_RES("img/ui/setting/display.png"));
-        disableAllBtn->registerClickAction([this](brls::View*) -> bool {
-            _setAllCheatsEnabled(false);
-            return true;
-        });
-        topRow->addView(disableAllBtn);
 
         wrapper->addView(topRow);
-
+        auto* itemContainer = new brls::ScrollingFrame();
+        itemContainer->setGrow(1.f);
         // 金手指网格列表
-        m_cheatItemBox = new beiklive::GridBox(2);
-        m_cheatItemBox->setWireframeEnabled(true);
-        wrapper->addView(m_cheatItemBox);
+        m_cheatItemBox = new brls::Box(brls::Axis::COLUMN);
+        m_cheatItemBox->setGrow(1.f);
+        m_cheatItemBox->setPadding(0.f, 20.f, 0.f, 20.f);
+
+        itemContainer->addView(m_cheatItemBox);
+        wrapper->addView(itemContainer);
         // 读取金手指文件
         if (!m_gameEntry.cheatPath.empty())
             _loadCheatsFromPath(m_gameEntry.cheatPath);
@@ -425,7 +418,8 @@ namespace beiklive
     {
         m_cheats = beiklive::parseChtFile(path);
         m_gameEntry.cheatPath = path;
-        // _rebuildCheatItems();
+        brls::Logger::info("Loaded {} cheats from {}", m_cheats.size(), path);
+        _rebuildCheatItems();
     }
 
     void GameMenuView::_rebuildCheatItems()
@@ -471,17 +465,6 @@ namespace beiklive
         m_cheatCountLabel->setText("共 " + std::to_string(total) + " 项 | 已启用 " + std::to_string(enabled) + " 项");
     }
 
-    void GameMenuView::_setAllCheatsEnabled(bool enabled)
-    {
-        for (int i = 0; i < (int)m_cheats.size(); ++i) {
-            m_cheats[i].enabled = enabled;
-            if (i < (int)m_cheatSwitches.size()) {
-                m_cheatSwitches[i]->setState(enabled);
-                if (m_cheatToggleCallback) m_cheatToggleCallback(i, enabled);
-            }
-        }
-        _updateCheatCount();
-    }
 
     // ============================================================
     // _createDisplayPanel

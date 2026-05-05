@@ -77,6 +77,9 @@ namespace beiklive
             /// 需在游戏线程中调用（通过 GameSignal 传递请求）。
             void requestRestoreRewindFrame(int frameIndex);
 
+            /// 请求更新金手指文件路径（UI线程调用）
+            void requestCheatPathUpdate(const std::string& path);
+
         private:
             // ---- 游戏线程常量 ------------------------------------------------
             static constexpr double   MAX_REASONABLE_FPS      = 240.0;  ///< 核心上报 FPS 的安全上限
