@@ -27,8 +27,8 @@ SwitchButton::SwitchButton()
     m_label->setFocusable(false);
 
     m_image = new brls::Image();
-    m_image->setWidth(36.f);
-    m_image->setHeight(36.f);
+    m_image->setWidth(50.f);
+    m_image->setHeight(50.f);
     m_image->setScalingType(brls::ImageScalingType::FIT);
     m_image->setInterpolation(brls::ImageInterpolation::LINEAR);
     m_image->setFocusable(false);

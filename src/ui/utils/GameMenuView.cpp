@@ -354,7 +354,7 @@ namespace beiklive
         // topRow->setPadding(12.f, 16.f, 8.f, 16.f);
         topRow->setHeight(30.f);
         topRow->setWidthPercentage(100.f);
-        topRow->setWireframeEnabled(true);
+        // topRow->setWireframeEnabled(true);
 
         auto* titleLabel = new brls::Label();
         titleLabel->setText("当前金手指文件：");
