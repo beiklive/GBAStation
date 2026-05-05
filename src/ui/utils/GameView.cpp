@@ -831,7 +831,7 @@ namespace beiklive
             auto& sig = GameSignal::instance();
 
             // ---- 自动加载即时存档 0 ----
-            if (!autoLoadDone && autoLoadEnabled && m_gba_core && m_gba_core->IsReady()) {
+            if (!sig.isPaused() && !autoLoadDone && autoLoadEnabled && m_gba_core && m_gba_core->IsReady()) {
                 if (stateExists(0)) {
                     _doLoadState(0);
                     brls::Logger::info("GameView: 自动加载存档槽 0");
@@ -840,7 +840,7 @@ namespace beiklive
             }
 
             // ---- 自动保存即时存档 ----
-            if (autoSaveEnabled && autoSaveSecs > 0) {
+            if (!sig.isPaused() && autoSaveEnabled && autoSaveSecs > 0) {
                 auto now = Clock::now();
                 double sinceSave = std::chrono::duration<double>(now - m_autoSaveTimer).count();
                 if (sinceSave >= static_cast<double>(autoSaveSecs)) {
@@ -866,6 +866,7 @@ namespace beiklive
             }
             if (wasPaused) {
                 m_playStartTime = Clock::now();
+                m_autoSaveTimer = Clock::now();
                 wasPaused = false;
             }
 
