@@ -166,6 +166,8 @@ namespace beiklive
         SettingManager->SetDefault(KEY_UI_SHOW_XMB_BG, ConfigValue(0));
         SettingManager->SetDefault(KEY_UI_PSPXMB_COLOR, ConfigValue(std::string("blue")));
         SettingManager->SetDefault(KEY_UI_USE_SAVESTATE_THUMB, ConfigValue(0));
+        SettingManager->SetDefault(KEY_UI_SHOW_SHADER, ConfigValue(1));
+        SettingManager->SetDefault(KEY_UI_GRADIENT_THEME, ConfigValue(std::string("VscodeBlack")));
 
         // 遮罩设置
         SettingManager->SetDefault(KEY_DISPLAY_OVERLAY_ENABLED, ConfigValue(0));

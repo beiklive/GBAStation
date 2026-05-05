@@ -710,16 +710,41 @@ brls::View *SettingPage::buildUITab()
         box->addView(cheatDirCell);
     }
 
-    // ── 封面设置 ──────────────────────────────────────────────────────────────
-    box->addView(makeHeader("封面设置"));
+    // ── 动态背景 ──────────────────────────────────────────────────────────────
+    box->addView(makeHeader("动态背景"));
 
     {
-        auto *thumbCell = new brls::BooleanCell();
-        thumbCell->init("使用存档截图作为封面",
-                       cfgGetBool(beiklive::SettingKey::KEY_UI_USE_SAVESTATE_THUMB, false),
-                       [](bool v) { cfgSetBool(beiklive::SettingKey::KEY_UI_USE_SAVESTATE_THUMB, v); });
-        box->addView(thumbCell);
-        box->addView(makeHint("使用即时存档0截图作为封面，已自定义封面的游戏不覆盖"));
+        auto *shaderCell = new brls::BooleanCell();
+        shaderCell->init("启用动态渐变背景",
+                        cfgGetBool(beiklive::SettingKey::KEY_UI_SHOW_SHADER, false),
+                        [this](bool v) {
+                            cfgSetBool(beiklive::SettingKey::KEY_UI_SHOW_SHADER, v);
+                            this->showShader(v);
+                        });
+        box->addView(shaderCell);
+    }
+
+    {
+        std::vector<std::string> themes = {"深夜蓝", "柠檬黄", "牛油果绿", "草莓红", "海洋蓝", "樱花粉", "VSCode黑"};
+        std::vector<std::string> themeIds = {"Midnight", "LemonYellow", "AvocadoGreen", "StrawberryRed",
+                                              "OceanBlue", "SakuraPink", "VscodeBlack"};
+        std::string curTheme = cfgGetStr(beiklive::SettingKey::KEY_UI_GRADIENT_THEME, "VscodeBlack");
+        int curIdx = findIndex(themeIds, curTheme, 6);
+        auto *themeCell = new brls::SelectorCell();
+        themeCell->init("渐变主题", themes, curIdx,
+                       [this, themeIds](int idx) {
+                           if (idx >= 0 && idx < (int)themeIds.size()) {
+                               cfgSetStr(beiklive::SettingKey::KEY_UI_GRADIENT_THEME, themeIds[idx]);
+                               if (themeIds[idx] == "Midnight")      this->setGradientTheme(GradientTheme::Midnight);
+                               else if (themeIds[idx] == "LemonYellow")  this->setGradientTheme(GradientTheme::LemonYellow);
+                               else if (themeIds[idx] == "AvocadoGreen") this->setGradientTheme(GradientTheme::AvocadoGreen);
+                               else if (themeIds[idx] == "StrawberryRed") this->setGradientTheme(GradientTheme::StrawberryRed);
+                               else if (themeIds[idx] == "OceanBlue")    this->setGradientTheme(GradientTheme::OceanBlue);
+                               else if (themeIds[idx] == "SakuraPink")   this->setGradientTheme(GradientTheme::SakuraPink);
+                               else if (themeIds[idx] == "VscodeBlack")  this->setGradientTheme(GradientTheme::VscodeBlack);
+                           }
+                       });
+        box->addView(themeCell);
     }
 
     scroll->setContentView(box);
@@ -1378,7 +1403,6 @@ SettingPage::SettingPage()
         this->getHeader()->setTitle("设置");
         this->showFooter(true);
         this->showBackground(false);
-        this->showShader(true);
 
         m_tabframe = new beiklive::TabFrame();
         this->getContentBox()->addView(m_tabframe);

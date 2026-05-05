@@ -145,6 +145,8 @@ namespace beiklive::SettingKey
 
     // UI XMB 风格背景设置
     constexpr const char *KEY_UI_SHOW_XMB_BG        = "UI.showXmbBg";              ///< 是否显示 PSP XMB 风格背景
+    constexpr const char *KEY_UI_SHOW_SHADER        = "UI.showShader";             ///< 是否显示动态渐变背景
+    constexpr const char *KEY_UI_GRADIENT_THEME     = "UI.gradientTheme";          ///< 渐变背景主题
     constexpr const char *KEY_UI_PSPXMB_COLOR       = "UI.pspxmb.color";           ///< XMB 颜色预设 ID
 
     // UI 缩略图设置

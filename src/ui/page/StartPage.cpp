@@ -12,8 +12,7 @@ namespace beiklive
         this->showHeader(true);
         // this->showFooter(false);
         // this->showBackground(true);
-        this->showShader(true);
-        this->setGradientTheme(GradientTheme::VscodeBlack);
+        // 动态背景由 Box::setupShaderLayer 根据配置初始化
         Init();
         brls::Application::giveFocus(this); });
     }
@@ -41,6 +40,19 @@ namespace beiklive
     void StartPage::onResume()
     {
         brls::Logger::debug("StartPage onResume called");
+        // 重新读取动态背景配置（设置页面可能已修改）
+        bool enableShader = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_UI_SHOW_SHADER, 1) != 0;
+        this->showShader(enableShader);
+        if (enableShader) {
+            std::string themeStr = GET_SETTING_KEY_STR(beiklive::SettingKey::KEY_UI_GRADIENT_THEME, "VscodeBlack");
+            if (themeStr == "Midnight")           this->setGradientTheme(GradientTheme::Midnight);
+            else if (themeStr == "LemonYellow")   this->setGradientTheme(GradientTheme::LemonYellow);
+            else if (themeStr == "AvocadoGreen")  this->setGradientTheme(GradientTheme::AvocadoGreen);
+            else if (themeStr == "StrawberryRed") this->setGradientTheme(GradientTheme::StrawberryRed);
+            else if (themeStr == "OceanBlue")     this->setGradientTheme(GradientTheme::OceanBlue);
+            else if (themeStr == "SakuraPink")    this->setGradientTheme(GradientTheme::SakuraPink);
+            else                                   this->setGradientTheme(GradientTheme::VscodeBlack);
+        }
         // 每次回到起始页时刷新游戏列表，获取最新的最近玩过的10款游戏
         if (switchLayout)
         {
