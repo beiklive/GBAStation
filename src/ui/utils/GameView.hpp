@@ -88,6 +88,10 @@ namespace beiklive
             void _onDisplayModeChange(const std::string& mode);
             /// 纹理过滤变更（UI线程调用）
             void _onFilterChange(const std::string& filter);
+            /// 获取着色器参数列表
+            std::vector<ShaderParamInfo> _getShaderParams() const { return m_renderer.getShaderParams(); }
+            /// 设置着色器参数
+            void _setShaderParam(const std::string& name, float val) { m_renderer.setShaderParam(name, val); }
 
         private:
             // ---- 游戏线程常量 ------------------------------------------------
@@ -114,6 +118,9 @@ namespace beiklive
 
             // ---- 画面模式 ----------------------------------------------------
             beiklive::ScreenMode m_screenMode = beiklive::ScreenMode::Fit; ///< 当前画面缩放模式
+
+            // ---- 遮罩 --------------------------------------------------------
+            brls::Image* m_overlayImage = nullptr; ///< 遮罩图片
 
             // ---- 最新视频帧（游戏线程写，UI 线程读）--------------------------
             mutable std::mutex          m_frameMutex;

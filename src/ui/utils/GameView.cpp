@@ -171,11 +171,31 @@ namespace beiklive
             unsigned gw = m_renderer.texWidth()  > 0 ? m_renderer.texWidth()  : beiklive::GetGamePixelWidth(m_gameEntry.platform);
             unsigned gh = m_renderer.texHeight() > 0 ? m_renderer.texHeight() : beiklive::GetGamePixelHeight(m_gameEntry.platform);
 
+            int intScale = GET_SETTING_KEY_INT("display.integer_scale_mult", 0);
             beiklive::DisplayRect rect = beiklive::computeDisplayRect(
                 m_screenMode, x, y, width, height, gw, gh,
-                m_gameEntry.customScale, m_gameEntry.customOffsetX, m_gameEntry.customOffsetY);
+                m_gameEntry.customScale, m_gameEntry.customOffsetX, m_gameEntry.customOffsetY,
+                intScale);
 
             m_renderer.drawToScreen(rect.x, rect.y, rect.w, rect.h, windowScale, windowW, windowH);
+
+            // 绘制遮罩层（覆盖整个 GameView 区域）
+            if (m_gameEntry.overlayEnabled && !m_gameEntry.overlayPath.empty())
+            {
+                if (!m_overlayImage)
+                {
+                    m_overlayImage = new brls::Image();
+                    m_overlayImage->setScalingType(brls::ImageScalingType::FILL);
+                }
+                if (!m_overlayImage->getTexture() && std::filesystem::exists(m_gameEntry.overlayPath))
+                    m_overlayImage->setImageFromFile(m_gameEntry.overlayPath);
+                if (m_overlayImage->getTexture())
+                    m_overlayImage->draw(vg, x, y, width, height, style, ctx);
+            }
+            else if (m_overlayImage && m_overlayImage->getTexture())
+            {
+                m_overlayImage->clear();
+            }
         }
 
         // 绘制状态覆盖层

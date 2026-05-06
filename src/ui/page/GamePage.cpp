@@ -281,8 +281,13 @@ namespace beiklive
         m_gameMenuView->setShaderToggleCallback([this](bool on) {
             if (m_gameView) m_gameView->_onShaderToggle(on);
         });
-        m_gameMenuView->setShaderPathCallback([this](const std::string& path) {
-            if (m_gameView) m_gameView->_onShaderPathChange(path);
+        // 注入着色器参数回调
+        m_gameMenuView->setShaderParamsCallback([this]() -> std::vector<ShaderParamInfo> {
+            if (m_gameView) return m_gameView->_getShaderParams();
+            return {};
+        });
+        m_gameMenuView->setShaderParamCallback([this](const std::string& name, float val) {
+            if (m_gameView) m_gameView->_setShaderParam(name, val);
         });
 
         // 注入槽位信息查询回调：供菜单面板异步扫描存档目录

@@ -82,7 +82,8 @@ namespace beiklive // 全局功能函数
                                           unsigned gameW, unsigned gameH,
                                           float customScale = 1.0f,
                                           float xOffset = 0.0f,
-                                          float yOffset = 0.0f)
+                                          float yOffset = 0.0f,
+                                          int integerScaleMult = 0)
     {
         DisplayRect r;
         const float gw = static_cast<float>(gameW);
@@ -102,11 +103,13 @@ namespace beiklive // 全局功能函数
                 r.y = viewY + yOffset;
                 return r;
             case ScreenMode::IntegerScale:
-            {
-                float s = std::min(viewW / gw, viewH / gh);
-                scale = std::max(1.0f, std::floor(s));
+                if (integerScaleMult > 0)
+                    scale = static_cast<float>(integerScaleMult);
+                else {
+                    float s = std::min(viewW / gw, viewH / gh);
+                    scale = std::max(1.0f, std::floor(s));
+                }
                 break;
-            }
             case ScreenMode::FreeScale:
                 scale = customScale;
                 break;

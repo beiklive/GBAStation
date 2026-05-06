@@ -8,6 +8,7 @@
 #include "Box.hpp"
 #include "GridItem.hpp"
 #include "FunctionButtons.hpp"
+#include "game/render/GLSLPParser.hpp"
 namespace beiklive
 {
     /// 存档槽位状态信息
@@ -46,6 +47,8 @@ namespace beiklive
             void setFilterCallback(std::function<void(const std::string&)> cb) { m_filterCallback = std::move(cb); }
             void setShaderToggleCallback(std::function<void(bool)> cb) { m_shaderToggleCallback = std::move(cb); }
             void setShaderPathCallback(std::function<void(const std::string&)> cb) { m_shaderPathCallback = std::move(cb); }
+            void setShaderParamsCallback(std::function<std::vector<ShaderParamInfo>()> cb) { m_shaderParamsCallback = std::move(cb); }
+            void setShaderParamCallback(std::function<void(const std::string&, float)> cb) { m_shaderParamCallback = std::move(cb); }
 
         private:
             beiklive::GameEntry m_gameEntry;
@@ -58,6 +61,8 @@ namespace beiklive
             std::function<void(const std::string&)> m_filterCallback;
             std::function<void(bool)> m_shaderToggleCallback;
             std::function<void(const std::string&)> m_shaderPathCallback;
+            std::function<std::vector<ShaderParamInfo>()> m_shaderParamsCallback;
+            std::function<void(const std::string&, float)> m_shaderParamCallback;
 
             beiklive::TabFrame* m_panel = nullptr;
             brls::Label* m_title = nullptr;
@@ -94,6 +99,11 @@ namespace beiklive
             void _openShaderSettings();
             void _openOverlaySettings();
             void _openCustomScaleSettings();
+
+            /// 清除当前侧边栏面板
+            void _dismissSidePanel();
+
+            brls::Box* m_sidePanel = nullptr;  ///< 当前打开的侧边栏 overlay
     };
 
 } // namespace beiklive
