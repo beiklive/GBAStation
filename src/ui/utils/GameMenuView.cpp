@@ -501,109 +501,103 @@ namespace beiklive
             hdr1->setTitle("画面设置");
             box->addView(hdr1);
 
+            // ── 画面模式 ──
             auto* modeCell = new beiklive::SelectorButton();
             auto* IntegerCell = new beiklive::SelectorButton();
             auto* customCell = new brls::DetailCell();
-
-            std::vector<std::string> modes = {"(保持比例填充)Fit", "(填充)Fill", "(原始大小)Original", "(整数倍)Integer", "(自定义)Custom"};
+            std::vector<std::string> modes = {"(保持比例)Fit", "(填充)Fill", "(原始)Original", "(整数倍)Integer", "(自定义)Custom"};
+            std::vector<std::string> modeIds = {"fit", "fill", "original", "integer", "custom"};
             std::string curMode = GET_SETTING_KEY_STR("display.mode", "original");
             int idx = 2;
-            std::vector<std::string> ids = {"fit", "fill", "original", "integer", "custom"};
-            for (int i = 0; i < 5; ++i) if (ids[i] == curMode) { idx = i; break; }
-            if(idx == 3) IntegerCell->setFocusable(true);
-            else IntegerCell->setFocusable(false);
-            if(idx == 4) customCell->setFocusable(true);
-            else customCell->setFocusable(false);
-                        
-
+            for (int i = 0; i < 5; ++i) if (modeIds[i] == curMode) { idx = i; break; }
+            IntegerCell->setFocusable(idx == 3);
+            customCell->setFocusable(idx == 4);
 
             modeCell->setText("画面模式");
             modeCell->setOptions(modes, idx);
             modeCell->setOnSelect(
-                [modes, IntegerCell, customCell](int idx){
-                    if(idx >= 0 && idx < (int)modes.size()){
-                        if(idx == 3) IntegerCell->setFocusable(true);
-                        else IntegerCell->setFocusable(false);
-                        if(idx == 4) customCell->setFocusable(true);
-                        else customCell->setFocusable(false);
-                        // TODO: 这里修改后对GameView渲染链立即生效，同时保存配置值
+                [this, modeIds, IntegerCell, customCell](int idx) {
+                    if (idx >= 0 && idx < (int)modeIds.size()) {
+                        SET_SETTING_KEY_STR("display.mode", modeIds[idx]);
+                        IntegerCell->setFocusable(idx == 3);
+                        customCell->setFocusable(idx == 4);
+                        if (m_displayModeCallback) m_displayModeCallback(modeIds[idx]);
                     }
                 }
             );
-            
-            std::vector<std::string> Integermodes = {"自动(auto)", "x1", "x2", "x3", "x4", "x5"};
-            int curIdxMode = GET_SETTING_KEY_INT("display.integer_scale_mult", 0);
-            for (int i = 0; i < 5; ++i) if (ids[i] == curMode) { idx = i; break; }
+            box->addView(modeCell);
+
+            // ── 整数倍缩放 ──
+            std::vector<std::string> intScaleLabels = {"自动(auto)", "x1", "x2", "x3", "x4", "x5"};
+            static const int intScaleVals[] = {0, 1, 2, 3, 4, 5};
+            int curIntScale = GET_SETTING_KEY_INT("display.integer_scale_mult", 0);
+            int intScaleIdx = 0;
+            for (int i = 0; i < 6; ++i) if (intScaleVals[i] == curIntScale) { intScaleIdx = i; break; }
             IntegerCell->setText("整数倍缩放倍率");
-            IntegerCell->setOptions(Integermodes, curIdxMode);
+            IntegerCell->setOptions(intScaleLabels, intScaleIdx);
             IntegerCell->setOnSelect(
-                [Integermodes](int idx){
-                    if(idx >= 0 && idx < (int)Integermodes.size()){
-                        // 选择0时为自动，根据游戏原始分辨率和窗口大小自动选择最合适的整数倍；选择1-5时则固定为对应的整数倍缩放
-                        // TODO: 这里修改后对GameView渲染链立即生效，同时保存配置值
+                [this](int idx) {
+                    if (idx >= 0 && idx < 6) {
+                        static const int vals[] = {0, 1, 2, 3, 4, 5};
+                        SET_SETTING_KEY_INT("display.integer_scale_mult", vals[idx]);
+                        if (m_displayModeCallback) {
+                            std::string cur = GET_SETTING_KEY_STR("display.mode", "original");
+                            m_displayModeCallback(cur);
+                        }
                     }
                 }
             );
+            box->addView(IntegerCell);
+            box->addView(makeHint("仅在画面模式为整数倍时可用，选择auto则自动匹配最大整数倍"));
 
-
+            // ── 自定义设置入口 ──
             customCell->setText("自定义设置");
             customCell->setDetailText(">>");
             customCell->registerClickAction([this](brls::View*) -> bool {
-                // TODO: 打开新的activity, 显示自定义设置界面
-                // 设置的是entry的以下字段 "customOffsetX": 0.0, "customOffsetY": 0.0, "customScale": 1.0,
+                _openCustomScaleSettings();
                 return true;
             });
-            
-            
-            box->addView(modeCell);
-            box->addView(IntegerCell);
-            box->addView(makeHint("整数倍缩放设置仅在画面模式选择为整数倍时可用"));
             box->addView(customCell);
-            box->addView(makeHint("画面模式为自定义时可用，自定义设置允许用户微调画面位置、缩放等参数，以适配特殊游戏的显示需求"));
-
-
-
+            box->addView(makeHint("仅在画面模式为自定义时可用，调整位置偏移和缩放比例"));
         }
 
-
-
-
-        std::vector<std::string> filters = {"(像素化)Nearest", "(线性平滑)Linear"};
+        // ── 纹理过滤 ──
+        std::vector<std::string> filters = {"(像素)Nearest", "(平滑)Linear"};
         std::string curFilter = GET_SETTING_KEY_STR("display.filter", "nearest");
         int fi = (curFilter == "linear") ? 1 : 0;
         auto* filterCell = new beiklive::SelectorButton();
         filterCell->setText("纹理过滤");
         filterCell->setOptions(filters, fi);
         filterCell->setOnSelect(
-            [filters](int idx){
-                if(idx >= 0 && idx < (int)filters.size()){
-                    SET_SETTING_KEY_STR("display.filter", idx == 1 ? "linear" : "nearest");
-                    //TODO: 这里修改后对GameView渲染链立即生效
-                }
+            [this](int idx) {
+                std::string val = (idx == 1) ? "linear" : "nearest";
+                SET_SETTING_KEY_STR("display.filter", val);
+                if (m_filterCallback) m_filterCallback(val);
             }
         );
         box->addView(filterCell);
-        box->addView(makeHint("纹理过滤仅在不使用着色器时生效，使用着色器时过滤方式由着色器决定"));
+        box->addView(makeHint("不影响着色器渲染效果"));
 
         {
             auto* hdr1 = new brls::Header();
             hdr1->setTitle("个性化设置");
             box->addView(hdr1);
         }
+
         auto* overlayCell = new brls::DetailCell();
         overlayCell->setText("遮罩设置");
-        overlayCell->setDetailText(">>"); // 显示一个箭头，暗示这是一个可进入的子菜单
+        overlayCell->setDetailText(">>");
         overlayCell->registerClickAction([this](brls::View*) -> bool {
-            // TODO: 打开新的activity, 显示遮罩设置界面，允许用户选择选择使得启用遮罩图片和选择遮罩png图片
+            _openOverlaySettings();
             return true;
         });
         box->addView(overlayCell);
 
         auto* shaderCell = new brls::DetailCell();
         shaderCell->setText("着色器设置");
-        shaderCell->setDetailText(">>"); // 显示一个箭头，暗示这是一个可进入的子菜单
+        shaderCell->setDetailText(">>");
         shaderCell->registerClickAction([this](brls::View*) -> bool {
-            // TODO: 打开新的activity, 显示着色器设置界面，允许用户选择启用着色器、选择着色器文件、调整着色器参数
+            _openShaderSettings();
             return true;
         });
         box->addView(shaderCell);
@@ -613,4 +607,187 @@ namespace beiklive
         return wrapper;
     }
 
-} // namespace beiklive
+    // ============================================================
+    // _openCustomScaleSettings - 自定义缩放子界面
+    // ============================================================
+    void GameMenuView::_openCustomScaleSettings()
+    {
+        auto* content = new beiklive::Box();
+        content->setGrow(1.f);
+        auto* scroll = new brls::ScrollingFrame();
+        scroll->setGrow(1.f);
+        auto* box = new brls::Box(brls::Axis::COLUMN);
+        box->setPadding(10.f, 20.f, 20.f, 20.f);
+
+        auto* hdr = new brls::Header();
+        hdr->setTitle("自定义画面设置");
+        box->addView(hdr);
+
+        // X 偏移
+        auto* xCell = new brls::SliderCell();
+        xCell->init("X轴偏移", GET_SETTING_KEY_FLOAT("display.x_offset", 0.f),
+            [](float v) { SET_SETTING_KEY_FLOAT("display.x_offset", v); });
+        box->addView(xCell);
+
+        // Y 偏移
+        auto* yCell = new brls::SliderCell();
+        yCell->init("Y轴偏移", GET_SETTING_KEY_FLOAT("display.y_offset", 0.f),
+            [](float v) { SET_SETTING_KEY_FLOAT("display.y_offset", v); });
+        box->addView(yCell);
+
+        // 自定义缩放
+        auto* sCell = new brls::SliderCell();
+        sCell->init("缩放比例", GET_SETTING_KEY_FLOAT("display.custom_scale", 1.f),
+            [](float v) { SET_SETTING_KEY_FLOAT("display.custom_scale", v); });
+        box->addView(sCell);
+
+        auto* hint = new brls::Label();
+        hint->setText("偏移范围: -200 ~ 200 px | 缩放: 0.5 ~ 3.0 x");
+        hint->setFontSize(13.f);
+        hint->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
+        hint->setFocusable(false);
+        hint->setMarginTop(10.f);
+        box->addView(hint);
+
+        scroll->setContentView(box);
+        content->getContentBox()->addView(scroll);
+
+        auto* frame = new brls::AppletFrame(content);
+        frame->setHeaderVisibility(brls::Visibility::GONE);
+        frame->setFooterVisibility(brls::Visibility::GONE);
+        frame->setBackground(brls::ViewBackground::NONE);
+        brls::Application::pushActivity(new brls::Activity(frame));
+    }
+
+    // ============================================================
+    // _openShaderSettings – 着色器设置子界面
+    // ============================================================
+    void GameMenuView::_openShaderSettings()
+    {
+        auto* content = new beiklive::Box();
+        content->setGrow(1.f);
+        content->setFocusable(false);
+
+        auto* scroll = new brls::ScrollingFrame();
+        scroll->setGrow(1.f);
+        scroll->setScrollingBehavior(brls::ScrollingBehavior::NATURAL);
+
+        auto* box = new brls::Box(brls::Axis::COLUMN);
+        box->setPadding(10.f, 20.f, 20.f, 20.f);
+
+        auto* hdr = new brls::Header();
+        hdr->setTitle("着色器设置");
+        box->addView(hdr);
+
+        // ── 启停着色器 ──
+        bool shaderOn = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_DISPLAY_SHADER_ENABLED, 0) != 0;
+        auto* toggleCell = new brls::BooleanCell();
+        toggleCell->init("启用着色器", shaderOn,
+            [this](bool v) {
+                SET_SETTING_KEY_INT(beiklive::SettingKey::KEY_DISPLAY_SHADER_ENABLED, v ? 1 : 0);
+                if (m_shaderToggleCallback) m_shaderToggleCallback(v);
+            });
+        box->addView(toggleCell);
+
+        // ── 选择着色器文件 ──
+        auto* pathCell = new brls::DetailCell();
+        pathCell->setText("着色器文件");
+        std::string curShader = GET_SETTING_KEY_STR(beiklive::SettingKey::KEY_DISPLAY_SHADER_PATH, "");
+        pathCell->setDetailText(curShader.empty() ? "未设置" : beiklive::tools::getFileName(curShader));
+        pathCell->registerAction("选择", brls::BUTTON_A,
+            [this, pathCell](brls::View*) -> bool {
+                std::string dir = GET_SETTING_KEY_STR(beiklive::SettingKey::KEY_DISPLAY_SHADER_PATH, "");
+                auto pos = dir.rfind('/');
+#ifdef _WIN32
+                auto posW = dir.rfind('\\');
+                if (posW != std::string::npos && (pos == std::string::npos || posW > pos)) pos = posW;
+#endif
+                if (pos != std::string::npos) dir = dir.substr(0, pos); else dir = "";
+                beiklive::openFilePicker({"glslp", "glsl"},
+                    [this, pathCell](const std::string& path) {
+                        SET_SETTING_KEY_STR(beiklive::SettingKey::KEY_DISPLAY_SHADER_PATH, path);
+                        pathCell->setDetailText(beiklive::tools::getFileName(path));
+                        if (m_shaderPathCallback) m_shaderPathCallback(path);
+                    }, dir);
+                return true;
+            });
+        box->addView(pathCell);
+
+        // ── 着色器参数（外部注入时填充）──
+        // TODO: 若 GameView 有活跃着色器参数，通过回调获取并动态创建 SliderCell
+
+        scroll->setContentView(box);
+        content->getContentBox()->addView(scroll);
+
+        auto* frame = new brls::AppletFrame(content);
+        frame->setHeaderVisibility(brls::Visibility::GONE);
+        frame->setFooterVisibility(brls::Visibility::GONE);
+        frame->setBackground(brls::ViewBackground::NONE);
+        brls::Application::pushActivity(new brls::Activity(frame));
+    }
+
+    // ============================================================
+    // _openOverlaySettings – 遮罩设置子界面
+    // ============================================================
+    void GameMenuView::_openOverlaySettings()
+    {
+        auto* content = new beiklive::Box();
+        content->setGrow(1.f);
+        content->setFocusable(false);
+
+        auto* scroll = new brls::ScrollingFrame();
+        scroll->setGrow(1.f);
+
+        auto* box = new brls::Box(brls::Axis::COLUMN);
+        box->setPadding(10.f, 20.f, 20.f, 20.f);
+
+        auto* hdr = new brls::Header();
+        hdr->setTitle("遮罩设置");
+        box->addView(hdr);
+
+        bool overlayOn = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_DISPLAY_OVERLAY_ENABLED, 0) != 0;
+        auto* toggleCell = new brls::BooleanCell();
+        toggleCell->init("启用遮罩", overlayOn,
+            [](bool v) {
+                SET_SETTING_KEY_INT(beiklive::SettingKey::KEY_DISPLAY_OVERLAY_ENABLED, v ? 1 : 0);
+            });
+        box->addView(toggleCell);
+
+        auto makeOverlayCell = [&](const std::string& cfgKey, const std::string& label) {
+            auto* cell = new brls::DetailCell();
+            cell->setText(label);
+            std::string cur = GET_SETTING_KEY_STR(cfgKey, "");
+            cell->setDetailText(cur.empty() ? "未设置" : beiklive::tools::getFileName(cur));
+            cell->registerAction("选择", brls::BUTTON_A,
+                [cell, cfgKey](brls::View*) -> bool {
+                    std::string dir = GET_SETTING_KEY_STR(cfgKey, "");
+                    auto pos = dir.rfind('/');
+#ifdef _WIN32
+                    auto posW = dir.rfind('\\');
+                    if (posW != std::string::npos && (pos == std::string::npos || posW > pos)) pos = posW;
+#endif
+                    if (pos != std::string::npos) dir = dir.substr(0, pos); else dir = "";
+                    beiklive::openFilePicker({"png"},
+                        [cell, cfgKey](const std::string& path) {
+                            SET_SETTING_KEY_STR(cfgKey, path);
+                            cell->setDetailText(beiklive::tools::getFileName(path));
+                        }, dir);
+                    return true;
+                });
+            return cell;
+        };
+
+        box->addView(makeOverlayCell(beiklive::SettingKey::KEY_DISPLAY_OVERLAY_GBA_PATH, "GBA 遮罩"));
+        box->addView(makeOverlayCell(beiklive::SettingKey::KEY_DISPLAY_OVERLAY_GBC_PATH, "GBC 遮罩"));
+        box->addView(makeOverlayCell(beiklive::SettingKey::KEY_DISPLAY_OVERLAY_GB_PATH,  "GB 遮罩"));
+
+        scroll->setContentView(box);
+        content->getContentBox()->addView(scroll);
+
+        auto* frame = new brls::AppletFrame(content);
+        frame->setHeaderVisibility(brls::Visibility::GONE);
+        frame->setFooterVisibility(brls::Visibility::GONE);
+        frame->setBackground(brls::ViewBackground::NONE);
+        brls::Application::pushActivity(new brls::Activity(frame));
+    }
+    }

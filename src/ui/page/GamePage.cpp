@@ -271,6 +271,20 @@ namespace beiklive
                 m_gameView->requestCheatPathUpdate(path);
         });
 
+        // 注入画面设置回调
+        m_gameMenuView->setDisplayModeCallback([this](const std::string& mode) {
+            if (m_gameView) m_gameView->_onDisplayModeChange(mode);
+        });
+        m_gameMenuView->setFilterCallback([this](const std::string& filter) {
+            if (m_gameView) m_gameView->_onFilterChange(filter);
+        });
+        m_gameMenuView->setShaderToggleCallback([this](bool on) {
+            if (m_gameView) m_gameView->_onShaderToggle(on);
+        });
+        m_gameMenuView->setShaderPathCallback([this](const std::string& path) {
+            if (m_gameView) m_gameView->_onShaderPathChange(path);
+        });
+
         // 注入槽位信息查询回调：供菜单面板异步扫描存档目录
         // 预先在UI线程计算所有槽位路径（仅字符串操作），避免后台线程持有 GameView 原始指针，
         // 防止游戏退出后 GameView 被销毁时后台线程仍访问其成员导致崩溃。

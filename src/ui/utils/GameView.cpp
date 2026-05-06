@@ -1198,6 +1198,47 @@ namespace beiklive
         }
     }
 
+    void GameView::_onShaderToggle(bool on)
+    {
+        if (!m_rendererReady) return;
+        if (on) {
+            std::string path = GET_SETTING_KEY_STR(
+                beiklive::SettingKey::KEY_DISPLAY_SHADER_PATH, "");
+            if (!path.empty())
+                m_renderer.setShader(path);
+        } else {
+            m_renderer.setShader("");
+        }
+    }
+
+    void GameView::_onShaderPathChange(const std::string& path)
+    {
+        if (!m_rendererReady) return;
+        bool shaderOn = GET_SETTING_KEY_INT(
+            beiklive::SettingKey::KEY_DISPLAY_SHADER_ENABLED, 0) != 0;
+        if (shaderOn && !path.empty())
+            m_renderer.setShader(path);
+        else if (!shaderOn)
+            m_renderer.setShader("");
+    }
+
+    void GameView::_onDisplayModeChange(const std::string& mode)
+    {
+        // 画面模式: fit/fill/original/integer/custom
+        if (mode == "fit")      m_screenMode = beiklive::ScreenMode::Fit;
+        else if (mode == "fill") m_screenMode = beiklive::ScreenMode::Fill;
+        else if (mode == "integer") m_screenMode = beiklive::ScreenMode::IntegerScale;
+        else if (mode == "custom")  m_screenMode = beiklive::ScreenMode::FreeScale;
+        else m_screenMode = beiklive::ScreenMode::Fit;
+        m_gameEntry.displayMode = static_cast<int>(m_screenMode);
+    }
+
+    void GameView::_onFilterChange(const std::string& filter)
+    {
+        if (!m_rendererReady) return;
+        m_renderer.setFilter(filter == "linear");
+    }
+
     // ============================================================
     // _downsampleToRGB565 – RGBA8888 降采样并转换为 RGB565
     // 支持最近邻（NearestNeighbor）和双线性（Bilinear）两种压缩策略

@@ -41,6 +41,12 @@ namespace beiklive
             /// 设置金手指文件变更回调 (newPath)
             void setCheatPathCallback(std::function<void(const std::string&)> cb) { m_cheatPathCallback = std::move(cb); }
 
+            /// 画面设置回调
+            void setDisplayModeCallback(std::function<void(const std::string&)> cb) { m_displayModeCallback = std::move(cb); }
+            void setFilterCallback(std::function<void(const std::string&)> cb) { m_filterCallback = std::move(cb); }
+            void setShaderToggleCallback(std::function<void(bool)> cb) { m_shaderToggleCallback = std::move(cb); }
+            void setShaderPathCallback(std::function<void(const std::string&)> cb) { m_shaderPathCallback = std::move(cb); }
+
         private:
             beiklive::GameEntry m_gameEntry;
             std::function<void()> m_onResume, m_onReset, m_onExit;
@@ -48,6 +54,10 @@ namespace beiklive
             std::function<StateSlotInfo(int)> m_stateInfoCallback;
             std::function<void(int, bool)> m_cheatToggleCallback;
             std::function<void(const std::string&)> m_cheatPathCallback;
+            std::function<void(const std::string&)> m_displayModeCallback;
+            std::function<void(const std::string&)> m_filterCallback;
+            std::function<void(bool)> m_shaderToggleCallback;
+            std::function<void(const std::string&)> m_shaderPathCallback;
 
             beiklive::TabFrame* m_panel = nullptr;
             brls::Label* m_title = nullptr;
@@ -81,6 +91,9 @@ namespace beiklive
 
             /// 画面设置面板
             brls::View* _createDisplayPanel();
+            void _openShaderSettings();
+            void _openOverlaySettings();
+            void _openCustomScaleSettings();
     };
 
 } // namespace beiklive

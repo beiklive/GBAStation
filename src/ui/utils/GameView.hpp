@@ -80,6 +80,15 @@ namespace beiklive
             /// 请求更新金手指文件路径（UI线程调用）
             void requestCheatPathUpdate(const std::string& path);
 
+            /// 着色器开关（UI线程调用）
+            void _onShaderToggle(bool on);
+            /// 着色器路径变更（UI线程调用）
+            void _onShaderPathChange(const std::string& path);
+            /// 画面模式变更（UI线程调用）
+            void _onDisplayModeChange(const std::string& mode);
+            /// 纹理过滤变更（UI线程调用）
+            void _onFilterChange(const std::string& filter);
+
         private:
             // ---- 游戏线程常量 ------------------------------------------------
             static constexpr double   MAX_REASONABLE_FPS      = 240.0;  ///< 核心上报 FPS 的安全上限
