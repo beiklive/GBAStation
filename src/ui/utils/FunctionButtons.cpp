@@ -84,7 +84,7 @@ SelectorButton::SelectorButton()
     m_arrowLeft = new brls::Label();
     m_arrowLeft->setFontSize(22.f);
     m_arrowLeft->setTextColor(GET_THEME_COLOR("brls/text"));
-    m_arrowLeft->setText("\u25C0");
+    m_arrowLeft->setText("\uE0E4");
     m_arrowLeft->setFocusable(false);
     m_arrowLeft->setMarginRight(8.f);
 
@@ -98,7 +98,7 @@ SelectorButton::SelectorButton()
     m_arrowRight = new brls::Label();
     m_arrowRight->setFontSize(22.f);
     m_arrowRight->setTextColor(GET_THEME_COLOR("brls/text"));
-    m_arrowRight->setText("\u25B6");
+    m_arrowRight->setText("\uE0E5");
     m_arrowRight->setFocusable(false);
     m_arrowRight->setMarginLeft(8.f);
 
@@ -111,13 +111,13 @@ SelectorButton::SelectorButton()
     this->addView(rightBox);
 
     this->registerAction(
-        "", brls::BUTTON_LEFT, [this](brls::View*) -> bool {
+        "", brls::BUTTON_LB, [this](brls::View*) -> bool {
             previous();
             return true;
         }, false, false, brls::SOUND_CLICK);
 
     this->registerAction(
-        "", brls::BUTTON_RIGHT, [this](brls::View*) -> bool {
+        "", brls::BUTTON_RB, [this](brls::View*) -> bool {
             next();
             return true;
         }, false, false, brls::SOUND_CLICK);
