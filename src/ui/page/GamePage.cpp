@@ -275,6 +275,9 @@ namespace beiklive
         m_gameMenuView->setDisplayModeCallback([this](const std::string& mode) {
             if (m_gameView) m_gameView->_onDisplayModeChange(mode);
         });
+        m_gameMenuView->setCustomScaleCallback([this](float x, float y, float scale) {
+            if (m_gameView) m_gameView->_onCustomValuesChanged(x, y, scale);
+        });
         m_gameMenuView->setFilterCallback([this](const std::string& filter) {
             if (m_gameView) m_gameView->_onFilterChange(filter);
         });

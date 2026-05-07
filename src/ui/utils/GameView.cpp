@@ -1251,6 +1251,29 @@ namespace beiklive
         else if (mode == "custom")  m_screenMode = beiklive::ScreenMode::FreeScale;
         else m_screenMode = beiklive::ScreenMode::Fit;
         m_gameEntry.displayMode = static_cast<int>(m_screenMode);
+
+        // 持久化画面模式到数据库
+        if (beiklive::GameDB && m_gameEntry.crc32 != 0) {
+            beiklive::GameDB->set(m_gameEntry.crc32, "displayMode",
+                nlohmann::json(m_gameEntry.displayMode));
+        }
+    }
+
+    void GameView::_onCustomValuesChanged(float x, float y, float scale)
+    {
+        m_gameEntry.customOffsetX = x;
+        m_gameEntry.customOffsetY = y;
+        m_gameEntry.customScale  = scale;
+
+        // 持久化自定义值到数据库
+        if (beiklive::GameDB && m_gameEntry.crc32 != 0) {
+            beiklive::GameDB->set(m_gameEntry.crc32, "customOffsetX",
+                nlohmann::json(static_cast<double>(x)));
+            beiklive::GameDB->set(m_gameEntry.crc32, "customOffsetY",
+                nlohmann::json(static_cast<double>(y)));
+            beiklive::GameDB->set(m_gameEntry.crc32, "customScale",
+                nlohmann::json(static_cast<double>(scale)));
+        }
     }
 
     void GameView::_onFilterChange(const std::string& filter)

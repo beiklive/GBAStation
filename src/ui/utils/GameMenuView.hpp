@@ -50,6 +50,9 @@ namespace beiklive
             void setShaderParamsCallback(std::function<std::vector<ShaderParamInfo>()> cb) { m_shaderParamsCallback = std::move(cb); }
             void setShaderParamCallback(std::function<void(const std::string&, float)> cb) { m_shaderParamCallback = std::move(cb); }
 
+            /// 自定义缩放/偏移变更回调：将 x/y/scale 同步到 GameView
+            void setCustomScaleCallback(std::function<void(float, float, float)> cb) { m_customScaleCallback = std::move(cb); }
+
         private:
             beiklive::GameEntry m_gameEntry;
             std::function<void()> m_onResume, m_onReset, m_onExit;
@@ -63,6 +66,7 @@ namespace beiklive
             std::function<void(const std::string&)> m_shaderPathCallback;
             std::function<std::vector<ShaderParamInfo>()> m_shaderParamsCallback;
             std::function<void(const std::string&, float)> m_shaderParamCallback;
+            std::function<void(float, float, float)> m_customScaleCallback; ///< custom x/y/scale 变更回调
 
             beiklive::TabFrame* m_panel = nullptr;
             brls::Label* m_title = nullptr;

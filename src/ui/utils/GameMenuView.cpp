@@ -657,6 +657,7 @@ namespace beiklive
         xBtn->setDecimal(-1);
         xBtn->setOnChange([this](double v) {
             m_gameEntry.customOffsetX = (float)v;
+            if (m_customScaleCallback) m_customScaleCallback(m_gameEntry.customOffsetX, m_gameEntry.customOffsetY, m_gameEntry.customScale);
             if (m_displayModeCallback) m_displayModeCallback("custom");
         });
         xBtn->registerAction("关闭", brls::BUTTON_B, closeAct);
@@ -672,6 +673,7 @@ namespace beiklive
         yBtn->setDecimal(-1);
         yBtn->setOnChange([this](double v) {
             m_gameEntry.customOffsetY = (float)v;
+            if (m_customScaleCallback) m_customScaleCallback(m_gameEntry.customOffsetX, m_gameEntry.customOffsetY, m_gameEntry.customScale);
             if (m_displayModeCallback) m_displayModeCallback("custom");
         });
         yBtn->registerAction("关闭", brls::BUTTON_B, closeAct);
@@ -687,6 +689,7 @@ namespace beiklive
         sBtn->setDecimal(1);
         sBtn->setOnChange([this](double v) {
             m_gameEntry.customScale = (float)v;
+            if (m_customScaleCallback) m_customScaleCallback(m_gameEntry.customOffsetX, m_gameEntry.customOffsetY, m_gameEntry.customScale);
             if (m_displayModeCallback) m_displayModeCallback("custom");
         });
         sBtn->registerAction("关闭", brls::BUTTON_B, closeAct);
@@ -702,6 +705,7 @@ namespace beiklive
             m_gameEntry.customOffsetX = initX;
             m_gameEntry.customOffsetY = initY;
             m_gameEntry.customScale = initScale;
+            if (m_customScaleCallback) m_customScaleCallback(initX, initY, initScale);
             if (m_displayModeCallback) m_displayModeCallback("custom");
             return true;
         });
