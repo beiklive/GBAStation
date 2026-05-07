@@ -83,6 +83,8 @@ namespace beiklive::gba
         }
         /// 重新从 cheatPath 加载金手指
         void ReloadCheats() { _loadCheats(); }
+        /// 设置金手指文件路径
+        void SetCheatPath(const std::string& path) { m_gameEntry.cheatPath = path; }
 
         // ---- 运行状态查询 ---------------------------------------------------
 

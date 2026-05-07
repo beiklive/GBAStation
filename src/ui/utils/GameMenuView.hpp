@@ -45,6 +45,7 @@ namespace beiklive
 
             /// 画面设置回调
             void setDisplayModeCallback(std::function<void(const std::string&)> cb) { m_displayModeCallback = std::move(cb); }
+            void setIntegerScaleCallback(std::function<void(float)> cb) { m_integerScaleCallback = std::move(cb); }
             void setFilterCallback(std::function<void(const std::string&)> cb) { m_filterCallback = std::move(cb); }
             void setShaderToggleCallback(std::function<void(bool)> cb) { m_shaderToggleCallback = std::move(cb); }
             void setShaderPathCallback(std::function<void(const std::string&)> cb) { m_shaderPathCallback = std::move(cb); }
@@ -66,6 +67,7 @@ namespace beiklive
             std::function<void(int, bool)> m_cheatToggleCallback;
             std::function<void(const std::string&)> m_cheatPathCallback;
             std::function<void(const std::string&)> m_displayModeCallback;
+            std::function<void(float)> m_integerScaleCallback; ///< 整数倍缩放变更回调 (newScale)
             std::function<void(const std::string&)> m_filterCallback;
             std::function<void(bool)> m_shaderToggleCallback;
             std::function<void(const std::string&)> m_shaderPathCallback;
@@ -110,6 +112,7 @@ namespace beiklive
             void _openShaderSettings();
             void _openOverlaySettings();
             void _openCustomScaleSettings();
+            void _rebuildShaderParamUI();
 
             /// 清除当前侧边栏面板
             void _dismissSidePanel(int idx = -1); // idx=-1=全部

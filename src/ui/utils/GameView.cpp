@@ -172,7 +172,7 @@ namespace beiklive
             unsigned gw = m_renderer.texWidth()  > 0 ? m_renderer.texWidth()  : beiklive::GetGamePixelWidth(m_gameEntry.platform);
             unsigned gh = m_renderer.texHeight() > 0 ? m_renderer.texHeight() : beiklive::GetGamePixelHeight(m_gameEntry.platform);
 
-            int intScale = GET_SETTING_KEY_INT("display.integer_scale_mult", 0);
+            int intScale = static_cast<int>(m_gameEntry.integerAspectRatio);
             beiklive::DisplayRect rect = beiklive::computeDisplayRect(
                 m_screenMode, x, y, width, height, gw, gh,
                 m_gameEntry.customScale, m_gameEntry.customOffsetX, m_gameEntry.customOffsetY,
@@ -1222,6 +1222,7 @@ namespace beiklive
         if (m_gba_core)
         {
             m_gameEntry.cheatPath = path;
+            m_gba_core->SetCheatPath(path);
             m_gba_core->ReloadCheats();
         }
     }
@@ -1277,6 +1278,16 @@ namespace beiklive
         if (beiklive::GameDB && m_gameEntry.crc32 != 0) {
             beiklive::GameDB->set(m_gameEntry.crc32, "displayMode",
                 nlohmann::json(m_gameEntry.displayMode));
+        }
+    }
+
+    void GameView::_onIntegerScaleChange(float scale)
+    {
+        m_gameEntry.integerAspectRatio = scale;
+
+        if (beiklive::GameDB && m_gameEntry.crc32 != 0) {
+            beiklive::GameDB->set(m_gameEntry.crc32, "display.integer_scale_mult",
+                nlohmann::json(static_cast<int>(scale)));
         }
     }
 

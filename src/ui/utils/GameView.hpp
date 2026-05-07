@@ -86,6 +86,8 @@ namespace beiklive
             void _onShaderPathChange(const std::string& path);
             /// 画面模式变更（UI线程调用）
             void _onDisplayModeChange(const std::string& mode);
+            /// 整数倍缩放倍率变更（UI线程调用）
+            void _onIntegerScaleChange(float scale);
             /// 自定义缩放/偏移变更（UI线程调用）
             void _onCustomValuesChanged(float x, float y, float scale);
             /// 遮罩开关变更（UI线程调用）

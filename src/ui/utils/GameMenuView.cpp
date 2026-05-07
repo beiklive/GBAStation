@@ -458,6 +458,8 @@ namespace beiklive
                         m_cheats[idx].enabled = on;
                         if (m_cheatToggleCallback) m_cheatToggleCallback(idx, on);
                         _updateCheatCount();
+                        if (!m_gameEntry.cheatPath.empty())
+                            beiklive::saveChtFile(m_gameEntry.cheatPath, m_cheats);
                     } });
                 m_cheatSwitches.push_back(sw);
                 m_cheatItemBox->addView(sw);
@@ -508,14 +510,8 @@ namespace beiklive
             auto *customCell = new brls::DetailCell();
             std::vector<std::string> modes = {"(保持比例)Fit", "(填充)Fill", "(原始)Original", "(整数倍)Integer", "(自定义)Custom"};
             std::vector<std::string> modeIds = {"fit", "fill", "original", "integer", "custom"};
-            std::string curMode = GET_SETTING_KEY_STR("display.mode", "original");
-            int idx = 2;
-            for (int i = 0; i < 5; ++i)
-                if (modeIds[i] == curMode)
-                {
-                    idx = i;
-                    break;
-                }
+            int idx = m_gameEntry.displayMode;
+            if (idx < 0 || idx >= 5) idx = 2;
 
             IntegerCell->setFocusable(idx == 3);
             IntegerCell->setAlpha(idx == 3? 1.0f: 0.3f);
@@ -560,6 +556,8 @@ namespace beiklive
                     {
                         static const int vals[] = {0, 1, 2, 3, 4, 5};
                         m_gameEntry.integerAspectRatio = static_cast<float>(vals[idx]);
+                        if (m_integerScaleCallback)
+                            m_integerScaleCallback(m_gameEntry.integerAspectRatio);
                         if (m_displayModeCallback)
                         {
                             std::string cur = modeIds[m_gameEntry.displayMode];
@@ -705,94 +703,30 @@ namespace beiklive
 
             if (m_shaderParamsCallback)
             {
-                auto params = m_shaderParamsCallback();
-                if (!params.empty())
-                {
-                    auto *div = new brls::Rectangle(nvgRGBA(255, 255, 255, 40));
-                    div->setWidthPercentage(100.f);
-                    div->setHeight(1.f);
-                    div->setMarginTop(12.f);
-                    div->setMarginBottom(12.f);
-                    panel->addView(div);
+                auto *div = new brls::Rectangle(nvgRGBA(255, 255, 255, 40));
+                div->setWidthPercentage(100.f);
+                div->setHeight(1.f);
+                div->setMarginTop(12.f);
+                div->setMarginBottom(12.f);
+                panel->addView(div);
 
-                    auto *paramHdr = new brls::Header();
-                    paramHdr->setTitle("着色器参数");
-                    panel->addView(paramHdr);
-                    paramHdr->setMarginBottom(12.f);
+                auto *paramHdr = new brls::Header();
+                paramHdr->setTitle("着色器参数");
+                panel->addView(paramHdr);
+                paramHdr->setMarginBottom(12.f);
 
-                    // 从entry中读取参数名列表和参数值列表
-                    // 先检查参数列表是否相同，如果不同则清空参数值列表
-                    bool isNewParams = false;
-                    if (params.size() != m_gameEntry.shaderParaNames.size())
-                    {
-                        m_gameEntry.shaderParaNames.clear();
-                        m_gameEntry.shaderParaValues.clear();
-                        isNewParams = true;
-                    }
-                    else
-                    {
-                        for (size_t i = 0; i < params.size(); ++i)
-                        {
-                            if (params[i].name != m_gameEntry.shaderParaNames[i])
-                            {
-                                m_gameEntry.shaderParaValues.clear();
-                                m_gameEntry.shaderParaValues.clear();
-                                isNewParams = true;
-                                break;
-                            }
-                        }
-                    }
+                auto *srcollbox = new brls::ScrollingFrame();
+                srcollbox->setGrow(1.f);
+                srcollbox->setScrollingIndicatorVisible(false);
+                m_ShaderParamBox = new brls::Box(brls::Axis::COLUMN);
+                m_ShaderParamBox->setPadding(10.f, 10.f, 10.f, 10.f);
+                srcollbox->setCornerRadius(10.f);
+                srcollbox->setBorderThickness(1.f);
+                srcollbox->setBorderColor(nvgRGBA(255, 255, 255, 50));
+                srcollbox->addView(m_ShaderParamBox);
+                panel->addView(srcollbox);
 
-                    if (!m_ShaderParamBox)
-                    {
-                        auto *srcollbox = new brls::ScrollingFrame();
-                        srcollbox->setGrow(1.f);
-                        srcollbox->setScrollingIndicatorVisible(false);
-                        m_ShaderParamBox = new brls::Box(brls::Axis::COLUMN);
-                        m_ShaderParamBox->setPadding(10.f, 10.f, 10.f, 10.f);
-                        srcollbox->setCornerRadius(10.f);
-                        srcollbox->setBorderThickness(1.f);
-                        srcollbox->setBorderColor(nvgRGBA(255, 255, 255, 50));
-                        srcollbox->addView(m_ShaderParamBox);
-                        panel->addView(srcollbox);
-                    }
-
-                    int idx = 0;
-                    for (const auto &p : params)
-                    {
-                        auto *btn = new beiklive::NumberButton();
-                        // 限制焦点移动
-                        DISABLE_LR_NAVIGATION(btn);
-
-                        btn->registerAction("返回", brls::BUTTON_B, [this, pathCell](brls::View *)
-                                            {
-                        brls::Application::giveFocus(pathCell);
-                        return true; });
-
-                        btn->setText(p.desc);
-
-                        if (isNewParams)
-                        {
-                            m_gameEntry.shaderParaNames.push_back(p.name);
-                            m_gameEntry.shaderParaValues.push_back(p.value);
-                        }
-
-                        btn->setValue(static_cast<double>(m_gameEntry.shaderParaValues[idx]));
-                        btn->setStep(static_cast<double>(p.step));
-                        btn->setDecimal(2);
-
-                        std::string pname = m_gameEntry.shaderParaNames[idx];
-                        btn->setOnChange([this, pname](double v)
-                                         {
-                        if (m_shaderParamCallback) m_shaderParamCallback(pname, static_cast<float>(v)); });
-                        m_ShaderParamBox->addView(btn);
-                    }
-                }
-                else
-                {
-                    // 弹性空间
-                    panel->addView(new brls::Padding());
-                }
+                _rebuildShaderParamUI();
             }
             // HintsBar 按钮提示栏
             auto *hintsBar = new beiklive::HintsBar();
@@ -1034,6 +968,7 @@ namespace beiklive
     // ============================================================
     void GameMenuView::_openShaderSettings()
     {
+        _rebuildShaderParamUI();
         m_ShaderSidePanel->setVisibility(brls::Visibility::VISIBLE);
         m_panel->setVisibility(brls::Visibility::GONE);
         this->showHeader(false);
@@ -1081,6 +1016,71 @@ namespace beiklive
         this->showFooter(true);
         this->setBackgroundColor(nvgRGBA(0, 0, 0, 240));
         brls::Application::giveFocus(m_panel->getDefaultFocus());
+    }
+
+    void GameMenuView::_rebuildShaderParamUI()
+    {
+        if (!m_ShaderParamBox || !m_shaderParamsCallback)
+            return;
+
+        m_ShaderParamBox->clearViews(true);
+
+        auto params = m_shaderParamsCallback();
+        if (params.empty())
+            return;
+
+        bool isNewParams = false;
+        if (params.size() != m_gameEntry.shaderParaNames.size())
+        {
+            m_gameEntry.shaderParaNames.clear();
+            m_gameEntry.shaderParaValues.clear();
+            isNewParams = true;
+        }
+        else
+        {
+            for (size_t i = 0; i < params.size(); ++i)
+            {
+                if (params[i].name != m_gameEntry.shaderParaNames[i])
+                {
+                    m_gameEntry.shaderParaNames.clear();
+                    m_gameEntry.shaderParaValues.clear();
+                    isNewParams = true;
+                    break;
+                }
+            }
+        }
+
+        int idx = 0;
+        for (const auto &p : params)
+        {
+            auto *btn = new beiklive::NumberButton();
+            DISABLE_LR_NAVIGATION(btn);
+
+            btn->registerAction("返回", brls::BUTTON_B, [this](brls::View *) {
+                _dismissSidePanel(3);
+                return true;
+            });
+
+            btn->setText(p.desc);
+
+            if (isNewParams)
+            {
+                m_gameEntry.shaderParaNames.push_back(p.name);
+                m_gameEntry.shaderParaValues.push_back(p.value);
+            }
+
+            btn->setValue(static_cast<double>(m_gameEntry.shaderParaValues[idx]));
+            btn->setStep(static_cast<double>(p.step));
+            btn->setDecimal(2);
+
+            std::string pname = m_gameEntry.shaderParaNames[idx];
+            btn->setOnChange([this, pname](double v) {
+                if (m_shaderParamCallback) m_shaderParamCallback(pname, static_cast<float>(v));
+            });
+
+            m_ShaderParamBox->addView(btn);
+            ++idx;
+        }
     }
 
 } // namespace beiklive
