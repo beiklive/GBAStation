@@ -782,7 +782,7 @@ namespace beiklive
         pathCell->registerAction("选择", brls::BUTTON_A,
             [pathCell, this](brls::View*) -> bool {
                 std::string dir = m_gameEntry.shaderPath;
-                auto pos = dir.rfind("/");
+                auto pos = dir.rfind(beiklive::path::SPLIT_CHAR);
                 if (pos != std::string::npos) dir = dir.substr(0, pos); else dir = "";
                 beiklive::openFilePicker({"glslp", "glsl"},
                     [pathCell, this](const std::string& path) {
@@ -885,7 +885,7 @@ namespace beiklive
         pathCell->registerAction("选择", brls::BUTTON_A,
             [pathCell, this](brls::View*) -> bool {
                 std::string dir = m_gameEntry.overlayPath;
-                auto pos = dir.rfind('/');
+                auto pos = dir.rfind(beiklive::path::SPLIT_CHAR);
                 if (pos != std::string::npos) dir = dir.substr(0, pos); else dir = "";
                 beiklive::openFilePicker({"png"},
                     [pathCell, this](const std::string& path) {
