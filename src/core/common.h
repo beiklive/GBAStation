@@ -260,6 +260,24 @@ namespace beiklive // 全局功能函数
         (frame)->setFooterVisibility(brls::Visibility::GONE); \
     } while (0)
 
+// 禁用左右导航
+#define DISABLE_LR_NAVIGATION(panel) \
+    do                                \
+    {                                 \
+        (panel)->setCustomNavigationRoute(brls::FocusDirection::RIGHT, panel);  \
+        (panel)->setCustomNavigationRoute(brls::FocusDirection::LEFT, panel);   \
+    } while (0)
+
+// 设置上下循环导航
+#define UP_DOWN_NAVIGATION(firstTab, lastTab) \
+    do                                            \
+    {                                             \
+        (firstTab)->setCustomNavigationRoute(brls::FocusDirection::UP, lastTab);   \
+        (lastTab)->setCustomNavigationRoute(brls::FocusDirection::DOWN, firstTab); \
+    } while (0)
+
+
+
 #define ADD_STYLE(name, value) \
     brls::Application::getStyle().addMetric(name, value)
 #define ADD_THEME_COLOR(name, color) \

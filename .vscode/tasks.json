@@ -38,11 +38,6 @@
             "label": "运行app",
             "type": "process",
             "command": ".\\GBAStation.exe",
-            "args": [
-                "-d",
-                "-v",
-                "-o"
-            ],
             "options": {
                 "cwd": "${workspaceFolder}\\build_windows"
             },

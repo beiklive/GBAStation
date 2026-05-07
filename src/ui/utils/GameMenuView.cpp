@@ -9,7 +9,7 @@ namespace beiklive
     // ============================================================
     // 辅助函数：获取文件最后修改时间的字符串（委托给 Tools 公共函数）
     // ============================================================
-    static std::string getFileModTimeStr(const std::string& path)
+    static std::string getFileModTimeStr(const std::string &path)
     {
         return beiklive::tools::getFileModTimeStr(path);
     }
@@ -46,13 +46,9 @@ namespace beiklive
         this->setJustifyContent(brls::JustifyContent::CENTER);
         this->setAlignItems(brls::AlignItems::CENTER);
 
-
-
         // 居中面板
         m_panel = new beiklive::TabFrame();
         HIDE_BRLS_HIGHLIGHT(m_panel);
-
-
 
         // BK_RES("img/ui/menu/" + iconPath)
         // 标题
@@ -62,28 +58,29 @@ namespace beiklive
 
         // 1. 返回游戏（无面板）
         m_panel->addTab(
-            "返回游戏", 
-            BK_RES("img/ui/menu/back.png"), 
-            [this]() {
-                if (m_onResume) m_onResume();
-            }
-        );
+            "返回游戏",
+            BK_RES("img/ui/menu/back.png"),
+            [this]()
+            {
+                if (m_onResume)
+                    m_onResume();
+            });
 
-        m_panel->registerAction("返回", brls::BUTTON_B, [this](brls::View*) -> bool {
+        m_panel->registerAction("返回", brls::BUTTON_B, [this](brls::View *) -> bool
+                                {
             brls::sync([this]() {
                 _clearGridItemsFocus();
                 if (m_onResume) m_onResume();
             });
-            return true;
-        });
+            return true; });
         // 2. 保存状态（绑定保存状态面板）
         m_savePanel = _createSaveStatePanel();
         m_panel->addTab(
-            "保存状态", 
+            "保存状态",
             BK_RES("img/ui/menu/save.png"),
-            nullptr, 
-            nullptr, 
-            nullptr, 
+            nullptr,
+            nullptr,
+            nullptr,
             m_savePanel,
             m_saveGrid->getItemView(0) // 默认聚焦第一个槽位
         );
@@ -91,64 +88,57 @@ namespace beiklive
         // 3. 读取状态（绑定读取状态面板）
         m_loadPanel = _createLoadStatePanel();
         m_panel->addTab(
-            "读取状态", 
+            "读取状态",
             BK_RES("img/ui/menu/load.png"),
-            nullptr, 
-            nullptr, 
-            nullptr, 
+            nullptr,
+            nullptr,
+            nullptr,
             m_loadPanel,
             m_loadGrid->getItemView(0) // 默认聚焦第一个槽位
         );
 
         // 4. 金手指设置
-        auto* cheatPanel = _createCheatPanel();
+        auto *cheatPanel = _createCheatPanel();
         m_panel->addTab(
             "金手指设置",
             BK_RES("img/ui/menu/cheat.png"),
             nullptr, nullptr, nullptr,
-            cheatPanel
-        );
+            cheatPanel);
 
         // 5. 画面设置
-        auto* displayPanel = _createDisplayPanel();
+        auto *displayPanel = _createDisplayPanel();
         m_panel->addTab(
             "画面设置",
             BK_RES("img/ui/menu/display.png"),
             nullptr, nullptr, nullptr,
-            displayPanel
-        );
+            displayPanel);
 
-
-        //插入分割线
+        // 插入分割线
         m_panel->addDivider();
-
 
         // TODO 添加重置游戏（重启游戏）功能
         m_panel->addTab(
-            "重置游戏", 
-            BK_RES("img/ui/menu/reset.png"), 
-            [this]() {
-            if (m_onReset) m_onReset();
-            }
-        );
-
-
+            "重置游戏",
+            BK_RES("img/ui/menu/reset.png"),
+            [this]()
+            {
+                if (m_onReset)
+                    m_onReset();
+            });
 
         // 6. 退出游戏（无面板）
         m_panel->addTab(
-            "退出游戏", 
-            BK_RES("img/ui/menu/exit.png"), 
-            [this]() {
-            if (m_onExit) m_onExit();
-            }
-        );
-
+            "退出游戏",
+            BK_RES("img/ui/menu/exit.png"),
+            [this]()
+            {
+                if (m_onExit)
+                    m_onExit();
+            });
 
         m_panel->addFinish();
         this->getContentBox()->addView(m_panel);
-
     }
-
 
     // ============================================================
     // _slotName
@@ -163,15 +153,15 @@ namespace beiklive
     // _createSaveStatePanel
     // ============================================================
 
-    brls::View* GameMenuView::_createSaveStatePanel()
+    brls::View *GameMenuView::_createSaveStatePanel()
     {
-        auto* wrapper = new brls::Box(brls::Axis::COLUMN);
+        auto *wrapper = new brls::Box(brls::Axis::COLUMN);
         wrapper->setVisibility(brls::Visibility::GONE);
         wrapper->setGrow(1.f);
         wrapper->setFocusable(false);
         HIDE_BRLS_HIGHLIGHT(wrapper);
 
-        auto* titleLabel = new brls::Label();
+        auto *titleLabel = new brls::Label();
         titleLabel->setText("保存状态");
         titleLabel->setFontSize(18.f);
         titleLabel->setMarginBottom(8.f);
@@ -181,30 +171,33 @@ namespace beiklive
         titleLabel->setFocusable(false);
         wrapper->addView(titleLabel);
 
-        auto* grid = new beiklive::GridBox(2);
+        auto *grid = new beiklive::GridBox(2);
         grid->setGrow(1.f);
         m_saveGrid = grid;
 
         m_saveItems.clear();
         for (int slot = 0; slot < 10; ++slot)
         {
-            auto* item = new beiklive::GridItem(GridItemMode::SAVE_STATE, slot);
+            auto *item = new beiklive::GridItem(GridItemMode::SAVE_STATE, slot);
             item->setEmpty(_slotName(slot));
             m_saveItems.push_back(item);
 
-            beiklive::GridItem* captItem = item;
-            grid->addItem([captItem]() -> brls::View* { return captItem; });
+            beiklive::GridItem *captItem = item;
+            grid->addItem([captItem]() -> brls::View *
+                          { return captItem; });
         }
         // GridBox 的 onItemClicked 触发确认对话框
-        grid->onItemClicked = [this](int slot) {
+        grid->onItemClicked = [this](int slot)
+        {
             // auto* dialog = new brls::Dialog("确认保存到" + _slotName(slot) + "？");
             // dialog->addButton("取消", []() {});
             // dialog->addButton("确认", [this, slot]() {
-                if (m_saveStateCallback) m_saveStateCallback(slot);
+            if (m_saveStateCallback)
+                m_saveStateCallback(slot);
 
-                brls::sync([this]() {
-                    if (m_onResume) m_onResume();
-                });
+            brls::sync([this]()
+                       {
+                    if (m_onResume) m_onResume(); });
 
             // dialog->open();
         };
@@ -217,15 +210,15 @@ namespace beiklive
     // _createLoadStatePanel
     // ============================================================
 
-    brls::View* GameMenuView::_createLoadStatePanel()
+    brls::View *GameMenuView::_createLoadStatePanel()
     {
-        auto* wrapper = new brls::Box(brls::Axis::COLUMN);
+        auto *wrapper = new brls::Box(brls::Axis::COLUMN);
         wrapper->setVisibility(brls::Visibility::GONE);
         wrapper->setGrow(1.f);
         wrapper->setFocusable(false);
         HIDE_BRLS_HIGHLIGHT(wrapper);
 
-        auto* titleLabel = new brls::Label();
+        auto *titleLabel = new brls::Label();
         titleLabel->setText("读取状态");
         titleLabel->setFontSize(18.f);
         titleLabel->setMarginBottom(8.f);
@@ -236,29 +229,32 @@ namespace beiklive
         titleLabel->setFocusable(false);
         wrapper->addView(titleLabel);
 
-        auto* grid = new beiklive::GridBox(2);
+        auto *grid = new beiklive::GridBox(2);
         grid->setGrow(1.f);
         m_loadGrid = grid;
 
         m_loadItems.clear();
         for (int slot = 0; slot < 10; ++slot)
         {
-            auto* item = new beiklive::GridItem(GridItemMode::SAVE_STATE, slot);
+            auto *item = new beiklive::GridItem(GridItemMode::SAVE_STATE, slot);
             item->setEmpty(_slotName(slot));
             m_loadItems.push_back(item);
 
-            beiklive::GridItem* captItem = item;
-            grid->addItem([captItem]() -> brls::View* { return captItem; });
+            beiklive::GridItem *captItem = item;
+            grid->addItem([captItem]() -> brls::View *
+                          { return captItem; });
         }
 
-        grid->onItemClicked = [this](int slot) {
+        grid->onItemClicked = [this](int slot)
+        {
             // auto* dialog = new brls::Dialog("确认从" + _slotName(slot) + "读取？");
             // dialog->addButton("取消", []() {});
             // dialog->addButton("确认", [this, slot]() {
-                if (m_loadStateCallback) m_loadStateCallback(slot);
-                brls::sync([this]() {
-                    if (m_onResume) m_onResume();
-                });
+            if (m_loadStateCallback)
+                m_loadStateCallback(slot);
+            brls::sync([this]()
+                       {
+                    if (m_onResume) m_onResume(); });
             // });
             // dialog->open();
         };
@@ -269,17 +265,17 @@ namespace beiklive
 
     void GameMenuView::_clearGridItemsFocus()
     {
-        for (auto* item : m_saveItems)
+        for (auto *item : m_saveItems)
         {
-            if (item) item->setFocusable(false);
+            if (item)
+                item->setFocusable(false);
         }
-        for (auto* item : m_loadItems)
+        for (auto *item : m_loadItems)
         {
-            if (item) item->setFocusable(false);
+            if (item)
+                item->setFocusable(false);
         }
     }
-
-
 
     // ============================================================
     // _refreshStatePanel – 异步扫描存档并更新 GridItem 显示
@@ -287,12 +283,14 @@ namespace beiklive
 
     void GameMenuView::_refreshStatePanel(bool isSave)
     {
-        if (!m_stateInfoCallback) return;
+        if (!m_stateInfoCallback)
+            return;
 
         auto infoCallback = m_stateInfoCallback;
 
         ASYNC_RETAIN
-        brls::async([ASYNC_TOKEN, infoCallback, isSave]() {
+        brls::async([ASYNC_TOKEN, infoCallback, isSave]()
+                    {
             std::vector<StateSlotInfo> infos;
             infos.reserve(10);
             for (int slot = 0; slot < 10; ++slot)
@@ -327,12 +325,11 @@ namespace beiklive
                     //     item->setImagePath(BK_RES("img/ui/menu/empty.png"));
                     // }
                 }
-            });
-        });
+            }); });
     }
 
-    void GameMenuView::draw(NVGcontext* vg, float x, float y, float w, float h,
-                            brls::Style style, brls::FrameContext* ctx)
+    void GameMenuView::draw(NVGcontext *vg, float x, float y, float w, float h,
+                            brls::Style style, brls::FrameContext *ctx)
     {
         Box::draw(vg, x, y, w, h, style, ctx);
     }
@@ -347,10 +344,10 @@ namespace beiklive
     // ============================================================
     // _createCheatPanel
     // ============================================================
-    brls::View* GameMenuView::_createCheatPanel()
+    brls::View *GameMenuView::_createCheatPanel()
     {
         // 子界面容器
-        auto* wrapper = new brls::Box(brls::Axis::COLUMN);
+        auto *wrapper = new brls::Box(brls::Axis::COLUMN);
         wrapper->setVisibility(brls::Visibility::GONE);
         wrapper->setGrow(1.f);
         wrapper->setFocusable(false);
@@ -359,7 +356,7 @@ namespace beiklive
         // wrapper->setWireframeEnabled(true);
 
         // 顶栏
-        auto* topRow = new brls::Box(brls::Axis::ROW);
+        auto *topRow = new brls::Box(brls::Axis::ROW);
         topRow->setFocusable(false);
         topRow->setAlignItems(brls::AlignItems::CENTER);
         // topRow->setPadding(12.f, 16.f, 8.f, 16.f);
@@ -367,7 +364,7 @@ namespace beiklive
         topRow->setWidthPercentage(100.f);
         // topRow->setWireframeEnabled(true);
 
-        auto* titleLabel = new brls::Label();
+        auto *titleLabel = new brls::Label();
         titleLabel->setText("当前金手指文件：");
         titleLabel->setFontSize(20.f);
         titleLabel->setTextColor(GET_THEME_COLOR("brls/text"));
@@ -392,24 +389,21 @@ namespace beiklive
         m_cheatCountLabel->setFocusable(false);
         topRow->addView(m_cheatCountLabel);
 
-
-        auto* selectChtBtn = new brls::Button();
+        auto *selectChtBtn = new brls::Button();
         selectChtBtn->setText("选择金手指文件(cht)");
         selectChtBtn->setMarginRight(4.f);
-        selectChtBtn->registerClickAction([this](brls::View*) -> bool {
+        selectChtBtn->registerClickAction([this](brls::View *) -> bool
+                                          {
             beiklive::openFilePicker({"cht"},
                 [this](const std::string& path) {
                     _loadCheatsFromPath(path);
                     if (m_cheatPathCallback) m_cheatPathCallback(path);
                 });
-            return true;
-        });
+            return true; });
         topRow->addView(selectChtBtn);
 
-
-
         wrapper->addView(topRow);
-        auto* itemContainer = new brls::ScrollingFrame();
+        auto *itemContainer = new brls::ScrollingFrame();
         itemContainer->setGrow(1.f);
         // 金手指网格列表
         m_cheatItemBox = new brls::Box(brls::Axis::COLUMN);
@@ -425,7 +419,7 @@ namespace beiklive
         return wrapper;
     }
 
-    void GameMenuView::_loadCheatsFromPath(const std::string& path)
+    void GameMenuView::_loadCheatsFromPath(const std::string &path)
     {
         m_cheats = beiklive::parseChtFile(path);
         m_gameEntry.cheatPath = path;
@@ -435,31 +429,36 @@ namespace beiklive
 
     void GameMenuView::_rebuildCheatItems()
     {
-        if (!m_cheatItemBox) return;
+        if (!m_cheatItemBox)
+            return;
         m_cheatItemBox->clearViews(true);
         m_cheatSwitches.clear();
 
-        if (m_cheats.empty()) {
-            auto* label = new brls::Label();
+        if (m_cheats.empty())
+        {
+            auto *label = new brls::Label();
             label->setText("该金手指文件无有效条目");
             label->setFontSize(14.f);
             label->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
             label->setHorizontalAlign(brls::HorizontalAlign::CENTER);
             label->setFocusable(false);
             m_cheatItemBox->addView(label);
-        } else {
-            for (int i = 0; i < (int)m_cheats.size(); ++i) {
-                auto* sw = new SwitchButton();
+        }
+        else
+        {
+            for (int i = 0; i < (int)m_cheats.size(); ++i)
+            {
+                auto *sw = new SwitchButton();
                 sw->setText(m_cheats[i].desc);
                 sw->setState(m_cheats[i].enabled);
                 int idx = i;
-                sw->setOnToggle([this, idx](bool on) {
+                sw->setOnToggle([this, idx](bool on)
+                                {
                     if (idx < (int)m_cheats.size()) {
                         m_cheats[idx].enabled = on;
                         if (m_cheatToggleCallback) m_cheatToggleCallback(idx, on);
                         _updateCheatCount();
-                    }
-                });
+                    } });
                 m_cheatSwitches.push_back(sw);
                 m_cheatItemBox->addView(sw);
             }
@@ -469,94 +468,115 @@ namespace beiklive
 
     void GameMenuView::_updateCheatCount()
     {
-        if (!m_cheatCountLabel) return;
+        if (!m_cheatCountLabel)
+            return;
         int total = (int)m_cheats.size();
         int enabled = 0;
-        for (auto& c : m_cheats) if (c.enabled) ++enabled;
+        for (auto &c : m_cheats)
+            if (c.enabled)
+                ++enabled;
         m_cheatCountLabel->setText("共 " + std::to_string(total) + " 项 | 已启用 " + std::to_string(enabled) + " 项");
     }
-
 
     // ============================================================
     // _createDisplayPanel
     // ============================================================
-    brls::View* GameMenuView::_createDisplayPanel()
+    brls::View *GameMenuView::_createDisplayPanel()
     {
-        auto* wrapper = new brls::Box(brls::Axis::COLUMN);
+        auto *wrapper = new brls::Box(brls::Axis::COLUMN);
         wrapper->setVisibility(brls::Visibility::GONE);
         wrapper->setGrow(1.f);
         wrapper->setWidthPercentage(100.f);
         wrapper->setFocusable(false);
 
-        auto* scroll = new brls::ScrollingFrame();
+        auto *scroll = new brls::ScrollingFrame();
         scroll->setGrow(1.f);
         scroll->setScrollingBehavior(brls::ScrollingBehavior::NATURAL);
         scroll->setFocusable(false);
 
-        auto* box = new brls::Box(brls::Axis::COLUMN);
+        auto *box = new brls::Box(brls::Axis::COLUMN);
         box->setPadding(10.f, 20.f, 20.f, 20.f);
 
         {
-            auto* hdr1 = new brls::Header();
+            auto *hdr1 = new brls::Header();
             hdr1->setTitle("画面设置");
             box->addView(hdr1);
 
             // ── 画面模式 ──
-            auto* modeCell = new beiklive::SelectorButton();
-            auto* IntegerCell = new beiklive::SelectorButton();
-            auto* customCell = new brls::DetailCell();
+            auto *modeCell = new beiklive::SelectorButton();
+            auto *IntegerCell = new beiklive::SelectorButton();
+            auto *customCell = new brls::DetailCell();
             std::vector<std::string> modes = {"(保持比例)Fit", "(填充)Fill", "(原始)Original", "(整数倍)Integer", "(自定义)Custom"};
             std::vector<std::string> modeIds = {"fit", "fill", "original", "integer", "custom"};
             std::string curMode = GET_SETTING_KEY_STR("display.mode", "original");
             int idx = 2;
-            for (int i = 0; i < 5; ++i) if (modeIds[i] == curMode) { idx = i; break; }
-            IntegerCell->setFocusable(idx == 3);
-            customCell->setFocusable(idx == 4);
+            for (int i = 0; i < 5; ++i)
+                if (modeIds[i] == curMode)
+                {
+                    idx = i;
+                    break;
+                }
 
+            IntegerCell->setFocusable(idx == 3);
+            IntegerCell->setAlpha(idx == 3? 1.0f: 0.3f);
+            customCell->setFocusable(idx == 4);
+            customCell->setAlpha(idx == 4? 1.0f: 0.3f);
+            
             modeCell->setText("画面模式");
             modeCell->setOptions(modes, idx);
             modeCell->setOnSelect(
-                [this, modeIds, IntegerCell, customCell](int idx) {
-                    if (idx >= 0 && idx < (int)modeIds.size()) {
-                        SET_SETTING_KEY_STR("display.mode", modeIds[idx]);
+                [this, modeIds, IntegerCell, customCell](int idx)
+                {
+                    if (idx >= 0 && idx < (int)modeIds.size())
+                    {
                         IntegerCell->setFocusable(idx == 3);
+                        IntegerCell->setAlpha(idx == 3? 1.0f: 0.3f);
                         customCell->setFocusable(idx == 4);
-                        if (m_displayModeCallback) m_displayModeCallback(modeIds[idx]);
+                        customCell->setAlpha(idx == 4? 1.0f: 0.3f);
+                        m_gameEntry.displayMode = idx;
+                        if (m_displayModeCallback)
+                            m_displayModeCallback(modeIds[idx]);
                     }
-                }
-            );
+                });
             box->addView(modeCell);
 
             // ── 整数倍缩放 ──
             std::vector<std::string> intScaleLabels = {"自动(auto)", "x1", "x2", "x3", "x4", "x5"};
             static const int intScaleVals[] = {0, 1, 2, 3, 4, 5};
-            int curIntScale = GET_SETTING_KEY_INT("display.integer_scale_mult", 0);
+            int curIntScale = static_cast<int>(m_gameEntry.integerAspectRatio);
             int intScaleIdx = 0;
-            for (int i = 0; i < 6; ++i) if (intScaleVals[i] == curIntScale) { intScaleIdx = i; break; }
+            for (int i = 0; i < 6; ++i)
+                if (intScaleVals[i] == curIntScale)
+                {
+                    intScaleIdx = i;
+                    break;
+                }
             IntegerCell->setText("整数倍缩放倍率");
             IntegerCell->setOptions(intScaleLabels, intScaleIdx);
             IntegerCell->setOnSelect(
-                [this](int idx) {
-                    if (idx >= 0 && idx < 6) {
+                [this, modeIds](int idx)
+                {
+                    if (idx >= 0 && idx < 6)
+                    {
                         static const int vals[] = {0, 1, 2, 3, 4, 5};
-                        SET_SETTING_KEY_INT("display.integer_scale_mult", vals[idx]);
-                        if (m_displayModeCallback) {
-                            std::string cur = GET_SETTING_KEY_STR("display.mode", "original");
+                        m_gameEntry.integerAspectRatio = static_cast<float>(vals[idx]);
+                        if (m_displayModeCallback)
+                        {
+                            std::string cur = modeIds[m_gameEntry.displayMode];
                             m_displayModeCallback(cur);
                         }
                     }
-                }
-            );
+                });
             box->addView(IntegerCell);
             box->addView(makeHint("仅在画面模式为整数倍时可用，选择auto则自动匹配最大整数倍"));
 
             // ── 自定义设置入口 ──
             customCell->setText("自定义设置");
             customCell->setDetailText(">>");
-            customCell->registerClickAction([this](brls::View*) -> bool {
+            customCell->registerClickAction([this](brls::View *) -> bool
+                                            {
                 _openCustomScaleSettings();
-                return true;
-            });
+                return true; });
             box->addView(customCell);
             box->addView(makeHint("仅在画面模式为自定义时可用，调整位置偏移和缩放比例"));
         }
@@ -565,140 +585,408 @@ namespace beiklive
         std::vector<std::string> filters = {"(像素)Nearest", "(平滑)Linear"};
         std::string curFilter = GET_SETTING_KEY_STR("display.filter", "nearest");
         int fi = (curFilter == "linear") ? 1 : 0;
-        auto* filterCell = new beiklive::SelectorButton();
+        auto *filterCell = new beiklive::SelectorButton();
         filterCell->setText("纹理过滤");
         filterCell->setOptions(filters, fi);
         filterCell->setOnSelect(
-            [this](int idx) {
+            [this](int idx)
+            {
                 std::string val = (idx == 1) ? "linear" : "nearest";
                 SET_SETTING_KEY_STR("display.filter", val);
-                if (m_filterCallback) m_filterCallback(val);
-            }
-        );
+                if (m_filterCallback)
+                    m_filterCallback(val);
+            });
         box->addView(filterCell);
         box->addView(makeHint("不影响着色器渲染效果"));
 
         {
-            auto* hdr1 = new brls::Header();
+            auto *hdr1 = new brls::Header();
             hdr1->setTitle("个性化设置");
             box->addView(hdr1);
         }
 
-        auto* overlayCell = new brls::DetailCell();
+        auto *overlayCell = new brls::DetailCell();
         overlayCell->setText("遮罩设置");
         overlayCell->setDetailText(">>");
-        overlayCell->registerClickAction([this](brls::View*) -> bool {
+        overlayCell->registerClickAction([this](brls::View *) -> bool
+                                         {
             _openOverlaySettings();
-            return true;
-        });
+            return true; });
         box->addView(overlayCell);
 
-        auto* shaderCell = new brls::DetailCell();
+        auto *shaderCell = new brls::DetailCell();
         shaderCell->setText("着色器设置");
         shaderCell->setDetailText(">>");
-        shaderCell->registerClickAction([this](brls::View*) -> bool {
+        shaderCell->registerClickAction([this](brls::View *) -> bool
+                                        {
             _openShaderSettings();
-            return true;
-        });
+            return true; });
         box->addView(shaderCell);
 
         scroll->setContentView(box);
         wrapper->addView(scroll);
-        return wrapper;
-    }
 
-    // ============================================================
-    // _openCustomScaleSettings - 自定义缩放子界面
-    // ============================================================
-    void GameMenuView::_openCustomScaleSettings()
-    {
-        _dismissSidePanel();
-        this->setBackgroundColor(nvgRGBA(0, 0, 0, 10));
+        {
+            m_ShaderSidePanel = new brls::Box(brls::Axis::COLUMN);
+            m_ShaderSidePanel->setHideHighlight(true);
+            m_ShaderSidePanel->setPositionType(brls::PositionType::ABSOLUTE);
+            m_ShaderSidePanel->setPositionTop(0);
+            m_ShaderSidePanel->setPositionLeft(0);
+            m_ShaderSidePanel->setWidthPercentage(100.f);
+            m_ShaderSidePanel->setHeightPercentage(100.f);
+            m_ShaderSidePanel->setBackgroundColor(nvgRGBA(0, 0, 0, 60));
+            m_ShaderSidePanel->setFocusable(false);
+            m_ShaderSidePanel->setVisibility(brls::Visibility::GONE);
 
-        m_sidePanel = new brls::Box(brls::Axis::COLUMN);
-        m_sidePanel->setHideHighlight(true);
-        m_sidePanel->setPositionType(brls::PositionType::ABSOLUTE);
-        m_sidePanel->setPositionTop(0); m_sidePanel->setPositionLeft(0);
-        m_sidePanel->setWidthPercentage(100.f); m_sidePanel->setHeightPercentage(100.f);
-        m_sidePanel->setBackgroundColor(nvgRGBA(0, 0, 0, 60));
-        m_sidePanel->setFocusable(false);
+            auto *row = new brls::Box(brls::Axis::ROW);
+            row->setGrow(1.f);
+            row->setJustifyContent(brls::JustifyContent::FLEX_END);
+            row->setFocusable(false);
 
-        auto* row = new brls::Box(brls::Axis::ROW);
-        row->setGrow(1.f);
-        row->setJustifyContent(brls::JustifyContent::FLEX_END);
-        row->setFocusable(false);
+            auto *panel = new brls::Box(brls::Axis::COLUMN);
+            panel->setWidth(380.f);
+            panel->setHeightPercentage(100.f);
+            panel->setBackgroundColor(nvgRGBA(30, 30, 35, 250));
+            panel->setCornerRadius(12.f);
+            panel->setPadding(20.f);
+            panel->setAlignItems(brls::AlignItems::STRETCH);
 
-        auto* panel = new brls::Box(brls::Axis::COLUMN);
-        panel->setWidth(380.f);
-        panel->setHeightPercentage(100.f);
-        panel->setBackgroundColor(nvgRGBA(30, 30, 35, 50));
-        panel->setCornerRadius(12.f);
-        panel->setPadding(20.f);
-        panel->setAlignItems(brls::AlignItems::STRETCH);
+            auto closeAct = [this](brls::View *)
+            { _dismissSidePanel(3); return true; };
 
-        auto closeAct = [this](brls::View*) { _dismissSidePanel(); return true; };
+            auto *hdr = new brls::Header();
+            hdr->setTitle("着色器设置");
+            panel->addView(hdr);
 
-        auto* hdr = new brls::Header();
-        hdr->setTitle("自定义画面设置");
-        panel->addView(hdr);
+            bool shaderOn = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_DISPLAY_SHADER_ENABLED, 0) && m_gameEntry.shaderEnabled;
 
-        // 从 entry 读取当前值
-        float initX = m_gameEntry.customOffsetX;
-        float initY = m_gameEntry.customOffsetY;
-        float initScale = m_gameEntry.customScale > 0.f ? m_gameEntry.customScale : 1.f;
+            auto *toggleCell = new brls::BooleanCell();
+            DISABLE_LR_NAVIGATION(toggleCell);
+            (toggleCell)->setCustomNavigationRoute(brls::FocusDirection::UP, toggleCell);
 
-        auto* hdrX = new brls::Header();
-        hdrX->setTitle("X轴偏移");
-        panel->addView(hdrX);
-        auto* xBtn = new beiklive::NumberButton();
-        xBtn->setText("");
-        xBtn->setValue(initX);
-        xBtn->setStep(1.f);
-        xBtn->setDecimal(-1);
-        xBtn->setOnChange([this](double v) {
+            toggleCell->init("启用着色器", shaderOn,
+                             [this](bool v)
+                             {
+                                 m_gameEntry.shaderEnabled = v;
+                                 if (m_shaderToggleCallback)
+                                     m_shaderToggleCallback(v);
+                             });
+            toggleCell->registerAction("关闭", brls::BUTTON_B, closeAct);
+            panel->addView(toggleCell);
+
+            auto *hdr2 = new brls::Header();
+            hdr2->setTitle("选择着色器文件");
+            panel->addView(hdr2);
+
+            auto *pathCell = new brls::DetailCell();
+            DISABLE_LR_NAVIGATION(pathCell);
+
+            pathCell->setText("");
+            std::string curShader = m_gameEntry.shaderPath;
+            pathCell->setDetailText(curShader.empty() ? "未设置" : beiklive::tools::getFileName(curShader));
+            pathCell->registerAction("选择", brls::BUTTON_A,
+                                     [pathCell, this](brls::View *) -> bool
+                                     {
+                                         std::string dir = m_gameEntry.shaderPath;
+                                         auto pos = dir.rfind(beiklive::path::SPLIT_CHAR);
+                                         if (pos != std::string::npos)
+                                             dir = dir.substr(0, pos);
+                                         else
+                                             dir = "";
+                                         beiklive::openFilePicker({"glslp", "glsl"}, [pathCell, this](const std::string &path)
+                                                                  {
+                        m_gameEntry.shaderPath = path;
+                        pathCell->setDetailText(beiklive::tools::getFileName(path));
+                        if (m_shaderPathCallback) m_shaderPathCallback(path); }, dir);
+                                         return true;
+                                     });
+            pathCell->registerAction("关闭", brls::BUTTON_B, closeAct);
+            panel->addView(pathCell);
+
+            if (m_shaderParamsCallback)
+            {
+                auto params = m_shaderParamsCallback();
+                if (!params.empty())
+                {
+                    auto *div = new brls::Rectangle(nvgRGBA(255, 255, 255, 40));
+                    div->setWidthPercentage(100.f);
+                    div->setHeight(1.f);
+                    div->setMarginTop(12.f);
+                    div->setMarginBottom(12.f);
+                    panel->addView(div);
+
+                    auto *paramHdr = new brls::Header();
+                    paramHdr->setTitle("着色器参数");
+                    panel->addView(paramHdr);
+                    paramHdr->setMarginBottom(12.f);
+
+                    // 从entry中读取参数名列表和参数值列表
+                    // 先检查参数列表是否相同，如果不同则清空参数值列表
+                    bool isNewParams = false;
+                    if (params.size() != m_gameEntry.shaderParaNames.size())
+                    {
+                        m_gameEntry.shaderParaNames.clear();
+                        m_gameEntry.shaderParaValues.clear();
+                        isNewParams = true;
+                    }
+                    else
+                    {
+                        for (size_t i = 0; i < params.size(); ++i)
+                        {
+                            if (params[i].name != m_gameEntry.shaderParaNames[i])
+                            {
+                                m_gameEntry.shaderParaValues.clear();
+                                m_gameEntry.shaderParaValues.clear();
+                                isNewParams = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!m_ShaderParamBox)
+                    {
+                        auto *srcollbox = new brls::ScrollingFrame();
+                        srcollbox->setGrow(1.f);
+                        srcollbox->setScrollingIndicatorVisible(false);
+                        m_ShaderParamBox = new brls::Box(brls::Axis::COLUMN);
+                        m_ShaderParamBox->setPadding(10.f, 10.f, 10.f, 10.f);
+                        srcollbox->setCornerRadius(10.f);
+                        srcollbox->setBorderThickness(1.f);
+                        srcollbox->setBorderColor(nvgRGBA(255, 255, 255, 50));
+                        srcollbox->addView(m_ShaderParamBox);
+                        panel->addView(srcollbox);
+                    }
+
+                    int idx = 0;
+                    for (const auto &p : params)
+                    {
+                        auto *btn = new beiklive::NumberButton();
+                        // 限制焦点移动
+                        DISABLE_LR_NAVIGATION(btn);
+
+                        btn->registerAction("返回", brls::BUTTON_B, [this, pathCell](brls::View *)
+                                            {
+                        brls::Application::giveFocus(pathCell);
+                        return true; });
+
+                        btn->setText(p.desc);
+
+                        if (isNewParams)
+                        {
+                            m_gameEntry.shaderParaNames.push_back(p.name);
+                            m_gameEntry.shaderParaValues.push_back(p.value);
+                        }
+
+                        btn->setValue(static_cast<double>(m_gameEntry.shaderParaValues[idx]));
+                        btn->setStep(static_cast<double>(p.step));
+                        btn->setDecimal(2);
+
+                        std::string pname = m_gameEntry.shaderParaNames[idx];
+                        btn->setOnChange([this, pname](double v)
+                                         {
+                        if (m_shaderParamCallback) m_shaderParamCallback(pname, static_cast<float>(v)); });
+                        m_ShaderParamBox->addView(btn);
+                    }
+                }
+                else
+                {
+                    // 弹性空间
+                    panel->addView(new brls::Padding());
+                }
+            }
+            // HintsBar 按钮提示栏
+            auto *hintsBar = new beiklive::HintsBar();
+            panel->addView(hintsBar);
+            // 保存entry
+            beiklive::GameDB->upsert(m_gameEntry);
+
+            m_ShaderSidePanel->registerAction("关闭", brls::BUTTON_B, closeAct);
+            row->addView(panel);
+            m_ShaderSidePanel->addView(row);
+            this->addView(m_ShaderSidePanel);
+        }
+
+        {
+            m_OverlaySidePanel = new brls::Box(brls::Axis::COLUMN);
+            m_OverlaySidePanel->setHideHighlight(true);
+            m_OverlaySidePanel->setPositionType(brls::PositionType::ABSOLUTE);
+            m_OverlaySidePanel->setPositionTop(0);
+            m_OverlaySidePanel->setPositionLeft(0);
+            m_OverlaySidePanel->setWidthPercentage(100.f);
+            m_OverlaySidePanel->setHeightPercentage(100.f);
+            m_OverlaySidePanel->setBackgroundColor(nvgRGBA(0, 0, 0, 60));
+            m_OverlaySidePanel->setFocusable(false);
+            m_OverlaySidePanel->setVisibility(brls::Visibility::GONE);
+
+            auto *row = new brls::Box(brls::Axis::ROW);
+            row->setGrow(1.f);
+            row->setJustifyContent(brls::JustifyContent::FLEX_END);
+            row->setFocusable(false);
+
+            auto *panel = new brls::Box(brls::Axis::COLUMN);
+            panel->setWidth(380.f);
+            panel->setHeightPercentage(100.f);
+            panel->setBackgroundColor(nvgRGBA(30, 30, 35, 255));
+            panel->setCornerRadius(12.f);
+            panel->setPadding(20.f);
+            panel->setAlignItems(brls::AlignItems::STRETCH);
+
+            auto closeAct = [this](brls::View *)
+            { _dismissSidePanel(2); return true; };
+
+            auto *hdr = new brls::Header();
+            hdr->setTitle("遮罩设置");
+            panel->addView(hdr);
+
+            auto *toggleCell = new brls::BooleanCell();
+            toggleCell->init("启用遮罩", m_gameEntry.overlayEnabled,
+                             [this](bool v)
+                             {
+                                 m_gameEntry.overlayEnabled = v;
+                                 if (m_overlayToggleCallback)
+                                     m_overlayToggleCallback(v);
+                             });
+            DISABLE_LR_NAVIGATION(toggleCell);
+            (toggleCell)->setCustomNavigationRoute(brls::FocusDirection::UP, toggleCell);
+
+            toggleCell->registerAction("关闭", brls::BUTTON_B, closeAct);
+            panel->addView(toggleCell);
+
+            auto *hdr2 = new brls::Header();
+            hdr2->setTitle("选择遮罩图片");
+            panel->addView(hdr2);
+
+            auto *pathCell = new brls::DetailCell();
+            DISABLE_LR_NAVIGATION(pathCell);
+            (pathCell)->setCustomNavigationRoute(brls::FocusDirection::DOWN, pathCell);
+
+            pathCell->setText("");
+            pathCell->setDetailText(m_gameEntry.overlayPath.empty() ? "未设置"
+                                                                    : beiklive::tools::getFileName(m_gameEntry.overlayPath));
+            pathCell->registerAction("选择", brls::BUTTON_A,
+                                     [pathCell, this](brls::View *) -> bool
+                                     {
+                                         std::string dir = m_gameEntry.overlayPath;
+                                         auto pos = dir.rfind(beiklive::path::SPLIT_CHAR);
+                                         if (pos != std::string::npos)
+                                             dir = dir.substr(0, pos);
+                                         else
+                                             dir = "";
+                                         beiklive::openFilePicker({"png"}, [pathCell, this](const std::string &path)
+                                                                  {
+                        m_gameEntry.overlayPath = path;
+                        pathCell->setDetailText(beiklive::tools::getFileName(path));
+                        if (m_overlayPathCallback) m_overlayPathCallback(path); }, dir);
+                                         return true;
+                                     });
+            pathCell->registerAction("关闭", brls::BUTTON_B, closeAct);
+            panel->addView(pathCell);
+
+            panel->addView(new brls::Padding());
+
+            // HintsBar 按钮提示栏
+            auto *hintsBar = new beiklive::HintsBar();
+            panel->addView(hintsBar);
+
+            // 保存entry
+            beiklive::GameDB->upsert(m_gameEntry);
+            m_OverlaySidePanel->registerAction("关闭", brls::BUTTON_B, closeAct);
+            row->addView(panel);
+            m_OverlaySidePanel->addView(row);
+            this->addView(m_OverlaySidePanel);
+        }
+
+        {
+
+            m_CustomSidePanel = new brls::Box(brls::Axis::COLUMN);
+            m_CustomSidePanel->setHideHighlight(true);
+            m_CustomSidePanel->setPositionType(brls::PositionType::ABSOLUTE);
+            m_CustomSidePanel->setPositionTop(0);
+            m_CustomSidePanel->setPositionLeft(0);
+            m_CustomSidePanel->setWidthPercentage(100.f);
+            m_CustomSidePanel->setHeightPercentage(100.f);
+            m_CustomSidePanel->setBackgroundColor(nvgRGBA(0, 0, 0, 60));
+            m_CustomSidePanel->setFocusable(false);
+            m_CustomSidePanel->setVisibility(brls::Visibility::GONE);
+
+            auto *row = new brls::Box(brls::Axis::ROW);
+            row->setGrow(1.f);
+            row->setJustifyContent(brls::JustifyContent::FLEX_END);
+            row->setFocusable(false);
+
+            auto *panel = new brls::Box(brls::Axis::COLUMN);
+            panel->setWidth(380.f);
+            panel->setHeightPercentage(100.f);
+            panel->setBackgroundColor(nvgRGBA(30, 30, 35, 50));
+            panel->setCornerRadius(12.f);
+            panel->setPadding(20.f);
+            panel->setAlignItems(brls::AlignItems::STRETCH);
+
+            auto closeAct = [this](brls::View *)
+            { _dismissSidePanel(1); return true; };
+
+            auto *hdr = new brls::Header();
+            hdr->setTitle("自定义画面设置");
+            panel->addView(hdr);
+
+            // 从 entry 读取当前值
+            float initX = m_gameEntry.customOffsetX;
+            float initY = m_gameEntry.customOffsetY;
+            float initScale = m_gameEntry.customScale > 0.f ? m_gameEntry.customScale : 1.f;
+
+            auto *hdrX = new brls::Header();
+            hdrX->setTitle("X轴偏移");
+            panel->addView(hdrX);
+            auto *xBtn = new beiklive::NumberButton();
+            xBtn->setText("");
+            xBtn->setValue(initX);
+            xBtn->setStep(1.f);
+            xBtn->setDecimal(-1);
+            xBtn->setOnChange([this](double v)
+                              {
             m_gameEntry.customOffsetX = (float)v;
             if (m_customScaleCallback) m_customScaleCallback(m_gameEntry.customOffsetX, m_gameEntry.customOffsetY, m_gameEntry.customScale);
-            if (m_displayModeCallback) m_displayModeCallback("custom");
-        });
-        xBtn->registerAction("关闭", brls::BUTTON_B, closeAct);
-        panel->addView(xBtn);
+            if (m_displayModeCallback) m_displayModeCallback("custom"); });
+            xBtn->registerAction("关闭", brls::BUTTON_B, closeAct);
+            panel->addView(xBtn);
 
-        auto* hdrY = new brls::Header();
-        hdrY->setTitle("Y轴偏移");
-        panel->addView(hdrY);
-        auto* yBtn = new beiklive::NumberButton();
-        yBtn->setText("");
-        yBtn->setValue(initY);
-        yBtn->setStep(1.f);
-        yBtn->setDecimal(-1);
-        yBtn->setOnChange([this](double v) {
+            auto *hdrY = new brls::Header();
+            hdrY->setTitle("Y轴偏移");
+            panel->addView(hdrY);
+            auto *yBtn = new beiklive::NumberButton();
+            yBtn->setText("");
+            yBtn->setValue(initY);
+            yBtn->setStep(1.f);
+            yBtn->setDecimal(-1);
+            yBtn->setOnChange([this](double v)
+                              {
             m_gameEntry.customOffsetY = (float)v;
             if (m_customScaleCallback) m_customScaleCallback(m_gameEntry.customOffsetX, m_gameEntry.customOffsetY, m_gameEntry.customScale);
-            if (m_displayModeCallback) m_displayModeCallback("custom");
-        });
-        yBtn->registerAction("关闭", brls::BUTTON_B, closeAct);
-        panel->addView(yBtn);
+            if (m_displayModeCallback) m_displayModeCallback("custom"); });
+            yBtn->registerAction("关闭", brls::BUTTON_B, closeAct);
+            panel->addView(yBtn);
 
-        auto* hdrS = new brls::Header();
-        hdrS->setTitle("缩放比例");
-        panel->addView(hdrS);
-        auto* sBtn = new beiklive::NumberButton();
-        sBtn->setText("");
-        sBtn->setValue(initScale);
-        sBtn->setStep(0.1f);
-        sBtn->setDecimal(1);
-        sBtn->setOnChange([this](double v) {
+            auto *hdrS = new brls::Header();
+            hdrS->setTitle("缩放比例");
+            panel->addView(hdrS);
+            auto *sBtn = new beiklive::NumberButton();
+            sBtn->setText("");
+            sBtn->setValue(initScale);
+            sBtn->setStep(0.1f);
+            sBtn->setDecimal(1);
+            sBtn->setOnChange([this](double v)
+                              {
             m_gameEntry.customScale = (float)v;
             if (m_customScaleCallback) m_customScaleCallback(m_gameEntry.customOffsetX, m_gameEntry.customOffsetY, m_gameEntry.customScale);
-            if (m_displayModeCallback) m_displayModeCallback("custom");
-        });
-        sBtn->registerAction("关闭", brls::BUTTON_B, closeAct);
-        panel->addView(sBtn);
+            if (m_displayModeCallback) m_displayModeCallback("custom"); });
+            sBtn->registerAction("关闭", brls::BUTTON_B, closeAct);
+            panel->addView(sBtn);
 
-        // 重置按钮
-        auto* resetBtn = new beiklive::ButtonBox();
-        resetBtn->setText("重置为默认值");
-        resetBtn->registerClickAction([xBtn, yBtn, sBtn, initX, initY, initScale, this](brls::View*) -> bool {
+            // 重置按钮
+            auto *resetBtn = new beiklive::ButtonBox();
+            resetBtn->setText("重置为默认值");
+            resetBtn->registerClickAction([xBtn, yBtn, sBtn, initX, initY, initScale, this](brls::View *) -> bool
+                                          {
             xBtn->setValue(initX);
             yBtn->setValue(initY);
             sBtn->setValue(initScale);
@@ -707,127 +995,52 @@ namespace beiklive
             m_gameEntry.customScale = initScale;
             if (m_customScaleCallback) m_customScaleCallback(initX, initY, initScale);
             if (m_displayModeCallback) m_displayModeCallback("custom");
-            return true;
-        });
-        panel->addView(resetBtn);
+            return true; });
+            panel->addView(resetBtn);
 
-        auto* saveBtn = new beiklive::ButtonBox();
-        saveBtn->setText("保存到存档");
-        saveBtn->registerClickAction([closeAct](brls::View*) -> bool {
+            auto *saveBtn = new beiklive::ButtonBox();
+            saveBtn->setText("保存到存档");
+            saveBtn->registerClickAction([closeAct](brls::View *) -> bool
+                                         {
             closeAct(nullptr);
-            return true;
-        });
-        panel->addView(saveBtn);
+            return true; });
+            panel->addView(saveBtn);
 
-        m_sidePanel->registerAction("关闭", brls::BUTTON_B, closeAct);
-        row->addView(panel);
-        m_sidePanel->addView(row);
-        this->addView(m_sidePanel);
-        brls::Application::giveFocus(xBtn);
+            m_CustomSidePanel->registerAction("关闭", brls::BUTTON_B, closeAct);
+            row->addView(panel);
+            m_CustomSidePanel->addView(row);
+            this->addView(m_CustomSidePanel);
+        }
+
+        return wrapper;
     }
 
-        // ============================================================
+    // ============================================================
+    // _openCustomScaleSettings - 自定义缩放子界面
+    // ============================================================
+    void GameMenuView::_openCustomScaleSettings()
+    {
+        m_CustomSidePanel->setVisibility(brls::Visibility::VISIBLE);
+        m_panel->setVisibility(brls::Visibility::GONE);
+        this->showHeader(false);
+        this->showFooter(false);
+        this->setBackgroundColor(nvgRGBA(0, 0, 0, 10));
+
+        brls::Application::giveFocus(m_CustomSidePanel);
+    }
+
+    // ============================================================
     // _openShaderSettings – 着色器设置侧边栏
     // ============================================================
     void GameMenuView::_openShaderSettings()
     {
-        _dismissSidePanel();
+        m_ShaderSidePanel->setVisibility(brls::Visibility::VISIBLE);
+        m_panel->setVisibility(brls::Visibility::GONE);
+        this->showHeader(false);
+        this->showFooter(false);
         this->setBackgroundColor(nvgRGBA(0, 0, 0, 10));
 
-        m_sidePanel = new brls::Box(brls::Axis::COLUMN);
-        m_sidePanel->setHideHighlight(true);
-        m_sidePanel->setPositionType(brls::PositionType::ABSOLUTE);
-        m_sidePanel->setPositionTop(0); m_sidePanel->setPositionLeft(0);
-        m_sidePanel->setWidthPercentage(100.f); m_sidePanel->setHeightPercentage(100.f);
-        m_sidePanel->setBackgroundColor(nvgRGBA(0, 0, 0, 60));
-        m_sidePanel->setFocusable(false);
-
-        auto* row = new brls::Box(brls::Axis::ROW);
-        row->setGrow(1.f);
-        row->setJustifyContent(brls::JustifyContent::FLEX_END);
-        row->setFocusable(false);
-
-        auto* panel = new brls::Box(brls::Axis::COLUMN);
-        panel->setWidth(380.f);
-        panel->setHeightPercentage(100.f);
-        panel->setBackgroundColor(nvgRGBA(30, 30, 35, 50));
-        panel->setCornerRadius(12.f);
-        panel->setPadding(20.f);
-        panel->setAlignItems(brls::AlignItems::STRETCH);
-
-        auto closeAct = [this](brls::View*) { _dismissSidePanel(); return true; };
-
-        auto* hdr = new brls::Header();
-        hdr->setTitle("着色器设置");
-        panel->addView(hdr);
-
-        bool shaderOn = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_DISPLAY_SHADER_ENABLED, 0) && m_gameEntry.shaderEnabled;
-        auto* toggleCell = new brls::BooleanCell();
-        toggleCell->init("启用着色器", shaderOn,
-            [this](bool v) {
-                m_gameEntry.shaderEnabled = v;
-                if (m_shaderToggleCallback) m_shaderToggleCallback(v);
-            });
-        toggleCell->registerAction("关闭", brls::BUTTON_B, closeAct);
-        panel->addView(toggleCell);
-
-        auto* hdr2 = new brls::Header();
-        hdr2->setTitle("选择着色器文件");
-        panel->addView(hdr2);
-
-        auto* pathCell = new brls::DetailCell();
-        pathCell->setText("");
-        std::string curShader = m_gameEntry.shaderPath;
-        pathCell->setDetailText(curShader.empty() ? "未设置" : beiklive::tools::getFileName(curShader));
-        pathCell->registerAction("选择", brls::BUTTON_A,
-            [pathCell, this](brls::View*) -> bool {
-                std::string dir = m_gameEntry.shaderPath;
-                auto pos = dir.rfind(beiklive::path::SPLIT_CHAR);
-                if (pos != std::string::npos) dir = dir.substr(0, pos); else dir = "";
-                beiklive::openFilePicker({"glslp", "glsl"},
-                    [pathCell, this](const std::string& path) {
-                        m_gameEntry.shaderPath = path;
-                        pathCell->setDetailText(beiklive::tools::getFileName(path));
-                        if (m_shaderPathCallback) m_shaderPathCallback(path);
-                    }, dir);
-                return true;
-            });
-        pathCell->registerAction("关闭", brls::BUTTON_B, closeAct);
-        panel->addView(pathCell);
-
-        if (m_shaderParamsCallback) {
-            auto params = m_shaderParamsCallback();
-            if (!params.empty()) {
-                auto* div = new brls::Rectangle(nvgRGBA(255, 255, 255, 40));
-                div->setWidthPercentage(100.f); div->setHeight(1.f);
-                div->setMarginTop(12.f); div->setMarginBottom(12.f);
-                panel->addView(div);
-
-                auto* paramHdr = new brls::Header();
-                paramHdr->setTitle("着色器参数");
-                panel->addView(paramHdr);
-
-                for (const auto& p : params) {
-                    auto* btn = new beiklive::NumberButton();
-                    btn->setText(p.desc);
-                    btn->setValue(static_cast<double>(p.value));
-                    btn->setStep(static_cast<double>(p.step));
-                    btn->setDecimal(2);
-                    std::string pname = p.name;
-                    btn->setOnChange([this, pname](double v) {
-                        if (m_shaderParamCallback) m_shaderParamCallback(pname, static_cast<float>(v));
-                    });
-                    btn->registerAction("关闭", brls::BUTTON_B, closeAct);
-                    panel->addView(btn);
-                }
-            }
-        }
-
-        m_sidePanel->registerAction("关闭", brls::BUTTON_B, closeAct);
-        row->addView(panel);
-        m_sidePanel->addView(row);
-        this->addView(m_sidePanel);
-        brls::Application::giveFocus(toggleCell);
+        brls::Application::giveFocus(m_ShaderSidePanel);
     }
 
     // ============================================================
@@ -835,83 +1048,37 @@ namespace beiklive
     // ============================================================
     void GameMenuView::_openOverlaySettings()
     {
-        _dismissSidePanel();
-        this->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
+        m_OverlaySidePanel->setVisibility(brls::Visibility::VISIBLE);
+        m_panel->setVisibility(brls::Visibility::GONE);
+        this->showHeader(false);
+        this->showFooter(false);
+        this->setBackgroundColor(nvgRGBA(0, 0, 0, 10));
 
-        m_sidePanel = new brls::Box(brls::Axis::COLUMN);
-        m_sidePanel->setHideHighlight(true);
-        m_sidePanel->setPositionType(brls::PositionType::ABSOLUTE);
-        m_sidePanel->setPositionTop(0); m_sidePanel->setPositionLeft(0);
-        m_sidePanel->setWidthPercentage(100.f); m_sidePanel->setHeightPercentage(100.f);
-        m_sidePanel->setBackgroundColor(nvgRGBA(0, 0, 0, 60));
-        m_sidePanel->setFocusable(false);
-
-        auto* row = new brls::Box(brls::Axis::ROW);
-        row->setGrow(1.f);
-        row->setJustifyContent(brls::JustifyContent::FLEX_END);
-        row->setFocusable(false);
-
-        auto* panel = new brls::Box(brls::Axis::COLUMN);
-        panel->setWidth(380.f);
-        panel->setHeightPercentage(100.f);
-        panel->setBackgroundColor(nvgRGBA(30, 30, 35, 255));
-        panel->setCornerRadius(12.f);
-        panel->setPadding(20.f);
-        panel->setAlignItems(brls::AlignItems::STRETCH);
-
-        auto closeAct = [this](brls::View*) { _dismissSidePanel(); return true; };
-
-        auto* hdr = new brls::Header();
-        hdr->setTitle("遮罩设置");
-        panel->addView(hdr);
-
-        auto* toggleCell = new brls::BooleanCell();
-        toggleCell->init("启用遮罩", m_gameEntry.overlayEnabled,
-            [this](bool v) {
-                m_gameEntry.overlayEnabled = v;
-                if (m_overlayToggleCallback) m_overlayToggleCallback(v);
-            });
-        toggleCell->registerAction("关闭", brls::BUTTON_B, closeAct);
-        panel->addView(toggleCell);
-
-        auto* hdr2 = new brls::Header();
-        hdr2->setTitle("选择遮罩图片");
-        panel->addView(hdr2);
-
-        auto* pathCell = new brls::DetailCell();
-        pathCell->setText("");
-        pathCell->setDetailText(m_gameEntry.overlayPath.empty() ? "未设置"
-            : beiklive::tools::getFileName(m_gameEntry.overlayPath));
-        pathCell->registerAction("选择", brls::BUTTON_A,
-            [pathCell, this](brls::View*) -> bool {
-                std::string dir = m_gameEntry.overlayPath;
-                auto pos = dir.rfind(beiklive::path::SPLIT_CHAR);
-                if (pos != std::string::npos) dir = dir.substr(0, pos); else dir = "";
-                beiklive::openFilePicker({"png"},
-                    [pathCell, this](const std::string& path) {
-                        m_gameEntry.overlayPath = path;
-                        pathCell->setDetailText(beiklive::tools::getFileName(path));
-                        if (m_overlayPathCallback) m_overlayPathCallback(path);
-                    }, dir);
-                return true;
-            });
-        pathCell->registerAction("关闭", brls::BUTTON_B, closeAct);
-        panel->addView(pathCell);
-
-        m_sidePanel->registerAction("关闭", brls::BUTTON_B, closeAct);
-        row->addView(panel);
-        m_sidePanel->addView(row);
-        this->addView(m_sidePanel);
-        brls::Application::giveFocus(toggleCell);
+        brls::Application::giveFocus(m_OverlaySidePanel);
     }
 
-    void GameMenuView::_dismissSidePanel()
+    void GameMenuView::_dismissSidePanel(int idx)
     {
-        if (m_sidePanel)
+
+        switch (idx)
         {
-            m_sidePanel->removeFromSuperView(true);
-            m_sidePanel = nullptr;
+        case 1:
+            m_CustomSidePanel->setVisibility(brls::Visibility::GONE);
+            break;
+        case 2:
+            m_OverlaySidePanel->setVisibility(brls::Visibility::GONE);
+            break;
+        case 3:
+            m_ShaderSidePanel->setVisibility(brls::Visibility::GONE);
+            break;
+        default:
+            // 处理所有侧边栏
+            break;
         }
+
+        m_panel->setVisibility(brls::Visibility::VISIBLE);
+        this->showHeader(true);
+        this->showFooter(true);
         this->setBackgroundColor(nvgRGBA(0, 0, 0, 240));
         brls::Application::giveFocus(m_panel->getDefaultFocus());
     }

@@ -8,6 +8,7 @@
 #include "Box.hpp"
 #include "GridItem.hpp"
 #include "FunctionButtons.hpp"
+#include "HintsBar.hpp"
 #include "game/render/GLSLPParser.hpp"
 namespace beiklive
 {
@@ -111,9 +112,12 @@ namespace beiklive
             void _openCustomScaleSettings();
 
             /// 清除当前侧边栏面板
-            void _dismissSidePanel();
+            void _dismissSidePanel(int idx = -1); // idx=-1=全部
 
-            brls::Box* m_sidePanel = nullptr;  ///< 当前打开的侧边栏 overlay
+            brls::Box* m_ShaderParamBox = nullptr; ///< 着色器参数面板
+            brls::Box* m_ShaderSidePanel = nullptr;  ///< 当前打开的侧边栏 overlay
+            brls::Box* m_OverlaySidePanel = nullptr;  ///< 当前打开的侧边栏 overlay
+            brls::Box* m_CustomSidePanel = nullptr;  ///< 当前打开的侧边栏 overlay
     };
 
 } // namespace beiklive
