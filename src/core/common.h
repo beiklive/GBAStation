@@ -91,6 +91,7 @@ namespace beiklive // 全局功能函数
         if (gw <= 0.f || gh <= 0.f) return r;
 
         float scale = 1.0f;
+        bool useOffsets = false;
         switch (mode)
         {
             case ScreenMode::Fit:
@@ -99,8 +100,8 @@ namespace beiklive // 全局功能函数
             case ScreenMode::Fill:
                 r.w = viewW;
                 r.h = viewH;
-                r.x = viewX + xOffset;
-                r.y = viewY + yOffset;
+                r.x = viewX;
+                r.y = viewY;
                 return r;
             case ScreenMode::IntegerScale:
                 if (integerScaleMult > 0)
@@ -112,13 +113,14 @@ namespace beiklive // 全局功能函数
                 break;
             case ScreenMode::FreeScale:
                 scale = customScale;
+                useOffsets = true;
                 break;
         }
 
         r.w = gw * scale;
         r.h = gh * scale;
-        r.x = viewX + (viewW - r.w) * 0.5f + xOffset;
-        r.y = viewY + (viewH - r.h) * 0.5f + yOffset;
+        r.x = viewX + (viewW - r.w) * 0.5f + (useOffsets ? xOffset : 0.f);
+        r.y = viewY + (viewH - r.h) * 0.5f + (useOffsets ? yOffset : 0.f);
         return r;
     }
 
