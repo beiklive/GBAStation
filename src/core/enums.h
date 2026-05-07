@@ -145,31 +145,31 @@ namespace beiklive // 结构体
     };
 
     // 方向键
-    #define UP_FLAG        0x00000001
-    #define DOWN_FLAG      0x00000002
-    #define LEFT_FLAG      0x00000004
-    #define RIGHT_FLAG     0x00000008
+    constexpr uint32_t UP_FLAG    = 0x00000001;
+    constexpr uint32_t DOWN_FLAG  = 0x00000002;
+    constexpr uint32_t LEFT_FLAG  = 0x00000004;
+    constexpr uint32_t RIGHT_FLAG = 0x00000008;
 
     // ABXY
-    #define A_FLAG         0x00000010
-    #define B_FLAG         0x00000020
-    #define X_FLAG         0x00000040
-    #define Y_FLAG         0x00000080
+    constexpr uint32_t A_FLAG = 0x00000010;
+    constexpr uint32_t B_FLAG = 0x00000020;
+    constexpr uint32_t X_FLAG = 0x00000040;
+    constexpr uint32_t Y_FLAG = 0x00000080;
 
     // 功能键
-    #define BACK_FLAG      0x00000100
-    #define PLAY_FLAG      0x00000200
+    constexpr uint32_t BACK_FLAG = 0x00000100;
+    constexpr uint32_t PLAY_FLAG = 0x00000200;
 
     // 肩键
-    #define LB_FLAG        0x00000400
-    #define RB_FLAG        0x00000800
+    constexpr uint32_t LB_FLAG = 0x00000400;
+    constexpr uint32_t RB_FLAG = 0x00000800;
 
     // 摇杆按压
-    #define LS_CLK_FLAG    0x00001000
-    #define RS_CLK_FLAG    0x00002000
+    constexpr uint32_t LS_CLK_FLAG = 0x00001000;
+    constexpr uint32_t RS_CLK_FLAG = 0x00002000;
 
     // 存储键值 pad.retro.xxx  = [[], []]
-    static const RetroNameMap k_retroNames[] = {
+    inline constexpr RetroNameMap k_retroNames[] = {
         { "a",      RETRO_DEVICE_ID_JOYPAD_A      },
         { "b",      RETRO_DEVICE_ID_JOYPAD_B      },
         { "x",      RETRO_DEVICE_ID_JOYPAD_X      },
@@ -228,7 +228,7 @@ namespace beiklive // 结构体
         HOLD,         // 按住持续触发
         RELEASE       // 松开触发一次
     };
-    static const RetroNameMap k_emuNames[] = {
+    inline constexpr RetroNameMap k_emuNames[] = {
         { "fastforward",    EMU_FAST_FORWARD    },
         { "rewind",         EMU_REWIND          },
         { "quicksave",      EMU_QUICK_SAVE      },
@@ -270,7 +270,7 @@ namespace beiklive // 结构体
         STATE_PAD_RIGHT_STICK_RIGHT  // 右摇杆向右
     };
     // 手柄字符值与 GameInputPad 的映射表
-    static const RetroNameMap k_gameInputNames[] = {
+    inline constexpr RetroNameMap k_gameInputNames[] = {
         { "PAD_A",               STATE_PAD_A                 },
         { "PAD_B",               STATE_PAD_B                 },
         { "PAD_X",               STATE_PAD_X                 },
@@ -302,7 +302,7 @@ namespace beiklive // 结构体
     };
 
     /// 键盘按键名 → BrlsKeyboardScancode
-    static const RetroNameMap k_kbdInputNames[] = {
+    inline constexpr RetroNameMap k_kbdInputNames[] = {
         { "A",  brls::BRLS_KBD_KEY_A }, { "B", brls::BRLS_KBD_KEY_B },
         { "C",  brls::BRLS_KBD_KEY_C }, { "D", brls::BRLS_KBD_KEY_D },
         { "E",  brls::BRLS_KBD_KEY_E }, { "F", brls::BRLS_KBD_KEY_F },

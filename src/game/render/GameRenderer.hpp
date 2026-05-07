@@ -98,6 +98,7 @@ public:
 private:
     GameTexture  m_texture;     ///< 游戏帧 GL 纹理
     RenderChain  m_renderChain; ///< 渲染链（含着色器管线和直接渲染器）
+    bool         m_linear = false; ///< 当前纹理过滤模式
 };
 
 } // namespace beiklive

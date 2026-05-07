@@ -563,11 +563,12 @@ namespace beiklive
         auto it = crc32Index_.find(entry.crc32);
         if (it != crc32Index_.end())
         {
-            // 更新已有条目
+            // 更新已有条目：先保存旧路径再赋值，否则旧路径信息被覆盖丢失
+            std::string oldPath = data_[it->second].path;
             data_[it->second] = entry;
-            if (data_[it->second].path != entry.path)
+            if (oldPath != entry.path)
             {
-                pathIndex_.erase(data_[it->second].path);
+                pathIndex_.erase(oldPath);
                 pathIndex_[entry.path] = it->second;
             }
         }

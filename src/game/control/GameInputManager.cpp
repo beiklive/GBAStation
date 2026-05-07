@@ -162,6 +162,7 @@ namespace beiklive
         {
 #endif
             GamepadState gamepadState = getControllerState(i);
+            GamepadState prevGamepadState = lastGamepadStates[i];
             lastGamepadStates[i] = gamepadState;
             currentTime += 16;
 
@@ -181,7 +182,7 @@ namespace beiklive
             updateInputState();
             checkHotkeys();
 
-            if (!gamepadState.is_equal(lastGamepadStates[i]))
+            if (!gamepadState.is_equal(prevGamepadState))
             {
                 printactiveInputs();
 #ifdef __SWITCH__

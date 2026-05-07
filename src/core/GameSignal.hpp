@@ -188,6 +188,7 @@ public:
         m_requestOpenRewindUI.store(false, std::memory_order_relaxed);
         m_pendingRewindRestore.store(-1, std::memory_order_relaxed);
         m_pendingCheatIdx.store(-1, std::memory_order_relaxed);
+        m_pendingCheatEnabled.store(false, std::memory_order_relaxed);
         m_gameButtonMask.store(0, std::memory_order_relaxed);
     }
 

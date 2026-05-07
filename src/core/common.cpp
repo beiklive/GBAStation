@@ -118,8 +118,7 @@ namespace beiklive
 
         SettingManager = new beiklive::ConfigManager(beiklive::path::configFilePath());
         NameMappingManager = new beiklive::ConfigManager(beiklive::path::mappingFilePath());
-        SettingManager->Load();
-        NameMappingManager->Load();
+        // ConfigManager 构造函数已调用 Load()，无需重复加载
 
         // 数据库初始化：优先使用平台分文件，回退到旧版单一文件（自动迁移）
         {
@@ -312,21 +311,22 @@ namespace beiklive
 
         if (!std::filesystem::exists(path))
         {
-            brls::Logger::info("GameView: no cheat file found at {}", path);
+            brls::Logger::info("parseChtFile: no cheat file found at {}", path);
             return result;
         }
 
-        std::ifstream f(path);
-        if (!f)
+        std::ifstream file(path);
+        if (!file)
         {
-            brls::Logger::warning("GameView: failed to open cheat file: {}", path);
+            brls::Logger::warning("parseChtFile: failed to open cheat file: {}",
+                                  path);
             return result;
         }
 
         std::string content;
         {
             std::ostringstream oss;
-            oss << f.rdbuf();
+            oss << file.rdbuf();
             content = oss.str();
         }
 
@@ -516,7 +516,7 @@ namespace beiklive
         std::ofstream f(path);
         if (!f)
         {
-            brls::Logger::warning("GameView: 无法写入金手指文件: {}", path);
+            brls::Logger::warning("saveChtFile: 无法写入金手指文件: {}", path);
             return false;
         }
 
@@ -529,6 +529,12 @@ namespace beiklive
             f << "cheat" << i << "_code = " << e.code << "\n\n";
         }
 
+        f.close();
+        if (!f.good())
+        {
+            brls::Logger::warning("saveChtFile: 写入金手指文件失败: {}", path);
+            return false;
+        }
         return true;
     }
 

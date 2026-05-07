@@ -12,6 +12,8 @@ namespace beiklive {
 bool GameRenderer::init(unsigned width, unsigned height, bool linear,
                          const std::string& shaderPath)
 {
+    m_linear = linear;
+
     // 初始化 GL 纹理
     if (!m_texture.init(width, height, linear)) {
         brls::Logger::error("GameRenderer: 游戏帧纹理初始化失败 ({}x{})", width, height);
@@ -50,8 +52,7 @@ void GameRenderer::uploadFrame(const LibretroLoader::VideoFrame& frame)
 
     // 若尺寸发生变化，重新初始化纹理
     if (frame.width != m_texture.width() || frame.height != m_texture.height()) {
-        bool linear = false; // 保持当前过滤模式
-        m_texture.init(frame.width, frame.height, linear);
+        m_texture.init(frame.width, frame.height, m_linear);
     }
 
     // 上传 RGBA8888 数据（LibretroLoader 已将帧数据转换为 RGBA8888）
@@ -66,6 +67,7 @@ void GameRenderer::uploadFrame(const LibretroLoader::VideoFrame& frame)
 // ============================================================
 void GameRenderer::setFilter(bool linear)
 {
+    m_linear = linear;
     m_texture.setFilter(linear);
 }
 
