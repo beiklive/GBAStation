@@ -886,6 +886,9 @@ namespace beiklive
                         m_gba_core->saveSram();
                     wasPaused = true;
                 }
+                // 暂停时仍可消费金手指重载信号（来自菜单关闭时的批量同步）
+                if (sig.consumeReloadCheats() && m_gba_core)
+                    m_gba_core->ReloadCheats();
                 std::this_thread::sleep_for(std::chrono::milliseconds(16));
                 auto now     = Clock::now();
                 nextFrameTarget = now;
@@ -934,6 +937,10 @@ namespace beiklive
             auto cheatReq = sig.consumeCheatToggle();
             if (cheatReq.pending && m_gba_core)
                 m_gba_core->ToggleCheat(cheatReq.idx, cheatReq.enabled);
+
+            // ---- 金手指重载 ----
+            if (sig.consumeReloadCheats() && m_gba_core)
+                m_gba_core->ReloadCheats();
 
             // ---- 从信号更新游戏按键状态 ----
             m_gba_core->SetButtonsFromSignal();

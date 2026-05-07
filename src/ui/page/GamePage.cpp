@@ -220,6 +220,7 @@ namespace beiklive
         // setOnResume和setOnExit回调由GamePage注入，触发时分别执行对应的动画和操作
         m_gameMenuView->setOnResume([this]() {
             brls::sync([this]() {
+                GameSignal::instance().requestReloadCheats();
                 m_gameView->setFocusable(true);
                 AnimationHelper::slideOutToBottom(m_gameMenuView, MENU_FADE_OUT_MS, 120.f,true, [this]() {
                     brls::Application::giveFocus(m_gameView);

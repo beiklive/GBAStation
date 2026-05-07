@@ -293,12 +293,6 @@ namespace beiklive::gba
                 m_core.cheatSet(static_cast<unsigned>(i), true, m_cheats[i].code);
             }
         }
-        std::string path = m_gameEntry.cheatPath;
-
-        if (!path.empty())
-        {
-            beiklive::saveChtFile(path, m_cheats);
-        }
     }
 
     bool CoreMgba::_saveSram()

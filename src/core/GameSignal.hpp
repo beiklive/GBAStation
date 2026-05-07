@@ -172,6 +172,16 @@ public:
         return {idx, en, true};
     }
 
+    // ---- 重载金手指信号 -------------------------------------------------
+
+    /// UI 线程调用：请求从文件重新加载全部金手指到核心。
+    void requestReloadCheats() { m_pendingReloadCheats.store(true, std::memory_order_release); }
+
+    /// 游戏线程调用：获取并消费金手指重载请求。
+    bool consumeReloadCheats() {
+        return m_pendingReloadCheats.exchange(false, std::memory_order_acq_rel);
+    }
+
     // ---- 全部重置 -------------------------------------------------------
 
     /// 重置所有信号到初始状态（一般在游戏启动前调用）。
@@ -189,6 +199,7 @@ public:
         m_pendingRewindRestore.store(-1, std::memory_order_relaxed);
         m_pendingCheatIdx.store(-1, std::memory_order_relaxed);
         m_pendingCheatEnabled.store(false, std::memory_order_relaxed);
+        m_pendingReloadCheats.store(false, std::memory_order_relaxed);
         m_gameButtonMask.store(0, std::memory_order_relaxed);
     }
 
@@ -206,6 +217,7 @@ private:
     std::atomic<int>  m_pendingRewindRestore{-1};   ///< 待恢复的倒带帧索引（-1=无）
     std::atomic<int>  m_pendingCheatIdx{-1};          ///< 待切换的金手指索引
     std::atomic<bool> m_pendingCheatEnabled{false};   ///< 待切换的金手指启用状态
+    std::atomic<bool> m_pendingReloadCheats{false};   ///< 待重载全部金手指
     std::atomic<uint32_t> m_gameButtonMask{0};  ///< 游戏按键位掩码（bit i = RETRO_DEVICE_ID_JOYPAD_* i）
 };
 
