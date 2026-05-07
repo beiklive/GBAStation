@@ -208,10 +208,10 @@ uint32_t crc32(const std::string& path)
 std::string getTimestampString() {
     auto now = std::chrono::system_clock::now();
     std::time_t now_time_t = std::chrono::system_clock::to_time_t(now);
-    std::tm now_tm;
-    localtime_r(&now_time_t, &now_tm);
+    std::tm* now_tm = std::localtime(&now_time_t);
     char buf[64];
-    std::strftime(buf, sizeof(buf), "%y-%m-%d %H-%M-%S", &now_tm);
+    // 存储格式使用 "yy-mm-dd HH-MM-SS"，便于字符串字典序排序
+    std::strftime(buf, sizeof(buf), "%y-%m-%d %H-%M-%S", now_tm);
     return std::string(buf);
 }
 
@@ -242,10 +242,10 @@ std::string getFileModTimeStr(const std::string& path) {
         ftime - fs::file_time_type::clock::now() +
         std::chrono::system_clock::now());
     std::time_t tt = std::chrono::system_clock::to_time_t(sctp);
-    std::tm tm;
-    localtime_r(&tt, &tm);
     char buf[64];
-    std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm);
+    std::tm* tm = std::localtime(&tt);
+    if (!tm) return "";
+    std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", tm);
     return std::string(buf);
 }
 

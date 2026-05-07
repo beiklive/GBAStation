@@ -185,7 +185,9 @@ namespace beiklive
                 if (!m_overlayImage)
                 {
                     m_overlayImage = new brls::Image();
-                    m_overlayImage->setScalingType(brls::ImageScalingType::FILL);
+                    m_overlayImage->setScalingType(brls::ImageScalingType::STRETCH);
+                    m_overlayImage->setWidth(1280.f);
+                    m_overlayImage->setHeight(720.f);
                 }
                 if (!m_overlayImage->getTexture() && std::filesystem::exists(m_gameEntry.overlayPath))
                     m_overlayImage->setImageFromFile(m_gameEntry.overlayPath);
