@@ -613,7 +613,7 @@ namespace beiklive
     void GameMenuView::_openCustomScaleSettings()
     {
         _dismissSidePanel();
-        this->setBackgroundColor(nvgRGBA(0, 0, 0, 25));
+        this->setBackgroundColor(nvgRGBA(0, 0, 0, 10));
 
         m_sidePanel = new brls::Box(brls::Axis::COLUMN);
         m_sidePanel->setHideHighlight(true);
@@ -631,7 +631,7 @@ namespace beiklive
         auto* panel = new brls::Box(brls::Axis::COLUMN);
         panel->setWidth(380.f);
         panel->setHeightPercentage(100.f);
-        panel->setBackgroundColor(nvgRGBA(30, 30, 35, 255));
+        panel->setBackgroundColor(nvgRGBA(30, 30, 35, 50));
         panel->setCornerRadius(12.f);
         panel->setPadding(20.f);
         panel->setAlignItems(brls::AlignItems::STRETCH);
@@ -732,7 +732,7 @@ namespace beiklive
     void GameMenuView::_openShaderSettings()
     {
         _dismissSidePanel();
-        this->setBackgroundColor(nvgRGBA(0, 0, 0, 25));
+        this->setBackgroundColor(nvgRGBA(0, 0, 0, 10));
 
         m_sidePanel = new brls::Box(brls::Axis::COLUMN);
         m_sidePanel->setHideHighlight(true);
@@ -750,7 +750,7 @@ namespace beiklive
         auto* panel = new brls::Box(brls::Axis::COLUMN);
         panel->setWidth(380.f);
         panel->setHeightPercentage(100.f);
-        panel->setBackgroundColor(nvgRGBA(30, 30, 35, 255));
+        panel->setBackgroundColor(nvgRGBA(30, 30, 35, 50));
         panel->setCornerRadius(12.f);
         panel->setPadding(20.f);
         panel->setAlignItems(brls::AlignItems::STRETCH);
@@ -761,11 +761,11 @@ namespace beiklive
         hdr->setTitle("着色器设置");
         panel->addView(hdr);
 
-        bool shaderOn = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_DISPLAY_SHADER_ENABLED, 0) != 0;
+        bool shaderOn = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_DISPLAY_SHADER_ENABLED, 0) && m_gameEntry.shaderEnabled;
         auto* toggleCell = new brls::BooleanCell();
         toggleCell->init("启用着色器", shaderOn,
             [this](bool v) {
-                SET_SETTING_KEY_INT(beiklive::SettingKey::KEY_DISPLAY_SHADER_ENABLED, v ? 1 : 0);
+                m_gameEntry.shaderEnabled = v;
                 if (m_shaderToggleCallback) m_shaderToggleCallback(v);
             });
         toggleCell->registerAction("关闭", brls::BUTTON_B, closeAct);
@@ -777,16 +777,16 @@ namespace beiklive
 
         auto* pathCell = new brls::DetailCell();
         pathCell->setText("");
-        std::string curShader = GET_SETTING_KEY_STR(beiklive::SettingKey::KEY_DISPLAY_SHADER_PATH, "");
+        std::string curShader = m_gameEntry.shaderPath;
         pathCell->setDetailText(curShader.empty() ? "未设置" : beiklive::tools::getFileName(curShader));
         pathCell->registerAction("选择", brls::BUTTON_A,
             [pathCell, this](brls::View*) -> bool {
-                std::string dir = GET_SETTING_KEY_STR(beiklive::SettingKey::KEY_DISPLAY_SHADER_PATH, "");
+                std::string dir = m_gameEntry.shaderPath;
                 auto pos = dir.rfind("/");
                 if (pos != std::string::npos) dir = dir.substr(0, pos); else dir = "";
                 beiklive::openFilePicker({"glslp", "glsl"},
                     [pathCell, this](const std::string& path) {
-                        SET_SETTING_KEY_STR(beiklive::SettingKey::KEY_DISPLAY_SHADER_PATH, path);
+                        m_gameEntry.shaderPath = path;
                         pathCell->setDetailText(beiklive::tools::getFileName(path));
                         if (m_shaderPathCallback) m_shaderPathCallback(path);
                     }, dir);
@@ -836,7 +836,7 @@ namespace beiklive
     void GameMenuView::_openOverlaySettings()
     {
         _dismissSidePanel();
-        this->setBackgroundColor(nvgRGBA(0, 0, 0, 25));
+        this->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
 
         m_sidePanel = new brls::Box(brls::Axis::COLUMN);
         m_sidePanel->setHideHighlight(true);

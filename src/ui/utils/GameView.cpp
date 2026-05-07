@@ -148,6 +148,7 @@ namespace beiklive
             std::string shaderPath;
             if (m_gameEntry.shaderEnabled && !m_gameEntry.shaderPath.empty()) {
                 shaderPath = m_gameEntry.shaderPath;
+                // _onShaderToggle(true); // 同步着色器开关状态，确保启用着色器
             }
             if (m_renderer.init(gw, gh, false, shaderPath)) {
                 m_rendererReady = true;
@@ -848,6 +849,11 @@ namespace beiklive
         m_autoSaveTimer = Clock::now();
         bool autoLoadDone = false;
 
+
+        // 读取shader开关配置
+        // _onShaderToggle(GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_DISPLAY_SHADER_ENABLED, 0));
+
+
         while (m_running.load(std::memory_order_acquire))
         {
             auto& sig = GameSignal::instance();
@@ -1223,9 +1229,16 @@ namespace beiklive
     void GameView::_onShaderToggle(bool on)
     {
         if (!m_rendererReady) return;
+
+        m_gameEntry.shaderEnabled = on;
+        // 持久化到数据库
+        if (beiklive::GameDB && m_gameEntry.crc32 != 0) {
+            beiklive::GameDB->set(m_gameEntry.crc32, "shaderEnabled",
+                nlohmann::json(m_gameEntry.shaderEnabled));
+        }
+        brls::Logger::debug("GameView: Shader {} (enabled={})", m_gameEntry.shaderPath, m_gameEntry.shaderEnabled);
         if (on) {
-            std::string path = GET_SETTING_KEY_STR(
-                beiklive::SettingKey::KEY_DISPLAY_SHADER_PATH, "");
+            std::string path = m_gameEntry.shaderPath;
             if (!path.empty())
                 m_renderer.setShader(path);
         } else {
@@ -1236,8 +1249,14 @@ namespace beiklive
     void GameView::_onShaderPathChange(const std::string& path)
     {
         if (!m_rendererReady) return;
-        bool shaderOn = GET_SETTING_KEY_INT(
-            beiklive::SettingKey::KEY_DISPLAY_SHADER_ENABLED, 0) != 0;
+        bool shaderOn = m_gameEntry.shaderEnabled;
+        m_gameEntry.shaderPath = path;
+        brls::Logger::debug("GameView: Shader path changed to {} (enabled={})", m_gameEntry.shaderPath, shaderOn);
+        // 持久化到数据库
+        if (beiklive::GameDB && m_gameEntry.crc32 != 0) {
+            beiklive::GameDB->set(m_gameEntry.crc32, "shaderPath",
+                nlohmann::json(m_gameEntry.shaderPath));
+        }
         if (shaderOn && !path.empty())
             m_renderer.setShader(path);
         else if (!shaderOn)

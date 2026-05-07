@@ -290,6 +290,10 @@ namespace beiklive
         m_gameMenuView->setShaderToggleCallback([this](bool on) {
             if (m_gameView) m_gameView->_onShaderToggle(on);
         });
+        //setShaderPathCallback
+        m_gameMenuView->setShaderPathCallback([this](const std::string& path) {
+            if (m_gameView) m_gameView->_onShaderPathChange(path);
+        });
         // 注入着色器参数回调
         m_gameMenuView->setShaderParamsCallback([this]() -> std::vector<ShaderParamInfo> {
             if (m_gameView) return m_gameView->_getShaderParams();
