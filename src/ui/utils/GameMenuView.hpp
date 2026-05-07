@@ -52,6 +52,10 @@ namespace beiklive
 
             /// 自定义缩放/偏移变更回调：将 x/y/scale 同步到 GameView
             void setCustomScaleCallback(std::function<void(float, float, float)> cb) { m_customScaleCallback = std::move(cb); }
+            /// 遮罩开关回调
+            void setOverlayToggleCallback(std::function<void(bool)> cb) { m_overlayToggleCallback = std::move(cb); }
+            /// 遮罩路径变更回调
+            void setOverlayPathCallback(std::function<void(const std::string&)> cb) { m_overlayPathCallback = std::move(cb); }
 
         private:
             beiklive::GameEntry m_gameEntry;
@@ -67,6 +71,8 @@ namespace beiklive
             std::function<std::vector<ShaderParamInfo>()> m_shaderParamsCallback;
             std::function<void(const std::string&, float)> m_shaderParamCallback;
             std::function<void(float, float, float)> m_customScaleCallback; ///< custom x/y/scale 变更回调
+            std::function<void(bool)> m_overlayToggleCallback;        ///< 遮罩开关回调
+            std::function<void(const std::string&)> m_overlayPathCallback; ///< 遮罩路径变更回调
 
             beiklive::TabFrame* m_panel = nullptr;
             brls::Label* m_title = nullptr;

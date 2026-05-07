@@ -88,6 +88,10 @@ namespace beiklive
             void _onDisplayModeChange(const std::string& mode);
             /// 自定义缩放/偏移变更（UI线程调用）
             void _onCustomValuesChanged(float x, float y, float scale);
+            /// 遮罩开关变更（UI线程调用）
+            void _onOverlayToggle(bool enabled);
+            /// 遮罩路径变更（UI线程调用）
+            void _onOverlayPathChange(const std::string& path);
             /// 纹理过滤变更（UI线程调用）
             void _onFilterChange(const std::string& filter);
             /// 获取着色器参数列表

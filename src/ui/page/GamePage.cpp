@@ -278,6 +278,12 @@ namespace beiklive
         m_gameMenuView->setCustomScaleCallback([this](float x, float y, float scale) {
             if (m_gameView) m_gameView->_onCustomValuesChanged(x, y, scale);
         });
+        m_gameMenuView->setOverlayToggleCallback([this](bool enabled) {
+            if (m_gameView) m_gameView->_onOverlayToggle(enabled);
+        });
+        m_gameMenuView->setOverlayPathCallback([this](const std::string& path) {
+            if (m_gameView) m_gameView->_onOverlayPathChange(path);
+        });
         m_gameMenuView->setFilterCallback([this](const std::string& filter) {
             if (m_gameView) m_gameView->_onFilterChange(filter);
         });

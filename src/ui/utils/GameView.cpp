@@ -1276,6 +1276,26 @@ namespace beiklive
         }
     }
 
+    void GameView::_onOverlayToggle(bool enabled)
+    {
+        m_gameEntry.overlayEnabled = enabled;
+        if (beiklive::GameDB && m_gameEntry.crc32 != 0) {
+            beiklive::GameDB->set(m_gameEntry.crc32, "overlayEnabled",
+                nlohmann::json(enabled));
+        }
+    }
+
+    void GameView::_onOverlayPathChange(const std::string& path)
+    {
+        m_gameEntry.overlayPath = path;
+        // 清除已缓存的遮罩纹理，使其重新加载
+        if (m_overlayImage) m_overlayImage->clear();
+        if (beiklive::GameDB && m_gameEntry.crc32 != 0) {
+            beiklive::GameDB->set(m_gameEntry.crc32, "overlayPath",
+                nlohmann::json(path));
+        }
+    }
+
     void GameView::_onFilterChange(const std::string& filter)
     {
         if (!m_rendererReady) return;

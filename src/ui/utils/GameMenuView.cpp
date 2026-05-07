@@ -867,7 +867,10 @@ namespace beiklive
 
         auto* toggleCell = new brls::BooleanCell();
         toggleCell->init("启用遮罩", m_gameEntry.overlayEnabled,
-            [this](bool v) { m_gameEntry.overlayEnabled = v; });
+            [this](bool v) {
+                m_gameEntry.overlayEnabled = v;
+                if (m_overlayToggleCallback) m_overlayToggleCallback(v);
+            });
         toggleCell->registerAction("关闭", brls::BUTTON_B, closeAct);
         panel->addView(toggleCell);
 
@@ -888,6 +891,7 @@ namespace beiklive
                     [pathCell, this](const std::string& path) {
                         m_gameEntry.overlayPath = path;
                         pathCell->setDetailText(beiklive::tools::getFileName(path));
+                        if (m_overlayPathCallback) m_overlayPathCallback(path);
                     }, dir);
                 return true;
             });
