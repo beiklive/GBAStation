@@ -500,6 +500,28 @@ namespace beiklive
         box->setPadding(10.f, 20.f, 20.f, 20.f);
 
         {
+            // ── 快进速度快速调整 ──
+            auto *ffHdr = new brls::Header();
+            ffHdr->setTitle("快进速度");
+            box->addView(ffHdr);
+
+            std::vector<std::string> ffLabels = {"0.1倍", "0.5倍", "2倍", "3倍", "4倍", "5倍", "8倍"};
+            static const float ffVals[] = {0.1f, 0.5f, 2.0f, 3.0f, 4.0f, 5.0f, 8.0f};
+            float curFF = GET_SETTING_KEY_FLOAT("fastforward.multiplier", 4.0f);
+            int ffIdx = 4;
+            for (int i = 0; i < 7; ++i)
+                if (ffVals[i] == curFF) { ffIdx = i; break; }
+            auto *ffCell = new beiklive::SelectorButton();
+            ffCell->setText("快进倍率");
+            ffCell->setOptions(ffLabels, ffIdx);
+            ffCell->setOnSelect(
+                [](int i) {
+                    static const float vals[] = {0.1f, 0.5f, 2.0f, 3.0f, 4.0f, 5.0f, 8.0f};
+                    if (i >= 0 && i < 7) SET_SETTING_KEY_FLOAT("fastforward.multiplier", vals[i]);
+                });
+            box->addView(ffCell);
+            box->addView(makeHint("小于1倍时可在快进触发时实现慢动作效果"));
+
             auto *hdr1 = new brls::Header();
             hdr1->setTitle("画面设置");
             box->addView(hdr1);

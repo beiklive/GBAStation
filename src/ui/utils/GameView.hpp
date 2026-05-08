@@ -107,12 +107,13 @@ namespace beiklive
             static constexpr double   SPIN_GUARD_SEC           = 0.002;  ///< 每帧自旋等待预算（秒）
             static constexpr double   FPS_UPDATE_INTERVAL      = 1.0;   ///< FPS 计数器更新间隔（秒）
             static constexpr unsigned REWIND_STEP              = 2;     ///< 每次倒带弹出的帧数
-            static constexpr unsigned FF_MULTIPLIER            = 4;     ///< 快进倍率（每迭代运行的帧数）
 
             bool _brls_inputLocked = false; ///< 输入锁定状态
             beiklive::GameEntry m_gameEntry; ///< 游戏条目数据
 
-            // ---- 倒带设置（从配置中读取，游戏启动时初始化）------------------
+            // ---- 快进倍率（从配置读取，支持慢动作）--------------------------
+            float m_ffMultiplier = 4.0f;     ///< 快进倍率（>1=加速, <1=慢动作）
+            float m_ffSlowAccum  = 0.0f;     ///< 慢动作帧累加器
             int  m_rewindSaveInterval = 1;     ///< 每 N 帧保存一次倒带状态
             unsigned m_rewindBufferSize = 600; ///< 倒带缓冲区最大条目数（从配置读取）
             bool m_rewindShowUI       = false;  ///< 是否启用可视化倒带界面

@@ -370,18 +370,32 @@ namespace beiklive
             }
         }
 
-        // 快进切换
+        // 快进（支持按住/切换两种模式）
         {
             std::string val = GET_SETTING_KEY_STR("handle.fastforward", "LSB");
+            std::string mode = GET_SETTING_KEY_STR("fastforward.mode", "hold");
             auto combos = beiklive::tools::parseMultiCombo(val);
-            for (const auto& combo : combos) {
-                GameInputManager::instance().registerEmuFunctionKey(
-                    EmuFunctionKey::EMU_FAST_FORWARD, {combo},
-                    []() {
-                        bool cur = GameSignal::instance().isFastForward();
-                        GameSignal::instance().requestFastForward(!cur);
-                        brls::Logger::debug("快进切换：{}", !cur);
-                    });
+            if (mode == "hold") {
+                for (const auto& combo : combos) {
+                    GameInputManager::instance().registerEmuFunctionKey(
+                        EmuFunctionKey::EMU_FAST_FORWARD, {combo},
+                        []() { GameSignal::instance().requestFastForward(true); },
+                        TriggerType::HOLD);
+                    GameInputManager::instance().registerEmuFunctionKey(
+                        EmuFunctionKey::EMU_FAST_FORWARD, {combo},
+                        []() { GameSignal::instance().requestFastForward(false); },
+                        TriggerType::RELEASE);
+                }
+            } else {
+                for (const auto& combo : combos) {
+                    GameInputManager::instance().registerEmuFunctionKey(
+                        EmuFunctionKey::EMU_FAST_FORWARD, {combo},
+                        []() {
+                            bool cur = GameSignal::instance().isFastForward();
+                            GameSignal::instance().requestFastForward(!cur);
+                            brls::Logger::debug("快进切换：{}", !cur);
+                        });
+                }
             }
         }
 
@@ -600,15 +614,31 @@ namespace beiklive
     // ============================================================
     unsigned GameView::_stepFrame(bool ff)
     {
-        // 快进时每次迭代运行 FF_MULTIPLIER 帧
-        unsigned frames = ff ? FF_MULTIPLIER : 1u;
-
-        for (unsigned i = 0; i < frames; ++i) {
-            // 第一帧前保存倒带状态（快进时也保存，保证倒带缓冲区持续更新）
-            if (i == 0) _saveRewindState();  
+        if (!ff) {
+            _saveRewindState();
             m_gba_core->RunFrame();
+            return 1u;
         }
-        return frames;
+
+        if (m_ffMultiplier >= 1.0f) {
+            unsigned frames = static_cast<unsigned>(m_ffMultiplier);
+            if (frames == 0) frames = 1u;
+            for (unsigned i = 0; i < frames; ++i) {
+                if (i == 0) _saveRewindState();
+                m_gba_core->RunFrame();
+            }
+            return frames;
+        }
+
+        // 慢动作：使用累加器，仅在累积满 1 帧时才执行一帧
+        m_ffSlowAccum += m_ffMultiplier;
+        if (m_ffSlowAccum >= 1.0f) {
+            m_ffSlowAccum -= 1.0f;
+            _saveRewindState();
+            m_gba_core->RunFrame();
+            return 1u;
+        }
+        return 0u;
     }
 
     // ============================================================
@@ -773,7 +803,7 @@ namespace beiklive
     {
         using Clock = std::chrono::steady_clock;
 
-        if (ff) return; // 快进：不限速
+        if (ff && m_ffMultiplier >= 1.0f) return; // 仅真正快进时跳过限速
 
         nextTarget += frameDurNs;
 
@@ -848,6 +878,11 @@ namespace beiklive
         int  autoSaveSecs    = GET_SETTING_KEY_INT("save.autoSaveInterval", 0);
         m_autoSaveTimer = Clock::now();
         bool autoLoadDone = false;
+
+        // 读取快进倍率配置
+        m_ffMultiplier = GET_SETTING_KEY_FLOAT("fastforward.multiplier", 4.0f);
+        if (m_ffMultiplier <= 0.0f) m_ffMultiplier = 1.0f;
+        m_ffSlowAccum = 0.0f;
 
 
         // 读取shader开关配置
@@ -958,6 +993,10 @@ namespace beiklive
             // ---- 执行核心帧逻辑 ----
             unsigned framesRan = 1u;
 
+            // 每帧读取快进倍率（支持菜单中实时调整）
+            m_ffMultiplier = GET_SETTING_KEY_FLOAT("fastforward.multiplier", 4.0f);
+            if (m_ffMultiplier <= 0.0f) m_ffMultiplier = 1.0f;
+
             if (rew) {
                 // 倒带：从历史缓冲区恢复状态
                 _stepRewind();
@@ -966,13 +1005,15 @@ namespace beiklive
                 framesRan = _stepFrame(ff);
             }
 
-            // ---- 取出视频帧暂存 ----
-            _captureVideoFrame();
+            // ---- 取出视频帧暂存（慢动作跳过帧时不捕获）----
+            if (framesRan > 0)
+                _captureVideoFrame();
 
-            // ---- 推送音频 ----
-            _pushFrameAudio(ff, framesRan);
+            // ---- 推送音频（慢动作跳过帧时不推送）----
+            if (framesRan > 0)
+                _pushFrameAudio(ff, framesRan);
 
-            // ---- FPS 统计 ----
+            // ---- FPS 统计（慢动作跳过帧时仍计入时间）----
             _updateFpsStats(framesRan, fpsLastTime, fpsCount);
 
             // ---- SRAM 自动落盘检测 ----

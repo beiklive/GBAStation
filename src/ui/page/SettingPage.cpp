@@ -818,16 +818,16 @@ brls::View *SettingPage::buildGameTab()
     }
 
     {
-        std::vector<std::string> multis = {"2x", "3x", "4x", "5x", "8x", "无限"};
-        static const float multiVals[] = {2.0f, 3.0f, 4.0f, 5.0f, 8.0f, 99.0f};
+        std::vector<std::string> multis = {"0.1倍", "0.5倍", "2倍", "3倍", "4倍", "5倍", "8倍", "无限"};
+        static const float multiVals[] = {0.1f, 0.5f, 2.0f, 3.0f, 4.0f, 5.0f, 8.0f, 99.0f};
         float curMulti = GET_SETTING_KEY_FLOAT("fastforward.multiplier", 4.0f);
-        int idx = 2;
-        for (int i = 0; i < 6; ++i) if (multiVals[i] == curMulti) { idx = i; break; }
+        int idx = 4;
+        for (int i = 0; i < 8; ++i) if (multiVals[i] == curMulti) { idx = i; break; }
         auto *cell = new brls::SelectorCell();
         cell->init("快进倍率", multis, idx,
-                   [](int i) { if (i >= 0 && i < 6) SET_SETTING_KEY_FLOAT("fastforward.multiplier", multiVals[i]); });
+                   [](int i) { if (i >= 0 && i < 8) SET_SETTING_KEY_FLOAT("fastforward.multiplier", multiVals[i]); });
         box->addView(cell);
-        box->addView(makeHint("每次迭代运行的帧数，倍率越高速度越快但可能跳帧"));
+        box->addView(makeHint("小于1倍时可实现慢动作效果，大于1倍用于快进加速"));
     }
 
     auto *ffMuteCell = new brls::BooleanCell();
