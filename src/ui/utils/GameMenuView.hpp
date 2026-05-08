@@ -88,6 +88,8 @@ namespace beiklive
             beiklive::GridBox* m_loadGrid = nullptr;
 
             // 金手指面板
+            beiklive::ButtonBox* selectChtBtn = nullptr;
+
             brls::Box* m_cheatItemBox = nullptr;
             brls::Label* m_cheatCountLabel = nullptr;
             brls::Label* cheatPathLabel = nullptr;
