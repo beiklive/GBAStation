@@ -569,7 +569,7 @@ namespace beiklive
 
             // ── 自定义设置入口 ──
             customCell->setText("自定义设置");
-            customCell->setDetailText(">>");
+            customCell->setDetailText("\uE14A");
             customCell->registerClickAction([this](brls::View *) -> bool
                                             {
                 _openCustomScaleSettings();
@@ -604,7 +604,7 @@ namespace beiklive
 
         auto *overlayCell = new brls::DetailCell();
         overlayCell->setText("遮罩设置");
-        overlayCell->setDetailText(">>");
+        overlayCell->setDetailText("\uE14A");
         overlayCell->registerClickAction([this](brls::View *) -> bool
                                          {
             _openOverlaySettings();
@@ -613,7 +613,7 @@ namespace beiklive
 
         auto *shaderCell = new brls::DetailCell();
         shaderCell->setText("着色器设置");
-        shaderCell->setDetailText(">>");
+        shaderCell->setDetailText("\uE14A");
         shaderCell->registerClickAction([this](brls::View *) -> bool
                                         {
             _openShaderSettings();
@@ -643,7 +643,7 @@ namespace beiklive
             auto *panel = new brls::Box(brls::Axis::COLUMN);
             panel->setWidth(380.f);
             panel->setHeightPercentage(100.f);
-            panel->setBackgroundColor(nvgRGBA(30, 30, 35, 250));
+            panel->setBackgroundColor(nvgRGBA(30, 30, 35, 50));
             panel->setCornerRadius(12.f);
             panel->setPadding(20.f);
             panel->setAlignItems(brls::AlignItems::STRETCH);
@@ -667,6 +667,7 @@ namespace beiklive
                                  m_gameEntry.shaderEnabled = v;
                                  if (m_shaderToggleCallback)
                                      m_shaderToggleCallback(v);
+                                 _rebuildShaderParamUI();
                              });
             toggleCell->registerAction("关闭", brls::BUTTON_B, closeAct);
             panel->addView(toggleCell);
@@ -675,14 +676,14 @@ namespace beiklive
             hdr2->setTitle("选择着色器文件");
             panel->addView(hdr2);
 
-            auto *pathCell = new brls::DetailCell();
-            DISABLE_LR_NAVIGATION(pathCell);
+            shaderPathcell = new brls::DetailCell();
+            DISABLE_LR_NAVIGATION(shaderPathcell);
 
-            pathCell->setText("");
+            shaderPathcell->setText("");
             std::string curShader = m_gameEntry.shaderPath;
-            pathCell->setDetailText(curShader.empty() ? "未设置" : beiklive::tools::getFileName(curShader));
-            pathCell->registerAction("选择", brls::BUTTON_A,
-                                     [pathCell, this](brls::View *) -> bool
+            shaderPathcell->setDetailText(curShader.empty() ? "未设置" : beiklive::tools::getFileName(curShader));
+            shaderPathcell->registerAction("选择", brls::BUTTON_A,
+                                     [this](brls::View *) -> bool
                                      {
                                          std::string dir = m_gameEntry.shaderPath;
                                          auto pos = dir.rfind(beiklive::path::SPLIT_CHAR);
@@ -690,43 +691,41 @@ namespace beiklive
                                              dir = dir.substr(0, pos);
                                          else
                                              dir = "";
-                                         beiklive::openFilePicker({"glslp", "glsl"}, [pathCell, this](const std::string &path)
+                                         beiklive::openFilePicker({"glslp", "glsl"}, [this](const std::string &path)
                                                                   {
                         m_gameEntry.shaderPath = path;
-                        pathCell->setDetailText(beiklive::tools::getFileName(path));
-                        if (m_shaderPathCallback) m_shaderPathCallback(path); }, dir);
+                        shaderPathcell->setDetailText(beiklive::tools::getFileName(path));
+                        if (m_shaderPathCallback) m_shaderPathCallback(path);
+                        _rebuildShaderParamUI(); }, dir);
                                          return true;
                                      });
-            pathCell->registerAction("关闭", brls::BUTTON_B, closeAct);
-            panel->addView(pathCell);
+            shaderPathcell->registerAction("关闭", brls::BUTTON_B, closeAct);
+            panel->addView(shaderPathcell);
 
-            if (m_shaderParamsCallback)
-            {
-                auto *div = new brls::Rectangle(nvgRGBA(255, 255, 255, 40));
-                div->setWidthPercentage(100.f);
-                div->setHeight(1.f);
-                div->setMarginTop(12.f);
-                div->setMarginBottom(12.f);
-                panel->addView(div);
+            auto *div = new brls::Rectangle(nvgRGBA(255, 255, 255, 40));
+            div->setWidthPercentage(100.f);
+            div->setHeight(1.f);
+            div->setMarginTop(12.f);
+            div->setMarginBottom(12.f);
+            panel->addView(div);
 
-                auto *paramHdr = new brls::Header();
-                paramHdr->setTitle("着色器参数");
-                panel->addView(paramHdr);
-                paramHdr->setMarginBottom(12.f);
+            auto *paramHdr = new brls::Header();
+            paramHdr->setTitle("着色器参数");
+            panel->addView(paramHdr);
+            paramHdr->setMarginBottom(12.f);
 
-                auto *srcollbox = new brls::ScrollingFrame();
-                srcollbox->setGrow(1.f);
-                srcollbox->setScrollingIndicatorVisible(false);
-                m_ShaderParamBox = new brls::Box(brls::Axis::COLUMN);
-                m_ShaderParamBox->setPadding(10.f, 10.f, 10.f, 10.f);
-                srcollbox->setCornerRadius(10.f);
-                srcollbox->setBorderThickness(1.f);
-                srcollbox->setBorderColor(nvgRGBA(255, 255, 255, 50));
-                srcollbox->addView(m_ShaderParamBox);
-                panel->addView(srcollbox);
+            auto *srcollbox = new brls::ScrollingFrame();
+            srcollbox->setGrow(1.f);
+            srcollbox->setScrollingIndicatorVisible(false);
+            m_ShaderParamBox = new brls::Box(brls::Axis::COLUMN);
+            m_ShaderParamBox->setPadding(10.f, 10.f, 10.f, 10.f);
+            srcollbox->setCornerRadius(10.f);
+            srcollbox->setBorderThickness(1.f);
+            srcollbox->setBorderColor(nvgRGBA(255, 255, 255, 50));
+            srcollbox->addView(m_ShaderParamBox);
+            panel->addView(srcollbox);
 
-                _rebuildShaderParamUI();
-            }
+            _rebuildShaderParamUI();
             // HintsBar 按钮提示栏
             auto *hintsBar = new beiklive::HintsBar();
             panel->addView(hintsBar);
@@ -757,7 +756,7 @@ namespace beiklive
             auto *panel = new brls::Box(brls::Axis::COLUMN);
             panel->setWidth(380.f);
             panel->setHeightPercentage(100.f);
-            panel->setBackgroundColor(nvgRGBA(30, 30, 35, 255));
+            panel->setBackgroundColor(nvgRGBA(30, 30, 35, 50));
             panel->setCornerRadius(12.f);
             panel->setPadding(20.f);
             panel->setAlignItems(brls::AlignItems::STRETCH);
@@ -913,7 +912,8 @@ namespace beiklive
 
             // 重置按钮
             auto *resetBtn = new beiklive::ButtonBox();
-            resetBtn->setText("重置为默认值");
+            resetBtn->setText("复原");
+            resetBtn->setIcon(BK_RES("img/ui/menu/reset.png"));
             resetBtn->registerClickAction([xBtn, yBtn, sBtn, initX, initY, initScale, this](brls::View *) -> bool
                                           {
             xBtn->setValue(initX);
@@ -928,7 +928,8 @@ namespace beiklive
             panel->addView(resetBtn);
 
             auto *saveBtn = new beiklive::ButtonBox();
-            saveBtn->setText("保存到存档");
+            resetBtn->setIcon(BK_RES("img/ui/menu/save.png"));
+            saveBtn->setText("保存");
             saveBtn->registerClickAction([closeAct](brls::View *) -> bool
                                          {
             closeAct(nullptr);
@@ -1023,6 +1024,10 @@ namespace beiklive
         m_ShaderParamBox->clearViews(true);
 
         auto params = m_shaderParamsCallback();
+        // 打印 params的相关信息
+        brls::Logger::debug("---params size {}", params.size());
+
+
         if (params.empty())
             return;
 
@@ -1054,7 +1059,7 @@ namespace beiklive
             DISABLE_LR_NAVIGATION(btn);
 
             btn->registerAction("返回", brls::BUTTON_B, [this](brls::View *) {
-                _dismissSidePanel(3);
+                brls::Application::giveFocus(shaderPathcell);
                 return true;
             });
 
