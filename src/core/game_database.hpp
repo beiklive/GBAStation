@@ -23,10 +23,8 @@ namespace beiklive
     class GameDatabase
     {
     public:
-        // 构造函数：可指定自动保存模式与文件路径
-        // autoSaveMode: 0 = 手动保存, 1 = 每次变更立即保存, 2 = 定时保存（间隔 intervalSeconds）
-        // autoSaveInterval: 当 mode=2 时，定时保存的间隔（秒）
-        GameDatabase(const std::string &filepath = "", int autoSaveMode = 0, int autoSaveInterval = 5);
+        // 构造函数
+        GameDatabase(int autoSaveMode = 0, int autoSaveInterval = 5);
         ~GameDatabase();
 
         // 禁止拷贝和移动
@@ -60,23 +58,11 @@ namespace beiklive
         // 清空所有数据（线程安全）
         void clear();
 
-        // 保存到文件（线程安全）
-        bool saveToFile(const std::string &filepath) const;
-
-        // 从文件加载（线程安全）
-        bool loadFromFile(const std::string &filepath);
-
-        // ── 按平台分文件的读写接口 ─────────────────────────────────────────────
-
-        /// 设置数据库目录（平台分文件存储时使用）
-        void setDbDir(const std::string &dir);
-
-        /// 从目录中按平台加载所有数据库文件并合并，若平台文件不存在则回退加载主文件。
-        /// 此函数会清空现有数据。
-        bool loadFromDir(const std::string &dir);
-
-        /// 将数据按平台分组，分别保存到目录下的平台数据库文件
+        // 保存到目录（按平台分文件，线程安全）
         bool saveToDir(const std::string &dir) const;
+
+        /// 从目录中按平台加载所有数据库文件并合并到内存，会清空现有数据
+        bool loadFromDir(const std::string &dir);
 
         // ── 通用字段访问接口（基于 JSON 中间层，方便新增字段无需修改调用代码）──
 
@@ -100,15 +86,8 @@ namespace beiklive
 
         // ─────────────────────────────────────────────────────────────────────
 
-        // 手动触发保存（如果启用了自动保存，也会更新脏标记）
-        // 同时保存主文件（filepath_）和平台分文件（dbDir_ 下各平台文件）
+        // 手动触发保存，按平台写入 dbDir_ 下各平台文件
         bool flush();
-
-        // 设置自动保存模式（运行时动态修改）
-        void setAutoSaveMode(int mode, int intervalSeconds = 5);
-
-        // 设置数据库文件路径
-        void setFilePath(const std::string &filepath);
 
         // 获取最近玩的游戏列表，按 lastPlayed 降序排序，返回前 count 个条目
         std::vector<GameEntry> getRecentPlayed(int count) const;
@@ -138,7 +117,6 @@ namespace beiklive
 
 
         // 自动保存相关
-        std::string filepath_;          ///< 合并主文件路径
         std::string dbDir_;             ///< 数据库目录（用于按平台分文件存储）
         int autoSaveMode_;     // 0: manual, 1: immediate, 2: periodic
         int autoSaveInterval_; // seconds (for mode 2)

@@ -221,6 +221,7 @@ namespace beiklive
         m_gameMenuView->setOnResume([this]() {
             brls::sync([this]() {
                 GameSignal::instance().requestReloadCheats();
+                beiklive::GameDB->flush();
                 m_gameView->setFocusable(true);
                 AnimationHelper::slideOutToBottom(m_gameMenuView, MENU_FADE_OUT_MS, 120.f,true, [this]() {
                     brls::Application::giveFocus(m_gameView);
@@ -244,6 +245,7 @@ namespace beiklive
         // "退出游戏"回调：触发退出信号
         m_gameMenuView->setOnExit([this]() {
             brls::sync([this]() {
+                beiklive::GameDB->flush();
                 AnimationHelper::slideOutToBottom(m_gameMenuView, MENU_EXIT_FADE_MS, 120.f,true, [this]() {
                     GameSignal::instance().requestExit();
                 });

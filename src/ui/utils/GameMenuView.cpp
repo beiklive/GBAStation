@@ -505,13 +505,16 @@ namespace beiklive
             box->addView(hdr1);
 
             // ── 画面模式 ──
+            // ScreenMode 枚举值到 UI 索引映射: 0(Fit)→0, 1(Fill)→1, 2(IntegerScale)→3, 3(FreeScale)→4
+            static const int kScreenModeToUi[] = {0, 1, 3, 4};
+            int idx = (m_gameEntry.displayMode >= 0 && m_gameEntry.displayMode < 4)
+                          ? kScreenModeToUi[m_gameEntry.displayMode] : 2;
+
             auto *modeCell = new beiklive::SelectorButton();
             auto *IntegerCell = new beiklive::SelectorButton();
             auto *customCell = new brls::DetailCell();
             std::vector<std::string> modes = {"(保持比例)Fit", "(填充)Fill", "(原始)Original", "(整数倍)Integer", "(自定义)Custom"};
             std::vector<std::string> modeIds = {"fit", "fill", "original", "integer", "custom"};
-            int idx = m_gameEntry.displayMode;
-            if (idx < 0 || idx >= 5) idx = 2;
 
             IntegerCell->setFocusable(idx == 3);
             IntegerCell->setAlpha(idx == 3? 1.0f: 0.3f);
@@ -529,7 +532,6 @@ namespace beiklive
                         IntegerCell->setAlpha(idx == 3? 1.0f: 0.3f);
                         customCell->setFocusable(idx == 4);
                         customCell->setAlpha(idx == 4? 1.0f: 0.3f);
-                        m_gameEntry.displayMode = idx;
                         if (m_displayModeCallback)
                             m_displayModeCallback(modeIds[idx]);
                     }
@@ -731,8 +733,6 @@ namespace beiklive
             // HintsBar 按钮提示栏
             auto *hintsBar = new beiklive::HintsBar();
             panel->addView(hintsBar);
-            // 保存entry
-            beiklive::GameDB->upsert(m_gameEntry);
 
             m_ShaderSidePanel->registerAction("关闭", brls::BUTTON_B, closeAct);
             row->addView(panel);
@@ -822,8 +822,6 @@ namespace beiklive
             auto *hintsBar = new beiklive::HintsBar();
             panel->addView(hintsBar);
 
-            // 保存entry
-            beiklive::GameDB->upsert(m_gameEntry);
             m_OverlaySidePanel->registerAction("关闭", brls::BUTTON_B, closeAct);
             row->addView(panel);
             m_OverlaySidePanel->addView(row);
@@ -946,6 +944,8 @@ namespace beiklive
             this->addView(m_CustomSidePanel);
         }
 
+        beiklive::GameDB->upsert(m_gameEntry);
+        beiklive::GameDB->flush();
         return wrapper;
     }
 

@@ -120,14 +120,12 @@ namespace beiklive
         NameMappingManager = new beiklive::ConfigManager(beiklive::path::mappingFilePath());
         // ConfigManager 构造函数已调用 Load()，无需重复加载
 
-        // 数据库初始化：优先使用平台分文件，回退到旧版单一文件（自动迁移）
+        // 数据库初始化
         {
             std::string dbDir = beiklive::path::databasePath();
-            std::string dbFile = beiklive::path::databaseFilePath();
             if (SettingManager->Contains("db_path"))
             {
-                // 兼容旧配置：若 db_path 指向文件，则取其父目录；若指向目录则直接使用
-                std::string savedPath = GET_SETTING_KEY_STR("db_path", dbFile);
+                std::string savedPath = GET_SETTING_KEY_STR("db_path", dbDir);
                 if (!savedPath.empty())
                 {
                     fs::path p(savedPath);
@@ -144,10 +142,8 @@ namespace beiklive
                     }
                 }
             }
-            dbFile = dbDir + beiklive::path::SPLIT_CHAR + beiklive::path::DATA_BASE_FILE;
 
             GameDB = new beiklive::GameDatabase();
-            GameDB->setFilePath(dbFile);
             GameDB->loadFromDir(dbDir);
 
             // 将目录路径写入配置（新版本以目录为准）

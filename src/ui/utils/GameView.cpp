@@ -1293,8 +1293,8 @@ namespace beiklive
         m_gameEntry.integerAspectRatio = scale;
 
         if (beiklive::GameDB && m_gameEntry.crc32 != 0) {
-            beiklive::GameDB->set(m_gameEntry.crc32, "display.integer_scale_mult",
-                nlohmann::json(static_cast<int>(scale)));
+            beiklive::GameDB->set(m_gameEntry.crc32, "integerAspectRatio",
+                nlohmann::json(static_cast<float>(scale)));
         }
     }
 

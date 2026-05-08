@@ -94,27 +94,17 @@ namespace beiklive
     }
 
     // ==================== GameDatabase 实现（单线程版） ====================
-    GameDatabase::GameDatabase(const std::string &filepath, int autoSaveMode, int autoSaveInterval)
-        : filepath_(filepath), autoSaveMode_(autoSaveMode),
+    GameDatabase::GameDatabase(int autoSaveMode, int autoSaveInterval)
+        : autoSaveMode_(autoSaveMode),
           autoSaveInterval_(autoSaveInterval), dirty_(false)
     {
-        std::lock_guard<std::recursive_mutex> lock(m_mutex);
-        // 自动保存不再使用后台线程，仅根据模式决定行为
-        if (!filepath_.empty())
-            loadFromFile(filepath_);
     }
 
     GameDatabase::~GameDatabase()
     {
         std::lock_guard<std::recursive_mutex> lock(m_mutex);
-        // 析构时若自动保存模式非手动，则保存一次
-        if (autoSaveMode_ != 0)
-        {
-            if (!dbDir_.empty())
-                saveToDir(dbDir_);
-            if (!filepath_.empty())
-                saveToFile(filepath_);
-        }
+        if (autoSaveMode_ != 0 && !dbDir_.empty())
+            saveToDir(dbDir_);
     }
 
     void GameDatabase::upsert(const GameEntry &entry)
@@ -194,50 +184,6 @@ namespace beiklive
         markDirtyAndAutoSave();
     }
 
-    bool GameDatabase::saveToFile(const std::string &filepath) const
-    {
-        try
-        {
-            nlohmann::json j = toJson();
-            std::ofstream file(filepath);
-            if (!file.is_open())
-                return false;
-            file << j.dump(4);
-            file.close();
-            return true;
-        }
-        catch (...)
-        {
-            return false;
-        }
-    }
-
-    bool GameDatabase::loadFromFile(const std::string &filepath)
-    {
-        std::lock_guard<std::recursive_mutex> lock(m_mutex);
-        try
-        {
-            std::ifstream file(filepath);
-            if (!file.is_open())
-                return false;
-            nlohmann::json j;
-            file >> j;
-            fromJson(j);
-            return true;
-        }
-        catch (...)
-        {
-            return false;
-        }
-    }
-
-    // ── 按平台分文件接口实现 ────────────────────────────────────────────────
-
-    void GameDatabase::setDbDir(const std::string &dir)
-    {
-        std::lock_guard<std::recursive_mutex> lock(m_mutex);
-        dbDir_ = dir;
-    }
 
     /*static*/ std::string GameDatabase::getPlatformFileName(int platform)
     {
@@ -256,14 +202,12 @@ namespace beiklive
         doClear();
         dbDir_ = dir;
 
-        // 尝试逐平台加载数据库文件并合并
         const int platforms[] = {
             (int)beiklive::enums::EmuPlatform::EmuGBA,
             (int)beiklive::enums::EmuPlatform::EmuGBC,
             (int)beiklive::enums::EmuPlatform::EmuGB,
         };
 
-        bool anyPlatformLoaded = false;
         for (int platform : platforms)
         {
             std::string filePath = dir + beiklive::path::SPLIT_CHAR + getPlatformFileName(platform);
@@ -281,7 +225,6 @@ namespace beiklive
                     GameEntry entry = item.get<GameEntry>();
                     doUpsert(entry);
                 }
-                anyPlatformLoaded = true;
             }
             catch (const std::exception &e)
             {
@@ -290,38 +233,6 @@ namespace beiklive
             catch (...)
             {
                 brls::Logger::warning("GameDatabase: 加载平台文件 {} 时发生未知异常", filePath);
-            }
-        }
-
-        // 向后兼容：若平台文件均不存在，则尝试加载旧版合并主文件并迁移
-        if (!anyPlatformLoaded && !filepath_.empty())
-        {
-            try
-            {
-                std::ifstream file(filepath_);
-                if (file.is_open())
-                {
-                    nlohmann::json j;
-                    file >> j;
-                    if (j.is_array())
-                    {
-                        for (const auto &item : j)
-                        {
-                            GameEntry entry = item.get<GameEntry>();
-                            doUpsert(entry);
-                        }
-                        // 迁移：将旧版数据按平台分别保存到各平台文件
-                        saveToDir(dir);
-                    }
-                }
-            }
-            catch (const std::exception &e)
-            {
-                brls::Logger::warning("GameDatabase: 迁移旧版数据库文件失败: {}", e.what());
-            }
-            catch (...)
-            {
-                brls::Logger::warning("GameDatabase: 迁移旧版数据库文件时发生未知异常");
             }
         }
 
@@ -495,35 +406,12 @@ namespace beiklive
     bool GameDatabase::flush()
     {
         std::lock_guard<std::recursive_mutex> lock(m_mutex);
-        bool ok = true;
-        // 保存合并主文件（向后兼容）
-        if (!filepath_.empty())
-        {
-            bool saved = saveToFile(filepath_);
-            ok = ok && saved;
-        }
-        // 同时按平台分文件保存
-        if (!dbDir_.empty())
-        {
-            bool saved = saveToDir(dbDir_);
-            ok = ok && saved;
-        }
+        if (dbDir_.empty())
+            return false;
+        bool ok = saveToDir(dbDir_);
         if (ok)
-            dirty_ = false;
-        return ok;
-    }
-
-    void GameDatabase::setAutoSaveMode(int mode, int intervalSeconds)
-    {
-        std::lock_guard<std::recursive_mutex> lock(m_mutex);
-        autoSaveMode_ = mode;
-        autoSaveInterval_ = intervalSeconds;
-    }
-
-    void GameDatabase::setFilePath(const std::string &filepath)
-    {
-        std::lock_guard<std::recursive_mutex> lock(m_mutex);
-        filepath_ = filepath;
+        dirty_ = false;
+        return true;
     }
 
     std::vector<GameEntry> GameDatabase::getRecentPlayed(int count) const {
