@@ -196,17 +196,14 @@ namespace beiklive
 
     bool GameDatabase::saveToFile(const std::string &filepath) const
     {
-        // 原子写入：先写 .tmp，再 rename
         try
         {
             nlohmann::json j = toJson();
-            std::string tmpPath = filepath + ".tmp";
-            std::ofstream file(tmpPath);
+            std::ofstream file(filepath);
             if (!file.is_open())
                 return false;
             file << j.dump(4);
             file.close();
-            std::filesystem::rename(tmpPath, filepath);
             return true;
         }
         catch (...)
@@ -349,10 +346,9 @@ namespace beiklive
         for (auto &[platform, j] : platformData)
         {
             std::string filePath = dir + beiklive::path::SPLIT_CHAR + getPlatformFileName(platform);
-            std::string tmpPath = filePath + ".tmp";
             try
             {
-                std::ofstream file(tmpPath);
+                std::ofstream file(filePath);
                 if (!file.is_open())
                 {
                     allOk = false;
@@ -360,7 +356,6 @@ namespace beiklive
                 }
                 file << j.dump(4);
                 file.close();
-                std::filesystem::rename(tmpPath, filePath);
             }
             catch (const std::exception &e)
             {
