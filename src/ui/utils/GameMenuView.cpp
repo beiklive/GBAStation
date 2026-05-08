@@ -532,6 +532,8 @@ namespace beiklive
                         IntegerCell->setAlpha(idx == 3? 1.0f: 0.3f);
                         customCell->setFocusable(idx == 4);
                         customCell->setAlpha(idx == 4? 1.0f: 0.3f);
+                        static const int kUiToScreenMode[] = {0, 1, 0, 2, 3};
+                        m_gameEntry.displayMode = kUiToScreenMode[idx];
                         if (m_displayModeCallback)
                             m_displayModeCallback(modeIds[idx]);
                     }
@@ -539,11 +541,11 @@ namespace beiklive
             box->addView(modeCell);
 
             // ── 整数倍缩放 ──
-            std::vector<std::string> intScaleLabels = {"自动(auto)", "x1", "x2", "x3", "x4", "x5"};
-            static const int intScaleVals[] = {0, 1, 2, 3, 4, 5};
+            std::vector<std::string> intScaleLabels = {"自动(auto)", "x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8"};
+            static const int intScaleVals[] = {0, 1, 2, 3, 4, 5, 6, 7, 8};
             int curIntScale = static_cast<int>(m_gameEntry.integerAspectRatio);
             int intScaleIdx = 0;
-            for (int i = 0; i < 6; ++i)
+            for (int i = 0; i < 9; ++i)
                 if (intScaleVals[i] == curIntScale)
                 {
                     intScaleIdx = i;
@@ -552,19 +554,14 @@ namespace beiklive
             IntegerCell->setText("整数倍缩放倍率");
             IntegerCell->setOptions(intScaleLabels, intScaleIdx);
             IntegerCell->setOnSelect(
-                [this, modeIds](int idx)
+                [this](int idx)
                 {
-                    if (idx >= 0 && idx < 6)
+                    if (idx >= 0 && idx < 9)
                     {
-                        static const int vals[] = {0, 1, 2, 3, 4, 5};
+                        static const int vals[] = {0, 1, 2, 3, 4, 5, 6, 7, 8};
                         m_gameEntry.integerAspectRatio = static_cast<float>(vals[idx]);
                         if (m_integerScaleCallback)
                             m_integerScaleCallback(m_gameEntry.integerAspectRatio);
-                        if (m_displayModeCallback)
-                        {
-                            std::string cur = modeIds[m_gameEntry.displayMode];
-                            m_displayModeCallback(cur);
-                        }
                     }
                 });
             box->addView(IntegerCell);
