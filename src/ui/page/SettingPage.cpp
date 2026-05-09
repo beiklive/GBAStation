@@ -1,5 +1,6 @@
 #include "ui/page/SettingPage.hpp"
 #include "ui/page/FileListPage.hpp"
+#include "ui/page/GameImportView.hpp"
 #include "ui/utils/FunctionButtons.hpp"
 #include "ui/utils/FilePickerHelper.hpp"
 
@@ -743,6 +744,26 @@ brls::View *SettingPage::buildUITab()
                 return true;
             });
         box->addView(bgPathCell);
+    }
+
+    // ── 游戏导入 ────────────────────────────────────────────────────────────────
+    box->addView(makeHeader("导入游戏"));
+
+    {
+        auto *importCell = new brls::DetailCell();
+        importCell->setText("导入游戏库");
+        importCell->setDetailText("\uE14A");
+        importCell->registerAction("打开"_i18n, brls::BUTTON_A,
+            [](brls::View*) -> bool {
+                auto *importView = new beiklive::GameImportView();
+                auto *frame = new brls::AppletFrame(importView);
+                HIDE_BRLS_BAR(frame);
+                brls::Application::pushActivity(
+                    new brls::Activity(frame),
+                    brls::TransitionAnimation::NONE);
+                return true;
+            });
+        box->addView(importCell);
     }
 
     scroll->setContentView(box);
