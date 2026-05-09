@@ -343,7 +343,6 @@ namespace beiklive
                 crc = beiklive::tools::crc32(romPath);
 
             std::string logoPath;
-            {
                 std::string thumbPath = "/retroarch/thumbnails";
                     std::string logoFile = thumbPath + "/Named_Snaps/" + romStem + ".png";
 #ifdef _WIN32
