@@ -69,6 +69,8 @@ namespace beiklive
 
     GameImportView::~GameImportView()
     {
+        if (m_importThread.joinable())
+            m_importThread.join();
     }
 
     std::string GameImportView::platformName(int platform)
@@ -213,9 +215,76 @@ namespace beiklive
         m_progressBox->setVisibility(brls::Visibility::VISIBLE);
     }
 
+    void GameImportView::draw(NVGcontext* vg, float x, float y, float w, float h,
+                              brls::Style style, brls::FrameContext* ctx)
+    {
+        brls::Box::draw(vg, x, y, w, h, style, ctx);
+
+        if (m_importing.load(std::memory_order_acquire))
+        {
+            int cur = m_progress.load(std::memory_order_acquire);
+            int tot = m_total.load(std::memory_order_acquire);
+
+            float frac = (tot > 0) ? (float)cur / (float)tot : 0.f;
+            m_progressBar->setWidth(400.f * frac);
+
+            std::ostringstream oss;
+            oss << cur << " / " << tot;
+            m_progressCountLabel->setText(oss.str());
+
+            if (m_importError.load(std::memory_order_acquire))
+            {
+                m_importing.store(false, std::memory_order_release);
+                m_progressTitleLabel->setText("导入失败");
+
+                std::lock_guard<std::mutex> lock(m_errorMutex);
+                m_progressCountLabel->setText(
+                    m_errorMsg.size() > 60 ? m_errorMsg.substr(0, 60) + "..." : m_errorMsg);
+
+                if (!m_completionShown)
+                {
+                    m_completionShown = true;
+                    auto* dialog = new brls::Dialog("导入失败\n\n" + m_errorMsg);
+                    dialog->addButton("确认", [this]() {
+                        brls::Application::popActivity(brls::TransitionAnimation::NONE);
+                    });
+                    dialog->open();
+                }
+            }
+            else if (m_importDone.load(std::memory_order_acquire))
+            {
+                m_importing.store(false, std::memory_order_release);
+                m_progressBar->setWidth(400.f);
+                m_progressBar->setColor(nvgRGB(129, 199, 132));
+                m_progressTitleLabel->setText("正在保存数据库...");
+                m_progressCountLabel->setText("共导入 " + std::to_string(tot) + " 个游戏");
+
+                if (m_importThread.joinable())
+                    m_importThread.join();
+
+                beiklive::GameDB->flush();
+
+                if (!m_completionShown)
+                {
+                    m_completionShown = true;
+                    m_progressTitleLabel->setText("导入完成");
+                    auto* doneDialog = new brls::Dialog("导入完成\n\n共导入 " + std::to_string(tot) + " 个游戏");
+                    doneDialog->addButton("确认", [this]() {
+                        brls::Application::popActivity(brls::TransitionAnimation::NONE);
+                    });
+                    doneDialog->open();
+                }
+            }
+            else
+            {
+                invalidate();
+            }
+        }
+    }
+
     void GameImportView::onSelectLpl(int platform)
     {
-        if (m_importing) return;
+        if (m_importing.load(std::memory_order_acquire)) return;
 
         auto* flPage = new beiklive::FileListPage();
         flPage->setFliter(beiklive::enums::FilterMode::Whitelist, {"lpl"});
@@ -253,11 +322,16 @@ namespace beiklive
 
     void GameImportView::startImport(const std::string& lplPath, int platform)
     {
-        m_importing = true;
+        m_completionShown = false;
+        m_importDone.store(false, std::memory_order_release);
+        m_importError.store(false, std::memory_order_release);
+        m_progress.store(0, std::memory_order_release);
+
         showProgressLayout();
         m_progressTitleLabel->setText("正在解析LPL文件...");
         m_progressCountLabel->setText("");
         m_progressBar->setWidth(0.f);
+        m_progressBar->setColor(nvgRGB(79, 193, 255));
 
         brls::Application::giveFocus(this);
         this->invalidate();
@@ -311,66 +385,24 @@ namespace beiklive
         }
 
         auto items = lplJson["items"];
-        m_totalItems = (int)items.size();
-        m_importedCount = 0;
+        int itemCount = (int)items.size();
+        m_total.store(itemCount, std::memory_order_release);
 
-        m_progressTitleLabel->setText("正在导入游戏数据...");
-
-        namespace sk = beiklive::SettingKey;
-
-        for (int i = 0; i < m_totalItems; ++i)
+        std::vector<ImportItem> importItems;
+        importItems.reserve(itemCount);
+        for (int i = 0; i < itemCount; ++i)
         {
             auto& item = items[i];
-            std::string romPath = expandTilde(item.value("path", ""));
-            std::string label = item.value("label", "");
+            ImportItem it;
+            it.romPath = item.value("path", "");
+            it.label = item.value("label", "");
+            importItems.push_back(std::move(it));
+        }
 
-            if (romPath.empty() || label.empty())
-            {
-                m_importedCount = i + 1;
-                float progress = (float)m_importedCount / (float)m_totalItems;
-                m_progressBar->setWidth(400.f * progress);
-                std::ostringstream oss;
-                oss << m_importedCount << " / " << m_totalItems;
-                m_progressCountLabel->setText(oss.str());
-                this->invalidate();
-                continue;
-            }
-
-            std::string romStem = getStemFromPath(romPath);
-
-            uint32_t crc = 0;
-            if (fs::exists(romPath))
-                crc = beiklive::tools::crc32(romPath);
-
-            std::string logoPath;
-                std::string thumbPath = "/retroarch/thumbnails";
-                    std::string logoFile = thumbPath + "/Named_Snaps/" + romStem + ".png";
-#ifdef _WIN32
-                    std::string altLogo = logoFile;
-                    for (auto& c : altLogo) if (c == '/') c = '\\';
-                    if (fs::exists(altLogo))
-                        logoPath = altLogo;
-                    else
-#endif
-                        logoPath = logoFile;
-
-            std::string pDirName = platformDirName(platform);
-            std::string savePath = beiklive::path::ROOT + beiklive::path::SPLIT_CHAR +
-                                   std::string(beiklive::path::PROGRAM_NAME) +
-                                   beiklive::path::SPLIT_CHAR + "saves" +
-                                   beiklive::path::SPLIT_CHAR + "retroarch" +
-                                   beiklive::path::SPLIT_CHAR + pDirName +
-                                   beiklive::path::SPLIT_CHAR + romStem;
-
-            try
-            {
-                fs::create_directories(savePath);
-            }
-            catch (...)
-            {
-            }
-
-            std::string overlayPath;
+        namespace sk = beiklive::SettingKey;
+        ImportSharedConfig config;
+        config.platform = platform;
+        {
             std::string overlayKey;
             switch (static_cast<beiklive::enums::EmuPlatform>(platform))
             {
@@ -383,9 +415,10 @@ namespace beiklive
             default: break;
             }
             if (!overlayKey.empty())
-                overlayPath = GET_SETTING_KEY_STR(overlayKey.c_str(), "");
-
-            std::string shaderPath;
+                config.overlayPath = GET_SETTING_KEY_STR(overlayKey.c_str(), "");
+            config.overlayEnabled = GET_SETTING_KEY_INT(sk::KEY_DISPLAY_OVERLAY_ENABLED, 0) != 0;
+        }
+        {
             std::string shaderKey;
             switch (static_cast<beiklive::enums::EmuPlatform>(platform))
             {
@@ -398,49 +431,95 @@ namespace beiklive
             default: break;
             }
             if (!shaderKey.empty())
-                shaderPath = GET_SETTING_KEY_STR(shaderKey.c_str(), "");
-            if (shaderPath.empty())
-                shaderPath = GET_SETTING_KEY_STR(sk::KEY_DISPLAY_SHADER_PATH, "");
-
-            beiklive::GameEntry entry;
-            entry.path = romPath;
-            entry.title = label;
-            entry.platform = platform;
-            entry.crc32 = (int)crc;
-            entry.cheatPath = "";
-            entry.logoPath = logoPath;
-            entry.savePath = savePath;
-            entry.overlayPath = overlayPath;
-            entry.shaderPath = shaderPath;
-            entry.overlayEnabled = GET_SETTING_KEY_INT(sk::KEY_DISPLAY_OVERLAY_ENABLED, 0) != 0;
-            entry.shaderEnabled = GET_SETTING_KEY_INT(sk::KEY_DISPLAY_SHADER_ENABLED, 0) != 0;
-
-            beiklive::GameDB->upsert(entry);
-
-            m_importedCount = i + 1;
-
-            float progress = (float)m_importedCount / (float)m_totalItems;
-            m_progressBar->setWidth(400.f * progress);
-
-            std::ostringstream oss;
-            oss << m_importedCount << " / " << m_totalItems;
-            m_progressCountLabel->setText(oss.str());
-
-            this->invalidate();
+                config.shaderPath = GET_SETTING_KEY_STR(shaderKey.c_str(), "");
+            if (config.shaderPath.empty())
+                config.shaderPath = GET_SETTING_KEY_STR(sk::KEY_DISPLAY_SHADER_PATH, "");
+            config.shaderEnabled = GET_SETTING_KEY_INT(sk::KEY_DISPLAY_SHADER_ENABLED, 0) != 0;
         }
 
-        beiklive::GameDB->flush();
+        m_progressTitleLabel->setText("正在导入游戏数据...");
 
-        m_progressBar->setWidth(400.f);
-        m_progressBar->setColor(nvgRGB(129, 199, 132));
-        m_progressTitleLabel->setText("导入完成");
-        m_progressCountLabel->setText("共导入 " + std::to_string(m_totalItems) + " 个游戏");
+        m_importing.store(true, std::memory_order_release);
 
-        auto* doneDialog = new brls::Dialog("导入完成\n\n共导入 " + std::to_string(m_totalItems) + " 个游戏");
-        doneDialog->addButton("确认", [this]() {
-            brls::Application::popActivity(brls::TransitionAnimation::NONE);
+        if (m_importThread.joinable())
+            m_importThread.join();
+
+        m_importThread = std::thread([this, importItems = std::move(importItems), config]()
+        {
+            int count = (int)importItems.size();
+            for (int i = 0; i < count; ++i)
+            {
+                const auto& it = importItems[i];
+                std::string romPath = expandTilde(it.romPath);
+
+                if (romPath.empty() || it.label.empty())
+                {
+                    m_progress.store(i + 1, std::memory_order_release);
+                    continue;
+                }
+
+                std::string romStem = getStemFromPath(romPath);
+
+                uint32_t crc = 0;
+                if (fs::exists(romPath))
+                    crc = beiklive::tools::crc32(romPath);
+
+                std::string logoPath;
+                {
+                    std::string thumbPath = romPath;
+                    size_t romsPos = thumbPath.find("roms");
+                    if (romsPos != std::string::npos)
+                    {
+                        thumbPath.replace(romsPos, 4, "retroarch/thumbnails");
+                        std::string thumbDir = getParentPath(thumbPath);
+                        std::string logoFile = thumbDir + "/Named_Snaps/" + romStem + ".png";
+#ifdef _WIN32
+                        std::string altLogo = logoFile;
+                        for (auto& c : altLogo) if (c == '/') c = '\\';
+                        if (fs::exists(altLogo))
+                            logoPath = altLogo;
+                        else
+#endif
+                            logoPath = logoFile;
+                    }
+                }
+
+                std::string pDirName = platformDirName(config.platform);
+                std::string savePath = beiklive::path::ROOT + beiklive::path::SPLIT_CHAR +
+                                       std::string(beiklive::path::PROGRAM_NAME) +
+                                       beiklive::path::SPLIT_CHAR + "saves" +
+                                       beiklive::path::SPLIT_CHAR + "retroarch" +
+                                       beiklive::path::SPLIT_CHAR + pDirName +
+                                       beiklive::path::SPLIT_CHAR + romStem;
+
+                try
+                {
+                    fs::create_directories(savePath);
+                }
+                catch (...)
+                {
+                }
+
+                beiklive::GameEntry entry;
+                entry.path = romPath;
+                entry.title = it.label;
+                entry.platform = config.platform;
+                entry.crc32 = (int)crc;
+                entry.cheatPath = "";
+                entry.logoPath = logoPath;
+                entry.savePath = savePath;
+                entry.overlayPath = config.overlayPath;
+                entry.shaderPath = config.shaderPath;
+                entry.overlayEnabled = config.overlayEnabled;
+                entry.shaderEnabled = config.shaderEnabled;
+
+                beiklive::GameDB->upsert(entry);
+
+                m_progress.store(i + 1, std::memory_order_release);
+            }
+
+            m_importDone.store(true, std::memory_order_release);
         });
-        doneDialog->open();
     }
 
 }

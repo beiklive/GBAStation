@@ -3,13 +3,36 @@
 #include "core/common.h"
 #include "ui/utils/Box.hpp"
 
+#include <atomic>
+#include <mutex>
+#include <thread>
+#include <vector>
+
 namespace beiklive
 {
+    struct ImportItem
+    {
+        std::string romPath;
+        std::string label;
+    };
+
+    struct ImportSharedConfig
+    {
+        int platform;
+        std::string overlayPath;
+        std::string shaderPath;
+        bool overlayEnabled;
+        bool shaderEnabled;
+    };
+
     class GameImportView : public beiklive::Box
     {
     public:
         GameImportView();
         ~GameImportView();
+
+        void draw(NVGcontext* vg, float x, float y, float w, float h,
+                  brls::Style style, brls::FrameContext* ctx) override;
 
     private:
         void setupButtonLayout();
@@ -29,8 +52,14 @@ namespace beiklive
         brls::Label* m_progressCountLabel = nullptr;
         brls::Rectangle* m_progressBar = nullptr;
 
-        bool m_importing = false;
-        int m_totalItems = 0;
-        int m_importedCount = 0;
+        std::thread m_importThread;
+        std::atomic<bool> m_importing{false};
+        std::atomic<bool> m_importDone{false};
+        std::atomic<bool> m_importError{false};
+        std::atomic<int> m_progress{0};
+        std::atomic<int> m_total{0};
+        std::mutex m_errorMutex;
+        std::string m_errorMsg;
+        bool m_completionShown = false;
     };
 }
