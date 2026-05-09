@@ -229,17 +229,17 @@ namespace beiklive
 
         if (!m_isEmpty)
         {
-            this->registerAction(
-                "收藏",
-                brls::BUTTON_RT,
-                [this](brls::View *)
-                {
-                    _toggleFavourite();
-                    return true;
-                },
-                false,
-                false,
-                brls::SOUND_CLICK);
+            // this->registerAction(
+            //     "收藏",
+            //     brls::BUTTON_RT,
+            //     [this](brls::View *)
+            //     {
+            //         _toggleFavourite();
+            //         return true;
+            //     },
+            //     false,
+            //     false,
+            //     brls::SOUND_CLICK);
         }
     }
 
@@ -262,7 +262,7 @@ namespace beiklive
         m_infoT         = 0.0f;
         m_infoOffset    = 300.f;
 
-        _updateFavouriteHint();
+        // _updateFavouriteHint();
         invalidate();
     }
 

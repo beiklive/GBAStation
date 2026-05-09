@@ -44,20 +44,20 @@ namespace beiklive
             brls::SOUND_CLICK);
 
         // 注册 ZR 键收藏动作（仅 GAME_LIBRARY 模式）
-        this->registerAction(
-            "收藏",
-            brls::BUTTON_RT,
-            [this](brls::View*) -> bool
-            {
-                if (m_mode != GridItemMode::GAME_LIBRARY) return true;
-                if (toggleFavourite)
-                    toggleFavourite(m_index);
-                _updateFavouriteHint();
-                return true;
-            },
-            false,
-            false,
-            brls::SOUND_CLICK);
+        // this->registerAction(
+        //     "收藏",
+        //     brls::BUTTON_RT,
+        //     [this](brls::View*) -> bool
+        //     {
+        //         if (m_mode != GridItemMode::GAME_LIBRARY) return true;
+        //         if (toggleFavourite)
+        //             toggleFavourite(m_index);
+        //         _updateFavouriteHint();
+        //         return true;
+        //     },
+        //     false,
+        //     false,
+        //     brls::SOUND_CLICK);
 
         _initLayout();
     }
