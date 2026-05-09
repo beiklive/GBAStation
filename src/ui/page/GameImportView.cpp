@@ -164,7 +164,7 @@ namespace beiklive
         card->setWidth(560.f);
 
         auto* iconLabel = new brls::Label();
-        iconLabel->setText("\uE14A");
+        iconLabel->setText("\uE131");
         iconLabel->setFontSize(36.f);
         iconLabel->setTextColor(nvgRGB(79, 193, 255));
         iconLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
@@ -174,12 +174,21 @@ namespace beiklive
 
         m_progressTitleLabel = new brls::Label();
         m_progressTitleLabel->setText("正在导入...");
-        m_progressTitleLabel->setFontSize(24.f);
+        m_progressTitleLabel->setFontSize(22.f);
         m_progressTitleLabel->setTextColor(GET_THEME_COLOR("brls/text"));
         m_progressTitleLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
         m_progressTitleLabel->setMarginBottom(16.f);
         m_progressTitleLabel->setFocusable(false);
         card->addView(m_progressTitleLabel);
+
+        m_progressNameLabel = new brls::Label();
+        m_progressNameLabel->setText(" ");
+        m_progressNameLabel->setFontSize(26.f);
+        m_progressNameLabel->setTextColor(GET_THEME_COLOR("brls/text"));
+        m_progressNameLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+        m_progressNameLabel->setMarginBottom(16.f);
+        m_progressNameLabel->setFocusable(false);
+        card->addView(m_progressNameLabel);
 
         m_progressCountLabel = new brls::Label();
         m_progressCountLabel->setText("0 / 0");
@@ -299,7 +308,10 @@ namespace beiklive
                     "导入游戏库\n\n文件: " + getFileNameFromPath(selectedPath));
                 dialog->addButton("取消", []() {});
                 dialog->addButton("确定导入", [this, selectedPath, platform]() {
+                    brls::Application::blockInputs(false);
                     startImport(selectedPath, platform);
+                    brls::Application::unblockInputs();
+
                 });
                 dialog->open();
             }
@@ -437,7 +449,7 @@ namespace beiklive
             config.shaderEnabled = GET_SETTING_KEY_INT(sk::KEY_DISPLAY_SHADER_ENABLED, 0) != 0;
         }
 
-        m_progressTitleLabel->setText("正在导入游戏数据...");
+        m_progressTitleLabel->setText("正在导入游戏数据，请勿操作");
 
         m_importing.store(true, std::memory_order_release);
 
@@ -457,7 +469,9 @@ namespace beiklive
                     m_progress.store(i + 1, std::memory_order_release);
                     continue;
                 }
-
+                brls::sync([this, it](){
+                    m_progressNameLabel->setText(it.label);
+                });
                 std::string romStem = getStemFromPath(romPath);
 
                 uint32_t crc = 0;

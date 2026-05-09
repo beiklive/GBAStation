@@ -50,6 +50,7 @@ namespace beiklive
         brls::Box* m_progressBox = nullptr;
         brls::Label* m_progressTitleLabel = nullptr;
         brls::Label* m_progressCountLabel = nullptr;
+        brls::Label* m_progressNameLabel = nullptr;
         brls::Rectangle* m_progressBar = nullptr;
 
         std::thread m_importThread;
