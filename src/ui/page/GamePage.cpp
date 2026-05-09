@@ -54,8 +54,6 @@ namespace beiklive
 
     GamePage::~GamePage()
     {
-        // 关闭游戏时检查是否可将默认图标封面更新为存档截图
-        _tryUpdateLogoFromThumbnail();
         brls::Logger::debug("GamePage destructor called for game: " + m_gameEntry.title);
     }
 
@@ -194,6 +192,7 @@ namespace beiklive
             m_gameEntry.logoPath = beiklive::tools::getDefaultLogoPath(
                 static_cast<beiklive::enums::EmuPlatform>(m_gameEntry.platform));
         }
+        // 检查一次 封面是否需要替换
         _tryUpdateLogoFromThumbnail();
 
         // screenShotPath：优先使用已有值，否则使用全局截图目录
@@ -277,6 +276,7 @@ namespace beiklive
         // "退出游戏"回调：触发退出信号
         m_gameMenuView->setOnExit([this]() {
             brls::sync([this]() {
+                _tryUpdateLogoFromThumbnail();
                 beiklive::GameDB->flush();
                 AnimationHelper::slideOutToBottom(m_gameMenuView, MENU_EXIT_FADE_MS, 120.f,true, [this]() {
                     GameSignal::instance().requestExit();
@@ -437,7 +437,9 @@ namespace beiklive
 
     void GamePage::_tryUpdateLogoFromThumbnail()
     {
-        // 仅在配置启用时检查
+        brls::Logger::debug("当前logopath -> {}", m_gameEntry.logoPath);
+
+        // 打开了使用截图作为默认封面时才执行下面的逻辑
         if (GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_UI_USE_SAVESTATE_THUMB, 0) == 0)
             return;
 
@@ -445,23 +447,27 @@ namespace beiklive
         std::string defaultLogo = beiklive::tools::getDefaultLogoPath(
             static_cast<beiklive::enums::EmuPlatform>(m_gameEntry.platform));
 
-        // 如果当前封面不是默认图标（已自定义），跳过
+        // 如果当前封面不是默认图标，已自定义则不用替换
         if (m_gameEntry.logoPath != defaultLogo)
             return;
 
         // 构建即时存档 0 截图路径
-        std::filesystem::path gamePath(m_gameEntry.path);
-        std::string thumbPath = (std::filesystem::path(m_gameEntry.savePath) /
-                                (gamePath.stem().string() + ".ss0.png")).string();
+        std::string gamename = beiklive::tools::getFileNameWithoutExtension(m_gameEntry.path);
+        std::string thumbPath = m_gameEntry.savePath +  beiklive::path::SPLIT_CHAR +
+                                gamename + ".ss0.png";
 
+        // 检测文件是否存在
         if (std::filesystem::exists(thumbPath))
         {
             m_gameEntry.logoPath = thumbPath;
             if (beiklive::GameDB)
             {
                 beiklive::GameDB->set(m_gameEntry.crc32, "logoPath", nlohmann::json(thumbPath));
-                beiklive::GameDB->flush();
             }
         }
+
+        // 检查一下是否成功变更
+        // brls::Logger::debug("变更GameDB logopath -> {}", beiklive::GameDB->get(m_gameEntry.crc32, "logoPath").value());
+
     }
 }
