@@ -99,6 +99,13 @@ namespace beiklive
         std::string defaultLogo = beiklive::tools::getDefaultLogoPath(
             static_cast<beiklive::enums::EmuPlatform>((int)m_gameData.itemType));
         db->setDefault(dcrc32, "logoPath", defaultLogo);
+
+        namespace sk = beiklive::SettingKey;
+        db->setDefault(dcrc32, "overlayEnabled",
+                       GET_SETTING_KEY_INT(sk::KEY_DISPLAY_OVERLAY_ENABLED, 0) != 0);
+        db->setDefault(dcrc32, "shaderEnabled",
+                       GET_SETTING_KEY_INT(sk::KEY_DISPLAY_SHADER_ENABLED, 0) != 0);
+
         m_gameEntry = db->findByCrc32(dcrc32).value();
 
         // 初始化路径字段（优先使用已有记录，若为空则从配置中读取默认值）
@@ -155,6 +162,31 @@ namespace beiklive
             if (!overlayKey.empty())
                 m_gameEntry.overlayPath = GET_SETTING_KEY_STR(overlayKey.c_str(), "");
         }
+
+        // shaderPath：优先使用已有值，否则从设置读取平台对应的着色器路径（平台路径为空时回退到全局路径）
+        if (m_gameEntry.shaderPath.empty())
+        {
+            std::string shaderKey;
+            switch (static_cast<beiklive::enums::EmuPlatform>(m_gameEntry.platform))
+            {
+                case beiklive::enums::EmuPlatform::EmuGBA: shaderKey = sk::KEY_DISPLAY_SHADER_GBA_PATH; break;
+                case beiklive::enums::EmuPlatform::EmuGBC: shaderKey = sk::KEY_DISPLAY_SHADER_GBC_PATH; break;
+                case beiklive::enums::EmuPlatform::EmuGB:  shaderKey = sk::KEY_DISPLAY_SHADER_GB_PATH;  break;
+                default: break;
+            }
+            if (!shaderKey.empty())
+                m_gameEntry.shaderPath = GET_SETTING_KEY_STR(shaderKey.c_str(), "");
+            if (m_gameEntry.shaderPath.empty())
+                m_gameEntry.shaderPath = GET_SETTING_KEY_STR(sk::KEY_DISPLAY_SHADER_PATH, "");
+        }
+
+        // overlayEnabled：优先使用已有值，新游戏使用全局设置初始化
+        if (!m_gameEntry.overlayEnabled)
+            m_gameEntry.overlayEnabled = GET_SETTING_KEY_INT(sk::KEY_DISPLAY_OVERLAY_ENABLED, 0) != 0;
+
+        // shaderEnabled：优先使用已有值，新游戏使用全局设置初始化
+        if (!m_gameEntry.shaderEnabled)
+            m_gameEntry.shaderEnabled = GET_SETTING_KEY_INT(sk::KEY_DISPLAY_SHADER_ENABLED, 0) != 0;
 
         // logoPath：优先使用已有值（包括自定义封面），否则使用平台默认图标。若为默认图标则尝试替换为存档截图
         if (m_gameEntry.logoPath.empty())

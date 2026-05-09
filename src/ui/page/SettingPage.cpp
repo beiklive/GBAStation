@@ -658,6 +658,19 @@ brls::View *SettingPage::buildUITab()
                         [](bool v) { cfgSetBool("save.autoLoadState0", v); });
     box->addView(autoLoadCell);
 
+    // ── 封面设置 ──────────────────────────────────────────────────────────────
+    box->addView(makeHeader("封面设置"));
+
+    {
+        auto *thumbCell = new brls::BooleanCell();
+        thumbCell->init("使用存档截图作为封面",
+                       cfgGetBool(beiklive::SettingKey::KEY_UI_USE_SAVESTATE_THUMB, false),
+                       [](bool v) { cfgSetBool(beiklive::SettingKey::KEY_UI_USE_SAVESTATE_THUMB, v); });
+        box->addView(thumbCell);
+        box->addView(makeHint("使用即时存档0截图作为封面，已自定义封面的游戏不覆盖"));
+    }
+
+
     // ── 金手指设置 ────────────────────────────────────────────────────────────
     box->addView(makeHeader("金手指设置"));
 
