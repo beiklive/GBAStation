@@ -402,7 +402,7 @@ public:
 
 private:
     std::function<void(const std::string &)> m_onDone;
-    float m_countdownSeconds = 5.0f;
+    float m_countdownSeconds = 3.0f;
     brls::Label *m_promptLabel    = nullptr;
     brls::Label *m_keyLabel       = nullptr;
     brls::Label *m_countdownLabel = nullptr;
@@ -671,22 +671,6 @@ brls::View *SettingPage::buildUITab()
     }
 
 
-    // ── 金手指设置 ────────────────────────────────────────────────────────────
-    box->addView(makeHeader("金手指设置"));
-
-    auto *cheatEnabledCell = new brls::BooleanCell();
-    cheatEnabledCell->init("启用金手指", cfgGetBool("cheat.enabled", false),
-                           [](bool v) { cfgSetBool("cheat.enabled", v); });
-    box->addView(cheatEnabledCell);
-
-    {
-        std::vector<std::string> cheatDirs = {"ROM 所在目录", "模拟器目录"};
-        std::string curCheat = cfgGetStr("cheat.dir", "");
-        auto *cheatDirCell = new brls::SelectorCell();
-        cheatDirCell->init("金手指目录", cheatDirs, curCheat.empty() ? 0 : 1,
-                           [](int idx) { cfgSetStr("cheat.dir", idx == 0 ? "" : beiklive::path::cheatPath()); });
-        box->addView(cheatDirCell);
-    }
 
     // ── 动态背景 ──────────────────────────────────────────────────────────────
     box->addView(makeHeader("动态背景"));
@@ -1091,10 +1075,10 @@ brls::View *SettingPage::buildAudioTab()
 
 struct GameBtnEntry { const char *label; const char *suffix; };
 static const GameBtnEntry k_gameBtns[] = {
-    {"\uE0E0", "a"}, {"\uE0E1", "b"}, {"\uE0E2", "x"}, {"\uE0E3", "y"},
-    {"\uE0EB", "up"}, {"\uE0EC", "down"}, {"\uE0ED", "left"}, {"\uE0EE", "right"},
-    {"\uE0E4", "l"}, {"\uE0E5", "r"}, {"\uE0E6", "l2"}, {"\uE0E7", "r2"},
-    {"\uE0EF", "start"}, {"\uE0F0", "select"},
+    {"A键", "a"}, {"B键", "b"}, {"X键", "x"}, {"Y键", "y"},
+    {"方向键上", "up"}, {"方向键下", "down"}, {"方向键左", "left"}, {"方向键右", "right"},
+    {"L键", "l"}, {"R键", "r"}, {"L2键", "l2"}, {"R2键", "r2"},
+    {"开始键", "start"}, {"选择键", "select"},
     {"左摇杆上", "lstick_up"}, {"左摇杆下", "lstick_down"},
     {"左摇杆左", "lstick_left"}, {"左摇杆右", "lstick_right"},
     {"右摇杆上", "rstick_up"}, {"右摇杆下", "rstick_down"},
@@ -1111,7 +1095,7 @@ static const HotkeyEntry k_hotkeys[] = {
     {"hotkey.menu.pad",       "打开菜单"},
     {"hotkey.mute.pad",       "静音"},
     {"hotkey.pause.pad",      "暂停"},
-    {"hotkey.screenshot.pad", "截图"},
+    // {"hotkey.screenshot.pad", "截图"},
 };
 static constexpr int k_hotkeyCount = static_cast<int>(sizeof(k_hotkeys) / sizeof(k_hotkeys[0]));
 
@@ -1166,7 +1150,7 @@ brls::View *SettingPage::buildKeyBindTab()
     {
         std::string cfgKey = std::string("handle.") + k_gameBtns[i].suffix;
         auto *cell         = new beiklive::DetailCell();
-        cell->setLeftTextSize(28.f);
+        cell->setLeftTextSize(18.f);
         cell->setLeftText(k_gameBtns[i].label);
         cell->setRightText(cfgGetStr(cfgKey, "none"));
         registerKeyBindActions(cell, cfgKey);
@@ -1247,7 +1231,6 @@ brls::View *SettingPage::buildDebugTab()
                                }
                            });
         box->addView(logLevelCell);
-        box->addView(makeHint("debug 最详细但影响性能，error 仅显示错误"));
     }
 
     auto *logFileCell = new brls::BooleanCell();
@@ -1320,70 +1303,6 @@ brls::View *SettingPage::buildDebugTab()
         box->addView(makeHint("强制模拟 Game Boy Player 振动外设效果"));
     }
 
-    // ── 控件演示 ──────────────────────────────────────────────────────────────
-    box->addView(makeHeader("自定义控件演示"));
-
-    {
-        auto *btn = new SwitchButton();
-        btn->setText("启停快进功能 (演示)");
-        btn->setState(false);
-        btn->setOnToggle([](bool on)
-        {
-            brls::Application::notify(std::string("快进功能: ") + (on ? "已开启" : "已关闭"));
-        });
-        box->addView(btn);
-    }
-
-    {
-        auto *btn = new SelectorButton();
-        btn->setText("画面缩放模式 (演示)");
-        std::vector<std::string> options = {"Fit", "Fill", "Original", "IntegerScale", "Custom"};
-        btn->setOptions(options, 0);
-        btn->setOnSelect([options](int idx)
-        {
-            if (idx >= 0 && idx < (int)options.size())
-                brls::Application::notify("已选择: " + options[idx]);
-        });
-        box->addView(btn);
-    }
-
-    {
-        auto *btn = new NumberButton();
-        btn->setText("音量百分比 (演示)");
-        btn->setValue(75);
-        btn->setStep(1);
-        btn->setDecimal(-1);
-        btn->setOnChange([](double val)
-        {
-            brls::Application::notify("音量: " + std::to_string((int)val) + "%");
-        });
-        box->addView(btn);
-    }
-
-    {
-        auto *btn = new NumberButton();
-        btn->setText("浮点数值 (演示)");
-        btn->setValue(1.5);
-        btn->setStep(0.1);
-        btn->setDecimal(1);
-        btn->setOnChange([](double val)
-        {
-            std::ostringstream oss;
-            oss << std::fixed << std::setprecision(1) << val;
-            brls::Application::notify("浮点值: " + oss.str());
-        });
-        box->addView(btn);
-    }
-
-    {
-        auto *hint = new brls::Label();
-        hint->setText("切换按钮: A 键切换 | 选择按钮: 左右切换 | 数字按钮: L/R 增减, A 弹窗输入");
-        hint->setFontSize(16.f);
-        hint->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
-        hint->setMarginLeft(20.f);
-        hint->setFocusable(false);
-        box->addView(hint);
-    }
 
     scroll->setContentView(box);
     auto *container = new brls::Box(brls::Axis::COLUMN);
