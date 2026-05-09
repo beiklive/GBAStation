@@ -1016,7 +1016,6 @@ brls::View *SettingPage::buildDisplayTab()
         return cell;
     };
 
-    box->addView(makeShaderPathCell(beiklive::SettingKey::KEY_DISPLAY_SHADER_PATH,     "全局着色器"));
     box->addView(makeShaderPathCell(beiklive::SettingKey::KEY_DISPLAY_SHADER_GBA_PATH, "GBA 着色器"));
     box->addView(makeShaderPathCell(beiklive::SettingKey::KEY_DISPLAY_SHADER_GBC_PATH, "GBC 着色器"));
     box->addView(makeShaderPathCell(beiklive::SettingKey::KEY_DISPLAY_SHADER_GB_PATH,  "GB 着色器"));
