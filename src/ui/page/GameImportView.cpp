@@ -344,13 +344,8 @@ namespace beiklive
 
             std::string logoPath;
             {
-                std::string thumbPath = romPath;
-                size_t romsPos = thumbPath.find("roms");
-                if (romsPos != std::string::npos)
-                {
-                    thumbPath.replace(romsPos, 4, "thumbnails");
-                    std::string thumbDir = getParentPath(thumbPath);
-                    std::string logoFile = thumbDir + "/Named_Snaps/" + romStem + ".png";
+                std::string thumbPath = "/retroarch/thumbnails";
+                    std::string logoFile = thumbPath + "/Named_Snaps/" + romStem + ".png";
 #ifdef _WIN32
                     std::string altLogo = logoFile;
                     for (auto& c : altLogo) if (c == '/') c = '\\';
@@ -359,8 +354,6 @@ namespace beiklive
                     else
 #endif
                         logoPath = logoFile;
-                }
-            }
 
             std::string pDirName = platformDirName(platform);
             std::string savePath = beiklive::path::ROOT + beiklive::path::SPLIT_CHAR +
