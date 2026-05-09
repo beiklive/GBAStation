@@ -13,6 +13,47 @@ namespace beiklive
     {
         return beiklive::tools::getFileModTimeStr(path);
     }
+    static bool isValidCheatCode(const std::string &code)
+    {
+        if (code.empty())
+            return false;
+
+        size_t b = code.find_first_not_of(" \t");
+        if (b == std::string::npos)
+            return false;
+        size_t e = code.find_last_not_of(" \t");
+        std::string line = code.substr(b, e - b + 1);
+        if (line.empty())
+            return false;
+
+        if (line.find(':') != std::string::npos ||
+            line.find('+') != std::string::npos)
+        {
+            return true;
+        }
+
+        auto sp = line.find(' ');
+        if (sp != std::string::npos)
+        {
+            std::string addr = line.substr(0, sp);
+            std::string val = line.substr(sp + 1);
+            size_t vb = val.find_first_not_of(" \t");
+            if (vb != std::string::npos)
+                val = val.substr(vb);
+            if (addr.size() == 8 &&
+                std::all_of(addr.begin(), addr.end(),
+                            [](char c) { return std::isxdigit(static_cast<unsigned char>(c)); }) &&
+                (val.size() == 4 || val.size() == 8) &&
+                std::all_of(val.begin(), val.end(),
+                            [](char c) { return std::isxdigit(static_cast<unsigned char>(c)); }))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     static brls::Label *makeHint(const std::string &text)
     {
         auto *lbl = new brls::Label();
@@ -424,16 +465,16 @@ namespace beiklive
 
         auto* filenameBox = new brls::Box(brls::Axis::COLUMN);
         filenameBox->setHeightPercentage(100.f);
-        filenameBox->setWidth(150.f);
+        filenameBox->setWidth(120.f);
         filenameBox->setFocusable(false);
-        filenameBox->setMarginRight(10.f);
+        // filenameBox->setMarginRight(10.f);
         filenameBox->setMarginLeft(10.f);
         filenameBox->setAlignItems(brls::AlignItems::CENTER);
 
         auto *titleLabel = new brls::Label();
         titleLabel->setText("已启用金手指");
         titleLabel->setFontSize(13.f);
-        titleLabel->setWidth(140.f);
+        titleLabel->setWidth(110.f);
         titleLabel->setHorizontalAlign(brls::HorizontalAlign::LEFT);
         titleLabel->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
         titleLabel->setMarginRight(10.f);
@@ -446,7 +487,7 @@ namespace beiklive
         m_cheatCountLabel = new brls::Label();
         m_cheatCountLabel->setText("0 | 0 项");
         m_cheatCountLabel->setHorizontalAlign(brls::HorizontalAlign::LEFT);
-        m_cheatCountLabel->setWidth(140.f);
+        m_cheatCountLabel->setWidth(110.f);
         m_cheatCountLabel->setHeight(20.f);
         m_cheatCountLabel->setFontSize(18.f);
         m_cheatCountLabel->setTextColor(GET_THEME_COLOR("brls/text"));
@@ -469,11 +510,11 @@ namespace beiklive
         selectChtBtn->setBorderThickness(1.f);
         selectChtBtn->setBorderColor(nvgRGBA(255, 255, 255, 100));
         selectChtBtn->setCornerRadius(5.f);
-        selectChtBtn->setWidth(250.f);
+        selectChtBtn->setWidth(170.f);
         selectChtBtn->setHeight(50.f);
-        selectChtBtn->setMarginLeft(20.f);
+        selectChtBtn->setMarginLeft(5.f);
         selectChtBtn->setMarginTop(10.f);
-        selectChtBtn->setText("切换文件(cht)");
+        selectChtBtn->setText("切换金手指");
         selectChtBtn->setIcon(BK_RES("img/ui/light/wenjian.png"));
         selectChtBtn->setMarginRight(4.f);
         selectChtBtn->registerClickAction([this](brls::View *) -> bool
@@ -488,6 +529,70 @@ namespace beiklive
         selectChtBtn->setCustomNavigationRoute(brls::FocusDirection::UP, selectChtBtn);
 
         topRow->addView(selectChtBtn);
+
+        // 新增金手指按钮
+        auto* addCheatBtn = new beiklive::ButtonBox();
+        addCheatBtn->setBorderThickness(1.f);
+        addCheatBtn->setBorderColor(nvgRGBA(255, 255, 255, 100));
+        addCheatBtn->setCornerRadius(5.f);
+        addCheatBtn->setWidth(170.f);
+        addCheatBtn->setHeight(50.f);
+        addCheatBtn->setMarginLeft(10.f);
+        addCheatBtn->setMarginTop(10.f);
+        addCheatBtn->setText("新增金手指");
+        addCheatBtn->setIcon(BK_RES("img/ui/menu/cheat.png"));
+        addCheatBtn->setMarginRight(4.f);
+        addCheatBtn->registerClickAction([this](brls::View *) -> bool {
+            auto* ime = brls::Application::getImeManager();
+            if (!ime) return true;
+
+            ime->openForText(
+                [this](std::string name) {
+                    if (name.empty()) return;
+
+                    std::function<void()> promptCode;
+                    promptCode = [this, name, &promptCode]() {
+                        auto* ime2 = brls::Application::getImeManager();
+                        if (!ime2) return;
+                        ime2->openForText(
+                            [this, name, &promptCode](std::string code) {
+                                if (code.empty()) return;
+                                if (!isValidCheatCode(code))
+                                {
+                                    brls::Application::notify("金手指代码格式不正确，请重新输入");
+                                    promptCode();
+                                    return;
+                                }
+                                CheatEntry entry;
+                                entry.desc = name;
+                                entry.code = code;
+                                entry.enabled = true;
+                                m_cheats.push_back(entry);
+                                if (!m_gameEntry.cheatPath.empty())
+                                    beiklive::saveChtFile(m_gameEntry.cheatPath, m_cheats);
+                                if (m_cheatToggleCallback)
+                                {
+                                    int newIdx = static_cast<int>(m_cheats.size()) - 1;
+                                    m_cheatToggleCallback(newIdx, true);
+                                }
+                                _rebuildCheatItems();
+                            },
+                            "金手指代码",
+                            "",
+                            256,
+                            "",
+                            brls::KeyboardKeyDisableBitmask::KEYBOARD_DISABLE_NONE);
+                    };
+                    promptCode();
+                },
+                "金手指名称",
+                "",
+                128,
+                "",
+                brls::KeyboardKeyDisableBitmask::KEYBOARD_DISABLE_NONE);
+            return true;
+        });
+        topRow->addView(addCheatBtn);
 
         wrapper->addView(topRow);
 
@@ -505,7 +610,7 @@ namespace beiklive
         // 金手指网格列表
         m_cheatItemBox = new brls::Box(brls::Axis::COLUMN);
         m_cheatItemBox->setGrow(1.f);
-        m_cheatItemBox->setPadding(0.f, 20.f, 0.f, 20.f);
+        m_cheatItemBox->setPadding(10.f, 20.f, 10.f, 20.f);
 
         itemContainer->addView(m_cheatItemBox);
         wrapper->addView(itemContainer);
@@ -566,6 +671,61 @@ namespace beiklive
                         if (!m_gameEntry.cheatPath.empty())
                             beiklive::saveChtFile(m_gameEntry.cheatPath, m_cheats);
                     } });
+
+                // BUTTON_X: 修改金手指代码
+                sw->registerAction("修改代码", brls::BUTTON_X, [this, idx](brls::View *) -> bool {
+                    if (idx >= (int)m_cheats.size()) return true;
+                    std::function<void()> promptCode;
+                    promptCode = [this, idx, &promptCode]() {
+                        auto* ime = brls::Application::getImeManager();
+                        if (!ime) return;
+                        if (idx >= (int)m_cheats.size()) return;
+                        ime->openForText(
+                            [this, idx, &promptCode](std::string code) {
+                                if (code.empty()) return;
+                                if (!isValidCheatCode(code))
+                                {
+                                    brls::Application::notify("金手指代码格式不正确，请重新输入");
+                                    promptCode();
+                                    return;
+                                }
+                                if (idx >= (int)m_cheats.size()) return;
+                                m_cheats[idx].code = code;
+                                if (!m_gameEntry.cheatPath.empty())
+                                    beiklive::saveChtFile(m_gameEntry.cheatPath, m_cheats);
+                            },
+                            "修改金手指代码",
+                            "",
+                            256,
+                            m_cheats[idx].code,
+                            brls::KeyboardKeyDisableBitmask::KEYBOARD_DISABLE_NONE);
+                    };
+                    promptCode();
+                    return true;
+                });
+
+                // BUTTON_Y: 修改金手指名称
+                sw->registerAction("修改名称", brls::BUTTON_Y, [this, idx](brls::View *) -> bool {
+                    if (idx >= (int)m_cheats.size()) return true;
+                    auto* ime = brls::Application::getImeManager();
+                    if (!ime) return true;
+                    ime->openForText(
+                        [this, idx](std::string name) {
+                            if (name.empty()) return;
+                            if (idx >= (int)m_cheats.size()) return;
+                            m_cheats[idx].desc = name;
+                            if (!m_gameEntry.cheatPath.empty())
+                                beiklive::saveChtFile(m_gameEntry.cheatPath, m_cheats);
+                            _rebuildCheatItems();
+                        },
+                        "修改金手指名称",
+                        "",
+                        128,
+                        m_cheats[idx].desc,
+                        brls::KeyboardKeyDisableBitmask::KEYBOARD_DISABLE_NONE);
+                    return true;
+                });
+
                 m_cheatSwitches.push_back(sw);
                 m_cheatItemBox->addView(sw);
             }
