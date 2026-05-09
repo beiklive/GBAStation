@@ -609,7 +609,6 @@ brls::View *SettingPage::buildUITab()
                        cfgGetStr("core.mgba_skip_bios", "OFF") == "ON",
                        [](bool v) { cfgSetStr("core.mgba_skip_bios", v ? "ON" : "OFF"); });
     box->addView(skipBiosCell);
-    box->addView(makeHint("使用真实 GBA 启动画面"));
 
     {
         std::vector<std::string> gbColors = {
@@ -621,41 +620,7 @@ brls::View *SettingPage::buildUITab()
         gbColorCell->init("GB 配色", gbColors, findIndex(gbColors, curGbColor),
                           [gbColors](int idx) { if (idx >= 0 && idx < (int)gbColors.size()) cfgSetStr("core.mgba_gb_colors", gbColors[idx]); });
         box->addView(gbColorCell);
-    }
-
-    {
-        std::vector<std::string> idleOpts = {"Remove Known", "Detect and Remove", "Don't Remove"};
-        std::string curIdle = cfgGetStr("core.mgba_idle_optimization", "Remove Known");
-        auto *idleCell = new brls::SelectorCell();
-        idleCell->init("空闲优化", idleOpts, findIndex(idleOpts, curIdle),
-                       [idleOpts](int idx) { if (idx >= 0 && idx < 3) cfgSetStr("core.mgba_idle_optimization", idleOpts[idx]); });
-        box->addView(idleCell);
-        box->addView(makeHint("减少无意义循环的 CPU 占用，大部分情况下使用 Remove Known"));
-    }
-
-    {
-        auto *cell = new brls::BooleanCell();
-        cell->init("允许同时按下反方向", cfgGetStr("core.mgba_allow_opposing_directions", "no") == "yes",
-                   [](bool v) { cfgSetStr("core.mgba_allow_opposing_directions", v ? "yes" : "no"); });
-        box->addView(cell);
-        box->addView(makeHint("允许同时按下左+右或上+下方向键"));
-    }
-
-    // ── GBA/GBC 高级 ──────────────────────────────────────────────────────────
-    box->addView(makeHeader("GBA/GBC 高级"));
-
-    {
-        auto *cell = new brls::BooleanCell();
-        cell->init("超级 GB 边框", cfgGetStr("core.mgba_sgb_borders", "ON") == "ON",
-                   [](bool v) { cfgSetStr("core.mgba_sgb_borders", v ? "ON" : "OFF"); });
-        box->addView(cell);
-    }
-
-    {
-        auto *cell = new brls::BooleanCell();
-        cell->init("强制 GBP 振动", cfgGetStr("core.mgba_force_gbp", "OFF") == "ON",
-                   [](bool v) { cfgSetStr("core.mgba_force_gbp", v ? "ON" : "OFF"); });
-        box->addView(cell);
+        box->addView(makeHint("为 GB/GBC 单色游戏着色，不影响 GBA 游戏"));
     }
 
     // ── 存档设置 ──────────────────────────────────────────────────────────────
@@ -815,6 +780,7 @@ brls::View *SettingPage::buildGameTab()
         cell->init("触发模式", modes, curMode == "toggle" ? 1 : 0,
                    [](int idx) { cfgSetStr("fastforward.mode", idx == 1 ? "toggle" : "hold"); });
         box->addView(cell);
+        box->addView(makeHint("按住：长按快进键触发  |  切换：按一次永久保持"));
     }
 
     {
@@ -850,6 +816,7 @@ brls::View *SettingPage::buildGameTab()
         cell->init("触发模式", modes, curMode == "toggle" ? 1 : 0,
                    [](int idx) { cfgSetStr("rewind.mode", idx == 1 ? "toggle" : "hold"); });
         box->addView(cell);
+        box->addView(makeHint("按住：长按倒带键触发  |  切换：按一次永久保持"));
     }
 
     auto *rewMuteCell = new brls::BooleanCell();
@@ -867,6 +834,7 @@ brls::View *SettingPage::buildGameTab()
         cell->init("倒带步进", stepOpts, idx,
                    [](int i) { if (i >= 0 && i < 4) SET_SETTING_KEY_INT("rewind.step", stepVals[i]); });
         box->addView(cell);
+        box->addView(makeHint("每次倒带操作回退的帧数，步进越小控制越精细"));
     }
 
     {
@@ -911,6 +879,7 @@ brls::View *SettingPage::buildGameTab()
         cell->init("缩略图压缩策略", compressionOpts, curCompression,
                    [](int idx) { if (idx >= 0 && idx <= 1) SET_SETTING_KEY_INT(beiklive::SettingKey::KEY_REWIND_THUMB_COMPRESSION, idx); });
         box->addView(cell);
+        box->addView(makeHint("最近邻速度更快但锯齿明显，双线性更平滑但性能略低"));
     }
 
     scroll->setContentView(box);
@@ -956,13 +925,8 @@ brls::View *SettingPage::buildDisplayTab()
         cell->init("纹理过滤", filters, idx,
                    [](int i) { cfgSetStr("display.filter", i == 1 ? "linear" : "nearest"); });
         box->addView(cell);
-
+        box->addView(makeHint("Nearest 像素点阵风格（锐利）| Linear 平滑柔和（模糊）"));
     }
-
-    auto *fpsCell = new brls::BooleanCell();
-    fpsCell->init("显示 FPS 覆盖层", cfgGetBool("display.showFps", false),
-                   [](bool v) { cfgSetBool("display.showFps", v); });
-    box->addView(fpsCell);
 
     auto *ffOverlayCell = new brls::BooleanCell();
     ffOverlayCell->init("显示快进覆盖层", cfgGetBool("display.showFfOverlay", true),
@@ -978,6 +942,13 @@ brls::View *SettingPage::buildDisplayTab()
     muteOverlayCell->init("显示静音覆盖层", cfgGetBool("display.showMuteOverlay", true),
                            [](bool v) { cfgSetBool("display.showMuteOverlay", v); });
     box->addView(muteOverlayCell);
+
+    {
+        auto *fpsCell = new brls::BooleanCell();
+        fpsCell->init("显示 FPS 覆盖层", cfgGetBool("display.showFps", false),
+                       [](bool v) { cfgSetBool("display.showFps", v); });
+        box->addView(fpsCell);
+    }
 
     // ── 遮罩设置 ──────────────────────────────────────────────────────────────
     box->addView(makeHeader("遮罩设置"));
@@ -1095,20 +1066,8 @@ brls::View *SettingPage::buildAudioTab()
         cell->init("低通滤波截止频率", rangeOpts, idx,
                    [](int i) { if (i >= 0 && i < 5) cfgSetStr("core.mgba_audio_low_pass_range", rangeVals[i]); });
         box->addView(cell);
+        box->addView(makeHint("数值越低高频削减越多，音色越沉闷"));
     }
-
-    // ── 游戏音频 ──────────────────────────────────────────────────────────────
-    box->addView(makeHeader("游戏音频"));
-
-    auto *ffMuteCell = new brls::BooleanCell();
-    ffMuteCell->init("快进时静音", cfgGetBool("fastforward.mute", true),
-                     [](bool v) { cfgSetBool("fastforward.mute", v); });
-    box->addView(ffMuteCell);
-
-    auto *rewMuteCell = new brls::BooleanCell();
-    rewMuteCell->init("倒带时静音", cfgGetBool("rewind.mute", false),
-                      [](bool v) { cfgSetBool("rewind.mute", v); });
-    box->addView(rewMuteCell);
 
     scroll->setContentView(box);
     auto *container = new brls::Box(brls::Axis::COLUMN);
@@ -1248,6 +1207,7 @@ brls::View *SettingPage::buildDebugTab()
     auto *scroll = makeScrollTab();
     auto *box    = makeContentBox();
 
+    // ── 日志 ──────────────────────────────────────────────────────────────────
     box->addView(makeHeader("日志"));
 
     {
@@ -1275,6 +1235,7 @@ brls::View *SettingPage::buildDebugTab()
                                }
                            });
         box->addView(logLevelCell);
+        box->addView(makeHint("debug 最详细但影响性能，error 仅显示错误"));
     }
 
     auto *logFileCell = new brls::BooleanCell();
@@ -1308,31 +1269,51 @@ brls::View *SettingPage::buildDebugTab()
                              brls::Application::enableDebuggingView(v);
                          });
     box->addView(logOverlayCell);
+    box->addView(makeHint("在屏幕上方叠加显示帧率、帧时间等性能数据"));
 
-    scroll->setContentView(box);
-    auto *container = new brls::Box(brls::Axis::COLUMN);
-    container->setGrow(1.0f);
-    container->setWidthPercentage(100.f);
-    container->addView(scroll);
+    // ── 核心调试 ──────────────────────────────────────────────────────────────
+    box->addView(makeHeader("核心调试选项"));
 
-    return container;
-}
+    {
+        std::vector<std::string> idleOpts = {"Remove Known", "Detect and Remove", "Don't Remove"};
+        std::string curIdle = cfgGetStr("core.mgba_idle_optimization", "Remove Known");
+        auto *idleCell = new brls::SelectorCell();
+        idleCell->init("空闲优化", idleOpts, findIndex(idleOpts, curIdle),
+                       [idleOpts](int idx) { if (idx >= 0 && idx < 3) cfgSetStr("core.mgba_idle_optimization", idleOpts[idx]); });
+        box->addView(idleCell);
+        box->addView(makeHint("减少无意义循环的 CPU 占用，大部分情况下使用 Remove Known"));
+    }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  Tab: 功能演示 (FunctionButtons demo)
-// ─────────────────────────────────────────────────────────────────────────────
+    {
+        auto *cell = new brls::BooleanCell();
+        cell->init("允许同时按下反方向", cfgGetStr("core.mgba_allow_opposing_directions", "no") == "yes",
+                   [](bool v) { cfgSetStr("core.mgba_allow_opposing_directions", v ? "yes" : "no"); });
+        box->addView(cell);
+        box->addView(makeHint("允许同时按下左+右或上+下方向键"));
+    }
 
-brls::View *SettingPage::buildFunctionDemoTab()
-{
-    auto *scroll = makeScrollTab();
-    auto *box    = makeContentBox();
+    {
+        auto *cell = new brls::BooleanCell();
+        cell->init("超级 GB 边框", cfgGetStr("core.mgba_sgb_borders", "ON") == "ON",
+                   [](bool v) { cfgSetStr("core.mgba_sgb_borders", v ? "ON" : "OFF"); });
+        box->addView(cell);
+        box->addView(makeHint("为 Super Game Boy 游戏绘制专属边框图案"));
+    }
 
-    // ── 切换按钮 ──────────────────────────────────────────────────────────────
-    box->addView(makeHeader("切换按钮 (SwitchButton)"));
+    {
+        auto *cell = new brls::BooleanCell();
+        cell->init("强制 GBP 振动", cfgGetStr("core.mgba_force_gbp", "OFF") == "ON",
+                   [](bool v) { cfgSetStr("core.mgba_force_gbp", v ? "ON" : "OFF"); });
+        box->addView(cell);
+        box->addView(makeHint("强制模拟 Game Boy Player 振动外设效果"));
+    }
+
+    // ── 控件演示 ──────────────────────────────────────────────────────────────
+    box->addView(makeHeader("自定义控件演示"));
 
     {
         auto *btn = new SwitchButton();
-        btn->setText("启停快进功能");
+        btn->setText("启停快进功能 (演示)");
         btn->setState(false);
         btn->setOnToggle([](bool on)
         {
@@ -1341,12 +1322,9 @@ brls::View *SettingPage::buildFunctionDemoTab()
         box->addView(btn);
     }
 
-    // ── 选择按钮 ──────────────────────────────────────────────────────────────
-    box->addView(makeHeader("选择按钮 (SelectorButton)"));
-
     {
         auto *btn = new SelectorButton();
-        btn->setText("画面缩放模式");
+        btn->setText("画面缩放模式 (演示)");
         std::vector<std::string> options = {"Fit", "Fill", "Original", "IntegerScale", "Custom"};
         btn->setOptions(options, 0);
         btn->setOnSelect([options](int idx)
@@ -1357,12 +1335,9 @@ brls::View *SettingPage::buildFunctionDemoTab()
         box->addView(btn);
     }
 
-    // ── 数字按钮 ──────────────────────────────────────────────────────────────
-    box->addView(makeHeader("数字按钮 (NumberButton)"));
-
     {
         auto *btn = new NumberButton();
-        btn->setText("音量百分比 (整数)");
+        btn->setText("音量百分比 (演示)");
         btn->setValue(75);
         btn->setStep(1);
         btn->setDecimal(-1);
@@ -1375,7 +1350,7 @@ brls::View *SettingPage::buildFunctionDemoTab()
 
     {
         auto *btn = new NumberButton();
-        btn->setText("浮点数值 (小数)");
+        btn->setText("浮点数值 (演示)");
         btn->setValue(1.5);
         btn->setStep(0.1);
         btn->setDecimal(1);
@@ -1388,44 +1363,22 @@ brls::View *SettingPage::buildFunctionDemoTab()
         box->addView(btn);
     }
 
-    // ── 说明 ──────────────────────────────────────────────────────────────────
-    box->addView(makeHeader("操作说明"));
-
     {
         auto *hint = new brls::Label();
-        hint->setText("切换按钮: A 键切换开关状态");
-        hint->setFontSize(18.f);
+        hint->setText("切换按钮: A 键切换 | 选择按钮: 左右切换 | 数字按钮: L/R 增减, A 弹窗输入");
+        hint->setFontSize(16.f);
         hint->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
-        hint->setHeight(24.f);
-        hint->setFocusable(false);
-        box->addView(hint);
-    }
-
-    {
-        auto *hint = new brls::Label();
-        hint->setText("选择按钮: 方向键左右切换选项");
-        hint->setFontSize(18.f);
-        hint->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
-        hint->setHeight(24.f);
-        hint->setFocusable(false);
-        box->addView(hint);
-    }
-
-    {
-        auto *hint = new brls::Label();
-        hint->setText("数字按钮: L / R 键增减数值, A 键弹窗输入");
-        hint->setFontSize(18.f);
-        hint->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
-        hint->setHeight(24.f);
+        hint->setMarginLeft(20.f);
         hint->setFocusable(false);
         box->addView(hint);
     }
 
     scroll->setContentView(box);
     auto *container = new brls::Box(brls::Axis::COLUMN);
-    container->setWidthPercentage(100.f);
     container->setGrow(1.0f);
+    container->setWidthPercentage(100.f);
     container->addView(scroll);
+
     return container;
 }
 
@@ -1490,13 +1443,6 @@ void SettingPage::init()
         nullptr, 
         nullptr,      
         buildDebugTab());
-    m_tabframe->addDivider();
-    m_tabframe->addTab("演示",   
-        BK_RES("img/ui/setting/control.png"), 
-        nullptr, 
-        nullptr, 
-        nullptr,      
-        buildFunctionDemoTab());
 
     m_tabframe->addFinish();
 }

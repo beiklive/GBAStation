@@ -24,7 +24,6 @@ namespace beiklive
         brls::View *buildAudioTab();
         brls::View *buildKeyBindTab();
         brls::View *buildDebugTab();
-        brls::View *buildFunctionDemoTab();
 
         void init();
     };
