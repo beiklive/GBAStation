@@ -13,13 +13,11 @@ namespace beiklive
         : m_factory(std::move(factory))
         , m_index(index)
     {
-        // LazyCell 自身作为可聚焦元素，管理焦点路由
         this->setFocusable(true);
         this->setAxis(brls::Axis::ROW);
         this->setAlignItems(brls::AlignItems::CENTER);
         this->setJustifyContent(brls::JustifyContent::CENTER);
 
-        // 注册 A 键点击动作
         this->registerAction(
             "确认",
             brls::BUTTON_A,
@@ -37,14 +35,12 @@ namespace beiklive
     void LazyCell::draw(NVGcontext* vg, float x, float y, float w, float h,
                         brls::Style style, brls::FrameContext* ctx)
     {
-        // 首次绘制时执行延迟加载
         if (!m_loaded && m_factory)
         {
             m_loaded = true;
             brls::View* content = m_factory();
             if (content)
             {
-                // 内容视图不参与焦点管理，由 LazyCell 统一持有焦点
                 content->setFocusable(false);
                 this->addView(content);
                 this->invalidate();
@@ -75,17 +71,15 @@ namespace beiklive
     {
         this->setAxis(brls::Axis::COLUMN);
         this->setWidthPercentage(100.f);
-        // this->setHeightPercentage(100.f);
         this->setGrow(1.0f);
-        this->setFocusable(false); // 滚动容器不参与焦点管理，焦点由单元格统一持有
+        this->setFocusable(false);
 
-        // 垂直滚动容器，焦点移动时自动滚动保持聚焦单元格可见
         m_scrollFrame = new brls::ScrollingFrame();
         m_scrollFrame->setGrow(1.0f);
         m_scrollFrame->setScrollingBehavior(brls::ScrollingBehavior::CENTERED);
         m_scrollFrame->setScrollingIndicatorVisible(false);
-        m_scrollFrame->setFocusable(false); // 滚动容器不参与焦点管理，焦点由单元格统一持有
-        // 网格内容：垂直堆叠的行盒子
+        m_scrollFrame->setFocusable(false);
+
         m_gridContent = new brls::Box(brls::Axis::COLUMN);
         m_gridContent->setPadding(5.0f);
 
@@ -93,19 +87,28 @@ namespace beiklive
         this->addView(m_scrollFrame);
     }
 
-
     void GridBox::setColumns(int columns)
     {
         if (m_columns == columns)
             return;
         m_columns = columns;
-        rebuild();
+        m_renderedCount = 0;
+        renderAll();
     }
 
     void GridBox::addItem(std::function<brls::View*()> factory)
     {
         m_factories.push_back(std::move(factory));
-        rebuild();
+    }
+
+    void GridBox::commit()
+    {
+        renderAll();
+    }
+
+    void GridBox::commitAppend()
+    {
+        renderMore(static_cast<int>(m_factories.size()));
     }
 
     brls::View *GridBox::getItemView(int index) const
@@ -123,71 +126,73 @@ namespace beiklive
     {
         m_factories.clear();
         m_cells.clear();
+        m_rowBoxes.clear();
         m_gridContent->clearViews(true);
+        m_renderedCount = 0;
     }
 
-    void GridBox::rebuild()
+    // ── 内部工厂函数 ───────────────────────────────────────────────────────
+
+    LazyCell* GridBox::makeCell(int idx, float widthPercent)
     {
-        // 清除旧布局
+        auto* cell = new LazyCell(m_factories[idx], idx);
+        if (m_hideHightlight)
+            HIDE_BRLS_HIGHLIGHT(cell);
+        cell->setMargins(5.0f, 5.0f, 5.0f, 5.0f);
+        cell->setWidthPercentage(widthPercent);
+        cell->onClicked = [this](int index) {
+            if (onItemClicked) onItemClicked(index);
+        };
+        cell->onFocused = [this](int index) {
+            if (onItemFocused) onItemFocused(index);
+        };
+        return cell;
+    }
+
+    brls::Box* GridBox::makeRowBox()
+    {
+        auto* rowBox = new brls::Box(brls::Axis::ROW);
+        rowBox->setGrow(1.0f);
+        rowBox->setFocusable(false);
+        rowBox->setAlignItems(brls::AlignItems::CENTER);
+        rowBox->setJustifyContent(brls::JustifyContent::CENTER);
+        rowBox->setPaddingTop(5.0f);
+        rowBox->setPaddingBottom(5.0f);
+        return rowBox;
+    }
+
+    // ── 全量渲染 ───────────────────────────────────────────────────────────
+
+    void GridBox::renderAll()
+    {
         m_cells.clear();
+        m_rowBoxes.clear();
         m_gridContent->clearViews(true);
 
-        if (m_factories.empty() || m_columns <= 0)
+        int total = static_cast<int>(m_factories.size());
+        if (total <= 0 || m_columns <= 0)
+        {
+            m_renderedCount = 0;
             return;
+        }
 
-        const int total   = static_cast<int>(m_factories.size());
-        const int rowCount = (total + m_columns - 1) / m_columns;
-
-        const float widthPercent = 96.f / m_columns;
+        int rowCount = (total + m_columns - 1) / m_columns;
+        float widthPercent = 96.f / m_columns;
 
         for (int row = 0; row < rowCount; ++row)
         {
-            // 每行使用 ROW 方向的盒子
-            auto* rowBox = new brls::Box(brls::Axis::ROW);
-            rowBox->setGrow(1.0f);
-            rowBox->setFocusable(false);
-            rowBox->setAlignItems(brls::AlignItems::CENTER);
-            rowBox->setJustifyContent(brls::JustifyContent::CENTER);
-            rowBox->setPaddingTop(5.0f);
-            rowBox->setPaddingBottom(5.0f);
+            brls::Box* rowBox = makeRowBox();
 
-            m_cells.emplace_back(); // 新增一行
+            m_cells.emplace_back();
+            m_rowBoxes.push_back(rowBox);
 
             for (int col = 0; col < m_columns; ++col)
             {
                 int idx = row * m_columns + col;
                 if (idx >= total)
-                {
-                    // 当最后一行不满时，添加透明占位符保持每列宽度一致
-                    auto* placeholder = new brls::Box();
-                    placeholder->setWidthPercentage(widthPercent);
-                    placeholder->setFocusable(false);
-                    // placeholder->setGrow(1.0f);
-                    placeholder->setMargins(5.0f, 5.0f, 5.0f, 5.0f);
-                    rowBox->addView(placeholder);
-                    continue;
-                }
+                    break;
 
-                auto* cell = new LazyCell(m_factories[idx], idx);
-                if(m_hideHightlight){
-                    HIDE_BRLS_HIGHLIGHT(cell);
-                }
-                // cell->setGrow(1.0f);
-                cell->setMargins(5.0f, 5.0f, 5.0f, 5.0f);
-                cell->setWidthPercentage(widthPercent);
-
-                // 注入 GridBox 级别的回调
-                cell->onClicked = [this](int index)
-                {
-                    if (onItemClicked)
-                        onItemClicked(index);
-                };
-                cell->onFocused = [this](int index)
-                {
-                    if (onItemFocused)
-                        onItemFocused(index);
-                };
-
+                LazyCell* cell = makeCell(idx, widthPercent);
                 rowBox->addView(cell);
                 m_cells[row].push_back(cell);
             }
@@ -195,9 +200,71 @@ namespace beiklive
             m_gridContent->addView(rowBox);
         }
 
-        // 完成布局后配置所有单元格的焦点路由
+        m_renderedCount = total;
         setupNavigation();
     }
+
+    // ── 增量渲染 ───────────────────────────────────────────────────────────
+
+    void GridBox::renderMore(int newTotal)
+    {
+        int total = static_cast<int>(m_factories.size());
+        newTotal = std::min(newTotal, total);
+        if (newTotal <= m_renderedCount)
+            return;
+
+        float widthPercent = 96.f / m_columns;
+        int idx = m_renderedCount;
+        int remaining = newTotal - m_renderedCount;
+
+        // 先填满末行（如果有空位）
+        int lastRow = static_cast<int>(m_rowBoxes.size()) - 1;
+        if (lastRow >= 0)
+        {
+            int lastRowCells = static_cast<int>(m_cells[lastRow].size());
+            if (lastRowCells < m_columns)
+            {
+                brls::Box* rowBox = m_rowBoxes[lastRow];
+                int space = m_columns - lastRowCells;
+                int addToRow = std::min(space, remaining);
+
+                for (int i = 0; i < addToRow; ++i)
+                {
+                    LazyCell* cell = makeCell(idx, widthPercent);
+                    rowBox->addView(cell);
+                    m_cells[lastRow].push_back(cell);
+                    ++idx;
+                    --remaining;
+                }
+            }
+        }
+
+        // 创建新行
+        while (remaining > 0)
+        {
+            brls::Box* rowBox = makeRowBox();
+
+            m_cells.emplace_back();
+            m_rowBoxes.push_back(rowBox);
+
+            int addToRow = std::min(m_columns, remaining);
+            for (int col = 0; col < addToRow; ++col)
+            {
+                LazyCell* cell = makeCell(idx, widthPercent);
+                rowBox->addView(cell);
+                m_cells.back().push_back(cell);
+                ++idx;
+                --remaining;
+            }
+
+            m_gridContent->addView(rowBox);
+        }
+
+        m_renderedCount = newTotal;
+        setupNavigation();
+    }
+
+    // ── 导航设置 ───────────────────────────────────────────────────────────
 
     void GridBox::setupNavigation()
     {
@@ -213,11 +280,9 @@ namespace beiklive
             {
                 LazyCell* cell = m_cells[row][col];
 
-                // ── 向上 ──────────────────────────────────────
+                // 向上
                 {
-                    // 目标行：上一行（到顶则循环到末行）
                     int targetRow = (row > 0) ? (row - 1) : (rowCount - 1);
-                    // 目标列：同列，若目标行列数不足则取末列（防止空行越界）
                     int tColCount = static_cast<int>(m_cells[targetRow].size());
                     if (tColCount == 0)
                         continue;
@@ -226,9 +291,8 @@ namespace beiklive
                                                    m_cells[targetRow][targetCol]);
                 }
 
-                // ── 向下 ──────────────────────────────────────
+                // 向下
                 {
-                    // 目标行：下一行（到底则循环到首行）
                     int targetRow = (row < rowCount - 1) ? (row + 1) : 0;
                     int tColCount = static_cast<int>(m_cells[targetRow].size());
                     if (tColCount == 0)
@@ -238,17 +302,15 @@ namespace beiklive
                                                    m_cells[targetRow][targetCol]);
                 }
 
-                // ── 向左 ──────────────────────────────────────
+                // 向左
                 {
-                    // 目标列：左边一列（到头则循环到当前行末列）
                     int targetCol = (col > 0) ? (col - 1) : (colCount - 1);
                     cell->setCustomNavigationRoute(brls::FocusDirection::LEFT,
                                                    m_cells[row][targetCol]);
                 }
 
-                // ── 向右 ─────────────────────────────────────
+                // 向右
                 {
-                    // 目标列：右边一列（到尾则循环到当前行首列）
                     int targetCol = (col < colCount - 1) ? (col + 1) : 0;
                     cell->setCustomNavigationRoute(brls::FocusDirection::RIGHT,
                                                    m_cells[row][targetCol]);

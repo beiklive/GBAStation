@@ -95,6 +95,9 @@ class ScrollingFrame : public Box
 
     static View* create();
 
+    float getScrollingAreaHeight();
+    float getContentHeight();
+
   protected:
     View* contentView             = nullptr;
     Rectangle* scrollingIndicator = nullptr;
@@ -115,9 +118,6 @@ class ScrollingFrame : public Box
     void scrollAnimationTick();
 
     float getScrollingAreaTopBoundary();
-    float getScrollingAreaHeight();
-
-    float getContentHeight();
 
     ScrollingBehavior behavior = ScrollingBehavior::NATURAL;
     bool naturalScrollingCanScroll = false;

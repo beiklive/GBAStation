@@ -34,18 +34,26 @@ namespace beiklive
         GameLibraryPage();
         ~GameLibraryPage() = default;
 
+        void draw(NVGcontext* vg, float x, float y, float w, float h,
+                  brls::Style style, brls::FrameContext* ctx) override;
+
         /// 游戏被激活（启动）时触发
         std::function<void(const beiklive::GameEntry&)> onGameSelected;
 
     private:
+        static constexpr int PAGE_SIZE = 21;
+
         beiklive::GridBox*    m_grid      = nullptr;
         std::vector<beiklive::GameEntry> m_entries;
+        int                   m_visibleCount = 0;
+        bool                  m_loadingMore  = false;
         SortMode              m_sortMode  = SortMode::ByLastPlayed;
         beiklive::GameOptionsSidebar* m_gameOptionsSidebar = nullptr;
 
         void _loadAndShowEntries();
         void _sortEntries();
         void _rebuildGrid();
+        void _loadNextPage();
         void _reloadEntries();
         void _showSortDropdown();
         void _updateHeader();
