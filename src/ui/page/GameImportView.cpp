@@ -456,7 +456,7 @@ namespace beiklive
         if (m_importThread.joinable())
             m_importThread.join();
 
-        m_importThread = std::thread([this, importItems = std::move(importItems), config]()
+        m_importThread = std::thread([this, importItems = std::move(importItems), config, lplPath]()
         {
             int count = (int)importItems.size();
             for (int i = 0; i < count; ++i)
@@ -498,7 +498,7 @@ namespace beiklive
                     }
                 }
 
-                std::string pDirName = platformDirName(config.platform);
+                std::string pDirName = beiklive::tools::getFileNameWithoutExtension(lplPath);
                 std::string savePath = beiklive::path::ROOT + beiklive::path::SPLIT_CHAR +
                                        std::string(beiklive::path::PROGRAM_NAME) +
                                        beiklive::path::SPLIT_CHAR + "saves" +

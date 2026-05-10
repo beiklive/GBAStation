@@ -191,7 +191,7 @@ static constexpr int k_capKbdKeyCount =
 class KeyCaptureView : public beiklive::Box
 {
 public:
-    explicit KeyCaptureView(std::function<void(const std::string &)> onDone, float countdownSecs = 5.0f)
+    explicit KeyCaptureView(std::function<void(const std::string &)> onDone, float countdownSecs = 3.0f)
         : m_onDone(std::move(onDone)), m_countdownSeconds(countdownSecs)
     {
         this->showFooter(false);
