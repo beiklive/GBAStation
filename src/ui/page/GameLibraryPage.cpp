@@ -17,8 +17,8 @@ namespace beiklive
 
         this->getContentBox()->addView(m_grid);
 
-        m_grid->registerAction("排序", brls::BUTTON_Y, [this](brls::View*) -> bool {
-            _showSortDropdown();
+        m_grid->registerAction("分类", brls::BUTTON_Y, [this](brls::View*) -> bool {
+            _showFilterDropdown();
             return true;
         });
 
@@ -76,7 +76,7 @@ namespace beiklive
         ASYNC_RETAIN
         brls::async([ASYNC_TOKEN]() {
             m_entries = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
-            _sortEntries();
+            _filterEntries();
             ASYNC_RELEASE
             brls::sync([this]() {
                 m_visibleCount = std::min(PAGE_SIZE, static_cast<int>(m_entries.size()));
@@ -89,32 +89,33 @@ namespace beiklive
     }
 
     // ============================================================
-    // _sortEntries
+    // _filterEntries – 按平台过滤 m_entries
     // ============================================================
 
-    void GameLibraryPage::_sortEntries()
+    void GameLibraryPage::_filterEntries()
     {
-        switch (m_sortMode)
+        if (m_platformFilter == PlatformFilter::ALL)
         {
-            case SortMode::ByLastPlayed:
-                std::sort(m_entries.begin(), m_entries.end(),
-                    [](const GameEntry& a, const GameEntry& b) {
-                        return a.lastPlayed > b.lastPlayed;
-                    });
-                break;
-            case SortMode::ByPlayTime:
-                std::sort(m_entries.begin(), m_entries.end(),
-                    [](const GameEntry& a, const GameEntry& b) {
-                        return a.playTime > b.playTime;
-                    });
-                break;
-            case SortMode::ByName:
-                std::sort(m_entries.begin(), m_entries.end(),
-                    [](const GameEntry& a, const GameEntry& b) {
-                        return a.title < b.title;
-                    });
-                break;
+            std::sort(m_entries.begin(), m_entries.end(),
+                [](const GameEntry& a, const GameEntry& b) {
+                    return a.lastPlayed > b.lastPlayed;
+                });
+            return;
         }
+
+        int targetPlatform = static_cast<int>(m_platformFilter);
+
+        m_entries.erase(
+            std::remove_if(m_entries.begin(), m_entries.end(),
+                [targetPlatform](const GameEntry& e) {
+                    return e.platform != targetPlatform;
+                }),
+            m_entries.end());
+
+        std::sort(m_entries.begin(), m_entries.end(),
+            [](const GameEntry& a, const GameEntry& b) {
+                return a.lastPlayed > b.lastPlayed;
+            });
     }
 
     // ============================================================
@@ -241,33 +242,59 @@ namespace beiklive
     }
 
     // ============================================================
-    // _showSortDropdown
+    // _showFilterDropdown – Y 键弹出平台分类选择
     // ============================================================
 
-    void GameLibraryPage::_showSortDropdown()
+    void GameLibraryPage::_showFilterDropdown()
     {
-        std::vector<std::string> options = {
-            "按最近游玩排序",
-            "按游戏时长排序",
-            "按游戏名称排序",
-        };
+        auto allEntries = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
+        bool hasGBA = false, hasGBC = false, hasGB = false;
+        for (const auto& e : allEntries)
+        {
+            switch (static_cast<beiklive::enums::EmuPlatform>(e.platform))
+            {
+                case beiklive::enums::EmuPlatform::EmuGBA: hasGBA = true; break;
+                case beiklive::enums::EmuPlatform::EmuGBC: hasGBC = true; break;
+                case beiklive::enums::EmuPlatform::EmuGB:  hasGB  = true; break;
+                default: break;
+            }
+        }
 
-        int current = static_cast<int>(m_sortMode);
+        std::vector<std::string> options;
+        std::vector<PlatformFilter> filterMapping;
+
+        options.push_back("所有");
+        filterMapping.push_back(PlatformFilter::ALL);
+
+        if (hasGBA) { options.push_back("GBA"); filterMapping.push_back(PlatformFilter::GBA); }
+        if (hasGBC) { options.push_back("GBC"); filterMapping.push_back(PlatformFilter::GBC); }
+        if (hasGB)  { options.push_back("GB");  filterMapping.push_back(PlatformFilter::GB);  }
+
+        int current = 0;
+        for (size_t i = 0; i < filterMapping.size(); ++i)
+        {
+            if (filterMapping[i] == m_platformFilter)
+            {
+                current = static_cast<int>(i);
+                break;
+            }
+        }
 
         auto* dropdown = new brls::Dropdown(
-            "排序方式",
+            "游戏分类",
             options,
             [](int) {},
             current,
-            [this](int selected) {
-                if (selected < 0) return;
-                SortMode newMode = static_cast<SortMode>(selected);
-                if (newMode == m_sortMode) return;
-                m_sortMode = newMode;
+            [this, filterMapping](int selected) {
+                if (selected < 0 || selected >= static_cast<int>(filterMapping.size())) return;
+                PlatformFilter newFilter = filterMapping[selected];
+                if (newFilter == m_platformFilter) return;
+                m_platformFilter = newFilter;
 
                 ASYNC_RETAIN
                 brls::async([ASYNC_TOKEN]() {
-                    _sortEntries();
+                    m_entries = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
+                    _filterEntries();
                     ASYNC_RELEASE
                     brls::sync([this]() {
                         m_visibleCount = std::min(PAGE_SIZE, static_cast<int>(m_entries.size()));
@@ -288,14 +315,15 @@ namespace beiklive
     void GameLibraryPage::_updateHeader()
     {
         this->getHeader()->setInfo("共 " + std::to_string(m_entries.size()) + " 款游戏");
-        std::string sortStr;
-        switch (m_sortMode)
+        std::string filterStr;
+        switch (m_platformFilter)
         {
-            case SortMode::ByLastPlayed: sortStr = "最近游玩"; break;
-            case SortMode::ByPlayTime:   sortStr = "游玩时长"; break;
-            case SortMode::ByName:       sortStr = "名称";     break;
+            case PlatformFilter::ALL: filterStr = "所有"; break;
+            case PlatformFilter::GBA: filterStr = "GBA";  break;
+            case PlatformFilter::GBC: filterStr = "GBC";  break;
+            case PlatformFilter::GB:  filterStr = "GB";   break;
         }
-        this->getHeader()->setPath("排序：" + sortStr);
+        this->getHeader()->setPath("分类：" + filterStr);
     }
 
     // ============================================================
@@ -344,7 +372,7 @@ namespace beiklive
         ASYNC_RETAIN
         brls::async([ASYNC_TOKEN]() {
             m_entries = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
-            _sortEntries();
+            _filterEntries();
             ASYNC_RELEASE
             brls::sync([this]() {
                 m_visibleCount = std::min(PAGE_SIZE, static_cast<int>(m_entries.size()));

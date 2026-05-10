@@ -16,19 +16,20 @@ namespace beiklive
      * 主视图为 GridBox（3 列），每个格子使用 GridItem（GAME_LIBRARY 模式）。
      *
      * 功能：
-     *   - 按最近游玩（默认）/ 游玩时长 / 游戏名称 三种方式排序
-     *   - Y 键弹出排序方式 Dropdown
-     *   - 每个 GridItem 按 X 键触发设置面板（暂时 log 占位）
+     *   - Y 键弹出平台分类 Dropdown（所有 / GBA / GBC / GB），按最近游玩排序
+     *   - 触底自动翻页加载（每页 21 条）
+     *   - X 键打开游戏选项侧边栏
      */
     class GameLibraryPage : public beiklive::Box
     {
     public:
-        /// 排序方式
-        enum class SortMode
+        /// 平台分类
+        enum class PlatformFilter : int
         {
-            ByLastPlayed,  ///< 按最近游玩时间（默认）
-            ByPlayTime,    ///< 按总游玩时长
-            ByName,        ///< 按游戏名称
+            ALL = 0,
+            GBA = (int)beiklive::enums::EmuPlatform::EmuGBA,
+            GBC = (int)beiklive::enums::EmuPlatform::EmuGBC,
+            GB  = (int)beiklive::enums::EmuPlatform::EmuGB,
         };
 
         GameLibraryPage();
@@ -47,15 +48,15 @@ namespace beiklive
         std::vector<beiklive::GameEntry> m_entries;
         int                   m_visibleCount = 0;
         bool                  m_loadingMore  = false;
-        SortMode              m_sortMode  = SortMode::ByLastPlayed;
+        PlatformFilter        m_platformFilter = PlatformFilter::ALL;
         beiklive::GameOptionsSidebar* m_gameOptionsSidebar = nullptr;
 
         void _loadAndShowEntries();
-        void _sortEntries();
+        void _filterEntries();
         void _rebuildGrid();
         void _loadNextPage();
         void _reloadEntries();
-        void _showSortDropdown();
+        void _showFilterDropdown();
         void _updateHeader();
 
         /// 显示游戏选项侧边栏
