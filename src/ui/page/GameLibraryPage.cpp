@@ -1,6 +1,7 @@
 #include "GameLibraryPage.hpp"
 #include "ui/utils/FilePickerHelper.hpp"
 #include <algorithm>
+#include <cctype>
 
 namespace beiklive
 {
@@ -27,6 +28,43 @@ namespace beiklive
                 return true;
             const GameEntry& entry = m_entries[_currentFocusedIndex];
             _showGameOptionsPanel(entry);
+            return true;
+        });
+
+        m_grid->registerAction("搜索", brls::BUTTON_RT, [this](brls::View*) -> bool {
+            auto* ime = brls::Application::getPlatform()->getImeManager();
+            if (!ime) return true;
+            ime->openForText(
+                [this](std::string text) {
+                    m_isSearching = !text.empty();
+                    m_searchTerm = text;
+
+                    ASYNC_RETAIN
+                    brls::async([ASYNC_TOKEN]() {
+                        m_entries = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
+                        _filterEntries();
+                        ASYNC_RELEASE
+                        brls::sync([this]() {
+                            if (m_isSearching && m_entries.empty())
+                            {
+                                auto* dialog = new brls::Dialog("当前分类下无 \"" + m_searchTerm + "\"");
+                                dialog->addButton("确认", []() {});
+                                dialog->open();
+                                return;
+                            }
+
+                            m_visibleCount = std::min(PAGE_SIZE, static_cast<int>(m_entries.size()));
+                            _rebuildGrid();
+                            _updateHeader();
+                            brls::Application::giveFocus(m_grid);
+                        });
+                    });
+                },
+                "搜索游戏",
+                "",
+                128,
+                m_searchTerm,
+                brls::KeyboardKeyDisableBitmask::KEYBOARD_DISABLE_NONE);
             return true;
         });
 
@@ -94,23 +132,33 @@ namespace beiklive
 
     void GameLibraryPage::_filterEntries()
     {
-        if (m_platformFilter == PlatformFilter::ALL)
+        if (m_platformFilter != PlatformFilter::ALL)
         {
-            std::sort(m_entries.begin(), m_entries.end(),
-                [](const GameEntry& a, const GameEntry& b) {
-                    return a.lastPlayed > b.lastPlayed;
-                });
-            return;
+            int targetPlatform = static_cast<int>(m_platformFilter);
+            m_entries.erase(
+                std::remove_if(m_entries.begin(), m_entries.end(),
+                    [targetPlatform](const GameEntry& e) {
+                        return e.platform != targetPlatform;
+                    }),
+                m_entries.end());
         }
 
-        int targetPlatform = static_cast<int>(m_platformFilter);
+        if (m_isSearching && !m_searchTerm.empty())
+        {
+            std::string lowerTerm = m_searchTerm;
+            std::transform(lowerTerm.begin(), lowerTerm.end(), lowerTerm.begin(),
+                           [](unsigned char c) { return std::tolower(c); });
 
-        m_entries.erase(
-            std::remove_if(m_entries.begin(), m_entries.end(),
-                [targetPlatform](const GameEntry& e) {
-                    return e.platform != targetPlatform;
-                }),
-            m_entries.end());
+            m_entries.erase(
+                std::remove_if(m_entries.begin(), m_entries.end(),
+                    [&lowerTerm](const GameEntry& e) {
+                        std::string lowerTitle = e.title;
+                        std::transform(lowerTitle.begin(), lowerTitle.end(), lowerTitle.begin(),
+                                       [](unsigned char c) { return std::tolower(c); });
+                        return lowerTitle.find(lowerTerm) == std::string::npos;
+                    }),
+                m_entries.end());
+        }
 
         std::sort(m_entries.begin(), m_entries.end(),
             [](const GameEntry& a, const GameEntry& b) {
@@ -314,7 +362,14 @@ namespace beiklive
 
     void GameLibraryPage::_updateHeader()
     {
-        this->getHeader()->setInfo("共 " + std::to_string(m_entries.size()) + " 款游戏");
+        if (m_isSearching)
+        {
+            this->getHeader()->setInfo("搜索 \"" + m_searchTerm + "\" — " + std::to_string(m_entries.size()) + " 款");
+        }
+        else
+        {
+            this->getHeader()->setInfo("共 " + std::to_string(m_entries.size()) + " 款游戏");
+        }
         std::string filterStr;
         switch (m_platformFilter)
         {
@@ -323,7 +378,7 @@ namespace beiklive
             case PlatformFilter::GBC: filterStr = "GBC";  break;
             case PlatformFilter::GB:  filterStr = "GB";   break;
         }
-        this->getHeader()->setPath("分类：" + filterStr);
+        this->getHeader()->setPath((m_isSearching ? "搜索" : "分类") + (": " + filterStr));
     }
 
     // ============================================================

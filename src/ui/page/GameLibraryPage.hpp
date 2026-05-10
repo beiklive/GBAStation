@@ -49,6 +49,8 @@ namespace beiklive
         int                   m_visibleCount = 0;
         bool                  m_loadingMore  = false;
         PlatformFilter        m_platformFilter = PlatformFilter::ALL;
+        std::string           m_searchTerm;
+        bool                  m_isSearching = false;
         beiklive::GameOptionsSidebar* m_gameOptionsSidebar = nullptr;
 
         void _loadAndShowEntries();
