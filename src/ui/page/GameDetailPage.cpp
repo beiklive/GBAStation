@@ -233,6 +233,7 @@ namespace beiklive
             beiklive::GridItem* capturedItem = item;
             m_saveGrid->addItem([capturedItem]() -> brls::View* { return capturedItem; });
         }
+        m_saveGrid->commit();
 
         wrapper->addView(m_saveGrid);
         return wrapper;

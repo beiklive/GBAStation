@@ -51,6 +51,7 @@ namespace beiklive
                 return item;
             });
         }
+        m_grid->commit();
         m_grid->onItemClicked = [this](int slot) {
             beiklive::GameEntry& entry = m_entries[slot];
                     auto* detailPage = new beiklive::GameDetailPage(entry);

@@ -227,6 +227,7 @@ namespace beiklive
             grid->addItem([captItem]() -> brls::View *
                           { return captItem; });
         }
+        grid->commit();
         // GridBox 的 onItemClicked 触发确认对话框
         grid->onItemClicked = [this](int slot)
         {
@@ -285,6 +286,7 @@ namespace beiklive
             grid->addItem([captItem]() -> brls::View *
                           { return captItem; });
         }
+        grid->commit();
 
         grid->onItemClicked = [this](int slot)
         {
