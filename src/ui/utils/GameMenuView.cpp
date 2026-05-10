@@ -1155,6 +1155,9 @@ namespace beiklive
             hdrX->setTitle("X轴偏移");
             panel->addView(hdrX);
             auto *xBtn = new beiklive::NumberButton();
+            DISABLE_LR_NAVIGATION(xBtn);
+            (xBtn)->setCustomNavigationRoute(brls::FocusDirection::UP, xBtn);
+
             xBtn->setText("");
             xBtn->setValue(initX);
             xBtn->setStep(1.f);
@@ -1171,6 +1174,7 @@ namespace beiklive
             hdrY->setTitle("Y轴偏移");
             panel->addView(hdrY);
             auto *yBtn = new beiklive::NumberButton();
+            DISABLE_LR_NAVIGATION(yBtn);
             yBtn->setText("");
             yBtn->setValue(initY);
             yBtn->setStep(1.f);
@@ -1187,6 +1191,7 @@ namespace beiklive
             hdrS->setTitle("缩放比例");
             panel->addView(hdrS);
             auto *sBtn = new beiklive::NumberButton();
+            DISABLE_LR_NAVIGATION(sBtn);
             sBtn->setText("");
             sBtn->setValue(initScale);
             sBtn->setStep(0.1f);
@@ -1201,6 +1206,7 @@ namespace beiklive
 
             // 重置按钮
             auto *resetBtn = new beiklive::ButtonBox();
+            DISABLE_LR_NAVIGATION(resetBtn);
             resetBtn->setText("复原");
             resetBtn->setIcon(BK_RES("img/ui/menu/reset.png"));
             resetBtn->registerClickAction([xBtn, yBtn, sBtn, initX, initY, initScale, this](brls::View *) -> bool
@@ -1218,6 +1224,8 @@ namespace beiklive
 
             auto *saveBtn = new beiklive::ButtonBox();
             resetBtn->setIcon(BK_RES("img/ui/menu/save.png"));
+            DISABLE_LR_NAVIGATION(saveBtn);
+            (saveBtn)->setCustomNavigationRoute(brls::FocusDirection::DOWN, saveBtn);
             saveBtn->setText("保存");
             saveBtn->registerClickAction([closeAct](brls::View *) -> bool
                                          {
