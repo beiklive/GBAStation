@@ -51,9 +51,11 @@ namespace beiklive
 
         // 设置封面图片路径（GAME_LIBRARY 模式使用）
         void setImageLayer(const std::string& path, bool visible);
+        void setImageLayerDeferred(const std::string& path, bool visible);
 
         /// 设置左侧正方形封面图片路径
         void setImagePath(const std::string& path);
+        void setImagePathDeferred(const std::string& path);
 
         /**
          * 设置平台徽标（GAME_LIBRARY 模式）
@@ -102,6 +104,9 @@ namespace beiklive
 
         /// 被点击（A键）时触发，参数为本控件的索引
         std::function<void(int index)> onItemClicked;
+
+        /// 取消所有待处理的延迟图片加载（重建网格前调用，防止野指针）
+        static void cancelDeferredLoads();
 
         /// 查询指定索引是否已收藏
         std::function<bool(int index)> isFavourite;

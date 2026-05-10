@@ -123,6 +123,7 @@ namespace beiklive
 
     void GameLibraryPage::_rebuildGrid()
     {
+        beiklive::GridItem::cancelDeferredLoads();
         m_grid->clearItems();
 
         int count = std::min(m_visibleCount, static_cast<int>(m_entries.size()));
@@ -135,8 +136,7 @@ namespace beiklive
             m_grid->addItem([this, entry, captIdx]() -> brls::View* {
                 auto* item = new beiklive::GridItem(GridItemMode::GAME_LIBRARY, captIdx);
 
-                if (!entry.logoPath.empty())
-                    item->setImagePath(entry.logoPath);
+                item->setImagePathDeferred(entry.logoPath);
 
                 std::string badgeText;
                 PlatformBadgeColor badgeColor = _platformBadge(entry.platform);
@@ -151,8 +151,7 @@ namespace beiklive
                     item->setBadge(badgeText, badgeColor);
 
                 std::string logoLayerPath = GetGameLogoLayerPath(entry.platform);
-                if (!logoLayerPath.empty())
-                    item->setImageLayer(logoLayerPath, true);
+                item->setImageLayerDeferred(logoLayerPath, !logoLayerPath.empty());
 
                 item->setTitle(entry.title.empty() ? entry.path : entry.title);
 
@@ -205,8 +204,7 @@ namespace beiklive
             m_grid->addItem([this, entry, captIdx]() -> brls::View* {
                 auto* item = new beiklive::GridItem(GridItemMode::GAME_LIBRARY, captIdx);
 
-                if (!entry.logoPath.empty())
-                    item->setImagePath(entry.logoPath);
+                item->setImagePathDeferred(entry.logoPath);
 
                 std::string badgeText;
                 PlatformBadgeColor badgeColor = _platformBadge(entry.platform);
@@ -221,8 +219,7 @@ namespace beiklive
                     item->setBadge(badgeText, badgeColor);
 
                 std::string logoLayerPath = GetGameLogoLayerPath(entry.platform);
-                if (!logoLayerPath.empty())
-                    item->setImageLayer(logoLayerPath, true);
+                item->setImageLayerDeferred(logoLayerPath, !logoLayerPath.empty());
 
                 item->setTitle(entry.title.empty() ? entry.path : entry.title);
 

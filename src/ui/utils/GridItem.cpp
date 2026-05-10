@@ -1,7 +1,41 @@
 #include "GridItem.hpp"
 
+#include <deque>
+#include <functional>
+
 namespace beiklive
 {
+
+    static std::deque<std::function<void()>> s_imageLoadQueue;
+    static bool s_imageQueueActive = false;
+
+    static void processImageQueue()
+    {
+        if (s_imageLoadQueue.empty())
+        {
+            s_imageQueueActive = false;
+            return;
+        }
+        auto task = std::move(s_imageLoadQueue.front());
+        s_imageLoadQueue.pop_front();
+        if (task) task();
+        brls::sync([]() { processImageQueue(); });
+    }
+
+    static void enqueueImageTask(std::function<void()> task)
+    {
+        s_imageLoadQueue.push_back(std::move(task));
+        if (!s_imageQueueActive)
+        {
+            s_imageQueueActive = true;
+            brls::sync([]() { processImageQueue(); });
+        }
+    }
+
+    void GridItem::cancelDeferredLoads()
+    {
+        s_imageLoadQueue.clear();
+    }
 
     // ============================================================
     // 构造 / 析构
@@ -304,6 +338,26 @@ namespace beiklive
         if (visible && !path.empty())
             m_imageLayer->setImageFromFile(path);
         m_imageLayer->setVisibility(visible ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+    }
+
+    void GridItem::setImagePathDeferred(const std::string& path)
+    {
+        if (path.empty() || !m_image) return;
+        enqueueImageTask([this, path]() {
+            if (m_image) m_image->setImageFromFileForce(path);
+        });
+    }
+
+    void GridItem::setImageLayerDeferred(const std::string& path, bool visible)
+    {
+        if (!m_imageLayer) return;
+        m_imageLayer->setVisibility(visible ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+        if (visible && !path.empty())
+        {
+            enqueueImageTask([this, path]() {
+                if (m_imageLayer) m_imageLayer->setImageFromFile(path);
+            });
+        }
     }
 
     void GridItem::_updateFavouriteHint()
