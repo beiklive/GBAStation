@@ -496,6 +496,10 @@ namespace beiklive
 #endif
                             logoPath = logoFile;
                     }
+
+                    if (logoPath.empty() || !fs::exists(logoPath))
+                        logoPath = beiklive::tools::getDefaultLogoPath(
+                            static_cast<beiklive::enums::EmuPlatform>(config.platform));
                 }
 
                 std::string pDirName = beiklive::tools::getFileNameWithoutExtension(lplPath);
