@@ -636,9 +636,14 @@ brls::View *SettingPage::buildUITab()
         box->addView(sramDirCell);
     }
 
-    auto *autoSaveCell = new brls::BooleanCell();
-    autoSaveCell->init("自动保存游戏状态", cfgGetBool("save.autoSaveState", false),
-                       [](bool v) { cfgSetBool("save.autoSaveState", v); });
+    auto *autoSaveCell = new brls::SelectorCell();
+    {
+        std::vector<std::string> slotOpts = {"关闭", "档位0", "档位1", "档位2", "档位3", "档位4", "档位5", "档位6", "档位7", "档位8", "档位9"};
+        int curSlot = GET_SETTING_KEY_INT("save.autoSaveState", 0);
+        if (curSlot < 0 || curSlot > 10) curSlot = 0;
+        autoSaveCell->init("自动保存游戏状态", slotOpts, curSlot,
+                           [](int i) { SET_SETTING_KEY_INT("save.autoSaveState", i); });
+    }
     box->addView(autoSaveCell);
 
     {
@@ -654,10 +659,25 @@ brls::View *SettingPage::buildUITab()
         box->addView(makeHint("定时自动创建即时存档，防止意外丢失进度"));
     }
 
-    auto *autoLoadCell = new brls::BooleanCell();
-    autoLoadCell->init("启动时自动加载存档槽 0", cfgGetBool("save.autoLoadState0", false),
-                        [](bool v) { cfgSetBool("save.autoLoadState0", v); });
+    auto *autoLoadCell = new brls::SelectorCell();
+    {
+        std::vector<std::string> slotOpts = {"关闭", "档位0", "档位1", "档位2", "档位3", "档位4", "档位5", "档位6", "档位7", "档位8", "档位9"};
+        int curSlot = GET_SETTING_KEY_INT("save.autoLoadState0", 0);
+        if (curSlot < 0 || curSlot > 10) curSlot = 0;
+        autoLoadCell->init("启动时自动加载", slotOpts, curSlot,
+                           [](int i) { SET_SETTING_KEY_INT("save.autoLoadState0", i); });
+    }
     box->addView(autoLoadCell);
+
+    {
+        std::vector<std::string> exitSlotOpts = {"关闭", "档位0", "档位1", "档位2", "档位3", "档位4", "档位5", "档位6", "档位7", "档位8", "档位9"};
+        int curExitSlot = GET_SETTING_KEY_INT("save.autoSaveOnExit", 0);
+        if (curExitSlot < 0 || curExitSlot > 10) curExitSlot = 0;
+        auto *exitSaveCell = new brls::SelectorCell();
+        exitSaveCell->init("退出游戏时自动保存", exitSlotOpts, curExitSlot,
+                           [](int i) { SET_SETTING_KEY_INT("save.autoSaveOnExit", i); });
+        box->addView(exitSaveCell);
+    }
 
     // ── 封面设置 ──────────────────────────────────────────────────────────────
     box->addView(makeHeader("封面设置"));

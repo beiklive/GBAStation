@@ -223,6 +223,7 @@ namespace beiklive
         SettingManager->SetDefault("save.autoSaveState", ConfigValue(0));
         SettingManager->SetDefault("save.autoSaveInterval", ConfigValue(0));
         SettingManager->SetDefault("save.autoLoadState0", ConfigValue(0));
+        SettingManager->SetDefault("save.autoSaveOnExit", ConfigValue(0));
         SettingManager->SetDefault("save.sramDir", ConfigValue(std::string("")));
         SettingManager->SetDefault("save.stateDir", ConfigValue(std::string("")));
 

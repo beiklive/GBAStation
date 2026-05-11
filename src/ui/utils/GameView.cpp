@@ -875,9 +875,9 @@ namespace beiklive
         m_sramLastCheck = Clock::now();
 
         // ── 读取自动存档配置 ──
-        bool autoLoadEnabled = GET_SETTING_KEY_INT("save.autoLoadState0", 0) != 0;
-        bool autoSaveEnabled = GET_SETTING_KEY_INT("save.autoSaveState", 0) != 0;
-        int  autoSaveSecs    = GET_SETTING_KEY_INT("save.autoSaveInterval", 0);
+        int autoLoadSlot = GET_SETTING_KEY_INT("save.autoLoadState0", 0);
+        int autoSaveSlot = GET_SETTING_KEY_INT("save.autoSaveState", 0);
+        int autoSaveSecs = GET_SETTING_KEY_INT("save.autoSaveInterval", 0);
         m_autoSaveTimer = Clock::now();
         bool autoLoadDone = false;
 
@@ -895,23 +895,23 @@ namespace beiklive
         {
             auto& sig = GameSignal::instance();
 
-            // ---- 自动加载即时存档 0 ----
-            if (!sig.isPaused() && !autoLoadDone && autoLoadEnabled && m_gba_core && m_gba_core->IsReady()) {
-                if (stateExists(0)) {
-                    _doLoadState(0);
-                    brls::Logger::info("GameView: 自动加载存档槽 0");
+            // ---- 自动加载即时存档 ----
+            if (!sig.isPaused() && !autoLoadDone && autoLoadSlot > 0 && m_gba_core && m_gba_core->IsReady()) {
+                if (stateExists(autoLoadSlot - 1)) {
+                    _doLoadState(autoLoadSlot - 1);
+                    brls::Logger::info("GameView: 自动加载存档槽 {}", autoLoadSlot - 1);
                 }
                 autoLoadDone = true;
             }
 
             // ---- 自动保存即时存档 ----
-            if (!sig.isPaused() && !wasPaused && autoSaveEnabled && autoSaveSecs > 0) {
+            if (!sig.isPaused() && !wasPaused && autoSaveSlot > 0 && autoSaveSecs > 0) {
                 auto now = Clock::now();
                 double sinceSave = std::chrono::duration<double>(now - m_autoSaveTimer).count();
                 if (sinceSave >= static_cast<double>(autoSaveSecs)) {
-                    _doSaveState(0);
+                    _doSaveState(autoSaveSlot - 1);
                     m_autoSaveTimer = now;
-                    brls::Logger::debug("GameView: 自动保存存档槽 0 (间隔 {}s)", autoSaveSecs);
+                    brls::Logger::debug("GameView: 自动保存存档槽 {} (间隔 {}s)", autoSaveSlot - 1, autoSaveSecs);
                 }
             }
 
@@ -926,6 +926,12 @@ namespace beiklive
                 // 暂停时仍可消费金手指重载信号（来自菜单关闭时的批量同步）
                 if (sig.consumeReloadCheats() && m_gba_core)
                     m_gba_core->ReloadCheats();
+                // 暂停时仍可消费退出自动存档信号
+                {
+                    int exitSaveSlot = sig.consumeAutoSave();
+                    if (exitSaveSlot >= 0)
+                        _doSaveState(exitSaveSlot);
+                }
                 std::this_thread::sleep_for(std::chrono::milliseconds(16));
                 auto now     = Clock::now();
                 nextFrameTarget = now;
@@ -978,6 +984,13 @@ namespace beiklive
             // ---- 金手指重载 ----
             if (sig.consumeReloadCheats() && m_gba_core)
                 m_gba_core->ReloadCheats();
+
+            // ---- 退出自动存档 ----
+            {
+                int exitSaveSlot = sig.consumeAutoSave();
+                if (exitSaveSlot >= 0)
+                    _doSaveState(exitSaveSlot);
+            }
 
             // ---- 从信号更新游戏按键状态 ----
             m_gba_core->SetButtonsFromSignal();

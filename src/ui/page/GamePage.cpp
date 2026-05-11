@@ -279,6 +279,9 @@ namespace beiklive
                 _tryUpdateLogoFromThumbnail();
                 beiklive::GameDB->flush();
                 AnimationHelper::slideOutToBottom(m_gameMenuView, MENU_EXIT_FADE_MS, 120.f,true, [this]() {
+                    int exitSlot = GET_SETTING_KEY_INT("save.autoSaveOnExit", 0);
+                    if (exitSlot > 0 && exitSlot <= 10)
+                        GameSignal::instance().requestAutoSave(exitSlot - 1);
                     GameSignal::instance().requestExit();
                 });
             });

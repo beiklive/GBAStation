@@ -172,6 +172,16 @@ public:
         return {idx, en, true};
     }
 
+    // ---- 自动存档信号（退出时使用）-----------------------------------
+
+    /// 调用方：请求在游戏线程保存到指定槽位（-1 表示无请求）。
+    void requestAutoSave(int slot) { m_pendingAutoSave.store(slot, std::memory_order_release); }
+
+    /// 游戏线程调用：获取并消费自动存档请求（返回槽号，-1 表示无请求）。
+    int consumeAutoSave() {
+        return m_pendingAutoSave.exchange(-1, std::memory_order_acq_rel);
+    }
+
     // ---- 重载金手指信号 -------------------------------------------------
 
     /// UI 线程调用：请求从文件重新加载全部金手指到核心。
@@ -200,6 +210,7 @@ public:
         m_pendingCheatIdx.store(-1, std::memory_order_relaxed);
         m_pendingCheatEnabled.store(false, std::memory_order_relaxed);
         m_pendingReloadCheats.store(false, std::memory_order_relaxed);
+        m_pendingAutoSave.store(-1, std::memory_order_relaxed);
         m_gameButtonMask.store(0, std::memory_order_relaxed);
     }
 
@@ -218,6 +229,7 @@ private:
     std::atomic<int>  m_pendingCheatIdx{-1};          ///< 待切换的金手指索引
     std::atomic<bool> m_pendingCheatEnabled{false};   ///< 待切换的金手指启用状态
     std::atomic<bool> m_pendingReloadCheats{false};   ///< 待重载全部金手指
+    std::atomic<int>  m_pendingAutoSave{-1};            ///< 待自动存档槽位（-1=无）
     std::atomic<uint32_t> m_gameButtonMask{0};  ///< 游戏按键位掩码（bit i = RETRO_DEVICE_ID_JOYPAD_* i）
 };
 
