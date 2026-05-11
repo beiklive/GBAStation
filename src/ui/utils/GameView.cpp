@@ -213,6 +213,7 @@ namespace beiklive
         auto& sig = GameSignal::instance();
 
         // FPS 覆盖层（左上角）
+        if (GET_SETTING_KEY_INT("display.showFps", 0))
         {
             float fps = 0.f;
             {
@@ -224,11 +225,11 @@ namespace beiklive
         }
 
         // 快进覆盖层（右上角）
-        if (sig.isFastForward())
+        if (sig.isFastForward() && GET_SETTING_KEY_INT("display.showFfOverlay", 1))
             GameOverlayRenderer::drawFastForward(vg, x, y, w);
 
         // 倒带覆盖层（顶部居中）
-        if (sig.isRewinding())
+        if (sig.isRewinding() && GET_SETTING_KEY_INT("display.showRewindOverlay", 1))
             GameOverlayRenderer::drawRewind(vg, x, y, w);
 
         // 暂停覆盖层（顶部居中，快进/倒带时不另外显示）
@@ -236,7 +237,7 @@ namespace beiklive
             GameOverlayRenderer::drawPaused(vg, x, y, w);
 
         // 静音覆盖层（右下角）
-        if (sig.isMuted())
+        if (sig.isMuted() && GET_SETTING_KEY_INT("display.showMuteOverlay", 1))
             GameOverlayRenderer::drawMute(vg, x, y, w, h);
     }
 
