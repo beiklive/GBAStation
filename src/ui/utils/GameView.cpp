@@ -410,7 +410,8 @@ namespace beiklive
 
         // 倒带切换：若启用可视化倒带界面则打开UI，否则执行传统倒带
         {
-            std::string val = GET_SETTING_KEY_STR("handle.rewind", "RSB");
+            std::string val  = GET_SETTING_KEY_STR("handle.rewind", "RSB");
+            std::string mode = GET_SETTING_KEY_STR("rewind.mode", "hold");
             auto combos = beiklive::tools::parseMultiCombo(val);
             bool showUI = m_rewindShowUI;
             for (const auto& combo : combos) {
@@ -423,8 +424,16 @@ namespace beiklive
                             GameSignal::instance().requestOpenRewindUI();
                             this->setFocusable(false);
                         });
+                } else if (mode == "hold") {
+                    GameInputManager::instance().registerEmuFunctionKey(
+                        EmuFunctionKey::EMU_REWIND, {combo},
+                        []() { GameSignal::instance().requestRewind(true); },
+                        TriggerType::HOLD);
+                    GameInputManager::instance().registerEmuFunctionKey(
+                        EmuFunctionKey::EMU_REWIND, {combo},
+                        []() { GameSignal::instance().requestRewind(false); },
+                        TriggerType::RELEASE);
                 } else {
-                    // 传统倒带模式：按键切换倒带状态
                     GameInputManager::instance().registerEmuFunctionKey(
                         EmuFunctionKey::EMU_REWIND, {combo},
                         []() {
