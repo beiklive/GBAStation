@@ -160,6 +160,14 @@ namespace beiklive
             int m_cachedThumbCompression = 0;  ///< 缓存缩略图压缩模式，避免每帧读取配置
             std::chrono::steady_clock::time_point m_playStartTime; ///< 计时起点
 
+            // ---- 连发（Turbo）状态 -------------------------------------------
+            std::atomic<bool> m_turboAheld{false};  ///< Turbo A 按键是否按住
+            std::atomic<bool> m_turboBheld{false};  ///< Turbo B 按键是否按住
+            bool m_turboAon = false;                ///< Turbo A 当前帧是否按下
+            bool m_turboBon = false;                ///< Turbo B 当前帧是否按下
+            int  m_turboFrameCount = 0;             ///< Turbo 帧计数器
+            int  m_turboToggleInterval = 3;         ///< Turbo 切换间隔帧数（60fps 下 10Hz）
+
             // ---- SRAM 自动落盘 -------------------------------------------------
             uint32_t    m_sramLastCRC   = 0;    ///< 上次检测的 SRAM CRC32
             bool        m_sramDirty     = false; ///< SRAM 是否有未保存变更

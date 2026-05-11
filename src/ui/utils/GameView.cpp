@@ -49,6 +49,14 @@ namespace beiklive
         m_cachedThumbCompression = GET_SETTING_KEY_INT(
             beiklive::SettingKey::KEY_REWIND_THUMB_COMPRESSION, 0);
 
+        // 读取连发速率（Hz）
+        {
+            float turboHz = GET_SETTING_KEY_FLOAT("turbo.rate", 10.0f);
+            if (turboHz < 1.0f) turboHz = 1.0f;
+            if (turboHz > 30.0f) turboHz = 30.0f;
+            m_turboToggleInterval = std::max(1, static_cast<int>(30.0f / turboHz));
+        }
+
         _registerGameInput();
         _registerGameRuntime();
     }
@@ -461,6 +469,38 @@ namespace beiklive
                         bool cur = GameSignal::instance().isMuted();
                         GameSignal::instance().requestMute(!cur);
                     });
+            }
+        }
+
+        // 连发 A（Turbo A）
+        {
+            std::string val = GET_SETTING_KEY_STR("handle.a_turbo", "none");
+            auto combos = beiklive::tools::parseMultiCombo(val);
+            for (const auto& combo : combos) {
+                GameInputManager::instance().registerEmuFunctionKey(
+                    EmuFunctionKey::EMU_A_TURBO, {combo},
+                    [this]() { m_turboAheld.store(true, std::memory_order_release); },
+                    TriggerType::HOLD);
+                GameInputManager::instance().registerEmuFunctionKey(
+                    EmuFunctionKey::EMU_A_TURBO, {combo},
+                    [this]() { m_turboAheld.store(false, std::memory_order_release); },
+                    TriggerType::RELEASE);
+            }
+        }
+
+        // 连发 B（Turbo B）
+        {
+            std::string val = GET_SETTING_KEY_STR("handle.b_turbo", "none");
+            auto combos = beiklive::tools::parseMultiCombo(val);
+            for (const auto& combo : combos) {
+                GameInputManager::instance().registerEmuFunctionKey(
+                    EmuFunctionKey::EMU_B_TURBO, {combo},
+                    [this]() { m_turboBheld.store(true, std::memory_order_release); },
+                    TriggerType::HOLD);
+                GameInputManager::instance().registerEmuFunctionKey(
+                    EmuFunctionKey::EMU_B_TURBO, {combo},
+                    [this]() { m_turboBheld.store(false, std::memory_order_release); },
+                    TriggerType::RELEASE);
             }
         }
     }
@@ -886,6 +926,14 @@ namespace beiklive
         if (m_ffMultiplier <= 0.0f) m_ffMultiplier = 1.0f;
         m_ffSlowAccum = 0.0f;
 
+        // 读取连发速率
+        {
+            float turboHz = GET_SETTING_KEY_FLOAT("turbo.rate", 10.0f);
+            if (turboHz < 1.0f) turboHz = 1.0f;
+            if (turboHz > 30.0f) turboHz = 30.0f;
+            m_turboToggleInterval = std::max(1, static_cast<int>(coreFps / (turboHz * 2.0f)));
+        }
+
 
         // 读取shader开关配置
         // _onShaderToggle(GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_DISPLAY_SHADER_ENABLED, 0));
@@ -993,6 +1041,34 @@ namespace beiklive
             }
 
             // ---- 从信号更新游戏按键状态 ----
+            // 先处理连发（Turbo）状态
+            m_turboFrameCount++;
+            if (m_turboFrameCount >= m_turboToggleInterval) {
+                m_turboFrameCount = 0;
+                if (m_turboAheld.load(std::memory_order_acquire)) {
+                    m_turboAon = !m_turboAon;
+                    if (m_turboAon)
+                        GameSignal::instance().pressGameButton(8); // RETRO_DEVICE_ID_JOYPAD_A
+                    else
+                        GameSignal::instance().releaseGameButton(8);
+                }
+                if (m_turboBheld.load(std::memory_order_acquire)) {
+                    m_turboBon = !m_turboBon;
+                    if (m_turboBon)
+                        GameSignal::instance().pressGameButton(0); // RETRO_DEVICE_ID_JOYPAD_B
+                    else
+                        GameSignal::instance().releaseGameButton(0);
+                }
+            }
+            // 连发键释放时确保对应按键松开
+            if (!m_turboAheld.load(std::memory_order_acquire) && m_turboAon) {
+                m_turboAon = false;
+                GameSignal::instance().releaseGameButton(8);
+            }
+            if (!m_turboBheld.load(std::memory_order_acquire) && m_turboBon) {
+                m_turboBon = false;
+                GameSignal::instance().releaseGameButton(0);
+            }
             m_gba_core->SetButtonsFromSignal();
 
             // ---- 决定本帧行为 ----

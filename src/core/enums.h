@@ -211,6 +211,8 @@ namespace beiklive // 结构体
         EMU_QUICK_LOAD,                 // 快速读取
         EMU_OPEN_MENU,                  // 打开菜单
         EMU_MUTE,                       // 静音
+        EMU_A_TURBO,                    // A键连发
+        EMU_B_TURBO,                    // B键连发
         EMU_LEFT_STICK_UP,              // 左摇杆向上
         EMU_LEFT_STICK_DOWN,            // 左摇杆向下
         EMU_LEFT_STICK_LEFT,            // 左摇杆向左
@@ -235,6 +237,8 @@ namespace beiklive // 结构体
         { "quickload",      EMU_QUICK_LOAD      },
         { "menu",           EMU_OPEN_MENU       },
         { "mute",           EMU_MUTE            },
+        { "a_turbo",        EMU_A_TURBO         },
+        { "b_turbo",        EMU_B_TURBO         },
     };
 
     enum GameInputPad

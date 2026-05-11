@@ -227,6 +227,11 @@ namespace beiklive
         SettingManager->SetDefault("save.sramDir", ConfigValue(std::string("")));
         SettingManager->SetDefault("save.stateDir", ConfigValue(std::string("")));
 
+        // 连发设置
+        SettingManager->SetDefault("handle.a_turbo", ConfigValue(std::string("none")));
+        SettingManager->SetDefault("handle.b_turbo", ConfigValue(std::string("none")));
+        SettingManager->SetDefault("turbo.rate", ConfigValue(10.0f));
+
         // 截图设置
         SettingManager->SetDefault("screenshot.dir", ConfigValue(0));
 

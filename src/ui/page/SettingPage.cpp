@@ -1212,6 +1212,40 @@ brls::View *SettingPage::buildKeyBindTab()
         box->addView(cell);
     }
 
+    // ── 连发按键绑定 ──────────────────────────────────────────────────────────
+    box->addView(makeHeader("连发按键绑定"));
+
+    {
+        std::string cfgKey = "handle.a_turbo";
+        auto *cell         = new beiklive::DetailCell();
+        cell->setLeftText("A 连发");
+        cell->setRightText(cfgGetStr(cfgKey, "none"));
+        registerKeyBindActions(cell, cfgKey);
+        box->addView(cell);
+    }
+
+    {
+        std::string cfgKey = "handle.b_turbo";
+        auto *cell         = new beiklive::DetailCell();
+        cell->setLeftText("B 连发");
+        cell->setRightText(cfgGetStr(cfgKey, "none"));
+        registerKeyBindActions(cell, cfgKey);
+        box->addView(cell);
+    }
+
+    {
+        std::vector<std::string> rates = {"每秒1次", "每秒5次", "每秒10次", "每秒15次", "每秒30次"};
+        static const float rateVals[] = {1.0f, 5.0f, 10.0f, 15.0f, 30.0f};
+        float curRate = GET_SETTING_KEY_FLOAT("turbo.rate", 10.0f);
+        int idx = 2;
+        for (int i = 0; i < 5; ++i) if (rateVals[i] == curRate) { idx = i; break; }
+        auto *rateCell = new brls::SelectorCell();
+        rateCell->init("连发速度", rates, idx,
+                       [](int i) { if (i >= 0 && i < 5) SET_SETTING_KEY_FLOAT("turbo.rate", rateVals[i]); });
+        box->addView(rateCell);
+        box->addView(makeHint("按住连发按键时每秒触发的次数，次数越高反应越快"));
+    }
+
     // ── 摇杆设置 ──────────────────────────────────────────────────────────────
     box->addView(makeHeader("摇杆设置"));
 
