@@ -671,7 +671,18 @@ namespace beiklive
         }
 
         if (m_ffMultiplier >= 1.0f) {
-            unsigned frames = static_cast<unsigned>(m_ffMultiplier);
+            unsigned integerPart = static_cast<unsigned>(m_ffMultiplier);
+            float fracPart = m_ffMultiplier - static_cast<float>(integerPart);
+
+            unsigned frames = integerPart;
+
+            // 小数部分累加：累加器满 1.0 时多跑一帧
+            m_ffSlowAccum += fracPart;
+            if (m_ffSlowAccum >= 1.0f) {
+                m_ffSlowAccum -= 1.0f;
+                ++frames;
+            }
+
             if (frames == 0) frames = 1u;
             for (unsigned i = 0; i < frames; ++i) {
                 if (i == 0) _saveRewindState();
@@ -854,7 +865,7 @@ namespace beiklive
     {
         using Clock = std::chrono::steady_clock;
 
-        if (ff && m_ffMultiplier >= 1.0f) return; // 仅真正快进时跳过限速
+        if (ff && m_ffMultiplier >= 2.0f) return; // 2倍以上跳过限速，小数倍率仍需帧率控制
 
         nextTarget += frameDurNs;
 
