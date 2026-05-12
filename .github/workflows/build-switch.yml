@@ -25,9 +25,7 @@ jobs:
           chmod +x switchbuild.sh
           ./switchbuild.sh
 
-      - name: 上传 NRO
-        uses: actions/upload-artifact@v4
+      - name: 上传 NRO 到 Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: GBAStation-${{ github.ref_name }}
-          path: build_switch/GBAStation.nro
-          retention-days: 30
+          files: build_switch/GBAStation.nro
