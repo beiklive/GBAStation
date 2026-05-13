@@ -3,6 +3,7 @@
 #include "ui/utils/FilePickerHelper.hpp"
 #include <filesystem>
 #include "borealis/core/cache_helper.hpp"
+#include <borealis/views/dialog.hpp>
 
 namespace beiklive
 {
@@ -1239,6 +1240,53 @@ namespace beiklive
             this->addView(m_CustomSidePanel);
         }
 
+        // ── 同步设置到其他游戏 ──
+        {
+            auto *syncHdr = new brls::Header();
+            syncHdr->setTitle("同步设置到其他游戏");
+            box->addView(syncHdr);
+
+            auto makeSyncBtn = [&](const std::string& text, std::function<void()> action) {
+                auto *btn = new brls::DetailCell();
+                btn->setText(text);
+                btn->registerClickAction([this, action](brls::View*) -> bool {
+                    action();
+                    return true;
+                });
+                box->addView(btn);
+            };
+
+            makeSyncBtn("同步画面设置", [this]() {
+                auto *dlg = new brls::Dialog("同步画面设置\n\n将当前游戏的画面模式、整数倍缩放、自定义偏移和缩放值同步到同平台所有游戏，确认继续？");
+                dlg->addButton("取消", []() {});
+                dlg->addButton("确认", [this]() { _syncDisplaySettings(); });
+                dlg->open();
+            });
+
+            makeSyncBtn("同步遮罩路径", [this]() {
+                auto *dlg = new brls::Dialog("同步遮罩路径\n\n将当前游戏的遮罩路径同步到同平台所有游戏，同时更新全局默认遮罩路径，确认继续？");
+                dlg->addButton("取消", []() {});
+                dlg->addButton("确认", [this]() { _syncOverlayPath(); });
+                dlg->open();
+            });
+
+            makeSyncBtn("同步着色器路径和参数", [this]() {
+                auto *dlg = new brls::Dialog("同步着色器路径和参数\n\n将当前游戏的着色器路径和参数同步到同平台所有游戏，同时更新全局默认着色器路径，确认继续？");
+                dlg->addButton("取消", []() {});
+                dlg->addButton("确认", [this]() { _syncShaderPath(); });
+                dlg->open();
+            });
+
+            auto *hint = new brls::Label();
+            hint->setText("将当前游戏的面板设置应用到同平台所有游戏，同步后自动保存并刷新全局默认值。画面模式=模式+整数倍+自定义偏移/缩放；遮罩=遮罩路径；着色器=GLSLP路径+参数");
+            hint->setFontSize(14.f);
+            hint->setTextColor(nvgRGB(154, 154, 154));
+            hint->setMarginTop(10.f);
+            hint->setMarginLeft(20.f);
+            hint->setFocusable(false);
+            box->addView(hint);
+        }
+
         beiklive::GameDB->upsert(m_gameEntry);
         beiklive::GameDB->flush();
         return wrapper;
@@ -1377,6 +1425,101 @@ namespace beiklive
             m_ShaderParamBox->addView(btn);
             ++idx;
         }
+    }
+
+    // ============================================================
+    // 同步设置到同平台其他游戏
+    // ============================================================
+
+    std::string GameMenuView::_getPlatformOverlayKey() const {
+        using namespace beiklive::SettingKey;
+        switch (static_cast<beiklive::enums::EmuPlatform>(m_gameEntry.platform)) {
+            case beiklive::enums::EmuPlatform::EmuGBA: return KEY_DISPLAY_OVERLAY_GBA_PATH;
+            case beiklive::enums::EmuPlatform::EmuGBC: return KEY_DISPLAY_OVERLAY_GBC_PATH;
+            case beiklive::enums::EmuPlatform::EmuGB:  return KEY_DISPLAY_OVERLAY_GB_PATH;
+            default: return "";
+        }
+    }
+
+    std::string GameMenuView::_getPlatformShaderKey() const {
+        using namespace beiklive::SettingKey;
+        switch (static_cast<beiklive::enums::EmuPlatform>(m_gameEntry.platform)) {
+            case beiklive::enums::EmuPlatform::EmuGBA: return KEY_DISPLAY_SHADER_GBA_PATH;
+            case beiklive::enums::EmuPlatform::EmuGBC: return KEY_DISPLAY_SHADER_GBC_PATH;
+            case beiklive::enums::EmuPlatform::EmuGB:  return KEY_DISPLAY_SHADER_GB_PATH;
+            default: return "";
+        }
+    }
+
+    void GameMenuView::_syncDisplaySettings() {
+        int platform = m_gameEntry.platform;
+        auto games = beiklive::GameDB->getAll();
+        int count = 0;
+        for (auto& game : games) {
+            if (game.platform != platform) continue;
+            if (game.crc32 == m_gameEntry.crc32) continue;
+            game.displayMode      = m_gameEntry.displayMode;
+            game.integerAspectRatio = m_gameEntry.integerAspectRatio;
+            game.customScale      = m_gameEntry.customScale;
+            game.customOffsetX    = m_gameEntry.customOffsetX;
+            game.customOffsetY    = m_gameEntry.customOffsetY;
+            beiklive::GameDB->upsert(game);
+            ++count;
+        }
+        beiklive::GameDB->flush();
+
+        auto *dlg = new brls::Dialog("同步完成\n\n已同步画面设置到 " + std::to_string(count) + " 个游戏");
+        dlg->addButton("确定", []() {});
+        dlg->open();
+    }
+
+    void GameMenuView::_syncOverlayPath() {
+        int platform = m_gameEntry.platform;
+        auto games = beiklive::GameDB->getAll();
+        int count = 0;
+        for (auto& game : games) {
+            if (game.platform != platform) continue;
+            if (game.crc32 == m_gameEntry.crc32) continue;
+            game.overlayPath    = m_gameEntry.overlayPath;
+            game.overlayEnabled = m_gameEntry.overlayEnabled;
+            beiklive::GameDB->upsert(game);
+            ++count;
+        }
+        // 更新全局默认遮罩路径
+        std::string key = _getPlatformOverlayKey();
+        if (!key.empty())
+            SET_SETTING_KEY_STR(key.c_str(), m_gameEntry.overlayPath);
+
+        beiklive::GameDB->flush();
+
+        auto *dlg = new brls::Dialog("同步完成\n\n已同步遮罩路径到 " + std::to_string(count) + " 个游戏");
+        dlg->addButton("确定", []() {});
+        dlg->open();
+    }
+
+    void GameMenuView::_syncShaderPath() {
+        int platform = m_gameEntry.platform;
+        auto games = beiklive::GameDB->getAll();
+        int count = 0;
+        for (auto& game : games) {
+            if (game.platform != platform) continue;
+            if (game.crc32 == m_gameEntry.crc32) continue;
+            game.shaderPath      = m_gameEntry.shaderPath;
+            game.shaderParaNames  = m_gameEntry.shaderParaNames;
+            game.shaderParaValues = m_gameEntry.shaderParaValues;
+            beiklive::GameDB->upsert(game);
+            ++count;
+        }
+        // 更新全局默认着色器路径
+        std::string key = _getPlatformShaderKey();
+        if (!key.empty())
+            SET_SETTING_KEY_STR(key.c_str(), m_gameEntry.shaderPath);
+
+        beiklive::GameDB->flush();
+
+        auto *dlg = new brls::Dialog("同步完成\n\n已同步着色器路径和参数到 " + std::to_string(count) + " 个游戏");
+        dlg->addButton("确定", []() {});
+        dlg->open();
     }
 
 } // namespace beiklive

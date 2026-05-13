@@ -119,6 +119,13 @@ namespace beiklive
             /// 清除当前侧边栏面板
             void _dismissSidePanel(int idx = -1); // idx=-1=全部
 
+            /// 同步设置到同平台其他游戏
+            void _syncDisplaySettings();
+            void _syncOverlayPath();
+            void _syncShaderPath();
+            std::string _getPlatformOverlayKey() const;
+            std::string _getPlatformShaderKey() const;
+
 
 
             brls::DetailCell* shaderPathcell = nullptr;
