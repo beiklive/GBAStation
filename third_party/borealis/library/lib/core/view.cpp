@@ -240,6 +240,7 @@ void View::resetClickAnimation()
 
 void View::playClickAnimation(bool reverse, bool animateBack, bool force)
 {
+    hideClickAnimation = true;
     if (hideClickAnimation && !force)
         return;
 
