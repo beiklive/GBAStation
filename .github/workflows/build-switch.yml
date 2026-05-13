@@ -25,20 +25,54 @@ jobs:
 
       - name: 安装依赖
         run: |
-          dkp-pacman -S --noconfirm --needed switch-dev
+          dkp-pacman -S --noconfirm --needed switch-dev jq git
 
       - name: 编译
         run: |
           chmod +x switchbuild.sh
           ./switchbuild.sh
 
-      - name: 查看输出文件
+      - name: 生成 version.json
         run: |
-          find . -name "*.nro"
+          TAG_NAME=${GITHUB_REF_NAME}
 
-      - name: 上传到 Release
-        uses: softprops/action-gh-release@v2
-        with:
-          generate_release_notes: true
-          files: |
-            build_switch/GBAStation.nro
+          CHANGELOG=$(git tag -l --format='%(contents)' "$TAG_NAME")
+
+          cat > version.json <<EOF
+          {
+            "version": "$TAG_NAME",
+            "changelog": $(jq -Rs . <<< "$CHANGELOG")
+          }
+          EOF
+
+          cat version.json
+
+      - name: Clone Release Repo
+        run: |
+          git clone https://x-access-token:${{ secrets.RELEASE_REPO_TOKEN }}@github.com/beiklive/GBAStation_Release.git release_repo
+
+      - name: 拷贝发布文件
+        run: |
+          TAG_NAME=${GITHUB_REF_NAME}
+
+          mkdir -p release_repo/$TAG_NAME
+
+          cp build_switch/GBAStation.nro release_repo/$TAG_NAME/
+          cp version.json release_repo/$TAG_NAME/
+
+          cp version.json release_repo/version.json
+
+      - name: 提交到 Release Repo
+        run: |
+          TAG_NAME=${GITHUB_REF_NAME}
+
+          cd release_repo
+
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          git add .
+
+          git commit -m "Release $TAG_NAME" || echo "Nothing to commit"
+
+          git push
