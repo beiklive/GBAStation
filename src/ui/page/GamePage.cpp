@@ -121,6 +121,7 @@ namespace beiklive
         std::string gameDir  = gamePath.parent_path().string();
 
         // savePath：优先使用已有值，否则从设置读取 save.sramDir，为空时使用全局 saves 目录
+        if (m_gameEntry.savePath.empty())
         {
             // sramDir为空表示rom目录， 不为空为模拟器目录
             std::string sramDir = GET_SETTING_KEY_STR("save.sramDir", "");
