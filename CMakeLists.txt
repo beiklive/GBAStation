@@ -201,11 +201,8 @@ endif ()
 
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${APP_PLATFORM_INCLUDE})
-target_include_directories(${PROJECT_NAME} PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/cpp-httplib-0.44.0
-)
 target_compile_options(${PROJECT_NAME} PRIVATE -ffunction-sections -fdata-sections ${APP_PLATFORM_OPTION})
-target_link_libraries(${PROJECT_NAME} PRIVATE borealis ${APP_PLATFORM_LIB})
+target_link_libraries(${PROJECT_NAME} PRIVATE borealis ${APP_PLATFORM_LIB} curl)
 
 # ============================================================
 # Post-build: copy mgba_libretro shared library next to the

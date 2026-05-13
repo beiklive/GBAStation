@@ -2,12 +2,13 @@
 #include "core/Tools.hpp"
 #include "core/constexpr.h"
 #include <borealis.hpp>
-#include <httplib.h>
+#include <curl/curl.h>
 #include <filesystem>
 #include <fstream>
 #include <chrono>
 #include <sstream>
 #include <cstdio>
+#include <cstring>
 
 #ifdef __SWITCH__
 #include <switch.h>
@@ -22,19 +23,69 @@ AppUpdater& AppUpdater::instance() {
     return s;
 }
 
-static std::string fetchUrl(const std::string& url) {
-    httplib::Client cli("https://cdn.jsdelivr.net");
-    cli.set_connection_timeout(10, 0);
-    cli.set_read_timeout(10, 0);
-    cli.set_follow_location(true);
+// ── libcurl 回调 ──────────────────────────────────────────
 
-    // 从完整 URL 中提取 path
-    std::string path = "/" + url.substr(std::string(BASE_URL).size());
-    auto res = cli.Get(path);
-    if (res && res->status == 200)
-        return res->body;
-    return "";
+static size_t writeToString(void* ptr, size_t size, size_t nmemb, void* userdata) {
+    auto* str = static_cast<std::string*>(userdata);
+    str->append(static_cast<const char*>(ptr), size * nmemb);
+    return size * nmemb;
 }
+
+static size_t writeToVector(void* ptr, size_t size, size_t nmemb, void* userdata) {
+    auto* vec = static_cast<std::vector<uint8_t>*>(userdata);
+    auto bytes = size * nmemb;
+    vec->insert(vec->end(), (uint8_t*)ptr, (uint8_t*)ptr + bytes);
+    return bytes;
+}
+
+struct ProgressCtx {
+    std::function<bool(size_t, size_t)>* onProgress;
+    std::atomic<bool>* cancelled;
+};
+
+static int progressCallback(void* userdata, curl_off_t dltotal, curl_off_t dlnow,
+                            curl_off_t, curl_off_t) {
+    auto* ctx = static_cast<ProgressCtx*>(userdata);
+    if (ctx->cancelled && ctx->cancelled->load()) return 1;
+    if (ctx->onProgress && *ctx->onProgress)
+        return (*ctx->onProgress)(static_cast<size_t>(dltotal), static_cast<size_t>(dlnow)) ? 0 : 1;
+    return 0;
+}
+
+static void setCommonOptions(CURL* curl) {
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
+    curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 1024L);
+    curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 30L);
+    curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "");
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "GBAStation-Updater");
+}
+
+static std::string fetchUrl(const std::string& url) {
+    CURL* curl = curl_easy_init();
+    if (!curl) return "";
+
+    std::string body;
+    setCommonOptions(curl);
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeToString);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &body);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);
+
+    CURLcode res = curl_easy_perform(curl);
+    long code = 0;
+    if (res == CURLE_OK)
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &code);
+
+    curl_easy_cleanup(curl);
+
+    if (res != CURLE_OK || code != 200) return "";
+    return body;
+}
+
+// ── AppUpdater ────────────────────────────────────────────
 
 void AppUpdater::check(const std::string& localVersion) {
     brls::async([this, localVersion]() {
@@ -46,7 +97,6 @@ bool AppUpdater::checkSync(const std::string& localVersion) {
     m_info = UpdateInfo{};
     m_info.hasUpdate = false;
 
-    // 构建带时间戳的 URL
     auto ts = std::chrono::duration_cast<std::chrono::seconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
     std::string url = std::string(BASE_URL) + "/version.json?t=" + std::to_string(ts);
@@ -68,14 +118,12 @@ bool AppUpdater::checkSync(const std::string& localVersion) {
         return false;
     }
 
-    // 保存 version.json 到本地
     try {
         std::string localPath = beiklive::path::configPath() + "/version.json";
         std::ofstream f(localPath, std::ios::trunc);
         if (f) { f << json; f.close(); }
     } catch (...) {}
 
-    // 版本比较
     int remoteVer = beiklive::tools::versionCode(m_info.version);
     int localVer  = beiklive::tools::versionCode(localVersion);
     m_info.hasUpdate = remoteVer > localVer;
@@ -89,35 +137,34 @@ bool AppUpdater::checkSync(const std::string& localVersion) {
 bool AppUpdater::download(std::function<bool(size_t, size_t)> onProgress) {
     if (m_info.downloadUrl.empty()) return false;
 
-    // 从完整 URL 提取 host 和 path
-    std::string host = "cdn.jsdelivr.net";
-    std::string path = "/" + m_info.downloadUrl.substr(std::string(BASE_URL).size());
-
-    httplib::Client cli("https://" + host);
-    cli.set_connection_timeout(30, 0);
-    cli.set_read_timeout(0);  // 下载不限速
-    cli.set_follow_location(true);
+    CURL* curl = curl_easy_init();
+    if (!curl) return false;
 
     m_downloadedData.clear();
 
-    auto res = cli.Get(path,
-        [&](const char* data, size_t len) -> bool {
-            m_downloadedData.insert(m_downloadedData.end(), data, data + len);
-            if (onProgress)
-                return onProgress(0, m_downloadedData.size());
-            return true;
-        },
-        [](uint64_t current, uint64_t total) -> bool {
-            return true;
-        });
+    ProgressCtx ctx{&onProgress, nullptr};
+    setCommonOptions(curl);
+    curl_easy_setopt(curl, CURLOPT_URL, m_info.downloadUrl.c_str());
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeToVector);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &m_downloadedData);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 0L);
+    curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+    curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, progressCallback);
+    curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &ctx);
 
-    if (!res || res->status != 200) {
+    CURLcode res = curl_easy_perform(curl);
+    long code = 0;
+    if (res == CURLE_OK)
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &code);
+
+    curl_easy_cleanup(curl);
+
+    if (res != CURLE_OK || code != 200) {
         m_downloadedData.clear();
-        brls::Logger::error("AppUpdater: 下载失败 status={}", res ? res->status : 0);
+        brls::Logger::error("AppUpdater: 下载失败 code={}", code);
         return false;
     }
 
-    // 保存到临时文件
     std::string tmpPath = beiklive::path::configPath() + "/update.nro";
     std::ofstream f(tmpPath, std::ios::binary | std::ios::trunc);
     if (!f) return false;
@@ -131,12 +178,10 @@ bool AppUpdater::download(std::function<bool(size_t, size_t)> onProgress) {
 bool AppUpdater::install() {
 #ifdef __SWITCH__
     std::string tmpPath = beiklive::path::configPath() + "/update.nro";
-    std::string nroPath = "sdmc:/switch/GBAStation.nro"; // 默认 NRO 路径
+    std::string nroPath = "sdmc:/switch/GBAStation.nro";
 
-    // 释放 romfs 挂载，解除对运行中 NRO 文件的读句柄锁定
     romfsExit();
 
-    // 删除旧文件并重命名
     std::remove(nroPath.c_str());
     if (std::rename(tmpPath.c_str(), nroPath.c_str()) != 0) {
         std::remove(tmpPath.c_str());
