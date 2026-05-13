@@ -29,7 +29,7 @@ include(${BOREALIS_LIBRARY}/cmake/toolchain.cmake)
 project(GBAStation)
 set(VERSION_MAJOR "0")
 set(VERSION_MINOR "0")
-set(VERSION_ALTER "1")
+set(VERSION_ALTER "5")
 set(VERSION_BUILD "0")
 set(PACKAGE_NAME "com.beiklive.GBAStation")
 set(PROJECT_AUTHOR "beiklive")
@@ -156,6 +156,7 @@ endif ()
 # 构建可执行目标
 program_target(${PROJECT_NAME} "${MAIN_SRC}")
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17)
+target_compile_definitions(${PROJECT_NAME} PRIVATE APP_VERSION="${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_ALTER}")
 
 
 # 生成发布文件
