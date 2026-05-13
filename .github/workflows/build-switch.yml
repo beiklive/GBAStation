@@ -20,17 +20,21 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v4
 
-      - name: 修复 git 权限
+      - name: 修复 Git 权限
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: 安装依赖
         run: |
           dkp-pacman -S --noconfirm --needed switch-dev jq git
 
-      - name: 编译
+      - name: 编译 NRO
         run: |
           chmod +x switchbuild.sh
           ./switchbuild.sh
+
+      - name: 检查输出文件
+        run: |
+          find . -name "*.nro"
 
       - name: 生成 version.json
         run: |
@@ -41,7 +45,8 @@ jobs:
           cat > version.json <<EOF
           {
             "version": "$TAG_NAME",
-            "changelog": $(jq -Rs . <<< "$CHANGELOG")
+            "changelog": $(jq -Rs . <<< "$CHANGELOG"),
+            "download": "latest/GBAStation.nro"
           }
           EOF
 
@@ -51,15 +56,26 @@ jobs:
         run: |
           git clone https://x-access-token:${{ secrets.RELEASE_REPO_TOKEN }}@github.com/beiklive/GBAStation_Release.git release_repo
 
+      - name: 创建目录结构
+        run: |
+          TAG_NAME=${GITHUB_REF_NAME}
+
+          mkdir -p release_repo/latest
+          mkdir -p release_repo/$TAG_NAME
+
       - name: 拷贝发布文件
         run: |
           TAG_NAME=${GITHUB_REF_NAME}
 
-          mkdir -p release_repo/$TAG_NAME
+          # latest
+          cp build_switch/GBAStation.nro release_repo/latest/GBAStation.nro
+          cp version.json release_repo/latest/version.json
 
-          cp build_switch/GBAStation.nro release_repo/$TAG_NAME/
-          cp version.json release_repo/$TAG_NAME/
+          # 历史版本
+          cp build_switch/GBAStation.nro release_repo/$TAG_NAME/GBAStation-$TAG_NAME.nro
+          cp version.json release_repo/$TAG_NAME/version.json
 
+          # 根目录
           cp version.json release_repo/version.json
 
       - name: 提交到 Release Repo
