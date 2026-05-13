@@ -180,6 +180,9 @@ namespace beiklive::SettingKey
     constexpr const char *KEY_DEBUG_LOG_FILE        = "debug.logFile";             ///< 是否输出日志到文件
     constexpr const char *KEY_DEBUG_LOG_OVERLAY     = "debug.logOverlay";          ///< 是否显示调试覆盖层
 
+    // 更新设置
+    constexpr const char *KEY_EMU_UPDATE              = "emu.update";                 ///< 启用更新检查（1=启用 0=禁用）
+
 
 
 

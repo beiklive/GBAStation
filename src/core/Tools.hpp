@@ -108,4 +108,7 @@ bool stateExists(const std::string& saveDir, const std::string& romPath, int slo
 
 /// 将游玩时长（秒）格式化为可读字符串（"X 小时 X 分钟" / "不到 1 分钟"）
 std::string formatPlayTime(int totalSeconds);
+
+/// 将版本号字符串（如 "v3.2.1"）转为整数（如 3002001），每段占三位十进制，用于版本比较
+int versionCode(const std::string& version);
 } // namespace beiklive::tools

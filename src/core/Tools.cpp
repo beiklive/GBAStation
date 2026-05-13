@@ -413,4 +413,22 @@ std::string formatPlayTime(int totalSeconds) {
     return std::to_string(minutes) + " 分钟";
 }
 
+int versionCode(const std::string& version) {
+    // 去除前缀 "v" 或 "V"
+    std::string v = version;
+    if (!v.empty() && (v[0] == 'v' || v[0] == 'V'))
+        v = v.substr(1);
+    // 按 '.' 分割，取前三段，不足补 0
+    int parts[3] = {0, 0, 0};
+    size_t pos = 0;
+    for (int i = 0; i < 3; ++i) {
+        auto dot = v.find('.', pos);
+        std::string seg = (dot == std::string::npos) ? v.substr(pos) : v.substr(pos, dot - pos);
+        parts[i] = std::stoi(seg.empty() ? "0" : seg);
+        if (dot == std::string::npos) break;
+        pos = dot + 1;
+    }
+    return parts[0] * 1000000 + parts[1] * 1000 + parts[2];
+}
+
 } // namespace beiklive::tools

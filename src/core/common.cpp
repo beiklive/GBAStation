@@ -232,6 +232,9 @@ namespace beiklive
         SettingManager->SetDefault("handle.b_turbo", ConfigValue(std::string("none")));
         SettingManager->SetDefault("turbo.rate", ConfigValue(10.0f));
 
+        // 更新设置
+        SettingManager->SetDefault(beiklive::SettingKey::KEY_EMU_UPDATE, ConfigValue(1));
+
         // 截图设置
         SettingManager->SetDefault("screenshot.dir", ConfigValue(0));
 
