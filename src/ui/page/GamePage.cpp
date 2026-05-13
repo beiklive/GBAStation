@@ -104,6 +104,19 @@ namespace beiklive
         db->setDefault(dcrc32, "shaderEnabled",
                        GET_SETTING_KEY_INT(sk::KEY_DISPLAY_SHADER_ENABLED, 0) != 0);
 
+        // 画面模式：全局配置为字符串，DB 存整数 ScreenMode 枚举值
+        {
+            std::string dmStr = GET_SETTING_KEY_STR("display.mode", "original");
+            int dm = 0; // Fit
+            if (dmStr == "fill") dm = 1;          // Fill
+            else if (dmStr == "integer") dm = 2;   // IntegerScale
+            else if (dmStr == "custom") dm = 3;    // FreeScale
+            db->setDefault(dcrc32, "displayMode", dm);
+        }
+        // 整数倍缩放
+        db->setDefault(dcrc32, "integerAspectRatio",
+                       GET_SETTING_KEY_INT("display.integer_scale_mult", 0));
+
         m_gameEntry = db->findByCrc32(dcrc32).value();
 
         // 初始化路径字段（优先使用已有记录，若为空则从配置中读取默认值）

@@ -531,6 +531,17 @@ namespace beiklive
                 entry.overlayEnabled = config.overlayEnabled;
                 entry.shaderEnabled = config.shaderEnabled;
 
+                // 从全局设置初始化画面模式
+                {
+                    std::string dm = GET_SETTING_KEY_STR("display.mode", "original");
+                    if (dm == "fill") entry.displayMode = 1;
+                    else if (dm == "integer") entry.displayMode = 2;
+                    else if (dm == "custom") entry.displayMode = 3;
+                    else entry.displayMode = 0;
+                }
+                entry.integerAspectRatio = static_cast<float>(
+                    GET_SETTING_KEY_INT("display.integer_scale_mult", 0));
+
                 beiklive::GameDB->upsert(entry);
 
                 m_progress.store(i + 1, std::memory_order_release);

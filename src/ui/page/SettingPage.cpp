@@ -956,6 +956,19 @@ brls::View *SettingPage::buildDisplayTab()
     }
 
     {
+        std::vector<std::string> scales = {"自动", "1倍", "2倍", "3倍", "4倍", "5倍"};
+        static const int scaleVals[] = {0, 1, 2, 3, 4, 5};
+        int curScale = GET_SETTING_KEY_INT("display.integer_scale_mult", 0);
+        int idx = 0;
+        for (int i = 0; i < 6; ++i) if (scaleVals[i] == curScale) { idx = i; break; }
+        auto *cell = new brls::SelectorCell();
+        cell->init("整数倍缩放", scales, idx,
+                   [](int i) { if (i >= 0 && i < 6) SET_SETTING_KEY_INT("display.integer_scale_mult", scaleVals[i]); });
+        box->addView(cell);
+        box->addView(makeHint("画面模式为整数倍时生效，自动=取最大整数倍"));
+    }
+
+    {
         std::vector<std::string> filters = {"像素风格 (Nearest)", "平滑 (Linear)"};
         std::string curFilter = cfgGetStr("display.filter", "nearest");
         int idx = (curFilter == "linear") ? 1 : 0;
