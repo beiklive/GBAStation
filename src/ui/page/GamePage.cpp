@@ -302,9 +302,11 @@ namespace beiklive
             GameSignal::instance().requestCheatToggle(idx, enabled);
         });
 
-        // 注入金手指文件变更回调：更新 GameEntry 的 cheatPath
+        // 注入金手指文件变更回调：更新 GameEntry 的 cheatPath 并持久化
         m_gameMenuView->setCheatPathCallback([this](const std::string& path) {
             m_gameEntry.cheatPath = path;
+            if (beiklive::GameDB)
+                beiklive::GameDB->set(m_gameEntry.crc32, "cheatPath", nlohmann::json(path));
             if (m_gameView)
                 m_gameView->requestCheatPathUpdate(path);
         });
