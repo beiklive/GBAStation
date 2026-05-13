@@ -50,7 +50,7 @@ jobs:
           {
             "version": "$TAG_NAME",
             "changelog": "$CHANGELOG_ESCAPED",
-            "download": "latest/GBAStation.nro"
+            "download":  "$TAG_NAME/GBAStation-$TAG_NAME.nro"
           }
           EOF
 
