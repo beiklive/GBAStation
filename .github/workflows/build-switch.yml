@@ -17,9 +17,11 @@ jobs:
       image: devkitpro/devkita64:latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: 检出代码
+        uses: actions/checkout@v4
 
-      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: 修复 git 权限
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: 安装依赖
         run: |
@@ -30,7 +32,7 @@ jobs:
           chmod +x switchbuild.sh
           ./switchbuild.sh
 
-      - name: 检查输出
+      - name: 查看输出文件
         run: |
           find . -name "*.nro"
 
