@@ -6,26 +6,37 @@ on:
       - 'v*'
       - 'V*'
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
+
     container:
       image: devkitpro/devkita64:latest
 
     steps:
-      - name: 检出代码
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: 安装额外依赖
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: 安装依赖
         run: |
           dkp-pacman -S --noconfirm --needed switch-dev
 
-      - name: 编译 NRO
+      - name: 编译
         run: |
           chmod +x switchbuild.sh
           ./switchbuild.sh
 
-      - name: 上传 NRO 到 Release
+      - name: 检查输出
+        run: |
+          find . -name "*.nro"
+
+      - name: 上传到 Release
         uses: softprops/action-gh-release@v2
         with:
-          files: build_switch/GBAStation.nro
+          generate_release_notes: true
+          files: |
+            build_switch/GBAStation.nro
