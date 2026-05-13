@@ -25,7 +25,7 @@ jobs:
 
       - name: 安装依赖
         run: |
-          dkp-pacman -S --noconfirm --needed switch-dev jq git
+          dkp-pacman -S --noconfirm --needed switch-dev
 
       - name: 编译 NRO
         run: |
@@ -42,10 +42,14 @@ jobs:
 
           CHANGELOG=$(git tag -l --format='%(contents)' "$TAG_NAME")
 
+          CHANGELOG_ESCAPED=$(printf '%s' "$CHANGELOG" \
+            | sed ':a;N;$!ba;s/\n/\\n/g' \
+            | sed 's/"/\\"/g')
+
           cat > version.json <<EOF
           {
             "version": "$TAG_NAME",
-            "changelog": $(jq -Rs . <<< "$CHANGELOG"),
+            "changelog": "$CHANGELOG_ESCAPED",
             "download": "latest/GBAStation.nro"
           }
           EOF
