@@ -75,13 +75,8 @@ namespace beiklive
 
     std::string GameImportView::platformName(int platform)
     {
-        switch (static_cast<beiklive::enums::EmuPlatform>(platform))
-        {
-        case beiklive::enums::EmuPlatform::EmuGBA: return "GBA";
-        case beiklive::enums::EmuPlatform::EmuGBC: return "GBC";
-        case beiklive::enums::EmuPlatform::EmuGB:  return "GB";
-        default: return "未知";
-        }
+        auto name = beiklive::tools::platformName(platform);
+        return name.empty() ? "未知" : name;
     }
 
     std::string GameImportView::platformDirName(int platform)

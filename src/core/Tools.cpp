@@ -341,4 +341,76 @@ std::vector<std::vector<int>> parseMultiCombo(const std::string& val)
     return result;
 }
 
+// ── 平台工具 ──────────────────────────────────────────────────────────────
+
+std::string platformName(int platform) {
+    switch (static_cast<beiklive::enums::EmuPlatform>(platform)) {
+        case beiklive::enums::EmuPlatform::EmuGBA: return "GBA";
+        case beiklive::enums::EmuPlatform::EmuGBC: return "GBC";
+        case beiklive::enums::EmuPlatform::EmuGB:  return "GB";
+        default: return "";
+    }
+}
+
+std::string platformOverlayKey(int platform) {
+    switch (static_cast<beiklive::enums::EmuPlatform>(platform)) {
+        case beiklive::enums::EmuPlatform::EmuGBA: return beiklive::SettingKey::KEY_DISPLAY_OVERLAY_GBA_PATH;
+        case beiklive::enums::EmuPlatform::EmuGBC: return beiklive::SettingKey::KEY_DISPLAY_OVERLAY_GBC_PATH;
+        case beiklive::enums::EmuPlatform::EmuGB:  return beiklive::SettingKey::KEY_DISPLAY_OVERLAY_GB_PATH;
+        default: return "";
+    }
+}
+
+std::string platformShaderKey(int platform) {
+    switch (static_cast<beiklive::enums::EmuPlatform>(platform)) {
+        case beiklive::enums::EmuPlatform::EmuGBA: return beiklive::SettingKey::KEY_DISPLAY_SHADER_GBA_PATH;
+        case beiklive::enums::EmuPlatform::EmuGBC: return beiklive::SettingKey::KEY_DISPLAY_SHADER_GBC_PATH;
+        case beiklive::enums::EmuPlatform::EmuGB:  return beiklive::SettingKey::KEY_DISPLAY_SHADER_GB_PATH;
+        default: return "";
+    }
+}
+
+std::string platformBadgeName(int platform) {
+    switch (static_cast<beiklive::enums::EmuPlatform>(platform)) {
+        case beiklive::enums::EmuPlatform::EmuGBA: return "GBA";
+        case beiklive::enums::EmuPlatform::EmuGBC: return "GBC";
+        case beiklive::enums::EmuPlatform::EmuGB:  return "GB";
+        default: return "";
+    }
+}
+
+// ── 存档路径工具 ──────────────────────────────────────────────────────────
+
+std::string slotName(int slot) {
+    return (slot == 0) ? "自动存档" : "槽位 " + std::to_string(slot);
+}
+
+std::string getStatePath(const std::string& saveDir, const std::string& romPath, int slot) {
+    std::string stem = std::filesystem::path(romPath).stem().string();
+    std::string sep;
+    if (!saveDir.empty() && saveDir.back() != '/' && saveDir.back() != '\\')
+        sep = "/";
+    return saveDir + sep + stem + ".ss" + std::to_string(slot);
+}
+
+std::string getStateThumbPath(const std::string& saveDir, const std::string& romPath, int slot) {
+    return getStatePath(saveDir, romPath, slot) + ".png";
+}
+
+bool stateExists(const std::string& saveDir, const std::string& romPath, int slot) {
+    std::error_code ec;
+    return std::filesystem::exists(getStatePath(saveDir, romPath, slot), ec);
+}
+
+// ── 时间工具 ──────────────────────────────────────────────────────────────
+
+std::string formatPlayTime(int totalSeconds) {
+    if (totalSeconds < 60) return "不到 1 分钟";
+    int hours = totalSeconds / 3600;
+    int minutes = (totalSeconds % 3600) / 60;
+    if (hours > 0)
+        return std::to_string(hours) + " 小时 " + std::to_string(minutes) + " 分钟";
+    return std::to_string(minutes) + " 分钟";
+}
+
 } // namespace beiklive::tools

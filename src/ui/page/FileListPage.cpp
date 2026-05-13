@@ -297,12 +297,8 @@ namespace beiklive
     // ============================================================
     std::string FileListPage::_platformName(int platform)
     {
-        switch (static_cast<beiklive::enums::EmuPlatform>(platform)) {
-            case beiklive::enums::EmuPlatform::EmuGBA: return "GBA";
-            case beiklive::enums::EmuPlatform::EmuGBC: return "GBC";
-            case beiklive::enums::EmuPlatform::EmuGB:  return "GB";
-            default: return "未知";
-        }
+        auto name = beiklive::tools::platformName(platform);
+        return name.empty() ? "未知" : name;
     }
 
     // ============================================================
@@ -311,11 +307,7 @@ namespace beiklive
     std::string FileListPage::_formatPlayTime(int seconds)
     {
         if (seconds <= 0) return "未游玩";
-        int h = seconds / 3600;
-        int m = (seconds % 3600) / 60;
-        if (h > 0) return std::to_string(h) + " 小时 " + std::to_string(m) + " 分钟";
-        if (m > 0) return std::to_string(m) + " 分钟";
-        return "不到 1 分钟";
+        return beiklive::tools::formatPlayTime(seconds);
     }
 
     std::string FileListPage::_formatFileSizeStr(const std::string& path)

@@ -75,4 +75,37 @@ std::vector<int> parseKbdCombo(const std::string& combo);
 /// 外层 vector 为各组合（OR 关系），内层为各按键（AND 关系）。
 /// "none" 或空字符串返回空列表。
 std::vector<std::vector<int>> parseMultiCombo(const std::string& val);
+
+// ── 平台工具 ────────────────────────────────────────────────────────────────
+
+/// 将 EmuPlatform 枚举值转为平台显示名称（"GBA"/"GBC"/"GB"）
+std::string platformName(int platform);
+
+/// 根据平台返回对应的遮罩全局配置键
+std::string platformOverlayKey(int platform);
+
+/// 根据平台返回对应的着色器全局配置键
+std::string platformShaderKey(int platform);
+
+/// 根据平台返回对应的徽章显示文本
+std::string platformBadgeName(int platform);
+
+// ── 存档路径工具 ────────────────────────────────────────────────────────────
+
+/// 返回存档槽位名称："自动存档" (slot=0) 或 "槽位 N" (slot>0)
+std::string slotName(int slot);
+
+/// 构建即时存档文件路径
+std::string getStatePath(const std::string& saveDir, const std::string& romPath, int slot);
+
+/// 构建即时存档缩略图路径 (.png)
+std::string getStateThumbPath(const std::string& saveDir, const std::string& romPath, int slot);
+
+/// 检查指定槽位的存档文件是否存在
+bool stateExists(const std::string& saveDir, const std::string& romPath, int slot);
+
+// ── 时间工具 ────────────────────────────────────────────────────────────────
+
+/// 将游玩时长（秒）格式化为可读字符串（"X 小时 X 分钟" / "不到 1 分钟"）
+std::string formatPlayTime(int totalSeconds);
 } // namespace beiklive::tools

@@ -187,15 +187,8 @@ namespace beiklive
 
                 item->setImagePathDeferred(entry.logoPath);
 
-                std::string badgeText;
+                std::string badgeText = beiklive::tools::platformBadgeName(entry.platform);
                 PlatformBadgeColor badgeColor = _platformBadge(entry.platform);
-                switch (static_cast<beiklive::enums::EmuPlatform>(entry.platform))
-                {
-                    case beiklive::enums::EmuPlatform::EmuGBA: badgeText = "GBA"; break;
-                    case beiklive::enums::EmuPlatform::EmuGBC: badgeText = "GBC"; break;
-                    case beiklive::enums::EmuPlatform::EmuGB:  badgeText = "GB";  break;
-                    default:                                                        break;
-                }
                 if (!badgeText.empty())
                     item->setBadge(badgeText, badgeColor);
 
@@ -255,15 +248,8 @@ namespace beiklive
 
                 item->setImagePathDeferred(entry.logoPath);
 
-                std::string badgeText;
+                std::string badgeText = beiklive::tools::platformBadgeName(entry.platform);
                 PlatformBadgeColor badgeColor = _platformBadge(entry.platform);
-                switch (static_cast<beiklive::enums::EmuPlatform>(entry.platform))
-                {
-                    case beiklive::enums::EmuPlatform::EmuGBA: badgeText = "GBA"; break;
-                    case beiklive::enums::EmuPlatform::EmuGBC: badgeText = "GBC"; break;
-                    case beiklive::enums::EmuPlatform::EmuGB:  badgeText = "GB";  break;
-                    default:                                                        break;
-                }
                 if (!badgeText.empty())
                     item->setBadge(badgeText, badgeColor);
 
@@ -403,19 +389,7 @@ namespace beiklive
     std::string GameLibraryPage::_formatPlayTime(int seconds)
     {
         if (seconds <= 0) return "";
-
-        int hours   = seconds / 3600;
-        int minutes = (seconds % 3600) / 60;
-
-        char buf[64];
-        if (hours > 0)
-            std::snprintf(buf, sizeof(buf), "%d 小时 %d 分钟", hours, minutes);
-        else if (minutes > 0)
-            std::snprintf(buf, sizeof(buf), "%d 分钟", minutes);
-        else
-            std::snprintf(buf, sizeof(buf), "不到 1 分钟");
-
-        return std::string(buf);
+        return beiklive::tools::formatPlayTime(seconds);
     }
 
     // ============================================================

@@ -1163,41 +1163,25 @@ namespace beiklive
 
     std::string GameView::getStatePath(int slot) const
     {
-        namespace fs = std::filesystem;
-
-        // 确定存档目录
         std::string dir = m_gameEntry.savePath;
-
-        // 提取 ROM 文件名（不含扩展名）
-        std::string stem;
-        if (!m_gameEntry.path.empty())
-            stem = fs::path(m_gameEntry.path).stem().string();
-        else
-            stem = "game";
-
-        // 确保目录存在
-        if (!dir.empty()) {
-            std::error_code ec;
-            fs::create_directories(dir, ec);
-        }
-
-        // 路径分隔符
-        std::string sep;
-        if (!dir.empty() && dir.back() != '/' && dir.back() != '\\')
-            sep = "/";
-
-        return dir + sep + stem + ".ss" + std::to_string(slot);
+        if (dir.empty()) dir = beiklive::path::savePath();
+        std::error_code ec;
+        std::filesystem::create_directories(dir, ec);
+        return beiklive::tools::getStatePath(dir, m_gameEntry.path, slot);
     }
 
     std::string GameView::getStateThumbPath(int slot) const
     {
-        return getStatePath(slot) + ".png";
+        return beiklive::tools::getStateThumbPath(
+            m_gameEntry.savePath.empty() ? beiklive::path::savePath() : m_gameEntry.savePath,
+            m_gameEntry.path, slot);
     }
 
     bool GameView::stateExists(int slot) const
     {
-        std::error_code ec;
-        return std::filesystem::exists(getStatePath(slot), ec);
+        std::string dir = m_gameEntry.savePath;
+        if (dir.empty()) dir = beiklive::path::savePath();
+        return beiklive::tools::stateExists(dir, m_gameEntry.path, slot);
     }
 
     // ============================================================

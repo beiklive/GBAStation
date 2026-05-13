@@ -163,14 +163,7 @@ namespace beiklive
         // overlayPath：优先使用已有值，否则从设置读取平台对应的遮罩路径
         if (m_gameEntry.overlayPath.empty())
         {
-            std::string overlayKey;
-            switch (static_cast<beiklive::enums::EmuPlatform>(m_gameEntry.platform))
-            {
-                case beiklive::enums::EmuPlatform::EmuGBA: overlayKey = sk::KEY_DISPLAY_OVERLAY_GBA_PATH; break;
-                case beiklive::enums::EmuPlatform::EmuGBC: overlayKey = sk::KEY_DISPLAY_OVERLAY_GBC_PATH; break;
-                case beiklive::enums::EmuPlatform::EmuGB:  overlayKey = sk::KEY_DISPLAY_OVERLAY_GB_PATH;  break;
-                default: break;
-            }
+            std::string overlayKey = beiklive::tools::platformOverlayKey(m_gameEntry.platform);
             if (!overlayKey.empty())
                 m_gameEntry.overlayPath = GET_SETTING_KEY_STR(overlayKey.c_str(), "");
         }
@@ -178,14 +171,7 @@ namespace beiklive
         // shaderPath：优先使用已有值，否则从设置读取平台对应的着色器路径（平台路径为空时回退到全局路径）
         if (m_gameEntry.shaderPath.empty())
         {
-            std::string shaderKey;
-            switch (static_cast<beiklive::enums::EmuPlatform>(m_gameEntry.platform))
-            {
-                case beiklive::enums::EmuPlatform::EmuGBA: shaderKey = sk::KEY_DISPLAY_SHADER_GBA_PATH; break;
-                case beiklive::enums::EmuPlatform::EmuGBC: shaderKey = sk::KEY_DISPLAY_SHADER_GBC_PATH; break;
-                case beiklive::enums::EmuPlatform::EmuGB:  shaderKey = sk::KEY_DISPLAY_SHADER_GB_PATH;  break;
-                default: break;
-            }
+            std::string shaderKey = beiklive::tools::platformShaderKey(m_gameEntry.platform);
             if (!shaderKey.empty())
                 m_gameEntry.shaderPath = GET_SETTING_KEY_STR(shaderKey.c_str(), "");
             if (m_gameEntry.shaderPath.empty())

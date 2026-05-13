@@ -27,28 +27,21 @@ namespace beiklive
         std::string dir = m_entry.savePath.empty()
                           ? beiklive::path::savePath()
                           : m_entry.savePath;
-        std::string stem = !m_entry.path.empty()
-                           ? fs::path(m_entry.path).stem().string()
-                           : "game";
-        if (!dir.empty())
-        {
-            std::error_code ec;
-            fs::create_directories(dir, ec);
-        }
-        std::string sep;
-        if (!dir.empty() && dir.back() != '/' && dir.back() != '\\')
-            sep = "/";
-        return dir + sep + stem + ".ss" + std::to_string(slot);
+        std::error_code ec;
+        std::filesystem::create_directories(dir, ec);
+        return beiklive::tools::getStatePath(dir, m_entry.path, slot);
     }
 
     std::string GameDetailPage::_getStateThumbPath(int slot) const
     {
-        return _getStatePath(slot) + ".png";
+        return beiklive::tools::getStateThumbPath(
+            m_entry.savePath.empty() ? beiklive::path::savePath() : m_entry.savePath,
+            m_entry.path, slot);
     }
 
     std::string GameDetailPage::_slotName(int slot)
     {
-        return (slot == 0) ? "自动存档" : "槽位 " + std::to_string(slot);
+        return beiklive::tools::slotName(slot);
     }
 
     // ============================================================

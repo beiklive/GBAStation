@@ -1,6 +1,7 @@
 #include "GameMenuView.hpp"
 #include "core/Tools.hpp"
 #include "ui/utils/FilePickerHelper.hpp"
+#include "ui/utils/UiHelper.hpp"
 #include <filesystem>
 #include "borealis/core/cache_helper.hpp"
 #include <borealis/views/dialog.hpp>
@@ -55,18 +56,8 @@ namespace beiklive
         return false;
     }
 
-    static brls::Label *makeHint(const std::string &text)
-    {
-        auto *lbl = new brls::Label();
-        lbl->setText(text);
-        lbl->setFontSize(16.f);
-        lbl->setTextColor(nvgRGB(154, 154, 154));
-        lbl->setMarginBottom(10.f);
-        lbl->setMarginTop(10.f);
-        lbl->setMarginLeft(20.f);
-        lbl->setFocusable(false);
-        return lbl;
-    }
+    using beiklive::ui::makeHint;
+
     GameMenuView::GameMenuView(beiklive::GameEntry gameData)
         : m_gameEntry(std::move(gameData))
     {
@@ -183,12 +174,10 @@ namespace beiklive
     }
 
     // ============================================================
-    // _slotName
-    // ============================================================
-
+    // slotName 已移至 beiklive::tools::slotName
     std::string GameMenuView::_slotName(int slot)
     {
-        return (slot == 0) ? "自动存档" : "槽位 " + std::to_string(slot);
+        return beiklive::tools::slotName(slot);
     }
 
     // ============================================================
@@ -1432,23 +1421,11 @@ namespace beiklive
     // ============================================================
 
     std::string GameMenuView::_getPlatformOverlayKey() const {
-        using namespace beiklive::SettingKey;
-        switch (static_cast<beiklive::enums::EmuPlatform>(m_gameEntry.platform)) {
-            case beiklive::enums::EmuPlatform::EmuGBA: return KEY_DISPLAY_OVERLAY_GBA_PATH;
-            case beiklive::enums::EmuPlatform::EmuGBC: return KEY_DISPLAY_OVERLAY_GBC_PATH;
-            case beiklive::enums::EmuPlatform::EmuGB:  return KEY_DISPLAY_OVERLAY_GB_PATH;
-            default: return "";
-        }
+        return beiklive::tools::platformOverlayKey(m_gameEntry.platform);
     }
 
     std::string GameMenuView::_getPlatformShaderKey() const {
-        using namespace beiklive::SettingKey;
-        switch (static_cast<beiklive::enums::EmuPlatform>(m_gameEntry.platform)) {
-            case beiklive::enums::EmuPlatform::EmuGBA: return KEY_DISPLAY_SHADER_GBA_PATH;
-            case beiklive::enums::EmuPlatform::EmuGBC: return KEY_DISPLAY_SHADER_GBC_PATH;
-            case beiklive::enums::EmuPlatform::EmuGB:  return KEY_DISPLAY_SHADER_GB_PATH;
-            default: return "";
-        }
+        return beiklive::tools::platformShaderKey(m_gameEntry.platform);
     }
 
     void GameMenuView::_syncDisplaySettings() {

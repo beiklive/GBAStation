@@ -3,6 +3,7 @@
 #include "ui/page/GameImportView.hpp"
 #include "ui/utils/FunctionButtons.hpp"
 #include "ui/utils/FilePickerHelper.hpp"
+#include "ui/utils/UiHelper.hpp"
 
 #include <borealis/views/cells/cell_bool.hpp>
 #include <borealis/views/cells/cell_selector.hpp>
@@ -50,45 +51,12 @@ static void cfgSetStr(const std::string &key, const std::string &val)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  布局辅助函数
+//  布局辅助函数（已移至 ui/utils/UiHelper.hpp）
 // ─────────────────────────────────────────────────────────────────────────────
-
-static brls::ScrollingFrame *makeScrollTab()
-{
-    auto *scroll = new brls::ScrollingFrame();
-    scroll->setGrow(1.0f);
-    scroll->setScrollingBehavior(brls::ScrollingBehavior::NATURAL);
-    scroll->setScrollingIndicatorVisible(false);
-    scroll->setFocusable(false); // 滚动容器不参与焦点管理，焦点由单元格统一持有
-    return scroll;
-}
-
-static brls::Box *makeContentBox()
-{
-    auto *box = new brls::Box(brls::Axis::COLUMN);
-    box->setPadding(20.f, 40.f, 30.f, 40.f);
-    return box;
-}
-
-static brls::Header *makeHeader(const std::string &title)
-{
-    auto *h = new brls::Header();
-    h->setTitle(title);
-    return h;
-}
-
-static brls::Label *makeHint(const std::string &text)
-{
-    auto *lbl = new brls::Label();
-    lbl->setText(text);
-    lbl->setFontSize(16.f);
-    lbl->setTextColor(nvgRGB(154, 154, 154));
-    lbl->setMarginBottom(10.f);
-    lbl->setMarginTop(10.f);
-    lbl->setMarginLeft(20.f);
-    lbl->setFocusable(false);
-    return lbl;
-}
+using beiklive::ui::makeHint;
+using beiklive::ui::makeHeader;
+using beiklive::ui::makeContentBox;
+using beiklive::ui::makeScrollTab;
 
 static int findIndex(const std::vector<std::string> &options,
                      const std::string &val, int defaultIdx = 0)
