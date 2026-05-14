@@ -110,8 +110,19 @@ bool AppUpdater::checkSync(const std::string& localVersion) {
         return false;
     }
 
+    brls::Logger::info("Version Json: {}", json);
+
+    // 移除尾随逗号（部分编辑器生成的 JSON 可能带有尾随逗号）
+    std::string cleanJson = json;
+    // 匹配 ", \n}" 或 ",\n}" 模式
+    size_t pos;
+    while ((pos = cleanJson.find(",\n}")) != std::string::npos)
+        cleanJson.erase(pos, 1);
+    while ((pos = cleanJson.find(", }")) != std::string::npos)
+        cleanJson.erase(pos, 1);
+
     try {
-        auto j = nlohmann::json::parse(json);
+        auto j = nlohmann::json::parse(cleanJson);
         m_info.version = j.value("version", "");
         m_info.changelog = j.value("changelog", "");
         m_info.fileSize = j.value("size", size_t(0));

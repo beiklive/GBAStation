@@ -324,6 +324,8 @@ brls::View* AboutPage::_buildUpdateTab() {
 void AboutPage::_checkUpdate() {
     // 显示检测中弹窗
     auto* dlg = new brls::Dialog("正在检测更新...\n\n请稍候");
+    dlg->setFocusable(true);
+    HIDE_BRLS_HIGHLIGHT(dlg);
     dlg->open();
 
     brls::async([this, dlg]() {
