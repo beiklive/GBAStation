@@ -78,9 +78,12 @@ int main(int argc, char* argv[]) {
 	activity->setPageView(mStartPage);
 	brls::Application::pushActivity(activity);
 
-#ifdef __SWITCH__
-	brls::async([]() {
+	// Use a dedicated thread for update checking instead of brls::async,
+	// so it doesn't block the single async worker thread.
+	new std::thread([]() {
 		std::this_thread::sleep_for(std::chrono::seconds(2));
+
+		brls::Logger::debug("开始更新检查线程");
 
 		int updateEnabled = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_EMU_UPDATE, 1);
 		if (!updateEnabled) return;
@@ -118,7 +121,6 @@ int main(int argc, char* argv[]) {
 			}
 		});
 	});
-#endif
 
 	// Run the app
 	while (brls::Application::mainLoop())
