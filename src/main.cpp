@@ -54,26 +54,6 @@ int main(int argc, char* argv[]) {
 		}
 	}
 
-#ifndef __SWITCH__
-    {
-        std::string logPath = beiklive::path::logFilePath();
-        FILE* fp = std::fopen(logPath.c_str(), "w+");
-
-        if (fp)
-            brls::Logger::setLogOutput(fp);
-        // brls::Application::enableDebuggingView(true);
-    }
-#endif
-
-#ifndef __SWITCH__
-    {
-        std::string logPath = beiklive::path::logFilePath();
-        FILE* fp = std::fopen(logPath.c_str(), "w+");
-        if (fp)
-            brls::Logger::setLogOutput(fp);
-    }
-#endif
-
 	brls::Platform::APP_LOCALE_DEFAULT = brls::LOCALE_AUTO;
 	if (!brls::Application::init()) {
 		brls::Logger::error("Unable to init Borealis application");

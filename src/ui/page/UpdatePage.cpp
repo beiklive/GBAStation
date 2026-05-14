@@ -35,6 +35,7 @@ void UpdatePage::_initLayout() {
     card->setAlignItems(brls::AlignItems::CENTER);
     card->setPadding(30.f, 50.f, 30.f, 50.f);
     card->setWidth(480.f);
+    card->setHeight(640.f);
 
     // 标题
     m_titleLabel = new brls::Label();
@@ -129,7 +130,7 @@ void UpdatePage::_initLayout() {
     this->getContentBox()->addView(card);
 
     // 默认取消按钮
-    m_cancelBtn = new brls::DetailCell();
+    m_cancelBtn = new brls::Button();
     m_cancelBtn->setText("取消");
     m_cancelBtn->registerClickAction([this](brls::View*) -> bool {
         m_cancelled.store(true);
@@ -229,11 +230,12 @@ void UpdatePage::startDownload() {
         brls::sync([this, ok]() {
             // 先移除取消按钮
             m_btnBox->clearViews(true);
+            brls::Application::giveFocus(nullptr);
 
             if (!ok) {
                 m_statusLabel->setText("下载失败，请重试");
 
-                auto* retryBtn = new brls::DetailCell();
+                auto* retryBtn = new brls::Button();
                 retryBtn->setText("重试");
                 retryBtn->registerClickAction([this](brls::View*) -> bool {
                     startDownload();
@@ -241,7 +243,7 @@ void UpdatePage::startDownload() {
                 });
                 m_btnBox->addView(retryBtn);
 
-                auto* closeBtn = new brls::DetailCell();
+                auto* closeBtn = new brls::Button();
                 closeBtn->setText("关闭");
                 closeBtn->registerClickAction([](brls::View*) -> bool {
                     brls::Application::popActivity(brls::TransitionAnimation::NONE);
@@ -255,7 +257,7 @@ void UpdatePage::startDownload() {
 
             m_statusLabel->setText("下载完成，是否安装？");
 
-            auto* installBtn = new brls::DetailCell();
+            auto* installBtn = new brls::Button();
             installBtn->setText("安装");
             installBtn->registerClickAction([this](brls::View*) -> bool {
                 startInstall();
@@ -263,8 +265,8 @@ void UpdatePage::startDownload() {
             });
             m_btnBox->addView(installBtn);
 
-            auto* laterBtn = new brls::DetailCell();
-            laterBtn->setText("稍后");
+            auto* laterBtn = new brls::Button();
+            laterBtn->setText("取消");
             laterBtn->registerClickAction([](brls::View*) -> bool {
                 brls::Application::popActivity(brls::TransitionAnimation::NONE);
                 return true;
@@ -284,7 +286,7 @@ void UpdatePage::startInstall() {
         if (ok) {
             m_statusLabel->setText("安装完成，请重启");
 
-            auto* rebootBtn = new brls::DetailCell();
+            auto* rebootBtn = new brls::Button();
             rebootBtn->setText("重启");
             rebootBtn->registerClickAction([](brls::View*) -> bool {
 #ifdef __SWITCH__
@@ -299,7 +301,7 @@ void UpdatePage::startInstall() {
         } else {
             m_statusLabel->setText("安装失败");
 
-            auto* closeBtn = new brls::DetailCell();
+            auto* closeBtn = new brls::Button();
             closeBtn->setText("关闭");
             closeBtn->registerClickAction([](brls::View*) -> bool {
                 brls::Application::popActivity(brls::TransitionAnimation::NONE);
