@@ -5,6 +5,18 @@
 
 namespace beiklive {
 
+static std::string formatSize(size_t bytes) {
+    if (bytes < 1024) return std::to_string(bytes) + " B";
+    if (bytes < 1024 * 1024) {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "%.1f KB", bytes / 1024.0);
+        return buf;
+    }
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%.1f MB", bytes / (1024.0 * 1024.0));
+    return buf;
+}
+
 AboutPage::AboutPage() {
     brls::sync([this]() {
         this->showFooter(true);
@@ -182,14 +194,10 @@ brls::View* AboutPage::_buildUpdateTab() {
     auto* box = new brls::Box(brls::Axis::COLUMN);
     box->setPadding(20.f, 40.f, 30.f, 40.f);
 
-    // 当前版本
-    auto* header = new brls::Header();
-    header->setTitle("当前版本");
-    box->addView(header);
-
     // 读取本地 version.json
     std::string localVersion = "未知";
     std::string localChangelog = "";
+    size_t localSize = 0;
     try {
         std::string localPath = beiklive::path::configPath() + "/version.json";
         std::ifstream f(localPath);
@@ -199,21 +207,61 @@ brls::View* AboutPage::_buildUpdateTab() {
             auto j = nlohmann::json::parse(content);
             localVersion = j.value("version", "未知");
             localChangelog = j.value("changelog", "");
+            localSize = j.value("size", size_t(0));
         }
     } catch (...) {}
 
-    auto* versionLabel = new brls::Label();
-    versionLabel->setText("版本: " + localVersion);
-    versionLabel->setFontSize(22.f);
-    versionLabel->setTextColor(GET_THEME_COLOR("brls/text"));
-    versionLabel->setMarginBottom(10.f);
-    versionLabel->setFocusable(false);
-    box->addView(versionLabel);
+    // 版本信息卡片
+    auto* versionCard = new brls::Box(brls::Axis::COLUMN);
+    versionCard->setCornerRadius(14.f);
+    versionCard->setBackgroundColor(nvgRGBA(0, 0, 0, 20));
+    versionCard->setShadowVisibility(true);
+    versionCard->setShadowType(brls::ShadowType::GENERIC);
+    versionCard->setPadding(20.f, 24.f, 20.f, 24.f);
+    versionCard->setFocusable(false);
+    versionCard->setHideHighlightBackground(true);
 
+    auto* verTitle = new brls::Label();
+    verTitle->setText("当前版本信息");
+    verTitle->setFontSize(22.f);
+    verTitle->setTextColor(GET_THEME_COLOR("brls/text"));
+    verTitle->setMarginBottom(14.f);
+    verTitle->setFocusable(false);
+    versionCard->addView(verTitle);
+
+    auto addInfoRow = [&](const std::string& label, const std::string& value) {
+        auto* row = new brls::Box(brls::Axis::ROW);
+        row->setFocusable(false);
+        row->setMarginBottom(6.f);
+
+        auto* lbl = new brls::Label();
+        lbl->setText(label);
+        lbl->setFontSize(17.f);
+        lbl->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
+        lbl->setWidth(80.f);
+        lbl->setFocusable(false);
+        row->addView(lbl);
+
+        auto* val = new brls::Label();
+        val->setText(value);
+        val->setFontSize(17.f);
+        val->setTextColor(GET_THEME_COLOR("brls/text"));
+        val->setFocusable(false);
+        row->addView(val);
+
+        versionCard->addView(row);
+    };
+
+    addInfoRow("版本号", localVersion);
+    addInfoRow("文件大小", formatSize(localSize));
+
+    box->addView(versionCard);
+
+    // 更新日志
     if (!localChangelog.empty()) {
         auto* changelogHeader = new brls::Header();
         changelogHeader->setTitle("更新日志");
-        changelogHeader->setMarginTop(20.f);
+        changelogHeader->setMarginTop(24.f);
         box->addView(changelogHeader);
 
         auto* changelogCard = new brls::Box(brls::Axis::COLUMN);
@@ -222,7 +270,6 @@ brls::View* AboutPage::_buildUpdateTab() {
         changelogCard->setPadding(16.f, 20.f, 16.f, 20.f);
         changelogCard->setFocusable(false);
 
-        // 按行显示 changelog
         std::istringstream iss(localChangelog);
         std::string line;
         while (std::getline(iss, line)) {
@@ -256,7 +303,7 @@ brls::View* AboutPage::_buildUpdateTab() {
     box->addView(checkBtn);
 
     auto* hint = new brls::Label();
-    hint->setText("点击检测最新版本，如有更新可自动下载安装");
+    hint->setText("连接到服务器检测最新版本，如有更新可自动下载安装");
     hint->setFontSize(14.f);
     hint->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
     hint->setMarginTop(8.f);

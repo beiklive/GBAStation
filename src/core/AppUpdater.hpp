@@ -10,6 +10,7 @@ struct UpdateInfo {
     std::string version;     // 最新版本号（如 "v0.0.5_2"）
     std::string changelog;   // 更新日志
     std::string downloadUrl; // 下载链接
+    size_t      fileSize = 0;// 文件大小（字节）
     bool hasUpdate = false;  // 是否有更新
 };
 

@@ -34,6 +34,7 @@ private:
     brls::Label* m_speedLabel = nullptr;
     brls::Label* m_sizeLabel = nullptr;
     brls::Label* m_etaLabel = nullptr;
+    brls::Label* m_pctLabel = nullptr;
     brls::Rectangle* m_progressBg = nullptr;
     brls::Rectangle* m_progressBar = nullptr;
     brls::Box* m_btnBox = nullptr;

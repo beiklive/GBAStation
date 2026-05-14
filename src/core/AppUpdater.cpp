@@ -41,14 +41,17 @@ static size_t writeToVector(void* ptr, size_t size, size_t nmemb, void* userdata
 struct ProgressCtx {
     std::function<bool(size_t, size_t)>* onProgress;
     std::atomic<bool>* cancelled;
+    size_t totalSize;
 };
 
 static int progressCallback(void* userdata, curl_off_t dltotal, curl_off_t dlnow,
                             curl_off_t, curl_off_t) {
     auto* ctx = static_cast<ProgressCtx*>(userdata);
     if (ctx->cancelled && ctx->cancelled->load()) return 1;
-    if (ctx->onProgress && *ctx->onProgress)
-        return (*ctx->onProgress)(static_cast<size_t>(dltotal), static_cast<size_t>(dlnow)) ? 0 : 1;
+    if (ctx->onProgress && *ctx->onProgress) {
+        size_t total = ctx->totalSize ? ctx->totalSize : static_cast<size_t>(dltotal);
+        return (*ctx->onProgress)(total, static_cast<size_t>(dlnow)) ? 0 : 1;
+    }
     return 0;
 }
 
@@ -111,6 +114,7 @@ bool AppUpdater::checkSync(const std::string& localVersion) {
         auto j = nlohmann::json::parse(json);
         m_info.version = j.value("version", "");
         m_info.changelog = j.value("changelog", "");
+        m_info.fileSize = j.value("size", size_t(0));
         std::string dl = j.value("download", "");
         m_info.downloadUrl = dl.empty() ? "" : std::string(BASE_URL) + "/" + dl;
     } catch (...) {
@@ -140,7 +144,8 @@ bool AppUpdater::download(std::function<bool(size_t, size_t)> onProgress) {
 
     m_downloadedData.clear();
 
-    ProgressCtx ctx{&onProgress, nullptr};
+    size_t totalSize = m_info.fileSize;
+    ProgressCtx ctx{&onProgress, nullptr, totalSize};
     setCommonOptions(curl);
     curl_easy_setopt(curl, CURLOPT_URL, m_info.downloadUrl.c_str());
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeToVector);

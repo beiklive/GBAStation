@@ -24,73 +24,94 @@ void UpdatePage::_initLayout() {
     this->getContentBox()->setAlignItems(brls::AlignItems::CENTER);
     this->getContentBox()->setJustifyContent(brls::JustifyContent::CENTER);
     this->getContentBox()->setGrow(1.0f);
+    this->getContentBox()->setBackgroundColor(nvgRGBA(20, 20, 28, 255));
 
-    // ── 卡片 ──
-    auto* card = new brls::Box(brls::Axis::COLUMN);
-    card->setFocusable(false);
-    card->setCornerRadius(16.f);
-    card->setBackgroundColor(nvgRGBA(30, 30, 40, 230));
-    card->setShadowType(brls::ShadowType::GENERIC);
-    card->setShadowVisibility(true);
-    card->setAlignItems(brls::AlignItems::CENTER);
-    card->setPadding(30.f, 50.f, 30.f, 50.f);
-    card->setWidth(560.f);
+    // 主容器
+    auto* mainBox = new brls::Box(brls::Axis::COLUMN);
+    mainBox->setFocusable(false);
+    mainBox->setAlignItems(brls::AlignItems::CENTER);
+    mainBox->setJustifyContent(brls::JustifyContent::CENTER);
+    mainBox->setGrow(1.0f);
+    mainBox->setWidthPercentage(70.f);
 
-    // 标题
+    // 标题区
     m_titleLabel = new brls::Label();
     m_titleLabel->setText("系统更新");
-    m_titleLabel->setFontSize(26.f);
+    m_titleLabel->setFontSize(30.f);
     m_titleLabel->setTextColor(GET_THEME_COLOR("brls/text"));
     m_titleLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
-    m_titleLabel->setMarginBottom(20.f);
+    m_titleLabel->setMarginBottom(8.f);
     m_titleLabel->setFocusable(false);
-    card->addView(m_titleLabel);
+    mainBox->addView(m_titleLabel);
 
-    // 分隔线
-    auto* div = new brls::Rectangle(nvgRGBA(79, 193, 255, 80));
-    div->setWidth(80.f);
-    div->setHeight(2.f);
-    div->setMarginBottom(20.f);
-    card->addView(div);
+    // 分割线
+    auto* div = new brls::Rectangle(nvgRGBA(79, 193, 255, 100));
+    div->setWidth(60.f);
+    div->setHeight(3.f);
+    div->setCornerRadius(1.5f);
+    div->setMarginBottom(30.f);
+    mainBox->addView(div);
 
-    // 状态
+    // 状态文字
     m_statusLabel = new brls::Label();
-    m_statusLabel->setText("准备下载...");
-    m_statusLabel->setFontSize(18.f);
+    m_statusLabel->setText("正在连接服务器...");
+    m_statusLabel->setFontSize(20.f);
     m_statusLabel->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
     m_statusLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
-    m_statusLabel->setMarginBottom(16.f);
+    m_statusLabel->setMarginBottom(24.f);
     m_statusLabel->setFocusable(false);
-    card->addView(m_statusLabel);
+    mainBox->addView(m_statusLabel);
+
+    // 进度条容器
+    auto* progressBox = new brls::Box(brls::Axis::COLUMN);
+    progressBox->setFocusable(false);
+    progressBox->setAlignItems(brls::AlignItems::CENTER);
+    progressBox->setWidthPercentage(80.f);
 
     // 进度条背景
-    m_progressBg = new brls::Rectangle(nvgRGBA(60, 60, 70, 255));
-    m_progressBg->setWidth(400.f);
-    m_progressBg->setHeight(8.f);
-    m_progressBg->setCornerRadius(4.f);
+    m_progressBg = new brls::Rectangle(nvgRGBA(50, 50, 60, 255));
+    m_progressBg->setWidthPercentage(100.f);
+    m_progressBg->setHeight(10.f);
+    m_progressBg->setCornerRadius(5.f);
     m_progressBg->setFocusable(false);
-    card->addView(m_progressBg);
+    progressBox->addView(m_progressBg);
 
-    // 进度条
+    // 进度条填充
     m_progressBar = new brls::Rectangle(nvgRGBA(79, 193, 255, 255));
     m_progressBar->setWidth(0.f);
-    m_progressBar->setHeight(8.f);
-    m_progressBar->setCornerRadius(4.f);
+    m_progressBar->setHeight(10.f);
+    m_progressBar->setCornerRadius(5.f);
     m_progressBar->setFocusable(false);
     m_progressBar->setPositionType(brls::PositionType::ABSOLUTE);
-    card->addView(m_progressBar);
+    progressBox->addView(m_progressBar);
 
-    // 速度
+    // 百分比文字
+    m_pctLabel = new brls::Label();
+    m_pctLabel->setText("0%");
+    m_pctLabel->setFontSize(32.f);
+    m_pctLabel->setTextColor(GET_THEME_COLOR("brls/text"));
+    m_pctLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+    m_pctLabel->setMarginTop(16.f);
+    m_pctLabel->setMarginBottom(12.f);
+    m_pctLabel->setFocusable(false);
+    progressBox->addView(m_pctLabel);
+
+    mainBox->addView(progressBox);
+
+    // 详情区（速度和大小）
+    auto* detailBox = new brls::Box(brls::Axis::COLUMN);
+    detailBox->setFocusable(false);
+    detailBox->setAlignItems(brls::AlignItems::CENTER);
+    detailBox->setMarginTop(20.f);
+
     m_speedLabel = new brls::Label();
     m_speedLabel->setText("");
     m_speedLabel->setFontSize(16.f);
     m_speedLabel->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
     m_speedLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
-    m_speedLabel->setMarginTop(12.f);
     m_speedLabel->setFocusable(false);
-    card->addView(m_speedLabel);
+    detailBox->addView(m_speedLabel);
 
-    // 大小
     m_sizeLabel = new brls::Label();
     m_sizeLabel->setText("");
     m_sizeLabel->setFontSize(16.f);
@@ -98,9 +119,8 @@ void UpdatePage::_initLayout() {
     m_sizeLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
     m_sizeLabel->setMarginTop(4.f);
     m_sizeLabel->setFocusable(false);
-    card->addView(m_sizeLabel);
+    detailBox->addView(m_sizeLabel);
 
-    // 剩余时间
     m_etaLabel = new brls::Label();
     m_etaLabel->setText("");
     m_etaLabel->setFontSize(16.f);
@@ -108,17 +128,20 @@ void UpdatePage::_initLayout() {
     m_etaLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
     m_etaLabel->setMarginTop(4.f);
     m_etaLabel->setFocusable(false);
-    card->addView(m_etaLabel);
+    detailBox->addView(m_etaLabel);
+
+    mainBox->addView(detailBox);
 
     // 按钮区
     m_btnBox = new brls::Box(brls::Axis::ROW);
     m_btnBox->setFocusable(false);
     m_btnBox->setAlignItems(brls::AlignItems::CENTER);
     m_btnBox->setJustifyContent(brls::JustifyContent::CENTER);
-    m_btnBox->setMarginTop(24.f);
+    m_btnBox->setMarginTop(30.f);
 
     auto* cancelBtn = new brls::DetailCell();
     cancelBtn->setText("取消下载");
+    cancelBtn->setDetailText("\uE03E");
     cancelBtn->registerClickAction(
         [this](brls::View*) -> bool {
             m_cancelled.store(true);
@@ -128,23 +151,25 @@ void UpdatePage::_initLayout() {
         });
     m_btnBox->addView(cancelBtn);
 
-    card->addView(m_btnBox);
+    mainBox->addView(m_btnBox);
 
-    this->getContentBox()->addView(card);
+    this->getContentBox()->addView(mainBox);
 }
 
 void UpdatePage::_updateProgress(float pct, const std::string& speed,
                                   const std::string& size, const std::string& eta) {
     brls::sync([this, pct, speed, size, eta]() {
-        float w = std::min(400.f, 400.f * pct / 100.f);
-        m_progressBar->setWidth(w);
+        float maxW = m_progressBg->getWidth();
+        m_progressBar->setWidth(maxW * pct / 100.f);
+        m_pctLabel->setText(std::to_string(static_cast<int>(pct)) + "%");
         m_speedLabel->setText(speed);
         m_sizeLabel->setText(size);
         m_etaLabel->setText(eta);
-        // 进度条 100% 时变绿
+
         if (pct >= 99.5f) {
             m_progressBar->setColor(nvgRGB(129, 199, 132));
             m_statusLabel->setText("下载完成");
+            m_statusLabel->setTextColor(nvgRGB(129, 199, 132));
         }
     });
 }
@@ -182,14 +207,16 @@ static std::string formatETA(int seconds) {
 }
 
 void UpdatePage::startDownload() {
-    static const char* FALLBACK_URL = "https://github.com/beiklive/GBAStation/releases";
-
     brls::async([this]() {
         using Clock = std::chrono::steady_clock;
         auto startTime = Clock::now();
         auto lastUpdate = startTime;
         size_t lastBytes = 0;
         double smoothedSpeed = 0;
+        size_t totalSize = AppUpdater::instance().info().fileSize;
+
+        m_statusLabel->setText("正在下载...");
+        _updateProgress(0, "", "0 B / " + formatSize(totalSize), "");
 
         bool ok = AppUpdater::instance().download(
             [&](size_t total, size_t now) -> bool {
@@ -221,44 +248,47 @@ void UpdatePage::startDownload() {
 
         brls::sync([this, ok]() {
             if (!ok) {
-                // 下载失败，提供手动跳转链接
-                m_statusLabel->setText("下载失败，请手动更新");
+                m_statusLabel->setText("下载失败，请重试");
                 m_statusLabel->setTextColor(nvgRGB(255, 100, 100));
-                // 更新按钮区为手动下载按钮
+
                 m_btnBox->clearViews(true);
-                auto* manualBtn = new brls::DetailCell();
-                manualBtn->setText("手动下载");
-                manualBtn->registerClickAction(
-                    [](brls::View*) -> bool {
-                        brls::Application::notify("请前往 GitHub Releases 页面下载");
-                        return true;
-                    });
-                m_btnBox->addView(manualBtn);
+                auto* retryBtn = new brls::DetailCell();
+                retryBtn->setText("重试");
+                retryBtn->registerClickAction([this](brls::View*) -> bool {
+                    startDownload();
+                    return true;
+                });
+                m_btnBox->addView(retryBtn);
 
                 auto* closeBtn = new brls::DetailCell();
                 closeBtn->setText("关闭");
-                closeBtn->registerClickAction(
-                    [](brls::View*) -> bool {
-                        brls::Application::popActivity(brls::TransitionAnimation::NONE);
-                        return true;
-                    });
+                closeBtn->registerClickAction([](brls::View*) -> bool {
+                    brls::Application::popActivity(brls::TransitionAnimation::NONE);
+                    return true;
+                });
                 m_btnBox->addView(closeBtn);
                 return;
             }
 
-            // 下载成功，显示安装确认
             m_statusLabel->setText("下载完成，是否安装更新？");
             m_statusLabel->setTextColor(nvgRGB(129, 199, 132));
 
             m_btnBox->clearViews(true);
             auto* installBtn = new brls::DetailCell();
             installBtn->setText("安装更新");
-            installBtn->registerClickAction(
-                [this](brls::View*) -> bool {
-                    startInstall();
-                    return true;
-                });
+            installBtn->registerClickAction([this](brls::View*) -> bool {
+                startInstall();
+                return true;
+            });
             m_btnBox->addView(installBtn);
+
+            auto* closeBtn2 = new brls::DetailCell();
+            closeBtn2->setText("稍后");
+            closeBtn2->registerClickAction([](brls::View*) -> bool {
+                brls::Application::popActivity(brls::TransitionAnimation::NONE);
+                return true;
+            });
+            m_btnBox->addView(closeBtn2);
         });
     });
 }
@@ -272,15 +302,14 @@ void UpdatePage::startInstall() {
 
         auto* rebootBtn = new brls::DetailCell();
         rebootBtn->setText("重启");
-        rebootBtn->registerClickAction(
-            [](brls::View*) -> bool {
+        rebootBtn->registerClickAction([](brls::View*) -> bool {
 #ifdef __SWITCH__
-                brls::Application::quit();
+            brls::Application::quit();
 #else
-                brls::Application::notify("请手动重启");
+            brls::Application::notify("请手动重启");
 #endif
-                return true;
-            });
+            return true;
+        });
         m_btnBox->addView(rebootBtn);
     } else {
         m_statusLabel->setText("安装失败");
