@@ -38,6 +38,7 @@ private:
     brls::Rectangle* m_progressBg = nullptr;
     brls::Rectangle* m_progressBar = nullptr;
     brls::Box* m_btnBox = nullptr;
+    brls::DetailCell* m_cancelBtn = nullptr;
 };
 
 } // namespace beiklive

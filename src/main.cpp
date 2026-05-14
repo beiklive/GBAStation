@@ -99,46 +99,43 @@ int main(int argc, char* argv[]) {
 	brls::Application::pushActivity(activity);
 
 #ifdef __SWITCH__
-	// ── 启动时异步检查更新 ──
 	brls::async([]() {
-		// 延迟 2 秒，避免阻塞启动画面
 		std::this_thread::sleep_for(std::chrono::seconds(2));
 
 		int updateEnabled = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_EMU_UPDATE, 1);
 		if (!updateEnabled) return;
 
 		auto& updater = beiklive::AppUpdater::instance();
-		updater.check(APP_VERSION);
+		updater.checkSync(APP_VERSION);
 
-		// 等待检查完成（最多 10 秒）
 		auto start = std::chrono::steady_clock::now();
-		while (!updater.hasUpdate()) {
-			if (std::chrono::duration_cast<std::chrono::seconds>(
-				std::chrono::steady_clock::now() - start).count() > 10)
-				return;
+		while (!updater.hasUpdate() &&
+			   std::chrono::duration_cast<std::chrono::seconds>(
+				   std::chrono::steady_clock::now() - start).count() < 15) {
 			std::this_thread::sleep_for(std::chrono::milliseconds(200));
 		}
 
-		// 在主线程显示更新对话框
 		brls::sync([&updater]() {
 			auto& info = updater.info();
-			std::string msg = "发现新版本\n\n" + info.version + "\n\n" + info.changelog;
+			if (info.hasUpdate) {
+				std::string msg = "发现新版本\n\n" + info.version + "\n\n" + info.changelog;
 
-			auto* dlg = new brls::Dialog(msg);
-			dlg->addButton("更新", [&updater]() {
-				auto* page = new beiklive::UpdatePage();
-				auto* frame = new brls::AppletFrame(page);
-				HIDE_BRLS_BAR(frame);
-				brls::Application::pushActivity(
-					new brls::Activity(frame), brls::TransitionAnimation::NONE);
-				page->startDownload();
-			});
-			dlg->addButton("取消", []() {});
-			dlg->addButton("不再提示", []() {
-				SET_SETTING_KEY_INT(beiklive::SettingKey::KEY_EMU_UPDATE, 0);
-				brls::Application::notify("已关闭更新提示");
-			});
-			dlg->open();
+				auto* dlg = new brls::Dialog(msg);
+				dlg->addButton("更新", [&updater]() {
+					auto* page = new beiklive::UpdatePage();
+					auto* frame = new brls::AppletFrame(page);
+					HIDE_BRLS_BAR(frame);
+					brls::Application::pushActivity(
+						new brls::Activity(frame), brls::TransitionAnimation::NONE);
+					page->startDownload();
+				});
+				dlg->addButton("取消", []() {});
+				dlg->addButton("不再提示", []() {
+					SET_SETTING_KEY_INT(beiklive::SettingKey::KEY_EMU_UPDATE, 0);
+					brls::Application::notify("已关闭更新提示");
+				});
+				dlg->open();
+			}
 		});
 	});
 #endif
