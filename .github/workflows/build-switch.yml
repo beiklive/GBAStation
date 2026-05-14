@@ -25,7 +25,7 @@ jobs:
 
       - name: 安装依赖
         run: |
-          dkp-pacman -S --noconfirm --needed switch-dev switch-curl
+          dkp-pacman -S --noconfirm --needed switch-dev switch-curl python
 
       - name: 编译 NRO
         run: |
@@ -46,11 +46,33 @@ jobs:
             | sed ':a;N;$!ba;s/\n/\\n/g' \
             | sed 's/"/\\"/g')
 
+          NRO_FILE="build_switch/GBAStation.nro"
+
+          # 文件大小（字节）
+          FILE_SIZE=$(stat -c%s "$NRO_FILE")
+
+          # 文件大小（MB）
+          FILE_SIZE_MB=$(awk "BEGIN {printf \"%.2f\", $FILE_SIZE / 1024 / 1024}")
+
+          # CRC32
+          CRC32=$(python - <<PY
+            import zlib
+
+            with open("$NRO_FILE", "rb") as f:
+                data = f.read()
+
+            print(format(zlib.crc32(data) & 0xFFFFFFFF, '08X'))
+            PY
+            )
+
           cat > version.json <<EOF
           {
             "version": "$TAG_NAME",
             "changelog": "$CHANGELOG_ESCAPED",
-            "download":  "$TAG_NAME/GBAStation-$TAG_NAME.nro"
+            "download": "$TAG_NAME/GBAStation-$TAG_NAME.nro",
+            "size": $FILE_SIZE,
+            "size_mb": "$FILE_SIZE_MB MB",
+            "crc32": "$CRC32"
           }
           EOF
 
