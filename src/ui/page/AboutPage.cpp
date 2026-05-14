@@ -6,26 +6,28 @@
 namespace beiklive {
 
 AboutPage::AboutPage() {
-    this->showFooter(true);
-    this->showHeader(false);
+    brls::sync([this]() {
+        this->showFooter(true);
+        this->showHeader(false);
 
-    m_tabFrame = new beiklive::TabFrame();
-    this->getContentBox()->addView(m_tabFrame);
+        m_tabFrame = new beiklive::TabFrame();
+        this->getContentBox()->addView(m_tabFrame);
 
-    m_tabFrame->addTab(
-        "关于本项目",
-        BK_RES("img/ui/setting/emu.png"),
-        nullptr, nullptr, nullptr,
-        _buildInfoTab()
-    );
-    m_tabFrame->addDivider();
-    m_tabFrame->addTab(
-        "更新",
-        BK_RES("img/ui/setting/debug.png"),
-        nullptr, nullptr, nullptr,
-        _buildUpdateTab()
-    );
-    m_tabFrame->addFinish();
+        m_tabFrame->addTab(
+            "关于本项目",
+            BK_RES("img/ui/setting/emu.png"),
+            nullptr, nullptr, nullptr,
+            _buildInfoTab()
+        );
+        m_tabFrame->addDivider();
+        m_tabFrame->addTab(
+            "更新",
+            BK_RES("img/ui/setting/debug.png"),
+            nullptr, nullptr, nullptr,
+            _buildUpdateTab()
+        );
+        m_tabFrame->addFinish();
+    });
 }
 
 // ── 关于本项目 ─────────────────────────────────────────────
@@ -160,7 +162,12 @@ brls::View* AboutPage::_buildInfoTab() {
     box->addView(descCard);
     box->addView(new brls::Padding());
     scroll->setContentView(box);
-    return scroll;
+
+    auto* container = new brls::Box(brls::Axis::COLUMN);
+    container->setWidthPercentage(100.f);
+    container->setGrow(1.0f);
+    container->addView(scroll);
+    return container;
 }
 
 // ── 更新 ──────────────────────────────────────────────────
@@ -259,7 +266,12 @@ brls::View* AboutPage::_buildUpdateTab() {
 
     box->addView(new brls::Padding());
     scroll->setContentView(box);
-    return scroll;
+
+    auto* container = new brls::Box(brls::Axis::COLUMN);
+    container->setWidthPercentage(100.f);
+    container->setGrow(1.0f);
+    container->addView(scroll);
+    return container;
 }
 
 void AboutPage::_checkUpdate() {
