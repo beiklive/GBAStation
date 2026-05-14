@@ -55,15 +55,15 @@ jobs:
           FILE_SIZE_MB=$(awk "BEGIN {printf \"%.2f\", $FILE_SIZE / 1024 / 1024}")
 
           # CRC32
-          CRC32=$(python3 - <<PY
-            import zlib
+          CRC32=$(python3 <<PY
+import zlib
 
-            with open("$NRO_FILE", "rb") as f:
-                data = f.read()
+with open("$NRO_FILE", "rb") as f:
+    data = f.read()
 
-            print(format(zlib.crc32(data) & 0xFFFFFFFF, '08X'))
-            PY
-            )
+print(format(zlib.crc32(data) & 0xFFFFFFFF, '08X'))
+PY
+)
 
           cat > version.json <<EOF
           {
