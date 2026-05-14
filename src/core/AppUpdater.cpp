@@ -150,6 +150,8 @@ bool AppUpdater::checkSync(const std::string& localVersion) {
 bool AppUpdater::download(std::function<bool(size_t, size_t)> onProgress) {
     if (m_info.downloadUrl.empty()) return false;
 
+    brls::Logger::info("Download Url : {}", m_info.downloadUrl);
+
     CURL* curl = curl_easy_init();
     if (!curl) return false;
 
