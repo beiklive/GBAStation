@@ -22,6 +22,27 @@ int main(int argc, char* argv[]) {
 
 	beiklive::ConfigureInit();
 
+	// ── 从配置文件读取调试设置 ──────────────────────────────────
+	{
+		std::string logLevel = beiklive::getKeyStr(beiklive::SettingManager, "debug.logLevel", "info");
+		if (logLevel == "debug")
+			brls::Logger::setLogLevel(brls::LogLevel::LOG_DEBUG);
+		else if (logLevel == "warning")
+			brls::Logger::setLogLevel(brls::LogLevel::LOG_WARNING);
+		else if (logLevel == "error")
+			brls::Logger::setLogLevel(brls::LogLevel::LOG_ERROR);
+		else
+			brls::Logger::setLogLevel(brls::LogLevel::LOG_INFO);
+
+		if (beiklive::getKeyInt(beiklive::SettingManager, "debug.logFile", 0)) {
+			std::string logPath = beiklive::path::logFilePath();
+			FILE* fp = std::fopen(logPath.c_str(), "w+");
+			if (fp)
+				brls::Logger::setLogOutput(fp);
+		}
+	}
+
+	// CLI 参数可覆盖配置文件中的调试设置
 	for (int i = 1; i < argc; i++) {
 		if (std::strcmp(argv[i], "-d") == 0) {
 			brls::Logger::setLogLevel(brls::LogLevel::LOG_DEBUG);
@@ -44,15 +65,26 @@ int main(int argc, char* argv[]) {
     }
 #endif
 
+#ifndef __SWITCH__
+    {
+        std::string logPath = beiklive::path::logFilePath();
+        FILE* fp = std::fopen(logPath.c_str(), "w+");
+        if (fp)
+            brls::Logger::setLogOutput(fp);
+    }
+#endif
+
 	brls::Platform::APP_LOCALE_DEFAULT = brls::LOCALE_AUTO;
-	// Init the app and i18n
 	if (!brls::Application::init()) {
 		brls::Logger::error("Unable to init Borealis application");
 		return EXIT_FAILURE;
 	}
 	brls::Application::createWindow("beiklive/title"_i18n);
 
-	// 所有平台统一使用BKAudioPlayer播放WAV音效文件
+	// ── 应用初始化后读取调试覆盖层设置 ──────────────────────────
+	if (beiklive::getKeyInt(beiklive::SettingManager, "debug.logOverlay", 0))
+		brls::Application::enableDebuggingView(true);
+
 	brls::Application::setAudioPlayer(new beiklive::BKAudioPlayer());
 
 	brls::Application::getPlatform()->setThemeVariant(brls::ThemeVariant::DARK);
