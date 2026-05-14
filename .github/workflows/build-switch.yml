@@ -25,7 +25,7 @@ jobs:
 
       - name: 安装依赖
         run: |
-          dkp-pacman -S --noconfirm --needed switch-dev switch-curl python
+          dkp-pacman -S --noconfirm --needed switch-dev switch-curl
 
       - name: 编译 NRO
         run: |
@@ -55,7 +55,7 @@ jobs:
           FILE_SIZE_MB=$(awk "BEGIN {printf \"%.2f\", $FILE_SIZE / 1024 / 1024}")
 
           # CRC32
-          CRC32=$(python - <<PY
+          CRC32=$(python3 - <<PY
             import zlib
 
             with open("$NRO_FILE", "rb") as f:
