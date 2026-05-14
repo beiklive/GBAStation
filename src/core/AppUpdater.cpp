@@ -124,12 +124,10 @@ bool AppUpdater::checkSync(const std::string& localVersion) {
         if (f) { f << json; f.close(); }
     } catch (...) {}
 
-    int remoteVer = beiklive::tools::versionCode(m_info.version);
-    int localVer  = beiklive::tools::versionCode(localVersion);
-    m_info.hasUpdate = remoteVer > localVer;
+    m_info.hasUpdate = (m_info.version != localVersion);
 
-    brls::Logger::info("AppUpdater: 本地={} ({}), 远程={} ({}), 有更新={}",
-        localVersion, localVer, m_info.version, remoteVer, m_info.hasUpdate);
+    brls::Logger::info("AppUpdater: 本地={}, 远程={}, 有更新={}",
+        localVersion, m_info.version, m_info.hasUpdate);
 
     return m_info.hasUpdate;
 }
