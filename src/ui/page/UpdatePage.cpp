@@ -33,9 +33,10 @@ void UpdatePage::_initLayout() {
     card->setShadowType(brls::ShadowType::GENERIC);
     card->setShadowVisibility(true);
     card->setAlignItems(brls::AlignItems::CENTER);
+    card->setJustifyContent(brls::JustifyContent::SPACE_BETWEEN);
     card->setPadding(30.f, 50.f, 30.f, 50.f);
     card->setWidth(480.f);
-    card->setHeight(640.f);
+    card->setHeight(480.f);
 
     // 标题
     m_titleLabel = new brls::Label();
