@@ -322,9 +322,11 @@ brls::View* AboutPage::_buildUpdateTab() {
 }
 
 void AboutPage::_checkUpdate() {
-    brls::Application::notify("正在检测更新...");
+    // 显示检测中弹窗
+    auto* dlg = new brls::Dialog("正在检测更新...\n\n请稍候");
+    dlg->open();
 
-    brls::async([this]() {
+    brls::async([this, dlg]() {
         auto& updater = AppUpdater::instance();
         updater.checkSync(APP_VERSION);
 
@@ -335,30 +337,28 @@ void AboutPage::_checkUpdate() {
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
         }
 
-        brls::sync([this, start]() {
+        brls::sync([this, dlg, start]() {
+            // 关闭检测中弹窗（通过返回上一层 activity 关闭 dialog 覆盖层）
+            brls::Application::popActivity(brls::TransitionAnimation::NONE);
+
             auto& info = AppUpdater::instance().info();
             if (info.hasUpdate) {
-                std::string msg = "发现新版本\n\n" + info.version + "\n\n" + info.changelog;
-                auto* dlg = new brls::Dialog(msg);
-                dlg->addButton("更新", [this]() {
-                    auto* page = new UpdatePage();
-                    auto* frame = new brls::AppletFrame(page);
-                    HIDE_BRLS_BAR(frame);
-                    brls::Application::pushActivity(
-                        new brls::Activity(frame), brls::TransitionAnimation::NONE);
-                    page->startDownload();
-                });
-                dlg->addButton("取消", []() {});
-                dlg->addButton("不再提示", []() {
-                    SET_SETTING_KEY_INT(SettingKey::KEY_EMU_UPDATE, 0);
-                    brls::Application::notify("已关闭更新提示");
-                });
-                dlg->open();
+                // 有更新，直接进入下载流程
+                auto* page = new UpdatePage();
+                auto* frame = new brls::AppletFrame(page);
+                HIDE_BRLS_BAR(frame);
+                brls::Application::pushActivity(
+                    new brls::Activity(frame), brls::TransitionAnimation::NONE);
+                page->startDownload();
             } else if (std::chrono::duration_cast<std::chrono::seconds>(
                            std::chrono::steady_clock::now() - start).count() >= 15) {
-                brls::Application::notify("检测超时");
+                auto* errDlg = new brls::Dialog("检测超时\n\n请检查网络连接后重试");
+                errDlg->addButton("确定", []() {});
+                errDlg->open();
             } else {
-                brls::Application::notify("已是最新版本");
+                auto* okDlg = new brls::Dialog("已是最新版本");
+                okDlg->addButton("确定", []() {});
+                okDlg->open();
             }
         });
     });

@@ -37,11 +37,15 @@ public:
     /// 安装更新：替换运行中的 NRO 文件（仅 Switch 平台）
     bool install();
 
+    /// 取消正在进行的网络操作
+    void abort() { m_aborted.store(true); }
+
 private:
     AppUpdater() = default;
 
     UpdateInfo m_info;
-    std::vector<uint8_t> m_downloadedData; // 下载的 NRO 数据
+    std::vector<uint8_t> m_downloadedData;
+    std::atomic<bool> m_aborted{false};
 };
 
 } // namespace beiklive
