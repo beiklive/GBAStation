@@ -159,7 +159,9 @@ void UpdatePage::_initLayout() {
     // 默认取消按钮
     m_cancelBtn = new brls::Button();
     m_cancelBtn->setText("取消");
-
+    m_cancelBtn->setWidth(170);
+    m_cancelBtn->setBorderColor(nvgRGBA(255, 255, 255, 255));
+    m_cancelBtn->setBorderThickness(1);
     m_cancelBtn->registerClickAction([this](brls::View*) -> bool {
         m_cancelled.store(true);
 
@@ -201,6 +203,7 @@ void UpdatePage::startDownload() {
 
     brls::sync([this]() {
         m_statusLabel->setText("正在下载...");
+        brls::Application::giveFocus(m_cancelBtn);
     });
 
     brls::async([this]() {
@@ -296,7 +299,9 @@ void UpdatePage::startDownload() {
 
                 auto* retryBtn = new brls::Button();
                 retryBtn->setText("重试");
-
+                retryBtn->setWidth(170);
+                retryBtn->setBorderColor(nvgRGBA(255, 255, 255, 255));
+                retryBtn->setBorderThickness(1);
                 retryBtn->registerClickAction(
                     [this](brls::View*) -> bool {
                         startDownload();
@@ -308,7 +313,9 @@ void UpdatePage::startDownload() {
 
                 auto* closeBtn = new brls::Button();
                 closeBtn->setText("关闭");
-
+                closeBtn->setWidth(170);
+                closeBtn->setBorderColor(nvgRGBA(255, 255, 255, 255));
+                closeBtn->setBorderThickness(1);
                 closeBtn->registerClickAction(
                     [](brls::View*) -> bool {
                         brls::Application::popActivity(
@@ -328,7 +335,9 @@ void UpdatePage::startDownload() {
 
             auto* installBtn = new brls::Button();
             installBtn->setText("安装");
-
+            installBtn->setWidth(170);
+            installBtn->setBorderColor(nvgRGBA(255, 255, 255, 255));
+            installBtn->setBorderThickness(1);
             installBtn->registerClickAction(
                 [this](brls::View*) -> bool {
                     startInstall();
@@ -341,6 +350,9 @@ void UpdatePage::startDownload() {
             auto* cancelBtn = new brls::Button();
             cancelBtn->setText("取消");
 
+            cancelBtn->setWidth(170);
+            cancelBtn->setBorderColor(nvgRGBA(255, 255, 255, 255));
+            cancelBtn->setBorderThickness(1);
             cancelBtn->registerClickAction(
                 [](brls::View*) -> bool {
                     brls::Application::popActivity(
@@ -371,7 +383,9 @@ void UpdatePage::startInstall() {
 
             auto* rebootBtn = new brls::Button();
             rebootBtn->setText("重启");
-
+            rebootBtn->setWidth(170);
+            rebootBtn->setBorderColor(nvgRGBA(255, 255, 255, 255));
+            rebootBtn->setBorderThickness(1);
             rebootBtn->registerClickAction(
                 [](brls::View*) -> bool {
 
@@ -394,7 +408,9 @@ void UpdatePage::startInstall() {
 
             auto* closeBtn = new brls::Button();
             closeBtn->setText("关闭");
-
+            closeBtn->setWidth(170);
+                closeBtn->setBorderColor(nvgRGBA(255, 255, 255, 255));
+                closeBtn->setBorderThickness(1);
             closeBtn->registerClickAction(
                 [](brls::View*) -> bool {
                     brls::Application::popActivity(

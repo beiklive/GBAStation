@@ -9,10 +9,7 @@
 #include "ui/page/StartPage.hpp"
 #include "ui/page/UpdatePage.hpp"
 #include "ui/utils/MyActivity.hpp"
-#if defined(BOREALIS_USE_OPENGL)
-// Needed for the OpenGL driver to work
-extern "C" unsigned int sceLibcHeapSize = 2 * 1024 * 1024;
-#endif
+#include "ui/utils/UpdateDialog.hpp"
 
 int main(int argc, char* argv[]) {
 #ifdef __SWITCH__
@@ -120,12 +117,10 @@ int main(int argc, char* argv[]) {
 			auto& info = updater.info();
 
 			if (info.hasUpdate) {
-				std::string ver = info.version;
-				std::string changelog = info.changelog;
-
-				std::string msg = "发现新版本\n\n" + ver + "\n\n" + changelog;
-
-				auto* dlg = new brls::Dialog(msg);
+				auto* dlg = new beiklive::UpdateDialog(
+					"版本更新  " + info.version,
+					info.changelog
+				);
 				dlg->addButton("更新", [&updater]() {
 					auto* page = new beiklive::UpdatePage();
 					auto* frame = new brls::AppletFrame(page);

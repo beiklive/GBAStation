@@ -1,5 +1,6 @@
 #include "ui/page/AboutPage.hpp"
 #include "ui/page/UpdatePage.hpp"
+#include "ui/utils/UpdateDialog.hpp"
 #include "core/AppUpdater.hpp"
 #include "core/Tools.hpp"
 
@@ -351,9 +352,10 @@ void AboutPage::_checkUpdate() {
 
             auto& info = AppUpdater::instance().info();
             if (info.hasUpdate) {
-                // 有更新，弹窗询问
-                std::string msg = "发现新版本\n\n" + info.version + "\n\n" + info.changelog;
-                auto* confirmDlg = new brls::Dialog(msg);
+                auto* confirmDlg = new beiklive::UpdateDialog(
+                    "版本更新  " + info.version,
+                    info.changelog
+                );
                 confirmDlg->addButton("更新", []() {
                     auto* page = new UpdatePage();
                     auto* frame = new brls::AppletFrame(page);
