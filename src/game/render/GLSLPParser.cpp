@@ -59,9 +59,11 @@ static ShaderPassDesc::WrapMode parseWrapMode(const std::string& val)
 bool GLSLPParser::parse(const std::string& glslpPath,
                         std::vector<ShaderPassDesc>& outPasses,
                         std::vector<GLSLPTextureDesc>* outTextures,
-                        std::vector<GLSLPParamOverride>* outParams)
+                        std::vector<GLSLPParamOverride>* outParams,
+                        GLSLPPresetMeta*             outMeta)
 {
     outPasses.clear();
+    if (outMeta) { outMeta->feedbackPass = -1; outMeta->historySize = 0; }
 
     // 获取 .glslp 文件所在目录，用于解析相对路径
     std::filesystem::path baseDir =
@@ -100,7 +102,8 @@ bool GLSLPParser::parse(const std::string& glslpPath,
 
                             bool ok = parse(resolvedRef.string(), refPasses,
                                             outTextures ? &refTextures : nullptr,
-                                            outParams    ? &refParams    : nullptr);
+                                            outParams    ? &refParams    : nullptr,
+                                            outMeta);
                             if (!ok) {
                                 brls::Logger::error("GLSLPParser: #reference 解析失败: {}", resolvedRef.string());
                                 return false;
@@ -272,6 +275,32 @@ apply_overrides:
                 }
             }
 
+            // frame_count_mod
+            {
+                auto fcm = kv.find("frame_count_mod" + idx);
+                if (fcm != kv.end()) {
+                    try { pass.frameCountMod = std::stoi(fcm->second); } catch (...) {}
+                }
+            }
+
+            // mipmap_input
+            {
+                auto mi = kv.find("mipmap_input" + idx);
+                if (mi != kv.end()) {
+                    std::string v = toLower(mi->second);
+                    pass.mipmapInput = (v == "true" || v == "1");
+                }
+            }
+
+            // feedback (per-pass)
+            {
+                auto fb = kv.find("feedback" + idx);
+                if (fb != kv.end()) {
+                    std::string v = toLower(fb->second);
+                    pass.feedback = (v == "true" || v == "1");
+                }
+            }
+
             outPasses.push_back(std::move(pass));
         }
     }
@@ -367,6 +396,18 @@ apply_overrides:
                     }
                 }
             }
+        }
+    }
+
+    // ---- 解析预设级元数据 ----
+    if (outMeta) {
+        auto fp = kv.find("feedback_pass");
+        if (fp != kv.end()) {
+            try { outMeta->feedbackPass = std::stoi(fp->second); } catch (...) {}
+        }
+        auto hs = kv.find("history_size");
+        if (hs != kv.end()) {
+            try { outMeta->historySize = std::stoi(hs->second); } catch (...) {}
         }
     }
 

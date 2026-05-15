@@ -45,6 +45,16 @@ struct ShaderPassDesc {
     };
 
     WrapMode wrapMode = WrapMode::ClampToEdge; ///< 输入纹理环绕模式
+
+    int  frameCountMod = 0;   ///< 仅在每 N 帧执行（0 = 每帧都执行）
+    bool mipmapInput   = false; ///< 是否为输入纹理生成 mipmap
+    bool feedback      = false; ///< 是否启用帧反馈
+};
+
+/// .glslp 预设级别的元数据（非每 pass 属性）
+struct GLSLPPresetMeta {
+    int feedbackPass = -1; ///< 哪个 pass 的输出用于帧反馈（-1 = 无）
+    int historySize  = 0;  ///< 保留多少帧的原始输入历史
 };
 
 /// .glslp 预设中声明的外部纹理描述
@@ -102,9 +112,10 @@ public:
     /// @param outParams   输出：预设中声明的参数默认值覆盖列表。
     /// @return true = 解析成功；false = 文件无法打开或 shaders 键缺失。
     static bool parse(const std::string& glslpPath,
-                      std::vector<ShaderPassDesc>& outPasses,
-                      std::vector<GLSLPTextureDesc>* outTextures = nullptr,
-                      std::vector<GLSLPParamOverride>* outParams = nullptr);
+                       std::vector<ShaderPassDesc>& outPasses,
+                       std::vector<GLSLPTextureDesc>* outTextures = nullptr,
+                       std::vector<GLSLPParamOverride>* outParams = nullptr,
+                       GLSLPPresetMeta*             outMeta = nullptr);
 
     /// 从单个 .glsl 着色器源文件中解析 #pragma parameter 指令并输出参数元数据。
     ///
