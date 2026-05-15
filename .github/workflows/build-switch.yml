@@ -109,9 +109,9 @@ jobs:
           # 构造插入内容
           NEW_CONTENT=$(cat <<EOF
 
-## ${TAG_NAME}
+          ## ${TAG_NAME}
 
-${CHANGELOG}
+          ${CHANGELOG}
 
 EOF
 )
