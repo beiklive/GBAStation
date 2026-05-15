@@ -198,7 +198,6 @@ brls::View* AboutPage::_buildUpdateTab() {
     std::string localVersion = "未知";
     std::string localChangelog = "";
     size_t localSize = 0;
-    try {
         std::string localPath = beiklive::path::configPath() + "/version.json";
         std::ifstream f(localPath);
         if (f) {
@@ -209,7 +208,6 @@ brls::View* AboutPage::_buildUpdateTab() {
             localChangelog = j.value("changelog", "");
             localSize = j.value("size", size_t(0));
         }
-    } catch (...) {}
 
     // 版本信息卡片
     auto* versionCard = new brls::Box(brls::Axis::COLUMN);
@@ -218,6 +216,7 @@ brls::View* AboutPage::_buildUpdateTab() {
     versionCard->setShadowVisibility(true);
     versionCard->setShadowType(brls::ShadowType::GENERIC);
     versionCard->setPadding(20.f, 24.f, 20.f, 24.f);
+    versionCard->setMarginBottom(10.f);
     versionCard->setFocusable(false);
     versionCard->setHideHighlightBackground(true);
 
@@ -237,7 +236,7 @@ brls::View* AboutPage::_buildUpdateTab() {
         auto* lbl = new brls::Label();
         lbl->setText(label);
         lbl->setFontSize(17.f);
-        lbl->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
+        lbl->setTextColor(nvgRGBA(200, 200, 200, 200));
         lbl->setWidth(80.f);
         lbl->setFocusable(false);
         row->addView(lbl);
@@ -256,7 +255,24 @@ brls::View* AboutPage::_buildUpdateTab() {
     addInfoRow("文件大小", formatSize(localSize));
 
     box->addView(versionCard);
+    // 检测更新按钮
+    auto* checkBtn = new brls::Button();
+    checkBtn->setText("检测更新");
+    checkBtn->registerClickAction([this](brls::View*) -> bool {
+        _checkUpdate();
+        return true;
+    });
 
+    box->addView(checkBtn);
+
+    auto* hint = new brls::Label();
+    hint->setText("连接到服务器检测最新版本，如有更新可自动下载安装");
+    hint->setFontSize(14.f);
+    hint->setTextColor(nvgRGBA(200, 200, 200, 200));
+    hint->setMarginTop(15.f);
+    hint->setMarginLeft(20.f);
+    hint->setFocusable(false);
+    box->addView(hint);
     // 更新日志
     if (!localChangelog.empty()) {
         auto* changelogHeader = new brls::Header();
@@ -291,25 +307,7 @@ brls::View* AboutPage::_buildUpdateTab() {
         box->addView(changelogCard);
     }
 
-    // 检测更新按钮
-    box->addView(new brls::Padding());
-    auto* checkBtn = new brls::DetailCell();
-    checkBtn->setText("检测更新");
-    checkBtn->setDetailText("\uE14A");
-    checkBtn->registerClickAction([this](brls::View*) -> bool {
-        _checkUpdate();
-        return true;
-    });
-    box->addView(checkBtn);
 
-    auto* hint = new brls::Label();
-    hint->setText("连接到服务器检测最新版本，如有更新可自动下载安装");
-    hint->setFontSize(14.f);
-    hint->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
-    hint->setMarginTop(8.f);
-    hint->setMarginLeft(20.f);
-    hint->setFocusable(false);
-    box->addView(hint);
 
     box->addView(new brls::Padding());
     scroll->setContentView(box);
