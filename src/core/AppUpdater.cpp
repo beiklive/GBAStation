@@ -170,6 +170,14 @@ bool AppUpdater::checkSync(const std::string& localVersion) {
 
     m_info.hasUpdate = (m_info.version != localVersion);
 
+    // 将远程 version.json 写入 cache 目录，供 download/install 使用
+    if (m_info.hasUpdate) {
+        std::error_code ec;
+        std::filesystem::create_directories(beiklive::path::cachePath(), ec);
+        std::ofstream f(cacheVersionJsonPath(), std::ios::trunc);
+        if (f) { f << cleanJson; f.close(); }
+    }
+
     brls::Logger::info("AppUpdater: 本地={}, 远程={}, 有更新={}",
         localVersion, m_info.version, m_info.hasUpdate);
 
@@ -180,18 +188,6 @@ bool AppUpdater::download(std::function<bool(size_t, size_t)> onProgress) {
     if (m_info.downloadUrl.empty()) return false;
 
     brls::Logger::info("Download Url : {}", m_info.downloadUrl);
-
-    // 先下载 version.json 到 cache 目录
-    {
-        std::string verUrl = std::string(BASE_URL) + "/version.json";
-        std::string verJson = fetchUrl(verUrl);
-        if (!verJson.empty()) {
-            std::error_code ec;
-            std::filesystem::create_directories(beiklive::path::cachePath(), ec);
-            std::ofstream f(cacheVersionJsonPath(), std::ios::trunc);
-            if (f) { f << verJson; f.close(); }
-        }
-    }
 
     CURL* curl = curl_easy_init();
     if (!curl) return false;
