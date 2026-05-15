@@ -36,6 +36,7 @@ inline std::string GetRootPath()
     constexpr const char *CONFIG_DIR        = "config";
     constexpr const char *LOG_DIR           = "log";
     constexpr const char *DATA_BASE_DIR     = "data";
+    constexpr const char *CACHE_DIR         = "cache";
     constexpr const char *SCREENSHOT_DIR    = "screenshots";
     constexpr const char *ROM_DIR           = "roms";
     constexpr const char *SAVE_DIR          = "saves";
@@ -115,6 +116,10 @@ inline std::string GetRootPath()
         inline std::string cheatPath()
         {
             return ROOT + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + CHEATS_DIR;
+        }
+        inline std::string cachePath()
+        {
+            return ROOT + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + CACHE_DIR;
         }
         inline std::string shaderPath()
         {

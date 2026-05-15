@@ -88,8 +88,28 @@ int main(int argc, char* argv[]) {
 		int updateEnabled = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_EMU_UPDATE, 1);
 		if (!updateEnabled) return;
 
+		// 从 config/version.json 读取本地版本号，不存在则用 APP_VERSION
+		std::string localVersion = APP_VERSION;
+		{
+			std::ifstream f(beiklive::path::configPath() + "/version.json");
+			if (f.is_open()) {
+				try {
+					nlohmann::json j;
+					f >> j;
+					std::string ver = j.value("version", "");
+					brls::Logger::info("本地版本号: {}", ver);
+					if (!ver.empty())
+						localVersion = ver;
+				} catch (...) {}
+			}
+		}
+
+		brls::Logger::info("当前版本: {}", localVersion);
+
 		auto& updater = beiklive::AppUpdater::instance();
-		updater.checkSync(APP_VERSION);
+
+		// 远程拉取最新版本信息
+		updater.checkSync(localVersion);
 
 		auto start = std::chrono::steady_clock::now();
 		while (!updater.hasUpdate() &&
@@ -98,10 +118,14 @@ int main(int argc, char* argv[]) {
 			std::this_thread::sleep_for(std::chrono::milliseconds(200));
 		}
 
-		brls::sync([&updater]() {
+		brls::sync([&updater, localVersion]() {
 			auto& info = updater.info();
+
 			if (info.hasUpdate) {
-				std::string msg = "发现新版本\n\n" + info.version + "\n\n" + info.changelog;
+				std::string ver = info.version;
+				std::string changelog = info.changelog;
+
+				std::string msg = "发现新版本\n\n" + ver + "\n\n" + changelog;
 
 				auto* dlg = new brls::Dialog(msg);
 				dlg->addButton("更新", [&updater]() {
@@ -119,7 +143,7 @@ int main(int argc, char* argv[]) {
 				});
 				dlg->open();
 			} else {
-				auto* dlg = new brls::Dialog("当前已是最新版本\n\n" + std::string(APP_VERSION));
+				auto* dlg = new brls::Dialog("当前已是最新版本\n\n" + localVersion);
 				dlg->addButton("确定", []() {});
 				dlg->open();
 			}

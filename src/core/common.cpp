@@ -115,6 +115,7 @@ namespace beiklive
         std::filesystem::create_directories(beiklive::path::corePath());
         std::filesystem::create_directories(beiklive::path::cheatPath());
         std::filesystem::create_directories(beiklive::path::shaderPath());
+        std::filesystem::create_directories(beiklive::path::cachePath());
 
         SettingManager = new beiklive::ConfigManager(beiklive::path::configFilePath());
         NameMappingManager = new beiklive::ConfigManager(beiklive::path::mappingFilePath());

@@ -18,6 +18,21 @@ namespace beiklive {
 
 static const char* BASE_URL = "https://cdn.jsdelivr.net/gh/beiklive/GBAStation_Release@main";
 
+// 本地 version.json 路径（config 目录）
+static std::string localVersionJsonPath() {
+    return beiklive::path::configPath() + "/version.json";
+}
+
+// 缓存目录中的 version.json 路径
+static std::string cacheVersionJsonPath() {
+    return beiklive::path::cachePath() + "/version.json";
+}
+
+// 缓存目录中的 update.nro 路径
+static std::string cacheNroPath() {
+    return beiklive::path::cachePath() + "/update.nro";
+}
+
 AppUpdater& AppUpdater::instance() {
     static AppUpdater s;
     return s;
@@ -88,6 +103,20 @@ static std::string fetchUrl(const std::string& url) {
     return body;
 }
 
+// ── 读取本地 version.json（config 目录）────
+// 返回 version 字段，文件不存在或解析失败返回空字符串
+static std::string readLocalVersionFromConfig() {
+    std::ifstream f(localVersionJsonPath());
+    if (!f.is_open()) return "";
+    try {
+        nlohmann::json j;
+        f >> j;
+        return j.value("version", "");
+    } catch (...) {
+        return "";
+    }
+}
+
 // ── AppUpdater ────────────────────────────────────────────
 
 void AppUpdater::check(const std::string& localVersion) {
@@ -107,14 +136,20 @@ bool AppUpdater::checkSync(const std::string& localVersion) {
     std::string json = fetchUrl(url);
     if (json.empty()) {
         brls::Logger::warning("AppUpdater: 无法获取版本信息");
-        return false;
+        // 远程获取失败时，检查本地 config/version.json 是否存在且与当前版本不同
+        std::string localVer = readLocalVersionFromConfig();
+        if (!localVer.empty() && localVer != localVersion) {
+            m_info.version = localVer;
+            m_info.hasUpdate = true;
+            brls::Logger::info("AppUpdater: 使用本地缓存版本信息 version={}", localVer);
+        }
+        return m_info.hasUpdate;
     }
 
     brls::Logger::info("Version Json: {}", json);
 
-    // 移除尾随逗号（部分编辑器生成的 JSON 可能带有尾随逗号）
+    // 移除尾随逗号
     std::string cleanJson = json;
-    // 匹配 ", \n}" 或 ",\n}" 模式
     size_t pos;
     while ((pos = cleanJson.find(",\n}")) != std::string::npos)
         cleanJson.erase(pos, 1);
@@ -133,12 +168,6 @@ bool AppUpdater::checkSync(const std::string& localVersion) {
         return false;
     }
 
-    try {
-        std::string localPath = beiklive::path::configPath() + "/version.json";
-        std::ofstream f(localPath, std::ios::trunc);
-        if (f) { f << json; f.close(); }
-    } catch (...) {}
-
     m_info.hasUpdate = (m_info.version != localVersion);
 
     brls::Logger::info("AppUpdater: 本地={}, 远程={}, 有更新={}",
@@ -151,6 +180,18 @@ bool AppUpdater::download(std::function<bool(size_t, size_t)> onProgress) {
     if (m_info.downloadUrl.empty()) return false;
 
     brls::Logger::info("Download Url : {}", m_info.downloadUrl);
+
+    // 先下载 version.json 到 cache 目录
+    {
+        std::string verUrl = std::string(BASE_URL) + "/version.json";
+        std::string verJson = fetchUrl(verUrl);
+        if (!verJson.empty()) {
+            std::error_code ec;
+            std::filesystem::create_directories(beiklive::path::cachePath(), ec);
+            std::ofstream f(cacheVersionJsonPath(), std::ios::trunc);
+            if (f) { f << verJson; f.close(); }
+        }
+    }
 
     CURL* curl = curl_easy_init();
     if (!curl) return false;
@@ -181,26 +222,42 @@ bool AppUpdater::download(std::function<bool(size_t, size_t)> onProgress) {
         return false;
     }
 
-    std::string tmpPath = beiklive::path::configPath() + "/update.nro";
-    std::ofstream f(tmpPath, std::ios::binary | std::ios::trunc);
+    // 写入 cache 目录
+    std::error_code ec;
+    std::filesystem::create_directories(beiklive::path::cachePath(), ec);
+    std::ofstream f(cacheNroPath(), std::ios::binary | std::ios::trunc);
     if (!f) return false;
     f.write(reinterpret_cast<const char*>(m_downloadedData.data()), m_downloadedData.size());
     f.close();
 
-    brls::Logger::info("AppUpdater: 下载完成 {} bytes", m_downloadedData.size());
+    brls::Logger::info("AppUpdater: 下载完成 {} bytes -> {}", m_downloadedData.size(), cacheNroPath());
     return true;
 }
 
 bool AppUpdater::install() {
 #ifdef __SWITCH__
-    std::string tmpPath = beiklive::path::configPath() + "/update.nro";
+    // 1. 先复制 cache/version.json 到 config/version.json
+    {
+        std::error_code ec;
+        if (std::filesystem::exists(cacheVersionJsonPath(), ec)) {
+            std::filesystem::copy_file(
+                cacheVersionJsonPath(),
+                localVersionJsonPath(),
+                std::filesystem::copy_options::overwrite_existing,
+                ec);
+            if (ec) {
+                brls::Logger::error("AppUpdater: 复制 version.json 失败");
+            }
+        }
+    }
+
+    // 2. 替换 NRO
     std::string nroPath = "sdmc:/switch/GBAStation.nro";
 
     romfsExit();
 
     std::remove(nroPath.c_str());
-    if (std::rename(tmpPath.c_str(), nroPath.c_str()) != 0) {
-        std::remove(tmpPath.c_str());
+    if (std::rename(cacheNroPath().c_str(), nroPath.c_str()) != 0) {
         brls::Logger::error("AppUpdater: 安装失败");
         return false;
     }
@@ -208,7 +265,18 @@ bool AppUpdater::install() {
     brls::Logger::info("AppUpdater: 安装完成 -> {}", nroPath);
     return true;
 #else
-    brls::Logger::warning("AppUpdater: 安装仅在 Switch 平台可用");
+    // 非 Switch 平台也执行 version.json 替换（方便测试）
+    {
+        std::error_code ec;
+        if (std::filesystem::exists(cacheVersionJsonPath(), ec)) {
+            std::filesystem::copy_file(
+                cacheVersionJsonPath(),
+                localVersionJsonPath(),
+                std::filesystem::copy_options::overwrite_existing,
+                ec);
+        }
+    }
+    brls::Logger::warning("AppUpdater: NRO 安装仅在 Switch 平台可用");
     return false;
 #endif
 }
