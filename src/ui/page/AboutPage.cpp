@@ -279,32 +279,39 @@ brls::View* AboutPage::_buildUpdateTab() {
         auto* changelogHeader = new brls::Header();
         changelogHeader->setTitle("更新日志");
         changelogHeader->setMarginTop(24.f);
+        changelogHeader->setMarginBottom(10.f);
         box->addView(changelogHeader);
 
-        auto* changelogCard = new brls::Box(brls::Axis::COLUMN);
-        changelogCard->setCornerRadius(12.f);
-        changelogCard->setBackgroundColor(nvgRGBA(0, 0, 0, 20));
-        changelogCard->setPadding(16.f, 20.f, 16.f, 20.f);
-        changelogCard->setFocusable(false);
+        auto* changelogCard = new brls::ScrollingFrame();
+        changelogCard->setWidthPercentage(100.f);
+        changelogCard->setHeight(280.f);
+        // changelogCard->setScrollingIndicatorVisible(false);
 
-        std::istringstream iss(localChangelog);
-        std::string line;
-        while (std::getline(iss, line)) {
-            if (line.empty()) {
-                auto* spacer = new brls::Label();
-                spacer->setText("");
-                spacer->setFontSize(8.f);
-                spacer->setFocusable(false);
-                changelogCard->addView(spacer);
-            } else {
-                auto* l = new brls::Label();
-                l->setText(line);
-                l->setFontSize(18.f);
-                l->setTextColor(GET_THEME_COLOR("brls/text"));
-                l->setFocusable(false);
-                changelogCard->addView(l);
-            }
-        }
+        auto* m_bodyLabel = new brls::Label();
+        m_bodyLabel->setText(localChangelog);
+        m_bodyLabel->setFontSize(15);
+        m_bodyLabel->setTextColor(nvgRGBA(200, 200, 210, 255));
+        changelogCard->addView(m_bodyLabel);
+
+        // std::istringstream iss(localChangelog);
+        // std::string line;
+        // while (std::getline(iss, line)) {
+        //     if (line.empty()) {
+        //         auto* spacer = new brls::Label();
+        //         spacer->setText("");
+        //         spacer->setFontSize(8.f);
+        //         spacer->setFocusable(false);
+        //         changelogCard->addView(spacer);
+        //     } else {
+        //         auto* l = new brls::Label();
+        //         l->setText(line);
+        //         l->setFontSize(18.f);
+        //         l->setTextColor(GET_THEME_COLOR("brls/text"));
+        //         l->setFocusable(false);
+        //         changelogCard->addView(l);
+        //     }
+        // }
+
         box->addView(changelogCard);
     }
 
