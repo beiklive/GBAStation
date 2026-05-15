@@ -63,146 +63,217 @@ bool GLSLPParser::parse(const std::string& glslpPath,
 {
     outPasses.clear();
 
-    std::ifstream f(glslpPath);
-    if (!f.is_open()) return false;
-
     // 获取 .glslp 文件所在目录，用于解析相对路径
     std::filesystem::path baseDir =
         std::filesystem::path(glslpPath).parent_path();
 
-    // ---- 第一遍：读取所有 key=value 对 ----
+    // ---- 检查 #reference 指令（简单预设引用链） ----
+    {
+        std::ifstream refFile(glslpPath);
+        if (refFile.is_open()) {
+            std::string refLine;
+            while (std::getline(refFile, refLine)) {
+                if (!refLine.empty() && refLine.back() == '\r') refLine.pop_back();
+                size_t ns = refLine.find_first_not_of(" \t");
+                if (ns == std::string::npos) continue;
+                std::string trimRef = refLine.substr(ns);
+                if (trimRef.empty() || trimRef[0] == '#') {
+                    if (trimRef.size() > 10 && trimRef.substr(1, 9) == "reference") {
+                        std::string after = trimRef.substr(10);
+                        size_t q1 = after.find('"');
+                        size_t q2 = (q1 != std::string::npos) ? after.find('"', q1 + 1) : std::string::npos;
+                        if (q1 != std::string::npos && q2 != std::string::npos) {
+                            std::string refPath = after.substr(q1 + 1, q2 - q1 - 1);
+                            std::filesystem::path resolvedRef;
+                            if (std::filesystem::path(refPath).is_absolute()) {
+                                resolvedRef = refPath;
+                            } else {
+                                resolvedRef = baseDir / refPath;
+                            }
+                            resolvedRef = resolvedRef.lexically_normal();
+
+                            brls::Logger::debug("GLSLPParser: 跟随 #reference -> {}", resolvedRef.string());
+
+                            std::vector<ShaderPassDesc>    refPasses;
+                            std::vector<GLSLPTextureDesc>  refTextures;
+                            std::vector<GLSLPParamOverride> refParams;
+
+                            bool ok = parse(resolvedRef.string(), refPasses,
+                                            outTextures ? &refTextures : nullptr,
+                                            outParams    ? &refParams    : nullptr);
+                            if (!ok) {
+                                brls::Logger::error("GLSLPParser: #reference 解析失败: {}", resolvedRef.string());
+                                return false;
+                            }
+
+                            outPasses = std::move(refPasses);
+                            if (outTextures) *outTextures = std::move(refTextures);
+                            if (outParams)   *outParams   = std::move(refParams);
+
+                            // 当前文件的 key=value 对用于覆盖引用链中的值（参数/纹理）
+                            goto apply_overrides;
+                        }
+                    }
+                    continue;
+                }
+                break;
+            }
+        }
+    }
+
+apply_overrides:
+    // ---- 重新打开当前文件读取 key=value 对 ----
     std::unordered_map<std::string, std::string> kv;
     {
-        std::string line;
-        while (std::getline(f, line)) {
-            if (!line.empty() && line.back() == '\r') line.pop_back();
-            auto hash = line.find('#');
-            if (hash != std::string::npos) line = line.substr(0, hash);
-            auto eq = line.find('=');
-            if (eq == std::string::npos) continue;
-            std::string key = trimValue(line.substr(0, eq));
-            std::string val = trimValue(line.substr(eq + 1));
-            if (!key.empty())
-                kv[toLower(key)] = val;
+        std::ifstream f2(glslpPath);
+        if (!f2.is_open() && outPasses.empty()) return false;
+        if (f2.is_open())
+        {
+            std::string line;
+            while (std::getline(f2, line)) {
+                if (!line.empty() && line.back() == '\r') line.pop_back();
+                auto hash = line.find('#');
+                if (hash != std::string::npos) line = line.substr(0, hash);
+                auto eq = line.find('=');
+                if (eq == std::string::npos) continue;
+                std::string key = trimValue(line.substr(0, eq));
+                std::string val = trimValue(line.substr(eq + 1));
+                if (!key.empty())
+                    kv[toLower(key)] = val;
+            }
         }
     }
 
     // ---- 读取 shaders 总数 ----
     auto it = kv.find("shaders");
-    if (it == kv.end()) return false;
-    int numShaders = 0;
-    try { numShaders = std::stoi(it->second); } catch (...) { return false; }
-    if (numShaders <= 0) return false;
+    bool hasShaders = (it != kv.end());
+    int  numShaders  = 0;
 
-    // ---- 按序解析每个通道 ----
-    for (int i = 0; i < numShaders; ++i) {
-        std::string idx = std::to_string(i);
-        ShaderPassDesc pass;
+    if (hasShaders) {
+        try { numShaders = std::stoi(it->second); } catch (...) { return false; }
+        if (numShaders <= 0) return false;
 
-        auto sit = kv.find("shader" + idx);
-        if (sit == kv.end()) continue;
-
-        std::filesystem::path shaderRel(sit->second);
-        if (shaderRel.is_absolute()) {
-            pass.shaderPath = shaderRel.string();
-        } else {
-            pass.shaderPath = (baseDir / shaderRel).lexically_normal().string();
+        // 如果已有来自 #reference 的 passes，当前文件的 shaders 声明会替换它们
+        if (!outPasses.empty()) {
+            brls::Logger::debug("GLSLPParser: 当前文件覆盖 #reference 的 {} 个通道", outPasses.size());
+            outPasses.clear();
         }
+    } else {
+        // 无 shaders 键：若 passes 为空（无 #reference），则失败
+        if (outPasses.empty()) return false;
+    }
 
-        // filter_linear
-        {
-            auto flt = kv.find("filter_linear" + idx);
-            if (flt != kv.end()) {
-                std::string v = toLower(flt->second);
-                pass.filterLinear = (v == "true" || v == "1" || v == "yes");
-            }
-        }
+    // ---- 按序解析每个通道（仅在当前文件声明了 shaders 时）----
+    if (hasShaders) {
+        for (int i = 0; i < numShaders; ++i) {
+            std::string idx = std::to_string(i);
+            ShaderPassDesc pass;
 
-        // wrap_mode
-        {
-            auto wm = kv.find("wrap_mode" + idx);
-            if (wm != kv.end()) {
-                pass.wrapMode = parseWrapMode(wm->second);
-            }
-        }
+            auto sit = kv.find("shader" + idx);
+            if (sit == kv.end()) continue;
 
-        // scale_type（同时设置 X 和 Y）
-        {
-            auto st = kv.find("scale_type" + idx);
-            if (st != kv.end()) {
-                pass.scaleTypeX = pass.scaleTypeY = parseScaleType(st->second);
-                pass.hasExplicitScale = true;
+            std::filesystem::path shaderRel(sit->second);
+            if (shaderRel.is_absolute()) {
+                pass.shaderPath = shaderRel.string();
+            } else {
+                pass.shaderPath = (baseDir / shaderRel).lexically_normal().string();
             }
-        }
-        // scale_type_x / scale_type_y（单独覆盖）
-        {
-            auto stx = kv.find("scale_type_x" + idx);
-            if (stx != kv.end()) {
-                pass.scaleTypeX = parseScaleType(stx->second);
-                pass.hasExplicitScale = true;
-            }
-            auto sty = kv.find("scale_type_y" + idx);
-            if (sty != kv.end()) {
-                pass.scaleTypeY = parseScaleType(sty->second);
-                pass.hasExplicitScale = true;
-            }
-        }
 
-        // scale（同时设置 X 和 Y）
-        {
-            auto sc = kv.find("scale" + idx);
-            if (sc != kv.end()) {
-                try {
-                    float v = std::stof(sc->second);
-                    pass.scaleX = pass.scaleY = v;
+            // filter_linear
+            {
+                auto flt = kv.find("filter_linear" + idx);
+                if (flt != kv.end()) {
+                    std::string v = toLower(flt->second);
+                    pass.filterLinear = (v == "true" || v == "1" || v == "yes");
+                }
+            }
+
+            // wrap_mode
+            {
+                auto wm = kv.find("wrap_mode" + idx);
+                if (wm != kv.end()) {
+                    pass.wrapMode = parseWrapMode(wm->second);
+                }
+            }
+
+            // scale_type（同时设置 X 和 Y）
+            {
+                auto st = kv.find("scale_type" + idx);
+                if (st != kv.end()) {
+                    pass.scaleTypeX = pass.scaleTypeY = parseScaleType(st->second);
                     pass.hasExplicitScale = true;
-                } catch (...) {}
+                }
             }
-        }
-        // scale_x / scale_y（单独覆盖）
-        {
-            auto sx = kv.find("scale_x" + idx);
-            if (sx != kv.end()) {
-                try {
-                    pass.scaleX = std::stof(sx->second);
+            // scale_type_x / scale_type_y（单独覆盖）
+            {
+                auto stx = kv.find("scale_type_x" + idx);
+                if (stx != kv.end()) {
+                    pass.scaleTypeX = parseScaleType(stx->second);
                     pass.hasExplicitScale = true;
-                } catch (...) {}
-            }
-            auto sy = kv.find("scale_y" + idx);
-            if (sy != kv.end()) {
-                try {
-                    pass.scaleY = std::stof(sy->second);
+                }
+                auto sty = kv.find("scale_type_y" + idx);
+                if (sty != kv.end()) {
+                    pass.scaleTypeY = parseScaleType(sty->second);
                     pass.hasExplicitScale = true;
-                } catch (...) {}
+                }
             }
-        }
 
-        // float_framebuffer
-        {
-            auto ff = kv.find("float_framebuffer" + idx);
-            if (ff != kv.end()) {
-                std::string v = toLower(ff->second);
-                pass.floatFramebuffer = (v == "true" || v == "1");
+            // scale（同时设置 X 和 Y）
+            {
+                auto sc = kv.find("scale" + idx);
+                if (sc != kv.end()) {
+                    try {
+                        float v = std::stof(sc->second);
+                        pass.scaleX = pass.scaleY = v;
+                        pass.hasExplicitScale = true;
+                    } catch (...) {}
+                }
             }
-        }
-        // srgb_framebuffer
-        {
-            auto sf = kv.find("srgb_framebuffer" + idx);
-            if (sf != kv.end()) {
-                std::string v = toLower(sf->second);
-                pass.srgbFramebuffer = (v == "true" || v == "1");
+            // scale_x / scale_y（单独覆盖）
+            {
+                auto sx = kv.find("scale_x" + idx);
+                if (sx != kv.end()) {
+                    try {
+                        pass.scaleX = std::stof(sx->second);
+                        pass.hasExplicitScale = true;
+                    } catch (...) {}
+                }
+                auto sy = kv.find("scale_y" + idx);
+                if (sy != kv.end()) {
+                    try {
+                        pass.scaleY = std::stof(sy->second);
+                        pass.hasExplicitScale = true;
+                    } catch (...) {}
+                }
             }
-        }
 
-        // alias
-        {
-            auto al = kv.find("alias" + idx);
-            if (al != kv.end()) {
-                pass.alias = al->second;
+            // float_framebuffer
+            {
+                auto ff = kv.find("float_framebuffer" + idx);
+                if (ff != kv.end()) {
+                    std::string v = toLower(ff->second);
+                    pass.floatFramebuffer = (v == "true" || v == "1");
+                }
             }
-        }
+            // srgb_framebuffer
+            {
+                auto sf = kv.find("srgb_framebuffer" + idx);
+                if (sf != kv.end()) {
+                    std::string v = toLower(sf->second);
+                    pass.srgbFramebuffer = (v == "true" || v == "1");
+                }
+            }
 
-        outPasses.push_back(std::move(pass));
+            // alias
+            {
+                auto al = kv.find("alias" + idx);
+                if (al != kv.end()) {
+                    pass.alias = al->second;
+                }
+            }
+
+            outPasses.push_back(std::move(pass));
+        }
     }
 
     // ---- 最后一个通道的缩放默认值处理 ----
@@ -219,9 +290,13 @@ bool GLSLPParser::parse(const std::string& glslpPath,
 
     // ---- 解析外部纹理声明 ----
     if (outTextures) {
-        outTextures->clear();
         auto tit = kv.find("textures");
         if (tit != kv.end()) {
+            // 对已有纹理去重（#reference 可能已加载同名纹理）
+            std::unordered_map<std::string, size_t> texIndex;
+            for (size_t i = 0; i < outTextures->size(); ++i)
+                texIndex[toLower((*outTextures)[i].name)] = i;
+
             std::istringstream ss(tit->second);
             std::string texName;
             while (std::getline(ss, texName, ';')) {
@@ -247,8 +322,18 @@ bool GLSLPParser::parse(const std::string& glslpPath,
                     td.filterLinear = (v == "true" || v == "1" || v == "yes");
                 }
 
+                auto wrapIt = kv.find(toLower(texName) + "_wrap_mode");
+                if (wrapIt != kv.end()) {
+                    td.wrapMode = parseWrapMode(wrapIt->second);
+                }
+
                 if (!td.path.empty()) {
-                    outTextures->push_back(std::move(td));
+                    auto dup = texIndex.find(toLower(texName));
+                    if (dup != texIndex.end()) {
+                        (*outTextures)[dup->second] = std::move(td);
+                    } else {
+                        outTextures->push_back(std::move(td));
+                    }
                 }
             }
         }
@@ -256,9 +341,13 @@ bool GLSLPParser::parse(const std::string& glslpPath,
 
     // ---- 解析参数默认值覆盖 ----
     if (outParams) {
-        outParams->clear();
         auto pit = kv.find("parameters");
         if (pit != kv.end()) {
+            // 对已有参数去重覆盖
+            std::unordered_map<std::string, size_t> paramIndex;
+            for (size_t i = 0; i < outParams->size(); ++i)
+                paramIndex[toLower((*outParams)[i].name)] = i;
+
             std::istringstream ss(pit->second);
             std::string paramName;
             while (std::getline(ss, paramName, ';')) {
@@ -269,7 +358,13 @@ bool GLSLPParser::parse(const std::string& glslpPath,
                 if (valIt != kv.end() && !valIt->second.empty()) {
                     float val = 0.0f;
                     try { val = std::stof(valIt->second); } catch (...) { continue; }
-                    outParams->push_back({ paramName, val });
+
+                    auto dup = paramIndex.find(toLower(paramName));
+                    if (dup != paramIndex.end()) {
+                        (*outParams)[dup->second].value = val;
+                    } else {
+                        outParams->push_back({ paramName, val });
+                    }
                 }
             }
         }

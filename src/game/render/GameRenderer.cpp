@@ -3,6 +3,7 @@
 #include <borealis.hpp>
 #include <cstring>
 #include <algorithm>
+#include <cmath>
 
 namespace beiklive {
 
@@ -88,8 +89,9 @@ void GameRenderer::drawToScreen(float virtX, float virtY, float virtW, float vir
     if (!isReady()) return;
 
     // 计算视口物理尺寸（供着色器管线 viewport 缩放类型计算）
-    const auto viewW = static_cast<unsigned>(virtW * windowScale);
-    const auto viewH = static_cast<unsigned>(virtH * windowScale);
+    // 使用 llround 四舍五入，避免 static_cast<unsigned> 的截断导致 1 像素精度丢失
+    const auto viewW = static_cast<unsigned>(std::llround(static_cast<double>(virtW) * static_cast<double>(windowScale)));
+    const auto viewH = static_cast<unsigned>(std::llround(static_cast<double>(virtH) * static_cast<double>(windowScale)));
 
     // 通过渲染链处理游戏帧纹理（着色器模式或直通模式）
     GLuint finalTex = m_renderChain.run(m_texture.texId(),

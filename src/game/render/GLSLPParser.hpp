@@ -52,6 +52,7 @@ struct GLSLPTextureDesc {
     std::string name;          ///< 纹理名称（对应 GLSL uniform sampler2D 的变量名）
     std::string path;          ///< 纹理图片文件的绝对路径
     bool        filterLinear = false; ///< 采样过滤模式：true = 线性，false = 最近邻
+    ShaderPassDesc::WrapMode wrapMode = ShaderPassDesc::WrapMode::ClampToEdge; ///< 纹理包裹模式
 };
 
 /// .glslp 预设中声明的参数默认值覆盖

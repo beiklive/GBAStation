@@ -26,6 +26,7 @@ struct ShaderPass {
 struct ExternalTexture {
     std::string name;      ///< uniform sampler2D 变量名
     GLuint      texId = 0; ///< GL 纹理对象 ID（0 = 未加载）
+    ShaderPassDesc::WrapMode wrapMode = ShaderPassDesc::WrapMode::ClampToEdge; ///< 纹理包裹模式
 };
 
 /// RetroArch 多通道着色器管线
@@ -103,7 +104,8 @@ private:
                      const std::vector<std::pair<std::string,GLuint>>& extraTexUnits);
 
     /// 从图像文件加载纹理到 GPU。
-    static GLuint loadTextureFromFile(const std::string& path, bool filterLinear);
+    static GLuint loadTextureFromFile(const std::string& path, bool filterLinear,
+                                         ShaderPassDesc::WrapMode wrapMode = ShaderPassDesc::WrapMode::ClampToEdge);
 };
 
 } // namespace beiklive

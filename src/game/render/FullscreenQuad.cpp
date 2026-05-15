@@ -16,7 +16,6 @@ namespace beiklive {
 //   底右 (+1,−1)  TexCoord (1,0)
 //   顶右 (+1,+1)  TexCoord (1,1)
 //   顶左 (−1,+1)  TexCoord (0,1)
-// ============================================================
 static const float k_quadVerts[] = {
     //  x     y    z    w      r    g    b    a      u    v    s    t
     -1.f, -1.f, 0.f, 1.f,   1.f, 1.f, 1.f, 1.f,   0.f, 0.f, 0.f, 0.f,

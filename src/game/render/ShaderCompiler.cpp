@@ -4,6 +4,9 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <cstring>
+#include <filesystem>
+#include <vector>
 
 namespace beiklive {
 
@@ -31,6 +34,115 @@ const char* ShaderCompiler::fragPrecisionPrefix()
 #else
     return "";
 #endif
+}
+
+// ============================================================
+// #include 预处理支持
+// ============================================================
+
+static std::string resolveIncludes(const std::string& filePath,
+                                   std::vector<std::string>& visitedStack,
+                                   int depth)
+{
+    const int kMaxIncludeDepth = 16;
+    if (depth > kMaxIncludeDepth) {
+        brls::Logger::error("ShaderCompiler: #include 嵌套深度超限 ({}) in: {}", depth, filePath);
+        return {};
+    }
+
+    for (const auto& v : visitedStack) {
+        if (v == filePath) {
+            brls::Logger::error("ShaderCompiler: #include 循环引用检测: {}", filePath);
+            return {};
+        }
+    }
+    visitedStack.push_back(filePath);
+
+    std::ifstream f(filePath);
+    if (!f.is_open()) {
+        brls::Logger::error("ShaderCompiler: 无法打开文件: {}", filePath);
+        visitedStack.pop_back();
+        return {};
+    }
+
+    std::string       fileName  = std::filesystem::path(filePath).filename().string();
+    std::string       dir       = std::filesystem::path(filePath).parent_path().string();
+    std::string       result;
+    std::string       line;
+    unsigned          lineNum   = 0;
+
+    while (std::getline(f, line)) {
+        ++lineNum;
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+
+        size_t start = line.find_first_not_of(" \t");
+        if (start == std::string::npos) {
+            result += line + "\n";
+            continue;
+        }
+        std::string trimmed = line.substr(start);
+
+        bool isOptional = false;
+        const char* includePrefix = nullptr;
+
+        if (trimmed.rfind("#include ", 0) == 0) {
+            includePrefix = "#include ";
+        } else if (trimmed.rfind("#pragma include_optional ", 0) == 0) {
+            includePrefix = "#pragma include_optional ";
+            isOptional = true;
+        }
+
+        if (includePrefix) {
+            std::string rest = trimmed.substr(std::strlen(includePrefix));
+            size_t q1 = rest.find('"');
+            if (q1 == std::string::npos) {
+                result += line + "\n";
+                continue;
+            }
+            size_t q2 = rest.find('"', q1 + 1);
+            if (q2 == std::string::npos) {
+                result += line + "\n";
+                continue;
+            }
+            std::string includeFile = rest.substr(q1 + 1, q2 - q1 - 1);
+
+            std::filesystem::path incPath;
+            if (std::filesystem::path(includeFile).is_absolute()) {
+                incPath = includeFile;
+            } else {
+                incPath = std::filesystem::path(dir) / includeFile;
+            }
+            incPath = incPath.lexically_normal();
+            std::string resolvedPath = incPath.string();
+
+            if (!std::filesystem::exists(resolvedPath)) {
+                if (!isOptional) {
+                    brls::Logger::error("ShaderCompiler: #include 文件不存在: {}", resolvedPath);
+                    visitedStack.pop_back();
+                    return {};
+                }
+                brls::Logger::debug("ShaderCompiler: 可选的 #include 未找到: {}", resolvedPath);
+                result += line + "\n";
+                continue;
+            }
+
+            // 插入 #line 1 "included_file" 用于错误行号追踪
+            result += "#line 1 \"" + resolvedPath + "\"\n";
+            std::string included = resolveIncludes(resolvedPath, visitedStack, depth + 1);
+            if (included.empty()) {
+                visitedStack.pop_back();
+                return {};
+            }
+            result += included;
+            // 恢复行号指向当前文件的下一条指令
+            result += "#line " + std::to_string(lineNum + 1) + " \"" + fileName + "\"\n";
+        } else {
+            result += line + "\n";
+        }
+    }
+
+    visitedStack.pop_back();
+    return result;
 }
 
 // ============================================================
@@ -127,18 +239,15 @@ GLuint ShaderCompiler::compileProgram(const std::string& vertSrc,
 
 GLuint ShaderCompiler::compileRetroShader(const std::string& glslPath)
 {
-    std::ifstream f(glslPath);
-    if (!f.is_open()) {
-        brls::Logger::error("ShaderCompiler: 无法打开着色器文件: {}", glslPath);
+    // 1. #include 预处理：递归解析 #include 和 #pragma include_optional 指令
+    std::vector<std::string> visitedStack;
+    std::string body = resolveIncludes(glslPath, visitedStack, 0);
+    if (body.empty()) {
+        brls::Logger::error("ShaderCompiler: #include 预处理失败: {}", glslPath);
         return 0;
     }
 
-    std::ostringstream oss;
-    oss << f.rdbuf();
-    const std::string body = oss.str();
-
-    // 从文件中提取 #version 声明，并构建去除 #version 的主体。
-    // 保留着色器声明的版本（如 #version 330），若无声明则回退到平台默认值。
+    // 2. 从预处理后的内容中提取 #version 声明
     std::string cleanBody;
     std::string extractedVersionLine;
     {

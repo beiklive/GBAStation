@@ -15,7 +15,11 @@ namespace beiklive {
 // ============================================================
 // MVP 单位矩阵（列主序，RetroArch 顶点着色器所需）
 // ============================================================
-static const float k_identity4x4[16] = {
+// MVP 单位矩阵（列主序）
+// 注：本项目的 FullscreenQuad 顶点使用 NDC 坐标 [-1,+1]，无需额外变换。
+// RetroArch 的 MVP 矩阵 [2,0,0,-1; 0,2,0,-1; ...] 是为 [0,1] 坐标空间的
+// 四边形设计的，不可直接套用到 NDC 四边形上，否则会导致画面象限翻转。
+static const float k_mvp4x4[16] = {
     1.f, 0.f, 0.f, 0.f,
     0.f, 1.f, 0.f, 0.f,
     0.f, 0.f, 1.f, 0.f,
@@ -101,8 +105,9 @@ bool RetroShaderPipeline::init(const std::string& glslpPath)
     // 4. 加载 .glslp 中声明的外部纹理
     for (const auto& td : texDescs) {
         ExternalTexture et;
-        et.name  = td.name;
-        et.texId = loadTextureFromFile(td.path, td.filterLinear);
+        et.name     = td.name;
+        et.wrapMode = td.wrapMode;
+        et.texId    = loadTextureFromFile(td.path, td.filterLinear, td.wrapMode);
         if (et.texId) {
             m_textures.push_back(std::move(et));
         } else {
@@ -196,23 +201,22 @@ bool RetroShaderPipeline::allocateFBO(ShaderPass& pass, int w, int h)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, glFilter);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    // float_framebuffer = true → GL_RGBA16F（HDR / bloom 着色器所需）
+    // 选择内部格式：floatFBO > sRGB > RGBA8
+    GLenum internalFormat = GL_RGBA;
+    GLenum pixelType      = GL_UNSIGNED_BYTE;
 #if !defined(USE_GLES2)
     if (pass.desc.floatFramebuffer) {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F,
-                     static_cast<GLsizei>(w), static_cast<GLsizei>(h),
-                     0, GL_RGBA, GL_FLOAT, nullptr);
-    } else {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
-                     static_cast<GLsizei>(w), static_cast<GLsizei>(h),
-                     0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        internalFormat = GL_RGBA16F;
+        pixelType      = GL_FLOAT;
+    } else if (pass.desc.srgbFramebuffer) {
+        internalFormat = GL_SRGB8_ALPHA8;
     }
 #else
-    // GLES2 不支持 GL_RGBA16F，降级为 RGBA8
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
-                 static_cast<GLsizei>(w), static_cast<GLsizei>(h),
-                 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    // GLES2 不支持 GL_RGBA16F / GL_SRGB8_ALPHA8，降级为 RGBA8
 #endif
+    glTexImage2D(GL_TEXTURE_2D, 0, internalFormat,
+                 static_cast<GLsizei>(w), static_cast<GLsizei>(h),
+                 0, GL_RGBA, pixelType, nullptr);
     glBindTexture(GL_TEXTURE_2D, 0);
 
     // 创建 FBO 并附加颜色纹理
@@ -299,8 +303,8 @@ void RetroShaderPipeline::setUniforms(GLuint program,
         if (loc >= 0) glUniform1i(loc, static_cast<int>(v));
     };
 
-    // MVP 单位矩阵
-    setUniformMat4("MVPMatrix", k_identity4x4);
+    // MVP 投影矩阵（NDC -1..+1 → 标准 RetroArch 输出）
+    setUniformMat4("MVPMatrix", k_mvp4x4);
 
     // 帧计数 / 方向
     setUniform1i("FrameCount",     static_cast<int>(frameCount));
@@ -354,7 +358,8 @@ void RetroShaderPipeline::setUniforms(GLuint program,
 // ============================================================
 // loadTextureFromFile – 从图像文件加载 GL 纹理
 // ============================================================
-GLuint RetroShaderPipeline::loadTextureFromFile(const std::string& path, bool filterLinear)
+GLuint RetroShaderPipeline::loadTextureFromFile(const std::string& path, bool filterLinear,
+                                                 ShaderPassDesc::WrapMode wrapMode)
 {
     if (path.empty()) return 0;
 
@@ -373,8 +378,32 @@ GLuint RetroShaderPipeline::loadTextureFromFile(const std::string& path, bool fi
     GLenum glFilter = filterLinear ? GL_LINEAR : GL_NEAREST;
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, glFilter);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, glFilter);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    GLenum glWrap;
+    switch (wrapMode) {
+        case ShaderPassDesc::WrapMode::ClampToBorder:
+#if !defined(USE_GLES2)
+            glWrap = GL_CLAMP_TO_BORDER;
+            {
+                static const GLfloat borderColor[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+                glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
+            }
+#else
+            glWrap = GL_CLAMP_TO_EDGE;
+#endif
+            break;
+        case ShaderPassDesc::WrapMode::Repeat:
+            glWrap = GL_REPEAT;
+            break;
+        case ShaderPassDesc::WrapMode::MirroredRepeat:
+            glWrap = GL_MIRRORED_REPEAT;
+            break;
+        default:
+            glWrap = GL_CLAMP_TO_EDGE;
+            break;
+    }
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, static_cast<GLint>(glWrap));
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, static_cast<GLint>(glWrap));
 
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
                  static_cast<GLsizei>(w), static_cast<GLsizei>(h),
