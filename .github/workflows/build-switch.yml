@@ -113,8 +113,8 @@ jobs:
 
           ${CHANGELOG}
 
-EOF
-)
+          EOF
+          )
 
           # 在 #更新说明 后插入
           awk -v insert="$NEW_CONTENT" '
