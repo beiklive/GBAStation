@@ -326,20 +326,28 @@ void AboutPage::_checkUpdate() {
     HIDE_BRLS_HIGHLIGHT(dlg);
     dlg->open();
 
-    brls::async([this, dlg]() {
+    new std::thread([this, dlg]() {
         auto& updater = AppUpdater::instance();
-        updater.checkSync(APP_VERSION);
 
-        auto start = std::chrono::steady_clock::now();
-        while (!AppUpdater::instance().hasUpdate() &&
-               std::chrono::duration_cast<std::chrono::seconds>(
-                   std::chrono::steady_clock::now() - start).count() < 15) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(200));
-        }
+		// 从 config/version.json 读取本地版本号，不存在则用 APP_VERSION
+		std::string localVersion = APP_VERSION;
+		{
+			std::ifstream f(beiklive::path::configPath() + "/version.json");
+			if (f.is_open()) {
+				nlohmann::json j;
+				f >> j;
+				std::string ver = j.value("version", "");
+				brls::Logger::info("本地版本号: {}", ver);
+				if (!ver.empty())
+					localVersion = ver;
+			}
+		}
 
-        brls::sync([this, dlg, start]() {
-            // 关闭检测中弹窗（通过返回上一层 activity 关闭 dialog 覆盖层）
-            brls::Application::popActivity(brls::TransitionAnimation::NONE);
+        updater.checkSync(localVersion);
+
+        brls::sync([this, dlg]() {
+            // 关闭检测中弹窗
+            dlg->close([]{});
 
             auto& info = AppUpdater::instance().info();
             if (info.hasUpdate) {
@@ -356,11 +364,6 @@ void AboutPage::_checkUpdate() {
                 });
                 confirmDlg->addButton("取消", []() {});
                 confirmDlg->open();
-            } else if (std::chrono::duration_cast<std::chrono::seconds>(
-                           std::chrono::steady_clock::now() - start).count() >= 15) {
-                auto* errDlg = new brls::Dialog("检测超时\n\n请检查网络连接后重试");
-                errDlg->addButton("确定", []() {});
-                errDlg->open();
             } else {
                 auto* okDlg = new brls::Dialog("已是最新版本");
                 okDlg->addButton("确定", []() {});
@@ -369,5 +372,4 @@ void AboutPage::_checkUpdate() {
         });
     });
 }
-
 } // namespace beiklive

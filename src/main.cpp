@@ -93,14 +93,12 @@ int main(int argc, char* argv[]) {
 		{
 			std::ifstream f(beiklive::path::configPath() + "/version.json");
 			if (f.is_open()) {
-				try {
-					nlohmann::json j;
-					f >> j;
-					std::string ver = j.value("version", "");
-					brls::Logger::info("本地版本号: {}", ver);
-					if (!ver.empty())
-						localVersion = ver;
-				} catch (...) {}
+				nlohmann::json j;
+				f >> j;
+				std::string ver = j.value("version", "");
+				brls::Logger::info("本地版本号: {}", ver);
+				if (!ver.empty())
+					localVersion = ver;
 			}
 		}
 
@@ -141,10 +139,6 @@ int main(int argc, char* argv[]) {
 					SET_SETTING_KEY_INT(beiklive::SettingKey::KEY_EMU_UPDATE, 0);
 					brls::Application::notify("已关闭更新提示");
 				});
-				dlg->open();
-			} else {
-				auto* dlg = new brls::Dialog("当前已是最新版本\n\n" + localVersion);
-				dlg->addButton("确定", []() {});
 				dlg->open();
 			}
 		});
