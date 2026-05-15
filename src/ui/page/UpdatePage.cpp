@@ -112,7 +112,8 @@ void UpdatePage::_initLayout() {
     m_progressBar = new brls::Rectangle(nvgRGB(59,167,255));
     m_progressBar->setHeight(10.f);
     m_progressBar->setWidth(0.f);
-    m_progressBar->setCornerRadius(9.f);
+    m_progressBar->setCornerRadius(2.f);
+    m_progressBar->setMarginBottom(10.f);
     card->addView(m_progressBar);
 
     // 百分比
@@ -198,6 +199,10 @@ void UpdatePage::_updateProgress(float pct,
 
 void UpdatePage::startDownload() {
 
+    brls::sync([this]() {
+        m_statusLabel->setText("正在下载...");
+    });
+
     brls::async([this]() {
 
         using Clock = std::chrono::steady_clock;
@@ -268,6 +273,16 @@ void UpdatePage::startDownload() {
         if (m_cancelled.load())
             return;
 
+        {
+        // 下载完成，强制更新进度到 100%
+        size_t totalSize = AppUpdater::instance().info().fileSize;
+        _updateProgress(
+            100.0f,
+            "  ",
+            formatSize(totalSize) + " / " + formatSize(totalSize),
+            "  "
+        );
+        }
         brls::sync([this, ok]() {
 
             m_btnBox->clearViews(true);
