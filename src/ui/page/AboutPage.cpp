@@ -345,13 +345,19 @@ void AboutPage::_checkUpdate() {
 
             auto& info = AppUpdater::instance().info();
             if (info.hasUpdate) {
-                // 有更新，直接进入下载流程
-                auto* page = new UpdatePage();
-                auto* frame = new brls::AppletFrame(page);
-                HIDE_BRLS_BAR(frame);
-                brls::Application::pushActivity(
-                    new brls::Activity(frame), brls::TransitionAnimation::NONE);
-                page->startDownload();
+                // 有更新，弹窗询问
+                std::string msg = "发现新版本\n\n" + info.version + "\n\n" + info.changelog;
+                auto* confirmDlg = new brls::Dialog(msg);
+                confirmDlg->addButton("更新", []() {
+                    auto* page = new UpdatePage();
+                    auto* frame = new brls::AppletFrame(page);
+                    HIDE_BRLS_BAR(frame);
+                    brls::Application::pushActivity(
+                        new brls::Activity(frame), brls::TransitionAnimation::NONE);
+                    page->startDownload();
+                });
+                confirmDlg->addButton("取消", []() {});
+                confirmDlg->open();
             } else if (std::chrono::duration_cast<std::chrono::seconds>(
                            std::chrono::steady_clock::now() - start).count() >= 15) {
                 auto* errDlg = new brls::Dialog("检测超时\n\n请检查网络连接后重试");
