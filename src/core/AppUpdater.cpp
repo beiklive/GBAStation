@@ -232,17 +232,18 @@ bool AppUpdater::download(std::function<bool(size_t, size_t)> onProgress) {
 
 bool AppUpdater::install() {
 #ifdef __SWITCH__
-    // 1. 先复制 cache/version.json 到 config/version.json
+    // 1. 从 cache 读取 version.json 内容，写入 config 目录
     {
-        std::error_code ec;
-        if (std::filesystem::exists(cacheVersionJsonPath(), ec)) {
-            std::filesystem::copy_file(
-                cacheVersionJsonPath(),
-                localVersionJsonPath(),
-                std::filesystem::copy_options::overwrite_existing,
-                ec);
-            if (ec) {
-                brls::Logger::error("AppUpdater: 复制 version.json 失败");
+        std::ifstream in(cacheVersionJsonPath());
+        if (in.is_open()) {
+            std::string content((std::istreambuf_iterator<char>(in)),
+                                std::istreambuf_iterator<char>());
+            in.close();
+            if (!content.empty()) {
+                std::error_code ec;
+                std::filesystem::create_directories(beiklive::path::configPath(), ec);
+                std::ofstream out(localVersionJsonPath(), std::ios::trunc);
+                if (out) { out << content; out.close(); }
             }
         }
     }
@@ -261,15 +262,19 @@ bool AppUpdater::install() {
     brls::Logger::info("AppUpdater: 安装完成 -> {}", nroPath);
     return true;
 #else
-    // 非 Switch 平台也执行 version.json 替换（方便测试）
+    // 非 Switch 平台也执行 version.json 写入（方便测试）
     {
-        std::error_code ec;
-        if (std::filesystem::exists(cacheVersionJsonPath(), ec)) {
-            std::filesystem::copy_file(
-                cacheVersionJsonPath(),
-                localVersionJsonPath(),
-                std::filesystem::copy_options::overwrite_existing,
-                ec);
+        std::ifstream in(cacheVersionJsonPath());
+        if (in.is_open()) {
+            std::string content((std::istreambuf_iterator<char>(in)),
+                                std::istreambuf_iterator<char>());
+            in.close();
+            if (!content.empty()) {
+                std::error_code ec;
+                std::filesystem::create_directories(beiklive::path::configPath(), ec);
+                std::ofstream out(localVersionJsonPath(), std::ios::trunc);
+                if (out) { out << content; out.close(); }
+            }
         }
     }
     brls::Logger::warning("AppUpdater: NRO 安装仅在 Switch 平台可用");
