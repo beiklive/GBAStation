@@ -34,6 +34,7 @@ jobs:
 
       - name: 检查输出文件
         run: |
+          echo "===== NRO FILES ====="
           find . -name "*.nro"
 
       - name: 生成 version.json
@@ -56,10 +57,11 @@ jobs:
             "version": "$TAG_NAME",
             "changelog": "$CHANGELOG_ESCAPED",
             "download": "$TAG_NAME/GBAStation-$TAG_NAME.nro",
-            "size": $FILE_SIZE,
+            "size": $FILE_SIZE
           }
           EOF
 
+          echo "===== version.json ====="
           cat version.json
 
       - name: Clone Release Repo
@@ -87,6 +89,46 @@ jobs:
 
           # 根目录
           cp version.json release_repo/version.json
+
+      - name: 更新 README 更新说明
+        run: |
+          TAG_NAME=${GITHUB_REF_NAME}
+
+          CHANGELOG=$(git tag -l --format='%(contents)' "$TAG_NAME")
+
+          README_FILE="release_repo/README.md"
+
+          # README 不存在则创建
+          touch "$README_FILE"
+
+          # 不存在更新说明标题则创建
+          if ! grep -q "^#更新说明" "$README_FILE"; then
+            echo -e "\n#更新说明\n" >> "$README_FILE"
+          fi
+
+          # 构造插入内容
+          NEW_CONTENT=$(cat <<EOF
+
+## ${TAG_NAME}
+
+${CHANGELOG}
+
+EOF
+)
+
+          # 在 #更新说明 后插入
+          awk -v insert="$NEW_CONTENT" '
+          {
+            print
+            if ($0 ~ /^#更新说明$/) {
+              print insert
+            }
+          }' "$README_FILE" > "$README_FILE.tmp"
+
+          mv "$README_FILE.tmp" "$README_FILE"
+
+          echo "===== README.md ====="
+          cat "$README_FILE"
 
       - name: 提交到 Release Repo
         run: |
