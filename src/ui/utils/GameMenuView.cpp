@@ -1253,14 +1253,14 @@ namespace beiklive
             });
 
             makeSyncBtn("同步遮罩路径", [this]() {
-                auto *dlg = new brls::Dialog("同步遮罩路径\n\n将当前游戏的遮罩路径同步到同平台所有游戏，同时更新全局默认遮罩路径，确认继续？");
+                auto *dlg = new brls::Dialog("同步遮罩开关、路径\n\n将当前游戏的遮罩路径同步到同平台所有游戏，同时更新全局默认遮罩路径，确认继续？");
                 dlg->addButton("取消", []() {});
                 dlg->addButton("确认", [this]() { _syncOverlayPath(); });
                 dlg->open();
             });
 
             makeSyncBtn("同步着色器路径和参数", [this]() {
-                auto *dlg = new brls::Dialog("同步着色器路径和参数\n\n将当前游戏的着色器路径和参数同步到同平台所有游戏，同时更新全局默认着色器路径，确认继续？");
+                auto *dlg = new brls::Dialog("同步着色器开关、路径和参数\n\n将当前游戏的着色器路径和参数同步到同平台所有游戏，同时更新全局默认着色器路径，确认继续？");
                 dlg->addButton("取消", []() {});
                 dlg->addButton("确认", [this]() { _syncShaderPath(); });
                 dlg->open();
@@ -1481,6 +1481,7 @@ namespace beiklive
         for (auto& game : games) {
             if (game.platform != platform) continue;
             if (game.crc32 == m_gameEntry.crc32) continue;
+            game.shaderEnabled   = m_gameEntry.shaderEnabled;
             game.shaderPath      = m_gameEntry.shaderPath;
             game.shaderParaNames  = m_gameEntry.shaderParaNames;
             game.shaderParaValues = m_gameEntry.shaderParaValues;

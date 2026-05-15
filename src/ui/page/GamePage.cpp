@@ -100,9 +100,9 @@ namespace beiklive
 
         namespace sk = beiklive::SettingKey;
         db->setDefault(dcrc32, "overlayEnabled",
-                       GET_SETTING_KEY_INT(sk::KEY_DISPLAY_OVERLAY_ENABLED, 0) != 0);
+                       GET_SETTING_KEY_INT(sk::KEY_DISPLAY_OVERLAY_ENABLED, 0));
         db->setDefault(dcrc32, "shaderEnabled",
-                       GET_SETTING_KEY_INT(sk::KEY_DISPLAY_SHADER_ENABLED, 0) != 0);
+                       GET_SETTING_KEY_INT(sk::KEY_DISPLAY_SHADER_ENABLED, 0));
 
         // 画面模式：全局配置为字符串，DB 存整数 ScreenMode 枚举值
         {
@@ -178,13 +178,13 @@ namespace beiklive
                 m_gameEntry.shaderPath = GET_SETTING_KEY_STR(sk::KEY_DISPLAY_SHADER_PATH, "");
         }
 
-        // overlayEnabled：优先使用已有值，新游戏使用全局设置初始化
-        if (!m_gameEntry.overlayEnabled)
-            m_gameEntry.overlayEnabled = GET_SETTING_KEY_INT(sk::KEY_DISPLAY_OVERLAY_ENABLED, 0) != 0;
+        // // overlayEnabled：优先使用已有值，新游戏使用全局设置初始化
+        // if (!m_gameEntry.overlayEnabled)
+        //     m_gameEntry.overlayEnabled = GET_SETTING_KEY_INT(sk::KEY_DISPLAY_OVERLAY_ENABLED, 0) != 0;
 
-        // shaderEnabled：优先使用已有值，新游戏使用全局设置初始化
-        if (!m_gameEntry.shaderEnabled)
-            m_gameEntry.shaderEnabled = GET_SETTING_KEY_INT(sk::KEY_DISPLAY_SHADER_ENABLED, 0) != 0;
+        // // shaderEnabled：优先使用已有值，新游戏使用全局设置初始化
+        // if (!m_gameEntry.shaderEnabled)
+        //     m_gameEntry.shaderEnabled = GET_SETTING_KEY_INT(sk::KEY_DISPLAY_SHADER_ENABLED, 0) != 0;
 
         // logoPath：优先使用已有值（包括自定义封面），否则使用平台默认图标。若为默认图标则尝试替换为存档截图
         if (m_gameEntry.logoPath.empty())
