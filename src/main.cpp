@@ -118,6 +118,10 @@ int main(int argc, char* argv[]) {
 					brls::Application::notify("已关闭更新提示");
 				});
 				dlg->open();
+			} else {
+				auto* dlg = new brls::Dialog("当前已是最新版本\n\n" + std::string(APP_VERSION));
+				dlg->addButton("确定", []() {});
+				dlg->open();
 			}
 		});
 	});

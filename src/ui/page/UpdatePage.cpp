@@ -80,13 +80,13 @@ void UpdatePage::_initLayout() {
     card->setShadowVisibility(true);
     card->setPadding(32.f, 42.f, 32.f, 42.f);
     card->setAlignItems(brls::AlignItems::STRETCH);
-    card->setJustifyContent(brls::JustifyContent::FLEX_START);
+    card->setJustifyContent(brls::JustifyContent::CENTER);
 
     root->addView(card);
 
     // 标题
     m_titleLabel = new brls::Label();
-    m_titleLabel->setText("系统更新");
+    m_titleLabel->setText("模拟器更新");
     m_titleLabel->setFontSize(40.f);
     m_titleLabel->setTextColor(nvgRGB(255,255,255));
     m_titleLabel->setMarginBottom(18.f);
@@ -107,20 +107,12 @@ void UpdatePage::_initLayout() {
     m_statusLabel->setMarginBottom(28.f);
     card->addView(m_statusLabel);
 
-    // 进度条背景
-    m_progressBg = new brls::Rectangle(nvgRGBA(255,255,255,18));
-    m_progressBg->setHeight(10.f);
-    m_progressBg->setWidth(536.f);
-    m_progressBg->setCornerRadius(999.f);
-    m_progressBg->setMarginBottom(18.f);
-    card->addView(m_progressBg);
 
     // 进度条
     m_progressBar = new brls::Rectangle(nvgRGB(59,167,255));
     m_progressBar->setHeight(10.f);
     m_progressBar->setWidth(0.f);
-    m_progressBar->setCornerRadius(999.f);
-    m_progressBar->setPositionType(brls::PositionType::ABSOLUTE);
+    m_progressBar->setCornerRadius(9.f);
     card->addView(m_progressBar);
 
     // 百分比
