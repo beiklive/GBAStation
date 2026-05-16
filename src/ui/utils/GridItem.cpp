@@ -42,10 +42,11 @@ namespace beiklive
     // ============================================================
 
     GridItem::GridItem(GridItemMode mode, int index)
-        : m_mode(mode)
+        : RecyclingGridItem()
+        , m_mode(mode)
         , m_index(index)
     {
-        // 自适应宽度（由父 GridBox 确定），固定高度
+        this->setGridIndex(index);
         this->setAxis(brls::Axis::ROW);
         this->setGrow(1.f);
         this->setHeight(ITEM_HEIGHT);
@@ -348,42 +349,16 @@ namespace beiklive
         });
     }
 
-    void GridItem::setImageLayerDeferred(const std::string& path, bool visible)
+    void GridItem::prepareForReuse() override
     {
-        if (!m_imageLayer) return;
-        m_imageLayer->setVisibility(visible ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
-        if (visible && !path.empty())
-        {
-            enqueueImageTask([this, path]() {
-                if (m_imageLayer) m_imageLayer->setImageFromFile(path);
-            });
-        }
-    }
-
-    void GridItem::_updateFavouriteHint()
-    {
-        if (m_mode != GridItemMode::GAME_LIBRARY) return;
-        bool fav = false;
-        if (isFavourite)
-            fav = isFavourite(m_index);
-        for (auto& action : this->getActions())
-        {
-            if (action->getButton() == brls::BUTTON_RT)
-            {
-                action->setHintText(fav ? "取消收藏" : "收藏");
-            }
-        }
-    }
-
-    void GridItem::onFocusGained()
-    {
-        brls::Box::onFocusGained();
-        _updateFavouriteHint();
-    }
-
-    void GridItem::onFocusLost()
-    {
-        brls::Box::onFocusLost();
+        RecyclingGridItem::prepareForReuse();
+        if (m_image) m_image->clear();
+        if (m_imageLayer) m_imageLayer->setVisibility(brls::Visibility::GONE);
+        if (m_titleLabel) m_titleLabel->setText("");
+        if (m_subLabel) m_subLabel->setText("");
+        if (m_playLabel) m_playLabel->setText("");
+        if (m_badgeLabel) m_badgeLabel->setText("");
+        m_isEmpty = true;
     }
 
     // ============================================================

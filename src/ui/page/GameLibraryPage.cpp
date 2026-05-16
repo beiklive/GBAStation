@@ -14,8 +14,11 @@ namespace beiklive
         this->getHeader()->setTitle("游戏库");
         this->setFocusable(false);
 
-        m_grid = new beiklive::GridBox(3);
+        m_grid = new beiklive::RecyclingGrid(3, GridItem::ITEM_HEIGHT, 10.0f);
         m_grid->setGrow(1.f);
+        m_grid->registerCell("GridItem", []() -> RecyclingGridItem* {
+            return new GridItem(GridItemMode::GAME_LIBRARY, 0);
+        });
 
         this->getContentBox()->addView(m_grid);
 
@@ -36,31 +39,32 @@ namespace beiklive
             auto* ime = brls::Application::getPlatform()->getImeManager();
             if (!ime) return true;
             ime->openForText(
-                    [this](std::string text) {
-                        m_isSearching = !text.empty();
-                        m_searchTerm = text;
+                [this](std::string text) {
+                    m_isSearching = !text.empty();
+                    m_searchTerm = text;
 
-                        auto* alive = &m_alive;
-                        ThreadPool::instance().enqueue([this, alive]() {
+                    auto* alive = &m_alive;
+                    ThreadPool::instance().enqueue([this, alive]() {
+                        if (!alive->load()) return;
+                        m_entries = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
+                        _filterEntries();
+                        brls::sync([this, alive]() {
                             if (!alive->load()) return;
-                            m_entries = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
-                            _filterEntries();
-                            brls::sync([this, alive]() {
-                                if (!alive->load()) return;
-                                if (m_isSearching && m_entries.empty())
-                                {
-                                    auto* dialog = new brls::Dialog("当前分类下无 \"" + m_searchTerm + "\"");
-                                    dialog->addButton("确认", []() {});
-                                    dialog->open();
-                                    return;
-                                }
+                            if (m_isSearching && m_entries.empty())
+                            {
+                                auto* dialog = new brls::Dialog("当前分类下无 \"" + m_searchTerm + "\"");
+                                dialog->addButton("确认", []() {});
+                                dialog->open();
+                                return;
+                            }
 
-                                m_visibleCount = std::min(PAGE_SIZE, static_cast<int>(m_entries.size()));
-                                _rebuildGrid();
-                                _updateHeader();
-                                brls::Application::giveFocus(m_grid);
-                            });
+                            m_visibleCount = std::min(PAGE_SIZE, static_cast<int>(m_entries.size()));
+                            if (m_dataSource)
+                                m_grid->reloadData();
+                            _updateHeader();
+                            brls::Application::giveFocus(m_grid);
                         });
+                    });
                 },
                 "搜索游戏",
                 "",
@@ -70,6 +74,11 @@ namespace beiklive
             return true;
         });
 
+        m_grid->onNextPage = [this]() {
+            if (!m_loadingMore)
+                _loadNextPage();
+        };
+
         _loadAndShowEntries();
     }
 
@@ -78,38 +87,56 @@ namespace beiklive
         m_alive.store(false);
     }
 
-    // ============================================================
-    // draw – 每帧检测触底，增量加载
-    // ============================================================
-
     void GameLibraryPage::draw(NVGcontext* vg, float x, float y, float w, float h,
                                 brls::Style style, brls::FrameContext* ctx)
     {
         beiklive::Box::draw(vg, x, y, w, h, style, ctx);
+    }
 
-        if (!m_alive.load()) return;
-        if (m_loadingMore)
-            return;
+    // ============================================================
+    // GameLibraryDS
+    // ============================================================
 
-        if (m_visibleCount <= 0)
-            return;
+    size_t GameLibraryPage::GameLibraryDS::getItemCount() const
+    {
+        return m_page ? m_page->m_visibleCount : 0;
+    }
 
-        if (static_cast<size_t>(m_visibleCount) >= m_entries.size())
-            return;
+    RecyclingGridItem* GameLibraryPage::GameLibraryDS::cellForRow(RecyclingGrid* grid, size_t index)
+    {
+        auto* cell = static_cast<GridItem*>(grid->dequeueReusableCell("GridItem"));
+        if (!cell) return nullptr;
 
-        auto* sf = m_grid->getScrollFrame();
-        float contentH = sf->getContentHeight();
-        float areaH    = sf->getScrollingAreaHeight();
-        if (contentH <= areaH)
-            return;
-
-        float offset      = sf->getContentOffsetY();
-        float bottomLimit = contentH - areaH;
-
-        if (offset >= bottomLimit - 50.f)
+        if (!m_page || index >= m_page->m_entries.size())
         {
-            _loadNextPage();
+            cell->setEmpty("空");
+            return cell;
         }
+
+        const auto& entry = m_page->m_entries[index];
+        GridItemData data = _buildItemData(entry);
+
+        cell->setImagePathDeferred(data.logoPath);
+
+        if (!data.badgeText.empty())
+            cell->setBadge(data.badgeText, data.badgeColor);
+
+        cell->setImageLayerDeferred(data.logoLayerPath, data.showLogoLayer);
+
+        cell->setTitle(data.title);
+
+        cell->setSubText(data.subText);
+
+        cell->setPlayTime(data.playTime);
+
+        cell->setDataLoaded();
+
+        cell->onItemClicked = [this, idx = index](int) {
+            if (m_page && idx < (int)m_page->m_entries.size() && m_page->onGameSelected)
+                m_page->onGameSelected(m_page->m_entries[idx]);
+        };
+
+        return cell;
     }
 
     // ============================================================
@@ -127,7 +154,9 @@ namespace beiklive
             brls::sync([this, alive]() {
                 if (!alive->load()) return;
                 m_visibleCount = std::min(PAGE_SIZE, static_cast<int>(m_entries.size()));
-                _rebuildGrid();
+                m_dataSource = new GameLibraryDS(this);
+                m_grid->setDataSource(m_dataSource);
+                m_grid->reloadData();
                 _updateHeader();
                 brls::Application::giveFocus(m_grid);
                 brls::Application::unblockInputs();
@@ -176,109 +205,27 @@ namespace beiklive
     }
 
     // ============================================================
-    // _rebuildGrid – 全量重建（仅在首次/排序变更/刷新时调用）
-    // ============================================================
-
-    void GameLibraryPage::_rebuildGrid()
-    {
-        beiklive::GridItem::cancelDeferredLoads();
-        m_grid->clearItems();
-
-        int count = std::min(m_visibleCount, static_cast<int>(m_entries.size()));
-
-        for (int i = 0; i < count; ++i)
-        {
-            GridItemData data = _buildItemData(m_entries[i]);
-            int captIdx = i;
-
-            m_grid->addItem([this, data = std::move(data), captIdx]() -> brls::View* {
-                auto* item = new beiklive::GridItem(GridItemMode::GAME_LIBRARY, captIdx);
-
-                item->setImagePathDeferred(data.logoPath);
-
-                if (!data.badgeText.empty())
-                    item->setBadge(data.badgeText, data.badgeColor);
-
-                item->setImageLayerDeferred(data.logoLayerPath, data.showLogoLayer);
-
-                item->setTitle(data.title);
-
-                item->setSubText(data.subText);
-
-                item->setPlayTime(data.playTime);
-
-                item->setDataLoaded();
-
-                return item;
-            });
-        }
-
-        m_grid->commit();
-
-        m_grid->onItemClicked = [this](int index) {
-            if (index < 0 || index >= static_cast<int>(m_entries.size())) return;
-            if (onGameSelected)
-                onGameSelected(m_entries[index]);
-        };
-        m_grid->onItemFocused = [this](int index) {
-            _currentFocusedIndex = index;
-            brls::Logger::debug("GameLibraryPage: 游戏聚焦，索引: {}, 游戏: {}", index, m_entries[index].title);
-        };
-    }
-
-    // ============================================================
-    // _loadNextPage – 增量追加，不重建已有视图
+    // _loadNextPage – 增量追加
     // ============================================================
 
     void GameLibraryPage::_loadNextPage()
     {
         if (!m_alive.load()) return;
-        if (m_loadingMore)
-            return;
-        if (static_cast<size_t>(m_visibleCount) >= m_entries.size())
-            return;
+        if (m_loadingMore) return;
+        if (m_visibleCount >= static_cast<int>(m_entries.size())) return;
 
         m_loadingMore = true;
 
-        int oldVisible = m_visibleCount;
         m_visibleCount = std::min(m_visibleCount + PAGE_SIZE, static_cast<int>(m_entries.size()));
-        int newItems = m_visibleCount - oldVisible;
 
-        for (int i = 0; i < newItems; ++i)
-        {
-            GridItemData data = _buildItemData(m_entries[oldVisible + i]);
-            int captIdx = oldVisible + i;
-
-            m_grid->addItem([data = std::move(data), captIdx]() -> brls::View* {
-                auto* item = new beiklive::GridItem(GridItemMode::GAME_LIBRARY, captIdx);
-
-                item->setImagePathDeferred(data.logoPath);
-
-                if (!data.badgeText.empty())
-                    item->setBadge(data.badgeText, data.badgeColor);
-
-                item->setImageLayerDeferred(data.logoLayerPath, data.showLogoLayer);
-
-                item->setTitle(data.title);
-
-                item->setSubText(data.subText);
-
-                item->setPlayTime(data.playTime);
-
-                item->setDataLoaded();
-
-                return item;
-            });
-        }
-
-        // 增量追加：不触动已有视图，只添加新行
-        m_grid->commitAppend();
+        if (m_dataSource)
+            m_grid->notifyDataChanged();
 
         m_loadingMore = false;
     }
 
     // ============================================================
-    // _showFilterDropdown – Y 键弹出平台分类选择
+    // _showFilterDropdown
     // ============================================================
 
     void GameLibraryPage::_showFilterDropdown()
@@ -335,7 +282,8 @@ namespace beiklive
                     brls::sync([this, alive]() {
                         if (!alive->load()) return;
                         m_visibleCount = std::min(PAGE_SIZE, static_cast<int>(m_entries.size()));
-                        _rebuildGrid();
+                        if (m_dataSource)
+                            m_grid->reloadData();
                         _updateHeader();
                         brls::Application::giveFocus(m_grid);
                     });
@@ -396,7 +344,7 @@ namespace beiklive
     }
 
     // ============================================================
-    // _buildItemData – 将 GameEntry 预处理为纯数据（可在后台线程调用）
+    // _buildItemData
     // ============================================================
 
     GridItemData GameLibraryPage::_buildItemData(const beiklive::GameEntry& entry)
@@ -414,7 +362,7 @@ namespace beiklive
     }
 
     // ============================================================
-    // _reloadEntries – 操作后刷新（重置为第一页）
+    // _reloadEntries
     // ============================================================
 
     void GameLibraryPage::_reloadEntries()
@@ -427,7 +375,8 @@ namespace beiklive
             brls::sync([this, alive]() {
                 if (!alive->load()) return;
                 m_visibleCount = std::min(PAGE_SIZE, static_cast<int>(m_entries.size()));
-                _rebuildGrid();
+                if (m_dataSource)
+                    m_grid->reloadData();
                 _updateHeader();
                 brls::Application::giveFocus(m_grid);
             });
@@ -435,7 +384,7 @@ namespace beiklive
     }
 
     // ============================================================
-    // _showGameOptionsPanel
+    // _showGameOptionsPanel / _hideGameOptionsPanel
     // ============================================================
 
     void GameLibraryPage::_showGameOptionsPanel(const beiklive::GameEntry& entry)

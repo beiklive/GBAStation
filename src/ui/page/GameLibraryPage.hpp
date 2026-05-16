@@ -1,9 +1,11 @@
 #pragma once
 
+#include <atomic>
 #include "core/common.h"
 #include "core/Tools.hpp"
 #include "ui/utils/Box.hpp"
-#include "ui/utils/GridBox.hpp"
+#include "ui/utils/RecyclingGrid.hpp"
+#include "ui/utils/RecyclingGridDataSource.hpp"
 #include "ui/utils/GridItem.hpp"
 #include "ui/utils/GameOptionsSidebar.hpp"
 
@@ -23,7 +25,6 @@ namespace beiklive
     class GameLibraryPage : public beiklive::Box
     {
     public:
-        /// 平台分类
         enum class PlatformFilter : int
         {
             ALL = 0,
@@ -38,14 +39,24 @@ namespace beiklive
         void draw(NVGcontext* vg, float x, float y, float w, float h,
                   brls::Style style, brls::FrameContext* ctx) override;
 
-        /// 游戏被激活（启动）时触发
         std::function<void(const beiklive::GameEntry&)> onGameSelected;
 
     private:
+        class GameLibraryDS : public RecyclingGridDataSource {
+        public:
+            GameLibraryDS(GameLibraryPage* page) : m_page(page) {}
+            size_t getItemCount() const override;
+            RecyclingGridItem* cellForRow(RecyclingGrid* grid, size_t index) override;
+            float heightForRow(RecyclingGrid* grid, size_t index) override { return GridItem::ITEM_HEIGHT; }
+        private:
+            GameLibraryPage* m_page;
+        };
+
         static constexpr int PAGE_SIZE = 21;
 
-        beiklive::GridBox*    m_grid      = nullptr;
+        beiklive::RecyclingGrid* m_grid = nullptr;
         std::vector<beiklive::GameEntry> m_entries;
+        GameLibraryDS* m_dataSource = nullptr;
         int                   m_visibleCount = 0;
         bool                  m_loadingMore  = false;
         PlatformFilter        m_platformFilter = PlatformFilter::ALL;
@@ -55,27 +66,19 @@ namespace beiklive
 
         void _loadAndShowEntries();
         void _filterEntries();
-        void _rebuildGrid();
         void _loadNextPage();
         void _reloadEntries();
         void _showFilterDropdown();
         void _updateHeader();
 
-        /// 显示游戏选项侧边栏
         void _showGameOptionsPanel(const beiklive::GameEntry& entry);
-        /// 关闭游戏选项侧边栏
         void _hideGameOptionsPanel();
 
-        /// 将 GameEntry 的平台字段转换为徽标颜色枚举
         static PlatformBadgeColor _platformBadge(int platform);
-
-        /// 将游戏时长（秒）格式化为可读字符串
         static std::string _formatPlayTime(int seconds);
-
-        /// 从 GameEntry 构建 GridItemData（纯数据，可在后台线程调用）
         static GridItemData _buildItemData(const beiklive::GameEntry& entry);
 
-        int _currentFocusedIndex = -1; // 当前焦点所在的游戏索引（-1 表示无焦点）
+        int _currentFocusedIndex = -1;
         std::atomic<bool> m_alive{true};
     };
 
