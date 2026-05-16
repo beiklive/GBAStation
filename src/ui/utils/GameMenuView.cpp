@@ -721,12 +721,18 @@ namespace beiklive
                 // BUTTON_RT: 删除金手指
                 sw->registerAction("删除", brls::BUTTON_RT, [this, idx](brls::View *) -> bool {
                     if (idx >= (int)m_cheats.size()) return true;
-                    if (m_cheatToggleCallback)
-                        m_cheatToggleCallback(idx, false);
-                    m_cheats.erase(m_cheats.begin() + idx);
-                    if (!m_gameEntry.cheatPath.empty())
-                        beiklive::saveChtFile(m_gameEntry.cheatPath, m_cheats);
-                    _rebuildCheatItems();
+                    auto* dlg = new brls::Dialog("是否删除 \"" + m_cheats[idx].desc + "\" ?");
+                    dlg->addButton("确认删除", [this, idx]() {
+                        if (idx >= (int)m_cheats.size()) return;
+                        if (m_cheatToggleCallback)
+                            m_cheatToggleCallback(idx, false);
+                        m_cheats.erase(m_cheats.begin() + idx);
+                        if (!m_gameEntry.cheatPath.empty())
+                            beiklive::saveChtFile(m_gameEntry.cheatPath, m_cheats);
+                        _rebuildCheatItems();
+                    });
+                    dlg->addButton("取消", [](){});
+                    dlg->open();
                     return true;
                 });
 
