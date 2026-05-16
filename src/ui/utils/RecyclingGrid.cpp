@@ -108,7 +108,12 @@ RecyclingGridDataSource* RecyclingGrid::getDataSource() const
 
 void RecyclingGrid::reloadData()
 {
-    if (!m_layouted) return;
+    if (!m_layouted)
+    {
+        m_layouted = true;
+        m_oldWidth = getWidth();
+        if (m_oldWidth != m_oldWidth) m_oldWidth = 1200;
+    }
 
     auto& children = m_contentBox->getChildren();
     for (auto* child : children)
@@ -147,11 +152,13 @@ void RecyclingGrid::reloadData()
     size_t lineHeadIndex = cellFocusIndex / spanCount * spanCount;
     m_renderedFrame.origin.y = getHeightByCellIndex(lineHeadIndex);
     addCellAt(lineHeadIndex, true);
+
+    itemsRecyclingLoop();
 }
 
 void RecyclingGrid::notifyDataChanged()
 {
-    if (!m_layouted || !m_dataSource) return;
+    if (!m_dataSource) return;
     m_contentBox->setHeight(
         (estimatedRowHeight + estimatedRowSpace) * getRowCount()
         - estimatedRowSpace + m_paddingTop + m_paddingBottom);

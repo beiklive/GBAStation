@@ -61,6 +61,7 @@ namespace beiklive
                                 return;
                             }
                             m_visibleCount = std::min(PAGE_SIZE, static_cast<int>(m_entries.size()));
+                            m_grid->setDefaultCellFocus(0);
                             m_grid->reloadData();
                             _updateHeader();
                             brls::Application::giveFocus(m_grid);
@@ -161,6 +162,7 @@ namespace beiklive
             brls::sync([this, alive]() {
                 if (!alive->load()) return;
                 m_visibleCount = std::min(PAGE_SIZE, static_cast<int>(m_entries.size()));
+                m_grid->setDefaultCellFocus(0);
                 m_dataSource = new GameLibraryDS(this);
                 m_grid->setDataSource(m_dataSource);
                 m_grid->reloadData();
@@ -255,6 +257,7 @@ namespace beiklive
                             brls::sync([this, alive]() {
                                 if (!alive->load()) return;
                                 m_visibleCount = std::min(PAGE_SIZE, (int)m_entries.size());
+                                m_grid->setDefaultCellFocus(0);
                                 m_grid->reloadData();
                                 _updateHeader();
                                 brls::Application::giveFocus(m_grid);
@@ -302,6 +305,7 @@ namespace beiklive
             brls::sync([this, alive]() {
                 if (!alive->load()) return;
                 m_visibleCount = std::min(PAGE_SIZE, static_cast<int>(m_entries.size()));
+                m_grid->setDefaultCellFocus(0);
                 m_dataSource = new GameLibraryDS(this);
                 m_grid->setDataSource(m_dataSource);
                 m_grid->reloadData();
