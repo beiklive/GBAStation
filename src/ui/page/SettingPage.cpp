@@ -579,7 +579,7 @@ brls::View *SettingPage::buildUITab()
                        [](bool v) { cfgSetStr("core.mgba_skip_bios", v ? "ON" : "OFF"); });
     box->addView(skipBiosCell);
 
-    box->addView(makeHint("BIOS 文件请放入 GBAStation/bios 目录下（gba_bios.bin / gbc_bios.bin / gb_bios.bin / sgb_bios.bin）"));
+    box->addView(makeHint("BIOS 文件请放入 GBAStation/bios 目录下（gba_bios.bin）"));
 
     {
         std::vector<std::string> gbColors = {
