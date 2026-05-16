@@ -18,9 +18,10 @@ namespace beiklive
         m_grid->spanCount = 3;
         m_grid->estimatedRowHeight = 120;
         m_grid->estimatedRowSpace = 8;
-        m_grid->setPaddingTop(10.0f);
-        m_grid->setPaddingBottom(10.0f);
-        m_grid->setPaddingLeft(5.0f);
+        m_grid->setMarginLeft(5.0f);
+        m_grid->setMarginTop(10.0f);
+        m_grid->setMarginBottom(10.0f);
+        // m_grid->setPaddingLeft(5.0f);
         m_grid->setGrow(1.f);
 
         m_grid->registerCell("GridItem", []() -> RecyclingGridItem* {
