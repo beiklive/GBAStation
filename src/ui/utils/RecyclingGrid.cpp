@@ -332,18 +332,14 @@ void RecyclingGrid::draw(NVGcontext* vg, float x, float y, float w, float h,
 
     if (m_dataSource && m_dataSource->getItemCount() > 0)
     {
+        brls::Rect vf = getVisibleFrame();
         float contentH = m_contentBox->getHeight();
-        float frameH = getHeight();
-        if (contentH > frameH)
+        if (contentH > getHeight() && vf.getMaxY() >= contentH - 80.0f)
         {
-            float off = getContentOffsetY();
-            if (off >= contentH - frameH - 80.0f)
+            if (!m_requestNextPage && m_nextPageCallback)
             {
-                if (!m_requestNextPage && m_nextPageCallback)
-                {
-                    m_requestNextPage = true;
-                    m_nextPageCallback();
-                }
+                m_requestNextPage = true;
+                m_nextPageCallback();
             }
         }
     }
