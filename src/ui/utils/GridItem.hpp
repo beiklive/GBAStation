@@ -5,6 +5,7 @@
 #include <string>
 
 #include "core/common.h"
+#include "RecyclingGridItem.hpp"
 
 namespace beiklive
 {
@@ -23,7 +24,7 @@ namespace beiklive
         NONE,
     };
 
-    class GridItem : public brls::Box
+    class GridItem : public RecyclingGridItem
     {
     public:
         static constexpr float ITEM_HEIGHT = 120.f;
@@ -31,7 +32,10 @@ namespace beiklive
         explicit GridItem(GridItemMode mode, int index = 0);
         ~GridItem() = default;
 
-        void draw(NVGcontext* vg, float x, float y, float width, float height, brls::Style style, brls::FrameContext* ctx) override;
+        void draw(NVGcontext* vg, float x, float y, float width, float height,
+                  brls::Style style, brls::FrameContext* ctx) override;
+
+        void prepareForReuse() override;
 
         void setImageLayer(const std::string& path, bool visible);
         void setImageLayerDeferred(const std::string& path, bool visible);
@@ -47,9 +51,6 @@ namespace beiklive
 
         void setEmpty(const std::string& slotName);
         void setDataLoaded();
-
-        /// 复用回收的GridItem：重置所有视图到空状态，准备重新填充数据
-        void reset();
 
         int           getIndex() const { return m_index; }
         GridItemMode  getMode()  const { return m_mode;  }
@@ -86,9 +87,6 @@ namespace beiklive
         void _initLayout();
 
         static NVGcolor _getBadgeColor(PlatformBadgeColor color);
-
-        void onFocusGained() override;
-        void onFocusLost()   override;
 
         void _updateFavouriteHint();
     };

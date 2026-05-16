@@ -9,78 +9,83 @@
 #include "RecyclingGridItem.hpp"
 #include "RecyclingGridDataSource.hpp"
 
-namespace beiklive {
+class RecyclingGridContentBox : public brls::Box {
+public:
+    RecyclingGridContentBox(class RecyclingGrid* recycler);
+    brls::View* getNextFocus(brls::FocusDirection direction, brls::View* currentView) override;
+
+private:
+    RecyclingGrid* m_recycler;
+};
 
 class RecyclingGrid : public brls::ScrollingFrame {
 public:
-    RecyclingGrid(int spanCount = 3, float itemHeight = 120.0f, float itemSpace = 10.0f);
+    RecyclingGrid();
+    ~RecyclingGrid() override;
 
-    void registerCell(const std::string& identifier, std::function<RecyclingGridItem*()> factory);
+    void registerCell(const std::string& identifier, std::function<RecyclingGridItem*()> allocation);
 
     RecyclingGridItem* dequeueReusableCell(const std::string& identifier);
 
     void setDataSource(RecyclingGridDataSource* source);
+    RecyclingGridDataSource* getDataSource() const;
+
     void reloadData();
     void notifyDataChanged();
+    void clearData();
 
     RecyclingGridItem* getGridItemByIndex(size_t index);
+    size_t getItemCount() const;
 
-    void setSpanCount(int count);
-    int getSpanCount() const { return m_spanCount; }
+    void setDefaultCellFocus(size_t index);
+    size_t getDefaultCellFocus() const;
 
-    void setItemHeight(float height);
-    float getItemHeight() const { return m_itemHeight; }
+    brls::View* getNextCellFocus(brls::FocusDirection direction, brls::View* currentView);
 
-    void setItemSpace(float space);
-    float getItemSpace() const { return m_itemSpace; }
+    void onNextPage(const std::function<void()>& callback = nullptr);
 
-    std::function<void()> onNextPage;
+    void setFocusChangeCallback(std::function<void(size_t)> callback);
 
     void draw(NVGcontext* vg, float x, float y, float w, float h,
               brls::Style style, brls::FrameContext* ctx) override;
+    void onLayout() override;
+    void onChildFocusGained(View* directChild, View* focusedView) override;
+    brls::View* getDefaultFocus() override;
 
-    void onFocusGained() override;
-    void onFocusLost() override;
+    int spanCount = 3;
+    float estimatedRowHeight = 120;
+    float estimatedRowSpace = 8;
+
+    static brls::View* create();
 
 private:
-    struct CellItem {
-        RecyclingGridItem* cell = nullptr;
-        int row = 0;
-        int col = 0;
-    };
-
-    void itemsRecyclingLoop();
-    void addCellsForRow(int row);
-    void recycleOutOfRangeRows();
-    void setupNavigation();
-    int getRowIndex(size_t itemIndex) const;
-    int getItemCount() const;
-
-    size_t getCellStartIndex();
-    size_t getCellEndIndex();
-    float getContentHeightForRows(int rows) const;
-
-    int m_spanCount;
-    float m_itemHeight;
-    float m_itemSpace;
-    float m_estimatedRowHeight;
-
     RecyclingGridDataSource* m_dataSource = nullptr;
-
-    std::map<std::string, std::function<RecyclingGridItem*()>> m_allocationMap;
-    std::map<std::string, std::vector<RecyclingGridItem*>*> m_queueMap;
-
-    std::map<int, std::vector<CellItem>> m_attachedRows;
-
-    brls::Box* m_contentBox = nullptr;
-
-    int m_visibleMinRow = 0;
-    int m_visibleMaxRow = 0;
-    size_t m_itemCount = 0;
+    bool m_layouted = false;
+    float m_oldWidth = -1;
     bool m_requestNextPage = false;
-    int m_preFetchLine = 1;
 
-    bool m_focusOnReload = false;
+    size_t visibleMin = 0, visibleMax = 0;
+    size_t m_defaultCellFocus = 0;
+
+    float m_paddingTop = 0, m_paddingRight = 0, m_paddingBottom = 0, m_paddingLeft = 0;
+
+    std::function<void()> m_nextPageCallback;
+    std::function<void(size_t)> m_focusChangeCallback;
+
+    RecyclingGridContentBox* m_contentBox = nullptr;
+    brls::Rect m_renderedFrame;
+    std::vector<float> m_cellHeightCache;
+
+    std::map<std::string, std::vector<RecyclingGridItem*>*> m_queueMap;
+    std::map<std::string, std::function<RecyclingGridItem*()>> m_allocationMap;
+
+    bool checkWidth();
+
+    void queueReusableCell(RecyclingGridItem* cell);
+    void itemsRecyclingLoop();
+    void addCellAt(size_t index, bool downSide);
+    void removeCell(brls::View* view);
+
+    size_t getRowCount() const;
+    float getHeightByCellIndex(size_t index, size_t start = 0) const;
 };
-
-} // namespace beiklive

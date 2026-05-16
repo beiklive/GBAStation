@@ -2,369 +2,494 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
-namespace beiklive {
+// ── RecyclingGridContentBox ────────────────────────────────────
 
-RecyclingGrid::RecyclingGrid(int spanCount, float itemHeight, float itemSpace)
-    : m_spanCount(spanCount)
-    , m_itemHeight(itemHeight)
-    , m_itemSpace(itemSpace)
-    , m_estimatedRowHeight(itemHeight + itemSpace)
+RecyclingGridContentBox::RecyclingGridContentBox(RecyclingGrid* recycler)
+    : Box(brls::Axis::ROW), m_recycler(recycler) {}
+
+brls::View* RecyclingGridContentBox::getNextFocus(brls::FocusDirection direction, brls::View* currentView)
 {
-    this->setFocusable(false);
-    this->setScrollingBehavior(brls::ScrollingBehavior::CENTERED);
-    this->setScrollingIndicatorVisible(false);
-
-    this->setWidth(View::AUTO);
-    this->setHeight(View::AUTO);
-
-    m_contentBox = new brls::Box(brls::Axis::COLUMN);
-    m_contentBox->setFocusable(false);
-    m_contentBox->setWidthPercentage(100);
-    this->setContentView(m_contentBox);
+    auto* next = m_recycler->getNextCellFocus(direction, currentView);
+    return next;
 }
 
-void RecyclingGrid::registerCell(const std::string& identifier, std::function<RecyclingGridItem*()> factory)
+// ── RecyclingGrid ──────────────────────────────────────────────
+
+RecyclingGrid::RecyclingGrid()
 {
-    m_allocationMap[identifier] = std::move(factory);
+    setFocusable(false);
+    setScrollingBehavior(brls::ScrollingBehavior::CENTERED);
+    setScrollingIndicatorVisible(false);
+
+    m_contentBox = new RecyclingGridContentBox(this);
+    setContentView(m_contentBox);
+}
+
+RecyclingGrid::~RecyclingGrid()
+{
+    delete m_dataSource;
+    for (auto& it : m_queueMap)
+    {
+        for (auto* item : *it.second)
+        {
+            item->setParent(nullptr);
+            delete item;
+        }
+        delete it.second;
+    }
+}
+
+void RecyclingGrid::registerCell(const std::string& identifier,
+                                  std::function<RecyclingGridItem*()> allocation)
+{
     m_queueMap[identifier] = new std::vector<RecyclingGridItem*>();
+    m_allocationMap[identifier] = std::move(allocation);
 }
 
 RecyclingGridItem* RecyclingGrid::dequeueReusableCell(const std::string& identifier)
 {
+    RecyclingGridItem* cell = nullptr;
     auto it = m_queueMap.find(identifier);
-    if (it != m_queueMap.end() && !it->second->empty())
+
+    if (it != m_queueMap.end())
     {
-        RecyclingGridItem* cell = it->second->back();
-        it->second->pop_back();
-        cell->prepareForReuse();
-        return cell;
+        auto* vec = it->second;
+        if (!vec->empty())
+        {
+            auto* curFocus = brls::Application::getCurrentFocus();
+            if (vec->back() == curFocus && vec->size() > 1)
+            {
+                cell = vec->front();
+                vec->erase(vec->begin());
+            }
+            else
+            {
+                cell = vec->back();
+                vec->pop_back();
+            }
+        }
     }
 
-    auto allocIt = m_allocationMap.find(identifier);
-    if (allocIt != m_allocationMap.end())
-        return allocIt->second();
+    if (!cell)
+    {
+        auto allocIt = m_allocationMap.find(identifier);
+        if (allocIt != m_allocationMap.end())
+        {
+            cell = allocIt->second();
+            cell->reuseIdentifier = identifier;
+        }
+    }
 
-    return nullptr;
+    if (cell)
+    {
+        cell->prepareForReuse();
+        cell->setHeight(brls::View::AUTO);
+    }
+
+    return cell;
 }
 
 void RecyclingGrid::setDataSource(RecyclingGridDataSource* source)
 {
+    if (m_dataSource) delete m_dataSource;
+    m_requestNextPage = false;
     m_dataSource = source;
+    if (m_layouted) reloadData();
 }
+
+RecyclingGridDataSource* RecyclingGrid::getDataSource() const
+{
+    return m_dataSource;
+}
+
+// ── reloadData ─────────────────────────────────────────────────
 
 void RecyclingGrid::reloadData()
 {
-    if (!m_dataSource) return;
+    if (!m_layouted) return;
 
-    for (auto& [row, cells] : m_attachedRows)
+    auto& children = m_contentBox->getChildren();
+    for (auto* child : children)
     {
-        for (auto& ci : cells)
+        if (auto* item = dynamic_cast<RecyclingGridItem*>(child))
         {
-            ci.cell->removeFromSuperView(false);
-            std::string id = m_queueMap.begin()->first;
-            auto qit = m_queueMap.find(id);
-            if (qit != m_queueMap.end())
-                qit->second->push_back(ci.cell);
-            else
-                delete ci.cell;
+            queueReusableCell(item);
+            child->willDisappear(true);
         }
     }
-    m_attachedRows.clear();
-    m_contentBox->clearViews(true);
+    children.clear();
 
-    m_itemCount = m_dataSource->getItemCount();
-    int rows = (static_cast<int>(m_itemCount) + m_spanCount - 1) / m_spanCount;
-    float totalH = rows * m_estimatedRowHeight + 10.0f;
-    m_contentBox->setHeight(totalH);
+    visibleMin = UINT32_MAX;
+    visibleMax = 0;
 
-    m_visibleMinRow = 0;
-    m_visibleMaxRow = 0;
+    m_renderedFrame = brls::Rect();
+    m_renderedFrame.size.width = getWidth();
+    if (m_renderedFrame.size.width != m_renderedFrame.size.width)
+        m_renderedFrame.size.width = m_oldWidth;
 
-    brls::Rect visibleFrame = this->getVisibleFrame();
-    int startRow = static_cast<int>(visibleFrame.getMinY() / m_estimatedRowHeight);
-    if (startRow < 0) startRow = 0;
-    startRow = std::max(0, startRow - m_preFetchLine);
+    setContentOffsetY(0, false);
+    if (!m_dataSource || m_dataSource->getItemCount() <= 0)
+    {
+        m_contentBox->setHeight(0);
+        return;
+    }
 
-    int totalRows = (static_cast<int>(m_itemCount) + m_spanCount - 1) / m_spanCount;
-    int endRow = std::min(totalRows, startRow + 4);
+    size_t cellFocusIndex = m_defaultCellFocus;
+    if (cellFocusIndex >= m_dataSource->getItemCount())
+        cellFocusIndex = m_dataSource->getItemCount() - 1;
 
-    for (int r = startRow; r < endRow; ++r)
-        addCellsForRow(r);
+    m_contentBox->setHeight(
+        (estimatedRowHeight + estimatedRowSpace) * (float)getRowCount()
+        - estimatedRowSpace + m_paddingTop + m_paddingBottom);
 
-    m_visibleMinRow = startRow;
-    m_visibleMaxRow = endRow;
-
-    m_focusOnReload = true;
-    invalidate();
+    size_t lineHeadIndex = cellFocusIndex / spanCount * spanCount;
+    m_renderedFrame.origin.y = getHeightByCellIndex(lineHeadIndex);
+    addCellAt(lineHeadIndex, true);
 }
 
 void RecyclingGrid::notifyDataChanged()
 {
-    if (!m_dataSource) return;
-    m_itemCount = m_dataSource->getItemCount();
-    int rows = (static_cast<int>(m_itemCount) + m_spanCount - 1) / m_spanCount;
-    float totalH = rows * m_estimatedRowHeight + 10.0f;
-    m_contentBox->setHeight(totalH);
+    if (!m_layouted || !m_dataSource) return;
+    m_contentBox->setHeight(
+        (estimatedRowHeight + estimatedRowSpace) * getRowCount()
+        - estimatedRowSpace + m_paddingTop + m_paddingBottom);
     m_requestNextPage = false;
-    invalidate();
 }
+
+void RecyclingGrid::clearData()
+{
+    if (m_dataSource)
+    {
+        m_dataSource->clearData();
+        reloadData();
+    }
+}
+
+// ── 查询 ───────────────────────────────────────────────────────
 
 RecyclingGridItem* RecyclingGrid::getGridItemByIndex(size_t index)
 {
-    int row = static_cast<int>(index) / m_spanCount;
-    auto it = m_attachedRows.find(row);
-    if (it == m_attachedRows.end()) return nullptr;
-    int col = static_cast<int>(index) % m_spanCount;
-    for (auto& ci : it->second)
+    for (auto* v : m_contentBox->getChildren())
     {
-        if (ci.col == col) return ci.cell;
+        auto* item = dynamic_cast<RecyclingGridItem*>(v);
+        if (item && item->getIndex() == index)
+            return item;
     }
     return nullptr;
 }
 
-void RecyclingGrid::setSpanCount(int count)
+size_t RecyclingGrid::getItemCount() const
 {
-    if (m_spanCount == count) return;
-    m_spanCount = count;
-    reloadData();
+    return m_dataSource ? m_dataSource->getItemCount() : 0;
 }
 
-void RecyclingGrid::setItemHeight(float height)
+size_t RecyclingGrid::getRowCount() const
 {
-    m_itemHeight = height;
-    m_estimatedRowHeight = height + m_itemSpace;
+    size_t count = m_dataSource ? m_dataSource->getItemCount() : 0;
+    return count > 0 ? (count - 1) / spanCount + 1 : 0;
 }
 
-void RecyclingGrid::setItemSpace(float space)
+float RecyclingGrid::getHeightByCellIndex(size_t index, size_t start) const
 {
-    m_itemSpace = space;
-    m_estimatedRowHeight = m_itemHeight + space;
+    if (index <= start) return 0;
+    return (estimatedRowHeight + estimatedRowSpace) * (size_t)((index - start) / spanCount);
 }
 
-int RecyclingGrid::getRowIndex(size_t itemIndex) const
+// ── 焦点 ───────────────────────────────────────────────────────
+
+void RecyclingGrid::setDefaultCellFocus(size_t index) { m_defaultCellFocus = index; }
+
+size_t RecyclingGrid::getDefaultCellFocus() const { return m_defaultCellFocus; }
+
+brls::View* RecyclingGrid::getDefaultFocus()
 {
-    return static_cast<int>(itemIndex) / m_spanCount;
+    if (m_dataSource && m_dataSource->getItemCount() > 0)
+        return ScrollingFrame::getDefaultFocus();
+    return nullptr;
 }
 
-int RecyclingGrid::getItemCount() const
+void RecyclingGrid::setFocusChangeCallback(std::function<void(size_t)> callback)
 {
-    return static_cast<int>(m_itemCount);
+    m_focusChangeCallback = std::move(callback);
 }
 
-float RecyclingGrid::getContentHeightForRows(int rows) const
+void RecyclingGrid::onChildFocusGained(View* directChild, View* focusedView)
 {
-    return rows * m_estimatedRowHeight;
-}
-
-size_t RecyclingGrid::getCellStartIndex()
-{
-    brls::Rect visibleFrame = this->getVisibleFrame();
-    float top = visibleFrame.getMinY();
-    if (top <= 0) return 0;
-
-    int startRow = static_cast<int>(top / m_estimatedRowHeight);
-    if (startRow < 0) startRow = 0;
-    startRow = std::max(0, startRow - m_preFetchLine);
-    return static_cast<size_t>(startRow) * m_spanCount;
-}
-
-size_t RecyclingGrid::getCellEndIndex()
-{
-    brls::Rect visibleFrame = this->getVisibleFrame();
-    float bottom = visibleFrame.getMaxY();
-
-    int endRow = static_cast<int>(bottom / m_estimatedRowHeight) + 1;
-    int rows = (static_cast<int>(m_itemCount) + m_spanCount - 1) / m_spanCount;
-    if (endRow > rows) endRow = rows;
-    endRow = std::min(rows, endRow + m_preFetchLine);
-
-    size_t endIdx = static_cast<size_t>(endRow) * m_spanCount;
-    if (endIdx > m_itemCount) endIdx = m_itemCount;
-    return endIdx;
-}
-
-void RecyclingGrid::draw(NVGcontext* vg, float x, float y, float w, float h,
-                          brls::Style style, brls::FrameContext* ctx)
-{
-    if (m_focusOnReload && !m_attachedRows.empty())
+    ScrollingFrame::onChildFocusGained(directChild, focusedView);
+    View* v = focusedView;
+    while (v && !dynamic_cast<RecyclingGridItem*>(v))
+        v = v->getParent();
+    if (v)
     {
-        m_focusOnReload = false;
-        auto& firstRow = m_attachedRows.begin()->second;
-        if (!firstRow.empty() && firstRow[0].cell)
-            brls::Application::giveFocus(firstRow[0].cell);
+        size_t idx = static_cast<RecyclingGridItem*>(v)->getIndex();
+        m_defaultCellFocus = idx;
+        if (m_focusChangeCallback) m_focusChangeCallback(idx);
+    }
+}
+
+// ── 导航 ───────────────────────────────────────────────────────
+
+brls::View* RecyclingGrid::getNextCellFocus(brls::FocusDirection direction, brls::View* currentView)
+{
+    if (!m_dataSource || m_dataSource->getItemCount() == 0)
+        return nullptr;
+
+    void* parentUserData = currentView->getParentUserData();
+    if (!parentUserData) return nullptr;
+
+    size_t currentFocusIndex = *reinterpret_cast<size_t*>(parentUserData);
+    int offset = 1;
+    size_t dataCount = m_dataSource->getItemCount();
+
+    if (direction == brls::FocusDirection::UP)
+        offset = -spanCount;
+    else if (direction == brls::FocusDirection::DOWN)
+        offset = spanCount;
+    else if (direction == brls::FocusDirection::LEFT)
+        offset = -1;
+    else if (direction == brls::FocusDirection::RIGHT)
+        offset = 1;
+    else
+        return nullptr;
+
+    int target = static_cast<int>(currentFocusIndex) + offset;
+    if (target < 0 || static_cast<size_t>(target) >= dataCount)
+    {
+        View* next = getParentNavigationDecision(this, nullptr, direction);
+        if (!next && hasParent()) next = getParent()->getNextFocus(direction, this);
+        return next;
     }
 
     itemsRecyclingLoop();
 
-    brls::ScrollingFrame::draw(vg, x, y, w, h, style, ctx);
+    for (auto* v : m_contentBox->getChildren())
+    {
+        auto* item = dynamic_cast<RecyclingGridItem*>(v);
+        if (item && item->getIndex() == static_cast<size_t>(target))
+            return item->getDefaultFocus();
+    }
+    return nullptr;
 }
 
-void RecyclingGrid::onFocusGained()
+// ── 分页 ───────────────────────────────────────────────────────
+
+void RecyclingGrid::onNextPage(const std::function<void()>& callback)
 {
-    brls::ScrollingFrame::onFocusGained();
+    m_nextPageCallback = callback;
 }
 
-void RecyclingGrid::onFocusLost()
+// ── 布局 ───────────────────────────────────────────────────────
+
+void RecyclingGrid::onLayout()
 {
-    brls::ScrollingFrame::onFocusLost();
+    ScrollingFrame::onLayout();
+    float width = getFrame().getWidth();
+    if (width != width) return;
+    if (!m_contentBox) return;
+    m_contentBox->setWidth(width);
+    if (checkWidth())
+    {
+        m_layouted = true;
+        reloadData();
+    }
+}
+
+bool RecyclingGrid::checkWidth()
+{
+    float width = getWidth();
+    if (m_oldWidth == -1) m_oldWidth = width;
+    if ((int)m_oldWidth != (int)width && width != 0)
+    {
+        m_oldWidth = width;
+        return true;
+    }
+    m_oldWidth = width;
+    return false;
+}
+
+// ── draw ───────────────────────────────────────────────────────
+
+void RecyclingGrid::draw(NVGcontext* vg, float x, float y, float w, float h,
+                          brls::Style style, brls::FrameContext* ctx)
+{
+    itemsRecyclingLoop();
+    ScrollingFrame::draw(vg, x, y, w, h, style, ctx);
+}
+
+// ── Cell 回收循环 ──────────────────────────────────────────────
+
+void RecyclingGrid::addCellAt(size_t index, bool downSide)
+{
+    if (!m_dataSource) return;
+    RecyclingGridItem* cell = m_dataSource->cellForRow(this, index);
+    if (!cell) return;
+
+    float cellHeight = estimatedRowHeight;
+    float cellWidth = (m_renderedFrame.getWidth() - m_paddingLeft - m_paddingRight) / spanCount
+                      - cell->getMarginLeft() - cell->getMarginRight();
+    float cellX = m_renderedFrame.getMinX() + m_paddingLeft;
+    cellX += (m_renderedFrame.getWidth() - m_paddingLeft - m_paddingRight) / spanCount * (index % spanCount);
+
+    cell->setWidth(cellWidth - estimatedRowSpace);
+    cell->setHeight(cellHeight);
+    cell->setDetachedPositionX(cellX);
+    cell->setDetachedPositionY(getHeightByCellIndex(index) + m_paddingTop);
+    cell->setIndex(index);
+
+    m_contentBox->getChildren().insert(m_contentBox->getChildren().end(), cell);
+
+    size_t* userdata = reinterpret_cast<size_t*>(malloc(sizeof(size_t)));
+    *userdata = index;
+    cell->setParent(m_contentBox, userdata);
+
+    m_contentBox->invalidate();
+    cell->View::willAppear();
+
+    if (index < visibleMin) visibleMin = index;
+    if (index > visibleMax) visibleMax = index;
+
+    if (index % spanCount == 0)
+    {
+        if (!downSide)
+            m_renderedFrame.origin.y -= cellHeight + estimatedRowSpace;
+        m_renderedFrame.size.height += cellHeight + estimatedRowSpace;
+    }
+}
+
+void RecyclingGrid::removeCell(brls::View* view)
+{
+    if (!view) return;
+
+    auto& children = m_contentBox->getChildren();
+    for (size_t i = 0; i < children.size(); i++)
+    {
+        if (children[i] == view)
+        {
+            children.erase(children.begin() + i);
+            view->willDisappear(true);
+            invalidate();
+            return;
+        }
+    }
+}
+
+void RecyclingGrid::queueReusableCell(RecyclingGridItem* cell)
+{
+    m_queueMap.at(cell->reuseIdentifier)->push_back(cell);
+    if (brls::Application::getCurrentFocus() != cell)
+        cell->setParent(nullptr);
+    cell->cacheForReuse();
 }
 
 void RecyclingGrid::itemsRecyclingLoop()
 {
-    if (!m_dataSource || m_itemCount == 0) return;
+    if (!m_dataSource || m_dataSource->getItemCount() == 0) return;
 
-    brls::Rect visibleFrame = this->getVisibleFrame();
+    brls::Rect visibleFrame = getVisibleFrame();
 
-    int totalRows = (static_cast<int>(m_itemCount) + m_spanCount - 1) / m_spanCount;
-    int newMinRow = std::max(0, static_cast<int>(visibleFrame.getMinY() / m_estimatedRowHeight) - m_preFetchLine);
-    int newMaxRow = std::min(totalRows, static_cast<int>(visibleFrame.getMaxY() / m_estimatedRowHeight) + 1 + m_preFetchLine);
-    if (newMaxRow < newMinRow + 1) newMaxRow = newMinRow + 1;
-
-    if (newMinRow == m_visibleMinRow && newMaxRow == m_visibleMaxRow)
+    // 回收上方元素
+    while (true)
     {
-        if (m_attachedRows.empty() && totalRows > 0)
-            addCellsForRow(0);
-        return;
-    }
-
-    recycleOutOfRangeRows();
-
-    for (int r = newMinRow; r < newMaxRow; ++r)
-    {
-        if (m_attachedRows.find(r) == m_attachedRows.end())
-            addCellsForRow(r);
-    }
-
-    m_visibleMinRow = newMinRow;
-    m_visibleMaxRow = newMaxRow;
-
-    if (!m_requestNextPage && m_visibleMaxRow >= totalRows)
-    {
-        m_requestNextPage = true;
-        if (onNextPage)
-            onNextPage();
-    }
-}
-
-void RecyclingGrid::recycleOutOfRangeRows()
-{
-    brls::Rect visibleFrame = this->getVisibleFrame();
-    int totalRows = (static_cast<int>(m_itemCount) + m_spanCount - 1) / m_spanCount;
-    int newMinRow = std::max(0, static_cast<int>(visibleFrame.getMinY() / m_estimatedRowHeight) - m_preFetchLine);
-    int newMaxRow = std::min(totalRows, static_cast<int>(visibleFrame.getMaxY() / m_estimatedRowHeight) + 1 + m_preFetchLine);
-    if (newMaxRow < newMinRow + 1) newMaxRow = newMinRow + 1;
-
-    std::string id = m_queueMap.begin()->first;
-
-    auto it = m_attachedRows.begin();
-    while (it != m_attachedRows.end())
-    {
-        int row = it->first;
-        if (row < newMinRow || row >= newMaxRow)
+        RecyclingGridItem* minCell = nullptr;
+        for (auto* it : m_contentBox->getChildren())
         {
-            for (auto& ci : it->second)
+            auto* item = dynamic_cast<RecyclingGridItem*>(it);
+            if (item && item->getIndex() == visibleMin)
             {
-                ci.cell->removeFromSuperView(false);
-                auto qit = m_queueMap.find(id);
-                if (qit != m_queueMap.end())
-                    qit->second->push_back(ci.cell);
-                else
-                    delete ci.cell;
+                minCell = item;
+                break;
             }
-            auto* rowBox = dynamic_cast<brls::Box*>(it->second[0].cell->getParent());
-            if (rowBox)
-            {
-                rowBox->clearViews(true);
-                rowBox->removeFromSuperView(true);
-            }
-            it = m_attachedRows.erase(it);
         }
-        else
+
+        if (!minCell || minCell->getIndex() >= m_dataSource->getItemCount())
+            break;
+
+        float cellHeight = estimatedRowHeight;
+        int prefetchIdx = static_cast<int>(visibleMin)
+            + (spanCount * 2); // prefetch rows
+        float prefetchH = getHeightByCellIndex(
+            std::min(static_cast<size_t>(prefetchIdx), m_dataSource->getItemCount()),
+            visibleMin);
+
+        if (minCell->getDetachedPosition().y + cellHeight + prefetchH >= visibleFrame.getMinY())
+            break;
+
+        m_renderedFrame.origin.y += minCell->getIndex() % spanCount == 0
+            ? cellHeight + estimatedRowSpace : 0;
+        m_renderedFrame.size.height -= minCell->getIndex() % spanCount == 0
+            ? cellHeight + estimatedRowSpace : 0;
+
+        queueReusableCell(minCell);
+        removeCell(minCell);
+        visibleMin++;
+    }
+
+    // 回收下方元素
+    while (visibleMax > 0 && visibleMax < m_dataSource->getItemCount())
+    {
+        RecyclingGridItem* maxCell = nullptr;
+        for (auto* it : m_contentBox->getChildren())
         {
-            ++it;
+            auto* item = dynamic_cast<RecyclingGridItem*>(it);
+            if (item && item->getIndex() == visibleMax)
+            {
+                maxCell = item;
+                break;
+            }
         }
-    }
-}
 
-void RecyclingGrid::addCellsForRow(int row)
-{
-    if (!m_dataSource) return;
+        if (!maxCell) break;
+        if (visibleMax == 0) break;
 
-    int totalRows = (static_cast<int>(m_itemCount) + m_spanCount - 1) / m_spanCount;
-    if (row < 0 || row >= totalRows) return;
+        float cellHeight = estimatedRowHeight;
+        int prefetchIdx = static_cast<int>(visibleMax)
+            - (spanCount * 2);
+        float prefetchH = visibleMax > 0 && prefetchIdx >= 0
+            ? getHeightByCellIndex(visibleMax, prefetchIdx) : 0;
 
-    float cellWidthPct = 100.0f / m_spanCount;
+        if (maxCell->getDetachedPosition().y - prefetchH <= visibleFrame.getMaxY())
+            break;
 
-    auto* rowBox = new brls::Box(brls::Axis::ROW);
-    rowBox->setFocusable(false);
-    rowBox->setWidthPercentage(100);
-    rowBox->setHeight(m_estimatedRowHeight);
-    rowBox->setAlignItems(brls::AlignItems::CENTER);
+        m_renderedFrame.size.height -= maxCell->getIndex() % spanCount == 0
+            ? cellHeight + estimatedRowSpace : 0;
 
-    std::vector<CellItem> cellsInRow;
-    int startIdx = row * m_spanCount;
-    int endIdx = std::min(startIdx + m_spanCount, static_cast<int>(m_itemCount));
-
-    for (int i = startIdx; i < endIdx; ++i)
-    {
-        RecyclingGridItem* cell = m_dataSource->cellForRow(this, i);
-        if (!cell) continue;
-
-        cell->setGridIndex(i);
-        cell->setWidthPercentage(cellWidthPct);
-        cell->setHeight(m_itemHeight);
-        cell->setMargins(5.0f, 5.0f, 5.0f, 5.0f);
-
-        cellsInRow.push_back({cell, row, i - startIdx});
-        rowBox->addView(cell);
+        queueReusableCell(maxCell);
+        removeCell(maxCell);
+        visibleMax--;
     }
 
-    m_contentBox->addView(rowBox);
-    m_attachedRows[row] = std::move(cellsInRow);
-    setupNavigation();
-}
-
-void RecyclingGrid::setupNavigation()
-{
-    for (auto& [row, cells] : m_attachedRows)
+    // 上方添加
+    while (visibleMin > 0 && visibleMin - 1 < m_dataSource->getItemCount())
     {
-        for (auto& ci : cells)
+        addCellAt(visibleMin - 1, false);
+    }
+
+    // 下方添加
+    while (visibleMax + 1 < m_dataSource->getItemCount())
+    {
+        size_t nextIdx = visibleMax + 1;
+        float nextY = getHeightByCellIndex(nextIdx);
+        float maxY = visibleFrame.getMaxY() + estimatedRowHeight * (2);
+        if (nextY > maxY) break;
+        addCellAt(nextIdx, true);
+    }
+
+    // 触底触发 onNextPage
+    if (visibleMax + 1 >= getItemCount())
+    {
+        if (!m_requestNextPage && m_nextPageCallback)
         {
-            RecyclingGridItem* cell = ci.cell;
-            int idx = cell->getGridIndex();
-
-            int totalRows = (static_cast<int>(m_itemCount) + m_spanCount - 1) / m_spanCount;
-
-            if (row > 0)
+            if (m_dataSource && m_dataSource->getItemCount() > 0)
             {
-                auto prevIt = m_attachedRows.find(row - 1);
-                if (prevIt != m_attachedRows.end() && ci.col < static_cast<int>(prevIt->second.size()))
-                {
-                    cell->setCustomNavigationRoute(brls::FocusDirection::UP, prevIt->second[ci.col].cell);
-                }
-            }
-
-            if (row < totalRows - 1)
-            {
-                auto nextIt = m_attachedRows.find(row + 1);
-                if (nextIt != m_attachedRows.end() && ci.col < static_cast<int>(nextIt->second.size()))
-                {
-                    cell->setCustomNavigationRoute(brls::FocusDirection::DOWN, nextIt->second[ci.col].cell);
-                }
-            }
-
-            if (ci.col > 0)
-            {
-                cell->setCustomNavigationRoute(brls::FocusDirection::LEFT, cells[ci.col - 1].cell);
-            }
-
-            if (ci.col < m_spanCount - 1 && ci.col + 1 < static_cast<int>(cells.size()))
-            {
-                cell->setCustomNavigationRoute(brls::FocusDirection::RIGHT, cells[ci.col + 1].cell);
+                m_requestNextPage = true;
+                m_nextPageCallback();
             }
         }
     }
 }
 
-} // namespace beiklive
+// ── 工厂 ───────────────────────────────────────────────────────
+
+brls::View* RecyclingGrid::create() { return new RecyclingGrid(); }

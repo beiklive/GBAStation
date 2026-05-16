@@ -4,20 +4,21 @@
 #include <string>
 #include <functional>
 
-namespace beiklive {
+class RecyclingGrid;
 
 class RecyclingGridItem : public brls::Box {
 public:
     RecyclingGridItem();
-    virtual ~RecyclingGridItem() = default;
+    ~RecyclingGridItem() override;
+
+    size_t getIndex() const;
+    void setIndex(size_t value);
 
     virtual void prepareForReuse();
+    virtual void cacheForReuse();
 
-    int getGridIndex() const { return m_gridIndex; }
-    void setGridIndex(int index) { m_gridIndex = index; }
+    std::string reuseIdentifier;
 
 private:
-    int m_gridIndex = -1;
+    size_t index = 0;
 };
-
-} // namespace beiklive

@@ -42,7 +42,8 @@ namespace beiklive
     // ============================================================
 
     GridItem::GridItem(GridItemMode mode, int index)
-        : m_mode(mode)
+        : RecyclingGridItem()
+        , m_mode(mode)
         , m_index(index)
     {
         this->setAxis(brls::Axis::ROW);
@@ -50,7 +51,6 @@ namespace beiklive
         this->setHeight(ITEM_HEIGHT);
         this->setAlignItems(brls::AlignItems::CENTER);
         this->setJustifyContent(brls::JustifyContent::CENTER);
-        this->setFocusable(true);
         // 设置边框和阴影
         this->setBorderColor(nvgRGBA(128, 128, 128, 120));
         this->setBorderThickness(1.f);
@@ -62,19 +62,6 @@ namespace beiklive
         // this->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
         // HIDE_BRLS_HIGHLIGHT(this);
 
-        // 注册 A 键点击动作
-        this->registerAction(
-            "确认",
-            brls::BUTTON_A,
-            [this](brls::View*) -> bool
-            {
-                if (onItemClicked)
-                    onItemClicked(m_index);
-                return true;
-            },
-            false,
-            false,
-            brls::SOUND_CLICK);
 
         // 注册 ZR 键收藏动作（仅 GAME_LIBRARY 模式）
         // this->registerAction(
@@ -327,21 +314,6 @@ namespace beiklive
         m_isEmpty = false;
     }
 
-    void GridItem::reset()
-    {
-        if (m_image) m_image->clear();
-        if (m_imageLayer) m_imageLayer->setVisibility(brls::Visibility::GONE);
-        if (m_titleLabel) m_titleLabel->setText("");
-        if (m_subLabel) m_subLabel->setText("");
-        if (m_playLabel) m_playLabel->setText("");
-        if (m_badgeLabel) m_badgeLabel->setText("");
-        if (m_badgeBox) m_badgeBox->setVisibility(brls::Visibility::GONE);
-
-        m_emptyLabel->setVisibility(brls::Visibility::VISIBLE);
-        if (m_dataLayout) m_dataLayout->setVisibility(brls::Visibility::GONE);
-        m_isEmpty = true;
-    }
-
     // ============================================================
     // 图片加载
     // ============================================================
@@ -374,19 +346,22 @@ namespace beiklive
     }
 
     // ============================================================
-    // 焦点回调
+    // 复用重置
     // ============================================================
 
-    void GridItem::onFocusGained()
+    void GridItem::prepareForReuse()
     {
-        brls::Box::onFocusGained();
-        if (onItemFocused)
-            onItemFocused(m_index);
-    }
-
-    void GridItem::onFocusLost()
-    {
-        brls::Box::onFocusLost();
+        RecyclingGridItem::prepareForReuse();
+        if (m_image) m_image->clear();
+        if (m_imageLayer) m_imageLayer->setVisibility(brls::Visibility::GONE);
+        if (m_titleLabel) m_titleLabel->setText("");
+        if (m_subLabel) m_subLabel->setText("");
+        if (m_playLabel) m_playLabel->setText("");
+        if (m_badgeLabel) m_badgeLabel->setText("");
+        if (m_badgeBox) m_badgeBox->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
+        m_emptyLabel->setVisibility(brls::Visibility::VISIBLE);
+        m_dataLayout->setVisibility(brls::Visibility::GONE);
+        m_isEmpty = true;
     }
 
     // ============================================================
