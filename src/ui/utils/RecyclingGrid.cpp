@@ -25,6 +25,7 @@ RecyclingGrid::RecyclingGrid()
 
     m_contentBox = new RecyclingGridContentBox(this);
     setContentView(m_contentBox);
+
 }
 
 RecyclingGrid::~RecyclingGrid()
@@ -527,6 +528,12 @@ void RecyclingGrid::itemsRecyclingLoop()
         addCellAt(nextIdx, true);
     }
 }
+
+// ── Padding ────────────────────────────────────────────────────
+
+void RecyclingGrid::setPaddingTop(float top) { m_paddingTop = top; }
+void RecyclingGrid::setPaddingBottom(float bottom) { m_paddingBottom = bottom; }
+void RecyclingGrid::setPaddingLeft(float left) { m_paddingLeft = left; }
 
 // ── 工厂 ───────────────────────────────────────────────────────
 

@@ -44,6 +44,10 @@ public:
 
     void onNextPage(const std::function<void()>& callback = nullptr);
 
+    void setPaddingTop(float top);
+    void setPaddingBottom(float bottom);
+    void setPaddingLeft(float left);
+
     void setFocusChangeCallback(std::function<void(size_t)> callback);
 
     void draw(NVGcontext* vg, float x, float y, float w, float h,
