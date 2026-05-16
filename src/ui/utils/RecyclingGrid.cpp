@@ -158,6 +158,8 @@ void RecyclingGrid::reloadData()
     auto* firstCell = getGridItemByIndex(0);
     if (firstCell)
         brls::Application::giveFocus(firstCell);
+
+    invalidate();
 }
 
 void RecyclingGrid::notifyDataChanged()
