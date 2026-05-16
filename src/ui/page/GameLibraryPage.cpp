@@ -40,12 +40,13 @@ namespace beiklive
                         m_isSearching = !text.empty();
                         m_searchTerm = text;
 
-                        ThreadPool::instance().enqueue([this]() {
-                            if (!m_alive.load()) return;
+                        auto* alive = &m_alive;
+                        ThreadPool::instance().enqueue([this, alive]() {
+                            if (!alive->load()) return;
                             m_entries = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
                             _filterEntries();
-                            brls::sync([this]() {
-                                if (!m_alive.load()) return;
+                            brls::sync([this, alive]() {
+                                if (!alive->load()) return;
                                 if (m_isSearching && m_entries.empty())
                                 {
                                     auto* dialog = new brls::Dialog("当前分类下无 \"" + m_searchTerm + "\"");
@@ -118,12 +119,13 @@ namespace beiklive
     void GameLibraryPage::_loadAndShowEntries()
     {
         brls::Application::blockInputs(true);
-        ThreadPool::instance().enqueue([this]() {
-            if (!m_alive.load()) return;
+        auto* alive = &m_alive;
+        ThreadPool::instance().enqueue([this, alive]() {
+            if (!alive->load()) return;
             m_entries = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
             _filterEntries();
-            brls::sync([this]() {
-                if (!m_alive.load()) return;
+            brls::sync([this, alive]() {
+                if (!alive->load()) return;
                 m_visibleCount = std::min(PAGE_SIZE, static_cast<int>(m_entries.size()));
                 _rebuildGrid();
                 _updateHeader();
@@ -333,12 +335,13 @@ namespace beiklive
                 if (newFilter == m_platformFilter) return;
                 m_platformFilter = newFilter;
 
-                ThreadPool::instance().enqueue([this]() {
-                    if (!m_alive.load()) return;
+                auto* alive = &m_alive;
+                ThreadPool::instance().enqueue([this, alive]() {
+                    if (!alive->load()) return;
                     m_entries = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
                     _filterEntries();
-                    brls::sync([this]() {
-                        if (!m_alive.load()) return;
+                    brls::sync([this, alive]() {
+                        if (!alive->load()) return;
                         m_visibleCount = std::min(PAGE_SIZE, static_cast<int>(m_entries.size()));
                         _rebuildGrid();
                         _updateHeader();
@@ -406,12 +409,13 @@ namespace beiklive
 
     void GameLibraryPage::_reloadEntries()
     {
-        ThreadPool::instance().enqueue([this]() {
-            if (!m_alive.load()) return;
+        auto* alive = &m_alive;
+        ThreadPool::instance().enqueue([this, alive]() {
+            if (!alive->load()) return;
             m_entries = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
             _filterEntries();
-            brls::sync([this]() {
-                if (!m_alive.load()) return;
+            brls::sync([this, alive]() {
+                if (!alive->load()) return;
                 m_visibleCount = std::min(PAGE_SIZE, static_cast<int>(m_entries.size()));
                 _rebuildGrid();
                 _updateHeader();
