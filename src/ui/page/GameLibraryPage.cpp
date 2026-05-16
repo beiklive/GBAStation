@@ -7,72 +7,6 @@
 namespace beiklive
 {
 
-    // ============================================================
-    // LibGridCell
-    // ============================================================
-
-    GameLibraryPage::LibGridCell::LibGridCell()
-    {
-        this->setAxis(brls::Axis::COLUMN);
-        this->setAlignItems(brls::AlignItems::CENTER);
-        this->setJustifyContent(brls::JustifyContent::FLEX_START);
-        this->setFocusable(true);
-        this->setHideHighlightBackground(true);
-        this->setCornerRadius(6);
-
-        m_cover = new brls::Image();
-        m_cover->setWidthPercentage(100);
-        m_cover->setHeight(200);
-        m_cover->setScalingType(brls::ImageScalingType::FILL);
-        m_cover->setInterpolation(brls::ImageInterpolation::LINEAR);
-        m_cover->setCornerRadius(8);
-        m_cover->setFocusable(false);
-        m_cover->setMarginBottom(6);
-        m_cover->setShadowVisibility(true);
-        m_cover->setShadowType(brls::ShadowType::GENERIC);
-        this->addView(m_cover);
-
-        m_title = new brls::Label();
-        m_title->setFontSize(15);
-        m_title->setSingleLine(true);
-        m_title->setAnimated(true);
-        m_title->setAutoAnimate(true);
-        m_title->setHorizontalAlign(brls::HorizontalAlign::CENTER);
-        m_title->setWidthPercentage(100);
-        m_title->setFocusable(false);
-        this->addView(m_title);
-    }
-
-    void GameLibraryPage::LibGridCell::prepareForReuse()
-    {
-        RecyclingGridItem::prepareForReuse();
-        m_cover->clear();
-        m_title->setText("");
-        m_entry = beiklive::GameEntry{};
-    }
-
-    void GameLibraryPage::LibGridCell::setEntry(const beiklive::GameEntry& entry)
-    {
-        m_entry = entry;
-    }
-
-    void GameLibraryPage::LibGridCell::setLogoPath(const std::string& path)
-    {
-        if (!path.empty())
-            m_cover->setImageFromFile(path);
-        else
-            m_cover->clear();
-    }
-
-    void GameLibraryPage::LibGridCell::setGameTitle(const std::string& title)
-    {
-        m_title->setText(title);
-    }
-
-    // ============================================================
-    // GameLibraryPage
-    // ============================================================
-
     GameLibraryPage::GameLibraryPage()
     {
         this->showHeader(true);
@@ -80,10 +14,10 @@ namespace beiklive
         this->getHeader()->setTitle("游戏库");
         this->setFocusable(false);
 
-        m_grid = new beiklive::RecyclingGrid(3, 260.0f, 8.0f);
+        m_grid = new beiklive::RecyclingGrid(3, GridItem::ITEM_HEIGHT, 8.0f);
         m_grid->setGrow(1.f);
-        m_grid->registerCell("LibGridCell", []() -> RecyclingGridItem* {
-            return new LibGridCell();
+        m_grid->registerCell("GridItem", []() -> RecyclingGridItem* {
+            return new GridItem(GridItemMode::GAME_LIBRARY, 0);
         });
 
         this->getContentBox()->addView(m_grid);
@@ -170,24 +104,49 @@ namespace beiklive
 
     RecyclingGridItem* GameLibraryPage::GameLibraryDS::cellForRow(RecyclingGrid* grid, size_t index)
     {
-        auto* cell = static_cast<LibGridCell*>(grid->dequeueReusableCell("LibGridCell"));
+        auto* cell = static_cast<GridItem*>(grid->dequeueReusableCell("GridItem"));
         if (!cell) return nullptr;
 
         if (!m_page || index >= m_page->m_entries.size())
+        {
+            cell->setEmpty("空");
             return cell;
+        }
 
         const auto& entry = m_page->m_entries[index];
-        cell->setEntry(entry);
-        cell->setLogoPath(entry.logoPath);
-        cell->setGameTitle(entry.title.empty() ? entry.path : entry.title);
 
-        cell->registerAction("确认", brls::BUTTON_A,
-            [this, idx = static_cast<int>(index)](brls::View*) -> bool {
-                if (m_page && idx >= 0 && idx < static_cast<int>(m_page->m_entries.size()) && m_page->onGameSelected)
-                    m_page->onGameSelected(m_page->m_entries[idx]);
-                return true;
-            },
-            false, false, brls::SOUND_CLICK);
+        cell->setImagePathDeferred(entry.logoPath);
+
+        cell->setTitle(entry.title.empty() ? entry.path : entry.title);
+
+        std::string badgeText = beiklive::tools::platformBadgeName(entry.platform);
+        PlatformBadgeColor badgeColor = [](int platform) -> PlatformBadgeColor {
+            switch (static_cast<beiklive::enums::EmuPlatform>(platform))
+            {
+                case beiklive::enums::EmuPlatform::EmuGBA: return PlatformBadgeColor::GBA;
+                case beiklive::enums::EmuPlatform::EmuGBC: return PlatformBadgeColor::GBC;
+                case beiklive::enums::EmuPlatform::EmuGB:  return PlatformBadgeColor::GB;
+                default: return PlatformBadgeColor::NONE;
+            }
+        }(entry.platform);
+        if (!badgeText.empty())
+            cell->setBadge(badgeText, badgeColor);
+
+        std::string logoLayerPath = GetGameLogoLayerPath(entry.platform);
+        cell->setImageLayerDeferred(logoLayerPath, !logoLayerPath.empty());
+
+        std::string lastPlayed = entry.lastPlayed.empty() ? "从未游玩" : beiklive::tools::formatTimestampForDisplay(entry.lastPlayed);
+        cell->setSubText(lastPlayed);
+
+        std::string playTimeStr = entry.playTime > 0 ? beiklive::tools::formatPlayTime(entry.playTime) : "";
+        cell->setPlayTime(playTimeStr);
+
+        cell->setDataLoaded();
+
+        cell->onItemClicked = [this, idx = static_cast<int>(index)](int) {
+            if (m_page && idx >= 0 && idx < static_cast<int>(m_page->m_entries.size()) && m_page->onGameSelected)
+                m_page->onGameSelected(m_page->m_entries[idx]);
+        };
 
         return cell;
     }
@@ -268,12 +227,9 @@ namespace beiklive
         if (m_visibleCount >= static_cast<int>(m_entries.size())) return;
 
         m_loadingMore = true;
-
         m_visibleCount = std::min(m_visibleCount + PAGE_SIZE, static_cast<int>(m_entries.size()));
-
         if (m_dataSource)
             m_grid->notifyDataChanged();
-
         m_loadingMore = false;
     }
 
@@ -353,13 +309,10 @@ namespace beiklive
     void GameLibraryPage::_updateHeader()
     {
         if (m_isSearching)
-        {
             this->getHeader()->setInfo("搜索 \"" + m_searchTerm + "\" — " + std::to_string(m_entries.size()) + " 款");
-        }
         else
-        {
             this->getHeader()->setInfo("共 " + std::to_string(m_entries.size()) + " 款游戏");
-        }
+
         std::string filterStr;
         switch (m_platformFilter)
         {
@@ -400,7 +353,6 @@ namespace beiklive
     void GameLibraryPage::_showGameOptionsPanel(const beiklive::GameEntry& entry)
     {
         int crc = entry.crc32;
-
         _hideGameOptionsPanel();
 
         m_gameOptionsSidebar = new beiklive::GameOptionsSidebar();
@@ -422,17 +374,13 @@ namespace beiklive
                             beiklive::NameMappingManager->Save();
                         }
                     },
-                    "编辑游戏名称",
-                    "",
-                    128,
-                    title,
+                    "编辑游戏名称", "", 128, title,
                     brls::KeyboardKeyDisableBitmask::KEYBOARD_DISABLE_NONE);
             });
 
         m_gameOptionsSidebar->addButton("设置封面图", BK_RES("img/ui/setting/display.png"),
             [this, crc](const beiklive::GameEntry& e) {
                 _hideGameOptionsPanel();
-                std::string startDir;
                 beiklive::openFilePicker({"png", "jpg"},
                     [this, crc](const std::string& selectedPath) {
                         if (beiklive::GameDB) {
@@ -458,8 +406,7 @@ namespace beiklive
                         brls::Application::notify("删除失败");
                     }
                 });
-                dialog->addButton("取消", [this]() {
-                });
+                dialog->addButton("取消", []() {});
                 dialog->open();
             });
 
