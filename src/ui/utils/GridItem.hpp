@@ -5,7 +5,6 @@
 #include <string>
 
 #include "core/common.h"
-#include "RecyclingGridItem.hpp"
 
 namespace beiklive
 {
@@ -24,7 +23,7 @@ namespace beiklive
         NONE,
     };
 
-    class GridItem : public RecyclingGridItem
+    class GridItem : public brls::Box
     {
     public:
         static constexpr float ITEM_HEIGHT = 120.f;
@@ -33,8 +32,6 @@ namespace beiklive
         ~GridItem() = default;
 
         void draw(NVGcontext* vg, float x, float y, float width, float height, brls::Style style, brls::FrameContext* ctx) override;
-
-        void prepareForReuse() override;
 
         void setImageLayer(const std::string& path, bool visible);
         void setImageLayerDeferred(const std::string& path, bool visible);

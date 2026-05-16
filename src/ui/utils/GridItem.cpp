@@ -42,11 +42,9 @@ namespace beiklive
     // ============================================================
 
     GridItem::GridItem(GridItemMode mode, int index)
-        : RecyclingGridItem()
-        , m_mode(mode)
+        : m_mode(mode)
         , m_index(index)
     {
-        this->setGridIndex(index);
         this->setAxis(brls::Axis::ROW);
         this->setGrow(1.f);
         this->setHeight(ITEM_HEIGHT);
@@ -360,34 +358,20 @@ namespace beiklive
         });
     }
 
-    void GridItem::prepareForReuse()
-    {
-        RecyclingGridItem::prepareForReuse();
-        if (m_image) m_image->clear();
-        if (m_imageLayer) m_imageLayer->setVisibility(brls::Visibility::GONE);
-        if (m_titleLabel) m_titleLabel->setText("");
-        if (m_subLabel) m_subLabel->setText("");
-        if (m_playLabel) m_playLabel->setText("");
-        if (m_badgeLabel) m_badgeLabel->setText("");
-        m_emptyLabel->setVisibility(brls::Visibility::VISIBLE);
-        m_dataLayout->setVisibility(brls::Visibility::GONE);
-        m_isEmpty = true;
-    }
-
     // ============================================================
     // 焦点回调
     // ============================================================
 
     void GridItem::onFocusGained()
     {
-        RecyclingGridItem::onFocusGained();
+        brls::Box::onFocusGained();
         if (onItemFocused)
             onItemFocused(m_index);
     }
 
     void GridItem::onFocusLost()
     {
-        RecyclingGridItem::onFocusLost();
+        brls::Box::onFocusLost();
     }
 
     // ============================================================

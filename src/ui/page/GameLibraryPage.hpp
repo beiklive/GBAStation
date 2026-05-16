@@ -4,13 +4,23 @@
 #include "core/common.h"
 #include "core/Tools.hpp"
 #include "ui/utils/Box.hpp"
-#include "ui/utils/RecyclingGrid.hpp"
-#include "ui/utils/RecyclingGridDataSource.hpp"
+#include "ui/utils/GridBox.hpp"
 #include "ui/utils/GridItem.hpp"
 #include "ui/utils/GameOptionsSidebar.hpp"
 
 namespace beiklive
 {
+    struct GridItemData {
+        std::string logoPath;
+        std::string badgeText;
+        PlatformBadgeColor badgeColor = PlatformBadgeColor::NONE;
+        std::string logoLayerPath;
+        bool showLogoLayer = false;
+        std::string title;
+        std::string subText;
+        std::string playTime;
+    };
+
     class GameLibraryPage : public beiklive::Box
     {
     public:
@@ -31,21 +41,10 @@ namespace beiklive
         std::function<void(const beiklive::GameEntry&)> onGameSelected;
 
     private:
-        class GameLibraryDS : public RecyclingGridDataSource {
-        public:
-            GameLibraryDS(GameLibraryPage* page) : m_page(page) {}
-            size_t getItemCount() const override;
-            RecyclingGridItem* cellForRow(RecyclingGrid* grid, size_t index) override;
-            float heightForRow(RecyclingGrid* grid, size_t index) override { return GridItem::ITEM_HEIGHT; }
-        private:
-            GameLibraryPage* m_page;
-        };
-
         static constexpr int PAGE_SIZE = 21;
 
-        beiklive::RecyclingGrid* m_grid = nullptr;
+        beiklive::GridBox* m_grid = nullptr;
         std::vector<beiklive::GameEntry> m_entries;
-        GameLibraryDS* m_dataSource = nullptr;
         int                   m_visibleCount = 0;
         bool                  m_loadingMore  = false;
         PlatformFilter        m_platformFilter = PlatformFilter::ALL;
@@ -55,6 +54,7 @@ namespace beiklive
 
         void _loadAndShowEntries();
         void _filterEntries();
+        void _rebuildGrid();
         void _loadNextPage();
         void _reloadEntries();
         void _showFilterDropdown();
@@ -62,6 +62,10 @@ namespace beiklive
 
         void _showGameOptionsPanel(const beiklive::GameEntry& entry);
         void _hideGameOptionsPanel();
+
+        static PlatformBadgeColor _platformBadge(int platform);
+        static std::string _formatPlayTime(int seconds);
+        static GridItemData _buildItemData(const beiklive::GameEntry& entry);
 
         int _currentFocusedIndex = -1;
         std::atomic<bool> m_alive{true};
