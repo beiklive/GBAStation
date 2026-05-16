@@ -47,8 +47,6 @@ GLuint RenderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH,
         // 直通模式
         m_lastW = videoW;
         m_lastH = videoH;
-        m_lastTexW = videoW;
-        m_lastTexH = videoH;
         return srcTex;
     }
 
@@ -58,8 +56,6 @@ GLuint RenderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH,
 
     m_lastW = m_pipeline.outputW() > 0 ? m_pipeline.outputW() : videoW;
     m_lastH = m_pipeline.outputH() > 0 ? m_pipeline.outputH() : videoH;
-    m_lastTexW = m_pipeline.outputTexW() > 0 ? m_pipeline.outputTexW() : m_lastW;
-    m_lastTexH = m_pipeline.outputTexH() > 0 ? m_pipeline.outputTexH() : m_lastH;
 
     return out;
 }

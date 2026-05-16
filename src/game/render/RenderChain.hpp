@@ -92,8 +92,6 @@ private:
     unsigned            m_frameCount = 0; ///< 累计帧计数，传入着色器 FrameCount uniform
     unsigned            m_lastW      = 0;
     unsigned            m_lastH      = 0;
-    unsigned            m_lastTexW   = 0;
-    unsigned            m_lastTexH   = 0;
 };
 
 } // namespace beiklive

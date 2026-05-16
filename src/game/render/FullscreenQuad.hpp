@@ -32,13 +32,7 @@ public:
 
     /// 绘制全屏四边形（以 2 个三角形拼成的矩形）。
     /// 调用前须先绑定目标 FBO 和着色器程序。
-    void draw();
-
-    /// 设置纹理坐标缩放因子（用于 FBO 填充纹理的坐标补偿）。
-    /// 默认 (1,1) 表示无填充，全纹理 [0,1] 均为有效内容。
-    /// 填充时设为 (contentW/texW, contentH/texH)，
-    /// 将 TexCoord 映射到 [0, scale] 而非 [0,1]。
-    void setTexCoordScale(float uScale, float vScale);
+    void draw() const;
 
     bool isInitialized() const { return m_vbo != 0; }
 
@@ -46,8 +40,6 @@ private:
     GLuint m_vao = 0; ///< Vertex Array Object（GL3/GLES3）
     GLuint m_vbo = 0; ///< Vertex Buffer Object
     GLuint m_ebo = 0; ///< Element Buffer Object（索引缓冲）
-    float  m_uScale = 1.0f; ///< 当前 U 缩放
-    float  m_vScale = 1.0f; ///< 当前 V 缩放
 };
 
 } // namespace beiklive

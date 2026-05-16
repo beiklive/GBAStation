@@ -15,10 +15,8 @@ struct ShaderPass {
     GLuint program      = 0;     ///< 链接完成的 GL 程序 ID
     GLuint fbo          = 0;     ///< 输出帧缓冲对象
     GLuint texture      = 0;     ///< 输出颜色纹理
-    int    width        = 0;     ///< 输出内容宽度（像素）= InputSize
-    int    height       = 0;     ///< 输出内容高度（像素）= InputSize
-    int    texWidth     = 0;     ///< 输出纹理宽度（像素）= TextureSize（next_pow2）
-    int    texHeight    = 0;     ///< 输出纹理高度（像素）= TextureSize（next_pow2）
+    int    width        = 0;     ///< 输出纹理宽度（像素）
+    int    height       = 0;     ///< 输出纹理高度（像素）
     bool   filterLinear = false; ///< 纹理过滤：true=线性，false=最近邻
     std::string alias;           ///< 通道别名，供后续通道以 <alias>Texture 引用
     ShaderPassDesc desc;         ///< 来自 .glslp 的原始描述（用于尺寸重算）
@@ -73,8 +71,6 @@ public:
     bool     isLoaded() const { return !m_passes.empty(); }
     unsigned outputW()  const { return m_lastOutW; }
     unsigned outputH()  const { return m_lastOutH; }
-    unsigned outputTexW() const { return m_lastTexW; }
-    unsigned outputTexH() const { return m_lastTexH; }
 
     /// 返回当前管线中所有参数的完整元数据（含当前值）。
     const std::vector<ShaderParamInfo>& getParams() const { return m_params; }
@@ -89,8 +85,6 @@ private:
     FullscreenQuad               m_quad;
     unsigned                     m_lastOutW = 0;
     unsigned                     m_lastOutH = 0;
-    unsigned                     m_lastTexW = 0;
-    unsigned                     m_lastTexH = 0;
 
     int    m_feedbackPass = -1;     ///< 帧反馈的源 pass 索引（-1 = 无）
     int    m_historySize  = 0;      ///< 原始帧历史保留帧数
@@ -99,7 +93,7 @@ private:
     unsigned m_historyWriteIdx = 0; ///< 帧历史写入位置
 
     /// 为通道分配或调整 FBO + 颜色纹理。
-    bool allocateFBO(ShaderPass& pass, int w, int h, bool allowPadding = true);
+    bool allocateFBO(ShaderPass& pass, int w, int h);
 
     /// 根据 pass 描述和当前视频/视口尺寸，计算输出 FBO 像素尺寸。
     void computePassSize(const ShaderPassDesc& desc,
@@ -110,7 +104,6 @@ private:
     /// 设置当前通道所需的 uniform 变量。
     void setUniforms(GLuint program,
                      unsigned inW, unsigned inH,
-                     unsigned texInW, unsigned texInH,
                      unsigned outW, unsigned outH,
                      unsigned origW, unsigned origH,
                      unsigned viewW, unsigned viewH,

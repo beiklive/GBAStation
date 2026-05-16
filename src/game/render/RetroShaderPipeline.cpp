@@ -23,18 +23,6 @@ static const float k_mvp4x4[16] = {
     0.f, 0.f, 0.f, 1.f,
 };
 
-static unsigned nextPow2(unsigned v)
-{
-    if (v == 0) return 1;
-    v--;
-    v |= v >> 1;
-    v |= v >> 2;
-    v |= v >> 4;
-    v |= v >> 8;
-    v |= v >> 16;
-    return v + 1;
-}
-
 // ============================================================
 // init
 // ============================================================
@@ -181,8 +169,6 @@ void RetroShaderPipeline::deinit()
         if (pass.program) { glDeleteProgram(pass.program);       pass.program = 0; }
         pass.width  = 0;
         pass.height = 0;
-        pass.texWidth  = 0;
-        pass.texHeight = 0;
     }
     m_passes.clear();
     // 释放外部纹理 GL 对象
@@ -201,24 +187,21 @@ void RetroShaderPipeline::deinit()
 
     m_quad.deinit();
     m_lastOutW = m_lastOutH = 0;
-    m_lastTexW = m_lastTexH = 0;
 }
 
 // ============================================================
 // allocateFBO – 为通道分配或调整 FBO + 颜色纹理
 // ============================================================
-bool RetroShaderPipeline::allocateFBO(ShaderPass& pass, int w, int h, bool allowPadding)
+bool RetroShaderPipeline::allocateFBO(ShaderPass& pass, int w, int h)
 {
     if (w <= 0 || h <= 0) return false;
-    const int tw = allowPadding ? static_cast<int>(nextPow2(static_cast<unsigned>(w))) : w;
-    const int th = allowPadding ? static_cast<int>(nextPow2(static_cast<unsigned>(h))) : h;
     if (pass.fbo && pass.width == w && pass.height == h) return true;
 
     // 释放旧 FBO / 纹理
     if (pass.fbo)     { glDeleteFramebuffers(1, &pass.fbo);  pass.fbo = 0; }
     if (pass.texture) { glDeleteTextures(1, &pass.texture);  pass.texture = 0; }
 
-    // 创建颜色纹理（尺寸为 next_pow2，与 RetroArch 一致）
+    // 创建颜色纹理
     glGenTextures(1, &pass.texture);
     glBindTexture(GL_TEXTURE_2D, pass.texture);
     GLenum glFilter = pass.filterLinear ? GL_LINEAR : GL_NEAREST;
@@ -237,7 +220,7 @@ bool RetroShaderPipeline::allocateFBO(ShaderPass& pass, int w, int h, bool allow
     }
 #endif
     glTexImage2D(GL_TEXTURE_2D, 0, internalFormat,
-                 static_cast<GLsizei>(tw), static_cast<GLsizei>(th),
+                 static_cast<GLsizei>(w), static_cast<GLsizei>(h),
                  0, GL_RGBA, pixelType, nullptr);
     glBindTexture(GL_TEXTURE_2D, 0);
 
@@ -257,12 +240,9 @@ bool RetroShaderPipeline::allocateFBO(ShaderPass& pass, int w, int h, bool allow
         return false;
     }
 
-    pass.width    = w;
-    pass.height   = h;
-    pass.texWidth  = tw;
-    pass.texHeight = th;
-    brls::Logger::debug("RetroShaderPipeline: 分配 FBO id={} content={}×{} tex={}×{}",
-                        pass.fbo, w, h, tw, th);
+    pass.width  = w;
+    pass.height = h;
+    brls::Logger::debug("RetroShaderPipeline: 分配 FBO id={} {}×{}", pass.fbo, w, h);
     return true;
 }
 
@@ -302,7 +282,6 @@ void RetroShaderPipeline::computePassSize(const ShaderPassDesc& desc,
 // ============================================================
 void RetroShaderPipeline::setUniforms(GLuint program,
                                        unsigned inW, unsigned inH,
-                                       unsigned texInW, unsigned texInH,
                                        unsigned outW, unsigned outH,
                                        unsigned origW, unsigned origH,
                                        unsigned viewW, unsigned viewH,
@@ -341,9 +320,9 @@ void RetroShaderPipeline::setUniforms(GLuint program,
     setUniform1i("FrameCount",     static_cast<int>(frameCount));
     setUniform1i("FrameDirection", 1);
 
-    // 输入纹理尺寸（TextureSize 为填充后纹理尺寸，InputSize 为有效内容尺寸）
-    setUniform2f("TextureSize", static_cast<float>(texInW), static_cast<float>(texInH));
-    setUniform2f("InputSize",   static_cast<float>(inW),    static_cast<float>(inH));
+    // 输入纹理尺寸（TextureSize / InputSize 均指输入）
+    setUniform2f("TextureSize", static_cast<float>(inW), static_cast<float>(inH));
+    setUniform2f("InputSize",   static_cast<float>(inW), static_cast<float>(inH));
     setUniform4f("SourceSize",
                  static_cast<float>(inW),  static_cast<float>(inH),
                  1.f / static_cast<float>(inW), 1.f / static_cast<float>(inH));
@@ -531,8 +510,6 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
     GLuint currentTex = inputTex;
     unsigned currentW = videoW;
     unsigned currentH = videoH;
-    unsigned currentTexW = videoW;  // 原始纹理无填充
-    unsigned currentTexH = videoH;  // 原始纹理无填充
     // 逻辑尺寸：用于链式 Source 缩放，避免每一跳都基于整数 round 后尺寸继续计算
     double currentLogicalW = static_cast<double>(videoW);
     double currentLogicalH = static_cast<double>(videoH);
@@ -586,9 +563,8 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
         calcAxisFromLogical(pass.desc.scaleTypeX, pass.desc.scaleX, currentLogicalW, vpW, outW, nextLogicalW);
         calcAxisFromLogical(pass.desc.scaleTypeY, pass.desc.scaleY, currentLogicalH, vpH, outH, nextLogicalH);
 
-        // 确保 FBO 已分配且尺寸正确（最后一个 pass 不填充，供显示渲染器直接使用）
-        const bool isLast = (idx == m_passes.size() - 1);
-        if (!allocateFBO(pass, outW, outH, !isLast)) {
+        // 确保 FBO 已分配且尺寸正确
+        if (!allocateFBO(pass, outW, outH)) {
             brls::Logger::warning("RetroShaderPipeline: 跳过通道 {}（FBO 分配失败）", idx);
             continue;
         }
@@ -733,7 +709,6 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
         // 设置 uniform（含 OrigInputSize / OrigSize 和参数覆盖值）
         setUniforms(pass.program,
                     currentW, currentH,
-                    currentTexW, currentTexH,
                     static_cast<unsigned>(outW),
                     static_cast<unsigned>(outH),
                     videoW, videoH,
@@ -747,8 +722,6 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
             if (!prev.texture) continue;
             float fw = static_cast<float>(prev.width);
             float fh = static_cast<float>(prev.height);
-            float tfw = static_cast<float>(prev.texWidth);
-            float tfh = static_cast<float>(prev.texHeight);
             float inv_w = (prev.width  > 0) ? 1.f / fw : 0.f;
             float inv_h = (prev.height > 0) ? 1.f / fh : 0.f;
             // 绝对索引尺寸
@@ -756,7 +729,7 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
             {
                 GLint loc;
                 loc = glGetUniformLocation(pass.program, (absPrefix + "TextureSize").c_str());
-                if (loc >= 0) glUniform2f(loc, tfw, tfh);
+                if (loc >= 0) glUniform2f(loc, fw, fh);
                 loc = glGetUniformLocation(pass.program, (absPrefix + "InputSize").c_str());
                 if (loc >= 0) glUniform2f(loc, fw, fh);
                 loc = glGetUniformLocation(pass.program, (absPrefix + "Size").c_str());
@@ -768,7 +741,7 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
             {
                 GLint loc;
                 loc = glGetUniformLocation(pass.program, (prevPrefix + "TextureSize").c_str());
-                if (loc >= 0) glUniform2f(loc, tfw, tfh);
+                if (loc >= 0) glUniform2f(loc, fw, fh);
                 loc = glGetUniformLocation(pass.program, (prevPrefix + "InputSize").c_str());
                 if (loc >= 0) glUniform2f(loc, fw, fh);
                 loc = glGetUniformLocation(pass.program, (prevPrefix + "Size").c_str());
@@ -805,13 +778,6 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
             if (loc >= 0) glUniform4f(loc, fw, fh, inv_w, inv_h);
         }
 
-        // 设置纹理坐标缩放以补偿 FBO 填充（next_pow2）
-        if (currentTexW > 0 && currentTexH > 0) {
-            m_quad.setTexCoordScale(
-                static_cast<float>(currentW)  / static_cast<float>(currentTexW),
-                static_cast<float>(currentH)  / static_cast<float>(currentTexH));
-        }
-
         // 绘制全屏四边形
         m_quad.draw();
 
@@ -819,16 +785,12 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
         currentTex = pass.texture;
         currentW   = static_cast<unsigned>(outW);
         currentH   = static_cast<unsigned>(outH);
-        currentTexW  = static_cast<unsigned>(pass.texWidth);
-        currentTexH  = static_cast<unsigned>(pass.texHeight);
         currentLogicalW = nextLogicalW;
         currentLogicalH = nextLogicalH;
     }
 
     m_lastOutW = currentW;
     m_lastOutH = currentH;
-    m_lastTexW = currentTexW;
-    m_lastTexH = currentTexH;
 
     // ---- 帧反馈纹理保存 ----
     if (m_feedbackPass >= 0 && static_cast<size_t>(m_feedbackPass) < m_passes.size()) {

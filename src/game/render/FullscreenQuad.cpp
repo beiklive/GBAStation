@@ -95,23 +95,9 @@ void FullscreenQuad::deinit()
 // ============================================================
 // draw
 // ============================================================
-void FullscreenQuad::draw()
+void FullscreenQuad::draw() const
 {
     if (!m_vbo) return;
-
-    // 始终更新 VBO 中的 UV 数据（缩放到 (1,1) 时恢复为全纹理 UV）
-    {
-        glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
-        float vert0[2] = { 0.0f,         0.0f };
-        float vert1[2] = { m_uScale,     0.0f };
-        float vert2[2] = { m_uScale,     m_vScale };
-        float vert3[2] = { 0.0f,         m_vScale };
-        glBufferSubData(GL_ARRAY_BUFFER, k_offTexCoord,                                                sizeof(vert0), vert0);
-        glBufferSubData(GL_ARRAY_BUFFER, k_stride + k_offTexCoord,                                     sizeof(vert1), vert1);
-        glBufferSubData(GL_ARRAY_BUFFER, k_stride * 2 + k_offTexCoord,                                 sizeof(vert2), vert2);
-        glBufferSubData(GL_ARRAY_BUFFER, k_stride * 3 + k_offTexCoord,                                 sizeof(vert3), vert3);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-    }
 
 #if !defined(USE_GLES2)
     glBindVertexArray(m_vao);
@@ -140,12 +126,6 @@ void FullscreenQuad::draw()
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 #endif
-}
-
-void FullscreenQuad::setTexCoordScale(float uScale, float vScale)
-{
-    m_uScale = uScale;
-    m_vScale = vScale;
 }
 
 } // namespace beiklive
