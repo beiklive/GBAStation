@@ -154,6 +154,10 @@ void RecyclingGrid::reloadData()
     addCellAt(lineHeadIndex, true);
 
     itemsRecyclingLoop();
+
+    auto* firstCell = getGridItemByIndex(0);
+    if (firstCell)
+        brls::Application::giveFocus(firstCell);
 }
 
 void RecyclingGrid::notifyDataChanged()
@@ -411,17 +415,15 @@ void RecyclingGrid::itemsRecyclingLoop()
             }
         }
 
-        if (!minCell || minCell->getIndex() >= m_dataSource->getItemCount())
+        if (!minCell) break;
+        if (minCell->getIndex() >= m_dataSource->getItemCount())
             break;
 
         float cellHeight = estimatedRowHeight;
-        int prefetchIdx = static_cast<int>(visibleMin)
-            + (spanCount * 2); // prefetch rows
-        float prefetchH = getHeightByCellIndex(
-            std::min(static_cast<size_t>(prefetchIdx), m_dataSource->getItemCount()),
-            visibleMin);
-
-        if (minCell->getDetachedPosition().y + cellHeight + prefetchH >= visibleFrame.getMinY())
+        if (minCell->getDetachedPosition().y + cellHeight +
+            getHeightByCellIndex(
+                std::min(visibleMin + static_cast<size_t>(spanCount) * 2, m_dataSource->getItemCount()),
+                visibleMin) >= visibleFrame.getMinY())
             break;
 
         m_renderedFrame.origin.y += minCell->getIndex() % spanCount == 0
@@ -451,17 +453,14 @@ void RecyclingGrid::itemsRecyclingLoop()
         if (!maxCell) break;
         if (visibleMax == 0) break;
 
-        float cellHeight = estimatedRowHeight;
-        int prefetchIdx = static_cast<int>(visibleMax)
-            - (spanCount * 2);
-        float prefetchH = visibleMax > 0 && prefetchIdx >= 0
-            ? getHeightByCellIndex(visibleMax, prefetchIdx) : 0;
-
-        if (maxCell->getDetachedPosition().y - prefetchH <= visibleFrame.getMaxY())
+        size_t compareIdx = visibleMax > static_cast<size_t>(spanCount) * 2
+            ? visibleMax - static_cast<size_t>(spanCount) * 2 : 0;
+        if (maxCell->getDetachedPosition().y -
+            getHeightByCellIndex(visibleMax, compareIdx) <= visibleFrame.getMaxY())
             break;
 
         m_renderedFrame.size.height -= maxCell->getIndex() % spanCount == 0
-            ? cellHeight + estimatedRowSpace : 0;
+            ? estimatedRowHeight + estimatedRowSpace : 0;
 
         queueReusableCell(maxCell);
         removeCell(maxCell);
@@ -478,9 +477,18 @@ void RecyclingGrid::itemsRecyclingLoop()
     while (visibleMax + 1 < m_dataSource->getItemCount())
     {
         size_t nextIdx = visibleMax + 1;
-        float nextY = getHeightByCellIndex(nextIdx);
-        float maxY = visibleFrame.getMaxY() + estimatedRowHeight * (2);
-        if (nextY > maxY) break;
+        if ((nextIdx) % spanCount == 0)
+        {
+            if (m_renderedFrame.getMaxY() -
+                getHeightByCellIndex(
+                    nextIdx,
+                    nextIdx > static_cast<size_t>(spanCount) * 2 ? nextIdx - static_cast<size_t>(spanCount) * 2 : 0) >
+                visibleFrame.getMaxY())
+            {
+                m_requestNextPage = false;
+                break;
+            }
+        }
         addCellAt(nextIdx, true);
     }
 
