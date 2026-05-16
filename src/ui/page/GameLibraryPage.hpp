@@ -9,17 +9,17 @@
 
 namespace beiklive
 {
-    /**
-     * GameLibraryPage – 游戏库主页面
-     *
-     * 布局：与 FileListPage 相同的 Header + BottomBar 结构，
-     * 主视图为 GridBox（3 列），每个格子使用 GridItem（GAME_LIBRARY 模式）。
-     *
-     * 功能：
-     *   - Y 键弹出平台分类 Dropdown（所有 / GBA / GBC / GB），按最近游玩排序
-     *   - 触底自动翻页加载（每页 21 条）
-     *   - X 键打开游戏选项侧边栏
-     */
+    struct GridItemData {
+        std::string logoPath;
+        std::string badgeText;
+        PlatformBadgeColor badgeColor = PlatformBadgeColor::NONE;
+        std::string logoLayerPath;
+        bool showLogoLayer = false;
+        std::string title;
+        std::string subText;
+        std::string playTime;
+    };
+
     class GameLibraryPage : public beiklive::Box
     {
     public:
@@ -71,6 +71,9 @@ namespace beiklive
 
         /// 将游戏时长（秒）格式化为可读字符串
         static std::string _formatPlayTime(int seconds);
+
+        /// 从 GameEntry 构建 GridItemData（纯数据，可在后台线程调用）
+        static GridItemData _buildItemData(const beiklive::GameEntry& entry);
 
         int _currentFocusedIndex = -1; // 当前焦点所在的游戏索引（-1 表示无焦点）
         std::atomic<bool> m_alive{true};

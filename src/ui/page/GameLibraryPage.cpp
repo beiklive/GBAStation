@@ -188,28 +188,24 @@ namespace beiklive
 
         for (int i = 0; i < count; ++i)
         {
-            const beiklive::GameEntry& entry = m_entries[i];
+            GridItemData data = _buildItemData(m_entries[i]);
             int captIdx = i;
 
-            m_grid->addItem([this, entry, captIdx]() -> brls::View* {
+            m_grid->addItem([this, data = std::move(data), captIdx]() -> brls::View* {
                 auto* item = new beiklive::GridItem(GridItemMode::GAME_LIBRARY, captIdx);
 
-                item->setImagePathDeferred(entry.logoPath);
+                item->setImagePathDeferred(data.logoPath);
 
-                std::string badgeText = beiklive::tools::platformBadgeName(entry.platform);
-                PlatformBadgeColor badgeColor = _platformBadge(entry.platform);
-                if (!badgeText.empty())
-                    item->setBadge(badgeText, badgeColor);
+                if (!data.badgeText.empty())
+                    item->setBadge(data.badgeText, data.badgeColor);
 
-                std::string logoLayerPath = GetGameLogoLayerPath(entry.platform);
-                item->setImageLayerDeferred(logoLayerPath, !logoLayerPath.empty());
+                item->setImageLayerDeferred(data.logoLayerPath, data.showLogoLayer);
 
-                item->setTitle(entry.title.empty() ? entry.path : entry.title);
+                item->setTitle(data.title);
 
-                std::string lastPlayed = entry.lastPlayed.empty() ? "从未游玩" : beiklive::tools::formatTimestampForDisplay(entry.lastPlayed);
-                item->setSubText(lastPlayed);
+                item->setSubText(data.subText);
 
-                item->setPlayTime(_formatPlayTime(entry.playTime));
+                item->setPlayTime(data.playTime);
 
                 item->setDataLoaded();
 
@@ -250,28 +246,24 @@ namespace beiklive
 
         for (int i = 0; i < newItems; ++i)
         {
-            const beiklive::GameEntry& entry = m_entries[oldVisible + i];
+            GridItemData data = _buildItemData(m_entries[oldVisible + i]);
             int captIdx = oldVisible + i;
 
-            m_grid->addItem([this, entry, captIdx]() -> brls::View* {
+            m_grid->addItem([data = std::move(data), captIdx]() -> brls::View* {
                 auto* item = new beiklive::GridItem(GridItemMode::GAME_LIBRARY, captIdx);
 
-                item->setImagePathDeferred(entry.logoPath);
+                item->setImagePathDeferred(data.logoPath);
 
-                std::string badgeText = beiklive::tools::platformBadgeName(entry.platform);
-                PlatformBadgeColor badgeColor = _platformBadge(entry.platform);
-                if (!badgeText.empty())
-                    item->setBadge(badgeText, badgeColor);
+                if (!data.badgeText.empty())
+                    item->setBadge(data.badgeText, data.badgeColor);
 
-                std::string logoLayerPath = GetGameLogoLayerPath(entry.platform);
-                item->setImageLayerDeferred(logoLayerPath, !logoLayerPath.empty());
+                item->setImageLayerDeferred(data.logoLayerPath, data.showLogoLayer);
 
-                item->setTitle(entry.title.empty() ? entry.path : entry.title);
+                item->setTitle(data.title);
 
-                std::string lastPlayed = entry.lastPlayed.empty() ? "从未游玩" : beiklive::tools::formatTimestampForDisplay(entry.lastPlayed);
-                item->setSubText(lastPlayed);
+                item->setSubText(data.subText);
 
-                item->setPlayTime(_formatPlayTime(entry.playTime));
+                item->setPlayTime(data.playTime);
 
                 item->setDataLoaded();
 
@@ -401,6 +393,24 @@ namespace beiklive
     {
         if (seconds <= 0) return "";
         return beiklive::tools::formatPlayTime(seconds);
+    }
+
+    // ============================================================
+    // _buildItemData – 将 GameEntry 预处理为纯数据（可在后台线程调用）
+    // ============================================================
+
+    GridItemData GameLibraryPage::_buildItemData(const beiklive::GameEntry& entry)
+    {
+        GridItemData d;
+        d.logoPath = entry.logoPath;
+        d.badgeText = beiklive::tools::platformBadgeName(entry.platform);
+        d.badgeColor = _platformBadge(entry.platform);
+        d.logoLayerPath = GetGameLogoLayerPath(entry.platform);
+        d.showLogoLayer = !d.logoLayerPath.empty();
+        d.title = entry.title.empty() ? entry.path : entry.title;
+        d.subText = entry.lastPlayed.empty() ? "从未游玩" : beiklive::tools::formatTimestampForDisplay(entry.lastPlayed);
+        d.playTime = _formatPlayTime(entry.playTime);
+        return d;
     }
 
     // ============================================================
