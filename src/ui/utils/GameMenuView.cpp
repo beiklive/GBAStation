@@ -718,6 +718,18 @@ namespace beiklive
                     return true;
                 });
 
+                // BUTTON_RT: 删除金手指
+                sw->registerAction("删除", brls::BUTTON_RT, [this, idx](brls::View *) -> bool {
+                    if (idx >= (int)m_cheats.size()) return true;
+                    if (m_cheatToggleCallback)
+                        m_cheatToggleCallback(idx, false);
+                    m_cheats.erase(m_cheats.begin() + idx);
+                    if (!m_gameEntry.cheatPath.empty())
+                        beiklive::saveChtFile(m_gameEntry.cheatPath, m_cheats);
+                    _rebuildCheatItems();
+                    return true;
+                });
+
                 m_cheatSwitches.push_back(sw);
                 m_cheatItemBox->addView(sw);
             }
