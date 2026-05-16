@@ -337,7 +337,7 @@ void RecyclingGrid::draw(NVGcontext* vg, float x, float y, float w, float h,
         if (contentH > frameH)
         {
             float off = getContentOffsetY();
-            if (off >= ( contentH - frameH - 50))
+            if (off >= contentH - frameH - 80.0f)
             {
                 if (!m_requestNextPage && m_nextPageCallback)
                 {
