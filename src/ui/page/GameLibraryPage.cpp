@@ -210,6 +210,8 @@ namespace beiklive
 
     void GameLibraryPage::_loadNextPage()
     {
+        brls::Logger::info("_loadNextPage: alive={} loading={} visible={} total={}",
+            m_alive.load(), m_loadingMore, m_visibleCount, m_entries.size());
         if (!m_alive.load() || m_loadingMore) return;
         if (m_visibleCount >= static_cast<int>(m_entries.size())) return;
 
