@@ -135,10 +135,11 @@ void RecyclingGrid::reloadData()
     if (m_renderedFrame.size.width != m_renderedFrame.size.width)
         m_renderedFrame.size.width = m_oldWidth;
 
-    setContentOffsetY(0, false);
     if (!m_dataSource || m_dataSource->getItemCount() <= 0)
     {
         m_contentBox->setHeight(0);
+        setContentOffsetY(0, false);
+        invalidate();
         return;
     }
 
@@ -149,6 +150,8 @@ void RecyclingGrid::reloadData()
     m_contentBox->setHeight(
         (estimatedRowHeight + estimatedRowSpace) * (float)getRowCount()
         - estimatedRowSpace + m_paddingTop + m_paddingBottom);
+
+    setContentOffsetY(0, false);
 
     size_t lineHeadIndex = cellFocusIndex / spanCount * spanCount;
     m_renderedFrame.origin.y = getHeightByCellIndex(lineHeadIndex);
