@@ -73,6 +73,7 @@ namespace beiklive
     GameLibraryPage::~GameLibraryPage()
     {
         m_alive.store(false);
+        _freeItemPool();
     }
 
     void GameLibraryPage::draw(NVGcontext* vg, float x, float y, float w, float h,
@@ -155,6 +156,38 @@ namespace beiklive
     }
 
     // ============================================================
+    // _recycleVisibleItems — 从GridBox的LazyCell中取下所有GridItem放入池
+    // ============================================================
+
+    void GameLibraryPage::_recycleVisibleItems()
+    {
+        if (!m_grid) return;
+        for (int i = 0; i < m_visibleCount; ++i)
+        {
+            auto* view = m_grid->getItemView(i);
+            if (!view) continue;
+            if (auto* box = dynamic_cast<brls::Box*>(view))
+            {
+                auto& children = box->getChildren();
+                if (!children.empty())
+                {
+                    if (auto* item = dynamic_cast<GridItem*>(children[0]))
+                    {
+                        item->removeFromSuperView();
+                        m_itemPool.push_back(item);
+                    }
+                }
+            }
+        }
+    }
+
+    void GameLibraryPage::_freeItemPool()
+    {
+        for (auto* item : m_itemPool) delete item;
+        m_itemPool.clear();
+    }
+
+    // ============================================================
     // _rebuildGrid — 使用 GridBox::addItem 工厂模式
     // ============================================================
 
@@ -162,6 +195,9 @@ namespace beiklive
     {
         if (!m_alive.load()) return;
         beiklive::GridItem::cancelDeferredLoads();
+
+        _recycleVisibleItems();
+
         m_grid->clearItems();
 
         int count = std::min(m_visibleCount, static_cast<int>(m_entries.size()));
@@ -171,8 +207,18 @@ namespace beiklive
             GridItemData data = _buildItemData(m_entries[i]);
             int captIdx = i;
 
-            m_grid->addItem([data = std::move(data), captIdx]() -> brls::View* {
-                auto* item = new beiklive::GridItem(GridItemMode::GAME_LIBRARY, captIdx);
+            m_grid->addItem([this, data = std::move(data), captIdx]() -> brls::View* {
+                GridItem* item = nullptr;
+                if (!m_itemPool.empty())
+                {
+                    item = m_itemPool.back();
+                    m_itemPool.pop_back();
+                    item->reset();
+                }
+                else
+                {
+                    item = new beiklive::GridItem(GridItemMode::GAME_LIBRARY, captIdx);
+                }
 
                 item->setImagePathDeferred(data.logoPath);
 

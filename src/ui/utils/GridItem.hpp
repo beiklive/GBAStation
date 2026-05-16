@@ -48,6 +48,9 @@ namespace beiklive
         void setEmpty(const std::string& slotName);
         void setDataLoaded();
 
+        /// 复用回收的GridItem：重置所有视图到空状态，准备重新填充数据
+        void reset();
+
         int           getIndex() const { return m_index; }
         GridItemMode  getMode()  const { return m_mode;  }
         bool          isEmpty()  const { return m_isEmpty; }

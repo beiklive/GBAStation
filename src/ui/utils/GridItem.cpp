@@ -327,6 +327,21 @@ namespace beiklive
         m_isEmpty = false;
     }
 
+    void GridItem::reset()
+    {
+        if (m_image) m_image->clear();
+        if (m_imageLayer) m_imageLayer->setVisibility(brls::Visibility::GONE);
+        if (m_titleLabel) m_titleLabel->setText("");
+        if (m_subLabel) m_subLabel->setText("");
+        if (m_playLabel) m_playLabel->setText("");
+        if (m_badgeLabel) m_badgeLabel->setText("");
+        if (m_badgeBox) m_badgeBox->setVisibility(brls::Visibility::GONE);
+
+        m_emptyLabel->setVisibility(brls::Visibility::VISIBLE);
+        if (m_dataLayout) m_dataLayout->setVisibility(brls::Visibility::GONE);
+        m_isEmpty = true;
+    }
+
     // ============================================================
     // 图片加载
     // ============================================================

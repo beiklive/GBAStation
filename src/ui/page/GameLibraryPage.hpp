@@ -52,12 +52,16 @@ namespace beiklive
         bool                  m_isSearching = false;
         beiklive::GameOptionsSidebar* m_gameOptionsSidebar = nullptr;
 
+        std::vector<beiklive::GridItem*> m_itemPool;
+
         void _loadAndShowEntries();
         void _filterEntries();
         void _rebuildGrid();
         void _loadNextPage();
         void _reloadEntries();
         void _showFilterDropdown();
+        void _recycleVisibleItems();
+        void _freeItemPool();
         void _updateHeader();
 
         void _showGameOptionsPanel(const beiklive::GameEntry& entry);
