@@ -336,6 +336,7 @@ void RecyclingGrid::addCellAt(size_t index, bool downSide)
     cell->setHeight(cellHeight);
     cell->setDetachedPositionX(cellX);
     cell->setDetachedPositionY(getHeightByCellIndex(index) + m_paddingTop);
+    cell->detach();
     cell->setIndex(index);
 
     m_contentBox->getChildren().insert(m_contentBox->getChildren().end(), cell);
