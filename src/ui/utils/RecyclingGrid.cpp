@@ -330,6 +330,24 @@ void RecyclingGrid::draw(NVGcontext* vg, float x, float y, float w, float h,
 {
     itemsRecyclingLoop();
     ScrollingFrame::draw(vg, x, y, w, h, style, ctx);
+
+    if (m_dataSource && m_dataSource->getItemCount() > 0)
+    {
+        float contentH = m_contentBox->getHeight();
+        float frameH = getHeight();
+        if (contentH > frameH)
+        {
+            float off = getContentOffsetY();
+            if (off >= contentH - frameH - 20.0f)
+            {
+                if (!m_requestNextPage && m_nextPageCallback)
+                {
+                    m_requestNextPage = true;
+                    m_nextPageCallback();
+                }
+            }
+        }
+    }
 }
 
 // ── Cell 回收循环 ──────────────────────────────────────────────
@@ -503,24 +521,10 @@ void RecyclingGrid::itemsRecyclingLoop()
                     nextIdx > static_cast<size_t>(spanCount) * 3 ? nextIdx - static_cast<size_t>(spanCount) * 3 : 0) >
                 visibleFrame.getMaxY())
             {
-                m_requestNextPage = false;
                 break;
             }
         }
         addCellAt(nextIdx, true);
-    }
-
-    // 触底触发 onNextPage
-    if (visibleMax + 1 >= getItemCount())
-    {
-        if (!m_requestNextPage && m_nextPageCallback)
-        {
-            if (m_dataSource && m_dataSource->getItemCount() > 0)
-            {
-                m_requestNextPage = true;
-                m_nextPageCallback();
-            }
-        }
     }
 }
 
