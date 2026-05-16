@@ -43,9 +43,15 @@ public:
     void onFocusLost() override;
 
 private:
+    struct CellItem {
+        RecyclingGridItem* cell = nullptr;
+        int row = 0;
+        int col = 0;
+    };
+
     void itemsRecyclingLoop();
-    void addCellAt(size_t startIndex, bool below);
-    void recycleOutOfRangeCells();
+    void addCellsForRow(int row);
+    void recycleOutOfRangeRows();
     void setupNavigation();
     int getRowIndex(size_t itemIndex) const;
     int getItemCount() const;
@@ -53,7 +59,6 @@ private:
     size_t getCellStartIndex();
     size_t getCellEndIndex();
     float getContentHeightForRows(int rows) const;
-    float getYForItem(size_t index) const;
 
     int m_spanCount;
     float m_itemHeight;
@@ -65,12 +70,12 @@ private:
     std::map<std::string, std::function<RecyclingGridItem*()>> m_allocationMap;
     std::map<std::string, std::vector<RecyclingGridItem*>*> m_queueMap;
 
-    std::vector<RecyclingGridItem*> m_attachedItems;
+    std::map<int, std::vector<CellItem>> m_attachedRows;
 
     brls::Box* m_contentBox = nullptr;
 
-    size_t m_visibleMin = 0;
-    size_t m_visibleMax = 0;
+    int m_visibleMinRow = 0;
+    int m_visibleMaxRow = 0;
     size_t m_itemCount = 0;
     bool m_requestNextPage = false;
     int m_preFetchLine = 1;
