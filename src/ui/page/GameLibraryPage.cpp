@@ -109,7 +109,7 @@ namespace beiklive
 
         const auto& entry = m_page->m_entries[index];
 
-        cell->setImagePathDeferred(entry.logoPath);
+        cell->setImagePath(entry.logoPath);
 
         std::string badgeText = beiklive::tools::platformBadgeName(entry.platform);
         PlatformBadgeColor badgeColor;
@@ -124,7 +124,7 @@ namespace beiklive
             cell->setBadge(badgeText, badgeColor);
 
         std::string logoLayerPath = GetGameLogoLayerPath(entry.platform);
-        cell->setImageLayerDeferred(logoLayerPath, !logoLayerPath.empty());
+        cell->setImageLayer(logoLayerPath, !logoLayerPath.empty());
 
         cell->setTitle(entry.title.empty() ? entry.path : entry.title);
         std::string lastPlayed = entry.lastPlayed.empty() ? "从未游玩" : beiklive::tools::formatTimestampForDisplay(entry.lastPlayed);

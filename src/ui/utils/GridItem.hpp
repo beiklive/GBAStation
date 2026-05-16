@@ -38,10 +38,8 @@ namespace beiklive
         void prepareForReuse() override;
 
         void setImageLayer(const std::string& path, bool visible);
-        void setImageLayerDeferred(const std::string& path, bool visible);
 
         void setImagePath(const std::string& path);
-        void setImagePathDeferred(const std::string& path);
 
         void setBadge(const std::string& text, PlatformBadgeColor color);
 
@@ -56,8 +54,6 @@ namespace beiklive
         GridItemMode  getMode()  const { return m_mode;  }
         bool          isEmpty()  const { return m_isEmpty; }
 
-        static void cancelDeferredLoads();
-
         std::function<void(int index)> onItemClicked;
         std::function<void(int index)> onItemFocused;
 
@@ -67,7 +63,6 @@ namespace beiklive
     private:
         GridItemMode m_mode;
         int          m_index;
-        int          m_loadGen = 0;
         bool         m_isEmpty = true;
         bool         m_showImageLayer = false;
         brls::Label* m_emptyLabel = nullptr;

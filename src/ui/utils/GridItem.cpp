@@ -1,41 +1,9 @@
 #include "GridItem.hpp"
 
-#include <deque>
 #include <functional>
 
 namespace beiklive
 {
-
-    static std::deque<std::function<void()>> s_imageLoadQueue;
-    static bool s_imageQueueActive = false;
-
-    static void processImageQueue()
-    {
-        if (s_imageLoadQueue.empty())
-        {
-            s_imageQueueActive = false;
-            return;
-        }
-        auto task = std::move(s_imageLoadQueue.front());
-        s_imageLoadQueue.pop_front();
-        if (task) task();
-        brls::sync([]() { processImageQueue(); });
-    }
-
-    static void enqueueImageTask(std::function<void()> task)
-    {
-        s_imageLoadQueue.push_back(std::move(task));
-        if (!s_imageQueueActive)
-        {
-            s_imageQueueActive = true;
-            brls::sync([]() { processImageQueue(); });
-        }
-    }
-
-    void GridItem::cancelDeferredLoads()
-    {
-        s_imageLoadQueue.clear();
-    }
 
     // ============================================================
     // 构造 / 析构
@@ -250,11 +218,12 @@ namespace beiklive
     void GridItem::setImagePath(const std::string& path)
     {
         if (!m_image) return;
-        if (!path.empty())
+        if (path.empty())
         {
-            m_image->setImageFromFileForce(path);
-
+            m_image->clear();
+            return;
         }
+        m_image->setImageFromFile(path);
     }
 
     void GridItem::setBadge(const std::string& text, PlatformBadgeColor color)
@@ -326,27 +295,6 @@ namespace beiklive
         m_imageLayer->setVisibility(visible ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
     }
 
-    void GridItem::setImageLayerDeferred(const std::string& path, bool visible)
-    {
-        m_showImageLayer = visible;
-        if (path.empty() || !m_imageLayer) return;
-        int gen = m_loadGen;
-        enqueueImageTask([this, path, visible, gen]() {
-            if (!m_imageLayer || m_loadGen != gen) return;
-            if (visible) m_imageLayer->setImageFromFile(path);
-            m_imageLayer->setVisibility(visible ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
-        });
-    }
-
-    void GridItem::setImagePathDeferred(const std::string& path)
-    {
-        if (path.empty() || !m_image) return;
-        int gen = m_loadGen;
-        enqueueImageTask([this, path, gen]() {
-            if (m_image && m_loadGen == gen) m_image->setImageFromFileForce(path);
-        });
-    }
-
     // ============================================================
     // 复用重置
     // ============================================================
@@ -354,8 +302,6 @@ namespace beiklive
     void GridItem::prepareForReuse()
     {
         RecyclingGridItem::prepareForReuse();
-        m_loadGen++;
-        if (m_image) m_image->clear();
         if (m_imageLayer) m_imageLayer->setVisibility(brls::Visibility::GONE);
         if (m_titleLabel) m_titleLabel->setText("");
         if (m_subLabel) m_subLabel->setText("");
