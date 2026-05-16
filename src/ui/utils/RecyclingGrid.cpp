@@ -170,7 +170,6 @@ void RecyclingGrid::notifyDataChanged()
     if (!m_dataSource) return;
     float newH = (estimatedRowHeight + estimatedRowSpace) * getRowCount()
         - estimatedRowSpace + m_paddingTop + m_paddingBottom;
-    brls::Logger::info("RecyclingGrid::notifyDataChanged: rowCount={} items={} newHeight={}", getRowCount(), getItemCount(), newH);
     m_contentBox->setHeight(newH);
     m_requestNextPage = false;
     invalidate();
@@ -340,8 +339,6 @@ void RecyclingGrid::draw(NVGcontext* vg, float x, float y, float w, float h,
         brls::Rect vf = getVisibleFrame();
         float contentH = m_contentBox->getHeight();
         float frameH = getHeight();
-        brls::Logger::debug("RecyclingGrid::draw onNextPage check: visibleMaxY={} contentH={} frameH={} reqNext={}",
-            vf.getMaxY(), contentH, frameH, m_requestNextPage);
         if (contentH > frameH && vf.getMaxY() >= contentH - 80.0f)
         {
             if (!m_requestNextPage && m_nextPageCallback)
