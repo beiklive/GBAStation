@@ -55,6 +55,9 @@ namespace beiklive
 
         static void cancelDeferredLoads();
 
+        std::function<void(int index)> onItemClicked;
+        std::function<void(int index)> onItemFocused;
+
         std::function<bool(int index)> isFavourite;
         std::function<void(int index)> toggleFavourite;
 
