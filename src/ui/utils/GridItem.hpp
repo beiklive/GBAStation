@@ -34,6 +34,8 @@ namespace beiklive
 
         void draw(NVGcontext* vg, float x, float y, float width, float height, brls::Style style, brls::FrameContext* ctx) override;
 
+        void prepareForReuse() override;
+
         void setImageLayer(const std::string& path, bool visible);
         void setImageLayerDeferred(const std::string& path, bool visible);
 
