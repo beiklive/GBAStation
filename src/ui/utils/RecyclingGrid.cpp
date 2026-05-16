@@ -429,7 +429,7 @@ void RecyclingGrid::itemsRecyclingLoop()
         float cellHeight = estimatedRowHeight;
         if (minCell->getDetachedPosition().y + cellHeight +
             getHeightByCellIndex(
-                std::min(visibleMin + static_cast<size_t>(spanCount) * 2, m_dataSource->getItemCount()),
+                std::min(visibleMin + static_cast<size_t>(spanCount) * 3, m_dataSource->getItemCount()),
                 visibleMin) >= visibleFrame.getMinY())
             break;
 
@@ -460,8 +460,8 @@ void RecyclingGrid::itemsRecyclingLoop()
         if (!maxCell) break;
         if (visibleMax == 0) break;
 
-        size_t compareIdx = visibleMax > static_cast<size_t>(spanCount) * 2
-            ? visibleMax - static_cast<size_t>(spanCount) * 2 : 0;
+        size_t compareIdx = visibleMax > static_cast<size_t>(spanCount) * 3
+            ? visibleMax - static_cast<size_t>(spanCount) * 3 : 0;
         if (maxCell->getDetachedPosition().y -
             getHeightByCellIndex(visibleMax, compareIdx) <= visibleFrame.getMaxY())
             break;
@@ -477,6 +477,14 @@ void RecyclingGrid::itemsRecyclingLoop()
     // 上方添加
     while (visibleMin > 0 && visibleMin - 1 < m_dataSource->getItemCount())
     {
+        if ((visibleMin) % spanCount == 0)
+        {
+            if (m_renderedFrame.getMinY() +
+                getHeightByCellIndex(
+                    std::min(visibleMin + static_cast<size_t>(spanCount) * 3, m_dataSource->getItemCount()),
+                    visibleMin) < visibleFrame.getMinY())
+                break;
+        }
         addCellAt(visibleMin - 1, false);
     }
 
@@ -489,7 +497,7 @@ void RecyclingGrid::itemsRecyclingLoop()
             if (m_renderedFrame.getMaxY() -
                 getHeightByCellIndex(
                     nextIdx,
-                    nextIdx > static_cast<size_t>(spanCount) * 2 ? nextIdx - static_cast<size_t>(spanCount) * 2 : 0) >
+                    nextIdx > static_cast<size_t>(spanCount) * 3 ? nextIdx - static_cast<size_t>(spanCount) * 3 : 0) >
                 visibleFrame.getMaxY())
             {
                 m_requestNextPage = false;
