@@ -334,6 +334,13 @@ void RecyclingGrid::draw(NVGcontext* vg, float x, float y, float w, float h,
 void RecyclingGrid::addCellAt(size_t index, bool downSide)
 {
     if (!m_dataSource) return;
+
+    for (auto* it : m_contentBox->getChildren())
+    {
+        auto* item = dynamic_cast<RecyclingGridItem*>(it);
+        if (item && item->getIndex() == index) return;
+    }
+
     RecyclingGridItem* cell = m_dataSource->cellForRow(this, index);
     if (!cell) return;
 
