@@ -20,6 +20,7 @@ namespace beiklive
 
     StartPage::~StartPage()
     {
+        m_alive.store(false);
     }
 
     void StartPage::Init()
@@ -66,10 +67,12 @@ namespace beiklive
         if (switchLayout)
         {
             ThreadPool::instance().enqueue([this]() {
+                if (!m_alive.load()) return;
                 beiklive::GameList recent = beiklive::GameDB
                     ? beiklive::GameDB->getRecentPlayed(10)
                     : beiklive::GameList{};
                 brls::sync([this, recent = std::move(recent)]() {
+                    if (!m_alive.load()) return;
                     switchLayout->refreshGameList(recent);
                     auto& children = switchLayout->getContentBox()->getChildren();
                     if (!children.empty())

@@ -50,6 +50,8 @@ namespace beiklive
 
     void SwitchLayout::refreshGameList(beiklive::GameList gameList)
     {
+        int thisGen = ++m_loadGen;
+
         // UI 线程：构建卡片框架（无封面图片）
         buildCardRow(gameList);
 
@@ -63,8 +65,10 @@ namespace beiklive
             std::string logoPath = gameList[i].logoPath;
             if (logoPath.empty()) continue;
 
-            ThreadPool::instance().enqueue([card, logoPath]() {
-                brls::sync([card, logoPath]() {
+            ThreadPool::instance().enqueue([card, logoPath, thisGen, this]() {
+                if (thisGen != m_loadGen.load()) return;
+                brls::sync([card, logoPath, thisGen, this]() {
+                    if (thisGen != m_loadGen.load()) return;
                     card->loadCoverImage(logoPath);
                 });
             });

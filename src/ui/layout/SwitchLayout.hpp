@@ -1,6 +1,7 @@
 #pragma once
 
 #include <borealis.hpp>
+#include <atomic>
 #include "core/common.h"
 #include "Layout.hpp"
 #include "ui/utils/GameCard.hpp"
@@ -24,5 +25,7 @@ namespace beiklive
         brls::Box* m_cardRow;
 
         brls::Box* m_functionArea;
+
+        std::atomic<int> m_loadGen{0};
     };
 } // namespace beiklive

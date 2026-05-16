@@ -1,5 +1,6 @@
 #pragma once 
 
+#include <atomic>
 #include "core/common.h"
 #include "ui/layout/SwitchLayout.hpp"
 #include "ui/page/FileListPage.hpp" 
@@ -39,6 +40,7 @@ namespace beiklive
         beiklive::SwitchLayout* switchLayout = nullptr;
         beiklive::GamePage* m_gamePage = nullptr;
         beiklive::GameOptionsSidebar* m_gameOptionsSidebar = nullptr;
+        std::atomic<bool> m_alive{true};
     };
 } // namespace beiklive
 
