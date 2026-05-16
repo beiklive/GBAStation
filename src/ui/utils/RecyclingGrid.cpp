@@ -15,9 +15,12 @@ RecyclingGrid::RecyclingGrid(int spanCount, float itemHeight, float itemSpace)
     this->setScrollingBehavior(brls::ScrollingBehavior::CENTERED);
     this->setScrollingIndicatorVisible(false);
 
+    this->setWidth(View::AUTO);
+    this->setHeight(View::AUTO);
+
     m_contentBox = new brls::Box(brls::Axis::COLUMN);
     m_contentBox->setFocusable(false);
-    m_contentBox->setWidth(View::AUTO);
+    m_contentBox->setWidthPercentage(100);
     this->setContentView(m_contentBox);
 }
 
@@ -313,9 +316,8 @@ void RecyclingGrid::addCellAt(size_t startIndex, bool below)
     size_t endIndex = getCellEndIndex();
     if (startIndex >= endIndex) return;
 
-    float contentWidth = this->getWidth();
     float padding = 10.0f;
-    float cellWidth = (contentWidth - padding * 2) / m_spanCount;
+    float cellWidthPct = (100.0f - padding * 2) / m_spanCount;
 
     if (below)
     {
@@ -327,7 +329,7 @@ void RecyclingGrid::addCellAt(size_t startIndex, bool below)
             if (!cell) continue;
 
             cell->setGridIndex(static_cast<int>(i));
-            cell->setWidth(cellWidth);
+            cell->setWidthPercentage(cellWidthPct);
             cell->setHeight(m_itemHeight);
             cell->setMarginRight(5.0f);
             cell->setMarginLeft(5.0f);
@@ -347,7 +349,7 @@ void RecyclingGrid::addCellAt(size_t startIndex, bool below)
             if (!cell) continue;
 
             cell->setGridIndex(static_cast<int>(i));
-            cell->setWidth(cellWidth);
+            cell->setWidthPercentage(cellWidthPct);
             cell->setHeight(m_itemHeight);
             cell->setMarginRight(5.0f);
             cell->setMarginLeft(5.0f);

@@ -131,8 +131,8 @@ namespace beiklive
 
         cell->setDataLoaded();
 
-        cell->onItemClicked = [this, idx = index](int) {
-            if (m_page && idx < (int)m_page->m_entries.size() && m_page->onGameSelected)
+        cell->onItemClicked = [this, idx = static_cast<int>(index)](int) {
+            if (m_page && idx >= 0 && idx < static_cast<int>(m_page->m_entries.size()) && m_page->onGameSelected)
                 m_page->onGameSelected(m_page->m_entries[idx]);
         };
 
