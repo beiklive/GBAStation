@@ -167,6 +167,7 @@ void RecyclingGrid::notifyDataChanged()
         (estimatedRowHeight + estimatedRowSpace) * getRowCount()
         - estimatedRowSpace + m_paddingTop + m_paddingBottom);
     m_requestNextPage = false;
+    invalidate();
 }
 
 void RecyclingGrid::clearData()
