@@ -53,8 +53,19 @@ namespace beiklive
     {
         if (m_coverImage)
         {
-            m_coverImage->setImageFromFileForce(logoPath);
+            m_coverImage->setImageFromFile(logoPath);
         }
+    }
+
+    void GameCard::loadCoverImage(const std::string &logoPath)
+    {
+        if (!m_coverImage) return;
+        if (logoPath.empty())
+        {
+            m_coverImage->clear();
+            return;
+        }
+        m_coverImage->setImageFromFile(logoPath);
     }
 
     void GameCard::setLogoLayer(const std::string &path, bool visible)
@@ -133,7 +144,7 @@ namespace beiklive
         m_coverImage->setCornerRadius(7.f);
 
         if (!m_isEmpty && !m_gameEntry.logoPath.empty())
-            m_coverImage->setImageFromFileForce(m_gameEntry.logoPath);
+            m_coverImage->setImageFromFile(m_gameEntry.logoPath);
         else if (m_isEmpty)
             m_coverImage->clear(); // 空卡片不加载图片
 

@@ -50,6 +50,7 @@ namespace beiklive
         void applyThemeLayout();
 
         void updateLogo(const std::string &logoPath);
+        void loadCoverImage(const std::string &logoPath);
         void setLogoLayer(const std::string &path, bool visible);
         void setLayoutType(beiklive::enums::ThemeLayout type) { m_layoutType = type; }
         beiklive::enums::ThemeLayout getLayoutType() const { return m_layoutType; }
