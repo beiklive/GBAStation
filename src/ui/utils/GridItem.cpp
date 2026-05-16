@@ -349,7 +349,7 @@ namespace beiklive
         });
     }
 
-    void GridItem::prepareForReuse() override
+    void GridItem::prepareForReuse()
     {
         RecyclingGridItem::prepareForReuse();
         if (m_image) m_image->clear();
