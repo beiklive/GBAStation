@@ -110,6 +110,12 @@ namespace beiklive::gba
 
         // 将全局配置管理器传入核心（用于响应 RETRO_ENVIRONMENT_GET_VARIABLE）
         m_core.setConfigManager(cfg);
+
+        // 设置 BIOS 文件搜索目录（从配置读取，默认 biosPath）
+        {
+            std::string biosDir = beiklive::getKeyStr(beiklive::SettingManager, "bios.path", beiklive::path::biosPath());
+            m_core.setSystemDirectory(biosDir);
+        }
     }
 
     bool CoreMgba::_loadCore(const std::string &corePath)

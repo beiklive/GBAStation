@@ -43,6 +43,7 @@ inline std::string GetRootPath()
     constexpr const char *CHEATS_DIR        = "cheats";
     constexpr const char *SHADER_DIR        = "shaders";
     constexpr const char *CORE_DIR        = "cores";
+    constexpr const char *BIOS_DIR        = "bios";
 
     constexpr const char *CONFIG_FILE          = "config.cfg";
     constexpr const char *MAPPING_FILE         = "name_mapping.cfg";
@@ -128,6 +129,10 @@ inline std::string GetRootPath()
         inline std::string corePath()
         {
             return ROOT + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + CORE_DIR;
+        }
+        inline std::string biosPath()
+        {
+            return ROOT + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + BIOS_DIR;
         }
 
     }

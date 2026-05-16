@@ -580,6 +580,27 @@ brls::View *SettingPage::buildUITab()
     box->addView(skipBiosCell);
 
     {
+        std::string cfgKey = "bios.path";
+        std::string curPath = cfgGetStr(cfgKey, beiklive::path::biosPath());
+        auto* biosPathCell = new brls::DetailCell();
+        biosPathCell->setText("BIOS 文件目录");
+        biosPathCell->setDetailText(curPath.empty() ? "未设置" : curPath);
+        biosPathCell->registerAction("选择", brls::BUTTON_A,
+            [biosPathCell, cfgKey](brls::View*) -> bool {
+                beiklive::openFilePicker({"bin"},
+                    [biosPathCell, cfgKey](const std::string& path) {
+                        std::string dir = std::filesystem::path(path).parent_path().string();
+                        cfgSetStr(cfgKey, dir);
+                        biosPathCell->setDetailText(dir);
+                    },
+                    cfgGetStr(cfgKey, beiklive::path::biosPath()));
+                return true;
+            });
+        box->addView(biosPathCell);
+        box->addView(makeHint("存放 gba_bios.bin / gbc_bios.bin / gb_bios.bin / sgb_bios.bin"));
+    }
+
+    {
         std::vector<std::string> gbColors = {
             "Grayscale", "DMG Green", "GB Pocket", "GB Light",
             "GBC Brown ↑", "GBC Red ↑A", "GBC Dark Brown ↑B",

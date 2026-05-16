@@ -116,6 +116,7 @@ namespace beiklive
         std::filesystem::create_directories(beiklive::path::cheatPath());
         std::filesystem::create_directories(beiklive::path::shaderPath());
         std::filesystem::create_directories(beiklive::path::cachePath());
+        std::filesystem::create_directories(beiklive::path::biosPath());
 
         SettingManager = new beiklive::ConfigManager(beiklive::path::configFilePath());
         NameMappingManager = new beiklive::ConfigManager(beiklive::path::mappingFilePath());
@@ -210,6 +211,9 @@ namespace beiklive
         SettingManager->SetDefault("core.mgba_gb_colors", ConfigValue(std::string("Grayscale")));
         SettingManager->SetDefault("core.mgba_idle_optimization", ConfigValue(std::string("Remove Known")));
         SettingManager->SetDefault("core.mgba_audio_low_pass_filter", ConfigValue(std::string("disabled")));
+
+        // BIOS 路径设置
+        SettingManager->SetDefault("bios.path", ConfigValue(beiklive::path::biosPath()));
 
         // 画面设置
         SettingManager->SetDefault("display.mode", ConfigValue(std::string("original")));
