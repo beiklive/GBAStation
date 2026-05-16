@@ -29,6 +29,7 @@ namespace beiklive
 
         buildFunctionArea();
 
+        // 先初始化默认空卡片
         _buildEmptyCards();
     }
 
@@ -49,50 +50,17 @@ namespace beiklive
 
     void SwitchLayout::refreshGameList(beiklive::GameList gameList)
     {
-        _updateCardData(gameList);
-    }
-
-    void SwitchLayout::_updateCardData(const beiklive::GameList& gameList)
-    {
-        size_t totalSlots = std::max(static_cast<size_t>(DEFAULT_EMPTY_CARDS), gameList.size());
-
-        auto& children = m_cardRow->getChildren();
-
-        for (size_t i = 0; i < totalSlots; ++i)
+        brls::sync([this, gameList]() mutable
         {
-            GameCard* card = nullptr;
-            if (i < children.size())
-                card = dynamic_cast<GameCard*>(children[i]);
-            else
-                continue;
-
-            if (!card) continue;
-
-            if (i < gameList.size())
-            {
-                card->updateGameEntry(gameList[i]);
-                if (!card->onCardClicked)
-                {
-                    card->onCardClicked = [this](beiklive::GameEntry &entry)
-                    {
-                        if (onGameActivated)
-                            onGameActivated(entry);
-                    };
-                }
-                card->updateLogo(gameList[i].logoPath);
-            }
-            else
-            {
-                beiklive::GameEntry emptyEntry;
-                card->updateGameEntry(emptyEntry);
-            }
-        }
+            buildCardRow(gameList);
+        });
     }
 
     void SwitchLayout::buildCardRow(beiklive::GameList gameList)
     {
         m_cardRow->clearViews(true);
 
+        // 保证至少有 DEFAULT_EMPTY_CARDS 个位置
         size_t totalSlots = std::max(static_cast<size_t>(DEFAULT_EMPTY_CARDS), gameList.size());
 
         for (size_t i = 0; i < totalSlots; ++i)
@@ -106,19 +74,18 @@ namespace beiklive
                 gameCard->setMarginRight(10.f);
                 gameCard->setMarginLeft(10.f);
                 gameCard->updateLogo(gameEntry.logoPath);
+                // gameCard->setLogoLayer(GetGameLogoLayerPath(gameEntry.platform), true);
                 gameCard->onCardClicked = [this](beiklive::GameEntry &entry)
                 {
                     if (onGameActivated)
                         onGameActivated(entry);
                 };
-                gameCard->onFavouriteToggled = [this, i](beiklive::GameEntry &toggled) {
-                    // 收藏变更后只更新对应卡片的数据
-                    if (beiklive::GameDB) {
-                        auto recent = beiklive::GameDB->getRecentPlayed(10);
-                        brls::sync([this, recent]() {
-                            _updateCardData(recent);
-                        });
-                    }
+                gameCard->onFavouriteToggled = [this](beiklive::GameEntry &) {
+                    // 收藏状态变化后刷新整个列表
+                    beiklive::GameList recent = beiklive::GameDB
+                        ? beiklive::GameDB->getRecentPlayed(10)
+                        : beiklive::GameList{};
+                    refreshGameList(recent);
                 };
                 gameCard->registerAction(
                     "游戏选项",
@@ -134,6 +101,7 @@ namespace beiklive
             }
             else
             {
+                // 空占位卡片
                 beiklive::GameEntry emptyEntry;
                 auto *gameCard = new beiklive::GameCard(
                     beiklive::enums::ThemeLayout::SWITCH_THEME, emptyEntry, static_cast<int>(i));

@@ -64,17 +64,10 @@ namespace beiklive
         // 每次回到起始页时刷新游戏列表，获取最新的最近玩过的10款游戏
         if (switchLayout)
         {
-            new std::thread([this]() {
-                beiklive::GameList recent = beiklive::GameDB
-                    ? beiklive::GameDB->getRecentPlayed(10)
-                    : beiklive::GameList{};
-                brls::sync([this, recent = std::move(recent)]() {
-                    switchLayout->refreshGameList(recent);
-                    auto& children = switchLayout->getContentBox()->getChildren();
-                    if (!children.empty())
-                        brls::Application::giveFocus(children[0]->getDefaultFocus());
-                });
-            });
+            beiklive::GameList recent = beiklive::GameDB->getRecentPlayed(10);
+            switchLayout->refreshGameList(recent);
+            brls::sync([this]()
+                       { brls::Application::giveFocus(switchLayout->getContentBox()->getChildren().empty() ? switchLayout->getDefaultFocus() : switchLayout->getContentBox()->getChildren()[0]->getDefaultFocus()); });
         }
     }
 

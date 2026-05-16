@@ -54,9 +54,6 @@ namespace beiklive
         void setLayoutType(beiklive::enums::ThemeLayout type) { m_layoutType = type; }
         beiklive::enums::ThemeLayout getLayoutType() const { return m_layoutType; }
 
-        /// 更新卡片数据并刷新显示（复用视图，不重建）
-        void updateGameEntry(const beiklive::GameEntry& entry);
-
         bool isEmpty() const { return m_isEmpty; }
         beiklive::GameEntry& getGameEntry() { return m_gameEntry; }
 

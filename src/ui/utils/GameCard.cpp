@@ -53,44 +53,7 @@ namespace beiklive
     {
         if (m_coverImage)
         {
-            m_coverImage->setImageFromFile(logoPath);
-        }
-    }
-
-    void GameCard::updateGameEntry(const beiklive::GameEntry& entry)
-    {
-        m_gameEntry = entry;
-        m_isEmpty = m_gameEntry.path.empty();
-
-        if (m_coverImage)
-        {
-            if (!m_isEmpty && !m_gameEntry.logoPath.empty())
-                m_coverImage->setImageFromFile(m_gameEntry.logoPath);
-            else
-                m_coverImage->clear();
-        }
-
-        if (m_titleLabel)
-            m_titleLabel->setText(m_isEmpty ? " " : m_gameEntry.title);
-
-        if (m_playTimeLabel)
-        {
-            std::string playStr = "未游玩";
-            if (!m_isEmpty && m_gameEntry.playTime > 0)
-            {
-                int h = m_gameEntry.playTime / 3600;
-                int min = (m_gameEntry.playTime % 3600) / 60;
-                playStr = "游玩时间: " + std::to_string(h) + "时" + std::to_string(min) + "分";
-            }
-            m_playTimeLabel->setText(m_isEmpty ? " " : playStr);
-        }
-
-        if (m_lastPlayedLabel)
-        {
-            std::string timeStr = m_gameEntry.lastPlayed.empty()
-                ? "上次打开: 从未"
-                : "上次打开: " + beiklive::tools::formatTimestampForDisplay(m_gameEntry.lastPlayed);
-            m_lastPlayedLabel->setText(m_isEmpty ? " " : timeStr);
+            m_coverImage->setImageFromFileForce(logoPath);
         }
     }
 
