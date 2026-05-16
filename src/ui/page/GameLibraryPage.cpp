@@ -1,5 +1,6 @@
 #include "GameLibraryPage.hpp"
 #include "ui/utils/FilePickerHelper.hpp"
+#include "core/ThreadPool.hpp"
 #include <algorithm>
 #include <cctype>
 
@@ -35,30 +36,28 @@ namespace beiklive
             auto* ime = brls::Application::getPlatform()->getImeManager();
             if (!ime) return true;
             ime->openForText(
-                [this](std::string text) {
-                    m_isSearching = !text.empty();
-                    m_searchTerm = text;
+                    [this](std::string text) {
+                        m_isSearching = !text.empty();
+                        m_searchTerm = text;
 
-                    ASYNC_RETAIN
-                    brls::async([ASYNC_TOKEN]() {
-                        m_entries = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
-                        _filterEntries();
-                        ASYNC_RELEASE
-                        brls::sync([this]() {
-                            if (m_isSearching && m_entries.empty())
-                            {
-                                auto* dialog = new brls::Dialog("当前分类下无 \"" + m_searchTerm + "\"");
-                                dialog->addButton("确认", []() {});
-                                dialog->open();
-                                return;
-                            }
+                        ThreadPool::instance().enqueue([this]() {
+                            m_entries = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
+                            _filterEntries();
+                            brls::sync([this]() {
+                                if (m_isSearching && m_entries.empty())
+                                {
+                                    auto* dialog = new brls::Dialog("当前分类下无 \"" + m_searchTerm + "\"");
+                                    dialog->addButton("确认", []() {});
+                                    dialog->open();
+                                    return;
+                                }
 
-                            m_visibleCount = std::min(PAGE_SIZE, static_cast<int>(m_entries.size()));
-                            _rebuildGrid();
-                            _updateHeader();
-                            brls::Application::giveFocus(m_grid);
+                                m_visibleCount = std::min(PAGE_SIZE, static_cast<int>(m_entries.size()));
+                                _rebuildGrid();
+                                _updateHeader();
+                                brls::Application::giveFocus(m_grid);
+                            });
                         });
-                    });
                 },
                 "搜索游戏",
                 "",
@@ -111,11 +110,9 @@ namespace beiklive
     void GameLibraryPage::_loadAndShowEntries()
     {
         brls::Application::blockInputs(true);
-        ASYNC_RETAIN
-        brls::async([ASYNC_TOKEN]() {
+        ThreadPool::instance().enqueue([this]() {
             m_entries = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
             _filterEntries();
-            ASYNC_RELEASE
             brls::sync([this]() {
                 m_visibleCount = std::min(PAGE_SIZE, static_cast<int>(m_entries.size()));
                 _rebuildGrid();
@@ -325,11 +322,9 @@ namespace beiklive
                 if (newFilter == m_platformFilter) return;
                 m_platformFilter = newFilter;
 
-                ASYNC_RETAIN
-                brls::async([ASYNC_TOKEN]() {
+                ThreadPool::instance().enqueue([this]() {
                     m_entries = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
                     _filterEntries();
-                    ASYNC_RELEASE
                     brls::sync([this]() {
                         m_visibleCount = std::min(PAGE_SIZE, static_cast<int>(m_entries.size()));
                         _rebuildGrid();
@@ -398,11 +393,9 @@ namespace beiklive
 
     void GameLibraryPage::_reloadEntries()
     {
-        ASYNC_RETAIN
-        brls::async([ASYNC_TOKEN]() {
+        ThreadPool::instance().enqueue([this]() {
             m_entries = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
             _filterEntries();
-            ASYNC_RELEASE
             brls::sync([this]() {
                 m_visibleCount = std::min(PAGE_SIZE, static_cast<int>(m_entries.size()));
                 _rebuildGrid();
