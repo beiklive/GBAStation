@@ -154,9 +154,7 @@ void RecyclingGrid::reloadData()
     m_renderedFrame.origin.y = getHeightByCellIndex(lineHeadIndex);
     addCellAt(lineHeadIndex, true);
 
-    itemsRecyclingLoop();
-
-    auto* firstCell = getGridItemByIndex(0);
+    auto* firstCell = getGridItemByIndex(cellFocusIndex);
     if (firstCell)
         brls::Application::giveFocus(firstCell);
 
