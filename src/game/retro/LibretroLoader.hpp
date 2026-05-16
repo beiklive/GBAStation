@@ -76,7 +76,7 @@ public:
     /// 在loadGame()之前调用，使RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY返回该路径。
     void setSaveDirectory(const std::string& dir) { m_saveDirectory = dir; }
 
-    /// 设置核心的系统/BIOS目录。
+    /// 设置核心使用的系统/BIOS目录。
     void setSystemDirectory(const std::string& dir) { m_systemDirectory = dir; }
 
     // ---- 视频帧 -----------------------------------------------------
