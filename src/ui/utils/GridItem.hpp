@@ -67,6 +67,7 @@ namespace beiklive
     private:
         GridItemMode m_mode;
         int          m_index;
+        int          m_loadGen = 0;
         bool         m_isEmpty = true;
         bool         m_showImageLayer = false;
         brls::Label* m_emptyLabel = nullptr;
