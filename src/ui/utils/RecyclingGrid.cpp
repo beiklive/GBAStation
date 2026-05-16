@@ -130,6 +130,7 @@ void RecyclingGrid::reloadData()
     visibleMin = UINT32_MAX;
     visibleMax = 0;
 
+    m_requestNextPage = false;
     m_renderedFrame = brls::Rect();
     m_renderedFrame.size.width = getWidth();
     if (m_renderedFrame.size.width != m_renderedFrame.size.width)
