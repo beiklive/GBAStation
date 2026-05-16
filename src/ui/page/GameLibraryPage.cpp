@@ -86,6 +86,7 @@ namespace beiklive
     {
         beiklive::Box::draw(vg, x, y, w, h, style, ctx);
 
+        if (!m_alive.load()) return;
         if (m_loadingMore)
             return;
 
@@ -233,6 +234,7 @@ namespace beiklive
 
     void GameLibraryPage::_loadNextPage()
     {
+        if (!m_alive.load()) return;
         if (m_loadingMore)
             return;
         if (static_cast<size_t>(m_visibleCount) >= m_entries.size())
