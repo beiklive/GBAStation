@@ -33,7 +33,7 @@ namespace beiklive
         };
 
         GameLibraryPage();
-        ~GameLibraryPage() = default;
+        ~GameLibraryPage();
 
         void draw(NVGcontext* vg, float x, float y, float w, float h,
                   brls::Style style, brls::FrameContext* ctx) override;
@@ -73,6 +73,7 @@ namespace beiklive
         static std::string _formatPlayTime(int seconds);
 
         int _currentFocusedIndex = -1; // 当前焦点所在的游戏索引（-1 表示无焦点）
+        std::atomic<bool> m_alive{true};
     };
 
 } // namespace beiklive
