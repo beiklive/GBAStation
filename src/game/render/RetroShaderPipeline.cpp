@@ -471,6 +471,7 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
     GLint     prevBlendDstRGB   = GL_ZERO;
     GLint     prevBlendSrcAlpha = GL_ONE;
     GLint     prevBlendDstAlpha = GL_ZERO;
+    GLboolean prevSRGBEn  = GL_FALSE;   // GL_FRAMEBUFFER_SRGB 状态
     {
         GLint tmp = 0;
         glGetIntegerv(GL_FRAMEBUFFER_BINDING, &tmp);
@@ -495,6 +496,7 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
     prevStencilEn = glIsEnabled(GL_STENCIL_TEST);
     prevScissorEn = glIsEnabled(GL_SCISSOR_TEST);
     prevCullEn    = glIsEnabled(GL_CULL_FACE);
+    prevSRGBEn   = glIsEnabled(GL_FRAMEBUFFER_SRGB);
     glGetIntegerv(GL_BLEND_SRC_RGB,   &prevBlendSrcRGB);
     glGetIntegerv(GL_BLEND_DST_RGB,   &prevBlendDstRGB);
     glGetIntegerv(GL_BLEND_SRC_ALPHA, &prevBlendSrcAlpha);
@@ -571,6 +573,10 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
 
         // 绑定输出 FBO 和视口
         glBindFramebuffer(GL_FRAMEBUFFER, pass.fbo);
+        if (pass.desc.srgbFramebuffer)
+            glEnable(GL_FRAMEBUFFER_SRGB);
+        else
+            glDisable(GL_FRAMEBUFFER_SRGB);
         glViewport(0, 0, outW, outH);
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
@@ -860,6 +866,7 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
     if (prevStencilEn) glEnable(GL_STENCIL_TEST); else glDisable(GL_STENCIL_TEST);
     if (prevScissorEn) glEnable(GL_SCISSOR_TEST); else glDisable(GL_SCISSOR_TEST);
     if (prevCullEn)    glEnable(GL_CULL_FACE);    else glDisable(GL_CULL_FACE);
+    if (prevSRGBEn)   glEnable(GL_FRAMEBUFFER_SRGB); else glDisable(GL_FRAMEBUFFER_SRGB);
     glBlendFuncSeparate(static_cast<GLenum>(prevBlendSrcRGB),
                         static_cast<GLenum>(prevBlendDstRGB),
                         static_cast<GLenum>(prevBlendSrcAlpha),
