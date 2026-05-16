@@ -50,8 +50,8 @@ private:
     int getRowIndex(size_t itemIndex) const;
     int getItemCount() const;
 
-    size_t getCellStartIndex() const;
-    size_t getCellEndIndex() const;
+    size_t getCellStartIndex();
+    size_t getCellEndIndex();
     float getContentHeightForRows(int rows) const;
     float getYForItem(size_t index) const;
 

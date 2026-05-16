@@ -150,7 +150,7 @@ float RecyclingGrid::getYForItem(size_t index) const
     return getRowIndex(index) * m_estimatedRowHeight;
 }
 
-size_t RecyclingGrid::getCellStartIndex() const
+size_t RecyclingGrid::getCellStartIndex()
 {
     brls::Rect visibleFrame = this->getVisibleFrame();
     float top = visibleFrame.getMinY();
@@ -168,7 +168,7 @@ size_t RecyclingGrid::getCellStartIndex() const
     return startIdx;
 }
 
-size_t RecyclingGrid::getCellEndIndex() const
+size_t RecyclingGrid::getCellEndIndex()
 {
     brls::Rect visibleFrame = this->getVisibleFrame();
     float bottom = visibleFrame.getMaxY();

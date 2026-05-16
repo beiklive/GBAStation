@@ -330,7 +330,7 @@ namespace beiklive
     }
 
     // ============================================================
-    // 焦点回调（高亮效果）
+    // 图片加载
     // ============================================================
 
     void GridItem::setImageLayer(const std::string &path, bool visible)
@@ -339,6 +339,17 @@ namespace beiklive
         if (visible && !path.empty())
             m_imageLayer->setImageFromFile(path);
         m_imageLayer->setVisibility(visible ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+    }
+
+    void GridItem::setImageLayerDeferred(const std::string& path, bool visible)
+    {
+        m_showImageLayer = visible;
+        if (path.empty() || !m_imageLayer) return;
+        enqueueImageTask([this, path, visible]() {
+            if (!m_imageLayer) return;
+            if (visible) m_imageLayer->setImageFromFile(path);
+            m_imageLayer->setVisibility(visible ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+        });
     }
 
     void GridItem::setImagePathDeferred(const std::string& path)
@@ -359,6 +370,22 @@ namespace beiklive
         if (m_playLabel) m_playLabel->setText("");
         if (m_badgeLabel) m_badgeLabel->setText("");
         m_isEmpty = true;
+    }
+
+    // ============================================================
+    // 焦点回调
+    // ============================================================
+
+    void GridItem::onFocusGained()
+    {
+        RecyclingGridItem::onFocusGained();
+        if (onItemFocused)
+            onItemFocused(m_index);
+    }
+
+    void GridItem::onFocusLost()
+    {
+        RecyclingGridItem::onFocusLost();
     }
 
     // ============================================================
