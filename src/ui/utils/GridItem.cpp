@@ -369,6 +369,8 @@ namespace beiklive
         if (m_subLabel) m_subLabel->setText("");
         if (m_playLabel) m_playLabel->setText("");
         if (m_badgeLabel) m_badgeLabel->setText("");
+        m_emptyLabel->setVisibility(brls::Visibility::VISIBLE);
+        m_dataLayout->setVisibility(brls::Visibility::GONE);
         m_isEmpty = true;
     }
 
