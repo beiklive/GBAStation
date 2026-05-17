@@ -736,6 +736,8 @@ namespace beiklive
                 return;
             size_t limit = frames / framesRan;
             if (limit > 0) frames = limit;
+        } else if (GameSignal::instance().isRewinding() && GET_SETTING_KEY_INT("rewind.mute", 0)) {
+            return;
         }
 
         AudioManager::instance().pushSamples(samples.data(), frames);
