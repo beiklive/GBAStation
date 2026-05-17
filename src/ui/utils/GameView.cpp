@@ -721,7 +721,6 @@ namespace beiklive
     void GameView::_pushFrameAudio(bool ff, unsigned framesRan)
     {
         if (GameSignal::instance().isMuted()) {
-            // 静音时仍需排空缓冲区，防止积压
             std::vector<int16_t> dummy;
             m_gba_core->DrainAudio(dummy);
             return;
@@ -730,14 +729,11 @@ namespace beiklive
         std::vector<int16_t> samples;
         if (!m_gba_core->DrainAudio(samples) || samples.empty()) return;
 
-        size_t frames = samples.size() / 2; // 立体声
-
-        // 快进时（framesRan > 1）限制推送量为单帧音频量，避免撑满音频缓冲区
         if (ff && framesRan > 1) {
-            size_t limit = frames / framesRan;
-            if (limit > 0) frames = limit;
+            return;
         }
 
+        size_t frames = samples.size() / 2;
         AudioManager::instance().pushSamples(samples.data(), frames);
     }
 
@@ -865,7 +861,10 @@ namespace beiklive
     {
         using Clock = std::chrono::steady_clock;
 
-        if (ff && m_ffMultiplier >= 2.0f) return; // 2倍以上跳过限速，小数倍率仍需帧率控制
+        if (ff && m_ffMultiplier >= 2.0f) {
+            std::this_thread::yield();
+            return;
+        }
 
         nextTarget += frameDurNs;
 
