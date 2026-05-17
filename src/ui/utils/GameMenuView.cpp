@@ -946,7 +946,13 @@ namespace beiklive
             panel->setAlignItems(brls::AlignItems::STRETCH);
 
             auto closeAct = [this](brls::View *)
-            { _dismissSidePanel(3); return true; };
+            {
+                beiklive::GameDB->set(m_gameEntry.crc32, "shaderEnabled", nlohmann::json(m_gameEntry.shaderEnabled));
+                beiklive::GameDB->set(m_gameEntry.crc32, "shaderPath", nlohmann::json(m_gameEntry.shaderPath));
+                beiklive::GameDB->set(m_gameEntry.crc32, "shaderParaNames", nlohmann::json(m_gameEntry.shaderParaNames));
+                beiklive::GameDB->set(m_gameEntry.crc32, "shaderParaValues", nlohmann::json(m_gameEntry.shaderParaValues));
+                beiklive::GameDB->flush();
+                _dismissSidePanel(3); return true; };
 
             auto *hdr = new brls::Header();
             hdr->setTitle("着色器设置");
