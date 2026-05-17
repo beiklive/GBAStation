@@ -39,6 +39,20 @@ AboutPage::AboutPage() {
             nullptr, nullptr, nullptr,
             _buildUpdateTab()
         );
+        m_tabFrame->addDivider();
+        m_tabFrame->addTab(
+            "支持作者",
+            BK_RES("img/ui/setting/display.png"),
+            nullptr, nullptr, nullptr,
+            _buildSupportTab()
+        );
+        m_tabFrame->addDivider();
+        m_tabFrame->addTab(
+            "历史更新",
+            BK_RES("img/ui/setting/debug.png"),
+            nullptr, nullptr, nullptr,
+            _buildHistoryTab()
+        );
         m_tabFrame->addFinish();
     });
 }
@@ -381,4 +395,86 @@ void AboutPage::_checkUpdate() {
         });
     });
 }
+
+// ── 支持作者 ─────────────────────────────────────────────
+
+brls::View* AboutPage::_buildSupportTab() {
+    auto* scroll = new brls::ScrollingFrame();
+    scroll->setGrow(1.0f);
+    scroll->setScrollingBehavior(brls::ScrollingBehavior::NATURAL);
+    scroll->setScrollingIndicatorVisible(false);
+    scroll->setFocusable(false);
+
+    auto* box = new brls::Box(brls::Axis::COLUMN);
+    box->setPadding(20.f, 40.f, 30.f, 40.f);
+    box->setAlignItems(brls::AlignItems::CENTER);
+    box->setFocusable(false);
+
+    auto* label1 = new brls::Label();
+    label1->setText("喜欢这个项目的话，不妨请作者喝杯咖啡吧");
+    label1->setFontSize(22.f);
+    label1->setTextColor(GET_THEME_COLOR("brls/text"));
+    label1->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+    label1->setMarginBottom(16.f);
+    label1->setFocusable(false);
+    box->addView(label1);
+
+    auto* label2 = new brls::Label();
+    label2->setText("也许下一次更新的灵感，就来自这杯咖啡里的能量");
+    label2->setFontSize(18.f);
+    label2->setTextColor(nvgRGBA(200, 200, 200, 200));
+    label2->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+    label2->setMarginBottom(32.f);
+    label2->setFocusable(false);
+    box->addView(label2);
+
+    auto* payImage = new brls::Image();
+    payImage->setImageFromFile(BK_RES("img/pay.png"));
+    payImage->setScalingType(brls::ImageScalingType::FIT);
+    payImage->setInterpolation(brls::ImageInterpolation::LINEAR);
+    payImage->setWidth(320.f);
+    payImage->setHeight(320.f);
+    payImage->setFocusable(false);
+    box->addView(payImage);
+
+    box->addView(new brls::Padding());
+    scroll->setContentView(box);
+
+    auto* container = new brls::Box(brls::Axis::COLUMN);
+    container->setWidthPercentage(100.f);
+    container->setGrow(1.0f);
+    container->addView(scroll);
+    return container;
+}
+
+// ── 历史更新 ─────────────────────────────────────────────
+
+brls::View* AboutPage::_buildHistoryTab() {
+    auto* scroll = new brls::ScrollingFrame();
+    scroll->setGrow(1.0f);
+    scroll->setScrollingBehavior(brls::ScrollingBehavior::NATURAL);
+    scroll->setScrollingIndicatorVisible(false);
+    scroll->setFocusable(false);
+
+    auto* box = new brls::Box(brls::Axis::COLUMN);
+    box->setPadding(20.f, 40.f, 30.f, 40.f);
+    box->setFocusable(false);
+
+    auto* historyLabel = new brls::Label();
+    historyLabel->setText("");
+    historyLabel->setFontSize(18.f);
+    historyLabel->setTextColor(GET_THEME_COLOR("brls/text"));
+    historyLabel->setFocusable(false);
+    box->addView(historyLabel);
+
+    box->addView(new brls::Padding());
+    scroll->setContentView(box);
+
+    auto* container = new brls::Box(brls::Axis::COLUMN);
+    container->setWidthPercentage(100.f);
+    container->setGrow(1.0f);
+    container->addView(scroll);
+    return container;
+}
+
 } // namespace beiklive

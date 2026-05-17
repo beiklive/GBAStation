@@ -15,6 +15,8 @@ private:
 
     brls::View* _buildInfoTab();
     brls::View* _buildUpdateTab();
+    brls::View* _buildSupportTab();
+    brls::View* _buildHistoryTab();
     void _checkUpdate();
 };
 
