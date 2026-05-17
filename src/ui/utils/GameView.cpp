@@ -731,12 +731,15 @@ namespace beiklive
 
         size_t frames = samples.size() / 2;
 
-        if (ff && framesRan > 1) {
+        if (ff) {
             if (GET_SETTING_KEY_INT("fastforward.mute", 1))
                 return;
-            size_t limit = frames / framesRan;
-            if (limit > 0) frames = limit;
-        } else if (GameSignal::instance().isRewinding() && GET_SETTING_KEY_INT("rewind.mute", 0)) {
+            if (framesRan > 1) {
+                size_t limit = frames / framesRan;
+                if (limit > 0) frames = limit;
+            }
+        }
+        if (GameSignal::instance().isRewinding() && GET_SETTING_KEY_INT("rewind.mute", 0)) {
             return;
         }
 
@@ -867,26 +870,20 @@ namespace beiklive
     {
         using Clock = std::chrono::steady_clock;
 
-        if (ff && m_ffMultiplier >= 2.0f) {
-            std::this_thread::yield();
-            return;
-        }
-
         nextTarget += frameDurNs;
 
         auto now = Clock::now();
-        // 漂移防护：若目标时间已落后于当前时间，说明此帧超时，重置目标
         if (nextTarget < now) {
             nextTarget = now;
+            if (ff)
+                std::this_thread::yield();
             return;
         }
 
-        // 粗粒度睡眠（预留自旋等待时间）
         auto coarse = nextTarget - now - spinGuardNs;
         if (coarse.count() > 0)
             std::this_thread::sleep_for(coarse);
 
-        // 精确自旋等待至目标时间
         while (Clock::now() < nextTarget)
             std::this_thread::yield();
     }
