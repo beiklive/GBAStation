@@ -22,6 +22,7 @@ namespace beiklive
 
         void Init();
         void onResume();
+        void willAppear(bool resetState) override;
 
     private:
         void _useSwitchLayout();

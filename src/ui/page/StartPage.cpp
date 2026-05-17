@@ -82,6 +82,12 @@ namespace beiklive
         }
     }
 
+    void StartPage::willAppear(bool resetState)
+    {
+        brls::Box::willAppear(resetState);
+        onResume();
+    }
+
     void StartPage::_useSwitchLayout()
     {
         brls::Logger::debug("Using SWITCH theme layout");

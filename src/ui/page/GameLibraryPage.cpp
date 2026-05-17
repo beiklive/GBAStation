@@ -93,6 +93,12 @@ namespace beiklive
         m_alive.store(false);
     }
 
+    void GameLibraryPage::willAppear(bool resetState)
+    {
+        brls::Box::willAppear(resetState);
+        _reloadEntries();
+    }
+
     // ============================================================
     // GameLibraryDS
     // ============================================================

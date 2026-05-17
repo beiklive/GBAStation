@@ -25,6 +25,8 @@ namespace beiklive
         GameLibraryPage();
         ~GameLibraryPage();
 
+        void willAppear(bool resetState) override;
+
         std::function<void(const beiklive::GameEntry&)> onGameSelected;
 
     private:
