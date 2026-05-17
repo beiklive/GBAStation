@@ -313,6 +313,10 @@ brls::View* AboutPage::_buildUpdateTab() {
         changelogCard->addView(lablebox);
 
         m_bodyLabel->setText(R"(
+v0.1.7
+    1. 进一步优化游戏循环，减少卡顿掉帧
+    2. 关于界面添加QQ群号
+
 v0.1.6
     bug修复和优化
     1. 倒带时静音和快进时静音功能之前无效，现在可正常使用
@@ -450,7 +454,7 @@ brls::View* AboutPage::_buildSupportTab() {
 
     auto* label1 = new brls::Label();
     label1->setText("喜欢这个项目的话，不妨请作者喝杯咖啡吧");
-    label1->setFontSize(22.f);
+    label1->setFontSize(20.f);
     label1->setTextColor(GET_THEME_COLOR("brls/text"));
     label1->setHorizontalAlign(brls::HorizontalAlign::CENTER);
     label1->setMarginBottom(16.f);
@@ -459,12 +463,23 @@ brls::View* AboutPage::_buildSupportTab() {
 
     auto* label2 = new brls::Label();
     label2->setText("也许下一次更新的灵感，就来自这杯咖啡里的能量");
-    label2->setFontSize(18.f);
+    label2->setFontSize(14.f);
     label2->setTextColor(nvgRGBA(200, 200, 200, 200));
     label2->setHorizontalAlign(brls::HorizontalAlign::CENTER);
     label2->setMarginBottom(32.f);
     label2->setFocusable(false);
     box->addView(label2);
+
+    auto* QQImage = new brls::Image();
+    QQImage->setImageFromFile(BK_RES("img/QQ.png"));
+    QQImage->setScalingType(brls::ImageScalingType::FIT);
+    QQImage->setInterpolation(brls::ImageInterpolation::NEAREST);
+    QQImage->setCornerRadius(16.f);
+    QQImage->setWidth(400.f);
+    QQImage->setHeight(150.f);
+    QQImage->setFocusable(false);
+    box->addView(QQImage);
+
 
     auto* payImage = new brls::Image();
     payImage->setImageFromFile(BK_RES("img/pay.png"));

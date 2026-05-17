@@ -144,3 +144,13 @@ jobs:
           git commit -m "Release $TAG_NAME" || echo "Nothing to commit"
 
           git push
+
+      - name: 延迟刷新 jsDelivr 缓存
+        run: |
+          echo "等待 60 秒后刷新 CDN 缓存..."
+          sleep 60
+
+          curl -L \
+            "https://purge.jsdelivr.net/gh/beiklive/GBAStation_Release@main/version.json"
+
+          echo "jsDelivr 缓存刷新完成"
