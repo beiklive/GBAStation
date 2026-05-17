@@ -313,6 +313,11 @@ brls::View* AboutPage::_buildUpdateTab() {
         changelogCard->addView(lablebox);
 
         m_bodyLabel->setText(R"(
+v0.1.6
+    bug修复和优化
+    1. 倒带时静音和快进时静音功能之前无效，现在可正常使用
+    2. 开启倍速后会出现掉帧情况，与音频缓冲有关，现已优化并提升了倍速性能，如有问题请在评论区反馈
+
 v0.1.5
     bug修复
     1. 修复设置同步功能未同步到其他游戏的bug
