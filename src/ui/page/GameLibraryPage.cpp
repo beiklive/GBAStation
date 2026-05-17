@@ -153,8 +153,13 @@ namespace beiklive
     void GameLibraryPage::GameLibraryDS::onItemSelected(RecyclingGrid*, size_t index)
     {
         if (!m_page || index >= m_page->m_entries.size()) return;
-        if (m_page->onGameSelected)
-            m_page->onGameSelected(m_page->m_entries[index]);
+        if (m_page->onGameSelected) {
+            auto& cached = m_page->m_entries[index];
+            auto fresh = beiklive::GameDB
+                ? beiklive::GameDB->findByCrc32(cached.crc32)
+                : std::optional<beiklive::GameEntry>{};
+            m_page->onGameSelected(fresh.has_value() ? *fresh : cached);
+        }
     }
 
     void GameLibraryPage::GameLibraryDS::clearData()
