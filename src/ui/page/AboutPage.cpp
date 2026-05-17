@@ -32,26 +32,17 @@ AboutPage::AboutPage() {
             nullptr, nullptr, nullptr,
             _buildInfoTab()
         );
-        m_tabFrame->addDivider();
         m_tabFrame->addTab(
             "更新",
             BK_RES("img/ui/setting/debug.png"),
             nullptr, nullptr, nullptr,
             _buildUpdateTab()
         );
-        m_tabFrame->addDivider();
         m_tabFrame->addTab(
             "支持作者",
             BK_RES("img/ui/setting/display.png"),
             nullptr, nullptr, nullptr,
             _buildSupportTab()
-        );
-        m_tabFrame->addDivider();
-        m_tabFrame->addTab(
-            "历史更新",
-            BK_RES("img/ui/setting/debug.png"),
-            nullptr, nullptr, nullptr,
-            _buildHistoryTab()
         );
         m_tabFrame->addFinish();
     });
@@ -299,32 +290,73 @@ brls::View* AboutPage::_buildUpdateTab() {
         auto* changelogCard = new brls::ScrollingFrame();
         changelogCard->setWidthPercentage(100.f);
         changelogCard->setHeight(280.f);
-        // changelogCard->setScrollingIndicatorVisible(false);
+
+
+        auto* lablebox = new brls::Box(brls::Axis::COLUMN);
+        lablebox->setWidthPercentage(100.f);
+        lablebox->setHeightPercentage(100.f);
+        lablebox->setFocusable(true);
 
         auto* m_bodyLabel = new brls::Label();
-        m_bodyLabel->setText(localChangelog);
         m_bodyLabel->setFontSize(15);
+        m_bodyLabel->setWidthPercentage(100.f);
+        m_bodyLabel->setHeightPercentage(100.f);
         m_bodyLabel->setTextColor(nvgRGBA(200, 200, 210, 255));
-        changelogCard->addView(m_bodyLabel);
+        m_bodyLabel->setFocusable(true);
+        UP_DOWN_NAVIGATION(m_bodyLabel, m_bodyLabel);
+        m_bodyLabel->registerAction("返回", brls::BUTTON_B, [this, checkBtn](brls::View*) {
+            brls::Application::giveFocus(checkBtn);
+            return true;
+        });
+        lablebox->addView(m_bodyLabel);
 
-        // std::istringstream iss(localChangelog);
-        // std::string line;
-        // while (std::getline(iss, line)) {
-        //     if (line.empty()) {
-        //         auto* spacer = new brls::Label();
-        //         spacer->setText("");
-        //         spacer->setFontSize(8.f);
-        //         spacer->setFocusable(false);
-        //         changelogCard->addView(spacer);
-        //     } else {
-        //         auto* l = new brls::Label();
-        //         l->setText(line);
-        //         l->setFontSize(18.f);
-        //         l->setTextColor(GET_THEME_COLOR("brls/text"));
-        //         l->setFocusable(false);
-        //         changelogCard->addView(l);
-        //     }
-        // }
+        changelogCard->addView(lablebox);
+
+        m_bodyLabel->setText(R"(
+v0.1.5
+    bug修复
+    1. 修复设置同步功能未同步到其他游戏的bug
+    2. 修复进入游戏库有概率按键被禁用的bug
+
+v0.1.4
+    bug修复和优化
+    1. 优化游戏库界面加载速度降低内存消耗s
+
+    新功能：
+    1. 游戏菜单金手指条目支持删除
+
+v0.1.3
+    bug修复和优化
+    修复 sRGB FBO 缺少 GL_FRAMEBUFFER_SRGB 导致画面偏暗
+    修复 scalefx/hqx 等高清化着色器的画面放大和偏移
+    起始页菜单加载速度优化
+
+v0.1.2
+    新功能
+    1. 添加GBA BIOS画面，需要在网盘中下载GBA BIOS文件，并将gba_bios.bin放到 /GBAStation/bios 目录下
+    2. 设置--模拟器--GB配色 功能可用，可以通过该项设置调节gb游戏的调色板
+
+    bug修复
+    1. 修复 scalefx/hqx 等高清化着色器的画面放大和偏移
+
+v0.1.1
+    bug修复
+    1. 修复RetroArch着色器的支持，反射滤镜可以正常使用
+
+v0.1.0
+    新功能
+    1. 模拟器新增更新检测功能，默认启动后自动检测(可关闭), 也可以在 关于-更新 中检测更新
+    2. 添加 A B键连发功能，在 设置-按键 中设置
+    3. 游戏菜单-显示设置 添加同平台游戏设置同步功能，一键将着色器、遮罩、画面等设置同步到游戏库中同平台的其他游戏中
+    4. 快进功能倍速增加 1.25倍 1.5倍 1.75倍
+    5. 模拟器设置中 自动保存状态、自动加载、退出自动保存 添加了存档位的选择，不再固定位档位0
+
+    bug修复
+    1. 修复从RetroArch导入的不同平台游戏文件名称相同时会使用同一个存档目录的bug
+    2. 修复游戏菜单中选择金手指文件后，路径没有保存的bug
+    3. 修复倒带功能触发方式设置为保持时，触发效果仍然为切换效果的bug
+        
+    )");
 
         box->addView(changelogCard);
     }
@@ -408,6 +440,7 @@ brls::View* AboutPage::_buildSupportTab() {
     auto* box = new brls::Box(brls::Axis::COLUMN);
     box->setPadding(20.f, 40.f, 30.f, 40.f);
     box->setAlignItems(brls::AlignItems::CENTER);
+    box->setJustifyContent(brls::JustifyContent::CENTER);
     box->setFocusable(false);
 
     auto* label1 = new brls::Label();
@@ -432,8 +465,9 @@ brls::View* AboutPage::_buildSupportTab() {
     payImage->setImageFromFile(BK_RES("img/pay.png"));
     payImage->setScalingType(brls::ImageScalingType::FIT);
     payImage->setInterpolation(brls::ImageInterpolation::LINEAR);
-    payImage->setWidth(320.f);
-    payImage->setHeight(320.f);
+    payImage->setCornerRadius(16.f);
+    payImage->setWidth(800.f);
+    payImage->setHeight(400.f);
     payImage->setFocusable(false);
     box->addView(payImage);
 
@@ -447,34 +481,5 @@ brls::View* AboutPage::_buildSupportTab() {
     return container;
 }
 
-// ── 历史更新 ─────────────────────────────────────────────
-
-brls::View* AboutPage::_buildHistoryTab() {
-    auto* scroll = new brls::ScrollingFrame();
-    scroll->setGrow(1.0f);
-    scroll->setScrollingBehavior(brls::ScrollingBehavior::NATURAL);
-    scroll->setScrollingIndicatorVisible(false);
-    scroll->setFocusable(false);
-
-    auto* box = new brls::Box(brls::Axis::COLUMN);
-    box->setPadding(20.f, 40.f, 30.f, 40.f);
-    box->setFocusable(false);
-
-    auto* historyLabel = new brls::Label();
-    historyLabel->setText("");
-    historyLabel->setFontSize(18.f);
-    historyLabel->setTextColor(GET_THEME_COLOR("brls/text"));
-    historyLabel->setFocusable(false);
-    box->addView(historyLabel);
-
-    box->addView(new brls::Padding());
-    scroll->setContentView(box);
-
-    auto* container = new brls::Box(brls::Axis::COLUMN);
-    container->setWidthPercentage(100.f);
-    container->setGrow(1.0f);
-    container->addView(scroll);
-    return container;
-}
 
 } // namespace beiklive
