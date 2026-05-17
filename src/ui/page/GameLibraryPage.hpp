@@ -66,6 +66,7 @@ namespace beiklive
         static std::string _formatPlayTime(int seconds);
 
         int _currentFocusedIndex = -1;
+        bool m_firstAppear = true;
         std::atomic<bool> m_alive{true};
     };
 

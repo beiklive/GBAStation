@@ -96,6 +96,10 @@ namespace beiklive
     void GameLibraryPage::willAppear(bool resetState)
     {
         brls::Box::willAppear(resetState);
+        if (m_firstAppear) {
+            m_firstAppear = false;
+            return;
+        }
         _reloadEntries();
     }
 
