@@ -99,12 +99,16 @@ namespace beiklive
 
         switchLayout->onGameActivated = [this](const beiklive::GameEntry &entry)
         {
-            brls::Logger::info("Game activated: " + entry.title);
+            auto fresh = beiklive::GameDB
+                ? beiklive::GameDB->findByCrc32(entry.crc32)
+                : std::optional<beiklive::GameEntry>{};
+            const auto& e = fresh.has_value() ? *fresh : entry;
+            brls::Logger::info("Game activated: " + e.title);
             {
-                m_gamePage = new beiklive::GamePage(entry);
+                m_gamePage = new beiklive::GamePage(e);
                 auto *frame = new brls::AppletFrame(m_gamePage);
                 HIDE_BRLS_BAR(frame);
-                brls::Logger::info("Pushing GamePage activity for: " + entry.title);
+                brls::Logger::info("Pushing GamePage activity for: " + e.title);
                 brls::sync([this, frame]()
                            { brls::Application::pushActivity(new brls::Activity(frame)); });
             }
@@ -158,12 +162,16 @@ namespace beiklive
 
         gameLibraryPage->onGameSelected = [this](const beiklive::GameEntry &entry)
         {
-            brls::Logger::info("Game selected from library: " + entry.title);
+            auto fresh = beiklive::GameDB
+                ? beiklive::GameDB->findByCrc32(entry.crc32)
+                : std::optional<beiklive::GameEntry>{};
+            const auto& e = fresh.has_value() ? *fresh : entry;
+            brls::Logger::info("Game selected from library: " + e.title);
             {
-                m_gamePage = new beiklive::GamePage(entry);
+                m_gamePage = new beiklive::GamePage(e);
                 auto *frame = new brls::AppletFrame(m_gamePage);
                 HIDE_BRLS_BAR(frame);
-                brls::Logger::info("Pushing GamePage activity for: " + entry.title);
+                brls::Logger::info("Pushing GamePage activity for: " + e.title);
                 brls::sync([this, frame]()
                            { brls::Application::pushActivity(new brls::Activity(frame)); });
             }
