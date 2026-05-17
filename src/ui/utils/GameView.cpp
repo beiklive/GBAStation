@@ -721,18 +721,16 @@ namespace beiklive
     void GameView::_pushFrameAudio(bool ff, unsigned framesRan)
     {
         if (GameSignal::instance().isMuted()) {
-            std::vector<int16_t> dummy;
-            m_gba_core->DrainAudio(dummy);
+            m_gba_core->DrainAudio(m_audioDrainBuf);
             return;
         }
 
-        std::vector<int16_t> samples;
-        if (!m_gba_core->DrainAudio(samples) || samples.empty()) return;
+        if (!m_gba_core->DrainAudio(m_audioDrainBuf) || m_audioDrainBuf.empty()) return;
 
-        size_t frames = samples.size() / 2;
+        size_t frames = m_audioDrainBuf.size() / 2;
 
         if (ff) {
-            if (GET_SETTING_KEY_INT("fastforward.mute", 1))
+            if (m_ffMute)
                 return;
             if (framesRan > 1) {
                 size_t limit = frames / framesRan;
@@ -743,7 +741,7 @@ namespace beiklive
             return;
         }
 
-        AudioManager::instance().pushSamples(samples.data(), frames);
+        AudioManager::instance().pushSamples(m_audioDrainBuf.data(), frames);
     }
 
     // ============================================================
@@ -947,6 +945,7 @@ namespace beiklive
         m_ffMultiplier = GET_SETTING_KEY_FLOAT("fastforward.multiplier", 4.0f);
         if (m_ffMultiplier <= 0.0f) m_ffMultiplier = 1.0f;
         m_ffSlowAccum = 0.0f;
+        m_ffMute = GET_SETTING_KEY_INT("fastforward.mute", 1) != 0;
 
         // 读取连发速率
         {
@@ -1109,6 +1108,7 @@ namespace beiklive
             // 每帧读取快进倍率（支持菜单中实时调整）
             m_ffMultiplier = GET_SETTING_KEY_FLOAT("fastforward.multiplier", 4.0f);
             if (m_ffMultiplier <= 0.0f) m_ffMultiplier = 1.0f;
+            m_ffMute = GET_SETTING_KEY_INT("fastforward.mute", 1) != 0;
 
             if (rew) {
                 // 倒带：从历史缓冲区恢复状态
