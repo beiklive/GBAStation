@@ -172,7 +172,7 @@ namespace beiklive
 
     void GameLibraryPage::_loadAndShowEntries()
     {
-        brls::Application::blockInputs(true);
+        // brls::Application::blockInputs(true);
         auto* alive = &m_alive;
         ThreadPool::instance().enqueue([this, alive]() {
             if (!alive->load()) return;
@@ -187,7 +187,7 @@ namespace beiklive
                 m_grid->reloadData();
                 _updateHeader();
                 brls::Application::giveFocus(m_grid);
-                brls::Application::unblockInputs();
+                // brls::Application::unblockInputs();
             });
         });
     }
