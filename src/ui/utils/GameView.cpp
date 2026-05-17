@@ -729,11 +729,15 @@ namespace beiklive
         std::vector<int16_t> samples;
         if (!m_gba_core->DrainAudio(samples) || samples.empty()) return;
 
+        size_t frames = samples.size() / 2;
+
         if (ff && framesRan > 1) {
-            return;
+            if (GET_SETTING_KEY_INT("fastforward.mute", 1))
+                return;
+            size_t limit = frames / framesRan;
+            if (limit > 0) frames = limit;
         }
 
-        size_t frames = samples.size() / 2;
         AudioManager::instance().pushSamples(samples.data(), frames);
     }
 
