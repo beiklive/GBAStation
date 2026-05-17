@@ -1421,6 +1421,7 @@ namespace beiklive
         if (beiklive::GameDB && m_gameEntry.crc32 != 0) {
             beiklive::GameDB->set(m_gameEntry.crc32, "displayMode",
                 nlohmann::json(m_gameEntry.displayMode));
+            beiklive::GameDB->flush();
         }
     }
 
@@ -1431,6 +1432,7 @@ namespace beiklive
         if (beiklive::GameDB && m_gameEntry.crc32 != 0) {
             beiklive::GameDB->set(m_gameEntry.crc32, "integerAspectRatio",
                 nlohmann::json(static_cast<float>(scale)));
+            beiklive::GameDB->flush();
         }
     }
 
@@ -1448,6 +1450,7 @@ namespace beiklive
                 nlohmann::json(static_cast<double>(y)));
             beiklive::GameDB->set(m_gameEntry.crc32, "customScale",
                 nlohmann::json(static_cast<double>(scale)));
+            beiklive::GameDB->flush();
         }
     }
 
