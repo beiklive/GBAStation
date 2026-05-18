@@ -86,7 +86,7 @@ namespace beiklive
             minimal.title    = GET_MAPPING_KEY_STR(
                 beiklive::tools::getFileNameWithoutExtension(m_gameData.fileName),
                 beiklive::tools::getFileNameWithoutExtension(m_gameData.fileName));
-            db->upsert(minimal);
+            db->upsertByPath(minimal);
         }
         else
         {
