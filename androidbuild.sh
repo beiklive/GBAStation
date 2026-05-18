@@ -44,11 +44,16 @@ if [ ! -L "borealis" ]; then
 fi
 cd "${SCRIPT_DIR}"
 
-# ── 3. 复制 libromfs-generator ──────────────────────────────
-cp "${SCRIPT_DIR}/libromfs-generator" "${JNI_DIR}/borealis/libromfs-generator"
+# ── 3. 验证 libromfs-generator ──────────────────────────────
+echo "[3/4] Verifying libromfs-generator..."
+if [ ! -f "${JNI_DIR}/borealis/libromfs-generator" ]; then
+    echo "  ERROR: libromfs-generator not found at ${JNI_DIR}/borealis/libromfs-generator"
+    exit 1
+fi
+echo "  libromfs-generator OK."
 
 # ── 4. 编译 APK ─────────────────────────────────────────────
-echo "[3/4] Building APK (assembleDebug)..."
+echo "[4/4] Building APK (assembleDebug)..."
 cd "${ANDROID_PROJECT}"
 chmod +x gradlew
 ./gradlew assembleDebug

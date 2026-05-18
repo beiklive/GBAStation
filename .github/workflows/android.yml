@@ -45,9 +45,10 @@ jobs:
           ln -sf ../../.. borealis
           cd ../../..
 
-      - name: Copy libromfs-generator to JNI path
+      - name: Verify libromfs-generator location
         run: |
-          cp libromfs-generator android-project/app/jni/borealis/libromfs-generator
+          test -f libromfs-generator || (echo "ERROR: libromfs-generator not found" && exit 1)
+          echo "libromfs-generator ready at $(pwd)/libromfs-generator"
 
       - name: Build APK
         id: build
