@@ -33,7 +33,7 @@ namespace beiklive
 
         // 插入或更新（线程安全）
         void upsert(const GameEntry &entry);
-
+        void upsertByPath(const GameEntry &entry);
         // 根据 crc32 删除（线程安全）
         bool removeByCrc32(int crc32);
 
@@ -97,6 +97,7 @@ namespace beiklive
 
     private:
         // 内部非线程安全的操作，调用时需持有写锁
+        void doUpsertByPath(const GameEntry &entry);
         void doUpsert(const GameEntry &entry);
         bool doRemoveByCrc32(int crc32);
         bool doRemoveByPath(const std::string &path);

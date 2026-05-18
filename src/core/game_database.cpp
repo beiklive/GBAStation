@@ -114,6 +114,13 @@ namespace beiklive
         markDirtyAndAutoSave();
     }
 
+    void GameDatabase::upsertByPath(const GameEntry &entry)
+    {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
+        doUpsertByPath(entry);
+        markDirtyAndAutoSave();
+    }
+
     bool GameDatabase::removeByCrc32(int crc32)
     {
         std::lock_guard<std::recursive_mutex> lock(m_mutex);

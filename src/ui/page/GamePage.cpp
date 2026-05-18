@@ -72,12 +72,12 @@ namespace beiklive
     void GamePage::GameEntryInitialize()
     {
         auto &db = beiklive::GameDB;                     // 获取全局游戏数据库实例
-        auto dcrc32 = tools::crc32(m_gameData.fullPath); // 计算 CRC32 校验值
-        brls::Logger::debug("GamePage 开始处理游戏条目，路径: {}, CRC32: {}", m_gameData.fullPath, dcrc32);
-
+        brls::Logger::debug("GamePage 开始处理游戏条目，路径: {}", m_gameData.fullPath);
+        
         // 若数据库中不存在此游戏记录，先插入含必要字段的最小条目
-        if (!db->findByCrc32(dcrc32).has_value())
+        if (!db->findByPath(m_gameData.fullPath).has_value())
         {
+            auto dcrc32 = tools::crc32(m_gameData.fullPath); // 计算 CRC32 校验值
             brls::Logger::debug("GamePage 数据库中没有此游戏的记录，插入新记录: {}", m_gameData.fullPath);
             GameEntry minimal;
             minimal.path     = m_gameData.fullPath;
@@ -96,6 +96,12 @@ namespace beiklive
         // 使用 setDefault 为可选字段设置首次默认值（已有值时不覆盖）
         std::string defaultLogo = beiklive::tools::getDefaultLogoPath(
             static_cast<beiklive::enums::EmuPlatform>((int)m_gameData.itemType));
+
+        // 获取游戏的crc32
+        int dcrc32 = db->get(m_gameData.fullPath, "crc32", 0);
+        if(dcrc32 == 0)
+            dcrc32 = tools::crc32(m_gameData.fullPath); 
+
         db->setDefault(dcrc32, "logoPath", defaultLogo);
 
         namespace sk = beiklive::SettingKey;

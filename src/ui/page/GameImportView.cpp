@@ -470,8 +470,9 @@ namespace beiklive
                 std::string romStem = getStemFromPath(romPath);
 
                 uint32_t crc = 0;
+                // 跳过crc32计算，因为它会导致卡顿
                 if (fs::exists(romPath))
-                    crc = beiklive::tools::crc32(romPath);
+                     crc = 0;
 
                 std::string logoPath;
                 {
@@ -537,7 +538,7 @@ namespace beiklive
                 entry.integerAspectRatio = static_cast<float>(
                     GET_SETTING_KEY_INT("display.integer_scale_mult", 0));
 
-                beiklive::GameDB->upsert(entry);
+                beiklive::GameDB->upsertByPath(entry);
 
                 m_progress.store(i + 1, std::memory_order_release);
             }
