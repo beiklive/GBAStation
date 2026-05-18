@@ -120,6 +120,9 @@ if (PLATFORM_DESKTOP)
 elseif (PLATFORM_SWITCH)
     # audout is provided by libnx – already linked via borealis/toolchain
     message(STATUS "Audio backend: libnx audout")
+elseif (PLATFORM_ANDROID)
+    # OpenSL ES / AAudio via SDL2 (handled by SDL2 internally)
+    message(STATUS "Audio backend: SDL2 (OpenSL ES / AAudio)")
 else()
     message(STATUS "Audio backend: none (samples will be discarded)")
 endif ()
@@ -203,14 +206,17 @@ endif ()
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${APP_PLATFORM_INCLUDE})
 target_compile_options(${PROJECT_NAME} PRIVATE -ffunction-sections -fdata-sections ${APP_PLATFORM_OPTION})
-target_link_libraries(${PROJECT_NAME} PRIVATE borealis ${APP_PLATFORM_LIB} curl)
+target_link_libraries(${PROJECT_NAME} PRIVATE borealis ${APP_PLATFORM_LIB})
+if(NOT PLATFORM_ANDROID)
+    target_link_libraries(${PROJECT_NAME} PRIVATE curl)
+endif()
 
 # ============================================================
 # Post-build: copy mgba_libretro shared library next to the
 # GBAStation executable so that LibretroLoader can find it
 # via a relative "./mgba_libretro.*" path.
 # ============================================================
-if (TARGET mgba_libretro)
+if (TARGET mgba_libretro AND NOT PLATFORM_ANDROID)
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             $<TARGET_FILE:mgba_libretro>

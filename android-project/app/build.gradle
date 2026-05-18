@@ -1,0 +1,48 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace = "com.beiklive.gbastation"
+    compileSdkVersion 31
+    defaultConfig {
+        minSdkVersion 16
+        targetSdkVersion 31
+        versionCode 1
+        versionName "0.1.8"
+        ndkVersion "22.1.7171670"
+        externalNativeBuild {
+            cmake {
+                arguments "-DANDROID_PLATFORM=android-16",
+                          "-DANDROID_STL=c++_shared",
+                          "-DCMAKE_WARN_DEPRECATED=FALSE"
+                abiFilters 'armeabi-v7a', 'arm64-v8a'
+                version = '3.16.0+'
+            }
+        }
+    }
+
+    sourceSets.main {
+        java.srcDirs += ['../../../third_party/borealis/library/lib/extern/SDL/android-project/app/src/main/java']
+    }
+
+    externalNativeBuild {
+        cmake {
+            path 'jni/CMakeLists.txt'
+            version = '3.16.0+'
+        }
+    }
+
+    applicationVariants.all { variant ->
+        tasks["merge${variant.name.capitalize()}Assets"]
+            .dependsOn("externalNativeBuild${variant.name.capitalize()}")
+    }
+
+    lint {
+        abortOnError = false
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+}
