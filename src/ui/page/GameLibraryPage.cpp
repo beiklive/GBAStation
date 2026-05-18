@@ -342,21 +342,21 @@ namespace beiklive
 
     void GameLibraryPage::_showGameOptionsPanel(const beiklive::GameEntry& entry)
     {
-        int crc = entry.crc32;
+        std::string path = entry.path;
         _hideGameOptionsPanel();
         m_gameOptionsSidebar = new beiklive::GameOptionsSidebar();
         this->getBottomBar()->setVisibility(brls::Visibility::INVISIBLE);
         std::string fn = beiklive::tools::getFileNameWithoutExtension(entry.path);
 
         m_gameOptionsSidebar->addButton("修改映射名称", BK_RES("img/ui/setting/emu.png"),
-            [this, crc, title = entry.title, fn](const beiklive::GameEntry&) {
+            [this, path, title = entry.title, fn](const beiklive::GameEntry&) {
                 _hideGameOptionsPanel();
                 auto* ime = brls::Application::getPlatform()->getImeManager();
                 if (!ime) return;
                 ime->openForText(
-                    [this, crc, fn](std::string text) {
+                    [this, path, fn](std::string text) {
                         if (!text.empty() && beiklive::GameDB) {
-                            beiklive::GameDB->set(crc, "title", nlohmann::json(text));
+                            beiklive::GameDB->set(path, "title", nlohmann::json(text));
                             _reloadEntries();
                             beiklive::NameMappingManager->Set(fn, text, true);
                             beiklive::GameDB->flush();
@@ -368,12 +368,12 @@ namespace beiklive
             });
 
         m_gameOptionsSidebar->addButton("设置封面图", BK_RES("img/ui/setting/display.png"),
-            [this, crc](const beiklive::GameEntry&) {
+            [this, path](const beiklive::GameEntry&) {
                 _hideGameOptionsPanel();
                 beiklive::openFilePicker({"png", "jpg"},
-                    [this, crc](const std::string& path) {
+                    [this, path](const std::string& selectedPath) {
                         if (beiklive::GameDB) {
-                            beiklive::GameDB->set(crc, "logoPath", nlohmann::json(path));
+                            beiklive::GameDB->set(path, "logoPath", nlohmann::json(selectedPath));
                             _reloadEntries();
                             beiklive::GameDB->flush();
                         }
@@ -381,12 +381,12 @@ namespace beiklive
             });
 
         m_gameOptionsSidebar->addButton("删除游戏", BK_RES("img/ui/menu/exit.png"),
-            [this, crc](const beiklive::GameEntry&) {
+            [this, path](const beiklive::GameEntry&) {
                 _hideGameOptionsPanel();
                 auto* dlg = new brls::Dialog("确定要删除该游戏吗？\n此操作将清除游戏记录与存档数据。");
-                dlg->addButton("确认删除", [this, crc]() {
+                dlg->addButton("确认删除", [this, path]() {
                     _hideGameOptionsPanel();
-                    if (beiklive::GameDB && beiklive::GameDB->removeByCrc32(crc)) {
+                    if (beiklive::GameDB && beiklive::GameDB->removeByPath(path)) {
                         brls::Application::notify("已删除游戏");
                         _reloadEntries();
                         beiklive::GameDB->flush();

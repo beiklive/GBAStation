@@ -93,10 +93,9 @@ namespace beiklive
     {
         if (m_isEmpty) return;
         m_gameEntry.favourite = !m_gameEntry.favourite;
-        int crc = m_gameEntry.crc32;
-        if (crc != 0 && beiklive::GameDB)
+        if (!m_gameEntry.path.empty() && beiklive::GameDB)
         {
-            beiklive::GameDB->set(crc, "favourite", nlohmann::json(m_gameEntry.favourite));
+            beiklive::GameDB->set(m_gameEntry.path, "favourite", nlohmann::json(m_gameEntry.favourite));
             beiklive::GameDB->flush();
         }
         _updateFavouriteHint();

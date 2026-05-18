@@ -1459,7 +1459,7 @@ namespace beiklive
         int count = 0;
         for (auto& game : games) {
             if (game.platform != platform) continue;
-            if (game.crc32 == m_gameEntry.crc32) continue;
+            if (game.path == m_gameEntry.path) continue;
             game.displayMode      = m_gameEntry.displayMode;
             game.integerAspectRatio = m_gameEntry.integerAspectRatio;
             game.customScale      = m_gameEntry.customScale;
@@ -1481,7 +1481,7 @@ namespace beiklive
         int count = 0;
         for (auto& game : games) {
             if (game.platform != platform) continue;
-            if (game.crc32 == m_gameEntry.crc32) continue;
+            if (game.path == m_gameEntry.path) continue;
             game.overlayPath    = m_gameEntry.overlayPath;
             game.overlayEnabled = m_gameEntry.overlayEnabled;
             beiklive::GameDB->upsertByPath(game);
@@ -1505,7 +1505,7 @@ namespace beiklive
         int count = 0;
         for (auto& game : games) {
             if (game.platform != platform) continue;
-            if (game.crc32 == m_gameEntry.crc32) continue;
+            if (game.path == m_gameEntry.path) continue;
             game.shaderEnabled   = m_gameEntry.shaderEnabled;
             game.shaderPath      = m_gameEntry.shaderPath;
             game.shaderParaNames  = m_gameEntry.shaderParaNames;
