@@ -100,7 +100,7 @@ namespace beiklive
         switchLayout->onGameActivated = [this](const beiklive::GameEntry &entry)
         {
             auto fresh = beiklive::GameDB
-                ? beiklive::GameDB->findByCrc32(entry.crc32)
+                ? beiklive::GameDB->findByPath(entry.path)
                 : std::optional<beiklive::GameEntry>{};
             const auto& e = fresh.has_value() ? *fresh : entry;
             brls::Logger::info("Game activated: " + e.title);
