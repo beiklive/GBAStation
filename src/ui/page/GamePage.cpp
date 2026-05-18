@@ -64,8 +64,8 @@ namespace beiklive
         m_gameEntry.lastPlayed = beiklive::tools::getTimestampString();
         m_gameEntry.playCount += 1;
         brls::Logger::debug("GamePage 更新游戏条目：lastPlayed={}, playCount={}", m_gameEntry.lastPlayed, m_gameEntry.playCount);
-        db->set(m_gameEntry.crc32, "lastPlayed", m_gameEntry.lastPlayed);
-        db->set(m_gameEntry.crc32, "playCount", m_gameEntry.playCount);
+        db->set(m_gameEntry.path, "lastPlayed", m_gameEntry.lastPlayed);
+        db->set(m_gameEntry.path, "playCount", m_gameEntry.playCount);
         db->flush();
     }
 
@@ -308,7 +308,7 @@ namespace beiklive
         m_gameMenuView->setCheatPathCallback([this](const std::string& path) {
             m_gameEntry.cheatPath = path;
             if (beiklive::GameDB)
-                beiklive::GameDB->set(m_gameEntry.crc32, "cheatPath", nlohmann::json(path));
+                beiklive::GameDB->set(m_gameEntry.path, "cheatPath", nlohmann::json(path));
             if (m_gameView)
                 m_gameView->requestCheatPathUpdate(path);
         });
@@ -469,7 +469,7 @@ namespace beiklive
             m_gameEntry.logoPath = thumbPath;
             if (beiklive::GameDB)
             {
-                beiklive::GameDB->set(m_gameEntry.crc32, "logoPath", nlohmann::json(thumbPath));
+                beiklive::GameDB->set(m_gameEntry.path, "logoPath", nlohmann::json(thumbPath));
             }
         }
 

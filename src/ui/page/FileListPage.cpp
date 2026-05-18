@@ -63,7 +63,7 @@ namespace beiklive
                                 beiklive::NameMappingManager->Save();
                                 auto entryOpt = beiklive::GameDB ? beiklive::GameDB->findByPath(fullPath) : std::nullopt;
                                 if (entryOpt) {
-                                    beiklive::GameDB->set(entryOpt->crc32, "title", nlohmann::json(text));
+                                    beiklive::GameDB->set(fullPath, "title", nlohmann::json(text));
                                     beiklive::GameDB->flush();
                                 }
                             }

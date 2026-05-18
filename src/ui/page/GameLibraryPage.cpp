@@ -156,7 +156,7 @@ namespace beiklive
         if (m_page->onGameSelected) {
             auto& cached = m_page->m_entries[index];
             auto fresh = beiklive::GameDB
-                ? beiklive::GameDB->findByCrc32(cached.crc32)
+                ? beiklive::GameDB->findByPath(cached.path)
                 : std::optional<beiklive::GameEntry>{};
             m_page->onGameSelected(fresh.has_value() ? *fresh : cached);
         }

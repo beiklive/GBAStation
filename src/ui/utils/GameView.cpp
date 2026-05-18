@@ -796,7 +796,7 @@ namespace beiklive
 
         if (beiklive::GameDB && m_gameEntry.playTime > 0) {
             // beiklive::GameDB->upsert(m_gameEntry);
-            beiklive::GameDB->set(m_gameEntry.crc32, "playTime", nlohmann::json(m_gameEntry.playTime));
+            beiklive::GameDB->set(m_gameEntry.path, "playTime", nlohmann::json(m_gameEntry.playTime));
             // beiklive::GameDB->flush();
         }
         std::error_code ec;
@@ -838,7 +838,7 @@ namespace beiklive
                         // 取遗留值和当前 GameEntry 中保存值的最大值，避免数据倒退
                         m_gameEntry.playTime = std::max(m_gameEntry.playTime, static_cast<int>(legacySeconds));
                         if (beiklive::GameDB) {
-                            beiklive::GameDB->upsert(m_gameEntry);
+                            beiklive::GameDB->upsertByPath(m_gameEntry);
                             beiklive::GameDB->flush();
                             brls::Logger::info("GameView: 已合并遗留时长 {} 秒到 GameDB，清理临时文件",
                                                legacySeconds);
@@ -1378,8 +1378,8 @@ namespace beiklive
 
         m_gameEntry.shaderEnabled = on;
         // 持久化到数据库
-        if (beiklive::GameDB && m_gameEntry.crc32 != 0) {
-            beiklive::GameDB->set(m_gameEntry.crc32, "shaderEnabled",
+        if (beiklive::GameDB && !m_gameEntry.path.empty()) {
+            beiklive::GameDB->set(m_gameEntry.path, "shaderEnabled",
                 nlohmann::json(m_gameEntry.shaderEnabled));
         }
         brls::Logger::debug("GameView: Shader {} (enabled={})", m_gameEntry.shaderPath, m_gameEntry.shaderEnabled);
@@ -1399,8 +1399,8 @@ namespace beiklive
         m_gameEntry.shaderPath = path;
         brls::Logger::debug("GameView: Shader path changed to {} (enabled={})", m_gameEntry.shaderPath, shaderOn);
         // 持久化到数据库
-        if (beiklive::GameDB && m_gameEntry.crc32 != 0) {
-            beiklive::GameDB->set(m_gameEntry.crc32, "shaderPath",
+        if (beiklive::GameDB && !m_gameEntry.path.empty()) {
+            beiklive::GameDB->set(m_gameEntry.path, "shaderPath",
                 nlohmann::json(m_gameEntry.shaderPath));
         }
         if (shaderOn && !path.empty())
@@ -1420,8 +1420,8 @@ namespace beiklive
         m_gameEntry.displayMode = static_cast<int>(m_screenMode);
 
         // 持久化画面模式到数据库
-        if (beiklive::GameDB && m_gameEntry.crc32 != 0) {
-            beiklive::GameDB->set(m_gameEntry.crc32, "displayMode",
+        if (beiklive::GameDB && !m_gameEntry.path.empty()) {
+            beiklive::GameDB->set(m_gameEntry.path, "displayMode",
                 nlohmann::json(m_gameEntry.displayMode));
             beiklive::GameDB->flush();
         }
@@ -1431,8 +1431,8 @@ namespace beiklive
     {
         m_gameEntry.integerAspectRatio = scale;
 
-        if (beiklive::GameDB && m_gameEntry.crc32 != 0) {
-            beiklive::GameDB->set(m_gameEntry.crc32, "integerAspectRatio",
+        if (beiklive::GameDB && !m_gameEntry.path.empty()) {
+            beiklive::GameDB->set(m_gameEntry.path, "integerAspectRatio",
                 nlohmann::json(static_cast<float>(scale)));
             beiklive::GameDB->flush();
         }
@@ -1445,12 +1445,12 @@ namespace beiklive
         m_gameEntry.customScale  = scale;
 
         // 持久化自定义值到数据库
-        if (beiklive::GameDB && m_gameEntry.crc32 != 0) {
-            beiklive::GameDB->set(m_gameEntry.crc32, "customOffsetX",
+        if (beiklive::GameDB && !m_gameEntry.path.empty()) {
+            beiklive::GameDB->set(m_gameEntry.path, "customOffsetX",
                 nlohmann::json(static_cast<double>(x)));
-            beiklive::GameDB->set(m_gameEntry.crc32, "customOffsetY",
+            beiklive::GameDB->set(m_gameEntry.path, "customOffsetY",
                 nlohmann::json(static_cast<double>(y)));
-            beiklive::GameDB->set(m_gameEntry.crc32, "customScale",
+            beiklive::GameDB->set(m_gameEntry.path, "customScale",
                 nlohmann::json(static_cast<double>(scale)));
             beiklive::GameDB->flush();
         }
@@ -1459,8 +1459,8 @@ namespace beiklive
     void GameView::_onOverlayToggle(bool enabled)
     {
         m_gameEntry.overlayEnabled = enabled;
-        if (beiklive::GameDB && m_gameEntry.crc32 != 0) {
-            beiklive::GameDB->set(m_gameEntry.crc32, "overlayEnabled",
+        if (beiklive::GameDB && !m_gameEntry.path.empty()) {
+            beiklive::GameDB->set(m_gameEntry.path, "overlayEnabled",
                 nlohmann::json(enabled));
         }
     }
@@ -1470,8 +1470,8 @@ namespace beiklive
         m_gameEntry.overlayPath = path;
         // 清除已缓存的遮罩纹理，使其重新加载
         if (m_overlayImage) m_overlayImage->clear();
-        if (beiklive::GameDB && m_gameEntry.crc32 != 0) {
-            beiklive::GameDB->set(m_gameEntry.crc32, "overlayPath",
+        if (beiklive::GameDB && !m_gameEntry.path.empty()) {
+            beiklive::GameDB->set(m_gameEntry.path, "overlayPath",
                 nlohmann::json(path));
         }
     }

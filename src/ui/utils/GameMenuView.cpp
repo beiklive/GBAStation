@@ -947,10 +947,10 @@ namespace beiklive
 
             auto closeAct = [this](brls::View *)
             {
-                beiklive::GameDB->set(m_gameEntry.crc32, "shaderEnabled", nlohmann::json(m_gameEntry.shaderEnabled));
-                beiklive::GameDB->set(m_gameEntry.crc32, "shaderPath", nlohmann::json(m_gameEntry.shaderPath));
-                beiklive::GameDB->set(m_gameEntry.crc32, "shaderParaNames", nlohmann::json(m_gameEntry.shaderParaNames));
-                beiklive::GameDB->set(m_gameEntry.crc32, "shaderParaValues", nlohmann::json(m_gameEntry.shaderParaValues));
+                beiklive::GameDB->set(m_gameEntry.path, "shaderEnabled", nlohmann::json(m_gameEntry.shaderEnabled));
+                beiklive::GameDB->set(m_gameEntry.path, "shaderPath", nlohmann::json(m_gameEntry.shaderPath));
+                beiklive::GameDB->set(m_gameEntry.path, "shaderParaNames", nlohmann::json(m_gameEntry.shaderParaNames));
+                beiklive::GameDB->set(m_gameEntry.path, "shaderParaValues", nlohmann::json(m_gameEntry.shaderParaValues));
                 beiklive::GameDB->flush();
                 _dismissSidePanel(3); return true; };
 
@@ -1300,7 +1300,7 @@ namespace beiklive
             box->addView(hint);
         }
 
-        beiklive::GameDB->upsert(m_gameEntry);
+        beiklive::GameDB->upsertByPath(m_gameEntry);
         beiklive::GameDB->flush();
         return wrapper;
     }
@@ -1465,7 +1465,7 @@ namespace beiklive
             game.customScale      = m_gameEntry.customScale;
             game.customOffsetX    = m_gameEntry.customOffsetX;
             game.customOffsetY    = m_gameEntry.customOffsetY;
-            beiklive::GameDB->upsert(game);
+            beiklive::GameDB->upsertByPath(game);
             ++count;
         }
         beiklive::GameDB->flush();
@@ -1484,7 +1484,7 @@ namespace beiklive
             if (game.crc32 == m_gameEntry.crc32) continue;
             game.overlayPath    = m_gameEntry.overlayPath;
             game.overlayEnabled = m_gameEntry.overlayEnabled;
-            beiklive::GameDB->upsert(game);
+            beiklive::GameDB->upsertByPath(game);
             ++count;
         }
         // 更新全局默认遮罩路径
@@ -1510,7 +1510,7 @@ namespace beiklive
             game.shaderPath      = m_gameEntry.shaderPath;
             game.shaderParaNames  = m_gameEntry.shaderParaNames;
             game.shaderParaValues = m_gameEntry.shaderParaValues;
-            beiklive::GameDB->upsert(game);
+            beiklive::GameDB->upsertByPath(game);
             ++count;
         }
         // 更新全局默认着色器路径
