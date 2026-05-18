@@ -676,12 +676,12 @@ namespace beiklive
                         ime->openForText(
                             [this, idx, &promptCode](std::string code) {
                                 if (code.empty()) return;
-                                if (!isValidCheatCode(code))
-                                {
-                                    brls::Application::notify("金手指代码格式不正确，请重新输入");
-                                    promptCode();
-                                    return;
-                                }
+                                // if (!isValidCheatCode(code))
+                                // {
+                                //     brls::Application::notify("金手指代码格式不正确，请重新输入");
+                                //     promptCode();
+                                //     return;
+                                // }
                                 if (idx >= (int)m_cheats.size()) return;
                                 m_cheats[idx].code = code;
                                 if (!m_gameEntry.cheatPath.empty())
