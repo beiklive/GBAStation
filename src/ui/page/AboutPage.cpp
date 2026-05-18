@@ -313,6 +313,10 @@ brls::View* AboutPage::_buildUpdateTab() {
         changelogCard->addView(lablebox);
 
         m_bodyLabel->setText(R"(
+v0.1.9
+    bug修复和优化
+    1. 修复金手指输入和修改时不能输入多行的bug
+
 v0.1.8
     bug修复和优化
     1. 修复着色器参数修改后重启游戏参数修改无效的bug
