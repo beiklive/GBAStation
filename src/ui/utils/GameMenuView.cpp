@@ -549,12 +549,13 @@ namespace beiklive
                         ime2->openForText(
                             [this, name, &promptCode](std::string code) {
                                 if (code.empty()) return;
-                                if (!isValidCheatCode(code))
-                                {
-                                    brls::Application::notify("金手指代码格式不正确，请重新输入");
-                                    promptCode();
-                                    return;
-                                }
+                                // BKTODO beiklive 格式校验还有问题，暂时不校验
+                                // if (!isValidCheatCode(code))
+                                // {
+                                //     brls::Application::notify("金手指代码格式不正确，请重新输入");
+                                //     promptCode();
+                                //     return;
+                                // }
                                 CheatEntry entry;
                                 entry.desc = name;
                                 entry.code = code;
