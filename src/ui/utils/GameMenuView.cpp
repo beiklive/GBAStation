@@ -56,6 +56,52 @@ namespace beiklive
         return false;
     }
 
+    // 金手指格式转换
+    // 输入：多行空格分隔 或 + 格式
+    // 输出：+ 连接格式
+    // 异常/失败：返回 "00000000 0000"
+    std::string convertCheatCode(const std::string& input) {
+        // 1. 空字符串 → 失败
+        if (input.empty()) {
+            return "00000000 0000";
+        }
+
+        // 2. 已经是 + 格式 → 直接返回
+        if (input.find('+') != std::string::npos) {
+            return input;
+        }
+
+        std::string result;
+        bool hasValidChar = false;
+
+        // 3. 遍历字符，替换空白为 +
+        for (char c : input) {
+            // 合法字符：0-9, A-F, a-f（金手指只允许16进制）
+            bool isHex = (c >= '0' && c <= '9') ||
+                        (c >= 'A' && c <= 'F') ||
+                        (c >= 'a' && c <= 'f');
+
+            if (isHex) {
+                result += c;
+                hasValidChar = true;
+            }
+            // 空白符（空格、换行、回车）→ 换成 +
+            else if (c == ' ' || c == '\n' || c == '\r') {
+                result += '+';
+            }
+            // 出现非法字符 → 直接判定转换失败
+            else {
+                return "00000000+0000";
+            }
+        }
+
+        // 4. 没有有效16进制字符 → 失败
+        if (!hasValidChar) {
+            return "00000000+0000";
+        }
+
+        return result;
+    }
     using beiklive::ui::makeHint;
 
     GameMenuView::GameMenuView(beiklive::GameEntry gameData)
@@ -556,6 +602,7 @@ namespace beiklive
                                 //     promptCode();
                                 //     return;
                                 // }
+                                code = convertCheatCode(code);
                                 CheatEntry entry;
                                 entry.desc = name;
                                 entry.code = code;
@@ -676,6 +723,7 @@ namespace beiklive
                         ime->openForText(
                             [this, idx, &promptCode](std::string code) {
                                 if (code.empty()) return;
+                                code = convertCheatCode(code);
                                 // if (!isValidCheatCode(code))
                                 // {
                                 //     brls::Application::notify("金手指代码格式不正确，请重新输入");
