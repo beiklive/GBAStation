@@ -1431,7 +1431,8 @@ namespace beiklive
             btn->setDecimal(2);
 
             std::string pname = m_gameEntry.shaderParaNames[idx];
-            btn->setOnChange([this, pname](double v) {
+            btn->setOnChange([this, pname, idx](double v) {
+                m_gameEntry.shaderParaValues[idx] = static_cast<float>(v);
                 if (m_shaderParamCallback) m_shaderParamCallback(pname, static_cast<float>(v));
             });
 
