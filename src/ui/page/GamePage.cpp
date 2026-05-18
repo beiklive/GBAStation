@@ -97,17 +97,13 @@ namespace beiklive
         std::string defaultLogo = beiklive::tools::getDefaultLogoPath(
             static_cast<beiklive::enums::EmuPlatform>((int)m_gameData.itemType));
 
-        // 获取游戏的crc32
-        int dcrc32 = db->get(m_gameData.fullPath, "crc32", 0);
-        if(dcrc32 == 0)
-            dcrc32 = tools::crc32(m_gameData.fullPath); 
-
-        db->setDefault(dcrc32, "logoPath", defaultLogo);
+        auto& path = m_gameData.fullPath;
+        db->setDefault(path, "logoPath", defaultLogo);
 
         namespace sk = beiklive::SettingKey;
-        db->setDefault(dcrc32, "overlayEnabled",
+        db->setDefault(path, "overlayEnabled",
                        GET_SETTING_KEY_INT(sk::KEY_DISPLAY_OVERLAY_ENABLED, 0));
-        db->setDefault(dcrc32, "shaderEnabled",
+        db->setDefault(path, "shaderEnabled",
                        GET_SETTING_KEY_INT(sk::KEY_DISPLAY_SHADER_ENABLED, 0));
 
         // 画面模式：全局配置为字符串，DB 存整数 ScreenMode 枚举值
@@ -117,13 +113,13 @@ namespace beiklive
             if (dmStr == "fill") dm = 1;          // Fill
             else if (dmStr == "integer") dm = 2;   // IntegerScale
             else if (dmStr == "custom") dm = 3;    // FreeScale
-            db->setDefault(dcrc32, "displayMode", dm);
+            db->setDefault(path, "displayMode", dm);
         }
         // 整数倍缩放
-        db->setDefault(dcrc32, "integerAspectRatio",
+        db->setDefault(path, "integerAspectRatio",
                        GET_SETTING_KEY_INT("display.integer_scale_mult", 0));
 
-        m_gameEntry = db->findByCrc32(dcrc32).value();
+        m_gameEntry = db->findByPath(path).value();
 
         // 初始化路径字段（优先使用已有记录，若为空则从配置中读取默认值）
         _initGameEntryPaths();

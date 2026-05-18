@@ -230,7 +230,7 @@ namespace beiklive
                 for (const auto &item : j)
                 {
                     GameEntry entry = item.get<GameEntry>();
-                    doUpsert(entry);
+                    doUpsertByPath(entry);
                 }
             }
             catch (const std::exception &e)
