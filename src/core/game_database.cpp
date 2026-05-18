@@ -441,6 +441,30 @@ namespace beiklive
     }
 
     // ==================== 私有实现（无锁） ====================
+    void GameDatabase::doUpsertByPath(const GameEntry &entry)
+    {
+        auto it = pathIndex_.find(entry.path);
+        if (it != pathIndex_.end())
+        {
+            int oldCrc32 = data_[it->second].crc32;
+            data_[it->second] = entry;
+            if (oldCrc32 != entry.crc32)
+            {
+                crc32Index_.erase(oldCrc32);
+                crc32Index_[entry.crc32] = it->second;
+            }
+        }
+        else
+        {
+            data_.push_back(entry);
+            size_t idx = data_.size() - 1;
+            crc32Index_[entry.crc32] = idx;
+            pathIndex_[entry.path] = idx;
+        }
+    }
+
+
+
     void GameDatabase::doUpsert(const GameEntry &entry)
     {
         auto it = crc32Index_.find(entry.crc32);
