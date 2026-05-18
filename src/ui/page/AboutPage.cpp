@@ -314,8 +314,9 @@ brls::View* AboutPage::_buildUpdateTab() {
 
         m_bodyLabel->setText(R"(
 v0.1.8
-    bug修复
+    bug修复和优化
     1. 修复着色器参数修改后重启游戏参数修改无效的bug
+    2. 优化crc32计算逻辑，加快了RetroArch导入速度
 
 v0.1.7
     1. 进一步优化游戏循环，减少卡顿掉帧
