@@ -330,6 +330,12 @@ namespace beiklive
                 }
                 AudioManager::instance().init(32768, 2);
 
+                {
+                    int16_t discardBuf[4096];
+                    while (m_nds_core->ReadAudio(discardBuf, 2048) > 0)
+                        ;
+                }
+
                 GameSignal::instance().resetAll();
                 _startGameThread();
             }

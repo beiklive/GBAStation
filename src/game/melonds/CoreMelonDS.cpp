@@ -117,7 +117,7 @@ bool CoreMelonDS::SetupGame(beiklive::GameEntry entry)
 
     melonDS::NDS::Current = m_nds.get();
 
-    if (m_nds->NeedsDirectBoot())
+    // 强制 DirectBoot 跳过 BIOS 引导动画，直接启动游戏
     {
         std::string romName = beiklive::tools::getFileNameWithoutExtension(m_gameEntry.path);
         m_nds->SetupDirectBoot(romName);
@@ -170,14 +170,16 @@ const uint32_t* CoreMelonDS::GetTopFramebuffer() const
 {
     if (!m_ready) return nullptr;
     int fb = m_nds->GPU.FrontBuffer;
-    return m_nds->GPU.Framebuffer[0][fb].get();
+    bool swap = (m_nds->PowerControl9 >> 15) & 1;
+    return m_nds->GPU.Framebuffer[swap ? 1 : 0][fb].get();
 }
 
 const uint32_t* CoreMelonDS::GetBottomFramebuffer() const
 {
     if (!m_ready) return nullptr;
     int fb = m_nds->GPU.FrontBuffer;
-    return m_nds->GPU.Framebuffer[1][fb].get();
+    bool swap = (m_nds->PowerControl9 >> 15) & 1;
+    return m_nds->GPU.Framebuffer[swap ? 0 : 1][fb].get();
 }
 
 int CoreMelonDS::ReadAudio(int16_t* data, int samples)
