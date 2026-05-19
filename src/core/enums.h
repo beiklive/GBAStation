@@ -48,6 +48,7 @@ namespace beiklive::enums
         GBA_ROM, // GBA文件
         GBC_ROM, // GBC文件
         GB_ROM,  // GB文件
+        DS_ROM,  // DS文件
 
         // 上面的顺序必须与EmuPlatform保持一致，方便后续通过平台类型直接转换为文件类型
 

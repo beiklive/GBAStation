@@ -5,6 +5,8 @@
 #include "ui/utils/GameView.hpp"
 #include "ui/utils/GameMenuView.hpp"
 #include "ui/utils/RewindSelectorView.hpp"
+#include "ui/utils/NdsGameView.hpp"
+#include "ui/utils/NdsGameMenuView.hpp"
 
 namespace beiklive
 {
@@ -36,6 +38,8 @@ namespace beiklive
         GameView *m_gameView                   = nullptr;         // 游戏视图实例，负责游戏的渲染显示和输入处理
         GameMenuView *m_gameMenuView           = nullptr;         // 游戏菜单视图实例，负责游戏菜单的渲染显示和输入处理
         RewindSelectorView *m_rewindSelectorView = nullptr;       // 可视化倒带选择界面（显示倒带缩略图列表）
+        NdsGameView *m_ndsGameView             = nullptr;
+        NdsGameMenuView *m_ndsGameMenuView     = nullptr;
     };
 
 }

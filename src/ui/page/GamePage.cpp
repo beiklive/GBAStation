@@ -225,160 +225,205 @@ namespace beiklive
     void GamePage::GameViewInitialize()
     {
         #undef ABSOLUTE
-        m_gameView = new GameView(m_gameEntry);
-        m_gameView->setWidthPercentage(100.f);
-        m_gameView->setHeightPercentage(100.f);
-        // m_gameView->setBackgroundColor(nvgRGBA(114, 187, 255, 255)); // 设置游戏视图背景为黑色
-        m_gameView->setBackground(brls::ViewBackground::NONE);
-        m_gameView->setFocusable(true);
-        m_gameView->setPositionType(brls::PositionType::ABSOLUTE);
-        m_gameView->setPositionTop(0);
-        m_gameView->setPositionLeft(0);
-        this->addView(m_gameView);
+        if (m_gameEntry.platform == (int)beiklive::enums::EmuPlatform::EmuDS)
+        {
+            m_ndsGameView = new NdsGameView(m_gameEntry);
+            m_ndsGameView->setWidthPercentage(100.f);
+            m_ndsGameView->setHeightPercentage(100.f);
+            m_ndsGameView->setBackground(brls::ViewBackground::NONE);
+            m_ndsGameView->setFocusable(true);
+            m_ndsGameView->setPositionType(brls::PositionType::ABSOLUTE);
+            m_ndsGameView->setPositionTop(0);
+            m_ndsGameView->setPositionLeft(0);
+            this->addView(m_ndsGameView);
+        }
+        else
+        {
+            m_gameView = new GameView(m_gameEntry);
+            m_gameView->setWidthPercentage(100.f);
+            m_gameView->setHeightPercentage(100.f);
+            m_gameView->setBackground(brls::ViewBackground::NONE);
+            m_gameView->setFocusable(true);
+            m_gameView->setPositionType(brls::PositionType::ABSOLUTE);
+            m_gameView->setPositionTop(0);
+            m_gameView->setPositionLeft(0);
+            this->addView(m_gameView);
+        }
     }
 
     void GamePage::GameMenuInitialize()
     {
         #undef ABSOLUTE
-        m_gameMenuView = new GameMenuView(m_gameEntry);
-        m_gameMenuView->setWidthPercentage(100.f);
-        m_gameMenuView->setHeightPercentage(100.f);
-        m_gameMenuView->setFocusable(false);
-        m_gameMenuView->setPositionType(brls::PositionType::ABSOLUTE);
-        m_gameMenuView->setPositionTop(0);
-        m_gameMenuView->setPositionLeft(0);
-        m_gameMenuView->setVisibility(brls::Visibility::GONE); // 初始隐藏
-
-
-        // setOnResume和setOnExit回调由GamePage注入，触发时分别执行对应的动画和操作
-        m_gameMenuView->setOnResume([this]() {
-            brls::sync([this]() {
-                GameSignal::instance().requestReloadCheats();
-                beiklive::GameDB->flush();
-                m_gameView->setFocusable(true);
-                AnimationHelper::slideOutToBottom(m_gameMenuView, MENU_FADE_OUT_MS, 120.f,true, [this]() {
-                    brls::Application::giveFocus(m_gameView);
-                });
-            });
-        });
-
-        // "重置游戏"回调：触发重置信号
-        m_gameMenuView->setOnReset([this]() {
-            brls::sync([this]() {
-                m_gameView->setFocusable(true);
-                AnimationHelper::slideOutToBottom(m_gameMenuView, MENU_FADE_OUT_MS, 120.f,true, [this]() {
-                    GameSignal::instance().requestReset();
-                    brls::Application::giveFocus(m_gameView);
-
-                });
-            });
-        });
-
-
-        // "退出游戏"回调：触发退出信号
-        m_gameMenuView->setOnExit([this]() {
-            brls::sync([this]() {
-                _tryUpdateLogoFromThumbnail();
-                beiklive::GameDB->flush();
-                AnimationHelper::slideOutToBottom(m_gameMenuView, MENU_EXIT_FADE_MS, 120.f,true, [this]() {
-                    int exitSlot = GET_SETTING_KEY_INT("save.autoSaveOnExit", 0);
-                    if (exitSlot > 0 && exitSlot <= 10)
-                        GameSignal::instance().requestAutoSave(exitSlot - 1);
-                    GameSignal::instance().requestExit();
-                });
-            });
-        });
-
-        // 注入保存状态回调：通过 GameSignal 在游戏线程中执行实际存档
-        m_gameMenuView->setSaveStateCallback([this](int slot) {
-            GameSignal::instance().requestQuickSave(slot);
-        });
-
-        // 注入读取状态回调：通过 GameSignal 在游戏线程中执行实际读档
-        m_gameMenuView->setLoadStateCallback([this](int slot) {
-            GameSignal::instance().requestQuickLoad(slot);
-        });
-
-        // 注入金手指切换回调：通过 GameSignal 在游戏线程中执行实际切换
-        m_gameMenuView->setCheatToggleCallback([this](int idx, bool enabled) {
-            GameSignal::instance().requestCheatToggle(idx, enabled);
-        });
-
-        // 注入金手指文件变更回调：更新 GameEntry 的 cheatPath 并持久化
-        m_gameMenuView->setCheatPathCallback([this](const std::string& path) {
-            m_gameEntry.cheatPath = path;
-            if (beiklive::GameDB)
-                beiklive::GameDB->set(m_gameEntry.path, "cheatPath", nlohmann::json(path));
-            if (m_gameView)
-                m_gameView->requestCheatPathUpdate(path);
-        });
-
-        // 注入画面设置回调
-        m_gameMenuView->setDisplayModeCallback([this](const std::string& mode) {
-            if (m_gameView) m_gameView->_onDisplayModeChange(mode);
-        });
-        m_gameMenuView->setIntegerScaleCallback([this](float scale) {
-            if (m_gameView) m_gameView->_onIntegerScaleChange(scale);
-        });
-        m_gameMenuView->setCustomScaleCallback([this](float x, float y, float scale) {
-            if (m_gameView) m_gameView->_onCustomValuesChanged(x, y, scale);
-        });
-        m_gameMenuView->setOverlayToggleCallback([this](bool enabled) {
-            if (m_gameView) m_gameView->_onOverlayToggle(enabled);
-        });
-        m_gameMenuView->setOverlayPathCallback([this](const std::string& path) {
-            if (m_gameView) m_gameView->_onOverlayPathChange(path);
-        });
-        m_gameMenuView->setFilterCallback([this](const std::string& filter) {
-            if (m_gameView) m_gameView->_onFilterChange(filter);
-        });
-        m_gameMenuView->setShaderToggleCallback([this](bool on) {
-            if (m_gameView) m_gameView->_onShaderToggle(on);
-        });
-        m_gameMenuView->setShaderPathCallback([this](const std::string& path) {
-            if (m_gameView) m_gameView->_onShaderPathChange(path);
-        });
-        // 注入着色器参数回调
-        m_gameMenuView->setShaderParamsCallback([this]() -> std::vector<ShaderParamInfo> {
-            if (m_gameView) return m_gameView->_getShaderParams();
-            return {};
-        });
-        m_gameMenuView->setShaderParamCallback([this](const std::string& name, float val) {
-            if (m_gameView) m_gameView->_setShaderParam(name, val);
-        });
-
-        // 注入槽位信息查询回调：供菜单面板异步扫描存档目录
-        // 预先在UI线程计算所有槽位路径（仅字符串操作），避免后台线程持有 GameView 原始指针，
-        // 防止游戏退出后 GameView 被销毁时后台线程仍访问其成员导致崩溃。
-        // 槽位数量 10 与 GameMenuView 内部的 _createSaveStatePanel/_createLoadStatePanel 保持一致
+        if (m_gameEntry.platform == (int)beiklive::enums::EmuPlatform::EmuDS)
         {
-            std::vector<std::string> statePaths, thumbPaths;
-            statePaths.reserve(10);
-            thumbPaths.reserve(10);
-            for (int slot = 0; slot < 10; ++slot) {
-                statePaths.push_back(m_gameView->getStatePath(slot));
-                thumbPaths.push_back(m_gameView->getStateThumbPath(slot));
-            }
-            m_gameMenuView->setStateInfoCallback(
-                [statePaths = std::move(statePaths), thumbPaths = std::move(thumbPaths)](int slot) -> beiklive::StateSlotInfo {
-                    beiklive::StateSlotInfo info;
-                    if (slot < 0 || slot >= static_cast<int>(statePaths.size())) return info;
-                    const std::string& statePath = statePaths[slot];
-                    const std::string& thumbPath = thumbPaths[slot];
-                    if (statePath.empty()) return info;
-                    std::error_code ec;
-                    info.exists = std::filesystem::exists(statePath, ec);
-                    if (info.exists) {
-                        if (std::filesystem::exists(thumbPath, ec))
-                            info.thumbPath = thumbPath;
-                        // 使用公共工具函数读取文件修改时间字符串
-                        info.timeStr = beiklive::tools::getFileModTimeStr(statePath);
-                    }
-                    return info;
-                });
-        }
+            m_ndsGameMenuView = new NdsGameMenuView(m_gameEntry);
+            m_ndsGameMenuView->setWidthPercentage(100.f);
+            m_ndsGameMenuView->setHeightPercentage(100.f);
+            m_ndsGameMenuView->setFocusable(false);
+            m_ndsGameMenuView->setPositionType(brls::PositionType::ABSOLUTE);
+            m_ndsGameMenuView->setPositionTop(0);
+            m_ndsGameMenuView->setPositionLeft(0);
+            m_ndsGameMenuView->setVisibility(brls::Visibility::GONE);
 
-        this->addView(m_gameMenuView);
+            m_ndsGameMenuView->setOnResume([this]() {
+                brls::sync([this]() {
+                    beiklive::GameDB->flush();
+                    m_ndsGameView->setFocusable(true);
+                    AnimationHelper::slideOutToBottom(m_ndsGameMenuView, 180, 120.f, true, [this]() {
+                        brls::Application::giveFocus(m_ndsGameView);
+                    });
+                });
+            });
+
+            m_ndsGameMenuView->setOnExit([this]() {
+                brls::sync([this]() {
+                    beiklive::GameDB->flush();
+                    AnimationHelper::slideOutToBottom(m_ndsGameMenuView, 150, 120.f, true, [this]() {
+                        GameSignal::instance().requestExit();
+                    });
+                });
+            });
+
+            this->addView(m_ndsGameMenuView);
+        }
+        else
+        {
+            m_gameMenuView = new GameMenuView(m_gameEntry);
+            m_gameMenuView->setWidthPercentage(100.f);
+            m_gameMenuView->setHeightPercentage(100.f);
+            m_gameMenuView->setFocusable(false);
+            m_gameMenuView->setPositionType(brls::PositionType::ABSOLUTE);
+            m_gameMenuView->setPositionTop(0);
+            m_gameMenuView->setPositionLeft(0);
+            m_gameMenuView->setVisibility(brls::Visibility::GONE); // 初始隐藏
+
+
+            // setOnResume和setOnExit回调由GamePage注入，触发时分别执行对应的动画和操作
+            m_gameMenuView->setOnResume([this]() {
+                brls::sync([this]() {
+                    GameSignal::instance().requestReloadCheats();
+                    beiklive::GameDB->flush();
+                    m_gameView->setFocusable(true);
+                    AnimationHelper::slideOutToBottom(m_gameMenuView, MENU_FADE_OUT_MS, 120.f,true, [this]() {
+                        brls::Application::giveFocus(m_gameView);
+                    });
+                });
+            });
+
+            // "重置游戏"回调：触发重置信号
+            m_gameMenuView->setOnReset([this]() {
+                brls::sync([this]() {
+                    m_gameView->setFocusable(true);
+                    AnimationHelper::slideOutToBottom(m_gameMenuView, MENU_FADE_OUT_MS, 120.f,true, [this]() {
+                        GameSignal::instance().requestReset();
+                        brls::Application::giveFocus(m_gameView);
+
+                    });
+                });
+            });
+
+
+            // "退出游戏"回调：触发退出信号
+            m_gameMenuView->setOnExit([this]() {
+                brls::sync([this]() {
+                    _tryUpdateLogoFromThumbnail();
+                    beiklive::GameDB->flush();
+                    AnimationHelper::slideOutToBottom(m_gameMenuView, MENU_EXIT_FADE_MS, 120.f,true, [this]() {
+                        int exitSlot = GET_SETTING_KEY_INT("save.autoSaveOnExit", 0);
+                        if (exitSlot > 0 && exitSlot <= 10)
+                            GameSignal::instance().requestAutoSave(exitSlot - 1);
+                        GameSignal::instance().requestExit();
+                    });
+                });
+            });
+
+            // 注入保存状态回调：通过 GameSignal 在游戏线程中执行实际存档
+            m_gameMenuView->setSaveStateCallback([this](int slot) {
+                GameSignal::instance().requestQuickSave(slot);
+            });
+
+            // 注入读取状态回调：通过 GameSignal 在游戏线程中执行实际读档
+            m_gameMenuView->setLoadStateCallback([this](int slot) {
+                GameSignal::instance().requestQuickLoad(slot);
+            });
+
+            // 注入金手指切换回调：通过 GameSignal 在游戏线程中执行实际切换
+            m_gameMenuView->setCheatToggleCallback([this](int idx, bool enabled) {
+                GameSignal::instance().requestCheatToggle(idx, enabled);
+            });
+
+            // 注入金手指文件变更回调：更新 GameEntry 的 cheatPath 并持久化
+            m_gameMenuView->setCheatPathCallback([this](const std::string& path) {
+                m_gameEntry.cheatPath = path;
+                if (beiklive::GameDB)
+                    beiklive::GameDB->set(m_gameEntry.path, "cheatPath", nlohmann::json(path));
+                if (m_gameView)
+                    m_gameView->requestCheatPathUpdate(path);
+            });
+
+            // 注入画面设置回调
+            m_gameMenuView->setDisplayModeCallback([this](const std::string& mode) {
+                if (m_gameView) m_gameView->_onDisplayModeChange(mode);
+            });
+            m_gameMenuView->setIntegerScaleCallback([this](float scale) {
+                if (m_gameView) m_gameView->_onIntegerScaleChange(scale);
+            });
+            m_gameMenuView->setCustomScaleCallback([this](float x, float y, float scale) {
+                if (m_gameView) m_gameView->_onCustomValuesChanged(x, y, scale);
+            });
+            m_gameMenuView->setOverlayToggleCallback([this](bool enabled) {
+                if (m_gameView) m_gameView->_onOverlayToggle(enabled);
+            });
+            m_gameMenuView->setOverlayPathCallback([this](const std::string& path) {
+                if (m_gameView) m_gameView->_onOverlayPathChange(path);
+            });
+            m_gameMenuView->setFilterCallback([this](const std::string& filter) {
+                if (m_gameView) m_gameView->_onFilterChange(filter);
+            });
+            m_gameMenuView->setShaderToggleCallback([this](bool on) {
+                if (m_gameView) m_gameView->_onShaderToggle(on);
+            });
+            m_gameMenuView->setShaderPathCallback([this](const std::string& path) {
+                if (m_gameView) m_gameView->_onShaderPathChange(path);
+            });
+            // 注入着色器参数回调
+            m_gameMenuView->setShaderParamsCallback([this]() -> std::vector<ShaderParamInfo> {
+                if (m_gameView) return m_gameView->_getShaderParams();
+                return {};
+            });
+            m_gameMenuView->setShaderParamCallback([this](const std::string& name, float val) {
+                if (m_gameView) m_gameView->_setShaderParam(name, val);
+            });
+
+            // 注入槽位信息查询回调
+            {
+                std::vector<std::string> statePaths, thumbPaths;
+                statePaths.reserve(10);
+                thumbPaths.reserve(10);
+                for (int slot = 0; slot < 10; ++slot) {
+                    statePaths.push_back(m_gameView->getStatePath(slot));
+                    thumbPaths.push_back(m_gameView->getStateThumbPath(slot));
+                }
+                m_gameMenuView->setStateInfoCallback(
+                    [statePaths = std::move(statePaths), thumbPaths = std::move(thumbPaths)](int slot) -> beiklive::StateSlotInfo {
+                        beiklive::StateSlotInfo info;
+                        if (slot < 0 || slot >= static_cast<int>(statePaths.size())) return info;
+                        const std::string& statePath = statePaths[slot];
+                        const std::string& thumbPath = thumbPaths[slot];
+                        if (statePath.empty()) return info;
+                        std::error_code ec;
+                        info.exists = std::filesystem::exists(statePath, ec);
+                        if (info.exists) {
+                            if (std::filesystem::exists(thumbPath, ec))
+                                info.thumbPath = thumbPath;
+                            info.timeStr = beiklive::tools::getFileModTimeStr(statePath);
+                        }
+                        return info;
+                    });
+            }
+
+            this->addView(m_gameMenuView);
+        }
     }
 
     void GamePage::RewindSelectorViewInitialize()
@@ -428,18 +473,28 @@ namespace beiklive
         PageInit();
         GameViewInitialize();
         GameMenuInitialize();
-        RewindSelectorViewInitialize();
 
-        // 将菜单视图引用注入 GameView，以便菜单热键触发时可打开菜单
-        if (m_gameView && m_gameMenuView)
-            m_gameView->setGameMenuView(m_gameMenuView);
+        if (m_gameEntry.platform == (int)beiklive::enums::EmuPlatform::EmuDS)
+        {
+            if (m_ndsGameView && m_ndsGameMenuView)
+                m_ndsGameView->setGameMenuView(m_ndsGameMenuView);
 
-        // 将倒带选择视图引用注入 GameView，以便倒带键触发时可打开可视化倒带界面
-        if (m_gameView && m_rewindSelectorView)
-            m_gameView->setRewindSelectorView(m_rewindSelectorView);
+            brls::sync([this]()
+                       { brls::Application::giveFocus(m_ndsGameView); });
+        }
+        else
+        {
+            RewindSelectorViewInitialize();
 
-        brls::sync([this]()
-                   { brls::Application::giveFocus(m_gameView); }); // 游戏视图获得焦点，准备接受输入
+            if (m_gameView && m_gameMenuView)
+                m_gameView->setGameMenuView(m_gameMenuView);
+
+            if (m_gameView && m_rewindSelectorView)
+                m_gameView->setRewindSelectorView(m_rewindSelectorView);
+
+            brls::sync([this]()
+                       { brls::Application::giveFocus(m_gameView); });
+        }
     }
 
     void GamePage::_tryUpdateLogoFromThumbnail()

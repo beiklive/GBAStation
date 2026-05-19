@@ -558,6 +558,8 @@ namespace beiklive
             return 144;
         case beiklive::enums::EmuPlatform::EmuGB:
             return 144;
+        case beiklive::enums::EmuPlatform::EmuDS:
+            return 192 * 2; // top + bottom screens stacked
         default:
             break;
         }
@@ -574,6 +576,8 @@ namespace beiklive
             return 160;
         case beiklive::enums::EmuPlatform::EmuGB:
             return 160;
+        case beiklive::enums::EmuPlatform::EmuDS:
+            return 256;
         default:
             break;
         }
@@ -590,6 +594,8 @@ namespace beiklive
             return BK_RES("img/LogoLayer/GBC_LOGOLAY.png");
         case beiklive::enums::EmuPlatform::EmuGB:
             return BK_RES("img/LogoLayer/GB_LOGOLAY.png");
+        case beiklive::enums::EmuPlatform::EmuDS:
+            return BK_RES("img/LogoLayer/DS_LOGOLAY.png");
         default:
             return BK_RES("img/LogoLayer/GBA_LOGOLAY.png");
         }
