@@ -54,6 +54,10 @@ static size_t fileSize(const std::string& path)
     return static_cast<size_t>(f.tellg());
 }
 
+CoreMelonDS::CoreMelonDS()
+{
+}
+
 CoreMelonDS::~CoreMelonDS()
 {
     if (m_ready)

@@ -194,7 +194,7 @@ namespace beiklive
 
                 return true;
             });
-        m_fileListPage->setFliter(beiklive::enums::FilterMode::None, {".gba", ".gbc", ".gb"});
+        m_fileListPage->setFliter(beiklive::enums::FilterMode::None, {".gba", ".gbc", ".gb", ".nds"});
 
         m_fileListPage->onFileSelected = [this](beiklive::DirListData dirItem)
         {
@@ -206,6 +206,7 @@ namespace beiklive
             case beiklive::enums::FileType::GBA_ROM:
             case beiklive::enums::FileType::GBC_ROM:
             case beiklive::enums::FileType::GB_ROM:
+            case beiklive::enums::FileType::DS_ROM:
                 brls::Application::notify("启动游戏：" + dirItem.fileName);
                 {
                     m_gamePage = new beiklive::GamePage(dirItem);

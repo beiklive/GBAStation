@@ -324,6 +324,7 @@ namespace beiklive
             case PlatformBadgeColor::GBA:  return nvgRGBA(108, 77,  191, 220); // 紫色
             case PlatformBadgeColor::GBC:  return nvgRGBA(0,   112, 221, 220); // 蓝色
             case PlatformBadgeColor::GB:   return nvgRGBA(0,   168, 107, 220); // 绿色
+            case PlatformBadgeColor::DS:   return nvgRGBA(200, 80,  60,  220); // 红色
             default:                       return nvgRGBA(100, 100, 100, 200);
         }
     }

@@ -21,6 +21,7 @@ namespace beiklive
         GBA,
         GBC,
         GB,
+        DS,
         NONE,
     };
 

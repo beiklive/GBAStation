@@ -20,6 +20,7 @@ namespace beiklive
             GBA = (int)beiklive::enums::EmuPlatform::EmuGBA,
             GBC = (int)beiklive::enums::EmuPlatform::EmuGBC,
             GB  = (int)beiklive::enums::EmuPlatform::EmuGB,
+            DS  = (int)beiklive::enums::EmuPlatform::EmuDS,
         };
 
         GameLibraryPage();

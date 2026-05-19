@@ -133,6 +133,7 @@ namespace beiklive
             case beiklive::enums::EmuPlatform::EmuGBA: badgeColor = PlatformBadgeColor::GBA; break;
             case beiklive::enums::EmuPlatform::EmuGBC: badgeColor = PlatformBadgeColor::GBC; break;
             case beiklive::enums::EmuPlatform::EmuGB:  badgeColor = PlatformBadgeColor::GB;  break;
+            case beiklive::enums::EmuPlatform::EmuDS:  badgeColor = PlatformBadgeColor::DS;  break;
             default: badgeColor = PlatformBadgeColor::NONE; break;
         }
         if (!badgeText.empty())
@@ -246,16 +247,17 @@ namespace beiklive
         ThreadPool::instance().enqueue([this, alive]() {
             if (!alive->load()) return;
             auto ae = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
-            bool hG = false, hC = false, hB = false;
+            bool hG = false, hC = false, hB = false, hD = false;
             for (auto& e : ae) {
                 switch (static_cast<beiklive::enums::EmuPlatform>(e.platform)) {
                     case beiklive::enums::EmuPlatform::EmuGBA: hG = true; break;
                     case beiklive::enums::EmuPlatform::EmuGBC: hC = true; break;
                     case beiklive::enums::EmuPlatform::EmuGB:  hB = true; break;
+                    case beiklive::enums::EmuPlatform::EmuDS:  hD = true; break;
                     default: break;
                 }
             }
-            brls::sync([this, alive, hG, hC, hB]() {
+            brls::sync([this, alive, hG, hC, hB, hD]() {
                 if (!alive->load()) return;
                 std::vector<std::string> opts;
                 std::vector<PlatformFilter> map;
@@ -263,6 +265,7 @@ namespace beiklive
                 if (hG) { opts.push_back("GBA"); map.push_back(PlatformFilter::GBA); }
                 if (hC) { opts.push_back("GBC"); map.push_back(PlatformFilter::GBC); }
                 if (hB) { opts.push_back("GB");  map.push_back(PlatformFilter::GB);  }
+                if (hD) { opts.push_back("DS");  map.push_back(PlatformFilter::DS);  }
                 int cur = 0;
                 for (size_t i = 0; i < map.size(); i++)
                     if (map[i] == m_platformFilter) { cur = (int)i; break; }
@@ -302,6 +305,7 @@ namespace beiklive
             case PlatformFilter::GBA: fs = "GBA";  break;
             case PlatformFilter::GBC: fs = "GBC";  break;
             case PlatformFilter::GB:  fs = "GB";   break;
+            case PlatformFilter::DS:  fs = "DS";   break;
         }
         this->getHeader()->setPath((m_isSearching ? "搜索" : "分类") + (": " + fs));
     }

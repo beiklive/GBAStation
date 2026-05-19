@@ -36,7 +36,7 @@ namespace beiklive::melonds
 class CoreMelonDS
 {
 public:
-    CoreMelonDS() = default;
+    CoreMelonDS();
     ~CoreMelonDS();
 
     bool SetupGame(beiklive::GameEntry entry);
