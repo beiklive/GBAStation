@@ -1,9 +1,10 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.16)
 
 
 
 set(BOREALIS_LIBRARY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/borealis/library)
 set(MGBA_PATH        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mgba)
+set(MELONDS_PATH     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/melonDS-switch)
 
 # 构建选项
 include(${BOREALIS_LIBRARY}/cmake/commonOption.cmake)
@@ -128,6 +129,7 @@ else()
 endif ()
 
 include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/src)
+include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/third_party/melonDS-switch/src)
 file(GLOB_RECURSE MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
 # list(APPEND MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp)
 
@@ -206,7 +208,7 @@ endif ()
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${APP_PLATFORM_INCLUDE})
 target_compile_options(${PROJECT_NAME} PRIVATE -ffunction-sections -fdata-sections ${APP_PLATFORM_OPTION})
-target_link_libraries(${PROJECT_NAME} PRIVATE borealis ${APP_PLATFORM_LIB})
+target_link_libraries(${PROJECT_NAME} PRIVATE borealis core ${APP_PLATFORM_LIB})
 if(NOT PLATFORM_ANDROID)
     target_link_libraries(${PROJECT_NAME} PRIVATE curl)
 endif()

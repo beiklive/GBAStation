@@ -135,6 +135,8 @@ namespace beiklive // 全局功能函数
             #elif defined(__APPLE__)
                 return  beiklive::path::corePath() + beiklive::path::SPLIT_CHAR + std::string("mgba_libretro.dylib");
             #endif
+        case (int)beiklive::enums::EmuPlatform::EmuDS:
+            return "";  // melonDS core 静态链接
         default:
             return "";
         }

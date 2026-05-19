@@ -53,6 +53,7 @@ inline std::string GetRootPath()
     constexpr const char *DATA_BASE_FILE_GBA   = "GameData_GBA.json";   ///< GBA 平台数据库文件
     constexpr const char *DATA_BASE_FILE_GBC   = "GameData_GBC.json";   ///< GBC 平台数据库文件
     constexpr const char *DATA_BASE_FILE_GB    = "GameData_GB.json";    ///< GB 平台数据库文件
+    constexpr const char *DATA_BASE_FILE_DS    = "GameData_DS.json";    ///< DS 平台数据库文件
 
     namespace 
     {
@@ -86,6 +87,7 @@ inline std::string GetRootPath()
             case 1: return DATA_BASE_FILE_GBA;  // EmuPlatform::EmuGBA
             case 2: return DATA_BASE_FILE_GBC;  // EmuPlatform::EmuGBC
             case 3: return DATA_BASE_FILE_GB;   // EmuPlatform::EmuGB
+            case 4: return DATA_BASE_FILE_DS;   // EmuPlatform::EmuDS
             default: return DATA_BASE_FILE;
             }
         }

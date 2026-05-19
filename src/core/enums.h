@@ -38,7 +38,8 @@ namespace beiklive::enums
         NONE,
         EmuGBA,
         EmuGBC,
-        EmuGB
+        EmuGB,
+        EmuDS
     };
     // 文件类型,用于文件浏览器
     enum class FileType
