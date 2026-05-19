@@ -315,8 +315,18 @@ namespace beiklive
         if (m_gameEntry.platform == (int)beiklive::enums::EmuPlatform::EmuDS)
         {
             m_nds_core = new beiklive::melonds::CoreMelonDS();
-            if (m_nds_core->SetupGame(m_gameEntry))
-            {
+
+            m_running.store(true, std::memory_order_release);
+            m_gameThread = std::thread([this]() {
+                if (!m_nds_core->SetupGame(m_gameEntry))
+                {
+                    brls::Logger::error("NDS core init failed: {}", m_gameEntry.path);
+                    delete m_nds_core;
+                    m_nds_core = nullptr;
+                    brls::sync([this]() { GameSignal::instance().requestExit(); });
+                    return;
+                }
+
                 brls::Logger::debug("NDS core initialized: {}", m_gameEntry.path);
 
                 if (auto* player = dynamic_cast<beiklive::BKAudioPlayer*>(
@@ -328,6 +338,7 @@ namespace beiklive
                            && std::chrono::steady_clock::now() < deadline)
                         std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 }
+
                 AudioManager::instance().init(32768, 2);
 
                 {
@@ -337,21 +348,9 @@ namespace beiklive
                 }
 
                 GameSignal::instance().resetAll();
-                _startGameThread();
-            }
-            else
-            {
-                brls::Logger::error("NDS core init failed: {}", m_gameEntry.path);
-                delete m_nds_core;
-                m_nds_core = nullptr;
-            }
+                _gameLoop();
+            });
         }
-    }
-
-    void NdsGameView::_startGameThread()
-    {
-        m_running.store(true, std::memory_order_release);
-        m_gameThread = std::thread(&NdsGameView::_gameLoop, this);
     }
 
     void NdsGameView::_stopGameThread()

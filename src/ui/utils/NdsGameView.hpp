@@ -74,7 +74,6 @@ namespace beiklive
         void _registerGameInput();
         void _registerGameRuntime();
 
-        void _startGameThread();
         void _stopGameThread();
 
         void _gameLoop();

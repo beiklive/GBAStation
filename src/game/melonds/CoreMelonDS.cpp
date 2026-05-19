@@ -15,6 +15,8 @@
 #include "types.h"
 #include "FreeBIOS.h"
 #include "SPI_Firmware.h"
+#include "RTC.h"
+#include "SPI.h"
 
 using namespace melonDS;
 
@@ -130,6 +132,17 @@ bool CoreMelonDS::SetupGame(beiklive::GameEntry entry)
 
     m_nds->Start();
 
+    m_nds->SPI.GetPowerMan()->SetBatteryLevelOkay(true);
+
+    {
+        auto now = std::chrono::system_clock::now();
+        std::time_t t = std::chrono::system_clock::to_time_t(now);
+        std::tm* tm = std::localtime(&t);
+        m_nds->RTC.SetDateTime(
+            tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
+            tm->tm_hour, tm->tm_min, tm->tm_sec);
+    }
+
     melonDS::Platform::SetNDSSavePath(m_gameEntry.savePath + beiklive::path::SPLIT_CHAR
         + beiklive::tools::getFileNameWithoutExtension(m_gameEntry.path) + ".sav");
     melonDS::Platform::SetFirmwarePath(beiklive::path::biosPath() + beiklive::path::SPLIT_CHAR + "firmware.bin");
@@ -170,16 +183,14 @@ const uint32_t* CoreMelonDS::GetTopFramebuffer() const
 {
     if (!m_ready) return nullptr;
     int fb = m_nds->GPU.FrontBuffer;
-    bool swap = (m_nds->PowerControl9 >> 15) & 1;
-    return m_nds->GPU.Framebuffer[swap ? 1 : 0][fb].get();
+    return m_nds->GPU.Framebuffer[0][fb].get();
 }
 
 const uint32_t* CoreMelonDS::GetBottomFramebuffer() const
 {
     if (!m_ready) return nullptr;
     int fb = m_nds->GPU.FrontBuffer;
-    bool swap = (m_nds->PowerControl9 >> 15) & 1;
-    return m_nds->GPU.Framebuffer[swap ? 0 : 1][fb].get();
+    return m_nds->GPU.Framebuffer[1][fb].get();
 }
 
 int CoreMelonDS::ReadAudio(int16_t* data, int samples)
