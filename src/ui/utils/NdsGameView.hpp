@@ -8,9 +8,7 @@
 #include "game/render/GameRenderer.hpp"
 #include "ui/utils/GameOverlayRenderer.hpp"
 
-#include <atomic>
 #include <chrono>
-#include <thread>
 #include <vector>
 
 namespace beiklive
@@ -57,17 +55,8 @@ namespace beiklive
 
         NdsGameMenuView* m_gameMenuView = nullptr;
 
-        std::chrono::steady_clock::time_point m_playStartTime;
-
-        std::thread m_loadThread;
-        std::atomic<bool> m_loadDone{false};
-        std::atomic<bool> m_loadFailed{false};
-
         void _registerGameInput();
         void _registerGameRuntime();
-
-        void _startLoadThread();
-        void _joinLoadThread();
 
         void _stepEmulation();
         void _renderOutput();

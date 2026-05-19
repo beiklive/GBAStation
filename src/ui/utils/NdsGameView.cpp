@@ -32,8 +32,6 @@ namespace beiklive
 
     NdsGameView::~NdsGameView()
     {
-        _joinLoadThread();
-
         if (m_nds_core) {
             if (m_nds_core->IsReady())
                 m_nds_core->SaveNDSSave();
@@ -99,10 +97,7 @@ namespace beiklive
             {
                 unsigned gw = m_nds_core->GameWidth();
                 unsigned gh = m_nds_core->GameHeight();
-                std::string shaderPath;
-                if (m_gameEntry.shaderEnabled && !m_gameEntry.shaderPath.empty())
-                    shaderPath = m_gameEntry.shaderPath;
-                if (m_renderer.init(gw, gh, false, shaderPath))
+                if (m_renderer.init(gw, gh, false))
                 {
                     m_rendererReady = true;
                     brls::Logger::info("NdsGameView: renderer init {}x{}", gw, gh);
@@ -255,9 +250,7 @@ namespace beiklive
         bool joystickDiagonal = GET_SETTING_KEY_INT("input.joystick.diagonal", 1) != 0;
         GameInputManager::instance().setDiagonalMode(joystickDiagonal);
 
-        struct GameBtnInfo {
-            EmuFunctionKey emuKey;  const char* cfgSuffix;  unsigned retroId;
-        };
+        struct GameBtnInfo { EmuFunctionKey emuKey; const char* cfgSuffix; unsigned retroId; };
         static const GameBtnInfo gameBtnInfos[] = {
             { EMU_A, "a", 8 }, { EMU_B, "b", 0 }, { EMU_X, "x", 9 }, { EMU_Y, "y", 1 },
             { EMU_UP, "up", 4 }, { EMU_DOWN, "down", 5 }, { EMU_LEFT, "left", 6 }, { EMU_RIGHT, "right", 7 },
@@ -345,58 +338,40 @@ namespace beiklive
 
     void NdsGameView::_registerGameRuntime()
     {
-        if (m_gameEntry.platform == (int)beiklive::enums::EmuPlatform::EmuDS)
+        if (m_gameEntry.platform != (int)beiklive::enums::EmuPlatform::EmuDS)
+            return;
+
+        auto t0 = std::chrono::steady_clock::now();
+
+        m_nds_core = new beiklive::melonds::CoreMelonDS();
+        if (!m_nds_core->SetupGame(m_gameEntry))
         {
-            _startLoadThread();
+            brls::Logger::error("NDS core init failed: {}", m_gameEntry.path);
+            delete m_nds_core;
+            m_nds_core = nullptr;
+            return;
         }
-    }
 
-    void NdsGameView::_startLoadThread()
-    {
-        m_loadThread = std::thread([this]() {
-            auto t0 = std::chrono::steady_clock::now();
+        brls::Logger::info("NDS core SetupGame took {:.1f}s",
+            std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
 
-            m_nds_core = new beiklive::melonds::CoreMelonDS();
-            if (!m_nds_core->SetupGame(m_gameEntry))
-            {
-                brls::Logger::error("NDS core init failed: {}", m_gameEntry.path);
-                delete m_nds_core;
-                m_nds_core = nullptr;
-                m_loadFailed.store(true);
-                return;
-            }
+        if (auto* player = dynamic_cast<beiklive::BKAudioPlayer*>(brls::Application::getAudioPlayer()))
+        {
+            constexpr std::chrono::milliseconds kTimeout{500};
+            auto deadline = std::chrono::steady_clock::now() + kTimeout;
+            while (player->isPlaying() && std::chrono::steady_clock::now() < deadline)
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
 
-            auto t1 = std::chrono::steady_clock::now();
-            brls::Logger::info("NDS core SetupGame took {:.1f}s",
-                std::chrono::duration<double>(t1 - t0).count());
+        AudioManager::instance().init(32768, 2);
 
-            if (auto* player = dynamic_cast<beiklive::BKAudioPlayer*>(
-                    brls::Application::getAudioPlayer()))
-            {
-                constexpr std::chrono::milliseconds kTimeout{500};
-                auto deadline = std::chrono::steady_clock::now() + kTimeout;
-                while (player->isPlaying()
-                       && std::chrono::steady_clock::now() < deadline)
-                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            }
+        {
+            int16_t discardBuf[4096];
+            while (m_nds_core->ReadAudio(discardBuf, 2048) > 0)
+                ;
+        }
 
-            AudioManager::instance().init(32768, 2);
-
-            {
-                int16_t discardBuf[4096];
-                while (m_nds_core->ReadAudio(discardBuf, 2048) > 0)
-                    ;
-            }
-
-            GameSignal::instance().resetAll();
-            m_loadDone.store(true);
-        });
-    }
-
-    void NdsGameView::_joinLoadThread()
-    {
-        if (m_loadThread.joinable())
-            m_loadThread.join();
+        GameSignal::instance().resetAll();
     }
 
 } // namespace beiklive
