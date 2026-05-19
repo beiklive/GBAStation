@@ -48,6 +48,7 @@ namespace beiklive
         beiklive::GameRenderer m_renderer;
         bool m_rendererReady = false;
         bool m_oglActive = false;
+        bool m_oglPending = false;
 
         beiklive::ScreenMode m_screenMode = beiklive::ScreenMode::Fit;
 

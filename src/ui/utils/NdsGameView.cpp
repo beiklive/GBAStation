@@ -101,6 +101,30 @@ namespace beiklive
 
         if (m_nds_core && m_nds_core->IsReady())
         {
+#ifdef OGLRENDERER_ENABLED
+            if (m_oglPending)
+            {
+                m_oglPending = false;
+                auto* nds = m_nds_core->GetNDS();
+                if (nds && !nds->GPU.GetRenderer3D().Accelerated)
+                {
+                    auto glrenderer = melonDS::GLRenderer::New();
+                    if (glrenderer)
+                    {
+                        glrenderer->SetRenderSettings(true, 1);
+                        nds->GPU.SetRenderer3D(std::move(glrenderer));
+                        m_oglActive = true;
+                        m_rendererReady = false;
+                        brls::Logger::info("NdsGameView: GLRenderer activated");
+                    }
+                    else
+                    {
+                        brls::Logger::error("NdsGameView: GLRenderer::New() failed");
+                    }
+                }
+            }
+#endif
+
             unsigned gw, gh;
 
 #ifdef OGLRENDERER_ENABLED
@@ -137,6 +161,9 @@ namespace beiklive
 
             if (m_rendererReady)
             {
+                GLint prevFBO = 0;
+                glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFBO);
+
                 if (!GameSignal::instance().isPaused())
                     _stepEmulation();
 
@@ -153,6 +180,11 @@ namespace beiklive
                     m_gameEntry.customScale, m_gameEntry.customOffsetX, m_gameEntry.customOffsetY,
                     intScale);
                 m_renderer.drawToScreen(rect.x, rect.y, rect.w, rect.h, windowScale, windowW, windowH);
+
+                glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(prevFBO));
+                glUseProgram(0);
+                glBindVertexArray(0);
+                glBindTexture(GL_TEXTURE_2D, 0);
             }
         }
 
@@ -441,18 +473,7 @@ namespace beiklive
 
 #ifdef OGLRENDERER_ENABLED
             brls::sync([this]() {
-                if (m_nds_core && m_nds_core->IsReady())
-                {
-                    auto* nds = m_nds_core->GetNDS();
-                    if (nds)
-                    {
-                        auto glrenderer = melonDS::GLRenderer::New();
-                        glrenderer->SetRenderSettings(true, 1);
-                        nds->GPU.SetRenderer3D(std::move(glrenderer));
-                        m_oglActive = true;
-                        brls::Logger::info("NdsGameView: GLRenderer activated");
-                    }
-                }
+                m_oglPending = true;
             });
 #endif
 
