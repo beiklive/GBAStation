@@ -105,7 +105,7 @@ bool CoreMelonDS::SetupGame(beiklive::GameEntry entry)
         .ARM7BIOS = m_arm7bios,
         .Firmware = std::move(m_firmware),
 #ifdef JIT_ENABLED
-        .JIT = std::nullopt, // TODO: re-enable JIT after debugging
+        .JIT = jitargs,
 #else
         .JIT = std::nullopt,
 #endif
@@ -113,12 +113,20 @@ bool CoreMelonDS::SetupGame(beiklive::GameEntry entry)
 
     m_nds = std::make_unique<melonDS::NDS>(std::move(ndsargs));
 
+    m_nds->Reset();
+
+    melonDS::NDS::Current = m_nds.get();
+
     if (m_nds->NeedsDirectBoot())
     {
         std::string romName = beiklive::tools::getFileNameWithoutExtension(m_gameEntry.path);
         m_nds->SetupDirectBoot(romName);
         brls::Logger::info("CoreMelonDS: direct boot enabled for {}", romName);
     }
+
+    melonDS::Platform::SetStopCallback([this]() {
+        m_ready = false;
+    });
 
     m_nds->Start();
 
