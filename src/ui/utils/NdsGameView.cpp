@@ -8,12 +8,6 @@
 #include <algorithm>
 #include <filesystem>
 
-#ifdef OGLRENDERER_ENABLED
-#include "NDS.h"
-#include "GPU3D_OpenGL.h"
-#include "GPU_OpenGL.h"
-#endif
-
 #ifdef __SWITCH__
 #include <switch.h>
 #endif
@@ -101,48 +95,10 @@ namespace beiklive
 
         if (m_nds_core && m_nds_core->IsReady())
         {
-#ifdef OGLRENDERER_ENABLED
-            if (m_oglPending)
+            if (!m_rendererReady)
             {
-                m_oglPending = false;
-                auto* nds = m_nds_core->GetNDS();
-                if (nds && !nds->GPU.GetRenderer3D().Accelerated)
-                {
-                    auto glrenderer = melonDS::GLRenderer::New();
-                    if (glrenderer)
-                    {
-                        glrenderer->SetRenderSettings(true, 1);
-                        nds->GPU.SetRenderer3D(std::move(glrenderer));
-                        m_oglActive = true;
-                        m_rendererReady = false;
-                        brls::Logger::info("NdsGameView: GLRenderer activated");
-                    }
-                    else
-                    {
-                        brls::Logger::error("NdsGameView: GLRenderer::New() failed");
-                    }
-                }
-            }
-#endif
-
-            unsigned gw, gh;
-
-#ifdef OGLRENDERER_ENABLED
-            auto* nds = m_nds_core->GetNDS();
-            bool isAccel = nds && nds->GPU.GetRenderer3D().Accelerated;
-            if (isAccel)
-            {
-                gw = 256; gh = 192 * 2 + 2;
-            }
-            else
-#endif
-            {
-                gw = m_nds_core->GameWidth();
-                gh = m_nds_core->GameHeight();
-            }
-
-            if (!m_rendererReady || (m_oglActive && m_renderer.texWidth() != gw))
-            {
+                unsigned gw = m_nds_core->GameWidth();
+                unsigned gh = m_nds_core->GameHeight();
                 std::string shaderPath;
                 if (m_gameEntry.shaderEnabled && !m_gameEntry.shaderPath.empty())
                     shaderPath = m_gameEntry.shaderPath;
@@ -151,7 +107,6 @@ namespace beiklive
                     m_rendererReady = true;
                     brls::Logger::info("NdsGameView: renderer init {}x{}", gw, gh);
                     m_fpsLastTime = std::chrono::steady_clock::now();
-                    m_nextFrameTarget = std::chrono::steady_clock::now();
                 }
                 else
                 {
@@ -161,9 +116,6 @@ namespace beiklive
 
             if (m_rendererReady)
             {
-                GLint prevFBO = 0;
-                glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFBO);
-
                 if (!GameSignal::instance().isPaused())
                     _stepEmulation();
 
@@ -180,11 +132,6 @@ namespace beiklive
                     m_gameEntry.customScale, m_gameEntry.customOffsetX, m_gameEntry.customOffsetY,
                     intScale);
                 m_renderer.drawToScreen(rect.x, rect.y, rect.w, rect.h, windowScale, windowW, windowH);
-
-                glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(prevFBO));
-                glUseProgram(0);
-                glBindVertexArray(0);
-                glBindTexture(GL_TEXTURE_2D, 0);
             }
         }
 
@@ -216,8 +163,6 @@ namespace beiklive
         if (!m_nds_core || !m_nds_core->IsReady()) return;
 
         auto& sig = GameSignal::instance();
-
-        if (sig.isPaused()) return;
 
         if (sig.consumeReset()) {
             m_nds_core->Reset();
@@ -251,21 +196,6 @@ namespace beiklive
 
     void NdsGameView::_renderOutput()
     {
-#ifdef OGLRENDERER_ENABLED
-        auto* nds = m_nds_core ? m_nds_core->GetNDS() : nullptr;
-        if (nds && nds->GPU.GetRenderer3D().Accelerated)
-        {
-            auto& renderer = static_cast<melonDS::GLRenderer&>(nds->GPU.GetRenderer3D());
-            auto& compositor = renderer.GetCompositor();
-            int fb = nds->GPU.FrontBuffer;
-            compositor.BindOutputTexture(fb);
-            GLint texId = 0;
-            glGetIntegerv(GL_TEXTURE_BINDING_2D, &texId);
-            m_renderer.bindExternalTexture(static_cast<GLuint>(texId), 256, 192 * 2 + 2);
-            return;
-        }
-#endif
-
         const uint32_t* top = nullptr, *bot = nullptr;
         if (m_nds_core && m_nds_core->IsReady())
         {
@@ -326,19 +256,13 @@ namespace beiklive
         GameInputManager::instance().setDiagonalMode(joystickDiagonal);
 
         struct GameBtnInfo {
-            EmuFunctionKey emuKey;
-            const char*    cfgSuffix;
-            unsigned       retroId;
+            EmuFunctionKey emuKey;  const char* cfgSuffix;  unsigned retroId;
         };
         static const GameBtnInfo gameBtnInfos[] = {
-            { EMU_A,      "a",      8  }, { EMU_B,      "b",      0  },
-            { EMU_X,      "x",      9  }, { EMU_Y,      "y",      1  },
-            { EMU_UP,     "up",     4  }, { EMU_DOWN,   "down",   5  },
-            { EMU_LEFT,   "left",   6  }, { EMU_RIGHT,  "right",  7  },
-            { EMU_L,      "l",      10 }, { EMU_R,      "r",      11 },
-            { EMU_L2,     "l2",     12 }, { EMU_R2,     "r2",     13 },
-            { EMU_L3,     "l3",     14 }, { EMU_R3,     "r3",     15 },
-            { EMU_START,  "start",  3  }, { EMU_SELECT, "select", 2  },
+            { EMU_A, "a", 8 }, { EMU_B, "b", 0 }, { EMU_X, "x", 9 }, { EMU_Y, "y", 1 },
+            { EMU_UP, "up", 4 }, { EMU_DOWN, "down", 5 }, { EMU_LEFT, "left", 6 }, { EMU_RIGHT, "right", 7 },
+            { EMU_L, "l", 10 }, { EMU_R, "r", 11 }, { EMU_L2, "l2", 12 }, { EMU_R2, "r2", 13 },
+            { EMU_L3, "l3", 14 }, { EMU_R3, "r3", 15 }, { EMU_START, "start", 3 }, { EMU_SELECT, "select", 2 },
         };
         for (const auto& info : gameBtnInfos) {
             std::string val = GET_SETTING_KEY_STR(std::string("handle.") + info.cfgSuffix, "none");
@@ -348,29 +272,19 @@ namespace beiklive
             unsigned rid = info.retroId;
             for (const auto& combo : combos) {
                 GameInputManager::instance().registerEmuFunctionKey(
-                    info.emuKey, {combo},
-                    [rid]() { GameSignal::instance().pressGameButton(rid); },
-                    TriggerType::HOLD);
+                    info.emuKey, {combo}, [rid]() { GameSignal::instance().pressGameButton(rid); }, TriggerType::HOLD);
                 GameInputManager::instance().registerEmuFunctionKey(
-                    info.emuKey, {combo},
-                    [rid]() { GameSignal::instance().releaseGameButton(rid); },
-                    TriggerType::RELEASE);
+                    info.emuKey, {combo}, [rid]() { GameSignal::instance().releaseGameButton(rid); }, TriggerType::RELEASE);
             }
         }
 
         if (joystickEnabled) {
-            struct StickBtnInfo {
-                EmuFunctionKey emuKey; const char* cfgSuffix; unsigned retroId;
-            };
+            struct StickBtnInfo { EmuFunctionKey emuKey; const char* cfgSuffix; unsigned retroId; };
             static const StickBtnInfo stickBtnInfos[] = {
-                { EMU_LEFT_STICK_UP,     "lstick_up",    4 },
-                { EMU_LEFT_STICK_DOWN,   "lstick_down",  5 },
-                { EMU_LEFT_STICK_LEFT,   "lstick_left",  6 },
-                { EMU_LEFT_STICK_RIGHT,  "lstick_right", 7 },
-                { EMU_RIGHT_STICK_UP,    "rstick_up",    4 },
-                { EMU_RIGHT_STICK_DOWN,  "rstick_down",  5 },
-                { EMU_RIGHT_STICK_LEFT,  "rstick_left",  6 },
-                { EMU_RIGHT_STICK_RIGHT, "rstick_right", 7 },
+                { EMU_LEFT_STICK_UP, "lstick_up", 4 }, { EMU_LEFT_STICK_DOWN, "lstick_down", 5 },
+                { EMU_LEFT_STICK_LEFT, "lstick_left", 6 }, { EMU_LEFT_STICK_RIGHT, "lstick_right", 7 },
+                { EMU_RIGHT_STICK_UP, "rstick_up", 4 }, { EMU_RIGHT_STICK_DOWN, "rstick_down", 5 },
+                { EMU_RIGHT_STICK_LEFT, "rstick_left", 6 }, { EMU_RIGHT_STICK_RIGHT, "rstick_right", 7 },
             };
             for (const auto& info : stickBtnInfos) {
                 std::string val = GET_SETTING_KEY_STR(std::string("handle.") + info.cfgSuffix, "none");
@@ -379,13 +293,9 @@ namespace beiklive
                 unsigned rid = info.retroId;
                 for (const auto& combo : combos) {
                     GameInputManager::instance().registerEmuFunctionKey(
-                        info.emuKey, {combo},
-                        [rid]() { GameSignal::instance().pressGameButton(rid); },
-                        TriggerType::HOLD);
+                        info.emuKey, {combo}, [rid]() { GameSignal::instance().pressGameButton(rid); }, TriggerType::HOLD);
                     GameInputManager::instance().registerEmuFunctionKey(
-                        info.emuKey, {combo},
-                        [rid]() { GameSignal::instance().releaseGameButton(rid); },
-                        TriggerType::RELEASE);
+                        info.emuKey, {combo}, [rid]() { GameSignal::instance().releaseGameButton(rid); }, TriggerType::RELEASE);
                 }
             }
         }
@@ -396,10 +306,7 @@ namespace beiklive
             for (const auto& combo : combos) {
                 GameInputManager::instance().registerEmuFunctionKey(
                     EmuFunctionKey::EMU_OPEN_MENU, {combo},
-                    [this]() {
-                        GameSignal::instance().requestOpenMenu();
-                        this->setFocusable(false);
-                    });
+                    [this]() { GameSignal::instance().requestOpenMenu(); this->setFocusable(false); });
             }
         }
 
@@ -411,21 +318,16 @@ namespace beiklive
                 for (const auto& combo : combos) {
                     GameInputManager::instance().registerEmuFunctionKey(
                         EmuFunctionKey::EMU_FAST_FORWARD, {combo},
-                        []() { GameSignal::instance().requestFastForward(true); },
-                        TriggerType::HOLD);
+                        []() { GameSignal::instance().requestFastForward(true); }, TriggerType::HOLD);
                     GameInputManager::instance().registerEmuFunctionKey(
                         EmuFunctionKey::EMU_FAST_FORWARD, {combo},
-                        []() { GameSignal::instance().requestFastForward(false); },
-                        TriggerType::RELEASE);
+                        []() { GameSignal::instance().requestFastForward(false); }, TriggerType::RELEASE);
                 }
             } else {
                 for (const auto& combo : combos) {
                     GameInputManager::instance().registerEmuFunctionKey(
                         EmuFunctionKey::EMU_FAST_FORWARD, {combo},
-                        []() {
-                            bool cur = GameSignal::instance().isFastForward();
-                            GameSignal::instance().requestFastForward(!cur);
-                        });
+                        []() { bool cur = GameSignal::instance().isFastForward(); GameSignal::instance().requestFastForward(!cur); });
                 }
             }
         }
@@ -436,10 +338,7 @@ namespace beiklive
             for (const auto& combo : combos) {
                 GameInputManager::instance().registerEmuFunctionKey(
                     EmuFunctionKey::EMU_MUTE, {combo},
-                    []() {
-                        bool cur = GameSignal::instance().isMuted();
-                        GameSignal::instance().requestMute(!cur);
-                    });
+                    []() { bool cur = GameSignal::instance().isMuted(); GameSignal::instance().requestMute(!cur); });
             }
         }
     }
@@ -470,12 +369,6 @@ namespace beiklive
             auto t1 = std::chrono::steady_clock::now();
             brls::Logger::info("NDS core SetupGame took {:.1f}s",
                 std::chrono::duration<double>(t1 - t0).count());
-
-#ifdef OGLRENDERER_ENABLED
-            brls::sync([this]() {
-                m_oglPending = true;
-            });
-#endif
 
             if (auto* player = dynamic_cast<beiklive::BKAudioPlayer*>(
                     brls::Application::getAudioPlayer()))
