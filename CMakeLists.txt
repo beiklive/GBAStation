@@ -26,6 +26,10 @@ endif ()
 # 工具链配置
 include(${BOREALIS_LIBRARY}/cmake/toolchain.cmake)
 
+if (PLATFORM_SWITCH)
+    add_compile_definitions(__SWITCH__)
+endif ()
+
 # 项目信息
 project(GBAStation)
 set(VERSION_MAJOR "0")

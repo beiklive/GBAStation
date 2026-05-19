@@ -48,3 +48,15 @@ cmake --build . --target GBAStation.nro
 cd ..
 echo ""
 echo "[完成] 产物目录：${BUILD_DIR}/"
+
+# ── 新增：显示文件大小（MB） ──────────────────────────────────
+echo ""
+echo "==================== 编译产物大小 ===================="
+# 计算文件大小，单位 MB（保留 2 位小数）
+if [ -f "${BUILD_DIR}/GBAStation.nro" ]; then
+    NRO_SIZE=$(du -b "${BUILD_DIR}/GBAStation.nro" | awk '{printf "%.2f", $1/1024/1024}')
+    echo "✅ GBAStation.nro    : ${NRO_SIZE} MB"
+else
+    echo "❌ GBAStation.nro    : 文件不存在"
+fi
+echo "======================================================"
