@@ -8,6 +8,10 @@
 #include <algorithm>
 #include <filesystem>
 
+#ifdef __SWITCH__
+#include <switch.h>
+#endif
+
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -433,11 +437,16 @@ namespace beiklive
             if (ff) std::this_thread::yield();
             return;
         }
-        auto coarse = nextTarget - now - spinGuardNs;
+        auto remaining = nextTarget - now;
+#ifdef __SWITCH__
+        svcSleepThread(remaining.count());
+#else
+        auto coarse = remaining - spinGuardNs;
         if (coarse.count() > 0)
             std::this_thread::sleep_for(coarse);
         while (Clock::now() < nextTarget)
             std::this_thread::yield();
+#endif
     }
 
     void NdsGameView::_gameLoop()
@@ -481,7 +490,11 @@ namespace beiklive
                         m_nds_core->SaveNDSSave();
                     wasPaused = true;
                 }
+#ifdef __SWITCH__
+                svcSleepThread(16000000ULL);
+#else
                 std::this_thread::sleep_for(std::chrono::milliseconds(16));
+#endif
                 nextFrameTarget = Clock::now();
                 fpsLastTime     = Clock::now();
                 continue;
