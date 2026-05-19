@@ -50,8 +50,7 @@ static std::vector<u8> readFile(const std::string& path)
 static size_t fileSize(const std::string& path)
 {
     std::ifstream f(path, std::ios::binary | std::ios::ate);
-    if (!f) return 0;
-    return static_cast<size_t>(f.tellg());
+    return f ? static_cast<size_t>(f.tellg()) : 0;
 }
 
 CoreMelonDS::CoreMelonDS()
@@ -106,13 +105,22 @@ bool CoreMelonDS::SetupGame(beiklive::GameEntry entry)
         .ARM7BIOS = m_arm7bios,
         .Firmware = std::move(m_firmware),
 #ifdef JIT_ENABLED
-        .JIT = jitargs,
+        .JIT = std::nullopt, // TODO: re-enable JIT after debugging
 #else
         .JIT = std::nullopt,
 #endif
     };
 
     m_nds = std::make_unique<melonDS::NDS>(std::move(ndsargs));
+
+    if (m_nds->NeedsDirectBoot())
+    {
+        std::string romName = beiklive::tools::getFileNameWithoutExtension(m_gameEntry.path);
+        m_nds->SetupDirectBoot(romName);
+        brls::Logger::info("CoreMelonDS: direct boot enabled for {}", romName);
+    }
+
+    m_nds->Start();
 
     melonDS::Platform::SetNDSSavePath(m_gameEntry.savePath + beiklive::path::SPLIT_CHAR
         + beiklive::tools::getFileNameWithoutExtension(m_gameEntry.path) + ".sav");
@@ -270,25 +278,34 @@ bool CoreMelonDS::_loadROM(const std::string& romPath)
 bool CoreMelonDS::_loadBIOS()
 {
     std::string biosPath = beiklive::path::biosPath();
-    std::string arm9Path = biosPath + beiklive::path::SPLIT_CHAR + "biosnds9.bin";
-    std::string arm7Path = biosPath + beiklive::path::SPLIT_CHAR + "biosnds7.bin";
 
-    auto loadFile = [](const std::string& path, u8* out, size_t expectedSize) -> bool {
-        std::ifstream f(path, std::ios::binary);
-        if (!f) return false;
-        size_t sz = fileSize(path);
-        if (sz < expectedSize) return false;
-        f.read(reinterpret_cast<char*>(out), expectedSize);
-        return f.good();
+    static const char* arm9Names[] = {"biosnds9.bin", "bios9.bin", "biosnds9.rom", "nds_bios_arm9.bin"};
+    static const char* arm7Names[] = {"biosnds7.bin", "bios7.bin", "biosnds7.rom", "nds_bios_arm7.bin"};
+
+    auto tryLoad = [](const std::string& dir, const char** names, int count, u8* out, size_t expectedSize) -> bool {
+        for (int i = 0; i < count; ++i)
+        {
+            std::string path = dir + beiklive::path::SPLIT_CHAR + names[i];
+            std::ifstream f(path, std::ios::binary);
+            if (!f) continue;
+            f.seekg(0, std::ios::end);
+            size_t sz = static_cast<size_t>(f.tellg());
+            f.seekg(0, std::ios::beg);
+            if (sz < expectedSize) continue;
+            f.read(reinterpret_cast<char*>(out), expectedSize);
+            brls::Logger::info("CoreMelonDS: loaded BIOS from {}", path);
+            return true;
+        }
+        return false;
     };
 
-    bool arm9ok = loadFile(arm9Path, m_arm9bios.data(), m_arm9bios.size());
-    bool arm7ok = loadFile(arm7Path, m_arm7bios.data(), m_arm7bios.size());
+    bool arm9ok = tryLoad(biosPath, arm9Names, 4, m_arm9bios.data(), m_arm9bios.size());
+    bool arm7ok = tryLoad(biosPath, arm7Names, 4, m_arm7bios.data(), m_arm7bios.size());
 
     if (!arm9ok)
-        brls::Logger::warning("CoreMelonDS: ARM9 BIOS not found at {}, using FreeBIOS", arm9Path);
+        brls::Logger::warning("CoreMelonDS: ARM9 BIOS not found, using FreeBIOS");
     if (!arm7ok)
-        brls::Logger::warning("CoreMelonDS: ARM7 BIOS not found at {}, using FreeBIOS", arm7Path);
+        brls::Logger::warning("CoreMelonDS: ARM7 BIOS not found, using FreeBIOS");
 
     return true;
 }
