@@ -8,6 +8,10 @@
 #include <algorithm>
 #include <filesystem>
 
+#ifdef _WIN32
+#include <windows.h>
+#include <mmsystem.h>
+#endif
 #ifdef __SWITCH__
 #include <switch.h>
 #endif
@@ -32,6 +36,8 @@ namespace beiklive
 
     NdsGameView::~NdsGameView()
     {
+        _stopGameThread();
+
         if (m_nds_core) {
             if (m_nds_core->IsReady())
                 m_nds_core->SaveNDSSave();
@@ -91,43 +97,37 @@ namespace beiklive
             }
         }
 
-        if (m_nds_core && m_nds_core->IsReady())
+        if (!m_rendererReady && m_nds_core && m_nds_core->IsReady())
         {
-            if (!m_rendererReady)
+            unsigned gw = m_nds_core->GameWidth();
+            unsigned gh = m_nds_core->GameHeight();
+            if (m_renderer.init(gw, gh, false))
             {
-                unsigned gw = m_nds_core->GameWidth();
-                unsigned gh = m_nds_core->GameHeight();
-                if (m_renderer.init(gw, gh, false))
-                {
-                    m_rendererReady = true;
-                    brls::Logger::info("NdsGameView: renderer init {}x{}", gw, gh);
-                    m_fpsLastTime = std::chrono::steady_clock::now();
-                }
-                else
-                {
-                    brls::Logger::error("NdsGameView: renderer init FAILED {}x{}", gw, gh);
-                }
+                m_rendererReady = true;
+                brls::Logger::info("NdsGameView: renderer init {}x{}", gw, gh);
+                m_fpsLastTime = std::chrono::steady_clock::now();
             }
-
-            if (m_rendererReady)
+            else
             {
-                if (!GameSignal::instance().isPaused())
-                    _stepEmulation();
-
-                _renderOutput();
-
-                float windowScale = brls::Application::windowScale;
-                int   windowW     = brls::Application::windowWidth;
-                int   windowH     = brls::Application::windowHeight;
-                unsigned gw = m_renderer.texWidth();
-                unsigned gh = m_renderer.texHeight();
-                int intScale = static_cast<int>(m_gameEntry.integerAspectRatio);
-                beiklive::DisplayRect rect = beiklive::computeDisplayRect(
-                    m_screenMode, x, y, width, height, gw, gh,
-                    m_gameEntry.customScale, m_gameEntry.customOffsetX, m_gameEntry.customOffsetY,
-                    intScale);
-                m_renderer.drawToScreen(rect.x, rect.y, rect.w, rect.h, windowScale, windowW, windowH);
+                brls::Logger::error("NdsGameView: renderer init FAILED {}x{}", gw, gh);
             }
+        }
+
+        _uploadPendingFrame();
+
+        if (m_rendererReady)
+        {
+            float windowScale = brls::Application::windowScale;
+            int   windowW     = brls::Application::windowWidth;
+            int   windowH     = brls::Application::windowHeight;
+            unsigned gw = m_renderer.texWidth();
+            unsigned gh = m_renderer.texHeight();
+            int intScale = static_cast<int>(m_gameEntry.integerAspectRatio);
+            beiklive::DisplayRect rect = beiklive::computeDisplayRect(
+                m_screenMode, x, y, width, height, gw, gh,
+                m_gameEntry.customScale, m_gameEntry.customOffsetX, m_gameEntry.customOffsetY,
+                intScale);
+            m_renderer.drawToScreen(rect.x, rect.y, rect.w, rect.h, windowScale, windowW, windowH);
         }
 
         _drawOverlays(vg, x, y, width, height);
@@ -139,8 +139,13 @@ namespace beiklive
 
         if (GET_SETTING_KEY_INT("display.showFps", 0))
         {
-            if (m_currentFps > 0.f)
-                GameOverlayRenderer::drawFps(vg, x, y, m_currentFps);
+            float fps = 0.f;
+            {
+                std::lock_guard<std::mutex> lk(m_fpsMutex);
+                fps = m_currentFps;
+            }
+            if (fps > 0.f)
+                GameOverlayRenderer::drawFps(vg, x, y, fps);
         }
 
         if (sig.isFastForward() && GET_SETTING_KEY_INT("display.showFfOverlay", 1))
@@ -153,95 +158,23 @@ namespace beiklive
             GameOverlayRenderer::drawMute(vg, x, y, w, h);
     }
 
-    void NdsGameView::_stepEmulation()
+    void NdsGameView::_uploadPendingFrame()
     {
-        if (!m_nds_core || !m_nds_core->IsReady()) return;
-
-        auto& sig = GameSignal::instance();
-
-        if (sig.consumeReset()) {
-            m_nds_core->Reset();
-        }
-
-        m_nds_core->SetButtonsFromSignal();
-
-        bool ff = sig.isFastForward();
-        m_ffMultiplier = GET_SETTING_KEY_FLOAT("fastforward.multiplier", 4.0f);
-        if (m_ffMultiplier <= 0.0f) m_ffMultiplier = 1.0f;
-        m_ffMute = GET_SETTING_KEY_INT("fastforward.mute", 1) != 0;
-
-        unsigned count = 1;
-        if (ff) {
-            count = static_cast<unsigned>(m_ffMultiplier);
-            float frac = m_ffMultiplier - static_cast<float>(count);
-            m_ffSlowAccum += frac;
-            if (m_ffSlowAccum >= 1.0f) { m_ffSlowAccum -= 1.0f; ++count; }
-            if (count == 0) count = 1;
-        }
-
-        for (unsigned i = 0; i < count; ++i)
-            m_nds_core->RunFrame();
-
-        if (count > 0)
-        {
-            _pushFrameAudio(ff, count);
-            _updateFpsStats(count);
-        }
-    }
-
-    void NdsGameView::_renderOutput()
-    {
-        const uint32_t* top = nullptr, *bot = nullptr;
-        if (m_nds_core && m_nds_core->IsReady())
-        {
-            top = m_nds_core->GetTopFramebuffer();
-            bot = m_nds_core->GetBottomFramebuffer();
-        }
-        if (!top || !bot) return;
+        if (!m_rendererReady) return;
 
         LibretroLoader::VideoFrame frame;
-        frame.width = kScreenW;
-        frame.height = kScreenH * 2;
-        frame.pixels.resize(frame.width * frame.height);
-
-        for (unsigned row = 0; row < kScreenH; ++row)
-            std::memcpy(&frame.pixels[row * kScreenW],
-                        &top[row * kScreenW], kScreenW * sizeof(uint32_t));
-        for (unsigned row = 0; row < kScreenH; ++row)
-            std::memcpy(&frame.pixels[(kScreenH + row) * kScreenW],
-                        &bot[row * kScreenW], kScreenW * sizeof(uint32_t));
-
-        m_renderer.uploadFrame(frame);
-    }
-
-    void NdsGameView::_pushFrameAudio(bool ff, unsigned framesRan)
-    {
-        if (!m_nds_core || !m_nds_core->IsReady()) return;
-
-        m_audioDrainBuf.resize(4096);
-        int got = m_nds_core->ReadAudio(m_audioDrainBuf.data(), 2048);
-        if (got <= 0) return;
-
-        if (GameSignal::instance().isMuted()) return;
-
-        size_t sampleCount = static_cast<size_t>(got) * 2;
-        if (ff && m_ffMute) return;
-
-        AudioManager::instance().pushSamples(m_audioDrainBuf.data(), sampleCount);
-    }
-
-    void NdsGameView::_updateFpsStats(unsigned framesRan)
-    {
-        using Clock = std::chrono::steady_clock;
-        m_fpsFrameCount += framesRan;
-        auto now = Clock::now();
-        double elap = std::chrono::duration<double>(now - m_fpsLastTime).count();
-        if (elap >= 1.0)
+        bool hasFrame = false;
         {
-            m_currentFps = static_cast<float>(m_fpsFrameCount / elap);
-            m_fpsFrameCount = 0;
-            m_fpsLastTime = now;
+            std::lock_guard<std::mutex> lk(m_frameMutex);
+            if (m_frameReady) {
+                frame = std::move(m_pendingFrame);
+                m_frameReady = false;
+                hasFrame = true;
+            }
         }
+
+        if (hasFrame)
+            m_renderer.uploadFrame(frame);
     }
 
     void NdsGameView::_registerGameInput()
@@ -341,37 +274,232 @@ namespace beiklive
         if (m_gameEntry.platform != (int)beiklive::enums::EmuPlatform::EmuDS)
             return;
 
-        auto t0 = std::chrono::steady_clock::now();
-
         m_nds_core = new beiklive::melonds::CoreMelonDS();
-        if (!m_nds_core->SetupGame(m_gameEntry))
+        if (m_nds_core->SetupGame(m_gameEntry))
+        {
+            brls::Logger::debug("NDS core initialized: {}", m_gameEntry.path);
+
+            if (auto* player = dynamic_cast<beiklive::BKAudioPlayer*>(brls::Application::getAudioPlayer()))
+            {
+                constexpr std::chrono::milliseconds kTimeout{500};
+                auto deadline = std::chrono::steady_clock::now() + kTimeout;
+                while (player->isPlaying() && std::chrono::steady_clock::now() < deadline)
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+
+            AudioManager::instance().init(32768, 2);
+
+            {
+                int16_t discardBuf[4096];
+                while (m_nds_core->ReadAudio(discardBuf, 2048) > 0)
+                    ;
+            }
+
+            GameSignal::instance().resetAll();
+            _startGameThread();
+        }
+        else
         {
             brls::Logger::error("NDS core init failed: {}", m_gameEntry.path);
             delete m_nds_core;
             m_nds_core = nullptr;
+        }
+    }
+
+    void NdsGameView::_startGameThread()
+    {
+        m_running.store(true, std::memory_order_release);
+        m_gameThread = std::thread(&NdsGameView::_gameLoop, this);
+    }
+
+    void NdsGameView::_stopGameThread()
+    {
+        m_running.store(false, std::memory_order_release);
+        if (m_gameThread.joinable())
+            m_gameThread.join();
+    }
+
+    void NdsGameView::_captureVideoFrame()
+    {
+        if (!m_nds_core || !m_nds_core->IsReady()) return;
+
+        const uint32_t* top = m_nds_core->GetTopFramebuffer();
+        const uint32_t* bot = m_nds_core->GetBottomFramebuffer();
+        if (!top || !bot) return;
+
+        LibretroLoader::VideoFrame frame;
+        frame.width = kScreenW;
+        frame.height = kScreenH * 2;
+        frame.pixels.resize(frame.width * frame.height);
+
+        for (unsigned row = 0; row < kScreenH; ++row)
+            std::memcpy(&frame.pixels[row * kScreenW],
+                        &top[row * kScreenW], kScreenW * sizeof(uint32_t));
+        for (unsigned row = 0; row < kScreenH; ++row)
+            std::memcpy(&frame.pixels[(kScreenH + row) * kScreenW],
+                        &bot[row * kScreenW], kScreenW * sizeof(uint32_t));
+
+        std::lock_guard<std::mutex> lk(m_frameMutex);
+        m_pendingFrame = std::move(frame);
+        m_frameReady = true;
+    }
+
+    void NdsGameView::_pushFrameAudio(bool ff, unsigned framesRan)
+    {
+        if (!m_nds_core || !m_nds_core->IsReady()) return;
+
+        m_audioDrainBuf.resize(4096);
+        int got = m_nds_core->ReadAudio(m_audioDrainBuf.data(), 2048);
+        if (got <= 0) return;
+
+        if (GameSignal::instance().isMuted()) return;
+
+        size_t sampleCount = static_cast<size_t>(got) * 2;
+        if (ff && m_ffMute) return;
+
+        AudioManager::instance().pushSamples(m_audioDrainBuf.data(), sampleCount);
+    }
+
+    void NdsGameView::_updateFpsStats(unsigned framesRan,
+                                       std::chrono::steady_clock::time_point& lastTime,
+                                       unsigned& counter)
+    {
+        using Clock = std::chrono::steady_clock;
+        counter += framesRan;
+        auto now = Clock::now();
+        double elap = std::chrono::duration<double>(now - lastTime).count();
+        if (elap >= FPS_UPDATE_INTERVAL)
+        {
+            float fps = static_cast<float>(counter / elap);
+            {
+                std::lock_guard<std::mutex> lk(m_fpsMutex);
+                m_currentFps = fps;
+            }
+            counter = 0;
+            lastTime = now;
+        }
+    }
+
+    void NdsGameView::_throttleFrameRate(bool ff,
+                                          std::chrono::steady_clock::time_point& nextTarget,
+                                          std::chrono::nanoseconds frameDurNs,
+                                          std::chrono::nanoseconds spinGuardNs)
+    {
+        using Clock = std::chrono::steady_clock;
+        nextTarget += frameDurNs;
+        auto now = Clock::now();
+        if (nextTarget < now) {
+            nextTarget = now;
+            if (ff) std::this_thread::yield();
             return;
         }
+#ifdef __SWITCH__
+        auto remaining = nextTarget - now;
+        svcSleepThread(remaining.count());
+#else
+        auto coarse = nextTarget - now - spinGuardNs;
+        if (coarse.count() > 0)
+            std::this_thread::sleep_for(coarse);
+        while (Clock::now() < nextTarget)
+            std::this_thread::yield();
+#endif
+    }
 
-        brls::Logger::info("NDS core SetupGame took {:.1f}s",
-            std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
+    void NdsGameView::_gameLoop()
+    {
+        using Clock = std::chrono::steady_clock;
 
-        if (auto* player = dynamic_cast<beiklive::BKAudioPlayer*>(brls::Application::getAudioPlayer()))
+        if (!m_nds_core || !m_nds_core->IsReady()) return;
+
+#ifdef _WIN32
+        timeBeginPeriod(1);
+#endif
+
+        double coreFps = m_nds_core->Fps();
+        if (coreFps <= 0.0 || coreFps > 120.0) coreFps = 60.0;
+
+        const auto frameDurNs  = std::chrono::nanoseconds(static_cast<long long>(1e9 / coreFps));
+
+        auto nextFrameTarget = Clock::now();
+        auto fpsLastTime     = Clock::now();
+        unsigned fpsCount    = 0;
+
+        GameTimer::instance().start();
+
+        brls::Logger::info("NdsGameView: gameloop start coreFps={:.2f}", coreFps);
+
+        bool wasPaused = false;
+
+        while (m_running.load(std::memory_order_acquire))
         {
-            constexpr std::chrono::milliseconds kTimeout{500};
-            auto deadline = std::chrono::steady_clock::now() + kTimeout;
-            while (player->isPlaying() && std::chrono::steady_clock::now() < deadline)
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            auto& sig = GameSignal::instance();
+
+            if (sig.isPaused()) {
+                if (!wasPaused) {
+                    if (m_nds_core && m_nds_core->IsReady())
+                        m_nds_core->SaveNDSSave();
+                    wasPaused = true;
+                }
+#ifdef __SWITCH__
+                svcSleepThread(16000000ULL);
+#else
+                std::this_thread::sleep_for(std::chrono::milliseconds(16));
+#endif
+                nextFrameTarget = Clock::now();
+                fpsLastTime     = Clock::now();
+                continue;
+            }
+            if (wasPaused) {
+                wasPaused = false;
+            }
+
+            if (sig.consumeReset()) {
+                if (m_nds_core) m_nds_core->Reset();
+            }
+
+            m_nds_core->SetButtonsFromSignal();
+
+            bool ff = sig.isFastForward();
+
+            m_ffMultiplier = GET_SETTING_KEY_FLOAT("fastforward.multiplier", 4.0f);
+            if (m_ffMultiplier <= 0.0f) m_ffMultiplier = 1.0f;
+            m_ffMute = GET_SETTING_KEY_INT("fastforward.mute", 1) != 0;
+
+            unsigned framesRan = 1;
+            if (ff) {
+                framesRan = static_cast<unsigned>(m_ffMultiplier);
+                float frac = m_ffMultiplier - static_cast<float>(framesRan);
+                m_ffSlowAccum += frac;
+                if (m_ffSlowAccum >= 1.0f) { m_ffSlowAccum -= 1.0f; ++framesRan; }
+                if (framesRan == 0) framesRan = 1;
+                for (unsigned i = 0; i < framesRan; ++i)
+                    m_nds_core->RunFrame();
+            } else {
+                m_nds_core->RunFrame();
+            }
+
+            if (framesRan > 0)
+                _captureVideoFrame();
+
+            if (framesRan > 0)
+                _pushFrameAudio(ff, framesRan);
+
+            _updateFpsStats(framesRan, fpsLastTime, fpsCount);
+
+            _throttleFrameRate(ff, nextFrameTarget, frameDurNs, std::chrono::nanoseconds(0));
         }
 
-        AudioManager::instance().init(32768, 2);
-
-        {
-            int16_t discardBuf[4096];
-            while (m_nds_core->ReadAudio(discardBuf, 2048) > 0)
-                ;
+        if (m_nds_core && m_nds_core->IsReady()) {
+            m_nds_core->SaveNDSSave();
+            brls::Logger::info("NdsGameView: save on exit");
         }
+        brls::Logger::info("NdsGameView: gameloop end");
 
-        GameSignal::instance().resetAll();
+        AudioManager::instance().deinit();
+
+#ifdef _WIN32
+        timeEndPeriod(1);
+#endif
     }
 
 } // namespace beiklive

@@ -8,7 +8,10 @@
 #include "game/render/GameRenderer.hpp"
 #include "ui/utils/GameOverlayRenderer.hpp"
 
+#include <atomic>
 #include <chrono>
+#include <mutex>
+#include <thread>
 #include <vector>
 
 namespace beiklive
@@ -30,6 +33,7 @@ namespace beiklive
         void setGameMenuView(NdsGameMenuView* menuView) { m_gameMenuView = menuView; }
 
     private:
+        static constexpr double FPS_UPDATE_INTERVAL = 1.0;
         static constexpr unsigned kScreenW = 256;
         static constexpr unsigned kScreenH = 192;
 
@@ -47,10 +51,18 @@ namespace beiklive
 
         beiklive::ScreenMode m_screenMode = beiklive::ScreenMode::Fit;
 
+        mutable std::mutex m_frameMutex;
+        LibretroLoader::VideoFrame m_pendingFrame;
+        bool m_frameReady = false;
+
         std::vector<int16_t> m_audioDrainBuf;
 
-        float    m_currentFps    = 0.0f;
+        std::thread       m_gameThread;
+        std::atomic<bool> m_running{false};
+
+        mutable std::mutex m_fpsMutex;
         unsigned m_fpsFrameCount = 0;
+        float    m_currentFps    = 0.0f;
         std::chrono::steady_clock::time_point m_fpsLastTime;
 
         NdsGameMenuView* m_gameMenuView = nullptr;
@@ -58,14 +70,23 @@ namespace beiklive
         void _registerGameInput();
         void _registerGameRuntime();
 
-        void _stepEmulation();
-        void _renderOutput();
+        void _startGameThread();
+        void _stopGameThread();
+        void _gameLoop();
+
+        void _uploadPendingFrame();
 
         void _drawOverlays(NVGcontext* vg, float x, float y, float w, float h);
 
+        void _captureVideoFrame();
         void _pushFrameAudio(bool ff, unsigned framesRan);
-
-        void _updateFpsStats(unsigned framesRan);
+        void _updateFpsStats(unsigned framesRan,
+                             std::chrono::steady_clock::time_point& lastTime,
+                             unsigned& counter);
+        void _throttleFrameRate(bool ff,
+                                std::chrono::steady_clock::time_point& nextTarget,
+                                std::chrono::nanoseconds frameDurNs,
+                                std::chrono::nanoseconds spinGuardNs);
     };
 
 } // namespace beiklive
