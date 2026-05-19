@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.16)
 
 set(BOREALIS_LIBRARY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/borealis/library)
 set(MGBA_PATH        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mgba)
-set(MELONDS_PATH     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/melonDS-switch)
+set(MELONDS_PATH     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/melonDS)
 
 # 构建选项
 include(${BOREALIS_LIBRARY}/cmake/commonOption.cmake)
@@ -133,7 +133,7 @@ else()
 endif ()
 
 include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/src)
-include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/third_party/melonDS-switch/src)
+include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/third_party/melonDS/src)
 file(GLOB_RECURSE MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
 # list(APPEND MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp)
 

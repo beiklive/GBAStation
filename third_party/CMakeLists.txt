@@ -82,9 +82,9 @@ endif ()
 # =========================================================
 # melonDS 核心  –  静态库构建
 #
-# melonDS-switch 的 CMakeLists.txt 在作为子目录被 add_subdirectory
+# melonDS 的 CMakeLists.txt 在作为子目录被 add_subdirectory
 # 引入时会使用 CMAKE_SOURCE_DIR 指向顶层项目根目录而非自身源码树。
-# 因此需要预先将 melonDS-switch/cmake 追加到 CMAKE_MODULE_PATH。
+# 因此需要预先将 melonDS/cmake 追加到 CMAKE_MODULE_PATH。
 #
 # 关键选项：
 #   BUILD_QT_SDL=OFF     → 不构建 Qt/SDL 前端（无需 Qt / SDL2 依赖）
@@ -94,7 +94,7 @@ endif ()
 #
 # 构建产物：目标 'core' → 静态库 libcore.a
 # =========================================================
-set(MELONDS_PATH ${CMAKE_CURRENT_SOURCE_DIR}/melonDS-switch)
+set(MELONDS_PATH ${CMAKE_CURRENT_SOURCE_DIR}/melonDS)
 
 set(CMAKE_MODULE_PATH "${MELONDS_PATH}/cmake" ${CMAKE_MODULE_PATH})
 
