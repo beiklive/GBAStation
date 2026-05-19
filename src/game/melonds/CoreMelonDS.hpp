@@ -87,6 +87,8 @@ public:
 
     bool IsReady() const { return m_ready; }
 
+    melonDS::NDS* GetNDS() { return m_nds.get(); }
+
 private:
     beiklive::GameEntry m_gameEntry;
     std::unique_ptr<melonDS::NDS> m_nds;

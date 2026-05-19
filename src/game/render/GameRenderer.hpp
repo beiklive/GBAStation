@@ -55,6 +55,12 @@ public:
     /// @param frame  LibretroLoader 产出的视频帧。
     void uploadFrame(const LibretroLoader::VideoFrame& frame);
 
+    /// 绑定外部 GL 纹理（不获取所有权），用于 GPU 原生渲染路径。
+    void bindExternalTexture(GLuint texId, unsigned width, unsigned height)
+    {
+        m_texture.adoptExternal(texId, width, height);
+    }
+
     /// 设置纹理过滤模式。
     /// @param linear  true = 线性过滤；false = 最近邻采样。
     void setFilter(bool linear);

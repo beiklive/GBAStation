@@ -38,10 +38,20 @@ public:
     unsigned height() const { return m_height; }
     bool     isValid() const { return m_texId != 0; }
 
+    void adoptExternal(GLuint texId, unsigned w, unsigned h)
+    {
+        deinit();
+        m_texId = texId;
+        m_width = w;
+        m_height = h;
+        m_external = true;
+    }
+
 private:
     GLuint   m_texId  = 0;
     unsigned m_width  = 0;
     unsigned m_height = 0;
+    bool     m_external = false;
 };
 
 } // namespace beiklive

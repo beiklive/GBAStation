@@ -51,12 +51,13 @@ bool GameTexture::init(unsigned width, unsigned height, bool linear)
 // ============================================================
 void GameTexture::deinit()
 {
-    if (m_texId) {
+    if (m_texId && !m_external) {
         glDeleteTextures(1, &m_texId);
-        m_texId = 0;
     }
+    m_texId = 0;
     m_width  = 0;
     m_height = 0;
+    m_external = false;
 }
 
 // ============================================================
