@@ -313,6 +313,11 @@ brls::View* AboutPage::_buildUpdateTab() {
         changelogCard->addView(lablebox);
 
         m_bodyLabel->setText(R"(
+v0.1.11
+    bug修复和优化
+    1. 修复着色器参数设置好后下次打开游戏又复原的bug
+    2. 添加历史帧功能，带拖影效果的着色器可以正常显示拖影效果了
+
 v0.1.10
     bug修复和优化
     1. 修复启动模拟器后立即退出时，因为版本后台检测线程未退出导致的崩溃问题
