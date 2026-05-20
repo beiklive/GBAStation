@@ -535,8 +535,8 @@ namespace beiklive
                         if (!passesFilter(beiklive::tools::getFileExtension(p)))
                             continue;
                     }
-                    if (isDir) dirs.push_back({std::move(name), std::move(fullPath), true});
-                    else       files.push_back({std::move(name), std::move(fullPath), false});
+                    if (isDir) dirs.push_back({name + "." + beiklive::tools::getFileExtension(p.filename().string()), std::move(fullPath), true});
+                    else       files.push_back({name + "." + beiklive::tools::getFileExtension(p.filename().string()), std::move(fullPath), false});
                 }
 
                 auto nameLess = [](const RawEntry& a, const RawEntry& b) {
