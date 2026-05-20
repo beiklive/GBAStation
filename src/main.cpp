@@ -58,7 +58,7 @@ int main(int argc, char* argv[]) {
 	}
 	brls::Application::createWindow("beiklive/title"_i18n);
 
-	brls::Application::loadFontFromFile("chinese", BK_RES("font/switch_font.ttf"));
+	// brls::Application::loadFontFromFile("chinese", BK_RES("font/switch_font.ttf"));
 
 	// ── 应用初始化后读取调试覆盖层设置 ──────────────────────────
 	if (beiklive::getKeyInt(beiklive::SettingManager, "debug.logOverlay", 0))

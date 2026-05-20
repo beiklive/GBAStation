@@ -139,7 +139,7 @@ void FileListView::drawItem(NVGcontext* vg, int index, float itemY, float w, NVG
             nvgFill(vg);
         }
     }
-    nvgFontFace(vg, "chinese");
+    // nvgFontFace(vg, "chinese");
     // Title + Subtitle (horizontal: title left, subtitle right)
     float centerY = itemY + m_itemHeight * 0.5f + 2.f;
     float textMarginR = 4.f;
