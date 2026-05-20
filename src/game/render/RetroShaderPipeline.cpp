@@ -344,6 +344,8 @@ void RetroShaderPipeline::setUniforms(GLuint program,
     if (origW > 0 && origH > 0) {
         setUniform1f("OriginalAspect",
                      static_cast<float>(origW) / static_cast<float>(origH));
+        setUniform1f("OriginalAspectRotAted",
+                     static_cast<float>(origW) / static_cast<float>(origH));
     }
 
     // 帧时间增量（以微秒计；未精确追踪，填合理默认值 16666 ≈ 60fps）
@@ -686,13 +688,17 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
             extraTexUnits.emplace_back("PassPrev" + std::to_string(idx + 1) + "Texture", unit);
             ++unit;
 
-            // 帧反馈纹理（上一帧的反馈 pass 输出）
-            if (m_feedbackTex) {
+            // 帧反馈纹理（上一帧的反馈 pass 输出，回退为当前原始输入）
+            {
+                GLuint fbTex = m_feedbackTex ? m_feedbackTex : inputTex;
                 glActiveTexture(GL_TEXTURE0 + unit);
-                glBindTexture(GL_TEXTURE_2D, m_feedbackTex);
-                extraTexUnits.emplace_back("PassFeedbackTexture", unit);
-                extraTexUnits.emplace_back("PassFeedback" + std::to_string(m_feedbackPass + 1) + "Texture", unit);
-                extraTexUnits.emplace_back("PrevTexture", unit);  // RetroArch 标准别名
+                glBindTexture(GL_TEXTURE_2D, fbTex);
+                extraTexUnits.emplace_back("FeedbackTexture", unit);
+                if (m_feedbackTex) {
+                    extraTexUnits.emplace_back("PassFeedbackTexture", unit);
+                    extraTexUnits.emplace_back("PassFeedback" + std::to_string(m_feedbackPass + 1) + "Texture", unit);
+                }
+                extraTexUnits.emplace_back("PrevTexture", unit);
                 ++unit;
             }
 
