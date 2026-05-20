@@ -163,6 +163,17 @@ namespace beiklive
                 brls::Logger::info("GameView: 渲染器初始化完成 ({}x{} shader={})",
                                    gw, gh,
                                    shaderPath.empty() ? "无" : shaderPath);
+                // 应用保存的着色器参数
+                if (!shaderPath.empty() && !m_gameEntry.shaderParaNames.empty()) {
+                    for (size_t i = 0; i < m_gameEntry.shaderParaNames.size() &&
+                                       i < m_gameEntry.shaderParaValues.size(); ++i) {
+                        m_renderer.setShaderParam(m_gameEntry.shaderParaNames[i],
+                                                  m_gameEntry.shaderParaValues[i]);
+                    }
+                    brls::Logger::info("GameView: 已应用 {} 个保存的着色器参数",
+                                       std::min(m_gameEntry.shaderParaNames.size(),
+                                                m_gameEntry.shaderParaValues.size()));
+                }
                 // 初始化 FPS 计时
                 m_fpsLastTime = std::chrono::steady_clock::now();
             }
