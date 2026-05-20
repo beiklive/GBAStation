@@ -692,6 +692,7 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
                 glBindTexture(GL_TEXTURE_2D, m_feedbackTex);
                 extraTexUnits.emplace_back("PassFeedbackTexture", unit);
                 extraTexUnits.emplace_back("PassFeedback" + std::to_string(m_feedbackPass + 1) + "Texture", unit);
+                extraTexUnits.emplace_back("PrevTexture", unit);  // RetroArch 标准别名
                 ++unit;
             }
 
@@ -704,6 +705,7 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
                     glBindTexture(GL_TEXTURE_2D, m_historyTextures[hIdx]);
                     extraTexUnits.emplace_back("OriginalHistory" + std::to_string(hi), unit);
                     extraTexUnits.emplace_back("OriginalHistory" + std::to_string(hi) + "Texture", unit);
+                    extraTexUnits.emplace_back("Prev" + std::to_string(hi + 1) + "Texture", unit);  // RetroArch 别名(1-based)
                     ++unit;
                 }
             }
