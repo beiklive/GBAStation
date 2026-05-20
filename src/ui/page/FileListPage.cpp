@@ -6,7 +6,6 @@
 
 namespace beiklive
 {
-    static constexpr int BATCH_SIZE = 3;
 
     FileListPage::FileListPage()
     {
@@ -27,7 +26,10 @@ namespace beiklive
         listCard->setGrow(1.f);
 
         fileListView = new beiklive::FileListView();
-        fileListView->setOnItemClicked([this](const beiklive::ListItem& item) {
+        fileListView->setGrow(1.f);
+        fileListView->setWidthPercentage(100.f);
+
+        fileListView->onItemClicked = [this](const beiklive::ListItem& item) {
             for (const auto& dirItem : m_dirItems) {
                 if (dirItem.fullPath == item.data) {
                     if (dirItem.itemType == beiklive::enums::FileType::DIRECTORY ||
@@ -41,39 +43,7 @@ namespace beiklive
                     break;
                 }
             }
-        });
-
-        fileListView->setOnBindCell([this](beiklive::ListItemCell& cell) {
-            cell.registerAction(
-                "设置映射名", brls::BUTTON_X,
-                [this](brls::View*) {
-                    if (m_focusedFullPath.empty()) return true;
-                    auto* ime = brls::Application::getPlatform()->getImeManager();
-                    if (!ime) return true;
-                    std::string filename = beiklive::tools::getFileNameWithoutExtension(m_focusedFullPath);
-                    std::string curName = GET_MAPPING_KEY_STR(filename,
-                        beiklive::tools::getFileNameWithoutExtension(m_focusedFullPath));
-                    std::string fullPath = m_focusedFullPath;
-                    ime->openForText(
-                        [filename, fullPath](std::string text) {
-                            if (!text.empty()) {
-                                beiklive::NameMappingManager->Set(filename, text, true);
-                                beiklive::NameMappingManager->Save();
-                                auto entryOpt = beiklive::GameDB ? beiklive::GameDB->findByPath(fullPath) : std::nullopt;
-                                if (entryOpt) {
-                                    beiklive::GameDB->set(fullPath, "title", nlohmann::json(text));
-                                    beiklive::GameDB->flush();
-                                }
-                            }
-                        },
-                        "设置映射名称", "", 128, curName,
-                        brls::KeyboardKeyDisableBitmask::KEYBOARD_DISABLE_NONE);
-                    return true;
-                });
-
-            cell.registerAction("返回上一级", brls::BUTTON_B,
-                [this](brls::View*) { navigateUp(); return true; });
-        });
+        };
 
         fileListView->onItemFocused = [this](const beiklive::ListItem& item) {
             m_focusedFullPath = item.data;
@@ -109,6 +79,39 @@ namespace beiklive
         this->showFooter(true);
         this->getHeader()->setTitle("文件浏览");
 
+        // B = 返回上一级
+        this->registerAction("返回上一级", brls::BUTTON_B,
+            [this](brls::View*) { navigateUp(); return true; },
+            false, false, brls::SOUND_BACK);
+
+        // X = 设置映射名
+        this->registerAction("设置映射名", brls::BUTTON_X,
+            [this](brls::View*) {
+                if (m_focusedFullPath.empty()) return true;
+                auto* ime = brls::Application::getPlatform()->getImeManager();
+                if (!ime) return true;
+                std::string filename = beiklive::tools::getFileNameWithoutExtension(m_focusedFullPath);
+                std::string curName = GET_MAPPING_KEY_STR(filename,
+                    beiklive::tools::getFileNameWithoutExtension(m_focusedFullPath));
+                std::string fullPath = m_focusedFullPath;
+                ime->openForText(
+                    [filename, fullPath](std::string text) {
+                        if (!text.empty()) {
+                            beiklive::NameMappingManager->Set(filename, text, true);
+                            beiklive::NameMappingManager->Save();
+                            auto entryOpt = beiklive::GameDB ? beiklive::GameDB->findByPath(fullPath) : std::nullopt;
+                            if (entryOpt) {
+                                beiklive::GameDB->set(fullPath, "title", nlohmann::json(text));
+                                beiklive::GameDB->flush();
+                            }
+                        }
+                    },
+                    "设置映射名称", "", 128, curName,
+                    brls::KeyboardKeyDisableBitmask::KEYBOARD_DISABLE_NONE);
+                return true;
+            });
+
+        // RB = 切换详情面板
         this->registerAction("面板", brls::BUTTON_RB, [this](brls::View*) -> bool {
             _cancelThumbnail();
             m_panelVisible = !m_panelVisible;
@@ -126,6 +129,9 @@ namespace beiklive
         });
     }
 
+    // ============================================================
+    // _setupDetailPanel
+    // ============================================================
     void FileListPage::_setupDetailPanel()
     {
         m_detailPanel = new brls::Box(brls::Axis::COLUMN);
@@ -383,8 +389,7 @@ namespace beiklive
         m_detailImage->setVisibility(brls::Visibility::VISIBLE);
         m_detailImage->setImageFromFile(beiklive::tools::getIconPath(data.itemType));
 
-        _addHighlightRow(std::to_string(data.childCount) + " 个项目",
-            nvgRGBA(121, 201, 249, 255));
+        _addHighlightRow("文件夹", nvgRGBA(121, 201, 249, 255));
     }
 
     void FileListPage::_showFileDetail(const beiklive::DirListData& data)
@@ -426,10 +431,6 @@ namespace beiklive
         }
         ++m_thumbReqId;
     }
-
-    // ============================================================
-    //  路径 / 过滤
-    // ============================================================
 
     void FileListPage::updatePath()
     {
@@ -473,131 +474,100 @@ namespace beiklive
 #endif
             return;
         }
+        fileListView->saveFocusState(m_currentPath);
         setPath(parentPath);
     }
 
     // ============================================================
-    //  setPath – batch loading: 每 BATCH_SIZE 个 item sync 一次
+    //  setPath – 后台扫描全部条目，一次性提交
     // ============================================================
     void FileListPage::setPath(const std::string path)
     {
-        brls::Application::blockInputs();
+        fileListView->saveFocusState(m_currentPath);
+        fileListView->setInteractionDisabled(true);
         m_previousPath = m_currentPath;
         m_currentPath = path;
         m_isAtDriveList = false;
 
+        fileListView->clearItems();
+        m_dirItems.clear();
+        updatePath();
+        fileListView->restoreFocusState(m_currentPath);
+
         std::string iconPrefix = beiklive::tools::getIconPathPrefix();
 
-        brls::sync([this]() {
-            fileListView->clearItems();
-            m_dirItems.clear();
-            updatePath();
-        });
-
         ASYNC_RETAIN
-        brls::async([ASYNC_TOKEN, this, path, iconPrefix]() {
-            std::error_code ec;
-            if (!fs::exists(path, ec) || !fs::is_directory(path, ec)) return;
-
-            m_previousPath = m_currentPath;
-
-            std::vector<beiklive::DirListData> batchDir;
-            std::vector<beiklive::ListItem> batchItems;
+        brls::async([ASYNC_TOKEN, path, iconPrefix]() {
+            std::vector<beiklive::DirListData> dirData;
+            std::vector<beiklive::ListItem> items;
 
             // ".." 返回上一级
             std::string parentPath = fs::path(path).parent_path().string();
             if (parentPath != path) {
                 std::string upIcon = beiklive::tools::getIconPathWithPrefix(
                     beiklive::enums::FileType::NONE, iconPrefix);
-                batchDir.push_back({"..", path, upIcon,
+                dirData.push_back({"..", path, upIcon,
                     beiklive::enums::FileType::NONE, "返回上一级", 0});
-                batchItems.push_back({"..", "返回上一级", upIcon, path});
+                items.push_back({"..", "返回上一级", upIcon, path});
             }
 
-            struct RawEntry { std::string name, fullPath; bool isDir; };
-            std::vector<RawEntry> dirs, files;
+            std::error_code ec;
+            if (fs::exists(path, ec) && fs::is_directory(path, ec)) {
+                struct RawEntry { std::string name, fullPath; bool isDir; };
+                std::vector<RawEntry> dirs, files;
 
-            for (const auto& entry : fs::directory_iterator(
-                    path, fs::directory_options::skip_permission_denied, ec)) {
-                if (ec) { ec.clear(); continue; }
-                std::error_code entryEc;
-                bool isDir = entry.is_directory(entryEc);
-                if (entryEc) continue;
+                for (const auto& entry : fs::directory_iterator(
+                        path, fs::directory_options::skip_permission_denied, ec)) {
+                    if (ec) { ec.clear(); continue; }
+                    std::error_code entryEc;
+                    bool isDir = entry.is_directory(entryEc);
+                    if (entryEc) continue;
 
-                const auto& p = entry.path();
-                std::string name = p.filename().string();
-                name = GET_MAPPING_KEY_STR(
-                    beiklive::tools::getFileNameWithoutExtension(name),
-                    beiklive::tools::getFileNameWithoutExtension(name));
-                std::string fullPath = p.string();
+                    const auto& p = entry.path();
+                    std::string name = p.filename().string();
+                    name = GET_MAPPING_KEY_STR(
+                        beiklive::tools::getFileNameWithoutExtension(name),
+                        beiklive::tools::getFileNameWithoutExtension(name));
+                    std::string fullPath = p.string();
 
-                if (!isDir) {
-                    if (!passesFilter(beiklive::tools::getFileExtension(p)))
-                        continue;
+                    if (!isDir) {
+                        if (!passesFilter(beiklive::tools::getFileExtension(p)))
+                            continue;
+                    }
+                    if (isDir) dirs.push_back({std::move(name), std::move(fullPath), true});
+                    else       files.push_back({std::move(name), std::move(fullPath), false});
                 }
-                if (isDir) dirs.push_back({std::move(name), std::move(fullPath), true});
-                else       files.push_back({std::move(name), std::move(fullPath), false});
-            }
 
-            auto nameLess = [](const RawEntry& a, const RawEntry& b) {
-                std::string la = a.name, lb = b.name;
-                for (auto& c : la) c = static_cast<char>(std::tolower((unsigned char)c));
-                for (auto& c : lb) c = static_cast<char>(std::tolower((unsigned char)c));
-                return la < lb;
-            };
-            std::sort(dirs.begin(), dirs.end(), nameLess);
-            std::sort(files.begin(), files.end(), nameLess);
+                auto nameLess = [](const RawEntry& a, const RawEntry& b) {
+                    std::string la = a.name, lb = b.name;
+                    for (auto& c : la) c = static_cast<char>(std::tolower((unsigned char)c));
+                    for (auto& c : lb) c = static_cast<char>(std::tolower((unsigned char)c));
+                    return la < lb;
+                };
+                std::sort(dirs.begin(), dirs.end(), nameLess);
+                std::sort(files.begin(), files.end(), nameLess);
 
-            for (const auto& raw : dirs) {
-                auto fileType = beiklive::tools::getFileType(raw.fullPath);
-                std::string ip = beiklive::tools::getIconPathWithPrefix(fileType, iconPrefix);
-                size_t entryCount = beiklive::tools::countEntries(raw.fullPath);
-
-                batchDir.push_back({raw.name, raw.fullPath, ip, fileType, "", entryCount});
-                batchItems.push_back({raw.name, std::to_string(entryCount) + " items", ip, raw.fullPath});
-
-                if ((int)batchItems.size() >= BATCH_SIZE) {
-                    ASYNC_RELEASE
-                    brls::sync([this, bd = std::move(batchDir), bi = std::move(batchItems)]() {
-                        m_dirItems.insert(m_dirItems.end(), bd.begin(), bd.end());
-                        fileListView->appendItems(bi);
-                    });
-                    batchDir.clear();
-                    batchItems.clear();
+                for (const auto& raw : dirs) {
+                    auto fileType = beiklive::tools::getFileType(raw.fullPath);
+                    std::string ip = beiklive::tools::getIconPathWithPrefix(fileType, iconPrefix);
+                    dirData.push_back({raw.name, raw.fullPath, ip, fileType, "", 0});
+                    items.push_back({raw.name, "文件夹", ip, raw.fullPath});
                 }
-            }
 
-            for (const auto& raw : files) {
-                auto fileType = beiklive::tools::getFileType(raw.fullPath);
-                std::string ip = beiklive::tools::getIconPathWithPrefix(fileType, iconPrefix);
-                std::string sizeStr = beiklive::tools::getFileSizeString(raw.fullPath);
-
-                batchDir.push_back({raw.name, raw.fullPath, ip, fileType, sizeStr, 0});
-                batchItems.push_back({raw.name, sizeStr, ip, raw.fullPath});
-
-                if ((int)batchItems.size() >= BATCH_SIZE) {
-                    ASYNC_RELEASE
-                    brls::sync([this, bd = std::move(batchDir), bi = std::move(batchItems)]() {
-                        m_dirItems.insert(m_dirItems.end(), bd.begin(), bd.end());
-                        fileListView->appendItems(bi);
-                    });
-                    batchDir.clear();
-                    batchItems.clear();
+                for (const auto& raw : files) {
+                    auto fileType = beiklive::tools::getFileType(raw.fullPath);
+                    std::string ip = beiklive::tools::getIconPathWithPrefix(fileType, iconPrefix);
+                    std::string sizeStr = beiklive::tools::getFileSizeString(raw.fullPath);
+                    dirData.push_back({raw.name, raw.fullPath, ip, fileType, sizeStr, 0});
+                    items.push_back({raw.name, sizeStr, ip, raw.fullPath});
                 }
-            }
-
-            if (!batchItems.empty()) {
-                ASYNC_RELEASE
-                brls::sync([this, bd = std::move(batchDir), bi = std::move(batchItems)]() {
-                    m_dirItems.insert(m_dirItems.end(), bd.begin(), bd.end());
-                    fileListView->appendItems(bi);
-                });
             }
 
             ASYNC_RELEASE
-            brls::sync([this]() {
-                fileListView->finishLoading();
-                brls::Application::unblockInputs();
+            brls::sync([this, dd = std::move(dirData), it = std::move(items)]() {
+                m_dirItems = std::move(dd);
+                fileListView->setItems(it);
+                fileListView->setInteractionDisabled(false);
             });
         });
     }
@@ -608,49 +578,33 @@ namespace beiklive
         setPath("/");
         return;
 #endif
+        fileListView->setInteractionDisabled(true);
         m_isAtDriveList = true;
         m_currentPath = "";
 
-        brls::sync([this]() {
-            fileListView->clearItems();
-            m_dirItems.clear();
-        });
+        fileListView->clearItems();
+        m_dirItems.clear();
 
         std::string iconPrefix = beiklive::tools::getIconPathPrefix();
         ASYNC_RETAIN
-        brls::async([ASYNC_TOKEN, this, iconPrefix]() {
+        brls::async([ASYNC_TOKEN, iconPrefix]() {
             std::vector<std::string> drives = beiklive::tools::getLogicalDrives();
             const std::string driveIcon = beiklive::tools::getIconPathWithPrefix(
                 beiklive::enums::FileType::DRIVE, iconPrefix);
 
-            std::vector<beiklive::DirListData> batchDir;
-            std::vector<beiklive::ListItem> batchItems;
+            std::vector<beiklive::DirListData> dirData;
+            std::vector<beiklive::ListItem> items;
             for (const auto& drive : drives) {
-                batchDir.push_back({drive, drive, driveIcon,
+                dirData.push_back({drive, drive, driveIcon,
                     beiklive::enums::FileType::DRIVE, "", 0});
-                batchItems.push_back({drive, "本地磁盘", driveIcon, drive});
-
-                if ((int)batchItems.size() >= BATCH_SIZE) {
-                    ASYNC_RELEASE
-                    brls::sync([this, bd = std::move(batchDir), bi = std::move(batchItems)]() {
-                        m_dirItems.insert(m_dirItems.end(), bd.begin(), bd.end());
-                        fileListView->appendItems(bi);
-                    });
-                    batchDir.clear();
-                    batchItems.clear();
-                }
-            }
-            if (!batchItems.empty()) {
-                ASYNC_RELEASE
-                brls::sync([this, bd = std::move(batchDir), bi = std::move(batchItems)]() {
-                    m_dirItems.insert(m_dirItems.end(), bd.begin(), bd.end());
-                    fileListView->appendItems(bi);
-                });
+                items.push_back({drive, "本地磁盘", driveIcon, drive});
             }
 
             ASYNC_RELEASE
-            brls::sync([this]() {
-                fileListView->finishLoading();
+            brls::sync([this, dd = std::move(dirData), it = std::move(items)]() {
+                m_dirItems = std::move(dd);
+                fileListView->setItems(it);
+                fileListView->setInteractionDisabled(false);
             });
         });
     }

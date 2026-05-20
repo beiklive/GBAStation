@@ -2,109 +2,166 @@
 
 namespace beiklive {
 
-// ===== FileListDataSource =====
-
-int FileListDataSource::numberOfRows(brls::RecyclerFrame* recycler, int section) {
-    return count();
-}
-
-brls::RecyclerCell* FileListDataSource::cellForRow(brls::RecyclerFrame* recycler, brls::IndexPath index) {
-    auto* cell = dynamic_cast<beiklive::ListItemCell*>(recycler->dequeueReusableCell("Cell"));
-    if (!cell) return nullptr;
-
-    const auto& item = m_items[index.row];
-    cell->setTitle(item.text);
-    cell->setSubTitle(item.subText);
-    cell->setIcon(item.iconPath);
-    cell->setFullData(item.data);
-
-    if (onBindCell)
-        onBindCell(*cell);
-
-    return cell;
-}
-
-void FileListDataSource::didSelectRowAt(brls::RecyclerFrame* recycler, brls::IndexPath indexPath) {
-    if (onItemClicked && indexPath.row < (int)m_items.size())
-        onItemClicked(m_items[indexPath.row]);
-}
-
-void FileListDataSource::setItems(const std::vector<beiklive::ListItem>& items) {
-    m_items = items;
-}
-
-void FileListDataSource::appendItems(const std::vector<beiklive::ListItem>& items) {
-    m_items.insert(m_items.end(), items.begin(), items.end());
-}
-
-void FileListDataSource::clear() {
-    m_items.clear();
-}
-
-const beiklive::ListItem& FileListDataSource::getItem(int index) const {
-    return m_items[index];
-}
-
-// ===== FileListView =====
-
 FileListView::FileListView() {
-    this->setAxis(brls::Axis::COLUMN);
-    this->setWidthPercentage(100);
-    this->setGrow(1.f);
-    this->setFocusable(false);
-    m_dataSource = new FileListDataSource();
-
-    m_recycler = new brls::RecyclerFrame();
-    m_recycler->estimatedRowHeight = 66.f;
-    m_recycler->setPadding(20.f);
-    m_recycler->setScrollingIndicatorVisible(false);
-    m_recycler->setGrow(1.f);
-    m_recycler->setScrollingBehavior(brls::ScrollingBehavior::CENTERED);
-
-    m_recycler->registerCell("Cell", []() {
-        return new beiklive::ListItemCell();
-    });
-    m_recycler->setDataSource(m_dataSource, false);
-
-    this->addView(m_recycler);
-
-    // // Lock focus inside the list
-    // this->setCustomNavigationRoute(brls::FocusDirection::UP, this);
-    // this->setCustomNavigationRoute(brls::FocusDirection::DOWN, this);
-    // this->setCustomNavigationRoute(brls::FocusDirection::LEFT, this);
-    // this->setCustomNavigationRoute(brls::FocusDirection::RIGHT, this);
-
-    // UP/DOWN: single-step (fired once), long-press handled in frame()
-    this->registerAction("上", brls::BUTTON_UP, [this](brls::View*) {
-        moveUp();
-        return true;
-    }, false, false, brls::SOUND_FOCUS_CHANGE);
-
-    this->registerAction("下", brls::BUTTON_DOWN, [this](brls::View*) {
-        moveDown();
-        return true;
-    }, false, false, brls::SOUND_FOCUS_CHANGE);
-
-    // LEFT/RIGHT: page up/down (Switch/VitaShell style)
-    this->registerAction("上页", brls::BUTTON_LEFT, [this](brls::View*) {
-        movePageUp();
-        return true;
-    }, false, false, brls::SOUND_FOCUS_CHANGE);
-
-    this->registerAction("下页", brls::BUTTON_RIGHT, [this](brls::View*) {
-        movePageDown();
-        return true;
-    }, false, false, brls::SOUND_FOCUS_CHANGE);
-
+    this->setFocusable(true);
+    HIDE_BRLS_HIGHLIGHT(this);
     m_lastFrameTime = std::chrono::steady_clock::now();
 }
 
-void FileListView::frame(brls::FrameContext* ctx) {
-    brls::Box::frame(ctx);
+// ── Data ──
 
-    // Only handle long press when this list has focus
-    if (!this->isFocused() && !this->isChildFocused())
+void FileListView::setItems(const std::vector<beiklive::ListItem>& items) {
+    m_items = items;
+    if (m_focusedIndex < 0 && !m_items.empty())
+        m_focusedIndex = 0;
+    if (m_focusedIndex >= (int)m_items.size())
+        m_focusedIndex = std::max(0, (int)m_items.size() - 1);
+    m_scrollY = 0.f;
+    ensureFocusedVisible();
+}
+
+void FileListView::clearItems() {
+    m_items.clear();
+    m_focusedIndex = -1;
+    m_scrollY = 0.f;
+}
+
+// ── Focus state ──
+
+void FileListView::saveFocusState(const std::string& path) {
+    if (m_focusedIndex >= 0)
+        m_dirFocusIndex[path] = m_focusedIndex;
+}
+
+void FileListView::restoreFocusState(const std::string& path) {
+    auto it = m_dirFocusIndex.find(path);
+    if (it != m_dirFocusIndex.end() && it->second >= 0) {
+        m_focusedIndex = it->second;
+        m_dirFocusIndex.erase(it);
+    }
+}
+
+// ── Drawing ──
+
+void FileListView::draw(NVGcontext* vg, float x, float y, float w, float h,
+                         brls::Style style, brls::FrameContext* ctx) {
+    m_viewHeight = h;
+
+    nvgSave(vg);
+    nvgScissor(vg, x, y, w, h);
+
+    // Background
+    nvgBeginPath(vg);
+    nvgRect(vg, x, y, w, h);
+    nvgFillColor(vg, nvgRGBA(0, 0, 0, 40));
+    nvgFill(vg);
+
+    if (m_items.empty()) {
+        nvgRestore(vg);
         return;
+    }
+
+    int first = (int)(m_scrollY / m_itemHeight);
+    if (first < 0) first = 0;
+    int last = first + (int)(h / m_itemHeight) + 2;
+    if (last > (int)m_items.size()) last = (int)m_items.size();
+
+    NVGcolor textColor = GET_THEME_COLOR("brls/text");
+
+    for (int i = first; i < last; i++) {
+        float itemY = y + i * m_itemHeight - m_scrollY;
+        bool focused = (i == m_focusedIndex);
+        drawItem(vg, i, itemY, w, focused ? nvgRGB(255, 255, 255) : textColor);
+    }
+
+    // Scrollbar
+    int vr = visibleRows();
+    if (vr > 0 && (int)m_items.size() > vr)
+        drawScrollbar(vg, x + w, y, w, h);
+
+    nvgRestore(vg);
+}
+
+void FileListView::drawItem(NVGcontext* vg, int index, float itemY, float w, NVGcolor textColor) {
+    const auto& item = m_items[index];
+    float padX = 16.f;
+    float padY = (m_itemHeight - m_iconSize) * 0.5f;
+    float textX = padX + m_iconSize + 12.f;
+
+    // Focus highlight
+    if (index == m_focusedIndex && m_focusedIndex >= 0) {
+        nvgBeginPath(vg);
+        nvgRect(vg, 4.f, itemY + 2.f, w - 8.f, m_itemHeight - 4.f);
+        nvgFillColor(vg, nvgRGBA(79, 193, 255, 40));
+        nvgFill(vg);
+
+        // Left accent bar
+        nvgBeginPath(vg);
+        nvgRect(vg, 4.f, itemY + (m_itemHeight - 40.f) * 0.5f, 5.f, 40.f);
+        nvgFillColor(vg, nvgRGBA(79, 193, 255, 255));
+        nvgFill(vg);
+    }
+
+    // Icon
+    if (!item.iconPath.empty()) {
+        int img = getOrLoadIcon(vg, item.iconPath);
+        if (img > 0) {
+            NVGpaint paint = nvgImagePattern(vg, padX, itemY + padY,
+                                              m_iconSize, m_iconSize, 0.f, img, 1.f);
+            nvgBeginPath(vg);
+            nvgRoundedRect(vg, padX, itemY + padY, m_iconSize, m_iconSize, 6.f);
+            nvgFillPaint(vg, paint);
+            nvgFill(vg);
+        }
+    }
+
+    // Title
+    nvgFontSize(vg, 22.f);
+    nvgFillColor(vg, textColor);
+    nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_BASELINE);
+    nvgText(vg, textX, itemY + m_itemHeight * 0.5f - 4.f, item.text.c_str(), nullptr);
+
+    // Subtitle
+    nvgFontSize(vg, 16.f);
+    nvgFillColor(vg, nvgRGBA(textColor.r, textColor.g, textColor.b, 160));
+    nvgText(vg, textX, itemY + m_itemHeight * 0.5f + 18.f, item.subText.c_str(), nullptr);
+
+    // Separator line
+    nvgBeginPath(vg);
+    nvgMoveTo(vg, textX, itemY + m_itemHeight - 1.f);
+    nvgLineTo(vg, w - padX - 4.f, itemY + m_itemHeight - 1.f);
+    nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 10));
+    nvgStrokeWidth(vg, 1.f);
+    nvgStroke(vg);
+}
+
+void FileListView::drawScrollbar(NVGcontext* vg, float x, float y, float w, float h) {
+    float maxScroll = m_items.size() * m_itemHeight - m_viewHeight;
+    if (maxScroll <= 0.f) return;
+
+    float barH = std::max(20.f, (m_viewHeight / (m_items.size() * m_itemHeight)) * m_viewHeight);
+    float barY = (m_scrollY / maxScroll) * (m_viewHeight - barH);
+
+    nvgBeginPath(vg);
+    nvgRoundedRect(vg, x - 6.f, barY, 3.f, barH, 1.5f);
+    nvgFillColor(vg, nvgRGBA(255, 255, 255, 60));
+    nvgFill(vg);
+}
+
+int FileListView::getOrLoadIcon(NVGcontext* vg, const std::string& path) {
+    auto it = m_iconCache.find(path);
+    if (it != m_iconCache.end()) return it->second;
+    int handle = nvgCreateImage(vg, path.c_str(), 0);
+    if (handle > 0) m_iconCache[path] = handle;
+    return handle;
+}
+
+// ── Frame update ──
+
+void FileListView::frame(brls::FrameContext* ctx) {
+    brls::View::frame(ctx);
+
+    if (m_interactionDisabled || m_items.empty()) return;
 
     auto now = std::chrono::steady_clock::now();
     float dt = std::chrono::duration<float>(now - m_lastFrameTime).count();
@@ -113,11 +170,12 @@ void FileListView::frame(brls::FrameContext* ctx) {
 
     auto& state = brls::Application::getControllerState();
 
-    // ── Long press UP ──
+    // ── UP ──
     bool upNow = state.buttons[brls::BUTTON_UP];
     if (upNow && !m_prevUp) {
         m_holdUpTime = 0.f;
         m_holdUpRepeat = 0.f;
+        moveUp();
     }
     if (upNow) {
         m_holdUpTime += dt;
@@ -132,11 +190,12 @@ void FileListView::frame(brls::FrameContext* ctx) {
     }
     m_prevUp = upNow;
 
-    // ── Long press DOWN ──
+    // ── DOWN ──
     bool downNow = state.buttons[brls::BUTTON_DOWN];
     if (downNow && !m_prevDown) {
         m_holdDownTime = 0.f;
         m_holdDownRepeat = 0.f;
+        moveDown();
     }
     if (downNow) {
         m_holdDownTime += dt;
@@ -150,99 +209,97 @@ void FileListView::frame(brls::FrameContext* ctx) {
         }
     }
     m_prevDown = downNow;
-}
 
-brls::View* FileListView::getDefaultFocus() {
-    if (m_totalItemCount > 0)
-        m_recycler->setDefaultCellFocus(brls::IndexPath(0, m_focusedIndex));
-    return m_recycler;
-}
+    // ── LEFT = Page Up ──
+    bool leftNow = state.buttons[brls::BUTTON_LEFT];
+    if (leftNow && !m_prevLeft) movePageUp();
+    m_prevLeft = leftNow;
 
-// ── Data ──
+    // ── RIGHT = Page Down ──
+    bool rightNow = state.buttons[brls::BUTTON_RIGHT];
+    if (rightNow && !m_prevRight) movePageDown();
+    m_prevRight = rightNow;
 
-void FileListView::appendItems(const std::vector<beiklive::ListItem>& items) {
-    if (items.empty()) return;
-    bool firstBatch = (m_totalItemCount == 0);
-    m_dataSource->appendItems(items);
-    m_totalItemCount = m_dataSource->count();
-    m_recycler->reloadData();
-    if (firstBatch && m_totalItemCount > 0)
-        setFocusedIndex(0);
-}
-
-void FileListView::clearItems() {
-    m_dataSource->clear();
-    m_recycler->reloadData();
-    m_focusedIndex = 0;
-    m_totalItemCount = 0;
-}
-
-void FileListView::finishLoading() {
-    m_totalItemCount = m_dataSource->count();
-    m_recycler->reloadData();
-    brls::sync([this]() {
-        if (m_totalItemCount > 0)
-            setFocusedIndex(0);
-    });
-}
-
-int FileListView::itemCount() const {
-    return m_totalItemCount;
-}
-
-void FileListView::setOnItemClicked(std::function<void(const beiklive::ListItem&)> cb) {
-    m_dataSource->onItemClicked = std::move(cb);
-}
-
-void FileListView::setOnBindCell(std::function<void(beiklive::ListItemCell&)> cb) {
-    m_dataSource->onBindCell = std::move(cb);
+    // ── A = Select ──
+    bool aNow = state.buttons[brls::BUTTON_A];
+    if (aNow && !m_prevA && m_focusedIndex >= 0 && m_focusedIndex < (int)m_items.size()) {
+        if (onItemClicked)
+            onItemClicked(m_items[m_focusedIndex]);
+    }
+    m_prevA = aNow;
 }
 
 // ── Focus movement ──
 
-void FileListView::setFocusedIndex(int newIndex) {
-    if (newIndex < 0 || m_totalItemCount == 0) return;
-    if (newIndex >= m_totalItemCount)
-        newIndex = m_totalItemCount - 1;
-    if (newIndex == m_focusedIndex) return;
-
-    int oldIndex = m_focusedIndex;
-    m_focusedIndex = newIndex;
-
-    if (onItemFocusLost && oldIndex < m_dataSource->count())
-        onItemFocusLost(m_dataSource->getItem(oldIndex));
-
-    m_recycler->setDefaultCellFocus(brls::IndexPath(0, m_focusedIndex));
-
-    if (!m_recycler->isFocused() && !m_recycler->isChildFocused())
-        brls::Application::giveFocus(m_recycler);
-
-    m_recycler->selectRowAt(brls::IndexPath(0, m_focusedIndex), false);
-
-    if (onItemFocused && m_focusedIndex < m_dataSource->count())
-        onItemFocused(m_dataSource->getItem(m_focusedIndex));
-}
-
 void FileListView::moveUp() {
-    if (m_focusedIndex > 0)
-        setFocusedIndex(m_focusedIndex - 1);
+    if (m_focusedIndex > 0) {
+        int old = m_focusedIndex;
+        m_focusedIndex--;
+        ensureFocusedVisible();
+        fireFocusCallbacks(old);
+    }
 }
 
 void FileListView::moveDown() {
-    if (m_focusedIndex < m_totalItemCount - 1)
-        setFocusedIndex(m_focusedIndex + 1);
+    if (m_focusedIndex < (int)m_items.size() - 1) {
+        int old = m_focusedIndex;
+        m_focusedIndex++;
+        ensureFocusedVisible();
+        fireFocusCallbacks(old);
+    }
 }
 
 void FileListView::movePageUp() {
-    setFocusedIndex(m_focusedIndex - PAGE_STEP);
+    if (m_items.empty()) return;
+    int step = std::max(1, visibleRows() - 1);
+    int old = m_focusedIndex;
+    m_focusedIndex = std::max(0, m_focusedIndex - step);
+    ensureFocusedVisible();
+    fireFocusCallbacks(old);
 }
 
 void FileListView::movePageDown() {
-    setFocusedIndex(m_focusedIndex + PAGE_STEP);
+    if (m_items.empty()) return;
+    int step = std::max(1, visibleRows() - 1);
+    int old = m_focusedIndex;
+    m_focusedIndex = std::min((int)m_items.size() - 1, m_focusedIndex + step);
+    ensureFocusedVisible();
+    fireFocusCallbacks(old);
 }
 
-void FileListView::moveTo(int index) {
-    setFocusedIndex(index);
+void FileListView::ensureFocusedVisible() {
+    if (m_focusedIndex < 0 || m_items.empty()) return;
+
+    float itemTop = m_focusedIndex * m_itemHeight;
+    float itemBottom = itemTop + m_itemHeight;
+    float viewTop = m_scrollY;
+    float viewBottom = m_scrollY + m_viewHeight;
+
+    if (itemTop < viewTop)
+        m_scrollY = itemTop;
+    else if (itemBottom > viewBottom)
+        m_scrollY = itemBottom - m_viewHeight;
+
+    float maxScroll = m_items.size() * m_itemHeight - m_viewHeight;
+    if (m_scrollY < 0.f) m_scrollY = 0.f;
+    if (m_scrollY > maxScroll && maxScroll > 0.f) m_scrollY = maxScroll;
+    else if (maxScroll <= 0.f) m_scrollY = 0.f;
+}
+
+int FileListView::visibleRows() const {
+    if (m_viewHeight <= 0.f || m_itemHeight <= 0.f) return 1;
+    return std::max(1, (int)(m_viewHeight / m_itemHeight));
+}
+
+void FileListView::fireFocusCallbacks(int oldIndex) {
+    if (oldIndex >= 0 && oldIndex < (int)m_items.size()) {
+        if (onItemFocusLost)
+            onItemFocusLost(m_items[oldIndex]);
+    }
+    if (m_focusedIndex >= 0 && m_focusedIndex < (int)m_items.size()) {
+        if (onItemFocused)
+            onItemFocused(m_items[m_focusedIndex]);
+    }
 }
 
 } // namespace beiklive

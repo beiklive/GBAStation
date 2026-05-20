@@ -31,20 +31,18 @@ namespace beiklive
         brls::Label*    m_detailSubtitle   = nullptr;
         brls::Box*      m_detailInfoBox    = nullptr;
         bool            m_panelVisible     = true;
-        std::string     m_focusedFullPath; ///< 当前聚焦项的完整路径（面板隐藏时也更新）
+        std::string     m_focusedFullPath;
 
         void _setupDetailPanel();
         void _updateDetailPanel(const beiklive::DirListData& data);
         void _clearDetailInfo();
 
-        // 详情面板内容构建
         void _showGameDBDetail(const beiklive::DirListData& data, const beiklive::GameEntry& entry);
         void _showGameNoDBDetail(const beiklive::DirListData& data);
         void _showImageDetail(const beiklive::DirListData& data);
         void _showFolderDetail(const beiklive::DirListData& data);
         void _showFileDetail(const beiklive::DirListData& data);
 
-        // 辅助
         void _addInfoRow(const std::string& label, const std::string& value, NVGcolor labelColor = brls::TRANSPARENT);
         void _addHighlightRow(const std::string& text, NVGcolor color);
         void _addBadge(const std::string& text, NVGcolor bgColor, NVGcolor textColor);
@@ -52,7 +50,6 @@ namespace beiklive
         std::string _formatPlayTime(int seconds);
         static std::string _formatFileSizeStr(const std::string& path);
 
-        // 异步缩略图加载
         std::atomic<int>        m_thumbDelayId{0};
         int                     m_thumbReqId   = 0;
         std::string             m_thumbPendingPath;

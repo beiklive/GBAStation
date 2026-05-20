@@ -80,7 +80,7 @@ int main(int argc, char* argv[]) {
 	std::atomic<bool> gExitFlag{false};
 
 	// 订阅退出事件，在 mainLoop 返回前尽早设置退出标志
-	auto exitSub = brls::Application::getExitEvent()->subscribe(
+	brls::Application::getExitEvent()->subscribe(
 		[&gExitFlag]() { gExitFlag.store(true, std::memory_order_release); });
 
 	std::thread updateThread([&gExitFlag]() {
