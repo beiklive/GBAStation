@@ -6,7 +6,7 @@ FileListView::FileListView() {
     this->setFocusable(true);
     HIDE_BRLS_HIGHLIGHT(this);
     m_lastFrameTime = std::chrono::steady_clock::now();
-    m_font = Application::getDefaultFont();
+    m_font = brls::Application::getDefaultFont();
 }
 
 // ── Data ──
