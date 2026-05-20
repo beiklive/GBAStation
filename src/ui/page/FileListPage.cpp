@@ -483,6 +483,7 @@ namespace beiklive
     // ============================================================
     void FileListPage::setPath(const std::string path)
     {
+        brls::Application::blockInputs();
         fileListView->saveFocusState(m_currentPath);
         fileListView->setInteractionDisabled(true);
         m_previousPath = m_currentPath;
@@ -568,6 +569,7 @@ namespace beiklive
                 m_dirItems = std::move(dd);
                 fileListView->setItems(it);
                 fileListView->setInteractionDisabled(false);
+                brls::Application::unblockInputs();
             });
         });
     }
@@ -579,6 +581,7 @@ namespace beiklive
         return;
 #endif
         fileListView->setInteractionDisabled(true);
+        brls::Application::blockInputs();
         m_isAtDriveList = true;
         m_currentPath = "";
 
@@ -605,6 +608,7 @@ namespace beiklive
                 m_dirItems = std::move(dd);
                 fileListView->setItems(it);
                 fileListView->setInteractionDisabled(false);
+                brls::Application::unblockInputs();
             });
         });
     }

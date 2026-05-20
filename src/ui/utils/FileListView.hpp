@@ -40,6 +40,9 @@ private:
     float m_viewHeight = 0.f;
     float m_itemHeight = 72.f;
     float m_iconSize = 48.f;
+    float m_animTime = 0.f;
+    float m_shakeTime = 0.f;
+    int m_shakeDir = 0;
 
     bool m_interactionDisabled = false;
 

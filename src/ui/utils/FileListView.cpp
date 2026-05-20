@@ -51,10 +51,10 @@ void FileListView::draw(NVGcontext* vg, float x, float y, float w, float h,
     nvgScissor(vg, x, y, w, h);
 
     // Background
-    nvgBeginPath(vg);
-    nvgRect(vg, x, y, w, h);
-    nvgFillColor(vg, nvgRGBA(0, 0, 0, 40));
-    nvgFill(vg);
+    // nvgBeginPath(vg);
+    // nvgRect(vg, x, y, w, h);
+    // nvgFillColor(vg, nvgRGBA(0, 0, 0, 40));
+    // nvgFill(vg);
 
     if (m_items.empty()) {
         nvgRestore(vg);
@@ -75,29 +75,54 @@ void FileListView::draw(NVGcontext* vg, float x, float y, float w, float h,
     }
 
     // Scrollbar
-    int vr = visibleRows();
-    if (vr > 0 && (int)m_items.size() > vr)
-        drawScrollbar(vg, x + w, y, w, h);
+    // int vr = visibleRows();
+    // if (vr > 0 && (int)m_items.size() > vr)
+    //     drawScrollbar(vg, x + w, y, w, h);
 
     nvgRestore(vg);
 }
 
 void FileListView::drawItem(NVGcontext* vg, int index, float itemY, float w, NVGcolor textColor) {
     const auto& item = m_items[index];
-    float padX = 16.f;
+    float padX = 48.f;
     float padY = (m_itemHeight - m_iconSize) * 0.5f;
     float textX = padX + m_iconSize + 12.f;
 
-    // Focus highlight
+    // Focus highlight – rotating dual-gradient rounded border + left accent bar
     if (index == m_focusedIndex && m_focusedIndex >= 0) {
-        nvgBeginPath(vg);
-        nvgRect(vg, 4.f, itemY + 2.f, w - 8.f, m_itemHeight - 4.f);
-        nvgFillColor(vg, nvgRGBA(79, 193, 255, 40));
-        nvgFill(vg);
+        float shakeY = 0.f;
+        if (m_shakeTime > 0.f && m_shakeDir != 0) {
+            float t = m_shakeTime / 0.35f;
+            float decay = t * t;
+            float freq = 80.f;
+            shakeY = std::sin(m_shakeTime * freq) * 6.f * decay * m_shakeDir;
+        }
 
-        // Left accent bar
+        float rx = 36.f;
+        float ry = itemY + 6.f + shakeY;
+        float rw = w - 16.f;
+        float rh = m_itemHeight - 12.f;
+
+        float cx = rx + rw * 0.5f;
+        float cy = ry + rh * 0.5f;
+        float radius = std::max(rw, rh) * 0.6f;
+        float angle = m_animTime * 1.8f;
+        float sx = cx + std::cos(angle) * radius;
+        float sy = cy + std::sin(angle) * radius;
+        float ex = cx + std::cos(angle + 3.14159265f) * radius;
+        float ey = cy + std::sin(angle + 3.14159265f) * radius;
+
+        NVGcolor c1 = nvgRGBA(79, 193, 255, 200);
+        NVGcolor c2 = nvgRGBA(30, 80, 140, 200);
+        NVGpaint grad = nvgLinearGradient(vg, sx, sy, ex, ey, c1, c2);
         nvgBeginPath(vg);
-        nvgRect(vg, 4.f, itemY + (m_itemHeight - 40.f) * 0.5f, 5.f, 40.f);
+        nvgRoundedRect(vg, rx, ry, rw, rh, 8.f);
+        nvgStrokeWidth(vg, 4.f);
+        nvgStrokePaint(vg, grad);
+        nvgStroke(vg);
+
+        nvgBeginPath(vg);
+        nvgRect(vg, rx, itemY + (m_itemHeight - 40.f) * 0.5f, 5.f, 40.f);
         nvgFillColor(vg, nvgRGBA(79, 193, 255, 255));
         nvgFill(vg);
     }
@@ -115,16 +140,19 @@ void FileListView::drawItem(NVGcontext* vg, int index, float itemY, float w, NVG
         }
     }
 
-    // Title
+    // Title + Subtitle (horizontal: title left, subtitle right)
+    float centerY = itemY + m_itemHeight * 0.5f + 2.f;
+    float textMarginR = 4.f;
+
     nvgFontSize(vg, 22.f);
     nvgFillColor(vg, textColor);
-    nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_BASELINE);
-    nvgText(vg, textX, itemY + m_itemHeight * 0.5f - 4.f, item.text.c_str(), nullptr);
+    nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+    nvgText(vg, textX, centerY, item.text.c_str(), nullptr);
 
-    // Subtitle
-    nvgFontSize(vg, 16.f);
-    nvgFillColor(vg, nvgRGBA(textColor.r, textColor.g, textColor.b, 160));
-    nvgText(vg, textX, itemY + m_itemHeight * 0.5f + 18.f, item.subText.c_str(), nullptr);
+    nvgFontSize(vg, 15.f);
+    nvgFillColor(vg, textColor);
+    nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
+    nvgText(vg, w - textMarginR, centerY, item.subText.c_str(), nullptr);
 
     // Separator line
     nvgBeginPath(vg);
@@ -167,6 +195,11 @@ void FileListView::frame(brls::FrameContext* ctx) {
     float dt = std::chrono::duration<float>(now - m_lastFrameTime).count();
     m_lastFrameTime = now;
     if (dt <= 0.f || dt > 0.5f) dt = 0.016f;
+
+    m_animTime += dt;
+
+    if (m_shakeTime > 0.f)
+        m_shakeTime -= dt;
 
     auto& state = brls::Application::getControllerState();
 
@@ -237,6 +270,9 @@ void FileListView::moveUp() {
         m_focusedIndex--;
         ensureFocusedVisible();
         fireFocusCallbacks(old);
+    } else {
+        m_shakeTime = 0.35f;
+        m_shakeDir = -1;
     }
 }
 
@@ -246,6 +282,9 @@ void FileListView::moveDown() {
         m_focusedIndex++;
         ensureFocusedVisible();
         fireFocusCallbacks(old);
+    } else {
+        m_shakeTime = 0.35f;
+        m_shakeDir = 1;
     }
 }
 
