@@ -669,8 +669,8 @@ brls::View *SettingPage::buildUITab()
 
 
 
-    // ── 动态背景 ──────────────────────────────────────────────────────────────
-    box->addView(makeHeader("动态背景"));
+    // ── 模拟器UI ──────────────────────────────────────────────────────────────
+    box->addView(makeHeader("模拟器UI"));
 
     {
         auto *shaderCell = new brls::BooleanCell();
@@ -740,6 +740,16 @@ brls::View *SettingPage::buildUITab()
                 return true;
             });
         box->addView(bgPathCell);
+    }
+
+    // 文件列表滚动动画
+    {
+        auto *scrollAnimCell = new brls::BooleanCell();
+        scrollAnimCell->init("文件列表滚动动画",
+                            cfgGetBool(beiklive::SettingKey::KEY_FILE_LIST_SCROLL_ANIM, true),
+                            [](bool v) { cfgSetBool(beiklive::SettingKey::KEY_FILE_LIST_SCROLL_ANIM, v); });
+        box->addView(scrollAnimCell);
+        box->addView(makeHint("启用文件浏览器的平滑滚动效果，关闭后列表直接跳转"));
     }
 
     // ── 游戏导入 ────────────────────────────────────────────────────────────────

@@ -8,54 +8,6 @@
 
 namespace beiklive
 {
-    // ============================================================
-    // 辅助函数：获取文件最后修改时间的字符串（委托给 Tools 公共函数）
-    // ============================================================
-    static std::string getFileModTimeStr(const std::string &path)
-    {
-        return beiklive::tools::getFileModTimeStr(path);
-    }
-    static bool isValidCheatCode(const std::string &code)
-    {
-        if (code.empty())
-            return false;
-
-        size_t b = code.find_first_not_of(" \t");
-        if (b == std::string::npos)
-            return false;
-        size_t e = code.find_last_not_of(" \t");
-        std::string line = code.substr(b, e - b + 1);
-        if (line.empty())
-            return false;
-
-        if (line.find(':') != std::string::npos ||
-            line.find('+') != std::string::npos)
-        {
-            return true;
-        }
-
-        auto sp = line.find(' ');
-        if (sp != std::string::npos)
-        {
-            std::string addr = line.substr(0, sp);
-            std::string val = line.substr(sp + 1);
-            size_t vb = val.find_first_not_of(" \t");
-            if (vb != std::string::npos)
-                val = val.substr(vb);
-            if (addr.size() == 8 &&
-                std::all_of(addr.begin(), addr.end(),
-                            [](char c) { return std::isxdigit(static_cast<unsigned char>(c)); }) &&
-                (val.size() == 4 || val.size() == 8) &&
-                std::all_of(val.begin(), val.end(),
-                            [](char c) { return std::isxdigit(static_cast<unsigned char>(c)); }))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     // 金手指格式转换
     // 输入：多行空格分隔 或 + 格式
     // 输出：+ 连接格式

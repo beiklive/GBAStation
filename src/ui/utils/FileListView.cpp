@@ -20,6 +20,7 @@ void FileListView::setItems(const std::vector<beiklive::ListItem>& items) {
     if (m_focusedIndex >= (int)m_items.size())
         m_focusedIndex = std::max(0, (int)m_items.size() - 1);
     m_scrollY = 0.f;
+    m_targetScrollY = 0.f;
     ensureFocusedVisible();
 }
 
@@ -29,6 +30,7 @@ void FileListView::clearItems() {
     m_filterActive = false;
     m_focusedIndex = -1;
     m_scrollY = 0.f;
+    m_targetScrollY = 0.f;
 }
 
 // ── Focus state ──
@@ -69,6 +71,7 @@ void FileListView::applyFilter(const std::string& keyword) {
     m_filterActive = true;
     m_focusedIndex = m_items.empty() ? -1 : 0;
     m_scrollY = 0.f;
+    m_targetScrollY = 0.f;
     ensureFocusedVisible();
     this->invalidate();
 }
@@ -231,8 +234,6 @@ int FileListView::getOrLoadIcon(NVGcontext* vg, const std::string& path) {
 void FileListView::frame(brls::FrameContext* ctx) {
     brls::View::frame(ctx);
 
-    if (m_interactionDisabled || m_items.empty()) return;
-
     auto now = std::chrono::steady_clock::now();
     float dt = std::chrono::duration<float>(now - m_lastFrameTime).count();
     m_lastFrameTime = now;
@@ -242,6 +243,19 @@ void FileListView::frame(brls::FrameContext* ctx) {
 
     if (m_shakeTime > 0.f)
         m_shakeTime -= dt;
+
+    // Smooth scroll lerp (configurable)
+    if (GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_FILE_LIST_SCROLL_ANIM, 1)) {
+        float diff = m_targetScrollY - m_scrollY;
+        if (std::abs(diff) > 0.5f)
+            m_scrollY += diff * std::min(1.f, dt * 8.f);
+        else
+            m_scrollY = m_targetScrollY;
+    } else {
+        m_scrollY = m_targetScrollY;
+    }
+
+    if (m_interactionDisabled || m_items.empty()) return;
 
     auto& state = brls::Application::getControllerState();
 
@@ -383,18 +397,18 @@ void FileListView::ensureFocusedVisible() {
 
     float itemTop = m_focusedIndex * m_itemHeight;
     float itemBottom = itemTop + m_itemHeight;
-    float viewTop = m_scrollY;
-    float viewBottom = m_scrollY + m_viewHeight;
+    float viewTop = m_targetScrollY;
+    float viewBottom = m_targetScrollY + m_viewHeight;
 
     if (itemTop < viewTop)
-        m_scrollY = itemTop;
+        m_targetScrollY = itemTop;
     else if (itemBottom > viewBottom)
-        m_scrollY = itemBottom - m_viewHeight;
+        m_targetScrollY = itemBottom - m_viewHeight;
 
     float maxScroll = m_items.size() * m_itemHeight - m_viewHeight;
-    if (m_scrollY < 0.f) m_scrollY = 0.f;
-    if (m_scrollY > maxScroll && maxScroll > 0.f) m_scrollY = maxScroll;
-    else if (maxScroll <= 0.f) m_scrollY = 0.f;
+    if (m_targetScrollY < 0.f) m_targetScrollY = 0.f;
+    if (m_targetScrollY > maxScroll && maxScroll > 0.f) m_targetScrollY = maxScroll;
+    else if (maxScroll <= 0.f) m_targetScrollY = 0.f;
 }
 
 int FileListView::visibleRows() const {

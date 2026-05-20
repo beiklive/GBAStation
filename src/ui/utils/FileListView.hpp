@@ -44,6 +44,7 @@ private:
     int m_font = -1;
     int m_focusedIndex = -1;
     float m_scrollY = 0.f;
+    float m_targetScrollY = 0.f;
     float m_viewHeight = 0.f;
     float m_itemHeight = 72.f;
     float m_iconSize = 48.f;

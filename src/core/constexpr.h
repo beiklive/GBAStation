@@ -193,8 +193,8 @@ namespace beiklive::SettingKey
     // 更新设置
     constexpr const char *KEY_EMU_UPDATE              = "emu.update";                 ///< 启用更新检查（1=启用 0=禁用）
 
-
-
+    // 文件浏览器设置
+    constexpr const char *KEY_FILE_LIST_SCROLL_ANIM   = "ui.fileListScrollAnim";     ///< 文件列表滚动动画（1=启用 0=禁用）
 
 
 
