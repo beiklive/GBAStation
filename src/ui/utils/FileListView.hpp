@@ -34,7 +34,7 @@ public:
 
 private:
     std::vector<beiklive::ListItem> m_items;
-
+    int m_font = -1;
     int m_focusedIndex = -1;
     float m_scrollY = 0.f;
     float m_viewHeight = 0.f;

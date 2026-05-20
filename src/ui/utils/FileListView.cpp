@@ -6,6 +6,7 @@ FileListView::FileListView() {
     this->setFocusable(true);
     HIDE_BRLS_HIGHLIGHT(this);
     m_lastFrameTime = std::chrono::steady_clock::now();
+    m_font = Application::getDefaultFont();
 }
 
 // ── Data ──
@@ -139,7 +140,7 @@ void FileListView::drawItem(NVGcontext* vg, int index, float itemY, float w, NVG
             nvgFill(vg);
         }
     }
-    // nvgFontFace(vg, "chinese");
+    nvgFontFaceId(vg, m_font);
     // Title + Subtitle (horizontal: title left, subtitle right)
     float centerY = itemY + m_itemHeight * 0.5f + 2.f;
     float textMarginR = 4.f;
