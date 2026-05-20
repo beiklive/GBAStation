@@ -275,6 +275,7 @@ namespace beiklive
             return;
 
         m_nds_core = new beiklive::melonds::CoreMelonDS();
+        m_core = m_nds_core;
         if (m_nds_core->SetupGame(m_gameEntry))
         {
             brls::Logger::debug("NDS core initialized: {}", m_gameEntry.path);

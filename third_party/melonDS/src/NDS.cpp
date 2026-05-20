@@ -339,6 +339,7 @@ void InitTimings()
 
 void SetupDirectBoot()
 {
+    printf("SetupDirectBoot: start\n");
     if (ConsoleType == 1)
     {
         // With the BIOS select in SCFG_BIOS and the initialization od
@@ -448,6 +449,7 @@ void SetupDirectBoot()
     ARM7BIOSProt = 0x1204;
 
     SPI_Firmware::SetupDirectBoot();
+    printf("SetupDirectBoot: done\n");
 }
 
 void Reset()
@@ -500,6 +502,7 @@ void Reset()
 
 #ifdef JIT_ENABLED
     ARMJIT::Reset();
+    fprintf(stderr, "[Reset] JIT reset done\n");
 #endif
 
     if (ConsoleType == 1)
@@ -525,8 +528,10 @@ void Reset()
     SysTimestamp = 0;
 
     InitTimings();
+    fprintf(stderr, "[Reset] InitTimings done\n");
 
     memset(MainRAM, 0, MainRAMMask + 1);
+    fprintf(stderr, "[Reset] memset MainRAM done\n");
     memset(SharedWRAM, 0, 0x8000);
     memset(ARM7WRAM, 0, 0x10000);
 
@@ -569,6 +574,7 @@ void Reset()
 
     ARM9->Reset();
     ARM7->Reset();
+    fprintf(stderr, "[Reset] ARM cores reset done\n");
 
     CPUStop = 0;
 
@@ -589,12 +595,19 @@ void Reset()
     RCnt = 0;
 
     NDSCart::Reset();
+    fprintf(stderr, "[Reset] NDSCart::Reset done\n");
     GBACart::Reset();
+    fprintf(stderr, "[Reset] GBACart::Reset done\n");
     GPU::Reset();
+    fprintf(stderr, "[Reset] GPU::Reset done\n");
     SPU::Reset();
+    fprintf(stderr, "[Reset] SPU::Reset done\n");
     SPI::Reset();
+    fprintf(stderr, "[Reset] SPI::Reset done\n");
     RTC::Reset();
+    fprintf(stderr, "[Reset] RTC::Reset done\n");
     Wifi::Reset();
+    fprintf(stderr, "[Reset] Wifi::Reset done\n");
 
     if (ConsoleType == 1)
     {
@@ -603,6 +616,7 @@ void Reset()
     }
 
     AREngine::Reset();
+    fprintf(stderr, "[NDS::Reset] done, returning\n");
 }
 
 void Stop()

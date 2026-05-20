@@ -80,32 +80,24 @@ if (PLATFORM_SWITCH AND TARGET mgba_libretro)
 endif ()
 
 # =========================================================
-# melonDS 核心  –  静态库构建
+# melonDS 核心  –  静态库构建 (melonds_core)
 #
-# melonDS 的 CMakeLists.txt 在作为子目录被 add_subdirectory
-# 引入时会使用 CMAKE_SOURCE_DIR 指向顶层项目根目录而非自身源码树。
-# 因此需要预先将 melonDS/cmake 追加到 CMAKE_MODULE_PATH。
+# 使用自定义的 melonds_core/CMakeLists.txt 构建官方 melonDS
+# 核心源码，而不是通过官方 melonDS/CMakeLists.txt 构建。
 #
-# 关键选项：
-#   BUILD_QT_SDL=OFF     → 不构建 Qt/SDL 前端（无需 Qt / SDL2 依赖）
-#   ENABLE_OGLRENDERER=OFF → 使用软渲染器（避免 GL 上下文冲突）
-#   ENABLE_GDBSTUB=OFF    → 不构建 GDB stub
+# 原因：
+#   • 官方 CMake 会试图构建 frontend/Qt/SDL/Switch 前端
+#   • melonds_core 只编译模拟器核心（CPU/GPU/SPU/NDS 等）
+#   • 完全排除 frontend、窗口创建、OpenGL Context 创建
+#
+# 构建产物：目标 'melonds_core' → 静态库 libmelonds_core.a
+#
+# 选项：
 #   JIT 在 x86_64 / ARM64 上自动启用
-#
-# 构建产物：目标 'core' → 静态库 libcore.a
+#   OpenGL Renderer 在桌面端启用
+#   Deko3D GPU 在 Switch 端启用
 # =========================================================
 set(MELONDS_PATH ${CMAKE_CURRENT_SOURCE_DIR}/melonDS)
 
-set(CMAKE_MODULE_PATH "${MELONDS_PATH}/cmake" ${CMAKE_MODULE_PATH})
-
-set(BUILD_QT_SDL       OFF CACHE BOOL "" FORCE)
-set(ENABLE_GDBSTUB     OFF CACHE BOOL "" FORCE)
-set(ENABLE_OGLRENDERER OFF CACHE BOOL "" FORCE)
-set(ENABLE_LTO_RELEASE OFF CACHE BOOL "" FORCE)
-set(ENABLE_LTO         OFF CACHE BOOL "" FORCE)
-if (WIN32)
-    set(PORTABLE ON CACHE BOOL "" FORCE)
-endif()
-
-add_subdirectory(${MELONDS_PATH} melonds_build)
+add_subdirectory(melonds_core)
 

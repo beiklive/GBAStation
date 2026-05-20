@@ -146,9 +146,14 @@ std::unique_ptr<GLCompositor> CurGLCompositor = {};
 
 bool Init()
 {
-    //GPU2D_Renderer = std::make_unique<GPU2D::SoftRenderer>();
+#ifndef __SWITCH__
+    GPU2D_Renderer = std::make_unique<GPU2D::SoftRenderer>();
+#else
     GPU2D_Renderer = std::make_unique<GPU2D::DekoRenderer>();
+#endif
     if (!GPU3D::Init()) return false;
+
+    InitRenderer(0);
 
     FrontBuffer = 0;
     Framebuffer[0][0] = NULL; Framebuffer[0][1] = NULL;
@@ -255,6 +260,14 @@ void Reset()
         fbsize = (256*3 + 1) * 192;
     else
         fbsize = 256 * 192;
+
+    if (!Framebuffer[0][0])
+    {
+        Framebuffer[0][0] = new u32[fbsize];
+        Framebuffer[1][0] = new u32[fbsize];
+        Framebuffer[0][1] = new u32[fbsize];
+        Framebuffer[1][1] = new u32[fbsize];
+    }
 
     for (size_t i = 0; i < fbsize; i++)
     {

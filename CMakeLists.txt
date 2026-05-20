@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.16)
 
+# Workaround for CMake 4.x compatibility with older sub-projects
+if (CMAKE_VERSION VERSION_GREATER_EQUAL "4.0")
+    cmake_policy(SET CMP0069 NEW)
+endif()
+
 
 
 set(BOREALIS_LIBRARY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/borealis/library)
@@ -134,6 +139,8 @@ endif ()
 
 include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/src)
 include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/third_party/melonDS/src)
+include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/src/game)
+include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/src/game/melonds)
 file(GLOB_RECURSE MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
 # list(APPEND MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp)
 
@@ -212,7 +219,7 @@ endif ()
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${APP_PLATFORM_INCLUDE})
 target_compile_options(${PROJECT_NAME} PRIVATE -ffunction-sections -fdata-sections ${APP_PLATFORM_OPTION})
-target_link_libraries(${PROJECT_NAME} PRIVATE borealis core ${APP_PLATFORM_LIB})
+target_link_libraries(${PROJECT_NAME} PRIVATE borealis melonds_core ${APP_PLATFORM_LIB})
 if(NOT PLATFORM_ANDROID)
     target_link_libraries(${PROJECT_NAME} PRIVATE curl)
 endif()

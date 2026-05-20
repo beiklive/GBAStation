@@ -4,21 +4,18 @@
 #include <cstring>
 #include <fstream>
 #include <filesystem>
+#include <chrono>
 
 #include "third_party/mgba/src/platform/libretro/libretro.h"
 
 #include "NDS.h"
-#include "NDSCart.h"
 #include "SPU.h"
 #include "GPU.h"
-#include "Args.h"
 #include "types.h"
-#include "FreeBIOS.h"
-#include "SPI_Firmware.h"
 #include "RTC.h"
 #include "SPI.h"
-
-using namespace melonDS;
+#include "Platform.h"
+#include "Config.h"
 
 namespace beiklive::melonds
 {
@@ -49,12 +46,6 @@ static std::vector<u8> readFile(const std::string& path)
     return data;
 }
 
-static size_t fileSize(const std::string& path)
-{
-    std::ifstream f(path, std::ios::binary | std::ios::ate);
-    return f ? static_cast<size_t>(f.tellg()) : 0;
-}
-
 CoreMelonDS::CoreMelonDS()
 {
 }
@@ -69,89 +60,62 @@ bool CoreMelonDS::SetupGame(beiklive::GameEntry entry)
 {
     m_gameEntry = std::move(entry);
 
-    if (!_loadROM(m_gameEntry.path))
+    if (!_loadROMFile(m_gameEntry.path))
         return false;
 
-    _loadBIOS();
-    _loadFirmware();
+    std::string biosDir = beiklive::path::biosPath();
+    std::string firmwarePath = biosDir + beiklive::path::SPLIT_CHAR + "firmware.bin";
+    std::string savePath = m_gameEntry.savePath + beiklive::path::SPLIT_CHAR
+        + beiklive::tools::getFileNameWithoutExtension(m_gameEntry.path) + ".sav";
 
-    std::vector<u8> saveBuf;
+    strncpy(Config::FirmwarePath, firmwarePath.c_str(), sizeof(Config::FirmwarePath) - 1);
+    strncpy(Config::BIOS9Path, (biosDir + beiklive::path::SPLIT_CHAR + "bios9.bin").c_str(), sizeof(Config::BIOS9Path) - 1);
+    strncpy(Config::BIOS7Path, (biosDir + beiklive::path::SPLIT_CHAR + "bios7.bin").c_str(), sizeof(Config::BIOS7Path) - 1);
+
+    if (!m_instance.Init())
     {
-        std::string path = m_gameEntry.savePath + beiklive::path::SPLIT_CHAR
-            + beiklive::tools::getFileNameWithoutExtension(m_gameEntry.path) + ".sav";
-        saveBuf = readFile(path);
-    }
-
-#ifdef JIT_ENABLED
-    melonDS::JITArgs jitargs {
-        .MaxBlockSize = 32,
-        .LiteralOptimizations = true,
-        .BranchOptimizations = true,
-        .FastMemory = true,
-    };
-#endif
-
-    auto cart = melonDS::NDSCart::ParseROM(std::move(m_romData), m_romLen);
-    if (!cart)
-    {
-        brls::Logger::error("CoreMelonDS: failed to parse ROM");
+        brls::Logger::error("CoreMelonDS: MelonDSInstance::Init() failed");
         return false;
     }
 
-    if (!saveBuf.empty())
-        cart->SetSaveMemory(saveBuf.data(), static_cast<u32>(saveBuf.size()));
-
-    melonDS::NDSArgs ndsargs {
-        .NDSROM = std::move(cart),
-        .ARM9BIOS = m_arm9bios,
-        .ARM7BIOS = m_arm7bios,
-        .Firmware = std::move(m_firmware),
-#ifdef JIT_ENABLED
-        .JIT = jitargs,
-#else
-        .JIT = std::nullopt,
-#endif
-    };
-
-    m_nds = std::make_unique<melonDS::NDS>(std::move(ndsargs));
-
-    m_nds->Reset();
-
-    melonDS::NDS::Current = m_nds.get();
-
-    // 强制 DirectBoot 跳过 BIOS 引导动画，直接启动游戏
+    if (!m_instance.LoadROM(m_romData.data(), static_cast<u32>(m_romData.size()),
+                              savePath.c_str()))
     {
-        std::string romName = beiklive::tools::getFileNameWithoutExtension(m_gameEntry.path);
-        m_nds->SetupDirectBoot(romName);
-        brls::Logger::info("CoreMelonDS: direct boot enabled for {}", romName);
+        brls::Logger::error("CoreMelonDS: MelonDSInstance::LoadROM() failed");
+        return false;
     }
 
-    melonDS::Platform::SetStopCallback([this]() {
+    brls::Logger::info("CoreMelonDS: LoadROM done, setting stop callback");
+
+    m_instance.SetStopCallback([this]() {
         m_ready = false;
     });
 
-    m_nds->Start();
+    brls::Logger::info("CoreMelonDS: starting instance");
 
-    m_nds->SPI.GetPowerMan()->SetBatteryLevelOkay(true);
+    m_instance.Start();
 
-    {
-        auto now = std::chrono::system_clock::now();
-        std::time_t t = std::chrono::system_clock::to_time_t(now);
-        std::tm* tm = std::localtime(&t);
-        m_nds->RTC.SetDateTime(
-            tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
-            tm->tm_hour, tm->tm_min, tm->tm_sec);
-    }
+    brls::Logger::info("CoreMelonDS: creating sub-components");
 
-    melonDS::Platform::SetNDSSavePath(m_gameEntry.savePath + beiklive::path::SPLIT_CHAR
-        + beiklive::tools::getFileNameWithoutExtension(m_gameEntry.path) + ".sav");
-    melonDS::Platform::SetFirmwarePath(beiklive::path::biosPath() + beiklive::path::SPLIT_CHAR + "firmware.bin");
+    m_video = std::make_unique<MelonDSVideo>(m_instance);
+    brls::Logger::info("CoreMelonDS: video created");
+    m_composer = std::make_unique<FrameComposer>();
+    brls::Logger::info("CoreMelonDS: composer created");
+    m_audio = std::make_unique<MelonDSAudio>(m_instance);
+    brls::Logger::info("CoreMelonDS: audio created");
+    m_input = std::make_unique<MelonDSInput>(m_instance);
+    brls::Logger::info("CoreMelonDS: input created");
+    m_save = std::make_unique<MelonDSSave>(m_instance);
+    brls::Logger::info("CoreMelonDS: save created");
 
-    m_keyMask = 0x03FF03FF;
-    m_touchDown = false;
+    std::string saveDir = m_gameEntry.savePath + beiklive::path::SPLIT_CHAR;
+    std::string romName = beiklive::tools::getFileNameWithoutExtension(m_gameEntry.path);
+    m_save->setSavePath(saveDir + romName + ".sav", romName);
+    m_save->setFirmwarePath(firmwarePath);
+
     m_ready = true;
 
-    brls::Logger::info("CoreMelonDS: NDS initialized for: {}", m_gameEntry.title);
+    brls::Logger::info("CoreMelonDS: initialized for: {}", m_gameEntry.title);
     return true;
 }
 
@@ -161,13 +125,22 @@ void CoreMelonDS::Cleanup()
     m_ready = false;
 
     SaveNDSSave();
-    m_nds.reset();
+    m_instance.Shutdown();
+
+    m_video.reset();
+    m_composer.reset();
+    m_audio.reset();
+    m_input.reset();
+    m_save.reset();
 }
 
-void CoreMelonDS::RunFrame()
+bool CoreMelonDS::LoadRom(const std::string& path)
 {
-    if (!m_ready) return;
-    m_nds->RunFrame();
+    beiklive::GameEntry entry;
+    entry.path = path;
+    entry.title = path;
+    entry.platform = static_cast<int>(beiklive::enums::EmuPlatform::EmuDS);
+    return SetupGame(std::move(entry));
 }
 
 void CoreMelonDS::Reset()
@@ -179,93 +152,124 @@ void CoreMelonDS::Reset()
     SetupGame(std::move(entry));
 }
 
+void CoreMelonDS::RunFrame()
+{
+    if (!m_ready) return;
+    m_instance.RunFrame();
+}
+
+void CoreMelonDS::Stop()
+{
+    Cleanup();
+}
+
+bool CoreMelonDS::IsRunning() const
+{
+    return m_ready;
+}
+
+const uint32_t* CoreMelonDS::GetTopScreen()
+{
+    if (!m_video) return nullptr;
+    return m_video->topBuffer();
+}
+
+const uint32_t* CoreMelonDS::GetBottomScreen()
+{
+    if (!m_video) return nullptr;
+    return m_video->bottomBuffer();
+}
+
+int CoreMelonDS::GetScreenWidth() const
+{
+    return 256;
+}
+
+int CoreMelonDS::GetScreenHeight() const
+{
+    return 192 * 2;
+}
+
+int CoreMelonDS::GetTopScreenHeight() const
+{
+    return 192;
+}
+
+int CoreMelonDS::GetBottomScreenHeight() const
+{
+    return 192;
+}
+
+void CoreMelonDS::PushInput(int key, bool pressed)
+{
+    if (!m_input) return;
+    m_input->setButtonState(key, pressed);
+}
+
+void CoreMelonDS::SaveState(const std::string& path)
+{
+    if (!m_save) return;
+    m_save->saveState(path);
+}
+
+void CoreMelonDS::LoadState(const std::string& path)
+{
+    if (!m_save) return;
+    m_save->loadState(path);
+}
+
 const uint32_t* CoreMelonDS::GetTopFramebuffer() const
 {
-    if (!m_ready) return nullptr;
-    int fb = m_nds->GPU.FrontBuffer;
-    return m_nds->GPU.Framebuffer[0][fb].get();
+    if (!m_video) return nullptr;
+    return m_video->topBuffer();
 }
 
 const uint32_t* CoreMelonDS::GetBottomFramebuffer() const
 {
-    if (!m_ready) return nullptr;
-    int fb = m_nds->GPU.FrontBuffer;
-    return m_nds->GPU.Framebuffer[1][fb].get();
+    if (!m_video) return nullptr;
+    return m_video->bottomBuffer();
 }
 
 int CoreMelonDS::ReadAudio(int16_t* data, int samples)
 {
-    if (!m_ready) return 0;
-    return m_nds->SPU.ReadOutput(data, samples);
+    if (!m_audio) return 0;
+    return m_audio->readSamples(data, samples);
 }
 
 void CoreMelonDS::SetButtonState(unsigned id, bool pressed)
 {
-    if (!m_ready || id >= 16) return;
-
-    unsigned bit = k_retroToDS[id];
-    if (pressed)
-        m_keyMask &= ~(1u << bit);
-    else
-        m_keyMask |= (1u << bit);
-
-    m_nds->SetKeyMask(m_keyMask);
+    if (!m_input) return;
+    m_input->setButtonState(id, pressed);
 }
 
 void CoreMelonDS::SetButtonsFromSignal()
 {
-    if (!m_ready) return;
+    if (!m_ready || !m_input) return;
     uint32_t mask = GameSignal::instance().getGameButtonMask();
     for (unsigned i = 0; i < 16; ++i)
-        SetButtonState(i, (mask >> i) & 1u);
+        m_input->setButtonState(i, (mask >> i) & 1u);
 }
 
 void CoreMelonDS::TouchScreen(uint16_t x, uint16_t y)
 {
-    if (!m_ready) return;
-    m_touchDown = true;
-    m_nds->TouchScreen(x, y);
+    if (!m_input) return;
+    m_input->touchScreen(x, y);
 }
 
 void CoreMelonDS::ReleaseScreen()
 {
-    if (!m_ready) return;
-    m_touchDown = false;
-    m_nds->ReleaseScreen();
+    if (!m_input) return;
+    m_input->releaseTouch();
 }
 
 void CoreMelonDS::SaveNDSSave()
 {
     if (!m_ready) return;
-
-    const u8* savedata = m_nds->GetNDSSave();
-    u32 savelen = m_nds->GetNDSSaveLength();
-    if (!savedata || savelen == 0) return;
-
-    std::string path = m_gameEntry.savePath + beiklive::path::SPLIT_CHAR
-        + beiklive::tools::getFileNameWithoutExtension(m_gameEntry.path) + ".sav";
-
-    std::ofstream f(path, std::ios::binary);
-    if (!f) return;
-    f.write(reinterpret_cast<const char*>(savedata), savelen);
+    m_instance.FlushSave();
 }
 
 void CoreMelonDS::LoadNDSSave()
 {
-    if (!m_ready) return;
-
-    u32 savelen = m_nds->GetNDSSaveLength();
-    if (savelen == 0) return;
-
-    std::string path = m_gameEntry.savePath + beiklive::path::SPLIT_CHAR
-        + beiklive::tools::getFileNameWithoutExtension(m_gameEntry.path) + ".sav";
-
-    std::ifstream f(path, std::ios::binary);
-    if (!f) return;
-
-    std::vector<u8> buf(savelen, 0);
-    f.read(reinterpret_cast<char*>(buf.data()), savelen);
-    m_nds->SetNDSSave(buf.data(), static_cast<u32>(f.gcount()));
 }
 
 void CoreMelonDS::ApplyCheats(const std::vector<CheatEntry>& cheats)
@@ -273,7 +277,7 @@ void CoreMelonDS::ApplyCheats(const std::vector<CheatEntry>& cheats)
     m_cheats = cheats;
 }
 
-bool CoreMelonDS::_loadROM(const std::string& romPath)
+bool CoreMelonDS::_loadROMFile(const std::string& romPath)
 {
     if (romPath.empty())
     {
@@ -281,72 +285,14 @@ bool CoreMelonDS::_loadROM(const std::string& romPath)
         return false;
     }
 
-    std::vector<u8> data = readFile(romPath);
-    if (data.empty())
+    m_romData = readFile(romPath);
+    if (m_romData.empty())
     {
         brls::Logger::error("CoreMelonDS: failed to open ROM: {}", romPath);
         return false;
     }
 
-    m_romLen = static_cast<u32>(data.size());
-    m_romData = std::make_unique<u8[]>(m_romLen);
-    std::memcpy(m_romData.get(), data.data(), m_romLen);
-
-    brls::Logger::info("CoreMelonDS: ROM loaded {} ({} bytes)", romPath, m_romLen);
-    return true;
-}
-
-bool CoreMelonDS::_loadBIOS()
-{
-    std::string biosPath = beiklive::path::biosPath();
-
-    static const char* arm9Names[] = {"biosnds9.bin", "bios9.bin", "biosnds9.rom", "nds_bios_arm9.bin"};
-    static const char* arm7Names[] = {"biosnds7.bin", "bios7.bin", "biosnds7.rom", "nds_bios_arm7.bin"};
-
-    auto tryLoad = [](const std::string& dir, const char** names, int count, u8* out, size_t expectedSize) -> bool {
-        for (int i = 0; i < count; ++i)
-        {
-            std::string path = dir + beiklive::path::SPLIT_CHAR + names[i];
-            std::ifstream f(path, std::ios::binary);
-            if (!f) continue;
-            f.seekg(0, std::ios::end);
-            size_t sz = static_cast<size_t>(f.tellg());
-            f.seekg(0, std::ios::beg);
-            if (sz < expectedSize) continue;
-            f.read(reinterpret_cast<char*>(out), expectedSize);
-            brls::Logger::info("CoreMelonDS: loaded BIOS from {}", path);
-            return true;
-        }
-        return false;
-    };
-
-    bool arm9ok = tryLoad(biosPath, arm9Names, 4, m_arm9bios.data(), m_arm9bios.size());
-    bool arm7ok = tryLoad(biosPath, arm7Names, 4, m_arm7bios.data(), m_arm7bios.size());
-
-    if (!arm9ok)
-        brls::Logger::warning("CoreMelonDS: ARM9 BIOS not found, using FreeBIOS");
-    if (!arm7ok)
-        brls::Logger::warning("CoreMelonDS: ARM7 BIOS not found, using FreeBIOS");
-
-    return true;
-}
-
-bool CoreMelonDS::_loadFirmware()
-{
-    std::string fwPath = beiklive::path::biosPath() + beiklive::path::SPLIT_CHAR + "firmware.bin";
-
-    std::vector<u8> fwData = readFile(fwPath);
-    if (!fwData.empty())
-    {
-        m_firmware = melonDS::Firmware(fwData.data(), static_cast<u32>(fwData.size()));
-        brls::Logger::info("CoreMelonDS: loaded firmware from {}", fwPath);
-    }
-    else
-    {
-        m_firmware = melonDS::Firmware(0);
-        brls::Logger::info("CoreMelonDS: using generated NDS firmware");
-    }
-
+    brls::Logger::info("CoreMelonDS: ROM loaded {} ({} bytes)", romPath, m_romData.size());
     return true;
 }
 

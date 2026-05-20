@@ -235,7 +235,9 @@ void DoSavestate(Savestate* file)
 
 void SetupDirectBoot()
 {
+    printf("SPI_Firmware::SetupDirectBoot: start, Firmware=%p length=%u\n", Firmware, FirmwareLength);
     NDS::ARM9Write32(0x027FF864, 0);
+    printf("SPI_Firmware::SetupDirectBoot: write32 done\n");
     NDS::ARM9Write32(0x027FF868, *(u16*)&Firmware[0x20] << 3);
 
     NDS::ARM9Write16(0x027FF874, *(u16*)&Firmware[0x26]);

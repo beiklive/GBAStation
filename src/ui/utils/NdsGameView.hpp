@@ -4,6 +4,7 @@
 #include "core/GameSignal.hpp"
 #include "core/GameTimer.hpp"
 #include "game/control/GameInputManager.hpp"
+#include "game/core/IEmulatorCore.hpp"
 #include "game/melonds/CoreMelonDS.hpp"
 #include "game/render/GameRenderer.hpp"
 #include "ui/utils/GameOverlayRenderer.hpp"
@@ -44,6 +45,7 @@ namespace beiklive
         float m_ffSlowAccum  = 0.0f;
         bool  m_ffMute       = true;
 
+        beiklive::core::IEmulatorCore* m_core = nullptr;
         beiklive::melonds::CoreMelonDS* m_nds_core = nullptr;
 
         beiklive::GameRenderer m_renderer;

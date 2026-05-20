@@ -1543,6 +1543,7 @@ void DecryptSecureArea(u8* out)
 
 bool LoadROMCommon(u32 filelength, const char *sram, bool direct)
 {
+    fprintf(stderr, "[LoadROMCommon] entry\n");
     memcpy(&Header, CartROM, sizeof(Header));
     memcpy(&Banner, CartROM + Header.BannerOffset, sizeof(Banner));
 
@@ -1653,7 +1654,9 @@ bool LoadROMCommon(u32 filelength, const char *sram, bool direct)
         Cart->Reset();
         if (direct)
         {
+            fprintf(stderr, "[LoadROMCommon] calling SetupDirectBoot\n");
             NDS::SetupDirectBoot();
+            fprintf(stderr, "[LoadROMCommon] SetupDirectBoot done\n");
             Cart->SetupDirectBoot();
         }
     }
@@ -1701,16 +1704,22 @@ bool LoadROM(const char* path, const char* sram, bool direct)
 
 bool LoadROM(const u8* romdata, u32 filelength, const char *sram, bool direct)
 {
+    fprintf(stderr, "[NDSCart::LoadROM] entry\n");
     NDS::Reset();
+    fprintf(stderr, "[NDSCart::LoadROM] reset returned, computing CartROMSize\n");
 
     u32 len = filelength;
     CartROMSize = 0x200;
     while (CartROMSize < len)
         CartROMSize <<= 1;
 
+    fprintf(stderr, "[NDSCart::LoadROM] CartROMSize=%u, allocating...\n", CartROMSize);
     CartROM = new u8[CartROMSize];
+    fprintf(stderr, "[NDSCart::LoadROM] allocated, memset...\n");
     memset(CartROM, 0, CartROMSize);
+    fprintf(stderr, "[NDSCart::LoadROM] memset done, memcpy...\n");
     memcpy(CartROM, romdata, filelength);
+    fprintf(stderr, "[NDSCart::LoadROM] memcpy done, calling LoadROMCommon\n");
 
     return LoadROMCommon(filelength, sram, direct);
 }

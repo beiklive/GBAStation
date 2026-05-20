@@ -21,6 +21,7 @@
 
 #include "types.h"
 
+#include <cstdio>
 #include <functional>
 
 namespace Platform
