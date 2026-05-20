@@ -243,14 +243,44 @@ void FileListView::frame(brls::FrameContext* ctx) {
     }
     m_prevDown = downNow;
 
-    // ── LEFT = Page Up ──
+    // ── LEFT = Page Up (long press) ──
     bool leftNow = state.buttons[brls::BUTTON_LEFT];
-    if (leftNow && !m_prevLeft) movePageUp();
+    if (leftNow && !m_prevLeft) {
+        m_holdLeftTime = 0.f;
+        m_holdLeftRepeat = 0.f;
+        movePageUp();
+    }
+    if (leftNow) {
+        m_holdLeftTime += dt;
+        if (m_holdLeftTime > HOLD_INITIAL_DELAY) {
+            m_holdLeftRepeat += dt;
+            float interval = m_holdLeftTime > HOLD_ACCEL_TIME ? HOLD_REPEAT_FAST : HOLD_REPEAT;
+            while (m_holdLeftRepeat >= interval) {
+                m_holdLeftRepeat -= interval;
+                movePageUp();
+            }
+        }
+    }
     m_prevLeft = leftNow;
 
-    // ── RIGHT = Page Down ──
+    // ── RIGHT = Page Down (long press) ──
     bool rightNow = state.buttons[brls::BUTTON_RIGHT];
-    if (rightNow && !m_prevRight) movePageDown();
+    if (rightNow && !m_prevRight) {
+        m_holdRightTime = 0.f;
+        m_holdRightRepeat = 0.f;
+        movePageDown();
+    }
+    if (rightNow) {
+        m_holdRightTime += dt;
+        if (m_holdRightTime > HOLD_INITIAL_DELAY) {
+            m_holdRightRepeat += dt;
+            float interval = m_holdRightTime > HOLD_ACCEL_TIME ? HOLD_REPEAT_FAST : HOLD_REPEAT;
+            while (m_holdRightRepeat >= interval) {
+                m_holdRightRepeat -= interval;
+                movePageDown();
+            }
+        }
+    }
     m_prevRight = rightNow;
 
     // ── A = Select ──

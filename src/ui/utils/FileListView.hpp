@@ -56,6 +56,10 @@ private:
     float m_holdDownTime = 0.f;
     float m_holdUpRepeat = 0.f;
     float m_holdDownRepeat = 0.f;
+    float m_holdLeftTime = 0.f;
+    float m_holdRightTime = 0.f;
+    float m_holdLeftRepeat = 0.f;
+    float m_holdRightRepeat = 0.f;
 
     static constexpr float HOLD_INITIAL_DELAY = 0.3f;
     static constexpr float HOLD_REPEAT = 0.08f;
