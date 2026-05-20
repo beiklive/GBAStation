@@ -75,10 +75,17 @@ int main(int argc, char* argv[]) {
 	activity->setPageView(mStartPage);
 	brls::Application::pushActivity(activity);
 
-	// Use a dedicated thread for update checking instead of brls::async,
-	// so it doesn't block the single async worker thread.
-	new std::thread([]() {
+	// ── 更新检查线程 ──────────────────────────────────────────
+	// 标志位：程序退出时设置为 true，通知线程提前终止
+	std::atomic<bool> gExitFlag{false};
+
+	// 订阅退出事件，在 mainLoop 返回前尽早设置退出标志
+	auto exitSub = brls::Application::getExitEvent().subscribe(
+		[&gExitFlag]() { gExitFlag.store(true, std::memory_order_release); });
+
+	std::thread updateThread([&gExitFlag]() {
 		std::this_thread::sleep_for(std::chrono::seconds(2));
+		if (gExitFlag.load(std::memory_order_acquire)) return;
 
 		brls::Logger::debug("开始更新检查线程");
 
@@ -102,16 +109,20 @@ int main(int argc, char* argv[]) {
 		brls::Logger::info("当前版本: {}", localVersion);
 
 		auto& updater = beiklive::AppUpdater::instance();
+		if (gExitFlag.load(std::memory_order_acquire)) return;
 
-		// 远程拉取最新版本信息
 		updater.checkSync(localVersion);
+		if (gExitFlag.load(std::memory_order_acquire)) return;
 
 		auto start = std::chrono::steady_clock::now();
 		while (!updater.hasUpdate() &&
 			   std::chrono::duration_cast<std::chrono::seconds>(
 				   std::chrono::steady_clock::now() - start).count() < 15) {
+			if (gExitFlag.load(std::memory_order_acquire)) return;
 			std::this_thread::sleep_for(std::chrono::milliseconds(200));
 		}
+
+		if (gExitFlag.load(std::memory_order_acquire)) return;
 
 		brls::sync([&updater, localVersion]() {
 			auto& info = updater.info();
@@ -142,6 +153,11 @@ int main(int argc, char* argv[]) {
 	// Run the app
 	while (brls::Application::mainLoop())
 		;
+
+	// 通知线程退出并等待其完成
+	gExitFlag.store(true, std::memory_order_release);
+	if (updateThread.joinable())
+		updateThread.join();
 
 	// Cleanup
 	// Exit
