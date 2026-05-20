@@ -806,46 +806,47 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
     }
 
     // ---- 帧历史纹理管理 ----
-    if (m_historySize > 0 && inputTex && videoW > 0 && videoH > 0) {
-        // 增长环形缓冲区至所需大小
-        while (m_historyTextures.size() < static_cast<size_t>(m_historySize)) {
-            GLuint t = 0;
-            glGenTextures(1, &t);
-            glBindTexture(GL_TEXTURE_2D, t);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
-                         static_cast<GLsizei>(videoW), static_cast<GLsizei>(videoH),
-                         0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-            glBindTexture(GL_TEXTURE_2D, 0);
-            m_historyTextures.push_back(t);
+    // RetroArch 的 Prev/Prev1/Prev2.../Prev6 纹理始终可用（从视频驱动的 prev_info 环形缓冲区）。
+    // 此处始终维护至少 8 个历史帧（兼容 response-time 等需要多帧历史的着色器）。
+    {
+        const unsigned kMinHistory = 8u;
+        const unsigned needHistory = std::max(static_cast<unsigned>(m_historySize), kMinHistory);
+        if (inputTex && videoW > 0 && videoH > 0) {
+            while (m_historyTextures.size() < needHistory) {
+                GLuint t = 0;
+                glGenTextures(1, &t);
+                glBindTexture(GL_TEXTURE_2D, t);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
+                             static_cast<GLsizei>(videoW), static_cast<GLsizei>(videoH),
+                             0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+                glBindTexture(GL_TEXTURE_2D, 0);
+                m_historyTextures.push_back(t);
+            }
+            // 将当前输入帧拷贝到环形缓冲区当前位置
+            GLuint histTex = m_historyTextures[m_historyWriteIdx];
+            {
+                GLuint prevReadFBO = 0;
+                glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, reinterpret_cast<GLint*>(&prevReadFBO));
+                GLuint copyFBO = 0;
+                glGenFramebuffers(1, &copyFBO);
+                glBindFramebuffer(GL_READ_FRAMEBUFFER, copyFBO);
+                glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                                       GL_TEXTURE_2D, inputTex, 0);
+                glBindTexture(GL_TEXTURE_2D, histTex);
+                glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0,
+                                    static_cast<GLsizei>(videoW),
+                                    static_cast<GLsizei>(videoH));
+                glBindTexture(GL_TEXTURE_2D, 0);
+                glBindFramebuffer(GL_READ_FRAMEBUFFER, prevReadFBO);
+                glDeleteFramebuffers(1, &copyFBO);
+            }
+            m_historyWriteIdx = (m_historyWriteIdx + 1) % static_cast<unsigned>(m_historyTextures.size());
         }
-        // 将当前输入帧拷贝到当前写入位置
-        GLuint histTex = m_historyTextures[m_historyWriteIdx];
-        {
-            GLuint prevReadFBO = 0;
-            glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, reinterpret_cast<GLint*>(&prevReadFBO));
-            GLuint copyFBO = 0;
-            glGenFramebuffers(1, &copyFBO);
-            glBindFramebuffer(GL_READ_FRAMEBUFFER, copyFBO);
-            glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                                   GL_TEXTURE_2D, inputTex, 0);
-            glBindTexture(GL_TEXTURE_2D, histTex);
-            glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0,
-                                static_cast<GLsizei>(videoW),
-                                static_cast<GLsizei>(videoH));
-            glBindTexture(GL_TEXTURE_2D, 0);
-            glBindFramebuffer(GL_READ_FRAMEBUFFER, prevReadFBO);
-            glDeleteFramebuffers(1, &copyFBO);
-        }
-        m_historyWriteIdx = (m_historyWriteIdx + 1) % static_cast<unsigned>(m_historyTextures.size());
     }
-
-    // ---- 绑定反馈纹理和历史纹理到额外纹理单元 ----
-    // （在 pass 循环中为每个 pass 的 extraTexUnits 阶段添加）
-    // 此处仅恢复 GL 状态
 
     // 恢复 GL 状态（精确解绑实际使用过的额外纹理单元）
     for (GLuint u = 1; u <= maxTexUnit; ++u) {
