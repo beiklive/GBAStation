@@ -20,12 +20,9 @@ namespace beiklive
         std::vector<beiklive::DirListData> m_dirItems;
         beiklive::FileListView*     fileListView;
 
-        void refreshDirList(const std::string dirPath, beiklive::ListItemList* items,
-                            const std::string& iconPrefix);
         bool passesFilter(const std::string suffix);
         void navigateUp();
         void updatePath();
-        void updateIndex(std::string fullPath);
 
         // ── 右侧详情面板 ──
         brls::Box*      m_detailPanel      = nullptr;

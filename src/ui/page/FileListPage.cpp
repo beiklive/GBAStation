@@ -6,12 +6,13 @@
 
 namespace beiklive
 {
+    static constexpr int BATCH_SIZE = 3;
 
     FileListPage::FileListPage()
     {
         brls::Logger::debug("FileListPage initialized");
 
-        // ── 左侧：文件列表（grow=1，自动填充剩余空间）──
+        // ── 左侧：文件列表 ──
         auto* leftPanel = new brls::Box(brls::Axis::COLUMN);
         leftPanel->setGrow(1.f);
         leftPanel->setHeightPercentage(100.f);
@@ -23,13 +24,10 @@ namespace beiklive
         listCard->setBackgroundColor(nvgRGBA(255, 255, 255, 10));
         listCard->setShadowType(brls::ShadowType::GENERIC);
         listCard->setShadowVisibility(true);
-
-        // listCard->setBackgroundColor(nvgRGBA(0, 0, 0, 20));
         listCard->setGrow(1.f);
-        // listCard->setPadding(8.f);
 
         fileListView = new beiklive::FileListView();
-        fileListView->setItemClickListener([this](const beiklive::ListItem& item) {
+        fileListView->setOnItemClicked([this](const beiklive::ListItem& item) {
             for (const auto& dirItem : m_dirItems) {
                 if (dirItem.fullPath == item.data) {
                     if (dirItem.itemType == beiklive::enums::FileType::DIRECTORY ||
@@ -45,7 +43,7 @@ namespace beiklive
             }
         });
 
-        fileListView->onItemActionBind = [this](beiklive::ListItemCell& cell) {
+        fileListView->setOnBindCell([this](beiklive::ListItemCell& cell) {
             cell.registerAction(
                 "设置映射名", brls::BUTTON_X,
                 [this](brls::View*) {
@@ -75,31 +73,31 @@ namespace beiklive
 
             cell.registerAction("返回上一级", brls::BUTTON_B,
                 [this](brls::View*) { navigateUp(); return true; });
-        };
+        });
 
-        fileListView->onItemFocused = [this](std::string title, std::string fullPath) {
-            m_focusedFullPath = fullPath;
-            updateIndex(fullPath);
-            for (const auto& item : m_dirItems) {
-                if (item.fullPath == fullPath) {
-                    _updateDetailPanel(item);
+        fileListView->onItemFocused = [this](const beiklive::ListItem& item) {
+            m_focusedFullPath = item.data;
+            int idx = 0;
+            for (const auto& d : m_dirItems) {
+                if (d.fullPath == item.data) {
+                    _updateDetailPanel(d);
+                    this->getHeader()->setInfo(
+                        std::to_string(idx + 1) + "/" + std::to_string(m_dirItems.size()));
                     break;
                 }
+                idx++;
             }
         };
 
-        fileListView->onItemFocusLost = [this](std::string title, std::string fullPath) {
-            brls::Logger::debug("Item focus lost: " + title);
+        fileListView->onItemFocusLost = [this](const beiklive::ListItem& item) {
+            brls::Logger::debug("Item focus lost: {}", item.text);
         };
 
-        fileListView->Init();
         listCard->addView(fileListView);
         leftPanel->addView(listCard);
 
-        // ── 右侧 30%：详情面板 ──
         _setupDetailPanel();
 
-        // ── 左右总布局（ROW, left=grow, right=30%）──
         auto* mainRow = new brls::Box(brls::Axis::ROW);
         mainRow->setGrow(1.f);
         mainRow->addView(leftPanel);
@@ -107,18 +105,15 @@ namespace beiklive
 
         this->getContentBox()->addView(mainRow);
 
-        // ── 页头 ──
         this->showHeader(true);
         this->showFooter(true);
         this->getHeader()->setTitle("文件浏览");
 
-        // ── ZR 切换详情面板 ──
         this->registerAction("面板", brls::BUTTON_RB, [this](brls::View*) -> bool {
             _cancelThumbnail();
             m_panelVisible = !m_panelVisible;
             m_detailPanel->setVisibility(
                 m_panelVisible ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
-            // 面板重新打开时根据当前聚焦路径查找并恢复详情
             if (m_panelVisible && !m_focusedFullPath.empty()) {
                 for (const auto& item : m_dirItems) {
                     if (item.fullPath == m_focusedFullPath) {
@@ -131,9 +126,6 @@ namespace beiklive
         });
     }
 
-    // ============================================================
-    // _setupDetailPanel – 右侧详情面板结构
-    // ============================================================
     void FileListPage::_setupDetailPanel()
     {
         m_detailPanel = new brls::Box(brls::Axis::COLUMN);
@@ -147,7 +139,7 @@ namespace beiklive
         detailCard->setAlignItems(brls::AlignItems::CENTER);
         detailCard->setBackground(brls::ViewBackground::NONE);
         detailCard->setClipsToBounds(true);
-        // ── 缩略图（固定宽高，FIT 保持比例）──
+
         m_detailImage = new brls::Image();
         m_detailImage->setWidth(160.f);
         m_detailImage->setHeight(160.f);
@@ -159,7 +151,6 @@ namespace beiklive
         m_detailImage->setFocusable(false);
         detailCard->addView(m_detailImage);
 
-        // ── 标题 ──
         m_detailTitle = new brls::Label();
         m_detailTitle->setFontSize(22.f);
         m_detailTitle->setTextColor(GET_THEME_COLOR("brls/text"));
@@ -170,10 +161,8 @@ namespace beiklive
         m_detailTitle->setAutoAnimate(true);
         m_detailTitle->setMarginBottom(10.f);
         m_detailTitle->setFocusable(false);
-
         detailCard->addView(m_detailTitle);
 
-        // ── 副标题 ──
         m_detailSubtitle = new brls::Label();
         m_detailSubtitle->setFontSize(14.f);
         m_detailSubtitle->setTextColor(nvgRGBA(248, 123, 108, 255));
@@ -184,14 +173,12 @@ namespace beiklive
         m_detailSubtitle->setFocusable(false);
         detailCard->addView(m_detailSubtitle);
 
-        // ── 分隔线 ──
         auto* div = new brls::Rectangle(nvgRGBA(255, 255, 255, 40));
         div->setWidthPercentage(100.f);
         div->setHeight(1.f);
         div->setMarginBottom(14.f);
         detailCard->addView(div);
 
-        // ── 信息区（可滚动）──
         m_detailInfoBox = new brls::Box(brls::Axis::COLUMN);
         m_detailInfoBox->setAlignItems(brls::AlignItems::STRETCH);
         m_detailInfoBox->setWidthPercentage(100.f);
@@ -201,9 +188,6 @@ namespace beiklive
         m_detailPanel->addView(detailCard);
     }
 
-    // ============================================================
-    // _clearDetailInfo – 清空信息区
-    // ============================================================
     void FileListPage::_clearDetailInfo()
     {
         if (m_detailInfoBox) m_detailInfoBox->clearViews(true);
@@ -213,9 +197,6 @@ namespace beiklive
         _cancelThumbnail();
     }
 
-    // ============================================================
-    // _addInfoRow – 添加信息行
-    // ============================================================
     void FileListPage::_addInfoRow(const std::string& label, const std::string& value, NVGcolor labelColor)
     {
         auto* row = new brls::Box(brls::Axis::ROW);
@@ -231,7 +212,6 @@ namespace beiklive
         lbl->setFocusable(false);
         lbl->setMarginRight(8.f);
         row->addView(lbl);
-
 
         auto* val = new brls::Label();
         val->setText(value);
@@ -292,18 +272,12 @@ namespace beiklive
         m_detailInfoBox->addView(wrapper);
     }
 
-    // ============================================================
-    // _platformName
-    // ============================================================
     std::string FileListPage::_platformName(int platform)
     {
         auto name = beiklive::tools::platformName(platform);
         return name.empty() ? "未知" : name;
     }
 
-    // ============================================================
-    // _formatPlayTime
-    // ============================================================
     std::string FileListPage::_formatPlayTime(int seconds)
     {
         if (seconds <= 0) return "未游玩";
@@ -315,16 +289,12 @@ namespace beiklive
         return beiklive::tools::getFileSizeString(path);
     }
 
-    // ============================================================
-    // _updateDetailPanel – 根据文件类型更新详情
-    // ============================================================
     void FileListPage::_updateDetailPanel(const beiklive::DirListData& data)
     {
         if (!m_panelVisible) return;
         _clearDetailInfo();
 
         auto ft = data.itemType;
-        // 游戏文件
         if (ft == beiklive::enums::FileType::GBA_ROM ||
             ft == beiklive::enums::FileType::GBC_ROM ||
             ft == beiklive::enums::FileType::GB_ROM)
@@ -335,26 +305,20 @@ namespace beiklive
             else
                 _showGameNoDBDetail(data);
         }
-        // 图片
         else if (ft == beiklive::enums::FileType::IMAGE_FILE)
         {
             _showImageDetail(data);
         }
-        // 文件夹
         else if (ft == beiklive::enums::FileType::DIRECTORY || ft == beiklive::enums::FileType::DRIVE || ft == beiklive::enums::FileType::NONE)
         {
             _showFolderDetail(data);
         }
-        // 其他普通文件
         else
         {
             _showFileDetail(data);
         }
     }
 
-    // ============================================================
-    // _showGameDBDetail – 数据库已有该游戏
-    // ============================================================
     void FileListPage::_showGameDBDetail(const beiklive::DirListData& data, const beiklive::GameEntry& entry)
     {
         m_detailTitle->setText(entry.title.empty() ? data.fileName : entry.title);
@@ -373,18 +337,14 @@ namespace beiklive
 
         _addInfoRow("容量", data.fileSize, nvgRGB(173, 168, 255));
 
-
         std::string lastPlayed = entry.lastPlayed.empty()
             ? "从未游玩"
             : beiklive::tools::formatTimestampForDisplay(entry.lastPlayed);
-        _addInfoRow("最后游玩", lastPlayed, nvgRGB(144, 164, 174));      // 蓝灰
-        _addInfoRow("打开次数", std::to_string(entry.playCount), nvgRGB(129, 199, 132)); // 绿
-        _addInfoRow("路径", data.fullPath, nvgRGB(255, 183, 77));        // 橙
+        _addInfoRow("最后游玩", lastPlayed, nvgRGB(144, 164, 174));
+        _addInfoRow("打开次数", std::to_string(entry.playCount), nvgRGB(129, 199, 132));
+        _addInfoRow("路径", data.fullPath, nvgRGB(255, 183, 77));
     }
 
-    // ============================================================
-    // _showGameNoDBDetail – 数据库无该游戏
-    // ============================================================
     void FileListPage::_showGameNoDBDetail(const beiklive::DirListData& data)
     {
         m_detailTitle->setText(data.fileName);
@@ -401,9 +361,6 @@ namespace beiklive
         _addInfoRow("路径", data.fullPath, nvgRGB(129, 199, 132));
     }
 
-    // ============================================================
-    // _showImageDetail
-    // ============================================================
     void FileListPage::_showImageDetail(const beiklive::DirListData& data)
     {
         m_detailTitle->setText(data.fileName);
@@ -418,9 +375,6 @@ namespace beiklive
         _addInfoRow("路径", data.fullPath, nvgRGB(144, 164, 174));
     }
 
-    // ============================================================
-    // _showFolderDetail
-    // ============================================================
     void FileListPage::_showFolderDetail(const beiklive::DirListData& data)
     {
         m_detailTitle->setText(data.fileName);
@@ -433,9 +387,6 @@ namespace beiklive
             nvgRGBA(121, 201, 249, 255));
     }
 
-    // ============================================================
-    // _showFileDetail – 其他普通文件
-    // ============================================================
     void FileListPage::_showFileDetail(const beiklive::DirListData& data)
     {
         m_detailTitle->setText(data.fileName);
@@ -451,9 +402,6 @@ namespace beiklive
         _addInfoRow("路径", data.fullPath, nvgRGB(144, 164, 174));
     }
 
-    // ============================================================
-    // 缩略图加载（100ms 防抖，防止快速切换闪烁）
-    // ============================================================
     void FileListPage::_requestThumbnail(const std::string& path)
     {
         if (path.empty() || !m_detailImage) return;
@@ -480,24 +428,12 @@ namespace beiklive
     }
 
     // ============================================================
-    //  路径/过滤 逻辑（不变）
+    //  路径 / 过滤
     // ============================================================
 
     void FileListPage::updatePath()
     {
         this->getHeader()->setPath(m_currentPath);
-    }
-
-    void FileListPage::updateIndex(std::string fullPath)
-    {
-        int index = 0;
-        for (auto& item : m_dirItems) {
-            if (item.fullPath == fullPath) {
-                this->getHeader()->setInfo(std::to_string(index + 1) + "/" + std::to_string(m_dirItems.size()));
-                break;
-            }
-            index++;
-        }
     }
 
     void FileListPage::setFliter(beiklive::enums::FilterMode mode, std::vector<std::string> extensions)
@@ -510,31 +446,6 @@ namespace beiklive
     {
         _cancelThumbnail();
         brls::Logger::debug("FileListPage destroyed.");
-    }
-
-    void FileListPage::setPath(const std::string path)
-    {
-        brls::Application::blockInputs();
-        m_previousPath = m_currentPath;
-        m_currentPath = path;
-        m_isAtDriveList = false;
-
-        std::string iconPrefix = beiklive::tools::getIconPathPrefix();
-        ASYNC_RETAIN
-        brls::async([ASYNC_TOKEN, path, iconPrefix]() {
-            try {
-                beiklive::ListItemList* items = new beiklive::ListItemList();
-                refreshDirList(path, items, iconPrefix);
-                ASYNC_RELEASE
-                brls::sync([this, items]() {
-                    fileListView->setListItems(items);
-                    updatePath();
-                    brls::Application::unblockInputs();
-                });
-            } catch (const std::exception& e) {
-                brls::Logger::error("refreshDirList exception: " + std::string(e.what()));
-            }
-        });
     }
 
     bool FileListPage::passesFilter(const std::string suffix)
@@ -565,6 +476,132 @@ namespace beiklive
         setPath(parentPath);
     }
 
+    // ============================================================
+    //  setPath – batch loading: 每 BATCH_SIZE 个 item sync 一次
+    // ============================================================
+    void FileListPage::setPath(const std::string path)
+    {
+        brls::Application::blockInputs();
+        m_previousPath = m_currentPath;
+        m_currentPath = path;
+        m_isAtDriveList = false;
+
+        std::string iconPrefix = beiklive::tools::getIconPathPrefix();
+
+        brls::sync([this]() {
+            fileListView->clearItems();
+            m_dirItems.clear();
+            updatePath();
+        });
+
+        ASYNC_RETAIN
+        brls::async([ASYNC_TOKEN, this, path, iconPrefix]() {
+            std::error_code ec;
+            if (!fs::exists(path, ec) || !fs::is_directory(path, ec)) return;
+
+            m_previousPath = m_currentPath;
+
+            std::vector<beiklive::DirListData> batchDir;
+            std::vector<beiklive::ListItem> batchItems;
+
+            // ".." 返回上一级
+            std::string parentPath = fs::path(path).parent_path().string();
+            if (parentPath != path) {
+                std::string upIcon = beiklive::tools::getIconPathWithPrefix(
+                    beiklive::enums::FileType::NONE, iconPrefix);
+                batchDir.push_back({"..", path, upIcon,
+                    beiklive::enums::FileType::NONE, "返回上一级", 0});
+                batchItems.push_back({"..", "返回上一级", upIcon, path});
+            }
+
+            struct RawEntry { std::string name, fullPath; bool isDir; };
+            std::vector<RawEntry> dirs, files;
+
+            for (const auto& entry : fs::directory_iterator(
+                    path, fs::directory_options::skip_permission_denied, ec)) {
+                if (ec) { ec.clear(); continue; }
+                std::error_code entryEc;
+                bool isDir = entry.is_directory(entryEc);
+                if (entryEc) continue;
+
+                const auto& p = entry.path();
+                std::string name = p.filename().string();
+                name = GET_MAPPING_KEY_STR(
+                    beiklive::tools::getFileNameWithoutExtension(name),
+                    beiklive::tools::getFileNameWithoutExtension(name));
+                std::string fullPath = p.string();
+
+                if (!isDir) {
+                    if (!passesFilter(beiklive::tools::getFileExtension(p)))
+                        continue;
+                }
+                if (isDir) dirs.push_back({std::move(name), std::move(fullPath), true});
+                else       files.push_back({std::move(name), std::move(fullPath), false});
+            }
+
+            auto nameLess = [](const RawEntry& a, const RawEntry& b) {
+                std::string la = a.name, lb = b.name;
+                for (auto& c : la) c = static_cast<char>(std::tolower((unsigned char)c));
+                for (auto& c : lb) c = static_cast<char>(std::tolower((unsigned char)c));
+                return la < lb;
+            };
+            std::sort(dirs.begin(), dirs.end(), nameLess);
+            std::sort(files.begin(), files.end(), nameLess);
+
+            for (const auto& raw : dirs) {
+                auto fileType = beiklive::tools::getFileType(raw.fullPath);
+                std::string ip = beiklive::tools::getIconPathWithPrefix(fileType, iconPrefix);
+                size_t entryCount = beiklive::tools::countEntries(raw.fullPath);
+
+                batchDir.push_back({raw.name, raw.fullPath, ip, fileType, "", entryCount});
+                batchItems.push_back({raw.name, std::to_string(entryCount) + " items", ip, raw.fullPath});
+
+                if ((int)batchItems.size() >= BATCH_SIZE) {
+                    ASYNC_RELEASE
+                    brls::sync([this, bd = std::move(batchDir), bi = std::move(batchItems)]() {
+                        m_dirItems.insert(m_dirItems.end(), bd.begin(), bd.end());
+                        fileListView->appendItems(bi);
+                    });
+                    batchDir.clear();
+                    batchItems.clear();
+                }
+            }
+
+            for (const auto& raw : files) {
+                auto fileType = beiklive::tools::getFileType(raw.fullPath);
+                std::string ip = beiklive::tools::getIconPathWithPrefix(fileType, iconPrefix);
+                std::string sizeStr = beiklive::tools::getFileSizeString(raw.fullPath);
+
+                batchDir.push_back({raw.name, raw.fullPath, ip, fileType, sizeStr, 0});
+                batchItems.push_back({raw.name, sizeStr, ip, raw.fullPath});
+
+                if ((int)batchItems.size() >= BATCH_SIZE) {
+                    ASYNC_RELEASE
+                    brls::sync([this, bd = std::move(batchDir), bi = std::move(batchItems)]() {
+                        m_dirItems.insert(m_dirItems.end(), bd.begin(), bd.end());
+                        fileListView->appendItems(bi);
+                    });
+                    batchDir.clear();
+                    batchItems.clear();
+                }
+            }
+
+            if (!batchItems.empty()) {
+                ASYNC_RELEASE
+                brls::sync([this, bd = std::move(batchDir), bi = std::move(batchItems)]() {
+                    m_dirItems.insert(m_dirItems.end(), bd.begin(), bd.end());
+                    fileListView->appendItems(bi);
+                });
+            }
+
+            ASYNC_RELEASE
+            brls::sync([this]() {
+                fileListView->finishLoading();
+                brls::Application::unblockInputs();
+            });
+        });
+    }
+
     void FileListPage::showDriveList()
     {
 #ifndef _WIN32
@@ -573,95 +610,49 @@ namespace beiklive
 #endif
         m_isAtDriveList = true;
         m_currentPath = "";
+
+        brls::sync([this]() {
+            fileListView->clearItems();
+            m_dirItems.clear();
+        });
+
         std::string iconPrefix = beiklive::tools::getIconPathPrefix();
         ASYNC_RETAIN
-        brls::async([ASYNC_TOKEN, iconPrefix]() {
+        brls::async([ASYNC_TOKEN, this, iconPrefix]() {
             std::vector<std::string> drives = beiklive::tools::getLogicalDrives();
             const std::string driveIcon = beiklive::tools::getIconPathWithPrefix(
                 beiklive::enums::FileType::DRIVE, iconPrefix);
-            m_dirItems.clear();
-            beiklive::ListItemList* items = new beiklive::ListItemList();
+
+            std::vector<beiklive::DirListData> batchDir;
+            std::vector<beiklive::ListItem> batchItems;
             for (const auto& drive : drives) {
-                m_dirItems.push_back({drive, drive, driveIcon,
+                batchDir.push_back({drive, drive, driveIcon,
                     beiklive::enums::FileType::DRIVE, "", 0});
-                items->push_back({drive, "本地磁盘", driveIcon, drive});
+                batchItems.push_back({drive, "本地磁盘", driveIcon, drive});
+
+                if ((int)batchItems.size() >= BATCH_SIZE) {
+                    ASYNC_RELEASE
+                    brls::sync([this, bd = std::move(batchDir), bi = std::move(batchItems)]() {
+                        m_dirItems.insert(m_dirItems.end(), bd.begin(), bd.end());
+                        fileListView->appendItems(bi);
+                    });
+                    batchDir.clear();
+                    batchItems.clear();
+                }
             }
+            if (!batchItems.empty()) {
+                ASYNC_RELEASE
+                brls::sync([this, bd = std::move(batchDir), bi = std::move(batchItems)]() {
+                    m_dirItems.insert(m_dirItems.end(), bd.begin(), bd.end());
+                    fileListView->appendItems(bi);
+                });
+            }
+
             ASYNC_RELEASE
-            brls::sync([this, items]() {
-                fileListView->setListItems(items);
+            brls::sync([this]() {
+                fileListView->finishLoading();
             });
         });
-    }
-
-    void FileListPage::refreshDirList(const std::string dirPath, beiklive::ListItemList* items,
-                                       const std::string& iconPrefix)
-    {
-        std::error_code ec;
-        if (!fs::exists(dirPath, ec) || !fs::is_directory(dirPath, ec)) return;
-
-        m_previousPath = m_currentPath;
-        m_currentPath = dirPath;
-        m_dirItems.clear();
-
-        std::string parentPath = fs::path(m_currentPath).parent_path().string();
-        if (parentPath != m_currentPath) {
-            std::string upIcon = beiklive::tools::getIconPathWithPrefix(
-                beiklive::enums::FileType::NONE, iconPrefix);
-            m_dirItems.push_back({"..", m_currentPath, upIcon,
-                beiklive::enums::FileType::NONE, "返回上一级", 0});
-            items->push_back({"..", "返回上一级", upIcon, m_currentPath});
-        }
-
-        struct RawEntry { std::string name, fullPath; bool isDir; };
-        std::vector<RawEntry> dirs, files;
-
-        for (const auto& entry : fs::directory_iterator(
-                dirPath, fs::directory_options::skip_permission_denied, ec)) {
-            if (ec) { ec.clear(); continue; }
-            std::error_code entryEc;
-            bool isDir = entry.is_directory(entryEc);
-            if (entryEc) continue;
-
-            const auto& p = entry.path();
-            std::string name = p.filename().string();
-            name = GET_MAPPING_KEY_STR(
-                beiklive::tools::getFileNameWithoutExtension(name),
-                beiklive::tools::getFileNameWithoutExtension(name));
-            std::string fullPath = p.string();
-
-            if (!isDir) {
-                if (!passesFilter(beiklive::tools::getFileExtension(p)))
-                    continue;
-            }
-            if (isDir) dirs.push_back({std::move(name), std::move(fullPath), true});
-            else       files.push_back({std::move(name), std::move(fullPath), false});
-        }
-
-        auto nameLess = [](const RawEntry& a, const RawEntry& b) {
-            std::string la = a.name, lb = b.name;
-            for (auto& c : la) c = static_cast<char>(std::tolower((unsigned char)c));
-            for (auto& c : lb) c = static_cast<char>(std::tolower((unsigned char)c));
-            return la < lb;
-        };
-        std::sort(dirs.begin(), dirs.end(), nameLess);
-        std::sort(files.begin(), files.end(), nameLess);
-
-        auto appendEntry = [&](const RawEntry& raw) {
-            auto fileType = beiklive::tools::getFileType(raw.fullPath);
-            std::string ip = beiklive::tools::getIconPathWithPrefix(fileType, iconPrefix);
-            std::string sizeStr;
-            size_t entryCount = 0;
-            if (raw.isDir) entryCount = beiklive::tools::countEntries(raw.fullPath);
-            else           sizeStr = beiklive::tools::getFileSizeString(raw.fullPath);
-
-            m_dirItems.push_back({raw.name, raw.fullPath, ip, fileType, sizeStr, entryCount});
-            items->push_back({raw.name,
-                raw.isDir ? (std::to_string(entryCount) + " items") : sizeStr,
-                ip, raw.fullPath});
-        };
-
-        for (const auto& d : dirs)  appendEntry(d);
-        for (const auto& f : files) appendEntry(f);
     }
 
 } // namespace beiklive
