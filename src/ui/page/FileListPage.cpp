@@ -534,8 +534,12 @@ namespace beiklive
                     if (!isDir) {
                         if (!passesFilter(beiklive::tools::getFileExtension(p)))
                             continue;
+                    }else{
+                        // 目录不需要提取扩展名，直接映射整个目录名
+                        name = GET_MAPPING_KEY_STR(name, name);
                     }
-                    if (isDir) dirs.push_back({name + "." + beiklive::tools::getFileExtension(p.filename().string()), std::move(fullPath), true});
+
+                    if (isDir) dirs.push_back({name, std::move(fullPath), true});
                     else       files.push_back({name + "." + beiklive::tools::getFileExtension(p.filename().string()), std::move(fullPath), false});
                 }
 
