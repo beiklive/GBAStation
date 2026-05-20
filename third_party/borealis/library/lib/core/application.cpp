@@ -1112,7 +1112,7 @@ bool Application::loadFontFromFile(std::string fontName, std::string filePath)
 
     if (handle == FONT_INVALID)
     {
-        Logger::warning("Could not load the font \"{}\"", fontName);
+        Logger::warning("Could not load the font \"{}\" \"{}\"", fontName, filePath);
         return false;
     }
 
