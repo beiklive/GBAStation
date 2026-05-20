@@ -313,6 +313,14 @@ brls::View* AboutPage::_buildUpdateTab() {
         changelogCard->addView(lablebox);
 
         m_bodyLabel->setText(R"(
+v0.1.10
+    bug修复和优化
+    1. 修复启动模拟器后立即退出时，因为版本后台检测线程未退出导致的崩溃问题
+    2. 重写文件列表，优化浏览效果，去掉了列表声音
+    
+    新功能
+    1. 文件列表增加搜索功能, 按 ZR 键对所在目录搜索,按B键关闭搜索结果
+
 v0.1.9
     bug修复和优化
     1. 修复金手指输入和修改时不能输入多行的bug
