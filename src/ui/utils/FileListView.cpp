@@ -12,7 +12,9 @@ FileListView::FileListView() {
 // ── Data ──
 
 void FileListView::setItems(const std::vector<beiklive::ListItem>& items) {
-    m_items = items;
+    m_unfilteredItems = items;
+    m_filterActive = false;
+    m_items = m_unfilteredItems;
     if (m_focusedIndex < 0 && !m_items.empty())
         m_focusedIndex = 0;
     if (m_focusedIndex >= (int)m_items.size())
@@ -23,6 +25,8 @@ void FileListView::setItems(const std::vector<beiklive::ListItem>& items) {
 
 void FileListView::clearItems() {
     m_items.clear();
+    m_unfilteredItems.clear();
+    m_filterActive = false;
     m_focusedIndex = -1;
     m_scrollY = 0.f;
 }
@@ -40,6 +44,43 @@ void FileListView::restoreFocusState(const std::string& path) {
         m_focusedIndex = it->second;
         m_dirFocusIndex.erase(it);
     }
+}
+
+void FileListView::applyFilter(const std::string& keyword) {
+    if (!m_filterActive)
+        m_unfilteredItems = m_items;
+
+    if (keyword.empty()) {
+        removeFilter();
+        return;
+    }
+
+    m_items.clear();
+    for (const auto& item : m_unfilteredItems) {
+        if (item.text.empty()) continue;
+        std::string lower = item.text;
+        std::string lowerKw = keyword;
+        for (auto& c : lower) c = static_cast<char>(std::tolower((unsigned char)c));
+        for (auto& c : lowerKw) c = static_cast<char>(std::tolower((unsigned char)c));
+        if (lower.find(lowerKw) != std::string::npos)
+            m_items.push_back(item);
+    }
+
+    m_filterActive = true;
+    m_focusedIndex = m_items.empty() ? -1 : 0;
+    m_scrollY = 0.f;
+    ensureFocusedVisible();
+    this->invalidate();
+}
+
+void FileListView::removeFilter() {
+    if (!m_filterActive) return;
+    m_items = m_unfilteredItems;
+    m_filterActive = false;
+    if (m_focusedIndex >= (int)m_items.size())
+        m_focusedIndex = std::max(0, (int)m_items.size() - 1);
+    ensureFocusedVisible();
+    this->invalidate();
 }
 
 // ── Drawing ──

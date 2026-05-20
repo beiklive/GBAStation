@@ -24,6 +24,11 @@ public:
     void saveFocusState(const std::string& path);
     void restoreFocusState(const std::string& path);
 
+    void applyFilter(const std::string& keyword);
+    void removeFilter();
+    bool hasActiveFilter() const { return m_filterActive; }
+    int itemCount() const { return (int)m_items.size(); }
+
     void draw(NVGcontext* vg, float x, float y, float w, float h,
               brls::Style style, brls::FrameContext* ctx) override;
     void frame(brls::FrameContext* ctx) override;
@@ -34,6 +39,8 @@ public:
 
 private:
     std::vector<beiklive::ListItem> m_items;
+    std::vector<beiklive::ListItem> m_unfilteredItems;
+    bool m_filterActive = false;
     int m_font = -1;
     int m_focusedIndex = -1;
     float m_scrollY = 0.f;

@@ -80,8 +80,15 @@ namespace beiklive
         this->getHeader()->setTitle("文件浏览");
 
         // B = 返回上一级
-        this->registerAction("返回上一级", brls::BUTTON_B,
-            [this](brls::View*) { navigateUp(); return true; },
+        this->registerAction("返回", brls::BUTTON_B,
+            [this](brls::View*) {
+                if (fileListView->hasActiveFilter()) {
+                    fileListView->removeFilter();
+                    return true;
+                }
+                navigateUp();
+                return true;
+            },
             false, false, brls::SOUND_BACK);
 
         // X = 设置映射名
@@ -125,6 +132,32 @@ namespace beiklive
                     }
                 }
             }
+            return true;
+        });
+
+        // ZR = 搜索
+        this->registerAction("搜索", brls::BUTTON_RT, [this](brls::View*) -> bool {
+            auto* ime = brls::Application::getPlatform()->getImeManager();
+            if (!ime) return true;
+
+            ime->openForText(
+                [this](std::string keyword) {
+                    brls::sync([this, keyword = std::move(keyword)]() {
+                        if (keyword.empty()) {
+                            fileListView->removeFilter();
+                            return;
+                        }
+                        fileListView->applyFilter(keyword);
+                        if (fileListView->itemCount() == 0) {
+                            fileListView->removeFilter();
+                            auto* dlg = new brls::Dialog("未搜索到匹配项");
+                            dlg->addButton("确定", []() {});
+                            dlg->open();
+                        }
+                    });
+                },
+                "搜索文件", "", 64, "",
+                brls::KeyboardKeyDisableBitmask::KEYBOARD_DISABLE_NONE);
             return true;
         });
     }
