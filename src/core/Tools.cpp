@@ -182,26 +182,69 @@ bool isFileExists(const std::string& path) {
     return fs::exists(fs::path(path));
 }
 
-
 uint32_t crc32(const std::string& path)
 {
-    std::ifstream file(path, std::ios::binary);
-    if (!file) return 0;
+    static uint32_t table[256];
+    static bool initialized = false;
+
+    if (!initialized)
+    {
+        for (uint32_t i = 0; i < 256; i++)
+        {
+            uint32_t c = i;
+
+            for (int j = 0; j < 8; j++)
+            {
+                c = (c & 1)
+                    ? (0xEDB88320 ^ (c >> 1))
+                    : (c >> 1);
+            }
+
+            table[i] = c;
+        }
+
+        initialized = true;
+    }
+
+    FILE* fp = fopen(path.c_str(), "rb");
+
+    if (!fp)
+        return 0;
 
     uint32_t crc = 0xFFFFFFFF;
-    char buffer[4096];
 
-    while (file.read(buffer, sizeof(buffer)) || file.gcount())
+    uint8_t buffer[16384];
+
+    size_t n;
+
+    while ((n = fread(buffer, 1, sizeof(buffer), fp)) > 0)
     {
-        for (long long int i = 0; i < file.gcount(); i++)
+        for (size_t i = 0; i < n; i++)
         {
-            crc ^= (uint8_t)buffer[i];
-            for (int j = 0; j < 8; j++)
-                crc = (crc >> 1) ^ (0xEDB88320 & -(crc & 1));
+            crc = table[
+                (crc ^ buffer[i]) & 0xFF
+            ] ^ (crc >> 8);
         }
     }
 
+    fclose(fp);
+
     return ~crc;
+}
+
+std::string crc32ToHex(uint32_t crc)
+{
+    static const char* hex = "0123456789ABCDEF";
+
+    std::string result(8, '0');
+
+    for (int i = 7; i >= 0; i--)
+    {
+        result[i] = hex[crc & 0xF];
+        crc >>= 4;
+    }
+
+    return result;
 }
 
 
@@ -430,5 +473,25 @@ int versionCode(const std::string& version) {
     }
     return parts[0] * 1000000 + parts[1] * 1000 + parts[2];
 }
+
+
+std::string readGbaGameID(const std::string& path)
+{
+    std::ifstream file(path, std::ios::binary);
+
+    if (!file)
+        return "";
+
+    // Game ID 位于 0xAC
+    file.seekg(0xAC, std::ios::beg);
+
+    char gameId[4];
+
+    if (!file.read(gameId, 4))
+        return "";
+
+    return std::string(gameId, 4);
+}
+
 
 } // namespace beiklive::tools

@@ -17,6 +17,7 @@ private:
     brls::View* _buildUpdateTab();
     brls::View* _buildSupportTab();
     void _checkUpdate();
+    void _updateCheatDatabase();
 };
 
 } // namespace beiklive

@@ -3,6 +3,8 @@
 #include "ui/utils/UpdateDialog.hpp"
 #include "core/AppUpdater.hpp"
 #include "core/Tools.hpp"
+#include <curl/curl.h>
+#include <miniz.h>
 
 namespace beiklive {
 
@@ -198,6 +200,8 @@ brls::View* AboutPage::_buildUpdateTab() {
     scroll->setFocusable(false);
 
     auto* box = new brls::Box(brls::Axis::COLUMN);
+    box->setAlignItems(brls::AlignItems::CENTER);
+    box->setWidthPercentage(100.f);
     box->setPadding(20.f, 40.f, 30.f, 40.f);
 
     // 读取本地 version.json
@@ -223,6 +227,7 @@ brls::View* AboutPage::_buildUpdateTab() {
     versionCard->setShadowType(brls::ShadowType::GENERIC);
     versionCard->setPadding(20.f, 24.f, 20.f, 24.f);
     versionCard->setMarginBottom(10.f);
+    versionCard->setWidthPercentage(100.f);
     versionCard->setFocusable(false);
     versionCard->setHideHighlightBackground(true);
 
@@ -261,9 +266,22 @@ brls::View* AboutPage::_buildUpdateTab() {
     addInfoRow("文件大小", formatSize(localSize));
 
     box->addView(versionCard);
-    // 检测更新按钮
+
+    // 更新金手指数据库按钮
+    auto* cheatBtn = new brls::Button();
+    cheatBtn->setText("更新金手指数据库");
+    cheatBtn->setWidthPercentage(100.f);
+    cheatBtn->setMarginBottom(12.f);
+    cheatBtn->registerClickAction([this](brls::View*) -> bool {
+        _updateCheatDatabase();
+        return true;
+    });
+    box->addView(cheatBtn);
+
+    // 检测模拟器更新按钮
     auto* checkBtn = new brls::Button();
-    checkBtn->setText("检测更新");
+    checkBtn->setText("检测模拟器更新");
+    checkBtn->setWidthPercentage(100.f);
     checkBtn->registerClickAction([this](brls::View*) -> bool {
         _checkUpdate();
         return true;
@@ -313,6 +331,16 @@ brls::View* AboutPage::_buildUpdateTab() {
         changelogCard->addView(lablebox);
 
         m_bodyLabel->setText(R"(
+v0.1.12
+    bug修复和优化
+    1. 修复倍速状态下游戏声音出现杂音的问题
+    2. 调整着色器设置界面透明度，减少视觉色差
+    
+    新功能
+    1. 新增游戏菜单快捷存档删除功能
+    2. 新增游戏菜单GB颜色调整功能，仅GB游戏可用
+
+        
 v0.1.11
     bug修复和优化
     1. 修复着色器参数设置好后下次打开游戏又复原的bug
@@ -452,6 +480,104 @@ void AboutPage::_checkUpdate() {
                 confirmDlg->open();
             } else {
                 auto* okDlg = new brls::Dialog("已是最新版本");
+                okDlg->addButton("确定", []() {});
+                okDlg->open();
+            }
+        });
+    });
+}
+
+void AboutPage::_updateCheatDatabase() {
+    auto* dlg = new brls::Dialog("正在更新金手指数据库...\n\n请稍候");
+    auto* cancelFlag = new std::atomic<bool>(false);
+    dlg->addButton("取消", [cancelFlag]() { cancelFlag->store(true); });
+    dlg->setCancelable(false);
+    dlg->open();
+
+    new std::thread([this, dlg, cancelFlag]() {
+        static const char* kUrl = "https://cdn.jsdelivr.net/gh/beiklive/GBAStation_Release@main/cheat_db/cheat_db.zip";
+
+        std::string dbDir = beiklive::path::dbsPath();
+        std::error_code ec;
+        std::filesystem::create_directories(dbDir, ec);
+
+        std::string zipPath = dbDir + beiklive::path::SPLIT_CHAR + "cheat_db.zip";
+
+        // ── 下载 ──
+        bool downloadOk = false;
+        {
+            CURL* curl = curl_easy_init();
+            if (curl && !cancelFlag->load()) {
+                std::vector<uint8_t> body;
+                curl_easy_setopt(curl, CURLOPT_URL, kUrl);
+                curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+                curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+                curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+                curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
+                curl_easy_setopt(curl, CURLOPT_TIMEOUT, 120L);
+                curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION,
+                    static_cast<size_t(*)(void*, size_t, size_t, void*)>(
+                        [](void* ptr, size_t size, size_t nmemb, void* userdata) -> size_t {
+                            auto* v = static_cast<std::vector<uint8_t>*>(userdata);
+                            v->insert(v->end(), (uint8_t*)ptr, (uint8_t*)ptr + size * nmemb);
+                            return size * nmemb;
+                        }));
+                curl_easy_setopt(curl, CURLOPT_WRITEDATA, &body);
+
+                if (!cancelFlag->load()) {
+                    CURLcode res = curl_easy_perform(curl);
+                    long code = 0;
+                    if (res == CURLE_OK)
+                        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &code);
+                    if (res == CURLE_OK && code == 200 && !body.empty()) {
+                        std::ofstream out(zipPath, std::ios::binary | std::ios::trunc);
+                        if (out) {
+                            out.write(reinterpret_cast<const char*>(body.data()), body.size());
+                            out.close();
+                            downloadOk = true;
+                        }
+                    }
+                }
+                curl_easy_cleanup(curl);
+            }
+        }
+
+        // ── 解压 ──
+        int extractCount = 0;
+        if (downloadOk && !cancelFlag->load()) {
+            mz_zip_archive zip;
+            memset(&zip, 0, sizeof(zip));
+            if (mz_zip_reader_init_file(&zip, zipPath.c_str(), 0)) {
+                mz_uint numFiles = mz_zip_reader_get_num_files(&zip);
+                for (mz_uint i = 0; i < numFiles && !cancelFlag->load(); ++i) {
+                    char filename[256];
+                    mz_zip_reader_get_filename(&zip, i, filename, sizeof(filename));
+                    std::string outPath = dbDir + beiklive::path::SPLIT_CHAR + filename;
+                    if (mz_zip_reader_extract_to_file(&zip, i, outPath.c_str(), 0))
+                        ++extractCount;
+                }
+                mz_zip_reader_end(&zip);
+            }
+            std::filesystem::remove(zipPath, ec);
+        }
+
+        brls::sync([dlg, cancelFlag, downloadOk, extractCount]() {
+            dlg->close([]{});
+
+            bool cancelled = cancelFlag->load();
+            delete cancelFlag;
+
+            if (cancelled && !downloadOk) {
+                auto* okDlg = new brls::Dialog("已取消更新");
+                okDlg->addButton("确定", []() {});
+                okDlg->open();
+            } else if (!downloadOk) {
+                auto* okDlg = new brls::Dialog("下载失败，请去网盘手动下载");
+                okDlg->addButton("确定", []() {});
+                okDlg->open();
+            } else {
+                auto* okDlg = new brls::Dialog("更新完成（已解压 " +
+                    std::to_string(extractCount) + " 个文件）");
                 okDlg->addButton("确定", []() {});
                 okDlg->open();
             }

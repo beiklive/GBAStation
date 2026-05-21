@@ -128,7 +128,9 @@ else()
 endif ()
 
 include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/src)
+include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/third_party/miniz)
 file(GLOB_RECURSE MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
+list(APPEND MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/third_party/miniz/miniz.c)
 # list(APPEND MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp)
 
 

@@ -49,6 +49,10 @@ bool isFileExists(const std::string& path);
 
 // 计算文件的 CRC32 校验值
 uint32_t crc32(const std::string& path);
+// 将 CRC32 校验值转换为十六进制字符串
+std::string crc32ToHex(uint32_t crc);
+// 获取 GBA ROM 的游戏 ID（前4字节 ASCII），失败时返回空字符串
+std::string readGbaGameID(const std::string& path);
 
 // 获取当前时间戳字符串（存储格式：yy-mm-dd HH-MM-SS，适合字符串比较排序）
 std::string getTimestampString();
@@ -111,4 +115,5 @@ std::string formatPlayTime(int totalSeconds);
 
 /// 将版本号字符串（如 "v3.2.1"）转为整数（如 3002001），每段占三位十进制，用于版本比较
 int versionCode(const std::string& version);
+
 } // namespace beiklive::tools
