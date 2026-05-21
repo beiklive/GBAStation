@@ -877,9 +877,12 @@ namespace beiklive
                 gbColorCell->setText("GB 配色");
                 gbColorCell->setOptions(gbColors, gbIdx);
                 gbColorCell->setOnSelect(
-                    [&gbColors](int idx) {
-                        if (idx >= 0 && idx < (int)gbColors.size())
+                    [this, &gbColors](int idx) {
+                        if (idx >= 0 && idx < (int)gbColors.size()) {
                             SET_SETTING_KEY_STR("core.mgba_gb_colors", gbColors[idx]);
+                            if (m_gbColorCallback)
+                                m_gbColorCallback(gbColors[idx]);
+                        }
                     });
                 box->addView(gbColorCell);
                 box->addView(makeHint("为 GB 单色游戏着色，不影响 GBA 游戏"));

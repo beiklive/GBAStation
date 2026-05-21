@@ -347,6 +347,12 @@ namespace beiklive
             if (m_gameView) m_gameView->_setShaderParam(name, val);
         });
 
+        // 注入 GB 配色回调：写入配置后，核心在 retro_run() 中自动重读并应用
+        m_gameMenuView->setGbColorCallback([this](const std::string& color) {
+            // 配置已在 GameMenuView 的 setOnSelect 中通过 SET_SETTING_KEY_STR 写入 SettingManager
+            // 核心每帧调用 retro_run() → _updateGbPal() → RETRO_ENVIRONMENT_GET_VARIABLE 自动读取
+        });
+
         // 注入槽位信息查询回调：供菜单面板异步扫描存档目录
         // 预先在UI线程计算所有槽位路径（仅字符串操作），避免后台线程持有 GameView 原始指针，
         // 防止游戏退出后 GameView 被销毁时后台线程仍访问其成员导致崩溃。
