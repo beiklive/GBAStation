@@ -55,18 +55,13 @@ jobs:
       # =========================
       # 获取 cht 文件列表
       # =========================
-
       - name: Generate CHT JSON
         run: |
 
           python << 'EOF'
 
           import json
-          import requests
-
-          headers = {
-              "Accept": "application/vnd.github+json"
-          }
+          import urllib.request
 
           targets = [
               {
@@ -91,9 +86,18 @@ jobs:
                   "cht/" + item["repo_path"]
               )
 
-              r = requests.get(url, headers=headers)
+              req = urllib.request.Request(
+                  url,
+                  headers={
+                      "Accept": "application/vnd.github+json"
+                  }
+              )
 
-              data = r.json()
+              with urllib.request.urlopen(req) as response:
+
+                  data = json.loads(
+                      response.read().decode("utf-8")
+                  )
 
               result = []
 
@@ -119,6 +123,7 @@ jobs:
               print(item["output"], "Done")
 
           EOF
+
 
       # =========================
       # Clone Release Repo
