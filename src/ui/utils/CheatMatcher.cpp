@@ -25,6 +25,8 @@ public:
         : m_onCancel(std::move(onCancel)) {
         this->showHeader(false);
         this->showFooter(false);
+        if (this->getBottomBar())
+            this->getBottomBar()->setVisibility(brls::Visibility::GONE);
         auto* root = this->getContentBox();
         root->setAxis(brls::Axis::COLUMN);
         root->setAlignItems(brls::AlignItems::CENTER);
@@ -57,19 +59,23 @@ public:
         m_statusLabel->setIsWrapping(true);
         card->addView(m_statusLabel);
 
+        m_buttonBox = new brls::Box(brls::Axis::ROW);
+        m_buttonBox->setJustifyContent(brls::JustifyContent::CENTER);
+        m_buttonBox->setMarginTop(18.f);
+
         if (m_onCancel) {
             auto* btn = new brls::Button();
             btn->setText("取消");
             btn->setWidth(140.f);
-            btn->setMarginTop(18.f);
             btn->registerClickAction([this](brls::View*) -> bool {
                 if (m_onCancel) m_onCancel();
                 brls::Application::popActivity(brls::TransitionAnimation::NONE);
                 return true;
             });
-            card->addView(btn);
+            m_buttonBox->addView(btn);
         }
 
+        card->addView(m_buttonBox);
         root->addView(card);
     }
 
@@ -81,6 +87,21 @@ public:
         if (m_statusLabel) m_statusLabel->setText(status);
     }
 
+    void showResult(const std::string& text) {
+        m_statusLabel->setText(text);
+        m_onCancel = nullptr;
+        m_buttonBox->clearViews(true);
+        auto* btn = new brls::Button();
+        btn->setText("确定");
+        btn->setWidth(140.f);
+        btn->registerClickAction([](brls::View*) -> bool {
+            brls::Application::popActivity(brls::TransitionAnimation::NONE);
+            return true;
+        });
+        m_buttonBox->addView(btn);
+        brls::Application::giveFocus(btn);
+    }
+
     void close() {
         brls::Application::popActivity(brls::TransitionAnimation::NONE);
     }
@@ -88,6 +109,7 @@ public:
 private:
     brls::Label* m_titleLabel = nullptr;
     brls::Label* m_statusLabel = nullptr;
+    brls::Box* m_buttonBox = nullptr;
     std::function<void()> m_onCancel;
 };
 
@@ -254,6 +276,8 @@ public:
         : m_results(std::move(results)), m_onDone(std::move(onDone)) {
         this->showHeader(false);
         this->showFooter(false);
+        if (this->getBottomBar())
+            this->getBottomBar()->setVisibility(brls::Visibility::GONE);
         auto* root = this->getContentBox();
         root->setAxis(brls::Axis::COLUMN);
         root->setAlignItems(brls::AlignItems::CENTER);
@@ -374,10 +398,7 @@ void startCheatMatching(int platform, const std::string& romPath,
                 brls::sync([prog, cancelFlag]() {
                     delete cancelFlag;
                     brls::Application::unblockInputs();
-                    prog->close();
-                    auto* err = new brls::Dialog("数据库文件缺失\n请去 关于-更新 中更新数据库");
-                    err->addButton("确定", []() {});
-                    err->open();
+                    prog->showResult("数据库文件缺失，请去 关于-更新 中更新数据库");
                 });
                 return;
             }
@@ -409,10 +430,7 @@ void startCheatMatching(int platform, const std::string& romPath,
             brls::sync([prog, cancelFlag]() {
                 delete cancelFlag;
                 brls::Application::unblockInputs();
-                prog->close();
-                auto* err = new brls::Dialog("未匹配到，请在游戏中手动设置金手指");
-                err->addButton("确定", []() {});
-                err->open();
+                prog->showResult("未匹配到，请在游戏中手动设置金手指");
             });
             return;
         }
@@ -469,10 +487,7 @@ void startCheatMatching(int platform, const std::string& romPath,
             brls::sync([prog, cancelFlag]() {
                 delete cancelFlag;
                 brls::Application::unblockInputs();
-                prog->close();
-                auto* err = new brls::Dialog("下载失败，请检查网络后重试");
-                err->addButton("确定", []() {});
-                err->open();
+                prog->showResult("下载失败，请检查网络后重试");
             });
             return;
         }
