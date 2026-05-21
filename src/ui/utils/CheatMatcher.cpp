@@ -1,7 +1,6 @@
 #include "CheatMatcher.hpp"
 #include "core/Tools.hpp"
 #include "ui/utils/Box.hpp"
-#include "ui/utils/FunctionButtons.hpp"
 #include <curl/curl.h>
 #include <fstream>
 #include <sstream>
@@ -18,6 +17,80 @@ static const char* kRetroPlatformDirs[] = {"",
     "Nintendo%20-%20Game%20Boy"};
 static const char* kBaseUrl = "https://cdn.jsdelivr.net/gh/libretro/libretro-database@master/cht";
 
+// ── 自定义进度对话框 ──────────────────────────────────────
+
+class ProgressDialog : public beiklive::Box {
+public:
+    ProgressDialog(const std::string& title, std::function<void()> onCancel = nullptr)
+        : m_onCancel(std::move(onCancel)) {
+        this->showHeader(false);
+        this->showFooter(false);
+        auto* root = this->getContentBox();
+        root->setAxis(brls::Axis::COLUMN);
+        root->setAlignItems(brls::AlignItems::CENTER);
+        root->setJustifyContent(brls::JustifyContent::CENTER);
+
+        auto* card = new brls::Box(brls::Axis::COLUMN);
+        card->setWidth(500.f);
+        card->setHeight(brls::View::AUTO);
+        card->setCornerRadius(16.f);
+        card->setBackgroundColor(nvgRGBA(25, 28, 40, 245));
+        card->setShadowType(brls::ShadowType::GENERIC);
+        card->setShadowVisibility(true);
+        card->setPadding(24.f, 32.f, 24.f, 32.f);
+        card->setAlignItems(brls::AlignItems::CENTER);
+
+        m_titleLabel = new brls::Label();
+        m_titleLabel->setText(title);
+        m_titleLabel->setFontSize(22.f);
+        m_titleLabel->setTextColor(nvgRGB(255,255,255));
+        m_titleLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+        m_titleLabel->setIsWrapping(true);
+        m_titleLabel->setMarginBottom(20.f);
+        card->addView(m_titleLabel);
+
+        m_statusLabel = new brls::Label();
+        m_statusLabel->setText("");
+        m_statusLabel->setFontSize(15.f);
+        m_statusLabel->setTextColor(nvgRGBA(200,200,200,200));
+        m_statusLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+        m_statusLabel->setIsWrapping(true);
+        card->addView(m_statusLabel);
+
+        if (m_onCancel) {
+            auto* btn = new brls::Button();
+            btn->setText("取消");
+            btn->setWidth(140.f);
+            btn->setMarginTop(18.f);
+            btn->registerClickAction([this](brls::View*) -> bool {
+                if (m_onCancel) m_onCancel();
+                brls::Application::popActivity(brls::TransitionAnimation::NONE);
+                return true;
+            });
+            card->addView(btn);
+        }
+
+        root->addView(card);
+    }
+
+    void setText(const std::string& text) {
+        if (m_titleLabel) m_titleLabel->setText(text);
+    }
+
+    void setStatus(const std::string& status) {
+        if (m_statusLabel) m_statusLabel->setText(status);
+    }
+
+    void close() {
+        brls::Application::popActivity(brls::TransitionAnimation::NONE);
+    }
+
+private:
+    brls::Label* m_titleLabel = nullptr;
+    brls::Label* m_statusLabel = nullptr;
+    std::function<void()> m_onCancel;
+};
+
 // ── 工具函数 ──────────────────────────────────────────────
 
 static std::string cleanNameForMatch(const std::string& name) {
@@ -28,10 +101,8 @@ static std::string cleanNameForMatch(const std::string& name) {
         else if (c == ')' || c == ']') { if (depth > 0) --depth; }
         else if (depth == 0) s += c;
     }
-    // Remove extension
     auto dot = s.rfind('.');
     if (dot != std::string::npos) s = s.substr(0, dot);
-    // Trim
     size_t b = s.find_first_not_of(" \t-_");
     size_t e = s.find_last_not_of(" \t-_");
     if (b == std::string::npos) return "";
@@ -74,16 +145,8 @@ static std::string retroPlatformDir(int platform) {
     return kRetroPlatformDirs[platform];
 }
 
-static std::string dbDir() {
-    return beiklive::path::dbsPath();
-}
-
 static std::string chtCacheDir(int platform) {
     return beiklive::path::cheatPath() + "/Retroarch/" + platformDir(platform);
-}
-
-static std::string romPlatformKey(const std::string& romPath) {
-    return romPath + "_platform"; // 用于缓存平台类型
 }
 
 // ── HTTP 下载 ──────────────────────────────────────────────
@@ -121,18 +184,14 @@ static std::vector<CheatMatchResult> doMatch(int platform, const std::string& ro
     std::string pDir = platformDir(platform);
     if (pDir.empty()) return results;
 
-    // 1. 读取 ROM CRC32 和 GameID
     uint32_t crc = beiklive::tools::crc32(romPath);
     std::string crcHex = beiklive::tools::crc32ToHex(crc);
     std::string gameId = beiklive::tools::readGbaGameID(romPath);
 
-    // 2. 读取 DB，匹配 name
-    std::string dbPath = dbDir() + "/" + std::string(kPlatformNames[platform]) + "_db.json";
-    // platform 1=GBA → 小写
     std::string platLower = kPlatformNames[platform];
     std::transform(platLower.begin(), platLower.end(), platLower.begin(),
                    [](unsigned char c) { return std::tolower(c); });
-    dbPath = dbDir() + "/" + platLower + "_db.json";
+    std::string dbPath = beiklive::path::dbsPath() + "/" + platLower + "_db.json";
 
     std::ifstream dbFile(dbPath);
     if (!dbFile.is_open()) return results;
@@ -158,7 +217,6 @@ static std::vector<CheatMatchResult> doMatch(int platform, const std::string& ro
 
     if (matchedNames.empty()) return results;
 
-    // 对每个匹配到的 name 提取 keyword
     std::set<std::string> allKeywords;
     for (const auto& name : matchedNames) {
         auto kw = extractKeywords(name);
@@ -166,8 +224,7 @@ static std::vector<CheatMatchResult> doMatch(int platform, const std::string& ro
     }
     std::vector<std::string> keywords(allKeywords.begin(), allKeywords.end());
 
-    // 3. 读取 CHT DB，匹配关键字
-    std::string chtDbPath = dbDir() + "/" + platLower + "_cht.json";
+    std::string chtDbPath = beiklive::path::dbsPath() + "/" + platLower + "_cht.json";
     std::ifstream chtFile(chtDbPath);
     if (!chtFile.is_open()) return results;
 
@@ -192,12 +249,9 @@ static std::vector<CheatMatchResult> doMatch(int platform, const std::string& ro
 
 class CheatSelectActivity : public beiklive::Box {
 public:
-    CheatSelectActivity(const std::string& romPath,
-                        std::vector<CheatMatchResult> results,
-                        int platform,
+    CheatSelectActivity(std::vector<CheatMatchResult> results,
                         std::function<void(const std::string&)> onDone)
-        : m_romPath(romPath), m_results(std::move(results)),
-          m_platform(platform), m_onDone(std::move(onDone)) {
+        : m_results(std::move(results)), m_onDone(std::move(onDone)) {
         this->showHeader(false);
         this->showFooter(false);
         auto* root = this->getContentBox();
@@ -221,21 +275,19 @@ public:
         titleLbl->setMarginBottom(16.f);
         card->addView(titleLbl);
 
-        // SelectorButton
-        m_selector = new beiklive::SelectorButton();
-        m_selector->setText("匹配列表");
-        m_selector->setHeight(50.f);
         std::vector<std::string> names;
         for (auto& r : m_results) names.push_back(r.filename);
-        m_selector->setOptions(names, 0);
-        m_selector->setOnSelect([this](int idx) {
-            if (idx < 0 || idx >= (int)m_results.size()) return;
-            m_selectedIdx = idx;
-            _updatePreview();
-        });
-        card->addView(m_selector);
+        auto* dropdown = new brls::Dropdown("匹配列表", names,
+            [this](int idx) {
+                if (idx >= 0 && idx < (int)m_results.size()) {
+                    m_selectedIdx = idx;
+                    _updatePreview();
+                }
+            },
+            0);
+        dropdown->setHeight(60.f);
+        card->addView(dropdown);
 
-        // 预览区
         auto* scroll = new brls::ScrollingFrame();
         scroll->setGrow(1.f);
         scroll->setScrollingIndicatorVisible(false);
@@ -249,24 +301,21 @@ public:
         scroll->setContentView(m_previewLabel);
 
         card->addView(scroll);
-
         root->addView(card);
 
-        // B 关闭
         this->registerAction("返回", brls::BUTTON_B, [this](brls::View*) {
             brls::Application::popActivity(brls::TransitionAnimation::NONE);
             return true;
         });
 
-        // A 确认选择
         this->registerAction("确认", brls::BUTTON_A, [this](brls::View*) {
             if (m_selectedIdx < 0 || m_selectedIdx >= (int)m_results.size())
                 return false;
             auto& r = m_results[m_selectedIdx];
             auto* dlg = new brls::Dialog("是否选择 " + r.filename + " ？");
             dlg->addButton("取消", []() {});
-            dlg->addButton("确认", [this, &r]() {
-                if (m_onDone) m_onDone(r.filePath);
+            dlg->addButton("确认", [this, path = r.filePath]() {
+                if (m_onDone) m_onDone(path);
                 brls::Application::popActivity(brls::TransitionAnimation::NONE);
             });
             dlg->open();
@@ -277,12 +326,9 @@ public:
     }
 
 private:
-    std::string m_romPath;
     std::vector<CheatMatchResult> m_results;
-    int m_platform;
     int m_selectedIdx = 0;
     std::function<void(const std::string&)> m_onDone;
-    beiklive::SelectorButton* m_selector = nullptr;
     brls::Label* m_previewLabel = nullptr;
 
     void _updatePreview() {
@@ -297,15 +343,17 @@ private:
 
 void startCheatMatching(int platform, const std::string& romPath,
                         std::function<void(const std::string& cheatPath)> onDone) {
+    auto* cancelFlag = new std::atomic<bool>(false);
+
+    auto* prog = new ProgressDialog("正在匹配金手指...",
+        [cancelFlag]() { cancelFlag->store(true); });
+    auto* frame = new brls::AppletFrame(prog);
+    HIDE_BRLS_BAR(frame);
+    brls::Application::pushActivity(new brls::Activity(frame),
+                                    brls::TransitionAnimation::NONE);
     brls::Application::blockInputs();
 
-    auto* dlg = new brls::Dialog("正在匹配金手指...\n\n请稍候");
-    auto* cancelFlag = new std::atomic<bool>(false);
-    dlg->addButton("取消", [cancelFlag]() { cancelFlag->store(true); });
-    dlg->setCancelable(false);
-    dlg->open();
-
-    new std::thread([platform, romPath, onDone = std::move(onDone), dlg, cancelFlag]() {
+    new std::thread([platform, romPath, onDone = std::move(onDone), prog, cancelFlag]() {
         // 检查数据库文件
         {
             std::string db = beiklive::path::dbsPath();
@@ -321,10 +369,10 @@ void startCheatMatching(int platform, const std::string& romPath,
                 }
             }
             if (missing) {
-                brls::sync([dlg, cancelFlag]() {
-                    dlg->close([]{});
+                brls::sync([prog, cancelFlag]() {
                     delete cancelFlag;
                     brls::Application::unblockInputs();
+                    prog->close();
                     auto* err = new brls::Dialog("数据库文件缺失\n请去 关于-更新 中更新数据库");
                     err->addButton("确定", []() {});
                     err->open();
@@ -334,31 +382,32 @@ void startCheatMatching(int platform, const std::string& romPath,
         }
 
         if (cancelFlag->load()) {
-            brls::sync([dlg, cancelFlag]() {
-                dlg->close([]{});
+            brls::sync([prog, cancelFlag]() {
                 delete cancelFlag;
                 brls::Application::unblockInputs();
+                prog->close();
             });
             return;
         }
 
-        // 执行匹配
+        brls::sync([prog]() { prog->setStatus("正在计算 ROM 特征码..."); });
+
         auto results = doMatch(platform, romPath);
 
         if (cancelFlag->load()) {
-            brls::sync([dlg, cancelFlag]() {
-                dlg->close([]{});
+            brls::sync([prog, cancelFlag]() {
                 delete cancelFlag;
                 brls::Application::unblockInputs();
+                prog->close();
             });
             return;
         }
 
         if (results.empty()) {
-            brls::sync([dlg, cancelFlag]() {
-                dlg->close([]{});
+            brls::sync([prog, cancelFlag]() {
                 delete cancelFlag;
                 brls::Application::unblockInputs();
+                prog->close();
                 auto* err = new brls::Dialog("未匹配到，请在游戏中手动设置金手指");
                 err->addButton("确定", []() {});
                 err->open();
@@ -366,12 +415,17 @@ void startCheatMatching(int platform, const std::string& romPath,
             return;
         }
 
-        // 下载缺失的 cht 文件
+        brls::sync([prog, count = (int)results.size()]() {
+            prog->setText("正在下载金手指...");
+            prog->setStatus("已匹配 " + std::to_string(count) + " 个，正在下载...");
+        });
+
         std::string cacheDir = chtCacheDir(platform);
         std::error_code ec;
         std::filesystem::create_directories(cacheDir, ec);
         std::string retroDir = retroPlatformDir(platform);
 
+        int dlCount = 0;
         for (auto& r : results) {
             if (cancelFlag->load()) break;
             std::string localPath = cacheDir + beiklive::path::SPLIT_CHAR + r.filename;
@@ -380,8 +434,10 @@ void startCheatMatching(int platform, const std::string& romPath,
                 std::string body = fetchUrl(url);
                 if (!body.empty() && !cancelFlag->load()) {
                     std::ofstream out(localPath, std::ios::binary | std::ios::trunc);
-                    if (out) { out << body; out.close(); }
+                    if (out) { out << body; out.close(); ++dlCount; }
                 }
+            } else {
+                ++dlCount;
             }
             if (std::filesystem::exists(localPath)) {
                 r.filePath = localPath;
@@ -395,24 +451,23 @@ void startCheatMatching(int platform, const std::string& romPath,
         }
 
         if (cancelFlag->load()) {
-            brls::sync([dlg, cancelFlag]() {
-                dlg->close([]{});
+            brls::sync([prog, cancelFlag]() {
                 delete cancelFlag;
                 brls::Application::unblockInputs();
+                prog->close();
             });
             return;
         }
 
-        // 过滤掉下载失败的
         std::vector<CheatMatchResult> validResults;
         for (auto& r : results)
             if (!r.filePath.empty()) validResults.push_back(std::move(r));
 
         if (validResults.empty()) {
-            brls::sync([dlg, cancelFlag]() {
-                dlg->close([]{});
+            brls::sync([prog, cancelFlag]() {
                 delete cancelFlag;
                 brls::Application::unblockInputs();
+                prog->close();
                 auto* err = new brls::Dialog("下载失败，请检查网络后重试");
                 err->addButton("确定", []() {});
                 err->open();
@@ -420,15 +475,13 @@ void startCheatMatching(int platform, const std::string& romPath,
             return;
         }
 
-        brls::sync([dlg, cancelFlag, romPath, platform,
-                    validResults = std::move(validResults),
+        brls::sync([prog, cancelFlag, validResults = std::move(validResults),
                     onDone = std::move(onDone)]() mutable {
-            dlg->close([]{});
             delete cancelFlag;
             brls::Application::unblockInputs();
+            prog->close();
 
-            auto* activity = new CheatSelectActivity(romPath, std::move(validResults),
-                                                     platform, std::move(onDone));
+            auto* activity = new CheatSelectActivity(std::move(validResults), std::move(onDone));
             auto* frame = new brls::AppletFrame(activity);
             HIDE_BRLS_BAR(frame);
             brls::Application::pushActivity(new brls::Activity(frame),
