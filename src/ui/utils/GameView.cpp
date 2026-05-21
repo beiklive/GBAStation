@@ -744,7 +744,9 @@ namespace beiklive
             if (m_ffMute)
                 return;
             if (framesRan > 1) {
-                size_t limit = frames / framesRan;
+                float exact = static_cast<float>(frames) / static_cast<float>(framesRan);
+                size_t limit = static_cast<size_t>(exact + m_audioFracAccum);
+                m_audioFracAccum = exact + m_audioFracAccum - static_cast<float>(limit);
                 if (limit > 0) frames = limit;
             }
         }
