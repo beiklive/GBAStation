@@ -1,6 +1,7 @@
 #include "GameLibraryPage.hpp"
 #include "ui/utils/FilePickerHelper.hpp"
 #include "core/ThreadPool.hpp"
+#include "ui/utils/CheatMatcher.hpp"
 #include <algorithm>
 #include <cctype>
 
@@ -394,6 +395,20 @@ namespace beiklive
                 });
                 dlg->addButton("取消", [](){});
                 dlg->open();
+            });
+
+        // ── 自动匹配金手指 ──
+        m_gameOptionsSidebar->addButton("自动匹配金手指", BK_RES("img/ui/setting/emu.png"),
+            [this, path, platform = entry.platform, romPath = entry.path](const beiklive::GameEntry&) {
+                _hideGameOptionsPanel();
+                beiklive::startCheatMatching(platform, romPath,
+                    [this, path](const std::string& cheatPath) {
+                        if (!cheatPath.empty() && beiklive::GameDB) {
+                            beiklive::GameDB->set(path, "cheatPath", nlohmann::json(cheatPath));
+                            beiklive::GameDB->flush();
+                            _reloadEntries();
+                        }
+                    });
             });
 
         m_gameOptionsSidebar->onClosed = [this]() {
