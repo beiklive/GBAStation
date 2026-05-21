@@ -114,8 +114,11 @@ public:
 
     // ---- 快进状态 ---------------------------------------------------
 
-    /// 通知核心宿主是否正在快进，用于响应RETRO_ENVIRONMENT_GET_FASTFORWARDING查询。
+    /// 设置快进状态
     void setFastForwarding(bool ff) { m_fastForwarding.store(ff, std::memory_order_relaxed); }
+
+    /// 通知核心配置已更新，下次 GET_VARIABLE_UPDATE 返回 true，触发核心重读变量
+    void notifyConfigUpdated() { m_configChanged.store(true, std::memory_order_release); }
 
 private:
     // ---- 动态库句柄 -------------------------------------------------
@@ -169,6 +172,7 @@ private:
     // ConfigManager提供用户保存的值；m_coreVarStorage保存c_str()指针，
     // 在loader生命周期内保持有效。
     beiklive::ConfigManager*                        m_configManager = nullptr;
+    std::atomic<bool>                               m_configChanged{false};
     std::unordered_map<std::string, std::string> m_coreVarStorage;
 
     // ---- 存档/系统目录 ----------------------------------------------

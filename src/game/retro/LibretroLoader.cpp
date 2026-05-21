@@ -566,7 +566,7 @@ bool LibretroLoader::s_environmentCallback(unsigned cmd, void* data)
         }
         case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE: {
             bool* b = static_cast<bool*>(data);
-            if (b) *b = false;
+            if (b) *b = s_current->m_configChanged.exchange(false, std::memory_order_acq_rel);
             return true;
         }
         case RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL:

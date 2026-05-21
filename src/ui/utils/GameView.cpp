@@ -1501,6 +1501,12 @@ namespace beiklive
         m_renderer.setFilter(filter == "linear");
     }
 
+    void GameView::_onConfigUpdated()
+    {
+        if (m_gba_core)
+            m_gba_core->NotifyConfigUpdated();
+    }
+
     // ============================================================
     // _downsampleToRGB565 – RGBA8888 降采样并转换为 RGB565
     // 支持最近邻（NearestNeighbor）和双线性（Bilinear）两种压缩策略

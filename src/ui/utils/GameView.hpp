@@ -96,6 +96,8 @@ namespace beiklive
             void _onOverlayPathChange(const std::string& path);
             /// 纹理过滤变更（UI线程调用）
             void _onFilterChange(const std::string& filter);
+            /// 配置变更通知（UI线程调用，通知核心重读变量）
+            void _onConfigUpdated();
             /// 获取着色器参数列表
             std::vector<ShaderParamInfo> _getShaderParams() const { return m_renderer.getShaderParams(); }
             /// 设置着色器参数

@@ -68,6 +68,9 @@ namespace beiklive::gba
 
         void SetFastForwarding(bool ff) { m_core.setFastForwarding(ff); } // 只是设置标志位，实际快进逻辑由 GameView 根据该标志控制每帧运行的次数
 
+        /// 通知核心外部配置已变更，下次 retro_run 时重读变量
+        void NotifyConfigUpdated() { m_core.notifyConfigUpdated(); }
+
         // ---- 金手指管理（外部调用）------------------------------------------
 
         void ApplyCheats(const std::vector<CheatEntry>& cheats){
