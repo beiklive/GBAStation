@@ -135,21 +135,36 @@ jobs:
           git clone https://x-access-token:${{ secrets.RELEASE_REPO_TOKEN }}@github.com/beiklive/GBAStation_Release.git release_repo
 
       # =========================
-      # 拷贝数据库
+      # 打包数据库
       # =========================
 
-      - name: Copy Database Files
+      - name: Create Cheat Database ZIP
+        run: |
+
+          mkdir -p cheat_db
+
+          cp tools/gba_db.json cheat_db/
+          cp tools/gbc_db.json cheat_db/
+          cp tools/gb_db.json cheat_db/
+
+          cp tools/gba_cht.json cheat_db/
+          cp tools/gbc_cht.json cheat_db/
+          cp tools/gb_cht.json cheat_db/
+
+          cd cheat_db
+
+          zip -r ../cheat_db.zip .
+
+      # =========================
+      # 拷贝 ZIP
+      # =========================
+
+      - name: Copy ZIP File
         run: |
 
           mkdir -p release_repo/cheat_db
 
-          cp tools/gba_db.json release_repo/cheat_db/
-          cp tools/gbc_db.json release_repo/cheat_db/
-          cp tools/gb_db.json release_repo/cheat_db/
-
-          cp tools/gba_cht.json release_repo/cheat_db/
-          cp tools/gbc_cht.json release_repo/cheat_db/
-          cp tools/gb_cht.json release_repo/cheat_db/
+          cp cheat_db.zip release_repo/cheat_db/
 
       # =========================
       # Commit & Push
