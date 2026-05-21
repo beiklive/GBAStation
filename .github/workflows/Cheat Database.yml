@@ -1,0 +1,164 @@
+name: Update Cheat Database
+
+on:
+  schedule:
+    # 每两天 UTC 00:00
+    - cron: '0 0 */2 * *'
+
+  workflow_dispatch:
+
+jobs:
+  update-db:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      # =========================
+      # 下载 DAT
+      # =========================
+
+      - name: Download DAT Files
+        run: |
+
+          mkdir -p tools
+
+          curl -L \
+            "https://raw.githubusercontent.com/libretro/libretro-database/master/metadat/no-intro/Nintendo%20-%20Game%20Boy%20Advance.dat" \
+            -o "tools/Nintendo - Game Boy Advance.dat"
+
+          curl -L \
+            "https://raw.githubusercontent.com/libretro/libretro-database/master/metadat/no-intro/Nintendo%20-%20Game%20Boy%20Color.dat" \
+            -o "tools/Nintendo - Game Boy Color.dat"
+
+          curl -L \
+            "https://raw.githubusercontent.com/libretro/libretro-database/master/metadat/no-intro/Nintendo%20-%20Game%20Boy.dat" \
+            -o "tools/Nintendo - Game Boy.dat"
+
+      # =========================
+      # 执行 DAT 简化脚本
+      # =========================
+
+      - name: Run DataBaseSimplize
+        run: |
+          cd tools
+          python DataBaseSimplize.py
+
+      # =========================
+      # 获取 cht 文件列表
+      # =========================
+
+      - name: Generate CHT JSON
+        run: |
+
+          python << 'EOF'
+
+          import json
+          import requests
+
+          headers = {
+              "Accept": "application/vnd.github+json"
+          }
+
+          targets = [
+              {
+                  "repo_path": "Nintendo - Game Boy Advance",
+                  "output": "tools/gba_cht.json"
+              },
+              {
+                  "repo_path": "Nintendo - Game Boy Color",
+                  "output": "tools/gbc_cht.json"
+              },
+              {
+                  "repo_path": "Nintendo - Game Boy",
+                  "output": "tools/gb_cht.json"
+              }
+          ]
+
+          for item in targets:
+
+              url = (
+                  "https://api.github.com/repos/"
+                  "libretro/libretro-database/contents/"
+                  "cht/" + item["repo_path"]
+              )
+
+              r = requests.get(url, headers=headers)
+
+              data = r.json()
+
+              result = []
+
+              for entry in data:
+
+                  name = entry.get("name", "")
+
+                  if name.endswith(".cht"):
+
+                      result.append({
+                          "name": name
+                      })
+
+              with open(item["output"], "w", encoding="utf-8") as f:
+
+                  json.dump(
+                      result,
+                      f,
+                      ensure_ascii=False,
+                      indent=4
+                  )
+
+              print(item["output"], "Done")
+
+          EOF
+
+      # =========================
+      # Clone Release Repo
+      # =========================
+
+      - name: Clone Release Repo
+        run: |
+          git clone https://x-access-token:${{ secrets.RELEASE_REPO_TOKEN }}@github.com/beiklive/GBAStation_Release.git release_repo
+
+      # =========================
+      # 拷贝数据库
+      # =========================
+
+      - name: Copy Database Files
+        run: |
+
+          mkdir -p release_repo/cheat_db
+
+          cp tools/gba_db.json release_repo/cheat_db/
+          cp tools/gbc_db.json release_repo/cheat_db/
+          cp tools/gb_db.json release_repo/cheat_db/
+
+          cp tools/gba_cht.json release_repo/cheat_db/
+          cp tools/gbc_cht.json release_repo/cheat_db/
+          cp tools/gb_cht.json release_repo/cheat_db/
+
+      # =========================
+      # Commit & Push
+      # =========================
+
+      - name: Commit and Push
+        run: |
+
+          cd release_repo
+
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          git add cheat_db
+
+          git commit -m "Update cheat database" || echo "No changes"
+
+          git push
