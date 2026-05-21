@@ -37,6 +37,10 @@ namespace beiklive
             void setSaveStateCallback(std::function<void(int)> cb) { m_saveStateCallback = std::move(cb); }
             void setLoadStateCallback(std::function<void(int)> cb) { m_loadStateCallback = std::move(cb); }
             void setStateInfoCallback(std::function<StateSlotInfo(int)> cb) { m_stateInfoCallback = std::move(cb); }
+            void setDeleteStateCallback(std::function<void(int)> cb) { m_deleteStateCallback = std::move(cb); }
+
+            /// 重新扫描指定槽位并更新两个网格的显示状态
+            void refreshSlotState(int slot);
 
             /// 设置金手指切换回调 (index, enabled)
             void setCheatToggleCallback(std::function<void(int, bool)> cb) { m_cheatToggleCallback = std::move(cb); }
@@ -63,6 +67,7 @@ namespace beiklive
             beiklive::GameEntry m_gameEntry;
             std::function<void()> m_onResume, m_onReset, m_onExit;
             std::function<void(int)> m_saveStateCallback, m_loadStateCallback;
+            std::function<void(int)> m_deleteStateCallback;
             std::function<StateSlotInfo(int)> m_stateInfoCallback;
             std::function<void(int, bool)> m_cheatToggleCallback;
             std::function<void(const std::string&)> m_cheatPathCallback;

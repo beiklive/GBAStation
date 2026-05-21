@@ -64,13 +64,19 @@ namespace beiklive
         /// 清除全部数据与视图（重置渲染计数）
         void clearItems();
 
+        /// 获取当前item索引
+        int getItemIndex() const { return m_itemIndex; }
+        void setItemIndex(int index) { m_itemIndex = index; }
+
         /// 获取内部 ScrollingFrame
         brls::ScrollingFrame* getScrollFrame() const { return m_scrollFrame; }
 
         std::function<void(int index)> onItemClicked;
         std::function<void(int index)> onItemFocused;
+        
 
     private:
+        int m_itemIndex = -1;
         int m_columns = 4;
         bool m_hideHightlight = false;
         int m_renderedCount = 0;

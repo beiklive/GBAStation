@@ -231,6 +231,26 @@ namespace beiklive
 
             // dialog->open();
         };
+        grid->onItemFocused = [this, grid](int slot)
+        {
+            grid->setItemIndex(slot);
+        };
+
+        grid->registerAction("删除该档位", brls::BUTTON_X, [this, grid](brls::View *view) -> bool
+        {
+            int slot = grid->getItemIndex();
+            if (slot < 0 || slot >= static_cast<int>(m_saveItems.size()))
+                return true;
+            
+            auto* dialog = new brls::Dialog("确定要删除档位" + _slotName(slot) + "?");
+            dialog->addButton("取消", []() {});
+            dialog->addButton("确认", [this, slot]() {
+                if (m_deleteStateCallback)
+                    m_deleteStateCallback(slot);
+            });
+            dialog->open();
+            return true; 
+        });
 
         wrapper->addView(grid);
         return wrapper;
@@ -289,7 +309,26 @@ namespace beiklive
             // });
             // dialog->open();
         };
+        grid->onItemFocused = [this, grid](int slot)
+        {
+            grid->setItemIndex(slot);
+        };
 
+        grid->registerAction("删除该档位", brls::BUTTON_X, [this, grid](brls::View *view) -> bool
+        {
+            int slot = grid->getItemIndex();
+            if (slot < 0 || slot >= static_cast<int>(m_saveItems.size()))
+                return true;
+            
+            auto* dialog = new brls::Dialog("确定要删除档位" + _slotName(slot) + "?");
+            dialog->addButton("取消", []() {});
+            dialog->addButton("确认", [this, slot]() {
+                if (m_deleteStateCallback)
+                    m_deleteStateCallback(slot);
+            });
+            dialog->open();
+            return true; 
+        });
         wrapper->addView(grid);
         return wrapper;
     }
@@ -357,6 +396,31 @@ namespace beiklive
                     // }
                 }
             }); });
+    }
+
+    void GameMenuView::refreshSlotState(int slot)
+    {
+        if (slot < 0 || slot >= 10 || !m_stateInfoCallback) return;
+
+        StateSlotInfo info = m_stateInfoCallback(slot);
+
+        for (auto* items : {&m_saveItems, &m_loadItems}) {
+            if (slot >= static_cast<int>(items->size())) continue;
+            auto* item = (*items)[slot];
+            if (!item) continue;
+
+            item->setFocusable(true);
+            item->setDataLoaded();
+            item->setTitle(_slotName(slot));
+            if (info.exists) {
+                item->setSubText(info.timeStr.empty() ? "时间未知" : info.timeStr);
+                if (!info.thumbPath.empty())
+                    item->setImagePath(info.thumbPath);
+            } else {
+                item->setImagePath(BK_RES("img/ui/menu/empty.png"));
+                item->setSubText("");
+            }
+        }
     }
 
     void GameMenuView::draw(NVGcontext *vg, float x, float y, float w, float h,

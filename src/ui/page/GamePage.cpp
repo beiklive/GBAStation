@@ -371,11 +371,21 @@ namespace beiklive
                     if (info.exists) {
                         if (std::filesystem::exists(thumbPath, ec))
                             info.thumbPath = thumbPath;
-                        // 使用公共工具函数读取文件修改时间字符串
                         info.timeStr = beiklive::tools::getFileModTimeStr(statePath);
                     }
                     return info;
                 });
+
+            // 注入删除存档回调：删除指定槽位的存档文件和缩略图，然后刷新网格显示
+            m_gameMenuView->setDeleteStateCallback([this](int slot) {
+                if (!m_gameView) return;
+                std::string statePath = m_gameView->getStatePath(slot);
+                std::string thumbPath = m_gameView->getStateThumbPath(slot);
+                std::error_code ec;
+                std::filesystem::remove(statePath, ec);
+                std::filesystem::remove(thumbPath, ec);
+                m_gameMenuView->refreshSlotState(slot);
+            });
         }
 
         this->addView(m_gameMenuView);
