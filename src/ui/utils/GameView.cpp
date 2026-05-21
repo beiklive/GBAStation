@@ -729,7 +729,7 @@ namespace beiklive
     // ============================================================
     // _pushFrameAudio – 推送音频数据（快进时限制推送量）
     // ============================================================
-    void GameView::_pushFrameAudio(bool ff, unsigned framesRan)
+    void GameView::_pushFrameAudio(bool ff)
     {
         if (GameSignal::instance().isMuted()) {
             m_gba_core->DrainAudio(m_audioDrainBuf);
@@ -743,12 +743,9 @@ namespace beiklive
         if (ff) {
             if (m_ffMute)
                 return;
-            if (framesRan > 1) {
-                float exact = static_cast<float>(frames) / static_cast<float>(framesRan);
-                size_t limit = static_cast<size_t>(exact + m_audioFracAccum);
-                m_audioFracAccum = exact + m_audioFracAccum - static_cast<float>(limit);
-                if (limit > 0) frames = limit;
-            }
+            // 快进时全部样本非阻塞写入，由 ringbuffer 自动丢弃旧样本
+            AudioManager::instance().pushSamplesNoBlocking(m_audioDrainBuf.data(), frames);
+            return;
         }
         if (GameSignal::instance().isRewinding() && GET_SETTING_KEY_INT("rewind.mute", 0)) {
             return;
@@ -1137,7 +1134,7 @@ namespace beiklive
 
             // ---- 推送音频（慢动作跳过帧时不推送）----
             if (framesRan > 0)
-                _pushFrameAudio(ff, framesRan);
+                _pushFrameAudio(ff);
 
             // ---- FPS 统计（慢动作跳过帧时仍计入时间）----
             _updateFpsStats(framesRan, fpsLastTime, fpsCount);

@@ -82,6 +82,20 @@ void AudioManager::pushSamples(const int16_t* data, size_t frames)
     ringWrite(data, count);
 }
 
+void AudioManager::pushSamplesNoBlocking(const int16_t* data, size_t frames)
+{
+    if (!m_running.load(std::memory_order_acquire)) return;
+    const size_t count = frames * static_cast<size_t>(m_channels);
+    std::lock_guard<std::mutex> lk(m_mutex);
+    // 缓冲区满时一次性丢弃等量旧样本，不阻塞
+    if (m_available + count > RING_CAPACITY) {
+        size_t discard = m_available + count - RING_CAPACITY;
+        m_readPos = (m_readPos + discard) % RING_CAPACITY;
+        m_available -= discard;
+    }
+    ringWrite(data, count);
+}
+
 // ============================================================
 // flushRingBuffer – 丢弃所有缓冲样本
 // ============================================================

@@ -47,6 +47,10 @@ public:
     /// 线程安全，可在 libretro 音频回调中调用。
     void pushSamples(const int16_t* data, size_t frames);
 
+    /// 非阻塞写入：缓冲区满时丢弃等量旧样本腾空间，不阻塞调用方。
+    /// 用于快进等不希望因音频同步而拖慢模拟速度的场景。
+    void pushSamplesNoBlocking(const int16_t* data, size_t frames);
+
     /// 关闭音频子系统并停止后台线程。
     void deinit();
 
