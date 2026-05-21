@@ -494,7 +494,8 @@ void AboutPage::_updateCheatDatabase() {
     dlg->setCancelable(false);
     dlg->open();
 
-    new std::thread([this, dlg, cancelFlag]() {
+    ASYNC_RETAIN
+    new std::thread([ASYNC_TOKEN, dlg, cancelFlag]() {
         static const char* kUrl = "https://cdn.jsdelivr.net/gh/beiklive/GBAStation_Release@main/cheat_db/cheat_db.zip";
 
         std::string dbDir = beiklive::path::dbsPath();
@@ -561,18 +562,17 @@ void AboutPage::_updateCheatDatabase() {
             std::filesystem::remove(zipPath, ec);
         }
 
-        brls::sync([dlg, cancelFlag, downloadOk, extractCount]() {
-            dlg->close([]{});
-
+        brls::sync([ASYNC_TOKEN, dlg, cancelFlag, downloadOk, extractCount]() {
+            ASYNC_RELEASE
             bool cancelled = cancelFlag->load();
+            dlg->close([]{});
             delete cancelFlag;
-
             if (cancelled && !downloadOk) {
                 auto* okDlg = new brls::Dialog("已取消更新");
                 okDlg->addButton("确定", []() {});
                 okDlg->open();
             } else if (!downloadOk) {
-                auto* okDlg = new brls::Dialog("下载失败，请去网盘手动下载");
+                auto* okDlg = new brls::Dialog("下载失败，请稍后重试或者去网盘手动下载");
                 okDlg->addButton("确定", []() {});
                 okDlg->open();
             } else {
