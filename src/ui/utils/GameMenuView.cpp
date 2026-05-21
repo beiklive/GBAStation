@@ -781,19 +781,19 @@ namespace beiklive
             ffHdr->setTitle("快进速度");
             box->addView(ffHdr);
 
-            std::vector<std::string> ffLabels = {"0.1倍", "0.5倍", "1倍", "1.25倍", "1.5倍", "1.75倍", "2倍", "3倍", "4倍", "5倍", "6倍", "7倍", "8倍"};
-            static const float ffVals[] = {0.1f, 0.5f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f};
+            std::vector<std::string> ffLabels = {"0.1倍", "0.5倍", "1倍", "1.25倍", "1.5倍", "1.75倍", "2倍", "3倍", "4倍", "5倍", "6倍", "7倍", "8倍", "9倍", "10倍"};
+            static const float ffVals[] = {0.1f, 0.5f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f};
             float curFF = GET_SETTING_KEY_FLOAT("fastforward.multiplier", 4.0f);
             int ffIdx = 8;
-            for (int i = 0; i < 13; ++i)
+            for (int i = 0; i < 15; ++i)
                 if (ffVals[i] == curFF) { ffIdx = i; break; }
             auto *ffCell = new beiklive::SelectorButton();
             ffCell->setText("快进倍率");
             ffCell->setOptions(ffLabels, ffIdx);
             ffCell->setOnSelect(
                 [](int i) {
-                    static const float vals[] = {0.1f, 0.5f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f};
-                    if (i >= 0 && i < 13) SET_SETTING_KEY_FLOAT("fastforward.multiplier", vals[i]);
+                    static const float vals[] = {0.1f, 0.5f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f};
+                    if (i >= 0 && i < 15) SET_SETTING_KEY_FLOAT("fastforward.multiplier", vals[i]);
                 });
             box->addView(ffCell);
             box->addView(makeHint("小于1倍时可在快进触发时实现慢动作效果"));
