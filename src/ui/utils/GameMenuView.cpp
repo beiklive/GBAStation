@@ -929,7 +929,7 @@ namespace beiklive
             m_ShaderSidePanel->setPositionLeft(0);
             m_ShaderSidePanel->setWidthPercentage(100.f);
             m_ShaderSidePanel->setHeightPercentage(100.f);
-            m_ShaderSidePanel->setBackgroundColor(nvgRGBA(0, 0, 0, 60));
+            m_ShaderSidePanel->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
             m_ShaderSidePanel->setFocusable(false);
             m_ShaderSidePanel->setVisibility(brls::Visibility::GONE);
 
@@ -939,7 +939,7 @@ namespace beiklive
             row->setFocusable(false);
 
             auto *panel = new brls::Box(brls::Axis::COLUMN);
-            panel->setWidth(380.f);
+            panel->setWidth(420.f);
             panel->setHeightPercentage(100.f);
             panel->setBackgroundColor(nvgRGBA(30, 30, 35, 50));
             panel->setCornerRadius(12.f);
@@ -953,6 +953,18 @@ namespace beiklive
                 beiklive::GameDB->set(m_gameEntry.path, "shaderParaNames", nlohmann::json(m_gameEntry.shaderParaNames));
                 beiklive::GameDB->set(m_gameEntry.path, "shaderParaValues", nlohmann::json(m_gameEntry.shaderParaValues));
                 beiklive::GameDB->flush();
+
+                {
+                    bool enable = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_UI_SHOW_SHADER, 1) != 0;
+                    if(enable){
+                        this->showShader(true);
+                    }
+                    enable = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_UI_SHOW_BG_IMAGE, 1) != 0;
+                    if(enable){
+                        this->showBackground(true);
+                    }
+                }
+
                 _dismissSidePanel(3); return true; };
 
             auto *hdr = new brls::Header();
@@ -1330,7 +1342,17 @@ namespace beiklive
         m_panel->setVisibility(brls::Visibility::GONE);
         this->showHeader(false);
         this->showFooter(false);
-        this->setBackgroundColor(nvgRGBA(0, 0, 0, 10));
+        this->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
+        {
+            bool enable = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_UI_SHOW_SHADER, 1) != 0;
+            if(enable){
+                this->showShader(false);
+            }
+            enable = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_UI_SHOW_BG_IMAGE, 1) != 0;
+            if(enable){
+                this->showBackground(false);
+            }
+        }
 
         brls::Application::giveFocus(m_ShaderSidePanel);
     }
