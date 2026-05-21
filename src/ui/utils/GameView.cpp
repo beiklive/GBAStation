@@ -1112,13 +1112,20 @@ namespace beiklive
             // 通知核心当前快进状态（供 RETRO_ENVIRONMENT_GET_FASTFORWARDING 查询）
             m_gba_core->SetFastForwarding(ff);
 
-            // ---- 执行核心帧逻辑 ----
-            unsigned framesRan = 1u;
-
             // 每帧读取快进倍率（支持菜单中实时调整）
             m_ffMultiplier = GET_SETTING_KEY_FLOAT("fastforward.multiplier", 4.0f);
             if (m_ffMultiplier <= 0.0f) m_ffMultiplier = 1.0f;
             m_ffMute = GET_SETTING_KEY_INT("fastforward.mute", 1) != 0;
+
+            // 同步倍速到音频重采样器
+            {
+                static float s_lastSpeed = 1.0f;
+                float curSpeed = ff ? m_ffMultiplier : 1.0f;
+                if (curSpeed != s_lastSpeed) {
+                    AudioManager::instance().setSpeed(curSpeed);
+                    s_lastSpeed = curSpeed;
+                }
+            }
 
             if (rew) {
                 // 倒带：从历史缓冲区恢复状态

@@ -47,9 +47,12 @@ public:
     /// 线程安全，可在 libretro 音频回调中调用。
     void pushSamples(const int16_t* data, size_t frames);
 
-    /// 非阻塞写入：缓冲区满时丢弃等量旧样本腾空间，不阻塞调用方。
+    /// 非阻塞写入：不阻塞调用方，缓冲区满时由 ringWrite 逐样本覆盖最旧数据。
     /// 用于快进等不希望因音频同步而拖慢模拟速度的场景。
     void pushSamplesNoBlocking(const int16_t* data, size_t frames);
+
+    /// 设置当前模拟速度倍率（1.0=正常速度，音频线程据此动态调整重采样比例）
+    void setSpeed(float speed) { m_currentSpeed.store(speed, std::memory_order_release); }
 
     /// 关闭音频子系统并停止后台线程。
     void deinit();
@@ -70,6 +73,8 @@ public:
     // ---- 环形缓冲区 -------------------------------------------------
     // 将总延迟控制在约 250ms 以内
     static constexpr size_t RING_CAPACITY = 32768;
+
+    std::atomic<float> m_currentSpeed{1.0f}; ///< 当前模拟速度倍率
 
     std::mutex               m_mutex;
     std::condition_variable  m_spaceCV;   ///< 环形缓冲区排空（释放空间）时通知

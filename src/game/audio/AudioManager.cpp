@@ -87,31 +87,6 @@ void AudioManager::pushSamplesNoBlocking(const int16_t* data, size_t frames)
     if (!m_running.load(std::memory_order_acquire)) return;
     const size_t count = frames * static_cast<size_t>(m_channels);
     std::lock_guard<std::mutex> lk(m_mutex);
-
-    static constexpr size_t RAMP_SAMPLES = 64; // ~1.3ms @ 48kHz stereo
-
-    if (m_available + count > RING_CAPACITY) {
-        size_t discard = m_available + count - RING_CAPACITY;
-        m_readPos = (m_readPos + discard) % RING_CAPACITY;
-        m_available -= discard;
-
-        // 丢弃后对新区间做 fade-in ramp，消除硬切导致的 click/pop
-        if (discard > 0 && count > 0) {
-            size_t rampCount = std::min(count, RAMP_SAMPLES);
-            for (size_t i = 0; i < rampCount; ++i) {
-                float t = static_cast<float>(i + 1) / static_cast<float>(rampCount);
-                int16_t v = static_cast<int16_t>(static_cast<float>(data[i]) * t);
-                m_ring[m_writePos] = v;
-                m_writePos = (m_writePos + 1) % RING_CAPACITY;
-                ++m_available;
-            }
-            size_t remaining = count - rampCount;
-            if (remaining > 0)
-                ringWrite(data + rampCount, remaining);
-            m_dataCV.notify_one();
-            return;
-        }
-    }
     ringWrite(data, count);
 }
 
@@ -217,19 +192,18 @@ void AudioManager::audioThreadFunc()
 
         int16_t* dst = sw->bufData[sw->curBuf];
 
-        // 计算重采样所需输入帧数（核心采样率 → SWITCH_OUT_RATE）
-        double ratio = static_cast<double>(m_sampleRate) / SWITCH_OUT_RATE;
+        // 动态重采样比例 = (输入采样率 / 输出采样率) * 当前模拟速度
+        float speed = m_currentSpeed.load(std::memory_order_acquire);
+        if (speed < 0.1f) speed = 1.0f;
+        double ratio = static_cast<double>(m_sampleRate) / SWITCH_OUT_RATE * speed;
         size_t inputFrames = static_cast<size_t>(SWITCH_FRAMES * ratio + 0.5);
         if (inputFrames == 0) inputFrames = 1;
-        if (inputFrames > SWITCH_FRAMES) inputFrames = SWITCH_FRAMES;
+        if (inputFrames > SWITCH_FRAMES * 2) inputFrames = SWITCH_FRAMES * 2;
 
-        int16_t tmp[SWITCH_FRAMES * 2];
+        int16_t tmp[SWITCH_FRAMES * 4]; // 足够容纳 2x 输入
         {
             const size_t needed = inputFrames * static_cast<size_t>(m_channels);
             std::unique_lock<std::mutex> lk(m_mutex);
-            // 等待足够数据（最多 8ms）：8ms 约为一个 512帧/48000Hz 硬件缓冲区的播放时长，
-            // 在此窗口内等待游戏线程补充数据，可大幅减少 underrun 导致的静音爆音，
-            // 同时不会因等待过长而导致硬件缓冲区耗尽。
             m_dataCV.wait_for(lk, std::chrono::milliseconds(8), [&] {
                 return m_available >= needed ||
                        !m_running.load(std::memory_order_relaxed);
@@ -239,16 +213,19 @@ void AudioManager::audioThreadFunc()
                 memset(tmp + got, 0, (needed - got) * sizeof(int16_t));
         }
 
-        if (m_sampleRate != SWITCH_OUT_RATE) {
-            // 最近邻重采样
-            for (size_t i = 0; i < SWITCH_FRAMES; ++i) {
-                size_t s = static_cast<size_t>(i * ratio);
-                if (s >= inputFrames) s = inputFrames - 1;
-                dst[i * 2]     = tmp[s * 2];
-                dst[i * 2 + 1] = tmp[s * 2 + 1];
+        // 线性插值重采样（替代最近邻，大幅减少 aliasing）
+        double step = static_cast<double>(inputFrames) / SWITCH_FRAMES;
+        for (size_t i = 0; i < SWITCH_FRAMES; ++i) {
+            double pos = i * step;
+            size_t idx = static_cast<size_t>(pos);
+            double frac = pos - static_cast<double>(idx);
+            size_t nextIdx = (idx + 1 < inputFrames) ? idx + 1 : idx;
+
+            for (int ch = 0; ch < 2; ++ch) {
+                float a = static_cast<float>(tmp[idx * 2 + ch]);
+                float b = static_cast<float>(tmp[nextIdx * 2 + ch]);
+                dst[i * 2 + ch] = static_cast<int16_t>(a + (b - a) * static_cast<float>(frac));
             }
-        } else {
-            memcpy(dst, tmp, SWITCH_FRAMES * 2 * sizeof(int16_t));
         }
 
         audoutAppendAudioOutBuffer(&sw->outBuf[sw->curBuf]);
