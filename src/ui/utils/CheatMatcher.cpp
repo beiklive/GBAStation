@@ -471,6 +471,7 @@ void startCheatMatching(int platform, const std::string& romPath,
             HIDE_BRLS_BAR(frame);
             brls::Application::pushActivity(new brls::Activity(frame),
                                             brls::TransitionAnimation::NONE);
+            brls::Application::giveFocus(activity->getFocusView());
         });
     });
 }
