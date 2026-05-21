@@ -117,20 +117,6 @@ private:
         selector->setHeight(70.f);
         m_dynamicArea->addView(selector);
 
-        auto* scroll = new brls::ScrollingFrame();
-        scroll->setGrow(1.f);
-        scroll->setScrollingIndicatorVisible(false);
-
-        m_previewLabel = new brls::Label();
-        m_previewLabel->setFontSize(14.f);
-        m_previewLabel->setTextColor(nvgRGBA(200,200,200,255));
-        m_previewLabel->setIsWrapping(true);
-        m_previewLabel->setFocusable(true);
-        UP_DOWN_NAVIGATION(m_previewLabel, m_previewLabel);
-        scroll->setContentView(m_previewLabel);
-
-        m_dynamicArea->addView(scroll);
-
         // 确认按钮
         auto* btnBox = new brls::Box(brls::Axis::ROW);
         btnBox->setJustifyContent(brls::JustifyContent::CENTER);
@@ -153,6 +139,22 @@ private:
         });
         btnBox->addView(confirmBtn);
         m_dynamicArea->addView(btnBox);
+
+        auto* scroll = new brls::ScrollingFrame();
+        scroll->setGrow(1.f);
+        scroll->setScrollingIndicatorVisible(false);
+
+        m_previewLabel = new brls::Label();
+        m_previewLabel->setFontSize(14.f);
+        m_previewLabel->setTextColor(nvgRGBA(200,200,200,255));
+        m_previewLabel->setIsWrapping(true);
+        m_previewLabel->setFocusable(true);
+        UP_DOWN_NAVIGATION(m_previewLabel, m_previewLabel);
+        scroll->setContentView(m_previewLabel);
+
+        m_dynamicArea->addView(scroll);
+
+
 
         if (!m_results.empty()) _updatePreview();
         brls::Application::giveFocus(selector);
