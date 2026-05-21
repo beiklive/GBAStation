@@ -862,6 +862,29 @@ namespace beiklive
             box->addView(ffCell);
             box->addView(makeHint("小于1倍时可在快进触发时实现慢动作效果"));
 
+            // ── GB 配色（仅 GB 平台显示）──
+            if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuGB)) {
+                auto *gbHdr = new brls::Header();
+                gbHdr->setTitle("GB 配色");
+                box->addView(gbHdr);
+
+                auto& gbColors = beiklive::GetGbColorPresets();
+                std::string curGbColor = GET_SETTING_KEY_STR("core.mgba_gb_colors", "Grayscale");
+                int gbIdx = 0;
+                for (int i = 0; i < (int)gbColors.size(); ++i)
+                    if (gbColors[i] == curGbColor) { gbIdx = i; break; }
+                auto *gbColorCell = new beiklive::SelectorButton();
+                gbColorCell->setText("GB 配色");
+                gbColorCell->setOptions(gbColors, gbIdx);
+                gbColorCell->setOnSelect(
+                    [&gbColors](int idx) {
+                        if (idx >= 0 && idx < (int)gbColors.size())
+                            SET_SETTING_KEY_STR("core.mgba_gb_colors", gbColors[idx]);
+                    });
+                box->addView(gbColorCell);
+                box->addView(makeHint("为 GB 单色游戏着色，不影响 GBA 游戏"));
+            }
+
             auto *hdr1 = new brls::Header();
             hdr1->setTitle("画面设置");
             box->addView(hdr1);

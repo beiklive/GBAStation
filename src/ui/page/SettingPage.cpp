@@ -582,20 +582,11 @@ brls::View *SettingPage::buildUITab()
     box->addView(makeHint("BIOS 文件请放入 GBAStation/bios 目录下（gba_bios.bin）"));
 
     {
-        std::vector<std::string> gbColors = {
-            "Grayscale", "DMG Green", "GB Pocket", "GB Light",
-            "GBC Brown ↑", "GBC Red ↑A", "GBC Dark Brown ↑B",
-            "GBC Pale Yellow ↓", "GBC Orange ↓A", "GBC Yellow ↓B",
-            "GBC Blue ←", "GBC Dark Blue ←A", "GBC Gray ←B",
-            "GBC Green →", "GBC Dark Green →A", "GBC Reverse →B",
-            "SGB 1-A", "SGB 1-B", "SGB 1-C", "SGB 1-D", "SGB 1-E", "SGB 1-F", "SGB 1-G", "SGB 1-H",
-            "SGB 2-A", "SGB 2-B", "SGB 2-C", "SGB 2-D", "SGB 2-E", "SGB 2-F", "SGB 2-G", "SGB 2-H",
-            "SGB 3-A", "SGB 3-B", "SGB 3-C", "SGB 3-D", "SGB 3-E", "SGB 3-F", "SGB 3-G", "SGB 3-H",
-            "SGB 4-A", "SGB 4-B", "SGB 4-C", "SGB 4-D", "SGB 4-E", "SGB 4-F", "SGB 4-G", "SGB 4-H"};
+        auto& gbColors = beiklive::GetGbColorPresets();
         std::string curGbColor = cfgGetStr("core.mgba_gb_colors", "Grayscale");
         auto *gbColorCell      = new brls::SelectorCell();
         gbColorCell->init("GB 配色", gbColors, findIndex(gbColors, curGbColor),
-                          [gbColors](int idx) { if (idx >= 0 && idx < (int)gbColors.size()) cfgSetStr("core.mgba_gb_colors", gbColors[idx]); });
+                          [&gbColors](int idx) { if (idx >= 0 && idx < (int)gbColors.size()) cfgSetStr("core.mgba_gb_colors", gbColors[idx]); });
         box->addView(gbColorCell);
         box->addView(makeHint("为 GB/GBC 单色游戏着色，不影响 GBA 游戏"));
     }
