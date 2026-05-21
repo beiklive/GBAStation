@@ -698,6 +698,9 @@ namespace beiklive
             for (unsigned i = 0; i < frames; ++i) {
                 if (i == 0) _saveRewindState();
                 m_gba_core->RunFrame();
+                // 逐帧排空音频：仅保留第一帧（由 _pushFrameAudio 推送），其余丢弃
+                if (i > 0)
+                    m_gba_core->DrainAudio(m_audioDrainBuf);
             }
             return frames;
         }
@@ -743,12 +746,7 @@ namespace beiklive
         if (ff) {
             if (m_ffMute)
                 return;
-            if (framesRan > 1) {
-                float exact = static_cast<float>(frames) / static_cast<float>(framesRan);
-                size_t limit = static_cast<size_t>(exact + m_audioFracAccum);
-                m_audioFracAccum = exact + m_audioFracAccum - static_cast<float>(limit);
-                if (limit > 0) frames = limit;
-            }
+            // _stepFrame 已逐帧排空多余帧的音频，此处只剩第一帧数据，直接推送
         }
         if (GameSignal::instance().isRewinding() && GET_SETTING_KEY_INT("rewind.mute", 0)) {
             return;
