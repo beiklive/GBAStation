@@ -1127,6 +1127,8 @@ namespace beiklive
                 }
             }
 
+            unsigned framesRan = 1u;
+
             if (rew) {
                 // 倒带：从历史缓冲区恢复状态
                 _stepRewind();
