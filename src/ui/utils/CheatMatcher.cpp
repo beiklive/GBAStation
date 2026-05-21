@@ -497,7 +497,7 @@ void startCheatMatching(int platform, const std::string& romPath,
             delete cancelFlag;
             brls::Application::unblockInputs();
             // prog->close();
-            brls::Application::popActivity();
+            // brls::Application::popActivity();
             
             auto* activity = new CheatSelectActivity(std::move(validResults), std::move(onDone));
             auto* frame = new brls::AppletFrame(activity);
