@@ -106,16 +106,16 @@ private:
 
         std::vector<std::string> names;
         for (auto& r : m_results) names.push_back(r.filename);
-        auto* dropdown = new brls::Dropdown("匹配列表", names,
+        auto* selector = new brls::SelectorCell();
+        selector->init("匹配列表", names, 0,
             [this](int idx) {
                 if (idx >= 0 && idx < (int)m_results.size()) {
                     m_selectedIdx = idx;
                     _updatePreview();
                 }
-            },
-            0);
-        dropdown->setHeight(60.f);
-        m_dynamicArea->addView(dropdown);
+            });
+        selector->setHeight(70.f);
+        m_dynamicArea->addView(selector);
 
         auto* scroll = new brls::ScrollingFrame();
         scroll->setGrow(1.f);
@@ -155,7 +155,7 @@ private:
         m_dynamicArea->addView(btnBox);
 
         if (!m_results.empty()) _updatePreview();
-        brls::Application::giveFocus(dropdown);
+        brls::Application::giveFocus(selector);
     }
 
     void _showResult(const std::string& text) {
