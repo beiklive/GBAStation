@@ -47,6 +47,7 @@ namespace beiklive
         void setSubText(const std::string& text);
         void setPlayTime(const std::string& text);
 
+        void setSubTextEmpty();
         void setEmpty(const std::string& slotName);
         void setDataLoaded();
 

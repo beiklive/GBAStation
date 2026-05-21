@@ -418,7 +418,7 @@ namespace beiklive
                     item->setImagePath(info.thumbPath);
             } else {
                 item->setImagePath(BK_RES("img/ui/menu/empty.png"));
-                item->setEmpty(_slotName(slot));
+                item->setSubTextEmpty();
             }
         }
     }

@@ -265,7 +265,13 @@ namespace beiklive
         m_playLabel->setVisibility(brls::Visibility::VISIBLE);
     }
 
-    void GridItem::setEmpty(const std::string& slotName)
+    void GridItem::setSubTextEmpty()
+    {
+        if (m_subLabel)
+            m_subLabel->setText("  ");
+    }
+
+    void GridItem::setEmpty(const std::string &slotName)
     {
         if (m_emptyLabel)
             m_emptyLabel->setText(slotName);
