@@ -69,7 +69,7 @@ public:
 // private:
     // ---- 环形缓冲区 -------------------------------------------------
     // 将总延迟控制在约 250ms 以内
-    static constexpr size_t RING_CAPACITY = 8192;
+    static constexpr size_t RING_CAPACITY = 32768;
 
     std::mutex               m_mutex;
     std::condition_variable  m_spaceCV;   ///< 环形缓冲区排空（释放空间）时通知

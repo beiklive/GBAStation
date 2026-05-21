@@ -87,11 +87,30 @@ void AudioManager::pushSamplesNoBlocking(const int16_t* data, size_t frames)
     if (!m_running.load(std::memory_order_acquire)) return;
     const size_t count = frames * static_cast<size_t>(m_channels);
     std::lock_guard<std::mutex> lk(m_mutex);
-    // 缓冲区满时一次性丢弃等量旧样本，不阻塞
+
+    static constexpr size_t RAMP_SAMPLES = 64; // ~1.3ms @ 48kHz stereo
+
     if (m_available + count > RING_CAPACITY) {
         size_t discard = m_available + count - RING_CAPACITY;
         m_readPos = (m_readPos + discard) % RING_CAPACITY;
         m_available -= discard;
+
+        // 丢弃后对新区间做 fade-in ramp，消除硬切导致的 click/pop
+        if (discard > 0 && count > 0) {
+            size_t rampCount = std::min(count, RAMP_SAMPLES);
+            for (size_t i = 0; i < rampCount; ++i) {
+                float t = static_cast<float>(i + 1) / static_cast<float>(rampCount);
+                int16_t v = static_cast<int16_t>(static_cast<float>(data[i]) * t);
+                m_ring[m_writePos] = v;
+                m_writePos = (m_writePos + 1) % RING_CAPACITY;
+                ++m_available;
+            }
+            size_t remaining = count - rampCount;
+            if (remaining > 0)
+                ringWrite(data + rampCount, remaining);
+            m_dataCV.notify_one();
+            return;
+        }
     }
     ringWrite(data, count);
 }
@@ -117,7 +136,7 @@ void AudioManager::flushRingBuffer()
 #ifdef __SWITCH__
 
 static constexpr int    SWITCH_OUT_RATE  = 48000;
-static constexpr size_t SWITCH_FRAMES    = 512;
+static constexpr size_t SWITCH_FRAMES    = 1024;
 static constexpr size_t SWITCH_BYTES     = SWITCH_FRAMES * 2 * sizeof(int16_t);
 static constexpr int    SWITCH_N_BUFFERS = 4;
 
