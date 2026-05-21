@@ -50,7 +50,7 @@ public:
         card->addView(m_titleLabel);
 
         m_statusLabel = new brls::Label();
-        m_statusLabel->setText("");
+        m_statusLabel->setText(" ");
         m_statusLabel->setFontSize(15.f);
         m_statusLabel->setTextColor(nvgRGBA(200,200,200,200));
         m_statusLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
@@ -349,9 +349,11 @@ void startCheatMatching(int platform, const std::string& romPath,
         [cancelFlag]() { cancelFlag->store(true); });
     auto* frame = new brls::AppletFrame(prog);
     HIDE_BRLS_BAR(frame);
+    brls::sync([frame]() {
     brls::Application::pushActivity(new brls::Activity(frame),
                                     brls::TransitionAnimation::NONE);
-    brls::Application::blockInputs();
+                                    brls::Application::blockInputs();
+    });
 
     new std::thread([platform, romPath, onDone = std::move(onDone), prog, cancelFlag]() {
         // 检查数据库文件
@@ -479,8 +481,9 @@ void startCheatMatching(int platform, const std::string& romPath,
                     onDone = std::move(onDone)]() mutable {
             delete cancelFlag;
             brls::Application::unblockInputs();
-            prog->close();
-
+            // prog->close();
+            brls::Application::popActivity();
+            
             auto* activity = new CheatSelectActivity(std::move(validResults), std::move(onDone));
             auto* frame = new brls::AppletFrame(activity);
             HIDE_BRLS_BAR(frame);
