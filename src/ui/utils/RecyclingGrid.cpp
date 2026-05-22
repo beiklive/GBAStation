@@ -758,7 +758,7 @@ void GameGridView::draw(NVGcontext* vg, float x, float y, float w, float h,
         }
     }
 
-    _drawScrollbar(vg, x+5, y, w, h);
+    _drawScrollbar(vg, x+1, y, w, h);
 
     nvgResetScissor(vg);
     nvgRestore(vg);
@@ -815,15 +815,18 @@ void GameGridView::_drawItem(NVGcontext* vg, const GridDrawItem& item, float x, 
 
     nvgBeginPath(vg);
     nvgRoundedRect(vg, x + shakeX, y + shakeY, w, h, 3.f);
-    if (item.favorite)
-        nvgFillColor(vg, nvgRGBA(80, 75, 45, 230));
-    else
-        nvgFillColor(vg, nvgRGBA(42, 42, 42, 230));
+    nvgFillColor(vg, nvgRGBA(42, 42, 42, 30));
     nvgFill(vg);
-
-    nvgStrokeColor(vg, nvgRGBA(110, 110, 110, focused ? 200 : 100));
+    
+    nvgStrokeColor(vg, item.favorite ? nvgRGBA(224, 166, 87, 255) : nvgRGBA(110, 110, 110, 255));
     nvgStrokeWidth(vg, 1.0f);
     nvgStroke(vg);
+    
+
+    if (item.favorite)
+        _drawFavourite(vg, item, x, y, w, h, shakeX, shakeY);
+    
+
 
     if (item.empty) {
         _drawEmptyItem(vg, x, y, w, h);
@@ -939,6 +942,53 @@ void GameGridView::_drawEmptyItem(NVGcontext* vg, float x, float y, float w, flo
     nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
     nvgFillColor(vg, nvgRGBA(150, 150, 150, 200));
     nvgText(vg, x + w * 0.5f, y + h * 0.5f, "空", nullptr);
+}
+
+void GameGridView::_drawFavourite(NVGcontext* vg, const GridDrawItem& item, float x, float y, float w, float h, float sx, float sy)
+{
+    if (m_favIconHandle < 0)
+    {
+        std::string path = BK_RES("img/ui/light/fa.png");
+        m_favIconHandle = nvgCreateImage(
+            vg,
+            path.c_str(),
+            NVG_IMAGE_PREMULTIPLIED
+        );
+        if (m_favIconHandle < 0)
+            return;
+    }
+    float iconSize = 100.f;
+    float pad = 1.f;
+
+    float ix = x + w - iconSize - pad + sx;
+    float iy = y + h - iconSize - pad + sy;
+    nvgSave(vg);
+    nvgIntersectScissor(
+        vg,
+        x + sx,
+        y + sy,
+        w,
+        h
+    );
+    // 图片纹理
+    NVGpaint paint = nvgImagePattern(
+        vg,
+        ix,
+        iy,
+        iconSize,
+        iconSize,
+        0.f,
+        m_favIconHandle,
+        0.2f
+    );
+    // 绘制透明PNG
+    nvgBeginPath(vg);
+    nvgRoundedRect(vg, ix, iy, iconSize, iconSize, 3.f);
+
+    nvgFillPaint(vg, paint);
+    nvgFill(vg);
+
+    nvgRestore(vg);
 }
 
 void GameGridView::_drawScrollbar(NVGcontext* vg, float x, float y, float w, float h)

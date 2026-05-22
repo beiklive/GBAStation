@@ -76,6 +76,7 @@ private:
     std::unordered_map<std::string, int> m_textureCache;
 
     int m_fontId = -1;
+    int m_favIconHandle = -1;
 
     std::chrono::steady_clock::time_point m_lastFrameTime;
 
@@ -129,6 +130,7 @@ private:
     void _drawPlayTime(NVGcontext* vg, const std::string& text, float x, float y, float maxWidth);
     void _drawEmptyItem(NVGcontext* vg, float x, float y, float w, float h);
     void _drawScrollbar(NVGcontext* vg, float x, float y, float w, float h);
+    void _drawFavourite(NVGcontext* vg, const GridDrawItem& item, float x, float y, float w, float h, float sx, float sy);
 
     float _getItemX(int col);
     float _getItemY(int row);
