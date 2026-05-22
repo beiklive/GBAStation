@@ -1,91 +1,65 @@
 #pragma once
 
 #include <borealis.hpp>
-#include <functional>
 #include <string>
 
 #include "core/common.h"
 #include "RecyclingGridItem.hpp"
 
-namespace beiklive
-{
+namespace beiklive {
 
-    enum class GridItemMode
-    {
-        GAME_LIBRARY,
-        SAVE_STATE,
-    };
+enum class GridItemMode {
+    GAME_LIBRARY,
+    SAVE_STATE,
+};
 
-    enum class PlatformBadgeColor
-    {
-        GBA,
-        GBC,
-        GB,
-        NONE,
-    };
+class GridItem : public brls::Box {
+public:
+    static constexpr float ITEM_HEIGHT = 120.f;
 
-    class GridItem : public RecyclingGridItem
-    {
-    public:
-        static constexpr float ITEM_HEIGHT = 120.f;
+    explicit GridItem(GridItemMode mode, int index = 0);
+    ~GridItem() = default;
 
-        explicit GridItem(GridItemMode mode, int index = 0);
-        ~GridItem() = default;
+    void draw(NVGcontext* vg, float x, float y, float w, float h,
+              brls::Style style, brls::FrameContext* ctx) override;
 
-        void draw(NVGcontext* vg, float x, float y, float width, float height,
-                  brls::Style style, brls::FrameContext* ctx) override;
+    void setImagePath(const std::string& path);
+    void setBadge(const std::string& text, PlatformBadgeColor color);
+    void setTitle(const std::string& title);
+    void setSubText(const std::string& text);
+    void setPlayTime(const std::string& text);
+    void setSubTextEmpty();
+    void setEmpty(const std::string& slotName);
+    void setDataLoaded();
 
-        void prepareForReuse() override;
+    int getIndex() const { return m_index; }
+    GridItemMode getMode() const { return m_mode; }
+    bool isEmpty() const { return m_isEmpty; }
 
-        void setImageLayer(const std::string& path, bool visible);
+    static void populateFromGameEntry(GridDrawItem& item, const GameEntry& entry,
+                                       GridItemMode mode = GridItemMode::GAME_LIBRARY);
+    static void populateEmpty(GridDrawItem& item, const std::string& slotName = "空");
+    static std::string formatPlayTime(int seconds);
+    static std::string formatSubText(const GameEntry& entry, GridItemMode mode);
 
-        void setImagePath(const std::string& path);
+private:
+    GridItemMode m_mode;
+    int m_index;
+    bool m_isEmpty = true;
 
-        void setBadge(const std::string& text, PlatformBadgeColor color);
+    brls::Label* m_emptyLabel = nullptr;
+    brls::Box* m_dataLayout = nullptr;
+    brls::Image* m_image = nullptr;
+    brls::Box* m_rightBox = nullptr;
+    brls::Box* m_row1 = nullptr;
+    brls::Box* m_badgeBox = nullptr;
+    brls::Label* m_badgeLabel = nullptr;
+    brls::Label* m_titleLabel = nullptr;
+    brls::Label* m_subLabel = nullptr;
+    brls::Label* m_playLabel = nullptr;
 
-        void setTitle(const std::string& title);
-        void setSubText(const std::string& text);
-        void setPlayTime(const std::string& text);
-
-        void setSubTextEmpty();
-        void setEmpty(const std::string& slotName);
-        void setDataLoaded();
-
-        int           getIndex() const { return m_index; }
-        GridItemMode  getMode()  const { return m_mode;  }
-        bool          isEmpty()  const { return m_isEmpty; }
-
-        std::function<void(int index)> onItemClicked;
-        std::function<void(int index)> onItemFocused;
-
-        std::function<bool(int index)> isFavourite;
-        std::function<void(int index)> toggleFavourite;
-
-    private:
-        GridItemMode m_mode;
-        int          m_index;
-        bool         m_isEmpty = true;
-        bool         m_showImageLayer = false;
-        brls::Label* m_emptyLabel = nullptr;
-
-        brls::Box*   m_dataLayout  = nullptr;
-        brls::Image* m_image       = nullptr;
-        brls::Image* m_imageLayer  = nullptr;
-        brls::Box*   m_rightBox    = nullptr;
-
-        brls::Box*   m_row1        = nullptr;
-        brls::Box*   m_badgeBox    = nullptr;
-        brls::Label* m_badgeLabel  = nullptr;
-        brls::Label* m_titleLabel  = nullptr;
-
-        brls::Label* m_subLabel    = nullptr;
-        brls::Label* m_playLabel   = nullptr;
-
-        void _initLayout();
-
-        static NVGcolor _getBadgeColor(PlatformBadgeColor color);
-
-        void _updateFavouriteHint();
-    };
+    void _initLayout();
+    static NVGcolor _getBadgeColor(PlatformBadgeColor color);
+};
 
 } // namespace beiklive

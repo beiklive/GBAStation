@@ -2,15 +2,14 @@
 
 #include <cstddef>
 
-class RecyclingGrid;
-class RecyclingGridItem;
+struct GridDrawItem;
 
-class RecyclingGridDataSource {
+class GameGridDataSource {
 public:
-    virtual ~RecyclingGridDataSource() = default;
+    virtual ~GameGridDataSource() = default;
 
     virtual size_t getItemCount() = 0;
-    virtual RecyclingGridItem* cellForRow(RecyclingGrid* grid, size_t index) = 0;
-    virtual void onItemSelected(RecyclingGrid* grid, size_t index) = 0;
+    virtual void populateItem(GridDrawItem& item, size_t index) = 0;
+    virtual void onItemSelected(size_t index) = 0;
     virtual void clearData() = 0;
 };

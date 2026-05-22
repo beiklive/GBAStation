@@ -30,12 +30,12 @@ namespace beiklive
         std::function<void(const beiklive::GameEntry&)> onGameSelected;
 
     private:
-        class GameLibraryDS : public RecyclingGridDataSource {
+        class GameLibraryDS : public GameGridDataSource {
         public:
             GameLibraryDS(class GameLibraryPage* page) : m_page(page) {}
             size_t getItemCount() override;
-            RecyclingGridItem* cellForRow(RecyclingGrid* grid, size_t index) override;
-            void onItemSelected(RecyclingGrid* grid, size_t index) override;
+            void populateItem(GridDrawItem& item, size_t index) override;
+            void onItemSelected(size_t index) override;
             void clearData() override;
         private:
             GameLibraryPage* m_page;
@@ -43,7 +43,7 @@ namespace beiklive
 
         static constexpr int PAGE_SIZE = 21;
 
-        RecyclingGrid* m_grid = nullptr;
+        GameGridView* m_grid = nullptr;
         std::vector<beiklive::GameEntry> m_entries;
         GameLibraryDS* m_dataSource = nullptr;
         int m_visibleCount = 0;

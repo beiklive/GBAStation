@@ -1,537 +1,664 @@
 #include "RecyclingGrid.hpp"
+#include "core/common.h"
 
 #include <algorithm>
 #include <cmath>
-#include <cstring>
 
-// ── RecyclingGridContentBox ────────────────────────────────────
-
-RecyclingGridContentBox::RecyclingGridContentBox(RecyclingGrid* recycler)
-    : Box(brls::Axis::ROW), m_recycler(recycler) {}
-
-brls::View* RecyclingGridContentBox::getNextFocus(brls::FocusDirection direction, brls::View* currentView)
+GameGridView::GameGridView()
 {
-    auto* next = m_recycler->getNextCellFocus(direction, currentView);
-    return next;
+    setFocusable(true);
+    setHideHighlightBackground(true);
+    setHideHighlightBorder(true);
+    setHideClickAnimation(true);
+    setBackground(brls::ViewBackground::NONE);
+    setClipsToBounds(true);
+
+    m_fontId = brls::Application::getDefaultFont();
+
+    registerAction("上移", brls::BUTTON_UP, [this](brls::View*) {
+        _navigateFocus(brls::FocusDirection::UP);
+        return true;
+    }, false, true);
+
+    registerAction("下移", brls::BUTTON_DOWN, [this](brls::View*) {
+        _navigateFocus(brls::FocusDirection::DOWN);
+        return true;
+    }, false, true);
+
+    registerAction("左移", brls::BUTTON_LEFT, [this](brls::View*) {
+        _navigateFocus(brls::FocusDirection::LEFT);
+        return true;
+    }, false, true);
+
+    registerAction("右移", brls::BUTTON_RIGHT, [this](brls::View*) {
+        _navigateFocus(brls::FocusDirection::RIGHT);
+        return true;
+    }, false, true);
+
+    registerClickAction([this](brls::View*) {
+        if (m_dataSource && m_selectedIndex >= 0 &&
+            static_cast<size_t>(m_selectedIndex) < m_items.size())
+            m_dataSource->onItemSelected(m_selectedIndex);
+        return true;
+    });
 }
 
-// ── RecyclingGrid ──────────────────────────────────────────────
-
-RecyclingGrid::RecyclingGrid()
-{
-    setFocusable(false);
-    setScrollingBehavior(brls::ScrollingBehavior::CENTERED);
-    setScrollingIndicatorVisible(false);
-
-    m_contentBox = new RecyclingGridContentBox(this);
-    setContentView(m_contentBox);
-
-}
-
-RecyclingGrid::~RecyclingGrid()
+GameGridView::~GameGridView()
 {
     delete m_dataSource;
-    for (auto& it : m_queueMap)
-    {
-        for (auto* item : *it.second)
-        {
-            item->setParent(nullptr);
-            delete item;
+    NVGcontext* vg = brls::Application::getNVGContext();
+    if (vg) {
+        for (auto& kv : m_textureCache) {
+            if (kv.second >= 0) nvgDeleteImage(vg, kv.second);
         }
-        delete it.second;
+    }
+    m_textureCache.clear();
+    for (auto& item : m_items) {
+        item.textureHandle = -1;
+        item.imageLayerHandle = -1;
     }
 }
 
-void RecyclingGrid::registerCell(const std::string& identifier,
-                                  std::function<RecyclingGridItem*()> allocation)
-{
-    m_queueMap[identifier] = new std::vector<RecyclingGridItem*>();
-    m_allocationMap[identifier] = std::move(allocation);
-}
-
-RecyclingGridItem* RecyclingGrid::dequeueReusableCell(const std::string& identifier)
-{
-    RecyclingGridItem* cell = nullptr;
-    auto it = m_queueMap.find(identifier);
-
-    if (it != m_queueMap.end())
-    {
-        auto* vec = it->second;
-        if (!vec->empty())
-        {
-            auto* curFocus = brls::Application::getCurrentFocus();
-            if (vec->back() == curFocus && vec->size() > 1)
-            {
-                cell = vec->front();
-                vec->erase(vec->begin());
-            }
-            else
-            {
-                cell = vec->back();
-                vec->pop_back();
-            }
-        }
-    }
-
-    if (!cell)
-    {
-        auto allocIt = m_allocationMap.find(identifier);
-        if (allocIt != m_allocationMap.end())
-        {
-            cell = allocIt->second();
-            cell->reuseIdentifier = identifier;
-        }
-    }
-
-    if (cell)
-    {
-        cell->prepareForReuse();
-        cell->setHeight(brls::View::AUTO);
-    }
-
-    return cell;
-}
-
-void RecyclingGrid::setDataSource(RecyclingGridDataSource* source)
+void GameGridView::setDataSource(GameGridDataSource* source)
 {
     if (m_dataSource) delete m_dataSource;
     m_requestNextPage = false;
     m_dataSource = source;
-    if (m_layouted) reloadData();
+    if (m_isLayouted) reloadData();
 }
 
-RecyclingGridDataSource* RecyclingGrid::getDataSource() const
+void GameGridView::setPadding(float top, float right, float bottom, float left)
 {
-    return m_dataSource;
+    m_paddingTop = top;
+    m_paddingRight = right;
+    m_paddingBottom = bottom;
+    m_paddingLeft = left;
 }
 
-// ── reloadData ─────────────────────────────────────────────────
-
-void RecyclingGrid::reloadData()
+void GameGridView::setDefaultCellFocus(size_t index)
 {
-    if (!m_layouted)
-    {
-        m_layouted = true;
-        m_oldWidth = getWidth();
-        if (m_oldWidth != m_oldWidth) m_oldWidth = 1200;
-    }
-
-    auto& children = m_contentBox->getChildren();
-    for (auto* child : children)
-    {
-        if (auto* item = dynamic_cast<RecyclingGridItem*>(child))
-        {
-            queueReusableCell(item);
-            child->willDisappear(true);
-        }
-    }
-    children.clear();
-
-    visibleMin = UINT32_MAX;
-    visibleMax = 0;
-
-    m_requestNextPage = false;
-    m_renderedFrame = brls::Rect();
-    m_renderedFrame.size.width = getWidth();
-    if (m_renderedFrame.size.width != m_renderedFrame.size.width)
-        m_renderedFrame.size.width = m_oldWidth;
-
-    if (!m_dataSource || m_dataSource->getItemCount() <= 0)
-    {
-        m_contentBox->setHeight(0);
-        setContentOffsetY(0, false);
-        invalidate();
-        return;
-    }
-
-    size_t cellFocusIndex = m_defaultCellFocus;
-    if (cellFocusIndex >= m_dataSource->getItemCount())
-        cellFocusIndex = m_dataSource->getItemCount() - 1;
-
-    m_contentBox->setHeight(
-        (estimatedRowHeight + estimatedRowSpace) * (float)getRowCount()
-        - estimatedRowSpace + m_paddingTop + m_paddingBottom);
-
-    setContentOffsetY(0, false);
-
-    size_t lineHeadIndex = cellFocusIndex / spanCount * spanCount;
-    m_renderedFrame.origin.y = getHeightByCellIndex(lineHeadIndex);
-    addCellAt(lineHeadIndex, true);
-
-    auto* firstCell = getGridItemByIndex(cellFocusIndex);
-    if (firstCell)
-        brls::Application::giveFocus(firstCell);
-
-    invalidate();
+    m_defaultCellFocus = index;
+    m_selectedIndex = static_cast<int>(index);
 }
 
-void RecyclingGrid::notifyDataChanged()
+float GameGridView::_getItemWidth()
+{
+    float usable = getWidth() - m_paddingLeft - m_paddingRight;
+    if (usable <= 0.f) return estimatedRowHeight;
+    return (usable - estimatedRowSpace * (spanCount - 1)) / spanCount;
+}
+
+float GameGridView::_getRowHeight()
+{
+    return estimatedRowHeight + estimatedRowSpace;
+}
+
+float GameGridView::_getItemX(int col)
+{
+    float itemW = _getItemWidth();
+    return m_paddingLeft + col * (itemW + estimatedRowSpace);
+}
+
+float GameGridView::_getItemY(int row)
+{
+    return m_paddingTop + row * _getRowHeight() - m_scrollY;
+}
+
+int GameGridView::_getRowCount()
+{
+    if (m_items.empty()) return 0;
+    return static_cast<int>((m_items.size() - 1) / spanCount + 1);
+}
+
+void GameGridView::reloadData()
 {
     if (!m_dataSource) return;
-    float newH = (estimatedRowHeight + estimatedRowSpace) * getRowCount()
-        - estimatedRowSpace + m_paddingTop + m_paddingBottom;
-    m_contentBox->setHeight(newH);
+    if (!m_isLayouted) m_isLayouted = true;
+
+    size_t count = m_dataSource->getItemCount();
+    m_items.clear();
+    m_items.resize(count);
+    for (size_t i = 0; i < count; i++) {
+        m_items[i].reset();
+        m_dataSource->populateItem(m_items[i], i);
+    }
+
+    m_scrollY = 0.f;
+    m_targetScrollY = 0.f;
+    m_velocityY = 0.f;
+    float viewH = getHeight();
+    if (viewH < 1.f) viewH = 720.f;
+    m_maxScrollY = std::max(0.f, _getRowCount() * _getRowHeight()
+                           + m_paddingTop + m_paddingBottom - viewH);
+
+    size_t focusIdx = m_defaultCellFocus;
+    if (m_selectedGameId != 0) {
+        for (size_t i = 0; i < m_items.size(); i++) {
+            if (m_items[i].gameId == m_selectedGameId) {
+                focusIdx = i;
+                break;
+            }
+        }
+    }
+    if (focusIdx >= m_items.size()) focusIdx = 0;
+    m_selectedIndex = static_cast<int>(focusIdx);
+    m_selectedGameId = m_items[m_selectedIndex].gameId;
+    if (m_focusChangeCallback) m_focusChangeCallback(m_selectedIndex);
+
+    _updateVisibleRange();
+    _ensureSelectedVisible();
+    m_scrollY = m_targetScrollY;
+
     m_requestNextPage = false;
-    invalidate();
 }
 
-void RecyclingGrid::clearData()
+void GameGridView::notifyDataChanged()
 {
-    if (m_dataSource)
-    {
+    if (!m_dataSource) return;
+
+    size_t oldCount = m_items.size();
+    size_t newCount = m_dataSource->getItemCount();
+    m_items.resize(newCount);
+    for (size_t i = oldCount; i < newCount; i++) {
+        m_items[i].reset();
+        m_dataSource->populateItem(m_items[i], i);
+    }
+
+    float viewH = getHeight();
+    if (viewH < 1.f) viewH = 720.f;
+    m_maxScrollY = std::max(0.f, _getRowCount() * _getRowHeight()
+                           + m_paddingTop + m_paddingBottom - viewH);
+    m_scrollY = std::min(m_scrollY, m_maxScrollY);
+    m_targetScrollY = m_scrollY;
+    _updateVisibleRange();
+}
+
+void GameGridView::clearData()
+{
+    if (m_dataSource) {
         m_dataSource->clearData();
         reloadData();
     }
 }
 
-// ── 查询 ───────────────────────────────────────────────────────
-
-RecyclingGridItem* RecyclingGrid::getGridItemByIndex(size_t index)
+const GridDrawItem* GameGridView::getGridItemByIndex(size_t index) const
 {
-    for (auto* v : m_contentBox->getChildren())
-    {
-        auto* item = dynamic_cast<RecyclingGridItem*>(v);
-        if (item && item->getIndex() == index)
-            return item;
-    }
+    if (index < m_items.size()) return &m_items[index];
     return nullptr;
 }
 
-size_t RecyclingGrid::getItemCount() const
+size_t GameGridView::getItemCount() const
 {
-    return m_dataSource ? m_dataSource->getItemCount() : 0;
+    return m_items.size();
 }
 
-size_t RecyclingGrid::getRowCount() const
+void GameGridView::willAppear(bool resetState)
 {
-    size_t count = m_dataSource ? m_dataSource->getItemCount() : 0;
-    return count > 0 ? (count - 1) / spanCount + 1 : 0;
+    View::willAppear(resetState);
 }
 
-float RecyclingGrid::getHeightByCellIndex(size_t index, size_t start) const
+void GameGridView::onLayout()
 {
-    if (index <= start) return 0;
-    return (estimatedRowHeight + estimatedRowSpace) * (size_t)((index - start) / spanCount);
-}
-
-// ── 焦点 ───────────────────────────────────────────────────────
-
-void RecyclingGrid::setDefaultCellFocus(size_t index) { m_defaultCellFocus = index; }
-
-size_t RecyclingGrid::getDefaultCellFocus() const { return m_defaultCellFocus; }
-
-brls::View* RecyclingGrid::getDefaultFocus()
-{
-    if (m_dataSource && m_dataSource->getItemCount() > 0)
-        return ScrollingFrame::getDefaultFocus();
-    return nullptr;
-}
-
-void RecyclingGrid::setFocusChangeCallback(std::function<void(size_t)> callback)
-{
-    m_focusChangeCallback = std::move(callback);
-}
-
-void RecyclingGrid::onChildFocusGained(View* directChild, View* focusedView)
-{
-    ScrollingFrame::onChildFocusGained(directChild, focusedView);
-    View* v = focusedView;
-    while (v && !dynamic_cast<RecyclingGridItem*>(v))
-        v = v->getParent();
-    if (v)
-    {
-        size_t idx = static_cast<RecyclingGridItem*>(v)->getIndex();
-        m_defaultCellFocus = idx;
-        if (m_focusChangeCallback) m_focusChangeCallback(idx);
-    }
-}
-
-// ── 导航 ───────────────────────────────────────────────────────
-
-brls::View* RecyclingGrid::getNextCellFocus(brls::FocusDirection direction, brls::View* currentView)
-{
-    if (!m_dataSource || m_dataSource->getItemCount() == 0)
-        return nullptr;
-
-    void* parentUserData = currentView->getParentUserData();
-    if (!parentUserData) return nullptr;
-
-    size_t currentFocusIndex = *reinterpret_cast<size_t*>(parentUserData);
-    int offset = 1;
-    size_t dataCount = m_dataSource->getItemCount();
-
-    if (direction == brls::FocusDirection::UP)
-        offset = -spanCount;
-    else if (direction == brls::FocusDirection::DOWN)
-        offset = spanCount;
-    else if (direction == brls::FocusDirection::LEFT)
-        offset = -1;
-    else if (direction == brls::FocusDirection::RIGHT)
-        offset = 1;
-    else
-        return nullptr;
-
-    int target = static_cast<int>(currentFocusIndex) + offset;
-    if (target < 0 || static_cast<size_t>(target) >= dataCount)
-    {
-        View* next = getParentNavigationDecision(this, nullptr, direction);
-        if (!next && hasParent()) next = getParent()->getNextFocus(direction, this);
-        return next;
-    }
-
-    itemsRecyclingLoop();
-
-    for (auto* v : m_contentBox->getChildren())
-    {
-        auto* item = dynamic_cast<RecyclingGridItem*>(v);
-        if (item && item->getIndex() == static_cast<size_t>(target))
-            return item->getDefaultFocus();
-    }
-    return nullptr;
-}
-
-// ── 分页 ───────────────────────────────────────────────────────
-
-void RecyclingGrid::onNextPage(const std::function<void()>& callback)
-{
-    m_nextPageCallback = callback;
-}
-
-// ── 布局 ───────────────────────────────────────────────────────
-
-void RecyclingGrid::onLayout()
-{
-    ScrollingFrame::onLayout();
-    float width = getFrame().getWidth();
-    if (width != width) return;
-    if (!m_contentBox) return;
-    m_contentBox->setWidth(width);
-    if (checkWidth())
-    {
-        m_layouted = true;
+    View::onLayout();
+    if (!m_isLayouted && m_dataSource) {
         reloadData();
     }
 }
 
-bool RecyclingGrid::checkWidth()
+void GameGridView::_navigateFocus(brls::FocusDirection direction)
 {
-    float width = getWidth();
-    if (m_oldWidth == -1) m_oldWidth = width;
-    if ((int)m_oldWidth != (int)width && width != 0)
-    {
-        m_oldWidth = width;
-        return true;
-    }
-    m_oldWidth = width;
-    return false;
-}
+    if (m_items.empty()) return;
 
-// ── draw ───────────────────────────────────────────────────────
+    int col = m_selectedIndex % spanCount;
+    int row = m_selectedIndex / spanCount;
+    int maxRow = _getRowCount() - 1;
 
-void RecyclingGrid::draw(NVGcontext* vg, float x, float y, float w, float h,
-                          brls::Style style, brls::FrameContext* ctx)
-{
-    itemsRecyclingLoop();
-    ScrollingFrame::draw(vg, x, y, w, h, style, ctx);
-}
-
-// ── Cell 回收循环 ──────────────────────────────────────────────
-
-void RecyclingGrid::addCellAt(size_t index, bool downSide)
-{
-    if (!m_dataSource) return;
-
-    for (auto* it : m_contentBox->getChildren())
-    {
-        auto* item = dynamic_cast<RecyclingGridItem*>(it);
-        if (item && item->getIndex() == index) return;
+    switch (direction) {
+        case brls::FocusDirection::UP:
+            if (row > 0) m_selectedIndex -= spanCount;
+            break;
+        case brls::FocusDirection::DOWN:
+            if (row < maxRow) {
+                m_selectedIndex += spanCount;
+                if (m_selectedIndex >= static_cast<int>(m_items.size()))
+                    m_selectedIndex = static_cast<int>(m_items.size()) - 1;
+            }
+            break;
+        case brls::FocusDirection::LEFT:
+            if (col > 0) m_selectedIndex -= 1;
+            break;
+        case brls::FocusDirection::RIGHT:
+            if (col < spanCount - 1) {
+                m_selectedIndex += 1;
+                if (m_selectedIndex >= static_cast<int>(m_items.size()))
+                    m_selectedIndex = static_cast<int>(m_items.size()) - 1;
+            }
+            break;
     }
 
-    RecyclingGridItem* cell = m_dataSource->cellForRow(this, index);
-    if (!cell) return;
+    m_selectedIndex = std::max(0, std::min(m_selectedIndex, static_cast<int>(m_items.size()) - 1));
+    m_selectedGameId = m_items[m_selectedIndex].gameId;
+    m_focusMoved = true;
+    if (m_focusChangeCallback) m_focusChangeCallback(m_selectedIndex);
+}
 
-    float cellHeight = estimatedRowHeight;
-    float cellWidth = (m_renderedFrame.getWidth() - m_paddingLeft - m_paddingRight) / spanCount
-                      - cell->getMarginLeft() - cell->getMarginRight();
-    float cellX = m_renderedFrame.getMinX() + m_paddingLeft;
-    cellX += (m_renderedFrame.getWidth() - m_paddingLeft - m_paddingRight) / spanCount * (index % spanCount);
+void GameGridView::_updateVisibleRange()
+{
+    if (m_items.empty()) return;
 
-    cell->setWidth(cellWidth - estimatedRowSpace);
-    cell->setHeight(cellHeight);
-    cell->setDetachedPositionX(cellX);
-    cell->setDetachedPositionY(getHeightByCellIndex(index) + m_paddingTop);
-    cell->detach();
-    cell->setIndex(index);
+    float rowH = _getRowHeight();
+    float viewH = getHeight();
 
-    m_contentBox->getChildren().insert(m_contentBox->getChildren().end(), cell);
+    m_visibleStartRow = static_cast<int>(std::floor((m_scrollY - m_paddingTop) / rowH));
+    m_visibleStartRow = std::max(0, m_visibleStartRow);
 
-    size_t* userdata = reinterpret_cast<size_t*>(malloc(sizeof(size_t)));
-    *userdata = index;
-    cell->setParent(m_contentBox, userdata);
+    int visibleRows = static_cast<int>(std::ceil(viewH / rowH)) + 1;
+    m_visibleEndRow = m_visibleStartRow + visibleRows;
+    m_visibleEndRow = std::min(m_visibleEndRow, _getRowCount());
+}
 
-    m_contentBox->invalidate();
-    cell->View::willAppear();
+void GameGridView::_ensureSelectedVisible()
+{
+    if (m_items.empty()) return;
 
-    if (index < visibleMin) visibleMin = index;
-    if (index > visibleMax) visibleMax = index;
+    int selRow = m_selectedIndex / spanCount;
+    float rowH = _getRowHeight();
+    float itemY = m_paddingTop + selRow * rowH;
+    float itemBottom = itemY + estimatedRowHeight;
+    float viewH = getHeight();
 
-    if (index % spanCount == 0)
-    {
-        if (!downSide)
-            m_renderedFrame.origin.y -= cellHeight + estimatedRowSpace;
-        m_renderedFrame.size.height += cellHeight + estimatedRowSpace;
+    float target = m_scrollY;
+
+    if (itemY < target + m_paddingTop) {
+        target = itemY - m_paddingTop;
+    } else if (itemBottom > target + viewH - m_paddingBottom) {
+        target = itemBottom - viewH + m_paddingBottom;
+    }
+
+    target = std::max(0.f, std::min(target, m_maxScrollY));
+    m_targetScrollY = target;
+}
+
+void GameGridView::_updateScrollPhysics(float delta)
+{
+    if (m_maxScrollY <= 0.f) {
+        m_scrollY = 0.f;
+        m_targetScrollY = 0.f;
+        m_velocityY = 0.f;
+        return;
+    }
+
+    m_scrollY += (m_targetScrollY - m_scrollY) * 0.15f;
+    if (std::abs(m_targetScrollY - m_scrollY) < 0.5f) {
+        m_scrollY = m_targetScrollY;
+        m_velocityY = 0.f;
+    }
+
+    m_scrollY = std::max(0.f, std::min(m_scrollY, m_maxScrollY));
+}
+
+void GameGridView::_updateFocusAnimation(float delta)
+{
+    for (size_t i = 0; i < m_items.size(); i++) {
+        auto& item = m_items[i];
+        bool focused = (static_cast<int>(i) == m_selectedIndex);
+
+        float targetGlow = focused ? 1.f : 0.f;
+        item.focusGlow += (targetGlow - item.focusGlow) * 0.15f;
+
+        item.selected = focused;
     }
 }
 
-void RecyclingGrid::removeCell(brls::View* view)
+void GameGridView::_updateMarquee(float delta)
 {
-    if (!view) return;
-
-    auto& children = m_contentBox->getChildren();
-    for (size_t i = 0; i < children.size(); i++)
-    {
-        if (children[i] == view)
-        {
-            children.erase(children.begin() + i);
-            view->willDisappear(true);
-            invalidate();
-            return;
+    for (size_t i = 0; i < m_items.size(); i++) {
+        auto& item = m_items[i];
+        bool focused = (static_cast<int>(i) == m_selectedIndex);
+        if (!focused) {
+            item.marqueeOffset = std::max(0.f, item.marqueeOffset - delta * 100.f);
+            continue;
+        }
+        if (item.marqueeMaxOffset > 0.f) {
+            item.marqueeOffset += delta * 30.f;
+            if (item.marqueeOffset > item.marqueeMaxOffset + 20.f) {
+                item.marqueeOffset = 0.f;
+            }
         }
     }
 }
 
-void RecyclingGrid::queueReusableCell(RecyclingGridItem* cell)
+void GameGridView::_loadTextures(NVGcontext* vg)
 {
-    m_queueMap.at(cell->reuseIdentifier)->push_back(cell);
-    if (brls::Application::getCurrentFocus() != cell)
-        cell->setParent(nullptr);
-    cell->cacheForReuse();
+    if (!vg) return;
+
+    int loadedThisFrame = 0;
+    static const int MAX_LOADS_PER_FRAME = 2;
+
+    for (size_t i = 0; i < m_items.size() && loadedThisFrame < MAX_LOADS_PER_FRAME; i++) {
+        auto& item = m_items[i];
+        if (!item.imagePath.empty() && item.textureHandle < 0 && !item.textureLoading) {
+            auto it = m_textureCache.find(item.imagePath);
+            if (it != m_textureCache.end()) {
+                item.textureHandle = it->second;
+                item.textureReady = true;
+            } else {
+                item.textureLoading = true;
+                int handle = nvgCreateImage(vg, item.imagePath.c_str(), 0);
+                item.textureHandle = handle;
+                item.textureLoading = false;
+                loadedThisFrame++;
+                if (handle >= 0) {
+                    item.textureReady = true;
+                    m_textureCache[item.imagePath] = handle;
+                }
+            }
+        }
+        if (!item.imageLayerPath.empty() && item.imageLayerHandle < 0 && !item.textureLoading
+            && loadedThisFrame < MAX_LOADS_PER_FRAME) {
+            auto it = m_textureCache.find(item.imageLayerPath);
+            if (it != m_textureCache.end()) {
+                item.imageLayerHandle = it->second;
+            } else {
+                item.textureLoading = true;
+                int handle = nvgCreateImage(vg, item.imageLayerPath.c_str(), 0);
+                item.imageLayerHandle = handle;
+                item.textureLoading = false;
+                loadedThisFrame++;
+                if (handle >= 0) {
+                    m_textureCache[item.imageLayerPath] = handle;
+                }
+            }
+        }
+    }
 }
 
-void RecyclingGrid::itemsRecyclingLoop()
+void GameGridView::_evictTextures()
 {
-    if (!m_dataSource || m_dataSource->getItemCount() == 0) return;
+    const size_t maxCache = 128;
+    if (m_textureCache.size() <= maxCache) return;
 
-    brls::Rect visibleFrame = getVisibleFrame();
+    NVGcontext* vg = brls::Application::getNVGContext();
+    if (!vg) return;
 
-    // 回收上方元素
-    while (true)
-    {
-        RecyclingGridItem* minCell = nullptr;
-        for (auto* it : m_contentBox->getChildren())
-        {
-            auto* item = dynamic_cast<RecyclingGridItem*>(it);
-            if (item && item->getIndex() == visibleMin)
-            {
-                minCell = item;
+    size_t toRemove = m_textureCache.size() - maxCache;
+    auto it = m_textureCache.begin();
+    while (toRemove > 0 && it != m_textureCache.end()) {
+        bool inUse = false;
+        for (auto& item : m_items) {
+            if (item.textureHandle == it->second || item.imageLayerHandle == it->second) {
+                inUse = true;
                 break;
             }
         }
-
-        if (!minCell) break;
-        if (minCell->getIndex() >= m_dataSource->getItemCount())
-            break;
-
-        float cellHeight = estimatedRowHeight;
-        if (minCell->getDetachedPosition().y + cellHeight +
-            getHeightByCellIndex(
-                std::min(visibleMin + static_cast<size_t>(spanCount) * 3, m_dataSource->getItemCount()),
-                visibleMin) >= visibleFrame.getMinY())
-            break;
-
-        m_renderedFrame.origin.y += minCell->getIndex() % spanCount == 0
-            ? cellHeight + estimatedRowSpace : 0;
-        m_renderedFrame.size.height -= minCell->getIndex() % spanCount == 0
-            ? cellHeight + estimatedRowSpace : 0;
-
-        queueReusableCell(minCell);
-        removeCell(minCell);
-        visibleMin++;
+        if (!inUse) {
+            nvgDeleteImage(vg, it->second);
+            it = m_textureCache.erase(it);
+            toRemove--;
+        } else {
+            ++it;
+        }
     }
+}
 
-    // 回收下方元素
-    while (visibleMax > 0 && visibleMax < m_dataSource->getItemCount())
-    {
-        RecyclingGridItem* maxCell = nullptr;
-        for (auto* it : m_contentBox->getChildren())
-        {
-            auto* item = dynamic_cast<RecyclingGridItem*>(it);
-            if (item && item->getIndex() == visibleMax)
-            {
-                maxCell = item;
-                break;
-            }
+void GameGridView::frame(brls::FrameContext* ctx)
+{
+    if (m_dataSource && !m_items.empty()) {
+        uint64_t now = brls::getCPUTimeUsec();
+        float delta = 0.f;
+        if (m_lastFrameTime > 0) {
+            delta = static_cast<float>(now - m_lastFrameTime) / 1000.f;
+        }
+        m_lastFrameTime = now;
+        if (delta <= 0.f) delta = 16.67f;
+        delta *= 0.001f;
+
+        if (m_focusMoved) {
+            _ensureSelectedVisible();
+            m_focusMoved = false;
         }
 
-        if (!maxCell) break;
-        if (visibleMax == 0) break;
+        _updateScrollPhysics(delta);
 
-        size_t compareIdx = visibleMax > static_cast<size_t>(spanCount) * 3
-            ? visibleMax - static_cast<size_t>(spanCount) * 3 : 0;
-        if (maxCell->getDetachedPosition().y -
-            getHeightByCellIndex(visibleMax, compareIdx) <= visibleFrame.getMaxY())
-            break;
+        _updateVisibleRange();
 
-        m_renderedFrame.size.height -= maxCell->getIndex() % spanCount == 0
-            ? estimatedRowHeight + estimatedRowSpace : 0;
+        _updateFocusAnimation(delta);
 
-        queueReusableCell(maxCell);
-        removeCell(maxCell);
-        visibleMax--;
-    }
+        _updateMarquee(delta);
 
-    // 上方添加
-    while (visibleMin > 0 && visibleMin - 1 < m_dataSource->getItemCount())
-    {
-        if ((visibleMin) % spanCount == 0)
-        {
-            if (m_renderedFrame.getMinY() +
-                getHeightByCellIndex(
-                    std::min(visibleMin + static_cast<size_t>(spanCount) * 3, m_dataSource->getItemCount()),
-                    visibleMin) < visibleFrame.getMinY())
-                break;
-        }
-        addCellAt(visibleMin - 1, false);
-    }
+        NVGcontext* vg = brls::Application::getNVGContext();
+        _loadTextures(vg);
+        _evictTextures();
 
-    // 下方添加
-    while (visibleMax + 1 < m_dataSource->getItemCount())
-    {
-        size_t nextIdx = visibleMax + 1;
-        if ((nextIdx) % spanCount == 0)
-        {
-            if (m_renderedFrame.getMaxY() -
-                getHeightByCellIndex(
-                    nextIdx,
-                    nextIdx > static_cast<size_t>(spanCount) * 3 ? nextIdx - static_cast<size_t>(spanCount) * 3 : 0) >
-                visibleFrame.getMaxY())
-            {
-                break;
-            }
-        }
-        addCellAt(nextIdx, true);
-    }
-
-    // 所有 cell 已渲染则触发加载下一页
-    if (visibleMax + 1 >= getItemCount() && visibleMax > 0)
-    {
-        if (!m_requestNextPage && m_nextPageCallback)
-        {
-            if (m_dataSource && m_dataSource->getItemCount() > 0)
-            {
+        if (!m_requestNextPage && m_selectedIndex >= 0 &&
+            static_cast<size_t>(m_selectedIndex) >= m_items.size() - static_cast<size_t>(spanCount) * 2 &&
+            m_items.size() > 0) {
+            if (m_nextPageCallback) {
                 m_requestNextPage = true;
                 m_nextPageCallback();
             }
         }
     }
+
+    View::frame(ctx);
 }
 
-// ── Padding ────────────────────────────────────────────────────
+NVGcolor GameGridView::_getBadgeColor(PlatformBadgeColor color) const
+{
+    switch (color) {
+        case PlatformBadgeColor::GBA: return nvgRGBA(108, 77,  191, 220);
+        case PlatformBadgeColor::GBC: return nvgRGBA(0,   112, 221, 220);
+        case PlatformBadgeColor::GB:  return nvgRGBA(0,   168, 107, 220);
+        default:                      return nvgRGBA(100, 100, 100, 200);
+    }
+}
 
-void RecyclingGrid::setPaddingTop(float top) { m_paddingTop = top; }
-void RecyclingGrid::setPaddingBottom(float bottom) { m_paddingBottom = bottom; }
-void RecyclingGrid::setPaddingLeft(float left) { m_paddingLeft = left; }
+void GameGridView::draw(NVGcontext* vg, float x, float y, float w, float h,
+                         brls::Style style, brls::FrameContext* ctx)
+{
+    if (!vg) return;
+    if (!m_dataSource || m_items.empty()) return;
 
-// ── 工厂 ───────────────────────────────────────────────────────
+    nvgSave(vg);
 
-brls::View* RecyclingGrid::create() { return new RecyclingGrid(); }
+    nvgIntersectScissor(vg, x, y, w, h);
+
+    float itemW = _getItemWidth();
+    float itemH = estimatedRowHeight;
+    int startCol = 0;
+    int startRow = m_visibleStartRow;
+    int endRow = m_visibleEndRow;
+
+    for (int row = startRow; row < endRow; row++) {
+        for (int col = startCol; col < spanCount; col++) {
+            int idx = row * spanCount + col;
+            if (idx >= static_cast<int>(m_items.size())) break;
+
+            const auto& item = m_items[idx];
+            float ix = x + _getItemX(col);
+            float iy = y + _getItemY(row);
+
+            if (iy + itemH < y - 20.f || iy > y + h + 20.f) continue;
+
+            bool focused = (idx == m_selectedIndex);
+            _drawItem(vg, item, ix, iy, itemW, itemH, focused);
+        }
+    }
+
+    _drawScrollbar(vg, x, y, w, h);
+
+    nvgResetScissor(vg);
+    nvgRestore(vg);
+}
+
+void GameGridView::_drawItem(NVGcontext* vg, const GridDrawItem& item, float x, float y, float w, float h, bool focused)
+{
+    nvgSave(vg);
+
+    if (focused && item.focusGlow > 0.01f) {
+        float glowAlpha = item.focusGlow * 0.6f;
+        float glowPad = 3.f;
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, x - glowPad, y - glowPad, w + glowPad * 2, h + glowPad * 2, 5.f);
+        nvgFillColor(vg, nvgRGBA(70, 170, 255, static_cast<unsigned char>(glowAlpha * 255)));
+        nvgFill(vg);
+
+        nvgStrokeColor(vg, nvgRGBA(80, 180, 255, static_cast<unsigned char>(glowAlpha * 255)));
+        nvgStrokeWidth(vg, 2.5f);
+        nvgStroke(vg);
+    }
+
+    nvgBeginPath(vg);
+    nvgRoundedRect(vg, x, y, w, h, 3.f);
+    nvgFillColor(vg, nvgRGBA(42, 42, 42, 230));
+    nvgFill(vg);
+
+    nvgStrokeColor(vg, nvgRGBA(110, 110, 110, focused ? 200 : 100));
+    nvgStrokeWidth(vg, 1.0f);
+    nvgStroke(vg);
+
+    if (item.empty) {
+        _drawEmptyItem(vg, x, y, w, h);
+    } else {
+        float imageSize = h - 10.f;
+        float imageX = x + 5.f;
+        float imageY = y + 5.f;
+
+        _drawImage(vg, item, imageX, imageY, imageSize);
+
+        float textX = imageX + imageSize + 10.f;
+        float textMaxWidth = w - (imageSize + 20.f) - 8.f;
+
+        float titleY = y + 22.f;
+        _drawBadge(vg, item, textX, titleY - 16.f);
+        _drawTitle(vg, item, textX, titleY, textMaxWidth, focused);
+
+        float playY = y + 42.f;
+        _drawPlayTime(vg, item.playTime, textX, playY, textMaxWidth);
+
+        float subY = y + 62.f;
+        _drawSubText(vg, item.subText, textX, subY, textMaxWidth);
+    }
+
+    nvgRestore(vg);
+}
+
+void GameGridView::_drawImage(NVGcontext* vg, const GridDrawItem& item, float x, float y, float imageSize)
+{
+    nvgBeginPath(vg);
+    nvgRoundedRect(vg, x, y, imageSize, imageSize, 3.f);
+
+    if (item.textureHandle >= 0 && item.textureReady) {
+        NVGpaint paint = nvgImagePattern(vg, x, y, imageSize, imageSize, 0.f, item.textureHandle, 1.f);
+        nvgFillPaint(vg, paint);
+        nvgFill(vg);
+
+        if (item.imageLayerHandle >= 0 && item.imageLayerVisible) {
+            nvgBeginPath(vg);
+            nvgRoundedRect(vg, x, y, imageSize, imageSize, 3.f);
+            NVGpaint layerPaint = nvgImagePattern(vg, x, y, imageSize, imageSize, 0.f, item.imageLayerHandle, 0.5f);
+            nvgFillPaint(vg, layerPaint);
+            nvgFill(vg);
+        }
+    } else {
+        nvgFillColor(vg, nvgRGBA(60, 60, 60, 200));
+        nvgFill(vg);
+    }
+
+    nvgStrokeColor(vg, nvgRGBA(100, 100, 100, 150));
+    nvgStrokeWidth(vg, 0.5f);
+    nvgStroke(vg);
+}
+
+void GameGridView::_drawBadge(NVGcontext* vg, const GridDrawItem& item, float x, float y)
+{
+    if (item.badgeText.empty() || item.badgeColor == PlatformBadgeColor::NONE) return;
+
+    float badgeW = 36.f;
+    float badgeH = 20.f;
+
+    nvgBeginPath(vg);
+    nvgRoundedRect(vg, x, y, badgeW, badgeH, 4.f);
+    nvgFillColor(vg, _getBadgeColor(item.badgeColor));
+    nvgFill(vg);
+
+    nvgFontSize(vg, 12.f);
+    nvgFontFaceId(vg, m_fontId);
+    nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+    nvgFillColor(vg, nvgRGBA(255, 255, 255, 255));
+    nvgText(vg, x + badgeW * 0.5f, y + badgeH * 0.5f, item.badgeText.c_str(), nullptr);
+}
+
+void GameGridView::_drawTitle(NVGcontext* vg, const GridDrawItem& item, float x, float y, float maxWidth, bool focused)
+{
+    nvgFontSize(vg, 16.f);
+    nvgFontFaceId(vg, m_fontId);
+    nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
+    nvgFillColor(vg, nvgRGBA(255, 255, 255, 255));
+
+    if (focused && item.marqueeMaxOffset > 0.f) {
+        nvgSave(vg);
+        nvgIntersectScissor(vg, x, y - 2.f, maxWidth, 20.f);
+        nvgText(vg, x - item.marqueeOffset, y, item.title.c_str(), nullptr);
+        nvgRestore(vg);
+    } else {
+        nvgText(vg, x, y, item.title.c_str(), nullptr);
+    }
+}
+
+void GameGridView::_drawSubText(NVGcontext* vg, const std::string& text, float x, float y, float maxWidth)
+{
+    if (text.empty()) return;
+
+    nvgFontSize(vg, 14.f);
+    nvgFontFaceId(vg, m_fontId);
+    nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
+    nvgFillColor(vg, nvgRGBA(130, 130, 130, 255));
+
+    nvgText(vg, x, y, text.c_str(), nullptr);
+}
+
+void GameGridView::_drawPlayTime(NVGcontext* vg, const std::string& text, float x, float y, float maxWidth)
+{
+    if (text.empty()) return;
+
+    nvgFontSize(vg, 14.f);
+    nvgFontFaceId(vg, m_fontId);
+    nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
+    nvgFillColor(vg, nvgRGBA(121, 201, 249, 255));
+
+    nvgText(vg, x, y, text.c_str(), nullptr);
+}
+
+void GameGridView::_drawEmptyItem(NVGcontext* vg, float x, float y, float w, float h)
+{
+    nvgFontSize(vg, 16.f);
+    nvgFontFaceId(vg, m_fontId);
+    nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+    nvgFillColor(vg, nvgRGBA(150, 150, 150, 200));
+    nvgText(vg, x + w * 0.5f, y + h * 0.5f, "空", nullptr);
+}
+
+void GameGridView::_drawScrollbar(NVGcontext* vg, float x, float y, float w, float h)
+{
+    if (m_maxScrollY <= 0.f) return;
+
+    float totalH = _getRowCount() * _getRowHeight() + m_paddingTop + m_paddingBottom;
+    if (totalH <= 0.f) return;
+
+    float barH = h * (h / totalH);
+    barH = std::max(barH, 20.f);
+    float barY = y + (m_scrollY / m_maxScrollY) * (h - barH);
+    float barX = x + w - 5.f;
+    float barW = 3.f;
+
+    nvgBeginPath(vg);
+    nvgRoundedRect(vg, barX, barY, barW, barH, 1.5f);
+    nvgFillColor(vg, nvgRGBA(180, 180, 180, 120));
+    nvgFill(vg);
+}
+
+brls::View* GameGridView::create()
+{
+    return new GameGridView();
+}

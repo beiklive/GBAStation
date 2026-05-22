@@ -1,24 +1,62 @@
 #pragma once
 
-#include <borealis.hpp>
 #include <string>
-#include <functional>
+#include <cstdint>
 
-class RecyclingGrid;
+enum class PlatformBadgeColor {
+    GBA,
+    GBC,
+    GB,
+    NONE,
+};
 
-class RecyclingGridItem : public brls::Box {
-public:
-    RecyclingGridItem();
-    ~RecyclingGridItem() override;
+struct GridDrawItem {
+    uint64_t gameId = 0;
 
-    size_t getIndex() const;
-    void setIndex(size_t value);
+    bool empty = true;
 
-    virtual void prepareForReuse();
-    virtual void cacheForReuse();
+    std::string title;
+    std::string subText;
+    std::string playTime;
 
-    std::string reuseIdentifier;
+    PlatformBadgeColor badgeColor = PlatformBadgeColor::NONE;
+    std::string badgeText;
 
-private:
-    size_t index = 0;
+    std::string imagePath;
+    std::string imageLayerPath;
+    bool imageLayerVisible = false;
+
+    bool favorite = false;
+
+    float marqueeOffset = 0.f;
+    float marqueeMaxOffset = 0.f;
+    float focusScale = 1.f;
+    float focusGlow = 0.f;
+
+    int textureHandle = -1;
+    int imageLayerHandle = -1;
+    bool textureLoading = false;
+    bool textureReady = false;
+
+    bool selected = false;
+
+    void reset() {
+        empty = true;
+        title.clear();
+        subText.clear();
+        playTime.clear();
+        badgeColor = PlatformBadgeColor::NONE;
+        badgeText.clear();
+        imagePath.clear();
+        imageLayerPath.clear();
+        imageLayerVisible = false;
+        favorite = false;
+        marqueeOffset = 0.f;
+        marqueeMaxOffset = 0.f;
+        focusScale = 1.f;
+        focusGlow = 0.f;
+        textureLoading = false;
+        textureReady = false;
+        selected = false;
+    }
 };

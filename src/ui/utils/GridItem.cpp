@@ -1,16 +1,13 @@
 #include "GridItem.hpp"
+#include "core/Tools.hpp"
 
 #include <functional>
 
 namespace beiklive
 {
 
-    // ============================================================
-    // 构造 / 析构
-    // ============================================================
-
     GridItem::GridItem(GridItemMode mode, int index)
-        : RecyclingGridItem()
+        : brls::Box()
         , m_mode(mode)
         , m_index(index)
     {
@@ -19,7 +16,6 @@ namespace beiklive
         this->setHeight(ITEM_HEIGHT);
         this->setAlignItems(brls::AlignItems::CENTER);
         this->setJustifyContent(brls::JustifyContent::CENTER);
-        // 设置边框和阴影
         this->setBorderColor(nvgRGBA(128, 128, 128, 120));
         this->setBorderThickness(1.f);
         this->setCornerRadius(3.f);
@@ -27,43 +23,19 @@ namespace beiklive
         this->setShadowType(brls::ShadowType::GENERIC);
         this->setHideHighlightBackground(true);
         this->setHighlightCornerRadius(0.f);
-        // this->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
-        // HIDE_BRLS_HIGHLIGHT(this);
-
-
-        // 注册 ZR 键收藏动作（仅 GAME_LIBRARY 模式）
-        // this->registerAction(
-        //     "收藏",
-        //     brls::BUTTON_RT,
-        //     [this](brls::View*) -> bool
-        //     {
-        //         if (m_mode != GridItemMode::GAME_LIBRARY) return true;
-        //         if (toggleFavourite)
-        //             toggleFavourite(m_index);
-        //         _updateFavouriteHint();
-        //         return true;
-        //     },
-        //     false,
-        //     false,
-        //     brls::SOUND_CLICK);
+        this->setFocusable(true);
 
         _initLayout();
     }
 
-    void GridItem::draw(NVGcontext *vg, float x, float y, float width, float height, brls::Style style, brls::FrameContext *ctx)
+    void GridItem::draw(NVGcontext* vg, float x, float y, float w, float h,
+                         brls::Style style, brls::FrameContext* ctx)
     {
-        // 绘制背景（如果有的话）
-        brls::Box::draw(vg, x, y, width, height, style, ctx);
-        // 绘制边框
+        brls::Box::draw(vg, x, y, w, h, style, ctx);
     }
-
-    // ============================================================
-    // _initLayout – 构建控件布局
-    // ============================================================
 
     void GridItem::_initLayout()
     {
-        // ─── 空状态 Label ───────────────────────────────────────────────────
         m_emptyLabel = new brls::Label();
         m_emptyLabel->setFontSize(16.f);
         m_emptyLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
@@ -74,10 +46,8 @@ namespace beiklive
         m_emptyLabel->setAnimated(true);
         m_emptyLabel->setAutoAnimate(true);
         m_emptyLabel->setHideHighlightBackground(true);
-
         this->addView(m_emptyLabel);
 
-        // ─── 有数据主布局（横向）────────────────────────────────────────────
         m_dataLayout = new brls::Box(brls::Axis::ROW);
         m_dataLayout->setWidthPercentage(100.f);
         m_dataLayout->setAlignItems(brls::AlignItems::CENTER);
@@ -85,49 +55,31 @@ namespace beiklive
         m_dataLayout->setFocusable(false);
         HIDE_BRLS_HIGHLIGHT(m_dataLayout);
 
-        #undef ABSOLUTE
-        // 左侧：正方形封面图（宽 = 高 = ITEM_HEIGHT）
         auto logobox = new brls::Box();
-        logobox->setWidth(ITEM_HEIGHT-10);
-        logobox->setHeight(ITEM_HEIGHT-10);
+        logobox->setWidth(ITEM_HEIGHT - 10);
+        logobox->setHeight(ITEM_HEIGHT - 10);
         logobox->setMarginLeft(5.f);
         logobox->setCornerRadius(3.f);
 
         m_image = new brls::Image();
-        m_image->setWidth(ITEM_HEIGHT-10);
-        m_image->setHeight(ITEM_HEIGHT-10);
+        m_image->setWidth(ITEM_HEIGHT - 10);
+        m_image->setHeight(ITEM_HEIGHT - 10);
         m_image->setScalingType(brls::ImageScalingType::FILL);
         m_image->setFocusable(false);
         m_image->setCornerRadius(3.f);
         m_image->setImageFromFile(BK_RES("img/ui/menu/empty.png"));
 
-        m_imageLayer = new brls::Image();
-        m_imageLayer->setWidth(ITEM_HEIGHT-10);
-        m_imageLayer->setHeight(ITEM_HEIGHT-10);        
-        m_imageLayer->setPositionTop(0.f);
-        m_imageLayer->setPositionLeft(0.f);
-        m_imageLayer->setPositionType(brls::PositionType::ABSOLUTE);
-        m_imageLayer->setScalingType(brls::ImageScalingType::FILL);
-        m_imageLayer->setFocusable(false);
-        m_imageLayer->setVisibility(brls::Visibility::GONE);
-        m_imageLayer->setCornerRadius(3.f);
-
         logobox->addView(m_image);
-        // logobox->addView(m_imageLayer);
         m_dataLayout->addView(logobox);
 
-        // 右侧：纵向容器
         m_rightBox = new brls::Box(brls::Axis::COLUMN);
-
         m_rightBox->setGrow(1.f);
         m_rightBox->setAlignItems(brls::AlignItems::FLEX_START);
-        // m_rightBox->setJustifyContent(brls::JustifyContent::CENTER);
         m_rightBox->setFocusable(false);
         m_rightBox->setPaddingLeft(10.f);
         m_rightBox->setPaddingRight(8.f);
         HIDE_BRLS_HIGHLIGHT(m_rightBox);
 
-        // Row1：横向容器（徽标 + 标题）
         m_row1 = new brls::Box(brls::Axis::ROW);
         m_row1->setGrow(0.f);
         m_row1->setAlignItems(brls::AlignItems::CENTER);
@@ -137,7 +89,6 @@ namespace beiklive
         m_row1->setMarginBottom(10.f);
         HIDE_BRLS_HIGHLIGHT(m_row1);
 
-        // 徽标背景框（SAVE_STATE 模式下初始隐藏）
         m_badgeBox = new brls::Box();
         m_badgeBox->setAxis(brls::Axis::ROW);
         m_badgeBox->setAlignItems(brls::AlignItems::CENTER);
@@ -157,13 +108,11 @@ namespace beiklive
         m_badgeLabel->setFocusable(false);
         m_badgeBox->addView(m_badgeLabel);
 
-        // SAVE_STATE 模式隐藏徽标
         if (m_mode == GridItemMode::SAVE_STATE)
             m_badgeBox->setVisibility(brls::Visibility::GONE);
 
         m_row1->addView(m_badgeBox);
 
-        // 主标题 Label
         m_titleLabel = new brls::Label();
         m_titleLabel->setFontSize(16.f);
         m_titleLabel->setSingleLine(true);
@@ -175,20 +124,6 @@ namespace beiklive
 
         m_rightBox->addView(m_row1);
 
-        // Row2：时间文字
-        m_subLabel = new brls::Label();
-        m_subLabel->setFontSize(14.f);
-        m_subLabel->setTextColor(nvgRGBA(130, 130, 130, 255));
-        m_subLabel->setSingleLine(true);
-        m_subLabel->setAnimated(true);
-        m_subLabel->setAutoAnimate(true);
-        m_subLabel->setText("  ");
-        m_subLabel->setGrow(0.f);
-        // m_subLabel->setMarginBottom(5.f);
-
-        m_subLabel->setFocusable(false);
-        
-        // Row3：游玩时长（SAVE_STATE 模式下恒为 GONE）
         m_playLabel = new brls::Label();
         m_playLabel->setFontSize(14.f);
         m_playLabel->setTextColor(nvgRGBA(121, 201, 249, 255));
@@ -199,38 +134,38 @@ namespace beiklive
         m_playLabel->setMarginBottom(10.f);
         m_playLabel->setFocusable(false);
         if (m_mode == GridItemMode::SAVE_STATE)
-        m_playLabel->setVisibility(brls::Visibility::GONE);
+            m_playLabel->setVisibility(brls::Visibility::GONE);
         m_rightBox->addView(m_playLabel);
+
+        m_subLabel = new brls::Label();
+        m_subLabel->setFontSize(14.f);
+        m_subLabel->setTextColor(nvgRGBA(130, 130, 130, 255));
+        m_subLabel->setSingleLine(true);
+        m_subLabel->setAnimated(true);
+        m_subLabel->setAutoAnimate(true);
+        m_subLabel->setText("  ");
+        m_subLabel->setGrow(0.f);
+        m_subLabel->setFocusable(false);
         m_rightBox->addView(m_subLabel);
 
         m_dataLayout->addView(m_rightBox);
         this->addView(m_dataLayout);
 
-        // 初始为空状态：显示 emptyLabel，隐藏 dataLayout
         m_dataLayout->setVisibility(brls::Visibility::GONE);
         m_isEmpty = true;
     }
 
-    // ============================================================
-    // 数据设置接口
-    // ============================================================
-
     void GridItem::setImagePath(const std::string& path)
     {
         if (!m_image) return;
-        if (path.empty())
-        {
-            m_image->clear();
-            return;
-        }
+        if (path.empty()) { m_image->clear(); return; }
         m_image->setImageFromFile(path);
     }
 
     void GridItem::setBadge(const std::string& text, PlatformBadgeColor color)
     {
         if (!m_badgeBox || !m_badgeLabel) return;
-        if (color == PlatformBadgeColor::NONE || m_mode == GridItemMode::SAVE_STATE)
-        {
+        if (color == PlatformBadgeColor::NONE || m_mode == GridItemMode::SAVE_STATE) {
             m_badgeBox->setVisibility(brls::Visibility::GONE);
             return;
         }
@@ -241,25 +176,19 @@ namespace beiklive
 
     void GridItem::setTitle(const std::string& title)
     {
-        if (m_titleLabel)
-            m_titleLabel->setText(title);
-        // 同步更新空状态 emptyLabel（便于 SAVE_STATE 模式的槽位名称）
-        if (m_emptyLabel)
-            m_emptyLabel->setText(title);
+        if (m_titleLabel) m_titleLabel->setText(title);
+        if (m_emptyLabel) m_emptyLabel->setText(title);
     }
 
     void GridItem::setSubText(const std::string& text)
     {
-        if (m_subLabel)
-            m_subLabel->setText(
-                m_mode == GridItemMode::GAME_LIBRARY ? "上次游玩: " + text : "存档时间: " +
-                text);
+        if (m_subLabel) m_subLabel->setText(
+            m_mode == GridItemMode::GAME_LIBRARY ? "上次游玩: " + text : "存档时间: " + text);
     }
 
     void GridItem::setPlayTime(const std::string& text)
     {
-        if (!m_playLabel) return;
-        if (m_mode == GridItemMode::SAVE_STATE) return; // SAVE_STATE 模式不显示
+        if (!m_playLabel || m_mode == GridItemMode::SAVE_STATE) return;
         std::string display = text.empty() ? "未游玩" : "已游玩 " + text;
         m_playLabel->setText(display);
         m_playLabel->setVisibility(brls::Visibility::VISIBLE);
@@ -267,71 +196,90 @@ namespace beiklive
 
     void GridItem::setSubTextEmpty()
     {
-        if (m_subLabel)
-            m_subLabel->setText("  ");
+        if (m_subLabel) m_subLabel->setText("  ");
     }
 
-    void GridItem::setEmpty(const std::string &slotName)
+    void GridItem::setEmpty(const std::string& slotName)
     {
-        if (m_emptyLabel)
-            m_emptyLabel->setText(slotName);
+        if (m_emptyLabel) m_emptyLabel->setText(slotName);
         m_emptyLabel->setVisibility(brls::Visibility::VISIBLE);
-        if (m_dataLayout)
-            m_dataLayout->setVisibility(brls::Visibility::GONE);
+        if (m_dataLayout) m_dataLayout->setVisibility(brls::Visibility::GONE);
         m_isEmpty = true;
     }
 
     void GridItem::setDataLoaded()
     {
         m_emptyLabel->setVisibility(brls::Visibility::GONE);
-        if (m_dataLayout)
-            m_dataLayout->setVisibility(brls::Visibility::VISIBLE);
+        if (m_dataLayout) m_dataLayout->setVisibility(brls::Visibility::VISIBLE);
         m_isEmpty = false;
     }
 
-    // ============================================================
-    // 图片加载
-    // ============================================================
-
-    void GridItem::setImageLayer(const std::string &path, bool visible)
-    {
-        if (!m_imageLayer) return;
-        if (visible && !path.empty())
-            m_imageLayer->setImageFromFile(path);
-        m_imageLayer->setVisibility(visible ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
-    }
-
-    // ============================================================
-    // 复用重置
-    // ============================================================
-
-    void GridItem::prepareForReuse()
-    {
-        RecyclingGridItem::prepareForReuse();
-        if (m_imageLayer) m_imageLayer->setVisibility(brls::Visibility::GONE);
-        if (m_titleLabel) m_titleLabel->setText("");
-        if (m_subLabel) m_subLabel->setText("");
-        if (m_playLabel) m_playLabel->setText("");
-        if (m_badgeLabel) m_badgeLabel->setText("");
-        if (m_badgeBox) m_badgeBox->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
-        m_emptyLabel->setVisibility(brls::Visibility::VISIBLE);
-        m_dataLayout->setVisibility(brls::Visibility::GONE);
-        m_isEmpty = true;
-    }
-
-    // ============================================================
-    // 平台徽标颜色映射
-    // ============================================================
-
     NVGcolor GridItem::_getBadgeColor(PlatformBadgeColor color)
     {
-        switch (color)
-        {
-            case PlatformBadgeColor::GBA:  return nvgRGBA(108, 77,  191, 220); // 紫色
-            case PlatformBadgeColor::GBC:  return nvgRGBA(0,   112, 221, 220); // 蓝色
-            case PlatformBadgeColor::GB:   return nvgRGBA(0,   168, 107, 220); // 绿色
-            default:                       return nvgRGBA(100, 100, 100, 200);
+        switch (color) {
+            case PlatformBadgeColor::GBA: return nvgRGBA(108, 77,  191, 220);
+            case PlatformBadgeColor::GBC: return nvgRGBA(0,   112, 221, 220);
+            case PlatformBadgeColor::GB:  return nvgRGBA(0,   168, 107, 220);
+            default:                      return nvgRGBA(100, 100, 100, 200);
         }
+    }
+
+    void GridItem::populateFromGameEntry(GridDrawItem& item, const GameEntry& entry,
+                                          GridItemMode mode)
+    {
+        item.reset();
+        item.empty = false;
+        item.title = entry.title.empty() ? entry.path : entry.title;
+        item.imagePath = entry.logoPath;
+
+        item.imageLayerPath = GetGameLogoLayerPath(entry.platform);
+        item.imageLayerVisible = !item.imageLayerPath.empty();
+
+        item.subText = formatSubText(entry, mode);
+
+        if (mode == GridItemMode::GAME_LIBRARY) {
+            item.playTime = formatPlayTime(entry.playTime);
+        }
+
+        std::string badgeText = beiklive::tools::platformBadgeName(entry.platform);
+        switch (static_cast<beiklive::enums::EmuPlatform>(entry.platform)) {
+            case beiklive::enums::EmuPlatform::EmuGBA: item.badgeColor = PlatformBadgeColor::GBA; break;
+            case beiklive::enums::EmuPlatform::EmuGBC: item.badgeColor = PlatformBadgeColor::GBC; break;
+            case beiklive::enums::EmuPlatform::EmuGB:  item.badgeColor = PlatformBadgeColor::GB;  break;
+            default: item.badgeColor = PlatformBadgeColor::NONE; break;
+        }
+        item.badgeText = badgeText;
+
+        item.favorite = entry.favourite;
+        item.gameId = static_cast<uint64_t>(std::hash<std::string>{}(entry.path));
+    }
+
+    void GridItem::populateEmpty(GridDrawItem& item, const std::string& slotName)
+    {
+        item.reset();
+        item.empty = true;
+        item.title = slotName;
+    }
+
+    std::string GridItem::formatPlayTime(int seconds)
+    {
+        if (seconds <= 0) return "";
+        return beiklive::tools::formatPlayTime(seconds);
+    }
+
+    std::string GridItem::formatSubText(const GameEntry& entry, GridItemMode mode)
+    {
+        switch (mode) {
+            case GridItemMode::GAME_LIBRARY:
+                return entry.lastPlayed.empty()
+                    ? "从未游玩"
+                    : "上次游玩: " + beiklive::tools::formatTimestampForDisplay(entry.lastPlayed);
+            case GridItemMode::SAVE_STATE:
+                return entry.lastPlayed.empty()
+                    ? ""
+                    : "存档时间: " + beiklive::tools::formatTimestampForDisplay(entry.lastPlayed);
+        }
+        return "";
     }
 
 } // namespace beiklive
