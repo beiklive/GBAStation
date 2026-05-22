@@ -19,7 +19,6 @@ public:
               brls::Style style, brls::FrameContext* ctx) override;
     void frame(brls::FrameContext* ctx) override;
     void onLayout() override;
-    void willAppear(bool resetState = false) override;
 
     void setDataSource(GameGridDataSource* source);
     GameGridDataSource* getDataSource() const { return m_dataSource; }
@@ -31,8 +30,6 @@ public:
     void setDefaultCellFocus(size_t index);
     size_t getDefaultCellFocus() const { return m_defaultCellFocus; }
 
-    const GridDrawItem* getGridItemByIndex(size_t index) const;
-    size_t getItemCount() const;
     int getSelectedIndex() const { return m_selectedIndex; }
 
     void onNextPage(std::function<void()> callback) { m_nextPageCallback = std::move(callback); }
@@ -44,8 +41,6 @@ public:
     int spanCount = 3;
     float estimatedRowHeight = 120.f;
     float estimatedRowSpace = 8.f;
-
-    static brls::View* create();
 
 private:
     GameGridDataSource* m_dataSource = nullptr;
@@ -65,13 +60,15 @@ private:
 
     float m_paddingTop = 0.f;
     float m_paddingRight = 0.f;
-    float m_paddingBottom = 0.f;
     float m_paddingLeft = 0.f;
 
     bool m_focusMoved = false;
     bool m_isLayouted = false;
     bool m_requestNextPage = false;
     bool m_interactionDisabled = false;
+
+    float m_shakeTime = 0.f;
+    float m_shakeDir = 0.f;
 
     std::function<void()> m_nextPageCallback;
     std::function<void(int)> m_focusChangeCallback;
@@ -114,6 +111,10 @@ private:
     void _moveDown();
     void _moveLeft();
     void _moveRight();
+    bool _tryMoveUp();
+    bool _tryMoveDown();
+    bool _tryMoveLeft();
+    bool _tryMoveRight();
     void _captureInputState();
 
     void _drawItem(NVGcontext* vg, const GridDrawItem& item, float x, float y, float w, float h, bool focused);

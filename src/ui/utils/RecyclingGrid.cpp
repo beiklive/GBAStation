@@ -45,11 +45,10 @@ void GameGridView::setDataSource(GameGridDataSource* source)
     if (m_isLayouted) reloadData();
 }
 
-void GameGridView::setPadding(float top, float right, float bottom, float left)
+void GameGridView::setPadding(float top, float right, float /*bottom*/, float left)
 {
     m_paddingTop = top;
     m_paddingRight = right;
-    m_paddingBottom = bottom;
     m_paddingLeft = left;
 }
 
@@ -106,7 +105,7 @@ void GameGridView::reloadData()
     float viewH = getHeight();
     if (viewH < 1.f) viewH = 720.f;
     m_maxScrollY = std::max(0.f, _getRowCount() * _getRowHeight()
-                           + m_paddingTop + m_paddingBottom - viewH);
+                           + m_paddingTop - viewH);
 
     size_t focusIdx = m_defaultCellFocus;
     if (m_selectedGameId != 0) {
@@ -144,7 +143,7 @@ void GameGridView::notifyDataChanged()
     float viewH = getHeight();
     if (viewH < 1.f) viewH = 720.f;
     m_maxScrollY = std::max(0.f, _getRowCount() * _getRowHeight()
-                           + m_paddingTop + m_paddingBottom - viewH);
+                           + m_paddingTop - viewH);
     m_scrollY = std::min(m_scrollY, m_maxScrollY);
     m_targetScrollY = m_scrollY;
     _updateVisibleRange();
@@ -160,22 +159,6 @@ void GameGridView::clearData()
     }
 }
 
-const GridDrawItem* GameGridView::getGridItemByIndex(size_t index) const
-{
-    if (index < m_items.size()) return &m_items[index];
-    return nullptr;
-}
-
-size_t GameGridView::getItemCount() const
-{
-    return m_items.size();
-}
-
-void GameGridView::willAppear(bool resetState)
-{
-    View::willAppear(resetState);
-}
-
 void GameGridView::onLayout()
 {
     View::onLayout();
@@ -184,45 +167,101 @@ void GameGridView::onLayout()
     }
 }
 
-void GameGridView::_moveUp()
+bool GameGridView::_tryMoveUp()
 {
-    if (m_items.empty()) return;
+    if (m_items.empty()) return false;
     int row = m_selectedIndex / spanCount;
     if (row > 0) {
         m_selectedIndex -= spanCount;
         m_selectedIndex = std::max(0, m_selectedIndex);
+        return true;
     }
+    return false;
 }
 
-void GameGridView::_moveDown()
+bool GameGridView::_tryMoveDown()
 {
-    if (m_items.empty()) return;
+    if (m_items.empty()) return false;
     int row = m_selectedIndex / spanCount;
     int maxRow = _getRowCount() - 1;
     if (row < maxRow) {
         m_selectedIndex += spanCount;
         if (m_selectedIndex >= static_cast<int>(m_items.size()))
             m_selectedIndex = static_cast<int>(m_items.size()) - 1;
+        return true;
     }
+    return false;
 }
 
-void GameGridView::_moveLeft()
+bool GameGridView::_tryMoveLeft()
 {
-    if (m_items.empty()) return;
+    if (m_items.empty()) return false;
     int col = m_selectedIndex % spanCount;
     if (col > 0) {
         m_selectedIndex -= 1;
+        return true;
     }
+    return false;
 }
 
-void GameGridView::_moveRight()
+bool GameGridView::_tryMoveRight()
 {
-    if (m_items.empty()) return;
+    if (m_items.empty()) return false;
     int col = m_selectedIndex % spanCount;
     if (col < spanCount - 1) {
         m_selectedIndex += 1;
         if (m_selectedIndex >= static_cast<int>(m_items.size()))
             m_selectedIndex = static_cast<int>(m_items.size()) - 1;
+        return true;
+    }
+    return false;
+}
+
+void GameGridView::_moveUp()
+{
+    if (_tryMoveUp()) {
+        m_focusMoved = true;
+        brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_SIDEBAR);
+    } else {
+        m_shakeTime = 0.3f;
+        m_shakeDir = -1.f;
+        brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_ERROR);
+    }
+}
+
+void GameGridView::_moveDown()
+{
+    if (_tryMoveDown()) {
+        m_focusMoved = true;
+        brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_SIDEBAR);
+    } else {
+        m_shakeTime = 0.3f;
+        m_shakeDir = 1.f;
+        brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_ERROR);
+    }
+}
+
+void GameGridView::_moveLeft()
+{
+    if (_tryMoveLeft()) {
+        m_focusMoved = true;
+        brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_SIDEBAR);
+    } else {
+        m_shakeTime = 0.3f;
+        m_shakeDir = -2.f;
+        brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_ERROR);
+    }
+}
+
+void GameGridView::_moveRight()
+{
+    if (_tryMoveRight()) {
+        m_focusMoved = true;
+        brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_SIDEBAR);
+    } else {
+        m_shakeTime = 0.3f;
+        m_shakeDir = 2.f;
+        brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_ERROR);
     }
 }
 
@@ -255,8 +294,8 @@ void GameGridView::_ensureSelectedVisible()
 
     if (itemY < target + m_paddingTop) {
         target = itemY - m_paddingTop;
-    } else if (itemBottom > target + viewH - m_paddingBottom) {
-        target = itemBottom - viewH + m_paddingBottom;
+    } else if (itemBottom > target + viewH - m_paddingTop) {
+        target = itemBottom - viewH + m_paddingTop;
     }
 
     target = std::max(0.f, std::min(target, m_maxScrollY));
@@ -425,7 +464,6 @@ void GameGridView::_handleInput(float dt)
         m_holdUpTime = 0.f;
         m_holdUpRepeat = 0.f;
         _moveUp();
-        m_focusMoved = true;
     }
     if (upNow) {
         m_holdUpTime += dt;
@@ -434,8 +472,10 @@ void GameGridView::_handleInput(float dt)
             float interval = m_holdUpTime > HOLD_ACCEL_TIME ? HOLD_REPEAT_FAST : HOLD_REPEAT;
             while (m_holdUpRepeat >= interval) {
                 m_holdUpRepeat -= interval;
-                _moveUp();
-                m_focusMoved = true;
+                if (_tryMoveUp()) {
+                    m_focusMoved = true;
+                    brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_SIDEBAR);
+                }
             }
         }
     }
@@ -446,7 +486,6 @@ void GameGridView::_handleInput(float dt)
         m_holdDownTime = 0.f;
         m_holdDownRepeat = 0.f;
         _moveDown();
-        m_focusMoved = true;
     }
     if (downNow) {
         m_holdDownTime += dt;
@@ -455,8 +494,10 @@ void GameGridView::_handleInput(float dt)
             float interval = m_holdDownTime > HOLD_ACCEL_TIME ? HOLD_REPEAT_FAST : HOLD_REPEAT;
             while (m_holdDownRepeat >= interval) {
                 m_holdDownRepeat -= interval;
-                _moveDown();
-                m_focusMoved = true;
+                if (_tryMoveDown()) {
+                    m_focusMoved = true;
+                    brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_SIDEBAR);
+                }
             }
         }
     }
@@ -467,7 +508,6 @@ void GameGridView::_handleInput(float dt)
         m_holdLeftTime = 0.f;
         m_holdLeftRepeat = 0.f;
         _moveLeft();
-        m_focusMoved = true;
     }
     if (leftNow) {
         m_holdLeftTime += dt;
@@ -476,8 +516,10 @@ void GameGridView::_handleInput(float dt)
             float interval = m_holdLeftTime > HOLD_ACCEL_TIME ? HOLD_REPEAT_FAST : HOLD_REPEAT;
             while (m_holdLeftRepeat >= interval) {
                 m_holdLeftRepeat -= interval;
-                _moveLeft();
-                m_focusMoved = true;
+                if (_tryMoveLeft()) {
+                    m_focusMoved = true;
+                    brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_SIDEBAR);
+                }
             }
         }
     }
@@ -488,7 +530,6 @@ void GameGridView::_handleInput(float dt)
         m_holdRightTime = 0.f;
         m_holdRightRepeat = 0.f;
         _moveRight();
-        m_focusMoved = true;
     }
     if (rightNow) {
         m_holdRightTime += dt;
@@ -497,8 +538,10 @@ void GameGridView::_handleInput(float dt)
             float interval = m_holdRightTime > HOLD_ACCEL_TIME ? HOLD_REPEAT_FAST : HOLD_REPEAT;
             while (m_holdRightRepeat >= interval) {
                 m_holdRightRepeat -= interval;
-                _moveRight();
-                m_focusMoved = true;
+                if (_tryMoveRight()) {
+                    m_focusMoved = true;
+                    brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_SIDEBAR);
+                }
             }
         }
     }
@@ -529,6 +572,9 @@ void GameGridView::frame(brls::FrameContext* ctx)
     if (dt <= 0.f || dt > 0.5f) dt = 0.016f;
 
     _handleInput(dt);
+
+    if (m_shakeTime > 0.f)
+        m_shakeTime -= dt;
 
     if (m_focusMoved) {
         _ensureSelectedVisible();
@@ -605,11 +651,27 @@ void GameGridView::_drawItem(NVGcontext* vg, const GridDrawItem& item, float x, 
 {
     nvgSave(vg);
 
+    float shakeX = 0.f;
+    float shakeY = 0.f;
+    if (focused && m_shakeTime > 0.f && m_shakeDir != 0.f) {
+        float t = m_shakeTime / 0.3f;
+        float decay = t * t;
+        float freq = 80.f;
+        float amount = std::sin(m_shakeTime * freq) * 6.f * decay;
+        float adir = std::abs(m_shakeDir);
+        if (adir < 1.5f)
+            shakeY = amount * m_shakeDir;
+        else
+            shakeX = amount * (m_shakeDir > 0.f ? 1.f : -1.f);
+    }
+
     if (focused && item.focusGlow > 0.01f) {
         float glowAlpha = item.focusGlow * 0.6f;
         float glowPad = 3.f;
+        float gx = x + shakeX;
+        float gy = y + shakeY;
         nvgBeginPath(vg);
-        nvgRoundedRect(vg, x - glowPad, y - glowPad, w + glowPad * 2, h + glowPad * 2, 5.f);
+        nvgRoundedRect(vg, gx - glowPad, gy - glowPad, w + glowPad * 2, h + glowPad * 2, 5.f);
         nvgFillColor(vg, nvgRGBA(70, 170, 255, static_cast<unsigned char>(glowAlpha * 255)));
         nvgFill(vg);
 
@@ -619,8 +681,8 @@ void GameGridView::_drawItem(NVGcontext* vg, const GridDrawItem& item, float x, 
     }
 
     nvgBeginPath(vg);
-    nvgRoundedRect(vg, x, y, w, h, 3.f);
-    nvgFillColor(vg, nvgRGBA(42, 42, 42, 130));
+    nvgRoundedRect(vg, x, y + shakeY, w, h, 3.f);
+    nvgFillColor(vg, nvgRGBA(42, 42, 42, 230));
     nvgFill(vg);
 
     nvgStrokeColor(vg, nvgRGBA(110, 110, 110, focused ? 200 : 100));
@@ -637,7 +699,7 @@ void GameGridView::_drawItem(NVGcontext* vg, const GridDrawItem& item, float x, 
         _drawImage(vg, item, imageX, imageY, imageSize);
 
         float textX = imageX + imageSize + 10.f;
-        float textMaxWidth = imageSize * 2;
+        float textMaxWidth = imageSize * 1.8f;
 
         float titleY = y + 22.f;
         _drawBadge(vg, item, textX, titleY-4);
@@ -747,7 +809,7 @@ void GameGridView::_drawScrollbar(NVGcontext* vg, float x, float y, float w, flo
 {
     if (m_maxScrollY <= 0.f) return;
 
-    float totalH = _getRowCount() * _getRowHeight() + m_paddingTop + m_paddingBottom;
+    float totalH = _getRowCount() * _getRowHeight() + m_paddingTop;
     if (totalH <= 0.f) return;
 
     float barH = h * (h / totalH);
@@ -760,9 +822,4 @@ void GameGridView::_drawScrollbar(NVGcontext* vg, float x, float y, float w, flo
     nvgRoundedRect(vg, barX, barY, barW, barH, 1.5f);
     nvgFillColor(vg, nvgRGBA(180, 180, 180, 120));
     nvgFill(vg);
-}
-
-brls::View* GameGridView::create()
-{
-    return new GameGridView();
 }

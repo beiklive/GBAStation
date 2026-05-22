@@ -18,7 +18,7 @@ public:
     void setItems(const std::vector<beiklive::ListItem>& items);
     void clearItems();
 
-    void setInteractionDisabled(bool disabled) { m_interactionDisabled = disabled; }
+    void setInteractionDisabled(bool disabled) { m_interactionDisabled = disabled; if (!disabled) _captureInputState(); }
     int getFocusedIndex() const { return m_focusedIndex; }
 
     void saveFocusState(const std::string& path);
@@ -86,6 +86,7 @@ private:
     void moveDown();
     void movePageUp();
     void movePageDown();
+    void _captureInputState();
 
     void ensureFocusedVisible();
     int visibleRows() const;

@@ -356,9 +356,11 @@ void FileListView::moveUp() {
         m_focusedIndex--;
         ensureFocusedVisible();
         fireFocusCallbacks(old);
+        brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_SIDEBAR);
     } else {
         m_shakeTime = 0.35f;
         m_shakeDir = -1;
+        // brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_ERROR);
     }
 }
 
@@ -368,9 +370,11 @@ void FileListView::moveDown() {
         m_focusedIndex++;
         ensureFocusedVisible();
         fireFocusCallbacks(old);
+        brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_SIDEBAR);
     } else {
         m_shakeTime = 0.35f;
         m_shakeDir = 1;
+        // brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_ERROR);
     }
 }
 
@@ -381,6 +385,8 @@ void FileListView::movePageUp() {
     m_focusedIndex = std::max(0, m_focusedIndex - step);
     ensureFocusedVisible();
     fireFocusCallbacks(old);
+    if (old != m_focusedIndex)
+        brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_SIDEBAR);
 }
 
 void FileListView::movePageDown() {
@@ -390,6 +396,18 @@ void FileListView::movePageDown() {
     m_focusedIndex = std::min((int)m_items.size() - 1, m_focusedIndex + step);
     ensureFocusedVisible();
     fireFocusCallbacks(old);
+    if (old != m_focusedIndex)
+        brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_SIDEBAR);
+}
+
+void FileListView::_captureInputState()
+{
+    auto& state = brls::Application::getControllerState();
+    m_prevUp = state.buttons[brls::BUTTON_UP];
+    m_prevDown = state.buttons[brls::BUTTON_DOWN];
+    m_prevLeft = state.buttons[brls::BUTTON_LEFT];
+    m_prevRight = state.buttons[brls::BUTTON_RIGHT];
+    m_prevA = state.buttons[brls::BUTTON_A];
 }
 
 void FileListView::ensureFocusedVisible() {
