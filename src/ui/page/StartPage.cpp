@@ -335,6 +335,25 @@ namespace beiklive
                 dialog->open();
             });
 
+        // ── 收藏 ──
+        m_gameOptionsSidebar->addButton(
+            entry.favourite ? "取消收藏" : "加入收藏",
+            BK_RES("img/ui/setting/emu.png"),
+            [this, path, fav = entry.favourite](const beiklive::GameEntry&) {
+                _hideGameOptionsPanel();
+                std::string msg = fav ? "确定要取消收藏吗？" : "确定要加入收藏吗？";
+                auto* dlg = new brls::Dialog(msg);
+                dlg->addButton("确认", [this, path, fav]() {
+                    if (beiklive::GameDB) {
+                        beiklive::GameDB->set(path, "favourite", nlohmann::json(!fav));
+                        beiklive::GameDB->flush();
+                        onResume();
+                    }
+                });
+                dlg->addButton("取消", [](){});
+                dlg->open();
+            });
+
         // ── 自动匹配金手指 ──
         // m_gameOptionsSidebar->addButton("自动匹配金手指", BK_RES("img/ui/setting/emu.png"),
         //     [this, path, platform = entry.platform, romPath = entry.path](const beiklive::GameEntry&) {

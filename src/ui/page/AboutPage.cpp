@@ -268,16 +268,16 @@ brls::View* AboutPage::_buildUpdateTab() {
 
     box->addView(versionCard);
 
-    // 更新金手指数据库按钮
-    auto* cheatBtn = new brls::Button();
-    cheatBtn->setText("更新金手指数据库");
-    cheatBtn->setWidthPercentage(100.f);
-    cheatBtn->setMarginBottom(12.f);
-    cheatBtn->registerClickAction([this](brls::View*) -> bool {
-        _updateCheatDatabase();
-        return true;
-    });
-    box->addView(cheatBtn);
+    // // 更新金手指数据库按钮
+    // auto* cheatBtn = new brls::Button();
+    // cheatBtn->setText("更新金手指数据库");
+    // cheatBtn->setWidthPercentage(100.f);
+    // cheatBtn->setMarginBottom(12.f);
+    // cheatBtn->registerClickAction([this](brls::View*) -> bool {
+    //     _updateCheatDatabase();
+    //     return true;
+    // });
+    // box->addView(cheatBtn);
 
     // 检测模拟器更新按钮
     auto* checkBtn = new brls::Button();

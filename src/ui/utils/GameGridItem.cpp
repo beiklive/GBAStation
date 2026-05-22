@@ -18,10 +18,7 @@ namespace beiklive
         this->setMarginRight(8.f);
         this->setMarginTop(8.f);
         this->setMarginBottom(8.f);
-        
 
-
-        // 封面图
         imgBox = new brls::Box();
         imgBox->setWidth(IMAGE_S - 10.f);
         imgBox->setHeight(IMAGE_S - 10.f);
@@ -32,7 +29,6 @@ namespace beiklive
         imgBox->setShadowVisibility(true);
         imgBox->setShadowType(brls::ShadowType::GENERIC);
         imgBox->setBorderColor(nvgRGBA(128, 128, 128, 120));
-
 
         m_image = new brls::Image();
         m_image->setWidth(IMAGE_S - 20.f);
@@ -50,9 +46,7 @@ namespace beiklive
         imgBox->addView(m_image);
         this->addView(imgBox);
 
-        // 标题 Label（失焦隐藏）
         m_title = new brls::Label();
-        // m_title->setWidth(IMAGE_S - 10.f);
         m_title->setHeight(20.f);
         m_title->setFontSize(16.f);
         m_title->setText(entry.title.empty() ? entry.path : entry.title);
@@ -67,11 +61,9 @@ namespace beiklive
         this->addView(m_title);
 
         this->registerAction(
-            "确认",
-            brls::BUTTON_A,
+            "确认", brls::BUTTON_A,
             [this](brls::View*) -> bool {
-                if (onItemClicked)
-                    onItemClicked(m_entry);
+                if (onItemClicked) onItemClicked(m_entry);
                 return true;
             },
             false, false, brls::SOUND_CLICK);
@@ -83,21 +75,18 @@ namespace beiklive
             m_image->setImageFromFile(path);
     }
 
-    void GameGridItem::onParentFocusGained(brls::View* focusedView) 
+    void GameGridItem::onParentFocusGained(brls::View* focusedView)
     {
         brls::Box::onParentFocusGained(focusedView);
-        if (m_title)
-            m_title->setVisibility(brls::Visibility::VISIBLE);
+        if (m_title) m_title->setVisibility(brls::Visibility::VISIBLE);
         imgBox->setBorderThickness(5.f);
         imgBox->setBorderColor(nvgRGBA(128, 128, 255, 120));
-        
     }
 
-    void GameGridItem::onParentFocusLost(brls::View *focusedView)
+    void GameGridItem::onParentFocusLost(brls::View* focusedView)
     {
         brls::Box::onParentFocusLost(focusedView);
-        if (m_title)
-            m_title->setVisibility(brls::Visibility::INVISIBLE);
+        if (m_title) m_title->setVisibility(brls::Visibility::INVISIBLE);
         imgBox->setBorderColor(nvgRGBA(128, 128, 128, 120));
         imgBox->setBorderThickness(1.f);
     }

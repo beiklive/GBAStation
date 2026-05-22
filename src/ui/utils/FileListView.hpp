@@ -60,6 +60,10 @@ private:
     bool m_prevLeft = false;
     bool m_prevRight = false;
     bool m_prevA = false;
+    bool m_prevStickUp = false;
+    bool m_prevStickDown = false;
+    bool m_prevStickLeft = false;
+    bool m_prevStickRight = false;
     float m_holdUpTime = 0.f;
     float m_holdDownTime = 0.f;
     float m_holdUpRepeat = 0.f;

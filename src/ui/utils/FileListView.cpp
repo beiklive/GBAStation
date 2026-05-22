@@ -339,6 +339,77 @@ void FileListView::frame(brls::FrameContext* ctx) {
     }
     m_prevRight = rightNow;
 
+    // ── Stick ──
+    float ly = state.axes[brls::LEFT_Y];
+    float lx = state.axes[brls::LEFT_X];
+    float ry_ = state.axes[brls::RIGHT_Y];
+    float rx = state.axes[brls::RIGHT_X];
+
+    constexpr float STICK_DEADZONE = 0.3f;
+    constexpr float STICK_DOMINANCE = 1.5f;
+    float absLX = std::abs(lx), absLY = std::abs(ly);
+    float absRX = std::abs(rx), absRY = std::abs(ry_);
+
+    auto stickDir = [](float x, float y, float ax, float ay) -> uint8_t {
+        if (ax < STICK_DEADZONE && ay < STICK_DEADZONE) return 0;
+        if (ax > ay * STICK_DOMINANCE) return (x > 0) ? 2 : 1;
+        if (ay > ax * STICK_DOMINANCE) return (y > 0) ? 4 : 3;
+        return 0;
+    };
+
+    uint8_t dir = 0;
+    uint8_t ld = stickDir(lx, ly, absLX, absLY);
+    uint8_t rd = stickDir(rx, ry_, absRX, absRY);
+    if (ld) dir = ld;
+    if (rd) dir = rd;
+
+    bool stickUp = (dir == 3), stickDown = (dir == 4);
+    bool stickLeft = (dir == 1), stickRight = (dir == 2);
+
+    if (stickUp && !m_prevStickUp) { m_holdUpTime = 0.f; m_holdUpRepeat = 0.f; moveUp(); }
+    if (stickUp) {
+        m_holdUpTime += dt;
+        if (m_holdUpTime > HOLD_INITIAL_DELAY) {
+            m_holdUpRepeat += dt;
+            float interval = m_holdUpTime > HOLD_ACCEL_TIME ? HOLD_REPEAT_FAST : HOLD_REPEAT;
+            while (m_holdUpRepeat >= interval) { m_holdUpRepeat -= interval; moveUp(); }
+        }
+    }
+    m_prevStickUp = stickUp;
+
+    if (stickDown && !m_prevStickDown) { m_holdDownTime = 0.f; m_holdDownRepeat = 0.f; moveDown(); }
+    if (stickDown) {
+        m_holdDownTime += dt;
+        if (m_holdDownTime > HOLD_INITIAL_DELAY) {
+            m_holdDownRepeat += dt;
+            float interval = m_holdDownTime > HOLD_ACCEL_TIME ? HOLD_REPEAT_FAST : HOLD_REPEAT;
+            while (m_holdDownRepeat >= interval) { m_holdDownRepeat -= interval; moveDown(); }
+        }
+    }
+    m_prevStickDown = stickDown;
+
+    if (stickLeft && !m_prevStickLeft) { m_holdLeftTime = 0.f; m_holdLeftRepeat = 0.f; movePageUp(); }
+    if (stickLeft) {
+        m_holdLeftTime += dt;
+        if (m_holdLeftTime > HOLD_INITIAL_DELAY) {
+            m_holdLeftRepeat += dt;
+            float interval = m_holdLeftTime > HOLD_ACCEL_TIME ? HOLD_REPEAT_FAST : HOLD_REPEAT;
+            while (m_holdLeftRepeat >= interval) { m_holdLeftRepeat -= interval; movePageUp(); }
+        }
+    }
+    m_prevStickLeft = stickLeft;
+
+    if (stickRight && !m_prevStickRight) { m_holdRightTime = 0.f; m_holdRightRepeat = 0.f; movePageDown(); }
+    if (stickRight) {
+        m_holdRightTime += dt;
+        if (m_holdRightTime > HOLD_INITIAL_DELAY) {
+            m_holdRightRepeat += dt;
+            float interval = m_holdRightTime > HOLD_ACCEL_TIME ? HOLD_REPEAT_FAST : HOLD_REPEAT;
+            while (m_holdRightRepeat >= interval) { m_holdRightRepeat -= interval; movePageDown(); }
+        }
+    }
+    m_prevStickRight = stickRight;
+
     // ── A = Select ──
     bool aNow = state.buttons[brls::BUTTON_A];
     if (aNow && !m_prevA && m_focusedIndex >= 0 && m_focusedIndex < (int)m_items.size()) {
@@ -408,6 +479,12 @@ void FileListView::_captureInputState()
     m_prevLeft = state.buttons[brls::BUTTON_LEFT];
     m_prevRight = state.buttons[brls::BUTTON_RIGHT];
     m_prevA = state.buttons[brls::BUTTON_A];
+    float ly = state.axes[brls::LEFT_Y];
+    float lx = state.axes[brls::LEFT_X];
+    m_prevStickUp = (ly < -0.3f);
+    m_prevStickDown = (ly > 0.3f);
+    m_prevStickLeft = (lx < -0.3f);
+    m_prevStickRight = (lx > 0.3f);
 }
 
 void FileListView::ensureFocusedVisible() {

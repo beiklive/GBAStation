@@ -163,7 +163,12 @@ namespace beiklive
 
     void GameLibraryPage::_filterEntries()
     {
-        if (m_platformFilter != PlatformFilter::ALL)
+        if (m_platformFilter == PlatformFilter::FAVORITE)
+        {
+            m_entries.erase(std::remove_if(m_entries.begin(), m_entries.end(),
+                [](const GameEntry& e) { return !e.favourite; }), m_entries.end());
+        }
+        else if (m_platformFilter != PlatformFilter::ALL)
         {
             int target = static_cast<int>(m_platformFilter);
             m_entries.erase(std::remove_if(m_entries.begin(), m_entries.end(),
@@ -204,7 +209,9 @@ namespace beiklive
             if (!alive->load()) return;
             auto ae = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
             bool hG = false, hC = false, hB = false;
+            int favCount = 0;
             for (auto& e : ae) {
+                if (e.favourite) favCount++;
                 switch (static_cast<beiklive::enums::EmuPlatform>(e.platform)) {
                     case beiklive::enums::EmuPlatform::EmuGBA: hG = true; break;
                     case beiklive::enums::EmuPlatform::EmuGBC: hC = true; break;
@@ -212,11 +219,12 @@ namespace beiklive
                     default: break;
                 }
             }
-            brls::sync([this, alive, hG, hC, hB]() {
+            brls::sync([this, alive, hG, hC, hB, favCount]() {
                 if (!alive->load()) return;
                 std::vector<std::string> opts;
                 std::vector<PlatformFilter> map;
                 opts.push_back("所有"); map.push_back(PlatformFilter::ALL);
+                if (favCount > 0) { opts.push_back("收藏 (" + std::to_string(favCount) + ")"); map.push_back(PlatformFilter::FAVORITE); }
                 if (hG) { opts.push_back("GBA"); map.push_back(PlatformFilter::GBA); }
                 if (hC) { opts.push_back("GBC"); map.push_back(PlatformFilter::GBC); }
                 if (hB) { opts.push_back("GB");  map.push_back(PlatformFilter::GB);  }
@@ -234,6 +242,10 @@ namespace beiklive
                             _filterEntries();
                             brls::sync([this, alive]() {
                                 if (!alive->load()) return;
+                                if (m_platformFilter == PlatformFilter::FAVORITE && m_entries.empty()) {
+                                    m_platformFilter = PlatformFilter::ALL;
+                                    brls::Application::notify("收藏列表为空，已切换至所有游戏");
+                                }
                                 m_visibleCount = std::min(PAGE_SIZE, (int)m_entries.size());
                                 m_grid->setDefaultCellFocus(0);
                                 m_dataSource = new GameLibraryDS(this);
@@ -258,10 +270,11 @@ namespace beiklive
             this->getHeader()->setInfo("共 " + std::to_string(m_entries.size()) + " 款游戏");
         std::string fs;
         switch (m_platformFilter) {
-            case PlatformFilter::ALL: fs = "所有"; break;
-            case PlatformFilter::GBA: fs = "GBA";  break;
-            case PlatformFilter::GBC: fs = "GBC";  break;
-            case PlatformFilter::GB:  fs = "GB";   break;
+            case PlatformFilter::ALL:      fs = "所有"; break;
+            case PlatformFilter::GBA:      fs = "GBA";  break;
+            case PlatformFilter::GBC:      fs = "GBC";  break;
+            case PlatformFilter::GB:       fs = "GB";   break;
+            case PlatformFilter::FAVORITE: fs = "收藏"; break;
         }
         this->getHeader()->setPath((m_isSearching ? "搜索" : "分类") + (": " + fs));
     }
@@ -281,6 +294,10 @@ namespace beiklive
             _filterEntries();
             brls::sync([this, alive]() {
                 if (!alive->load()) return;
+                if (m_platformFilter == PlatformFilter::FAVORITE && m_entries.empty()) {
+                    m_platformFilter = PlatformFilter::ALL;
+                    brls::Application::notify("收藏列表为空，已切换至所有游戏");
+                }
                 m_visibleCount = std::min(PAGE_SIZE, static_cast<int>(m_entries.size()));
                 m_grid->setDefaultCellFocus(0);
                 m_dataSource = new GameLibraryDS(this);
@@ -344,6 +361,25 @@ namespace beiklive
                         _reloadEntries();
                         beiklive::GameDB->flush();
                     } else brls::Application::notify("删除失败");
+                    m_grid->setInteractionDisabled(false);
+                });
+                dlg->addButton("取消", [this]() { m_grid->setInteractionDisabled(false); });
+                dlg->open();
+            });
+
+        m_gameOptionsSidebar->addButton(
+            entry.favourite ? "取消收藏" : "加入收藏",
+            BK_RES("img/ui/setting/emu.png"),
+            [this, path, fav = entry.favourite](const beiklive::GameEntry&) {
+                _hideGameOptionsPanel();
+                std::string msg = fav ? "确定要取消收藏吗？" : "确定要加入收藏吗？";
+                auto* dlg = new brls::Dialog(msg);
+                dlg->addButton("确认", [this, path, fav]() {
+                    if (beiklive::GameDB) {
+                        beiklive::GameDB->set(path, "favourite", nlohmann::json(!fav));
+                        beiklive::GameDB->flush();
+                        _reloadEntries();
+                    }
                     m_grid->setInteractionDisabled(false);
                 });
                 dlg->addButton("取消", [this]() { m_grid->setInteractionDisabled(false); });

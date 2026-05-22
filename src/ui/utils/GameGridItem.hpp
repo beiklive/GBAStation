@@ -2,40 +2,31 @@
 
 #include <borealis.hpp>
 #include <functional>
-
 #include "core/common.h"
 
-namespace beiklive
-{
-    /**
-     * GameGridItem – 数据管理页面的正方形卡片控件
-     *
-     * 尺寸：200 x 250
-     * 布局：上方 200x200 正方形封面图，下方标题 Label（聚焦时显示）
-     */
-    class GameGridItem : public brls::Box
-    {
-    public:
-        explicit GameGridItem(const beiklive::GameEntry& entry);
-        ~GameGridItem() = default;
+namespace beiklive {
 
-        void onParentFocusGained(brls::View* focusedView) override;
-        void onParentFocusLost(brls::View *focusedView) override;
+class GameGridItem : public brls::Box {
+public:
+    static constexpr float ITEM_W = 200.f;
+    static constexpr float ITEM_H = 250.f;
+    static constexpr float IMAGE_S = 170.f;
 
-        std::function<void(const beiklive::GameEntry&)> onItemClicked;
+    explicit GameGridItem(const beiklive::GameEntry& entry);
+    ~GameGridItem() = default;
 
-        void setImagePath(const std::string& path);
+    void setImagePath(const std::string& path);
 
-    private:
-        beiklive::GameEntry m_entry;
-        brls::Image* m_image = nullptr;
-        brls::Label* m_title = nullptr;
-        brls::Box* imgBox = nullptr;
+    void onParentFocusGained(brls::View* focusedView) override;
+    void onParentFocusLost(brls::View* focusedView) override;
 
+    std::function<void(const beiklive::GameEntry&)> onItemClicked;
 
-        static constexpr float ITEM_W = 180.f;
-        static constexpr float ITEM_H = 210.f;
-        static constexpr float IMAGE_S = 180.f;
-    };
+private:
+    beiklive::GameEntry m_entry;
+    brls::Box* imgBox = nullptr;
+    brls::Image* m_image = nullptr;
+    brls::Label* m_title = nullptr;
+};
 
 } // namespace beiklive
