@@ -1,6 +1,7 @@
 #include "ui/page/AboutPage.hpp"
 #include "ui/page/UpdatePage.hpp"
 #include "ui/utils/UpdateDialog.hpp"
+#include "ui/utils/CheatMatcher.hpp"
 #include "core/AppUpdater.hpp"
 #include "core/Tools.hpp"
 #include <curl/curl.h>
@@ -488,14 +489,16 @@ void AboutPage::_checkUpdate() {
 }
 
 void AboutPage::_updateCheatDatabase() {
-    auto* dlg = new brls::Dialog("正在更新金手指数据库...\n\n请稍候");
     auto* cancelFlag = new std::atomic<bool>(false);
-    dlg->addButton("取消", [cancelFlag]() { cancelFlag->store(true); });
-    dlg->setCancelable(false);
-    dlg->open();
 
-    ASYNC_RETAIN
-    new std::thread([ASYNC_TOKEN, dlg, cancelFlag]() {
+    auto* prog = new beiklive::ProgressDialog("正在更新金手指数据库...",
+        [cancelFlag]() { cancelFlag->store(true); });
+    auto* frame = new brls::AppletFrame(prog);
+    HIDE_BRLS_BAR(frame);
+    brls::Application::pushActivity(new brls::Activity(frame),
+                                    brls::TransitionAnimation::NONE);
+
+    new std::thread([prog, cancelFlag]() {
         static const char* kUrl = "https://cdn.jsdelivr.net/gh/beiklive/GBAStation_Release@main/cheat_db/cheat_db.zip";
 
         std::string dbDir = beiklive::path::dbsPath();
@@ -505,6 +508,8 @@ void AboutPage::_updateCheatDatabase() {
         std::string zipPath = dbDir + beiklive::path::SPLIT_CHAR + "cheat_db.zip";
 
         // ── 下载 ──
+        brls::sync([prog]() { prog->setStatus("正在下载..."); });
+
         bool downloadOk = false;
         {
             CURL* curl = curl_easy_init();
@@ -543,10 +548,25 @@ void AboutPage::_updateCheatDatabase() {
             }
         }
 
+        if (cancelFlag->load()) {
+            brls::sync([prog, cancelFlag]() { delete cancelFlag; prog->close(); });
+            return;
+        }
+
+        if (!downloadOk) {
+            brls::sync([prog, cancelFlag]() {
+                delete cancelFlag;
+                prog->showResult("下载失败，请稍后重试或者去网盘手动下载");
+            });
+            return;
+        }
+
         // ── 解压 ──
         int extractCount = 0;
         std::string nestedZipPath;
-        if (downloadOk && !cancelFlag->load()) {
+        {
+            brls::sync([prog]() { prog->setStatus("正在解压..."); });
+
             mz_zip_archive zip;
             memset(&zip, 0, sizeof(zip));
             if (mz_zip_reader_init_file(&zip, zipPath.c_str(), 0)) {
@@ -557,7 +577,6 @@ void AboutPage::_updateCheatDatabase() {
                     std::string name = filename;
 
                     if (name == "RetroArch.zip") {
-                        // 嵌套 ZIP 先解压到 dbs 目录，后续处理
                         nestedZipPath = dbDir + beiklive::path::SPLIT_CHAR + "RetroArch.zip";
                         if (mz_zip_reader_extract_to_file(&zip, i, nestedZipPath.c_str(), 0))
                             ++extractCount;
@@ -569,49 +588,44 @@ void AboutPage::_updateCheatDatabase() {
                 }
                 mz_zip_reader_end(&zip);
             }
-
-            // 解压嵌套的 RetroArch.zip 到 cheats/RetroArch/
-            if (!nestedZipPath.empty() && !cancelFlag->load()) {
-                std::string retroArchDir = beiklive::path::cheatPath() + "/RetroArch";
-                std::filesystem::create_directories(retroArchDir, ec);
-
-                mz_zip_archive nestedZip;
-                memset(&nestedZip, 0, sizeof(nestedZip));
-                if (mz_zip_reader_init_file(&nestedZip, nestedZipPath.c_str(), 0)) {
-                    mz_uint nestedCount = mz_zip_reader_get_num_files(&nestedZip);
-                    for (mz_uint i = 0; i < nestedCount && !cancelFlag->load(); ++i) {
-                        char fn[512];
-                        mz_zip_reader_get_filename(&nestedZip, i, fn, sizeof(fn));
-                        std::string outPath = retroArchDir + "/" + fn;
-                        mz_zip_reader_extract_to_file(&nestedZip, i, outPath.c_str(), 0);
-                    }
-                    mz_zip_reader_end(&nestedZip);
-                }
-                std::filesystem::remove(nestedZipPath, ec);
-            }
-
-            std::filesystem::remove(zipPath, ec);
         }
 
-        brls::sync([ASYNC_TOKEN, dlg, cancelFlag, downloadOk, extractCount]() {
-            ASYNC_RELEASE
-            bool cancelled = cancelFlag->load();
-            dlg->close([]{});
-            delete cancelFlag;
-            if (cancelled && !downloadOk) {
-                auto* okDlg = new brls::Dialog("已取消更新");
-                okDlg->addButton("确定", []() {});
-                okDlg->open();
-            } else if (!downloadOk) {
-                auto* okDlg = new brls::Dialog("下载失败，请稍后重试或者去网盘手动下载");
-                okDlg->addButton("确定", []() {});
-                okDlg->open();
-            } else {
-                auto* okDlg = new brls::Dialog("更新完成（已解压 " +
-                    std::to_string(extractCount) + " 个文件）");
-                okDlg->addButton("确定", []() {});
-                okDlg->open();
+        // 解压嵌套的 RetroArch.zip
+        if (!nestedZipPath.empty() && !cancelFlag->load()) {
+            brls::sync([prog]() { prog->setStatus("正在解压 RetroArch.zip..."); });
+
+            std::string retroArchDir = beiklive::path::cheatPath() + "/RetroArch";
+            std::filesystem::create_directories(retroArchDir, ec);
+
+            mz_zip_archive nestedZip;
+            memset(&nestedZip, 0, sizeof(nestedZip));
+            if (mz_zip_reader_init_file(&nestedZip, nestedZipPath.c_str(), 0)) {
+                mz_uint nestedCount = mz_zip_reader_get_num_files(&nestedZip);
+                for (mz_uint i = 0; i < nestedCount && !cancelFlag->load(); ++i) {
+                    char fn[512];
+                    mz_zip_reader_get_filename(&nestedZip, i, fn, sizeof(fn));
+                    std::string outPath = retroArchDir + "/" + fn;
+                    mz_zip_reader_extract_to_file(&nestedZip, i, outPath.c_str(), 0);
+                }
+                mz_zip_reader_end(&nestedZip);
             }
+            std::filesystem::remove(nestedZipPath, ec);
+        }
+
+        std::filesystem::remove(zipPath, ec);
+
+        if (cancelFlag->load()) {
+            brls::sync([prog, cancelFlag]() { delete cancelFlag; prog->close(); });
+            return;
+        }
+
+        brls::sync([prog, cancelFlag, extractCount]() {
+            delete cancelFlag;
+            prog->setText("更新完成");
+            std::string msg = "数据库已更新（解压 " + std::to_string(extractCount) + " 个文件）";
+            if (extractCount > 0)
+                msg = "数据库已更新（解压 " + std::to_string(extractCount) + " 个文件），\n金手指文件已就绪";
+            prog->showResult(msg);
         });
     });
 }
