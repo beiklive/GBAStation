@@ -240,12 +240,14 @@ namespace beiklive
                             if (!alive->load()) return;
                             m_entries = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
                             _filterEntries();
+                            if (m_platformFilter == PlatformFilter::FAVORITE && m_entries.empty()) {
+                                m_platformFilter = PlatformFilter::ALL;
+                                m_entries = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
+                                _filterEntries();
+                                brls::Application::notify("收藏列表为空，已切换至所有游戏");
+                            }
                             brls::sync([this, alive]() {
                                 if (!alive->load()) return;
-                                if (m_platformFilter == PlatformFilter::FAVORITE && m_entries.empty()) {
-                                    m_platformFilter = PlatformFilter::ALL;
-                                    brls::Application::notify("收藏列表为空，已切换至所有游戏");
-                                }
                                 m_visibleCount = std::min(PAGE_SIZE, (int)m_entries.size());
                                 m_grid->setDefaultCellFocus(0);
                                 m_dataSource = new GameLibraryDS(this);
@@ -292,12 +294,14 @@ namespace beiklive
             if (!alive->load()) return;
             m_entries = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
             _filterEntries();
+            if (m_platformFilter == PlatformFilter::FAVORITE && m_entries.empty()) {
+                m_platformFilter = PlatformFilter::ALL;
+                m_entries = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
+                _filterEntries();
+                brls::Application::notify("收藏列表为空，已切换至所有游戏");
+            }
             brls::sync([this, alive]() {
                 if (!alive->load()) return;
-                if (m_platformFilter == PlatformFilter::FAVORITE && m_entries.empty()) {
-                    m_platformFilter = PlatformFilter::ALL;
-                    brls::Application::notify("收藏列表为空，已切换至所有游戏");
-                }
                 m_visibleCount = std::min(PAGE_SIZE, static_cast<int>(m_entries.size()));
                 m_grid->setDefaultCellFocus(0);
                 m_dataSource = new GameLibraryDS(this);
