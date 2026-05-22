@@ -2,10 +2,10 @@
 
 #include <borealis.hpp>
 #include <vector>
-#include <map>
+#include <unordered_map>
 #include <functional>
 #include <string>
-#include <unordered_map>
+#include <chrono>
 
 #include "RecyclingGridItem.hpp"
 #include "RecyclingGridDataSource.hpp"
@@ -37,6 +37,7 @@ public:
 
     void onNextPage(std::function<void()> callback) { m_nextPageCallback = std::move(callback); }
     void setFocusChangeCallback(std::function<void(int)> callback) { m_focusChangeCallback = std::move(callback); }
+    void setInteractionDisabled(bool disabled) { m_interactionDisabled = disabled; }
 
     void setPadding(float top, float right, float bottom, float left);
 
@@ -50,7 +51,6 @@ private:
     GameGridDataSource* m_dataSource = nullptr;
 
     std::vector<GridDrawItem> m_items;
-    std::vector<int> m_visibleIndices;
 
     int m_selectedIndex = 0;
     uint64_t m_selectedGameId = 0;
@@ -58,7 +58,6 @@ private:
 
     float m_scrollY = 0.f;
     float m_targetScrollY = 0.f;
-    float m_velocityY = 0.f;
     float m_maxScrollY = 0.f;
 
     int m_visibleStartRow = 0;
@@ -72,11 +71,35 @@ private:
     bool m_focusMoved = false;
     bool m_isLayouted = false;
     bool m_requestNextPage = false;
+    bool m_interactionDisabled = false;
 
     std::function<void()> m_nextPageCallback;
     std::function<void(int)> m_focusChangeCallback;
 
     std::unordered_map<std::string, int> m_textureCache;
+
+    int m_fontId = -1;
+
+    std::chrono::steady_clock::time_point m_lastFrameTime;
+
+    bool m_prevUp = false;
+    bool m_prevDown = false;
+    bool m_prevLeft = false;
+    bool m_prevRight = false;
+    bool m_prevA = false;
+    float m_holdUpTime = 0.f;
+    float m_holdDownTime = 0.f;
+    float m_holdLeftTime = 0.f;
+    float m_holdRightTime = 0.f;
+    float m_holdUpRepeat = 0.f;
+    float m_holdDownRepeat = 0.f;
+    float m_holdLeftRepeat = 0.f;
+    float m_holdRightRepeat = 0.f;
+
+    static constexpr float HOLD_INITIAL_DELAY = 0.3f;
+    static constexpr float HOLD_REPEAT = 0.08f;
+    static constexpr float HOLD_REPEAT_FAST = 0.03f;
+    static constexpr float HOLD_ACCEL_TIME = 1.5f;
 
     void _updateVisibleRange();
     void _updateFocusAnimation(float delta);
@@ -85,6 +108,12 @@ private:
     void _ensureSelectedVisible();
     void _loadTextures(NVGcontext* vg);
     void _evictTextures();
+    void _handleInput(float dt);
+
+    void _moveUp();
+    void _moveDown();
+    void _moveLeft();
+    void _moveRight();
 
     void _drawItem(NVGcontext* vg, const GridDrawItem& item, float x, float y, float w, float h, bool focused);
     void _drawImage(NVGcontext* vg, const GridDrawItem& item, float x, float y, float imageSize);
@@ -100,10 +129,6 @@ private:
     float _getItemWidth();
     float _getRowHeight();
     int _getRowCount();
-    void _navigateFocus(brls::FocusDirection direction);
 
     NVGcolor _getBadgeColor(PlatformBadgeColor color) const;
-
-    uint64_t m_lastFrameTime = 0;
-    int m_fontId = -1;
 };

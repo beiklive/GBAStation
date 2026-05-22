@@ -14,33 +14,11 @@ GameGridView::GameGridView()
     setClipsToBounds(true);
 
     m_fontId = brls::Application::getDefaultFont();
+    m_lastFrameTime = std::chrono::steady_clock::now();
 
-    registerAction("上移", brls::BUTTON_UP, [this](brls::View*) {
-        _navigateFocus(brls::FocusDirection::UP);
-        return true;
-    }, false, true);
-
-    registerAction("下移", brls::BUTTON_DOWN, [this](brls::View*) {
-        _navigateFocus(brls::FocusDirection::DOWN);
-        return true;
-    }, false, true);
-
-    registerAction("左移", brls::BUTTON_LEFT, [this](brls::View*) {
-        _navigateFocus(brls::FocusDirection::LEFT);
-        return true;
-    }, false, true);
-
-    registerAction("右移", brls::BUTTON_RIGHT, [this](brls::View*) {
-        _navigateFocus(brls::FocusDirection::RIGHT);
-        return true;
-    }, false, true);
-
-    registerClickAction([this](brls::View*) {
-        if (m_dataSource && m_selectedIndex >= 0 &&
-            static_cast<size_t>(m_selectedIndex) < m_items.size())
-            m_dataSource->onItemSelected(m_selectedIndex);
-        return true;
-    });
+    m_paddingLeft = 5.f;
+    m_paddingRight = 5.f;
+    m_paddingTop = 5.f;
 }
 
 GameGridView::~GameGridView()
@@ -85,7 +63,7 @@ float GameGridView::_getItemWidth()
 {
     float usable = getWidth() - m_paddingLeft - m_paddingRight;
     if (usable <= 0.f) return estimatedRowHeight;
-    return (usable - estimatedRowSpace * (spanCount - 1)) / spanCount;
+    return (usable - estimatedRowSpace * (spanCount - 1)) / spanCount - 10.f;
 }
 
 float GameGridView::_getRowHeight()
@@ -125,7 +103,6 @@ void GameGridView::reloadData()
 
     m_scrollY = 0.f;
     m_targetScrollY = 0.f;
-    m_velocityY = 0.f;
     float viewH = getHeight();
     if (viewH < 1.f) viewH = 720.f;
     m_maxScrollY = std::max(0.f, _getRowCount() * _getRowHeight()
@@ -171,6 +148,8 @@ void GameGridView::notifyDataChanged()
     m_scrollY = std::min(m_scrollY, m_maxScrollY);
     m_targetScrollY = m_scrollY;
     _updateVisibleRange();
+
+    m_requestNextPage = false;
 }
 
 void GameGridView::clearData()
@@ -205,41 +184,46 @@ void GameGridView::onLayout()
     }
 }
 
-void GameGridView::_navigateFocus(brls::FocusDirection direction)
+void GameGridView::_moveUp()
 {
     if (m_items.empty()) return;
+    int row = m_selectedIndex / spanCount;
+    if (row > 0) {
+        m_selectedIndex -= spanCount;
+        m_selectedIndex = std::max(0, m_selectedIndex);
+    }
+}
 
-    int col = m_selectedIndex % spanCount;
+void GameGridView::_moveDown()
+{
+    if (m_items.empty()) return;
     int row = m_selectedIndex / spanCount;
     int maxRow = _getRowCount() - 1;
-
-    switch (direction) {
-        case brls::FocusDirection::UP:
-            if (row > 0) m_selectedIndex -= spanCount;
-            break;
-        case brls::FocusDirection::DOWN:
-            if (row < maxRow) {
-                m_selectedIndex += spanCount;
-                if (m_selectedIndex >= static_cast<int>(m_items.size()))
-                    m_selectedIndex = static_cast<int>(m_items.size()) - 1;
-            }
-            break;
-        case brls::FocusDirection::LEFT:
-            if (col > 0) m_selectedIndex -= 1;
-            break;
-        case brls::FocusDirection::RIGHT:
-            if (col < spanCount - 1) {
-                m_selectedIndex += 1;
-                if (m_selectedIndex >= static_cast<int>(m_items.size()))
-                    m_selectedIndex = static_cast<int>(m_items.size()) - 1;
-            }
-            break;
+    if (row < maxRow) {
+        m_selectedIndex += spanCount;
+        if (m_selectedIndex >= static_cast<int>(m_items.size()))
+            m_selectedIndex = static_cast<int>(m_items.size()) - 1;
     }
+}
 
-    m_selectedIndex = std::max(0, std::min(m_selectedIndex, static_cast<int>(m_items.size()) - 1));
-    m_selectedGameId = m_items[m_selectedIndex].gameId;
-    m_focusMoved = true;
-    if (m_focusChangeCallback) m_focusChangeCallback(m_selectedIndex);
+void GameGridView::_moveLeft()
+{
+    if (m_items.empty()) return;
+    int col = m_selectedIndex % spanCount;
+    if (col > 0) {
+        m_selectedIndex -= 1;
+    }
+}
+
+void GameGridView::_moveRight()
+{
+    if (m_items.empty()) return;
+    int col = m_selectedIndex % spanCount;
+    if (col < spanCount - 1) {
+        m_selectedIndex += 1;
+        if (m_selectedIndex >= static_cast<int>(m_items.size()))
+            m_selectedIndex = static_cast<int>(m_items.size()) - 1;
+    }
 }
 
 void GameGridView::_updateVisibleRange()
@@ -284,15 +268,14 @@ void GameGridView::_updateScrollPhysics(float delta)
     if (m_maxScrollY <= 0.f) {
         m_scrollY = 0.f;
         m_targetScrollY = 0.f;
-        m_velocityY = 0.f;
         return;
     }
 
-    m_scrollY += (m_targetScrollY - m_scrollY) * 0.15f;
-    if (std::abs(m_targetScrollY - m_scrollY) < 0.5f) {
+    float diff = m_targetScrollY - m_scrollY;
+    if (std::abs(diff) > 0.5f)
+        m_scrollY += diff * std::min(1.f, delta * 8.f);
+    else
         m_scrollY = m_targetScrollY;
-        m_velocityY = 0.f;
-    }
 
     m_scrollY = std::max(0.f, std::min(m_scrollY, m_maxScrollY));
 }
@@ -302,10 +285,8 @@ void GameGridView::_updateFocusAnimation(float delta)
     for (size_t i = 0; i < m_items.size(); i++) {
         auto& item = m_items[i];
         bool focused = (static_cast<int>(i) == m_selectedIndex);
-
         float targetGlow = focused ? 1.f : 0.f;
         item.focusGlow += (targetGlow - item.focusGlow) * 0.15f;
-
         item.selected = focused;
     }
 }
@@ -323,6 +304,27 @@ void GameGridView::_updateMarquee(float delta)
             item.marqueeOffset += delta * 30.f;
             if (item.marqueeOffset > item.marqueeMaxOffset + 20.f) {
                 item.marqueeOffset = 0.f;
+            }
+        }
+    }
+
+    // Calculate marquee limit for focused item
+    if (m_selectedIndex >= 0 && static_cast<size_t>(m_selectedIndex) < m_items.size()) {
+        auto& item = m_items[m_selectedIndex];
+        if (!item.title.empty()) {
+            NVGcontext* vg = brls::Application::getNVGContext();
+            if (vg) {
+                nvgFontSize(vg, 16.f);
+                nvgFontFaceId(vg, m_fontId);
+                float bounds[4];
+                nvgTextBounds(vg, 0, 0, item.title.c_str(), nullptr, bounds);
+                float textW = bounds[2] - bounds[0];
+                float textMaxW = _getItemWidth() - (estimatedRowHeight - 10.f + 5.f + 10.f + 8.f);
+                if (textMaxW < 0.f) textMaxW = 100.f;
+                if (textW > textMaxW)
+                    item.marqueeMaxOffset = textW - textMaxW;
+                else
+                    item.marqueeMaxOffset = 0.f;
             }
         }
     }
@@ -401,46 +403,145 @@ void GameGridView::_evictTextures()
     }
 }
 
-void GameGridView::frame(brls::FrameContext* ctx)
+void GameGridView::_handleInput(float dt)
 {
-    if (m_dataSource && !m_items.empty()) {
-        uint64_t now = brls::getCPUTimeUsec();
-        float delta = 0.f;
-        if (m_lastFrameTime > 0) {
-            delta = static_cast<float>(now - m_lastFrameTime) / 1000.f;
-        }
-        m_lastFrameTime = now;
-        if (delta <= 0.f) delta = 16.67f;
-        delta *= 0.001f;
+    if (m_interactionDisabled || m_items.empty()) return;
+    if (!isFocused()) return;
 
-        if (m_focusMoved) {
-            _ensureSelectedVisible();
-            m_focusMoved = false;
-        }
+    auto& state = brls::Application::getControllerState();
 
-        _updateScrollPhysics(delta);
-
-        _updateVisibleRange();
-
-        _updateFocusAnimation(delta);
-
-        _updateMarquee(delta);
-
-        NVGcontext* vg = brls::Application::getNVGContext();
-        _loadTextures(vg);
-        _evictTextures();
-
-        if (!m_requestNextPage && m_selectedIndex >= 0 &&
-            static_cast<size_t>(m_selectedIndex) >= m_items.size() - static_cast<size_t>(spanCount) * 2 &&
-            m_items.size() > 0) {
-            if (m_nextPageCallback) {
-                m_requestNextPage = true;
-                m_nextPageCallback();
+    bool upNow = state.buttons[static_cast<int>(brls::BUTTON_UP)];
+    if (upNow && !m_prevUp) {
+        m_holdUpTime = 0.f;
+        m_holdUpRepeat = 0.f;
+        _moveUp();
+        m_focusMoved = true;
+    }
+    if (upNow) {
+        m_holdUpTime += dt;
+        if (m_holdUpTime > HOLD_INITIAL_DELAY) {
+            m_holdUpRepeat += dt;
+            float interval = m_holdUpTime > HOLD_ACCEL_TIME ? HOLD_REPEAT_FAST : HOLD_REPEAT;
+            while (m_holdUpRepeat >= interval) {
+                m_holdUpRepeat -= interval;
+                _moveUp();
+                m_focusMoved = true;
             }
         }
     }
+    m_prevUp = upNow;
 
+    bool downNow = state.buttons[static_cast<int>(brls::BUTTON_DOWN)];
+    if (downNow && !m_prevDown) {
+        m_holdDownTime = 0.f;
+        m_holdDownRepeat = 0.f;
+        _moveDown();
+        m_focusMoved = true;
+    }
+    if (downNow) {
+        m_holdDownTime += dt;
+        if (m_holdDownTime > HOLD_INITIAL_DELAY) {
+            m_holdDownRepeat += dt;
+            float interval = m_holdDownTime > HOLD_ACCEL_TIME ? HOLD_REPEAT_FAST : HOLD_REPEAT;
+            while (m_holdDownRepeat >= interval) {
+                m_holdDownRepeat -= interval;
+                _moveDown();
+                m_focusMoved = true;
+            }
+        }
+    }
+    m_prevDown = downNow;
+
+    bool leftNow = state.buttons[static_cast<int>(brls::BUTTON_LEFT)];
+    if (leftNow && !m_prevLeft) {
+        m_holdLeftTime = 0.f;
+        m_holdLeftRepeat = 0.f;
+        _moveLeft();
+        m_focusMoved = true;
+    }
+    if (leftNow) {
+        m_holdLeftTime += dt;
+        if (m_holdLeftTime > HOLD_INITIAL_DELAY) {
+            m_holdLeftRepeat += dt;
+            float interval = m_holdLeftTime > HOLD_ACCEL_TIME ? HOLD_REPEAT_FAST : HOLD_REPEAT;
+            while (m_holdLeftRepeat >= interval) {
+                m_holdLeftRepeat -= interval;
+                _moveLeft();
+                m_focusMoved = true;
+            }
+        }
+    }
+    m_prevLeft = leftNow;
+
+    bool rightNow = state.buttons[static_cast<int>(brls::BUTTON_RIGHT)];
+    if (rightNow && !m_prevRight) {
+        m_holdRightTime = 0.f;
+        m_holdRightRepeat = 0.f;
+        _moveRight();
+        m_focusMoved = true;
+    }
+    if (rightNow) {
+        m_holdRightTime += dt;
+        if (m_holdRightTime > HOLD_INITIAL_DELAY) {
+            m_holdRightRepeat += dt;
+            float interval = m_holdRightTime > HOLD_ACCEL_TIME ? HOLD_REPEAT_FAST : HOLD_REPEAT;
+            while (m_holdRightRepeat >= interval) {
+                m_holdRightRepeat -= interval;
+                _moveRight();
+                m_focusMoved = true;
+            }
+        }
+    }
+    m_prevRight = rightNow;
+
+    if (m_focusMoved) {
+        m_selectedGameId = m_items[m_selectedIndex].gameId;
+        if (m_focusChangeCallback) m_focusChangeCallback(m_selectedIndex);
+    }
+
+    bool aNow = state.buttons[static_cast<int>(brls::BUTTON_A)];
+    if (aNow && !m_prevA && m_selectedIndex >= 0 && static_cast<size_t>(m_selectedIndex) < m_items.size()) {
+        if (m_dataSource)
+            m_dataSource->onItemSelected(m_selectedIndex);
+    }
+    m_prevA = aNow;
+}
+
+void GameGridView::frame(brls::FrameContext* ctx)
+{
     View::frame(ctx);
+
+    if (!m_dataSource || m_items.empty()) return;
+
+    auto now = std::chrono::steady_clock::now();
+    float dt = std::chrono::duration<float>(now - m_lastFrameTime).count();
+    m_lastFrameTime = now;
+    if (dt <= 0.f || dt > 0.5f) dt = 0.016f;
+
+    _handleInput(dt);
+
+    if (m_focusMoved) {
+        _ensureSelectedVisible();
+        m_focusMoved = false;
+    }
+
+    _updateScrollPhysics(dt);
+    _updateVisibleRange();
+    _updateFocusAnimation(dt);
+    _updateMarquee(dt);
+
+    NVGcontext* vg = brls::Application::getNVGContext();
+    _loadTextures(vg);
+    _evictTextures();
+
+    if (!m_requestNextPage && m_selectedIndex >= 0 &&
+        static_cast<size_t>(m_selectedIndex) >= m_items.size() - static_cast<size_t>(spanCount) * 2 &&
+        m_items.size() > 0) {
+        if (m_nextPageCallback) {
+            m_requestNextPage = true;
+            m_nextPageCallback();
+        }
+    }
 }
 
 NVGcolor GameGridView::_getBadgeColor(PlatformBadgeColor color) const
@@ -460,7 +561,6 @@ void GameGridView::draw(NVGcontext* vg, float x, float y, float w, float h,
     if (!m_dataSource || m_items.empty()) return;
 
     nvgSave(vg);
-
     nvgIntersectScissor(vg, x, y, w, h);
 
     float itemW = _getItemWidth();
@@ -485,7 +585,7 @@ void GameGridView::draw(NVGcontext* vg, float x, float y, float w, float h,
         }
     }
 
-    _drawScrollbar(vg, x, y, w, h);
+    _drawScrollbar(vg, x+5, y, w, h);
 
     nvgResetScissor(vg);
     nvgRestore(vg);
@@ -510,7 +610,7 @@ void GameGridView::_drawItem(NVGcontext* vg, const GridDrawItem& item, float x, 
 
     nvgBeginPath(vg);
     nvgRoundedRect(vg, x, y, w, h, 3.f);
-    nvgFillColor(vg, nvgRGBA(42, 42, 42, 230));
+    nvgFillColor(vg, nvgRGBA(42, 42, 42, 130));
     nvgFill(vg);
 
     nvgStrokeColor(vg, nvgRGBA(110, 110, 110, focused ? 200 : 100));
@@ -527,16 +627,16 @@ void GameGridView::_drawItem(NVGcontext* vg, const GridDrawItem& item, float x, 
         _drawImage(vg, item, imageX, imageY, imageSize);
 
         float textX = imageX + imageSize + 10.f;
-        float textMaxWidth = w - (imageSize + 20.f) - 8.f;
+        float textMaxWidth = imageSize * 2;
 
         float titleY = y + 22.f;
-        _drawBadge(vg, item, textX, titleY - 16.f);
-        _drawTitle(vg, item, textX, titleY, textMaxWidth, focused);
+        _drawBadge(vg, item, textX, titleY-3);
+        _drawTitle(vg, item, textX + 40, titleY, textMaxWidth, focused);
 
-        float playY = y + 42.f;
+        float playY = y + 50.f;
         _drawPlayTime(vg, item.playTime, textX, playY, textMaxWidth);
 
-        float subY = y + 62.f;
+        float subY = playY + 25.f;
         _drawSubText(vg, item.subText, textX, subY, textMaxWidth);
     }
 
@@ -596,14 +696,16 @@ void GameGridView::_drawTitle(NVGcontext* vg, const GridDrawItem& item, float x,
     nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
     nvgFillColor(vg, nvgRGBA(255, 255, 255, 255));
 
+    nvgSave(vg);
+    nvgIntersectScissor(vg, x, y - 2.f, maxWidth, 20.f);
+
     if (focused && item.marqueeMaxOffset > 0.f) {
-        nvgSave(vg);
-        nvgIntersectScissor(vg, x, y - 2.f, maxWidth, 20.f);
         nvgText(vg, x - item.marqueeOffset, y, item.title.c_str(), nullptr);
-        nvgRestore(vg);
     } else {
         nvgText(vg, x, y, item.title.c_str(), nullptr);
     }
+
+    nvgRestore(vg);
 }
 
 void GameGridView::_drawSubText(NVGcontext* vg, const std::string& text, float x, float y, float maxWidth)

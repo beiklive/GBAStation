@@ -19,8 +19,8 @@ namespace beiklive
         m_grid->spanCount = 3;
         m_grid->estimatedRowHeight = 120;
         m_grid->estimatedRowSpace = 8;
-        m_grid->setMarginLeft(10.0f);
-        m_grid->setMarginTop(10.0f);
+        m_grid->setMarginLeft(15.0f);
+        m_grid->setMarginTop(0.0f);
         m_grid->setMarginBottom(10.0f);
         m_grid->setWidthPercentage(100.f);
         m_grid->setHeightPercentage(100.f);
@@ -340,10 +340,12 @@ namespace beiklive
             });
 
         m_gameOptionsSidebar->onClosed = [this]() {
+            m_grid->setInteractionDisabled(false);
             brls::Application::giveFocus(m_grid);
             this->getBottomBar()->setVisibility(brls::Visibility::VISIBLE);
         };
         this->addView(m_gameOptionsSidebar);
+        m_grid->setInteractionDisabled(true);
         m_gameOptionsSidebar->open(entry);
     }
 
@@ -354,6 +356,7 @@ namespace beiklive
             m_gameOptionsSidebar->removeFromSuperView(true);
             m_gameOptionsSidebar = nullptr;
             this->getBottomBar()->setVisibility(brls::Visibility::VISIBLE);
+            m_grid->setInteractionDisabled(false);
         }
     }
 
