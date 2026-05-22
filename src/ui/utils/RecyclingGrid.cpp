@@ -403,6 +403,16 @@ void GameGridView::_evictTextures()
     }
 }
 
+void GameGridView::_captureInputState()
+{
+    auto& state = brls::Application::getControllerState();
+    m_prevUp = state.buttons[static_cast<int>(brls::BUTTON_UP)];
+    m_prevDown = state.buttons[static_cast<int>(brls::BUTTON_DOWN)];
+    m_prevLeft = state.buttons[static_cast<int>(brls::BUTTON_LEFT)];
+    m_prevRight = state.buttons[static_cast<int>(brls::BUTTON_RIGHT)];
+    m_prevA = state.buttons[static_cast<int>(brls::BUTTON_A)];
+}
+
 void GameGridView::_handleInput(float dt)
 {
     if (m_interactionDisabled || m_items.empty()) return;
@@ -630,7 +640,7 @@ void GameGridView::_drawItem(NVGcontext* vg, const GridDrawItem& item, float x, 
         float textMaxWidth = imageSize * 2;
 
         float titleY = y + 22.f;
-        _drawBadge(vg, item, textX, titleY-3);
+        _drawBadge(vg, item, textX, titleY-4);
         _drawTitle(vg, item, textX + 40, titleY, textMaxWidth, focused);
 
         float playY = y + 50.f;
@@ -652,14 +662,6 @@ void GameGridView::_drawImage(NVGcontext* vg, const GridDrawItem& item, float x,
         NVGpaint paint = nvgImagePattern(vg, x, y, imageSize, imageSize, 0.f, item.textureHandle, 1.f);
         nvgFillPaint(vg, paint);
         nvgFill(vg);
-
-        if (item.imageLayerHandle >= 0 && item.imageLayerVisible) {
-            nvgBeginPath(vg);
-            nvgRoundedRect(vg, x, y, imageSize, imageSize, 3.f);
-            NVGpaint layerPaint = nvgImagePattern(vg, x, y, imageSize, imageSize, 0.f, item.imageLayerHandle, 0.5f);
-            nvgFillPaint(vg, layerPaint);
-            nvgFill(vg);
-        }
     } else {
         nvgFillColor(vg, nvgRGBA(60, 60, 60, 200));
         nvgFill(vg);

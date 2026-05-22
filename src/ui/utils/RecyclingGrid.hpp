@@ -37,7 +37,7 @@ public:
 
     void onNextPage(std::function<void()> callback) { m_nextPageCallback = std::move(callback); }
     void setFocusChangeCallback(std::function<void(int)> callback) { m_focusChangeCallback = std::move(callback); }
-    void setInteractionDisabled(bool disabled) { m_interactionDisabled = disabled; }
+    void setInteractionDisabled(bool disabled) { m_interactionDisabled = disabled; if (!disabled) _captureInputState(); }
 
     void setPadding(float top, float right, float bottom, float left);
 
@@ -114,6 +114,7 @@ private:
     void _moveDown();
     void _moveLeft();
     void _moveRight();
+    void _captureInputState();
 
     void _drawItem(NVGcontext* vg, const GridDrawItem& item, float x, float y, float w, float h, bool focused);
     void _drawImage(NVGcontext* vg, const GridDrawItem& item, float x, float y, float imageSize);

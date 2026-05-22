@@ -29,6 +29,7 @@ namespace beiklive
         this->getContentBox()->addView(m_grid);
 
         m_grid->registerAction("分类", brls::BUTTON_Y, [this](brls::View*) -> bool {
+            m_grid->setInteractionDisabled(true);
             _showFilterDropdown();
             return true;
         });
@@ -37,13 +38,18 @@ namespace beiklive
             int idx = m_grid->getSelectedIndex();
             if (idx < 0 || static_cast<size_t>(idx) >= m_entries.size())
                 return true;
+            m_grid->setInteractionDisabled(true);
             _showGameOptionsPanel(m_entries[idx]);
             return true;
         });
 
         m_grid->registerAction("搜索", brls::BUTTON_RT, [this](brls::View*) -> bool {
+            m_grid->setInteractionDisabled(true);
             auto* ime = brls::Application::getPlatform()->getImeManager();
-            if (!ime) return true;
+            if (!ime) {
+                m_grid->setInteractionDisabled(false);
+                return true;
+            }
             ime->openForText(
                 [this](std::string text) {
                     m_isSearching = !text.empty();
@@ -59,6 +65,7 @@ namespace beiklive
                                 auto* dialog = new brls::Dialog("当前分类下无 \"" + m_searchTerm + "\"");
                                 dialog->addButton("确认", []() {});
                                 dialog->open();
+                                m_grid->setInteractionDisabled(false);
                                 return;
                             }
                             m_visibleCount = std::min(PAGE_SIZE, static_cast<int>(m_entries.size()));
@@ -67,6 +74,7 @@ namespace beiklive
                             m_grid->setDataSource(m_dataSource);
                             m_grid->reloadData();
                             _updateHeader();
+                            m_grid->setInteractionDisabled(false);
                             brls::Application::giveFocus(m_grid);
                         });
                     });
@@ -232,6 +240,7 @@ namespace beiklive
                                 m_grid->setDataSource(m_dataSource);
                                 m_grid->reloadData();
                                 _updateHeader();
+                                m_grid->setInteractionDisabled(false);
                                 brls::Application::giveFocus(m_grid);
                             });
                         });
@@ -295,7 +304,7 @@ namespace beiklive
             [this, path, title = entry.title, fn](const beiklive::GameEntry&) {
                 _hideGameOptionsPanel();
                 auto* ime = brls::Application::getPlatform()->getImeManager();
-                if (!ime) return;
+                if (!ime) { m_grid->setInteractionDisabled(false); return; }
                 ime->openForText(
                     [this, path, fn](std::string text) {
                         if (!text.empty() && beiklive::GameDB) {
@@ -305,6 +314,7 @@ namespace beiklive
                             beiklive::GameDB->flush();
                             beiklive::NameMappingManager->Save();
                         }
+                        m_grid->setInteractionDisabled(false);
                     },
                     "编辑游戏名称", "", 128, title,
                     brls::KeyboardKeyDisableBitmask::KEYBOARD_DISABLE_NONE);
@@ -320,6 +330,7 @@ namespace beiklive
                             _reloadEntries();
                             beiklive::GameDB->flush();
                         }
+                        m_grid->setInteractionDisabled(false);
                     }, beiklive::path::GetRootPath());
             });
 
@@ -328,14 +339,14 @@ namespace beiklive
                 _hideGameOptionsPanel();
                 auto* dlg = new brls::Dialog("确定要删除该游戏吗？\n此操作将清除游戏记录与存档数据。");
                 dlg->addButton("确认删除", [this, path]() {
-                    _hideGameOptionsPanel();
                     if (beiklive::GameDB && beiklive::GameDB->removeByPath(path)) {
                         brls::Application::notify("已删除游戏");
                         _reloadEntries();
                         beiklive::GameDB->flush();
                     } else brls::Application::notify("删除失败");
+                    m_grid->setInteractionDisabled(false);
                 });
-                dlg->addButton("取消", [](){});
+                dlg->addButton("取消", [this]() { m_grid->setInteractionDisabled(false); });
                 dlg->open();
             });
 
@@ -356,7 +367,6 @@ namespace beiklive
             m_gameOptionsSidebar->removeFromSuperView(true);
             m_gameOptionsSidebar = nullptr;
             this->getBottomBar()->setVisibility(brls::Visibility::VISIBLE);
-            m_grid->setInteractionDisabled(false);
         }
     }
 
