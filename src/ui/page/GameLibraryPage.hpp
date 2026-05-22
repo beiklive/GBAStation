@@ -75,6 +75,7 @@ namespace beiklive
 
         void _showGameOptionsPanel(const beiklive::GameEntry& entry);
         void _hideGameOptionsPanel();
+        void _showMultiSelectSidebar();
 
         int _currentFocusedIndex = -1;
         bool m_firstAppear = true;

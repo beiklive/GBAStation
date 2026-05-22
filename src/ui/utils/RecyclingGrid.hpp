@@ -3,6 +3,7 @@
 #include <borealis.hpp>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include <functional>
 #include <string>
 #include <chrono>
@@ -36,6 +37,12 @@ public:
     void setFocusChangeCallback(std::function<void(int)> callback) { m_focusChangeCallback = std::move(callback); }
     void setInteractionDisabled(bool disabled) { m_interactionDisabled = disabled; if (!disabled) _captureInputState(); }
 
+    void setMultiSelectMode(bool on);
+    bool isMultiSelectMode() const { return m_multiSelectMode; }
+    void toggleDeleteSelection(size_t index);
+    const std::unordered_set<int>& getDeleteSelection() const { return m_selectedForDelete; }
+    void clearDeleteSelection();
+
     void setPadding(float top, float right, float bottom, float left);
 
     int spanCount = 3;
@@ -66,6 +73,7 @@ private:
     bool m_isLayouted = false;
     bool m_requestNextPage = false;
     bool m_interactionDisabled = false;
+    bool m_multiSelectMode = false;
 
     float m_shakeTime = 0.f;
     float m_shakeDir = 0.f;
@@ -74,6 +82,7 @@ private:
     std::function<void(int)> m_focusChangeCallback;
 
     std::unordered_map<std::string, int> m_textureCache;
+    std::unordered_set<int> m_selectedForDelete;
 
     int m_fontId = -1;
     int m_favIconHandle = -1;
@@ -122,7 +131,7 @@ private:
     bool _tryMoveRight();
     void _captureInputState();
 
-    void _drawItem(NVGcontext* vg, const GridDrawItem& item, float x, float y, float w, float h, bool focused);
+    void _drawItem(NVGcontext* vg, const GridDrawItem& item, float x, float y, float w, float h, bool focused, int idx);
     void _drawImage(NVGcontext* vg, const GridDrawItem& item, float x, float y, float imageSize);
     void _drawBadge(NVGcontext* vg, const GridDrawItem& item, float x, float y);
     void _drawTitle(NVGcontext* vg, const GridDrawItem& item, float x, float y, float maxWidth, bool focused);

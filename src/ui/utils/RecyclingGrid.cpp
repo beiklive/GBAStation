@@ -52,6 +52,26 @@ void GameGridView::setPadding(float top, float right, float /*bottom*/, float le
     m_paddingLeft = left;
 }
 
+void GameGridView::setMultiSelectMode(bool on)
+{
+    m_multiSelectMode = on;
+    if (!on) m_selectedForDelete.clear();
+}
+
+void GameGridView::toggleDeleteSelection(size_t index)
+{
+    if (m_selectedForDelete.count(static_cast<int>(index)))
+        m_selectedForDelete.erase(static_cast<int>(index));
+    else
+        m_selectedForDelete.insert(static_cast<int>(index));
+}
+
+void GameGridView::clearDeleteSelection()
+{
+    m_selectedForDelete.clear();
+    m_multiSelectMode = false;
+}
+
 void GameGridView::setDefaultCellFocus(size_t index)
 {
     m_defaultCellFocus = index;
@@ -671,7 +691,9 @@ void GameGridView::_handleInput(float dt)
 
     bool aNow = state.buttons[static_cast<int>(brls::BUTTON_A)];
     if (aNow && !m_prevA && m_selectedIndex >= 0 && static_cast<size_t>(m_selectedIndex) < m_items.size()) {
-        if (m_dataSource)
+        if (m_multiSelectMode)
+            toggleDeleteSelection(m_selectedIndex);
+        else if (m_dataSource)
             m_dataSource->onItemSelected(m_selectedIndex);
     }
     m_prevA = aNow;
@@ -754,7 +776,7 @@ void GameGridView::draw(NVGcontext* vg, float x, float y, float w, float h,
             if (iy + itemH < y - 20.f || iy > y + h + 20.f) continue;
 
             bool focused = (idx == m_selectedIndex);
-            _drawItem(vg, item, ix, iy, itemW, itemH, focused);
+            _drawItem(vg, item, ix, iy, itemW, itemH, focused, idx);
         }
     }
 
@@ -764,7 +786,7 @@ void GameGridView::draw(NVGcontext* vg, float x, float y, float w, float h,
     nvgRestore(vg);
 }
 
-void GameGridView::_drawItem(NVGcontext* vg, const GridDrawItem& item, float x, float y, float w, float h, bool focused)
+void GameGridView::_drawItem(NVGcontext* vg, const GridDrawItem& item, float x, float y, float w, float h, bool focused, int idx)
 {
     nvgSave(vg);
 
@@ -820,6 +842,13 @@ void GameGridView::_drawItem(NVGcontext* vg, const GridDrawItem& item, float x, 
     
     nvgStrokeColor(vg, item.favorite ? nvgRGBA(224, 166, 87, 255) : nvgRGBA(110, 110, 110, 255));
     nvgStrokeWidth(vg, 1.0f);
+
+    if (m_multiSelectMode) {
+        bool sel = m_selectedForDelete.count(idx);
+        nvgStrokeColor(vg, sel ? nvgRGBA(255, 60, 60, 255) : nvgRGBA(255, 255, 255, 220));
+    } else {
+        nvgStrokeColor(vg, item.favorite ? nvgRGBA(224, 166, 87, 255) : nvgRGBA(110, 110, 110, 255));
+    }
     nvgStroke(vg);
     
 

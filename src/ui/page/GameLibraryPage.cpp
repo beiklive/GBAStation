@@ -35,6 +35,10 @@ namespace beiklive
         });
 
         m_grid->registerAction("设置", brls::BUTTON_X, [this](brls::View*) -> bool {
+            if (m_grid->isMultiSelectMode()) {
+                _showMultiSelectSidebar();
+                return true;
+            }
             int idx = m_grid->getSelectedIndex();
             if (idx < 0 || static_cast<size_t>(idx) >= m_entries.size())
                 return true;
@@ -466,6 +470,16 @@ namespace beiklive
                 dlg->open();
             });
 
+        m_gameOptionsSidebar->addButton(
+            "多选",
+            BK_RES("img/ui/setting/emu.png"),
+            [this](const beiklive::GameEntry&) {
+                _hideGameOptionsPanel();
+                m_grid->setMultiSelectMode(true);
+                m_grid->setInteractionDisabled(false);
+                brls::Application::giveFocus(m_grid);
+            });
+
         m_gameOptionsSidebar->onClosed = [this]() {
             m_grid->setInteractionDisabled(false);
             brls::Application::giveFocus(m_grid);
@@ -484,6 +498,63 @@ namespace beiklive
             m_gameOptionsSidebar = nullptr;
             this->getBottomBar()->setVisibility(brls::Visibility::VISIBLE);
         }
+    }
+
+    void GameLibraryPage::_showMultiSelectSidebar()
+    {
+        m_grid->setInteractionDisabled(true);
+        _hideGameOptionsPanel();
+        m_gameOptionsSidebar = new beiklive::GameOptionsSidebar();
+        this->getBottomBar()->setVisibility(brls::Visibility::INVISIBLE);
+
+        size_t count = m_grid->getDeleteSelection().size();
+
+        m_gameOptionsSidebar->addButton(
+            "取消多选",
+            BK_RES("img/ui/setting/emu.png"),
+            [this](const beiklive::GameEntry&) {
+                _hideGameOptionsPanel();
+                m_grid->clearDeleteSelection();
+                m_grid->setInteractionDisabled(false);
+                brls::Application::notify("已取消多选模式");
+            });
+
+        if (count > 0) {
+            m_gameOptionsSidebar->addButton(
+                "删除已选游戏 (" + std::to_string(count) + ")",
+                BK_RES("img/ui/menu/exit.png"),
+                [this](const beiklive::GameEntry&) {
+                    _hideGameOptionsPanel();
+                    auto& sel = m_grid->getDeleteSelection();
+                    size_t n = sel.size();
+                    std::string msg = "确定要删除这 " + std::to_string(n) + " 款游戏吗？\n此操作将清除游戏记录与存档数据。";
+                    auto* dlg = new brls::Dialog(msg);
+                    dlg->addButton("确认删除", [this, sel]() {
+                        for (int idx : sel) {
+                            if (idx >= 0 && static_cast<size_t>(idx) < m_entries.size()) {
+                                if (beiklive::GameDB)
+                                    beiklive::GameDB->removeByPath(m_entries[idx].path);
+                            }
+                        }
+                        if (beiklive::GameDB) beiklive::GameDB->flush();
+                        m_grid->clearDeleteSelection();
+                        _reloadEntries();
+                        m_grid->setInteractionDisabled(false);
+                    });
+                    dlg->addButton("取消", [this]() {
+                        m_grid->setInteractionDisabled(false);
+                    });
+                    dlg->open();
+                });
+        }
+
+        m_gameOptionsSidebar->onClosed = [this]() {
+            m_grid->setInteractionDisabled(false);
+            brls::Application::giveFocus(m_grid);
+            this->getBottomBar()->setVisibility(brls::Visibility::VISIBLE);
+        };
+        this->addView(m_gameOptionsSidebar);
+        m_gameOptionsSidebar->open(beiklive::GameEntry{});
     }
 
 } // namespace beiklive
