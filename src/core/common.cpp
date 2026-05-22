@@ -126,26 +126,6 @@ namespace beiklive
         // 数据库初始化
         {
             std::string dbDir = beiklive::path::databasePath();
-            if (SettingManager->Contains("db_path"))
-            {
-                std::string savedPath = GET_SETTING_KEY_STR("db_path", dbDir);
-                if (!savedPath.empty())
-                {
-                    fs::path p(savedPath);
-                    std::error_code ec;
-                    if (fs::exists(p, ec) && fs::is_directory(p, ec))
-                    {
-                        dbDir = savedPath;
-                    }
-                    else
-                    {
-                        std::string parentDir = p.parent_path().string();
-                        if (!parentDir.empty())
-                            dbDir = parentDir;
-                    }
-                }
-            }
-
             GameDB = new beiklive::GameDatabase();
             GameDB->loadFromDir(dbDir);
 
