@@ -670,19 +670,35 @@ void GameGridView::_drawItem(NVGcontext* vg, const GridDrawItem& item, float x, 
         float glowPad = 3.f;
         float gx = x + shakeX;
         float gy = y + shakeY;
-        nvgBeginPath(vg);
-        nvgRoundedRect(vg, gx - glowPad, gy - glowPad, w + glowPad * 2, h + glowPad * 2, 5.f);
-        nvgFillColor(vg, nvgRGBA(70, 170, 255, static_cast<unsigned char>(glowAlpha * 255)));
-        nvgFill(vg);
 
-        nvgStrokeColor(vg, nvgRGBA(80, 180, 255, static_cast<unsigned char>(glowAlpha * 255)));
-        nvgStrokeWidth(vg, 2.5f);
+        // 主高亮边框
+        nvgBeginPath(vg);
+        nvgRoundedRect(
+            vg,
+            gx,
+            gy,
+            w,
+            h,
+            4.f
+        );
+
+        nvgStrokeColor(
+            vg,
+            nvgRGBA(
+                0,
+                122,
+                255,
+                255
+            )
+        );
+
+        nvgStrokeWidth(vg, 5.0f);
         nvgStroke(vg);
     }
 
     nvgBeginPath(vg);
     nvgRoundedRect(vg, x, y + shakeY, w, h, 3.f);
-    nvgFillColor(vg, nvgRGBA(42, 42, 42, 230));
+    nvgFillColor(vg, nvgRGBA(42, 42, 42, 50));
     nvgFill(vg);
 
     nvgStrokeColor(vg, nvgRGBA(110, 110, 110, focused ? 200 : 100));
