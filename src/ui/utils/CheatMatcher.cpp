@@ -269,7 +269,7 @@ public:
         root->setJustifyContent(brls::JustifyContent::CENTER);
 
         auto* card = new brls::Box(brls::Axis::COLUMN);
-        card->setWidth(700.f);
+        card->setWidth(1000.f);
         card->setHeight(700.f);
         card->setCornerRadius(16.f);
         card->setBackgroundColor(nvgRGBA(25, 28, 40, 245));
@@ -305,19 +305,6 @@ public:
         selector->setHeight(70.f);
         card->addView(selector);
 
-        auto* scroll = new brls::ScrollingFrame();
-        scroll->setGrow(1.f);
-        scroll->setScrollingIndicatorVisible(false);
-
-        m_previewLabel = new brls::Label();
-        m_previewLabel->setFontSize(14.f);
-        m_previewLabel->setTextColor(nvgRGBA(200,200,200,255));
-        m_previewLabel->setIsWrapping(true);
-        m_previewLabel->setFocusable(true);
-        UP_DOWN_NAVIGATION(m_previewLabel, m_previewLabel);
-        scroll->setContentView(m_previewLabel);
-
-        card->addView(scroll);
 
         auto* btnBox = new brls::Box(brls::Axis::ROW);
         btnBox->setJustifyContent(brls::JustifyContent::CENTER);
@@ -340,6 +327,22 @@ public:
         });
         btnBox->addView(confirmBtn);
         card->addView(btnBox);
+
+
+        auto* scroll = new brls::ScrollingFrame();
+        scroll->setGrow(1.f);
+        scroll->setScrollingIndicatorVisible(false);
+
+        m_previewLabel = new brls::Label();
+        m_previewLabel->setFontSize(14.f);
+        m_previewLabel->setTextColor(nvgRGBA(200,200,200,255));
+        m_previewLabel->setIsWrapping(true);
+        m_previewLabel->setFocusable(true);
+        UP_DOWN_NAVIGATION(m_previewLabel, m_previewLabel);
+        scroll->setContentView(m_previewLabel);
+
+        card->addView(scroll);
+
 
         root->addView(card);
 

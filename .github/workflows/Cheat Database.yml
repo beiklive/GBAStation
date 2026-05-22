@@ -151,6 +151,8 @@ jobs:
           cp tools/gbc_cht.json cheat_db/
           cp tools/gb_cht.json cheat_db/
 
+          cp release_repo/cheat_db/RetroArch.zip cheat_db/
+
           cd cheat_db
 
           zip -r ../cheat_db.zip .

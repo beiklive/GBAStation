@@ -545,6 +545,7 @@ void AboutPage::_updateCheatDatabase() {
 
         // ── 解压 ──
         int extractCount = 0;
+        std::string nestedZipPath;
         if (downloadOk && !cancelFlag->load()) {
             mz_zip_archive zip;
             memset(&zip, 0, sizeof(zip));
@@ -553,12 +554,42 @@ void AboutPage::_updateCheatDatabase() {
                 for (mz_uint i = 0; i < numFiles && !cancelFlag->load(); ++i) {
                     char filename[256];
                     mz_zip_reader_get_filename(&zip, i, filename, sizeof(filename));
-                    std::string outPath = dbDir + beiklive::path::SPLIT_CHAR + filename;
-                    if (mz_zip_reader_extract_to_file(&zip, i, outPath.c_str(), 0))
-                        ++extractCount;
+                    std::string name = filename;
+
+                    if (name == "RetroArch.zip") {
+                        // 嵌套 ZIP 先解压到 dbs 目录，后续处理
+                        nestedZipPath = dbDir + beiklive::path::SPLIT_CHAR + "RetroArch.zip";
+                        if (mz_zip_reader_extract_to_file(&zip, i, nestedZipPath.c_str(), 0))
+                            ++extractCount;
+                    } else {
+                        std::string outPath = dbDir + beiklive::path::SPLIT_CHAR + name;
+                        if (mz_zip_reader_extract_to_file(&zip, i, outPath.c_str(), 0))
+                            ++extractCount;
+                    }
                 }
                 mz_zip_reader_end(&zip);
             }
+
+            // 解压嵌套的 RetroArch.zip 到 cheats/RetroArch/
+            if (!nestedZipPath.empty() && !cancelFlag->load()) {
+                std::string retroArchDir = beiklive::path::cheatPath() + "/RetroArch";
+                std::filesystem::create_directories(retroArchDir, ec);
+
+                mz_zip_archive nestedZip;
+                memset(&nestedZip, 0, sizeof(nestedZip));
+                if (mz_zip_reader_init_file(&nestedZip, nestedZipPath.c_str(), 0)) {
+                    mz_uint nestedCount = mz_zip_reader_get_num_files(&nestedZip);
+                    for (mz_uint i = 0; i < nestedCount && !cancelFlag->load(); ++i) {
+                        char fn[512];
+                        mz_zip_reader_get_filename(&nestedZip, i, fn, sizeof(fn));
+                        std::string outPath = retroArchDir + "/" + fn;
+                        mz_zip_reader_extract_to_file(&nestedZip, i, outPath.c_str(), 0);
+                    }
+                    mz_zip_reader_end(&nestedZip);
+                }
+                std::filesystem::remove(nestedZipPath, ec);
+            }
+
             std::filesystem::remove(zipPath, ec);
         }
 
