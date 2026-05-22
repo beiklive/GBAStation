@@ -29,7 +29,6 @@ namespace beiklive
         this->getContentBox()->addView(m_grid);
 
         m_grid->registerAction("分类", brls::BUTTON_Y, [this](brls::View*) -> bool {
-            m_grid->setInteractionDisabled(true);
             _showFilterDropdown();
             return true;
         });
@@ -48,12 +47,8 @@ namespace beiklive
         });
 
         m_grid->registerAction("搜索", brls::BUTTON_RT, [this](brls::View*) -> bool {
-            m_grid->setInteractionDisabled(true);
             auto* ime = brls::Application::getPlatform()->getImeManager();
-            if (!ime) {
-                m_grid->setInteractionDisabled(false);
-                return true;
-            }
+            if (!ime) return true;
             ime->openForText(
                 [this](std::string text) {
                     m_isSearching = !text.empty();
@@ -69,7 +64,6 @@ namespace beiklive
                                 auto* dialog = new brls::Dialog("当前分类下无 \"" + m_searchTerm + "\"");
                                 dialog->addButton("确认", []() {});
                                 dialog->open();
-                                m_grid->setInteractionDisabled(false);
                                 return;
                             }
                             m_visibleCount = std::min(PAGE_SIZE, static_cast<int>(m_entries.size()));
@@ -78,7 +72,6 @@ namespace beiklive
                             m_grid->setDataSource(m_dataSource);
                             m_grid->reloadData();
                             _updateHeader();
-                            m_grid->setInteractionDisabled(false);
                             brls::Application::giveFocus(m_grid);
                         });
                     });
@@ -89,7 +82,6 @@ namespace beiklive
         });
 
         m_grid->registerAction("排序", brls::BUTTON_LT, [this](brls::View*) -> bool {
-            m_grid->setInteractionDisabled(true);
             _showSortSelector();
             return true;
         });
@@ -256,7 +248,7 @@ namespace beiklive
                 int cur = 0;
                 for (size_t i = 0; i < map.size(); i++)
                     if (map[i] == m_platformFilter) { cur = (int)i; break; }
-                auto* dd = new brls::Dropdown("游戏分类", opts, [](int){}, cur,
+                auto* dd = new brls::Dropdown("游戏分类", opts,
                     [this, map, alive](int sel) {
                         if (sel < 0 || sel >= (int)map.size()) return;
                         if (map[sel] == m_platformFilter) return;
@@ -279,7 +271,6 @@ namespace beiklive
                                 m_grid->setDataSource(m_dataSource);
                                 m_grid->reloadData();
                                 _updateHeader();
-                                m_grid->setInteractionDisabled(false);
                                 brls::Application::giveFocus(m_grid);
                             });
                         });
@@ -320,15 +311,11 @@ namespace beiklive
             [this](int sel) {
                 if (sel < 0 || sel >= 3) return;
                 auto newMode = static_cast<SortMode>(sel);
-                if (newMode == m_sortMode) { m_grid->setInteractionDisabled(false); return; }
+                if (newMode == m_sortMode) return;
                 m_sortMode = newMode;
-                m_grid->setInteractionDisabled(false);
                 _reloadEntries();
             },
-            cur,
-            [this](int) {
-                m_grid->setInteractionDisabled(false);
-            });
+            cur);
         brls::Application::pushActivity(new brls::Activity(dd));
     }
 

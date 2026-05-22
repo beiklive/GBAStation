@@ -35,7 +35,7 @@ public:
 
     void onNextPage(std::function<void()> callback) { m_nextPageCallback = std::move(callback); }
     void setFocusChangeCallback(std::function<void(int)> callback) { m_focusChangeCallback = std::move(callback); }
-    void setInteractionDisabled(bool disabled) { m_interactionDisabled = disabled; if (!disabled) _captureInputState(); }
+    void setInteractionDisabled(bool disabled) { m_interactionDisabled = disabled; }
 
     void setMultiSelectMode(bool on);
     bool isMultiSelectMode() const { return m_multiSelectMode; }
@@ -77,6 +77,7 @@ private:
     bool m_requestNextPage = false;
     bool m_interactionDisabled = false;
     bool m_multiSelectMode = false;
+    bool m_wasFocused = false;
 
     float m_shakeTime = 0.f;
     float m_shakeDir = 0.f;

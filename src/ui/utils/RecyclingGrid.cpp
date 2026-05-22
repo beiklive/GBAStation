@@ -503,8 +503,18 @@ void GameGridView::_captureInputState()
 
 void GameGridView::_handleInput(float dt)
 {
-    if (m_interactionDisabled || m_items.empty()) return;
-    if (!isFocused()) return;
+    if (m_items.empty()) return;
+
+    bool focused = isFocused();
+    if (!focused) {
+        m_wasFocused = false;
+        return;
+    }
+    if (!m_wasFocused) {
+        _captureInputState();
+        m_wasFocused = true;
+    }
+    if (m_interactionDisabled) return;
 
     auto& state = brls::Application::getControllerState();
 
