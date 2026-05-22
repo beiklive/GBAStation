@@ -165,13 +165,10 @@ public:
         : m_results(std::move(results)), m_onDone(std::move(onDone)) {
         this->showHeader(false);
         this->showFooter(false);
-        if (this->getBottomBar())
-            this->getBottomBar()->setVisibility(brls::Visibility::GONE);
         auto* root = this->getContentBox();
         root->setAxis(brls::Axis::COLUMN);
         root->setAlignItems(brls::AlignItems::CENTER);
         root->setJustifyContent(brls::JustifyContent::CENTER);
-
         auto* card = new brls::Box(brls::Axis::COLUMN);
         card->setWidth(1000.f);
         card->setHeight(700.f);
@@ -370,16 +367,19 @@ void startCheatMatching(int platform, const std::string& romPath,
 
         brls::sync([prog, cancelFlag, validResults = std::move(validResults),
                     onDone = std::move(onDone)]() mutable {
+            brls::Application::giveFocus(nullptr); // 先清除焦点，避免界面卡顿
             delete cancelFlag;
             prog->close();
 
-            auto* activity = new CheatSelectActivity(std::move(validResults), std::move(onDone));
-            auto* frame = new brls::AppletFrame(activity);
-            HIDE_BRLS_BAR(frame);
-            brls::Application::pushActivity(new brls::Activity(frame),
-                                            brls::TransitionAnimation::NONE);
-            brls::Application::giveFocus(activity->getDefaultFocus());
+            brls::sync([validResults = std::move(validResults), onDone = std::move(onDone)]() mutable {
+                auto* activity = new CheatSelectActivity(std::move(validResults), std::move(onDone));
+                auto* frame = new brls::AppletFrame(activity);
+                HIDE_BRLS_BAR(frame);
+                brls::Application::pushActivity(new brls::Activity(frame),
+                                                brls::TransitionAnimation::NONE);
+            });
         });
+
     });
 }
 

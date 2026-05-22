@@ -249,7 +249,11 @@ namespace beiklive
 
     bool GameDatabase::saveToDir(const std::string &dir) const
     {
-        // 按平台分组，原子写入
+        // 确保目录存在
+        std::error_code ec;
+        std::filesystem::create_directories(dir, ec);
+
+        // 按平台分组
         std::unordered_map<int, nlohmann::json> platformData;
         for (const auto &entry : data_)
         {
