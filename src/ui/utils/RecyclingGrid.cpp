@@ -72,6 +72,29 @@ void GameGridView::clearDeleteSelection()
     m_multiSelectMode = false;
 }
 
+void GameGridView::setItemFavourite(size_t index, bool fav)
+{
+    if (index < m_items.size())
+        m_items[index].favorite = fav;
+}
+
+void GameGridView::setItemTitle(size_t index, const std::string& title)
+{
+    if (index < m_items.size())
+        m_items[index].title = title;
+}
+
+void GameGridView::setItemImagePath(size_t index, const std::string& path)
+{
+    if (index < m_items.size()) {
+        auto& item = m_items[index];
+        item.imagePath = path;
+        item.textureHandle = -1;
+        item.textureLoading = false;
+        item.textureReady = false;
+    }
+}
+
 void GameGridView::setDefaultCellFocus(size_t index)
 {
     m_defaultCellFocus = index;

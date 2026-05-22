@@ -42,6 +42,9 @@ public:
     void toggleDeleteSelection(size_t index);
     const std::unordered_set<int>& getDeleteSelection() const { return m_selectedForDelete; }
     void clearDeleteSelection();
+    void setItemFavourite(size_t index, bool fav);
+    void setItemTitle(size_t index, const std::string& title);
+    void setItemImagePath(size_t index, const std::string& path);
 
     void setPadding(float top, float right, float bottom, float left);
 

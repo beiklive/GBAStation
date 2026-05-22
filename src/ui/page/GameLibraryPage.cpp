@@ -402,18 +402,18 @@ namespace beiklive
         std::string fn = beiklive::tools::getFileNameWithoutExtension(entry.path);
 
         m_gameOptionsSidebar->addButton("修改映射名称", BK_RES("img/ui/setting/emu.png"),
-            [this, path, title = entry.title, fn](const beiklive::GameEntry&) {
+            [this, path, title = entry.title, fn, idx = m_grid->getSelectedIndex()](const beiklive::GameEntry&) {
                 _hideGameOptionsPanel();
                 auto* ime = brls::Application::getPlatform()->getImeManager();
                 if (!ime) { m_grid->setInteractionDisabled(false); return; }
                 ime->openForText(
-                    [this, path, fn](std::string text) {
+                    [this, path, fn, idx](std::string text) {
                         if (!text.empty() && beiklive::GameDB) {
                             beiklive::GameDB->set(path, "title", nlohmann::json(text));
-                            _reloadEntries();
-                            beiklive::NameMappingManager->Set(fn, text, true);
                             beiklive::GameDB->flush();
+                            beiklive::NameMappingManager->Set(fn, text, true);
                             beiklive::NameMappingManager->Save();
+                            m_grid->setItemTitle(idx, text);
                         }
                         m_grid->setInteractionDisabled(false);
                     },
@@ -422,14 +422,14 @@ namespace beiklive
             });
 
         m_gameOptionsSidebar->addButton("设置封面图", BK_RES("img/ui/setting/display.png"),
-            [this, path](const beiklive::GameEntry&) {
+            [this, path, idx = m_grid->getSelectedIndex()](const beiklive::GameEntry&) {
                 _hideGameOptionsPanel();
                 beiklive::openFilePicker({"png", "jpg"},
-                    [this, path](const std::string& selectedPath) {
+                    [this, path, idx](const std::string& selectedPath) {
                         if (beiklive::GameDB) {
                             beiklive::GameDB->set(path, "logoPath", nlohmann::json(selectedPath));
-                            _reloadEntries();
                             beiklive::GameDB->flush();
+                            m_grid->setItemImagePath(idx, selectedPath);
                         }
                         m_grid->setInteractionDisabled(false);
                     }, beiklive::path::GetRootPath());
@@ -454,15 +454,15 @@ namespace beiklive
         m_gameOptionsSidebar->addButton(
             entry.favourite ? "取消收藏" : "加入收藏",
             BK_RES("img/ui/setting/emu.png"),
-            [this, path, fav = entry.favourite](const beiklive::GameEntry&) {
+            [this, path, fav = entry.favourite, idx = m_grid->getSelectedIndex()](const beiklive::GameEntry&) {
                 _hideGameOptionsPanel();
                 std::string msg = fav ? "确定要取消收藏吗？" : "确定要加入收藏吗？";
                 auto* dlg = new brls::Dialog(msg);
-                dlg->addButton("确认", [this, path, fav]() {
+                dlg->addButton("确认", [this, path, fav, idx]() {
                     if (beiklive::GameDB) {
                         beiklive::GameDB->set(path, "favourite", nlohmann::json(!fav));
                         beiklive::GameDB->flush();
-                        _reloadEntries();
+                        m_grid->setItemFavourite(idx, !fav);
                     }
                     m_grid->setInteractionDisabled(false);
                 });
