@@ -84,6 +84,12 @@ namespace beiklive
             return true;
         });
 
+        m_grid->registerAction("排序", brls::BUTTON_LT, [this](brls::View*) -> bool {
+            m_grid->setInteractionDisabled(true);
+            _showSortSelector();
+            return true;
+        });
+
         m_grid->onNextPage([this]() {
             if (!m_loadingMore) _loadNextPage();
         });
@@ -185,8 +191,23 @@ namespace beiklive
                     return t.find(lt) == std::string::npos;
                 }), m_entries.end());
         }
-        std::sort(m_entries.begin(), m_entries.end(),
-            [](const GameEntry& a, const GameEntry& b) { return a.lastPlayed > b.lastPlayed; });
+
+        switch (m_sortMode) {
+        case SortMode::PLAY_TIME:
+            std::sort(m_entries.begin(), m_entries.end(),
+                [](const GameEntry& a, const GameEntry& b) { return a.playTime > b.playTime; });
+            break;
+        case SortMode::FIRST_LETTER:
+            std::sort(m_entries.begin(), m_entries.end(),
+                [](const GameEntry& a, const GameEntry& b) {
+                    return _titleToSortKey(a.title) < _titleToSortKey(b.title);
+                });
+            break;
+        default:
+            std::sort(m_entries.begin(), m_entries.end(),
+                [](const GameEntry& a, const GameEntry& b) { return a.lastPlayed > b.lastPlayed; });
+            break;
+        }
     }
 
     void GameLibraryPage::_loadNextPage()
@@ -285,6 +306,61 @@ namespace beiklive
     {
         if (seconds <= 0) return "";
         return beiklive::tools::formatPlayTime(seconds);
+    }
+
+    void GameLibraryPage::_showSortSelector()
+    {
+        std::vector<std::string> opts = {"最近游玩", "游玩时长", "首字母"};
+        int cur = static_cast<int>(m_sortMode);
+        auto* dd = new brls::Dropdown("排序方式", opts,
+            [this](int sel) {
+                if (sel < 0 || sel >= 3) return;
+                auto newMode = static_cast<SortMode>(sel);
+                if (newMode == m_sortMode) { m_grid->setInteractionDisabled(false); return; }
+                m_sortMode = newMode;
+                m_grid->setInteractionDisabled(false);
+                _reloadEntries();
+            },
+            cur,
+            [this](int) {
+                m_grid->setInteractionDisabled(false);
+            });
+        brls::Application::pushActivity(new brls::Activity(dd));
+    }
+
+    std::string GameLibraryPage::_titleToSortKey(const std::string& title)
+    {
+        static nlohmann::json pinyinMap;
+        static bool loaded = false;
+        if (!loaded) {
+            std::ifstream f(BK_RES("pinyin/pingyin.json"));
+            if (f.is_open()) {
+                f >> pinyinMap;
+                loaded = true;
+            }
+        }
+
+        std::string key;
+        for (size_t i = 0; i < title.size(); i++) {
+            std::string ch(1, title[i]);
+            unsigned char c = static_cast<unsigned char>(title[i]);
+            if (c >= 0x80 && i + 2 < title.size()) {
+                ch = title.substr(i, 3);
+                i += 2;
+            }
+            if (pinyinMap.contains(ch)) {
+                key += pinyinMap[ch].get<std::string>();
+            } else if (c >= 0x80) {
+                key += "\xFF"; // unknown CJK, sort after everything
+            } else if (std::isdigit(c)) {
+                key += std::string(1, '\x00') + ch; // digits first
+            } else if (std::isalpha(c)) {
+                key += std::string(1, '\x01') + std::string(1, static_cast<char>(std::tolower(c)));
+            } else {
+                key += std::string(1, '\x02') + ch;
+            }
+        }
+        return key;
     }
 
     void GameLibraryPage::_reloadEntries()

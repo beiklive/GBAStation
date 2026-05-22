@@ -23,6 +23,13 @@ namespace beiklive
             FAVORITE = 999,
         };
 
+        enum class SortMode : int
+        {
+            LAST_PLAYED = 0,
+            PLAY_TIME,
+            FIRST_LETTER,
+        };
+
         GameLibraryPage();
         ~GameLibraryPage();
 
@@ -50,6 +57,7 @@ namespace beiklive
         int m_visibleCount = 0;
         bool m_loadingMore = false;
         PlatformFilter m_platformFilter = PlatformFilter::ALL;
+        SortMode m_sortMode = SortMode::LAST_PLAYED;
         std::string m_searchTerm;
         bool m_isSearching = false;
         beiklive::GameOptionsSidebar* m_gameOptionsSidebar = nullptr;
@@ -59,12 +67,14 @@ namespace beiklive
         void _loadNextPage();
         void _reloadEntries();
         void _showFilterDropdown();
+        void _showSortSelector();
         void _updateHeader();
+
+        static std::string _titleToSortKey(const std::string& title);
+        static std::string _formatPlayTime(int seconds);
 
         void _showGameOptionsPanel(const beiklive::GameEntry& entry);
         void _hideGameOptionsPanel();
-
-        static std::string _formatPlayTime(int seconds);
 
         int _currentFocusedIndex = -1;
         bool m_firstAppear = true;
