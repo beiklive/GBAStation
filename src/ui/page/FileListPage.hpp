@@ -30,8 +30,9 @@ namespace beiklive
         brls::Label*    m_detailTitle      = nullptr;
         brls::Label*    m_detailSubtitle   = nullptr;
         brls::Box*      m_detailInfoBox    = nullptr;
-        bool            m_panelVisible     = true;
-        std::string     m_focusedFullPath;
+        bool m_panelVisible     = true;
+        bool m_dirSelectionMode = false;
+        std::string m_focusedFullPath;
 
         void _setupDetailPanel();
         void _updateDetailPanel(const beiklive::DirListData& data);
@@ -64,6 +65,7 @@ namespace beiklive
         void showDriveList();
         void setFliter(beiklive::enums::FilterMode mode, std::vector<std::string> extensions);
         void setPath(const std::string path);
+        void setDirSelectionMode(bool on) { m_dirSelectionMode = on; }
 
         std::function<void(beiklive::DirListData)> onFileSelected;
     };

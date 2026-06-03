@@ -81,5 +81,10 @@ namespace beiklive
             m_infoLabel->setText(info);
     }
 
+    std::string HeaderBar::getPath() const
+    {
+        return m_pathLabel ? m_pathLabel->getFullText() : "";
+    }
+
 
 } // namespace beiklive

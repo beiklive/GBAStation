@@ -86,16 +86,94 @@ namespace beiklive
 
     void GameImportView::setupButtonLayout()
     {
-        m_layoutBox = new brls::Box(brls::Axis::COLUMN);
+        m_layoutBox = new brls::Box(brls::Axis::ROW);
         m_layoutBox->setFocusable(false);
-        m_layoutBox->setAlignItems(brls::AlignItems::STRETCH);
+        m_layoutBox->setAlignItems(brls::AlignItems::FLEX_START);
         m_layoutBox->setJustifyContent(brls::JustifyContent::CENTER);
         m_layoutBox->setGrow(1.0f);
-        m_layoutBox->setWidth(600.f);
+
+        // ── 左侧面板：扫描目录导入 ──
+        m_leftPanel = new brls::Box(brls::Axis::COLUMN);
+        m_leftPanel->setFocusable(false);
+        m_leftPanel->setMarginRight(12.f);
+        m_leftPanel->setMarginTop(12.f);
+        m_leftPanel->setWidthPercentage(40.f);
+        m_leftPanel->setHeightPercentage(90.f);
+        m_leftPanel->setPadding(20.f);
+        m_leftPanel->setCornerRadius(12.f);
+        m_leftPanel->setBackgroundColor(nvgRGBA(255, 255, 255, 10));
+        m_leftPanel->setShadowType(brls::ShadowType::GENERIC);
+        m_leftPanel->setShadowVisibility(true);
+        auto* scanHeader = new brls::Header();
+        scanHeader->setTitle("扫描目录并导入");
+        m_leftPanel->addView(scanHeader);
+
+        auto* scanBtn = new beiklive::ButtonBox();
+        scanBtn->setText("选择ROM目录并导入");
+        scanBtn->setIcon(BK_RES("img/ui/icon_gba.png"));
+        scanBtn->registerAction("选择", brls::BUTTON_A, [this](brls::View*) -> bool {
+            _selectRomDir();
+            return true;
+        });
+        m_leftPanel->addView(scanBtn);
+
+        auto* subDirSwitch = new beiklive::SwitchButton();
+        subDirSwitch->setText("自动扫描子目录");
+        subDirSwitch->setState(true);
+        subDirSwitch->setOnToggle([this](bool on) { m_autoSubDir = on; });
+        m_leftPanel->addView(subDirSwitch);
+
+        auto* nameMapSwitch = new beiklive::SwitchButton();
+        nameMapSwitch->setText("自动读取映射名称(如果存在)");
+        nameMapSwitch->setState(true);
+        nameMapSwitch->setOnToggle([this](bool on) { m_useNameMapping = on; });
+        m_leftPanel->addView(nameMapSwitch);
+
+        auto* gbaSwitch = new beiklive::SwitchButton();
+        gbaSwitch->setText("扫描GBA游戏");
+        gbaSwitch->setState(true);
+        gbaSwitch->setOnToggle([this](bool on) { m_scanGBA = on; });
+        m_leftPanel->addView(gbaSwitch);
+
+        auto* gbcSwitch = new beiklive::SwitchButton();
+        gbcSwitch->setText("扫描GBC游戏");
+        gbcSwitch->setState(true);
+        gbcSwitch->setOnToggle([this](bool on) { m_scanGBC = on; });
+        m_leftPanel->addView(gbcSwitch);
+
+        auto* gbSwitch = new beiklive::SwitchButton();
+        gbSwitch->setText("扫描GB游戏");
+        gbSwitch->setState(true);
+        gbSwitch->setOnToggle([this](bool on) { m_scanGB = on; });
+        m_leftPanel->addView(gbSwitch);
+
+        auto* scanHint = new brls::Label();
+        scanHint->setText("自动扫描设置为ON的游戏类型");
+        scanHint->setFontSize(16.f);
+        scanHint->setTextColor(nvgRGB(154, 154, 154));
+        scanHint->setMarginTop(20.f);
+        scanHint->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+        scanHint->setFocusable(false);
+        m_leftPanel->addView(scanHint);
+
+        m_layoutBox->addView(m_leftPanel);
+
+        // ── 右侧面板：导入 RetroArch 整合包 ──
+        m_rightPanel = new brls::Box(brls::Axis::COLUMN);
+        m_rightPanel->setFocusable(false);
+        m_rightPanel->setWidthPercentage(40.f);
+        m_rightPanel->setHeightPercentage(90.f);
+        m_rightPanel->setPadding(20.f);
+        m_rightPanel->setMarginLeft(12.f);
+        m_rightPanel->setMarginTop(12.f);
+        m_rightPanel->setCornerRadius(12.f);
+        m_rightPanel->setBackgroundColor(nvgRGBA(255, 255, 255, 10));
+        m_rightPanel->setShadowType(brls::ShadowType::GENERIC);
+        m_rightPanel->setShadowVisibility(true);
 
         auto* header = new brls::Header();
         header->setTitle("导入 RetroArch 整合包");
-        m_layoutBox->addView(header);
+        m_rightPanel->addView(header);
 
         auto* gbaBtn = new beiklive::ButtonBox();
         gbaBtn->setText("选择GBA游戏的lpl文件");
@@ -105,7 +183,7 @@ namespace beiklive
                 onSelectLpl((int)beiklive::enums::EmuPlatform::EmuGBA);
                 return true;
             });
-        m_layoutBox->addView(gbaBtn);
+        m_rightPanel->addView(gbaBtn);
 
         auto* gbcBtn = new beiklive::ButtonBox();
         gbcBtn->setText("选择GBC游戏的lpl文件");
@@ -115,7 +193,7 @@ namespace beiklive
                 onSelectLpl((int)beiklive::enums::EmuPlatform::EmuGBC);
                 return true;
             });
-        m_layoutBox->addView(gbcBtn);
+        m_rightPanel->addView(gbcBtn);
 
         auto* gbBtn = new beiklive::ButtonBox();
         gbBtn->setText("选择GB游戏的lpl文件");
@@ -125,7 +203,7 @@ namespace beiklive
                 onSelectLpl((int)beiklive::enums::EmuPlatform::EmuGB);
                 return true;
             });
-        m_layoutBox->addView(gbBtn);
+        m_rightPanel->addView(gbBtn);
 
         auto* hint = new brls::Label();
         hint->setText("lpl文件通常在 /retroarch/playlists 目录下");
@@ -134,7 +212,9 @@ namespace beiklive
         hint->setMarginTop(20.f);
         hint->setHorizontalAlign(brls::HorizontalAlign::CENTER);
         hint->setFocusable(false);
-        m_layoutBox->addView(hint);
+        m_rightPanel->addView(hint);
+
+        m_layoutBox->addView(m_rightPanel);
 
         this->getContentBox()->addView(m_layoutBox);
     }
@@ -542,6 +622,188 @@ namespace beiklive
 
                 beiklive::GameDB->upsertByPath(entry);
 
+                m_progress.store(i + 1, std::memory_order_release);
+            }
+
+            m_importDone.store(true, std::memory_order_release);
+        });
+    }
+
+    void GameImportView::_selectRomDir()
+    {
+        auto* flPage = new beiklive::FileListPage();
+        flPage->setDirSelectionMode(true);
+
+        flPage->registerAction("选择目录", brls::BUTTON_Y,
+            [this, flPage](brls::View*) -> bool {
+                std::string dirPath = flPage->getHeader()->getPath();
+                if (dirPath.empty()) return true;
+                brls::Application::popActivity(brls::TransitionAnimation::NONE);
+                brls::sync([this, dirPath]() {
+                    _startDirImport(dirPath);
+                });
+                return true;
+            });
+
+        auto* container = new brls::Box(brls::Axis::COLUMN);
+        container->setGrow(1.0f);
+        container->addView(flPage);
+        container->registerAction("关闭", brls::BUTTON_START,
+                                   [](brls::View*) { brls::Application::popActivity(); return true; });
+
+        auto* frame = new brls::AppletFrame(container);
+        frame->setHeaderVisibility(brls::Visibility::GONE);
+        frame->setFooterVisibility(brls::Visibility::GONE);
+        frame->setBackground(brls::ViewBackground::NONE);
+        brls::Application::pushActivity(new brls::Activity(frame));
+
+        flPage->showDriveList();
+    }
+
+    void GameImportView::_startDirImport(const std::string& dirPath)
+    {
+        m_completionShown = false;
+        m_importDone.store(false, std::memory_order_release);
+        m_importError.store(false, std::memory_order_release);
+        m_progress.store(0, std::memory_order_release);
+
+        showProgressLayout();
+        m_progressTitleLabel->setText("正在扫描ROM文件...");
+        m_progressCountLabel->setText("");
+        m_progressBar->setWidth(0.f);
+        m_progressBar->setColor(nvgRGB(79, 193, 255));
+
+        brls::Application::giveFocus(this);
+        this->invalidate();
+
+        if (m_importThread.joinable())
+            m_importThread.join();
+
+        std::unordered_set<std::string> exts;
+        if (m_scanGBA) exts.insert("gba");
+        if (m_scanGBC) exts.insert("gbc");
+        if (m_scanGB)  exts.insert("gb");
+
+        auto getPlatform = [](const std::string& ext) -> int {
+            if (ext == "gba") return (int)beiklive::enums::EmuPlatform::EmuGBA;
+            if (ext == "gbc") return (int)beiklive::enums::EmuPlatform::EmuGBC;
+            if (ext == "gb")  return (int)beiklive::enums::EmuPlatform::EmuGB;
+            return -1;
+        };
+
+        namespace sk = beiklive::SettingKey;
+        ImportSharedConfig config;
+        config.overlayEnabled = GET_SETTING_KEY_INT(sk::KEY_DISPLAY_OVERLAY_ENABLED, 0) != 0;
+        config.shaderEnabled = GET_SETTING_KEY_INT(sk::KEY_DISPLAY_SHADER_ENABLED, 0) != 0;
+
+        m_importing.store(true, std::memory_order_release);
+
+        m_importThread = std::thread([this, dirPath, exts = std::move(exts), getPlatform, config]()
+        {
+            std::vector<fs::path> roms;
+            try {
+                if (m_autoSubDir) {
+                    for (auto& entry : fs::recursive_directory_iterator(dirPath)) {
+                        if (entry.is_regular_file()) {
+                            std::string ext = entry.path().extension().string();
+                            if (ext.size() > 1 && ext[0] == '.') ext = ext.substr(1);
+                            for (auto& c : ext) c = static_cast<char>(std::tolower((unsigned char)c));
+                            if (exts.count(ext)) roms.push_back(entry.path());
+                        }
+                    }
+                } else {
+                    for (auto& entry : fs::directory_iterator(dirPath)) {
+                        if (entry.is_regular_file()) {
+                            std::string ext = entry.path().extension().string();
+                            if (ext.size() > 1 && ext[0] == '.') ext = ext.substr(1);
+                            for (auto& c : ext) c = static_cast<char>(std::tolower((unsigned char)c));
+                            if (exts.count(ext)) roms.push_back(entry.path());
+                        }
+                    }
+                }
+            } catch (...) {
+                m_importError.store(true);
+            }
+
+            if (m_importError.load()) {
+                m_importDone.store(true, std::memory_order_release);
+                return;
+            }
+
+            int total = (int)roms.size();
+            m_total.store(total, std::memory_order_release);
+
+            brls::sync([this]() { m_progressTitleLabel->setText("正在导入游戏数据，请勿操作"); });
+
+            for (int i = 0; i < total; ++i) {
+                const auto& romPath = roms[i];
+                std::string path = romPath.string();
+                std::string romStem = romPath.stem().string();
+                std::string ext = romPath.extension().string();
+                if (ext.size() > 1 && ext[0] == '.') ext = ext.substr(1);
+                for (auto& c : ext) c = static_cast<char>(std::tolower((unsigned char)c));
+                int platform = getPlatform(ext);
+                if (platform < 0) { m_progress.store(i + 1, std::memory_order_release); continue; }
+
+                std::string displayName = romStem;
+                if (m_useNameMapping) {
+                    auto nameVal = beiklive::NameMappingManager->Get(romStem);
+                    if (nameVal) {
+                        auto nameStr = nameVal->AsString();
+                        if (nameStr && !nameStr->empty())
+                            displayName = *nameStr;
+                    }
+                }
+                brls::sync([this, displayName]() { m_progressNameLabel->setText(displayName); });
+
+                std::string logoPath = beiklive::tools::getDefaultLogoPath(
+                    static_cast<beiklive::enums::EmuPlatform>(platform));
+
+                std::string savePath = beiklive::path::ROOT + beiklive::path::SPLIT_CHAR +
+                                       std::string(beiklive::path::PROGRAM_NAME) +
+                                       beiklive::path::SPLIT_CHAR + "saves" +
+                                       beiklive::path::SPLIT_CHAR + "dirms" +
+                                       beiklive::path::SPLIT_CHAR + romStem;
+                try { fs::create_directories(savePath); } catch (...) {}
+
+                beiklive::GameEntry entry;
+                entry.path = path;
+                entry.title = displayName;
+                entry.platform = platform;
+                entry.logoPath = logoPath;
+                entry.savePath = savePath;
+                entry.overlayEnabled = config.overlayEnabled;
+                entry.shaderEnabled = config.shaderEnabled;
+                if (platform == (int)beiklive::enums::EmuPlatform::EmuGBA)
+                    entry.overlayPath = GET_SETTING_KEY_STR(sk::KEY_DISPLAY_OVERLAY_GBA_PATH, "");
+                else if (platform == (int)beiklive::enums::EmuPlatform::EmuGBC)
+                    entry.overlayPath = GET_SETTING_KEY_STR(sk::KEY_DISPLAY_OVERLAY_GBC_PATH, "");
+                else if (platform == (int)beiklive::enums::EmuPlatform::EmuGB)
+                    entry.overlayPath = GET_SETTING_KEY_STR(sk::KEY_DISPLAY_OVERLAY_GB_PATH, "");
+
+                { std::string dm = GET_SETTING_KEY_STR("display.mode", "original");
+                  if (dm == "fill") entry.displayMode = 1;
+                  else if (dm == "integer") entry.displayMode = 2;
+                  else if (dm == "custom") entry.displayMode = 3;
+                  else entry.displayMode = 0; }
+                entry.integerAspectRatio = static_cast<float>(GET_SETTING_KEY_INT("display.integer_scale_mult", 0));
+
+                // 保留已有记录的用户数据
+                auto existing = beiklive::GameDB->findByPath(path);
+                if (existing) {
+                    entry.playCount  = existing->playCount;
+                    entry.playTime   = existing->playTime;
+                    entry.lastPlayed = existing->lastPlayed;
+                    entry.favourite  = existing->favourite;
+                    if (!existing->cheatPath.empty())
+                        entry.cheatPath = existing->cheatPath;
+                    if (!existing->logoPath.empty())
+                        entry.logoPath = existing->logoPath;
+                    if (!existing->savePath.empty())
+                        entry.savePath = existing->savePath;
+                }
+
+                beiklive::GameDB->upsertByPath(entry);
                 m_progress.store(i + 1, std::memory_order_release);
             }
 

@@ -13,6 +13,7 @@ namespace beiklive
         void setTitleWidth(float width);
         void setPath(const std::string &path);
         void setInfo(const std::string &info);
+        std::string getPath() const;
 
     private:
         brls::Label *m_titleLabel = nullptr;

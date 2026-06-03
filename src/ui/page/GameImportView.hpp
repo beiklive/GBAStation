@@ -2,11 +2,13 @@
 
 #include "core/common.h"
 #include "ui/utils/Box.hpp"
+#include "ui/utils/FunctionButtons.hpp"
 
 #include <atomic>
 #include <mutex>
 #include <thread>
 #include <vector>
+#include <unordered_set>
 
 namespace beiklive
 {
@@ -43,6 +45,9 @@ namespace beiklive
         void onSelectLpl(int platform);
         void startImport(const std::string& lplPath, int platform);
 
+        void _selectRomDir();
+        void _startDirImport(const std::string& dirPath);
+
         static std::string platformName(int platform);
         static std::string platformDirName(int platform);
 
@@ -52,6 +57,14 @@ namespace beiklive
         brls::Label* m_progressCountLabel = nullptr;
         brls::Label* m_progressNameLabel = nullptr;
         brls::Rectangle* m_progressBar = nullptr;
+
+        brls::Box* m_leftPanel = nullptr;
+        brls::Box* m_rightPanel = nullptr;
+        bool m_autoSubDir = true;
+        bool m_useNameMapping = true;
+        bool m_scanGBA = true;
+        bool m_scanGBC = true;
+        bool m_scanGB = true;
 
         std::thread m_importThread;
         std::atomic<bool> m_importing{false};
