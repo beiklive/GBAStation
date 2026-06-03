@@ -157,6 +157,13 @@ namespace beiklive
 
     void StartPage::_openGameLibrary()
     {
+        if (!beiklive::GameDB || beiklive::GameDB->getAll().empty()) {
+            auto* dialog = new brls::Dialog("游戏库为空，请从文件列表选择游戏或者从设置中进行游戏导入");
+            dialog->addButton("确定", [](){});
+            dialog->open();
+            return;
+        }
+
         brls::Logger::debug("Opening Game Library Page");
         auto *gameLibraryPage = new beiklive::GameLibraryPage();
         auto *frame           = new brls::AppletFrame(gameLibraryPage);
@@ -320,13 +327,17 @@ namespace beiklive
                 auto* dialog = new brls::Dialog("确定要删除该游戏吗？\n此操作将清除游戏记录与存档数据。");
                 dialog->addButton("确认删除", [this, path]() {
                     _hideGameOptionsPanel();
-                    if (beiklive::GameDB && beiklive::GameDB->removeByPath(path)) {
+                    if (beiklive::GameDB) {
+                        if ((int)beiklive::GameDB->getAll().size() <= 1)
+                            beiklive::GameDB->clearAll();
+                        else {
+                            beiklive::GameDB->removeByPath(path);
+                            beiklive::GameDB->flush();
+                        }
                         brls::Application::notify("已删除游戏");
                         onResume();
-                        beiklive::GameDB->flush();
                     } else {
                         brls::Application::notify("删除失败");
-
                     }
                 });
                 dialog->addButton("取消", [this]() {

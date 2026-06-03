@@ -427,10 +427,15 @@ namespace beiklive
                 _hideGameOptionsPanel();
                 auto* dlg = new brls::Dialog("确定要删除该游戏吗？\n此操作将清除游戏记录与存档数据。");
                 dlg->addButton("确认删除", [this, path]() {
-                    if (beiklive::GameDB && beiklive::GameDB->removeByPath(path)) {
+                    if (beiklive::GameDB) {
+                        if ((int)beiklive::GameDB->getAll().size() <= 1)
+                            beiklive::GameDB->clearAll();
+                        else {
+                            beiklive::GameDB->removeByPath(path);
+                            beiklive::GameDB->flush();
+                        }
                         brls::Application::notify("已删除游戏");
                         _reloadEntries();
-                        beiklive::GameDB->flush();
                     } else brls::Application::notify("删除失败");
                     m_grid->setInteractionDisabled(false);
                 });
@@ -517,13 +522,17 @@ namespace beiklive
                     std::string msg = "确定要删除这 " + std::to_string(n) + " 款游戏吗？\n此操作将清除游戏记录与存档数据。";
                     auto* dlg = new brls::Dialog(msg);
                     dlg->addButton("确认删除", [this, sel]() {
-                        for (int idx : sel) {
-                            if (idx >= 0 && static_cast<size_t>(idx) < m_entries.size()) {
-                                if (beiklive::GameDB)
-                                    beiklive::GameDB->removeByPath(m_entries[idx].path);
+                        if (beiklive::GameDB) {
+                            if ((int)beiklive::GameDB->getAll().size() <= (int)sel.size())
+                                beiklive::GameDB->clearAll();
+                            else {
+                                for (int idx : sel) {
+                                    if (idx >= 0 && static_cast<size_t>(idx) < m_entries.size())
+                                        beiklive::GameDB->removeByPath(m_entries[idx].path);
+                                }
+                                beiklive::GameDB->flush();
                             }
                         }
-                        if (beiklive::GameDB) beiklive::GameDB->flush();
                         m_grid->clearDeleteSelection();
                         _reloadEntries();
                         m_grid->setInteractionDisabled(false);

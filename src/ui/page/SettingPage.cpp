@@ -775,6 +775,7 @@ brls::View *SettingPage::buildUITab()
                     brls::Application::blockInputs(true);
                     new std::thread([]() {
                         auto entries = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
+                        int total = (int)entries.size();
                         int removed = 0;
                         for (const auto& entry : entries) {
                             if (!std::filesystem::exists(entry.path)) {
@@ -782,7 +783,10 @@ brls::View *SettingPage::buildUITab()
                                     removed++;
                             }
                         }
-                        if (removed > 0) beiklive::GameDB->flush();
+                        if (removed == total)
+                            beiklive::GameDB->clearAll();
+                        else if (removed > 0)
+                            beiklive::GameDB->flush();
                         brls::sync([removed]() {
                             brls::Application::unblockInputs();
                             std::string msg = removed > 0

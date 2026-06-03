@@ -191,6 +191,23 @@ namespace beiklive
         markDirtyAndAutoSave();
     }
 
+    void GameDatabase::clearAll()
+    {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
+        doClear();
+        dirty_ = false;
+        if (!dbDir_.empty()) {
+            const int platforms[] = {
+                (int)beiklive::enums::EmuPlatform::EmuGBA,
+                (int)beiklive::enums::EmuPlatform::EmuGBC,
+                (int)beiklive::enums::EmuPlatform::EmuGB,
+            };
+            std::error_code ec;
+            for (int p : platforms)
+                std::filesystem::remove(dbDir_ + beiklive::path::SPLIT_CHAR + getPlatformFileName(p), ec);
+        }
+    }
+
 
     /*static*/ std::string GameDatabase::getPlatformFileName(int platform)
     {

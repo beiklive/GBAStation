@@ -58,6 +58,9 @@ namespace beiklive
         // 清空所有数据（线程安全）
         void clear();
 
+        // 清空内存数据并删除数据库文件（线程安全）
+        void clearAll();
+
         // 保存到目录（按平台分文件，线程安全）
         bool saveToDir(const std::string &dir) const;
 
