@@ -95,6 +95,17 @@ void GameGridView::setItemImagePath(size_t index, const std::string& path)
     }
 }
 
+void GameGridView::setTitleFontSize(int opt)
+{
+    switch (opt) {
+        case 0: m_titleFontSize = 16; break;
+        case 1: m_titleFontSize = 19; break;
+        case 2: m_titleFontSize = 22; break;
+        default: m_titleFontSize = 16; break;
+    }
+    for (auto& item : m_items) item.marqueeMaxOffset = 0.f;
+}
+
 void GameGridView::setDefaultCellFocus(size_t index)
 {
     m_defaultCellFocus = index;
@@ -396,12 +407,12 @@ void GameGridView::_updateMarquee(float delta)
         if (!item.title.empty()) {
             NVGcontext* vg = brls::Application::getNVGContext();
             if (vg) {
-                nvgFontSize(vg, 16.f);
+                nvgFontSize(vg, m_titleFontSize);
                 nvgFontFaceId(vg, m_fontId);
                 float bounds[4];
                 nvgTextBounds(vg, 0, 0, item.title.c_str(), nullptr, bounds);
                 float textW = bounds[2] - bounds[0];
-                float textMaxW = _getItemWidth() - (estimatedRowHeight - 10.f + 5.f + 10.f + 8.f);
+                float textMaxW = (estimatedRowHeight - 10.f) * 1.8f;
                 if (textMaxW < 0.f) textMaxW = 100.f;
                 if (textW > textMaxW)
                     item.marqueeMaxOffset = textW - textMaxW;
@@ -956,7 +967,7 @@ void GameGridView::_drawBadge(NVGcontext* vg, const GridDrawItem& item, float x,
 
 void GameGridView::_drawTitle(NVGcontext* vg, const GridDrawItem& item, float x, float y, float maxWidth, bool focused)
 {
-    nvgFontSize(vg, 16.f);
+    nvgFontSize(vg, m_titleFontSize);
     nvgFontFaceId(vg, m_fontId);
     nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
     nvgFillColor(vg, nvgRGBA(255, 255, 255, 255));

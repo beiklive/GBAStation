@@ -36,6 +36,7 @@ public:
     void onNextPage(std::function<void()> callback) { m_nextPageCallback = std::move(callback); }
     void setFocusChangeCallback(std::function<void(int)> callback) { m_focusChangeCallback = std::move(callback); }
     void setInteractionDisabled(bool disabled) { m_interactionDisabled = disabled; }
+    void setTitleFontSize(int opt);
 
     void setMultiSelectMode(bool on);
     bool isMultiSelectMode() const { return m_multiSelectMode; }
@@ -89,6 +90,7 @@ private:
     std::unordered_set<int> m_selectedForDelete;
 
     int m_fontId = -1;
+    int m_titleFontSize = 16;
     int m_favIconHandle = -1;
 
     std::chrono::steady_clock::time_point m_lastFrameTime;

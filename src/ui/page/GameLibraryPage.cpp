@@ -19,6 +19,7 @@ namespace beiklive
         m_grid->spanCount = 3;
         m_grid->estimatedRowHeight = 120;
         m_grid->estimatedRowSpace = 8;
+        m_grid->setTitleFontSize(GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_UI_LIBRARY_TITLE_SIZE, 0));
         m_grid->setMarginLeft(15.0f);
         m_grid->setMarginTop(0.0f);
         m_grid->setMarginBottom(10.0f);

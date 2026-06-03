@@ -201,6 +201,8 @@ namespace beiklive::SettingKey
     // 文件浏览器设置
     constexpr const char *KEY_FILE_LIST_SCROLL_ANIM   = "ui.fileListScrollAnim";     ///< 文件列表滚动动画（1=启用 0=禁用）
 
+    // 游戏库设置
+    constexpr const char *KEY_UI_LIBRARY_TITLE_SIZE   = "ui.libraryTitleSize";       ///< 游戏库标题字号 (0=16 1=19 2=22)
 
 
 } // namespace beiklive::SettingKey

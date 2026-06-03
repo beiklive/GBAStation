@@ -40,6 +40,16 @@ static void cfgSetBool(const std::string &key, bool val)
     SET_SETTING_KEY_INT(key, val ? 1 : 0);
 }
 
+static int cfgGetInt(const std::string &key, int def)
+{
+    return GET_SETTING_KEY_INT(key, def);
+}
+
+static void cfgSetInt(const std::string &key, int val)
+{
+    SET_SETTING_KEY_INT(key, val);
+}
+
 static std::string cfgGetStr(const std::string &key, const std::string &def)
 {
     return GET_SETTING_KEY_STR(key, def);
@@ -742,6 +752,16 @@ brls::View *SettingPage::buildUITab()
         box->addView(scrollAnimCell);
         box->addView(makeHint("启用文件浏览器的平滑滚动效果，关闭后列表直接跳转"));
     }
+
+    {
+        auto* titleSizeCell = new brls::SelectorCell();
+        titleSizeCell->init("游戏库标题字号",
+            {"正常", "大", "超大"},
+            cfgGetInt(beiklive::SettingKey::KEY_UI_LIBRARY_TITLE_SIZE, 0),
+            [](int sel) { cfgSetInt(beiklive::SettingKey::KEY_UI_LIBRARY_TITLE_SIZE, sel); });
+        box->addView(titleSizeCell);
+    }
+    box->addView(makeHint("设置游戏库网格列表中游戏标题的显示字号"));
 
     // ── 游戏批量管理 ────────────────────────────────────────────────────────────────
     box->addView(makeHeader("游戏批量管理"));
