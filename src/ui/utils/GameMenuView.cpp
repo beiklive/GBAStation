@@ -395,6 +395,7 @@ namespace beiklive
                     //     item->setImagePath(BK_RES("img/ui/menu/empty.png"));
                     // }
                 }
+                brls::TextureCache::instance().cleanDirty();
             }); });
     }
 

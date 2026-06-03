@@ -53,7 +53,7 @@ namespace beiklive
     {
         if (m_coverImage)
         {
-            m_coverImage->setImageFromFile(logoPath);
+            m_coverImage->setImageFromFileForce(logoPath);
         }
     }
 
@@ -65,7 +65,7 @@ namespace beiklive
             m_coverImage->clear();
             return;
         }
-        m_coverImage->setImageFromFile(logoPath);
+        m_coverImage->setImageFromFileForce(logoPath);
     }
 
     void GameCard::setLogoLayer(const std::string &path, bool visible)
