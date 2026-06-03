@@ -16,6 +16,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <unordered_set>
 #include "constexpr.h" // 一些常量定义
 #include "enums.h"     // 枚举类型定义
 
@@ -50,6 +51,7 @@ namespace beiklive // 全局变量 动态背景
 
     extern std::vector<FloatingIcon> g_backgroundIcons;
     extern float g_backgroundLastTime;
+    extern std::unordered_set<std::string> g_forceRefreshPaths;
 
     enum class GradientTheme
     {

@@ -159,7 +159,10 @@ namespace beiklive
     {
         if (!m_image) return;
         if (path.empty()) { m_image->clear(); return; }
-        m_image->setImageFromFileForce(path);
+        if (beiklive::g_forceRefreshPaths.erase(path) > 0)
+            m_image->setImageFromFileForce(path);
+        else
+            m_image->setImageFromFile(path);
     }
 
     void GridItem::setBadge(const std::string& text, PlatformBadgeColor color)

@@ -15,6 +15,7 @@ namespace beiklive
 
     std::vector<FloatingIcon> g_backgroundIcons;
     float g_backgroundLastTime = 0.0f;
+    std::unordered_set<std::string> g_forceRefreshPaths;
 
     GradientTheme g_gradientTheme = GradientTheme::Midnight;
 
