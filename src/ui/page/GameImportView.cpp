@@ -470,9 +470,11 @@ namespace beiklive
                 std::string romStem = getStemFromPath(romPath);
 
                 uint32_t crc = 0;
-                // 跳过crc32计算，因为它会导致卡顿
-                if (fs::exists(romPath))
-                     crc = 0;
+                if (!fs::exists(romPath))
+                {
+                    m_progress.store(i + 1, std::memory_order_release);
+                    continue;
+                }
 
                 std::string logoPath;
                 {
