@@ -973,12 +973,13 @@ void GameGridView::_drawTitle(NVGcontext* vg, const GridDrawItem& item, float x,
     nvgFillColor(vg, nvgRGBA(255, 255, 255, 255));
 
     nvgSave(vg);
-    nvgIntersectScissor(vg, x, y - 2.f, maxWidth, 20.f);
+    nvgIntersectScissor(vg, x, y - 3.f, maxWidth, m_titleFontSize + 6.f);
 
+    float adjY = y - (m_titleFontSize - 16.f) * 0.15f;
     if (focused && item.marqueeMaxOffset > 0.f) {
-        nvgText(vg, x - item.marqueeOffset, y, item.title.c_str(), nullptr);
+        nvgText(vg, x - item.marqueeOffset, adjY, item.title.c_str(), nullptr);
     } else {
-        nvgText(vg, x, y, item.title.c_str(), nullptr);
+        nvgText(vg, x, adjY, item.title.c_str(), nullptr);
     }
 
     nvgRestore(vg);
