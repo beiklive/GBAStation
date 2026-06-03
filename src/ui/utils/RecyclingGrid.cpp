@@ -914,7 +914,7 @@ void GameGridView::_drawItem(NVGcontext* vg, const GridDrawItem& item, float x, 
         float textMaxWidth = imageSize * 1.8f;
 
         float titleY = y + 22.f;
-        _drawBadge(vg, item, textX, titleY-3);
+        _drawBadge(vg, item, textX, titleY-2);
         _drawTitle(vg, item, textX + 40, titleY, textMaxWidth, focused);
 
         float playY = y + 50.f;
