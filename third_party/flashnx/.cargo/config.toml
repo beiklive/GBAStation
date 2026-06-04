@@ -14,14 +14,28 @@ target = "aarch64-nintendo-switch-freestanding"
 rustflags = [
     "--cfg", "target_family=\"unix\"",
     "--cfg", "target_env=\"newlib\"",
+    # `cfg(unix)` is a well-known shortcut that's normally auto-derived from
+    # the target spec's family field; --cfg target_family doesn't propagate
+    # to it. libc and stdlib both use `cfg(unix)` directly, so we must set
+    # both forms.
     "--cfg", "unix",
+    # Recent nightlies deny manually setting "built-in" cfgs via --cfg.
+    # We're intentionally overriding these because the upstream target spec
+    # is missing fields it should have for std support, so bypass the lint.
     "-A", "explicit_builtin_cfgs_in_flags",
     "-Z", "has-thread-local=true",
+    # NOTE (2026-05-31): a `#[thread_local]` access faults (DataAbort FAR≈0x98)
+    # in std's `panic_count::increase` whenever code panics on the libnx worker
+    # thread — the thread's TLS block isn't set up for Rust std, so the panic
+    # message is lost. `-Z tls-model=local-exec` was tried and did NOT fix it
+    # (the block, not the access model, is the problem), so it's not set here.
+    # Panics are still diagnosable: cpp/src/exception.cpp does a stack-scan
+    # backtrace (no frame pointers) → addr2line gives the panicking function.
+    # getrandom has no built-in backend for our target → opt into "custom"
+    # mode. We provide __getrandom_v03_custom in src/lib.rs. Stub LCG for
+    # now; Phase 2 will route to libnx csrngGetRandomBytes.
     "--cfg", "getrandom_backend=\"custom\"",
 ]
-
-[target.aarch64-nintendo-switch-freestanding]
-linker = "aarch64-none-elf-gcc"
 
 [unstable]
 build-std = ["std", "panic_abort", "core", "alloc", "compiler_builtins"]
