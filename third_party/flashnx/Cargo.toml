@@ -1,0 +1,77 @@
+[package]
+name = "ruffle_switch"
+version = "1.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "ruffle_switch"
+crate-type = ["staticlib"]
+
+[dependencies]
+# Pulled in at Phase 1.2 (2026-05-21). Default features off — we don't need
+# lzma, mp3, aac, nellymoser, egui, jpegxr. `audio` feature enables Ruffle's
+# software AudioMixer (dasp + PCM/ADPCM decoders) which we wire to libnx
+# audren in [backend::audio::SwitchAudioBackend] (Phase 2.2). MP3/AAC/
+# Nellymoser left off for now — most Mario 63 sounds are PCM/ADPCM.
+ruffle_core = { path = "../ruffle/core", default-features = false, features = ["audio", "mp3", "default_font"] }
+
+ruffle_render = { path = "../ruffle/render", features = ["tessellator"] }
+
+swf = { path = "../ruffle/swf" }
+# Phase 3.x — library AS3 badge. We decompress only the small prefix of each
+# SWF body at scan time to read its FileAttributes tag (AVM2/ActionScript3
+# flag), so the library can warn that an AS3 game has limited support. flate2
+# is already in the dep tree (the `swf` crate uses it for CWS), so direct-dep
+# binary cost is ~0.
+flate2 = "1"
+# Needed to declare `__getrandom_v03_custom` with the correct Error type;
+# the cfg flag in .cargo/config.toml puts getrandom in "custom backend" mode.
+getrandom = "0.3"
+# Wire a tracing subscriber so Ruffle's internal warn!/error!/debug! reach
+# nxlink. Without this they go to a noop subscriber and we miss signal —
+# notably the frame-40 mystery crash whose precursor is likely a tracing
+# warn or error from Ruffle itself.
+tracing = "0.1.43"
+# Phase 3.3 (suite) — user-editable keymap JSON on SD card. serde_json is
+# already in Ruffle's transitive dep tree (used by SharedObject de/serialise
+# etc.), so this is binary-size-free; we just declare it as a direct dep so
+# we can name its types in src/keymap.rs.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Phase 3.4 — banner.png decode (assets/banner.png embedded via include_bytes!
+# and uploaded as a GL texture for the library UI title). `png` 0.18.x is
+# already pulled transitively by ruffle_render and `image`, so direct-dep
+# binary cost is ~0. Picked over the full `image` crate to keep the API
+# surface tight (we only need PNG, not BMP/TIFF/AVIF/WebP).
+png = "0.18"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+
+# Fast-iteration release profile. Same opt-level as release so runtime
+# behaviour is the same modulo LLVM LTO bugs, but `lto = "thin"` and
+# `codegen-units = 16` cut the compile + link time from ~3 min to ~30 s.
+# Use for hardware test iterations (`cargo build --profile release-dev`).
+# The official `.nro` we ship still goes through `--release`.
+[profile.release-dev]
+inherits = "release"
+lto = "thin"
+codegen-units = 16
+# Keep symbols so panics resolve to source lines in dev sessions.
+strip = "none"
+
+[profile.dev]
+panic = "abort"
+
+# Switchfork of jpeg-decoder 0.3.2 with select_worker() patched to never
+# pick the multithreaded path. The default heuristic spawns std::thread
+# for JPEGs > 128*128 px, which crashes natively on Switch (newlib pthread
+# limitation). Pinned in third_party/. Pin once we confirm fixed, then can
+# upstream a target-cfg PR.
+[patch.crates-io]
+jpeg-decoder = { path = "../jpeg-decoder-switchfork" }

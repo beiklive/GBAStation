@@ -100,6 +100,22 @@ public:
     void setButtonState(unsigned id, bool pressed);
     bool getButtonState(unsigned id) const;
 
+    // ---- 鼠标 (Flash 专用) -------------------------------------------
+
+    void setMouseX(int16_t x);
+    void setMouseY(int16_t y);
+    void setMouseButton(unsigned id, bool pressed);
+    int16_t getMouseX() const { return m_mouseX; }
+    int16_t getMouseY() const { return m_mouseY; }
+
+    // ---- 键盘 (Flash 专用) -------------------------------------------
+
+    void sendKeyboardEvent(bool down, unsigned keycode, uint32_t character, uint16_t key_modifiers);
+
+    // ---- 设备类型设置 -----------------------------------------------
+
+    void setControllerDevice(unsigned port, unsigned device);
+
     // ---- 几何信息 ---------------------------------------------------
 
     unsigned gameWidth()  const { return m_avInfo.geometry.base_width; }
@@ -168,6 +184,14 @@ private:
     // ---- 输入状态 ---------------------------------------------------
     bool m_buttons[RETRO_DEVICE_ID_JOYPAD_R3 + 1] = {};
 
+    // ---- 鼠标状态 ---------------------------------------------------
+    int16_t m_mouseX = 0;
+    int16_t m_mouseY = 0;
+    bool    m_mouseButtons[2] = {}; // [0]=left, [1]=right
+
+    // ---- 键盘回调函数指针 -------------------------------------------
+    void (*fn_set_keyboard_event_callback)(retro_keyboard_event_t) = nullptr;
+
     // ---- 核心变量/设置存储 ------------------------------------------
     // ConfigManager提供用户保存的值；m_coreVarStorage保存c_str()指针，
     // 在loader生命周期内保持有效。
@@ -195,6 +219,8 @@ private:
     static void  s_inputPollCallback();
     static int16_t s_inputStateCallback(unsigned port, unsigned device,
                                          unsigned index, unsigned id);
+    static void  s_keyboardEventCallback(bool down, unsigned keycode,
+                                          uint32_t character, uint16_t key_modifiers);
 
     // ---- 辅助函数 ---------------------------------------------------
     template<typename T>

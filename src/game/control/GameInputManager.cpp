@@ -1,5 +1,12 @@
 #include "GameInputManager.hpp"
 
+#include "core/GameSignal.hpp"
+#include "game/flash/FlashKeymap.hpp"
+
+#ifdef __SWITCH__
+#include <switch.h>
+#endif
+
 namespace beiklive
 {
     float fsqrt_(float f)
@@ -181,6 +188,9 @@ namespace beiklive
 
             updateInputState();
             checkHotkeys();
+
+            if (m_flashInputMode)
+                processFlashMouse();
 
             if (!gamepadState.is_equal(prevGamepadState))
             {
@@ -512,9 +522,94 @@ namespace beiklive
         hotkeyBindings.push_back({emuKey, buttons, callback, type, threshold});
     }
 
-    void GameInputManager::clearEmuFunctionKeys()
-    {
-        hotkeyBindings.clear();
+void GameInputManager::clearEmuFunctionKeys()
+{
+    hotkeyBindings.clear();
+}
+
+void GameInputManager::registerFlashKeyBindings()
+{
+    m_flashInputMode = true;
+}
+
+void GameInputManager::processFlashMouse()
+{
+    if (!m_flashInputMode) return;
+
+    GamepadState state = lastGamepadStates[0];
+
+    struct FlashBtnMap {
+        const char* switchName;
+        uint32_t    flag;
+        int         retroId;
+    };
+    static const FlashBtnMap btnMap[] = {
+        {"A",            beiklive::A_FLAG,        RETRO_DEVICE_ID_JOYPAD_A},
+        {"B",            beiklive::B_FLAG,        RETRO_DEVICE_ID_JOYPAD_B},
+        {"X",            beiklive::X_FLAG,        RETRO_DEVICE_ID_JOYPAD_X},
+        {"Y",            beiklive::Y_FLAG,        RETRO_DEVICE_ID_JOYPAD_Y},
+        {"L",            beiklive::LB_FLAG,       RETRO_DEVICE_ID_JOYPAD_L},
+        {"R",            beiklive::RB_FLAG,       RETRO_DEVICE_ID_JOYPAD_R},
+        {"Plus",         beiklive::PLAY_FLAG,     RETRO_DEVICE_ID_JOYPAD_START},
+        {"Up",           beiklive::UP_FLAG,       RETRO_DEVICE_ID_JOYPAD_UP},
+        {"Down",         beiklive::DOWN_FLAG,     RETRO_DEVICE_ID_JOYPAD_DOWN},
+        {"Left",         beiklive::LEFT_FLAG,     RETRO_DEVICE_ID_JOYPAD_LEFT},
+        {"Right",        beiklive::RIGHT_FLAG,    RETRO_DEVICE_ID_JOYPAD_RIGHT},
+    };
+
+    for (const auto& btn : btnMap) {
+        std::string flashKey = beiklive::flash::FlashKeymap::lookup(btn.switchName);
+        if (flashKey.empty() || flashKey == "(none)" || flashKey == "MouseLeft")
+            continue;
+
+        bool pressed = (state.buttonFlags & btn.flag) != 0;
+        if (pressed)
+            GameSignal::instance().pressGameButton(btn.retroId);
+        else
+            GameSignal::instance().releaseGameButton(btn.retroId);
     }
+
+    float rx = static_cast<float>(state.rightStickX) / 32767.0f;
+    float ry = static_cast<float>(state.rightStickY) / 32767.0f;
+
+    const float DEADZONE = 0.15f;
+    if (std::abs(rx) < DEADZONE) rx = 0.0f;
+    if (std::abs(ry) < DEADZONE) ry = 0.0f;
+
+    static float s_cursorX = 0.5f;
+    static float s_cursorY = 0.5f;
+    static bool  s_wasDown = false;
+
+    const float SENSITIVITY = 0.03f;
+    s_cursorX += rx * SENSITIVITY;
+    s_cursorY += ry * SENSITIVITY;
+
+    s_cursorX = std::max(0.0f, std::min(1.0f, s_cursorX));
+    s_cursorY = std::max(0.0f, std::min(1.0f, s_cursorY));
+
+    bool zlDown = (state.buttonFlags & beiklive::LB_FLAG) != 0;
+
+    bool mouseDown = zlDown;
+    if (mouseDown != s_wasDown) {
+        GameSignal::instance().setMouseDown(mouseDown);
+        s_wasDown = mouseDown;
+    }
+
+#ifdef __SWITCH__
+    {
+        HidTouchScreenState touchState = {};
+        if (hidGetTouchScreenStates(&touchState, 1) > 0 && touchState.count > 0) {
+            float tx = static_cast<float>(touchState.touches[0].x) / 1280.0f;
+            float ty = static_cast<float>(touchState.touches[0].y) / 720.0f;
+            s_cursorX = std::max(0.0f, std::min(1.0f, tx));
+            s_cursorY = std::max(0.0f, std::min(1.0f, ty));
+            GameSignal::instance().setMouseDown(true);
+            s_wasDown = true;
+        }
+    }
+#endif
+
+    GameSignal::instance().setMousePosition(s_cursorX, s_cursorY);
+}
 
 } // namespace beiklive

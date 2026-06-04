@@ -1,0 +1,8 @@
+[toolchain]
+# Use the GNU (MinGW) host on Windows so cargo's host-side build scripts don't
+# need MSVC's link.exe (which would require Visual Studio Build Tools).
+channel = "nightly-x86_64-pc-windows-gnu"
+components = ["rust-src"]
+# No `targets` field on purpose: `aarch64-nintendo-switch-freestanding` is
+# tier-3, so rust-std is not pre-built. We build core/alloc/compiler_builtins
+# from source via `-Z build-std` (set in .cargo/config.toml).

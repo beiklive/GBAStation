@@ -3,17 +3,25 @@
 # Nintendo Switch 编译脚本（DevkitPro / libnx）
 # 编译后产物：
 #   build_switch/GBAStation.nro           —— Switch 可执行文件（NRO 格式）
-#   build_switch/mgba_libretro.so       —— libretro 核心
+#
+# 前置步骤（Flash 支持）：
+#   ./build_flashnx.sh                    —— 编译 Rust staticlib
 #
 # 依赖：
 #   - 已安装 DevkitPro，并设置环境变量 DEVKITPRO
 #     官方安装说明：https://devkitpro.org/wiki/Getting_Started
 #   - 已通过 dkp-pacman 安装 switch-dev 组：
 #     sudo dkp-pacman -S switch-dev
+#   - 已安装 Rust nightly + rust-src
+#     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+#     rustup install nightly-x86_64-pc-windows-gnu
+#     rustup component add rust-src --toolchain nightly-x86_64-pc-windows-gnu
+#   - (Flash 可选) 已运行 ./build_flashnx.sh 预构建 libruffle_switch.a
 #
 # 使用方式：
 #   export DEVKITPRO=/opt/devkitpro   # 若尚未设置
-#   ./build_switch.sh
+#   ./build_flashnx.sh                # 首次/更新后
+#   ./switchbuild.sh
 # ============================================================
 set -e
 

@@ -54,6 +54,7 @@ inline std::string GetRootPath()
     constexpr const char *DATA_BASE_FILE_GBA   = "GameData_GBA.json";   ///< GBA 平台数据库文件
     constexpr const char *DATA_BASE_FILE_GBC   = "GameData_GBC.json";   ///< GBC 平台数据库文件
     constexpr const char *DATA_BASE_FILE_GB    = "GameData_GB.json";    ///< GB 平台数据库文件
+    constexpr const char *DATA_BASE_FILE_FLASH = "GameData_Flash.json"; ///< Flash 平台数据库文件
 
     namespace 
     {
@@ -87,6 +88,7 @@ inline std::string GetRootPath()
             case 1: return DATA_BASE_FILE_GBA;  // EmuPlatform::EmuGBA
             case 2: return DATA_BASE_FILE_GBC;  // EmuPlatform::EmuGBC
             case 3: return DATA_BASE_FILE_GB;   // EmuPlatform::EmuGB
+            case 4: return DATA_BASE_FILE_FLASH; // EmuPlatform::EmuFlash
             default: return DATA_BASE_FILE;
             }
         }
@@ -189,6 +191,9 @@ namespace beiklive::SettingKey
     constexpr const char *KEY_REWIND_UI_ITEM_COUNT      = "rewind.uiItemCount";         ///< 保留兼容性，已不使用（item 数量由保存间隔自动计算）
     constexpr const char *KEY_REWIND_THUMB_COMPRESSION  = "rewind.thumbCompression";    ///< 缩略图压缩策略（0=最近邻，1=双线性，默认 0）
     constexpr const char *KEY_REWIND_BUFFER_SIZE        = "rewind.bufferSize";          ///< 倒带缓冲区最大保存帧数（默认 600）
+
+    // Flash 设置
+    constexpr const char *KEY_FLASH_KEYMAP_DIR      = "flash.keymapDir";           ///< Flash 按键映射目录
 
     // 调试设置
     constexpr const char *KEY_DEBUG_LOG_LEVEL       = "debug.logLevel";            ///< 日志级别

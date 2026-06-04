@@ -106,6 +106,18 @@ namespace beiklive
             float threshold = 0.5f);
         void clearEmuFunctionKeys();
 
+        /// 为 Flash 游戏注册键盘按键映射绑定。
+        /// 将 16 个可编辑手柄按钮绑定到 Flash 键盘键（通过 FlashKeymap 查找），
+        /// 在按键按下/释放时通过 GameSignal 写入对应的按键位掩码。
+        void registerFlashKeyBindings();
+
+        /// 处理右摇杆和触摸屏为鼠标坐标（Flash 专用），在 handleControllerInput 中调用。
+        void processFlashMouse();
+
+        /// 启用 Flash 输入模式（鼠标处理 + 触摸映射）
+        void setFlashInputMode(bool on) { m_flashInputMode = on; }
+        bool isFlashInputMode() const { return m_flashInputMode; }
+
         /// 设置摇杆斜向输入模式。
         /// diagonal=true 时同时触发 X 和 Y 方向（斜向），
         /// diagonal=false 时仅触发绝对值更大的轴方向。
@@ -115,6 +127,7 @@ namespace beiklive
         bool inputDropped = false;
         bool inputEnabled = true;
         bool m_diagonalMode = true;  ///< 摇杆斜向模式：true=同时触发X+Y，false=仅触发主轴
+        bool m_flashInputMode = false; ///< Flash 输入模式（启用鼠标处理）
         GamepadState lastGamepadStates[GAMEPADS_MAX];
 
         InputState inputState;
