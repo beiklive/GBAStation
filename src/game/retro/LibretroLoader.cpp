@@ -221,7 +221,6 @@ bool LibretroLoader::load(const std::string& libPath)
     fn_cheat_set              = retro_cheat_set;
     fn_get_memory_data        = retro_get_memory_data;
     fn_get_memory_size        = retro_get_memory_size;
-    fn_set_keyboard_event_callback = retro_set_keyboard_event_callback;
     m_handle = reinterpret_cast<void*>(1); // 哨兵值：符号已绑定
 #else
     m_handle = dynOpen(libPath);
@@ -255,7 +254,6 @@ bool LibretroLoader::load(const std::string& libPath)
     resolveSymbol(fn_cheat_set,                 "retro_cheat_set");
     resolveSymbol(fn_get_memory_data,           "retro_get_memory_data");
     resolveSymbol(fn_get_memory_size,           "retro_get_memory_size");
-    resolveSymbol(fn_set_keyboard_event_callback, "retro_set_keyboard_event_callback");
 
     if (!ok) {
         dynClose(m_handle);
@@ -272,9 +270,6 @@ bool LibretroLoader::load(const std::string& libPath)
     fn_set_audio_sample_batch (s_audioSampleBatchCallback);
     fn_set_input_poll         (s_inputPollCallback);
     fn_set_input_state        (s_inputStateCallback);
-
-    if (fn_set_keyboard_event_callback)
-        fn_set_keyboard_event_callback(s_keyboardEventCallback);
 
     return true;
 }
@@ -320,7 +315,6 @@ void LibretroLoader::unload()
     fn_cheat_set               = nullptr;
     fn_get_memory_data         = nullptr;
     fn_get_memory_size         = nullptr;
-    fn_set_keyboard_event_callback = nullptr;
 }
 
 // ============================================================
@@ -438,26 +432,6 @@ void LibretroLoader::setButtonState(unsigned id, bool pressed)
 bool LibretroLoader::getButtonState(unsigned id) const
 {
     return (id <= RETRO_DEVICE_ID_JOYPAD_R3) ? m_buttons[id] : false;
-}
-
-void LibretroLoader::setMouseX(int16_t x) { m_mouseX = x; }
-void LibretroLoader::setMouseY(int16_t y) { m_mouseY = y; }
-
-void LibretroLoader::setMouseButton(unsigned id, bool pressed)
-{
-    if (id < 2)
-        m_mouseButtons[id] = pressed;
-}
-
-void LibretroLoader::sendKeyboardEvent(bool down, unsigned keycode, uint32_t character, uint16_t key_modifiers)
-{
-    (void)down; (void)keycode; (void)character; (void)key_modifiers;
-}
-
-void LibretroLoader::setControllerDevice(unsigned port, unsigned device)
-{
-    if (fn_set_controller_port_device)
-        fn_set_controller_port_device(port, device);
 }
 
 // ============================================================
@@ -729,32 +703,12 @@ void LibretroLoader::s_inputPollCallback()
 }
 
 int16_t LibretroLoader::s_inputStateCallback(unsigned port, unsigned device,
-                                                unsigned /*index*/, unsigned id)
+                                               unsigned /*index*/, unsigned id)
 {
     if (!s_current || port != 0) return 0;
-
-    if (device == RETRO_DEVICE_JOYPAD) {
-        if (id > RETRO_DEVICE_ID_JOYPAD_R3) return 0;
-        return s_current->m_buttons[id] ? 1 : 0;
-    }
-
-    if (device == RETRO_DEVICE_MOUSE) {
-        switch (id) {
-            case RETRO_DEVICE_ID_MOUSE_X:     return s_current->m_mouseX;
-            case RETRO_DEVICE_ID_MOUSE_Y:     return s_current->m_mouseY;
-            case RETRO_DEVICE_ID_MOUSE_LEFT:  return s_current->m_mouseButtons[0] ? 1 : 0;
-            case RETRO_DEVICE_ID_MOUSE_RIGHT: return s_current->m_mouseButtons[1] ? 1 : 0;
-            default: return 0;
-        }
-    }
-
-    return 0;
-}
-
-void LibretroLoader::s_keyboardEventCallback(bool down, unsigned keycode,
-                                              uint32_t character, uint16_t key_modifiers)
-{
-    (void)down; (void)keycode; (void)character; (void)key_modifiers;
+    if (device != RETRO_DEVICE_JOYPAD && device != RETRO_DEVICE_ANALOG) return 0;
+    if (id > RETRO_DEVICE_ID_JOYPAD_R3) return 0;
+    return s_current->m_buttons[id] ? 1 : 0;
 }
 
 } // namespace beiklive

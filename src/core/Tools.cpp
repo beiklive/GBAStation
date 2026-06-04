@@ -43,8 +43,6 @@ beiklive::enums::FileType getFileType(const fs::path& path) {
         return beiklive::enums::FileType::GBC_ROM;
     if (ext == "gb")
         return beiklive::enums::FileType::GB_ROM;
-    if (ext == "swf")
-        return beiklive::enums::FileType::FLASH_SWF;
 
     return beiklive::enums::FileType::NORMAL_FILE;
 }
@@ -144,8 +142,6 @@ std::string getIconPathWithPrefix(beiklive::enums::FileType type, const std::str
             return BK_RES(prefix + "icon_gb.png");
         case beiklive::enums::FileType::GB_ROM:
             return BK_RES(prefix + "icon_gb.png");
-        case beiklive::enums::FileType::FLASH_SWF:
-            return BK_RES(prefix + "icon_gba.png");
         default:
             return BK_RES(prefix + "wenjian.png");
     }
@@ -161,8 +157,6 @@ std::string getDefaultLogoPath(beiklive::enums::EmuPlatform platform)
             return BK_RES(path_prefix + "gbc.png");
         case beiklive::enums::EmuPlatform::EmuGB:
             return BK_RES(path_prefix + "gb.png");
-        case beiklive::enums::EmuPlatform::EmuFlash:
-            return BK_RES(path_prefix + "gba.png");
         default:
             return BK_RES(path_prefix + "gba.png");
     }
@@ -397,7 +391,6 @@ std::string platformName(int platform) {
         case beiklive::enums::EmuPlatform::EmuGBA: return "GBA";
         case beiklive::enums::EmuPlatform::EmuGBC: return "GBC";
         case beiklive::enums::EmuPlatform::EmuGB:  return "GB";
-        case beiklive::enums::EmuPlatform::EmuFlash: return "Flash";
         default: return "";
     }
 }
@@ -425,7 +418,6 @@ std::string platformBadgeName(int platform) {
         case beiklive::enums::EmuPlatform::EmuGBA: return "GBA";
         case beiklive::enums::EmuPlatform::EmuGBC: return "GBC";
         case beiklive::enums::EmuPlatform::EmuGB:  return "GB";
-        case beiklive::enums::EmuPlatform::EmuFlash: return "SWF";
         default: return "";
     }
 }

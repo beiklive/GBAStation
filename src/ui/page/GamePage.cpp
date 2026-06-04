@@ -2,9 +2,6 @@
 #include "core/Tools.hpp"
 #include "core/GameSignal.hpp"
 #include "ui/utils/AnimationHelper.hpp"
-#include "ui/utils/FlashGameView.hpp"
-#include "ui/utils/FlashGameMenuView.hpp"
-#include "game/flash/FlashKeymap.hpp"
 
 #include <filesystem>
 
@@ -444,93 +441,20 @@ namespace beiklive
     void GamePage::_setupGame()
     {
         PageInit();
+        GameViewInitialize();
+        GameMenuInitialize();
+        RewindSelectorViewInitialize();
 
-        if (m_gameEntry.platform == (int)beiklive::enums::EmuPlatform::EmuFlash) {
-            _setupFlashGame();
-        } else {
-            GameViewInitialize();
-            GameMenuInitialize();
-            RewindSelectorViewInitialize();
+        // 将菜单视图引用注入 GameView，以便菜单热键触发时可打开菜单
+        if (m_gameView && m_gameMenuView)
+            m_gameView->setGameMenuView(m_gameMenuView);
 
-            if (m_gameView && m_gameMenuView)
-                m_gameView->setGameMenuView(m_gameMenuView);
-
-            if (m_gameView && m_rewindSelectorView)
-                m_gameView->setRewindSelectorView(m_rewindSelectorView);
-        }
+        // 将倒带选择视图引用注入 GameView，以便倒带键触发时可打开可视化倒带界面
+        if (m_gameView && m_rewindSelectorView)
+            m_gameView->setRewindSelectorView(m_rewindSelectorView);
 
         brls::sync([this]()
-                   {
-            if (m_gameEntry.platform == (int)beiklive::enums::EmuPlatform::EmuFlash) {
-                if (m_flashGameView)
-                    brls::Application::giveFocus(m_flashGameView);
-            } else {
-                if (m_gameView)
-                    brls::Application::giveFocus(m_gameView);
-            } });
-    }
-
-    void GamePage::_setupFlashGame()
-    {
-        using namespace beiklive::flash;
-
-        m_flashGameView = new FlashGameView(m_gameEntry);
-        m_flashGameView->setWidthPercentage(100.f);
-        m_flashGameView->setHeightPercentage(100.f);
-        m_flashGameView->setFocusable(true);
-        m_flashGameView->setPositionType(brls::PositionType::ABSOLUTE);
-        m_flashGameView->setPositionTop(0);
-        m_flashGameView->setPositionLeft(0);
-        this->addView(m_flashGameView);
-
-        m_flashMenuView = new FlashGameMenuView(m_gameEntry);
-        m_flashMenuView->setWidthPercentage(100.f);
-        m_flashMenuView->setHeightPercentage(100.f);
-        m_flashMenuView->setFocusable(false);
-        m_flashMenuView->setPositionType(brls::PositionType::ABSOLUTE);
-        m_flashMenuView->setPositionTop(0);
-        m_flashMenuView->setPositionLeft(0);
-        m_flashMenuView->setVisibility(brls::Visibility::GONE);
-
-        m_flashMenuView->setOnResume([this]() {
-            brls::sync([this]() {
-                beiklive::GameDB->flush();
-                m_flashGameView->setFocusable(true);
-                AnimationHelper::slideOutToBottom(m_flashMenuView, 180, 120.f, true, [this]() {
-                    brls::Application::giveFocus(m_flashGameView);
-                });
-            });
-        });
-
-        m_flashMenuView->setOnReset([this]() {
-            brls::sync([this]() {
-                m_flashGameView->setFocusable(true);
-                AnimationHelper::slideOutToBottom(m_flashMenuView, 180, 120.f, true, [this]() {
-                    GameSignal::instance().requestReset();
-                    brls::Application::giveFocus(m_flashGameView);
-                });
-            });
-        });
-
-        m_flashMenuView->setOnExit([this]() {
-            brls::sync([this]() {
-                beiklive::GameDB->flush();
-                AnimationHelper::slideOutToBottom(m_flashMenuView, 150, 120.f, true, [this]() {
-                    GameSignal::instance().requestExit();
-                });
-            });
-        });
-
-        m_flashMenuView->setKeyBindingCallback([this](const std::string& btn, const std::string& key) {
-            beiklive::flash::FlashKeymap::setBinding(btn, key);
-            if (m_flashGameView)
-                m_flashGameView->_onKeymapChanged();
-        });
-
-        this->addView(m_flashMenuView);
-
-        if (m_flashGameView && m_flashMenuView)
-            m_flashGameView->setFlashMenuView(m_flashMenuView);
+                   { brls::Application::giveFocus(m_gameView); }); // 游戏视图获得焦点，准备接受输入
     }
 
     void GamePage::_tryUpdateLogoFromThumbnail()

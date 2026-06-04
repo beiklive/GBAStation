@@ -137,11 +137,6 @@ namespace beiklive // 全局功能函数
             #elif defined(__APPLE__)
                 return  beiklive::path::corePath() + beiklive::path::SPLIT_CHAR + std::string("mgba_libretro.dylib");
             #endif
-        case (int)beiklive::enums::EmuPlatform::EmuFlash:
-            #if defined(__SWITCH__)
-                return "";  // Switch 平台静态链接 ruffle_libretro
-            #endif
-            return "";
         default:
             return "";
         }

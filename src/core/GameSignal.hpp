@@ -212,22 +212,7 @@ public:
         m_pendingReloadCheats.store(false, std::memory_order_relaxed);
         m_pendingAutoSave.store(-1, std::memory_order_relaxed);
         m_gameButtonMask.store(0, std::memory_order_relaxed);
-        m_mouseX.store(0.0f, std::memory_order_relaxed);
-        m_mouseY.store(0.0f, std::memory_order_relaxed);
-        m_mouseDown.store(false, std::memory_order_relaxed);
     }
-
-    // ---- 鼠标信号 (Flash 专用) ------------------------------------------
-
-    void setMousePosition(float x, float y) {
-        m_mouseX.store(x, std::memory_order_release);
-        m_mouseY.store(y, std::memory_order_release);
-    }
-    void setMouseDown(bool down) { m_mouseDown.store(down, std::memory_order_release); }
-
-    float getMouseX() const { return m_mouseX.load(std::memory_order_acquire); }
-    float getMouseY() const { return m_mouseY.load(std::memory_order_acquire); }
-    bool  isMouseDown() const { return m_mouseDown.load(std::memory_order_acquire); }
 
 private:
     std::atomic<bool> m_paused{false};          ///< 暂停标志
@@ -246,9 +231,6 @@ private:
     std::atomic<bool> m_pendingReloadCheats{false};   ///< 待重载全部金手指
     std::atomic<int>  m_pendingAutoSave{-1};            ///< 待自动存档槽位（-1=无）
     std::atomic<uint32_t> m_gameButtonMask{0};  ///< 游戏按键位掩码（bit i = RETRO_DEVICE_ID_JOYPAD_* i）
-    std::atomic<float>    m_mouseX{0.0f};       ///< 鼠标 X 坐标（归一化 0~1 或 像素坐标）
-    std::atomic<float>    m_mouseY{0.0f};       ///< 鼠标 Y 坐标
-    std::atomic<bool>     m_mouseDown{false};   ///< 鼠标左键按下标志
 };
 
 } // namespace beiklive

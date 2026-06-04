@@ -4,7 +4,6 @@ cmake_minimum_required(VERSION 3.10)
 
 set(BOREALIS_LIBRARY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/borealis/library)
 set(MGBA_PATH        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mgba)
-set(FLASHNX_PATH     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/flashnx)
 
 # 构建选项
 include(${BOREALIS_LIBRARY}/cmake/commonOption.cmake)
@@ -231,14 +230,6 @@ endif ()
 if (PLATFORM_SWITCH)
     # 静态链接，不能用 dlopen
     target_link_libraries(${PROJECT_NAME} PRIVATE mgba_libretro)
-    # FlashNX Ruffle 核心 (Rust staticlib, 需要 cargo build 预构建)
-    set(FLASHNX_LIB ${FLASHNX_PATH}/target/aarch64-nintendo-switch-freestanding/release/libruffle_switch.a)
-    if (EXISTS ${FLASHNX_LIB})
-        target_link_libraries(${PROJECT_NAME} PRIVATE ${FLASHNX_LIB})
-        message(STATUS "FlashNX: linking ${FLASHNX_LIB}")
-    else()
-        message(STATUS "FlashNX: libruffle_switch.a not found, Flash support disabled (run: cd third_party/flashnx && cargo build --release)")
-    endif()
 else()
     # 桌面平台用动态加载
     # LibretroLoader 用 dlopen/LoadLibrary 加载 .so/.dll
