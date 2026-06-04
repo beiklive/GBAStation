@@ -44,8 +44,8 @@
 out/
 
 build
-build_*
-build-*
+build_w*
+build_s*
 
 AGENTS.md
 .DS_Store
