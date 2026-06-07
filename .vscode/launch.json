@@ -5,34 +5,25 @@
             "name": "Debug GBAStation (MinGW64)",
             "type": "cppdbg",
             "request": "launch",
-
-            "program": "${workspaceFolder}/build/GBAStation.exe",
-
+            "program": "${workspaceFolder}/build_windows/GBAStation.exe",
             "args": [],
-
             "stopAtEntry": false,
-
-            "cwd": "${workspaceFolder}",
-
+            "cwd": "${workspaceFolder}/build_windows",   // ← 改为这个路径
             "environment": [],
-
             "externalConsole": false,
-
             "MIMode": "gdb",
-
             "miDebuggerPath": "E:\\bin\\msys64\\mingw64\\bin\\gdb.exe",
-
-    "setupCommands": [
-        {
-            "text": "handle SIGFPE stop print"
-        },
-        {
-            "text": "handle SIGSEGV stop print"
-        },
-        {
-            "text": "handle SIGABRT stop print"
-        }
-    ]
+            "setupCommands": [
+                {
+                    "text": "handle SIGFPE stop print"
+                },
+                {
+                    "text": "handle SIGSEGV stop print"
+                },
+                {
+                    "text": "handle SIGABRT stop print"
+                }
+            ]
         }
     ]
 }

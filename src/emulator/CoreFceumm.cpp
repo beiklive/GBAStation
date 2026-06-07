@@ -31,8 +31,6 @@ void CoreFceumm::Cleanup()
     m_ready = false;
     _saveSram();
     m_core.unloadGame();
-    m_core.deinitCore();
-    m_core.unload();
 }
 
 void CoreFceumm::RunFrame()

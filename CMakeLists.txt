@@ -219,7 +219,7 @@ endif()
 # mGBA          – GBA / GBC / GB      (原始 retro_* 符号)
 # FCEUmm        – NES / Famicom       (fceumm_retro_*)
 # Snes9x        – SNES / SFC          (snes9x_retro_*)
-# Genesis Plus GX – MD / Genesis / SMS / GG  (genesis_retro_*)
+# PicoDrive    – MD / Genesis / SMS / GG  (picodrive_retro_*)
 #
 # 桌面平台: mgba_libretro 作为共享库供 dlopen 加载，
 #           其余核心静态链接。
@@ -233,9 +233,9 @@ if (TARGET snes9x_core)
     target_link_libraries(${PROJECT_NAME} PRIVATE snes9x_core)
     message(STATUS "Linking Snes9x (SNES) core statically")
 endif()
-if (TARGET genesis_core)
-    target_link_libraries(${PROJECT_NAME} PRIVATE genesis_core)
-    message(STATUS "Linking Genesis Plus GX core statically")
+if (TARGET picodrive_core)
+    target_link_libraries(${PROJECT_NAME} PRIVATE picodrive_core)
+    message(STATUS "Linking PicoDrive core statically")
 endif()
 
 if (PLATFORM_SWITCH)

@@ -1687,6 +1687,7 @@ bool retro_load_game_special(unsigned game_type, const struct retro_game_info *i
 
 void retro_unload_game(void)
 {
+    PicoCartUnload();
     libretro_mem_AHW = 0;
 }
 

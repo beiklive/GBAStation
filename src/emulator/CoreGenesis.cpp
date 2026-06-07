@@ -31,8 +31,7 @@ void CoreGenesis::Cleanup()
     m_ready = false;
     _saveSram();
     m_core.unloadGame();
-    m_core.deinitCore();
-    m_core.unload();
+    // 不调用 deinitCore() — PicoDrive 不支持重复 retro_deinit/retro_init
 }
 
 void CoreGenesis::RunFrame()
@@ -68,21 +67,14 @@ void CoreGenesis::_initConfig()
     if (!cfg) return;
 
     using CV = beiklive::ConfigValue;
-    cfg->SetDefault("core.genesis_plus_gx_region",          CV(std::string("auto")));
-    cfg->SetDefault("core.genesis_plus_gx_overclock",       CV(std::string("disabled")));
-    cfg->SetDefault("core.genesis_plus_gx_no_sprite_limit", CV(std::string("disabled")));
-    cfg->SetDefault("core.genesis_plus_gx_aspect_ratio",    CV(std::string("auto")));
-    cfg->SetDefault("core.genesis_plus_gx_render",          CV(std::string("single field")));
-    cfg->SetDefault("core.genesis_plus_gx_blargg_ntsc_filter", CV(std::string("disabled")));
-    cfg->SetDefault("core.genesis_plus_gx_lcd_filter",      CV(std::string("disabled")));
-    cfg->SetDefault("core.genesis_plus_gx_frameskip",       CV(std::string("disabled")));
-    cfg->SetDefault("core.genesis_plus_gx_gg_extra",        CV(std::string("disabled")));
-    cfg->SetDefault("core.genesis_plus_gx_ym2413",          CV(std::string("auto")));
-    cfg->SetDefault("core.genesis_plus_gx_sound_output",    CV(std::string("stereo")));
-    cfg->SetDefault("core.genesis_plus_gx_bram",            CV(std::string("per bios")));
-    cfg->SetDefault("core.genesis_plus_gx_width",           CV(std::string("320")));
-    cfg->SetDefault("core.genesis_plus_gx_height",          CV(std::string("224")));
-    cfg->SetDefault("core.genesis_plus_gx_addr_error",      CV(std::string("disabled")));
+    cfg->SetDefault("core.picodrive_region",              CV(std::string("Auto")));
+    cfg->SetDefault("core.picodrive_sound_output",        CV(std::string("stereo")));
+    cfg->SetDefault("core.picodrive_frameskip",           CV(std::string("0")));
+    cfg->SetDefault("core.picodrive_render",              CV(std::string("single field")));
+    cfg->SetDefault("core.picodrive_aspect",              CV(std::string("PAR")));
+    cfg->SetDefault("core.picodrive_overclock",           CV(std::string("disabled")));
+    cfg->SetDefault("core.picodrive_audio_filter",        CV(std::string("low-pass")));
+    cfg->SetDefault("core.picodrive_lowpass_range",       CV(std::string("60")));
     cfg->Save();
 
     m_core.setConfigManager(cfg);
@@ -93,12 +85,12 @@ bool CoreGenesis::_loadCore()
 {
     if (!m_core.load(beiklive::CoreType::Genesis))
     {
-        brls::Logger::error("Failed to static-load Genesis Plus GX core");
+        brls::Logger::error("Failed to static-load PicoDrive core");
         return false;
     }
     if (!m_core.initCore())
     {
-        brls::Logger::error("retro_init() failed for Genesis Plus GX");
+        brls::Logger::error("retro_init() failed for PicoDrive");
         m_core.unload();
         return false;
     }

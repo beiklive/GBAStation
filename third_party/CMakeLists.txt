@@ -7,7 +7,6 @@ set(BOREALIS_LIBRARY   ${CMAKE_CURRENT_SOURCE_DIR}/borealis/library)
 set(MGBA_PATH          ${CMAKE_CURRENT_SOURCE_DIR}/mgba)
 set(FCEUMM_PATH        ${CMAKE_CURRENT_SOURCE_DIR}/libretro-fceumm)
 set(SNES9X_PATH        ${CMAKE_CURRENT_SOURCE_DIR}/snes9x)
-set(GENESIS_PATH       ${CMAKE_CURRENT_SOURCE_DIR}/Genesis-Plus-GX)
 
 # =========================================================
 # borealis UI 框架
@@ -297,178 +296,190 @@ set_target_properties(snes9x_core PROPERTIES
 )
 
 # =========================================================
-# Genesis Plus GX 核心 – 按 Makefile.libretro + libretro/Makefile.common
+# PicoDrive 核心 – 替代 Genesis Plus GX（MD/Genesis/SMS/GG/CD/32X）
+# 按 Makefile.libretro + platform/common/common.mak
 # =========================================================
-set(GENESIS_CORE_DIR ${GENESIS_PATH})
+set(PICODRIVE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/picodrive)
 
-file(GLOB GENESIS_CORE_SRC
-    ${GENESIS_CORE_DIR}/core/*.c
-)
-file(GLOB GENESIS_Z80_SRC
-    ${GENESIS_CORE_DIR}/core/z80/*.c
-)
-file(GLOB GENESIS_M68K_SRC
-    ${GENESIS_CORE_DIR}/core/m68k/*.c
-)
-file(GLOB GENESIS_NTSC_SRC
-    ${GENESIS_CORE_DIR}/core/ntsc/*.c
-)
-file(GLOB GENESIS_SOUND_SRC
-    ${GENESIS_CORE_DIR}/core/sound/*.c
-)
-file(GLOB GENESIS_TREMOR_SRC
-    ${GENESIS_CORE_DIR}/core/sound/tremor/*.c
-)
-file(GLOB GENESIS_INPUTHW_SRC
-    ${GENESIS_CORE_DIR}/core/input_hw/*.c
-)
-file(GLOB GENESIS_CDHW_SRC
-    ${GENESIS_CORE_DIR}/core/cd_hw/*.c
-)
-file(GLOB GENESIS_CARTHW_SRC
-    ${GENESIS_CORE_DIR}/core/cart_hw/*.c
-)
-file(GLOB GENESIS_SVP_SRC
-    ${GENESIS_CORE_DIR}/core/cart_hw/svp/*.c
-)
-
-# main libretro entry point
-set(GENESIS_LIBRETRO_SRC
-    ${GENESIS_CORE_DIR}/libretro/libretro.c
-)
-
-# libretro-common 兼容层（Makefile.common:63-83）
-set(GENESIS_LRC_DIR ${GENESIS_CORE_DIR}/libretro/libretro-common)
-set(GENESIS_LRC_SRC
-    ${GENESIS_LRC_DIR}/streams/file_stream.c
-    ${GENESIS_LRC_DIR}/streams/file_stream_transforms.c
-    ${GENESIS_LRC_DIR}/compat/fopen_utf8.c
-    ${GENESIS_LRC_DIR}/compat/compat_snprintf.c
-    ${GENESIS_LRC_DIR}/compat/compat_strl.c
-    ${GENESIS_LRC_DIR}/compat/compat_strcasestr.c
-    ${GENESIS_LRC_DIR}/compat/compat_posix_string.c
-    ${GENESIS_LRC_DIR}/encodings/encoding_utf.c
-    ${GENESIS_LRC_DIR}/file/file_path.c
-    ${GENESIS_LRC_DIR}/file/retro_dirent.c
-    ${GENESIS_LRC_DIR}/lists/string_list.c
-    ${GENESIS_LRC_DIR}/lists/dir_list.c
-    ${GENESIS_LRC_DIR}/memmap/memalign.c
-    ${GENESIS_LRC_DIR}/string/stdstring.c
-    ${GENESIS_LRC_DIR}/vfs/vfs_implementation.c
-    ${GENESIS_LRC_DIR}/cdrom/cdrom.c
-    ${GENESIS_LRC_DIR}/vfs/vfs_implementation_cdrom.c
-)
-
-# zlib (Makefile.common:91-96) — 始终嵌入避免与 zlibstatic 的链接冲突
-set(GENESIS_ZLIB_DIR ${GENESIS_CORE_DIR}/libretro/deps/zlib-1.2.11)
-set(GENESIS_ZLIB_SRC
-    ${GENESIS_ZLIB_DIR}/adler32.c
-    ${GENESIS_ZLIB_DIR}/crc32.c
-    ${GENESIS_ZLIB_DIR}/inffast.c
-    ${GENESIS_ZLIB_DIR}/inflate.c
-    ${GENESIS_ZLIB_DIR}/inftrees.c
-    ${GENESIS_ZLIB_DIR}/zutil.c
+set(PICODRIVE_CORE_SRC
+    ${PICODRIVE_PATH}/pico/pico.c
+    ${PICODRIVE_PATH}/pico/cart.c
+    ${PICODRIVE_PATH}/pico/memory.c
+    ${PICODRIVE_PATH}/pico/state.c
+    ${PICODRIVE_PATH}/pico/sek.c
+    ${PICODRIVE_PATH}/pico/z80if.c
+    ${PICODRIVE_PATH}/pico/videoport.c
+    ${PICODRIVE_PATH}/pico/draw2.c
+    ${PICODRIVE_PATH}/pico/draw.c
+    ${PICODRIVE_PATH}/pico/mode4.c
+    ${PICODRIVE_PATH}/pico/misc.c
+    ${PICODRIVE_PATH}/pico/eeprom.c
+    ${PICODRIVE_PATH}/pico/patch.c
+    ${PICODRIVE_PATH}/pico/debug.c
+    ${PICODRIVE_PATH}/pico/media.c
+    ${PICODRIVE_PATH}/pico/sms.c
+    ${PICODRIVE_PATH}/pico/cd/mcd.c
+    ${PICODRIVE_PATH}/pico/cd/memory.c
+    ${PICODRIVE_PATH}/pico/cd/sek.c
+    ${PICODRIVE_PATH}/pico/cd/cdc.c
+    ${PICODRIVE_PATH}/pico/cd/cdd.c
+    ${PICODRIVE_PATH}/pico/cd/cd_image.c
+    ${PICODRIVE_PATH}/pico/cd/cd_parse.c
+    ${PICODRIVE_PATH}/pico/cd/gfx.c
+    ${PICODRIVE_PATH}/pico/cd/gfx_dma.c
+    ${PICODRIVE_PATH}/pico/cd/misc.c
+    ${PICODRIVE_PATH}/pico/cd/pcm.c
+    ${PICODRIVE_PATH}/pico/cd/megasd.c
+    ${PICODRIVE_PATH}/pico/32x/32x.c
+    ${PICODRIVE_PATH}/pico/32x/memory.c
+    ${PICODRIVE_PATH}/pico/32x/draw.c
+    ${PICODRIVE_PATH}/pico/32x/sh2soc.c
+    ${PICODRIVE_PATH}/pico/32x/pwm.c
+    ${PICODRIVE_PATH}/pico/pico/pico.c
+    ${PICODRIVE_PATH}/pico/pico/memory.c
+    ${PICODRIVE_PATH}/pico/pico/xpcm.c
+    ${PICODRIVE_PATH}/pico/carthw/carthw.c
+    ${PICODRIVE_PATH}/pico/carthw/eeprom_spi.c
+    ${PICODRIVE_PATH}/pico/carthw/svp/svp.c
+    ${PICODRIVE_PATH}/pico/carthw/svp/memory.c
+    ${PICODRIVE_PATH}/pico/carthw/svp/ssp16.c
+    ${PICODRIVE_PATH}/pico/sound/sound.c
+    ${PICODRIVE_PATH}/pico/sound/resampler.c
+    ${PICODRIVE_PATH}/pico/sound/sn76496.c
+    ${PICODRIVE_PATH}/pico/sound/ym2612.c
+    ${PICODRIVE_PATH}/pico/sound/ym2413.c
+    ${PICODRIVE_PATH}/pico/sound/vgm.c
+    ${PICODRIVE_PATH}/pico/sound/mix.c
+    ${PICODRIVE_PATH}/pico/sound/emu2413/emu2413.c
+    ${PICODRIVE_PATH}/cpu/fame/famec.c
+    ${PICODRIVE_PATH}/cpu/cz80/cz80.c
+    ${PICODRIVE_PATH}/cpu/drc/cmn.c
+    ${PICODRIVE_PATH}/cpu/sh2/sh2.c
+    ${PICODRIVE_PATH}/cpu/sh2/compiler.c
+    ${PICODRIVE_PATH}/cpu/sh2/mame/sh2pico.c
+    ${PICODRIVE_PATH}/platform/libretro/libretro.c
 )
 
-# CHD / LZMA / zstd 依赖（Makefile.common:25-57）
-set(GENESIS_DEPS_DIR ${GENESIS_CORE_DIR}/libretro/deps)
-set(GENESIS_LZMA_SRC
-    ${GENESIS_DEPS_DIR}/lzma-19.00/src/Alloc.c
-    ${GENESIS_DEPS_DIR}/lzma-19.00/src/Bra86.c
-    ${GENESIS_DEPS_DIR}/lzma-19.00/src/BraIA64.c
-    ${GENESIS_DEPS_DIR}/lzma-19.00/src/CpuArch.c
-    ${GENESIS_DEPS_DIR}/lzma-19.00/src/Delta.c
-    ${GENESIS_DEPS_DIR}/lzma-19.00/src/LzFind.c
-    ${GENESIS_DEPS_DIR}/lzma-19.00/src/Lzma86Dec.c
-    ${GENESIS_DEPS_DIR}/lzma-19.00/src/LzmaDec.c
-    ${GENESIS_DEPS_DIR}/lzma-19.00/src/LzmaEnc.c
-    ${GENESIS_DEPS_DIR}/lzma-19.00/src/Sort.c
-)
-set(GENESIS_LIBCHDR_SRC
-    ${GENESIS_DEPS_DIR}/libchdr/src/libchdr_bitstream.c
-    ${GENESIS_DEPS_DIR}/libchdr/src/libchdr_cdrom.c
-    ${GENESIS_DEPS_DIR}/libchdr/src/libchdr_chd.c
-    ${GENESIS_DEPS_DIR}/libchdr/src/libchdr_flac.c
-    ${GENESIS_DEPS_DIR}/libchdr/src/libchdr_huffman.c
-)
-set(GENESIS_ZSTD_SRC
-    ${GENESIS_DEPS_DIR}/zstd/lib/common/entropy_common.c
-    ${GENESIS_DEPS_DIR}/zstd/lib/common/error_private.c
-    ${GENESIS_DEPS_DIR}/zstd/lib/common/fse_decompress.c
-    ${GENESIS_DEPS_DIR}/zstd/lib/common/zstd_common.c
-    ${GENESIS_DEPS_DIR}/zstd/lib/common/xxhash.c
-    ${GENESIS_DEPS_DIR}/zstd/lib/decompress/huf_decompress.c
-    ${GENESIS_DEPS_DIR}/zstd/lib/decompress/zstd_ddict.c
-    ${GENESIS_DEPS_DIR}/zstd/lib/decompress/zstd_decompress.c
-    ${GENESIS_DEPS_DIR}/zstd/lib/decompress/zstd_decompress_block.c
+set(PICODRIVE_LRC_DIR ${PICODRIVE_PATH}/platform/libretro/libretro-common)
+set(PICODRIVE_LRC_SRC
+    ${PICODRIVE_LRC_DIR}/streams/file_stream.c
+    ${PICODRIVE_LRC_DIR}/streams/file_stream_transforms.c
+    ${PICODRIVE_LRC_DIR}/compat/fopen_utf8.c
+    ${PICODRIVE_LRC_DIR}/compat/compat_strl.c
+    ${PICODRIVE_LRC_DIR}/compat/compat_strcasestr.c
+    ${PICODRIVE_LRC_DIR}/compat/compat_posix_string.c
+    ${PICODRIVE_LRC_DIR}/encodings/encoding_utf.c
+    ${PICODRIVE_LRC_DIR}/file/file_path.c
+    ${PICODRIVE_LRC_DIR}/file/file_path_io.c
+    ${PICODRIVE_LRC_DIR}/string/stdstring.c
+    ${PICODRIVE_LRC_DIR}/time/rtime.c
+    ${PICODRIVE_LRC_DIR}/vfs/vfs_implementation.c
+    ${PICODRIVE_LRC_DIR}/formats/png/rpng.c
+    ${PICODRIVE_LRC_DIR}/memmap/memmap.c
+    ${PICODRIVE_LRC_DIR}/streams/trans_stream_zlib.c
+    ${PICODRIVE_LRC_DIR}/streams/trans_stream.c
+    ${PICODRIVE_LRC_DIR}/streams/trans_stream_pipe.c
 )
 
-add_library(genesis_core STATIC
-    ${GENESIS_CORE_SRC}
-    ${GENESIS_Z80_SRC}
-    ${GENESIS_M68K_SRC}
-    ${GENESIS_NTSC_SRC}
-    ${GENESIS_SOUND_SRC}
-    ${GENESIS_TREMOR_SRC}
-    ${GENESIS_INPUTHW_SRC}
-    ${GENESIS_CDHW_SRC}
-    ${GENESIS_CARTHW_SRC}
-    ${GENESIS_SVP_SRC}
-    ${GENESIS_LIBRETRO_SRC}
-    ${GENESIS_LRC_SRC}
-    ${GENESIS_ZLIB_SRC}
-    ${GENESIS_LZMA_SRC}
-    ${GENESIS_LIBCHDR_SRC}
-    ${GENESIS_ZSTD_SRC}
+set(PICODRIVE_PLAT_SRC
+    ${PICODRIVE_PATH}/platform/common/ogg.c
+    ${PICODRIVE_PATH}/platform/common/mp3.c
+    ${PICODRIVE_PATH}/platform/common/mp3_sync.c
+    ${PICODRIVE_PATH}/platform/common/mp3_ogg_stubs.c
 )
 
-target_include_directories(genesis_core PRIVATE
-    ${GENESIS_CORE_DIR}/libretro
-    ${GENESIS_LRC_DIR}/include
-    ${GENESIS_CORE_DIR}/core
-    ${GENESIS_CORE_DIR}/core/z80
-    ${GENESIS_CORE_DIR}/core/m68k
-    ${GENESIS_CORE_DIR}/core/ntsc
-    ${GENESIS_CORE_DIR}/core/sound
-    ${GENESIS_CORE_DIR}/core/sound/minimp3
-    ${GENESIS_CORE_DIR}/core/input_hw
-    ${GENESIS_CORE_DIR}/core/cd_hw
-    ${GENESIS_CORE_DIR}/core/cart_hw
-    ${GENESIS_CORE_DIR}/core/cart_hw/svp
-    ${GENESIS_CORE_DIR}/core/sound/tremor
-    ${GENESIS_DEPS_DIR}/libchdr/include
-    ${GENESIS_DEPS_DIR}/lzma-19.00/include
-    ${GENESIS_DEPS_DIR}/zlib-1.2.11
-    ${GENESIS_DEPS_DIR}/zstd/lib
+set(PICODRIVE_TREMOR_DIR ${PICODRIVE_PATH}/platform/common/tremor)
+set(PICODRIVE_TREMOR_SRC
+    ${PICODRIVE_TREMOR_DIR}/bitwise.c
+    ${PICODRIVE_TREMOR_DIR}/block.c
+    ${PICODRIVE_TREMOR_DIR}/codebook.c
+    ${PICODRIVE_TREMOR_DIR}/floor0.c
+    ${PICODRIVE_TREMOR_DIR}/floor1.c
+    ${PICODRIVE_TREMOR_DIR}/framing.c
+    ${PICODRIVE_TREMOR_DIR}/info.c
+    ${PICODRIVE_TREMOR_DIR}/mapping0.c
+    ${PICODRIVE_TREMOR_DIR}/mdct.c
+    ${PICODRIVE_TREMOR_DIR}/registry.c
+    ${PICODRIVE_TREMOR_DIR}/res012.c
+    ${PICODRIVE_TREMOR_DIR}/sharedbook.c
+    ${PICODRIVE_TREMOR_DIR}/synthesis.c
+    ${PICODRIVE_TREMOR_DIR}/vorbisfile.c
+    ${PICODRIVE_TREMOR_DIR}/window.c
 )
 
-target_compile_definitions(genesis_core PRIVATE
+set(PICODRIVE_ZLIB_DIR ${PICODRIVE_PATH}/zlib)
+set(PICODRIVE_ZLIB_SRC
+    ${PICODRIVE_ZLIB_DIR}/adler32.c
+    ${PICODRIVE_ZLIB_DIR}/crc32.c
+    ${PICODRIVE_ZLIB_DIR}/inffast.c
+    ${PICODRIVE_ZLIB_DIR}/inflate.c
+    ${PICODRIVE_ZLIB_DIR}/inftrees.c
+    ${PICODRIVE_ZLIB_DIR}/trees.c
+    ${PICODRIVE_ZLIB_DIR}/deflate.c
+    ${PICODRIVE_ZLIB_DIR}/zutil.c
+    ${PICODRIVE_ZLIB_DIR}/compress.c
+    ${PICODRIVE_ZLIB_DIR}/uncompr.c
+)
+
+set(PICODRIVE_UNZIP_SRC
+    ${PICODRIVE_PATH}/unzip/unzip.c
+)
+
+add_library(picodrive_core STATIC
+    ${PICODRIVE_CORE_SRC}
+    ${PICODRIVE_LRC_SRC}
+    ${PICODRIVE_TREMOR_SRC}
+    ${PICODRIVE_ZLIB_SRC}
+    ${PICODRIVE_UNZIP_SRC}
+    ${PICODRIVE_PLAT_SRC}
+)
+
+target_include_directories(picodrive_core PRIVATE
+    ${PICODRIVE_PATH}
+    ${PICODRIVE_PATH}/pico
+    ${PICODRIVE_PATH}/pico/cd
+    ${PICODRIVE_PATH}/pico/32x
+    ${PICODRIVE_PATH}/pico/carthw
+    ${PICODRIVE_PATH}/pico/pico
+    ${PICODRIVE_PATH}/pico/sound
+    ${PICODRIVE_PATH}/cpu
+    ${PICODRIVE_PATH}/cpu/cz80
+    ${PICODRIVE_PATH}/cpu/fame
+    ${PICODRIVE_PATH}/cpu/drc
+    ${PICODRIVE_PATH}/cpu/sh2
+    ${PICODRIVE_PATH}/cpu/sh2/mame
+    ${PICODRIVE_PATH}/platform/libretro
+    ${PICODRIVE_LRC_DIR}/include
+    ${PICODRIVE_LRC_DIR}/include/compat
+    ${PICODRIVE_LRC_DIR}/include/encodings
+    ${PICODRIVE_LRC_DIR}/include/formats
+    ${PICODRIVE_LRC_DIR}/include/streams
+    ${PICODRIVE_LRC_DIR}/include/string
+    ${PICODRIVE_LRC_DIR}/include/vfs
+    ${PICODRIVE_TREMOR_DIR}
+    ${PICODRIVE_ZLIB_DIR}
+    ${PICODRIVE_PATH}/unzip
+    ${PICODRIVE_PATH}/platform/common
+)
+
+target_compile_definitions(picodrive_core PRIVATE
     __LIBRETRO__
     USE_LIBRETRO_VFS
-    USE_16BPP_RENDERING
-    LSB_FIRST
-    BYTE_ORDER=LITTLE_ENDIAN
-    M68K_OVERCLOCK_SHIFT=20
-    Z80_OVERCLOCK_SHIFT=20
-    HAVE_YM3438_CORE
-    HAVE_OPLL_CORE
+    FRONTEND_SUPPORTS_RGB565
+    EMU_F68K
+    _USE_CZ80
+    DRC_SH2
+    USE_TREMOR
     HAVE_ZLIB
-    USE_LIBTREMOR
-    USE_LIBCHDR
-    USE_PER_SOUND_CHANNELS_CONFIG
-    _7ZIP_ST
-    ZSTD_DISABLE_ASM
-    MAXROMSIZE=33554432
-    HAVE_CDROM
-    ENABLE_SUB_68K_ADDRESS_ERROR_EXCEPTIONS
-    "INLINE=static inline"
+    LSB_FIRST
+    FAMEC_NO_GOTOS
+    "REVISION=\"\""
 )
 
-apply_retro_symbol_rename(genesis_core genesis)
-apply_data_symbol_rename(genesis_core genesis)
-target_compile_definitions(genesis_core PRIVATE "cart_size=genesis_cart_size")
+apply_retro_symbol_rename(picodrive_core picodrive)
+apply_data_symbol_rename(picodrive_core picodrive)
 
-set_target_properties(genesis_core PROPERTIES
+set_target_properties(picodrive_core PROPERTIES
     C_STANDARD 11
     CXX_STANDARD 11
 )

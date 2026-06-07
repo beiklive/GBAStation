@@ -36,16 +36,14 @@ namespace beiklive::gba
     // ============================================================
     // Cleanup – 保存存档并卸载核心
     // ============================================================
-    void CoreMgba::Cleanup()
-    {
-        if (!m_ready) return;
-        m_ready = false;
-        _saveSram();
-        _saveRtc();
-        m_core.unloadGame();
-        m_core.deinitCore();
-        m_core.unload();
-    }
+void CoreMgba::Cleanup()
+{
+    if (!m_ready) return;
+    m_ready = false;
+    _saveSram();
+    _saveRtc();
+    m_core.unloadGame();
+}
 
     // ============================================================
     // RunFrame – 执行一帧游戏逻辑
