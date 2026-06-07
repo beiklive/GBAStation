@@ -449,8 +449,6 @@ target_compile_definitions(genesis_core PRIVATE
     FRONTEND_SUPPORTS_RGB565
     LSB_FIRST
     BYTE_ORDER=LITTLE_ENDIAN
-    ALIGN_LONG
-    ALIGN_WORD
     M68K_OVERCLOCK_SHIFT=20
     Z80_OVERCLOCK_SHIFT=20
     HAVE_YM3438_CORE
@@ -469,6 +467,7 @@ target_compile_definitions(genesis_core PRIVATE
 
 apply_retro_symbol_rename(genesis_core genesis)
 apply_data_symbol_rename(genesis_core genesis)
+target_compile_definitions(genesis_core PRIVATE "cart_size=genesis_cart_size")
 
 set_target_properties(genesis_core PROPERTIES
     C_STANDARD 11

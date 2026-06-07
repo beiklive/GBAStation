@@ -554,28 +554,11 @@ namespace beiklive
             if (fps <= 0.0) fps = 59.7;
             double srate = m_core->SampleRate();
             if (srate <= 0.0) srate = 32768.0;
-            brls::Logger::info("GameView: fps={:.2f} sampleRate={:.0f}", fps, srate);
             AudioManager::instance().init(static_cast<int>(srate), 2);
             {
                 std::vector<int16_t> initAudioDiscard;
                 m_core->DrainAudio(initAudioDiscard);
             }
-
-            // 音频缓冲预热：跑帧直到环形缓冲区达到 PLL 目标值，避免启动时 PLL 过度修正
-            {
-                const size_t kPrebufferTarget = 8000;
-                std::vector<int16_t> buf;
-                for (int i = 0; i < 120 && AudioManager::instance().available() < kPrebufferTarget; ++i) {
-                    m_core->RunFrame();
-                    if (m_core->DrainAudio(buf) && !buf.empty()) {
-                        size_t f = buf.size() / 2;
-                        AudioManager::instance().pushSamplesNoBlocking(buf.data(), f);
-                    }
-                }
-                brls::Logger::debug("GameView: audio prebuffer done, ringFill={}",
-                    AudioManager::instance().available());
-            }
-
             GameSignal::instance().resetAll();
             _initPlayTimeTracking();
             _startGameThread();
@@ -750,14 +733,6 @@ namespace beiklive
 
         size_t frames = m_audioDrainBuf.size() / 2;
 
-        static int s_audioDiagFrame = 0;
-        if (++s_audioDiagFrame >= 60) {
-            brls::Logger::debug("audioDiag: frames={} samples={} ringAvail={}",
-                frames, m_audioDrainBuf.size(),
-                AudioManager::instance().available());
-            s_audioDiagFrame = 0;
-        }
-
         if (ff) {
             if (m_ffMute)
                 return;
@@ -783,7 +758,7 @@ namespace beiklive
         counter += framesRan;
         auto now    = Clock::now();
         double elap = std::chrono::duration<double>(now - lastTime).count();
-        if (elap >= FPS_UPDATE_INTERVAL) {
+        if (elap >= FPS_UPDATE_INTERVAL && elap > 0.0) {
             float fps = static_cast<float>(counter / elap);
             {
                 std::lock_guard<std::mutex> lk(m_fpsMutex);
@@ -1148,14 +1123,6 @@ namespace beiklive
 
             unsigned framesRan = 1u;
 
-            // ── 性能诊断：计时关键路径 ──
-            static int   s_timerFrame = 0;
-            static double s_accStepMs   = 0.0;
-            static double s_accCaptureMs = 0.0;
-            static double s_accAudioMs   = 0.0;
-            static double s_accTotalMs   = 0.0;
-            auto t0 = Clock::now();
-
             if (rew) {
                 // 倒带：从历史缓冲区恢复状态
                 _stepRewind();
@@ -1164,33 +1131,13 @@ namespace beiklive
                 framesRan = _stepFrame(ff);
             }
 
-            auto t1 = Clock::now();
-
             // ---- 取出视频帧暂存（慢动作跳过帧时不捕获）----
             if (framesRan > 0)
                 _captureVideoFrame();
 
-            auto t2 = Clock::now();
-
             // ---- 推送音频（慢动作跳过帧时不推送）----
             if (framesRan > 0)
                 _pushFrameAudio(ff);
-
-            auto t3 = Clock::now();
-
-            // ── 性能诊断：累积计时 ──
-            if (framesRan > 0) {
-                s_accStepMs    += std::chrono::duration<double, std::milli>(t1 - t0).count();
-                s_accCaptureMs += std::chrono::duration<double, std::milli>(t2 - t1).count();
-                s_accAudioMs   += std::chrono::duration<double, std::milli>(t3 - t2).count();
-                s_accTotalMs   += std::chrono::duration<double, std::milli>(t3 - t0).count();
-            }
-            if (++s_timerFrame >= 60) {
-                brls::Logger::debug("perf: step={:.2f}ms capture={:.2f}ms audio={:.2f}ms total={:.2f}ms",
-                    s_accStepMs/60.0, s_accCaptureMs/60.0, s_accAudioMs/60.0, s_accTotalMs/60.0);
-                s_timerFrame = 0;
-                s_accStepMs = s_accCaptureMs = s_accAudioMs = s_accTotalMs = 0.0;
-            }
 
             // ---- FPS 统计（慢动作跳过帧时仍计入时间）----
             _updateFpsStats(framesRan, fpsLastTime, fpsCount);
@@ -1201,14 +1148,16 @@ namespace beiklive
             // ── 音频驱动帧率微调（PLL：误差比例校正，±2% 限幅）──
             if (framesRan > 0 && !ff) {
                 size_t ringFill = AudioManager::instance().available();
-                double targetFill = 8000.0; // ~10 帧音频，足够缓冲，反馈及时
-                double errorRatio = (static_cast<double>(ringFill) - targetFill) / targetFill;
-                double gain = 0.01; // 每帧纠正 1% 比例误差
-                double correction = 1.0 + errorRatio * gain;
-                if (correction > 1.02) correction = 1.02;
-                if (correction < 0.98) correction = 0.98;
-                frameDurNs = std::chrono::nanoseconds(
-                    static_cast<long long>(baseFrameDurNs.count() * correction));
+                double targetFill = 8000.0;
+                if (targetFill > 0.0) {
+                    double errorRatio = (static_cast<double>(ringFill) - targetFill) / targetFill;
+                    double gain = 0.01;
+                    double correction = 1.0 + errorRatio * gain;
+                    if (correction > 1.02) correction = 1.02;
+                    if (correction < 0.98) correction = 0.98;
+                    frameDurNs = std::chrono::nanoseconds(
+                        static_cast<long long>(baseFrameDurNs.count() * correction));
+                }
             } else {
                 frameDurNs = baseFrameDurNs;
             }

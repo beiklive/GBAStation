@@ -795,6 +795,11 @@ bool LibretroLoader::s_environmentCallback(unsigned cmd, void* data)
         //     if (log) log->log = s_coreLogCallback;
         //     return true;
         // }
+        case RETRO_ENVIRONMENT_GET_LOG_INTERFACE: {
+            retro_log_callback* log = static_cast<retro_log_callback*>(data);
+            if (log) log->log = s_coreLogCallback;
+            return true;
+        }
         default:
             return false;
     }
