@@ -249,8 +249,8 @@ namespace beiklive
                 if (hG) { opts.push_back("GBA"); map.push_back(PlatformFilter::GBA); }
                 if (hC) { opts.push_back("GBC"); map.push_back(PlatformFilter::GBC); }
                 if (hB) { opts.push_back("GB");  map.push_back(PlatformFilter::GB);  }
-                if (hN) { opts.push_back("NES"); map.push_back(PlatformFilter::NES); }
-                if (hS) { opts.push_back("SNES"); map.push_back(PlatformFilter::SNES); }
+                if (hN) { opts.push_back("FC"); map.push_back(PlatformFilter::NES); }
+                if (hS) { opts.push_back("SFC"); map.push_back(PlatformFilter::SNES); }
                 if (hMD) { opts.push_back("MD"); map.push_back(PlatformFilter::GENESIS); }
                 int cur = 0;
                 for (size_t i = 0; i < map.size(); i++)
@@ -299,8 +299,8 @@ namespace beiklive
             case PlatformFilter::GBA:      fs = "GBA";  break;
             case PlatformFilter::GBC:      fs = "GBC";  break;
             case PlatformFilter::GB:       fs = "GB";   break;
-            case PlatformFilter::NES:      fs = "NES";  break;
-            case PlatformFilter::SNES:     fs = "SNES"; break;
+            case PlatformFilter::NES:      fs = "FC";  break;
+            case PlatformFilter::SNES:     fs = "SFC"; break;
             case PlatformFilter::GENESIS:  fs = "MD";   break;
             case PlatformFilter::FAVORITE: fs = "收藏"; break;
         }

@@ -148,13 +148,13 @@ namespace beiklive
         m_leftPanel->addView(gbSwitch);
 
         auto* nesSwitch = new beiklive::SwitchButton();
-        nesSwitch->setText("扫描NES游戏");
+        nesSwitch->setText("扫描FC游戏");
         nesSwitch->setState(true);
         nesSwitch->setOnToggle([this](bool on) { m_scanNES = on; });
         m_leftPanel->addView(nesSwitch);
 
         auto* snesSwitch = new beiklive::SwitchButton();
-        snesSwitch->setText("扫描SNES游戏");
+        snesSwitch->setText("扫描SFC游戏");
         snesSwitch->setState(true);
         snesSwitch->setOnToggle([this](bool on) { m_scanSNES = on; });
         m_leftPanel->addView(snesSwitch);
@@ -224,7 +224,7 @@ namespace beiklive
         m_rightPanel->addView(gbBtn);
 
         auto* nesBtn = new beiklive::ButtonBox();
-        nesBtn->setText("选择NES游戏的lpl文件");
+        nesBtn->setText("选择FC游戏的lpl文件");
         nesBtn->setIcon(BK_RES("img/ui/icon_gba.png"));
         nesBtn->registerAction("选择", brls::BUTTON_A,
             [this](brls::View*) -> bool {
@@ -234,7 +234,7 @@ namespace beiklive
         m_rightPanel->addView(nesBtn);
 
         auto* snesBtn = new beiklive::ButtonBox();
-        snesBtn->setText("选择SNES游戏的lpl文件");
+        snesBtn->setText("选择SFC游戏的lpl文件");
         snesBtn->setIcon(BK_RES("img/ui/icon_gba.png"));
         snesBtn->registerAction("选择", brls::BUTTON_A,
             [this](brls::View*) -> bool {

@@ -404,8 +404,8 @@ std::string platformName(int platform) {
         case beiklive::enums::EmuPlatform::EmuGBA: return "GBA";
         case beiklive::enums::EmuPlatform::EmuGBC: return "GBC";
         case beiklive::enums::EmuPlatform::EmuGB:  return "GB";
-        case beiklive::enums::EmuPlatform::EmuNES: return "NES";
-        case beiklive::enums::EmuPlatform::EmuSNES: return "SNES";
+        case beiklive::enums::EmuPlatform::EmuNES: return "FC";
+        case beiklive::enums::EmuPlatform::EmuSNES: return "SFC";
         case beiklive::enums::EmuPlatform::EmuGenesis: return "MD";
         default: return "";
     }
@@ -440,8 +440,8 @@ std::string platformBadgeName(int platform) {
         case beiklive::enums::EmuPlatform::EmuGBA: return "GBA";
         case beiklive::enums::EmuPlatform::EmuGBC: return "GBC";
         case beiklive::enums::EmuPlatform::EmuGB:  return "GB";
-        case beiklive::enums::EmuPlatform::EmuNES: return "NES";
-        case beiklive::enums::EmuPlatform::EmuSNES: return "SNES";
+        case beiklive::enums::EmuPlatform::EmuNES: return "FC";
+        case beiklive::enums::EmuPlatform::EmuSNES: return "SFC";
         case beiklive::enums::EmuPlatform::EmuGenesis: return "MD";
         default: return "";
     }
