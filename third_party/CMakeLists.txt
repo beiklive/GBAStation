@@ -286,6 +286,15 @@ else()
     endif()
 endif()
 
+if (PLATFORM_SWITCH)
+    target_compile_definitions(snes9x_core PRIVATE
+        __SWITCH__
+        SWITCH
+        HAVE_LIBNX
+        IOAPI_NO_64
+    )
+endif ()
+
 apply_retro_symbol_rename(snes9x_core snes9x)
 apply_data_symbol_rename(snes9x_core snes9x)
 target_compile_definitions(snes9x_core PRIVATE "PPU=snes9x_PPU")
@@ -475,6 +484,14 @@ target_compile_definitions(picodrive_core PRIVATE
     FAMEC_NO_GOTOS
     "REVISION=\"\""
 )
+
+if (PLATFORM_SWITCH)
+    target_compile_definitions(picodrive_core PRIVATE
+        __SWITCH__
+        SWITCH
+        HAVE_LIBNX
+    )
+endif ()
 
 apply_retro_symbol_rename(picodrive_core picodrive)
 apply_data_symbol_rename(picodrive_core picodrive)
