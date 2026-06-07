@@ -11,11 +11,11 @@ namespace beiklive
     // 金手指格式转换
     // 输入：多行空格分隔 或 + 格式
     // 输出：+ 连接格式
-    // 异常/失败：返回 "00000000 0000"
+    // 异常/失败：返回 "00000000+0000"
     std::string convertCheatCode(const std::string& input) {
         // 1. 空字符串 → 失败
         if (input.empty()) {
-            return "00000000 0000";
+            return "00000000+0000";
         }
 
         // 2. 已经是 + 格式 → 直接返回
@@ -37,8 +37,8 @@ namespace beiklive
                 result += c;
                 hasValidChar = true;
             }
-            // 空白符（空格、换行、回车）→ 换成 +
-            else if (c == ' ' || c == '\n' || c == '\r') {
+            // 空白符（空格、换行、回车、冒号）→ 换成 +
+            else if (c == ' ' || c == '\n' || c == '\r' || c == ':') {
                 result += '+';
             }
             // 出现非法字符 → 直接判定转换失败
