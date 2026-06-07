@@ -286,6 +286,7 @@ bool LibretroLoader::load(CoreType coreType)
     // 根据核心类型选择对应的符号集
     switch (coreType) {
         case CoreType::Mgba:
+#if defined(__SWITCH__) || defined(STATIC_MGBA)
             fn_set_environment        = retro_set_environment;
             fn_set_video_refresh      = retro_set_video_refresh;
             fn_set_audio_sample       = retro_set_audio_sample;
@@ -309,6 +310,10 @@ bool LibretroLoader::load(CoreType coreType)
             fn_cheat_set              = retro_cheat_set;
             fn_get_memory_data        = retro_get_memory_data;
             fn_get_memory_size        = retro_get_memory_size;
+#else
+            // 桌面平台: mGBA 使用 dlopen 加载，不支持静态绑定
+            return false;
+#endif
             break;
 
         case CoreType::Fceumm:

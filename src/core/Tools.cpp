@@ -43,6 +43,13 @@ beiklive::enums::FileType getFileType(const fs::path& path) {
         return beiklive::enums::FileType::GBC_ROM;
     if (ext == "gb")
         return beiklive::enums::FileType::GB_ROM;
+    if (ext == "nes" || ext == "fds")
+        return beiklive::enums::FileType::NES_ROM;
+    if (ext == "sfc" || ext == "smc")
+        return beiklive::enums::FileType::SNES_ROM;
+    if (ext == "md" || ext == "gen" || ext == "bin" || ext == "smd"
+        || ext == "sms" || ext == "gg" || ext == "sg" || ext == "cue")
+        return beiklive::enums::FileType::GENESIS_ROM;
 
     return beiklive::enums::FileType::NORMAL_FILE;
 }
@@ -409,6 +416,9 @@ std::string platformOverlayKey(int platform) {
         case beiklive::enums::EmuPlatform::EmuGBA: return beiklive::SettingKey::KEY_DISPLAY_OVERLAY_GBA_PATH;
         case beiklive::enums::EmuPlatform::EmuGBC: return beiklive::SettingKey::KEY_DISPLAY_OVERLAY_GBC_PATH;
         case beiklive::enums::EmuPlatform::EmuGB:  return beiklive::SettingKey::KEY_DISPLAY_OVERLAY_GB_PATH;
+        case beiklive::enums::EmuPlatform::EmuNES: return beiklive::SettingKey::KEY_DISPLAY_OVERLAY_NES_PATH;
+        case beiklive::enums::EmuPlatform::EmuSNES: return beiklive::SettingKey::KEY_DISPLAY_OVERLAY_SNES_PATH;
+        case beiklive::enums::EmuPlatform::EmuGenesis: return beiklive::SettingKey::KEY_DISPLAY_OVERLAY_GENESIS_PATH;
         default: return "";
     }
 }
@@ -418,6 +428,9 @@ std::string platformShaderKey(int platform) {
         case beiklive::enums::EmuPlatform::EmuGBA: return beiklive::SettingKey::KEY_DISPLAY_SHADER_GBA_PATH;
         case beiklive::enums::EmuPlatform::EmuGBC: return beiklive::SettingKey::KEY_DISPLAY_SHADER_GBC_PATH;
         case beiklive::enums::EmuPlatform::EmuGB:  return beiklive::SettingKey::KEY_DISPLAY_SHADER_GB_PATH;
+        case beiklive::enums::EmuPlatform::EmuNES: return beiklive::SettingKey::KEY_DISPLAY_SHADER_NES_PATH;
+        case beiklive::enums::EmuPlatform::EmuSNES: return beiklive::SettingKey::KEY_DISPLAY_SHADER_SNES_PATH;
+        case beiklive::enums::EmuPlatform::EmuGenesis: return beiklive::SettingKey::KEY_DISPLAY_SHADER_GENESIS_PATH;
         default: return "";
     }
 }

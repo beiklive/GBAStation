@@ -73,7 +73,22 @@ function(apply_retro_symbol_rename TARGET PREFIX)
         "retro_cheat_reset=${PREFIX}_retro_cheat_reset"
         "retro_cheat_set=${PREFIX}_retro_cheat_set"
         "retro_get_region=${PREFIX}_retro_get_region"
+        "retro_load_game_special=${PREFIX}_retro_load_game_special"
     )
+endfunction()
+
+function(apply_data_symbol_rename TARGET PREFIX)
+    target_compile_definitions(${TARGET} PRIVATE
+        "log_cb=${PREFIX}_log_cb"
+        "options_intl=${PREFIX}_options_intl"
+    )
+    foreach(LOCALE us tr vn val uk sv sr sk ru pt_pt pt_br pl no nl ko ja it id hu hr he gl fr fi fa es eo en el de da cy cs cht chs ca ast ar)
+        target_compile_definitions(${TARGET} PRIVATE
+            "options_${LOCALE}=${PREFIX}_options_${LOCALE}"
+            "option_cats_${LOCALE}=${PREFIX}_option_cats_${LOCALE}"
+            "option_defs_${LOCALE}=${PREFIX}_option_defs_${LOCALE}"
+        )
+    endforeach()
 endfunction()
 
 # =========================================================
@@ -161,6 +176,8 @@ target_compile_definitions(fceumm_core PRIVATE
 )
 
 apply_retro_symbol_rename(fceumm_core fceumm)
+apply_data_symbol_rename(fceumm_core fceumm)
+target_compile_definitions(fceumm_core PRIVATE "PPU=fceumm_PPU")
 
 set_target_properties(fceumm_core PROPERTIES C_STANDARD 11)
 
@@ -271,6 +288,8 @@ else()
 endif()
 
 apply_retro_symbol_rename(snes9x_core snes9x)
+apply_data_symbol_rename(snes9x_core snes9x)
+target_compile_definitions(snes9x_core PRIVATE "PPU=snes9x_PPU")
 
 set_target_properties(snes9x_core PROPERTIES
     CXX_STANDARD 14
@@ -340,27 +359,16 @@ set(GENESIS_LRC_SRC
     ${GENESIS_LRC_DIR}/vfs/vfs_implementation_cdrom.c
 )
 
-# zlib: 使用 mGBA 内建的 zlibstatic 而非重复嵌入（避免符号冲突）
-if (TARGET zlibstatic)
-    target_include_directories(genesis_core PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/mgba/src/third-party/zlib
-        ${CMAKE_BINARY_DIR}/third_party/zlib
-    )
-    target_link_libraries(genesis_core PRIVATE zlibstatic)
-else()
-    # fallback: 嵌入 zlib 源文件
-    set(GENESIS_ZLIB_DIR ${GENESIS_CORE_DIR}/libretro/deps/zlib-1.2.11)
-    set(GENESIS_ZLIB_SRC
-        ${GENESIS_ZLIB_DIR}/adler32.c
-        ${GENESIS_ZLIB_DIR}/crc32.c
-        ${GENESIS_ZLIB_DIR}/inffast.c
-        ${GENESIS_ZLIB_DIR}/inflate.c
-        ${GENESIS_ZLIB_DIR}/inftrees.c
-        ${GENESIS_ZLIB_DIR}/zutil.c
-    )
-    target_sources(genesis_core PRIVATE ${GENESIS_ZLIB_SRC})
-    target_include_directories(genesis_core PRIVATE ${GENESIS_DEPS_DIR}/zlib-1.2.11)
-endif()
+# zlib (Makefile.common:91-96) — 始终嵌入避免与 zlibstatic 的链接冲突
+set(GENESIS_ZLIB_DIR ${GENESIS_CORE_DIR}/libretro/deps/zlib-1.2.11)
+set(GENESIS_ZLIB_SRC
+    ${GENESIS_ZLIB_DIR}/adler32.c
+    ${GENESIS_ZLIB_DIR}/crc32.c
+    ${GENESIS_ZLIB_DIR}/inffast.c
+    ${GENESIS_ZLIB_DIR}/inflate.c
+    ${GENESIS_ZLIB_DIR}/inftrees.c
+    ${GENESIS_ZLIB_DIR}/zutil.c
+)
 
 # CHD / LZMA / zstd 依赖（Makefile.common:25-57）
 set(GENESIS_DEPS_DIR ${GENESIS_CORE_DIR}/libretro/deps)
@@ -408,6 +416,7 @@ add_library(genesis_core STATIC
     ${GENESIS_SVP_SRC}
     ${GENESIS_LIBRETRO_SRC}
     ${GENESIS_LRC_SRC}
+    ${GENESIS_ZLIB_SRC}
     ${GENESIS_LZMA_SRC}
     ${GENESIS_LIBCHDR_SRC}
     ${GENESIS_ZSTD_SRC}
@@ -429,6 +438,7 @@ target_include_directories(genesis_core PRIVATE
     ${GENESIS_CORE_DIR}/core/sound/tremor
     ${GENESIS_DEPS_DIR}/libchdr/include
     ${GENESIS_DEPS_DIR}/lzma-19.00/include
+    ${GENESIS_DEPS_DIR}/zlib-1.2.11
     ${GENESIS_DEPS_DIR}/zstd/lib
 )
 
@@ -454,10 +464,11 @@ target_compile_definitions(genesis_core PRIVATE
     MAXROMSIZE=33554432
     HAVE_CDROM
     ENABLE_SUB_68K_ADDRESS_ERROR_EXCEPTIONS
-    INLINE="static inline"
+    "INLINE=static inline"
 )
 
 apply_retro_symbol_rename(genesis_core genesis)
+apply_data_symbol_rename(genesis_core genesis)
 
 set_target_properties(genesis_core PROPERTIES
     C_STANDARD 11

@@ -201,6 +201,9 @@ namespace beiklive
                 (int)beiklive::enums::EmuPlatform::EmuGBA,
                 (int)beiklive::enums::EmuPlatform::EmuGBC,
                 (int)beiklive::enums::EmuPlatform::EmuGB,
+                (int)beiklive::enums::EmuPlatform::EmuNES,
+                (int)beiklive::enums::EmuPlatform::EmuSNES,
+                (int)beiklive::enums::EmuPlatform::EmuGenesis,
             };
             std::error_code ec;
             for (int p : platforms)
@@ -209,13 +212,16 @@ namespace beiklive
     }
 
 
-    /*static*/ std::string GameDatabase::getPlatformFileName(int platform)
+    std::string GameDatabase::getPlatformFileName(int platform)
     {
         switch (platform)
         {
         case (int)beiklive::enums::EmuPlatform::EmuGBA: return beiklive::path::DATA_BASE_FILE_GBA;
         case (int)beiklive::enums::EmuPlatform::EmuGBC: return beiklive::path::DATA_BASE_FILE_GBC;
         case (int)beiklive::enums::EmuPlatform::EmuGB:  return beiklive::path::DATA_BASE_FILE_GB;
+        case (int)beiklive::enums::EmuPlatform::EmuNES: return beiklive::path::DATA_BASE_FILE_NES;
+        case (int)beiklive::enums::EmuPlatform::EmuSNES: return beiklive::path::DATA_BASE_FILE_SNES;
+        case (int)beiklive::enums::EmuPlatform::EmuGenesis: return beiklive::path::DATA_BASE_FILE_GENESIS;
         default: return beiklive::path::DATA_BASE_FILE;
         }
     }
@@ -230,6 +236,9 @@ namespace beiklive
             (int)beiklive::enums::EmuPlatform::EmuGBA,
             (int)beiklive::enums::EmuPlatform::EmuGBC,
             (int)beiklive::enums::EmuPlatform::EmuGB,
+            (int)beiklive::enums::EmuPlatform::EmuNES,
+            (int)beiklive::enums::EmuPlatform::EmuSNES,
+            (int)beiklive::enums::EmuPlatform::EmuGenesis,
         };
 
         for (int platform : platforms)

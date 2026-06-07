@@ -220,10 +220,13 @@ namespace beiklive
     NVGcolor GridItem::_getBadgeColor(PlatformBadgeColor color)
     {
         switch (color) {
-            case PlatformBadgeColor::GBA: return nvgRGBA(108, 77,  191, 220);
-            case PlatformBadgeColor::GBC: return nvgRGBA(0,   112, 221, 220);
-            case PlatformBadgeColor::GB:  return nvgRGBA(0,   168, 107, 220);
-            default:                      return nvgRGBA(100, 100, 100, 200);
+            case PlatformBadgeColor::GBA:     return nvgRGBA(108, 77,  191, 220);
+            case PlatformBadgeColor::GBC:     return nvgRGBA(0,   112, 221, 220);
+            case PlatformBadgeColor::GB:      return nvgRGBA(0,   168, 107, 220);
+            case PlatformBadgeColor::NES:     return nvgRGBA(218, 41,  28,  220);
+            case PlatformBadgeColor::SNES:    return nvgRGBA(160, 100, 180, 220);
+            case PlatformBadgeColor::GENESIS: return nvgRGBA(23,  55,  139, 220);
+            default:                          return nvgRGBA(100, 100, 100, 200);
         }
     }
 
@@ -245,12 +248,15 @@ namespace beiklive
         }
 
         std::string badgeText = beiklive::tools::platformBadgeName(entry.platform);
-        switch (static_cast<beiklive::enums::EmuPlatform>(entry.platform)) {
-            case beiklive::enums::EmuPlatform::EmuGBA: item.badgeColor = PlatformBadgeColor::GBA; break;
-            case beiklive::enums::EmuPlatform::EmuGBC: item.badgeColor = PlatformBadgeColor::GBC; break;
-            case beiklive::enums::EmuPlatform::EmuGB:  item.badgeColor = PlatformBadgeColor::GB;  break;
-            default: item.badgeColor = PlatformBadgeColor::NONE; break;
-        }
+    switch (static_cast<beiklive::enums::EmuPlatform>(entry.platform)) {
+        case beiklive::enums::EmuPlatform::EmuGBA: item.badgeColor = PlatformBadgeColor::GBA; break;
+        case beiklive::enums::EmuPlatform::EmuGBC: item.badgeColor = PlatformBadgeColor::GBC; break;
+        case beiklive::enums::EmuPlatform::EmuGB:  item.badgeColor = PlatformBadgeColor::GB;  break;
+        case beiklive::enums::EmuPlatform::EmuNES: item.badgeColor = PlatformBadgeColor::NES; break;
+        case beiklive::enums::EmuPlatform::EmuSNES: item.badgeColor = PlatformBadgeColor::SNES; break;
+        case beiklive::enums::EmuPlatform::EmuGenesis: item.badgeColor = PlatformBadgeColor::GENESIS; break;
+        default: item.badgeColor = PlatformBadgeColor::NONE; break;
+    }
         item.badgeText = badgeText;
 
         item.favorite = entry.favourite;

@@ -147,6 +147,24 @@ namespace beiklive
         gbSwitch->setOnToggle([this](bool on) { m_scanGB = on; });
         m_leftPanel->addView(gbSwitch);
 
+        auto* nesSwitch = new beiklive::SwitchButton();
+        nesSwitch->setText("扫描NES游戏");
+        nesSwitch->setState(true);
+        nesSwitch->setOnToggle([this](bool on) { m_scanNES = on; });
+        m_leftPanel->addView(nesSwitch);
+
+        auto* snesSwitch = new beiklive::SwitchButton();
+        snesSwitch->setText("扫描SNES游戏");
+        snesSwitch->setState(true);
+        snesSwitch->setOnToggle([this](bool on) { m_scanSNES = on; });
+        m_leftPanel->addView(snesSwitch);
+
+        auto* genesisSwitch = new beiklive::SwitchButton();
+        genesisSwitch->setText("扫描MD游戏");
+        genesisSwitch->setState(true);
+        genesisSwitch->setOnToggle([this](bool on) { m_scanGenesis = on; });
+        m_leftPanel->addView(genesisSwitch);
+
         auto* scanHint = new brls::Label();
         scanHint->setText("自动扫描设置为ON的游戏类型");
         scanHint->setFontSize(16.f);
@@ -204,6 +222,36 @@ namespace beiklive
                 return true;
             });
         m_rightPanel->addView(gbBtn);
+
+        auto* nesBtn = new beiklive::ButtonBox();
+        nesBtn->setText("选择NES游戏的lpl文件");
+        nesBtn->setIcon(BK_RES("img/ui/icon_gba.png"));
+        nesBtn->registerAction("选择", brls::BUTTON_A,
+            [this](brls::View*) -> bool {
+                onSelectLpl((int)beiklive::enums::EmuPlatform::EmuNES);
+                return true;
+            });
+        m_rightPanel->addView(nesBtn);
+
+        auto* snesBtn = new beiklive::ButtonBox();
+        snesBtn->setText("选择SNES游戏的lpl文件");
+        snesBtn->setIcon(BK_RES("img/ui/icon_gba.png"));
+        snesBtn->registerAction("选择", brls::BUTTON_A,
+            [this](brls::View*) -> bool {
+                onSelectLpl((int)beiklive::enums::EmuPlatform::EmuSNES);
+                return true;
+            });
+        m_rightPanel->addView(snesBtn);
+
+        auto* genesisBtn = new beiklive::ButtonBox();
+        genesisBtn->setText("选择MD游戏的lpl文件");
+        genesisBtn->setIcon(BK_RES("img/ui/icon_gba.png"));
+        genesisBtn->registerAction("选择", brls::BUTTON_A,
+            [this](brls::View*) -> bool {
+                onSelectLpl((int)beiklive::enums::EmuPlatform::EmuGenesis);
+                return true;
+            });
+        m_rightPanel->addView(genesisBtn);
 
         auto* hint = new brls::Label();
         hint->setText("lpl文件通常在 /retroarch/playlists 目录下");
@@ -499,6 +547,12 @@ namespace beiklive
                 overlayKey = sk::KEY_DISPLAY_OVERLAY_GBC_PATH; break;
             case beiklive::enums::EmuPlatform::EmuGB:
                 overlayKey = sk::KEY_DISPLAY_OVERLAY_GB_PATH; break;
+            case beiklive::enums::EmuPlatform::EmuNES:
+                overlayKey = sk::KEY_DISPLAY_OVERLAY_NES_PATH; break;
+            case beiklive::enums::EmuPlatform::EmuSNES:
+                overlayKey = sk::KEY_DISPLAY_OVERLAY_SNES_PATH; break;
+            case beiklive::enums::EmuPlatform::EmuGenesis:
+                overlayKey = sk::KEY_DISPLAY_OVERLAY_GENESIS_PATH; break;
             default: break;
             }
             if (!overlayKey.empty())
@@ -515,6 +569,12 @@ namespace beiklive
                 shaderKey = sk::KEY_DISPLAY_SHADER_GBC_PATH; break;
             case beiklive::enums::EmuPlatform::EmuGB:
                 shaderKey = sk::KEY_DISPLAY_SHADER_GB_PATH; break;
+            case beiklive::enums::EmuPlatform::EmuNES:
+                shaderKey = sk::KEY_DISPLAY_SHADER_NES_PATH; break;
+            case beiklive::enums::EmuPlatform::EmuSNES:
+                shaderKey = sk::KEY_DISPLAY_SHADER_SNES_PATH; break;
+            case beiklive::enums::EmuPlatform::EmuGenesis:
+                shaderKey = sk::KEY_DISPLAY_SHADER_GENESIS_PATH; break;
             default: break;
             }
             if (!shaderKey.empty())
@@ -683,11 +743,25 @@ namespace beiklive
         if (m_scanGBA) exts.insert("gba");
         if (m_scanGBC) exts.insert("gbc");
         if (m_scanGB)  exts.insert("gb");
+        if (m_scanNES) { exts.insert("nes"); exts.insert("fds"); }
+        if (m_scanSNES) { exts.insert("sfc"); exts.insert("smc"); }
+        if (m_scanGenesis) {
+            exts.insert("md"); exts.insert("gen"); exts.insert("bin");
+            exts.insert("smd"); exts.insert("sms"); exts.insert("gg");
+            exts.insert("sg"); exts.insert("cue");
+        }
 
         auto getPlatform = [](const std::string& ext) -> int {
             if (ext == "gba") return (int)beiklive::enums::EmuPlatform::EmuGBA;
             if (ext == "gbc") return (int)beiklive::enums::EmuPlatform::EmuGBC;
             if (ext == "gb")  return (int)beiklive::enums::EmuPlatform::EmuGB;
+            if (ext == "nes" || ext == "fds")
+                return (int)beiklive::enums::EmuPlatform::EmuNES;
+            if (ext == "sfc" || ext == "smc")
+                return (int)beiklive::enums::EmuPlatform::EmuSNES;
+            if (ext == "md" || ext == "gen" || ext == "bin" || ext == "smd"
+                || ext == "sms" || ext == "gg" || ext == "sg" || ext == "cue")
+                return (int)beiklive::enums::EmuPlatform::EmuGenesis;
             return -1;
         };
 
@@ -780,6 +854,12 @@ namespace beiklive
                     entry.overlayPath = GET_SETTING_KEY_STR(sk::KEY_DISPLAY_OVERLAY_GBC_PATH, "");
                 else if (platform == (int)beiklive::enums::EmuPlatform::EmuGB)
                     entry.overlayPath = GET_SETTING_KEY_STR(sk::KEY_DISPLAY_OVERLAY_GB_PATH, "");
+                else if (platform == (int)beiklive::enums::EmuPlatform::EmuNES)
+                    entry.overlayPath = GET_SETTING_KEY_STR(sk::KEY_DISPLAY_OVERLAY_NES_PATH, "");
+                else if (platform == (int)beiklive::enums::EmuPlatform::EmuSNES)
+                    entry.overlayPath = GET_SETTING_KEY_STR(sk::KEY_DISPLAY_OVERLAY_SNES_PATH, "");
+                else if (platform == (int)beiklive::enums::EmuPlatform::EmuGenesis)
+                    entry.overlayPath = GET_SETTING_KEY_STR(sk::KEY_DISPLAY_OVERLAY_GENESIS_PATH, "");
 
                 { std::string dm = GET_SETTING_KEY_STR("display.mode", "original");
                   if (dm == "fill") entry.displayMode = 1;

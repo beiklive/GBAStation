@@ -4,10 +4,11 @@
 #include "core/Tools.hpp"
 #include "core/GameSignal.hpp"
 #include "game/retro/LibretroLoader.hpp"
+#include "emulator/IEmulatorCore.hpp"
 
 namespace beiklive::fceumm {
 
-class CoreFceumm {
+class CoreFceumm : public IEmulatorCore {
 public:
     CoreFceumm() = default;
     ~CoreFceumm();
@@ -33,7 +34,8 @@ public:
 
     unsigned GameWidth()  const { return m_core.gameWidth();  }
     unsigned GameHeight() const { return m_core.gameHeight(); }
-    double   Fps()        const { return m_core.fps();        }
+        double   Fps()        const { return m_core.fps();        }
+        double   SampleRate() const { return m_core.sampleRate(); }
 
     void SetFastForwarding(bool ff) { m_core.setFastForwarding(ff); }
     void NotifyConfigUpdated() { m_core.notifyConfigUpdated(); }

@@ -12,16 +12,9 @@
 // libretro public API types
 #include "third_party/mgba/src/platform/libretro/libretro.h"
 #include "core/ConfigManager.hpp"
+#include "core/enums.h"
 
 namespace beiklive {
-
-/// 核心类型标识符，用于选择静态链接的 libretro 核心。
-enum class CoreType {
-    Mgba,
-    Fceumm,
-    Snes9x,
-    Genesis
-};
 
 /// 封装单个已加载的libretro核心。
 /// 处理动态库加载（桌面）或静态符号绑定（Switch/静态链接），
@@ -123,6 +116,7 @@ public:
     unsigned gameWidth()  const { return m_avInfo.geometry.base_width; }
     unsigned gameHeight() const { return m_avInfo.geometry.base_height; }
     double   fps()        const { return m_avInfo.timing.fps; }
+    double   sampleRate() const { return m_avInfo.timing.sample_rate; }
 
     // ---- 设置（通过libretro环境的核心变量）-------------------------
 

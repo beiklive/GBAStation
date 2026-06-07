@@ -25,6 +25,7 @@ struct IEmulatorCore {
     virtual unsigned GameWidth()  const = 0;
     virtual unsigned GameHeight() const = 0;
     virtual double   Fps()        const = 0;
+    virtual double   SampleRate() const = 0;
 
     virtual void SetFastForwarding(bool ff) = 0;
     virtual void NotifyConfigUpdated() = 0;

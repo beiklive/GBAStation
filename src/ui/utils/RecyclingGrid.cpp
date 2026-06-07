@@ -786,10 +786,13 @@ void GameGridView::frame(brls::FrameContext* ctx)
 NVGcolor GameGridView::_getBadgeColor(PlatformBadgeColor color) const
 {
     switch (color) {
-        case PlatformBadgeColor::GBA: return nvgRGBA(108, 77,  191, 220);
-        case PlatformBadgeColor::GBC: return nvgRGBA(0,   112, 221, 220);
-        case PlatformBadgeColor::GB:  return nvgRGBA(0,   168, 107, 220);
-        default:                      return nvgRGBA(100, 100, 100, 200);
+        case PlatformBadgeColor::GBA:     return nvgRGBA(108, 77,  191, 220);
+        case PlatformBadgeColor::GBC:     return nvgRGBA(0,   112, 221, 220);
+        case PlatformBadgeColor::GB:      return nvgRGBA(0,   168, 107, 220);
+        case PlatformBadgeColor::NES:     return nvgRGBA(218, 41,  28,  220);
+        case PlatformBadgeColor::SNES:    return nvgRGBA(160, 100, 180, 220);
+        case PlatformBadgeColor::GENESIS: return nvgRGBA(23,  55,  139, 220);
+        default:                          return nvgRGBA(100, 100, 100, 200);
     }
 }
 

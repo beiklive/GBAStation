@@ -65,9 +65,9 @@ namespace beiklive
     {
         _stopGameThread();
 
-        if (m_gba_core) {
-            delete m_gba_core;
-            m_gba_core = nullptr;
+        if (m_core) {
+            delete m_core;
+            m_core = nullptr;
         }
 
         GameInputManager::instance().clearEmuFunctionKeys();
@@ -149,9 +149,9 @@ namespace beiklive
         }
 
         // 初始化渲染器（首帧时，GL 上下文已就绪）
-        if (!m_rendererReady && m_gba_core && m_gba_core->IsReady()) {
-            unsigned gw = m_gba_core->GameWidth()  > 0 ? m_gba_core->GameWidth()  : beiklive::GetGamePixelWidth(m_gameEntry.platform);
-            unsigned gh = m_gba_core->GameHeight() > 0 ? m_gba_core->GameHeight() : beiklive::GetGamePixelHeight(m_gameEntry.platform);
+        if (!m_rendererReady && m_core && m_core->IsReady()) {
+            unsigned gw = m_core->GameWidth()  > 0 ? m_core->GameWidth()  : beiklive::GetGamePixelWidth(m_gameEntry.platform);
+            unsigned gh = m_core->GameHeight() > 0 ? m_core->GameHeight() : beiklive::GetGamePixelHeight(m_gameEntry.platform);
             // 若游戏条目启用了着色器且路径有效，则传入着色器路径初始化渲染链
             std::string shaderPath;
             if (m_gameEntry.shaderEnabled && !m_gameEntry.shaderPath.empty()) {
@@ -530,53 +530,47 @@ namespace beiklive
     // ============================================================
     void GameView::_registerGameRuntime()
     {
-        if (m_gameEntry.platform == (int)beiklive::enums::EmuPlatform::EmuGBA ||
-            m_gameEntry.platform == (int)beiklive::enums::EmuPlatform::EmuGB  ||
-            m_gameEntry.platform == (int)beiklive::enums::EmuPlatform::EmuGBC)
+        m_core = CreateEmulatorCore(m_gameEntry.platform);
+        if (!m_core) {
+            brls::Logger::warning("不支持的平台：{}", m_gameEntry.platform);
+            return;
+        }
+
+        if (m_core->SetupGame(m_gameEntry))
         {
-            m_gba_core = new beiklive::gba::CoreMgba();
-            if (m_gba_core->SetupGame(m_gameEntry))
+            brls::Logger::debug("核心已初始化，平台={}, 路径={}",
+                                beiklive::tools::platformName(m_gameEntry.platform),
+                                m_gameEntry.path);
+            if (auto* player = dynamic_cast<beiklive::BKAudioPlayer*>(
+                    brls::Application::getAudioPlayer()))
             {
-                brls::Logger::debug("GBA 核心已初始化，游戏路径：{}", m_gameEntry.path);
-                // 初始化音频系统前，等待 UI 音效（如启动点击音）播放完毕，
-                // 避免 BKAudioPlayer 与 AudioManager 共用 audout 设备时产生竞争，引发撕裂音
-                if (auto* player = dynamic_cast<beiklive::BKAudioPlayer*>(
-                        brls::Application::getAudioPlayer()))
-                {
-                    // 最长等待 500ms，一般 UI 音效（点击声）< 100ms，足够覆盖
-                    constexpr std::chrono::milliseconds kAudioPlayerWaitTimeout{500};
-                    auto deadline = std::chrono::steady_clock::now() + kAudioPlayerWaitTimeout;
-                    while (player->isPlaying()
-                           && std::chrono::steady_clock::now() < deadline)
-                        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                }
-                // 初始化音频系统
-                double fps = m_gba_core->Fps();
-                if (fps <= 0.0) fps = 59.7;
-                AudioManager::instance().init(32768, 2);
-                // 丢弃核心初始化阶段（retro_load_game/retro_reset）可能积累的音频数据，
-                // 防止游戏启动初帧推送这些旧数据到硬件，导致刺耳的起始噪音
-                {
-                    std::vector<int16_t> initAudioDiscard;
-                    m_gba_core->DrainAudio(initAudioDiscard);
-                }
-                // 重置信号状态，准备开始游戏
-                GameSignal::instance().resetAll();
-                // 先加载遗留时长（避免与游戏线程的 playTime 累加产生竞态）
-                _initPlayTimeTracking();
-                // 启动游戏线程
-                _startGameThread();
+                constexpr std::chrono::milliseconds kAudioPlayerWaitTimeout{500};
+                auto deadline = std::chrono::steady_clock::now() + kAudioPlayerWaitTimeout;
+                while (player->isPlaying()
+                       && std::chrono::steady_clock::now() < deadline)
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
-            else
+            double fps = m_core->Fps();
+            if (fps <= 0.0) fps = 59.7;
+            double srate = m_core->SampleRate();
+            if (srate <= 0.0) srate = 32768.0;
+            brls::Logger::info("GameView: fps={:.2f} sampleRate={:.0f}", fps, srate);
+            AudioManager::instance().init(static_cast<int>(srate), 2);
             {
-                brls::Logger::error("GBA 核心初始化失败，游戏路径：{}", m_gameEntry.path);
-                delete m_gba_core;
-                m_gba_core = nullptr;
+                std::vector<int16_t> initAudioDiscard;
+                m_core->DrainAudio(initAudioDiscard);
             }
+            GameSignal::instance().resetAll();
+            _initPlayTimeTracking();
+            _startGameThread();
         }
         else
         {
-            brls::Logger::warning("不支持的平台：{}", m_gameEntry.platform);
+            brls::Logger::error("核心初始化失败，平台={}, 路径={}",
+                                beiklive::tools::platformName(m_gameEntry.platform),
+                                m_gameEntry.path);
+            delete m_core;
+            m_core = nullptr;
         }
     }
 
@@ -610,12 +604,12 @@ namespace beiklive
         m_rewindFrameCounter = 0;
 
         RewindFrame frame;
-        if (!m_gba_core->Serialize(frame.state) || frame.state.empty())
+        if (!m_core->Serialize(frame.state) || frame.state.empty())
             return;
 
         // 若启用可视化倒带界面，则同时捕获并压缩缩略图
         if (m_rewindShowUI) {
-            auto videoFrame = m_gba_core->GetVideoFrame();
+            auto videoFrame = m_core->GetVideoFrame();
             if (!videoFrame.pixels.empty() && videoFrame.width > 0 && videoFrame.height > 0) {
                 frame.thumb = _downsampleToRGB565(
                     videoFrame.pixels, videoFrame.width, videoFrame.height,
@@ -660,13 +654,13 @@ namespace beiklive
         if (stateToRestore.empty()) return false;
 
         // 锁外执行反序列化（可能涉及内存分配、状态重建，较耗时）
-        if (!m_gba_core->Unserialize(stateToRestore)) {
+        if (!m_core->Unserialize(stateToRestore)) {
             brls::Logger::warning("GameView: 倒带状态反序列化失败，丢弃该帧");
             return false;
         }
 
         // 运行一帧以刷新视频输出，保证倒带画面流畅
-        m_gba_core->RunFrame();
+        m_core->RunFrame();
         return true;
     }
 
@@ -677,7 +671,7 @@ namespace beiklive
     {
         if (!ff) {
             _saveRewindState();
-            m_gba_core->RunFrame();
+            m_core->RunFrame();
             return 1u;
         }
 
@@ -697,7 +691,7 @@ namespace beiklive
             if (frames == 0) frames = 1u;
             for (unsigned i = 0; i < frames; ++i) {
                 if (i == 0) _saveRewindState();
-                m_gba_core->RunFrame();
+                m_core->RunFrame();
             }
             return frames;
         }
@@ -707,7 +701,7 @@ namespace beiklive
         if (m_ffSlowAccum >= 1.0f) {
             m_ffSlowAccum -= 1.0f;
             _saveRewindState();
-            m_gba_core->RunFrame();
+            m_core->RunFrame();
             return 1u;
         }
         return 0u;
@@ -718,7 +712,7 @@ namespace beiklive
     // ============================================================
     void GameView::_captureVideoFrame()
     {
-        auto frame = m_gba_core->GetVideoFrame();
+        auto frame = m_core->GetVideoFrame();
         if (!frame.pixels.empty()) {
             std::lock_guard<std::mutex> lk(m_frameMutex);
             m_pendingFrame = std::move(frame);
@@ -732,26 +726,33 @@ namespace beiklive
     void GameView::_pushFrameAudio(bool ff)
     {
         if (GameSignal::instance().isMuted()) {
-            m_gba_core->DrainAudio(m_audioDrainBuf);
+            m_core->DrainAudio(m_audioDrainBuf);
             return;
         }
 
-        if (!m_gba_core->DrainAudio(m_audioDrainBuf) || m_audioDrainBuf.empty()) return;
+        if (!m_core->DrainAudio(m_audioDrainBuf) || m_audioDrainBuf.empty()) return;
 
         size_t frames = m_audioDrainBuf.size() / 2;
+
+        static int s_audioDiagFrame = 0;
+        if (++s_audioDiagFrame >= 60) {
+            brls::Logger::debug("audioDiag: frames={} samples={} ringAvail={}",
+                frames, m_audioDrainBuf.size(),
+                AudioManager::instance().available());
+            s_audioDiagFrame = 0;
+        }
 
         if (ff) {
             if (m_ffMute)
                 return;
-            // 快进时全部样本非阻塞写入，由 ringbuffer 自动丢弃旧样本
-            AudioManager::instance().pushSamplesNoBlocking(m_audioDrainBuf.data(), frames);
+        AudioManager::instance().pushSamples(m_audioDrainBuf.data(), frames);
             return;
         }
         if (GameSignal::instance().isRewinding() && GET_SETTING_KEY_INT("rewind.mute", 0)) {
             return;
         }
 
-        AudioManager::instance().pushSamples(m_audioDrainBuf.data(), frames);
+        AudioManager::instance().pushSamplesNoBlocking(m_audioDrainBuf.data(), frames);
     }
 
     // ============================================================
@@ -909,20 +910,21 @@ namespace beiklive
     {
         using Clock = std::chrono::steady_clock;
 
-        if (!m_gba_core || !m_gba_core->IsReady()) return;
+        if (!m_core || !m_core->IsReady()) return;
 
 #ifdef _WIN32
         timeBeginPeriod(1); // 提升 Windows 定时器精度至 1ms
 #endif
 
         // 从核心获取目标帧率
-        double coreFps = m_gba_core->Fps();
+        double coreFps = m_core->Fps();
         if (coreFps <= 0.0 || coreFps > MAX_REASONABLE_FPS)
             coreFps = 59.7275;
 
         // 预计算帧时长（nanoseconds 避免浮点精度损失）
-        const auto frameDurNs   = std::chrono::nanoseconds(
+        const auto baseFrameDurNs = std::chrono::nanoseconds(
             static_cast<long long>(1e9 / coreFps));
+        auto frameDurNs         = baseFrameDurNs;
         const auto spinGuardNs  = std::chrono::nanoseconds(
             static_cast<long long>(std::min(SPIN_GUARD_SEC, 1.0 / coreFps * 0.1) * 1e9));
 
@@ -975,7 +977,7 @@ namespace beiklive
             auto& sig = GameSignal::instance();
 
             // ---- 自动加载即时存档 ----
-            if (!sig.isPaused() && !autoLoadDone && autoLoadSlot > 0 && m_gba_core && m_gba_core->IsReady()) {
+            if (!sig.isPaused() && !autoLoadDone && autoLoadSlot > 0 && m_core && m_core->IsReady()) {
                 if (stateExists(autoLoadSlot - 1)) {
                     _doLoadState(autoLoadSlot - 1);
                     brls::Logger::info("GameView: 自动加载存档槽 {}", autoLoadSlot - 1);
@@ -998,13 +1000,13 @@ namespace beiklive
             if (sig.isPaused()) {
                 if (!wasPaused) {
                     _savePlayTimeCheckpoint();
-                    if (m_sramDirty && m_gba_core && m_gba_core->IsReady())
-                        m_gba_core->saveSram();
+                    if (m_sramDirty && m_core && m_core->IsReady())
+                        m_core->saveSram();
                     wasPaused = true;
                 }
                 // 暂停时仍可消费金手指重载信号（来自菜单关闭时的批量同步）
-                if (sig.consumeReloadCheats() && m_gba_core)
-                    m_gba_core->ReloadCheats();
+                if (sig.consumeReloadCheats() && m_core)
+                    m_core->ReloadCheats();
                 // 暂停时仍可消费退出自动存档信号
                 {
                     int exitSaveSlot = sig.consumeAutoSave();
@@ -1025,7 +1027,7 @@ namespace beiklive
 
             // ---- 重置请求 ----
             if (sig.consumeReset()) {
-                m_gba_core->Reset();
+                m_core->Reset();
                 std::lock_guard<std::mutex> lk(m_rewindMutex);
                 m_rewindBuffer.clear(); // 重置后清空倒带缓冲区
             }
@@ -1045,24 +1047,24 @@ namespace beiklive
             if (restoreIdx >= 0) {
                 std::lock_guard<std::mutex> lk(m_rewindMutex);
                 if (restoreIdx < static_cast<int>(m_rewindBuffer.size())) {
-                    if (!m_gba_core->Unserialize(m_rewindBuffer[restoreIdx].state)) {
+                    if (!m_core->Unserialize(m_rewindBuffer[restoreIdx].state)) {
                         brls::Logger::warning("GameView: 倒带帧恢复失败 idx={}", restoreIdx);
                     } else {
                         for (int i = 0; i < restoreIdx && !m_rewindBuffer.empty(); ++i)
                             m_rewindBuffer.pop_front();
-                        m_gba_core->RunFrame();
+                        m_core->RunFrame();
                     }
                 }
             }
 
             // ---- 金手指切换 ----
             auto cheatReq = sig.consumeCheatToggle();
-            if (cheatReq.pending && m_gba_core)
-                m_gba_core->ToggleCheat(cheatReq.idx, cheatReq.enabled);
+            if (cheatReq.pending && m_core)
+                m_core->ToggleCheat(cheatReq.idx, cheatReq.enabled);
 
             // ---- 金手指重载 ----
-            if (sig.consumeReloadCheats() && m_gba_core)
-                m_gba_core->ReloadCheats();
+            if (sig.consumeReloadCheats() && m_core)
+                m_core->ReloadCheats();
 
             // ---- 退出自动存档 ----
             {
@@ -1100,7 +1102,7 @@ namespace beiklive
                 m_turboBon = false;
                 GameSignal::instance().releaseGameButton(0);
             }
-            m_gba_core->SetButtonsFromSignal();
+            m_core->SetButtonsFromSignal();
 
             // ---- 决定本帧行为 ----
             bool ff      = sig.isFastForward();
@@ -1110,7 +1112,7 @@ namespace beiklive
             if (rew) ff = false;
 
             // 通知核心当前快进状态（供 RETRO_ENVIRONMENT_GET_FASTFORWARDING 查询）
-            m_gba_core->SetFastForwarding(ff);
+            m_core->SetFastForwarding(ff);
 
             // 每帧读取快进倍率（支持菜单中实时调整）
             m_ffMultiplier = GET_SETTING_KEY_FLOAT("fastforward.multiplier", 4.0f);
@@ -1129,6 +1131,14 @@ namespace beiklive
 
             unsigned framesRan = 1u;
 
+            // ── 性能诊断：计时关键路径 ──
+            static int   s_timerFrame = 0;
+            static double s_accStepMs   = 0.0;
+            static double s_accCaptureMs = 0.0;
+            static double s_accAudioMs   = 0.0;
+            static double s_accTotalMs   = 0.0;
+            auto t0 = Clock::now();
+
             if (rew) {
                 // 倒带：从历史缓冲区恢复状态
                 _stepRewind();
@@ -1137,19 +1147,54 @@ namespace beiklive
                 framesRan = _stepFrame(ff);
             }
 
+            auto t1 = Clock::now();
+
             // ---- 取出视频帧暂存（慢动作跳过帧时不捕获）----
             if (framesRan > 0)
                 _captureVideoFrame();
 
+            auto t2 = Clock::now();
+
             // ---- 推送音频（慢动作跳过帧时不推送）----
             if (framesRan > 0)
                 _pushFrameAudio(ff);
+
+            auto t3 = Clock::now();
+
+            // ── 性能诊断：累积计时 ──
+            if (framesRan > 0) {
+                s_accStepMs    += std::chrono::duration<double, std::milli>(t1 - t0).count();
+                s_accCaptureMs += std::chrono::duration<double, std::milli>(t2 - t1).count();
+                s_accAudioMs   += std::chrono::duration<double, std::milli>(t3 - t2).count();
+                s_accTotalMs   += std::chrono::duration<double, std::milli>(t3 - t0).count();
+            }
+            if (++s_timerFrame >= 60) {
+                brls::Logger::debug("perf: step={:.2f}ms capture={:.2f}ms audio={:.2f}ms total={:.2f}ms",
+                    s_accStepMs/60.0, s_accCaptureMs/60.0, s_accAudioMs/60.0, s_accTotalMs/60.0);
+                s_timerFrame = 0;
+                s_accStepMs = s_accCaptureMs = s_accAudioMs = s_accTotalMs = 0.0;
+            }
 
             // ---- FPS 统计（慢动作跳过帧时仍计入时间）----
             _updateFpsStats(framesRan, fpsLastTime, fpsCount);
 
             // ---- SRAM 自动落盘检测 ----
             _checkAndAutoSaveSram();
+
+            // ── 音频驱动帧率微调（PLL：误差比例校正，±2% 限幅）──
+            if (framesRan > 0 && !ff) {
+                size_t ringFill = AudioManager::instance().available();
+                double targetFill = 8000.0; // ~10 帧音频，足够缓冲，反馈及时
+                double errorRatio = (static_cast<double>(ringFill) - targetFill) / targetFill;
+                double gain = 0.01; // 每帧纠正 1% 比例误差
+                double correction = 1.0 + errorRatio * gain;
+                if (correction > 1.02) correction = 1.02;
+                if (correction < 0.98) correction = 0.98;
+                frameDurNs = std::chrono::nanoseconds(
+                    static_cast<long long>(baseFrameDurNs.count() * correction));
+            } else {
+                frameDurNs = baseFrameDurNs;
+            }
 
             // ---- 帧率限制（快进时不限速）----
             _throttleFrameRate(ff, nextFrameTarget, frameDurNs, spinGuardNs);
@@ -1159,8 +1204,8 @@ namespace beiklive
         _saveAndCommitPlayTime();
 
         // ---- 强制保存 SRAM ----
-        if (m_gba_core && m_gba_core->IsReady()) {
-            m_gba_core->saveSram();
+        if (m_core && m_core->IsReady()) {
+            m_core->saveSram();
             brls::Logger::info("GameView: SRAM saved on exit");
         }
         brls::Logger::info("GameView: 游戏循环结束 playTime={}",
@@ -1211,10 +1256,10 @@ namespace beiklive
 
     void GameView::_doSaveState(int slot)
     {
-        if (!m_gba_core || !m_gba_core->IsReady()) return;
+        if (!m_core || !m_core->IsReady()) return;
 
         std::vector<uint8_t> buf;
-        if (!m_gba_core->Serialize(buf) || buf.empty()) {
+        if (!m_core->Serialize(buf) || buf.empty()) {
             brls::Logger::warning("GameView: 存档序列化失败 (slot {})", slot);
             brls::sync([slot](){
                 brls::Application::notify("存档失败 (slot " + std::to_string(slot) + ")");
@@ -1238,7 +1283,7 @@ namespace beiklive
         brls::Logger::info("GameView: 已保存到 {} ({} bytes)", path, buf.size());
 
         // 保存缩略图
-        auto frame = m_gba_core->GetVideoFrame();
+        auto frame = m_core->GetVideoFrame();
         if (!frame.pixels.empty() && frame.width > 0 && frame.height > 0) {
             std::string thumbPath = getStateThumbPath(slot);
             stbi_write_png(thumbPath.c_str(),
@@ -1262,7 +1307,7 @@ namespace beiklive
 
     void GameView::_doLoadState(int slot)
     {
-        if (!m_gba_core || !m_gba_core->IsReady()) return;
+        if (!m_core || !m_core->IsReady()) return;
 
         std::string path = getStatePath(slot);
         if (!std::filesystem::exists(path)) {
@@ -1297,7 +1342,7 @@ namespace beiklive
         std::streamsize got = f.gcount();
         f.close();
 
-        if (!m_gba_core->Unserialize(buf)) {
+        if (!m_core->Unserialize(buf)) {
             brls::Logger::warning("GameView: 存档反序列化失败 (slot {})", slot);
             brls::sync([slot](){
                 brls::Application::notify("读取失败 (slot " + std::to_string(slot) + ")");
@@ -1383,11 +1428,11 @@ namespace beiklive
 
     void GameView::requestCheatPathUpdate(const std::string& path)
     {
-        if (m_gba_core)
+        if (m_core)
         {
             m_gameEntry.cheatPath = path;
-            m_gba_core->SetCheatPath(path);
-            m_gba_core->ReloadCheats();
+            m_core->SetCheatPath(path);
+            m_core->ReloadCheats();
         }
     }
 
@@ -1503,8 +1548,8 @@ namespace beiklive
 
     void GameView::_onConfigUpdated()
     {
-        if (m_gba_core)
-            m_gba_core->NotifyConfigUpdated();
+        if (m_core)
+            m_core->NotifyConfigUpdated();
     }
 
     // ============================================================
@@ -1635,15 +1680,15 @@ namespace beiklive
     // ============================================================
     void GameView::_checkAndAutoSaveSram()
     {
-        if (!m_gba_core || !m_gba_core->IsReady()) return;
+        if (!m_core || !m_core->IsReady()) return;
 
         auto now = std::chrono::steady_clock::now();
         double sinceCheck = std::chrono::duration<double>(now - m_sramLastCheck).count();
         if (sinceCheck < SRAM_CHECK_INTERVAL) return;
         m_sramLastCheck = now;
 
-        size_t sz = m_gba_core->getSramSize();
-        const void* ptr = m_gba_core->getSramData();
+        size_t sz = m_core->getSramSize();
+        const void* ptr = m_core->getSramData();
         if (!ptr || sz == 0) return;
 
         uint32_t crc = _crc32Sram(ptr, sz);
@@ -1658,7 +1703,7 @@ namespace beiklive
             double sinceDirty = std::chrono::duration<double>(now - m_sramDirtyTime).count();
             if (sinceDirty >= SRAM_FLUSH_DELAY)
             {
-                m_gba_core->saveSram();
+                m_core->saveSram();
                 m_sramDirty = false;
                 brls::Logger::debug("GameView: SRAM auto-saved");
             }

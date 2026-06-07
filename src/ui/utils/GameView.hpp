@@ -4,7 +4,7 @@
 #include "core/GameSignal.hpp"
 #include "core/GameTimer.hpp"
 #include "game/control/GameInputManager.hpp"
-#include "game/mgba/GameRun.hpp"
+#include "emulator/IEmulatorCore.hpp"
 #include "game/render/GameRenderer.hpp"
 #include "ui/utils/GameOverlayRenderer.hpp"
 
@@ -122,7 +122,7 @@ namespace beiklive
             bool m_rewindShowUI       = false;  ///< 是否启用可视化倒带界面
 
             // ---- libretro 核心 -----------------------------------------------
-            beiklive::gba::CoreMgba* m_gba_core = nullptr; ///< mgba 核心实例
+            IEmulatorCore* m_core = nullptr;
 
             // ---- 渲染器 -------------------------------------------------------
             beiklive::GameRenderer m_renderer; ///< 游戏帧渲染器（GL 纹理 + 直接绘制）

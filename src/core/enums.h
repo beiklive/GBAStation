@@ -2,6 +2,14 @@
 #include <borealis.hpp>
 namespace beiklive
 {
+    /// 核心类型标识符，用于选择静态链接的 libretro 核心。
+    enum class CoreType {
+        Mgba,
+        Fceumm,
+        Snes9x,
+        Genesis
+    };
+
     /// 游戏画面缩放模式
     enum class ScreenMode : int
     {
