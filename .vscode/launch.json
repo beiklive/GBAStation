@@ -1,38 +1,38 @@
 {
-    // 使用 IntelliSense 了解相关属性。 
-    // 悬停以查看现有属性的描述。
-    // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "(gdb) Windows 上的 Bash 启动",
+            "name": "Debug GBAStation (MinGW64)",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/GBAStation.exe",
-            "args": [],
-            "stopAtEntry": false,
-            "cwd": "${fileDirname}",
-            "environment": [],
-            "externalConsole": false,
-            "pipeTransport": {
-                "debuggerPath": "/usr/bin/gdb",
-                "pipeProgram": "${env:windir}\\system32\\bash.exe",
-                "pipeArgs": ["-c"],
-                "pipeCwd": ""
-            },
-            "setupCommands": [
-                {
-                    "description": "为 gdb 启用整齐打印",
-                    "text": "-enable-pretty-printing",
-                    "ignoreFailures": true
-                },
-                {
-                    "description": "将反汇编风格设置为 Intel",
-                    "text": "-gdb-set disassembly-flavor intel",
-                    "ignoreFailures": true
-                }
-            ]
-        }
 
+            "program": "${workspaceFolder}/build/GBAStation.exe",
+
+            "args": [],
+
+            "stopAtEntry": false,
+
+            "cwd": "${workspaceFolder}",
+
+            "environment": [],
+
+            "externalConsole": false,
+
+            "MIMode": "gdb",
+
+            "miDebuggerPath": "E:\\bin\\msys64\\mingw64\\bin\\gdb.exe",
+
+    "setupCommands": [
+        {
+            "text": "handle SIGFPE stop print"
+        },
+        {
+            "text": "handle SIGSEGV stop print"
+        },
+        {
+            "text": "handle SIGABRT stop print"
+        }
+    ]
+        }
     ]
 }

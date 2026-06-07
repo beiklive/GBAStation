@@ -669,8 +669,8 @@ bool LibretroLoader::s_environmentCallback(unsigned cmd, void* data)
         }
         case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT: {
             const retro_pixel_format* fmt = static_cast<const retro_pixel_format*>(data);
-            if (*fmt == RETRO_PIXEL_FORMAT_XRGB8888 ||
-                *fmt == RETRO_PIXEL_FORMAT_RGB565) {
+            // Genesis Plus GX 使用 RGB565 时内部有除零风险，强制退回 XRGB1555
+            if (*fmt == RETRO_PIXEL_FORMAT_XRGB8888) {
                 s_current->m_pixelFormat = *fmt;
                 return true;
             }
