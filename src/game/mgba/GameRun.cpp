@@ -117,14 +117,23 @@ namespace beiklive::gba
 
     bool CoreMgba::_loadCore(const std::string &corePath)
     {
-        // 初始化核心
-        if (!m_core.load(corePath))
+        if (corePath.empty())
         {
-            brls::Logger::error("Failed to load libretro core from: {}", corePath);
-            return false;
+            if (!m_core.load(beiklive::CoreType::Mgba))
+            {
+                brls::Logger::error("Failed to static-load mGBA core");
+                return false;
+            }
+        }
+        else
+        {
+            if (!m_core.load(corePath))
+            {
+                brls::Logger::error("Failed to load libretro core from: {}", corePath);
+                return false;
+            }
         }
 
-        // 检查核心状态
         if (!m_core.initCore())
         {
             brls::Logger::error("retro_init() failed");

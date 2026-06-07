@@ -1,0 +1,224 @@
+#include "CoreGenesis.hpp"
+
+namespace beiklive::genesis {
+
+CoreGenesis::~CoreGenesis()
+{
+    if (m_ready) Cleanup();
+}
+
+bool CoreGenesis::SetupGame(beiklive::GameEntry GameEntry)
+{
+    m_gameEntry = std::move(GameEntry);
+    if (_loadCore())
+    {
+        _initConfig();
+        if (_loadRom(m_gameEntry.path))
+        {
+            _loadSram();
+            _loadCheats();
+            m_core.reset();
+            m_ready = true;
+            return true;
+        }
+    }
+    return false;
+}
+
+void CoreGenesis::Cleanup()
+{
+    if (!m_ready) return;
+    m_ready = false;
+    _saveSram();
+    m_core.unloadGame();
+    m_core.deinitCore();
+    m_core.unload();
+}
+
+void CoreGenesis::RunFrame()
+{
+    if (!m_ready) return;
+    m_core.run();
+}
+
+void CoreGenesis::Reset()
+{
+    if (!m_ready) return;
+    m_core.reset();
+}
+
+bool CoreGenesis::Serialize(std::vector<uint8_t>& outBuf) const
+{
+    if (!m_ready) return false;
+    size_t sz = m_core.serializeSize();
+    if (sz == 0) return false;
+    outBuf.resize(sz);
+    return m_core.serialize(outBuf.data(), sz);
+}
+
+bool CoreGenesis::Unserialize(const std::vector<uint8_t>& buf)
+{
+    if (!m_ready || buf.empty()) return false;
+    return m_core.unserialize(buf.data(), buf.size());
+}
+
+void CoreGenesis::_initConfig()
+{
+    beiklive::ConfigManager* cfg = beiklive::SettingManager;
+    if (!cfg) return;
+
+    using CV = beiklive::ConfigValue;
+    cfg->SetDefault("core.genesis_plus_gx_region",          CV(std::string("auto")));
+    cfg->SetDefault("core.genesis_plus_gx_overclock",       CV(std::string("disabled")));
+    cfg->SetDefault("core.genesis_plus_gx_no_sprite_limit", CV(std::string("disabled")));
+    cfg->SetDefault("core.genesis_plus_gx_aspect_ratio",    CV(std::string("auto")));
+    cfg->SetDefault("core.genesis_plus_gx_render",          CV(std::string("single field")));
+    cfg->SetDefault("core.genesis_plus_gx_blargg_ntsc_filter", CV(std::string("disabled")));
+    cfg->SetDefault("core.genesis_plus_gx_lcd_filter",      CV(std::string("disabled")));
+    cfg->SetDefault("core.genesis_plus_gx_frameskip",       CV(std::string("disabled")));
+    cfg->SetDefault("core.genesis_plus_gx_gg_extra",        CV(std::string("disabled")));
+    cfg->SetDefault("core.genesis_plus_gx_ym2413",          CV(std::string("auto")));
+    cfg->SetDefault("core.genesis_plus_gx_sound_output",    CV(std::string("stereo")));
+    cfg->SetDefault("core.genesis_plus_gx_bram",            CV(std::string("per bios")));
+    cfg->SetDefault("core.genesis_plus_gx_width",           CV(std::string("320")));
+    cfg->SetDefault("core.genesis_plus_gx_height",          CV(std::string("224")));
+    cfg->SetDefault("core.genesis_plus_gx_addr_error",      CV(std::string("disabled")));
+    cfg->Save();
+
+    m_core.setConfigManager(cfg);
+    m_core.setSystemDirectory(beiklive::path::biosPath());
+}
+
+bool CoreGenesis::_loadCore()
+{
+    if (!m_core.load(beiklive::CoreType::Genesis))
+    {
+        brls::Logger::error("Failed to static-load Genesis Plus GX core");
+        return false;
+    }
+    if (!m_core.initCore())
+    {
+        brls::Logger::error("retro_init() failed for Genesis Plus GX");
+        m_core.unload();
+        return false;
+    }
+    return true;
+}
+
+bool CoreGenesis::_loadRom(const std::string &romPath)
+{
+    if (romPath.empty())
+    {
+        brls::Logger::error("ROM path is empty");
+        m_core.deinitCore();
+        m_core.unload();
+        return false;
+    }
+    if (!std::filesystem::exists(romPath))
+    {
+        brls::Logger::error("ROM not found: {}", romPath);
+        m_core.deinitCore();
+        m_core.unload();
+        return false;
+    }
+    if (!m_core.loadGame(romPath))
+    {
+        brls::Logger::error("retro_load_game() failed for: {}", romPath);
+        m_core.deinitCore();
+        m_core.unload();
+        return false;
+    }
+    brls::Logger::info("ROM loaded: {} ({}x{} @ {:.2f} fps)",
+                       romPath,
+                       m_core.gameWidth(), m_core.gameHeight(),
+                       m_core.fps());
+    return true;
+}
+
+bool CoreGenesis::_loadSram()
+{
+    size_t sz = m_core.getMemorySize(RETRO_MEMORY_SAVE_RAM);
+    if (sz == 0)
+    {
+        brls::Logger::info("CoreGenesis: no SRAM region in core, skipping SRAM load");
+        return true;
+    }
+
+    std::string path = m_gameEntry.savePath + beiklive::path::SPLIT_CHAR
+                     + beiklive::tools::getFileNameWithoutExtension(m_gameEntry.path) + ".sav";
+    if (path.empty()) return true;
+
+    if (!std::filesystem::exists(path))
+    {
+        brls::Logger::info("CoreGenesis: no SRAM file found at {}, skipping", path);
+        return true;
+    }
+
+    std::ifstream f(path, std::ios::binary);
+    if (!f) return true;
+
+    std::vector<uint8_t> buf(sz, 0);
+    f.read(reinterpret_cast<char *>(buf.data()), static_cast<std::streamsize>(sz));
+    std::streamsize got = f.gcount();
+
+    void *sramPtr = m_core.getMemoryData(RETRO_MEMORY_SAVE_RAM);
+    if (sramPtr)
+    {
+        std::memcpy(sramPtr, buf.data(), static_cast<size_t>(got));
+        brls::Logger::debug("CoreGenesis: SRAM loaded from {} ({} bytes)", path, got);
+    }
+    return true;
+}
+
+bool CoreGenesis::_saveSram()
+{
+    size_t sz = m_core.getMemorySize(RETRO_MEMORY_SAVE_RAM);
+    if (sz == 0) return true;
+
+    const void *sramPtr = m_core.getMemoryData(RETRO_MEMORY_SAVE_RAM);
+    if (!sramPtr) return true;
+
+    std::string path = m_gameEntry.savePath + beiklive::path::SPLIT_CHAR
+                     + beiklive::tools::getFileNameWithoutExtension(m_gameEntry.path) + ".sav";
+    if (path.empty()) return true;
+
+    std::ofstream f(path, std::ios::binary);
+    if (!f) return true;
+
+    f.write(reinterpret_cast<const char *>(sramPtr), static_cast<std::streamsize>(sz));
+    if (!f) return true;
+
+    brls::Logger::info("CoreGenesis: SRAM saved to {} ({} bytes)", path, sz);
+    return true;
+}
+
+bool CoreGenesis::_loadCheats()
+{
+    std::string path = m_gameEntry.cheatPath;
+    if (path.empty()) return true;
+
+    m_cheats = beiklive::parseChtFile(path);
+    if (m_cheats.empty()) return true;
+
+    brls::Logger::info("CoreGenesis: loaded {} cheats from {}", m_cheats.size(), path);
+
+    m_core.cheatReset();
+    for (size_t i = 0; i < m_cheats.size(); ++i)
+    {
+        if (m_cheats[i].enabled)
+            m_core.cheatSet(static_cast<unsigned>(i), true, m_cheats[i].code);
+    }
+    return true;
+}
+
+void CoreGenesis::_updateCheats()
+{
+    m_core.cheatReset();
+    for (size_t i = 0; i < m_cheats.size(); ++i)
+    {
+        if (m_cheats[i].enabled)
+            m_core.cheatSet(static_cast<unsigned>(i), true, m_cheats[i].code);
+    }
+}
+
+} // namespace beiklive::genesis

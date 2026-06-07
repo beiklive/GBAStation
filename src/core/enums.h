@@ -38,7 +38,10 @@ namespace beiklive::enums
         NONE,
         EmuGBA,
         EmuGBC,
-        EmuGB
+        EmuGB,
+        EmuNES,
+        EmuSNES,
+        EmuGenesis
     };
     // 文件类型,用于文件浏览器
     enum class FileType
@@ -47,6 +50,9 @@ namespace beiklive::enums
         GBA_ROM, // GBA文件
         GBC_ROM, // GBC文件
         GB_ROM,  // GB文件
+        NES_ROM, // NES/Famicom文件
+        SNES_ROM,// SNES/SFC文件
+        GENESIS_ROM, // Genesis/MD文件
 
         // 上面的顺序必须与EmuPlatform保持一致，方便后续通过平台类型直接转换为文件类型
 
