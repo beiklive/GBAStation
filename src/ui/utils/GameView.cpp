@@ -560,6 +560,22 @@ namespace beiklive
                 std::vector<int16_t> initAudioDiscard;
                 m_core->DrainAudio(initAudioDiscard);
             }
+
+            // 音频缓冲预热：跑帧直到环形缓冲区达到 PLL 目标值，避免启动时 PLL 过度修正
+            {
+                const size_t kPrebufferTarget = 8000;
+                std::vector<int16_t> buf;
+                for (int i = 0; i < 120 && AudioManager::instance().available() < kPrebufferTarget; ++i) {
+                    m_core->RunFrame();
+                    if (m_core->DrainAudio(buf) && !buf.empty()) {
+                        size_t f = buf.size() / 2;
+                        AudioManager::instance().pushSamplesNoBlocking(buf.data(), f);
+                    }
+                }
+                brls::Logger::debug("GameView: audio prebuffer done, ringFill={}",
+                    AudioManager::instance().available());
+            }
+
             GameSignal::instance().resetAll();
             _initPlayTimeTracking();
             _startGameThread();
@@ -1002,6 +1018,7 @@ namespace beiklive
                     _savePlayTimeCheckpoint();
                     if (m_sramDirty && m_core && m_core->IsReady())
                         m_core->saveSram();
+                    AudioManager::instance().flushRingBuffer(); // 立即停止音频
                     wasPaused = true;
                 }
                 // 暂停时仍可消费金手指重载信号（来自菜单关闭时的批量同步）
