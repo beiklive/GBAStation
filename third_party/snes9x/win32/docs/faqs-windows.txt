@@ -1,0 +1,67 @@
+FAQ for Windows Port
+
+The majority of the things in this FAQ are based off the Windows port of Snes9x.
+While some of the information is relevant to most, or all, ports, no guarantees
+are made that what is said will be accurate for all versions.
+
+--------------------------------------------------------------------------------
+
+Q: I get a dx9 dll error on startup. What to do?
+  A: Snes9x requires DirectX9 to run correctly. You can install it manually from
+here: https://www.microsoft.com/en-us/Download/confirmation.aspx?id=35
+
+Q: I recently purchased a gamepad controller. Will it work on Snes9x?
+  A: More than likely yes. Any USB compatible controller will work. Generally
+this means any controller made within the past 7 years or so. If you are having
+problems consider updating drivers and recalibrating your controller.
+
+Q: In Snes9x my gamepad is having trouble inputting any diagonal directions on
+the D-Pad. How can I fix this?
+  A: While setting up your controller functions in Snes9x, make sure you do not
+setup the diagonal buttons; leave them blank. Ye olde Snes only had 4 buttons on
+the D-Pad: Up, down, left and right. By pressing two directions you would go in
+the appropriate diagonal direction (game specific, of course). If you have
+accidently set a value in the diagonal boxes already either select them one at a
+time and hit "Escape", or press the "Toggle Diagonals" button.
+
+Q: Why do you have diagonals in the controller setup anyway?
+  A: Simple really. Some people enjoy using the keyboard, or have no other
+choice. In the next chapter the topic of keyboard input limitations will be
+addressed. Being able to input the diagonals can help hinder that occurrence. It
+can also make keyboard usage a bit easier... assigning the directional controls
+to the number pad for instance.
+
+Q: I have a translation patch (.ips) for my game. Now what do I do so I can
+use it?
+  A: Make sure both your ROM image and .ips file are in the same folder. Finally
+make sure they have the exact same name (minus file extensions, of course). As
+an example "Pie.smc" should have "Pie.ips" and "Super_Pie3(E).smc" should have
+"Super_Pie3(E).ips". Now open up Snes9x, load your ROM and voila! It should be
+noted that IPS patches are almost always designed for use with a specific dump
+of a ROM. If you are positive you are using it correctly, but it still does not
+work, consider trying a ROM from a different source.
+
+Q: I think my options in Snes9x got screwed up, how do I reset them?
+  A: Snes9x uses a config file, so you can edit your options there in any text
+editor if you're having problems. You can safely delete your config file (called
+snes9x.conf) to reset all of the options. If it doesn't let you delete or change
+it, make sure to close Snes9x first.
+
+Q: Why can't I press many buttons at once? Especially in Chrono Trigger.
+  A: Most standard keyboards (There are a few exceptions, though only a few) can
+only output so much data to the computer at a time. As such your computer is
+often unable to carry-out the instructions you have given it. There are
+solutions abound, of course, and here they are now: Lovely recommendation one is
+to rearrange the keymapping in Snes9x so that all the necessary buttons are on a
+single keystroke... That way you can press 1 key and have it do all the actions.
+The draw back to this is that if you set "a" to jump and shoot you will be
+unable to jump without shooting, or shoot without jumping, until you change it
+back. The super sexy recommendation number 2 is to set the ctrl and alt keys to
+some of the necessary buttons. The draw back to this is that often these buttons
+can cause problems if used in tandem with other keys, due to Windows shortcuts.
+You may, for instance, be using alt to jump and while in midair hit f4 to load a
+savestate... That will close the program, which is bad. Finally, and the method
+I personally recommend, is to purchase a gamepad. The draw backs to this are
+that it requires time and money.
+
+--------------------------------------------------------------------------------

@@ -1,0 +1,85 @@
+/* FCE Ultra - NES/Famicom Emulator
+ *
+ * Copyright notice for this file:
+ *  Copyright (C) 2025 NewRisingSun
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+ */
+
+#include "mapinc.h"
+#include "asic_vrc2and4.h"
+#include "cartram.h"
+
+static uint8_t mask;
+static uint8_t compare;
+
+extern uint32_t RefreshAddr;
+static writefunc writePPU;
+
+static SFORMAT stateRegs[] = {
+	{ &mask, 1, "CHRM" },
+	{ &compare, 1, "CHRC" },
+        { 0 }
+};
+
+static void sync () {
+	int bank;
+	VRC24_syncWRAM(0);
+	VRC24_syncPRG(0x01F, 0x000);
+	for (bank = 0; bank < 8; bank++) setchr1r((VRC24_getCHRBank(bank) &mask) == compare? 0x10: 0x00, bank <<10, VRC24_getCHRBank(bank));
+	VRC24_syncMirror();
+}
+
+static DECLFW (Mapper252_253_interceptPPUWrite) {
+	if (~RefreshAddr &0x2000) {
+		int bank = VRC24_getCHRBank(RefreshAddr >>10 &7);
+		switch(bank) {
+			case 0x88: mask = 0xFC; compare = 0x4C; sync(); break;
+			case 0xC2: mask = 0xFE; compare = 0x7C; sync(); break;
+			case 0xC8: mask = 0xFE; compare = 0x04; sync(); break;
+		}
+	}
+	writePPU(A, V);
+}
+
+static void Mapper252_power (void) {
+	mask = 0xFE;
+	compare = 0x06;
+	VRC24_power();
+	writePPU = GetWriteHandler(0x2007);
+	SetWriteHandler(0x2007, 0x2007, Mapper252_253_interceptPPUWrite);
+}
+
+static void Mapper253_power (void) {
+	mask = 0xFE; /* There are two board revisions, the earlier one with a non-switchable mask/compare FE/04 and a later switchable one that starts with FC/28 */
+	compare = 0x04;
+	VRC24_power();
+	writePPU = GetWriteHandler(0x2007);
+	SetWriteHandler(0x2007, 0x2007, Mapper252_253_interceptPPUWrite);
+}
+
+void Mapper252_Init (CartInfo *info) {
+	VRC4_init(info, sync, 0x4, 0x8, 1, NULL, NULL, NULL, NULL, NULL);
+	CartRAM_init(info, 8, 2);
+	info->Power = Mapper252_power;
+	AddExState(stateRegs, ~0, 0, 0);
+}
+
+void Mapper253_Init (CartInfo *info) {
+	VRC4_init(info, sync, 0x4, 0x8, 1, NULL, NULL, NULL, NULL, NULL);
+	CartRAM_init(info, 8, 2);
+	info->Power = Mapper253_power;
+	AddExState(stateRegs, ~0, 0, 0);
+}

@@ -1,0 +1,108 @@
+/* FCE Ultra - NES/Famicom Emulator
+ *
+ * Copyright notice for this file:
+ *  Copyright (C) 2007 CaH4e3
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+ */
+
+#include "mapinc.h"
+#include "mmc3.h"
+
+static void UNLA9746PWrap(uint32_t A, uint8_t V) {
+	int prgAND = EXPREGS[0] &0x40? 0x0F: 0x1F;
+	int prgOR = EXPREGS[0] <<4 &0x10 | EXPREGS[1] &0x20;
+	setprg8(A, V &prgAND | prgOR &~prgAND);
+}
+
+static void UNLA9746CWrap(uint32_t A, uint8_t V) {
+	int chrAND = EXPREGS[0] &0x80? 0x7F: 0xFF;
+	int chrOR = EXPREGS[0] <<4 &0x80 | EXPREGS[1] <<3 &0x100;
+	setchr1(A, V &chrAND | chrOR &~chrAND);
+}
+
+static DECLFW(UNLA9746WriteOuter) {
+	EXPREGS[A &1] = V;
+	FixMMC3PRG(MMC3_cmd);
+	FixMMC3CHR(MMC3_cmd);
+}
+
+static DECLFW(UNLA9746WriteASIC) {
+	int index;
+	
+	if (A &1)
+	{ 	/* Register data */
+		if (~EXPREGS[2] &0x20)
+		{	/* Scrambled mode inactive */
+			MMC3_CMDWrite(A, V);
+		}
+		else
+		{	/* Scrambled mode active */
+			if (MMC3_cmd >=0x08 && MMC3_cmd <=0x1F)
+			{	/* Scrambled CHR register */
+				index = (MMC3_cmd -8) >>2;
+				if (MMC3_cmd &1)
+				{	/* LSB nibble */
+					DRegBuf[index] &=~0x0F;
+					DRegBuf[index] |=V >>1 &0x0F;
+				}
+				else
+				{	/* MSB nibble */
+					DRegBuf[index] &=~0xF0;
+					DRegBuf[index] |=V <<4 &0xF0;
+				}
+				FixMMC3CHR(MMC3_cmd);
+			}
+			else
+			if (MMC3_cmd >=0x25 && MMC3_cmd <=0x26)
+			{	/* Scrambled PRG register */
+				DRegBuf[6 | MMC3_cmd &1] =V >>5 &1 | V >>3 &2 | V >>1 &4 | V <<1 &8;
+				FixMMC3PRG(MMC3_cmd);
+			}
+		}
+	}
+	else
+	{	/* Register index */
+		MMC3_CMDWrite(A, V);
+		if (A &2) EXPREGS[2] =V;
+	}
+}
+
+static void UNLA9746Power(void) {
+	GenMMC3Power();
+	SetWriteHandler(0x5000, 0x5FFF, UNLA9746WriteOuter);
+	SetWriteHandler(0x8000, 0xBFFF, UNLA9746WriteASIC);
+	EXPREGS[0] = 0x00;
+	EXPREGS[1] = 0x20;
+	EXPREGS[2] = 0x00;
+	MMC3RegReset();
+}
+
+static void UNLA9746Reset(void) {
+	EXPREGS[0] = 0x00;
+	EXPREGS[1] = 0x20;
+	EXPREGS[2] = 0x00;
+	MMC3RegReset();
+}
+
+void UNLA9746_Init(CartInfo *info) {
+	GenMMC3_Init(info, 256, 256, 0, 0);
+	pwrap = UNLA9746PWrap;
+	cwrap = UNLA9746CWrap;
+	info->Power = UNLA9746Power;
+	info->Reset = UNLA9746Reset;
+	AddExState(EXPREGS, 3, 0, "EXPR");
+}
+
