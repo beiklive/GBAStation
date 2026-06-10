@@ -14,6 +14,7 @@ bool CoreGenesis::SetupGame(beiklive::GameEntry GameEntry)
     if (_loadCore())
     {
         _initConfig();
+        brls::Logger::debug("[CoreGenesis] _initConfig done, about to load ROM...");
         if (_loadRom(m_gameEntry.path))
         {
             _loadSram();
@@ -57,6 +58,7 @@ bool CoreGenesis::_loadCore()
 
 bool CoreGenesis::_loadRom(const std::string &romPath)
 {
+    brls::Logger::debug("[CoreGenesis] _loadRom ENTER");
     brls::Logger::debug("[CoreGenesis] _loadRom: {}", romPath);
     if (romPath.empty())
     {
