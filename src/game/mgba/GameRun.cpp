@@ -43,6 +43,7 @@ void CoreMgba::Cleanup()
     _saveSram();
     _saveRtc();
     m_core.unloadGame();
+    m_core.deinitCore();
 }
 
     // ============================================================

@@ -36,6 +36,7 @@ void CorePicoDrive::Cleanup()
     m_ready = false;
     _saveSram();
     m_core.unloadGame();
+    m_core.deinitCore();
 }
 
 bool CorePicoDrive::_loadCore()
