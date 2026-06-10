@@ -142,7 +142,7 @@ namespace beiklive // 全局功能函数
         case (int)beiklive::enums::EmuPlatform::EmuSNES:
             return "";  // Snes9x 静态链接，无需路径
         case (int)beiklive::enums::EmuPlatform::EmuGenesis:
-            return "";  // Genesis Plus GX 静态链接，无需路径
+            return "";  // PicoDrive 静态链接，无需路径
         default:
             return "";
         }

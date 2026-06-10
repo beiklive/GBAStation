@@ -536,6 +536,8 @@ void LibretroLoader::deinitCore()
     if (!m_coreReady) return;
     brls::Logger::debug("[LibretroLoader] deinitCore: calling retro_deinit()");
     fn_deinit();
+    int idx = static_cast<int>(m_coreType);
+    s_coreInitialized[idx] = false;
     m_coreReady = false;
 }
 
@@ -908,6 +910,11 @@ size_t LibretroLoader::s_audioSampleBatchCallback(const int16_t* data, size_t fr
     std::lock_guard<std::mutex> lk(s_current->m_audioMutex);
     auto& buf = s_current->m_audioBuffer;
     const size_t samples = frames * 2; // 立体声
+    static constexpr size_t MAX_AUDIO_SAMPLES = 16384;
+    if (buf.size() + samples > MAX_AUDIO_SAMPLES) {
+        size_t excess = buf.size() + samples - MAX_AUDIO_SAMPLES;
+        buf.erase(buf.begin(), buf.begin() + static_cast<std::ptrdiff_t>(excess));
+    }
     buf.insert(buf.end(), data, data + samples);
     return frames;
 }

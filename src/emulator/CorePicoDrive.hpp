@@ -6,12 +6,12 @@
 #include "game/retro/LibretroLoader.hpp"
 #include "emulator/IEmulatorCore.hpp"
 
-namespace beiklive::genesis {
+namespace beiklive::picodrive {
 
-class CoreGenesis : public IEmulatorCore {
+class CorePicoDrive : public IEmulatorCore {
 public:
-    CoreGenesis() = default;
-    ~CoreGenesis();
+    CorePicoDrive() = default;
+    ~CorePicoDrive();
 
     bool SetupGame(beiklive::GameEntry GameEntry);
     void Cleanup();
@@ -34,8 +34,8 @@ public:
 
     unsigned GameWidth()  const { return m_core.gameWidth();  }
     unsigned GameHeight() const { return m_core.gameHeight(); }
-        double   Fps()        const { return m_core.fps();        }
-        double   SampleRate() const { return m_core.sampleRate(); }
+    double   Fps()        const { return m_core.fps();        }
+    double   SampleRate() const { return m_core.sampleRate(); }
 
     void SetFastForwarding(bool ff) { m_core.setFastForwarding(ff); }
     void NotifyConfigUpdated() { m_core.notifyConfigUpdated(); }
@@ -77,4 +77,4 @@ private:
     bool _saveSram();
 };
 
-} // namespace beiklive::genesis
+} // namespace beiklive::picodrive

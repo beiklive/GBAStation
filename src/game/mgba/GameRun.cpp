@@ -22,10 +22,10 @@ namespace beiklive::gba
             _initConfig(); // 向核心注册默认配置项
             if (_loadRom(m_gameEntry.path))
             {
+                m_core.reset();
                 _loadSram();
                 _loadRtc();
                 _loadCheats();
-                m_core.reset(); // 加载存档/金手指后确保核心从干净状态启动
                 m_ready = true;
                 return true;
             }
@@ -146,14 +146,12 @@ void CoreMgba::Cleanup()
         if (romPath.empty())
         {
             brls::Logger::error("ROM path is empty");
-            m_core.deinitCore();
             m_core.unload();
             return false;
         }
         if (!std::filesystem::exists(romPath))
         {
             brls::Logger::error("ROM not found: {}", romPath);
-            m_core.deinitCore();
             m_core.unload();
             return false;
         }
@@ -161,7 +159,6 @@ void CoreMgba::Cleanup()
         if (!m_core.loadGame(romPath))
         {
             brls::Logger::error("retro_load_game() failed for: {}", romPath);
-            m_core.deinitCore();
             m_core.unload();
             return false;
         }

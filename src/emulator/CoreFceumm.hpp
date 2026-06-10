@@ -34,8 +34,8 @@ public:
 
     unsigned GameWidth()  const { return m_core.gameWidth();  }
     unsigned GameHeight() const { return m_core.gameHeight(); }
-        double   Fps()        const { return m_core.fps();        }
-        double   SampleRate() const { return m_core.sampleRate(); }
+    double   Fps()        const { return m_core.fps();        }
+    double   SampleRate() const { return m_core.sampleRate(); }
 
     void SetFastForwarding(bool ff) { m_core.setFastForwarding(ff); }
     void NotifyConfigUpdated() { m_core.notifyConfigUpdated(); }

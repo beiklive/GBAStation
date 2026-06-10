@@ -1,4 +1,5 @@
 #include "CoreFceumm.hpp"
+#include "core/CoreUtils.hpp"
 
 namespace beiklive::fceumm {
 
@@ -15,9 +16,9 @@ bool CoreFceumm::SetupGame(beiklive::GameEntry GameEntry)
         _initConfig();
         if (_loadRom(m_gameEntry.path))
         {
+            m_core.reset();
             _loadSram();
             _loadCheats();
-            m_core.reset();
             m_ready = true;
             return true;
         }
@@ -108,21 +109,18 @@ bool CoreFceumm::_loadRom(const std::string &romPath)
     if (romPath.empty())
     {
         brls::Logger::error("ROM path is empty");
-        m_core.deinitCore();
         m_core.unload();
         return false;
     }
     if (!std::filesystem::exists(romPath))
     {
         brls::Logger::error("ROM not found: {}", romPath);
-        m_core.deinitCore();
         m_core.unload();
         return false;
     }
     if (!m_core.loadGame(romPath))
     {
         brls::Logger::error("retro_load_game() failed for: {}", romPath);
-        m_core.deinitCore();
         m_core.unload();
         return false;
     }
@@ -135,88 +133,27 @@ bool CoreFceumm::_loadRom(const std::string &romPath)
 
 bool CoreFceumm::_loadSram()
 {
-    size_t sz = m_core.getMemorySize(RETRO_MEMORY_SAVE_RAM);
-    if (sz == 0)
-    {
-        brls::Logger::info("CoreFceumm: no SRAM region in core, skipping SRAM load");
-        return true;
-    }
-
-    std::string path = m_gameEntry.savePath + beiklive::path::SPLIT_CHAR
-                     + beiklive::tools::getFileNameWithoutExtension(m_gameEntry.path) + ".sav";
-    if (path.empty()) return true;
-
-    if (!std::filesystem::exists(path))
-    {
-        brls::Logger::info("CoreFceumm: no SRAM file found at {}, skipping", path);
-        return true;
-    }
-
-    std::ifstream f(path, std::ios::binary);
-    if (!f) return true;
-
-    std::vector<uint8_t> buf(sz, 0);
-    f.read(reinterpret_cast<char *>(buf.data()), static_cast<std::streamsize>(sz));
-    std::streamsize got = f.gcount();
-
-    void *sramPtr = m_core.getMemoryData(RETRO_MEMORY_SAVE_RAM);
-    if (sramPtr)
-    {
-        std::memcpy(sramPtr, buf.data(), static_cast<size_t>(got));
-        brls::Logger::debug("CoreFceumm: SRAM loaded from {} ({} bytes)", path, got);
-    }
-    return true;
+    return core_utils::loadSram(m_core, m_gameEntry.savePath,
+        beiklive::tools::getFileNameWithoutExtension(m_gameEntry.path));
 }
 
 bool CoreFceumm::_saveSram()
 {
-    size_t sz = m_core.getMemorySize(RETRO_MEMORY_SAVE_RAM);
-    if (sz == 0) return true;
-
-    const void *sramPtr = m_core.getMemoryData(RETRO_MEMORY_SAVE_RAM);
-    if (!sramPtr) return true;
-
-    std::string path = m_gameEntry.savePath + beiklive::path::SPLIT_CHAR
-                     + beiklive::tools::getFileNameWithoutExtension(m_gameEntry.path) + ".sav";
-    if (path.empty()) return true;
-
-    std::ofstream f(path, std::ios::binary);
-    if (!f) return true;
-
-    f.write(reinterpret_cast<const char *>(sramPtr), static_cast<std::streamsize>(sz));
-    if (!f) return true;
-
-    brls::Logger::info("CoreFceumm: SRAM saved to {} ({} bytes)", path, sz);
-    return true;
+    return core_utils::saveSram(m_core, m_gameEntry.savePath,
+        beiklive::tools::getFileNameWithoutExtension(m_gameEntry.path));
 }
 
 bool CoreFceumm::_loadCheats()
 {
-    std::string path = m_gameEntry.cheatPath;
-    if (path.empty()) return true;
-
-    m_cheats = beiklive::parseChtFile(path);
-    if (m_cheats.empty()) return true;
-
-    brls::Logger::info("CoreFceumm: loaded {} cheats from {}", m_cheats.size(), path);
-
-    m_core.cheatReset();
-    for (size_t i = 0; i < m_cheats.size(); ++i)
-    {
-        if (m_cheats[i].enabled)
-            m_core.cheatSet(static_cast<unsigned>(i), true, m_cheats[i].code);
-    }
-    return true;
+    bool ok = core_utils::loadCheats(m_core, m_gameEntry.cheatPath, m_cheats);
+    if (ok && !m_cheats.empty())
+        brls::Logger::info("CoreFceumm: loaded {} cheats from {}", m_cheats.size(), m_gameEntry.cheatPath);
+    return ok;
 }
 
 void CoreFceumm::_updateCheats()
 {
-    m_core.cheatReset();
-    for (size_t i = 0; i < m_cheats.size(); ++i)
-    {
-        if (m_cheats[i].enabled)
-            m_core.cheatSet(static_cast<unsigned>(i), true, m_cheats[i].code);
-    }
+    core_utils::updateCheats(m_core, m_cheats);
 }
 
 } // namespace beiklive::fceumm
