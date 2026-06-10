@@ -9,6 +9,7 @@ CoreGenesis::~CoreGenesis()
 
 bool CoreGenesis::SetupGame(beiklive::GameEntry GameEntry)
 {
+    brls::Logger::debug("[CoreGenesis] SetupGame: path={}", GameEntry.path);
     m_gameEntry = std::move(GameEntry);
     if (_loadCore())
     {
@@ -19,19 +20,68 @@ bool CoreGenesis::SetupGame(beiklive::GameEntry GameEntry)
             _loadCheats();
             m_core.reset();
             m_ready = true;
+            brls::Logger::debug("[CoreGenesis] SetupGame OK");
             return true;
         }
     }
+    brls::Logger::error("[CoreGenesis] SetupGame failed");
     return false;
 }
 
 void CoreGenesis::Cleanup()
 {
+    brls::Logger::debug("[CoreGenesis] Cleanup");
     if (!m_ready) return;
     m_ready = false;
     _saveSram();
     m_core.unloadGame();
-    // 不调用 deinitCore() — PicoDrive 不支持重复 retro_deinit/retro_init
+}
+
+bool CoreGenesis::_loadCore()
+{
+    brls::Logger::debug("[CoreGenesis] _loadCore: loading PicoDrive");
+    if (!m_core.load(beiklive::CoreType::Genesis))
+    {
+        brls::Logger::error("[CoreGenesis] _loadCore: load failed");
+        return false;
+    }
+    if (!m_core.initCore())
+    {
+        brls::Logger::error("[CoreGenesis] _loadCore: initCore failed");
+        m_core.unload();
+        return false;
+    }
+    brls::Logger::debug("[CoreGenesis] _loadCore OK");
+    return true;
+}
+
+bool CoreGenesis::_loadRom(const std::string &romPath)
+{
+    brls::Logger::debug("[CoreGenesis] _loadRom: {}", romPath);
+    if (romPath.empty())
+    {
+        brls::Logger::error("[CoreGenesis] _loadRom: empty path");
+        m_core.deinitCore();
+        m_core.unload();
+        return false;
+    }
+    if (!std::filesystem::exists(romPath))
+    {
+        brls::Logger::error("[CoreGenesis] _loadRom: file not found");
+        m_core.deinitCore();
+        m_core.unload();
+        return false;
+    }
+    if (!m_core.loadGame(romPath))
+    {
+        brls::Logger::error("[CoreGenesis] _loadRom: loadGame failed");
+        m_core.deinitCore();
+        m_core.unload();
+        return false;
+    }
+    brls::Logger::debug("[CoreGenesis] _loadRom OK: {}x{} @ {:.2f}fps",
+        m_core.gameWidth(), m_core.gameHeight(), m_core.fps());
+    return true;
 }
 
 void CoreGenesis::RunFrame()
@@ -79,52 +129,6 @@ void CoreGenesis::_initConfig()
 
     m_core.setConfigManager(cfg);
     m_core.setSystemDirectory(beiklive::path::biosPath());
-}
-
-bool CoreGenesis::_loadCore()
-{
-    if (!m_core.load(beiklive::CoreType::Genesis))
-    {
-        brls::Logger::error("Failed to static-load PicoDrive core");
-        return false;
-    }
-    if (!m_core.initCore())
-    {
-        brls::Logger::error("retro_init() failed for PicoDrive");
-        m_core.unload();
-        return false;
-    }
-    return true;
-}
-
-bool CoreGenesis::_loadRom(const std::string &romPath)
-{
-    if (romPath.empty())
-    {
-        brls::Logger::error("ROM path is empty");
-        m_core.deinitCore();
-        m_core.unload();
-        return false;
-    }
-    if (!std::filesystem::exists(romPath))
-    {
-        brls::Logger::error("ROM not found: {}", romPath);
-        m_core.deinitCore();
-        m_core.unload();
-        return false;
-    }
-    if (!m_core.loadGame(romPath))
-    {
-        brls::Logger::error("retro_load_game() failed for: {}", romPath);
-        m_core.deinitCore();
-        m_core.unload();
-        return false;
-    }
-    brls::Logger::info("ROM loaded: {} ({}x{} @ {:.2f} fps)",
-                       romPath,
-                       m_core.gameWidth(), m_core.gameHeight(),
-                       m_core.fps());
-    return true;
 }
 
 bool CoreGenesis::_loadSram()

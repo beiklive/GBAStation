@@ -27,6 +27,8 @@ namespace beiklive
 
     GameView::GameView(beiklive::GameEntry gameData) : m_gameEntry(std::move(gameData))
     {
+        brls::Logger::debug("[GameView] constructor: platform={}, path={}",
+            m_gameEntry.platform, m_gameEntry.path);
         _brls_inputLocked = false;
         GameInputManager::instance().sayHello();
         HIDE_BRLS_HIGHLIGHT(this);
@@ -63,6 +65,8 @@ namespace beiklive
 
     GameView::~GameView()
     {
+        brls::Logger::debug("[GameView] destructor: platform={}, path={}",
+            m_gameEntry.platform, m_gameEntry.path);
         _stopGameThread();
 
         if (m_core) {
@@ -530,9 +534,10 @@ namespace beiklive
     // ============================================================
     void GameView::_registerGameRuntime()
     {
+        brls::Logger::debug("[GameView] _registerGameRuntime: platform={}", m_gameEntry.platform);
         m_core = CreateEmulatorCore(m_gameEntry.platform);
         if (!m_core) {
-            brls::Logger::warning("不支持的平台：{}", m_gameEntry.platform);
+            brls::Logger::warning("[GameView] _registerGameRuntime: unsupported platform={}", m_gameEntry.platform);
             return;
         }
 
@@ -554,6 +559,7 @@ namespace beiklive
             if (fps <= 0.0) fps = 59.7;
             double srate = m_core->SampleRate();
             if (srate <= 0.0) srate = 32768.0;
+            brls::Logger::debug("[GameView] audio init: fps={:.2f} sampleRate={:.0f}", fps, srate);
             AudioManager::instance().init(static_cast<int>(srate), 2);
             {
                 std::vector<int16_t> initAudioDiscard;
@@ -561,6 +567,7 @@ namespace beiklive
             }
             GameSignal::instance().resetAll();
             _initPlayTimeTracking();
+            brls::Logger::debug("[GameView] starting game thread...");
             _startGameThread();
         }
         else
@@ -578,15 +585,18 @@ namespace beiklive
     // ============================================================
     void GameView::_startGameThread()
     {
+        brls::Logger::debug("[GameView] _startGameThread");
         m_running.store(true, std::memory_order_release);
         m_gameThread = std::thread(&GameView::_gameLoop, this);
     }
 
     void GameView::_stopGameThread()
     {
+        brls::Logger::debug("[GameView] _stopGameThread begin");
         m_running.store(false, std::memory_order_release);
         if (m_gameThread.joinable())
             m_gameThread.join();
+        brls::Logger::debug("[GameView] _stopGameThread end");
     }
 
     // ============================================================
@@ -903,6 +913,8 @@ namespace beiklive
 
         if (!m_core || !m_core->IsReady()) return;
 
+        brls::Logger::debug("[GameView] _gameLoop enter");
+
 #ifdef _WIN32
         timeBeginPeriod(1); // 提升 Windows 定时器精度至 1ms
 #endif
@@ -1145,18 +1157,21 @@ namespace beiklive
             // ---- SRAM 自动落盘检测 ----
             _checkAndAutoSaveSram();
 
-            // ── 音频驱动帧率微调（PLL：误差比例校正，±2% 限幅）──
+            // ── PLL：仅减速不加速 ──
             if (framesRan > 0 && !ff) {
                 size_t ringFill = AudioManager::instance().available();
                 double targetFill = 8000.0;
                 if (targetFill > 0.0) {
                     double errorRatio = (static_cast<double>(ringFill) - targetFill) / targetFill;
-                    double gain = 0.01;
-                    double correction = 1.0 + errorRatio * gain;
-                    if (correction > 1.02) correction = 1.02;
-                    if (correction < 0.98) correction = 0.98;
-                    frameDurNs = std::chrono::nanoseconds(
-                        static_cast<long long>(baseFrameDurNs.count() * correction));
+                    if (errorRatio > 0.0) {
+                        double gain = 0.01;
+                        double correction = 1.0 + errorRatio * gain;
+                        if (correction > 1.02) correction = 1.02;
+                        frameDurNs = std::chrono::nanoseconds(
+                            static_cast<long long>(baseFrameDurNs.count() * correction));
+                    } else {
+                        frameDurNs = baseFrameDurNs;
+                    }
                 }
             } else {
                 frameDurNs = baseFrameDurNs;
@@ -1183,6 +1198,7 @@ namespace beiklive
 #ifdef _WIN32
         timeEndPeriod(1);
 #endif
+        brls::Logger::debug("[GameView] _gameLoop exit");
     }
 
     // ============================================================

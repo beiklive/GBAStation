@@ -282,6 +282,7 @@ bool LibretroLoader::load(CoreType coreType)
     unload();
 
     m_coreType = coreType;
+    brls::Logger::debug("[LibretroLoader] load(CoreType={})", static_cast<int>(coreType));
 
     // 根据核心类型选择对应的符号集
     switch (coreType) {
@@ -406,6 +407,7 @@ bool LibretroLoader::load(CoreType coreType)
     fn_set_input_poll         (s_inputPollCallback);
     fn_set_input_state        (s_inputStateCallback);
 
+    brls::Logger::debug("[LibretroLoader] load(CoreType) OK, handle={}", m_handle != nullptr);
     return true;
 }
 
@@ -465,6 +467,8 @@ bool LibretroLoader::load(const std::string& libPath)
 
 void LibretroLoader::unload()
 {
+    brls::Logger::debug("[LibretroLoader] unload: gameLoaded={}, coreReady={}",
+        m_gameLoaded, m_coreReady);
     if (m_gameLoaded && fn_unload_game) {
         fn_unload_game();
         m_gameLoaded = false;
@@ -512,21 +516,25 @@ static bool s_coreInitialized[4] = {false, false, false, false};
 
 bool LibretroLoader::initCore()
 {
-    if (!m_handle) return false;
+    if (!m_handle) { brls::Logger::debug("[LibretroLoader] initCore: no handle"); return false; }
     int idx = static_cast<int>(m_coreType);
     if (s_coreInitialized[idx]) {
+        brls::Logger::debug("[LibretroLoader] initCore: already initialized (idx={})", idx);
         m_coreReady = true;
         return true;
     }
+    brls::Logger::debug("[LibretroLoader] initCore: calling retro_init()...");
     fn_init();
     s_coreInitialized[idx] = true;
     m_coreReady = true;
+    brls::Logger::debug("[LibretroLoader] initCore: retro_init() OK");
     return true;
 }
 
 void LibretroLoader::deinitCore()
 {
     if (!m_coreReady) return;
+    brls::Logger::debug("[LibretroLoader] deinitCore: calling retro_deinit()");
     fn_deinit();
     m_coreReady = false;
 }
@@ -548,24 +556,31 @@ void LibretroLoader::getSystemAvInfo(retro_system_av_info* info) const
 
 bool LibretroLoader::loadGame(const std::string& romPath)
 {
-    if (!m_coreReady) return false;
+    if (!m_coreReady) { brls::Logger::debug("[LibretroLoader] loadGame: core not ready"); return false; }
 
+    brls::Logger::debug("[LibretroLoader] loadGame: path={}", romPath);
     retro_game_info info{};
     info.path = romPath.c_str();
     info.data = nullptr;
     info.size = 0;
     info.meta = nullptr;
 
-    if (!fn_load_game(&info)) return false;
+    if (!fn_load_game(&info)) {
+        brls::Logger::error("[LibretroLoader] loadGame: retro_load_game failed");
+        return false;
+    }
 
     fn_get_system_av_info(&m_avInfo);
     m_gameLoaded = true;
+    brls::Logger::debug("[LibretroLoader] loadGame OK: {}x{} @ {:.2f}fps",
+        m_avInfo.geometry.base_width, m_avInfo.geometry.base_height, m_avInfo.timing.fps);
     return true;
 }
 
 void LibretroLoader::unloadGame()
 {
     if (!m_gameLoaded) return;
+    brls::Logger::debug("[LibretroLoader] unloadGame");
     fn_unload_game();
     m_gameLoaded = false;
 }
