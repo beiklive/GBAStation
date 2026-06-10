@@ -13,7 +13,9 @@ bool CoreGenesis::SetupGame(beiklive::GameEntry GameEntry)
     m_gameEntry = std::move(GameEntry);
     if (_loadCore())
     {
+#ifndef __SWITCH__
         _initConfig();
+#endif
         if (_loadRom(m_gameEntry.path))
         {
             _loadSram();

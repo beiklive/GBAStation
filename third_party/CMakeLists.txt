@@ -305,88 +305,9 @@ set_target_properties(snes9x_core PROPERTIES
 )
 
 # =========================================================
-# Genesis Plus GX (仅 Switch — PicoDrive 在 Switch 上有内存冲突)
+# PicoDrive 核心 – 替代 Genesis Plus GX（MD/Genesis/SMS/GG/CD/32X）
+# 按 Makefile.libretro + platform/common/common.mak
 # =========================================================
-if (PLATFORM_SWITCH)
-set(GENESIS_PATH ${CMAKE_CURRENT_SOURCE_DIR}/Genesis-Plus-GX)
-set(GENESIS_CORE_DIR ${GENESIS_PATH})
-
-file(GLOB GENESIS_CORE_SRC ${GENESIS_CORE_DIR}/core/*.c)
-file(GLOB GENESIS_Z80_SRC   ${GENESIS_CORE_DIR}/core/z80/*.c)
-file(GLOB GENESIS_M68K_SRC  ${GENESIS_CORE_DIR}/core/m68k/*.c)
-file(GLOB GENESIS_NTSC_SRC  ${GENESIS_CORE_DIR}/core/ntsc/*.c)
-file(GLOB GENESIS_SOUND_SRC ${GENESIS_CORE_DIR}/core/sound/*.c)
-file(GLOB GENESIS_TREMOR_SRC ${GENESIS_CORE_DIR}/core/sound/tremor/*.c)
-file(GLOB GENESIS_INPUTHW_SRC ${GENESIS_CORE_DIR}/core/input_hw/*.c)
-file(GLOB GENESIS_CDHW_SRC  ${GENESIS_CORE_DIR}/core/cd_hw/*.c)
-file(GLOB GENESIS_CARTHW_SRC ${GENESIS_CORE_DIR}/core/cart_hw/*.c)
-file(GLOB GENESIS_SVP_SRC   ${GENESIS_CORE_DIR}/core/cart_hw/svp/*.c)
-
-set(GENESIS_LRC_DIR ${GENESIS_CORE_DIR}/libretro/libretro-common)
-set(GENESIS_LRC_SRC
-    ${GENESIS_LRC_DIR}/streams/file_stream.c
-    ${GENESIS_LRC_DIR}/streams/file_stream_transforms.c
-    ${GENESIS_LRC_DIR}/compat/fopen_utf8.c
-    ${GENESIS_LRC_DIR}/compat/compat_snprintf.c
-    ${GENESIS_LRC_DIR}/compat/compat_strl.c
-    ${GENESIS_LRC_DIR}/compat/compat_strcasestr.c
-    ${GENESIS_LRC_DIR}/compat/compat_posix_string.c
-    ${GENESIS_LRC_DIR}/encodings/encoding_utf.c
-    ${GENESIS_LRC_DIR}/file/file_path.c
-    ${GENESIS_LRC_DIR}/file/retro_dirent.c
-    ${GENESIS_LRC_DIR}/lists/string_list.c
-    ${GENESIS_LRC_DIR}/lists/dir_list.c
-    ${GENESIS_LRC_DIR}/memmap/memalign.c
-    ${GENESIS_LRC_DIR}/string/stdstring.c
-    ${GENESIS_LRC_DIR}/vfs/vfs_implementation.c
-    ${GENESIS_LRC_DIR}/cdrom/cdrom.c
-    ${GENESIS_LRC_DIR}/vfs/vfs_implementation_cdrom.c
-)
-
-set(GENESIS_ZLIB_DIR ${GENESIS_CORE_DIR}/libretro/deps/zlib-1.2.11)
-set(GENESIS_ZLIB_SRC ${GENESIS_ZLIB_DIR}/adler32.c ${GENESIS_ZLIB_DIR}/crc32.c ${GENESIS_ZLIB_DIR}/inffast.c ${GENESIS_ZLIB_DIR}/inflate.c ${GENESIS_ZLIB_DIR}/inftrees.c ${GENESIS_ZLIB_DIR}/zutil.c)
-
-set(GENESIS_DEPS_DIR ${GENESIS_CORE_DIR}/libretro/deps)
-set(GENESIS_LZMA_SRC ${GENESIS_DEPS_DIR}/lzma-19.00/src/Alloc.c ${GENESIS_DEPS_DIR}/lzma-19.00/src/Bra86.c ${GENESIS_DEPS_DIR}/lzma-19.00/src/BraIA64.c ${GENESIS_DEPS_DIR}/lzma-19.00/src/CpuArch.c ${GENESIS_DEPS_DIR}/lzma-19.00/src/Delta.c ${GENESIS_DEPS_DIR}/lzma-19.00/src/LzFind.c ${GENESIS_DEPS_DIR}/lzma-19.00/src/Lzma86Dec.c ${GENESIS_DEPS_DIR}/lzma-19.00/src/LzmaDec.c ${GENESIS_DEPS_DIR}/lzma-19.00/src/LzmaEnc.c ${GENESIS_DEPS_DIR}/lzma-19.00/src/Sort.c)
-set(GENESIS_LIBCHDR_SRC ${GENESIS_DEPS_DIR}/libchdr/src/libchdr_bitstream.c ${GENESIS_DEPS_DIR}/libchdr/src/libchdr_cdrom.c ${GENESIS_DEPS_DIR}/libchdr/src/libchdr_chd.c ${GENESIS_DEPS_DIR}/libchdr/src/libchdr_flac.c ${GENESIS_DEPS_DIR}/libchdr/src/libchdr_huffman.c)
-set(GENESIS_ZSTD_SRC ${GENESIS_DEPS_DIR}/zstd/lib/common/entropy_common.c ${GENESIS_DEPS_DIR}/zstd/lib/common/error_private.c ${GENESIS_DEPS_DIR}/zstd/lib/common/fse_decompress.c ${GENESIS_DEPS_DIR}/zstd/lib/common/zstd_common.c ${GENESIS_DEPS_DIR}/zstd/lib/common/xxhash.c ${GENESIS_DEPS_DIR}/zstd/lib/decompress/huf_decompress.c ${GENESIS_DEPS_DIR}/zstd/lib/decompress/zstd_ddict.c ${GENESIS_DEPS_DIR}/zstd/lib/decompress/zstd_decompress.c ${GENESIS_DEPS_DIR}/zstd/lib/decompress/zstd_decompress_block.c)
-
-add_library(genesis_core STATIC
-    ${GENESIS_CORE_SRC} ${GENESIS_Z80_SRC} ${GENESIS_M68K_SRC} ${GENESIS_NTSC_SRC}
-    ${GENESIS_SOUND_SRC} ${GENESIS_TREMOR_SRC} ${GENESIS_INPUTHW_SRC} ${GENESIS_CDHW_SRC}
-    ${GENESIS_CARTHW_SRC} ${GENESIS_SVP_SRC} ${GENESIS_CORE_DIR}/libretro/libretro.c
-    ${GENESIS_LRC_SRC} ${GENESIS_ZLIB_SRC} ${GENESIS_LZMA_SRC} ${GENESIS_LIBCHDR_SRC} ${GENESIS_ZSTD_SRC}
-)
-
-target_include_directories(genesis_core PRIVATE
-    ${GENESIS_CORE_DIR}/libretro ${GENESIS_LRC_DIR}/include
-    ${GENESIS_CORE_DIR}/core ${GENESIS_CORE_DIR}/core/z80 ${GENESIS_CORE_DIR}/core/m68k
-    ${GENESIS_CORE_DIR}/core/ntsc ${GENESIS_CORE_DIR}/core/sound ${GENESIS_CORE_DIR}/core/sound/minimp3
-    ${GENESIS_CORE_DIR}/core/input_hw ${GENESIS_CORE_DIR}/core/cd_hw
-    ${GENESIS_CORE_DIR}/core/cart_hw ${GENESIS_CORE_DIR}/core/cart_hw/svp
-    ${GENESIS_CORE_DIR}/core/sound/tremor ${GENESIS_DEPS_DIR}/libchdr/include
-    ${GENESIS_DEPS_DIR}/lzma-19.00/include ${GENESIS_DEPS_DIR}/zlib-1.2.11 ${GENESIS_DEPS_DIR}/zstd/lib
-)
-
-target_compile_definitions(genesis_core PRIVATE
-    __LIBRETRO__ USE_LIBRETRO_VFS USE_16BPP_RENDERING
-    LSB_FIRST BYTE_ORDER=LITTLE_ENDIAN M68K_OVERCLOCK_SHIFT=20 Z80_OVERCLOCK_SHIFT=20
-    HAVE_YM3438_CORE HAVE_OPLL_CORE HAVE_ZLIB USE_LIBTREMOR USE_LIBCHDR
-    USE_PER_SOUND_CHANNELS_CONFIG _7ZIP_ST ZSTD_DISABLE_ASM
-    MAXROMSIZE=33554432 HAVE_CDROM ENABLE_SUB_68K_ADDRESS_ERROR_EXCEPTIONS
-    "INLINE=static inline"
-)
-
-apply_retro_symbol_rename(genesis_core genesis)
-apply_data_symbol_rename(genesis_core genesis)
-target_compile_definitions(genesis_core PRIVATE "cart_size=genesis_cart_size")
-set_target_properties(genesis_core PROPERTIES C_STANDARD 11 CXX_STANDARD 11)
-endif()
-
-# =========================================================
-# PicoDrive 核心（仅桌面 — Switch 使用 Genesis Plus GX）
-# =========================================================
-if (NOT PLATFORM_SWITCH)
 set(PICODRIVE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/picodrive)
 
 set(PICODRIVE_CORE_SRC
@@ -579,6 +500,4 @@ set_target_properties(picodrive_core PROPERTIES
     C_STANDARD 11
     CXX_STANDARD 11
 )
-
-endif()  # NOT PLATFORM_SWITCH → PicoDrive section
 
