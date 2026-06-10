@@ -122,7 +122,46 @@
 
 ---
 
-## 紧急修复: Fix F 回调实例 ID 检查导致所有核心失效 🔥
+## PicoDrive mmap 崩溃修复
+
+### 根因定位
+
+**崩溃位置**: `third_party/picodrive/pico/cart.c:740`
+```c
+rom = plat_mmap(0x02000000, rom_alloc_size, 0, 0);
+```
+
+**调用链**:
+```
+PicoCartAlloc → plat_mmap(0x02000000, ...) → mmap → VirtualAlloc(0x02000000, ...)
+```
+
+**根因**: Windows 上 `VirtualAlloc` 的非 NULL 地址参数是严格请求 — 若地址区域已被占用则直接返回 NULL，不像 Linux `mmap` 仅作 hint。`retro_init()` 中分配的资源（`vout_buf`、SH2 DRC cache 等）在之前 `retro_deinit()` 永不执行的架构中累积，导致进程虚拟地址空间碎片化，3 次加载后 `VirtualAlloc(0x02000000, 2MB)` 无法找到连续空间。
+
+### 修复
+
+- **文件**: `third_party/picodrive/pico/cart.c:738-740`
+- **改动**: `plat_mmap(0x02000000, ...)` → `plat_mmap(0, ...)`，让 OS 自行选择可用地址
+- **兼容性**: PicoDrive 的 `plat_mmap` 已处理地址不匹配情况（`is_fixed=0` 时接受任意地址再返回），此修改对 Linux/macOS 无影响（它们本来就是 hint），对 Windows 消除固定地址冲突
+
+### 验证
+
+其他 `0x02000000` 引用均非 host mmap 地址:
+| 文件 | 用途 | 安全 |
+|------|------|------|
+| `compiler.c/memory.c` | MD 模拟地址空间检查 | ✅ |
+| `emit_arm.c` | ARM 指令编码常量 | ✅ |
+| `m68kcpu.h/m68kdasm.c` | 68K 位掩码 | ✅ |
+| `libretro.c` (`pico_mmaps[]`) | 仅 3DS 平台 | ✅ |
+
+### retro_deinit 调用链确认
+
+```
+CorePicoDrive::Cleanup()
+  → m_core.unloadGame()   → picodrive_retro_unload_game() → PicoCartUnload → VirtualFree
+  → m_core.deinitCore()   → picodrive_retro_deinit() → PicoExit → free(vout_buf,...)
+                          → s_coreInitialized[3] = false  ← 下次会话可重新 retro_init
+```
 
 ### 根因
 

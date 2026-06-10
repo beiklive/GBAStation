@@ -501,3 +501,141 @@ set_target_properties(picodrive_core PROPERTIES
     CXX_STANDARD 11
 )
 
+# =========================================================
+# Genesis Plus GX – MD / Genesis / SMS / GG / Sega CD
+# 动态/静态链接 libretro 核心
+# 替代 PicoDrive，更稳定、兼容性更好
+# =========================================================
+set(GENESIS_PLUS_GX_PATH ${CMAKE_CURRENT_SOURCE_DIR}/genesis_plus_gx)
+
+set(GENESIS_PLUS_GX_CORE_SRC_DIRS
+    ${GENESIS_PLUS_GX_PATH}/core
+    ${GENESIS_PLUS_GX_PATH}/core/z80
+    ${GENESIS_PLUS_GX_PATH}/core/m68k
+    ${GENESIS_PLUS_GX_PATH}/core/ntsc
+    ${GENESIS_PLUS_GX_PATH}/core/sound
+    ${GENESIS_PLUS_GX_PATH}/core/sound/minimp3
+    ${GENESIS_PLUS_GX_PATH}/core/input_hw
+    ${GENESIS_PLUS_GX_PATH}/core/cd_hw
+    ${GENESIS_PLUS_GX_PATH}/core/cart_hw
+    ${GENESIS_PLUS_GX_PATH}/core/cart_hw/svp
+)
+
+set(GENESIS_PLUS_GX_LRC_SRC
+    ${GENESIS_PLUS_GX_PATH}/libretro/libretro.c
+    ${GENESIS_PLUS_GX_PATH}/libretro/libretro-common/streams/file_stream.c
+    ${GENESIS_PLUS_GX_PATH}/libretro/libretro-common/streams/file_stream_transforms.c
+    ${GENESIS_PLUS_GX_PATH}/libretro/libretro-common/compat/fopen_utf8.c
+    ${GENESIS_PLUS_GX_PATH}/libretro/libretro-common/compat/compat_snprintf.c
+    ${GENESIS_PLUS_GX_PATH}/libretro/libretro-common/compat/compat_strl.c
+    ${GENESIS_PLUS_GX_PATH}/libretro/libretro-common/compat/compat_strcasestr.c
+    ${GENESIS_PLUS_GX_PATH}/libretro/libretro-common/compat/compat_posix_string.c
+    ${GENESIS_PLUS_GX_PATH}/libretro/libretro-common/encodings/encoding_utf.c
+    ${GENESIS_PLUS_GX_PATH}/libretro/libretro-common/file/file_path.c
+    ${GENESIS_PLUS_GX_PATH}/libretro/libretro-common/file/retro_dirent.c
+    ${GENESIS_PLUS_GX_PATH}/libretro/libretro-common/lists/string_list.c
+    ${GENESIS_PLUS_GX_PATH}/libretro/libretro-common/lists/dir_list.c
+    ${GENESIS_PLUS_GX_PATH}/libretro/libretro-common/memmap/memalign.c
+    ${GENESIS_PLUS_GX_PATH}/libretro/libretro-common/string/stdstring.c
+    ${GENESIS_PLUS_GX_PATH}/libretro/libretro-common/vfs/vfs_implementation.c
+)
+
+set(GENESIS_PLUS_GX_ZLIB_SRC
+    ${GENESIS_PLUS_GX_PATH}/libretro/deps/zlib-1.2.11/adler32.c
+    ${GENESIS_PLUS_GX_PATH}/libretro/deps/zlib-1.2.11/crc32.c
+    ${GENESIS_PLUS_GX_PATH}/libretro/deps/zlib-1.2.11/inffast.c
+    ${GENESIS_PLUS_GX_PATH}/libretro/deps/zlib-1.2.11/inflate.c
+    ${GENESIS_PLUS_GX_PATH}/libretro/deps/zlib-1.2.11/inftrees.c
+    ${GENESIS_PLUS_GX_PATH}/libretro/deps/zlib-1.2.11/zutil.c
+)
+
+file(GLOB_RECURSE GENESIS_PLUS_GX_CORE_SRC
+    ${GENESIS_PLUS_GX_PATH}/core/*.c
+)
+
+add_library(genesis_plus_gx_core STATIC
+    ${GENESIS_PLUS_GX_CORE_SRC}
+    ${GENESIS_PLUS_GX_LRC_SRC}
+    ${GENESIS_PLUS_GX_ZLIB_SRC}
+)
+
+target_include_directories(genesis_plus_gx_core PRIVATE
+    ${GENESIS_PLUS_GX_PATH}/libretro
+    ${GENESIS_PLUS_GX_PATH}/core
+    ${GENESIS_PLUS_GX_PATH}/core/z80
+    ${GENESIS_PLUS_GX_PATH}/core/m68k
+    ${GENESIS_PLUS_GX_PATH}/core/ntsc
+    ${GENESIS_PLUS_GX_PATH}/core/sound
+    ${GENESIS_PLUS_GX_PATH}/core/sound/minimp3
+    ${GENESIS_PLUS_GX_PATH}/core/input_hw
+    ${GENESIS_PLUS_GX_PATH}/core/cd_hw
+    ${GENESIS_PLUS_GX_PATH}/core/cart_hw
+    ${GENESIS_PLUS_GX_PATH}/core/cart_hw/svp
+    ${GENESIS_PLUS_GX_PATH}/libretro/libretro-common/include
+    ${GENESIS_PLUS_GX_PATH}/libretro/deps/zlib-1.2.11
+)
+
+target_compile_definitions(genesis_plus_gx_core PRIVATE
+    USE_16BPP_RENDERING
+    HAVE_NO_LANGEXTRA
+    HAVE_ZLIB
+    LSB_FIRST
+    __LIBRETRO__
+)
+
+if (NOT PLATFORM_SWITCH)
+    target_compile_definitions(genesis_plus_gx_core PRIVATE
+        _7ZIP_ST
+        ZSTD_DISABLE_ASM
+        HAVE_CHD
+    )
+    set(GENESIS_PLUS_GX_CHD_DEPS
+        ${GENESIS_PLUS_GX_PATH}/libretro/deps/lzma-19.00/src/Alloc.c
+        ${GENESIS_PLUS_GX_PATH}/libretro/deps/lzma-19.00/src/Bra86.c
+        ${GENESIS_PLUS_GX_PATH}/libretro/deps/lzma-19.00/src/BraIA64.c
+        ${GENESIS_PLUS_GX_PATH}/libretro/deps/lzma-19.00/src/CpuArch.c
+        ${GENESIS_PLUS_GX_PATH}/libretro/deps/lzma-19.00/src/Delta.c
+        ${GENESIS_PLUS_GX_PATH}/libretro/deps/lzma-19.00/src/LzFind.c
+        ${GENESIS_PLUS_GX_PATH}/libretro/deps/lzma-19.00/src/Lzma86Dec.c
+        ${GENESIS_PLUS_GX_PATH}/libretro/deps/lzma-19.00/src/LzmaDec.c
+        ${GENESIS_PLUS_GX_PATH}/libretro/deps/lzma-19.00/src/LzmaEnc.c
+        ${GENESIS_PLUS_GX_PATH}/libretro/deps/lzma-19.00/src/Sort.c
+        ${GENESIS_PLUS_GX_PATH}/libretro/deps/libchdr/src/libchdr_bitstream.c
+        ${GENESIS_PLUS_GX_PATH}/libretro/deps/libchdr/src/libchdr_cdrom.c
+        ${GENESIS_PLUS_GX_PATH}/libretro/deps/libchdr/src/libchdr_chd.c
+        ${GENESIS_PLUS_GX_PATH}/libretro/deps/libchdr/src/libchdr_flac.c
+        ${GENESIS_PLUS_GX_PATH}/libretro/deps/libchdr/src/libchdr_huffman.c
+        ${GENESIS_PLUS_GX_PATH}/libretro/deps/zstd/lib/common/entropy_common.c
+        ${GENESIS_PLUS_GX_PATH}/libretro/deps/zstd/lib/common/error_private.c
+        ${GENESIS_PLUS_GX_PATH}/libretro/deps/zstd/lib/common/fse_decompress.c
+        ${GENESIS_PLUS_GX_PATH}/libretro/deps/zstd/lib/common/zstd_common.c
+        ${GENESIS_PLUS_GX_PATH}/libretro/deps/zstd/lib/common/xxhash.c
+        ${GENESIS_PLUS_GX_PATH}/libretro/deps/zstd/lib/decompress/huf_decompress.c
+        ${GENESIS_PLUS_GX_PATH}/libretro/deps/zstd/lib/decompress/zstd_ddict.c
+        ${GENESIS_PLUS_GX_PATH}/libretro/deps/zstd/lib/decompress/zstd_decompress.c
+        ${GENESIS_PLUS_GX_PATH}/libretro/deps/zstd/lib/decompress/zstd_decompress_block.c
+    )
+    target_sources(genesis_plus_gx_core PRIVATE ${GENESIS_PLUS_GX_CHD_DEPS})
+    target_include_directories(genesis_plus_gx_core PRIVATE
+        ${GENESIS_PLUS_GX_PATH}/libretro/deps/libchdr/include
+        ${GENESIS_PLUS_GX_PATH}/libretro/deps/lzma-19.00/include
+        ${GENESIS_PLUS_GX_PATH}/libretro/deps/zstd/lib
+    )
+endif ()
+
+if (PLATFORM_SWITCH)
+    target_compile_definitions(genesis_plus_gx_core PRIVATE
+        __SWITCH__
+        SWITCH
+        HAVE_LIBNX
+    )
+endif ()
+
+apply_retro_symbol_rename(genesis_plus_gx_core genesis_plus_gx)
+apply_data_symbol_rename(genesis_plus_gx_core genesis_plus_gx)
+
+set_target_properties(genesis_plus_gx_core PROPERTIES
+    C_STANDARD 11
+    CXX_STANDARD 11
+)
+

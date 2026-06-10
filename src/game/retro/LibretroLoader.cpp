@@ -75,31 +75,31 @@ void snes9x_retro_cheat_reset(void);
 void snes9x_retro_cheat_set(unsigned, bool, const char*);
 unsigned snes9x_retro_get_region(void);
 
-// ---- PicoDrive（MD）重命名符号 ----------------------------
-void picodrive_retro_init(void);
-void picodrive_retro_deinit(void);
-unsigned picodrive_retro_api_version(void);
-void picodrive_retro_get_system_info(struct retro_system_info*);
-void picodrive_retro_get_system_av_info(struct retro_system_av_info*);
-void picodrive_retro_set_environment(retro_environment_t);
-void picodrive_retro_set_video_refresh(retro_video_refresh_t);
-void picodrive_retro_set_audio_sample(retro_audio_sample_t);
-void picodrive_retro_set_audio_sample_batch(retro_audio_sample_batch_t);
-void picodrive_retro_set_input_poll(retro_input_poll_t);
-void picodrive_retro_set_input_state(retro_input_state_t);
-void picodrive_retro_set_controller_port_device(unsigned, unsigned);
-void picodrive_retro_reset(void);
-void picodrive_retro_run(void);
-size_t picodrive_retro_serialize_size(void);
-bool picodrive_retro_serialize(void*, size_t);
-bool picodrive_retro_unserialize(const void*, size_t);
-bool picodrive_retro_load_game(const struct retro_game_info*);
-void picodrive_retro_unload_game(void);
-void* picodrive_retro_get_memory_data(unsigned);
-size_t picodrive_retro_get_memory_size(unsigned);
-void picodrive_retro_cheat_reset(void);
-void picodrive_retro_cheat_set(unsigned, bool, const char*);
-unsigned picodrive_retro_get_region(void);
+// ---- Genesis Plus GX（MD/Genesis/SMS/GG/Sega CD）重命名符号 ----
+void genesis_plus_gx_retro_init(void);
+void genesis_plus_gx_retro_deinit(void);
+unsigned genesis_plus_gx_retro_api_version(void);
+void genesis_plus_gx_retro_get_system_info(struct retro_system_info*);
+void genesis_plus_gx_retro_get_system_av_info(struct retro_system_av_info*);
+void genesis_plus_gx_retro_set_environment(retro_environment_t);
+void genesis_plus_gx_retro_set_video_refresh(retro_video_refresh_t);
+void genesis_plus_gx_retro_set_audio_sample(retro_audio_sample_t);
+void genesis_plus_gx_retro_set_audio_sample_batch(retro_audio_sample_batch_t);
+void genesis_plus_gx_retro_set_input_poll(retro_input_poll_t);
+void genesis_plus_gx_retro_set_input_state(retro_input_state_t);
+void genesis_plus_gx_retro_set_controller_port_device(unsigned, unsigned);
+void genesis_plus_gx_retro_reset(void);
+void genesis_plus_gx_retro_run(void);
+size_t genesis_plus_gx_retro_serialize_size(void);
+bool genesis_plus_gx_retro_serialize(void*, size_t);
+bool genesis_plus_gx_retro_unserialize(const void*, size_t);
+bool genesis_plus_gx_retro_load_game(const struct retro_game_info*);
+void genesis_plus_gx_retro_unload_game(void);
+void* genesis_plus_gx_retro_get_memory_data(unsigned);
+size_t genesis_plus_gx_retro_get_memory_size(unsigned);
+void genesis_plus_gx_retro_cheat_reset(void);
+void genesis_plus_gx_retro_cheat_set(unsigned, bool, const char*);
+unsigned genesis_plus_gx_retro_get_region(void);
 
 } // extern "C"
 
@@ -370,29 +370,29 @@ bool LibretroLoader::load(CoreType coreType)
             break;
 
         case CoreType::Genesis:
-            fn_set_environment        = picodrive_retro_set_environment;
-            fn_set_video_refresh      = picodrive_retro_set_video_refresh;
-            fn_set_audio_sample       = picodrive_retro_set_audio_sample;
-            fn_set_audio_sample_batch = picodrive_retro_set_audio_sample_batch;
-            fn_set_input_poll         = picodrive_retro_set_input_poll;
-            fn_set_input_state        = picodrive_retro_set_input_state;
-            fn_init                   = picodrive_retro_init;
-            fn_deinit                 = picodrive_retro_deinit;
-            fn_api_version            = picodrive_retro_api_version;
-            fn_get_system_info        = picodrive_retro_get_system_info;
-            fn_get_system_av_info     = picodrive_retro_get_system_av_info;
-            fn_set_controller_port_device = picodrive_retro_set_controller_port_device;
-            fn_reset                  = picodrive_retro_reset;
-            fn_run                    = picodrive_retro_run;
-            fn_serialize_size         = picodrive_retro_serialize_size;
-            fn_serialize              = picodrive_retro_serialize;
-            fn_unserialize            = picodrive_retro_unserialize;
-            fn_load_game              = picodrive_retro_load_game;
-            fn_unload_game            = picodrive_retro_unload_game;
-            fn_cheat_reset            = picodrive_retro_cheat_reset;
-            fn_cheat_set              = picodrive_retro_cheat_set;
-            fn_get_memory_data        = picodrive_retro_get_memory_data;
-            fn_get_memory_size        = picodrive_retro_get_memory_size;
+            fn_set_environment        = genesis_plus_gx_retro_set_environment;
+            fn_set_video_refresh      = genesis_plus_gx_retro_set_video_refresh;
+            fn_set_audio_sample       = genesis_plus_gx_retro_set_audio_sample;
+            fn_set_audio_sample_batch = genesis_plus_gx_retro_set_audio_sample_batch;
+            fn_set_input_poll         = genesis_plus_gx_retro_set_input_poll;
+            fn_set_input_state        = genesis_plus_gx_retro_set_input_state;
+            fn_init                   = genesis_plus_gx_retro_init;
+            fn_deinit                 = genesis_plus_gx_retro_deinit;
+            fn_api_version            = genesis_plus_gx_retro_api_version;
+            fn_get_system_info        = genesis_plus_gx_retro_get_system_info;
+            fn_get_system_av_info     = genesis_plus_gx_retro_get_system_av_info;
+            fn_set_controller_port_device = genesis_plus_gx_retro_set_controller_port_device;
+            fn_reset                  = genesis_plus_gx_retro_reset;
+            fn_run                    = genesis_plus_gx_retro_run;
+            fn_serialize_size         = genesis_plus_gx_retro_serialize_size;
+            fn_serialize              = genesis_plus_gx_retro_serialize;
+            fn_unserialize            = genesis_plus_gx_retro_unserialize;
+            fn_load_game              = genesis_plus_gx_retro_load_game;
+            fn_unload_game            = genesis_plus_gx_retro_unload_game;
+            fn_cheat_reset            = genesis_plus_gx_retro_cheat_reset;
+            fn_cheat_set              = genesis_plus_gx_retro_cheat_set;
+            fn_get_memory_data        = genesis_plus_gx_retro_get_memory_data;
+            fn_get_memory_size        = genesis_plus_gx_retro_get_memory_size;
             break;
     }
 

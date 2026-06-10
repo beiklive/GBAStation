@@ -1,7 +1,7 @@
 #include "IEmulatorCore.hpp"
 #include "emulator/CoreFceumm.hpp"
 #include "emulator/CoreSnes9x.hpp"
-#include "emulator/CorePicoDrive.hpp"
+#include "emulator/CoreGenesis.hpp"
 #include "game/mgba/GameRun.hpp"
 
 namespace beiklive {
@@ -19,7 +19,7 @@ IEmulatorCore* CreateEmulatorCore(int platform)
     case beiklive::enums::EmuPlatform::EmuSNES:
         return new beiklive::snes9x::CoreSnes9x();
     case beiklive::enums::EmuPlatform::EmuGenesis:
-        return new beiklive::picodrive::CorePicoDrive();
+        return new beiklive::genesis::CoreGenesis();
     default:
         return nullptr;
     }
