@@ -11,9 +11,9 @@ bool CoreGenesis::SetupGame(beiklive::GameEntry GameEntry)
 {
     brls::Logger::debug("[CoreGenesis] SetupGame: path={}", GameEntry.path);
     m_gameEntry = std::move(GameEntry);
+    _initConfig();
     if (_loadCore())
     {
-        _initConfig();
         brls::Logger::debug("[CoreGenesis] _initConfig done, about to load ROM...");
         {
             const std::string &rp = m_gameEntry.path;
