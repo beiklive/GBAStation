@@ -552,6 +552,7 @@ set(GENESIS_PLUS_GX_ZLIB_SRC
 file(GLOB_RECURSE GENESIS_PLUS_GX_CORE_SRC
     ${GENESIS_PLUS_GX_PATH}/core/*.c
 )
+list(FILTER GENESIS_PLUS_GX_CORE_SRC EXCLUDE REGEX ".*/libchdr/.*")
 
 add_library(genesis_plus_gx_core STATIC
     ${GENESIS_PLUS_GX_CORE_SRC}
@@ -581,7 +582,19 @@ target_compile_definitions(genesis_plus_gx_core PRIVATE
     HAVE_ZLIB
     LSB_FIRST
     __LIBRETRO__
+    M68K_OVERCLOCK_SHIFT=20
+    Z80_OVERCLOCK_SHIFT=20
+    HAVE_YM3438_CORE
+    HAVE_OPLL_CORE
+    USE_LIBRETRO_VFS
 )
+
+target_compile_options(genesis_plus_gx_core PRIVATE
+    -fgnu89-inline
+)
+
+# GENPLUS_STATIC_INLINE makes macros.h use static inline instead of static __inline__
+# This matches the Makefile.libretro behavior for non-MSVC platforms
 
 if (NOT PLATFORM_SWITCH)
     target_compile_definitions(genesis_plus_gx_core PRIVATE

@@ -10,7 +10,7 @@
                 "build_windows",
                 "-G",
                 "Ninja",
-                "-DCMAKE_BUILD_TYPE=Debug",
+                "-DCMAKE_BUILD_TYPE=Release",
                 "-DCMAKE_POLICY_VERSION_MINIMUM=3.5",
                 "-DPLATFORM_DESKTOP=ON"
             ],
@@ -27,7 +27,7 @@
                 "--build",
                 "build_windows",
                 "--config",
-                "Debug"
+                "Release"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
