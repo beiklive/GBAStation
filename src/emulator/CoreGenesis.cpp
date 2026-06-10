@@ -11,15 +11,11 @@ bool CoreGenesis::SetupGame(beiklive::GameEntry GameEntry)
 {
     brls::Logger::debug("[CoreGenesis] SetupGame: path={}", GameEntry.path);
     m_gameEntry = std::move(GameEntry);
-    _initConfig();
     if (_loadCore())
     {
-        brls::Logger::debug("[CoreGenesis] _initConfig done, about to load ROM...");
-        {
-            const std::string &rp = m_gameEntry.path;
-            brls::Logger::debug("[CoreGenesis] path ptr={} len={} c_str='{}'",
-                (void*)&rp, rp.size(), rp.empty() ? "(empty)" : "OK");
-        }
+#ifndef __SWITCH__
+        _initConfig();
+#endif
         if (_loadRom(m_gameEntry.path))
         {
             _loadSram();
@@ -63,7 +59,7 @@ bool CoreGenesis::_loadCore()
 
 bool CoreGenesis::_loadRom(const std::string &romPath)
 {
-    brls::Logger::debug("[CoreGenesis] _loadRom ENTER (step 1)");
+    brls::Logger::debug("[CoreGenesis] _loadRom: {}", romPath);
     if (romPath.empty())
     {
         brls::Logger::error("[CoreGenesis] _loadRom: empty path");
@@ -71,7 +67,6 @@ bool CoreGenesis::_loadRom(const std::string &romPath)
         m_core.unload();
         return false;
     }
-    brls::Logger::debug("[CoreGenesis] _loadRom step 2: checking filesystem...");
     if (!std::filesystem::exists(romPath))
     {
         brls::Logger::error("[CoreGenesis] _loadRom: file not found");
@@ -86,8 +81,10 @@ bool CoreGenesis::_loadRom(const std::string &romPath)
         m_core.unload();
         return false;
     }
-    brls::Logger::debug("[CoreGenesis] _loadRom OK: {}x{} @ {:.2f}fps",
-        m_core.gameWidth(), m_core.gameHeight(), m_core.fps());
+    brls::Logger::info("ROM loaded: {} ({}x{} @ {:.2f} fps)",
+                       romPath,
+                       m_core.gameWidth(), m_core.gameHeight(),
+                       m_core.fps());
     return true;
 }
 
