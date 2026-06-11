@@ -1,4 +1,5 @@
 #include "GameLibraryPage.hpp"
+#include "ui/widget/GridItem.hpp"
 #include "ui/utils/FilePickerHelper.hpp"
 #include "core/ThreadPool.hpp"
 #include "ui/utils/CheatMatcher.hpp"

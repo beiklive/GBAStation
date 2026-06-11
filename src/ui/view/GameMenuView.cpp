@@ -1,5 +1,6 @@
 #include "GameMenuView.hpp"
 #include "core/Tools.hpp"
+#include "ui/widget/HintsBar.hpp"
 #include "ui/utils/FilePickerHelper.hpp"
 #include "ui/utils/UiHelper.hpp"
 #include <filesystem>

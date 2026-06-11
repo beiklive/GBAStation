@@ -1,4 +1,5 @@
 #include "GameOptionsSidebar.hpp"
+#include "ui/widget/HintsBar.hpp"
 
 namespace beiklive
 {

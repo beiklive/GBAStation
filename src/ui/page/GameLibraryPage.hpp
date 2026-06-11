@@ -6,7 +6,6 @@
 #include "ui/widget/Box.hpp"
 #include "ui/view/RecyclingGrid.hpp"
 #include "ui/view/RecyclingGridDataSource.hpp"
-#include "ui/widget/GridItem.hpp"
 #include "ui/view/GameOptionsSidebar.hpp"
 
 namespace beiklive

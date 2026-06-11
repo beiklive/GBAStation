@@ -8,7 +8,6 @@
 #include "ui/widget/Box.hpp"
 #include "ui/widget/GridItem.hpp"
 #include "ui/widget/FunctionButtons.hpp"
-#include "ui/widget/HintsBar.hpp"
 #include "game/render/GLSLPParser.hpp"
 namespace beiklive
 {

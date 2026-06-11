@@ -1,5 +1,7 @@
 #include "SwitchLayout.hpp"
 #include "core/ThreadPool.hpp"
+#include "ui/widget/GameCard.hpp"
+#include "ui/widget/RoundButton.hpp"
 
 namespace beiklive
 {

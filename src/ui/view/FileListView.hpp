@@ -6,7 +6,6 @@
 #include <chrono>
 #include <unordered_map>
 
-#include "ui/widget/ListItem.hpp"
 #include "core/common.h"
 
 namespace beiklive {

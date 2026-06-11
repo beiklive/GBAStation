@@ -1,7 +1,6 @@
 #include "ui/page/SettingPage.hpp"
 #include "ui/page/FileListPage.hpp"
 #include "ui/view/GameImportView.hpp"
-#include "ui/widget/FunctionButtons.hpp"
 #include "ui/utils/FilePickerHelper.hpp"
 #include "ui/utils/UiHelper.hpp"
 

@@ -2,7 +2,6 @@
 
 #include "core/common.h"
 #include "ui/widget/Box.hpp"
-#include "ui/widget/FunctionButtons.hpp"
 
 #include <atomic>
 #include <mutex>
