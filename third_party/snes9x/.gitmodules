@@ -1,0 +1,18 @@
+[submodule "win32/libpng/src"]
+	path = win32/libpng/src
+	url = https://git.code.sf.net/p/libpng/code
+[submodule "win32/zlib/src"]
+	path = win32/zlib/src
+	url = https://github.com/madler/zlib.git
+[submodule "shaders/SPIRV-Cross"]
+	path = external/SPIRV-Cross
+	url = https://github.com/KhronosGroup/SPIRV-Cross.git
+[submodule "shaders/glslang"]
+	path = external/glslang
+	url = https://github.com/KhronosGroup/glslang.git
+[submodule "external/vulkan-headers"]
+	path = external/vulkan-headers
+	url = https://github.com/KhronosGroup/Vulkan-Headers.git
+[submodule "external/cubeb"]
+	path = external/cubeb
+	url = https://github.com/mozilla/cubeb.git

@@ -153,6 +153,8 @@ namespace beiklive
         SettingManager->SetDefault(KEY_DISPLAY_OVERLAY_GBA_PATH, ConfigValue(std::string("")));
         SettingManager->SetDefault(KEY_DISPLAY_OVERLAY_GBC_PATH, ConfigValue(std::string("")));
         SettingManager->SetDefault(KEY_DISPLAY_OVERLAY_GB_PATH, ConfigValue(std::string("")));
+        SettingManager->SetDefault(KEY_DISPLAY_OVERLAY_NES_PATH, ConfigValue(std::string("")));
+        SettingManager->SetDefault(KEY_DISPLAY_OVERLAY_SNES_PATH, ConfigValue(std::string("")));
 
         // 着色器设置
         SettingManager->SetDefault(KEY_DISPLAY_SHADER_ENABLED, ConfigValue(0));
@@ -160,6 +162,8 @@ namespace beiklive
         SettingManager->SetDefault(KEY_DISPLAY_SHADER_GBA_PATH, ConfigValue(std::string("")));
         SettingManager->SetDefault(KEY_DISPLAY_SHADER_GBC_PATH, ConfigValue(std::string("")));
         SettingManager->SetDefault(KEY_DISPLAY_SHADER_GB_PATH, ConfigValue(std::string("")));
+        SettingManager->SetDefault(KEY_DISPLAY_SHADER_NES_PATH, ConfigValue(std::string("")));
+        SettingManager->SetDefault(KEY_DISPLAY_SHADER_SNES_PATH, ConfigValue(std::string("")));
 
         // 调试设置
         SettingManager->SetDefault(KEY_DEBUG_LOG_LEVEL, ConfigValue(std::string("info")));
@@ -540,6 +544,10 @@ namespace beiklive
             return 144;
         case beiklive::enums::EmuPlatform::EmuGB:
             return 144;
+        case beiklive::enums::EmuPlatform::EmuNES:
+            return 240;
+        case beiklive::enums::EmuPlatform::EmuSNES:
+            return 224;
         default:
             break;
         }
@@ -556,6 +564,10 @@ namespace beiklive
             return 160;
         case beiklive::enums::EmuPlatform::EmuGB:
             return 160;
+        case beiklive::enums::EmuPlatform::EmuNES:
+            return 256;
+        case beiklive::enums::EmuPlatform::EmuSNES:
+            return 256;
         default:
             break;
         }
@@ -572,6 +584,10 @@ namespace beiklive
             return BK_RES("img/LogoLayer/GBC_LOGOLAY.png");
         case beiklive::enums::EmuPlatform::EmuGB:
             return BK_RES("img/LogoLayer/GB_LOGOLAY.png");
+        case beiklive::enums::EmuPlatform::EmuNES:
+            return BK_RES("img/LogoLayer/GBA_LOGOLAY.png");
+        case beiklive::enums::EmuPlatform::EmuSNES:
+            return BK_RES("img/LogoLayer/GBA_LOGOLAY.png");
         default:
             return BK_RES("img/LogoLayer/GBA_LOGOLAY.png");
         }

@@ -22,10 +22,10 @@ namespace beiklive::gba
             _initConfig(); // 向核心注册默认配置项
             if (_loadRom(m_gameEntry.path))
             {
+                m_core.reset();
                 _loadSram();
                 _loadRtc();
                 _loadCheats();
-                m_core.reset(); // 加载存档/金手指后确保核心从干净状态启动
                 m_ready = true;
                 return true;
             }
@@ -36,16 +36,15 @@ namespace beiklive::gba
     // ============================================================
     // Cleanup – 保存存档并卸载核心
     // ============================================================
-    void CoreMgba::Cleanup()
-    {
-        if (!m_ready) return;
-        m_ready = false;
-        _saveSram();
-        _saveRtc();
-        m_core.unloadGame();
-        m_core.deinitCore();
-        m_core.unload();
-    }
+void CoreMgba::Cleanup()
+{
+    if (!m_ready) return;
+    m_ready = false;
+    _saveSram();
+    _saveRtc();
+    m_core.unloadGame();
+    m_core.deinitCore();
+}
 
     // ============================================================
     // RunFrame – 执行一帧游戏逻辑
@@ -117,14 +116,23 @@ namespace beiklive::gba
 
     bool CoreMgba::_loadCore(const std::string &corePath)
     {
-        // 初始化核心
-        if (!m_core.load(corePath))
+        if (corePath.empty())
         {
-            brls::Logger::error("Failed to load libretro core from: {}", corePath);
-            return false;
+            if (!m_core.load(beiklive::CoreType::Mgba))
+            {
+                brls::Logger::error("Failed to static-load mGBA core");
+                return false;
+            }
+        }
+        else
+        {
+            if (!m_core.load(corePath))
+            {
+                brls::Logger::error("Failed to load libretro core from: {}", corePath);
+                return false;
+            }
         }
 
-        // 检查核心状态
         if (!m_core.initCore())
         {
             brls::Logger::error("retro_init() failed");
@@ -139,14 +147,12 @@ namespace beiklive::gba
         if (romPath.empty())
         {
             brls::Logger::error("ROM path is empty");
-            m_core.deinitCore();
             m_core.unload();
             return false;
         }
         if (!std::filesystem::exists(romPath))
         {
             brls::Logger::error("ROM not found: {}", romPath);
-            m_core.deinitCore();
             m_core.unload();
             return false;
         }
@@ -154,7 +160,6 @@ namespace beiklive::gba
         if (!m_core.loadGame(romPath))
         {
             brls::Logger::error("retro_load_game() failed for: {}", romPath);
-            m_core.deinitCore();
             m_core.unload();
             return false;
         }

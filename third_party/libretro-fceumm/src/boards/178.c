@@ -1,0 +1,269 @@
+/* FCE Ultra - NES/Famicom Emulator
+ *
+ * Copyright notice for this file:
+ *  Copyright (C) 2013 CaH4e3
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+ *
+ * DSOUNDV1/FL-TR8MA boards (32K WRAM, 8/16M), 178 mapper boards (8K WRAM, 4/8M)
+ * Various Education Cartridges
+ * 
+ * mapper 551
+ * Compared to INES Mapper 178, mirroring is hard-wired, and the chipset's internal CHR-RAM is not used in favor of CHR-ROM.
+ *
+ */
+
+#include "mapinc.h"
+
+static uint8_t submapper;
+static uint8_t reg[4];
+static uint8_t pad[2];
+
+static uint8_t *WRAM = NULL;
+static uint32_t WRAMSIZE;
+
+/* SND Registers */
+static uint8_t pcm_enable = 0;
+static int16_t pcm_latch = 0x3F6, pcm_clock = 0x3F6;
+static writefunc pcmwrite;
+
+static SFORMAT StateRegs[] =
+{
+	{ reg, 4, "REGS" },
+	{ 0 }
+};
+
+static const int16_t step_size[49] = {
+	16, 17, 19, 21, 23, 25, 28, 31, 34, 37,
+	41, 45, 50, 55, 60, 66, 73, 80, 88, 97,
+	107, 118, 130, 143, 157, 173, 190, 209, 230, 253,
+	279, 307, 337, 371, 408, 449, 494, 544, 598, 658,
+	724, 796, 876, 963, 1060, 1166, 1282, 1411, 1552
+};	/* 49 items */
+static const int32_t step_adj[16] = { -1, -1, -1, -1, 2, 5, 7, 9, -1, -1, -1, -1, 2, 5, 7, 9 };
+
+/* decode stuff */
+static int32_t jedi_table[16 * 49];
+static int32_t acc = 0;	/* ADPCM accumulator, initial condition must be 0 */
+static int32_t decstep = 0;	/* ADPCM decoding step, initial condition must be 0 */
+
+static void jedi_table_init() {
+	int step, nib;
+
+	for (step = 0; step < 49; step++) {
+		for (nib = 0; nib < 16; nib++) {
+			int value = (2 * (nib & 0x07) + 1) * step_size[step] / 8;
+			jedi_table[step * 16 + nib] = ((nib & 0x08) != 0) ? -value : value;
+		}
+	}
+}
+
+static uint8_t decode(uint8_t code) {
+	acc += jedi_table[decstep + code];
+	if ((acc & ~0x7ff) != 0)	/* acc is > 2047 */
+		acc |= ~0xfff;
+	else acc &= 0xfff;
+	decstep += step_adj[code & 7] * 16;
+	if (decstep < 0) decstep = 0;
+	if (decstep > 48 * 16) decstep = 48 * 16;
+	return (acc >> 8) & 0xff;
+}
+
+static DECLFR(readPad) {
+	return CartBR(A &~3 | pad[1] &3);
+}
+
+static void M178Sync(void) {
+	uint32_t sbank = reg[1] & 0x7;
+	uint32_t bbank = reg[2];
+	setchr8(0);
+	setprg8r(0x10, 0x6000, reg[3] & 3);
+	if (reg[0] & 2) {	/* UNROM mode */
+		setprg16(0x8000, (bbank << 3) | sbank);
+		if (reg[0] & 4)
+			setprg16(0xC000, (bbank << 3) | 6 | (reg[1] & 1));
+		else
+			setprg16(0xC000, (bbank << 3) | 7);
+	} else {			/* NROM mode */
+		uint32_t bank = (bbank << 3) | sbank;
+		if (reg[0] & 4) {
+			setprg16(0x8000, bank);
+			setprg16(0xC000, bank);
+		} else
+			setprg32(0x8000, bank >> 1);
+	}
+
+	setmirror((reg[0] & 1) ^ 1);
+	if (submapper == 3) SetReadHandler(0x8000, 0xffff, pad[0] &1? readPad: CartBR);
+}
+
+static void M551Sync(void) {
+	uint32_t sbank = reg[1] & 0x7;
+	uint32_t bbank = reg[2];
+	if (reg[0] & 2) {	/* UNROM mode */
+		setprg16(0x8000, (bbank << 3) | sbank);
+		if (reg[0] & 4)
+			setprg16(0xC000, (bbank << 3) | 6 | (reg[1] & 1));
+		else
+			setprg16(0xC000, (bbank << 3) | 7);
+	} else {			/* NROM mode */
+		uint32_t bank = (bbank << 3) | sbank;
+		if (reg[0] & 4) {
+			setprg16(0x8000, bank);
+			setprg16(0xC000, bank);
+		} else
+			setprg32(0x8000, bank >> 1);
+	}
+
+	setprg8r(0x10, 0x6000, 0);
+	setchr8(reg[3]);
+	setmirror(head.ROM_type & 1);
+}
+
+static DECLFW(M551Write) {
+	reg[A & 3] = V;
+	M551Sync();
+}
+
+static DECLFW(M178Write) {
+	reg[A & 3] = V;
+	M178Sync();
+}
+
+static DECLFW(M178WriteSnd) {
+	if (A == 0x5800)
+	{
+		if (V & 0xF0) {
+			pcm_enable = 1;
+			pcmwrite(0x4011, decode(V & 0xf));
+		} else
+			pcm_enable = 0;
+	}
+}
+
+static DECLFR(M178ReadSnd) {
+	if (A == 0x5800)
+		return (X.DB & 0xBF) | ((pcm_enable ^ 1) << 6);
+	return X.DB;
+}
+
+static DECLFW(writePad) {
+	pad[0] = V;
+	M178Sync();
+}
+
+static void M551Power(void) {
+	reg[0] = reg[1] = reg[2] = reg[3] = 0;
+	M551Sync();
+	pcmwrite = GetWriteHandler(0x4011);
+	SetWriteHandler(0x4800, 0x4fff, M551Write);
+	SetWriteHandler(0x5800, 0x5fff, M178WriteSnd);
+	SetReadHandler(0x5800, 0x5fff, M178ReadSnd);
+	SetReadHandler(0x8000, 0xffff, CartBR);
+	SetReadHandler(0x6000, 0x7fff, CartBR);
+	SetWriteHandler(0x6000, 0x7fff, CartBW);
+	FCEU_CheatAddRAM(WRAMSIZE >> 10, 0x6000, WRAM);
+}
+
+static void M178Power(void) {
+	reg[0] = reg[1] = reg[2] = reg[3] = 0;
+	M178Sync();
+	pcmwrite = GetWriteHandler(0x4011);
+	SetWriteHandler(0x4800, 0x4fff, M178Write);
+	SetWriteHandler(0x5800, 0x5fff, M178WriteSnd);
+	SetReadHandler(0x5800, 0x5fff, M178ReadSnd);
+	SetReadHandler(0x8000, 0xffff, CartBR);
+	if (submapper == 3)
+		SetWriteHandler(0x6000, 0x7fff, writePad);
+	else {
+		SetReadHandler(0x6000, 0x7fff, CartBR);
+		SetWriteHandler(0x6000, 0x7fff, CartBW);
+		FCEU_CheatAddRAM(WRAMSIZE >> 10, 0x6000, WRAM);
+	}
+	pad[0] = pad[1] = 0;
+}
+
+static void M551Reset(void) {
+	/* Always reset to menu */
+	reg[0] = reg[1] = reg[2] = reg[3] = 0;
+	M551Sync();
+}
+
+static void M178Reset(void)
+{
+	/* Always reset to menu */
+	reg[0] = reg[1] = reg[2] = reg[3] = 0;
+	M178Sync();
+	pad[0] = 0;
+	pad[1]++;
+}
+
+static void M178SndClk(int a)
+{
+	if (pcm_enable) {
+		pcm_latch -= a;
+		if (pcm_latch <= 0) {
+			pcm_latch += pcm_clock;
+			pcm_enable = 0;
+		}
+	}
+}
+
+static void M178Close(void) {
+	if (WRAM)
+		FCEU_gfree(WRAM);
+	WRAM = NULL;
+}
+
+static void M551StateRestore(int version) {
+	M551Sync();
+}
+
+static void M178StateRestore(int version) {
+	M178Sync();
+}
+
+void Mapper178_Init(CartInfo *info) {
+	submapper = info->submapper;
+	info->Power = M178Power;
+	info->Reset = M178Reset;
+	info->Close = M178Close;
+	GameStateRestore = M178StateRestore;
+	MapIRQHook = M178SndClk;
+
+	jedi_table_init();
+
+	if (submapper == 3)
+		AddExState(pad, 2, 0, "DIPS");
+	else {
+		WRAMSIZE = 32768;
+		WRAM = (uint8_t*)FCEU_gmalloc(WRAMSIZE);
+		SetupCartPRGMapping(0x10, WRAM, WRAMSIZE, 1);
+		if (info->battery) {
+			info->SaveGame[0] = WRAM;
+			info->SaveGameLen[0] = WRAMSIZE;
+		}
+		AddExState(WRAM, WRAMSIZE, 0, "WRAM");
+	}
+
+	AddExState(&StateRegs, ~0, 0, 0);
+
+	if (info->mapper == 551)
+	{
+		info->Power      = M551Power;
+		info->Reset      = M551Reset;
+		GameStateRestore = M551StateRestore;
+	}
+}

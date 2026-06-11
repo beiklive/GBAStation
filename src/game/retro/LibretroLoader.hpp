@@ -12,10 +12,13 @@
 // libretro public API types
 #include "third_party/mgba/src/platform/libretro/libretro.h"
 #include "core/ConfigManager.hpp"
+#include "core/enums.h"
+
 namespace beiklive {
 
 /// 封装单个已加载的libretro核心。
-/// 处理动态库加载、回调注册和生命周期管理。
+/// 处理动态库加载（桌面）或静态符号绑定（Switch/静态链接），
+/// 以及回调注册和生命周期管理。
 class LibretroLoader {
 public:
     LibretroLoader()  = default;
@@ -26,14 +29,22 @@ public:
 
     // ---- 生命周期 ---------------------------------------------------
 
-    /// 加载 @a path 处的共享库并解析所有必需符号。
+    /// 按核心类型静态加载（直接绑定符号，无动态库依赖）。
+    /// 适用于所有静态链接核心：Mgba / Fceumm / Snes9x。
+    /// @return 成功时返回true。
+    bool load(CoreType coreType);
+
+    /// 加载 @a path 处的共享库并解析所有必需符号（桌面动态加载路径）。
     /// @return 成功时返回true。
     bool load(const std::string& libPath);
 
-    /// 卸载共享库。即使未调用load()也可安全调用。
+    /// 卸载核心。即使未调用load()也可安全调用。
     void unload();
 
     bool isLoaded() const { return m_handle != nullptr; }
+
+    /// 返回当前加载的核心类型。
+    CoreType coreType() const { return m_coreType; }
 
     // ---- libretro API转发 ------------------------------------------
 
@@ -42,6 +53,7 @@ public:
     unsigned    apiVersion()  const;
     void        getSystemInfo(retro_system_info* info)   const;
     void        getSystemAvInfo(retro_system_av_info* info) const;
+    void        setControllerPortDevice(unsigned port, unsigned device);
     bool        loadGame(const std::string& romPath);
     void        unloadGame();
     void        run();
@@ -105,6 +117,7 @@ public:
     unsigned gameWidth()  const { return m_avInfo.geometry.base_width; }
     unsigned gameHeight() const { return m_avInfo.geometry.base_height; }
     double   fps()        const { return m_avInfo.timing.fps; }
+    double   sampleRate() const { return m_avInfo.timing.sample_rate; }
 
     // ---- 设置（通过libretro环境的核心变量）-------------------------
 
@@ -121,6 +134,9 @@ public:
     void notifyConfigUpdated() { m_configChanged.store(true, std::memory_order_release); }
 
 private:
+    // ---- 核心类型 ---------------------------------------------------
+    CoreType m_coreType = CoreType::Mgba;
+
     // ---- 动态库句柄 -------------------------------------------------
     void* m_handle = nullptr;
 

@@ -7,6 +7,8 @@ enum class PlatformBadgeColor {
     GBA,
     GBC,
     GB,
+    NES,
+    SNES,
     NONE,
 };
 

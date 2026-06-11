@@ -1,0 +1,50 @@
+/*****************************************************************************\
+     Snes9x - Portable Super Nintendo Entertainment System (TM) emulator.
+                This file is licensed under the Snes9x License.
+   For further information, consult the LICENSE file in the root directory.
+\*****************************************************************************/
+
+#ifndef __GTK_DISPLAY_DRIVER_GTK_H
+#define __GTK_DISPLAY_DRIVER_GTK_H
+
+#include "gtk_s9x.h"
+#include "gtk_display_driver.h"
+
+class S9xGTKDisplayDriver : public S9xDisplayDriver
+{
+  public:
+    S9xGTKDisplayDriver(Snes9xWindow *window, Snes9xConfig *config);
+    void refresh();
+    int init();
+    void deinit();
+    void update(uint16_t *buffer, int width, int height, int stride_in_pixels);
+    void *get_parameters()
+    {
+        return NULL;
+    }
+    void save(const char *filename)
+    {
+    }
+    bool is_ready()
+    {
+        return true;
+    }
+    int get_width() { return last_known_width; }
+    int get_height() { return last_known_height; }
+
+  private:
+    void clear();
+    void output(void *src,
+                int src_pitch,
+                int x,
+                int y,
+                int width,
+                int height,
+                int dst_width,
+                int dst_height);
+
+    int last_known_width;
+    int last_known_height;
+};
+
+#endif /* __GTK_DISPLAY_DRIVER_GTK_H */

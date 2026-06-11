@@ -69,6 +69,12 @@ public:
     /// 用于从快进切换回正常速度时，防止播放过时音频。
     void flushRingBuffer();
 
+    /// 查询环形缓冲区中当前可用样本数（仅用于诊断）
+    size_t available() const { return m_available; }
+
+    /// 查询当前音频采样率
+    int sampleRate() const { return m_sampleRate; }
+
 // private:
     // ---- 环形缓冲区 -------------------------------------------------
     // 将总延迟控制在约 250ms 以内

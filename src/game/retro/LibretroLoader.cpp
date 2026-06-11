@@ -11,10 +11,71 @@
 #  include <windows.h>
 #elif defined(__PSV__) || defined(__psp2__) || defined(__SWITCH__)
 // PSVita / Nintendo Switch 不支持 POSIX 动态链接器。
-// dynXxx 函数均返回 nullptr 或空操作，load() 会在运行时优雅失败。
 #else
 #  include <dlfcn.h>
 #endif
+
+// ============================================================
+// 静态链接核心的外部符号声明
+//
+// mGBA 保留原始 retro_* 名称，其余核心通过编译期
+// -Dretro_xxx=prefix_retro_xxx 重命名为带前缀的符号。
+// ============================================================
+extern "C" {
+
+// ---- FCEUmm（NES）重命名符号 -------------------------------
+void fceumm_retro_init(void);
+void fceumm_retro_deinit(void);
+unsigned fceumm_retro_api_version(void);
+void fceumm_retro_get_system_info(struct retro_system_info*);
+void fceumm_retro_get_system_av_info(struct retro_system_av_info*);
+void fceumm_retro_set_environment(retro_environment_t);
+void fceumm_retro_set_video_refresh(retro_video_refresh_t);
+void fceumm_retro_set_audio_sample(retro_audio_sample_t);
+void fceumm_retro_set_audio_sample_batch(retro_audio_sample_batch_t);
+void fceumm_retro_set_input_poll(retro_input_poll_t);
+void fceumm_retro_set_input_state(retro_input_state_t);
+void fceumm_retro_set_controller_port_device(unsigned, unsigned);
+void fceumm_retro_reset(void);
+void fceumm_retro_run(void);
+size_t fceumm_retro_serialize_size(void);
+bool fceumm_retro_serialize(void*, size_t);
+bool fceumm_retro_unserialize(const void*, size_t);
+bool fceumm_retro_load_game(const struct retro_game_info*);
+void fceumm_retro_unload_game(void);
+void* fceumm_retro_get_memory_data(unsigned);
+size_t fceumm_retro_get_memory_size(unsigned);
+void fceumm_retro_cheat_reset(void);
+void fceumm_retro_cheat_set(unsigned, bool, const char*);
+unsigned fceumm_retro_get_region(void);
+
+// ---- Snes9x（SNES）重命名符号 ------------------------------
+void snes9x_retro_init(void);
+void snes9x_retro_deinit(void);
+unsigned snes9x_retro_api_version(void);
+void snes9x_retro_get_system_info(struct retro_system_info*);
+void snes9x_retro_get_system_av_info(struct retro_system_av_info*);
+void snes9x_retro_set_environment(retro_environment_t);
+void snes9x_retro_set_video_refresh(retro_video_refresh_t);
+void snes9x_retro_set_audio_sample(retro_audio_sample_t);
+void snes9x_retro_set_audio_sample_batch(retro_audio_sample_batch_t);
+void snes9x_retro_set_input_poll(retro_input_poll_t);
+void snes9x_retro_set_input_state(retro_input_state_t);
+void snes9x_retro_set_controller_port_device(unsigned, unsigned);
+void snes9x_retro_reset(void);
+void snes9x_retro_run(void);
+size_t snes9x_retro_serialize_size(void);
+bool snes9x_retro_serialize(void*, size_t);
+bool snes9x_retro_unserialize(const void*, size_t);
+bool snes9x_retro_load_game(const struct retro_game_info*);
+void snes9x_retro_unload_game(void);
+void* snes9x_retro_get_memory_data(unsigned);
+size_t snes9x_retro_get_memory_size(unsigned);
+void snes9x_retro_cheat_reset(void);
+void snes9x_retro_cheat_set(unsigned, bool, const char*);
+unsigned snes9x_retro_get_region(void);
+
+} // extern "C"
 
 // ---- 像素格式辅助函数 -------------------------------------------
 
@@ -190,39 +251,120 @@ bool LibretroLoader::resolveSymbol(T& fnPtr, const char* name)
 // 加载 / 卸载
 // ============================================================
 
+bool LibretroLoader::load(CoreType coreType)
+{
+    unload();
+
+    m_coreType = coreType;
+    brls::Logger::debug("[LibretroLoader] load(CoreType={})", static_cast<int>(coreType));
+
+    // 根据核心类型选择对应的符号集
+    switch (coreType) {
+        case CoreType::Mgba:
+#if defined(__SWITCH__) || defined(STATIC_MGBA)
+            fn_set_environment        = retro_set_environment;
+            fn_set_video_refresh      = retro_set_video_refresh;
+            fn_set_audio_sample       = retro_set_audio_sample;
+            fn_set_audio_sample_batch = retro_set_audio_sample_batch;
+            fn_set_input_poll         = retro_set_input_poll;
+            fn_set_input_state        = retro_set_input_state;
+            fn_init                   = retro_init;
+            fn_deinit                 = retro_deinit;
+            fn_api_version            = retro_api_version;
+            fn_get_system_info        = retro_get_system_info;
+            fn_get_system_av_info     = retro_get_system_av_info;
+            fn_set_controller_port_device = retro_set_controller_port_device;
+            fn_reset                  = retro_reset;
+            fn_run                    = retro_run;
+            fn_serialize_size         = retro_serialize_size;
+            fn_serialize              = retro_serialize;
+            fn_unserialize            = retro_unserialize;
+            fn_load_game              = retro_load_game;
+            fn_unload_game            = retro_unload_game;
+            fn_cheat_reset            = retro_cheat_reset;
+            fn_cheat_set              = retro_cheat_set;
+            fn_get_memory_data        = retro_get_memory_data;
+            fn_get_memory_size        = retro_get_memory_size;
+#else
+            // 桌面平台: mGBA 使用 dlopen 加载，不支持静态绑定
+            return false;
+#endif
+            break;
+
+        case CoreType::Fceumm:
+            fn_set_environment        = fceumm_retro_set_environment;
+            fn_set_video_refresh      = fceumm_retro_set_video_refresh;
+            fn_set_audio_sample       = fceumm_retro_set_audio_sample;
+            fn_set_audio_sample_batch = fceumm_retro_set_audio_sample_batch;
+            fn_set_input_poll         = fceumm_retro_set_input_poll;
+            fn_set_input_state        = fceumm_retro_set_input_state;
+            fn_init                   = fceumm_retro_init;
+            fn_deinit                 = fceumm_retro_deinit;
+            fn_api_version            = fceumm_retro_api_version;
+            fn_get_system_info        = fceumm_retro_get_system_info;
+            fn_get_system_av_info     = fceumm_retro_get_system_av_info;
+            fn_set_controller_port_device = fceumm_retro_set_controller_port_device;
+            fn_reset                  = fceumm_retro_reset;
+            fn_run                    = fceumm_retro_run;
+            fn_serialize_size         = fceumm_retro_serialize_size;
+            fn_serialize              = fceumm_retro_serialize;
+            fn_unserialize            = fceumm_retro_unserialize;
+            fn_load_game              = fceumm_retro_load_game;
+            fn_unload_game            = fceumm_retro_unload_game;
+            fn_cheat_reset            = fceumm_retro_cheat_reset;
+            fn_cheat_set              = fceumm_retro_cheat_set;
+            fn_get_memory_data        = fceumm_retro_get_memory_data;
+            fn_get_memory_size        = fceumm_retro_get_memory_size;
+            break;
+
+        case CoreType::Snes9x:
+            fn_set_environment        = snes9x_retro_set_environment;
+            fn_set_video_refresh      = snes9x_retro_set_video_refresh;
+            fn_set_audio_sample       = snes9x_retro_set_audio_sample;
+            fn_set_audio_sample_batch = snes9x_retro_set_audio_sample_batch;
+            fn_set_input_poll         = snes9x_retro_set_input_poll;
+            fn_set_input_state        = snes9x_retro_set_input_state;
+            fn_init                   = snes9x_retro_init;
+            fn_deinit                 = snes9x_retro_deinit;
+            fn_api_version            = snes9x_retro_api_version;
+            fn_get_system_info        = snes9x_retro_get_system_info;
+            fn_get_system_av_info     = snes9x_retro_get_system_av_info;
+            fn_set_controller_port_device = snes9x_retro_set_controller_port_device;
+            fn_reset                  = snes9x_retro_reset;
+            fn_run                    = snes9x_retro_run;
+            fn_serialize_size         = snes9x_retro_serialize_size;
+            fn_serialize              = snes9x_retro_serialize;
+            fn_unserialize            = snes9x_retro_unserialize;
+            fn_load_game              = snes9x_retro_load_game;
+            fn_unload_game            = snes9x_retro_unload_game;
+            fn_cheat_reset            = snes9x_retro_cheat_reset;
+            fn_cheat_set              = snes9x_retro_cheat_set;
+            fn_get_memory_data        = snes9x_retro_get_memory_data;
+            fn_get_memory_size        = snes9x_retro_get_memory_size;
+            break;
+
+    }
+
+    m_handle = reinterpret_cast<void*>(1); // 哨兵值：符号已绑定
+
+    // 注册静态回调（须在 retro_init 前调用）
+    s_current = this;
+    fn_set_environment        (s_environmentCallback);
+    fn_set_video_refresh      (s_videoRefreshCallback);
+    fn_set_audio_sample       (s_audioSampleCallback);
+    fn_set_audio_sample_batch (s_audioSampleBatchCallback);
+    fn_set_input_poll         (s_inputPollCallback);
+    fn_set_input_state        (s_inputStateCallback);
+
+    brls::Logger::debug("[LibretroLoader] load(CoreType) OK, handle={}", m_handle != nullptr);
+    return true;
+}
+
 bool LibretroLoader::load(const std::string& libPath)
 {
     unload();
 
-#ifdef __SWITCH__
-    // Switch 上 mgba_libretro.a 静态链接到二进制文件中，
-    // retro_* 符号在链接期解析，无需 dlopen。
-    // libretro.h（通过 LibretroLoader.hpp 包含）已声明所有入口点。
-    fn_set_environment        = retro_set_environment;
-    fn_set_video_refresh      = retro_set_video_refresh;
-    fn_set_audio_sample       = retro_set_audio_sample;
-    fn_set_audio_sample_batch = retro_set_audio_sample_batch;
-    fn_set_input_poll         = retro_set_input_poll;
-    fn_set_input_state        = retro_set_input_state;
-    fn_init                   = retro_init;
-    fn_deinit                 = retro_deinit;
-    fn_api_version            = retro_api_version;
-    fn_get_system_info        = retro_get_system_info;
-    fn_get_system_av_info     = retro_get_system_av_info;
-    fn_set_controller_port_device = retro_set_controller_port_device;
-    fn_reset                  = retro_reset;
-    fn_run                    = retro_run;
-    fn_serialize_size         = retro_serialize_size;
-    fn_serialize              = retro_serialize;
-    fn_unserialize            = retro_unserialize;
-    fn_load_game              = retro_load_game;
-    fn_unload_game            = retro_unload_game;
-    fn_cheat_reset            = retro_cheat_reset;
-    fn_cheat_set              = retro_cheat_set;
-    fn_get_memory_data        = retro_get_memory_data;
-    fn_get_memory_size        = retro_get_memory_size;
-    m_handle = reinterpret_cast<void*>(1); // 哨兵值：符号已绑定
-#else
+    m_coreType = CoreType::Mgba;
     m_handle = dynOpen(libPath);
     if (!m_handle) {
         dynLoadError();
@@ -249,7 +391,6 @@ bool LibretroLoader::load(const std::string& libPath)
     ok &= resolveSymbol(fn_unserialize,             "retro_unserialize");
     ok &= resolveSymbol(fn_load_game,               "retro_load_game");
     ok &= resolveSymbol(fn_unload_game,             "retro_unload_game");
-    // 可选符号：缺失时不报错
     resolveSymbol(fn_cheat_reset,               "retro_cheat_reset");
     resolveSymbol(fn_cheat_set,                 "retro_cheat_set");
     resolveSymbol(fn_get_memory_data,           "retro_get_memory_data");
@@ -260,7 +401,6 @@ bool LibretroLoader::load(const std::string& libPath)
         m_handle = nullptr;
         return false;
     }
-#endif
 
     // 注册静态回调（须在 retro_init 前调用）
     s_current = this;
@@ -276,18 +416,17 @@ bool LibretroLoader::load(const std::string& libPath)
 
 void LibretroLoader::unload()
 {
+    brls::Logger::debug("[LibretroLoader] unload: gameLoaded={}, coreReady={}",
+        m_gameLoaded, m_coreReady);
     if (m_gameLoaded && fn_unload_game) {
         fn_unload_game();
         m_gameLoaded = false;
     }
-    if (m_coreReady && fn_deinit) {
-        fn_deinit();
-        m_coreReady = false;
-    }
-    if (m_handle) {
-        dynClose(m_handle);
-        m_handle = nullptr;
-    }
+    // retro_deinit() intentionally not called here:
+    // many cores (especially PicoDrive) don't handle repeated init/deinit cycles.
+    // deinitCore() can be called explicitly when program exits.
+
+    m_handle = nullptr;
     if (s_current == this) {
         s_current = nullptr;
     }
@@ -321,18 +460,33 @@ void LibretroLoader::unload()
 // 核心生命周期
 // ============================================================
 
+// 跟踪哪些核心类型已经调用了 retro_init()，防止重复初始化
+static bool s_coreInitialized[4] = {false, false, false, false};
+
 bool LibretroLoader::initCore()
 {
-    if (!m_handle || m_coreReady) return m_coreReady;
+    if (!m_handle) { brls::Logger::debug("[LibretroLoader] initCore: no handle"); return false; }
+    int idx = static_cast<int>(m_coreType);
+    if (s_coreInitialized[idx]) {
+        brls::Logger::debug("[LibretroLoader] initCore: already initialized (idx={})", idx);
+        m_coreReady = true;
+        return true;
+    }
+    brls::Logger::debug("[LibretroLoader] initCore: calling retro_init()...");
     fn_init();
+    s_coreInitialized[idx] = true;
     m_coreReady = true;
+    brls::Logger::debug("[LibretroLoader] initCore: retro_init() OK");
     return true;
 }
 
 void LibretroLoader::deinitCore()
 {
     if (!m_coreReady) return;
+    brls::Logger::debug("[LibretroLoader] deinitCore: calling retro_deinit()");
     fn_deinit();
+    int idx = static_cast<int>(m_coreType);
+    s_coreInitialized[idx] = false;
     m_coreReady = false;
 }
 
@@ -351,26 +505,39 @@ void LibretroLoader::getSystemAvInfo(retro_system_av_info* info) const
     if (m_handle) fn_get_system_av_info(info);
 }
 
+void LibretroLoader::setControllerPortDevice(unsigned port, unsigned device)
+{
+    if (m_handle && fn_set_controller_port_device)
+        fn_set_controller_port_device(port, device);
+}
+
 bool LibretroLoader::loadGame(const std::string& romPath)
 {
-    if (!m_coreReady) return false;
+    if (!m_coreReady) { brls::Logger::debug("[LibretroLoader] loadGame: core not ready"); return false; }
 
+    brls::Logger::debug("[LibretroLoader] loadGame: path={}", romPath);
     retro_game_info info{};
     info.path = romPath.c_str();
     info.data = nullptr;
     info.size = 0;
     info.meta = nullptr;
 
-    if (!fn_load_game(&info)) return false;
+    if (!fn_load_game(&info)) {
+        brls::Logger::error("[LibretroLoader] loadGame: retro_load_game failed");
+        return false;
+    }
 
     fn_get_system_av_info(&m_avInfo);
     m_gameLoaded = true;
+    brls::Logger::debug("[LibretroLoader] loadGame OK: {}x{} @ {:.2f}fps",
+        m_avInfo.geometry.base_width, m_avInfo.geometry.base_height, m_avInfo.timing.fps);
     return true;
 }
 
 void LibretroLoader::unloadGame()
 {
     if (!m_gameLoaded) return;
+    brls::Logger::debug("[LibretroLoader] unloadGame");
     fn_unload_game();
     m_gameLoaded = false;
 }
@@ -516,14 +683,34 @@ bool LibretroLoader::s_environmentCallback(unsigned cmd, void* data)
             }
             return true;
         }
-        case RETRO_ENVIRONMENT_SHUTDOWN:
-            return true;
-        // ---- 核心选项版本：返回 0 以使用旧版 SET_VARIABLES ----
-        case RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION: {
-            unsigned* ver = static_cast<unsigned*>(data);
-            if (ver) *ver = 0;
+        case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO: {
+            const retro_system_av_info* info =
+                static_cast<const retro_system_av_info*>(data);
+            if (!info) return false;
+            s_current->m_avInfo = *info;
+            brls::Logger::debug(
+                "[LibretroLoader] SET_SYSTEM_AV_INFO: {}x{} (max {}x{}, aspect {:.3f}, fps {:.2f}, sampleRate {:.2f})",
+                info->geometry.base_width,
+                info->geometry.base_height,
+                info->geometry.max_width,
+                info->geometry.max_height,
+                info->geometry.aspect_ratio,
+                info->timing.fps,
+                info->timing.sample_rate);
             return true;
         }
+        case RETRO_ENVIRONMENT_SHUTDOWN:
+            return true;
+        // ---- 核心选项版本：返回 2 以使用 V2 接口 ----
+        case RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION: {
+            unsigned* ver = static_cast<unsigned*>(data);
+            if (ver) *ver = 2;
+            return true;
+        }
+        case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2:
+        case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL:
+            // V2 选项接口已声明支持，直接返回 true
+            return true;
         // ---- 核心声明变量及默认值 ----------------------
         case RETRO_ENVIRONMENT_SET_VARIABLES: {
             const retro_variable* vars = static_cast<const retro_variable*>(data);
@@ -574,9 +761,24 @@ bool LibretroLoader::s_environmentCallback(unsigned cmd, void* data)
         case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO:
         case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS:
         case RETRO_ENVIRONMENT_SET_MEMORY_MAPS:
-        case RETRO_ENVIRONMENT_SET_GEOMETRY:
         case RETRO_ENVIRONMENT_SET_ROTATION:
-            return false;
+        case RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS:
+        case RETRO_ENVIRONMENT_SET_DISK_CONTROL_INTERFACE:
+            return true;
+        case RETRO_ENVIRONMENT_SET_GEOMETRY: {
+            const retro_game_geometry* geometry =
+                static_cast<const retro_game_geometry*>(data);
+            if (!geometry) return false;
+            s_current->m_avInfo.geometry = *geometry;
+            brls::Logger::debug(
+                "[LibretroLoader] SET_GEOMETRY: {}x{} (max {}x{}, aspect {:.3f})",
+                geometry->base_width,
+                geometry->base_height,
+                geometry->max_width,
+                geometry->max_height,
+                geometry->aspect_ratio);
+            return true;
+        }
         case RETRO_ENVIRONMENT_GET_FASTFORWARDING: {
             bool* ff = static_cast<bool*>(data);
             if (ff) *ff = s_current->m_fastForwarding.load(std::memory_order_relaxed);
@@ -599,13 +801,39 @@ bool LibretroLoader::s_environmentCallback(unsigned cmd, void* data)
         case RETRO_ENVIRONMENT_GET_SENSOR_INTERFACE:
         case RETRO_ENVIRONMENT_GET_CAMERA_INTERFACE:
         case RETRO_ENVIRONMENT_GET_LOCATION_INTERFACE:
-        case RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS:
             return false;
-        // case RETRO_ENVIRONMENT_GET_LOG_INTERFACE: {
-        //     retro_log_callback* log = static_cast<retro_log_callback*>(data);
-        //     if (log) log->log = s_coreLogCallback;
-        //     return true;
-        // }
+        case RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE: {
+            int* flags = static_cast<int*>(data);
+            if (flags) *flags = (1 << 0) | (1 << 1); // VIDEO | AUDIO
+            return true;
+        }
+        case RETRO_ENVIRONMENT_GET_VFS_INTERFACE: {
+            // VFS 不可用，返回 true 但 iface 保持 NULL
+            // 核心会回退到 stdio 文件操作
+            return true;
+        }
+        case RETRO_ENVIRONMENT_GET_LED_INTERFACE:
+            // LED 接口不可用，核心不检查返回值
+            return true;
+        case RETRO_ENVIRONMENT_GET_MESSAGE_INTERFACE_VERSION: {
+            unsigned* ver = static_cast<unsigned*>(data);
+            if (ver) *ver = 1;
+            return true;
+        }
+        case RETRO_ENVIRONMENT_SET_MESSAGE_EXT: {
+            const retro_message_ext* msg = static_cast<const retro_message_ext*>(data);
+            if (msg && msg->msg) {
+                fprintf(stdout, "[Core] %s\n", msg->msg);
+            }
+            return true;
+        }
+        case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY:
+            return true;
+        case RETRO_ENVIRONMENT_GET_LOG_INTERFACE: {
+            retro_log_callback* log = static_cast<retro_log_callback*>(data);
+            if (log) log->log = s_coreLogCallback;
+            return true;
+        }
         default:
             return false;
     }
@@ -616,6 +844,12 @@ void LibretroLoader::s_videoRefreshCallback(const void* data,
                                              size_t pitch)
 {
     if (!s_current || !data) return;
+
+    // 防御性检查：合理范围
+    if (width < 16 || width > 720 || height < 16 || height > 576)
+        return;
+    if (pitch < width * 2)
+        return;
 
     std::lock_guard<std::mutex> lk(s_current->m_videoMutex);
     auto& vf       = s_current->m_videoFrame;
@@ -693,6 +927,14 @@ size_t LibretroLoader::s_audioSampleBatchCallback(const int16_t* data, size_t fr
     std::lock_guard<std::mutex> lk(s_current->m_audioMutex);
     auto& buf = s_current->m_audioBuffer;
     const size_t samples = frames * 2; // 立体声
+    static constexpr size_t MAX_AUDIO_SAMPLES = 16384;
+    if (buf.size() + samples > MAX_AUDIO_SAMPLES) {
+        size_t excess = buf.size() + samples - MAX_AUDIO_SAMPLES;
+        if (excess > buf.size())
+            excess = buf.size();
+        if (excess > 0)
+            buf.erase(buf.begin(), buf.begin() + static_cast<std::ptrdiff_t>(excess));
+    }
     buf.insert(buf.end(), data, data + samples);
     return frames;
 }

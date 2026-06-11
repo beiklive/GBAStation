@@ -137,8 +137,29 @@ namespace beiklive // 全局功能函数
             #elif defined(__APPLE__)
                 return  beiklive::path::corePath() + beiklive::path::SPLIT_CHAR + std::string("mgba_libretro.dylib");
             #endif
+        case (int)beiklive::enums::EmuPlatform::EmuNES:
+            return "";  // FCEUmm 静态链接，无需路径
+        case (int)beiklive::enums::EmuPlatform::EmuSNES:
+            return "";  // Snes9x 静态链接，无需路径
         default:
             return "";
+        }
+    }
+
+    /// 根据平台枚举返回对应的 CoreType
+    inline beiklive::CoreType GetCoreType(int platform){
+        switch (platform)
+        {
+        case (int)beiklive::enums::EmuPlatform::EmuGBA:
+        case (int)beiklive::enums::EmuPlatform::EmuGBC:
+        case (int)beiklive::enums::EmuPlatform::EmuGB:
+            return beiklive::CoreType::Mgba;
+        case (int)beiklive::enums::EmuPlatform::EmuNES:
+            return beiklive::CoreType::Fceumm;
+        case (int)beiklive::enums::EmuPlatform::EmuSNES:
+            return beiklive::CoreType::Snes9x;
+        default:
+            return beiklive::CoreType::Mgba;
         }
     }
 

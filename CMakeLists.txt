@@ -214,11 +214,46 @@ if(NOT PLATFORM_ANDROID)
 endif()
 
 # ============================================================
-# Post-build: copy mgba_libretro shared library next to the
-# GBAStation executable so that LibretroLoader can find it
-# via a relative "./mgba_libretro.*" path.
+# 静态链接所有 libretro 核心
+#
+# mGBA          – GBA / GBC / GB      (原始 retro_* 符号)
+# FCEUmm        – NES / Famicom       (fceumm_retro_*)
+# Snes9x        – SNES / SFC          (snes9x_retro_*)
+#
+# 桌面平台: mgba_libretro 作为共享库供 dlopen 加载，
+#           其余核心静态链接。
+# Switch:    全部核心静态链接。
 # ============================================================
-if (TARGET mgba_libretro AND NOT PLATFORM_ANDROID)
+if (TARGET fceumm_core)
+    target_link_libraries(${PROJECT_NAME} PRIVATE fceumm_core)
+    message(STATUS "Linking FCEUmm (NES) core statically")
+endif()
+if (TARGET snes9x_core)
+    target_link_libraries(${PROJECT_NAME} PRIVATE snes9x_core)
+    message(STATUS "Linking Snes9x (SNES) core statically")
+endif()
+
+if (PLATFORM_SWITCH)
+    target_link_libraries(${PROJECT_NAME} PRIVATE mgba_libretro)
+    message(STATUS "Linking mGBA core statically (Switch)")
+else()
+    # 桌面平台保留 mgba_libretro 动态加载路径（向后兼容）
+    # mgba_libretro 是 DLL，其 retro_* 符号不在可执行文件中
+    message(STATUS "mGBA core: dynamic load (desktop)")
+endif()
+
+# 静态库内部符号冲突：不同核心定义了同名全局变量
+# (options_us, PPU, log_cb 等)，使用链接器标志允许多重定义。
+if (WIN32)
+    target_link_options(${PROJECT_NAME} PRIVATE -Wl,--allow-multiple-definition)
+elseif(NOT APPLE)
+    target_link_options(${PROJECT_NAME} PRIVATE -Wl,--allow-multiple-definition)
+endif()
+
+# ============================================================
+# Post-build: 桌面平台复制 mgba_libretro 共享库至输出目录
+# ============================================================
+if (TARGET mgba_libretro AND NOT PLATFORM_ANDROID AND NOT PLATFORM_SWITCH)
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             $<TARGET_FILE:mgba_libretro>
@@ -226,11 +261,3 @@ if (TARGET mgba_libretro AND NOT PLATFORM_ANDROID)
         COMMENT "Copying mgba_libretro to output directory"
     )
 endif ()
-
-if (PLATFORM_SWITCH)
-    # 静态链接，不能用 dlopen
-    target_link_libraries(${PROJECT_NAME} PRIVATE mgba_libretro)
-else()
-    # 桌面平台用动态加载
-    # LibretroLoader 用 dlopen/LoadLibrary 加载 .so/.dll
-endif()

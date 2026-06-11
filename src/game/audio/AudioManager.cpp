@@ -35,19 +35,16 @@ namespace beiklive {
 
 void AudioManager::ringWrite(const int16_t* data, size_t count)
 {
-    for (size_t i = 0; i < count; ++i) {
-        if (m_available < RING_CAPACITY) {
-            m_ring[m_writePos] = data[i];
-            m_writePos = (m_writePos + 1) % RING_CAPACITY;
-            ++m_available;
-        } else {
-            // 缓冲区满：覆盖最旧样本
-            m_ring[m_writePos] = data[i];
-            m_writePos  = (m_writePos + 1) % RING_CAPACITY;
-            m_readPos   = (m_readPos  + 1) % RING_CAPACITY;
-        }
+    if (m_available + count > RING_CAPACITY) {
+        size_t excess = (m_available + count) - RING_CAPACITY + (RING_CAPACITY / 8);
+        m_readPos = (m_readPos + excess) % RING_CAPACITY;
+        m_available -= excess;
     }
-    // 通知音频线程有新数据可消费
+    for (size_t i = 0; i < count; ++i) {
+        m_ring[m_writePos] = data[i];
+        m_writePos = (m_writePos + 1) % RING_CAPACITY;
+        ++m_available;
+    }
     m_dataCV.notify_one();
 }
 

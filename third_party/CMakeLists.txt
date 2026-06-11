@@ -3,62 +3,28 @@ cmake_minimum_required(VERSION 3.10)
 # =========================================================
 # 路径变量（与根目录 CMakeLists.txt 保持一致）
 # =========================================================
-set(BOREALIS_LIBRARY ${CMAKE_CURRENT_SOURCE_DIR}/borealis/library)
-set(MGBA_PATH        ${CMAKE_CURRENT_SOURCE_DIR}/mgba)
+set(BOREALIS_LIBRARY   ${CMAKE_CURRENT_SOURCE_DIR}/borealis/library)
+set(MGBA_PATH          ${CMAKE_CURRENT_SOURCE_DIR}/mgba)
+set(FCEUMM_PATH        ${CMAKE_CURRENT_SOURCE_DIR}/libretro-fceumm)
+set(SNES9X_PATH        ${CMAKE_CURRENT_SOURCE_DIR}/snes9x)
 
 # =========================================================
 # borealis UI 框架
-#
-# 构建静态库目标 'borealis'。
-# 平台选项（PLATFORM_DESKTOP / PLATFORM_SWITCH 等）
-# 和渲染器选项（USE_SDL2 / USE_GLFW / USE_DEKO3D 等）
-# 由根目录 CMakeLists.txt 通过 commonOption.cmake /
-# toolchain.cmake 在包含本文件之前设置完毕。
 # =========================================================
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/borealis/library)
 
 # =========================================================
 # mGBA 模拟器  –  libretro 核心构建
-#
-# 使用 EXCLUDE_FROM_ALL 后，mGBA 自身的 CMakeLists 会
-# 自动检测到 LIBMGBA_ONLY=ON，从而：
-#   • 跳过所有 GUI / SDL / Qt 前端
-#   • 禁用外部依赖搜索（zlib、png 等）
-#   • 强制 BUILD_STATIC=ON → 生成静态库目标 'mgba'
-#     供主程序直接链接
-#
-# 在此基础上，通过 BUILD_LIBRETRO=ON 额外构建
-# 独立的 'mgba_libretro' 共享库（即可被 RetroArch /
-# Lakka 等加载的 libretro 核心二进制文件）。
-#
-# 支持平台：
-#   桌面端（Windows / macOS / Linux） → mgba_libretro.dll/.dylib/.so
-#   Nintendo Switch（DevkitPro / libnx）→ mgba_libretro.so
 # =========================================================
-
-# 强制启用 libretro 核心；通过 CACHE 方式写入以保证
-# 值能跨越 add_subdirectory() 的作用域边界生效。
-
 set(BUILD_LIBRETRO ON  CACHE BOOL "" FORCE)
-# set(SKIP_LIBRARY   ON  CACHE BOOL "" FORCE)   # 只构建核心，跳过 libmgba
 set(BUILD_SDL      OFF CACHE BOOL "" FORCE)
 set(BUILD_QT       OFF CACHE BOOL "" FORCE)
 
-# mGBA 内部通过 `DEFINED SWITCH`（CMake 变量）检测 Switch 平台；
-# borealis 工具链设置的是 PLATFORM_SWITCH，不会触发 mGBA 的逻辑。
-# 但该版本的 mGBA 没有 src/platform/switch 目录，直接设置 SWITCH=TRUE
-# 会导致 add_subdirectory 找不到目录而报错。
-# 因此手动复制 mGBA IS_EMBEDDED 分支中实际需要的 OFF 项：
 if (PLATFORM_SWITCH)
     set(CMAKE_TOOLCHAIN_FILE   "mgba/src/platform/switch/CMakeToolchain.txt")
-
     set(USE_SQLITE3     OFF CACHE BOOL "" FORCE)
-#     set(USE_DEBUGGERS   OFF CACHE BOOL "" FORCE)
-#     set(USE_DISCORD_RPC OFF CACHE BOOL "" FORCE)
-#     set(USE_LIBZIP      OFF CACHE BOOL "" FORCE)
 endif ()
 
-# 禁止 mGBA 构建文档、性能分析及各类测试相关目标
 set(BUILD_PERF     OFF CACHE BOOL "" FORCE)
 set(BUILD_TEST     OFF CACHE BOOL "" FORCE)
 set(BUILD_SUITE    OFF CACHE BOOL "" FORCE)
@@ -67,11 +33,6 @@ set(BUILD_DOCGEN   OFF CACHE BOOL "" FORCE)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/mgba)
 
-# ── Switch: 补充 VFS 文件 ──────────────────────────────────────────────
-# mGBA 的 CMakeLists.txt 只在 WIN32 / UNIX 条件下把 vfs-fd.c / vfs-dirent.c
-# 加入 CORE_VFS_SRC，Switch（嵌入式目标）两个条件都不满足，导致
-# VFileOpenFD / VDirOpen 符号缺失。devkitA64/newlib 提供 open() / opendir()，
-# 直接补充源文件即可。
 if (PLATFORM_SWITCH AND TARGET mgba_libretro)
     target_sources(mgba_libretro PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/mgba/src/util/vfs/vfs-fd.c
@@ -79,3 +40,266 @@ if (PLATFORM_SWITCH AND TARGET mgba_libretro)
     )
 endif ()
 
+# =========================================================
+# 通用：libretro 符号重命名宏
+#
+# 将 retro_* API 函数名映射为 {prefix}_retro_*，
+# 避免多个核心静态链接时发生符号冲突。
+# =========================================================
+function(apply_retro_symbol_rename TARGET PREFIX)
+    target_compile_definitions(${TARGET} PRIVATE
+        "retro_init=${PREFIX}_retro_init"
+        "retro_deinit=${PREFIX}_retro_deinit"
+        "retro_api_version=${PREFIX}_retro_api_version"
+        "retro_get_system_info=${PREFIX}_retro_get_system_info"
+        "retro_get_system_av_info=${PREFIX}_retro_get_system_av_info"
+        "retro_set_environment=${PREFIX}_retro_set_environment"
+        "retro_set_video_refresh=${PREFIX}_retro_set_video_refresh"
+        "retro_set_audio_sample=${PREFIX}_retro_set_audio_sample"
+        "retro_set_audio_sample_batch=${PREFIX}_retro_set_audio_sample_batch"
+        "retro_set_input_poll=${PREFIX}_retro_set_input_poll"
+        "retro_set_input_state=${PREFIX}_retro_set_input_state"
+        "retro_set_controller_port_device=${PREFIX}_retro_set_controller_port_device"
+        "retro_reset=${PREFIX}_retro_reset"
+        "retro_run=${PREFIX}_retro_run"
+        "retro_serialize_size=${PREFIX}_retro_serialize_size"
+        "retro_serialize=${PREFIX}_retro_serialize"
+        "retro_unserialize=${PREFIX}_retro_unserialize"
+        "retro_load_game=${PREFIX}_retro_load_game"
+        "retro_unload_game=${PREFIX}_retro_unload_game"
+        "retro_get_memory_data=${PREFIX}_retro_get_memory_data"
+        "retro_get_memory_size=${PREFIX}_retro_get_memory_size"
+        "retro_cheat_reset=${PREFIX}_retro_cheat_reset"
+        "retro_cheat_set=${PREFIX}_retro_cheat_set"
+        "retro_get_region=${PREFIX}_retro_get_region"
+        "retro_load_game_special=${PREFIX}_retro_load_game_special"
+    )
+endfunction()
+
+function(apply_data_symbol_rename TARGET PREFIX)
+    target_compile_definitions(${TARGET} PRIVATE
+        "log_cb=${PREFIX}_log_cb"
+        "options_intl=${PREFIX}_options_intl"
+    )
+    foreach(LOCALE us tr vn val uk sv sr sk ru pt_pt pt_br pl no nl ko ja it id hu hr he gl fr fi fa es eo en el de da cy cs cht chs ca ast ar)
+        target_compile_definitions(${TARGET} PRIVATE
+            "options_${LOCALE}=${PREFIX}_options_${LOCALE}"
+            "option_cats_${LOCALE}=${PREFIX}_option_cats_${LOCALE}"
+            "option_defs_${LOCALE}=${PREFIX}_option_defs_${LOCALE}"
+        )
+    endforeach()
+endfunction()
+
+# =========================================================
+# FCEUmm (NES) 核心 – 按 Makefile.libretro + Makefile.common
+# 提取源文件，仅编译 libretro 版本使用的代码。
+# =========================================================
+set(FCEUMM_CORE_DIR ${FCEUMM_PATH}/src)
+
+# 板级 MAP 实现（与 Makefile.common:25-26 一致）
+file(GLOB FCEUMM_BOARDS_SRC   ${FCEUMM_CORE_DIR}/boards/*.c)
+file(GLOB FCEUMM_INPUT_SRC    ${FCEUMM_CORE_DIR}/input/*.c)
+file(GLOB FCEUMM_NTSC_SRC     ${FCEUMM_CORE_DIR}/ntsc/nes_ntsc.c)
+
+# 主源文件（与 Makefile.common:38-63 一致）
+set(FCEUMM_MAIN_SRC
+    ${FCEUMM_CORE_DIR}/drivers/libretro/libretro.c
+    ${FCEUMM_CORE_DIR}/drivers/libretro/libretro_dipswitch.c
+    ${FCEUMM_CORE_DIR}/cart.c
+    ${FCEUMM_CORE_DIR}/cheat.c
+    ${FCEUMM_CORE_DIR}/crc32.c
+    ${FCEUMM_CORE_DIR}/fceu-endian.c
+    ${FCEUMM_CORE_DIR}/fceu-memory.c
+    ${FCEUMM_CORE_DIR}/fceu.c
+    ${FCEUMM_CORE_DIR}/fds.c
+    ${FCEUMM_CORE_DIR}/fds_apu.c
+    ${FCEUMM_CORE_DIR}/file.c
+    ${FCEUMM_CORE_DIR}/filter.c
+    ${FCEUMM_CORE_DIR}/general.c
+    ${FCEUMM_CORE_DIR}/input.c
+    ${FCEUMM_CORE_DIR}/md5.c
+    ${FCEUMM_CORE_DIR}/nsf.c
+    ${FCEUMM_CORE_DIR}/palette.c
+    ${FCEUMM_CORE_DIR}/ppu.c
+    ${FCEUMM_CORE_DIR}/sound.c
+    ${FCEUMM_CORE_DIR}/state.c
+    ${FCEUMM_CORE_DIR}/video.c
+    ${FCEUMM_CORE_DIR}/vsuni.c
+    ${FCEUMM_CORE_DIR}/ines.c
+    ${FCEUMM_CORE_DIR}/unif.c
+    ${FCEUMM_CORE_DIR}/x6502.c
+)
+
+# libretro-common 兼容层（Makefile.common:65-80; STATIC_LINKING!=1 时追加）
+set(FCEUMM_LRC_DIR ${FCEUMM_CORE_DIR}/drivers/libretro/libretro-common)
+set(FCEUMM_COMPAT_SRC
+    ${FCEUMM_LRC_DIR}/compat/compat_posix_string.c
+    ${FCEUMM_LRC_DIR}/compat/compat_snprintf.c
+    ${FCEUMM_LRC_DIR}/compat/compat_strcasestr.c
+    ${FCEUMM_LRC_DIR}/compat/compat_strl.c
+    ${FCEUMM_LRC_DIR}/compat/fopen_utf8.c
+    ${FCEUMM_LRC_DIR}/encodings/encoding_utf.c
+    ${FCEUMM_LRC_DIR}/file/file_path.c
+    ${FCEUMM_LRC_DIR}/file/file_path_io.c
+    ${FCEUMM_LRC_DIR}/streams/file_stream.c
+    ${FCEUMM_LRC_DIR}/streams/file_stream_transforms.c
+    ${FCEUMM_LRC_DIR}/streams/memory_stream.c
+    ${FCEUMM_LRC_DIR}/string/stdstring.c
+    ${FCEUMM_LRC_DIR}/time/rtime.c
+    ${FCEUMM_LRC_DIR}/vfs/vfs_implementation.c
+)
+
+add_library(fceumm_core STATIC
+    ${FCEUMM_BOARDS_SRC}
+    ${FCEUMM_INPUT_SRC}
+    ${FCEUMM_NTSC_SRC}
+    ${FCEUMM_MAIN_SRC}
+    ${FCEUMM_COMPAT_SRC}
+)
+
+target_include_directories(fceumm_core PRIVATE
+    ${FCEUMM_CORE_DIR}/drivers/libretro
+    ${FCEUMM_LRC_DIR}/include
+    ${FCEUMM_CORE_DIR}
+    ${FCEUMM_CORE_DIR}/input
+    ${FCEUMM_CORE_DIR}/boards
+    ${FCEUMM_CORE_DIR}/ntsc
+)
+
+target_compile_definitions(fceumm_core PRIVATE
+    __LIBRETRO__
+    PATH_MAX=1024
+    FCEU_VERSION_NUMERIC=9813
+    FRONTEND_SUPPORTS_RGB888
+    HAVE_NTSC_FILTER
+)
+
+apply_retro_symbol_rename(fceumm_core fceumm)
+apply_data_symbol_rename(fceumm_core fceumm)
+target_compile_definitions(fceumm_core PRIVATE "PPU=fceumm_PPU")
+
+set_target_properties(fceumm_core PROPERTIES C_STANDARD 11)
+
+# =========================================================
+# Snes9x (SNES) 核心 – 按 libretro/Makefile + Makefile.common
+# =========================================================
+set(SNES9X_CORE_DIR ${SNES9X_PATH})
+
+# C 源文件（Makefile.common:11,69-75）
+set(SNES9X_C_SRC
+    ${SNES9X_CORE_DIR}/filter/snes_ntsc.c
+    ${SNES9X_CORE_DIR}/unzip/unzip.c
+    ${SNES9X_CORE_DIR}/unzip/ioapi.c
+)
+
+# C++ 源文件（Makefile.common:12-65）
+set(SNES9X_CXX_SRC
+    ${SNES9X_CORE_DIR}/apu/apu.cpp
+    ${SNES9X_CORE_DIR}/apu/bapu/dsp/sdsp.cpp
+    ${SNES9X_CORE_DIR}/apu/bapu/smp/smp.cpp
+    ${SNES9X_CORE_DIR}/apu/bapu/smp/smp_state.cpp
+    ${SNES9X_CORE_DIR}/bsx.cpp
+    ${SNES9X_CORE_DIR}/c4.cpp
+    ${SNES9X_CORE_DIR}/c4emu.cpp
+    ${SNES9X_CORE_DIR}/cheats.cpp
+    ${SNES9X_CORE_DIR}/cheats2.cpp
+    ${SNES9X_CORE_DIR}/clip.cpp
+    ${SNES9X_CORE_DIR}/conffile.cpp
+    ${SNES9X_CORE_DIR}/controls.cpp
+    ${SNES9X_CORE_DIR}/cpu.cpp
+    ${SNES9X_CORE_DIR}/cpuexec.cpp
+    ${SNES9X_CORE_DIR}/cpuops.cpp
+    ${SNES9X_CORE_DIR}/crosshairs.cpp
+    ${SNES9X_CORE_DIR}/dma.cpp
+    ${SNES9X_CORE_DIR}/dsp.cpp
+    ${SNES9X_CORE_DIR}/dsp1.cpp
+    ${SNES9X_CORE_DIR}/dsp2.cpp
+    ${SNES9X_CORE_DIR}/dsp3.cpp
+    ${SNES9X_CORE_DIR}/dsp4.cpp
+    ${SNES9X_CORE_DIR}/fxinst.cpp
+    ${SNES9X_CORE_DIR}/fxemu.cpp
+    ${SNES9X_CORE_DIR}/gfx.cpp
+    ${SNES9X_CORE_DIR}/globals.cpp
+    ${SNES9X_CORE_DIR}/loadzip.cpp
+    ${SNES9X_CORE_DIR}/memmap.cpp
+    ${SNES9X_CORE_DIR}/obc1.cpp
+    ${SNES9X_CORE_DIR}/msu1.cpp
+    ${SNES9X_CORE_DIR}/ppu.cpp
+    ${SNES9X_CORE_DIR}/stream.cpp
+    ${SNES9X_CORE_DIR}/sa1.cpp
+    ${SNES9X_CORE_DIR}/sa1cpu.cpp
+    ${SNES9X_CORE_DIR}/screenshot.cpp
+    ${SNES9X_CORE_DIR}/sdd1.cpp
+    ${SNES9X_CORE_DIR}/sdd1emu.cpp
+    ${SNES9X_CORE_DIR}/seta.cpp
+    ${SNES9X_CORE_DIR}/seta010.cpp
+    ${SNES9X_CORE_DIR}/seta011.cpp
+    ${SNES9X_CORE_DIR}/seta018.cpp
+    ${SNES9X_CORE_DIR}/snapshot.cpp
+    ${SNES9X_CORE_DIR}/snes9x.cpp
+    ${SNES9X_CORE_DIR}/spc7110.cpp
+    ${SNES9X_CORE_DIR}/srtc.cpp
+    ${SNES9X_CORE_DIR}/tile.cpp
+    ${SNES9X_CORE_DIR}/tileimpl-n1x1.cpp
+    ${SNES9X_CORE_DIR}/tileimpl-n2x1.cpp
+    ${SNES9X_CORE_DIR}/tileimpl-h2x1.cpp
+    ${SNES9X_CORE_DIR}/sha256.cpp
+    ${SNES9X_CORE_DIR}/bml.cpp
+    ${SNES9X_CORE_DIR}/movie.cpp
+    ${SNES9X_CORE_DIR}/fscompat.cpp
+    ${SNES9X_CORE_DIR}/libretro/libretro.cpp
+)
+
+add_library(snes9x_core STATIC
+    ${SNES9X_C_SRC}
+    ${SNES9X_CXX_SRC}
+)
+
+target_include_directories(snes9x_core PRIVATE
+    ${SNES9X_CORE_DIR}/libretro
+    ${SNES9X_CORE_DIR}/libretro/libretro-common/include
+    ${SNES9X_CORE_DIR}
+    ${SNES9X_CORE_DIR}/apu
+    ${SNES9X_CORE_DIR}/apu/bapu
+    ${SNES9X_CORE_DIR}/unzip
+)
+
+target_compile_definitions(snes9x_core PRIVATE
+    __LIBRETRO__
+    RIGHTSHIFT_IS_SAR
+    ALLOW_CPU_OVERCLOCK
+    HAVE_STDINT_H
+    HAVE_STRINGS_H
+)
+
+# Snes9x 需要 zlib（unzip 功能）；优先使用 mGBA 内建的 zlibstatic
+if (TARGET zlibstatic)
+    target_link_libraries(snes9x_core PRIVATE zlibstatic)
+    target_include_directories(snes9x_core PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/mgba/src/third-party/zlib
+        ${CMAKE_BINARY_DIR}/third_party/zlib
+    )
+else()
+    find_package(ZLIB)
+    if (ZLIB_FOUND)
+        target_link_libraries(snes9x_core PRIVATE ZLIB::ZLIB)
+    endif()
+endif()
+
+if (PLATFORM_SWITCH)
+    target_compile_definitions(snes9x_core PRIVATE
+        __SWITCH__
+        SWITCH
+        HAVE_LIBNX
+        IOAPI_NO_64
+    )
+endif ()
+
+apply_retro_symbol_rename(snes9x_core snes9x)
+apply_data_symbol_rename(snes9x_core snes9x)
+target_compile_definitions(snes9x_core PRIVATE "PPU=snes9x_PPU")
+
+set_target_properties(snes9x_core PROPERTIES
+    CXX_STANDARD 14
+    C_STANDARD 11
+)

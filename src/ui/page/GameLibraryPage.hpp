@@ -14,14 +14,16 @@ namespace beiklive
     class GameLibraryPage : public beiklive::Box
     {
     public:
-        enum class PlatformFilter : int
-        {
-            ALL = 0,
-            GBA = (int)beiklive::enums::EmuPlatform::EmuGBA,
-            GBC = (int)beiklive::enums::EmuPlatform::EmuGBC,
-            GB  = (int)beiklive::enums::EmuPlatform::EmuGB,
-            FAVORITE = 999,
-        };
+enum class PlatformFilter : int
+{
+    ALL = 0,
+    GBA = (int)beiklive::enums::EmuPlatform::EmuGBA,
+    GBC = (int)beiklive::enums::EmuPlatform::EmuGBC,
+    GB  = (int)beiklive::enums::EmuPlatform::EmuGB,
+    NES = (int)beiklive::enums::EmuPlatform::EmuNES,
+    SNES = (int)beiklive::enums::EmuPlatform::EmuSNES,
+    FAVORITE = 999,
+};
 
         enum class SortMode : int
         {

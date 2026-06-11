@@ -147,6 +147,18 @@ namespace beiklive
         gbSwitch->setOnToggle([this](bool on) { m_scanGB = on; });
         m_leftPanel->addView(gbSwitch);
 
+        auto* nesSwitch = new beiklive::SwitchButton();
+        nesSwitch->setText("扫描FC游戏");
+        nesSwitch->setState(true);
+        nesSwitch->setOnToggle([this](bool on) { m_scanNES = on; });
+        m_leftPanel->addView(nesSwitch);
+
+        auto* snesSwitch = new beiklive::SwitchButton();
+        snesSwitch->setText("扫描SFC游戏");
+        snesSwitch->setState(true);
+        snesSwitch->setOnToggle([this](bool on) { m_scanSNES = on; });
+        m_leftPanel->addView(snesSwitch);
+
         auto* scanHint = new brls::Label();
         scanHint->setText("自动扫描设置为ON的游戏类型");
         scanHint->setFontSize(16.f);
@@ -204,6 +216,26 @@ namespace beiklive
                 return true;
             });
         m_rightPanel->addView(gbBtn);
+
+        auto* nesBtn = new beiklive::ButtonBox();
+        nesBtn->setText("选择FC游戏的lpl文件");
+        nesBtn->setIcon(BK_RES("img/ui/icon_gba.png"));
+        nesBtn->registerAction("选择", brls::BUTTON_A,
+            [this](brls::View*) -> bool {
+                onSelectLpl((int)beiklive::enums::EmuPlatform::EmuNES);
+                return true;
+            });
+        m_rightPanel->addView(nesBtn);
+
+        auto* snesBtn = new beiklive::ButtonBox();
+        snesBtn->setText("选择SFC游戏的lpl文件");
+        snesBtn->setIcon(BK_RES("img/ui/icon_gba.png"));
+        snesBtn->registerAction("选择", brls::BUTTON_A,
+            [this](brls::View*) -> bool {
+                onSelectLpl((int)beiklive::enums::EmuPlatform::EmuSNES);
+                return true;
+            });
+        m_rightPanel->addView(snesBtn);
 
         auto* hint = new brls::Label();
         hint->setText("lpl文件通常在 /retroarch/playlists 目录下");
@@ -499,6 +531,10 @@ namespace beiklive
                 overlayKey = sk::KEY_DISPLAY_OVERLAY_GBC_PATH; break;
             case beiklive::enums::EmuPlatform::EmuGB:
                 overlayKey = sk::KEY_DISPLAY_OVERLAY_GB_PATH; break;
+            case beiklive::enums::EmuPlatform::EmuNES:
+                overlayKey = sk::KEY_DISPLAY_OVERLAY_NES_PATH; break;
+            case beiklive::enums::EmuPlatform::EmuSNES:
+                overlayKey = sk::KEY_DISPLAY_OVERLAY_SNES_PATH; break;
             default: break;
             }
             if (!overlayKey.empty())
@@ -515,6 +551,10 @@ namespace beiklive
                 shaderKey = sk::KEY_DISPLAY_SHADER_GBC_PATH; break;
             case beiklive::enums::EmuPlatform::EmuGB:
                 shaderKey = sk::KEY_DISPLAY_SHADER_GB_PATH; break;
+            case beiklive::enums::EmuPlatform::EmuNES:
+                shaderKey = sk::KEY_DISPLAY_SHADER_NES_PATH; break;
+            case beiklive::enums::EmuPlatform::EmuSNES:
+                shaderKey = sk::KEY_DISPLAY_SHADER_SNES_PATH; break;
             default: break;
             }
             if (!shaderKey.empty())
@@ -683,11 +723,17 @@ namespace beiklive
         if (m_scanGBA) exts.insert("gba");
         if (m_scanGBC) exts.insert("gbc");
         if (m_scanGB)  exts.insert("gb");
+        if (m_scanNES) { exts.insert("nes"); exts.insert("fds"); }
+        if (m_scanSNES) { exts.insert("sfc"); exts.insert("smc"); }
 
         auto getPlatform = [](const std::string& ext) -> int {
             if (ext == "gba") return (int)beiklive::enums::EmuPlatform::EmuGBA;
             if (ext == "gbc") return (int)beiklive::enums::EmuPlatform::EmuGBC;
             if (ext == "gb")  return (int)beiklive::enums::EmuPlatform::EmuGB;
+            if (ext == "nes" || ext == "fds")
+                return (int)beiklive::enums::EmuPlatform::EmuNES;
+            if (ext == "sfc" || ext == "smc")
+                return (int)beiklive::enums::EmuPlatform::EmuSNES;
             return -1;
         };
 
@@ -780,6 +826,10 @@ namespace beiklive
                     entry.overlayPath = GET_SETTING_KEY_STR(sk::KEY_DISPLAY_OVERLAY_GBC_PATH, "");
                 else if (platform == (int)beiklive::enums::EmuPlatform::EmuGB)
                     entry.overlayPath = GET_SETTING_KEY_STR(sk::KEY_DISPLAY_OVERLAY_GB_PATH, "");
+                else if (platform == (int)beiklive::enums::EmuPlatform::EmuNES)
+                    entry.overlayPath = GET_SETTING_KEY_STR(sk::KEY_DISPLAY_OVERLAY_NES_PATH, "");
+                else if (platform == (int)beiklive::enums::EmuPlatform::EmuSNES)
+                    entry.overlayPath = GET_SETTING_KEY_STR(sk::KEY_DISPLAY_OVERLAY_SNES_PATH, "");
 
                 { std::string dm = GET_SETTING_KEY_STR("display.mode", "original");
                   if (dm == "fill") entry.displayMode = 1;
