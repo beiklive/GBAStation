@@ -1,8 +1,8 @@
 #pragma once
 
 #include "core/common.h"
-#include "ui/utils/Box.hpp"
-#include "ui/utils/FunctionButtons.hpp"
+#include "ui/widget/Box.hpp"
+#include "ui/widget/FunctionButtons.hpp"
 
 #include <atomic>
 #include <mutex>

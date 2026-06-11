@@ -1,6 +1,6 @@
 #include "ui/page/AboutPage.hpp"
 #include "ui/page/UpdatePage.hpp"
-#include "ui/utils/UpdateDialog.hpp"
+#include "ui/widget/UpdateDialog.hpp"
 #include "ui/utils/CheatMatcher.hpp"
 #include "core/AppUpdater.hpp"
 #include "core/Tools.hpp"

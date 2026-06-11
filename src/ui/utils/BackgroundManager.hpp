@@ -1,7 +1,7 @@
 #pragma once
 
 #include <borealis.hpp>
-#include "DynamicBackgroundBox.hpp"
+#include "ui/widget/DynamicBackgroundBox.hpp"
 
 namespace beiklive
 {

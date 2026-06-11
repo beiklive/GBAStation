@@ -1,7 +1,7 @@
 #pragma once
 #include "core/common.h"
-#include "ui/utils/Box.hpp"
-#include "ui/utils/FileListView.hpp"
+#include "ui/widget/Box.hpp"
+#include "ui/view/FileListView.hpp"
 #include "core/Tools.hpp"
 #include <atomic>
 #include <functional>

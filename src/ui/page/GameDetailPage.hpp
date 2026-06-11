@@ -1,10 +1,10 @@
 #pragma once
 
 #include "core/common.h"
-#include "ui/utils/Box.hpp"
-#include "ui/utils/ButtonBox.hpp"
-#include "ui/utils/GridBox.hpp"
-#include "ui/utils/GridItem.hpp"
+#include "ui/widget/Box.hpp"
+#include "ui/widget/ButtonBox.hpp"
+#include "ui/widget/GridBox.hpp"
+#include "ui/widget/GridItem.hpp"
 
 #include <filesystem>
 #include <string>

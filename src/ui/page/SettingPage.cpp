@@ -1,7 +1,7 @@
 #include "ui/page/SettingPage.hpp"
 #include "ui/page/FileListPage.hpp"
-#include "ui/page/GameImportView.hpp"
-#include "ui/utils/FunctionButtons.hpp"
+#include "ui/view/GameImportView.hpp"
+#include "ui/widget/FunctionButtons.hpp"
 #include "ui/utils/FilePickerHelper.hpp"
 #include "ui/utils/UiHelper.hpp"
 
@@ -9,7 +9,7 @@
 #include <borealis/views/cells/cell_selector.hpp>
 #include <borealis/views/cells/cell_detail.hpp>
 #include <borealis/views/header.hpp>
-#include "ui/utils/DetailCell.hpp"
+#include "ui/widget/DetailCell.hpp"
 #include <borealis/views/scrolling_frame.hpp>
 #include <borealis/views/label.hpp>
 #include <borealis/views/applet_frame.hpp>

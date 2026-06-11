@@ -2,7 +2,7 @@
 #include "GameMenuView.hpp"
 #include "RewindSelectorView.hpp"
 #include "game/audio/AudioManager.hpp"
-#include "ui/audio/BKAudioPlayer.hpp"
+#include "ui/utils/BKAudioPlayer.hpp"
 #include "ui/utils/AnimationHelper.hpp"
 #include "core/Tools.hpp"
 

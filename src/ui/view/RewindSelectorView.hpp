@@ -1,7 +1,7 @@
 #pragma once
 
 #include "core/common.h"
-#include "ui/utils/GameView.hpp"
+#include "ui/view/GameView.hpp"
 
 #include <borealis/views/h_scrolling_frame.hpp>
 #include <functional>

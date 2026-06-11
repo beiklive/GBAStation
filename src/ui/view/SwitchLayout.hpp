@@ -4,8 +4,8 @@
 #include <atomic>
 #include "core/common.h"
 #include "Layout.hpp"
-#include "ui/utils/GameCard.hpp"
-#include "ui/utils/RoundButton.hpp"
+#include "ui/widget/GameCard.hpp"
+#include "ui/widget/RoundButton.hpp"
 
 namespace beiklive
 {

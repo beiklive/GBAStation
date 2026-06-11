@@ -1,7 +1,7 @@
 #pragma once
 
 #include "core/common.h"
-#include "ui/utils/Box.hpp"
+#include "ui/widget/Box.hpp"
 
 #include <borealis.hpp>
 #include <vector>

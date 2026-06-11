@@ -2,9 +2,9 @@
 
 #include "core/common.h"
 #include "core/Tools.hpp"
-#include "ui/utils/Box.hpp"
-#include "ui/utils/GridBox.hpp"
-#include "ui/utils/GameGridItem.hpp"
+#include "ui/widget/Box.hpp"
+#include "ui/widget/GridBox.hpp"
+#include "ui/widget/GameGridItem.hpp"
 
 namespace beiklive
 {

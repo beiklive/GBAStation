@@ -3,12 +3,12 @@
 #include "core/common.h"
 #include "core/GameSignal.hpp"
 #include <functional>
-#include "TabFrame.hpp"
-#include "GridBox.hpp"
-#include "Box.hpp"
-#include "GridItem.hpp"
-#include "FunctionButtons.hpp"
-#include "HintsBar.hpp"
+#include "ui/widget/TabFrame.hpp"
+#include "ui/widget/GridBox.hpp"
+#include "ui/widget/Box.hpp"
+#include "ui/widget/GridItem.hpp"
+#include "ui/widget/FunctionButtons.hpp"
+#include "ui/widget/HintsBar.hpp"
 #include "game/render/GLSLPParser.hpp"
 namespace beiklive
 {

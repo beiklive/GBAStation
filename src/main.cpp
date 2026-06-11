@@ -5,11 +5,11 @@
 
 #include "core/common.h"
 #include "core/AppUpdater.hpp"
-#include "ui/audio/BKAudioPlayer.hpp"
+#include "ui/utils/BKAudioPlayer.hpp"
 #include "ui/page/StartPage.hpp"
 #include "ui/page/UpdatePage.hpp"
 #include "ui/utils/MyActivity.hpp"
-#include "ui/utils/UpdateDialog.hpp"
+#include "ui/widget/UpdateDialog.hpp"
 
 int main(int argc, char* argv[]) {
 #ifdef __SWITCH__

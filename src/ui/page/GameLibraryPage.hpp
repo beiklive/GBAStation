@@ -3,11 +3,11 @@
 #include <atomic>
 #include "core/common.h"
 #include "core/Tools.hpp"
-#include "ui/utils/Box.hpp"
-#include "ui/utils/RecyclingGrid.hpp"
-#include "ui/utils/RecyclingGridDataSource.hpp"
-#include "ui/utils/GridItem.hpp"
-#include "ui/utils/GameOptionsSidebar.hpp"
+#include "ui/widget/Box.hpp"
+#include "ui/view/RecyclingGrid.hpp"
+#include "ui/view/RecyclingGridDataSource.hpp"
+#include "ui/widget/GridItem.hpp"
+#include "ui/view/GameOptionsSidebar.hpp"
 
 namespace beiklive
 {

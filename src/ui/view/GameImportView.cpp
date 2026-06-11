@@ -1,6 +1,6 @@
-#include "ui/page/GameImportView.hpp"
+#include "ui/view/GameImportView.hpp"
 #include "ui/page/FileListPage.hpp"
-#include "ui/utils/ButtonBox.hpp"
+#include "ui/widget/ButtonBox.hpp"
 #include "core/Tools.hpp"
 
 #include <borealis/views/label.hpp>

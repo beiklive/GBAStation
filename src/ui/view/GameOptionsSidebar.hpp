@@ -2,8 +2,8 @@
 
 #include <borealis.hpp>
 #include "core/common.h"
-#include "ui/utils/ButtonBox.hpp"
-#include "ui/utils/HintsBar.hpp"
+#include "ui/widget/ButtonBox.hpp"
+#include "ui/widget/HintsBar.hpp"
 #include <functional>
 #include <string>
 #include <vector>

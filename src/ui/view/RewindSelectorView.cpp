@@ -1,5 +1,5 @@
 #include "RewindSelectorView.hpp"
-#include "AnimationHelper.hpp"
+#include "ui/utils/AnimationHelper.hpp"
 #include "core/GameSignal.hpp"
 
 #include <borealis.hpp>

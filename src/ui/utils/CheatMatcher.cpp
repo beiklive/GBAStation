@@ -1,6 +1,6 @@
 #include "CheatMatcher.hpp"
 #include "core/Tools.hpp"
-#include "ui/utils/Box.hpp"
+#include "ui/widget/Box.hpp"
 #include <curl/curl.h>
 #include <fstream>
 #include <sstream>

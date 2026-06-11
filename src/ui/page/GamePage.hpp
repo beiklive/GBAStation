@@ -2,9 +2,9 @@
 #include "core/common.h"
 #include <functional>
 
-#include "ui/utils/GameView.hpp"
-#include "ui/utils/GameMenuView.hpp"
-#include "ui/utils/RewindSelectorView.hpp"
+#include "ui/view/GameView.hpp"
+#include "ui/view/GameMenuView.hpp"
+#include "ui/view/RewindSelectorView.hpp"
 
 namespace beiklive
 {

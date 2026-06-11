@@ -2,15 +2,15 @@
 
 #include <atomic>
 #include "core/common.h"
-#include "ui/layout/SwitchLayout.hpp"
+#include "ui/view/SwitchLayout.hpp"
 #include "ui/page/FileListPage.hpp" 
 #include "ui/page/GamePage.hpp"
 #include "ui/page/SettingPage.hpp"
 #include "ui/page/AboutPage.hpp"
 #include "ui/page/GameLibraryPage.hpp"
 #include "ui/page/DataManagementPage.hpp"
-#include "ui/utils/Box.hpp"
-#include "ui/utils/GameOptionsSidebar.hpp"
+#include "ui/widget/Box.hpp"
+#include "ui/view/GameOptionsSidebar.hpp"
 
 namespace beiklive
 {

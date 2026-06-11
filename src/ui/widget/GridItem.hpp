@@ -4,7 +4,7 @@
 #include <string>
 
 #include "core/common.h"
-#include "RecyclingGridItem.hpp"
+#include "ui/view/RecyclingGridItem.hpp"
 
 namespace beiklive {
 
