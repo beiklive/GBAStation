@@ -360,7 +360,8 @@ void UpdatePage::startInstall() {
                 m_statusLabel->setText("安装完成，正在重启");
 
 #ifdef __SWITCH__
-                    brls::Application::quit();
+               envSetNextLoad("switch/GBAStation.nro");
+                brls::Application::quit();
 #else
                     brls::Application::notify("请手动重启");
 #endif
