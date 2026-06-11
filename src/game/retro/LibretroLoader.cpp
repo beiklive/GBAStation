@@ -728,6 +728,22 @@ bool LibretroLoader::s_environmentCallback(unsigned cmd, void* data)
             }
             return true;
         }
+        case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO: {
+            const retro_system_av_info* info =
+                static_cast<const retro_system_av_info*>(data);
+            if (!info) return false;
+            s_current->m_avInfo = *info;
+            brls::Logger::debug(
+                "[LibretroLoader] SET_SYSTEM_AV_INFO: {}x{} (max {}x{}, aspect {:.3f}, fps {:.2f}, sampleRate {:.2f})",
+                info->geometry.base_width,
+                info->geometry.base_height,
+                info->geometry.max_width,
+                info->geometry.max_height,
+                info->geometry.aspect_ratio,
+                info->timing.fps,
+                info->timing.sample_rate);
+            return true;
+        }
         case RETRO_ENVIRONMENT_SHUTDOWN:
             return true;
         // ---- 核心选项版本：返回 0 以使用旧版 SET_VARIABLES ----
@@ -786,9 +802,22 @@ bool LibretroLoader::s_environmentCallback(unsigned cmd, void* data)
         case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO:
         case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS:
         case RETRO_ENVIRONMENT_SET_MEMORY_MAPS:
-        case RETRO_ENVIRONMENT_SET_GEOMETRY:
         case RETRO_ENVIRONMENT_SET_ROTATION:
             return false;
+        case RETRO_ENVIRONMENT_SET_GEOMETRY: {
+            const retro_game_geometry* geometry =
+                static_cast<const retro_game_geometry*>(data);
+            if (!geometry) return false;
+            s_current->m_avInfo.geometry = *geometry;
+            brls::Logger::debug(
+                "[LibretroLoader] SET_GEOMETRY: {}x{} (max {}x{}, aspect {:.3f})",
+                geometry->base_width,
+                geometry->base_height,
+                geometry->max_width,
+                geometry->max_height,
+                geometry->aspect_ratio);
+            return true;
+        }
         case RETRO_ENVIRONMENT_GET_FASTFORWARDING: {
             bool* ff = static_cast<bool*>(data);
             if (ff) *ff = s_current->m_fastForwarding.load(std::memory_order_relaxed);

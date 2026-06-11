@@ -12,9 +12,9 @@ bool CoreGenesis::SetupGame(beiklive::GameEntry GameEntry)
 {
     brls::Logger::debug("[CoreGenesis] SetupGame: path={}", GameEntry.path);
     m_gameEntry = std::move(GameEntry);
+    _initConfig();
     if (_loadCore())
     {
-        _initConfig();
         if (_loadRom(m_gameEntry.path))
         {
             m_core.reset();
@@ -141,6 +141,9 @@ void CoreGenesis::_initConfig()
 
     m_core.setConfigManager(cfg);
     m_core.setSystemDirectory(beiklive::path::biosPath());
+    m_core.setSaveDirectory(m_gameEntry.savePath.empty()
+        ? beiklive::path::savePath()
+        : m_gameEntry.savePath);
 }
 
 bool CoreGenesis::_loadSram()

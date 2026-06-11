@@ -117,6 +117,7 @@ namespace beiklive
             float m_ffMultiplier = 4.0f;     ///< 快进倍率（>1=加速, <1=慢动作）
             float m_ffSlowAccum  = 0.0f;     ///< 慢动作帧累加器
             bool  m_ffMute       = true;     ///< 快进时静音（缓存配置避免每帧读取）
+            bool  m_rewindEnabled = false;   ///< 是否启用倒带状态缓存
             int  m_rewindSaveInterval = 1;     ///< 每 N 帧保存一次倒带状态
             unsigned m_rewindBufferSize = 600; ///< 倒带缓冲区最大条目数（从配置读取）
             bool m_rewindShowUI       = false;  ///< 是否启用可视化倒带界面
