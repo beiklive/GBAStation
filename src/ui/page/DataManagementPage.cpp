@@ -207,7 +207,8 @@ void DataManagementPage::draw(
         if (m_importError.load(std::memory_order_acquire))
         {
             m_importing.store(false, std::memory_order_release);
-            m_progressTitleLabel->setText("导入失败");
+            m_progressTitleLabel->setText(
+                m_progressTask == ProgressTask::Cleanup ? "处理失败" : "导入失败");
             {
                 std::lock_guard<std::mutex> lock(m_statusMutex);
                 std::string err = m_errorMsg.empty() ? "未知错误" : m_errorMsg;
@@ -226,7 +227,10 @@ void DataManagementPage::draw(
                     err = m_errorMsg.empty() ? "未知错误" : m_errorMsg;
                 }
                 rememberFocusBeforeModal();
-                auto* dialog = new brls::Dialog("导入失败\n\n" + err);
+                auto* dialog = new brls::Dialog(
+                    std::string(m_progressTask == ProgressTask::Cleanup ? "处理失败\n\n"
+                                                                       : "导入失败\n\n") +
+                    err);
                 dialog->addButton("确认", [this]() { restoreFocusAfterModal(); });
                 dialog->open();
             }
@@ -235,22 +239,44 @@ void DataManagementPage::draw(
         {
             m_importing.store(false, std::memory_order_release);
             finishWorker();
-            if (beiklive::GameDB)
+            if (beiklive::GameDB && m_progressTask == ProgressTask::Import)
                 beiklive::GameDB->flush();
 
             int total = m_total.load(std::memory_order_acquire);
             m_progressBar->setWidth(400.f);
             m_progressBar->setColor(nvgRGB(129, 199, 132));
-            m_progressTitleLabel->setText("导入完成");
-            m_progressCountLabel->setText("共处理 " + std::to_string(total) + " 个游戏");
+            if (m_progressTask == ProgressTask::Cleanup)
+            {
+                int removed = m_cleanupRemoved.load(std::memory_order_acquire);
+                m_progressTitleLabel->setText("处理完成");
+                m_progressCountLabel->setText(
+                    "已扫描 " + std::to_string(total) + " 个游戏，移除 " +
+                    std::to_string(removed) + " 个无效记录");
+            }
+            else
+            {
+                m_progressTitleLabel->setText("导入完成");
+                m_progressCountLabel->setText("共处理 " + std::to_string(total) + " 个游戏");
+            }
             hideProgressOverlay();
 
             if (!m_completionShown)
             {
                 m_completionShown = true;
                 rememberFocusBeforeModal();
-                auto* dialog = new brls::Dialog(
-                    "导入完成\n\n共处理 " + std::to_string(total) + " 个游戏");
+                std::string dialogText;
+                if (m_progressTask == ProgressTask::Cleanup)
+                {
+                    int removed = m_cleanupRemoved.load(std::memory_order_acquire);
+                    dialogText = removed > 0
+                        ? "处理完成\n\n已移除 " + std::to_string(removed) + " 个无效游戏记录"
+                        : "处理完成\n\n没有发现无效游戏记录";
+                }
+                else
+                {
+                    dialogText = "导入完成\n\n共处理 " + std::to_string(total) + " 个游戏";
+                }
+                auto* dialog = new brls::Dialog(dialogText);
                 dialog->addButton("确认", [this]() { restoreFocusAfterModal(); });
                 dialog->open();
             }
@@ -578,6 +604,7 @@ brls::View* DataManagementPage::buildDataProcessingTab()
 void DataManagementPage::resetProgressUi(const std::string& title)
 {
     m_completionShown = false;
+    m_cleanupRemoved.store(0, std::memory_order_release);
     m_importDone.store(false, std::memory_order_release);
     m_importError.store(false, std::memory_order_release);
     m_progress.store(0, std::memory_order_release);
@@ -656,6 +683,7 @@ void DataManagementPage::onSelectLpl(int platform)
 
 void DataManagementPage::startImport(const std::string& lplPath, int platform)
 {
+    m_progressTask = ProgressTask::Import;
     resetProgressUi("正在解析LPL文件...");
     finishWorker();
 
@@ -822,6 +850,7 @@ void DataManagementPage::selectRomDir()
 
 void DataManagementPage::startDirImport(const std::string& dirPath)
 {
+    m_progressTask = ProgressTask::Import;
     resetProgressUi("正在扫描ROM文件...");
     finishWorker();
 
@@ -958,39 +987,53 @@ void DataManagementPage::removeInvalidGames()
         "确定要从游戏库中移除无效游戏吗？\n\n此操作将删除数据库中 ROM 文件已不存在的游戏记录。");
     dialog->addButton("取消", [this]() { restoreFocusAfterModal(); });
     dialog->addButton("确认移除", [this]() {
-        brls::Application::blockInputs(true);
-        std::thread([this]() {
+        m_progressTask = ProgressTask::Cleanup;
+        resetProgressUi("正在扫描无效游戏...");
+        finishWorker();
+        m_progressTitleLabel->setText("正在扫描无效游戏，请勿操作");
+        m_importing.store(true, std::memory_order_release);
+
+        m_importThread = std::thread([this]() {
             auto entries = beiklive::GameDB ? beiklive::GameDB->getAll()
                                             : std::vector<beiklive::GameEntry>{};
             int total = static_cast<int>(entries.size());
             int removed = 0;
+            m_total.store(total, std::memory_order_release);
 
-            if (beiklive::GameDB)
+            try
             {
-                for (const auto& entry : entries)
+                if (beiklive::GameDB)
                 {
-                    if (!fs::exists(entry.path) && beiklive::GameDB->removeByPath(entry.path))
-                        removed++;
-                }
+                    for (int i = 0; i < total; ++i)
+                    {
+                        const auto& entry = entries[i];
+                        updateProgressName(entry.title.empty() ? fileNameFromPath(entry.path)
+                                                               : entry.title);
 
-                if (removed == total && total > 0)
-                    beiklive::GameDB->clearAll();
-                else if (removed > 0)
-                    beiklive::GameDB->flush();
+                        if (!fs::exists(entry.path) &&
+                            beiklive::GameDB->removeByPath(entry.path))
+                            removed++;
+
+                        m_progress.store(i + 1, std::memory_order_release);
+                    }
+
+                    if (removed == total && total > 0)
+                        beiklive::GameDB->clearAll();
+                    else if (removed > 0)
+                        beiklive::GameDB->flush();
+                }
+            }
+            catch (const std::exception& e)
+            {
+                setErrorMessage(e.what());
+                m_importError.store(true, std::memory_order_release);
+                m_importDone.store(true, std::memory_order_release);
+                return;
             }
 
-            brls::sync([this, removed]() {
-                brls::Application::unblockInputs();
-
-                rememberFocusBeforeModal();
-                std::string msg = removed > 0
-                    ? "已移除 " + std::to_string(removed) + " 个无效游戏记录"
-                    : "没有发现无效游戏记录";
-                auto* okDialog = new brls::Dialog(msg);
-                okDialog->addButton("确定", [this]() { restoreFocusAfterModal(); });
-                okDialog->open();
-            });
-        }).detach();
+            m_cleanupRemoved.store(removed, std::memory_order_release);
+            m_importDone.store(true, std::memory_order_release);
+        });
     });
     dialog->open();
 }

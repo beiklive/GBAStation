@@ -28,6 +28,12 @@ namespace beiklive
                   brls::Style style, brls::FrameContext* ctx) override;
 
     private:
+        enum class ProgressTask
+        {
+            Import,
+            Cleanup,
+        };
+
         beiklive::TabFrame* m_tabframe = nullptr;
         brls::View* m_scanDefaultFocus = nullptr;
         brls::View* m_bundleDefaultFocus = nullptr;
@@ -54,11 +60,13 @@ namespace beiklive
         std::atomic<bool> m_importError{false};
         std::atomic<int> m_progress{0};
         std::atomic<int> m_total{0};
+        std::atomic<int> m_cleanupRemoved{0};
         std::atomic<bool> m_alive{true};
         std::mutex m_statusMutex;
         std::string m_errorMsg;
         std::string m_progressName;
         bool m_completionShown = false;
+        ProgressTask m_progressTask = ProgressTask::Import;
 
         brls::View* buildScanImportTab();
         brls::View* buildBundleImportTab();
