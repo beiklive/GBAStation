@@ -25,6 +25,11 @@ namespace beiklive
         void setGradientTheme(GradientTheme theme);
         brls::Box* getContentBox() { return contentBox; }
 
+        void animaShow(bool show);
+        void animaHide(bool show);
+
+
+
     private:
         // 背景层
         void setupBackgroundLayer();

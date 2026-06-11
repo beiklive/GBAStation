@@ -69,6 +69,16 @@ namespace beiklive
             shaderLayer->setGradientTheme(theme);
     }
 
+    void Box::animaShow(bool show)
+    {
+        auto* box_ptr = contentBox;
+    }
+
+    void Box::animaHide(bool show)
+    {
+        auto* box_ptr = contentBox;
+
+    }
 
     void Box::setupBackgroundLayer()
     {
