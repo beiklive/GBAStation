@@ -18,7 +18,7 @@ brls::Box* buildUpdateDialogContent(const std::string& title, const std::string&
     titleLabel->setText(title);
     titleLabel->setFontSize(26.f);
     titleLabel->setTextColor(nvgRGB(255, 255, 255));
-    titleLabel->setHorizontalAlign(brls::HorizontalAlign::LEFT);
+    titleLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
     titleLabel->setSingleLine(false);
     titleLabel->setMarginBottom(18.f);
     titleLabel->setFocusable(false);

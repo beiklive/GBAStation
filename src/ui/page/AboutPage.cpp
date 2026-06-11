@@ -418,7 +418,7 @@ void AboutPage::_checkUpdate() {
                         auto* dialog = new UpdatePage();
                         dialog->open();
                         brls::sync([dialog]() {
-                            dialog->startDownload();
+                            // dialog->startDownload();
                         });
                     });
                 });

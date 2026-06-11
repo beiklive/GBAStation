@@ -139,7 +139,7 @@ int main(int argc, char* argv[]) {
 						auto* dialog = new beiklive::UpdatePage();
 						dialog->open();
 						brls::sync([dialog]() {
-							dialog->startDownload();
+							// dialog->startDownload();
 						});
 					});
 				});
