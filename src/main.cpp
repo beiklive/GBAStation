@@ -7,9 +7,7 @@
 #include "core/AppUpdater.hpp"
 #include "ui/utils/BKAudioPlayer.hpp"
 #include "ui/page/StartPage.hpp"
-#include "ui/page/UpdatePage.hpp"
 #include "ui/utils/MyActivity.hpp"
-#include "ui/widget/UpdateDialog.hpp"
 
 int main(int argc, char* argv[]) {
 #ifdef __SWITCH__
@@ -126,29 +124,10 @@ int main(int argc, char* argv[]) {
 
 		if (gExitFlag.load(std::memory_order_acquire)) return;
 
-		brls::sync([&updater, localVersion]() {
+		brls::sync([&updater]() {
 			auto& info = updater.info();
-
 			if (info.hasUpdate) {
-				auto* dlg = new beiklive::UpdateDialog(
-					"版本更新  " + info.version,
-					info.changelog
-				);
-				dlg->addButton("更新", [&updater]() {
-					brls::sync([]() {
-						auto* dialog = new beiklive::UpdatePage();
-						dialog->open();
-						brls::sync([dialog]() {
-							dialog->startDownload();
-						});
-					});
-				});
-				dlg->addButton("取消", []() {});
-				dlg->addButton("不再提示", []() {
-					SET_SETTING_KEY_INT(beiklive::SettingKey::KEY_EMU_UPDATE, 0);
-					brls::Application::notify("已关闭更新提示");
-				});
-				dlg->open();
+				brls::Application::notify("新版本 " + info.version + " 可用，请到关于界面更新");
 			}
 		});
 	});
