@@ -135,9 +135,13 @@ int main(int argc, char* argv[]) {
 					info.changelog
 				);
 				dlg->addButton("更新", [&updater]() {
-					auto* dialog = new beiklive::UpdatePage();
-					dialog->open();
-					dialog->startDownload();
+					brls::sync([]() {
+						auto* dialog = new beiklive::UpdatePage();
+						dialog->open();
+						brls::sync([dialog]() {
+							dialog->startDownload();
+						});
+					});
 				});
 				dlg->addButton("取消", []() {});
 				dlg->addButton("不再提示", []() {

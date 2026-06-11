@@ -414,9 +414,13 @@ void AboutPage::_checkUpdate() {
                     info.changelog
                 );
                 confirmDlg->addButton("更新", []() {
-                    auto* dialog = new UpdatePage();
-                    dialog->open();
-                    dialog->startDownload();
+                    brls::sync([]() {
+                        auto* dialog = new UpdatePage();
+                        dialog->open();
+                        brls::sync([dialog]() {
+                            dialog->startDownload();
+                        });
+                    });
                 });
                 confirmDlg->addButton("取消", []() {});
                 confirmDlg->open();
