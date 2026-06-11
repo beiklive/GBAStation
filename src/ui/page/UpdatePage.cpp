@@ -220,7 +220,7 @@ void UpdatePage::_resetActionButtons() {
 void UpdatePage::_updateProgress(
     float pct, const std::string& speed, const std::string& size, const std::string& eta) {
     brls::sync([this, pct, speed, size, eta]() {
-        m_progressBar->setWidth(680.f * pct / 100.f);
+        m_progressBar->setWidth(560.f * pct / 100.f);
         m_pctLabel->setText(std::to_string(static_cast<int>(pct)) + "%");
         m_speedLabel->setText(speed);
         m_sizeLabel->setText(size);
@@ -322,15 +322,15 @@ void UpdatePage::startDownload() {
 
 #ifdef __SWITCH__
             m_statusLabel->setText("下载完成，是否安装？");
+            startInstall();
+            // auto* installBtn = _makeActionButton(
+            //     "安装", [this](brls::View*) -> bool { startInstall(); return true; });
+            // auto* cancelBtn = _makeActionButton(
+            //     "取消", [this](brls::View*) -> bool { _closeDialog(); return true; });
 
-            auto* installBtn = _makeActionButton(
-                "安装", [this](brls::View*) -> bool { startInstall(); return true; });
-            auto* cancelBtn = _makeActionButton(
-                "取消", [this](brls::View*) -> bool { _closeDialog(); return true; });
-
-            m_btnBox->addView(installBtn);
-            m_btnBox->addView(cancelBtn);
-            brls::Application::giveFocus(installBtn);
+            // m_btnBox->addView(installBtn);
+            // m_btnBox->addView(cancelBtn);
+            // brls::Application::giveFocus(installBtn);
 #else
             m_statusLabel->setText("下载完成，请手动替换程序文件");
 
@@ -357,19 +357,14 @@ void UpdatePage::startInstall() {
             m_btnBox->clearViews(true);
 
             if (ok) {
-                m_statusLabel->setText("安装完成，请重启");
+                m_statusLabel->setText("安装完成，正在重启");
 
-                auto* rebootBtn = _makeActionButton("重启", [](brls::View*) -> bool {
 #ifdef __SWITCH__
                     brls::Application::quit();
 #else
                     brls::Application::notify("请手动重启");
 #endif
-                    return true;
-                });
 
-                m_btnBox->addView(rebootBtn);
-                brls::Application::giveFocus(rebootBtn);
             } else {
 #ifdef __SWITCH__
                 m_statusLabel->setText("安装失败");
