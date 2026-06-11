@@ -1,14 +1,16 @@
 #pragma once
 
 #include "core/common.h"
-#include "ui/widget/Box.hpp"
 #include "core/AppUpdater.hpp"
+
+#include <borealis/views/dialog.hpp>
+
 #include <atomic>
 #include <functional>
 
 namespace beiklive {
 
-class UpdatePage : public beiklive::Box {
+class UpdatePage : public brls::Dialog {
 public:
     UpdatePage();
     ~UpdatePage();
@@ -23,8 +25,12 @@ public:
     void startInstall();
 
 private:
-    void _initLayout();
+    static brls::Box* buildDialogContent(UpdatePage* self);
     void _updateProgress(float pct, const std::string& speed, const std::string& size, const std::string& eta);
+    brls::Button* _makeActionButton(
+        const std::string& text, std::function<bool(brls::View*)> onClick);
+    void _resetActionButtons();
+    void _closeDialog();
 
     std::atomic<bool> m_cancelled{false};
     std::function<void()> m_onCancel;
@@ -38,7 +44,6 @@ private:
     brls::Rectangle* m_progressBg = nullptr;
     brls::Rectangle* m_progressBar = nullptr;
     brls::Box* m_btnBox = nullptr;
-    brls::Button* m_cancelBtn = nullptr;
 };
 
 } // namespace beiklive

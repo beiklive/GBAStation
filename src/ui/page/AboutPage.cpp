@@ -5,6 +5,7 @@
 #include "ui/utils/CheatMatcher.hpp"
 #include "core/AppUpdater.hpp"
 #include "core/Tools.hpp"
+#include <borealis/views/applet_frame.hpp>
 #include <curl/curl.h>
 #include <miniz.h>
 
@@ -29,6 +30,47 @@ static std::string readTextFile(const std::string& path, const std::string& fall
 
     return std::string(std::istreambuf_iterator<char>(file),
                        std::istreambuf_iterator<char>());
+}
+
+static void openChangelogApplet(const std::string& title, const std::string& content) {
+    auto* scroll = new brls::ScrollingFrame();
+    scroll->setGrow(1.0f);
+    scroll->setScrollingBehavior(brls::ScrollingBehavior::NATURAL);
+    scroll->setScrollingIndicatorVisible(false);
+
+    auto* box = new brls::Box(brls::Axis::COLUMN);
+    box->setWidthPercentage(100.f);
+    box->setHeightPercentage(100.f);
+    box->setPadding(26.f, 34.f, 26.f, 34.f);
+    box->setAlignItems(brls::AlignItems::FLEX_START);
+    box->setJustifyContent(brls::JustifyContent::FLEX_START);
+
+    auto* bodyLabel = new brls::Label();
+    bodyLabel->setText(content.empty() ? "暂无更新日志" : content);
+    bodyLabel->setFontSize(18.f);
+    bodyLabel->setWidthPercentage(100.f);
+    bodyLabel->setTextColor(GET_THEME_COLOR("brls/text"));
+    bodyLabel->setHorizontalAlign(brls::HorizontalAlign::LEFT);
+    bodyLabel->setSingleLine(false);
+    bodyLabel->setIsWrapping(true);
+    bodyLabel->setFocusable(true);
+    bodyLabel->registerAction("确认", brls::BUTTON_A, [](brls::View*) -> bool {
+        brls::Application::popActivity(brls::TransitionAnimation::NONE);
+        return true;
+    });
+    bodyLabel->registerAction("返回", brls::BUTTON_B, [](brls::View*) -> bool {
+        brls::Application::popActivity(brls::TransitionAnimation::NONE);
+        return true;
+    });
+    box->addView(bodyLabel);
+
+    scroll->setContentView(box);
+
+    auto* frame = new brls::AppletFrame(scroll);
+    frame->setTitle(title);
+
+    brls::Application::pushActivity(new brls::Activity(frame), brls::TransitionAnimation::NONE);
+    brls::Application::giveFocus(bodyLabel);
 }
 
 AboutPage::AboutPage() {
@@ -287,11 +329,9 @@ brls::View* AboutPage::_buildUpdateTab() {
     changelogBtn->setRightText("\uE14A");
     changelogBtn->registerAction("打开", brls::BUTTON_A,
         [localVersion, changelogText](brls::View*) -> bool {
-            auto* dialog = new beiklive::UpdateDialog(
+            openChangelogApplet(
                 "当前版本更新内容  " + localVersion,
                 changelogText.empty() ? "暂无更新日志" : changelogText);
-            dialog->addButton("关闭", []() {});
-            dialog->open();
             return true;
         });
     box->addView(changelogBtn);
@@ -375,8 +415,7 @@ void AboutPage::_checkUpdate() {
                 );
                 confirmDlg->addButton("更新", []() {
                     auto* dialog = new UpdatePage();
-                    brls::Application::pushActivity(
-                        new brls::Activity(dialog), brls::TransitionAnimation::NONE);
+                    dialog->open();
                     dialog->startDownload();
                 });
                 confirmDlg->addButton("取消", []() {});

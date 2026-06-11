@@ -136,8 +136,7 @@ int main(int argc, char* argv[]) {
 				);
 				dlg->addButton("更新", [&updater]() {
 					auto* dialog = new beiklive::UpdatePage();
-					brls::Application::pushActivity(
-						new brls::Activity(dialog), brls::TransitionAnimation::NONE);
+					dialog->open();
 					dialog->startDownload();
 				});
 				dlg->addButton("取消", []() {});
