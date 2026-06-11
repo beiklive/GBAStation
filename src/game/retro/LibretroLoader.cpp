@@ -556,6 +556,12 @@ void LibretroLoader::getSystemAvInfo(retro_system_av_info* info) const
     if (m_handle) fn_get_system_av_info(info);
 }
 
+void LibretroLoader::setControllerPortDevice(unsigned port, unsigned device)
+{
+    if (m_handle && fn_set_controller_port_device)
+        fn_set_controller_port_device(port, device);
+}
+
 bool LibretroLoader::loadGame(const std::string& romPath)
 {
     if (!m_coreReady) { brls::Logger::debug("[LibretroLoader] loadGame: core not ready"); return false; }
@@ -746,12 +752,16 @@ bool LibretroLoader::s_environmentCallback(unsigned cmd, void* data)
         }
         case RETRO_ENVIRONMENT_SHUTDOWN:
             return true;
-        // ---- 核心选项版本：返回 0 以使用旧版 SET_VARIABLES ----
+        // ---- 核心选项版本：返回 2 以使用 V2 接口 ----
         case RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION: {
             unsigned* ver = static_cast<unsigned*>(data);
-            if (ver) *ver = 0;
+            if (ver) *ver = 2;
             return true;
         }
+        case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2:
+        case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL:
+            // V2 选项接口已声明支持，直接返回 true
+            return true;
         // ---- 核心声明变量及默认值 ----------------------
         case RETRO_ENVIRONMENT_SET_VARIABLES: {
             const retro_variable* vars = static_cast<const retro_variable*>(data);
@@ -803,7 +813,9 @@ bool LibretroLoader::s_environmentCallback(unsigned cmd, void* data)
         case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS:
         case RETRO_ENVIRONMENT_SET_MEMORY_MAPS:
         case RETRO_ENVIRONMENT_SET_ROTATION:
-            return false;
+        case RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS:
+        case RETRO_ENVIRONMENT_SET_DISK_CONTROL_INTERFACE:
+            return true;
         case RETRO_ENVIRONMENT_SET_GEOMETRY: {
             const retro_game_geometry* geometry =
                 static_cast<const retro_game_geometry*>(data);
@@ -840,13 +852,34 @@ bool LibretroLoader::s_environmentCallback(unsigned cmd, void* data)
         case RETRO_ENVIRONMENT_GET_SENSOR_INTERFACE:
         case RETRO_ENVIRONMENT_GET_CAMERA_INTERFACE:
         case RETRO_ENVIRONMENT_GET_LOCATION_INTERFACE:
-        case RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS:
             return false;
-        // case RETRO_ENVIRONMENT_GET_LOG_INTERFACE: {
-        //     retro_log_callback* log = static_cast<retro_log_callback*>(data);
-        //     if (log) log->log = s_coreLogCallback;
-        //     return true;
-        // }
+        case RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE: {
+            int* flags = static_cast<int*>(data);
+            if (flags) *flags = (1 << 0) | (1 << 1); // VIDEO | AUDIO
+            return true;
+        }
+        case RETRO_ENVIRONMENT_GET_VFS_INTERFACE: {
+            // VFS 不可用，返回 true 但 iface 保持 NULL
+            // 核心会回退到 stdio 文件操作
+            return true;
+        }
+        case RETRO_ENVIRONMENT_GET_LED_INTERFACE:
+            // LED 接口不可用，核心不检查返回值
+            return true;
+        case RETRO_ENVIRONMENT_GET_MESSAGE_INTERFACE_VERSION: {
+            unsigned* ver = static_cast<unsigned*>(data);
+            if (ver) *ver = 1;
+            return true;
+        }
+        case RETRO_ENVIRONMENT_SET_MESSAGE_EXT: {
+            const retro_message_ext* msg = static_cast<const retro_message_ext*>(data);
+            if (msg && msg->msg) {
+                fprintf(stdout, "[Core] %s\n", msg->msg);
+            }
+            return true;
+        }
+        case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY:
+            return true;
         case RETRO_ENVIRONMENT_GET_LOG_INTERFACE: {
             retro_log_callback* log = static_cast<retro_log_callback*>(data);
             if (log) log->log = s_coreLogCallback;

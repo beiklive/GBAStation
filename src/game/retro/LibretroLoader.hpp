@@ -53,6 +53,7 @@ public:
     unsigned    apiVersion()  const;
     void        getSystemInfo(retro_system_info* info)   const;
     void        getSystemAvInfo(retro_system_av_info* info) const;
+    void        setControllerPortDevice(unsigned port, unsigned device);
     bool        loadGame(const std::string& romPath);
     void        unloadGame();
     void        run();

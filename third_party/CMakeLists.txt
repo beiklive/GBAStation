@@ -578,6 +578,7 @@ target_include_directories(genesis_plus_gx_core PRIVATE
 
 target_compile_definitions(genesis_plus_gx_core PRIVATE
     USE_16BPP_RENDERING
+    FRONTEND_SUPPORTS_RGB565
     HAVE_NO_LANGEXTRA
     HAVE_ZLIB
     LSB_FIRST

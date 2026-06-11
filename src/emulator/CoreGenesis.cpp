@@ -53,6 +53,11 @@ bool CoreGenesis::_loadCore()
         m_core.unload();
         return false;
     }
+
+    // 初始化输入设备（RetroArch 在 load_game 之前调用）
+    m_core.setControllerPortDevice(0, RETRO_DEVICE_JOYPAD);
+    m_core.setControllerPortDevice(1, RETRO_DEVICE_JOYPAD);
+
     brls::Logger::debug("[CoreGenesis] _loadCore OK");
     return true;
 }
