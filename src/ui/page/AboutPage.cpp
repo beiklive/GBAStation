@@ -413,9 +413,9 @@ void AboutPage::_checkUpdate() {
                     "版本更新  " + info.version,
                     info.changelog
                 );
-                confirmDlg->addButton("更新", []() {
-                    brls::sync([]() {
-                        auto* dialog = new UpdatePage();
+                auto* dialog = new UpdatePage();
+                confirmDlg->addButton("更新", [dialog]() {
+                    brls::sync([dialog]() {
                         dialog->open();
                         brls::sync([dialog]() {
                             // dialog->startDownload();

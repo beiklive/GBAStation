@@ -134,9 +134,9 @@ int main(int argc, char* argv[]) {
 					"版本更新  " + info.version,
 					info.changelog
 				);
-				dlg->addButton("更新", [&updater]() {
-					brls::sync([]() {
-						auto* dialog = new beiklive::UpdatePage();
+				auto* dialog = new beiklive::UpdatePage();
+				dlg->addButton("更新", [dialog, &updater]() {
+					brls::sync([dialog]() {
 						dialog->open();
 						brls::sync([dialog]() {
 							// dialog->startDownload();
