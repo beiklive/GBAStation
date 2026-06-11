@@ -632,6 +632,11 @@ namespace beiklive
 
         {
             std::lock_guard<std::mutex> lk(m_rewindMutex);
+            size_t oldSize = m_rewindBuffer.size();
+            size_t bytesBefore = 0;
+            for (const auto& f : m_rewindBuffer)
+                bytesBefore += f.state.capacity();
+
             m_rewindBuffer.push_front(std::move(frame));
             // 根据保存间隔计算实际最大条目数：
             // m_rewindBufferSize 表示"最多缓存多少帧游戏时间"（如 3600 = 60fps × 60s = 1分钟）。
@@ -640,8 +645,43 @@ namespace beiklive
             // 使用 std::max(1u, ...) 避免 saveInterval 意外为 0 时的除零错误
             unsigned saveInterval = static_cast<unsigned>(std::max(1, m_rewindSaveInterval));
             unsigned maxEntries = std::max(1u, m_rewindBufferSize / saveInterval);
-            while (m_rewindBuffer.size() > maxEntries)
+            bool popped = false;
+            while (m_rewindBuffer.size() > maxEntries) {
                 m_rewindBuffer.pop_back();
+                popped = true;
+            }
+
+            // ---- 倒带缓冲区内存监控日志 ----
+            if (m_rewindBuffer.size() > oldSize) {
+                size_t newStateBytes = m_rewindBuffer.front().state.size();
+                size_t newStateCapacity = m_rewindBuffer.front().state.capacity();
+                size_t bytesAfter = bytesBefore + newStateCapacity;
+                double memMB = static_cast<double>(bytesAfter) / (1024.0 * 1024.0);
+                brls::Logger::debug(
+                    "[Rewind] +1 frame | count={}/{} | newFrame={}/{}B | totalEst≈{:.1f}MB | interval={} | bufferSize={}",
+                    m_rewindBuffer.size(), maxEntries,
+                    newStateBytes, newStateCapacity,
+                    memMB,
+                    m_rewindSaveInterval, m_rewindBufferSize);
+            }
+            if (popped) {
+                brls::Logger::debug(
+                    "[Rewind] buffer full, popped oldest | count={}/{}",
+                    m_rewindBuffer.size(), maxEntries);
+            }
+
+            // 每 60 次保存输出一次汇总
+            static unsigned saveCount = 0;
+            ++saveCount;
+            if (saveCount % 60 == 0) {
+                size_t totalBytes = 0;
+                for (const auto& f : m_rewindBuffer)
+                    totalBytes += f.state.capacity();
+                double totalMB = static_cast<double>(totalBytes) / (1024.0 * 1024.0);
+                brls::Logger::info(
+                    "[Rewind] summary: {} saves done, buffer={}/{} frames, memory≈{:.1f}MB",
+                    saveCount, m_rewindBuffer.size(), maxEntries, totalMB);
+            }
         }
     }
 
