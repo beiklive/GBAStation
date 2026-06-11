@@ -66,9 +66,12 @@ void UpdatePage::_initLayout() {
 
     auto* root = this->getContentBox();
     root->setAxis(brls::Axis::COLUMN);
+    root->setWidthPercentage(100.f);
+    root->setHeightPercentage(100.f);
     root->setAlignItems(brls::AlignItems::CENTER);
     root->setJustifyContent(brls::JustifyContent::CENTER);
     root->setGrow(1.0f);
+    root->setBackgroundColor(nvgRGBA(0, 0, 0, 170));
 
     // 主卡片
     auto* card = new brls::Box(brls::Axis::COLUMN);

@@ -135,12 +135,10 @@ int main(int argc, char* argv[]) {
 					info.changelog
 				);
 				dlg->addButton("更新", [&updater]() {
-					auto* page = new beiklive::UpdatePage();
-					auto* frame = new brls::AppletFrame(page);
-					HIDE_BRLS_BAR(frame);
+					auto* dialog = new beiklive::UpdatePage();
 					brls::Application::pushActivity(
-						new brls::Activity(frame), brls::TransitionAnimation::NONE);
-					page->startDownload();
+						new brls::Activity(dialog), brls::TransitionAnimation::NONE);
+					dialog->startDownload();
 				});
 				dlg->addButton("取消", []() {});
 				dlg->addButton("不再提示", []() {

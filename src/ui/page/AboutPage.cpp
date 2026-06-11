@@ -1,6 +1,7 @@
 #include "ui/page/AboutPage.hpp"
 #include "ui/page/UpdatePage.hpp"
 #include "ui/widget/UpdateDialog.hpp"
+#include "ui/widget/DetailCell.hpp"
 #include "ui/utils/CheatMatcher.hpp"
 #include "core/AppUpdater.hpp"
 #include "core/Tools.hpp"
@@ -19,6 +20,15 @@ static std::string formatSize(size_t bytes) {
     char buf[32];
     snprintf(buf, sizeof(buf), "%.1f MB", bytes / (1024.0 * 1024.0));
     return buf;
+}
+
+static std::string readTextFile(const std::string& path, const std::string& fallback = "") {
+    std::ifstream file(path);
+    if (!file)
+        return fallback;
+
+    return std::string(std::istreambuf_iterator<char>(file),
+                       std::istreambuf_iterator<char>());
 }
 
 AboutPage::AboutPage() {
@@ -209,16 +219,20 @@ brls::View* AboutPage::_buildUpdateTab() {
     std::string localVersion = "未知";
     std::string localChangelog = "";
     size_t localSize = 0;
-        std::string localPath = beiklive::path::configPath() + "/version.json";
-        std::ifstream f(localPath);
-        if (f) {
-            std::string content((std::istreambuf_iterator<char>(f)),
-                                std::istreambuf_iterator<char>());
-            auto j = nlohmann::json::parse(content);
-            localVersion = j.value("version", "未知");
-            localChangelog = j.value("changelog", "");
-            localSize = j.value("size", size_t(0));
-        }
+    std::string localPath = beiklive::path::configPath() + "/version.json";
+    std::ifstream f(localPath);
+    if (f) {
+        std::string content((std::istreambuf_iterator<char>(f)),
+                            std::istreambuf_iterator<char>());
+        auto j = nlohmann::json::parse(content);
+        localVersion = j.value("version", "未知");
+        localChangelog = j.value("changelog", "");
+        localSize = j.value("size", size_t(0));
+    }
+
+    std::string changelogText = localChangelog;
+    if (changelogText.empty())
+        changelogText = readTextFile(BK_RES("changelog"), "暂无更新日志");
 
     // 版本信息卡片
     auto* versionCard = new brls::Box(brls::Axis::COLUMN);
@@ -268,6 +282,20 @@ brls::View* AboutPage::_buildUpdateTab() {
 
     box->addView(versionCard);
 
+    auto* changelogBtn = new beiklive::DetailCell();
+    changelogBtn->setLeftText("查看当前版本更新内容");
+    changelogBtn->setRightText("\uE14A");
+    changelogBtn->registerAction("打开", brls::BUTTON_A,
+        [localVersion, changelogText](brls::View*) -> bool {
+            auto* dialog = new beiklive::UpdateDialog(
+                "当前版本更新内容  " + localVersion,
+                changelogText.empty() ? "暂无更新日志" : changelogText);
+            dialog->addButton("关闭", []() {});
+            dialog->open();
+            return true;
+        });
+    box->addView(changelogBtn);
+
     // // 更新金手指数据库按钮
     // auto* cheatBtn = new brls::Button();
     // cheatBtn->setText("更新金手指数据库");
@@ -298,49 +326,6 @@ brls::View* AboutPage::_buildUpdateTab() {
     hint->setMarginLeft(20.f);
     hint->setFocusable(false);
     box->addView(hint);
-    // 更新日志
-    if (!localChangelog.empty()) {
-        auto* changelogHeader = new brls::Header();
-        changelogHeader->setTitle("更新日志");
-        changelogHeader->setMarginTop(24.f);
-        changelogHeader->setMarginBottom(10.f);
-        box->addView(changelogHeader);
-
-        auto* changelogCard = new brls::ScrollingFrame();
-        changelogCard->setWidthPercentage(100.f);
-        changelogCard->setHeight(280.f);
-
-
-        auto* lablebox = new brls::Box(brls::Axis::COLUMN);
-        lablebox->setWidthPercentage(100.f);
-        lablebox->setHeightPercentage(100.f);
-        lablebox->setFocusable(true);
-
-        auto* m_bodyLabel = new brls::Label();
-        m_bodyLabel->setFontSize(15);
-        m_bodyLabel->setWidthPercentage(100.f);
-        m_bodyLabel->setHeightPercentage(100.f);
-        m_bodyLabel->setTextColor(nvgRGBA(200, 200, 210, 255));
-        m_bodyLabel->setFocusable(true);
-        UP_DOWN_NAVIGATION(m_bodyLabel, m_bodyLabel);
-        m_bodyLabel->registerAction("返回", brls::BUTTON_B, [this, checkBtn](brls::View*) {
-            brls::Application::giveFocus(checkBtn);
-            return true;
-        });
-        lablebox->addView(m_bodyLabel);
-
-        changelogCard->addView(lablebox);
-
-        m_bodyLabel->setText([]() {
-            std::ifstream f(BK_RES("changelog"));
-            if (f) return std::string(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
-            return std::string("暂无更新日志");
-        }());
-
-        box->addView(changelogCard);
-    }
-
-
 
     box->addView(new brls::Padding());
     scroll->setContentView(box);
@@ -389,12 +374,10 @@ void AboutPage::_checkUpdate() {
                     info.changelog
                 );
                 confirmDlg->addButton("更新", []() {
-                    auto* page = new UpdatePage();
-                    auto* frame = new brls::AppletFrame(page);
-                    HIDE_BRLS_BAR(frame);
+                    auto* dialog = new UpdatePage();
                     brls::Application::pushActivity(
-                        new brls::Activity(frame), brls::TransitionAnimation::NONE);
-                    page->startDownload();
+                        new brls::Activity(dialog), brls::TransitionAnimation::NONE);
+                    dialog->startDownload();
                 });
                 confirmDlg->addButton("取消", []() {});
                 confirmDlg->open();
