@@ -937,8 +937,8 @@ brls::View *SettingPage::buildGameTab()
     }
 
     {
-        std::vector<std::string> bufferOpts = {"60 (~1秒)", "120 (~2秒)", "600 (~10秒)", "3600 (~1分钟)"};
-        static const int bufferVals[] = {60, 120, 600, 3600};
+        std::vector<std::string> bufferOpts = {"60 (~1秒)", "120 (~2秒)", "600 (~10秒)", "1800 (~30秒)"};
+        static const int bufferVals[] = {60, 120, 600, 1800};
         int curBuffer = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_REWIND_BUFFER_SIZE, 600);
         int curIdx = 2;
         for (int i = 0; i < 4; ++i) if (bufferVals[i] == curBuffer) { curIdx = i; break; }
