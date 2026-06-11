@@ -756,7 +756,7 @@ namespace beiklive
         if (ff) {
             if (m_ffMute)
                 return;
-        AudioManager::instance().pushSamples(m_audioDrainBuf.data(), frames);
+            AudioManager::instance().pushSamplesNoBlocking(m_audioDrainBuf.data(), frames);
             return;
         }
         if (GameSignal::instance().isRewinding() && GET_SETTING_KEY_INT("rewind.mute", 0)) {
