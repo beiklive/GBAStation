@@ -225,7 +225,6 @@ namespace beiklive
             case PlatformBadgeColor::GB:      return nvgRGBA(0,   168, 107, 220);
             case PlatformBadgeColor::NES:     return nvgRGBA(218, 41,  28,  220);
             case PlatformBadgeColor::SNES:    return nvgRGBA(160, 100, 180, 220);
-            case PlatformBadgeColor::GENESIS: return nvgRGBA(23,  55,  139, 220);
             default:                          return nvgRGBA(100, 100, 100, 200);
         }
     }
@@ -254,7 +253,6 @@ namespace beiklive
         case beiklive::enums::EmuPlatform::EmuGB:  item.badgeColor = PlatformBadgeColor::GB;  break;
         case beiklive::enums::EmuPlatform::EmuNES: item.badgeColor = PlatformBadgeColor::NES; break;
         case beiklive::enums::EmuPlatform::EmuSNES: item.badgeColor = PlatformBadgeColor::SNES; break;
-        case beiklive::enums::EmuPlatform::EmuGenesis: item.badgeColor = PlatformBadgeColor::GENESIS; break;
         default: item.badgeColor = PlatformBadgeColor::NONE; break;
     }
         item.badgeText = badgeText;

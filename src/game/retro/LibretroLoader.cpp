@@ -75,32 +75,6 @@ void snes9x_retro_cheat_reset(void);
 void snes9x_retro_cheat_set(unsigned, bool, const char*);
 unsigned snes9x_retro_get_region(void);
 
-// ---- Genesis Plus GX（MD/Genesis/SMS/GG/Sega CD）重命名符号 ----
-void genesis_plus_gx_retro_init(void);
-void genesis_plus_gx_retro_deinit(void);
-unsigned genesis_plus_gx_retro_api_version(void);
-void genesis_plus_gx_retro_get_system_info(struct retro_system_info*);
-void genesis_plus_gx_retro_get_system_av_info(struct retro_system_av_info*);
-void genesis_plus_gx_retro_set_environment(retro_environment_t);
-void genesis_plus_gx_retro_set_video_refresh(retro_video_refresh_t);
-void genesis_plus_gx_retro_set_audio_sample(retro_audio_sample_t);
-void genesis_plus_gx_retro_set_audio_sample_batch(retro_audio_sample_batch_t);
-void genesis_plus_gx_retro_set_input_poll(retro_input_poll_t);
-void genesis_plus_gx_retro_set_input_state(retro_input_state_t);
-void genesis_plus_gx_retro_set_controller_port_device(unsigned, unsigned);
-void genesis_plus_gx_retro_reset(void);
-void genesis_plus_gx_retro_run(void);
-size_t genesis_plus_gx_retro_serialize_size(void);
-bool genesis_plus_gx_retro_serialize(void*, size_t);
-bool genesis_plus_gx_retro_unserialize(const void*, size_t);
-bool genesis_plus_gx_retro_load_game(const struct retro_game_info*);
-void genesis_plus_gx_retro_unload_game(void);
-void* genesis_plus_gx_retro_get_memory_data(unsigned);
-size_t genesis_plus_gx_retro_get_memory_size(unsigned);
-void genesis_plus_gx_retro_cheat_reset(void);
-void genesis_plus_gx_retro_cheat_set(unsigned, bool, const char*);
-unsigned genesis_plus_gx_retro_get_region(void);
-
 } // extern "C"
 
 // ---- 像素格式辅助函数 -------------------------------------------
@@ -369,31 +343,6 @@ bool LibretroLoader::load(CoreType coreType)
             fn_get_memory_size        = snes9x_retro_get_memory_size;
             break;
 
-        case CoreType::Genesis:
-            fn_set_environment        = genesis_plus_gx_retro_set_environment;
-            fn_set_video_refresh      = genesis_plus_gx_retro_set_video_refresh;
-            fn_set_audio_sample       = genesis_plus_gx_retro_set_audio_sample;
-            fn_set_audio_sample_batch = genesis_plus_gx_retro_set_audio_sample_batch;
-            fn_set_input_poll         = genesis_plus_gx_retro_set_input_poll;
-            fn_set_input_state        = genesis_plus_gx_retro_set_input_state;
-            fn_init                   = genesis_plus_gx_retro_init;
-            fn_deinit                 = genesis_plus_gx_retro_deinit;
-            fn_api_version            = genesis_plus_gx_retro_api_version;
-            fn_get_system_info        = genesis_plus_gx_retro_get_system_info;
-            fn_get_system_av_info     = genesis_plus_gx_retro_get_system_av_info;
-            fn_set_controller_port_device = genesis_plus_gx_retro_set_controller_port_device;
-            fn_reset                  = genesis_plus_gx_retro_reset;
-            fn_run                    = genesis_plus_gx_retro_run;
-            fn_serialize_size         = genesis_plus_gx_retro_serialize_size;
-            fn_serialize              = genesis_plus_gx_retro_serialize;
-            fn_unserialize            = genesis_plus_gx_retro_unserialize;
-            fn_load_game              = genesis_plus_gx_retro_load_game;
-            fn_unload_game            = genesis_plus_gx_retro_unload_game;
-            fn_cheat_reset            = genesis_plus_gx_retro_cheat_reset;
-            fn_cheat_set              = genesis_plus_gx_retro_cheat_set;
-            fn_get_memory_data        = genesis_plus_gx_retro_get_memory_data;
-            fn_get_memory_size        = genesis_plus_gx_retro_get_memory_size;
-            break;
     }
 
     m_handle = reinterpret_cast<void*>(1); // 哨兵值：符号已绑定
@@ -896,6 +845,12 @@ void LibretroLoader::s_videoRefreshCallback(const void* data,
 {
     if (!s_current || !data) return;
 
+    // 防御性检查：合理范围
+    if (width < 16 || width > 720 || height < 16 || height > 576)
+        return;
+    if (pitch < width * 2)
+        return;
+
     std::lock_guard<std::mutex> lk(s_current->m_videoMutex);
     auto& vf       = s_current->m_videoFrame;
     vf.width       = width;
@@ -975,7 +930,10 @@ size_t LibretroLoader::s_audioSampleBatchCallback(const int16_t* data, size_t fr
     static constexpr size_t MAX_AUDIO_SAMPLES = 16384;
     if (buf.size() + samples > MAX_AUDIO_SAMPLES) {
         size_t excess = buf.size() + samples - MAX_AUDIO_SAMPLES;
-        buf.erase(buf.begin(), buf.begin() + static_cast<std::ptrdiff_t>(excess));
+        if (excess > buf.size())
+            excess = buf.size();
+        if (excess > 0)
+            buf.erase(buf.begin(), buf.begin() + static_cast<std::ptrdiff_t>(excess));
     }
     buf.insert(buf.end(), data, data + samples);
     return frames;

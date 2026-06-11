@@ -216,7 +216,6 @@ namespace beiklive
             case beiklive::enums::FileType::GB_ROM:
             case beiklive::enums::FileType::NES_ROM:
             case beiklive::enums::FileType::SNES_ROM:
-            case beiklive::enums::FileType::GENESIS_ROM:
                 brls::Application::notify("启动游戏：" + dirItem.fileName);
                 {
                     m_gamePage = new beiklive::GamePage(dirItem);

@@ -9,7 +9,6 @@ enum class PlatformBadgeColor {
     GB,
     NES,
     SNES,
-    GENESIS,
     NONE,
 };
 

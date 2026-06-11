@@ -30,7 +30,7 @@ public:
     // ---- 生命周期 ---------------------------------------------------
 
     /// 按核心类型静态加载（直接绑定符号，无动态库依赖）。
-    /// 适用于所有静态链接核心：Mgba / Fceumm / Snes9x / Genesis。
+    /// 适用于所有静态链接核心：Mgba / Fceumm / Snes9x。
     /// @return 成功时返回true。
     bool load(CoreType coreType);
 

@@ -47,9 +47,6 @@ beiklive::enums::FileType getFileType(const fs::path& path) {
         return beiklive::enums::FileType::NES_ROM;
     if (ext == "sfc" || ext == "smc")
         return beiklive::enums::FileType::SNES_ROM;
-    if (ext == "md" || ext == "gen" || ext == "bin" || ext == "smd"
-        || ext == "sms" || ext == "gg" || ext == "sg" || ext == "cue")
-        return beiklive::enums::FileType::GENESIS_ROM;
 
     return beiklive::enums::FileType::NORMAL_FILE;
 }
@@ -167,8 +164,6 @@ std::string getDefaultLogoPath(beiklive::enums::EmuPlatform platform)
         case beiklive::enums::EmuPlatform::EmuNES:
             return BK_RES(path_prefix + "gba.png");
         case beiklive::enums::EmuPlatform::EmuSNES:
-            return BK_RES(path_prefix + "gba.png");
-        case beiklive::enums::EmuPlatform::EmuGenesis:
             return BK_RES(path_prefix + "gba.png");
         default:
             return BK_RES(path_prefix + "gba.png");
@@ -406,7 +401,6 @@ std::string platformName(int platform) {
         case beiklive::enums::EmuPlatform::EmuGB:  return "GB";
         case beiklive::enums::EmuPlatform::EmuNES: return "FC";
         case beiklive::enums::EmuPlatform::EmuSNES: return "SFC";
-        case beiklive::enums::EmuPlatform::EmuGenesis: return "MD";
         default: return "";
     }
 }
@@ -418,7 +412,6 @@ std::string platformOverlayKey(int platform) {
         case beiklive::enums::EmuPlatform::EmuGB:  return beiklive::SettingKey::KEY_DISPLAY_OVERLAY_GB_PATH;
         case beiklive::enums::EmuPlatform::EmuNES: return beiklive::SettingKey::KEY_DISPLAY_OVERLAY_NES_PATH;
         case beiklive::enums::EmuPlatform::EmuSNES: return beiklive::SettingKey::KEY_DISPLAY_OVERLAY_SNES_PATH;
-        case beiklive::enums::EmuPlatform::EmuGenesis: return beiklive::SettingKey::KEY_DISPLAY_OVERLAY_GENESIS_PATH;
         default: return "";
     }
 }
@@ -430,7 +423,6 @@ std::string platformShaderKey(int platform) {
         case beiklive::enums::EmuPlatform::EmuGB:  return beiklive::SettingKey::KEY_DISPLAY_SHADER_GB_PATH;
         case beiklive::enums::EmuPlatform::EmuNES: return beiklive::SettingKey::KEY_DISPLAY_SHADER_NES_PATH;
         case beiklive::enums::EmuPlatform::EmuSNES: return beiklive::SettingKey::KEY_DISPLAY_SHADER_SNES_PATH;
-        case beiklive::enums::EmuPlatform::EmuGenesis: return beiklive::SettingKey::KEY_DISPLAY_SHADER_GENESIS_PATH;
         default: return "";
     }
 }
@@ -442,7 +434,6 @@ std::string platformBadgeName(int platform) {
         case beiklive::enums::EmuPlatform::EmuGB:  return "GB";
         case beiklive::enums::EmuPlatform::EmuNES: return "FC";
         case beiklive::enums::EmuPlatform::EmuSNES: return "SFC";
-        case beiklive::enums::EmuPlatform::EmuGenesis: return "MD";
         default: return "";
     }
 }

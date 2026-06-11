@@ -203,7 +203,6 @@ namespace beiklive
                 (int)beiklive::enums::EmuPlatform::EmuGB,
                 (int)beiklive::enums::EmuPlatform::EmuNES,
                 (int)beiklive::enums::EmuPlatform::EmuSNES,
-                (int)beiklive::enums::EmuPlatform::EmuGenesis,
             };
             std::error_code ec;
             for (int p : platforms)
@@ -221,7 +220,6 @@ namespace beiklive
         case (int)beiklive::enums::EmuPlatform::EmuGB:  return beiklive::path::DATA_BASE_FILE_GB;
         case (int)beiklive::enums::EmuPlatform::EmuNES: return beiklive::path::DATA_BASE_FILE_NES;
         case (int)beiklive::enums::EmuPlatform::EmuSNES: return beiklive::path::DATA_BASE_FILE_SNES;
-        case (int)beiklive::enums::EmuPlatform::EmuGenesis: return beiklive::path::DATA_BASE_FILE_GENESIS;
         default: return beiklive::path::DATA_BASE_FILE;
         }
     }
@@ -238,7 +236,6 @@ namespace beiklive
             (int)beiklive::enums::EmuPlatform::EmuGB,
             (int)beiklive::enums::EmuPlatform::EmuNES,
             (int)beiklive::enums::EmuPlatform::EmuSNES,
-            (int)beiklive::enums::EmuPlatform::EmuGenesis,
         };
 
         for (int platform : platforms)

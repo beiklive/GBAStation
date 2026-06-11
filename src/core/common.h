@@ -141,8 +141,6 @@ namespace beiklive // 全局功能函数
             return "";  // FCEUmm 静态链接，无需路径
         case (int)beiklive::enums::EmuPlatform::EmuSNES:
             return "";  // Snes9x 静态链接，无需路径
-        case (int)beiklive::enums::EmuPlatform::EmuGenesis:
-            return "";  // Genesis Plus GX 静态链接，无需路径
         default:
             return "";
         }
@@ -160,8 +158,6 @@ namespace beiklive // 全局功能函数
             return beiklive::CoreType::Fceumm;
         case (int)beiklive::enums::EmuPlatform::EmuSNES:
             return beiklive::CoreType::Snes9x;
-        case (int)beiklive::enums::EmuPlatform::EmuGenesis:
-            return beiklive::CoreType::Genesis;
         default:
             return beiklive::CoreType::Mgba;
         }
