@@ -1,6 +1,5 @@
 #include "ui/page/SettingPage.hpp"
 #include "ui/page/FileListPage.hpp"
-#include "ui/view/GameImportView.hpp"
 #include "ui/utils/FilePickerHelper.hpp"
 #include "ui/utils/UiHelper.hpp"
 
@@ -761,68 +760,6 @@ brls::View *SettingPage::buildUITab()
         box->addView(titleSizeCell);
     }
     box->addView(makeHint("设置游戏库网格列表中游戏标题的显示字号"));
-
-    // ── 游戏批量管理 ────────────────────────────────────────────────────────────────
-    box->addView(makeHeader("游戏批量管理"));
-
-    {
-        auto *importCell = new brls::DetailCell();
-        importCell->setText("批量导入游戏");
-        importCell->setDetailText("\uE14A");
-        importCell->registerAction("打开"_i18n, brls::BUTTON_A,
-            [](brls::View*) -> bool {
-                auto *importView = new beiklive::GameImportView();
-                auto *frame = new brls::AppletFrame(importView);
-                HIDE_BRLS_BAR(frame);
-                brls::Application::pushActivity(
-                    new brls::Activity(frame),
-                    brls::TransitionAnimation::NONE);
-                return true;
-            });
-        box->addView(importCell);
-    }
-
-    {
-        auto *cleanCell = new brls::DetailCell();
-        cleanCell->setText("从库中移除无效游戏");
-        cleanCell->setDetailText("\uE14A");
-        cleanCell->registerAction("打开"_i18n, brls::BUTTON_A,
-            [](brls::View*) -> bool {
-                auto* dlg = new brls::Dialog("确定要从游戏库中移除无效游戏吗？\n\n此操作将删除数据库中 ROM 文件已不存在的游戏记录。");
-                dlg->addButton("取消", [](){});
-                dlg->addButton("确认移除", []() {
-                    brls::Application::blockInputs(true);
-                    new std::thread([]() {
-                        auto entries = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
-                        int total = (int)entries.size();
-                        int removed = 0;
-                        for (const auto& entry : entries) {
-                            if (!std::filesystem::exists(entry.path)) {
-                                if (beiklive::GameDB->removeByPath(entry.path))
-                                    removed++;
-                            }
-                        }
-                        if (removed == total)
-                            beiklive::GameDB->clearAll();
-                        else if (removed > 0)
-                            beiklive::GameDB->flush();
-                        brls::sync([removed]() {
-                            brls::Application::unblockInputs();
-                            std::string msg = removed > 0
-                                ? "已移除 " + std::to_string(removed) + " 个无效游戏记录"
-                                : "没有发现无效游戏记录";
-                            auto* okDlg = new brls::Dialog(msg);
-                            okDlg->addButton("确定", [](){});
-                            okDlg->open();
-                        });
-                    });
-                });
-                dlg->open();
-                return true;
-            });
-        box->addView(cleanCell);
-    }
-    box->addView(makeHint("移除库中存在，实际ROM文件不存在的游戏"));
 
     scroll->setContentView(box);
     auto *container = new brls::Box(brls::Axis::COLUMN);
