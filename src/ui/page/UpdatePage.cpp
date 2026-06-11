@@ -25,7 +25,7 @@ struct UpdatePageRefs
     brls::Box* buttonBox = nullptr;
 };
 
-thread_local UpdatePageRefs g_updatePageRefs;
+static UpdatePageRefs g_updatePageRefs;
 
 } // namespace
 

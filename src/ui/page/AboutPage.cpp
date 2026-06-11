@@ -413,12 +413,12 @@ void AboutPage::_checkUpdate() {
                     "版本更新  " + info.version,
                     info.changelog
                 );
-                auto* dialog = new UpdatePage();
-                confirmDlg->addButton("更新", [dialog]() {
-                    brls::sync([dialog]() {
+                confirmDlg->addButton("更新", []() {
+                    brls::sync([]() {
+                        auto* dialog = new UpdatePage();
                         dialog->open();
                         brls::sync([dialog]() {
-                            // dialog->startDownload();
+                            dialog->startDownload();
                         });
                     });
                 });
