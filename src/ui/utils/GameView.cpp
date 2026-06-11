@@ -75,6 +75,12 @@ namespace beiklive
             m_core = nullptr;
         }
 
+        if (m_overlayImage) {
+            m_overlayImage->clear();
+            delete m_overlayImage;
+            m_overlayImage = nullptr;
+        }
+
         GameInputManager::instance().clearEmuFunctionKeys();
         GameInputManager::instance().dropInput();
     }
