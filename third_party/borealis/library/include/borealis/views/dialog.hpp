@@ -77,6 +77,7 @@ class Dialog : public Box
      */
     void addButton(std::string label, VoidEvent::Callback cb);
 
+    void clearButtons();
     /**
      * A cancelable dialog is closed when
      * the user presses B (defaults to true)

@@ -192,6 +192,16 @@ void Dialog::addButton(std::string label, VoidEvent::Callback cb)
     this->rebuildButtons();
 }
 
+void Dialog::clearButtons()
+{
+    for (auto& button : this->buttons)
+    {
+        delete button;
+    }
+    this->buttons.clear();
+    this->rebuildButtons();
+}
+
 void Dialog::open()
 {
     Application::pushActivity(new Activity(this));

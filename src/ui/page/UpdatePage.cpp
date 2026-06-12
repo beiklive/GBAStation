@@ -329,11 +329,15 @@ void UpdatePage::startInstall() {
         brls::sync([this, ok]() {
 
             if (ok) {
-
+                
 #ifdef __SWITCH__
                 AppUpdater::instance().finishInstall();
-                envSetNextLoad("sdmc:/switch/GBAStation.nro", "sdmc:/switch/GBAStation.nro");
-                brls::Application::quit();
+                m_statusLabel->setText("安装完成，请重启模拟器");
+                // envSetNextLoad("sdmc:/switch/GBAStation.nro", "sdmc:/switch/GBAStation.nro");
+                this->clearButtons();
+                this->addButton("重启模拟器", [this]() {
+                    brls::Application::quit();
+                });
 #else
                     brls::Application::notify("请手动重启");
 #endif
