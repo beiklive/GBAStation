@@ -30,8 +30,6 @@ namespace beiklive
         void animaHide(std::function<void()> onComplete = nullptr);
 
         void frame(brls::FrameContext* ctx) override;
-        void draw(NVGcontext* vg, float x, float y, float w, float h,
-                  brls::Style style, brls::FrameContext* ctx) override;
 
 
     private:
@@ -55,13 +53,11 @@ namespace beiklive
         // 内容层动画状态
         enum class AnimState { None, Hiding, Showing };
         AnimState m_animState = AnimState::None;
-        brls::Animatable m_animScale{1.0f};
         brls::Animatable m_animOffsetX{0.0f};
         brls::Animatable m_animHeaderY{0.0f};
         brls::Animatable m_animFooterY{0.0f};
 
         static constexpr int32_t ANIM_DUR_SLIDE     = 200;
-        static constexpr int32_t ANIM_DUR_SCALE     = 150;
         static constexpr int32_t ANIM_DUR_HFADE     = 200;
         static constexpr long    ANIM_DELAY_PHASE   = 1;
         static constexpr long    ANIM_DELAY_ENDPAUSE = 1;

@@ -78,7 +78,6 @@ namespace beiklive
 
         brls::Application::blockInputs();
 
-        m_animScale.stop();
         m_animOffsetX.stop();
         m_animHeaderY.stop();
         m_animFooterY.stop();
@@ -92,8 +91,7 @@ namespace beiklive
         if (bottomBar && bottomBar->getVisibility() == brls::Visibility::VISIBLE)
             m_animFooterY.reset(bottomBar->getHeight());
 
-        // 阶段1：contentBox 从左侧滑入 (200ms)
-        m_animScale.reset(0.9f);
+        // 阶段1：contentBox 从左侧滑入
         m_animOffsetX.reset(1280.0f);
         m_animOffsetX.addStep(0.0f, ANIM_DUR_SLIDE, tweeny::easing::enumerated::cubicOut);
 
@@ -104,61 +102,45 @@ namespace beiklive
                 ASYNC_RETAIN
                 if (m_animState != AnimState::Showing || !contentBox) { ASYNC_RELEASE; return; }
 
-                // 阶段2：从小缩放到原本大小 (150ms)
-                m_animScale.reset(0.9f);
-                m_animScale.addStep(1.0f, ANIM_DUR_SCALE, tweeny::easing::enumerated::backOut);
-
-                m_animScale.setEndCallback([this](bool) {
-                    if (!contentBox) return;
-
-                    brls::delay(ANIM_DELAY_PHASE, [this]() {
-                        ASYNC_RETAIN
-                        if (m_animState != AnimState::Showing || !contentBox) { ASYNC_RELEASE; return; }
-
-                        // 阶段3：顶栏/底栏归位 (200ms)
-                        bool hasVisibleHeader = header && header->getVisibility() == brls::Visibility::VISIBLE;
-                        bool hasVisibleFooter = bottomBar && bottomBar->getVisibility() == brls::Visibility::VISIBLE;
-                        if (hasVisibleHeader) {
-                            m_animHeaderY.reset(-header->getHeight());
-                            m_animHeaderY.addStep(0.0f, ANIM_DUR_HFADE, tweeny::easing::enumerated::cubicOut);
-                            m_animHeaderY.setEndCallback([this](bool) {
-                                brls::delay(ANIM_DELAY_ENDPAUSE, [this]() {
-                                    ASYNC_RETAIN
-                                    brls::Application::unblockInputs();
-                                    m_animState = AnimState::None;
-                                    ASYNC_RELEASE
-                                });
-                            });
-                            m_animHeaderY.start();
-                        }
-                        if (hasVisibleFooter) {
-                            m_animFooterY.reset(bottomBar->getHeight());
-                            m_animFooterY.addStep(0.0f, ANIM_DUR_HFADE, tweeny::easing::enumerated::cubicOut);
-                            if (!hasVisibleHeader) {
-                                m_animFooterY.setEndCallback([this](bool) {
-                                    brls::delay(ANIM_DELAY_ENDPAUSE, [this]() {
-                                        ASYNC_RETAIN
-                                        brls::Application::unblockInputs();
-                                        m_animState = AnimState::None;
-                                        ASYNC_RELEASE
-                                    });
-                                });
-                            }
-                            m_animFooterY.start();
-                        }
-                        if (!hasVisibleHeader && !hasVisibleFooter) {
+                // 阶段2：顶栏/底栏归位
+                bool hasVisibleHeader = header && header->getVisibility() == brls::Visibility::VISIBLE;
+                bool hasVisibleFooter = bottomBar && bottomBar->getVisibility() == brls::Visibility::VISIBLE;
+                if (hasVisibleHeader) {
+                    m_animHeaderY.reset(-header->getHeight());
+                    m_animHeaderY.addStep(0.0f, ANIM_DUR_HFADE, tweeny::easing::enumerated::cubicOut);
+                    m_animHeaderY.setEndCallback([this](bool) {
+                        brls::delay(ANIM_DELAY_ENDPAUSE, [this]() {
+                            ASYNC_RETAIN
+                            brls::Application::unblockInputs();
+                            m_animState = AnimState::None;
+                            ASYNC_RELEASE
+                        });
+                    });
+                    m_animHeaderY.start();
+                }
+                if (hasVisibleFooter) {
+                    m_animFooterY.reset(bottomBar->getHeight());
+                    m_animFooterY.addStep(0.0f, ANIM_DUR_HFADE, tweeny::easing::enumerated::cubicOut);
+                    if (!hasVisibleHeader) {
+                        m_animFooterY.setEndCallback([this](bool) {
                             brls::delay(ANIM_DELAY_ENDPAUSE, [this]() {
                                 ASYNC_RETAIN
                                 brls::Application::unblockInputs();
                                 m_animState = AnimState::None;
                                 ASYNC_RELEASE
                             });
-                        }
+                        });
+                    }
+                    m_animFooterY.start();
+                }
+                if (!hasVisibleHeader && !hasVisibleFooter) {
+                    brls::delay(ANIM_DELAY_ENDPAUSE, [this]() {
+                        ASYNC_RETAIN
+                        brls::Application::unblockInputs();
+                        m_animState = AnimState::None;
                         ASYNC_RELEASE
                     });
-                });
-
-                m_animScale.start();
+                }
                 ASYNC_RELEASE
             });
         });
@@ -174,28 +156,47 @@ namespace beiklive
 
         auto onCompletePtr = std::make_shared<std::function<void()>>(std::move(onComplete));
 
-        m_animScale.stop();
         m_animOffsetX.stop();
         m_animHeaderY.stop();
         m_animFooterY.stop();
         m_animState = AnimState::Hiding;
 
-        m_animScale.reset(1.0f);
         m_animOffsetX.reset(0.0f);
 
-        auto startPhase2 = [this, onCompletePtr]() {
-            // 阶段2：contentBox 缩小 (150ms)
-            m_animScale.reset(1.0f);
-            m_animScale.addStep(0.9f, ANIM_DUR_SCALE, tweeny::easing::enumerated::cubicIn);
+        auto startSlide = [this, onCompletePtr]() {
+            // 阶段2：向左滑出屏幕
+            m_animOffsetX.reset(0.0f);
+            m_animOffsetX.addStep(-contentBox->getWidth() - 50.0f, ANIM_DUR_SLIDE,
+                                  tweeny::easing::enumerated::cubicIn);
 
-            m_animScale.setEndCallback([this, onCompletePtr](bool finished) {
-                if (!finished || m_animState != AnimState::Hiding || !contentBox) return;
+            m_animOffsetX.setEndCallback([this, onCompletePtr](bool) {
+                if (!contentBox) return;
+                brls::delay(ANIM_DELAY_ENDPAUSE, [this, onCompletePtr]() {
+                    ASYNC_RETAIN
+                    if (!contentBox) { ASYNC_RELEASE; return; }
+                    brls::Application::unblockInputs();
+                    m_animState = AnimState::None;
+                    if (*onCompletePtr)
+                        (*onCompletePtr)();
+                    ASYNC_RELEASE
+                });
+            });
 
+            m_animOffsetX.start();
+        };
+
+        // 阶段1：顶栏向上移出，底栏向下移出
+        bool hasVisibleHeader = header && header->getVisibility() == brls::Visibility::VISIBLE;
+        bool hasVisibleFooter = bottomBar && bottomBar->getVisibility() == brls::Visibility::VISIBLE;
+        if (hasVisibleHeader) {
+            m_animHeaderY.reset(0.0f);
+            m_animHeaderY.addStep(-header->getHeight(), ANIM_DUR_HFADE,
+                                  tweeny::easing::enumerated::cubicIn);
+            m_animHeaderY.setEndCallback([this, onCompletePtr](bool) {
                 brls::delay(ANIM_DELAY_PHASE, [this, onCompletePtr]() {
                     ASYNC_RETAIN
                     if (m_animState != AnimState::Hiding || !contentBox) { ASYNC_RELEASE; return; }
 
-                    // 阶段3：向左滑出屏幕 (200ms)
                     m_animOffsetX.reset(0.0f);
                     m_animOffsetX.addStep(-contentBox->getWidth() - 50.0f, ANIM_DUR_SLIDE,
                                           tweeny::easing::enumerated::cubicIn);
@@ -217,18 +218,6 @@ namespace beiklive
                     ASYNC_RELEASE
                 });
             });
-
-            m_animScale.start();
-        };
-
-        // 阶段1：顶栏向上移出，底栏向下移出 (200ms)
-        bool hasVisibleHeader = header && header->getVisibility() == brls::Visibility::VISIBLE;
-        bool hasVisibleFooter = bottomBar && bottomBar->getVisibility() == brls::Visibility::VISIBLE;
-        if (hasVisibleHeader) {
-            m_animHeaderY.reset(0.0f);
-            m_animHeaderY.addStep(-header->getHeight(), ANIM_DUR_HFADE,
-                                  tweeny::easing::enumerated::cubicIn);
-            m_animHeaderY.setEndCallback([startPhase2](bool) { startPhase2(); });
             m_animHeaderY.start();
         }
         if (hasVisibleFooter) {
@@ -236,12 +225,37 @@ namespace beiklive
             m_animFooterY.addStep(bottomBar->getHeight(), ANIM_DUR_HFADE,
                                   tweeny::easing::enumerated::cubicIn);
             if (!hasVisibleHeader) {
-                m_animFooterY.setEndCallback([startPhase2](bool) { startPhase2(); });
+                m_animFooterY.setEndCallback([this, onCompletePtr](bool) {
+                    brls::delay(ANIM_DELAY_PHASE, [this, onCompletePtr]() {
+                        ASYNC_RETAIN
+                        if (m_animState != AnimState::Hiding || !contentBox) { ASYNC_RELEASE; return; }
+
+                        m_animOffsetX.reset(0.0f);
+                        m_animOffsetX.addStep(-contentBox->getWidth() - 50.0f, ANIM_DUR_SLIDE,
+                                              tweeny::easing::enumerated::cubicIn);
+
+                        m_animOffsetX.setEndCallback([this, onCompletePtr](bool) {
+                            if (!contentBox) return;
+                            brls::delay(ANIM_DELAY_ENDPAUSE, [this, onCompletePtr]() {
+                                ASYNC_RETAIN
+                                if (!contentBox) { ASYNC_RELEASE; return; }
+                                brls::Application::unblockInputs();
+                                m_animState = AnimState::None;
+                                if (*onCompletePtr)
+                                    (*onCompletePtr)();
+                                ASYNC_RELEASE
+                            });
+                        });
+
+                        m_animOffsetX.start();
+                        ASYNC_RELEASE
+                    });
+                });
             }
             m_animFooterY.start();
         }
         if (!hasVisibleHeader && !hasVisibleFooter) {
-            startPhase2();
+            startSlide();
         }
     }
 
@@ -264,28 +278,6 @@ namespace beiklive
                     bottomBar->setAlpha(1.0f - std::abs((float)m_animFooterY) / h);
             }
             this->invalidate();
-        }
-    }
-
-    void Box::draw(NVGcontext* vg, float x, float y, float w, float h,
-                   brls::Style style, brls::FrameContext* ctx)
-    {
-        if (m_animState != AnimState::None && contentBox) {
-            float sx = m_animScale;
-            float sy = m_animScale;
-
-            brls::Rect frame = contentBox->getFrame();
-            float cx = frame.origin.x + frame.size.width * 0.5f;
-            float cy = frame.origin.y + frame.size.height * 0.5f;
-
-            nvgSave(vg);
-            nvgTranslate(vg, cx, cy);
-            nvgScale(vg, sx, sy);
-            nvgTranslate(vg, -cx, -cy);
-            brls::Box::draw(vg, x, y, w, h, style, ctx);
-            nvgRestore(vg);
-        } else {
-            brls::Box::draw(vg, x, y, w, h, style, ctx);
         }
     }
 
