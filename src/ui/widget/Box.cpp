@@ -82,9 +82,9 @@ namespace beiklive
 
         contentBox->setVisibility(brls::Visibility::VISIBLE);
 
-        // 阶段1：从右侧外移入 (200ms)
+        // 阶段1：从左侧外移入 (200ms)
         m_animScale.reset(0.9f);
-        m_animOffsetX.reset(300.0f);
+        m_animOffsetX.reset(-300.0f);
         m_animOffsetX.addStep(0.0f, 200, tweeny::easing::enumerated::cubicOut);
 
         m_animOffsetX.setEndCallback([this](bool finished) {
@@ -96,7 +96,11 @@ namespace beiklive
 
             m_animScale.setEndCallback([this](bool) {
                 if (!contentBox) return;
-                m_animState = AnimState::None;
+                brls::delay(200, [this]() {
+                    ASYNC_RETAIN
+                    m_animState = AnimState::None;
+                    ASYNC_RELEASE
+                });
             });
 
             m_animScale.start();
@@ -130,10 +134,15 @@ namespace beiklive
 
             m_animOffsetX.setEndCallback([this, onCompletePtr](bool) {
                 if (!contentBox) return;
-                contentBox->setVisibility(brls::Visibility::GONE);
-                m_animState = AnimState::None;
-                if (*onCompletePtr)
-                    (*onCompletePtr)();
+                brls::delay(200, [this, onCompletePtr]() {
+                    ASYNC_RETAIN
+                    if (!contentBox) { ASYNC_RELEASE; return; }
+                    contentBox->setVisibility(brls::Visibility::GONE);
+                    m_animState = AnimState::None;
+                    if (*onCompletePtr)
+                        (*onCompletePtr)();
+                    ASYNC_RELEASE
+                });
             });
 
             m_animOffsetX.start();
