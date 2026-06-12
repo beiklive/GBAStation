@@ -1,6 +1,7 @@
 #pragma once
 
 #include <borealis.hpp>
+#include <borealis/core/animation.hpp>
 #include "Header.hpp"
 #include "DynamicBackgroundBox.hpp"
 
@@ -25,9 +26,12 @@ namespace beiklive
         void setGradientTheme(GradientTheme theme);
         brls::Box* getContentBox() { return contentBox; }
 
-        void animaShow(bool show);
-        void animaHide(bool show);
+        void animaShow(std::function<void()> onStart = nullptr);
+        void animaHide(std::function<void()> onComplete = nullptr);
 
+        void frame(brls::FrameContext* ctx) override;
+        void draw(NVGcontext* vg, float x, float y, float w, float h,
+                  brls::Style style, brls::FrameContext* ctx) override;
 
 
     private:
@@ -47,6 +51,12 @@ namespace beiklive
         // 页脚
         void setupFooter();
         brls::BottomBar* bottomBar = nullptr;
+
+        // 内容层动画状态
+        enum class AnimState { None, Hiding, Showing };
+        AnimState m_animState = AnimState::None;
+        brls::Animatable m_animScale{1.0f};
+        brls::Animatable m_animOffsetX{0.0f};
     };
 
 }

@@ -1,4 +1,5 @@
 #include "common.h"
+#include "ui/widget/Box.hpp"
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
@@ -12,6 +13,8 @@ namespace beiklive
     ConfigManager *SettingManager = nullptr;     // 全局配置管理器实例
     ConfigManager *NameMappingManager = nullptr; // 全局名称映射管理器实例
     GameDatabase *GameDB = nullptr;              // 全局游戏数据库实例
+
+    std::vector<brls::Box *> g_beiklive_boxes; // 全局盒子列表
 
     std::vector<FloatingIcon> g_backgroundIcons;
     float g_backgroundLastTime = 0.0f;
@@ -591,6 +594,30 @@ namespace beiklive
         default:
             return BK_RES("img/LogoLayer/GBA_LOGOLAY.png");
         }
+    }
+
+    
+    void pushActivity(brls::AppletFrame *frame, beiklive::Box *pre, beiklive::Box *next)
+    {
+        g_beiklive_boxes.push_back(pre);
+        pre->animaHide(
+            [frame, next]() {
+                brls::Application::pushActivity(new brls::Activity(frame));
+                next->animaShow();
+            }
+        );
+    }
+
+    void popActivity(beiklive::Box *v)
+    {
+        auto* box = static_cast<beiklive::Box*>(g_beiklive_boxes.back());
+        g_beiklive_boxes.pop_back();
+            v->animaHide(
+                [box]() {
+                                brls::Application::popActivity();
+                               box->animaShow();
+                }
+            );
     }
 
 } // namespace beiklive

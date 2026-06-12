@@ -149,7 +149,7 @@ namespace beiklive
         functionBox->setHeight(95.f);
         functionBox->setWidth(600.f);
         // functionBox->setPadding(10.f);
-        functionBox->setBackgroundColor(nvgRGBA(0, 0, 0, 50));
+        functionBox->setBackgroundColor(nvgRGBA(0, 0, 0, 10));
         functionBox->setClipsToBounds(false);
         functionBox->setCornerRadius(45.0f);
         // functionBox->setShadowVisibility(true);

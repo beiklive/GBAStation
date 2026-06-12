@@ -30,6 +30,13 @@ namespace beiklive
 
         this->getContentBox()->addView(m_grid);
 
+        m_grid->registerAction("退出游戏库", brls::BUTTON_B, [this](brls::View*) -> bool {
+            beiklive::popActivity(this);
+            return true;
+        });
+
+
+
         m_grid->registerAction("分类", brls::BUTTON_Y, [this](brls::View*) -> bool {
             _showFilterDropdown();
             return true;

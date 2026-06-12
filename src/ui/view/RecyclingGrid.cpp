@@ -342,14 +342,15 @@ void GameGridView::_ensureSelectedVisible()
     float rowH = _getRowHeight();
     float itemY = m_paddingTop + selRow * rowH;
     float itemBottom = itemY + estimatedRowHeight;
+    float itemCenterY = itemY + estimatedRowHeight * 0.5f;
     float viewH = getHeight();
 
     float target = m_scrollY;
 
     if (itemY < target + m_paddingTop) {
-        target = itemY - m_paddingTop;
+        target = itemCenterY - viewH * 0.5f;
     } else if (itemBottom > target + viewH - m_paddingTop) {
-        target = itemBottom - viewH + m_paddingTop;
+        target = itemCenterY - viewH * 0.5f;
     }
 
     target = std::max(0.f, std::min(target, m_maxScrollY));
@@ -851,8 +852,6 @@ void GameGridView::_drawItem(NVGcontext* vg, const GridDrawItem& item, float x, 
     }
 
     if (focused && item.focusGlow > 0.01f) {
-        float glowAlpha = item.focusGlow * 0.6f;
-        float glowPad = 3.f;
         float gx = x + shakeX;
         float gy = y + shakeY;
 

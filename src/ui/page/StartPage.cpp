@@ -182,8 +182,8 @@ namespace beiklive
         };
 
         HIDE_BRLS_BAR(frame);
-        brls::sync([frame]()
-                   { brls::Application::pushActivity(new brls::Activity(frame)); });
+        brls::sync([frame, this, gameLibraryPage]()
+                   { beiklive::pushActivity(frame, this, gameLibraryPage); });
     }
 
     void StartPage::_openFileList()

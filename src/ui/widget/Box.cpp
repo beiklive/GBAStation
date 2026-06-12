@@ -69,15 +69,109 @@ namespace beiklive
             shaderLayer->setGradientTheme(theme);
     }
 
-    void Box::animaShow(bool show)
+    void Box::animaShow(std::function<void()> onStart)
     {
-        auto* box_ptr = contentBox;
+        if (!contentBox) return;
+
+        if (onStart)
+            onStart();
+
+        m_animScale.stop();
+        m_animOffsetX.stop();
+        m_animState = AnimState::Showing;
+
+        contentBox->setVisibility(brls::Visibility::VISIBLE);
+
+        // 阶段1：从右侧外移入 (200ms)
+        m_animScale.reset(0.9f);
+        m_animOffsetX.reset(300.0f);
+        m_animOffsetX.addStep(0.0f, 200, tweeny::easing::enumerated::cubicOut);
+
+        m_animOffsetX.setEndCallback([this](bool finished) {
+            if (!finished || m_animState != AnimState::Showing || !contentBox) return;
+
+            // 阶段2：从小缩放到原本大小 (150ms)
+            m_animScale.reset(0.9f);
+            m_animScale.addStep(1.0f, 150, tweeny::easing::enumerated::backOut);
+
+            m_animScale.setEndCallback([this](bool) {
+                if (!contentBox) return;
+                m_animState = AnimState::None;
+            });
+
+            m_animScale.start();
+        });
+
+        m_animOffsetX.start();
     }
 
-    void Box::animaHide(bool show)
+    void Box::animaHide(std::function<void()> onComplete)
     {
-        auto* box_ptr = contentBox;
+        if (!contentBox) return;
 
+        auto onCompletePtr = std::make_shared<std::function<void()>>(std::move(onComplete));
+
+        m_animScale.stop();
+        m_animOffsetX.stop();
+        m_animState = AnimState::Hiding;
+
+        // 阶段1：缩小到 0.9x (150ms)
+        m_animScale.reset(1.0f);
+        m_animScale.addStep(0.9f, 150, tweeny::easing::enumerated::cubicIn);
+        m_animOffsetX.reset(0.0f);
+
+        m_animScale.setEndCallback([this, onCompletePtr](bool finished) {
+            if (!finished || m_animState != AnimState::Hiding || !contentBox) return;
+
+            // 阶段2：向左滑出屏幕 (200ms)
+            m_animOffsetX.reset(0.0f);
+            m_animOffsetX.addStep(-contentBox->getWidth() - 50.0f, 200,
+                                  tweeny::easing::enumerated::cubicIn);
+
+            m_animOffsetX.setEndCallback([this, onCompletePtr](bool) {
+                if (!contentBox) return;
+                contentBox->setVisibility(brls::Visibility::GONE);
+                m_animState = AnimState::None;
+                if (*onCompletePtr)
+                    (*onCompletePtr)();
+            });
+
+            m_animOffsetX.start();
+        });
+
+        m_animScale.start();
+    }
+
+    void Box::frame(brls::FrameContext* ctx)
+    {
+        brls::Box::frame(ctx);
+
+        if (m_animState != AnimState::None && contentBox)
+            this->invalidate();
+    }
+
+    void Box::draw(NVGcontext* vg, float x, float y, float w, float h,
+                   brls::Style style, brls::FrameContext* ctx)
+    {
+        if (m_animState != AnimState::None && contentBox) {
+            float sx = m_animScale;
+            float sy = m_animScale;
+            float tx = m_animOffsetX;
+
+            brls::Rect frame = contentBox->getFrame();
+            float cx = frame.origin.x + frame.size.width * 0.5f;
+            float cy = frame.origin.y + frame.size.height * 0.5f;
+
+            nvgSave(vg);
+            nvgTranslate(vg, cx, cy);
+            nvgTranslate(vg, tx, 0.0f);
+            nvgScale(vg, sx, sy);
+            nvgTranslate(vg, -cx, -cy);
+            brls::Box::draw(vg, x, y, w, h, style, ctx);
+            nvgRestore(vg);
+        } else {
+            brls::Box::draw(vg, x, y, w, h, style, ctx);
+        }
     }
 
     void Box::setupBackgroundLayer()
