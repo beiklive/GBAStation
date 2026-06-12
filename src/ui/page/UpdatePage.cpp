@@ -307,7 +307,7 @@ void UpdatePage::startDownload() {
             }
 
 #ifdef __SWITCH__
-            m_statusLabel->setText("下载完成，是否安装？");
+            m_statusLabel->setText("下载完成，开始安装");
             startInstall();
 #else
             m_statusLabel->setText("下载完成，请手动替换程序文件");
@@ -327,12 +327,13 @@ void UpdatePage::startInstall() {
         bool ok = AppUpdater::instance().install();
 
         brls::sync([this, ok]() {
+            m_btnBox->clearViews(true);
 
             if (ok) {
+                m_statusLabel->setText("安装完成，正在重启");
 
 #ifdef __SWITCH__
-                AppUpdater::instance().finishInstall();
-                envSetNextLoad("sdmc:/switch/GBAStation.nro", "sdmc:/switch/GBAStation.nro");
+               envSetNextLoad("sdmc:/switch/GBAStation.nro", "sdmc:/switch/GBAStation.nro");
                 brls::Application::quit();
 #else
                     brls::Application::notify("请手动重启");
@@ -346,6 +347,10 @@ void UpdatePage::startInstall() {
 #endif
                 m_progressBar->setColor(nvgRGB(255, 120, 120));
 
+                auto* closeBtn = _makeActionButton(
+                    "关闭", [this](brls::View*) -> bool { _closeDialog(); return true; });
+                m_btnBox->addView(closeBtn);
+                brls::Application::giveFocus(closeBtn);
             }
         });
     });
