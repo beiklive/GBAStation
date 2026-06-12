@@ -248,18 +248,16 @@ bool AppUpdater::install() {
         }
     }
 
-    // 2. 替换 NRO
-    std::string nroPath = "sdmc:/switch/GBAStation.nro";
-
-    romfsExit();
-
-    std::remove(nroPath.c_str());
-    if (std::rename(cacheNroPath().c_str(), nroPath.c_str()) != 0) {
-        brls::Logger::error("AppUpdater: 安装失败");
-        return false;
+    // 2. 验证缓存 NRO 存在
+    {
+        std::ifstream test(cacheNroPath(), std::ios::binary);
+        if (!test.good()) {
+            brls::Logger::error("AppUpdater: 缓存 NRO 文件不存在");
+            return false;
+        }
     }
 
-    brls::Logger::info("AppUpdater: 安装完成 -> {}", nroPath);
+    brls::Logger::info("AppUpdater: 安装准备工作完成");
     return true;
 #else
     // 非 Switch 平台也执行 version.json 写入（方便测试）
@@ -278,6 +276,25 @@ bool AppUpdater::install() {
         }
     }
     brls::Logger::warning("AppUpdater: NRO 安装仅在 Switch 平台可用");
+    return false;
+#endif
+}
+
+bool AppUpdater::finishInstall() {
+#ifdef __SWITCH__
+    std::string nroPath = "sdmc:/switch/GBAStation.nro";
+
+    romfsExit();
+
+    std::remove(nroPath.c_str());
+    if (std::rename(cacheNroPath().c_str(), nroPath.c_str()) != 0) {
+        brls::Logger::error("AppUpdater: NRO 替换失败");
+        return false;
+    }
+
+    brls::Logger::info("AppUpdater: NRO 替换完成 -> {}", nroPath);
+    return true;
+#else
     return false;
 #endif
 }

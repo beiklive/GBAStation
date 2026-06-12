@@ -34,8 +34,11 @@ public:
     /// onProgress: (totalBytes, downloadedBytes) → 返回 false 可中断
     bool download(std::function<bool(size_t total, size_t now)> onProgress);
 
-    /// 安装更新：替换运行中的 NRO 文件（仅 Switch 平台）
+    /// 准备安装：写入 version.json，验证缓存文件（异步线程安全）
     bool install();
+
+    /// 完成安装：romfsExit + 替换 NRO 文件（必须在 UI 线程调用，紧接 quit）
+    bool finishInstall();
 
     /// 取消正在进行的网络操作
     void abort() { m_aborted.store(true); }
