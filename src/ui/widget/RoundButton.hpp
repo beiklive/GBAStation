@@ -34,6 +34,9 @@ class RoundButton : public brls::Box
     bool  m_clickAnimating = false;
     float m_clickT         = 0.0f;
     float m_clickScale     = 1.0f;
+
+    // 彩虹环绕动画偏移（度）
+    float m_rainbowOffset  = 0.0f;
 };
 
 

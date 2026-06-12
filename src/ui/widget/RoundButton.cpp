@@ -18,8 +18,10 @@ namespace beiklive
         : brls::Box(brls::Axis::COLUMN)
         , m_onClick(std::move(onClick))
     {
+        this->setFocusable(false);
 
         this->setAlignItems(brls::AlignItems::CENTER);
+        this->setPadding(ROUND_BTN_PADDING);
         this->setPadding(ROUND_BTN_PADDING);
         this->setHideHighlightBackground(true);
         this->setHideClickAnimation(true);
@@ -160,14 +162,29 @@ namespace beiklive
         //       m_imageWrapper 通过圆角半径裁剪渲染 brls::Image
         brls::Box::draw(vg, x, y, w, h, style, ctx);
 
-        // ── 5. 圆形描边：聚焦时青色高亮，否则细灰边 ──
-        nvgBeginPath(vg);
-        nvgCircle(vg, cx, cy, radius);
-        nvgStrokeWidth(vg, m_focused ? 2.5f : 1.5f);
-        nvgStrokeColor(vg, m_focused
-            ? nvgRGBA(79, 193, 255, 230)
-            : nvgRGBA(120, 120, 120, 100));
-        nvgStroke(vg);
+        // // ── 5. 聚焦时彩虹动态环绕描边 ──
+        // if (m_focused) {
+        //     m_rainbowOffset += 2.0f;
+        //     if (m_rainbowOffset >= 360.0f)
+        //         m_rainbowOffset -= 360.0f;
+
+        //     constexpr int   NUM_SEGMENTS = 60;
+        //     constexpr float SEG_ANGLE    = NVG_PI * 2.0f / NUM_SEGMENTS;
+
+        //     nvgLineCap(vg, NVG_BUTT);
+        //     nvgStrokeWidth(vg, 3.0f);
+
+        //     for (int i = 0; i < NUM_SEGMENTS; i++) {
+        //         float a1  = i * SEG_ANGLE;
+        //         float a2  = a1 + SEG_ANGLE + 0.001f; // 微量重叠，避免接缝
+        //         float hue = fmodf(i * (360.0f / NUM_SEGMENTS) + m_rainbowOffset, 360.0f);
+
+        //         nvgBeginPath(vg);
+        //         nvgArc(vg, cx, cy, radius, a1, a2, NVG_CW);
+        //         nvgStrokeColor(vg, nvgHSLA(hue, 1.0f, 0.5f, 230));
+        //         nvgStroke(vg);
+        //     }
+        // }
 
         nvgRestore(vg);
     }

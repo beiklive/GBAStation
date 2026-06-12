@@ -26,7 +26,6 @@ namespace beiklive
 
         m_functionArea = new brls::Box(brls::Axis::ROW);
         m_functionArea->setHeight(150.f);
-
         addView(m_frame);
         addView(m_functionArea);
 
@@ -136,7 +135,28 @@ namespace beiklive
 
     void SwitchLayout::buildFunctionArea()
     {
-        m_functionArea->addView(new brls::Padding());
+
+
+        // functionbox
+        auto *functionBox = new brls::Box(brls::Axis::ROW);
+        m_functionArea->addView(functionBox);
+
+        #undef ABSOLUTE
+        functionBox->setPositionType(brls::PositionType::ABSOLUTE);
+        functionBox->setPositionLeft(310.f);
+        functionBox->setPositionTop(1.5f);
+        functionBox->setFocusable(false);
+        functionBox->setHeight(95.f);
+        functionBox->setWidth(600.f);
+        // functionBox->setPadding(10.f);
+        functionBox->setBackgroundColor(nvgRGBA(0, 0, 0, 50));
+        functionBox->setClipsToBounds(false);
+        functionBox->setCornerRadius(45.0f);
+        // functionBox->setShadowVisibility(true);
+        // functionBox->setShadowType(brls::ShadowType::GENERIC);
+        functionBox->setBorderColor(nvgRGBA(255, 255, 255, 35));
+        functionBox->setBorderThickness(0.5f);
+
         std::string path_prefix = "img/ui/" +
                                   std::string((brls::Application::getPlatform()->getThemeVariant() == brls::ThemeVariant::DARK) ? "light/" : "dark/");
 
@@ -152,6 +172,8 @@ namespace beiklive
                                                      { if (onAboutOpened) onAboutOpened(); });
         auto ExitButton = new beiklive::RoundButton(BK_RES(path_prefix + "tuichu_64.png"), "退出", [this]()
                                                     { if (onExitRequested) onExitRequested(); });
+
+        m_functionArea->addView(new brls::Padding());
 
         m_functionArea->addView(GameDataBaseButton);
         m_functionArea->addView(FileListButton);
