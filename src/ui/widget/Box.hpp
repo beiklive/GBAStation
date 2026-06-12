@@ -57,6 +57,14 @@ namespace beiklive
         AnimState m_animState = AnimState::None;
         brls::Animatable m_animScale{1.0f};
         brls::Animatable m_animOffsetX{0.0f};
+        brls::Animatable m_animHeaderY{0.0f};
+        brls::Animatable m_animFooterY{0.0f};
+
+        static constexpr int32_t ANIM_DUR_SLIDE     = 200;
+        static constexpr int32_t ANIM_DUR_SCALE     = 150;
+        static constexpr int32_t ANIM_DUR_HFADE     = 200;
+        static constexpr long    ANIM_DELAY_PHASE   = 1;
+        static constexpr long    ANIM_DELAY_ENDPAUSE = 1;
     };
 
 }

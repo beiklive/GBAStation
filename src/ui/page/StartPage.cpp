@@ -176,8 +176,8 @@ namespace beiklive
                 auto *frame = new brls::AppletFrame(m_gamePage);
                 HIDE_BRLS_BAR(frame);
                 brls::Logger::info("Pushing GamePage activity for: " + entry.title);
-                brls::sync([this, frame]()
-                           { brls::Application::pushActivity(new brls::Activity(frame)); });
+                brls::sync([this, frame ]()
+                           { beiklive::pushActivity(frame, this, m_gamePage); });
             }
         };
 

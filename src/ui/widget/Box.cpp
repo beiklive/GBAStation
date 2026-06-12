@@ -76,34 +76,89 @@ namespace beiklive
         if (onStart)
             onStart();
 
+        brls::Application::blockInputs();
+
         m_animScale.stop();
         m_animOffsetX.stop();
+        m_animHeaderY.stop();
+        m_animFooterY.stop();
         m_animState = AnimState::Showing;
 
         contentBox->setVisibility(brls::Visibility::VISIBLE);
 
-        // 阶段1：从左侧外移入 (200ms)
+        // 顶栏/底栏初始保持在屏幕外
+        if (header)
+            m_animHeaderY.reset(-header->getHeight());
+        if (bottomBar)
+            m_animFooterY.reset(bottomBar->getHeight());
+
+        // 阶段1：contentBox 从左侧滑入 (200ms)
         m_animScale.reset(0.9f);
-        m_animOffsetX.reset(-300.0f);
-        m_animOffsetX.addStep(0.0f, 200, tweeny::easing::enumerated::cubicOut);
+        m_animOffsetX.reset(1280.0f);
+        m_animOffsetX.addStep(0.0f, ANIM_DUR_SLIDE, tweeny::easing::enumerated::cubicOut);
 
         m_animOffsetX.setEndCallback([this](bool finished) {
             if (!finished || m_animState != AnimState::Showing || !contentBox) return;
 
-            // 阶段2：从小缩放到原本大小 (150ms)
-            m_animScale.reset(0.9f);
-            m_animScale.addStep(1.0f, 150, tweeny::easing::enumerated::backOut);
+            brls::delay(ANIM_DELAY_PHASE, [this]() {
+                ASYNC_RETAIN
+                if (m_animState != AnimState::Showing || !contentBox) { ASYNC_RELEASE; return; }
 
-            m_animScale.setEndCallback([this](bool) {
-                if (!contentBox) return;
-                brls::delay(200, [this]() {
-                    ASYNC_RETAIN
-                    m_animState = AnimState::None;
-                    ASYNC_RELEASE
+                // 阶段2：从小缩放到原本大小 (150ms)
+                m_animScale.reset(0.9f);
+                m_animScale.addStep(1.0f, ANIM_DUR_SCALE, tweeny::easing::enumerated::backOut);
+
+                m_animScale.setEndCallback([this](bool) {
+                    if (!contentBox) return;
+
+                    brls::delay(ANIM_DELAY_PHASE, [this]() {
+                        ASYNC_RETAIN
+                        if (m_animState != AnimState::Showing || !contentBox) { ASYNC_RELEASE; return; }
+
+                        // 阶段3：顶栏/底栏归位 (200ms)
+                        if (header) {
+                            m_animHeaderY.reset(-header->getHeight());
+                            m_animHeaderY.addStep(0.0f, ANIM_DUR_HFADE, tweeny::easing::enumerated::cubicOut);
+                            m_animHeaderY.setEndCallback([this](bool) {
+                                brls::delay(ANIM_DELAY_ENDPAUSE, [this]() {
+                                    ASYNC_RETAIN
+                                    brls::Application::unblockInputs();
+                                    m_animState = AnimState::None;
+                                    ASYNC_RELEASE
+                                });
+                            });
+                            m_animHeaderY.start();
+                        }
+                        if (bottomBar) {
+                            m_animFooterY.reset(bottomBar->getHeight());
+                            m_animFooterY.addStep(0.0f, ANIM_DUR_HFADE, tweeny::easing::enumerated::cubicOut);
+                            if (!header) {
+                                m_animFooterY.setEndCallback([this](bool) {
+                                    brls::delay(ANIM_DELAY_ENDPAUSE, [this]() {
+                                        ASYNC_RETAIN
+                                        brls::Application::unblockInputs();
+                                        m_animState = AnimState::None;
+                                        ASYNC_RELEASE
+                                    });
+                                });
+                            }
+                            m_animFooterY.start();
+                        }
+                        if (!header && !bottomBar) {
+                            brls::delay(ANIM_DELAY_ENDPAUSE, [this]() {
+                                ASYNC_RETAIN
+                                brls::Application::unblockInputs();
+                                m_animState = AnimState::None;
+                                ASYNC_RELEASE
+                            });
+                        }
+                        ASYNC_RELEASE
+                    });
                 });
-            });
 
-            m_animScale.start();
+                m_animScale.start();
+                ASYNC_RELEASE
+            });
         });
 
         m_animOffsetX.start();
@@ -113,50 +168,100 @@ namespace beiklive
     {
         if (!contentBox) return;
 
+        brls::Application::blockInputs();
+
         auto onCompletePtr = std::make_shared<std::function<void()>>(std::move(onComplete));
 
         m_animScale.stop();
         m_animOffsetX.stop();
+        m_animHeaderY.stop();
+        m_animFooterY.stop();
         m_animState = AnimState::Hiding;
 
-        // 阶段1：缩小到 0.9x (150ms)
         m_animScale.reset(1.0f);
-        m_animScale.addStep(0.9f, 150, tweeny::easing::enumerated::cubicIn);
         m_animOffsetX.reset(0.0f);
 
-        m_animScale.setEndCallback([this, onCompletePtr](bool finished) {
-            if (!finished || m_animState != AnimState::Hiding || !contentBox) return;
+        auto startPhase2 = [this, onCompletePtr]() {
+            // 阶段2：contentBox 缩小 (150ms)
+            m_animScale.reset(1.0f);
+            m_animScale.addStep(0.9f, ANIM_DUR_SCALE, tweeny::easing::enumerated::cubicIn);
 
-            // 阶段2：向左滑出屏幕 (200ms)
-            m_animOffsetX.reset(0.0f);
-            m_animOffsetX.addStep(-contentBox->getWidth() - 50.0f, 200,
-                                  tweeny::easing::enumerated::cubicIn);
+            m_animScale.setEndCallback([this, onCompletePtr](bool finished) {
+                if (!finished || m_animState != AnimState::Hiding || !contentBox) return;
 
-            m_animOffsetX.setEndCallback([this, onCompletePtr](bool) {
-                if (!contentBox) return;
-                brls::delay(200, [this, onCompletePtr]() {
+                brls::delay(ANIM_DELAY_PHASE, [this, onCompletePtr]() {
                     ASYNC_RETAIN
-                    if (!contentBox) { ASYNC_RELEASE; return; }
-                    contentBox->setVisibility(brls::Visibility::GONE);
-                    m_animState = AnimState::None;
-                    if (*onCompletePtr)
-                        (*onCompletePtr)();
+                    if (m_animState != AnimState::Hiding || !contentBox) { ASYNC_RELEASE; return; }
+
+                    // 阶段3：向左滑出屏幕 (200ms)
+                    m_animOffsetX.reset(0.0f);
+                    m_animOffsetX.addStep(-contentBox->getWidth() - 50.0f, ANIM_DUR_SLIDE,
+                                          tweeny::easing::enumerated::cubicIn);
+
+                    m_animOffsetX.setEndCallback([this, onCompletePtr](bool) {
+                        if (!contentBox) return;
+                        brls::delay(ANIM_DELAY_ENDPAUSE, [this, onCompletePtr]() {
+                            ASYNC_RETAIN
+                            if (!contentBox) { ASYNC_RELEASE; return; }
+                            contentBox->setVisibility(brls::Visibility::GONE);
+                            brls::Application::unblockInputs();
+                            m_animState = AnimState::None;
+                            if (*onCompletePtr)
+                                (*onCompletePtr)();
+                            ASYNC_RELEASE
+                        });
+                    });
+
+                    m_animOffsetX.start();
                     ASYNC_RELEASE
                 });
             });
 
-            m_animOffsetX.start();
-        });
+            m_animScale.start();
+        };
 
-        m_animScale.start();
+        // 阶段1：顶栏向上移出，底栏向下移出 (200ms)
+        if (header) {
+            m_animHeaderY.reset(0.0f);
+            m_animHeaderY.addStep(-header->getHeight(), ANIM_DUR_HFADE,
+                                  tweeny::easing::enumerated::cubicIn);
+            m_animHeaderY.setEndCallback([startPhase2](bool) { startPhase2(); });
+            m_animHeaderY.start();
+        }
+        if (bottomBar) {
+            m_animFooterY.reset(0.0f);
+            m_animFooterY.addStep(bottomBar->getHeight(), ANIM_DUR_HFADE,
+                                  tweeny::easing::enumerated::cubicIn);
+            if (!header) {
+                m_animFooterY.setEndCallback([startPhase2](bool) { startPhase2(); });
+            }
+            m_animFooterY.start();
+        }
+        if (!header && !bottomBar) {
+            startPhase2();
+        }
     }
 
     void Box::frame(brls::FrameContext* ctx)
     {
         brls::Box::frame(ctx);
 
-        if (m_animState != AnimState::None && contentBox)
+        if (m_animState != AnimState::None && contentBox) {
+            contentBox->setTranslationX(m_animOffsetX);
+            if (header) {
+                header->setTranslationY(m_animHeaderY);
+                float h = header->getHeight();
+                if (h > 0)
+                    header->setAlpha(1.0f - std::abs((float)m_animHeaderY) / h);
+            }
+            if (bottomBar) {
+                bottomBar->setTranslationY(m_animFooterY);
+                float h = bottomBar->getHeight();
+                if (h > 0)
+                    bottomBar->setAlpha(1.0f - std::abs((float)m_animFooterY) / h);
+            }
             this->invalidate();
+        }
     }
 
     void Box::draw(NVGcontext* vg, float x, float y, float w, float h,
@@ -165,7 +270,6 @@ namespace beiklive
         if (m_animState != AnimState::None && contentBox) {
             float sx = m_animScale;
             float sy = m_animScale;
-            float tx = m_animOffsetX;
 
             brls::Rect frame = contentBox->getFrame();
             float cx = frame.origin.x + frame.size.width * 0.5f;
@@ -173,7 +277,6 @@ namespace beiklive
 
             nvgSave(vg);
             nvgTranslate(vg, cx, cy);
-            nvgTranslate(vg, tx, 0.0f);
             nvgScale(vg, sx, sy);
             nvgTranslate(vg, -cx, -cy);
             brls::Box::draw(vg, x, y, w, h, style, ctx);

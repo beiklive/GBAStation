@@ -11,7 +11,7 @@ namespace beiklive
     /*
         游戏页面, 负责游戏的启动、初始化、调用渲染器等功能。
     */
-    class GamePage : public brls::Box
+    class GamePage : public beiklive::Box
     {
     public:
         GamePage(beiklive::DirListData gameData);

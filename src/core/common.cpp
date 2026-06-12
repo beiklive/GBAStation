@@ -616,6 +616,7 @@ namespace beiklive
                 [box]() {
                                 brls::Application::popActivity();
                                box->animaShow();
+
                 }
             );
     }

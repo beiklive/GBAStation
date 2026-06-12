@@ -13,6 +13,7 @@ namespace beiklive
     static constexpr int MENU_EXIT_FADE_MS = 150; ///< 退出游戏淡出动画时长
     GamePage::GamePage(beiklive::DirListData gameData)
     {
+
         m_gameData = std::move(gameData);
         // 检查文件是否存在
         if (!beiklive::tools::isFileExists(m_gameData.fullPath))
@@ -210,6 +211,11 @@ namespace beiklive
 
     void GamePage::PageInit()
     {
+        this->showFooter(false);
+        this->showHeader(false);
+        this->showBackground(false);
+        this->showShader(false);
+
         this->setAxis(brls::Axis::COLUMN);
         this->setAlignItems(brls::AlignItems::CENTER);
         this->setJustifyContent(brls::JustifyContent::CENTER);
@@ -234,7 +240,7 @@ namespace beiklive
         m_gameView->setPositionType(brls::PositionType::ABSOLUTE);
         m_gameView->setPositionTop(0);
         m_gameView->setPositionLeft(0);
-        this->addView(m_gameView);
+        this->getContentBox()->addView(m_gameView);
     }
 
     void GamePage::GameMenuInitialize()
@@ -247,6 +253,7 @@ namespace beiklive
         m_gameMenuView->setPositionType(brls::PositionType::ABSOLUTE);
         m_gameMenuView->setPositionTop(0);
         m_gameMenuView->setPositionLeft(0);
+        this->getContentBox()->addView(m_gameMenuView);
         m_gameMenuView->setVisibility(brls::Visibility::GONE); // 初始隐藏
 
 
