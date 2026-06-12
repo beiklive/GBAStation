@@ -111,7 +111,8 @@ namespace beiklive
                 HIDE_BRLS_BAR(frame);
                 brls::Logger::info("Pushing GamePage activity for: " + e.title);
                 brls::sync([this, frame]()
-                           { brls::Application::pushActivity(new brls::Activity(frame)); });
+                           { beiklive::pushActivity(frame, this, m_gamePage,
+                                [this]() { m_gamePage->startGame(); }); });
             }
         };
     switchLayout->onGameOptions = [this](const beiklive::GameEntry &entry)
@@ -168,7 +169,7 @@ namespace beiklive
         auto *gameLibraryPage = new beiklive::GameLibraryPage();
         auto *frame           = new brls::AppletFrame(gameLibraryPage);
 
-        gameLibraryPage->onGameSelected = [this](const beiklive::GameEntry &entry)
+        gameLibraryPage->onGameSelected = [this, gameLibraryPage](const beiklive::GameEntry &entry)
         {
             brls::Logger::info("Game selected from library: " + entry.title);
             {
@@ -176,8 +177,9 @@ namespace beiklive
                 auto *frame = new brls::AppletFrame(m_gamePage);
                 HIDE_BRLS_BAR(frame);
                 brls::Logger::info("Pushing GamePage activity for: " + entry.title);
-                brls::sync([this, frame ]()
-                           { beiklive::pushActivity(frame, this, m_gamePage); });
+                brls::sync([this, frame, gameLibraryPage]()
+                           { beiklive::pushActivity(frame, gameLibraryPage, m_gamePage,
+                                [this]() { m_gamePage->startGame(); }); });
             }
         };
 
@@ -196,9 +198,8 @@ namespace beiklive
             brls::BUTTON_START,
             [this](brls::View *)
             {
-                // 此处设置按键功能
                 brls::sync([this]()
-                           { brls::Application::popActivity(); });
+                           { beiklive::popActivity(m_fileListPage); });
 
                 return true;
             });
@@ -223,7 +224,8 @@ namespace beiklive
                     HIDE_BRLS_BAR(frame);
                     brls::Logger::info("Pushing GamePage activity for: " + dirItem.fileName);
                     brls::sync([this, frame]()
-                               { brls::Application::pushActivity(new brls::Activity(frame)); });
+                               { beiklive::pushActivity(frame, this, m_gamePage,
+                                    [this]() { m_gamePage->startGame(); }); });
                 }
                 break;
             default:
@@ -237,8 +239,8 @@ namespace beiklive
         brls::sync([this, frame]()
                    {
                        brls::Logger::info("Pushing FileListPage activity");
-                       brls::Application::pushActivity(new brls::Activity(frame));
-                       m_fileListPage->showDriveList(); // Activity 入栈后再加载，确保 recycler 已在视图树中
+                       beiklive::pushActivity(frame, this, m_fileListPage);
+                       m_fileListPage->showDriveList();
                    });
     }
 
@@ -248,8 +250,8 @@ namespace beiklive
         auto *settingPage = new beiklive::SettingPage();
         auto *frame       = new brls::AppletFrame(settingPage);
         HIDE_BRLS_BAR(frame);
-        brls::sync([frame]()
-                   { brls::Application::pushActivity(new brls::Activity(frame)); });
+        brls::sync([this, frame, settingPage]()
+                   { beiklive::pushActivity(frame, this, settingPage); });
     }
 
     void StartPage::_openAbout()
@@ -258,8 +260,8 @@ namespace beiklive
         auto *aboutPage = new beiklive::AboutPage();
         auto *frame     = new brls::AppletFrame(aboutPage);
         HIDE_BRLS_BAR(frame);
-        brls::sync([frame]()
-                   { brls::Application::pushActivity(new brls::Activity(frame)); });
+        brls::sync([this, frame, aboutPage]()
+                   { beiklive::pushActivity(frame, this, aboutPage); });
     }
 
     void StartPage::_openDataManagement()
@@ -268,8 +270,8 @@ namespace beiklive
         auto *dataPage = new beiklive::DataManagementPage();
         auto *frame    = new brls::AppletFrame(dataPage);
         HIDE_BRLS_BAR(frame);
-        brls::sync([frame]()
-                   { brls::Application::pushActivity(new brls::Activity(frame)); });
+        brls::sync([this, frame, dataPage]()
+                   { beiklive::pushActivity(frame, this, dataPage); });
     }
 
     void StartPage::_showGameOptionsPanel(const beiklive::GameEntry& entry)

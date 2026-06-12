@@ -169,6 +169,12 @@ DataManagementPage::DataManagementPage()
     this->getHeader()->setTitle("数据管理");
     this->setFocusable(false);
 
+    this->registerAction("返回", brls::BUTTON_B, [this](brls::View*) { 
+        beiklive::popActivity(this);
+        return true;
+    });
+
+
     m_tabframe = new beiklive::TabFrame();
     this->getContentBox()->addView(m_tabframe);
     setupProgressOverlay();
@@ -331,7 +337,10 @@ void DataManagementPage::setupProgressOverlay()
     m_progressOverlay->setBackgroundColor(nvgRGBA(0, 0, 0, 140));
     m_progressOverlay->setJustifyContent(brls::JustifyContent::CENTER);
     m_progressOverlay->setAlignItems(brls::AlignItems::CENTER);
-    m_progressOverlay->registerAction("返回", brls::BUTTON_B, [](brls::View*) { return true; });
+    m_progressOverlay->registerAction("返回", brls::BUTTON_B, [](brls::View*) { 
+        return true; 
+    
+    });
 
     auto* card = new brls::Box(brls::Axis::COLUMN);
     card->setFocusable(false);

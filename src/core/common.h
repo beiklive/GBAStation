@@ -348,7 +348,8 @@ namespace beiklive // 函数声明
     }
 
 
-    void pushActivity(brls::AppletFrame *frame, class Box *pre, class Box *next); // 将一个视图推入 AppletFrame 的内容栈并显示
+    void pushActivity(brls::AppletFrame *frame, class Box *pre, class Box *next,
+                      std::function<void()> onShow = nullptr);
     void popActivity(class Box *v); // 从 AppletFrame 的内容
 
 

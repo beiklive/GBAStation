@@ -597,13 +597,14 @@ namespace beiklive
     }
 
     
-    void pushActivity(brls::AppletFrame *frame, beiklive::Box *pre, beiklive::Box *next)
+    void pushActivity(brls::AppletFrame *frame, beiklive::Box *pre, beiklive::Box *next,
+                      std::function<void()> onShow)
     {
         g_beiklive_boxes.push_back(pre);
         pre->animaHide(
-            [frame, next]() {
+            [frame, next, onShow = std::move(onShow)]() {
                 brls::Application::pushActivity(new brls::Activity(frame));
-                next->animaShow();
+                next->animaShow(std::move(onShow));
             }
         );
     }

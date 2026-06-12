@@ -87,9 +87,9 @@ namespace beiklive
         contentBox->setVisibility(brls::Visibility::VISIBLE);
 
         // 顶栏/底栏初始保持在屏幕外
-        if (header)
+        if (header && header->getVisibility() == brls::Visibility::VISIBLE)
             m_animHeaderY.reset(-header->getHeight());
-        if (bottomBar)
+        if (bottomBar && bottomBar->getVisibility() == brls::Visibility::VISIBLE)
             m_animFooterY.reset(bottomBar->getHeight());
 
         // 阶段1：contentBox 从左侧滑入 (200ms)
@@ -116,7 +116,9 @@ namespace beiklive
                         if (m_animState != AnimState::Showing || !contentBox) { ASYNC_RELEASE; return; }
 
                         // 阶段3：顶栏/底栏归位 (200ms)
-                        if (header) {
+                        bool hasVisibleHeader = header && header->getVisibility() == brls::Visibility::VISIBLE;
+                        bool hasVisibleFooter = bottomBar && bottomBar->getVisibility() == brls::Visibility::VISIBLE;
+                        if (hasVisibleHeader) {
                             m_animHeaderY.reset(-header->getHeight());
                             m_animHeaderY.addStep(0.0f, ANIM_DUR_HFADE, tweeny::easing::enumerated::cubicOut);
                             m_animHeaderY.setEndCallback([this](bool) {
@@ -129,10 +131,10 @@ namespace beiklive
                             });
                             m_animHeaderY.start();
                         }
-                        if (bottomBar) {
+                        if (hasVisibleFooter) {
                             m_animFooterY.reset(bottomBar->getHeight());
                             m_animFooterY.addStep(0.0f, ANIM_DUR_HFADE, tweeny::easing::enumerated::cubicOut);
-                            if (!header) {
+                            if (!hasVisibleHeader) {
                                 m_animFooterY.setEndCallback([this](bool) {
                                     brls::delay(ANIM_DELAY_ENDPAUSE, [this]() {
                                         ASYNC_RETAIN
@@ -144,7 +146,7 @@ namespace beiklive
                             }
                             m_animFooterY.start();
                         }
-                        if (!header && !bottomBar) {
+                        if (!hasVisibleHeader && !hasVisibleFooter) {
                             brls::delay(ANIM_DELAY_ENDPAUSE, [this]() {
                                 ASYNC_RETAIN
                                 brls::Application::unblockInputs();
@@ -203,7 +205,6 @@ namespace beiklive
                         brls::delay(ANIM_DELAY_ENDPAUSE, [this, onCompletePtr]() {
                             ASYNC_RETAIN
                             if (!contentBox) { ASYNC_RELEASE; return; }
-                            contentBox->setVisibility(brls::Visibility::GONE);
                             brls::Application::unblockInputs();
                             m_animState = AnimState::None;
                             if (*onCompletePtr)
@@ -221,23 +222,25 @@ namespace beiklive
         };
 
         // 阶段1：顶栏向上移出，底栏向下移出 (200ms)
-        if (header) {
+        bool hasVisibleHeader = header && header->getVisibility() == brls::Visibility::VISIBLE;
+        bool hasVisibleFooter = bottomBar && bottomBar->getVisibility() == brls::Visibility::VISIBLE;
+        if (hasVisibleHeader) {
             m_animHeaderY.reset(0.0f);
             m_animHeaderY.addStep(-header->getHeight(), ANIM_DUR_HFADE,
                                   tweeny::easing::enumerated::cubicIn);
             m_animHeaderY.setEndCallback([startPhase2](bool) { startPhase2(); });
             m_animHeaderY.start();
         }
-        if (bottomBar) {
+        if (hasVisibleFooter) {
             m_animFooterY.reset(0.0f);
             m_animFooterY.addStep(bottomBar->getHeight(), ANIM_DUR_HFADE,
                                   tweeny::easing::enumerated::cubicIn);
-            if (!header) {
+            if (!hasVisibleHeader) {
                 m_animFooterY.setEndCallback([startPhase2](bool) { startPhase2(); });
             }
             m_animFooterY.start();
         }
-        if (!header && !bottomBar) {
+        if (!hasVisibleHeader && !hasVisibleFooter) {
             startPhase2();
         }
     }
@@ -248,13 +251,13 @@ namespace beiklive
 
         if (m_animState != AnimState::None && contentBox) {
             contentBox->setTranslationX(m_animOffsetX);
-            if (header) {
+            if (header && header->getVisibility() == brls::Visibility::VISIBLE) {
                 header->setTranslationY(m_animHeaderY);
                 float h = header->getHeight();
                 if (h > 0)
                     header->setAlpha(1.0f - std::abs((float)m_animHeaderY) / h);
             }
-            if (bottomBar) {
+            if (bottomBar && bottomBar->getVisibility() == brls::Visibility::VISIBLE) {
                 bottomBar->setTranslationY(m_animFooterY);
                 float h = bottomBar->getHeight();
                 if (h > 0)

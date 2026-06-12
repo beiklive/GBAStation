@@ -1389,7 +1389,10 @@ SettingPage::SettingPage()
         this->showHeader(true);
         this->getHeader()->setTitle("设置");
         this->showFooter(true);
-
+        this->registerAction("返回", brls::BUTTON_B, [this](brls::View*) { 
+            beiklive::popActivity(this);
+            return true;
+        });
         m_tabframe = new beiklive::TabFrame();
         this->getContentBox()->addView(m_tabframe);
         init();

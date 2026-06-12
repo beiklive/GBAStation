@@ -77,7 +77,10 @@ AboutPage::AboutPage() {
     brls::sync([this]() {
         this->showFooter(true);
         this->showHeader(false);
-
+        this->registerAction("返回", brls::BUTTON_B, [this](brls::View*) { 
+            beiklive::popActivity(this);
+            return true;
+        });
         m_tabFrame = new beiklive::TabFrame();
         this->getContentBox()->addView(m_tabFrame);
 

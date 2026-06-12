@@ -27,7 +27,6 @@ namespace beiklive
         {
             // 此处将 DirListData 处理为 GameEntry 以供游戏使用
             GameEntryInitialize();
-            _setupGame();
         }
     }
 
@@ -48,8 +47,6 @@ namespace beiklive
             // 仍需检查并补全可能为空的路径字段
             _initGameEntryPaths();
             updateGameCount();
-
-            _setupGame();
         }
     }
 
@@ -462,6 +459,12 @@ namespace beiklive
 
         brls::sync([this]()
                    { brls::Application::giveFocus(m_gameView); }); // 游戏视图获得焦点，准备接受输入
+    }
+
+    void GamePage::startGame()
+    {
+        if (!m_gameView)
+            _setupGame();
     }
 
     void GamePage::_tryUpdateLogoFromThumbnail()

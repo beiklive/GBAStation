@@ -18,6 +18,8 @@ namespace beiklive
         GamePage(beiklive::GameEntry gameEntry);
         ~GamePage();
 
+        void startGame();
+
     private:
         void PageInit();
         void GameEntryInitialize();
