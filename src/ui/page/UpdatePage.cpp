@@ -8,6 +8,10 @@
 
 #include <chrono>
 
+#ifdef __SWITCH__
+#include <switch.h>
+#endif
+
 namespace beiklive {
 
 namespace
