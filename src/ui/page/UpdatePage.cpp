@@ -327,13 +327,12 @@ void UpdatePage::startInstall() {
         bool ok = AppUpdater::instance().install();
 
         brls::sync([this, ok]() {
-            m_btnBox->clearViews(true);
 
             if (ok) {
-                m_statusLabel->setText("安装完成，正在重启");
 
 #ifdef __SWITCH__
-               envSetNextLoad("sdmc:/switch/GBAStation.nro", "sdmc:/switch/GBAStation.nro");
+                AppUpdater::instance().finishInstall();
+                envSetNextLoad("sdmc:/switch/GBAStation.nro", "sdmc:/switch/GBAStation.nro");
                 brls::Application::quit();
 #else
                     brls::Application::notify("请手动重启");
@@ -347,10 +346,6 @@ void UpdatePage::startInstall() {
 #endif
                 m_progressBar->setColor(nvgRGB(255, 120, 120));
 
-                auto* closeBtn = _makeActionButton(
-                    "关闭", [this](brls::View*) -> bool { _closeDialog(); return true; });
-                m_btnBox->addView(closeBtn);
-                brls::Application::giveFocus(closeBtn);
             }
         });
     });
