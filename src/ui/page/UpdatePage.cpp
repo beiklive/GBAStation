@@ -26,7 +26,6 @@ struct UpdatePageRefs
     brls::Label* etaLabel = nullptr;
     brls::Label* pctLabel = nullptr;
     brls::Rectangle* progressBar = nullptr;
-    brls::Box* buttonBox = nullptr;
 };
 
 static UpdatePageRefs g_updatePageRefs;
@@ -156,13 +155,7 @@ brls::Box* UpdatePage::buildDialogContent(UpdatePage* self) {
     g_updatePageRefs.etaLabel->setFocusable(false);
     root->addView(g_updatePageRefs.etaLabel);
 
-    g_updatePageRefs.buttonBox = new brls::Box(brls::Axis::ROW);
-    g_updatePageRefs.buttonBox->setWidthPercentage(100.f);
-    g_updatePageRefs.buttonBox->setJustifyContent(brls::JustifyContent::CENTER);
-    g_updatePageRefs.buttonBox->setAlignItems(brls::AlignItems::CENTER);
-    g_updatePageRefs.buttonBox->setMarginTop(8.f);
-    g_updatePageRefs.buttonBox->setFocusable(false);
-    root->addView(g_updatePageRefs.buttonBox);
+
 
     return root;
 }
@@ -176,7 +169,6 @@ UpdatePage::UpdatePage()
     m_etaLabel = g_updatePageRefs.etaLabel;
     m_pctLabel = g_updatePageRefs.pctLabel;
     m_progressBar = g_updatePageRefs.progressBar;
-    m_btnBox = g_updatePageRefs.buttonBox;
     g_updatePageRefs = {};
 
     this->setCancelable(false);
@@ -218,7 +210,6 @@ brls::Button* UpdatePage::_makeActionButton(
 }
 
 void UpdatePage::_resetActionButtons() {
-    m_btnBox->clearViews(true);
 }
 
 void UpdatePage::_updateProgress(
@@ -306,42 +297,20 @@ void UpdatePage::startDownload() {
         }
 
         brls::sync([this, ok]() {
-            m_btnBox->clearViews(true);
             brls::Application::giveFocus(nullptr);
 
             if (!ok) {
                 m_statusLabel->setText("下载失败，请重试");
                 m_progressBar->setColor(nvgRGB(255, 120, 120));
 
-                auto* retryBtn = _makeActionButton(
-                    "重试", [this](brls::View*) -> bool { startDownload(); return true; });
-                auto* closeBtn = _makeActionButton(
-                    "关闭", [this](brls::View*) -> bool { _closeDialog(); return true; });
-
-                m_btnBox->addView(retryBtn);
-                m_btnBox->addView(closeBtn);
-                brls::Application::giveFocus(retryBtn);
                 return;
             }
 
 #ifdef __SWITCH__
-            m_statusLabel->setText("下载完成，是否安装？");
+            m_statusLabel->setText("下载完成，开始安装");
             startInstall();
-            // auto* installBtn = _makeActionButton(
-            //     "安装", [this](brls::View*) -> bool { startInstall(); return true; });
-            // auto* cancelBtn = _makeActionButton(
-            //     "取消", [this](brls::View*) -> bool { _closeDialog(); return true; });
-
-            // m_btnBox->addView(installBtn);
-            // m_btnBox->addView(cancelBtn);
-            // brls::Application::giveFocus(installBtn);
 #else
             m_statusLabel->setText("下载完成，请手动替换程序文件");
-
-            auto* closeBtn = _makeActionButton(
-                "关闭", [this](brls::View*) -> bool { _closeDialog(); return true; });
-            m_btnBox->addView(closeBtn);
-            brls::Application::giveFocus(closeBtn);
 #endif
         });
     });
@@ -349,7 +318,6 @@ void UpdatePage::startDownload() {
 
 void UpdatePage::startInstall() {
     brls::sync([this]() {
-        m_btnBox->clearViews(true);
         m_statusLabel->setText("正在安装...");
         m_etaLabel->setText("");
     });
@@ -358,14 +326,12 @@ void UpdatePage::startInstall() {
         bool ok = AppUpdater::instance().install();
 
         brls::sync([this, ok]() {
-            m_btnBox->clearViews(true);
-
             if (ok) {
-                m_statusLabel->setText("安装完成，正在重启");
+                // m_statusLabel->setText("安装完成，正在重启");
 
 #ifdef __SWITCH__
-               envSetNextLoad("sdmc:/switch/GBAStation.nro", "sdmc:/switch/GBAStation.nro");
-                brls::Application::quit();
+                    envSetNextLoad("sdmc:/switch/GBAStation.nro", "sdmc:/switch/GBAStation.nro");
+                    brls::Application::quit();
 #else
                     brls::Application::notify("请手动重启");
 #endif
@@ -380,7 +346,6 @@ void UpdatePage::startInstall() {
 
                 auto* closeBtn = _makeActionButton(
                     "关闭", [this](brls::View*) -> bool { _closeDialog(); return true; });
-                m_btnBox->addView(closeBtn);
                 brls::Application::giveFocus(closeBtn);
             }
         });
