@@ -223,6 +223,9 @@ namespace beiklive
         this->setBackground(brls::ViewBackground::NONE);
         this->setWidthPercentage(100.f);
         this->setHeightPercentage(100.f);
+
+        this->getContentBox()->setMarginRight(0.f);
+        this->getContentBox()->setMarginLeft(0.f);
     }
 
     void GamePage::GameViewInitialize()

@@ -56,7 +56,6 @@ namespace beiklive
         brls::Animatable m_animOffsetX{0.0f};
         brls::Animatable m_animHeaderY{0.0f};
         brls::Animatable m_animFooterY{0.0f};
-        float m_animMaxOffsetX = 1.0f;
 
         static constexpr int32_t ANIM_DUR_SLIDE     = 200;
         static constexpr int32_t ANIM_DUR_HFADE     = 200;
