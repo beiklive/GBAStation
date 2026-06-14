@@ -4,11 +4,50 @@ namespace beiklive::gba
 {
     namespace
     {
+        struct LocalRtcSaveBuffer
+        {
+            uint32_t sec;
+            uint32_t min;
+            uint32_t hour;
+            uint32_t days;
+            uint32_t daysHi;
+            uint32_t latchedSec;
+            uint32_t latchedMin;
+            uint32_t latchedHour;
+            uint32_t latchedDays;
+            uint32_t latchedDaysHi;
+            uint64_t unixTime;
+        };
+
         constexpr size_t k_rtcUnixTimeOffset = 10 * sizeof(uint32_t); // = 40
 
         bool usePersistentRtcMode()
         {
             return GET_SETTING_KEY_STR("core.mgba_rtc_mode", "persist") != "system";
+        }
+
+        void seedRtcBufferFromSystemTime(LocalRtcSaveBuffer& rtcBuffer, uint64_t nowUnix)
+        {
+            std::time_t raw = static_cast<std::time_t>(nowUnix);
+            std::tm localTm{};
+#ifdef _WIN32
+            localtime_s(&localTm, &raw);
+#else
+            localtime_r(&raw, &localTm);
+#endif
+
+            int yday = localTm.tm_yday;
+            rtcBuffer.sec         = static_cast<uint32_t>(localTm.tm_sec);
+            rtcBuffer.min         = static_cast<uint32_t>(localTm.tm_min);
+            rtcBuffer.hour        = static_cast<uint32_t>(localTm.tm_hour);
+            rtcBuffer.days        = static_cast<uint32_t>(yday & 0xFF);
+            rtcBuffer.daysHi      = static_cast<uint32_t>((yday >> 8) & 0x01);
+            rtcBuffer.latchedSec  = rtcBuffer.sec;
+            rtcBuffer.latchedMin  = rtcBuffer.min;
+            rtcBuffer.latchedHour = rtcBuffer.hour;
+            rtcBuffer.latchedDays = rtcBuffer.days;
+            rtcBuffer.latchedDaysHi = rtcBuffer.daysHi;
+            rtcBuffer.unixTime    = nowUnix;
         }
     }
 
@@ -270,8 +309,19 @@ void CoreMgba::Cleanup()
         auto now = std::chrono::system_clock::now();
         uint64_t nowUnix = std::chrono::duration_cast<std::chrono::seconds>(
             now.time_since_epoch()).count();
-        std::memcpy(static_cast<uint8_t*>(rtcPtr) + k_rtcUnixTimeOffset,
-                    &nowUnix, sizeof(uint64_t));
+
+        if (!persistentRtc && sz >= sizeof(LocalRtcSaveBuffer))
+        {
+            LocalRtcSaveBuffer rtcBuffer{};
+            seedRtcBufferFromSystemTime(rtcBuffer, nowUnix);
+            std::memcpy(rtcPtr, &rtcBuffer, sizeof(rtcBuffer));
+        }
+        else
+        {
+            std::memcpy(static_cast<uint8_t*>(rtcPtr) + k_rtcUnixTimeOffset,
+                        &nowUnix, sizeof(uint64_t));
+        }
+
         brls::Logger::debug("CoreMgba: RTC seeded unixTime={} mode={}",
                             nowUnix, persistentRtc ? "persist" : "system");
         return true;
