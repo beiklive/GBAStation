@@ -125,21 +125,22 @@ namespace beiklive
 
         GameInputManager::instance().handleInput(); // 每帧获取输入
 
-        // 消费退出信号：异步弹出活动，本帧仍继续渲染避免闪烁
-        if (GameSignal::instance().consumeExit()) {
-            brls::sync([this](){ 
-                brls::Application::popActivity(); });
-            // 不提前返回：继续渲染最后一帧，防止画面出现黑帧闪烁
-        }
+        // // 消费退出信号：异步弹出活动，本帧仍继续渲染避免闪烁
+        // if (GameSignal::instance().consumeExit()) {
+        //     brls::sync([this](){ 
+        //         beiklive::popActivity(); 
+        //     });
+        //     // 不提前返回：继续渲染最后一帧，防止画面出现黑帧闪烁
+        // }
 
         // 消费打开菜单信号：异步触发菜单入场，本帧仍继续渲染避免闪烁
         if (GameSignal::instance().consumeOpenMenu()) {
             if (m_gameMenuView) {
                 brls::sync([this](){
                     // 菜单从底部滑入，入场动画（120ms）
-                    AnimationHelper::slideInFromBottom(m_gameMenuView, 60.f, 120);
-                    brls::Application::giveFocus(m_gameMenuView);
-                    m_gameMenuView->onShow();
+                    AnimationHelper::slideInFromBottom(m_gameMenuView, 60.f, 120, [this]() {
+                        m_gameMenuView->onShow();
+                    });
                 });
             }
             // 不提前返回：继续渲染当前游戏帧，防止菜单弹出时出现黑帧闪烁
@@ -790,15 +791,37 @@ namespace beiklive
     }
 
     // ============================================================
+    // _accumulatePlayTime – 按实际运行帧数累计时长
+    // ============================================================
+    void GameView::_accumulatePlayTime(unsigned framesRan, double coreFps)
+    {
+        if (framesRan == 0 || coreFps <= 0.0)
+            return;
+
+        m_playTimeFraction += static_cast<double>(framesRan) / coreFps;
+        if (m_playTimeFraction < 1.0)
+            return;
+
+        int wholeSeconds = static_cast<int>(m_playTimeFraction);
+        m_gameEntry.playTime += wholeSeconds;
+        m_playTimeFraction -= static_cast<double>(wholeSeconds);
+        m_playStartTime = std::chrono::steady_clock::now();
+
+        if (!m_playTimeTempPath.empty()) {
+            std::ofstream f(m_playTimeTempPath, std::ios::trunc);
+            if (f) {
+                f << m_gameEntry.playTime;
+                f.close();
+            }
+        }
+    }
+
+    // ============================================================
     // _savePlayTimeCheckpoint – 计时累加到 playTime 并写入临时文件
     // ============================================================
     void GameView::_savePlayTimeCheckpoint()
     {
         auto now = std::chrono::steady_clock::now();
-        double elapsed = std::chrono::duration<double>(now - m_playStartTime).count();
-        if (elapsed < 0.5) return; // 忽略极短间隔
-
-        m_gameEntry.playTime += static_cast<int>(elapsed);
         m_playStartTime = now;
 
         if (!m_playTimeTempPath.empty()) {
@@ -954,6 +977,7 @@ namespace beiklive
                            m_gameEntry.playTime, coreFps);
 
         m_playStartTime = Clock::now();
+        m_playTimeFraction = 0.0;
         bool wasPaused  = false;
 
         // 初始化 SRAM 检测时间
@@ -1163,6 +1187,9 @@ namespace beiklive
 
             // ---- FPS 统计（慢动作跳过帧时仍计入时间）----
             _updateFpsStats(framesRan, fpsLastTime, fpsCount);
+
+            // ---- 游玩时长统计（按实际执行帧数累计，忽略暂停）----
+            _accumulatePlayTime(framesRan, coreFps);
 
             // ---- SRAM 自动落盘检测 ----
             _checkAndAutoSaveSram();

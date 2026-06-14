@@ -198,6 +198,7 @@ namespace beiklive
         SettingManager->SetDefault("core.mgba_use_bios", ConfigValue(std::string("ON")));
         SettingManager->SetDefault("core.mgba_skip_bios", ConfigValue(std::string("OFF")));
         SettingManager->SetDefault("core.mgba_gb_colors", ConfigValue(std::string("Grayscale")));
+        SettingManager->SetDefault("core.mgba_rtc_mode", ConfigValue(std::string("persist")));
         SettingManager->SetDefault("core.mgba_idle_optimization", ConfigValue(std::string("Remove Known")));
         SettingManager->SetDefault("core.mgba_audio_low_pass_filter", ConfigValue(std::string("disabled")));
 

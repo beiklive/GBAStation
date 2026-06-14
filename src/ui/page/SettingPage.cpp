@@ -599,6 +599,20 @@ brls::View *SettingPage::buildUITab()
         box->addView(makeHint("为 GB/GBC 单色游戏着色，不影响 GBA 游戏"));
     }
 
+    {
+        std::vector<std::string> rtcModes = {"持久化 RTC", "跟随当前系统时间"};
+        std::vector<std::string> rtcModeIds = {"persist", "system"};
+        std::string curRtcMode = cfgGetStr("core.mgba_rtc_mode", "persist");
+        auto* rtcModeCell = new brls::SelectorCell();
+        rtcModeCell->init("RTC 时钟模式", rtcModes, findIndex(rtcModeIds, curRtcMode),
+                          [rtcModeIds](int idx) {
+                              if (idx >= 0 && idx < static_cast<int>(rtcModeIds.size()))
+                                  cfgSetStr("core.mgba_rtc_mode", rtcModeIds[idx]);
+                          });
+        box->addView(rtcModeCell);
+        box->addView(makeHint("持久化 RTC：保留游戏内部时钟进度；跟随当前系统时间：每次启动时按当前设备时间校准"));
+    }
+
     // ── 存档设置 ──────────────────────────────────────────────────────────────
     box->addView(makeHeader("存档设置"));
 

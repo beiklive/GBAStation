@@ -246,7 +246,7 @@ namespace beiklive
         m_gameMenuView = new GameMenuView(m_gameEntry);
         m_gameMenuView->setWidthPercentage(100.f);
         m_gameMenuView->setHeightPercentage(100.f);
-        m_gameMenuView->setFocusable(false);
+        m_gameMenuView->setFocusable(true);
         m_gameMenuView->setPositionType(brls::PositionType::ABSOLUTE);
         m_gameMenuView->setPositionTop(0);
         m_gameMenuView->setPositionLeft(0);
@@ -288,7 +288,9 @@ namespace beiklive
                     int exitSlot = GET_SETTING_KEY_INT("save.autoSaveOnExit", 0);
                     if (exitSlot > 0 && exitSlot <= 10)
                         GameSignal::instance().requestAutoSave(exitSlot - 1);
-                    GameSignal::instance().requestExit();
+                    brls::sync([this]() {
+                        beiklive::popActivity(this);
+                    });
                 });
             });
         });
@@ -397,7 +399,6 @@ namespace beiklive
             });
         }
 
-        this->addView(m_gameMenuView);
     }
 
     void GamePage::RewindSelectorViewInitialize()
@@ -439,7 +440,7 @@ namespace beiklive
             });
         });
 
-        this->addView(m_rewindSelectorView);
+        this->getContentBox()->addView(m_rewindSelectorView);
     }
 
     void GamePage::_setupGame()

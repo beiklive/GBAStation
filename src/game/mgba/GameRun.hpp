@@ -120,5 +120,7 @@ namespace beiklive::gba
 
         bool _saveSram();
         bool _saveRtc();
+
+        std::string _rtcFilePath() const;
     };
 } // namespace beiklive
