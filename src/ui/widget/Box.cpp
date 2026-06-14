@@ -92,7 +92,6 @@ namespace beiklive
             m_animFooterY.reset(bottomBar->getHeight());
 
         // 阶段1：contentBox 从左侧滑入
-        m_animMaxOffsetX = 1280.0f;
         m_animOffsetX.reset(1280.0f);
         m_animOffsetX.addStep(0.0f, ANIM_DUR_SLIDE, tweeny::easing::enumerated::cubicOut);
 
@@ -167,7 +166,6 @@ namespace beiklive
         auto startSlide = [this, onCompletePtr]() {
             // 阶段2：向左滑出屏幕
             m_animOffsetX.reset(0.0f);
-            m_animMaxOffsetX = contentBox->getWidth() + 50.0f;
             m_animOffsetX.addStep(-contentBox->getWidth() - 50.0f, ANIM_DUR_SLIDE,
                                   tweeny::easing::enumerated::cubicIn);
 
@@ -267,8 +265,6 @@ namespace beiklive
 
         if (m_animState != AnimState::None && contentBox) {
             contentBox->setTranslationX(m_animOffsetX);
-            if (m_animMaxOffsetX > 0)
-                contentBox->setAlpha(1.0f - std::abs((float)m_animOffsetX) / m_animMaxOffsetX);
             if (header && header->getVisibility() == brls::Visibility::VISIBLE) {
                 header->setTranslationY(m_animHeaderY);
                 float h = header->getHeight();
