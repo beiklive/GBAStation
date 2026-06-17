@@ -54,6 +54,9 @@ static void openChangelogApplet(const std::string& title, const std::string& con
     bodyLabel->setSingleLine(false);
     bodyLabel->setIsWrapping(true);
     bodyLabel->setFocusable(true);
+
+    HIDE_BRLS_HIGHLIGHT(bodyLabel);
+
     bodyLabel->registerAction("确认", brls::BUTTON_A, [](brls::View*) -> bool {
         brls::Application::popActivity(brls::TransitionAnimation::NONE);
         return true;
@@ -276,8 +279,7 @@ brls::View* AboutPage::_buildUpdateTab() {
     }
 
     std::string changelogText = localChangelog;
-    if (changelogText.empty())
-        changelogText = readTextFile(BK_RES("changelog"), "暂无更新日志");
+    changelogText = readTextFile(BK_RES("changelog"), "暂无更新日志");
 
     // 版本信息卡片
     auto* versionCard = new brls::Box(brls::Axis::COLUMN);

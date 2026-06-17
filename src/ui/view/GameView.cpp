@@ -1363,24 +1363,24 @@ namespace beiklive
 
         // 先用当前核心状态大小做一次轻量兼容性探测，避免把旧核心或损坏的状态
         // 直接喂给新核心，导致反序列化失败后内部状态被部分污染。
-        {
-            std::vector<uint8_t> probe;
-            if (m_core->Serialize(probe) && !probe.empty() &&
-                probe.size() != static_cast<size_t>(got)) {
-                brls::Logger::warning(
-                    "GameView: 存档大小与当前核心不匹配 (slot {} file={} expected={})",
-                    slot, static_cast<size_t>(got), probe.size());
-                m_core->Reset();
-                AudioManager::instance().flushRingBuffer();
-                brls::sync([slot](){
-                    std::string msg = (slot == 0)
-                        ? "读取失败：自动存档与当前核心不兼容，已重置游戏"
-                        : "读取失败：槽位 " + std::to_string(slot) + " 与当前核心不兼容";
-                    brls::Application::notify(msg);
-                });
-                return;
-            }
-        }
+        // {
+        //     std::vector<uint8_t> probe;
+        //     if (m_core->Serialize(probe) && !probe.empty() &&
+        //         probe.size() != static_cast<size_t>(got)) {
+        //         brls::Logger::warning(
+        //             "GameView: 存档大小与当前核心不匹配 (slot {} file={} expected={})",
+        //             slot, static_cast<size_t>(got), probe.size());
+        //         m_core->Reset();
+        //         AudioManager::instance().flushRingBuffer();
+        //         brls::sync([slot](){
+        //             std::string msg = (slot == 0)
+        //                 ? "读取失败：自动存档与当前核心不兼容，已重置游戏"
+        //                 : "读取失败：槽位 " + std::to_string(slot) + " 与当前核心不兼容";
+        //             brls::Application::notify(msg);
+        //         });
+        //         return;
+        //     }
+        // }
 
         if (!m_core->Unserialize(buf)) {
             brls::Logger::warning("GameView: 存档反序列化失败 (slot {})", slot);
