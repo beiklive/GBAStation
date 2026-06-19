@@ -7,6 +7,7 @@
 #include "core/Tools.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 
@@ -35,6 +36,7 @@ namespace beiklive
 
         // 从 GameEntry 加载画面模式（默认 Fit）
         m_screenMode = static_cast<beiklive::ScreenMode>(m_gameEntry.displayMode);
+        m_isNdsGame = m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS);
 
         // 从配置读取倒带相关设置
         m_rewindSaveInterval = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_REWIND_SAVE_INTERVAL, 1);
@@ -47,6 +49,12 @@ namespace beiklive
         if (m_rewindBufferSize > 1800) m_rewindBufferSize = 1800;
         m_rewindEnabled = GET_SETTING_KEY_INT("rewind.enabled", 0) != 0;
         m_rewindShowUI = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_REWIND_SHOW_UI, 0) != 0;
+        if (m_isNdsGame) {
+            m_rewindEnabled = false;
+            m_rewindShowUI = false;
+            GameSignal::instance().requestRewind(false);
+            brls::Logger::info("GameView: NDS 游戏已禁用倒带缓存，避免 melonDS 状态恢复崩溃");
+        }
 
         // 缓存缩略图压缩模式（避免每帧读取配置）
         m_cachedThumbCompression = GET_SETTING_KEY_INT(
@@ -82,6 +90,7 @@ namespace beiklive
         }
 
         GameInputManager::instance().clearEmuFunctionKeys();
+        GameInputManager::instance().setRightStickVirtualButtonsEnabled(true);
         GameInputManager::instance().dropInput();
     }
 
@@ -124,6 +133,7 @@ namespace beiklive
         Box::draw(vg, x, y, width, height, style, ctx);
 
         GameInputManager::instance().handleInput(); // 每帧获取输入
+        _updateNdsPointerFromInput();
 
         // // 消费退出信号：异步弹出活动，本帧仍继续渲染避免闪烁
         // if (GameSignal::instance().consumeExit()) {
@@ -208,6 +218,9 @@ namespace beiklive
                 m_screenMode, x, y, width, height, gw, gh,
                 m_gameEntry.customScale, m_gameEntry.customOffsetX, m_gameEntry.customOffsetY,
                 intScale);
+            m_lastGameRect = rect;
+            m_lastGameTexW = gw;
+            m_lastGameTexH = gh;
 
             m_renderer.drawToScreen(rect.x, rect.y, rect.w, rect.h, windowScale, windowW, windowH);
 
@@ -232,8 +245,117 @@ namespace beiklive
             }
         }
 
+        _drawNdsPointer(vg);
+
         // 绘制状态覆盖层
         _drawOverlays(vg, x, y, width, height);
+    }
+
+    bool GameView::_mapWindowPointToPointer(float px, float py, int16_t& outX, int16_t& outY) const
+    {
+        if (!m_isNdsGame || m_lastGameRect.w <= 0.f || m_lastGameRect.h <= 0.f)
+            return false;
+
+        float nx = (px - m_lastGameRect.x) / m_lastGameRect.w;
+        float ny = (py - m_lastGameRect.y) / m_lastGameRect.h;
+        if (nx < 0.f || nx > 1.f || ny < 0.f || ny > 1.f)
+            return false;
+
+        nx = std::clamp(nx, 0.f, 1.f);
+        ny = std::clamp(ny, 0.f, 1.f);
+        outX = static_cast<int16_t>(std::clamp(nx * 65534.f - 32767.f, -32767.f, 32767.f));
+        outY = static_cast<int16_t>(std::clamp(ny * 65534.f - 32767.f, -32767.f, 32767.f));
+        return true;
+    }
+
+    void GameView::_updateNdsPointerFromInput()
+    {
+        if (!m_isNdsGame)
+            return;
+
+        bool pressed = false;
+        int16_t pointerX = m_ndsPointerX.load(std::memory_order_relaxed);
+        int16_t pointerY = m_ndsPointerY.load(std::memory_order_relaxed);
+
+        for (const auto& touch : brls::Application::getCurrentTouchState()) {
+            if (touch.phase == brls::TouchPhase::NONE || touch.phase == brls::TouchPhase::END)
+                continue;
+            float tx = touch.position.x;
+            float ty = touch.position.y;
+            bool mapped = _mapWindowPointToPointer(tx, ty, pointerX, pointerY);
+            if (!mapped && brls::Application::windowScale > 0.f) {
+                mapped = _mapWindowPointToPointer(
+                    tx / brls::Application::windowScale,
+                    ty / brls::Application::windowScale,
+                    pointerX, pointerY);
+            }
+            if (mapped) {
+                pressed = true;
+                m_ndsCursorNormX = static_cast<float>(pointerX + 32767) / 65534.f;
+                m_ndsCursorNormY = static_cast<float>(pointerY + 32767) / 65534.f;
+                m_ndsCursorVisible = true;
+                break;
+            }
+        }
+
+        if (!pressed) {
+            const auto& mouse = brls::Application::getCurrentMouseState();
+            if (mouse.leftButton != brls::TouchPhase::NONE && mouse.leftButton != brls::TouchPhase::END &&
+                _mapWindowPointToPointer(mouse.position.x, mouse.position.y, pointerX, pointerY)) {
+                pressed = true;
+                m_ndsCursorNormX = static_cast<float>(pointerX + 32767) / 65534.f;
+                m_ndsCursorNormY = static_cast<float>(pointerY + 32767) / 65534.f;
+                m_ndsCursorVisible = true;
+            }
+        }
+
+        auto pad = GameInputManager::instance().getGamepadState(0);
+        m_ndsRightAnalogX.store(pad.rightStickX, std::memory_order_release);
+        m_ndsRightAnalogY.store(static_cast<int16_t>(-pad.rightStickY), std::memory_order_release);
+        constexpr float kDeadZone = 6000.f;
+        float rx = static_cast<float>(pad.rightStickX);
+        float ry = static_cast<float>(pad.rightStickY);
+        if (std::fabs(rx) > kDeadZone || std::fabs(ry) > kDeadZone) {
+            constexpr float kCursorSpeed = 0.025f;
+            m_ndsCursorNormX = std::clamp(m_ndsCursorNormX + (rx / 32767.f) * kCursorSpeed, 0.f, 1.f);
+            m_ndsCursorNormY = std::clamp(m_ndsCursorNormY - (ry / 32767.f) * kCursorSpeed, 0.f, 1.f);
+            pointerX = static_cast<int16_t>(std::clamp(m_ndsCursorNormX * 65534.f - 32767.f, -32767.f, 32767.f));
+            pointerY = static_cast<int16_t>(std::clamp(m_ndsCursorNormY * 65534.f - 32767.f, -32767.f, 32767.f));
+            m_ndsCursorVisible = true;
+        }
+
+        if (m_ndsHotkeyTouchHeld) {
+            pressed = true;
+            m_ndsCursorVisible = true;
+        }
+
+        m_ndsPointerX.store(pointerX, std::memory_order_release);
+        m_ndsPointerY.store(pointerY, std::memory_order_release);
+        m_ndsPointerPressed.store(pressed, std::memory_order_release);
+    }
+
+    void GameView::_drawNdsPointer(NVGcontext* vg)
+    {
+        if (!m_isNdsGame || !m_ndsCursorVisible || m_lastGameRect.w <= 0.f || m_lastGameRect.h <= 0.f)
+            return;
+
+        float cx = m_lastGameRect.x + m_lastGameRect.w * m_ndsCursorNormX;
+        float cy = m_lastGameRect.y + m_lastGameRect.h * m_ndsCursorNormY;
+        bool pressed = m_ndsPointerPressed.load(std::memory_order_acquire);
+        NVGcolor color = pressed ? nvgRGBA(40, 220, 140, 230) : nvgRGBA(255, 255, 255, 210);
+        nvgBeginPath(vg);
+        nvgCircle(vg, cx, cy, pressed ? 9.f : 7.f);
+        nvgStrokeColor(vg, color);
+        nvgStrokeWidth(vg, 2.0f);
+        nvgStroke(vg);
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, cx - 12.f, cy);
+        nvgLineTo(vg, cx + 12.f, cy);
+        nvgMoveTo(vg, cx, cy - 12.f);
+        nvgLineTo(vg, cx, cy + 12.f);
+        nvgStrokeColor(vg, color);
+        nvgStrokeWidth(vg, 1.5f);
+        nvgStroke(vg);
     }
 
     // ============================================================
@@ -303,6 +425,7 @@ namespace beiklive
         bool joystickEnabled  = GET_SETTING_KEY_INT("input.joystick.enabled",  1) != 0;
         bool joystickDiagonal = GET_SETTING_KEY_INT("input.joystick.diagonal", 1) != 0;
         GameInputManager::instance().setDiagonalMode(joystickDiagonal);
+        GameInputManager::instance().setRightStickVirtualButtonsEnabled(!m_isNdsGame);
 
         // ---- 游戏按键绑定（从配置读取多 combo 按键映射）--------------------
         // 按住时持续置位，松开时清除，使用 GameSignal 按键位掩码传入游戏帧。
@@ -331,6 +454,8 @@ namespace beiklive
             { EMU_SELECT, "select", 2  }, // RETRO_DEVICE_ID_JOYPAD_SELECT
         };
         for (const auto& info : gameBtnInfos) {
+            if (m_isNdsGame && (info.emuKey == EMU_R2 || info.emuKey == EMU_R3))
+                continue;
             std::string val = GET_SETTING_KEY_STR(std::string("handle.") + info.cfgSuffix, "none");
             if (val == "none" || val.empty()) continue;
             auto combos = beiklive::tools::parseMultiCombo(val);
@@ -368,6 +493,13 @@ namespace beiklive
                 { EMU_RIGHT_STICK_RIGHT, "rstick_right", 7  }, // RETRO_DEVICE_ID_JOYPAD_RIGHT
             };
             for (const auto& info : stickBtnInfos) {
+                if (m_isNdsGame &&
+                    (info.emuKey == EMU_RIGHT_STICK_UP ||
+                     info.emuKey == EMU_RIGHT_STICK_DOWN ||
+                     info.emuKey == EMU_RIGHT_STICK_LEFT ||
+                     info.emuKey == EMU_RIGHT_STICK_RIGHT)) {
+                    continue;
+                }
                 std::string val = GET_SETTING_KEY_STR(std::string("handle.") + info.cfgSuffix, "none");
                 auto combos = beiklive::tools::parseMultiCombo(val);
                 if (combos.empty()) continue;
@@ -432,6 +564,7 @@ namespace beiklive
         }
 
         // 倒带切换：若启用可视化倒带界面则打开UI，否则执行传统倒带
+        if (!m_isNdsGame)
         {
             std::string val  = GET_SETTING_KEY_STR("handle.rewind", "RSB");
             std::string mode = GET_SETTING_KEY_STR("rewind.mode", "hold");
@@ -465,6 +598,37 @@ namespace beiklive
                             brls::Logger::debug("倒带切换：{}", !cur);
                         });
                 }
+            }
+        }
+
+        if (m_isNdsGame) {
+            std::string val = GET_SETTING_KEY_STR("nds.pointer.touch", "RSB");
+            auto combos = beiklive::tools::parseMultiCombo(val);
+            for (const auto& combo : combos) {
+                GameInputManager::instance().registerEmuFunctionKey(
+                    EmuFunctionKey::EMU_R3, {combo},
+                    [this]() {
+                        m_ndsHotkeyTouchHeld = true;
+                        m_ndsCursorVisible = true;
+                    },
+                    TriggerType::HOLD);
+                GameInputManager::instance().registerEmuFunctionKey(
+                    EmuFunctionKey::EMU_R3, {combo},
+                    [this]() { m_ndsHotkeyTouchHeld = false; },
+                    TriggerType::RELEASE);
+            }
+        }
+
+        if (m_isNdsGame) {
+            std::string val = GET_SETTING_KEY_STR("nds.layout.next", "none");
+            auto combos = beiklive::tools::parseMultiCombo(val);
+            for (const auto& combo : combos) {
+                GameInputManager::instance().registerEmuFunctionKey(
+                    EmuFunctionKey::EMU_R2, {combo},
+                    [this]() {
+                        m_ndsLayoutPulseFrames.store(2, std::memory_order_release);
+                    },
+                    TriggerType::PRESS);
             }
         }
 
@@ -1140,11 +1304,29 @@ namespace beiklive
                 m_turboBon = false;
                 GameSignal::instance().releaseGameButton(0);
             }
+            int ndsLayoutPulse = m_ndsLayoutPulseFrames.load(std::memory_order_acquire);
+            if (m_isNdsGame && ndsLayoutPulse > 0) {
+                GameSignal::instance().pressGameButton(13); // melonDS: Next Screen Layout
+                m_ndsLayoutPulseFrames.store(ndsLayoutPulse - 1, std::memory_order_release);
+            } else if (m_isNdsGame) {
+                GameSignal::instance().releaseGameButton(13);
+            }
             m_core->SetButtonsFromSignal();
+            if (m_isNdsGame) {
+                m_core->SetPointerState(
+                    m_ndsPointerPressed.load(std::memory_order_acquire),
+                    m_ndsPointerX.load(std::memory_order_acquire),
+                    m_ndsPointerY.load(std::memory_order_acquire));
+                m_core->SetAnalogState(
+                    m_ndsRightAnalogX.load(std::memory_order_acquire),
+                    m_ndsRightAnalogY.load(std::memory_order_acquire));
+            }
 
             // ---- 决定本帧行为 ----
             bool ff      = sig.isFastForward();
             bool rew     = sig.isRewinding();
+            if (m_isNdsGame)
+                rew = false;
 
             // 倒带时禁用快进，防止逻辑冲突
             if (rew) ff = false;

@@ -5,6 +5,9 @@
 #include <cstdarg>
 #include <ctime>
 #include <algorithm>
+#include <filesystem>
+#include <fstream>
+#include <limits>
 
 #if defined(_WIN32)
 #  define WIN32_LEAN_AND_MEAN
@@ -75,6 +78,32 @@ void snes9x_retro_cheat_reset(void);
 void snes9x_retro_cheat_set(unsigned, bool, const char*);
 unsigned snes9x_retro_get_region(void);
 
+// ---- melonDS DS（NDS）重命名符号 --------------------------
+void melonds_retro_init(void);
+void melonds_retro_deinit(void);
+unsigned melonds_retro_api_version(void);
+void melonds_retro_get_system_info(struct retro_system_info*);
+void melonds_retro_get_system_av_info(struct retro_system_av_info*);
+void melonds_retro_set_environment(retro_environment_t);
+void melonds_retro_set_video_refresh(retro_video_refresh_t);
+void melonds_retro_set_audio_sample(retro_audio_sample_t);
+void melonds_retro_set_audio_sample_batch(retro_audio_sample_batch_t);
+void melonds_retro_set_input_poll(retro_input_poll_t);
+void melonds_retro_set_input_state(retro_input_state_t);
+void melonds_retro_set_controller_port_device(unsigned, unsigned);
+void melonds_retro_reset(void);
+void melonds_retro_run(void);
+size_t melonds_retro_serialize_size(void);
+bool melonds_retro_serialize(void*, size_t);
+bool melonds_retro_unserialize(const void*, size_t);
+bool melonds_retro_load_game(const struct retro_game_info*);
+void melonds_retro_unload_game(void);
+void* melonds_retro_get_memory_data(unsigned);
+size_t melonds_retro_get_memory_size(unsigned);
+void melonds_retro_cheat_reset(void);
+void melonds_retro_cheat_set(unsigned, bool, const char*);
+unsigned melonds_retro_get_region(void);
+
 } // extern "C"
 
 // ---- 像素格式辅助函数 -------------------------------------------
@@ -97,11 +126,37 @@ static void RETRO_CALLCONV s_coreLogCallback(enum retro_log_level level,
     static const char* const levelStr[] = { "DEBUG", "INFO", "WARN", "ERROR" };
     const char* tag = (level >= RETRO_LOG_DEBUG && level <= RETRO_LOG_ERROR)
                       ? levelStr[level] : "?";
+
+    char message[2048] = {};
     va_list args;
     va_start(args, fmt);
-    fprintf(stderr, "[Core/%s] ", tag);
-    vfprintf(stderr, fmt, args);
+    vsnprintf(message, sizeof(message), fmt, args);
     va_end(args);
+
+    size_t len = std::strlen(message);
+    while (len > 0 && (message[len - 1] == '\n' || message[len - 1] == '\r')) {
+        message[--len] = '\0';
+    }
+
+    fprintf(stderr, "[Core/%s] %s\n", tag, message);
+
+    switch (level) {
+        case RETRO_LOG_DEBUG:
+            brls::Logger::debug("[Core/{}] {}", tag, message);
+            break;
+        case RETRO_LOG_INFO:
+            brls::Logger::info("[Core/{}] {}", tag, message);
+            break;
+        case RETRO_LOG_WARN:
+            brls::Logger::warning("[Core/{}] {}", tag, message);
+            break;
+        case RETRO_LOG_ERROR:
+            brls::Logger::error("[Core/{}] {}", tag, message);
+            break;
+        default:
+            brls::Logger::debug("[Core/{}] {}", tag, message);
+            break;
+    }
 }
 
 // ---- Libretro 性能接口回调 -----------------------
@@ -343,6 +398,32 @@ bool LibretroLoader::load(CoreType coreType)
             fn_get_memory_size        = snes9x_retro_get_memory_size;
             break;
 
+        case CoreType::MelonDS:
+            fn_set_environment        = melonds_retro_set_environment;
+            fn_set_video_refresh      = melonds_retro_set_video_refresh;
+            fn_set_audio_sample       = melonds_retro_set_audio_sample;
+            fn_set_audio_sample_batch = melonds_retro_set_audio_sample_batch;
+            fn_set_input_poll         = melonds_retro_set_input_poll;
+            fn_set_input_state        = melonds_retro_set_input_state;
+            fn_init                   = melonds_retro_init;
+            fn_deinit                 = melonds_retro_deinit;
+            fn_api_version            = melonds_retro_api_version;
+            fn_get_system_info        = melonds_retro_get_system_info;
+            fn_get_system_av_info     = melonds_retro_get_system_av_info;
+            fn_set_controller_port_device = melonds_retro_set_controller_port_device;
+            fn_reset                  = melonds_retro_reset;
+            fn_run                    = melonds_retro_run;
+            fn_serialize_size         = melonds_retro_serialize_size;
+            fn_serialize              = melonds_retro_serialize;
+            fn_unserialize            = melonds_retro_unserialize;
+            fn_load_game              = melonds_retro_load_game;
+            fn_unload_game            = melonds_retro_unload_game;
+            fn_cheat_reset            = melonds_retro_cheat_reset;
+            fn_cheat_set              = melonds_retro_cheat_set;
+            fn_get_memory_data        = melonds_retro_get_memory_data;
+            fn_get_memory_size        = melonds_retro_get_memory_size;
+            break;
+
     }
 
     m_handle = reinterpret_cast<void*>(1); // 哨兵值：符号已绑定
@@ -516,10 +597,32 @@ bool LibretroLoader::loadGame(const std::string& romPath)
     if (!m_coreReady) { brls::Logger::debug("[LibretroLoader] loadGame: core not ready"); return false; }
 
     brls::Logger::debug("[LibretroLoader] loadGame: path={}", romPath);
+    std::vector<uint8_t> content;
+    if (m_coreType == CoreType::MelonDS) {
+        std::error_code ec;
+        auto size = std::filesystem::file_size(romPath, ec);
+        if (ec || size == 0) {
+            brls::Logger::error("[LibretroLoader] loadGame: failed to stat ROM '{}': {}", romPath, ec.message());
+            return false;
+        }
+        if (size > static_cast<std::uintmax_t>(std::numeric_limits<size_t>::max())) {
+            brls::Logger::error("[LibretroLoader] loadGame: ROM too large: {}", romPath);
+            return false;
+        }
+
+        content.resize(static_cast<size_t>(size));
+        std::ifstream file(romPath, std::ios::binary);
+        if (!file || !file.read(reinterpret_cast<char*>(content.data()), static_cast<std::streamsize>(content.size()))) {
+            brls::Logger::error("[LibretroLoader] loadGame: failed to read ROM bytes: {}", romPath);
+            return false;
+        }
+        brls::Logger::debug("[LibretroLoader] loadGame: loaded {} bytes for melonDS", content.size());
+    }
+
     retro_game_info info{};
     info.path = romPath.c_str();
-    info.data = nullptr;
-    info.size = 0;
+    info.data = content.empty() ? nullptr : content.data();
+    info.size = content.size();
     info.meta = nullptr;
 
     if (!fn_load_game(&info)) {
@@ -601,6 +704,19 @@ bool LibretroLoader::getButtonState(unsigned id) const
     return (id <= RETRO_DEVICE_ID_JOYPAD_R3) ? m_buttons[id] : false;
 }
 
+void LibretroLoader::setPointerState(bool pressed, int16_t x, int16_t y)
+{
+    m_pointerPressed = pressed;
+    m_pointerX = x;
+    m_pointerY = y;
+}
+
+void LibretroLoader::setAnalogState(int16_t rightX, int16_t rightY)
+{
+    m_rightAnalogX = rightX;
+    m_rightAnalogY = rightY;
+}
+
 // ============================================================
 // 内存（SRAM）
 // ============================================================
@@ -680,6 +796,7 @@ bool LibretroLoader::s_environmentCallback(unsigned cmd, void* data)
             const retro_message* msg = static_cast<const retro_message*>(data);
             if (msg && msg->msg) {
                 fprintf(stdout, "[Core] %s\n", msg->msg);
+                brls::Logger::info("[Core] {}", msg->msg);
             }
             return true;
         }
@@ -808,9 +925,8 @@ bool LibretroLoader::s_environmentCallback(unsigned cmd, void* data)
             return true;
         }
         case RETRO_ENVIRONMENT_GET_VFS_INTERFACE: {
-            // VFS 不可用，返回 true 但 iface 保持 NULL
-            // 核心会回退到 stdio 文件操作
-            return true;
+            // 未提供 VFS 接口时必须返回 false，让核心回退到 stdio/libretro-common 文件操作。
+            return false;
         }
         case RETRO_ENVIRONMENT_GET_LED_INTERFACE:
             // LED 接口不可用，核心不检查返回值
@@ -824,10 +940,60 @@ bool LibretroLoader::s_environmentCallback(unsigned cmd, void* data)
             const retro_message_ext* msg = static_cast<const retro_message_ext*>(data);
             if (msg && msg->msg) {
                 fprintf(stdout, "[Core] %s\n", msg->msg);
+                switch (msg->level) {
+                    case RETRO_LOG_ERROR:
+                        brls::Logger::error("[Core] {}", msg->msg);
+                        break;
+                    case RETRO_LOG_WARN:
+                        brls::Logger::warning("[Core] {}", msg->msg);
+                        break;
+                    case RETRO_LOG_INFO:
+                        brls::Logger::info("[Core] {}", msg->msg);
+                        break;
+                    case RETRO_LOG_DEBUG:
+                    default:
+                        brls::Logger::debug("[Core] {}", msg->msg);
+                        break;
+                }
             }
             return true;
         }
         case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY:
+            return true;
+        case RETRO_ENVIRONMENT_GET_INPUT_BITMASKS:
+            return true;
+        case RETRO_ENVIRONMENT_GET_LANGUAGE: {
+            unsigned* language = static_cast<unsigned*>(data);
+            if (language) *language = RETRO_LANGUAGE_ENGLISH;
+            return true;
+        }
+        case RETRO_ENVIRONMENT_GET_USERNAME: {
+            const char** username = static_cast<const char**>(data);
+            if (username) *username = "GBAStation";
+            return true;
+        }
+        case RETRO_ENVIRONMENT_GET_TARGET_REFRESH_RATE: {
+            float* rate = static_cast<float*>(data);
+            if (rate) *rate = 60.0f;
+            return true;
+        }
+        case RETRO_ENVIRONMENT_GET_DEVICE_POWER: {
+            retro_device_power* power = static_cast<retro_device_power*>(data);
+            if (power) {
+                power->state = RETRO_POWERSTATE_CHARGING;
+                power->seconds = RETRO_POWERSTATE_NO_ESTIMATE;
+                power->percent = 100;
+            }
+            return true;
+        }
+        case RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK:
+        case RETRO_ENVIRONMENT_SET_PROC_ADDRESS_CALLBACK:
+        case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_UPDATE_DISPLAY_CALLBACK:
+        case RETRO_ENVIRONMENT_SET_NETPACKET_INTERFACE:
+        case RETRO_ENVIRONMENT_SET_CONTENT_INFO_OVERRIDE:
+        case RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS:
+        case RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO:
+        case RETRO_ENVIRONMENT_SET_FASTFORWARDING_OVERRIDE:
             return true;
         case RETRO_ENVIRONMENT_GET_LOG_INTERFACE: {
             retro_log_callback* log = static_cast<retro_log_callback*>(data);
@@ -845,10 +1011,18 @@ void LibretroLoader::s_videoRefreshCallback(const void* data,
 {
     if (!s_current || !data) return;
 
-    // 防御性检查：合理范围
-    if (width < 16 || width > 720 || height < 16 || height > 576)
+    unsigned maxWidth = s_current->m_avInfo.geometry.max_width;
+    unsigned maxHeight = s_current->m_avInfo.geometry.max_height;
+    if (maxWidth < 16) maxWidth = 2048;
+    if (maxHeight < 16) maxHeight = 2048;
+
+    // melonDS hybrid layouts can be wider than 720px (up to 1030px in software mode).
+    if (width < 16 || width > maxWidth || height < 16 || height > maxHeight)
         return;
-    if (pitch < width * 2)
+
+    const size_t bytesPerPixel =
+        s_current->m_pixelFormat == RETRO_PIXEL_FORMAT_XRGB8888 ? 4u : 2u;
+    if (pitch < static_cast<size_t>(width) * bytesPerPixel)
         return;
 
     std::lock_guard<std::mutex> lk(s_current->m_videoMutex);
@@ -945,10 +1119,37 @@ void LibretroLoader::s_inputPollCallback()
 }
 
 int16_t LibretroLoader::s_inputStateCallback(unsigned port, unsigned device,
-                                               unsigned /*index*/, unsigned id)
+                                               unsigned index, unsigned id)
 {
     if (!s_current || port != 0) return 0;
-    if (device != RETRO_DEVICE_JOYPAD && device != RETRO_DEVICE_ANALOG) return 0;
+    if (device == RETRO_DEVICE_POINTER) {
+        switch (id) {
+            case RETRO_DEVICE_ID_POINTER_PRESSED:
+                return s_current->m_pointerPressed ? 1 : 0;
+            case RETRO_DEVICE_ID_POINTER_X:
+                return s_current->m_pointerX;
+            case RETRO_DEVICE_ID_POINTER_Y:
+                return s_current->m_pointerY;
+            default:
+                return 0;
+        }
+    }
+    if (device == RETRO_DEVICE_JOYPAD && id == RETRO_DEVICE_ID_JOYPAD_MASK) {
+        int16_t mask = 0;
+        for (unsigned i = 0; i <= RETRO_DEVICE_ID_JOYPAD_R3; ++i) {
+            if (s_current->m_buttons[i])
+                mask |= static_cast<int16_t>(1u << i);
+        }
+        return mask;
+    }
+    if (device == RETRO_DEVICE_ANALOG) {
+        if (index == RETRO_DEVICE_INDEX_ANALOG_RIGHT) {
+            if (id == RETRO_DEVICE_ID_ANALOG_X) return s_current->m_rightAnalogX;
+            if (id == RETRO_DEVICE_ID_ANALOG_Y) return s_current->m_rightAnalogY;
+        }
+        return 0;
+    }
+    if (device != RETRO_DEVICE_JOYPAD) return 0;
     if (id > RETRO_DEVICE_ID_JOYPAD_R3) return 0;
     return s_current->m_buttons[id] ? 1 : 0;
 }

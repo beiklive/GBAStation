@@ -158,6 +158,7 @@ namespace beiklive
         SettingManager->SetDefault(KEY_DISPLAY_OVERLAY_GB_PATH, ConfigValue(std::string("")));
         SettingManager->SetDefault(KEY_DISPLAY_OVERLAY_NES_PATH, ConfigValue(std::string("")));
         SettingManager->SetDefault(KEY_DISPLAY_OVERLAY_SNES_PATH, ConfigValue(std::string("")));
+        SettingManager->SetDefault(KEY_DISPLAY_OVERLAY_NDS_PATH, ConfigValue(std::string("")));
 
         // 着色器设置
         SettingManager->SetDefault(KEY_DISPLAY_SHADER_ENABLED, ConfigValue(0));
@@ -167,6 +168,7 @@ namespace beiklive
         SettingManager->SetDefault(KEY_DISPLAY_SHADER_GB_PATH, ConfigValue(std::string("")));
         SettingManager->SetDefault(KEY_DISPLAY_SHADER_NES_PATH, ConfigValue(std::string("")));
         SettingManager->SetDefault(KEY_DISPLAY_SHADER_SNES_PATH, ConfigValue(std::string("")));
+        SettingManager->SetDefault(KEY_DISPLAY_SHADER_NDS_PATH, ConfigValue(std::string("")));
 
         // 调试设置
         SettingManager->SetDefault(KEY_DEBUG_LOG_LEVEL, ConfigValue(std::string("info")));
@@ -201,6 +203,17 @@ namespace beiklive
         SettingManager->SetDefault("core.mgba_rtc_mode", ConfigValue(std::string("persist")));
         SettingManager->SetDefault("core.mgba_idle_optimization", ConfigValue(std::string("Remove Known")));
         SettingManager->SetDefault("core.mgba_audio_low_pass_filter", ConfigValue(std::string("disabled")));
+        SettingManager->SetDefault("core.melonds_console_mode", ConfigValue(std::string("ds")));
+        SettingManager->SetDefault("core.melonds_sysfile_mode", ConfigValue(std::string("builtin")));
+        SettingManager->SetDefault("core.melonds_boot_mode", ConfigValue(std::string("direct")));
+        SettingManager->SetDefault("core.melonds_touch_mode", ConfigValue(std::string("auto")));
+        SettingManager->SetDefault("core.melonds_show_cursor", ConfigValue(std::string("timeout")));
+        SettingManager->SetDefault("core.melonds_cursor_timeout", ConfigValue(std::string("3")));
+        SettingManager->SetDefault("core.melonds_screen_layout1", ConfigValue(std::string("top-bottom")));
+        SettingManager->SetDefault("core.melonds_screen_layout2", ConfigValue(std::string("left-right")));
+        SettingManager->SetDefault("core.melonds_number_of_screen_layouts", ConfigValue(std::string("2")));
+        SettingManager->SetDefault("core.melonds_screen_gap", ConfigValue(std::string("0")));
+        SettingManager->SetDefault("core.melonds_render_mode", ConfigValue(std::string("software")));
 
         // BIOS 路径设置
         SettingManager->SetDefault("bios.path", ConfigValue(beiklive::path::biosPath()));
@@ -256,16 +269,16 @@ namespace beiklive
         SettingManager->SetDefault("handle.select", ConfigValue(std::string("BACK")));
 
         // 按键绑定默认值（左摇杆方向键）
-        SettingManager->SetDefault("handle.lstick_up", ConfigValue(std::string("LEFTSTICKUP")));
-        SettingManager->SetDefault("handle.lstick_down", ConfigValue(std::string("LEFTSTICKDOWN")));
-        SettingManager->SetDefault("handle.lstick_left", ConfigValue(std::string("LEFTSTICKLEFT")));
-        SettingManager->SetDefault("handle.lstick_right", ConfigValue(std::string("LEFTSTICKRIGHT")));
+        SettingManager->SetDefault("handle.lstick_up", ConfigValue(std::string("PAD_LEFTSTICKUP")));
+        SettingManager->SetDefault("handle.lstick_down", ConfigValue(std::string("PAD_LEFTSTICKDOWN")));
+        SettingManager->SetDefault("handle.lstick_left", ConfigValue(std::string("PAD_LEFTSTICKLEFT")));
+        SettingManager->SetDefault("handle.lstick_right", ConfigValue(std::string("PAD_LEFTSTICKRIGHT")));
 
         // 按键绑定默认值（右摇杆方向键）
-        SettingManager->SetDefault("handle.rstick_up", ConfigValue(std::string("RIGHTSTICKUP")));
-        SettingManager->SetDefault("handle.rstick_down", ConfigValue(std::string("RIGHTSTICKDOWN")));
-        SettingManager->SetDefault("handle.rstick_left", ConfigValue(std::string("RIGHTSTICKLEFT")));
-        SettingManager->SetDefault("handle.rstick_right", ConfigValue(std::string("RIGHTSTICKRIGHT")));
+        SettingManager->SetDefault("handle.rstick_up", ConfigValue(std::string("PAD_RIGHTSTICKUP")));
+        SettingManager->SetDefault("handle.rstick_down", ConfigValue(std::string("PAD_RIGHTSTICKDOWN")));
+        SettingManager->SetDefault("handle.rstick_left", ConfigValue(std::string("PAD_RIGHTSTICKLEFT")));
+        SettingManager->SetDefault("handle.rstick_right", ConfigValue(std::string("PAD_RIGHTSTICKRIGHT")));
 
         // 按键绑定默认值（功能热键）
         SettingManager->SetDefault("handle.fastforward", ConfigValue(std::string("LSB")));
@@ -276,6 +289,8 @@ namespace beiklive
         SettingManager->SetDefault("hotkey.mute.pad", ConfigValue(std::string("none")));
         SettingManager->SetDefault("hotkey.pause.pad", ConfigValue(std::string("none")));
         SettingManager->SetDefault("hotkey.screenshot.pad", ConfigValue(std::string("none")));
+        SettingManager->SetDefault("nds.pointer.touch", ConfigValue(std::string("RSB")));
+        SettingManager->SetDefault("nds.layout.next", ConfigValue(std::string("none")));
 
         // 摇杆输入设置
         SettingManager->SetDefault("input.joystick.enabled", ConfigValue(1));
@@ -552,6 +567,8 @@ namespace beiklive
             return 240;
         case beiklive::enums::EmuPlatform::EmuSNES:
             return 224;
+        case beiklive::enums::EmuPlatform::EmuNDS:
+            return 384;
         default:
             break;
         }
@@ -572,6 +589,8 @@ namespace beiklive
             return 256;
         case beiklive::enums::EmuPlatform::EmuSNES:
             return 256;
+        case beiklive::enums::EmuPlatform::EmuNDS:
+            return 256;
         default:
             break;
         }
@@ -591,6 +610,8 @@ namespace beiklive
         case beiklive::enums::EmuPlatform::EmuNES:
             return BK_RES("img/LogoLayer/GBA_LOGOLAY.png");
         case beiklive::enums::EmuPlatform::EmuSNES:
+            return BK_RES("img/LogoLayer/GBA_LOGOLAY.png");
+        case beiklive::enums::EmuPlatform::EmuNDS:
             return BK_RES("img/LogoLayer/GBA_LOGOLAY.png");
         default:
             return BK_RES("img/LogoLayer/GBA_LOGOLAY.png");

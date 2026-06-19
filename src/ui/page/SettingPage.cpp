@@ -613,6 +613,91 @@ brls::View *SettingPage::buildUITab()
         box->addView(makeHint("持久化 RTC：保留游戏内部时钟进度；跟随当前系统时间：每次启动时按当前设备时间校准"));
     }
 
+    // ── melonDS 核心设置 ─────────────────────────────────────────────────────
+    box->addView(makeHeader("melonDS 核心设置"));
+
+    {
+        std::vector<std::string> labels = {"DS", "DSi"};
+        std::vector<std::string> ids = {"ds", "dsi"};
+        std::string cur = cfgGetStr("core.melonds_console_mode", "ds");
+        auto* cell = new brls::SelectorCell();
+        cell->init("主机模式", labels, findIndex(ids, cur),
+                   [ids](int idx) { if (idx >= 0 && idx < (int)ids.size()) cfgSetStr("core.melonds_console_mode", ids[idx]); });
+        box->addView(cell);
+    }
+
+    {
+        std::vector<std::string> labels = {"内置固件", "原生 BIOS/固件"};
+        std::vector<std::string> ids = {"builtin", "native"};
+        std::string cur = cfgGetStr("core.melonds_sysfile_mode", "builtin");
+        auto* cell = new brls::SelectorCell();
+        cell->init("系统文件模式", labels, findIndex(ids, cur),
+                   [ids](int idx) { if (idx >= 0 && idx < (int)ids.size()) cfgSetStr("core.melonds_sysfile_mode", ids[idx]); });
+        box->addView(cell);
+        box->addView(makeHint("原生模式需要 BIOS/固件文件，默认使用内置固件直接启动游戏"));
+    }
+
+    {
+        std::vector<std::string> labels = {"直接启动游戏", "进入原生菜单"};
+        std::vector<std::string> ids = {"direct", "native"};
+        std::string cur = cfgGetStr("core.melonds_boot_mode", "direct");
+        auto* cell = new brls::SelectorCell();
+        cell->init("启动模式", labels, findIndex(ids, cur),
+                   [ids](int idx) { if (idx >= 0 && idx < (int)ids.size()) cfgSetStr("core.melonds_boot_mode", ids[idx]); });
+        box->addView(cell);
+    }
+
+    {
+        std::vector<std::string> labels = {"自动", "指针/触摸屏", "右摇杆"};
+        std::vector<std::string> ids = {"auto", "touch", "joystick"};
+        std::string cur = cfgGetStr("core.melonds_touch_mode", "auto");
+        auto* cell = new brls::SelectorCell();
+        cell->init("触摸模式", labels, findIndex(ids, cur),
+                   [ids](int idx) { if (idx >= 0 && idx < (int)ids.size()) cfgSetStr("core.melonds_touch_mode", ids[idx]); });
+        box->addView(cell);
+    }
+
+    {
+        std::vector<std::string> labels = {"不显示", "触摸时显示", "超时隐藏", "总是显示"};
+        std::vector<std::string> ids = {"disabled", "touching", "timeout", "always"};
+        std::string cur = cfgGetStr("core.melonds_show_cursor", "timeout");
+        auto* cell = new brls::SelectorCell();
+        cell->init("触摸光标", labels, findIndex(ids, cur, 2),
+                   [ids](int idx) { if (idx >= 0 && idx < (int)ids.size()) cfgSetStr("core.melonds_show_cursor", ids[idx]); });
+        box->addView(cell);
+    }
+
+    {
+        std::vector<std::string> labels = {"上下屏", "下上屏", "左右屏", "右左屏", "仅上屏", "仅下屏", "混合上屏优先", "混合下屏优先"};
+        std::vector<std::string> ids = {"top-bottom", "bottom-top", "left-right", "right-left", "top", "bottom", "hybrid-top", "hybrid-bottom"};
+        std::string cur = cfgGetStr("core.melonds_screen_layout1", "top-bottom");
+        auto* cell = new brls::SelectorCell();
+        cell->init("屏幕布局", labels, findIndex(ids, cur),
+                   [ids](int idx) { if (idx >= 0 && idx < (int)ids.size()) cfgSetStr("core.melonds_screen_layout1", ids[idx]); });
+        box->addView(cell);
+    }
+
+    {
+        std::vector<std::string> labels = {"0px", "4px", "8px", "16px", "24px", "32px"};
+        std::vector<std::string> ids = {"0", "4", "8", "16", "24", "32"};
+        std::string cur = cfgGetStr("core.melonds_screen_gap", "0");
+        auto* cell = new brls::SelectorCell();
+        cell->init("屏幕间距", labels, findIndex(ids, cur),
+                   [ids](int idx) { if (idx >= 0 && idx < (int)ids.size()) cfgSetStr("core.melonds_screen_gap", ids[idx]); });
+        box->addView(cell);
+    }
+
+    {
+        std::vector<std::string> labels = {"软件渲染", "OpenGL"};
+        std::vector<std::string> ids = {"software", "opengl"};
+        std::string cur = cfgGetStr("core.melonds_render_mode", "software");
+        auto* cell = new brls::SelectorCell();
+        cell->init("渲染模式", labels, findIndex(ids, cur),
+                   [ids](int idx) { if (idx >= 0 && idx < (int)ids.size()) cfgSetStr("core.melonds_render_mode", ids[idx]); });
+        box->addView(cell);
+        box->addView(makeHint("Switch 当前以软件渲染为稳妥默认值；若 OpenGL 不可用请保持软件渲染"));
+    }
+
     // ── 存档设置 ──────────────────────────────────────────────────────────────
     box->addView(makeHeader("存档设置"));
 
@@ -1142,6 +1227,8 @@ static const HotkeyEntry k_hotkeys[] = {
     {"hotkey.menu.pad",       "打开菜单"},
     {"hotkey.mute.pad",       "静音"},
     {"hotkey.pause.pad",      "暂停"},
+    {"nds.pointer.touch",     "NDS 触摸按住"},
+    {"nds.layout.next",       "NDS 下一屏幕布局"},
     // {"hotkey.screenshot.pad", "截图"},
 };
 static constexpr int k_hotkeyCount = static_cast<int>(sizeof(k_hotkeys) / sizeof(k_hotkeys[0]));

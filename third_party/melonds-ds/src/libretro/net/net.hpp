@@ -18,17 +18,24 @@
 
 #include <memory>
 #include <optional>
+#include <vector>
 
+#include <NDS.h>
+
+#ifdef HAVE_NETWORKING
 #ifdef HAVE_NETWORKING_DIRECT_MODE
 #include <Net_PCap.h>
 #endif
 
 #include "Net.h"
+#endif
+
 #include "config/types.hpp"
 #include "std/span.hpp"
 
 namespace melonDS
 {
+    struct AdapterData;
     class NetDriver;
 }
 
@@ -48,14 +55,18 @@ namespace MelonDsDs
 
         int SendPacket(std::span<std::byte> data) noexcept;
         int RecvPacket(melonDS::u8* data) noexcept;
+#ifdef HAVE_NETWORKING
         [[nodiscard]] std::vector<melonDS::AdapterData> GetAdapters() const noexcept;
+#endif
         void Apply(const CoreConfig& config) noexcept;
         [[nodiscard]] NetworkMode GetNetworkMode() const noexcept;
     private:
+#ifdef HAVE_NETWORKING
         melonDS::Net _net;
 #ifdef HAVE_NETWORKING_DIRECT_MODE
         std::optional<melonDS::LibPCap> _pcap;
         std::optional<melonDS::AdapterData> _adapter;
+#endif
 #endif
     };
 }

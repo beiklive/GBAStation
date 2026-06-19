@@ -46,6 +46,7 @@ out/
 build
 build_*
 build-*
+.tmp_switch/
 
 AGENTS.md
 .DS_Store

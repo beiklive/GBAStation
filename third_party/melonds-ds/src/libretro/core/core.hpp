@@ -129,7 +129,9 @@ namespace MelonDsDs {
         [[gnu::cold]] void RenderErrorScreen() noexcept;
         [[gnu::cold]] void InitContent(unsigned type, std::span<const retro_game_info> game);
 
+#ifdef HAVE_NETWORKING
         const melonDS::AdapterData* SelectNetworkInterface(std::span<const melonDS::AdapterData> adapters) const noexcept;
+#endif
 
         retro::task::TaskSpec PowerStatusUpdateTask() noexcept;
         retro::task::TaskSpec OnScreenDisplayTask() noexcept;

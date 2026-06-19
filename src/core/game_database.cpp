@@ -203,6 +203,7 @@ namespace beiklive
                 (int)beiklive::enums::EmuPlatform::EmuGB,
                 (int)beiklive::enums::EmuPlatform::EmuNES,
                 (int)beiklive::enums::EmuPlatform::EmuSNES,
+                (int)beiklive::enums::EmuPlatform::EmuNDS,
             };
             std::error_code ec;
             for (int p : platforms)
@@ -220,6 +221,7 @@ namespace beiklive
         case (int)beiklive::enums::EmuPlatform::EmuGB:  return beiklive::path::DATA_BASE_FILE_GB;
         case (int)beiklive::enums::EmuPlatform::EmuNES: return beiklive::path::DATA_BASE_FILE_NES;
         case (int)beiklive::enums::EmuPlatform::EmuSNES: return beiklive::path::DATA_BASE_FILE_SNES;
+        case (int)beiklive::enums::EmuPlatform::EmuNDS: return beiklive::path::DATA_BASE_FILE_NDS;
         default: return beiklive::path::DATA_BASE_FILE;
         }
     }
@@ -236,6 +238,7 @@ namespace beiklive
             (int)beiklive::enums::EmuPlatform::EmuGB,
             (int)beiklive::enums::EmuPlatform::EmuNES,
             (int)beiklive::enums::EmuPlatform::EmuSNES,
+            (int)beiklive::enums::EmuPlatform::EmuNDS,
         };
 
         for (int platform : platforms)
@@ -266,6 +269,35 @@ namespace beiklive
             }
         }
 
+        {
+            std::string legacyPath = dir + beiklive::path::SPLIT_CHAR + beiklive::path::DATA_BASE_FILE;
+            try
+            {
+                std::ifstream file(legacyPath);
+                if (file.is_open())
+                {
+                    nlohmann::json j;
+                    file >> j;
+                    if (j.is_array())
+                    {
+                        for (const auto &item : j)
+                        {
+                            GameEntry entry = item.get<GameEntry>();
+                            doUpsertByPath(entry);
+                        }
+                    }
+                }
+            }
+            catch (const std::exception &e)
+            {
+                brls::Logger::warning("GameDatabase: 加载兼容主库 {} 失败: {}", legacyPath, e.what());
+            }
+            catch (...)
+            {
+                brls::Logger::warning("GameDatabase: 加载兼容主库 {} 时发生未知异常", legacyPath);
+            }
+        }
+
         dirty_ = false;
         return true;
     }
@@ -293,6 +325,7 @@ namespace beiklive
             (int)beiklive::enums::EmuPlatform::EmuGB,
             (int)beiklive::enums::EmuPlatform::EmuNES,
             (int)beiklive::enums::EmuPlatform::EmuSNES,
+            (int)beiklive::enums::EmuPlatform::EmuNDS,
         };
 
         bool allOk = true;

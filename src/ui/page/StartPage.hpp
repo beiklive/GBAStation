@@ -31,6 +31,12 @@ namespace beiklive
         void _openSettings();
         void _openAbout();
         void _openDataManagement();
+        void _launchGameWithLoading(const beiklive::GameEntry& entry,
+                                    beiklive::Box* source,
+                                    const std::string& title);
+        void _launchGameWithLoading(const beiklive::DirListData& entry,
+                                    beiklive::Box* source,
+                                    const std::string& title);
 
         /// 显示游戏选项侧边栏
         void _showGameOptionsPanel(const beiklive::GameEntry& entry);

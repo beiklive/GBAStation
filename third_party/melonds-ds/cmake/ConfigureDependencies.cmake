@@ -1,10 +1,12 @@
 include(cmake/libretro-common.cmake)
-include(cmake/libslirp.cmake)
+if (HAVE_NETWORKING)
+    include(cmake/libslirp.cmake)
+endif()
 
 if (HAVE_OPENGL OR HAVE_OPENGLES)
     # Ensure that melonDS can find libretro's headers...
     target_include_directories(core SYSTEM PRIVATE "${libretro-common_SOURCE_DIR}/include")
-    target_include_directories(core PRIVATE "${CMAKE_SOURCE_DIR}/src/libretro")
+    target_include_directories(core PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/libretro")
 
     if (HAVE_OPENGL)
         target_include_directories(core SYSTEM PRIVATE "${OPENGL_INCLUDE_DIR}")

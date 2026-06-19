@@ -21,6 +21,7 @@ enum class PlatformFilter : int
     GB  = (int)beiklive::enums::EmuPlatform::EmuGB,
     NES = (int)beiklive::enums::EmuPlatform::EmuNES,
     SNES = (int)beiklive::enums::EmuPlatform::EmuSNES,
+    NDS = (int)beiklive::enums::EmuPlatform::EmuNDS,
     FAVORITE = 999,
 };
 

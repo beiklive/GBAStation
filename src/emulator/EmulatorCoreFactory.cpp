@@ -1,5 +1,6 @@
 #include "IEmulatorCore.hpp"
 #include "emulator/CoreFceumm.hpp"
+#include "emulator/CoreMelonDS.hpp"
 #include "emulator/CoreSnes9x.hpp"
 #include "game/mgba/GameRun.hpp"
 
@@ -17,6 +18,8 @@ IEmulatorCore* CreateEmulatorCore(int platform)
         return new beiklive::fceumm::CoreFceumm();
     case beiklive::enums::EmuPlatform::EmuSNES:
         return new beiklive::snes9x::CoreSnes9x();
+    case beiklive::enums::EmuPlatform::EmuNDS:
+        return new beiklive::melonds::CoreMelonDS();
     default:
         return nullptr;
     }

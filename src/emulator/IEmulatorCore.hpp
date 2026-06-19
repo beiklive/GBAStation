@@ -21,6 +21,8 @@ struct IEmulatorCore {
 
     virtual void SetButtonState(unsigned id, bool pressed) = 0;
     virtual void SetButtonsFromSignal() = 0;
+    virtual void SetPointerState(bool pressed, int16_t x, int16_t y) {}
+    virtual void SetAnalogState(int16_t rightX, int16_t rightY) {}
 
     virtual unsigned GameWidth()  const = 0;
     virtual unsigned GameHeight() const = 0;

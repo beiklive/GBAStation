@@ -50,7 +50,9 @@
 #include <SPI_Firmware.h>
 #include <FreeBIOS.h>
 #include <file/config_file.h>
+#ifdef HAVE_NETWORKING_DIRECT_MODE
 #include <Net_PCap.h>
+#endif
 
 #include "config/constants.hpp"
 #include "config/definitions.hpp"
@@ -63,7 +65,9 @@
 #include "input/input.hpp"
 #include "libretro.hpp"
 #include "microphone.hpp"
+#ifdef HAVE_NETWORKING_DIRECT_MODE
 #include "net/pcap.hpp"
+#endif
 #include "retro/dirent.hpp"
 #include "screenlayout.hpp"
 #include "std/span.hpp"

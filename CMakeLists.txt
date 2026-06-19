@@ -216,7 +216,24 @@ target_include_directories(${PROJECT_NAME} PRIVATE ${APP_PLATFORM_INCLUDE})
 target_compile_options(${PROJECT_NAME} PRIVATE -ffunction-sections -fdata-sections ${APP_PLATFORM_OPTION})
 target_link_libraries(${PROJECT_NAME} PRIVATE borealis ${APP_PLATFORM_LIB})
 if(NOT PLATFORM_ANDROID)
-    target_link_libraries(${PROJECT_NAME} PRIVATE curl)
+    if (WIN32)
+        get_filename_component(MINGW_BIN_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
+        get_filename_component(MINGW_PREFIX_DIR "${MINGW_BIN_DIR}" DIRECTORY)
+        find_library(CURL_IMPORT_LIB
+            NAMES libcurl.dll.a
+            PATHS "${MINGW_PREFIX_DIR}/lib" "$ENV{MINGW_PREFIX}/lib"
+            NO_DEFAULT_PATH
+        )
+        if (CURL_IMPORT_LIB)
+            message(STATUS "Linking curl import library: ${CURL_IMPORT_LIB}")
+            target_link_libraries(${PROJECT_NAME} PRIVATE ${CURL_IMPORT_LIB})
+        else()
+            message(STATUS "curl import library not found; falling back to -lcurl")
+            target_link_libraries(${PROJECT_NAME} PRIVATE curl)
+        endif()
+    else()
+        target_link_libraries(${PROJECT_NAME} PRIVATE curl)
+    endif()
 endif()
 
 # ============================================================
@@ -225,6 +242,7 @@ endif()
 # mGBA          – GBA / GBC / GB      (原始 retro_* 符号)
 # FCEUmm        – NES / Famicom       (fceumm_retro_*)
 # Snes9x        – SNES / SFC          (snes9x_retro_*)
+# melonDS DS    – NDS                 (melonds_retro_*)
 #
 # 桌面平台: mgba_libretro 作为共享库供 dlopen 加载，
 #           其余核心静态链接。
@@ -237,6 +255,17 @@ endif()
 if (TARGET snes9x_core)
     target_link_libraries(${PROJECT_NAME} PRIVATE snes9x_core)
     message(STATUS "Linking Snes9x (SNES) core statically")
+endif()
+if (TARGET melondsds_libretro)
+    if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.24" AND TARGET core
+        AND CMAKE_CXX_LINK_GROUP_USING_RESCAN_SUPPORTED)
+        target_link_libraries(${PROJECT_NAME} PRIVATE
+            "$<LINK_GROUP:RESCAN,melondsds_libretro,core>"
+        )
+    else()
+        target_link_libraries(${PROJECT_NAME} PRIVATE melondsds_libretro core melondsds_libretro)
+    endif()
+    message(STATUS "Linking melonDS DS (NDS) core statically")
 endif()
 
 if (PLATFORM_SWITCH)

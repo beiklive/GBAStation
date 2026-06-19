@@ -7,6 +7,7 @@ set(BOREALIS_LIBRARY   ${CMAKE_CURRENT_SOURCE_DIR}/borealis/library)
 set(MGBA_PATH          ${CMAKE_CURRENT_SOURCE_DIR}/mgba)
 set(FCEUMM_PATH        ${CMAKE_CURRENT_SOURCE_DIR}/libretro-fceumm)
 set(SNES9X_PATH        ${CMAKE_CURRENT_SOURCE_DIR}/snes9x)
+set(MELONDS_PATH       ${CMAKE_CURRENT_SOURCE_DIR}/melonds-ds)
 
 # =========================================================
 # borealis UI 框架
@@ -303,3 +304,42 @@ set_target_properties(snes9x_core PROPERTIES
     CXX_STANDARD 14
     C_STANDARD 11
 )
+
+# =========================================================
+# melonDS DS (NDS) 核心 – 使用上游 CMake 构建静态 libretro 目标
+# =========================================================
+if (EXISTS ${MELONDS_PATH}/CMakeLists.txt)
+    set(BUILD_AS_SHARED_LIBRARY OFF CACHE BOOL "" FORCE)
+    set(ENABLE_OPENGL OFF CACHE BOOL "" FORCE)
+    set(ENABLE_NETWORKING OFF CACHE BOOL "" FORCE)
+    set(ENABLE_JIT OFF CACHE BOOL "" FORCE)
+    set(ENABLE_LTO_RELEASE OFF CACHE BOOL "" FORCE)
+    set(ENABLE_LTO OFF CACHE BOOL "" FORCE)
+    set(ENABLE_THREADED_RENDERER ON CACHE BOOL "" FORCE)
+    set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+    if (PLATFORM_SWITCH)
+        set(_melonds_saved_c_flags "${CMAKE_C_FLAGS}")
+        set(_melonds_saved_cxx_flags "${CMAKE_CXX_FLAGS}")
+        string(REPLACE "-I/opt/devkitpro/portlibs/switch/include" "" CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
+        string(REPLACE "-I/opt/devkitpro/portlibs/switch/include" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+    endif()
+    add_subdirectory(${MELONDS_PATH})
+    if (PLATFORM_SWITCH)
+        set(CMAKE_C_FLAGS "${_melonds_saved_c_flags}")
+        set(CMAKE_CXX_FLAGS "${_melonds_saved_cxx_flags}")
+    endif()
+
+    if (TARGET melondsds_libretro)
+        if (PLATFORM_SWITCH)
+            set(_melonds_pic ON)
+        else()
+            set(_melonds_pic OFF)
+        endif()
+        set_target_properties(melondsds_libretro PROPERTIES
+            POSITION_INDEPENDENT_CODE ${_melonds_pic}
+            CXX_STANDARD 17
+        )
+        apply_retro_symbol_rename(melondsds_libretro melonds)
+        apply_data_symbol_rename(melondsds_libretro melonds)
+    endif()
+endif()

@@ -348,13 +348,16 @@ namespace beiklive
                      STATE_PAD_LEFT_STICK_UP,
                      STATE_PAD_LEFT_STICK_DOWN);
 
-        processStick(rightXAxis, rightYAxis,
-                     STATE_PAD_RIGHT_STICK_X,
-                     STATE_PAD_RIGHT_STICK_Y,
-                     STATE_PAD_RIGHT_STICK_LEFT,
-                     STATE_PAD_RIGHT_STICK_RIGHT,
-                     STATE_PAD_RIGHT_STICK_UP,
-                     STATE_PAD_RIGHT_STICK_DOWN);
+        if (m_rightStickVirtualButtonsEnabled)
+        {
+            processStick(rightXAxis, rightYAxis,
+                         STATE_PAD_RIGHT_STICK_X,
+                         STATE_PAD_RIGHT_STICK_Y,
+                         STATE_PAD_RIGHT_STICK_LEFT,
+                         STATE_PAD_RIGHT_STICK_RIGHT,
+                         STATE_PAD_RIGHT_STICK_UP,
+                         STATE_PAD_RIGHT_STICK_DOWN);
+        }
 
         // 开始逐个处理按钮输入，根据按钮状态设置对应的位
         auto SET_GAME_PAD_STATE = [&](int LIMELIGHT_KEY, int GAMEPAD_BUTTON)

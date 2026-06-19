@@ -1,12 +1,34 @@
 #include "GamePage.hpp"
 #include "core/Tools.hpp"
 #include "core/GameSignal.hpp"
+#include "core/ThreadPool.hpp"
 #include "ui/utils/AnimationHelper.hpp"
 
 #include <filesystem>
 
 namespace beiklive
 {
+    static int platformFromFileType(beiklive::enums::FileType type)
+    {
+        switch (type)
+        {
+        case beiklive::enums::FileType::GBA_ROM:
+            return (int)beiklive::enums::EmuPlatform::EmuGBA;
+        case beiklive::enums::FileType::GBC_ROM:
+            return (int)beiklive::enums::EmuPlatform::EmuGBC;
+        case beiklive::enums::FileType::GB_ROM:
+            return (int)beiklive::enums::EmuPlatform::EmuGB;
+        case beiklive::enums::FileType::NES_ROM:
+            return (int)beiklive::enums::EmuPlatform::EmuNES;
+        case beiklive::enums::FileType::SNES_ROM:
+            return (int)beiklive::enums::EmuPlatform::EmuSNES;
+        case beiklive::enums::FileType::NDS_ROM:
+            return (int)beiklive::enums::EmuPlatform::EmuNDS;
+        default:
+            return (int)beiklive::enums::EmuPlatform::NONE;
+        }
+    }
+
     // 菜单动画时长常量（毫秒）
     static constexpr int MENU_SLIDE_IN_MS  = 220; ///< 菜单入场滑动动画时长
     static constexpr int MENU_FADE_OUT_MS  = 180; ///< 菜单关闭淡出动画时长
@@ -75,16 +97,28 @@ namespace beiklive
         // 若数据库中不存在此游戏记录，先插入含必要字段的最小条目
         if (!db->findByPath(m_gameData.fullPath).has_value())
         {
-            auto dcrc32 = tools::crc32(m_gameData.fullPath); // 计算 CRC32 校验值
             brls::Logger::debug("GamePage 数据库中没有此游戏的记录，插入新记录: {}", m_gameData.fullPath);
             GameEntry minimal;
             minimal.path     = m_gameData.fullPath;
-            minimal.crc32    = dcrc32;
-            minimal.platform = (int)m_gameData.itemType;
+            minimal.crc32    = 0;
+            minimal.platform = platformFromFileType(m_gameData.itemType);
             minimal.title    = GET_MAPPING_KEY_STR(
                 beiklive::tools::getFileNameWithoutExtension(m_gameData.fileName),
                 beiklive::tools::getFileNameWithoutExtension(m_gameData.fileName));
             db->upsertByPath(minimal);
+            std::string crcPath = minimal.path;
+            ThreadPool::instance().enqueue([crcPath]() {
+                auto crc32 = tools::crc32(crcPath);
+                brls::sync([crcPath, crc32]() {
+                    if (!beiklive::GameDB) return;
+                    auto entry = beiklive::GameDB->findByPath(crcPath);
+                    if (!entry.has_value() || entry->crc32 != 0)
+                        return;
+                    beiklive::GameDB->set(crcPath, "crc32", crc32);
+                    beiklive::GameDB->flush();
+                    brls::Logger::debug("GamePage 后台 CRC32 已更新: {} -> {}", crcPath, crc32);
+                });
+            });
         }
         else
         {
@@ -93,7 +127,7 @@ namespace beiklive
 
         // 使用 setDefault 为可选字段设置首次默认值（已有值时不覆盖）
         std::string defaultLogo = beiklive::tools::getDefaultLogoPath(
-            static_cast<beiklive::enums::EmuPlatform>((int)m_gameData.itemType));
+            static_cast<beiklive::enums::EmuPlatform>(platformFromFileType(m_gameData.itemType)));
 
         auto& path = m_gameData.fullPath;
         db->setDefault(path, "logoPath", defaultLogo);

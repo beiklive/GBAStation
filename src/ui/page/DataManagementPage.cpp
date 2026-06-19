@@ -142,6 +142,7 @@ int platformFromExtension(const std::string& ext)
     if (ext == "gb") return static_cast<int>(beiklive::enums::EmuPlatform::EmuGB);
     if (ext == "nes" || ext == "fds") return static_cast<int>(beiklive::enums::EmuPlatform::EmuNES);
     if (ext == "sfc" || ext == "smc") return static_cast<int>(beiklive::enums::EmuPlatform::EmuSNES);
+    if (ext == "nds") return static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS);
     return -1;
 }
 
@@ -155,6 +156,7 @@ std::string overlayKeyForPlatform(int platform)
     case beiklive::enums::EmuPlatform::EmuGB: return sk::KEY_DISPLAY_OVERLAY_GB_PATH;
     case beiklive::enums::EmuPlatform::EmuNES: return sk::KEY_DISPLAY_OVERLAY_NES_PATH;
     case beiklive::enums::EmuPlatform::EmuSNES: return sk::KEY_DISPLAY_OVERLAY_SNES_PATH;
+    case beiklive::enums::EmuPlatform::EmuNDS: return sk::KEY_DISPLAY_OVERLAY_NDS_PATH;
     default: return "";
     }
 }
@@ -169,6 +171,7 @@ std::string shaderKeyForPlatform(int platform)
     case beiklive::enums::EmuPlatform::EmuGB: return sk::KEY_DISPLAY_SHADER_GB_PATH;
     case beiklive::enums::EmuPlatform::EmuNES: return sk::KEY_DISPLAY_SHADER_NES_PATH;
     case beiklive::enums::EmuPlatform::EmuSNES: return sk::KEY_DISPLAY_SHADER_SNES_PATH;
+    case beiklive::enums::EmuPlatform::EmuNDS: return sk::KEY_DISPLAY_SHADER_NDS_PATH;
     default: return "";
     }
 }
@@ -566,6 +569,10 @@ brls::View* DataManagementPage::buildScanImportTab()
     snesSwitch->init("扫描SFC游戏", m_scanSNES, [this](bool on) { m_scanSNES = on; });
     box->addView(snesSwitch);
 
+    auto* ndsSwitch = new brls::BooleanCell();
+    ndsSwitch->init("扫描NDS游戏", m_scanNDS, [this](bool on) { m_scanNDS = on; });
+    box->addView(ndsSwitch);
+
 
     scroll->setContentView(box);
 
@@ -600,6 +607,7 @@ brls::View* DataManagementPage::buildBundleImportTab()
         {"选择GB游戏的lpl文件",   "img/ui/icon_gb.png",  static_cast<int>(beiklive::enums::EmuPlatform::EmuGB)},
         {"选择FC游戏的lpl文件",   "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuNES)},
         {"选择SFC游戏的lpl文件",  "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuSNES)},
+        {"选择NDS游戏的lpl文件",  "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)},
     };
     
     box->addView(makeHint("lpl 文件通常位于 RetroArch 的 playlists 目录下，不动lpl文件语法规则不要自行删改"));
@@ -934,6 +942,7 @@ void DataManagementPage::startDirImport(const std::string& dirPath)
     if (m_scanGB) exts.insert("gb");
     if (m_scanNES) { exts.insert("nes"); exts.insert("fds"); }
     if (m_scanSNES) { exts.insert("sfc"); exts.insert("smc"); }
+    if (m_scanNDS) exts.insert("nds");
 
     m_importing.store(true, std::memory_order_release);
 

@@ -31,7 +31,7 @@ include(CheckIncludeFile)
 include(CheckIncludeFiles)
 include(CheckTypeSize)
 include(FetchContent)
-set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" "${CMAKE_MODULE_PATH}")
+set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake" "${CMAKE_MODULE_PATH}")
 
 find_package(Git REQUIRED)
 include(GitInfo)
@@ -84,11 +84,11 @@ include(cmake/FetchDependencies.cmake)
 include(cmake/ConfigureFeatures.cmake)
 include(cmake/ConfigureDependencies.cmake)
 
-set(MELONDSDS_NAME "${CMAKE_PROJECT_NAME}")
+set(MELONDSDS_NAME "${PROJECT_NAME}")
 if ("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
-    set(MELONDSDS_VERSION "${CMAKE_PROJECT_VERSION}")
+    set(MELONDSDS_VERSION "${PROJECT_VERSION}")
 elseif ("${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo")
-    set(MELONDSDS_VERSION "${CMAKE_PROJECT_VERSION} (RelWithDebInfo)")
+    set(MELONDSDS_VERSION "${PROJECT_VERSION} (RelWithDebInfo)")
 elseif (GIT_STATE)
     set(MELONDSDS_VERSION "${GIT_STATE}-${CMAKE_BUILD_TYPE}-upstream-${MELONDS_REPOSITORY_TAG}")
 else ()
@@ -96,7 +96,7 @@ else ()
 endif()
 
 message(STATUS "${MELONDSDS_NAME} version string: '${MELONDSDS_VERSION}'")
-configure_file("${CMAKE_SOURCE_DIR}/melondsds_libretro.info.in" "${CMAKE_CURRENT_BINARY_DIR}/melondsds_libretro.info")
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/melondsds_libretro.info.in" "${CMAKE_CURRENT_BINARY_DIR}/melondsds_libretro.info")
 
 # Formerly off by default due to a bug that has since been fixed.
 # This option may be removed in the future.

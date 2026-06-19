@@ -6,7 +6,8 @@ namespace beiklive
     enum class CoreType {
         Mgba,
         Fceumm,
-        Snes9x
+        Snes9x,
+        MelonDS
     };
 
     /// 游戏画面缩放模式
@@ -47,7 +48,8 @@ namespace beiklive::enums
         EmuGBC,
         EmuGB,
         EmuNES,
-        EmuSNES
+        EmuSNES,
+        EmuNDS
     };
     // 文件类型,用于文件浏览器
     enum class FileType
@@ -58,6 +60,7 @@ namespace beiklive::enums
         GB_ROM,  // GB文件
         NES_ROM, // NES/Famicom文件
         SNES_ROM,// SNES/SFC文件
+        NDS_ROM, // Nintendo DS文件
 
         // 上面的顺序必须与EmuPlatform保持一致，方便后续通过平台类型直接转换为文件类型
 

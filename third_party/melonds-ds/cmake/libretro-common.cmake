@@ -63,7 +63,7 @@ target_sources(libretro-common PRIVATE
     )
 
 add_common_definitions(libretro-common)
-target_include_directories(libretro-common PRIVATE ${CMAKE_SOURCE_DIR}/src/libretro)
+target_include_directories(libretro-common PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro)
 target_compile_definitions(libretro-common PRIVATE HAVE_GLSYM_PRIVATE HAVE_RPNG)
 
 if (HAVE_DYNAMIC)

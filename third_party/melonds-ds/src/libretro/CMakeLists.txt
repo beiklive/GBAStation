@@ -6,7 +6,7 @@ include(embed-binaries)
 if (BUILD_AS_SHARED_LIBRARY)
     set(LIBRARY_TYPE SHARED)
 else ()
-    set(LIBRARY_TYPE MODULE)
+    set(LIBRARY_TYPE STATIC)
 endif ()
 
 add_library(melondsds_libretro ${LIBRARY_TYPE}
@@ -70,7 +70,6 @@ add_library(melondsds_libretro ${LIBRARY_TYPE}
     message/error.hpp
     microphone.cpp
     microphone.hpp
-    net/pcap.hpp
     net/net.cpp
     net/net.hpp
     net/mp.cpp
@@ -123,13 +122,12 @@ target_include_directories(melondsds_libretro SYSTEM PUBLIC
     "${melonDS_SOURCE_DIR}/src"
     "${glm_SOURCE_DIR}"
     "${pntr_SOURCE_DIR}"
-    "${fmt_SOURCE_DIR}/include"
     "${yamc_SOURCE_DIR}/include"
     "${span-lite_SOURCE_DIR}/include"
     "${date_SOURCE_DIR}/include"
     )
 
-target_include_directories(melondsds_libretro PRIVATE "${CMAKE_SOURCE_DIR}/src/libretro")
+target_include_directories(melondsds_libretro PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 
 embed_binaries(libretro-assets
     ASSET
@@ -169,6 +167,7 @@ endif ()
 
 if (HAVE_NETWORKING)
     target_sources(melondsds_libretro PRIVATE
+        net/pcap.hpp
         ${melonDS_SOURCE_DIR}/src/net/Net_Slirp.cpp
         ${melonDS_SOURCE_DIR}/src/net/Net_Slirp.h
         ${melonDS_SOURCE_DIR}/src/net/Net.cpp
@@ -178,7 +177,6 @@ if (HAVE_NETWORKING)
         ${melonDS_SOURCE_DIR}/src/net/LocalMP.h
         ${melonDS_SOURCE_DIR}/src/net/PacketDispatcher.cpp
         ${melonDS_SOURCE_DIR}/src/net/PacketDispatcher.h
-        platform/lan.cpp
     )
 
     target_include_directories(melondsds_libretro SYSTEM PRIVATE "${melonDS_SOURCE_DIR}/src/net")
@@ -278,7 +276,11 @@ target_compile_definitions(melondsds_libretro PUBLIC
 target_compile_definitions(melondsds_libretro PUBLIC MELONDS_GL_HEADER="PlatformOGLPrivate.h")
 target_compile_definitions(core PUBLIC MELONDS_GL_HEADER="PlatformOGLPrivate.h")
 
-target_link_libraries(melondsds_libretro PUBLIC libretro-common core libretro-assets glm::glm pntr fmt::fmt date)
+target_link_libraries(melondsds_libretro PUBLIC libretro-common core libretro-assets)
+target_link_libraries(melondsds_libretro PRIVATE glm::glm pntr fmt::fmt date)
+if (glm_SOURCE_DIR AND NOT PLATFORM_SWITCH)
+    target_include_directories(melondsds_libretro BEFORE PRIVATE "${glm_SOURCE_DIR}")
+endif()
 
 if (HAVE_NETWORKING)
     target_compile_definitions(melondsds_libretro PUBLIC BUILDING_LIBSLIRP)

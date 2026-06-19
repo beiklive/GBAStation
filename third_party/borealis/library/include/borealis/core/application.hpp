@@ -349,6 +349,16 @@ class Application
         return drawCoursor;
     }
 
+    inline static const std::vector<TouchState>& getCurrentTouchState()
+    {
+        return currentTouchState;
+    }
+
+    inline static const MouseState& getCurrentMouseState()
+    {
+        return currentMouseState;
+    }
+
     inline static bool isHintsLiteMode()
     {
         return hintsLiteMode;

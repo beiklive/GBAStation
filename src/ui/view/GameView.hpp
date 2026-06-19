@@ -121,6 +121,7 @@ namespace beiklive
             int  m_rewindSaveInterval = 1;     ///< 每 N 帧保存一次倒带状态
             unsigned m_rewindBufferSize = 600; ///< 倒带缓冲区最大条目数（从配置读取）
             bool m_rewindShowUI       = false;  ///< 是否启用可视化倒带界面
+            bool m_isNdsGame          = false;  ///< NDS 核心禁用倒带并启用触摸指针
 
             // ---- libretro 核心 -----------------------------------------------
             IEmulatorCore* m_core = nullptr;
@@ -128,9 +129,24 @@ namespace beiklive
             // ---- 渲染器 -------------------------------------------------------
             beiklive::GameRenderer m_renderer; ///< 游戏帧渲染器（GL 纹理 + 直接绘制）
             bool m_rendererReady = false;      ///< 渲染器是否已初始化
+            beiklive::DisplayRect m_lastGameRect; ///< 最近一次游戏画面绘制区域
+            unsigned m_lastGameTexW = 0;       ///< 最近一次游戏帧宽度
+            unsigned m_lastGameTexH = 0;       ///< 最近一次游戏帧高度
 
             // ---- 画面模式 ----------------------------------------------------
             beiklive::ScreenMode m_screenMode = beiklive::ScreenMode::Fit; ///< 当前画面缩放模式
+
+            // ---- NDS 触摸指针 -------------------------------------------------
+            std::atomic<bool> m_ndsPointerPressed{false};
+            std::atomic<int16_t> m_ndsPointerX{0};
+            std::atomic<int16_t> m_ndsPointerY{16384};
+            std::atomic<int16_t> m_ndsRightAnalogX{0};
+            std::atomic<int16_t> m_ndsRightAnalogY{0};
+            float m_ndsCursorNormX = 0.5f;
+            float m_ndsCursorNormY = 0.75f;
+            bool  m_ndsCursorVisible = false;
+            bool  m_ndsHotkeyTouchHeld = false;
+            std::atomic<int> m_ndsLayoutPulseFrames{0};
 
             // ---- 遮罩 --------------------------------------------------------
             brls::Image* m_overlayImage = nullptr; ///< 遮罩图片
@@ -220,6 +236,9 @@ namespace beiklive
 
             /// 在视图上绘制状态覆盖层（FPS/快进/倒带/暂停/静音）
             void _drawOverlays(NVGcontext* vg, float x, float y, float w, float h);
+            void _updateNdsPointerFromInput();
+            void _drawNdsPointer(NVGcontext* vg);
+            bool _mapWindowPointToPointer(float px, float py, int16_t& outX, int16_t& outY) const;
 
             // ---- 游戏循环内部分段辅助方法（仅在游戏线程中调用）--------------
 

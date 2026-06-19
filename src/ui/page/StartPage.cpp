@@ -4,6 +4,9 @@
 #include "core/ThreadPool.hpp"
 #include "ui/utils/CheatMatcher.hpp"
 
+#include <chrono>
+#include <thread>
+
 namespace beiklive
 {
     StartPage::StartPage()
@@ -105,15 +108,7 @@ namespace beiklive
                 : std::optional<beiklive::GameEntry>{};
             const auto& e = fresh.has_value() ? *fresh : entry;
             brls::Logger::info("Game activated: " + e.title);
-            {
-                m_gamePage = new beiklive::GamePage(e);
-                auto *frame = new brls::AppletFrame(m_gamePage);
-                HIDE_BRLS_BAR(frame);
-                brls::Logger::info("Pushing GamePage activity for: " + e.title);
-                brls::sync([this, frame]()
-                           { beiklive::pushActivity(frame, this, m_gamePage,
-                                [this]() { m_gamePage->startGame(); }); });
-            }
+            _launchGameWithLoading(e, this, e.title);
         };
     switchLayout->onGameOptions = [this](const beiklive::GameEntry &entry)
         {
@@ -172,15 +167,7 @@ namespace beiklive
         gameLibraryPage->onGameSelected = [this, gameLibraryPage](const beiklive::GameEntry &entry)
         {
             brls::Logger::info("Game selected from library: " + entry.title);
-            {
-                m_gamePage = new beiklive::GamePage(entry);
-                auto *frame = new brls::AppletFrame(m_gamePage);
-                HIDE_BRLS_BAR(frame);
-                brls::Logger::info("Pushing GamePage activity for: " + entry.title);
-                brls::sync([this, frame, gameLibraryPage]()
-                           { beiklive::pushActivity(frame, gameLibraryPage, m_gamePage,
-                                [this]() { m_gamePage->startGame(); }); });
-            }
+            _launchGameWithLoading(entry, gameLibraryPage, entry.title);
         };
 
         HIDE_BRLS_BAR(frame);
@@ -203,7 +190,7 @@ namespace beiklive
 
                 return true;
             });
-        m_fileListPage->setFliter(beiklive::enums::FilterMode::Whitelist, {"gba", "gbc", "gb", "nes", "fds", "sfc", "smc", "md", "gen", "bin", "smd", "sms", "gg", "sg", "cue", "png"});
+        m_fileListPage->setFliter(beiklive::enums::FilterMode::Whitelist, {"gba", "gbc", "gb", "nes", "fds", "sfc", "smc", "nds", "7z", "md", "gen", "bin", "smd", "sms", "gg", "sg", "cue", "png"});
 
         m_fileListPage->onFileSelected = [this](beiklive::DirListData dirItem)
         {
@@ -217,16 +204,9 @@ namespace beiklive
             case beiklive::enums::FileType::GB_ROM:
             case beiklive::enums::FileType::NES_ROM:
             case beiklive::enums::FileType::SNES_ROM:
+            case beiklive::enums::FileType::NDS_ROM:
                 brls::Application::notify("启动游戏：" + dirItem.fileName);
-                {
-                    m_gamePage = new beiklive::GamePage(dirItem);
-                    auto *frame = new brls::AppletFrame(m_gamePage);
-                    HIDE_BRLS_BAR(frame);
-                    brls::Logger::info("Pushing GamePage activity for: " + dirItem.fileName);
-                    brls::sync([this, frame]()
-                               { beiklive::pushActivity(frame, this, m_gamePage,
-                                    [this]() { m_gamePage->startGame(); }); });
-                }
+                _launchGameWithLoading(dirItem, this, dirItem.fileName);
                 break;
             default:
                 brls::Logger::debug("Selected item: " + dirItem.fileName + ", type: " + std::to_string((int)dirItem.itemType));
@@ -242,6 +222,36 @@ namespace beiklive
                        beiklive::pushActivity(frame, this, m_fileListPage);
                        m_fileListPage->showDriveList();
                    });
+    }
+
+    void StartPage::_launchGameWithLoading(const beiklive::GameEntry& entry,
+                                           beiklive::Box* source,
+                                           const std::string& title)
+    {
+        if (!m_alive.load()) return;
+        m_gamePage = new beiklive::GamePage(entry);
+        auto* frame = new brls::AppletFrame(m_gamePage);
+        HIDE_BRLS_BAR(frame);
+        brls::Logger::info("Pushing GamePage activity for: " + title);
+        brls::sync([this, source, frame]() {
+            beiklive::pushActivity(frame, source, m_gamePage,
+                [this]() { m_gamePage->startGame(); });
+        });
+    }
+
+    void StartPage::_launchGameWithLoading(const beiklive::DirListData& entry,
+                                           beiklive::Box* source,
+                                           const std::string& title)
+    {
+        if (!m_alive.load()) return;
+        m_gamePage = new beiklive::GamePage(entry);
+        auto* frame = new brls::AppletFrame(m_gamePage);
+        HIDE_BRLS_BAR(frame);
+        brls::Logger::info("Pushing GamePage activity for: " + title);
+        brls::sync([this, source, frame]() {
+            beiklive::pushActivity(frame, source, m_gamePage,
+                [this]() { m_gamePage->startGame(); });
+        });
     }
 
     void StartPage::_openSettings()

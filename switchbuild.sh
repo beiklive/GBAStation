@@ -25,6 +25,10 @@ if [ -z "${DEVKITPRO}" ]; then
 fi
 export DEVKITPRO=/opt/devkitpro
 export DEVKITA64=/opt/devkitpro/devkitA64
+export TMPDIR="${PWD}/.tmp_switch"
+export TMP="${TMPDIR}"
+export TEMP="${TMPDIR}"
+mkdir -p "${TMPDIR}"
 
 # 并行编译线程数
 JOBS=$(nproc 2>/dev/null || sysctl -n hw.logicalcpu 2>/dev/null || echo 4)

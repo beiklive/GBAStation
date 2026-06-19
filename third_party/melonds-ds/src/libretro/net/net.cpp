@@ -18,7 +18,9 @@
 
 #include <string_view>
 
+#ifdef HAVE_NETWORKING
 #include <Net_Slirp.h>
+#endif
 #include <retro_assert.h>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
@@ -31,7 +33,7 @@
 using std::vector;
 using namespace melonDS;
 
-#ifdef HAVE_NETWORKING_DIRECT_MODE
+#if defined(HAVE_NETWORKING) && defined(HAVE_NETWORKING_DIRECT_MODE)
 bool MelonDsDs::IsAdapterAcceptable(const AdapterData& adapter) noexcept
 {
     ZoneScopedN(TracyFunction);
@@ -102,29 +104,44 @@ const AdapterData* SelectNetworkInterface(std::string_view iface, std::span<cons
 #endif
 
 MelonDsDs::NetState::NetState()
-#ifdef HAVE_NETWORKING_DIRECT_MODE
+#if defined(HAVE_NETWORKING) && defined(HAVE_NETWORKING_DIRECT_MODE)
     : _pcap(melonDS::LibPCap::New())
 #endif
 {
+#ifdef HAVE_NETWORKING
     _net.RegisterInstance(0);
+#endif
     // TODO: Handle registration properly (not yet sure what that'll entail)
 }
 
 MelonDsDs::NetState::~NetState() noexcept
 {
+#ifdef HAVE_NETWORKING
     _net.UnregisterInstance(0);
+#endif
 }
 
 int MelonDsDs::NetState::SendPacket(std::span<std::byte> data) noexcept
 {
+#ifdef HAVE_NETWORKING
     return _net.SendPacket(reinterpret_cast<u8*>(data.data()), data.size(), 0);
+#else
+    (void)data;
+    return 0;
+#endif
 }
 
 int MelonDsDs::NetState::RecvPacket(u8* data) noexcept
 {
+#ifdef HAVE_NETWORKING
     return _net.RecvPacket(data, 0);
+#else
+    (void)data;
+    return 0;
+#endif
 }
 
+#ifdef HAVE_NETWORKING
 vector<melonDS::AdapterData> MelonDsDs::NetState::GetAdapters() const noexcept
 {
     ZoneScopedN(TracyFunction);
@@ -138,7 +155,9 @@ vector<melonDS::AdapterData> MelonDsDs::NetState::GetAdapters() const noexcept
 
     return {};
 }
+#endif
 
+#if defined(HAVE_NETWORKING) && defined(HAVE_NETWORKING_DIRECT_MODE)
 bool operator==(const melonDS::AdapterData& lhs, const melonDS::AdapterData& rhs)
 {
     return
@@ -150,11 +169,13 @@ bool operator==(const melonDS::AdapterData& lhs, const melonDS::AdapterData& rhs
         strncmp(lhs.DeviceName, rhs.DeviceName, sizeof(lhs.DeviceName)) == 0
     ;
 }
+#endif
 
 void MelonDsDs::NetState::Apply(const CoreConfig& config) noexcept
 {
     ZoneScopedN(TracyFunction);
 
+#ifdef HAVE_NETWORKING
     NetworkMode lastMode = GetNetworkMode();
 
     switch (config.NetworkMode())
@@ -246,10 +267,14 @@ void MelonDsDs::NetState::Apply(const CoreConfig& config) noexcept
         _adapter = std::nullopt;
 #endif
     }
+#else
+    (void)config;
+#endif
 }
 
 [[nodiscard]] MelonDsDs::NetworkMode MelonDsDs::NetState::GetNetworkMode() const noexcept
 {
+#ifdef HAVE_NETWORKING
 #ifdef HAVE_NETWORKING_DIRECT_MODE
     if (dynamic_cast<const Net_PCap*>(_net.GetDriver().get()))
     {
@@ -263,4 +288,7 @@ void MelonDsDs::NetState::Apply(const CoreConfig& config) noexcept
     }
 
     return NetworkMode::None;
+#else
+    return NetworkMode::None;
+#endif
 }

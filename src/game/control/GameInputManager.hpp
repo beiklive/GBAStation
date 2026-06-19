@@ -110,11 +110,13 @@ namespace beiklive
         /// diagonal=true 时同时触发 X 和 Y 方向（斜向），
         /// diagonal=false 时仅触发绝对值更大的轴方向。
         void setDiagonalMode(bool diagonal) { m_diagonalMode = diagonal; }
+        void setRightStickVirtualButtonsEnabled(bool enabled) { m_rightStickVirtualButtonsEnabled = enabled; }
 
     private:
         bool inputDropped = false;
         bool inputEnabled = true;
         bool m_diagonalMode = true;  ///< 摇杆斜向模式：true=同时触发X+Y，false=仅触发主轴
+        bool m_rightStickVirtualButtonsEnabled = true;
         GamepadState lastGamepadStates[GAMEPADS_MAX];
 
         InputState inputState;

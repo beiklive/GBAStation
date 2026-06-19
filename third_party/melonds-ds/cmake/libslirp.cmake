@@ -11,10 +11,10 @@ file(RENAME "${libslirp_BINARY_DIR}/include/src" "${libslirp_BINARY_DIR}/include
 target_include_directories(slirp PUBLIC
     "${libslirp_BINARY_DIR}/include"
     "${libslirp_SOURCE_DIR}/src"
-    "${CMAKE_SOURCE_DIR}/src/glib-stub"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/glib-stub"
 )
 target_include_directories(slirp SYSTEM PUBLIC
-    "${CMAKE_SOURCE_DIR}/src/glib-stub"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/glib-stub"
 )
 
 check_type_size("void*" SIZEOF_VOID_P BUILTIN_TYPES_ONLY)

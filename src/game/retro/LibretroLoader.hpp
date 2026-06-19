@@ -11,6 +11,28 @@
 
 // libretro public API types
 #include "third_party/mgba/src/platform/libretro/libretro.h"
+
+#ifndef RETRO_ENVIRONMENT_GET_DEVICE_POWER
+#define RETRO_ENVIRONMENT_GET_DEVICE_POWER (77 | RETRO_ENVIRONMENT_EXPERIMENTAL)
+enum retro_power_state {
+    RETRO_POWERSTATE_UNKNOWN = 0,
+    RETRO_POWERSTATE_CHARGING,
+    RETRO_POWERSTATE_CHARGED,
+    RETRO_POWERSTATE_DISCHARGING,
+    RETRO_POWERSTATE_PLUGGED_IN
+};
+#define RETRO_POWERSTATE_NO_ESTIMATE (-1)
+struct retro_device_power {
+    enum retro_power_state state;
+    int seconds;
+    int8_t percent;
+};
+#endif
+
+#ifndef RETRO_ENVIRONMENT_SET_NETPACKET_INTERFACE
+#define RETRO_ENVIRONMENT_SET_NETPACKET_INTERFACE 78
+#endif
+
 #include "core/ConfigManager.hpp"
 #include "core/enums.h"
 
@@ -112,6 +134,9 @@ public:
     void setButtonState(unsigned id, bool pressed);
     bool getButtonState(unsigned id) const;
 
+    void setPointerState(bool pressed, int16_t x, int16_t y);
+    void setAnalogState(int16_t rightX, int16_t rightY);
+
     // ---- 几何信息 ---------------------------------------------------
 
     unsigned gameWidth()  const { return m_avInfo.geometry.base_width; }
@@ -183,6 +208,11 @@ private:
 
     // ---- 输入状态 ---------------------------------------------------
     bool m_buttons[RETRO_DEVICE_ID_JOYPAD_R3 + 1] = {};
+    bool m_pointerPressed = false;
+    int16_t m_pointerX = 0;
+    int16_t m_pointerY = 0;
+    int16_t m_rightAnalogX = 0;
+    int16_t m_rightAnalogY = 0;
 
     // ---- 核心变量/设置存储 ------------------------------------------
     // ConfigManager提供用户保存的值；m_coreVarStorage保存c_str()指针，

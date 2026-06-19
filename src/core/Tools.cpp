@@ -47,6 +47,8 @@ beiklive::enums::FileType getFileType(const fs::path& path) {
         return beiklive::enums::FileType::NES_ROM;
     if (ext == "sfc" || ext == "smc")
         return beiklive::enums::FileType::SNES_ROM;
+    if (ext == "nds" || ext == "7z")
+        return beiklive::enums::FileType::NDS_ROM;
 
     return beiklive::enums::FileType::NORMAL_FILE;
 }
@@ -116,6 +118,8 @@ std::string getIconPath(beiklive::enums::FileType type) {
             return BK_RES(path_prefix + "icon_gb.png");
         case beiklive::enums::FileType::GB_ROM:
             return BK_RES(path_prefix + "icon_gb.png");
+        case beiklive::enums::FileType::NDS_ROM:
+            return BK_RES(path_prefix + "icon_gba.png");
         default:
             return BK_RES(path_prefix + "wenjian.png");
     }
@@ -146,6 +150,8 @@ std::string getIconPathWithPrefix(beiklive::enums::FileType type, const std::str
             return BK_RES(prefix + "icon_gb.png");
         case beiklive::enums::FileType::GB_ROM:
             return BK_RES(prefix + "icon_gb.png");
+        case beiklive::enums::FileType::NDS_ROM:
+            return BK_RES(prefix + "icon_gba.png");
         default:
             return BK_RES(prefix + "wenjian.png");
     }
@@ -164,6 +170,8 @@ std::string getDefaultLogoPath(beiklive::enums::EmuPlatform platform)
         case beiklive::enums::EmuPlatform::EmuNES:
             return BK_RES(path_prefix + "gba.png");
         case beiklive::enums::EmuPlatform::EmuSNES:
+            return BK_RES(path_prefix + "gba.png");
+        case beiklive::enums::EmuPlatform::EmuNDS:
             return BK_RES(path_prefix + "gba.png");
         default:
             return BK_RES(path_prefix + "gba.png");
@@ -328,6 +336,17 @@ std::vector<int> parsePadCombo(const std::string& combo)
         while (e > s && part[e - 1] == ' ') --e;
         if (s >= e) continue;
         std::string name = part.substr(s, e - s);
+        if (name.rfind("LEFTSTICK", 0) == 0 || name.rfind("RIGHTSTICK", 0) == 0)
+            name = "PAD_" + name;
+        if (name != "NONE" && name.rfind("PAD_", 0) != 0) {
+            std::string padName = "PAD_" + name;
+            for (const auto& entry : beiklive::k_gameInputNames) {
+                if (entry.name == padName) {
+                    name = padName;
+                    break;
+                }
+            }
+        }
         // 在 k_gameInputNames 中查找
         for (const auto& entry : beiklive::k_gameInputNames) {
             if (entry.name == name) {
@@ -401,6 +420,7 @@ std::string platformName(int platform) {
         case beiklive::enums::EmuPlatform::EmuGB:  return "GB";
         case beiklive::enums::EmuPlatform::EmuNES: return "FC";
         case beiklive::enums::EmuPlatform::EmuSNES: return "SFC";
+        case beiklive::enums::EmuPlatform::EmuNDS: return "NDS";
         default: return "";
     }
 }
@@ -412,6 +432,7 @@ std::string platformOverlayKey(int platform) {
         case beiklive::enums::EmuPlatform::EmuGB:  return beiklive::SettingKey::KEY_DISPLAY_OVERLAY_GB_PATH;
         case beiklive::enums::EmuPlatform::EmuNES: return beiklive::SettingKey::KEY_DISPLAY_OVERLAY_NES_PATH;
         case beiklive::enums::EmuPlatform::EmuSNES: return beiklive::SettingKey::KEY_DISPLAY_OVERLAY_SNES_PATH;
+        case beiklive::enums::EmuPlatform::EmuNDS: return beiklive::SettingKey::KEY_DISPLAY_OVERLAY_NDS_PATH;
         default: return "";
     }
 }
@@ -423,6 +444,7 @@ std::string platformShaderKey(int platform) {
         case beiklive::enums::EmuPlatform::EmuGB:  return beiklive::SettingKey::KEY_DISPLAY_SHADER_GB_PATH;
         case beiklive::enums::EmuPlatform::EmuNES: return beiklive::SettingKey::KEY_DISPLAY_SHADER_NES_PATH;
         case beiklive::enums::EmuPlatform::EmuSNES: return beiklive::SettingKey::KEY_DISPLAY_SHADER_SNES_PATH;
+        case beiklive::enums::EmuPlatform::EmuNDS: return beiklive::SettingKey::KEY_DISPLAY_SHADER_NDS_PATH;
         default: return "";
     }
 }
@@ -434,6 +456,7 @@ std::string platformBadgeName(int platform) {
         case beiklive::enums::EmuPlatform::EmuGB:  return "GB";
         case beiklive::enums::EmuPlatform::EmuNES: return "FC";
         case beiklive::enums::EmuPlatform::EmuSNES: return "SFC";
+        case beiklive::enums::EmuPlatform::EmuNDS: return "NDS";
         default: return "";
     }
 }
