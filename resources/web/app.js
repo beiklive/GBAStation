@@ -359,7 +359,7 @@ async function uploadFile(file, startUrl, finishKind = 'rom', extraStartData = {
     method: 'POST',
     body: JSON.stringify({ name: file.name, size: file.size, kind: finishKind, ...extraStartData }),
   });
-  const chunkSize = 1024 * 1024;
+  const chunkSize = 2 * 1024 * 1024;
   let offset = 0;
   while (offset < file.size) {
     const chunk = file.slice(offset, offset + chunkSize);
