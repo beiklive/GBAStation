@@ -5,6 +5,7 @@
 #include "ui/widget/DetailCell.hpp"
 #include "core/Tools.hpp"
 #include "network/WebService.h"
+#include "third_party/qrcodegen/qrcodegen.hpp"
 
 #include <borealis/views/applet_frame.hpp>
 #include <borealis/views/cells/cell_bool.hpp>
@@ -13,7 +14,9 @@
 #include <borealis/views/label.hpp>
 #include <borealis/views/rectangle.hpp>
 
+#include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -38,6 +41,56 @@ struct ImportSharedConfig
     std::string shaderPath;
     bool overlayEnabled = false;
     bool shaderEnabled = false;
+};
+
+class QRCodeView : public brls::View
+{
+public:
+    explicit QRCodeView(const std::string& text)
+        : qr(qrcodegen::QrCode::encodeText(text.c_str(), qrcodegen::QrCode::Ecc::MEDIUM))
+    {
+        setDimensions(240.0f, 240.0f);
+    }
+
+    void draw(NVGcontext* vg, float x, float y, float w, float h,
+              brls::Style style, brls::FrameContext* ctx) override
+    {
+        (void)style;
+        (void)ctx;
+
+        const int quiet = 4;
+        const int qrSize = qr.getSize();
+        const int modules = qrSize + quiet * 2;
+        const float size = std::min(w, h);
+        const float cell = std::floor(size / modules);
+        if (cell <= 0.0f)
+            return;
+
+        const float drawn = cell * modules;
+        const float ox = x + (w - drawn) * 0.5f;
+        const float oy = y + (h - drawn) * 0.5f;
+
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, ox, oy, drawn, drawn, 8.0f);
+        nvgFillColor(vg, nvgRGB(255, 255, 255));
+        nvgFill(vg);
+
+        nvgFillColor(vg, nvgRGB(18, 24, 32));
+        for (int yy = 0; yy < qrSize; yy++)
+        {
+            for (int xx = 0; xx < qrSize; xx++)
+            {
+                if (!qr.getModule(xx, yy))
+                    continue;
+                nvgBeginPath(vg);
+                nvgRect(vg, ox + (xx + quiet) * cell, oy + (yy + quiet) * cell, cell, cell);
+                nvgFill(vg);
+            }
+        }
+    }
+
+private:
+    qrcodegen::QrCode qr;
 };
 
 std::string expandTilde(const std::string& path)
@@ -1076,11 +1129,44 @@ void DataManagementPage::startWebService()
     }
 
     rememberFocusBeforeModal();
-    auto* dialog = new brls::Dialog(
-        "Web 管理服务已启动\n\n"
-        "访问地址: " + beiklive::network::WebService::Url() +
-        "\n\n" + beiklive::network::WebService::KeepAwakeMessage() +
-        "\n\n关闭此窗口会停止 Web 服务");
+    std::string url = beiklive::network::WebService::Url();
+    brls::Style style = brls::Application::getStyle();
+
+    auto* content = new brls::Box(brls::Axis::COLUMN);
+    content->setAlignItems(brls::AlignItems::CENTER);
+    content->setJustifyContent(brls::JustifyContent::CENTER);
+    content->setPadding(style["brls/dialog/paddingTopBottom"],
+                        style["brls/dialog/paddingLeftRight"],
+                        style["brls/dialog/paddingTopBottom"],
+                        style["brls/dialog/paddingLeftRight"]);
+
+    auto* title = new brls::Label();
+    title->setText("Web 管理服务已启动");
+    title->setFontSize(style["brls/dialog/fontSize"]);
+    title->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+    title->setSingleLine(false);
+    content->addView(title);
+
+    auto* qr = new QRCodeView(url);
+    qr->setMargins(24.0f, 0.0f, 20.0f, 0.0f);
+    content->addView(qr);
+
+    auto* address = new brls::Label();
+    address->setText("访问地址:\n" + url);
+    address->setFontSize(style["brls/dialog/fontSize"] * 0.82f);
+    address->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+    address->setSingleLine(false);
+    content->addView(address);
+
+    auto* hint = new brls::Label();
+    hint->setText("\n" + beiklive::network::WebService::KeepAwakeMessage() +
+                  "\n关闭此窗口会停止 Web 服务");
+    hint->setFontSize(style["brls/dialog/fontSize"] * 0.72f);
+    hint->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+    hint->setSingleLine(false);
+    content->addView(hint);
+
+    auto* dialog = new brls::Dialog(content);
     dialog->setCancelable(false);
     dialog->addButton("关闭服务", [this]() {
         beiklive::network::WebService::Stop();
