@@ -8,6 +8,7 @@
 #include "ui/utils/BKAudioPlayer.hpp"
 #include "ui/page/StartPage.hpp"
 #include "ui/utils/MyActivity.hpp"
+#include "network/WebService.h"
 
 int main(int argc, char* argv[]) {
 #ifdef __SWITCH__
@@ -134,12 +135,14 @@ int main(int argc, char* argv[]) {
 
 	// Run the app
 	while (brls::Application::mainLoop())
-		;
+		beiklive::network::WebService::Update();
 
 	// 通知线程退出并等待其完成
 	gExitFlag.store(true, std::memory_order_release);
 	if (updateThread.joinable())
 		updateThread.join();
+
+	beiklive::network::WebService::Stop();
 
 	// Cleanup
 	// Exit

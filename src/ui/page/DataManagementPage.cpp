@@ -4,6 +4,7 @@
 #include "ui/utils/UiHelper.hpp"
 #include "ui/widget/DetailCell.hpp"
 #include "core/Tools.hpp"
+#include "network/WebService.h"
 
 #include <borealis/views/applet_frame.hpp>
 #include <borealis/views/cells/cell_bool.hpp>
@@ -589,6 +590,18 @@ brls::View* DataManagementPage::buildDataProcessingTab()
 
     box->addView(makeHeader("库数据处理"));
 
+    auto* webCell = new beiklive::DetailCell();
+    webCell->setLeftText("启动 Web 管理服务");
+    webCell->setRightText("\uE14A");
+    webCell->registerAction("启动", brls::BUTTON_A, [this](brls::View*) -> bool {
+        startWebService();
+        return true;
+    });
+    box->addView(webCell);
+    m_processDefaultFocus = webCell;
+
+    box->addView(makeHint("启动后可在同一局域网浏览器中管理游戏库、上传 ROM、导入存档和修改封面。"));
+
     auto* cleanCell = new beiklive::DetailCell();
     cleanCell->setLeftText("从库中移除无效游戏");
     cleanCell->setRightText("\uE14A");
@@ -597,7 +610,6 @@ brls::View* DataManagementPage::buildDataProcessingTab()
         return true;
     });
     box->addView(cleanCell);
-    m_processDefaultFocus = cleanCell;
 
     box->addView(makeHint("移除游戏库中仍有记录，但 ROM 文件已经不存在的游戏。"));
 
@@ -1043,6 +1055,36 @@ void DataManagementPage::removeInvalidGames()
             m_cleanupRemoved.store(removed, std::memory_order_release);
             m_importDone.store(true, std::memory_order_release);
         });
+    });
+    dialog->open();
+}
+
+void DataManagementPage::startWebService()
+{
+    int port = GET_SETTING_KEY_INT("web.port", 8080);
+    bool started = beiklive::network::WebService::Start(port);
+    if (!started)
+    {
+        rememberFocusBeforeModal();
+        auto* dialog = new brls::Dialog(
+            "Web 管理服务启动失败\n\n" +
+            beiklive::network::WebService::LastError() +
+            "\n\n请确认网络已连接，端口未被占用。");
+        dialog->addButton("确认", [this]() { restoreFocusAfterModal(); });
+        dialog->open();
+        return;
+    }
+
+    rememberFocusBeforeModal();
+    auto* dialog = new brls::Dialog(
+        "Web 管理服务已启动\n\n"
+        "访问地址: " + beiklive::network::WebService::Url() +
+        "\n\n" + beiklive::network::WebService::KeepAwakeMessage() +
+        "\n\n关闭此窗口会停止 Web 服务");
+    dialog->setCancelable(false);
+    dialog->addButton("关闭服务", [this]() {
+        beiklive::network::WebService::Stop();
+        restoreFocusAfterModal();
     });
     dialog->open();
 }

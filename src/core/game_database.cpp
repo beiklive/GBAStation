@@ -287,7 +287,33 @@ namespace beiklive
             platformData[entry.platform].push_back(item);
         }
 
+        const int knownPlatforms[] = {
+            (int)beiklive::enums::EmuPlatform::EmuGBA,
+            (int)beiklive::enums::EmuPlatform::EmuGBC,
+            (int)beiklive::enums::EmuPlatform::EmuGB,
+            (int)beiklive::enums::EmuPlatform::EmuNES,
+            (int)beiklive::enums::EmuPlatform::EmuSNES,
+        };
+
         bool allOk = true;
+        for (int platform : knownPlatforms)
+        {
+            if (platformData.count(platform))
+                continue;
+
+            std::string filePath = dir + beiklive::path::SPLIT_CHAR + getPlatformFileName(platform);
+            try
+            {
+                std::ofstream file(filePath, std::ios::trunc);
+                if (file.is_open())
+                    file << "[]";
+            }
+            catch (...)
+            {
+                allOk = false;
+            }
+        }
+
         for (auto &[platform, j] : platformData)
         {
             std::string filePath = dir + beiklive::path::SPLIT_CHAR + getPlatformFileName(platform);

@@ -1,0 +1,957 @@
+#include "ApiRouter.h"
+
+#include "core/Tools.hpp"
+#include "core/common.h"
+#include "core/game_database.hpp"
+
+#include <algorithm>
+#include <cctype>
+#include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <set>
+#include <sstream>
+#include <vector>
+
+namespace fs = std::filesystem;
+
+namespace beiklive::network
+{
+
+namespace
+{
+constexpr std::uint64_t MAX_UPLOAD_SIZE = 512ull * 1024ull * 1024ull;
+constexpr const char* JSON_HEADERS = "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n";
+constexpr const char* CORS_HEADERS = "Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET,POST,PUT,DELETE,OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\n";
+
+std::string strFromMg(mg_str s)
+{
+    return std::string(s.buf ? s.buf : "", s.len);
+}
+
+std::string toLower(std::string s)
+{
+    std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return s;
+}
+
+std::string trimExtDot(std::string ext)
+{
+    if (!ext.empty() && ext[0] == '.')
+        ext.erase(ext.begin());
+    return toLower(ext);
+}
+
+int platformFromExt(const std::string& ext)
+{
+    if (ext == "gba") return static_cast<int>(beiklive::enums::EmuPlatform::EmuGBA);
+    if (ext == "gbc") return static_cast<int>(beiklive::enums::EmuPlatform::EmuGBC);
+    if (ext == "gb") return static_cast<int>(beiklive::enums::EmuPlatform::EmuGB);
+    if (ext == "nes" || ext == "fds") return static_cast<int>(beiklive::enums::EmuPlatform::EmuNES);
+    if (ext == "sfc" || ext == "smc") return static_cast<int>(beiklive::enums::EmuPlatform::EmuSNES);
+    return 0;
+}
+
+std::string platformDir(int platform)
+{
+    std::string name = beiklive::tools::platformBadgeName(platform);
+    return name.empty() ? "OTHER" : name;
+}
+
+std::string decodeQuery(mg_http_message* hm, const char* name)
+{
+    char buf[2048] = {};
+    int n = mg_http_get_var(&hm->query, name, buf, sizeof(buf));
+    return n > 0 ? std::string(buf, static_cast<size_t>(n)) : "";
+}
+
+std::string jsonString(mg_http_message* hm, const char* path, const std::string& fallback = "")
+{
+    char* value = mg_json_get_str(hm->body, path);
+    if (!value)
+        return fallback;
+    std::string out(value);
+    free(value);
+    return out;
+}
+
+long jsonLong(mg_http_message* hm, const char* path, long fallback = 0)
+{
+    return mg_json_get_long(hm->body, path, fallback);
+}
+
+std::string uriDecode(const std::string& value)
+{
+    std::string out(value.size() + 1, '\0');
+    int n = mg_url_decode(value.c_str(), value.size(), out.data(), out.size(), 0);
+    if (n < 0)
+        return value;
+    out.resize(static_cast<size_t>(n));
+    return out;
+}
+
+bool containsNonAscii(const std::string& value)
+{
+    return std::any_of(value.begin(), value.end(), [](unsigned char c) { return c >= 0x80; });
+}
+
+bool isSafeChar(unsigned char c)
+{
+    return std::isalnum(c) || c == '-' || c == '_';
+}
+
+std::string loadTextFile(const std::string& path)
+{
+    std::ifstream file(path, std::ios::binary);
+    if (!file)
+        return "";
+    std::ostringstream ss;
+    ss << file.rdbuf();
+    return ss.str();
+}
+
+std::string pinyinForUtf8(const std::string& ch)
+{
+    static nlohmann::json table;
+    static bool loaded = false;
+    if (!loaded)
+    {
+        loaded = true;
+        try
+        {
+            std::string data = loadTextFile(beiklive::res_path("pinyin/pingyin.json"));
+            if (!data.empty())
+                table = nlohmann::json::parse(data);
+        }
+        catch (...)
+        {
+            table = nlohmann::json::object();
+        }
+    }
+
+    if (table.is_object() && table.contains(ch) && table[ch].is_string())
+        return table[ch].get<std::string>();
+    return "";
+}
+
+std::vector<std::string> utf8Chars(const std::string& input)
+{
+    std::vector<std::string> result;
+    for (size_t i = 0; i < input.size();)
+    {
+        unsigned char c = static_cast<unsigned char>(input[i]);
+        size_t len = 1;
+        if ((c & 0xE0) == 0xC0) len = 2;
+        else if ((c & 0xF0) == 0xE0) len = 3;
+        else if ((c & 0xF8) == 0xF0) len = 4;
+        if (i + len > input.size())
+            len = 1;
+        result.push_back(input.substr(i, len));
+        i += len;
+    }
+    return result;
+}
+
+std::string safeStemFromTitle(const std::string& stem)
+{
+    std::string out;
+    bool lastSep = false;
+    for (const auto& ch : utf8Chars(stem))
+    {
+        unsigned char c = static_cast<unsigned char>(ch[0]);
+        if (ch.size() == 1 && isSafeChar(c))
+        {
+            out.push_back(static_cast<char>(std::tolower(c)));
+            lastSep = false;
+            continue;
+        }
+
+        if (ch.size() == 1 && (c == ' ' || c == '.' || c == '(' || c == ')' || c == '[' || c == ']'))
+        {
+            if (!lastSep && !out.empty())
+            {
+                out.push_back('_');
+                lastSep = true;
+            }
+            continue;
+        }
+
+        std::string part = pinyinForUtf8(ch);
+        if (part.empty())
+            continue;
+
+        if (!lastSep && !out.empty())
+            out.push_back('_');
+        for (unsigned char pc : part)
+        {
+            if (isSafeChar(pc))
+                out.push_back(static_cast<char>(std::tolower(pc)));
+        }
+        out.push_back('_');
+        lastSep = true;
+    }
+
+    while (!out.empty() && out.back() == '_')
+        out.pop_back();
+    while (!out.empty() && out.front() == '_')
+        out.erase(out.begin());
+    return out.empty() ? "game" : out;
+}
+
+std::string uniquePath(const fs::path& dir, const std::string& stem, const std::string& ext)
+{
+    fs::path path = dir / (stem + "." + ext);
+    int i = 1;
+    while (fs::exists(path))
+        path = dir / (stem + "_" + std::to_string(i++) + "." + ext);
+    return path.string();
+}
+
+std::string gameIdFromEntry(const beiklive::GameEntry& entry)
+{
+    if (entry.crc32 != 0)
+        return std::to_string(entry.crc32);
+    return entry.path;
+}
+
+std::optional<beiklive::GameEntry> findGame(const std::string& id)
+{
+    if (!beiklive::GameDB)
+        return std::nullopt;
+    try
+    {
+        int crc = std::stoi(id);
+        auto byCrc = beiklive::GameDB->findByCrc32(crc);
+        if (byCrc)
+            return byCrc;
+    }
+    catch (...)
+    {
+    }
+    return beiklive::GameDB->findByPath(uriDecode(id));
+}
+
+bool saveGame(beiklive::GameEntry& entry)
+{
+    if (!beiklive::GameDB)
+        return false;
+    beiklive::GameDB->upsertByPath(entry);
+    return beiklive::GameDB->flush();
+}
+
+void replyJson(mg_connection* c, int status, const nlohmann::json& body)
+{
+    std::string data = body.dump();
+    std::string headers = std::string(JSON_HEADERS) + CORS_HEADERS;
+    mg_http_reply(c, status, headers.c_str(), "%s", data.c_str());
+}
+
+void replyError(mg_connection* c, int status, const std::string& message)
+{
+    replyJson(c, status, {{"ok", false}, {"error", message}});
+}
+
+void ensureDir(const std::string& path)
+{
+    std::error_code ec;
+    fs::create_directories(path, ec);
+}
+
+std::string defaultSavePath(const std::string& stem)
+{
+    fs::path path = fs::path(beiklive::path::savePath()) / "web" / stem;
+    ensureDir(path.string());
+    return path.string();
+}
+
+std::string uploadDirForKind(const std::string& kind, int platform)
+{
+    if (kind == "cover")
+        return (fs::path(beiklive::path::cachePath()) / "covers").string();
+    if (kind == "save")
+        return beiklive::path::savePath();
+    return (fs::path(beiklive::path::romPath()) / platformDir(platform)).string();
+}
+
+std::string saveDirForGame(const beiklive::GameEntry& game)
+{
+    if (!game.savePath.empty())
+        return game.savePath;
+    return defaultSavePath(fs::path(game.path).stem().string());
+}
+
+std::uintmax_t safeFileSize(const fs::path& path)
+{
+    std::error_code ec;
+    auto size = fs::file_size(path, ec);
+    return ec ? 0 : size;
+}
+
+std::string safeModTime(const fs::path& path)
+{
+    return beiklive::tools::getFileModTimeStr(path.string());
+}
+
+int parseStateSlot(const std::string& stem, const fs::path& path)
+{
+    std::string name = path.filename().string();
+    std::string prefix = stem + ".ss";
+    if (name.rfind(prefix, 0) != 0)
+        return -1;
+
+    std::string tail = name.substr(prefix.size());
+    if (tail.empty() || !std::all_of(tail.begin(), tail.end(), [](unsigned char c) { return std::isdigit(c); }))
+        return -1;
+
+    try
+    {
+        return std::stoi(tail);
+    }
+    catch (...)
+    {
+        return -1;
+    }
+}
+
+std::vector<fs::path> listImageFiles(const std::string& gameId = "")
+{
+    std::vector<fs::path> images;
+    std::vector<fs::path> roots = {
+        fs::path(beiklive::path::ROOT) / beiklive::path::PROGRAM_NAME / "logos",
+    };
+    ensureDir(roots.front().string());
+
+    if (!gameId.empty())
+    {
+        auto game = findGame(gameId);
+        if (game && !game->savePath.empty())
+            roots.push_back(game->savePath);
+    }
+
+    std::set<std::string> visitedRoots;
+    std::set<std::string> visitedImages;
+    for (const auto& root : roots)
+    {
+        std::error_code ec;
+        fs::path canonicalRoot = fs::weakly_canonical(root, ec);
+        std::string rootKey = ec ? root.string() : canonicalRoot.string();
+        if (!visitedRoots.insert(rootKey).second || !fs::exists(root, ec))
+            continue;
+        for (const auto& entry : fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied, ec))
+        {
+            if (ec || !entry.is_regular_file())
+                continue;
+            std::string ext = trimExtDot(entry.path().extension().string());
+            if (ext == "png" || ext == "jpg" || ext == "jpeg" || ext == "webp")
+            {
+                fs::path canonicalImage = fs::weakly_canonical(entry.path(), ec);
+                std::string imageKey = ec ? entry.path().string() : canonicalImage.string();
+                if (visitedImages.insert(imageKey).second)
+                    images.push_back(entry.path());
+            }
+        }
+    }
+    return images;
+}
+
+std::string encodedPathParam(const fs::path& path)
+{
+    std::string raw = path.string();
+    std::string out(raw.size() * 3 + 1, '\0');
+    size_t n = mg_url_encode(raw.c_str(), raw.size(), out.data(), out.size());
+    out.resize(n);
+    return out;
+}
+
+std::string safeHeaderFilename(std::string name)
+{
+    for (char& c : name)
+    {
+        if (c == '"' || c == '\\' || c == '\r' || c == '\n')
+            c = '_';
+    }
+    return name.empty() ? "save.dat" : name;
+}
+
+std::string htmlRoot()
+{
+#ifdef __SWITCH__
+    fs::path sd = fs::path("sdmc:/GBAStation/web");
+    std::error_code ec;
+    if (fs::exists(sd, ec))
+        return sd.string();
+#endif
+    return beiklive::res_path("web");
+}
+
+std::string webLogoPath()
+{
+#ifdef __SWITCH__
+    fs::path requested("romfs:/icon/defaullt.png");
+    std::error_code ec;
+    if (fs::exists(requested, ec))
+        return requested.string();
+
+    fs::path fallback("romfs:/icon/default.png");
+    if (fs::exists(fallback, ec))
+        return fallback.string();
+#endif
+    return beiklive::res_path("icon/default.png");
+}
+
+bool pathInsideDirectory(const fs::path& target, const fs::path& dir, fs::path& canonicalTarget)
+{
+    std::error_code ec;
+    fs::path canonicalDir = fs::weakly_canonical(dir, ec);
+    if (ec)
+        return false;
+    canonicalTarget = fs::weakly_canonical(target, ec);
+    if (ec)
+        return false;
+    std::string dirStr = canonicalDir.string();
+    std::string targetStr = canonicalTarget.string();
+    return targetStr == dirStr || (targetStr.size() > dirStr.size() &&
+           targetStr.rfind(dirStr, 0) == 0 &&
+           (dirStr.empty() || dirStr.back() == fs::path::preferred_separator || dirStr.back() == '/' || dirStr.back() == '\\' ||
+            targetStr[dirStr.size()] == fs::path::preferred_separator ||
+            targetStr[dirStr.size()] == '/' ||
+            targetStr[dirStr.size()] == '\\'));
+}
+
+} // namespace
+
+ApiRouter::ApiRouter(std::atomic<bool>& stopRequested)
+    : stopRequested_(stopRequested)
+{
+}
+
+void ApiRouter::Handle(mg_connection* c, mg_http_message* hm)
+{
+    std::string method = strFromMg(hm->method);
+    std::string uri = strFromMg(hm->uri);
+
+    if (method == "OPTIONS")
+    {
+        mg_http_reply(c, 204, CORS_HEADERS, "");
+        return;
+    }
+
+    try
+    {
+        if (uri.rfind("/api/", 0) == 0)
+            handleApi(c, hm, method, uri);
+        else
+            serveStatic(c, hm);
+    }
+    catch (const std::exception& e)
+    {
+        replyError(c, 500, e.what());
+    }
+    catch (...)
+    {
+        replyError(c, 500, "unknown error");
+    }
+}
+
+void ApiRouter::handleApi(mg_connection* c, mg_http_message* hm, const std::string& method, const std::string& uri)
+{
+    if (uri == "/api/games" && method == "GET")
+        return handleGames(c);
+    if (uri == "/api/upload/start" && method == "POST")
+        return handleUploadStart(c, hm);
+    if (uri == "/api/upload/chunk" && method == "POST")
+        return handleUploadChunk(c, hm);
+    if (uri == "/api/upload/finish" && method == "POST")
+        return handleUploadFinish(c, hm);
+    if (uri == "/api/images" && method == "GET")
+        return handleImages(c, hm);
+    if (uri == "/api/image" && method == "GET")
+        return handleImageFile(c, hm);
+    if (uri == "/api/logo" && method == "GET")
+        return handleLogoFile(c, hm);
+    if (uri.rfind("/api/system", 0) == 0)
+        return handleSystem(c, hm, method, uri);
+    if (uri.rfind("/api/game/", 0) == 0)
+        return handleGameById(c, hm, method, uri);
+    replyError(c, 404, "api not found");
+}
+
+void ApiRouter::handleGames(mg_connection* c)
+{
+    nlohmann::json games = nlohmann::json::array();
+    if (beiklive::GameDB)
+    {
+        for (const auto& entry : beiklive::GameDB->getAll())
+        {
+            nlohmann::json item;
+            beiklive::to_json(item, entry);
+            item["id"] = gameIdFromEntry(entry);
+            item["platformName"] = beiklive::tools::platformBadgeName(entry.platform);
+            games.push_back(item);
+        }
+    }
+    replyJson(c, 200, {{"ok", true}, {"games", games}});
+}
+
+void ApiRouter::handleGameById(mg_connection* c, mg_http_message* hm, const std::string& method, const std::string& uri)
+{
+    std::string rest = uri.substr(std::string("/api/game/").size());
+    auto slash = rest.find('/');
+    std::string id = slash == std::string::npos ? rest : rest.substr(0, slash);
+    std::string action = slash == std::string::npos ? "" : rest.substr(slash + 1);
+
+    if (action == "cover" && method == "GET")
+        return handleCoverFile(c, hm, id);
+    if (action == "saves" && method == "GET")
+        return handleSaveList(c, hm, id);
+    if (action == "save/delete" && method == "DELETE")
+        return handleSaveDelete(c, hm, id);
+    if (action == "save/export" && method == "GET")
+        return handleSaveExport(c, hm, id);
+    if (action == "save/start" && method == "POST")
+        return handleSaveStart(c, hm, id);
+    if (action == "cover/start" && method == "POST")
+        return handleCoverStart(c, hm, id);
+    if (action == "cover/select" && method == "POST")
+        return handleCoverSelect(c, hm, id);
+
+    auto game = findGame(id);
+    if (!game)
+        return replyError(c, 404, "game not found");
+
+    if (method == "DELETE")
+    {
+        bool deleteFile = jsonLong(hm, "$.deleteFile", 0) != 0;
+        std::string path = game->path;
+        bool removed = beiklive::GameDB && beiklive::GameDB->removeByPath(path);
+        if (removed && deleteFile)
+        {
+            std::error_code ec;
+            fs::remove(path, ec);
+        }
+        bool saved = removed && beiklive::GameDB->flush();
+        return replyJson(c, 200, {{"ok", removed}, {"saved", saved}});
+    }
+
+    if (method == "PUT")
+    {
+        std::string title = jsonString(hm, "$.title", game->title);
+        game->title = title.empty() ? game->title : title;
+        bool saved = saveGame(*game);
+        return replyJson(c, 200, {{"ok", saved}, {"saved", saved}});
+    }
+
+    replyError(c, 405, "method not allowed");
+}
+
+std::string ApiRouter::makeToken()
+{
+    std::lock_guard<std::mutex> lock(uploadMutex_);
+    return std::to_string(nextToken_++);
+}
+
+void ApiRouter::handleUploadStart(mg_connection* c, mg_http_message* hm)
+{
+    std::string kind = jsonString(hm, "$.kind", "rom");
+    std::string originalName = jsonString(hm, "$.name");
+    std::uint64_t totalSize = static_cast<std::uint64_t>(std::max<long>(0, jsonLong(hm, "$.size")));
+
+    if (originalName.empty())
+        return replyError(c, 400, "missing filename");
+    if (totalSize > MAX_UPLOAD_SIZE)
+        return replyError(c, 400, "file too large");
+
+    fs::path original(originalName);
+    std::string ext = trimExtDot(original.extension().string());
+    int platform = platformFromExt(ext);
+    if (kind == "rom" && platform == 0)
+        return replyError(c, 400, "unsupported rom extension");
+    if (kind == "cover" && !(ext == "png" || ext == "jpg" || ext == "jpeg" || ext == "webp"))
+        return replyError(c, 400, "unsupported image extension");
+
+    std::string stem = original.stem().string();
+    std::string safeStem = safeStemFromTitle(stem);
+    std::string targetDir = uploadDirForKind(kind, platform);
+    ensureDir(targetDir);
+    std::string target = uniquePath(targetDir, safeStem, ext);
+
+    UploadSession session;
+    session.token = makeToken();
+    session.kind = kind;
+    session.originalName = originalName;
+    session.title = containsNonAscii(stem) ? stem : safeStem;
+    session.targetPath = target;
+    session.platform = platform;
+    session.totalSize = totalSize;
+
+    {
+        std::lock_guard<std::mutex> lock(uploadMutex_);
+        uploads_[session.token] = session;
+    }
+
+    replyJson(c, 200, {
+        {"ok", true},
+        {"token", session.token},
+        {"targetName", fs::path(target).filename().string()},
+        {"targetPath", target},
+        {"title", session.title},
+        {"platform", platform},
+    });
+}
+
+bool ApiRouter::writeChunk(const UploadSession& session, mg_http_message* hm, std::uint64_t offset, std::string& error)
+{
+    if (offset + hm->body.len > session.totalSize || session.totalSize > MAX_UPLOAD_SIZE)
+    {
+        error = "upload size mismatch";
+        return false;
+    }
+
+    FILE* fp = std::fopen(session.targetPath.c_str(), offset == 0 ? "wb" : "r+b");
+    if (!fp)
+    {
+        error = "open target failed";
+        return false;
+    }
+    if (std::fseek(fp, static_cast<long>(offset), SEEK_SET) != 0)
+    {
+        std::fclose(fp);
+        error = "seek target failed";
+        return false;
+    }
+    size_t written = std::fwrite(hm->body.buf, 1, hm->body.len, fp);
+    std::fclose(fp);
+    if (written != hm->body.len)
+    {
+        error = "write target failed";
+        return false;
+    }
+    return true;
+}
+
+void ApiRouter::handleUploadChunk(mg_connection* c, mg_http_message* hm)
+{
+    std::string token = decodeQuery(hm, "token");
+    std::uint64_t offset = 0;
+    try { offset = static_cast<std::uint64_t>(std::stoull(decodeQuery(hm, "offset"))); } catch (...) {}
+
+    UploadSession session;
+    {
+        std::lock_guard<std::mutex> lock(uploadMutex_);
+        auto it = uploads_.find(token);
+        if (it == uploads_.end())
+            return replyError(c, 404, "upload not found");
+        session = it->second;
+    }
+
+    std::string error;
+    if (!writeChunk(session, hm, offset, error))
+        return replyError(c, 400, error);
+    replyJson(c, 200, {{"ok", true}, {"offset", offset + hm->body.len}});
+}
+
+void ApiRouter::handleUploadFinish(mg_connection* c, mg_http_message* hm)
+{
+    std::string token = jsonString(hm, "$.token");
+    UploadSession session;
+    {
+        std::lock_guard<std::mutex> lock(uploadMutex_);
+        auto it = uploads_.find(token);
+        if (it == uploads_.end())
+            return replyError(c, 404, "upload not found");
+        session = it->second;
+        uploads_.erase(it);
+    }
+
+    if (session.kind == "rom")
+    {
+        beiklive::GameEntry entry;
+        entry.path = session.targetPath;
+        entry.title = session.title;
+        entry.platform = session.platform;
+        entry.logoPath = beiklive::tools::getDefaultLogoPath(static_cast<beiklive::enums::EmuPlatform>(session.platform));
+        entry.savePath = defaultSavePath(fs::path(session.targetPath).stem().string());
+        entry.crc32 = static_cast<int>(beiklive::tools::crc32(session.targetPath));
+        bool saved = saveGame(entry);
+        return replyJson(c, 200, {{"ok", saved}, {"saved", saved}, {"gameId", gameIdFromEntry(entry)}});
+    }
+
+    if (session.kind == "save")
+    {
+        auto game = findGame(session.gameId);
+        if (!game)
+            return replyError(c, 404, "game not found");
+        game->savePath = fs::path(session.targetPath).parent_path().string();
+        bool saved = saveGame(*game);
+        return replyJson(c, 200, {{"ok", saved}, {"saved", saved}, {"path", session.targetPath}});
+    }
+
+    if (session.kind == "cover")
+    {
+        auto game = findGame(session.gameId);
+        if (!game)
+            return replyError(c, 404, "game not found");
+        game->logoPath = session.targetPath;
+        bool saved = saveGame(*game);
+        return replyJson(c, 200, {{"ok", saved}, {"saved", saved}, {"path", session.targetPath}});
+    }
+
+    replyJson(c, 200, {{"ok", true}, {"path", session.targetPath}});
+}
+
+void ApiRouter::handleSaveStart(mg_connection* c, mg_http_message* hm, const std::string& gameId)
+{
+    auto game = findGame(gameId);
+    if (!game)
+        return replyError(c, 404, "game not found");
+
+    fs::path rom(game->path);
+    std::string targetDir = saveDirForGame(*game);
+    ensureDir(targetDir);
+    std::string type = jsonString(hm, "$.type", "battery");
+    int slot = static_cast<int>(jsonLong(hm, "$.slot", 0));
+
+    UploadSession session;
+    session.token = makeToken();
+    session.kind = "save";
+    session.gameId = gameId;
+    session.originalName = jsonString(hm, "$.name", type == "state" ? rom.stem().string() + ".ss" + std::to_string(slot)
+                                                                     : rom.stem().string() + ".sav");
+    session.totalSize = static_cast<std::uint64_t>(std::max<long>(0, jsonLong(hm, "$.size")));
+    session.targetPath = (fs::path(targetDir) /
+                          (type == "state" ? rom.stem().string() + ".ss" + std::to_string(slot)
+                                           : rom.stem().string() + ".sav"))
+                             .string();
+
+    {
+        std::lock_guard<std::mutex> lock(uploadMutex_);
+        uploads_[session.token] = session;
+    }
+    replyJson(c, 200, {{"ok", true}, {"token", session.token}, {"targetPath", session.targetPath}});
+}
+
+void ApiRouter::handleSaveList(mg_connection* c, mg_http_message*, const std::string& gameId)
+{
+    auto game = findGame(gameId);
+    if (!game)
+        return replyError(c, 404, "game not found");
+
+    fs::path rom(game->path);
+    std::string stem = rom.stem().string();
+    fs::path saveDir = saveDirForGame(*game);
+    nlohmann::json battery = nlohmann::json::array();
+    nlohmann::json states = nlohmann::json::array();
+
+    fs::path batteryPath = saveDir / (stem + ".sav");
+    if (fs::exists(batteryPath))
+    {
+        battery.push_back({
+            {"type", "battery"},
+            {"name", batteryPath.filename().string()},
+            {"path", batteryPath.string()},
+            {"size", safeFileSize(batteryPath)},
+            {"modified", safeModTime(batteryPath)},
+        });
+    }
+
+    std::error_code ec;
+    if (fs::exists(saveDir, ec))
+    {
+        for (const auto& entry : fs::directory_iterator(saveDir, fs::directory_options::skip_permission_denied, ec))
+        {
+            if (ec || !entry.is_regular_file())
+                continue;
+
+            fs::path path = entry.path();
+            if (trimExtDot(path.extension().string()) == "png")
+                continue;
+
+            int slot = parseStateSlot(stem, path);
+            if (slot < 0)
+                continue;
+
+            fs::path thumb = path.string() + ".png";
+            nlohmann::json item = {
+                {"type", "state"},
+                {"slot", slot},
+                {"name", path.filename().string()},
+                {"path", path.string()},
+                {"size", safeFileSize(path)},
+                {"modified", safeModTime(path)},
+                {"thumbPath", fs::exists(thumb) ? thumb.string() : ""},
+                {"thumbUrl", fs::exists(thumb) ? "/api/image?path=" + encodedPathParam(thumb) : ""},
+            };
+            states.push_back(item);
+        }
+    }
+
+    std::sort(states.begin(), states.end(), [](const nlohmann::json& a, const nlohmann::json& b) {
+        return a.value("slot", 0) < b.value("slot", 0);
+    });
+
+    replyJson(c, 200, {
+        {"ok", true},
+        {"saveDir", saveDir.string()},
+        {"battery", battery},
+        {"states", states},
+    });
+}
+
+void ApiRouter::handleSaveDelete(mg_connection* c, mg_http_message* hm, const std::string& gameId)
+{
+    auto game = findGame(gameId);
+    if (!game)
+        return replyError(c, 404, "game not found");
+
+    std::string path = jsonString(hm, "$.path");
+    if (path.empty())
+        return replyError(c, 400, "missing path");
+
+    fs::path canonicalTarget;
+    if (!pathInsideDirectory(path, saveDirForGame(*game), canonicalTarget))
+        return replyError(c, 403, "path outside save dir");
+
+    std::error_code ec;
+    bool removed = fs::remove(canonicalTarget, ec);
+    fs::remove(fs::path(canonicalTarget.string() + ".png"), ec);
+    bool saved = beiklive::GameDB ? beiklive::GameDB->flush() : false;
+    replyJson(c, 200, {{"ok", removed}, {"saved", saved}});
+}
+
+void ApiRouter::handleSaveExport(mg_connection* c, mg_http_message* hm, const std::string& gameId)
+{
+    auto game = findGame(gameId);
+    if (!game)
+        return replyError(c, 404, "game not found");
+
+    std::string path = decodeQuery(hm, "path");
+    if (path.empty())
+        return replyError(c, 400, "missing path");
+
+    fs::path canonicalTarget;
+    if (!pathInsideDirectory(path, saveDirForGame(*game), canonicalTarget))
+        return replyError(c, 403, "path outside save dir");
+    if (!fs::exists(canonicalTarget) || !fs::is_regular_file(canonicalTarget))
+        return replyError(c, 404, "save file not found");
+
+    std::string disposition = "Content-Disposition: attachment; filename=\"" +
+        safeHeaderFilename(canonicalTarget.filename().string()) + "\"\r\n";
+    std::string headers = std::string(CORS_HEADERS) + disposition;
+    mg_http_serve_opts opts = {};
+    opts.extra_headers = headers.c_str();
+    mg_http_serve_file(c, hm, canonicalTarget.string().c_str(), &opts);
+}
+
+void ApiRouter::handleCoverStart(mg_connection* c, mg_http_message* hm, const std::string& gameId)
+{
+    auto game = findGame(gameId);
+    if (!game)
+        return replyError(c, 404, "game not found");
+
+    fs::path original(jsonString(hm, "$.name", "cover.png"));
+    std::string ext = trimExtDot(original.extension().string());
+    if (ext != "png" && ext != "jpg" && ext != "jpeg" && ext != "webp")
+        return replyError(c, 400, "unsupported image extension");
+
+    std::string stem = fs::path(game->path).stem().string() + "_cover";
+    fs::path targetDir = fs::path(beiklive::path::cachePath()) / "covers";
+    ensureDir(targetDir.string());
+
+    UploadSession session;
+    session.token = makeToken();
+    session.kind = "cover";
+    session.gameId = gameId;
+    session.originalName = original.string();
+    session.totalSize = static_cast<std::uint64_t>(std::max<long>(0, jsonLong(hm, "$.size")));
+    session.targetPath = uniquePath(targetDir, safeStemFromTitle(stem), ext);
+
+    {
+        std::lock_guard<std::mutex> lock(uploadMutex_);
+        uploads_[session.token] = session;
+    }
+    replyJson(c, 200, {{"ok", true}, {"token", session.token}, {"targetPath", session.targetPath}});
+}
+
+void ApiRouter::handleCoverSelect(mg_connection* c, mg_http_message* hm, const std::string& gameId)
+{
+    auto game = findGame(gameId);
+    if (!game)
+        return replyError(c, 404, "game not found");
+    std::string path = jsonString(hm, "$.path");
+    if (path.empty() || !fs::exists(path))
+        return replyError(c, 400, "image not found");
+    game->logoPath = path;
+    bool saved = saveGame(*game);
+    replyJson(c, 200, {{"ok", saved}, {"saved", saved}, {"logoPath", path}});
+}
+
+void ApiRouter::handleImages(mg_connection* c, mg_http_message* hm)
+{
+    std::string gameId = decodeQuery(hm, "gameId");
+    nlohmann::json items = nlohmann::json::array();
+    for (const auto& path : listImageFiles(gameId))
+    {
+        items.push_back({
+            {"name", path.filename().string()},
+            {"path", path.string()},
+            {"url", "/api/image?path=" + encodedPathParam(path)},
+        });
+    }
+    replyJson(c, 200, {{"ok", true}, {"images", items}});
+}
+
+void ApiRouter::handleImageFile(mg_connection* c, mg_http_message* hm)
+{
+    std::string path = decodeQuery(hm, "path");
+    if (path.empty() || !fs::exists(path))
+        return replyError(c, 404, "image not found");
+    mg_http_serve_opts opts = {};
+    opts.extra_headers = CORS_HEADERS;
+    mg_http_serve_file(c, hm, path.c_str(), &opts);
+}
+
+void ApiRouter::handleLogoFile(mg_connection* c, mg_http_message* hm)
+{
+    std::string path = webLogoPath();
+    if (path.empty() || !fs::exists(path))
+        return replyError(c, 404, "logo not found");
+    mg_http_serve_opts opts = {};
+    opts.extra_headers = CORS_HEADERS;
+    mg_http_serve_file(c, hm, path.c_str(), &opts);
+}
+
+void ApiRouter::handleCoverFile(mg_connection* c, mg_http_message* hm, const std::string& gameId)
+{
+    auto game = findGame(gameId);
+    if (!game)
+        return replyError(c, 404, "game not found");
+    std::string path = game->logoPath;
+    if (path.empty() || !fs::exists(path))
+        path = beiklive::tools::getDefaultLogoPath(static_cast<beiklive::enums::EmuPlatform>(game->platform));
+    if (!fs::exists(path))
+        return replyError(c, 404, "cover not found");
+    mg_http_serve_opts opts = {};
+    opts.extra_headers = CORS_HEADERS;
+    mg_http_serve_file(c, hm, path.c_str(), &opts);
+}
+
+void ApiRouter::handleSystem(mg_connection* c, mg_http_message*, const std::string& method, const std::string& uri)
+{
+    if (uri == "/api/system/stop" && method == "POST")
+    {
+        stopRequested_.store(true);
+        return replyJson(c, 200, {{"ok", true}});
+    }
+    replyError(c, 404, "system api not found");
+}
+
+void ApiRouter::serveStatic(mg_connection* c, mg_http_message* hm)
+{
+    mg_http_serve_opts opts = {};
+    std::string root = htmlRoot();
+    opts.root_dir = root.c_str();
+    opts.extra_headers = CORS_HEADERS;
+    mg_http_serve_dir(c, hm, &opts);
+}
+
+} // namespace beiklive::network

@@ -129,8 +129,10 @@ endif ()
 
 include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/src)
 include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/third_party/miniz)
+include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mongoose)
 file(GLOB_RECURSE MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
 list(APPEND MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/third_party/miniz/miniz.c)
+list(APPEND MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mongoose/mongoose.c)
 # list(APPEND MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp)
 
 
@@ -162,6 +164,9 @@ endif ()
 program_target(${PROJECT_NAME} "${MAIN_SRC}")
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17)
 target_compile_definitions(${PROJECT_NAME} PRIVATE APP_VERSION="${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_ALTER}")
+if (PLATFORM_SWITCH)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE MG_ARCH=MG_ARCH_UNIX)
+endif()
 
 
 # 生成发布文件
