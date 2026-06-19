@@ -76,6 +76,9 @@ body {
 .fa-list-check::before { content: "\f0ae"; }
 .fa-check::before { content: "\f00c"; }
 .fa-download::before { content: "\f019"; }
+.fa-file-arrow-up::before { content: "\f574"; }
+.fa-folder-open::before { content: "\f07c"; }
+.fa-ban::before { content: "\f05e"; }
 
 .app-titlebar {
   height: var(--titlebar-height);
@@ -143,6 +146,10 @@ button {
 }
 button:hover { border-color: var(--accent); }
 button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
 
 .upload-zone {
   min-height: 132px;
@@ -156,6 +163,23 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 }
 .upload-zone .fa-solid { font-size: 28px; color: var(--accent); }
 .upload-zone small { color: var(--muted); }
+.upload-zone.active {
+  border-color: var(--accent);
+  background: var(--accent-ring);
+}
+.upload-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.upload-actions button {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 10px;
+}
 
 .platform-tabs {
   display: grid;
@@ -331,6 +355,130 @@ h1 { font-size: 28px; letter-spacing: 0; }
   background: var(--accent-2);
 }
 
+.upload-dialog {
+  width: min(920px, 94vw);
+  max-height: 88vh;
+  overflow: auto;
+}
+.upload-dialog-head p {
+  color: var(--muted);
+  margin-top: 5px;
+}
+.upload-overview {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.upload-overview > div {
+  min-height: 70px;
+  display: grid;
+  gap: 6px;
+  align-content: center;
+  padding: 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.upload-overview span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.upload-overview strong {
+  font-size: 20px;
+}
+.upload-total-track {
+  margin-bottom: 12px;
+}
+.upload-dialog-tools {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+.upload-dialog-tools button {
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 12px;
+}
+.upload-queue-list {
+  display: grid;
+  gap: 9px;
+}
+.upload-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+.upload-row-main {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+.upload-row-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.upload-row-title strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.upload-row-title small,
+.upload-row-meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+.upload-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+.upload-row .progress-track {
+  height: 7px;
+}
+.upload-row-actions button {
+  min-width: 88px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 10px;
+}
+.upload-status {
+  min-width: 58px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 12px;
+}
+.upload-status.uploading {
+  color: var(--accent);
+  background: var(--accent-ring);
+}
+.upload-status.done {
+  color: var(--accent-2);
+  background: rgba(20, 162, 123, .14);
+}
+.upload-status.failed,
+.upload-status.cancelled {
+  color: var(--danger);
+  background: rgba(217, 45, 32, .12);
+}
+
 .game-sections {
   display: grid;
   gap: 24px;
@@ -501,7 +649,7 @@ h1 { font-size: 28px; letter-spacing: 0; }
 }
 .detail-cover {
   width: 100%;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 1;
   object-fit: cover;
   border-radius: 8px;
   border: 1px solid var(--border);
@@ -780,6 +928,22 @@ dialog::backdrop { background: rgba(0, 0, 0, .45); }
     width: 100%;
   }
   .content { padding: 18px; }
+  .upload-overview {
+    grid-template-columns: 1fr;
+  }
+  .upload-row {
+    grid-template-columns: 1fr;
+  }
+  .upload-row-actions {
+    display: flex;
+    justify-content: flex-end;
+  }
+  .upload-dialog {
+    width: 100vw;
+    max-width: 100vw;
+    max-height: 100vh;
+    border-radius: 0;
+  }
   .game-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

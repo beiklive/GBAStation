@@ -3,16 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>BeikLiveStation Web Manager</title>
+  <title>GBAStation Web 管理器</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
   <header class="app-titlebar">
     <div class="brand">
-      <span class="brand-mark"><img src="/api/logo" alt="BeikLiveStation"></span>
+      <span class="brand-mark"><img src="/api/logo" alt="GBAStation"></span>
       <div class="brand-copy">
-        <strong>BeikLiveStation</strong>
+        <strong>GBAStation</strong>
         <span>Web Manager</span>
       </div>
     </div>
@@ -22,10 +22,15 @@
     <aside class="sidebar">
       <button class="upload-zone" id="uploadZone">
         <i class="fa-solid fa-cloud-arrow-up"></i>
-        <span>批量导入 ROM</span>
-        <small>.gba .gb .gbc .nes .sfc</small>
+        <span>导入 ROM</span>
+        <small>支持文件或文件夹扫描</small>
       </button>
+      <div class="upload-actions">
+        <button id="chooseRomFilesBtn"><i class="fa-solid fa-file-arrow-up"></i><span>选择文件</span></button>
+        <button id="chooseRomFolderBtn"><i class="fa-solid fa-folder-open"></i><span>选择文件夹</span></button>
+      </div>
       <input id="romInput" type="file" multiple accept=".gba,.gb,.gbc,.nes,.fds,.sfc,.smc" hidden>
+      <input id="romFolderInput" type="file" multiple webkitdirectory directory hidden>
 
       <nav class="platform-tabs" id="platformTabs"></nav>
 
@@ -72,8 +77,8 @@
 
       <section class="progress-panel" id="progressPanel" hidden>
         <div>
-          <strong id="progressTitle">导入中</strong>
-          <span id="progressText">准备上传</span>
+          <strong id="progressTitle">处理中</strong>
+          <span id="progressText">准备执行</span>
         </div>
         <div class="progress-track"><span id="progressBar"></span></div>
       </section>
@@ -169,6 +174,35 @@
       <label>Y <input id="cropY" type="range" min="-160" max="160" step="1" value="0"></label>
       <button id="uploadCroppedBtn"><i class="fa-solid fa-upload"></i><span>上传封面</span></button>
     </div>
+  </dialog>
+
+  <dialog id="uploadDialog" class="upload-dialog">
+    <div class="dialog-head upload-dialog-head">
+      <div>
+        <h3>上传队列</h3>
+        <p id="uploadSummaryText">等待选择 ROM 文件</p>
+      </div>
+      <button class="icon-btn" id="closeUploadDialogBtn" title="关闭"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="upload-overview">
+      <div>
+        <span>总进度</span>
+        <strong id="uploadTotalPercent">0%</strong>
+      </div>
+      <div>
+        <span>上传速度</span>
+        <strong id="uploadTotalSpeed">0 B/s</strong>
+      </div>
+      <div>
+        <span>已完成</span>
+        <strong id="uploadDoneCount">0 / 0</strong>
+      </div>
+    </div>
+    <div class="progress-track upload-total-track"><span id="uploadTotalBar"></span></div>
+    <div class="upload-dialog-tools">
+      <button id="cancelAllUploadsBtn" class="danger"><i class="fa-solid fa-ban"></i><span>全部取消</span></button>
+    </div>
+    <div id="uploadQueueList" class="upload-queue-list"></div>
   </dialog>
 
   <div class="toast" id="toast"></div>

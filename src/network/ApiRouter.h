@@ -42,6 +42,7 @@ private:
     void handleUploadStart(mg_connection* c, mg_http_message* hm);
     void handleUploadChunk(mg_connection* c, mg_http_message* hm);
     void handleUploadFinish(mg_connection* c, mg_http_message* hm);
+    void handleUploadCancel(mg_connection* c, mg_http_message* hm);
     void handleSaveStart(mg_connection* c, mg_http_message* hm, const std::string& gameId);
     void handleSaveList(mg_connection* c, mg_http_message* hm, const std::string& gameId);
     void handleSaveDelete(mg_connection* c, mg_http_message* hm, const std::string& gameId);

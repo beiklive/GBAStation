@@ -463,6 +463,8 @@ void ApiRouter::handleApi(mg_connection* c, mg_http_message* hm, const std::stri
         return handleUploadChunk(c, hm);
     if (uri == "/api/upload/finish" && method == "POST")
         return handleUploadFinish(c, hm);
+    if (uri == "/api/upload/cancel" && method == "POST")
+        return handleUploadCancel(c, hm);
     if (uri == "/api/images" && method == "GET")
         return handleImages(c, hm);
     if (uri == "/api/image" && method == "GET")
@@ -648,6 +650,34 @@ void ApiRouter::handleUploadChunk(mg_connection* c, mg_http_message* hm)
     if (!writeChunk(session, hm, offset, error))
         return replyError(c, 400, error);
     replyJson(c, 200, {{"ok", true}, {"offset", offset + hm->body.len}});
+}
+
+void ApiRouter::handleUploadCancel(mg_connection* c, mg_http_message* hm)
+{
+    std::string token = jsonString(hm, "$.token");
+    if (token.empty())
+        token = decodeQuery(hm, "token");
+
+    UploadSession session;
+    bool found = false;
+    {
+        std::lock_guard<std::mutex> lock(uploadMutex_);
+        auto it = uploads_.find(token);
+        if (it != uploads_.end())
+        {
+            session = it->second;
+            uploads_.erase(it);
+            found = true;
+        }
+    }
+
+    if (found && !session.targetPath.empty())
+    {
+        std::error_code ec;
+        fs::remove(session.targetPath, ec);
+    }
+
+    replyJson(c, 200, {{"ok", true}, {"cancelled", found}});
 }
 
 void ApiRouter::handleUploadFinish(mg_connection* c, mg_http_message* hm)

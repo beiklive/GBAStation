@@ -11,7 +11,13 @@ const state = {
   view: 'grid',
   selectionMode: false,
   selectedIds: new Set(),
+  uploadTasks: [],
+  uploadActive: false,
+  uploadCancelAll: false,
+  uploadNextId: 1,
 };
+
+const romExtensions = new Set(['gba', 'gb', 'gbc', 'nes', 'fds', 'sfc', 'smc']);
 
 const platforms = [
   ['GBA', 'GBA'],
@@ -82,6 +88,25 @@ function formatSize(bytes) {
     index++;
   }
   return `${value.toFixed(index ? 1 : 0)} ${units[index]}`;
+}
+
+function formatSpeed(bytesPerSecond) {
+  return `${formatSize(bytesPerSecond)}/s`;
+}
+
+function romFilesFromList(files) {
+  const seen = new Set();
+  const roms = [];
+  for (const file of files || []) {
+    const name = file.name || '';
+    const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
+    if (!romExtensions.has(ext)) continue;
+    const key = `${file.webkitRelativePath || name}:${file.size}:${file.lastModified}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    roms.push(file);
+  }
+  return roms.sort((a, b) => (a.webkitRelativePath || a.name).localeCompare(b.webkitRelativePath || b.name, 'zh-Hans'));
 }
 
 async function loadGames(keepPage = false) {
@@ -354,41 +379,264 @@ async function deleteSave(path) {
   await loadSaves();
 }
 
-async function uploadFile(file, startUrl, finishKind = 'rom', extraStartData = {}) {
+async function uploadFile(file, startUrl, finishKind = 'rom', extraStartData = {}, callbacks = {}) {
   const start = await api(startUrl, {
     method: 'POST',
     body: JSON.stringify({ name: file.name, size: file.size, kind: finishKind, ...extraStartData }),
   });
+  callbacks.onStart?.(start);
   const chunkSize = 2 * 1024 * 1024;
   let offset = 0;
-  while (offset < file.size) {
-    const chunk = file.slice(offset, offset + chunkSize);
-    await api(`/api/upload/chunk?token=${encodeURIComponent(start.token)}&offset=${offset}`, {
+  try {
+    while (offset < file.size) {
+      if (callbacks.isCancelled?.()) throw new DOMException('upload cancelled', 'AbortError');
+      const chunk = file.slice(offset, offset + chunkSize);
+      await api(`/api/upload/chunk?token=${encodeURIComponent(start.token)}&offset=${offset}`, {
+        method: 'POST',
+        body: chunk,
+        headers: { 'Content-Type': 'application/octet-stream' },
+        signal: callbacks.signal,
+      });
+      offset += chunk.size;
+      callbacks.onProgress?.(offset);
+      setProgress(`${file.name}`, file.size ? offset / file.size : 1);
+    }
+    if (callbacks.isCancelled?.()) throw new DOMException('upload cancelled', 'AbortError');
+    return await api('/api/upload/finish', {
       method: 'POST',
-      body: chunk,
-      headers: { 'Content-Type': 'application/octet-stream' },
+      body: JSON.stringify({ token: start.token }),
+      signal: callbacks.signal,
     });
-    offset += chunk.size;
-    setProgress(`${file.name}`, file.size ? offset / file.size : 1);
+  } catch (err) {
+    if (start.token) {
+      try {
+        await api('/api/upload/cancel', {
+          method: 'POST',
+          body: JSON.stringify({ token: start.token }),
+        });
+      } catch (_) {
+      }
+    }
+    throw err;
   }
-  return api('/api/upload/finish', { method: 'POST', body: JSON.stringify({ token: start.token }) });
 }
 
 async function uploadRoms(files) {
-  if (!files.length) return;
-  showProgress('批量导入 ROM');
-  try {
-    for (let i = 0; i < files.length; i++) {
-      $('progressTitle').textContent = `导入 ${i + 1} / ${files.length}`;
-      await uploadFile(files[i], '/api/upload/start', 'rom');
-    }
-    toast('导入完成，GameDB 已保存');
-    await loadGames(true);
-  } catch (err) {
-    toast(err.message);
-  } finally {
-    hideProgress();
+  const roms = romFilesFromList(files);
+  if (!roms.length) {
+    toast('没有找到支持的 ROM 文件');
+    return;
   }
+  const tasks = roms.map((file) => ({
+    id: state.uploadNextId++,
+    file,
+    name: file.name,
+    relativePath: file.webkitRelativePath || file.name,
+    size: file.size,
+    uploaded: 0,
+    speed: 0,
+    status: 'pending',
+    error: '',
+    token: '',
+    controller: null,
+    startedAt: 0,
+    lastBytes: 0,
+    lastTime: 0,
+  }));
+  state.uploadTasks = tasks;
+  state.uploadCancelAll = false;
+  renderUploadDialog();
+  $('uploadDialog').showModal();
+  runUploadQueue().catch((err) => toast(err.message));
+}
+
+async function runUploadQueue() {
+  if (state.uploadActive) return;
+  state.uploadActive = true;
+  renderUploadDialog();
+  try {
+    for (const task of state.uploadTasks) {
+      if (state.uploadCancelAll) {
+        if (task.status === 'pending') task.status = 'cancelled';
+        continue;
+      }
+      if (task.status !== 'pending') continue;
+      await uploadQueueTask(task);
+    }
+  } finally {
+    state.uploadActive = false;
+    renderUploadDialog();
+    await loadGames(true);
+    const failed = state.uploadTasks.filter((task) => task.status === 'failed').length;
+    const cancelled = state.uploadTasks.filter((task) => task.status === 'cancelled').length;
+    const done = state.uploadTasks.filter((task) => task.status === 'done').length;
+    if (done && !failed && !cancelled) toast('导入完成，GameDB 已保存');
+    else if (done) toast(`已导入 ${done} 个，${failed + cancelled} 个未完成`);
+  }
+}
+
+async function uploadQueueTask(task) {
+  task.status = 'uploading';
+  task.controller = new AbortController();
+  task.startedAt = performance.now();
+  task.lastTime = task.startedAt;
+  task.lastBytes = 0;
+  renderUploadDialog();
+  try {
+    await uploadFile(task.file, '/api/upload/start', 'rom', {}, {
+      signal: task.controller.signal,
+      isCancelled: () => task.status === 'cancelled' || state.uploadCancelAll,
+      onStart: (session) => {
+        task.token = session.token || '';
+        renderUploadDialog();
+      },
+      onProgress: (uploaded) => {
+        const now = performance.now();
+        const elapsed = Math.max(1, now - task.lastTime) / 1000;
+        task.speed = (uploaded - task.lastBytes) / elapsed;
+        task.uploaded = uploaded;
+        task.lastBytes = uploaded;
+        task.lastTime = now;
+        renderUploadDialog();
+      },
+    });
+    task.uploaded = task.size;
+    task.speed = 0;
+    task.status = 'done';
+  } catch (err) {
+    task.speed = 0;
+    if (task.status === 'cancelled' || err.name === 'AbortError') {
+      task.status = 'cancelled';
+      task.error = '已取消';
+    } else {
+      task.status = 'failed';
+      task.error = err.message || '上传失败';
+    }
+  } finally {
+    task.controller = null;
+    renderUploadDialog();
+  }
+}
+
+function cancelUploadTask(id) {
+  const task = state.uploadTasks.find((item) => item.id === id);
+  if (!task || task.status === 'done' || task.status === 'failed' || task.status === 'cancelled') return;
+  task.status = 'cancelled';
+  task.error = '已取消';
+  if (task.controller) task.controller.abort();
+  if (task.token) {
+    api('/api/upload/cancel', { method: 'POST', body: JSON.stringify({ token: task.token }) }).catch(() => {});
+  }
+  renderUploadDialog();
+}
+
+function cancelAllUploads() {
+  state.uploadCancelAll = true;
+  for (const task of state.uploadTasks) {
+    if (task.status === 'pending') {
+      task.status = 'cancelled';
+      task.error = '已取消';
+    } else if (task.status === 'uploading') {
+      cancelUploadTask(task.id);
+    }
+  }
+  renderUploadDialog();
+}
+
+function uploadStatusText(status) {
+  return {
+    pending: '等待',
+    uploading: '上传中',
+    done: '完成',
+    failed: '失败',
+    cancelled: '已取消',
+  }[status] || status;
+}
+
+function renderUploadDialog() {
+  const totalBytes = state.uploadTasks.reduce((sum, task) => sum + task.size, 0);
+  const uploadedBytes = state.uploadTasks.reduce((sum, task) => sum + Math.min(task.uploaded, task.size), 0);
+  const totalSpeed = state.uploadTasks.reduce((sum, task) => sum + (task.status === 'uploading' ? task.speed : 0), 0);
+  const doneCount = state.uploadTasks.filter((task) => task.status === 'done').length;
+  const activeCount = state.uploadTasks.filter((task) => task.status === 'uploading').length;
+  const pendingCount = state.uploadTasks.filter((task) => task.status === 'pending').length;
+  const ratio = totalBytes ? uploadedBytes / totalBytes : 0;
+
+  $('uploadSummaryText').textContent = `${state.uploadTasks.length} 个文件，${activeCount} 个上传中，${pendingCount} 个等待`;
+  $('uploadTotalPercent').textContent = `${Math.round(ratio * 100)}%`;
+  $('uploadTotalSpeed').textContent = formatSpeed(totalSpeed);
+  $('uploadDoneCount').textContent = `${doneCount} / ${state.uploadTasks.length}`;
+  $('uploadTotalBar').style.width = `${Math.max(0, Math.min(1, ratio)) * 100}%`;
+  $('cancelAllUploadsBtn').disabled = !state.uploadTasks.some((task) => task.status === 'pending' || task.status === 'uploading');
+  $('closeUploadDialogBtn').disabled = state.uploadActive;
+
+  const root = $('uploadQueueList');
+  root.innerHTML = '';
+  if (!state.uploadTasks.length) {
+    root.innerHTML = '<div class="empty compact-empty">暂无上传任务</div>';
+    return;
+  }
+
+  for (const task of state.uploadTasks) {
+    const ratio = task.size ? task.uploaded / task.size : (task.status === 'done' ? 1 : 0);
+    const canCancel = task.status === 'pending' || task.status === 'uploading';
+    const row = document.createElement('div');
+    row.className = 'upload-row';
+    row.innerHTML = `
+      <div class="upload-row-main">
+        <div class="upload-row-title">
+          <span class="upload-status ${task.status}">${uploadStatusText(task.status)}</span>
+          <strong title="${escapeHtml(task.relativePath)}">${escapeHtml(task.name)}</strong>
+        </div>
+        <div class="progress-track"><span style="width:${Math.max(0, Math.min(1, ratio)) * 100}%"></span></div>
+        <div class="upload-row-meta">
+          <span>${formatSize(task.uploaded)} / ${formatSize(task.size)}</span>
+          <span>${task.status === 'uploading' ? formatSpeed(task.speed) : escapeHtml(task.error || task.relativePath)}</span>
+        </div>
+      </div>
+      <div class="upload-row-actions">
+        <button class="danger" ${canCancel ? '' : 'disabled'} title="取消上传"><i class="fa-solid fa-ban"></i><span>取消</span></button>
+      </div>
+    `;
+    row.querySelector('button').onclick = () => cancelUploadTask(task.id);
+    root.appendChild(row);
+  }
+}
+
+function readEntryFiles(entry) {
+  return new Promise((resolve) => {
+    if (!entry) return resolve([]);
+    if (entry.isFile) {
+      entry.file((file) => resolve([file]), () => resolve([]));
+      return;
+    }
+    if (!entry.isDirectory) return resolve([]);
+
+    const reader = entry.createReader();
+    const entries = [];
+    const readBatch = () => {
+      reader.readEntries(async (batch) => {
+        if (!batch.length) {
+          const nested = await Promise.all(entries.map(readEntryFiles));
+          resolve(nested.flat());
+          return;
+        }
+        entries.push(...batch);
+        readBatch();
+      }, () => resolve([]));
+    };
+    readBatch();
+  });
+}
+
+async function filesFromDropEvent(event) {
+  const items = [...(event.dataTransfer.items || [])];
+  const entries = items.map((item) => item.webkitGetAsEntry?.()).filter(Boolean);
+  if (entries.length) {
+    const nested = await Promise.all(entries.map(readEntryFiles));
+    return nested.flat();
+  }
+  return [...(event.dataTransfer.files || [])];
 }
 
 function showProgress(title) {
@@ -589,9 +837,23 @@ async function uploadCroppedCover() {
 
 function bindEvents() {
   $('uploadZone').onclick = () => $('romInput').click();
-  $('romInput').onchange = (e) => uploadRoms([...e.target.files]);
+  $('chooseRomFilesBtn').onclick = () => $('romInput').click();
+  $('chooseRomFolderBtn').onclick = () => $('romFolderInput').click();
+  $('romInput').onchange = (e) => {
+    uploadRoms([...e.target.files]);
+    e.target.value = '';
+  };
+  $('romFolderInput').onchange = (e) => {
+    uploadRoms([...e.target.files]);
+    e.target.value = '';
+  };
   $('uploadZone').ondragover = (e) => { e.preventDefault(); $('uploadZone').classList.add('active'); };
-  $('uploadZone').ondrop = (e) => { e.preventDefault(); uploadRoms([...e.dataTransfer.files]); };
+  $('uploadZone').ondragleave = () => $('uploadZone').classList.remove('active');
+  $('uploadZone').ondrop = async (e) => {
+    e.preventDefault();
+    $('uploadZone').classList.remove('active');
+    uploadRoms(await filesFromDropEvent(e));
+  };
   $('searchInput').oninput = (e) => { state.search = e.target.value; state.page = 1; renderGames(); };
   $('prevPageBtn').onclick = () => { state.page--; renderGames(); };
   $('nextPageBtn').onclick = () => { state.page++; renderGames(); };
@@ -625,6 +887,10 @@ function bindEvents() {
   $('selectPageBtn').onclick = toggleCurrentPageSelection;
   $('deleteSelectedBtn').onclick = () => deleteSelectedGames().catch((err) => toast(err.message));
   $('cancelSelectionBtn').onclick = () => setSelectionMode(false);
+  $('cancelAllUploadsBtn').onclick = cancelAllUploads;
+  $('closeUploadDialogBtn').onclick = () => {
+    if (!state.uploadActive) $('uploadDialog').close();
+  };
   $('lightBtn').onclick = () => setTheme('light');
   $('darkBtn').onclick = () => setTheme('dark');
   window.addEventListener('resize', () => {
