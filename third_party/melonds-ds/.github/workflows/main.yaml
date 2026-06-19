@@ -1,0 +1,265 @@
+name: Main Workflow
+permissions:
+  contents: read
+on:
+  workflow_dispatch:
+  push:
+    paths-ignore:
+      - "*.gitlab-ci.yml"
+      - "*.gitignore"
+      - "*.github/ISSUE_TEMPLATE/**"
+      - "*.github/FUNDING.yml"
+      - "*.github/workflows/**"
+  pull_request_target:
+    branches:
+      - dev
+    paths-ignore:
+      - "**.md"
+      - ".gitignore"
+      - "*.gitlab-ci.yml"
+      - "*.github/ISSUE_TEMPLATE/**"
+      - "*.github/FUNDING.yml"
+      - "*.github/workflows/**"
+jobs:
+  fetch-testfiles:
+    name: Fetch Test Files
+    runs-on: ubuntu-22.04-arm
+    permissions:
+      actions: write
+    steps:
+      - name: Clone Test File Repository
+        uses: actions/checkout@v4
+        id: clone-test-file-repo
+        with:
+          repository: "${{ secrets.TESTFILE_REPO }}"
+          token: "${{ secrets.TESTFILE_REPO_TOKEN }}"
+          path: "testfiles"
+          persist-credentials: false
+
+      - name: Check For Existing Cache
+        uses: actions/cache/restore@v4
+        id: check-existing-cache
+        with:
+          path: |
+            testfiles
+            !testfiles/.git
+            !testfiles/*.7z
+          restore-keys: |
+            testfiles
+          key: "testfiles-${{ steps.clone-test-file-repo.outputs.commit }}"
+          enableCrossOsArchive: true
+          lookup-only: true
+
+      - name: Prepare Test Files
+        if: steps.check-existing-cache.outputs.cache-hit != 'true'
+        working-directory: "${{ github.workspace }}/testfiles"
+        shell: bash
+        run: 7z x "${{ secrets.DSI_NAND_ARCHIVE }}"
+
+      - name: Cache Test Files
+        uses: actions/cache/save@v4
+        if: steps.check-existing-cache.outputs.cache-hit != 'true'
+        with:
+          path: |
+            testfiles
+            !testfiles/.git
+            !testfiles/*.7z
+          key: "testfiles-${{ steps.clone-test-file-repo.outputs.commit }}"
+          enableCrossOsArchive: true
+
+    outputs:
+      testfiles-cache-key: "testfiles-${{ steps.clone-test-file-repo.outputs.commit }}"
+
+  windows:
+    name: Windows (x86_64)
+    uses: ./.github/workflows/pipeline.yaml
+    needs: fetch-testfiles
+    strategy:
+      matrix:
+        config: [ Debug, Release, RelWithDebInfo ]
+    with:
+      archive-name: melondsds_libretro-win32-x86_64
+      runs-on: windows-latest
+      info-dir: info
+      shell: msys2 {0}
+      test-suite: true
+      testfiles-cache-key: ${{ needs.fetch-testfiles.outputs.testfiles-cache-key }}
+      cmake-args: -DENABLE_SCCACHE=ON -DSCCACHE="C:/Users/runneradmin/.cargo/bin/sccache.exe"
+      cmake-config: "${{ matrix.config }}"
+    secrets:
+      TESTFILE_REPO_TOKEN: ${{ secrets.TESTFILE_REPO_TOKEN }}
+      TESTFILE_REPO: ${{ secrets.TESTFILE_REPO }}
+      DSI_NAND_ARCHIVE: ${{ secrets.DSI_NAND_ARCHIVE }}
+      DSI_NAND: ${{ secrets.DSI_NAND }}
+      ARM7_BIOS: ${{ secrets.ARM7_BIOS }}
+      ARM9_BIOS: ${{ secrets.ARM9_BIOS }}
+      ARM7_DSI_BIOS: ${{ secrets.ARM7_DSI_BIOS }}
+      ARM9_DSI_BIOS: ${{ secrets.ARM9_DSI_BIOS }}
+      NDS_FIRMWARE: ${{ secrets.NDS_FIRMWARE }}
+      DSI_FIRMWARE: ${{ secrets.DSI_FIRMWARE }}
+      NDS_ROM: ${{ secrets.NDS_ROM }}
+      DSIWARE_ROM: ${{ secrets.DSIWARE_ROM }}
+      GBA_ROM: ${{ secrets.GBA_ROM }}
+      GBA_SRAM: ${{ secrets.GBA_SRAM }}
+
+  macos-x86_64:
+    name: macOS (x86_64)
+    uses: ./.github/workflows/pipeline.yaml
+    needs: fetch-testfiles
+    strategy:
+      matrix:
+        config: [ Debug, Release, RelWithDebInfo ]
+    with:
+      archive-name: melondsds_libretro-macos-x86_64
+      runs-on: macos-13
+      test-suite: true
+      testfiles-cache-key: ${{ needs.fetch-testfiles.outputs.testfiles-cache-key }}
+      cmake-config: "${{ matrix.config }}"
+      cmake-args: -DCMAKE_OSX_ARCHITECTURES:STRING="x86_64" -DENABLE_OGLRENDERER=OFF -DCMAKE_APPLE_SILICON_PROCESSOR="x86_64"
+      # Disabled OpenGL on macOS due to https://github.com/JesseTG/melonds-ds/issues/12
+    secrets:
+      TESTFILE_REPO_TOKEN: ${{ secrets.TESTFILE_REPO_TOKEN }}
+      TESTFILE_REPO: ${{ secrets.TESTFILE_REPO }}
+      DSI_NAND_ARCHIVE: ${{ secrets.DSI_NAND_ARCHIVE }}
+      DSI_NAND: ${{ secrets.DSI_NAND }}
+      ARM7_BIOS: ${{ secrets.ARM7_BIOS }}
+      ARM9_BIOS: ${{ secrets.ARM9_BIOS }}
+      ARM7_DSI_BIOS: ${{ secrets.ARM7_DSI_BIOS }}
+      ARM9_DSI_BIOS: ${{ secrets.ARM9_DSI_BIOS }}
+      NDS_FIRMWARE: ${{ secrets.NDS_FIRMWARE }}
+      DSI_FIRMWARE: ${{ secrets.DSI_FIRMWARE }}
+      NDS_ROM: ${{ secrets.NDS_ROM }}
+      DSIWARE_ROM: ${{ secrets.DSIWARE_ROM }}
+      GBA_ROM: ${{ secrets.GBA_ROM }}
+      GBA_SRAM: ${{ secrets.GBA_SRAM }}
+
+  macos-arm64:
+    name: macOS (arm64)
+    uses: ./.github/workflows/pipeline.yaml
+    needs: fetch-testfiles
+    strategy:
+      matrix:
+        config: [ Debug, Release, RelWithDebInfo ]
+    with:
+      archive-name: melondsds_libretro-macos-arm64
+      runs-on: macos-latest
+      test-suite: true
+      testfiles-cache-key: ${{ needs.fetch-testfiles.outputs.testfiles-cache-key }}
+      cmake-config: "${{ matrix.config }}"
+      cmake-args: -DCMAKE_OSX_ARCHITECTURES:STRING="arm64" -DENABLE_OGLRENDERER=OFF -DCMAKE_APPLE_SILICON_PROCESSOR="arm64"
+      # Disabled OpenGL on macOS due to https://github.com/JesseTG/melonds-ds/issues/12
+    secrets:
+      TESTFILE_REPO_TOKEN: ${{ secrets.TESTFILE_REPO_TOKEN }}
+      TESTFILE_REPO: ${{ secrets.TESTFILE_REPO }}
+      DSI_NAND_ARCHIVE: ${{ secrets.DSI_NAND_ARCHIVE }}
+      DSI_NAND: ${{ secrets.DSI_NAND }}
+      ARM7_BIOS: ${{ secrets.ARM7_BIOS }}
+      ARM9_BIOS: ${{ secrets.ARM9_BIOS }}
+      ARM7_DSI_BIOS: ${{ secrets.ARM7_DSI_BIOS }}
+      ARM9_DSI_BIOS: ${{ secrets.ARM9_DSI_BIOS }}
+      NDS_FIRMWARE: ${{ secrets.NDS_FIRMWARE }}
+      DSI_FIRMWARE: ${{ secrets.DSI_FIRMWARE }}
+      NDS_ROM: ${{ secrets.NDS_ROM }}
+      DSIWARE_ROM: ${{ secrets.DSIWARE_ROM }}
+      GBA_ROM: ${{ secrets.GBA_ROM }}
+      GBA_SRAM: ${{ secrets.GBA_SRAM }}
+
+  linux-x86_64:
+    name: Linux (x86_64)
+    uses: ./.github/workflows/pipeline.yaml
+    needs: fetch-testfiles
+    strategy:
+      matrix:
+        config: [ Debug, Release, RelWithDebInfo ]
+    with:
+      archive-name: melondsds_libretro-linux-x86_64
+      runs-on: ubuntu-latest
+      test-suite: true
+      testfiles-cache-key: ${{ needs.fetch-testfiles.outputs.testfiles-cache-key }}
+      cmake-config: "${{ matrix.config }}"
+    secrets:
+      TESTFILE_REPO_TOKEN: ${{ secrets.TESTFILE_REPO_TOKEN }}
+      TESTFILE_REPO: ${{ secrets.TESTFILE_REPO }}
+      DSI_NAND_ARCHIVE: ${{ secrets.DSI_NAND_ARCHIVE }}
+      DSI_NAND: ${{ secrets.DSI_NAND }}
+      ARM7_BIOS: ${{ secrets.ARM7_BIOS }}
+      ARM9_BIOS: ${{ secrets.ARM9_BIOS }}
+      ARM7_DSI_BIOS: ${{ secrets.ARM7_DSI_BIOS }}
+      ARM9_DSI_BIOS: ${{ secrets.ARM9_DSI_BIOS }}
+      NDS_FIRMWARE: ${{ secrets.NDS_FIRMWARE }}
+      DSI_FIRMWARE: ${{ secrets.DSI_FIRMWARE }}
+      NDS_ROM: ${{ secrets.NDS_ROM }}
+      DSIWARE_ROM: ${{ secrets.DSIWARE_ROM }}
+      GBA_ROM: ${{ secrets.GBA_ROM }}
+      GBA_SRAM: ${{ secrets.GBA_SRAM }}
+
+  linux-aarch64:
+    name: Linux (arm64)
+    uses: ./.github/workflows/pipeline.yaml
+    needs: fetch-testfiles
+    strategy:
+      matrix:
+        config: [ Debug, Release, RelWithDebInfo ]
+    with:
+      archive-name: melondsds_libretro-linux-arm64
+      runs-on: ubuntu-22.04-arm
+      test-suite: true
+      testfiles-cache-key: ${{ needs.fetch-testfiles.outputs.testfiles-cache-key }}
+      cmake-config: "${{ matrix.config }}"
+    secrets:
+      TESTFILE_REPO_TOKEN: ${{ secrets.TESTFILE_REPO_TOKEN }}
+      TESTFILE_REPO: ${{ secrets.TESTFILE_REPO }}
+      DSI_NAND_ARCHIVE: ${{ secrets.DSI_NAND_ARCHIVE }}
+      DSI_NAND: ${{ secrets.DSI_NAND }}
+      ARM7_BIOS: ${{ secrets.ARM7_BIOS }}
+      ARM9_BIOS: ${{ secrets.ARM9_BIOS }}
+      ARM7_DSI_BIOS: ${{ secrets.ARM7_DSI_BIOS }}
+      ARM9_DSI_BIOS: ${{ secrets.ARM9_DSI_BIOS }}
+      NDS_FIRMWARE: ${{ secrets.NDS_FIRMWARE }}
+      DSI_FIRMWARE: ${{ secrets.DSI_FIRMWARE }}
+      NDS_ROM: ${{ secrets.NDS_ROM }}
+      DSIWARE_ROM: ${{ secrets.DSIWARE_ROM }}
+      GBA_ROM: ${{ secrets.GBA_ROM }}
+      GBA_SRAM: ${{ secrets.GBA_SRAM }}
+
+  android:
+    name: Android
+    uses: ./.github/workflows/pipeline.yaml
+    strategy:
+      matrix:
+        config: [ Debug, Release, RelWithDebInfo ]
+    with:
+      core-name: melondsds_libretro_android
+      archive-name: melondsds_libretro-android
+      cmake-config: "${{ matrix.config }}"
+      cmake-args: -DENABLE_OGLRENDERER=OFF -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=24 -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK/build/cmake/android.toolchain.cmake"
+      runs-on: ubuntu-latest
+      # Disabled OpenGL on Android due to https://github.com/JesseTG/melonds-ds/issues/23
+
+  ios:
+    name: iOS
+    uses: ./.github/workflows/pipeline.yaml
+    strategy:
+      matrix:
+        config: [ Debug, Release, RelWithDebInfo ]
+    with:
+      runs-on: macos-latest
+      archive-name: melondsds_libretro-ios
+      info-dir: info
+      cmake-config: "${{ matrix.config }}"
+      cmake-args: --toolchain ./cmake/toolchain/ios.toolchain.cmake -DPLATFORM=OS64 -DDEPLOYMENT_TARGET=14
+      # Disabled OpenGL on iOS due to https://github.com/JesseTG/melonds-ds/issues/23
+
+  tvos:
+    name: tvOS
+    uses: ./.github/workflows/pipeline.yaml
+    strategy:
+      matrix:
+        config: [ Debug, Release, RelWithDebInfo ]
+    with:
+      runs-on: macos-latest
+      archive-name: melondsds_libretro-tvos
+      info-dir: info
+      cmake-config: "${{ matrix.config }}"
+      cmake-args: --toolchain ./cmake/toolchain/ios.toolchain.cmake -DPLATFORM=TVOS -DDEPLOYMENT_TARGET=14
+      # Disabled OpenGL on tvOS due to https://github.com/JesseTG/melonds-ds/issues/23

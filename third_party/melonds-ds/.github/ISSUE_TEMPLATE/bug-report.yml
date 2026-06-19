@@ -1,0 +1,142 @@
+name: Bug Report
+description: Found a problem? Tell us so we can fix it!
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: >
+        Thanks for taking the time to help improve melonDS DS!
+        Please answer the following questions to the best of your ability.
+
+  - type: input
+    id: version
+    attributes:
+      label: What version of melonDS DS are you using?
+      description: >
+        Different frontends have their own ways of showing this info.
+        In RetroArch, check the lower-left corner of the screen
+        when paused while the core is loaded.
+      placeholder: 1.0.1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: upstream
+    attributes:
+      label: Does the problem happen in standalone melonDS?
+      description: >
+        This core closely follows standalone melonDS,
+        so any bugs present there may affect melonDS DS as well.
+        **If the problem occurs on standalone melonDS,
+        please [report it or comment on an existing report](https://github.com/melonDS-emu/melonDS/issues)
+        in its issue tracker.**
+        You may continue to submit this bug report,
+        and it will be considered resolved when a fix upstream is integrated.
+      options:
+        - I don't know.
+        - Yes, in the latest stable release (0.9.5).
+        - Yes, in the release candidate (1.0-RC).
+        - Yes, in the latest commit on master.
+        - No, it's a bug specific to melonDS DS.
+      default: 0
+    validations:
+      required: true
+
+  - type: textarea
+    id: observed
+    attributes:
+      label: What happened?
+      description: >
+        Describe the problem you're having,
+        and provide as much information as you can to help reproduce it.
+        Please attach logs, screenshots, videos, savestates, or save data
+        (otherwise you may be asked to go back and take some).
+        Keep this bug report focused on a single issue;
+        open another ticket if you need to.
+        **Include steps to reproduce the problem if possible,**
+        as bugs that are easy to reproduce are much easier to fix!
+      placeholder: |
+        Waluigi is in my computer! Here's a log:
+
+        ```
+        [  0.000000] [FATAL] Waluigi is in your computer!
+        ```
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should've happened instead?
+      description: >
+        Please describe what you expected to happen.
+        If possible, a screenshot of the expected behavior
+        in upstream [melonDS](https://melonds.kuribo64.net)
+        or another emulator would be helpful.
+      placeholder: >
+        Waluigi should not be in my computer!
+        His constant screaming is making the emulator unusable.
+        Here's a screenshot of my computer without Waluigi.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: platform
+    attributes:
+      label: Which platforms do you see the problem on?
+      description: Check all that apply.
+      options:
+        - label: Windows
+        - label: macOS
+        - label: Linux
+        - label: Android
+        - label: iOS
+        - label: tvOS
+        - label: Other (specify below)
+    validations:
+      required: true
+
+  - type: input
+    id: platform-version
+    attributes:
+      label: Which versions of the OS?
+      description: Name the version (and other configuration info) of the OS you've reproduced the issue on.
+      placeholder: Windows 11 21H2, macOS 14 (Apple Silicon), Ubuntu 21.04 (x86_64), etc.
+    validations:
+      required: true
+
+  - type: input
+    id: frontend
+    attributes:
+      label: Which libretro frontend are you using?
+      description: >
+        melonDS DS is primarily designed for RetroArch,
+        but it will work on other libretro frontends as well.
+        List the frontends you've seen the problem on,
+        as well as the version and distribution.
+      placeholder: RetroArch 1.16.0, Steam and Flatpak releases
+    validations:
+        required: true
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Terms
+      description: >
+        You must understand and agree to the following terms in order to submit this bug report.
+        If your behavior indicates otherwise, your report may be closed.
+      options:
+        - label: I agree to follow the [code of conduct](../blob/main/CODE_OF_CONDUCT.md).
+          required: true
+        - label: I understand that melonDS DS is not developed or maintained by the authors of melonDS.
+          required: true
+        - label: I understand that this form is for reporting bugs, not for requesting help.
+          required: true
+        - label: >
+            I understand that the author develops this core in his spare time,
+            and that he is under no obligation to respond to this bug report.
+          required: true
+
+  - type: markdown
+    attributes:
+      value: Thank you very much!

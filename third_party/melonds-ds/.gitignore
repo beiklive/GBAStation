@@ -1,0 +1,42 @@
+# CMake
+CMakeLists.txt.user
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+CMakeUserPresets.json
+Testing
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps
+cmake-build-*
+__cmake_systeminformation
+Authors.txt
+SystemInformation.in
+
+# JetBrains
+.idea/
+fileList*.txt
+
+# Build System
+artifact
+build
+melondsds-LICENSE.txt
+melondsds_libretro.info
+out.txt
+
+# Tracy
+*.tracy
+
+# Archives
+*.7z
+*.zip
+*.tar
+
+# Act
+.actrc
+
+# Python
+venv*

@@ -1,0 +1,282 @@
+name: Build Pipeline
+on:
+  workflow_call:
+    secrets:
+      TESTFILE_REPO_TOKEN:
+        required: false
+      TESTFILE_REPO:
+        required: false
+      ARM7_BIOS:
+        required: false
+      ARM9_BIOS:
+        required: false
+      ARM7_DSI_BIOS:
+        required: false
+      ARM9_DSI_BIOS:
+        required: false
+      NDS_FIRMWARE:
+        required: false
+      DSI_FIRMWARE:
+        required: false
+      NDS_ROM:
+        required: false
+      DSIWARE_ROM:
+        required: false
+      GBA_ROM:
+        required: false
+      GBA_SRAM:
+        required: false
+      DSI_NAND_ARCHIVE:
+        required: false
+      DSI_NAND:
+        required: false
+    inputs:
+      cmake-args:
+        description: Additional arguments to pass to CMake.
+        type: string
+        required: false
+      core-name:
+        description: The name of the core.
+        type: string
+        required: false
+        default: melondsds_libretro
+      cores-dir:
+        description: The directory in which to place the built cores.
+        type: string
+        required: false
+        default: cores
+      info-dir:
+        description: The directory in which to place the built info files.
+        type: string
+        required: false
+        default: cores
+      runs-on:
+        description: The platform on which the workflow will be run. Passed directly to jobs.<job_id>.runs-on.
+        type: string
+        required: true
+      shell:
+        description: The shell to use for running commands. Passed directly to jobs.<job_id>.defaults.run.shell.
+        type: string
+        required: false
+        default: bash
+      build-dir:
+        description: The directory in which to build the project.
+        type: string
+        required: false
+        default: "build"
+      dist-dir:
+        description: The directory in which to place the built artifacts.
+        type: string
+        required: false
+        default: "dist"
+      archive-name:
+        description: The name of the archive to upload.
+        type: string
+        required: true
+      test-suite:
+        description: Whether there will be a test suite based on this run's output
+        type: boolean
+        required: false
+        default: false
+      testfiles-cache-key:
+        type: string
+        required: false
+      cmake-config:
+        description: The CMake configuration to use.
+        type: string
+        required: true
+env:
+  BUILD_DIR: "${{ github.workspace }}/${{ inputs.build-dir }}"
+  DIST_DIR: "${{ github.workspace }}/${{ inputs.dist-dir }}"
+  TESTFILE_DIR: "${{ github.workspace }}/testfiles"
+jobs:
+  build:
+    runs-on: ${{ inputs.runs-on }}
+    defaults:
+      run:
+        shell: ${{ inputs.shell }}
+    env:
+      TRACY_ENABLE: "${{ inputs.cmake-config == 'RelWithDebInfo' && 'ON' || 'OFF' }}"
+    steps:
+      - name: Check Out Source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request && github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Install GCC Problem Matcher
+        uses: root-project/gcc-problem-matcher-improved@c45ac8b7c1589268fdef2f7f5772375aa96ab210
+        if: ${{ runner.os != 'Windows' }} # See https://github.com/root-project/gcc-problem-matcher-improved/issues/3
+        with:
+          build-directory: ${{ env.BUILD_DIR }}
+
+      - name: Install MSYS2 Dependencies (Windows)
+        uses: msys2/setup-msys2@v2
+        if: ${{ runner.os == 'Windows' }}
+        with:
+          msystem: MINGW64
+          update: true
+          install: git pkgconf mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake
+
+      - name: Install Mesa
+        if: ${{ runner.os == 'Windows' }}
+        uses: ssciwr/setup-mesa-dist-win@v2
+
+      - name: Install Dependencies (macOS)
+        if: ${{ runner.os == 'macOS' }}
+        shell: bash
+        run: brew install pkg-config cmake ninja ccache
+
+        # Skip this step on act due to https://github.com/nektos/act/issues/1849
+      - name: Install Dependencies (Linux)
+        if: ${{ !env.ACT && runner.os == 'Linux' }}
+        uses: awalsh128/cache-apt-pkgs-action@v1.4.3
+        with:
+          packages: ccache cmake libepoxy-dev libopengl0 libopengl-dev ninja-build p7zip-full x11-xserver-utils xdg-utils xvfb
+          version: 1.2
+
+      - name: Install Dependencies (Linux + act)
+        if: ${{ env.ACT && runner.os == 'Linux' }}
+        shell: bash
+        run: sudo apt-get update -qy && sudo apt-get install -qy ccache cmake libepoxy-dev libopengl0 libopengl-dev ninja-build p7zip-full x11-xserver-utils xdg-utils xvfb
+
+      - name: Install CCache
+        uses: hendrikmuhs/ccache-action@53911442209d5c18de8a31615e0923161e435875
+        with:
+          key: ${{ inputs.archive-name }}-${{ inputs.cmake-config }}
+          variant: ${{ runner.os == 'Windows' && 'sccache' || 'ccache' }} # Equivalent to (runner.os == 'Windows') ? 'sccache' : 'ccache'
+          # Using sccache on Windows due to https://github.com/hendrikmuhs/ccache-action/issues/112
+          verbose: 2
+          evict-old-files: job
+
+      - name: Install Python
+        if: ${{ inputs.test-suite }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: "${{ github.workspace }}/test/requirements.txt"
+
+      - name: Install Python Dependencies
+        if: ${{ inputs.test-suite }}
+        shell: bash
+        run: |
+          pip install -v -r "${{ github.workspace }}/test/requirements.txt"
+
+      - name: Restore Cached Test Files
+        if: ${{ inputs.test-suite && inputs.testfiles-cache-key }}
+        id: restore-test-files
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            testfiles
+            !testfiles/.git
+            !testfiles/*.7z
+          restore-keys: |
+            testfiles
+          key: ${{ inputs.testfiles-cache-key }}
+          enableCrossOsArchive: true
+
+      - name: Download Test Files
+        if: ${{ inputs.test-suite && steps.restore-test-files.outputs.cache-hit != 'true' }}
+        uses: actions/checkout@v4
+        with:
+          repository: "${{ secrets.TESTFILE_REPO }}"
+          token: "${{ secrets.TESTFILE_REPO_TOKEN }}"
+          path: "testfiles"
+          persist-credentials: false
+
+      - name: Prepare Test Files
+        if: ${{ inputs.test-suite && steps.restore-test-files.outputs.cache-hit != 'true' }}
+        working-directory: "${{ github.workspace }}/testfiles"
+        shell: bash
+        run: 7z x "${{ secrets.DSI_NAND_ARCHIVE }}"
+
+      - name: Create Build Directory
+        run: mkdir -vp "${{ env.BUILD_DIR }}"
+
+      - name: Configure
+        working-directory: "${{ env.BUILD_DIR }}"
+        if: ${{ ! inputs.test-suite }}
+        run: |
+          cmake "${{ github.workspace }}" \
+            -Wno-deprecated \
+            -DCMAKE_BUILD_TYPE="${{ inputs.cmake-config }}" \
+            -DTRACY_ENABLE="${{ env.TRACY_ENABLE }}" \
+            ${{ inputs.cmake-args }}
+
+      - name: Configure (With Test Suite)
+        working-directory: "${{ env.BUILD_DIR }}"
+        if: ${{ inputs.test-suite }}
+        run: |
+          cmake "${{ github.workspace }}" \
+            -Wno-deprecated \
+            -DCMAKE_BUILD_TYPE="${{ inputs.cmake-config }}" \
+            -DTRACY_ENABLE="${{ env.TRACY_ENABLE }}" \
+            -DBUILD_TESTING=ON \
+            -DARM7_BIOS="${{ env.TESTFILE_DIR }}/${{ secrets.ARM7_BIOS }}" \
+            -DARM9_BIOS="${{ env.TESTFILE_DIR }}/${{ secrets.ARM9_BIOS }}" \
+            -DARM7_DSI_BIOS="${{ env.TESTFILE_DIR }}/${{ secrets.ARM7_DSI_BIOS }}" \
+            -DARM9_DSI_BIOS="${{ env.TESTFILE_DIR }}/${{ secrets.ARM9_DSI_BIOS }}" \
+            -DNDS_FIRMWARE="${{ env.TESTFILE_DIR }}/${{ secrets.NDS_FIRMWARE }}" \
+            -DDSI_FIRMWARE="${{ env.TESTFILE_DIR }}/${{ secrets.DSI_FIRMWARE }}" \
+            -DDSI_NAND="${{ env.TESTFILE_DIR }}/${{ secrets.DSI_NAND }}" \
+            -DNDS_ROM="${{ env.TESTFILE_DIR }}/${{ secrets.NDS_ROM }}" \
+            -DDSIWARE_ROM="${{ env.TESTFILE_DIR }}/${{ secrets.DSIWARE_ROM }}" \
+            -DGBA_ROM="${{ env.TESTFILE_DIR }}/${{ secrets.GBA_ROM }}" \
+            -DGBA_SRAM="${{ env.TESTFILE_DIR }}/${{ secrets.GBA_SRAM }}" \
+            -DMELONDSDS_INTERNAL_VENV=OFF \
+            ${{ inputs.cmake-args }}
+
+      - name: Build
+        working-directory: "${{ env.BUILD_DIR }}"
+        run: cmake --build "${{ env.BUILD_DIR }}" --parallel
+
+      - name: Prepare Artifact Directory
+        env:
+          CORES_PATH: "${{ env.DIST_DIR }}/${{ inputs.cores-dir }}"
+          INFO_PATH: "${{ env.DIST_DIR }}/${{ inputs.info-dir }}"
+        run: |
+          LIB_EXT=$(grep '^MELONDSDS_LIBRARY_SUFFIX:INTERNAL=' "${{ env.BUILD_DIR }}/CMakeCache.txt" | cut -d'=' -f2- | sed 's/^\.//')
+          # Find the cache variable I saved and extract it; I did so exactly for this build workflow
+
+          mkdir -vp "$CORES_PATH" "$INFO_PATH"
+          cp -f "${{ env.BUILD_DIR }}/src/libretro/${{ inputs.core-name }}.$LIB_EXT" "$CORES_PATH"
+          cp -f "${{ env.BUILD_DIR }}/melondsds_libretro.info" "$INFO_PATH/${{ inputs.core-name }}.info"
+          cp -f "${{ env.BUILD_DIR }}/melondsds-LICENSE.txt" "$CORES_PATH"
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: "${{ inputs.archive-name }}-${{ inputs.cmake-config }}"
+          if-no-files-found: error
+          path: "${{ env.DIST_DIR }}"
+
+      - name: Run Test Suite (macOS)
+        if: ${{ inputs.test-suite && runner.os == 'macOS' }}
+        working-directory: "${{ env.BUILD_DIR }}"
+        env:
+          PYTHONUNBUFFERED: 1
+          # Defining TRACY_NO_INVARIANT_CHECK fixes test suite failures on the macos-13 runner;
+          # this is fine because we're not taking traces on the CI anyway.
+          TRACY_NO_INVARIANT_CHECK: 1
+        run: ctest --exclude-regex example --output-on-failure
+
+      - name: Run Test Suite (Linux)
+        if: ${{ inputs.test-suite && runner.os == 'Linux' }}
+        working-directory: "${{ env.BUILD_DIR }}"
+        env:
+          PYTHONUNBUFFERED: 1
+        run: xvfb-run ctest --exclude-regex example --output-on-failure
+
+      - name: Run Test Suite (Windows)
+        if: ${{ inputs.test-suite && runner.os == 'Windows' }}
+        working-directory: "${{ env.BUILD_DIR }}"
+        shell: msys2 {0}
+        env:
+          PYTHONUNBUFFERED: 1
+          MESA_DEBUG: 1
+          D3D12_DEBUG: verbose,debuglayer,gpuvalidator
+          GLCONTEXT_WIN_LIBGL: "C:/Windows/System32/opengl32.dll"
+        run: |
+          ctest --exclude-regex example --output-on-failure
