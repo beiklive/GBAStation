@@ -277,19 +277,38 @@ namespace beiklive
         int16_t pointerX = m_ndsPointerX.load(std::memory_order_relaxed);
         int16_t pointerY = m_ndsPointerY.load(std::memory_order_relaxed);
 
-        for (const auto& touch : brls::Application::getCurrentTouchState()) {
-            if (touch.phase == brls::TouchPhase::NONE || touch.phase == brls::TouchPhase::END)
-                continue;
-            float tx = touch.position.x;
-            float ty = touch.position.y;
-            bool mapped = _mapWindowPointToPointer(tx, ty, pointerX, pointerY);
-            if (!mapped && brls::Application::windowScale > 0.f) {
-                mapped = _mapWindowPointToPointer(
-                    tx / brls::Application::windowScale,
-                    ty / brls::Application::windowScale,
-                    pointerX, pointerY);
+        auto* inputManager = brls::Application::getPlatform()->getInputManager();
+        if (inputManager) {
+            std::vector<brls::RawTouchState> rawTouches;
+            inputManager->updateTouchStates(&rawTouches);
+            for (const auto& touch : rawTouches) {
+                if (!touch.pressed)
+                    continue;
+                if (_mapWindowPointToPointer(touch.position.x, touch.position.y, pointerX, pointerY)) {
+                    pressed = true;
+                    m_ndsCursorNormX = static_cast<float>(pointerX + 32767) / 65534.f;
+                    m_ndsCursorNormY = static_cast<float>(pointerY + 32767) / 65534.f;
+                    m_ndsCursorVisible = true;
+                    break;
+                }
             }
-            if (mapped) {
+        }
+
+        if (!pressed) {
+            for (const auto& touch : brls::Application::getCurrentTouchState()) {
+                if (touch.phase == brls::TouchPhase::NONE || touch.phase == brls::TouchPhase::END)
+                    continue;
+                float tx = touch.position.x;
+                float ty = touch.position.y;
+                bool mapped = _mapWindowPointToPointer(tx, ty, pointerX, pointerY);
+                if (!mapped && brls::Application::windowScale > 0.f) {
+                    mapped = _mapWindowPointToPointer(
+                        tx / brls::Application::windowScale,
+                        ty / brls::Application::windowScale,
+                        pointerX, pointerY);
+                }
+                if (!mapped)
+                    continue;
                 pressed = true;
                 m_ndsCursorNormX = static_cast<float>(pointerX + 32767) / 65534.f;
                 m_ndsCursorNormY = static_cast<float>(pointerY + 32767) / 65534.f;
