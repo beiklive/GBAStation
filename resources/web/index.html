@@ -31,6 +31,13 @@
       </div>
       <input id="romInput" type="file" multiple accept=".gba,.gb,.gbc,.nes,.fds,.sfc,.smc,.nds" hidden>
       <input id="romFolderInput" type="file" multiple webkitdirectory directory hidden>
+      <input id="fileBrowserInput" type="file" multiple hidden>
+      <input id="folderBrowserInput" type="file" multiple webkitdirectory directory hidden>
+
+      <div class="sidebar-nav">
+        <button id="libraryModeBtn" class="active"><i class="fa-solid fa-gamepad"></i><span>游戏库</span></button>
+        <button id="filesModeBtn"><i class="fa-solid fa-folder-open"></i><span>文件管理</span></button>
+      </div>
 
       <nav class="platform-tabs" id="platformTabs"></nav>
 
@@ -81,6 +88,31 @@
           <span id="progressText">准备执行</span>
         </div>
         <div class="progress-track"><span id="progressBar"></span></div>
+      </section>
+
+      <section id="filePanel" class="file-panel" hidden>
+        <div class="file-head">
+          <div>
+            <h2>文件管理</h2>
+            <p id="fileSummary">浏览 Switch 内存卡文件</p>
+          </div>
+          <div class="file-actions">
+            <button id="fileUploadBtn"><i class="fa-solid fa-file-arrow-up"></i><span>上传文件</span></button>
+            <button id="folderUploadBtn"><i class="fa-solid fa-folder-open"></i><span>上传文件夹</span></button>
+            <button id="newFolderBtn"><i class="fa-solid fa-folder-plus"></i><span>新建文件夹</span></button>
+          </div>
+        </div>
+        <div class="file-toolbar">
+          <button id="fileHomeBtn" title="根目录"><i class="fa-solid fa-house"></i></button>
+          <button id="fileUpBtn" title="上级目录"><i class="fa-solid fa-arrow-up"></i></button>
+          <button id="fileRefreshBtn" title="刷新"><i class="fa-solid fa-rotate"></i></button>
+          <label class="file-path-field">
+            <i class="fa-solid fa-folder-open"></i>
+            <input id="filePathInput" type="text" spellcheck="false" placeholder="sdmc:/">
+          </label>
+          <button id="fileGoBtn"><i class="fa-solid fa-arrow-right"></i><span>打开</span></button>
+        </div>
+        <div id="fileList" class="file-list"></div>
       </section>
 
       <section id="gameSections" class="game-sections"></section>
@@ -160,6 +192,28 @@
       <button class="icon-btn" id="closeImageDialogBtn" title="关闭"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div id="imageGrid" class="image-grid"></div>
+  </dialog>
+
+  <dialog id="fileImageDialog" class="file-image-dialog">
+    <div class="dialog-head">
+      <h3 id="fileImageTitle">图片预览</h3>
+      <button class="icon-btn" id="closeFileImageBtn" title="关闭"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <img id="fileImagePreview" alt="图片预览">
+  </dialog>
+
+  <dialog id="textEditorDialog" class="text-editor-dialog">
+    <div class="dialog-head">
+      <div>
+        <h3 id="textEditorTitle">文本编辑</h3>
+        <p id="textEditorPath"></p>
+      </div>
+      <button class="icon-btn" id="closeTextEditorBtn" title="关闭"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <textarea id="textEditorContent" spellcheck="false"></textarea>
+    <div class="text-editor-actions">
+      <button id="saveTextEditorBtn"><i class="fa-solid fa-floppy-disk"></i><span>保存</span></button>
+    </div>
   </dialog>
 
   <dialog id="cropDialog" class="crop-dialog">

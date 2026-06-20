@@ -125,6 +125,7 @@ namespace beiklive
             void _openOverlaySettings();
             void _openCustomScaleSettings();
             void _openNdsScreenSettings(bool topScreen);
+            void _saveNdsScreenSettings();
             void _rebuildShaderParamUI();
 
             /// 清除当前侧边栏面板

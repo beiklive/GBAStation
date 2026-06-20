@@ -27,6 +27,7 @@ private:
         std::string originalName;
         std::string title;
         std::string targetPath;
+        std::string finalPath;
         int platform = 0;
         std::uint64_t totalSize = 0;
     };
@@ -54,6 +55,7 @@ private:
     void handleLogoFile(mg_connection* c, mg_http_message* hm);
     void handleCoverFile(mg_connection* c, mg_http_message* hm, const std::string& gameId);
     void handleSystem(mg_connection* c, mg_http_message* hm, const std::string& method, const std::string& uri);
+    void handleFiles(mg_connection* c, mg_http_message* hm, const std::string& method, const std::string& uri);
     void serveStatic(mg_connection* c, mg_http_message* hm);
 
     std::string makeToken();

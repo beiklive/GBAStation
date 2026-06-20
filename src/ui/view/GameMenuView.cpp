@@ -936,8 +936,8 @@ namespace beiklive
             box->addView(modeCell);
 
             if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)) {
-                std::vector<std::string> ndsLayouts = {"上下屏", "左右屏", "自定义", "仅上屏", "仅下屏"};
-                std::vector<std::string> ndsLayoutIds = {"vertical", "horizontal", "custom", "top", "bottom"};
+                std::vector<std::string> ndsLayouts = {"上下屏", "左右屏", "自定义", "混合", "仅上屏", "仅下屏"};
+                std::vector<std::string> ndsLayoutIds = {"vertical", "horizontal", "custom", "hybrid", "top", "bottom"};
                 std::string currentLayout = GET_SETTING_KEY_STR("nds.screenLayout", "vertical");
                 if (currentLayout == "separate") {
                     currentLayout = "custom";
@@ -1455,7 +1455,7 @@ namespace beiklive
             };
 
             makeSyncBtn("同步画面设置", [this]() {
-                auto *dlg = new brls::Dialog("同步画面设置\n\n将当前游戏的画面模式、整数倍缩放、自定义偏移和缩放值同步到同平台所有游戏，确认继续？");
+                auto *dlg = new brls::Dialog("同步画面设置\n\n将当前游戏的画面模式、整数倍缩放、自定义偏移和缩放值同步到同平台所有游戏；NDS 会同时同步上下屏缩放和偏移，确认继续？");
                 dlg->addButton("取消", []() {});
                 dlg->addButton("确认", [this]() { _syncDisplaySettings(); });
                 dlg->open();
@@ -1476,7 +1476,7 @@ namespace beiklive
             });
 
             auto *hint = new brls::Label();
-            hint->setText("将当前游戏的面板设置应用到同平台所有游戏，同步后自动保存并刷新全局默认值。画面模式=模式+整数倍+自定义偏移/缩放；遮罩=遮罩路径；着色器=GLSLP路径+参数");
+            hint->setText("将当前游戏的面板设置应用到同平台所有游戏，同步后自动保存并刷新全局默认值。画面模式=模式+整数倍+自定义偏移/缩放；NDS会同步上下屏偏移/缩放；遮罩=遮罩路径；着色器=GLSLP路径+参数");
             hint->setFontSize(14.f);
             hint->setTextColor(nvgRGB(154, 154, 154));
             hint->setMarginTop(10.f);
@@ -1524,7 +1524,11 @@ namespace beiklive
         panel->setPadding(20.f);
         panel->setAlignItems(brls::AlignItems::STRETCH);
 
-        auto closeAct = [this](brls::View *) { _dismissSidePanel(4); return true; };
+        auto closeAct = [this](brls::View *) {
+            _saveNdsScreenSettings();
+            _dismissSidePanel(4);
+            return true;
+        };
 
         auto *hdr = new brls::Header();
         hdr->setTitle(topScreen ? "NDS上屏调整" : "NDS下屏调整");
@@ -1635,6 +1639,24 @@ namespace beiklive
         this->showFooter(false);
         this->setBackgroundColor(nvgRGBA(0, 0, 0, 10));
         brls::Application::giveFocus(m_NdsScreenSidePanel);
+    }
+
+    void GameMenuView::_saveNdsScreenSettings()
+    {
+        if (!beiklive::GameDB || m_gameEntry.path.empty())
+            return;
+
+        beiklive::GameEntry entry = m_gameEntry;
+        if (auto current = beiklive::GameDB->findByPath(m_gameEntry.path))
+            entry = *current;
+        entry.ndsTopOffsetX = m_gameEntry.ndsTopOffsetX;
+        entry.ndsTopOffsetY = m_gameEntry.ndsTopOffsetY;
+        entry.ndsTopScale = m_gameEntry.ndsTopScale;
+        entry.ndsBottomOffsetX = m_gameEntry.ndsBottomOffsetX;
+        entry.ndsBottomOffsetY = m_gameEntry.ndsBottomOffsetY;
+        entry.ndsBottomScale = m_gameEntry.ndsBottomScale;
+        beiklive::GameDB->upsertByPath(entry);
+        beiklive::GameDB->flush();
     }
 
     // ============================================================
@@ -1805,6 +1827,14 @@ namespace beiklive
             game.customScale      = m_gameEntry.customScale;
             game.customOffsetX    = m_gameEntry.customOffsetX;
             game.customOffsetY    = m_gameEntry.customOffsetY;
+            if (platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)) {
+                game.ndsTopScale = m_gameEntry.ndsTopScale;
+                game.ndsTopOffsetX = m_gameEntry.ndsTopOffsetX;
+                game.ndsTopOffsetY = m_gameEntry.ndsTopOffsetY;
+                game.ndsBottomScale = m_gameEntry.ndsBottomScale;
+                game.ndsBottomOffsetX = m_gameEntry.ndsBottomOffsetX;
+                game.ndsBottomOffsetY = m_gameEntry.ndsBottomOffsetY;
+            }
             beiklive::GameDB->upsertByPath(game);
             ++count;
         }

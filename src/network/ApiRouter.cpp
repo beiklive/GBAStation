@@ -4,6 +4,8 @@
 #include "core/common.h"
 #include "core/game_database.hpp"
 
+#include "miniz.h"
+
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
@@ -11,6 +13,7 @@
 #include <fstream>
 #include <set>
 #include <sstream>
+#include <system_error>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -21,6 +24,7 @@ namespace beiklive::network
 namespace
 {
 constexpr std::uint64_t MAX_UPLOAD_SIZE = 512ull * 1024ull * 1024ull;
+constexpr std::uint64_t MAX_TEXT_EDIT_SIZE = 2ull * 1024ull * 1024ull;
 constexpr const char* JSON_HEADERS = "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n";
 constexpr const char* CORS_HEADERS = "Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET,POST,PUT,DELETE,OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\n";
 
@@ -95,6 +99,9 @@ bool containsNonAscii(const std::string& value)
 {
     return std::any_of(value.begin(), value.end(), [](unsigned char c) { return c >= 0x80; });
 }
+
+std::string safePathComponent(const std::string& name, bool fallbackFile);
+fs::path uniqueFileTarget(const fs::path& requested);
 
 bool isSafeChar(unsigned char c)
 {
@@ -199,6 +206,49 @@ std::string safeStemFromTitle(const std::string& stem)
     return out.empty() ? "game" : out;
 }
 
+std::string safePathComponent(const std::string& name, bool fallbackFile)
+{
+    fs::path path(name);
+    std::string stem = path.stem().string();
+    std::string ext = trimExtDot(path.extension().string());
+    if (stem.empty())
+        stem = path.filename().string();
+    std::string safe = safeStemFromTitle(stem);
+    if (safe == "game" && !fallbackFile)
+        safe = "folder";
+    if (!fallbackFile || ext.empty())
+        return safe;
+    return safe + "." + ext;
+}
+
+std::string safeUploadRelativePath(const std::string& relativePath, const std::string& fileName, bool& renamed)
+{
+    fs::path input(relativePath.empty() ? fileName : relativePath);
+    std::vector<std::string> parts;
+    for (const auto& part : input)
+    {
+        std::string raw = part.string();
+        if (raw.empty() || raw == "." || raw == "..")
+            continue;
+        parts.push_back(raw);
+    }
+    if (parts.empty())
+        parts.push_back(fileName.empty() ? "upload.bin" : fileName);
+
+    fs::path safe;
+    for (size_t i = 0; i < parts.size(); ++i)
+    {
+        bool isFile = i + 1 == parts.size();
+        std::string clean = containsNonAscii(parts[i]) ? safePathComponent(parts[i], isFile) : parts[i];
+        if (clean.empty() || clean == "." || clean == "..")
+            clean = isFile ? "upload.bin" : "folder";
+        if (clean != parts[i])
+            renamed = true;
+        safe /= clean;
+    }
+    return safe.string();
+}
+
 std::string uniquePath(const fs::path& dir, const std::string& stem, const std::string& ext)
 {
     fs::path path = dir / (stem + "." + ext);
@@ -206,6 +256,25 @@ std::string uniquePath(const fs::path& dir, const std::string& stem, const std::
     while (fs::exists(path))
         path = dir / (stem + "_" + std::to_string(i++) + "." + ext);
     return path.string();
+}
+
+fs::path uniqueFileTarget(const fs::path& requested)
+{
+    if (!fs::exists(requested))
+        return requested;
+
+    fs::path dir = requested.parent_path();
+    std::string stem = requested.stem().string();
+    std::string ext = requested.extension().string();
+    if (stem.empty())
+        stem = requested.filename().string();
+    int i = 1;
+    fs::path path;
+    do
+    {
+        path = dir / (stem + "_" + std::to_string(i++) + ext);
+    } while (fs::exists(path));
+    return path;
 }
 
 std::string gameIdFromEntry(const beiklive::GameEntry& entry)
@@ -258,11 +327,93 @@ void ensureDir(const std::string& path)
     fs::create_directories(path, ec);
 }
 
+bool isTextEditableExt(const std::string& ext)
+{
+    static const std::set<std::string> editable = {
+        "txt", "log", "cfg", "ini", "json", "xml", "md", "cht", "savtxt", "yaml", "yml", "csv",
+    };
+    return editable.count(toLower(ext)) > 0;
+}
+
+std::string mimeTypeForExt(const std::string& ext)
+{
+    std::string e = toLower(ext);
+    if (e == "png") return "image/png";
+    if (e == "jpg" || e == "jpeg") return "image/jpeg";
+    if (e == "webp") return "image/webp";
+    if (e == "gif") return "image/gif";
+    if (e == "bmp") return "image/bmp";
+    if (isTextEditableExt(e)) return "text/plain; charset=utf-8";
+    if (e == "zip") return "application/zip";
+    return "application/octet-stream";
+}
+
+bool addDirectoryToZip(mz_zip_archive& zip, const fs::path& root, const fs::path& dir)
+{
+    std::error_code ec;
+    for (const auto& entry : fs::recursive_directory_iterator(dir, fs::directory_options::skip_permission_denied, ec))
+    {
+        if (ec)
+            return false;
+        if (!entry.is_regular_file(ec))
+            continue;
+
+        fs::path relative = fs::relative(entry.path(), root, ec);
+        if (ec)
+            relative = entry.path().filename();
+        std::string archiveName = relative.generic_string();
+        if (archiveName.empty())
+            continue;
+        if (!mz_zip_writer_add_file(&zip, archiveName.c_str(), entry.path().string().c_str(), nullptr, 0, MZ_DEFAULT_COMPRESSION))
+            return false;
+    }
+    return true;
+}
+
+fs::path zipDirectoryToCache(const fs::path& dir, std::string& error)
+{
+    fs::path zipDir = fs::path(beiklive::path::cachePath()) / "web_downloads";
+    ensureDir(zipDir.string());
+    fs::path zipPath = uniqueFileTarget(zipDir / (safePathComponent(dir.filename().string(), false) + ".zip"));
+
+    mz_zip_archive zip = {};
+    if (!mz_zip_writer_init_file(&zip, zipPath.string().c_str(), 0))
+    {
+        error = "create zip failed";
+        return {};
+    }
+
+    bool ok = addDirectoryToZip(zip, dir, dir);
+    if (ok)
+        ok = mz_zip_writer_finalize_archive(&zip) != 0;
+    mz_zip_writer_end(&zip);
+    if (!ok)
+    {
+        std::error_code ec;
+        fs::remove(zipPath, ec);
+        error = "write zip failed";
+        return {};
+    }
+    return zipPath;
+}
+
 std::string defaultSavePath(const std::string& stem)
 {
     fs::path path = fs::path(beiklive::path::savePath()) / "web" / stem;
     ensureDir(path.string());
     return path.string();
+}
+
+fs::path fileBrowserRoot()
+{
+#ifdef __SWITCH__
+    return fs::path("sdmc:/");
+#else
+    std::error_code ec;
+    fs::path root = beiklive::path::ROOT.empty() ? fs::current_path(ec) : fs::path(beiklive::path::ROOT);
+    fs::path canonical = fs::weakly_canonical(root, ec);
+    return ec ? root : canonical;
+#endif
 }
 
 std::string uploadDirForKind(const std::string& kind, int platform)
@@ -271,6 +422,8 @@ std::string uploadDirForKind(const std::string& kind, int platform)
         return (fs::path(beiklive::path::cachePath()) / "covers").string();
     if (kind == "save")
         return beiklive::path::savePath();
+    if (kind == "file")
+        return fileBrowserRoot().string();
     return (fs::path(beiklive::path::romPath()) / platformDir(platform)).string();
 }
 
@@ -416,7 +569,87 @@ bool pathInsideDirectory(const fs::path& target, const fs::path& dir, fs::path& 
            (dirStr.empty() || dirStr.back() == fs::path::preferred_separator || dirStr.back() == '/' || dirStr.back() == '\\' ||
             targetStr[dirStr.size()] == fs::path::preferred_separator ||
             targetStr[dirStr.size()] == '/' ||
-            targetStr[dirStr.size()] == '\\'));
+           targetStr[dirStr.size()] == '\\'));
+}
+
+fs::path browserPathFromClient(const std::string& raw)
+{
+    fs::path root = fileBrowserRoot();
+    if (raw.empty())
+        return root;
+
+    fs::path path(raw);
+#ifdef __SWITCH__
+    std::string text = path.string();
+    if (text == "sdmc:")
+        return root;
+    if (text.rfind("sdmc:/", 0) != 0 && text != "sdmc:")
+        path = root / path;
+#else
+    if (path.is_relative())
+        path = root / path;
+#endif
+    return path.lexically_normal();
+}
+
+bool pathInsideFileBrowser(const fs::path& target);
+
+fs::path browserParentPath(const fs::path& path)
+{
+#ifdef __SWITCH__
+    std::string text = path.lexically_normal().string();
+    if (text == "sdmc:" || text == "sdmc:/")
+        return {};
+    while (text.size() > 6 && text.back() == '/')
+        text.pop_back();
+    if (text.rfind("sdmc:/", 0) != 0)
+        return {};
+    size_t slash = text.find_last_of('/');
+    if (slash == std::string::npos || slash <= 5)
+        return fs::path("sdmc:/");
+    return fs::path(text.substr(0, slash));
+#else
+    fs::path parent = path.parent_path();
+    if (!parent.empty() && pathInsideFileBrowser(parent) && parent != path)
+        return parent;
+    return {};
+#endif
+}
+
+bool pathInsideFileBrowser(const fs::path& target)
+{
+    fs::path root = fileBrowserRoot();
+#ifdef __SWITCH__
+    std::string rootStr = root.string();
+    std::string targetStr = target.lexically_normal().string();
+    return targetStr == rootStr || targetStr == "sdmc:" || targetStr.rfind("sdmc:/", 0) == 0;
+#else
+    fs::path canonicalTarget;
+    return pathInsideDirectory(target, root, canonicalTarget);
+#endif
+}
+
+bool writablePathInsideFileBrowser(const fs::path& target)
+{
+    fs::path parent = target.parent_path();
+    if (parent.empty())
+        parent = fileBrowserRoot();
+    return pathInsideFileBrowser(parent);
+}
+
+nlohmann::json fileEntryJson(const fs::directory_entry& entry)
+{
+    std::error_code ec;
+    fs::path path = entry.path();
+    bool isDir = entry.is_directory(ec);
+    return {
+        {"name", path.filename().string()},
+        {"path", path.string()},
+        {"isDir", isDir},
+        {"size", isDir ? 0 : safeFileSize(path)},
+        {"modified", safeModTime(path)},
+        {"ext", isDir ? "" : trimExtDot(path.extension().string())},
+    };
 }
 
 } // namespace
@@ -472,6 +705,8 @@ void ApiRouter::handleApi(mg_connection* c, mg_http_message* hm, const std::stri
         return handleImageFile(c, hm);
     if (uri == "/api/logo" && method == "GET")
         return handleLogoFile(c, hm);
+    if (uri.rfind("/api/files", 0) == 0)
+        return handleFiles(c, hm, method, uri);
     if (uri.rfind("/api/system", 0) == 0)
         return handleSystem(c, hm, method, uri);
     if (uri.rfind("/api/game/", 0) == 0)
@@ -574,9 +809,38 @@ void ApiRouter::handleUploadStart(mg_connection* c, mg_http_message* hm)
 
     std::string stem = original.stem().string();
     std::string safeStem = safeStemFromTitle(stem);
-    std::string targetDir = uploadDirForKind(kind, platform);
-    ensureDir(targetDir);
-    std::string target = uniquePath(targetDir, safeStem, ext);
+    std::string target;
+    std::string finalPath;
+    bool renamed = containsNonAscii(originalName);
+    if (kind == "file")
+    {
+        std::string targetDirRaw = jsonString(hm, "$.path");
+        std::string relativePath = jsonString(hm, "$.relativePath", originalName);
+        fs::path targetDir = browserPathFromClient(targetDirRaw);
+        if (!pathInsideFileBrowser(targetDir))
+            return replyError(c, 403, "path outside file browser root");
+        ensureDir(targetDir.string());
+
+        bool relativeRenamed = false;
+        fs::path safeRelative = safeUploadRelativePath(relativePath, originalName, relativeRenamed);
+        fs::path requested = (targetDir / safeRelative).lexically_normal();
+        if (!writablePathInsideFileBrowser(requested))
+            return replyError(c, 403, "target outside file browser root");
+        ensureDir(requested.parent_path().string());
+        fs::path finalTarget = uniqueFileTarget(requested);
+        fs::path tempTarget = finalTarget;
+        tempTarget += ".uploading";
+        target = tempTarget.string();
+        finalPath = finalTarget.string();
+        renamed = renamed || relativeRenamed || finalTarget.filename() != requested.filename();
+    }
+    else
+    {
+        std::string targetDir = uploadDirForKind(kind, platform);
+        ensureDir(targetDir);
+        target = uniquePath(targetDir, safeStem, ext);
+        finalPath = target;
+    }
 
     UploadSession session;
     session.token = makeToken();
@@ -584,6 +848,7 @@ void ApiRouter::handleUploadStart(mg_connection* c, mg_http_message* hm)
     session.originalName = originalName;
     session.title = containsNonAscii(stem) ? stem : safeStem;
     session.targetPath = target;
+    session.finalPath = finalPath;
     session.platform = platform;
     session.totalSize = totalSize;
 
@@ -595,8 +860,9 @@ void ApiRouter::handleUploadStart(mg_connection* c, mg_http_message* hm)
     replyJson(c, 200, {
         {"ok", true},
         {"token", session.token},
-        {"targetName", fs::path(target).filename().string()},
-        {"targetPath", target},
+        {"targetName", fs::path(finalPath.empty() ? target : finalPath).filename().string()},
+        {"targetPath", finalPath.empty() ? target : finalPath},
+        {"renamed", renamed},
         {"title", session.title},
         {"platform", platform},
     });
@@ -725,6 +991,28 @@ void ApiRouter::handleUploadFinish(mg_connection* c, mg_http_message* hm)
         game->logoPath = session.targetPath;
         bool saved = saveGame(*game);
         return replyJson(c, 200, {{"ok", saved}, {"saved", saved}, {"path", session.targetPath}});
+    }
+
+    if (session.kind == "file")
+    {
+        fs::path finalPath = session.finalPath.empty() ? session.targetPath : session.finalPath;
+        std::error_code ec;
+        if (session.totalSize == 0 && !fs::exists(session.targetPath, ec))
+        {
+            std::ofstream empty(session.targetPath, std::ios::binary);
+        }
+        if (fs::exists(finalPath, ec))
+            finalPath = uniqueFileTarget(finalPath);
+        fs::rename(session.targetPath, finalPath, ec);
+        if (ec)
+        {
+            fs::copy_file(session.targetPath, finalPath, fs::copy_options::overwrite_existing, ec);
+            if (!ec)
+                fs::remove(session.targetPath, ec);
+        }
+        if (ec)
+            return replyError(c, 500, "finalize upload failed");
+        return replyJson(c, 200, {{"ok", true}, {"path", finalPath.string()}, {"name", finalPath.filename().string()}});
     }
 
     replyJson(c, 200, {{"ok", true}, {"path", session.targetPath}});
@@ -974,6 +1262,196 @@ void ApiRouter::handleSystem(mg_connection* c, mg_http_message*, const std::stri
         return replyJson(c, 200, {{"ok", true}});
     }
     replyError(c, 404, "system api not found");
+}
+
+void ApiRouter::handleFiles(mg_connection* c, mg_http_message* hm, const std::string& method, const std::string& uri)
+{
+    if (uri == "/api/files/list" && method == "GET")
+    {
+        fs::path path = browserPathFromClient(decodeQuery(hm, "path"));
+        if (!pathInsideFileBrowser(path))
+            return replyError(c, 403, "path outside file browser root");
+        if (!fs::exists(path) || !fs::is_directory(path))
+            return replyError(c, 404, "directory not found");
+
+        nlohmann::json entries = nlohmann::json::array();
+        std::error_code ec;
+        for (const auto& entry : fs::directory_iterator(path, fs::directory_options::skip_permission_denied, ec))
+        {
+            if (ec)
+                break;
+            entries.push_back(fileEntryJson(entry));
+        }
+        std::sort(entries.begin(), entries.end(), [](const nlohmann::json& a, const nlohmann::json& b) {
+            bool ad = a.value("isDir", false);
+            bool bd = b.value("isDir", false);
+            if (ad != bd)
+                return ad > bd;
+            return a.value("name", "").compare(b.value("name", "")) < 0;
+        });
+
+        fs::path parent = browserParentPath(path);
+        return replyJson(c, 200, {
+            {"ok", true},
+            {"root", fileBrowserRoot().string()},
+            {"path", path.string()},
+            {"parent", parent.empty() ? "" : parent.string()},
+            {"entries", entries},
+        });
+    }
+
+    if (uri == "/api/files/upload/start" && method == "POST")
+        return handleUploadStart(c, hm);
+
+    if (uri == "/api/files/download" && method == "GET")
+    {
+        fs::path path = browserPathFromClient(decodeQuery(hm, "path"));
+        if (!pathInsideFileBrowser(path))
+            return replyError(c, 403, "path outside file browser root");
+        if (!fs::exists(path))
+            return replyError(c, 404, "file not found");
+        fs::path servedPath = path;
+        if (fs::is_directory(path))
+        {
+            std::string error;
+            servedPath = zipDirectoryToCache(path, error);
+            if (servedPath.empty())
+                return replyError(c, 500, error);
+        }
+        else if (!fs::is_regular_file(path))
+        {
+            return replyError(c, 404, "file not found");
+        }
+        std::string disposition = "Content-Disposition: attachment; filename=\"" +
+            safeHeaderFilename(servedPath.filename().string()) + "\"\r\n";
+        std::string headers = std::string(CORS_HEADERS) + disposition;
+        mg_http_serve_opts opts = {};
+        opts.extra_headers = headers.c_str();
+        return mg_http_serve_file(c, hm, servedPath.string().c_str(), &opts);
+    }
+
+    if (uri == "/api/files/view" && method == "GET")
+    {
+        fs::path path = browserPathFromClient(decodeQuery(hm, "path"));
+        if (!pathInsideFileBrowser(path))
+            return replyError(c, 403, "path outside file browser root");
+        if (!fs::exists(path) || !fs::is_regular_file(path))
+            return replyError(c, 404, "file not found");
+        std::string headers = std::string(CORS_HEADERS) + "Content-Type: " + mimeTypeForExt(trimExtDot(path.extension().string())) + "\r\n";
+        mg_http_serve_opts opts = {};
+        opts.extra_headers = headers.c_str();
+        return mg_http_serve_file(c, hm, path.string().c_str(), &opts);
+    }
+
+    if (uri == "/api/files/text" && method == "GET")
+    {
+        fs::path path = browserPathFromClient(decodeQuery(hm, "path"));
+        if (!pathInsideFileBrowser(path))
+            return replyError(c, 403, "path outside file browser root");
+        if (!fs::exists(path) || !fs::is_regular_file(path))
+            return replyError(c, 404, "file not found");
+        std::string ext = trimExtDot(path.extension().string());
+        if (!isTextEditableExt(ext))
+            return replyError(c, 400, "unsupported text extension");
+        if (safeFileSize(path) > MAX_TEXT_EDIT_SIZE)
+            return replyError(c, 400, "text file too large");
+        return replyJson(c, 200, {
+            {"ok", true},
+            {"path", path.string()},
+            {"name", path.filename().string()},
+            {"content", loadTextFile(path.string())},
+        });
+    }
+
+    if (uri == "/api/files/text" && method == "PUT")
+    {
+        fs::path path = browserPathFromClient(jsonString(hm, "$.path"));
+        if (!pathInsideFileBrowser(path))
+            return replyError(c, 403, "path outside file browser root");
+        if (!fs::exists(path) || !fs::is_regular_file(path))
+            return replyError(c, 404, "file not found");
+        std::string ext = trimExtDot(path.extension().string());
+        if (!isTextEditableExt(ext))
+            return replyError(c, 400, "unsupported text extension");
+        std::string content = jsonString(hm, "$.content");
+        if (content.size() > MAX_TEXT_EDIT_SIZE)
+            return replyError(c, 400, "text file too large");
+        std::ofstream out(path, std::ios::binary | std::ios::trunc);
+        if (!out)
+            return replyError(c, 500, "open text file failed");
+        out.write(content.data(), static_cast<std::streamsize>(content.size()));
+        if (!out)
+            return replyError(c, 500, "write text file failed");
+        return replyJson(c, 200, {{"ok", true}, {"path", path.string()}, {"size", content.size()}});
+    }
+
+    if (uri == "/api/files/mkdir" && method == "POST")
+    {
+        fs::path dir = browserPathFromClient(jsonString(hm, "$.path"));
+        std::string name = jsonString(hm, "$.name");
+        if (name.empty())
+            return replyError(c, 400, "missing folder name");
+        bool renamed = false;
+        fs::path target = (dir / safeUploadRelativePath(name, name, renamed)).lexically_normal();
+        if (!writablePathInsideFileBrowser(target))
+            return replyError(c, 403, "path outside file browser root");
+        std::error_code ec;
+        bool created = fs::create_directories(target, ec);
+        if (ec)
+            return replyError(c, 500, "create directory failed");
+        return replyJson(c, 200, {{"ok", true}, {"created", created}, {"path", target.string()}, {"renamed", renamed}});
+    }
+
+    if (uri == "/api/files/rename" && method == "POST")
+    {
+        fs::path path = browserPathFromClient(jsonString(hm, "$.path"));
+        std::string name = jsonString(hm, "$.name");
+        if (name.empty())
+            return replyError(c, 400, "missing name");
+        if (!pathInsideFileBrowser(path) || !fs::exists(path))
+            return replyError(c, 404, "file not found");
+        bool renamed = false;
+        fs::path target = (path.parent_path() / safeUploadRelativePath(name, name, renamed)).lexically_normal();
+        if (!writablePathInsideFileBrowser(target))
+            return replyError(c, 403, "path outside file browser root");
+        std::error_code ec;
+        fs::rename(path, target, ec);
+        if (ec)
+            return replyError(c, 500, "rename failed");
+        return replyJson(c, 200, {{"ok", true}, {"path", target.string()}, {"renamed", renamed}});
+    }
+
+    if (uri == "/api/files/move" && method == "POST")
+    {
+        fs::path path = browserPathFromClient(jsonString(hm, "$.path"));
+        fs::path destDir = browserPathFromClient(jsonString(hm, "$.destDir"));
+        if (!pathInsideFileBrowser(path) || !fs::exists(path))
+            return replyError(c, 404, "file not found");
+        if (!pathInsideFileBrowser(destDir) || !fs::exists(destDir) || !fs::is_directory(destDir))
+            return replyError(c, 404, "target directory not found");
+        fs::path target = uniqueFileTarget(destDir / path.filename());
+        std::error_code ec;
+        fs::rename(path, target, ec);
+        if (ec)
+            return replyError(c, 500, "move failed");
+        return replyJson(c, 200, {{"ok", true}, {"path", target.string()}});
+    }
+
+    if (uri == "/api/files/delete" && method == "DELETE")
+    {
+        fs::path path = browserPathFromClient(jsonString(hm, "$.path"));
+        if (!pathInsideFileBrowser(path) || !fs::exists(path))
+            return replyError(c, 404, "file not found");
+        if (path.lexically_normal() == fileBrowserRoot().lexically_normal())
+            return replyError(c, 400, "cannot delete root");
+        std::error_code ec;
+        std::uintmax_t removed = fs::is_directory(path, ec) ? fs::remove_all(path, ec) : (fs::remove(path, ec) ? 1 : 0);
+        if (ec)
+            return replyError(c, 500, "delete failed");
+        return replyJson(c, 200, {{"ok", true}, {"removed", removed}});
+    }
+
+    replyError(c, 404, "files api not found");
 }
 
 void ApiRouter::serveStatic(mg_connection* c, mg_http_message* hm)

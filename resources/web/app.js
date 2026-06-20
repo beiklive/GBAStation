@@ -9,6 +9,12 @@ const state = {
   pendingSaveReplace: null,
   sort: 'recent',
   view: 'grid',
+  mode: 'library',
+  fileRoot: '',
+  filePath: '',
+  fileParent: '',
+  fileEntries: [],
+  editingTextPath: '',
   selectionMode: false,
   selectedIds: new Set(),
   uploadTasks: [],
@@ -93,6 +99,14 @@ function formatSize(bytes) {
 
 function formatSpeed(bytesPerSecond) {
   return `${formatSize(bytesPerSecond)}/s`;
+}
+
+function hasNonAsciiPath(file) {
+  return /[^\x00-\x7F]/.test(fileRelativePath(file));
+}
+
+function fileRelativePath(file) {
+  return file.uploadRelativePath || file.webkitRelativePath || file.name || 'upload.bin';
 }
 
 function romFilesFromList(files) {
@@ -229,6 +243,7 @@ function renderTabs() {
 }
 
 function renderGames() {
+  if (state.mode !== 'library') return;
   const list = filteredGames();
   clampPage();
   const totalPages = pageCount(list);
@@ -281,6 +296,171 @@ function renderGames() {
     section.appendChild(grid);
     root.appendChild(section);
   }
+}
+
+function setMode(mode) {
+  state.mode = mode;
+  const library = mode === 'library';
+  $('libraryModeBtn').classList.toggle('active', library);
+  $('filesModeBtn').classList.toggle('active', !library);
+  $('platformTabs').hidden = !library;
+  $('gameSections').hidden = !library;
+  $('pager').hidden = !library || filteredGames().length <= state.pageSize;
+  $('filePanel').hidden = library;
+  $('searchInput').disabled = !library;
+  $('sortSelect').disabled = !library;
+  $('gridViewBtn').disabled = !library;
+  $('listViewBtn').disabled = !library;
+  $('multiSelectBtn').disabled = !library;
+  if (library) {
+    renderGames();
+  } else {
+    setSelectionMode(false);
+    $('summaryText').textContent = '正在浏览 Switch 内存卡';
+    if (!state.filePath) {
+      loadFiles().catch((err) => toast(err.message));
+    } else {
+      renderFiles();
+    }
+  }
+}
+
+async function loadFiles(path = state.filePath) {
+  const data = await api(`/api/files/list?path=${encodeURIComponent(path || '')}`);
+  state.fileRoot = data.root || '';
+  state.filePath = data.path || state.fileRoot;
+  state.fileParent = data.parent || '';
+  state.fileEntries = data.entries || [];
+  renderFiles();
+}
+
+function fileIcon(entry) {
+  if (entry.isDir) return 'fa-folder';
+  const ext = String(entry.ext || '').toLowerCase();
+  if (['png', 'jpg', 'jpeg', 'webp', 'bmp'].includes(ext)) return 'fa-image';
+  if (['zip', '7z', 'rar'].includes(ext)) return 'fa-file-zipper';
+  return 'fa-file';
+}
+
+function isImageEntry(entry) {
+  return !entry.isDir && ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif'].includes(String(entry.ext || '').toLowerCase());
+}
+
+function isTextEntry(entry) {
+  return !entry.isDir && ['txt', 'log', 'cfg', 'ini', 'json', 'xml', 'md', 'cht', 'yaml', 'yml', 'csv'].includes(String(entry.ext || '').toLowerCase());
+}
+
+function renderFiles() {
+  $('filePathInput').value = state.filePath || state.fileRoot || '';
+  $('fileUpBtn').disabled = !state.fileParent;
+  $('fileSummary').textContent = `${state.fileEntries.length} 个项目`;
+  $('summaryText').textContent = `文件管理：${state.filePath || state.fileRoot || ''}`;
+
+  const root = $('fileList');
+  root.innerHTML = '';
+  if (!state.fileEntries.length) {
+    root.innerHTML = '<div class="empty compact-empty">当前目录为空</div>';
+    return;
+  }
+
+  for (const entry of state.fileEntries) {
+    const row = document.createElement('div');
+    row.className = `file-row${entry.isDir ? ' dir' : ''}`;
+    row.innerHTML = `
+      <button class="file-main" title="${escapeHtml(entry.path)}">
+        <i class="fa-solid ${fileIcon(entry)}"></i>
+        <span>${escapeHtml(entry.name)}</span>
+      </button>
+      <span class="file-meta">${entry.isDir ? '文件夹' : formatSize(entry.size)}</span>
+      <span class="file-meta">${escapeHtml(entry.modified || '')}</span>
+      <div class="file-row-actions">
+        <button title="${entry.isDir ? '下载为 ZIP' : '下载'}"><i class="fa-solid fa-download"></i></button>
+        <button title="改名"><i class="fa-solid fa-pen"></i></button>
+        <button title="移动"><i class="fa-solid fa-arrows-up-down-left-right"></i></button>
+        <button class="danger" title="删除"><i class="fa-solid fa-trash-can"></i></button>
+      </div>
+    `;
+    row.querySelector('.file-main').onclick = () => {
+      openFileEntry(entry).catch((err) => toast(err.message));
+    };
+    const [downloadBtn, renameBtn, moveBtn, deleteBtn] = row.querySelectorAll('.file-row-actions button');
+    downloadBtn.onclick = () => downloadFile(entry);
+    renameBtn.onclick = () => renameFile(entry).catch((err) => toast(err.message));
+    moveBtn.onclick = () => moveFile(entry).catch((err) => toast(err.message));
+    deleteBtn.onclick = () => deleteFileEntry(entry).catch((err) => toast(err.message));
+    root.appendChild(row);
+  }
+}
+
+async function openFileEntry(entry) {
+  if (entry.isDir) {
+    await loadFiles(entry.path);
+  } else if (isImageEntry(entry)) {
+    openFileImage(entry);
+  } else if (isTextEntry(entry)) {
+    await openTextEditor(entry);
+  }
+}
+
+function downloadFile(entry) {
+  window.location.href = `/api/files/download?path=${encodeURIComponent(entry.path)}`;
+}
+
+function openFileImage(entry) {
+  $('fileImageTitle').textContent = entry.name || '图片预览';
+  $('fileImagePreview').src = `/api/files/view?path=${encodeURIComponent(entry.path)}&t=${Date.now()}`;
+  $('fileImageDialog').showModal();
+}
+
+async function openTextEditor(entry) {
+  const data = await api(`/api/files/text?path=${encodeURIComponent(entry.path)}`);
+  state.editingTextPath = data.path || entry.path;
+  $('textEditorTitle').textContent = data.name || entry.name || '文本编辑';
+  $('textEditorPath').textContent = state.editingTextPath;
+  $('textEditorContent').value = data.content || '';
+  $('textEditorDialog').showModal();
+}
+
+async function saveTextEditor() {
+  if (!state.editingTextPath) return;
+  await api('/api/files/text', {
+    method: 'PUT',
+    body: JSON.stringify({ path: state.editingTextPath, content: $('textEditorContent').value }),
+  });
+  toast('文本已保存');
+  $('textEditorDialog').close();
+  await loadFiles();
+}
+
+async function renameFile(entry) {
+  const name = prompt('输入新的名称', entry.name);
+  if (!name || name === entry.name) return;
+  await api('/api/files/rename', { method: 'POST', body: JSON.stringify({ path: entry.path, name }) });
+  toast('已改名');
+  await loadFiles();
+}
+
+async function moveFile(entry) {
+  const destDir = prompt('移动到目录', state.filePath || state.fileRoot);
+  if (!destDir) return;
+  await api('/api/files/move', { method: 'POST', body: JSON.stringify({ path: entry.path, destDir }) });
+  toast('已移动');
+  await loadFiles();
+}
+
+async function deleteFileEntry(entry) {
+  if (!confirm(`确认删除 ${entry.name}？${entry.isDir ? '\n文件夹内所有内容都会被删除。' : ''}`)) return;
+  await api('/api/files/delete', { method: 'DELETE', body: JSON.stringify({ path: entry.path }) });
+  toast('已删除');
+  await loadFiles();
+}
+
+async function createFolder() {
+  const name = prompt('新建文件夹名称');
+  if (!name) return;
+  await api('/api/files/mkdir', { method: 'POST', body: JSON.stringify({ path: state.filePath || state.fileRoot, name }) });
+  toast('文件夹已创建');
+  await loadFiles();
 }
 
 async function openGameDialog(game) {
@@ -437,6 +617,9 @@ async function uploadRoms(files) {
     uploaded: 0,
     speed: 0,
     status: 'pending',
+    kind: 'rom',
+    startUrl: '/api/upload/start',
+    extraStartData: {},
     error: '',
     token: '',
     controller: null,
@@ -444,6 +627,45 @@ async function uploadRoms(files) {
     lastBytes: 0,
     lastTime: 0,
   }));
+  state.uploadTasks = tasks;
+  state.uploadCancelAll = false;
+  renderUploadDialog();
+  $('uploadDialog').showModal();
+  runUploadQueue().catch((err) => toast(err.message));
+}
+
+async function uploadBrowserFiles(files) {
+  const list = [...(files || [])].filter((file) => file && file.name);
+  if (!list.length) {
+    toast('没有可上传的文件');
+    return;
+  }
+  if (list.some(hasNonAsciiPath)) {
+    const ok = confirm('文件名或目录名中包含中文字符，上传到 Switch 前会自动重命名为拼音，是否继续？');
+    if (!ok) return;
+  }
+  const targetPath = state.filePath || state.fileRoot || '';
+  const tasks = list
+    .sort((a, b) => fileRelativePath(a).localeCompare(fileRelativePath(b), 'zh-Hans'))
+    .map((file) => ({
+      id: state.uploadNextId++,
+      file,
+      name: file.name,
+      relativePath: fileRelativePath(file),
+      size: file.size,
+      uploaded: 0,
+      speed: 0,
+      status: 'pending',
+      kind: 'file',
+      startUrl: '/api/files/upload/start',
+      extraStartData: { path: targetPath, relativePath: fileRelativePath(file) },
+      error: '',
+      token: '',
+      controller: null,
+      startedAt: 0,
+      lastBytes: 0,
+      lastTime: 0,
+    }));
   state.uploadTasks = tasks;
   state.uploadCancelAll = false;
   renderUploadDialog();
@@ -467,12 +689,16 @@ async function runUploadQueue() {
   } finally {
     state.uploadActive = false;
     renderUploadDialog();
-    await loadGames(true);
+    const hasRom = state.uploadTasks.some((task) => (task.kind || 'rom') === 'rom');
+    const hasFile = state.uploadTasks.some((task) => task.kind === 'file');
+    if (hasRom) await loadGames(true);
+    if (hasFile && state.mode === 'files') await loadFiles();
     const failed = state.uploadTasks.filter((task) => task.status === 'failed').length;
     const cancelled = state.uploadTasks.filter((task) => task.status === 'cancelled').length;
     const done = state.uploadTasks.filter((task) => task.status === 'done').length;
-    if (done && !failed && !cancelled) toast('导入完成，GameDB 已保存');
-    else if (done) toast(`已导入 ${done} 个，${failed + cancelled} 个未完成`);
+    const action = hasFile && !hasRom ? '上传' : '导入';
+    if (done && !failed && !cancelled) toast(hasFile && !hasRom ? '上传完成' : '导入完成，GameDB 已保存');
+    else if (done) toast(`已${action} ${done} 个，${failed + cancelled} 个未完成`);
   }
 }
 
@@ -484,7 +710,7 @@ async function uploadQueueTask(task) {
   task.lastBytes = 0;
   renderUploadDialog();
   try {
-    await uploadFile(task.file, '/api/upload/start', 'rom', {}, {
+    await uploadFile(task.file, task.startUrl || '/api/upload/start', task.kind || 'rom', task.extraStartData || {}, {
       signal: task.controller.signal,
       isCancelled: () => task.status === 'cancelled' || state.uploadCancelAll,
       onStart: (session) => {
@@ -608,7 +834,14 @@ function readEntryFiles(entry) {
   return new Promise((resolve) => {
     if (!entry) return resolve([]);
     if (entry.isFile) {
-      entry.file((file) => resolve([file]), () => resolve([]));
+      entry.file((file) => {
+        const relativePath = String(entry.fullPath || file.name).replace(/^\/+/, '');
+        try {
+          Object.defineProperty(file, 'uploadRelativePath', { value: relativePath });
+        } catch (_) {
+        }
+        resolve([file]);
+      }, () => resolve([]));
       return;
     }
     if (!entry.isDirectory) return resolve([]);
@@ -855,6 +1088,29 @@ function bindEvents() {
     $('uploadZone').classList.remove('active');
     uploadRoms(await filesFromDropEvent(e));
   };
+  $('libraryModeBtn').onclick = () => setMode('library');
+  $('filesModeBtn').onclick = () => setMode('files');
+  $('fileUploadBtn').onclick = () => $('fileBrowserInput').click();
+  $('folderUploadBtn').onclick = () => $('folderBrowserInput').click();
+  $('fileBrowserInput').onchange = (e) => {
+    uploadBrowserFiles([...e.target.files]);
+    e.target.value = '';
+  };
+  $('folderBrowserInput').onchange = (e) => {
+    uploadBrowserFiles([...e.target.files]);
+    e.target.value = '';
+  };
+  $('newFolderBtn').onclick = () => createFolder().catch((err) => toast(err.message));
+  $('fileHomeBtn').onclick = () => loadFiles(state.fileRoot).catch((err) => toast(err.message));
+  $('fileUpBtn').onclick = () => state.fileParent && loadFiles(state.fileParent).catch((err) => toast(err.message));
+  $('fileRefreshBtn').onclick = () => loadFiles().catch((err) => toast(err.message));
+  $('fileGoBtn').onclick = () => loadFiles($('filePathInput').value.trim()).catch((err) => toast(err.message));
+  $('filePathInput').onkeydown = (e) => {
+    if (e.key === 'Enter') loadFiles(e.target.value.trim()).catch((err) => toast(err.message));
+  };
+  $('closeFileImageBtn').onclick = () => $('fileImageDialog').close();
+  $('closeTextEditorBtn').onclick = () => $('textEditorDialog').close();
+  $('saveTextEditorBtn').onclick = () => saveTextEditor().catch((err) => toast(err.message));
   $('searchInput').oninput = (e) => { state.search = e.target.value; state.page = 1; renderGames(); };
   $('prevPageBtn').onclick = () => { state.page--; renderGames(); };
   $('nextPageBtn').onclick = () => { state.page++; renderGames(); };

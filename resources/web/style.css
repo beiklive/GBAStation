@@ -34,6 +34,7 @@ body.dark {
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body {
   margin: 0;
   min-height: 100vh;
@@ -79,6 +80,15 @@ body {
 .fa-file-arrow-up::before { content: "\f574"; }
 .fa-folder-open::before { content: "\f07c"; }
 .fa-ban::before { content: "\f05e"; }
+.fa-folder::before { content: "\f07b"; }
+.fa-file::before { content: "\f15b"; }
+.fa-file-zipper::before { content: "\f1c6"; }
+.fa-folder-plus::before { content: "\f65e"; }
+.fa-house::before { content: "\f015"; }
+.fa-arrow-up::before { content: "\f062"; }
+.fa-arrow-right::before { content: "\f061"; }
+.fa-pen::before { content: "\f304"; }
+.fa-arrows-up-down-left-right::before { content: "\f047"; }
 
 .app-titlebar {
   height: var(--titlebar-height);
@@ -179,6 +189,24 @@ button:disabled {
   justify-content: center;
   gap: 7px;
   padding: 0 10px;
+}
+
+.sidebar-nav {
+  display: grid;
+  gap: 8px;
+}
+.sidebar-nav button {
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 9px;
+  padding: 0 12px;
+}
+.sidebar-nav button.active {
+  color: white;
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 .platform-tabs {
@@ -478,6 +506,122 @@ h1 { font-size: 28px; letter-spacing: 0; }
 .upload-status.cancelled {
   color: var(--danger);
   background: rgba(217, 45, 32, .12);
+}
+
+.file-panel {
+  display: grid;
+  gap: 14px;
+}
+.file-panel[hidden] {
+  display: none;
+}
+.file-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.file-head h2 {
+  font-size: 20px;
+}
+.file-head p {
+  color: var(--muted);
+  margin-top: 5px;
+}
+.file-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.file-actions button,
+.file-toolbar button {
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
+}
+.file-toolbar {
+  display: grid;
+  grid-template-columns: 38px 38px 38px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+.file-path-field {
+  min-width: 0;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 0 11px;
+}
+.file-path-field input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+}
+.file-list {
+  display: grid;
+  gap: 8px;
+}
+.file-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 112px 168px auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 48px;
+  padding: 7px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.file-row.dir .file-main .fa-solid {
+  color: var(--accent);
+}
+.file-main {
+  min-width: 0;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  border: 0;
+  background: transparent;
+  padding: 0 4px;
+  text-align: left;
+}
+.file-main span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-meta {
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.file-row-actions button {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  padding: 0;
 }
 
 .game-sections {
@@ -803,6 +947,54 @@ dialog::backdrop { background: rgba(0, 0, 0, .45); }
 .image-dialog {
   width: min(860px, 92vw);
 }
+.file-image-dialog {
+  width: min(980px, 94vw);
+  max-height: 92vh;
+  overflow: auto;
+}
+.file-image-dialog img {
+  width: 100%;
+  max-height: 76vh;
+  object-fit: contain;
+  display: block;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.text-editor-dialog {
+  width: min(960px, 94vw);
+  max-height: 92vh;
+}
+.text-editor-dialog .dialog-head p {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 5px;
+  overflow-wrap: anywhere;
+}
+.text-editor-dialog textarea {
+  width: 100%;
+  min-height: min(62vh, 560px);
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  padding: 12px;
+  font: 13px/1.55 Consolas, "Cascadia Mono", "Courier New", monospace;
+}
+.text-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+.text-editor-actions button {
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 14px;
+}
 .choice-dialog {
   width: min(420px, 92vw);
 }
@@ -905,6 +1097,9 @@ dialog::backdrop { background: rgba(0, 0, 0, .45); }
   .platform-tabs {
     grid-template-columns: repeat(3, 1fr);
   }
+  .sidebar-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .platform-tabs button {
     min-width: 0;
     padding: 0 9px;
@@ -937,6 +1132,29 @@ dialog::backdrop { background: rgba(0, 0, 0, .45); }
   }
   .upload-row-actions {
     display: flex;
+    justify-content: flex-end;
+  }
+  .file-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .file-actions {
+    justify-content: stretch;
+  }
+  .file-actions button {
+    flex: 1;
+    min-width: 0;
+  }
+  .file-toolbar {
+    grid-template-columns: repeat(3, 38px) 1fr;
+  }
+  .file-toolbar #fileGoBtn {
+    grid-column: 1 / -1;
+  }
+  .file-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .file-row-actions {
     justify-content: flex-end;
   }
   .upload-dialog {

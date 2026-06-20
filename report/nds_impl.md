@@ -95,6 +95,9 @@
 - 游戏菜单 NDS 屏幕布局下新增“上屏调整”“下屏调整”；仅在布局为自定义时可用，打开后复用自定义设置样式的侧边栏控制单屏 X/Y 偏移和缩放。
 - 自定义双屏布局改为 576x324 组合画布，上下屏可独立缩放和移动；下屏触摸区域根据下屏最终矩形同步映射。
 - NDS 自定义布局调整时缓存核心输出的原始双屏帧，菜单内修改布局/单屏 X/Y/scale 会立即重新排版并标记待上传，背景层游戏画面无需关闭菜单即可同步变化。
+- NDS 同步画面设置现在会同步上下屏独立缩放和偏移字段；自定义布局组合画布改为 1280x720 直出，单屏缩放以 NDS 原始 256x192 为 1x 基准，避免外层二次缩放影响缩放/偏移语义。
+- NDS 自定义布局单屏缩放目标矩形强制保持 4:3；调整上/下屏 X/Y/scale 时取消逐步写盘，改为关闭单屏调整面板时一次保存，提升菜单响应速度。
+- NDS 屏幕布局新增 Hybrid（混合）模式：输出 1280x720 固定画布，左侧上屏主屏按 10/3 倍放大并以整数目标矩形 `(0,40,853,640)` 绘制；右侧副屏上/下屏按 5/3 倍放大并以 `(853,40,427,320)`、`(853,360,427,320)` 绘制，同步下屏触摸区域。
 - Switch 正常音频缓冲水位提高到环形缓冲 3/4，并将音频线程等待数据窗口拉长到约一个硬件周期，减少轻微 underrun 撕裂。
 - NDS 快进改为折中批处理：低倍率保持逐帧平滑，高倍率每轮最多批量运行 2-4 帧并按 `framesRan / multiplier` 节流，以换取更高快进倍率。
 
@@ -158,4 +161,14 @@
 - 补充 NDS 自定义双屏上下屏独立 X/Y/scale、GameDB 字段、正常音频缓冲与高倍率快进批处理后复验：`cmd /c windowsbuild.bat` 通过。
 - 同次 Switch 复验：`E:\bin\msys64\usr\bin\bash.exe -lc 'cd /e/MyCode/MyEmuProject/Project/BeikLiveStation && ./switchbuild.sh'` 通过，重新编译 `core/game_database.cpp`、`AudioManager.cpp`、`GamePage.cpp`、`GameMenuView.cpp`、`GameView.cpp` 等并生成 `build_switch/GBAStation.nro`（脚本输出 21.49 MB）。
 - 修复 NDS 自定义布局菜单内背景画面不同步后复验：`cmd /c windowsbuild.bat` 通过，生成 `build_windows/GBAStation.exe`。
+- 同次 Switch 复验：`E:\bin\msys64\usr\bin\bash.exe -lc 'cd /e/MyCode/MyEmuProject/Project/BeikLiveStation && ./switchbuild.sh'` 通过，重新编译 `GameView.cpp` 并生成 `build_switch/GBAStation.nro`（脚本输出 21.49 MB）。
+- 修复 NDS 画面同步遗漏上下屏字段、自定义布局默认非整数缩放观感后复验：`cmd /c windowsbuild.bat` 通过，重新编译 `GameMenuView.cpp`、`GameView.cpp` 并生成 `build_windows/GBAStation.exe`。
+- 同次 Switch 复验：`E:\bin\msys64\usr\bin\bash.exe -lc 'cd /e/MyCode/MyEmuProject/Project/BeikLiveStation && ./switchbuild.sh'` 通过，重新编译 `GameMenuView.cpp`、`GameView.cpp` 并生成 `build_switch/GBAStation.nro`（脚本输出 21.49 MB）。
+- 补充 NDS Hybrid 布局、自定义布局 4:3 约束、单屏调整延迟保存后复验：`cmd /c windowsbuild.bat` 通过，重新编译 `GameMenuView.cpp`、`GameView.cpp` 并生成 `build_windows/GBAStation.exe`。
+- 同次 Switch 复验：`E:\bin\msys64\usr\bin\bash.exe -lc 'cd /e/MyCode/MyEmuProject/Project/BeikLiveStation && ./switchbuild.sh'` 通过，重新编译 `GameMenuView.cpp`、`GameView.cpp` 并生成 `build_switch/GBAStation.nro`（脚本输出 21.49 MB）。
+- 修正 Hybrid 副屏为右侧上下两个 1x 原始分辨率画面后复验：`cmd /c windowsbuild.bat` 通过，重新编译 `GameView.cpp` 并生成 `build_windows/GBAStation.exe`。
+- 同次 Switch 复验：`E:\bin\msys64\usr\bin\bash.exe -lc 'cd /e/MyCode/MyEmuProject/Project/BeikLiveStation && ./switchbuild.sh'` 通过，重新编译 `GameView.cpp` 并生成 `build_switch/GBAStation.nro`（脚本输出 21.49 MB）。
+- 修正 NDS 自定义布局缩放基准为单屏 256x192 后复验：`cmd /c windowsbuild.bat` 通过，重新编译 `GameView.cpp` 并生成 `build_windows/GBAStation.exe`。
+- 同次 Switch 复验：`E:\bin\msys64\usr\bin\bash.exe -lc 'cd /e/MyCode/MyEmuProject/Project/BeikLiveStation && ./switchbuild.sh'` 通过，重新编译 `GameView.cpp` 并生成 `build_switch/GBAStation.nro`（脚本输出 21.49 MB）。
+- 修正 Hybrid 主屏 10/3、副屏 5/3 布局后复验：`cmd /c windowsbuild.bat` 通过，重新编译 `GameView.cpp` 并生成 `build_windows/GBAStation.exe`。
 - 同次 Switch 复验：`E:\bin\msys64\usr\bin\bash.exe -lc 'cd /e/MyCode/MyEmuProject/Project/BeikLiveStation && ./switchbuild.sh'` 通过，重新编译 `GameView.cpp` 并生成 `build_switch/GBAStation.nro`（脚本输出 21.49 MB）。
