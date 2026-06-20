@@ -47,7 +47,8 @@ namespace beiklive::enums
         EmuGBC,
         EmuGB,
         EmuNES,
-        EmuSNES
+        EmuSNES,
+        EmuNDS
     };
     // 文件类型,用于文件浏览器
     enum class FileType
@@ -58,6 +59,7 @@ namespace beiklive::enums
         GB_ROM,  // GB文件
         NES_ROM, // NES/Famicom文件
         SNES_ROM,// SNES/SFC文件
+        NDS_ROM, // NDS文件
 
         // 上面的顺序必须与EmuPlatform保持一致，方便后续通过平台类型直接转换为文件类型
 
@@ -116,6 +118,12 @@ namespace beiklive // 结构体
         float customScale = 1.0f;
         float customOffsetX = 0.0f;
         float customOffsetY = 0.0f;
+        float ndsTopScale = 1.0f;
+        float ndsTopOffsetX = 0.0f;
+        float ndsTopOffsetY = 0.0f;
+        float ndsBottomScale = 1.0f;
+        float ndsBottomOffsetX = 0.0f;
+        float ndsBottomOffsetY = 0.0f;
 
         std::vector<std::string> shaderParaNames; // 着色器参数名称列表
         std::vector<float> shaderParaValues;      // 着色器参数值列表

@@ -5,6 +5,8 @@
 #include "core/GameTimer.hpp"
 #include "game/control/GameInputManager.hpp"
 #include "emulator/IEmulatorCore.hpp"
+#include "emulator/IEmulatorStopRequest.hpp"
+#include "emulator/IEmulatorTouchInput.hpp"
 #include "game/render/GameRenderer.hpp"
 #include "ui/utils/GameOverlayRenderer.hpp"
 
@@ -94,6 +96,10 @@ namespace beiklive
             void _onOverlayToggle(bool enabled);
             /// 遮罩路径变更（UI线程调用）
             void _onOverlayPathChange(const std::string& path);
+            /// NDS 双屏布局变更（UI线程调用）
+            void _onNdsLayoutChange(const std::string& layout);
+            /// NDS 自定义双屏位置/缩放变更（UI线程调用）
+            void _onNdsScreenValuesChanged(bool topScreen, float x, float y, float scale);
             /// 纹理过滤变更（UI线程调用）
             void _onFilterChange(const std::string& filter);
             /// 配置变更通知（UI线程调用，通知核心重读变量）
@@ -131,6 +137,10 @@ namespace beiklive
 
             // ---- 画面模式 ----------------------------------------------------
             beiklive::ScreenMode m_screenMode = beiklive::ScreenMode::Fit; ///< 当前画面缩放模式
+            beiklive::DisplayRect m_gameDrawRect; ///< 当前游戏画面在视图中的绘制区域
+            beiklive::DisplayRect m_ndsTouchRect; ///< NDS 下屏在视图中的绘制区域
+            std::string m_ndsLayout = "vertical"; ///< NDS 双屏布局
+            bool m_ndsTouchActive = false; ///< NDS 原始触摸轮询是否处于按下状态
 
             // ---- 遮罩 --------------------------------------------------------
             brls::Image* m_overlayImage = nullptr; ///< 遮罩图片
@@ -138,7 +148,9 @@ namespace beiklive
             // ---- 最新视频帧（游戏线程写，UI 线程读）--------------------------
             mutable std::mutex          m_frameMutex;
             LibretroLoader::VideoFrame  m_pendingFrame; ///< 等待上传的最新帧
+            LibretroLoader::VideoFrame  m_lastRawFrame; ///< NDS 菜单实时重排使用的核心原始帧
             bool                        m_frameReady = false; ///< 是否有新帧待上传
+            bool                        m_hasLastRawFrame = false; ///< 是否已缓存可重排的原始帧
 
             // ---- 音频排空缓冲（复用避免每帧分配）-----------------------------
             std::vector<int16_t> m_audioDrainBuf;
@@ -218,8 +230,14 @@ namespace beiklive
             /// 将待上传帧数据提交到 GPU（在 UI/draw 线程调用）
             void _uploadPendingFrame();
 
+            /// NDS 布局参数变化时，使用最近的原始帧立即重新排版并上传
+            void _requestNdsFrameRelayout();
+
             /// 在视图上绘制状态覆盖层（FPS/快进/倒带/暂停/静音）
             void _drawOverlays(NVGcontext* vg, float x, float y, float w, float h);
+            void _registerTouchInput();
+            void _pollNdsTouchInput();
+            void _submitTouchPoint(float x, float y, bool down);
 
             // ---- 游戏循环内部分段辅助方法（仅在游戏线程中调用）--------------
 
@@ -235,6 +253,12 @@ namespace beiklive
 
             /// 从核心取出最新视频帧并暂存，等待 UI 线程上传 GPU
             void _captureVideoFrame();
+
+            /// 按当前 NDS 双屏布局重排视频帧
+            LibretroLoader::VideoFrame _layoutNdsFrame(const LibretroLoader::VideoFrame& frame) const;
+
+            /// 根据当前 NDS 布局和绘制区域更新下屏触摸区域
+            void _updateNdsTouchRect(const beiklive::DisplayRect& rect);
 
             /// 推送音频数据到 AudioManager（ff=true 时限制推送量，避免缓冲区溢出）
             void _pushFrameAudio(bool ff);

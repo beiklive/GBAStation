@@ -17,7 +17,7 @@ const state = {
   uploadNextId: 1,
 };
 
-const romExtensions = new Set(['gba', 'gb', 'gbc', 'nes', 'fds', 'sfc', 'smc']);
+const romExtensions = new Set(['gba', 'gb', 'gbc', 'nes', 'fds', 'sfc', 'smc', 'nds']);
 
 const platforms = [
   ['GBA', 'GBA'],
@@ -25,6 +25,7 @@ const platforms = [
   ['GB', 'GB'],
   ['FC', 'FC'],
   ['SFC', 'SFC'],
+  ['NDS', 'NDS'],
 ];
 
 const $ = (id) => document.getElementById(id);
@@ -52,7 +53,7 @@ async function api(path, options = {}) {
 }
 
 function platformOf(game) {
-  return game.platformName || ({ 1: 'GBA', 2: 'GBC', 3: 'GB', 4: 'FC', 5: 'SFC' }[game.platform] || 'OTHER');
+  return game.platformName || ({ 1: 'GBA', 2: 'GBC', 3: 'GB', 4: 'FC', 5: 'SFC', 6: 'NDS' }[game.platform] || 'OTHER');
 }
 
 function platformClass(platform) {

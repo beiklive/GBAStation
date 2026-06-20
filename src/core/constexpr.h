@@ -56,6 +56,7 @@ inline std::string GetRootPath()
     constexpr const char *DATA_BASE_FILE_GB    = "GameData_GB.json";    ///< GB 平台数据库文件
     constexpr const char *DATA_BASE_FILE_NES     = "GameData_NES.json";     ///< NES 平台数据库文件
     constexpr const char *DATA_BASE_FILE_SNES    = "GameData_SNES.json";    ///< SNES 平台数据库文件
+    constexpr const char *DATA_BASE_FILE_NDS     = "GameData_NDS.json";     ///< NDS 平台数据库文件
 
     namespace 
     {
@@ -91,6 +92,7 @@ inline std::string GetRootPath()
             case 3: return DATA_BASE_FILE_GB;   // EmuPlatform::EmuGB
             case 4: return DATA_BASE_FILE_NES;     // EmuPlatform::EmuNES
             case 5: return DATA_BASE_FILE_SNES;    // EmuPlatform::EmuSNES
+            case 6: return DATA_BASE_FILE_NDS;      // EmuPlatform::EmuNDS
             default: return DATA_BASE_FILE;
             }
         }
@@ -178,6 +180,7 @@ namespace beiklive::SettingKey
     constexpr const char *KEY_DISPLAY_OVERLAY_GB_PATH  ="display.overlay.gbPath";  ///< 全局 GB 遮罩 PNG 路径
     constexpr const char *KEY_DISPLAY_OVERLAY_NES_PATH  ="display.overlay.nesPath";  ///< 全局 NES 遮罩 PNG 路径
     constexpr const char *KEY_DISPLAY_OVERLAY_SNES_PATH ="display.overlay.snesPath"; ///< 全局 SNES 遮罩 PNG 路径
+    constexpr const char *KEY_DISPLAY_OVERLAY_NDS_PATH  ="display.overlay.ndsPath";  ///< 全局 NDS 遮罩 PNG 路径
 
     // 着色器设置（全局默认）
     constexpr const char *KEY_DISPLAY_SHADER_ENABLED   ="display.shaderEnabled";   ///< 着色器总开关（true=启用）
@@ -187,6 +190,7 @@ namespace beiklive::SettingKey
     constexpr const char *KEY_DISPLAY_SHADER_GB_PATH   ="display.shader.gb";       ///< GB 着色器预设路径
     constexpr const char *KEY_DISPLAY_SHADER_NES_PATH  ="display.shader.nes";      ///< NES 着色器预设路径
     constexpr const char *KEY_DISPLAY_SHADER_SNES_PATH ="display.shader.snes";     ///< SNES 着色器预设路径
+    constexpr const char *KEY_DISPLAY_SHADER_NDS_PATH  ="display.shader.nds";      ///< NDS 着色器预设路径
 
     // 音频设置
     constexpr const char *KEY_AUDIO_BUTTON_SFX      = "audio.buttonSfx";           ///< 按钮音效开关

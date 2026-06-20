@@ -41,6 +41,7 @@ const int kCodeCacheTiming = 3;//5;
 
 void ARMv5::CP15Reset()
 {
+    Log(LogLevel::Debug, "melonDS: CP15Reset begin\n");
     CP15Control = 0x2078; // dunno
 
     RNGSeed = 44203;
@@ -49,16 +50,25 @@ void ARMv5::CP15Reset()
     DTCMSetting = 0;
     ITCMSetting = 0;
 
+    Log(LogLevel::Debug, "melonDS: CP15Reset clear ITCM begin\n");
     memset(ITCM, 0, ITCMPhysicalSize);
+    Log(LogLevel::Debug, "melonDS: CP15Reset clear ITCM end\n");
+    Log(LogLevel::Debug, "melonDS: CP15Reset clear DTCM begin ptr=%p size=%u\n", DTCM, DTCMPhysicalSize);
     memset(DTCM, 0, DTCMPhysicalSize);
+    Log(LogLevel::Debug, "melonDS: CP15Reset clear DTCM end\n");
 
     ITCMSize = 0;
     DTCMBase = 0xFFFFFFFF;
     DTCMMask = 0;
 
+    Log(LogLevel::Debug, "melonDS: CP15Reset clear ICache begin\n");
     memset(ICache, 0, 0x2000);
+    Log(LogLevel::Debug, "melonDS: CP15Reset clear ICache end\n");
+    Log(LogLevel::Debug, "melonDS: CP15Reset invalidate ICache begin\n");
     ICacheInvalidateAll();
+    Log(LogLevel::Debug, "melonDS: CP15Reset invalidate ICache end\n");
     memset(ICacheCount, 0, 64);
+    Log(LogLevel::Debug, "melonDS: CP15Reset clear ICacheCount end\n");
 
     PU_CodeCacheable = 0;
     PU_DataCacheable = 0;
@@ -68,7 +78,9 @@ void ARMv5::CP15Reset()
     PU_DataRW = 0;
 
     memset(PU_Region, 0, 8*sizeof(u32));
+    Log(LogLevel::Debug, "melonDS: CP15Reset UpdatePURegions begin\n");
     UpdatePURegions(true);
+    Log(LogLevel::Debug, "melonDS: CP15Reset end\n");
 
     CurICacheLine = NULL;
 }

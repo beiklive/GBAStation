@@ -49,6 +49,7 @@ int platformFromExt(const std::string& ext)
     if (ext == "gb") return static_cast<int>(beiklive::enums::EmuPlatform::EmuGB);
     if (ext == "nes" || ext == "fds") return static_cast<int>(beiklive::enums::EmuPlatform::EmuNES);
     if (ext == "sfc" || ext == "smc") return static_cast<int>(beiklive::enums::EmuPlatform::EmuSNES);
+    if (ext == "nds") return static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS);
     return 0;
 }
 

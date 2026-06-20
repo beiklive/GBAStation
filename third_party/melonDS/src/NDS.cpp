@@ -74,7 +74,7 @@ const s32 kIterationCycleMargin = 8;
 //
 // timings for GBA slot and wifi are set up at runtime
 
-thread_local NDS* NDS::Current = nullptr;
+NDS* NDS::Current = nullptr;
 
 NDS::NDS() noexcept :
     NDS(
@@ -126,9 +126,11 @@ NDS::NDS(NDSArgs&& args, int type, void* userdata) noexcept :
     RegisterEventFuncs(Event_Div, this, {MakeEventThunk(NDS, DivDone)});
     RegisterEventFuncs(Event_Sqrt, this, {MakeEventThunk(NDS, SqrtDone)});
 
+    Current = this;
     MainRAM = JIT.Memory.GetMainRAM();
     SharedWRAM = JIT.Memory.GetSharedWRAM();
     ARM7WRAM = JIT.Memory.GetARM7WRAM();
+    Log(LogLevel::Debug, "melonDS: NDS constructed this=%p\n", this);
 }
 
 NDS::~NDS() noexcept
@@ -435,12 +437,16 @@ void NDS::Reset()
     Platform::FileHandle* f;
     u32 i;
 
+    Log(LogLevel::Debug, "melonDS: NDS.Reset enter this=%p current=%p\n", this, Current);
+    Current = this;
     RunningGame = false;
     LastSysClockCycles = 0;
 
     // BIOS files are now loaded by the frontend
 
+    Log(LogLevel::Debug, "melonDS: NDS.Reset JIT.Reset begin\n");
     JIT.Reset();
+    Log(LogLevel::Debug, "melonDS: NDS.Reset JIT.Reset end\n");
 
     if (ConsoleType == 1)
     {
@@ -457,17 +463,23 @@ void NDS::Reset()
     // has to be called before InitTimings
     // otherwise some PU settings are completely
     // unitialised on the first run
+    Log(LogLevel::Debug, "melonDS: NDS.Reset CP15Reset begin\n");
     ARM9.CP15Reset();
+    Log(LogLevel::Debug, "melonDS: NDS.Reset CP15Reset end\n");
 
     ARM9Timestamp = 0; ARM9Target = 0;
     ARM7Timestamp = 0; ARM7Target = 0;
     SysTimestamp = 0;
 
+    Log(LogLevel::Debug, "melonDS: NDS.Reset InitTimings begin\n");
     InitTimings();
+    Log(LogLevel::Debug, "melonDS: NDS.Reset InitTimings end\n");
 
+    Log(LogLevel::Debug, "melonDS: NDS.Reset memory clear begin\n");
     memset(MainRAM, 0, MainRAMMask + 1);
     memset(SharedWRAM, 0, 0x8000);
     memset(ARM7WRAM, 0, 0x10000);
+    Log(LogLevel::Debug, "melonDS: NDS.Reset memory clear end\n");
 
     MapSharedWRAM(0);
 
@@ -506,8 +518,10 @@ void NDS::Reset()
     DivCnt = 0;
     SqrtCnt = 0;
 
+    Log(LogLevel::Debug, "melonDS: NDS.Reset ARM reset begin\n");
     ARM9.Reset();
     ARM7.Reset();
+    Log(LogLevel::Debug, "melonDS: NDS.Reset ARM reset end\n");
 
     CPUStop = 0;
 
@@ -535,14 +549,20 @@ void NDS::Reset()
     KeyCnt[1] = 0;
     RCnt = 0;
 
+    Log(LogLevel::Debug, "melonDS: NDS.Reset GPU.Reset begin\n");
     GPU.Reset();
+    Log(LogLevel::Debug, "melonDS: NDS.Reset GPU.Reset end\n");
+    Log(LogLevel::Debug, "melonDS: NDS.Reset cart reset begin\n");
     NDSCartSlot.Reset();
     GBACartSlot.Reset();
+    Log(LogLevel::Debug, "melonDS: NDS.Reset cart reset end\n");
+    Log(LogLevel::Debug, "melonDS: NDS.Reset peripherals reset begin\n");
     SPU.Reset();
     Mic.Reset();
     SPI.Reset();
     RTC.Reset();
     Wifi.Reset();
+    Log(LogLevel::Debug, "melonDS: NDS.Reset end\n");
 }
 
 void NDS::Start()

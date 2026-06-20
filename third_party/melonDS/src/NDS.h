@@ -19,6 +19,7 @@
 #ifndef NDS_H
 #define NDS_H
 
+#include <atomic>
 #include <memory>
 #include <string>
 #include <optional>
@@ -521,7 +522,7 @@ protected:
     alignas(u64) u32 SqrtVal[2];
     u32 SqrtRes;
     u16 KeyCnt[2];
-    bool Running;
+    std::atomic_bool Running {false};
     bool RunningGame;
     u64 LastSysClockCycles;
     u64 FrameStartTimestamp;
@@ -555,7 +556,7 @@ public:
     NDS(NDS&&) = delete;
     NDS& operator=(NDS&&) = delete;
 
-    static thread_local NDS* Current;
+    static NDS* Current;
 protected:
     explicit NDS(NDSArgs&& args, int type, void* userdata) noexcept;
     virtual u32 GetSavestateConfig();

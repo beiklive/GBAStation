@@ -203,7 +203,7 @@ namespace beiklive
 
                 return true;
             });
-        m_fileListPage->setFliter(beiklive::enums::FilterMode::Whitelist, {"gba", "gbc", "gb", "nes", "fds", "sfc", "smc", "md", "gen", "bin", "smd", "sms", "gg", "sg", "cue", "png"});
+        m_fileListPage->setFliter(beiklive::enums::FilterMode::Whitelist, {"gba", "gbc", "gb", "nes", "fds", "sfc", "smc", "nds", "md", "gen", "bin", "smd", "sms", "gg", "sg", "cue", "png"});
 
         m_fileListPage->onFileSelected = [this](beiklive::DirListData dirItem)
         {
@@ -217,6 +217,7 @@ namespace beiklive
             case beiklive::enums::FileType::GB_ROM:
             case beiklive::enums::FileType::NES_ROM:
             case beiklive::enums::FileType::SNES_ROM:
+            case beiklive::enums::FileType::NDS_ROM:
                 brls::Application::notify("启动游戏：" + dirItem.fileName);
                 {
                     m_gamePage = new beiklive::GamePage(dirItem);

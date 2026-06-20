@@ -115,8 +115,48 @@ static constexpr int    SWITCH_N_BUFFERS = 4;
 struct SwitchAudioState {
     alignas(0x1000) int16_t bufData[SWITCH_N_BUFFERS][SWITCH_FRAMES * 2];
     AudioOutBuffer outBuf[SWITCH_N_BUFFERS];
-    int            curBuf          = 0;
+    bool           queued[SWITCH_N_BUFFERS] = {};
+    int            freeList[SWITCH_N_BUFFERS] = {};
+    int            freeCount       = 0;
     u32            enqueuedBuffers = 0;
+
+    bool owns(const AudioOutBuffer* buf, int* index = nullptr) const
+    {
+        for (int i = 0; i < SWITCH_N_BUFFERS; ++i) {
+            if (buf == &outBuf[i]) {
+                if (index) *index = i;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void markQueued(int index)
+    {
+        if (!queued[index]) {
+            queued[index] = true;
+            ++enqueuedBuffers;
+        }
+    }
+
+    void markReleased(int index)
+    {
+        if (!queued[index])
+            return;
+
+        queued[index] = false;
+        if (enqueuedBuffers > 0)
+            --enqueuedBuffers;
+        if (freeCount < SWITCH_N_BUFFERS)
+            freeList[freeCount++] = index;
+    }
+
+    int takeFree()
+    {
+        if (freeCount <= 0)
+            return -1;
+        return freeList[--freeCount];
+    }
 };
 
 bool AudioManager::init(int sampleRate, int channels)
@@ -142,17 +182,19 @@ bool AudioManager::init(int sampleRate, int channels)
         sw->outBuf[i].buffer_size = SWITCH_BYTES;
         sw->outBuf[i].data_size   = SWITCH_BYTES;
         sw->outBuf[i].data_offset = 0;
-        audoutAppendAudioOutBuffer(&sw->outBuf[i]);
+        armDCacheFlush(sw->bufData[i], SWITCH_BYTES);
+        if (R_SUCCEEDED(audoutAppendAudioOutBuffer(&sw->outBuf[i])))
+            sw->markQueued(i);
+        else
+            sw->freeList[sw->freeCount++] = i;
     }
-    sw->enqueuedBuffers = SWITCH_N_BUFFERS;
-    sw->curBuf          = 0;
 
     // 每次初始化时重置环形缓冲区状态，防止上次会话的残留指针/计数导致第二次启动时读到
     // 零数据与真实音频混合的数据块，产生撕裂或刺耳声
     m_writePos          = 0;
     m_readPos           = 0;
     m_available         = 0;
-    m_maxLatencySamples = RING_CAPACITY / 2;
+    m_maxLatencySamples = (RING_CAPACITY * 3) / 4;
     m_ring.resize(RING_CAPACITY);
     m_running.store(true, std::memory_order_release);
     m_thread = std::thread(&AudioManager::audioThreadFunc, this);
@@ -165,29 +207,41 @@ void AudioManager::audioThreadFunc()
     svcSetThreadCoreMask(CUR_THREAD_HANDLE, 2, 1ULL << 2);
 
     auto* sw = static_cast<SwitchAudioState*>(m_platformState);
+    auto collectReleased = [sw](AudioOutBuffer* released) {
+        for (AudioOutBuffer* buf = released; buf != nullptr; buf = buf->next) {
+            int index = -1;
+            if (sw->owns(buf, &index))
+                sw->markReleased(index);
+        }
+    };
+
     while (m_running.load(std::memory_order_acquire)) {
         // 非阻塞回收：取回硬件已播完的缓冲
         {
             AudioOutBuffer* released = nullptr;
             u32 relCount = 0;
             audoutWaitPlayFinish(&released, &relCount, 0);
-            if (relCount > 0 && sw->enqueuedBuffers >= relCount)
-                sw->enqueuedBuffers -= relCount;
+            if (relCount > 0 && released)
+                collectReleased(released);
         }
 
         // 所有硬件槽占满时等待释放
-        while (sw->enqueuedBuffers >= SWITCH_N_BUFFERS &&
+        while (sw->freeCount == 0 &&
                m_running.load(std::memory_order_acquire)) {
             AudioOutBuffer* released = nullptr;
             u32 relCount = 0;
             audoutWaitPlayFinish(&released, &relCount, 10000000); // 10ms 超时
-            if (relCount > 0 && sw->enqueuedBuffers >= relCount)
-                sw->enqueuedBuffers -= relCount;
+            if (relCount > 0 && released)
+                collectReleased(released);
         }
 
         if (!m_running.load(std::memory_order_acquire)) break;
 
-        int16_t* dst = sw->bufData[sw->curBuf];
+        int bufIndex = sw->takeFree();
+        if (bufIndex < 0)
+            continue;
+
+        int16_t* dst = sw->bufData[bufIndex];
 
         // 动态重采样比例 = (输入采样率 / 输出采样率) * 当前模拟速度
         float speed = m_currentSpeed.load(std::memory_order_acquire);
@@ -201,7 +255,7 @@ void AudioManager::audioThreadFunc()
         {
             const size_t needed = inputFrames * static_cast<size_t>(m_channels);
             std::unique_lock<std::mutex> lk(m_mutex);
-            m_dataCV.wait_for(lk, std::chrono::milliseconds(8), [&] {
+            m_dataCV.wait_for(lk, std::chrono::milliseconds(18), [&] {
                 return m_available >= needed ||
                        !m_running.load(std::memory_order_relaxed);
             });
@@ -225,9 +279,13 @@ void AudioManager::audioThreadFunc()
             }
         }
 
-        audoutAppendAudioOutBuffer(&sw->outBuf[sw->curBuf]);
-        sw->curBuf = (sw->curBuf + 1) % SWITCH_N_BUFFERS;
-        ++sw->enqueuedBuffers;
+        armDCacheFlush(dst, SWITCH_BYTES);
+        sw->outBuf[bufIndex].next = nullptr;
+        if (R_SUCCEEDED(audoutAppendAudioOutBuffer(&sw->outBuf[bufIndex]))) {
+            sw->markQueued(bufIndex);
+        } else if (sw->freeCount < SWITCH_N_BUFFERS) {
+            sw->freeList[sw->freeCount++] = bufIndex;
+        }
     }
 }
 
@@ -269,11 +327,10 @@ void AudioManager::deinit()
             // 遍历返回缓冲区链表，仅统计属于本 AudioManager 的缓冲区
             // 若为外来缓冲区（BKAudioPlayer），丢弃完成事件并继续等待自身缓冲区
             for (AudioOutBuffer* buf = released; buf != nullptr; buf = buf->next) {
-                for (int i = 0; i < SWITCH_N_BUFFERS; ++i) {
-                    if (buf == &sw->outBuf[i]) {
-                        if (ourEnqueued > 0) --ourEnqueued;
-                        break;
-                    }
+                int index = -1;
+                if (sw->owns(buf, &index)) {
+                    sw->markReleased(index);
+                    if (ourEnqueued > 0) --ourEnqueued;
                 }
             }
         }

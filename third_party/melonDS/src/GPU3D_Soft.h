@@ -29,7 +29,7 @@ namespace melonDS
 class SoftRenderer : public Renderer3D
 {
 public:
-    SoftRenderer() noexcept;
+    SoftRenderer(bool threaded = false) noexcept;
     ~SoftRenderer() override;
     void Reset(GPU& gpu) override;
 

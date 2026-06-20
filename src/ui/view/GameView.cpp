@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <cmath>
 
 // stb_image_write 用于保存存档缩略图（PNG 格式）
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -20,6 +21,10 @@
 #endif
 #include <windows.h>
 #include <mmsystem.h> // timeBeginPeriod / timeEndPeriod
+#endif
+
+#ifdef __SWITCH__
+#include <switch.h>
 #endif
 
 namespace beiklive
@@ -51,6 +56,14 @@ namespace beiklive
         // 缓存缩略图压缩模式（避免每帧读取配置）
         m_cachedThumbCompression = GET_SETTING_KEY_INT(
             beiklive::SettingKey::KEY_REWIND_THUMB_COMPRESSION, 0);
+        if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)) {
+            m_ndsLayout = GET_SETTING_KEY_STR("nds.screenLayout", "vertical");
+            if (m_ndsLayout == "separate")
+                m_ndsLayout = "custom";
+            if (m_ndsLayout != "vertical" && m_ndsLayout != "horizontal" &&
+                m_ndsLayout != "custom" && m_ndsLayout != "top" && m_ndsLayout != "bottom")
+                m_ndsLayout = "vertical";
+        }
 
         // 读取连发速率（Hz）
         {
@@ -61,6 +74,7 @@ namespace beiklive
         }
 
         _registerGameInput();
+        _registerTouchInput();
         _registerGameRuntime();
     }
 
@@ -124,6 +138,7 @@ namespace beiklive
         Box::draw(vg, x, y, width, height, style, ctx);
 
         GameInputManager::instance().handleInput(); // 每帧获取输入
+        _pollNdsTouchInput();
 
         // // 消费退出信号：异步弹出活动，本帧仍继续渲染避免闪烁
         // if (GameSignal::instance().consumeExit()) {
@@ -208,6 +223,8 @@ namespace beiklive
                 m_screenMode, x, y, width, height, gw, gh,
                 m_gameEntry.customScale, m_gameEntry.customOffsetX, m_gameEntry.customOffsetY,
                 intScale);
+            m_gameDrawRect = rect;
+            _updateNdsTouchRect(rect);
 
             m_renderer.drawToScreen(rect.x, rect.y, rect.w, rect.h, windowScale, windowW, windowH);
 
@@ -290,8 +307,24 @@ namespace beiklive
             }
         }
 
-        if (hasFrame)
+        if (hasFrame) {
+            if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
+                frame = _layoutNdsFrame(frame);
             m_renderer.uploadFrame(frame);
+        }
+    }
+
+    void GameView::_requestNdsFrameRelayout()
+    {
+        if (m_gameEntry.platform != static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
+            return;
+
+        std::lock_guard<std::mutex> lk(m_frameMutex);
+        if (!m_hasLastRawFrame || m_lastRawFrame.pixels.empty())
+            return;
+
+        m_pendingFrame = m_lastRawFrame;
+        m_frameReady = true;
     }
 
     // ============================================================
@@ -537,6 +570,218 @@ namespace beiklive
         }
     }
 
+    void GameView::_registerTouchInput()
+    {
+        addGestureRecognizer(new brls::TapGestureRecognizer(
+            [this](brls::TapGestureStatus status, brls::Sound*) {
+                const bool down = status.state == brls::GestureState::START ||
+                                  status.state == brls::GestureState::UNSURE;
+                _submitTouchPoint(status.position.x, status.position.y, down);
+            }));
+
+        addGestureRecognizer(new brls::PanGestureRecognizer(
+            [this](brls::PanGestureStatus status, brls::Sound*) {
+                const bool down = status.state == brls::GestureState::START ||
+                                  status.state == brls::GestureState::STAY;
+                _submitTouchPoint(status.position.x, status.position.y, down);
+            },
+            brls::PanAxis::ANY));
+    }
+
+    void GameView::_pollNdsTouchInput()
+    {
+        if (m_gameEntry.platform != static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS) || !m_core)
+            return;
+
+        if (brls::Application::getCurrentFocus() != this) {
+            if (m_ndsTouchActive) {
+                m_ndsTouchActive = false;
+                _submitTouchPoint(0.f, 0.f, false);
+            }
+            return;
+        }
+
+        std::vector<brls::RawTouchState> states;
+        brls::Application::getPlatform()->getInputManager()->updateTouchStates(&states);
+        if (!states.empty() && states.front().pressed) {
+            m_ndsTouchActive = true;
+            _submitTouchPoint(states.front().position.x, states.front().position.y, true);
+            return;
+        }
+
+        brls::RawMouseState mouse;
+        brls::Application::getPlatform()->getInputManager()->updateMouseStates(&mouse);
+        if (mouse.leftButton) {
+            m_ndsTouchActive = true;
+            _submitTouchPoint(mouse.position.x, mouse.position.y, true);
+        } else if (m_ndsTouchActive) {
+            m_ndsTouchActive = false;
+            _submitTouchPoint(0.f, 0.f, false);
+        }
+    }
+
+    void GameView::_submitTouchPoint(float x, float y, bool down)
+    {
+        if (m_gameEntry.platform != static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS) || !m_core)
+            return;
+
+        auto* touchCore = dynamic_cast<beiklive::IEmulatorTouchInput*>(m_core);
+        if (!touchCore)
+            return;
+
+        const auto& rect = m_ndsTouchRect;
+        if (rect.w <= 0.f || rect.h <= 0.f)
+        {
+            touchCore->SetTouch(0, 0, false);
+            return;
+        }
+
+        const float localX = x - rect.x;
+        const float localY = y - rect.y;
+        if (!down || localX < 0.f || localY < 0.f || localX > rect.w || localY > rect.h)
+        {
+            touchCore->SetTouch(0, 0, false);
+            return;
+        }
+
+        const int ndsX = static_cast<int>(std::clamp(localX / rect.w, 0.f, 1.f) * 255.f + 0.5f);
+        const int ndsY = static_cast<int>(std::clamp(localY / rect.h, 0.f, 1.f) * 191.f + 0.5f);
+        touchCore->SetTouch(ndsX, ndsY, true);
+    }
+
+    LibretroLoader::VideoFrame GameView::_layoutNdsFrame(const LibretroLoader::VideoFrame& frame) const
+    {
+        if (frame.width != 256 || frame.height != 384 || frame.pixels.size() < 256u * 384u)
+            return frame;
+
+        constexpr unsigned screenW = 256;
+        constexpr unsigned screenH = 192;
+        LibretroLoader::VideoFrame out;
+
+        auto blitScaled = [&](LibretroLoader::VideoFrame& dst,
+                              const LibretroLoader::VideoFrame& src,
+                              unsigned srcOffsetY,
+                              int dstX,
+                              int dstY,
+                              int dstW,
+                              int dstH) {
+            if (dstW <= 0 || dstH <= 0)
+                return;
+            for (int y = 0; y < dstH; ++y) {
+                const int outY = dstY + y;
+                if (outY < 0 || outY >= static_cast<int>(dst.height))
+                    continue;
+                const unsigned srcY = srcOffsetY + std::min<unsigned>(
+                    screenH - 1,
+                    static_cast<unsigned>((static_cast<uint64_t>(y) * screenH) / static_cast<unsigned>(dstH)));
+                const uint32_t* srcRow = src.pixels.data() + static_cast<size_t>(srcY) * screenW;
+                uint32_t* dstRow = dst.pixels.data() + static_cast<size_t>(outY) * dst.width;
+                for (int x = 0; x < dstW; ++x) {
+                    const int outX = dstX + x;
+                    if (outX < 0 || outX >= static_cast<int>(dst.width))
+                        continue;
+                    const unsigned srcX = std::min<unsigned>(
+                        screenW - 1,
+                        static_cast<unsigned>((static_cast<uint64_t>(x) * screenW) / static_cast<unsigned>(dstW)));
+                    dstRow[outX] = srcRow[srcX];
+                }
+            }
+        };
+
+        if (m_ndsLayout == "custom") {
+            constexpr unsigned canvasW = 576;
+            constexpr unsigned canvasH = 324;
+            constexpr float baseScale = 1.0f;
+            out.width = canvasW;
+            out.height = canvasH;
+            out.pixels.assign(static_cast<size_t>(out.width) * out.height, 0xFF000000u);
+
+            auto place = [&](bool topScreen) {
+                const float scale = std::clamp(topScreen ? m_gameEntry.ndsTopScale : m_gameEntry.ndsBottomScale,
+                                               0.25f, 4.0f);
+                const float offsetX = topScreen ? m_gameEntry.ndsTopOffsetX : m_gameEntry.ndsBottomOffsetX;
+                const float offsetY = topScreen ? m_gameEntry.ndsTopOffsetY : m_gameEntry.ndsBottomOffsetY;
+                const float baseX = topScreen ? 16.0f : 304.0f;
+                const float baseY = 66.0f;
+                const int dstW = std::max(1, static_cast<int>(std::lround(screenW * baseScale * scale)));
+                const int dstH = std::max(1, static_cast<int>(std::lround(screenH * baseScale * scale)));
+                const int dstX = static_cast<int>(std::lround(baseX + offsetX - (dstW - static_cast<int>(screenW)) * 0.5f));
+                const int dstY = static_cast<int>(std::lround(baseY + offsetY - (dstH - static_cast<int>(screenH)) * 0.5f));
+                blitScaled(out, frame, topScreen ? 0u : screenH, dstX, dstY, dstW, dstH);
+            };
+
+            place(true);
+            place(false);
+            return out;
+        }
+
+        if (m_ndsLayout == "horizontal") {
+            constexpr unsigned gap = 0u;
+            out.width = screenW * 2;
+            out.height = screenH;
+            out.pixels.assign(static_cast<size_t>(out.width) * out.height, 0xFF000000u);
+            for (unsigned y = 0; y < screenH; ++y) {
+                const uint32_t* top = frame.pixels.data() + static_cast<size_t>(y) * screenW;
+                const uint32_t* bottom = frame.pixels.data() + static_cast<size_t>(screenH + y) * screenW;
+                uint32_t* dst = out.pixels.data() + static_cast<size_t>(y) * out.width;
+                std::copy(top, top + screenW, dst);
+                std::copy(bottom, bottom + screenW, dst + screenW + gap);
+            }
+            return out;
+        }
+
+        if (m_ndsLayout == "top" || m_ndsLayout == "bottom") {
+            out.width = screenW;
+            out.height = screenH;
+            out.pixels.resize(static_cast<size_t>(screenW) * screenH);
+            const size_t offset = (m_ndsLayout == "bottom") ? static_cast<size_t>(screenW) * screenH : 0;
+            std::copy(frame.pixels.data() + offset,
+                      frame.pixels.data() + offset + out.pixels.size(),
+                      out.pixels.data());
+            return out;
+        }
+
+        return frame;
+    }
+
+    void GameView::_updateNdsTouchRect(const beiklive::DisplayRect& rect)
+    {
+        m_ndsTouchRect = {};
+        if (m_gameEntry.platform != static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
+            return;
+        if (rect.w <= 0.f || rect.h <= 0.f)
+            return;
+
+        if (m_ndsLayout == "custom") {
+            constexpr float canvasW = 576.f;
+            constexpr float canvasH = 324.f;
+            const float scale = std::clamp(m_gameEntry.ndsBottomScale, 0.25f, 4.0f);
+            const float screenW = 256.f * scale;
+            const float screenH = 192.f * scale;
+            const float baseX = 304.f;
+            const float baseY = 66.f;
+            const float x = baseX + m_gameEntry.ndsBottomOffsetX - (screenW - 256.f) * 0.5f;
+            const float y = baseY + m_gameEntry.ndsBottomOffsetY - (screenH - 192.f) * 0.5f;
+            m_ndsTouchRect = {
+                rect.x + rect.w * (x / canvasW),
+                rect.y + rect.h * (y / canvasH),
+                rect.w * (screenW / canvasW),
+                rect.h * (screenH / canvasH)
+            };
+        } else if (m_ndsLayout == "horizontal") {
+            constexpr float screenW = 256.f;
+            constexpr float gap = 0.f;
+            const float totalW = screenW * 2.f + gap;
+            const float bottomX = rect.x + rect.w * ((screenW + gap) / totalW);
+            const float bottomW = rect.w * (screenW / totalW);
+            m_ndsTouchRect = { bottomX, rect.y, bottomW, rect.h };
+        } else if (m_ndsLayout == "bottom") {
+            m_ndsTouchRect = rect;
+        } else if (m_ndsLayout == "vertical") {
+            m_ndsTouchRect = { rect.x, rect.y + rect.h * 0.5f, rect.w, rect.h * 0.5f };
+        }
+    }
+
     // ============================================================
     // _registerGameRuntime – 创建并初始化核心，启动游戏线程
     // ============================================================
@@ -548,6 +793,16 @@ namespace beiklive
             brls::Logger::warning("[GameView] _registerGameRuntime: unsupported platform={}", m_gameEntry.platform);
             return;
         }
+
+#ifdef __SWITCH__
+        if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
+        {
+            GameSignal::instance().resetAll();
+            brls::Logger::debug("[GameView] deferring NDS core setup to game thread...");
+            _startGameThread();
+            return;
+        }
+#endif
 
         if (m_core->SetupGame(m_gameEntry))
         {
@@ -602,6 +857,8 @@ namespace beiklive
     {
         brls::Logger::debug("[GameView] _stopGameThread begin");
         m_running.store(false, std::memory_order_release);
+        if (auto* stopRequest = dynamic_cast<beiklive::IEmulatorStopRequest*>(m_core))
+            stopRequest->RequestStop();
         if (m_gameThread.joinable())
             m_gameThread.join();
         brls::Logger::debug("[GameView] _stopGameThread end");
@@ -695,6 +952,18 @@ namespace beiklive
             return 1u;
         }
 
+        if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS) &&
+            m_ffMultiplier >= 1.0f) {
+            unsigned frames = 1u;
+            if (m_ffMultiplier >= 4.0f)
+                frames = std::min<unsigned>(4u, std::max(2u, static_cast<unsigned>(m_ffMultiplier / 2.0f)));
+            for (unsigned i = 0; i < frames; ++i) {
+                if (i == 0) _saveRewindState();
+                m_core->RunFrame();
+            }
+            return frames;
+        }
+
         if (m_ffMultiplier >= 1.0f) {
             unsigned integerPart = static_cast<unsigned>(m_ffMultiplier);
             float fracPart = m_ffMultiplier - static_cast<float>(integerPart);
@@ -735,6 +1004,10 @@ namespace beiklive
         auto frame = m_core->GetVideoFrame();
         if (!frame.pixels.empty()) {
             std::lock_guard<std::mutex> lk(m_frameMutex);
+            if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)) {
+                m_lastRawFrame = frame;
+                m_hasLastRawFrame = true;
+            }
             m_pendingFrame = std::move(frame);
             m_frameReady   = true;
         }
@@ -764,7 +1037,7 @@ namespace beiklive
             return;
         }
 
-        AudioManager::instance().pushSamplesNoBlocking(m_audioDrainBuf.data(), frames);
+        AudioManager::instance().pushSamples(m_audioDrainBuf.data(), frames);
     }
 
     // ============================================================
@@ -927,6 +1200,15 @@ namespace beiklive
         if (coarse.count() > 0)
             std::this_thread::sleep_for(coarse);
 
+#ifdef __SWITCH__
+        if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
+        {
+            auto remaining = std::chrono::duration_cast<std::chrono::nanoseconds>(nextTarget - Clock::now());
+            if (remaining.count() > 0)
+                svcSleepThread(static_cast<s64>(remaining.count()));
+            return;
+        }
+#endif
         while (Clock::now() < nextTarget)
             std::this_thread::yield();
     }
@@ -944,13 +1226,48 @@ namespace beiklive
     {
         using Clock = std::chrono::steady_clock;
 
-        if (!m_core || !m_core->IsReady()) return;
+        if (!m_core) return;
 
         brls::Logger::debug("[GameView] _gameLoop enter");
 
 #ifdef _WIN32
         timeBeginPeriod(1); // 提升 Windows 定时器精度至 1ms
 #endif
+
+#ifdef __SWITCH__
+        if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)
+            && !m_core->IsReady())
+        {
+            svcSetThreadCoreMask(CUR_THREAD_HANDLE, 1, 1ULL << 1);
+
+            brls::Logger::info("GameView: initializing NDS core on game thread");
+            if (!m_core->SetupGame(m_gameEntry))
+            {
+                brls::Logger::error("核心初始化失败，平台={}, 路径={}",
+                                    beiklive::tools::platformName(m_gameEntry.platform),
+                                    m_gameEntry.path);
+                m_running.store(false, std::memory_order_release);
+                return;
+            }
+
+            brls::Logger::debug("核心已初始化，平台={}, 路径={}",
+                                beiklive::tools::platformName(m_gameEntry.platform),
+                                m_gameEntry.path);
+            double fps = m_core->Fps();
+            if (fps <= 0.0) fps = 59.7;
+            double srate = m_core->SampleRate();
+            if (srate <= 0.0) srate = 32768.0;
+            brls::Logger::debug("[GameView] audio init: fps={:.2f} sampleRate={:.0f}", fps, srate);
+            AudioManager::instance().init(static_cast<int>(srate), 2);
+            {
+                std::vector<int16_t> initAudioDiscard;
+                m_core->DrainAudio(initAudioDiscard);
+            }
+            _initPlayTimeTracking();
+        }
+#endif
+
+        if (!m_core->IsReady()) return;
 
         // 从核心获取目标帧率
         double coreFps = m_core->Fps();
@@ -1160,7 +1477,7 @@ namespace beiklive
             // 同步倍速到音频重采样器
             {
                 static float s_lastSpeed = 1.0f;
-                float curSpeed = ff ? m_ffMultiplier : 1.0f;
+                float curSpeed = (ff && !m_ffMute) ? m_ffMultiplier : 1.0f;
                 if (curSpeed != s_lastSpeed) {
                     AudioManager::instance().setSpeed(curSpeed);
                     s_lastSpeed = curSpeed;
@@ -1195,6 +1512,7 @@ namespace beiklive
             _checkAndAutoSaveSram();
 
             // ── PLL：仅减速不加速 ──
+            const bool ndsFastForward = ff && m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS);
             if (framesRan > 0 && !ff) {
                 size_t ringFill = AudioManager::instance().available();
                 double targetFill = 8000.0;
@@ -1211,11 +1529,17 @@ namespace beiklive
                     }
                 }
             } else {
-                frameDurNs = baseFrameDurNs;
+                if (ndsFastForward && m_ffMultiplier > 1.0f && framesRan > 0) {
+                    const double frameScale = static_cast<double>(framesRan) / static_cast<double>(m_ffMultiplier);
+                    frameDurNs = std::chrono::nanoseconds(
+                        static_cast<long long>(baseFrameDurNs.count() * frameScale));
+                } else {
+                    frameDurNs = baseFrameDurNs;
+                }
             }
 
-            // ---- 帧率限制（快进时不限速）----
-            _throttleFrameRate(ff, nextFrameTarget, frameDurNs, spinGuardNs);
+            // ---- 帧率限制（NDS 快进保留节流，避免多帧批处理造成明显跳帧）----
+            _throttleFrameRate(ff && !ndsFastForward, nextFrameTarget, frameDurNs, spinGuardNs);
         }
 
         // ---- 提交时长记录 ----
@@ -1582,6 +1906,47 @@ namespace beiklive
         if (beiklive::GameDB && !m_gameEntry.path.empty()) {
             beiklive::GameDB->set(m_gameEntry.path, "overlayPath",
                 nlohmann::json(path));
+        }
+    }
+
+    void GameView::_onNdsLayoutChange(const std::string& layout)
+    {
+        if (layout == "vertical" || layout == "horizontal" || layout == "custom" ||
+            layout == "top" || layout == "bottom")
+            m_ndsLayout = layout;
+        else if (layout == "separate")
+            m_ndsLayout = "custom";
+        else
+            m_ndsLayout = "vertical";
+
+        SET_SETTING_KEY_STR("nds.screenLayout", m_ndsLayout);
+        m_ndsTouchRect = {};
+        _requestNdsFrameRelayout();
+    }
+
+    void GameView::_onNdsScreenValuesChanged(bool topScreen, float x, float y, float scale)
+    {
+        scale = std::clamp(scale, 0.25f, 4.0f);
+        if (topScreen) {
+            m_gameEntry.ndsTopOffsetX = x;
+            m_gameEntry.ndsTopOffsetY = y;
+            m_gameEntry.ndsTopScale = scale;
+        } else {
+            m_gameEntry.ndsBottomOffsetX = x;
+            m_gameEntry.ndsBottomOffsetY = y;
+            m_gameEntry.ndsBottomScale = scale;
+        }
+        m_ndsTouchRect = {};
+        _requestNdsFrameRelayout();
+
+        if (beiklive::GameDB && !m_gameEntry.path.empty()) {
+            beiklive::GameDB->set(m_gameEntry.path, topScreen ? "ndsTopOffsetX" : "ndsBottomOffsetX",
+                nlohmann::json(static_cast<double>(x)));
+            beiklive::GameDB->set(m_gameEntry.path, topScreen ? "ndsTopOffsetY" : "ndsBottomOffsetY",
+                nlohmann::json(static_cast<double>(y)));
+            beiklive::GameDB->set(m_gameEntry.path, topScreen ? "ndsTopScale" : "ndsBottomScale",
+                nlohmann::json(static_cast<double>(scale)));
+            beiklive::GameDB->flush();
         }
     }
 

@@ -234,7 +234,7 @@ namespace beiklive
         ThreadPool::instance().enqueue([this, alive]() {
             if (!alive->load()) return;
             auto ae = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
-            bool hG = false, hC = false, hB = false, hN = false, hS = false;
+            bool hG = false, hC = false, hB = false, hN = false, hS = false, hD = false;
             int favCount = 0;
             for (auto& e : ae) {
                 if (e.favourite) favCount++;
@@ -244,10 +244,11 @@ namespace beiklive
                     case beiklive::enums::EmuPlatform::EmuGB:  hB = true; break;
                     case beiklive::enums::EmuPlatform::EmuNES: hN = true; break;
                     case beiklive::enums::EmuPlatform::EmuSNES: hS = true; break;
+                    case beiklive::enums::EmuPlatform::EmuNDS: hD = true; break;
                     default: break;
                 }
             }
-            brls::sync([this, alive, hG, hC, hB, hN, hS, favCount]() {
+            brls::sync([this, alive, hG, hC, hB, hN, hS, hD, favCount]() {
                 if (!alive->load()) return;
                 std::vector<std::string> opts;
                 std::vector<PlatformFilter> map;
@@ -258,6 +259,7 @@ namespace beiklive
                 if (hB) { opts.push_back("GB");  map.push_back(PlatformFilter::GB);  }
                 if (hN) { opts.push_back("FC"); map.push_back(PlatformFilter::NES); }
                 if (hS) { opts.push_back("SFC"); map.push_back(PlatformFilter::SNES); }
+                if (hD) { opts.push_back("NDS"); map.push_back(PlatformFilter::NDS); }
                 int cur = 0;
                 for (size_t i = 0; i < map.size(); i++)
                     if (map[i] == m_platformFilter) { cur = (int)i; break; }
@@ -307,6 +309,7 @@ namespace beiklive
             case PlatformFilter::GB:       fs = "GB";   break;
             case PlatformFilter::NES:      fs = "FC";  break;
             case PlatformFilter::SNES:     fs = "SFC"; break;
+            case PlatformFilter::NDS:      fs = "NDS"; break;
             case PlatformFilter::FAVORITE: fs = "收藏"; break;
         }
         this->getHeader()->setPath((m_isSearching ? "搜索" : "分类") + (": " + fs));

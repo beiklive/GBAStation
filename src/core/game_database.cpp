@@ -61,6 +61,12 @@ namespace beiklive
             {"customScale", entry.customScale},
             {"customOffsetX", entry.customOffsetX},
             {"customOffsetY", entry.customOffsetY},
+            {"ndsTopScale", entry.ndsTopScale},
+            {"ndsTopOffsetX", entry.ndsTopOffsetX},
+            {"ndsTopOffsetY", entry.ndsTopOffsetY},
+            {"ndsBottomScale", entry.ndsBottomScale},
+            {"ndsBottomOffsetX", entry.ndsBottomOffsetX},
+            {"ndsBottomOffsetY", entry.ndsBottomOffsetY},
             {"shaderParaNames", entry.shaderParaNames},
             {"shaderParaValues", entry.shaderParaValues}};
     }
@@ -89,6 +95,12 @@ namespace beiklive
         entry.customScale = j.value("customScale", 1.0f);
         entry.customOffsetX = j.value("customOffsetX", 0.0f);
         entry.customOffsetY = j.value("customOffsetY", 0.0f);
+        entry.ndsTopScale = j.value("ndsTopScale", 1.0f);
+        entry.ndsTopOffsetX = j.value("ndsTopOffsetX", 0.0f);
+        entry.ndsTopOffsetY = j.value("ndsTopOffsetY", 0.0f);
+        entry.ndsBottomScale = j.value("ndsBottomScale", 1.0f);
+        entry.ndsBottomOffsetX = j.value("ndsBottomOffsetX", 0.0f);
+        entry.ndsBottomOffsetY = j.value("ndsBottomOffsetY", 0.0f);
         entry.shaderParaNames = j.value("shaderParaNames", std::vector<std::string>());
         entry.shaderParaValues = j.value("shaderParaValues", std::vector<float>());
     }
@@ -203,6 +215,7 @@ namespace beiklive
                 (int)beiklive::enums::EmuPlatform::EmuGB,
                 (int)beiklive::enums::EmuPlatform::EmuNES,
                 (int)beiklive::enums::EmuPlatform::EmuSNES,
+                (int)beiklive::enums::EmuPlatform::EmuNDS,
             };
             std::error_code ec;
             for (int p : platforms)
@@ -220,6 +233,7 @@ namespace beiklive
         case (int)beiklive::enums::EmuPlatform::EmuGB:  return beiklive::path::DATA_BASE_FILE_GB;
         case (int)beiklive::enums::EmuPlatform::EmuNES: return beiklive::path::DATA_BASE_FILE_NES;
         case (int)beiklive::enums::EmuPlatform::EmuSNES: return beiklive::path::DATA_BASE_FILE_SNES;
+        case (int)beiklive::enums::EmuPlatform::EmuNDS: return beiklive::path::DATA_BASE_FILE_NDS;
         default: return beiklive::path::DATA_BASE_FILE;
         }
     }
@@ -236,6 +250,7 @@ namespace beiklive
             (int)beiklive::enums::EmuPlatform::EmuGB,
             (int)beiklive::enums::EmuPlatform::EmuNES,
             (int)beiklive::enums::EmuPlatform::EmuSNES,
+            (int)beiklive::enums::EmuPlatform::EmuNDS,
         };
 
         for (int platform : platforms)
@@ -293,6 +308,7 @@ namespace beiklive
             (int)beiklive::enums::EmuPlatform::EmuGB,
             (int)beiklive::enums::EmuPlatform::EmuNES,
             (int)beiklive::enums::EmuPlatform::EmuSNES,
+            (int)beiklive::enums::EmuPlatform::EmuNDS,
         };
 
         bool allOk = true;

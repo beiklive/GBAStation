@@ -24,6 +24,11 @@
 #include "../NDS.h"
 #include "../ARMJIT_Global.h"
 
+#if defined(__SWITCH__)
+#include <switch.h>
+extern char __start__;
+#endif
+
 #include <stdlib.h>
 
 using namespace Arm64Gen;
@@ -55,6 +60,10 @@ template <>
 const int RegisterCache<Compiler, ARM64Reg>::NativeRegsAvailable = 15;
 
 const BitSet32 CallerSavedPushRegs({W8, W9, W10, W11, W12, W13, W14, W15});
+
+#if defined(__SWITCH__)
+const int JitMemSize = 16 * 1024 * 1024;
+#endif
 
 void Compiler::MovePC()
 {

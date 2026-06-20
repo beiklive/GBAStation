@@ -130,6 +130,7 @@ endif ()
 include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/src)
 include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/third_party/miniz)
 include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mongoose)
+include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/third_party/melonDS/src)
 file(GLOB_RECURSE MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
 list(APPEND MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/third_party/miniz/miniz.c)
 list(APPEND MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mongoose/mongoose.c)
@@ -237,6 +238,14 @@ endif()
 if (TARGET snes9x_core)
     target_link_libraries(${PROJECT_NAME} PRIVATE snes9x_core)
     message(STATUS "Linking Snes9x (SNES) core statically")
+endif()
+if (TARGET melonds_core)
+    target_link_libraries(${PROJECT_NAME} PRIVATE melonds_core)
+    target_include_directories(${PROJECT_NAME} PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/melonDS/src
+        ${CMAKE_BINARY_DIR}/third_party/melonDS_version
+    )
+    message(STATUS "Linking melonDS (NDS) native core statically")
 endif()
 
 if (PLATFORM_SWITCH)

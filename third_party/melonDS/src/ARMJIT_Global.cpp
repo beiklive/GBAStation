@@ -1,7 +1,9 @@
 #include "ARMJIT_Global.h"
 #include "ARMJIT_Memory.h"
 
-#ifdef _WIN32
+#if defined(__SWITCH__)
+#include <switch.h>
+#elif defined(_WIN32)
 #include <windows.h>
 #else
 #include <sys/mman.h>
@@ -59,6 +61,8 @@ void* AllocateCodeMem()
     // allocate
 #ifdef _WIN32
     return VirtualAlloc(nullptr, CodeMemorySliceSize, MEM_RESERVE|MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+#elif defined(__SWITCH__)
+    return nullptr;
 #elif defined(APPLE_AARCH64)
     return mmap(NULL, CodeMemorySliceSize, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS | MAP_JIT,-1, 0);
 #elif defined(__NetBSD__)
@@ -87,6 +91,8 @@ void FreeCodeMem(void* codeMem)
 
 #ifdef _WIN32
     VirtualFree(codeMem, CodeMemorySliceSize, MEM_RELEASE|MEM_DECOMMIT);
+#elif defined(__SWITCH__)
+    (void)codeMem;
 #else
     munmap(codeMem, CodeMemorySliceSize);
 #endif
@@ -102,7 +108,7 @@ void Init()
         #ifdef _WIN32
             DWORD dummy;
             VirtualProtect(GetAlignedCodeMemoryStart(), CodeMemoryAlignedSize, PAGE_EXECUTE_READWRITE, &dummy);
-        #elif defined(APPLE_AARCH64) || defined(__NetBSD__) || defined(__OpenBSD__)
+        #elif defined(__SWITCH__) || defined(APPLE_AARCH64) || defined(__NetBSD__) || defined(__OpenBSD__)
             // Apple aarch64 always uses dynamic allocation
         #else
             mprotect(GetAlignedCodeMemoryStart(), CodeMemoryAlignedSize, PROT_EXEC | PROT_READ | PROT_WRITE);

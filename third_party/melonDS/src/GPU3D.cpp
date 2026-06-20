@@ -187,6 +187,7 @@ void GPU3D::ResetRenderingState() noexcept
 
 void GPU3D::Reset() noexcept
 {
+    Log(LogLevel::Debug, "melonDS: GPU3D.Reset begin\n");
     CmdFIFO.Clear();
     CmdPIPE.Clear();
 
@@ -306,7 +307,12 @@ void GPU3D::Reset() noexcept
     RenderXPos = 0;
 
     if (CurrentRenderer)
+    {
+        Log(LogLevel::Debug, "melonDS: GPU3D.Reset renderer begin\n");
         CurrentRenderer->Reset(NDS.GPU);
+        Log(LogLevel::Debug, "melonDS: GPU3D.Reset renderer end\n");
+    }
+    Log(LogLevel::Debug, "melonDS: GPU3D.Reset end\n");
 }
 
 void GPU3D::DoSavestate(Savestate* file) noexcept
@@ -3006,4 +3012,3 @@ Renderer3D::Renderer3D(bool Accelerated)
 { }
 
 }
-

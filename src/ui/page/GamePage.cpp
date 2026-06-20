@@ -326,6 +326,12 @@ namespace beiklive
         m_gameMenuView->setDisplayModeCallback([this](const std::string& mode) {
             if (m_gameView) m_gameView->_onDisplayModeChange(mode);
         });
+        m_gameMenuView->setNdsLayoutCallback([this](const std::string& layout) {
+            if (m_gameView) m_gameView->_onNdsLayoutChange(layout);
+        });
+        m_gameMenuView->setNdsScreenAdjustCallback([this](bool topScreen, float x, float y, float scale) {
+            if (m_gameView) m_gameView->_onNdsScreenValuesChanged(topScreen, x, y, scale);
+        });
         m_gameMenuView->setIntegerScaleCallback([this](float scale) {
             if (m_gameView) m_gameView->_onIntegerScaleChange(scale);
         });

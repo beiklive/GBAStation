@@ -48,6 +48,9 @@ namespace melonDS
 namespace Platform { struct DynamicLibrary; }
 class Compiler;
 class ARMJIT;
+#if defined(__SWITCH__)
+extern "C" void __libnx_exception_handler(ThreadExceptionDump* ctx);
+#endif
 #endif
 
 static constexpr u32 LargePageSize = 0x4000;
@@ -148,6 +151,9 @@ public:
     static u32 PageShift;
 private:
     friend class Compiler;
+#if defined(__SWITCH__)
+    friend void __libnx_exception_handler(ThreadExceptionDump* ctx);
+#endif
     struct Mapping
     {
         u32 Addr;
@@ -173,8 +179,10 @@ private:
     u8* MemoryBase = nullptr;
 
 #if defined(__SWITCH__)
-    VirtmemReservation* FastMem9Reservation, *FastMem7Reservation;
-    u8* MemoryBaseCodeMem;
+    VirtmemReservation* FastMem9Reservation = nullptr;
+    VirtmemReservation* FastMem7Reservation = nullptr;
+    u8* MemoryBaseBacking = nullptr;
+    u8* MemoryBaseCodeMem = nullptr;
 #elif defined(_WIN32)
     struct VirtmemPlaceholder
     {

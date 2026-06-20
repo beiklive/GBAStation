@@ -31,6 +31,12 @@ namespace fs = std::filesystem;
 using namespace Platform;
 using std::string;
 
+static std::string pathUtf8String(const fs::path& path)
+{
+    const auto utf8 = path.u8string();
+    return std::string(reinterpret_cast<const char*>(utf8.c_str()), utf8.size());
+}
+
 FATStorage::FATStorage(const std::string& filename, u64 size, bool readonly, const std::optional<string>& sourcedir) :
     FATStorage(FATStorageArgs { filename, size, readonly, sourcedir })
 {
@@ -433,7 +439,7 @@ bool FATStorage::ExportFile(const std::string& path, fs::path out)
                         err);
     }
 
-    fout = OpenFile(out.u8string(), FileMode::Write);
+    fout = OpenFile(pathUtf8String(out), FileMode::Write);
     if (!fout)
     {
         f_close(&file);
@@ -851,7 +857,7 @@ bool FATStorage::ImportFile(const std::string& path, fs::path in)
     FileHandle* fin;
     FRESULT res;
 
-    fin = Platform::OpenFile(in.u8string(), FileMode::Read);
+    fin = Platform::OpenFile(pathUtf8String(in), FileMode::Read);
     if (!fin)
         return false;
 
@@ -902,7 +908,7 @@ bool FATStorage::ImportDirectory(const std::string& sourcedir)
     // * files will be added if they aren't in the index, or if the size or last-modified-date don't match
     for (auto& entry : fs::recursive_directory_iterator(fs::u8path(sourcedir)))
     {
-        std::string fullpath = entry.path().u8string();
+        std::string fullpath = pathUtf8String(entry.path());
         std::string innerpath = fullpath.substr(srclen);
         if (innerpath[0] == '/' || innerpath[0] == '\\')
             innerpath = innerpath.substr(1);

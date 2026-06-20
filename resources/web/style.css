@@ -241,6 +241,7 @@ button:disabled {
 .platform-gb { --platform-color: #27ae60; --platform-bg: rgba(39, 174, 96, .12); }
 .platform-fc { --platform-color: #eb5757; --platform-bg: rgba(235, 87, 87, .12); }
 .platform-sfc { --platform-color: #f2994a; --platform-bg: rgba(242, 153, 74, .14); }
+.platform-nds { --platform-color: #0ea5a4; --platform-bg: rgba(14, 165, 164, .12); }
 .platform-other { --platform-color: #6b7280; --platform-bg: rgba(107, 114, 128, .12); }
 .platform-dot {
   width: 10px;

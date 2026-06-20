@@ -238,10 +238,14 @@ ARMJIT::~ARMJIT() noexcept
 
 void ARMJIT::Reset() noexcept
 {
+    Log(LogLevel::Debug, "melonDS: ARMJIT.Reset begin\n");
     JitEnableWrite();
+    Log(LogLevel::Debug, "melonDS: ARMJIT.Reset JitEnableWrite end\n");
     ResetBlockCache();
+    Log(LogLevel::Debug, "melonDS: ARMJIT.Reset ResetBlockCache end\n");
 
     Memory.Reset();
+    Log(LogLevel::Debug, "melonDS: ARMJIT.Reset end\n");
 }
 
 void FloodFillSetFlags(FetchedInstr instrs[], int start, u8 flags)

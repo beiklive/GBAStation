@@ -49,37 +49,53 @@ void SoftRenderer::SetupRenderThread(GPU& gpu)
 {
     if (Threaded)
     {
+        Platform::Log(Platform::LogLevel::Debug, "melonDS: SoftRenderer.SetupRenderThread begin running=%d rendering=%d\n",
+            RenderThreadRunning.load(std::memory_order_relaxed) ? 1 : 0, RenderThreadRendering ? 1 : 0);
         if (!RenderThreadRunning.load(std::memory_order_relaxed))
         { // If the render thread isn't already running...
             RenderThreadRunning = true; // "Time for work, render thread!"
+            Platform::Log(Platform::LogLevel::Debug, "melonDS: SoftRenderer.SetupRenderThread create begin\n");
             RenderThread = Platform::Thread_Create([this, &gpu]() {
                 RenderThreadFunc(gpu);
             });
+            Platform::Log(Platform::LogLevel::Debug, "melonDS: SoftRenderer.SetupRenderThread create end thread=%p\n", RenderThread);
         }
 
         // "Be on standby, but don't start rendering until I tell you to!"
+        Platform::Log(Platform::LogLevel::Debug, "melonDS: SoftRenderer.SetupRenderThread reset start sema begin\n");
         Platform::Semaphore_Reset(Sema_RenderStart);
+        Platform::Log(Platform::LogLevel::Debug, "melonDS: SoftRenderer.SetupRenderThread reset start sema end\n");
 
         // "Oh, sorry, were you already in the middle of a frame from the last iteration?"
         if (RenderThreadRendering)
+        {
             // "Tell me when you're done, I'll wait here."
+            Platform::Log(Platform::LogLevel::Debug, "melonDS: SoftRenderer.SetupRenderThread wait render done begin\n");
             Platform::Semaphore_Wait(Sema_RenderDone);
+            Platform::Log(Platform::LogLevel::Debug, "melonDS: SoftRenderer.SetupRenderThread wait render done end\n");
+        }
 
         // "All good? Okay, let me give you your training."
         // "(Maybe you're still the same thread, but I have to tell you this stuff anyway.)"
 
         // "This is the signal you'll send when you're done with a frame."
         // "I'll listen for it when I need to show something to the frontend."
+        Platform::Log(Platform::LogLevel::Debug, "melonDS: SoftRenderer.SetupRenderThread reset done sema begin\n");
         Platform::Semaphore_Reset(Sema_RenderDone);
+        Platform::Log(Platform::LogLevel::Debug, "melonDS: SoftRenderer.SetupRenderThread reset done sema end\n");
 
         // "This is the signal I'll send when I want you to start rendering."
         // "Don't do anything until you get the message."
+        Platform::Log(Platform::LogLevel::Debug, "melonDS: SoftRenderer.SetupRenderThread reset start sema2 begin\n");
         Platform::Semaphore_Reset(Sema_RenderStart);
+        Platform::Log(Platform::LogLevel::Debug, "melonDS: SoftRenderer.SetupRenderThread reset start sema2 end\n");
 
         // "This is the signal you'll send every time you finish drawing a line."
         // "I might need some of your scanlines before you finish the whole buffer,"
         // "so let me know as soon as you're done with each one."
+        Platform::Log(Platform::LogLevel::Debug, "melonDS: SoftRenderer.SetupRenderThread reset scanline sema begin\n");
         Platform::Semaphore_Reset(Sema_ScanlineCount);
+        Platform::Log(Platform::LogLevel::Debug, "melonDS: SoftRenderer.SetupRenderThread end\n");
     }
     else
     {
@@ -91,12 +107,14 @@ void SoftRenderer::EnableRenderThread()
 {
     if (Threaded && Sema_RenderStart)
     {
+        Platform::Log(Platform::LogLevel::Debug, "melonDS: SoftRenderer.EnableRenderThread post begin\n");
         Platform::Semaphore_Post(Sema_RenderStart);
+        Platform::Log(Platform::LogLevel::Debug, "melonDS: SoftRenderer.EnableRenderThread post end\n");
     }
 }
 
-SoftRenderer::SoftRenderer() noexcept
-    : Renderer3D(false)
+SoftRenderer::SoftRenderer(bool threaded) noexcept
+    : Renderer3D(false), Threaded(threaded)
 {
     Sema_RenderStart = Platform::Semaphore_Create();
     Sema_RenderDone = Platform::Semaphore_Create();
@@ -118,14 +136,18 @@ SoftRenderer::~SoftRenderer()
 
 void SoftRenderer::Reset(GPU& gpu)
 {
+    Platform::Log(Platform::LogLevel::Debug, "melonDS: SoftRenderer.Reset begin\n");
     memset(ColorBuffer, 0, BufferSize * 2 * 4);
     memset(DepthBuffer, 0, BufferSize * 2 * 4);
     memset(AttrBuffer, 0, BufferSize * 2 * 4);
+    Platform::Log(Platform::LogLevel::Debug, "melonDS: SoftRenderer.Reset buffers clear end\n");
 
     PrevIsShadowMask = false;
 
     SetupRenderThread(gpu);
+    Platform::Log(Platform::LogLevel::Debug, "melonDS: SoftRenderer.Reset setup end\n");
     EnableRenderThread();
+    Platform::Log(Platform::LogLevel::Debug, "melonDS: SoftRenderer.Reset end\n");
 }
 
 void SoftRenderer::SetThreaded(bool threaded, GPU& gpu) noexcept
@@ -1770,6 +1792,7 @@ void SoftRenderer::RestartFrame(GPU& gpu)
 
 void SoftRenderer::RenderThreadFunc(GPU& gpu)
 {
+    Platform::Log(Platform::LogLevel::Debug, "melonDS: SoftRenderer.RenderThread enter\n");
     for (;;)
     {
         // Wait for a notice from the main thread to start rendering (or to stop entirely).

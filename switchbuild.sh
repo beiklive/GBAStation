@@ -18,22 +18,31 @@
 set -e
 
 # ── 环境检查 ──────────────────────────────────────────────
-if [ -z "${DEVKITPRO}" ]; then
-    echo "[错误] 未设置环境变量 DEVKITPRO。"
-    echo "       请先执行：export DEVKITPRO=/opt/devkitpro"
+export DEVKITPRO="${DEVKITPRO:-/opt/devkitpro}"
+export DEVKITA64="${DEVKITA64:-${DEVKITPRO}/devkitA64}"
+if [ ! -f "${DEVKITPRO}/cmake/Switch.cmake" ]; then
+    echo "[错误] 未找到 ${DEVKITPRO}/cmake/Switch.cmake。"
+    echo "       请在 MSYS2/devkitPro 环境中运行，或设置 DEVKITPRO。"
     exit 1
 fi
-export DEVKITPRO=/opt/devkitpro
-export DEVKITA64=/opt/devkitpro/devkitA64
 
 # 并行编译线程数
 JOBS=$(nproc 2>/dev/null || sysctl -n hw.logicalcpu 2>/dev/null || echo 4)
 
 # 构建目录
 BUILD_DIR="build_switch"
+ROOT_DIR="$(pwd)"
+
+# 部分 Windows/MSYS2 环境下 /tmp 会映射到 MSYS 安装目录，devkitA64 编译器
+# 创建临时文件时可能因权限失败。固定到项目构建目录内，保证脚本可重复运行。
+export TMPDIR="${ROOT_DIR}/${BUILD_DIR}/tmp"
+TMPDIR_WIN="$(cygpath -w "${TMPDIR}" 2>/dev/null || echo "${TMPDIR}")"
+export TMP="${TMPDIR_WIN}"
+export TEMP="${TMPDIR_WIN}"
 
 echo "[1/4] 创建构建目录 ${BUILD_DIR} ..."
 mkdir -p "${BUILD_DIR}"
+mkdir -p "${TMPDIR}"
 cd "${BUILD_DIR}"
 
 echo "[2/4] 运行 CMake 配置（Switch 平台 / Release）..."

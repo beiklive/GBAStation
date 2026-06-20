@@ -119,6 +119,7 @@ void GPU::ResetVRAMCache() noexcept
 
 void GPU::Reset() noexcept
 {
+    Log(LogLevel::Debug, "melonDS: GPU.Reset begin\n");
     VCount = 0;
     NextVCount = -1;
     TotalScanlines = 0;
@@ -184,14 +185,22 @@ void GPU::Reset() noexcept
         Framebuffer[1][1][i] = 0xFFFFFFFF;
     }
 
+    Log(LogLevel::Debug, "melonDS: GPU.Reset GPU2D_A begin\n");
     GPU2D_A.Reset();
+    Log(LogLevel::Debug, "melonDS: GPU.Reset GPU2D_A end\n");
+    Log(LogLevel::Debug, "melonDS: GPU.Reset GPU2D_B begin\n");
     GPU2D_B.Reset();
+    Log(LogLevel::Debug, "melonDS: GPU.Reset GPU2D_B end\n");
+    Log(LogLevel::Debug, "melonDS: GPU.Reset GPU3D begin\n");
     GPU3D.Reset();
+    Log(LogLevel::Debug, "melonDS: GPU.Reset GPU3D end\n");
 
     int backbuf = FrontBuffer ? 0 : 1;
     GPU2D_Renderer->SetFramebuffer(Framebuffer[backbuf][1].get(), Framebuffer[backbuf][0].get());
 
+    Log(LogLevel::Debug, "melonDS: GPU.Reset VRAM cache begin\n");
     ResetVRAMCache();
+    Log(LogLevel::Debug, "melonDS: GPU.Reset end\n");
 
     OAMDirty = 0x3;
     PaletteDirty = 0xF;

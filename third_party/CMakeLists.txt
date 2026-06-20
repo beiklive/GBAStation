@@ -7,6 +7,7 @@ set(BOREALIS_LIBRARY   ${CMAKE_CURRENT_SOURCE_DIR}/borealis/library)
 set(MGBA_PATH          ${CMAKE_CURRENT_SOURCE_DIR}/mgba)
 set(FCEUMM_PATH        ${CMAKE_CURRENT_SOURCE_DIR}/libretro-fceumm)
 set(SNES9X_PATH        ${CMAKE_CURRENT_SOURCE_DIR}/snes9x)
+set(MELONDS_PATH       ${CMAKE_CURRENT_SOURCE_DIR}/melonDS)
 
 # =========================================================
 # borealis UI 框架
@@ -19,6 +20,7 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/borealis/library)
 set(BUILD_LIBRETRO ON  CACHE BOOL "" FORCE)
 set(BUILD_SDL      OFF CACHE BOOL "" FORCE)
 set(BUILD_QT       OFF CACHE BOOL "" FORCE)
+set(BUILD_LTO      OFF CACHE BOOL "" FORCE)
 
 if (PLATFORM_SWITCH)
     set(CMAKE_TOOLCHAIN_FILE   "mgba/src/platform/switch/CMakeToolchain.txt")
@@ -303,3 +305,132 @@ set_target_properties(snes9x_core PROPERTIES
     CXX_STANDARD 14
     C_STANDARD 11
 )
+
+# =========================================================
+# melonDS (NDS) 原生核心
+#
+# 只编译 melonDS 核心源码；不 add_subdirectory(third_party/melonDS)，
+# 避免拉入 frontend / Qt / SDL / libui / libretro 相关前端代码。
+# =========================================================
+set(MELONDS_SRC_DIR ${MELONDS_PATH}/src)
+
+set(MELONDS_CORE_SRC
+    ${MELONDS_SRC_DIR}/ARCodeFile.cpp
+    ${MELONDS_SRC_DIR}/ARDatabaseDAT.cpp
+    ${MELONDS_SRC_DIR}/AREngine.cpp
+    ${MELONDS_SRC_DIR}/ARM.cpp
+    ${MELONDS_SRC_DIR}/ARMInterpreter.cpp
+    ${MELONDS_SRC_DIR}/ARMInterpreter_ALU.cpp
+    ${MELONDS_SRC_DIR}/ARMInterpreter_Branch.cpp
+    ${MELONDS_SRC_DIR}/ARMInterpreter_LoadStore.cpp
+    ${MELONDS_SRC_DIR}/CP15.cpp
+    ${MELONDS_SRC_DIR}/CRC32.cpp
+    ${MELONDS_SRC_DIR}/DMA.cpp
+    ${MELONDS_SRC_DIR}/DMA_Timings.cpp
+    ${MELONDS_SRC_DIR}/DSi.cpp
+    ${MELONDS_SRC_DIR}/DSi_AES.cpp
+    ${MELONDS_SRC_DIR}/DSi_Camera.cpp
+    ${MELONDS_SRC_DIR}/DSi_DSP.cpp
+    ${MELONDS_SRC_DIR}/DSi_I2C.cpp
+    ${MELONDS_SRC_DIR}/DSi_I2S.cpp
+    ${MELONDS_SRC_DIR}/DSi_NAND.cpp
+    ${MELONDS_SRC_DIR}/DSi_NDMA.cpp
+    ${MELONDS_SRC_DIR}/DSi_NWifi.cpp
+    ${MELONDS_SRC_DIR}/DSi_SD.cpp
+    ${MELONDS_SRC_DIR}/DSi_SPI_TSC.cpp
+    ${MELONDS_SRC_DIR}/FATIO.cpp
+    ${MELONDS_SRC_DIR}/FATStorage.cpp
+    ${MELONDS_SRC_DIR}/FreeBIOS.cpp
+    ${MELONDS_SRC_DIR}/GBACart.cpp
+    ${MELONDS_SRC_DIR}/GBACartMotionPak.cpp
+    ${MELONDS_SRC_DIR}/GPU.cpp
+    ${MELONDS_SRC_DIR}/GPU2D.cpp
+    ${MELONDS_SRC_DIR}/GPU2D_Soft.cpp
+    ${MELONDS_SRC_DIR}/GPU3D.cpp
+    ${MELONDS_SRC_DIR}/GPU3D_Soft.cpp
+    ${MELONDS_SRC_DIR}/GPU3D_Texcache.cpp
+    ${MELONDS_SRC_DIR}/Mic.cpp
+    ${MELONDS_SRC_DIR}/NDS.cpp
+    ${MELONDS_SRC_DIR}/NDSCart.cpp
+    ${MELONDS_SRC_DIR}/NDSCartR4.cpp
+    ${MELONDS_SRC_DIR}/ROMList.cpp
+    ${MELONDS_SRC_DIR}/RTC.cpp
+    ${MELONDS_SRC_DIR}/Savestate.cpp
+    ${MELONDS_SRC_DIR}/SPI.cpp
+    ${MELONDS_SRC_DIR}/SPI_Firmware.cpp
+    ${MELONDS_SRC_DIR}/SPU.cpp
+    ${MELONDS_SRC_DIR}/Utils.cpp
+    ${MELONDS_SRC_DIR}/Wifi.cpp
+    ${MELONDS_SRC_DIR}/WifiAP.cpp
+    ${MELONDS_SRC_DIR}/DSP_HLE/UcodeBase.cpp
+    ${MELONDS_SRC_DIR}/DSP_HLE/AACUcode.cpp
+    ${MELONDS_SRC_DIR}/DSP_HLE/G711Ucode.cpp
+    ${MELONDS_SRC_DIR}/DSP_HLE/GraphicsUcode.cpp
+    ${MELONDS_SRC_DIR}/fatfs/ff.c
+    ${MELONDS_SRC_DIR}/fatfs/ffsystem.c
+    ${MELONDS_SRC_DIR}/fatfs/ffunicode.c
+    ${MELONDS_SRC_DIR}/sha1/sha1.c
+    ${MELONDS_SRC_DIR}/tiny-AES-c/aes.c
+    ${MELONDS_SRC_DIR}/xxhash/xxhash.c
+    ${MELONDS_SRC_DIR}/blip-buf/blip_buf.c
+)
+
+if (PLATFORM_SWITCH)
+    list(APPEND MELONDS_CORE_SRC
+        ${MELONDS_SRC_DIR}/ARM_InstrInfo.cpp
+        ${MELONDS_SRC_DIR}/ARMJIT.cpp
+        ${MELONDS_SRC_DIR}/ARMJIT_Memory.cpp
+        ${MELONDS_SRC_DIR}/ARMJIT_Global.cpp
+        ${MELONDS_SRC_DIR}/dolphin/CommonFuncs.cpp
+        ${MELONDS_SRC_DIR}/dolphin/Arm64Emitter.cpp
+        ${MELONDS_SRC_DIR}/dolphin/MathUtil.cpp
+        ${MELONDS_SRC_DIR}/ARMJIT_A64/ARMJIT_Compiler.cpp
+        ${MELONDS_SRC_DIR}/ARMJIT_A64/ARMJIT_ALU.cpp
+        ${MELONDS_SRC_DIR}/ARMJIT_A64/ARMJIT_LoadStore.cpp
+        ${MELONDS_SRC_DIR}/ARMJIT_A64/ARMJIT_Branch.cpp
+        ${MELONDS_SRC_DIR}/ARMJIT_A64/ARMJIT_Linkage.S
+    )
+endif()
+
+enable_language(ASM)
+
+set(BUILD_SHARED_LIBS OFF)
+add_subdirectory(${MELONDS_SRC_DIR}/teakra ${CMAKE_CURRENT_BINARY_DIR}/melonDS_teakra EXCLUDE_FROM_ALL)
+
+set(MELONDS_VERSION_SUFFIX "" CACHE STRING "" FORCE)
+set(MELONDS_EMBED_BUILD_INFO OFF CACHE BOOL "" FORCE)
+set(MELONDS_GIT_BRANCH "" CACHE STRING "" FORCE)
+set(MELONDS_GIT_HASH "" CACHE STRING "" FORCE)
+set(MELONDS_BUILD_PROVIDER "GBAStation" CACHE STRING "" FORCE)
+configure_file("${MELONDS_SRC_DIR}/version.h.in" "${CMAKE_CURRENT_BINARY_DIR}/melonDS_version/version.h")
+
+add_library(melonds_core STATIC ${MELONDS_CORE_SRC})
+target_include_directories(melonds_core PUBLIC
+    ${MELONDS_SRC_DIR}
+    ${CMAKE_CURRENT_BINARY_DIR}/melonDS_version
+)
+target_compile_options(melonds_core PUBLIC -fwrapv)
+target_compile_options(melonds_core PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:-Wno-invalid-offsetof>")
+
+if (PLATFORM_SWITCH)
+    target_compile_definitions(melonds_core PUBLIC
+        ENABLE_JIT=1
+        JIT_ENABLED
+    )
+    target_compile_definitions(melonds_core PUBLIC
+        __SWITCH__
+        SWITCH
+        HAVE_LIBNX
+        ARCHITECTURE_ARM64=1
+    )
+    target_compile_options(melonds_core PRIVATE
+        -O3
+        -mcpu=cortex-a57
+        -ffast-math
+        -flto
+        -fomit-frame-pointer
+    )
+    target_link_options(melonds_core PRIVATE -flto)
+endif()
+
+target_link_libraries(melonds_core PRIVATE teakra)

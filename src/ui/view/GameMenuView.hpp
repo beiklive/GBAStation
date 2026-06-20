@@ -48,6 +48,8 @@ namespace beiklive
 
             /// 画面设置回调
             void setDisplayModeCallback(std::function<void(const std::string&)> cb) { m_displayModeCallback = std::move(cb); }
+            void setNdsLayoutCallback(std::function<void(const std::string&)> cb) { m_ndsLayoutCallback = std::move(cb); }
+            void setNdsScreenAdjustCallback(std::function<void(bool, float, float, float)> cb) { m_ndsScreenAdjustCallback = std::move(cb); }
             void setIntegerScaleCallback(std::function<void(float)> cb) { m_integerScaleCallback = std::move(cb); }
             void setFilterCallback(std::function<void(const std::string&)> cb) { m_filterCallback = std::move(cb); }
             void setShaderToggleCallback(std::function<void(bool)> cb) { m_shaderToggleCallback = std::move(cb); }
@@ -72,6 +74,8 @@ namespace beiklive
             std::function<void(int, bool)> m_cheatToggleCallback;
             std::function<void(const std::string&)> m_cheatPathCallback;
             std::function<void(const std::string&)> m_displayModeCallback;
+            std::function<void(const std::string&)> m_ndsLayoutCallback;
+            std::function<void(bool, float, float, float)> m_ndsScreenAdjustCallback;
             std::function<void(float)> m_integerScaleCallback; ///< 整数倍缩放变更回调 (newScale)
             std::function<void(const std::string&)> m_filterCallback;
             std::function<void(bool)> m_shaderToggleCallback;
@@ -120,6 +124,7 @@ namespace beiklive
             void _openShaderSettings();
             void _openOverlaySettings();
             void _openCustomScaleSettings();
+            void _openNdsScreenSettings(bool topScreen);
             void _rebuildShaderParamUI();
 
             /// 清除当前侧边栏面板
@@ -139,6 +144,7 @@ namespace beiklive
             brls::Box* m_ShaderSidePanel = nullptr;  ///< 当前打开的侧边栏 overlay
             brls::Box* m_OverlaySidePanel = nullptr;  ///< 当前打开的侧边栏 overlay
             brls::Box* m_CustomSidePanel = nullptr;  ///< 当前打开的侧边栏 overlay
+            brls::Box* m_NdsScreenSidePanel = nullptr; ///< NDS 单屏位置/缩放侧边栏
     };
 
 } // namespace beiklive
