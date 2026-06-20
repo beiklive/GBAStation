@@ -1,20 +1,10 @@
 #pragma once
 #include "core/common.h"
 #include "ui/widget/Box.hpp"
-#include <vector>
 #include <string>
 #include <functional>
 
 namespace beiklive {
-
-struct CheatMatchResult {
-    std::string filename;
-    std::string filePath;
-    std::string content;
-};
-
-void startCheatMatching(int platform, const std::string& romPath,
-                        std::function<void(const std::string& cheatPath)> onDone);
 
 /// 通用进度对话框：居中卡片，标题 + 状态文字 + 按钮区，支持实时更新
 class ProgressDialog : public beiklive::Box {

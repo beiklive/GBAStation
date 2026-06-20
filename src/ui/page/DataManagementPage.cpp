@@ -861,13 +861,7 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
                     static_cast<beiklive::enums::EmuPlatform>(config.platform));
             }
 
-            std::string playlistName = beiklive::tools::getFileNameWithoutExtension(lplPath);
-            std::string savePath = beiklive::path::ROOT + beiklive::path::SPLIT_CHAR +
-                                   std::string(beiklive::path::PROGRAM_NAME) +
-                                   beiklive::path::SPLIT_CHAR + "saves" +
-                                   beiklive::path::SPLIT_CHAR + "retroarch" +
-                                   beiklive::path::SPLIT_CHAR + playlistName +
-                                   beiklive::path::SPLIT_CHAR + romStem;
+            std::string savePath = beiklive::tools::defaultGameSavePath(config.platform, romPath);
 
             try
             {
@@ -888,6 +882,8 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
             entry.overlayEnabled = config.overlayEnabled;
             entry.shaderEnabled = config.shaderEnabled;
             applyDisplayDefaults(entry);
+            if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
+                entry.ndsScreenLayout = "vertical";
 
             beiklive::GameDB->upsertByPath(entry);
             m_progress.store(i + 1, std::memory_order_release);
@@ -1019,11 +1015,7 @@ void DataManagementPage::startDirImport(const std::string& dirPath)
             entry.overlayPath = config.overlayPath;
             entry.shaderPath = config.shaderPath;
 
-            std::string savePath = beiklive::path::ROOT + beiklive::path::SPLIT_CHAR +
-                                   std::string(beiklive::path::PROGRAM_NAME) +
-                                   beiklive::path::SPLIT_CHAR + "saves" +
-                                   beiklive::path::SPLIT_CHAR + "dirms" +
-                                   beiklive::path::SPLIT_CHAR + romStem;
+            std::string savePath = beiklive::tools::defaultGameSavePath(platform, path);
             try
             {
                 fs::create_directories(savePath);
@@ -1033,6 +1025,8 @@ void DataManagementPage::startDirImport(const std::string& dirPath)
             }
             entry.savePath = savePath;
             applyDisplayDefaults(entry);
+            if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
+                entry.ndsScreenLayout = "vertical";
 
             auto existing = beiklive::GameDB->findByPath(path);
             if (existing)
@@ -1047,6 +1041,8 @@ void DataManagementPage::startDirImport(const std::string& dirPath)
                     entry.logoPath = existing->logoPath;
                 if (!existing->savePath.empty())
                     entry.savePath = existing->savePath;
+                if (!existing->ndsScreenLayout.empty())
+                    entry.ndsScreenLayout = existing->ndsScreenLayout;
             }
 
             beiklive::GameDB->upsertByPath(entry);

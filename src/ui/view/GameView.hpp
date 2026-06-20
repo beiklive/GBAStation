@@ -105,9 +105,9 @@ namespace beiklive
             /// 配置变更通知（UI线程调用，通知核心重读变量）
             void _onConfigUpdated();
             /// 获取着色器参数列表
-            std::vector<ShaderParamInfo> _getShaderParams() const { return m_renderer.getShaderParams(); }
+            std::vector<ShaderParamInfo> _getShaderParams() const;
             /// 设置着色器参数
-            void _setShaderParam(const std::string& name, float val) { m_renderer.setShaderParam(name, val); }
+            void _setShaderParam(const std::string& name, float val);
 
         private:
             // ---- 游戏线程常量 ------------------------------------------------
@@ -133,7 +133,10 @@ namespace beiklive
 
             // ---- 渲染器 -------------------------------------------------------
             beiklive::GameRenderer m_renderer; ///< 游戏帧渲染器（GL 纹理 + 直接绘制）
+            beiklive::GameRenderer m_ndsTopRenderer; ///< NDS 着色器模式：上屏独立渲染器
+            beiklive::GameRenderer m_ndsBottomRenderer; ///< NDS 着色器模式：下屏独立渲染器
             bool m_rendererReady = false;      ///< 渲染器是否已初始化
+            bool m_ndsSplitShaderRenderer = false; ///< NDS 是否使用上下屏拆分着色器渲染
 
             // ---- 画面模式 ----------------------------------------------------
             beiklive::ScreenMode m_screenMode = beiklive::ScreenMode::Fit; ///< 当前画面缩放模式
@@ -149,6 +152,8 @@ namespace beiklive
             mutable std::mutex          m_frameMutex;
             LibretroLoader::VideoFrame  m_pendingFrame; ///< 等待上传的最新帧
             LibretroLoader::VideoFrame  m_lastRawFrame; ///< NDS 菜单实时重排使用的核心原始帧
+            LibretroLoader::VideoFrame  m_ndsTopUploadFrame; ///< NDS 着色器模式复用上传帧
+            LibretroLoader::VideoFrame  m_ndsBottomUploadFrame; ///< NDS 着色器模式复用上传帧
             bool                        m_frameReady = false; ///< 是否有新帧待上传
             bool                        m_hasLastRawFrame = false; ///< 是否已缓存可重排的原始帧
 
@@ -202,6 +207,16 @@ namespace beiklive
             // ---- 辅助方法 ----------------------------------------------------
             void _registerGameInput();
             void _registerGameRuntime();
+            bool _useNdsSplitShader() const;
+            void _applySavedShaderParams(beiklive::GameRenderer& renderer) const;
+            bool _initGameRenderers(unsigned gw, unsigned gh, const std::string& shaderPath);
+            void _uploadNdsSplitShaderFrame(const LibretroLoader::VideoFrame& frame);
+            struct NdsScreenDrawRect {
+                bool topScreen = true;
+                beiklive::DisplayRect rect;
+            };
+            std::vector<NdsScreenDrawRect> _computeNdsScreenDrawRects(
+                const beiklive::DisplayRect& layoutRect) const;
 
             /// 初始化游戏时长追踪（启动时检查并合并遗留的临时文件）
             void _initPlayTimeTracking();

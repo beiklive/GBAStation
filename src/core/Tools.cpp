@@ -198,72 +198,6 @@ bool isFileExists(const std::string& path) {
     return fs::exists(fs::path(path));
 }
 
-uint32_t crc32(const std::string& path)
-{
-    static uint32_t table[256];
-    static bool initialized = false;
-
-    if (!initialized)
-    {
-        for (uint32_t i = 0; i < 256; i++)
-        {
-            uint32_t c = i;
-
-            for (int j = 0; j < 8; j++)
-            {
-                c = (c & 1)
-                    ? (0xEDB88320 ^ (c >> 1))
-                    : (c >> 1);
-            }
-
-            table[i] = c;
-        }
-
-        initialized = true;
-    }
-
-    FILE* fp = fopen(path.c_str(), "rb");
-
-    if (!fp)
-        return 0;
-
-    uint32_t crc = 0xFFFFFFFF;
-
-    uint8_t buffer[16384];
-
-    size_t n;
-
-    while ((n = fread(buffer, 1, sizeof(buffer), fp)) > 0)
-    {
-        for (size_t i = 0; i < n; i++)
-        {
-            crc = table[
-                (crc ^ buffer[i]) & 0xFF
-            ] ^ (crc >> 8);
-        }
-    }
-
-    fclose(fp);
-
-    return ~crc;
-}
-
-std::string crc32ToHex(uint32_t crc)
-{
-    static const char* hex = "0123456789ABCDEF";
-
-    std::string result(8, '0');
-
-    for (int i = 7; i >= 0; i--)
-    {
-        result[i] = hex[crc & 0xF];
-        crc >>= 4;
-    }
-
-    return result;
-}
-
-
 std::string getTimestampString() {
     auto now = std::chrono::system_clock::now();
     std::time_t now_time_t = std::chrono::system_clock::to_time_t(now);
@@ -448,6 +382,16 @@ std::string platformBadgeName(int platform) {
         case beiklive::enums::EmuPlatform::EmuNDS: return "NDS";
         default: return "";
     }
+}
+
+std::string defaultGameSavePath(int platform, const std::string& romPath) {
+    std::string platformDir = platformBadgeName(platform);
+    if (platformDir.empty())
+        platformDir = "OTHER";
+    std::string stem = std::filesystem::path(romPath).stem().string();
+    if (stem.empty())
+        stem = "game";
+    return (std::filesystem::path(beiklive::path::savePath()) / platformDir / stem).string();
 }
 
 // ── 存档路径工具 ──────────────────────────────────────────────────────────

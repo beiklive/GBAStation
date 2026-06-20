@@ -3,7 +3,6 @@
 #include "common.h"
 #include <filesystem>
 #include <string>
-#include <cstdint>
 #include <fstream>
 
 namespace fs = std::filesystem;
@@ -47,10 +46,6 @@ std::vector<std::string> getLogicalDrives();
 // 检查文件或目录是否存在
 bool isFileExists(const std::string& path);
 
-// 计算文件的 CRC32 校验值
-uint32_t crc32(const std::string& path);
-// 将 CRC32 校验值转换为十六进制字符串
-std::string crc32ToHex(uint32_t crc);
 // 获取 GBA ROM 的游戏 ID（前4字节 ASCII），失败时返回空字符串
 std::string readGbaGameID(const std::string& path);
 
@@ -93,6 +88,9 @@ std::string platformShaderKey(int platform);
 
 /// 根据平台返回对应的徽章显示文本
 std::string platformBadgeName(int platform);
+
+/// 构建游戏默认存档目录：GBAStation/saves/<平台名称>/<游戏文件名>/
+std::string defaultGameSavePath(int platform, const std::string& romPath);
 
 // ── 存档路径工具 ────────────────────────────────────────────────────────────
 

@@ -48,8 +48,10 @@ bool MelonDSCore::SetupGame(beiklive::GameEntry GameEntry)
     m_gameEntry = std::move(GameEntry);
     m_stopRequested.store(false, std::memory_order_release);
     std::filesystem::create_directories(defaultSaveDir());
-    m_saveFile = joinPath(defaultSaveDir(), beiklive::tools::getFileNameWithoutExtension(m_gameEntry.path) + ".sav");
-    m_stateFile = joinPath(defaultSaveDir(), beiklive::tools::getFileNameWithoutExtension(m_gameEntry.path) + ".state");
+    std::string saveDir = m_gameEntry.savePath.empty() ? defaultSaveDir() : m_gameEntry.savePath;
+    std::filesystem::create_directories(saveDir);
+    m_saveFile = joinPath(saveDir, beiklive::tools::getFileNameWithoutExtension(m_gameEntry.path) + ".sav");
+    m_stateFile = joinPath(saveDir, beiklive::tools::getFileNameWithoutExtension(m_gameEntry.path) + ".state");
     m_platformData.savePath = m_saveFile;
 
     if (!Initialize())
@@ -399,11 +401,9 @@ bool MelonDSCore::loadBatterySave(melonDS::NDSCart::NDSCartArgs& args) const
 
 std::string MelonDSCore::defaultSaveDir() const
 {
-#ifdef __SWITCH__
-    return "sdmc:/GBAStation/saves/nds";
-#else
-    return (std::filesystem::path(beiklive::path::savePath()) / "nds").string();
-#endif
+    return beiklive::tools::defaultGameSavePath(
+        static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS),
+        m_gameEntry.path);
 }
 
 std::string MelonDSCore::defaultBiosDir() const

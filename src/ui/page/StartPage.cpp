@@ -370,25 +370,6 @@ namespace beiklive
                 dlg->open();
             });
 
-        // ── 自动匹配金手指 ──
-        // m_gameOptionsSidebar->addButton("自动匹配金手指", BK_RES("img/ui/setting/emu.png"),
-        //     [this, path, platform = entry.platform, romPath = entry.path](const beiklive::GameEntry&) {
-        //         _hideGameOptionsPanel();
-        //         auto* dlg = new brls::Dialog("此功能目前处于测试阶段，\n使用前请慎重考虑");
-        //         dlg->addButton("取消", []() {});
-        //         dlg->addButton("我先试试", [this, path, platform, romPath]() {
-        //             beiklive::startCheatMatching(platform, romPath,
-        //                 [this, path](const std::string& cheatPath) {
-        //                     if (!cheatPath.empty() && beiklive::GameDB) {
-        //                         beiklive::GameDB->set(path, "cheatPath", nlohmann::json(cheatPath));
-        //                         beiklive::GameDB->flush();
-        //                         onResume();
-        //                     }
-        //                 });
-        //         });
-        //         dlg->open();
-        //     });
-
         m_gameOptionsSidebar->onClosed = [this, currentFocus]() {
             brls::Application::giveFocus(currentFocus);
         this->getBottomBar()->setVisibility(brls::Visibility::VISIBLE);

@@ -938,10 +938,9 @@ namespace beiklive
             if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)) {
                 std::vector<std::string> ndsLayouts = {"上下屏", "左右屏", "自定义", "混合", "仅上屏", "仅下屏"};
                 std::vector<std::string> ndsLayoutIds = {"vertical", "horizontal", "custom", "hybrid", "top", "bottom"};
-                std::string currentLayout = GET_SETTING_KEY_STR("nds.screenLayout", "vertical");
+                std::string currentLayout = m_gameEntry.ndsScreenLayout.empty() ? "vertical" : m_gameEntry.ndsScreenLayout;
                 if (currentLayout == "separate") {
                     currentLayout = "custom";
-                    SET_SETTING_KEY_STR("nds.screenLayout", currentLayout);
                 }
                 int layoutIdx = 0;
                 for (int i = 0; i < static_cast<int>(ndsLayoutIds.size()); ++i) {
@@ -967,7 +966,12 @@ namespace beiklive
                     [this, ndsLayoutIds, syncNdsAdjustCells](int idx) {
                         if (idx < 0 || idx >= static_cast<int>(ndsLayoutIds.size()))
                             return;
-                        SET_SETTING_KEY_STR("nds.screenLayout", ndsLayoutIds[idx]);
+                        m_gameEntry.ndsScreenLayout = ndsLayoutIds[idx];
+                        if (beiklive::GameDB && !m_gameEntry.path.empty()) {
+                            beiklive::GameDB->set(m_gameEntry.path, "ndsScreenLayout",
+                                nlohmann::json(m_gameEntry.ndsScreenLayout));
+                            beiklive::GameDB->flush();
+                        }
                         syncNdsAdjustCells(ndsLayoutIds[idx] == "custom");
                         if (m_ndsLayoutCallback)
                             m_ndsLayoutCallback(ndsLayoutIds[idx]);
@@ -978,7 +982,7 @@ namespace beiklive
                 ndsTopCell->setText("上屏调整");
                 ndsTopCell->setDetailText("\uE14A");
                 ndsTopCell->registerClickAction([this](brls::View*) -> bool {
-                    if (GET_SETTING_KEY_STR("nds.screenLayout", "vertical") != "custom")
+                    if (m_gameEntry.ndsScreenLayout != "custom")
                         return true;
                     _openNdsScreenSettings(true);
                     return true;
@@ -988,7 +992,7 @@ namespace beiklive
                 ndsBottomCell->setText("下屏调整");
                 ndsBottomCell->setDetailText("\uE14A");
                 ndsBottomCell->registerClickAction([this](brls::View*) -> bool {
-                    if (GET_SETTING_KEY_STR("nds.screenLayout", "vertical") != "custom")
+                    if (m_gameEntry.ndsScreenLayout != "custom")
                         return true;
                     _openNdsScreenSettings(false);
                     return true;
@@ -1655,6 +1659,7 @@ namespace beiklive
         entry.ndsBottomOffsetX = m_gameEntry.ndsBottomOffsetX;
         entry.ndsBottomOffsetY = m_gameEntry.ndsBottomOffsetY;
         entry.ndsBottomScale = m_gameEntry.ndsBottomScale;
+        entry.ndsScreenLayout = m_gameEntry.ndsScreenLayout;
         beiklive::GameDB->upsertByPath(entry);
         beiklive::GameDB->flush();
     }
@@ -1834,6 +1839,7 @@ namespace beiklive
                 game.ndsBottomScale = m_gameEntry.ndsBottomScale;
                 game.ndsBottomOffsetX = m_gameEntry.ndsBottomOffsetX;
                 game.ndsBottomOffsetY = m_gameEntry.ndsBottomOffsetY;
+                game.ndsScreenLayout = m_gameEntry.ndsScreenLayout;
             }
             beiklive::GameDB->upsertByPath(game);
             ++count;

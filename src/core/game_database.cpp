@@ -67,6 +67,7 @@ namespace beiklive
             {"ndsBottomScale", entry.ndsBottomScale},
             {"ndsBottomOffsetX", entry.ndsBottomOffsetX},
             {"ndsBottomOffsetY", entry.ndsBottomOffsetY},
+            {"ndsScreenLayout", sanitizeUtf8(entry.ndsScreenLayout)},
             {"shaderParaNames", entry.shaderParaNames},
             {"shaderParaValues", entry.shaderParaValues}};
     }
@@ -101,6 +102,7 @@ namespace beiklive
         entry.ndsBottomScale = j.value("ndsBottomScale", 1.0f);
         entry.ndsBottomOffsetX = j.value("ndsBottomOffsetX", 0.0f);
         entry.ndsBottomOffsetY = j.value("ndsBottomOffsetY", 0.0f);
+        entry.ndsScreenLayout = j.value("ndsScreenLayout", "");
         entry.shaderParaNames = j.value("shaderParaNames", std::vector<std::string>());
         entry.shaderParaValues = j.value("shaderParaValues", std::vector<float>());
     }
@@ -526,15 +528,18 @@ namespace beiklive
             data_[it->second] = entry;
             if (oldCrc32 != entry.crc32)
             {
-                crc32Index_.erase(oldCrc32);
-                crc32Index_[entry.crc32] = it->second;
+                if (oldCrc32 != 0)
+                    crc32Index_.erase(oldCrc32);
+                if (entry.crc32 != 0)
+                    crc32Index_[entry.crc32] = it->second;
             }
         }
         else
         {
             data_.push_back(entry);
             size_t idx = data_.size() - 1;
-            crc32Index_[entry.crc32] = idx;
+            if (entry.crc32 != 0)
+                crc32Index_[entry.crc32] = idx;
             pathIndex_[entry.path] = idx;
         }
     }
@@ -543,7 +548,7 @@ namespace beiklive
 
     void GameDatabase::doUpsert(const GameEntry &entry)
     {
-        auto it = crc32Index_.find(entry.crc32);
+        auto it = entry.crc32 != 0 ? crc32Index_.find(entry.crc32) : crc32Index_.end();
         if (it != crc32Index_.end())
         {
             // 更新已有条目：先保存旧路径再赋值，否则旧路径信息被覆盖丢失
@@ -559,7 +564,8 @@ namespace beiklive
         {
             data_.push_back(entry);
             size_t idx = data_.size() - 1;
-            crc32Index_[entry.crc32] = idx;
+            if (entry.crc32 != 0)
+                crc32Index_[entry.crc32] = idx;
             pathIndex_[entry.path] = idx;
         }
     }
@@ -576,7 +582,8 @@ namespace beiklive
         {
             data_[idx] = std::move(data_.back());
             const auto &moved = data_[idx];
-            crc32Index_[moved.crc32] = idx;
+            if (moved.crc32 != 0)
+                crc32Index_[moved.crc32] = idx;
             pathIndex_[moved.path] = idx;
         }
         data_.pop_back();
@@ -589,13 +596,15 @@ namespace beiklive
         if (it == pathIndex_.end())
             return false;
         size_t idx = it->second;
-        crc32Index_.erase(data_[idx].crc32);
+        if (data_[idx].crc32 != 0)
+            crc32Index_.erase(data_[idx].crc32);
         pathIndex_.erase(it);
         if (idx != data_.size() - 1)
         {
             data_[idx] = std::move(data_.back());
             const auto &moved = data_[idx];
-            crc32Index_[moved.crc32] = idx;
+            if (moved.crc32 != 0)
+                crc32Index_[moved.crc32] = idx;
             pathIndex_[moved.path] = idx;
         }
         data_.pop_back();

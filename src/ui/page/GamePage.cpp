@@ -75,15 +75,17 @@ namespace beiklive
         // 若数据库中不存在此游戏记录，先插入含必要字段的最小条目
         if (!db->findByPath(m_gameData.fullPath).has_value())
         {
-            auto dcrc32 = tools::crc32(m_gameData.fullPath); // 计算 CRC32 校验值
             brls::Logger::debug("GamePage 数据库中没有此游戏的记录，插入新记录: {}", m_gameData.fullPath);
             GameEntry minimal;
             minimal.path     = m_gameData.fullPath;
-            minimal.crc32    = dcrc32;
             minimal.platform = (int)m_gameData.itemType;
             minimal.title    = GET_MAPPING_KEY_STR(
                 beiklive::tools::getFileNameWithoutExtension(m_gameData.fileName),
                 beiklive::tools::getFileNameWithoutExtension(m_gameData.fileName));
+            minimal.savePath = beiklive::tools::defaultGameSavePath(minimal.platform, minimal.path);
+            if (minimal.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
+                minimal.ndsScreenLayout = "vertical";
+            std::filesystem::create_directories(minimal.savePath);
             db->upsertByPath(minimal);
         }
         else
@@ -116,6 +118,8 @@ namespace beiklive
         // 整数倍缩放
         db->setDefault(path, "integerAspectRatio",
                        GET_SETTING_KEY_INT("display.integer_scale_mult", 0));
+        if ((int)m_gameData.itemType == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
+            db->setDefault(path, "ndsScreenLayout", std::string("vertical"));
 
         m_gameEntry = db->findByPath(path).value();
 
@@ -136,16 +140,7 @@ namespace beiklive
         // savePath：优先使用已有值，否则从设置读取 save.sramDir，为空时使用全局 saves 目录
         if (m_gameEntry.savePath.empty())
         {
-            // sramDir为空表示rom目录， 不为空为模拟器目录
-            std::string sramDir = GET_SETTING_KEY_STR("save.sramDir", "");
-            if(!sramDir.empty())
-            {
-                // 如果没有单独的 sramDir 设置，则使用全局 saves 目录
-                sramDir = beiklive::path::savePath() + beiklive::path::SPLIT_CHAR + baseName;
-            }else
-            {
-                sramDir = gameDir;
-            }
+            std::string sramDir = beiklive::tools::defaultGameSavePath(m_gameEntry.platform, m_gameEntry.path);
             std::filesystem::create_directories(sramDir);
             m_gameEntry.savePath = sramDir;
         }
@@ -200,6 +195,13 @@ namespace beiklive
         {
             m_gameEntry.screenShotPath = beiklive::path::screenshotPath();
         }
+        if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS) &&
+            m_gameEntry.ndsScreenLayout.empty())
+        {
+            m_gameEntry.ndsScreenLayout = "vertical";
+        }
+        if (beiklive::GameDB && !m_gameEntry.path.empty())
+            beiklive::GameDB->upsertByPath(m_gameEntry);
 
         brls::Logger::debug("GamePage 路径初始化完成: savePath={}, cheatPath={}, overlayPath={}, logoPath={}, screenShotPath={}",
             m_gameEntry.savePath, m_gameEntry.cheatPath, m_gameEntry.overlayPath,
