@@ -8,6 +8,7 @@
 #include "emulator/melonds/MelonDSInput.h"
 #include "emulator/melonds/MelonDSPlatform.h"
 #include "emulator/melonds/MelonDSVideo.h"
+#include "ARCodeFile.h"
 
 #include <array>
 #include <atomic>
@@ -58,11 +59,11 @@ public:
     void SetFastForwarding(bool ff) override { m_fastForwarding = ff; }
     void NotifyConfigUpdated() override;
 
-    void ApplyCheats(const std::vector<CheatEntry>& cheats) override { m_cheats = cheats; }
+    void ApplyCheats(const std::vector<CheatEntry>& cheats) override;
     const std::vector<beiklive::CheatEntry>& GetCheats() const override { return m_cheats; }
-    void UpdateCheats() override {}
+    void UpdateCheats() override;
     void ToggleCheat(int idx, bool enabled) override;
-    void ReloadCheats() override {}
+    void ReloadCheats() override;
     void SetCheatPath(const std::string& path) override { m_gameEntry.cheatPath = path; }
 
     bool IsReady() const override { return m_ready.load(std::memory_order_acquire); }
@@ -93,6 +94,8 @@ private:
     MelonDSInput m_input;
     MelonDSVideo m_video;
     std::vector<beiklive::CheatEntry> m_cheats;
+    std::vector<melonDS::ARCode> m_arCheats;
+    std::vector<int> m_cheatToArIndex;
     std::vector<uint8_t> m_romData;
     std::string m_saveFile;
     std::string m_stateFile;
@@ -120,6 +123,9 @@ private:
 
     bool loadBiosFiles(melonDS::NDSArgs& args);
     bool loadBatterySave(melonDS::NDSCart::NDSCartArgs& args) const;
+    void syncRtcToHostTime();
+    void applyArCheatsToEngine();
+    std::string defaultCheatPath() const;
     std::unique_ptr<melonDS::Renderer3D> createRenderer3D();
     bool captureAcceleratedFrame();
     bool ensureAcceleratedReadbackPbos(size_t byteCount);

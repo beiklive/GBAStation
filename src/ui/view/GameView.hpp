@@ -82,6 +82,7 @@ namespace beiklive
 
             /// 请求更新金手指文件路径（UI线程调用）
             void requestCheatPathUpdate(const std::string& path);
+            void applyCheatsUpdate(const std::vector<CheatEntry>& cheats);
 
             /// 着色器开关（UI线程调用）
             void _onShaderToggle(bool on);

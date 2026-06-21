@@ -10,6 +10,7 @@
 #include <condition_variable>
 #include <cstdarg>
 #include <cstdio>
+#include <deque>
 #include <filesystem>
 #include <fstream>
 #include <mutex>
@@ -30,6 +31,113 @@ void HandleFault(u64 pc, u64 lr, u64 fp, u64 faultAddr, u32 desc)
 } // namespace melonDS
 
 namespace beiklive::melonds {
+
+namespace {
+
+struct AsyncBinaryWrite {
+    std::string path;
+    std::vector<uint8_t> data;
+};
+
+class AsyncBinaryWriter {
+public:
+    static AsyncBinaryWriter& instance()
+    {
+        static AsyncBinaryWriter writer;
+        return writer;
+    }
+
+    void enqueue(std::string path, std::vector<uint8_t> data)
+    {
+        if (path.empty())
+            return;
+
+        ensureStarted();
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            for (auto& queued : m_queue)
+            {
+                if (queued.path == path)
+                {
+                    queued.data = std::move(data);
+                    return;
+                }
+            }
+            m_queue.push_back({std::move(path), std::move(data)});
+        }
+        m_cv.notify_one();
+    }
+
+    void flush()
+    {
+        std::unique_lock<std::mutex> lock(m_mutex);
+        m_flushedCv.wait(lock, [&] { return m_queue.empty() && !m_writing; });
+    }
+
+private:
+    AsyncBinaryWriter() = default;
+
+    ~AsyncBinaryWriter()
+    {
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_stop = true;
+        }
+        m_cv.notify_one();
+        if (m_thread.joinable())
+            m_thread.join();
+    }
+
+    void ensureStarted()
+    {
+        std::lock_guard<std::mutex> lock(m_startMutex);
+        if (m_thread.joinable())
+            return;
+        m_thread = std::thread([this] {
+#ifdef __SWITCH__
+            svcSetThreadCoreMask(CUR_THREAD_HANDLE, 3, 1ULL << 3);
+#endif
+            workerLoop();
+        });
+    }
+
+    void workerLoop()
+    {
+        for (;;)
+        {
+            AsyncBinaryWrite job;
+            {
+                std::unique_lock<std::mutex> lock(m_mutex);
+                m_cv.wait(lock, [&] { return m_stop || !m_queue.empty(); });
+                if (m_stop && m_queue.empty())
+                    return;
+                job = std::move(m_queue.front());
+                m_queue.pop_front();
+                m_writing = true;
+            }
+
+            WriteBinaryFile(job.path, job.data.data(), job.data.size());
+
+            {
+                std::lock_guard<std::mutex> lock(m_mutex);
+                m_writing = false;
+                if (m_queue.empty())
+                    m_flushedCv.notify_all();
+            }
+        }
+    }
+
+    std::mutex m_startMutex;
+    std::mutex m_mutex;
+    std::condition_variable m_cv;
+    std::condition_variable m_flushedCv;
+    std::deque<AsyncBinaryWrite> m_queue;
+    std::thread m_thread;
+    bool m_stop = false;
+    bool m_writing = false;
+};
+
+} // namespace
 
 bool LoadBinaryFile(const std::string& path, void* data, size_t size)
 {
@@ -67,6 +175,16 @@ bool WriteBinaryFile(const std::string& path, const void* data, size_t size)
         return false;
     file.write(static_cast<const char*>(data), static_cast<std::streamsize>(size));
     return static_cast<bool>(file);
+}
+
+void AsyncWriteBinaryFile(std::string path, std::vector<uint8_t> data)
+{
+    AsyncBinaryWriter::instance().enqueue(std::move(path), std::move(data));
+}
+
+void FlushAsyncBinaryWrites()
+{
+    AsyncBinaryWriter::instance().flush();
 }
 
 uint64_t GetTimeUs()
@@ -296,7 +414,14 @@ Thread* Thread_Create(std::function<void()> func)
 {
     try
     {
+#ifdef __SWITCH__
+        return new Thread{std::thread([func = std::move(func)]() mutable {
+            svcSetThreadCoreMask(CUR_THREAD_HANDLE, 3, 1ULL << 3);
+            func();
+        })};
+#else
         return new Thread{std::thread(std::move(func))};
+#endif
     }
     catch (...)
     {
@@ -432,8 +557,10 @@ void SignalStop(StopReason reason, void*)
 void WriteNDSSave(const u8* savedata, u32 savelen, u32, u32, void* userdata)
 {
     auto* data = static_cast<beiklive::melonds::PlatformUserData*>(userdata);
-    if (data && !data->savePath.empty())
-        beiklive::melonds::WriteBinaryFile(data->savePath, savedata, savelen);
+    if (data && !data->savePath.empty() && savedata)
+        beiklive::melonds::AsyncWriteBinaryFile(
+            data->savePath,
+            std::vector<u8>(savedata, savedata + savelen));
 }
 
 void WriteGBASave(const u8*, u32, u32, u32, void*) {}

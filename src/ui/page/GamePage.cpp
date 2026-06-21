@@ -145,14 +145,29 @@ namespace beiklive
             m_gameEntry.savePath = sramDir;
         }
 
-        // cheatPath：优先使用已有值，否则构建为 <cheat目录>/<游戏名>.cht
+        // cheatPath：优先使用已有值；NDS 默认使用 usrcheat.dat，其他平台使用 <cheat目录>/<游戏名>.cht
         if (m_gameEntry.cheatPath.empty())
         {
             std::string cheatDir = GET_SETTING_KEY_STR("cheat.dir", "");
             if (cheatDir.empty())
                 cheatDir = beiklive::path::cheatPath();
-            // 使用 std::filesystem::path 拼接，自动处理平台路径分隔符
-            m_gameEntry.cheatPath = (std::filesystem::path(cheatDir) / (baseName + ".cht")).string();
+            if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
+                m_gameEntry.cheatPath = (std::filesystem::path(cheatDir) / "usrcheat.dat").string();
+            else
+                m_gameEntry.cheatPath = (std::filesystem::path(cheatDir) / (baseName + ".cht")).string();
+        }
+        else if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
+        {
+            std::string cheatDir = GET_SETTING_KEY_STR("cheat.dir", "");
+            if (cheatDir.empty())
+                cheatDir = beiklive::path::cheatPath();
+            const auto usrCheatPath = (std::filesystem::path(cheatDir) / "usrcheat.dat").string();
+            if (std::filesystem::exists(usrCheatPath) &&
+                !std::filesystem::exists(m_gameEntry.cheatPath) &&
+                std::filesystem::path(m_gameEntry.cheatPath).extension() == ".cht")
+            {
+                m_gameEntry.cheatPath = usrCheatPath;
+            }
         }
 
         // overlayPath：优先使用已有值，否则从设置读取平台对应的遮罩路径
@@ -262,7 +277,6 @@ namespace beiklive
         // setOnResume和setOnExit回调由GamePage注入，触发时分别执行对应的动画和操作
         m_gameMenuView->setOnResume([this]() {
             brls::sync([this]() {
-                GameSignal::instance().requestReloadCheats();
                 beiklive::GameDB->flush();
                 m_gameView->setFocusable(true);
                 AnimationHelper::slideOutToBottom(m_gameMenuView, MENU_FADE_OUT_MS, 120.f,true, [this]() {
@@ -321,7 +335,14 @@ namespace beiklive
             if (beiklive::GameDB)
                 beiklive::GameDB->set(m_gameEntry.path, "cheatPath", nlohmann::json(path));
             if (m_gameView)
+            {
                 m_gameView->requestCheatPathUpdate(path);
+                m_gameView->applyCheatsUpdate(m_gameMenuView->getCheats());
+            }
+        });
+        m_gameMenuView->setCheatsChangedCallback([this](const std::vector<CheatEntry>& cheats) {
+            if (m_gameView)
+                m_gameView->applyCheatsUpdate(cheats);
         });
 
         // 注入画面设置回调

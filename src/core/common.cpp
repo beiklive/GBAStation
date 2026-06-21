@@ -1,14 +1,72 @@
 #include "common.h"
 #include "ui/widget/Box.hpp"
+#include "ARDatabaseDAT.h"
+#include "ARCodeFile.h"
+#include "CRC32.h"
+#include "NDS_Header.h"
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
+#include <iomanip>
+#include <sstream>
+#include <variant>
 
 namespace fs = std::filesystem;
 
 namespace beiklive
 {
+    namespace
+    {
+        std::string ndsArCodeToText(const melonDS::ARCode& code)
+        {
+            std::ostringstream oss;
+            oss << std::uppercase << std::hex << std::setfill('0');
+            for (size_t i = 0; i + 1 < code.Code.size(); i += 2)
+            {
+                if (i > 0)
+                    oss << '\n';
+                oss << std::setw(8) << code.Code[i] << ' '
+                    << std::setw(8) << code.Code[i + 1];
+            }
+            return oss.str();
+        }
+
+        void appendNdsDatCheatsFromCat(const melonDS::ARCodeCat& cat, std::vector<CheatEntry>& out, int depth = 0)
+        {
+            for (const auto& item : cat.Children)
+            {
+                if (std::holds_alternative<melonDS::ARCodeCat>(item))
+                {
+                    const auto& childCat = std::get<melonDS::ARCodeCat>(item);
+                    if (!childCat.Name.empty())
+                    {
+                        CheatEntry catEntry;
+                        catEntry.desc = std::string(static_cast<size_t>(std::max(0, depth)) * 2, ' ') + childCat.Name;
+                        catEntry.code = "";
+                        catEntry.enabled = false;
+                        out.push_back(std::move(catEntry));
+                    }
+                    appendNdsDatCheatsFromCat(childCat, out, depth + 1);
+                    continue;
+                }
+
+                const auto& code = std::get<melonDS::ARCode>(item);
+                if (code.Code.empty())
+                    continue;
+
+                CheatEntry entry;
+                entry.desc = code.Name.empty() ? code.Description : code.Name;
+                if (entry.desc.empty())
+                    entry.desc = "NDS AR Code";
+                entry.code = ndsArCodeToText(code);
+                entry.enabled = false;
+                out.push_back(std::move(entry));
+            }
+        }
+    }
 
     ConfigManager *SettingManager = nullptr;     // 全局配置管理器实例
     ConfigManager *NameMappingManager = nullptr; // 全局名称映射管理器实例
@@ -507,6 +565,66 @@ namespace beiklive
             }
         }
 
+        return result;
+    }
+
+    std::vector<CheatEntry> parseNdsUsrCheatDat(const std::string &datPath, const std::string &romPath)
+    {
+        std::vector<CheatEntry> result;
+        if (datPath.empty() || romPath.empty())
+            return result;
+        if (!std::filesystem::exists(datPath) || !std::filesystem::exists(romPath))
+            return result;
+
+        std::array<melonDS::u8, 0x200> headerBytes {};
+        melonDS::NDSHeader header {};
+        {
+            std::ifstream rom(romPath, std::ios::binary);
+            if (!rom)
+                return result;
+            rom.read(reinterpret_cast<char*>(headerBytes.data()), static_cast<std::streamsize>(headerBytes.size()));
+            if (rom.gcount() != static_cast<std::streamsize>(headerBytes.size()))
+                return result;
+            std::memcpy(&header, headerBytes.data(), std::min(sizeof(header), headerBytes.size()));
+        }
+
+        melonDS::ARDatabaseDAT db(datPath);
+        if (db.Error)
+        {
+            brls::Logger::warning("parseNdsUsrCheatDat: failed to load database: {}", datPath);
+            return result;
+        }
+
+        const melonDS::u32 gameCode = header.GameCodeAsU32();
+        const melonDS::u32 checksum = ~melonDS::CRC32(headerBytes.data(), static_cast<int>(headerBytes.size()), 0);
+        auto entries = db.GetEntriesByGameCode(gameCode);
+        if (entries.empty())
+        {
+            brls::Logger::info("parseNdsUsrCheatDat: no cheats for ROM {} in {}", romPath, datPath);
+            return result;
+        }
+
+        bool hasChecksumMatch = false;
+        for (const auto& entry : entries)
+        {
+            if (entry.Checksum == checksum)
+            {
+                hasChecksumMatch = true;
+                break;
+            }
+        }
+
+        for (const auto& entry : entries)
+        {
+            if (hasChecksumMatch && entry.Checksum != checksum)
+                continue;
+            appendNdsDatCheatsFromCat(entry.RootCat, result);
+            if (!hasChecksumMatch)
+                break;
+        }
+
+        brls::Logger::info("parseNdsUsrCheatDat: loaded {} cheats for {} from {}",
+                           result.size(), romPath, datPath);
         return result;
     }
 

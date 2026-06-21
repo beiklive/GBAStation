@@ -323,6 +323,7 @@ namespace beiklive // 函数声明
     void RegisterThemes(); // 注册全局主题色
 
     std::vector<CheatEntry> parseChtFile(const std::string& path); // 解析 .cht 金手指文件，返回金手指条目列表
+    std::vector<CheatEntry> parseNdsUsrCheatDat(const std::string& datPath, const std::string& romPath); // 从 NDS usrcheat.dat 中提取当前 ROM 的金手指列表
     bool saveChtFile(const std::string& path, const std::vector<CheatEntry>& entries); // 将金手指列表以 .cht 格式写入文件
 
     int GetGamePixelHeight(int platform); // 获取游戏的原始像素高度（如 GBA 为 160）

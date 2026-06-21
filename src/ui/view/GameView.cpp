@@ -1286,9 +1286,7 @@ namespace beiklive
 
         if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS) &&
             m_ffMultiplier >= 1.0f) {
-            unsigned frames = 1u;
-            if (m_ffMultiplier >= 4.0f)
-                frames = std::min<unsigned>(4u, std::max(2u, static_cast<unsigned>(m_ffMultiplier / 2.0f)));
+            const unsigned frames = std::max(1u, static_cast<unsigned>(std::lround(m_ffMultiplier)));
             for (unsigned i = 0; i < frames; ++i) {
                 if (i == 0) _saveRewindState();
                 m_core->RunFrame();
@@ -1520,11 +1518,15 @@ namespace beiklive
 
         nextTarget += frameDurNs;
 
+        if (ff) {
+            nextTarget = Clock::now();
+            std::this_thread::yield();
+            return;
+        }
+
         auto now = Clock::now();
         if (nextTarget < now) {
             nextTarget = now;
-            if (ff)
-                std::this_thread::yield();
             return;
         }
 
@@ -1876,8 +1878,8 @@ namespace beiklive
                 }
             }
 
-            // ---- 帧率限制（NDS 快进保留节流，避免多帧批处理造成明显跳帧）----
-            _throttleFrameRate(ff && !ndsFastForward, nextFrameTarget, frameDurNs, spinGuardNs);
+            // ---- 帧率限制（NDS 快进全速运行，其他平台快进也不节流）----
+            _throttleFrameRate(ff, nextFrameTarget, frameDurNs, spinGuardNs);
         }
 
         // ---- 提交时长记录 ----
@@ -2141,8 +2143,13 @@ namespace beiklive
         {
             m_gameEntry.cheatPath = path;
             m_core->SetCheatPath(path);
-            m_core->ReloadCheats();
         }
+    }
+
+    void GameView::applyCheatsUpdate(const std::vector<CheatEntry>& cheats)
+    {
+        if (m_core)
+            m_core->ApplyCheats(cheats);
     }
 
     void GameView::_onShaderToggle(bool on)

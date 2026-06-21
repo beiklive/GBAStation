@@ -28,12 +28,16 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cctype>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <limits>
 #include <mutex>
 #include <string>
+#include <thread>
+#include <ctime>
+#include <unordered_map>
 
 namespace beiklive {
 
@@ -168,6 +172,93 @@ std::string joinPath(const std::string& dir, const std::string& name)
 bool readWholeFile(const std::string& path, std::vector<uint8_t>& out)
 {
     return LoadBinaryVector(path, out);
+}
+
+std::string lowerExtension(const std::string& path)
+{
+    std::string ext = std::filesystem::path(path).extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return ext;
+}
+
+std::string cheatStateKey(const beiklive::CheatEntry& cheat)
+{
+    return cheat.desc + "\n" + cheat.code;
+}
+
+std::vector<std::string> extractHexTokens(const std::string& code)
+{
+    std::vector<std::string> tokens;
+    std::string token;
+    auto flush = [&]() {
+        if (token.empty())
+            return;
+        if (token.size() > 8 && token.size() % 8 == 0)
+        {
+            for (size_t i = 0; i < token.size(); i += 8)
+                tokens.push_back(token.substr(i, 8));
+        }
+        else
+        {
+            tokens.push_back(token);
+        }
+        token.clear();
+    };
+
+    for (char ch : code)
+    {
+        if (std::isxdigit(static_cast<unsigned char>(ch)))
+            token.push_back(ch);
+        else
+            flush();
+    }
+    flush();
+    return tokens;
+}
+
+bool parseU32Hex(const std::string& text, melonDS::u32& out)
+{
+    if (text.empty() || text.size() > 8)
+        return false;
+    try
+    {
+        size_t consumed = 0;
+        unsigned long value = std::stoul(text, &consumed, 16);
+        if (consumed != text.size())
+            return false;
+        out = static_cast<melonDS::u32>(value);
+        return true;
+    }
+    catch (...)
+    {
+        return false;
+    }
+}
+
+melonDS::ARCode cheatEntryToArCode(const beiklive::CheatEntry& cheat)
+{
+    melonDS::ARCode ar {};
+    ar.Parent = nullptr;
+    ar.Name = cheat.desc;
+    ar.Description = "";
+    ar.Enabled = cheat.enabled;
+
+    auto tokens = extractHexTokens(cheat.code);
+    if (tokens.size() % 2 != 0)
+        tokens.pop_back();
+    ar.Code.reserve(tokens.size());
+    for (const auto& token : tokens)
+    {
+        melonDS::u32 value = 0;
+        if (!parseU32Hex(token, value))
+        {
+            ar.Code.clear();
+            break;
+        }
+        ar.Code.push_back(value);
+    }
+    return ar;
 }
 
 const char* glString(GLenum name)
@@ -360,6 +451,7 @@ bool MelonDSCore::SetupGame(beiklive::GameEntry GameEntry)
         return false;
     if (!LoadGame(m_gameEntry.path))
         return false;
+    ReloadCheats();
 
     m_ready.store(true, std::memory_order_release);
     brls::Logger::info("melonDS: ROM loaded: {} ({}x{} @ {:.2f} fps)",
@@ -377,6 +469,7 @@ void MelonDSCore::Cleanup()
         releaseAcceleratedReadbackPbos();
         if (m_ready.load(std::memory_order_acquire))
             saveSram();
+        FlushAsyncBinaryWrites();
 
         if (m_nds && m_nds->IsRunning())
             m_nds->Stop();
@@ -527,6 +620,7 @@ bool MelonDSCore::LoadGame(const std::string& path)
     brls::Logger::debug("melonDS: SetupDirectBoot begin");
     m_nds->SetupDirectBoot(std::filesystem::path(path).filename().string());
     brls::Logger::debug("melonDS: SetupDirectBoot end");
+    syncRtcToHostTime();
     if (m_stopRequested.load(std::memory_order_acquire))
         return false;
 
@@ -582,6 +676,7 @@ void MelonDSCore::Reset()
     ScopedMelonDSGLContext glScope(m_glContext.get());
     m_nds->Reset();
     m_nds->SetupDirectBoot(std::filesystem::path(m_gameEntry.path).filename().string());
+    syncRtcToHostTime();
     m_nds->GPU.StartFrame();
     m_nds->Start();
 }
@@ -707,6 +802,11 @@ bool MelonDSCore::GetVideoTexture(beiklive::EmulatorVideoTexture& out)
         return false;
 
     std::unique_lock<std::mutex> lock(m_ndsMutex, std::try_to_lock);
+    for (int attempt = 0; !lock.owns_lock() && attempt < 2; ++attempt)
+    {
+        std::this_thread::sleep_for(std::chrono::microseconds(250));
+        (void)lock.try_lock();
+    }
     if (!lock.owns_lock())
         return false;
     ScopedMelonDSGLContext glScope(m_glContext.get());
@@ -724,6 +824,11 @@ bool MelonDSCore::WithVideoTextureLocked(
         return false;
 
     std::unique_lock<std::mutex> lock(m_ndsMutex, std::try_to_lock);
+    for (int attempt = 0; !lock.owns_lock() && attempt < 2; ++attempt)
+    {
+        std::this_thread::sleep_for(std::chrono::microseconds(250));
+        (void)lock.try_lock();
+    }
     if (!lock.owns_lock())
         return false;
 
@@ -778,7 +883,10 @@ bool MelonDSCore::Unserialize(const std::vector<uint8_t>& buf)
     melonDS::Savestate state(const_cast<uint8_t*>(buf.data()), static_cast<melonDS::u32>(buf.size()), false);
     if (state.Error)
         return false;
-    return m_nds->DoSavestate(&state) && !state.Error;
+    const bool ok = m_nds->DoSavestate(&state) && !state.Error;
+    if (ok)
+        syncRtcToHostTime();
+    return ok;
 }
 
 bool MelonDSCore::SaveState(const std::string& path)
@@ -813,11 +921,94 @@ void MelonDSCore::SetTouch(int x, int y, bool down)
     m_input.SetTouch(x, y, down);
 }
 
+void MelonDSCore::ApplyCheats(const std::vector<CheatEntry>& cheats)
+{
+    std::lock_guard<std::mutex> lock(m_ndsMutex);
+    m_cheats = cheats;
+    UpdateCheats();
+}
+
+void MelonDSCore::UpdateCheats()
+{
+    m_arCheats.clear();
+    m_cheatToArIndex.clear();
+    m_arCheats.reserve(m_cheats.size());
+    m_cheatToArIndex.reserve(m_cheats.size());
+    for (const auto& cheat : m_cheats)
+    {
+        auto ar = cheatEntryToArCode(cheat);
+        if (!ar.Code.empty())
+        {
+            m_cheatToArIndex.push_back(static_cast<int>(m_arCheats.size()));
+            m_arCheats.push_back(std::move(ar));
+        }
+        else
+        {
+            m_cheatToArIndex.push_back(-1);
+        }
+    }
+    applyArCheatsToEngine();
+}
+
 void MelonDSCore::ToggleCheat(int idx, bool enabled)
 {
+    std::lock_guard<std::mutex> lock(m_ndsMutex);
     if (idx < 0 || idx >= static_cast<int>(m_cheats.size()))
         return;
+    if (m_cheats[static_cast<size_t>(idx)].code.empty())
+        return;
     m_cheats[static_cast<size_t>(idx)].enabled = enabled;
+    if (idx < static_cast<int>(m_cheatToArIndex.size()))
+    {
+        int arIdx = m_cheatToArIndex[static_cast<size_t>(idx)];
+        if (arIdx >= 0 && arIdx < static_cast<int>(m_arCheats.size()))
+            m_arCheats[static_cast<size_t>(arIdx)].Enabled = enabled;
+    }
+    applyArCheatsToEngine();
+}
+
+void MelonDSCore::ReloadCheats()
+{
+    std::lock_guard<std::mutex> lock(m_ndsMutex);
+
+    std::string path = m_gameEntry.cheatPath;
+    const std::string fallbackPath = defaultCheatPath();
+    if (path.empty() || (!std::filesystem::exists(path) && !fallbackPath.empty()))
+        path = fallbackPath;
+
+    const bool datFile = lowerExtension(path) == ".dat";
+    std::unordered_map<std::string, bool> previousState;
+    if (datFile)
+    {
+        previousState.reserve(m_cheats.size());
+        for (const auto& cheat : m_cheats)
+            previousState[cheatStateKey(cheat)] = cheat.enabled;
+    }
+
+    std::vector<CheatEntry> loaded = datFile
+        ? beiklive::parseNdsUsrCheatDat(path, m_gameEntry.path)
+        : beiklive::parseChtFile(path);
+
+    if (datFile)
+    {
+        for (auto& cheat : loaded)
+        {
+            auto it = previousState.find(cheatStateKey(cheat));
+            if (it != previousState.end())
+                cheat.enabled = it->second;
+        }
+    }
+
+    m_gameEntry.cheatPath = path;
+    m_cheats = std::move(loaded);
+    UpdateCheats();
+}
+
+void MelonDSCore::applyArCheatsToEngine()
+{
+    if (!m_nds)
+        return;
+    m_nds->AREngine.Cheats = m_arCheats;
 }
 
 const void* MelonDSCore::getSramData() const
@@ -836,7 +1027,9 @@ bool MelonDSCore::saveSram()
     const size_t size = getSramSize();
     if (!data || size == 0)
         return true;
-    return WriteBinaryFile(m_saveFile, data, size);
+    const auto* bytes = static_cast<const uint8_t*>(data);
+    AsyncWriteBinaryFile(m_saveFile, std::vector<uint8_t>(bytes, bytes + size));
+    return true;
 }
 
 bool MelonDSCore::loadBiosFiles(melonDS::NDSArgs& args)
@@ -884,6 +1077,32 @@ bool MelonDSCore::loadBatterySave(melonDS::NDSCart::NDSCartArgs& args) const
     args.SRAM = std::make_unique<melonDS::u8[]>(args.SRAMLength);
     std::memcpy(args.SRAM.get(), data.data(), data.size());
     return true;
+}
+
+void MelonDSCore::syncRtcToHostTime()
+{
+    if (!m_nds)
+        return;
+
+    std::time_t now = std::time(nullptr);
+    if (now == static_cast<std::time_t>(-1))
+        return;
+
+    std::tm local {};
+#if defined(_WIN32)
+    if (localtime_s(&local, &now) != 0)
+        return;
+#else
+    if (!localtime_r(&now, &local))
+        return;
+#endif
+
+    m_nds->RTC.SetDateTime(local.tm_year + 1900,
+                           local.tm_mon + 1,
+                           local.tm_mday,
+                           local.tm_hour,
+                           local.tm_min,
+                           local.tm_sec);
 }
 
 std::unique_ptr<melonDS::Renderer3D> MelonDSCore::createRenderer3D()
@@ -1288,6 +1507,11 @@ std::string MelonDSCore::defaultBiosDir() const
 #else
     return (std::filesystem::path(beiklive::path::biosPath()) / "nds").string();
 #endif
+}
+
+std::string MelonDSCore::defaultCheatPath() const
+{
+    return (std::filesystem::path(beiklive::path::cheatPath()) / "usrcheat.dat").string();
 }
 
 } // namespace beiklive::melonds

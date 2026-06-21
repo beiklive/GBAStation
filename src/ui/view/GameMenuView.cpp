@@ -581,7 +581,10 @@ namespace beiklive
         selectChtBtn->setMarginRight(4.f);
         selectChtBtn->registerClickAction([this](brls::View *) -> bool
                                           {
-            beiklive::openFilePicker({"cht"},
+            std::vector<std::string> extensions = {"cht"};
+            if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
+                extensions.push_back("dat");
+            beiklive::openFilePicker(extensions,
                 [this](const std::string& path) {
                     _loadCheatsFromPath(path);
                     if (m_cheatPathCallback) m_cheatPathCallback(path);
@@ -605,6 +608,11 @@ namespace beiklive
         addCheatBtn->setIcon(BK_RES("img/ui/menu/cheat.png"));
         addCheatBtn->setMarginRight(4.f);
         addCheatBtn->registerClickAction([this](brls::View *) -> bool {
+            if (m_cheatFileReadOnly)
+            {
+                brls::Application::notify("usrcheat.dat 为只读数据库，请切换到 .cht 后编辑");
+                return true;
+            }
             auto* ime = brls::Application::getImeManager();
             if (!ime) return true;
 
@@ -632,13 +640,8 @@ namespace beiklive
                                 entry.code = code;
                                 entry.enabled = true;
                                 m_cheats.push_back(entry);
-                                if (!m_gameEntry.cheatPath.empty())
-                                    beiklive::saveChtFile(m_gameEntry.cheatPath, m_cheats);
-                                if (m_cheatToggleCallback)
-                                {
-                                    int newIdx = static_cast<int>(m_cheats.size()) - 1;
-                                    m_cheatToggleCallback(newIdx, true);
-                                }
+                                _saveEditableCheats();
+                                _notifyCheatsChanged();
                                 _rebuildCheatItems();
                             },
                             "金手指代码",
@@ -687,10 +690,40 @@ namespace beiklive
 
     void GameMenuView::_loadCheatsFromPath(const std::string &path)
     {
-        m_cheats = beiklive::parseChtFile(path);
+        m_cheatFileReadOnly = _isNdsUsrCheatDat(path);
+        m_cheats = m_cheatFileReadOnly
+            ? beiklive::parseNdsUsrCheatDat(path, m_gameEntry.path)
+            : beiklive::parseChtFile(path);
         m_gameEntry.cheatPath = path;
+        if (cheatPathLabel)
+            cheatPathLabel->setText(beiklive::tools::getFileName(m_gameEntry.cheatPath));
         brls::Logger::info("Loaded {} cheats from {}", m_cheats.size(), path);
         _rebuildCheatItems();
+    }
+
+    bool GameMenuView::_isNdsUsrCheatDat(const std::string& path) const
+    {
+        if (m_gameEntry.platform != static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
+            return false;
+        std::filesystem::path cheatPath(path);
+        std::string ext = cheatPath.extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        return ext == ".dat";
+    }
+
+    void GameMenuView::_saveEditableCheats()
+    {
+        if (!m_cheatFileReadOnly && !m_gameEntry.cheatPath.empty())
+        {
+            beiklive::saveChtFile(m_gameEntry.cheatPath, m_cheats);
+        }
+    }
+
+    void GameMenuView::_notifyCheatsChanged()
+    {
+        if (m_cheatsChangedCallback)
+            m_cheatsChangedCallback(m_cheats);
     }
 
     void GameMenuView::_rebuildCheatItems()
@@ -714,6 +747,20 @@ namespace beiklive
         {
             for (int i = 0; i < (int)m_cheats.size(); ++i)
             {
+                if (m_cheats[i].code.empty())
+                {
+                    auto* catButton = new beiklive::ButtonBox();
+                    catButton->setText(m_cheats[i].desc);
+                    catButton->setIcon(BK_RES("img/ui/menu/cheat.png"));
+                    catButton->setFocusable(false);
+                    catButton->setAlpha(0.45f);
+                    catButton->setHeight(42.f);
+                    catButton->setMarginTop(4.f);
+                    catButton->setMarginBottom(4.f);
+                    m_cheatItemBox->addView(catButton);
+                    continue;
+                }
+
                 auto *sw = new SwitchButton();
 
                 DISABLE_LR_NAVIGATION(sw);
@@ -732,12 +779,16 @@ namespace beiklive
                         m_cheats[idx].enabled = on;
                         if (m_cheatToggleCallback) m_cheatToggleCallback(idx, on);
                         _updateCheatCount();
-                        if (!m_gameEntry.cheatPath.empty())
-                            beiklive::saveChtFile(m_gameEntry.cheatPath, m_cheats);
+                        _saveEditableCheats();
                     } });
 
                 // BUTTON_X: 修改金手指代码
                 sw->registerAction("修改代码", brls::BUTTON_X, [this, idx](brls::View *) -> bool {
+                    if (m_cheatFileReadOnly)
+                    {
+                        brls::Application::notify("usrcheat.dat 为只读数据库");
+                        return true;
+                    }
                     if (idx >= (int)m_cheats.size()) return true;
                     std::function<void()> promptCode;
                     promptCode = [this, idx, &promptCode]() {
@@ -756,8 +807,8 @@ namespace beiklive
                                 // }
                                 if (idx >= (int)m_cheats.size()) return;
                                 m_cheats[idx].code = code;
-                                if (!m_gameEntry.cheatPath.empty())
-                                    beiklive::saveChtFile(m_gameEntry.cheatPath, m_cheats);
+                                _saveEditableCheats();
+                                _notifyCheatsChanged();
                             },
                             "修改金手指代码",
                             "",
@@ -771,6 +822,11 @@ namespace beiklive
 
                 // BUTTON_Y: 修改金手指名称
                 sw->registerAction("修改名称", brls::BUTTON_Y, [this, idx](brls::View *) -> bool {
+                    if (m_cheatFileReadOnly)
+                    {
+                        brls::Application::notify("usrcheat.dat 为只读数据库");
+                        return true;
+                    }
                     if (idx >= (int)m_cheats.size()) return true;
                     auto* ime = brls::Application::getImeManager();
                     if (!ime) return true;
@@ -779,8 +835,8 @@ namespace beiklive
                             if (name.empty()) return;
                             if (idx >= (int)m_cheats.size()) return;
                             m_cheats[idx].desc = name;
-                            if (!m_gameEntry.cheatPath.empty())
-                                beiklive::saveChtFile(m_gameEntry.cheatPath, m_cheats);
+                            _saveEditableCheats();
+                            _notifyCheatsChanged();
                             _rebuildCheatItems();
                         },
                         "修改金手指名称",
@@ -793,6 +849,11 @@ namespace beiklive
 
                 // BUTTON_RT: 删除金手指
                 sw->registerAction("删除", brls::BUTTON_RT, [this, idx](brls::View *) -> bool {
+                    if (m_cheatFileReadOnly)
+                    {
+                        brls::Application::notify("usrcheat.dat 为只读数据库");
+                        return true;
+                    }
                     if (idx >= (int)m_cheats.size()) return true;
                     auto* dlg = new brls::Dialog("是否删除 \"" + m_cheats[idx].desc + "\" ?");
                     dlg->addButton("确认删除", [this, idx]() {
@@ -800,8 +861,8 @@ namespace beiklive
                         if (m_cheatToggleCallback)
                             m_cheatToggleCallback(idx, false);
                         m_cheats.erase(m_cheats.begin() + idx);
-                        if (!m_gameEntry.cheatPath.empty())
-                            beiklive::saveChtFile(m_gameEntry.cheatPath, m_cheats);
+                        _saveEditableCheats();
+                        _notifyCheatsChanged();
                         _rebuildCheatItems();
                     });
                     dlg->addButton("取消", [](){});
@@ -820,11 +881,16 @@ namespace beiklive
     {
         if (!m_cheatCountLabel)
             return;
-        int total = (int)m_cheats.size();
+        int total = 0;
         int enabled = 0;
         for (auto &c : m_cheats)
+        {
+            if (c.code.empty())
+                continue;
+            ++total;
             if (c.enabled)
                 ++enabled;
+        }
         m_cheatCountLabel->setText(std::to_string(enabled) + " | " + std::to_string(total) + " 项");
     }
 

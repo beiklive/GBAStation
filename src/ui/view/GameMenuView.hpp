@@ -45,6 +45,8 @@ namespace beiklive
             void setCheatToggleCallback(std::function<void(int, bool)> cb) { m_cheatToggleCallback = std::move(cb); }
             /// 设置金手指文件变更回调 (newPath)
             void setCheatPathCallback(std::function<void(const std::string&)> cb) { m_cheatPathCallback = std::move(cb); }
+            void setCheatsChangedCallback(std::function<void(const std::vector<CheatEntry>&)> cb) { m_cheatsChangedCallback = std::move(cb); }
+            const std::vector<CheatEntry>& getCheats() const { return m_cheats; }
 
             /// 画面设置回调
             void setDisplayModeCallback(std::function<void(const std::string&)> cb) { m_displayModeCallback = std::move(cb); }
@@ -74,6 +76,7 @@ namespace beiklive
             std::function<StateSlotInfo(int)> m_stateInfoCallback;
             std::function<void(int, bool)> m_cheatToggleCallback;
             std::function<void(const std::string&)> m_cheatPathCallback;
+            std::function<void(const std::vector<CheatEntry>&)> m_cheatsChangedCallback;
             std::function<void(const std::string&)> m_displayModeCallback;
             std::function<void(const std::string&)> m_ndsLayoutCallback;
             std::function<void(bool, float, float, float)> m_ndsScreenAdjustCallback;
@@ -107,6 +110,7 @@ namespace beiklive
             brls::Label* cheatPathLabel = nullptr;
             std::vector<beiklive::SwitchButton*> m_cheatSwitches;
             std::vector<CheatEntry> m_cheats;
+            bool m_cheatFileReadOnly = false;
 
             void _initLayout();
             brls::View* _createSaveStatePanel();
@@ -118,6 +122,9 @@ namespace beiklive
             /// 金手指面板
             brls::View* _createCheatPanel();
             void _loadCheatsFromPath(const std::string& path);
+            bool _isNdsUsrCheatDat(const std::string& path) const;
+            void _saveEditableCheats();
+            void _notifyCheatsChanged();
             void _rebuildCheatItems();
             void _updateCheatCount();
 
