@@ -7,6 +7,7 @@
 #include "core/Tools.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <cmath>
@@ -95,6 +96,8 @@ namespace beiklive
         _stopGameThread();
 
         if (m_core) {
+            if (auto* textureCore = dynamic_cast<beiklive::IEmulatorVideoTexture*>(m_core))
+                textureCore->SetVideoTextureConsumerActive(false);
             delete m_core;
             m_core = nullptr;
         }
@@ -160,6 +163,7 @@ namespace beiklive
 
         // 消费打开菜单信号：异步触发菜单入场，本帧仍继续渲染避免闪烁
         if (GameSignal::instance().consumeOpenMenu()) {
+            GameSignal::instance().requestPause(true);
             if (m_gameMenuView) {
                 brls::sync([this](){
                     // 菜单从底部滑入，入场动画（120ms）
@@ -221,7 +225,7 @@ namespace beiklive
 
             unsigned gw = m_renderer.texWidth()  > 0 ? m_renderer.texWidth()  : beiklive::GetGamePixelWidth(m_gameEntry.platform);
             unsigned gh = m_renderer.texHeight() > 0 ? m_renderer.texHeight() : beiklive::GetGamePixelHeight(m_gameEntry.platform);
-            if (m_ndsSplitShaderRenderer) {
+            if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)) {
                 if (m_ndsLayout == "custom" || m_ndsLayout == "hybrid") {
                     gw = 1280;
                     gh = 720;
@@ -259,7 +263,7 @@ namespace beiklive
                                               windowScale, windowW, windowH);
                     }
                 } else if (_drawNdsAcceleratedTexture(rect, windowScale, windowW, windowH)) {
-                    // NDS OpenGL/Compute 3D renderer output was drawn directly.
+                    // NDS OpenGL/Compute 3D renderer output was copied into the normal renderer texture.
                 } else {
                     m_renderer.drawToScreen(rect.x, rect.y, rect.w, rect.h, windowScale, windowW, windowH);
                 }
@@ -333,6 +337,9 @@ namespace beiklive
     {
         if (!m_rendererReady) return;
 
+        if (_copyNdsAcceleratedTextureFrame())
+            return;
+
         LibretroLoader::VideoFrame frame;
         bool hasFrame = false;
         {
@@ -345,20 +352,22 @@ namespace beiklive
         }
 
         if (hasFrame) {
-            if (_useNdsAcceleratedTexture()) {
-                auto* textureCore = dynamic_cast<beiklive::IEmulatorVideoTexture*>(m_core);
-                beiklive::EmulatorVideoTexture videoTex;
-                if (textureCore && textureCore->GetVideoTexture(videoTex) &&
-                    videoTex.texture != 0 && videoTex.width != 0 && videoTex.height != 0)
-                    return;
-            }
             if (m_ndsSplitShaderRenderer) {
                 _uploadNdsSplitShaderFrame(frame);
                 return;
             }
             if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
                 frame = _layoutNdsFrame(frame);
+            const bool isNds = m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS);
+            const auto uploadStart = std::chrono::steady_clock::now();
             m_renderer.uploadFrame(frame);
+            if (isNds) {
+                const auto uploadUs = std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::steady_clock::now() - uploadStart).count();
+                if (uploadUs > 3000)
+                    brls::Logger::warning("GameView: NDS uploadFrame took {} us ({}x{})",
+                                          uploadUs, frame.width, frame.height);
+            }
         }
     }
 
@@ -394,6 +403,16 @@ namespace beiklive
         m_ndsTopRenderer.deinit();
         m_ndsBottomRenderer.deinit();
         m_ndsSplitShaderRenderer = _useNdsSplitShader();
+        m_ndsCopiedTextureReady = false;
+
+        if (auto* textureCore = dynamic_cast<beiklive::IEmulatorVideoTexture*>(m_core)) {
+            const bool useTextureConsumer =
+                m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS) &&
+                !m_ndsSplitShaderRenderer;
+            textureCore->SetVideoTextureConsumerActive(useTextureConsumer);
+            if (useTextureConsumer)
+                brls::Logger::info("GameView: NDS GL texture copy path enabled");
+        }
 
         if (!m_ndsSplitShaderRenderer) {
             if (!m_renderer.init(gw, gh, false, shaderPath))
@@ -423,22 +442,17 @@ namespace beiklive
     bool GameView::_drawNdsAcceleratedTexture(const beiklive::DisplayRect& rect,
                                               float windowScale, int windowW, int windowH)
     {
-        if (!_useNdsAcceleratedTexture())
+        if (!_useNdsAcceleratedTexture() || !m_ndsCopiedTextureReady ||
+            m_renderer.texId() == 0 || m_renderer.texWidth() != 256u || m_renderer.texHeight() != 384u)
             return false;
 
-        auto* textureCore = dynamic_cast<beiklive::IEmulatorVideoTexture*>(m_core);
-        beiklive::EmulatorVideoTexture videoTex;
-        if (!textureCore || !textureCore->GetVideoTexture(videoTex) ||
-            videoTex.texture == 0 || videoTex.width == 0 || videoTex.height == 0)
-            return false;
-
-        const GLuint tex = static_cast<GLuint>(videoTex.texture);
-        const unsigned texW = videoTex.width;
-        const unsigned texH = videoTex.height;
-        const float fullH = static_cast<float>(texH);
+        const GLuint tex = m_renderer.texId();
+        constexpr unsigned texW = 256u;
+        constexpr unsigned texH = 384u;
+        constexpr float fullH = static_cast<float>(texH);
         const float topV0 = 0.0f;
-        const float topV1 = (192.0f * static_cast<float>(videoTex.scale)) / fullH;
-        const float bottomV0 = ((192.0f + 2.0f) * static_cast<float>(videoTex.scale)) / fullH;
+        const float topV1 = 192.0f / fullH;
+        const float bottomV0 = 192.0f / fullH;
         const float bottomV1 = 1.0f;
 
         for (const auto& screenRect : _computeNdsScreenDrawRects(rect)) {
@@ -452,6 +466,58 @@ namespace beiklive
                                            true);
         }
         return true;
+    }
+
+    bool GameView::_copyNdsAcceleratedTextureFrame()
+    {
+        if (!_useNdsAcceleratedTexture())
+            return false;
+
+        auto* textureCore = dynamic_cast<beiklive::IEmulatorVideoTexture*>(m_core);
+        if (!textureCore) {
+            m_ndsCopiedTextureReady = false;
+            return false;
+        }
+
+        bool topOk = false;
+        bool bottomOk = false;
+        const bool copied = textureCore->WithVideoTextureLocked(
+            [&](const beiklive::EmulatorVideoTexture& videoTex) {
+                if (videoTex.texture == 0 || videoTex.width < 256u || videoTex.height < 386u)
+                    return false;
+
+                if (!m_renderer.beginTextureCopyFrame(256u, 384u)) {
+                    brls::Logger::warning("GameView: NDS GL texture copy target init failed");
+                    return false;
+                }
+
+                const GLuint tex = static_cast<GLuint>(videoTex.texture);
+                topOk = m_renderer.copyTextureRegionToCopyFrame(tex,
+                                                                0u, 0u,
+                                                                0u, 0u,
+                                                                256u, 192u);
+                bottomOk = m_renderer.copyTextureRegionToCopyFrame(tex,
+                                                                   0u, 194u,
+                                                                   0u, 192u,
+                                                                   256u, 192u);
+                return topOk && bottomOk;
+            });
+        if (!copied) {
+            m_renderer.abortTextureCopyFrame();
+            m_ndsCopiedTextureReady = false;
+            return false;
+        }
+
+        m_ndsCopiedTextureReady = topOk && bottomOk;
+        if (!m_ndsCopiedTextureReady) {
+            m_renderer.abortTextureCopyFrame();
+            const GLenum err = glGetError();
+            brls::Logger::warning("GameView: NDS GL texture copy failed top={} bottom={} glError=0x{:x}",
+                                  topOk, bottomOk, static_cast<unsigned>(err));
+        } else {
+            m_renderer.commitTextureCopyFrame();
+        }
+        return m_ndsCopiedTextureReady;
     }
 
     void GameView::_uploadNdsSplitShaderFrame(const LibretroLoader::VideoFrame& frame)
@@ -671,6 +737,7 @@ namespace beiklive
                     EmuFunctionKey::EMU_OPEN_MENU, {combo},
                     [this]() {
                         brls::Logger::debug("打开菜单热键触发！");
+                        GameSignal::instance().requestPause(true);
                         GameSignal::instance().requestOpenMenu();
                         this->setFocusable(false);
                     });

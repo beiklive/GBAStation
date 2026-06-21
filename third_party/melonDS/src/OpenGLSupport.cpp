@@ -74,12 +74,18 @@ constexpr u32 ShaderCacheVersion = 1;
 
 void LoadShaderCache()
 {
+#ifdef __SWITCH__
+    ShaderCache.clear();
+    NewShaders.clear();
+    Log(LogLevel::Info, "OpenGL shader binary cache disabled on Switch\n");
+    return;
+#endif
     // for now the shader cache only contains only compute shaders
     // because they take the longest to compile
     Platform::FileHandle* file = Platform::OpenLocalFile("shadercache", Platform::FileMode::Read);
     if (file == nullptr)
     {
-        Log(LogLevel::Error, "Could not find shader cache\n");
+        Log(LogLevel::Info, "Could not find shader cache\n");
         return;
     }
 
@@ -138,7 +144,12 @@ fileInvalid:
 
 void SaveShaderCache()
 {
-    Platform::FileHandle* file = Platform::OpenLocalFile("shadercache", Platform::FileMode::ReadWrite);
+#ifdef __SWITCH__
+    ShaderCache.clear();
+    NewShaders.clear();
+    return;
+#endif
+    Platform::FileHandle* file = Platform::OpenLocalFile("shadercache", Platform::FileMode::Write);
 
     if (file == nullptr)
     {
@@ -158,19 +169,14 @@ void SaveShaderCache()
         goto writeError;
     }
 
-    Platform::FileSeek(file, 0, Platform::FileSeekOrigin::End);
-
-    printf("new shaders %zu\n", NewShaders.size());
-
-    for (u64 newShader : NewShaders)
+    for (const auto& shader : ShaderCache)
     {
         int error = 4;
-        auto it = ShaderCache.find(newShader);
 
-        error -= Platform::FileWrite(&it->first, 8, 1, file);
-        error -= Platform::FileWrite(&it->second.Length, 4, 1, file);
-        error -= Platform::FileWrite(&it->second.BinaryFormat, 4, 1, file);
-        error -= Platform::FileWrite(it->second.Data, it->second.Length, 1, file);
+        error -= Platform::FileWrite(&shader.first, 8, 1, file);
+        error -= Platform::FileWrite(&shader.second.Length, 4, 1, file);
+        error -= Platform::FileWrite(&shader.second.BinaryFormat, 4, 1, file);
+        error -= Platform::FileWrite(shader.second.Data, shader.second.Length, 1, file);
 
         if (error != 0)
         {
@@ -259,8 +265,13 @@ bool LinkProgram(GLuint& result, GLuint* ids, int numIds)
 bool CompileComputeProgram(GLuint& result, const std::string& source, const std::string& name)
 {
     result = glCreateProgram();
+#ifndef __SWITCH__
+    if (glProgramParameteri)
+        glProgramParameteri(result, GL_PROGRAM_BINARY_RETRIEVABLE_HINT, GL_TRUE);
+#endif
 
-    /*u64 sourceHash = XXH64(source.data(), source.size(), 0);
+    u64 sourceHash = XXH64(source.data(), source.size(), 0);
+#ifndef __SWITCH__
     auto it = ShaderCache.find(sourceHash);
     if (it != ShaderCache.end())
     {
@@ -275,11 +286,12 @@ bool CompileComputeProgram(GLuint& result, const std::string& source, const std:
         }
         else
         {
+            Log(LogLevel::Warn, "Shader %s from cache was rejected\n", name.c_str());
         }
-    }*/
-    Log(LogLevel::Error, "Shader %s from cache was rejected\n", name.c_str());
+    }
+#endif
 
-    GLuint shader;
+    GLuint shader = 0;
     bool linkingSucess = false;
 
     if (!glCreateShader || !glDeleteShader)
@@ -293,24 +305,34 @@ bool CompileComputeProgram(GLuint& result, const std::string& source, const std:
     linkingSucess = LinkProgram(result, &shader, 1);
 
 error:
-    glDeleteShader(shader);
+    if (shader)
+        glDeleteShader(shader);
 
     if (!linkingSucess)
     {
         glDeleteProgram(result);
     }
-    /*else
+#ifndef __SWITCH__
+    else if (glGetProgramBinary && glProgramBinary)
     {
         GLint length;
         GLenum format;
         glGetProgramiv(result, GL_PROGRAM_BINARY_LENGTH, &length);
 
-        u8* buffer = new u8[length];
-        glGetProgramBinary(result, length, nullptr, &format, buffer);
+        if (length > 0 && ShaderCache.find(sourceHash) == ShaderCache.end())
+        {
+            u8* buffer = new u8[length];
+            glGetProgramBinary(result, length, nullptr, &format, buffer);
 
-        ShaderCache.emplace(sourceHash, ShaderCacheEntry(buffer, length, format));
-        NewShaders.push_back(sourceHash);
-    }*/
+            ShaderCache.emplace(sourceHash, ShaderCacheEntry(buffer, length, format));
+            NewShaders.push_back(sourceHash);
+        }
+        else if (length <= 0)
+        {
+            Log(LogLevel::Warn, "OpenGL did not provide a shader binary for %s\n", name.c_str());
+        }
+    }
+#endif
 
     return linkingSucess;
 }

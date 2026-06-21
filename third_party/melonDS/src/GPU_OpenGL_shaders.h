@@ -51,6 +51,27 @@ smooth in vec2 fTexcoord;
 
 out vec4 oColor;
 
+ivec4 Get3DPixel(vec2 pos)
+{
+    ivec4 sum = ivec4(0);
+    int count = 0;
+    ivec2 base = ivec2(pos * u3DScale);
+
+    for (uint y = 0u; y < 4u; ++y)
+    {
+        if (y >= u3DScale) continue;
+        for (uint x = 0u; x < 4u; ++x)
+        {
+            if (x >= u3DScale) continue;
+            sum += ivec4(texelFetch(_3DTex, base + ivec2(x, y), 0).bgra
+                 * vec4(63,63,63,31));
+            count++;
+        }
+    }
+
+    return (sum + ivec4(count / 2)) / count;
+}
+
 void main()
 {
     ivec4 pixel = ivec4(texelFetch(ScreenTex, ivec2(fTexcoord), 0));
@@ -77,8 +98,7 @@ void main()
 
             float xpos = fTexcoord.x + _3dxpos;
             float ypos = mod(fTexcoord.y, 192);
-            ivec4 _3dpix = ivec4(texelFetch(_3DTex, ivec2(vec2(xpos, ypos)*u3DScale), 0).bgra
-                         * vec4(63,63,63,31));
+            ivec4 _3dpix = Get3DPixel(vec2(xpos, ypos));
 
             if (_3dpix.a > 0)
             {
@@ -97,8 +117,7 @@ void main()
 
             float xpos = fTexcoord.x + _3dxpos;
             float ypos = mod(fTexcoord.y, 192);
-            ivec4 _3dpix = ivec4(texelFetch(_3DTex, ivec2(vec2(xpos, ypos)*u3DScale), 0).bgra
-                         * vec4(63,63,63,31));
+            ivec4 _3dpix = Get3DPixel(vec2(xpos, ypos));
 
             if (_3dpix.a > 0)
             {
@@ -117,8 +136,7 @@ void main()
 
             float xpos = fTexcoord.x + _3dxpos;
             float ypos = mod(fTexcoord.y, 192);
-            ivec4 _3dpix = ivec4(texelFetch(_3DTex, ivec2(vec2(xpos, ypos)*u3DScale), 0).bgra
-                         * vec4(63,63,63,31));
+            ivec4 _3dpix = Get3DPixel(vec2(xpos, ypos));
 
             if (_3dpix.a > 0)
             {

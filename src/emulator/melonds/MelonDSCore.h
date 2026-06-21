@@ -9,7 +9,10 @@
 #include "emulator/melonds/MelonDSPlatform.h"
 #include "emulator/melonds/MelonDSVideo.h"
 
+#include <array>
 #include <atomic>
+#include <cstdint>
+#include <functional>
 #include <mutex>
 #include <memory>
 #include <string>
@@ -79,6 +82,8 @@ public:
     void SetTouch(int x, int y, bool down) override;
     const uint32_t* GetFrameBuffer() const { return m_video.GetFrameBuffer(); }
     bool GetVideoTexture(beiklive::EmulatorVideoTexture& out) override;
+    bool WithVideoTextureLocked(const std::function<bool(const beiklive::EmulatorVideoTexture&)>& consumer) override;
+    void SetVideoTextureConsumerActive(bool active) override;
 
 private:
     beiklive::GameEntry m_gameEntry;
@@ -101,8 +106,15 @@ private:
     bool m_usingAcceleratedRenderer = false;
     bool m_usingComputeRenderer = false;
     bool m_acceleratedReadbackFailed = false;
+    std::atomic<bool> m_videoTextureConsumerActive{false};
     std::unique_ptr<MelonDSGLContext> m_glContext;
     std::vector<uint32_t> m_acceleratedReadback;
+    std::array<unsigned int, 3> m_acceleratedReadbackPbos {};
+    std::array<std::uintptr_t, 3> m_acceleratedReadbackFences {};
+    size_t m_acceleratedReadbackBytes = 0;
+    unsigned m_acceleratedReadbackWrite = 0;
+    unsigned int m_acceleratedReadbackFramebuffer = 0;
+    bool m_acceleratedReadbackPboWarningShown = false;
     int m_skipAcceleratedReadbackFrames = 0;
     mutable std::mutex m_ndsMutex;
 
@@ -110,6 +122,8 @@ private:
     bool loadBatterySave(melonDS::NDSCart::NDSCartArgs& args) const;
     std::unique_ptr<melonDS::Renderer3D> createRenderer3D();
     bool captureAcceleratedFrame();
+    bool ensureAcceleratedReadbackPbos(size_t byteCount);
+    void releaseAcceleratedReadbackPbos();
     std::string defaultSaveDir() const;
     std::string defaultBiosDir() const;
 };

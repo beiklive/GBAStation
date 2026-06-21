@@ -3,7 +3,6 @@
 #include "GPU3D.h"
 #include "NDS.h"
 
-#include <algorithm>
 #include <cstring>
 
 namespace beiklive::melonds {
@@ -28,8 +27,36 @@ void copyScreenRgba(std::vector<uint32_t>& dst,
     for (size_t y = 0; y < height; ++y)
     {
         const uint32_t* line = src + y * srcStride;
-        std::transform(line, line + width, out + y * width, toRgba8888);
+        uint32_t* dstLine = out + y * width;
+        size_t x = 0;
+        for (; x + 3 < width; x += 4)
+        {
+            dstLine[x + 0] = toRgba8888(line[x + 0]);
+            dstLine[x + 1] = toRgba8888(line[x + 1]);
+            dstLine[x + 2] = toRgba8888(line[x + 2]);
+            dstLine[x + 3] = toRgba8888(line[x + 3]);
+        }
+        for (; x < width; ++x)
+            dstLine[x] = toRgba8888(line[x]);
     }
+}
+
+void copyContiguousRgba(uint32_t* dst, const uint32_t* src, size_t count)
+{
+    size_t i = 0;
+    for (; i + 7 < count; i += 8)
+    {
+        dst[i + 0] = toRgba8888(src[i + 0]);
+        dst[i + 1] = toRgba8888(src[i + 1]);
+        dst[i + 2] = toRgba8888(src[i + 2]);
+        dst[i + 3] = toRgba8888(src[i + 3]);
+        dst[i + 4] = toRgba8888(src[i + 4]);
+        dst[i + 5] = toRgba8888(src[i + 5]);
+        dst[i + 6] = toRgba8888(src[i + 6]);
+        dst[i + 7] = toRgba8888(src[i + 7]);
+    }
+    for (; i < count; ++i)
+        dst[i] = toRgba8888(src[i]);
 }
 
 } // namespace
@@ -75,34 +102,27 @@ void MelonDSVideo::CaptureAcceleratedRgba(const uint32_t* pixels,
                                           unsigned height,
                                           unsigned scale)
 {
-    if (!pixels || scale == 0 || width != kWidth * scale || height < (kHeight + 2u) * scale)
+    (void)scale;
+    if (!pixels || width != kWidth || height < kHeight + 2u)
         return;
 
     std::lock_guard<std::mutex> lock(m_mutex);
-    const unsigned outWidth = kWidth * scale;
-    const unsigned screenHeight = 192u * scale;
-    const unsigned paddingHeight = 2u * scale;
-    const unsigned outHeight = kHeight * scale;
+    const unsigned outWidth = kWidth;
+    const unsigned screenHeight = 192u;
+    const unsigned paddingHeight = 2u;
+    const unsigned outHeight = kHeight;
     const unsigned back = m_front ^ 1u;
     auto& dst = m_framebuffer[back];
     const size_t outPixels = static_cast<size_t>(outWidth) * outHeight;
     if (dst.size() != outPixels)
         dst.resize(outPixels);
 
-    for (unsigned y = 0; y < screenHeight; ++y)
-    {
-        const uint32_t* src = pixels + static_cast<size_t>(y) * width;
-        uint32_t* out = dst.data() + static_cast<size_t>(y) * outWidth;
-        std::transform(src, src + outWidth, out, toRgba8888);
-    }
+    copyContiguousRgba(dst.data(), pixels, static_cast<size_t>(outWidth) * screenHeight);
 
     const unsigned bottomSrcY = screenHeight + paddingHeight;
-    for (unsigned y = 0; y < screenHeight; ++y)
-    {
-        const uint32_t* src = pixels + static_cast<size_t>(bottomSrcY + y) * width;
-        uint32_t* out = dst.data() + static_cast<size_t>(screenHeight + y) * outWidth;
-        std::transform(src, src + outWidth, out, toRgba8888);
-    }
+    copyContiguousRgba(dst.data() + static_cast<size_t>(screenHeight) * outWidth,
+                       pixels + static_cast<size_t>(bottomSrcY) * width,
+                       static_cast<size_t>(outWidth) * screenHeight);
 
     m_front = back;
     m_width[back] = outWidth;

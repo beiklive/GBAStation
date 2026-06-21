@@ -149,6 +149,23 @@ FileHandle* OpenFile(const std::string& path, FileMode mode)
 
 FileHandle* OpenLocalFile(const std::string& path, FileMode mode)
 {
+#ifdef __SWITCH__
+    if (path == "shadercache")
+    {
+        const std::string cacheDir = "sdmc:/GBAStation/cache/nds";
+        std::error_code ec;
+        std::filesystem::create_directories(cacheDir, ec);
+        return OpenFile((std::filesystem::path(cacheDir) / path).string(), mode);
+    }
+#else
+    if (path == "shadercache")
+    {
+        const auto cacheDir = std::filesystem::path("GBAStation") / "cache" / "nds";
+        std::error_code ec;
+        std::filesystem::create_directories(cacheDir, ec);
+        return OpenFile((cacheDir / path).string(), mode);
+    }
+#endif
     return OpenFile(path, mode);
 }
 
