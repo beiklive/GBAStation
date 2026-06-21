@@ -87,6 +87,16 @@ public:
     void drawToScreen(float virtX, float virtY, float virtW, float virtH,
                       float windowScale, int windowW, int windowH);
 
+    void drawExternalTexture(GLuint tex, unsigned texW, unsigned texH,
+                             float virtX, float virtY, float virtW, float virtH,
+                             float windowScale, int windowW, int windowH);
+
+    void drawExternalTexture(GLuint tex, unsigned texW, unsigned texH,
+                             float virtX, float virtY, float virtW, float virtH,
+                             float windowScale, int windowW, int windowH,
+                             float u0, float v0, float u1, float v1,
+                             bool swizzleRB = false);
+
     /// 返回当前帧纹理的宽度。
     unsigned texWidth()  const { return m_texture.width();  }
     /// 返回当前帧纹理的高度。

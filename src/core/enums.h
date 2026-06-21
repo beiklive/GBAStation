@@ -125,6 +125,7 @@ namespace beiklive // 结构体
         float ndsBottomOffsetX = 0.0f;
         float ndsBottomOffsetY = 0.0f;
         std::string ndsScreenLayout = ""; // NDS 双屏布局（vertical/horizontal/custom/hybrid/top/bottom）
+        int ndsInternalResolution = 1; // NDS 3D 内部分辨率倍率（1-4）
 
         std::vector<std::string> shaderParaNames; // 着色器参数名称列表
         std::vector<float> shaderParaValues;      // 着色器参数值列表

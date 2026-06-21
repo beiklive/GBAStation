@@ -42,12 +42,20 @@ public:
                 float ndcLeft, float ndcRight,
                 float ndcTop,  float ndcBottom) const;
 
+    void render(GLuint tex,
+                float ndcLeft, float ndcRight,
+                float ndcTop,  float ndcBottom,
+                float u0, float v0,
+                float u1, float v1,
+                bool swizzleRB = false) const;
+
 private:
     GLuint m_prog = 0;  ///< GL 着色器程序（直通顶点 + 片段）
     GLuint m_vao  = 0;  ///< Vertex Array Object（GL3/GLES3）
     GLuint m_vbo  = 0;  ///< Vertex Buffer Object（动态，按帧更新顶点坐标）
     GLuint m_ebo  = 0;  ///< Element Buffer Object（静态索引）
     GLint  m_uTex = -1; ///< sampler2D uniform 位置
+    GLint  m_uSwizzleRB = -1; ///< 是否交换红蓝通道
 };
 
 } // namespace beiklive

@@ -192,6 +192,16 @@ public:
         return m_pendingReloadCheats.exchange(false, std::memory_order_acq_rel);
     }
 
+    // ---- 核心配置刷新信号 -----------------------------------------------
+
+    /// UI 线程调用：请求游戏线程重新读取核心配置。
+    void requestConfigUpdate() { m_pendingConfigUpdate.store(true, std::memory_order_release); }
+
+    /// 游戏线程调用：获取并消费核心配置刷新请求。
+    bool consumeConfigUpdate() {
+        return m_pendingConfigUpdate.exchange(false, std::memory_order_acq_rel);
+    }
+
     // ---- 全部重置 -------------------------------------------------------
 
     /// 重置所有信号到初始状态（一般在游戏启动前调用）。
@@ -211,6 +221,7 @@ public:
         m_pendingCheatEnabled.store(false, std::memory_order_relaxed);
         m_pendingReloadCheats.store(false, std::memory_order_relaxed);
         m_pendingAutoSave.store(-1, std::memory_order_relaxed);
+        m_pendingConfigUpdate.store(false, std::memory_order_relaxed);
         m_gameButtonMask.store(0, std::memory_order_relaxed);
     }
 
@@ -230,6 +241,7 @@ private:
     std::atomic<bool> m_pendingCheatEnabled{false};   ///< 待切换的金手指启用状态
     std::atomic<bool> m_pendingReloadCheats{false};   ///< 待重载全部金手指
     std::atomic<int>  m_pendingAutoSave{-1};            ///< 待自动存档槽位（-1=无）
+    std::atomic<bool> m_pendingConfigUpdate{false};    ///< 待刷新核心配置
     std::atomic<uint32_t> m_gameButtonMask{0};  ///< 游戏按键位掩码（bit i = RETRO_DEVICE_ID_JOYPAD_* i）
 };
 

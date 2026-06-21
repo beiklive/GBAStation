@@ -1,6 +1,9 @@
 #include "emulator/melonds/MelonDSCore.h"
 
 #include "Args.h"
+#include "GPU3D.h"
+#include "GPU3D_Compute.h"
+#include "GPU3D_OpenGL.h"
 #include "GPU3D_Soft.h"
 #include "MemConstants.h"
 #include "NDS.h"
@@ -9,8 +12,17 @@
 #include "Savestate.h"
 #include "core/GameSignal.hpp"
 #include "core/Tools.hpp"
+#include "core/game_database.hpp"
 
 #include <borealis.hpp>
+#include <borealis/platforms/glfw/glfw_video.hpp>
+#ifdef __SWITCH__
+#define GLFW_EXPOSE_NATIVE_EGL
+#include <GLFW/glfw3native.h>
+#include <EGL/egl.h>
+#endif
+#include <GLFW/glfw3.h>
+#include <glad/glad.h>
 
 #include <algorithm>
 #include <array>
@@ -19,8 +31,131 @@
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <mutex>
+#include <string>
+
+namespace beiklive {
+
+std::recursive_mutex& EmulatorGLMutex()
+{
+    static std::recursive_mutex mutex;
+    return mutex;
+}
+
+} // namespace beiklive
 
 namespace beiklive::melonds {
+
+struct MelonDSGLContext {
+#ifdef __SWITCH__
+    EGLDisplay display = EGL_NO_DISPLAY;
+    EGLSurface surface = EGL_NO_SURFACE;
+    EGLContext context = EGL_NO_CONTEXT;
+    std::vector<EGLContext> previousContextStack;
+    std::vector<EGLSurface> previousDrawStack;
+    std::vector<EGLSurface> previousReadStack;
+#else
+    GLFWwindow* window = nullptr;
+    std::vector<GLFWwindow*> previousStack;
+#endif
+    std::vector<std::unique_lock<std::recursive_mutex>> glLockStack;
+
+    bool makeCurrent()
+    {
+        std::unique_lock<std::recursive_mutex> glLock(beiklive::EmulatorGLMutex());
+#ifdef __SWITCH__
+        if (display == EGL_NO_DISPLAY || context == EGL_NO_CONTEXT)
+            return false;
+        const EGLContext previousContext = eglGetCurrentContext();
+        const EGLSurface previousDraw = eglGetCurrentSurface(EGL_DRAW);
+        const EGLSurface previousRead = eglGetCurrentSurface(EGL_READ);
+        if (eglMakeCurrent(display, surface, surface, context) != EGL_TRUE)
+            return false;
+        previousContextStack.push_back(previousContext);
+        previousDrawStack.push_back(previousDraw);
+        previousReadStack.push_back(previousRead);
+        glLockStack.emplace_back(std::move(glLock));
+        return true;
+#else
+        if (window == nullptr)
+            return false;
+        GLFWwindow* previous = glfwGetCurrentContext();
+        glfwMakeContextCurrent(window);
+        previousStack.push_back(previous);
+        glLockStack.emplace_back(std::move(glLock));
+        return true;
+#endif
+    }
+
+    void restore()
+    {
+#ifdef __SWITCH__
+        EGLContext previousContext = EGL_NO_CONTEXT;
+        EGLSurface previousDraw = EGL_NO_SURFACE;
+        EGLSurface previousRead = EGL_NO_SURFACE;
+        if (!previousContextStack.empty())
+        {
+            previousContext = previousContextStack.back();
+            previousContextStack.pop_back();
+        }
+        if (!previousDrawStack.empty())
+        {
+            previousDraw = previousDrawStack.back();
+            previousDrawStack.pop_back();
+        }
+        if (!previousReadStack.empty())
+        {
+            previousRead = previousReadStack.back();
+            previousReadStack.pop_back();
+        }
+        eglMakeCurrent(display, previousDraw, previousRead, previousContext);
+#else
+        GLFWwindow* previous = nullptr;
+        if (!previousStack.empty())
+        {
+            previous = previousStack.back();
+            previousStack.pop_back();
+        }
+        glfwMakeContextCurrent(previous);
+#endif
+        if (!glLockStack.empty())
+            glLockStack.pop_back();
+    }
+
+    ~MelonDSGLContext()
+    {
+#ifdef __SWITCH__
+        if (display != EGL_NO_DISPLAY)
+        {
+            if (eglGetCurrentContext() == context)
+                eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+            if (context != EGL_NO_CONTEXT)
+                eglDestroyContext(display, context);
+            if (surface != EGL_NO_SURFACE)
+                eglDestroySurface(display, surface);
+        }
+#else
+        if (window != nullptr)
+            glfwDestroyWindow(window);
+#endif
+    }
+};
+
+struct ScopedMelonDSGLContext {
+    explicit ScopedMelonDSGLContext(MelonDSGLContext* context) : ctx(context)
+    {
+        active = ctx != nullptr && ctx->makeCurrent();
+    }
+
+    ~ScopedMelonDSGLContext()
+    {
+        if (active)
+            ctx->restore();
+    }
+
+    MelonDSGLContext* ctx = nullptr;
+    bool active = false;
+};
 
 namespace {
 
@@ -32,6 +167,172 @@ std::string joinPath(const std::string& dir, const std::string& name)
 bool readWholeFile(const std::string& path, std::vector<uint8_t>& out)
 {
     return LoadBinaryVector(path, out);
+}
+
+const char* glString(GLenum name)
+{
+    const auto* value = glGetString(name);
+    return value ? reinterpret_cast<const char*>(value) : "(null)";
+}
+
+void logGLLoaderState(const char* label)
+{
+    brls::Logger::info(
+        "melonDS: {} GL vendor='{}' renderer='{}' version='{}' glsl='{}'",
+        label,
+        glString(GL_VENDOR),
+        glString(GL_RENDERER),
+        glString(GL_VERSION),
+        glString(GL_SHADING_LANGUAGE_VERSION));
+    brls::Logger::info(
+        "melonDS: {} GLAD_GL_VERSION_4_3={} glDispatchCompute={} glBindImageTexture={} glTexStorage2D={}",
+        label,
+        GLAD_GL_VERSION_4_3,
+        glDispatchCompute != nullptr,
+        glBindImageTexture != nullptr,
+        glTexStorage2D != nullptr);
+}
+
+std::unique_ptr<MelonDSGLContext> createSharedGLContext()
+{
+    auto* platform = brls::Application::getPlatform();
+    if (!platform)
+        return nullptr;
+
+    auto* video = dynamic_cast<brls::GLFWVideoContext*>(platform->getVideoContext());
+    if (!video)
+    {
+        brls::Logger::warning("melonDS: OpenGL renderer unavailable; current video context is not GLFW/OpenGL");
+        return nullptr;
+    }
+
+    GLFWwindow* mainWindow = video->getGLFWWindow();
+    if (!mainWindow)
+        return nullptr;
+
+#ifdef __SWITCH__
+    EGLDisplay display = glfwGetEGLDisplay();
+    EGLContext mainContext = glfwGetEGLContext(mainWindow);
+    EGLSurface mainSurface = glfwGetEGLSurface(mainWindow);
+    if (display == EGL_NO_DISPLAY || mainContext == EGL_NO_CONTEXT)
+    {
+        brls::Logger::warning("melonDS: EGL display/context unavailable for 3D renderer");
+        return nullptr;
+    }
+
+    EGLint configId = 0;
+    if (mainSurface == EGL_NO_SURFACE ||
+        eglQuerySurface(display, mainSurface, EGL_CONFIG_ID, &configId) != EGL_TRUE)
+    {
+        brls::Logger::warning("melonDS: failed to query main EGL config for 3D renderer (err=0x{:x})", eglGetError());
+        return nullptr;
+    }
+
+    EGLint configAttribs[] = { EGL_CONFIG_ID, configId, EGL_NONE };
+    EGLConfig config = nullptr;
+    EGLint configCount = 0;
+    if (eglChooseConfig(display, configAttribs, &config, 1, &configCount) != EGL_TRUE || configCount <= 0)
+    {
+        brls::Logger::warning("melonDS: failed to choose main EGL config {} for 3D renderer (err=0x{:x})",
+            configId, eglGetError());
+        return nullptr;
+    }
+
+    eglBindAPI(EGL_OPENGL_API);
+    EGLint contextAttribs[] = {
+        EGL_CONTEXT_MAJOR_VERSION, 4,
+        EGL_CONTEXT_MINOR_VERSION, 3,
+        EGL_CONTEXT_OPENGL_PROFILE_MASK, EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT,
+        EGL_NONE
+    };
+    EGLContext context = eglCreateContext(display, config, mainContext, contextAttribs);
+    if (context == EGL_NO_CONTEXT)
+    {
+        brls::Logger::warning("melonDS: failed to create shared EGL context for 3D renderer (err=0x{:x})", eglGetError());
+        return nullptr;
+    }
+
+    EGLSurface surface = EGL_NO_SURFACE;
+    const char* extensions = eglQueryString(display, EGL_EXTENSIONS);
+    const std::string extensionList = extensions ? extensions : "";
+    const bool supportsSurfaceless =
+        extensionList.find("EGL_KHR_surfaceless_context") != std::string::npos;
+    if (!supportsSurfaceless)
+    {
+        EGLint surfaceAttribs[] = { EGL_WIDTH, 16, EGL_HEIGHT, 16, EGL_NONE };
+        surface = eglCreatePbufferSurface(display, config, surfaceAttribs);
+        if (surface == EGL_NO_SURFACE)
+        {
+            brls::Logger::warning("melonDS: failed to create EGL pbuffer surface for 3D renderer (err=0x{:x})", eglGetError());
+            eglDestroyContext(display, context);
+            return nullptr;
+        }
+    }
+
+    auto glContext = std::make_unique<MelonDSGLContext>();
+    glContext->display = display;
+    glContext->surface = surface;
+    glContext->context = context;
+    if (!glContext->makeCurrent())
+    {
+        brls::Logger::warning("melonDS: failed to make shared EGL context current for 3D renderer (err=0x{:x})", eglGetError());
+        if (surface == EGL_NO_SURFACE)
+        {
+            EGLint surfaceAttribs[] = { EGL_WIDTH, 16, EGL_HEIGHT, 16, EGL_NONE };
+            surface = eglCreatePbufferSurface(display, config, surfaceAttribs);
+            if (surface != EGL_NO_SURFACE)
+            {
+                glContext->surface = surface;
+                if (glContext->makeCurrent())
+                    brls::Logger::info("melonDS: surfaceless EGL unavailable; using pbuffer surface");
+            }
+        }
+        if (eglGetCurrentContext() != context)
+            return nullptr;
+    }
+    logGLLoaderState("before shared EGL glad load");
+    if (!gladLoadGLLoader((GLADloadproc)eglGetProcAddress))
+    {
+        brls::Logger::warning("melonDS: failed to reload OpenGL functions for shared EGL renderer context (err=0x{:x})", eglGetError());
+        logGLLoaderState("after failed shared EGL glad load");
+        return nullptr;
+    }
+    logGLLoaderState("after shared EGL glad load");
+    brls::Logger::info("melonDS: 3D EGL context created: {}", glString(GL_VERSION));
+    glContext->restore();
+    return glContext;
+#else
+    GLFWwindow* previous = glfwGetCurrentContext();
+    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    GLFWwindow* workerWindow = glfwCreateWindow(16, 16, "melonDS 3D", nullptr, mainWindow);
+    glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
+    if (!workerWindow)
+    {
+        glfwMakeContextCurrent(previous);
+        brls::Logger::warning("melonDS: failed to create shared OpenGL context for 3D renderer");
+        return nullptr;
+    }
+
+    glfwMakeContextCurrent(workerWindow);
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+    {
+        glfwMakeContextCurrent(previous);
+        glfwDestroyWindow(workerWindow);
+        brls::Logger::warning("melonDS: failed to load OpenGL functions for 3D renderer");
+        return nullptr;
+    }
+
+    logGLLoaderState("shared GLFW glad load");
+    brls::Logger::info("melonDS: 3D GL context created: {}", glString(GL_VERSION));
+    glfwMakeContextCurrent(previous);
+
+    auto context = std::make_unique<MelonDSGLContext>();
+    context->window = workerWindow;
+    return context;
+#endif
 }
 
 } // namespace
@@ -67,15 +368,27 @@ bool MelonDSCore::SetupGame(beiklive::GameEntry GameEntry)
 
 void MelonDSCore::Cleanup()
 {
-    if (m_ready.load(std::memory_order_acquire))
-        saveSram();
+    std::lock_guard<std::mutex> lock(m_ndsMutex);
+    {
+        ScopedMelonDSGLContext glScope(m_glContext.get());
+        if (m_ready.load(std::memory_order_acquire))
+            saveSram();
 
-    Stop();
-    m_nds.reset();
+        if (m_nds && m_nds->IsRunning())
+            m_nds->Stop();
+        m_paused.store(false, std::memory_order_release);
+        m_nds.reset();
+    }
+    m_glContext.reset();
     m_romData.clear();
+    m_acceleratedReadback.clear();
     m_audio.Reset();
     m_input.Reset();
     m_video.Reset();
+    m_usingAcceleratedRenderer = false;
+    m_usingComputeRenderer = false;
+    m_acceleratedReadbackFailed = false;
+    m_skipAcceleratedReadbackFrames = 0;
     m_ready.store(false, std::memory_order_release);
     m_initialized.store(false, std::memory_order_release);
 }
@@ -95,7 +408,7 @@ bool MelonDSCore::Initialize()
     args.JIT = std::nullopt;
 #endif
     args.OutputSampleRate = 48000.0;
-    args.Renderer3D = std::make_unique<melonDS::SoftRenderer>(true);
+    args.Renderer3D = createRenderer3D();
 
     if (!loadBiosFiles(args))
         return false;
@@ -117,11 +430,20 @@ bool MelonDSCore::Initialize()
     brls::Logger::info("melonDS: JIT disabled on desktop build; using interpreter");
 #endif
 
-    const auto& soft = static_cast<const melonDS::SoftRenderer&>(m_nds->GPU.GetRenderer3D());
-    if (!soft.IsThreaded())
-        brls::Logger::warning("melonDS: Threaded Renderer requested but not enabled");
+    if (m_usingAcceleratedRenderer)
+    {
+        brls::Logger::info("melonDS: {} 3D renderer enabled, internal resolution x{}",
+            m_usingComputeRenderer ? "Compute" : "OpenGL",
+            m_internalResolution);
+    }
     else
-        brls::Logger::info("melonDS: Threaded Renderer enabled");
+    {
+        const auto& soft = static_cast<const melonDS::SoftRenderer&>(m_nds->GPU.GetRenderer3D());
+        if (!soft.IsThreaded())
+            brls::Logger::warning("melonDS: Threaded Renderer requested but not enabled");
+        else
+            brls::Logger::info("melonDS: Threaded Renderer enabled");
+    }
 
     m_initialized.store(true, std::memory_order_release);
     return true;
@@ -131,6 +453,8 @@ bool MelonDSCore::LoadGame(const std::string& path)
 {
     if (!m_nds)
         return false;
+    std::lock_guard<std::mutex> lock(m_ndsMutex);
+    ScopedMelonDSGLContext glScope(m_glContext.get());
     if (path.empty())
     {
         brls::Logger::error("melonDS: ROM path is empty");
@@ -213,6 +537,9 @@ void MelonDSCore::RunFrame()
     if (!m_ready.load(std::memory_order_acquire) || m_paused.load(std::memory_order_acquire) || !m_nds)
         return;
 
+    std::lock_guard<std::mutex> lock(m_ndsMutex);
+    ScopedMelonDSGLContext glScope(m_glContext.get());
+
     m_input.Apply(*m_nds);
     const auto frameStart = std::chrono::steady_clock::now();
     const auto scanlines = m_nds->RunFrame();
@@ -233,13 +560,16 @@ void MelonDSCore::RunFrame()
         available = m_nds->SPU.GetOutputSize();
     }
 
-    m_video.Capture(*m_nds);
+    if (!captureAcceleratedFrame())
+        m_video.Capture(*m_nds);
 }
 
 void MelonDSCore::Reset()
 {
     if (!m_ready.load(std::memory_order_acquire) || !m_nds)
         return;
+    std::lock_guard<std::mutex> lock(m_ndsMutex);
+    ScopedMelonDSGLContext glScope(m_glContext.get());
     m_nds->Reset();
     m_nds->SetupDirectBoot(std::filesystem::path(m_gameEntry.path).filename().string());
     m_nds->GPU.StartFrame();
@@ -248,6 +578,8 @@ void MelonDSCore::Reset()
 
 void MelonDSCore::Stop()
 {
+    std::lock_guard<std::mutex> lock(m_ndsMutex);
+    ScopedMelonDSGLContext glScope(m_glContext.get());
     if (m_nds && m_nds->IsRunning())
         m_nds->Stop();
     m_paused.store(false, std::memory_order_release);
@@ -264,6 +596,102 @@ void MelonDSCore::RequestStop()
 void MelonDSCore::Pause(bool paused)
 {
     m_paused.store(paused, std::memory_order_release);
+}
+
+void MelonDSCore::NotifyConfigUpdated()
+{
+    if (!m_nds)
+        return;
+
+    std::lock_guard<std::mutex> lock(m_ndsMutex);
+
+    int newScale = m_gameEntry.ndsInternalResolution;
+    if (beiklive::GameDB && !m_gameEntry.path.empty())
+        newScale = beiklive::GameDB->get(m_gameEntry.path, "ndsInternalResolution", 1).get<int>();
+    newScale = std::clamp(newScale, 1, 4);
+    if (newScale == m_internalResolution)
+        return;
+
+    brls::Logger::info("melonDS: changing internal resolution x{} -> x{}", m_internalResolution, newScale);
+    m_gameEntry.ndsInternalResolution = newScale;
+
+    if (m_glContext)
+    {
+        m_glContext->makeCurrent();
+        m_nds->GPU.Stop();
+        glFinish();
+        m_glContext->restore();
+    }
+    else
+    {
+        m_nds->GPU.Stop();
+    }
+
+    m_acceleratedReadback.clear();
+    m_video.Reset();
+
+    auto renderer = createRenderer3D();
+    if (m_glContext)
+        m_glContext->makeCurrent();
+    m_nds->GPU.SetRenderer3D(std::move(renderer));
+    m_nds->GPU.StartFrame();
+    if (m_glContext)
+        m_glContext->restore();
+    if (!m_usingAcceleratedRenderer)
+        m_glContext.reset();
+    m_skipAcceleratedReadbackFrames = m_usingAcceleratedRenderer ? 3 : 0;
+}
+
+bool MelonDSCore::GetVideoTexture(beiklive::EmulatorVideoTexture& out)
+{
+    out = {};
+    if (!m_ready.load(std::memory_order_acquire) || !m_nds || !m_usingAcceleratedRenderer || !m_glContext)
+        return false;
+#ifdef __SWITCH__
+    return false;
+#endif
+
+    std::unique_lock<std::mutex> lock(m_ndsMutex, std::try_to_lock);
+    if (!lock.owns_lock())
+        return false;
+    ScopedMelonDSGLContext glScope(m_glContext.get());
+    if (!glScope.active)
+        return false;
+
+    auto& renderer = m_nds->GPU.GetRenderer3D();
+    if (!renderer.Accelerated)
+        return false;
+
+    const int frontbuf = m_nds->GPU.FrontBuffer;
+    GLint previousTexture = 0;
+    GLint previousActive = 0;
+    glGetIntegerv(GL_ACTIVE_TEXTURE, &previousActive);
+    glActiveTexture(GL_TEXTURE0);
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &previousTexture);
+
+    renderer.BindOutputTexture(frontbuf);
+    GLint texture = 0;
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &texture);
+    if (texture > 0)
+    {
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    }
+
+    glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(previousTexture));
+    glActiveTexture(static_cast<GLenum>(previousActive));
+
+    if (texture <= 0)
+        return false;
+
+    out.texture = static_cast<uint32_t>(texture);
+    out.scale = static_cast<unsigned>(std::max(1, m_internalResolution));
+    out.width = 256u * out.scale;
+    out.height = (384u + 2u) * out.scale;
+    glFlush();
+    return true;
 }
 
 bool MelonDSCore::Serialize(std::vector<uint8_t>& outBuf) const
@@ -396,6 +824,191 @@ bool MelonDSCore::loadBatterySave(melonDS::NDSCart::NDSCartArgs& args) const
     args.SRAMLength = static_cast<melonDS::u32>(data.size());
     args.SRAM = std::make_unique<melonDS::u8[]>(args.SRAMLength);
     std::memcpy(args.SRAM.get(), data.data(), data.size());
+    return true;
+}
+
+std::unique_ptr<melonDS::Renderer3D> MelonDSCore::createRenderer3D()
+{
+    m_internalResolution = std::clamp(m_gameEntry.ndsInternalResolution, 1, 4);
+    m_usingAcceleratedRenderer = false;
+    m_usingComputeRenderer = false;
+
+    auto fallbackToSoftware = [this](const char* reason) -> std::unique_ptr<melonDS::Renderer3D> {
+        if (reason && reason[0] != '\0')
+            brls::Logger::warning("melonDS: {}; falling back to x1 threaded software renderer", reason);
+        m_internalResolution = 1;
+        m_gameEntry.ndsInternalResolution = 1;
+        if (beiklive::GameDB && !m_gameEntry.path.empty())
+        {
+            beiklive::GameDB->set(m_gameEntry.path, "ndsInternalResolution", nlohmann::json(1));
+            beiklive::GameDB->flush();
+        }
+        return std::make_unique<melonDS::SoftRenderer>(true);
+    };
+
+    if (m_internalResolution <= 1)
+    {
+        brls::Logger::info("melonDS: internal resolution x1; using threaded software 3D renderer");
+        return std::make_unique<melonDS::SoftRenderer>(true);
+    }
+
+    if (!m_glContext)
+        m_glContext = createSharedGLContext();
+    ScopedMelonDSGLContext glScope(m_glContext.get());
+    if (!glScope.active)
+        return fallbackToSoftware("OpenGL/Compute renderer unavailable");
+
+#ifdef __SWITCH__
+    brls::Logger::info("melonDS: trying Compute 3D renderer at x{}", m_internalResolution);
+    if (GLAD_GL_VERSION_4_3 && glDispatchCompute && glBindImageTexture && glTexStorage2D)
+    {
+        if (auto compute = melonDS::ComputeRenderer::New())
+        {
+            brls::Logger::info("melonDS: Compute 3D renderer created; applying render settings");
+            compute->SetRenderSettings(m_internalResolution, true);
+            int current = 0;
+            int count = 0;
+            while (compute->NeedsShaderCompile())
+            {
+                brls::Logger::debug("melonDS: compiling Compute 3D shader step {}", current);
+                compute->ShaderCompileStep(current, count);
+            }
+
+            m_usingAcceleratedRenderer = true;
+            m_usingComputeRenderer = true;
+            brls::Logger::info("melonDS: Compute 3D renderer enabled, internal resolution x{}", m_internalResolution);
+            return compute;
+        }
+        brls::Logger::warning("melonDS: Compute 3D renderer creation failed");
+    }
+    else
+    {
+        brls::Logger::warning(
+            "melonDS: Compute 3D renderer unavailable: GLAD_GL_VERSION_4_3={} glDispatchCompute={} glBindImageTexture={} glTexStorage2D={}",
+            GLAD_GL_VERSION_4_3,
+            glDispatchCompute != nullptr,
+            glBindImageTexture != nullptr,
+            glTexStorage2D != nullptr);
+    }
+
+    return fallbackToSoftware("Compute 3D renderer failed on Switch");
+#else
+    brls::Logger::info("melonDS: trying OpenGL 3D renderer at x{}", m_internalResolution);
+    if (auto glRenderer = melonDS::GLRenderer::New())
+    {
+        brls::Logger::info("melonDS: OpenGL 3D renderer created; applying render settings");
+        glRenderer->SetRenderSettings(false, m_internalResolution);
+        m_usingAcceleratedRenderer = true;
+        m_usingComputeRenderer = false;
+        brls::Logger::info("melonDS: OpenGL 3D renderer enabled, internal resolution x{}", m_internalResolution);
+        return glRenderer;
+    }
+
+    brls::Logger::warning("melonDS: OpenGL 3D renderer failed; trying Compute 3D renderer");
+    if (auto compute = melonDS::ComputeRenderer::New())
+    {
+        brls::Logger::info("melonDS: Compute 3D renderer created; applying render settings");
+        compute->SetRenderSettings(m_internalResolution, true);
+        int current = 0;
+        int count = 0;
+        while (compute->NeedsShaderCompile())
+        {
+            brls::Logger::debug("melonDS: compiling Compute 3D shader step {}", current);
+            compute->ShaderCompileStep(current, count);
+        }
+
+        m_usingAcceleratedRenderer = true;
+        m_usingComputeRenderer = true;
+        brls::Logger::info("melonDS: Compute 3D renderer enabled, internal resolution x{}", m_internalResolution);
+        return compute;
+    }
+
+    return fallbackToSoftware("OpenGL/Compute renderer failed");
+#endif
+}
+
+bool MelonDSCore::captureAcceleratedFrame()
+{
+    if (!m_nds || !m_usingAcceleratedRenderer || !m_glContext || m_internalResolution <= 1)
+        return false;
+    if (m_skipAcceleratedReadbackFrames > 0)
+    {
+        --m_skipAcceleratedReadbackFrames;
+        return false;
+    }
+
+    auto& renderer = m_nds->GPU.GetRenderer3D();
+    if (!renderer.Accelerated)
+        return false;
+
+    const unsigned scale = static_cast<unsigned>(std::clamp(m_internalResolution, 1, 4));
+    const unsigned width = MelonDSVideo::kWidth * scale;
+    const unsigned height = (MelonDSVideo::kHeight + 2u) * scale;
+    const size_t pixelCount = static_cast<size_t>(width) * height;
+    if (m_acceleratedReadback.size() != pixelCount)
+        m_acceleratedReadback.resize(pixelCount);
+
+    GLint previousActive = 0;
+    GLint previousTexture = 0;
+    GLint previousPackAlignment = 0;
+    GLint previousPackBuffer = 0;
+    GLint previousReadFramebuffer = 0;
+    glGetIntegerv(GL_ACTIVE_TEXTURE, &previousActive);
+    glActiveTexture(GL_TEXTURE0);
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &previousTexture);
+    glGetIntegerv(GL_PACK_ALIGNMENT, &previousPackAlignment);
+    glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING, &previousPackBuffer);
+    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &previousReadFramebuffer);
+
+    renderer.BindOutputTexture(m_nds->GPU.FrontBuffer);
+    GLint texture = 0;
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &texture);
+    if (texture <= 0)
+    {
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, static_cast<GLuint>(previousPackBuffer));
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(previousReadFramebuffer));
+        glPixelStorei(GL_PACK_ALIGNMENT, previousPackAlignment);
+        glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(previousTexture));
+        glActiveTexture(static_cast<GLenum>(previousActive));
+        if (!m_acceleratedReadbackFailed)
+        {
+            brls::Logger::warning("melonDS: accelerated renderer output texture unavailable; using CPU capture");
+            m_acceleratedReadbackFailed = true;
+        }
+        return false;
+    }
+
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+    glPixelStorei(GL_PACK_ALIGNMENT, 4);
+    const auto readbackStart = std::chrono::steady_clock::now();
+    glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, m_acceleratedReadback.data());
+    const auto readbackMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - readbackStart).count();
+    const GLenum error = glGetError();
+
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(previousReadFramebuffer));
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, static_cast<GLuint>(previousPackBuffer));
+    glPixelStorei(GL_PACK_ALIGNMENT, previousPackAlignment);
+    glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(previousTexture));
+    glActiveTexture(static_cast<GLenum>(previousActive));
+
+    if (error != GL_NO_ERROR)
+    {
+        if (!m_acceleratedReadbackFailed)
+        {
+            brls::Logger::warning("melonDS: accelerated renderer readback failed (glError=0x{:x}); using CPU capture",
+                                  static_cast<unsigned>(error));
+            m_acceleratedReadbackFailed = true;
+        }
+        return false;
+    }
+    if (readbackMs > 50)
+        brls::Logger::warning("melonDS: accelerated renderer readback took {} ms at x{}",
+                              readbackMs, scale);
+
+    m_acceleratedReadbackFailed = false;
+    m_video.CaptureAcceleratedRgba(m_acceleratedReadback.data(), width, height, scale);
     return true;
 }
 

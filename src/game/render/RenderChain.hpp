@@ -83,6 +83,12 @@ public:
                       float virtX, float virtY, float virtW, float virtH,
                       float windowScale, int windowW, int windowH);
 
+    void drawToScreen(GLuint tex,
+                      float virtX, float virtY, float virtW, float virtH,
+                      float windowScale, int windowW, int windowH,
+                      float u0, float v0, float u1, float v1,
+                      bool swizzleRB = false);
+
     /// 返回直接渲染器是否已初始化并可用。
     bool isDirectRendererReady() const { return m_directRenderer.isInitialized(); }
 

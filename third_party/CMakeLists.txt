@@ -347,8 +347,12 @@ set(MELONDS_CORE_SRC
     ${MELONDS_SRC_DIR}/GPU2D.cpp
     ${MELONDS_SRC_DIR}/GPU2D_Soft.cpp
     ${MELONDS_SRC_DIR}/GPU3D.cpp
+    ${MELONDS_SRC_DIR}/GPU_OpenGL.cpp
+    ${MELONDS_SRC_DIR}/GPU3D_Compute.cpp
+    ${MELONDS_SRC_DIR}/GPU3D_OpenGL.cpp
     ${MELONDS_SRC_DIR}/GPU3D_Soft.cpp
     ${MELONDS_SRC_DIR}/GPU3D_Texcache.cpp
+    ${MELONDS_SRC_DIR}/GPU3D_TexcacheOpenGL.cpp
     ${MELONDS_SRC_DIR}/Mic.cpp
     ${MELONDS_SRC_DIR}/NDS.cpp
     ${MELONDS_SRC_DIR}/NDSCart.cpp
@@ -362,6 +366,7 @@ set(MELONDS_CORE_SRC
     ${MELONDS_SRC_DIR}/Utils.cpp
     ${MELONDS_SRC_DIR}/Wifi.cpp
     ${MELONDS_SRC_DIR}/WifiAP.cpp
+    ${MELONDS_SRC_DIR}/OpenGLSupport.cpp
     ${MELONDS_SRC_DIR}/DSP_HLE/UcodeBase.cpp
     ${MELONDS_SRC_DIR}/DSP_HLE/AACUcode.cpp
     ${MELONDS_SRC_DIR}/DSP_HLE/G711Ucode.cpp
@@ -407,7 +412,12 @@ configure_file("${MELONDS_SRC_DIR}/version.h.in" "${CMAKE_CURRENT_BINARY_DIR}/me
 add_library(melonds_core STATIC ${MELONDS_CORE_SRC})
 target_include_directories(melonds_core PUBLIC
     ${MELONDS_SRC_DIR}
+    ${BOREALIS_LIBRARY}/include/borealis/extern
     ${CMAKE_CURRENT_BINARY_DIR}/melonDS_version
+)
+target_compile_definitions(melonds_core PUBLIC
+    OGLRENDERER_ENABLED
+    MELONDS_GL_HEADER=<glad/glad.h>
 )
 target_compile_options(melonds_core PUBLIC -fwrapv)
 target_compile_options(melonds_core PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:-Wno-invalid-offsetof>")

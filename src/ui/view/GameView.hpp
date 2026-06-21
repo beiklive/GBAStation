@@ -7,6 +7,7 @@
 #include "emulator/IEmulatorCore.hpp"
 #include "emulator/IEmulatorStopRequest.hpp"
 #include "emulator/IEmulatorTouchInput.hpp"
+#include "emulator/IEmulatorVideoTexture.hpp"
 #include "game/render/GameRenderer.hpp"
 #include "ui/utils/GameOverlayRenderer.hpp"
 
@@ -100,6 +101,8 @@ namespace beiklive
             void _onNdsLayoutChange(const std::string& layout);
             /// NDS 自定义双屏位置/缩放变更（UI线程调用）
             void _onNdsScreenValuesChanged(bool topScreen, float x, float y, float scale);
+            /// NDS 3D 内部分辨率倍率变更（UI线程调用）
+            void _onNdsInternalResolutionChange(int scale);
             /// 纹理过滤变更（UI线程调用）
             void _onFilterChange(const std::string& filter);
             /// 配置变更通知（UI线程调用，通知核心重读变量）
@@ -208,8 +211,11 @@ namespace beiklive
             void _registerGameInput();
             void _registerGameRuntime();
             bool _useNdsSplitShader() const;
+            bool _useNdsAcceleratedTexture() const;
             void _applySavedShaderParams(beiklive::GameRenderer& renderer) const;
             bool _initGameRenderers(unsigned gw, unsigned gh, const std::string& shaderPath);
+            bool _drawNdsAcceleratedTexture(const beiklive::DisplayRect& rect,
+                                            float windowScale, int windowW, int windowH);
             void _uploadNdsSplitShaderFrame(const LibretroLoader::VideoFrame& frame);
             struct NdsScreenDrawRect {
                 bool topScreen = true;

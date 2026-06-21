@@ -189,9 +189,10 @@ private:
         u32 SortWorkWorkCount[4];
     };
 
-    static const int MaxYSpanSetups = 6144*2;
+    static const int BaseMaxYSpanSetups = 6144*2;
+    int MaxYSpanSetups = BaseMaxYSpanSetups;
     std::vector<SetupIndices> YSpanIndices;
-    SpanSetupY YSpanSetups[MaxYSpanSetups];
+    std::vector<SpanSetupY> YSpanSetups;
     RenderPolygon RenderPolygons[2048];
 
     TexcacheOpenGL Texcache;

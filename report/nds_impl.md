@@ -5,6 +5,7 @@
 - `CMakeLists.txt`
 - `switchbuild.sh`
 - `third_party/CMakeLists.txt`
+- `src/core/GameSignal.hpp`
 - `third_party/melonDS/src/ARMJIT_A64/ARMJIT_Compiler.cpp`
 - `third_party/melonDS/src/ARMJIT.cpp`
 - `third_party/melonDS/src/ARMJIT_Global.cpp`
@@ -25,6 +26,12 @@
 - `src/core/game_database.cpp`
 - `src/emulator/EmulatorCoreFactory.cpp`
 - `src/game/audio/AudioManager.cpp`
+- `src/game/render/DirectQuadRenderer.cpp`
+- `src/game/render/DirectQuadRenderer.hpp`
+- `src/game/render/GameRenderer.cpp`
+- `src/game/render/GameRenderer.hpp`
+- `src/game/render/RenderChain.cpp`
+- `src/game/render/RenderChain.hpp`
 - `src/network/ApiRouter.cpp`
 - `src/ui/page/DataManagementPage.cpp`
 - `src/ui/page/FileListPage.cpp`
@@ -55,13 +62,15 @@
 - `src/emulator/melonds/MelonDSVideo.cpp`
 - `src/emulator/IEmulatorTouchInput.hpp`
 - `src/emulator/IEmulatorStopRequest.hpp`
+- `src/emulator/IEmulatorVideoTexture.hpp`
 
 ## 3. CMake 改动
 
 - 新增 `melonds_core` 静态库，手工列出 `third_party/melonDS/src` 核心源码。
 - 未使用 `add_subdirectory(third_party/melonDS)`，避免引入 melonDS frontend/Qt/SDL/libui。
 - 保留核心模块：ARM、ARMJIT、GPU、NDS、SPU、DSi、Savestate、Platform API 依赖、fatfs、DSP_HLE、teakra 等。
-- 排除 melonDS `frontend/`、Qt、SDL、libui、OpenGL renderer、net/pcap 前端依赖。
+- 排除 melonDS `frontend/`、Qt、SDL、libui、net/pcap 前端依赖；本轮新增编译 melonDS 核心内置 OpenGL/Compute 3D renderer 源码，不引入 SDL、Qt 或 libretro 前端。
+- `melonds_core` 定义 `OGLRENDERER_ENABLED`，并通过 `MELONDS_GL_HEADER=<glad/glad.h>` 复用 borealis 已编译的 glad/OpenGL 函数表。
 - Switch 构建下加入 ARM64 JIT 源码：`ARMJIT_A64/*`、`ARMJIT_Linkage.S`、`dolphin/Arm64Emitter.cpp`。
 - Switch 构建下定义 `ENABLE_JIT=1`、`JIT_ENABLED`、`ARCHITECTURE_ARM64=1`，并设置 `-O3 -mcpu=cortex-a57 -ffast-math -flto -fomit-frame-pointer`。
 - Switch JIT 平台适配补充了 libnx exception handler、A64 JIT 内存区声明、Switch fastmem 页大小初始化，避免依赖 POSIX `mmap/sysconf` 路径。
@@ -100,19 +109,26 @@
 - NDS 屏幕布局新增 Hybrid（混合）模式：输出 1280x720 固定画布，左侧上屏主屏按 10/3 倍放大并以整数目标矩形 `(0,40,853,640)` 绘制；右侧副屏上/下屏按 5/3 倍放大并以 `(853,40,427,320)`、`(853,360,427,320)` 绘制，同步下屏触摸区域。
 - Switch 正常音频缓冲水位提高到环形缓冲 3/4，并将音频线程等待数据窗口拉长到约一个硬件周期，减少轻微 underrun 撕裂。
 - NDS 快进改为折中批处理：低倍率保持逐帧平滑，高倍率每轮最多批量运行 2-4 帧并按 `framesRan / multiplier` 节流，以换取更高快进倍率。
+- 新增 `IEmulatorVideoTexture` 扩展接口，不改动 `IEmulatorCore`；NDS x2/x3/x4 OpenGL/Compute renderer 启用后，`MelonDSCore` 通过 `GPU.GetRenderer3D().BindOutputTexture(GPU.FrontBuffer)` 暴露 melonDS 加速输出纹理。
+- `GameRenderer/RenderChain/DirectQuadRenderer` 增加外部 GL 纹理绘制入口、UV 裁剪和可选红蓝通道交换；`GameView` 在 NDS 非 shader 模式下按当前屏幕布局直接绘制 melonDS 高分辨率输出纹理，并按 melonDS 原始前端规则跳过上下屏中间 2 像素 padding。
+- NDS 加速输出纹理使用非阻塞 try-lock 获取，避免 UI 线程等待游戏线程 GL 渲染；取到纹理后执行 `glFlush()`，降低共享 GL context 间纹理内容不同步的风险。
 
 ## 4. 未完成项
 
+- NDS 多倍内部分辨率已完成编译和运行路径接入，仍需 Switch 真机确认 x2/x3/x4 下 OpenGL/Compute renderer 实际初始化日志、画面正确性和退出稳定性。
 - 当前真机反馈：`.nds` 已能启动运行，ARM64 JIT 和 Threaded Renderer 日志正常；本轮继续针对“正常音频轻微撕裂”“更高快进倍率”“NDS 自定义双屏布局与上下屏独立调整”补齐适配，仍需真机复测确认。
-- 已实现每块屏幕独立 X/Y/scale 的菜单项；现有渲染框架仍是单纹理上传，自定义布局会在上传前进行 CPU 最近邻组合缩放，需真机验证高倍率缩放时的性能影响。
+- 已实现每块屏幕独立 X/Y/scale 的菜单项；x1/software renderer 和 NDS shader 模式仍使用 CPU 帧上传/拆屏路径，自定义布局需继续真机验证性能和触摸边界。
 - 未完成性能验证，尚未正式记录《宝可梦 白2》或《马里奥赛车DS》的 FPS、CPU 占用、JIT 状态；用户当前反馈的运行占用为 core0 15%、core1 67%、core2 0.25%、core3 28%。
 - 项目现有 Switch 音频后端为 audout。为保持现有 UI/渲染/输入/音频框架不变，本次 melonDS 核心仅实现异步 `RingBuffer<int16_t>` 并走现有 `DrainAudio()` 流程，未替换全局 AudioManager 为 audren。
 
 ## 5. 风险项
 
+- OpenGL/Compute 3D renderer 需要当前线程拥有有效 GL context；桌面端为 NDS 游戏线程创建隐藏共享 GLFW context，Switch 端改为基于当前 GLFW/EGL 主窗口 context 创建共享 EGL pbuffer context，并在 `LoadGame()`、`RunFrame()`、`Reset()`、`Stop()`、`Cleanup()` 期间绑定。若共享 GL context 创建失败，会自动保留可运行的 x1 software renderer、同步 `ndsInternalResolution=1` 并输出警告。
+- Compute renderer 已编译进核心，但默认只作为 OpenGL renderer 失败后的备用路径；Compute 首次 shader 编译成本较高，真机若出现长时间黑屏或 shader 编译失败日志，建议先使用 OpenGL renderer 路径验证。
+- NDS x2/x3/x4 非 shader 模式已绕过 256x384 CPU 帧上传显示，改为直接绘制 melonDS OpenGL/Compute renderer 的输出纹理；x1/software renderer 和 NDS shader 模式仍走既有 CPU 帧/纹理上传路径，2D UI、布局、输入框架未替换。
 - `MelonDSCore::Initialize()` 会强制验证 `NDS::IsJITEnabled()`；若 Switch JIT 未编译成功，会记录警告并拒绝静默回退。
 - Switch ARM64 JIT 当前显式关闭 FastMemory 以优先验证启动/退出稳定性；这仍然是 JIT 执行路径，但性能可能低于 fastmem 开启状态。若真机复测确认稳定，后续再单独修复 fastmem 映射/fault handler。
-- 视频仍需通过现有 `IEmulatorCore::GetVideoFrame()` 返回 `LibretroLoader::VideoFrame`，因此为了兼容现有渲染框架保留了一次稳定帧缓冲拷贝；已使用双缓冲降低锁等待，但不是完全的 framebuffer 直连纹理更新。
+- `IEmulatorCore::GetVideoFrame()` 仍保留为 x1/software renderer、shader、缩略图等兼容路径；x2+ 加速显示路径通过 `IEmulatorVideoTexture` 直接绘制 melonDS GL 输出纹理。若 UI 线程获取纹理时游戏线程正持有 NDS GL 锁，会跳过本次直绘并回落到上一帧/CPU 显示路径，避免 UI 卡顿。
 - BIOS 路径严格使用 `sdmc:/GBAStation/bios/nds/` 下的 `bios7.bin`、`bios9.bin`、`firmware.bin`，缺失会直接失败，不使用 FreeBIOS 静默替代。
 - 触摸输入通过新增 `IEmulatorTouchInput` 扩展接口从 `GameView` 转发到 NDS 核心；Tap/Pan 坐标会按当前游戏画面矩形映射到 NDS 下屏 256x192。
 - melonDS 第三方源码补了多处兼容修正：Switch JIT fault handler 调用、A64 JIT 内存区声明、Switch fastmem 页大小、C++20 `path::u8string()` 转换；后续更新 melonDS 时需重新核对。
@@ -121,9 +137,14 @@
 - Switch audout 仍由 `BKAudioPlayer` 和 `AudioManager` 共享同一输出流；本轮已过滤外来完成事件并在游戏音频运行时跳过 UI 音效播放，但长期看更稳的方案仍是统一后端所有权或迁移到 audren。
 - NDS 原始触摸轮询会直接读取 Borealis platform input manager；当前已限制在 GameView 获得焦点时生效，菜单打开时会主动释放触摸，仍需真机确认与系统触屏坐标缩放一致。
 - NDS 快进现在在高倍率下允许小批量运行以提高速度，实际最高倍率仍受核心运行性能、Threaded Renderer 和 Switch CPU 余量限制；若用户更偏好极限速度，后续可提供“平滑快进/极速快进”选项。
+- NDS 新增 GameDB 字段 `ndsInternalResolution`，游戏菜单新增“NDS内部分辨率”，支持 x1/x2/x3/x4；x1 使用原 threaded software 3D renderer，x2+ 在 NDS 游戏线程绑定共享 OpenGL context，优先使用 melonDS OpenGL 3D renderer，OpenGL 初始化失败时尝试 Compute renderer，全部失败则记录警告并退回 x1 软件渲染。
+- NDS `NotifyConfigUpdated()` 改为由 `GameSignal::requestConfigUpdate()` 投递，并在游戏线程消费后执行，避免 UI 菜单线程直接重建 melonDS 3D renderer 与 `RunFrame()` 并发。
+- Windows 端 NDS 和 Switch 一样延后到游戏线程执行 `SetupGame()`，确保 OpenGL/Compute renderer 创建、运行、销毁都在同一线程绑定的 GL context 下完成；其他平台核心仍保持原初始化流程。
+- NDS 加速输出纹理按 melonDS 前端约定进行 BGR->RGB 通道交换；若真机出现颜色再次异常，需要优先检查 OpenGL/Compute renderer 输出格式是否与软件帧路径不同。
 
 ## 6. 后续优化建议
 
+- 真机验证 NDS x2/x3/x4：记录 `melonDS: OpenGL 3D renderer enabled, internal resolution xN` 或 Compute fallback 日志，观察 3D 场景是否比 x1 更清晰，并记录 FPS、CPU 占用、画面颜色/3D 多边形正确性、退出回主界面后 CPU 是否回落。
 - 若决定满足 audren 硬性要求，需要在保持 AudioManager 公共接口不变的前提下增加 Switch audren 后端，再让所有核心复用该后端。
 - 真机验证触摸边界、缩放模式和自定义偏移下的 NDS 下屏坐标映射。
 - 若自定义布局 CPU 缩放成本偏高，可后续把每屏独立矩形下沉到渲染端双 draw call，但这会扩大现有 renderer 改动面。
@@ -172,3 +193,5 @@
 - 同次 Switch 复验：`E:\bin\msys64\usr\bin\bash.exe -lc 'cd /e/MyCode/MyEmuProject/Project/BeikLiveStation && ./switchbuild.sh'` 通过，重新编译 `GameView.cpp` 并生成 `build_switch/GBAStation.nro`（脚本输出 21.49 MB）。
 - 修正 Hybrid 主屏 10/3、副屏 5/3 布局后复验：`cmd /c windowsbuild.bat` 通过，重新编译 `GameView.cpp` 并生成 `build_windows/GBAStation.exe`。
 - 同次 Switch 复验：`E:\bin\msys64\usr\bin\bash.exe -lc 'cd /e/MyCode/MyEmuProject/Project/BeikLiveStation && ./switchbuild.sh'` 通过，重新编译 `GameView.cpp` 并生成 `build_switch/GBAStation.nro`（脚本输出 21.49 MB）。
+- 接入 NDS melonDS OpenGL/Compute 3D renderer、多倍内部分辨率菜单和 GameDB 字段后复验：`cmd /c windowsbuild.bat` 通过，生成 `build_windows/GBAStation.exe`。
+- 同次 Switch 复验：`E:\bin\msys64\usr\bin\bash.exe -lc 'cd /e/MyCode/MyEmuProject/Project/BeikLiveStation && ./switchbuild.sh'` 通过，生成 `build_switch/GBAStation.nro`（脚本输出 21.74 MB）。

@@ -32,8 +32,10 @@ static const char* k_fragSrc =
     "precision mediump float;\n"
     "varying vec2 vUV;\n"
     "uniform sampler2D uTex;\n"
+    "uniform bool uSwizzleRB;\n"
     "void main() {\n"
-    "    gl_FragColor = texture2D(uTex, vUV);\n"
+    "    vec4 c = texture2D(uTex, vUV);\n"
+    "    gl_FragColor = uSwizzleRB ? vec4(c.b, c.g, c.r, c.a) : c;\n"
     "}\n";
 
 #elif defined(USE_GL2)
@@ -55,8 +57,10 @@ static const char* k_fragSrc =
     "#version 120\n"
     "varying vec2 vUV;\n"
     "uniform sampler2D uTex;\n"
+    "uniform bool uSwizzleRB;\n"
     "void main() {\n"
-    "    gl_FragColor = texture2D(uTex, vUV);\n"
+    "    vec4 c = texture2D(uTex, vUV);\n"
+    "    gl_FragColor = uSwizzleRB ? vec4(c.b, c.g, c.r, c.a) : c;\n"
     "}\n";
 
 #elif defined(USE_GLES3)
@@ -80,8 +84,10 @@ static const char* k_fragSrc =
     "in vec2 vUV;\n"
     "out vec4 fragColor;\n"
     "uniform sampler2D uTex;\n"
+    "uniform bool uSwizzleRB;\n"
     "void main() {\n"
-    "    fragColor = texture(uTex, vUV);\n"
+    "    vec4 c = texture(uTex, vUV);\n"
+    "    fragColor = uSwizzleRB ? vec4(c.b, c.g, c.r, c.a) : c;\n"
     "}\n";
 
 #elif defined(__APPLE__)
@@ -105,8 +111,10 @@ static const char* k_fragSrc =
     "in vec2 vUV;\n"
     "out vec4 fragColor;\n"
     "uniform sampler2D uTex;\n"
+    "uniform bool uSwizzleRB;\n"
     "void main() {\n"
-    "    fragColor = texture(uTex, vUV);\n"
+    "    vec4 c = texture(uTex, vUV);\n"
+    "    fragColor = uSwizzleRB ? vec4(c.b, c.g, c.r, c.a) : c;\n"
     "}\n";
 
 #else
@@ -129,8 +137,10 @@ static const char* k_fragSrc =
     "in vec2 vUV;\n"
     "out vec4 fragColor;\n"
     "uniform sampler2D uTex;\n"
+    "uniform bool uSwizzleRB;\n"
     "void main() {\n"
-    "    fragColor = texture(uTex, vUV);\n"
+    "    vec4 c = texture(uTex, vUV);\n"
+    "    fragColor = uSwizzleRB ? vec4(c.b, c.g, c.r, c.a) : c;\n"
     "}\n";
 
 #endif
@@ -211,6 +221,7 @@ bool DirectQuadRenderer::init()
     }
 
     m_uTex = glGetUniformLocation(prog, "uTex");
+    m_uSwizzleRB = glGetUniformLocation(prog, "uSwizzleRB");
 
     // 创建 VAO/VBO/EBO
 #if !defined(USE_GLES2)
@@ -263,6 +274,7 @@ void DirectQuadRenderer::deinit()
 #endif
     if (m_prog) { glDeleteProgram(m_prog);             m_prog = 0; }
     m_uTex = -1;
+    m_uSwizzleRB = -1;
 }
 
 // ============================================================
@@ -272,6 +284,16 @@ void DirectQuadRenderer::render(GLuint tex,
                                  float ndcLeft, float ndcRight,
                                  float ndcTop,  float ndcBottom) const
 {
+    render(tex, ndcLeft, ndcRight, ndcTop, ndcBottom, 0.0f, 0.0f, 1.0f, 1.0f);
+}
+
+void DirectQuadRenderer::render(GLuint tex,
+                                 float ndcLeft, float ndcRight,
+                                 float ndcTop,  float ndcBottom,
+                                 float u0, float v0,
+                                 float u1, float v1,
+                                 bool swizzleRB) const
+{
     if (!m_prog || !tex) return;
 
     // 顶点数据（每帧按 NDC 坐标动态生成）
@@ -279,10 +301,10 @@ void DirectQuadRenderer::render(GLuint tex,
     // 因此屏幕顶端 (ndcTop) 映射到 UV v=0（游戏帧第一行/画面顶部），
     // 屏幕底端 (ndcBottom) 映射到 UV v=1（游戏帧最后一行/画面底部），图像正向显示。
     const float verts[] = {
-        ndcLeft,  ndcTop,    0.0f, 0.0f,  // 左上：UV (0,0) = 游戏帧顶部
-        ndcRight, ndcTop,    1.0f, 0.0f,  // 右上：UV (1,0)
-        ndcRight, ndcBottom, 1.0f, 1.0f,  // 右下：UV (1,1) = 游戏帧底部
-        ndcLeft,  ndcBottom, 0.0f, 1.0f,  // 左下：UV (0,1)
+        ndcLeft,  ndcTop,    u0, v0,
+        ndcRight, ndcTop,    u1, v0,
+        ndcRight, ndcBottom, u1, v1,
+        ndcLeft,  ndcBottom, u0, v1,
     };
 
     // 保存关键 GL 状态
@@ -293,6 +315,10 @@ void DirectQuadRenderer::render(GLuint tex,
     GLint  prevTex     = 0;
     GLint  prevFBO     = 0;
     GLint  prevActive  = 0;
+    GLint  prevViewport[4] = {0, 0, 0, 0};
+    GLint  prevScissor[4]  = {0, 0, 0, 0};
+    GLboolean prevColorMask[4] = {GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE};
+    GLboolean prevDepthMask = GL_TRUE;
     GLboolean blendEn   = GL_FALSE;
     GLboolean depthEn   = GL_FALSE;
     GLboolean stencilEn = GL_FALSE;
@@ -306,6 +332,10 @@ void DirectQuadRenderer::render(GLuint tex,
     glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &prevEBO);
     glGetIntegerv(GL_FRAMEBUFFER_BINDING,    &prevFBO);
     glGetIntegerv(GL_ACTIVE_TEXTURE,         &prevActive);
+    glGetIntegerv(GL_VIEWPORT,               prevViewport);
+    glGetIntegerv(GL_SCISSOR_BOX,            prevScissor);
+    glGetBooleanv(GL_COLOR_WRITEMASK,        prevColorMask);
+    glGetBooleanv(GL_DEPTH_WRITEMASK,        &prevDepthMask);
     // 保存 GL_TEXTURE0 上的纹理绑定（渲染时会切换到此单元并绑定游戏帧纹理）
     glActiveTexture(GL_TEXTURE0);
     glGetIntegerv(GL_TEXTURE_BINDING_2D,     &prevTex);
@@ -324,6 +354,8 @@ void DirectQuadRenderer::render(GLuint tex,
     glGetIntegerv(GL_BLEND_DST_ALPHA, &prevDstAlpha);
 
     // 设置直通渲染所需 GL 状态
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glDepthMask(GL_FALSE);
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_STENCIL_TEST);
     glDisable(GL_CULL_FACE);
@@ -339,6 +371,7 @@ void DirectQuadRenderer::render(GLuint tex,
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, tex);
     if (m_uTex >= 0) glUniform1i(m_uTex, 0);
+    if (m_uSwizzleRB >= 0) glUniform1i(m_uSwizzleRB, swizzleRB ? 1 : 0);
 
     // 更新顶点缓冲并绘制
 #if !defined(USE_GLES2)
@@ -377,6 +410,10 @@ void DirectQuadRenderer::render(GLuint tex,
     if (stencilEn) glEnable(GL_STENCIL_TEST);
     if (cullEn)    glEnable(GL_CULL_FACE);
     if (scissorEn) glEnable(GL_SCISSOR_TEST);
+    glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
+    glScissor(prevScissor[0], prevScissor[1], prevScissor[2], prevScissor[3]);
+    glColorMask(prevColorMask[0], prevColorMask[1], prevColorMask[2], prevColorMask[3]);
+    glDepthMask(prevDepthMask);
     glBlendFuncSeparate(static_cast<GLenum>(prevSrcRGB),
                         static_cast<GLenum>(prevDstRGB),
                         static_cast<GLenum>(prevSrcAlpha),

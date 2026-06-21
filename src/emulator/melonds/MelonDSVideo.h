@@ -20,12 +20,18 @@ public:
 
     void Reset();
     void Capture(const melonDS::NDS& nds);
+    void CaptureAcceleratedRgba(const uint32_t* pixels,
+                                unsigned width,
+                                unsigned height,
+                                unsigned scale);
     LibretroLoader::VideoFrame GetFrame() const;
     const uint32_t* GetFrameBuffer() const;
 
 private:
     mutable std::mutex m_mutex;
     std::array<std::vector<uint32_t>, 2> m_framebuffer;
+    std::array<unsigned, 2> m_width {};
+    std::array<unsigned, 2> m_height {};
     unsigned m_front = 0;
     bool m_ready = false;
 };

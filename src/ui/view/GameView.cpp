@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <fstream>
 #include <cmath>
+#include <mutex>
 
 // stb_image_write 用于保存存档缩略图（PNG 格式）
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -207,7 +208,10 @@ namespace beiklive
         }
 
         // 上传待渲染帧（游戏线程已写入 m_pendingFrame）
-        _uploadPendingFrame();
+        {
+            std::lock_guard<std::recursive_mutex> glLock(beiklive::EmulatorGLMutex());
+            _uploadPendingFrame();
+        }
 
         // 根据画面模式计算绘制矩形，将游戏帧绘制到视图区域
         if (m_rendererReady) {
@@ -245,15 +249,20 @@ namespace beiklive
             m_gameDrawRect = rect;
             _updateNdsTouchRect(rect);
 
-            if (m_ndsSplitShaderRenderer) {
-                for (const auto& screenRect : _computeNdsScreenDrawRects(rect)) {
-                    auto& renderer = screenRect.topScreen ? m_ndsTopRenderer : m_ndsBottomRenderer;
-                    renderer.drawToScreen(screenRect.rect.x, screenRect.rect.y,
-                                          screenRect.rect.w, screenRect.rect.h,
-                                          windowScale, windowW, windowH);
+            {
+                std::lock_guard<std::recursive_mutex> glLock(beiklive::EmulatorGLMutex());
+                if (m_ndsSplitShaderRenderer) {
+                    for (const auto& screenRect : _computeNdsScreenDrawRects(rect)) {
+                        auto& renderer = screenRect.topScreen ? m_ndsTopRenderer : m_ndsBottomRenderer;
+                        renderer.drawToScreen(screenRect.rect.x, screenRect.rect.y,
+                                              screenRect.rect.w, screenRect.rect.h,
+                                              windowScale, windowW, windowH);
+                    }
+                } else if (_drawNdsAcceleratedTexture(rect, windowScale, windowW, windowH)) {
+                    // NDS OpenGL/Compute 3D renderer output was drawn directly.
+                } else {
+                    m_renderer.drawToScreen(rect.x, rect.y, rect.w, rect.h, windowScale, windowW, windowH);
                 }
-            } else {
-                m_renderer.drawToScreen(rect.x, rect.y, rect.w, rect.h, windowScale, windowW, windowH);
             }
 
             // 绘制遮罩层（覆盖整个 GameView 区域）
@@ -336,6 +345,13 @@ namespace beiklive
         }
 
         if (hasFrame) {
+            if (_useNdsAcceleratedTexture()) {
+                auto* textureCore = dynamic_cast<beiklive::IEmulatorVideoTexture*>(m_core);
+                beiklive::EmulatorVideoTexture videoTex;
+                if (textureCore && textureCore->GetVideoTexture(videoTex) &&
+                    videoTex.texture != 0 && videoTex.width != 0 && videoTex.height != 0)
+                    return;
+            }
             if (m_ndsSplitShaderRenderer) {
                 _uploadNdsSplitShaderFrame(frame);
                 return;
@@ -351,6 +367,14 @@ namespace beiklive
         return m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS) &&
                m_gameEntry.shaderEnabled &&
                !m_gameEntry.shaderPath.empty();
+    }
+
+    bool GameView::_useNdsAcceleratedTexture() const
+    {
+        return m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS) &&
+               !m_ndsSplitShaderRenderer &&
+               m_core != nullptr &&
+               dynamic_cast<beiklive::IEmulatorVideoTexture*>(m_core) != nullptr;
     }
 
     void GameView::_applySavedShaderParams(beiklive::GameRenderer& renderer) const
@@ -396,13 +420,50 @@ namespace beiklive
         return true;
     }
 
+    bool GameView::_drawNdsAcceleratedTexture(const beiklive::DisplayRect& rect,
+                                              float windowScale, int windowW, int windowH)
+    {
+        if (!_useNdsAcceleratedTexture())
+            return false;
+
+        auto* textureCore = dynamic_cast<beiklive::IEmulatorVideoTexture*>(m_core);
+        beiklive::EmulatorVideoTexture videoTex;
+        if (!textureCore || !textureCore->GetVideoTexture(videoTex) ||
+            videoTex.texture == 0 || videoTex.width == 0 || videoTex.height == 0)
+            return false;
+
+        const GLuint tex = static_cast<GLuint>(videoTex.texture);
+        const unsigned texW = videoTex.width;
+        const unsigned texH = videoTex.height;
+        const float fullH = static_cast<float>(texH);
+        const float topV0 = 0.0f;
+        const float topV1 = (192.0f * static_cast<float>(videoTex.scale)) / fullH;
+        const float bottomV0 = ((192.0f + 2.0f) * static_cast<float>(videoTex.scale)) / fullH;
+        const float bottomV1 = 1.0f;
+
+        for (const auto& screenRect : _computeNdsScreenDrawRects(rect)) {
+            const float v0 = screenRect.topScreen ? topV0 : bottomV0;
+            const float v1 = screenRect.topScreen ? topV1 : bottomV1;
+            m_renderer.drawExternalTexture(tex, texW, texH,
+                                           screenRect.rect.x, screenRect.rect.y,
+                                           screenRect.rect.w, screenRect.rect.h,
+                                           windowScale, windowW, windowH,
+                                           0.0f, v0, 1.0f, v1,
+                                           true);
+        }
+        return true;
+    }
+
     void GameView::_uploadNdsSplitShaderFrame(const LibretroLoader::VideoFrame& frame)
     {
-        if (frame.width != 256 || frame.height != 384 || frame.pixels.size() < 256u * 384u)
+        if (frame.width == 0 || frame.height == 0 ||
+            frame.width % 256u != 0 || frame.height != 384u * (frame.width / 256u) ||
+            frame.pixels.size() < static_cast<size_t>(frame.width) * frame.height)
             return;
 
-        constexpr unsigned screenW = 256;
-        constexpr unsigned screenH = 192;
+        const unsigned scale = frame.width / 256u;
+        const unsigned screenW = 256u * scale;
+        const unsigned screenH = 192u * scale;
         const size_t screenPixels = static_cast<size_t>(screenW) * screenH;
 
         m_ndsTopUploadFrame.width = screenW;
@@ -832,11 +893,14 @@ namespace beiklive
 
     LibretroLoader::VideoFrame GameView::_layoutNdsFrame(const LibretroLoader::VideoFrame& frame) const
     {
-        if (frame.width != 256 || frame.height != 384 || frame.pixels.size() < 256u * 384u)
+        if (frame.width == 0 || frame.height == 0 ||
+            frame.width % 256u != 0 || frame.height != 384u * (frame.width / 256u) ||
+            frame.pixels.size() < static_cast<size_t>(frame.width) * frame.height)
             return frame;
 
-        constexpr unsigned screenW = 256;
-        constexpr unsigned screenH = 192;
+        const unsigned scale = frame.width / 256u;
+        const unsigned screenW = 256u * scale;
+        const unsigned screenH = 192u * scale;
         LibretroLoader::VideoFrame out;
 
         auto blitScaled = [&](LibretroLoader::VideoFrame& dst,
@@ -855,7 +919,7 @@ namespace beiklive
                 const unsigned srcY = srcOffsetY + std::min<unsigned>(
                     screenH - 1,
                     static_cast<unsigned>((static_cast<uint64_t>(y) * screenH) / static_cast<unsigned>(dstH)));
-                const uint32_t* srcRow = src.pixels.data() + static_cast<size_t>(srcY) * screenW;
+                const uint32_t* srcRow = src.pixels.data() + static_cast<size_t>(srcY) * src.width;
                 uint32_t* dstRow = dst.pixels.data() + static_cast<size_t>(outY) * dst.width;
                 for (int x = 0; x < dstW; ++x) {
                     const int outX = dstX + x;
@@ -884,10 +948,10 @@ namespace beiklive
                 const float offsetY = topScreen ? m_gameEntry.ndsTopOffsetY : m_gameEntry.ndsBottomOffsetY;
                 const float baseX = topScreen ? 224.0f : 800.0f;
                 const float baseY = 264.0f;
-                const int dstW = std::max(4, static_cast<int>(std::lround(screenW * baseScale * scale / 4.0f)) * 4);
+                const int dstW = std::max(4, static_cast<int>(std::lround(256.0f * baseScale * scale / 4.0f)) * 4);
                 const int dstH = std::max(3, (dstW * 3) / 4);
-                const int dstX = static_cast<int>(std::lround(baseX + offsetX - (dstW - static_cast<int>(screenW)) * 0.5f));
-                const int dstY = static_cast<int>(std::lround(baseY + offsetY - (dstH - static_cast<int>(screenH)) * 0.5f));
+                const int dstX = static_cast<int>(std::lround(baseX + offsetX - (dstW - 256) * 0.5f));
+                const int dstY = static_cast<int>(std::lround(baseY + offsetY - (dstH - 192) * 0.5f));
                 blitScaled(out, frame, topScreen ? 0u : screenH, dstX, dstY, dstW, dstH);
             };
 
@@ -997,7 +1061,6 @@ namespace beiklive
             return;
         }
 
-#ifdef __SWITCH__
         if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
         {
             GameSignal::instance().resetAll();
@@ -1005,7 +1068,6 @@ namespace beiklive
             _startGameThread();
             return;
         }
-#endif
 
         if (m_core->SetupGame(m_gameEntry))
         {
@@ -1438,10 +1500,11 @@ namespace beiklive
         timeBeginPeriod(1); // 提升 Windows 定时器精度至 1ms
 #endif
 
-#ifdef __SWITCH__
         if (isNds && !m_core->IsReady())
         {
+#ifdef __SWITCH__
             svcSetThreadCoreMask(CUR_THREAD_HANDLE, 1, 1ULL << 1);
+#endif
 
             brls::Logger::info("GameView: initializing NDS core on game thread");
             if (!m_core->SetupGame(m_gameEntry))
@@ -1468,7 +1531,6 @@ namespace beiklive
             }
             _initPlayTimeTracking();
         }
-#endif
 
         if (!m_core->IsReady()) return;
 
@@ -1623,6 +1685,10 @@ namespace beiklive
             // ---- 金手指重载 ----
             if (sig.consumeReloadCheats() && m_core)
                 m_core->ReloadCheats();
+
+            // ---- 核心配置刷新 ----
+            if (sig.consumeConfigUpdate() && m_core)
+                m_core->NotifyConfigUpdated();
 
             // ---- 退出自动存档 ----
             {
@@ -2154,6 +2220,21 @@ namespace beiklive
 
     }
 
+    void GameView::_onNdsInternalResolutionChange(int scale)
+    {
+        if (m_gameEntry.platform != static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
+            return;
+
+        m_gameEntry.ndsInternalResolution = std::clamp(scale, 1, 4);
+        if (beiklive::GameDB && !m_gameEntry.path.empty()) {
+            beiklive::GameDB->set(m_gameEntry.path, "ndsInternalResolution",
+                nlohmann::json(m_gameEntry.ndsInternalResolution));
+            beiklive::GameDB->flush();
+        }
+
+        GameSignal::instance().requestConfigUpdate();
+    }
+
     void GameView::_onFilterChange(const std::string& filter)
     {
         if (!m_rendererReady) return;
@@ -2171,8 +2252,7 @@ namespace beiklive
 
     void GameView::_onConfigUpdated()
     {
-        if (m_core)
-            m_core->NotifyConfigUpdated();
+        GameSignal::instance().requestConfigUpdate();
     }
 
     std::vector<ShaderParamInfo> GameView::_getShaderParams() const

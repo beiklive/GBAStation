@@ -3,17 +3,20 @@
 #include "emulator/IEmulatorCore.hpp"
 #include "emulator/IEmulatorStopRequest.hpp"
 #include "emulator/IEmulatorTouchInput.hpp"
+#include "emulator/IEmulatorVideoTexture.hpp"
 #include "emulator/melonds/MelonDSAudio.h"
 #include "emulator/melonds/MelonDSInput.h"
 #include "emulator/melonds/MelonDSPlatform.h"
 #include "emulator/melonds/MelonDSVideo.h"
 
 #include <atomic>
+#include <mutex>
 #include <memory>
 #include <string>
 #include <vector>
 
 namespace melonDS {
+class Renderer3D;
 class NDS;
 struct NDSArgs;
 namespace NDSCart {
@@ -23,7 +26,9 @@ struct NDSCartArgs;
 
 namespace beiklive::melonds {
 
-class MelonDSCore : public IEmulatorCore, public IEmulatorTouchInput, public IEmulatorStopRequest {
+struct MelonDSGLContext;
+
+class MelonDSCore : public IEmulatorCore, public IEmulatorTouchInput, public IEmulatorStopRequest, public IEmulatorVideoTexture {
 public:
     MelonDSCore();
     ~MelonDSCore() override;
@@ -48,7 +53,7 @@ public:
     double SampleRate() const override { return 48000.0; }
 
     void SetFastForwarding(bool ff) override { m_fastForwarding = ff; }
-    void NotifyConfigUpdated() override {}
+    void NotifyConfigUpdated() override;
 
     void ApplyCheats(const std::vector<CheatEntry>& cheats) override { m_cheats = cheats; }
     const std::vector<beiklive::CheatEntry>& GetCheats() const override { return m_cheats; }
@@ -73,6 +78,7 @@ public:
     void SetButton(int key, bool pressed);
     void SetTouch(int x, int y, bool down) override;
     const uint32_t* GetFrameBuffer() const { return m_video.GetFrameBuffer(); }
+    bool GetVideoTexture(beiklive::EmulatorVideoTexture& out) override;
 
 private:
     beiklive::GameEntry m_gameEntry;
@@ -91,9 +97,19 @@ private:
     std::atomic<bool> m_paused{false};
     std::atomic<bool> m_fastForwarding{false};
     std::atomic<bool> m_stopRequested{false};
+    int m_internalResolution = 1;
+    bool m_usingAcceleratedRenderer = false;
+    bool m_usingComputeRenderer = false;
+    bool m_acceleratedReadbackFailed = false;
+    std::unique_ptr<MelonDSGLContext> m_glContext;
+    std::vector<uint32_t> m_acceleratedReadback;
+    int m_skipAcceleratedReadbackFrames = 0;
+    mutable std::mutex m_ndsMutex;
 
     bool loadBiosFiles(melonDS::NDSArgs& args);
     bool loadBatterySave(melonDS::NDSCart::NDSCartArgs& args) const;
+    std::unique_ptr<melonDS::Renderer3D> createRenderer3D();
+    bool captureAcceleratedFrame();
     std::string defaultSaveDir() const;
     std::string defaultBiosDir() const;
 };

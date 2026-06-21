@@ -197,7 +197,8 @@ std::unique_ptr<ComputeRenderer> ComputeRenderer::New()
     //glEnable(GL_DEBUG_OUTPUT);
     glGenBuffers(1, &result->YSpanSetupMemory);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, result->YSpanSetupMemory);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(SpanSetupY)*MaxYSpanSetups, nullptr, GL_DYNAMIC_DRAW);
+    result->YSpanSetups.resize(result->MaxYSpanSetups);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(SpanSetupY)*result->MaxYSpanSetups, nullptr, GL_DYNAMIC_DRAW);
     
     glGenBuffers(1, &result->RenderPolygonMemory);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, result->RenderPolygonMemory);
@@ -345,6 +346,11 @@ void ComputeRenderer::SetRenderSettings(int scale, bool highResolutionCoordinate
     HiresCoordinates = highResolutionCoordinates;
 
     MaxWorkTiles = TilesPerLine*TileLines*16;
+    MaxYSpanSetups = BaseMaxYSpanSetups * ScaleFactor;
+    YSpanSetups.resize(MaxYSpanSetups);
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, YSpanSetupMemory);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(SpanSetupY)*MaxYSpanSetups, nullptr, GL_DYNAMIC_DRAW);
 
     for (int i = 0; i < tilememoryLayer_Num; i++)
     {
@@ -645,6 +651,17 @@ void ComputeRenderer::RenderFrame(GPU& gpu)
     Variant variants[MaxVariants];
 
     bool enableTextureMaps = gpu.GPU3D.RenderDispCnt & (1<<0);
+    bool spanOverflow = false;
+    auto reserveYSpan = [this, &numYSpans]() -> SpanSetupY* {
+        if (numYSpans >= MaxYSpanSetups)
+            return nullptr;
+        return &YSpanSetups[numYSpans++];
+    };
+    auto reserveYSpanIndex = [this, &numSetupIndices]() -> SetupIndices* {
+        if (numSetupIndices >= (int)YSpanIndices.size())
+            return nullptr;
+        return &YSpanIndices[numSetupIndices++];
+    };
 
     for (int i = 0; i < gpu.GPU3D.RenderNumPolygons; i++)
     {
@@ -773,27 +790,32 @@ void ComputeRenderer::RenderFrame(GPU& gpu)
             if (scaledPositions[j][0] < scaledPositions[vtop][0]) vtop = j;
             if (scaledPositions[j][0] > scaledPositions[vbot][0]) vbot = j;
 
-            assert(numYSpans < MaxYSpanSetups);
             u32 curSpanL = numYSpans;
-            SetupYSpanDummy(&RenderPolygons[i], &YSpanSetups[numYSpans++], polygon, vtop, 0, scaledPositions);
-            assert(numYSpans < MaxYSpanSetups);
+            SpanSetupY* spanL = reserveYSpan();
+            if (spanL == nullptr) { spanOverflow = true; break; }
+            SetupYSpanDummy(&RenderPolygons[i], spanL, polygon, vtop, 0, scaledPositions);
             u32 curSpanR = numYSpans;
-            SetupYSpanDummy(&RenderPolygons[i], &YSpanSetups[numYSpans++], polygon, vbot, 1, scaledPositions);
+            SpanSetupY* spanR = reserveYSpan();
+            if (spanR == nullptr) { spanOverflow = true; break; }
+            SetupYSpanDummy(&RenderPolygons[i], spanR, polygon, vbot, 1, scaledPositions);
 
-            YSpanIndices[numSetupIndices].PolyIdx = i;
-            YSpanIndices[numSetupIndices].SpanIdxL = curSpanL;
-            YSpanIndices[numSetupIndices].SpanIdxR = curSpanR;
-            YSpanIndices[numSetupIndices].Y = ytop;
-            numSetupIndices++;
+            SetupIndices* setup = reserveYSpanIndex();
+            if (setup == nullptr) { spanOverflow = true; break; }
+            setup->PolyIdx = i;
+            setup->SpanIdxL = curSpanL;
+            setup->SpanIdxR = curSpanR;
+            setup->Y = ytop;
         }
         else
         {
             u32 curSpanL = numYSpans;
-            assert(numYSpans < MaxYSpanSetups);
-            SetupYSpan(&RenderPolygons[i], &YSpanSetups[numYSpans++], polygon, curVL, nextVL, 0, scaledPositions);
+            SpanSetupY* spanL = reserveYSpan();
+            if (spanL == nullptr) { spanOverflow = true; break; }
+            SetupYSpan(&RenderPolygons[i], spanL, polygon, curVL, nextVL, 0, scaledPositions);
             u32 curSpanR = numYSpans;
-            assert(numYSpans < MaxYSpanSetups);
-            SetupYSpan(&RenderPolygons[i], &YSpanSetups[numYSpans++], polygon, curVR, nextVR, 1, scaledPositions);
+            SpanSetupY* spanR = reserveYSpan();
+            if (spanR == nullptr) { spanOverflow = true; break; }
+            SetupYSpan(&RenderPolygons[i], spanR, polygon, curVR, nextVR, 1, scaledPositions);
 
             for (u32 y = ytop; y < ybot; y++)
             {
@@ -817,10 +839,13 @@ void ComputeRenderer::RenderFrame(GPU& gpu)
                     }
 
 
-                    assert(numYSpans < MaxYSpanSetups);
                     curSpanL = numYSpans;
-                    SetupYSpan(&RenderPolygons[i], &YSpanSetups[numYSpans++], polygon, curVL, nextVL, 0, scaledPositions);
+                    SpanSetupY* span = reserveYSpan();
+                    if (span == nullptr) { spanOverflow = true; break; }
+                    SetupYSpan(&RenderPolygons[i], span, polygon, curVL, nextVL, 0, scaledPositions);
                 }
+                if (spanOverflow)
+                    break;
                 if (y >= scaledPositions[nextVR][1] && curVR != polygon->VBottom)
                 {
                     while (y >= scaledPositions[nextVR][1] && curVR != polygon->VBottom)
@@ -840,21 +865,30 @@ void ComputeRenderer::RenderFrame(GPU& gpu)
                         }
                     }
 
-                    assert(numYSpans < MaxYSpanSetups);
                     curSpanR = numYSpans;
-                    SetupYSpan(&RenderPolygons[i] ,&YSpanSetups[numYSpans++], polygon, curVR, nextVR, 1, scaledPositions);
+                    SpanSetupY* span = reserveYSpan();
+                    if (span == nullptr) { spanOverflow = true; break; }
+                    SetupYSpan(&RenderPolygons[i] ,span, polygon, curVR, nextVR, 1, scaledPositions);
                 }
+                if (spanOverflow)
+                    break;
 
-                YSpanIndices[numSetupIndices].PolyIdx = i;
-                YSpanIndices[numSetupIndices].SpanIdxL = curSpanL;
-                YSpanIndices[numSetupIndices].SpanIdxR = curSpanR;
-                YSpanIndices[numSetupIndices].Y = y;
-                numSetupIndices++;
+                SetupIndices* setup = reserveYSpanIndex();
+                if (setup == nullptr) { spanOverflow = true; break; }
+                setup->PolyIdx = i;
+                setup->SpanIdxL = curSpanL;
+                setup->SpanIdxR = curSpanR;
+                setup->Y = y;
             }
+            if (spanOverflow)
+                break;
         }
 
         //printf("polygon min max %d %d | %d %d\n", RenderPolygons[i].XMin, RenderPolygons[i].XMinY, RenderPolygons[i].XMax, RenderPolygons[i].XMaxY);
     }
+
+    if (spanOverflow)
+        return;
 
     /*for (u32 i = 0; i < RenderNumPolygons; i++)
     {
@@ -868,7 +902,7 @@ void ComputeRenderer::RenderFrame(GPU& gpu)
     if (numYSpans > 0)
     {
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, YSpanSetupMemory);
-        glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(SpanSetupY)*numYSpans, YSpanSetups);
+        glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(SpanSetupY)*numYSpans, YSpanSetups.data());
 
         glBindBuffer(GL_TEXTURE_BUFFER, YSpanIndicesTextureMemory);
         glBufferSubData(GL_TEXTURE_BUFFER, 0, numSetupIndices*4*2, YSpanIndices.data());

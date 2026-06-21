@@ -3,6 +3,7 @@
 #include "ui/widget/HintsBar.hpp"
 #include "ui/utils/FilePickerHelper.hpp"
 #include "ui/utils/UiHelper.hpp"
+#include <algorithm>
 #include <filesystem>
 #include "borealis/core/cache_helper.hpp"
 #include <borealis/views/dialog.hpp>
@@ -998,6 +999,26 @@ namespace beiklive
                     return true;
                 });
                 box->addView(ndsBottomCell);
+
+                std::vector<std::string> ndsResLabels = {"x1 原生", "x2", "x3", "x4"};
+                const int curNdsRes = std::clamp(m_gameEntry.ndsInternalResolution, 1, 4);
+                auto* ndsResCell = new beiklive::SelectorButton();
+                ndsResCell->setText("NDS内部分辨率");
+                ndsResCell->setOptions(ndsResLabels, curNdsRes - 1);
+                ndsResCell->setOnSelect([this](int idx) {
+                    if (idx < 0 || idx > 3)
+                        return;
+                    m_gameEntry.ndsInternalResolution = idx + 1;
+                    if (beiklive::GameDB && !m_gameEntry.path.empty()) {
+                        beiklive::GameDB->set(m_gameEntry.path, "ndsInternalResolution",
+                            nlohmann::json(m_gameEntry.ndsInternalResolution));
+                        beiklive::GameDB->flush();
+                    }
+                    if (m_ndsInternalResolutionCallback)
+                        m_ndsInternalResolutionCallback(m_gameEntry.ndsInternalResolution);
+                });
+                box->addView(ndsResCell);
+                box->addView(makeHint("需要 melonDS OpenGL/Compute 3D renderer；x1 使用原生 256x192"));
             }
 
             // ── 整数倍缩放 ──
@@ -1840,6 +1861,7 @@ namespace beiklive
                 game.ndsBottomOffsetX = m_gameEntry.ndsBottomOffsetX;
                 game.ndsBottomOffsetY = m_gameEntry.ndsBottomOffsetY;
                 game.ndsScreenLayout = m_gameEntry.ndsScreenLayout;
+                game.ndsInternalResolution = m_gameEntry.ndsInternalResolution;
             }
             beiklive::GameDB->upsertByPath(game);
             ++count;

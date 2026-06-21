@@ -103,4 +103,33 @@ void GameRenderer::drawToScreen(float virtX, float virtY, float virtW, float vir
                                windowScale, windowW, windowH);
 }
 
+void GameRenderer::drawExternalTexture(GLuint tex, unsigned texW, unsigned texH,
+                                       float virtX, float virtY, float virtW, float virtH,
+                                       float windowScale, int windowW, int windowH)
+{
+    drawExternalTexture(tex, texW, texH, virtX, virtY, virtW, virtH,
+                        windowScale, windowW, windowH, 0.0f, 0.0f, 1.0f, 1.0f);
+}
+
+void GameRenderer::drawExternalTexture(GLuint tex, unsigned texW, unsigned texH,
+                                       float virtX, float virtY, float virtW, float virtH,
+                                       float windowScale, int windowW, int windowH,
+                                       float u0, float v0, float u1, float v1,
+                                       bool swizzleRB)
+{
+    if (!tex || texW == 0 || texH == 0 || !m_renderChain.isDirectRendererReady())
+        return;
+
+    GLuint finalTex = m_renderChain.run(tex, texW, texH,
+        static_cast<unsigned>(std::llround(static_cast<double>(virtW) * static_cast<double>(windowScale))),
+        static_cast<unsigned>(std::llround(static_cast<double>(virtH) * static_cast<double>(windowScale))));
+
+    if (finalTex == tex)
+        m_renderChain.drawToScreen(finalTex, virtX, virtY, virtW, virtH,
+                                   windowScale, windowW, windowH, u0, v0, u1, v1, swizzleRB);
+    else
+        m_renderChain.drawToScreen(finalTex, virtX, virtY, virtW, virtH,
+                                   windowScale, windowW, windowH);
+}
+
 } // namespace beiklive

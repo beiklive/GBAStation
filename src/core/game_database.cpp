@@ -1,4 +1,5 @@
 #include "game_database.hpp"
+#include <algorithm>
 #include <fstream>
 #include <stdexcept>
 #include <filesystem>
@@ -68,6 +69,7 @@ namespace beiklive
             {"ndsBottomOffsetX", entry.ndsBottomOffsetX},
             {"ndsBottomOffsetY", entry.ndsBottomOffsetY},
             {"ndsScreenLayout", sanitizeUtf8(entry.ndsScreenLayout)},
+            {"ndsInternalResolution", entry.ndsInternalResolution},
             {"shaderParaNames", entry.shaderParaNames},
             {"shaderParaValues", entry.shaderParaValues}};
     }
@@ -103,6 +105,7 @@ namespace beiklive
         entry.ndsBottomOffsetX = j.value("ndsBottomOffsetX", 0.0f);
         entry.ndsBottomOffsetY = j.value("ndsBottomOffsetY", 0.0f);
         entry.ndsScreenLayout = j.value("ndsScreenLayout", "");
+        entry.ndsInternalResolution = std::clamp(j.value("ndsInternalResolution", 1), 1, 4);
         entry.shaderParaNames = j.value("shaderParaNames", std::vector<std::string>());
         entry.shaderParaValues = j.value("shaderParaValues", std::vector<float>());
     }
