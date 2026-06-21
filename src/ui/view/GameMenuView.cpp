@@ -1135,16 +1135,16 @@ namespace beiklive
                     if (idx < 0 || idx > 3)
                         return;
                     m_gameEntry.ndsInternalResolution = idx + 1;
-                    if (beiklive::GameDB && !m_gameEntry.path.empty()) {
-                        beiklive::GameDB->set(m_gameEntry.path, "ndsInternalResolution",
-                            nlohmann::json(m_gameEntry.ndsInternalResolution));
-                        beiklive::GameDB->flush();
-                    }
+                    // if (beiklive::GameDB && !m_gameEntry.path.empty()) {
+                    //     beiklive::GameDB->set(m_gameEntry.path, "ndsInternalResolution",
+                    //         nlohmann::json(m_gameEntry.ndsInternalResolution));
+                    //     beiklive::GameDB->flush();
+                    // }
                     if (m_ndsInternalResolutionCallback)
                         m_ndsInternalResolutionCallback(m_gameEntry.ndsInternalResolution);
                 });
                 box->addView(ndsResCell);
-                box->addView(makeHint("需要 melonDS OpenGL/Compute 3D renderer；x1 使用原生 256x192"));
+                box->addView(makeHint("默认1倍，目前为测试性功能，开启高倍可能会导致程序崩溃，请谨慎使用"));
             }
 
             if (!isNds) {
