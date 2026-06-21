@@ -968,8 +968,10 @@ void ApiRouter::handleUploadFinish(mg_connection* c, mg_http_message* hm)
         entry.platform = session.platform;
         entry.logoPath = beiklive::tools::getDefaultLogoPath(static_cast<beiklive::enums::EmuPlatform>(session.platform));
         entry.savePath = beiklive::tools::defaultGameSavePath(session.platform, session.targetPath);
-        if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
+        if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)) {
             entry.ndsScreenLayout = "vertical";
+            entry.ndsScreenOrientation = "0";
+        }
         ensureDir(entry.savePath);
         bool saved = saveGame(entry);
         return replyJson(c, 200, {{"ok", saved}, {"saved", saved}, {"gameId", gameIdFromEntry(entry)}});

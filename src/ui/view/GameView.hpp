@@ -12,6 +12,7 @@
 #include "ui/utils/GameOverlayRenderer.hpp"
 
 #include <atomic>
+#include <array>
 #include <chrono>
 #include <deque>
 #include <mutex>
@@ -100,6 +101,8 @@ namespace beiklive
             void _onOverlayPathChange(const std::string& path);
             /// NDS 双屏布局变更（UI线程调用）
             void _onNdsLayoutChange(const std::string& layout);
+            /// NDS 屏幕旋转角度变更（UI线程调用）
+            void _onNdsScreenOrientationChange(const std::string& orientation);
             /// NDS 自定义双屏位置/缩放变更（UI线程调用）
             void _onNdsScreenValuesChanged(bool topScreen, float x, float y, float scale);
             /// NDS 3D 内部分辨率倍率变更（UI线程调用）
@@ -147,6 +150,7 @@ namespace beiklive
             beiklive::DisplayRect m_gameDrawRect; ///< 当前游戏画面在视图中的绘制区域
             beiklive::DisplayRect m_ndsTouchRect; ///< NDS 下屏在视图中的绘制区域
             std::string m_ndsLayout = "vertical"; ///< NDS 双屏布局
+            std::string m_ndsScreenOrientation = "0"; ///< NDS 屏幕旋转角度（0/90/180/270）
             bool m_ndsTouchActive = false; ///< NDS 原始触摸轮询是否处于按下状态
 
             // ---- 遮罩 --------------------------------------------------------
@@ -224,6 +228,17 @@ namespace beiklive
             };
             std::vector<NdsScreenDrawRect> _computeNdsScreenDrawRects(
                 const beiklive::DisplayRect& layoutRect) const;
+            beiklive::DisplayRect _rotateNdsScreenRect(
+                const beiklive::DisplayRect& screenRect,
+                const beiklive::DisplayRect& layoutRect,
+                const beiklive::DisplayRect& orientedRect) const;
+            std::array<float, 8> _ndsOrientationUv() const;
+            beiklive::DisplayRect _unrotateNdsRect(
+                const beiklive::DisplayRect& orientedRect, const beiklive::DisplayRect& layoutRect) const;
+            bool _mapNdsPointToUnrotated(float x, float y,
+                                         const beiklive::DisplayRect& orientedRect,
+                                         const beiklive::DisplayRect& layoutRect,
+                                         float& outX, float& outY) const;
 
             /// 初始化游戏时长追踪（启动时检查并合并遗留的临时文件）
             void _initPlayTimeTracking();

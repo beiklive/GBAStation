@@ -83,8 +83,10 @@ namespace beiklive
                 beiklive::tools::getFileNameWithoutExtension(m_gameData.fileName),
                 beiklive::tools::getFileNameWithoutExtension(m_gameData.fileName));
             minimal.savePath = beiklive::tools::defaultGameSavePath(minimal.platform, minimal.path);
-            if (minimal.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
+            if (minimal.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)) {
                 minimal.ndsScreenLayout = "vertical";
+                minimal.ndsScreenOrientation = "0";
+            }
             std::filesystem::create_directories(minimal.savePath);
             db->upsertByPath(minimal);
         }
@@ -118,8 +120,10 @@ namespace beiklive
         // 整数倍缩放
         db->setDefault(path, "integerAspectRatio",
                        GET_SETTING_KEY_INT("display.integer_scale_mult", 0));
-        if ((int)m_gameData.itemType == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
+        if ((int)m_gameData.itemType == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)) {
             db->setDefault(path, "ndsScreenLayout", std::string("vertical"));
+            db->setDefault(path, "ndsScreenOrientation", std::string("0"));
+        }
 
         m_gameEntry = db->findByPath(path).value();
 
@@ -214,6 +218,11 @@ namespace beiklive
             m_gameEntry.ndsScreenLayout.empty())
         {
             m_gameEntry.ndsScreenLayout = "vertical";
+        }
+        if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS) &&
+            m_gameEntry.ndsScreenOrientation.empty())
+        {
+            m_gameEntry.ndsScreenOrientation = "0";
         }
         if (beiklive::GameDB && !m_gameEntry.path.empty())
             beiklive::GameDB->upsertByPath(m_gameEntry);
@@ -352,6 +361,9 @@ namespace beiklive
         m_gameMenuView->setNdsLayoutCallback([this](const std::string& layout) {
             if (m_gameView) m_gameView->_onNdsLayoutChange(layout);
         });
+        m_gameMenuView->setNdsScreenOrientationCallback([this](const std::string& orientation) {
+            if (m_gameView) m_gameView->_onNdsScreenOrientationChange(orientation);
+        });
         m_gameMenuView->setNdsScreenAdjustCallback([this](bool topScreen, float x, float y, float scale) {
             if (m_gameView) m_gameView->_onNdsScreenValuesChanged(topScreen, x, y, scale);
         });
@@ -369,9 +381,6 @@ namespace beiklive
         });
         m_gameMenuView->setOverlayPathCallback([this](const std::string& path) {
             if (m_gameView) m_gameView->_onOverlayPathChange(path);
-        });
-        m_gameMenuView->setFilterCallback([this](const std::string& filter) {
-            if (m_gameView) m_gameView->_onFilterChange(filter);
         });
         m_gameMenuView->setShaderToggleCallback([this](bool on) {
             if (m_gameView) m_gameView->_onShaderToggle(on);

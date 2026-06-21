@@ -7,6 +7,7 @@
 #include "core/Tools.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -28,6 +29,27 @@
 #ifdef __SWITCH__
 #include <switch.h>
 #endif
+
+namespace
+{
+    std::string normalizeNdsScreenRotation(std::string value)
+    {
+        value.erase(std::remove_if(value.begin(), value.end(),
+            [](unsigned char c) { return std::isspace(c) != 0; }), value.end());
+        std::transform(value.begin(), value.end(), value.begin(),
+            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+        if (value == "0" || value == "0deg" || value == "0°" || value == "vertical")
+            return "0";
+        if (value == "90" || value == "90deg" || value == "90°" || value == "horizontal")
+            return "90";
+        if (value == "180" || value == "180deg" || value == "180°" || value == "vertical_reverse")
+            return "180";
+        if (value == "270" || value == "270deg" || value == "270°" || value == "horizontal_reverse")
+            return "270";
+        return "0";
+    }
+}
 
 namespace beiklive
 {
@@ -74,6 +96,9 @@ namespace beiklive
                 m_ndsLayout != "top" && m_ndsLayout != "bottom")
                 m_ndsLayout = "vertical";
             m_gameEntry.ndsScreenLayout = m_ndsLayout;
+
+            m_ndsScreenOrientation = normalizeNdsScreenRotation(m_gameEntry.ndsScreenOrientation);
+            m_gameEntry.ndsScreenOrientation = m_ndsScreenOrientation;
         }
 
         // 读取连发速率（Hz）
@@ -237,6 +262,8 @@ namespace beiklive
                     gw = 256;
                     gh = 384;
                 }
+                if (m_ndsScreenOrientation == "90" || m_ndsScreenOrientation == "270")
+                    std::swap(gw, gh);
             }
 
             int intScale = static_cast<int>(m_gameEntry.integerAspectRatio);
@@ -254,14 +281,21 @@ namespace beiklive
             {
                 std::lock_guard<std::recursive_mutex> glLock(beiklive::EmulatorGLMutex());
                 if (m_ndsSplitShaderRenderer) {
-                    for (const auto& screenRect : _computeNdsScreenDrawRects(rect)) {
+                    const beiklive::DisplayRect layoutRect = _unrotateNdsRect(rect, rect);
+                    const auto uv = _ndsOrientationUv();
+                    for (const auto& screenRect : _computeNdsScreenDrawRects(layoutRect)) {
                         auto& renderer = screenRect.topScreen ? m_ndsTopRenderer : m_ndsBottomRenderer;
-                        renderer.drawToScreen(screenRect.rect.x, screenRect.rect.y,
-                                              screenRect.rect.w, screenRect.rect.h,
-                                              windowScale, windowW, windowH);
+                        const auto rotatedRect = _rotateNdsScreenRect(screenRect.rect, layoutRect, rect);
+                        renderer.drawToScreen(rotatedRect.x, rotatedRect.y,
+                                              rotatedRect.w, rotatedRect.h,
+                                              windowScale, windowW, windowH, uv);
                     }
                 } else if (_drawNdsAcceleratedTexture(rect, windowScale, windowW, windowH)) {
                     // NDS OpenGL/Compute 3D renderer output was copied into the normal renderer texture.
+                } else if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)) {
+                    m_renderer.drawToScreen(rect.x, rect.y, rect.w, rect.h,
+                                            windowScale, windowW, windowH,
+                                            _ndsOrientationUv());
                 } else {
                     m_renderer.drawToScreen(rect.x, rect.y, rect.w, rect.h, windowScale, windowW, windowH);
                 }
@@ -452,14 +486,24 @@ namespace beiklive
         const float bottomV0 = ((192.0f + 2.0f) * static_cast<float>(videoTex.scale)) / fullH;
         const float bottomV1 = 1.0f;
 
-        for (const auto& screenRect : _computeNdsScreenDrawRects(rect)) {
+        const beiklive::DisplayRect layoutRect = _unrotateNdsRect(rect, rect);
+        const auto orientationUv = _ndsOrientationUv();
+        for (const auto& screenRect : _computeNdsScreenDrawRects(layoutRect)) {
             const float v0 = screenRect.topScreen ? topV0 : bottomV0;
             const float v1 = screenRect.topScreen ? topV1 : bottomV1;
+            std::array<float, 8> uv{};
+            for (size_t i = 0; i < 4; ++i) {
+                const float u = orientationUv[i * 2];
+                const float v = orientationUv[i * 2 + 1];
+                uv[i * 2] = u;
+                uv[i * 2 + 1] = v0 + (v1 - v0) * v;
+            }
+            const auto rotatedRect = _rotateNdsScreenRect(screenRect.rect, layoutRect, rect);
             m_renderer.drawExternalTexture(tex, texW, texH,
-                                           screenRect.rect.x, screenRect.rect.y,
-                                           screenRect.rect.w, screenRect.rect.h,
+                                           rotatedRect.x, rotatedRect.y,
+                                           rotatedRect.w, rotatedRect.h,
                                            windowScale, windowW, windowH,
-                                           0.0f, v0, 1.0f, v1,
+                                           uv,
                                            true);
         }
         return true;
@@ -565,6 +609,101 @@ namespace beiklive
         rects.push_back({false, {layoutRect.x, layoutRect.y + layoutRect.h * 0.5f,
                                  layoutRect.w, layoutRect.h * 0.5f}});
         return rects;
+    }
+
+    beiklive::DisplayRect GameView::_unrotateNdsRect(
+        const beiklive::DisplayRect& orientedRect, const beiklive::DisplayRect&) const
+    {
+        if (m_ndsScreenOrientation == "90" || m_ndsScreenOrientation == "270")
+        {
+            const float cx = orientedRect.x + orientedRect.w * 0.5f;
+            const float cy = orientedRect.y + orientedRect.h * 0.5f;
+            return {cx - orientedRect.h * 0.5f, cy - orientedRect.w * 0.5f,
+                    orientedRect.h, orientedRect.w};
+        }
+        return orientedRect;
+    }
+
+    beiklive::DisplayRect GameView::_rotateNdsScreenRect(
+        const beiklive::DisplayRect& screenRect,
+        const beiklive::DisplayRect& layoutRect,
+        const beiklive::DisplayRect& orientedRect) const
+    {
+        if (m_ndsScreenOrientation == "0")
+            return screenRect;
+
+        const float relX = screenRect.x - layoutRect.x;
+        const float relY = screenRect.y - layoutRect.y;
+
+        if (m_ndsScreenOrientation == "180") {
+            return {
+                orientedRect.x + (layoutRect.w - relX - screenRect.w),
+                orientedRect.y + (layoutRect.h - relY - screenRect.h),
+                screenRect.w,
+                screenRect.h
+            };
+        }
+
+        if (m_ndsScreenOrientation == "90") {
+            return {
+                orientedRect.x + (layoutRect.h - relY - screenRect.h),
+                orientedRect.y + relX,
+                screenRect.h,
+                screenRect.w
+            };
+        }
+
+        if (m_ndsScreenOrientation == "270") {
+            return {
+                orientedRect.x + relY,
+                orientedRect.y + (layoutRect.w - relX - screenRect.w),
+                screenRect.h,
+                screenRect.w
+            };
+        }
+
+        return screenRect;
+    }
+
+    std::array<float, 8> GameView::_ndsOrientationUv() const
+    {
+        if (m_ndsScreenOrientation == "90")
+            return {0.f, 1.f, 0.f, 0.f, 1.f, 0.f, 1.f, 1.f};
+        if (m_ndsScreenOrientation == "180")
+            return {1.f, 1.f, 0.f, 1.f, 0.f, 0.f, 1.f, 0.f};
+        if (m_ndsScreenOrientation == "270")
+            return {1.f, 0.f, 1.f, 1.f, 0.f, 1.f, 0.f, 0.f};
+        return {0.f, 0.f, 1.f, 0.f, 1.f, 1.f, 0.f, 1.f};
+    }
+
+    bool GameView::_mapNdsPointToUnrotated(float x, float y,
+                                           const beiklive::DisplayRect& orientedRect,
+                                           const beiklive::DisplayRect& layoutRect,
+                                           float& outX, float& outY) const
+    {
+        if (orientedRect.w <= 0.f || orientedRect.h <= 0.f ||
+            layoutRect.w <= 0.f || layoutRect.h <= 0.f)
+            return false;
+
+        const float rx = x - orientedRect.x;
+        const float ry = y - orientedRect.y;
+        if (rx < 0.f || ry < 0.f || rx > orientedRect.w || ry > orientedRect.h)
+            return false;
+
+        if (m_ndsScreenOrientation == "90") {
+            outX = layoutRect.x + ry;
+            outY = layoutRect.y + (layoutRect.h - rx);
+        } else if (m_ndsScreenOrientation == "270") {
+            outX = layoutRect.x + (layoutRect.w - ry);
+            outY = layoutRect.y + rx;
+        } else if (m_ndsScreenOrientation == "180") {
+            outX = layoutRect.x + (layoutRect.w - rx);
+            outY = layoutRect.y + (layoutRect.h - ry);
+        } else {
+            outX = layoutRect.x + rx;
+            outY = layoutRect.y + ry;
+        }
+        return true;
     }
 
     void GameView::_requestNdsFrameRelayout()
@@ -883,24 +1022,37 @@ namespace beiklive
         if (!touchCore)
             return;
 
-        const auto& rect = m_ndsTouchRect;
-        if (rect.w <= 0.f || rect.h <= 0.f)
+        const auto& orientedRect = m_ndsTouchRect;
+        if (orientedRect.w <= 0.f || orientedRect.h <= 0.f)
         {
             touchCore->SetTouch(0, 0, false);
             return;
         }
 
-        const float localX = x - rect.x;
-        const float localY = y - rect.y;
-        if (!down || localX < 0.f || localY < 0.f || localX > rect.w || localY > rect.h)
+        beiklive::DisplayRect layoutRect = _unrotateNdsRect(orientedRect, orientedRect);
+        float mappedX = 0.f;
+        float mappedY = 0.f;
+        if (!down || !_mapNdsPointToUnrotated(x, y, orientedRect, layoutRect, mappedX, mappedY))
         {
             touchCore->SetTouch(0, 0, false);
             return;
         }
 
-        const int ndsX = static_cast<int>(std::clamp(localX / rect.w, 0.f, 1.f) * 255.f + 0.5f);
-        const int ndsY = static_cast<int>(std::clamp(localY / rect.h, 0.f, 1.f) * 191.f + 0.5f);
-        touchCore->SetTouch(ndsX, ndsY, true);
+        for (const auto& screenRect : _computeNdsScreenDrawRects(layoutRect)) {
+            if (screenRect.topScreen)
+                continue;
+            const auto& rect = screenRect.rect;
+            const float localX = mappedX - rect.x;
+            const float localY = mappedY - rect.y;
+            if (localX < 0.f || localY < 0.f || localX > rect.w || localY > rect.h)
+                continue;
+            const int ndsX = static_cast<int>(std::clamp(localX / rect.w, 0.f, 1.f) * 255.f + 0.5f);
+            const int ndsY = static_cast<int>(std::clamp(localY / rect.h, 0.f, 1.f) * 191.f + 0.5f);
+            touchCore->SetTouch(ndsX, ndsY, true);
+            return;
+        }
+
+        touchCore->SetTouch(0, 0, false);
     }
 
     LibretroLoader::VideoFrame GameView::_layoutNdsFrame(const LibretroLoader::VideoFrame& frame) const
@@ -1021,44 +1173,7 @@ namespace beiklive
         if (rect.w <= 0.f || rect.h <= 0.f)
             return;
 
-        if (m_ndsLayout == "custom") {
-            constexpr float canvasW = 1280.f;
-            constexpr float canvasH = 720.f;
-            const float scale = std::clamp(m_gameEntry.ndsBottomScale, 0.25f, 4.0f);
-            const float screenW = static_cast<float>(
-                std::max(4, static_cast<int>(std::lround(256.f * scale / 4.0f)) * 4));
-            const float screenH = screenW * 0.75f;
-            const float baseX = 800.f;
-            const float baseY = 264.f;
-            const float x = baseX + m_gameEntry.ndsBottomOffsetX - (screenW - 256.f) * 0.5f;
-            const float y = baseY + m_gameEntry.ndsBottomOffsetY - (screenH - 192.f) * 0.5f;
-            m_ndsTouchRect = {
-                rect.x + rect.w * (x / canvasW),
-                rect.y + rect.h * (y / canvasH),
-                rect.w * (screenW / canvasW),
-                rect.h * (screenH / canvasH)
-            };
-        } else if (m_ndsLayout == "horizontal") {
-            constexpr float screenW = 256.f;
-            constexpr float gap = 0.f;
-            const float totalW = screenW * 2.f + gap;
-            const float bottomX = rect.x + rect.w * ((screenW + gap) / totalW);
-            const float bottomW = rect.w * (screenW / totalW);
-            m_ndsTouchRect = { bottomX, rect.y, bottomW, rect.h };
-        } else if (m_ndsLayout == "hybrid") {
-            constexpr float canvasW = 1280.f;
-            constexpr float canvasH = 720.f;
-            m_ndsTouchRect = {
-                rect.x + rect.w * (853.f / canvasW),
-                rect.y + rect.h * (360.f / canvasH),
-                rect.w * (427.f / canvasW),
-                rect.h * (320.f / canvasH)
-            };
-        } else if (m_ndsLayout == "bottom") {
-            m_ndsTouchRect = rect;
-        } else if (m_ndsLayout == "vertical") {
-            m_ndsTouchRect = { rect.x, rect.y + rect.h * 0.5f, rect.w, rect.h * 0.5f };
-        }
+        m_ndsTouchRect = rect;
     }
 
     // ============================================================
@@ -2218,6 +2333,20 @@ namespace beiklive
         }
         if (m_rendererReady && m_ndsLayout == "hybrid")
             m_renderer.setFilter(false);
+        m_ndsTouchRect = {};
+        _requestNdsFrameRelayout();
+    }
+
+    void GameView::_onNdsScreenOrientationChange(const std::string& orientation)
+    {
+        m_ndsScreenOrientation = normalizeNdsScreenRotation(orientation);
+
+        m_gameEntry.ndsScreenOrientation = m_ndsScreenOrientation;
+        if (beiklive::GameDB && !m_gameEntry.path.empty()) {
+            beiklive::GameDB->set(m_gameEntry.path, "ndsScreenOrientation",
+                nlohmann::json(m_gameEntry.ndsScreenOrientation));
+            beiklive::GameDB->flush();
+        }
         m_ndsTouchRect = {};
         _requestNdsFrameRelayout();
     }

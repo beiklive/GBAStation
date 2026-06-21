@@ -569,6 +569,10 @@ brls::View* DataManagementPage::buildScanImportTab()
     snesSwitch->init("扫描SFC游戏", m_scanSNES, [this](bool on) { m_scanSNES = on; });
     box->addView(snesSwitch);
 
+    auto* ndsSwitch = new brls::BooleanCell();
+    ndsSwitch->init("扫描NDS游戏", m_scanNDS, [this](bool on) { m_scanNDS = on; });
+    box->addView(ndsSwitch);
+
 
     scroll->setContentView(box);
 
@@ -882,8 +886,10 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
             entry.overlayEnabled = config.overlayEnabled;
             entry.shaderEnabled = config.shaderEnabled;
             applyDisplayDefaults(entry);
-            if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
+            if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)) {
                 entry.ndsScreenLayout = "vertical";
+                entry.ndsScreenOrientation = "0";
+            }
 
             beiklive::GameDB->upsertByPath(entry);
             m_progress.store(i + 1, std::memory_order_release);
@@ -934,6 +940,7 @@ void DataManagementPage::startDirImport(const std::string& dirPath)
     if (m_scanGB) exts.insert("gb");
     if (m_scanNES) { exts.insert("nes"); exts.insert("fds"); }
     if (m_scanSNES) { exts.insert("sfc"); exts.insert("smc"); }
+    if (m_scanNDS) exts.insert("nds");
 
     m_importing.store(true, std::memory_order_release);
 
@@ -1025,8 +1032,10 @@ void DataManagementPage::startDirImport(const std::string& dirPath)
             }
             entry.savePath = savePath;
             applyDisplayDefaults(entry);
-            if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
+            if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)) {
                 entry.ndsScreenLayout = "vertical";
+                entry.ndsScreenOrientation = "0";
+            }
 
             auto existing = beiklive::GameDB->findByPath(path);
             if (existing)
@@ -1043,6 +1052,8 @@ void DataManagementPage::startDirImport(const std::string& dirPath)
                     entry.savePath = existing->savePath;
                 if (!existing->ndsScreenLayout.empty())
                     entry.ndsScreenLayout = existing->ndsScreenLayout;
+                if (!existing->ndsScreenOrientation.empty())
+                    entry.ndsScreenOrientation = existing->ndsScreenOrientation;
             }
 
             beiklive::GameDB->upsertByPath(entry);

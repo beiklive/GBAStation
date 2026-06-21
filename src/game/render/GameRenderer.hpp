@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <glad/glad.h>
 #include <string>
 #include <vector>
@@ -87,6 +88,10 @@ public:
     void drawToScreen(float virtX, float virtY, float virtW, float virtH,
                       float windowScale, int windowW, int windowH);
 
+    void drawToScreen(float virtX, float virtY, float virtW, float virtH,
+                      float windowScale, int windowW, int windowH,
+                      const std::array<float, 8>& uv);
+
     void drawExternalTexture(GLuint tex, unsigned texW, unsigned texH,
                              float virtX, float virtY, float virtW, float virtH,
                              float windowScale, int windowW, int windowH);
@@ -95,6 +100,12 @@ public:
                              float virtX, float virtY, float virtW, float virtH,
                              float windowScale, int windowW, int windowH,
                              float u0, float v0, float u1, float v1,
+                             bool swizzleRB = false);
+
+    void drawExternalTexture(GLuint tex, unsigned texW, unsigned texH,
+                             float virtX, float virtY, float virtW, float virtH,
+                             float windowScale, int windowW, int windowH,
+                             const std::array<float, 8>& uv,
                              bool swizzleRB = false);
 
     /// 返回当前帧纹理的宽度。

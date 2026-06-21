@@ -1,6 +1,7 @@
 #include "game/render/RenderChain.hpp"
 
 #include <borealis.hpp>
+#include <array>
 
 namespace beiklive {
 
@@ -99,6 +100,17 @@ void RenderChain::drawToScreen(GLuint tex,
                                 float u0, float v0, float u1, float v1,
                                 bool swizzleRB)
 {
+    drawToScreen(tex, virtX, virtY, virtW, virtH, windowScale, windowW, windowH,
+                 std::array<float, 8>{u0, v0, u1, v0, u1, v1, u0, v1}, swizzleRB);
+}
+
+void RenderChain::drawToScreen(GLuint tex,
+                                float virtX, float virtY,
+                                float virtW, float virtH,
+                                float windowScale, int windowW, int windowH,
+                                const std::array<float, 8>& uv,
+                                bool swizzleRB)
+{
     if (!tex || virtW <= 0.0f || virtH <= 0.0f) return;
     if (!m_directRenderer.isInitialized()) return;
     if (windowW <= 0 || windowH <= 0) return;
@@ -115,7 +127,7 @@ void RenderChain::drawToScreen(GLuint tex,
     float ndcTop    = 1.0f - (physicalY                / static_cast<float>(windowH)) * 2.0f;
     float ndcBottom = 1.0f - ((physicalY + physicalHeight) / static_cast<float>(windowH)) * 2.0f;
 
-    m_directRenderer.render(tex, ndcLeft, ndcRight, ndcTop, ndcBottom, u0, v0, u1, v1, swizzleRB);
+    m_directRenderer.render(tex, ndcLeft, ndcRight, ndcTop, ndcBottom, uv, swizzleRB);
 }
 
 } // namespace beiklive

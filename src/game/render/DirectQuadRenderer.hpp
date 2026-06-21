@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <glad/glad.h>
 
 namespace beiklive {
@@ -47,6 +48,12 @@ public:
                 float ndcTop,  float ndcBottom,
                 float u0, float v0,
                 float u1, float v1,
+                bool swizzleRB = false) const;
+
+    void render(GLuint tex,
+                float ndcLeft, float ndcRight,
+                float ndcTop,  float ndcBottom,
+                const std::array<float, 8>& uv,
                 bool swizzleRB = false) const;
 
 private:

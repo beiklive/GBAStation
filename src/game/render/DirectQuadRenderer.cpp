@@ -1,6 +1,7 @@
 #include "game/render/DirectQuadRenderer.hpp"
 
 #include <borealis.hpp>
+#include <array>
 
 namespace beiklive {
 
@@ -294,6 +295,17 @@ void DirectQuadRenderer::render(GLuint tex,
                                  float u1, float v1,
                                  bool swizzleRB) const
 {
+    render(tex, ndcLeft, ndcRight, ndcTop, ndcBottom,
+           std::array<float, 8>{u0, v0, u1, v0, u1, v1, u0, v1},
+           swizzleRB);
+}
+
+void DirectQuadRenderer::render(GLuint tex,
+                                 float ndcLeft, float ndcRight,
+                                 float ndcTop,  float ndcBottom,
+                                 const std::array<float, 8>& uv,
+                                 bool swizzleRB) const
+{
     if (!m_prog || !tex) return;
 
     // 顶点数据（每帧按 NDC 坐标动态生成）
@@ -301,10 +313,10 @@ void DirectQuadRenderer::render(GLuint tex,
     // 因此屏幕顶端 (ndcTop) 映射到 UV v=0（游戏帧第一行/画面顶部），
     // 屏幕底端 (ndcBottom) 映射到 UV v=1（游戏帧最后一行/画面底部），图像正向显示。
     const float verts[] = {
-        ndcLeft,  ndcTop,    u0, v0,
-        ndcRight, ndcTop,    u1, v0,
-        ndcRight, ndcBottom, u1, v1,
-        ndcLeft,  ndcBottom, u0, v1,
+        ndcLeft,  ndcTop,    uv[0], uv[1],
+        ndcRight, ndcTop,    uv[2], uv[3],
+        ndcRight, ndcBottom, uv[4], uv[5],
+        ndcLeft,  ndcBottom, uv[6], uv[7],
     };
 
     // 保存关键 GL 状态
