@@ -1,7 +1,6 @@
 #pragma once
 
 #include <glad/glad.h>
-#include <array>
 #include <string>
 #include <vector>
 #include <cstdint>
@@ -48,33 +47,13 @@ public:
     /// 释放所有 GL 资源。
     void deinit();
 
-    bool isReady() const;
+    bool isReady() const { return m_texture.isValid() && m_renderChain.isDirectRendererReady(); }
 
     /// 将 libretro VideoFrame 数据上传至 GL 纹理。
     ///
     /// 须在 GL 上下文就绪的线程（UI 线程/draw 函数）中调用。
     /// @param frame  LibretroLoader 产出的视频帧。
     void uploadFrame(const LibretroLoader::VideoFrame& frame);
-
-    /// 在 GPU 内部把外部纹理拷贝到当前游戏帧纹理。
-    ///
-    /// 源纹理必须与当前 GL 上下文共享资源。用于避免 GPU->CPU->GPU 回读路径。
-    bool copyFromTexture(GLuint srcTex, unsigned srcW, unsigned srcH,
-                         unsigned dstW, unsigned dstH);
-
-    bool copyTextureRegion(GLuint srcTex,
-                           unsigned srcX, unsigned srcY,
-                           unsigned dstX, unsigned dstY,
-                           unsigned copyW, unsigned copyH,
-                           unsigned dstW, unsigned dstH);
-
-    bool beginTextureCopyFrame(unsigned dstW, unsigned dstH);
-    bool copyTextureRegionToCopyFrame(GLuint srcTex,
-                                      unsigned srcX, unsigned srcY,
-                                      unsigned dstX, unsigned dstY,
-                                      unsigned copyW, unsigned copyH);
-    void commitTextureCopyFrame();
-    void abortTextureCopyFrame();
 
     /// 设置纹理过滤模式。
     /// @param linear  true = 线性过滤；false = 最近邻采样。
@@ -119,40 +98,17 @@ public:
                              bool swizzleRB = false);
 
     /// 返回当前帧纹理的宽度。
-    unsigned texWidth() const;
+    unsigned texWidth()  const { return m_texture.width();  }
     /// 返回当前帧纹理的高度。
-    unsigned texHeight() const;
+    unsigned texHeight() const { return m_texture.height(); }
 
     /// 返回游戏帧纹理 ID（可传给 NanoVG 等）。
-    GLuint texId() const;
+    GLuint texId() const { return m_texture.texId(); }
 
 private:
-    const GameTexture& displayTexture() const;
-    bool copyTextureRegionToTexture(GLuint dstTex,
-                                    GLuint srcTex,
-                                    unsigned srcX, unsigned srcY,
-                                    unsigned dstX, unsigned dstY,
-                                    unsigned copyW, unsigned copyH);
-    bool copyTextureRegionByDraw(GLuint dstTex,
-                                 GLuint srcTex,
-                                 unsigned srcX, unsigned srcY,
-                                 unsigned dstX, unsigned dstY,
-                                 unsigned copyW, unsigned copyH);
-    bool ensureCopyDrawResources();
-
     GameTexture  m_texture;     ///< 游戏帧 GL 纹理
-    std::array<GameTexture, 2> m_copyTextures; ///< GPU copy 双缓冲目标纹理
     RenderChain  m_renderChain; ///< 渲染链（含着色器管线和直接渲染器）
     bool         m_linear = false; ///< 当前纹理过滤模式
-    GLuint       m_copyReadFbo = 0;
-    GLuint       m_copyDrawFbo = 0;
-    GLuint       m_copyDrawProgram = 0;
-    GLuint       m_copyDrawVao = 0;
-    GLuint       m_copyDrawVbo = 0;
-    unsigned     m_copyWriteIndex = 0;
-    unsigned     m_copyDisplayIndex = 0;
-    bool         m_copyFrameActive = false;
-    bool         m_usingCopiedTexture = false;
 };
 
 } // namespace beiklive

@@ -202,18 +202,16 @@ void GLCompositor::SetScaleFactor(int scale) noexcept
         return;
 
     Scale = scale;
-    // GBAStation keeps the final composited NDS frame native-sized. The
-    // accelerated 3D renderer still uses Scale internally and is sampled here.
-    ScreenW = 256;
-    ScreenH = 384+2;
+    ScreenW = 256 * scale;
+    ScreenH = (384+2) * scale;
 
     for (int i = 0; i < 2; i++)
     {
         glBindTexture(GL_TEXTURE_2D, CompScreenOutputTex[i]);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ScreenW, ScreenH, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
         // fill the padding
-        u8* zeroPixels = (u8*) calloc(1, ScreenW*2*4);
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 192, ScreenW, 2, GL_RGBA, GL_UNSIGNED_BYTE, zeroPixels);
+        u8* zeroPixels = (u8*) calloc(1, ScreenW*2*scale*4);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 192*scale, ScreenW, 2*scale, GL_RGBA, GL_UNSIGNED_BYTE, zeroPixels);
 
         GLenum fbassign[] = {GL_COLOR_ATTACHMENT0};
         glBindFramebuffer(GL_FRAMEBUFFER, CompScreenOutputFB[i]);

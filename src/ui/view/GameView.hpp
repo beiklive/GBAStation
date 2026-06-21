@@ -141,7 +141,6 @@ namespace beiklive
             beiklive::GameRenderer m_ndsBottomRenderer; ///< NDS 着色器模式：下屏独立渲染器
             bool m_rendererReady = false;      ///< 渲染器是否已初始化
             bool m_ndsSplitShaderRenderer = false; ///< NDS 是否使用上下屏拆分着色器渲染
-            bool m_ndsCopiedTextureReady = false; ///< NDS OpenGL 输出是否已拷贝到 GameRenderer 纹理
 
             // ---- 画面模式 ----------------------------------------------------
             beiklive::ScreenMode m_screenMode = beiklive::ScreenMode::Fit; ///< 当前画面缩放模式
@@ -218,7 +217,6 @@ namespace beiklive
             bool _initGameRenderers(unsigned gw, unsigned gh, const std::string& shaderPath);
             bool _drawNdsAcceleratedTexture(const beiklive::DisplayRect& rect,
                                             float windowScale, int windowW, int windowH);
-            bool _copyNdsAcceleratedTextureFrame();
             void _uploadNdsSplitShaderFrame(const LibretroLoader::VideoFrame& frame);
             struct NdsScreenDrawRect {
                 bool topScreen = true;

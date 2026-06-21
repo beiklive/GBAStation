@@ -96,8 +96,6 @@ namespace beiklive
         _stopGameThread();
 
         if (m_core) {
-            if (auto* textureCore = dynamic_cast<beiklive::IEmulatorVideoTexture*>(m_core))
-                textureCore->SetVideoTextureConsumerActive(false);
             delete m_core;
             m_core = nullptr;
         }
@@ -337,9 +335,6 @@ namespace beiklive
     {
         if (!m_rendererReady) return;
 
-        if (_copyNdsAcceleratedTextureFrame())
-            return;
-
         LibretroLoader::VideoFrame frame;
         bool hasFrame = false;
         {
@@ -352,6 +347,13 @@ namespace beiklive
         }
 
         if (hasFrame) {
+            if (_useNdsAcceleratedTexture()) {
+                auto* textureCore = dynamic_cast<beiklive::IEmulatorVideoTexture*>(m_core);
+                beiklive::EmulatorVideoTexture videoTex;
+                if (textureCore && textureCore->GetVideoTexture(videoTex) &&
+                    videoTex.texture != 0 && videoTex.width != 0 && videoTex.height != 0)
+                    return;
+            }
             if (m_ndsSplitShaderRenderer) {
                 _uploadNdsSplitShaderFrame(frame);
                 return;
@@ -403,16 +405,6 @@ namespace beiklive
         m_ndsTopRenderer.deinit();
         m_ndsBottomRenderer.deinit();
         m_ndsSplitShaderRenderer = _useNdsSplitShader();
-        m_ndsCopiedTextureReady = false;
-
-        if (auto* textureCore = dynamic_cast<beiklive::IEmulatorVideoTexture*>(m_core)) {
-            const bool useTextureConsumer =
-                m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS) &&
-                !m_ndsSplitShaderRenderer;
-            textureCore->SetVideoTextureConsumerActive(useTextureConsumer);
-            if (useTextureConsumer)
-                brls::Logger::info("GameView: NDS GL texture copy path enabled");
-        }
 
         if (!m_ndsSplitShaderRenderer) {
             if (!m_renderer.init(gw, gh, false, shaderPath))
@@ -442,17 +434,22 @@ namespace beiklive
     bool GameView::_drawNdsAcceleratedTexture(const beiklive::DisplayRect& rect,
                                               float windowScale, int windowW, int windowH)
     {
-        if (!_useNdsAcceleratedTexture() || !m_ndsCopiedTextureReady ||
-            m_renderer.texId() == 0 || m_renderer.texWidth() != 256u || m_renderer.texHeight() != 384u)
+        if (!_useNdsAcceleratedTexture())
             return false;
 
-        const GLuint tex = m_renderer.texId();
-        constexpr unsigned texW = 256u;
-        constexpr unsigned texH = 384u;
-        constexpr float fullH = static_cast<float>(texH);
+        auto* textureCore = dynamic_cast<beiklive::IEmulatorVideoTexture*>(m_core);
+        beiklive::EmulatorVideoTexture videoTex;
+        if (!textureCore || !textureCore->GetVideoTexture(videoTex) ||
+            videoTex.texture == 0 || videoTex.width == 0 || videoTex.height == 0)
+            return false;
+
+        const GLuint tex = static_cast<GLuint>(videoTex.texture);
+        const unsigned texW = videoTex.width;
+        const unsigned texH = videoTex.height;
+        const float fullH = static_cast<float>(texH);
         const float topV0 = 0.0f;
-        const float topV1 = 192.0f / fullH;
-        const float bottomV0 = 192.0f / fullH;
+        const float topV1 = (192.0f * static_cast<float>(videoTex.scale)) / fullH;
+        const float bottomV0 = ((192.0f + 2.0f) * static_cast<float>(videoTex.scale)) / fullH;
         const float bottomV1 = 1.0f;
 
         for (const auto& screenRect : _computeNdsScreenDrawRects(rect)) {
@@ -466,58 +463,6 @@ namespace beiklive
                                            true);
         }
         return true;
-    }
-
-    bool GameView::_copyNdsAcceleratedTextureFrame()
-    {
-        if (!_useNdsAcceleratedTexture())
-            return false;
-
-        auto* textureCore = dynamic_cast<beiklive::IEmulatorVideoTexture*>(m_core);
-        if (!textureCore) {
-            m_ndsCopiedTextureReady = false;
-            return false;
-        }
-
-        bool topOk = false;
-        bool bottomOk = false;
-        const bool copied = textureCore->WithVideoTextureLocked(
-            [&](const beiklive::EmulatorVideoTexture& videoTex) {
-                if (videoTex.texture == 0 || videoTex.width < 256u || videoTex.height < 386u)
-                    return false;
-
-                if (!m_renderer.beginTextureCopyFrame(256u, 384u)) {
-                    brls::Logger::warning("GameView: NDS GL texture copy target init failed");
-                    return false;
-                }
-
-                const GLuint tex = static_cast<GLuint>(videoTex.texture);
-                topOk = m_renderer.copyTextureRegionToCopyFrame(tex,
-                                                                0u, 0u,
-                                                                0u, 0u,
-                                                                256u, 192u);
-                bottomOk = m_renderer.copyTextureRegionToCopyFrame(tex,
-                                                                   0u, 194u,
-                                                                   0u, 192u,
-                                                                   256u, 192u);
-                return topOk && bottomOk;
-            });
-        if (!copied) {
-            m_renderer.abortTextureCopyFrame();
-            m_ndsCopiedTextureReady = false;
-            return false;
-        }
-
-        m_ndsCopiedTextureReady = topOk && bottomOk;
-        if (!m_ndsCopiedTextureReady) {
-            m_renderer.abortTextureCopyFrame();
-            const GLenum err = glGetError();
-            brls::Logger::warning("GameView: NDS GL texture copy failed top={} bottom={} glError=0x{:x}",
-                                  topOk, bottomOk, static_cast<unsigned>(err));
-        } else {
-            m_renderer.commitTextureCopyFrame();
-        }
-        return m_ndsCopiedTextureReady;
     }
 
     void GameView::_uploadNdsSplitShaderFrame(const LibretroLoader::VideoFrame& frame)
