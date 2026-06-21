@@ -70,12 +70,24 @@ void AudioManager::pushSamples(const int16_t* data, size_t frames)
     if (!m_running.load(std::memory_order_acquire)) return;
     const size_t count = frames * static_cast<size_t>(m_channels);
     std::unique_lock<std::mutex> lk(m_mutex);
-    // 环满时阻塞，保持游戏与音频同步，防止延迟累积
-    m_spaceCV.wait(lk, [&] {
+    // 正常播放允许短暂等待音频线程释放空间，但不能无限阻塞模拟线程。
+    // 超时后丢弃最旧样本，让音频追上当前画面，避免启动阶段被 audout 反向拖慢。
+    m_spaceCV.wait_for(lk, std::chrono::milliseconds(2), [&] {
         return m_available + count <= m_maxLatencySamples ||
                !m_running.load(std::memory_order_relaxed);
     });
     if (!m_running.load(std::memory_order_relaxed)) return;
+
+    if (m_available + count > m_maxLatencySamples) {
+        const size_t targetAvailable =
+            (m_maxLatencySamples > count) ? (m_maxLatencySamples - count) : 0;
+        if (m_available > targetAvailable) {
+            const size_t drop = m_available - targetAvailable;
+            m_readPos = (m_readPos + drop) % RING_CAPACITY;
+            m_available -= drop;
+        }
+    }
+
     ringWrite(data, count);
 }
 
@@ -182,11 +194,7 @@ bool AudioManager::init(int sampleRate, int channels)
         sw->outBuf[i].buffer_size = SWITCH_BYTES;
         sw->outBuf[i].data_size   = SWITCH_BYTES;
         sw->outBuf[i].data_offset = 0;
-        armDCacheFlush(sw->bufData[i], SWITCH_BYTES);
-        if (R_SUCCEEDED(audoutAppendAudioOutBuffer(&sw->outBuf[i])))
-            sw->markQueued(i);
-        else
-            sw->freeList[sw->freeCount++] = i;
+        sw->freeList[sw->freeCount++] = i;
     }
 
     // 每次初始化时重置环形缓冲区状态，防止上次会话的残留指针/计数导致第二次启动时读到

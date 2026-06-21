@@ -19,6 +19,10 @@
 #include <thread>
 #include <vector>
 
+#ifdef __SWITCH__
+#include <switch.h>
+#endif
+
 namespace beiklive
 {
     class GameMenuView;         // 前置声明
@@ -121,6 +125,7 @@ namespace beiklive
             static constexpr double   MAX_REASONABLE_FPS      = 240.0;  ///< 核心上报 FPS 的安全上限
             static constexpr double   SPIN_GUARD_SEC           = 0.002;  ///< 每帧自旋等待预算（秒）
             static constexpr double   FPS_UPDATE_INTERVAL      = 1.0;   ///< FPS 计数器更新间隔（秒）
+            static constexpr double   PLAYTIME_SUSPEND_GAP_SEC = 5.0;   ///< 超过该间隔视为系统挂起/后台恢复
             static constexpr unsigned REWIND_STEP              = 2;     ///< 每次倒带弹出的帧数
 
             bool _brls_inputLocked = false; ///< 输入锁定状态
@@ -190,8 +195,16 @@ namespace beiklive
             // ---- 杂项 --------------------------------------------------------
             std::string m_playTimeTempPath;    ///< 时长临时文件路径，退出时合并到 GameDB
             int m_cachedThumbCompression = 0;  ///< 缓存缩略图压缩模式，避免每帧读取配置
-            std::chrono::steady_clock::time_point m_playStartTime; ///< 最近一次 checkpoint 时刻
-            double m_playTimeFraction = 0.0;   ///< 未满 1 秒的游玩时长累积（按实际运行帧数换算）
+            std::chrono::steady_clock::time_point m_playStartTime; ///< 最近一次真实游玩时长累计时刻
+            double m_playTimeFraction = 0.0;   ///< 未满 1 秒的真实游玩时长累积
+            int m_lastPlayTimeTempWrite = -1;  ///< 上次写入临时文件的 playTime 值
+#ifdef __SWITCH__
+            AppletHookCookie m_appletHookCookie{};
+            std::atomic<int> m_switchFocusState{AppletFocusState_InFocus};
+            bool m_switchAppletHooked = false;
+            bool m_switchBackgroundPaused = false;
+            bool m_switchPauseBeforeBackground = false;
+#endif
 
             // ---- 连发（Turbo）状态 -------------------------------------------
             std::atomic<bool> m_turboAheld{false};  ///< Turbo A 按键是否按住
@@ -249,8 +262,15 @@ namespace beiklive
             /// 将当前累加时长写入临时文件（暂停/存档点调用）
             void _savePlayTimeCheckpoint();
 
-            /// 按实际运行帧数累计游玩时长（忽略暂停，快进/慢动作均按游戏内时间统计）
-            void _accumulatePlayTime(unsigned framesRan, double coreFps);
+            /// 按真实运行时间累计游玩时长（忽略暂停，快进不放大，卡顿不少计）
+            void _accumulatePlayTime();
+
+#ifdef __SWITCH__
+            static void _appletHook(AppletHookType hook, void* param);
+            void _registerAppletHook();
+            void _unregisterAppletHook();
+            void _updateSwitchFocusState();
+#endif
 
             /// 自动存档计时起点
             std::chrono::steady_clock::time_point m_autoSaveTimer;

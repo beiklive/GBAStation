@@ -778,13 +778,13 @@ h1 { font-size: 28px; letter-spacing: 0; }
   place-items: center;
 }
 .game-dialog {
-  width: min(1040px, 94vw);
+  width: min(1380px, 96vw);
   max-height: 90vh;
   overflow: auto;
 }
 .detail-layout {
   display: grid;
-  grid-template-columns: minmax(260px, 340px) 1fr;
+  grid-template-columns: minmax(240px, 320px) minmax(320px, 1fr) minmax(300px, 380px);
   gap: 20px;
   align-items: start;
 }
@@ -842,7 +842,8 @@ h1 { font-size: 28px; letter-spacing: 0; }
   justify-content: center;
   gap: 8px;
 }
-.save-panel {
+.save-panel,
+.config-panel {
   display: grid;
   gap: 12px;
   min-width: 0;
@@ -880,6 +881,19 @@ h1 { font-size: 28px; letter-spacing: 0; }
   aspect-ratio: 4 / 3;
   object-fit: cover;
   display: block;
+}
+.save-thumb-preview {
+  width: 100%;
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  cursor: zoom-in;
+  overflow: hidden;
+}
+.save-thumb-preview:hover img {
+  filter: brightness(1.08);
 }
 .save-thumbs figcaption {
   padding: 7px 8px;
@@ -934,6 +948,72 @@ h1 { font-size: 28px; letter-spacing: 0; }
 .compact-empty {
   min-height: 70px;
   font-size: 13px;
+}
+.config-fields {
+  display: grid;
+  gap: 10px;
+  max-height: 68vh;
+  overflow: auto;
+  padding-right: 4px;
+}
+.config-fields h4 {
+  margin: 10px 0 2px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.config-fields h4:first-child {
+  margin-top: 0;
+}
+.config-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.config-field input,
+.config-field select,
+.config-field textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  padding: 0 10px;
+}
+.config-field input,
+.config-field select {
+  height: 36px;
+}
+.config-field textarea {
+  min-height: 82px;
+  resize: vertical;
+  padding-top: 8px;
+  font: 12px/1.45 Consolas, "Cascadia Mono", "Courier New", monospace;
+}
+.config-field.readonly input,
+.config-field.readonly select,
+.config-field.readonly textarea {
+  color: var(--muted);
+  background: var(--panel-2);
+}
+.config-check {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  padding: 0 10px;
+}
+.config-check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
 }
 
 dialog {

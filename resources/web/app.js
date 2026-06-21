@@ -34,6 +34,64 @@ const platforms = [
   ['NDS', 'NDS'],
 ];
 
+const gameConfigFields = [
+  { key: 'path', label: 'ROM 路径', type: 'text', readonly: true, group: '基础信息' },
+  { key: 'platformName', label: '平台名称', type: 'text', readonly: true, group: '基础信息' },
+  { key: 'platform', label: '平台 ID', type: 'number', readonly: true, group: '基础信息' },
+  { key: 'crc32', label: 'CRC32', type: 'number', readonly: true, group: '基础信息' },
+  { key: 'lastPlayed', label: '最后游玩', type: 'text', group: '基础信息' },
+  { key: 'playCount', label: '游玩次数', type: 'number', group: '基础信息' },
+  { key: 'playTime', label: '游玩时长(秒)', type: 'number', group: '基础信息' },
+  { key: 'favourite', label: '收藏', type: 'boolean', group: '基础信息' },
+
+  { key: 'savePath', label: '存档目录', type: 'text', group: '路径配置' },
+  { key: 'screenShotPath', label: '截图目录', type: 'text', group: '路径配置' },
+  { key: 'logoPath', label: '封面路径', type: 'text', group: '路径配置' },
+  { key: 'cheatPath', label: '金手指路径', type: 'text', group: '路径配置' },
+  { key: 'overlayPath', label: '遮罩路径', type: 'text', group: '路径配置' },
+  { key: 'shaderPath', label: '着色器路径', type: 'text', group: '路径配置' },
+
+  { key: 'overlayEnabled', label: '启用遮罩', type: 'boolean', group: '画面配置' },
+  { key: 'shaderEnabled', label: '启用着色器', type: 'boolean', group: '画面配置' },
+  { key: 'displayMode', label: '画面模式', type: 'number', group: '画面配置' },
+  { key: 'integerAspectRatio', label: '整数倍比例', type: 'number', step: '0.01', group: '画面配置' },
+  { key: 'customScale', label: '自定义缩放', type: 'number', step: '0.01', group: '画面配置' },
+  { key: 'customOffsetX', label: '自定义 X 偏移', type: 'number', step: '0.01', group: '画面配置' },
+  { key: 'customOffsetY', label: '自定义 Y 偏移', type: 'number', step: '0.01', group: '画面配置' },
+
+  { key: 'ndsScreenLayout', label: 'NDS 屏幕布局', type: 'select', group: 'NDS 配置', ndsOnly: true, options: [
+    ['', '默认'],
+    ['vertical', '竖向'],
+    ['horizontal', '横向'],
+    ['custom', '自定义'],
+    ['hybrid', '混合'],
+    ['top', '仅上屏'],
+    ['bottom', '仅下屏'],
+  ] },
+  { key: 'ndsScreenOrientation', label: 'NDS 旋转角度', type: 'select', group: 'NDS 配置', ndsOnly: true, options: [
+    ['', '默认'],
+    ['0', '0 度'],
+    ['90', '90 度'],
+    ['180', '180 度'],
+    ['270', '270 度'],
+  ] },
+  { key: 'ndsInternalResolution', label: 'NDS 内部分辨率', type: 'select', group: 'NDS 配置', ndsOnly: true, options: [
+    [1, '1x'],
+    [2, '2x'],
+    [3, '3x'],
+    [4, '4x'],
+  ] },
+  { key: 'ndsTopScale', label: '上屏缩放', type: 'number', step: '0.01', group: 'NDS 配置', ndsOnly: true },
+  { key: 'ndsTopOffsetX', label: '上屏 X 偏移', type: 'number', step: '0.01', group: 'NDS 配置', ndsOnly: true },
+  { key: 'ndsTopOffsetY', label: '上屏 Y 偏移', type: 'number', step: '0.01', group: 'NDS 配置', ndsOnly: true },
+  { key: 'ndsBottomScale', label: '下屏缩放', type: 'number', step: '0.01', group: 'NDS 配置', ndsOnly: true },
+  { key: 'ndsBottomOffsetX', label: '下屏 X 偏移', type: 'number', step: '0.01', group: 'NDS 配置', ndsOnly: true },
+  { key: 'ndsBottomOffsetY', label: '下屏 Y 偏移', type: 'number', step: '0.01', group: 'NDS 配置', ndsOnly: true },
+
+  { key: 'shaderParaNames', label: '着色器参数名(JSON)', type: 'json', group: '着色器参数' },
+  { key: 'shaderParaValues', label: '着色器参数值(JSON)', type: 'json', group: '着色器参数' },
+];
+
 const $ = (id) => document.getElementById(id);
 
 function toast(text) {
@@ -99,6 +157,116 @@ function formatSize(bytes) {
 
 function formatSpeed(bytesPerSecond) {
   return `${formatSize(bytesPerSecond)}/s`;
+}
+
+function configValueToString(value, field) {
+  if (field.type === 'json') return JSON.stringify(value ?? [], null, 2);
+  if (value === undefined || value === null) return '';
+  return String(value);
+}
+
+function makeConfigInput(field, game) {
+  const value = game[field.key];
+  if (field.type === 'boolean') {
+    const label = document.createElement('label');
+    label.className = 'config-check';
+    label.innerHTML = `<input type="checkbox" data-config-key="${field.key}" data-config-type="${field.type}"${value ? ' checked' : ''}${field.readonly ? ' disabled' : ''}><span>${field.label}</span>`;
+    return label;
+  }
+
+  if (field.type === 'select') {
+    const select = document.createElement('select');
+    select.dataset.configKey = field.key;
+    select.dataset.configType = field.type;
+    select.disabled = !!field.readonly;
+    for (const [optionValue, label] of field.options || []) {
+      const option = document.createElement('option');
+      option.value = String(optionValue);
+      option.textContent = label;
+      select.appendChild(option);
+    }
+    select.value = configValueToString(value, field);
+    return select;
+  }
+
+  const input = document.createElement(field.type === 'json' ? 'textarea' : 'input');
+  input.dataset.configKey = field.key;
+  input.dataset.configType = field.type;
+  if (field.type !== 'json') input.type = field.type === 'number' ? 'number' : 'text';
+  if (field.step) input.step = field.step;
+  if (field.readonly) input.readOnly = true;
+  input.value = configValueToString(value, field);
+  return input;
+}
+
+function renderGameConfig(game) {
+  const root = $('gameConfigFields');
+  if (!root) return;
+  root.innerHTML = '';
+  if (!game) {
+    root.innerHTML = '<div class="empty compact-empty">未选择游戏</div>';
+    return;
+  }
+
+  const isNds = platformOf(game) === 'NDS';
+  let currentGroup = '';
+  for (const field of gameConfigFields) {
+    if (field.ndsOnly && !isNds) continue;
+    if (field.group !== currentGroup) {
+      currentGroup = field.group;
+      const head = document.createElement('h4');
+      head.textContent = currentGroup;
+      root.appendChild(head);
+    }
+
+    const row = document.createElement(field.type === 'boolean' ? 'div' : 'label');
+    row.className = `config-field${field.readonly ? ' readonly' : ''}${field.type === 'boolean' ? ' boolean-field' : ''}`;
+    if (field.type === 'boolean') {
+      row.appendChild(makeConfigInput(field, game));
+    } else {
+      const caption = document.createElement('span');
+      caption.textContent = field.label;
+      row.appendChild(caption);
+      row.appendChild(makeConfigInput(field, game));
+    }
+    root.appendChild(row);
+  }
+}
+
+function readConfigInput(input) {
+  const key = input.dataset.configKey;
+  const type = input.dataset.configType;
+  if (!key || input.disabled || input.readOnly) return undefined;
+  if (type === 'boolean') return input.checked;
+  if (type === 'number') {
+    if (input.value.trim() === '') return 0;
+    const value = Number(input.value);
+    if (!Number.isFinite(value)) throw new Error(`${key} 必须是数字`);
+    return value;
+  }
+  if (type === 'json') {
+    try {
+      return input.value.trim() ? JSON.parse(input.value) : [];
+    } catch {
+      throw new Error(`${key} 不是有效 JSON`);
+    }
+  }
+  if (type === 'select') {
+    const field = gameConfigFields.find((item) => item.key === key);
+    const numeric = field?.options?.some(([value]) => typeof value === 'number');
+    return numeric ? Number(input.value) : input.value;
+  }
+  return input.value;
+}
+
+function collectGameConfig() {
+  const payload = {};
+  for (const input of $('gameConfigFields').querySelectorAll('[data-config-key]')) {
+    const value = readConfigInput(input);
+    if (value !== undefined) payload[input.dataset.configKey] = value;
+  }
+  if ($('titleInput')) payload.title = $('titleInput').value.trim();
+  return payload;
 }
 
 function hasNonAsciiPath(file) {
@@ -472,6 +640,7 @@ async function openGameDialog(game) {
   $('titleInput').value = game.title || '';
   $('playTimeText').textContent = formatPlayTime(game.playTime);
   $('playCountText').textContent = `${game.playCount || 0} 次`;
+  renderGameConfig(game);
   $('gameDialog').showModal();
   await loadSaves();
 }
@@ -500,12 +669,22 @@ function renderSaveThumbs(states) {
   for (const item of withThumbs) {
     const figure = document.createElement('figure');
     figure.innerHTML = `
-      <img alt="槽位 ${item.slot} 截图" src="${item.thumbUrl}">
+      <button class="save-thumb-preview" title="查看截图">
+        <img alt="槽位 ${item.slot} 截图" src="${item.thumbUrl}">
+      </button>
       <figcaption><span>槽位 ${item.slot}</span><button class="danger" title="删除截图"><i class="fa-solid fa-trash-can"></i></button></figcaption>
     `;
-    figure.querySelector('button').onclick = () => deleteSave(item.thumbPath);
+    figure.querySelector('.save-thumb-preview').onclick = () => openSaveThumb(item);
+    figure.querySelector('figcaption button').onclick = () => deleteSave(item.thumbPath);
     root.appendChild(figure);
   }
+}
+
+function openSaveThumb(item) {
+  $('fileImageTitle').textContent = `槽位 ${item.slot} 截图`;
+  const sep = String(item.thumbUrl || '').includes('?') ? '&' : '?';
+  $('fileImagePreview').src = `${item.thumbUrl}${sep}t=${Date.now()}`;
+  $('fileImageDialog').showModal();
 }
 
 function renderSaveList(rootId, saves, type) {
@@ -900,7 +1079,17 @@ async function saveTitle() {
     state.selected = updated;
     $('detailTitle').textContent = updated.title || '游戏详情';
     $('titleInput').value = updated.title || '';
+    renderGameConfig(updated);
   }
+}
+
+async function saveGameConfig() {
+  const game = state.selected;
+  if (!game) return;
+  const payload = collectGameConfig();
+  await api(`/api/game/${gameUrl(game)}`, { method: 'PUT', body: JSON.stringify(payload) });
+  toast('配置已保存');
+  await reloadSelectedGame();
 }
 
 async function removeGame() {
@@ -991,6 +1180,10 @@ async function reloadSelectedGame() {
     state.selected = updated;
     $('detailCover').src = `/api/game/${gameUrl(updated)}/cover?t=${Date.now()}`;
     $('detailTitle').textContent = updated.title || '游戏详情';
+    $('titleInput').value = updated.title || '';
+    $('playTimeText').textContent = formatPlayTime(updated.playTime);
+    $('playCountText').textContent = `${updated.playCount || 0} 次`;
+    renderGameConfig(updated);
   }
 }
 
@@ -1116,6 +1309,7 @@ function bindEvents() {
   $('nextPageBtn').onclick = () => { state.page++; renderGames(); };
   $('closeGameDialogBtn').onclick = closeGameDialog;
   $('saveTitleBtn').onclick = () => saveTitle().catch((err) => toast(err.message));
+  $('saveConfigBtn').onclick = () => saveGameConfig().catch((err) => toast(err.message));
   $('removeBtn').onclick = () => removeGame().catch((err) => toast(err.message));
   $('replaceBatteryBtn').onclick = () => chooseSaveReplacement({ type: 'battery', slot: 0 });
   $('refreshSavesBtn').onclick = () => loadSaves().catch((err) => toast(err.message));

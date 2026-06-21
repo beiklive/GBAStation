@@ -309,6 +309,38 @@ bool saveGame(beiklive::GameEntry& entry)
     return beiklive::GameDB->flush();
 }
 
+nlohmann::json parseJsonBody(mg_http_message* hm)
+{
+    if (!hm)
+        return nlohmann::json::object();
+    auto parsed = nlohmann::json::parse(strFromMg(hm->body), nullptr, false);
+    return parsed.is_discarded() ? nlohmann::json::object() : parsed;
+}
+
+nlohmann::json gameJsonWithMeta(const beiklive::GameEntry& entry)
+{
+    nlohmann::json item;
+    beiklive::to_json(item, entry);
+    item["id"] = gameIdFromEntry(entry);
+    item["platformName"] = beiklive::tools::platformBadgeName(entry.platform);
+    return item;
+}
+
+bool isRemoteEditableGameField(const std::string& key)
+{
+    static const std::set<std::string> editable = {
+        "title", "playCount", "playTime", "lastPlayed", "favourite",
+        "savePath", "screenShotPath", "logoPath", "cheatPath", "overlayPath", "shaderPath",
+        "overlayEnabled", "shaderEnabled",
+        "displayMode", "integerAspectRatio", "customScale", "customOffsetX", "customOffsetY",
+        "ndsTopScale", "ndsTopOffsetX", "ndsTopOffsetY",
+        "ndsBottomScale", "ndsBottomOffsetX", "ndsBottomOffsetY",
+        "ndsScreenLayout", "ndsScreenOrientation", "ndsInternalResolution",
+        "shaderParaNames", "shaderParaValues",
+    };
+    return editable.count(key) > 0;
+}
+
 void replyJson(mg_connection* c, int status, const nlohmann::json& body)
 {
     std::string data = body.dump();
@@ -721,11 +753,7 @@ void ApiRouter::handleGames(mg_connection* c)
     {
         for (const auto& entry : beiklive::GameDB->getAll())
         {
-            nlohmann::json item;
-            beiklive::to_json(item, entry);
-            item["id"] = gameIdFromEntry(entry);
-            item["platformName"] = beiklive::tools::platformBadgeName(entry.platform);
-            games.push_back(item);
+            games.push_back(gameJsonWithMeta(entry));
         }
     }
     replyJson(c, 200, {{"ok", true}, {"games", games}});
@@ -773,10 +801,27 @@ void ApiRouter::handleGameById(mg_connection* c, mg_http_message* hm, const std:
 
     if (method == "PUT")
     {
-        std::string title = jsonString(hm, "$.title", game->title);
-        game->title = title.empty() ? game->title : title;
+        nlohmann::json patch = parseJsonBody(hm);
+        nlohmann::json updated;
+        beiklive::to_json(updated, *game);
+        if (patch.is_object())
+        {
+            for (auto it = patch.begin(); it != patch.end(); ++it)
+            {
+                if (isRemoteEditableGameField(it.key()))
+                    updated[it.key()] = it.value();
+            }
+        }
+        try
+        {
+            beiklive::from_json(updated, *game);
+        }
+        catch (...)
+        {
+            return replyError(c, 400, "invalid game config");
+        }
         bool saved = saveGame(*game);
-        return replyJson(c, 200, {{"ok", saved}, {"saved", saved}});
+        return replyJson(c, 200, {{"ok", saved}, {"saved", saved}, {"game", gameJsonWithMeta(*game)}});
     }
 
     replyError(c, 405, "method not allowed");

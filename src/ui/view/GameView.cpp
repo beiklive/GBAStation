@@ -109,6 +109,9 @@ namespace beiklive
             m_turboToggleInterval = std::max(1, static_cast<int>(30.0f / turboHz));
         }
 
+#ifdef __SWITCH__
+        _registerAppletHook();
+#endif
         _registerGameInput();
         _registerTouchInput();
         _registerGameRuntime();
@@ -118,6 +121,9 @@ namespace beiklive
     {
         brls::Logger::debug("[GameView] destructor: platform={}, path={}",
             m_gameEntry.platform, m_gameEntry.path);
+#ifdef __SWITCH__
+        _unregisterAppletHook();
+#endif
         _stopGameThread();
 
         if (m_core) {
@@ -167,6 +173,66 @@ namespace beiklive
             brls::Application::unblockInputs();
         }
     }
+
+#ifdef __SWITCH__
+    void GameView::_appletHook(AppletHookType hook, void* param)
+    {
+        auto* self = static_cast<GameView*>(param);
+        if (!self || hook != AppletHookType_OnFocusState)
+            return;
+
+        self->m_switchFocusState.store(static_cast<int>(appletGetFocusState()),
+                                       std::memory_order_release);
+    }
+
+    void GameView::_registerAppletHook()
+    {
+        if (m_switchAppletHooked)
+            return;
+
+        m_switchFocusState.store(static_cast<int>(appletGetFocusState()),
+                                 std::memory_order_release);
+        appletHook(&m_appletHookCookie, &GameView::_appletHook, this);
+        m_switchAppletHooked = true;
+    }
+
+    void GameView::_unregisterAppletHook()
+    {
+        if (!m_switchAppletHooked)
+            return;
+
+        appletUnhook(&m_appletHookCookie);
+        m_switchAppletHooked = false;
+    }
+
+    void GameView::_updateSwitchFocusState()
+    {
+        const auto focusState = static_cast<AppletFocusState>(
+            m_switchFocusState.load(std::memory_order_acquire));
+
+        if (focusState == AppletFocusState_InFocus) {
+            if (m_switchBackgroundPaused) {
+                brls::Logger::info("GameView: Switch applet resumed, resetting playtime clock");
+                m_playStartTime = std::chrono::steady_clock::now();
+                m_switchBackgroundPaused = false;
+                if (!m_switchPauseBeforeBackground)
+                    GameSignal::instance().requestPause(false);
+            }
+            return;
+        }
+
+        if (!m_switchBackgroundPaused) {
+            brls::Logger::info("GameView: Switch applet backgrounded, pausing playtime");
+            m_switchPauseBeforeBackground = GameSignal::instance().isPaused();
+            _savePlayTimeCheckpoint();
+            m_playStartTime = {};
+            AudioManager::instance().flushRingBuffer();
+            m_switchBackgroundPaused = true;
+        }
+
+        GameSignal::instance().requestPause(true);
+    }
+#endif
 
     void GameView::draw(NVGcontext *vg, float x, float y, float width, float height,
                         brls::Style style, brls::FrameContext *ctx)
@@ -262,7 +328,8 @@ namespace beiklive
                     gw = 256;
                     gh = 384;
                 }
-                if (m_ndsScreenOrientation == "90" || m_ndsScreenOrientation == "270")
+                if (m_ndsLayout != "custom" && m_ndsLayout != "hybrid" &&
+                    (m_ndsScreenOrientation == "90" || m_ndsScreenOrientation == "270"))
                     std::swap(gw, gh);
             }
 
@@ -293,9 +360,12 @@ namespace beiklive
                 } else if (_drawNdsAcceleratedTexture(rect, windowScale, windowW, windowH)) {
                     // NDS OpenGL/Compute 3D renderer output was copied into the normal renderer texture.
                 } else if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)) {
+                    const std::array<float, 8> bakedCanvasUv = {0.f, 0.f, 1.f, 0.f, 1.f, 1.f, 0.f, 1.f};
                     m_renderer.drawToScreen(rect.x, rect.y, rect.w, rect.h,
                                             windowScale, windowW, windowH,
-                                            _ndsOrientationUv());
+                                            (m_ndsLayout == "custom" || m_ndsLayout == "hybrid")
+                                                ? bakedCanvasUv
+                                                : _ndsOrientationUv());
                 } else {
                     m_renderer.drawToScreen(rect.x, rect.y, rect.w, rect.h, windowScale, windowW, windowH);
                 }
@@ -614,6 +684,9 @@ namespace beiklive
     beiklive::DisplayRect GameView::_unrotateNdsRect(
         const beiklive::DisplayRect& orientedRect, const beiklive::DisplayRect&) const
     {
+        if (m_ndsLayout == "custom" || m_ndsLayout == "hybrid")
+            return orientedRect;
+
         if (m_ndsScreenOrientation == "90" || m_ndsScreenOrientation == "270")
         {
             const float cx = orientedRect.x + orientedRect.w * 0.5f;
@@ -629,6 +702,16 @@ namespace beiklive
         const beiklive::DisplayRect& layoutRect,
         const beiklive::DisplayRect& orientedRect) const
     {
+        if (m_ndsLayout == "custom" || m_ndsLayout == "hybrid") {
+            if (m_ndsScreenOrientation == "90" || m_ndsScreenOrientation == "270") {
+                const float cx = screenRect.x + screenRect.w * 0.5f;
+                const float cy = screenRect.y + screenRect.h * 0.5f;
+                return {cx - screenRect.h * 0.5f, cy - screenRect.w * 0.5f,
+                        screenRect.h, screenRect.w};
+            }
+            return screenRect;
+        }
+
         if (m_ndsScreenOrientation == "0")
             return screenRect;
 
@@ -1030,9 +1113,7 @@ namespace beiklive
         }
 
         beiklive::DisplayRect layoutRect = _unrotateNdsRect(orientedRect, orientedRect);
-        float mappedX = 0.f;
-        float mappedY = 0.f;
-        if (!down || !_mapNdsPointToUnrotated(x, y, orientedRect, layoutRect, mappedX, mappedY))
+        if (!down)
         {
             touchCore->SetTouch(0, 0, false);
             return;
@@ -1041,13 +1122,28 @@ namespace beiklive
         for (const auto& screenRect : _computeNdsScreenDrawRects(layoutRect)) {
             if (screenRect.topScreen)
                 continue;
-            const auto& rect = screenRect.rect;
-            const float localX = mappedX - rect.x;
-            const float localY = mappedY - rect.y;
-            if (localX < 0.f || localY < 0.f || localX > rect.w || localY > rect.h)
+            const auto rect = _rotateNdsScreenRect(screenRect.rect, layoutRect, orientedRect);
+            const float localX = x - rect.x;
+            const float localY = y - rect.y;
+            if (localX < 0.f || localY < 0.f || localX > rect.w || localY > rect.h ||
+                rect.w <= 0.f || rect.h <= 0.f)
                 continue;
-            const int ndsX = static_cast<int>(std::clamp(localX / rect.w, 0.f, 1.f) * 255.f + 0.5f);
-            const int ndsY = static_cast<int>(std::clamp(localY / rect.h, 0.f, 1.f) * 191.f + 0.5f);
+            const float nx = std::clamp(localX / rect.w, 0.f, 1.f);
+            const float ny = std::clamp(localY / rect.h, 0.f, 1.f);
+            float ndsU = nx;
+            float ndsV = ny;
+            if (m_ndsScreenOrientation == "90") {
+                ndsU = ny;
+                ndsV = 1.f - nx;
+            } else if (m_ndsScreenOrientation == "180") {
+                ndsU = 1.f - nx;
+                ndsV = 1.f - ny;
+            } else if (m_ndsScreenOrientation == "270") {
+                ndsU = 1.f - ny;
+                ndsV = nx;
+            }
+            const int ndsX = static_cast<int>(ndsU * 255.f + 0.5f);
+            const int ndsY = static_cast<int>(ndsV * 191.f + 0.5f);
             touchCore->SetTouch(ndsX, ndsY, true);
             return;
         }
@@ -1097,6 +1193,70 @@ namespace beiklive
             }
         };
 
+        auto blitScaledOriented = [&](LibretroLoader::VideoFrame& dst,
+                                      const LibretroLoader::VideoFrame& src,
+                                      unsigned srcOffsetY,
+                                      int dstX,
+                                      int dstY,
+                                      int dstW,
+                                      int dstH) {
+            if (m_ndsScreenOrientation == "0") {
+                blitScaled(dst, src, srcOffsetY, dstX, dstY, dstW, dstH);
+                return;
+            }
+
+            int drawX = dstX;
+            int drawY = dstY;
+            int drawW = dstW;
+            int drawH = dstH;
+            if (m_ndsScreenOrientation == "90" || m_ndsScreenOrientation == "270") {
+                const int cx2 = dstX * 2 + dstW;
+                const int cy2 = dstY * 2 + dstH;
+                drawW = dstH;
+                drawH = dstW;
+                drawX = (cx2 - drawW) / 2;
+                drawY = (cy2 - drawH) / 2;
+            }
+
+            if (drawW <= 0 || drawH <= 0)
+                return;
+
+            for (int y = 0; y < drawH; ++y) {
+                const int outY = drawY + y;
+                if (outY < 0 || outY >= static_cast<int>(dst.height))
+                    continue;
+                uint32_t* dstRow = dst.pixels.data() + static_cast<size_t>(outY) * dst.width;
+                for (int x = 0; x < drawW; ++x) {
+                    const int outX = drawX + x;
+                    if (outX < 0 || outX >= static_cast<int>(dst.width))
+                        continue;
+
+                    const float nx = drawW > 1 ? static_cast<float>(x) / static_cast<float>(drawW - 1) : 0.f;
+                    const float ny = drawH > 1 ? static_cast<float>(y) / static_cast<float>(drawH - 1) : 0.f;
+                    float srcNormX = nx;
+                    float srcNormY = ny;
+                    if (m_ndsScreenOrientation == "90") {
+                        srcNormX = ny;
+                        srcNormY = 1.f - nx;
+                    } else if (m_ndsScreenOrientation == "180") {
+                        srcNormX = 1.f - nx;
+                        srcNormY = 1.f - ny;
+                    } else if (m_ndsScreenOrientation == "270") {
+                        srcNormX = 1.f - ny;
+                        srcNormY = nx;
+                    }
+
+                    const unsigned srcX = std::min<unsigned>(
+                        screenW - 1,
+                        static_cast<unsigned>(std::clamp(srcNormX, 0.f, 1.f) * static_cast<float>(screenW - 1) + 0.5f));
+                    const unsigned srcY = srcOffsetY + std::min<unsigned>(
+                        screenH - 1,
+                        static_cast<unsigned>(std::clamp(srcNormY, 0.f, 1.f) * static_cast<float>(screenH - 1) + 0.5f));
+                    dstRow[outX] = src.pixels[static_cast<size_t>(srcY) * src.width + srcX];
+                }
+            }
+        };
+
         if (m_ndsLayout == "custom") {
             constexpr unsigned canvasW = 1280;
             constexpr unsigned canvasH = 720;
@@ -1116,7 +1276,7 @@ namespace beiklive
                 const int dstH = std::max(3, (dstW * 3) / 4);
                 const int dstX = static_cast<int>(std::lround(baseX + offsetX - (dstW - 256) * 0.5f));
                 const int dstY = static_cast<int>(std::lround(baseY + offsetY - (dstH - 192) * 0.5f));
-                blitScaled(out, frame, topScreen ? 0u : screenH, dstX, dstY, dstW, dstH);
+                blitScaledOriented(out, frame, topScreen ? 0u : screenH, dstX, dstY, dstW, dstH);
             };
 
             place(true);
@@ -1130,9 +1290,9 @@ namespace beiklive
             out.width = canvasW;
             out.height = canvasH;
             out.pixels.assign(static_cast<size_t>(out.width) * out.height, 0xFF000000u);
-            blitScaled(out, frame, 0u, 0, 40, 853, 640);
-            blitScaled(out, frame, 0u, 853, 40, 427, 320);
-            blitScaled(out, frame, screenH, 853, 360, 427, 320);
+            blitScaledOriented(out, frame, 0u, 0, 40, 853, 640);
+            blitScaledOriented(out, frame, 0u, 853, 40, 427, 320);
+            blitScaledOriented(out, frame, screenH, 853, 360, 427, 320);
             return out;
         }
 
@@ -1454,27 +1614,39 @@ namespace beiklive
     }
 
     // ============================================================
-    // _accumulatePlayTime – 按实际运行帧数累计时长
+    // _accumulatePlayTime – 按真实运行时间累计时长
     // ============================================================
-    void GameView::_accumulatePlayTime(unsigned framesRan, double coreFps)
+    void GameView::_accumulatePlayTime()
     {
-        if (framesRan == 0 || coreFps <= 0.0)
+        auto now = std::chrono::steady_clock::now();
+        if (m_playStartTime.time_since_epoch().count() == 0) {
+            m_playStartTime = now;
             return;
+        }
 
-        m_playTimeFraction += static_cast<double>(framesRan) / coreFps;
+        double elapsed = std::chrono::duration<double>(now - m_playStartTime).count();
+        m_playStartTime = now;
+        if (elapsed <= 0.0)
+            return;
+        if (elapsed > PLAYTIME_SUSPEND_GAP_SEC) {
+            brls::Logger::info("GameView: ignored playtime gap {:.2f}s", elapsed);
+            return;
+        }
+
+        m_playTimeFraction += elapsed;
         if (m_playTimeFraction < 1.0)
             return;
 
         int wholeSeconds = static_cast<int>(m_playTimeFraction);
         m_gameEntry.playTime += wholeSeconds;
         m_playTimeFraction -= static_cast<double>(wholeSeconds);
-        m_playStartTime = std::chrono::steady_clock::now();
 
-        if (!m_playTimeTempPath.empty()) {
+        if (!m_playTimeTempPath.empty() && m_lastPlayTimeTempWrite != m_gameEntry.playTime) {
             std::ofstream f(m_playTimeTempPath, std::ios::trunc);
             if (f) {
                 f << m_gameEntry.playTime;
                 f.close();
+                m_lastPlayTimeTempWrite = m_gameEntry.playTime;
             }
         }
     }
@@ -1484,12 +1656,15 @@ namespace beiklive
     // ============================================================
     void GameView::_savePlayTimeCheckpoint()
     {
-        auto now = std::chrono::steady_clock::now();
-        m_playStartTime = now;
+        _accumulatePlayTime();
 
         if (!m_playTimeTempPath.empty()) {
             std::ofstream f(m_playTimeTempPath, std::ios::trunc);
-            if (f) { f << m_gameEntry.playTime; f.close(); }
+            if (f) {
+                f << m_gameEntry.playTime;
+                f.close();
+                m_lastPlayTimeTempWrite = m_gameEntry.playTime;
+            }
         }
     }
 
@@ -1505,7 +1680,7 @@ namespace beiklive
         if (beiklive::GameDB && m_gameEntry.playTime > 0) {
             // beiklive::GameDB->upsert(m_gameEntry);
             beiklive::GameDB->set(m_gameEntry.path, "playTime", nlohmann::json(m_gameEntry.playTime));
-            // beiklive::GameDB->flush();
+            beiklive::GameDB->flush();
         }
         std::error_code ec;
         std::filesystem::remove(m_playTimeTempPath, ec);
@@ -1533,6 +1708,7 @@ namespace beiklive
         fs::create_directories(dir, ec);
 
         m_playTimeTempPath = dir + "/" + stem + ".playtime";
+        m_lastPlayTimeTempWrite = -1;
 
         // 检查是否存在遗留的临时文件（上次异常退出或未正常终止）
         if (fs::exists(m_playTimeTempPath, ec) && !ec) {
@@ -1689,6 +1865,7 @@ namespace beiklive
 
         m_playStartTime = Clock::now();
         m_playTimeFraction = 0.0;
+        m_lastPlayTimeTempWrite = -1;
         bool wasPaused  = false;
 
         // 初始化 SRAM 检测时间
@@ -1722,6 +1899,9 @@ namespace beiklive
 
         while (m_running.load(std::memory_order_acquire))
         {
+#ifdef __SWITCH__
+            _updateSwitchFocusState();
+#endif
             auto& sig = GameSignal::instance();
 
             // ---- 自动加载即时存档 ----
@@ -1748,6 +1928,7 @@ namespace beiklive
             if (sig.isPaused()) {
                 if (!wasPaused) {
                     _savePlayTimeCheckpoint();
+                    m_playStartTime = {};
                     if (m_sramDirty && m_core && m_core->IsReady())
                         m_core->saveSram();
                     AudioManager::instance().flushRingBuffer(); // 立即停止音频
@@ -1905,8 +2086,9 @@ namespace beiklive
             // ---- FPS 统计（慢动作跳过帧时仍计入时间）----
             _updateFpsStats(framesRan, fpsLastTime, fpsCount);
 
-            // ---- 游玩时长统计（按实际执行帧数累计，忽略暂停）----
-            _accumulatePlayTime(framesRan, coreFps);
+            // ---- 游玩时长统计（按真实运行时间累计，忽略暂停）----
+            if (framesRan > 0)
+                _accumulatePlayTime();
 
             // ---- SRAM 自动落盘检测 ----
             _checkAndAutoSaveSram();
