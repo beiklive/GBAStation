@@ -82,6 +82,7 @@ private:
 
     float m_shakeTime = 0.f;
     float m_shakeDir = 0.f;
+    float m_focusBorderAnimTime = 0.f;
 
     std::function<void()> m_nextPageCallback;
     std::function<void(int)> m_focusChangeCallback;

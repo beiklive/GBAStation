@@ -988,7 +988,7 @@ namespace beiklive
             beiklive::SelectorButton *IntegerCell = nullptr;
             brls::DetailCell *customCell = nullptr;
 
-            if (!isNds) {
+             {
                 auto *hdr1 = new brls::Header();
                 hdr1->setTitle("画面设置");
                 box->addView(hdr1);

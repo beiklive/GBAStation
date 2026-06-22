@@ -20,7 +20,6 @@ namespace beiklive
 
         auto* emptyCard = new brls::Box(brls::Axis::ROW);
         emptyCard->setHeight(60.f);
-        emptyCard->setWireframeEnabled(true);
         addView(emptyCard);
 
 

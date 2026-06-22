@@ -1,5 +1,6 @@
 #include "RecyclingGrid.hpp"
 #include "core/common.h"
+#include "ui/utils/GradientFocus.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -755,6 +756,8 @@ void GameGridView::frame(brls::FrameContext* ctx)
     m_lastFrameTime = now;
     if (dt <= 0.f || dt > 0.5f) dt = 0.016f;
 
+    m_focusBorderAnimTime += dt;
+
     _handleInput(dt);
 
     if (m_shakeTime > 0.f)
@@ -855,29 +858,16 @@ void GameGridView::_drawItem(NVGcontext* vg, const GridDrawItem& item, float x, 
         float gx = x + shakeX;
         float gy = y + shakeY;
 
-        // 主高亮边框
-        nvgBeginPath(vg);
-        nvgRoundedRect(
+        beiklive::ui::drawGradientFocusBorder(
             vg,
             gx,
             gy,
             w,
             h,
-            4.f
-        );
-
-        nvgStrokeColor(
-            vg,
-            nvgRGBA(
-                0,
-                122,
-                255,
-                255
-            )
-        );
-
-        nvgStrokeWidth(vg, 5.0f);
-        nvgStroke(vg);
+            4.0f,
+            5.0f,
+            item.focusGlow,
+            beiklive::ui::gradientFocusAnimationOffset(m_focusBorderAnimTime));
     }
 
     nvgBeginPath(vg);

@@ -1,4 +1,5 @@
 #include "FileListView.hpp"
+#include "ui/utils/GradientFocus.hpp"
 
 namespace beiklive {
 
@@ -133,7 +134,7 @@ void FileListView::drawItem(NVGcontext* vg, int index, float itemY, float w, NVG
     float padY = (m_itemHeight - m_iconSize) * 0.5f;
     float textX = padX + m_iconSize + 12.f;
 
-    // Focus highlight – rotating dual-gradient rounded border + left accent bar
+    // Focus highlight - flowing gradient rounded border + left accent bar
     if (index == m_focusedIndex && m_focusedIndex >= 0) {
         float shakeY = 0.f;
         if (m_shakeTime > 0.f && m_shakeDir != 0) {
@@ -148,23 +149,16 @@ void FileListView::drawItem(NVGcontext* vg, int index, float itemY, float w, NVG
         float rw = w - 16.f;
         float rh = m_itemHeight - 12.f;
 
-        float cx = rx + rw * 0.5f;
-        float cy = ry + rh * 0.5f;
-        float radius = std::max(rw, rh) * 0.6f;
-        float angle = m_animTime * 1.8f;
-        float sx = cx + std::cos(angle) * radius;
-        float sy = cy + std::sin(angle) * radius;
-        float ex = cx + std::cos(angle + 3.14159265f) * radius;
-        float ey = cy + std::sin(angle + 3.14159265f) * radius;
-
-        NVGcolor c1 = nvgRGBA(79, 193, 255, 200);
-        NVGcolor c2 = nvgRGBA(30, 80, 140, 200);
-        NVGpaint grad = nvgLinearGradient(vg, sx, sy, ex, ey, c1, c2);
-        nvgBeginPath(vg);
-        nvgRoundedRect(vg, rx, ry, rw, rh, 8.f);
-        nvgStrokeWidth(vg, 4.f);
-        nvgStrokePaint(vg, grad);
-        nvgStroke(vg);
+        beiklive::ui::drawGradientFocusBorder(
+            vg,
+            rx,
+            ry,
+            rw,
+            rh,
+            8.0f,
+            4.0f,
+            1.0f,
+            beiklive::ui::gradientFocusAnimationOffset(m_animTime));
 
         nvgBeginPath(vg);
         nvgRect(vg, rx, itemY + (m_itemHeight - 40.f) * 0.5f, 5.f, 40.f);
