@@ -3,6 +3,8 @@
 #include "core/GameSignal.hpp"
 #include "ui/utils/AnimationHelper.hpp"
 
+#include <borealis/views/dialog.hpp>
+
 #include <filesystem>
 
 namespace beiklive
@@ -13,6 +15,7 @@ namespace beiklive
     static constexpr int MENU_EXIT_FADE_MS = 150; ///< 退出游戏淡出动画时长
     static constexpr int EXIT_SAVE_POLL_MS = 30; ///< 退出自动存档完成状态轮询间隔
     static constexpr int EXIT_SAVE_TIMEOUT_MS = 8000; ///< 自动存档异常未回执时的最大等待时间
+    static constexpr int EXIT_CLEANUP_DIALOG_DELAY_MS = 120; ///< 给退出清理对话框留出可见首帧
     GamePage::GamePage(beiklive::DirListData gameData)
     {
 
@@ -531,10 +534,35 @@ namespace beiklive
         if (!m_exitRequested)
             return;
 
-        _tryUpdateLogoFromThumbnail();
-        if (beiklive::GameDB)
-            beiklive::GameDB->flush();
-        beiklive::popActivity(this);
+        if (m_exitCleanupStarted)
+            return;
+        m_exitCleanupStarted = true;
+        _showExitCleanupDialogThenPop();
+    }
+
+    void GamePage::_showExitCleanupDialogThenPop()
+    {
+        auto* dialog = new brls::Dialog("正在退出游戏...\n\n正在保存数据并释放模拟器核心");
+        dialog->setCancelable(false);
+        dialog->open();
+
+        ASYNC_RETAIN
+        brls::delay(EXIT_CLEANUP_DIALOG_DELAY_MS, [ASYNC_TOKEN, dialog]() {
+            ASYNC_RELEASE
+
+            brls::Logger::info("[GamePage] exit cleanup begin");
+            if (m_gameView)
+                m_gameView->prepareExitCleanup();
+
+            _tryUpdateLogoFromThumbnail();
+            if (beiklive::GameDB)
+                beiklive::GameDB->flush();
+            brls::Logger::info("[GamePage] exit cleanup end");
+
+            dialog->close([this]() {
+                beiklive::popActivity(this);
+            });
+        });
     }
 
     void GamePage::_waitExitAutoSaveThenPop()

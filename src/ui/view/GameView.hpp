@@ -56,6 +56,9 @@ namespace beiklive
 
             void draw(NVGcontext* vg, float x, float y, float width, float height, brls::Style style, brls::FrameContext* ctx) override;
 
+            /// 退出游戏前显式停止游戏线程并释放模拟器核心，避免 Activity 切换动画期间卡顿。
+            void prepareExitCleanup();
+
             /// 设置关联的游戏菜单视图（由 GamePage 调用）
             void setGameMenuView(GameMenuView* menuView) { m_gameMenuView = menuView; }
 

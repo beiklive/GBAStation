@@ -739,13 +739,12 @@ namespace beiklive
     {
         auto* box = static_cast<beiklive::Box*>(g_beiklive_boxes.back());
         g_beiklive_boxes.pop_back();
-            v->animaHide(
-                [box]() {
-                                brls::Application::popActivity();
-                               box->animaShow();
-
-                }
-            );
+        v->animaHide(
+            [box]() {
+                brls::Application::popActivity(brls::TransitionAnimation::NONE);
+                box->animaShow();
+            }
+        );
     }
 
 } // namespace beiklive

@@ -159,6 +159,26 @@ namespace beiklive
         GameInputManager::instance().dropInput();
     }
 
+    void GameView::prepareExitCleanup()
+    {
+        brls::Logger::debug("[GameView] prepareExitCleanup begin");
+#ifdef __SWITCH__
+        _unregisterAppletHook();
+#endif
+        GameInputManager::instance().setInputEnabled(false);
+        GameInputManager::instance().clearEmuFunctionKeys();
+        GameInputManager::instance().dropInput();
+
+        _stopGameThread();
+
+        if (m_core) {
+            delete m_core;
+            m_core = nullptr;
+        }
+
+        brls::Logger::debug("[GameView] prepareExitCleanup end");
+    }
+
     void GameView::onFocusGained()
     {
         Box::onFocusGained();
