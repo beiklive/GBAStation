@@ -1,0 +1,44 @@
+nestopia-libretro
+-----------------
+Nestopia is a cycle accurate emulator for the NES/Famicom.
+
+This is the libretro port of the Nestopia emulator, based on the de facto
+upstream Nestopia JG fork, which lives at: https://gitlab.com/jgemu/nestopia
+
+The libretro port contains an additional overclocking feature.
+
+Famicom Disk System
+-------------------
+FDS support requires the FDS BIOS to be placed in the "system" directory:
+ system/disksys.rom
+
+ADPCM Samples
+-------------
+Some games have ADPCM audio samples on the cartridge, which are not included in
+the ROM data. In order to use such samples with Nestopia, you must extract the
+samples into the correct location under the System directory. They are
+required to be in the "nestopia/samples" subdirectory named after the .zip file
+in MAME format:
+  moepro.zip        system/nestopia/samples/moepro/
+  moepro88.zip      system/nestopia/samples/moepro88/
+  mptennis.zip      system/nestopia/samples/mptennis/
+  terao.zip         system/nestopia/samples/terao/
+  ftaerobi.zip      system/nestopia/samples/ftaerobi/
+
+The location of the System directory depends on the frontend and platform in
+use. Refer to the frontend documentation.
+
+Contributing
+------------
+Changes to the libretro port should be contributed in this repository.
+Please contribute any changes to the emulator core to the upstream repository.
+
+Copyright
+---------
+Nestopia JG (GPL-2.0-or-later)
+  Copyright (c) 2003-2008 Martin Freij
+  Copyright (c) 2008-2018 Nestopia UE Contributors
+  Copyright (c) 2020-2024 Rupert Carmichael
+
+nes_ntsc (LGPL-2.1-or-later)
+  Copyright (c) 2006-2007 Shay Green

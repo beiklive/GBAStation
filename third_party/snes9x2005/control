@@ -1,0 +1,10 @@
+Package: com.libretro.catsfc
+Name: catsfc
+Depends: 
+Version: 0.0.1
+Architecture: iphoneos-arm
+Description: Libretro iOS core of catSFC
+Maintainer: libretro
+Author: libretro
+Section: System
+Tag: role::developer

@@ -1,0 +1,73 @@
+LIBRETRO_COMM_DIR := $(LIBRETRO_DIR)/libretro-common
+
+INCFLAGS := -I$(CORE_DIR) \
+				-I$(LIBRETRO_DIR) \
+				-I$(LIBRETRO_COMM_DIR)/include
+
+SOURCES_C := \
+	$(CORE_DIR)/c4.c \
+	$(CORE_DIR)/c4emu.c \
+	$(CORE_DIR)/cheats2.c \
+	$(CORE_DIR)/cheats.c \
+	$(CORE_DIR)/clip.c \
+	$(CORE_DIR)/cpu.c \
+	$(CORE_DIR)/cpuexec.c \
+	$(CORE_DIR)/cpuops.c \
+	$(CORE_DIR)/data.c\
+	$(CORE_DIR)/dma.c \
+	$(CORE_DIR)/dsp1.c \
+	$(CORE_DIR)/fxemu.c \
+	$(CORE_DIR)/fxinst.c \
+	$(CORE_DIR)/gfx.c \
+	$(CORE_DIR)/getset.c \
+	$(CORE_DIR)/globals.c \
+	$(CORE_DIR)/memmap.c \
+	$(CORE_DIR)/obc1.c \
+	$(CORE_DIR)/ppu.c \
+	$(CORE_DIR)/sa1.c \
+	$(CORE_DIR)/sa1cpu.c \
+	$(CORE_DIR)/sdd1.c \
+	$(CORE_DIR)/sdd1emu.c \
+	$(CORE_DIR)/seta010.c \
+	$(CORE_DIR)/seta011.c \
+	$(CORE_DIR)/seta018.c \
+	$(CORE_DIR)/seta.c \
+	$(CORE_DIR)/spc7110.c \
+	$(CORE_DIR)/spc7110dec.c \
+	$(CORE_DIR)/srtc.c \
+	$(CORE_DIR)/tile.c \
+	$(LIBRETRO_DIR)/libretro.c
+
+ifeq ($(USE_BLARGG_APU),1)
+	SOURCES_C += $(CORE_DIR)/apu_blargg.c
+	FLAGS += -DUSE_BLARGG_APU
+else
+	SOURCES_C += \
+		$(CORE_DIR)/apu.c \
+		$(CORE_DIR)/soundux.c \
+		$(CORE_DIR)/spc700.c
+endif
+
+ifeq ($(LOAD_FROM_MEMORY),1)
+	FLAGS += -DLOAD_FROM_MEMORY
+else ifneq ($(STATIC_LINKING), 1)
+	SOURCES_C += \
+		$(LIBRETRO_COMM_DIR)/compat/compat_posix_string.c \
+		$(LIBRETRO_COMM_DIR)/compat/compat_strcasestr.c \
+		$(LIBRETRO_COMM_DIR)/compat/compat_strl.c \
+		$(LIBRETRO_COMM_DIR)/compat/fopen_utf8.c \
+		$(LIBRETRO_COMM_DIR)/encodings/encoding_utf.c \
+		$(LIBRETRO_COMM_DIR)/file/file_path.c \
+		$(LIBRETRO_COMM_DIR)/file/file_path_io.c \
+		$(LIBRETRO_COMM_DIR)/streams/file_stream.c \
+		$(LIBRETRO_COMM_DIR)/streams/file_stream_transforms.c \
+		$(LIBRETRO_COMM_DIR)/string/stdstring.c \
+		$(LIBRETRO_COMM_DIR)/time/rtime.c \
+		$(LIBRETRO_COMM_DIR)/vfs/vfs_implementation.c
+endif
+
+ifeq ($(USE_OLD_COLOUR_OPS),1)
+	FLAGS += -DUSE_OLD_COLOUR_OPS
+endif
+
+FLAGS += $(DEFS) $(WARNINGS) $(INCFLAGS)

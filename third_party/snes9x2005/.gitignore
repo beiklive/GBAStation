@@ -1,0 +1,11 @@
+*.o
+*.plg
+*.elf
+*.dat
+*.zip
+*~
+depend
+[Tt]humbs.db
+expsfc.*
+EXPSFC/
+*.so
