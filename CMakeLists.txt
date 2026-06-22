@@ -272,14 +272,6 @@ else()
     message(STATUS "mGBA core: dynamic load (desktop)")
 endif()
 
-# 静态库内部符号冲突：不同核心定义了同名全局变量
-# (options_us, PPU, log_cb 等)，使用链接器标志允许多重定义。
-if (WIN32)
-    target_link_options(${PROJECT_NAME} PRIVATE -Wl,--allow-multiple-definition)
-elseif(NOT APPLE)
-    target_link_options(${PROJECT_NAME} PRIVATE -Wl,--allow-multiple-definition)
-endif()
-
 # ============================================================
 # Post-build: 桌面平台复制 mgba_libretro 共享库至输出目录
 # ============================================================

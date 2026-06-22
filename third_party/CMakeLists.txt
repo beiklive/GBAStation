@@ -86,13 +86,73 @@ function(apply_data_symbol_rename TARGET PREFIX)
         "log_cb=${PREFIX}_log_cb"
         "options_intl=${PREFIX}_options_intl"
     )
-    foreach(LOCALE us tr vn val uk sv sr sk ru pt_pt pt_br pl no nl ko ja it id hu hr he gl fr fi fa es eo en el de da cy cs cht chs ca ast ar)
+    foreach(LOCALE us tr vn val uk sv sr sk si ru ro pt_pt pt_br pl oc no nl mt ko ja it id hu hr he gl fr fi fa es eo en el de da cy cs cht chs ca ast ar)
         target_compile_definitions(${TARGET} PRIVATE
             "options_${LOCALE}=${PREFIX}_options_${LOCALE}"
             "option_cats_${LOCALE}=${PREFIX}_option_cats_${LOCALE}"
             "option_defs_${LOCALE}=${PREFIX}_option_defs_${LOCALE}"
         )
     endforeach()
+endfunction()
+
+set(LIBRETRO_API_SYMBOLS
+    retro_init
+    retro_deinit
+    retro_api_version
+    retro_get_system_info
+    retro_get_system_av_info
+    retro_set_environment
+    retro_set_video_refresh
+    retro_set_audio_sample
+    retro_set_audio_sample_batch
+    retro_set_input_poll
+    retro_set_input_state
+    retro_set_controller_port_device
+    retro_reset
+    retro_run
+    retro_serialize_size
+    retro_serialize
+    retro_unserialize
+    retro_load_game
+    retro_unload_game
+    retro_get_memory_data
+    retro_get_memory_size
+    retro_cheat_reset
+    retro_cheat_set
+    retro_get_region
+    retro_load_game_special
+)
+
+function(add_isolated_libretro_core TARGET OBJECT_TARGET PREFIX)
+    set(_raw_target "${TARGET}_raw")
+    set(_tmp_obj "${CMAKE_CURRENT_BINARY_DIR}/${TARGET}_combined.tmp.o")
+    set(_out_obj "${CMAKE_CURRENT_BINARY_DIR}/${TARGET}_combined.o")
+    set(_keep_args)
+    foreach(_sym IN LISTS LIBRETRO_API_SYMBOLS)
+        list(APPEND _keep_args "--keep-global-symbol=${PREFIX}_${_sym}")
+    endforeach()
+
+    add_library(${_raw_target} STATIC $<TARGET_OBJECTS:${OBJECT_TARGET}>)
+    add_dependencies(${_raw_target} ${OBJECT_TARGET})
+    set_target_properties(${_raw_target} PROPERTIES LINKER_LANGUAGE C)
+
+    add_custom_command(
+        OUTPUT "${_out_obj}"
+        COMMAND ${CMAKE_COMMAND} -E rm -f "${_tmp_obj}" "${_out_obj}"
+        COMMAND ${CMAKE_C_COMPILER} -r -o "${_tmp_obj}"
+                -Wl,--whole-archive "$<TARGET_FILE:${_raw_target}>" -Wl,--no-whole-archive
+        COMMAND ${CMAKE_OBJCOPY} ${_keep_args} "${_tmp_obj}" "${_out_obj}"
+        DEPENDS ${_raw_target}
+        COMMAND_EXPAND_LISTS
+        VERBATIM
+    )
+    set_source_files_properties("${_out_obj}" PROPERTIES
+        GENERATED TRUE
+        EXTERNAL_OBJECT TRUE
+    )
+    add_library(${TARGET} STATIC "${_out_obj}")
+    add_dependencies(${TARGET} ${OBJECT_TARGET})
+    set_target_properties(${TARGET} PROPERTIES LINKER_LANGUAGE C)
 endfunction()
 
 # =========================================================
@@ -154,7 +214,7 @@ set(FCEUMM_COMPAT_SRC
     ${FCEUMM_LRC_DIR}/vfs/vfs_implementation.c
 )
 
-add_library(fceumm_core STATIC
+add_library(fceumm_core_obj OBJECT
     ${FCEUMM_BOARDS_SRC}
     ${FCEUMM_INPUT_SRC}
     ${FCEUMM_NTSC_SRC}
@@ -162,7 +222,7 @@ add_library(fceumm_core STATIC
     ${FCEUMM_COMPAT_SRC}
 )
 
-target_include_directories(fceumm_core PRIVATE
+target_include_directories(fceumm_core_obj PRIVATE
     ${FCEUMM_CORE_DIR}/drivers/libretro
     ${FCEUMM_LRC_DIR}/include
     ${FCEUMM_CORE_DIR}
@@ -171,7 +231,7 @@ target_include_directories(fceumm_core PRIVATE
     ${FCEUMM_CORE_DIR}/ntsc
 )
 
-target_compile_definitions(fceumm_core PRIVATE
+target_compile_definitions(fceumm_core_obj PRIVATE
     __LIBRETRO__
     PATH_MAX=1024
     FCEU_VERSION_NUMERIC=9813
@@ -179,11 +239,12 @@ target_compile_definitions(fceumm_core PRIVATE
     HAVE_NTSC_FILTER
 )
 
-apply_retro_symbol_rename(fceumm_core fceumm)
-apply_data_symbol_rename(fceumm_core fceumm)
-target_compile_definitions(fceumm_core PRIVATE "PPU=fceumm_PPU")
+apply_retro_symbol_rename(fceumm_core_obj fceumm)
+apply_data_symbol_rename(fceumm_core_obj fceumm)
+target_compile_definitions(fceumm_core_obj PRIVATE "PPU=fceumm_PPU")
 
-set_target_properties(fceumm_core PROPERTIES C_STANDARD 11)
+set_target_properties(fceumm_core_obj PROPERTIES C_STANDARD 11)
+add_isolated_libretro_core(fceumm_core fceumm_core_obj fceumm)
 
 # =========================================================
 # Snes9x (SNES) 核心 – 按 libretro/Makefile + Makefile.common
@@ -383,20 +444,21 @@ set(SNES9X2005_SRC
     ${SNES9X2005_SRC_DIR}/spc700.c
 )
 
-add_library(snes9x2005_core STATIC ${SNES9X2005_SRC})
-target_include_directories(snes9x2005_core PRIVATE
+add_library(snes9x2005_core_obj OBJECT ${SNES9X2005_SRC})
+target_include_directories(snes9x2005_core_obj PRIVATE
     ${SNES9X2005_PATH}
     ${SNES9X2005_SRC_DIR}
     ${SNES9X2005_LRC_DIR}/include
 )
-target_compile_definitions(snes9x2005_core PRIVATE __LIBRETRO__ LOAD_FROM_MEMORY LAGFIX)
+target_compile_definitions(snes9x2005_core_obj PRIVATE __LIBRETRO__ LOAD_FROM_MEMORY LAGFIX)
 if (PLATFORM_SWITCH)
-    target_compile_definitions(snes9x2005_core PRIVATE __SWITCH__ SWITCH HAVE_LIBNX)
+    target_compile_definitions(snes9x2005_core_obj PRIVATE __SWITCH__ SWITCH HAVE_LIBNX)
 endif()
-apply_retro_symbol_rename(snes9x2005_core snes9x2005)
-apply_data_symbol_rename(snes9x2005_core snes9x2005)
-target_compile_definitions(snes9x2005_core PRIVATE "PPU=snes9x2005_PPU")
-set_target_properties(snes9x2005_core PROPERTIES C_STANDARD 11)
+apply_retro_symbol_rename(snes9x2005_core_obj snes9x2005)
+apply_data_symbol_rename(snes9x2005_core_obj snes9x2005)
+target_compile_definitions(snes9x2005_core_obj PRIVATE "PPU=snes9x2005_PPU")
+set_target_properties(snes9x2005_core_obj PROPERTIES C_STANDARD 11)
+add_isolated_libretro_core(snes9x2005_core snes9x2005_core_obj snes9x2005)
 
 # =========================================================
 # Snes9x 2010 (SNES) 核心
@@ -427,22 +489,37 @@ set(SNES9X2010_SRC
     ${SNES9X2010_SRC_DIR}/hwregisters.c
     ${SNES9X2010_PATH}/filter/snes_ntsc.c
     ${SNES9X2010_PATH}/libretro/libretro.c
+    ${SNES9X2010_LRC_DIR}/compat/compat_posix_string.c
+    ${SNES9X2010_LRC_DIR}/compat/compat_snprintf.c
+    ${SNES9X2010_LRC_DIR}/compat/compat_strcasestr.c
+    ${SNES9X2010_LRC_DIR}/compat/compat_strl.c
+    ${SNES9X2010_LRC_DIR}/compat/fopen_utf8.c
+    ${SNES9X2010_LRC_DIR}/encodings/encoding_utf.c
+    ${SNES9X2010_LRC_DIR}/file/file_path.c
+    ${SNES9X2010_LRC_DIR}/file/file_path_io.c
+    ${SNES9X2010_LRC_DIR}/streams/file_stream.c
+    ${SNES9X2010_LRC_DIR}/streams/file_stream_transforms.c
+    ${SNES9X2010_LRC_DIR}/streams/memory_stream.c
+    ${SNES9X2010_LRC_DIR}/string/stdstring.c
+    ${SNES9X2010_LRC_DIR}/time/rtime.c
+    ${SNES9X2010_LRC_DIR}/vfs/vfs_implementation.c
 )
 
-add_library(snes9x2010_core STATIC ${SNES9X2010_SRC})
-target_include_directories(snes9x2010_core PRIVATE
+add_library(snes9x2010_core_obj OBJECT ${SNES9X2010_SRC})
+target_include_directories(snes9x2010_core_obj PRIVATE
     ${SNES9X2010_PATH}/libretro
     ${SNES9X2010_SRC_DIR}
     ${SNES9X2010_LRC_DIR}/include
 )
-target_compile_definitions(snes9x2010_core PRIVATE __LIBRETRO__ INLINE=inline)
+target_compile_definitions(snes9x2010_core_obj PRIVATE __LIBRETRO__ INLINE=inline)
 if (PLATFORM_SWITCH)
-    target_compile_definitions(snes9x2010_core PRIVATE __SWITCH__ SWITCH HAVE_LIBNX)
+    target_compile_definitions(snes9x2010_core_obj PRIVATE __SWITCH__ SWITCH HAVE_LIBNX)
 endif()
-apply_retro_symbol_rename(snes9x2010_core snes9x2010)
-apply_data_symbol_rename(snes9x2010_core snes9x2010)
-target_compile_definitions(snes9x2010_core PRIVATE "PPU=snes9x2010_PPU")
-set_target_properties(snes9x2010_core PROPERTIES C_STANDARD 11)
+apply_retro_symbol_rename(snes9x2010_core_obj snes9x2010)
+apply_data_symbol_rename(snes9x2010_core_obj snes9x2010)
+target_compile_definitions(snes9x2010_core_obj PRIVATE "PPU=snes9x2010_PPU")
+set_target_properties(snes9x2010_core_obj PROPERTIES C_STANDARD 11)
+add_isolated_libretro_core(snes9x2010_core snes9x2010_core_obj snes9x2010)
 
 # =========================================================
 # melonDS (NDS) 原生核心

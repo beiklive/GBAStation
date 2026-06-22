@@ -34,10 +34,27 @@ const platforms = [
   ['NDS', 'NDS'],
 ];
 
+const coreOptionsByPlatform = {
+  GBA: [['mgba', 'mGBA']],
+  GBC: [['mgba', 'mGBA']],
+  GB: [['mgba', 'mGBA']],
+  FC: [
+    ['nestopia', 'Nestopia'],
+    ['fceumm', 'FCEUmm'],
+  ],
+  SFC: [
+    ['snes9x2010', 'Snes9x 2010'],
+    ['snes9x2005', 'Snes9x 2005'],
+    ['snes9x', 'Snes9x'],
+  ],
+  NDS: [['melonds', 'melonDS']],
+};
+
 const gameConfigFields = [
   { key: 'path', label: 'ROM 路径', type: 'text', readonly: true, group: '基础信息' },
   { key: 'platformName', label: '平台名称', type: 'text', readonly: true, group: '基础信息' },
   { key: 'platform', label: '平台 ID', type: 'number', readonly: true, group: '基础信息' },
+  { key: 'core', label: '模拟核心', type: 'select', group: '基础信息', optionsForGame: coreOptionsForGame },
   { key: 'crc32', label: 'CRC32', type: 'number', readonly: true, group: '基础信息' },
   { key: 'lastPlayed', label: '最后游玩', type: 'text', group: '基础信息' },
   { key: 'playCount', label: '游玩次数', type: 'number', group: '基础信息' },
@@ -120,6 +137,14 @@ function platformOf(game) {
   return game.platformName || ({ 1: 'GBA', 2: 'GBC', 3: 'GB', 4: 'FC', 5: 'SFC', 6: 'NDS' }[game.platform] || 'OTHER');
 }
 
+function coreOptionsForGame(game) {
+  return coreOptionsByPlatform[platformOf(game)] || [];
+}
+
+function defaultCoreForGame(game) {
+  return coreOptionsForGame(game)[0]?.[0] || '';
+}
+
 function platformClass(platform) {
   return `platform-${String(platform || 'OTHER').toLowerCase()}`;
 }
@@ -179,13 +204,14 @@ function makeConfigInput(field, game) {
     select.dataset.configKey = field.key;
     select.dataset.configType = field.type;
     select.disabled = !!field.readonly;
-    for (const [optionValue, label] of field.options || []) {
+    const options = field.optionsForGame ? field.optionsForGame(game) : (field.options || []);
+    for (const [optionValue, label] of options) {
       const option = document.createElement('option');
       option.value = String(optionValue);
       option.textContent = label;
       select.appendChild(option);
     }
-    select.value = configValueToString(value, field);
+    select.value = field.key === 'core' && !value ? defaultCoreForGame(game) : configValueToString(value, field);
     return select;
   }
 
@@ -253,7 +279,8 @@ function readConfigInput(input) {
   }
   if (type === 'select') {
     const field = gameConfigFields.find((item) => item.key === key);
-    const numeric = field?.options?.some(([value]) => typeof value === 'number');
+    const options = field?.optionsForGame ? field.optionsForGame(state.selected) : (field?.options || []);
+    const numeric = options.some(([value]) => typeof value === 'number');
     return numeric ? Number(input.value) : input.value;
   }
   return input.value;

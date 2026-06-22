@@ -5,6 +5,7 @@
 #include <cstdarg>
 #include <ctime>
 #include <algorithm>
+#include <fstream>
 
 #if defined(_WIN32)
 #  define WIN32_LEAN_AND_MEAN
@@ -672,10 +673,34 @@ bool LibretroLoader::loadGame(const std::string& romPath)
     if (!m_coreReady) { brls::Logger::debug("[LibretroLoader] loadGame: core not ready"); return false; }
 
     brls::Logger::debug("[LibretroLoader] loadGame: path={}", romPath);
+    retro_system_info systemInfo{};
+    fn_get_system_info(&systemInfo);
+
+    std::vector<uint8_t> romData;
+    if (!systemInfo.need_fullpath) {
+        std::ifstream file(romPath, std::ios::binary);
+        if (!file) {
+            brls::Logger::error("[LibretroLoader] loadGame: failed to open ROM data: {}", romPath);
+            return false;
+        }
+        file.seekg(0, std::ios::end);
+        std::streamoff size = file.tellg();
+        if (size <= 0) {
+            brls::Logger::error("[LibretroLoader] loadGame: ROM data is empty: {}", romPath);
+            return false;
+        }
+        file.seekg(0, std::ios::beg);
+        romData.resize(static_cast<size_t>(size));
+        if (!file.read(reinterpret_cast<char*>(romData.data()), size)) {
+            brls::Logger::error("[LibretroLoader] loadGame: failed to read ROM data: {}", romPath);
+            return false;
+        }
+    }
+
     retro_game_info info{};
     info.path = romPath.c_str();
-    info.data = nullptr;
-    info.size = 0;
+    info.data = romData.empty() ? nullptr : romData.data();
+    info.size = romData.size();
     info.meta = nullptr;
 
     if (!fn_load_game(&info)) {

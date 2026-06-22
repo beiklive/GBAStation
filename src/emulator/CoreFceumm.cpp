@@ -11,9 +11,9 @@ CoreFceumm::~CoreFceumm()
 bool CoreFceumm::SetupGame(beiklive::GameEntry GameEntry)
 {
     m_gameEntry = std::move(GameEntry);
+    _initConfig();
     if (_loadCore())
     {
-        _initConfig();
         if (_loadRom(m_gameEntry.path))
         {
             m_core.reset();
@@ -87,6 +87,7 @@ void CoreFceumm::_initConfig()
 
     m_core.setConfigManager(cfg);
     m_core.setSystemDirectory(beiklive::path::biosPath());
+    m_core.setSaveDirectory(m_gameEntry.savePath.empty() ? beiklive::path::savePath() : m_gameEntry.savePath);
 }
 
 bool CoreFceumm::_loadCore()
