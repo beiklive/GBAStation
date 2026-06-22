@@ -37,6 +37,7 @@
       <div class="sidebar-nav">
         <button id="libraryModeBtn" class="active"><i class="fa-solid fa-gamepad"></i><span>游戏库</span></button>
         <button id="filesModeBtn"><i class="fa-solid fa-folder-open"></i><span>文件管理</span></button>
+        <button id="albumModeBtn"><i class="fa-solid fa-images"></i><span>相册浏览</span></button>
       </div>
 
       <nav class="platform-tabs" id="platformTabs"></nav>
@@ -113,6 +114,19 @@
           <button id="fileGoBtn"><i class="fa-solid fa-arrow-right"></i><span>打开</span></button>
         </div>
         <div id="fileList" class="file-list"></div>
+      </section>
+
+      <section id="albumPanel" class="album-panel" hidden>
+        <div class="file-head">
+          <div>
+            <h2>相册浏览</h2>
+            <p id="albumSummary">按时间顺序显示 Album 中的图片和视频</p>
+          </div>
+          <div class="file-actions">
+            <button id="albumRefreshBtn"><i class="fa-solid fa-rotate"></i><span>刷新</span></button>
+          </div>
+        </div>
+        <div id="albumList" class="album-list"></div>
       </section>
 
       <section id="gameSections" class="game-sections"></section>
@@ -208,6 +222,14 @@
       <button class="icon-btn" id="closeFileImageBtn" title="关闭"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <img id="fileImagePreview" alt="图片预览">
+  </dialog>
+
+  <dialog id="videoDialog" class="file-image-dialog">
+    <div class="dialog-head">
+      <h3 id="videoTitle">视频预览</h3>
+      <button class="icon-btn" id="closeVideoBtn" title="关闭"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <video id="videoPreview" controls playsinline></video>
   </dialog>
 
   <dialog id="textEditorDialog" class="text-editor-dialog">

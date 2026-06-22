@@ -14,6 +14,10 @@ const state = {
   filePath: '',
   fileParent: '',
   fileEntries: [],
+  fileView: 'list',
+  albumRoot: '',
+  albumItems: [],
+  albumView: 'grid',
   editingTextPath: '',
   selectionMode: false,
   selectedIds: new Set(),
@@ -496,26 +500,41 @@ function renderGames() {
 function setMode(mode) {
   state.mode = mode;
   const library = mode === 'library';
+  const files = mode === 'files';
+  const album = mode === 'album';
   $('libraryModeBtn').classList.toggle('active', library);
-  $('filesModeBtn').classList.toggle('active', !library);
+  $('filesModeBtn').classList.toggle('active', files);
+  $('albumModeBtn').classList.toggle('active', album);
   $('platformTabs').hidden = !library;
   $('gameSections').hidden = !library;
   $('pager').hidden = !library || filteredGames().length <= state.pageSize;
-  $('filePanel').hidden = library;
+  $('filePanel').hidden = !files;
+  $('albumPanel').hidden = !album;
   $('searchInput').disabled = !library;
   $('sortSelect').disabled = !library;
-  $('gridViewBtn').disabled = !library;
-  $('listViewBtn').disabled = !library;
+  $('gridViewBtn').disabled = false;
+  $('listViewBtn').disabled = false;
   $('multiSelectBtn').disabled = !library;
   if (library) {
+    setView(state.view);
     renderGames();
-  } else {
+  } else if (files) {
     setSelectionMode(false);
+    setView(state.fileView);
     $('summaryText').textContent = '正在浏览 Switch 内存卡';
     if (!state.filePath) {
       loadFiles().catch((err) => toast(err.message));
     } else {
       renderFiles();
+    }
+  } else {
+    setSelectionMode(false);
+    setView(state.albumView);
+    $('summaryText').textContent = '正在读取 Switch 相册';
+    if (!state.albumItems.length) {
+      loadAlbum().catch((err) => toast(err.message));
+    } else {
+      renderAlbum();
     }
   }
 }
@@ -533,12 +552,17 @@ function fileIcon(entry) {
   if (entry.isDir) return 'fa-folder';
   const ext = String(entry.ext || '').toLowerCase();
   if (['png', 'jpg', 'jpeg', 'webp', 'bmp'].includes(ext)) return 'fa-image';
+  if (isVideoEntry(entry)) return 'fa-video';
   if (['zip', '7z', 'rar'].includes(ext)) return 'fa-file-zipper';
   return 'fa-file';
 }
 
 function isImageEntry(entry) {
   return !entry.isDir && ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif'].includes(String(entry.ext || '').toLowerCase());
+}
+
+function isVideoEntry(entry) {
+  return !entry.isDir && ['mp4', 'mov', 'm4v', 'webm', 'mkv', 'avi'].includes(String(entry.ext || '').toLowerCase());
 }
 
 function isTextEntry(entry) {
@@ -552,6 +576,7 @@ function renderFiles() {
   $('summaryText').textContent = `文件管理：${state.filePath || state.fileRoot || ''}`;
 
   const root = $('fileList');
+  root.className = state.fileView === 'grid' ? 'file-grid' : 'file-list';
   root.innerHTML = '';
   if (!state.fileEntries.length) {
     root.innerHTML = '<div class="empty compact-empty">当前目录为空</div>';
@@ -560,8 +585,28 @@ function renderFiles() {
 
   for (const entry of state.fileEntries) {
     const row = document.createElement('div');
-    row.className = `file-row${entry.isDir ? ' dir' : ''}`;
-    row.innerHTML = `
+    row.className = `${state.fileView === 'grid' ? 'file-card' : 'file-row'}${entry.isDir ? ' dir' : ''}`;
+    const preview = isImageEntry(entry)
+      ? `<img class="file-thumb" loading="lazy" alt="${escapeHtml(entry.name)}" src="/api/files/view?path=${encodeURIComponent(entry.path)}">`
+      : isVideoEntry(entry)
+        ? `<video class="file-thumb" preload="metadata" muted playsinline src="/api/files/view?path=${encodeURIComponent(entry.path)}"></video>`
+        : `<span class="file-thumb file-thumb-icon"><i class="fa-solid ${fileIcon(entry)}"></i></span>`;
+    row.innerHTML = state.fileView === 'grid' ? `
+      <button class="file-main" title="${escapeHtml(entry.path)}">
+        ${preview}
+        <span>${escapeHtml(entry.name)}</span>
+      </button>
+      <div class="file-meta-line">
+        <span>${entry.isDir ? '文件夹' : formatSize(entry.size)}</span>
+        <span>${escapeHtml(entry.modified || '')}</span>
+      </div>
+      <div class="file-row-actions">
+        <button title="${entry.isDir ? '下载为 ZIP' : '下载'}"><i class="fa-solid fa-download"></i></button>
+        <button title="改名"><i class="fa-solid fa-pen"></i></button>
+        <button title="移动"><i class="fa-solid fa-arrows-up-down-left-right"></i></button>
+        <button class="danger" title="删除"><i class="fa-solid fa-trash-can"></i></button>
+      </div>
+    ` : `
       <button class="file-main" title="${escapeHtml(entry.path)}">
         <i class="fa-solid ${fileIcon(entry)}"></i>
         <span>${escapeHtml(entry.name)}</span>
@@ -592,6 +637,8 @@ async function openFileEntry(entry) {
     await loadFiles(entry.path);
   } else if (isImageEntry(entry)) {
     openFileImage(entry);
+  } else if (isVideoEntry(entry)) {
+    openVideo(entry.name, `/api/files/view?path=${encodeURIComponent(entry.path)}&t=${Date.now()}`);
   } else if (isTextEntry(entry)) {
     await openTextEditor(entry);
   }
@@ -605,6 +652,57 @@ function openFileImage(entry) {
   $('fileImageTitle').textContent = entry.name || '图片预览';
   $('fileImagePreview').src = `/api/files/view?path=${encodeURIComponent(entry.path)}&t=${Date.now()}`;
   $('fileImageDialog').showModal();
+}
+
+function openVideo(title, url) {
+  $('videoTitle').textContent = title || '视频预览';
+  const video = $('videoPreview');
+  video.src = url;
+  video.load();
+  $('videoDialog').showModal();
+}
+
+async function loadAlbum() {
+  const data = await api('/api/album/list');
+  state.albumRoot = data.root || '';
+  state.albumItems = data.items || [];
+  renderAlbum();
+}
+
+function renderAlbum() {
+  $('albumSummary').textContent = `${state.albumItems.length} 个媒体文件 · ${state.albumRoot || 'sdmc:/emuMMC/SD00/Nintendo/Album'}`;
+  $('summaryText').textContent = `相册浏览：${state.albumRoot || 'Album'}`;
+  const root = $('albumList');
+  root.className = state.albumView === 'grid' ? 'album-grid' : 'album-list';
+  root.innerHTML = '';
+  if (!state.albumItems.length) {
+    root.innerHTML = '<div class="empty compact-empty">没有找到图片或视频</div>';
+    return;
+  }
+
+  for (const item of state.albumItems) {
+    const isVideo = item.type === 'video';
+    const card = document.createElement('button');
+    card.className = state.albumView === 'grid' ? 'album-card' : 'album-row';
+    const media = isVideo
+      ? `<video preload="metadata" muted playsinline src="${item.url}"></video>`
+      : `<img loading="lazy" alt="${escapeHtml(item.name)}" src="${item.url}">`;
+    card.innerHTML = `
+      ${media}
+      <span class="album-kind"><i class="fa-solid ${isVideo ? 'fa-video' : 'fa-image'}"></i>${isVideo ? '视频' : '图片'}</span>
+      <strong>${escapeHtml(item.name)}</strong>
+      <small>${formatSize(item.size)} · ${escapeHtml(item.modified || '')}</small>
+    `;
+    card.onclick = () => {
+      if (isVideo) openVideo(item.name, `${item.url}&t=${Date.now()}`);
+      else {
+        $('fileImageTitle').textContent = item.name || '图片预览';
+        $('fileImagePreview').src = `${item.url}&t=${Date.now()}`;
+        $('fileImageDialog').showModal();
+      }
+    };
+    root.appendChild(card);
+  }
 }
 
 async function openTextEditor(entry) {
@@ -1310,6 +1408,7 @@ function bindEvents() {
   };
   $('libraryModeBtn').onclick = () => setMode('library');
   $('filesModeBtn').onclick = () => setMode('files');
+  $('albumModeBtn').onclick = () => setMode('album');
   $('fileUploadBtn').onclick = () => $('fileBrowserInput').click();
   $('folderUploadBtn').onclick = () => $('folderBrowserInput').click();
   $('fileBrowserInput').onchange = (e) => {
@@ -1329,6 +1428,14 @@ function bindEvents() {
     if (e.key === 'Enter') loadFiles(e.target.value.trim()).catch((err) => toast(err.message));
   };
   $('closeFileImageBtn').onclick = () => $('fileImageDialog').close();
+  $('albumRefreshBtn').onclick = () => loadAlbum().catch((err) => toast(err.message));
+  $('closeVideoBtn').onclick = () => {
+    const video = $('videoPreview');
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+    $('videoDialog').close();
+  };
   $('closeTextEditorBtn').onclick = () => $('textEditorDialog').close();
   $('saveTextEditorBtn').onclick = () => saveTextEditor().catch((err) => toast(err.message));
   $('searchInput').oninput = (e) => { state.search = e.target.value; state.page = 1; renderGames(); };
@@ -1389,10 +1496,18 @@ function setTheme(theme) {
 }
 
 function setView(view) {
-  state.view = view;
+  if (state.mode === 'files') {
+    state.fileView = view;
+    renderFiles();
+  } else if (state.mode === 'album') {
+    state.albumView = view;
+    renderAlbum();
+  } else {
+    state.view = view;
+    renderGames();
+  }
   $('gridViewBtn').classList.toggle('active', view === 'grid');
   $('listViewBtn').classList.toggle('active', view === 'list');
-  renderGames();
 }
 
 bindEvents();

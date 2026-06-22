@@ -27,6 +27,7 @@ constexpr std::uint64_t MAX_UPLOAD_SIZE = 512ull * 1024ull * 1024ull;
 constexpr std::uint64_t MAX_TEXT_EDIT_SIZE = 2ull * 1024ull * 1024ull;
 constexpr const char* JSON_HEADERS = "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n";
 constexpr const char* CORS_HEADERS = "Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET,POST,PUT,DELETE,OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\n";
+constexpr const char* ALBUM_ROOT = "sdmc:/emuMMC/SD00/Nintendo/Album";
 
 std::string strFromMg(mg_str s)
 {
@@ -102,6 +103,7 @@ bool containsNonAscii(const std::string& value)
 
 std::string safePathComponent(const std::string& name, bool fallbackFile);
 fs::path uniqueFileTarget(const fs::path& requested);
+std::string encodedPathParam(const fs::path& path);
 
 bool isSafeChar(unsigned char c)
 {
@@ -375,9 +377,36 @@ std::string mimeTypeForExt(const std::string& ext)
     if (e == "webp") return "image/webp";
     if (e == "gif") return "image/gif";
     if (e == "bmp") return "image/bmp";
+    if (e == "mp4" || e == "m4v") return "video/mp4";
+    if (e == "mov") return "video/quicktime";
+    if (e == "webm") return "video/webm";
+    if (e == "mkv") return "video/x-matroska";
+    if (e == "avi") return "video/x-msvideo";
     if (isTextEditableExt(e)) return "text/plain; charset=utf-8";
     if (e == "zip") return "application/zip";
     return "application/octet-stream";
+}
+
+bool isAlbumImageExt(const std::string& ext)
+{
+    std::string e = toLower(ext);
+    return e == "png" || e == "jpg" || e == "jpeg" || e == "webp" || e == "bmp" || e == "gif";
+}
+
+bool isAlbumVideoExt(const std::string& ext)
+{
+    std::string e = toLower(ext);
+    return e == "mp4" || e == "mov" || e == "m4v" || e == "webm" || e == "mkv" || e == "avi";
+}
+
+bool isAlbumMediaExt(const std::string& ext)
+{
+    return isAlbumImageExt(ext) || isAlbumVideoExt(ext);
+}
+
+fs::path albumRoot()
+{
+    return fs::path(ALBUM_ROOT);
 }
 
 bool addDirectoryToZip(mz_zip_archive& zip, const fs::path& root, const fs::path& dir)
@@ -661,6 +690,35 @@ bool pathInsideFileBrowser(const fs::path& target)
 #endif
 }
 
+bool pathInsideAlbum(const fs::path& target)
+{
+    fs::path root = albumRoot();
+#ifdef __SWITCH__
+    std::string rootStr = root.lexically_normal().string();
+    std::string targetStr = target.lexically_normal().string();
+    return targetStr == rootStr || (targetStr.size() > rootStr.size() &&
+           targetStr.rfind(rootStr, 0) == 0 &&
+           (rootStr.empty() || rootStr.back() == '/' || targetStr[rootStr.size()] == '/'));
+#else
+    fs::path canonicalTarget;
+    return pathInsideDirectory(target, root, canonicalTarget);
+#endif
+}
+
+nlohmann::json albumEntryJson(const fs::path& path)
+{
+    std::string ext = trimExtDot(path.extension().string());
+    return {
+        {"name", path.filename().string()},
+        {"path", path.string()},
+        {"type", isAlbumVideoExt(ext) ? "video" : "image"},
+        {"size", safeFileSize(path)},
+        {"modified", safeModTime(path)},
+        {"ext", ext},
+        {"url", "/api/album/view?path=" + encodedPathParam(path)},
+    };
+}
+
 bool writablePathInsideFileBrowser(const fs::path& target)
 {
     fs::path parent = target.parent_path();
@@ -737,6 +795,8 @@ void ApiRouter::handleApi(mg_connection* c, mg_http_message* hm, const std::stri
         return handleImageFile(c, hm);
     if (uri == "/api/logo" && method == "GET")
         return handleLogoFile(c, hm);
+    if (uri.rfind("/api/album", 0) == 0)
+        return handleAlbum(c, hm, method, uri);
     if (uri.rfind("/api/files", 0) == 0)
         return handleFiles(c, hm, method, uri);
     if (uri.rfind("/api/system", 0) == 0)
@@ -1276,6 +1336,63 @@ void ApiRouter::handleImageFile(mg_connection* c, mg_http_message* hm)
     mg_http_serve_opts opts = {};
     opts.extra_headers = CORS_HEADERS;
     mg_http_serve_file(c, hm, path.c_str(), &opts);
+}
+
+void ApiRouter::handleAlbum(mg_connection* c, mg_http_message* hm, const std::string& method, const std::string& uri)
+{
+    if (uri == "/api/album/list" && method == "GET")
+    {
+        fs::path root = albumRoot();
+        nlohmann::json items = nlohmann::json::array();
+        std::error_code ec;
+        if (fs::exists(root, ec) && fs::is_directory(root, ec))
+        {
+            fs::recursive_directory_iterator it(root, fs::directory_options::skip_permission_denied, ec);
+            fs::recursive_directory_iterator end;
+            for (; it != end; it.increment(ec))
+            {
+                if (ec) { ec.clear(); continue; }
+                std::error_code entryEc;
+                if (!it->is_regular_file(entryEc) || entryEc)
+                    continue;
+                fs::path path = it->path();
+                std::string ext = trimExtDot(path.extension().string());
+                if (isAlbumMediaExt(ext))
+                    items.push_back(albumEntryJson(path));
+            }
+        }
+
+        std::sort(items.begin(), items.end(), [](const nlohmann::json& a, const nlohmann::json& b) {
+            std::string am = a.value("modified", "");
+            std::string bm = b.value("modified", "");
+            if (am != bm) return am > bm;
+            return a.value("name", "").compare(b.value("name", "")) < 0;
+        });
+
+        return replyJson(c, 200, {
+            {"ok", true},
+            {"root", root.string()},
+            {"items", items},
+        });
+    }
+
+    if (uri == "/api/album/view" && method == "GET")
+    {
+        fs::path path(decodeQuery(hm, "path"));
+        if (!pathInsideAlbum(path))
+            return replyError(c, 403, "path outside album root");
+        if (!fs::exists(path) || !fs::is_regular_file(path))
+            return replyError(c, 404, "media not found");
+        std::string ext = trimExtDot(path.extension().string());
+        if (!isAlbumMediaExt(ext))
+            return replyError(c, 400, "unsupported media type");
+        std::string headers = std::string(CORS_HEADERS) + "Content-Type: " + mimeTypeForExt(ext) + "\r\n";
+        mg_http_serve_opts opts = {};
+        opts.extra_headers = headers.c_str();
+        return mg_http_serve_file(c, hm, path.string().c_str(), &opts);
+    }
+
+    replyError(c, 404, "album api not found");
 }
 
 void ApiRouter::handleLogoFile(mg_connection* c, mg_http_message* hm)

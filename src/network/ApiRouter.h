@@ -52,6 +52,7 @@ private:
     void handleCoverSelect(mg_connection* c, mg_http_message* hm, const std::string& gameId);
     void handleImages(mg_connection* c, mg_http_message* hm);
     void handleImageFile(mg_connection* c, mg_http_message* hm);
+    void handleAlbum(mg_connection* c, mg_http_message* hm, const std::string& method, const std::string& uri);
     void handleLogoFile(mg_connection* c, mg_http_message* hm);
     void handleCoverFile(mg_connection* c, mg_http_message* hm, const std::string& gameId);
     void handleSystem(mg_connection* c, mg_http_message* hm, const std::string& method, const std::string& uri);
