@@ -12,7 +12,7 @@ namespace beiklive
         brls::Logger::debug("StartPage initialized");
         brls::sync([this]()
                    {
-        this->showHeader(true);
+        this->showHeader(false);
         // this->showFooter(false);
         // this->showBackground(true);
         // 动态背景由 Box::setupShaderLayer 根据配置初始化

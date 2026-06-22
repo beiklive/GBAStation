@@ -110,10 +110,10 @@ static StyleValues styleValues = {
     { "brls/button/border_thickness", 2.0f },
 
     // Generic shadow
-    { "brls/shadow/width", 2.0f },
-    { "brls/shadow/feather", 10.0f },
-    { "brls/shadow/opacity", 63.75f },
-    { "brls/shadow/offset", 10.0f },
+    { "brls/shadow/width", 6.0f },
+    { "brls/shadow/feather", 20.0f },
+    { "brls/shadow/opacity", 100.75f },
+    { "brls/shadow/offset", 45.0f },
 
     // Dropdown
     { "brls/dropdown/listPadding", 40.0f },

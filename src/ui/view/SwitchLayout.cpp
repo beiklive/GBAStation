@@ -17,6 +17,14 @@ namespace beiklive
         m_frame->setHeight(400.f);
         m_frame->setScrollingBehavior(brls::ScrollingBehavior::CENTERED);
         m_frame->setScrollingIndicatorVisible(false);
+
+        auto* emptyCard = new brls::Box(brls::Axis::ROW);
+        emptyCard->setHeight(60.f);
+        emptyCard->setWireframeEnabled(true);
+        addView(emptyCard);
+
+
+
         m_cardRow = new brls::Box(brls::Axis::ROW);
         m_cardRow->setAlignItems(brls::AlignItems::CENTER);
         m_cardRow->setGrow(1.0f);
@@ -148,14 +156,13 @@ namespace beiklive
         functionBox->setFocusable(false);
         functionBox->setHeight(95.f);
         functionBox->setWidth(600.f);
-        // functionBox->setPadding(10.f);
         functionBox->setBackgroundColor(nvgRGBA(0, 0, 0, 10));
         functionBox->setClipsToBounds(false);
         functionBox->setCornerRadius(45.0f);
-        // functionBox->setShadowVisibility(true);
-        // functionBox->setShadowType(brls::ShadowType::GENERIC);
-        functionBox->setBorderColor(nvgRGBA(255, 255, 255, 35));
-        functionBox->setBorderThickness(0.5f);
+        functionBox->setShadowVisibility(true);
+        functionBox->setShadowType(brls::ShadowType::GENERIC);
+        functionBox->setBorderColor(nvgRGBA(125, 125, 125, 95));
+        functionBox->setBorderThickness(1.5f);
 
         std::string path_prefix = "img/ui/" +
                                   std::string((brls::Application::getPlatform()->getThemeVariant() == brls::ThemeVariant::DARK) ? "light/" : "dark/");

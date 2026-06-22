@@ -38,15 +38,14 @@ namespace beiklive
         m_imageWrapper->setHeight(ROUND_BTN_IMAGE_SIZE);
         m_imageWrapper->setFocusable(true);
         m_imageWrapper->setHideHighlightBackground(true);
-        m_imageWrapper->setShadowVisibility(true);
-        m_imageWrapper->setShadowType(brls::ShadowType::GENERIC);
+        m_imageWrapper->setShadowVisibility(false);
 
         m_imageWrapper->setHighlightCornerRadius(ROUND_BTN_IMAGE_SIZE/ 2.0f);
         m_imageWrapper->setCornerRadius(ROUND_BTN_IMAGE_SIZE / 2.0f);
 
         m_imageWrapper->setAlignItems(brls::AlignItems::CENTER);
         m_imageWrapper->setJustifyContent(brls::JustifyContent::CENTER);
-        m_imageWrapper->setBackgroundColor(nvgRGBA(40, 40, 40, 10));
+        // m_imageWrapper->setBackgroundColor(nvgRGBA(40, 40, 40, 0));
 
 
 

@@ -130,10 +130,13 @@ namespace beiklive
         logobox->setWidth(COVER_WIDTH_SWITCH);
         logobox->setHeight(COVER_HEIGHT_SWITCH);
         logobox->setHideHighlightBackground(true);
-
-            logobox->setBorderColor(nvgRGBA(128, 128, 128, 120));
-        logobox->setCornerRadius(7.f);
-        logobox->setBorderThickness(1.f);
+        logobox->setHighlightCornerRadius(18.f);
+        logobox->setShadowVisibility(true);
+        logobox->setShadowType(brls::ShadowType::GENERIC);
+        logobox->setBackgroundColor(nvgRGBA(128, 128, 128, 12));
+        logobox->setCornerRadius(15.f);
+        logobox->setBorderColor(nvgRGBA(125, 125, 125, 95));
+        logobox->setBorderThickness(1.5f);
 
         m_coverImage = new brls::Image();
         m_coverImage->setWidth(COVER_WIDTH_SWITCH);
@@ -143,10 +146,9 @@ namespace beiklive
         m_coverImage->setInterpolation(brls::ImageInterpolation::LINEAR);
         m_coverImage->setHighlightPadding(3.f);
         m_coverImage->setHideHighlightBackground(true);
-        m_coverImage->setShadowVisibility(true);
-        m_coverImage->setShadowType(brls::ShadowType::GENERIC);
-        m_coverImage->setHighlightCornerRadius(12.f);
-        m_coverImage->setCornerRadius(7.f);
+
+        m_coverImage->setHighlightCornerRadius(18.f);
+        m_coverImage->setCornerRadius(15.f);
 
         if (!m_isEmpty && !m_gameEntry.logoPath.empty())
             m_coverImage->setImageFromFile(m_gameEntry.logoPath);
