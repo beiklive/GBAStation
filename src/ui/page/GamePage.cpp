@@ -11,6 +11,8 @@ namespace beiklive
     static constexpr int MENU_SLIDE_IN_MS  = 220; ///< 菜单入场滑动动画时长
     static constexpr int MENU_FADE_OUT_MS  = 180; ///< 菜单关闭淡出动画时长
     static constexpr int MENU_EXIT_FADE_MS = 150; ///< 退出游戏淡出动画时长
+    static constexpr int EXIT_SAVE_POLL_MS = 30; ///< 退出自动存档完成状态轮询间隔
+    static constexpr int EXIT_SAVE_TIMEOUT_MS = 8000; ///< 自动存档异常未回执时的最大等待时间
     GamePage::GamePage(beiklive::DirListData gameData)
     {
 
@@ -313,15 +315,24 @@ namespace beiklive
         // "退出游戏"回调：触发退出信号
         m_gameMenuView->setOnExit([this]() {
             brls::sync([this]() {
-                _tryUpdateLogoFromThumbnail();
-                beiklive::GameDB->flush();
+                if (m_exitRequested)
+                    return;
+                m_exitRequested = true;
+                if (m_gameView)
+                    m_gameView->setFocusable(false);
+                if (m_gameMenuView)
+                    m_gameMenuView->setFocusable(false);
+                GameSignal::instance().requestPause(true);
                 AnimationHelper::slideOutToBottom(m_gameMenuView, MENU_EXIT_FADE_MS, 120.f,true, [this]() {
                     int exitSlot = GET_SETTING_KEY_INT("save.autoSaveOnExit", 0);
-                    if (exitSlot > 0 && exitSlot <= 10)
+                    if (exitSlot > 0 && exitSlot <= 10) {
+                        brls::Application::notify("正在自动存档...");
+                        m_exitAutoSavePolls = 0;
                         GameSignal::instance().requestAutoSave(exitSlot - 1);
-                    brls::sync([this]() {
-                        beiklive::popActivity(this);
-                    });
+                        _waitExitAutoSaveThenPop();
+                        return;
+                    }
+                    _finishExitAndPop();
                 });
             });
         });
@@ -513,6 +524,41 @@ namespace beiklive
     {
         if (!m_gameView)
             _setupGame();
+    }
+
+    void GamePage::_finishExitAndPop()
+    {
+        if (!m_exitRequested)
+            return;
+
+        _tryUpdateLogoFromThumbnail();
+        if (beiklive::GameDB)
+            beiklive::GameDB->flush();
+        beiklive::popActivity(this);
+    }
+
+    void GamePage::_waitExitAutoSaveThenPop()
+    {
+        if (!m_exitRequested)
+            return;
+
+        if (GameSignal::instance().consumeAutoSaveDone()) {
+            _finishExitAndPop();
+            return;
+        }
+
+        m_exitAutoSavePolls++;
+        if (m_exitAutoSavePolls * EXIT_SAVE_POLL_MS >= EXIT_SAVE_TIMEOUT_MS) {
+            brls::Application::notify("自动存档等待超时，正在退出");
+            _finishExitAndPop();
+            return;
+        }
+
+        ASYNC_RETAIN
+        brls::delay(EXIT_SAVE_POLL_MS, [ASYNC_TOKEN]() {
+            ASYNC_RELEASE
+            _waitExitAutoSaveThenPop();
+        });
     }
 
     void GamePage::_tryUpdateLogoFromThumbnail()

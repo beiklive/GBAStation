@@ -2190,8 +2190,10 @@ namespace beiklive
                 // 暂停时仍可消费退出自动存档信号
                 {
                     int exitSaveSlot = sig.consumeAutoSave();
-                    if (exitSaveSlot >= 0)
+                    if (exitSaveSlot >= 0) {
                         _doSaveState(exitSaveSlot);
+                        sig.markAutoSaveDone();
+                    }
                 }
                 std::this_thread::sleep_for(std::chrono::milliseconds(16));
                 auto now     = Clock::now();
@@ -2255,8 +2257,10 @@ namespace beiklive
             // ---- 退出自动存档 ----
             {
                 int exitSaveSlot = sig.consumeAutoSave();
-                if (exitSaveSlot >= 0)
+                if (exitSaveSlot >= 0) {
                     _doSaveState(exitSaveSlot);
+                    sig.markAutoSaveDone();
+                }
             }
 
             // ---- 从信号更新游戏按键状态 ----

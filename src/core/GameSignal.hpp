@@ -175,11 +175,22 @@ public:
     // ---- 自动存档信号（退出时使用）-----------------------------------
 
     /// 调用方：请求在游戏线程保存到指定槽位（-1 表示无请求）。
-    void requestAutoSave(int slot) { m_pendingAutoSave.store(slot, std::memory_order_release); }
+    void requestAutoSave(int slot) {
+        m_autoSaveDone.store(false, std::memory_order_release);
+        m_pendingAutoSave.store(slot, std::memory_order_release);
+    }
 
     /// 游戏线程调用：获取并消费自动存档请求（返回槽号，-1 表示无请求）。
     int consumeAutoSave() {
         return m_pendingAutoSave.exchange(-1, std::memory_order_acq_rel);
+    }
+
+    /// 游戏线程调用：通知退出自动存档已经完成（成功或失败都算请求处理完毕）。
+    void markAutoSaveDone() { m_autoSaveDone.store(true, std::memory_order_release); }
+
+    /// UI 线程调用：消费退出自动存档完成标记。
+    bool consumeAutoSaveDone() {
+        return m_autoSaveDone.exchange(false, std::memory_order_acq_rel);
     }
 
     // ---- 重载金手指信号 -------------------------------------------------
@@ -221,6 +232,7 @@ public:
         m_pendingCheatEnabled.store(false, std::memory_order_relaxed);
         m_pendingReloadCheats.store(false, std::memory_order_relaxed);
         m_pendingAutoSave.store(-1, std::memory_order_relaxed);
+        m_autoSaveDone.store(false, std::memory_order_relaxed);
         m_pendingConfigUpdate.store(false, std::memory_order_relaxed);
         m_gameButtonMask.store(0, std::memory_order_relaxed);
     }
@@ -241,6 +253,7 @@ private:
     std::atomic<bool> m_pendingCheatEnabled{false};   ///< 待切换的金手指启用状态
     std::atomic<bool> m_pendingReloadCheats{false};   ///< 待重载全部金手指
     std::atomic<int>  m_pendingAutoSave{-1};            ///< 待自动存档槽位（-1=无）
+    std::atomic<bool> m_autoSaveDone{false};             ///< 退出自动存档是否已处理完毕
     std::atomic<bool> m_pendingConfigUpdate{false};    ///< 待刷新核心配置
     std::atomic<uint32_t> m_gameButtonMask{0};  ///< 游戏按键位掩码（bit i = RETRO_DEVICE_ID_JOYPAD_* i）
 };
