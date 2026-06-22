@@ -18,6 +18,8 @@ private:
     brls::View* _buildSupportTab();
     void _checkUpdate();
     void _updateCheatDatabase();
+    void _downloadNdsFirmware();
+    void _downloadNdsCheatDatabase();
 };
 
 } // namespace beiklive

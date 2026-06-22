@@ -8,6 +8,8 @@
 #include <borealis/views/applet_frame.hpp>
 #include <curl/curl.h>
 #include <miniz.h>
+#include <algorithm>
+#include <array>
 
 namespace beiklive {
 
@@ -30,6 +32,102 @@ static std::string readTextFile(const std::string& path, const std::string& fall
 
     return std::string(std::istreambuf_iterator<char>(file),
                        std::istreambuf_iterator<char>());
+}
+
+static void showMessageDialog(const std::string& message) {
+    auto* dlg = new brls::Dialog(message);
+    dlg->addButton("确定", []() {});
+    dlg->open();
+}
+
+static bool downloadFileToPath(const std::string& url,
+                               const std::string& outPath,
+                               const std::atomic<bool>* cancelFlag = nullptr) {
+    CURL* curl = curl_easy_init();
+    if (!curl)
+        return false;
+
+    std::vector<uint8_t> body;
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 120L);
+    curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "");
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "GBAStation-ResourceDownloader");
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION,
+        static_cast<size_t(*)(void*, size_t, size_t, void*)>(
+            [](void* ptr, size_t size, size_t nmemb, void* userdata) -> size_t {
+                auto* data = static_cast<std::vector<uint8_t>*>(userdata);
+                data->insert(data->end(), static_cast<uint8_t*>(ptr),
+                             static_cast<uint8_t*>(ptr) + size * nmemb);
+                return size * nmemb;
+            }));
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &body);
+
+    CURLcode res = CURLE_ABORTED_BY_CALLBACK;
+    if (!cancelFlag || !cancelFlag->load())
+        res = curl_easy_perform(curl);
+
+    long code = 0;
+    if (res == CURLE_OK)
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &code);
+    curl_easy_cleanup(curl);
+
+    if (cancelFlag && cancelFlag->load())
+        return false;
+
+    if (res != CURLE_OK || code != 200 || body.empty())
+        return false;
+
+    std::ofstream out(outPath, std::ios::binary | std::ios::trunc);
+    if (!out)
+        return false;
+
+    out.write(reinterpret_cast<const char*>(body.data()), body.size());
+    return out.good();
+}
+
+static std::string zipBaseName(const std::string& name) {
+    auto pos = name.find_last_of("/\\");
+    return pos == std::string::npos ? name : name.substr(pos + 1);
+}
+
+static bool extractZipFilesToDir(const std::string& zipPath,
+                                 const std::string& outDir,
+                                 const std::vector<std::string>& expectedFiles,
+                                 const std::atomic<bool>* cancelFlag,
+                                 int& extractCount) {
+    extractCount = 0;
+
+    mz_zip_archive zip;
+    memset(&zip, 0, sizeof(zip));
+    if (!mz_zip_reader_init_file(&zip, zipPath.c_str(), 0))
+        return false;
+
+    std::vector<std::string> remaining = expectedFiles;
+    mz_uint numFiles = mz_zip_reader_get_num_files(&zip);
+    for (mz_uint i = 0; i < numFiles && (!cancelFlag || !cancelFlag->load()); ++i) {
+        char filename[512];
+        mz_zip_reader_get_filename(&zip, i, filename, sizeof(filename));
+        std::string baseName = zipBaseName(filename);
+        if (baseName.empty())
+            continue;
+
+        auto it = std::find(remaining.begin(), remaining.end(), baseName);
+        if (it == remaining.end())
+            continue;
+
+        std::string outPath = (std::filesystem::path(outDir) / baseName).string();
+        if (mz_zip_reader_extract_to_file(&zip, i, outPath.c_str(), 0)) {
+            ++extractCount;
+            remaining.erase(it);
+        }
+    }
+
+    mz_zip_reader_end(&zip);
+    return remaining.empty() && (!cancelFlag || !cancelFlag->load());
 }
 
 static void openChangelogApplet(const std::string& title, const std::string& content) {
@@ -372,6 +470,30 @@ brls::View* AboutPage::_buildUpdateTab() {
     hint->setFocusable(false);
     box->addView(hint);
 
+
+    auto *h1 = new brls::Header();
+    h1->setTitle("资源下载");
+    box->addView(h1);
+
+    auto* ndsFirmwareBtn = new brls::Button();
+    ndsFirmwareBtn->setText("下载 NDS 固件");
+    ndsFirmwareBtn->setWidthPercentage(100.f);
+    ndsFirmwareBtn->setMarginBottom(12.f);
+    ndsFirmwareBtn->registerClickAction([this](brls::View*) -> bool {
+        _downloadNdsFirmware();
+        return true;
+    });
+    box->addView(ndsFirmwareBtn);
+
+    auto* ndsCheatBtn = new brls::Button();
+    ndsCheatBtn->setText("下载 NDS 金手指");
+    ndsCheatBtn->setWidthPercentage(100.f);
+    ndsCheatBtn->registerClickAction([this](brls::View*) -> bool {
+        _downloadNdsCheatDatabase();
+        return true;
+    });
+    box->addView(ndsCheatBtn);
+
     box->addView(new brls::Padding());
     scroll->setContentView(box);
 
@@ -576,6 +698,169 @@ void AboutPage::_updateCheatDatabase() {
             if (extractCount > 0)
                 msg = "数据库已更新（解压 " + std::to_string(extractCount) + " 个文件），\n金手指文件已就绪";
             prog->showResult(msg);
+        });
+    });
+}
+
+void AboutPage::_downloadNdsFirmware() {
+    static const char* kUrl = "https://cdn.jsdelivr.net/gh/beiklive/GBAStation_Release@main/firmware/nds.zip";
+    const std::array<std::string, 3> firmwareFiles = {
+        "bios7.bin",
+        "bios9.bin",
+        "firmware.bin",
+    };
+
+    std::error_code ec;
+    const auto ndsDir = std::filesystem::path(beiklive::path::biosPath()) / "nds";
+    std::filesystem::create_directories(ndsDir, ec);
+    if (ec) {
+        showMessageDialog("创建 NDS 固件目录失败：\n" + ndsDir.string());
+        return;
+    }
+
+    bool allExists = true;
+    for (const auto& file : firmwareFiles) {
+        if (!std::filesystem::exists(ndsDir / file)) {
+            allExists = false;
+            break;
+        }
+    }
+
+    if (allExists) {
+        showMessageDialog("NDS 固件文件已存在，无需下载");
+        return;
+    }
+
+    auto* cancelFlag = new std::atomic<bool>(false);
+    auto* prog = new beiklive::ProgressDialog("正在下载 NDS 固件...",
+        [cancelFlag]() { cancelFlag->store(true); });
+    auto* frame = new brls::AppletFrame(prog);
+    HIDE_BRLS_BAR(frame);
+    brls::Application::pushActivity(new brls::Activity(frame),
+                                    brls::TransitionAnimation::NONE);
+
+    new std::thread([prog, cancelFlag, ndsDir, firmwareFiles]() {
+        std::error_code ec;
+        const auto cacheDir = std::filesystem::path(beiklive::path::cachePath());
+        std::filesystem::create_directories(cacheDir, ec);
+        if (ec) {
+            brls::sync([prog, cancelFlag]() {
+                delete cancelFlag;
+                prog->showResult("创建缓存目录失败");
+            });
+            return;
+        }
+
+        const auto zipPath = cacheDir / "nds_firmware.zip";
+
+        brls::sync([prog]() { prog->setStatus("正在下载..."); });
+        if (!downloadFileToPath(kUrl, zipPath.string(), cancelFlag)) {
+            if (cancelFlag->load()) {
+                brls::sync([prog, cancelFlag]() { delete cancelFlag; prog->close(); });
+            } else {
+                brls::sync([prog, cancelFlag]() {
+                    delete cancelFlag;
+                    prog->showResult("下载失败，请稍后重试或者去网盘手动下载");
+                });
+            }
+            return;
+        }
+
+        brls::sync([prog]() { prog->setStatus("正在解压..."); });
+        std::vector<std::string> expectedFiles(firmwareFiles.begin(), firmwareFiles.end());
+        int extractCount = 0;
+        bool extractOk = extractZipFilesToDir(zipPath.string(), ndsDir.string(), expectedFiles,
+                                              cancelFlag, extractCount);
+        std::filesystem::remove(zipPath, ec);
+
+        if (cancelFlag->load()) {
+            brls::sync([prog, cancelFlag]() { delete cancelFlag; prog->close(); });
+            return;
+        }
+
+        brls::sync([prog, cancelFlag, extractOk, extractCount]() {
+            delete cancelFlag;
+            prog->setText(extractOk ? "下载完成" : "解压失败");
+            if (extractOk) {
+                prog->showResult("NDS 固件已就绪（解压 " + std::to_string(extractCount) + " 个文件）");
+            } else {
+                prog->showResult("解压失败，压缩包中缺少必要的 NDS 固件文件");
+            }
+        });
+    });
+}
+
+void AboutPage::_downloadNdsCheatDatabase() {
+    static const char* kUrl = "https://cdn.jsdelivr.net/gh/beiklive/GBAStation_Release@main/cheat_db/usrcheat.zip";
+    static const char* kCheatFile = "usrcheat.dat";
+
+    std::error_code ec;
+    const auto cheatDir = std::filesystem::path(beiklive::path::cheatPath());
+    std::filesystem::create_directories(cheatDir, ec);
+    if (ec) {
+        showMessageDialog("创建金手指目录失败：\n" + cheatDir.string());
+        return;
+    }
+
+    const auto cheatPath = cheatDir / kCheatFile;
+    if (std::filesystem::exists(cheatPath)) {
+        showMessageDialog("NDS 金手指文件已存在，无需下载");
+        return;
+    }
+
+    auto* cancelFlag = new std::atomic<bool>(false);
+    auto* prog = new beiklive::ProgressDialog("正在下载 NDS 金手指...",
+        [cancelFlag]() { cancelFlag->store(true); });
+    auto* frame = new brls::AppletFrame(prog);
+    HIDE_BRLS_BAR(frame);
+    brls::Application::pushActivity(new brls::Activity(frame),
+                                    brls::TransitionAnimation::NONE);
+
+    new std::thread([prog, cancelFlag, cheatDir]() {
+        std::error_code ec;
+        const auto cacheDir = std::filesystem::path(beiklive::path::cachePath());
+        std::filesystem::create_directories(cacheDir, ec);
+        if (ec) {
+            brls::sync([prog, cancelFlag]() {
+                delete cancelFlag;
+                prog->showResult("创建缓存目录失败");
+            });
+            return;
+        }
+
+        const auto zipPath = cacheDir / "usrcheat.zip";
+
+        brls::sync([prog]() { prog->setStatus("正在下载..."); });
+
+        if (!downloadFileToPath(kUrl, zipPath.string(), cancelFlag)) {
+            if (cancelFlag->load()) {
+                brls::sync([prog, cancelFlag]() { delete cancelFlag; prog->close(); });
+            } else {
+                brls::sync([prog, cancelFlag]() {
+                    delete cancelFlag;
+                    prog->showResult("下载失败，请稍后重试或者去网盘手动下载");
+                });
+            }
+            return;
+        }
+
+        brls::sync([prog]() { prog->setStatus("正在解压..."); });
+        int extractCount = 0;
+        bool extractOk = extractZipFilesToDir(zipPath.string(), cheatDir.string(), {kCheatFile},
+                                              cancelFlag, extractCount);
+        std::filesystem::remove(zipPath, ec);
+
+        if (cancelFlag->load()) {
+            brls::sync([prog, cancelFlag]() { delete cancelFlag; prog->close(); });
+            return;
+        }
+
+        brls::sync([prog, cancelFlag, extractOk]() {
+            delete cancelFlag;
+            prog->setText(extractOk ? "下载完成" : "解压失败");
+            prog->showResult(extractOk
+                ? "NDS 金手指文件已就绪"
+                : "解压失败，压缩包中缺少 usrcheat.dat");
         });
     });
 }

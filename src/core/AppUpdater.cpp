@@ -3,6 +3,7 @@
 #include "core/constexpr.h"
 #include <borealis.hpp>
 #include <curl/curl.h>
+#include <miniz.h>
 #include <filesystem>
 #include <fstream>
 #include <chrono>
@@ -31,6 +32,11 @@ static std::string cacheVersionJsonPath() {
 // 缓存目录中的 update.nro 路径
 static std::string cacheNroPath() {
     return beiklive::path::cachePath() + "/update.nro";
+}
+
+// 缓存目录中的 update.zip 路径
+static std::string cacheZipPath() {
+    return beiklive::path::cachePath() + "/update.zip";
 }
 
 AppUpdater& AppUpdater::instance() {
@@ -79,6 +85,33 @@ static void setCommonOptions(CURL* curl) {
     curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 30L);
     curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "");
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "GBAStation-Updater");
+}
+
+static std::string zipBaseName(const std::string& name) {
+    auto pos = name.find_last_of("/\\");
+    return pos == std::string::npos ? name : name.substr(pos + 1);
+}
+
+static bool extractNroFromZip(const std::string& zipPath, const std::string& outPath) {
+    mz_zip_archive zip;
+    memset(&zip, 0, sizeof(zip));
+    if (!mz_zip_reader_init_file(&zip, zipPath.c_str(), 0))
+        return false;
+
+    bool ok = false;
+    mz_uint numFiles = mz_zip_reader_get_num_files(&zip);
+    for (mz_uint i = 0; i < numFiles; ++i) {
+        char filename[512];
+        mz_zip_reader_get_filename(&zip, i, filename, sizeof(filename));
+        if (zipBaseName(filename) != "GBAStation.nro")
+            continue;
+
+        ok = mz_zip_reader_extract_to_file(&zip, i, outPath.c_str(), 0);
+        break;
+    }
+
+    mz_zip_reader_end(&zip);
+    return ok;
 }
 
 static std::string fetchUrl(const std::string& url) {
@@ -218,15 +251,24 @@ bool AppUpdater::download(std::function<bool(size_t, size_t)> onProgress) {
         return false;
     }
 
-    // 写入 cache 目录
+    // 写入 cache 目录中的 zip 包，然后解压出 update.nro
     std::error_code ec;
     std::filesystem::create_directories(beiklive::path::cachePath(), ec);
-    std::ofstream f(cacheNroPath(), std::ios::binary | std::ios::trunc);
+    std::ofstream f(cacheZipPath(), std::ios::binary | std::ios::trunc);
     if (!f) return false;
     f.write(reinterpret_cast<const char*>(m_downloadedData.data()), m_downloadedData.size());
     f.close();
 
-    brls::Logger::info("AppUpdater: 下载完成 {} bytes -> {}", m_downloadedData.size(), cacheNroPath());
+    if (!extractNroFromZip(cacheZipPath(), cacheNroPath())) {
+        std::filesystem::remove(cacheZipPath(), ec);
+        std::filesystem::remove(cacheNroPath(), ec);
+        brls::Logger::error("AppUpdater: 更新包解压失败，未找到 GBAStation.nro");
+        return false;
+    }
+
+    std::filesystem::remove(cacheZipPath(), ec);
+
+    brls::Logger::info("AppUpdater: 下载并解压完成 {} bytes -> {}", m_downloadedData.size(), cacheNroPath());
     return true;
 }
 
