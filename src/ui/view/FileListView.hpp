@@ -5,6 +5,7 @@
 #include <functional>
 #include <chrono>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "core/common.h"
 
@@ -13,6 +14,7 @@ namespace beiklive {
 class FileListView : public brls::View {
 public:
     FileListView();
+    ~FileListView() override;
 
     void setItems(const std::vector<beiklive::ListItem>& items);
     void clearItems();
@@ -45,6 +47,7 @@ private:
     float m_scrollY = 0.f;
     float m_targetScrollY = 0.f;
     float m_viewHeight = 0.f;
+    float m_lastLayoutHeight = 0.f;
     float m_itemHeight = 72.f;
     float m_iconSize = 48.f;
     float m_animTime = 0.f;
@@ -84,6 +87,7 @@ private:
 
     // Icon cache: path -> NVG image handle
     std::unordered_map<std::string, int> m_iconCache;
+    std::unordered_set<std::string> m_failedIconPaths;
 
     void moveUp();
     void moveDown();
@@ -92,10 +96,12 @@ private:
     void _captureInputState();
 
     void ensureFocusedVisible();
+    void clampScroll();
     int visibleRows() const;
     void fireFocusCallbacks(int oldIndex);
 
-    int getOrLoadIcon(NVGcontext* vg, const std::string& path);
+    void loadVisibleIcons(NVGcontext* vg, int first, int last);
+    int getCachedIcon(const std::string& path) const;
     void drawItem(NVGcontext* vg, int index, float itemY, float w, NVGcolor textColor);
     void drawScrollbar(NVGcontext* vg, float x, float y, float w, float h);
 };

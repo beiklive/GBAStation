@@ -10,6 +10,17 @@ FileListView::FileListView() {
     m_font = brls::Application::getDefaultFont();
 }
 
+FileListView::~FileListView() {
+    NVGcontext* vg = brls::Application::getNVGContext();
+    if (vg) {
+        for (const auto& kv : m_iconCache) {
+            if (kv.second > 0)
+                nvgDeleteImage(vg, kv.second);
+        }
+    }
+    m_iconCache.clear();
+}
+
 // ── Data ──
 
 void FileListView::setItems(const std::vector<beiklive::ListItem>& items) {
@@ -91,7 +102,14 @@ void FileListView::removeFilter() {
 
 void FileListView::draw(NVGcontext* vg, float x, float y, float w, float h,
                          brls::Style style, brls::FrameContext* ctx) {
+    bool heightChanged = std::abs(m_lastLayoutHeight - h) > 0.5f;
     m_viewHeight = h;
+    m_lastLayoutHeight = h;
+    if (heightChanged) {
+        ensureFocusedVisible();
+        clampScroll();
+        m_scrollY = m_targetScrollY;
+    }
 
     nvgSave(vg);
     nvgScissor(vg, x, y, w, h);
@@ -111,6 +129,8 @@ void FileListView::draw(NVGcontext* vg, float x, float y, float w, float h,
     if (first < 0) first = 0;
     int last = first + (int)(h / m_itemHeight) + 2;
     if (last > (int)m_items.size()) last = (int)m_items.size();
+
+    loadVisibleIcons(vg, first, last);
 
     NVGcolor textColor = GET_THEME_COLOR("brls/text");
 
@@ -168,7 +188,7 @@ void FileListView::drawItem(NVGcontext* vg, int index, float itemY, float w, NVG
 
     // Icon
     if (!item.iconPath.empty()) {
-        int img = getOrLoadIcon(vg, item.iconPath);
+        int img = getCachedIcon(item.iconPath);
         if (img > 0) {
             NVGpaint paint = nvgImagePattern(vg, padX, itemY + padY,
                                               m_iconSize, m_iconSize, 0.f, img, 1.f);
@@ -186,12 +206,18 @@ void FileListView::drawItem(NVGcontext* vg, int index, float itemY, float w, NVG
     nvgFontSize(vg, 22.f);
     nvgFillColor(vg, textColor);
     nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+    nvgSave(vg);
+    nvgIntersectScissor(vg, textX, itemY, std::max(1.0f, w - textX - 120.0f), m_itemHeight);
     nvgText(vg, textX, centerY, item.text.c_str(), nullptr);
+    nvgRestore(vg);
 
     nvgFontSize(vg, 15.f);
     nvgFillColor(vg, textColor);
     nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
+    nvgSave(vg);
+    nvgIntersectScissor(vg, std::max(textX, w - 120.0f), itemY, 120.0f, m_itemHeight);
     nvgText(vg, w - textMarginR, centerY, item.subText.c_str(), nullptr);
+    nvgRestore(vg);
 
     // Separator line
     nvgBeginPath(vg);
@@ -215,12 +241,42 @@ void FileListView::drawScrollbar(NVGcontext* vg, float x, float y, float w, floa
     nvgFill(vg);
 }
 
-int FileListView::getOrLoadIcon(NVGcontext* vg, const std::string& path) {
+void FileListView::loadVisibleIcons(NVGcontext* vg, int first, int last) {
+    if (!vg || first >= last) return;
+
+    int loadedThisFrame = 0;
+#ifdef __SWITCH__
+    static constexpr int MAX_ICON_LOADS_PER_FRAME = 1;
+#else
+    static constexpr int MAX_ICON_LOADS_PER_FRAME = 2;
+#endif
+
+    auto loadIconAt = [this, vg, &loadedThisFrame](int index) {
+        if (index < 0 || index >= static_cast<int>(m_items.size()) || loadedThisFrame >= MAX_ICON_LOADS_PER_FRAME)
+            return;
+
+        const std::string& path = m_items[index].iconPath;
+        if (path.empty() || m_iconCache.count(path) || m_failedIconPaths.count(path))
+            return;
+
+        int handle = nvgCreateImage(vg, path.c_str(), 0);
+        loadedThisFrame++;
+        if (handle > 0)
+            m_iconCache[path] = handle;
+        else
+            m_failedIconPaths.insert(path);
+    };
+
+    loadIconAt(m_focusedIndex);
+
+    for (int i = first; i < last && loadedThisFrame < MAX_ICON_LOADS_PER_FRAME; i++)
+        loadIconAt(i);
+}
+
+int FileListView::getCachedIcon(const std::string& path) const {
     auto it = m_iconCache.find(path);
     if (it != m_iconCache.end()) return it->second;
-    int handle = nvgCreateImage(vg, path.c_str(), 0);
-    if (handle > 0) m_iconCache[path] = handle;
-    return handle;
+    return -1;
 }
 
 // ── Frame update ──
@@ -248,6 +304,7 @@ void FileListView::frame(brls::FrameContext* ctx) {
     } else {
         m_scrollY = m_targetScrollY;
     }
+    clampScroll();
 
     if (m_interactionDisabled || m_items.empty()) return;
 
@@ -498,6 +555,18 @@ void FileListView::ensureFocusedVisible() {
     if (m_targetScrollY < 0.f) m_targetScrollY = 0.f;
     if (m_targetScrollY > maxScroll && maxScroll > 0.f) m_targetScrollY = maxScroll;
     else if (maxScroll <= 0.f) m_targetScrollY = 0.f;
+}
+
+void FileListView::clampScroll() {
+    float maxScroll = m_items.size() * m_itemHeight - m_viewHeight;
+    if (maxScroll <= 0.f) {
+        m_scrollY = 0.f;
+        m_targetScrollY = 0.f;
+        return;
+    }
+
+    m_targetScrollY = std::max(0.f, std::min(m_targetScrollY, maxScroll));
+    m_scrollY = std::max(0.f, std::min(m_scrollY, maxScroll));
 }
 
 int FileListView::visibleRows() const {
