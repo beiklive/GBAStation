@@ -247,6 +247,8 @@ namespace beiklive // 结构体
         EMU_RIGHT_STICK_DOWN,           // 右摇杆向下
         EMU_RIGHT_STICK_LEFT,           // 右摇杆向左
         EMU_RIGHT_STICK_RIGHT,          // 右摇杆向右
+        EMU_NDS_POINTER_MODE,           // NDS 指针模式切换
+        EMU_NDS_POINTER_CLICK,          // NDS 指针点击
         EMU_FUNCTION_KEY_COUNT
     };
     enum class TriggerType
@@ -265,6 +267,8 @@ namespace beiklive // 结构体
         { "mute",           EMU_MUTE            },
         { "a_turbo",        EMU_A_TURBO         },
         { "b_turbo",        EMU_B_TURBO         },
+        { "nds_pointer_mode", EMU_NDS_POINTER_MODE },
+        { "nds_pointer_click", EMU_NDS_POINTER_CLICK },
     };
 
     enum GameInputPad
@@ -313,6 +317,10 @@ namespace beiklive // 结构体
         { "PAD_RB",              STATE_PAD_RB                },
         { "PAD_LT",              STATE_PAD_LT                },
         { "PAD_RT",              STATE_PAD_RT                },
+        { "PAD_ZL",              STATE_PAD_LT                },
+        { "PAD_ZR",              STATE_PAD_RT                },
+        { "ZL",                  STATE_PAD_LT                },
+        { "ZR",                  STATE_PAD_RT                },
         { "PAD_LSB",             STATE_PAD_LSB               },
         { "PAD_RSB",             STATE_PAD_RSB               },
         { "PAD_START",           STATE_PAD_START             },

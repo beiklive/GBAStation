@@ -157,6 +157,12 @@ namespace beiklive
             std::string m_ndsLayout = "vertical"; ///< NDS 双屏布局
             std::string m_ndsScreenOrientation = "0"; ///< NDS 屏幕旋转角度（0/90/180/270）
             bool m_ndsTouchActive = false; ///< NDS 原始触摸轮询是否处于按下状态
+            bool m_ndsVirtualPointerMode = false; ///< NDS 虚拟指针模式是否开启
+            bool m_ndsVirtualPointerClickHeld = false; ///< NDS 虚拟指针点击键是否按住
+            bool m_ndsVirtualPointerTouchDown = false; ///< NDS 虚拟指针是否已向核心提交触摸按下
+            float m_ndsVirtualPointerX = 128.f; ///< NDS 虚拟指针 X（0..255）
+            float m_ndsVirtualPointerY = 96.f; ///< NDS 虚拟指针 Y（0..191）
+            std::chrono::steady_clock::time_point m_ndsVirtualPointerLastUpdate; ///< 虚拟指针移动计时
 
             // ---- 遮罩 --------------------------------------------------------
             brls::Image* m_overlayImage = nullptr; ///< 遮罩图片
@@ -295,6 +301,11 @@ namespace beiklive
             void _registerTouchInput();
             void _pollNdsTouchInput();
             void _submitTouchPoint(float x, float y, bool down);
+            void _toggleNdsVirtualPointerMode();
+            void _setNdsVirtualPointerClick(bool down);
+            void _updateNdsVirtualPointer();
+            void _drawNdsVirtualPointer(NVGcontext* vg);
+            void _releaseNdsVirtualPointerTouch();
 
             // ---- 游戏循环内部分段辅助方法（仅在游戏线程中调用）--------------
 

@@ -4,6 +4,7 @@
 #include "ARCodeFile.h"
 #include "CRC32.h"
 #include "NDS_Header.h"
+#include "game/control/InputMappingDefaults.hpp"
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -297,44 +298,38 @@ namespace beiklive
         SettingManager->SetDefault("cheat.enabled", ConfigValue(0));
         SettingManager->SetDefault("cheat.dir", ConfigValue(std::string("")));
 
-        // 按键绑定默认值（游戏按键）
-        SettingManager->SetDefault("handle.a", ConfigValue(std::string("A")));
-        SettingManager->SetDefault("handle.b", ConfigValue(std::string("B")));
-        SettingManager->SetDefault("handle.x", ConfigValue(std::string("X")));
-        SettingManager->SetDefault("handle.y", ConfigValue(std::string("Y")));
-        SettingManager->SetDefault("handle.up", ConfigValue(std::string("UP")));
-        SettingManager->SetDefault("handle.down", ConfigValue(std::string("DOWN")));
-        SettingManager->SetDefault("handle.left", ConfigValue(std::string("LEFT")));
-        SettingManager->SetDefault("handle.right", ConfigValue(std::string("RIGHT")));
-        SettingManager->SetDefault("handle.l", ConfigValue(std::string("LB")));
-        SettingManager->SetDefault("handle.r", ConfigValue(std::string("RB")));
-        SettingManager->SetDefault("handle.l2", ConfigValue(std::string("LT")));
-        SettingManager->SetDefault("handle.r2", ConfigValue(std::string("RT")));
-        SettingManager->SetDefault("handle.l3", ConfigValue(std::string("LSB")));
-        SettingManager->SetDefault("handle.r3", ConfigValue(std::string("RSB")));
-        SettingManager->SetDefault("handle.start", ConfigValue(std::string("START")));
-        SettingManager->SetDefault("handle.select", ConfigValue(std::string("BACK")));
-
-        // 按键绑定默认值（左摇杆方向键）
-        SettingManager->SetDefault("handle.lstick_up", ConfigValue(std::string("LEFTSTICKUP")));
-        SettingManager->SetDefault("handle.lstick_down", ConfigValue(std::string("LEFTSTICKDOWN")));
-        SettingManager->SetDefault("handle.lstick_left", ConfigValue(std::string("LEFTSTICKLEFT")));
-        SettingManager->SetDefault("handle.lstick_right", ConfigValue(std::string("LEFTSTICKRIGHT")));
-
-        // 按键绑定默认值（右摇杆方向键）
-        SettingManager->SetDefault("handle.rstick_up", ConfigValue(std::string("RIGHTSTICKUP")));
-        SettingManager->SetDefault("handle.rstick_down", ConfigValue(std::string("RIGHTSTICKDOWN")));
-        SettingManager->SetDefault("handle.rstick_left", ConfigValue(std::string("RIGHTSTICKLEFT")));
-        SettingManager->SetDefault("handle.rstick_right", ConfigValue(std::string("RIGHTSTICKRIGHT")));
-
-        // 按键绑定默认值（功能热键）
-        SettingManager->SetDefault("handle.fastforward", ConfigValue(std::string("LSB")));
-        SettingManager->SetDefault("handle.rewind", ConfigValue(std::string("RSB")));
-        SettingManager->SetDefault("hotkey.menu.pad", ConfigValue(std::string("LT+RT")));
-        SettingManager->SetDefault("hotkey.quicksave.pad", ConfigValue(std::string("none")));
-        SettingManager->SetDefault("hotkey.quickload.pad", ConfigValue(std::string("none")));
-        SettingManager->SetDefault("hotkey.mute.pad", ConfigValue(std::string("none")));
-        SettingManager->SetDefault("hotkey.pause.pad", ConfigValue(std::string("none")));
+        // 按键绑定默认值。GBA/GBC/GB 沿用无前缀键；其他机种使用平台前缀。
+        const std::string mappingPrefixes[] = {"", "nes.", "sfc.", "nds."};
+        for (const auto& prefix : mappingPrefixes)
+        {
+            const unsigned platformMask = beiklive::input_mapping::platformMaskForPrefix(prefix);
+            for (const auto& entry : beiklive::input_mapping::kGameButtonDefaults)
+            {
+                if ((entry.platformMask & platformMask) == 0)
+                    continue;
+                SettingManager->SetDefault(
+                    beiklive::input_mapping::makeHandleKey(prefix, entry.suffix),
+                    ConfigValue(std::string(entry.defaultValue)));
+            }
+            for (const auto& entry : beiklive::input_mapping::kHotkeyDefaults)
+            {
+                SettingManager->SetDefault(
+                    beiklive::input_mapping::makeKey(prefix, entry.key),
+                    ConfigValue(std::string(entry.defaultValue)));
+            }
+            SettingManager->SetDefault(
+                beiklive::input_mapping::makeKey(prefix, beiklive::input_mapping::kTurboAKey),
+                ConfigValue(std::string(beiklive::input_mapping::kTurboADefault)));
+            SettingManager->SetDefault(
+                beiklive::input_mapping::makeKey(prefix, beiklive::input_mapping::kTurboBKey),
+                ConfigValue(std::string(beiklive::input_mapping::kTurboBDefault)));
+        }
+        for (const auto& entry : beiklive::input_mapping::kNdsPointerHotkeys)
+        {
+            SettingManager->SetDefault(
+                beiklive::input_mapping::makeKey("nds.", entry.key),
+                ConfigValue(std::string(entry.defaultValue)));
+        }
         SettingManager->SetDefault("hotkey.screenshot.pad", ConfigValue(std::string("none")));
 
         // 摇杆输入设置

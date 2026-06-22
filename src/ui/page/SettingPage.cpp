@@ -14,6 +14,7 @@
 
 #include "core/Tools.hpp"
 #include "core/constexpr.h"
+#include "game/control/InputMappingDefaults.hpp"
 
 #include <chrono>
 #include <sstream>
@@ -1120,41 +1121,9 @@ brls::View *SettingPage::buildAudioTab()
     return container;
 }
 
-struct GameBtnEntry { const char *label; const char *suffix; };
-static const GameBtnEntry k_gameBtns[] = {
-    {"A键", "a"}, {"B键", "b"}, {"X键", "x"}, {"Y键", "y"},
-    {"方向键上", "up"}, {"方向键下", "down"}, {"方向键左", "left"}, {"方向键右", "right"},
-    {"L键", "l"}, {"R键", "r"}, {"L2键", "l2"}, {"R2键", "r2"},
-    {"开始键", "start"}, {"选择键", "select"},
-    {"左摇杆上", "lstick_up"}, {"左摇杆下", "lstick_down"},
-    {"左摇杆左", "lstick_left"}, {"左摇杆右", "lstick_right"},
-    {"右摇杆上", "rstick_up"}, {"右摇杆下", "rstick_down"},
-    {"右摇杆左", "rstick_left"}, {"右摇杆右", "rstick_right"},
-};
-static constexpr int k_gameBtnCount = static_cast<int>(sizeof(k_gameBtns) / sizeof(k_gameBtns[0]));
-
-struct HotkeyEntry { const char *cfgKey; const char *label; };
-static const HotkeyEntry k_hotkeys[] = {
-    {"handle.fastforward",    "快进"},
-    {"handle.rewind",         "倒带"},
-    {"hotkey.quicksave.pad",  "快速保存"},
-    {"hotkey.quickload.pad",  "快速读取"},
-    {"hotkey.menu.pad",       "打开菜单"},
-    {"hotkey.mute.pad",       "静音"},
-    {"hotkey.pause.pad",      "暂停"},
-    // {"hotkey.screenshot.pad", "截图"},
-};
-static constexpr int k_hotkeyCount = static_cast<int>(sizeof(k_hotkeys) / sizeof(k_hotkeys[0]));
-
-brls::View *SettingPage::buildKeyBindTab()
+namespace
 {
-
-
-    auto *scroll = makeScrollTab();
-    auto *box    = makeContentBox();
-
-    // 辅助函数：为 DetailCell 注册 A（追加 combo）和 X（清空）动作。
-    auto registerKeyBindActions = [](beiklive::DetailCell* cell, const std::string& cfgKey)
+    void registerKeyBindActions(beiklive::DetailCell* cell, const std::string& cfgKey)
     {
         cell->registerAction("确认"_i18n, brls::BUTTON_A,
             [cell, cfgKey](brls::View*) {
@@ -1183,92 +1152,170 @@ brls::View *SettingPage::buildKeyBindTab()
                 cell->setRightText("none");
                 return true;
             }, false, false, brls::SOUND_CLICK);
+    }
+
+    brls::Box* makeKeyBindListContainer()
+    {
+        auto* box = new brls::Box(brls::Axis::COLUMN);
+        box->setPadding(10.f, 10.f, 10.f, 10.f);
+        box->setCornerRadius(10.f);
+        box->setBorderThickness(1.f);
+        box->setBorderColor(nvgRGBA(255, 255, 255, 50));
+        return box;
+    }
+
+    brls::View* buildKeyBindPlatformContent(const std::string& prefix, bool nds)
+    {
+        auto* scroll = makeScrollTab();
+        auto* box = makeContentBox();
+        const unsigned platformMask = beiklive::input_mapping::platformMaskForPrefix(prefix);
+
+        box->addView(makeHeader("游戏按键映射（手柄）"));
+        auto* mapcontainer = makeKeyBindListContainer();
+        for (const auto& entry : beiklive::input_mapping::kGameButtonDefaults)
+        {
+            if ((entry.platformMask & platformMask) == 0)
+                continue;
+            std::string cfgKey = beiklive::input_mapping::makeHandleKey(prefix, entry.suffix);
+            auto* cell = new beiklive::DetailCell();
+            cell->setLeftTextSize(18.f);
+            cell->setLeftText(entry.label);
+            cell->setRightText(cfgGetStr(cfgKey, entry.defaultValue));
+            registerKeyBindActions(cell, cfgKey);
+            mapcontainer->addView(cell);
+        }
+        box->addView(mapcontainer);
+
+        box->addView(makeHeader("功能热键绑定"));
+        for (const auto& entry : beiklive::input_mapping::kHotkeyDefaults)
+        {
+            if (nds && entry.hiddenOnNds)
+                continue;
+            std::string cfgKey = beiklive::input_mapping::makeKey(prefix, entry.key);
+            auto* cell = new beiklive::DetailCell();
+            cell->setLeftText(std::string(entry.label));
+            cell->setRightText(cfgGetStr(cfgKey, entry.defaultValue));
+            registerKeyBindActions(cell, cfgKey);
+            box->addView(cell);
+        }
+        if (nds)
+        {
+            for (const auto& entry : beiklive::input_mapping::kNdsPointerHotkeys)
+            {
+                std::string cfgKey = beiklive::input_mapping::makeKey(prefix, entry.key);
+                auto* cell = new beiklive::DetailCell();
+                cell->setLeftText(std::string(entry.label));
+                cell->setRightText(cfgGetStr(cfgKey, entry.defaultValue));
+                registerKeyBindActions(cell, cfgKey);
+                box->addView(cell);
+            }
+            box->addView(makeHint("切换为指针模式后使用右摇杆控制指针"));
+        }
+
+        box->addView(makeHeader("连发按键绑定"));
+        {
+            std::string cfgKey = beiklive::input_mapping::makeKey(prefix, beiklive::input_mapping::kTurboAKey);
+            auto* cell = new beiklive::DetailCell();
+            cell->setLeftText("A 连发");
+            cell->setRightText(cfgGetStr(cfgKey, beiklive::input_mapping::kTurboADefault));
+            registerKeyBindActions(cell, cfgKey);
+            box->addView(cell);
+        }
+        {
+            std::string cfgKey = beiklive::input_mapping::makeKey(prefix, beiklive::input_mapping::kTurboBKey);
+            auto* cell = new beiklive::DetailCell();
+            cell->setLeftText("B 连发");
+            cell->setRightText(cfgGetStr(cfgKey, beiklive::input_mapping::kTurboBDefault));
+            registerKeyBindActions(cell, cfgKey);
+            box->addView(cell);
+        }
+        {
+            std::vector<std::string> rates = {"每秒1次", "每秒5次", "每秒10次", "每秒15次", "每秒30次"};
+            static const float rateVals[] = {1.0f, 5.0f, 10.0f, 15.0f, 30.0f};
+            float curRate = GET_SETTING_KEY_FLOAT("turbo.rate", 10.0f);
+            int idx = 2;
+            for (int i = 0; i < 5; ++i)
+                if (rateVals[i] == curRate) { idx = i; break; }
+            auto* rateCell = new brls::SelectorCell();
+            rateCell->init("连发速度", rates, idx,
+                           [](int i) {
+                               if (i >= 0 && i < 5)
+                                   SET_SETTING_KEY_FLOAT("turbo.rate", rateVals[i]);
+                           });
+            box->addView(rateCell);
+            box->addView(makeHint("按住连发按键时每秒触发的次数，次数越高反应越快"));
+        }
+
+        box->addView(makeHeader("摇杆设置"));
+        auto* joystickCell = new brls::BooleanCell();
+        joystickCell->init("启用左摇杆方向键输入",
+                           cfgGetBool("input.joystick.enabled", true),
+                           [](bool v) { cfgSetBool("input.joystick.enabled", v); });
+        box->addView(joystickCell);
+
+        auto* diagonalCell = new brls::BooleanCell();
+        diagonalCell->init("允许斜向输入（同时触发 X 和 Y 方向）",
+                           cfgGetBool("input.joystick.diagonal", true),
+                           [](bool v) { cfgSetBool("input.joystick.diagonal", v); });
+        box->addView(diagonalCell);
+
+        scroll->setContentView(box);
+        auto* container = new brls::Box(brls::Axis::COLUMN);
+        container->setGrow(1.0f);
+        container->setWidthPercentage(100.f);
+        container->addView(scroll);
+        return container;
+    }
+
+    void openKeyBindPlatformPage(beiklive::Box* parent,  const std::string& title, const std::string& prefix, bool nds)
+    {
+        auto* page = new beiklive::Box();
+        page->showHeader(true);
+        page->getHeader()->setTitle(title);
+        page->showFooter(true);
+        page->registerAction("返回", brls::BUTTON_B, [page](brls::View*) {
+            beiklive::popActivity(page);
+            return true;
+        });
+        page->getContentBox()->addView(buildKeyBindPlatformContent(prefix, nds));
+        auto* frame = new brls::AppletFrame(page);
+        HIDE_BRLS_BAR(frame);
+        beiklive::pushActivity(frame, parent, page);
+    }
+}
+
+brls::View *SettingPage::buildKeyBindTab()
+{
+    auto* scroll = makeScrollTab();
+    auto* box = makeContentBox();
+
+    struct PlatformEntry
+    {
+        const char* label;
+        const char* prefix;
+        bool nds;
+    };
+    static const PlatformEntry platforms[] = {
+        {"映射GBA/GBC/GB游戏", "", false},
+        {"映射NES游戏", "nes.", false},
+        {"映射SFC游戏", "sfc.", false},
+        {"映射NDS游戏", "nds.", true},
     };
 
-    // ── 游戏按键 ──────────────────────────────────────────────────────────────
-    box->addView(makeHeader("游戏按键映射（手柄）"));
-    // 一个按键容器
-    auto *mapcontainer = new brls::Box(brls::Axis::COLUMN);
-    mapcontainer->setPadding(10.f, 10.f, 10.f, 10.f);
-    mapcontainer->setCornerRadius(10.f);
-    mapcontainer->setBorderThickness(1.f);
-    mapcontainer->setBorderColor(nvgRGBA(255, 255, 255, 50));
-    for (int i = 0; i < k_gameBtnCount; ++i)
+    for (const auto& platform : platforms)
     {
-        std::string cfgKey = std::string("handle.") + k_gameBtns[i].suffix;
-        auto *cell         = new beiklive::DetailCell();
-        cell->setLeftTextSize(18.f);
-        cell->setLeftText(k_gameBtns[i].label);
-        cell->setRightText(cfgGetStr(cfgKey, "none"));
-        registerKeyBindActions(cell, cfgKey);
-        mapcontainer->addView(cell);
-    }
-    box->addView(mapcontainer);
-
-    // ── 功能热键 ──────────────────────────────────────────────────────────────
-    box->addView(makeHeader("功能热键绑定"));
-
-    for (int i = 0; i < k_hotkeyCount; ++i)
-    {
-        std::string cfgKey = k_hotkeys[i].cfgKey;
-        auto *cell         = new beiklive::DetailCell();
-        cell->setLeftText(std::string(k_hotkeys[i].label));
-        cell->setRightText(cfgGetStr(cfgKey, "none"));
-        registerKeyBindActions(cell, cfgKey);
+        auto* cell = new beiklive::DetailCell();
+        cell->setLeftText(platform.label);
+        cell->setRightText(">");
+        cell->registerClickAction([this, platform](brls::View*) -> bool {
+            openKeyBindPlatformPage(this, platform.label, platform.prefix, platform.nds);
+            return true;
+        });
         box->addView(cell);
     }
-
-    // ── 连发按键绑定 ──────────────────────────────────────────────────────────
-    box->addView(makeHeader("连发按键绑定"));
-
-    {
-        std::string cfgKey = "handle.a_turbo";
-        auto *cell         = new beiklive::DetailCell();
-        cell->setLeftText("A 连发");
-        cell->setRightText(cfgGetStr(cfgKey, "none"));
-        registerKeyBindActions(cell, cfgKey);
-        box->addView(cell);
-    }
-
-    {
-        std::string cfgKey = "handle.b_turbo";
-        auto *cell         = new beiklive::DetailCell();
-        cell->setLeftText("B 连发");
-        cell->setRightText(cfgGetStr(cfgKey, "none"));
-        registerKeyBindActions(cell, cfgKey);
-        box->addView(cell);
-    }
-
-    {
-        std::vector<std::string> rates = {"每秒1次", "每秒5次", "每秒10次", "每秒15次", "每秒30次"};
-        static const float rateVals[] = {1.0f, 5.0f, 10.0f, 15.0f, 30.0f};
-        float curRate = GET_SETTING_KEY_FLOAT("turbo.rate", 10.0f);
-        int idx = 2;
-        for (int i = 0; i < 5; ++i) if (rateVals[i] == curRate) { idx = i; break; }
-        auto *rateCell = new brls::SelectorCell();
-        rateCell->init("连发速度", rates, idx,
-                       [](int i) { if (i >= 0 && i < 5) SET_SETTING_KEY_FLOAT("turbo.rate", rateVals[i]); });
-        box->addView(rateCell);
-        box->addView(makeHint("按住连发按键时每秒触发的次数，次数越高反应越快"));
-    }
-
-    // ── 摇杆设置 ──────────────────────────────────────────────────────────────
-    box->addView(makeHeader("摇杆设置"));
-
-    auto *joystickCell = new brls::BooleanCell();
-    joystickCell->init("启用左摇杆方向键输入",
-                       cfgGetBool("input.joystick.enabled", true),
-                       [](bool v) { cfgSetBool("input.joystick.enabled", v); });
-    box->addView(joystickCell);
-
-    auto *diagonalCell = new brls::BooleanCell();
-    diagonalCell->init("允许斜向输入（同时触发 X 和 Y 方向）",
-                       cfgGetBool("input.joystick.diagonal", true),
-                       [](bool v) { cfgSetBool("input.joystick.diagonal", v); });
-    box->addView(diagonalCell);
 
     scroll->setContentView(box);
-    auto *container = new brls::Box(brls::Axis::COLUMN);
+    auto* container = new brls::Box(brls::Axis::COLUMN);
     container->setGrow(1.0f);
     container->setWidthPercentage(100.f);
     container->addView(scroll);

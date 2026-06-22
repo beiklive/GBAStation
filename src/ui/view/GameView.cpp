@@ -2,6 +2,7 @@
 #include "GameMenuView.hpp"
 #include "RewindSelectorView.hpp"
 #include "game/audio/AudioManager.hpp"
+#include "game/control/InputMappingDefaults.hpp"
 #include "ui/utils/BKAudioPlayer.hpp"
 #include "ui/utils/AnimationHelper.hpp"
 #include "core/Tools.hpp"
@@ -48,6 +49,16 @@ namespace
         if (value == "270" || value == "270deg" || value == "270°" || value == "horizontal_reverse")
             return "270";
         return "0";
+    }
+
+    bool isNdsPlatform(int platform)
+    {
+        return platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS);
+    }
+
+    bool isNdsRightStickMapping(const char* suffix)
+    {
+        return std::strncmp(suffix, "rstick_", 7) == 0;
     }
 }
 
@@ -242,6 +253,7 @@ namespace beiklive
 
         GameInputManager::instance().handleInput(); // 每帧获取输入
         _pollNdsTouchInput();
+        _updateNdsVirtualPointer();
 
         // // 消费退出信号：异步弹出活动，本帧仍继续渲染避免闪烁
         // if (GameSignal::instance().consumeExit()) {
@@ -394,6 +406,7 @@ namespace beiklive
         }
 
         // 绘制状态覆盖层
+        _drawNdsVirtualPointer(vg);
         _drawOverlays(vg, x, y, width, height);
     }
 
@@ -812,6 +825,12 @@ namespace beiklive
         bool joystickEnabled  = GET_SETTING_KEY_INT("input.joystick.enabled",  1) != 0;
         bool joystickDiagonal = GET_SETTING_KEY_INT("input.joystick.diagonal", 1) != 0;
         GameInputManager::instance().setDiagonalMode(joystickDiagonal);
+        const bool isNds = isNdsPlatform(m_gameEntry.platform);
+        const std::string mappingPrefix = beiklive::input_mapping::platformPrefix(m_gameEntry.platform);
+        const unsigned platformMask = beiklive::input_mapping::platformMaskForPlatform(m_gameEntry.platform);
+        auto readMapping = [&mappingPrefix](const std::string& key, const std::string& def) {
+            return GET_SETTING_KEY_STR(beiklive::input_mapping::makeKey(mappingPrefix, key), def);
+        };
 
         // ---- 游戏按键绑定（从配置读取多 combo 按键映射）--------------------
         // 按住时持续置位，松开时清除，使用 GameSignal 按键位掩码传入游戏帧。
@@ -840,7 +859,20 @@ namespace beiklive
             { EMU_SELECT, "select", 2  }, // RETRO_DEVICE_ID_JOYPAD_SELECT
         };
         for (const auto& info : gameBtnInfos) {
-            std::string val = GET_SETTING_KEY_STR(std::string("handle.") + info.cfgSuffix, "none");
+            const auto* defaultValue = beiklive::input_mapping::defaultHandleValue(info.cfgSuffix);
+            bool supported = false;
+            for (const auto& entry : beiklive::input_mapping::kGameButtonDefaults) {
+                if (std::string(info.cfgSuffix) == entry.suffix) {
+                    supported = (entry.platformMask & platformMask) != 0;
+                    break;
+                }
+            }
+            if (!supported)
+                continue;
+            const std::string cfgKey = beiklive::input_mapping::makeHandleKey(mappingPrefix, info.cfgSuffix);
+            std::string val = GET_SETTING_KEY_STR(
+                cfgKey,
+                defaultValue);
             if (val == "none" || val.empty()) continue;
             auto combos = beiklive::tools::parseMultiCombo(val);
             if (combos.empty()) continue;
@@ -877,14 +909,22 @@ namespace beiklive
                 { EMU_RIGHT_STICK_RIGHT, "rstick_right", 7  }, // RETRO_DEVICE_ID_JOYPAD_RIGHT
             };
             for (const auto& info : stickBtnInfos) {
-                std::string val = GET_SETTING_KEY_STR(std::string("handle.") + info.cfgSuffix, "none");
+                const std::string cfgKey = beiklive::input_mapping::makeHandleKey(mappingPrefix, info.cfgSuffix);
+                std::string val = GET_SETTING_KEY_STR(
+                    cfgKey,
+                    beiklive::input_mapping::defaultHandleValue(info.cfgSuffix));
                 auto combos = beiklive::tools::parseMultiCombo(val);
                 if (combos.empty()) continue;
                 unsigned rid = info.retroId;
+                const bool ndsRightStick = isNds && isNdsRightStickMapping(info.cfgSuffix);
                 for (const auto& combo : combos) {
                     GameInputManager::instance().registerEmuFunctionKey(
                         info.emuKey, {combo},
-                        [rid]() { GameSignal::instance().pressGameButton(rid); },
+                        [this, rid, ndsRightStick]() {
+                            if (ndsRightStick && m_ndsVirtualPointerMode)
+                                return;
+                            GameSignal::instance().pressGameButton(rid);
+                        },
                         TriggerType::HOLD);
                     GameInputManager::instance().registerEmuFunctionKey(
                         info.emuKey, {combo},
@@ -898,7 +938,7 @@ namespace beiklive
 
         // 打开菜单
         {
-            std::string val = GET_SETTING_KEY_STR("hotkey.menu.pad", "LT+RT");
+            std::string val = readMapping("hotkey.menu.pad", "PAD_LT+PAD_RT");
             auto combos = beiklive::tools::parseMultiCombo(val);
             for (const auto& combo : combos) {
                 GameInputManager::instance().registerEmuFunctionKey(
@@ -914,7 +954,7 @@ namespace beiklive
 
         // 快进（支持按住/切换两种模式）
         {
-            std::string val = GET_SETTING_KEY_STR("handle.fastforward", "LSB");
+            std::string val = readMapping("handle.fastforward", "PAD_LSB");
             std::string mode = GET_SETTING_KEY_STR("fastforward.mode", "hold");
             auto combos = beiklive::tools::parseMultiCombo(val);
             if (mode == "hold") {
@@ -942,8 +982,8 @@ namespace beiklive
         }
 
         // 倒带切换：若启用可视化倒带界面则打开UI，否则执行传统倒带
-        if (m_gameEntry.platform != static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)) {
-            std::string val  = GET_SETTING_KEY_STR("handle.rewind", "RSB");
+        if (!isNds) {
+            std::string val  = readMapping("handle.rewind", "none");
             std::string mode = GET_SETTING_KEY_STR("rewind.mode", "hold");
             auto combos = beiklive::tools::parseMultiCombo(val);
             bool showUI = m_rewindShowUI;
@@ -980,7 +1020,7 @@ namespace beiklive
 
         // 快速保存（默认槽位 1）
         {
-            std::string val = GET_SETTING_KEY_STR("hotkey.quicksave.pad", "none");
+            std::string val = readMapping("hotkey.quicksave.pad", "none");
             auto combos = beiklive::tools::parseMultiCombo(val);
             for (const auto& combo : combos) {
                 GameInputManager::instance().registerEmuFunctionKey(
@@ -991,7 +1031,7 @@ namespace beiklive
 
         // 快速读取（默认槽位 1）
         {
-            std::string val = GET_SETTING_KEY_STR("hotkey.quickload.pad", "none");
+            std::string val = readMapping("hotkey.quickload.pad", "none");
             auto combos = beiklive::tools::parseMultiCombo(val);
             for (const auto& combo : combos) {
                 GameInputManager::instance().registerEmuFunctionKey(
@@ -1002,7 +1042,7 @@ namespace beiklive
 
         // 静音切换
         {
-            std::string val = GET_SETTING_KEY_STR("hotkey.mute.pad", "none");
+            std::string val = readMapping("hotkey.mute.pad", "none");
             auto combos = beiklive::tools::parseMultiCombo(val);
             for (const auto& combo : combos) {
                 GameInputManager::instance().registerEmuFunctionKey(
@@ -1014,9 +1054,36 @@ namespace beiklive
             }
         }
 
+        // NDS 虚拟指针
+        if (isNds) {
+            {
+                std::string val = readMapping("hotkey.pointer_mode.pad", "none");
+                auto combos = beiklive::tools::parseMultiCombo(val);
+                for (const auto& combo : combos) {
+                    GameInputManager::instance().registerEmuFunctionKey(
+                        EmuFunctionKey::EMU_NDS_POINTER_MODE, {combo},
+                        [this]() { _toggleNdsVirtualPointerMode(); });
+                }
+            }
+            {
+                std::string val = readMapping("hotkey.pointer_click.pad", "none");
+                auto combos = beiklive::tools::parseMultiCombo(val);
+                for (const auto& combo : combos) {
+                    GameInputManager::instance().registerEmuFunctionKey(
+                        EmuFunctionKey::EMU_NDS_POINTER_CLICK, {combo},
+                        [this]() { _setNdsVirtualPointerClick(true); },
+                        TriggerType::HOLD);
+                    GameInputManager::instance().registerEmuFunctionKey(
+                        EmuFunctionKey::EMU_NDS_POINTER_CLICK, {combo},
+                        [this]() { _setNdsVirtualPointerClick(false); },
+                        TriggerType::RELEASE);
+                }
+            }
+        }
+
         // 连发 A（Turbo A）
         {
-            std::string val = GET_SETTING_KEY_STR("handle.a_turbo", "none");
+            std::string val = readMapping("handle.a_turbo", "none");
             auto combos = beiklive::tools::parseMultiCombo(val);
             for (const auto& combo : combos) {
                 GameInputManager::instance().registerEmuFunctionKey(
@@ -1032,7 +1099,7 @@ namespace beiklive
 
         // 连发 B（Turbo B）
         {
-            std::string val = GET_SETTING_KEY_STR("handle.b_turbo", "none");
+            std::string val = readMapping("handle.b_turbo", "none");
             auto combos = beiklive::tools::parseMultiCombo(val);
             for (const auto& combo : combos) {
                 GameInputManager::instance().registerEmuFunctionKey(
@@ -1150,6 +1217,140 @@ namespace beiklive
         }
 
         touchCore->SetTouch(0, 0, false);
+    }
+
+    void GameView::_toggleNdsVirtualPointerMode()
+    {
+        if (!isNdsPlatform(m_gameEntry.platform))
+            return;
+        m_ndsVirtualPointerMode = !m_ndsVirtualPointerMode;
+        m_ndsVirtualPointerLastUpdate = std::chrono::steady_clock::now();
+        _releaseNdsVirtualPointerTouch();
+        GameSignal::instance().releaseGameButton(4);
+        GameSignal::instance().releaseGameButton(5);
+        GameSignal::instance().releaseGameButton(6);
+        GameSignal::instance().releaseGameButton(7);
+        brls::Logger::debug("GameView: NDS pointer mode {}", m_ndsVirtualPointerMode ? "on" : "off");
+    }
+
+    void GameView::_setNdsVirtualPointerClick(bool down)
+    {
+        if (!isNdsPlatform(m_gameEntry.platform))
+            return;
+        m_ndsVirtualPointerClickHeld = down;
+        if (!down)
+            _releaseNdsVirtualPointerTouch();
+    }
+
+    void GameView::_releaseNdsVirtualPointerTouch()
+    {
+        if (!m_ndsVirtualPointerTouchDown)
+            return;
+        if (auto* touchCore = dynamic_cast<beiklive::IEmulatorTouchInput*>(m_core))
+            touchCore->SetTouch(0, 0, false);
+        m_ndsVirtualPointerTouchDown = false;
+    }
+
+    void GameView::_updateNdsVirtualPointer()
+    {
+        if (!isNdsPlatform(m_gameEntry.platform) || !m_core)
+            return;
+
+        const auto now = std::chrono::steady_clock::now();
+        if (m_ndsVirtualPointerLastUpdate.time_since_epoch().count() == 0)
+            m_ndsVirtualPointerLastUpdate = now;
+        float dt = std::chrono::duration<float>(now - m_ndsVirtualPointerLastUpdate).count();
+        m_ndsVirtualPointerLastUpdate = now;
+        dt = std::clamp(dt, 0.f, 0.05f);
+
+        if (brls::Application::getCurrentFocus() != this || !m_ndsVirtualPointerMode)
+        {
+            _releaseNdsVirtualPointerTouch();
+            return;
+        }
+
+        if (m_ndsTouchActive)
+        {
+            _releaseNdsVirtualPointerTouch();
+            return;
+        }
+
+        const auto state = GameInputManager::instance().getGamepadState(0);
+        constexpr float kStickMax = 32767.f;
+        constexpr float kDeadzone = 0.18f;
+        constexpr float kPointerSpeed = 320.f;
+        float sx = static_cast<float>(state.rightStickX) / kStickMax;
+        float sy = static_cast<float>(state.rightStickY) / kStickMax;
+        if (std::fabs(sx) < kDeadzone) sx = 0.f;
+        if (std::fabs(sy) < kDeadzone) sy = 0.f;
+
+        m_ndsVirtualPointerX = std::clamp(m_ndsVirtualPointerX + sx * kPointerSpeed * dt, 0.f, 255.f);
+        m_ndsVirtualPointerY = std::clamp(m_ndsVirtualPointerY - sy * kPointerSpeed * dt, 0.f, 191.f);
+
+        auto* touchCore = dynamic_cast<beiklive::IEmulatorTouchInput*>(m_core);
+        if (!touchCore)
+            return;
+        if (m_ndsVirtualPointerClickHeld)
+        {
+            touchCore->SetTouch(static_cast<int>(m_ndsVirtualPointerX + 0.5f),
+                                static_cast<int>(m_ndsVirtualPointerY + 0.5f),
+                                true);
+            m_ndsVirtualPointerTouchDown = true;
+        }
+        else
+        {
+            _releaseNdsVirtualPointerTouch();
+        }
+    }
+
+    void GameView::_drawNdsVirtualPointer(NVGcontext* vg)
+    {
+        if (!vg || !isNdsPlatform(m_gameEntry.platform) || !m_ndsVirtualPointerMode)
+            return;
+        if (m_ndsTouchRect.w <= 0.f || m_ndsTouchRect.h <= 0.f)
+            return;
+
+        const auto& orientedRect = m_ndsTouchRect;
+        const auto layoutRect = _unrotateNdsRect(orientedRect, orientedRect);
+        for (const auto& screenRect : _computeNdsScreenDrawRects(layoutRect))
+        {
+            if (screenRect.topScreen)
+                continue;
+
+            const auto rect = _rotateNdsScreenRect(screenRect.rect, layoutRect, orientedRect);
+            if (rect.w <= 0.f || rect.h <= 0.f)
+                return;
+
+            const float u = std::clamp(m_ndsVirtualPointerX / 255.f, 0.f, 1.f);
+            const float v = std::clamp(m_ndsVirtualPointerY / 191.f, 0.f, 1.f);
+            float nx = u;
+            float ny = v;
+            if (m_ndsScreenOrientation == "90") {
+                nx = 1.f - v;
+                ny = u;
+            } else if (m_ndsScreenOrientation == "180") {
+                nx = 1.f - u;
+                ny = 1.f - v;
+            } else if (m_ndsScreenOrientation == "270") {
+                nx = v;
+                ny = 1.f - u;
+            }
+
+            const float px = rect.x + nx * rect.w;
+            const float py = rect.y + ny * rect.h;
+            constexpr float kLen = 8.f;
+            nvgBeginPath(vg);
+            nvgMoveTo(vg, px - kLen, py);
+            nvgLineTo(vg, px + kLen, py);
+            nvgMoveTo(vg, px, py - kLen);
+            nvgLineTo(vg, px, py + kLen);
+            nvgStrokeWidth(vg, 2.5f);
+            nvgStrokeColor(vg, m_ndsVirtualPointerClickHeld
+                                   ? nvgRGBA(255, 64, 64, 255)
+                                   : nvgRGBA(255, 255, 255, 255));
+            nvgStroke(vg);
+            return;
+        }
     }
 
     LibretroLoader::VideoFrame GameView::_layoutNdsFrame(const LibretroLoader::VideoFrame& frame) const
