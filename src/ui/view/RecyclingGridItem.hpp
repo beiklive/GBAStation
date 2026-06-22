@@ -40,6 +40,8 @@ struct GridDrawItem {
     int imageLayerHandle = -1;
     bool textureLoading = false;
     bool textureReady = false;
+    bool textureFailed = false;
+    bool imageLayerFailed = false;
 
     bool selected = false;
 
@@ -58,8 +60,12 @@ struct GridDrawItem {
         marqueeMaxOffset = 0.f;
         focusScale = 1.f;
         focusGlow = 0.f;
+        textureHandle = -1;
+        imageLayerHandle = -1;
         textureLoading = false;
         textureReady = false;
+        textureFailed = false;
+        imageLayerFailed = false;
         selected = false;
     }
 };

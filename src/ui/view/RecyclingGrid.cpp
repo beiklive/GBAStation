@@ -93,6 +93,7 @@ void GameGridView::setItemImagePath(size_t index, const std::string& path)
         item.textureHandle = -1;
         item.textureLoading = false;
         item.textureReady = false;
+        item.textureFailed = false;
     }
 }
 
@@ -200,7 +201,7 @@ void GameGridView::notifyDataChanged()
     m_maxScrollY = std::max(0.f, _getRowCount() * _getRowHeight()
                            + m_paddingTop - viewH);
     m_scrollY = std::min(m_scrollY, m_maxScrollY);
-    m_targetScrollY = m_scrollY;
+    m_targetScrollY = std::min(m_targetScrollY, m_maxScrollY);
     _updateVisibleRange();
 
     m_requestNextPage = false;
@@ -430,11 +431,18 @@ void GameGridView::_loadTextures(NVGcontext* vg)
     if (!vg) return;
 
     int loadedThisFrame = 0;
-    static const int MAX_LOADS_PER_FRAME = 2;
+#ifdef __SWITCH__
+    static constexpr int MAX_LOADS_PER_FRAME = 1;
+#else
+    static constexpr int MAX_LOADS_PER_FRAME = 2;
+#endif
 
-    for (size_t i = 0; i < m_items.size() && loadedThisFrame < MAX_LOADS_PER_FRAME; i++) {
-        auto& item = m_items[i];
-        if (!item.imagePath.empty() && item.textureHandle < 0 && !item.textureLoading) {
+    auto loadItemAt = [this, vg, &loadedThisFrame](size_t index) {
+        if (index >= m_items.size() || loadedThisFrame >= MAX_LOADS_PER_FRAME)
+            return;
+
+        auto& item = m_items[index];
+        if (!item.imagePath.empty() && item.textureHandle < 0 && !item.textureLoading && !item.textureFailed) {
             auto it = m_textureCache.find(item.imagePath);
             if (it != m_textureCache.end()) {
                 item.textureHandle = it->second;
@@ -448,10 +456,12 @@ void GameGridView::_loadTextures(NVGcontext* vg)
                 if (handle >= 0) {
                     item.textureReady = true;
                     m_textureCache[item.imagePath] = handle;
+                } else {
+                    item.textureFailed = true;
                 }
             }
         }
-        if (!item.imageLayerPath.empty() && item.imageLayerHandle < 0 && !item.textureLoading
+        if (!item.imageLayerPath.empty() && item.imageLayerHandle < 0 && !item.textureLoading && !item.imageLayerFailed
             && loadedThisFrame < MAX_LOADS_PER_FRAME) {
             auto it = m_textureCache.find(item.imageLayerPath);
             if (it != m_textureCache.end()) {
@@ -464,8 +474,24 @@ void GameGridView::_loadTextures(NVGcontext* vg)
                 loadedThisFrame++;
                 if (handle >= 0) {
                     m_textureCache[item.imageLayerPath] = handle;
+                } else {
+                    item.imageLayerFailed = true;
                 }
             }
+        }
+    };
+
+    if (m_selectedIndex >= 0)
+        loadItemAt(static_cast<size_t>(m_selectedIndex));
+
+    int rowCount = _getRowCount();
+    int startRow = std::max(0, m_visibleStartRow - 1);
+    int endRow = std::min(rowCount, m_visibleEndRow + 2);
+
+    for (int row = startRow; row < endRow && loadedThisFrame < MAX_LOADS_PER_FRAME; row++) {
+        for (int col = 0; col < spanCount && loadedThisFrame < MAX_LOADS_PER_FRAME; col++) {
+            size_t index = static_cast<size_t>(row * spanCount + col);
+            loadItemAt(index);
         }
     }
 }
@@ -478,23 +504,59 @@ void GameGridView::_evictTextures()
     NVGcontext* vg = brls::Application::getNVGContext();
     if (!vg) return;
 
-    size_t toRemove = m_textureCache.size() - maxCache;
-    auto it = m_textureCache.begin();
-    while (toRemove > 0 && it != m_textureCache.end()) {
-        bool inUse = false;
-        for (auto& item : m_items) {
-            if (item.textureHandle == it->second || item.imageLayerHandle == it->second) {
-                inUse = true;
-                break;
+    int keepStartRow = std::max(0, m_visibleStartRow - 4);
+    int keepEndRow = std::min(_getRowCount(), m_visibleEndRow + 4);
+
+    auto handleUsedNearViewport = [this, keepStartRow, keepEndRow](int handle) {
+        if (handle < 0) return false;
+        for (int row = keepStartRow; row < keepEndRow; row++) {
+            for (int col = 0; col < spanCount; col++) {
+                size_t index = static_cast<size_t>(row * spanCount + col);
+                if (index >= m_items.size()) return false;
+                const auto& item = m_items[index];
+                if (item.textureHandle == handle || item.imageLayerHandle == handle)
+                    return true;
             }
         }
-        if (!inUse) {
-            nvgDeleteImage(vg, it->second);
-            it = m_textureCache.erase(it);
-            toRemove--;
-        } else {
-            ++it;
+        return false;
+    };
+
+    auto eraseCacheHandle = [this, vg](int handle) {
+        for (auto it = m_textureCache.begin(); it != m_textureCache.end();) {
+            if (it->second == handle)
+                it = m_textureCache.erase(it);
+            else
+                ++it;
         }
+        nvgDeleteImage(vg, handle);
+    };
+
+    auto releaseHandle = [this, &handleUsedNearViewport, &eraseCacheHandle](int handle) {
+        if (handle < 0 || handleUsedNearViewport(handle))
+            return false;
+
+        bool released = false;
+        for (auto& item : m_items) {
+            if (item.textureHandle == handle) {
+                item.textureHandle = -1;
+                item.textureReady = false;
+                released = true;
+            }
+            if (item.imageLayerHandle == handle) {
+                item.imageLayerHandle = -1;
+                released = true;
+            }
+        }
+        if (released)
+            eraseCacheHandle(handle);
+        return released;
+    };
+
+    for (auto& item : m_items) {
+        if (m_textureCache.size() <= maxCache) break;
+        releaseHandle(item.textureHandle);
+        if (m_textureCache.size() <= maxCache) break;
+        releaseHandle(item.imageLayerHandle);
     }
 }
 
@@ -777,8 +839,9 @@ void GameGridView::frame(brls::FrameContext* ctx)
     _loadTextures(vg);
     _evictTextures();
 
+    size_t preloadIndex = std::max(static_cast<size_t>(spanCount), m_items.size() / 2);
     if (!m_requestNextPage && m_selectedIndex >= 0 &&
-        static_cast<size_t>(m_selectedIndex) >= m_items.size() - static_cast<size_t>(spanCount) * 2 &&
+        static_cast<size_t>(m_selectedIndex) >= preloadIndex &&
         m_items.size() > 0) {
         if (m_nextPageCallback) {
             m_requestNextPage = true;
