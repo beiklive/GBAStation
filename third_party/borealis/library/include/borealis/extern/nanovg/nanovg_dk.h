@@ -101,19 +101,27 @@ static int dknvg__convertPaint(DKNVGcontext* dk, DKNVGfragUniforms* frag, NVGpai
     if (paint->image != 0) {
         tex = dknvg__findTexture(dk, paint->image);
         if (tex == NULL) return 0;
-        if ((tex->flags & NVG_IMAGE_FLIPY) != 0) {
-            float m1[6], m2[6];
-            nvgTransformTranslate(m1, 0.0f, frag->extent[1] * 0.5f);
-            nvgTransformMultiply(m1, paint->xform);
-            nvgTransformScale(m2, 1.0f, -1.0f);
-            nvgTransformMultiply(m2, m1);
-            nvgTransformTranslate(m1, 0.0f, -frag->extent[1] * 0.5f);
-            nvgTransformMultiply(m1, m2);
-            nvgTransformInverse(invxform, m1);
-        } else {
+
+        if (paint->type == NVG_PAINT_BOX_GRADIENT_LUT) {
+            frag->type = NSVG_SHADER_FILLGRAD_LUT;
+            frag->radius = paint->radius;
+            frag->feather = paint->feather;
             nvgTransformInverse(invxform, paint->xform);
+        } else {
+            if ((tex->flags & NVG_IMAGE_FLIPY) != 0) {
+                float m1[6], m2[6];
+                nvgTransformTranslate(m1, 0.0f, frag->extent[1] * 0.5f);
+                nvgTransformMultiply(m1, paint->xform);
+                nvgTransformScale(m2, 1.0f, -1.0f);
+                nvgTransformMultiply(m2, m1);
+                nvgTransformTranslate(m1, 0.0f, -frag->extent[1] * 0.5f);
+                nvgTransformMultiply(m1, m2);
+                nvgTransformInverse(invxform, m1);
+            } else {
+                nvgTransformInverse(invxform, paint->xform);
+            }
+            frag->type = NSVG_SHADER_FILLIMG;
         }
-        frag->type = NSVG_SHADER_FILLIMG;
 
         if (tex->type == NVG_TEXTURE_RGBA)
             frag->texType = (tex->flags & NVG_IMAGE_PREMULTIPLIED) ? 0 : 1;

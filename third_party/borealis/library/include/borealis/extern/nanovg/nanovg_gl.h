@@ -128,7 +128,8 @@ enum GLNVGshaderType {
 	NSVG_SHADER_FILLGRAD,
 	NSVG_SHADER_FILLIMG,
 	NSVG_SHADER_SIMPLE,
-	NSVG_SHADER_IMG
+	NSVG_SHADER_IMG,
+	NSVG_SHADER_FILLGRAD_LUT
 };
 
 #if NANOVG_GL_USE_UNIFORMBUFFER
@@ -623,6 +624,39 @@ static int glnvg__renderCreate(void* uptr)
 		"	return min(max(d.x,d.y),0.0) + length(max(d,0.0)) - rad;\n"
 		"}\n"
 		"\n"
+		"float roundedRectPerimeterPos(vec2 pt, vec2 ext, float rad) {\n"
+		"	const float PI = 3.14159265359;\n"
+		"	float r = max(rad, 0.001);\n"
+		"	vec2 b = max(ext - vec2(r,r), vec2(0.0,0.0));\n"
+		"	float q = PI * 0.5 * r;\n"
+		"	float h = b.x * 2.0;\n"
+		"	float vlen = b.y * 2.0;\n"
+		"	float pos = 0.0;\n"
+		"	if (pt.y <= -b.y && pt.x >= -b.x && pt.x <= b.x) {\n"
+		"		pos = pt.x + b.x;\n"
+		"	} else if (pt.x > b.x && pt.y < -b.y) {\n"
+		"		vec2 v = pt - vec2(b.x, -b.y); v /= max(length(v), 0.001);\n"
+		"		pos = h + clamp(atan(v.y, v.x) + PI * 0.5, 0.0, PI * 0.5) * r;\n"
+		"	} else if (pt.x >= b.x && pt.y >= -b.y && pt.y <= b.y) {\n"
+		"		pos = h + q + pt.y + b.y;\n"
+		"	} else if (pt.x > b.x && pt.y > b.y) {\n"
+		"		vec2 v = pt - vec2(b.x, b.y); v /= max(length(v), 0.001);\n"
+		"		pos = h + q + vlen + clamp(atan(v.y, v.x), 0.0, PI * 0.5) * r;\n"
+		"	} else if (pt.y >= b.y && pt.x >= -b.x && pt.x <= b.x) {\n"
+		"		pos = h + q * 2.0 + vlen + b.x - pt.x;\n"
+		"	} else if (pt.x < -b.x && pt.y > b.y) {\n"
+		"		vec2 v = pt - vec2(-b.x, b.y); v /= max(length(v), 0.001);\n"
+		"		pos = h * 2.0 + q * 2.0 + vlen + clamp(atan(v.y, v.x) - PI * 0.5, 0.0, PI * 0.5) * r;\n"
+		"	} else if (pt.x <= -b.x && pt.y >= -b.y && pt.y <= b.y) {\n"
+		"		pos = h * 2.0 + q * 3.0 + vlen + b.y - pt.y;\n"
+		"	} else {\n"
+		"		vec2 v = pt - vec2(-b.x, -b.y); v /= max(length(v), 0.001);\n"
+		"		float a = atan(v.y, v.x); if (a < 0.0) a += PI * 2.0;\n"
+		"		pos = h * 2.0 + vlen * 2.0 + q * 3.0 + clamp(a - PI, 0.0, PI * 0.5) * r;\n"
+		"	}\n"
+		"	return pos / max(h * 2.0 + vlen * 2.0 + q * 4.0, 1.0);\n"
+		"}\n"
+		"\n"
 		"// Scissoring\n"
 		"float scissorMask(vec2 p) {\n"
 		"	vec2 sc = (abs((scissorMat * vec3(p,1.0)).xy) - scissorExt);\n"
@@ -683,6 +717,21 @@ static int glnvg__renderCreate(void* uptr)
 		"		if (texType == 2) color = vec4(color.x);"
 		"		color *= scissor;\n"
 		"		result = color * innerCol;\n"
+		"	} else if (type == 4) {		// Gradient LUT\n"
+		"		vec2 pt = (paintMat * vec3(fpos,1.0)).xy;\n"
+		"		float d = sdroundrect(pt, extent, radius);\n"
+		"		float borderMask = 1.0 - smoothstep(max(feather - 1.0, 0.0), feather, abs(d));\n"
+		"		float u = fract(roundedRectPerimeterPos(pt, extent, radius) + outerCol.r);\n"
+		"#ifdef NANOVG_GL3\n"
+		"		vec4 color = texture(tex, vec2(u, 0.5));\n"
+		"#else\n"
+		"		vec4 color = texture2D(tex, vec2(u, 0.5));\n"
+		"#endif\n"
+		"		if (texType == 1) color = vec4(color.xyz*color.w,color.w);"
+		"		if (texType == 2) color = vec4(color.x);"
+		"		color *= innerCol;\n"
+		"		color *= borderMask * strokeAlpha * scissor;\n"
+		"		result = color;\n"
 		"	}\n"
 		"#ifdef NANOVG_GL3\n"
 		"	outColor = result;\n"
@@ -953,19 +1002,27 @@ static int glnvg__convertPaint(GLNVGcontext* gl, GLNVGfragUniforms* frag, NVGpai
 	if (paint->image != 0) {
 		tex = glnvg__findTexture(gl, paint->image);
 		if (tex == NULL) return 0;
-		if ((tex->flags & NVG_IMAGE_FLIPY) != 0) {
-			float m1[6], m2[6];
-			nvgTransformTranslate(m1, 0.0f, frag->extent[1] * 0.5f);
-			nvgTransformMultiply(m1, paint->xform);
-			nvgTransformScale(m2, 1.0f, -1.0f);
-			nvgTransformMultiply(m2, m1);
-			nvgTransformTranslate(m1, 0.0f, -frag->extent[1] * 0.5f);
-			nvgTransformMultiply(m1, m2);
-			nvgTransformInverse(invxform, m1);
-		} else {
+
+		if (paint->type == NVG_PAINT_BOX_GRADIENT_LUT) {
+			frag->type = NSVG_SHADER_FILLGRAD_LUT;
+			frag->radius = paint->radius;
+			frag->feather = paint->feather;
 			nvgTransformInverse(invxform, paint->xform);
+		} else {
+			if ((tex->flags & NVG_IMAGE_FLIPY) != 0) {
+				float m1[6], m2[6];
+				nvgTransformTranslate(m1, 0.0f, frag->extent[1] * 0.5f);
+				nvgTransformMultiply(m1, paint->xform);
+				nvgTransformScale(m2, 1.0f, -1.0f);
+				nvgTransformMultiply(m2, m1);
+				nvgTransformTranslate(m1, 0.0f, -frag->extent[1] * 0.5f);
+				nvgTransformMultiply(m1, m2);
+				nvgTransformInverse(invxform, m1);
+			} else {
+				nvgTransformInverse(invxform, paint->xform);
+			}
+			frag->type = NSVG_SHADER_FILLIMG;
 		}
-		frag->type = NSVG_SHADER_FILLIMG;
 
 		#if NANOVG_GL_USE_UNIFORMBUFFER
 		if (tex->type == NVG_TEXTURE_RGBA)

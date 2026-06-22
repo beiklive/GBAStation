@@ -28,6 +28,41 @@ float sdroundrect(vec2 pt, vec2 ext, float rad) {
     return min(max(d.x,d.y),0.0) + length(max(d,0.0)) - rad;
 }
 
+float roundedRectPerimeterPos(vec2 pt, vec2 ext, float rad) {
+    const float PI = 3.14159265359;
+    float r = max(rad, 0.001);
+    vec2 b = max(ext - vec2(r,r), vec2(0.0,0.0));
+    float q = PI * 0.5 * r;
+    float h = b.x * 2.0;
+    float vlen = b.y * 2.0;
+    float pos = 0.0;
+
+    if (pt.y <= -b.y && pt.x >= -b.x && pt.x <= b.x) {
+        pos = pt.x + b.x;
+    } else if (pt.x > b.x && pt.y < -b.y) {
+        vec2 v = pt - vec2(b.x, -b.y); v /= max(length(v), 0.001);
+        pos = h + clamp(atan(v.y, v.x) + PI * 0.5, 0.0, PI * 0.5) * r;
+    } else if (pt.x >= b.x && pt.y >= -b.y && pt.y <= b.y) {
+        pos = h + q + pt.y + b.y;
+    } else if (pt.x > b.x && pt.y > b.y) {
+        vec2 v = pt - vec2(b.x, b.y); v /= max(length(v), 0.001);
+        pos = h + q + vlen + clamp(atan(v.y, v.x), 0.0, PI * 0.5) * r;
+    } else if (pt.y >= b.y && pt.x >= -b.x && pt.x <= b.x) {
+        pos = h + q * 2.0 + vlen + b.x - pt.x;
+    } else if (pt.x < -b.x && pt.y > b.y) {
+        vec2 v = pt - vec2(-b.x, b.y); v /= max(length(v), 0.001);
+        pos = h * 2.0 + q * 2.0 + vlen + clamp(atan(v.y, v.x) - PI * 0.5, 0.0, PI * 0.5) * r;
+    } else if (pt.x <= -b.x && pt.y >= -b.y && pt.y <= b.y) {
+        pos = h * 2.0 + q * 3.0 + vlen + b.y - pt.y;
+    } else {
+        vec2 v = pt - vec2(-b.x, -b.y); v /= max(length(v), 0.001);
+        float a = atan(v.y, v.x); if (a < 0.0) a += PI * 2.0;
+        pos = h * 2.0 + vlen * 2.0 + q * 3.0 + clamp(a - PI, 0.0, PI * 0.5) * r;
+    }
+
+    return pos / max(h * 2.0 + vlen * 2.0 + q * 4.0, 1.0);
+}
+
 // Scissoring
 float scissorMask(vec2 p) {
     vec2 sc = (abs((scissorMat * vec3(p,1.0)).xy) - scissorExt);
@@ -70,6 +105,18 @@ void main(void) {
         if (texType == 2) color = vec4(color.x);
         color *= scissor;
         result = color * innerCol;
+    } else if (type == 4) {		// Gradient LUT
+        vec2 pt = (paintMat * vec3(fpos,1.0)).xy;
+        float d = sdroundrect(pt, extent, radius);
+        float borderMask = 1.0 - smoothstep(max(feather - 1.0, 0.0), feather, abs(d));
+        float u = fract(roundedRectPerimeterPos(pt, extent, radius) + outerCol.r);
+        vec4 color = texture(tex, vec2(u, 0.5));
+
+        if (texType == 1) color = vec4(color.xyz*color.w,color.w);
+        if (texType == 2) color = vec4(color.x);
+        color *= innerCol;
+        color *= borderMask * strokeAlpha * scissor;
+        result = color;
     }
 
     outColor = result;

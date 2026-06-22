@@ -50,8 +50,14 @@ struct NVGpaint {
 	NVGcolor innerColor;
 	NVGcolor outerColor;
 	int image;
+	int type;
 };
 typedef struct NVGpaint NVGpaint;
+
+enum NVGpaintType {
+	NVG_PAINT_GRADIENT = 0,
+	NVG_PAINT_BOX_GRADIENT_LUT = 1,
+};
 
 enum NVGwinding {
 	NVG_CCW = 1,			// Winding for solid shapes
@@ -416,6 +422,12 @@ NVGpaint nvgLinearGradient(NVGcontext* ctx, float sx, float sy, float ex, float 
 // The gradient is transformed by the current transform when it is passed to nvgFillPaint() or nvgStrokePaint().
 NVGpaint nvgBoxGradient(NVGcontext* ctx, float x, float y, float w, float h,
 						float r, float f, NVGcolor icol, NVGcolor ocol);
+
+// Creates a rounded-rectangle border paint whose color is sampled from the
+// image by perimeter position plus offset. The distance field is used only as
+// the generated border mask.
+NVGpaint nvgBoxGradientLUT(NVGcontext* ctx, float x, float y, float w, float h,
+						   float r, float f, int image, float alpha, float offset);
 
 // Creates and returns a radial gradient. Parameters (cx,cy) specify the center, inr and outr specify
 // the inner and outer radius of the gradient, icol specifies the start color and ocol the end color.

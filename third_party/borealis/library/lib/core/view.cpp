@@ -27,6 +27,7 @@
 #include <functional>
 #include <borealis/core/animation.hpp>
 #include <borealis/core/application.hpp>
+#include <borealis/core/assets.hpp>
 #include <borealis/core/box.hpp>
 #include <borealis/core/i18n.hpp>
 #include <borealis/core/input.hpp>
@@ -45,6 +46,10 @@ using namespace brls::literals;
 
 namespace brls
 {
+
+static constexpr float HIGHLIGHT_GRADIENT_BORDER_WIDTH_SCALE = 2.0f;
+static constexpr float HIGHLIGHT_GRADIENT_FLOW_CYCLE_MS      = 3600.0f;
+static constexpr float HIGHLIGHT_GRADIENT_BRIGHTNESS         = 1.0f;
 
 void AppletFrameItem::setHintView(View* hintView)
 {
@@ -86,6 +91,16 @@ static int shakeAnimation(float t, float a) // a = amplitude
     float w = 0.8f; // period
     float c = 0.35f; // damp factor
     return roundf(a * exp(-(c * t)) * sin(w * t));
+}
+
+static int createHighlightGradientImage(NVGcontext* vg)
+{
+#ifdef USE_LIBROMFS
+    auto image = romfs::get("img/ui/border_gradient.png");
+    return nvgCreateImageMem(vg, 0, const_cast<unsigned char*>(reinterpret_cast<const unsigned char*>(image.data())), (int)image.size());
+#else
+    return nvgCreateImage(vg, BRLS_ASSET("img/ui/border_gradient.png"), 0);
+#endif
 }
 
 void View::shakeHighlight(FocusDirection direction)
@@ -614,6 +629,45 @@ void View::drawHighlight(NVGcontext* vg, Theme theme, float alpha, Style style, 
         nvgPathWinding(vg, NVG_HOLE);
         nvgFillPaint(vg, shadowPaint);
         nvgFill(vg);
+
+#if defined(BOREALIS_USE_OPENGL) || defined(BOREALIS_USE_DEKO3D)
+        static NVGcontext* highlightGradientContext = nullptr;
+        static int highlightGradientImage = 0;
+
+        if (highlightGradientContext != vg)
+        {
+            highlightGradientContext = vg;
+            highlightGradientImage = 0;
+        }
+
+        if (highlightGradientImage == 0)
+            highlightGradientImage = createHighlightGradientImage(vg);
+
+        if (highlightGradientImage != 0)
+        {
+            float borderWidth = strokeWidth * HIGHLIGHT_GRADIENT_BORDER_WIDTH_SCALE;
+            float outerX = x - borderWidth;
+            float outerY = y - borderWidth;
+            float outerWidth = width + borderWidth * 2.0f;
+            float outerHeight = height + borderWidth * 2.0f;
+            float borderAlpha = std::min(alpha * this->getAlpha() * HIGHLIGHT_GRADIENT_BRIGHTNESS, 1.0f);
+            float animationOffset = fmodf((float)(getCPUTimeUsec() / 1000) / HIGHLIGHT_GRADIENT_FLOW_CYCLE_MS, 1.0f);
+
+            NVGpaint borderPaint = nvgBoxGradientLUT(vg,
+                x, y, width, height,
+                cornerRadius, borderWidth,
+                highlightGradientImage, borderAlpha, animationOffset);
+
+            nvgBeginPath(vg);
+            nvgRect(vg, outerX, outerY, outerWidth, outerHeight);
+            nvgRoundedRect(vg, x, y, width, height, cornerRadius);
+            nvgPathWinding(vg, NVG_HOLE);
+            nvgFillPaint(vg, borderPaint);
+            nvgFill(vg);
+            nvgRestore(vg);
+            return;
+        }
+#endif
 
         // Border
         float gradientX, gradientY, color;

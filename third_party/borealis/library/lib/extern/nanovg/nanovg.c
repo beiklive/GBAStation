@@ -966,6 +966,31 @@ NVGpaint nvgBoxGradient(NVGcontext* ctx,
 	return p;
 }
 
+NVGpaint nvgBoxGradientLUT(NVGcontext* ctx,
+							   float x, float y, float w, float h, float r, float f,
+							   int image, float alpha, float offset)
+{
+	NVGpaint p;
+	NVG_NOTUSED(ctx);
+	memset(&p, 0, sizeof(p));
+
+	nvgTransformIdentity(p.xform);
+	p.xform[4] = x+w*0.5f;
+	p.xform[5] = y+h*0.5f;
+
+	p.extent[0] = w*0.5f;
+	p.extent[1] = h*0.5f;
+
+	p.radius = r;
+	p.feather = nvg__maxf(1.0f, f);
+	p.image = image;
+	p.type = NVG_PAINT_BOX_GRADIENT_LUT;
+	p.innerColor = nvgRGBAf(1, 1, 1, alpha);
+	p.outerColor = nvgRGBAf(offset, 0, 0, 1);
+
+	return p;
+}
+
 
 NVGpaint nvgImagePattern(NVGcontext* ctx,
 								float cx, float cy, float w, float h, float angle,
