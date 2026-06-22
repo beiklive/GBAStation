@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <algorithm>
+#include <array>
 #include <vector>
 #include <mutex>
 #include <condition_variable>
@@ -103,6 +104,8 @@ public:
     size_t                   m_targetLatencySamples = RING_CAPACITY / 4;
     size_t                   m_fadeInSamplesRemaining = 0;
     size_t                   m_fadeInTotalSamples = 0;
+    std::array<int16_t, 2>   m_lastOutputSample{0, 0};
+    bool                     m_hasLastOutputSample = false;
     double                   m_resamplePhase = 0.0;
     std::vector<int16_t>     m_resampleCarry;
     std::vector<int16_t>     m_resampleScratch;
@@ -111,6 +114,9 @@ public:
     void   ringWrite(const int16_t* data, size_t count);
     size_t ringRead(int16_t* out, size_t maxCount);
     void   applyFadeIn(int16_t* out, size_t count);
+    void   fillUnderrunTailLocked(int16_t* out, size_t validSamples, size_t totalSamples);
+    void   rememberOutputTailLocked(const int16_t* data, size_t count);
+    void   resetOutputTailLocked();
     void   resetBufferLocked();
     void   configureLatencyMsLocked(int targetMs, int maxMs);
 

@@ -33,6 +33,12 @@
 
 namespace
 {
+    constexpr int kNdsTargetLatencyFloorMs = 120;
+    constexpr int kNdsMaxLatencyFloorMs = 240;
+    constexpr float kNdsMaxAudioSyncStrength = 0.008f;
+    constexpr double kNdsMinAudioCorrection = 0.99;
+    constexpr double kNdsMaxAudioCorrection = 1.01;
+
     std::string normalizeNdsScreenRotation(std::string value)
     {
         value.erase(std::remove_if(value.begin(), value.end(),
@@ -1557,6 +1563,11 @@ namespace beiklive
         int maxMs = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_AUDIO_MAX_LATENCY_MS, 180);
         targetMs = std::clamp(targetMs, 30, 300);
         maxMs = std::clamp(maxMs, targetMs + 20, 500);
+        if (isNdsPlatform(m_gameEntry.platform)) {
+            targetMs = std::max(targetMs, kNdsTargetLatencyFloorMs);
+            maxMs = std::max(maxMs, kNdsMaxLatencyFloorMs);
+            maxMs = std::clamp(maxMs, targetMs + 20, 500);
+        }
 
         brls::Logger::debug("[GameView] audio init: fps={:.2f} sampleRate={:.0f} target={}ms max={}ms",
                             fps, sampleRate, targetMs, maxMs);
@@ -1828,7 +1839,7 @@ namespace beiklive
 
         size_t frames = m_audioDrainBuf.size() / 2;
 
-        if (ff) {
+        if (ff || isNdsPlatform(m_gameEntry.platform)) {
             AudioManager::instance().pushSamplesNoBlocking(m_audioDrainBuf.data(), frames);
             return;
         }
@@ -2340,11 +2351,15 @@ namespace beiklive
                 const size_t ringFill = AudioManager::instance().available();
                 const double targetFill = static_cast<double>(AudioManager::instance().targetLatencySamples());
                 float gain = GET_SETTING_KEY_FLOAT(beiklive::SettingKey::KEY_AUDIO_SYNC_STRENGTH, 0.015f);
+                if (isNds)
+                    gain = std::min(gain, kNdsMaxAudioSyncStrength);
                 gain = std::clamp(gain, 0.0f, 0.05f);
                 if (targetFill > 0.0 && gain > 0.0f) {
                     double errorRatio = (static_cast<double>(ringFill) - targetFill) / targetFill;
                     double correction = 1.0 + errorRatio * static_cast<double>(gain);
-                    correction = std::clamp(correction, 0.98, 1.02);
+                    correction = isNds
+                        ? std::clamp(correction, kNdsMinAudioCorrection, kNdsMaxAudioCorrection)
+                        : std::clamp(correction, 0.98, 1.02);
                     frameDurNs = std::chrono::nanoseconds(
                         static_cast<long long>(baseFrameDurNs.count() * correction));
                 }

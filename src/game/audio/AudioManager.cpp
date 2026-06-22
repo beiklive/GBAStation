@@ -95,6 +95,59 @@ void AudioManager::applyFadeIn(int16_t* out, size_t count)
         m_fadeInTotalSamples = 0;
 }
 
+void AudioManager::resetOutputTailLocked()
+{
+    m_lastOutputSample = {0, 0};
+    m_hasLastOutputSample = false;
+}
+
+void AudioManager::rememberOutputTailLocked(const int16_t* data, size_t count)
+{
+    if (!data || count == 0)
+        return;
+
+    const size_t channels = static_cast<size_t>(std::max(1, m_channels));
+    const size_t frameStart = (count >= channels) ? (count - channels) : 0;
+    for (size_t ch = 0; ch < m_lastOutputSample.size(); ++ch) {
+        const size_t src = frameStart + std::min(ch, channels - 1);
+        m_lastOutputSample[ch] = data[std::min(src, count - 1)];
+    }
+    m_hasLastOutputSample = true;
+}
+
+void AudioManager::fillUnderrunTailLocked(int16_t* out, size_t validSamples, size_t totalSamples)
+{
+    if (!out || validSamples >= totalSamples)
+        return;
+
+    const size_t channels = static_cast<size_t>(std::max(1, m_channels));
+    std::array<int16_t, 2> tail = m_lastOutputSample;
+    if (validSamples >= channels) {
+        const size_t frameStart = validSamples - channels;
+        for (size_t ch = 0; ch < tail.size(); ++ch) {
+            const size_t src = frameStart + std::min(ch, channels - 1);
+            tail[ch] = out[std::min(src, validSamples - 1)];
+        }
+    } else if (!m_hasLastOutputSample) {
+        tail = {0, 0};
+    }
+
+    constexpr size_t kFadeFrames = 96; // 2ms at 48kHz, enough to hide hard cuts.
+    const size_t missingSamples = totalSamples - validSamples;
+    const size_t missingFrames = std::max<size_t>(1, (missingSamples + channels - 1) / channels);
+    const size_t fadeFrames = std::min(kFadeFrames, missingFrames);
+    for (size_t i = validSamples; i < totalSamples; ++i) {
+        const size_t rel = i - validSamples;
+        const size_t frame = rel / channels;
+        const size_t ch = std::min(rel % channels, tail.size() - 1);
+        float gain = 0.0f;
+        if (frame < fadeFrames) {
+            gain = 1.0f - (static_cast<float>(frame + 1) / static_cast<float>(fadeFrames + 1));
+        }
+        out[i] = static_cast<int16_t>(static_cast<float>(tail[ch]) * gain);
+    }
+}
+
 void AudioManager::resetBufferLocked()
 {
     m_writePos = 0;
@@ -103,6 +156,7 @@ void AudioManager::resetBufferLocked()
     m_ring.assign(RING_CAPACITY, 0);
     m_fadeInSamplesRemaining = 0;
     m_fadeInTotalSamples = 0;
+    resetOutputTailLocked();
     m_resamplePhase = 0.0;
     m_resampleCarry.clear();
     m_resampleScratch.clear();
@@ -205,6 +259,15 @@ void AudioManager::pushSamplesNoBlocking(const int16_t* data, size_t frames)
         src += count - keep;
         count = keep;
     }
+    if (m_available + count > m_maxLatencySamples) {
+        const size_t targetAvailable =
+            (m_maxLatencySamples > count) ? (m_maxLatencySamples - count) : 0;
+        if (m_available > targetAvailable) {
+            const size_t drop = m_available - targetAvailable;
+            m_readPos = (m_readPos + drop) % RING_CAPACITY;
+            m_available -= drop;
+        }
+    }
     ringWrite(src, count);
 }
 
@@ -221,6 +284,7 @@ void AudioManager::flushRingBuffer()
     m_resampleCarry.clear();
     m_fadeInSamplesRemaining = 0;
     m_fadeInTotalSamples = 0;
+    resetOutputTailLocked();
     m_spaceCV.notify_all();  // 唤醒阻塞的 pushSamples() 调用方
     m_dataCV.notify_all();   // 唤醒阻塞的音频线程
 }
@@ -232,6 +296,7 @@ void AudioManager::flushRingBufferWithFade(int fadeMs)
     m_writePos  = m_readPos;
     m_resamplePhase = 0.0;
     m_resampleCarry.clear();
+    resetOutputTailLocked();
     if (fadeMs > 0) {
         if (fadeMs > 20) fadeMs = 20;
         const size_t channels = static_cast<size_t>(std::max(1, m_channels));
@@ -258,6 +323,7 @@ void AudioManager::pauseOutput()
         m_resampleCarry.clear();
         m_fadeInSamplesRemaining = 0;
         m_fadeInTotalSamples = 0;
+        resetOutputTailLocked();
     }
     m_spaceCV.notify_all();
     m_dataCV.notify_all();
@@ -271,6 +337,7 @@ void AudioManager::resumeOutputWithFade(int fadeMs)
         m_writePos  = m_readPos;
         m_resamplePhase = 0.0;
         m_resampleCarry.clear();
+        resetOutputTailLocked();
         if (fadeMs > 0) {
             if (fadeMs > 20) fadeMs = 20;
             const size_t channels = static_cast<size_t>(std::max(1, m_channels));
@@ -477,9 +544,11 @@ void AudioManager::audioThreadFunc()
                        !m_running.load(std::memory_order_relaxed);
             });
             size_t got = ringRead(m_resampleScratch.data() + carryFrames * kOutChannels, needed);
-            if (got < needed)
-                memset(m_resampleScratch.data() + carryFrames * kOutChannels + got, 0,
-                       (needed - got) * sizeof(int16_t));
+            if (got < needed) {
+                const size_t validSamples = carryFrames * kOutChannels + got;
+                fillUnderrunTailLocked(m_resampleScratch.data(), validSamples,
+                                       inputFrames * kOutChannels);
+            }
 
             for (size_t i = 0; i < SWITCH_FRAMES; ++i) {
                 const double pos = m_resamplePhase + static_cast<double>(i) * step;
@@ -508,6 +577,7 @@ void AudioManager::audioThreadFunc()
                 m_resampleScratch.begin() + static_cast<std::ptrdiff_t>(consumedFrames * kOutChannels),
                 m_resampleScratch.end());
             applyFadeIn(dst, SWITCH_FRAMES * kOutChannels);
+            rememberOutputTailLocked(dst, SWITCH_FRAMES * kOutChannels);
         }
 
         armDCacheFlush(dst, SWITCH_BYTES);
@@ -652,8 +722,9 @@ void AudioManager::audioThreadFunc()
             std::lock_guard<std::mutex> lk(m_mutex);
             got = ringRead(buf, ALSA_PERIOD_FRAMES * 2);
             if (got < ALSA_PERIOD_FRAMES * 2)
-                memset(buf + got, 0, (ALSA_PERIOD_FRAMES * 2 - got) * sizeof(int16_t));
+                fillUnderrunTailLocked(buf, got, ALSA_PERIOD_FRAMES * 2);
             applyFadeIn(buf, ALSA_PERIOD_FRAMES * 2);
+            rememberOutputTailLocked(buf, ALSA_PERIOD_FRAMES * 2);
         }
 
         snd_pcm_sframes_t rc = snd_pcm_writei(st->handle, buf, ALSA_PERIOD_FRAMES);
@@ -790,8 +861,9 @@ void AudioManager::audioThreadFunc()
             std::lock_guard<std::mutex> lk(m_mutex);
             got = ringRead(dst, WINMM_BUF_FRAMES * 2);
             if (got < WINMM_BUF_FRAMES * 2)
-                memset(dst + got, 0, (WINMM_BUF_FRAMES * 2 - got) * sizeof(int16_t));
+                fillUnderrunTailLocked(dst, got, WINMM_BUF_FRAMES * 2);
             applyFadeIn(dst, WINMM_BUF_FRAMES * 2);
+            rememberOutputTailLocked(dst, WINMM_BUF_FRAMES * 2);
         }
 
         hdr.dwFlags &= ~WHDR_DONE;
@@ -856,8 +928,9 @@ static OSStatus s_coreAudioCallback(void*                       inRefCon,
     std::lock_guard<std::mutex> lk(mgr->m_mutex);
     size_t got = mgr->ringRead(dst, samples);
     if (got < samples)
-        memset(dst + got, 0, (samples - got) * sizeof(int16_t));
+        mgr->fillUnderrunTailLocked(dst, got, samples);
     mgr->applyFadeIn(dst, samples);
+    mgr->rememberOutputTailLocked(dst, samples);
 
     return noErr;
 }
