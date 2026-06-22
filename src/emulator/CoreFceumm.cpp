@@ -91,14 +91,14 @@ void CoreFceumm::_initConfig()
 
 bool CoreFceumm::_loadCore()
 {
-    if (!m_core.load(beiklive::CoreType::Fceumm))
+    if (!m_core.load(m_coreType))
     {
-        brls::Logger::error("Failed to static-load FCEUmm core");
+        brls::Logger::error("Failed to static-load {} core", m_coreName);
         return false;
     }
     if (!m_core.initCore())
     {
-        brls::Logger::error("retro_init() failed for FCEUmm");
+        brls::Logger::error("retro_init() failed for {}", m_coreName);
         m_core.unload();
         return false;
     }

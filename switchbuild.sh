@@ -1,4 +1,13 @@
 #!/bin/bash
+# Windows 下双击/从 PowerShell 运行时，自动切到指定 MSYS2 Bash 执行本脚本。
+if [ -z "$BASH_VERSION" ] && [ -z "$MSYSTEM" ] && command -v cmd.exe >/dev/null 2>&1; then
+    MSYS2_EXE='E:\bin\msys64\msys2.exe'
+    if [ -f "$MSYS2_EXE" ]; then
+        "$MSYS2_EXE" -defterm -no-start -here -ucrt64 -shell bash -lc "cd \"$(pwd)\" && ./switchbuild.sh"
+        exit $?
+    fi
+fi
+
 # ============================================================
 # Nintendo Switch 编译脚本（DevkitPro / libnx）
 # 使用 CMAKE_DEPENDS_USE_COMPILER=FALSE 避免编译器输出的

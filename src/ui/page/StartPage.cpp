@@ -3,6 +3,7 @@
 #include "core/Tools.hpp"
 #include "core/ThreadPool.hpp"
 #include "ui/utils/CheatMatcher.hpp"
+#include <borealis/views/dropdown.hpp>
 
 namespace beiklive
 {
@@ -324,6 +325,37 @@ namespace beiklive
                     },
                     beiklive::path::GetRootPath());
             });
+
+        // ── 核心选择 ──
+        if (beiklive::GetCoreOptions(entry.platform).size() > 1)
+        {
+            m_gameOptionsSidebar->addButton("核心选择", BK_RES("img/ui/setting/emu.png"),
+                [this, path, platform = entry.platform, core = entry.core](const beiklive::GameEntry&) {
+                    _hideGameOptionsPanel();
+
+                    const auto options = beiklive::GetCoreOptions(platform);
+                    std::vector<std::string> names;
+                    names.reserve(options.size());
+                    for (const auto& option : options)
+                        names.push_back(option.name);
+
+                    auto* dropdown = new brls::Dropdown(
+                        "核心选择",
+                        names,
+                        [this, path, options](int selected) {
+                            if (selected < 0 || selected >= static_cast<int>(options.size()))
+                                return;
+                            if (beiklive::GameDB) {
+                                beiklive::GameDB->set(path, "core", nlohmann::json(options[selected].id));
+                                beiklive::GameDB->flush();
+                                brls::Application::notify("已切换核心：" + options[selected].name);
+                                onResume();
+                            }
+                        },
+                        beiklive::GetCoreSelectionIndex(platform, core));
+                    brls::Application::pushActivity(new brls::Activity(dropdown));
+                });
+        }
 
         // ── 删除游戏 ──
         m_gameOptionsSidebar->addButton("删除游戏", BK_RES("img/ui/menu/exit.png"),

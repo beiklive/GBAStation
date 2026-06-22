@@ -6,8 +6,10 @@
 
 namespace beiklive {
 
-IEmulatorCore* CreateEmulatorCore(int platform)
+IEmulatorCore* CreateEmulatorCore(const beiklive::GameEntry& entry)
 {
+    const int platform = entry.platform;
+    const std::string coreId = beiklive::NormalizeCoreId(platform, entry.core);
     switch (static_cast<beiklive::enums::EmuPlatform>(platform))
     {
     case beiklive::enums::EmuPlatform::EmuGBA:
@@ -15,9 +17,15 @@ IEmulatorCore* CreateEmulatorCore(int platform)
     case beiklive::enums::EmuPlatform::EmuGB:
         return new beiklive::gba::CoreMgba();
     case beiklive::enums::EmuPlatform::EmuNES:
-        return new beiklive::fceumm::CoreFceumm();
+        if (coreId == "nestopia")
+            return new beiklive::fceumm::CoreFceumm(beiklive::CoreType::Nestopia, "Nestopia");
+        return new beiklive::fceumm::CoreFceumm(beiklive::CoreType::Fceumm, "FCEUmm");
     case beiklive::enums::EmuPlatform::EmuSNES:
-        return new beiklive::snes9x::CoreSnes9x();
+        if (coreId == "snes9x2005")
+            return new beiklive::snes9x::CoreSnes9x(beiklive::CoreType::Snes9x2005, "Snes9x 2005");
+        if (coreId == "snes9x")
+            return new beiklive::snes9x::CoreSnes9x(beiklive::CoreType::Snes9x, "Snes9x");
+        return new beiklive::snes9x::CoreSnes9x(beiklive::CoreType::Snes9x2010, "Snes9x 2010");
     case beiklive::enums::EmuPlatform::EmuNDS:
         return new beiklive::melonds::MelonDSCore();
     default:

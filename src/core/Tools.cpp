@@ -168,11 +168,11 @@ std::string getDefaultLogoPath(beiklive::enums::EmuPlatform platform)
         case beiklive::enums::EmuPlatform::EmuGB:
             return BK_RES(path_prefix + "gb.png");
         case beiklive::enums::EmuPlatform::EmuNES:
-            return BK_RES(path_prefix + "gba.png");
+            return BK_RES(path_prefix + "nes.png");
         case beiklive::enums::EmuPlatform::EmuSNES:
-            return BK_RES(path_prefix + "gba.png");
+            return BK_RES(path_prefix + "sfc.png");
         case beiklive::enums::EmuPlatform::EmuNDS:
-            return BK_RES(path_prefix + "gba.png");
+            return BK_RES(path_prefix + "nds.png");
         default:
             return BK_RES(path_prefix + "gba.png");
     }

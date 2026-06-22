@@ -6,7 +6,10 @@ namespace beiklive
     enum class CoreType {
         Mgba,
         Fceumm,
-        Snes9x
+        Snes9x,
+        Nestopia,
+        Snes9x2005,
+        Snes9x2010
     };
 
     /// 游戏画面缩放模式
@@ -98,6 +101,7 @@ namespace beiklive // 结构体
         int playCount = 0;                                      // 玩过的次数
         int playTime = 0;                                       // 玩过的总时间（单位：秒）
         int platform = (int)beiklive::enums::EmuPlatform::NONE; // 游戏平台（如 GBA、GBC、GB）
+        std::string core = "";                                  // 使用的模拟核心（空=按平台默认）
         std::string lastPlayed = "";                            // 上次玩的时间(时间戳字符串)
         int crc32 = 0;                                          // 游戏文件的 CRC32 校验值（用于唯一标识游戏）
         bool favourite = false;                                 // 是否收藏

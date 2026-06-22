@@ -3,6 +3,7 @@
 #include "ui/utils/FilePickerHelper.hpp"
 #include "core/ThreadPool.hpp"
 #include "ui/utils/CheatMatcher.hpp"
+#include <borealis/views/dropdown.hpp>
 #include <algorithm>
 #include <cctype>
 
@@ -439,6 +440,42 @@ namespace beiklive
                         m_grid->setInteractionDisabled(false);
                     }, beiklive::path::GetRootPath());
             });
+
+        if (beiklive::GetCoreOptions(entry.platform).size() > 1)
+        {
+            m_gameOptionsSidebar->addButton("核心选择", BK_RES("img/ui/setting/emu.png"),
+                [this, path, platform = entry.platform, core = entry.core,
+                 idx = m_grid->getSelectedIndex()](const beiklive::GameEntry&) {
+                    _hideGameOptionsPanel();
+
+                    const auto options = beiklive::GetCoreOptions(platform);
+                    std::vector<std::string> names;
+                    names.reserve(options.size());
+                    for (const auto& option : options)
+                        names.push_back(option.name);
+
+                    auto* dropdown = new brls::Dropdown(
+                        "核心选择",
+                        names,
+                        [this, path, idx, options](int selected) {
+                            if (selected < 0 || selected >= static_cast<int>(options.size()))
+                                return;
+                            if (beiklive::GameDB) {
+                                beiklive::GameDB->set(path, "core", nlohmann::json(options[selected].id));
+                                beiklive::GameDB->flush();
+                                if (idx >= 0 && static_cast<size_t>(idx) < m_entries.size())
+                                    m_entries[idx].core = options[selected].id;
+                                brls::Application::notify("已切换核心：" + options[selected].name);
+                            }
+                            m_grid->setInteractionDisabled(false);
+                        },
+                        beiklive::GetCoreSelectionIndex(platform, core),
+                        [this](int) {
+                            m_grid->setInteractionDisabled(false);
+                        });
+                    brls::Application::pushActivity(new brls::Activity(dropdown));
+                });
+        }
 
         m_gameOptionsSidebar->addButton("删除游戏", BK_RES("img/ui/menu/exit.png"),
             [this, path](const beiklive::GameEntry&) {

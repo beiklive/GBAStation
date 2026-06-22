@@ -124,6 +124,107 @@ namespace beiklive // 全局功能函数
     }
 
 
+    struct CoreOption
+    {
+        std::string id;
+        std::string name;
+        CoreType type;
+    };
+
+    inline const std::vector<CoreOption>& GetCoreOptions(int platform)
+    {
+        static const std::vector<CoreOption> gbaCores = {
+            {"mgba", "mGBA", CoreType::Mgba},
+        };
+        static const std::vector<CoreOption> nesCores = {
+            {"nestopia", "Nestopia", CoreType::Nestopia},
+            {"fceumm", "FCEUmm", CoreType::Fceumm},
+        };
+        static const std::vector<CoreOption> snesCores = {
+            {"snes9x2010", "Snes9x 2010", CoreType::Snes9x2010},
+            {"snes9x2005", "Snes9x 2005", CoreType::Snes9x2005},
+            {"snes9x", "Snes9x", CoreType::Snes9x},
+        };
+        static const std::vector<CoreOption> ndsCores = {
+            {"melonds", "melonDS", CoreType::Mgba},
+        };
+        static const std::vector<CoreOption> emptyCores;
+
+        switch (platform)
+        {
+        case (int)beiklive::enums::EmuPlatform::EmuGBA:
+        case (int)beiklive::enums::EmuPlatform::EmuGBC:
+        case (int)beiklive::enums::EmuPlatform::EmuGB:
+            return gbaCores;
+        case (int)beiklive::enums::EmuPlatform::EmuNES:
+            return nesCores;
+        case (int)beiklive::enums::EmuPlatform::EmuSNES:
+            return snesCores;
+        case (int)beiklive::enums::EmuPlatform::EmuNDS:
+            return ndsCores;
+        default:
+            return emptyCores;
+        }
+    }
+
+    inline std::string GetDefaultCoreId(int platform)
+    {
+        switch (platform)
+        {
+        case (int)beiklive::enums::EmuPlatform::EmuGBA:
+        case (int)beiklive::enums::EmuPlatform::EmuGBC:
+        case (int)beiklive::enums::EmuPlatform::EmuGB:
+            return "mgba";
+        case (int)beiklive::enums::EmuPlatform::EmuNES:
+            return "nestopia";
+        case (int)beiklive::enums::EmuPlatform::EmuSNES:
+            return "snes9x2010";
+        case (int)beiklive::enums::EmuPlatform::EmuNDS:
+            return "melonds";
+        default:
+            return "";
+        }
+    }
+
+    inline std::string NormalizeCoreId(int platform, const std::string& coreId)
+    {
+        const auto& options = GetCoreOptions(platform);
+        for (const auto& option : options)
+            if (option.id == coreId)
+                return option.id;
+        return GetDefaultCoreId(platform);
+    }
+
+    inline std::string GetCoreDisplayName(int platform, const std::string& coreId)
+    {
+        const auto normalized = NormalizeCoreId(platform, coreId);
+        const auto& options = GetCoreOptions(platform);
+        for (const auto& option : options)
+            if (option.id == normalized)
+                return option.name;
+        return "";
+    }
+
+    inline int GetCoreSelectionIndex(int platform, const std::string& coreId)
+    {
+        const auto normalized = NormalizeCoreId(platform, coreId);
+        const auto& options = GetCoreOptions(platform);
+        for (size_t i = 0; i < options.size(); ++i)
+            if (options[i].id == normalized)
+                return static_cast<int>(i);
+        return 0;
+    }
+
+    inline beiklive::CoreType GetCoreTypeFromId(int platform, const std::string& coreId)
+    {
+        const auto normalized = NormalizeCoreId(platform, coreId);
+        const auto& options = GetCoreOptions(platform);
+        for (const auto& option : options)
+            if (option.id == normalized)
+                return option.type;
+        return beiklive::CoreType::Mgba;
+    }
+
      inline std::string GetCorePath(int platform){
         switch (platform)
         {
@@ -148,19 +249,7 @@ namespace beiklive // 全局功能函数
 
     /// 根据平台枚举返回对应的 CoreType
     inline beiklive::CoreType GetCoreType(int platform){
-        switch (platform)
-        {
-        case (int)beiklive::enums::EmuPlatform::EmuGBA:
-        case (int)beiklive::enums::EmuPlatform::EmuGBC:
-        case (int)beiklive::enums::EmuPlatform::EmuGB:
-            return beiklive::CoreType::Mgba;
-        case (int)beiklive::enums::EmuPlatform::EmuNES:
-            return beiklive::CoreType::Fceumm;
-        case (int)beiklive::enums::EmuPlatform::EmuSNES:
-            return beiklive::CoreType::Snes9x;
-        default:
-            return beiklive::CoreType::Mgba;
-        }
+        return GetCoreTypeFromId(platform, GetDefaultCoreId(platform));
     }
 
 

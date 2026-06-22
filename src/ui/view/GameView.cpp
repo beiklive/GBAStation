@@ -56,6 +56,7 @@ namespace beiklive
 
     GameView::GameView(beiklive::GameEntry gameData) : m_gameEntry(std::move(gameData))
     {
+        m_gameEntry.core = beiklive::NormalizeCoreId(m_gameEntry.platform, m_gameEntry.core);
         brls::Logger::debug("[GameView] constructor: platform={}, path={}",
             m_gameEntry.platform, m_gameEntry.path);
         const bool isNds = m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS);
@@ -1342,7 +1343,7 @@ namespace beiklive
     void GameView::_registerGameRuntime()
     {
         brls::Logger::debug("[GameView] _registerGameRuntime: platform={}", m_gameEntry.platform);
-        m_core = CreateEmulatorCore(m_gameEntry.platform);
+        m_core = CreateEmulatorCore(m_gameEntry);
         if (!m_core) {
             brls::Logger::warning("[GameView] _registerGameRuntime: unsupported platform={}", m_gameEntry.platform);
             return;

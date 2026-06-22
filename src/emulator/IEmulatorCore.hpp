@@ -44,6 +44,6 @@ struct IEmulatorCore {
     virtual bool saveSram() = 0;
 };
 
-IEmulatorCore* CreateEmulatorCore(int platform);
+IEmulatorCore* CreateEmulatorCore(const beiklive::GameEntry& entry);
 
 } // namespace beiklive

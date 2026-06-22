@@ -79,6 +79,7 @@ namespace beiklive
             GameEntry minimal;
             minimal.path     = m_gameData.fullPath;
             minimal.platform = (int)m_gameData.itemType;
+            minimal.core     = beiklive::GetDefaultCoreId(minimal.platform);
             minimal.title    = GET_MAPPING_KEY_STR(
                 beiklive::tools::getFileNameWithoutExtension(m_gameData.fileName),
                 beiklive::tools::getFileNameWithoutExtension(m_gameData.fileName));
@@ -100,6 +101,7 @@ namespace beiklive
             static_cast<beiklive::enums::EmuPlatform>((int)m_gameData.itemType));
 
         auto& path = m_gameData.fullPath;
+        db->setDefault(path, "core", beiklive::GetDefaultCoreId((int)m_gameData.itemType));
         db->setDefault(path, "logoPath", defaultLogo);
 
         namespace sk = beiklive::SettingKey;
@@ -148,6 +150,7 @@ namespace beiklive
             std::filesystem::create_directories(sramDir);
             m_gameEntry.savePath = sramDir;
         }
+        m_gameEntry.core = beiklive::NormalizeCoreId(m_gameEntry.platform, m_gameEntry.core);
 
         // cheatPath：优先使用已有值；NDS 默认使用 usrcheat.dat，其他平台使用 <cheat目录>/<游戏名>.cht
         if (m_gameEntry.cheatPath.empty())

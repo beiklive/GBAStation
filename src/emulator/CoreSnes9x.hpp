@@ -11,6 +11,8 @@ namespace beiklive::snes9x {
 class CoreSnes9x : public IEmulatorCore {
 public:
     CoreSnes9x() = default;
+    CoreSnes9x(beiklive::CoreType coreType, std::string coreName)
+        : m_coreType(coreType), m_coreName(std::move(coreName)) {}
     ~CoreSnes9x();
 
     bool SetupGame(beiklive::GameEntry GameEntry);
@@ -64,6 +66,8 @@ private:
     beiklive::GameEntry m_gameEntry;
     beiklive::LibretroLoader m_core;
     std::vector<beiklive::CheatEntry> m_cheats;
+    beiklive::CoreType m_coreType = beiklive::CoreType::Snes9x;
+    std::string m_coreName = "Snes9x";
     bool m_ready = false;
 
     bool _loadCore();

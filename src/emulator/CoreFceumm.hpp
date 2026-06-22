@@ -11,6 +11,8 @@ namespace beiklive::fceumm {
 class CoreFceumm : public IEmulatorCore {
 public:
     CoreFceumm() = default;
+    CoreFceumm(beiklive::CoreType coreType, std::string coreName)
+        : m_coreType(coreType), m_coreName(std::move(coreName)) {}
     ~CoreFceumm();
 
     bool SetupGame(beiklive::GameEntry GameEntry);
@@ -64,6 +66,8 @@ private:
     beiklive::GameEntry m_gameEntry;
     beiklive::LibretroLoader m_core;
     std::vector<beiklive::CheatEntry> m_cheats;
+    beiklive::CoreType m_coreType = beiklive::CoreType::Fceumm;
+    std::string m_coreName = "FCEUmm";
     bool m_ready = false;
 
     bool _loadCore();

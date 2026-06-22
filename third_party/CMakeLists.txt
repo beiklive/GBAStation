@@ -7,6 +7,9 @@ set(BOREALIS_LIBRARY   ${CMAKE_CURRENT_SOURCE_DIR}/borealis/library)
 set(MGBA_PATH          ${CMAKE_CURRENT_SOURCE_DIR}/mgba)
 set(FCEUMM_PATH        ${CMAKE_CURRENT_SOURCE_DIR}/libretro-fceumm)
 set(SNES9X_PATH        ${CMAKE_CURRENT_SOURCE_DIR}/snes9x)
+set(NESTOPIA_PATH      ${CMAKE_CURRENT_SOURCE_DIR}/nestopia)
+set(SNES9X2005_PATH    ${CMAKE_CURRENT_SOURCE_DIR}/snes9x2005)
+set(SNES9X2010_PATH    ${CMAKE_CURRENT_SOURCE_DIR}/snes9x2010)
 set(MELONDS_PATH       ${CMAKE_CURRENT_SOURCE_DIR}/melonDS)
 
 # =========================================================
@@ -305,6 +308,141 @@ set_target_properties(snes9x_core PROPERTIES
     CXX_STANDARD 14
     C_STANDARD 11
 )
+
+# =========================================================
+# Nestopia (NES) 核心
+# =========================================================
+file(GLOB NESTOPIA_CORE_SRC
+    ${NESTOPIA_PATH}/source/core/*.cpp
+    ${NESTOPIA_PATH}/source/core/api/*.cpp
+    ${NESTOPIA_PATH}/source/core/board/*.cpp
+    ${NESTOPIA_PATH}/source/core/input/*.cpp
+    ${NESTOPIA_PATH}/source/core/vssystem/*.cpp
+)
+list(REMOVE_ITEM NESTOPIA_CORE_SRC
+    ${NESTOPIA_PATH}/source/core/NstVideoFilter2xSaI.cpp
+    ${NESTOPIA_PATH}/source/core/NstVideoFilterHqX.cpp
+    ${NESTOPIA_PATH}/source/core/NstVideoFilterScaleX.cpp
+    ${NESTOPIA_PATH}/source/core/NstVideoFilterxBR.cpp
+)
+list(APPEND NESTOPIA_CORE_SRC
+    ${NESTOPIA_PATH}/libretro/libretro.cpp
+)
+
+add_library(nestopia_core STATIC ${NESTOPIA_CORE_SRC})
+target_include_directories(nestopia_core PRIVATE
+    ${NESTOPIA_PATH}/libretro
+    ${NESTOPIA_PATH}
+    ${NESTOPIA_PATH}/libretro/libretro-common/include
+)
+target_compile_definitions(nestopia_core PRIVATE __LIBRETRO__)
+apply_retro_symbol_rename(nestopia_core nestopia)
+apply_data_symbol_rename(nestopia_core nestopia)
+set_target_properties(nestopia_core PROPERTIES CXX_STANDARD 11)
+
+# =========================================================
+# Snes9x 2005 (SNES) 核心
+# =========================================================
+set(SNES9X2005_SRC_DIR ${SNES9X2005_PATH}/source)
+set(SNES9X2005_LRC_DIR ${SNES9X2005_PATH}/libretro-common)
+set(SNES9X2005_SRC
+    ${SNES9X2005_SRC_DIR}/c4.c
+    ${SNES9X2005_SRC_DIR}/c4emu.c
+    ${SNES9X2005_SRC_DIR}/cheats2.c
+    ${SNES9X2005_SRC_DIR}/cheats.c
+    ${SNES9X2005_SRC_DIR}/clip.c
+    ${SNES9X2005_SRC_DIR}/cpu.c
+    ${SNES9X2005_SRC_DIR}/cpuexec.c
+    ${SNES9X2005_SRC_DIR}/cpuops.c
+    ${SNES9X2005_SRC_DIR}/data.c
+    ${SNES9X2005_SRC_DIR}/dma.c
+    ${SNES9X2005_SRC_DIR}/dsp1.c
+    ${SNES9X2005_SRC_DIR}/fxemu.c
+    ${SNES9X2005_SRC_DIR}/fxinst.c
+    ${SNES9X2005_SRC_DIR}/gfx.c
+    ${SNES9X2005_SRC_DIR}/getset.c
+    ${SNES9X2005_SRC_DIR}/globals.c
+    ${SNES9X2005_SRC_DIR}/memmap.c
+    ${SNES9X2005_SRC_DIR}/obc1.c
+    ${SNES9X2005_SRC_DIR}/ppu.c
+    ${SNES9X2005_SRC_DIR}/sa1.c
+    ${SNES9X2005_SRC_DIR}/sa1cpu.c
+    ${SNES9X2005_SRC_DIR}/sdd1.c
+    ${SNES9X2005_SRC_DIR}/sdd1emu.c
+    ${SNES9X2005_SRC_DIR}/seta010.c
+    ${SNES9X2005_SRC_DIR}/seta011.c
+    ${SNES9X2005_SRC_DIR}/seta018.c
+    ${SNES9X2005_SRC_DIR}/seta.c
+    ${SNES9X2005_SRC_DIR}/spc7110.c
+    ${SNES9X2005_SRC_DIR}/spc7110dec.c
+    ${SNES9X2005_SRC_DIR}/srtc.c
+    ${SNES9X2005_SRC_DIR}/tile.c
+    ${SNES9X2005_PATH}/libretro.c
+    ${SNES9X2005_SRC_DIR}/apu.c
+    ${SNES9X2005_SRC_DIR}/soundux.c
+    ${SNES9X2005_SRC_DIR}/spc700.c
+)
+
+add_library(snes9x2005_core STATIC ${SNES9X2005_SRC})
+target_include_directories(snes9x2005_core PRIVATE
+    ${SNES9X2005_PATH}
+    ${SNES9X2005_SRC_DIR}
+    ${SNES9X2005_LRC_DIR}/include
+)
+target_compile_definitions(snes9x2005_core PRIVATE __LIBRETRO__ LOAD_FROM_MEMORY LAGFIX)
+if (PLATFORM_SWITCH)
+    target_compile_definitions(snes9x2005_core PRIVATE __SWITCH__ SWITCH HAVE_LIBNX)
+endif()
+apply_retro_symbol_rename(snes9x2005_core snes9x2005)
+apply_data_symbol_rename(snes9x2005_core snes9x2005)
+target_compile_definitions(snes9x2005_core PRIVATE "PPU=snes9x2005_PPU")
+set_target_properties(snes9x2005_core PROPERTIES C_STANDARD 11)
+
+# =========================================================
+# Snes9x 2010 (SNES) 核心
+# =========================================================
+set(SNES9X2010_SRC_DIR ${SNES9X2010_PATH}/src)
+set(SNES9X2010_LRC_DIR ${SNES9X2010_PATH}/libretro/libretro-common)
+set(SNES9X2010_SRC
+    ${SNES9X2010_SRC_DIR}/apu.c
+    ${SNES9X2010_SRC_DIR}/bsx.c
+    ${SNES9X2010_SRC_DIR}/c4emu.c
+    ${SNES9X2010_SRC_DIR}/cheats.c
+    ${SNES9X2010_SRC_DIR}/controls.c
+    ${SNES9X2010_SRC_DIR}/cpu.c
+    ${SNES9X2010_SRC_DIR}/cpuexec.c
+    ${SNES9X2010_SRC_DIR}/dsp.c
+    ${SNES9X2010_SRC_DIR}/fxemu.c
+    ${SNES9X2010_SRC_DIR}/globals.c
+    ${SNES9X2010_SRC_DIR}/memmap.c
+    ${SNES9X2010_SRC_DIR}/obc1.c
+    ${SNES9X2010_SRC_DIR}/ppu.c
+    ${SNES9X2010_SRC_DIR}/sa1.c
+    ${SNES9X2010_SRC_DIR}/sdd1.c
+    ${SNES9X2010_SRC_DIR}/seta.c
+    ${SNES9X2010_SRC_DIR}/snapshot.c
+    ${SNES9X2010_SRC_DIR}/spc7110.c
+    ${SNES9X2010_SRC_DIR}/srtc.c
+    ${SNES9X2010_SRC_DIR}/tile.c
+    ${SNES9X2010_SRC_DIR}/hwregisters.c
+    ${SNES9X2010_PATH}/filter/snes_ntsc.c
+    ${SNES9X2010_PATH}/libretro/libretro.c
+)
+
+add_library(snes9x2010_core STATIC ${SNES9X2010_SRC})
+target_include_directories(snes9x2010_core PRIVATE
+    ${SNES9X2010_PATH}/libretro
+    ${SNES9X2010_SRC_DIR}
+    ${SNES9X2010_LRC_DIR}/include
+)
+target_compile_definitions(snes9x2010_core PRIVATE __LIBRETRO__ INLINE=inline)
+if (PLATFORM_SWITCH)
+    target_compile_definitions(snes9x2010_core PRIVATE __SWITCH__ SWITCH HAVE_LIBNX)
+endif()
+apply_retro_symbol_rename(snes9x2010_core snes9x2010)
+apply_data_symbol_rename(snes9x2010_core snes9x2010)
+target_compile_definitions(snes9x2010_core PRIVATE "PPU=snes9x2010_PPU")
+set_target_properties(snes9x2010_core PROPERTIES C_STANDARD 11)
 
 # =========================================================
 # melonDS (NDS) 原生核心

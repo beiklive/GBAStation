@@ -1,4 +1,5 @@
 #include "game_database.hpp"
+#include "common.h"
 #include <algorithm>
 #include <fstream>
 #include <stdexcept>
@@ -47,6 +48,7 @@ namespace beiklive
             {"playCount", entry.playCount},
             {"playTime", entry.playTime},
             {"platform", entry.platform},
+            {"core", sanitizeUtf8(entry.core)},
             {"lastPlayed", sanitizeUtf8(entry.lastPlayed)},
             {"crc32", entry.crc32},
             {"favourite", entry.favourite},
@@ -84,6 +86,7 @@ namespace beiklive
         entry.playCount = j.value("playCount", 0);
         entry.playTime = j.value("playTime", 0);
         entry.platform = j.value("platform", (int)beiklive::enums::EmuPlatform::NONE);
+        entry.core = beiklive::NormalizeCoreId(entry.platform, j.value("core", ""));
         entry.lastPlayed = j.value("lastPlayed", "");
         entry.crc32 = j.value("crc32", 0);
         entry.favourite = j.value("favourite", false);
