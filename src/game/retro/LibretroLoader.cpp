@@ -587,6 +587,10 @@ void LibretroLoader::unload()
     if (s_current == this) {
         s_current = nullptr;
     }
+    {
+        std::lock_guard<std::mutex> lk(m_audioMutex);
+        clearAudioBufferLocked();
+    }
     // 清空函数指针
     fn_set_environment         = nullptr;
     fn_set_video_refresh       = nullptr;
@@ -761,10 +765,61 @@ LibretroLoader::VideoFrame LibretroLoader::getVideoFrame() const
 bool LibretroLoader::drainAudio(std::vector<int16_t>& out)
 {
     std::lock_guard<std::mutex> lk(m_audioMutex);
-    if (m_audioBuffer.empty()) return false;
-    out.swap(m_audioBuffer);
-    m_audioBuffer.clear();
+    if (m_audioAvailable == 0) return false;
+
+    out.resize(m_audioAvailable);
+    const size_t cap = m_audioBuffer.size();
+    const size_t first = std::min(m_audioAvailable, cap - m_audioReadPos);
+    std::memcpy(out.data(), m_audioBuffer.data() + m_audioReadPos, first * sizeof(int16_t));
+    if (first < m_audioAvailable) {
+        std::memcpy(out.data() + first, m_audioBuffer.data(),
+                    (m_audioAvailable - first) * sizeof(int16_t));
+    }
+    m_audioReadPos = m_audioWritePos;
+    m_audioAvailable = 0;
     return true;
+}
+
+void LibretroLoader::clearAudioBufferLocked()
+{
+    m_audioReadPos = 0;
+    m_audioWritePos = 0;
+    m_audioAvailable = 0;
+    if (!m_audioBuffer.empty())
+        std::fill(m_audioBuffer.begin(), m_audioBuffer.end(), 0);
+}
+
+void LibretroLoader::pushAudioSamplesLocked(const int16_t* data, size_t samples)
+{
+    if (!data || samples == 0)
+        return;
+
+    if (m_audioBuffer.empty())
+        m_audioBuffer.assign(AUDIO_BUFFER_CAPACITY, 0);
+
+    const size_t cap = m_audioBuffer.size();
+    if (samples >= cap) {
+        data += samples - cap;
+        samples = cap;
+        m_audioReadPos = 0;
+        m_audioWritePos = 0;
+        m_audioAvailable = 0;
+    }
+
+    if (m_audioAvailable + samples > cap) {
+        const size_t drop = (m_audioAvailable + samples) - cap;
+        m_audioReadPos = (m_audioReadPos + drop) % cap;
+        m_audioAvailable -= drop;
+    }
+
+    const size_t first = std::min(samples, cap - m_audioWritePos);
+    std::memcpy(m_audioBuffer.data() + m_audioWritePos, data, first * sizeof(int16_t));
+    if (first < samples) {
+        std::memcpy(m_audioBuffer.data(), data + first, (samples - first) * sizeof(int16_t));
+    }
+
+    m_audioWritePos = (m_audioWritePos + samples) % cap;
+    m_audioAvailable += samples;
 }
 
 // ============================================================
@@ -1098,25 +1153,16 @@ void LibretroLoader::s_audioSampleCallback(int16_t left, int16_t right)
 {
     if (!s_current) return;
     std::lock_guard<std::mutex> lk(s_current->m_audioMutex);
-    s_current->m_audioBuffer.push_back(left);
-    s_current->m_audioBuffer.push_back(right);
+    const int16_t samples[2] = {left, right};
+    s_current->pushAudioSamplesLocked(samples, 2);
 }
 
 size_t LibretroLoader::s_audioSampleBatchCallback(const int16_t* data, size_t frames)
 {
     if (!s_current || !data) return frames;
     std::lock_guard<std::mutex> lk(s_current->m_audioMutex);
-    auto& buf = s_current->m_audioBuffer;
     const size_t samples = frames * 2; // 立体声
-    static constexpr size_t MAX_AUDIO_SAMPLES = 16384;
-    if (buf.size() + samples > MAX_AUDIO_SAMPLES) {
-        size_t excess = buf.size() + samples - MAX_AUDIO_SAMPLES;
-        if (excess > buf.size())
-            excess = buf.size();
-        if (excess > 0)
-            buf.erase(buf.begin(), buf.begin() + static_cast<std::ptrdiff_t>(excess));
-    }
-    buf.insert(buf.end(), data, data + samples);
+    s_current->pushAudioSamplesLocked(data, samples);
     return frames;
 }
 

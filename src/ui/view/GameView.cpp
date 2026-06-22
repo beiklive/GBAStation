@@ -238,7 +238,7 @@ namespace beiklive
             m_switchPauseBeforeBackground = GameSignal::instance().isPaused();
             _savePlayTimeCheckpoint();
             m_playStartTime = {};
-            AudioManager::instance().flushRingBuffer();
+            _flushAudioForTransition();
             m_switchBackgroundPaused = true;
         }
 
@@ -1538,6 +1538,57 @@ namespace beiklive
         m_ndsTouchRect = rect;
     }
 
+    void GameView::_initAudioForCore(double fps, double sampleRate)
+    {
+        if (fps <= 0.0) fps = 59.7;
+        if (sampleRate <= 0.0) sampleRate = 32768.0;
+
+        if (auto* player = dynamic_cast<beiklive::BKAudioPlayer*>(
+                brls::Application::getAudioPlayer()))
+        {
+            constexpr std::chrono::milliseconds kAudioPlayerWaitTimeout{500};
+            auto deadline = std::chrono::steady_clock::now() + kAudioPlayerWaitTimeout;
+            while (player->isPlaying() &&
+                   std::chrono::steady_clock::now() < deadline)
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+
+        int targetMs = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_AUDIO_TARGET_LATENCY_MS, 90);
+        int maxMs = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_AUDIO_MAX_LATENCY_MS, 180);
+        targetMs = std::clamp(targetMs, 30, 300);
+        maxMs = std::clamp(maxMs, targetMs + 20, 500);
+
+        brls::Logger::debug("[GameView] audio init: fps={:.2f} sampleRate={:.0f} target={}ms max={}ms",
+                            fps, sampleRate, targetMs, maxMs);
+        if (!AudioManager::instance().init(static_cast<int>(sampleRate), 2))
+            brls::Logger::warning("[GameView] audio init failed, continuing without audio output");
+        AudioManager::instance().configureLatencyMs(targetMs, maxMs);
+        AudioManager::instance().setSpeed(1.0f);
+        m_audioOutputSuppressed = false;
+
+        std::vector<int16_t> initAudioDiscard;
+        m_core->DrainAudio(initAudioDiscard);
+    }
+
+    void GameView::_flushAudioForTransition()
+    {
+        int fadeMs = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_AUDIO_TRANSITION_FADE_MS, 6);
+        fadeMs = std::clamp(fadeMs, 0, 20);
+        AudioManager::instance().flushRingBufferWithFade(fadeMs);
+    }
+
+    void GameView::_pauseAudioForTransition()
+    {
+        AudioManager::instance().pauseOutput();
+    }
+
+    void GameView::_resumeAudioForTransition()
+    {
+        int fadeMs = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_AUDIO_TRANSITION_FADE_MS, 6);
+        fadeMs = std::clamp(fadeMs, 0, 20);
+        AudioManager::instance().resumeOutputWithFade(fadeMs);
+    }
+
     // ============================================================
     // _registerGameRuntime – 创建并初始化核心，启动游戏线程
     // ============================================================
@@ -1563,25 +1614,9 @@ namespace beiklive
             brls::Logger::debug("核心已初始化，平台={}, 路径={}",
                                 beiklive::tools::platformName(m_gameEntry.platform),
                                 m_gameEntry.path);
-            if (auto* player = dynamic_cast<beiklive::BKAudioPlayer*>(
-                    brls::Application::getAudioPlayer()))
-            {
-                constexpr std::chrono::milliseconds kAudioPlayerWaitTimeout{500};
-                auto deadline = std::chrono::steady_clock::now() + kAudioPlayerWaitTimeout;
-                while (player->isPlaying()
-                       && std::chrono::steady_clock::now() < deadline)
-                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            }
             double fps = m_core->Fps();
-            if (fps <= 0.0) fps = 59.7;
             double srate = m_core->SampleRate();
-            if (srate <= 0.0) srate = 32768.0;
-            brls::Logger::debug("[GameView] audio init: fps={:.2f} sampleRate={:.0f}", fps, srate);
-            AudioManager::instance().init(static_cast<int>(srate), 2);
-            {
-                std::vector<int16_t> initAudioDiscard;
-                m_core->DrainAudio(initAudioDiscard);
-            }
+            _initAudioForCore(fps, srate);
             GameSignal::instance().resetAll();
             _initPlayTimeTracking();
             brls::Logger::debug("[GameView] starting game thread...");
@@ -1770,9 +1805,23 @@ namespace beiklive
     // ============================================================
     void GameView::_pushFrameAudio(bool ff)
     {
-        if (GameSignal::instance().isMuted()) {
+        const bool rewindMuted = GameSignal::instance().isRewinding() &&
+                                 GET_SETTING_KEY_INT("rewind.mute", 0) != 0;
+        const bool suppressAudio = GameSignal::instance().isMuted() ||
+                                   (ff && m_ffMute) ||
+                                   rewindMuted;
+
+        if (suppressAudio) {
             m_core->DrainAudio(m_audioDrainBuf);
+            if (!m_audioOutputSuppressed)
+                _flushAudioForTransition();
+            m_audioOutputSuppressed = true;
             return;
+        }
+
+        if (m_audioOutputSuppressed) {
+            _flushAudioForTransition();
+            m_audioOutputSuppressed = false;
         }
 
         if (!m_core->DrainAudio(m_audioDrainBuf) || m_audioDrainBuf.empty()) return;
@@ -1780,12 +1829,7 @@ namespace beiklive
         size_t frames = m_audioDrainBuf.size() / 2;
 
         if (ff) {
-            if (m_ffMute)
-                return;
             AudioManager::instance().pushSamplesNoBlocking(m_audioDrainBuf.data(), frames);
-            return;
-        }
-        if (GameSignal::instance().isRewinding() && GET_SETTING_KEY_INT("rewind.mute", 0)) {
             return;
         }
 
@@ -2027,15 +2071,8 @@ namespace beiklive
                                 beiklive::tools::platformName(m_gameEntry.platform),
                                 m_gameEntry.path);
             double fps = m_core->Fps();
-            if (fps <= 0.0) fps = 59.7;
             double srate = m_core->SampleRate();
-            if (srate <= 0.0) srate = 32768.0;
-            brls::Logger::debug("[GameView] audio init: fps={:.2f} sampleRate={:.0f}", fps, srate);
-            AudioManager::instance().init(static_cast<int>(srate), 2);
-            {
-                std::vector<int16_t> initAudioDiscard;
-                m_core->DrainAudio(initAudioDiscard);
-            }
+            _initAudioForCore(fps, srate);
             _initPlayTimeTracking();
         }
 
@@ -2133,7 +2170,7 @@ namespace beiklive
                     m_playStartTime = {};
                     if (m_sramDirty && m_core && m_core->IsReady())
                         m_core->saveSram();
-                    AudioManager::instance().flushRingBuffer(); // 立即停止音频
+                    _pauseAudioForTransition(); // 暂停期间停止继续提交硬件音频缓冲
                     wasPaused = true;
                 }
                 // 暂停时仍可消费金手指重载信号（来自菜单关闭时的批量同步）
@@ -2154,12 +2191,14 @@ namespace beiklive
             if (wasPaused) {
                 m_playStartTime = Clock::now();
                 m_autoSaveTimer = Clock::now();
+                _resumeAudioForTransition();
                 wasPaused = false;
             }
 
             // ---- 重置请求 ----
             if (sig.consumeReset()) {
                 m_core->Reset();
+                _flushAudioForTransition();
                 std::lock_guard<std::mutex> lk(m_rewindMutex);
                 m_rewindBuffer.clear(); // 重置后清空倒带缓冲区
             }
@@ -2295,22 +2334,19 @@ namespace beiklive
             // ---- SRAM 自动落盘检测 ----
             _checkAndAutoSaveSram();
 
-            // ── PLL：仅减速不加速 ──
+            // ── 音频 PLL：围绕目标缓冲量做轻微双向修正 ──
             const bool ndsFastForward = ff && m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS);
             if (framesRan > 0 && !ff) {
-                size_t ringFill = AudioManager::instance().available();
-                double targetFill = 8000.0;
-                if (targetFill > 0.0) {
+                const size_t ringFill = AudioManager::instance().available();
+                const double targetFill = static_cast<double>(AudioManager::instance().targetLatencySamples());
+                float gain = GET_SETTING_KEY_FLOAT(beiklive::SettingKey::KEY_AUDIO_SYNC_STRENGTH, 0.015f);
+                gain = std::clamp(gain, 0.0f, 0.05f);
+                if (targetFill > 0.0 && gain > 0.0f) {
                     double errorRatio = (static_cast<double>(ringFill) - targetFill) / targetFill;
-                    if (errorRatio > 0.0) {
-                        double gain = 0.01;
-                        double correction = 1.0 + errorRatio * gain;
-                        if (correction > 1.02) correction = 1.02;
-                        frameDurNs = std::chrono::nanoseconds(
-                            static_cast<long long>(baseFrameDurNs.count() * correction));
-                    } else {
-                        frameDurNs = baseFrameDurNs;
-                    }
+                    double correction = 1.0 + errorRatio * static_cast<double>(gain);
+                    correction = std::clamp(correction, 0.98, 1.02);
+                    frameDurNs = std::chrono::nanoseconds(
+                        static_cast<long long>(baseFrameDurNs.count() * correction));
                 }
             } else {
                 if (ndsFastForward && m_ffMultiplier > 1.0f && framesRan > 0) {
@@ -2493,7 +2529,7 @@ namespace beiklive
         if (!m_core->Unserialize(buf)) {
             brls::Logger::warning("GameView: 存档反序列化失败 (slot {})", slot);
             m_core->Reset();
-            AudioManager::instance().flushRingBuffer();
+            _flushAudioForTransition();
             brls::sync([slot](){
                 std::string msg = (slot == 0)
                     ? "读取失败：自动存档无效，已重置游戏"
@@ -2502,6 +2538,7 @@ namespace beiklive
             });
             return;
         }
+        _flushAudioForTransition();
 
         // 读档后清空倒带缓冲区，避免时序混乱
         {

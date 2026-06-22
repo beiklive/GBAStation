@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <thread>
 
 // ============================================================
@@ -35,8 +36,21 @@ namespace beiklive {
 
 void AudioManager::ringWrite(const int16_t* data, size_t count)
 {
+    if (count == 0 || m_ring.empty())
+        return;
+
+    if (count >= RING_CAPACITY) {
+        data += count - RING_CAPACITY;
+        count = RING_CAPACITY;
+        m_readPos = 0;
+        m_writePos = 0;
+        m_available = 0;
+    }
+
     if (m_available + count > RING_CAPACITY) {
         size_t excess = (m_available + count) - RING_CAPACITY + (RING_CAPACITY / 8);
+        if (excess > m_available)
+            excess = m_available;
         m_readPos = (m_readPos + excess) % RING_CAPACITY;
         m_available -= excess;
     }
@@ -61,15 +75,102 @@ size_t AudioManager::ringRead(int16_t* out, size_t maxCount)
     return n;
 }
 
+void AudioManager::applyFadeIn(int16_t* out, size_t count)
+{
+    if (!out || count == 0 || m_fadeInSamplesRemaining == 0 || m_fadeInTotalSamples == 0)
+        return;
+
+    const size_t n = std::min(count, m_fadeInSamplesRemaining);
+    const size_t total = m_fadeInTotalSamples;
+    const size_t channels = static_cast<size_t>(std::max(1, m_channels));
+    for (size_t i = 0; i < n; ++i) {
+        const size_t done = total - m_fadeInSamplesRemaining + i;
+        float gain = static_cast<float>(done / channels + 1) /
+                     static_cast<float>((total + channels - 1) / channels);
+        if (gain > 1.0f) gain = 1.0f;
+        out[i] = static_cast<int16_t>(static_cast<float>(out[i]) * gain);
+    }
+    m_fadeInSamplesRemaining -= n;
+    if (m_fadeInSamplesRemaining == 0)
+        m_fadeInTotalSamples = 0;
+}
+
+void AudioManager::resetBufferLocked()
+{
+    m_writePos = 0;
+    m_readPos = 0;
+    m_available = 0;
+    m_ring.assign(RING_CAPACITY, 0);
+    m_fadeInSamplesRemaining = 0;
+    m_fadeInTotalSamples = 0;
+    m_resamplePhase = 0.0;
+    m_resampleCarry.clear();
+    m_resampleScratch.clear();
+    m_outputPaused.store(false, std::memory_order_release);
+}
+
+void AudioManager::configureLatencyMsLocked(int targetMs, int maxMs)
+{
+    if (targetMs < 30) targetMs = 30;
+    if (targetMs > 300) targetMs = 300;
+    if (maxMs < targetMs + 20) maxMs = targetMs + 20;
+    if (maxMs > 500) maxMs = 500;
+
+    const size_t channels = static_cast<size_t>(std::max(1, m_channels));
+    auto msToSamples = [&](int ms) {
+        const double frames = static_cast<double>(std::max(1, m_sampleRate)) *
+                              static_cast<double>(ms) / 1000.0;
+        return static_cast<size_t>(frames + 0.5) * channels;
+    };
+
+    m_targetLatencySamples = std::min(RING_CAPACITY / 2, msToSamples(targetMs));
+    m_maxLatencySamples = std::min(RING_CAPACITY - channels, msToSamples(maxMs));
+    if (m_maxLatencySamples <= m_targetLatencySamples)
+        m_maxLatencySamples = std::min(RING_CAPACITY - channels,
+                                       m_targetLatencySamples + RING_CAPACITY / 8);
+}
+
+void AudioManager::configureLatencyMs(int targetMs, int maxMs)
+{
+    std::lock_guard<std::mutex> lk(m_mutex);
+    configureLatencyMsLocked(targetMs, maxMs);
+}
+
+size_t AudioManager::available() const
+{
+    std::lock_guard<std::mutex> lk(m_mutex);
+    return m_available;
+}
+
+size_t AudioManager::targetLatencySamples() const
+{
+    std::lock_guard<std::mutex> lk(m_mutex);
+    return m_targetLatencySamples;
+}
+
+size_t AudioManager::maxLatencySamples() const
+{
+    std::lock_guard<std::mutex> lk(m_mutex);
+    return m_maxLatencySamples;
+}
+
 // ============================================================
 // pushSamples – 由 libretro 音频回调调用
 // ============================================================
 
 void AudioManager::pushSamples(const int16_t* data, size_t frames)
 {
+    if (!data || frames == 0) return;
     if (!m_running.load(std::memory_order_acquire)) return;
-    const size_t count = frames * static_cast<size_t>(m_channels);
+    if (m_outputPaused.load(std::memory_order_acquire)) return;
+    size_t count = frames * static_cast<size_t>(m_channels);
+    const int16_t* src = data;
     std::unique_lock<std::mutex> lk(m_mutex);
+    if (count > m_maxLatencySamples) {
+        const size_t keep = std::max(static_cast<size_t>(m_channels), m_maxLatencySamples);
+        src += count - keep;
+        count = keep;
+    }
     // 正常播放允许短暂等待音频线程释放空间，但不能无限阻塞模拟线程。
     // 超时后丢弃最旧样本，让音频追上当前画面，避免启动阶段被 audout 反向拖慢。
     m_spaceCV.wait_for(lk, std::chrono::milliseconds(2), [&] {
@@ -88,15 +189,23 @@ void AudioManager::pushSamples(const int16_t* data, size_t frames)
         }
     }
 
-    ringWrite(data, count);
+    ringWrite(src, count);
 }
 
 void AudioManager::pushSamplesNoBlocking(const int16_t* data, size_t frames)
 {
+    if (!data || frames == 0) return;
     if (!m_running.load(std::memory_order_acquire)) return;
-    const size_t count = frames * static_cast<size_t>(m_channels);
+    if (m_outputPaused.load(std::memory_order_acquire)) return;
+    size_t count = frames * static_cast<size_t>(m_channels);
+    const int16_t* src = data;
     std::lock_guard<std::mutex> lk(m_mutex);
-    ringWrite(data, count);
+    if (count > m_maxLatencySamples) {
+        const size_t keep = std::max(static_cast<size_t>(m_channels), m_maxLatencySamples);
+        src += count - keep;
+        count = keep;
+    }
+    ringWrite(src, count);
 }
 
 // ============================================================
@@ -108,8 +217,75 @@ void AudioManager::flushRingBuffer()
     std::lock_guard<std::mutex> lk(m_mutex);
     m_available = 0;
     m_writePos  = m_readPos; // 读写指针归位，清空缓冲
+    m_resamplePhase = 0.0;
+    m_resampleCarry.clear();
+    m_fadeInSamplesRemaining = 0;
+    m_fadeInTotalSamples = 0;
     m_spaceCV.notify_all();  // 唤醒阻塞的 pushSamples() 调用方
     m_dataCV.notify_all();   // 唤醒阻塞的音频线程
+}
+
+void AudioManager::flushRingBufferWithFade(int fadeMs)
+{
+    std::lock_guard<std::mutex> lk(m_mutex);
+    m_available = 0;
+    m_writePos  = m_readPos;
+    m_resamplePhase = 0.0;
+    m_resampleCarry.clear();
+    if (fadeMs > 0) {
+        if (fadeMs > 20) fadeMs = 20;
+        const size_t channels = static_cast<size_t>(std::max(1, m_channels));
+        const double frames = static_cast<double>(std::max(1, m_sampleRate)) *
+                              static_cast<double>(fadeMs) / 1000.0;
+        m_fadeInTotalSamples = static_cast<size_t>(frames + 0.5) * channels;
+        m_fadeInSamplesRemaining = m_fadeInTotalSamples;
+    } else {
+        m_fadeInSamplesRemaining = 0;
+        m_fadeInTotalSamples = 0;
+    }
+    m_spaceCV.notify_all();
+    m_dataCV.notify_all();
+}
+
+void AudioManager::pauseOutput()
+{
+    m_outputPaused.store(true, std::memory_order_release);
+    {
+        std::lock_guard<std::mutex> lk(m_mutex);
+        m_available = 0;
+        m_writePos  = m_readPos;
+        m_resamplePhase = 0.0;
+        m_resampleCarry.clear();
+        m_fadeInSamplesRemaining = 0;
+        m_fadeInTotalSamples = 0;
+    }
+    m_spaceCV.notify_all();
+    m_dataCV.notify_all();
+}
+
+void AudioManager::resumeOutputWithFade(int fadeMs)
+{
+    {
+        std::lock_guard<std::mutex> lk(m_mutex);
+        m_available = 0;
+        m_writePos  = m_readPos;
+        m_resamplePhase = 0.0;
+        m_resampleCarry.clear();
+        if (fadeMs > 0) {
+            if (fadeMs > 20) fadeMs = 20;
+            const size_t channels = static_cast<size_t>(std::max(1, m_channels));
+            const double frames = static_cast<double>(std::max(1, m_sampleRate)) *
+                                  static_cast<double>(fadeMs) / 1000.0;
+            m_fadeInTotalSamples = static_cast<size_t>(frames + 0.5) * channels;
+            m_fadeInSamplesRemaining = m_fadeInTotalSamples;
+        } else {
+            m_fadeInSamplesRemaining = 0;
+            m_fadeInTotalSamples = 0;
+        }
+    }
+    m_outputPaused.store(false, std::memory_order_release);
+    m_spaceCV.notify_all();
+    m_dataCV.notify_all();
 }
 
 // ============================================================
@@ -199,11 +375,11 @@ bool AudioManager::init(int sampleRate, int channels)
 
     // 每次初始化时重置环形缓冲区状态，防止上次会话的残留指针/计数导致第二次启动时读到
     // 零数据与真实音频混合的数据块，产生撕裂或刺耳声
-    m_writePos          = 0;
-    m_readPos           = 0;
-    m_available         = 0;
-    m_maxLatencySamples = (RING_CAPACITY * 3) / 4;
-    m_ring.resize(RING_CAPACITY);
+    {
+        std::lock_guard<std::mutex> lk(m_mutex);
+        resetBufferLocked();
+        configureLatencyMsLocked(90, 180);
+    }
     m_running.store(true, std::memory_order_release);
     m_thread = std::thread(&AudioManager::audioThreadFunc, this);
     return true;
@@ -233,6 +409,25 @@ void AudioManager::audioThreadFunc()
                 collectReleased(released);
         }
 
+        while (m_outputPaused.load(std::memory_order_acquire) &&
+               m_running.load(std::memory_order_acquire)) {
+            if (sw->enqueuedBuffers > 0) {
+                AudioOutBuffer* released = nullptr;
+                u32 relCount = 0;
+                audoutWaitPlayFinish(&released, &relCount, 10000000);
+                if (relCount > 0 && released)
+                    collectReleased(released);
+            } else {
+                std::unique_lock<std::mutex> lk(m_mutex);
+                m_dataCV.wait_for(lk, std::chrono::milliseconds(10), [this] {
+                    return !m_outputPaused.load(std::memory_order_acquire) ||
+                           !m_running.load(std::memory_order_acquire);
+                });
+            }
+        }
+
+        if (!m_running.load(std::memory_order_acquire)) break;
+
         // 所有硬件槽占满时等待释放
         while (sw->freeCount == 0 &&
                m_running.load(std::memory_order_acquire)) {
@@ -251,40 +446,68 @@ void AudioManager::audioThreadFunc()
 
         int16_t* dst = sw->bufData[bufIndex];
 
-        // 动态重采样比例 = (输入采样率 / 输出采样率) * 当前模拟速度
+        // 动态重采样比例 = (输入采样率 / 输出采样率) * 当前模拟速度。
+        // 使用跨缓冲区延续的相位，避免每个 audout 块重新起算造成边界抖动。
         float speed = m_currentSpeed.load(std::memory_order_acquire);
         if (speed < 0.1f) speed = 1.0f;
-        double ratio = static_cast<double>(m_sampleRate) / SWITCH_OUT_RATE * speed;
-        size_t inputFrames = static_cast<size_t>(SWITCH_FRAMES * ratio + 0.5);
-        if (inputFrames == 0) inputFrames = 1;
-        if (inputFrames > SWITCH_FRAMES * 2) inputFrames = SWITCH_FRAMES * 2;
+        double step = static_cast<double>(m_sampleRate) / SWITCH_OUT_RATE * speed;
+        if (step <= 0.0)
+            step = static_cast<double>(m_sampleRate) / SWITCH_OUT_RATE;
 
-        int16_t tmp[SWITCH_FRAMES * 4]; // 足够容纳 2x 输入
         {
-            const size_t needed = inputFrames * static_cast<size_t>(m_channels);
+            constexpr size_t kOutChannels = 2;
             std::unique_lock<std::mutex> lk(m_mutex);
+            const size_t carryFrames = m_resampleCarry.size() / kOutChannels;
+            size_t inputFrames = static_cast<size_t>(
+                std::ceil(m_resamplePhase + step * static_cast<double>(SWITCH_FRAMES))) + 2u;
+            const size_t maxInputFrames = (RING_CAPACITY / kOutChannels) - 1u;
+            if (inputFrames > maxInputFrames)
+                inputFrames = maxInputFrames;
+            if (inputFrames < carryFrames + 2u)
+                inputFrames = carryFrames + 2u;
+
+            m_resampleScratch.resize(inputFrames * kOutChannels);
+            if (!m_resampleCarry.empty())
+                std::copy(m_resampleCarry.begin(), m_resampleCarry.end(), m_resampleScratch.begin());
+
+            const size_t framesToRead = inputFrames - carryFrames;
+            const size_t needed = framesToRead * kOutChannels;
             m_dataCV.wait_for(lk, std::chrono::milliseconds(18), [&] {
-                return m_available >= needed ||
+                return m_available >= needed || m_available >= kOutChannels ||
                        !m_running.load(std::memory_order_relaxed);
             });
-            size_t got = ringRead(tmp, needed);
+            size_t got = ringRead(m_resampleScratch.data() + carryFrames * kOutChannels, needed);
             if (got < needed)
-                memset(tmp + got, 0, (needed - got) * sizeof(int16_t));
-        }
+                memset(m_resampleScratch.data() + carryFrames * kOutChannels + got, 0,
+                       (needed - got) * sizeof(int16_t));
 
-        // 线性插值重采样（替代最近邻，大幅减少 aliasing）
-        double step = static_cast<double>(inputFrames) / SWITCH_FRAMES;
-        for (size_t i = 0; i < SWITCH_FRAMES; ++i) {
-            double pos = i * step;
-            size_t idx = static_cast<size_t>(pos);
-            double frac = pos - static_cast<double>(idx);
-            size_t nextIdx = (idx + 1 < inputFrames) ? idx + 1 : idx;
+            for (size_t i = 0; i < SWITCH_FRAMES; ++i) {
+                const double pos = m_resamplePhase + static_cast<double>(i) * step;
+                size_t idx = static_cast<size_t>(pos);
+                if (idx >= inputFrames)
+                    idx = inputFrames - 1u;
+                const double frac = pos - static_cast<double>(idx);
+                const size_t nextIdx = (idx + 1u < inputFrames) ? idx + 1u : idx;
 
-            for (int ch = 0; ch < 2; ++ch) {
-                float a = static_cast<float>(tmp[idx * 2 + ch]);
-                float b = static_cast<float>(tmp[nextIdx * 2 + ch]);
-                dst[i * 2 + ch] = static_cast<int16_t>(a + (b - a) * static_cast<float>(frac));
+                for (size_t ch = 0; ch < kOutChannels; ++ch) {
+                    const float a = static_cast<float>(m_resampleScratch[idx * kOutChannels + ch]);
+                    const float b = static_cast<float>(m_resampleScratch[nextIdx * kOutChannels + ch]);
+                    dst[i * kOutChannels + ch] =
+                        static_cast<int16_t>(a + (b - a) * static_cast<float>(frac));
+                }
             }
+
+            const double nextPhase = m_resamplePhase + static_cast<double>(SWITCH_FRAMES) * step;
+            size_t consumedFrames = static_cast<size_t>(nextPhase);
+            if (consumedFrames >= inputFrames)
+                consumedFrames = inputFrames - 1u;
+            m_resamplePhase = nextPhase - static_cast<double>(consumedFrames);
+            if (m_resamplePhase < 0.0 || m_resamplePhase >= 1.0)
+                m_resamplePhase -= std::floor(m_resamplePhase);
+            m_resampleCarry.assign(
+                m_resampleScratch.begin() + static_cast<std::ptrdiff_t>(consumedFrames * kOutChannels),
+                m_resampleScratch.end());
+            applyFadeIn(dst, SWITCH_FRAMES * kOutChannels);
         }
 
         armDCacheFlush(dst, SWITCH_BYTES);
@@ -399,11 +622,11 @@ bool AudioManager::init(int sampleRate, int channels)
     }
 
     // 重置环形缓冲区状态，防止上次会话残留导致第二次启动时音频撕裂
-    m_writePos          = 0;
-    m_readPos           = 0;
-    m_available         = 0;
-    m_maxLatencySamples = RING_CAPACITY / 2;
-    m_ring.resize(RING_CAPACITY);
+    {
+        std::lock_guard<std::mutex> lk(m_mutex);
+        resetBufferLocked();
+        configureLatencyMsLocked(90, 180);
+    }
     m_running.store(true, std::memory_order_release);
     m_thread = std::thread(&AudioManager::audioThreadFunc, this);
     return true;
@@ -415,13 +638,23 @@ void AudioManager::audioThreadFunc()
     static int16_t buf[ALSA_PERIOD_FRAMES * 2];
 
     while (m_running.load(std::memory_order_acquire)) {
+        if (m_outputPaused.load(std::memory_order_acquire)) {
+            std::unique_lock<std::mutex> lk(m_mutex);
+            m_dataCV.wait_for(lk, std::chrono::milliseconds(10), [this] {
+                return !m_outputPaused.load(std::memory_order_acquire) ||
+                       !m_running.load(std::memory_order_acquire);
+            });
+            continue;
+        }
+
         size_t got = 0;
         {
             std::lock_guard<std::mutex> lk(m_mutex);
             got = ringRead(buf, ALSA_PERIOD_FRAMES * 2);
+            if (got < ALSA_PERIOD_FRAMES * 2)
+                memset(buf + got, 0, (ALSA_PERIOD_FRAMES * 2 - got) * sizeof(int16_t));
+            applyFadeIn(buf, ALSA_PERIOD_FRAMES * 2);
         }
-        if (got < ALSA_PERIOD_FRAMES * 2)
-            memset(buf + got, 0, (ALSA_PERIOD_FRAMES * 2 - got) * sizeof(int16_t));
 
         snd_pcm_sframes_t rc = snd_pcm_writei(st->handle, buf, ALSA_PERIOD_FRAMES);
         if (rc == -EPIPE) {
@@ -517,11 +750,11 @@ bool AudioManager::init(int sampleRate, int channels)
     }
 
     // 重置环形缓冲区状态，防止上次会话残留导致第二次启动时音频撕裂
-    m_writePos          = 0;
-    m_readPos           = 0;
-    m_available         = 0;
-    m_maxLatencySamples = RING_CAPACITY / 2;
-    m_ring.resize(RING_CAPACITY);
+    {
+        std::lock_guard<std::mutex> lk(m_mutex);
+        resetBufferLocked();
+        configureLatencyMsLocked(90, 180);
+    }
     m_running.store(true, std::memory_order_release);
     m_thread = std::thread(&AudioManager::audioThreadFunc, this);
     return true;
@@ -532,6 +765,15 @@ void AudioManager::audioThreadFunc()
     auto* st = static_cast<WinMMState*>(m_platformState);
 
     while (m_running.load(std::memory_order_acquire)) {
+        if (m_outputPaused.load(std::memory_order_acquire)) {
+            std::unique_lock<std::mutex> lk(m_mutex);
+            m_dataCV.wait_for(lk, std::chrono::milliseconds(10), [this] {
+                return !m_outputPaused.load(std::memory_order_acquire) ||
+                       !m_running.load(std::memory_order_acquire);
+            });
+            continue;
+        }
+
         WAVEHDR& hdr = st->hdrs[st->nextBuf];
 
         // 等待当前缓冲可用
@@ -547,9 +789,10 @@ void AudioManager::audioThreadFunc()
         {
             std::lock_guard<std::mutex> lk(m_mutex);
             got = ringRead(dst, WINMM_BUF_FRAMES * 2);
+            if (got < WINMM_BUF_FRAMES * 2)
+                memset(dst + got, 0, (WINMM_BUF_FRAMES * 2 - got) * sizeof(int16_t));
+            applyFadeIn(dst, WINMM_BUF_FRAMES * 2);
         }
-        if (got < WINMM_BUF_FRAMES * 2)
-            memset(dst + got, 0, (WINMM_BUF_FRAMES * 2 - got) * sizeof(int16_t));
 
         hdr.dwFlags &= ~WHDR_DONE;
         hdr.dwBufferLength = static_cast<DWORD>(WINMM_BUF_BYTES);
@@ -605,10 +848,16 @@ static OSStatus s_coreAudioCallback(void*                       inRefCon,
     auto* dst = static_cast<int16_t*>(ioData->mBuffers[0].mData);
     size_t samples = inNumFrames * 2; // 立体声
 
+    if (mgr->m_outputPaused.load(std::memory_order_acquire)) {
+        memset(dst, 0, samples * sizeof(int16_t));
+        return noErr;
+    }
+
     std::lock_guard<std::mutex> lk(mgr->m_mutex);
     size_t got = mgr->ringRead(dst, samples);
     if (got < samples)
         memset(dst + got, 0, (samples - got) * sizeof(int16_t));
+    mgr->applyFadeIn(dst, samples);
 
     return noErr;
 }
@@ -663,11 +912,11 @@ bool AudioManager::init(int sampleRate, int channels)
     }
 
     // 重置环形缓冲区状态，防止上次会话残留导致第二次启动时音频撕裂
-    m_writePos          = 0;
-    m_readPos           = 0;
-    m_available         = 0;
-    m_maxLatencySamples = RING_CAPACITY / 2;
-    m_ring.resize(RING_CAPACITY);
+    {
+        std::lock_guard<std::mutex> lk(m_mutex);
+        resetBufferLocked();
+        configureLatencyMsLocked(90, 180);
+    }
     m_running.store(true, std::memory_order_release);
     // CoreAudio 由回调驱动，无需后台线程
     return true;
@@ -708,11 +957,11 @@ bool AudioManager::init(int sampleRate, int channels)
     m_sampleRate = sampleRate;
     m_channels   = channels;
     // 重置环形缓冲区状态，防止上次会话残留导致第二次启动时音频撕裂
-    m_writePos          = 0;
-    m_readPos           = 0;
-    m_available         = 0;
-    m_maxLatencySamples = RING_CAPACITY / 2;
-    m_ring.resize(RING_CAPACITY);
+    {
+        std::lock_guard<std::mutex> lk(m_mutex);
+        resetBufferLocked();
+        configureLatencyMsLocked(90, 180);
+    }
     m_running.store(true, std::memory_order_release);
     m_thread = std::thread(&AudioManager::audioThreadFunc, this);
     return true;
@@ -722,6 +971,15 @@ void AudioManager::audioThreadFunc()
 {
     static int16_t sink[512 * 2];
     while (m_running.load(std::memory_order_acquire)) {
+        if (m_outputPaused.load(std::memory_order_acquire)) {
+            std::unique_lock<std::mutex> lk(m_mutex);
+            m_dataCV.wait_for(lk, std::chrono::milliseconds(10), [this] {
+                return !m_outputPaused.load(std::memory_order_acquire) ||
+                       !m_running.load(std::memory_order_acquire);
+            });
+            continue;
+        }
+
         {
             std::lock_guard<std::mutex> lk(m_mutex);
             ringRead(sink, 512 * 2);

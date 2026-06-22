@@ -17,6 +17,7 @@
 #include "game/control/InputMappingDefaults.hpp"
 
 #include <chrono>
+#include <cmath>
 #include <sstream>
 #include <iomanip>
 #include <string>
@@ -1089,6 +1090,62 @@ brls::View *SettingPage::buildAudioTab()
     sfxCell->init("按钮音效", cfgGetBool("audio.buttonSfx", true),
                    [](bool v) { cfgSetBool("audio.buttonSfx", v); });
     box->addView(sfxCell);
+
+    {
+        std::vector<std::string> opts = {"60 ms", "90 ms", "120 ms", "160 ms"};
+        static const int vals[] = {60, 90, 120, 160};
+        int cur = cfgGetInt(beiklive::SettingKey::KEY_AUDIO_TARGET_LATENCY_MS, 90);
+        int idx = 1;
+        for (int i = 0; i < 4; ++i) if (vals[i] == cur) { idx = i; break; }
+        auto *cell = new brls::SelectorCell();
+        cell->init("目标缓冲延迟", opts, idx,
+                   [](int i) { if (i >= 0 && i < 4) cfgSetInt(beiklive::SettingKey::KEY_AUDIO_TARGET_LATENCY_MS, vals[i]); });
+        box->addView(cell);
+        box->addView(makeHint("越低操作反馈越快，越高越不容易断音"));
+    }
+
+    {
+        std::vector<std::string> opts = {"120 ms", "180 ms", "240 ms", "320 ms"};
+        static const int vals[] = {120, 180, 240, 320};
+        int cur = cfgGetInt(beiklive::SettingKey::KEY_AUDIO_MAX_LATENCY_MS, 180);
+        int idx = 1;
+        for (int i = 0; i < 4; ++i) if (vals[i] == cur) { idx = i; break; }
+        auto *cell = new brls::SelectorCell();
+        cell->init("最大缓冲延迟", opts, idx,
+                   [](int i) { if (i >= 0 && i < 4) cfgSetInt(beiklive::SettingKey::KEY_AUDIO_MAX_LATENCY_MS, vals[i]); });
+        box->addView(cell);
+        box->addView(makeHint("超过该延迟会丢弃旧音频，避免声音落后画面"));
+    }
+
+    {
+        std::vector<std::string> opts = {"关闭", "柔和", "标准", "强"};
+        static const float vals[] = {0.0f, 0.008f, 0.015f, 0.025f};
+        float cur = GET_SETTING_KEY_FLOAT(beiklive::SettingKey::KEY_AUDIO_SYNC_STRENGTH, 0.015f);
+        int idx = 2;
+        float best = std::fabs(cur - vals[2]);
+        for (int i = 0; i < 4; ++i) {
+            float diff = std::fabs(cur - vals[i]);
+            if (diff < best) { best = diff; idx = i; }
+        }
+        auto *cell = new brls::SelectorCell();
+        cell->init("音画同步修正", opts, idx,
+                   [](int i) { if (i >= 0 && i < 4) SET_SETTING_KEY_FLOAT(beiklive::SettingKey::KEY_AUDIO_SYNC_STRENGTH, vals[i]); });
+        box->addView(cell);
+        box->addView(makeHint("根据音频缓冲量微调模拟节奏，减少爆音和长期漂移"));
+    }
+
+    {
+        std::vector<std::string> opts = {"关闭", "4 ms", "6 ms", "10 ms"};
+        static const int vals[] = {0, 4, 6, 10};
+        int cur = cfgGetInt(beiklive::SettingKey::KEY_AUDIO_TRANSITION_FADE_MS, 6);
+        int idx = 2;
+        for (int i = 0; i < 4; ++i) if (vals[i] == cur) { idx = i; break; }
+        auto *cell = new brls::SelectorCell();
+        cell->init("切换淡入淡出", opts, idx,
+                   [](int i) { if (i >= 0 && i < 4) cfgSetInt(beiklive::SettingKey::KEY_AUDIO_TRANSITION_FADE_MS, vals[i]); });
+        box->addView(cell);
+        box->addView(makeHint("暂停、静音、读档等状态切换时降低咔哒声"));
+    }
 
     {
         std::vector<std::string> lpfOpts = {"关闭", "开启"};

@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <algorithm>
 #include <vector>
 #include <mutex>
 #include <condition_variable>
@@ -54,6 +55,9 @@ public:
     /// 设置当前模拟速度倍率（1.0=正常速度，音频线程据此动态调整重采样比例）
     void setSpeed(float speed) { m_currentSpeed.store(speed, std::memory_order_release); }
 
+    /// 根据核心采样率设置延迟窗口。target 用于 GameView 音画同步，max 用于写入端限流/丢旧样本。
+    void configureLatencyMs(int targetMs, int maxMs);
+
     /// 关闭音频子系统并停止后台线程。
     void deinit();
 
@@ -62,15 +66,21 @@ public:
     /// 设置环形缓冲区最大填充量（立体声帧数），超过后 pushSamples() 开始阻塞。
     /// 在 init() 之后调用，默认值为 RING_CAPACITY / 2。
     void setMaxLatencyFrames(size_t frames) {
-        m_maxLatencySamples = frames * static_cast<size_t>(m_channels);
+        std::lock_guard<std::mutex> lk(m_mutex);
+        m_maxLatencySamples = std::min(RING_CAPACITY, frames * static_cast<size_t>(m_channels));
     }
 
     /// 清空环形缓冲区中的所有样本，并唤醒被阻塞的 pushSamples() 调用方。
     /// 用于从快进切换回正常速度时，防止播放过时音频。
     void flushRingBuffer();
+    void flushRingBufferWithFade(int fadeMs);
+    void pauseOutput();
+    void resumeOutputWithFade(int fadeMs);
 
-    /// 查询环形缓冲区中当前可用样本数（仅用于诊断）
-    size_t available() const { return m_available; }
+    /// 查询环形缓冲区中当前可用样本数。
+    size_t available() const;
+    size_t targetLatencySamples() const;
+    size_t maxLatencySamples() const;
 
     /// 查询当前音频采样率
     int sampleRate() const { return m_sampleRate; }
@@ -82,7 +92,7 @@ public:
 
     std::atomic<float> m_currentSpeed{1.0f}; ///< 当前模拟速度倍率
 
-    std::mutex               m_mutex;
+    mutable std::mutex       m_mutex;
     std::condition_variable  m_spaceCV;   ///< 环形缓冲区排空（释放空间）时通知
     std::condition_variable  m_dataCV;    ///< 环形缓冲区有新数据时通知（唤醒音频线程）
     std::vector<int16_t>     m_ring;      ///< 循环 PCM 样本存储
@@ -90,9 +100,19 @@ public:
     size_t                   m_readPos           = 0;
     size_t                   m_available         = 0;
     size_t                   m_maxLatencySamples = RING_CAPACITY / 2;
+    size_t                   m_targetLatencySamples = RING_CAPACITY / 4;
+    size_t                   m_fadeInSamplesRemaining = 0;
+    size_t                   m_fadeInTotalSamples = 0;
+    double                   m_resamplePhase = 0.0;
+    std::vector<int16_t>     m_resampleCarry;
+    std::vector<int16_t>     m_resampleScratch;
+    std::atomic<bool>        m_outputPaused{false};
 
     void   ringWrite(const int16_t* data, size_t count);
     size_t ringRead(int16_t* out, size_t maxCount);
+    void   applyFadeIn(int16_t* out, size_t count);
+    void   resetBufferLocked();
+    void   configureLatencyMsLocked(int targetMs, int maxMs);
 
     // ---- 后台音频线程 -----------------------------------------------
     std::thread       m_thread;

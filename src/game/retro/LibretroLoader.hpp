@@ -179,7 +179,11 @@ private:
 
     // ---- 音频环形缓冲区 ---------------------------------------------
     mutable std::mutex       m_audioMutex;
+    static constexpr size_t  AUDIO_BUFFER_CAPACITY = 32768;
     std::vector<int16_t>     m_audioBuffer;
+    size_t                   m_audioReadPos = 0;
+    size_t                   m_audioWritePos = 0;
+    size_t                   m_audioAvailable = 0;
 
     // ---- 输入状态 ---------------------------------------------------
     bool m_buttons[RETRO_DEVICE_ID_JOYPAD_R3 + 1] = {};
@@ -215,6 +219,8 @@ private:
     // ---- 辅助函数 ---------------------------------------------------
     template<typename T>
     bool resolveSymbol(T& fnPtr, const char* name);
+    void clearAudioBufferLocked();
+    void pushAudioSamplesLocked(const int16_t* data, size_t samples);
 };
 
 } // namespace beiklive

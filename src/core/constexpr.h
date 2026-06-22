@@ -193,7 +193,11 @@ namespace beiklive::SettingKey
     constexpr const char *KEY_DISPLAY_SHADER_NDS_PATH  ="display.shader.nds";      ///< NDS 着色器预设路径
 
     // 音频设置
-    constexpr const char *KEY_AUDIO_BUTTON_SFX      = "audio.buttonSfx";           ///< 按钮音效开关
+    constexpr const char *KEY_AUDIO_BUTTON_SFX          = "audio.buttonSfx";          ///< 按钮音效开关
+    constexpr const char *KEY_AUDIO_TARGET_LATENCY_MS   = "audio.targetLatencyMs";    ///< 音频同步目标缓冲延迟（毫秒）
+    constexpr const char *KEY_AUDIO_MAX_LATENCY_MS      = "audio.maxLatencyMs";       ///< 音频最大缓冲延迟（毫秒）
+    constexpr const char *KEY_AUDIO_SYNC_STRENGTH       = "audio.syncStrength";       ///< 音画同步修正强度
+    constexpr const char *KEY_AUDIO_TRANSITION_FADE_MS  = "audio.transitionFadeMs";   ///< 静音/暂停/读档切换淡入淡出时间（毫秒）
 
     // 倒带设置
     constexpr const char *KEY_REWIND_SAVE_INTERVAL      = "rewind.saveInterval";        ///< 倒带状态保存间隔（每 N 帧保存一次，默认 1）

@@ -236,6 +236,10 @@ namespace beiklive
 
         // 音频设置
         SettingManager->SetDefault(KEY_AUDIO_BUTTON_SFX, ConfigValue(1));
+        SettingManager->SetDefault(KEY_AUDIO_TARGET_LATENCY_MS, ConfigValue(90));
+        SettingManager->SetDefault(KEY_AUDIO_MAX_LATENCY_MS, ConfigValue(180));
+        SettingManager->SetDefault(KEY_AUDIO_SYNC_STRENGTH, ConfigValue(0.015f));
+        SettingManager->SetDefault(KEY_AUDIO_TRANSITION_FADE_MS, ConfigValue(6));
 
         // 快进设置
         SettingManager->SetDefault("fastforward.enabled", ConfigValue(1));

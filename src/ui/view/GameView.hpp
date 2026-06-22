@@ -178,6 +178,7 @@ namespace beiklive
 
             // ---- 音频排空缓冲（复用避免每帧分配）-----------------------------
             std::vector<int16_t> m_audioDrainBuf;
+            bool m_audioOutputSuppressed = false; ///< 静音/快进静音/倒带静音状态是否已清过缓冲
 
             // ---- 游戏线程 -----------------------------------------------------
             std::thread       m_gameThread;
@@ -327,6 +328,14 @@ namespace beiklive
 
             /// 根据当前 NDS 布局和绘制区域更新下屏触摸区域
             void _updateNdsTouchRect(const beiklive::DisplayRect& rect);
+
+            /// 根据当前核心和配置初始化 AudioManager。
+            void _initAudioForCore(double fps, double sampleRate);
+
+            /// 清空音频缓冲并按设置为下一段音频加短淡入。
+            void _flushAudioForTransition();
+            void _pauseAudioForTransition();
+            void _resumeAudioForTransition();
 
             /// 推送音频数据到 AudioManager（ff=true 时限制推送量，避免缓冲区溢出）
             void _pushFrameAudio(bool ff);

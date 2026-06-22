@@ -263,7 +263,7 @@ namespace beiklive
         grid->registerAction("删除该档位", brls::BUTTON_X, [this, grid](brls::View *view) -> bool
         {
             int slot = grid->getItemIndex();
-            if (slot < 0 || slot >= static_cast<int>(m_saveItems.size()))
+            if (slot < 0 || slot >= static_cast<int>(m_loadItems.size()))
                 return true;
             
             auto* dialog = new brls::Dialog("确定要删除档位" + _slotName(slot) + "?");
@@ -390,14 +390,19 @@ namespace beiklive
             for (int slot = 0; slot < 10; ++slot)
                 infos.push_back(infoCallback(slot));
 
+            std::vector<std::string> refreshPaths;
+            refreshPaths.reserve(infos.size());
             for (auto& info : infos)
                 if (info.exists && !info.thumbPath.empty())
-                    g_forceRefreshPaths.insert(info.thumbPath);
+                    refreshPaths.push_back(info.thumbPath);
 
             // 将 ASYNC_RELEASE 移入 brls::sync 回调内部，确保在 UI 线程执行时
             // 检查视图是否已销毁，避免 View 析构与 brls::sync 投递之间的竞态条件。
-            brls::sync([ASYNC_TOKEN, infos = std::move(infos), isSave]() {
+            brls::sync([ASYNC_TOKEN, infos = std::move(infos), refreshPaths = std::move(refreshPaths), isSave]() {
                 ASYNC_RELEASE
+                for (const auto& path : refreshPaths)
+                    g_forceRefreshPaths.insert(path);
+
                 auto& items = isSave ? m_saveItems : m_loadItems;
                 for (int slot = 0; slot < 10 && slot < static_cast<int>(items.size()); ++slot)
                 {

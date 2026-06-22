@@ -54,10 +54,7 @@ namespace beiklive
         if (m_coverImage)
         {
             if (beiklive::g_forceRefreshPaths.erase(logoPath) > 0)
-        if (beiklive::g_forceRefreshPaths.erase(logoPath) > 0)
-            m_coverImage->setImageFromFileForce(logoPath);
-        else
-            m_coverImage->setImageFromFile(logoPath);
+                m_coverImage->setImageFromFileForce(logoPath);
             else
                 m_coverImage->setImageFromFile(logoPath);
         }
