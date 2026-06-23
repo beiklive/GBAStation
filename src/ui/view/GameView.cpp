@@ -176,6 +176,37 @@ namespace beiklive
             m_core = nullptr;
         }
 
+        m_rendererReady = false;
+        m_ndsSplitShaderRenderer = false;
+        m_renderer.deinit();
+        m_ndsTopRenderer.deinit();
+        m_ndsBottomRenderer.deinit();
+
+        if (m_overlayImage) {
+            m_overlayImage->clear();
+            delete m_overlayImage;
+            m_overlayImage = nullptr;
+        }
+
+        {
+            std::lock_guard<std::mutex> lk(m_frameMutex);
+            m_pendingFrame = {};
+            m_lastRawFrame = {};
+            m_ndsTopUploadFrame = {};
+            m_ndsBottomUploadFrame = {};
+            m_frameReady = false;
+            m_hasLastRawFrame = false;
+        }
+
+        {
+            std::lock_guard<std::mutex> lk(m_rewindMutex);
+            std::deque<RewindFrame>().swap(m_rewindBuffer);
+            m_rewindFrameCounter = 0;
+        }
+
+        m_audioDrainBuf.clear();
+        m_audioDrainBuf.shrink_to_fit();
+
         brls::Logger::debug("[GameView] prepareExitCleanup end");
     }
 
@@ -2567,12 +2598,11 @@ namespace beiklive
 
         if (!m_core->Unserialize(buf)) {
             brls::Logger::warning("GameView: 存档反序列化失败 (slot {})", slot);
-            m_core->Reset();
             _flushAudioForTransition();
             brls::sync([slot](){
                 std::string msg = (slot == 0)
-                    ? "读取失败：自动存档无效，已重置游戏"
-                    : "读取失败 (slot " + std::to_string(slot) + ")";
+                    ? "读取失败：自动存档无效或与当前 BIOS 设置不兼容"
+                    : "读取失败：槽位 " + std::to_string(slot) + " 无效或与当前 BIOS 设置不兼容";
                 brls::Application::notify(msg);
             });
             return;

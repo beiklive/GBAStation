@@ -722,7 +722,8 @@ namespace beiklive
         }
     }
 
-    
+    static constexpr long POP_ACTIVITY_DEFER_DELETE_MS = 600;
+
     void pushActivity(brls::AppletFrame *frame, beiklive::Box *pre, beiklive::Box *next,
                       std::function<void()> onShow)
     {
@@ -741,8 +742,23 @@ namespace beiklive
         g_beiklive_boxes.pop_back();
         v->animaHide(
             [box]() {
-                brls::Application::popActivity(brls::TransitionAnimation::NONE);
-                box->animaShow();
+                auto stack = brls::Application::getActivitiesStack();
+                brls::Activity* activityToDelete = stack.empty() ? nullptr : stack.back();
+                bool popped = brls::Application::popActivity(
+                    brls::TransitionAnimation::NONE,
+                    [box, activityToDelete]() {
+                        box->animaShow();
+                        if (!activityToDelete)
+                            return;
+
+                        brls::delay(POP_ACTIVITY_DEFER_DELETE_MS, [activityToDelete]() {
+                            brls::Logger::debug("Deferred delete popped activity");
+                            delete activityToDelete;
+                        });
+                    },
+                    false);
+                if (!popped)
+                    box->animaShow();
             }
         );
     }

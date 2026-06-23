@@ -582,6 +582,7 @@ brls::View *SettingPage::buildUITab()
     biosCell->init("使用 BIOS", cfgGetStr("core.mgba_use_bios", "ON") == "ON",
                    [](bool v) { cfgSetStr("core.mgba_use_bios", v ? "ON" : "OFF"); });
     box->addView(biosCell);
+    box->addView(makeHint("开启 BIOS 后，之前在非 BIOS 模式下保存的即时存档可能会失效"));
 
     auto *skipBiosCell = new brls::BooleanCell();
     skipBiosCell->init("跳过 BIOS 动画",

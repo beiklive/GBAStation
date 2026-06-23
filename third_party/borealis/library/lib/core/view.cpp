@@ -548,7 +548,7 @@ void View::setAlpha(float alpha)
 
 void View::drawHighlight(NVGcontext* vg, Theme theme, float alpha, Style style, bool background)
 {
-    if (Application::getInputType() == InputType::TOUCH)
+    if (Application::isInputBlocks() || Application::getInputType() == InputType::TOUCH)
         return;
 
     nvgSave(vg);
