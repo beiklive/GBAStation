@@ -75,10 +75,11 @@ namespace beiklive
                     : beiklive::GameList{};
                 brls::sync([this, recent = std::move(recent)]() {
                     if (!m_alive.load()) return;
+                    brls::View* currentFocus = brls::Application::getCurrentFocus();
+                    bool needInitialCardFocus = !currentFocus || currentFocus == this || currentFocus->isHidden();
                     switchLayout->refreshGameList(recent);
-                    auto& children = switchLayout->getContentBox()->getChildren();
-                    if (!children.empty())
-                        brls::Application::giveFocus(children[0]->getDefaultFocus());
+                    if (needInitialCardFocus)
+                        switchLayout->restoreCardFocus(false);
                 });
             });
         }

@@ -15,9 +15,11 @@ namespace beiklive
 
         void refreshGameList(beiklive::GameList gameList) override;
         brls::Box* getContentBox() { return m_cardRow; }
+        void restoreCardFocus(bool animated = false);
         void buildCardRow(beiklive::GameList gameList);
         void buildFunctionArea();
         void _buildEmptyCards();
+        void onChildFocusGained(brls::View* directChild, brls::View* focusedView) override;
     private:
         brls::HScrollingFrame* m_frame;
         brls::Box* m_cardRow;
@@ -25,5 +27,9 @@ namespace beiklive
         brls::Box* m_functionArea;
 
         std::atomic<int> m_loadGen{0};
+        int m_cardFocusIndex = 0;
+
+        bool isCardRowFocusActive() const;
+        int getCardIndexForFocus(brls::View* focusedView) const;
     };
 } // namespace beiklive

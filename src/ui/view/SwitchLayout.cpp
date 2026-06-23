@@ -44,6 +44,7 @@ namespace beiklive
     void SwitchLayout::_buildEmptyCards()
     {
         m_cardRow->clearViews(true);
+        m_cardRow->setDefaultFocusedIndex(m_cardFocusIndex);
         for (int i = 0; i < DEFAULT_EMPTY_CARDS; ++i)
         {
             beiklive::GameEntry emptyEntry;
@@ -59,9 +60,12 @@ namespace beiklive
     void SwitchLayout::refreshGameList(beiklive::GameList gameList)
     {
         int thisGen = ++m_loadGen;
+        bool restoreFocus = isCardRowFocusActive();
 
         // UI 线程：构建卡片框架（无封面图片）
         buildCardRow(gameList);
+        if (restoreFocus)
+            restoreCardFocus(false);
 
         // 后台线程池：逐张加载封面图片
         auto& children = m_cardRow->getChildren();
@@ -88,6 +92,11 @@ namespace beiklive
         m_cardRow->clearViews(true);
 
         size_t totalSlots = std::max(static_cast<size_t>(DEFAULT_EMPTY_CARDS), gameList.size());
+        if (m_cardFocusIndex < 0)
+            m_cardFocusIndex = 0;
+        if (totalSlots > 0 && m_cardFocusIndex >= static_cast<int>(totalSlots))
+            m_cardFocusIndex = static_cast<int>(totalSlots) - 1;
+        m_cardRow->setDefaultFocusedIndex(m_cardFocusIndex);
 
         for (size_t i = 0; i < totalSlots; ++i)
         {
@@ -189,6 +198,68 @@ namespace beiklive
         m_functionArea->addView(ExitButton);
 
         m_functionArea->addView(new brls::Padding());
+    }
+
+    bool SwitchLayout::isCardRowFocusActive() const
+    {
+        return getCardIndexForFocus(brls::Application::getCurrentFocus()) >= 0;
+    }
+
+    int SwitchLayout::getCardIndexForFocus(brls::View* focusedView) const
+    {
+        if (!focusedView || !m_cardRow)
+            return -1;
+
+        brls::View* view = focusedView;
+        while (view && view->getParent() != m_cardRow)
+            view = view->getParent();
+
+        if (!view)
+            return -1;
+
+        auto& children = m_cardRow->getChildren();
+        for (size_t i = 0; i < children.size(); ++i)
+        {
+            if (children[i] == view)
+                return static_cast<int>(i);
+        }
+        return -1;
+    }
+
+    void SwitchLayout::restoreCardFocus(bool animated)
+    {
+        auto& children = m_cardRow->getChildren();
+        if (children.empty())
+            return;
+
+        if (m_cardFocusIndex < 0)
+            m_cardFocusIndex = 0;
+        if (m_cardFocusIndex >= static_cast<int>(children.size()))
+            m_cardFocusIndex = static_cast<int>(children.size()) - 1;
+
+        m_cardRow->setDefaultFocusedIndex(m_cardFocusIndex);
+        brls::View* target = children[m_cardFocusIndex]->getDefaultFocus();
+        if (!target)
+            return;
+
+        brls::Application::giveFocus(target);
+        if (!animated && m_frame)
+        {
+            float cardCenter = children[m_cardFocusIndex]->getLocalX() + children[m_cardFocusIndex]->getWidth() * 0.5f;
+            float newOffset = cardCenter - m_frame->getWidth() * 0.5f;
+            m_frame->setContentOffsetX(newOffset, false);
+        }
+    }
+
+    void SwitchLayout::onChildFocusGained(brls::View* directChild, brls::View* focusedView)
+    {
+        int index = getCardIndexForFocus(focusedView);
+        if (index >= 0)
+        {
+            m_cardFocusIndex = index;
+            m_cardRow->setDefaultFocusedIndex(index);
+        }
+        Layout::onChildFocusGained(directChild, focusedView);
     }
 
 } // namespace beiklive
