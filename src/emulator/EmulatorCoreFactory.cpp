@@ -25,7 +25,7 @@ IEmulatorCore* CreateEmulatorCore(const beiklive::GameEntry& entry)
             return new beiklive::snes9x::CoreSnes9x(beiklive::CoreType::Snes9x2005, "Snes9x 2005");
         if (coreId == "snes9x")
             return new beiklive::snes9x::CoreSnes9x(beiklive::CoreType::Snes9x, "Snes9x");
-        return new beiklive::snes9x::CoreSnes9x(beiklive::CoreType::Snes9x2010, "Snes9x 2010");
+        return new beiklive::snes9x::CoreSnes9x(beiklive::CoreType::Snes9x2005, "Snes9x 2005");
     case beiklive::enums::EmuPlatform::EmuNDS:
         return new beiklive::melonds::MelonDSCore();
     default:

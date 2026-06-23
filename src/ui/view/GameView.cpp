@@ -117,6 +117,7 @@ namespace beiklive
 
             m_ndsScreenOrientation = normalizeNdsScreenRotation(m_gameEntry.ndsScreenOrientation);
             m_gameEntry.ndsScreenOrientation = m_ndsScreenOrientation;
+            m_ndsIntegerScale = m_gameEntry.ndsIntegerScale;
         }
 
         // 读取连发速率（Hz）
@@ -388,6 +389,9 @@ namespace beiklive
                 if (m_ndsLayout == "custom" || m_ndsLayout == "hybrid") {
                     gw = 1280;
                     gh = 720;
+                } else if (m_ndsLayout == "priority_top") {
+                    gw = 1024;
+                    gh = 768;
                 } else if (m_ndsLayout == "horizontal") {
                     gw = 512;
                     gh = 192;
@@ -398,7 +402,7 @@ namespace beiklive
                     gw = 256;
                     gh = 384;
                 }
-                if (m_ndsLayout != "custom" && m_ndsLayout != "hybrid" &&
+                if (m_ndsLayout != "custom" && m_ndsLayout != "hybrid" && m_ndsLayout != "priority_top" &&
                     (m_ndsScreenOrientation == "90" || m_ndsScreenOrientation == "270"))
                     std::swap(gw, gh);
             }
@@ -406,8 +410,13 @@ namespace beiklive
             int intScale = static_cast<int>(m_gameEntry.integerAspectRatio);
             beiklive::ScreenMode drawMode = m_screenMode;
             if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS) &&
-                (m_ndsLayout == "custom" || m_ndsLayout == "hybrid"))
+                (m_ndsLayout == "custom" || m_ndsLayout == "hybrid" || m_ndsLayout == "priority_top"))
                 drawMode = beiklive::ScreenMode::Fit;
+            else if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS) &&
+                     m_ndsIntegerScale) {
+                drawMode = beiklive::ScreenMode::IntegerScale;
+                intScale = 0;
+            }
             beiklive::DisplayRect rect = beiklive::computeDisplayRect(
                 drawMode, x, y, width, height, gw, gh,
                 m_gameEntry.customScale, m_gameEntry.customOffsetX, m_gameEntry.customOffsetY,
@@ -433,7 +442,7 @@ namespace beiklive
                     const std::array<float, 8> bakedCanvasUv = {0.f, 0.f, 1.f, 0.f, 1.f, 1.f, 0.f, 1.f};
                     m_renderer.drawToScreen(rect.x, rect.y, rect.w, rect.h,
                                             windowScale, windowW, windowH,
-                                            (m_ndsLayout == "custom" || m_ndsLayout == "hybrid")
+                                            (m_ndsLayout == "custom" || m_ndsLayout == "hybrid" || m_ndsLayout == "priority_top")
                                                 ? bakedCanvasUv
                                                 : _ndsOrientationUv());
                 } else {
@@ -688,7 +697,7 @@ namespace beiklive
         auto add = [&](bool topScreen, float x, float y, float w, float h,
                        float canvasW, float canvasH) {
             rects.push_back({
-                topScreen,
+                _mapNdsSourceScreen(topScreen),
                 {
                     layoutRect.x + layoutRect.w * (x / canvasW),
                     layoutRect.y + layoutRect.h * (y / canvasH),
@@ -729,6 +738,40 @@ namespace beiklive
             return rects;
         }
 
+        if (m_ndsLayout == "priority_top") {
+            constexpr float kAspect = 4.0f / 3.0f;
+            float topH = layoutRect.h;
+            float topW = topH * kAspect;
+            float bottomW = std::max(0.0f, layoutRect.w - topW);
+            float bottomH = std::min(layoutRect.h, bottomW / kAspect);
+
+            if (m_ndsIntegerScale) {
+                float topScale = std::floor(std::min(layoutRect.w / 256.0f, layoutRect.h / 192.0f));
+                topScale = std::max(1.0f, topScale);
+                float bottomScale = 0.0f;
+                for (; topScale >= 1.0f; topScale -= 1.0f) {
+                    const float remainingW = layoutRect.w - topScale * 256.0f;
+                    bottomScale = std::floor(std::min(layoutRect.h / 192.0f, remainingW / 256.0f));
+                    if (bottomScale >= 1.0f)
+                        break;
+                }
+                topScale = std::max(1.0f, topScale);
+                bottomScale = std::max(1.0f, bottomScale);
+                topW = topScale * 256.0f;
+                topH = topScale * 192.0f;
+                bottomW = bottomScale * 256.0f;
+                bottomH = bottomScale * 192.0f;
+            }
+
+            const float topY = layoutRect.y + (layoutRect.h - topH) * 0.5f;
+            const float bottomX = layoutRect.x + topW;
+            const float bottomY = layoutRect.y + (layoutRect.h - bottomH) * 0.5f;
+            rects.push_back({_mapNdsSourceScreen(true), {layoutRect.x, topY, topW, topH}});
+            if (bottomW > 0.0f && bottomH > 0.0f)
+                rects.push_back({_mapNdsSourceScreen(false), {bottomX, bottomY, bottomW, bottomH}});
+            return rects;
+        }
+
         if (m_ndsLayout == "horizontal") {
             rects.push_back({true, {layoutRect.x, layoutRect.y, layoutRect.w * 0.5f, layoutRect.h}});
             rects.push_back({false, {layoutRect.x + layoutRect.w * 0.5f, layoutRect.y,
@@ -752,10 +795,15 @@ namespace beiklive
         return rects;
     }
 
+    bool GameView::_mapNdsSourceScreen(bool layoutTopScreen) const
+    {
+        return m_ndsScreensSwapped ? !layoutTopScreen : layoutTopScreen;
+    }
+
     beiklive::DisplayRect GameView::_unrotateNdsRect(
         const beiklive::DisplayRect& orientedRect, const beiklive::DisplayRect&) const
     {
-        if (m_ndsLayout == "custom" || m_ndsLayout == "hybrid")
+        if (m_ndsLayout == "custom" || m_ndsLayout == "hybrid" || m_ndsLayout == "priority_top")
             return orientedRect;
 
         if (m_ndsScreenOrientation == "90" || m_ndsScreenOrientation == "270")
@@ -773,7 +821,7 @@ namespace beiklive
         const beiklive::DisplayRect& layoutRect,
         const beiklive::DisplayRect& orientedRect) const
     {
-        if (m_ndsLayout == "custom" || m_ndsLayout == "hybrid") {
+        if (m_ndsLayout == "custom" || m_ndsLayout == "hybrid" || m_ndsLayout == "priority_top") {
             if (m_ndsScreenOrientation == "90" || m_ndsScreenOrientation == "270") {
                 const float cx = screenRect.x + screenRect.w * 0.5f;
                 const float cy = screenRect.y + screenRect.h * 0.5f;
@@ -1134,6 +1182,21 @@ namespace beiklive
                         EmuFunctionKey::EMU_NDS_POINTER_CLICK, {combo},
                         [this]() { _setNdsVirtualPointerClick(false); },
                         TriggerType::RELEASE);
+                }
+            }
+            {
+                std::string val = readMapping("hotkey.swap_screens.pad", "none");
+                auto combos = beiklive::tools::parseMultiCombo(val);
+                for (const auto& combo : combos) {
+                    GameInputManager::instance().registerEmuFunctionKey(
+                        EmuFunctionKey::EMU_NDS_SWAP_SCREENS, {combo},
+                        [this]() {
+                            m_ndsScreensSwapped = !m_ndsScreensSwapped;
+                            m_ndsTouchRect = {};
+                            _releaseNdsVirtualPointerTouch();
+                            _requestNdsFrameRelayout();
+                            brls::Logger::debug("GameView: NDS screens swapped {}", m_ndsScreensSwapped);
+                        });
                 }
             }
         }
@@ -1535,7 +1598,8 @@ namespace beiklive
                 const int dstH = std::max(3, (dstW * 3) / 4);
                 const int dstX = static_cast<int>(std::lround(baseX + offsetX - (dstW - 256) * 0.5f));
                 const int dstY = static_cast<int>(std::lround(baseY + offsetY - (dstH - 192) * 0.5f));
-                blitScaledOriented(out, frame, topScreen ? 0u : screenH, dstX, dstY, dstW, dstH);
+                blitScaledOriented(out, frame, _mapNdsSourceScreen(topScreen) ? 0u : screenH,
+                                   dstX, dstY, dstW, dstH);
             };
 
             place(true);
@@ -1549,9 +1613,32 @@ namespace beiklive
             out.width = canvasW;
             out.height = canvasH;
             out.pixels.assign(static_cast<size_t>(out.width) * out.height, 0xFF000000u);
-            blitScaledOriented(out, frame, 0u, 0, 40, 853, 640);
-            blitScaledOriented(out, frame, 0u, 853, 40, 427, 320);
-            blitScaledOriented(out, frame, screenH, 853, 360, 427, 320);
+            blitScaledOriented(out, frame, _mapNdsSourceScreen(true) ? 0u : screenH, 0, 40, 853, 640);
+            blitScaledOriented(out, frame, _mapNdsSourceScreen(true) ? 0u : screenH, 853, 40, 427, 320);
+            blitScaledOriented(out, frame, _mapNdsSourceScreen(false) ? 0u : screenH, 853, 360, 427, 320);
+            return out;
+        }
+
+        if (m_ndsLayout == "priority_top") {
+            constexpr unsigned canvasW = 1024;
+            constexpr unsigned canvasH = 768;
+            out.width = canvasW;
+            out.height = canvasH;
+            out.pixels.assign(static_cast<size_t>(out.width) * out.height, 0xFF000000u);
+
+            const int topW = 768;
+            const int topH = 576;
+            const int topY = (static_cast<int>(canvasH) - topH) / 2;
+
+            const int bottomW = static_cast<int>(canvasW) - topW;
+            const int bottomH = (bottomW * 3) / 4;
+            const int bottomX = topW;
+            const int bottomY = (static_cast<int>(canvasH) - bottomH) / 2;
+
+            blitScaledOriented(out, frame, _mapNdsSourceScreen(true) ? 0u : screenH,
+                               0, topY, topW, topH);
+            blitScaledOriented(out, frame, _mapNdsSourceScreen(false) ? 0u : screenH,
+                               bottomX, bottomY, bottomW, bottomH);
             return out;
         }
 
@@ -1561,8 +1648,10 @@ namespace beiklive
             out.height = screenH;
             out.pixels.assign(static_cast<size_t>(out.width) * out.height, 0xFF000000u);
             for (unsigned y = 0; y < screenH; ++y) {
-                const uint32_t* top = frame.pixels.data() + static_cast<size_t>(y) * screenW;
-                const uint32_t* bottom = frame.pixels.data() + static_cast<size_t>(screenH + y) * screenW;
+                const uint32_t* top = frame.pixels.data() +
+                    (static_cast<size_t>(_mapNdsSourceScreen(true) ? y : screenH + y) * screenW);
+                const uint32_t* bottom = frame.pixels.data() +
+                    (static_cast<size_t>(_mapNdsSourceScreen(false) ? y : screenH + y) * screenW);
                 uint32_t* dst = out.pixels.data() + static_cast<size_t>(y) * out.width;
                 std::copy(top, top + screenW, dst);
                 std::copy(bottom, bottom + screenW, dst + screenW + gap);
@@ -1574,7 +1663,8 @@ namespace beiklive
             out.width = screenW;
             out.height = screenH;
             out.pixels.resize(static_cast<size_t>(screenW) * screenH);
-            const size_t offset = (m_ndsLayout == "bottom") ? static_cast<size_t>(screenW) * screenH : 0;
+            const bool sourceTop = _mapNdsSourceScreen(m_ndsLayout == "top");
+            const size_t offset = sourceTop ? 0 : static_cast<size_t>(screenW) * screenH;
             std::copy(frame.pixels.data() + offset,
                       frame.pixels.data() + offset + out.pixels.size(),
                       out.pixels.data());
@@ -2808,7 +2898,8 @@ namespace beiklive
     void GameView::_onNdsLayoutChange(const std::string& layout)
     {
         if (layout == "vertical" || layout == "horizontal" || layout == "custom" ||
-            layout == "hybrid" || layout == "top" || layout == "bottom")
+            layout == "hybrid" || layout == "top" || layout == "bottom" ||
+            layout == "priority_top")
             m_ndsLayout = layout;
         else if (layout == "separate")
             m_ndsLayout = "custom";
@@ -2856,6 +2947,21 @@ namespace beiklive
         m_ndsTouchRect = {};
         _requestNdsFrameRelayout();
 
+    }
+
+    void GameView::_onNdsIntegerScaleChange(bool enabled)
+    {
+        if (m_gameEntry.platform != static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
+            return;
+
+        m_ndsIntegerScale = enabled;
+        m_gameEntry.ndsIntegerScale = enabled;
+        if (beiklive::GameDB && !m_gameEntry.path.empty()) {
+            beiklive::GameDB->set(m_gameEntry.path, "ndsIntegerScale",
+                nlohmann::json(enabled));
+            beiklive::GameDB->flush();
+        }
+        m_ndsTouchRect = {};
     }
 
     void GameView::_onNdsInternalResolutionChange(int scale)

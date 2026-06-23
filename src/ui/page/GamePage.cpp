@@ -384,6 +384,9 @@ namespace beiklive
         m_gameMenuView->setNdsScreenAdjustCallback([this](bool topScreen, float x, float y, float scale) {
             if (m_gameView) m_gameView->_onNdsScreenValuesChanged(topScreen, x, y, scale);
         });
+        m_gameMenuView->setNdsIntegerScaleCallback([this](bool enabled) {
+            if (m_gameView) m_gameView->_onNdsIntegerScaleChange(enabled);
+        });
         m_gameMenuView->setNdsInternalResolutionCallback([this](int scale) {
             if (m_gameView) m_gameView->_onNdsInternalResolutionChange(scale);
         });

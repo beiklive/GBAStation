@@ -8,8 +8,7 @@ namespace beiklive
         Fceumm,
         Snes9x,
         Nestopia,
-        Snes9x2005,
-        Snes9x2010
+        Snes9x2005
     };
 
     /// 游戏画面缩放模式
@@ -130,6 +129,7 @@ namespace beiklive // 结构体
         float ndsBottomOffsetY = 0.0f;
         std::string ndsScreenLayout = ""; // NDS 双屏布局（vertical/horizontal/custom/hybrid/top/bottom）
         std::string ndsScreenOrientation = ""; // NDS 屏幕旋转角度（0/90/180/270，兼容旧方向字符串）
+        bool ndsIntegerScale = false; // NDS 自动最大整数倍缩放
         int ndsInternalResolution = 1; // NDS 3D 内部分辨率倍率（1-4）
 
         std::vector<std::string> shaderParaNames; // 着色器参数名称列表
@@ -249,6 +249,7 @@ namespace beiklive // 结构体
         EMU_RIGHT_STICK_RIGHT,          // 右摇杆向右
         EMU_NDS_POINTER_MODE,           // NDS 指针模式切换
         EMU_NDS_POINTER_CLICK,          // NDS 指针点击
+        EMU_NDS_SWAP_SCREENS,           // NDS 交换上下屏
         EMU_FUNCTION_KEY_COUNT
     };
     enum class TriggerType
@@ -269,6 +270,7 @@ namespace beiklive // 结构体
         { "b_turbo",        EMU_B_TURBO         },
         { "nds_pointer_mode", EMU_NDS_POINTER_MODE },
         { "nds_pointer_click", EMU_NDS_POINTER_CLICK },
+        { "nds_swap_screens", EMU_NDS_SWAP_SCREENS },
     };
 
     enum GameInputPad

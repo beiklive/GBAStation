@@ -1036,8 +1036,8 @@ namespace beiklive
             }
 
             if (isNds) {
-                std::vector<std::string> ndsLayouts = {"上下屏", "左右屏", "自定义", "混合", "仅上屏", "仅下屏"};
-                std::vector<std::string> ndsLayoutIds = {"vertical", "horizontal", "custom", "hybrid", "top", "bottom"};
+                std::vector<std::string> ndsLayouts = {"上下屏", "左右屏", "上屏优先", "自定义", "混合", "仅上屏", "仅下屏"};
+                std::vector<std::string> ndsLayoutIds = {"vertical", "horizontal", "priority_top", "custom", "hybrid", "top", "bottom"};
                 std::string currentLayout = m_gameEntry.ndsScreenLayout.empty() ? "vertical" : m_gameEntry.ndsScreenLayout;
                 if (currentLayout == "separate") {
                     currentLayout = "custom";
@@ -1109,6 +1109,21 @@ namespace beiklive
                             m_ndsLayoutCallback(ndsLayoutIds[idx]);
                     });
                 box->addView(ndsLayoutCell);
+
+                auto* ndsIntegerScaleCell = new brls::BooleanCell();
+                ndsIntegerScaleCell->init("NDS画面整数缩放", m_gameEntry.ndsIntegerScale,
+                    [this](bool enabled) {
+                        m_gameEntry.ndsIntegerScale = enabled;
+                        if (beiklive::GameDB && !m_gameEntry.path.empty()) {
+                            beiklive::GameDB->set(m_gameEntry.path, "ndsIntegerScale",
+                                nlohmann::json(m_gameEntry.ndsIntegerScale));
+                            beiklive::GameDB->flush();
+                        }
+                        if (m_ndsIntegerScaleCallback)
+                            m_ndsIntegerScaleCallback(enabled);
+                    });
+                box->addView(ndsIntegerScaleCell);
+                box->addView(makeHint("开启后，上下屏、左右屏、上屏优先、仅上屏、仅下屏会按窗口空间自动使用最大整数倍缩放；自定义和混合布局不受影响"));
 
                 syncNdsAdjustCells(currentLayout == "custom");
                 ndsTopCell->setText("上屏调整");

@@ -68,6 +68,7 @@ namespace beiklive::input_mapping
     inline constexpr HotkeyDefault kNdsPointerHotkeys[] = {
         {"hotkey.pointer_mode.pad", "NDS 指针模式切换", "none", false},
         {"hotkey.pointer_click.pad", "NDS 指针点击", "none", false},
+        {"hotkey.swap_screens.pad", "交换上下屏", "none", false},
     };
 
     inline constexpr const char* kTurboAKey = "handle.a_turbo";

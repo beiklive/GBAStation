@@ -128,32 +128,6 @@ void snes9x2005_retro_cheat_reset(void);
 void snes9x2005_retro_cheat_set(unsigned, bool, const char*);
 unsigned snes9x2005_retro_get_region(void);
 
-// ---- Snes9x 2010（SNES）重命名符号 -------------------------
-void snes9x2010_retro_init(void);
-void snes9x2010_retro_deinit(void);
-unsigned snes9x2010_retro_api_version(void);
-void snes9x2010_retro_get_system_info(struct retro_system_info*);
-void snes9x2010_retro_get_system_av_info(struct retro_system_av_info*);
-void snes9x2010_retro_set_environment(retro_environment_t);
-void snes9x2010_retro_set_video_refresh(retro_video_refresh_t);
-void snes9x2010_retro_set_audio_sample(retro_audio_sample_t);
-void snes9x2010_retro_set_audio_sample_batch(retro_audio_sample_batch_t);
-void snes9x2010_retro_set_input_poll(retro_input_poll_t);
-void snes9x2010_retro_set_input_state(retro_input_state_t);
-void snes9x2010_retro_set_controller_port_device(unsigned, unsigned);
-void snes9x2010_retro_reset(void);
-void snes9x2010_retro_run(void);
-size_t snes9x2010_retro_serialize_size(void);
-bool snes9x2010_retro_serialize(void*, size_t);
-bool snes9x2010_retro_unserialize(const void*, size_t);
-bool snes9x2010_retro_load_game(const struct retro_game_info*);
-void snes9x2010_retro_unload_game(void);
-void* snes9x2010_retro_get_memory_data(unsigned);
-size_t snes9x2010_retro_get_memory_size(unsigned);
-void snes9x2010_retro_cheat_reset(void);
-void snes9x2010_retro_cheat_set(unsigned, bool, const char*);
-unsigned snes9x2010_retro_get_region(void);
-
 } // extern "C"
 
 // ---- 像素格式辅助函数 -------------------------------------------
@@ -474,32 +448,6 @@ bool LibretroLoader::load(CoreType coreType)
             fn_get_memory_size        = snes9x2005_retro_get_memory_size;
             break;
 
-        case CoreType::Snes9x2010:
-            fn_set_environment        = snes9x2010_retro_set_environment;
-            fn_set_video_refresh      = snes9x2010_retro_set_video_refresh;
-            fn_set_audio_sample       = snes9x2010_retro_set_audio_sample;
-            fn_set_audio_sample_batch = snes9x2010_retro_set_audio_sample_batch;
-            fn_set_input_poll         = snes9x2010_retro_set_input_poll;
-            fn_set_input_state        = snes9x2010_retro_set_input_state;
-            fn_init                   = snes9x2010_retro_init;
-            fn_deinit                 = snes9x2010_retro_deinit;
-            fn_api_version            = snes9x2010_retro_api_version;
-            fn_get_system_info        = snes9x2010_retro_get_system_info;
-            fn_get_system_av_info     = snes9x2010_retro_get_system_av_info;
-            fn_set_controller_port_device = snes9x2010_retro_set_controller_port_device;
-            fn_reset                  = snes9x2010_retro_reset;
-            fn_run                    = snes9x2010_retro_run;
-            fn_serialize_size         = snes9x2010_retro_serialize_size;
-            fn_serialize              = snes9x2010_retro_serialize;
-            fn_unserialize            = snes9x2010_retro_unserialize;
-            fn_load_game              = snes9x2010_retro_load_game;
-            fn_unload_game            = snes9x2010_retro_unload_game;
-            fn_cheat_reset            = snes9x2010_retro_cheat_reset;
-            fn_cheat_set              = snes9x2010_retro_cheat_set;
-            fn_get_memory_data        = snes9x2010_retro_get_memory_data;
-            fn_get_memory_size        = snes9x2010_retro_get_memory_size;
-            break;
-
     }
 
     m_handle = reinterpret_cast<void*>(1); // 哨兵值：符号已绑定
@@ -622,7 +570,7 @@ void LibretroLoader::unload()
 // ============================================================
 
 // 跟踪哪些核心类型已经调用了 retro_init()，防止重复初始化
-static bool s_coreInitialized[6] = {false, false, false, false, false, false};
+static bool s_coreInitialized[5] = {false, false, false, false, false};
 
 bool LibretroLoader::initCore()
 {

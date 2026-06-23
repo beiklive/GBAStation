@@ -47,7 +47,6 @@ const coreOptionsByPlatform = {
     ['fceumm', 'FCEUmm'],
   ],
   SFC: [
-    ['snes9x2010', 'Snes9x 2010'],
     ['snes9x2005', 'Snes9x 2005'],
     ['snes9x', 'Snes9x'],
   ],
@@ -102,6 +101,7 @@ const gameConfigFields = [
     [3, '3x'],
     [4, '4x'],
   ] },
+  { key: 'ndsIntegerScale', label: 'NDS 画面整数缩放', type: 'boolean', group: 'NDS 配置', ndsOnly: true },
   { key: 'ndsTopScale', label: '上屏缩放', type: 'number', step: '0.01', group: 'NDS 配置', ndsOnly: true },
   { key: 'ndsTopOffsetX', label: '上屏 X 偏移', type: 'number', step: '0.01', group: 'NDS 配置', ndsOnly: true },
   { key: 'ndsTopOffsetY', label: '上屏 Y 偏移', type: 'number', step: '0.01', group: 'NDS 配置', ndsOnly: true },

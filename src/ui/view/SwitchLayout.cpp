@@ -7,8 +7,6 @@ namespace beiklive
 {
     static constexpr int DEFAULT_EMPTY_CARDS = 10;
     static constexpr long CARD_REFRESH_STAGGER_MS = 35;
-    static constexpr int INTRO_CARD_FADE_MS = 220;
-    static constexpr int INTRO_FUNCTION_MS = 260;
 
     SwitchLayout::SwitchLayout() : Layout()
     {
@@ -73,8 +71,6 @@ namespace beiklive
 
         // UI 线程：保证卡片槽位存在，但不清空整行，避免刷新时出现全空闪烁
         buildCardRow(gameList);
-        if (!m_introAnimationPlayed && !gameList.empty())
-            playInitialIntroAnimation();
         if (restoreFocus)
             restoreCardFocus(false);
 
@@ -289,73 +285,6 @@ namespace beiklive
         m_cardFocusIndex = 0;
         m_cardRow->setDefaultFocusedIndex(0);
         restoreCardFocus(false);
-    }
-
-    void SwitchLayout::playInitialIntroAnimation()
-    {
-        if (m_introAnimationPlayed)
-            return;
-
-        m_introAnimationPlayed = true;
-        m_introAnimating = true;
-
-        m_introCardAlpha.stop();
-        m_introFunctionAlpha.stop();
-        m_introFunctionY.stop();
-
-        m_introCardAlpha.reset(0.0f);
-        m_introFunctionAlpha.reset(0.0f);
-        m_introFunctionY.reset(26.0f);
-
-        if (m_cardRow)
-            m_cardRow->setAlpha(0.0f);
-        if (m_functionArea)
-        {
-            m_functionArea->setAlpha(0.0f);
-            m_functionArea->setTranslationY(26.0f);
-        }
-
-        m_introCardAlpha.addStep(1.0f, INTRO_CARD_FADE_MS, brls::EasingFunction::quadraticOut);
-        m_introCardAlpha.start();
-
-        brls::delay(70, [this]() {
-            if (!m_introAnimating)
-                return;
-
-            m_introFunctionAlpha.addStep(1.0f, INTRO_FUNCTION_MS, brls::EasingFunction::quadraticOut);
-            m_introFunctionY.addStep(0.0f, INTRO_FUNCTION_MS, brls::EasingFunction::quadraticOut);
-            m_introFunctionY.setEndCallback([this](bool finished) {
-                if (!finished)
-                    return;
-                m_introAnimating = false;
-                if (m_cardRow)
-                    m_cardRow->setAlpha(1.0f);
-                if (m_functionArea)
-                {
-                    m_functionArea->setAlpha(1.0f);
-                    m_functionArea->setTranslationY(0.0f);
-                }
-            });
-            m_introFunctionAlpha.start();
-            m_introFunctionY.start();
-        });
-    }
-
-    void SwitchLayout::frame(brls::FrameContext* ctx)
-    {
-        Layout::frame(ctx);
-
-        if (!m_introAnimating)
-            return;
-
-        if (m_cardRow)
-            m_cardRow->setAlpha(m_introCardAlpha);
-        if (m_functionArea)
-        {
-            m_functionArea->setAlpha(m_introFunctionAlpha);
-            m_functionArea->setTranslationY(m_introFunctionY);
-        }
-        invalidate();
     }
 
     void SwitchLayout::onChildFocusGained(brls::View* directChild, brls::View* focusedView)

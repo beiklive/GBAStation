@@ -1,8 +1,0 @@
-*.bc
-*.js
-*.o
-*.so
-package.json
-.npmignore
-*.gcda
-*tags

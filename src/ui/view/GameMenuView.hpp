@@ -53,6 +53,7 @@ namespace beiklive
             void setNdsLayoutCallback(std::function<void(const std::string&)> cb) { m_ndsLayoutCallback = std::move(cb); }
             void setNdsScreenOrientationCallback(std::function<void(const std::string&)> cb) { m_ndsScreenOrientationCallback = std::move(cb); }
             void setNdsScreenAdjustCallback(std::function<void(bool, float, float, float)> cb) { m_ndsScreenAdjustCallback = std::move(cb); }
+            void setNdsIntegerScaleCallback(std::function<void(bool)> cb) { m_ndsIntegerScaleCallback = std::move(cb); }
             void setNdsInternalResolutionCallback(std::function<void(int)> cb) { m_ndsInternalResolutionCallback = std::move(cb); }
             void setIntegerScaleCallback(std::function<void(float)> cb) { m_integerScaleCallback = std::move(cb); }
             void setShaderToggleCallback(std::function<void(bool)> cb) { m_shaderToggleCallback = std::move(cb); }
@@ -81,6 +82,7 @@ namespace beiklive
             std::function<void(const std::string&)> m_ndsLayoutCallback;
             std::function<void(const std::string&)> m_ndsScreenOrientationCallback;
             std::function<void(bool, float, float, float)> m_ndsScreenAdjustCallback;
+            std::function<void(bool)> m_ndsIntegerScaleCallback;
             std::function<void(int)> m_ndsInternalResolutionCallback;
             std::function<void(float)> m_integerScaleCallback; ///< 整数倍缩放变更回调 (newScale)
             std::function<void(bool)> m_shaderToggleCallback;

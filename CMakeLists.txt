@@ -228,7 +228,6 @@ endif()
 # Snes9x        – SNES / SFC          (snes9x_retro_*)
 # Nestopia      – NES / Famicom       (nestopia_retro_*)
 # Snes9x 2005   – SNES / SFC          (snes9x2005_retro_*)
-# Snes9x 2010   – SNES / SFC          (snes9x2010_retro_*)
 #
 # 桌面平台: mgba_libretro 作为共享库供 dlopen 加载，
 #           其余核心静态链接。
@@ -249,10 +248,6 @@ endif()
 if (TARGET snes9x2005_core)
     target_link_libraries(${PROJECT_NAME} PRIVATE snes9x2005_core)
     message(STATUS "Linking Snes9x 2005 (SNES) core statically")
-endif()
-if (TARGET snes9x2010_core)
-    target_link_libraries(${PROJECT_NAME} PRIVATE snes9x2010_core)
-    message(STATUS "Linking Snes9x 2010 (SNES) core statically")
 endif()
 if (TARGET melonds_core)
     target_link_libraries(${PROJECT_NAME} PRIVATE melonds_core)

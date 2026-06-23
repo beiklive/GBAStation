@@ -112,6 +112,8 @@ namespace beiklive
             void _onNdsScreenOrientationChange(const std::string& orientation);
             /// NDS 自定义双屏位置/缩放变更（UI线程调用）
             void _onNdsScreenValuesChanged(bool topScreen, float x, float y, float scale);
+            /// NDS 自动最大整数倍缩放变更（UI线程调用）
+            void _onNdsIntegerScaleChange(bool enabled);
             /// NDS 3D 内部分辨率倍率变更（UI线程调用）
             void _onNdsInternalResolutionChange(int scale);
             /// 纹理过滤变更（UI线程调用）
@@ -159,6 +161,8 @@ namespace beiklive
             beiklive::DisplayRect m_ndsTouchRect; ///< NDS 下屏在视图中的绘制区域
             std::string m_ndsLayout = "vertical"; ///< NDS 双屏布局
             std::string m_ndsScreenOrientation = "0"; ///< NDS 屏幕旋转角度（0/90/180/270）
+            bool m_ndsIntegerScale = false; ///< NDS 是否自动最大整数倍缩放
+            bool m_ndsScreensSwapped = false; ///< NDS 是否交换上下屏显示位置
             bool m_ndsTouchActive = false; ///< NDS 原始触摸轮询是否处于按下状态
             bool m_ndsVirtualPointerMode = false; ///< NDS 虚拟指针模式是否开启
             bool m_ndsVirtualPointerClickHeld = false; ///< NDS 虚拟指针点击键是否按住
@@ -251,6 +255,7 @@ namespace beiklive
             };
             std::vector<NdsScreenDrawRect> _computeNdsScreenDrawRects(
                 const beiklive::DisplayRect& layoutRect) const;
+            bool _mapNdsSourceScreen(bool layoutTopScreen) const;
             beiklive::DisplayRect _rotateNdsScreenRect(
                 const beiklive::DisplayRect& screenRect,
                 const beiklive::DisplayRect& layoutRect,

@@ -24,7 +24,6 @@ namespace beiklive
         void _buildEmptyCards();
         void onChildFocusGained(brls::View* directChild, brls::View* focusedView) override;
         brls::View* getParentNavigationDecision(brls::View* from, brls::View* newFocus, brls::FocusDirection direction) override;
-        void frame(brls::FrameContext* ctx) override;
     private:
         brls::HScrollingFrame* m_frame;
         brls::Box* m_cardRow;
@@ -33,15 +32,9 @@ namespace beiklive
 
         std::atomic<int> m_loadGen{0};
         int m_cardFocusIndex = 0;
-        bool m_introAnimationPlayed = false;
-        bool m_introAnimating = false;
-        brls::Animatable m_introCardAlpha{1.0f};
-        brls::Animatable m_introFunctionAlpha{1.0f};
-        brls::Animatable m_introFunctionY{0.0f};
 
         bool isCardRowFocusActive() const;
         int getCardIndexForFocus(brls::View* focusedView) const;
         void configureGameCard(GameCard* gameCard);
-        void playInitialIntroAnimation();
     };
 } // namespace beiklive

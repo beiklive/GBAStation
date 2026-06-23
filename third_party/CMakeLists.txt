@@ -9,7 +9,6 @@ set(FCEUMM_PATH        ${CMAKE_CURRENT_SOURCE_DIR}/libretro-fceumm)
 set(SNES9X_PATH        ${CMAKE_CURRENT_SOURCE_DIR}/snes9x)
 set(NESTOPIA_PATH      ${CMAKE_CURRENT_SOURCE_DIR}/nestopia)
 set(SNES9X2005_PATH    ${CMAKE_CURRENT_SOURCE_DIR}/snes9x2005)
-set(SNES9X2010_PATH    ${CMAKE_CURRENT_SOURCE_DIR}/snes9x2010)
 set(MELONDS_PATH       ${CMAKE_CURRENT_SOURCE_DIR}/melonDS)
 
 # =========================================================
@@ -459,67 +458,6 @@ apply_data_symbol_rename(snes9x2005_core_obj snes9x2005)
 target_compile_definitions(snes9x2005_core_obj PRIVATE "PPU=snes9x2005_PPU")
 set_target_properties(snes9x2005_core_obj PROPERTIES C_STANDARD 11)
 add_isolated_libretro_core(snes9x2005_core snes9x2005_core_obj snes9x2005)
-
-# =========================================================
-# Snes9x 2010 (SNES) 核心
-# =========================================================
-set(SNES9X2010_SRC_DIR ${SNES9X2010_PATH}/src)
-set(SNES9X2010_LRC_DIR ${SNES9X2010_PATH}/libretro/libretro-common)
-set(SNES9X2010_SRC
-    ${SNES9X2010_SRC_DIR}/apu.c
-    ${SNES9X2010_SRC_DIR}/bsx.c
-    ${SNES9X2010_SRC_DIR}/c4emu.c
-    ${SNES9X2010_SRC_DIR}/cheats.c
-    ${SNES9X2010_SRC_DIR}/controls.c
-    ${SNES9X2010_SRC_DIR}/cpu.c
-    ${SNES9X2010_SRC_DIR}/cpuexec.c
-    ${SNES9X2010_SRC_DIR}/dsp.c
-    ${SNES9X2010_SRC_DIR}/fxemu.c
-    ${SNES9X2010_SRC_DIR}/globals.c
-    ${SNES9X2010_SRC_DIR}/memmap.c
-    ${SNES9X2010_SRC_DIR}/obc1.c
-    ${SNES9X2010_SRC_DIR}/ppu.c
-    ${SNES9X2010_SRC_DIR}/sa1.c
-    ${SNES9X2010_SRC_DIR}/sdd1.c
-    ${SNES9X2010_SRC_DIR}/seta.c
-    ${SNES9X2010_SRC_DIR}/snapshot.c
-    ${SNES9X2010_SRC_DIR}/spc7110.c
-    ${SNES9X2010_SRC_DIR}/srtc.c
-    ${SNES9X2010_SRC_DIR}/tile.c
-    ${SNES9X2010_SRC_DIR}/hwregisters.c
-    ${SNES9X2010_PATH}/filter/snes_ntsc.c
-    ${SNES9X2010_PATH}/libretro/libretro.c
-    ${SNES9X2010_LRC_DIR}/compat/compat_posix_string.c
-    ${SNES9X2010_LRC_DIR}/compat/compat_snprintf.c
-    ${SNES9X2010_LRC_DIR}/compat/compat_strcasestr.c
-    ${SNES9X2010_LRC_DIR}/compat/compat_strl.c
-    ${SNES9X2010_LRC_DIR}/compat/fopen_utf8.c
-    ${SNES9X2010_LRC_DIR}/encodings/encoding_utf.c
-    ${SNES9X2010_LRC_DIR}/file/file_path.c
-    ${SNES9X2010_LRC_DIR}/file/file_path_io.c
-    ${SNES9X2010_LRC_DIR}/streams/file_stream.c
-    ${SNES9X2010_LRC_DIR}/streams/file_stream_transforms.c
-    ${SNES9X2010_LRC_DIR}/streams/memory_stream.c
-    ${SNES9X2010_LRC_DIR}/string/stdstring.c
-    ${SNES9X2010_LRC_DIR}/time/rtime.c
-    ${SNES9X2010_LRC_DIR}/vfs/vfs_implementation.c
-)
-
-add_library(snes9x2010_core_obj OBJECT ${SNES9X2010_SRC})
-target_include_directories(snes9x2010_core_obj PRIVATE
-    ${SNES9X2010_PATH}/libretro
-    ${SNES9X2010_SRC_DIR}
-    ${SNES9X2010_LRC_DIR}/include
-)
-target_compile_definitions(snes9x2010_core_obj PRIVATE __LIBRETRO__ INLINE=inline)
-if (PLATFORM_SWITCH)
-    target_compile_definitions(snes9x2010_core_obj PRIVATE __SWITCH__ SWITCH HAVE_LIBNX)
-endif()
-apply_retro_symbol_rename(snes9x2010_core_obj snes9x2010)
-apply_data_symbol_rename(snes9x2010_core_obj snes9x2010)
-target_compile_definitions(snes9x2010_core_obj PRIVATE "PPU=snes9x2010_PPU")
-set_target_properties(snes9x2010_core_obj PROPERTIES C_STANDARD 11)
-add_isolated_libretro_core(snes9x2010_core snes9x2010_core_obj snes9x2010)
 
 # =========================================================
 # melonDS (NDS) 原生核心

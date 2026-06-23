@@ -141,7 +141,6 @@ namespace beiklive // 全局功能函数
             {"fceumm", "FCEUmm", CoreType::Fceumm},
         };
         static const std::vector<CoreOption> snesCores = {
-            {"snes9x2010", "Snes9x 2010", CoreType::Snes9x2010},
             {"snes9x2005", "Snes9x 2005", CoreType::Snes9x2005},
             {"snes9x", "Snes9x", CoreType::Snes9x},
         };
@@ -178,7 +177,7 @@ namespace beiklive // 全局功能函数
         case (int)beiklive::enums::EmuPlatform::EmuNES:
             return "nestopia";
         case (int)beiklive::enums::EmuPlatform::EmuSNES:
-            return "snes9x2010";
+            return "snes9x2005";
         case (int)beiklive::enums::EmuPlatform::EmuNDS:
             return "melonds";
         default:
