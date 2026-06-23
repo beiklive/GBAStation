@@ -110,6 +110,7 @@ namespace beiklive
             if (m_ndsLayout == "separate")
                 m_ndsLayout = "custom";
             if (m_ndsLayout != "vertical" && m_ndsLayout != "horizontal" &&
+                m_ndsLayout != "priority_top" &&
                 m_ndsLayout != "custom" && m_ndsLayout != "hybrid" &&
                 m_ndsLayout != "top" && m_ndsLayout != "bottom")
                 m_ndsLayout = "vertical";
@@ -417,10 +418,16 @@ namespace beiklive
                 drawMode = beiklive::ScreenMode::IntegerScale;
                 intScale = 0;
             }
-            beiklive::DisplayRect rect = beiklive::computeDisplayRect(
-                drawMode, x, y, width, height, gw, gh,
-                m_gameEntry.customScale, m_gameEntry.customOffsetX, m_gameEntry.customOffsetY,
-                intScale);
+            beiklive::DisplayRect rect;
+            if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS) &&
+                m_ndsLayout == "priority_top") {
+                rect = {x, y, width, height};
+            } else {
+                rect = beiklive::computeDisplayRect(
+                    drawMode, x, y, width, height, gw, gh,
+                    m_gameEntry.customScale, m_gameEntry.customOffsetX, m_gameEntry.customOffsetY,
+                    intScale);
+            }
             m_gameDrawRect = rect;
             _updateNdsTouchRect(rect);
 
@@ -438,6 +445,37 @@ namespace beiklive
                     }
                 } else if (_drawNdsAcceleratedTexture(rect, windowScale, windowW, windowH)) {
                     // NDS OpenGL/Compute 3D renderer output was copied into the normal renderer texture.
+                } else if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS) &&
+                           m_ndsLayout == "priority_top") {
+                    const unsigned texW = m_renderer.texWidth();
+                    const unsigned texH = m_renderer.texHeight();
+                    const GLuint tex = m_renderer.texId();
+                    if (tex != 0 && texW >= 256 && texH >= 384) {
+                        const float scale = static_cast<float>(texW) / 256.0f;
+                        const float topV0 = 0.0f;
+                        const float topV1 = (192.0f * scale) / static_cast<float>(texH);
+                        const float bottomV0 = topV1;
+                        const float bottomV1 = 1.0f;
+                        const beiklive::DisplayRect layoutRect = _unrotateNdsRect(rect, rect);
+                        const auto orientationUv = _ndsOrientationUv();
+                        for (const auto& screenRect : _computeNdsScreenDrawRects(layoutRect)) {
+                            const float v0 = screenRect.topScreen ? topV0 : bottomV0;
+                            const float v1 = screenRect.topScreen ? topV1 : bottomV1;
+                            std::array<float, 8> uv{};
+                            for (size_t i = 0; i < 4; ++i) {
+                                const float u = orientationUv[i * 2];
+                                const float v = orientationUv[i * 2 + 1];
+                                uv[i * 2] = u;
+                                uv[i * 2 + 1] = v0 + (v1 - v0) * v;
+                            }
+                            const auto rotatedRect = _rotateNdsScreenRect(screenRect.rect, layoutRect, rect);
+                            m_renderer.drawExternalTexture(tex, texW, texH,
+                                                           rotatedRect.x, rotatedRect.y,
+                                                           rotatedRect.w, rotatedRect.h,
+                                                           windowScale, windowW, windowH,
+                                                           uv, false);
+                        }
+                    }
                 } else if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)) {
                     const std::array<float, 8> bakedCanvasUv = {0.f, 0.f, 1.f, 0.f, 1.f, 1.f, 0.f, 1.f};
                     m_renderer.drawToScreen(rect.x, rect.y, rect.w, rect.h,
@@ -542,7 +580,8 @@ namespace beiklive
                 _uploadNdsSplitShaderFrame(frame);
                 return;
             }
-            if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
+            if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS) &&
+                m_ndsLayout != "priority_top")
                 frame = _layoutNdsFrame(frame);
             const bool isNds = m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS);
             const auto uploadStart = std::chrono::steady_clock::now();
@@ -746,17 +785,21 @@ namespace beiklive
             float bottomH = std::min(layoutRect.h, bottomW / kAspect);
 
             if (m_ndsIntegerScale) {
-                float topScale = std::floor(std::min(layoutRect.w / 256.0f, layoutRect.h / 192.0f));
-                topScale = std::max(1.0f, topScale);
-                float bottomScale = 0.0f;
-                for (; topScale >= 1.0f; topScale -= 1.0f) {
-                    const float remainingW = layoutRect.w - topScale * 256.0f;
-                    bottomScale = std::floor(std::min(layoutRect.h / 192.0f, remainingW / 256.0f));
-                    if (bottomScale >= 1.0f)
-                        break;
+                float topScale = 3.0f;
+                float bottomScale = 2.0f;
+                if (layoutRect.w < 1280.0f || layoutRect.h < 576.0f) {
+                    topScale = std::floor(std::min(layoutRect.w / 256.0f, layoutRect.h / 192.0f));
+                    topScale = std::max(1.0f, topScale);
+                    bottomScale = 0.0f;
+                    for (; topScale >= 1.0f; topScale -= 1.0f) {
+                        const float remainingW = layoutRect.w - topScale * 256.0f;
+                        bottomScale = std::floor(std::min(layoutRect.h / 192.0f, remainingW / 256.0f));
+                        if (bottomScale >= 1.0f)
+                            break;
+                    }
+                    topScale = std::max(1.0f, topScale);
+                    bottomScale = std::max(1.0f, bottomScale);
                 }
-                topScale = std::max(1.0f, topScale);
-                bottomScale = std::max(1.0f, bottomScale);
                 topW = topScale * 256.0f;
                 topH = topScale * 192.0f;
                 bottomW = bottomScale * 256.0f;
