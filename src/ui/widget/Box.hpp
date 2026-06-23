@@ -20,6 +20,7 @@ namespace beiklive
         brls::BottomBar* getBottomBar() { return bottomBar; }
         void showHeader(bool show);
         void showFooter(bool show);
+        void hideFooterLine(){ bottomBar->hideLineTop(); }
         void showBackground(bool show);
         void setBackgroundImage(const std::string& path);
         void showShader(bool show);

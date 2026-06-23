@@ -34,6 +34,7 @@ const std::string bottomBarXML = R"xml(
     height="@style/brls/applet_frame/footer_height"
     axis="column">
     <brls:Box
+        id="brls/bottomBarbox"
         width="auto"
         height="@style/brls/applet_frame/footer_height"
         marginLeft="@style/brls/hints/footer_margin_sides"
@@ -95,6 +96,11 @@ BottomBar::BottomBar()
     Platform* platform = Application::getPlatform();
     battery->setVisibility(platform->canShowBatteryLevel() ? Visibility::VISIBLE : Visibility::GONE);
     wireless->setVisibility(platform->canShowWirelessLevel() ? Visibility::VISIBLE : Visibility::GONE);
+}
+
+void BottomBar::hideLineTop()
+{
+    bottomBarbox->setLineTop(0);
 }
 
 void BottomBar::draw(NVGcontext* vg, float x, float y, float width, float height, Style style, FrameContext* ctx)

@@ -45,6 +45,7 @@ namespace beiklive
         beiklive::GameOptionsSidebar* m_gameOptionsSidebar = nullptr;
         std::atomic<bool> m_alive{true};
         std::atomic<int> m_recentRefreshGen{0};
+        bool m_resetCardFocusOnNextRefresh = false;
     };
 } // namespace beiklive
 

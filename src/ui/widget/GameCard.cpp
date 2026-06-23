@@ -21,9 +21,6 @@ namespace beiklive
 
         addGestureRecognizer(new brls::TapGestureRecognizer(this));
 
-        m_enterT        = -index * 0.01f;
-        m_enterScale    = 1.0f;
-        m_enterAnimating = false;
     }
 
     GameCard::~GameCard() {}
@@ -47,6 +44,57 @@ namespace beiklive
         default:
             break;
         }
+    }
+
+    void GameCard::setGameEntry(beiklive::GameEntry gameEntry, bool loadCover)
+    {
+        m_gameEntry = std::move(gameEntry);
+        m_isEmpty = m_gameEntry.path.empty();
+
+        if (m_titleLabel)
+        {
+            m_titleLabel->setText(m_isEmpty ? " " : m_gameEntry.title);
+            m_titleLabel->setVisibility(brls::Visibility::INVISIBLE);
+        }
+
+        std::string playStr = "未游玩";
+        if (!m_isEmpty && m_gameEntry.playTime > 0)
+        {
+            int h = m_gameEntry.playTime / 3600;
+            int min = (m_gameEntry.playTime % 3600) / 60;
+            playStr = "游玩时间: " + std::to_string(h) + "时" + std::to_string(min) + "分";
+        }
+        if (m_playTimeLabel)
+        {
+            m_playTimeLabel->setText(m_isEmpty ? " " : playStr);
+            m_playTimeLabel->setVisibility(brls::Visibility::INVISIBLE);
+        }
+
+        std::string timeStr = m_gameEntry.lastPlayed.empty()
+            ? "上次打开: 从未"
+            : "上次打开: " + beiklive::tools::formatTimestampForDisplay(m_gameEntry.lastPlayed);
+        if (m_lastPlayedLabel)
+        {
+            m_lastPlayedLabel->setText(m_isEmpty ? " " : timeStr);
+            m_lastPlayedLabel->setVisibility(brls::Visibility::INVISIBLE);
+        }
+
+        m_infoAnimating = false;
+        m_infoOffset = 0.f;
+        if (m_playTimeLabel)
+            m_playTimeLabel->setTranslationX(0.f);
+        if (m_lastPlayedLabel)
+            m_lastPlayedLabel->setTranslationX(0.f);
+
+        if (m_coverImage)
+        {
+            if (m_isEmpty || m_gameEntry.logoPath.empty())
+                m_coverImage->clear();
+            else if (loadCover)
+                loadCoverImage(m_gameEntry.logoPath);
+        }
+
+        invalidate();
     }
 
     void GameCard::updateLogo(const std::string &logoPath)
@@ -147,10 +195,7 @@ namespace beiklive
         m_coverImage->setHighlightCornerRadius(18.f);
         m_coverImage->setCornerRadius(15.f);
 
-        if (!m_isEmpty && !m_gameEntry.logoPath.empty())
-            m_coverImage->setImageFromFile(m_gameEntry.logoPath);
-        else if (m_isEmpty)
-            m_coverImage->clear(); // 空卡片不加载图片
+        m_coverImage->clear();
 
         m_imageLayer = new brls::Image();
         m_imageLayer->setWidth(COVER_WIDTH_SWITCH);
@@ -298,28 +343,6 @@ namespace beiklive
     void GameCard::draw(NVGcontext *vg, float x, float y, float w, float h,
                         brls::Style style, brls::FrameContext *ctx)
     {
-        // 入场动画
-        if (m_enterAnimating)
-        {
-            m_enterT += 1.0f / 120.0f;
-            float duration = 0.35f;
-            float t = m_enterT / duration;
-            if (t >= 1.0f)
-            {
-                m_enterScale     = 1.0f;
-                m_enterAnimating = false;
-            }
-            else
-            {
-                float overshoot = 1.2f;
-                float p = t - 1.0f;
-                float ease = 1.0f + overshoot * (p * p * p + p * p);
-                float start = 0.75f;
-                m_enterScale = start + (1.0f - start) * ease;
-            }
-            invalidate();
-        }
-
         // 信息标签滑入动画
         if (m_infoAnimating)
         {
@@ -362,7 +385,7 @@ namespace beiklive
             invalidate();
         }
 
-        float finalScale = m_scale * m_clickScale * m_enterScale;
+        float finalScale = m_scale * m_clickScale;
 
         const float cx = x + w * 0.5f;
         const float cy = y + h * 0.5f;
@@ -371,7 +394,6 @@ namespace beiklive
         nvgTranslate(vg, cx, cy);
         nvgScale(vg, finalScale, finalScale);
         nvgTranslate(vg, -cx, -cy);
-
         // 先绘制子视图，再叠加信息标签的滑动偏移
         brls::Box::draw(vg, x, y, w, h, style, ctx);
 

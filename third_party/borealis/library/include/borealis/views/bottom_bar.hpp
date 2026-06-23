@@ -29,12 +29,14 @@ class BottomBar : public Box
 {
   public:
     BottomBar();
+    void hideLineTop();
     void draw(NVGcontext* vg, float x, float y, float width, float height, Style style, FrameContext* ctx) override;
     static View* create();
 
   private:
     void updateText();
     std::string bottomText;
+    BRLS_BIND(Box, bottomBarbox, "brls/bottomBarbox");
     BRLS_BIND(Box, hints, "brls/hints");
     BRLS_BIND(Label, time, "brls/hints/time");
     BRLS_BIND(View, battery, "brls/battery");

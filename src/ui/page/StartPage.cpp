@@ -18,6 +18,7 @@ namespace beiklive
         brls::sync([this]()
                    {
         this->showHeader(false);
+        this->hideFooterLine();
         // this->showFooter(false);
         // this->showBackground(true);
         // 动态背景由 Box::setupShaderLayer 根据配置初始化
@@ -102,7 +103,12 @@ namespace beiklive
                     brls::View* currentFocus = brls::Application::getCurrentFocus();
                     bool needInitialCardFocus = !currentFocus || currentFocus == this || currentFocus->isHidden();
                     switchLayout->refreshGameList(recent);
-                    if (needInitialCardFocus)
+                    if (m_resetCardFocusOnNextRefresh)
+                    {
+                        m_resetCardFocusOnNextRefresh = false;
+                        switchLayout->resetCardFocusToFirst();
+                    }
+                    else if (needInitialCardFocus)
                         switchLayout->restoreCardFocus(false);
                 });
             });
@@ -129,6 +135,7 @@ namespace beiklive
 
         switchLayout->onGameActivated = [this](const beiklive::GameEntry &entry)
         {
+            m_resetCardFocusOnNextRefresh = true;
             auto fresh = beiklive::GameDB
                 ? beiklive::GameDB->findByPath(entry.path)
                 : std::optional<beiklive::GameEntry>{};

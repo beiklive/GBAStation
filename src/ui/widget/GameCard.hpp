@@ -25,11 +25,6 @@ namespace beiklive
         float m_clickT = 0.0f;
         float m_clickScale = 1.0f;
 
-        // 入场动画
-        bool m_enterAnimating = false;
-        float m_enterT = 0.0f;
-        float m_enterScale = 1.0f;
-
         // 额外信息标签滑入动画
         bool m_infoAnimating = false;
         float m_infoT = 0.0f;
@@ -49,6 +44,7 @@ namespace beiklive
         ~GameCard();
         void applyThemeLayout();
 
+        void setGameEntry(beiklive::GameEntry gameEntry, bool loadCover);
         void updateLogo(const std::string &logoPath);
         void loadCoverImage(const std::string &logoPath);
         void setLogoLayer(const std::string &path, bool visible);
