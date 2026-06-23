@@ -7,6 +7,11 @@
 
 namespace beiklive
 {
+    namespace
+    {
+        constexpr long START_PAGE_REFRESH_DEFER_MS = 260;
+    }
+
     StartPage::StartPage()
     {
         brls::Logger::debug("StartPage initialized");
@@ -44,6 +49,12 @@ namespace beiklive
     void StartPage::onResume()
     {
         brls::Logger::debug("StartPage onResume called");
+        _applyRuntimeUiSettings();
+        _requestRecentGamesRefresh(true);
+    }
+
+    void StartPage::_applyRuntimeUiSettings()
+    {
         // 重新读取动态背景配置（设置页面可能已修改）
         bool enableShader = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_UI_SHOW_SHADER, 1) != 0;
         this->showShader(enableShader);
@@ -65,16 +76,29 @@ namespace beiklive
             if (!bgPath.empty())
                 this->setBackgroundImage(bgPath);
         }
+    }
+
+    void StartPage::_requestRecentGamesRefresh(bool defer)
+    {
         // 每次回到起始页时刷新游戏列表，获取最新的最近玩过的10款游戏
-        if (switchLayout)
-        {
-            ThreadPool::instance().enqueue([this]() {
-                if (!m_alive.load()) return;
+        if (!switchLayout)
+            return;
+
+        int gen = ++m_recentRefreshGen;
+        auto dispatchRefresh = [this, gen]() {
+            if (!m_alive.load() || gen != m_recentRefreshGen.load())
+                return;
+
+            ThreadPool::instance().enqueue([this, gen]() {
+                if (!m_alive.load() || gen != m_recentRefreshGen.load()) return;
+
                 beiklive::GameList recent = beiklive::GameDB
                     ? beiklive::GameDB->getRecentPlayed(10)
                     : beiklive::GameList{};
-                brls::sync([this, recent = std::move(recent)]() {
-                    if (!m_alive.load()) return;
+
+                brls::sync([this, gen, recent = std::move(recent)]() {
+                    if (!m_alive.load() || gen != m_recentRefreshGen.load() || !switchLayout) return;
+
                     brls::View* currentFocus = brls::Application::getCurrentFocus();
                     bool needInitialCardFocus = !currentFocus || currentFocus == this || currentFocus->isHidden();
                     switchLayout->refreshGameList(recent);
@@ -82,7 +106,12 @@ namespace beiklive
                         switchLayout->restoreCardFocus(false);
                 });
             });
-        }
+        };
+
+        if (defer)
+            brls::delay(START_PAGE_REFRESH_DEFER_MS, dispatchRefresh);
+        else
+            dispatchRefresh();
     }
 
     void StartPage::willAppear(bool resetState)
@@ -97,8 +126,6 @@ namespace beiklive
         switchLayout = new beiklive::SwitchLayout();
         switchLayout->setGrow(1.f);
         // TODO: 后续改为从数据库读取数据 参数为  游戏路径、标题、封面路径
-
-        onResume(); // 刷新游戏列表显示
 
         switchLayout->onGameActivated = [this](const beiklive::GameEntry &entry)
         {
@@ -156,6 +183,7 @@ namespace beiklive
                        { brls::Application::quit(); });
         };
         this->getContentBox()->addView(switchLayout);
+        _requestRecentGamesRefresh(true);
     }
 
     void StartPage::_openGameLibrary()

@@ -11,7 +11,7 @@ namespace beiklive
     {
     public:
         SwitchLayout();
-        ~SwitchLayout() = default;
+        ~SwitchLayout();
 
         void refreshGameList(beiklive::GameList gameList) override;
         brls::Box* getContentBox() { return m_cardRow; }

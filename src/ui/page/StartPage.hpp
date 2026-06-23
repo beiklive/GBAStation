@@ -31,6 +31,8 @@ namespace beiklive
         void _openSettings();
         void _openAbout();
         void _openDataManagement();
+        void _applyRuntimeUiSettings();
+        void _requestRecentGamesRefresh(bool defer);
 
         /// 显示游戏选项侧边栏
         void _showGameOptionsPanel(const beiklive::GameEntry& entry);
@@ -42,6 +44,7 @@ namespace beiklive
         beiklive::GamePage* m_gamePage = nullptr;
         beiklive::GameOptionsSidebar* m_gameOptionsSidebar = nullptr;
         std::atomic<bool> m_alive{true};
+        std::atomic<int> m_recentRefreshGen{0};
     };
 } // namespace beiklive
 

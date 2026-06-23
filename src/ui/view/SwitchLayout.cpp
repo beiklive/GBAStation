@@ -41,6 +41,11 @@ namespace beiklive
         _buildEmptyCards();
     }
 
+    SwitchLayout::~SwitchLayout()
+    {
+        ++m_loadGen;
+    }
+
     void SwitchLayout::_buildEmptyCards()
     {
         m_cardRow->clearViews(true);
@@ -77,9 +82,9 @@ namespace beiklive
             std::string logoPath = gameList[i].logoPath;
             if (logoPath.empty()) continue;
 
-            ThreadPool::instance().enqueue([card, logoPath, thisGen, this]() {
+            ThreadPool::instance().enqueue([card, logoPath, thisGen, this, i]() {
                 if (thisGen != m_loadGen.load()) return;
-                brls::sync([card, logoPath, thisGen, this]() {
+                brls::delay(static_cast<long>(i) * 18, [card, logoPath, thisGen, this]() {
                     if (thisGen != m_loadGen.load()) return;
                     card->loadCoverImage(logoPath);
                 });
