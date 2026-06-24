@@ -989,11 +989,8 @@ namespace beiklive
         return true;
     }
 
-    void GameView::_requestNdsFrameRelayout()
+    void GameView::_requestLastFrameUpload()
     {
-        if (m_gameEntry.platform != static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
-            return;
-
         std::lock_guard<std::mutex> lk(m_frameMutex);
         if (!m_hasLastRawFrame || m_lastRawFrame.pixels.empty())
             return;
@@ -1275,7 +1272,7 @@ namespace beiklive
                             m_ndsScreensSwapped = !m_ndsScreensSwapped;
                             m_ndsTouchRect = {};
                             _releaseNdsVirtualPointerTouch();
-                            _requestNdsFrameRelayout();
+                            _requestLastFrameUpload();
                             brls::Logger::debug("GameView: NDS screens swapped {}", m_ndsScreensSwapped);
                         });
                 }
@@ -2024,10 +2021,8 @@ namespace beiklive
         auto frame = m_core->GetVideoFrame();
         if (!frame.pixels.empty()) {
             std::lock_guard<std::mutex> lk(m_frameMutex);
-            if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)) {
-                m_lastRawFrame = frame;
-                m_hasLastRawFrame = true;
-            }
+            m_lastRawFrame = frame;
+            m_hasLastRawFrame = true;
             m_pendingFrame = std::move(frame);
             m_frameReady   = true;
         }
@@ -2888,7 +2883,7 @@ namespace beiklive
         unsigned gh = m_core && m_core->GameHeight() > 0 ? m_core->GameHeight() : beiklive::GetGamePixelHeight(m_gameEntry.platform);
         const std::string path = (on && !m_gameEntry.shaderPath.empty()) ? m_gameEntry.shaderPath : "";
         m_rendererReady = _initGameRenderers(gw, gh, path);
-        _requestNdsFrameRelayout();
+        _requestLastFrameUpload();
     }
 
     void GameView::_onShaderPathChange(const std::string& path)
@@ -2906,7 +2901,7 @@ namespace beiklive
         unsigned gh = m_core && m_core->GameHeight() > 0 ? m_core->GameHeight() : beiklive::GetGamePixelHeight(m_gameEntry.platform);
         const std::string shaderPath = (shaderOn && !path.empty()) ? path : "";
         m_rendererReady = _initGameRenderers(gw, gh, shaderPath);
-        _requestNdsFrameRelayout();
+        _requestLastFrameUpload();
     }
 
     void GameView::_onDisplayModeChange(const std::string& mode)
@@ -2997,7 +2992,7 @@ namespace beiklive
         if (m_rendererReady && m_ndsLayout == "hybrid")
             m_renderer.setFilter(false);
         m_ndsTouchRect = {};
-        _requestNdsFrameRelayout();
+        _requestLastFrameUpload();
     }
 
     void GameView::_onNdsScreenOrientationChange(const std::string& orientation)
@@ -3011,7 +3006,7 @@ namespace beiklive
             beiklive::GameDB->flush();
         }
         m_ndsTouchRect = {};
-        _requestNdsFrameRelayout();
+        _requestLastFrameUpload();
     }
 
     void GameView::_onNdsScreenValuesChanged(bool topScreen, float x, float y, float scale)
@@ -3027,7 +3022,7 @@ namespace beiklive
             m_gameEntry.ndsBottomScale = scale;
         }
         m_ndsTouchRect = {};
-        _requestNdsFrameRelayout();
+        _requestLastFrameUpload();
 
     }
 

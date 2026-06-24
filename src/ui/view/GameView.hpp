@@ -177,7 +177,7 @@ namespace beiklive
             // ---- 最新视频帧（游戏线程写，UI 线程读）--------------------------
             mutable std::mutex          m_frameMutex;
             LibretroLoader::VideoFrame  m_pendingFrame; ///< 等待上传的最新帧
-            LibretroLoader::VideoFrame  m_lastRawFrame; ///< NDS 菜单实时重排使用的核心原始帧
+            LibretroLoader::VideoFrame  m_lastRawFrame; ///< 最近一次核心原始帧，供暂停时重建渲染器后重传
             LibretroLoader::VideoFrame  m_ndsTopUploadFrame; ///< NDS 着色器模式复用上传帧
             LibretroLoader::VideoFrame  m_ndsBottomUploadFrame; ///< NDS 着色器模式复用上传帧
             bool                        m_frameReady = false; ///< 是否有新帧待上传
@@ -304,8 +304,8 @@ namespace beiklive
             /// 将待上传帧数据提交到 GPU（在 UI/draw 线程调用）
             void _uploadPendingFrame();
 
-            /// NDS 布局参数变化时，使用最近的原始帧立即重新排版并上传
-            void _requestNdsFrameRelayout();
+            /// 使用最近的原始帧立即重新上传，避免暂停时重建渲染器后画面变空
+            void _requestLastFrameUpload();
 
             /// 在视图上绘制状态覆盖层（FPS/快进/倒带/暂停/静音）
             void _drawOverlays(NVGcontext* vg, float x, float y, float w, float h);
