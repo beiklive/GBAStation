@@ -246,6 +246,8 @@ namespace beiklive
             bool _useNdsAcceleratedTexture() const;
             void _applySavedShaderParams(beiklive::GameRenderer& renderer) const;
             bool _initGameRenderers(unsigned gw, unsigned gh, const std::string& shaderPath);
+            void _clearGameViewBackground(float x, float y, float w, float h,
+                                          float windowScale, int windowW, int windowH);
             bool _drawNdsAcceleratedTexture(const beiklive::DisplayRect& rect,
                                             float windowScale, int windowW, int windowH);
             void _uploadNdsSplitShaderFrame(const LibretroLoader::VideoFrame& frame);

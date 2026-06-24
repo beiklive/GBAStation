@@ -433,6 +433,7 @@ namespace beiklive
 
             {
                 std::lock_guard<std::recursive_mutex> glLock(beiklive::EmulatorGLMutex());
+                _clearGameViewBackground(x, y, width, height, windowScale, windowW, windowH);
                 if (m_ndsSplitShaderRenderer) {
                     const beiklive::DisplayRect layoutRect = _unrotateNdsRect(rect, rect);
                     const auto uv = _ndsOrientationUv();
@@ -652,6 +653,43 @@ namespace beiklive
         _applySavedShaderParams(m_ndsBottomRenderer);
         brls::Logger::info("GameView: NDS split-screen shader renderer enabled");
         return true;
+    }
+
+    void GameView::_clearGameViewBackground(float x, float y, float w, float h,
+                                            float windowScale, int windowW, int windowH)
+    {
+        if (w <= 0.0f || h <= 0.0f || windowScale <= 0.0f || windowW <= 0 || windowH <= 0)
+            return;
+
+        const GLint sx = static_cast<GLint>(std::floor(x * windowScale));
+        const GLint sy = static_cast<GLint>(std::floor(windowH - (y + h) * windowScale));
+        const GLsizei sw = static_cast<GLsizei>(std::ceil(w * windowScale));
+        const GLsizei sh = static_cast<GLsizei>(std::ceil(h * windowScale));
+        if (sw <= 0 || sh <= 0)
+            return;
+
+        GLboolean scissorEnabled = glIsEnabled(GL_SCISSOR_TEST);
+        GLint prevScissor[4] = {};
+        GLfloat prevClearColor[4] = {};
+        GLboolean prevColorMask[4] = {};
+
+        glGetIntegerv(GL_SCISSOR_BOX, prevScissor);
+        glGetFloatv(GL_COLOR_CLEAR_VALUE, prevClearColor);
+        glGetBooleanv(GL_COLOR_WRITEMASK, prevColorMask);
+
+        glEnable(GL_SCISSOR_TEST);
+        glScissor(sx, std::max<GLint>(0, sy), sw, sh);
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        if (scissorEnabled)
+            glEnable(GL_SCISSOR_TEST);
+        else
+            glDisable(GL_SCISSOR_TEST);
+        glScissor(prevScissor[0], prevScissor[1], prevScissor[2], prevScissor[3]);
+        glClearColor(prevClearColor[0], prevClearColor[1], prevClearColor[2], prevClearColor[3]);
+        glColorMask(prevColorMask[0], prevColorMask[1], prevColorMask[2], prevColorMask[3]);
     }
 
     bool GameView::_drawNdsAcceleratedTexture(const beiklive::DisplayRect& rect,
