@@ -102,6 +102,12 @@ namespace beiklive // 全局功能函数
                 r.x = viewX;
                 r.y = viewY;
                 return r;
+            case ScreenMode::FourThree:
+                r.h = viewH;
+                r.w = viewH * (4.0f / 3.0f);
+                r.x = viewX + (viewW - r.w) * 0.5f;
+                r.y = viewY;
+                return r;
             case ScreenMode::IntegerScale:
                 if (integerScaleMult > 0)
                     scale = static_cast<float>(integerScaleMult);

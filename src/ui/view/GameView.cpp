@@ -2873,9 +2873,10 @@ namespace beiklive
 
     void GameView::_onDisplayModeChange(const std::string& mode)
     {
-        // 画面模式: fit/fill/original/integer/custom
+        // 画面模式: fit/fill/original/4:3/integer/custom
         if (mode == "fit")      m_screenMode = beiklive::ScreenMode::Fit;
         else if (mode == "fill") m_screenMode = beiklive::ScreenMode::Fill;
+        else if (mode == "four_three" || mode == "4:3") m_screenMode = beiklive::ScreenMode::FourThree;
         else if (mode == "integer") m_screenMode = beiklive::ScreenMode::IntegerScale;
         else if (mode == "custom")  m_screenMode = beiklive::ScreenMode::FreeScale;
         else m_screenMode = beiklive::ScreenMode::Fit;

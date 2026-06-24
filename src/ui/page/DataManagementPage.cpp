@@ -207,6 +207,8 @@ void applyDisplayDefaults(beiklive::GameEntry& entry)
         entry.displayMode = 2;
     else if (mode == "custom")
         entry.displayMode = 3;
+    else if (mode == "four_three" || mode == "4:3")
+        entry.displayMode = 4;
     else
         entry.displayMode = 0;
 

@@ -18,6 +18,7 @@ namespace beiklive
         Fill         = 1,  ///< 拉伸填满，不保持宽高比
         IntegerScale = 2,  ///< 整数倍率缩放，默认最大整数倍
         FreeScale    = 3,  ///< 自由缩放（使用 customScale）
+        FourThree    = 4,  ///< 4:3 模式，高度按窗口高度，宽度按 4:3 等比换算
     };
 
     /// 可视化倒带缩略图压缩策略

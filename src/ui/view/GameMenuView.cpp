@@ -993,27 +993,27 @@ namespace beiklive
             beiklive::SelectorButton *IntegerCell = nullptr;
             brls::DetailCell *customCell = nullptr;
 
-             {
+            if (!isNds) {
                 auto *hdr1 = new brls::Header();
                 hdr1->setTitle("画面设置");
                 box->addView(hdr1);
 
                 // ── 画面模式 ──
-                // ScreenMode 枚举值到 UI 索引映射: 0(Fit)→0, 1(Fill)→1, 2(IntegerScale)→3, 3(FreeScale)→4
-                static const int kScreenModeToUi[] = {0, 1, 3, 4};
-                int idx = (m_gameEntry.displayMode >= 0 && m_gameEntry.displayMode < 4)
+                // ScreenMode 枚举值到 UI 索引映射: 0(Fit)→0, 1(Fill)→1, 2(IntegerScale)→4, 3(FreeScale)→5, 4(4:3)→3
+                static const int kScreenModeToUi[] = {0, 1, 4, 5, 3};
+                int idx = (m_gameEntry.displayMode >= 0 && m_gameEntry.displayMode < 5)
                               ? kScreenModeToUi[m_gameEntry.displayMode] : 2;
 
                 auto *modeCell = new beiklive::SelectorButton();
                 IntegerCell = new beiklive::SelectorButton();
                 customCell = new brls::DetailCell();
-                std::vector<std::string> modes = {"(保持比例)Fit", "(填充)Fill", "(原始)Original", "(整数倍)Integer", "(自定义)Custom"};
-                std::vector<std::string> modeIds = {"fit", "fill", "original", "integer", "custom"};
+                std::vector<std::string> modes = {"(保持比例)Fit", "(填充)Fill", "(原始)Original", "4:3", "(整数倍)Integer", "(自定义)Custom"};
+                std::vector<std::string> modeIds = {"fit", "fill", "original", "four_three", "integer", "custom"};
 
-                IntegerCell->setFocusable(idx == 3);
-                IntegerCell->setAlpha(idx == 3? 1.0f: 0.3f);
-                customCell->setFocusable(idx == 4);
-                customCell->setAlpha(idx == 4? 1.0f: 0.3f);
+                IntegerCell->setFocusable(idx == 4);
+                IntegerCell->setAlpha(idx == 4? 1.0f: 0.3f);
+                customCell->setFocusable(idx == 5);
+                customCell->setAlpha(idx == 5? 1.0f: 0.3f);
 
                 modeCell->setText("画面模式");
                 modeCell->setOptions(modes, idx);
@@ -1022,11 +1022,11 @@ namespace beiklive
                     {
                         if (idx >= 0 && idx < (int)modeIds.size())
                         {
-                            IntegerCell->setFocusable(idx == 3);
-                            IntegerCell->setAlpha(idx == 3? 1.0f: 0.3f);
-                            customCell->setFocusable(idx == 4);
-                            customCell->setAlpha(idx == 4? 1.0f: 0.3f);
-                            static const int kUiToScreenMode[] = {0, 1, 0, 2, 3};
+                            IntegerCell->setFocusable(idx == 4);
+                            IntegerCell->setAlpha(idx == 4? 1.0f: 0.3f);
+                            customCell->setFocusable(idx == 5);
+                            customCell->setAlpha(idx == 5? 1.0f: 0.3f);
+                            static const int kUiToScreenMode[] = {0, 1, 0, 4, 2, 3};
                             m_gameEntry.displayMode = kUiToScreenMode[idx];
                             if (m_displayModeCallback)
                                 m_displayModeCallback(modeIds[idx]);

@@ -122,6 +122,7 @@ namespace beiklive
             if (dmStr == "fill") dm = 1;          // Fill
             else if (dmStr == "integer") dm = 2;   // IntegerScale
             else if (dmStr == "custom") dm = 3;    // FreeScale
+            else if (dmStr == "four_three" || dmStr == "4:3") dm = 4; // FourThree
             db->setDefault(path, "displayMode", dm);
         }
         // 整数倍缩放

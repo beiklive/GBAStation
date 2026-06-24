@@ -933,18 +933,18 @@ brls::View *SettingPage::buildDisplayTab()
     box->addView(makeHeader("画面显示"));
 
     {
-        std::vector<std::string> modes = {"按比例 (Fit)", "拉伸 (Fill)", "原始 (Original)", "整数倍 (Integer)", "自定义 (Custom)"};
+        std::vector<std::string> modes = {"按比例 (Fit)", "拉伸 (Fill)", "原始 (Original)", "4:3", "整数倍 (Integer)", "自定义 (Custom)"};
         std::string curMode = cfgGetStr("display.mode", "original");
-        std::vector<std::string> modeIds = {"fit", "fill", "original", "integer", "custom"};
+        std::vector<std::string> modeIds = {"fit", "fill", "original", "four_three", "integer", "custom"};
         int idx = findIndex(modeIds, curMode);
         auto *cell = new brls::SelectorCell();
         cell->init("画面模式", modes, idx,
                    [](int i) {
-                       static const char* vals[] = {"fit", "fill", "original", "integer", "custom"};
-                       if (i >= 0 && i < 5) cfgSetStr("display.mode", vals[i]);
+                       static const char* vals[] = {"fit", "fill", "original", "four_three", "integer", "custom"};
+                       if (i >= 0 && i < 6) cfgSetStr("display.mode", vals[i]);
                    });
         box->addView(cell);
-        box->addView(makeHint("画面缩放模式：Fit=保持比例最大化 Fill=拉伸填满"));
+        box->addView(makeHint("画面缩放模式：Fit=保持比例最大化 Fill=拉伸填满 4:3=按窗口高度等比换算宽度"));
     }
 
     {
