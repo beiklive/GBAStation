@@ -25,6 +25,7 @@ const state = {
   uploadActive: false,
   uploadCancelAll: false,
   uploadNextId: 1,
+  importNameMapping: false,
 };
 
 const romExtensions = new Set(['gba', 'gb', 'gbc', 'nes', 'fds', 'sfc', 'smc', 'nds']);
@@ -923,7 +924,7 @@ async function uploadRoms(files) {
     status: 'pending',
     kind: 'rom',
     startUrl: '/api/upload/start',
-    extraStartData: {},
+    extraStartData: { importNameMapping: state.importNameMapping },
     error: '',
     token: '',
     controller: null,
@@ -1389,6 +1390,9 @@ function bindEvents() {
   $('uploadZone').onclick = () => $('romInput').click();
   $('chooseRomFilesBtn').onclick = () => $('romInput').click();
   $('chooseRomFolderBtn').onclick = () => $('romFolderInput').click();
+  $('importNameMappingSwitch').onchange = (e) => {
+    state.importNameMapping = e.target.checked;
+  };
   $('romInput').onchange = (e) => {
     uploadRoms([...e.target.files]);
     e.target.value = '';

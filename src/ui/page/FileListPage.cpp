@@ -6,6 +6,19 @@
 
 namespace beiklive
 {
+    namespace
+    {
+        std::string resolveFileListIcon(beiklive::enums::FileType fileType,
+                                        const std::string& fullPath,
+                                        const std::string& fallbackIcon)
+        {
+            if (fileType != beiklive::enums::FileType::NDS_ROM)
+                return fallbackIcon;
+
+            std::string ndsIcon = beiklive::GetOrCreateNdsIconPath(fullPath);
+            return ndsIcon.empty() ? fallbackIcon : ndsIcon;
+        }
+    }
 
     FileListPage::FileListPage()
     {
@@ -370,7 +383,9 @@ namespace beiklive
         if (!entry.logoPath.empty())
             _requestThumbnail(entry.logoPath);
         else
-            m_detailImage->setImageFromFile(beiklive::tools::getIconPath(data.itemType));
+            m_detailImage->setImageFromFile(data.iconPath.empty()
+                ? beiklive::tools::getIconPath(data.itemType)
+                : data.iconPath);
 
         std::string ext = beiklive::tools::getFileExtension(data.fullPath);
         _addBadge(ext, nvgRGBA(79, 193, 255, 200), nvgRGBA(255,255,255,255));
@@ -393,7 +408,9 @@ namespace beiklive
         m_detailSubtitle->setText("未录入数据库");
 
         m_detailImage->setVisibility(brls::Visibility::VISIBLE);
-        m_detailImage->setImageFromFile(beiklive::tools::getIconPath(data.itemType));
+        m_detailImage->setImageFromFile(data.iconPath.empty()
+            ? beiklive::tools::getIconPath(data.itemType)
+            : data.iconPath);
 
         std::string ext = beiklive::tools::getFileExtension(data.fullPath);
         _addBadge(ext, nvgRGBA(79, 193, 255, 200), nvgRGBA(255,255,255,255));
@@ -598,6 +615,7 @@ namespace beiklive
                 for (const auto& raw : files) {
                     auto fileType = beiklive::tools::getFileType(raw.fullPath);
                     std::string ip = beiklive::tools::getIconPathWithPrefix(fileType, iconPrefix);
+                    ip = resolveFileListIcon(fileType, raw.fullPath, ip);
                     std::string sizeStr = beiklive::tools::getFileSizeString(raw.fullPath);
                     dirData.push_back({raw.name, raw.fullPath, ip, fileType, sizeStr, 0});
                     items.push_back({raw.name, sizeStr, ip, raw.fullPath});

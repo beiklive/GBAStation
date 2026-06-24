@@ -26,10 +26,13 @@ private:
         std::string gameId;
         std::string originalName;
         std::string title;
+        std::string originalStem;
         std::string targetPath;
         std::string finalPath;
         int platform = 0;
         std::uint64_t totalSize = 0;
+        bool importNameMapping = false;
+        bool renamedFromChinese = false;
     };
 
     std::atomic<bool>& stopRequested_;

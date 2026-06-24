@@ -191,6 +191,50 @@ button:disabled {
   gap: 7px;
   padding: 0 10px;
 }
+.upload-option {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 13px;
+}
+.upload-option input {
+  appearance: none;
+  width: 42px;
+  height: 24px;
+  margin: 0;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  position: relative;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.upload-option input::before {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 2px;
+  top: 2px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform .18s, background .18s;
+}
+.upload-option input:checked {
+  border-color: var(--accent);
+  background: var(--accent-ring);
+}
+.upload-option input:checked::before {
+  transform: translateX(18px);
+  background: var(--accent);
+}
 
 .sidebar-nav {
   display: grid;

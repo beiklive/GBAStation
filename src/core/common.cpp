@@ -8,12 +8,17 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
 #include <filesystem>
 #include <iomanip>
+#include <mutex>
 #include <sstream>
+#include <unordered_map>
 #include <variant>
+#include <vector>
 
 namespace fs = std::filesystem;
 
@@ -67,6 +72,197 @@ namespace beiklive
                 out.push_back(std::move(entry));
             }
         }
+
+        uint32_t readLe32(const std::array<uint8_t, 4>& bytes)
+        {
+            return static_cast<uint32_t>(bytes[0]) |
+                   (static_cast<uint32_t>(bytes[1]) << 8) |
+                   (static_cast<uint32_t>(bytes[2]) << 16) |
+                   (static_cast<uint32_t>(bytes[3]) << 24);
+        }
+
+        uint16_t readLe16(const uint8_t* bytes)
+        {
+            return static_cast<uint16_t>(bytes[0]) |
+                   (static_cast<uint16_t>(bytes[1]) << 8);
+        }
+
+        uint32_t crc32ForPng(const uint8_t* data, size_t size)
+        {
+            uint32_t crc = 0xFFFFFFFFu;
+            for (size_t i = 0; i < size; ++i)
+            {
+                crc ^= data[i];
+                for (int bit = 0; bit < 8; ++bit)
+                    crc = (crc >> 1) ^ (0xEDB88320u & (0u - (crc & 1u)));
+            }
+            return ~crc;
+        }
+
+        uint32_t adler32(const std::vector<uint8_t>& data)
+        {
+            uint32_t a = 1;
+            uint32_t b = 0;
+            for (uint8_t byte : data)
+            {
+                a = (a + byte) % 65521u;
+                b = (b + a) % 65521u;
+            }
+            return (b << 16) | a;
+        }
+
+        void appendBe32(std::vector<uint8_t>& out, uint32_t value)
+        {
+            out.push_back(static_cast<uint8_t>((value >> 24) & 0xFF));
+            out.push_back(static_cast<uint8_t>((value >> 16) & 0xFF));
+            out.push_back(static_cast<uint8_t>((value >> 8) & 0xFF));
+            out.push_back(static_cast<uint8_t>(value & 0xFF));
+        }
+
+        void appendPngChunk(std::vector<uint8_t>& png, const char type[4], const std::vector<uint8_t>& data)
+        {
+            appendBe32(png, static_cast<uint32_t>(data.size()));
+            const size_t typeOffset = png.size();
+            png.insert(png.end(), type, type + 4);
+            png.insert(png.end(), data.begin(), data.end());
+            appendBe32(png, crc32ForPng(png.data() + typeOffset, 4 + data.size()));
+        }
+
+        bool writeRgbaPng(const fs::path& path, const std::array<uint8_t, 32 * 32 * 4>& rgba)
+        {
+            std::vector<uint8_t> scanlines;
+            scanlines.reserve((32 * 4 + 1) * 32);
+            for (int y = 0; y < 32; ++y)
+            {
+                scanlines.push_back(0);
+                const size_t rowOffset = static_cast<size_t>(y) * 32 * 4;
+                scanlines.insert(scanlines.end(), rgba.begin() + rowOffset, rgba.begin() + rowOffset + 32 * 4);
+            }
+
+            std::vector<uint8_t> zlib;
+            zlib.reserve(scanlines.size() + 16);
+            zlib.push_back(0x78);
+            zlib.push_back(0x01);
+
+            size_t offset = 0;
+            while (offset < scanlines.size())
+            {
+                const uint16_t blockSize = static_cast<uint16_t>(
+                    std::min<size_t>(65535, scanlines.size() - offset));
+                const bool finalBlock = (offset + blockSize) == scanlines.size();
+                zlib.push_back(finalBlock ? 0x01 : 0x00);
+                zlib.push_back(static_cast<uint8_t>(blockSize & 0xFF));
+                zlib.push_back(static_cast<uint8_t>((blockSize >> 8) & 0xFF));
+                const uint16_t nlen = static_cast<uint16_t>(~blockSize);
+                zlib.push_back(static_cast<uint8_t>(nlen & 0xFF));
+                zlib.push_back(static_cast<uint8_t>((nlen >> 8) & 0xFF));
+                zlib.insert(zlib.end(), scanlines.begin() + offset, scanlines.begin() + offset + blockSize);
+                offset += blockSize;
+            }
+            appendBe32(zlib, adler32(scanlines));
+
+            std::vector<uint8_t> png = {137, 80, 78, 71, 13, 10, 26, 10};
+
+            std::vector<uint8_t> ihdr;
+            ihdr.reserve(13);
+            appendBe32(ihdr, 32);
+            appendBe32(ihdr, 32);
+            ihdr.push_back(8);
+            ihdr.push_back(6);
+            ihdr.push_back(0);
+            ihdr.push_back(0);
+            ihdr.push_back(0);
+            appendPngChunk(png, "IHDR", ihdr);
+            appendPngChunk(png, "IDAT", zlib);
+            appendPngChunk(png, "IEND", {});
+
+            std::ofstream out(path, std::ios::binary);
+            if (!out)
+                return false;
+            out.write(reinterpret_cast<const char*>(png.data()), static_cast<std::streamsize>(png.size()));
+            return out.good();
+        }
+
+        bool decodeNdsIcon(const std::string& romPath, std::array<uint8_t, 32 * 32 * 4>& rgba)
+        {
+            std::ifstream rom(romPath, std::ios::binary);
+            if (!rom)
+                return false;
+
+            rom.seekg(0x68, std::ios::beg);
+            std::array<uint8_t, 4> offsetBytes {};
+            rom.read(reinterpret_cast<char*>(offsetBytes.data()), static_cast<std::streamsize>(offsetBytes.size()));
+            if (rom.gcount() != static_cast<std::streamsize>(offsetBytes.size()))
+                return false;
+
+            const uint32_t bannerOffset = readLe32(offsetBytes);
+            if (bannerOffset == 0)
+                return false;
+
+            std::array<uint8_t, 512> icon {};
+            std::array<uint8_t, 16 * 2> paletteBytes {};
+            rom.seekg(static_cast<std::streamoff>(bannerOffset) + 0x20, std::ios::beg);
+            rom.read(reinterpret_cast<char*>(icon.data()), static_cast<std::streamsize>(icon.size()));
+            if (rom.gcount() != static_cast<std::streamsize>(icon.size()))
+                return false;
+
+            rom.seekg(static_cast<std::streamoff>(bannerOffset) + 0x220, std::ios::beg);
+            rom.read(reinterpret_cast<char*>(paletteBytes.data()), static_cast<std::streamsize>(paletteBytes.size()));
+            if (rom.gcount() != static_cast<std::streamsize>(paletteBytes.size()))
+                return false;
+
+            rgba.fill(0);
+            for (int tileY = 0; tileY < 4; ++tileY)
+            {
+                for (int tileX = 0; tileX < 4; ++tileX)
+                {
+                    for (int py = 0; py < 8; ++py)
+                    {
+                        for (int px = 0; px < 8; ++px)
+                        {
+                            const int tileIndex = tileY * 4 + tileX;
+                            const int iconOffset = tileIndex * 32 + py * 4 + px / 2;
+                            const uint8_t packed = icon[static_cast<size_t>(iconOffset)];
+                            const uint8_t colorIndex = (px & 1) ? (packed >> 4) : (packed & 0x0F);
+
+                            const uint16_t color = readLe16(&paletteBytes[static_cast<size_t>(colorIndex) * 2]);
+                            const int x = tileX * 8 + px;
+                            const int y = tileY * 8 + py;
+                            const size_t outOffset = (static_cast<size_t>(y) * 32 + x) * 4;
+                            const uint8_t r5 = static_cast<uint8_t>(color & 0x1F);
+                            const uint8_t g5 = static_cast<uint8_t>((color >> 5) & 0x1F);
+                            const uint8_t b5 = static_cast<uint8_t>((color >> 10) & 0x1F);
+                            rgba[outOffset + 0] = static_cast<uint8_t>((r5 << 3) | (r5 >> 2));
+                            rgba[outOffset + 1] = static_cast<uint8_t>((g5 << 3) | (g5 >> 2));
+                            rgba[outOffset + 2] = static_cast<uint8_t>((b5 << 3) | (b5 >> 2));
+                            rgba[outOffset + 3] = colorIndex == 0 ? 0 : 255;
+                        }
+                    }
+                }
+            }
+            return true;
+        }
+
+        uint64_t fnv1a64(const std::string& text)
+        {
+            uint64_t hash = 14695981039346656037ull;
+            for (unsigned char c : text)
+            {
+                hash ^= c;
+                hash *= 1099511628211ull;
+            }
+            return hash;
+        }
+
+        std::string hex64(uint64_t value)
+        {
+            std::ostringstream oss;
+            oss << std::hex << std::setw(16) << std::setfill('0') << value;
+            return oss.str();
+        }
+
+        std::mutex g_ndsIconCacheMutex;
+        std::unordered_map<std::string, std::string> g_ndsIconPathMemo;
     }
 
     ConfigManager *SettingManager = nullptr;     // 全局配置管理器实例
@@ -625,6 +821,78 @@ namespace beiklive
         brls::Logger::info("parseNdsUsrCheatDat: loaded {} cheats for {} from {}",
                            result.size(), romPath, datPath);
         return result;
+    }
+
+    std::string GetNdsIconCachePath(const std::string& romPath)
+    {
+        if (romPath.empty())
+            return "";
+
+        std::error_code ec;
+        fs::path romFsPath = fs::absolute(fs::path(romPath), ec);
+        if (ec)
+            romFsPath = fs::path(romPath);
+
+        std::ostringstream key;
+        key << romFsPath.lexically_normal().string();
+        key << '|';
+        const auto romSize = fs::file_size(romPath, ec);
+        if (!ec)
+            key << romSize;
+        else {
+            ec.clear();
+            key << 0;
+        }
+        key << '|';
+        const auto writeTime = fs::last_write_time(romPath, ec);
+        if (!ec)
+            key << writeTime.time_since_epoch().count();
+        else
+            key << 0;
+
+        return (fs::path(beiklive::path::cachePath()) / "nds_icons" / (hex64(fnv1a64(key.str())) + ".png")).string();
+    }
+
+    std::string GetOrCreateNdsIconPath(const std::string& romPath)
+    {
+        if (romPath.empty())
+            return "";
+
+        std::lock_guard<std::mutex> lock(g_ndsIconCacheMutex);
+        const std::string cachePath = GetNdsIconCachePath(romPath);
+        if (cachePath.empty())
+            return "";
+
+        auto memoIt = g_ndsIconPathMemo.find(cachePath);
+        if (memoIt != g_ndsIconPathMemo.end())
+            return memoIt->second;
+
+        std::error_code ec;
+        if (fs::exists(cachePath, ec) && fs::is_regular_file(cachePath, ec))
+        {
+            g_ndsIconPathMemo[cachePath] = cachePath;
+            return cachePath;
+        }
+
+        const fs::path cacheFsPath(cachePath);
+        fs::create_directories(cacheFsPath.parent_path(), ec);
+        if (ec)
+        {
+            brls::Logger::warning("GetOrCreateNdsIconPath: failed to create cache dir: {}", cacheFsPath.parent_path().string());
+            g_ndsIconPathMemo[cachePath] = "";
+            return "";
+        }
+
+        std::array<uint8_t, 32 * 32 * 4> rgba {};
+        if (!decodeNdsIcon(romPath, rgba) || !writeRgbaPng(cacheFsPath, rgba))
+        {
+            brls::Logger::warning("GetOrCreateNdsIconPath: failed to extract NDS icon: {}", romPath);
+            g_ndsIconPathMemo[cachePath] = "";
+            return "";
+        }
+
+        g_ndsIconPathMemo[cachePath] = cachePath;
+        return cachePath;
     }
 
     /// 将金手指列表以 RetroArch .cht 格式写入文件。

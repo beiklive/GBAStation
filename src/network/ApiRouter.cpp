@@ -86,6 +86,14 @@ long jsonLong(mg_http_message* hm, const char* path, long fallback = 0)
     return mg_json_get_long(hm->body, path, fallback);
 }
 
+bool jsonBool(mg_http_message* hm, const char* path, bool fallback = false)
+{
+    bool value = fallback;
+    if (mg_json_get_bool(hm->body, path, &value))
+        return value;
+    return fallback;
+}
+
 std::string uriDecode(const std::string& value)
 {
     std::string out(value.size() + 1, '\0');
@@ -99,6 +107,25 @@ std::string uriDecode(const std::string& value)
 bool containsNonAscii(const std::string& value)
 {
     return std::any_of(value.begin(), value.end(), [](unsigned char c) { return c >= 0x80; });
+}
+
+std::vector<std::string> utf8Chars(const std::string& input);
+
+bool containsChineseChar(const std::string& value)
+{
+    for (const auto& ch : utf8Chars(value))
+    {
+        if (ch.size() != 3)
+            continue;
+        const unsigned char b0 = static_cast<unsigned char>(ch[0]);
+        const unsigned char b1 = static_cast<unsigned char>(ch[1]);
+        const unsigned char b2 = static_cast<unsigned char>(ch[2]);
+        const uint32_t cp = ((b0 & 0x0F) << 12) | ((b1 & 0x3F) << 6) | (b2 & 0x3F);
+        if ((cp >= 0x3400 && cp <= 0x4DBF) || (cp >= 0x4E00 && cp <= 0x9FFF) ||
+            (cp >= 0xF900 && cp <= 0xFAFF))
+            return true;
+    }
+    return false;
 }
 
 std::string safePathComponent(const std::string& name, bool fallbackFile);
@@ -920,6 +947,7 @@ void ApiRouter::handleUploadStart(mg_connection* c, mg_http_message* hm)
 {
     std::string kind = jsonString(hm, "$.kind", "rom");
     std::string originalName = jsonString(hm, "$.name");
+    bool importNameMapping = jsonBool(hm, "$.importNameMapping", false);
     std::uint64_t totalSize = static_cast<std::uint64_t>(std::max<long>(0, jsonLong(hm, "$.size")));
 
     if (originalName.empty())
@@ -937,6 +965,7 @@ void ApiRouter::handleUploadStart(mg_connection* c, mg_http_message* hm)
 
     std::string stem = original.stem().string();
     std::string safeStem = safeStemFromTitle(stem);
+    bool stemHasChinese = containsChineseChar(stem);
     std::string target;
     std::string finalPath;
     bool renamed = containsNonAscii(originalName);
@@ -974,11 +1003,14 @@ void ApiRouter::handleUploadStart(mg_connection* c, mg_http_message* hm)
     session.token = makeToken();
     session.kind = kind;
     session.originalName = originalName;
+    session.originalStem = stem;
     session.title = containsNonAscii(stem) ? stem : safeStem;
     session.targetPath = target;
     session.finalPath = finalPath;
     session.platform = platform;
     session.totalSize = totalSize;
+    session.importNameMapping = importNameMapping;
+    session.renamedFromChinese = kind == "rom" && stemHasChinese && fs::path(target).stem().string() != stem;
 
     {
         std::lock_guard<std::mutex> lock(uploadMutex_);
@@ -1102,6 +1134,16 @@ void ApiRouter::handleUploadFinish(mg_connection* c, mg_http_message* hm)
         }
         ensureDir(entry.savePath);
         bool saved = saveGame(entry);
+        if (saved && session.importNameMapping && session.renamedFromChinese &&
+            !session.originalStem.empty() && beiklive::NameMappingManager)
+        {
+            std::string mappedKey = fs::path(session.targetPath).stem().string();
+            if (!mappedKey.empty() && mappedKey != session.originalStem)
+            {
+                SET_MAPPING_KEY_STR(mappedKey, session.originalStem);
+                beiklive::NameMappingManager->Save();
+            }
+        }
         return replyJson(c, 200, {{"ok", saved}, {"saved", saved}, {"gameId", gameIdFromEntry(entry)}});
     }
 
