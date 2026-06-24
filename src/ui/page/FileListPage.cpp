@@ -572,7 +572,7 @@ namespace beiklive
                             continue;
                     }else{
                         // 目录不需要提取扩展名，直接映射整个目录名
-                        name = GET_MAPPING_KEY_STR(name, name);
+                        name = GET_MAPPING_KEY_STR(p.filename().string(), p.filename().string());
                     }
 
                     if (isDir) dirs.push_back({name, std::move(fullPath), true});
