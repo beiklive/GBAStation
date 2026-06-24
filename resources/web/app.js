@@ -1220,8 +1220,7 @@ async function saveGameConfig() {
 async function removeGame() {
   const game = state.selected;
   if (!game) return;
-  const deleteFile = confirm('是否同时删除 ROM 文件？\n取消则仅从游戏库移除。');
-  await api(`/api/game/${gameUrl(game)}`, { method: 'DELETE', body: JSON.stringify({ deleteFile }) });
+  await api(`/api/game/${gameUrl(game)}`, { method: 'DELETE', body: JSON.stringify({ deleteFile: true }) });
   toast('游戏已移除，GameDB 已保存');
   closeGameDialog();
   await loadGames(true);
@@ -1231,7 +1230,6 @@ async function deleteSelectedGames() {
   const selectedGames = state.games.filter((game) => state.selectedIds.has(gameKey(game)));
   if (!selectedGames.length) return;
   if (!confirm(`确认从游戏库移除 ${selectedGames.length} 个游戏？`)) return;
-  const deleteFile = confirm('是否同时删除这些 ROM 文件？\n取消则仅从游戏库移除。');
 
   showProgress('批量删除游戏');
   let done = 0;
@@ -1240,7 +1238,7 @@ async function deleteSelectedGames() {
       const title = game.title || game.path || '未命名游戏';
       $('progressTitle').textContent = `删除 ${done + 1} / ${selectedGames.length}`;
       setProgress(title, done / selectedGames.length);
-      await api(`/api/game/${gameUrl(game)}`, { method: 'DELETE', body: JSON.stringify({ deleteFile }) });
+      await api(`/api/game/${gameUrl(game)}`, { method: 'DELETE', body: JSON.stringify({ deleteFile: true }) });
       state.selectedIds.delete(gameKey(game));
       done++;
       setProgress(title, done / selectedGames.length);

@@ -4,6 +4,25 @@
 #include "core/ThreadPool.hpp"
 #include "ui/utils/CheatMatcher.hpp"
 #include <borealis/views/dropdown.hpp>
+#include <filesystem>
+
+namespace
+{
+
+bool deleteGameFileIfExists(const std::string& path)
+{
+    if (path.empty())
+        return true;
+
+    std::error_code ec;
+    if (!std::filesystem::exists(path, ec))
+        return true;
+
+    ec.clear();
+    return std::filesystem::remove(path, ec) && !ec;
+}
+
+} // namespace
 
 namespace beiklive
 {
@@ -397,17 +416,26 @@ namespace beiklive
         m_gameOptionsSidebar->addButton("删除游戏", BK_RES("img/ui/menu/exit.png"),
             [this, path](const beiklive::GameEntry& e) {
                 _hideGameOptionsPanel();
-                auto* dialog = new brls::Dialog("确定要删除该游戏吗？\n此操作将清除游戏记录与存档数据。");
+                auto* dialog = new brls::Dialog("确定要删除该游戏吗？\n此操作将移除游戏记录并删除 ROM 文件。");
                 dialog->addButton("确认删除", [this, path]() {
                     _hideGameOptionsPanel();
                     if (beiklive::GameDB) {
+                        bool removedRecord = false;
                         if ((int)beiklive::GameDB->getAll().size() <= 1)
+                        {
                             beiklive::GameDB->clearAll();
-                        else {
-                            beiklive::GameDB->removeByPath(path);
-                            beiklive::GameDB->flush();
+                            removedRecord = true;
                         }
-                        brls::Application::notify("已删除游戏");
+                        else {
+                            removedRecord = beiklive::GameDB->removeByPath(path);
+                            if (removedRecord)
+                                beiklive::GameDB->flush();
+                        }
+                        bool removedFile = removedRecord && deleteGameFileIfExists(path);
+                        if (!removedRecord)
+                            brls::Application::notify("删除失败");
+                        else
+                            brls::Application::notify(removedFile ? "已删除游戏" : "已移除记录，ROM 文件删除失败");
                         onResume();
                     } else {
                         brls::Application::notify("删除失败");

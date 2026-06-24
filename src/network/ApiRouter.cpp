@@ -319,6 +319,28 @@ nlohmann::json parseJsonBody(mg_http_message* hm)
     return parsed.is_discarded() ? nlohmann::json::object() : parsed;
 }
 
+bool jsonBoolValue(const nlohmann::json& body, const char* key, bool fallback = false)
+{
+    if (!body.is_object() || !body.contains(key))
+        return fallback;
+
+    const auto& value = body[key];
+    if (value.is_boolean())
+        return value.get<bool>();
+    if (value.is_number_integer())
+        return value.get<long long>() != 0;
+    if (value.is_number_unsigned())
+        return value.get<unsigned long long>() != 0;
+    if (value.is_number_float())
+        return value.get<double>() != 0.0;
+    if (value.is_string())
+    {
+        std::string text = toLower(value.get<std::string>());
+        return text == "true" || text == "1" || text == "yes" || text == "on";
+    }
+    return fallback;
+}
+
 nlohmann::json gameJsonWithMeta(const beiklive::GameEntry& entry)
 {
     nlohmann::json item;
@@ -847,7 +869,8 @@ void ApiRouter::handleGameById(mg_connection* c, mg_http_message* hm, const std:
 
     if (method == "DELETE")
     {
-        bool deleteFile = jsonLong(hm, "$.deleteFile", 0) != 0;
+        nlohmann::json body = parseJsonBody(hm);
+        bool deleteFile = jsonBoolValue(body, "deleteFile");
         std::string path = game->path;
         bool removed = beiklive::GameDB && beiklive::GameDB->removeByPath(path);
         if (removed && deleteFile)
