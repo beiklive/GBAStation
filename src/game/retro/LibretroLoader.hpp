@@ -21,6 +21,8 @@ namespace beiklive {
 /// 以及回调注册和生命周期管理。
 class LibretroLoader {
 public:
+    static constexpr unsigned kMaxInputPorts = 2;
+
     LibretroLoader()  = default;
     ~LibretroLoader() = default;
 
@@ -108,9 +110,9 @@ public:
 
     // ---- 输入 -------------------------------------------------------
 
-    /// 各按钮按下状态，索引 = RETRO_DEVICE_ID_JOYPAD_*
-    void setButtonState(unsigned id, bool pressed);
-    bool getButtonState(unsigned id) const;
+    /// 各按钮按下状态，索引 = RETRO_DEVICE_ID_JOYPAD_*。
+    void setButtonState(unsigned port, unsigned id, bool pressed);
+    bool getButtonState(unsigned port, unsigned id) const;
 
     // ---- 几何信息 ---------------------------------------------------
 
@@ -186,7 +188,7 @@ private:
     size_t                   m_audioAvailable = 0;
 
     // ---- 输入状态 ---------------------------------------------------
-    bool m_buttons[RETRO_DEVICE_ID_JOYPAD_R3 + 1] = {};
+    bool m_buttons[kMaxInputPorts][RETRO_DEVICE_ID_JOYPAD_R3 + 1] = {};
 
     // ---- 核心变量/设置存储 ------------------------------------------
     // ConfigManager提供用户保存的值；m_coreVarStorage保存c_str()指针，

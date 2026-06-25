@@ -103,6 +103,8 @@ bool CoreFceumm::_loadCore()
         m_core.unload();
         return false;
     }
+    m_core.setControllerPortDevice(0, RETRO_DEVICE_JOYPAD);
+    m_core.setControllerPortDevice(1, RETRO_DEVICE_JOYPAD);
     return true;
 }
 

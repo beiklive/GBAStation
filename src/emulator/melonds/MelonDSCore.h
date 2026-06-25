@@ -46,8 +46,11 @@ public:
     LibretroLoader::VideoFrame GetVideoFrame() const override { return m_video.GetFrame(); }
     bool DrainAudio(std::vector<int16_t>& out) override { return m_audio.Drain(out); }
 
-    void SetButtonState(unsigned id, bool pressed) override { SetButton(static_cast<int>(id), pressed); }
-    void SetButtonsFromSignal() override;
+    void SetButtonState(unsigned player, unsigned id, bool pressed) override {
+        if (player == 0)
+            SetButton(static_cast<int>(id), pressed);
+    }
+    void SetButtonsFromSignal(unsigned player) override;
 
     unsigned GameWidth() const override { return MelonDSVideo::kWidth; }
     unsigned GameHeight() const override { return MelonDSVideo::kHeight; }

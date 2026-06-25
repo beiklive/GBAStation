@@ -1004,6 +1004,7 @@ namespace beiklive
     // ============================================================
     void GameView::_registerGameInput()
     {
+        GameSignal::instance().clearGameButtonMask(1);
         // ---- 读取摇杆模式配置 -------------------------------------------
         bool joystickEnabled  = GET_SETTING_KEY_INT("input.joystick.enabled",  1) != 0;
         bool joystickDiagonal = GET_SETTING_KEY_INT("input.joystick.diagonal", 1) != 0;
@@ -2509,7 +2510,25 @@ namespace beiklive
                 m_turboBon = false;
                 GameSignal::instance().releaseGameButton(0);
             }
-            m_core->SetButtonsFromSignal();
+            m_core->SetButtonsFromSignal(0);
+            if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNES))
+            {
+                const auto player2 = GameInputManager::instance().getPlayerInputState(1);
+                const uint32_t previousMask = GameSignal::instance().getGameButtonMask(1);
+                const uint32_t nextMask = player2.buttonMask;
+                const uint32_t changed = previousMask ^ nextMask;
+                for (unsigned i = 0; i < 16; ++i)
+                {
+                    const uint32_t bit = (1u << i);
+                    if ((changed & bit) == 0)
+                        continue;
+                    if (nextMask & bit)
+                        GameSignal::instance().pressGameButton(1, i);
+                    else
+                        GameSignal::instance().releaseGameButton(1, i);
+                }
+                m_core->SetButtonsFromSignal(1);
+            }
 
             // ---- 决定本帧行为 ----
             bool ff      = sig.isFastForward();

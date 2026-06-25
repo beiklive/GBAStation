@@ -136,6 +136,8 @@ namespace beiklive
 
         currentTime = 0;
         activeInputs.clear();
+        for (auto& playerInput : m_playerInputs)
+            playerInput.buttonMask = 0;
     }
 
     void GameInputManager::handleInput(bool ignoreTouch)
@@ -156,6 +158,7 @@ namespace beiklive
         auto controllersCount = brls::Application::getPlatform()
                                     ->getInputManager()
                                     ->getControllersConnectedCount();
+        updatePlayerAssignments(controllersCount);
         int i = 0;
 #ifdef __SWITCH__
         for (i = 0; i < controllersCount; i++)
@@ -179,9 +182,6 @@ namespace beiklive
             }
 #endif
 
-            updateInputState();
-            checkHotkeys();
-
             if (!gamepadState.is_equal(prevGamepadState))
             {
                 printactiveInputs();
@@ -201,6 +201,9 @@ namespace beiklive
 #ifdef __SWITCH__
         }
 #endif
+        updatePlayerStates();
+        updateInputState();
+        checkHotkeys();
     }
     void GameInputManager::checkHotkeys()
     {
@@ -264,7 +267,9 @@ namespace beiklive
     }
     GamepadState GameInputManager::getControllerState(int controllerNum)
     {
-        activeInputs.clear();
+        const bool collectActiveInputs = (controllerNum == m_playerAssignments[0]);
+        if (collectActiveInputs)
+            activeInputs.clear();
         brls::ControllerState rawController{};
         brls::ControllerState controller{};
 
@@ -332,29 +337,32 @@ namespace beiklive
         };
 
         // 存入手柄状态中，后续处理热键时会用到
-        if (gamepadState.leftTrigger >= 0xFF)
+        if (collectActiveInputs && gamepadState.leftTrigger >= 0xFF)
         {
             activeInputs.push_back(STATE_PAD_LT);
         }
-        if (gamepadState.rightTrigger >= 0xFF)
+        if (collectActiveInputs && gamepadState.rightTrigger >= 0xFF)
         {
             activeInputs.push_back(STATE_PAD_RT);
         }
-        processStick(leftXAxis, leftYAxis,
-                     STATE_PAD_LEFT_STICK_X,
-                     STATE_PAD_LEFT_STICK_Y,
-                     STATE_PAD_LEFT_STICK_LEFT,
-                     STATE_PAD_LEFT_STICK_RIGHT,
-                     STATE_PAD_LEFT_STICK_UP,
-                     STATE_PAD_LEFT_STICK_DOWN);
+        if (collectActiveInputs)
+        {
+            processStick(leftXAxis, leftYAxis,
+                         STATE_PAD_LEFT_STICK_X,
+                         STATE_PAD_LEFT_STICK_Y,
+                         STATE_PAD_LEFT_STICK_LEFT,
+                         STATE_PAD_LEFT_STICK_RIGHT,
+                         STATE_PAD_LEFT_STICK_UP,
+                         STATE_PAD_LEFT_STICK_DOWN);
 
-        processStick(rightXAxis, rightYAxis,
-                     STATE_PAD_RIGHT_STICK_X,
-                     STATE_PAD_RIGHT_STICK_Y,
-                     STATE_PAD_RIGHT_STICK_LEFT,
-                     STATE_PAD_RIGHT_STICK_RIGHT,
-                     STATE_PAD_RIGHT_STICK_UP,
-                     STATE_PAD_RIGHT_STICK_DOWN);
+            processStick(rightXAxis, rightYAxis,
+                         STATE_PAD_RIGHT_STICK_X,
+                         STATE_PAD_RIGHT_STICK_Y,
+                         STATE_PAD_RIGHT_STICK_LEFT,
+                         STATE_PAD_RIGHT_STICK_RIGHT,
+                         STATE_PAD_RIGHT_STICK_UP,
+                         STATE_PAD_RIGHT_STICK_DOWN);
+        }
 
         // 开始逐个处理按钮输入，根据按钮状态设置对应的位
         auto SET_GAME_PAD_STATE = [&](int LIMELIGHT_KEY, int GAMEPAD_BUTTON)
@@ -362,7 +370,8 @@ namespace beiklive
             if (controller.buttons[GAMEPAD_BUTTON])
             {
                 gamepadState.buttonFlags |= LIMELIGHT_KEY; // 设置对应位
-                activeInputs.push_back(GAMEPAD_BUTTON);    // 记录这个按键被按下了
+                if (collectActiveInputs)
+                    activeInputs.push_back(GAMEPAD_BUTTON);    // 记录这个按键被按下了
             }
             else
             {
@@ -507,6 +516,20 @@ namespace beiklive
         return lastGamepadStates[controllerNum];
     }
 
+    PlayerInputState GameInputManager::getPlayerInputState(int playerIndex) const
+    {
+        if (playerIndex < 0 || playerIndex >= GAME_INPUT_MAX_PLAYERS)
+            return {};
+        return m_playerInputs[playerIndex];
+    }
+
+    int GameInputManager::getAssignedControllerForPlayer(int playerIndex) const
+    {
+        if (playerIndex < 0 || playerIndex >= GAME_INPUT_MAX_PLAYERS)
+            return -1;
+        return m_playerAssignments[playerIndex];
+    }
+
     void GameInputManager::registerEmuFunctionKey(EmuFunctionKey emuKey, BrlsButtonMatrix buttons, std::function<void()> callback, TriggerType type, float threshold)
     {
         hotkeyBindings.push_back({emuKey, buttons, callback, type, threshold});
@@ -515,6 +538,45 @@ namespace beiklive
     void GameInputManager::clearEmuFunctionKeys()
     {
         hotkeyBindings.clear();
+    }
+
+    void GameInputManager::updatePlayerAssignments(int controllersCount)
+    {
+        m_playerAssignments[0] = controllersCount > 0 ? 0 : -1;
+        m_playerAssignments[1] = controllersCount > 1 ? 1 : -1;
+    }
+
+    void GameInputManager::updatePlayerStates()
+    {
+        for (auto& playerInput : m_playerInputs)
+            playerInput.buttonMask = 0;
+
+        for (int player = 0; player < GAME_INPUT_MAX_PLAYERS; ++player)
+        {
+            int controllerIndex = m_playerAssignments[player];
+            if (controllerIndex < 0 || controllerIndex >= GAMEPADS_MAX)
+                continue;
+
+            const GamepadState& pad = lastGamepadStates[controllerIndex];
+            uint32_t mask = 0;
+            if (pad.buttonFlags & A_FLAG)     mask |= (1u << RETRO_DEVICE_ID_JOYPAD_A);
+            if (pad.buttonFlags & B_FLAG)     mask |= (1u << RETRO_DEVICE_ID_JOYPAD_B);
+            if (pad.buttonFlags & X_FLAG)     mask |= (1u << RETRO_DEVICE_ID_JOYPAD_X);
+            if (pad.buttonFlags & Y_FLAG)     mask |= (1u << RETRO_DEVICE_ID_JOYPAD_Y);
+            if (pad.buttonFlags & UP_FLAG)    mask |= (1u << RETRO_DEVICE_ID_JOYPAD_UP);
+            if (pad.buttonFlags & DOWN_FLAG)  mask |= (1u << RETRO_DEVICE_ID_JOYPAD_DOWN);
+            if (pad.buttonFlags & LEFT_FLAG)  mask |= (1u << RETRO_DEVICE_ID_JOYPAD_LEFT);
+            if (pad.buttonFlags & RIGHT_FLAG) mask |= (1u << RETRO_DEVICE_ID_JOYPAD_RIGHT);
+            if (pad.buttonFlags & LB_FLAG)    mask |= (1u << RETRO_DEVICE_ID_JOYPAD_L);
+            if (pad.buttonFlags & RB_FLAG)    mask |= (1u << RETRO_DEVICE_ID_JOYPAD_R);
+            if (pad.buttonFlags & BACK_FLAG)  mask |= (1u << RETRO_DEVICE_ID_JOYPAD_SELECT);
+            if (pad.buttonFlags & PLAY_FLAG)  mask |= (1u << RETRO_DEVICE_ID_JOYPAD_START);
+            if (pad.leftTrigger > 0)          mask |= (1u << RETRO_DEVICE_ID_JOYPAD_L2);
+            if (pad.rightTrigger > 0)         mask |= (1u << RETRO_DEVICE_ID_JOYPAD_R2);
+            if (pad.buttonFlags & LS_CLK_FLAG) mask |= (1u << RETRO_DEVICE_ID_JOYPAD_L3);
+            if (pad.buttonFlags & RS_CLK_FLAG) mask |= (1u << RETRO_DEVICE_ID_JOYPAD_R3);
+            m_playerInputs[player].buttonMask = mask;
+        }
     }
 
 } // namespace beiklive

@@ -774,15 +774,15 @@ void LibretroLoader::pushAudioSamplesLocked(const int16_t* data, size_t samples)
 // 输入
 // ============================================================
 
-void LibretroLoader::setButtonState(unsigned id, bool pressed)
+void LibretroLoader::setButtonState(unsigned port, unsigned id, bool pressed)
 {
-    if (id <= RETRO_DEVICE_ID_JOYPAD_R3)
-        m_buttons[id] = pressed;
+    if (port < kMaxInputPorts && id <= RETRO_DEVICE_ID_JOYPAD_R3)
+        m_buttons[port][id] = pressed;
 }
 
-bool LibretroLoader::getButtonState(unsigned id) const
+bool LibretroLoader::getButtonState(unsigned port, unsigned id) const
 {
-    return (id <= RETRO_DEVICE_ID_JOYPAD_R3) ? m_buttons[id] : false;
+    return (port < kMaxInputPorts && id <= RETRO_DEVICE_ID_JOYPAD_R3) ? m_buttons[port][id] : false;
 }
 
 // ============================================================
@@ -1122,10 +1122,10 @@ void LibretroLoader::s_inputPollCallback()
 int16_t LibretroLoader::s_inputStateCallback(unsigned port, unsigned device,
                                                unsigned /*index*/, unsigned id)
 {
-    if (!s_current || port != 0) return 0;
+    if (!s_current || port >= kMaxInputPorts) return 0;
     if (device != RETRO_DEVICE_JOYPAD && device != RETRO_DEVICE_ANALOG) return 0;
     if (id > RETRO_DEVICE_ID_JOYPAD_R3) return 0;
-    return s_current->m_buttons[id] ? 1 : 0;
+    return s_current->m_buttons[port][id] ? 1 : 0;
 }
 
 } // namespace beiklive

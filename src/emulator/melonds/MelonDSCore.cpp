@@ -842,9 +842,10 @@ bool MelonDSCore::LoadState(const std::string& path)
     return Unserialize(data);
 }
 
-void MelonDSCore::SetButtonsFromSignal()
+void MelonDSCore::SetButtonsFromSignal(unsigned player)
 {
-    m_input.SetButtonsFromMask(GameSignal::instance().getGameButtonMask());
+    if (player == 0)
+        m_input.SetButtonsFromMask(GameSignal::instance().getGameButtonMask(player));
 }
 
 void MelonDSCore::SetButton(int key, bool pressed)

@@ -30,6 +30,8 @@ class GameSignal : public Singleton<GameSignal> {
     friend class Singleton<GameSignal>;
 
 public:
+    static constexpr unsigned kMaxPlayers = 2;
+
     // ---- 暂停信号 -------------------------------------------------------
 
     /// UI 线程调用：设置游戏暂停状态。
@@ -139,19 +141,42 @@ public:
 
     /// UI 线程调用：按下指定 retro 按钮（id < 16）。
     void pressGameButton(unsigned id) {
-        if (id < 16)
-            m_gameButtonMask.fetch_or(1u << id, std::memory_order_release);
+        pressGameButton(0, id);
+    }
+
+    /// UI 线程调用：按下指定玩家的 retro 按钮（id < 16）。
+    void pressGameButton(unsigned player, unsigned id) {
+        if (player < kMaxPlayers && id < 16)
+            m_gameButtonMasks[player].fetch_or(1u << id, std::memory_order_release);
     }
 
     /// UI 线程调用：释放指定 retro 按钮（id < 16）。
     void releaseGameButton(unsigned id) {
-        if (id < 16)
-            m_gameButtonMask.fetch_and(~(1u << id), std::memory_order_release);
+        releaseGameButton(0, id);
+    }
+
+    /// UI 线程调用：释放指定玩家的 retro 按钮（id < 16）。
+    void releaseGameButton(unsigned player, unsigned id) {
+        if (player < kMaxPlayers && id < 16)
+            m_gameButtonMasks[player].fetch_and(~(1u << id), std::memory_order_release);
     }
 
     /// 游戏线程调用：获取当前按键位掩码。
     uint32_t getGameButtonMask() const {
-        return m_gameButtonMask.load(std::memory_order_acquire);
+        return getGameButtonMask(0);
+    }
+
+    /// 游戏线程调用：获取指定玩家的按键位掩码。
+    uint32_t getGameButtonMask(unsigned player) const {
+        if (player >= kMaxPlayers)
+            return 0;
+        return m_gameButtonMasks[player].load(std::memory_order_acquire);
+    }
+
+    /// 重置指定玩家的按键位掩码。
+    void clearGameButtonMask(unsigned player) {
+        if (player < kMaxPlayers)
+            m_gameButtonMasks[player].store(0, std::memory_order_release);
     }
 
     // ---- 金手指切换信号 -------------------------------------------------
@@ -234,7 +259,8 @@ public:
         m_pendingAutoSave.store(-1, std::memory_order_relaxed);
         m_autoSaveDone.store(false, std::memory_order_relaxed);
         m_pendingConfigUpdate.store(false, std::memory_order_relaxed);
-        m_gameButtonMask.store(0, std::memory_order_relaxed);
+        for (auto& mask : m_gameButtonMasks)
+            mask.store(0, std::memory_order_relaxed);
     }
 
 private:
@@ -255,7 +281,7 @@ private:
     std::atomic<int>  m_pendingAutoSave{-1};            ///< 待自动存档槽位（-1=无）
     std::atomic<bool> m_autoSaveDone{false};             ///< 退出自动存档是否已处理完毕
     std::atomic<bool> m_pendingConfigUpdate{false};    ///< 待刷新核心配置
-    std::atomic<uint32_t> m_gameButtonMask{0};  ///< 游戏按键位掩码（bit i = RETRO_DEVICE_ID_JOYPAD_* i）
+    std::atomic<uint32_t> m_gameButtonMasks[kMaxPlayers]{};  ///< 游戏按键位掩码（bit i = RETRO_DEVICE_ID_JOYPAD_* i）
 };
 
 } // namespace beiklive

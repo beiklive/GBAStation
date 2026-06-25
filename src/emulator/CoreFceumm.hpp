@@ -27,11 +27,11 @@ public:
     LibretroLoader::VideoFrame GetVideoFrame() const { return m_core.getVideoFrame(); }
     bool DrainAudio(std::vector<int16_t>& out) { return m_core.drainAudio(out); }
 
-    void SetButtonState(unsigned id, bool pressed) { m_core.setButtonState(id, pressed); }
-    void SetButtonsFromSignal() {
-        uint32_t mask = GameSignal::instance().getGameButtonMask();
+    void SetButtonState(unsigned player, unsigned id, bool pressed) override { m_core.setButtonState(player, id, pressed); }
+    void SetButtonsFromSignal(unsigned player) override {
+        uint32_t mask = GameSignal::instance().getGameButtonMask(player);
         for (unsigned i = 0; i < 16; ++i)
-            m_core.setButtonState(i, (mask >> i) & 1u);
+            m_core.setButtonState(player, i, (mask >> i) & 1u);
     }
 
     unsigned GameWidth()  const { return m_core.gameWidth();  }

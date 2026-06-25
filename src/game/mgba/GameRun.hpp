@@ -50,13 +50,13 @@ namespace beiklive::gba
         // ---- 输入 -----------------------------------------------------------
 
         /// 设置按钮状态（RETRO_DEVICE_ID_JOYPAD_*）
-        void SetButtonState(unsigned id, bool pressed) { m_core.setButtonState(id, pressed); }
+        void SetButtonState(unsigned player, unsigned id, bool pressed) override { m_core.setButtonState(player, id, pressed); }
 
         /// 从 GameSignal 按键位掩码批量更新所有按钮状态（游戏线程每帧调用）
-        void SetButtonsFromSignal() {
-            uint32_t mask = GameSignal::instance().getGameButtonMask();
+        void SetButtonsFromSignal(unsigned player) override {
+            uint32_t mask = GameSignal::instance().getGameButtonMask(player);
             for (unsigned i = 0; i < 16; ++i)
-                m_core.setButtonState(i, (mask >> i) & 1u);
+                m_core.setButtonState(player, i, (mask >> i) & 1u);
         }
 
         // ---- 几何信息 --------------------------------------------------------

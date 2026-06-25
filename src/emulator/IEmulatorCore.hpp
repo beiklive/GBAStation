@@ -19,8 +19,8 @@ struct IEmulatorCore {
     virtual LibretroLoader::VideoFrame GetVideoFrame() const = 0;
     virtual bool DrainAudio(std::vector<int16_t>& out) = 0;
 
-    virtual void SetButtonState(unsigned id, bool pressed) = 0;
-    virtual void SetButtonsFromSignal() = 0;
+    virtual void SetButtonState(unsigned player, unsigned id, bool pressed) = 0;
+    virtual void SetButtonsFromSignal(unsigned player) = 0;
 
     virtual unsigned GameWidth()  const = 0;
     virtual unsigned GameHeight() const = 0;

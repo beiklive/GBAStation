@@ -14,6 +14,7 @@ using BrlsButtonMatrix = std::vector<std::vector<int>>;
 
 namespace beiklive
 {
+    constexpr int GAME_INPUT_MAX_PLAYERS = 2;
 
 
     struct InputMap 
@@ -77,6 +78,11 @@ namespace beiklive
         }
     };
 
+    struct PlayerInputState
+    {
+        uint32_t buttonMask = 0;
+    };
+
     class GameInputManager : public Singleton<GameInputManager>
     {
     public:
@@ -90,12 +96,14 @@ namespace beiklive
         bool isInputEnabled() const { return inputEnabled; }
 
         GamepadState getGamepadState(int controllerNum);
+        PlayerInputState getPlayerInputState(int playerIndex) const;
         int getControllerCount() const
         {
             return brls::Application::getPlatform()
                 ->getInputManager()
                 ->getControllersConnectedCount();
         }
+        int getAssignedControllerForPlayer(int playerIndex) const;
 
         // 注册一个模拟器功能键的回调函数，当对应的按键组合被按下时调用回调函数
         void registerEmuFunctionKey(
@@ -116,6 +124,8 @@ namespace beiklive
         bool inputEnabled = true;
         bool m_diagonalMode = true;  ///< 摇杆斜向模式：true=同时触发X+Y，false=仅触发主轴
         GamepadState lastGamepadStates[GAMEPADS_MAX];
+        PlayerInputState m_playerInputs[GAME_INPUT_MAX_PLAYERS];
+        int m_playerAssignments[GAME_INPUT_MAX_PLAYERS] = {0, 1};
 
         InputState inputState;
         std::map<int, uint64_t > pressTime;
@@ -130,6 +140,8 @@ namespace beiklive
 
         // 处理控制器的输入
         void handleControllerInput();
+        void updatePlayerAssignments(int controllersCount);
+        void updatePlayerStates();
         void checkHotkeys();
         GamepadState getControllerState(int controllerNum);
         void updateInputState();
