@@ -2539,13 +2539,19 @@ namespace beiklive
             // 倒带时禁用快进，防止逻辑冲突
             if (rew) ff = false;
 
-            // 通知核心当前快进状态（供 RETRO_ENVIRONMENT_GET_FASTFORWARDING 查询）
-            m_core->SetFastForwarding(ff);
-
             // 每帧读取快进倍率（支持菜单中实时调整）
             m_ffMultiplier = GET_SETTING_KEY_FLOAT("fastforward.multiplier", 4.0f);
-            if (m_ffMultiplier <= 0.0f) m_ffMultiplier = 1.0f;
+            if (m_ffMultiplier <= 0.0f)
+                m_ffMultiplier = 1.0f;
+            else if (m_ffMultiplier < 0.1f)
+                m_ffMultiplier = 0.1f;
             m_ffMute = GET_SETTING_KEY_INT("fastforward.mute", 1) != 0;
+
+            const bool fastForwardActive = ff && m_ffMultiplier >= 1.0f;
+
+            // 通知核心当前快进状态（供 RETRO_ENVIRONMENT_GET_FASTFORWARDING 查询）。
+            // 慢动作同样由快进热键触发，但不能让核心进入快进模式。
+            m_core->SetFastForwarding(fastForwardActive);
 
             // 同步倍速到音频重采样器
             {
@@ -2586,8 +2592,7 @@ namespace beiklive
             _checkAndAutoSaveSram();
 
             // ── 音频 PLL：围绕目标缓冲量做轻微双向修正 ──
-            const bool ndsFastForward = ff && m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS);
-            if (framesRan > 0 && !ff) {
+            if (framesRan > 0 && !fastForwardActive) {
                 const size_t ringFill = AudioManager::instance().available();
                 const double targetFill = static_cast<double>(AudioManager::instance().targetLatencySamples());
                 float gain = GET_SETTING_KEY_FLOAT(beiklive::SettingKey::KEY_AUDIO_SYNC_STRENGTH, 0.015f);
@@ -2604,7 +2609,7 @@ namespace beiklive
                         static_cast<long long>(baseFrameDurNs.count() * correction));
                 }
             } else {
-                if (ndsFastForward && m_ffMultiplier > 1.0f && framesRan > 0) {
+                if (fastForwardActive && m_ffMultiplier > 1.0f && framesRan > 0) {
                     const double frameScale = static_cast<double>(framesRan) / static_cast<double>(m_ffMultiplier);
                     frameDurNs = std::chrono::nanoseconds(
                         static_cast<long long>(baseFrameDurNs.count() * frameScale));
@@ -2613,8 +2618,8 @@ namespace beiklive
                 }
             }
 
-            // ---- 帧率限制（NDS 快进全速运行，其他平台快进也不节流）----
-            _throttleFrameRate(ff, nextFrameTarget, frameDurNs, spinGuardNs);
+            // ---- 帧率限制（倍率决定间隔；慢动作与快进都走节流）----
+            _throttleFrameRate(false, nextFrameTarget, frameDurNs, spinGuardNs);
         }
 
         // ---- 提交时长记录 ----
