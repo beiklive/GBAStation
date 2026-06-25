@@ -108,7 +108,7 @@ namespace beiklive
         // BK_RES("img/ui/menu/" + iconPath)
         // 标题
         this->getHeader()->setTitle("游戏菜单");
-
+        this->showBackground(false);
         // ── 创建 6 个菜单按钮 ──────────────────────────────────────────────
 
         // 1. 返回游戏（无面板）
