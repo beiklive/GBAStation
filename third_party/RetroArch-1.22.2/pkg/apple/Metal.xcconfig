@@ -1,0 +1,7 @@
+//
+//  BaseConfig.xcconfig
+//  RetroArch
+//
+//
+
+OTHER_CFLAGS = $(inherited) -DHAVE_MAIN -DHAVE_CORE_INFO_CACHE -DHAVE_ONLINE_UPDATER -DHAVE_UPDATE_CORES

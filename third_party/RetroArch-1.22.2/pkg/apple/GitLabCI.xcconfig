@@ -1,0 +1,13 @@
+//
+//  GitLabCI.xcconfig
+//  RetroArch_Metal
+//
+//
+
+// Configuration settings file format documentation can be found at:
+// https://help.apple.com/xcode/#/dev745c5c974
+
+#include "Metal.xcconfig"
+DEVELOPMENT_TEAM=UK699V5ZS8
+OTHER_CFLAGS = $(inherited) -DHAVE_ICLOUD -DHAVE_ICLOUD_DRIVE
+CODE_SIGN_ENTITLEMENTS = RetroArchCI.entitlements

@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "retroarch_logo_back-1.png",
+      "idiom" : "tv"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

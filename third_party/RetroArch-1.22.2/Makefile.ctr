@@ -1,0 +1,374 @@
+TARGET := retroarch_3ds
+LIBRETRO =
+
+DEBUG                   = 0
+CONSOLE_LOG             = 0
+GRIFFIN_BUILD           = 0
+HAVE_STATIC_DUMMY      ?= 0
+WHOLE_ARCHIVE_LINK      = 0
+BUILD_3DSX              = 1
+BUILD_3DS               = 0
+BUILD_CIA               = 1
+LIBCTRU_NO_DEPRECATION  = 1
+USE_CTRULIB_2          ?= 0
+LOAD_WITHOUT_CORE_INFO ?= 0
+
+APP_TITLE            = RetroArch 3DS
+APP_DESCRIPTION      = RetroArch 3DS
+APP_AUTHOR           = Team Libretro
+APP_PRODUCT_CODE     = RETROARCH-3DS
+APP_UNIQUE_ID        = 0xBAC00
+APP_ICON             = pkg/ctr/assets/default.png
+APP_BANNER           = pkg/ctr/assets/libretro_banner.png
+APP_AUDIO            = pkg/ctr/assets/silent.wav
+APP_RSF              = pkg/ctr/tools/template.rsf
+APP_SYSTEM_MODE      = 64MB
+APP_SYSTEM_MODE_EXT  = 124MB
+APP_BIG_TEXT_SECTION = 0
+APP_USE_SVCHAX       = 0
+
+include pkg/ctr/Makefile.cores
+
+OBJ :=
+OBJ += gfx/drivers/ctr_shaders/ctr_sprite.o
+OBJ += ctr/ctr_system.o
+OBJ += ctr/ctr_memory.o
+OBJ += ctr/ctr_linear.o
+OBJ += ctr/gpu_old.o
+OBJ += ctr/exec-3dsx/exec_cia.o \
+	ctr/exec-3dsx/exec_3dsx.o \
+	ctr/exec-3dsx/mini-hb-menu/launch.o \
+	ctr/exec-3dsx/mini-hb-menu/loaders/rosalina.o \
+	ctr/exec-3dsx/mini-hb-menu/loaders/hax2.o
+
+ifeq ($(APP_BIG_TEXT_SECTION), 1)
+	APP_USE_SVCHAX = 1
+	LDFLAGS  += -Wl,--defsym,__ctr_patch_services=__service_ptr
+endif
+
+ifeq ($(APP_USE_SVCHAX), 1)
+	OBJ += ctr/ctr_svchax.o
+endif
+
+DEFINES :=
+ifeq ($(GRIFFIN_BUILD), 1)
+	OBJ += griffin/griffin.o
+	DEFINES += -DHAVE_GRIFFIN=1 -DHAVE_MENU -DHAVE_CONFIGFILE -DHAVE_RGUI -DHAVE_XMB -DHAVE_LIBRETRODB -DHAVE_CC_RESAMPLER
+	DEFINES += -DHAVE_ZLIB -DHAVE_7ZIP -D_7ZIP_ST -DHAVE_RPNG -DHAVE_RJPEG -DHAVE_RBMP -DHAVE_RTGA
+	DEFINES += -DHAVE_NETWORKING -DHAVE_IFINFO -DHAVE_CHEEVOS -DRC_DISABLE_LUA -DHAVE_ONLINE_UPDATER -DHAVE_UPDATE_CORES
+	DEFINES += -DHAVE_UPDATE_CORE_INFO
+	#DEFINES += -DHAVE_UPDATE_ASSETS
+	DEFINES += -DHAVE_PATCH -DHAVE_RWAV
+	DEFINES += -DHAVE_SCREENSHOTS
+	DEFINES += -DHAVE_REWIND
+	DEFINES += -DHAVE_THREADS
+	DEFINES += -DHAVE_GFX_WIDGETS
+	DEFINES += -DHAVE_OVERLAY
+	DEFINES += -DHAVE_CORE_INFO_CACHE
+	#DEFINES += -DHAVE_SOCKET_LEGACY
+	#-DHAVE_SSL -DHAVE_BUILTINMBEDTLS -DMBEDTLS_SSL_DEBUG_ALL
+	#ssl is currently incompatible with griffin due to use of the "static" flag on repeating functions that will conflict when included in one file
+	CFLAGS += -I. \
+		-Ideps \
+		-Ideps/7zip \
+		-Ideps/stb \
+		-Ideps/mbedtls \
+		-Ideps/rcheevos/include \
+		-Ilibretro-common/include \
+		-Ilibretro-common/include/compat/zlib
+else
+	HAVE_CC_RESAMPLER = 1
+	HAVE_MENU_COMMON = 1
+	HAVE_RTGA = 1
+	HAVE_RPNG = 1
+	HAVE_RJPEG = 1
+	HAVE_RBMP = 1
+	HAVE_MENU = 1
+	HAVE_RGUI = 1
+	HAVE_ZLIB = 1
+	HAVE_7ZIP = 1
+	HAVE_BUILTINZLIB = 1
+	HAVE_LIBRETRODB = 1
+	HAVE_XMB = 1
+	HAVE_STATIC_VIDEO_FILTERS = 1
+	HAVE_STATIC_AUDIO_FILTERS = 1
+	HAVE_PATCH = 1
+	HAVE_SCREENSHOTS = 1
+	HAVE_REWIND = 1
+	HAVE_AUDIOMIXER = 1
+	HAVE_RWAV = 1
+	HAVE_CHEATS = 1
+	HAVE_VIDEO_FILTER = 1
+	HAVE_DSP_FILTER = 1
+	HAVE_CONFIGFILE = 1
+	HAVE_OVERLAY = 1
+	HAVE_GFX_WIDGETS = 1
+	HAVE_NETWORKING = 1
+	HAVE_IFINFO = 1
+	HAVE_CHEEVOS = 1
+	HAVE_THREADS = 1
+	HAVE_BUILTINMBEDTLS = 1
+	HAVE_CORE_INFO_CACHE = 1
+	HAVE_CLOUDSYNC = 1
+
+	include Makefile.common
+	CFLAGS += $(DEF_FLAGS) -I. $(INCLUDE_DIRS)
+endif
+
+ifeq ($(strip $(DEVKITPRO)),)
+	$(error "Please set DEVKITPRO in your environment. export DEVKITPRO=<path to>devkitpro")
+endif
+ifeq ($(strip $(DEVKITARM)),)
+	$(error "Please set DEVKITARM in your environment. export DEVKITARM=<path to>devkitarm")
+endif
+
+ifeq ($(strip $(CTRULIB)),)
+	CTRULIB = $(DEVKITPRO)/libctru
+endif
+
+ifeq ($(strip $(USE_CTRULIB_2)),1)
+	CFLAGS += -DUSE_CTRULIB_2
+endif
+
+ifeq ($(LOAD_WITHOUT_CORE_INFO),1)
+	CFLAGS += -DLOAD_WITHOUT_CORE_INFO
+endif
+
+ifeq ($(strip $(DEVKITTOOLS)),)
+	ifeq ($(strip $(USE_CTRULIB_2)),1)
+		DEVKITTOOLS = $(DEVKITPRO)/tools
+	else
+		DEVKITTOOLS = $(DEVKITARM)
+	endif
+endif
+
+APP_TITLE         := $(shell echo "$(APP_TITLE)" | cut -c1-128)
+APP_DESCRIPTION   := $(shell echo "$(APP_DESCRIPTION)" | cut -c1-256)
+APP_AUTHOR        := $(shell echo "$(APP_AUTHOR)" | cut -c1-128)
+APP_PRODUCT_CODE  := $(shell echo $(APP_PRODUCT_CODE) | cut -c1-16)
+APP_UNIQUE_ID     := $(shell echo $(APP_UNIQUE_ID) | cut -c1-7)
+
+APP_VERSION_MAJOR := $(shell shuf -i 0-63 -n 1)
+APP_VERSION_MINOR := $(shell shuf -i 0-63 -n 1)
+APP_VERSION_MICRO := $(shell shuf -i 0-15 -n 1)
+
+MAKEROM_ARGS_COMMON = -rsf $(APP_RSF) -exefslogo -elf $(TARGET).elf -icon $(TARGET).icn -banner $(TARGET).bnr \
+	-DAPP_TITLE="$(APP_TITLE)" -DAPP_PRODUCT_CODE="$(APP_PRODUCT_CODE)" -DAPP_UNIQUE_ID=$(APP_UNIQUE_ID) \
+	-DAPP_SYSTEM_MODE=$(APP_SYSTEM_MODE) -DAPP_SYSTEM_MODE_EXT=$(APP_SYSTEM_MODE_EXT) \
+	-major "$(APP_VERSION_MAJOR)" -minor "$(APP_VERSION_MINOR)" -micro "$(APP_VERSION_MICRO)"
+
+INCDIRS := -I$(CTRULIB)/include
+LIBDIRS := -L. -L$(CTRULIB)/lib
+
+ARCH     := -march=armv6k -mtune=mpcore -mfloat-abi=hard -marm -mfpu=vfp -mtp=soft
+
+CFLAGS	+= -mword-relocations $(ARCH)
+CFLAGS	+= -DARM11 -D_3DS
+
+ifeq ($(strip $(USE_CTRULIB_2)),1)
+   CFLAGS	+= -D__3DS__
+endif
+
+ifeq ($(DEBUG), 1)
+   CFLAGS	+= -O0 -g
+else
+   CFLAGS	+= -fomit-frame-pointer -O3
+endif
+
+ifeq ($(CONSOLE_LOG), 1)
+   CFLAGS	+= -DCONSOLE_LOG
+endif
+
+ifeq ($(LIBCTRU_NO_DEPRECATION), 1)
+   CFLAGS	+= -DLIBCTRU_NO_DEPRECATION
+endif
+
+ifeq ($(WHOLE_ARCHIVE_LINK), 1)
+   WHOLE_START := -Wl,--whole-archive
+   WHOLE_END := -Wl,--no-whole-archive
+endif
+
+
+CFLAGS += -DRARCH_INTERNAL -DRARCH_CONSOLE
+CFLAGS += -DHAVE_FILTERS_BUILTIN $(DEFINES)
+CFLAGS += -DHAVE_ONLINE_UPDATER -DHAVE_UPDATE_CORES -DHAVE_UPDATE_CORE_INFO
+
+CXXFLAGS := $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++11
+CFLAGS += -Werror=implicit-function-declaration
+
+ASFLAGS	 := -g $(ARCH) -O3
+LDFLAGS  += -specs=ctr/3dsx_custom.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
+CFLAGS   += -std=gnu99
+
+LIB_CORE      :=
+LIB_CORE_FULL :=
+
+ifeq ($(HAVE_STATIC_DUMMY),1)
+  DEFINES += -DHAVE_STATIC_DUMMY
+else
+  LIB_CORE      += -lretro_ctr
+  LIB_CORE_FULL += libretro_ctr.a
+endif
+
+LIBS	:= $(WHOLE_START) $(LIB_CORE) $(WHOLE_END) -lm
+
+ifeq ($(DEBUG), 1)
+	LIBS	+= -lctrud
+else
+	LIBS	+= -lctru
+endif
+
+ifneq ($(V),1)
+	Q := @
+endif
+
+ifeq ($(BUILD_3DSX), 1)
+	TARGET_3DSX := $(TARGET).3dsx $(TARGET).smdh
+endif
+
+ifeq ($(BUILD_3DS), 1)
+	TARGET_3DS := $(TARGET).3ds
+endif
+
+ifeq ($(BUILD_CIA), 1)
+	TARGET_CIA := $(TARGET).cia
+endif
+
+PREFIX		:=	$(DEVKITARM)/bin/arm-none-eabi-
+CC      := $(PREFIX)gcc
+CXX     := $(PREFIX)g++
+AS      := $(PREFIX)as
+AR      := $(PREFIX)ar
+OBJCOPY := $(PREFIX)objcopy
+STRIP   := $(PREFIX)strip
+NM      := $(PREFIX)nm
+LD      := $(CXX)
+
+ifeq ($(strip $(CTRBANNERTOOL)),)
+	ifneq ($(findstring Linux,$(shell uname)),)
+		BANNERTOOL = pkg/ctr/tools/bannertool-linux
+	else ifneq ($(findstring Darwin,$(shell uname)),)
+		BANNERTOOL = pkg/ctr/tools/bannertool-mac
+	else
+		BANNERTOOL = pkg/ctr/tools/bannertool.exe
+	endif
+else
+	BANNERTOOL = $(CTRBANNERTOOL)
+endif
+
+ifeq ($(strip $(CTRMAKEROM)),)
+	ifneq ($(findstring Linux,$(shell uname)),)
+		MAKEROM    = pkg/ctr/tools/makerom-linux
+	else ifneq ($(findstring Darwin,$(shell uname)),)
+		MAKEROM    = pkg/ctr/tools/makerom-mac
+	else
+		MAKEROM    = pkg/ctr/tools/makerom.exe
+	endif
+else
+	MAKEROM = $(CTRMAKEROM)
+endif
+
+.PHONY: $(BUILD) clean all
+
+all: $(TARGET)
+
+define INFO
+AR: $(AR)
+ASFLAGS: $(ASFLAGS)
+CC: $(CC)
+CFLAGS: $(CFLAGS)
+CXX: $(CXX)
+CXXFLAGS: $(CXXFLAGS)
+INCDIRS: $(INCDIRS)
+LD: $(LD)
+LDFLAGS: $(LDFLAGS)
+LIBDIRS: $(LIBDIRS)
+LIBS: $(LIBS)
+OBJ: $(OBJ)
+endef
+export INFO
+
+info:
+ifneq ($(V),1)
+	@echo "$$INFO"
+endif
+
+
+$(TARGET): $(TARGET_3DSX) $(TARGET_3DS) $(TARGET_CIA)
+$(TARGET).3dsx: $(TARGET).elf
+$(TARGET).elf: $(OBJ) $(LIB_CORE_FULL)
+
+%.o: %.vsh %.gsh
+	$(DEVKITTOOLS)/bin/picasso $^ -o $*.shbin
+	$(DEVKITTOOLS)/bin/bin2s $*.shbin | $(PREFIX)as -o $@
+	rm $*.shbin
+
+%.o: %.vsh
+	$(DEVKITTOOLS)/bin/picasso $^ -o $*.shbin
+	$(DEVKITTOOLS)/bin/bin2s $*.shbin | $(PREFIX)as -o $@
+	rm $*.shbin
+
+%.o: %.cpp
+	@$(if $(Q), $(shell echo echo CXX $<),)
+	$(Q)$(CXX) -c -o $@ $< $(CXXFLAGS) $(INCDIRS)
+
+%.o: %.c
+	@$(if $(Q), $(shell echo echo CC $<),)
+	$(Q)$(CC) -c -o $@ $< $(CFLAGS) $(INCDIRS)
+
+%.o: %.s
+	@$(if $(Q), $(shell echo echo CC $<),)
+	$(Q)$(CC) -c -o $@ $< $(ASFLAGS)
+
+%.o: %.S
+	@$(if $(Q), $(shell echo echo CC $<),)
+	$(Q)$(CC) -c -o $@ $< $(ASFLAGS)
+
+%.a:
+	@$(if $(Q), $(shell echo echo AR $<),)
+	$(Q)$(AR) -rc $@ $^
+
+%.vsh:
+
+$(TARGET).smdh: $(TARGET).elf $(APP_ICON)
+	$(DEVKITTOOLS)/bin/smdhtool --create "$(APP_TITLE)" "$(APP_DESCRIPTION)" "$(APP_AUTHOR)" $(APP_ICON) $@
+
+$(TARGET).3dsx: $(TARGET).elf
+ifeq ($(APP_BIG_TEXT_SECTION), 1)
+	cp pkg/ctr/big_text_section.xml $(TARGET).xml
+else
+	rm -f $(TARGET).xml
+endif
+	$(DEVKITTOOLS)/bin/3dsxtool $< $@ $(_3DSXFLAGS)
+
+$(TARGET).elf: ctr/3dsx_custom_crt0.o
+	@$(if $(Q), $(shell echo echo LD $@),)
+	$(Q)$(LD) $(LDFLAGS) $(OBJ) $(LIBDIRS) $(LIBS) -o $@
+	$(NM) -CSn $@ > $(notdir $*.lst)
+
+$(TARGET).bnr: $(TARGET).elf $(APP_BANNER) $(APP_AUDIO)
+	$(BANNERTOOL) makebanner -i "$(APP_BANNER)" -a "$(APP_AUDIO)" -o $@
+
+$(TARGET).icn: $(TARGET).elf $(APP_ICON)
+	$(BANNERTOOL) makesmdh -s "$(APP_TITLE)" -l "$(APP_TITLE)" -p "$(APP_AUTHOR)" -i $(APP_ICON) -o $@
+
+$(TARGET).3ds: $(TARGET).elf $(TARGET).bnr $(TARGET).icn $(APP_RSF)
+	$(MAKEROM) -f cci -o $@ $(MAKEROM_ARGS_COMMON) -DAPP_ENCRYPTED=true
+
+$(TARGET).cia: $(TARGET).elf $(TARGET).bnr $(TARGET).icn $(APP_RSF)
+	$(MAKEROM) -f cia -o $@ $(MAKEROM_ARGS_COMMON) -DAPP_ENCRYPTED=false
+
+clean:
+	@$(if $(Q), echo $@,)
+	$(Q)rm -f $(OBJ)
+	$(Q)rm -f $(TARGET).3dsx
+	$(Q)rm -f $(TARGET).elf
+	$(Q)rm -f $(TARGET).3ds
+	$(Q)rm -f $(TARGET).cia
+	$(Q)rm -f $(TARGET).smdh
+	$(Q)rm -f $(TARGET).bnr
+	$(Q)rm -f $(TARGET).icn
+	$(Q)rm -f ctr/ctr_config_*.o
+	$(Q)rm -f ctr/3dsx_custom_crt0.o
+
+.PHONY: clean

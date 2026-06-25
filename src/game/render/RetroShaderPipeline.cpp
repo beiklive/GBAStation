@@ -283,9 +283,8 @@ void RetroShaderPipeline::deinit()
 bool RetroShaderPipeline::allocateFBO(ShaderPass& pass, int w, int h)
 {
     if (w <= 0 || h <= 0) return false;
-    const unsigned texSize = nextPowerOfTwo(static_cast<unsigned>(std::max(w, h)));
-    const unsigned texW = texSize;
-    const unsigned texH = texSize;
+    const unsigned texW = nextPowerOfTwo(static_cast<unsigned>(w));
+    const unsigned texH = nextPowerOfTwo(static_cast<unsigned>(h));
     if (pass.fbo &&
         pass.imageWidth == w && pass.imageHeight == h &&
         pass.width == static_cast<int>(texW) &&
