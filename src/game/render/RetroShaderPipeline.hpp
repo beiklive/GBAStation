@@ -15,8 +15,10 @@ struct ShaderPass {
     GLuint program      = 0;     ///< 链接完成的 GL 程序 ID
     GLuint fbo          = 0;     ///< 输出帧缓冲对象
     GLuint texture      = 0;     ///< 输出颜色纹理
-    int    width        = 0;     ///< 输出纹理宽度（像素）
-    int    height       = 0;     ///< 输出纹理高度（像素）
+    int    width        = 0;     ///< 实际输出纹理宽度（像素，可能含 padding）
+    int    height       = 0;     ///< 实际输出纹理高度（像素，可能含 padding）
+    int    imageWidth   = 0;     ///< 有效输出画面宽度（像素）
+    int    imageHeight  = 0;     ///< 有效输出画面高度（像素）
     bool   filterLinear = false; ///< 纹理过滤：true=线性，false=最近邻
     std::string alias;           ///< 通道别名，供后续通道以 <alias>Texture 引用
     ShaderPassDesc desc;         ///< 来自 .glslp 的原始描述（用于尺寸重算）
@@ -71,6 +73,8 @@ public:
     bool     isLoaded() const { return !m_passes.empty(); }
     unsigned outputW()  const { return m_lastOutW; }
     unsigned outputH()  const { return m_lastOutH; }
+    float    outputU()  const { return m_lastOutU; }
+    float    outputV()  const { return m_lastOutV; }
 
     /// 返回当前管线中所有参数的完整元数据（含当前值）。
     const std::vector<ShaderParamInfo>& getParams() const { return m_params; }
@@ -85,12 +89,20 @@ private:
     FullscreenQuad               m_quad;
     unsigned                     m_lastOutW = 0;
     unsigned                     m_lastOutH = 0;
+    float                        m_lastOutU = 1.0f;
+    float                        m_lastOutV = 1.0f;
 
     int    m_feedbackPass = -1;     ///< 帧反馈的源 pass 索引（-1 = 无）
     int    m_historySize  = 0;      ///< 原始帧历史保留帧数
     GLuint m_feedbackTex  = 0;      ///< 帧反馈纹理（上一帧的反馈 pass 输出）
+    unsigned m_feedbackW  = 0;      ///< 帧反馈实际纹理宽度
+    unsigned m_feedbackH  = 0;      ///< 帧反馈实际纹理高度
+    unsigned m_feedbackImageW = 0;  ///< 帧反馈有效画面宽度
+    unsigned m_feedbackImageH = 0;  ///< 帧反馈有效画面高度
     std::vector<GLuint> m_historyTextures; ///< 帧历史纹理（环形缓冲区）
     unsigned m_historyWriteIdx = 0; ///< 帧历史写入位置
+    unsigned m_historyW = 0;        ///< 帧历史纹理宽度
+    unsigned m_historyH = 0;        ///< 帧历史纹理高度
 
     /// 为通道分配或调整 FBO + 颜色纹理。
     bool allocateFBO(ShaderPass& pass, int w, int h);
@@ -103,7 +115,8 @@ private:
 
     /// 设置当前通道所需的 uniform 变量。
     void setUniforms(GLuint program,
-                     unsigned inW, unsigned inH,
+                     unsigned inputW, unsigned inputH,
+                     unsigned textureW, unsigned textureH,
                      unsigned outW, unsigned outH,
                      unsigned origW, unsigned origH,
                      unsigned viewW, unsigned viewH,

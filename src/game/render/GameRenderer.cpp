@@ -8,6 +8,16 @@
 
 namespace beiklive {
 
+static std::array<float, 8> scaleUv(const std::array<float, 8>& uv, float uMax, float vMax)
+{
+    return {
+        uv[0] * uMax, uv[1] * vMax,
+        uv[2] * uMax, uv[3] * vMax,
+        uv[4] * uMax, uv[5] * vMax,
+        uv[6] * uMax, uv[7] * vMax,
+    };
+}
+
 // ============================================================
 // init
 // ============================================================
@@ -115,8 +125,9 @@ void GameRenderer::drawToScreen(float virtX, float virtY, float virtW, float vir
     GLuint finalTex = m_renderChain.run(m_texture.texId(),
                                         m_texture.width(), m_texture.height(),
                                         viewW, viewH);
+    const auto finalUv = scaleUv(uv, m_renderChain.outputU(), m_renderChain.outputV());
     m_renderChain.drawToScreen(finalTex, virtX, virtY, virtW, virtH,
-                               windowScale, windowW, windowH, uv);
+                               windowScale, windowW, windowH, finalUv);
 }
 
 void GameRenderer::drawExternalTexture(GLuint tex, unsigned texW, unsigned texH,
@@ -152,8 +163,9 @@ void GameRenderer::drawExternalTexture(GLuint tex, unsigned texW, unsigned texH,
         static_cast<unsigned>(std::llround(static_cast<double>(virtW) * static_cast<double>(windowScale))),
         static_cast<unsigned>(std::llround(static_cast<double>(virtH) * static_cast<double>(windowScale))));
 
+    const auto finalUv = scaleUv(uv, m_renderChain.outputU(), m_renderChain.outputV());
     m_renderChain.drawToScreen(finalTex, virtX, virtY, virtW, virtH,
-                               windowScale, windowW, windowH, uv,
+                               windowScale, windowW, windowH, finalUv,
                                finalTex == tex ? swizzleRB : false);
 }
 

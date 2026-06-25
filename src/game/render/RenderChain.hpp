@@ -56,6 +56,10 @@ public:
     /// 返回最终输出纹理的高度。
     unsigned outputH() const { return m_lastH; }
 
+    /// 返回最终输出纹理的有效 UV 右/下边界。
+    float outputU() const { return m_lastU; }
+    float outputV() const { return m_lastV; }
+
     /// 加载新的着色器预设，替换当前管线（若有）。
     ///
     /// @param glslpPath  .glslp 文件路径；空字符串 = 卸载当前着色器并切换为直通模式。
@@ -105,6 +109,8 @@ private:
     unsigned            m_frameCount = 0; ///< 累计帧计数，传入着色器 FrameCount uniform
     unsigned            m_lastW      = 0;
     unsigned            m_lastH      = 0;
+    float               m_lastU      = 1.0f;
+    float               m_lastV      = 1.0f;
 };
 
 } // namespace beiklive

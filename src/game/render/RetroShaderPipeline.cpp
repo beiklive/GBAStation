@@ -23,6 +23,90 @@ static const float k_mvp4x4[16] = {
     0.f, 0.f, 0.f, 1.f,
 };
 
+static bool ensureCacheTexture(GLuint& tex, unsigned& texW, unsigned& texH,
+                               unsigned w, unsigned h, bool filterLinear)
+{
+    if (w == 0 || h == 0) return false;
+    if (tex && texW == w && texH == h) return true;
+
+    if (tex) {
+        glDeleteTextures(1, &tex);
+        tex = 0;
+    }
+
+    glGenTextures(1, &tex);
+    if (!tex) return false;
+
+    glBindTexture(GL_TEXTURE_2D, tex);
+    GLenum filter = filterLinear ? GL_LINEAR : GL_NEAREST;
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
+                 static_cast<GLsizei>(w), static_cast<GLsizei>(h),
+                 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    texW = w;
+    texH = h;
+    return true;
+}
+
+static bool copyTextureToCache(GLuint srcTex, unsigned srcW, unsigned srcH,
+                               GLuint& dstTex, unsigned& dstW, unsigned& dstH,
+                               bool filterLinear)
+{
+    if (!srcTex || srcW == 0 || srcH == 0) return false;
+    if (!ensureCacheTexture(dstTex, dstW, dstH, srcW, srcH, filterLinear))
+        return false;
+
+    GLint prevReadFBO = 0;
+    GLint prevTex     = 0;
+    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFBO);
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &prevTex);
+
+    GLuint copyFBO = 0;
+    glGenFramebuffers(1, &copyFBO);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, copyFBO);
+    glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                           GL_TEXTURE_2D, srcTex, 0);
+
+    bool ok = false;
+    if (glCheckFramebufferStatus(GL_READ_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE) {
+        glBindTexture(GL_TEXTURE_2D, dstTex);
+        glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0,
+                            static_cast<GLsizei>(srcW),
+                            static_cast<GLsizei>(srcH));
+        ok = true;
+    } else {
+        brls::Logger::warning("RetroShaderPipeline: 无法复制纹理到缓存，源 FBO 不完整");
+    }
+
+    glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(prevTex));
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(prevReadFBO));
+    glDeleteFramebuffers(1, &copyFBO);
+
+    return ok;
+}
+
+static unsigned nextPowerOfTwo(unsigned v)
+{
+    if (v <= 1) return 1;
+    --v;
+    v |= v >> 1;
+    v |= v >> 2;
+    v |= v >> 4;
+    v |= v >> 8;
+    v |= v >> 16;
+    return v + 1;
+}
+
+static float uvMax(unsigned image, unsigned texture)
+{
+    return texture > 0 ? static_cast<float>(image) / static_cast<float>(texture) : 1.0f;
+}
+
 // ============================================================
 // init
 // ============================================================
@@ -167,8 +251,8 @@ void RetroShaderPipeline::deinit()
         if (pass.fbo)     { glDeleteFramebuffers(1, &pass.fbo);  pass.fbo = 0; }
         if (pass.texture) { glDeleteTextures(1, &pass.texture);  pass.texture = 0; }
         if (pass.program) { glDeleteProgram(pass.program);       pass.program = 0; }
-        pass.width  = 0;
-        pass.height = 0;
+        pass.width = pass.height = 0;
+        pass.imageWidth = pass.imageHeight = 0;
     }
     m_passes.clear();
     // 释放外部纹理 GL 对象
@@ -179,14 +263,18 @@ void RetroShaderPipeline::deinit()
     m_params.clear();
 
     if (m_feedbackTex) { glDeleteTextures(1, &m_feedbackTex); m_feedbackTex = 0; }
+    m_feedbackW = m_feedbackH = 0;
+    m_feedbackImageW = m_feedbackImageH = 0;
     for (auto& t : m_historyTextures) {
         if (t) { glDeleteTextures(1, &t); t = 0; }
     }
     m_historyTextures.clear();
     m_historyWriteIdx = 0;
+    m_historyW = m_historyH = 0;
 
     m_quad.deinit();
     m_lastOutW = m_lastOutH = 0;
+    m_lastOutU = m_lastOutV = 1.0f;
 }
 
 // ============================================================
@@ -195,7 +283,15 @@ void RetroShaderPipeline::deinit()
 bool RetroShaderPipeline::allocateFBO(ShaderPass& pass, int w, int h)
 {
     if (w <= 0 || h <= 0) return false;
-    if (pass.fbo && pass.width == w && pass.height == h) return true;
+    const unsigned texSize = nextPowerOfTwo(static_cast<unsigned>(std::max(w, h)));
+    const unsigned texW = texSize;
+    const unsigned texH = texSize;
+    if (pass.fbo &&
+        pass.imageWidth == w && pass.imageHeight == h &&
+        pass.width == static_cast<int>(texW) &&
+        pass.height == static_cast<int>(texH)) {
+        return true;
+    }
 
     // 释放旧 FBO / 纹理
     if (pass.fbo)     { glDeleteFramebuffers(1, &pass.fbo);  pass.fbo = 0; }
@@ -220,7 +316,7 @@ bool RetroShaderPipeline::allocateFBO(ShaderPass& pass, int w, int h)
     }
 #endif
     glTexImage2D(GL_TEXTURE_2D, 0, internalFormat,
-                 static_cast<GLsizei>(w), static_cast<GLsizei>(h),
+                 static_cast<GLsizei>(texW), static_cast<GLsizei>(texH),
                  0, GL_RGBA, pixelType, nullptr);
     glBindTexture(GL_TEXTURE_2D, 0);
 
@@ -240,9 +336,12 @@ bool RetroShaderPipeline::allocateFBO(ShaderPass& pass, int w, int h)
         return false;
     }
 
-    pass.width  = w;
-    pass.height = h;
-    brls::Logger::debug("RetroShaderPipeline: 分配 FBO id={} {}×{}", pass.fbo, w, h);
+    pass.width       = static_cast<int>(texW);
+    pass.height      = static_cast<int>(texH);
+    pass.imageWidth  = w;
+    pass.imageHeight = h;
+    brls::Logger::debug("RetroShaderPipeline: 分配 FBO id={} image={}×{} texture={}×{}",
+                        pass.fbo, w, h, texW, texH);
     return true;
 }
 
@@ -281,7 +380,8 @@ void RetroShaderPipeline::computePassSize(const ShaderPassDesc& desc,
 // setUniforms – 设置标准 RetroArch uniform 变量及额外纹理单元
 // ============================================================
 void RetroShaderPipeline::setUniforms(GLuint program,
-                                       unsigned inW, unsigned inH,
+                                       unsigned inputW, unsigned inputH,
+                                       unsigned textureW, unsigned textureH,
                                        unsigned outW, unsigned outH,
                                        unsigned origW, unsigned origH,
                                        unsigned viewW, unsigned viewH,
@@ -320,12 +420,12 @@ void RetroShaderPipeline::setUniforms(GLuint program,
     setUniform1i("FrameCount",     static_cast<int>(frameCount));
     setUniform1i("FrameDirection", 1);
 
-    // 输入纹理尺寸（TextureSize / InputSize 均指输入）
-    setUniform2f("TextureSize", static_cast<float>(inW), static_cast<float>(inH));
-    setUniform2f("InputSize",   static_cast<float>(inW), static_cast<float>(inH));
+    // RetroArch 语义：InputSize 是有效画面尺寸，TextureSize 是实际纹理尺寸（可能含 padding）。
+    setUniform2f("TextureSize", static_cast<float>(textureW), static_cast<float>(textureH));
+    setUniform2f("InputSize",   static_cast<float>(inputW), static_cast<float>(inputH));
     setUniform4f("SourceSize",
-                 static_cast<float>(inW),  static_cast<float>(inH),
-                 1.f / static_cast<float>(inW), 1.f / static_cast<float>(inH));
+                 static_cast<float>(inputW),  static_cast<float>(inputH),
+                 1.f / static_cast<float>(inputW), 1.f / static_cast<float>(inputH));
 
     // 输出尺寸
     setUniform2f("OutputSize", static_cast<float>(outW), static_cast<float>(outH));
@@ -512,8 +612,10 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
     glDisable(GL_CULL_FACE);
 
     GLuint currentTex = inputTex;
-    unsigned currentW = videoW;
-    unsigned currentH = videoH;
+    unsigned currentImageW = videoW;
+    unsigned currentImageH = videoH;
+    unsigned currentTexW = videoW;
+    unsigned currentTexH = videoH;
     // 逻辑尺寸：用于链式 Source 缩放，避免每一跳都基于整数 round 后尺寸继续计算
     double currentLogicalW = static_cast<double>(videoW);
     double currentLogicalH = static_cast<double>(videoH);
@@ -528,8 +630,17 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
 
         // frame_count_mod：仅每 N 帧执行一次
         if (pass.desc.frameCountMod > 1 && (frameCount % static_cast<unsigned>(pass.desc.frameCountMod)) != 0) {
-            // 需要将上一个通道的输出链入（本通道不执行），以保持尺寸链条完整
-            if (pass.texture) { currentTex = pass.texture; }
+            // 复用本 pass 上一次执行时的输出，并同步尺寸供后续 pass 的 Source 缩放和 uniform 使用。
+            if (pass.texture && pass.width > 0 && pass.height > 0 &&
+                pass.imageWidth > 0 && pass.imageHeight > 0) {
+                currentTex = pass.texture;
+                currentImageW = static_cast<unsigned>(pass.imageWidth);
+                currentImageH = static_cast<unsigned>(pass.imageHeight);
+                currentTexW = static_cast<unsigned>(pass.width);
+                currentTexH = static_cast<unsigned>(pass.height);
+                currentLogicalW = static_cast<double>(pass.imageWidth);
+                currentLogicalH = static_cast<double>(pass.imageHeight);
+            }
             continue;
         }
 
@@ -556,13 +667,13 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
             outInt = std::max(1, static_cast<int>(std::llround(scaled)));
         };
 
-        int outW = static_cast<int>(currentW);
-        int outH = static_cast<int>(currentH);
+        int outW = static_cast<int>(currentImageW);
+        int outH = static_cast<int>(currentImageH);
         double nextLogicalW = currentLogicalW;
         double nextLogicalH = currentLogicalH;
 
-        const unsigned vpW = (viewW > 0) ? viewW : currentW;
-        const unsigned vpH = (viewH > 0) ? viewH : currentH;
+        const unsigned vpW = (viewW > 0) ? viewW : currentImageW;
+        const unsigned vpH = (viewH > 0) ? viewH : currentImageH;
 
         calcAxisFromLogical(pass.desc.scaleTypeX, pass.desc.scaleX, currentLogicalW, vpW, outW, nextLogicalW);
         calcAxisFromLogical(pass.desc.scaleTypeY, pass.desc.scaleY, currentLogicalH, vpH, outH, nextLogicalH);
@@ -630,7 +741,7 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
         // 自动防拉伸：当本 pass 是放大且仍为边缘钳制时，改为透明边框钳制
         // 仅应用在主输入纹理，避免影响 LUT/历史纹理语义
         if (wrapGL == GL_CLAMP_TO_EDGE &&
-            (outW > static_cast<int>(currentW) || outH > static_cast<int>(currentH))) {
+            (outW > static_cast<int>(currentImageW) || outH > static_cast<int>(currentImageH))) {
             wrapGL = GL_CLAMP_TO_BORDER;
         }
 #endif
@@ -722,7 +833,8 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
 
         // 设置 uniform（含 OrigInputSize / OrigSize 和参数覆盖值）
         setUniforms(pass.program,
-                    currentW, currentH,
+                    currentImageW, currentImageH,
+                    currentTexW, currentTexH,
                     static_cast<unsigned>(outW),
                     static_cast<unsigned>(outH),
                     videoW, videoH,
@@ -734,20 +846,22 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
         for (size_t pi = 0; pi < idx; ++pi) {
             const auto& prev = m_passes[pi];
             if (!prev.texture) continue;
-            float fw = static_cast<float>(prev.width);
-            float fh = static_cast<float>(prev.height);
-            float inv_w = (prev.width  > 0) ? 1.f / fw : 0.f;
-            float inv_h = (prev.height > 0) ? 1.f / fh : 0.f;
+            float inputW = static_cast<float>(prev.imageWidth);
+            float inputH = static_cast<float>(prev.imageHeight);
+            float texW = static_cast<float>(prev.width);
+            float texH = static_cast<float>(prev.height);
+            float inv_w = (prev.imageWidth  > 0) ? 1.f / inputW : 0.f;
+            float inv_h = (prev.imageHeight > 0) ? 1.f / inputH : 0.f;
             // 绝对索引尺寸
             std::string absPrefix = "Pass" + std::to_string(pi + 1);
             {
                 GLint loc;
                 loc = glGetUniformLocation(pass.program, (absPrefix + "TextureSize").c_str());
-                if (loc >= 0) glUniform2f(loc, fw, fh);
+                if (loc >= 0) glUniform2f(loc, texW, texH);
                 loc = glGetUniformLocation(pass.program, (absPrefix + "InputSize").c_str());
-                if (loc >= 0) glUniform2f(loc, fw, fh);
+                if (loc >= 0) glUniform2f(loc, inputW, inputH);
                 loc = glGetUniformLocation(pass.program, (absPrefix + "Size").c_str());
-                if (loc >= 0) glUniform4f(loc, fw, fh, inv_w, inv_h);
+                if (loc >= 0) glUniform4f(loc, inputW, inputH, inv_w, inv_h);
             }
             // 相对索引尺寸
             size_t prevN = idx - pi;
@@ -755,21 +869,21 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
             {
                 GLint loc;
                 loc = glGetUniformLocation(pass.program, (prevPrefix + "TextureSize").c_str());
-                if (loc >= 0) glUniform2f(loc, fw, fh);
+                if (loc >= 0) glUniform2f(loc, texW, texH);
                 loc = glGetUniformLocation(pass.program, (prevPrefix + "InputSize").c_str());
-                if (loc >= 0) glUniform2f(loc, fw, fh);
+                if (loc >= 0) glUniform2f(loc, inputW, inputH);
                 loc = glGetUniformLocation(pass.program, (prevPrefix + "Size").c_str());
-                if (loc >= 0) glUniform4f(loc, fw, fh, inv_w, inv_h);
+                if (loc >= 0) glUniform4f(loc, inputW, inputH, inv_w, inv_h);
             }
             // 别名尺寸：<alias>Size / <alias>TextureSize / <alias>InputSize
             if (!prev.alias.empty()) {
                 GLint loc;
                 loc = glGetUniformLocation(pass.program, (prev.alias + "TextureSize").c_str());
-                if (loc >= 0) glUniform2f(loc, fw, fh);
+                if (loc >= 0) glUniform2f(loc, texW, texH);
                 loc = glGetUniformLocation(pass.program, (prev.alias + "InputSize").c_str());
-                if (loc >= 0) glUniform2f(loc, fw, fh);
+                if (loc >= 0) glUniform2f(loc, inputW, inputH);
                 loc = glGetUniformLocation(pass.program, (prev.alias + "Size").c_str());
-                if (loc >= 0) glUniform4f(loc, fw, fh, inv_w, inv_h);
+                if (loc >= 0) glUniform4f(loc, inputW, inputH, inv_w, inv_h);
             }
         }
 
@@ -792,23 +906,63 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
             if (loc >= 0) glUniform4f(loc, fw, fh, inv_w, inv_h);
         }
 
+        // 反馈纹理尺寸 uniform。第一帧无反馈缓存时回退到原始输入纹理尺寸。
+        {
+            float inputW = static_cast<float>(m_feedbackTex ? m_feedbackImageW : videoW);
+            float inputH = static_cast<float>(m_feedbackTex ? m_feedbackImageH : videoH);
+            float texW = static_cast<float>(m_feedbackTex ? m_feedbackW : videoW);
+            float texH = static_cast<float>(m_feedbackTex ? m_feedbackH : videoH);
+            float inv_w = (inputW > 0.0f) ? 1.f / inputW : 0.f;
+            float inv_h = (inputH > 0.0f) ? 1.f / inputH : 0.f;
+            GLint loc;
+            loc = glGetUniformLocation(pass.program, "FeedbackTextureSize");
+            if (loc >= 0) glUniform2f(loc, texW, texH);
+            loc = glGetUniformLocation(pass.program, "FeedbackInputSize");
+            if (loc >= 0) glUniform2f(loc, inputW, inputH);
+            loc = glGetUniformLocation(pass.program, "FeedbackSize");
+            if (loc >= 0) glUniform4f(loc, inputW, inputH, inv_w, inv_h);
+            if (m_feedbackPass >= 0) {
+                std::string feedbackPrefix = "PassFeedback" + std::to_string(m_feedbackPass + 1);
+                loc = glGetUniformLocation(pass.program, (feedbackPrefix + "TextureSize").c_str());
+                if (loc >= 0) glUniform2f(loc, texW, texH);
+                loc = glGetUniformLocation(pass.program, (feedbackPrefix + "InputSize").c_str());
+                if (loc >= 0) glUniform2f(loc, inputW, inputH);
+                loc = glGetUniformLocation(pass.program, (feedbackPrefix + "Size").c_str());
+                if (loc >= 0) glUniform4f(loc, inputW, inputH, inv_w, inv_h);
+            }
+        }
+
         // 绘制全屏四边形
-        m_quad.draw();
+        m_quad.draw(uvMax(currentImageW, currentTexW),
+                    uvMax(currentImageH, currentTexH));
 
         // 本通道输出成为下一通道输入
         currentTex = pass.texture;
-        currentW   = static_cast<unsigned>(outW);
-        currentH   = static_cast<unsigned>(outH);
+        currentImageW = static_cast<unsigned>(outW);
+        currentImageH = static_cast<unsigned>(outH);
+        currentTexW = static_cast<unsigned>(pass.width);
+        currentTexH = static_cast<unsigned>(pass.height);
         currentLogicalW = nextLogicalW;
         currentLogicalH = nextLogicalH;
     }
 
-    m_lastOutW = currentW;
-    m_lastOutH = currentH;
+    m_lastOutW = currentImageW;
+    m_lastOutH = currentImageH;
+    m_lastOutU = uvMax(currentImageW, currentTexW);
+    m_lastOutV = uvMax(currentImageH, currentTexH);
 
     // ---- 帧反馈纹理保存 ----
     if (m_feedbackPass >= 0 && static_cast<size_t>(m_feedbackPass) < m_passes.size()) {
-        m_feedbackTex = m_passes[static_cast<size_t>(m_feedbackPass)].texture;
+        const auto& feedbackPass = m_passes[static_cast<size_t>(m_feedbackPass)];
+        if (feedbackPass.texture && feedbackPass.width > 0 && feedbackPass.height > 0) {
+            copyTextureToCache(feedbackPass.texture,
+                               static_cast<unsigned>(feedbackPass.width),
+                               static_cast<unsigned>(feedbackPass.height),
+                               m_feedbackTex, m_feedbackW, m_feedbackH,
+                               feedbackPass.filterLinear);
+            m_feedbackImageW = static_cast<unsigned>(feedbackPass.imageWidth);
+            m_feedbackImageH = static_cast<unsigned>(feedbackPass.imageHeight);
+        }
     }
 
     // ---- 帧历史纹理管理 ----
@@ -818,6 +972,16 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
         const unsigned kMinHistory = 8u;
         const unsigned needHistory = std::max(static_cast<unsigned>(m_historySize), kMinHistory);
         if (inputTex && videoW > 0 && videoH > 0) {
+            if (m_historyW != videoW || m_historyH != videoH) {
+                for (auto& t : m_historyTextures) {
+                    if (t) { glDeleteTextures(1, &t); t = 0; }
+                }
+                m_historyTextures.clear();
+                m_historyWriteIdx = 0;
+                m_historyW = videoW;
+                m_historyH = videoH;
+            }
+
             while (m_historyTextures.size() < needHistory) {
                 GLuint t = 0;
                 glGenTextures(1, &t);
@@ -834,22 +998,9 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
             }
             // 将当前输入帧拷贝到环形缓冲区当前位置
             GLuint histTex = m_historyTextures[m_historyWriteIdx];
-            {
-                GLuint prevReadFBO = 0;
-                glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, reinterpret_cast<GLint*>(&prevReadFBO));
-                GLuint copyFBO = 0;
-                glGenFramebuffers(1, &copyFBO);
-                glBindFramebuffer(GL_READ_FRAMEBUFFER, copyFBO);
-                glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                                       GL_TEXTURE_2D, inputTex, 0);
-                glBindTexture(GL_TEXTURE_2D, histTex);
-                glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0,
-                                    static_cast<GLsizei>(videoW),
-                                    static_cast<GLsizei>(videoH));
-                glBindTexture(GL_TEXTURE_2D, 0);
-                glBindFramebuffer(GL_READ_FRAMEBUFFER, prevReadFBO);
-                glDeleteFramebuffers(1, &copyFBO);
-            }
+            unsigned histW = videoW;
+            unsigned histH = videoH;
+            copyTextureToCache(inputTex, videoW, videoH, histTex, histW, histH, false);
             m_historyWriteIdx = (m_historyWriteIdx + 1) % static_cast<unsigned>(m_historyTextures.size());
         }
     }

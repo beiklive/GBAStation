@@ -5,6 +5,26 @@
 
 namespace beiklive {
 
+namespace {
+void setTextureNearestForScreenDraw(GLuint tex)
+{
+    if (!tex) return;
+
+    GLint prevActive = 0;
+    GLint prevTex = 0;
+    glGetIntegerv(GL_ACTIVE_TEXTURE, &prevActive);
+    glActiveTexture(GL_TEXTURE0);
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &prevTex);
+
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(prevTex));
+    glActiveTexture(static_cast<GLenum>(prevActive));
+}
+}
+
 // ============================================================
 // init
 // ============================================================
@@ -36,6 +56,7 @@ void RenderChain::deinit()
     m_directRenderer.deinit();
     m_frameCount = 0;
     m_lastW = m_lastH = 0;
+    m_lastU = m_lastV = 1.0f;
 }
 
 // ============================================================
@@ -48,6 +69,7 @@ GLuint RenderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH,
         // 直通模式
         m_lastW = videoW;
         m_lastH = videoH;
+        m_lastU = m_lastV = 1.0f;
         return srcTex;
     }
 
@@ -57,6 +79,8 @@ GLuint RenderChain::run(GLuint srcTex, unsigned videoW, unsigned videoH,
 
     m_lastW = m_pipeline.outputW() > 0 ? m_pipeline.outputW() : videoW;
     m_lastH = m_pipeline.outputH() > 0 ? m_pipeline.outputH() : videoH;
+    m_lastU = m_pipeline.outputU();
+    m_lastV = m_pipeline.outputV();
 
     return out;
 }
@@ -69,6 +93,7 @@ void RenderChain::setShader(const std::string& glslpPath)
     m_pipeline.deinit();
     m_frameCount = 0;
     m_lastW = m_lastH = 0;
+    m_lastU = m_lastV = 1.0f;
 
     if (!glslpPath.empty()) {
         if (m_pipeline.init(glslpPath)) {
@@ -90,7 +115,7 @@ void RenderChain::drawToScreen(GLuint tex,
                                 float windowScale, int windowW, int windowH)
 {
     drawToScreen(tex, virtX, virtY, virtW, virtH, windowScale, windowW, windowH,
-                 0.0f, 0.0f, 1.0f, 1.0f);
+                 0.0f, 0.0f, m_lastU, m_lastV);
 }
 
 void RenderChain::drawToScreen(GLuint tex,
@@ -126,6 +151,9 @@ void RenderChain::drawToScreen(GLuint tex,
     float ndcRight  = ((physicalX + physicalWidth)     / static_cast<float>(windowW)) * 2.0f - 1.0f;
     float ndcTop    = 1.0f - (physicalY                / static_cast<float>(windowH)) * 2.0f;
     float ndcBottom = 1.0f - ((physicalY + physicalHeight) / static_cast<float>(windowH)) * 2.0f;
+
+    if (m_pipeline.isLoaded())
+        setTextureNearestForScreenDraw(tex);
 
     m_directRenderer.render(tex, ndcLeft, ndcRight, ndcTop, ndcBottom, uv, swizzleRB);
 }

@@ -34,6 +34,10 @@ public:
     /// 调用前须先绑定目标 FBO 和着色器程序。
     void draw() const;
 
+    /// 绘制全屏四边形，并将 TexCoord 限制在 [0, uMax] × [0, vMax]。
+    /// RetroArch 的 FBO 链通常将有效画面放在更大的纹理中，shader 通过这个坐标范围采样有效区域。
+    void draw(float uMax, float vMax) const;
+
     bool isInitialized() const { return m_vbo != 0; }
 
 private:

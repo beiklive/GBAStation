@@ -1,6 +1,7 @@
 #include "game/render/FullscreenQuad.hpp"
 
 #include <borealis.hpp>
+#include <algorithm>
 
 namespace beiklive {
 
@@ -48,7 +49,7 @@ bool FullscreenQuad::init()
     glGenBuffers(1, &m_vbo);
     glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(k_quadVerts),
-                 k_quadVerts, GL_STATIC_DRAW);
+                 k_quadVerts, GL_DYNAMIC_DRAW);
 
     glGenBuffers(1, &m_ebo);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_ebo);
@@ -126,6 +127,63 @@ void FullscreenQuad::draw() const
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 #endif
+}
+
+void FullscreenQuad::draw(float uMax, float vMax) const
+{
+    if (!m_vbo) return;
+
+    uMax = std::max(0.0f, std::min(1.0f, uMax));
+    vMax = std::max(0.0f, std::min(1.0f, vMax));
+
+    if (uMax == 1.0f && vMax == 1.0f) {
+        draw();
+        return;
+    }
+
+    const float verts[] = {
+        -1.f, -1.f, 0.f, 1.f,   1.f, 1.f, 1.f, 1.f,   0.f,  0.f,  0.f, 0.f,
+         1.f, -1.f, 0.f, 1.f,   1.f, 1.f, 1.f, 1.f,   uMax, 0.f,  0.f, 0.f,
+         1.f,  1.f, 0.f, 1.f,   1.f, 1.f, 1.f, 1.f,   uMax, vMax, 0.f, 0.f,
+        -1.f,  1.f, 0.f, 1.f,   1.f, 1.f, 1.f, 1.f,   0.f,  vMax, 0.f, 0.f,
+    };
+
+#if !defined(USE_GLES2)
+    glBindVertexArray(m_vao);
+    glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
+    glBufferSubData(GL_ARRAY_BUFFER, 0,
+                    static_cast<GLsizeiptr>(sizeof(verts)), verts);
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
+    glBufferSubData(GL_ARRAY_BUFFER, 0,
+                    static_cast<GLsizeiptr>(sizeof(k_quadVerts)), k_quadVerts);
+    glBindVertexArray(0);
+#else
+    glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
+    glBufferSubData(GL_ARRAY_BUFFER, 0,
+                    static_cast<GLsizeiptr>(sizeof(verts)), verts);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_ebo);
+
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, k_stride,
+                          reinterpret_cast<const void*>(k_offVertex));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, k_stride,
+                          reinterpret_cast<const void*>(k_offColor));
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, k_stride,
+                          reinterpret_cast<const void*>(k_offTexCoord));
+
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
+
+    glBufferSubData(GL_ARRAY_BUFFER, 0,
+                    static_cast<GLsizeiptr>(sizeof(k_quadVerts)), k_quadVerts);
+    glDisableVertexAttribArray(2);
+    glDisableVertexAttribArray(1);
+    glDisableVertexAttribArray(0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+#endif
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
 } // namespace beiklive
