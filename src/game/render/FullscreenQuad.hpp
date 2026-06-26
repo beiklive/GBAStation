@@ -1,5 +1,8 @@
 #pragma once
 
+#include <array>
+#include <vector>
+
 #include <glad/glad.h>
 
 namespace beiklive {
@@ -17,6 +20,11 @@ namespace beiklive {
 /// 纹理坐标约定：(0,0) = 左下，(1,1) = 右上（OpenGL 标准）。
 class FullscreenQuad {
 public:
+    struct ExtraTexCoordAttrib {
+        GLint location = -1;
+        std::array<float, 8> coords {};
+    };
+
     FullscreenQuad()  = default;
     ~FullscreenQuad() { deinit(); }
 
@@ -38,12 +46,17 @@ public:
     /// RetroArch 的 FBO 链通常将有效画面放在更大的纹理中，shader 通过这个坐标范围采样有效区域。
     void draw(float uMax, float vMax) const;
 
+    /// 绘制全屏四边形，并为额外的 TexCoord attribute 提供独立坐标。
+    void draw(float uMax, float vMax,
+              const std::vector<ExtraTexCoordAttrib>& extraTexCoords) const;
+
     bool isInitialized() const { return m_vbo != 0; }
 
 private:
     GLuint m_vao = 0; ///< Vertex Array Object（GL3/GLES3）
     GLuint m_vbo = 0; ///< Vertex Buffer Object
     GLuint m_ebo = 0; ///< Element Buffer Object（索引缓冲）
+    mutable GLuint m_auxVbo = 0; ///< 额外 TexCoord attribute 的临时缓冲
 };
 
 } // namespace beiklive

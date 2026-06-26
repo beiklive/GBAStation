@@ -107,6 +107,13 @@ static float uvMax(unsigned image, unsigned texture)
     return texture > 0 ? static_cast<float>(image) / static_cast<float>(texture) : 1.0f;
 }
 
+static std::array<float, 8> makeUvCoords(float uMax, float vMax)
+{
+    uMax = std::max(0.0f, std::min(1.0f, uMax));
+    vMax = std::max(0.0f, std::min(1.0f, vMax));
+    return {0.0f, 0.0f, uMax, 0.0f, uMax, vMax, 0.0f, vMax};
+}
+
 // ============================================================
 // init
 // ============================================================
@@ -615,9 +622,6 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
     unsigned currentImageH = videoH;
     unsigned currentTexW = videoW;
     unsigned currentTexH = videoH;
-    // 逻辑尺寸：用于链式 Source 缩放，避免每一跳都基于整数 round 后尺寸继续计算
-    double currentLogicalW = static_cast<double>(videoW);
-    double currentLogicalH = static_cast<double>(videoH);
     GLuint   maxTexUnit = 0;
 
     for (size_t idx = 0; idx < m_passes.size(); ++idx) {
@@ -637,45 +641,12 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
                 currentImageH = static_cast<unsigned>(pass.imageHeight);
                 currentTexW = static_cast<unsigned>(pass.width);
                 currentTexH = static_cast<unsigned>(pass.height);
-                currentLogicalW = static_cast<double>(pass.imageWidth);
-                currentLogicalH = static_cast<double>(pass.imageHeight);
             }
             continue;
         }
-
-        // 计算本通道输出尺寸（基于逻辑尺寸，最终输出再取整）
-        auto calcAxisFromLogical = [](ShaderPassDesc::ScaleType type,
-                                      float scale, double logicalSrc, unsigned vp,
-                                      int& outInt, double& outLogical) {
-            const double dScale = static_cast<double>(scale);
-            double scaled = 1.0;
-            switch (type) {
-                case ShaderPassDesc::ScaleType::Viewport:
-                    scaled = static_cast<double>(vp) * dScale;
-                    break;
-                case ShaderPassDesc::ScaleType::Absolute:
-                    scaled = dScale;
-                    break;
-                case ShaderPassDesc::ScaleType::Source:
-                default:
-                    scaled = logicalSrc * dScale;
-                    break;
-            }
-            if (scaled < 1.0) scaled = 1.0;
-            outLogical = scaled;
-            outInt = std::max(1, static_cast<int>(std::llround(scaled)));
-        };
-
         int outW = static_cast<int>(currentImageW);
         int outH = static_cast<int>(currentImageH);
-        double nextLogicalW = currentLogicalW;
-        double nextLogicalH = currentLogicalH;
-
-        const unsigned vpW = (viewW > 0) ? viewW : currentImageW;
-        const unsigned vpH = (viewH > 0) ? viewH : currentImageH;
-
-        calcAxisFromLogical(pass.desc.scaleTypeX, pass.desc.scaleX, currentLogicalW, vpW, outW, nextLogicalW);
-        calcAxisFromLogical(pass.desc.scaleTypeY, pass.desc.scaleY, currentLogicalH, vpH, outH, nextLogicalH);
+        computePassSize(pass.desc, currentImageW, currentImageH, viewW, viewH, outW, outH);
 
         // 确保 FBO 已分配且尺寸正确
         if (!allocateFBO(pass, outW, outH)) {
@@ -941,8 +912,6 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
         currentImageH = static_cast<unsigned>(outH);
         currentTexW = static_cast<unsigned>(pass.width);
         currentTexH = static_cast<unsigned>(pass.height);
-        currentLogicalW = nextLogicalW;
-        currentLogicalH = nextLogicalH;
     }
 
     m_lastOutW = currentImageW;

@@ -2,6 +2,7 @@
 
 #include <borealis.hpp>
 #include <algorithm>
+#include <vector>
 
 namespace beiklive {
 
@@ -88,6 +89,7 @@ void FullscreenQuad::deinit()
 {
     if (m_ebo) { glDeleteBuffers(1, &m_ebo);         m_ebo = 0; }
     if (m_vbo) { glDeleteBuffers(1, &m_vbo);         m_vbo = 0; }
+    if (m_auxVbo) { glDeleteBuffers(1, &m_auxVbo);   m_auxVbo = 0; }
 #if !defined(USE_GLES2)
     if (m_vao) { glDeleteVertexArrays(1, &m_vao);    m_vao = 0; }
 #endif
@@ -131,15 +133,16 @@ void FullscreenQuad::draw() const
 
 void FullscreenQuad::draw(float uMax, float vMax) const
 {
+    draw(uMax, vMax, {});
+}
+
+void FullscreenQuad::draw(float uMax, float vMax,
+                          const std::vector<ExtraTexCoordAttrib>& extraTexCoords) const
+{
     if (!m_vbo) return;
 
     uMax = std::max(0.0f, std::min(1.0f, uMax));
     vMax = std::max(0.0f, std::min(1.0f, vMax));
-
-    if (uMax == 1.0f && vMax == 1.0f) {
-        draw();
-        return;
-    }
 
     const float verts[] = {
         -1.f, -1.f, 0.f, 1.f,   1.f, 1.f, 1.f, 1.f,   0.f,  0.f,  0.f, 0.f,
@@ -148,19 +151,58 @@ void FullscreenQuad::draw(float uMax, float vMax) const
         -1.f,  1.f, 0.f, 1.f,   1.f, 1.f, 1.f, 1.f,   0.f,  vMax, 0.f, 0.f,
     };
 
+    std::vector<float> packedExtra;
+    packedExtra.reserve(extraTexCoords.size() * 8);
+    for (const auto& attr : extraTexCoords) {
+        if (attr.location < 0) continue;
+        packedExtra.insert(packedExtra.end(), attr.coords.begin(), attr.coords.end());
+    }
+
 #if !defined(USE_GLES2)
     glBindVertexArray(m_vao);
     glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
-    glBufferSubData(GL_ARRAY_BUFFER, 0,
-                    static_cast<GLsizeiptr>(sizeof(verts)), verts);
+    if (uMax != 1.0f || vMax != 1.0f) {
+        glBufferSubData(GL_ARRAY_BUFFER, 0,
+                        static_cast<GLsizeiptr>(sizeof(verts)), verts);
+    }
+
+    if (!packedExtra.empty()) {
+        if (!m_auxVbo)
+            glGenBuffers(1, &m_auxVbo);
+        glBindBuffer(GL_ARRAY_BUFFER, m_auxVbo);
+        glBufferData(GL_ARRAY_BUFFER,
+                     static_cast<GLsizeiptr>(packedExtra.size() * sizeof(float)),
+                     packedExtra.data(), GL_STREAM_DRAW);
+
+        size_t offset = 0;
+        for (const auto& attr : extraTexCoords) {
+            if (attr.location < 0) continue;
+            glEnableVertexAttribArray(static_cast<GLuint>(attr.location));
+            glVertexAttribPointer(static_cast<GLuint>(attr.location), 2, GL_FLOAT, GL_FALSE, 0,
+                                  reinterpret_cast<const void*>(offset * sizeof(float)));
+            offset += 8;
+        }
+    }
+
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
-    glBufferSubData(GL_ARRAY_BUFFER, 0,
-                    static_cast<GLsizeiptr>(sizeof(k_quadVerts)), k_quadVerts);
+
+    for (const auto& attr : extraTexCoords) {
+        if (attr.location >= 0)
+            glDisableVertexAttribArray(static_cast<GLuint>(attr.location));
+    }
+
+    glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
+    if (uMax != 1.0f || vMax != 1.0f) {
+        glBufferSubData(GL_ARRAY_BUFFER, 0,
+                        static_cast<GLsizeiptr>(sizeof(k_quadVerts)), k_quadVerts);
+    }
     glBindVertexArray(0);
 #else
     glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
-    glBufferSubData(GL_ARRAY_BUFFER, 0,
-                    static_cast<GLsizeiptr>(sizeof(verts)), verts);
+    if (uMax != 1.0f || vMax != 1.0f) {
+        glBufferSubData(GL_ARRAY_BUFFER, 0,
+                        static_cast<GLsizeiptr>(sizeof(verts)), verts);
+    }
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_ebo);
 
     glEnableVertexAttribArray(0);
@@ -173,10 +215,35 @@ void FullscreenQuad::draw(float uMax, float vMax) const
     glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, k_stride,
                           reinterpret_cast<const void*>(k_offTexCoord));
 
+    if (!packedExtra.empty()) {
+        if (!m_auxVbo)
+            glGenBuffers(1, &m_auxVbo);
+        glBindBuffer(GL_ARRAY_BUFFER, m_auxVbo);
+        glBufferData(GL_ARRAY_BUFFER,
+                     static_cast<GLsizeiptr>(packedExtra.size() * sizeof(float)),
+                     packedExtra.data(), GL_STREAM_DRAW);
+
+        size_t offset = 0;
+        for (const auto& attr : extraTexCoords) {
+            if (attr.location < 0) continue;
+            glEnableVertexAttribArray(static_cast<GLuint>(attr.location));
+            glVertexAttribPointer(static_cast<GLuint>(attr.location), 2, GL_FLOAT, GL_FALSE, 0,
+                                  reinterpret_cast<const void*>(offset * sizeof(float)));
+            offset += 8;
+        }
+    }
+
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
 
-    glBufferSubData(GL_ARRAY_BUFFER, 0,
-                    static_cast<GLsizeiptr>(sizeof(k_quadVerts)), k_quadVerts);
+    glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
+    if (uMax != 1.0f || vMax != 1.0f) {
+        glBufferSubData(GL_ARRAY_BUFFER, 0,
+                        static_cast<GLsizeiptr>(sizeof(k_quadVerts)), k_quadVerts);
+    }
+    for (const auto& attr : extraTexCoords) {
+        if (attr.location >= 0)
+            glDisableVertexAttribArray(static_cast<GLuint>(attr.location));
+    }
     glDisableVertexAttribArray(2);
     glDisableVertexAttribArray(1);
     glDisableVertexAttribArray(0);

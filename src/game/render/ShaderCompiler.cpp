@@ -205,12 +205,6 @@ GLuint ShaderCompiler::compileProgram(const std::string& vertSrc,
     glBindAttribLocation(prog, 1, "COLOR");
     glBindAttribLocation(prog, 2, "TexCoord");
 
-    // PassPrevNTexCoord 属性：绑定到与 TexCoord 相同的位置（2）
-    for (int n = 1; n <= 8; ++n) {
-        std::string attrName = "PassPrev" + std::to_string(n) + "TexCoord";
-        glBindAttribLocation(prog, 2, attrName.c_str());
-    }
-
     glLinkProgram(prog);
 
     glDetachShader(prog, vert);
