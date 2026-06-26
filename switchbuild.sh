@@ -1,82 +1,211 @@
-#!/bin/bash
-# Windows 下双击/从 PowerShell 运行时，自动切到指定 MSYS2 Bash 执行本脚本。
-if [ -z "$BASH_VERSION" ] && [ -z "$MSYSTEM" ] && command -v cmd.exe >/dev/null 2>&1; then
-    MSYS2_EXE='E:\bin\msys64\msys2.exe'
-    if [ -f "$MSYS2_EXE" ]; then
-        "$MSYS2_EXE" -defterm -no-start -here -ucrt64 -shell bash -lc "cd \"$(pwd)\" && ./switchbuild.sh"
-        exit $?
-    fi
-fi
-
+#!/usr/bin/env bash
 # ============================================================
-# Nintendo Switch 编译脚本（DevkitPro / libnx）
-# 使用 CMAKE_DEPENDS_USE_COMPILER=FALSE 避免编译器输出的
-# Windows 路径（含冒号 E:）导致 GNU Make 依赖解析失败。
-# 编译后产物：
-#   build_switch/GBAStation.nro           —— Switch 可执行文件（NRO 格式）
+# Nintendo Switch 构建脚本（MSYS2 + macOS + Linux）
 #
-# 依赖：
-#   - 已安装 DevkitPro，并设置环境变量 DEVKITPRO
-#   - 已通过 dkp-pacman 安装 switch-dev 组：
-#     sudo dkp-pacman -S switch-dev
+# 支持：
+#   - Windows + MSYS2
+#   - macOS
+#   - Linux
 #
-# 使用方式：
-#   export DEVKITPRO=/opt/devkitpro   # 若尚未设置
+# 输出：
+#   build_switch/GBAStation.nro
+#
+# 使用：
 #   ./switchbuild.sh
+#
 # ============================================================
+
 set -e
 
-# ── 环境检查 ──────────────────────────────────────────────
-export DEVKITPRO="${DEVKITPRO:-/opt/devkitpro}"
-export DEVKITA64="${DEVKITA64:-${DEVKITPRO}/devkitA64}"
-if [ ! -f "${DEVKITPRO}/cmake/Switch.cmake" ]; then
-    echo "[错误] 未找到 ${DEVKITPRO}/cmake/Switch.cmake。"
-    echo "       请在 MSYS2/devkitPro 环境中运行，或设置 DEVKITPRO。"
+# ────────────────────────────────────────────────────────────
+# Windows 非 MSYS 环境自动切换到 MSYS2
+# ────────────────────────────────────────────────────────────
+
+if [ -z "$MSYSTEM" ] && [ -n "$WINDIR" ]; then
+
+    MSYS2_PATHS=(
+        "C:/msys64/msys2.exe"
+        "D:/msys64/msys2.exe"
+        "E:/msys64/msys2.exe"
+        "C:/tools/msys64/msys2.exe"
+    )
+
+    for p in "${MSYS2_PATHS[@]}"; do
+        WIN_PATH=$(echo "$p" | sed 's#/#\\#g')
+
+        if [ -f "$WIN_PATH" ]; then
+            "$WIN_PATH" \
+                -defterm \
+                -no-start \
+                -here \
+                -ucrt64 \
+                -shell bash \
+                -lc "cd \"$(pwd)\" && ./switchbuild.sh"
+
+            exit $?
+        fi
+    done
+
+    echo "[错误] 未找到 MSYS2"
     exit 1
 fi
 
-# 并行编译线程数
-JOBS=$(nproc 2>/dev/null || sysctl -n hw.logicalcpu 2>/dev/null || echo 4)
+# ────────────────────────────────────────────────────────────
+# 平台检测
+# ────────────────────────────────────────────────────────────
 
-# 构建目录
-BUILD_DIR="build_switch"
+OS="$(uname -s)"
+
+case "$OS" in
+    Darwin*)
+        PLATFORM="mac"
+        ;;
+    Linux*)
+        PLATFORM="linux"
+        ;;
+    MINGW*|MSYS*)
+        PLATFORM="windows"
+        ;;
+    *)
+        PLATFORM="unknown"
+        ;;
+esac
+
+echo "[平台] ${PLATFORM}"
+
+# ────────────────────────────────────────────────────────────
+# devkitPro 环境
+# ────────────────────────────────────────────────────────────
+
+export DEVKITPRO="${DEVKITPRO:-/opt/devkitpro}"
+export DEVKITA64="${DEVKITA64:-${DEVKITPRO}/devkitA64}"
+
+export PATH="${DEVKITPRO}/tools/bin:${PATH}"
+export PATH="${DEVKITA64}/bin:${PATH}"
+
+if [ ! -f "${DEVKITPRO}/cmake/Switch.cmake" ]; then
+
+    echo ""
+    echo "[错误] 找不到:"
+    echo "    ${DEVKITPRO}/cmake/Switch.cmake"
+    echo ""
+    echo "请确认："
+    echo "1. 已安装 devkitPro"
+    echo "2. DEVKITPRO 环境变量正确"
+    echo ""
+
+    exit 1
+fi
+
+# ────────────────────────────────────────────────────────────
+# 获取CPU线程数
+# ────────────────────────────────────────────────────────────
+
+if command -v nproc >/dev/null 2>&1; then
+
+    JOBS=$(nproc)
+
+elif [ "$PLATFORM" = "mac" ]; then
+
+    JOBS=$(sysctl -n hw.logicalcpu)
+
+else
+
+    JOBS=4
+
+fi
+
+echo "[线程] ${JOBS}"
+
+# ────────────────────────────────────────────────────────────
+# 路径
+# ────────────────────────────────────────────────────────────
+
 ROOT_DIR="$(pwd)"
+BUILD_DIR="${ROOT_DIR}/build_switch"
 
-# 部分 Windows/MSYS2 环境下 /tmp 会映射到 MSYS 安装目录，devkitA64 编译器
-# 创建临时文件时可能因权限失败。固定到项目构建目录内，保证脚本可重复运行。
-export TMPDIR="${ROOT_DIR}/${BUILD_DIR}/tmp"
-TMPDIR_WIN="$(cygpath -w "${TMPDIR}" 2>/dev/null || echo "${TMPDIR}")"
-export TMP="${TMPDIR_WIN}"
-export TEMP="${TMPDIR_WIN}"
-
-echo "[1/4] 创建构建目录 ${BUILD_DIR} ..."
 mkdir -p "${BUILD_DIR}"
+
+# ────────────────────────────────────────────────────────────
+# 临时目录
+# ────────────────────────────────────────────────────────────
+
+export TMPDIR="${BUILD_DIR}/tmp"
+
 mkdir -p "${TMPDIR}"
+
+if [ "$PLATFORM" = "windows" ]; then
+
+    if command -v cygpath >/dev/null 2>&1; then
+
+        TMP_WIN=$(cygpath -w "${TMPDIR}")
+
+        export TMP="${TMP_WIN}"
+        export TEMP="${TMP_WIN}"
+
+    fi
+
+else
+
+    export TMP="${TMPDIR}"
+    export TEMP="${TMPDIR}"
+
+fi
+
+# ────────────────────────────────────────────────────────────
+# 开始构建
+# ────────────────────────────────────────────────────────────
+
 cd "${BUILD_DIR}"
 
-echo "[2/4] 运行 CMake 配置（Switch 平台 / Release）..."
+echo ""
+echo "[1/4] CMake配置..."
+
 cmake .. \
     -DPLATFORM_SWITCH=ON \
     -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_DEPENDS_USE_COMPILER=FALSE
 
-echo "[3/4] 编译主程序 ELF（并行线程：${JOBS}）..."
+echo ""
+echo "[2/4] 编译..."
+
 cmake --build . -j "${JOBS}"
 
-echo "[4/4] 打包为 NRO 文件..."
+echo ""
+echo "[3/4] 打包 NRO..."
+
 cmake --build . --target GBAStation.nro
 
 cd ..
+
+# ────────────────────────────────────────────────────────────
+# 输出大小
+# ────────────────────────────────────────────────────────────
+
 echo ""
-echo "[完成] 产物目录：${BUILD_DIR}/"
-# ── 显示文件大小（MB） ──────────────────────────────────────
-echo ""
-echo "==================== 编译产物大小 ===================="
+echo "==================== 编译结果 ===================="
+
 if [ -f "${BUILD_DIR}/GBAStation.nro" ]; then
-    NRO_SIZE=$(du -b "${BUILD_DIR}/GBAStation.nro" | awk '{printf "%.2f", $1/1024/1024}')
-    echo "✅ GBAStation.nro    : ${NRO_SIZE} MB"
+
+    if [ "$PLATFORM" = "mac" ]; then
+        SIZE=$(stat -f%z "${BUILD_DIR}/GBAStation.nro")
+    else
+        SIZE=$(stat -c%s "${BUILD_DIR}/GBAStation.nro")
+    fi
+
+    SIZE_MB=$(awk "BEGIN {printf \"%.2f\", ${SIZE}/1024/1024}")
+
+    echo "✅ GBAStation.nro : ${SIZE_MB} MB"
+
 else
-    echo "❌ GBAStation.nro    : 文件不存在"
+
+    echo "❌ GBAStation.nro 不存在"
+
 fi
-echo "======================================================"
+
+echo "=================================================="
+
+echo ""
+echo "[完成]"
+echo "${BUILD_DIR}/GBAStation.nro"
