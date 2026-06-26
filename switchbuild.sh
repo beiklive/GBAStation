@@ -103,15 +103,30 @@ fi
 
 if command -v nproc >/dev/null 2>&1; then
 
-    JOBS=$(nproc)
+    CPU_COUNT=$(nproc)
 
 elif [ "$PLATFORM" = "mac" ]; then
 
-    JOBS=$(sysctl -n hw.logicalcpu)
+    CPU_COUNT=$(sysctl -n hw.logicalcpu)
 
 else
 
-    JOBS=4
+    CPU_COUNT=4
+
+fi
+
+# M1/M2/M3 MacBook Air 限制并行数量
+if [ "$PLATFORM" = "mac" ]; then
+
+    if [ "$CPU_COUNT" -ge 8 ]; then
+        JOBS=4
+    else
+        JOBS=$CPU_COUNT
+    fi
+
+else
+
+    JOBS=$CPU_COUNT
 
 fi
 

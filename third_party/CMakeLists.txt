@@ -590,7 +590,7 @@ if (PLATFORM_SWITCH)
         -O3
         -mcpu=cortex-a57
         -ffast-math
-        -flto
+        -fno-lto
         -fomit-frame-pointer
     )
     target_link_options(melonds_core PRIVATE -flto)
