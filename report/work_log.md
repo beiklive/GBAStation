@@ -791,6 +791,88 @@ RetroArch 不只传 `TextureSize/InputSize`，还会对以下对象分别查找�
 
 通过，仍然只有项目现存第三方 warning。
 
+### Switch 发布工作流与更新说明拉取调整
+
+- `build-switch.yml` 调整为新的发布方式：
+  - 仍在 tag 触发后编译 `build_switch/GBAStation.nro`
+  - 将 `GBAStation.nro` 压缩为 `GBAStation-版本号.zip`
+  - 通过 `softprops/action-gh-release` 上传到当前项目的 GitHub Release
+  - 从 tag 注释中读取更新说明，并保存为 `版本号.txt`，例如 `0.2.0.txt`
+  - 将 `版本号.txt` 提交到 `GBAStation_Release` 仓库根目录
+  - 继续自动更新 `GBAStation_Release` 仓库中的 `README.md` 更新说明部分
+  - CDN 刷新目标改为新生成的 `版本号.txt` 和 `README.md`
+- 程序侧更新说明拉取逻辑调整：
+  - 版本检查仍然先从 `version.ini` 读取 `GBAStation` 对应版本号
+  - 当判断存在新版本时，再根据该版本号请求
+    `https://cdn.jsdelivr.net/gh/beiklive/GBAStation_Release@main/版本号.txt`
+  - 读取成功后将 txt 内容作为更新弹窗中的更新说明
+  - 若远程 txt 获取失败，则回退为一条简短提示文案
+  - 对版本号额外做了前缀兼容处理：若带 `v/V`，会先去掉再拼接 txt 文件名
+
+### 本次验证
+
+- 单独重新编译 `src/core/AppUpdater.cpp.o`
+- 编译通过，仅有项目现存 warning
+
+### 更新流程梳理
+
+- 入口分为两处：
+  - `src/main.cpp` 启动后 2 秒会在后台线程自动检查更新，受 `SettingKey::KEY_EMU_UPDATE` 控制。
+  - `src/ui/page/AboutPage.cpp` 的“检查更新”按钮会手动触发检查。
+- 本地版本号来源：
+  - 优先读取 `config/version.json` 中的 `version`
+  - 若不存在则回退到编译时的 `APP_VERSION`
+- 远程元数据流程：
+  - `AppUpdater::checkSync()` 从 `https://cdn.jsdelivr.net/gh/beiklive/GBAStation_Release@main/version.json` 拉取版本信息
+  - 解析 `version`、`changelog`、`size`、`download`
+  - 若发现新版本，会把远程 `version.json` 写入 `cache/version.json`
+- 自动检查行为：
+  - 仅在发现新版本时弹出通知
+  - 当前不会直接进入更新页，而是提示用户前往“关于”页面更新
+- 手动检查行为：
+  - 检测中先显示 borealis dialog
+  - 有更新时弹出 `UpdateDialog` 展示版本号和更新日志
+  - 用户确认后打开 `UpdatePage` 开始下载
+  - 无更新时弹出“已是最新版本”
+- 下载流程：
+  - `AppUpdater::download()` 使用 libcurl 下载更新包到内存
+  - 之后写入 `cache/update.zip`
+  - 再从 zip 中解压出 `GBAStation.nro` 到 `cache/update.nro`
+  - `UpdatePage` 负责显示百分比、速度、已下载大小和剩余时间
+- 安装流程：
+  - `AppUpdater::install()` 会先把 `cache/version.json` 写回 `config/version.json`
+  - Switch 平台仅校验 `cache/update.nro` 是否存在，成功后由 `finishInstall()` 真正替换 `sdmc:/switch/GBAStation.nro`
+  - 非 Switch 平台不会自动替换程序本体，只会提示用户手动替换
+- 当前实现注意点：
+  - `AppUpdater::abort()` 目前没有接入 `download()` 的 `ProgressCtx.cancelled`
+  - 取消下载主要依赖 `UpdatePage` 的进度回调返回 `false`
+  - 远程检查失败时，`checkSync()` 会尝试用本地 `config/version.json` 与当前版本比较，作为一种回退判定
+
+### 更新源切换
+
+- 按新需求重做了更新流程：
+  - 版本检查改为读取 `https://download.nswiki.cn/hahappify/xlcj/version.ini`
+  - 从 ini 中提取 `GBAStation=` 对应版本号
+  - 以 `APP_VERSION` 作为本地版本基准进行比较
+  - 更新包下载地址固定为 `https://download.nswiki.cn/hahappify/xlcj/nro/GBAStation.zip`
+- `AppUpdater` 侧清理：
+  - 删除旧的 `version.json` 远程解析、缓存和本地回退逻辑
+  - 删除安装前写回 `config/version.json` 的旧流程
+  - 保留 zip 下载后解压 `GBAStation.nro` 到缓存，再由 Switch 平台执行替换
+  - 将 `abort()` 真正接入下载取消流程
+- 页面侧同步调整：
+  - `AboutPage` 的当前版本信息改为直接展示 `APP_VERSION`
+  - 更新页提示来源改为 `download.nswiki.cn`
+  - 自动检查和手动检查统一直接调用新版 `checkSync()`
+  - `main.cpp` 中移除同步检查后额外等待 15 秒的陈旧轮询
+- 验证情况：
+  - 单独重新编译 `src/core/AppUpdater.cpp.o`
+  - 单独重新编译 `src/ui/page/AboutPage.cpp.o`
+  - 单独重新编译 `src/ui/page/UpdatePage.cpp.o`
+  - 单独重新编译 `src/main.cpp.o`
+  - 以上均通过
+  - 整包 `cmake --build build_macos --target GBAStation -j4` 仍被项目现存第三方目标失败阻断，主要来自 `third_party/melonDS` 与 `third_party/nestopia`，与本次修改无关
+
 ---
 
 ## 2026-06-27 显示页默认遮罩与着色器调整

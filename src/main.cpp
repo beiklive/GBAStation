@@ -93,35 +93,12 @@ int main(int argc, char* argv[]) {
 		int updateEnabled = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_EMU_UPDATE, 1);
 		if (!updateEnabled) return;
 
-		// 从 config/version.json 读取本地版本号，不存在则用 APP_VERSION
-		std::string localVersion = APP_VERSION;
-		{
-			std::ifstream f(beiklive::path::configPath() + "/version.json");
-			if (f.is_open()) {
-				nlohmann::json j;
-				f >> j;
-				std::string ver = j.value("version", "");
-				brls::Logger::info("本地版本号: {}", ver);
-				if (!ver.empty())
-					localVersion = ver;
-			}
-		}
-
-		brls::Logger::info("当前版本: {}", localVersion);
+		brls::Logger::info("当前版本: {}", APP_VERSION);
 
 		auto& updater = beiklive::AppUpdater::instance();
 		if (gExitFlag.load(std::memory_order_acquire)) return;
 
-		updater.checkSync(localVersion);
-		if (gExitFlag.load(std::memory_order_acquire)) return;
-
-		auto start = std::chrono::steady_clock::now();
-		while (!updater.hasUpdate() &&
-			   std::chrono::duration_cast<std::chrono::seconds>(
-				   std::chrono::steady_clock::now() - start).count() < 15) {
-			if (gExitFlag.load(std::memory_order_acquire)) return;
-			std::this_thread::sleep_for(std::chrono::milliseconds(200));
-		}
+		updater.checkSync();
 
 		if (gExitFlag.load(std::memory_order_acquire)) return;
 

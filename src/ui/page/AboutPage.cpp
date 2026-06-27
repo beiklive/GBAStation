@@ -13,18 +13,6 @@
 
 namespace beiklive {
 
-static std::string formatSize(size_t bytes) {
-    if (bytes < 1024) return std::to_string(bytes) + " B";
-    if (bytes < 1024 * 1024) {
-        char buf[32];
-        snprintf(buf, sizeof(buf), "%.1f KB", bytes / 1024.0);
-        return buf;
-    }
-    char buf[32];
-    snprintf(buf, sizeof(buf), "%.1f MB", bytes / (1024.0 * 1024.0));
-    return buf;
-}
-
 static std::string readTextFile(const std::string& path, const std::string& fallback = "") {
     std::ifstream file(path);
     if (!file)
@@ -361,23 +349,8 @@ brls::View* AboutPage::_buildUpdateTab() {
     box->setWidthPercentage(100.f);
     box->setPadding(20.f, 40.f, 30.f, 40.f);
 
-    // 读取本地 version.json
-    std::string localVersion = "未知";
-    std::string localChangelog = "";
-    size_t localSize = 0;
-    std::string localPath = beiklive::path::configPath() + "/version.json";
-    std::ifstream f(localPath);
-    if (f) {
-        std::string content((std::istreambuf_iterator<char>(f)),
-                            std::istreambuf_iterator<char>());
-        auto j = nlohmann::json::parse(content);
-        localVersion = j.value("version", "未知");
-        localChangelog = j.value("changelog", "");
-        localSize = j.value("size", size_t(0));
-    }
-
-    std::string changelogText = localChangelog;
-    changelogText = readTextFile(BK_RES("changelog"), "暂无更新日志");
+    std::string localVersion = APP_VERSION;
+    std::string changelogText = readTextFile(BK_RES("changelog"), "暂无更新日志");
 
     // 版本信息卡片
     auto* versionCard = new brls::Box(brls::Axis::COLUMN);
@@ -423,7 +396,7 @@ brls::View* AboutPage::_buildUpdateTab() {
     };
 
     addInfoRow("版本号", localVersion);
-    addInfoRow("文件大小", formatSize(localSize));
+    addInfoRow("更新源", "download.nswiki.cn");
 
     box->addView(versionCard);
 
@@ -511,26 +484,11 @@ void AboutPage::_checkUpdate() {
     HIDE_BRLS_HIGHLIGHT(dlg);
     dlg->open();
 
-    new std::thread([this, dlg]() {
+    new std::thread([dlg]() {
         auto& updater = AppUpdater::instance();
+        updater.checkSync();
 
-		// 从 config/version.json 读取本地版本号，不存在则用 APP_VERSION
-		std::string localVersion = APP_VERSION;
-		{
-			std::ifstream f(beiklive::path::configPath() + "/version.json");
-			if (f.is_open()) {
-				nlohmann::json j;
-				f >> j;
-				std::string ver = j.value("version", "");
-				brls::Logger::info("本地版本号: {}", ver);
-				if (!ver.empty())
-					localVersion = ver;
-			}
-		}
-
-        updater.checkSync(localVersion);
-
-        brls::sync([this, dlg]() {
+        brls::sync([dlg]() {
             // 关闭检测中弹窗
             dlg->close([]{});
 

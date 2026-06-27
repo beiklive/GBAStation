@@ -176,6 +176,7 @@ UpdatePage::UpdatePage()
     this->getAppletFrame()->setHeight(340.f);
     this->addButton("取消", [this]() {
         m_cancelled.store(true);
+        AppUpdater::instance().abort();
         if (m_onCancel)
             m_onCancel();
     });
@@ -183,6 +184,7 @@ UpdatePage::UpdatePage()
 
     this->registerAction("返回", brls::BUTTON_B, [this](brls::View*) -> bool {
         m_cancelled.store(true);
+        AppUpdater::instance().abort();
         if (m_onCancel)
             m_onCancel();
         _closeDialog();
@@ -192,6 +194,7 @@ UpdatePage::UpdatePage()
 
 UpdatePage::~UpdatePage() {
     m_cancelled.store(true);
+    AppUpdater::instance().abort();
 }
 
 void UpdatePage::_closeDialog() {

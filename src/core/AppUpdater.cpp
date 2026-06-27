@@ -10,6 +10,7 @@
 #include <sstream>
 #include <cstdio>
 #include <cstring>
+#include <cctype>
 
 #ifdef __SWITCH__
 #include <switch.h>
@@ -17,17 +18,9 @@
 
 namespace beiklive {
 
-static const char* BASE_URL = "https://cdn.jsdelivr.net/gh/beiklive/GBAStation_Release@main";
-
-// 本地 version.json 路径（config 目录）
-static std::string localVersionJsonPath() {
-    return beiklive::path::configPath() + "/version.json";
-}
-
-// 缓存目录中的 version.json 路径
-static std::string cacheVersionJsonPath() {
-    return beiklive::path::cachePath() + "/version.json";
-}
+static const char* VERSION_INI_URL = "https://download.nswiki.cn/hahappify/xlcj/version.ini";
+static const char* DOWNLOAD_URL = "https://download.nswiki.cn/hahappify/xlcj/nro/GBAStation.zip";
+static const char* CHANGELOG_BASE_URL = "https://cdn.jsdelivr.net/gh/beiklive/GBAStation_Release@main";
 
 // 缓存目录中的 update.nro 路径
 static std::string cacheNroPath() {
@@ -87,6 +80,24 @@ static void setCommonOptions(CURL* curl) {
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "GBAStation-Updater");
 }
 
+static std::string trimCopy(const std::string& value) {
+    size_t start = 0;
+    while (start < value.size() && std::isspace(static_cast<unsigned char>(value[start])))
+        ++start;
+
+    size_t end = value.size();
+    while (end > start && std::isspace(static_cast<unsigned char>(value[end - 1])))
+        --end;
+
+    return value.substr(start, end - start);
+}
+
+static std::string normalizeVersionLabel(const std::string& version) {
+    if (!version.empty() && (version[0] == 'v' || version[0] == 'V'))
+        return version.substr(1);
+    return version;
+}
+
 static std::string zipBaseName(const std::string& name) {
     auto pos = name.find_last_of("/\\");
     return pos == std::string::npos ? name : name.substr(pos + 1);
@@ -136,83 +147,121 @@ static std::string fetchUrl(const std::string& url) {
     return body;
 }
 
-// ── 读取本地 version.json（config 目录）────
-// 返回 version 字段，文件不存在或解析失败返回空字符串
-static std::string readLocalVersionFromConfig() {
-    std::ifstream f(localVersionJsonPath());
-    if (!f.is_open()) return "";
+static size_t fetchContentLength(const std::string& url) {
+    CURL* curl = curl_easy_init();
+    if (!curl) return 0;
+
+    setCommonOptions(curl);
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);
+
+    CURLcode res = curl_easy_perform(curl);
+    long code = 0;
+    if (res == CURLE_OK)
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &code);
+
+    size_t fileSize = 0;
+    if (res == CURLE_OK && code == 200) {
+#ifdef CURLINFO_CONTENT_LENGTH_DOWNLOAD_T
+        curl_off_t length = 0;
+        if (curl_easy_getinfo(curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD_T, &length) == CURLE_OK &&
+            length > 0) {
+            fileSize = static_cast<size_t>(length);
+        }
+#else
+        double length = 0;
+        if (curl_easy_getinfo(curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD, &length) == CURLE_OK &&
+            length > 0) {
+            fileSize = static_cast<size_t>(length);
+        }
+#endif
+    }
+
+    curl_easy_cleanup(curl);
+    return fileSize;
+}
+
+static std::string readVersionFromIni(const std::string& iniText, const std::string& targetKey) {
+    std::istringstream stream(iniText);
+    std::string line;
+    while (std::getline(stream, line)) {
+        if (!line.empty() && line.back() == '\r')
+            line.pop_back();
+
+        std::string trimmed = trimCopy(line);
+        if (trimmed.empty() || trimmed[0] == ';' || trimmed[0] == '#')
+            continue;
+        if (trimmed.front() == '[' && trimmed.back() == ']')
+            continue;
+
+        auto pos = trimmed.find('=');
+        if (pos == std::string::npos)
+            continue;
+
+        std::string key = trimCopy(trimmed.substr(0, pos));
+        if (key != targetKey)
+            continue;
+
+        return trimCopy(trimmed.substr(pos + 1));
+    }
+
+    return "";
+}
+
+static bool isRemoteVersionNewer(const std::string& remoteVersion, const std::string& localVersion) {
     try {
-        nlohmann::json j;
-        f >> j;
-        return j.value("version", "");
+        return tools::versionCode(remoteVersion) > tools::versionCode(localVersion);
     } catch (...) {
-        return "";
+        return remoteVersion != localVersion;
     }
 }
 
 // ── AppUpdater ────────────────────────────────────────────
 
-void AppUpdater::check(const std::string& localVersion) {
-    brls::async([this, localVersion]() {
-        checkSync(localVersion);
+void AppUpdater::check() {
+    brls::async([this]() {
+        checkSync();
     });
 }
 
-bool AppUpdater::checkSync(const std::string& localVersion) {
+bool AppUpdater::checkSync() {
     m_info = UpdateInfo{};
     m_info.hasUpdate = false;
+    m_info.downloadUrl = DOWNLOAD_URL;
+    m_info.changelog = "检测到新版本后，将从服务器下载并解压最新的 GBAStation.nro。";
+    m_aborted.store(false);
 
     auto ts = std::chrono::duration_cast<std::chrono::seconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
-    std::string url = std::string(BASE_URL) + "/version.json?t=" + std::to_string(ts);
+    std::string url = std::string(VERSION_INI_URL) + "?t=" + std::to_string(ts);
 
-    std::string json = fetchUrl(url);
-    if (json.empty()) {
-        brls::Logger::warning("AppUpdater: 无法获取版本信息");
-        // 远程获取失败时，检查本地 config/version.json 是否存在且与当前版本不同
-        std::string localVer = readLocalVersionFromConfig();
-        if (!localVer.empty() && localVer != localVersion) {
-            m_info.version = localVer;
-            m_info.hasUpdate = true;
-            brls::Logger::info("AppUpdater: 使用本地缓存版本信息 version={}", localVer);
-        }
-        return m_info.hasUpdate;
-    }
-
-    brls::Logger::info("Version Json: {}", json);
-
-    // 移除尾随逗号
-    std::string cleanJson = json;
-    size_t pos;
-    while ((pos = cleanJson.find(",\n}")) != std::string::npos)
-        cleanJson.erase(pos, 1);
-    while ((pos = cleanJson.find(", }")) != std::string::npos)
-        cleanJson.erase(pos, 1);
-
-    try {
-        auto j = nlohmann::json::parse(cleanJson);
-        m_info.version = j.value("version", "");
-        m_info.changelog = j.value("changelog", "");
-        m_info.fileSize = j.value("size", size_t(0));
-        std::string dl = j.value("download", "");
-        m_info.downloadUrl = dl.empty() ? "" : std::string(BASE_URL) + "/" + dl;
-    } catch (...) {
-        brls::Logger::warning("AppUpdater: 版本 JSON 解析失败");
+    std::string iniText = fetchUrl(url);
+    if (iniText.empty()) {
+        brls::Logger::warning("AppUpdater: 无法获取版本信息 {}", VERSION_INI_URL);
         return false;
     }
 
-    m_info.hasUpdate = (m_info.version != localVersion);
+    m_info.version = readVersionFromIni(iniText, "GBAStation");
+    if (m_info.version.empty()) {
+        brls::Logger::warning("AppUpdater: version.ini 中未找到 GBAStation 版本号");
+        return false;
+    }
 
-    // 将远程 version.json 写入 cache 目录，供 download/install 使用
+    m_info.fileSize = fetchContentLength(m_info.downloadUrl);
+    m_info.hasUpdate = isRemoteVersionNewer(m_info.version, APP_VERSION);
     if (m_info.hasUpdate) {
-        std::error_code ec;
-        std::filesystem::create_directories(beiklive::path::cachePath(), ec);
-        std::ofstream f(cacheVersionJsonPath(), std::ios::trunc);
-        if (f) { f << cleanJson; f.close(); }
+        std::string versionLabel = normalizeVersionLabel(m_info.version);
+        std::string changelogUrl = std::string(CHANGELOG_BASE_URL) + "/" + versionLabel + ".txt?t=" + std::to_string(ts);
+        std::string changelogText = fetchUrl(changelogUrl);
+        if (!changelogText.empty())
+            m_info.changelog = changelogText;
+        else
+            m_info.changelog = "检测到新版本 " + m_info.version + "，但暂时无法获取更新说明。";
     }
 
     brls::Logger::info("AppUpdater: 本地={}, 远程={}, 有更新={}",
-        localVersion, m_info.version, m_info.hasUpdate);
+        APP_VERSION, m_info.version, m_info.hasUpdate);
 
     return m_info.hasUpdate;
 }
@@ -226,9 +275,10 @@ bool AppUpdater::download(std::function<bool(size_t, size_t)> onProgress) {
     if (!curl) return false;
 
     m_downloadedData.clear();
+    m_aborted.store(false);
 
     size_t totalSize = m_info.fileSize;
-    ProgressCtx ctx{&onProgress, nullptr, totalSize};
+    ProgressCtx ctx{&onProgress, &m_aborted, totalSize};
     setCommonOptions(curl);
     curl_easy_setopt(curl, CURLOPT_URL, m_info.downloadUrl.c_str());
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeToVector);
@@ -247,6 +297,10 @@ bool AppUpdater::download(std::function<bool(size_t, size_t)> onProgress) {
 
     if (res != CURLE_OK || code != 200) {
         m_downloadedData.clear();
+        if (res == CURLE_ABORTED_BY_CALLBACK || m_aborted.load()) {
+            brls::Logger::warning("AppUpdater: 下载被取消");
+            return false;
+        }
         brls::Logger::error("AppUpdater: 下载失败 code={}", code);
         return false;
     }
@@ -267,6 +321,7 @@ bool AppUpdater::download(std::function<bool(size_t, size_t)> onProgress) {
     }
 
     std::filesystem::remove(cacheZipPath(), ec);
+    m_info.fileSize = m_downloadedData.size();
 
     brls::Logger::info("AppUpdater: 下载并解压完成 {} bytes -> {}", m_downloadedData.size(), cacheNroPath());
     return true;
@@ -274,23 +329,7 @@ bool AppUpdater::download(std::function<bool(size_t, size_t)> onProgress) {
 
 bool AppUpdater::install() {
 #ifdef __SWITCH__
-    // 1. 从 cache 读取 version.json 内容，写入 config 目录
-    {
-        std::ifstream in(cacheVersionJsonPath());
-        if (in.is_open()) {
-            std::string content((std::istreambuf_iterator<char>(in)),
-                                std::istreambuf_iterator<char>());
-            in.close();
-            if (!content.empty()) {
-                std::error_code ec;
-                std::filesystem::create_directories(beiklive::path::configPath(), ec);
-                std::ofstream out(localVersionJsonPath(), std::ios::trunc);
-                if (out) { out << content; out.close(); }
-            }
-        }
-    }
-
-    // 2. 验证缓存 NRO 存在
+    // 校验缓存 NRO 是否存在
     {
         std::ifstream test(cacheNroPath(), std::ios::binary);
         if (!test.good()) {
@@ -302,21 +341,6 @@ bool AppUpdater::install() {
     brls::Logger::info("AppUpdater: 安装准备工作完成");
     return true;
 #else
-    // 非 Switch 平台也执行 version.json 写入（方便测试）
-    {
-        std::ifstream in(cacheVersionJsonPath());
-        if (in.is_open()) {
-            std::string content((std::istreambuf_iterator<char>(in)),
-                                std::istreambuf_iterator<char>());
-            in.close();
-            if (!content.empty()) {
-                std::error_code ec;
-                std::filesystem::create_directories(beiklive::path::configPath(), ec);
-                std::ofstream out(localVersionJsonPath(), std::ios::trunc);
-                if (out) { out << content; out.close(); }
-            }
-        }
-    }
     brls::Logger::warning("AppUpdater: NRO 安装仅在 Switch 平台可用");
     return false;
 #endif

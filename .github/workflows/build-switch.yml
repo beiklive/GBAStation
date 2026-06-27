@@ -37,69 +37,55 @@ jobs:
           echo "===== NRO FILES ====="
           find . -name "*.nro"
 
-      - name: 生成 version.json
+      - name: 生成发布文件
+        id: prep
         run: |
           TAG_NAME=${GITHUB_REF_NAME}
-          ZIP_FILE="GBAStation-$TAG_NAME.zip"
+          VERSION_NAME=${TAG_NAME#v}
+          VERSION_NAME=${VERSION_NAME#V}
+          ZIP_FILE="GBAStation-${VERSION_NAME}.zip"
+          CHANGELOG_FILE="${VERSION_NAME}.txt"
 
           CHANGELOG=$(git tag -l --format='%(contents)' "$TAG_NAME")
-
-          CHANGELOG_ESCAPED=$(printf '%s' "$CHANGELOG" \
-            | sed ':a;N;$!ba;s/\n/\\n/g' \
-            | sed 's/"/\\"/g')
 
           NRO_FILE="build_switch/GBAStation.nro"
           cp "$NRO_FILE" GBAStation.nro
           cmake -E tar cf "$ZIP_FILE" --format=zip GBAStation.nro
           rm GBAStation.nro
 
-          # 文件大小（字节）
-          FILE_SIZE=$(stat -c%s "$ZIP_FILE")
+          printf '%s\n' "$CHANGELOG" > "$CHANGELOG_FILE"
 
-          cat > version.json <<EOF
-          {
-            "version": "$TAG_NAME",
-            "changelog": "$CHANGELOG_ESCAPED",
-            "download": "$TAG_NAME/$ZIP_FILE",
-            "size": $FILE_SIZE
-          }
-          EOF
+          echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "zip_file=$ZIP_FILE" >> "$GITHUB_OUTPUT"
+          echo "changelog_file=$CHANGELOG_FILE" >> "$GITHUB_OUTPUT"
 
-          echo "===== version.json ====="
-          cat version.json
+          echo "===== ZIP FILE ====="
+          ls -lh "$ZIP_FILE"
+          echo "===== CHANGELOG FILE ====="
+          cat "$CHANGELOG_FILE"
+
+      - name: 上传到 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body_path: ${{ steps.prep.outputs.changelog_file }}
+          files: ${{ steps.prep.outputs.zip_file }}
 
       - name: Clone Release Repo
         run: |
           git clone https://x-access-token:${{ secrets.RELEASE_REPO_TOKEN }}@github.com/beiklive/GBAStation_Release.git release_repo
 
-      - name: 创建目录结构
+      - name: 保存版本更新说明
         run: |
-          TAG_NAME=${GITHUB_REF_NAME}
-
-          mkdir -p release_repo/latest
-          mkdir -p release_repo/$TAG_NAME
-
-      - name: 拷贝发布文件
-        run: |
-          TAG_NAME=${GITHUB_REF_NAME}
-          ZIP_FILE="GBAStation-$TAG_NAME.zip"
-
-          # latest
-          cp "$ZIP_FILE" release_repo/latest/GBAStation.zip
-          cp version.json release_repo/latest/version.json
-
-          # 历史版本
-          cp "$ZIP_FILE" release_repo/$TAG_NAME/$ZIP_FILE
-          cp version.json release_repo/$TAG_NAME/version.json
-
-          # 根目录
-          cp version.json release_repo/version.json
+          cp "${{ steps.prep.outputs.changelog_file }}" "release_repo/${{ steps.prep.outputs.changelog_file }}"
 
       - name: 更新 README 更新说明
         run: |
-          TAG_NAME=${GITHUB_REF_NAME}
+          VERSION_NAME="${{ steps.prep.outputs.version_name }}"
+          CHANGELOG_FILE="${{ steps.prep.outputs.changelog_file }}"
 
-          CHANGELOG=$(git tag -l --format='%(contents)' "$TAG_NAME")
+          CHANGELOG=$(cat "$CHANGELOG_FILE")
 
           README_FILE="release_repo/README.md"
 
@@ -114,7 +100,7 @@ jobs:
           # 构造插入内容
           NEW_CONTENT=$(cat <<EOF
 
-          ## ${TAG_NAME}
+          ## ${VERSION_NAME}
 
           ${CHANGELOG}
 
@@ -150,12 +136,4 @@ jobs:
 
           git push
 
-      - name: 延迟刷新 jsDelivr 缓存
-        run: |
-          echo "等待 60 秒后刷新 CDN 缓存..."
-          sleep 60
 
-          curl -L \
-            "https://purge.jsdelivr.net/gh/beiklive/GBAStation_Release@main/version.json"
-
-          echo "jsDelivr 缓存刷新完成"
