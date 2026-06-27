@@ -86,6 +86,12 @@ std::string platformOverlayKey(int platform);
 /// 根据平台返回对应的着色器全局配置键
 std::string platformShaderKey(int platform);
 
+/// 根据平台默认遮罩路径判断新游戏是否应自动启用遮罩
+bool shouldAutoEnableOverlayForPlatform(int platform);
+
+/// 根据平台默认着色器路径判断新游戏是否应自动启用着色器
+bool shouldAutoEnableShaderForPlatform(int platform);
+
 /// 根据平台返回对应的徽章显示文本
 std::string platformBadgeName(int platform);
 

@@ -111,9 +111,9 @@ namespace beiklive
 
         namespace sk = beiklive::SettingKey;
         db->setDefault(path, "overlayEnabled",
-                       GET_SETTING_KEY_INT(sk::KEY_DISPLAY_OVERLAY_ENABLED, 0));
+                       beiklive::tools::shouldAutoEnableOverlayForPlatform((int)m_gameData.itemType));
         db->setDefault(path, "shaderEnabled",
-                       GET_SETTING_KEY_INT(sk::KEY_DISPLAY_SHADER_ENABLED, 0));
+                       beiklive::tools::shouldAutoEnableShaderForPlatform((int)m_gameData.itemType));
 
         // 画面模式：全局配置为字符串，DB 存整数 ScreenMode 枚举值
         {

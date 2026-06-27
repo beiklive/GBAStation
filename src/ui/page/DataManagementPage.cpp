@@ -182,8 +182,8 @@ ImportSharedConfig buildSharedConfig(int platform)
 
     ImportSharedConfig config;
     config.platform = platform;
-    config.overlayEnabled = GET_SETTING_KEY_INT(sk::KEY_DISPLAY_OVERLAY_ENABLED, 0) != 0;
-    config.shaderEnabled = GET_SETTING_KEY_INT(sk::KEY_DISPLAY_SHADER_ENABLED, 0) != 0;
+    config.overlayEnabled = beiklive::tools::shouldAutoEnableOverlayForPlatform(platform);
+    config.shaderEnabled = beiklive::tools::shouldAutoEnableShaderForPlatform(platform);
 
     std::string overlayKey = overlayKeyForPlatform(platform);
     if (!overlayKey.empty())

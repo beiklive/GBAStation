@@ -372,6 +372,20 @@ std::string platformShaderKey(int platform) {
     }
 }
 
+bool shouldAutoEnableOverlayForPlatform(int platform) {
+    const std::string key = platformOverlayKey(platform);
+    if (key.empty())
+        return false;
+    return !GET_SETTING_KEY_STR(key.c_str(), "").empty();
+}
+
+bool shouldAutoEnableShaderForPlatform(int platform) {
+    const std::string key = platformShaderKey(platform);
+    if (!key.empty() && !GET_SETTING_KEY_STR(key.c_str(), "").empty())
+        return true;
+    return !GET_SETTING_KEY_STR(beiklive::SettingKey::KEY_DISPLAY_SHADER_PATH, "").empty();
+}
+
 std::string platformBadgeName(int platform) {
     switch (static_cast<beiklive::enums::EmuPlatform>(platform)) {
         case beiklive::enums::EmuPlatform::EmuGBA: return "GBA";
