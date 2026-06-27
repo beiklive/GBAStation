@@ -76,10 +76,19 @@ namespace beiklive::input_mapping
     inline constexpr const char* kTurboADefault = "none";
     inline constexpr const char* kTurboBDefault = "none";
 
+    inline bool usesLegacyGbFamilyFallback(const std::string& prefix)
+    {
+        return prefix == "gbc." || prefix == "gb.";
+    }
+
     inline std::string platformPrefix(int platform)
     {
         switch (static_cast<beiklive::enums::EmuPlatform>(platform))
         {
+        case beiklive::enums::EmuPlatform::EmuGBC:
+            return "gbc.";
+        case beiklive::enums::EmuPlatform::EmuGB:
+            return "gb.";
         case beiklive::enums::EmuPlatform::EmuNES:
             return "nes.";
         case beiklive::enums::EmuPlatform::EmuSNES:

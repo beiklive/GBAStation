@@ -425,6 +425,17 @@ namespace beiklive
         m_gameOptionsSidebar = new beiklive::GameOptionsSidebar();
         this->getBottomBar()->setVisibility(brls::Visibility::INVISIBLE);
         std::string fn = beiklive::tools::getFileNameWithoutExtension(entry.path);
+        auto enterMultiSelect = [this](bool selectAll) {
+            _hideGameOptionsPanel();
+            m_grid->setMultiSelectMode(true);
+            if (selectAll)
+            {
+                m_grid->selectAllForDelete(m_entries.size());
+                brls::Application::notify("已全选当前列表中的全部游戏");
+            }
+            m_grid->setInteractionDisabled(false);
+            brls::Application::giveFocus(m_grid);
+        };
 
         m_gameOptionsSidebar->addButton("修改映射名称", BK_RES("img/ui/setting/emu.png"),
             [this, path, title = entry.title, fn, idx = m_grid->getSelectedIndex()](const beiklive::GameEntry&) {
@@ -548,11 +559,15 @@ namespace beiklive
         m_gameOptionsSidebar->addButton(
             "多选",
             BK_RES("img/ui/setting/emu.png"),
-            [this](const beiklive::GameEntry&) {
-                _hideGameOptionsPanel();
-                m_grid->setMultiSelectMode(true);
-                m_grid->setInteractionDisabled(false);
-                brls::Application::giveFocus(m_grid);
+            [enterMultiSelect](const beiklive::GameEntry&) {
+                enterMultiSelect(false);
+            });
+
+        m_gameOptionsSidebar->addButton(
+            "全选",
+            BK_RES("img/ui/setting/emu.png"),
+            [enterMultiSelect](const beiklive::GameEntry&) {
+                enterMultiSelect(true);
             });
 
         m_gameOptionsSidebar->onClosed = [this]() {

@@ -85,6 +85,7 @@ namespace beiklive
         void selectRomDir();
         void startDirImport(const std::string& dirPath);
         void removeInvalidGames();
+        void clearGameLibrary();
         void startWebService();
         void updateProgressName(const std::string& name);
         void setErrorMessage(const std::string& msg);

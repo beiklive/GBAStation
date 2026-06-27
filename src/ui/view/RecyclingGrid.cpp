@@ -67,6 +67,14 @@ void GameGridView::toggleDeleteSelection(size_t index)
         m_selectedForDelete.insert(static_cast<int>(index));
 }
 
+void GameGridView::selectAllForDelete(size_t count)
+{
+    m_multiSelectMode = true;
+    m_selectedForDelete.clear();
+    for (size_t i = 0; i < count; i++)
+        m_selectedForDelete.insert(static_cast<int>(i));
+}
+
 void GameGridView::clearDeleteSelection()
 {
     m_selectedForDelete.clear();

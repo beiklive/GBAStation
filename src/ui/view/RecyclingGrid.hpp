@@ -41,6 +41,7 @@ public:
     void setMultiSelectMode(bool on);
     bool isMultiSelectMode() const { return m_multiSelectMode; }
     void toggleDeleteSelection(size_t index);
+    void selectAllForDelete(size_t count);
     const std::unordered_set<int>& getDeleteSelection() const { return m_selectedForDelete; }
     void clearDeleteSelection();
     void setItemFavourite(size_t index, bool fav);

@@ -1354,7 +1354,9 @@ brls::View *SettingPage::buildKeyBindTab()
         bool nds;
     };
     static const PlatformEntry platforms[] = {
-        {"映射GBA/GBC/GB游戏", "", false},
+        {"映射GBA游戏", "", false},
+        {"映射GBC游戏", "gbc.", false},
+        {"映射GB游戏", "gb.", false},
         {"映射NES游戏", "nes.", false},
         {"映射SFC游戏", "sfc.", false},
         {"映射NDS游戏", "nds.", true},

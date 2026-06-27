@@ -216,6 +216,48 @@ void applyDisplayDefaults(beiklive::GameEntry& entry)
         static_cast<float>(GET_SETTING_KEY_INT("display.integer_scale_mult", 0));
 }
 
+bool clearDirectoryContents(const fs::path& dir)
+{
+    std::error_code ec;
+    if (!fs::exists(dir, ec))
+        return true;
+
+    std::vector<fs::path> targets;
+    for (fs::directory_iterator it(dir, ec), end; !ec && it != end; it.increment(ec))
+        targets.push_back(it->path());
+
+    if (ec)
+        return false;
+
+    bool ok = true;
+    for (const auto& target : targets)
+    {
+        ec.clear();
+        fs::remove_all(target, ec);
+        if (ec)
+            ok = false;
+    }
+
+    return ok;
+}
+
+int findUnexpectedLplPlatform(const json& items, int expectedPlatform)
+{
+    for (const auto& item : items)
+    {
+        std::string romPath = item.value("path", "");
+        if (romPath.empty())
+            continue;
+
+        std::string ext = normalizeExtension(fs::path(romPath).extension().string());
+        int detectedPlatform = platformFromExtension(ext);
+        if (detectedPlatform >= 0 && detectedPlatform != expectedPlatform)
+            return detectedPlatform;
+    }
+
+    return -1;
+}
+
 } // namespace
 
 namespace beiklive
@@ -676,6 +718,17 @@ brls::View* DataManagementPage::buildDataProcessingTab()
 
     box->addView(makeHint("移除游戏库中仍有记录，但 ROM 文件已经不存在的游戏。"));
 
+    auto* clearCell = new beiklive::DetailCell();
+    clearCell->setLeftText("清空游戏库");
+    clearCell->setRightText("\uE14A");
+    clearCell->registerAction("打开", brls::BUTTON_A, [this](brls::View*) -> bool {
+        clearGameLibrary();
+        return true;
+    });
+    box->addView(clearCell);
+
+    box->addView(makeHint("此功能不会删除游戏文件和存档，仅清空 GBAStation/data 下的游戏库数据。"));
+
     scroll->setContentView(box);
 
     auto* container = new brls::Box(brls::Axis::COLUMN);
@@ -806,6 +859,22 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
         hideProgressOverlay();
         rememberFocusBeforeModal();
         auto* dialog = new brls::Dialog("LPL文件无数据");
+        dialog->addButton("确认", [this]() { restoreFocusAfterModal(); });
+        dialog->open();
+        return;
+    }
+
+    int unexpectedPlatform = findUnexpectedLplPlatform(lplJson["items"], platform);
+    if (unexpectedPlatform >= 0)
+    {
+        hideProgressOverlay();
+        rememberFocusBeforeModal();
+        auto* dialog = new brls::Dialog(
+            "选择错误\n\n当前选择的是 " +
+            beiklive::tools::platformName(platform) +
+            " 游戏的lpl导入按钮，但文件中的游戏类型是 " +
+            beiklive::tools::platformName(unexpectedPlatform) +
+            "。\n请返回后选择对应类型的按钮。");
         dialog->addButton("确认", [this]() { restoreFocusAfterModal(); });
         dialog->open();
         return;
@@ -1123,6 +1192,31 @@ void DataManagementPage::removeInvalidGames()
         });
     });
     dialog->open();
+}
+
+void DataManagementPage::clearGameLibrary()
+{
+    rememberFocusBeforeModal();
+
+    auto* firstDialog = new brls::Dialog("确定要清空游戏库吗？");
+    firstDialog->addButton("取消", [this]() { restoreFocusAfterModal(); });
+    firstDialog->addButton("确定", [this]() {
+        auto* secondDialog = new brls::Dialog("真的要清空游戏库吗？\n数据都会丢失哦。");
+        secondDialog->addButton("取消", [this]() { restoreFocusAfterModal(); });
+        secondDialog->addButton("确定", [this]() {
+            bool success = true;
+
+            if (beiklive::GameDB)
+                beiklive::GameDB->clearAll();
+
+            success = clearDirectoryContents(beiklive::path::databasePath()) && success;
+
+            restoreFocusAfterModal();
+            brls::Application::notify(success ? "游戏库数据已清空" : "清空游戏库时发生错误");
+        });
+        secondDialog->open();
+    });
+    firstDialog->open();
 }
 
 void DataManagementPage::startWebService()

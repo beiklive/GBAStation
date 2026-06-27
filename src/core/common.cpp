@@ -498,8 +498,8 @@ namespace beiklive
         SettingManager->SetDefault("cheat.enabled", ConfigValue(0));
         SettingManager->SetDefault("cheat.dir", ConfigValue(std::string("")));
 
-        // 按键绑定默认值。GBA/GBC/GB 沿用无前缀键；其他机种使用平台前缀。
-        const std::string mappingPrefixes[] = {"", "nes.", "sfc.", "nds."};
+        // 按键绑定默认值。GBA 保持无前缀；GBC/GB 独立前缀首次默认继承旧的无前缀配置。
+        const std::string mappingPrefixes[] = {"", "gbc.", "gb.", "nes.", "sfc.", "nds."};
         for (const auto& prefix : mappingPrefixes)
         {
             const unsigned platformMask = beiklive::input_mapping::platformMaskForPrefix(prefix);
@@ -507,22 +507,68 @@ namespace beiklive
             {
                 if ((entry.platformMask & platformMask) == 0)
                     continue;
+                std::string defaultValue = entry.defaultValue;
+                if (beiklive::input_mapping::usesLegacyGbFamilyFallback(prefix))
+                {
+                    auto legacy = SettingManager->Get(
+                        beiklive::input_mapping::makeHandleKey("", entry.suffix));
+                    if (legacy.has_value())
+                    {
+                        auto legacyStr = legacy->AsString();
+                        if (legacyStr.has_value())
+                            defaultValue = *legacyStr;
+                    }
+                }
                 SettingManager->SetDefault(
                     beiklive::input_mapping::makeHandleKey(prefix, entry.suffix),
-                    ConfigValue(std::string(entry.defaultValue)));
+                    ConfigValue(defaultValue));
             }
             for (const auto& entry : beiklive::input_mapping::kHotkeyDefaults)
             {
+                std::string defaultValue = entry.defaultValue;
+                if (beiklive::input_mapping::usesLegacyGbFamilyFallback(prefix))
+                {
+                    auto legacy = SettingManager->Get(
+                        beiklive::input_mapping::makeKey("", entry.key));
+                    if (legacy.has_value())
+                    {
+                        auto legacyStr = legacy->AsString();
+                        if (legacyStr.has_value())
+                            defaultValue = *legacyStr;
+                    }
+                }
                 SettingManager->SetDefault(
                     beiklive::input_mapping::makeKey(prefix, entry.key),
-                    ConfigValue(std::string(entry.defaultValue)));
+                    ConfigValue(defaultValue));
+            }
+            std::string turboADefault = beiklive::input_mapping::kTurboADefault;
+            std::string turboBDefault = beiklive::input_mapping::kTurboBDefault;
+            if (beiklive::input_mapping::usesLegacyGbFamilyFallback(prefix))
+            {
+                auto legacyTurboA = SettingManager->Get(
+                    beiklive::input_mapping::makeKey("", beiklive::input_mapping::kTurboAKey));
+                if (legacyTurboA.has_value())
+                {
+                    auto legacyStr = legacyTurboA->AsString();
+                    if (legacyStr.has_value())
+                        turboADefault = *legacyStr;
+                }
+
+                auto legacyTurboB = SettingManager->Get(
+                    beiklive::input_mapping::makeKey("", beiklive::input_mapping::kTurboBKey));
+                if (legacyTurboB.has_value())
+                {
+                    auto legacyStr = legacyTurboB->AsString();
+                    if (legacyStr.has_value())
+                        turboBDefault = *legacyStr;
+                }
             }
             SettingManager->SetDefault(
                 beiklive::input_mapping::makeKey(prefix, beiklive::input_mapping::kTurboAKey),
-                ConfigValue(std::string(beiklive::input_mapping::kTurboADefault)));
+                ConfigValue(turboADefault));
             SettingManager->SetDefault(
                 beiklive::input_mapping::makeKey(prefix, beiklive::input_mapping::kTurboBKey),
-                ConfigValue(std::string(beiklive::input_mapping::kTurboBDefault)));
+                ConfigValue(turboBDefault));
         }
         for (const auto& entry : beiklive::input_mapping::kNdsPointerHotkeys)
         {

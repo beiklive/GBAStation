@@ -201,6 +201,54 @@ if (s_current->m_instanceId != s_currentId.load()) return;  // 0 != 1 → ALWAYS
 
 ---
 
+## 2026-06-27 数据管理与按键映射拆分
+
+### 任务分析
+
+- **任务目标**:
+  - 在 `DataManagementPage` 的“数据处理”标签页新增“清空游戏库”入口，并通过二次确认后清空 `GBAStation/data` 下的游戏库数据，但不删除 ROM 和存档。
+  - 在 `GameLibraryPage` 的 X 键侧边栏中，为“多选”下方新增“全选”，进入多选后自动标记当前列表中的全部游戏，便于后续整体删除。
+  - 在 `SettingPage` 中将原本共用的 `GBA/GBC/GB` 按键映射拆分为三套独立配置，其中 `GBA` 继续使用无前缀旧键，`GBC/GB` 使用新增前缀键。
+- **输入输出**:
+  - 输入为现有 `DataManagementPage`、`GameLibraryPage`、`SettingPage`、`GameView` 与输入映射默认值注册逻辑。
+  - 输出为新的 UI 入口、确认流程、选择逻辑以及可被运行时正确读取的独立映射配置。
+- **可能挑战**:
+  - 游戏库页的“多选删除”逻辑已经建立，新增“全选”时需要复用现有删除通路，同时兼容分页加载和已过滤列表。
+  - `GBA/GBC/GB` 之前共用无前缀配置，拆分后如果只改设置页而不改运行时读取逻辑，会出现界面可配但实际不生效的问题。
+  - 已有用户可能已使用无前缀键自定义了 GBC/GB 映射，拆分后需要尽量兼容旧配置，避免升级后表现为“丢映射”。
+- **解决方案**:
+  - 为网格视图补充“全选删除标记”能力，由 `GameLibraryPage` 在进入多选时统一调用，删除逻辑继续沿用现有 `deleteSelection` 流程。
+  - 为 GBC/GB 新增前缀，并同步修改设置页入口、默认值注册以及 `GameView` 的读取逻辑。
+  - 为 GBC/GB 的读取增加对旧无前缀键的回退，这样旧配置可继续生效，用户修改后再逐步写入独立前缀键。
+
+### 实现结果
+
+- **数据管理页**:
+  - 在“数据处理”标签页新增“清空游戏库”按钮。
+  - 新增两级确认对话框，确认后调用 `GameDB->clearAll()` 并清理 `GBAStation/data` 目录下全部条目。
+  - 增加提示文案，明确说明不会删除游戏文件和存档。
+- **游戏库页**:
+  - 在单游戏 X 键侧边栏的“多选”下方新增“全选”。
+  - “全选”进入多选模式后会一次性标记当前列表中的全部游戏，随后再次按 X 即可直接进入批量删除流程。
+  - 为 `RecyclingGrid` 新增全量删除选择接口，复用原有多选删除逻辑。
+- **设置页与输入映射**:
+  - 将原先“映射GBA/GBC/GB游戏”拆分为“映射GBA游戏 / 映射GBC游戏 / 映射GB游戏”三个入口。
+  - 运行时平台前缀改为：`GBA=""`、`GBC="gbc."`、`GB="gb."`。
+  - 默认值注册中为 `GBC/GB` 首次创建独立键时继承旧的无前缀映射，避免已有用户升级后丢失原先共用映射。
+
+### 验证记录
+
+- **单文件编译通过**:
+  - `src/ui/page/DataManagementPage.cpp.o`
+  - `src/ui/page/GameLibraryPage.cpp.o`
+  - `src/ui/page/SettingPage.cpp.o`
+  - `src/ui/view/RecyclingGrid.cpp.o`
+- **受现有问题影响未完成的完整验证**:
+  - `src/core/common.cpp.o` 编译被现有代码 `src/core/common.cpp:895` 的 `__int128` 输出歧义错误阻断。
+  - `cmake --build build_macos` 继续会在第三方 `fceumm` 链接阶段因 `ld: unknown options: --whole-archive --no-whole-archive` 失败。
+
+---
+
 ## RetroArch 渲染链对比分析：多通道滤镜左下角拉伸
 
 ### 任务目标
@@ -536,6 +584,37 @@ RetroArch 不只传 `TextureSize/InputSize`，还会对以下对象分别查找�
 - `src/game/render/RetroShaderPipeline.cpp.o`
 
 通过，仍然只有项目现存第三方 warning。
+
+---
+
+## 2026-06-27 LPL 导入类型校验
+
+### 任务分析
+
+- **任务目标**:
+  - 修改“数据管理 -> 整合包导入”中的 LPL 导入逻辑。
+  - 当用户选择的 LPL 文件内游戏类型与当前按钮对应的平台类型不一致时，立即中断导入并弹出“选择错误”提示。
+- **输入输出**:
+  - 输入为 `DataManagementPage::startImport()` 中现有的 LPL 解析结果 `lplJson["items"]`。
+  - 输出为导入前的平台一致性校验，以及错误提示对话框。
+- **可能挑战**:
+  - LPL 本身没有单独的强类型字段可直接复用，平台识别需要依赖条目路径中的 ROM 扩展名。
+  - 需要把校验插在真正启动导入线程之前，避免选错后仍然出现部分导入。
+- **解决方案**:
+  - 在 `items` 解析成功后，遍历每个条目的 `path` 扩展名并映射为平台类型。
+  - 只要发现任一可识别平台与当前按钮传入的平台不同，就直接停止流程并弹出错误对话框，不进入导入线程。
+
+### 实现结果
+
+- 在 `DataManagementPage.cpp` 中新增 LPL 条目平台校验辅助函数。
+- 在 `startImport()` 中加入导入前检查：
+  - 若 LPL 内条目类型和当前按钮平台不一致，立即隐藏进度层并弹出“选择错误”对话框。
+  - 若一致，则保持原有导入流程不变。
+
+### 编译验证
+
+- `src/ui/page/DataManagementPage.cpp.o`
+  - 通过，仅有项目现存第三方 warning。
 
 ## 2026-06-27 反射类滤镜参数归属修正
 
