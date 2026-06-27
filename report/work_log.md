@@ -198,3 +198,296 @@ if (s_current->m_instanceId != s_currentId.load()) return;  // 0 != 1 → ALWAYS
 | Phase 3: Fix J (PLL 对称化) | 低优先级优化，暂缓 |
 | Phase 4: Fix K (存档版本化) | 新功能，需设计文件格式兼容策略，暂缓 |
 | Phase 5: Fix M (frameskip 文档) | 非功能变更，暂缓 |
+
+---
+
+## RetroArch 渲染链对比分析：多通道滤镜左下角拉伸
+
+### 任务目标
+
+对比 `third_party/RetroArch-1.22.2/gfx` 与 `src/game/render` 的渲染器实现，定位以下多通道 GLSLP 滤镜最终输出画面向左下角拉伸的原因：
+
+- `build_switch/GBAStation/shaders/shaders_glsl/phosphor-dot v3.3/2x-Scanline+ScaleFX.glslp`
+- `build_switch/GBAStation/shaders/shaders_glsl/phosphor-dot v3.3/CRT+ScaleFX.glslp`
+- `build_switch/GBAStation/shaders/hqx/hq4x.glslp`
+- `build_switch/GBAStation/shaders/scalefx/scalefx.glslp`
+
+### 输入与输出
+
+- 输入：
+  - RetroArch `gfx/drivers_shader/shader_glsl.c` / `shader_gl3.cpp`
+  - 本项目 `src/game/render/RetroShaderPipeline.cpp`
+  - 本项目 `src/game/render/FullscreenQuad.cpp`
+  - 本项目 `src/game/render/ShaderCompiler.cpp`
+  - 相关 `.glslp/.glsl` 预设与 pass 文件
+- 输出：
+  - 渲染链差异说明
+  - 问题根因定位
+  - 后续修复方向
+
+### 关键差异
+
+#### 1. 本项目中间 FBO 强制扩展为 2 的幂纹理
+
+`src/game/render/RetroShaderPipeline.cpp:290-350`
+
+- 本项目 `allocateFBO()` 会把 pass 输出 `imageWidth/imageHeight` 扩展为 `nextPowerOfTwo()` 后的 `texture width/height`
+- 例如 240x160 经 3x 放大后有效画面可能是 720x480，但实际纹理会分配成 1024x512
+- 这样有效画面只占中间纹理左下区域，剩余区域是 padding
+
+RetroArch 本身允许 `TextureSize != InputSize`，但它会同步给每个采样器传递匹配的纹理坐标，不会直接拿同一套 UV 去采所有纹理。
+
+#### 2. 本项目只给所有纹理共用主 `TexCoord`
+
+`src/game/render/ShaderCompiler.cpp:203-206`
+`src/game/render/FullscreenQuad.cpp:60-72, 147-152`
+`src/game/render/RetroShaderPipeline.cpp:905-907`
+
+- 本项目固定只绑定了：
+  - `VertexCoord`
+  - `COLOR`
+  - `TexCoord`
+- 每次绘制只调用：
+  - `m_quad.draw(uvMax(currentImageW, currentTexW), uvMax(currentImageH, currentTexH));`
+- 这意味着当前 pass 的主输入纹理会收到裁剪后的 `TexCoord`
+- 但所有额外纹理，包括：
+  - `OrigTexture`
+  - `Pass1Texture/PassPrevNTexture`
+  - `FeedbackTexture`
+  - `PrevTexture`
+  都没有独立的 `OrigTexCoord/PassPrevNTexCoord/...`
+
+#### 3. RetroArch 会为每个额外采样器单独传入匹配的 TexCoord attribute
+
+`third_party/RetroArch-1.22.2/gfx/drivers_shader/shader_glsl.c:698-728`
+`third_party/RetroArch-1.22.2/gfx/drivers_shader/shader_glsl.c:1431-1557`
+
+RetroArch 不只传 `TextureSize/InputSize`，还会对以下对象分别查找并填充独立坐标：
+
+- `OrigTexCoord`
+- `FeedbackTexCoord`
+- `Pass1TexCoord / PassPrevNTexCoord / <alias>TexCoord`
+- `PrevTexCoord / Prev1TexCoord / ...`
+
+也就是说，RetroArch 的每个采样器都会拿到“与自己实际纹理尺寸匹配”的坐标范围，而不是简单复用当前 pass 主输入的 `TexCoord`。
+
+### 为什么这些滤镜更容易出问题
+
+#### `scalefx.glslp`
+
+`scalefx-pass4.glsl` 明确依赖：
+
+- `PassPrev5Texture`
+- `PassPrev5TextureSize`
+- `PassPrev5InputSize`
+
+该 pass 还会在 3x 子像素网格中重建输出。当前 pass 的主输入和 `PassPrev5Texture` 并不是同一尺寸语义：
+
+- 主输入是前一 pass 的 POT 纹理裁剪坐标
+- `PassPrev5Texture` 实际应按它自己的有效区域采样
+
+但本项目没有给 `PassPrev5TexCoord` 独立坐标，shader 内只能复用 `vTexCoord`。  
+当 `PassPrev5Texture` 的实际纹理尺寸大于有效画面尺寸时，采样只会命中左下角有效区域，最后再被放大到整个输出，看起来就是“最终画面向左下角缩成一块并拉伸”。
+
+#### `hq4x.glslp`
+
+`hqx-pass2.glsl` 依赖：
+
+- `Texture`（pass1 输出）
+- `OrigTexture`（原始输入）
+- `LUT`
+
+这个 pass 同时混用当前 pass 输入和 `OrigTexture`。  
+本项目给了 `OrigTextureSize` / `OrigInputSize`，但没有给 `OrigTexCoord`。一旦主输入 pass1 使用了 POT 纹理裁剪 UV，而 `OrigTexture` 仍是原始非 POT 语义，两个采样器的坐标系就错位，最终混合区域会收缩到左下角。
+
+#### `2x-Scanline+ScaleFX.glslp` / `CRT+ScaleFX.glslp`
+
+这两套 preset 前半段都先走 `ScaleFX` 多 pass，后半段再叠加 CRT / phosphor dot pass。
+
+其中：
+
+- `ScaleFX` 部分已经引入了 `PassPrevNTexture` 采样
+- `phosphor-dot.glsl` 又会同时使用
+  - `TextureSize`
+  - `InputSize`
+  - `OrigInputSize`
+  - `OutputSize`
+
+特别是 `phosphor-dot.glsl` 中这句：
+
+- `vec2 pix_co = vTexCoord * TextureSize.xy / InputSize.xy * OutputSize.xy;`
+
+它默认假设当前传入的 `vTexCoord` 与当前 `TextureSize/InputSize` 语义严格匹配。  
+但当前渲染链里，只有主输入拿到了裁剪过的 UV，其他引用的历史 pass / 原始纹理并没有独立坐标，结果就是上游已经错位，后续 CRT pass 再按照错误坐标做居中和放大，视觉上更明显地表现为左下角拉伸。
+
+### 直接根因
+
+问题不是单一的 `OutputSize` 或 `viewport` 计算错误，而是两个实现差异叠加：
+
+1. 本项目将中间 pass FBO 扩展为 POT 纹理，导致 `TextureSize` 大于 `InputSize`
+2. 本项目没有像 RetroArch 那样为 `OrigTexture`、`PassPrevNTexture`、`FeedbackTexture`、`PrevTexture` 等额外采样器提供各自独立的 `*TexCoord`
+
+因此，多通道 shader 在引用非主输入纹理时，会错误复用当前主输入的 `TexCoord`。  
+当这些被引用纹理存在 padding 区域时，shader 实际只采到左下角有效区域，最后 pass 再把这块区域拉伸到整个输出，于是出现“最终画面向左下角拉伸”。
+
+### 次要差异
+
+#### 本项目 viewport 只设到有效画面尺寸
+
+`src/game/render/RetroShaderPipeline.cpp:657-665`
+
+- FBO 实际分配为 POT 尺寸
+- 但 `glViewport(0, 0, outW, outH)` 只绘制有效画面区域
+
+这本身不是 bug，RetroArch 也允许纹理大于有效区域。  
+真正的问题是：绘制只覆盖左下有效区域后，后续又没有为引用这些纹理的采样器传独立坐标。
+
+### 结论
+
+以下滤镜出现左下角拉伸的根因一致：
+
+- `scalefx.glslp`
+- `hq4x.glslp`
+- `2x-Scanline+ScaleFX.glslp`
+- `CRT+ScaleFX.glslp`
+
+根因是本项目当前渲染链只兼容“单主输入纹理坐标”，没有完整实现 RetroArch 多通道 GLSL preset 所要求的“每个历史/别名/原始/反馈纹理单独 TexCoord attribute”语义；而中间 FBO 又使用了 POT padding，最终把这个差异放大成左下角缩块并被后续 pass 拉伸的现象。
+
+### 修复方向
+
+优先级最高的修复方向：
+
+1. 参照 RetroArch，为 `OrigTexture`、`FeedbackTexture`、`PassNTexture`、`PassPrevNTexture`、`PrevTexture`、`<alias>Texture` 增加对应的 `*TexCoord` attribute 绑定
+2. 绘制每个 pass 时，为不同来源纹理传各自 `uvMax(imageSize / textureSize)` 对应的顶点坐标
+3. 保留当前 `TextureSize/InputSize` uniform 逻辑，因为这部分语义基本正确，问题主要出在坐标 attribute 缺失
+
+备选方向：
+
+- 若平台允许，也可以先去掉中间 FBO 的 POT 扩展，改成直接按 `imageWidth/imageHeight` 分配纹理，以降低问题暴露面
+- 但这只是缓解，不是完整兼容方案；因为 RetroArch 规范本来就允许 `TextureSize != InputSize`
+
+### 本次实现
+
+本次仅修改 `src/game/render/RetroShaderPipeline.cpp`，未改动任何第三方代码。
+
+已补齐的兼容点：
+
+1. 为以下采样器来源补充独立 `*TexCoord` attribute 绑定：
+   - `OrigTexture`
+   - `FeedbackTexture`
+   - `PassNTexture`
+   - `PassPrevNTexture`
+   - `PassPrevTexture`（社区 shader 常见无编号别名）
+   - `<alias>Texture`
+   - `PrevTexture / Prev1Texture / Prev2Texture ...`
+   - `OriginalHistory0Texture / OriginalHistory1Texture ...`
+   - `LUTTexCoord`
+2. 为以下来源补充对应尺寸 uniform：
+   - `PassNTextureSize / InputSize / Size`
+   - `PassPrevNTextureSize / InputSize / Size`
+   - `PassPrevTextureSize / InputSize / Size`
+   - `OrigTextureSize / InputSize / Size`
+   - `FeedbackTextureSize / InputSize / Size`
+   - `PassFeedbackTextureSize / InputSize / Size`
+   - `PrevTextureSize / InputSize / Size`
+   - `Prev1TextureSize / InputSize / Size ...`
+   - `OriginalHistory0TextureSize / InputSize / Size ...`
+3. 将 `PrevTexture` 的绑定语义修正为“上一帧原始输入历史”，不再错误复用反馈纹理
+4. 增加首帧回退：历史帧尚未建立时，`PrevTexture` / `OriginalHistory0Texture` 回退到当前输入纹理，避免首帧未绑定
+5. 调整中间 pass FBO 分配策略：
+   - 桌面 / GLES3 路径改为按 `imageWidth/imageHeight` 精确分配
+   - 仅 `USE_GLES2` 保留 POT 分配兜底
+   - 目的：与 RetroArch `gl3` 渲染链保持一致，避免 `ScaleFX + CRT/Scanline` 末端 pass 因 `TextureSize != InputSize` 的 padding 再次发生主输入拉伸
+
+### 验证
+
+已执行的验证：
+
+- 运行 CMake 配置：成功
+- 尝试整仓 macOS 构建：失败，但失败点位于 `third_party/melonDS/src/ARCodeFile.cpp` 的现有 `std::variant` 编译错误，与本次修改无关
+- 单独编译 `src/game/render/RetroShaderPipeline.cpp` 对应目标：成功，仅有项目现有第三方头文件告警，无本次改动引入的编译错误
+- 在精确尺寸 FBO 调整后再次单独编译 `src/game/render/RetroShaderPipeline.cpp`：成功
+
+### 当前结论
+
+本次修改已经把导致多通道滤镜“右下角拉伸并超出窗口”的主要兼容缺口补上：
+
+- 不再让 `OrigTexture`、`PassPrevNTexture`、`PrevTexture` 等错误复用主输入 `TexCoord`
+- 不再缺失 `Prev*` / `PassPrev*` 的尺寸 uniform
+
+后续若仍有个别滤镜异常，需要继续排查的优先方向：
+
+1. 某些 shader 是否还依赖更细的 RetroArch 约定（如外部 LUT 的特殊坐标语义）
+2. 中间历史纹理在前几帧的初始化策略是否需要进一步与 RetroArch 对齐
+
+## 2026-06-27 phosphor-line 反射框修复补充
+
+### 新问题
+
+用户反馈以下 phosphor-line 预设仍然显示异常：
+
+- `build_switch/GBAStation/shaders/shaders_glsl/phosphor-line v2.0/F10_PhosphorLineReflex.glslp`
+- `build_switch/GBAStation/shaders/shaders_glsl/phosphor-line v2.0/F00_PhosphorLineReflex(Base).glslp`
+
+现象是：
+
+- 预期应该是游戏画面缩小，并在四周形成完整的反射/边框效果
+- 实际上反射框显示不完整，很多效果与 RetroArch 不一致
+
+### 这轮对比结论
+
+继续对照 `third_party/RetroArch-1.22.2/gfx/drivers/gl3.c` 与 `shader_glsl.c` 后，确认本项目还有两处语义差异：
+
+1. `GLSLPParser` 之前错误地把“最后一个未显式声明 scale 的 pass”自动补成了 `viewport x 1.0`
+2. RetroArch 的真实行为不是这样：
+   - 如果最后一个 pass 没有显式 scale，它会作为“最终直接上屏 pass”执行
+   - 不会先落到中间 FBO，再额外做一次直通 blit
+
+这会直接影响 `PP-reflex.glsl` 这类依赖最终 `OutputSize`、`FinalViewportSize` 和最终屏幕语义的后处理 pass。
+
+此外，本项目原先在着色器管线输出到屏幕时，还会强制把最终纹理改成 `GL_NEAREST` 再直绘，这与 RetroArch 的最终输出路径也不一致，会放大某些边框/反射 shader 的误差。
+
+### 本次修改
+
+本次仍然只修改 `src/game/render/`，没有改动任何第三方代码。
+
+已完成的修复：
+
+1. 移除 `GLSLPParser` 对“最后一个无显式 scale 的 pass 自动补成 viewport 缩放”的错误兼容逻辑
+2. 在 `RetroShaderPipeline` 中新增“最终直接上屏 pass”分支：
+   - 中间 pass 继续输出到 FBO
+   - 最后一个未显式声明 scale 的 pass 改为在 `drawToScreen()` 阶段直接绘制到目标屏幕矩形
+3. 为直接上屏 pass 补齐与中间 pass 一致的资源绑定语义：
+   - `Texture`
+   - `OrigTexture`
+   - `PassNTexture`
+   - `PassPrevNTexture`
+   - `FeedbackTexture`
+   - `PrevTexture / OriginalHistoryN`
+   - 对应 `*TexCoord`
+   - 对应 `*TextureSize / *InputSize / *Size`
+4. 为 `FullscreenQuad` 增加“主输入自定义 UV”绘制接口，避免最终直接上屏 pass 退化成只能使用固定 `0..1` 坐标
+5. 在 `RenderChain::drawToScreen()` 接入这条新分支：
+   - 若当前 preset 存在待执行的最终 screen pass，则直接让 `RetroShaderPipeline` 负责最终着色
+   - 否则沿用原有 `DirectQuadRenderer`
+6. 移除原先“只要加载 shader 就强制把最终纹理改成最近邻采样再上屏”的处理，避免额外破坏 phosphor-line / reflex 类 shader 的最终效果
+
+### 影响判断
+
+这轮修复主要针对两类 preset：
+
+1. 最后一个 pass 就是最终屏幕效果，但 `.glslp` 没写 `scale_type` 的预设
+   - 典型就是 `F10_PhosphorLineReflex.glslp`
+2. 最终效果强依赖屏幕输出语义、且对最终采样方式较敏感的预设
+   - `F00_PhosphorLineReflex(Base).glslp` 也属于这类，需要避免额外直绘链路改变它的最终表现
+
+### 编译验证
+
+已完成最小编译验证，以下目标均通过：
+
+- `src/game/render/RetroShaderPipeline.cpp.o`
+- `src/game/render/RenderChain.cpp.o`
+- `src/game/render/FullscreenQuad.cpp.o`
+- `src/game/render/GameRenderer.cpp.o`
+
+仅有项目现存第三方头文件 warning，无本次改动引入的新编译错误。

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <glad/glad.h>
+#include <array>
 #include <string>
 #include <utility>
 #include <vector>
@@ -75,12 +76,19 @@ public:
     unsigned outputH()  const { return m_lastOutH; }
     float    outputU()  const { return m_lastOutU; }
     float    outputV()  const { return m_lastOutV; }
+    bool     hasScreenPass() const { return m_screenPassIndex >= 0; }
+    bool     hasPendingScreenPass() const { return hasScreenPass() && m_hasPendingScreenPass; }
 
     /// 返回当前管线中所有参数的完整元数据（含当前值）。
     const std::vector<ShaderParamInfo>& getParams() const { return m_params; }
 
     /// 更新指定名称参数的当前值（区分大小写）。
     void setParamValue(const std::string& name, float value);
+
+    /// 将最终直接上屏 pass 绘制到目标屏幕矩形。
+    bool drawScreenPass(int viewportX, int viewportY, int viewportW, int viewportH,
+                        int windowH,
+                        const std::array<float, 8>& uv = {0.f, 0.f, 1.f, 0.f, 1.f, 1.f, 0.f, 1.f});
 
 private:
     std::vector<ShaderPass>      m_passes;
@@ -103,6 +111,19 @@ private:
     unsigned m_historyWriteIdx = 0; ///< 帧历史写入位置
     unsigned m_historyW = 0;        ///< 帧历史纹理宽度
     unsigned m_historyH = 0;        ///< 帧历史纹理高度
+    int      m_screenPassIndex = -1; ///< 最后一个直接上屏的 pass 索引（-1 = 无）
+    bool     m_hasPendingScreenPass = false; ///< 当前帧是否等待执行直接上屏 pass
+    GLuint   m_screenInputTex = 0; ///< 直接上屏 pass 的主输入纹理
+    unsigned m_screenInputImageW = 0; ///< 直接上屏 pass 的主输入有效宽度
+    unsigned m_screenInputImageH = 0; ///< 直接上屏 pass 的主输入有效高度
+    unsigned m_screenInputTexW = 0; ///< 直接上屏 pass 的主输入纹理宽度
+    unsigned m_screenInputTexH = 0; ///< 直接上屏 pass 的主输入纹理高度
+    GLuint   m_origInputTex = 0; ///< 当前帧原始输入纹理
+    unsigned m_origInputW = 0; ///< 当前帧原始输入宽度
+    unsigned m_origInputH = 0; ///< 当前帧原始输入高度
+    unsigned m_viewW = 0; ///< 当前帧目标视口宽度
+    unsigned m_viewH = 0; ///< 当前帧目标视口高度
+    unsigned m_frameCount = 0; ///< 当前帧序号
 
     /// 为通道分配或调整 FBO + 颜色纹理。
     bool allocateFBO(ShaderPass& pass, int w, int h);

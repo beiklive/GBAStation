@@ -305,17 +305,8 @@ apply_overrides:
         }
     }
 
-    // ---- 最后一个通道的缩放默认值处理 ----
-    // 按 RetroArch 规范：最后通道无显式缩放时默认为 viewport×1.0
-    if (!outPasses.empty() && !outPasses.back().hasExplicitScale) {
-        auto& last = outPasses.back();
-        last.scaleTypeX = ShaderPassDesc::ScaleType::Viewport;
-        last.scaleTypeY = ShaderPassDesc::ScaleType::Viewport;
-        last.scaleX = 1.0f;
-        last.scaleY = 1.0f;
-        brls::Logger::debug("GLSLPParser: 共 {} 个通道，最后通道无显式缩放，默认设置为 viewport×1.0",
-                             outPasses.size());
-    }
+    // RetroArch 语义：最后一个未显式声明缩放的 pass 直接渲染到屏幕，
+    // 因此这里不再擅自补成 viewport×1.0。
 
     // ---- 解析外部纹理声明 ----
     if (outTextures) {

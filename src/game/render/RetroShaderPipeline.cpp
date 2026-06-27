@@ -116,6 +116,17 @@ static std::array<float, 8> makeUvCoords(float uMax, float vMax)
     return {0.0f, 0.0f, uMax, 0.0f, uMax, vMax, 0.0f, vMax};
 }
 
+static std::array<float, 8> scaleUvCoords(const std::array<float, 8>& uv,
+                                          float uMax, float vMax)
+{
+    return {
+        uv[0] * uMax, uv[1] * vMax,
+        uv[2] * uMax, uv[3] * vMax,
+        uv[4] * uMax, uv[5] * vMax,
+        uv[6] * uMax, uv[7] * vMax,
+    };
+}
+
 static void addTexCoordAttribIfUsed(
     GLuint program,
     const std::string& attribName,
@@ -192,6 +203,9 @@ bool RetroShaderPipeline::init(const std::string& glslpPath)
         m_feedbackPass = meta.feedbackPass;
         m_historySize  = meta.historySize;
     }
+
+    if (!descs.empty() && !descs.back().hasExplicitScale)
+        m_screenPassIndex = static_cast<int>(descs.size()) - 1;
 
     // 2. 初始化全屏四边形
     if (!m_quad.init()) {
@@ -312,6 +326,15 @@ void RetroShaderPipeline::deinit()
     m_historyTextures.clear();
     m_historyWriteIdx = 0;
     m_historyW = m_historyH = 0;
+    m_screenPassIndex = -1;
+    m_hasPendingScreenPass = false;
+    m_screenInputTex = 0;
+    m_screenInputImageW = m_screenInputImageH = 0;
+    m_screenInputTexW = m_screenInputTexH = 0;
+    m_origInputTex = 0;
+    m_origInputW = m_origInputH = 0;
+    m_viewW = m_viewH = 0;
+    m_frameCount = 0;
 
     m_quad.deinit();
     m_lastOutW = m_lastOutH = 0;
@@ -662,8 +685,18 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
     unsigned currentTexW = videoW;
     unsigned currentTexH = videoH;
     GLuint   maxTexUnit = 0;
+    m_hasPendingScreenPass = false;
+    m_origInputTex = inputTex;
+    m_origInputW = videoW;
+    m_origInputH = videoH;
+    m_viewW = viewW;
+    m_viewH = viewH;
+    m_frameCount = frameCount;
+    const size_t fboPassCount = m_screenPassIndex >= 0
+        ? static_cast<size_t>(m_screenPassIndex)
+        : m_passes.size();
 
-    for (size_t idx = 0; idx < m_passes.size(); ++idx) {
+    for (size_t idx = 0; idx < fboPassCount; ++idx) {
         auto& pass = m_passes[idx];
         if (!pass.program) {
             brls::Logger::debug("RetroShaderPipeline: 跳过通道 {} (无程序)", idx);
@@ -1019,10 +1052,23 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
         currentTexH = static_cast<unsigned>(pass.height);
     }
 
-    m_lastOutW = currentImageW;
-    m_lastOutH = currentImageH;
-    m_lastOutU = uvMax(currentImageW, currentTexW);
-    m_lastOutV = uvMax(currentImageH, currentTexH);
+    if (m_screenPassIndex >= 0) {
+        m_screenInputTex = currentTex;
+        m_screenInputImageW = currentImageW;
+        m_screenInputImageH = currentImageH;
+        m_screenInputTexW = currentTexW;
+        m_screenInputTexH = currentTexH;
+        m_hasPendingScreenPass = true;
+        m_lastOutW = viewW > 0 ? viewW : currentImageW;
+        m_lastOutH = viewH > 0 ? viewH : currentImageH;
+        m_lastOutU = 1.0f;
+        m_lastOutV = 1.0f;
+    } else {
+        m_lastOutW = currentImageW;
+        m_lastOutH = currentImageH;
+        m_lastOutU = uvMax(currentImageW, currentTexW);
+        m_lastOutV = uvMax(currentImageH, currentTexH);
+    }
 
     // ---- 帧反馈纹理保存 ----
     if (m_feedbackPass >= 0 && static_cast<size_t>(m_feedbackPass) < m_passes.size()) {
@@ -1117,6 +1163,386 @@ GLuint RetroShaderPipeline::process(GLuint inputTex,
     }
 
     return currentTex;
+}
+
+bool RetroShaderPipeline::drawScreenPass(int viewportX, int viewportY,
+                                         int viewportW, int viewportH,
+                                         int windowH,
+                                         const std::array<float, 8>& uv)
+{
+    if (!hasPendingScreenPass() || viewportW <= 0 || viewportH <= 0)
+        return false;
+
+    const size_t idx = static_cast<size_t>(m_screenPassIndex);
+    if (idx >= m_passes.size())
+        return false;
+
+    auto& pass = m_passes[idx];
+    if (!pass.program || !m_screenInputTex)
+        return false;
+
+    GLuint    prevFBO         = 0;
+    GLint     prevViewport[4] = {};
+    GLuint    prevProg        = 0;
+    GLuint    prevVAO         = 0;
+    GLuint    prevTex         = 0;
+    GLboolean prevBlendEn     = GL_FALSE;
+    GLboolean prevDepthEn     = GL_FALSE;
+    GLboolean prevStencilEn   = GL_FALSE;
+    GLboolean prevScissorEn   = GL_FALSE;
+    GLboolean prevCullEn      = GL_FALSE;
+    GLint     prevBlendSrcRGB   = GL_ONE;
+    GLint     prevBlendDstRGB   = GL_ZERO;
+    GLint     prevBlendSrcAlpha = GL_ONE;
+    GLint     prevBlendDstAlpha = GL_ZERO;
+    GLboolean prevSRGBEn      = GL_FALSE;
+    {
+        GLint tmp = 0;
+        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &tmp);
+        prevFBO = static_cast<GLuint>(tmp);
+        glGetIntegerv(GL_CURRENT_PROGRAM, &tmp);
+        prevProg = static_cast<GLuint>(tmp);
+#if !defined(USE_GLES2)
+        glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &tmp);
+        prevVAO = static_cast<GLuint>(tmp);
+#endif
+        glGetIntegerv(GL_TEXTURE_BINDING_2D, &tmp);
+        prevTex = static_cast<GLuint>(tmp);
+    }
+    glGetIntegerv(GL_VIEWPORT, prevViewport);
+
+    prevBlendEn   = glIsEnabled(GL_BLEND);
+    prevDepthEn   = glIsEnabled(GL_DEPTH_TEST);
+    prevStencilEn = glIsEnabled(GL_STENCIL_TEST);
+    prevScissorEn = glIsEnabled(GL_SCISSOR_TEST);
+    prevCullEn    = glIsEnabled(GL_CULL_FACE);
+    prevSRGBEn    = glIsEnabled(GL_FRAMEBUFFER_SRGB);
+    glGetIntegerv(GL_BLEND_SRC_RGB,   &prevBlendSrcRGB);
+    glGetIntegerv(GL_BLEND_DST_RGB,   &prevBlendDstRGB);
+    glGetIntegerv(GL_BLEND_SRC_ALPHA, &prevBlendSrcAlpha);
+    glGetIntegerv(GL_BLEND_DST_ALPHA, &prevBlendDstAlpha);
+
+    glDisable(GL_BLEND);
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_STENCIL_TEST);
+    glDisable(GL_SCISSOR_TEST);
+    glDisable(GL_CULL_FACE);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    if (pass.desc.srgbFramebuffer)
+        glEnable(GL_FRAMEBUFFER_SRGB);
+    else
+        glDisable(GL_FRAMEBUFFER_SRGB);
+
+    glViewport(viewportX, windowH - viewportY - viewportH, viewportW, viewportH);
+    glUseProgram(pass.program);
+
+    auto applyTextureSamplingState = [&](GLuint tex, GLenum wrap, bool updateFilter, GLenum filter) {
+        if (!tex) return;
+        glBindTexture(GL_TEXTURE_2D, tex);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, static_cast<GLint>(wrap));
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, static_cast<GLint>(wrap));
+        if (updateFilter) {
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, static_cast<GLint>(filter));
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, static_cast<GLint>(filter));
+        }
+#if !defined(USE_GLES2)
+        if (wrap == GL_CLAMP_TO_BORDER) {
+            static const GLfloat s_borderColor[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+            glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, s_borderColor);
+        }
+#endif
+        glBindTexture(GL_TEXTURE_2D, 0);
+    };
+
+    GLenum wrapGL = GL_CLAMP_TO_EDGE;
+    switch (pass.desc.wrapMode) {
+        case ShaderPassDesc::WrapMode::ClampToBorder:
+#if !defined(USE_GLES2)
+            wrapGL = GL_CLAMP_TO_BORDER;
+#else
+            wrapGL = GL_CLAMP_TO_EDGE;
+#endif
+            break;
+        case ShaderPassDesc::WrapMode::Repeat:
+            wrapGL = GL_REPEAT;
+            break;
+        case ShaderPassDesc::WrapMode::MirroredRepeat:
+            wrapGL = GL_MIRRORED_REPEAT;
+            break;
+        default:
+            wrapGL = GL_CLAMP_TO_EDGE;
+            break;
+    }
+
+#if !defined(USE_GLES2)
+    if (wrapGL == GL_CLAMP_TO_EDGE &&
+        (viewportW > static_cast<int>(m_screenInputImageW) || viewportH > static_cast<int>(m_screenInputImageH))) {
+        wrapGL = GL_CLAMP_TO_BORDER;
+    }
+#endif
+
+    GLenum filterGL = pass.filterLinear ? GL_LINEAR : GL_NEAREST;
+    applyTextureSamplingState(m_screenInputTex, wrapGL, true, filterGL);
+
+    if (pass.desc.mipmapInput && m_screenInputTex) {
+        glBindTexture(GL_TEXTURE_2D, m_screenInputTex);
+        glGenerateMipmap(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, m_screenInputTex);
+
+    std::vector<std::pair<std::string, GLuint>> extraTexUnits;
+    std::vector<FullscreenQuad::ExtraTexCoordAttrib> extraTexCoords;
+    GLuint maxTexUnit = 0;
+    {
+        GLuint unit = 1;
+        for (const auto& et : m_textures) {
+            if (!et.texId) continue;
+            glActiveTexture(GL_TEXTURE0 + unit);
+            glBindTexture(GL_TEXTURE_2D, et.texId);
+            extraTexUnits.emplace_back(et.name, unit);
+            addTexCoordAttribIfUsed(pass.program, et.name + "TexCoord", 1, 1, 1, 1, extraTexCoords);
+            if (et.name == "LUT")
+                addTexCoordAttribIfUsed(pass.program, "LUTTexCoord", 1, 1, 1, 1, extraTexCoords);
+            ++unit;
+        }
+
+        for (size_t pi = 0; pi < idx; ++pi) {
+            const auto& prev = m_passes[pi];
+            if (!prev.texture) continue;
+            glActiveTexture(GL_TEXTURE0 + unit);
+            glBindTexture(GL_TEXTURE_2D, prev.texture);
+            extraTexUnits.emplace_back("Pass" + std::to_string(pi + 1) + "Texture", unit);
+            size_t prevN = idx - pi;
+            extraTexUnits.emplace_back("PassPrev" + std::to_string(prevN) + "Texture", unit);
+            if (!prev.alias.empty())
+                extraTexUnits.emplace_back(prev.alias + "Texture", unit);
+
+            addTexCoordAttribIfUsed(pass.program, "Pass" + std::to_string(pi + 1) + "TexCoord",
+                                    static_cast<unsigned>(prev.imageWidth),
+                                    static_cast<unsigned>(prev.imageHeight),
+                                    static_cast<unsigned>(prev.width),
+                                    static_cast<unsigned>(prev.height),
+                                    extraTexCoords);
+            addTexCoordAttribIfUsed(pass.program, "PassPrev" + std::to_string(prevN) + "TexCoord",
+                                    static_cast<unsigned>(prev.imageWidth),
+                                    static_cast<unsigned>(prev.imageHeight),
+                                    static_cast<unsigned>(prev.width),
+                                    static_cast<unsigned>(prev.height),
+                                    extraTexCoords);
+            if (prevN == 1) {
+                extraTexUnits.emplace_back("PassPrevTexture", unit);
+                addTexCoordAttribIfUsed(pass.program, "PassPrevTexCoord",
+                                        static_cast<unsigned>(prev.imageWidth),
+                                        static_cast<unsigned>(prev.imageHeight),
+                                        static_cast<unsigned>(prev.width),
+                                        static_cast<unsigned>(prev.height),
+                                        extraTexCoords);
+            }
+            if (!prev.alias.empty()) {
+                addTexCoordAttribIfUsed(pass.program, prev.alias + "TexCoord",
+                                        static_cast<unsigned>(prev.imageWidth),
+                                        static_cast<unsigned>(prev.imageHeight),
+                                        static_cast<unsigned>(prev.width),
+                                        static_cast<unsigned>(prev.height),
+                                        extraTexCoords);
+            }
+            ++unit;
+        }
+
+        glActiveTexture(GL_TEXTURE0 + unit);
+        glBindTexture(GL_TEXTURE_2D, m_origInputTex);
+        extraTexUnits.emplace_back("OrigTexture", unit);
+        extraTexUnits.emplace_back("PassPrev" + std::to_string(idx + 1) + "Texture", unit);
+        addTexCoordAttribIfUsed(pass.program, "OrigTexCoord",
+                                m_origInputW, m_origInputH, m_origInputW, m_origInputH,
+                                extraTexCoords);
+        addTexCoordAttribIfUsed(pass.program, "PassPrev" + std::to_string(idx + 1) + "TexCoord",
+                                m_origInputW, m_origInputH, m_origInputW, m_origInputH,
+                                extraTexCoords);
+        ++unit;
+
+        {
+            GLuint fbTex = m_feedbackTex ? m_feedbackTex : m_origInputTex;
+            glActiveTexture(GL_TEXTURE0 + unit);
+            glBindTexture(GL_TEXTURE_2D, fbTex);
+            extraTexUnits.emplace_back("FeedbackTexture", unit);
+            if (m_feedbackTex) {
+                extraTexUnits.emplace_back("PassFeedbackTexture", unit);
+                extraTexUnits.emplace_back("PassFeedback" + std::to_string(m_feedbackPass + 1) + "Texture", unit);
+            }
+            addTexCoordAttribIfUsed(pass.program, "FeedbackTexCoord",
+                                    m_feedbackTex ? m_feedbackImageW : m_origInputW,
+                                    m_feedbackTex ? m_feedbackImageH : m_origInputH,
+                                    m_feedbackTex ? m_feedbackW : m_origInputW,
+                                    m_feedbackTex ? m_feedbackH : m_origInputH,
+                                    extraTexCoords);
+            addTexCoordAttribIfUsed(pass.program, "PassFeedbackTexCoord",
+                                    m_feedbackTex ? m_feedbackImageW : m_origInputW,
+                                    m_feedbackTex ? m_feedbackImageH : m_origInputH,
+                                    m_feedbackTex ? m_feedbackW : m_origInputW,
+                                    m_feedbackTex ? m_feedbackH : m_origInputH,
+                                    extraTexCoords);
+            if (m_feedbackTex) {
+                addTexCoordAttribIfUsed(pass.program,
+                                        "PassFeedback" + std::to_string(m_feedbackPass + 1) + "TexCoord",
+                                        m_feedbackImageW, m_feedbackImageH,
+                                        m_feedbackW, m_feedbackH,
+                                        extraTexCoords);
+            }
+            ++unit;
+        }
+
+        const unsigned historyCount = static_cast<unsigned>(m_historyTextures.size());
+        if (historyCount == 0 && m_origInputTex) {
+            glActiveTexture(GL_TEXTURE0 + unit);
+            glBindTexture(GL_TEXTURE_2D, m_origInputTex);
+            extraTexUnits.emplace_back("PrevTexture", unit);
+            extraTexUnits.emplace_back("OriginalHistory0", unit);
+            extraTexUnits.emplace_back("OriginalHistory0Texture", unit);
+            addTexCoordAttribIfUsed(pass.program, "PrevTexCoord",
+                                    m_origInputW, m_origInputH, m_origInputW, m_origInputH, extraTexCoords);
+            addTexCoordAttribIfUsed(pass.program, "OriginalHistory0TexCoord",
+                                    m_origInputW, m_origInputH, m_origInputW, m_origInputH, extraTexCoords);
+            ++unit;
+        }
+        for (unsigned hi = 0; hi < historyCount; ++hi) {
+            unsigned hIdx = (m_historyWriteIdx + historyCount - 1 - hi) % historyCount;
+            GLuint histTex = m_historyTextures[hIdx] ? m_historyTextures[hIdx] : m_origInputTex;
+            if (!histTex) continue;
+
+            glActiveTexture(GL_TEXTURE0 + unit);
+            glBindTexture(GL_TEXTURE_2D, histTex);
+            extraTexUnits.emplace_back("OriginalHistory" + std::to_string(hi), unit);
+            extraTexUnits.emplace_back("OriginalHistory" + std::to_string(hi) + "Texture", unit);
+            if (hi == 0) {
+                extraTexUnits.emplace_back("PrevTexture", unit);
+                addTexCoordAttribIfUsed(pass.program, "PrevTexCoord",
+                                        m_origInputW, m_origInputH, m_origInputW, m_origInputH, extraTexCoords);
+            } else {
+                extraTexUnits.emplace_back("Prev" + std::to_string(hi) + "Texture", unit);
+                addTexCoordAttribIfUsed(pass.program, "Prev" + std::to_string(hi) + "TexCoord",
+                                        m_origInputW, m_origInputH, m_origInputW, m_origInputH, extraTexCoords);
+            }
+            addTexCoordAttribIfUsed(pass.program, "OriginalHistory" + std::to_string(hi) + "TexCoord",
+                                    m_origInputW, m_origInputH, m_origInputW, m_origInputH, extraTexCoords);
+            ++unit;
+        }
+
+        maxTexUnit = unit - 1;
+    }
+    glActiveTexture(GL_TEXTURE0);
+
+    setUniforms(pass.program,
+                m_screenInputImageW, m_screenInputImageH,
+                m_screenInputTexW, m_screenInputTexH,
+                static_cast<unsigned>(viewportW),
+                static_cast<unsigned>(viewportH),
+                m_origInputW, m_origInputH,
+                static_cast<unsigned>(viewportW),
+                static_cast<unsigned>(viewportH),
+                m_frameCount,
+                extraTexUnits);
+
+    for (size_t pi = 0; pi < idx; ++pi) {
+        const auto& prev = m_passes[pi];
+        if (!prev.texture) continue;
+        float inputW = static_cast<float>(prev.imageWidth);
+        float inputH = static_cast<float>(prev.imageHeight);
+        float texW = static_cast<float>(prev.width);
+        float texH = static_cast<float>(prev.height);
+        std::string absPrefix = "Pass" + std::to_string(pi + 1);
+        addFrameSizeUniforms(pass.program, absPrefix, inputW, inputH, texW, texH);
+        size_t prevN = idx - pi;
+        std::string prevPrefix = "PassPrev" + std::to_string(prevN);
+        addFrameSizeUniforms(pass.program, prevPrefix, inputW, inputH, texW, texH);
+        if (prevN == 1)
+            addFrameSizeUniforms(pass.program, "PassPrev", inputW, inputH, texW, texH);
+        if (!prev.alias.empty())
+            addFrameSizeUniforms(pass.program, prev.alias, inputW, inputH, texW, texH);
+    }
+
+    {
+        float fw = static_cast<float>(m_origInputW);
+        float fh = static_cast<float>(m_origInputH);
+        std::string origPrevPrefix = "PassPrev" + std::to_string(idx + 1);
+        addFrameSizeUniforms(pass.program, "Orig", fw, fh, fw, fh);
+        addFrameSizeUniforms(pass.program, origPrevPrefix, fw, fh, fw, fh);
+    }
+
+    {
+        float inputW = static_cast<float>(m_feedbackTex ? m_feedbackImageW : m_origInputW);
+        float inputH = static_cast<float>(m_feedbackTex ? m_feedbackImageH : m_origInputH);
+        float texW = static_cast<float>(m_feedbackTex ? m_feedbackW : m_origInputW);
+        float texH = static_cast<float>(m_feedbackTex ? m_feedbackH : m_origInputH);
+        addFrameSizeUniforms(pass.program, "Feedback", inputW, inputH, texW, texH);
+        addFrameSizeUniforms(pass.program, "PassFeedback", inputW, inputH, texW, texH);
+        if (m_feedbackPass >= 0) {
+            std::string feedbackPrefix = "PassFeedback" + std::to_string(m_feedbackPass + 1);
+            addFrameSizeUniforms(pass.program, feedbackPrefix, inputW, inputH, texW, texH);
+        }
+    }
+
+    {
+        const unsigned historyCount = static_cast<unsigned>(m_historyTextures.size());
+        if (historyCount == 0 && m_origInputTex) {
+            float fw = static_cast<float>(m_origInputW);
+            float fh = static_cast<float>(m_origInputH);
+            addFrameSizeUniforms(pass.program, "Prev", fw, fh, fw, fh);
+            addFrameSizeUniforms(pass.program, "OriginalHistory0", fw, fh, fw, fh);
+        }
+        for (unsigned hi = 0; hi < historyCount; ++hi) {
+            float fw = static_cast<float>(m_origInputW);
+            float fh = static_cast<float>(m_origInputH);
+            addFrameSizeUniforms(pass.program, "OriginalHistory" + std::to_string(hi), fw, fh, fw, fh);
+            if (hi == 0)
+                addFrameSizeUniforms(pass.program, "Prev", fw, fh, fw, fh);
+            else
+                addFrameSizeUniforms(pass.program, "Prev" + std::to_string(hi), fw, fh, fw, fh);
+        }
+    }
+
+    m_quad.draw(scaleUvCoords(uv,
+                              uvMax(m_screenInputImageW, m_screenInputTexW),
+                              uvMax(m_screenInputImageH, m_screenInputTexH)),
+                extraTexCoords);
+
+    for (GLuint u = 1; u <= maxTexUnit; ++u) {
+        glActiveTexture(GL_TEXTURE0 + u);
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
+    glUseProgram(prevProg);
+    glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
+    glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, prevTex);
+#if !defined(USE_GLES2)
+    glBindVertexArray(prevVAO);
+#endif
+
+    if (prevBlendEn)   glEnable(GL_BLEND); else glDisable(GL_BLEND);
+    if (prevDepthEn)   glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
+    if (prevStencilEn) glEnable(GL_STENCIL_TEST); else glDisable(GL_STENCIL_TEST);
+    if (prevScissorEn) glEnable(GL_SCISSOR_TEST); else glDisable(GL_SCISSOR_TEST);
+    if (prevCullEn)    glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
+    if (prevSRGBEn)    glEnable(GL_FRAMEBUFFER_SRGB); else glDisable(GL_FRAMEBUFFER_SRGB);
+    glBlendFuncSeparate(static_cast<GLenum>(prevBlendSrcRGB),
+                        static_cast<GLenum>(prevBlendDstRGB),
+                        static_cast<GLenum>(prevBlendSrcAlpha),
+                        static_cast<GLenum>(prevBlendDstAlpha));
+
+    if (m_origInputTex) {
+        glBindTexture(GL_TEXTURE_2D, m_origInputTex);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glBindTexture(GL_TEXTURE_2D, prevTex);
+    }
+
+    m_hasPendingScreenPass = false;
+    return true;
 }
 
 // ============================================================

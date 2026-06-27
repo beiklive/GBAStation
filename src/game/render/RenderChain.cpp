@@ -2,28 +2,9 @@
 
 #include <borealis.hpp>
 #include <array>
+#include <cmath>
 
 namespace beiklive {
-
-namespace {
-void setTextureNearestForScreenDraw(GLuint tex)
-{
-    if (!tex) return;
-
-    GLint prevActive = 0;
-    GLint prevTex = 0;
-    glGetIntegerv(GL_ACTIVE_TEXTURE, &prevActive);
-    glActiveTexture(GL_TEXTURE0);
-    glGetIntegerv(GL_TEXTURE_BINDING_2D, &prevTex);
-
-    glBindTexture(GL_TEXTURE_2D, tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-    glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(prevTex));
-    glActiveTexture(static_cast<GLenum>(prevActive));
-}
-}
 
 // ============================================================
 // init
@@ -152,8 +133,14 @@ void RenderChain::drawToScreen(GLuint tex,
     float ndcTop    = 1.0f - (physicalY                / static_cast<float>(windowH)) * 2.0f;
     float ndcBottom = 1.0f - ((physicalY + physicalHeight) / static_cast<float>(windowH)) * 2.0f;
 
-    if (m_pipeline.isLoaded())
-        setTextureNearestForScreenDraw(tex);
+    if (m_pipeline.hasPendingScreenPass()) {
+        const int viewportX = static_cast<int>(std::lround(physicalX));
+        const int viewportY = static_cast<int>(std::lround(physicalY));
+        const int viewportW = static_cast<int>(std::lround(physicalWidth));
+        const int viewportH = static_cast<int>(std::lround(physicalHeight));
+        if (m_pipeline.drawScreenPass(viewportX, viewportY, viewportW, viewportH, windowH, uv))
+            return;
+    }
 
     m_directRenderer.render(tex, ndcLeft, ndcRight, ndcTop, ndcBottom, uv, swizzleRB);
 }

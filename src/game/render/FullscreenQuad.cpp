@@ -26,6 +26,7 @@ static const float k_quadVerts[] = {
     -1.f,  1.f, 0.f, 1.f,   1.f, 1.f, 1.f, 1.f,   0.f, 1.f, 0.f, 0.f,
 };
 static const GLuint k_quadIndices[] = { 0, 1, 2, 0, 2, 3 };
+static const std::array<float, 8> k_defaultTexCoords = {0.f, 0.f, 1.f, 0.f, 1.f, 1.f, 0.f, 1.f};
 
 // 每顶点字节数
 static constexpr GLsizei k_stride = 12 * sizeof(float);
@@ -139,16 +140,21 @@ void FullscreenQuad::draw(float uMax, float vMax) const
 void FullscreenQuad::draw(float uMax, float vMax,
                           const std::vector<ExtraTexCoordAttrib>& extraTexCoords) const
 {
-    if (!m_vbo) return;
-
     uMax = std::max(0.0f, std::min(1.0f, uMax));
     vMax = std::max(0.0f, std::min(1.0f, vMax));
+    draw({0.f, 0.f, uMax, 0.f, uMax, vMax, 0.f, vMax}, extraTexCoords);
+}
+
+void FullscreenQuad::draw(const std::array<float, 8>& texCoords,
+                          const std::vector<ExtraTexCoordAttrib>& extraTexCoords) const
+{
+    if (!m_vbo) return;
 
     const float verts[] = {
-        -1.f, -1.f, 0.f, 1.f,   1.f, 1.f, 1.f, 1.f,   0.f,  0.f,  0.f, 0.f,
-         1.f, -1.f, 0.f, 1.f,   1.f, 1.f, 1.f, 1.f,   uMax, 0.f,  0.f, 0.f,
-         1.f,  1.f, 0.f, 1.f,   1.f, 1.f, 1.f, 1.f,   uMax, vMax, 0.f, 0.f,
-        -1.f,  1.f, 0.f, 1.f,   1.f, 1.f, 1.f, 1.f,   0.f,  vMax, 0.f, 0.f,
+        -1.f, -1.f, 0.f, 1.f,   1.f, 1.f, 1.f, 1.f,   texCoords[0], texCoords[1], 0.f, 0.f,
+         1.f, -1.f, 0.f, 1.f,   1.f, 1.f, 1.f, 1.f,   texCoords[2], texCoords[3], 0.f, 0.f,
+         1.f,  1.f, 0.f, 1.f,   1.f, 1.f, 1.f, 1.f,   texCoords[4], texCoords[5], 0.f, 0.f,
+        -1.f,  1.f, 0.f, 1.f,   1.f, 1.f, 1.f, 1.f,   texCoords[6], texCoords[7], 0.f, 0.f,
     };
 
     std::vector<float> packedExtra;
@@ -161,7 +167,7 @@ void FullscreenQuad::draw(float uMax, float vMax,
 #if !defined(USE_GLES2)
     glBindVertexArray(m_vao);
     glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
-    if (uMax != 1.0f || vMax != 1.0f) {
+    if (texCoords != k_defaultTexCoords) {
         glBufferSubData(GL_ARRAY_BUFFER, 0,
                         static_cast<GLsizeiptr>(sizeof(verts)), verts);
     }
@@ -192,14 +198,14 @@ void FullscreenQuad::draw(float uMax, float vMax,
     }
 
     glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
-    if (uMax != 1.0f || vMax != 1.0f) {
+    if (texCoords != k_defaultTexCoords) {
         glBufferSubData(GL_ARRAY_BUFFER, 0,
                         static_cast<GLsizeiptr>(sizeof(k_quadVerts)), k_quadVerts);
     }
     glBindVertexArray(0);
 #else
     glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
-    if (uMax != 1.0f || vMax != 1.0f) {
+    if (texCoords != k_defaultTexCoords) {
         glBufferSubData(GL_ARRAY_BUFFER, 0,
                         static_cast<GLsizeiptr>(sizeof(verts)), verts);
     }
@@ -236,7 +242,7 @@ void FullscreenQuad::draw(float uMax, float vMax,
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
 
     glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
-    if (uMax != 1.0f || vMax != 1.0f) {
+    if (texCoords != k_defaultTexCoords) {
         glBufferSubData(GL_ARRAY_BUFFER, 0,
                         static_cast<GLsizeiptr>(sizeof(k_quadVerts)), k_quadVerts);
     }

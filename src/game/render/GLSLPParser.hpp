@@ -30,7 +30,7 @@ struct ShaderPassDesc {
     float scaleY = 1.0f; ///< Y 轴缩放系数
 
     /// 是否在 .glslp 中显式指定了缩放设置（scale_type/scale 等键存在）。
-    /// 若为 false，则最后一个通道需按 RetroArch 规范默认为 viewport×1.0。
+    /// RetroArch 会将“最后一个未显式声明缩放的 pass”视为直接上屏 pass。
     bool hasExplicitScale = false;
 
     bool floatFramebuffer = false; ///< 是否使用浮点 FBO（暂未使用，保留兼容性）

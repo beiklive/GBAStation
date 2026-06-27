@@ -50,6 +50,10 @@ public:
     void draw(float uMax, float vMax,
               const std::vector<ExtraTexCoordAttrib>& extraTexCoords) const;
 
+    /// 绘制全屏四边形，并为主输入纹理提供自定义 TexCoord。
+    void draw(const std::array<float, 8>& texCoords,
+              const std::vector<ExtraTexCoordAttrib>& extraTexCoords = {}) const;
+
     bool isInitialized() const { return m_vbo != 0; }
 
 private:
