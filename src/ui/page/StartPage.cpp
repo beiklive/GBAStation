@@ -416,35 +416,49 @@ namespace beiklive
         m_gameOptionsSidebar->addButton("删除游戏", BK_RES("img/ui/menu/exit.png"),
             [this, path](const beiklive::GameEntry& e) {
                 _hideGameOptionsPanel();
-                auto* dialog = new brls::Dialog("确定要删除该游戏吗？\n此操作将移除游戏记录并删除 ROM 文件。");
-                dialog->addButton("确认删除", [this, path]() {
-                    _hideGameOptionsPanel();
-                    if (beiklive::GameDB) {
-                        bool removedRecord = false;
-                        if ((int)beiklive::GameDB->getAll().size() <= 1)
-                        {
-                            beiklive::GameDB->clearAll();
-                            removedRecord = true;
-                        }
-                        else {
-                            removedRecord = beiklive::GameDB->removeByPath(path);
-                            if (removedRecord)
-                                beiklive::GameDB->flush();
-                        }
-                        bool removedFile = removedRecord && deleteGameFileIfExists(path);
-                        if (!removedRecord)
-                            brls::Application::notify("删除失败");
-                        else
-                            brls::Application::notify(removedFile ? "已删除游戏" : "已移除记录，ROM 文件删除失败");
-                        onResume();
-                    } else {
-                        brls::Application::notify("删除失败");
-                    }
-                });
-                dialog->addButton("取消", [this]() {
+                auto* removeDialog = new brls::Dialog("是否从游戏库移除该游戏？");
+                removeDialog->addButton("是", [this, path]() {
+                    auto* romDialog = new brls::Dialog("是否删除 ROM 文件？");
+                    auto deleteGame = [this, path](bool deleteRomFile) {
+                        if (beiklive::GameDB) {
+                            bool removedRecord = false;
+                            if ((int)beiklive::GameDB->getAll().size() <= 1)
+                            {
+                                beiklive::GameDB->clearAll();
+                                removedRecord = true;
+                            }
+                            else {
+                                removedRecord = beiklive::GameDB->removeByPath(path);
+                                if (removedRecord)
+                                    beiklive::GameDB->flush();
+                            }
 
+                            bool removedFile = true;
+                            if (removedRecord && deleteRomFile)
+                                removedFile = deleteGameFileIfExists(path);
+
+                            if (!removedRecord)
+                                brls::Application::notify("删除失败");
+                            else if (deleteRomFile)
+                                brls::Application::notify(removedFile ? "已删除游戏" : "已移除记录，ROM 文件删除失败");
+                            else
+                                brls::Application::notify("已从游戏库移除该游戏");
+                            onResume();
+                        } else {
+                            brls::Application::notify("删除失败");
+                        }
+                    };
+                    romDialog->addButton("是", [deleteGame]() { deleteGame(true); });
+                    romDialog->addButton("否", [deleteGame]() { deleteGame(false); });
+                    romDialog->addButton("不删了", []() {
+                    });
+                    romDialog->open();
                 });
-                dialog->open();
+                removeDialog->addButton("否", []() {
+                });
+                removeDialog->addButton("不删了", []() {
+                });
+                removeDialog->open();
             });
 
         // ── 收藏 ──

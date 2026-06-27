@@ -510,31 +510,47 @@ namespace beiklive
         m_gameOptionsSidebar->addButton("删除游戏", BK_RES("img/ui/menu/exit.png"),
             [this, path](const beiklive::GameEntry&) {
                 _hideGameOptionsPanel();
-                auto* dlg = new brls::Dialog("确定要删除该游戏吗？\n此操作将移除游戏记录并删除 ROM 文件。");
-                dlg->addButton("确认删除", [this, path]() {
-                    if (beiklive::GameDB) {
-                        bool removedRecord = false;
-                        if ((int)beiklive::GameDB->getAll().size() <= 1)
-                        {
-                            beiklive::GameDB->clearAll();
-                            removedRecord = true;
-                        }
-                        else {
-                            removedRecord = beiklive::GameDB->removeByPath(path);
-                            if (removedRecord)
-                                beiklive::GameDB->flush();
-                        }
-                        bool removedFile = removedRecord && deleteGameFileIfExists(path);
-                        if (!removedRecord)
+                auto* removeDlg = new brls::Dialog("是否从游戏库移除该游戏？");
+                removeDlg->addButton("是", [this, path]() {
+                    auto* romDlg = new brls::Dialog("是否删除 ROM 文件？");
+                    auto deleteGame = [this, path](bool deleteRomFile) {
+                        if (beiklive::GameDB) {
+                            bool removedRecord = false;
+                            if ((int)beiklive::GameDB->getAll().size() <= 1)
+                            {
+                                beiklive::GameDB->clearAll();
+                                removedRecord = true;
+                            }
+                            else {
+                                removedRecord = beiklive::GameDB->removeByPath(path);
+                                if (removedRecord)
+                                    beiklive::GameDB->flush();
+                            }
+
+                            bool removedFile = true;
+                            if (removedRecord && deleteRomFile)
+                                removedFile = deleteGameFileIfExists(path);
+
+                            if (!removedRecord)
+                                brls::Application::notify("删除失败");
+                            else if (deleteRomFile)
+                                brls::Application::notify(removedFile ? "已删除游戏" : "已移除记录，ROM 文件删除失败");
+                            else
+                                brls::Application::notify("已从游戏库移除该游戏");
+                            _reloadEntries();
+                        } else {
                             brls::Application::notify("删除失败");
-                        else
-                            brls::Application::notify(removedFile ? "已删除游戏" : "已移除记录，ROM 文件删除失败");
-                        _reloadEntries();
-                    } else brls::Application::notify("删除失败");
-                    m_grid->setInteractionDisabled(false);
+                        }
+                        m_grid->setInteractionDisabled(false);
+                    };
+                    romDlg->addButton("是", [deleteGame]() { deleteGame(true); });
+                    romDlg->addButton("否", [deleteGame]() { deleteGame(false); });
+                    romDlg->addButton("不删了", [this]() { m_grid->setInteractionDisabled(false); });
+                    romDlg->open();
                 });
-                dlg->addButton("取消", [this]() { m_grid->setInteractionDisabled(false); });
-                dlg->open();
+                removeDlg->addButton("否", [this]() { m_grid->setInteractionDisabled(false); });
+                removeDlg->addButton("不删了", [this]() { m_grid->setInteractionDisabled(false); });
+                removeDlg->open();
             });
 
         m_gameOptionsSidebar->addButton(
@@ -663,9 +679,13 @@ namespace beiklive
                         };
                         romDlg->addButton("是", [deleteSelected]() { deleteSelected(true); });
                         romDlg->addButton("否", [deleteSelected]() { deleteSelected(false); });
+                        romDlg->addButton("不删了", [this]() { m_grid->setInteractionDisabled(false); });
                         romDlg->open();
                     });
                     removeDlg->addButton("否", [this]() {
+                        m_grid->setInteractionDisabled(false);
+                    });
+                    removeDlg->addButton("不删了", [this]() {
                         m_grid->setInteractionDisabled(false);
                     });
                     removeDlg->open();
