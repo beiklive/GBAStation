@@ -127,6 +127,20 @@ static std::array<float, 8> scaleUvCoords(const std::array<float, 8>& uv,
     };
 }
 
+static std::array<float, 8> toQuadUvOrder(const std::array<float, 8>& uv)
+{
+    // RenderChain/DirectQuadRenderer 传入的 UV 顺序是：
+    // 左上、右上、右下、左下。
+    // FullscreenQuad 内部顶点顺序是：
+    // 左下、右下、右上、左上。
+    return {
+        uv[6], uv[7],
+        uv[4], uv[5],
+        uv[2], uv[3],
+        uv[0], uv[1],
+    };
+}
+
 static void addTexCoordAttribIfUsed(
     GLuint program,
     const std::string& attribName,
@@ -1505,9 +1519,9 @@ bool RetroShaderPipeline::drawScreenPass(int viewportX, int viewportY,
         }
     }
 
-    m_quad.draw(scaleUvCoords(uv,
-                              uvMax(m_screenInputImageW, m_screenInputTexW),
-                              uvMax(m_screenInputImageH, m_screenInputTexH)),
+    m_quad.draw(toQuadUvOrder(scaleUvCoords(uv,
+                                            uvMax(m_screenInputImageW, m_screenInputTexW),
+                                            uvMax(m_screenInputImageH, m_screenInputTexH))),
                 extraTexCoords);
 
     for (GLuint u = 1; u <= maxTexUnit; ++u) {
