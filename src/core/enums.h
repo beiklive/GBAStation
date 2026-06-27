@@ -237,6 +237,7 @@ namespace beiklive // 结构体
         EMU_REWIND,                     // 倒带
         EMU_QUICK_SAVE,                 // 快速保存
         EMU_QUICK_LOAD,                 // 快速读取
+        EMU_SCREENSHOT,                 // 截图
         EMU_OPEN_MENU,                  // 打开菜单
         EMU_MUTE,                       // 静音
         EMU_A_TURBO,                    // A键连发
@@ -266,6 +267,7 @@ namespace beiklive // 结构体
         { "rewind",         EMU_REWIND          },
         { "quicksave",      EMU_QUICK_SAVE      },
         { "quickload",      EMU_QUICK_LOAD      },
+        { "screenshot",     EMU_SCREENSHOT      },
         { "menu",           EMU_OPEN_MENU       },
         { "mute",           EMU_MUTE            },
         { "a_turbo",        EMU_A_TURBO         },

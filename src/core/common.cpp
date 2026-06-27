@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <chrono>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -576,7 +577,6 @@ namespace beiklive
                 beiklive::input_mapping::makeKey("nds.", entry.key),
                 ConfigValue(std::string(entry.defaultValue)));
         }
-        SettingManager->SetDefault("hotkey.screenshot.pad", ConfigValue(std::string("none")));
 
         // 摇杆输入设置
         SettingManager->SetDefault("input.joystick.enabled", ConfigValue(1));
@@ -891,9 +891,11 @@ namespace beiklive
         }
         key << '|';
         const auto writeTime = fs::last_write_time(romPath, ec);
-        if (!ec)
-            key << writeTime.time_since_epoch().count();
-        else
+        if (!ec) {
+            const auto writeTicks = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                writeTime.time_since_epoch()).count();
+            key << writeTicks;
+        } else
             key << 0;
 
         return (fs::path(beiklive::path::cachePath()) / "nds_icons" / (hex64(fnv1a64(key.str())) + ".png")).string();

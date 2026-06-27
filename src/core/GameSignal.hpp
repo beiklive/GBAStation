@@ -78,6 +78,16 @@ public:
         return m_pendingQuickLoad.exchange(-1, std::memory_order_acq_rel);
     }
 
+    // ---- 截图信号 -------------------------------------------------------
+
+    /// UI 线程调用：请求保存当前游戏画面截图。
+    void requestScreenshot() { m_pendingScreenshot.store(true, std::memory_order_release); }
+
+    /// 游戏线程调用：获取并消费截图请求。
+    bool consumeScreenshot() {
+        return m_pendingScreenshot.exchange(false, std::memory_order_acq_rel);
+    }
+
     // ---- 重置信号 -------------------------------------------------------
 
     /// UI 线程调用：请求重置游戏核心。
@@ -247,6 +257,7 @@ public:
         m_rewind.store(false, std::memory_order_relaxed);
         m_pendingQuickSave.store(-1, std::memory_order_relaxed);
         m_pendingQuickLoad.store(-1, std::memory_order_relaxed);
+        m_pendingScreenshot.store(false, std::memory_order_relaxed);
         m_pendingReset.store(false, std::memory_order_relaxed);
         m_muted.store(false, std::memory_order_relaxed);
         m_requestExit.store(false, std::memory_order_relaxed);
@@ -269,6 +280,7 @@ private:
     std::atomic<bool> m_rewind{false};          ///< 倒带标志
     std::atomic<int>  m_pendingQuickSave{-1};   ///< 待存档槽号（-1=无）
     std::atomic<int>  m_pendingQuickLoad{-1};   ///< 待读档槽号（-1=无）
+    std::atomic<bool> m_pendingScreenshot{false}; ///< 待截图请求
     std::atomic<bool> m_pendingReset{false};    ///< 重置请求
     std::atomic<bool> m_muted{false};           ///< 静音标志
     std::atomic<bool> m_requestExit{false};     ///< 退出请求

@@ -3,6 +3,7 @@
 #include "emulator/IEmulatorCore.hpp"
 #include "emulator/IEmulatorStopRequest.hpp"
 #include "emulator/IEmulatorTouchInput.hpp"
+#include "emulator/IEmulatorVideoFrameMode.hpp"
 #include "emulator/IEmulatorVideoTexture.hpp"
 #include "emulator/melonds/MelonDSAudio.h"
 #include "emulator/melonds/MelonDSInput.h"
@@ -30,7 +31,11 @@ namespace beiklive::melonds {
 
 struct MelonDSGLContext;
 
-class MelonDSCore : public IEmulatorCore, public IEmulatorTouchInput, public IEmulatorStopRequest, public IEmulatorVideoTexture {
+class MelonDSCore : public IEmulatorCore,
+                    public IEmulatorTouchInput,
+                    public IEmulatorStopRequest,
+                    public IEmulatorVideoTexture,
+                    public IEmulatorVideoFrameMode {
 public:
     MelonDSCore();
     ~MelonDSCore() override;
@@ -58,6 +63,10 @@ public:
     double SampleRate() const override { return 48000.0; }
 
     void SetFastForwarding(bool ff) override { m_fastForwarding = ff; }
+    void SetAcceleratedFrameReadbackEnabled(bool enabled) override
+    {
+        m_acceleratedFrameReadbackEnabled.store(enabled, std::memory_order_release);
+    }
     void NotifyConfigUpdated() override;
 
     void ApplyCheats(const std::vector<CheatEntry>& cheats) override;
@@ -108,6 +117,7 @@ private:
     bool m_usingAcceleratedRenderer = false;
     bool m_usingComputeRenderer = false;
     bool m_acceleratedReadbackFailed = false;
+    std::atomic<bool> m_acceleratedFrameReadbackEnabled{true};
     std::unique_ptr<MelonDSGLContext> m_glContext;
     std::vector<uint32_t> m_acceleratedReadback;
     int m_skipAcceleratedReadbackFrames = 0;

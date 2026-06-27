@@ -615,42 +615,60 @@ namespace beiklive
                 BK_RES("img/ui/menu/exit.png"),
                 [this](const beiklive::GameEntry&) {
                     _hideGameOptionsPanel();
-                    auto& sel = m_grid->getDeleteSelection();
+                    std::vector<int> sel(m_grid->getDeleteSelection().begin(),
+                                         m_grid->getDeleteSelection().end());
                     size_t n = sel.size();
-                    std::string msg = "确定要删除这 " + std::to_string(n) + " 款游戏吗？\n此操作将移除游戏记录并删除 ROM 文件。";
-                    auto* dlg = new brls::Dialog(msg);
-                    dlg->addButton("确认删除", [this, sel]() {
-                        bool allFilesRemoved = true;
-                        if (beiklive::GameDB) {
-                            if ((int)beiklive::GameDB->getAll().size() <= (int)sel.size())
-                            {
-                                for (int idx : sel) {
-                                    if (idx >= 0 && static_cast<size_t>(idx) < m_entries.size())
-                                        allFilesRemoved = deleteGameFileIfExists(m_entries[idx].path) && allFilesRemoved;
-                                }
-                                beiklive::GameDB->clearAll();
-                            }
-                            else {
-                                for (int idx : sel) {
-                                    if (idx >= 0 && static_cast<size_t>(idx) < m_entries.size()) {
-                                        const auto& path = m_entries[idx].path;
-                                        if (beiklive::GameDB->removeByPath(path))
-                                            allFilesRemoved = deleteGameFileIfExists(path) && allFilesRemoved;
+                    std::string msg = "是否从游戏库移除这 " + std::to_string(n) + " 款游戏？";
+                    auto* removeDlg = new brls::Dialog(msg);
+                    removeDlg->addButton("是", [this, sel]() {
+                        auto* romDlg = new brls::Dialog("是否删除 ROM 文件？");
+                        auto deleteSelected = [this, sel](bool deleteRomFiles) {
+                            bool allFilesRemoved = true;
+                            bool removedAnyRecord = false;
+                            if (beiklive::GameDB) {
+                                if ((int)beiklive::GameDB->getAll().size() <= (int)sel.size())
+                                {
+                                    if (deleteRomFiles) {
+                                        for (int idx : sel) {
+                                            if (idx >= 0 && static_cast<size_t>(idx) < m_entries.size())
+                                                allFilesRemoved = deleteGameFileIfExists(m_entries[idx].path) && allFilesRemoved;
+                                        }
                                     }
+                                    beiklive::GameDB->clearAll();
+                                    removedAnyRecord = true;
                                 }
-                                beiklive::GameDB->flush();
+                                else {
+                                    for (int idx : sel) {
+                                        if (idx >= 0 && static_cast<size_t>(idx) < m_entries.size()) {
+                                            const auto& path = m_entries[idx].path;
+                                            if (beiklive::GameDB->removeByPath(path)) {
+                                                removedAnyRecord = true;
+                                                if (deleteRomFiles)
+                                                    allFilesRemoved = deleteGameFileIfExists(path) && allFilesRemoved;
+                                            }
+                                        }
+                                    }
+                                    beiklive::GameDB->flush();
+                                }
                             }
-                        }
-                        if (!allFilesRemoved)
-                            brls::Application::notify("部分 ROM 文件删除失败");
-                        m_grid->clearDeleteSelection();
-                        _reloadEntries();
+                            if (!removedAnyRecord)
+                                brls::Application::notify("删除失败");
+                            else if (deleteRomFiles && !allFilesRemoved)
+                                brls::Application::notify("已移除记录，部分 ROM 文件删除失败");
+                            else
+                                brls::Application::notify(deleteRomFiles ? "已删除所选游戏" : "已从游戏库移除所选游戏");
+                            m_grid->clearDeleteSelection();
+                            _reloadEntries();
+                            m_grid->setInteractionDisabled(false);
+                        };
+                        romDlg->addButton("是", [deleteSelected]() { deleteSelected(true); });
+                        romDlg->addButton("否", [deleteSelected]() { deleteSelected(false); });
+                        romDlg->open();
+                    });
+                    removeDlg->addButton("否", [this]() {
                         m_grid->setInteractionDisabled(false);
                     });
-                    dlg->addButton("取消", [this]() {
-                        m_grid->setInteractionDisabled(false);
-                    });
-                    dlg->open();
+                    removeDlg->open();
                 });
         }
 

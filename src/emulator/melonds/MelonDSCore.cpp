@@ -657,8 +657,19 @@ void MelonDSCore::RunFrame()
         available = m_nds->SPU.GetOutputSize();
     }
 
-    if (!captureAcceleratedFrame())
+    const bool needAcceleratedReadback =
+        m_usingAcceleratedRenderer &&
+        m_internalResolution > 1 &&
+        m_acceleratedFrameReadbackEnabled.load(std::memory_order_acquire);
+    if (needAcceleratedReadback)
+    {
+        if (!captureAcceleratedFrame())
+            m_video.Capture(*m_nds);
+    }
+    else
+    {
         m_video.Capture(*m_nds);
+    }
 }
 
 void MelonDSCore::Reset()

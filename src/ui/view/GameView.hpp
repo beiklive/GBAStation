@@ -7,6 +7,7 @@
 #include "emulator/IEmulatorCore.hpp"
 #include "emulator/IEmulatorStopRequest.hpp"
 #include "emulator/IEmulatorTouchInput.hpp"
+#include "emulator/IEmulatorVideoFrameMode.hpp"
 #include "emulator/IEmulatorVideoTexture.hpp"
 #include "game/render/GameRenderer.hpp"
 #include "ui/utils/GameOverlayRenderer.hpp"
@@ -244,6 +245,7 @@ namespace beiklive
             void _registerGameRuntime();
             bool _useNdsSplitShader() const;
             bool _useNdsAcceleratedTexture() const;
+            void _syncNdsVideoFrameMode();
             void _applySavedShaderParams(beiklive::GameRenderer& renderer) const;
             bool _initGameRenderers(unsigned gw, unsigned gh, const std::string& shaderPath);
             void _clearGameViewBackground(float x, float y, float w, float h,
@@ -365,6 +367,9 @@ namespace beiklive
 
             /// 序列化核心状态到文件并保存缩略图（slot=0 为自动存档）
             void _doSaveState(int slot);
+
+            /// 保存当前游戏画面截图到存档目录
+            void _doScreenshot();
 
             /// 从文件反序列化核心状态（slot=0 为自动存档）
             void _doLoadState(int slot);

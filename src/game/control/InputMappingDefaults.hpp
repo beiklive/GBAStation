@@ -60,6 +60,7 @@ namespace beiklive::input_mapping
         {"handle.rewind", "倒带", "none", true},
         {"hotkey.quicksave.pad", "快速保存", "none", false},
         {"hotkey.quickload.pad", "快速读取", "none", false},
+        {"hotkey.screenshot.pad", "截图", "none", false},
         {"hotkey.menu.pad", "打开菜单", "PAD_LT+PAD_RT", false},
         {"hotkey.mute.pad", "静音", "none", false},
         {"hotkey.pause.pad", "暂停", "none", false},

@@ -612,6 +612,18 @@ namespace beiklive
                dynamic_cast<beiklive::IEmulatorVideoTexture*>(m_core) != nullptr;
     }
 
+    void GameView::_syncNdsVideoFrameMode()
+    {
+        if (!isNdsPlatform(m_gameEntry.platform) || !m_core)
+            return;
+
+        auto* frameMode = dynamic_cast<beiklive::IEmulatorVideoFrameMode*>(m_core);
+        if (!frameMode)
+            return;
+
+        frameMode->SetAcceleratedFrameReadbackEnabled(_useNdsSplitShader());
+    }
+
     void GameView::_applySavedShaderParams(beiklive::GameRenderer& renderer) const
     {
         if (m_gameEntry.shaderParaNames.empty())
@@ -646,6 +658,7 @@ namespace beiklive
         m_ndsTopRenderer.deinit();
         m_ndsBottomRenderer.deinit();
         m_ndsSplitShaderRenderer = _useNdsSplitShader();
+        _syncNdsVideoFrameMode();
 
         if (!m_ndsSplitShaderRenderer) {
             if (!m_renderer.init(gw, gh, false, shaderPath))
@@ -1238,6 +1251,17 @@ namespace beiklive
                 GameInputManager::instance().registerEmuFunctionKey(
                     EmuFunctionKey::EMU_QUICK_LOAD, {combo},
                     []() { GameSignal::instance().requestQuickLoad(1); });
+            }
+        }
+
+        // 截图
+        {
+            std::string val = readMapping("hotkey.screenshot.pad", "none");
+            auto combos = beiklive::tools::parseMultiCombo(val);
+            for (const auto& combo : combos) {
+                GameInputManager::instance().registerEmuFunctionKey(
+                    EmuFunctionKey::EMU_SCREENSHOT, {combo},
+                    []() { GameSignal::instance().requestScreenshot(); });
             }
         }
 
@@ -1849,6 +1873,8 @@ namespace beiklive
             return;
         }
 
+        _syncNdsVideoFrameMode();
+
         if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
         {
             GameSignal::instance().resetAll();
@@ -2422,6 +2448,9 @@ namespace beiklive
                 // 暂停时仍可消费金手指重载信号（来自菜单关闭时的批量同步）
                 if (sig.consumeReloadCheats() && m_core)
                     m_core->ReloadCheats();
+                // 暂停时允许截图，便于在菜单暂停后保存当前画面。
+                if (sig.consumeScreenshot())
+                    _doScreenshot();
                 // 暂停时仍可消费退出自动存档信号
                 {
                     int exitSaveSlot = sig.consumeAutoSave();
@@ -2460,6 +2489,10 @@ namespace beiklive
             int loadSlot = sig.consumeQuickLoad();
             if (loadSlot >= 0)
                 _doLoadState(loadSlot);
+
+            // ---- 截图 ----
+            if (sig.consumeScreenshot())
+                _doScreenshot();
 
             // ---- 倒带帧恢复（由可视化倒带UI触发）----
             int restoreIdx = sig.consumeRewindRestore();
@@ -2636,7 +2669,7 @@ namespace beiklive
             }
 
             // ---- 帧率限制（倍率决定间隔；慢动作与快进都走节流）----
-            _throttleFrameRate(false, nextFrameTarget, frameDurNs, spinGuardNs);
+            _throttleFrameRate(fastForwardActive, nextFrameTarget, frameDurNs, spinGuardNs);
         }
 
         // ---- 提交时长记录 ----
@@ -2738,6 +2771,64 @@ namespace beiklive
         brls::sync([slot](){
             std::string msg = (slot == 0) ? "已保存到自动存档" : "已保存到槽位 " + std::to_string(slot);
             brls::Application::notify(msg);
+        });
+    }
+
+    // ============================================================
+    // _doScreenshot – 保存当前画面截图（游戏线程调用）
+    // ============================================================
+
+    void GameView::_doScreenshot()
+    {
+        if (!m_core || !m_core->IsReady()) return;
+
+        auto frame = m_core->GetVideoFrame();
+        if (frame.pixels.empty() || frame.width == 0 || frame.height == 0) {
+            brls::sync([]() {
+                brls::Application::notify("截图失败：没有可用画面");
+            });
+            return;
+        }
+
+        std::string dir = m_gameEntry.savePath;
+        if (dir.empty()) dir = beiklive::path::savePath();
+
+        std::error_code ec;
+        std::filesystem::create_directories(dir, ec);
+        if (ec) {
+            brls::Logger::warning("GameView: 创建截图目录失败: {} ({})", dir, ec.message());
+            brls::sync([]() {
+                brls::Application::notify("截图失败：无法创建存档目录");
+            });
+            return;
+        }
+
+        std::string timestamp = beiklive::tools::getTimestampString();
+        std::replace(timestamp.begin(), timestamp.end(), ' ', '_');
+        std::filesystem::path outPath = std::filesystem::path(dir) / ("screenshot_" + timestamp + ".png");
+        for (int suffix = 1; std::filesystem::exists(outPath, ec) && suffix < 1000; ++suffix) {
+            ec.clear();
+            outPath = std::filesystem::path(dir) /
+                ("screenshot_" + timestamp + "_" + std::to_string(suffix) + ".png");
+        }
+
+        const int ok = stbi_write_png(outPath.string().c_str(),
+                                      static_cast<int>(frame.width),
+                                      static_cast<int>(frame.height),
+                                      4,
+                                      frame.pixels.data(),
+                                      static_cast<int>(frame.width * 4));
+        if (!ok) {
+            brls::Logger::warning("GameView: 截图保存失败: {}", outPath.string());
+            brls::sync([]() {
+                brls::Application::notify("截图保存失败");
+            });
+            return;
+        }
+
+        brls::Logger::info("GameView: 截图已保存: {}", outPath.string());
+        brls::sync([]() {
+            brls::Application::notify("截图已保存到存档目录");
         });
     }
 
