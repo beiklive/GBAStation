@@ -859,6 +859,54 @@ RetroArch 不只传 `TextureSize/InputSize`，还会对以下对象分别查找�
 
 通过，仍然只有项目现存第三方 warning。
 
+---
+
+## 2026-06-28 README 与 About 页面介绍文案更新
+
+### 任务分析
+
+- **任务目标**:
+  - 根据项目当前已经落地的模拟器能力，更新 `README.md` 与 `AboutPage` 中的项目介绍文案。
+  - 让对外描述与当前支持机型、核心、游戏管理能力、画面功能和资源能力保持一致。
+- **输入输出**:
+  - 输入为 `README.md`、`src/ui/page/AboutPage.cpp` 现有文案，以及项目代码中的真实功能实现。
+  - 输出为更新后的文档介绍和关于页介绍，避免继续停留在仅支持 mGBA / Switch 的旧表述。
+- **可能挑战**:
+  - 项目功能已经从早期 GBA 扩展到多机型、多核心和 NDS 专属设置，若只参考旧 README 很容易遗漏。
+  - 关于页空间有限，需要在不堆砌的前提下覆盖最核心能力。
+- **解决方案**:
+  - 先从 `EmuPlatform`、`EmulatorCoreFactory`、`GetCoreOptions`、`DataManagementPage`、`GameLibraryPage`、`GameView` 和更新日志中交叉确认实际功能。
+  - README 侧补充“支持机型与核心”表和更完整的功能概览。
+  - About 页面侧改为精炼版介绍，重点突出支持机型、核心、管理能力和画面能力。
+
+### 实现结果
+
+- `README.md`
+  - 项目标题统一为 `GBAStation`。
+  - 开头介绍改为跨平台、多机型前端，不再误写成仅内置 mGBA、仅支持 Switch。
+  - 新增“支持机型与核心”表，明确 GB/GBC/GBA、FC、SFC、NDS 对应核心。
+  - 功能表更新为当前真实能力，补充游戏库管理、导入、Web 管理、多核心切换、NDS 画面设置、自动存档、截图、更新与资源下载等内容。
+- `src/ui/page/AboutPage.cpp`
+  - “关于本项目”描述改为与 README 一致的新版介绍。
+  - 补充当前支持机型和内置核心说明。
+  - 将功能点更新为最近游玩、搜索分类、Web 管理、即时存档、截图热键、NDS 双屏设置等当前已有功能。
+
+### 验证情况
+
+- 本次改动包含文档文件和 `AboutPage` 文案常量，未改动业务逻辑。
+- 已人工核对文案与以下实现入口保持一致：
+  - `src/core/enums.h`
+  - `src/emulator/EmulatorCoreFactory.cpp`
+  - `src/core/common.h`
+  - `src/ui/page/DataManagementPage.cpp`
+  - `src/ui/page/GameLibraryPage.cpp`
+  - `src/ui/view/GameView.cpp`
+- 额外执行了：
+  - `cmake --build build_macos --target GBAStation -j4`
+- 构建结果：
+  - 本次构建失败，但失败点位于项目现存第三方目标，与本次文案修改无关。
+  - 主要报错来自 `third_party/melonDS` 的 `std::variant` 相关编译错误，以及 `third_party/nestopia` 的 narrowing / 链接参数问题。
+
 ### Switch 发布工作流与更新说明拉取调整
 
 - `build-switch.yml` 调整为新的发布方式：

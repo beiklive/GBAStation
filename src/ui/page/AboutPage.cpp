@@ -298,19 +298,19 @@ brls::View* AboutPage::_buildInfoTab() {
     descCard->setHeight(brls::View::AUTO);
 
     std::vector<std::string> descLines = {
-        "本项目基于 libretro 核心接口构建，目前内置 mGBA 模拟器核心。",
+        "GBAStation 是一个基于 borealis UI 的跨平台模拟器前端，整合 libretro 核心并移植 melonDS 核心代码。",
+        "当前支持 GB、GBC、GBA、FC、SFC、NDS(NDS性能较弱，仍在优化中)",
+        "内置核心包含 mGBA、Nestopia、FCEUmm、Snes9x 2005、Snes9x 与 melonDS。",
         "",
         "目前已实现功能：",
-        "  •  游戏库功能（运行过的游戏会被自动添加到游戏库中）",
-        "  •  定时存档功能",
-        "  •  键位自定义",
-        "  •  金手指功能",
-        "  •  封面设置",
-        "  •  游戏时间统计",
-        "  •  RA 着色器及参数修改支持（还不完善）",
-        "  •  遮罩功能",
-        "  •  RA 游戏库导入",
-        "  •  快进倒带"
+        "  •  游戏库功能、游戏封面、游玩时长、游戏次数",
+        "  •  支持目录扫描、RetroArch 游戏库导入、Web 局域网管理游戏库与封面自定义",
+        "  •  支持即时存档 / 读档、自动存档 / 自动存读档",
+        "  •  支持金手指（不支持raw格式）",
+        "  •  按机型独立按键映射、A / B 连发",
+        "  •  快进、倒带",
+        "  •  遮罩、RetroArch GLSL 着色器与参数调整",
+        "  •  多种画面模式"
     };
 
     for (const auto& line : descLines) {
