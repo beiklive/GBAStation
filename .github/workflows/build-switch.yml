@@ -49,9 +49,10 @@ jobs:
           CHANGELOG=$(git tag -l --format='%(contents)' "$TAG_NAME")
 
           NRO_FILE="build_switch/GBAStation.nro"
-          cp "$NRO_FILE" GBAStation.nro
-          cmake -E tar cf "$ZIP_FILE" --format=zip GBAStation.nro
-          rm GBAStation.nro
+          mkdir -p switch
+          cp "$NRO_FILE" switch/GBAStation.nro
+          cmake -E tar cf "$ZIP_FILE" --format=zip switch
+          rm -rf switch
 
           printf '%s\n' "$CHANGELOG" > "$CHANGELOG_FILE"
 
@@ -135,5 +136,4 @@ jobs:
           git commit -m "Release $TAG_NAME" || echo "Nothing to commit"
 
           git push
-
 

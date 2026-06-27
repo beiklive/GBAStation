@@ -103,23 +103,39 @@ static std::string zipBaseName(const std::string& name) {
     return pos == std::string::npos ? name : name.substr(pos + 1);
 }
 
+static std::string normalizeZipPath(const std::string& name) {
+    std::string normalized = name;
+    for (char& ch : normalized)
+        if (ch == '\\')
+            ch = '/';
+    return normalized;
+}
+
 static bool extractNroFromZip(const std::string& zipPath, const std::string& outPath) {
     mz_zip_archive zip;
     memset(&zip, 0, sizeof(zip));
     if (!mz_zip_reader_init_file(&zip, zipPath.c_str(), 0))
         return false;
 
-    bool ok = false;
+    int preferredIndex = -1;
+    int fallbackIndex = -1;
     mz_uint numFiles = mz_zip_reader_get_num_files(&zip);
     for (mz_uint i = 0; i < numFiles; ++i) {
         char filename[512];
         mz_zip_reader_get_filename(&zip, i, filename, sizeof(filename));
-        if (zipBaseName(filename) != "GBAStation.nro")
-            continue;
-
-        ok = mz_zip_reader_extract_to_file(&zip, i, outPath.c_str(), 0);
-        break;
+        std::string normalized = normalizeZipPath(filename);
+        if (normalized == "switch/GBAStation.nro") {
+            preferredIndex = static_cast<int>(i);
+            break;
+        }
+        if (zipBaseName(normalized) == "GBAStation.nro" && fallbackIndex < 0)
+            fallbackIndex = static_cast<int>(i);
     }
+
+    int extractIndex = preferredIndex >= 0 ? preferredIndex : fallbackIndex;
+    bool ok = false;
+    if (extractIndex >= 0)
+        ok = mz_zip_reader_extract_to_file(&zip, static_cast<mz_uint>(extractIndex), outPath.c_str(), 0);
 
     mz_zip_reader_end(&zip);
     return ok;

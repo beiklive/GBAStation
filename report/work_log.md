@@ -814,6 +814,24 @@ RetroArch 不只传 `TextureSize/InputSize`，还会对以下对象分别查找�
 - 单独重新编译 `src/core/AppUpdater.cpp.o`
 - 编译通过，仅有项目现存 warning
 
+### 更新包目录结构调整
+
+- 发布包结构调整为：
+  - `GBAStation.zip`
+  - zip 内部包含 `switch/GBAStation.nro`
+- `build-switch.yml` 已同步修改：
+  - 打包前先创建 `switch/` 目录
+  - 将编译产物复制到 `switch/GBAStation.nro`
+  - 再将整个 `switch` 目录压缩进 zip
+- 程序侧解压逻辑已同步修改：
+  - `AppUpdater::extractNroFromZip()` 现在优先查找 `switch/GBAStation.nro`
+  - 若遇到旧包格式，仍兼容回退到任意路径下的 `GBAStation.nro`
+
+### 本次验证补充
+
+- 单独重新编译 `src/core/AppUpdater.cpp.o`
+- 编译通过，仅有项目现存 warning
+
 ### 更新流程梳理
 
 - 入口分为两处：
