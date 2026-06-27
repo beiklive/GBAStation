@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
+#include <cctype>
 
 // stb_image：仅声明，实现已在 nanovg.c 中通过 STB_IMAGE_IMPLEMENTATION 编译
 #include "stb_image.h"
@@ -90,7 +91,6 @@ static bool copyTextureToCache(GLuint srcTex, unsigned srcW, unsigned srcH,
     return ok;
 }
 
-#if defined(USE_GLES2)
 static unsigned nextPowerOfTwo(unsigned v)
 {
     if (v <= 1) return 1;
@@ -102,18 +102,27 @@ static unsigned nextPowerOfTwo(unsigned v)
     v |= v >> 16;
     return v + 1;
 }
-#endif
 
 static float uvMax(unsigned image, unsigned texture)
 {
     return texture > 0 ? static_cast<float>(image) / static_cast<float>(texture) : 1.0f;
 }
 
-static std::array<float, 8> makeUvCoords(float uMax, float vMax)
+static std::array<float, 8> makeUvCoords(float uMax, float vMax, bool topOrigin = false)
 {
     uMax = std::max(0.0f, std::min(1.0f, uMax));
     vMax = std::max(0.0f, std::min(1.0f, vMax));
+    if (topOrigin)
+        return {0.0f, vMax, uMax, vMax, uMax, 0.0f, 0.0f, 0.0f};
     return {0.0f, 0.0f, uMax, 0.0f, uMax, vMax, 0.0f, vMax};
+}
+
+static bool isPPReflexShaderPath(const std::string& shaderPath)
+{
+    std::string name = std::filesystem::path(shaderPath).filename().string();
+    std::transform(name.begin(), name.end(), name.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return name == "pp-reflex.glsl";
 }
 
 static std::array<float, 8> scaleUvCoords(const std::array<float, 8>& uv,
@@ -146,14 +155,15 @@ static void addTexCoordAttribIfUsed(
     const std::string& attribName,
     unsigned imageW, unsigned imageH,
     unsigned textureW, unsigned textureH,
-    std::vector<FullscreenQuad::ExtraTexCoordAttrib>& outAttribs)
+    std::vector<FullscreenQuad::ExtraTexCoordAttrib>& outAttribs,
+    bool topOrigin = false)
 {
     GLint location = glGetAttribLocation(program, attribName.c_str());
     if (location < 0) return;
 
     FullscreenQuad::ExtraTexCoordAttrib attrib;
     attrib.location = location;
-    attrib.coords   = makeUvCoords(uvMax(imageW, textureW), uvMax(imageH, textureH));
+    attrib.coords   = makeUvCoords(uvMax(imageW, textureW), uvMax(imageH, textureH), topOrigin);
     outAttribs.push_back(attrib);
 }
 
@@ -220,6 +230,16 @@ bool RetroShaderPipeline::init(const std::string& glslpPath)
 
     if (!descs.empty() && !descs.back().hasExplicitScale)
         m_screenPassIndex = static_cast<int>(descs.size()) - 1;
+
+    m_usePaddedFBO = std::any_of(descs.begin(), descs.end(), [](const ShaderPassDesc& desc) {
+        return isPPReflexShaderPath(desc.shaderPath);
+    });
+    if (m_usePaddedFBO) {
+        for (auto& desc : descs) {
+            if (!desc.hasExplicitWrap)
+                desc.wrapMode = ShaderPassDesc::WrapMode::ClampToBorder;
+        }
+    }
 
     // 2. 初始化全屏四边形
     if (!m_quad.init()) {
@@ -342,6 +362,7 @@ void RetroShaderPipeline::deinit()
     m_historyW = m_historyH = 0;
     m_screenPassIndex = -1;
     m_hasPendingScreenPass = false;
+    m_usePaddedFBO = false;
     m_screenInputTex = 0;
     m_screenInputImageW = m_screenInputImageH = 0;
     m_screenInputTexW = m_screenInputTexH = 0;
@@ -361,13 +382,9 @@ void RetroShaderPipeline::deinit()
 bool RetroShaderPipeline::allocateFBO(ShaderPass& pass, int w, int h)
 {
     if (w <= 0 || h <= 0) return false;
-    unsigned texW = static_cast<unsigned>(w);
-    unsigned texH = static_cast<unsigned>(h);
-#if defined(USE_GLES2)
-    // GLES2 旧设备对 NPOT 纹理/FBO 兼容性较弱，保留 POT 兜底。
-    texW = nextPowerOfTwo(texW);
-    texH = nextPowerOfTwo(texH);
-#endif
+    // 只有 PP-reflex 反射类预设需要黑色 padding；ScaleFX 等滤镜必须保持精确尺寸。
+    unsigned texW = m_usePaddedFBO ? nextPowerOfTwo(static_cast<unsigned>(w)) : static_cast<unsigned>(w);
+    unsigned texH = m_usePaddedFBO ? nextPowerOfTwo(static_cast<unsigned>(h)) : static_cast<unsigned>(h);
     if (pass.fbo &&
         pass.imageWidth == w && pass.imageHeight == h &&
         pass.width == static_cast<int>(texW) &&
@@ -1318,9 +1335,9 @@ bool RetroShaderPipeline::drawScreenPass(int viewportX, int viewportY,
             glActiveTexture(GL_TEXTURE0 + unit);
             glBindTexture(GL_TEXTURE_2D, et.texId);
             extraTexUnits.emplace_back(et.name, unit);
-            addTexCoordAttribIfUsed(pass.program, et.name + "TexCoord", 1, 1, 1, 1, extraTexCoords);
+            addTexCoordAttribIfUsed(pass.program, et.name + "TexCoord", 1, 1, 1, 1, extraTexCoords, true);
             if (et.name == "LUT")
-                addTexCoordAttribIfUsed(pass.program, "LUTTexCoord", 1, 1, 1, 1, extraTexCoords);
+                addTexCoordAttribIfUsed(pass.program, "LUTTexCoord", 1, 1, 1, 1, extraTexCoords, true);
             ++unit;
         }
 
@@ -1340,13 +1357,13 @@ bool RetroShaderPipeline::drawScreenPass(int viewportX, int viewportY,
                                     static_cast<unsigned>(prev.imageHeight),
                                     static_cast<unsigned>(prev.width),
                                     static_cast<unsigned>(prev.height),
-                                    extraTexCoords);
+                                    extraTexCoords, true);
             addTexCoordAttribIfUsed(pass.program, "PassPrev" + std::to_string(prevN) + "TexCoord",
                                     static_cast<unsigned>(prev.imageWidth),
                                     static_cast<unsigned>(prev.imageHeight),
                                     static_cast<unsigned>(prev.width),
                                     static_cast<unsigned>(prev.height),
-                                    extraTexCoords);
+                                    extraTexCoords, true);
             if (prevN == 1) {
                 extraTexUnits.emplace_back("PassPrevTexture", unit);
                 addTexCoordAttribIfUsed(pass.program, "PassPrevTexCoord",
@@ -1354,7 +1371,7 @@ bool RetroShaderPipeline::drawScreenPass(int viewportX, int viewportY,
                                         static_cast<unsigned>(prev.imageHeight),
                                         static_cast<unsigned>(prev.width),
                                         static_cast<unsigned>(prev.height),
-                                        extraTexCoords);
+                                        extraTexCoords, true);
             }
             if (!prev.alias.empty()) {
                 addTexCoordAttribIfUsed(pass.program, prev.alias + "TexCoord",
@@ -1362,7 +1379,7 @@ bool RetroShaderPipeline::drawScreenPass(int viewportX, int viewportY,
                                         static_cast<unsigned>(prev.imageHeight),
                                         static_cast<unsigned>(prev.width),
                                         static_cast<unsigned>(prev.height),
-                                        extraTexCoords);
+                                        extraTexCoords, true);
             }
             ++unit;
         }
@@ -1373,10 +1390,10 @@ bool RetroShaderPipeline::drawScreenPass(int viewportX, int viewportY,
         extraTexUnits.emplace_back("PassPrev" + std::to_string(idx + 1) + "Texture", unit);
         addTexCoordAttribIfUsed(pass.program, "OrigTexCoord",
                                 m_origInputW, m_origInputH, m_origInputW, m_origInputH,
-                                extraTexCoords);
+                                extraTexCoords, true);
         addTexCoordAttribIfUsed(pass.program, "PassPrev" + std::to_string(idx + 1) + "TexCoord",
                                 m_origInputW, m_origInputH, m_origInputW, m_origInputH,
-                                extraTexCoords);
+                                extraTexCoords, true);
         ++unit;
 
         {
@@ -1393,19 +1410,19 @@ bool RetroShaderPipeline::drawScreenPass(int viewportX, int viewportY,
                                     m_feedbackTex ? m_feedbackImageH : m_origInputH,
                                     m_feedbackTex ? m_feedbackW : m_origInputW,
                                     m_feedbackTex ? m_feedbackH : m_origInputH,
-                                    extraTexCoords);
+                                    extraTexCoords, true);
             addTexCoordAttribIfUsed(pass.program, "PassFeedbackTexCoord",
                                     m_feedbackTex ? m_feedbackImageW : m_origInputW,
                                     m_feedbackTex ? m_feedbackImageH : m_origInputH,
                                     m_feedbackTex ? m_feedbackW : m_origInputW,
                                     m_feedbackTex ? m_feedbackH : m_origInputH,
-                                    extraTexCoords);
+                                    extraTexCoords, true);
             if (m_feedbackTex) {
                 addTexCoordAttribIfUsed(pass.program,
                                         "PassFeedback" + std::to_string(m_feedbackPass + 1) + "TexCoord",
                                         m_feedbackImageW, m_feedbackImageH,
                                         m_feedbackW, m_feedbackH,
-                                        extraTexCoords);
+                                        extraTexCoords, true);
             }
             ++unit;
         }
@@ -1418,9 +1435,9 @@ bool RetroShaderPipeline::drawScreenPass(int viewportX, int viewportY,
             extraTexUnits.emplace_back("OriginalHistory0", unit);
             extraTexUnits.emplace_back("OriginalHistory0Texture", unit);
             addTexCoordAttribIfUsed(pass.program, "PrevTexCoord",
-                                    m_origInputW, m_origInputH, m_origInputW, m_origInputH, extraTexCoords);
+                                    m_origInputW, m_origInputH, m_origInputW, m_origInputH, extraTexCoords, true);
             addTexCoordAttribIfUsed(pass.program, "OriginalHistory0TexCoord",
-                                    m_origInputW, m_origInputH, m_origInputW, m_origInputH, extraTexCoords);
+                                    m_origInputW, m_origInputH, m_origInputW, m_origInputH, extraTexCoords, true);
             ++unit;
         }
         for (unsigned hi = 0; hi < historyCount; ++hi) {
@@ -1435,14 +1452,14 @@ bool RetroShaderPipeline::drawScreenPass(int viewportX, int viewportY,
             if (hi == 0) {
                 extraTexUnits.emplace_back("PrevTexture", unit);
                 addTexCoordAttribIfUsed(pass.program, "PrevTexCoord",
-                                        m_origInputW, m_origInputH, m_origInputW, m_origInputH, extraTexCoords);
+                                        m_origInputW, m_origInputH, m_origInputW, m_origInputH, extraTexCoords, true);
             } else {
                 extraTexUnits.emplace_back("Prev" + std::to_string(hi) + "Texture", unit);
                 addTexCoordAttribIfUsed(pass.program, "Prev" + std::to_string(hi) + "TexCoord",
-                                        m_origInputW, m_origInputH, m_origInputW, m_origInputH, extraTexCoords);
+                                        m_origInputW, m_origInputH, m_origInputW, m_origInputH, extraTexCoords, true);
             }
             addTexCoordAttribIfUsed(pass.program, "OriginalHistory" + std::to_string(hi) + "TexCoord",
-                                    m_origInputW, m_origInputH, m_origInputW, m_origInputH, extraTexCoords);
+                                    m_origInputW, m_origInputH, m_origInputW, m_origInputH, extraTexCoords, true);
             ++unit;
         }
 

@@ -38,13 +38,14 @@ struct ShaderPassDesc {
 
     /// 输入纹理的环绕（wrap）模式（对应 .glslp 的 wrap_mode 字段）
     enum class WrapMode {
-        ClampToEdge,    ///< GL_CLAMP_TO_EDGE（默认）
+        ClampToEdge,    ///< GL_CLAMP_TO_EDGE
         ClampToBorder,  ///< GL_CLAMP_TO_BORDER（black border）
         Repeat,         ///< GL_REPEAT
         MirroredRepeat, ///< GL_MIRRORED_REPEAT
     };
 
     WrapMode wrapMode = WrapMode::ClampToEdge; ///< 输入纹理环绕模式
+    bool hasExplicitWrap = false; ///< 是否在 .glslp 中显式指定 wrap_mode
 
     int  frameCountMod = 0;   ///< 仅在每 N 帧执行（0 = 每帧都执行）
     bool mipmapInput   = false; ///< 是否为输入纹理生成 mipmap

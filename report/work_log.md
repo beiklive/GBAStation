@@ -583,6 +583,114 @@ RetroArch 不只传 `TextureSize/InputSize`，还会对以下对象分别查找�
 
 均通过，仅有项目现存第三方 warning。
 
+## 2026-06-27 最终 pass 额外纹理坐标原点修正
+
+### 用户反馈
+
+用户确认 `F10_PhosphorLineReflex.glslp` / `F00_PhosphorLineReflex(Base).glslp` 的反射框已经恢复正常，但游戏画面与反射框连接处的处理仍然不对，预期应有黑色过渡遮住上下和左右对边像素。
+
+### 新定位
+
+继续对照 RetroArch `gl3` 的最终 pass 坐标后，发现当前还有一个细节不一致：
+
+1. 最终 screen pass 的主 `TexCoord` 已经转换成“屏幕顶部 `v=0`”
+2. 但 `PassN/PassPrevN/Orig/Feedback/LUT` 这些额外 `TexCoord` 属性仍沿用中间 FBO pass 的默认方向
+3. RetroArch 最终 pass 会把这些坐标与最终屏幕顶点一起提交，因此它们也需要和主 `TexCoord` 保持同一个顶部原点
+
+这个问题对普通 blit 类滤镜不明显，但会影响依赖多路纹理混合、边缘过渡或历史 pass 坐标的后处理滤镜。
+
+### 本次修复
+
+在 `src/game/render/RetroShaderPipeline.cpp` 中调整：
+
+1. `makeUvCoords()` 增加 `topOrigin` 参数
+2. `addTexCoordAttribIfUsed()` 增加 `topOrigin` 参数
+3. 中间 FBO pass 保持原来的 FBO 坐标方向
+4. 最终 screen pass 绑定的所有额外纹理坐标统一使用顶部原点方向
+
+这样最终 pass 内的主纹理坐标和额外纹理坐标不再一个顶部原点、一个底部原点，减少连接处混合时采到对边像素的机会。
+
+### 编译验证
+
+完成最小编译验证：
+
+- `src/game/render/RetroShaderPipeline.cpp.o`
+
+通过，仅有项目现存第三方 warning。
+
+## 2026-06-27 收窄 FBO padding 作用范围
+
+### 用户反馈
+
+上一轮恢复 RetroArch 风格的全局 POT FBO 后，用户反馈 `CRT+ScaleFX.glslp`、`Scanline+ScaleFX.glslp` 这类 ScaleFX 滤镜又出现游戏画面向右下拉伸并超出画面范围的问题。
+
+### 新定位
+
+这说明黑色 padding 不能全局启用：
+
+1. `PP-reflex.glsl` 需要 RetroArch 风格的 FBO padding 来避免反射连接处采到对边像素
+2. ScaleFX / hqx 这类滤镜对中间 pass 的有效纹理尺寸更敏感，全局 POT FBO 会重新引入右下方向拉伸
+3. 因此需要按预设能力收窄，而不是全局模拟 RetroArch 行为
+
+### 本次修复
+
+1. `GLSLPParser` 默认 `wrap_mode` 恢复为 `clamp_to_edge`
+2. `ShaderPassDesc` 增加 `hasExplicitWrap`，记录预设是否显式写了 `wrap_mode`
+3. `RetroShaderPipeline` 增加 `m_usePaddedFBO`
+4. 仅当预设通道中包含 `PP-reflex.glsl` 时：
+   - FBO 纹理扩展到 2 的幂尺寸，提供黑色 padding
+   - 未显式声明 `wrap_mode` 的 pass 自动使用 `clamp_to_border`
+5. 普通 ScaleFX / hqx / CRT+ScaleFX 等预设继续使用精确 FBO 尺寸，避免右下拉伸回归
+
+### 编译验证
+
+完成最小编译验证：
+
+- `src/game/render/RetroShaderPipeline.cpp.o`
+- `src/game/render/GLSLPParser.cpp.o`
+
+通过，仅有项目现存第三方 warning。
+
+## 2026-06-27 恢复 RetroArch FBO 黑色 padding
+
+### 用户反馈
+
+用户确认上一轮后反射框仍然正常，但游戏画面和反射框之间依然没有预期的黑色连接/过渡区域。
+
+### 新定位
+
+继续对照 RetroArch `gl3` renderchain 后，发现更关键的差异：
+
+1. RetroArch 为每个 FBO 分配的纹理尺寸是 `next_pow2(img_width/img_height)`
+2. 有效画面只绘制在 `img_width/img_height` 区域内
+3. 超出有效画面但仍在纹理内的区域会因为 `glClear()` 保持黑色
+4. `PP-reflex.glsl` 中大量使用 `fract()` 做反射采样，预期会在部分边界采到这圈黑色 padding，从而遮住上下和左右对边像素
+5. 项目之前为了修复拉伸问题把 FBO 改成精确尺寸，导致 `InputSize == TextureSize`，黑色 padding 消失，`fract()` 更容易直接卷到对边像素
+
+同时发现 `.glslp` 默认 `wrap_mode` 也与 RetroArch 不一致：
+
+- RetroArch 默认：`clamp_to_border`
+- 项目旧默认：`clamp_to_edge`
+
+这会进一步增加边缘像素被钳住/重复的概率。
+
+### 本次修复
+
+1. `RetroShaderPipeline::allocateFBO()` 恢复 RetroArch 风格：所有平台都将 FBO 纹理尺寸扩展到 2 的幂
+2. 保留 `imageWidth/imageHeight` 为有效画面尺寸，`width/height` 为真实纹理尺寸
+3. 继续通过 `InputSize/TextureSize` 和 `uvMax()` 限制有效区域，避免恢复 POT 后再次出现拉伸
+4. `GLSLPParser` 默认 `wrapMode` 改为 `ClampToBorder`
+5. 外部纹理默认 wrap 也同步改为 `ClampToBorder`
+
+### 编译验证
+
+完成最小编译验证：
+
+- `src/game/render/RetroShaderPipeline.cpp.o`
+- `src/game/render/GLSLPParser.cpp.o`
+
+通过，仅有项目现存第三方 warning。
+
 ### 追加修正
 
 用户随后反馈：`F10_PhosphorLineReflex.glslp` 的反射框跑到显示范围外，比上一版更差。

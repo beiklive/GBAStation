@@ -196,6 +196,7 @@ apply_overrides:
                 auto wm = kv.find("wrap_mode" + idx);
                 if (wm != kv.end()) {
                     pass.wrapMode = parseWrapMode(wm->second);
+                    pass.hasExplicitWrap = true;
                 }
             }
 

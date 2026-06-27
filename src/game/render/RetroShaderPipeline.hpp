@@ -113,6 +113,7 @@ private:
     unsigned m_historyH = 0;        ///< 帧历史纹理高度
     int      m_screenPassIndex = -1; ///< 最后一个直接上屏的 pass 索引（-1 = 无）
     bool     m_hasPendingScreenPass = false; ///< 当前帧是否等待执行直接上屏 pass
+    bool     m_usePaddedFBO = false; ///< 是否使用 RetroArch 风格的 FBO 黑色 padding
     GLuint   m_screenInputTex = 0; ///< 直接上屏 pass 的主输入纹理
     unsigned m_screenInputImageW = 0; ///< 直接上屏 pass 的主输入有效宽度
     unsigned m_screenInputImageH = 0; ///< 直接上屏 pass 的主输入有效高度
