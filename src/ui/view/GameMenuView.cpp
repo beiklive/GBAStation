@@ -109,7 +109,7 @@ namespace beiklive
         // 标题
         this->getHeader()->setTitle("游戏菜单");
         // ── 创建 6 个菜单按钮 ──────────────────────────────────────────────
-
+        this->showBackground(false);
         // 1. 返回游戏（无面板）
         m_panel->addTab(
             "返回游戏",
@@ -1271,10 +1271,6 @@ namespace beiklive
                     bool enable = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_UI_SHOW_SHADER, 1) != 0;
                     if(enable){
                         this->showShader(true);
-                    }
-                    enable = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_UI_SHOW_BG_IMAGE, 1) != 0;
-                    if(enable){
-                        this->showBackground(true);
                     }
                 }
 
