@@ -1,0 +1,68 @@
+ifeq ($(strip $(DEVKITPRO)),)
+$(error "Please set DEVKITPRO in your environment. export DEVKITPRO=<path to>/devkitpro")
+endif
+
+APP_NAME := NooDS
+APP_SHORTNAME := NooDS
+APP_AUTHOR := Hydr8gon
+APP_ICON := ../icon/icon-vita.png
+
+include $(DEVKITPRO)/wut/share/wut_rules
+
+NAME := noods
+BUILD := build-wiiu
+SRCS := src src/common src/console
+DATA := src/console/images src/console/shaders
+LIBS := -lwut -lSDL2
+INCS := $(PORTLIBS) $(WUT_ROOT)
+
+CXXFLAGS := -g -Ofast -flto -ffunction-sections $(MACHDEP) $(INCLUDE) \
+    -D__WIIU__ -D__WUT__ -DENDIAN_BIG -DNO_FDOPEN -DLOG_LEVEL=0
+LDFLAGS = -g $(ARCH) $(RPXSPECS) -Wl,-Map,$(notdir $*.map)
+
+ifneq ($(BUILD),$(notdir $(CURDIR)))
+
+export LD := $(CXX)
+export OUTPUT := $(CURDIR)/$(NAME)
+export DEPSDIR := $(CURDIR)/$(BUILD)
+export LIBPATHS := $(foreach dir,$(INCS),-L$(dir)/lib)
+export VPATH := $(foreach dir,$(SRCS),$(CURDIR)/$(dir)) $(foreach dir,$(DATA),$(CURDIR)/$(dir))
+export INCLUDE := $(foreach dir,$(SRCS),-I$(CURDIR)/$(dir)) $(foreach dir,$(INCS),-I$(dir)/include)
+
+CPPFILES := $(foreach dir,$(SRCS),$(notdir $(wildcard $(dir)/*.cpp)))
+BMPFILES := $(foreach dir,$(DATA),$(notdir $(wildcard $(dir)/*.bmp)))
+GSHFILES := $(foreach dir,$(DATA),$(notdir $(wildcard $(dir)/*.gsh)))
+export OFILES := $(CPPFILES:.cpp=.o) $(BMPFILES:.bmp=.o) $(addsuffix .o,$(GSHFILES))
+
+.PHONY: $(BUILD)
+all: $(BUILD)
+
+$(BUILD):
+	mkdir -p $@
+	$(MAKE) -C $(BUILD) -f $(CURDIR)/Makefile.wiiu
+
+build-shader:
+	cd src/console/shaders; ./latte-assembler compile shader_wiiu.gsh --vsh shader_wiiu.vsh --psh shader_wiiu.psh
+
+clean:
+	rm -rf $(BUILD) $(NAME).wuhb $(NAME).rpx $(NAME).elf
+
+else
+
+all: $(OUTPUT).wuhb
+$(OUTPUT).wuhb: $(OUTPUT).rpx
+$(OUTPUT).rpx: $(OUTPUT).elf
+$(OUTPUT).elf: $(OFILES)
+
+%.o: %.bmp
+	@echo $(notdir $<)
+	@cd ..; $(PREFIX)ld -r -b binary -o $(BUILD)/$@ src/console/images/$*.bmp
+
+%.gsh.o: %.gsh
+	@echo $(notdir $<)
+	@$(bin2o)
+
+DEPENDS := $(OFILES:.o=.d)
+-include $(DEPENDS)
+
+endif

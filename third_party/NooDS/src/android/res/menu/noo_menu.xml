@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item android:id="@+id/controls_action"
+        android:title="Toggle Controls" />
+
+    <item android:id="@+id/restart_action"
+        android:title="Restart" />
+
+    <item android:id="@+id/save_state_action"
+        android:title="Save State" />
+
+    <item android:id="@+id/load_state_action"
+        android:title="Load State" />
+
+    <item android:id="@+id/save_type_action"
+        android:title="Change Save Type" />
+
+    <item android:id="@+id/settings_action"
+        android:title="Settings" />
+
+    <item android:id="@+id/browser_action"
+        android:title="File Browser" />
+
+</menu>

@@ -1,0 +1,272 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <PreferenceCategory
+        app:title="General Settings"
+        app:iconSpaceReserved="false">
+
+        <SwitchPreference
+            app:key="direct_boot"
+            app:title="Direct Boot"
+            app:iconSpaceReserved="false"
+            app:allowDividerAbove="true"
+            app:allowDividerBelow="true" />
+
+        <SwitchPreference
+            app:key="rom_in_ram"
+            app:title="Keep ROM in RAM"
+            app:iconSpaceReserved="false"
+            app:allowDividerAbove="true"
+            app:allowDividerBelow="true" />
+
+        <SwitchPreference
+            app:key="fps_limiter"
+            app:title="FPS Limiter"
+            app:iconSpaceReserved="false"
+            app:allowDividerAbove="true"
+            app:allowDividerBelow="true" />
+
+        <SwitchPreference
+            app:key="show_fps_counter"
+            app:title="Show FPS Counter"
+            app:iconSpaceReserved="false"
+            app:allowDividerAbove="true"
+            app:allowDividerBelow="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        app:title="Graphics Settings"
+        app:iconSpaceReserved="false">
+
+        <ListPreference
+            app:key="frameskip"
+            app:title="Skip Frames"
+            app:entries="@array/frameskip_entries"
+            app:entryValues="@array/setting_values"
+            app:useSimpleSummaryProvider="true"
+            app:iconSpaceReserved="false"
+            app:allowDividerAbove="true"
+            app:allowDividerBelow="true" />
+
+        <SwitchPreference
+            app:key="threaded_2d"
+            app:title="Threaded 2D"
+            app:iconSpaceReserved="false"
+            app:allowDividerAbove="true"
+            app:allowDividerBelow="true" />
+
+        <ListPreference
+            app:key="threaded_3d"
+            app:title="Threaded 3D"
+            app:entries="@array/threaded_3d_entries"
+            app:entryValues="@array/setting_values"
+            app:useSimpleSummaryProvider="true"
+            app:iconSpaceReserved="false"
+            app:allowDividerAbove="true"
+            app:allowDividerBelow="true" />
+
+        <SwitchPreference
+            app:key="high_res_3d"
+            app:title="High-Resolution 3D"
+            app:iconSpaceReserved="false"
+            app:allowDividerAbove="true"
+            app:allowDividerBelow="true" />
+
+        <SwitchPreference
+            app:key="screen_ghost"
+            app:title="Simulate Ghosting"
+            app:iconSpaceReserved="false"
+            app:allowDividerAbove="true"
+            app:allowDividerBelow="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        app:title="Audio Settings"
+        app:iconSpaceReserved="false">
+
+        <SwitchPreference
+            app:key="emulate_audio"
+            app:title="Audio Emulation"
+            app:iconSpaceReserved="false"
+            app:allowDividerAbove="true"
+            app:allowDividerBelow="true" />
+
+        <SwitchPreference
+            app:key="audio_16_bit"
+            app:title="16-Bit Audio Output"
+            app:iconSpaceReserved="false"
+            app:allowDividerAbove="true"
+            app:allowDividerBelow="true" />
+
+        <SwitchPreference
+            app:key="mic_enable"
+            app:title="Use Microphone"
+            app:iconSpaceReserved="false"
+            app:allowDividerAbove="true"
+            app:allowDividerBelow="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        app:title="Experimental Settings"
+        app:iconSpaceReserved="false">
+
+        <SwitchPreference
+            app:key="arm7_hle"
+            app:title="High-Level ARM7"
+            app:iconSpaceReserved="false"
+            app:allowDividerAbove="true"
+            app:allowDividerBelow="true" />
+
+        <SwitchPreference
+            app:key="dsi_mode"
+            app:title="DSi Homebrew Mode"
+            app:iconSpaceReserved="false"
+            app:allowDividerAbove="true"
+            app:allowDividerBelow="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        app:title="Path Settings"
+        app:iconSpaceReserved="false">
+
+        <SwitchPreference
+            app:key="saves_folder"
+            app:title="Separate Saves Folder"
+            app:iconSpaceReserved="false"
+            app:allowDividerAbove="true"
+            app:allowDividerBelow="true" />
+
+        <SwitchPreference
+            app:key="states_folder"
+            app:title="Separate States Folder"
+            app:iconSpaceReserved="false"
+            app:allowDividerAbove="true"
+            app:allowDividerBelow="true" />
+
+        <SwitchPreference
+            app:key="cheats_folder"
+            app:title="Separate Cheats Folder"
+            app:iconSpaceReserved="false"
+            app:allowDividerAbove="true"
+            app:allowDividerBelow="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        app:title="Screen Layout"
+        app:iconSpaceReserved="false">
+
+        <ListPreference
+            app:key="screen_position"
+            app:title="Screen Position"
+            app:entries="@array/screen_position_entries"
+            app:entryValues="@array/setting_values"
+            app:useSimpleSummaryProvider="true"
+            app:iconSpaceReserved="false"
+            app:allowDividerAbove="true"
+            app:allowDividerBelow="true" />
+
+        <ListPreference
+            app:key="screen_rotation"
+            app:title="Screen Rotation"
+            app:entries="@array/screen_rotation_entries"
+            app:entryValues="@array/setting_values"
+            app:useSimpleSummaryProvider="true"
+            app:iconSpaceReserved="false"
+            app:allowDividerAbove="true"
+            app:allowDividerBelow="true" />
+
+        <ListPreference
+            app:key="screen_arrangement"
+            app:title="Screen Arrangement"
+            app:entries="@array/screen_arrangement_entries"
+            app:entryValues="@array/setting_values"
+            app:useSimpleSummaryProvider="true"
+            app:iconSpaceReserved="false"
+            app:allowDividerAbove="true"
+            app:allowDividerBelow="true" />
+
+        <ListPreference
+            app:key="screen_sizing"
+            app:title="Screen Sizing"
+            app:entries="@array/screen_sizing_entries"
+            app:entryValues="@array/setting_values"
+            app:useSimpleSummaryProvider="true"
+            app:iconSpaceReserved="false"
+            app:allowDividerAbove="true"
+            app:allowDividerBelow="true" />
+
+        <ListPreference
+            app:key="screen_gap"
+            app:title="Screen Gap"
+            app:entries="@array/screen_gap_entries"
+            app:entryValues="@array/setting_values"
+            app:useSimpleSummaryProvider="true"
+            app:iconSpaceReserved="false"
+            app:allowDividerAbove="true"
+            app:allowDividerBelow="true" />
+
+        <ListPreference
+            app:key="screen_filter"
+            app:title="Screen Filter"
+            app:entries="@array/screen_filter_entries"
+            app:entryValues="@array/setting_values"
+            app:useSimpleSummaryProvider="true"
+            app:iconSpaceReserved="false"
+            app:allowDividerAbove="true"
+            app:allowDividerBelow="true" />
+
+        <ListPreference
+            app:key="aspect_ratio"
+            app:title="Aspect Ratio"
+            app:entries="@array/aspect_ratio_entries"
+            app:entryValues="@array/setting_values"
+            app:useSimpleSummaryProvider="true"
+            app:iconSpaceReserved="false"
+            app:allowDividerAbove="true"
+            app:allowDividerBelow="true" />
+
+        <SwitchPreference
+            app:key="integer_scale"
+            app:title="Integer Scale"
+            app:iconSpaceReserved="false"
+            app:allowDividerAbove="true"
+            app:allowDividerBelow="true" />
+
+        <SwitchPreference
+            app:key="gba_crop"
+            app:title="GBA Crop"
+            app:iconSpaceReserved="false"
+            app:allowDividerAbove="true"
+            app:allowDividerBelow="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        app:title="On-Screen Controls"
+        app:iconSpaceReserved="false">
+
+        <SeekBarPreference
+            app:key="button_scale"
+            app:title="Button Scale"
+            app:iconSpaceReserved="false"
+            app:allowDividerAbove="true"
+            app:allowDividerBelow="true"
+            android:max="10" />
+
+        <SeekBarPreference
+            app:key="button_spacing"
+            app:title="Button Spacing"
+            app:iconSpaceReserved="false"
+            app:allowDividerAbove="true"
+            app:allowDividerBelow="true"
+            android:max="10" />
+
+        <SeekBarPreference
+            app:key="vibrate_strength"
+            app:title="Vibration Strength"
+            app:iconSpaceReserved="false"
+            app:allowDividerAbove="true"
+            app:allowDividerBelow="true"
+            android:max="10" />
+    </PreferenceCategory>
+</PreferenceScreen>

@@ -1,0 +1,60 @@
+ifeq ($(strip $(DEVKITPRO)),)
+$(error "Please set DEVKITPRO in your environment. export DEVKITPRO=<path to>/devkitpro")
+endif
+
+include $(DEVKITPRO)/libnx/switch_rules
+
+NAME := noods
+BUILD := build-switch
+SRCS := src src/common src/console
+DATA := src/console/images
+LIBS := -lglad -lEGL -lglapi -ldrm_nouveau -lnx
+INCS := $(PORTLIBS) $(LIBNX)
+
+APP_TITLE := NooDS
+APP_AUTHOR := Hydr8gon
+APP_VERSION := 0.1
+APP_ICON := ../icon/icon-switch.jpg
+
+ARCH := -march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
+CXXFLAGS := -Ofast -flto -std=c++11 -ffunction-sections $(ARCH) $(INCLUDE) -D__SWITCH__ -DNO_FDOPEN -DLOG_LEVEL=0
+LDFLAGS = -specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
+
+ifneq ($(BUILD),$(notdir $(CURDIR)))
+
+export LD := $(CXX)
+export OUTPUT := $(CURDIR)/$(NAME)
+export DEPSDIR := $(CURDIR)/$(BUILD)
+export LIBPATHS := $(foreach dir,$(INCS),-L$(dir)/lib)
+export VPATH := $(foreach dir,$(SRCS),$(CURDIR)/$(dir)) $(foreach dir,$(DATA),$(CURDIR)/$(dir))
+export INCLUDE := $(foreach dir,$(SRCS),-I$(CURDIR)/$(dir)) $(foreach dir,$(INCS),-I$(dir)/include)
+export NROFLAGS += --icon=$(APP_ICON) --nacp=$(CURDIR)/$(NAME).nacp
+
+CPPFILES := $(foreach dir,$(SRCS),$(notdir $(wildcard $(dir)/*.cpp)))
+BMPFILES := $(foreach dir,$(DATA),$(notdir $(wildcard $(dir)/*.bmp)))
+export OFILES := $(CPPFILES:.cpp=.o) $(BMPFILES:.bmp=.o)
+
+.PHONY: $(BUILD)
+all: $(BUILD)
+
+$(BUILD):
+	mkdir -p $@
+	$(MAKE) -C $(BUILD) -f $(CURDIR)/Makefile.switch
+
+clean:
+	rm -rf $(BUILD) $(NAME).nro $(NAME).nacp $(NAME).elf
+
+else
+
+all: $(OUTPUT).nro
+$(OUTPUT).nro: $(OUTPUT).elf $(OUTPUT).nacp
+$(OUTPUT).elf: $(OFILES)
+
+%.o: %.bmp
+	@echo $(notdir $<)
+	@cd ..; $(PREFIX)ld -r -b binary -o $(BUILD)/$@ src/console/images/$*.bmp
+
+DEPENDS := $(OFILES:.o=.d)
+-include $(DEPENDS)
+
+endif
