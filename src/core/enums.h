@@ -133,6 +133,7 @@ namespace beiklive // 结构体
         bool ndsIntegerScale = false; // NDS 自动最大整数倍缩放
         int ndsInternalResolution = 1; // NDS 3D 内部分辨率倍率（1-4）
 
+        std::string shaderParaPath = "";          // 着色器参数所属预设路径
         std::vector<std::string> shaderParaNames; // 着色器参数名称列表
         std::vector<float> shaderParaValues;      // 着色器参数值列表
     };

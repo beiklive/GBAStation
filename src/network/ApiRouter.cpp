@@ -387,7 +387,7 @@ bool isRemoteEditableGameField(const std::string& key)
         "ndsTopScale", "ndsTopOffsetX", "ndsTopOffsetY",
         "ndsBottomScale", "ndsBottomOffsetX", "ndsBottomOffsetY",
         "ndsScreenLayout", "ndsScreenOrientation", "ndsIntegerScale", "ndsInternalResolution",
-        "shaderParaNames", "shaderParaValues",
+        "shaderParaPath", "shaderParaNames", "shaderParaValues",
     };
     return editable.count(key) > 0;
 }

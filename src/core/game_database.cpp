@@ -74,6 +74,7 @@ namespace beiklive
             {"ndsScreenOrientation", sanitizeUtf8(entry.ndsScreenOrientation)},
             {"ndsIntegerScale", entry.ndsIntegerScale},
             {"ndsInternalResolution", entry.ndsInternalResolution},
+            {"shaderParaPath", sanitizeUtf8(entry.shaderParaPath)},
             {"shaderParaNames", entry.shaderParaNames},
             {"shaderParaValues", entry.shaderParaValues}};
     }
@@ -113,6 +114,7 @@ namespace beiklive
         entry.ndsScreenOrientation = j.value("ndsScreenOrientation", "");
         entry.ndsIntegerScale = j.value("ndsIntegerScale", false);
         entry.ndsInternalResolution = std::clamp(j.value("ndsInternalResolution", 1), 1, 4);
+        entry.shaderParaPath = j.value("shaderParaPath", "");
         entry.shaderParaNames = j.value("shaderParaNames", std::vector<std::string>());
         entry.shaderParaValues = j.value("shaderParaValues", std::vector<float>());
     }

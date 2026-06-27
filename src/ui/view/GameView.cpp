@@ -617,9 +617,26 @@ namespace beiklive
         if (m_gameEntry.shaderParaNames.empty())
             return;
 
-        const size_t count = std::min(m_gameEntry.shaderParaNames.size(),
-                                      m_gameEntry.shaderParaValues.size());
-        for (size_t i = 0; i < count; ++i)
+        if (m_gameEntry.shaderParaPath != m_gameEntry.shaderPath) {
+            brls::Logger::debug("GameView: 跳过旧着色器参数，预设路径不匹配");
+            return;
+        }
+
+        const auto& params = renderer.getShaderParams();
+        if (params.size() != m_gameEntry.shaderParaNames.size() ||
+            params.size() != m_gameEntry.shaderParaValues.size()) {
+            brls::Logger::debug("GameView: 跳过旧着色器参数，参数数量不匹配");
+            return;
+        }
+
+        for (size_t i = 0; i < params.size(); ++i) {
+            if (params[i].name != m_gameEntry.shaderParaNames[i]) {
+                brls::Logger::debug("GameView: 跳过旧着色器参数，参数名称不匹配");
+                return;
+            }
+        }
+
+        for (size_t i = 0; i < params.size(); ++i)
             renderer.setShaderParam(m_gameEntry.shaderParaNames[i], m_gameEntry.shaderParaValues[i]);
     }
 
@@ -2914,12 +2931,26 @@ namespace beiklive
     {
         if (!m_rendererReady) return;
         bool shaderOn = m_gameEntry.shaderEnabled;
+        const bool pathChanged = m_gameEntry.shaderPath != path;
         m_gameEntry.shaderPath = path;
+        if (pathChanged) {
+            m_gameEntry.shaderParaPath.clear();
+            m_gameEntry.shaderParaNames.clear();
+            m_gameEntry.shaderParaValues.clear();
+        }
         brls::Logger::debug("GameView: Shader path changed to {} (enabled={})", m_gameEntry.shaderPath, shaderOn);
         // 持久化到数据库
         if (beiklive::GameDB && !m_gameEntry.path.empty()) {
             beiklive::GameDB->set(m_gameEntry.path, "shaderPath",
                 nlohmann::json(m_gameEntry.shaderPath));
+            if (pathChanged) {
+                beiklive::GameDB->set(m_gameEntry.path, "shaderParaPath",
+                    nlohmann::json(m_gameEntry.shaderParaPath));
+                beiklive::GameDB->set(m_gameEntry.path, "shaderParaNames",
+                    nlohmann::json(m_gameEntry.shaderParaNames));
+                beiklive::GameDB->set(m_gameEntry.path, "shaderParaValues",
+                    nlohmann::json(m_gameEntry.shaderParaValues));
+            }
         }
         unsigned gw = m_core && m_core->GameWidth() > 0 ? m_core->GameWidth() : beiklive::GetGamePixelWidth(m_gameEntry.platform);
         unsigned gh = m_core && m_core->GameHeight() > 0 ? m_core->GameHeight() : beiklive::GetGamePixelHeight(m_gameEntry.platform);

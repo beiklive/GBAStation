@@ -1519,10 +1519,10 @@ bool RetroShaderPipeline::drawScreenPass(int viewportX, int viewportY,
         }
     }
 
-    m_quad.draw(toQuadUvOrder(scaleUvCoords(uv,
-                                            uvMax(m_screenInputImageW, m_screenInputTexW),
-                                            uvMax(m_screenInputImageH, m_screenInputTexH))),
-                extraTexCoords);
+    const auto screenUv = scaleUvCoords(uv,
+                                        uvMax(m_screenInputImageW, m_screenInputTexW),
+                                        uvMax(m_screenInputImageH, m_screenInputTexH));
+    m_quad.draw(toQuadUvOrder(screenUv), extraTexCoords);
 
     for (GLuint u = 1; u <= maxTexUnit; ++u) {
         glActiveTexture(GL_TEXTURE0 + u);

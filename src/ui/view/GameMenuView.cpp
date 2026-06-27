@@ -1262,6 +1262,7 @@ namespace beiklive
             {
                 beiklive::GameDB->set(m_gameEntry.path, "shaderEnabled", nlohmann::json(m_gameEntry.shaderEnabled));
                 beiklive::GameDB->set(m_gameEntry.path, "shaderPath", nlohmann::json(m_gameEntry.shaderPath));
+                beiklive::GameDB->set(m_gameEntry.path, "shaderParaPath", nlohmann::json(m_gameEntry.shaderParaPath));
                 beiklive::GameDB->set(m_gameEntry.path, "shaderParaNames", nlohmann::json(m_gameEntry.shaderParaNames));
                 beiklive::GameDB->set(m_gameEntry.path, "shaderParaValues", nlohmann::json(m_gameEntry.shaderParaValues));
                 beiklive::GameDB->flush();
@@ -1321,6 +1322,12 @@ namespace beiklive
                                              dir = "";
                                          beiklive::openFilePicker({"glslp", "glsl"}, [this](const std::string &path)
                                                                   {
+                        if (m_gameEntry.shaderPath != path)
+                        {
+                            m_gameEntry.shaderParaPath.clear();
+                            m_gameEntry.shaderParaNames.clear();
+                            m_gameEntry.shaderParaValues.clear();
+                        }
                         m_gameEntry.shaderPath = path;
                         shaderPathcell->setDetailText(beiklive::tools::getFileName(path));
                         if (m_shaderPathCallback) m_shaderPathCallback(path);
@@ -1905,10 +1912,12 @@ namespace beiklive
             return;
 
         bool isNewParams = false;
-        if (params.size() != m_gameEntry.shaderParaNames.size())
+        if (params.size() != m_gameEntry.shaderParaNames.size() ||
+            params.size() != m_gameEntry.shaderParaValues.size())
         {
             m_gameEntry.shaderParaNames.clear();
             m_gameEntry.shaderParaValues.clear();
+            m_gameEntry.shaderParaPath = m_gameEntry.shaderPath;
             isNewParams = true;
         }
         else
@@ -1919,10 +1928,19 @@ namespace beiklive
                 {
                     m_gameEntry.shaderParaNames.clear();
                     m_gameEntry.shaderParaValues.clear();
+                    m_gameEntry.shaderParaPath = m_gameEntry.shaderPath;
                     isNewParams = true;
                     break;
                 }
             }
+        }
+
+        if (!isNewParams && m_gameEntry.shaderParaPath != m_gameEntry.shaderPath)
+        {
+            m_gameEntry.shaderParaNames.clear();
+            m_gameEntry.shaderParaValues.clear();
+            m_gameEntry.shaderParaPath = m_gameEntry.shaderPath;
+            isNewParams = true;
         }
 
         int idx = 0;
@@ -2037,6 +2055,7 @@ namespace beiklive
             if (game.path == m_gameEntry.path) continue;
             game.shaderEnabled   = m_gameEntry.shaderEnabled;
             game.shaderPath      = m_gameEntry.shaderPath;
+            game.shaderParaPath   = m_gameEntry.shaderParaPath;
             game.shaderParaNames  = m_gameEntry.shaderParaNames;
             game.shaderParaValues = m_gameEntry.shaderParaValues;
             beiklive::GameDB->upsertByPath(game);

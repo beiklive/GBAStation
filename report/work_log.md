@@ -491,3 +491,136 @@ RetroArch 不只传 `TextureSize/InputSize`，还会对以下对象分别查找�
 - `src/game/render/GameRenderer.cpp.o`
 
 仅有项目现存第三方头文件 warning，无本次改动引入的新编译错误。
+
+## 2026-06-27 screen pass UV 顺序修正
+
+### 用户反馈
+
+在上一轮“最终直接上屏 pass”改造后，用户继续反馈两类问题：
+
+1. `CRT+ScaleFX.glslp`、`2x-Scanline+ScaleFX.glslp` 这类滤镜出现游戏画面上下颠倒
+2. `F10_PhosphorLineReflex.glslp` / `F00_PhosphorLineReflex(Base).glslp` 在游戏画面与反射边框连接处，本应存在的黑色过渡遮罩仍然不正确
+
+### 新定位
+
+继续检查 `RenderChain`、`DirectQuadRenderer`、`FullscreenQuad` 和 `RetroShaderPipeline::drawScreenPass()` 后，确认还有一个坐标顺序问题：
+
+1. `DirectQuadRenderer` 接收的 UV 顺序是：
+   - 左上、右上、右下、左下
+2. `FullscreenQuad` 内部顶点顺序是：
+   - 左下、右下、右上、左上
+3. 上一轮把“最终直接上屏 pass”改接到 `FullscreenQuad` 时，直接复用了 `RenderChain` 传入的屏幕 UV
+4. 结果就是：
+   - 对某些 implicit final pass 预设，最终画面被垂直翻转
+   - `PP-reflex.glsl` 这类依赖 `TEX0`、屏幕中心和边界关系的 shader，边框连接处遮罩逻辑也会被带偏
+
+### 本次修复
+
+在 `src/game/render/RetroShaderPipeline.cpp` 中新增 UV 顺序转换：
+
+1. 保留 `RenderChain` 对外的 UV 约定不变
+2. 在 `drawScreenPass()` 内部，将“左上起始”的屏幕 UV 转为 `FullscreenQuad` 需要的“左下起始”顺序
+3. 再把它送入最终 screen pass 的主 `TexCoord`
+
+这次改动很小，但会同时影响：
+
+- `CRT+ScaleFX.glslp`
+- `2x-Scanline+ScaleFX.glslp`
+- `F10_PhosphorLineReflex.glslp`
+- `F00_PhosphorLineReflex(Base).glslp`
+
+### 编译验证
+
+再次完成最小编译验证：
+
+- `src/game/render/RetroShaderPipeline.cpp.o`
+
+通过，仍然只有项目现存第三方 warning。
+
+## 2026-06-27 反射类滤镜参数归属修正
+
+### 用户反馈
+
+用户继续反馈 `F10_PhosphorLineReflex.glslp` / `F00_PhosphorLineReflex(Base).glslp` 仍然显示异常：
+
+1. 游戏画面没有按预期缩小
+2. 反射边框左右两侧跑出可视范围
+3. 游戏画面与反射边框连接处缺少黑色过渡
+
+### 新定位
+
+继续对照 RetroArch `gl3` 最终 pass 坐标后，确认当前最终 pass 的主 UV 方向不应再加 `PP-reflex.glsl` 特例；`PP-reflex.glsl` 期望屏幕顶部对应 `TexCoord.y = 0`，当前统一转换后的方向与 RetroArch 行为更接近。
+
+随后转向参数链路检查，发现项目只按“参数数量与名称”判断是否应用旧参数。`F10/F00` 这类 phosphor-line 预设拥有大量同名参数，但不同预设会覆盖不同默认值，例如：
+
+- `F10_PhosphorLineReflex.glslp`: `PIC_SCALE_X = 0.9`、`PIC_SCALE_Y = 0.9`
+- `F00_PhosphorLineReflex(Base).glslp`: `PIC_SCALE_X = 0.88`、`PIC_SCALE_Y = 0.88`
+
+如果之前保存过同一组参数名但值为 `1.0` 的配置，启动或切换滤镜时仍会被应用，导致 `PP-reflex.glsl` 里的缩小和边框过渡计算被覆盖。
+
+### 本次修复
+
+为游戏条目新增 `shaderParaPath`，让保存的着色器参数明确归属于某个预设路径：
+
+1. `GameEntry` 增加 `shaderParaPath`
+2. 数据库序列化和反序列化保存该字段
+3. 远程 API 可编辑字段补充 `shaderParaPath`
+4. `GameView::_applySavedShaderParams()` 仅在 `shaderParaPath == shaderPath` 时应用保存参数
+5. 切换着色器路径时清空旧参数和旧参数归属
+6. 着色器参数面板重建时，如果路径不匹配，使用当前预设的 `#pragma` / `.glslp` 默认值重新初始化
+
+这样旧数据库里没有 `shaderParaPath` 的历史参数会被自动跳过，避免继续污染当前滤镜；之后用户手动调整同一个滤镜的参数仍会随路径一起保存。
+
+### 编译验证
+
+完成最小编译验证：
+
+- `src/ui/view/GameView.cpp.o`
+- `src/ui/view/GameMenuView.cpp.o`
+- `src/core/game_database.cpp.o`
+- `src/network/ApiRouter.cpp.o`
+- `src/game/render/RetroShaderPipeline.cpp.o`
+
+均通过，仅有项目现存第三方 warning。
+
+### 追加修正
+
+用户随后反馈：`F10_PhosphorLineReflex.glslp` 的反射框跑到显示范围外，比上一版更差。
+
+继续确认后发现：
+
+1. 普通最终 pass 需要把 `RenderChain` 的左上起始 UV 转成 `FullscreenQuad` 的左下起始 UV，才能避免上下颠倒
+2. 但 `PP-reflex.glsl` 不是普通 blit pass，它直接使用 `TEX0` 计算屏幕空间中的缩放画面、边框与反射区域
+3. 因此对 `PP-reflex.glsl` 做同样的 UV 翻转，会把它的屏幕坐标系翻乱，导致反射框位置跑出显示范围
+
+本次在 `RetroShaderPipeline::drawScreenPass()` 中加入更窄的判断：
+
+- 普通最终 screen pass：继续执行 UV 顺序转换
+- `PP-reflex.glsl`：保持 shader 空间的 `TexCoord` 方向，不做最终直绘式翻转
+
+已再次编译验证：
+
+- `src/game/render/RetroShaderPipeline.cpp.o`
+
+通过，仍然只有项目现存第三方 warning。
+
+### 追加修正回收
+
+用户继续反馈：上一条 `PP-reflex.glsl` 特例后，`F10_PhosphorLineReflex.glslp` 出现主体不缩小、上下颠倒、两侧反射框跑出可视范围的问题。
+
+重新对照 RetroArch `gl3` 最终 pass 的坐标后，确认上一条判断过窄：
+
+1. RetroArch 最终 pass 的屏幕左上角对应 `TexCoord = (0, 0)`
+2. `PP-reflex.glsl` 虽然使用 `TEX0` 计算屏幕空间边框，但它仍然期待这个“左上为 0,0”的最终 pass 坐标
+3. 因此不能给 `PP-reflex.glsl` 跳过 UV 顺序转换
+
+本次回收上一条特例：
+
+- 所有最终 screen pass 统一将 `RenderChain` 的左上起始 UV 转换成 `FullscreenQuad` 的顶点顺序
+- `PP-reflex.glsl` 不再单独跳过这一步
+
+已再次编译验证：
+
+- `src/game/render/RetroShaderPipeline.cpp.o`
+
+通过，仍然只有项目现存第三方 warning。
