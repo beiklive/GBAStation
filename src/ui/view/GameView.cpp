@@ -2261,9 +2261,10 @@ namespace beiklive
     // 使用 nextTarget 累加模式（而非每帧重新取 Clock::now()）：
     //   - nextTarget 每帧递增一个 frameDurNs，避免睡眠超时引发的帧率漂移；
     //   - 若某帧耗时超过目标时间（nextTarget 落在过去），直接重置到 now，不补偿；
-    //   - 快进状态下不做限速，全速运行。
+    //   - 快进状态同样按倍率后的目标时间限速，避免倍率被“多跑帧 + 不等待”
+    //     双重放大。
     // ============================================================
-    void GameView::_throttleFrameRate(bool ff,
+    void GameView::_throttleFrameRate(bool /*ff*/,
                                       std::chrono::steady_clock::time_point& nextTarget,
                                       std::chrono::nanoseconds frameDurNs,
                                       std::chrono::nanoseconds spinGuardNs)
@@ -2271,12 +2272,6 @@ namespace beiklive
         using Clock = std::chrono::steady_clock;
 
         nextTarget += frameDurNs;
-
-        if (ff) {
-            nextTarget = Clock::now();
-            std::this_thread::yield();
-            return;
-        }
 
         auto now = Clock::now();
         if (nextTarget < now) {
@@ -2642,7 +2637,7 @@ namespace beiklive
             _checkAndAutoSaveSram();
 
             // ── 音频 PLL：围绕目标缓冲量做轻微双向修正 ──
-            if (framesRan > 0 && !fastForwardActive) {
+            if (framesRan > 0 && !ff) {
                 const size_t ringFill = AudioManager::instance().available();
                 const double targetFill = static_cast<double>(AudioManager::instance().targetLatencySamples());
                 float gain = GET_SETTING_KEY_FLOAT(beiklive::SettingKey::KEY_AUDIO_SYNC_STRENGTH, 0.015f);
@@ -2659,8 +2654,9 @@ namespace beiklive
                         static_cast<long long>(baseFrameDurNs.count() * correction));
                 }
             } else {
-                if (fastForwardActive && m_ffMultiplier > 1.0f && framesRan > 0) {
-                    const double frameScale = static_cast<double>(framesRan) / static_cast<double>(m_ffMultiplier);
+                if (fastForwardActive && framesRan > 0) {
+                    const double frameScale = static_cast<double>(framesRan) /
+                                              static_cast<double>(m_ffMultiplier);
                     frameDurNs = std::chrono::nanoseconds(
                         static_cast<long long>(baseFrameDurNs.count() * frameScale));
                 } else {
