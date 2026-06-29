@@ -135,6 +135,10 @@ namespace beiklive
         int m_playerAssignments[GAME_INPUT_MAX_PLAYERS] = {0, 1};
         bool m_nesMenuPressed[GAME_INPUT_MAX_PLAYERS] = {false, false};
         bool m_prevNesMenuPressed[GAME_INPUT_MAX_PLAYERS] = {false, false};
+        bool m_nesFastForwardPressed[GAME_INPUT_MAX_PLAYERS] = {false, false};
+        bool m_nesRewindPressed[GAME_INPUT_MAX_PLAYERS] = {false, false};
+        bool m_prevNesFastForwardPressed[GAME_INPUT_MAX_PLAYERS] = {false, false};
+        bool m_prevNesRewindPressed[GAME_INPUT_MAX_PLAYERS] = {false, false};
 
         InputState inputState;
         std::map<int, uint64_t > pressTime;
@@ -156,6 +160,9 @@ namespace beiklive
         bool containsComboInMask(const GamepadState& pad, const std::vector<int>& combo) const;
         bool isNesDualPlayerMode() const;
         bool consumeNesPlayerMenuPress();
+        bool consumeNesFunctionPress(EmuFunctionKey emuKey, TriggerType triggerType);
+        bool isNesPlayerFunctionPressed(EmuFunctionKey emuKey) const;
+        void updatePreviousNesFunctionStates();
         void rebuildActiveInputsForHotkeys(int pollCount);
         void appendActiveInputsFromGamepadState(const GamepadState& state);
         void appendKeyboardHotkeyInputs();

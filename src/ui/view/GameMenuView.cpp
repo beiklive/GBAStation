@@ -63,9 +63,12 @@ namespace beiklive
                 setDefaultIfMissing(prefix + "handle.a", "PAD_A");
                 setDefaultIfMissing(prefix + "handle.b", "PAD_B");
                 setDefaultIfMissing(prefix + "handle.start", "PAD_START");
+                setDefaultIfMissing(prefix + "handle.select", "PAD_BACK");
+                setDefaultIfMissing(prefix + "handle.fastforward", "none");
+                setDefaultIfMissing(prefix + "handle.rewind", "none");
             }
             setDefaultIfMissing("nes.p1.handle.menu", "PAD_LB");
-            setDefaultIfMissing("nes.p2.handle.menu", "PAD_LB");
+            setDefaultIfMissing("nes.p2.handle.menu", "PAD_RB");
         }
 
         constexpr NesButtonBindInfo kNesButtonBinds[] = {
@@ -76,7 +79,10 @@ namespace beiklive
             {"A", "a", "PAD_A"},
             {"B", "b", "PAD_B"},
             {"start键", "start", "PAD_START"},
+            {"select键", "select", "PAD_BACK"},
             {"模拟器菜单", "menu", "PAD_LB"},
+            {"快进", "fastforward", "none"},
+            {"倒带", "rewind", "none"},
         };
 
         struct MenuCapturePadKey
@@ -852,8 +858,10 @@ namespace beiklive
         playersRow->setFocusable(false);
         playersRow->setAlignItems(brls::AlignItems::FLEX_START);
         playersRow->setMarginTop(12.f);
-        playersRow->addView(_createNesPlayerBox(0));
-        playersRow->addView(_createNesPlayerBox(1));
+        auto* leftBox = _createNesPlayerBox(0);
+        playersRow->addView(leftBox);
+        auto* RightBox = _createNesPlayerBox(1);
+        playersRow->addView(RightBox);
         box->addView(playersRow);
 
         scroll->setContentView(box);

@@ -199,6 +199,7 @@ namespace beiklive
         updatePlayerStates();
         updateInputState();
         checkHotkeys();
+        updatePreviousNesFunctionStates();
     }
     void GameInputManager::checkHotkeys()
     {
@@ -207,6 +208,14 @@ namespace beiklive
             if (isNesDualPlayerMode() && hk.emuKey == EmuFunctionKey::EMU_OPEN_MENU)
             {
                 if (consumeNesPlayerMenuPress())
+                    hk.callback();
+                continue;
+            }
+            if (isNesDualPlayerMode() &&
+                (hk.emuKey == EmuFunctionKey::EMU_FAST_FORWARD ||
+                 hk.emuKey == EmuFunctionKey::EMU_REWIND))
+            {
+                if (consumeNesFunctionPress(hk.emuKey, hk.triggerType))
                     hk.callback();
                 continue;
             }
@@ -559,6 +568,83 @@ namespace beiklive
         return triggered;
     }
 
+    bool GameInputManager::isNesPlayerFunctionPressed(EmuFunctionKey emuKey) const
+    {
+        const bool* states = nullptr;
+        if (emuKey == EmuFunctionKey::EMU_FAST_FORWARD)
+            states = m_nesFastForwardPressed;
+        else if (emuKey == EmuFunctionKey::EMU_REWIND)
+            states = m_nesRewindPressed;
+        else
+            return false;
+
+        for (int player = 0; player < GAME_INPUT_MAX_PLAYERS; ++player)
+            if (states[player])
+                return true;
+        return false;
+    }
+
+    bool GameInputManager::consumeNesFunctionPress(EmuFunctionKey emuKey, TriggerType triggerType)
+    {
+        bool* current = nullptr;
+        bool* previous = nullptr;
+        if (emuKey == EmuFunctionKey::EMU_FAST_FORWARD)
+        {
+            current = m_nesFastForwardPressed;
+            previous = m_prevNesFastForwardPressed;
+        }
+        else if (emuKey == EmuFunctionKey::EMU_REWIND)
+        {
+            current = m_nesRewindPressed;
+            previous = m_prevNesRewindPressed;
+        }
+        else
+        {
+            return false;
+        }
+
+        bool now = false;
+        bool before = false;
+        for (int player = 0; player < GAME_INPUT_MAX_PLAYERS; ++player)
+        {
+            now = now || current[player];
+            before = before || previous[player];
+        }
+
+        bool triggered = false;
+        switch (triggerType)
+        {
+            case TriggerType::PRESS:
+                triggered = now && !before;
+                break;
+            case TriggerType::RELEASE:
+                triggered = !now && before;
+                break;
+            case TriggerType::HOLD:
+                triggered = now;
+                break;
+            case TriggerType::LONG_PRESS:
+                triggered = now && !before;
+                break;
+        }
+
+        if (triggerType == TriggerType::PRESS || triggerType == TriggerType::LONG_PRESS)
+        {
+            for (int player = 0; player < GAME_INPUT_MAX_PLAYERS; ++player)
+                previous[player] = current[player];
+        }
+        return triggered;
+    }
+
+    void GameInputManager::updatePreviousNesFunctionStates()
+    {
+        for (int player = 0; player < GAME_INPUT_MAX_PLAYERS; ++player)
+        {
+            m_prevNesFastForwardPressed[player] = m_nesFastForwardPressed[player];
+            m_prevNesRewindPressed[player] = m_nesRewindPressed[player];
+        }
+    }
+
     void GameInputManager::appendActiveInputsFromGamepadState(const GamepadState& state)
     {
         if (state.leftTrigger >= 0xFF)
@@ -632,26 +718,29 @@ namespace beiklive
         for (int player = 0; player < GAME_INPUT_MAX_PLAYERS; ++player)
         {
             m_nesMenuPressed[player] = false;
+            m_nesFastForwardPressed[player] = false;
+            m_nesRewindPressed[player] = false;
             const std::string playerPrefix = player == 0 ? "nes.p1." : "nes.p2.";
             const int defaultController = player == 0 ? 0 : 1;
             const int controller = GET_SETTING_KEY_INT((playerPrefix + "controller").c_str(), defaultController);
             if (controller < 0 || controller >= pollCount || controller >= GAMEPADS_MAX)
                 continue;
 
-            const std::string cfgKey = playerPrefix + "handle.menu";
-            const std::string fallback = player == 0 ? "PAD_LB" : "PAD_RB";
-            const std::string value = GET_SETTING_KEY_STR(cfgKey.c_str(), fallback);
-            if (value.empty() || value == "none")
-                continue;
-            auto combos = beiklive::tools::parseMultiCombo(value);
-            for (const auto& combo : combos)
-            {
-                if (containsComboInMask(lastGamepadStates[controller], combo))
-                {
-                    m_nesMenuPressed[player] = true;
-                    break;
-                }
-            }
+            auto readFunction = [&](const std::string& suffix, const std::string& fallback) -> bool {
+                const std::string cfgKey = playerPrefix + "handle." + suffix;
+                const std::string value = GET_SETTING_KEY_STR(cfgKey.c_str(), fallback);
+                if (value.empty() || value == "none")
+                    return false;
+                auto combos = beiklive::tools::parseMultiCombo(value);
+                for (const auto& combo : combos)
+                    if (containsComboInMask(lastGamepadStates[controller], combo))
+                        return true;
+                return false;
+            };
+
+            m_nesMenuPressed[player] = readFunction("menu", player == 0 ? "PAD_LB" : "PAD_RB");
+            m_nesFastForwardPressed[player] = readFunction("fastforward", "none");
+            m_nesRewindPressed[player] = readFunction("rewind", "none");
         }
     }
 
