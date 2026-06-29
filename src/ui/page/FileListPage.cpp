@@ -6,6 +6,9 @@
 
 namespace beiklive
 {
+    const float DETAIL_IMAGE_HEIGHT = 160.f;
+
+
     namespace
     {
         std::string resolveFileListIcon(beiklive::enums::FileType fileType,
@@ -18,6 +21,17 @@ namespace beiklive
             std::string ndsIcon = beiklive::GetOrCreateNdsIconPath(fullPath);
             return ndsIcon.empty() ? fallbackIcon : ndsIcon;
         }
+
+
+        void imageScaleFit(brls::Image* image)
+        {
+            auto width = image->getOriginalImageWidth();
+            auto height = image->getOriginalImageHeight();
+            float aspectRatio = width / height;
+            image->setHeight(DETAIL_IMAGE_HEIGHT);
+            image->setWidth(DETAIL_IMAGE_HEIGHT * aspectRatio);
+        }
+
     }
 
     FileListPage::FileListPage()
@@ -193,10 +207,10 @@ namespace beiklive
         detailCard->setClipsToBounds(true);
 
         m_detailImage = new brls::Image();
-        m_detailImage->setWidth(160.f);
-        m_detailImage->setHeight(160.f);
+        m_detailImage->setWidth(DETAIL_IMAGE_HEIGHT);
+        m_detailImage->setHeight(DETAIL_IMAGE_HEIGHT);
         m_detailImage->setCornerRadius(8.f);
-        m_detailImage->setScalingType(brls::ImageScalingType::FILL);
+        m_detailImage->setScalingType(brls::ImageScalingType::FIT);
         m_detailImage->setInterpolation(brls::ImageInterpolation::LINEAR);
         m_detailImage->setMarginBottom(14.f);
         m_detailImage->setVisibility(brls::Visibility::GONE);
@@ -381,11 +395,17 @@ namespace beiklive
 
         m_detailImage->setVisibility(brls::Visibility::VISIBLE);
         if (!entry.logoPath.empty())
+        {
             _requestThumbnail(entry.logoPath);
+
+        }
         else
+        {
+
             m_detailImage->setImageFromFile(data.iconPath.empty()
-                ? beiklive::tools::getIconPath(data.itemType)
-                : data.iconPath);
+            ? beiklive::tools::getIconPath(data.itemType)
+            : data.iconPath);
+        }
 
         std::string ext = beiklive::tools::getFileExtension(data.fullPath);
         _addBadge(ext, nvgRGBA(79, 193, 255, 200), nvgRGBA(255,255,255,255));
@@ -411,6 +431,9 @@ namespace beiklive
         m_detailImage->setImageFromFile(data.iconPath.empty()
             ? beiklive::tools::getIconPath(data.itemType)
             : data.iconPath);
+
+        if(!data.iconPath.empty())
+            imageScaleFit(m_detailImage);
 
         std::string ext = beiklive::tools::getFileExtension(data.fullPath);
         _addBadge(ext, nvgRGBA(79, 193, 255, 200), nvgRGBA(255,255,255,255));
@@ -472,6 +495,7 @@ namespace beiklive
             if (!m_detailImage) return;
             m_detailImage->setImageFromFile(path);
             m_detailImage->setVisibility(brls::Visibility::VISIBLE);
+            imageScaleFit(m_detailImage);
         });
         m_thumbDelayId = (int)delayId;
     }
