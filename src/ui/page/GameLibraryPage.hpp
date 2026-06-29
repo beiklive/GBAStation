@@ -78,6 +78,7 @@ enum class PlatformFilter : int
         void _showGameOptionsPanel(const beiklive::GameEntry& entry);
         void _hideGameOptionsPanel();
         void _showMultiSelectSidebar();
+        void _openGameDataPage(const beiklive::GameEntry& entry);
 
         int _currentFocusedIndex = -1;
         bool m_firstAppear = true;
