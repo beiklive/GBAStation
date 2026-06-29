@@ -841,7 +841,7 @@ namespace beiklive
                               GameInputManager::instance().setNesDualPlayerEnabled(v);
                           });
         box->addView(enabledCell);
-        box->addView(beiklive::ui::makeHint("开启双打后按键映射会变为下方的 P1/P2 设置，关闭后恢复通用按键映射。"));
+        box->addView(beiklive::ui::makeHint("开启双打后按键映射会变为下方的 P1/P2 设置，此设置不会保存，每次打开游戏都要设置一次"));
 
         auto* testBtn = new beiklive::DetailCell();
         testBtn->setLeftText("测试手柄序号");
