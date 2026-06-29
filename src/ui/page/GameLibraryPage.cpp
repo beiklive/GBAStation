@@ -15,6 +15,7 @@
 #include <cctype>
 #include <chrono>
 #include <filesystem>
+#include <fstream>
 #include <iomanip>
 #include <sstream>
 
@@ -34,6 +35,40 @@ bool deleteGameFileIfExists(const std::string& path)
 
     ec.clear();
     return std::filesystem::remove(path, ec) && !ec;
+}
+
+bool copyBinaryFile(const fs::path& src, const fs::path& dst, std::string* error = nullptr)
+{
+    std::error_code ec;
+    const fs::path parent = dst.parent_path();
+    if (!parent.empty()) {
+        fs::create_directories(parent, ec);
+        if (ec) {
+            if (error) *error = ec.message();
+            return false;
+        }
+    }
+
+    std::ifstream in(src.string(), std::ios::binary);
+    if (!in) {
+        if (error) *error = "open source failed";
+        return false;
+    }
+
+    std::ofstream out(dst.string(), std::ios::binary | std::ios::trunc);
+    if (!out) {
+        if (error) *error = "open target failed";
+        return false;
+    }
+
+    out << in.rdbuf();
+    out.flush();
+    if (!out || in.bad()) {
+        if (error) *error = "copy stream failed";
+        return false;
+    }
+
+    return true;
 }
 
 std::string gameSaveDir(const beiklive::GameEntry& entry)
@@ -106,7 +141,6 @@ namespace beiklive
             {
                 setAxis(brls::Axis::COLUMN);
                 setFocusable(false);
-                setWidthPercentage(100.f);
                 setHeight(230.f);
                 setPadding(8.f);
                 setBackgroundColor(nvgRGBA(255, 255, 255, 12));
@@ -117,8 +151,9 @@ namespace beiklive
                 auto* image = new brls::Image();
                 image->setImageFromFile(imagePath);
                 image->setScalingType(brls::ImageScalingType::FIT);
-                image->setWidthPercentage(100.f);
                 image->setHeight(168.f);
+                image->setWidth(168.f * image->getOriginalImageWidth()/image->getOriginalImageHeight());
+                setWidth(180.f * image->getOriginalImageWidth()/image->getOriginalImageHeight());
                 image->setFocusable(false);
                 addView(image);
 
@@ -163,7 +198,9 @@ namespace beiklive
             beiklive::GridBox* m_stateGrid = nullptr;
             beiklive::GridBox* m_screenshotGrid = nullptr;
             brls::Box* m_batteryBox = nullptr;
+            brls::Box* m_batteryActionsBox = nullptr;
             brls::Box* m_backupContainer = nullptr;
+            beiklive::ButtonBox* m_exportSavBtn = nullptr;
             std::vector<beiklive::GridItem*> m_stateItems;
             std::vector<brls::View*> m_screenshotItems;
             std::vector<fs::path> m_screenshotPaths;
@@ -203,6 +240,15 @@ namespace beiklive
                 return label;
             }
 
+            static void _giveFocusSoon(brls::View* view)
+            {
+                if (!view)
+                    return;
+                brls::sync([view]() {
+                    brls::Application::giveFocus(view);
+                });
+            }
+
             void _initLayout()
             {
                 registerAction("返回", brls::BUTTON_B, [this](brls::View*) -> bool {
@@ -217,17 +263,17 @@ namespace beiklive
                 auto* shots = _createScreenshotPanel();
                 auto* battery = _createBatteryPanel();
 
-                m_tabs->addTab("即时存档", BK_RES("img/ui/menu/save.png"), nullptr,
+                m_tabs->addTab("即时存档管理", BK_RES("img/ui/menu/save.png"), nullptr,
                     [this]() {
                         _refreshStateList();
                     }, nullptr, states,
                     m_stateGrid ? m_stateGrid->getItemView(0) : states);
-                m_tabs->addTab("游戏截图", BK_RES("img/ui/setting/display.png"), nullptr,
+                m_tabs->addTab("游戏图片管理", BK_RES("img/ui/setting/display.png"), nullptr,
                     [this]() {
                         _refreshScreenshotList();
                     }, nullptr, shots,
                     m_screenshotGrid ? m_screenshotGrid->getItemView(0) : shots);
-                m_tabs->addTab("电池存档", BK_RES("img/ui/menu/save.png"), nullptr,
+                m_tabs->addTab("电池存档管理", BK_RES("img/ui/menu/save.png"), nullptr,
                     [this]() { _refreshBackupList(); }, nullptr, battery, battery);
                 m_tabs->addFinish();
 
@@ -270,6 +316,7 @@ namespace beiklive
                 wrapper->setFocusable(false);
 
                 m_screenshotGrid = new beiklive::GridBox(2);
+                m_screenshotGrid->setColumns(2);
                 m_screenshotGrid->setGrow(1.f);
                 m_screenshotGrid->onItemClicked = [this](int index) {
                     _openImagePreview(index);
@@ -286,40 +333,54 @@ namespace beiklive
 
             brls::View* _createBatteryPanel()
             {
-                m_batteryBox = new brls::Box(brls::Axis::COLUMN);
+                m_batteryBox = new brls::Box(brls::Axis::ROW);
                 m_batteryBox->setGrow(1.f);
                 m_batteryBox->setFocusable(false);
                 m_batteryBox->setWidthPercentage(100.f);
+                m_batteryBox->setAlignItems(brls::AlignItems::FLEX_START);
 
-                auto* exportBtn = _makeButton("导出存档", BK_RES("img/ui/menu/save.png"));
-                exportBtn->registerClickAction([this](brls::View*) -> bool {
+                m_batteryActionsBox = new brls::Box(brls::Axis::COLUMN);
+                m_batteryActionsBox->setFocusable(false);
+                m_batteryActionsBox->setWidth(320.f);
+                m_batteryActionsBox->setMarginRight(18.f);
+
+                auto* listBox = new brls::Box(brls::Axis::COLUMN);
+                listBox->setGrow(1.f);
+                listBox->setFocusable(false);
+
+                m_exportSavBtn = _makeButton("导出存档", BK_RES("img/ui/menu/save.png"));
+                m_exportSavBtn->registerClickAction([this](brls::View*) -> bool {
                     _exportSav();
                     return true;
                 });
-                m_batteryBox->addView(exportBtn);
+                m_batteryActionsBox->addView(m_exportSavBtn);
 
                 auto* importBtn = _makeButton("导入存档", BK_RES("img/ui/light/wenjian.png"));
                 importBtn->registerClickAction([this](brls::View*) -> bool {
                     _importSav();
                     return true;
                 });
-                m_batteryBox->addView(importBtn);
+                m_batteryActionsBox->addView(importBtn);
 
                 auto* backupBtn = _makeButton("存档备份", BK_RES("img/ui/menu/save.png"));
                 backupBtn->registerClickAction([this](brls::View*) -> bool {
                     _backupSav();
                     return true;
                 });
-                m_batteryBox->addView(backupBtn);
+                m_batteryActionsBox->addView(backupBtn);
 
                 auto* header = new brls::Header();
                 header->setTitle("备份列表");
-                m_batteryBox->addView(header);
+                listBox->addView(header);
 
                 m_backupContainer = new brls::Box(brls::Axis::COLUMN);
                 m_backupContainer->setGrow(1.f);
+                m_backupContainer->setHeightPercentage(100.f);
                 m_backupContainer->setFocusable(false);
-                m_batteryBox->addView(m_backupContainer);
+                listBox->addView(m_backupContainer);
+
+                m_batteryBox->addView(m_batteryActionsBox);
+                m_batteryBox->addView(listBox);
 
                 return m_batteryBox;
             }
@@ -360,7 +421,7 @@ namespace beiklive
                 dlg->open();
             }
 
-            void _refreshScreenshotList()
+            void _refreshScreenshotList(bool refocus = false)
             {
                 if (!m_screenshotGrid)
                     return;
@@ -372,6 +433,8 @@ namespace beiklive
                     auto* empty = _makeEmptyLabel("暂无游戏截图");
                     m_screenshotGrid->addItem([empty]() -> brls::View* { return empty; });
                     m_screenshotGrid->commit();
+                    if (refocus)
+                        _giveFocusSoon(m_screenshotGrid->getItemView(0));
                     return;
                 }
 
@@ -385,6 +448,8 @@ namespace beiklive
                     m_screenshotGrid->addItem([item]() -> brls::View* { return item; });
                 }
                 m_screenshotGrid->commit();
+                if (refocus)
+                    _giveFocusSoon(m_screenshotGrid->getItemView(0));
             }
 
             void _openImagePreview(int index)
@@ -393,7 +458,7 @@ namespace beiklive
                     return;
                 auto* page = new beiklive::Box(brls::Axis::COLUMN);
                 page->showHeader(false);
-                page->showFooter(false);
+                page->showFooter(true);
                 page->setGrow(1.f);
                 page->setFocusable(false);
                 auto* imageView = new beiklive::ImageView(m_screenshotPaths[index].string());
@@ -423,7 +488,7 @@ namespace beiklive
                     std::error_code ec;
                     fs::remove(path, ec);
                     brls::Application::notify(ec ? "删除失败" : "已删除截图");
-                    _refreshScreenshotList();
+                    _refreshScreenshotList(true);
                 });
                 dlg->open();
             }
@@ -458,16 +523,15 @@ namespace beiklive
                 auto* dlg = new brls::Dialog("确认导出当前电池存档？");
                 dlg->addButton("取消", []() {});
                 dlg->addButton("导出", [src]() {
-                    std::error_code ec;
                     fs::path exportDir("sdmc:/GBAStation/export");
-                    fs::create_directories(exportDir, ec);
-                    if (ec) {
-                        brls::Application::notify("创建导出目录失败");
+                    std::string error;
+                    if (!copyBinaryFile(src, exportDir / fs::path(src).filename(), &error)) {
+                        brls::Logger::warning("导出电池存档失败: {} -> {}, error={}",
+                            src, (exportDir / fs::path(src).filename()).string(), error);
+                        brls::Application::notify("导出失败");
                         return;
                     }
-                    fs::copy_file(src, exportDir / fs::path(src).filename(),
-                                  fs::copy_options::overwrite_existing, ec);
-                    brls::Application::notify(ec ? "导出失败" : "已导出存档");
+                    brls::Application::notify("已导出存档");
                 });
                 dlg->open();
             }
@@ -478,10 +542,14 @@ namespace beiklive
                 dlg->addButton("取消", []() {});
                 dlg->addButton("选择文件", [this]() {
                     beiklive::openFilePicker({"sav"}, [this](const std::string& selected) {
-                        std::error_code ec;
-                        fs::copy_file(selected, _savPath(),
-                                      fs::copy_options::overwrite_existing, ec);
-                        brls::Application::notify(ec ? "导入失败" : "已导入存档");
+                        std::string error;
+                        if (!copyBinaryFile(selected, _savPath(), &error)) {
+                            brls::Logger::warning("导入电池存档失败: {} -> {}, error={}",
+                                selected, _savPath(), error);
+                            brls::Application::notify("导入失败");
+                            return;
+                        }
+                        brls::Application::notify("已导入存档");
                         _refreshBackupList();
                     }, beiklive::path::GetRootPath());
                 });
@@ -499,16 +567,23 @@ namespace beiklive
                 auto* dlg = new brls::Dialog("确认为当前电池存档创建备份？");
                 dlg->addButton("取消", []() {});
                 dlg->addButton("备份", [this, src]() {
-                    std::error_code ec;
                     fs::path backup = fs::path(src).string() + ".bak_" + timestampForFile();
-                    fs::copy_file(src, backup, fs::copy_options::overwrite_existing, ec);
-                    brls::Application::notify(ec ? "备份失败" : "已创建备份");
+                    std::string error;
+                    if (!copyBinaryFile(src, backup, &error)) {
+                        std::error_code removeEc;
+                        fs::remove(backup, removeEc);
+                        brls::Logger::warning("备份电池存档失败: {} -> {}, error={}",
+                            src, backup.string(), error);
+                        brls::Application::notify("备份失败");
+                        return;
+                    }
+                    brls::Application::notify("已创建备份");
                     _refreshBackupList();
                 });
                 dlg->open();
             }
 
-            void _refreshBackupList()
+            void _refreshBackupList(bool refocus = false)
             {
                 if (!m_backupContainer)
                     return;
@@ -522,13 +597,23 @@ namespace beiklive
                     if (ec || !it.is_regular_file())
                         continue;
                     const std::string name = it.path().filename().string();
-                    if (name.rfind(prefix, 0) == 0)
-                        m_backupPaths.push_back(it.path());
+                    if (name.empty() || name.rfind(prefix, 0) != 0)
+                        continue;
+                    std::error_code sizeEc;
+                    if (fs::file_size(it.path(), sizeEc) == 0 || sizeEc) {
+                        continue;
+                    }
+                    m_backupPaths.push_back(it.path());
                 }
                 std::sort(m_backupPaths.begin(), m_backupPaths.end());
 
                 if (m_backupPaths.empty())
+                {
+                    m_backupContainer->addView(_makeEmptyLabel("暂无电池存档备份"));
+                    if (refocus)
+                        _giveFocusSoon(m_exportSavBtn);
                     return;
+                }
 
                 auto* scroll = new brls::ScrollingFrame();
                 scroll->setMargins(5.f, 5.f, 5.f, 5.f);
@@ -557,15 +642,13 @@ namespace beiklive
                         _confirmDeleteBackup(index);
                         return true;
                     });
-                    label->registerAction("返回", brls::BUTTON_B, [this, index = static_cast<int>(i)](brls::View*) -> bool {
-                        brls::Application::giveFocus(m_batteryBox->getDefaultFocus());
-                        return true;
-                    });
                     list->addView(label);
                 }
 
                 scroll->setContentView(list);
                 m_backupContainer->addView(scroll);
+                if (refocus)
+                    _giveFocusSoon(list->getDefaultFocus() ? list : m_exportSavBtn);
             }
 
             void _confirmRestoreBackup(int index)
@@ -576,9 +659,14 @@ namespace beiklive
                 auto* dlg = new brls::Dialog("确认还原备份\n" + backup.filename().string() + "？");
                 dlg->addButton("取消", []() {});
                 dlg->addButton("还原", [this, backup]() {
-                    std::error_code ec;
-                    fs::copy_file(backup, _savPath(), fs::copy_options::overwrite_existing, ec);
-                    brls::Application::notify(ec ? "还原失败" : "已还原存档");
+                    std::string error;
+                    if (!copyBinaryFile(backup, _savPath(), &error)) {
+                        brls::Logger::warning("还原电池存档失败: {} -> {}, error={}",
+                            backup.string(), _savPath(), error);
+                        brls::Application::notify("还原失败");
+                        return;
+                    }
+                    brls::Application::notify("已还原存档");
                 });
                 dlg->open();
             }
@@ -594,7 +682,7 @@ namespace beiklive
                     std::error_code ec;
                     fs::remove(backup, ec);
                     brls::Application::notify(ec ? "删除失败" : "已删除备份");
-                    _refreshBackupList();
+                    _refreshBackupList(true);
                 });
                 dlg->open();
             }
@@ -1079,7 +1167,7 @@ namespace beiklive
                 });
         }
 
-        m_gameOptionsSidebar->addButton("游戏数据", BK_RES("img/ui/menu/save.png"),
+        m_gameOptionsSidebar->addButton("游戏数据浏览", BK_RES("img/ui/menu/save.png"),
             [this, entry](const beiklive::GameEntry&) {
                 _hideGameOptionsPanel();
                 _openGameDataPage(entry);

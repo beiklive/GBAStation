@@ -6,6 +6,9 @@ namespace beiklive
 {
     ImageView::ImageView(const std::string& imagePath)
     {
+        this->setHideHighlightBackground(true); 
+        this->setHideHighlightBorder(true);   
+        this->setHideClickAnimation(true);  
         setFocusable(true);
         setGrow(1.f);
         setWidthPercentage(100.f);
@@ -17,16 +20,23 @@ namespace beiklive
 
         m_image = new brls::Image();
         m_image->setScalingType(brls::ImageScalingType::FIT);
+        m_image->setInterpolation(brls::ImageInterpolation::LINEAR);
         m_image->setFocusable(false);
         addView(m_image);
+        bool mode1 = true;
+        registerAction("切换渲染模式", brls::BUTTON_LT, [this, &mode1](brls::View*) -> bool {
+            mode1 = !mode1;
+            m_image->setInterpolation(mode1 ? brls::ImageInterpolation::LINEAR: brls::ImageInterpolation::NEAREST);
+            return true;
+        }, false, true);
 
         registerAction("缩小", brls::BUTTON_LB, [this](brls::View*) -> bool {
-            m_zoom = std::max(0.25f, m_zoom / 1.1f);
+            m_zoom = std::max(0.1f, m_zoom / 1.1f);
             _updateImageLayout();
             return true;
         }, false, true);
         registerAction("放大", brls::BUTTON_RB, [this](brls::View*) -> bool {
-            m_zoom = std::min(8.0f, m_zoom * 1.1f);
+            m_zoom = std::min(20.0f, m_zoom * 1.1f);
             _updateImageLayout();
             return true;
         }, false, true);
