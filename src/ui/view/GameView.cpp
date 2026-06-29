@@ -79,6 +79,7 @@ namespace beiklive
         const bool isNds = m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS);
         _brls_inputLocked = false;
         GameInputManager::instance().sayHello();
+        GameInputManager::instance().setNesDualPlayerEnabled(false);
         HIDE_BRLS_HIGHLIGHT(this);
 
         // 从 GameEntry 加载画面模式（默认 Fit）
@@ -158,6 +159,7 @@ namespace beiklive
         }
 
         GameInputManager::instance().clearEmuFunctionKeys();
+        GameInputManager::instance().setNesDualPlayerEnabled(false);
         GameInputManager::instance().dropInput();
     }
 
@@ -169,6 +171,7 @@ namespace beiklive
 #endif
         GameInputManager::instance().setInputEnabled(false);
         GameInputManager::instance().clearEmuFunctionKeys();
+        GameInputManager::instance().setNesDualPlayerEnabled(false);
         GameInputManager::instance().dropInput();
 
         _stopGameThread();

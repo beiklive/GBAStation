@@ -8,6 +8,7 @@
 #include <filesystem>
 #include "borealis/core/cache_helper.hpp"
 #include <borealis/views/dialog.hpp>
+#include <borealis/views/dropdown.hpp>
 #include <borealis/views/cells/cell_bool.hpp>
 #include <borealis/views/rectangle.hpp>
 #include <cctype>
@@ -44,14 +45,37 @@ namespace beiklive
             const char* fallback;
         };
 
+        void setDefaultIfMissing(const std::string& key, const std::string& value)
+        {
+            if (beiklive::SettingManager && !beiklive::SettingManager->Contains(key))
+                SET_SETTING_KEY_STR(key.c_str(), value);
+        }
+
+        void initNesPlayerDefaults()
+        {
+            const std::string prefixes[] = {"nes.p1.", "nes.p2."};
+            for (const auto& prefix : prefixes)
+            {
+                setDefaultIfMissing(prefix + "handle.up", "PAD_UP|PAD_LEFTSTICKUP");
+                setDefaultIfMissing(prefix + "handle.down", "PAD_DOWN|PAD_LEFTSTICKDOWN");
+                setDefaultIfMissing(prefix + "handle.left", "PAD_LEFT|PAD_LEFTSTICKLEFT");
+                setDefaultIfMissing(prefix + "handle.right", "PAD_RIGHT|PAD_LEFTSTICKRIGHT");
+                setDefaultIfMissing(prefix + "handle.a", "PAD_A");
+                setDefaultIfMissing(prefix + "handle.b", "PAD_B");
+                setDefaultIfMissing(prefix + "handle.start", "PAD_START");
+            }
+            setDefaultIfMissing("nes.p1.handle.menu", "PAD_LB");
+            setDefaultIfMissing("nes.p2.handle.menu", "PAD_LB");
+        }
+
         constexpr NesButtonBindInfo kNesButtonBinds[] = {
-            {"上", "up", "PAD_UP"},
-            {"下", "down", "PAD_DOWN"},
-            {"左", "left", "PAD_LEFT"},
-            {"右", "right", "PAD_RIGHT"},
+            {"上", "up", "PAD_UP|PAD_LEFTSTICKUP"},
+            {"下", "down", "PAD_DOWN|PAD_LEFTSTICKDOWN"},
+            {"左", "left", "PAD_LEFT|PAD_LEFTSTICKLEFT"},
+            {"右", "right", "PAD_RIGHT|PAD_LEFTSTICKRIGHT"},
             {"A", "a", "PAD_A"},
             {"B", "b", "PAD_B"},
-            {"菜单键", "start", "PAD_START"},
+            {"start键", "start", "PAD_START"},
             {"模拟器菜单", "menu", "PAD_LB"},
         };
 
@@ -187,6 +211,7 @@ namespace beiklive
                     else
                     {
                         m_promptLabel->setText("按下要绑定的按键...");
+                        pollSticks();
                         const auto now = std::chrono::steady_clock::now();
                         const float elapsed = std::chrono::duration<float>(now - m_startTime).count();
                         const float remaining = m_countdownSeconds - elapsed;
@@ -221,11 +246,50 @@ namespace beiklive
             std::vector<std::string> m_capturedKeys;
             std::string m_captured;
 
+            struct StickDir
+            {
+                const char* name;
+                int axis;
+                bool positive;
+            };
+            static const StickDir k_stickDirs[];
+            static constexpr int k_stickDirCount = 8;
+            bool m_stickPrevActive[k_stickDirCount] = {};
+
             void captureGamepadButton(brls::ControllerButton btn)
             {
                 const char* name = nullptr;
                 for (const auto& key : kMenuCapturePadKeys)
                     if (key.btn == btn) { name = key.name; break; }
+                if (!name)
+                    return;
+                if (std::find(m_capturedKeys.begin(), m_capturedKeys.end(), name) != m_capturedKeys.end())
+                    return;
+                if (m_capturedKeys.size() >= 2)
+                    return;
+                m_capturedKeys.push_back(name);
+                m_captured = buildCombo();
+                m_keyLabel->setText(m_captured);
+                m_startTime = std::chrono::steady_clock::now();
+            }
+
+            void pollSticks()
+            {
+                auto state = brls::Application::getControllerState();
+                for (int i = 0; i < k_stickDirCount; ++i)
+                {
+                    const float val = k_stickDirs[i].axis < static_cast<int>(brls::_AXES_MAX)
+                        ? state.axes[k_stickDirs[i].axis]
+                        : 0.f;
+                    const bool active = k_stickDirs[i].positive ? val > 0.5f : val < -0.5f;
+                    if (active && !m_stickPrevActive[i])
+                        captureStick(k_stickDirs[i].name);
+                    m_stickPrevActive[i] = active;
+                }
+            }
+
+            void captureStick(const char* name)
+            {
                 if (!name)
                     return;
                 if (std::find(m_capturedKeys.begin(), m_capturedKeys.end(), name) != m_capturedKeys.end())
@@ -247,6 +311,14 @@ namespace beiklive
                     if (idx >= 0 && idx < static_cast<int>(brls::_BUTTON_MAX) && state.buttons[idx])
                         return;
                 }
+                for (int i = 0; i < k_stickDirCount; ++i)
+                {
+                    const float val = k_stickDirs[i].axis < static_cast<int>(brls::_AXES_MAX)
+                        ? state.axes[k_stickDirs[i].axis]
+                        : 0.f;
+                    if (std::abs(val) > 0.5f)
+                        return;
+                }
                 m_waitingForRelease = false;
             }
 
@@ -256,7 +328,7 @@ namespace beiklive
                 for (const auto& key : m_capturedKeys)
                 {
                     if (!result.empty())
-                        result += "+";
+                        result += "|";
                     result += key;
                 }
                 return result;
@@ -273,6 +345,17 @@ namespace beiklive
                     brls::Application::popActivity(brls::TransitionAnimation::FADE);
                 });
             }
+        };
+
+        const MenuKeyCaptureView::StickDir MenuKeyCaptureView::k_stickDirs[] = {
+            {"PAD_LEFTSTICKUP",     static_cast<int>(brls::LEFT_Y),  false},
+            {"PAD_LEFTSTICKDOWN",   static_cast<int>(brls::LEFT_Y),  true },
+            {"PAD_LEFTSTICKLEFT",   static_cast<int>(brls::LEFT_X),  false},
+            {"PAD_LEFTSTICKRIGHT",  static_cast<int>(brls::LEFT_X),  true },
+            {"PAD_RIGHTSTICKUP",    static_cast<int>(brls::RIGHT_Y), false},
+            {"PAD_RIGHTSTICKDOWN",  static_cast<int>(brls::RIGHT_Y), true },
+            {"PAD_RIGHTSTICKLEFT",  static_cast<int>(brls::RIGHT_X), false},
+            {"PAD_RIGHTSTICKRIGHT", static_cast<int>(brls::RIGHT_X), true },
         };
 
     }
@@ -733,21 +816,23 @@ namespace beiklive
         std::vector<std::string> options;
         options.reserve(static_cast<size_t>(count));
         for (int i = 0; i < count; ++i)
-            options.push_back("控制器 " + std::to_string(i));
+            options.push_back("手柄 " + std::to_string(i));
         return options;
     }
 
     brls::View* GameMenuView::_createControllerPanel()
     {
+        initNesPlayerDefaults();
+
         auto* scroll = beiklive::ui::makeScrollTab();
         auto* box = beiklive::ui::makeContentBox();
 
         box->addView(beiklive::ui::makeHeader("FC 双手柄"));
         auto* enabledCell = new brls::BooleanCell();
         enabledCell->init("开启双打",
-                          GET_SETTING_KEY_INT("nes.multiplayer.enabled", 0) != 0,
+                          GameInputManager::instance().isNesDualPlayerEnabled(),
                           [](bool v) {
-                              SET_SETTING_KEY_INT("nes.multiplayer.enabled", v ? 1 : 0);
+                              GameInputManager::instance().setNesDualPlayerEnabled(v);
                           });
         box->addView(enabledCell);
         box->addView(beiklive::ui::makeHint("开启双打后按键映射会变为下方的 P1/P2 设置，关闭后恢复通用按键映射。"));
@@ -803,15 +888,37 @@ namespace beiklive
         title->setFocusable(false);
         box->addView(title);
 
-        auto options = _controllerOptions();
-        int selected = GET_SETTING_KEY_INT((prefix + "controller").c_str(), defaultController);
-        if (selected < 0 || selected >= static_cast<int>(options.size()))
-            selected = 0;
-        auto* selector = new brls::SelectorCell();
-        selector->init(playerName + " 手柄", options, selected,
-                       [prefix](int idx) {
-                           SET_SETTING_KEY_INT((prefix + "controller").c_str(), idx);
-                       });
+        auto* selector = new beiklive::DetailCell();
+        selector->setLeftText(playerName + " 手柄");
+        auto refreshSelectorText = [this, selector, prefix, defaultController]() {
+            auto options = _controllerOptions();
+            int selected = GET_SETTING_KEY_INT((prefix + "controller").c_str(), defaultController);
+            if (selected < 0 || selected >= static_cast<int>(options.size()))
+                selected = 0;
+            selector->setRightText(options[selected]);
+        };
+        refreshSelectorText();
+        selector->registerClickAction([this, selector, prefix, playerName, defaultController, refreshSelectorText](brls::View*) -> bool {
+            auto options = _controllerOptions();
+            int selected = GET_SETTING_KEY_INT((prefix + "controller").c_str(), defaultController);
+            if (selected < 0 || selected >= static_cast<int>(options.size()))
+                selected = 0;
+            auto* dropdown = new brls::Dropdown(
+                playerName + " 手柄",
+                options,
+                [selector, prefix, options](int idx) {
+                    if (idx < 0 || idx >= static_cast<int>(options.size()))
+                        return;
+                    SET_SETTING_KEY_INT((prefix + "controller").c_str(), idx);
+                    selector->setRightText(options[idx]);
+                },
+                selected,
+                [refreshSelectorText](int) {
+                    refreshSelectorText();
+                });
+            brls::Application::pushActivity(new brls::Activity(dropdown));
+            return true;
+        });
         box->addView(selector);
 
         for (const auto& bind : kNesButtonBinds)
@@ -871,7 +978,7 @@ namespace beiklive
         {
             if (input.getControllerButtonMask(i) != 0)
             {
-                brls::Application::notify("检测到控制器 " + std::to_string(i));
+                brls::Application::notify("触发此按钮的是手柄  " + std::to_string(i));
                 return;
             }
         }

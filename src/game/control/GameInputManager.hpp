@@ -100,6 +100,8 @@ namespace beiklive
         uint32_t getControllerButtonMask(int controllerIndex) const;
         void refreshPlayerInputStatesForPlatform(int platform);
         void setActivePlatform(int platform) { m_activePlatform = platform; }
+        void setNesDualPlayerEnabled(bool enabled) { m_nesDualPlayerEnabled = enabled; }
+        bool isNesDualPlayerEnabled() const { return m_nesDualPlayerEnabled; }
         int getControllerCount() const
         {
             return brls::Application::getPlatform()
@@ -127,6 +129,7 @@ namespace beiklive
         bool inputEnabled = true;
         bool m_diagonalMode = true;  ///< 摇杆斜向模式：true=同时触发X+Y，false=仅触发主轴
         int m_activePlatform = -1;
+        bool m_nesDualPlayerEnabled = false;
         GamepadState lastGamepadStates[GAMEPADS_MAX];
         PlayerInputState m_playerInputs[GAME_INPUT_MAX_PLAYERS];
         int m_playerAssignments[GAME_INPUT_MAX_PLAYERS] = {0, 1};

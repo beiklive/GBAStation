@@ -188,7 +188,7 @@ namespace beiklive
                     for (int i = 0; i < controllersCount; i++)
                     {
                         brls::Logger::debug("GameInputManager: Controller #{} connected", i);
-                        std::string buttonStr = "控制器" + std::to_string(i) + "已连接";
+                        std::string buttonStr = "手柄 " + std::to_string(i) + " 已连接";
                         brls::Application::notify(buttonStr);
                     }
                 }
@@ -544,7 +544,7 @@ namespace beiklive
     bool GameInputManager::isNesDualPlayerMode() const
     {
         return m_activePlatform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNES) &&
-               GET_SETTING_KEY_INT("nes.multiplayer.enabled", 0) != 0;
+               m_nesDualPlayerEnabled;
     }
 
     bool GameInputManager::consumeNesPlayerMenuPress()
@@ -668,7 +668,7 @@ namespace beiklive
         }
 
         const bool isNes = platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNES);
-        const bool nesTwoPlayer = isNes && GET_SETTING_KEY_INT("nes.multiplayer.enabled", 0) != 0;
+        const bool nesTwoPlayer = isNes && m_nesDualPlayerEnabled;
         if (nesTwoPlayer)
         {
             for (int player = 0; player < GAME_INPUT_MAX_PLAYERS; ++player)
