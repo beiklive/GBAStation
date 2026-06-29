@@ -334,7 +334,7 @@ namespace beiklive
                 for (const auto& key : m_capturedKeys)
                 {
                     if (!result.empty())
-                        result += "|";
+                        result += "+";
                     result += key;
                 }
                 return result;
@@ -934,7 +934,7 @@ namespace beiklive
             const std::string cfgKey = prefix + "handle." + bind.suffix;
             std::string fallback = bind.fallback;
             if (std::string(bind.suffix) == "menu")
-                fallback = "PAD_LB";
+                fallback = player == 0 ? "PAD_LB" : "PAD_RB";
             auto* cell = new beiklive::DetailCell();
             cell->setLeftText(bind.label);
             cell->setRightText(GET_SETTING_KEY_STR(cfgKey.c_str(), fallback));
@@ -959,9 +959,32 @@ namespace beiklive
         auto* content = new MenuKeyCaptureView([cell, cfgKey](const std::string& result) {
             if (result.empty())
                 return;
-            SET_SETTING_KEY_STR(cfgKey.c_str(), result);
+
+            std::string value = GET_SETTING_KEY_STR(cfgKey.c_str(), "none");
+            if (value.empty() || value == "none")
+            {
+                value = result;
+            }
+            else
+            {
+                bool exists = false;
+                std::istringstream iss(value);
+                std::string combo;
+                while (std::getline(iss, combo, '|'))
+                {
+                    if (combo == result)
+                    {
+                        exists = true;
+                        break;
+                    }
+                }
+                if (!exists)
+                    value += "|" + result;
+            }
+
+            SET_SETTING_KEY_STR(cfgKey.c_str(), value);
             if (cell)
-                cell->setRightText(result);
+                cell->setRightText(value);
         });
         auto* frame = new brls::AppletFrame(content);
         frame->setHeaderVisibility(brls::Visibility::GONE);

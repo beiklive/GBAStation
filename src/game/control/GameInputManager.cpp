@@ -777,10 +777,7 @@ namespace beiklive
         uint32_t mergedMask = 0;
         for (int i = 0; i < controllersCount; ++i)
         {
-            if (!mappingPrefix.empty())
-                mergedMask |= buildMaskFromConfiguredMapping(lastGamepadStates[i], mappingPrefix);
-            else
-                mergedMask |= buildMaskFromGamepadState(lastGamepadStates[i]);
+            mergedMask |= buildMaskFromConfiguredMapping(lastGamepadStates[i], mappingPrefix);
         }
         m_playerInputs[0].buttonMask = mergedMask;
     }
@@ -871,6 +868,14 @@ namespace beiklive
             {"r3", "PAD_RSB", RETRO_DEVICE_ID_JOYPAD_R3},
             {"start", "PAD_START", RETRO_DEVICE_ID_JOYPAD_START},
             {"select", "PAD_BACK", RETRO_DEVICE_ID_JOYPAD_SELECT},
+            {"lstick_up", "PAD_LEFTSTICKUP", RETRO_DEVICE_ID_JOYPAD_UP},
+            {"lstick_down", "PAD_LEFTSTICKDOWN", RETRO_DEVICE_ID_JOYPAD_DOWN},
+            {"lstick_left", "PAD_LEFTSTICKLEFT", RETRO_DEVICE_ID_JOYPAD_LEFT},
+            {"lstick_right", "PAD_LEFTSTICKRIGHT", RETRO_DEVICE_ID_JOYPAD_RIGHT},
+            {"rstick_up", "PAD_RIGHTSTICKUP", RETRO_DEVICE_ID_JOYPAD_UP},
+            {"rstick_down", "PAD_RIGHTSTICKDOWN", RETRO_DEVICE_ID_JOYPAD_DOWN},
+            {"rstick_left", "PAD_RIGHTSTICKLEFT", RETRO_DEVICE_ID_JOYPAD_LEFT},
+            {"rstick_right", "PAD_RIGHTSTICKRIGHT", RETRO_DEVICE_ID_JOYPAD_RIGHT},
         };
 
         uint32_t mask = 0;
@@ -880,7 +885,24 @@ namespace beiklive
             : beiklive::input_mapping::platformMaskForPrefix(prefix);
         for (const auto& entry : maps)
         {
-            bool supported = playerSpecificNes;
+            const bool stickMapping =
+                std::strncmp(entry.suffix, "lstick_", 7) == 0 ||
+                std::strncmp(entry.suffix, "rstick_", 7) == 0;
+            bool supported = false;
+            if (playerSpecificNes)
+            {
+                supported =
+                    std::string(entry.suffix) == "a" ||
+                    std::string(entry.suffix) == "b" ||
+                    std::string(entry.suffix) == "up" ||
+                    std::string(entry.suffix) == "down" ||
+                    std::string(entry.suffix) == "left" ||
+                    std::string(entry.suffix) == "right" ||
+                    std::string(entry.suffix) == "start" ||
+                    std::string(entry.suffix) == "select";
+            }
+            if (!supported && stickMapping)
+                supported = GET_SETTING_KEY_INT("input.joystick.enabled", 1) != 0;
             if (!supported)
             {
                 for (const auto& def : beiklive::input_mapping::kGameButtonDefaults)
