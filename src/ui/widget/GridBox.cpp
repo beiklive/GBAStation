@@ -30,6 +30,32 @@ namespace beiklive
             false,
             false,
             brls::SOUND_CLICK);
+
+        this->registerAction(
+            "删除",
+            brls::BUTTON_X,
+            [this](brls::View*) -> bool
+            {
+                if (onX)
+                    onX(m_index);
+                return true;
+            },
+            false,
+            false,
+            brls::SOUND_CLICK);
+
+        this->registerAction(
+            "操作",
+            brls::BUTTON_Y,
+            [this](brls::View*) -> bool
+            {
+                if (onY)
+                    onY(m_index);
+                return true;
+            },
+            false,
+            false,
+            brls::SOUND_CLICK);
     }
 
     void LazyCell::draw(NVGcontext* vg, float x, float y, float w, float h,
@@ -145,6 +171,12 @@ namespace beiklive
         };
         cell->onFocused = [this](int index) {
             if (onItemFocused) onItemFocused(index);
+        };
+        cell->onX = [this](int index) {
+            if (onItemX) onItemX(index);
+        };
+        cell->onY = [this](int index) {
+            if (onItemY) onItemY(index);
         };
         return cell;
     }

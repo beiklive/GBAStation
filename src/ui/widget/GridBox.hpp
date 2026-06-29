@@ -31,6 +31,8 @@ namespace beiklive
 
         std::function<void(int index)> onClicked;
         std::function<void(int index)> onFocused;
+        std::function<void(int index)> onX;
+        std::function<void(int index)> onY;
 
     private:
         std::function<brls::View*()> m_factory;
@@ -73,6 +75,8 @@ namespace beiklive
 
         std::function<void(int index)> onItemClicked;
         std::function<void(int index)> onItemFocused;
+        std::function<void(int index)> onItemX;
+        std::function<void(int index)> onItemY;
         
 
     private:
