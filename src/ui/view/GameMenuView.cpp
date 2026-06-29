@@ -1,5 +1,6 @@
 #include "GameMenuView.hpp"
 #include "core/Tools.hpp"
+#include "game/control/GameInputManager.hpp"
 #include "ui/widget/HintsBar.hpp"
 #include "ui/utils/FilePickerHelper.hpp"
 #include "ui/utils/UiHelper.hpp"
@@ -7,7 +8,12 @@
 #include <filesystem>
 #include "borealis/core/cache_helper.hpp"
 #include <borealis/views/dialog.hpp>
+#include <borealis/views/cells/cell_bool.hpp>
+#include <borealis/views/rectangle.hpp>
 #include <cctype>
+#include <chrono>
+#include <iomanip>
+#include <sstream>
 
 namespace beiklive
 {
@@ -30,6 +36,245 @@ namespace beiklive
                 return "270";
             return "0";
         }
+
+        struct NesButtonBindInfo
+        {
+            const char* label;
+            const char* suffix;
+            const char* fallback;
+        };
+
+        constexpr NesButtonBindInfo kNesButtonBinds[] = {
+            {"上", "up", "PAD_UP"},
+            {"下", "down", "PAD_DOWN"},
+            {"左", "left", "PAD_LEFT"},
+            {"右", "right", "PAD_RIGHT"},
+            {"A", "a", "PAD_A"},
+            {"B", "b", "PAD_B"},
+            {"菜单键", "start", "PAD_START"},
+            {"模拟器菜单", "menu", "PAD_LB"},
+        };
+
+        struct MenuCapturePadKey
+        {
+            const char* name;
+            brls::ControllerButton btn;
+        };
+
+        constexpr MenuCapturePadKey kMenuCapturePadKeys[] = {
+            {"PAD_LT", brls::BUTTON_LT},
+            {"PAD_LB", brls::BUTTON_LB},
+            {"PAD_LSB", brls::BUTTON_LSB},
+            {"PAD_UP", brls::BUTTON_UP},
+            {"PAD_RIGHT", brls::BUTTON_RIGHT},
+            {"PAD_DOWN", brls::BUTTON_DOWN},
+            {"PAD_LEFT", brls::BUTTON_LEFT},
+            {"PAD_BACK", brls::BUTTON_BACK},
+            {"PAD_START", brls::BUTTON_START},
+            {"PAD_RSB", brls::BUTTON_RSB},
+            {"PAD_Y", brls::BUTTON_Y},
+            {"PAD_B", brls::BUTTON_B},
+            {"PAD_A", brls::BUTTON_A},
+            {"PAD_X", brls::BUTTON_X},
+            {"PAD_RB", brls::BUTTON_RB},
+            {"PAD_RT", brls::BUTTON_RT},
+        };
+
+        class MenuKeyCaptureView : public beiklive::Box
+        {
+        public:
+            explicit MenuKeyCaptureView(std::function<void(const std::string&)> onDone,
+                                        float countdownSecs = 2.0f)
+                : m_onDone(std::move(onDone)), m_countdownSeconds(countdownSecs)
+            {
+                showFooter(false);
+                showHeader(false);
+                setFocusable(true);
+                getContentBox()->setAxis(brls::Axis::COLUMN);
+                getContentBox()->setAlignItems(brls::AlignItems::CENTER);
+                getContentBox()->setJustifyContent(brls::JustifyContent::CENTER);
+                getContentBox()->setGrow(1.f);
+
+                auto* card = new brls::Box(brls::Axis::COLUMN);
+                card->setFocusable(false);
+                card->setCornerRadius(16.f);
+                card->setBackgroundColor(nvgRGBA(30, 30, 35, 220));
+                card->setShadowType(brls::ShadowType::GENERIC);
+                card->setShadowVisibility(true);
+                card->setAlignItems(brls::AlignItems::CENTER);
+                card->setPadding(38.f, 58.f, 38.f, 58.f);
+                card->setWidth(540.f);
+
+                auto* title = new brls::Label();
+                title->setText("按键监听");
+                title->setFontSize(26.f);
+                title->setTextColor(GET_THEME_COLOR("brls/text"));
+                title->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+                title->setMarginBottom(14.f);
+                title->setFocusable(false);
+                card->addView(title);
+
+                m_promptLabel = new brls::Label();
+                m_promptLabel->setText("松开所有按键以开始捕获");
+                m_promptLabel->setFontSize(17.f);
+                m_promptLabel->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
+                m_promptLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+                m_promptLabel->setMarginBottom(16.f);
+                m_promptLabel->setFocusable(false);
+                card->addView(m_promptLabel);
+
+                m_keyLabel = new brls::Label();
+                m_keyLabel->setText("...");
+                m_keyLabel->setFontSize(30.f);
+                m_keyLabel->setTextColor(nvgRGB(79, 193, 255));
+                m_keyLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+                m_keyLabel->setMarginBottom(18.f);
+                m_keyLabel->setFocusable(false);
+                card->addView(m_keyLabel);
+
+                auto* barRow = new brls::Box(brls::Axis::ROW);
+                barRow->setFocusable(false);
+                barRow->setAlignItems(brls::AlignItems::CENTER);
+                barRow->setJustifyContent(brls::JustifyContent::CENTER);
+                barRow->setMarginBottom(8.f);
+                m_progressBar = new brls::Rectangle(nvgRGBA(79, 193, 255, 80));
+                m_progressBar->setWidth(240.f);
+                m_progressBar->setHeight(6.f);
+                m_progressBar->setCornerRadius(3.f);
+                m_progressBar->setFocusable(false);
+                barRow->addView(m_progressBar);
+                card->addView(barRow);
+
+                m_countdownLabel = new brls::Label();
+                m_countdownLabel->setText("最多 2 个按键");
+                m_countdownLabel->setFontSize(14.f);
+                m_countdownLabel->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
+                m_countdownLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+                m_countdownLabel->setFocusable(false);
+                card->addView(m_countdownLabel);
+
+                getContentBox()->addView(card);
+                m_startTime = std::chrono::steady_clock::now();
+
+                for (const auto& key : kMenuCapturePadKeys)
+                {
+                    registerAction("", key.btn,
+                        [this, btn = key.btn](brls::View*) -> bool {
+                            if (!m_done && !m_waitingForRelease)
+                                captureGamepadButton(btn);
+                            return true;
+                        },
+                        true);
+                }
+            }
+
+            void draw(NVGcontext* vg, float x, float y, float w, float h,
+                      brls::Style style, brls::FrameContext* ctx) override
+            {
+                nvgBeginPath(vg);
+                nvgRect(vg, x, y, w, h);
+                nvgFillColor(vg, nvgRGBA(0, 0, 0, 180));
+                nvgFill(vg);
+
+                if (!m_done)
+                {
+                    if (m_waitingForRelease)
+                    {
+                        checkAllReleased();
+                        m_startTime = std::chrono::steady_clock::now();
+                        m_promptLabel->setText("松开所有已按下的按键...");
+                    }
+                    else
+                    {
+                        m_promptLabel->setText("按下要绑定的按键...");
+                        const auto now = std::chrono::steady_clock::now();
+                        const float elapsed = std::chrono::duration<float>(now - m_startTime).count();
+                        const float remaining = m_countdownSeconds - elapsed;
+                        if (remaining <= 0.f)
+                        {
+                            finish(m_captured);
+                        }
+                        else
+                        {
+                            std::ostringstream oss;
+                            oss << std::fixed << std::setprecision(2) << remaining << " 秒后确认";
+                            m_countdownLabel->setText(oss.str());
+                            m_progressBar->setWidth(240.f * (remaining / m_countdownSeconds));
+                        }
+                    }
+                }
+                beiklive::Box::draw(vg, x, y, w, h, style, ctx);
+                if (!m_done)
+                    invalidate();
+            }
+
+        private:
+            std::function<void(const std::string&)> m_onDone;
+            float m_countdownSeconds = 2.f;
+            brls::Label* m_promptLabel = nullptr;
+            brls::Label* m_keyLabel = nullptr;
+            brls::Label* m_countdownLabel = nullptr;
+            brls::Rectangle* m_progressBar = nullptr;
+            std::chrono::steady_clock::time_point m_startTime;
+            bool m_done = false;
+            bool m_waitingForRelease = true;
+            std::vector<std::string> m_capturedKeys;
+            std::string m_captured;
+
+            void captureGamepadButton(brls::ControllerButton btn)
+            {
+                const char* name = nullptr;
+                for (const auto& key : kMenuCapturePadKeys)
+                    if (key.btn == btn) { name = key.name; break; }
+                if (!name)
+                    return;
+                if (std::find(m_capturedKeys.begin(), m_capturedKeys.end(), name) != m_capturedKeys.end())
+                    return;
+                if (m_capturedKeys.size() >= 2)
+                    return;
+                m_capturedKeys.push_back(name);
+                m_captured = buildCombo();
+                m_keyLabel->setText(m_captured);
+                m_startTime = std::chrono::steady_clock::now();
+            }
+
+            void checkAllReleased()
+            {
+                auto state = brls::Application::getControllerState();
+                for (const auto& key : kMenuCapturePadKeys)
+                {
+                    const int idx = static_cast<int>(key.btn);
+                    if (idx >= 0 && idx < static_cast<int>(brls::_BUTTON_MAX) && state.buttons[idx])
+                        return;
+                }
+                m_waitingForRelease = false;
+            }
+
+            std::string buildCombo() const
+            {
+                std::string result;
+                for (const auto& key : m_capturedKeys)
+                {
+                    if (!result.empty())
+                        result += "+";
+                    result += key;
+                }
+                return result;
+            }
+
+            void finish(const std::string& result)
+            {
+                if (m_done)
+                    return;
+                m_done = true;
+                if (m_onDone)
+                    m_onDone(result);
+                brls::delay(300, []() {
+                    brls::Application::popActivity(brls::TransitionAnimation::FADE);
+                });
+            }
+        };
+
     }
 
     // 金手指格式转换
@@ -166,6 +411,16 @@ namespace beiklive
             BK_RES("img/ui/menu/display.png"),
             nullptr, nullptr, nullptr,
             displayPanel);
+
+        if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNES))
+        {
+            auto* controllerPanel = _createControllerPanel();
+            m_panel->addTab(
+                "手柄",
+                BK_RES("img/ui/setting/control.png"),
+                nullptr, nullptr, nullptr,
+                controllerPanel);
+        }
 
         // 插入分割线
         m_panel->addDivider();
@@ -468,6 +723,159 @@ namespace beiklive
         _refreshStatePanel(true);
         _refreshStatePanel(false);
         m_panel->onShow();
+    }
+
+    std::vector<std::string> GameMenuView::_controllerOptions() const
+    {
+        int count = GameInputManager::instance().getControllerCount();
+        if (count <= 0)
+            count = 1;
+        std::vector<std::string> options;
+        options.reserve(static_cast<size_t>(count));
+        for (int i = 0; i < count; ++i)
+            options.push_back("控制器 " + std::to_string(i));
+        return options;
+    }
+
+    brls::View* GameMenuView::_createControllerPanel()
+    {
+        auto* scroll = beiklive::ui::makeScrollTab();
+        auto* box = beiklive::ui::makeContentBox();
+
+        box->addView(beiklive::ui::makeHeader("FC 双手柄"));
+        auto* enabledCell = new brls::BooleanCell();
+        enabledCell->init("开启双打",
+                          GET_SETTING_KEY_INT("nes.multiplayer.enabled", 0) != 0,
+                          [](bool v) {
+                              SET_SETTING_KEY_INT("nes.multiplayer.enabled", v ? 1 : 0);
+                          });
+        box->addView(enabledCell);
+        box->addView(beiklive::ui::makeHint("开启双打后按键映射会变为下方的 P1/P2 设置，关闭后恢复通用按键映射。"));
+
+        auto* testBtn = new beiklive::DetailCell();
+        testBtn->setLeftText("测试手柄序号");
+        testBtn->setRightText("开始");
+        testBtn->registerClickAction([this](brls::View*) -> bool {
+            _notifyPressedController();
+            return true;
+        });
+        box->addView(testBtn);
+        box->addView(beiklive::ui::makeHint("多手柄按下时会提示手柄序号，用于下方的手柄分配"));
+
+        auto* playersRow = new brls::Box(brls::Axis::ROW);
+        playersRow->setWidthPercentage(100.f);
+        playersRow->setFocusable(false);
+        playersRow->setAlignItems(brls::AlignItems::FLEX_START);
+        playersRow->setMarginTop(12.f);
+        playersRow->addView(_createNesPlayerBox(0));
+        playersRow->addView(_createNesPlayerBox(1));
+        box->addView(playersRow);
+
+        scroll->setContentView(box);
+        auto* container = new brls::Box(brls::Axis::COLUMN);
+        container->setVisibility(brls::Visibility::GONE);
+        container->setGrow(1.f);
+        container->setWidthPercentage(100.f);
+        container->addView(scroll);
+        return container;
+    }
+
+    brls::View* GameMenuView::_createNesPlayerBox(int player)
+    {
+        const std::string playerName = player == 0 ? "P1" : "P2";
+        const std::string prefix = player == 0 ? "nes.p1." : "nes.p2.";
+        const int defaultController = player == 0 ? 0 : 1;
+        auto* box = new brls::Box(brls::Axis::COLUMN);
+        box->setGrow(1.f);
+        box->setFocusable(false);
+        box->setCornerRadius(8.f);
+        box->setBorderThickness(1.f);
+        box->setBorderColor(nvgRGBA(255, 255, 255, 50));
+        box->setPadding(12.f, 12.f, 12.f, 12.f);
+        box->setMarginRight(player == 0 ? 10.f : 0.f);
+        box->setMarginLeft(player == 1 ? 10.f : 0.f);
+
+        auto* title = new brls::Label();
+        title->setText(playerName);
+        title->setFontSize(20.f);
+        title->setTextColor(GET_THEME_COLOR("brls/text"));
+        title->setMarginBottom(8.f);
+        title->setFocusable(false);
+        box->addView(title);
+
+        auto options = _controllerOptions();
+        int selected = GET_SETTING_KEY_INT((prefix + "controller").c_str(), defaultController);
+        if (selected < 0 || selected >= static_cast<int>(options.size()))
+            selected = 0;
+        auto* selector = new brls::SelectorCell();
+        selector->init(playerName + " 手柄", options, selected,
+                       [prefix](int idx) {
+                           SET_SETTING_KEY_INT((prefix + "controller").c_str(), idx);
+                       });
+        box->addView(selector);
+
+        for (const auto& bind : kNesButtonBinds)
+        {
+            const std::string cfgKey = prefix + "handle." + bind.suffix;
+            std::string fallback = bind.fallback;
+            if (std::string(bind.suffix) == "menu")
+                fallback = "PAD_LB";
+            auto* cell = new beiklive::DetailCell();
+            cell->setLeftText(bind.label);
+            cell->setRightText(GET_SETTING_KEY_STR(cfgKey.c_str(), fallback));
+            cell->registerClickAction([this, cell, cfgKey](brls::View*) -> bool {
+                _openNesKeyCapture(cell, cfgKey);
+                return true;
+            });
+            cell->registerAction("清除绑定", brls::BUTTON_X,
+                [cell, cfgKey](brls::View*) -> bool {
+                    SET_SETTING_KEY_STR(cfgKey.c_str(), "none");
+                    cell->setRightText("none");
+                    return true;
+                }, false, false, brls::SOUND_CLICK);
+            box->addView(cell);
+        }
+
+        return box;
+    }
+
+    void GameMenuView::_openNesKeyCapture(beiklive::DetailCell* cell, const std::string& cfgKey)
+    {
+        auto* content = new MenuKeyCaptureView([cell, cfgKey](const std::string& result) {
+            if (result.empty())
+                return;
+            SET_SETTING_KEY_STR(cfgKey.c_str(), result);
+            if (cell)
+                cell->setRightText(result);
+        });
+        auto* frame = new brls::AppletFrame(content);
+        frame->setHeaderVisibility(brls::Visibility::GONE);
+        frame->setFooterVisibility(brls::Visibility::GONE);
+        frame->setBackground(brls::ViewBackground::NONE);
+        brls::Application::pushActivity(new brls::Activity(frame),
+                                        brls::TransitionAnimation::FADE);
+    }
+
+    void GameMenuView::_notifyPressedController()
+    {
+        auto& input = GameInputManager::instance();
+        input.setInputEnabled(true);
+        input.handleInput();
+
+        int count = input.getControllerCount();
+        if (count <= 0)
+            count = 1;
+        count = std::min(count, GAMEPADS_MAX);
+
+        for (int i = 0; i < count; ++i)
+        {
+            if (input.getControllerButtonMask(i) != 0)
+            {
+                brls::Application::notify("检测到控制器 " + std::to_string(i));
+                return;
+            }
+        }
+        brls::Application::notify("未检测到手柄按键");
     }
 
     // ============================================================

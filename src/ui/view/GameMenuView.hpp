@@ -7,8 +7,10 @@
 #include "ui/widget/GridBox.hpp"
 #include "ui/widget/Box.hpp"
 #include "ui/widget/GridItem.hpp"
+#include "ui/widget/DetailCell.hpp"
 #include "ui/widget/FunctionButtons.hpp"
 #include "game/render/GLSLPParser.hpp"
+#include <borealis/views/cells/cell_selector.hpp>
 namespace beiklive
 {
     /// 存档槽位状态信息
@@ -138,6 +140,11 @@ namespace beiklive
             void _openNdsScreenSettings(bool topScreen);
             void _saveNdsScreenSettings();
             void _rebuildShaderParamUI();
+            brls::View* _createControllerPanel();
+            brls::View* _createNesPlayerBox(int player);
+            void _openNesKeyCapture(beiklive::DetailCell* cell, const std::string& cfgKey);
+            void _notifyPressedController();
+            std::vector<std::string> _controllerOptions() const;
 
             /// 清除当前侧边栏面板
             void _dismissSidePanel(int idx = -1); // idx=-1=全部

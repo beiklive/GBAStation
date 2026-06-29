@@ -310,6 +310,7 @@ namespace beiklive
     {
         Box::draw(vg, x, y, width, height, style, ctx);
 
+        GameInputManager::instance().setActivePlatform(m_gameEntry.platform);
         GameInputManager::instance().handleInput(); // 每帧获取输入
         _pollNdsTouchInput();
         _updateNdsVirtualPointer();
@@ -1034,6 +1035,7 @@ namespace beiklive
     // ============================================================
     void GameView::_registerGameInput()
     {
+        GameSignal::instance().clearGameButtonMask(0);
         GameSignal::instance().clearGameButtonMask(1);
         // ---- 读取摇杆模式配置 -------------------------------------------
         bool joystickEnabled  = GET_SETTING_KEY_INT("input.joystick.enabled",  1) != 0;
@@ -1087,6 +1089,10 @@ namespace beiklive
             std::string val = GET_SETTING_KEY_STR(
                 cfgKey,
                 defaultValue);
+            const bool usePolledGameInput =
+                GET_SETTING_KEY_INT("input.polled_game_input", 1) != 0;
+            if (usePolledGameInput)
+                continue;
             if (val == "none" || val.empty()) continue;
             auto combos = beiklive::tools::parseMultiCombo(val);
             if (combos.empty()) continue;
@@ -1127,6 +1133,10 @@ namespace beiklive
                 std::string val = GET_SETTING_KEY_STR(
                     cfgKey,
                     beiklive::input_mapping::defaultHandleValue(info.cfgSuffix));
+                const bool usePolledGameInput =
+                    GET_SETTING_KEY_INT("input.polled_game_input", 1) != 0;
+                if (usePolledGameInput)
+                    continue;
                 auto combos = beiklive::tools::parseMultiCombo(val);
                 if (combos.empty()) continue;
                 unsigned rid = info.retroId;
@@ -2526,7 +2536,14 @@ namespace beiklive
                 }
             }
 
-            // ---- 从信号更新游戏按键状态 ----
+            // ---- 从输入管理器更新游戏按键状态 ----
+            GameInputManager::instance().setActivePlatform(m_gameEntry.platform);
+            GameInputManager::instance().refreshPlayerInputStatesForPlatform(m_gameEntry.platform);
+            GameSignal::instance().setGameButtonMask(
+                0, GameInputManager::instance().getPlayerInputState(0).buttonMask);
+            GameSignal::instance().setGameButtonMask(
+                1, GameInputManager::instance().getPlayerInputState(1).buttonMask);
+
             // 先处理连发（Turbo）状态
             m_turboFrameCount++;
             if (m_turboFrameCount >= m_turboToggleInterval) {
@@ -2556,24 +2573,7 @@ namespace beiklive
                 GameSignal::instance().releaseGameButton(0);
             }
             m_core->SetButtonsFromSignal(0);
-            if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNES))
-            {
-                const auto player2 = GameInputManager::instance().getPlayerInputState(1);
-                const uint32_t previousMask = GameSignal::instance().getGameButtonMask(1);
-                const uint32_t nextMask = player2.buttonMask;
-                const uint32_t changed = previousMask ^ nextMask;
-                for (unsigned i = 0; i < 16; ++i)
-                {
-                    const uint32_t bit = (1u << i);
-                    if ((changed & bit) == 0)
-                        continue;
-                    if (nextMask & bit)
-                        GameSignal::instance().pressGameButton(1, i);
-                    else
-                        GameSignal::instance().releaseGameButton(1, i);
-                }
-                m_core->SetButtonsFromSignal(1);
-            }
+            m_core->SetButtonsFromSignal(1);
 
             // ---- 决定本帧行为 ----
             bool ff      = sig.isFastForward();

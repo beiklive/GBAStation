@@ -189,6 +189,12 @@ public:
             m_gameButtonMasks[player].store(0, std::memory_order_release);
     }
 
+    /// 直接设置指定玩家的按键位掩码。
+    void setGameButtonMask(unsigned player, uint32_t mask) {
+        if (player < kMaxPlayers)
+            m_gameButtonMasks[player].store(mask, std::memory_order_release);
+    }
+
     // ---- 金手指切换信号 -------------------------------------------------
 
     /// UI 线程调用：请求切换指定金手指的启用状态。

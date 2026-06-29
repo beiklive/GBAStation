@@ -97,6 +97,9 @@ namespace beiklive
 
         GamepadState getGamepadState(int controllerNum);
         PlayerInputState getPlayerInputState(int playerIndex) const;
+        uint32_t getControllerButtonMask(int controllerIndex) const;
+        void refreshPlayerInputStatesForPlatform(int platform);
+        void setActivePlatform(int platform) { m_activePlatform = platform; }
         int getControllerCount() const
         {
             return brls::Application::getPlatform()
@@ -123,9 +126,12 @@ namespace beiklive
         bool inputDropped = false;
         bool inputEnabled = true;
         bool m_diagonalMode = true;  ///< 摇杆斜向模式：true=同时触发X+Y，false=仅触发主轴
+        int m_activePlatform = -1;
         GamepadState lastGamepadStates[GAMEPADS_MAX];
         PlayerInputState m_playerInputs[GAME_INPUT_MAX_PLAYERS];
         int m_playerAssignments[GAME_INPUT_MAX_PLAYERS] = {0, 1};
+        bool m_nesMenuPressed[GAME_INPUT_MAX_PLAYERS] = {false, false};
+        bool m_prevNesMenuPressed[GAME_INPUT_MAX_PLAYERS] = {false, false};
 
         InputState inputState;
         std::map<int, uint64_t > pressTime;
@@ -142,6 +148,14 @@ namespace beiklive
         void handleControllerInput();
         void updatePlayerAssignments(int controllersCount);
         void updatePlayerStates();
+        uint32_t buildMaskFromGamepadState(const GamepadState& pad) const;
+        uint32_t buildMaskFromConfiguredMapping(const GamepadState& pad, const std::string& prefix) const;
+        bool containsComboInMask(const GamepadState& pad, const std::vector<int>& combo) const;
+        bool isNesDualPlayerMode() const;
+        bool consumeNesPlayerMenuPress();
+        void rebuildActiveInputsForHotkeys(int pollCount);
+        void appendActiveInputsFromGamepadState(const GamepadState& state);
+        void appendKeyboardHotkeyInputs();
         void checkHotkeys();
         GamepadState getControllerState(int controllerNum);
         void updateInputState();

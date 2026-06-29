@@ -1,4 +1,6 @@
 #include "GameInputManager.hpp"
+#include "game/control/InputMappingDefaults.hpp"
+#include "core/Tools.hpp"
 
 namespace beiklive
 {
@@ -152,35 +154,29 @@ namespace beiklive
 
     void GameInputManager::handleControllerInput()
     {
+#ifdef __SWITCH__
         static int lastControllerCount = 0;
+#endif
 
         // 获取所有控制器数量
         auto controllersCount = brls::Application::getPlatform()
                                     ->getInputManager()
                                     ->getControllersConnectedCount();
         updatePlayerAssignments(controllersCount);
-        int i = 0;
-#ifdef __SWITCH__
-        for (i = 0; i < controllersCount; i++)
-        {
+        int pollCount = controllersCount;
+#ifndef __SWITCH__
+        if (pollCount <= 0)
+            pollCount = 1;
 #endif
+        if (pollCount > GAMEPADS_MAX)
+            pollCount = GAMEPADS_MAX;
+
+        for (int i = 0; i < pollCount; i++)
+        {
             GamepadState gamepadState = getControllerState(i);
             GamepadState prevGamepadState = lastGamepadStates[i];
             lastGamepadStates[i] = gamepadState;
             currentTime += 16;
-
-            // ── 键盘轮询（Switch 平台跳过）──
-#ifndef __SWITCH__
-            auto* im = brls::Application::getPlatform()->getInputManager();
-            if (im) {
-                for (const auto& hk : hotkeyBindings)
-                    for (const auto& combo : hk.buttons)
-                        for (int key : combo)
-                            if (key >= 32 && im->getKeyboardKeyState(
-                                    static_cast<brls::BrlsKeyboardScancode>(key)))
-                                activeInputs.push_back(key);
-            }
-#endif
 
             if (!gamepadState.is_equal(prevGamepadState))
             {
@@ -198,9 +194,8 @@ namespace beiklive
                 }
 #endif
             }
-#ifdef __SWITCH__
         }
-#endif
+        rebuildActiveInputsForHotkeys(pollCount);
         updatePlayerStates();
         updateInputState();
         checkHotkeys();
@@ -209,6 +204,13 @@ namespace beiklive
     {
         for (auto &hk : hotkeyBindings)
         {
+            if (isNesDualPlayerMode() && hk.emuKey == EmuFunctionKey::EMU_OPEN_MENU)
+            {
+                if (consumeNesPlayerMenuPress())
+                    hk.callback();
+                continue;
+            }
+
             for (auto &combo : hk.buttons)
             {
                 bool now = containsCombo(inputState.current, combo);
@@ -267,9 +269,6 @@ namespace beiklive
     }
     GamepadState GameInputManager::getControllerState(int controllerNum)
     {
-        const bool collectActiveInputs = (controllerNum == m_playerAssignments[0]);
-        if (collectActiveInputs)
-            activeInputs.clear();
         brls::ControllerState rawController{};
         brls::ControllerState controller{};
 
@@ -278,9 +277,11 @@ namespace beiklive
         brls::Application::getPlatform()->getInputManager()->updateControllerState(
             &rawController, controllerNum);
 #else
-        brls::Application::getPlatform()
-            ->getInputManager()
-            ->updateUnifiedControllerState(&rawController);
+        auto* im = brls::Application::getPlatform()->getInputManager();
+        if (im && im->getControllersConnectedCount() > controllerNum)
+            im->updateControllerState(&rawController, controllerNum);
+        else if (im)
+            im->updateUnifiedControllerState(&rawController);
 #endif
         // 防止以后按键需要调整映射，先把原始输入状态保存下来，后续处理都基于这个状态进行转换
         controller = rawController;
@@ -337,32 +338,6 @@ namespace beiklive
         };
 
         // 存入手柄状态中，后续处理热键时会用到
-        if (collectActiveInputs && gamepadState.leftTrigger >= 0xFF)
-        {
-            activeInputs.push_back(STATE_PAD_LT);
-        }
-        if (collectActiveInputs && gamepadState.rightTrigger >= 0xFF)
-        {
-            activeInputs.push_back(STATE_PAD_RT);
-        }
-        if (collectActiveInputs)
-        {
-            processStick(leftXAxis, leftYAxis,
-                         STATE_PAD_LEFT_STICK_X,
-                         STATE_PAD_LEFT_STICK_Y,
-                         STATE_PAD_LEFT_STICK_LEFT,
-                         STATE_PAD_LEFT_STICK_RIGHT,
-                         STATE_PAD_LEFT_STICK_UP,
-                         STATE_PAD_LEFT_STICK_DOWN);
-
-            processStick(rightXAxis, rightYAxis,
-                         STATE_PAD_RIGHT_STICK_X,
-                         STATE_PAD_RIGHT_STICK_Y,
-                         STATE_PAD_RIGHT_STICK_LEFT,
-                         STATE_PAD_RIGHT_STICK_RIGHT,
-                         STATE_PAD_RIGHT_STICK_UP,
-                         STATE_PAD_RIGHT_STICK_DOWN);
-        }
 
         // 开始逐个处理按钮输入，根据按钮状态设置对应的位
         auto SET_GAME_PAD_STATE = [&](int LIMELIGHT_KEY, int GAMEPAD_BUTTON)
@@ -370,8 +345,6 @@ namespace beiklive
             if (controller.buttons[GAMEPAD_BUTTON])
             {
                 gamepadState.buttonFlags |= LIMELIGHT_KEY; // 设置对应位
-                if (collectActiveInputs)
-                    activeInputs.push_back(GAMEPAD_BUTTON);    // 记录这个按键被按下了
             }
             else
             {
@@ -523,6 +496,13 @@ namespace beiklive
         return m_playerInputs[playerIndex];
     }
 
+    uint32_t GameInputManager::getControllerButtonMask(int controllerIndex) const
+    {
+        if (controllerIndex < 0 || controllerIndex >= GAMEPADS_MAX)
+            return 0;
+        return buildMaskFromGamepadState(lastGamepadStates[controllerIndex]);
+    }
+
     int GameInputManager::getAssignedControllerForPlayer(int playerIndex) const
     {
         if (playerIndex < 0 || playerIndex >= GAME_INPUT_MAX_PLAYERS)
@@ -557,26 +537,289 @@ namespace beiklive
             if (controllerIndex < 0 || controllerIndex >= GAMEPADS_MAX)
                 continue;
 
-            const GamepadState& pad = lastGamepadStates[controllerIndex];
-            uint32_t mask = 0;
-            if (pad.buttonFlags & A_FLAG)     mask |= (1u << RETRO_DEVICE_ID_JOYPAD_A);
-            if (pad.buttonFlags & B_FLAG)     mask |= (1u << RETRO_DEVICE_ID_JOYPAD_B);
-            if (pad.buttonFlags & X_FLAG)     mask |= (1u << RETRO_DEVICE_ID_JOYPAD_X);
-            if (pad.buttonFlags & Y_FLAG)     mask |= (1u << RETRO_DEVICE_ID_JOYPAD_Y);
-            if (pad.buttonFlags & UP_FLAG)    mask |= (1u << RETRO_DEVICE_ID_JOYPAD_UP);
-            if (pad.buttonFlags & DOWN_FLAG)  mask |= (1u << RETRO_DEVICE_ID_JOYPAD_DOWN);
-            if (pad.buttonFlags & LEFT_FLAG)  mask |= (1u << RETRO_DEVICE_ID_JOYPAD_LEFT);
-            if (pad.buttonFlags & RIGHT_FLAG) mask |= (1u << RETRO_DEVICE_ID_JOYPAD_RIGHT);
-            if (pad.buttonFlags & LB_FLAG)    mask |= (1u << RETRO_DEVICE_ID_JOYPAD_L);
-            if (pad.buttonFlags & RB_FLAG)    mask |= (1u << RETRO_DEVICE_ID_JOYPAD_R);
-            if (pad.buttonFlags & BACK_FLAG)  mask |= (1u << RETRO_DEVICE_ID_JOYPAD_SELECT);
-            if (pad.buttonFlags & PLAY_FLAG)  mask |= (1u << RETRO_DEVICE_ID_JOYPAD_START);
-            if (pad.leftTrigger > 0)          mask |= (1u << RETRO_DEVICE_ID_JOYPAD_L2);
-            if (pad.rightTrigger > 0)         mask |= (1u << RETRO_DEVICE_ID_JOYPAD_R2);
-            if (pad.buttonFlags & LS_CLK_FLAG) mask |= (1u << RETRO_DEVICE_ID_JOYPAD_L3);
-            if (pad.buttonFlags & RS_CLK_FLAG) mask |= (1u << RETRO_DEVICE_ID_JOYPAD_R3);
-            m_playerInputs[player].buttonMask = mask;
+            m_playerInputs[player].buttonMask = buildMaskFromGamepadState(lastGamepadStates[controllerIndex]);
         }
+    }
+
+    bool GameInputManager::isNesDualPlayerMode() const
+    {
+        return m_activePlatform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNES) &&
+               GET_SETTING_KEY_INT("nes.multiplayer.enabled", 0) != 0;
+    }
+
+    bool GameInputManager::consumeNesPlayerMenuPress()
+    {
+        bool triggered = false;
+        for (int player = 0; player < GAME_INPUT_MAX_PLAYERS; ++player)
+        {
+            if (m_nesMenuPressed[player] && !m_prevNesMenuPressed[player])
+                triggered = true;
+            m_prevNesMenuPressed[player] = m_nesMenuPressed[player];
+        }
+        return triggered;
+    }
+
+    void GameInputManager::appendActiveInputsFromGamepadState(const GamepadState& state)
+    {
+        if (state.leftTrigger >= 0xFF)
+            activeInputs.push_back(STATE_PAD_LT);
+        if (state.rightTrigger >= 0xFF)
+            activeInputs.push_back(STATE_PAD_RT);
+
+        processStick(
+            static_cast<float>(state.leftStickX) / 0x7FFF,
+            -static_cast<float>(state.leftStickY) / 0x7FFF,
+            STATE_PAD_LEFT_STICK_X,
+            STATE_PAD_LEFT_STICK_Y,
+            STATE_PAD_LEFT_STICK_LEFT,
+            STATE_PAD_LEFT_STICK_RIGHT,
+            STATE_PAD_LEFT_STICK_UP,
+            STATE_PAD_LEFT_STICK_DOWN);
+
+        processStick(
+            static_cast<float>(state.rightStickX) / 0x7FFF,
+            -static_cast<float>(state.rightStickY) / 0x7FFF,
+            STATE_PAD_RIGHT_STICK_X,
+            STATE_PAD_RIGHT_STICK_Y,
+            STATE_PAD_RIGHT_STICK_LEFT,
+            STATE_PAD_RIGHT_STICK_RIGHT,
+            STATE_PAD_RIGHT_STICK_UP,
+            STATE_PAD_RIGHT_STICK_DOWN);
+
+        if (state.buttonFlags & UP_FLAG)     activeInputs.push_back(brls::BUTTON_UP);
+        if (state.buttonFlags & DOWN_FLAG)   activeInputs.push_back(brls::BUTTON_DOWN);
+        if (state.buttonFlags & LEFT_FLAG)   activeInputs.push_back(brls::BUTTON_LEFT);
+        if (state.buttonFlags & RIGHT_FLAG)  activeInputs.push_back(brls::BUTTON_RIGHT);
+        if (state.buttonFlags & A_FLAG)      activeInputs.push_back(brls::BUTTON_A);
+        if (state.buttonFlags & B_FLAG)      activeInputs.push_back(brls::BUTTON_B);
+        if (state.buttonFlags & X_FLAG)      activeInputs.push_back(brls::BUTTON_X);
+        if (state.buttonFlags & Y_FLAG)      activeInputs.push_back(brls::BUTTON_Y);
+        if (state.buttonFlags & BACK_FLAG)   activeInputs.push_back(brls::BUTTON_BACK);
+        if (state.buttonFlags & PLAY_FLAG)   activeInputs.push_back(brls::BUTTON_START);
+        if (state.buttonFlags & LB_FLAG)     activeInputs.push_back(brls::BUTTON_LB);
+        if (state.buttonFlags & RB_FLAG)     activeInputs.push_back(brls::BUTTON_RB);
+        if (state.buttonFlags & LS_CLK_FLAG) activeInputs.push_back(brls::BUTTON_LSB);
+        if (state.buttonFlags & RS_CLK_FLAG) activeInputs.push_back(brls::BUTTON_RSB);
+    }
+
+    void GameInputManager::appendKeyboardHotkeyInputs()
+    {
+#ifndef __SWITCH__
+        auto* im = brls::Application::getPlatform()->getInputManager();
+        if (!im)
+            return;
+        for (const auto& hk : hotkeyBindings)
+            for (const auto& combo : hk.buttons)
+                for (int key : combo)
+                    if (key >= 32 && im->getKeyboardKeyState(
+                            static_cast<brls::BrlsKeyboardScancode>(key)))
+                        activeInputs.push_back(key);
+#endif
+    }
+
+    void GameInputManager::rebuildActiveInputsForHotkeys(int pollCount)
+    {
+        activeInputs.clear();
+        appendKeyboardHotkeyInputs();
+
+        if (!isNesDualPlayerMode())
+        {
+            for (int i = 0; i < pollCount && i < GAMEPADS_MAX; ++i)
+                appendActiveInputsFromGamepadState(lastGamepadStates[i]);
+            return;
+        }
+
+        for (int player = 0; player < GAME_INPUT_MAX_PLAYERS; ++player)
+        {
+            m_nesMenuPressed[player] = false;
+            const std::string playerPrefix = player == 0 ? "nes.p1." : "nes.p2.";
+            const int defaultController = player == 0 ? 0 : 1;
+            const int controller = GET_SETTING_KEY_INT((playerPrefix + "controller").c_str(), defaultController);
+            if (controller < 0 || controller >= pollCount || controller >= GAMEPADS_MAX)
+                continue;
+
+            const std::string cfgKey = playerPrefix + "handle.menu";
+            const std::string fallback = player == 0 ? "PAD_LB" : "PAD_RB";
+            const std::string value = GET_SETTING_KEY_STR(cfgKey.c_str(), fallback);
+            if (value.empty() || value == "none")
+                continue;
+            auto combos = beiklive::tools::parseMultiCombo(value);
+            for (const auto& combo : combos)
+            {
+                if (containsComboInMask(lastGamepadStates[controller], combo))
+                {
+                    m_nesMenuPressed[player] = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    void GameInputManager::refreshPlayerInputStatesForPlatform(int platform)
+    {
+        for (auto& playerInput : m_playerInputs)
+            playerInput.buttonMask = 0;
+
+        const int controllersCount = std::min(getControllerCount(), GAMEPADS_MAX);
+        if (controllersCount <= 0)
+        {
+            m_playerInputs[0].buttonMask = buildMaskFromGamepadState(lastGamepadStates[0]);
+            return;
+        }
+
+        const bool isNes = platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNES);
+        const bool nesTwoPlayer = isNes && GET_SETTING_KEY_INT("nes.multiplayer.enabled", 0) != 0;
+        if (nesTwoPlayer)
+        {
+            for (int player = 0; player < GAME_INPUT_MAX_PLAYERS; ++player)
+            {
+                std::string playerPrefix = player == 0 ? "nes.p1." : "nes.p2.";
+                const int defaultController = player == 0 ? 0 : 1;
+                const int controller = GET_SETTING_KEY_INT((playerPrefix + "controller").c_str(), defaultController);
+                if (controller < 0 || controller >= controllersCount)
+                    continue;
+                m_playerInputs[player].buttonMask =
+                    buildMaskFromConfiguredMapping(lastGamepadStates[controller], playerPrefix);
+            }
+            return;
+        }
+
+        const std::string mappingPrefix = beiklive::input_mapping::platformPrefix(platform);
+        uint32_t mergedMask = 0;
+        for (int i = 0; i < controllersCount; ++i)
+        {
+            if (!mappingPrefix.empty())
+                mergedMask |= buildMaskFromConfiguredMapping(lastGamepadStates[i], mappingPrefix);
+            else
+                mergedMask |= buildMaskFromGamepadState(lastGamepadStates[i]);
+        }
+        m_playerInputs[0].buttonMask = mergedMask;
+    }
+
+    uint32_t GameInputManager::buildMaskFromGamepadState(const GamepadState& pad) const
+    {
+        uint32_t mask = 0;
+        if (pad.buttonFlags & A_FLAG)      mask |= (1u << RETRO_DEVICE_ID_JOYPAD_A);
+        if (pad.buttonFlags & B_FLAG)      mask |= (1u << RETRO_DEVICE_ID_JOYPAD_B);
+        if (pad.buttonFlags & X_FLAG)      mask |= (1u << RETRO_DEVICE_ID_JOYPAD_X);
+        if (pad.buttonFlags & Y_FLAG)      mask |= (1u << RETRO_DEVICE_ID_JOYPAD_Y);
+        if (pad.buttonFlags & UP_FLAG)     mask |= (1u << RETRO_DEVICE_ID_JOYPAD_UP);
+        if (pad.buttonFlags & DOWN_FLAG)   mask |= (1u << RETRO_DEVICE_ID_JOYPAD_DOWN);
+        if (pad.buttonFlags & LEFT_FLAG)   mask |= (1u << RETRO_DEVICE_ID_JOYPAD_LEFT);
+        if (pad.buttonFlags & RIGHT_FLAG)  mask |= (1u << RETRO_DEVICE_ID_JOYPAD_RIGHT);
+        if (pad.buttonFlags & LB_FLAG)     mask |= (1u << RETRO_DEVICE_ID_JOYPAD_L);
+        if (pad.buttonFlags & RB_FLAG)     mask |= (1u << RETRO_DEVICE_ID_JOYPAD_R);
+        if (pad.buttonFlags & BACK_FLAG)   mask |= (1u << RETRO_DEVICE_ID_JOYPAD_SELECT);
+        if (pad.buttonFlags & PLAY_FLAG)   mask |= (1u << RETRO_DEVICE_ID_JOYPAD_START);
+        if (pad.leftTrigger > 0)           mask |= (1u << RETRO_DEVICE_ID_JOYPAD_L2);
+        if (pad.rightTrigger > 0)          mask |= (1u << RETRO_DEVICE_ID_JOYPAD_R2);
+        if (pad.buttonFlags & LS_CLK_FLAG) mask |= (1u << RETRO_DEVICE_ID_JOYPAD_L3);
+        if (pad.buttonFlags & RS_CLK_FLAG) mask |= (1u << RETRO_DEVICE_ID_JOYPAD_R3);
+        return mask;
+    }
+
+    bool GameInputManager::containsComboInMask(const GamepadState& pad, const std::vector<int>& combo) const
+    {
+        for (int key : combo)
+        {
+            bool pressed = false;
+            switch (key)
+            {
+                case brls::BUTTON_A: pressed = (pad.buttonFlags & A_FLAG) != 0; break;
+                case brls::BUTTON_B: pressed = (pad.buttonFlags & B_FLAG) != 0; break;
+                case brls::BUTTON_X: pressed = (pad.buttonFlags & X_FLAG) != 0; break;
+                case brls::BUTTON_Y: pressed = (pad.buttonFlags & Y_FLAG) != 0; break;
+                case brls::BUTTON_UP: pressed = (pad.buttonFlags & UP_FLAG) != 0; break;
+                case brls::BUTTON_DOWN: pressed = (pad.buttonFlags & DOWN_FLAG) != 0; break;
+                case brls::BUTTON_LEFT: pressed = (pad.buttonFlags & LEFT_FLAG) != 0; break;
+                case brls::BUTTON_RIGHT: pressed = (pad.buttonFlags & RIGHT_FLAG) != 0; break;
+                case brls::BUTTON_LB: pressed = (pad.buttonFlags & LB_FLAG) != 0; break;
+                case brls::BUTTON_RB: pressed = (pad.buttonFlags & RB_FLAG) != 0; break;
+                case brls::BUTTON_BACK: pressed = (pad.buttonFlags & BACK_FLAG) != 0; break;
+                case brls::BUTTON_START: pressed = (pad.buttonFlags & PLAY_FLAG) != 0; break;
+                case brls::BUTTON_LSB: pressed = (pad.buttonFlags & LS_CLK_FLAG) != 0; break;
+                case brls::BUTTON_RSB: pressed = (pad.buttonFlags & RS_CLK_FLAG) != 0; break;
+                case STATE_PAD_LT: pressed = pad.leftTrigger > 0; break;
+                case STATE_PAD_RT: pressed = pad.rightTrigger > 0; break;
+                case STATE_PAD_LEFT_STICK_LEFT: pressed = pad.leftStickX < -0x4000; break;
+                case STATE_PAD_LEFT_STICK_RIGHT: pressed = pad.leftStickX > 0x4000; break;
+                case STATE_PAD_LEFT_STICK_UP: pressed = pad.leftStickY > 0x4000; break;
+                case STATE_PAD_LEFT_STICK_DOWN: pressed = pad.leftStickY < -0x4000; break;
+                case STATE_PAD_RIGHT_STICK_LEFT: pressed = pad.rightStickX < -0x4000; break;
+                case STATE_PAD_RIGHT_STICK_RIGHT: pressed = pad.rightStickX > 0x4000; break;
+                case STATE_PAD_RIGHT_STICK_UP: pressed = pad.rightStickY > 0x4000; break;
+                case STATE_PAD_RIGHT_STICK_DOWN: pressed = pad.rightStickY < -0x4000; break;
+                default: break;
+            }
+            if (!pressed)
+                return false;
+        }
+        return true;
+    }
+
+    uint32_t GameInputManager::buildMaskFromConfiguredMapping(const GamepadState& pad, const std::string& prefix) const
+    {
+        struct NesMapInfo
+        {
+            const char* suffix;
+            const char* fallback;
+            unsigned retroId;
+        };
+        static const NesMapInfo maps[] = {
+            {"a", "PAD_A", RETRO_DEVICE_ID_JOYPAD_A},
+            {"b", "PAD_B", RETRO_DEVICE_ID_JOYPAD_B},
+            {"x", "PAD_X", RETRO_DEVICE_ID_JOYPAD_X},
+            {"y", "PAD_Y", RETRO_DEVICE_ID_JOYPAD_Y},
+            {"up", "PAD_UP", RETRO_DEVICE_ID_JOYPAD_UP},
+            {"down", "PAD_DOWN", RETRO_DEVICE_ID_JOYPAD_DOWN},
+            {"left", "PAD_LEFT", RETRO_DEVICE_ID_JOYPAD_LEFT},
+            {"right", "PAD_RIGHT", RETRO_DEVICE_ID_JOYPAD_RIGHT},
+            {"l", "PAD_LB", RETRO_DEVICE_ID_JOYPAD_L},
+            {"r", "PAD_RB", RETRO_DEVICE_ID_JOYPAD_R},
+            {"l2", "PAD_LT", RETRO_DEVICE_ID_JOYPAD_L2},
+            {"r2", "PAD_RT", RETRO_DEVICE_ID_JOYPAD_R2},
+            {"l3", "PAD_LSB", RETRO_DEVICE_ID_JOYPAD_L3},
+            {"r3", "PAD_RSB", RETRO_DEVICE_ID_JOYPAD_R3},
+            {"start", "PAD_START", RETRO_DEVICE_ID_JOYPAD_START},
+            {"select", "PAD_BACK", RETRO_DEVICE_ID_JOYPAD_SELECT},
+        };
+
+        uint32_t mask = 0;
+        const bool playerSpecificNes = prefix == "nes.p1." || prefix == "nes.p2.";
+        const unsigned platformMask = playerSpecificNes
+            ? beiklive::input_mapping::kPlatformNes
+            : beiklive::input_mapping::platformMaskForPrefix(prefix);
+        for (const auto& entry : maps)
+        {
+            bool supported = playerSpecificNes;
+            if (!supported)
+            {
+                for (const auto& def : beiklive::input_mapping::kGameButtonDefaults)
+                {
+                    if (std::string(entry.suffix) == def.suffix)
+                    {
+                        supported = (def.platformMask & platformMask) != 0;
+                        break;
+                    }
+                }
+            }
+            if (!supported)
+                continue;
+            const std::string key = prefix + "handle." + entry.suffix;
+            const std::string value = GET_SETTING_KEY_STR(key.c_str(), entry.fallback);
+            if (value.empty() || value == "none")
+                continue;
+            auto combos = beiklive::tools::parseMultiCombo(value);
+            for (const auto& combo : combos)
+            {
+                if (containsComboInMask(pad, combo))
+                {
+                    mask |= (1u << entry.retroId);
+                    break;
+                }
+            }
+        }
+        return mask;
     }
 
 } // namespace beiklive
