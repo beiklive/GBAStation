@@ -1,5 +1,6 @@
 #include "GameDetailPage.hpp"
 #include "core/Tools.hpp"
+#include "core/cheat/CheatSystem.hpp"
 
 #include <filesystem>
 #include <fstream>
@@ -360,7 +361,7 @@ namespace beiklive
         m_cheatListBox->clearViews(true);
 
         std::string path = _getCheatPath();
-        m_cheatEntries = beiklive::parseChtFile(path);
+        m_cheatEntries = beiklive::cheat::loadCheats({path, m_entry.path, m_entry.platform}).entries;
 
         if (m_cheatEntries.empty())
         {

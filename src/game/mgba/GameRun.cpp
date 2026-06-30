@@ -1,4 +1,5 @@
 #include "GameRun.hpp"
+#include "core/cheat/CheatSystem.hpp"
 
 namespace beiklive::gba
 {
@@ -335,7 +336,7 @@ void CoreMgba::Cleanup()
             return true; // 没有指定金手指路径，非错误
         }
 
-        m_cheats = beiklive::parseChtFile(path);
+        m_cheats = beiklive::cheat::loadChtFile(path);
 
         if (m_cheats.empty())
         {
@@ -346,11 +347,13 @@ void CoreMgba::Cleanup()
 
         // 将金手指注册到核心，只注册激活的金手指
         m_core.cheatReset();
+        unsigned cheatIndex = 0;
         for (size_t i = 0; i < m_cheats.size(); ++i)
         {
-            if (m_cheats[i].enabled)
+            if (m_cheats[i].enabled && m_cheats[i].valid &&
+                m_cheats[i].payloadType == beiklive::CheatPayloadType::LibretroRaw)
             {
-                m_core.cheatSet(static_cast<unsigned>(i), true, m_cheats[i].code);
+                m_core.cheatSet(cheatIndex++, true, m_cheats[i].code);
             }
         }
         return true;
@@ -360,11 +363,13 @@ void CoreMgba::Cleanup()
     {
         m_core.cheatReset();
         // 重新注册所有金手指，保持启用状态不变
+        unsigned cheatIndex = 0;
         for (size_t i = 0; i < m_cheats.size(); ++i)
         {
-            if (m_cheats[i].enabled)
+            if (m_cheats[i].enabled && m_cheats[i].valid &&
+                m_cheats[i].payloadType == beiklive::CheatPayloadType::LibretroRaw)
             {
-                m_core.cheatSet(static_cast<unsigned>(i), true, m_cheats[i].code);
+                m_core.cheatSet(cheatIndex++, true, m_cheats[i].code);
             }
         }
     }

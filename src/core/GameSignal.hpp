@@ -2,6 +2,9 @@
 
 #include <atomic>
 #include <cstdint>
+#include <deque>
+#include <mutex>
+#include <vector>
 #include "core/Singleton.hpp"
 
 namespace beiklive {
@@ -197,20 +200,33 @@ public:
 
     // ---- 金手指切换信号 -------------------------------------------------
 
+    struct CheatToggleReq { int idx = -1; bool enabled = false; bool pending = false; };
+
     /// UI 线程调用：请求切换指定金手指的启用状态。
     void requestCheatToggle(int idx, bool enabled) {
-        m_pendingCheatIdx.store(idx, std::memory_order_release);
-        m_pendingCheatEnabled.store(enabled, std::memory_order_release);
+        std::lock_guard<std::mutex> lock(m_cheatToggleMutex);
+        m_pendingCheatToggles.push_back({idx, enabled, true});
     }
 
     /// 游戏线程调用：获取并消费金手指切换请求（返回 {idx, hasRequest}）。
     /// 调用后自动清除请求。
-    struct CheatToggleReq { int idx = -1; bool enabled = false; bool pending = false; };
     CheatToggleReq consumeCheatToggle() {
-        int idx = m_pendingCheatIdx.exchange(-1, std::memory_order_acq_rel);
-        if (idx < 0) return {};
-        bool en = m_pendingCheatEnabled.exchange(false, std::memory_order_acq_rel);
-        return {idx, en, true};
+        std::lock_guard<std::mutex> lock(m_cheatToggleMutex);
+        if (m_pendingCheatToggles.empty())
+            return {};
+        CheatToggleReq req = m_pendingCheatToggles.front();
+        m_pendingCheatToggles.pop_front();
+        return req;
+    }
+
+    /// 游戏线程调用：一次性获取并消费当前所有金手指切换请求。
+    std::vector<CheatToggleReq> consumeCheatToggles() {
+        std::lock_guard<std::mutex> lock(m_cheatToggleMutex);
+        std::vector<CheatToggleReq> requests(
+            m_pendingCheatToggles.begin(),
+            m_pendingCheatToggles.end());
+        m_pendingCheatToggles.clear();
+        return requests;
     }
 
     // ---- 自动存档信号（退出时使用）-----------------------------------
@@ -270,8 +286,10 @@ public:
         m_requestOpenMenu.store(false, std::memory_order_relaxed);
         m_requestOpenRewindUI.store(false, std::memory_order_relaxed);
         m_pendingRewindRestore.store(-1, std::memory_order_relaxed);
-        m_pendingCheatIdx.store(-1, std::memory_order_relaxed);
-        m_pendingCheatEnabled.store(false, std::memory_order_relaxed);
+        {
+            std::lock_guard<std::mutex> lock(m_cheatToggleMutex);
+            m_pendingCheatToggles.clear();
+        }
         m_pendingReloadCheats.store(false, std::memory_order_relaxed);
         m_pendingAutoSave.store(-1, std::memory_order_relaxed);
         m_autoSaveDone.store(false, std::memory_order_relaxed);
@@ -293,8 +311,8 @@ private:
     std::atomic<bool> m_requestOpenMenu{false}; ///< 打开菜单请求
     std::atomic<bool> m_requestOpenRewindUI{false}; ///< 打开倒带UI请求
     std::atomic<int>  m_pendingRewindRestore{-1};   ///< 待恢复的倒带帧索引（-1=无）
-    std::atomic<int>  m_pendingCheatIdx{-1};          ///< 待切换的金手指索引
-    std::atomic<bool> m_pendingCheatEnabled{false};   ///< 待切换的金手指启用状态
+    std::mutex m_cheatToggleMutex;
+    std::deque<CheatToggleReq> m_pendingCheatToggles; ///< 待切换的金手指队列
     std::atomic<bool> m_pendingReloadCheats{false};   ///< 待重载全部金手指
     std::atomic<int>  m_pendingAutoSave{-1};            ///< 待自动存档槽位（-1=无）
     std::atomic<bool> m_autoSaveDone{false};             ///< 退出自动存档是否已处理完毕

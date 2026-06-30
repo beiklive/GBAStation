@@ -1,5 +1,6 @@
 #include "CoreUtils.hpp"
 #include "core/Tools.hpp"
+#include "core/cheat/CheatSystem.hpp"
 #include "core/constexpr.h"
 #include <filesystem>
 #include <fstream>
@@ -62,15 +63,17 @@ bool loadCheats(LibretroLoader& core, const std::string& cheatPath, std::vector<
     if (cheatPath.empty())
         return true;
 
-    out = beiklive::parseChtFile(cheatPath);
+    out = beiklive::cheat::loadChtFile(cheatPath);
     if (out.empty())
         return true;
 
     core.cheatReset();
+    unsigned cheatIndex = 0;
     for (size_t i = 0; i < out.size(); ++i)
     {
-        if (out[i].enabled)
-            core.cheatSet(static_cast<unsigned>(i), true, out[i].code);
+        if (out[i].enabled && out[i].valid &&
+            out[i].payloadType == beiklive::CheatPayloadType::LibretroRaw)
+            core.cheatSet(cheatIndex++, true, out[i].code);
     }
     return true;
 }
@@ -78,10 +81,12 @@ bool loadCheats(LibretroLoader& core, const std::string& cheatPath, std::vector<
 void updateCheats(LibretroLoader& core, const std::vector<CheatEntry>& cheats)
 {
     core.cheatReset();
+    unsigned cheatIndex = 0;
     for (size_t i = 0; i < cheats.size(); ++i)
     {
-        if (cheats[i].enabled)
-            core.cheatSet(static_cast<unsigned>(i), true, cheats[i].code);
+        if (cheats[i].enabled && cheats[i].valid &&
+            cheats[i].payloadType == beiklive::CheatPayloadType::LibretroRaw)
+            core.cheatSet(cheatIndex++, true, cheats[i].code);
     }
 }
 

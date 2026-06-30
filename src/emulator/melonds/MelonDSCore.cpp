@@ -13,6 +13,7 @@
 #include "Savestate.h"
 #include "core/GameSignal.hpp"
 #include "core/Tools.hpp"
+#include "core/cheat/CheatSystem.hpp"
 #include "core/game_database.hpp"
 
 #include <borealis.hpp>
@@ -174,49 +175,6 @@ bool readWholeFile(const std::string& path, std::vector<uint8_t>& out)
     return LoadBinaryVector(path, out);
 }
 
-std::string lowerExtension(const std::string& path)
-{
-    std::string ext = std::filesystem::path(path).extension().string();
-    std::transform(ext.begin(), ext.end(), ext.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    return ext;
-}
-
-std::string cheatStateKey(const beiklive::CheatEntry& cheat)
-{
-    return cheat.desc + "\n" + cheat.code;
-}
-
-std::vector<std::string> extractHexTokens(const std::string& code)
-{
-    std::vector<std::string> tokens;
-    std::string token;
-    auto flush = [&]() {
-        if (token.empty())
-            return;
-        if (token.size() > 8 && token.size() % 8 == 0)
-        {
-            for (size_t i = 0; i < token.size(); i += 8)
-                tokens.push_back(token.substr(i, 8));
-        }
-        else
-        {
-            tokens.push_back(token);
-        }
-        token.clear();
-    };
-
-    for (char ch : code)
-    {
-        if (std::isxdigit(static_cast<unsigned char>(ch)))
-            token.push_back(ch);
-        else
-            flush();
-    }
-    flush();
-    return tokens;
-}
-
 bool parseU32Hex(const std::string& text, melonDS::u32& out)
 {
     if (text.empty() || text.size() > 8)
@@ -244,7 +202,15 @@ melonDS::ARCode cheatEntryToArCode(const beiklive::CheatEntry& cheat)
     ar.Description = "";
     ar.Enabled = cheat.enabled;
 
-    auto tokens = extractHexTokens(cheat.code);
+    if (!cheat.ndsWords.empty())
+    {
+        ar.Code.reserve(cheat.ndsWords.size());
+        for (const auto word : cheat.ndsWords)
+            ar.Code.push_back(static_cast<melonDS::u32>(word));
+        return ar;
+    }
+
+    auto tokens = beiklive::cheat::extractHexTokens(cheat.code);
     if (tokens.size() % 2 != 0)
         tokens.pop_back();
     ar.Code.reserve(tokens.size());
@@ -885,6 +851,12 @@ void MelonDSCore::UpdateCheats()
     m_cheatToArIndex.reserve(m_cheats.size());
     for (const auto& cheat : m_cheats)
     {
+        if (cheat.payloadType == beiklive::CheatPayloadType::Category || !cheat.valid)
+        {
+            m_cheatToArIndex.push_back(-1);
+            continue;
+        }
+
         auto ar = cheatEntryToArCode(cheat);
         if (!ar.Code.empty())
         {
@@ -907,13 +879,18 @@ void MelonDSCore::ToggleCheat(int idx, bool enabled)
     if (m_cheats[static_cast<size_t>(idx)].code.empty())
         return;
     m_cheats[static_cast<size_t>(idx)].enabled = enabled;
-    if (idx < static_cast<int>(m_cheatToArIndex.size()))
+
+    if (enabled && m_cheats[static_cast<size_t>(idx)].exclusiveGroup >= 0)
     {
-        int arIdx = m_cheatToArIndex[static_cast<size_t>(idx)];
-        if (arIdx >= 0 && arIdx < static_cast<int>(m_arCheats.size()))
-            m_arCheats[static_cast<size_t>(arIdx)].Enabled = enabled;
+        const int group = m_cheats[static_cast<size_t>(idx)].exclusiveGroup;
+        for (size_t i = 0; i < m_cheats.size(); ++i)
+        {
+            if (static_cast<int>(i) != idx && m_cheats[i].exclusiveGroup == group)
+                m_cheats[i].enabled = false;
+        }
     }
-    applyArCheatsToEngine();
+
+    UpdateCheats();
 }
 
 void MelonDSCore::ReloadCheats()
@@ -925,24 +902,23 @@ void MelonDSCore::ReloadCheats()
     if (path.empty() || (!std::filesystem::exists(path) && !fallbackPath.empty()))
         path = fallbackPath;
 
-    const bool datFile = lowerExtension(path) == ".dat";
+    const bool datFile = beiklive::cheat::isNdsUsrCheatDat(path, m_gameEntry.platform);
     std::unordered_map<std::string, bool> previousState;
     if (datFile)
     {
         previousState.reserve(m_cheats.size());
         for (const auto& cheat : m_cheats)
-            previousState[cheatStateKey(cheat)] = cheat.enabled;
+            previousState[beiklive::cheat::stateKey(cheat)] = cheat.enabled;
     }
 
-    std::vector<CheatEntry> loaded = datFile
-        ? beiklive::parseNdsUsrCheatDat(path, m_gameEntry.path)
-        : beiklive::parseChtFile(path);
+    auto loadedResult = beiklive::cheat::loadCheats({path, m_gameEntry.path, m_gameEntry.platform});
+    std::vector<CheatEntry> loaded = std::move(loadedResult.entries);
 
     if (datFile)
     {
         for (auto& cheat : loaded)
         {
-            auto it = previousState.find(cheatStateKey(cheat));
+            auto it = previousState.find(beiklive::cheat::stateKey(cheat));
             if (it != previousState.end())
                 cheat.enabled = it->second;
         }

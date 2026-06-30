@@ -2456,6 +2456,12 @@ namespace beiklive
                 // 暂停时仍可消费金手指重载信号（来自菜单关闭时的批量同步）
                 if (sig.consumeReloadCheats() && m_core)
                     m_core->ReloadCheats();
+                // 暂停菜单中连续切换多个金手指时，也要及时同步到核心。
+                if (m_core) {
+                    for (const auto& cheatReq : sig.consumeCheatToggles())
+                        if (cheatReq.pending)
+                            m_core->ToggleCheat(cheatReq.idx, cheatReq.enabled);
+                }
                 // 暂停时允许截图，便于在菜单暂停后保存当前画面。
                 if (sig.consumeScreenshot())
                     _doScreenshot();
@@ -2518,9 +2524,11 @@ namespace beiklive
             }
 
             // ---- 金手指切换 ----
-            auto cheatReq = sig.consumeCheatToggle();
-            if (cheatReq.pending && m_core)
-                m_core->ToggleCheat(cheatReq.idx, cheatReq.enabled);
+            if (m_core) {
+                for (const auto& cheatReq : sig.consumeCheatToggles())
+                    if (cheatReq.pending)
+                        m_core->ToggleCheat(cheatReq.idx, cheatReq.enabled);
+            }
 
             // ---- 金手指重载 ----
             if (sig.consumeReloadCheats() && m_core)

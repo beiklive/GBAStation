@@ -1,5 +1,6 @@
 #include "GameMenuView.hpp"
 #include "core/Tools.hpp"
+#include "core/cheat/CheatSystem.hpp"
 #include "game/control/GameInputManager.hpp"
 #include "ui/widget/HintsBar.hpp"
 #include "ui/utils/FilePickerHelper.hpp"
@@ -1260,12 +1261,11 @@ namespace beiklive
         return wrapper;
     }
 
-    void GameMenuView::_loadCheatsFromPath(const std::string &path)
+        void GameMenuView::_loadCheatsFromPath(const std::string &path)
     {
-        m_cheatFileReadOnly = _isNdsUsrCheatDat(path);
-        m_cheats = m_cheatFileReadOnly
-            ? beiklive::parseNdsUsrCheatDat(path, m_gameEntry.path)
-            : beiklive::parseChtFile(path);
+        auto loaded = beiklive::cheat::loadCheats({path, m_gameEntry.path, m_gameEntry.platform});
+        m_cheatFileReadOnly = !loaded.editable;
+        m_cheats = std::move(loaded.entries);
         m_gameEntry.cheatPath = path;
         if (cheatPathLabel)
             cheatPathLabel->setText(beiklive::tools::getFileName(m_gameEntry.cheatPath));
@@ -1275,13 +1275,7 @@ namespace beiklive
 
     bool GameMenuView::_isNdsUsrCheatDat(const std::string& path) const
     {
-        if (m_gameEntry.platform != static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
-            return false;
-        std::filesystem::path cheatPath(path);
-        std::string ext = cheatPath.extension().string();
-        std::transform(ext.begin(), ext.end(), ext.begin(),
-                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-        return ext == ".dat";
+        return beiklive::cheat::isNdsUsrCheatDat(path, m_gameEntry.platform);
     }
 
     void GameMenuView::_saveEditableCheats()
@@ -1304,6 +1298,7 @@ namespace beiklive
             return;
         m_cheatItemBox->clearViews(true);
         m_cheatSwitches.clear();
+        m_cheatSwitches.resize(m_cheats.size(), nullptr);
 
         if (m_cheats.empty())
         {
@@ -1349,6 +1344,16 @@ namespace beiklive
                                 {
                     if (idx < (int)m_cheats.size()) {
                         m_cheats[idx].enabled = on;
+                        if (on && m_cheats[idx].exclusiveGroup >= 0) {
+                            const int group = m_cheats[idx].exclusiveGroup;
+                            for (int other = 0; other < (int)m_cheats.size(); ++other) {
+                                if (other == idx || m_cheats[other].exclusiveGroup != group)
+                                    continue;
+                                m_cheats[other].enabled = false;
+                                if (other < (int)m_cheatSwitches.size() && m_cheatSwitches[other])
+                                    m_cheatSwitches[other]->setState(false);
+                            }
+                        }
                         if (m_cheatToggleCallback) m_cheatToggleCallback(idx, on);
                         _updateCheatCount();
                         _saveEditableCheats();
@@ -1442,7 +1447,7 @@ namespace beiklive
                     return true;
                 });
 
-                m_cheatSwitches.push_back(sw);
+                m_cheatSwitches[static_cast<size_t>(i)] = sw;
                 m_cheatItemBox->addView(sw);
             }
         }

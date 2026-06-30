@@ -1,5 +1,8 @@
 #pragma once
 #include <borealis.hpp>
+#include <cstdint>
+#include <string>
+#include <vector>
 namespace beiklive
 {
     /// 核心类型标识符，用于选择静态链接的 libretro 核心。
@@ -160,11 +163,40 @@ namespace beiklive // 结构体
         std::string fileSize;               // 文件大小（字节），目录为0
         size_t childCount;                  // 子项数量，仅目录有效，文件为0
     };
+    enum class CheatSourceFormat
+    {
+        Unknown,
+        RetroArchCht,
+        PlainText,
+        NdsUsrCheatDat
+    };
+
+    enum class CheatPayloadType
+    {
+        None,
+        Category,
+        LibretroRaw,
+        MelonDsAr,
+        FrontendMemoryPatch,
+        Unsupported
+    };
+
     /// 金手指条目
     struct CheatEntry {
         std::string desc;    ///< 金手指名称
         std::string code;    ///< 金手指代码
         bool        enabled = true; ///< 是否启用
+
+        std::string id;       ///< 稳定条目 ID
+        std::string parentId; ///< 分类父节点 ID
+        CheatSourceFormat sourceFormat = CheatSourceFormat::Unknown;
+        CheatPayloadType payloadType = CheatPayloadType::LibretroRaw;
+        bool editable = true;
+        bool valid = true;
+        std::string diagnostic;
+        int exclusiveGroup = -1;
+
+        std::vector<uint32_t> ndsWords; ///< melonDS AR 引擎使用的预解析 words
     };
     struct RetroNameMap
     {
