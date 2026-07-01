@@ -46,13 +46,6 @@ public:
         m_cheats = cheats;
         _updateCheats();
     }
-    const std::vector<beiklive::CheatEntry>& GetCheats() const { return m_cheats; }
-    void UpdateCheats() { _updateCheats(); }
-    void ToggleCheat(int idx, bool enabled) {
-        if (idx < 0 || idx >= (int)m_cheats.size()) return;
-        m_cheats[idx].enabled = enabled;
-        _updateCheats();
-    }
     void ReloadCheats() { _loadCheats(); }
     void SetCheatPath(const std::string& path) { m_gameEntry.cheatPath = path; }
 

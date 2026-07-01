@@ -31,10 +31,6 @@ struct IEmulatorCore {
     virtual void NotifyConfigUpdated() = 0;
 
     virtual void ApplyCheats(const std::vector<CheatEntry>& cheats) = 0;
-    virtual const std::vector<CheatEntry>& GetCheats() const = 0;
-    virtual void UpdateCheats() = 0;
-    virtual void ToggleCheat(int idx, bool enabled) = 0;
-    virtual void ReloadCheats() = 0;
     virtual void SetCheatPath(const std::string& path) = 0;
 
     virtual bool IsReady() const = 0;

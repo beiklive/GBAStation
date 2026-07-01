@@ -871,28 +871,6 @@ void MelonDSCore::UpdateCheats()
     applyArCheatsToEngine();
 }
 
-void MelonDSCore::ToggleCheat(int idx, bool enabled)
-{
-    std::lock_guard<std::mutex> lock(m_ndsMutex);
-    if (idx < 0 || idx >= static_cast<int>(m_cheats.size()))
-        return;
-    if (m_cheats[static_cast<size_t>(idx)].code.empty())
-        return;
-    m_cheats[static_cast<size_t>(idx)].enabled = enabled;
-
-    if (enabled && m_cheats[static_cast<size_t>(idx)].exclusiveGroup >= 0)
-    {
-        const int group = m_cheats[static_cast<size_t>(idx)].exclusiveGroup;
-        for (size_t i = 0; i < m_cheats.size(); ++i)
-        {
-            if (static_cast<int>(i) != idx && m_cheats[i].exclusiveGroup == group)
-                m_cheats[i].enabled = false;
-        }
-    }
-
-    UpdateCheats();
-}
-
 void MelonDSCore::ReloadCheats()
 {
     std::lock_guard<std::mutex> lock(m_ndsMutex);

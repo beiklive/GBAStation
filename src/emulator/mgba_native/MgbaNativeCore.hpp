@@ -50,10 +50,7 @@ public:
     void NotifyConfigUpdated() override { applyConfig(); }
 
     void ApplyCheats(const std::vector<CheatEntry>& cheats) override;
-    const std::vector<CheatEntry>& GetCheats() const override { return m_cheats; }
-    void UpdateCheats() override { updateCheats(); }
-    void ToggleCheat(int idx, bool enabled) override;
-    void ReloadCheats() override;
+    void ReloadCheats();
     void SetCheatPath(const std::string& path) override;
 
     bool IsReady() const override { return m_ready; }

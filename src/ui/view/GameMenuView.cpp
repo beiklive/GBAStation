@@ -367,49 +367,28 @@ namespace beiklive
 
     }
 
-    // 金手指格式转换
-    // 输入：多行空格分隔 或 + 格式
-    // 输出：+ 连接格式
-    // 异常/失败：返回 "00000000+0000"
+    // 金手指格式转换：只统一行/段分隔符，不破坏核心原生格式。
+    // 例如 GBA VBA 的 ":"、GB Game Genie 的 "-" 需要原样交给核心解析。
     std::string convertCheatCode(const std::string& input) {
-        // 1. 空字符串 → 失败
-        if (input.empty()) {
-            return "00000000+0000";
-        }
-
-        // 2. 已经是 + 格式 → 直接返回
-        if (input.find('+') != std::string::npos) {
-            return input;
-        }
-
         std::string result;
-        bool hasValidChar = false;
+        bool lastWasSeparator = true;
 
-        // 3. 遍历字符，替换空白为 +
-        for (char c : input) {
-            // 合法字符：0-9, A-F, a-f（金手指只允许16进制）
-            bool isHex = (c >= '0' && c <= '9') ||
-                        (c >= 'A' && c <= 'F') ||
-                        (c >= 'a' && c <= 'f');
-
-            if (isHex) {
-                result += c;
-                hasValidChar = true;
+        for (unsigned char c : input) {
+            const bool separator = std::isspace(c) || c == '+' || c == ',' || c == ';';
+            if (separator) {
+                if (!result.empty() && !lastWasSeparator)
+                    result += '+';
+                lastWasSeparator = true;
+                continue;
             }
-            // 空白符（空格、换行、回车、冒号）→ 换成 +
-            else if (c == ' ' || c == '\n' || c == '\r' || c == ':') {
-                result += '+';
-            }
-            // 出现非法字符 → 直接判定转换失败
-            else {
-                return "00000000+0000";
-            }
+            if (c == '"' || c == '\'')
+                continue;
+            result += static_cast<char>(c);
+            lastWasSeparator = false;
         }
 
-        // 4. 没有有效16进制字符 → 失败
-        if (!hasValidChar) {
-            return "00000000+0000";
-        }
+        while (!result.empty() && result.back() == '+')
+            result.pop_back();
 
         return result;
     }
@@ -1361,6 +1340,8 @@ namespace beiklive
                                     m_cheatSwitches[other]->setState(false);
                             }
                         }
+                        brls::Logger::info("GameMenuView: cheat toggle idx={} enabled={} entries={} callback={}",
+                                           idx, on, m_cheats.size(), static_cast<bool>(m_cheatToggleCallback));
                         if (m_cheatToggleCallback) m_cheatToggleCallback(idx, on);
                         _updateCheatCount();
                         _saveEditableCheats();

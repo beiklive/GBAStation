@@ -70,10 +70,8 @@ public:
     void NotifyConfigUpdated() override;
 
     void ApplyCheats(const std::vector<CheatEntry>& cheats) override;
-    const std::vector<beiklive::CheatEntry>& GetCheats() const override { return m_cheats; }
-    void UpdateCheats() override;
-    void ToggleCheat(int idx, bool enabled) override;
-    void ReloadCheats() override;
+    void UpdateCheats();
+    void ReloadCheats();
     void SetCheatPath(const std::string& path) override { m_gameEntry.cheatPath = path; }
 
     bool IsReady() const override { return m_ready.load(std::memory_order_acquire); }

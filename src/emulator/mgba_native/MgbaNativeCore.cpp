@@ -18,6 +18,7 @@
 #include <cstring>
 #include <ctime>
 #include <cstdlib>
+#include <utility>
 
 #ifdef __SWITCH__
 #include <switch.h>
@@ -123,17 +124,33 @@ void applyGbPalette(mCoreConfig* config)
     }
 }
 
+std::string trimCopy(std::string text)
+{
+    const auto begin = text.find_first_not_of(" \t\r\n");
+    if (begin == std::string::npos)
+        return "";
+    const auto end = text.find_last_not_of(" \t\r\n");
+    return text.substr(begin, end - begin + 1);
+}
+
+bool hasOnlyHex(const std::string& text)
+{
+    return !text.empty() && std::all_of(text.begin(), text.end(), [](unsigned char ch) {
+        return std::isxdigit(ch) != 0;
+    });
+}
+
 std::vector<std::string> splitCheatTokens(const std::string& code)
 {
     std::vector<std::string> tokens;
     std::string current;
     for (unsigned char ch : code)
     {
-        if (std::isspace(ch) || ch == '+')
+        if (std::isspace(ch) || ch == '+' || ch == ',' || ch == ';')
         {
             if (!current.empty())
             {
-                tokens.push_back(current);
+                tokens.push_back(trimCopy(current));
                 current.clear();
             }
             continue;
@@ -141,42 +158,89 @@ std::vector<std::string> splitCheatTokens(const std::string& code)
         current.push_back(static_cast<char>(ch));
     }
     if (!current.empty())
-        tokens.push_back(current);
+        tokens.push_back(trimCopy(current));
     return tokens;
 }
 
-void addGbaRawCheatLines(mCheatSet* set, const std::string& code)
+bool addCheatLine(mCheatSet* set, const std::string& rawLine)
 {
-    auto tokens = splitCheatTokens(code);
-    std::vector<std::string> words;
-    for (const auto& token : tokens)
-    {
-        if (token.size() == 16)
-        {
-            words.push_back(token.substr(0, 8));
-            words.push_back(token.substr(8, 8));
-        }
-        else
-        {
-            words.push_back(token);
-        }
-    }
-
-    for (size_t i = 0; i + 1 < words.size(); i += 2)
-    {
-        std::string line = words[i] + " " + words[i + 1];
-        mCheatAddLine(set, line.c_str(), 0);
-    }
+    const std::string line = trimCopy(rawLine);
+    if (!set || line.empty())
+        return false;
+    return mCheatAddLine(set, line.c_str(), 0);
 }
 
-void addGbRawCheatLines(mCheatSet* set, const std::string& code)
+bool canTryMgbaCheat(const beiklive::CheatEntry& cheat)
 {
-    for (auto token : splitCheatTokens(code))
+    return cheat.payloadType == beiklive::CheatPayloadType::LibretroRaw ||
+           cheat.payloadType == beiklive::CheatPayloadType::FrontendMemoryPatch;
+}
+
+size_t addGbaCheatLines(mCheatSet* set, const std::string& code, size_t& rejected)
+{
+    size_t accepted = 0;
+    const auto tokens = splitCheatTokens(code);
+    for (size_t i = 0; i < tokens.size(); ++i)
     {
-        if (token.size() == 9 && token.find('-') == std::string::npos)
-            token = token.substr(0, 3) + "-" + token.substr(3, 3) + "-" + token.substr(6, 3);
-        mCheatAddLine(set, token.c_str(), 0);
+        const std::string& token = tokens[i];
+        if (token.empty())
+            continue;
+
+        std::string line = token;
+        if (token.find(':') == std::string::npos)
+        {
+            if ((token.size() == 12 || token.size() == 16) && hasOnlyHex(token))
+            {
+                line = token.substr(0, 8) + " " + token.substr(8);
+            }
+            else if (token.size() == 8 && hasOnlyHex(token) && i + 1 < tokens.size() &&
+                     (tokens[i + 1].size() == 4 || tokens[i + 1].size() == 8) &&
+                     hasOnlyHex(tokens[i + 1]))
+            {
+                line = token + " " + tokens[++i];
+            }
+        }
+
+        if (addCheatLine(set, line))
+            ++accepted;
+        else
+            ++rejected;
     }
+    return accepted;
+}
+
+size_t addGbCheatLines(mCheatSet* set, const std::string& code, size_t& rejected)
+{
+    size_t accepted = 0;
+    const auto tokens = splitCheatTokens(code);
+    for (size_t i = 0; i < tokens.size(); ++i)
+    {
+        const std::string& token = tokens[i];
+        if (token.empty())
+            continue;
+
+        std::string line = token;
+        if (token.find(':') == std::string::npos && token.find('-') == std::string::npos)
+        {
+            if (token.size() == 9 && hasOnlyHex(token))
+            {
+                line = token.substr(0, 3) + "-" + token.substr(3, 3) + "-" + token.substr(6, 3);
+            }
+            else if (token.size() == 4 && hasOnlyHex(token) && i + 2 < tokens.size() &&
+                     tokens[i + 1].size() == 2 && hasOnlyHex(tokens[i + 1]) &&
+                     tokens[i + 2].size() == 2 && hasOnlyHex(tokens[i + 2]))
+            {
+                line = token + tokens[i + 1] + tokens[i + 2];
+                i += 2;
+            }
+        }
+
+        if (addCheatLine(set, line))
+            ++accepted;
+        else
+            ++rejected;
+    }
+    return accepted;
 }
 
 } // namespace
@@ -205,8 +269,6 @@ bool MgbaNativeCore::SetupGame(beiklive::GameEntry gameEntry)
     brls::Logger::debug("MgbaNativeCore: SetupGame loadRom ok");
     Reset();
     brls::Logger::debug("MgbaNativeCore: SetupGame reset ok");
-    loadSram();
-    brls::Logger::debug("MgbaNativeCore: SetupGame loadSram ok");
     loadCheats();
     brls::Logger::debug("MgbaNativeCore: SetupGame loadCheats ok");
     captureVideoFrame();
@@ -377,25 +439,27 @@ void MgbaNativeCore::SetButtonsFromSignal(unsigned player)
 void MgbaNativeCore::ApplyCheats(const std::vector<CheatEntry>& cheats)
 {
     m_cheats = cheats;
-    updateCheats();
-}
-
-void MgbaNativeCore::ToggleCheat(int idx, bool enabled)
-{
-    if (idx < 0 || idx >= static_cast<int>(m_cheats.size()))
-        return;
-    m_cheats[static_cast<size_t>(idx)].enabled = enabled;
+    size_t enabled = 0;
+    for (const auto& cheat : m_cheats)
+    {
+        if (cheat.enabled)
+            ++enabled;
+    }
+    brls::Logger::info("MgbaNativeCore: ApplyCheats entries={} enabled={}",
+                       m_cheats.size(), enabled);
     updateCheats();
 }
 
 void MgbaNativeCore::ReloadCheats()
 {
+    brls::Logger::info("MgbaNativeCore: ReloadCheats path={}", m_gameEntry.cheatPath);
     loadCheats();
 }
 
 void MgbaNativeCore::SetCheatPath(const std::string& path)
 {
     m_gameEntry.cheatPath = path;
+    brls::Logger::info("MgbaNativeCore: SetCheatPath path={}", path);
     loadCheats();
 }
 
@@ -517,6 +581,8 @@ bool MgbaNativeCore::loadRom(const std::string& romPath)
     brls::Logger::debug("MgbaNativeCore: ROM file loaded");
     applyConfig();
     brls::Logger::debug("MgbaNativeCore: post-load config applied ok");
+    loadSram();
+    brls::Logger::debug("MgbaNativeCore: SRAM setup ok");
 
     unsigned desiredW = 0;
     unsigned desiredH = 0;
@@ -711,28 +777,25 @@ void MgbaNativeCore::updateLuxLevel()
 
 bool MgbaNativeCore::loadSram()
 {
-    if (!m_core || !m_core->savedataRestore)
+    if (!m_core)
         return true;
 
     const std::string path = saveFilePath();
-    if (path.empty() || !std::filesystem::exists(path))
+    if (path.empty())
         return true;
 
-    std::ifstream file(path, std::ios::binary);
-    if (!file)
+    std::error_code ec;
+    std::filesystem::create_directories(std::filesystem::path(path).parent_path(), ec);
+    if (ec)
     {
-        brls::Logger::warning("MgbaNativeCore: failed to open SRAM file: {}", path);
+        brls::Logger::warning("MgbaNativeCore: failed to create SRAM directory for {}: {}", path, ec.message());
         return true;
     }
 
-    std::vector<uint8_t> data((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-    if (data.empty())
-        return true;
-
-    if (!m_core->savedataRestore(m_core, data.data(), data.size(), true))
-        brls::Logger::warning("MgbaNativeCore: savedataRestore failed for {}", path);
+    if (!mCoreLoadSaveFile(m_core, path.c_str(), false))
+        brls::Logger::warning("MgbaNativeCore: failed to attach SRAM file: {}", path);
     else
-        brls::Logger::debug("MgbaNativeCore: SRAM loaded from {} ({} bytes)", path, data.size());
+        brls::Logger::info("MgbaNativeCore: SRAM file attached: {}", path);
     return true;
 }
 
@@ -741,12 +804,18 @@ bool MgbaNativeCore::loadCheats()
     if (m_gameEntry.cheatPath.empty())
     {
         m_cheats.clear();
+        brls::Logger::info("MgbaNativeCore: cleared cheats because cheatPath is empty");
         updateCheats();
         return true;
     }
 
-    m_cheats = beiklive::cheat::loadChtFile(m_gameEntry.cheatPath);
-    brls::Logger::info("MgbaNativeCore: loaded {} cheats from {}", m_cheats.size(), m_gameEntry.cheatPath);
+    auto loaded = beiklive::cheat::loadCheats(
+        {m_gameEntry.cheatPath, m_gameEntry.path, m_gameEntry.platform});
+    m_cheats = std::move(loaded.entries);
+    brls::Logger::info("MgbaNativeCore: loaded {} cheats from {} format={} editable={}",
+                       m_cheats.size(), m_gameEntry.cheatPath,
+                       static_cast<int>(loaded.format), loaded.editable);
+    updateCheats();
     return true;
 }
 
@@ -760,35 +829,90 @@ void MgbaNativeCore::updateCheats()
         return;
 
     mCheatDeviceClear(device);
-    mCheatSet* set = device->createSet(device, "BeikLiveStation");
-    if (!set)
-        return;
 
-    bool hasLines = false;
+    size_t createdSets = 0;
+    size_t acceptedLines = 0;
+    size_t rejectedLines = 0;
+    size_t disabledEntries = 0;
+    size_t invalidEntries = 0;
+    size_t unsupportedEntries = 0;
+    size_t categoryEntries = 0;
+    size_t emptyCodeEntries = 0;
     const bool isGba = m_core->platform(m_core) == mPLATFORM_GBA;
+
     for (const auto& cheat : m_cheats)
     {
-        if (!cheat.enabled || !cheat.valid || cheat.payloadType != beiklive::CheatPayloadType::LibretroRaw)
+        if (cheat.payloadType == beiklive::CheatPayloadType::Category)
+        {
+            ++categoryEntries;
+            continue;
+        }
+        if (!cheat.enabled)
+        {
+            ++disabledEntries;
+            continue;
+        }
+        if (cheat.code.empty())
+        {
+            ++emptyCodeEntries;
+            continue;
+        }
+        if (!canTryMgbaCheat(cheat))
+        {
+            ++unsupportedEntries;
+            continue;
+        }
+        if (!cheat.valid && cheat.payloadType != beiklive::CheatPayloadType::FrontendMemoryPatch)
+        {
+            ++invalidEntries;
+            continue;
+        }
+
+        const std::string setName = cheat.desc.empty() ? "BeikLiveStation cheat" : cheat.desc;
+        mCheatSet* set = device->createSet(device, setName.c_str());
+        if (!set)
             continue;
 
-        if (isGba)
-            addGbaRawCheatLines(set, cheat.code);
-        else
-            addGbRawCheatLines(set, cheat.code);
-        hasLines = true;
+        size_t setRejectedLines = 0;
+        const size_t setAcceptedLines = isGba
+            ? addGbaCheatLines(set, cheat.code, setRejectedLines)
+            : addGbCheatLines(set, cheat.code, setRejectedLines);
+        rejectedLines += setRejectedLines;
+
+        if (setAcceptedLines == 0)
+        {
+            mCheatSetDeinit(set);
+            continue;
+        }
+
+        set->enabled = true;
+        mCheatAddSet(device, set);
+        mCheatRefresh(device, set);
+
+        ++createdSets;
+        acceptedLines += setAcceptedLines;
     }
 
-    if (!hasLines)
+    if (createdSets == 0)
     {
-        set->deinit(set);
-        std::free(set);
+        if (rejectedLines > 0)
+        {
+            brls::Logger::warning("MgbaNativeCore: no mGBA cheat sets registered (total={} disabled={} rejectedLines={} invalid={} unsupported={} categories={} empty={})",
+                                  m_cheats.size(), disabledEntries, rejectedLines, invalidEntries,
+                                  unsupportedEntries, categoryEntries, emptyCodeEntries);
+        }
+        else
+        {
+            brls::Logger::info("MgbaNativeCore: no mGBA cheat sets to register (total={} disabled={} invalid={} unsupported={} categories={} empty={})",
+                               m_cheats.size(), disabledEntries, invalidEntries, unsupportedEntries,
+                               categoryEntries, emptyCodeEntries);
+        }
         return;
     }
 
-    set->enabled = true;
-    mCheatAddSet(device, set);
-    if (set->refresh)
-        set->refresh(set, device);
+    brls::Logger::info("MgbaNativeCore: registered mGBA cheat sets total={} sets={} disabled={} acceptedLines={} rejectedLines={} invalid={} unsupported={} categories={} empty={}",
+                       m_cheats.size(), createdSets, disabledEntries, acceptedLines, rejectedLines,
+                       invalidEntries, unsupportedEntries, categoryEntries, emptyCodeEntries);
 }
 
 void MgbaNativeCore::configureAudioStream()

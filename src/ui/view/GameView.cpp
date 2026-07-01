@@ -2497,6 +2497,34 @@ namespace beiklive
         // 读取shader开关配置
         // _onShaderToggle(GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_DISPLAY_SHADER_ENABLED, 0));
 
+        auto processCheatSignals = [this](GameSignal& sig, bool paused) {
+            if (!m_core)
+                return;
+
+            auto pathReq = sig.consumeCheatPathUpdate();
+            if (pathReq.pending)
+            {
+                brls::Logger::info("GameView: consume cheat path update paused={} path={}",
+                                   paused, pathReq.path);
+                m_gameEntry.cheatPath = pathReq.path;
+                m_core->SetCheatPath(pathReq.path);
+            }
+
+            auto applyReq = sig.consumeApplyCheats();
+            if (applyReq.pending)
+            {
+                size_t enabled = 0;
+                for (const auto& cheat : applyReq.cheats)
+                {
+                    if (cheat.enabled)
+                        ++enabled;
+                }
+                brls::Logger::info("GameView: consume cheat list paused={} entries={} enabled={}",
+                                   paused, applyReq.cheats.size(), enabled);
+                m_core->ApplyCheats(applyReq.cheats);
+            }
+        };
+
 
         while (m_running.load(std::memory_order_acquire))
         {
@@ -2535,15 +2563,8 @@ namespace beiklive
                     _pauseAudioForTransition(); // 暂停期间停止继续提交硬件音频缓冲
                     wasPaused = true;
                 }
-                // 暂停时仍可消费金手指重载信号（来自菜单关闭时的批量同步）
-                if (sig.consumeReloadCheats() && m_core)
-                    m_core->ReloadCheats();
-                // 暂停菜单中连续切换多个金手指时，也要及时同步到核心。
-                if (m_core) {
-                    for (const auto& cheatReq : sig.consumeCheatToggles())
-                        if (cheatReq.pending)
-                            m_core->ToggleCheat(cheatReq.idx, cheatReq.enabled);
-                }
+                // 暂停菜单中切换/编辑金手指时，也要及时同步到核心。
+                processCheatSignals(sig, true);
                 // 暂停时允许截图，便于在菜单暂停后保存当前画面。
                 if (sig.consumeScreenshot())
                     _doScreenshot();
@@ -2605,16 +2626,8 @@ namespace beiklive
                 }
             }
 
-            // ---- 金手指切换 ----
-            if (m_core) {
-                for (const auto& cheatReq : sig.consumeCheatToggles())
-                    if (cheatReq.pending)
-                        m_core->ToggleCheat(cheatReq.idx, cheatReq.enabled);
-            }
-
-            // ---- 金手指重载 ----
-            if (sig.consumeReloadCheats() && m_core)
-                m_core->ReloadCheats();
+            // ---- 金手指更新 ----
+            processCheatSignals(sig, false);
 
             // ---- 核心配置刷新 ----
             if (sig.consumeConfigUpdate() && m_core)
@@ -2844,6 +2857,10 @@ namespace beiklive
         f.close();
 
         brls::Logger::info("GameView: 已保存到 {} ({} bytes)", path, buf.size());
+        if (m_core->saveSram())
+            m_sramDirty = false;
+        else
+            brls::Logger::warning("GameView: 即时存档后刷新 SRAM 失败");
 
         // 保存缩略图
         auto frame = m_core->GetVideoFrame();
@@ -3077,17 +3094,22 @@ namespace beiklive
 
     void GameView::requestCheatPathUpdate(const std::string& path)
     {
-        if (m_core)
-        {
-            m_gameEntry.cheatPath = path;
-            m_core->SetCheatPath(path);
-        }
+        m_gameEntry.cheatPath = path;
+        brls::Logger::info("GameView: queue cheat path update path={}", path);
+        GameSignal::instance().requestCheatPathUpdate(path);
     }
 
     void GameView::applyCheatsUpdate(const std::vector<CheatEntry>& cheats)
     {
-        if (m_core)
-            m_core->ApplyCheats(cheats);
+        size_t enabled = 0;
+        for (const auto& cheat : cheats)
+        {
+            if (cheat.enabled)
+                ++enabled;
+        }
+        brls::Logger::info("GameView: queue cheat list entries={} enabled={}",
+                           cheats.size(), enabled);
+        GameSignal::instance().requestApplyCheats(cheats);
     }
 
     void GameView::_onShaderToggle(bool on)

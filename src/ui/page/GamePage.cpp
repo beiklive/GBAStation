@@ -351,9 +351,13 @@ namespace beiklive
             GameSignal::instance().requestQuickLoad(slot);
         });
 
-        // 注入金手指切换回调：通过 GameSignal 在游戏线程中执行实际切换
+        // 注入金手指切换回调：GameMenuView 只维护统一的显示/编辑状态，
+        // 实际应用由当前 IEmulatorCore::ApplyCheats 在游戏线程中分发。
         m_gameMenuView->setCheatToggleCallback([this](int idx, bool enabled) {
-            GameSignal::instance().requestCheatToggle(idx, enabled);
+            brls::Logger::info("GamePage: sync cheat list after toggle idx={} enabled={}",
+                               idx, enabled);
+            if (m_gameView && m_gameMenuView)
+                m_gameView->applyCheatsUpdate(m_gameMenuView->getCheats());
         });
 
         // 注入金手指文件变更回调：更新 GameEntry 的 cheatPath 并持久化
