@@ -1,0 +1,889 @@
+#include "MgbaNativeCore.hpp"
+
+#include "core/Tools.hpp"
+#include "core/cheat/CheatSystem.hpp"
+
+#include <mgba/core/blip_buf.h>
+#include <mgba/core/cheats.h>
+#include <mgba/core/config.h>
+#include <mgba/core/core.h>
+#include <mgba/core/serialize.h>
+#include <mgba/gb/interface.h>
+#include <mgba/internal/gb/overrides.h>
+#include <mgba-util/vfs.h>
+
+#include <algorithm>
+#include <cctype>
+#include <cstring>
+#include <ctime>
+#include <cstdlib>
+
+namespace beiklive::mgba_native
+{
+namespace
+{
+uint32_t makeRGBA8888(uint8_t r, uint8_t g, uint8_t b)
+{
+    return static_cast<uint32_t>(r) |
+           (static_cast<uint32_t>(g) << 8) |
+           (static_cast<uint32_t>(b) << 16) |
+           0xFF000000u;
+}
+
+uint32_t nativeColorToRgba(color_t px)
+{
+#if defined(COLOR_16_BIT) && defined(COLOR_5_6_5)
+    const uint8_t r5 = static_cast<uint8_t>((px >> 11) & 0x1F);
+    const uint8_t g6 = static_cast<uint8_t>((px >> 5) & 0x3F);
+    const uint8_t b5 = static_cast<uint8_t>(px & 0x1F);
+    return makeRGBA8888(
+        static_cast<uint8_t>((r5 << 3) | (r5 >> 2)),
+        static_cast<uint8_t>((g6 << 2) | (g6 >> 4)),
+        static_cast<uint8_t>((b5 << 3) | (b5 >> 2)));
+#elif defined(COLOR_16_BIT)
+    const uint8_t r5 = static_cast<uint8_t>(px & 0x1F);
+    const uint8_t g5 = static_cast<uint8_t>((px >> 5) & 0x1F);
+    const uint8_t b5 = static_cast<uint8_t>((px >> 10) & 0x1F);
+    return makeRGBA8888(
+        static_cast<uint8_t>((r5 << 3) | (r5 >> 2)),
+        static_cast<uint8_t>((g5 << 3) | (g5 >> 2)),
+        static_cast<uint8_t>((b5 << 3) | (b5 >> 2)));
+#else
+    return static_cast<uint32_t>(px) | 0xFF000000u;
+#endif
+}
+
+bool useBios()
+{
+    return GET_SETTING_KEY_STR("core.mgba_use_bios", "ON") == "ON";
+}
+
+bool skipBios()
+{
+    return GET_SETTING_KEY_STR("core.mgba_skip_bios", "OFF") == "ON";
+}
+
+bool settingEnabled(const char* key, const char* fallback, const char* enabledValue)
+{
+    return GET_SETTING_KEY_STR(key, fallback) == enabledValue;
+}
+
+int settingInt(const char* key, const char* fallback, int minValue, int maxValue)
+{
+    const std::string value = GET_SETTING_KEY_STR(key, fallback);
+    int result = std::atoi(value.c_str());
+    return std::clamp(result, minValue, maxValue);
+}
+
+GBModel gbModelFromSetting()
+{
+    const std::string model = GET_SETTING_KEY_STR("core.mgba_gb_model", "Autodetect");
+    if (model == "Game Boy")
+        return GB_MODEL_DMG;
+    if (model == "Super Game Boy")
+        return GB_MODEL_SGB;
+    if (model == "Game Boy Color")
+        return GB_MODEL_CGB;
+    if (model == "Game Boy Advance")
+        return GB_MODEL_AGB;
+    return GB_MODEL_AUTODETECT;
+}
+
+const char* idleOptimizationFromSetting()
+{
+    const std::string mode = GET_SETTING_KEY_STR("core.mgba_idle_optimization", "Remove Known");
+    if (mode == "Don't Remove")
+        return "ignore";
+    if (mode == "Detect and Remove")
+        return "detect";
+    return "remove";
+}
+
+void applyGbPalette(mCoreConfig* config)
+{
+    const std::string selected = GET_SETTING_KEY_STR("core.mgba_gb_colors", "Grayscale");
+    const GBColorPreset* presets = nullptr;
+    const size_t count = GBColorPresetList(&presets);
+    for (size_t i = 0; i < count; ++i)
+    {
+        if (selected != presets[i].name)
+            continue;
+
+        for (size_t color = 0; color < 12; ++color)
+        {
+            const std::string key = "gb.pal[" + std::to_string(color) + "]";
+            mCoreConfigSetOverrideUIntValue(config, key.c_str(), presets[i].colors[color] & 0xFFFFFFu);
+        }
+        return;
+    }
+}
+
+std::vector<std::string> splitCheatTokens(const std::string& code)
+{
+    std::vector<std::string> tokens;
+    std::string current;
+    for (unsigned char ch : code)
+    {
+        if (std::isspace(ch) || ch == '+')
+        {
+            if (!current.empty())
+            {
+                tokens.push_back(current);
+                current.clear();
+            }
+            continue;
+        }
+        current.push_back(static_cast<char>(ch));
+    }
+    if (!current.empty())
+        tokens.push_back(current);
+    return tokens;
+}
+
+void addGbaRawCheatLines(mCheatSet* set, const std::string& code)
+{
+    auto tokens = splitCheatTokens(code);
+    std::vector<std::string> words;
+    for (const auto& token : tokens)
+    {
+        if (token.size() == 16)
+        {
+            words.push_back(token.substr(0, 8));
+            words.push_back(token.substr(8, 8));
+        }
+        else
+        {
+            words.push_back(token);
+        }
+    }
+
+    for (size_t i = 0; i + 1 < words.size(); i += 2)
+    {
+        std::string line = words[i] + " " + words[i + 1];
+        mCheatAddLine(set, line.c_str(), 0);
+    }
+}
+
+void addGbRawCheatLines(mCheatSet* set, const std::string& code)
+{
+    for (auto token : splitCheatTokens(code))
+    {
+        if (token.size() == 9 && token.find('-') == std::string::npos)
+            token = token.substr(0, 3) + "-" + token.substr(3, 3) + "-" + token.substr(6, 3);
+        mCheatAddLine(set, token.c_str(), 0);
+    }
+}
+
+} // namespace
+
+MgbaNativeCore::~MgbaNativeCore()
+{
+    if (m_ready)
+        Cleanup();
+    else
+        releaseCore();
+}
+
+bool MgbaNativeCore::SetupGame(beiklive::GameEntry gameEntry)
+{
+    Cleanup();
+    m_gameEntry = std::move(gameEntry);
+
+    brls::Logger::debug("MgbaNativeCore: SetupGame begin");
+    initSettingsDefaults();
+    if (!loadRom(m_gameEntry.path))
+        return false;
+
+    brls::Logger::debug("MgbaNativeCore: SetupGame loadRom ok");
+    Reset();
+    brls::Logger::debug("MgbaNativeCore: SetupGame reset ok");
+    loadSram();
+    brls::Logger::debug("MgbaNativeCore: SetupGame loadSram ok");
+    loadCheats();
+    brls::Logger::debug("MgbaNativeCore: SetupGame loadCheats ok");
+    captureVideoFrame();
+    brls::Logger::debug("MgbaNativeCore: SetupGame captureVideoFrame ok");
+
+    m_ready = true;
+    brls::Logger::info("MgbaNativeCore: ROM loaded: {} ({}x{} @ {:.2f} fps)",
+                       m_gameEntry.path, m_width, m_height, m_fps);
+    return true;
+}
+
+void MgbaNativeCore::Cleanup()
+{
+    if (m_ready)
+    {
+        m_ready = false;
+        saveSram();
+    }
+    releaseCore();
+}
+
+void MgbaNativeCore::RunFrame()
+{
+    if (!m_ready || !m_core)
+        return;
+
+    updateKeys();
+    m_core->runFrame(m_core);
+    captureVideoFrame();
+    drainMgbaAudio();
+}
+
+void MgbaNativeCore::Reset()
+{
+    m_audioLowPassLeftPrev = 0;
+    m_audioLowPassRightPrev = 0;
+    if (m_core)
+        m_core->reset(m_core);
+}
+
+bool MgbaNativeCore::Serialize(std::vector<uint8_t>& outBuf) const
+{
+    if (!m_ready || !m_core)
+        return false;
+
+    VFile* vf = VFileMemChunk(nullptr, 0);
+    if (!vf)
+        return false;
+
+    const bool ok = mCoreSaveStateNamed(m_core, vf, SAVESTATE_SAVEDATA | SAVESTATE_RTC);
+    if (!ok)
+    {
+        vf->close(vf);
+        return false;
+    }
+
+    const ssize_t size = vf->size(vf);
+    if (size <= 0)
+    {
+        vf->close(vf);
+        return false;
+    }
+
+    outBuf.resize(static_cast<size_t>(size));
+    vf->seek(vf, 0, SEEK_SET);
+    const ssize_t read = vf->read(vf, outBuf.data(), outBuf.size());
+    vf->close(vf);
+    return read == static_cast<ssize_t>(outBuf.size());
+}
+
+bool MgbaNativeCore::Unserialize(const std::vector<uint8_t>& buf)
+{
+    if (!m_ready || !m_core || buf.empty())
+        return false;
+
+    VFile* vf = VFileFromConstMemory(buf.data(), buf.size());
+    if (!vf)
+        return false;
+    const bool ok = mCoreLoadStateNamed(m_core, vf, SAVESTATE_RTC);
+    vf->close(vf);
+    if (ok)
+        captureVideoFrame();
+    return ok;
+}
+
+LibretroLoader::VideoFrame MgbaNativeCore::GetVideoFrame() const
+{
+    std::lock_guard<std::mutex> lock(m_videoMutex);
+    return m_videoFrame;
+}
+
+bool MgbaNativeCore::DrainAudio(std::vector<int16_t>& out)
+{
+    std::lock_guard<std::mutex> lock(m_audioMutex);
+    out.clear();
+    if (m_audioBuffer.empty())
+        return false;
+    out = std::move(m_audioBuffer);
+    m_audioBuffer.clear();
+    return true;
+}
+
+void MgbaNativeCore::SetButtonState(unsigned player, unsigned id, bool pressed)
+{
+    if (player >= kMaxInputPorts || id >= kMaxButtons)
+        return;
+    m_buttons[player][id] = pressed;
+}
+
+void MgbaNativeCore::SetButtonsFromSignal(unsigned player)
+{
+    if (player >= kMaxInputPorts)
+        return;
+
+    const uint32_t mask = GameSignal::instance().getGameButtonMask(player);
+    for (unsigned i = 0; i < kMaxButtons; ++i)
+        m_buttons[player][i] = ((mask >> i) & 1u) != 0;
+}
+
+void MgbaNativeCore::ApplyCheats(const std::vector<CheatEntry>& cheats)
+{
+    m_cheats = cheats;
+    updateCheats();
+}
+
+void MgbaNativeCore::ToggleCheat(int idx, bool enabled)
+{
+    if (idx < 0 || idx >= static_cast<int>(m_cheats.size()))
+        return;
+    m_cheats[static_cast<size_t>(idx)].enabled = enabled;
+    updateCheats();
+}
+
+void MgbaNativeCore::ReloadCheats()
+{
+    loadCheats();
+}
+
+void MgbaNativeCore::SetCheatPath(const std::string& path)
+{
+    m_gameEntry.cheatPath = path;
+    loadCheats();
+}
+
+const void* MgbaNativeCore::getSramData() const
+{
+    m_sramSnapshot.clear();
+    if (!m_core || !m_core->savedataClone)
+        return nullptr;
+
+    void* data = nullptr;
+    const size_t size = m_core->savedataClone(m_core, &data);
+    if (!data || size == 0)
+        return nullptr;
+
+    m_sramSnapshot.resize(size);
+    std::memcpy(m_sramSnapshot.data(), data, size);
+    std::free(data);
+    return m_sramSnapshot.data();
+}
+
+size_t MgbaNativeCore::getSramSize() const
+{
+    getSramData();
+    return m_sramSnapshot.size();
+}
+
+bool MgbaNativeCore::saveSram()
+{
+    if (!m_core || !m_core->savedataClone)
+        return true;
+
+    void* data = nullptr;
+    const size_t size = m_core->savedataClone(m_core, &data);
+    if (!data || size == 0)
+        return true;
+
+    const std::string path = saveFilePath();
+    if (path.empty())
+    {
+        std::free(data);
+        return true;
+    }
+
+    std::error_code ec;
+    std::filesystem::create_directories(std::filesystem::path(path).parent_path(), ec);
+
+    std::ofstream file(path, std::ios::binary | std::ios::trunc);
+    if (!file)
+    {
+        brls::Logger::warning("MgbaNativeCore: failed to open SRAM file: {}", path);
+        std::free(data);
+        return true;
+    }
+
+    file.write(reinterpret_cast<const char*>(data), static_cast<std::streamsize>(size));
+    std::free(data);
+    if (!file)
+    {
+        brls::Logger::warning("MgbaNativeCore: failed to write SRAM file: {}", path);
+        return true;
+    }
+
+    brls::Logger::debug("MgbaNativeCore: SRAM saved to {} ({} bytes)", path, size);
+    return true;
+}
+
+bool MgbaNativeCore::loadRom(const std::string& romPath)
+{
+    brls::Logger::debug("MgbaNativeCore: loadRom begin");
+    if (romPath.empty())
+    {
+        brls::Logger::error("MgbaNativeCore: ROM path is empty");
+        return false;
+    }
+
+    releaseCore();
+    const auto platform = static_cast<beiklive::enums::EmuPlatform>(m_gameEntry.platform);
+    const mPlatform mgbaPlatform =
+        platform == beiklive::enums::EmuPlatform::EmuGBA ? mPLATFORM_GBA : mPLATFORM_GB;
+    brls::Logger::debug("MgbaNativeCore: creating core platform={}", static_cast<int>(mgbaPlatform));
+    m_core = mCoreCreate(mgbaPlatform);
+    if (!m_core)
+    {
+        brls::Logger::error("MgbaNativeCore: mCoreCreate failed");
+        return false;
+    }
+
+    brls::Logger::debug("MgbaNativeCore: core created");
+    if (!m_core->init(m_core))
+    {
+        brls::Logger::error("MgbaNativeCore: core init failed");
+        releaseCore();
+        return false;
+    }
+    m_coreInitialized = true;
+
+    brls::Logger::debug("MgbaNativeCore: core init ok");
+    initConfigDefaults();
+    brls::Logger::debug("MgbaNativeCore: config defaults ok");
+    installPeripherals();
+    brls::Logger::debug("MgbaNativeCore: peripherals ok");
+    applyConfig();
+    brls::Logger::debug("MgbaNativeCore: config applied ok");
+
+    brls::Logger::debug("MgbaNativeCore: loading ROM file");
+    if (!mCoreLoadFile(m_core, romPath.c_str()))
+    {
+        brls::Logger::error("MgbaNativeCore: mCoreLoadFile failed: {}", romPath);
+        releaseCore();
+        return false;
+    }
+    brls::Logger::debug("MgbaNativeCore: ROM file loaded");
+
+    unsigned desiredW = 0;
+    unsigned desiredH = 0;
+    m_core->desiredVideoDimensions(m_core, &desiredW, &desiredH);
+    m_width = desiredW > 0 ? desiredW : static_cast<unsigned>(beiklive::GetGamePixelWidth(m_gameEntry.platform));
+    m_height = desiredH > 0 ? desiredH : static_cast<unsigned>(beiklive::GetGamePixelHeight(m_gameEntry.platform));
+    m_bufferWidth = std::max(m_width, kMaxVideoWidth);
+    m_bufferHeight = std::max(m_height, kMaxVideoHeight);
+    m_videoBuffer.assign(static_cast<size_t>(m_bufferWidth) * m_bufferHeight, 0);
+    m_core->setVideoBuffer(m_core, m_videoBuffer.data(), m_bufferWidth);
+    brls::Logger::debug("MgbaNativeCore: video buffer configured visible={}x{} backing={}x{} bpp={}",
+                        m_width, m_height, m_bufferWidth, m_bufferHeight, BYTES_PER_PIXEL);
+
+    const int32_t cycles = m_core->frameCycles(m_core);
+    const int32_t frequency = m_core->frequency(m_core);
+    if (cycles > 0 && frequency > 0)
+        m_fps = static_cast<double>(frequency) / static_cast<double>(cycles);
+
+    const size_t audioBufferSamples = m_core->platform(m_core) == mPLATFORM_GBA
+        ? static_cast<size_t>(448)
+        : static_cast<size_t>(kSampleRate / 60.0 + 4);
+    m_core->setAudioBufferSize(m_core, audioBufferSamples);
+    blip_set_rates(m_core->getAudioChannel(m_core, 0), m_core->frequency(m_core), kSampleRate);
+    blip_set_rates(m_core->getAudioChannel(m_core, 1), m_core->frequency(m_core), kSampleRate);
+    return true;
+}
+
+void MgbaNativeCore::initSettingsDefaults()
+{
+    if (!beiklive::SettingManager)
+        return;
+
+    using CV = beiklive::ConfigValue;
+    beiklive::SettingManager->SetDefault("core.mgba_gb_model", CV(std::string("Autodetect")));
+    beiklive::SettingManager->SetDefault("core.mgba_use_bios", CV(std::string("ON")));
+    beiklive::SettingManager->SetDefault("core.mgba_skip_bios", CV(std::string("OFF")));
+    beiklive::SettingManager->SetDefault("core.mgba_gb_colors", CV(std::string("Grayscale")));
+    beiklive::SettingManager->SetDefault("core.mgba_gb_colors_preset", CV(std::string("0")));
+    beiklive::SettingManager->SetDefault("core.mgba_sgb_borders", CV(std::string("ON")));
+    beiklive::SettingManager->SetDefault("core.mgba_audio_low_pass_filter", CV(std::string("disabled")));
+    beiklive::SettingManager->SetDefault("core.mgba_audio_low_pass_range", CV(std::string("60")));
+    beiklive::SettingManager->SetDefault("core.mgba_allow_opposing_directions", CV(std::string("no")));
+    beiklive::SettingManager->SetDefault("core.mgba_solar_sensor_level", CV(std::string("5")));
+    beiklive::SettingManager->SetDefault("core.mgba_force_gbp", CV(std::string("OFF")));
+    beiklive::SettingManager->SetDefault("core.mgba_idle_optimization", CV(std::string("Remove Known")));
+    beiklive::SettingManager->SetDefault("core.mgba_frameskip", CV(std::string("0")));
+    beiklive::SettingManager->SetDefault("core.mgba_rtc_mode", CV(std::string("persist")));
+    beiklive::SettingManager->Save();
+}
+
+void MgbaNativeCore::initConfigDefaults()
+{
+    if (!m_core)
+        return;
+
+    mCoreInitConfig(m_core, "BeikLiveStation");
+    m_configInitialized = true;
+    mCoreConfigSetDefaultIntValue(&m_core->config, "sampleRate", static_cast<int>(kSampleRate));
+    mCoreConfigSetDefaultUIntValue(&m_core->config, "audioBuffers", static_cast<unsigned>(kSampleRate / 30.0));
+    mCoreConfigSetDefaultIntValue(&m_core->config, "useBios", useBios() ? 1 : 0);
+    mCoreConfigSetDefaultIntValue(&m_core->config, "skipBios", skipBios() ? 1 : 0);
+    mCoreConfigSetDefaultIntValue(&m_core->config, "frameskip", settingInt("core.mgba_frameskip", "0", 0, 10));
+    mCoreConfigSetDefaultIntValue(&m_core->config, "allowOpposingDirections",
+                                  settingEnabled("core.mgba_allow_opposing_directions", "no", "yes") ? 1 : 0);
+    mCoreConfigSetDefaultValue(&m_core->config, "idleOptimization", idleOptimizationFromSetting());
+    mCoreConfigSetDefaultIntValue(&m_core->config, "gba.forceGbp",
+                                  settingEnabled("core.mgba_force_gbp", "OFF", "ON") ? 1 : 0);
+
+    const char* modelName = GBModelToName(gbModelFromSetting());
+    mCoreConfigSetDefaultValue(&m_core->config, "gb.model", modelName);
+    mCoreConfigSetDefaultValue(&m_core->config, "sgb.model", modelName);
+    mCoreConfigSetDefaultValue(&m_core->config, "cgb.model", modelName);
+    mCoreConfigSetDefaultIntValue(&m_core->config, "sgb.borders",
+                                  settingEnabled("core.mgba_sgb_borders", "ON", "ON") ? 1 : 0);
+    applyGbPalette(&m_core->config);
+    applyAudioLowPassSettings();
+}
+
+void MgbaNativeCore::applyConfig()
+{
+    if (!m_core)
+        return;
+
+    const int frameskip = settingInt("core.mgba_frameskip", "0", 0, 10);
+    const bool allowOpposing = settingEnabled("core.mgba_allow_opposing_directions", "no", "yes");
+    const bool sgbBorders = settingEnabled("core.mgba_sgb_borders", "ON", "ON");
+    const bool forceGbp = settingEnabled("core.mgba_force_gbp", "OFF", "ON");
+    const char* modelName = GBModelToName(gbModelFromSetting());
+
+    mCoreConfigSetOverrideIntValue(&m_core->config, "sampleRate", static_cast<int>(kSampleRate));
+    mCoreConfigSetOverrideUIntValue(&m_core->config, "audioBuffers", static_cast<unsigned>(kSampleRate / 30.0));
+    mCoreConfigSetOverrideIntValue(&m_core->config, "useBios", useBios() ? 1 : 0);
+    mCoreConfigSetOverrideIntValue(&m_core->config, "skipBios", skipBios() ? 1 : 0);
+    mCoreConfigSetOverrideIntValue(&m_core->config, "frameskip", frameskip);
+    mCoreConfigSetOverrideIntValue(&m_core->config, "allowOpposingDirections", allowOpposing ? 1 : 0);
+    mCoreConfigSetOverrideValue(&m_core->config, "idleOptimization", idleOptimizationFromSetting());
+    mCoreConfigSetOverrideIntValue(&m_core->config, "gba.forceGbp", forceGbp ? 1 : 0);
+    mCoreConfigSetOverrideValue(&m_core->config, "gb.model", modelName);
+    mCoreConfigSetOverrideValue(&m_core->config, "sgb.model", modelName);
+    mCoreConfigSetOverrideValue(&m_core->config, "cgb.model", modelName);
+    mCoreConfigSetOverrideIntValue(&m_core->config, "sgb.borders", sgbBorders ? 1 : 0);
+    applyGbPalette(&m_core->config);
+    applyAudioLowPassSettings();
+
+    m_useSystemRtc = GET_SETTING_KEY_STR("core.mgba_rtc_mode", "persist") == "system";
+    if (m_useSystemRtc)
+        mCoreSetRTC(m_core, &m_rtcSource.d);
+    else
+        m_core->rtc.override = RTC_NO_OVERRIDE;
+
+    mCoreLoadForeignConfig(m_core, &m_core->config);
+}
+
+void MgbaNativeCore::applyAudioLowPassSettings()
+{
+    const bool enabled = GET_SETTING_KEY_STR("core.mgba_audio_low_pass_filter", "disabled") == "enabled";
+    const int range = settingInt("core.mgba_audio_low_pass_range", "60", 0, 100);
+    const int32_t fixedRange = (range * 0x10000) / 100;
+    if (enabled != m_audioLowPassEnabled || fixedRange != m_audioLowPassRange)
+    {
+        m_audioLowPassLeftPrev = 0;
+        m_audioLowPassRightPrev = 0;
+    }
+    m_audioLowPassEnabled = enabled;
+    m_audioLowPassRange = fixedRange;
+}
+
+void MgbaNativeCore::applyAudioLowPass(std::vector<int16_t>& samples)
+{
+    if (!m_audioLowPassEnabled || samples.size() < 2)
+        return;
+
+    int32_t left = m_audioLowPassLeftPrev;
+    int32_t right = m_audioLowPassRightPrev;
+    const int32_t factorA = m_audioLowPassRange;
+    const int32_t factorB = 0x10000 - factorA;
+
+    for (size_t i = 0; i + 1 < samples.size(); i += 2)
+    {
+        left = (left * factorA) + (samples[i] * factorB);
+        right = (right * factorA) + (samples[i + 1] * factorB);
+        left >>= 16;
+        right >>= 16;
+        samples[i] = static_cast<int16_t>(left);
+        samples[i + 1] = static_cast<int16_t>(right);
+    }
+
+    m_audioLowPassLeftPrev = left;
+    m_audioLowPassRightPrev = right;
+}
+
+void MgbaNativeCore::installPeripherals()
+{
+    if (!m_core)
+        return;
+
+    m_luminanceSource.owner = this;
+    m_luminanceSource.d.sample = &MgbaNativeCore::sampleLux;
+    m_luminanceSource.d.readLuminance = &MgbaNativeCore::readLux;
+    updateLuxLevel();
+
+    m_rtcSource.owner = this;
+    m_rtcSource.d.sample = &MgbaNativeCore::sampleRtc;
+    m_rtcSource.d.unixTime = &MgbaNativeCore::readRtcUnixTime;
+    m_rtcSource.d.serialize = nullptr;
+    m_rtcSource.d.deserialize = nullptr;
+
+    if (m_core->setPeripheral && m_core->platform(m_core) == mPLATFORM_GBA)
+        m_core->setPeripheral(m_core, mPERIPH_GBA_LUMINANCE, &m_luminanceSource.d);
+}
+
+void MgbaNativeCore::updateLuxLevel()
+{
+    m_luxLevelIndex = settingInt("core.mgba_solar_sensor_level", "5", 0, 10);
+    m_luxLevel = 0x16;
+    if (m_luxLevelIndex > 0)
+        m_luxLevel = static_cast<uint8_t>(m_luxLevel + GBA_LUX_LEVELS[m_luxLevelIndex - 1]);
+}
+
+bool MgbaNativeCore::loadSram()
+{
+    if (!m_core || !m_core->savedataRestore)
+        return true;
+
+    const std::string path = saveFilePath();
+    if (path.empty() || !std::filesystem::exists(path))
+        return true;
+
+    std::ifstream file(path, std::ios::binary);
+    if (!file)
+    {
+        brls::Logger::warning("MgbaNativeCore: failed to open SRAM file: {}", path);
+        return true;
+    }
+
+    std::vector<uint8_t> data((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    if (data.empty())
+        return true;
+
+    if (!m_core->savedataRestore(m_core, data.data(), data.size(), true))
+        brls::Logger::warning("MgbaNativeCore: savedataRestore failed for {}", path);
+    else
+        brls::Logger::debug("MgbaNativeCore: SRAM loaded from {} ({} bytes)", path, data.size());
+    return true;
+}
+
+bool MgbaNativeCore::loadCheats()
+{
+    if (m_gameEntry.cheatPath.empty())
+    {
+        m_cheats.clear();
+        updateCheats();
+        return true;
+    }
+
+    m_cheats = beiklive::cheat::loadChtFile(m_gameEntry.cheatPath);
+    brls::Logger::info("MgbaNativeCore: loaded {} cheats from {}", m_cheats.size(), m_gameEntry.cheatPath);
+    return true;
+}
+
+void MgbaNativeCore::updateCheats()
+{
+    if (!m_core || !m_core->cheatDevice)
+        return;
+
+    mCheatDevice* device = m_core->cheatDevice(m_core);
+    if (!device)
+        return;
+
+    mCheatDeviceClear(device);
+    mCheatSet* set = device->createSet(device, "BeikLiveStation");
+    if (!set)
+        return;
+
+    bool hasLines = false;
+    const bool isGba = m_core->platform(m_core) == mPLATFORM_GBA;
+    for (const auto& cheat : m_cheats)
+    {
+        if (!cheat.enabled || !cheat.valid || cheat.payloadType != beiklive::CheatPayloadType::LibretroRaw)
+            continue;
+
+        if (isGba)
+            addGbaRawCheatLines(set, cheat.code);
+        else
+            addGbRawCheatLines(set, cheat.code);
+        hasLines = true;
+    }
+
+    if (!hasLines)
+    {
+        set->deinit(set);
+        std::free(set);
+        return;
+    }
+
+    set->enabled = true;
+    mCheatAddSet(device, set);
+    if (set->refresh)
+        set->refresh(set, device);
+}
+
+void MgbaNativeCore::drainMgbaAudio()
+{
+    if (!m_core)
+        return;
+
+    blip_t* left = m_core->getAudioChannel(m_core, 0);
+    blip_t* right = m_core->getAudioChannel(m_core, 1);
+    if (!left || !right)
+        return;
+
+    const int available = std::min(blip_samples_avail(left), blip_samples_avail(right));
+    if (available <= 0)
+        return;
+
+    std::vector<int16_t> samples(static_cast<size_t>(available) * 2);
+    const int produced = blip_read_samples(left, samples.data(), available, true);
+    if (produced <= 0)
+        return;
+    blip_read_samples(right, samples.data() + 1, produced, true);
+
+    if (!m_loggedFirstAudio)
+    {
+        brls::Logger::info("MgbaNativeCore: first audio batch produced {} frames", produced);
+        m_loggedFirstAudio = true;
+    }
+
+    samples.resize(static_cast<size_t>(produced) * 2);
+    applyAudioLowPass(samples);
+
+    std::lock_guard<std::mutex> lock(m_audioMutex);
+    if (m_audioBuffer.size() + samples.size() > kAudioBufferCapacity)
+    {
+        const size_t overflow = (m_audioBuffer.size() + samples.size()) - kAudioBufferCapacity;
+        if (overflow >= m_audioBuffer.size())
+            m_audioBuffer.clear();
+        else
+            m_audioBuffer.erase(m_audioBuffer.begin(), m_audioBuffer.begin() + static_cast<std::ptrdiff_t>(overflow));
+    }
+    m_audioBuffer.insert(m_audioBuffer.end(), samples.begin(), samples.end());
+}
+
+void MgbaNativeCore::captureVideoFrame()
+{
+    if (!m_core)
+        return;
+
+    const void* pixels = nullptr;
+    size_t stride = 0;
+    m_core->getPixels(m_core, &pixels, &stride);
+    if (!pixels || m_width == 0 || m_height == 0)
+        return;
+
+    std::lock_guard<std::mutex> lock(m_videoMutex);
+    m_videoFrame.width = m_width;
+    m_videoFrame.height = m_height;
+    m_videoFrame.pixels.resize(static_cast<size_t>(m_width) * m_height);
+
+    const auto* src = static_cast<const color_t*>(pixels);
+    for (unsigned y = 0; y < m_height; ++y)
+    {
+        const color_t* srcRow = src + static_cast<size_t>(y) * stride;
+        uint32_t* dstRow = m_videoFrame.pixels.data() + static_cast<size_t>(y) * m_width;
+        for (unsigned x = 0; x < m_width; ++x)
+            dstRow[x] = nativeColorToRgba(srcRow[x]);
+    }
+}
+
+void MgbaNativeCore::updateKeys()
+{
+    if (!m_core)
+        return;
+
+    const auto& b = m_buttons[0];
+    uint32_t keys = 0;
+    keys |= b[RETRO_DEVICE_ID_JOYPAD_A] ? (1u << 0) : 0;
+    keys |= b[RETRO_DEVICE_ID_JOYPAD_B] ? (1u << 1) : 0;
+    keys |= b[RETRO_DEVICE_ID_JOYPAD_SELECT] ? (1u << 2) : 0;
+    keys |= b[RETRO_DEVICE_ID_JOYPAD_START] ? (1u << 3) : 0;
+    keys |= b[RETRO_DEVICE_ID_JOYPAD_RIGHT] ? (1u << 4) : 0;
+    keys |= b[RETRO_DEVICE_ID_JOYPAD_LEFT] ? (1u << 5) : 0;
+    keys |= b[RETRO_DEVICE_ID_JOYPAD_UP] ? (1u << 6) : 0;
+    keys |= b[RETRO_DEVICE_ID_JOYPAD_DOWN] ? (1u << 7) : 0;
+    keys |= b[RETRO_DEVICE_ID_JOYPAD_R] ? (1u << 8) : 0;
+    keys |= b[RETRO_DEVICE_ID_JOYPAD_L] ? (1u << 9) : 0;
+
+    if (keys != m_keyMask)
+    {
+        m_keyMask = keys;
+        m_core->setKeys(m_core, keys);
+    }
+}
+
+void MgbaNativeCore::releaseCore()
+{
+    {
+        std::lock_guard<std::mutex> lock(m_audioMutex);
+        m_audioBuffer.clear();
+    }
+    {
+        std::lock_guard<std::mutex> lock(m_videoMutex);
+        m_videoFrame = {};
+    }
+    m_videoBuffer.clear();
+    m_sramSnapshot.clear();
+    m_width = 0;
+    m_height = 0;
+    m_bufferWidth = 0;
+    m_bufferHeight = 0;
+    m_fps = 60.0;
+    m_keyMask = 0;
+    m_loggedFirstAudio = false;
+
+    if (!m_core)
+        return;
+
+    if (m_coreInitialized)
+    {
+        mCheatDevice* device = m_core->cheatDevice ? m_core->cheatDevice(m_core) : nullptr;
+        if (device)
+            mCheatDeviceClear(device);
+
+        m_core->unloadROM(m_core);
+        if (m_configInitialized)
+            mCoreConfigDeinit(&m_core->config);
+        m_core->deinit(m_core);
+    }
+    else
+    {
+        std::free(m_core);
+    }
+    m_core = nullptr;
+    m_coreInitialized = false;
+    m_configInitialized = false;
+}
+
+std::string MgbaNativeCore::saveFilePath() const
+{
+    std::string dir = m_gameEntry.savePath;
+    if (dir.empty())
+        dir = beiklive::path::savePath();
+    if (dir.empty() || m_gameEntry.path.empty())
+        return {};
+
+    return dir + beiklive::path::SPLIT_CHAR +
+           beiklive::tools::getFileNameWithoutExtension(m_gameEntry.path) + ".sav";
+}
+
+void MgbaNativeCore::sampleLux(GBALuminanceSource* source)
+{
+    auto* native = reinterpret_cast<NativeLuminanceSource*>(source);
+    if (native && native->owner)
+        native->owner->updateLuxLevel();
+}
+
+uint8_t MgbaNativeCore::readLux(GBALuminanceSource* source)
+{
+    auto* native = reinterpret_cast<NativeLuminanceSource*>(source);
+    if (!native || !native->owner)
+        return 0xFF - 0x16;
+    return static_cast<uint8_t>(0xFF - native->owner->m_luxLevel);
+}
+
+void MgbaNativeCore::sampleRtc(mRTCSource* source)
+{
+    (void)source;
+}
+
+time_t MgbaNativeCore::readRtcUnixTime(mRTCSource* source)
+{
+    (void)source;
+    return std::time(nullptr);
+}
+
+} // namespace beiklive::mgba_native

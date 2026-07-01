@@ -62,6 +62,19 @@ namespace
         return platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS);
     }
 
+    bool isMgbaNativePlatform(int platform)
+    {
+        using beiklive::enums::EmuPlatform;
+        return platform == static_cast<int>(EmuPlatform::EmuGBA) ||
+               platform == static_cast<int>(EmuPlatform::EmuGBC) ||
+               platform == static_cast<int>(EmuPlatform::EmuGB);
+    }
+
+    bool shouldSetupCoreOnGameThread(int platform)
+    {
+        return isNdsPlatform(platform) || isMgbaNativePlatform(platform);
+    }
+
     bool isNdsRightStickMapping(const char* suffix)
     {
         return std::strncmp(suffix, "rstick_", 7) == 0;
@@ -1888,10 +1901,11 @@ namespace beiklive
 
         _syncNdsVideoFrameMode();
 
-        if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
+        if (shouldSetupCoreOnGameThread(m_gameEntry.platform))
         {
             GameSignal::instance().resetAll();
-            brls::Logger::debug("[GameView] deferring NDS core setup to game thread...");
+            brls::Logger::debug("[GameView] deferring {} core setup to game thread...",
+                                beiklive::tools::platformName(m_gameEntry.platform));
             _startGameThread();
             return;
         }
@@ -2113,7 +2127,7 @@ namespace beiklive
 
         size_t frames = m_audioDrainBuf.size() / 2;
 
-        if (ff || isNdsPlatform(m_gameEntry.platform)) {
+        if (ff || isNdsPlatform(m_gameEntry.platform) || isMgbaNativePlatform(m_gameEntry.platform)) {
             AudioManager::instance().pushSamplesNoBlocking(m_audioDrainBuf.data(), frames);
             return;
         }
@@ -2325,19 +2339,21 @@ namespace beiklive
         if (!m_core) return;
 
         brls::Logger::debug("[GameView] _gameLoop enter");
-        const bool isNds = m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS);
+        const bool isNds = isNdsPlatform(m_gameEntry.platform);
+        const bool setupOnGameThread = shouldSetupCoreOnGameThread(m_gameEntry.platform);
 
 #ifdef _WIN32
         timeBeginPeriod(1); // 提升 Windows 定时器精度至 1ms
 #endif
 
-        if (isNds && !m_core->IsReady())
+        if (setupOnGameThread && !m_core->IsReady())
         {
 #ifdef __SWITCH__
             svcSetThreadCoreMask(CUR_THREAD_HANDLE, 1, 1ULL << 1);
 #endif
 
-            brls::Logger::info("GameView: initializing NDS core on game thread");
+            brls::Logger::info("GameView: initializing {} core on game thread",
+                               beiklive::tools::platformName(m_gameEntry.platform));
             if (!m_core->SetupGame(m_gameEntry))
             {
                 brls::Logger::error("核心初始化失败，平台={}, 路径={}",

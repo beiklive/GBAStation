@@ -62,28 +62,26 @@ endif ()
 add_subdirectory(third_party)
 
 # mGBA: 目标创建后再补充编译宏（Switch/newlib + POSIX/GNU 扩展）
-foreach(_mgba_tgt IN ITEMS mgba mgba_libretro)
-    if (TARGET ${_mgba_tgt} AND NOT WIN32)
-        target_compile_definitions(${_mgba_tgt} PRIVATE
-            _POSIX_C_SOURCE=200809L
-            _GNU_SOURCE
-        )
-    endif ()
+if (TARGET mgba AND NOT WIN32)
+    target_compile_definitions(mgba PRIVATE
+        _POSIX_C_SOURCE=200809L
+        _GNU_SOURCE
+    )
+endif ()
 
-    if (TARGET ${_mgba_tgt} AND PLATFORM_SWITCH)
-        target_compile_definitions(${_mgba_tgt} PRIVATE
-            HAVE_LOCALE
-            HAVE_STRTOF_L
-            HAVE_LOCALTIME_R
-        )
-    endif ()
-endforeach()
+if (TARGET mgba AND PLATFORM_SWITCH)
+    target_compile_definitions(mgba PRIVATE
+        HAVE_LOCALE
+        HAVE_STRTOF_L
+        HAVE_LOCALTIME_R
+    )
+endif ()
 
 find_package(Threads REQUIRED)
 list(APPEND APP_PLATFORM_LIB ${CMAKE_THREAD_LIBS_INIT})
 
-# mGBA libretro core – expose the mGBA header path so LibretroLoader.hpp
-# can include third_party/mgba/src/platform/libretro/libretro.h
+# expose the repository root so LibretroLoader.hpp can include the vendored
+# libretro API header used by NES/SNES wrappers.
 include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR})
 message(STATUS "Building mGBA from source (third_party/mgba)")
 
@@ -132,6 +130,7 @@ include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/third_party/miniz)
 include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mongoose)
 include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/third_party/melonDS/src)
 file(GLOB_RECURSE MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
+list(FILTER MAIN_SRC EXCLUDE REGEX ".*/src/game/mgba/.*")
 list(APPEND MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/third_party/miniz/miniz.c)
 list(APPEND MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mongoose/mongoose.c)
 list(APPEND MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/third_party/qrcodegen/qrcodegen.cpp)
@@ -166,6 +165,7 @@ endif ()
 program_target(${PROJECT_NAME} "${MAIN_SRC}")
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17)
 target_compile_definitions(${PROJECT_NAME} PRIVATE APP_VERSION="${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_ALTER}")
+target_compile_definitions(${PROJECT_NAME} PRIVATE COLOR_16_BIT COLOR_5_6_5)
 if (PLATFORM_SWITCH)
     target_compile_definitions(${PROJECT_NAME} PRIVATE MG_ARCH=MG_ARCH_UNIX)
 endif()
@@ -221,17 +221,16 @@ if(NOT PLATFORM_ANDROID)
 endif()
 
 # ============================================================
-# 静态链接所有 libretro 核心
+# 静态链接模拟器核心
 #
-# mGBA          – GBA / GBC / GB      (原始 retro_* 符号)
-# FCEUmm        – NES / Famicom       (fceumm_retro_*)
-# Snes9x        – SNES / SFC          (snes9x_retro_*)
-# Nestopia      – NES / Famicom       (nestopia_retro_*)
-# Snes9x 2005   – SNES / SFC          (snes9x2005_retro_*)
+# mGBA          – GBA / GBC / GB      (native source API)
+# FCEUmm        – NES / Famicom       (libretro, fceumm_retro_*)
+# Snes9x        – SNES / SFC          (libretro, snes9x_retro_*)
+# Nestopia      – NES / Famicom       (libretro, nestopia_retro_*)
+# Snes9x 2005   – SNES / SFC          (libretro, snes9x2005_retro_*)
+# melonDS       – NDS                 (native)
 #
-# 桌面平台: mgba_libretro 作为共享库供 dlopen 加载，
-#           其余核心静态链接。
-# Switch:    全部核心静态链接。
+# mGBA 不再构建/加载 mgba_libretro，也不复制 mgba 动态库。
 # ============================================================
 if (TARGET fceumm_core)
     target_link_libraries(${PROJECT_NAME} PRIVATE fceumm_core)
@@ -258,23 +257,11 @@ if (TARGET melonds_core)
     message(STATUS "Linking melonDS (NDS) native core statically")
 endif()
 
-if (PLATFORM_SWITCH)
-    target_link_libraries(${PROJECT_NAME} PRIVATE mgba_libretro)
-    message(STATUS "Linking mGBA core statically (Switch)")
-else()
-    # 桌面平台保留 mgba_libretro 动态加载路径（向后兼容）
-    # mgba_libretro 是 DLL，其 retro_* 符号不在可执行文件中
-    message(STATUS "mGBA core: dynamic load (desktop)")
-endif()
-
-# ============================================================
-# Post-build: 桌面平台复制 mgba_libretro 共享库至输出目录
-# ============================================================
-if (TARGET mgba_libretro AND NOT PLATFORM_ANDROID AND NOT PLATFORM_SWITCH)
-    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            $<TARGET_FILE:mgba_libretro>
-            $<TARGET_FILE_DIR:${PROJECT_NAME}>/$<TARGET_FILE_NAME:mgba_libretro>
-        COMMENT "Copying mgba_libretro to output directory"
+if (TARGET mgba)
+    target_link_libraries(${PROJECT_NAME} PRIVATE mgba)
+    target_include_directories(${PROJECT_NAME} PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mgba/include
+        ${CMAKE_BINARY_DIR}/third_party/mgba/include
     )
-endif ()
+    message(STATUS "Linking mGBA native core")
+endif()

@@ -236,13 +236,7 @@ namespace beiklive // 全局功能函数
         case (int)beiklive::enums::EmuPlatform::EmuGBA:
         case (int)beiklive::enums::EmuPlatform::EmuGBC:
         case (int)beiklive::enums::EmuPlatform::EmuGB:
-            #if defined(__SWITCH__)
-                return "";  // switch平台直接静态链接
-            #elif defined(_WIN32)
-                return  std::string("mgba_libretro.dll");
-            #elif defined(__APPLE__)
-                return  beiklive::path::corePath() + beiklive::path::SPLIT_CHAR + std::string("mgba_libretro.dylib");
-            #endif
+            return "";  // mGBA 源码静态接入，无需 libretro 动态库路径
         case (int)beiklive::enums::EmuPlatform::EmuNES:
             return "";  // FCEUmm 静态链接，无需路径
         case (int)beiklive::enums::EmuPlatform::EmuSNES:

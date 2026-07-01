@@ -19,8 +19,8 @@
 // ============================================================
 // 静态链接核心的外部符号声明
 //
-// mGBA 保留原始 retro_* 名称，其余核心通过编译期
-// -Dretro_xxx=prefix_retro_xxx 重命名为带前缀的符号。
+// mGBA now uses the native source API. The remaining libretro cores are
+// compiled with -Dretro_xxx=prefix_retro_xxx to avoid symbol collisions.
 // ============================================================
 extern "C" {
 
@@ -314,35 +314,8 @@ bool LibretroLoader::load(CoreType coreType)
     // 根据核心类型选择对应的符号集
     switch (coreType) {
         case CoreType::Mgba:
-#if defined(__SWITCH__) || defined(STATIC_MGBA)
-            fn_set_environment        = retro_set_environment;
-            fn_set_video_refresh      = retro_set_video_refresh;
-            fn_set_audio_sample       = retro_set_audio_sample;
-            fn_set_audio_sample_batch = retro_set_audio_sample_batch;
-            fn_set_input_poll         = retro_set_input_poll;
-            fn_set_input_state        = retro_set_input_state;
-            fn_init                   = retro_init;
-            fn_deinit                 = retro_deinit;
-            fn_api_version            = retro_api_version;
-            fn_get_system_info        = retro_get_system_info;
-            fn_get_system_av_info     = retro_get_system_av_info;
-            fn_set_controller_port_device = retro_set_controller_port_device;
-            fn_reset                  = retro_reset;
-            fn_run                    = retro_run;
-            fn_serialize_size         = retro_serialize_size;
-            fn_serialize              = retro_serialize;
-            fn_unserialize            = retro_unserialize;
-            fn_load_game              = retro_load_game;
-            fn_unload_game            = retro_unload_game;
-            fn_cheat_reset            = retro_cheat_reset;
-            fn_cheat_set              = retro_cheat_set;
-            fn_get_memory_data        = retro_get_memory_data;
-            fn_get_memory_size        = retro_get_memory_size;
-#else
-            // 桌面平台: mGBA 使用 dlopen 加载，不支持静态绑定
+            brls::Logger::error("[LibretroLoader] mGBA libretro backend is disabled; use MgbaNativeCore");
             return false;
-#endif
-            break;
 
         case CoreType::Fceumm:
             fn_set_environment        = fceumm_retro_set_environment;

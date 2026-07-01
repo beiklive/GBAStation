@@ -17,15 +17,21 @@ set(MELONDS_PATH       ${CMAKE_CURRENT_SOURCE_DIR}/melonDS)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/borealis/library)
 
 # =========================================================
-# mGBA 模拟器  –  libretro 核心构建
+# mGBA 模拟器  –  源码 native 静态库构建
 # =========================================================
-set(BUILD_LIBRETRO ON  CACHE BOOL "" FORCE)
+set(BUILD_LIBRETRO OFF CACHE BOOL "" FORCE)
+set(BUILD_STATIC   ON  CACHE BOOL "" FORCE)
+set(BUILD_SHARED   OFF CACHE BOOL "" FORCE)
 set(BUILD_SDL      OFF CACHE BOOL "" FORCE)
 set(BUILD_QT       OFF CACHE BOOL "" FORCE)
 set(BUILD_LTO      OFF CACHE BOOL "" FORCE)
 
 if (PLATFORM_SWITCH)
     set(CMAKE_TOOLCHAIN_FILE   "mgba/src/platform/switch/CMakeToolchain.txt")
+    set(LIBMGBA_ONLY    ON  CACHE BOOL "" FORCE)
+    set(BUILD_GL        OFF CACHE BOOL "" FORCE)
+    set(BUILD_GLES2     OFF CACHE BOOL "" FORCE)
+    set(BUILD_GLES3     OFF CACHE BOOL "" FORCE)
     set(USE_SQLITE3     OFF CACHE BOOL "" FORCE)
 endif ()
 
@@ -37,10 +43,14 @@ set(BUILD_DOCGEN   OFF CACHE BOOL "" FORCE)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/mgba)
 
-if (PLATFORM_SWITCH AND TARGET mgba_libretro)
-    target_sources(mgba_libretro PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/mgba/src/util/vfs/vfs-fd.c
-        ${CMAKE_CURRENT_SOURCE_DIR}/mgba/src/util/vfs/vfs-dirent.c
+if (TARGET mgba)
+    target_compile_definitions(mgba PRIVATE COLOR_16_BIT COLOR_5_6_5)
+endif ()
+
+if (PLATFORM_SWITCH AND TARGET mgba)
+    target_sources(mgba PRIVATE
+        ${MGBA_PATH}/src/util/vfs/vfs-fd.c
+        ${MGBA_PATH}/src/util/vfs/vfs-dirent.c
     )
 endif ()
 

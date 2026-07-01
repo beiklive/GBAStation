@@ -9,6 +9,67 @@ namespace fs = std::filesystem;
 
 namespace beiklive
 {
+    namespace
+    {
+        bool writeJsonFileSafely(const std::string& filePath, const nlohmann::json& json)
+        {
+            const fs::path target(filePath);
+            const fs::path tmp = target.string() + ".tmp";
+
+            std::ofstream file(tmp, std::ios::binary | std::ios::trunc);
+            if (!file.is_open())
+                return false;
+
+            file << json.dump(4);
+            file.flush();
+            if (!file)
+            {
+                file.close();
+                std::error_code removeEc;
+                fs::remove(tmp, removeEc);
+                return false;
+            }
+            file.close();
+
+            std::error_code ec;
+            fs::rename(tmp, target, ec);
+            if (!ec)
+                return true;
+
+            // Some platforms do not replace an existing target with rename().
+            const fs::path backup = target.string() + ".bak";
+            fs::remove(backup, ec);
+            ec.clear();
+            if (fs::exists(target, ec))
+            {
+                ec.clear();
+                fs::rename(target, backup, ec);
+                if (ec)
+                {
+                    std::error_code removeEc;
+                    fs::remove(tmp, removeEc);
+                    return false;
+                }
+            }
+
+            ec.clear();
+            fs::rename(tmp, target, ec);
+            if (!ec)
+            {
+                std::error_code removeEc;
+                fs::remove(backup, removeEc);
+                return true;
+            }
+
+            std::error_code restoreEc;
+            if (fs::exists(backup, restoreEc))
+                fs::rename(backup, target, restoreEc);
+            std::error_code removeEc;
+            fs::remove(tmp, removeEc);
+            return false;
+        }
+    }
+
     /// 确保字符串为合法 UTF-8（剔除非法字节）
     static std::string sanitizeUtf8(const std::string& s)
     {
@@ -305,8 +366,20 @@ namespace beiklive
         std::error_code ec;
         std::filesystem::create_directories(dir, ec);
 
-        // 按平台分组
+        // 按平台分组。即使某个平台当前没有条目，也写出合法空数组，避免
+        // 异常退出后平台 JSON 缺失或保留过期内容。
         std::unordered_map<int, nlohmann::json> platformData;
+        const int platforms[] = {
+            (int)beiklive::enums::EmuPlatform::EmuGBA,
+            (int)beiklive::enums::EmuPlatform::EmuGBC,
+            (int)beiklive::enums::EmuPlatform::EmuGB,
+            (int)beiklive::enums::EmuPlatform::EmuNES,
+            (int)beiklive::enums::EmuPlatform::EmuSNES,
+            (int)beiklive::enums::EmuPlatform::EmuNDS,
+        };
+        for (int platform : platforms)
+            platformData[platform] = nlohmann::json::array();
+
         for (const auto &entry : data_)
         {
             nlohmann::json item;
@@ -316,47 +389,17 @@ namespace beiklive
             platformData[entry.platform].push_back(item);
         }
 
-        const int knownPlatforms[] = {
-            (int)beiklive::enums::EmuPlatform::EmuGBA,
-            (int)beiklive::enums::EmuPlatform::EmuGBC,
-            (int)beiklive::enums::EmuPlatform::EmuGB,
-            (int)beiklive::enums::EmuPlatform::EmuNES,
-            (int)beiklive::enums::EmuPlatform::EmuSNES,
-            (int)beiklive::enums::EmuPlatform::EmuNDS,
-        };
-
         bool allOk = true;
-        for (int platform : knownPlatforms)
-        {
-            if (platformData.count(platform))
-                continue;
-
-            std::string filePath = dir + beiklive::path::SPLIT_CHAR + getPlatformFileName(platform);
-            try
-            {
-                std::ofstream file(filePath, std::ios::trunc);
-                if (file.is_open())
-                    file << "[]";
-            }
-            catch (...)
-            {
-                allOk = false;
-            }
-        }
-
         for (auto &[platform, j] : platformData)
         {
             std::string filePath = dir + beiklive::path::SPLIT_CHAR + getPlatformFileName(platform);
             try
             {
-                std::ofstream file(filePath);
-                if (!file.is_open())
+                if (!writeJsonFileSafely(filePath, j))
                 {
+                    brls::Logger::warning("GameDatabase: 安全保存平台文件失败: {}", filePath);
                     allOk = false;
-                    continue;
                 }
-                file << j.dump(4);
-                file.close();
             }
             catch (const std::exception &e)
             {

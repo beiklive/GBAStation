@@ -415,6 +415,10 @@ namespace beiklive
         SettingManager->SetDefault("core.mgba_rtc_mode", ConfigValue(std::string("persist")));
         SettingManager->SetDefault("core.mgba_idle_optimization", ConfigValue(std::string("Remove Known")));
         SettingManager->SetDefault("core.mgba_audio_low_pass_filter", ConfigValue(std::string("disabled")));
+        SettingManager->SetDefault("core.mgba_audio_low_pass_range", ConfigValue(std::string("60")));
+        SettingManager->SetDefault("core.mgba_allow_opposing_directions", ConfigValue(std::string("no")));
+        SettingManager->SetDefault("core.mgba_force_gbp", ConfigValue(std::string("OFF")));
+        SettingManager->SetDefault("core.mgba_frameskip", ConfigValue(std::string("0")));
 
         // BIOS 路径设置
         SettingManager->SetDefault("bios.path", ConfigValue(beiklive::path::biosPath()));

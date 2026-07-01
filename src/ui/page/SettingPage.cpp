@@ -1461,14 +1461,6 @@ brls::View *SettingPage::buildDebugTab()
 
     {
         auto *cell = new brls::BooleanCell();
-        cell->init("超级 GB 边框", cfgGetStr("core.mgba_sgb_borders", "ON") == "ON",
-                   [](bool v) { cfgSetStr("core.mgba_sgb_borders", v ? "ON" : "OFF"); });
-        box->addView(cell);
-        box->addView(makeHint("为 Super Game Boy 游戏绘制专属边框图案"));
-    }
-
-    {
-        auto *cell = new brls::BooleanCell();
         cell->init("强制 GBP 振动", cfgGetStr("core.mgba_force_gbp", "OFF") == "ON",
                    [](bool v) { cfgSetStr("core.mgba_force_gbp", v ? "ON" : "OFF"); });
         box->addView(cell);
