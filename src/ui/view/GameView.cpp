@@ -1,6 +1,7 @@
 #include "GameView.hpp"
 #include "GameMenuView.hpp"
 #include "RewindSelectorView.hpp"
+#include "emulator/IEmulatorAudioOutput.hpp"
 #include "game/audio/AudioManager.hpp"
 #include "game/control/InputMappingDefaults.hpp"
 #include "ui/utils/BKAudioPlayer.hpp"
@@ -73,6 +74,12 @@ namespace
     bool shouldSetupCoreOnGameThread(int platform)
     {
         return isNdsPlatform(platform) || isMgbaNativePlatform(platform);
+    }
+
+    beiklive::IEmulatorAudioOutput* coreAudioOutput(beiklive::IEmulatorCore* core)
+    {
+        auto* output = dynamic_cast<beiklive::IEmulatorAudioOutput*>(core);
+        return output && output->HandlesAudioOutput() ? output : nullptr;
     }
 
     bool isNdsRightStickMapping(const char* suffix)
@@ -1831,20 +1838,38 @@ namespace beiklive
         m_ndsTouchRect = rect;
     }
 
+    void GameView::_waitForUiAudioPlayer()
+    {
+        auto* player = dynamic_cast<beiklive::BKAudioPlayer*>(
+            brls::Application::getAudioPlayer());
+        if (!player)
+            return;
+
+        constexpr std::chrono::milliseconds kAudioPlayerWaitTimeout{500};
+        auto deadline = std::chrono::steady_clock::now() + kAudioPlayerWaitTimeout;
+        while (player->isPlaying() &&
+               std::chrono::steady_clock::now() < deadline)
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
     void GameView::_initAudioForCore(double fps, double sampleRate)
     {
         if (fps <= 0.0) fps = 59.7;
         if (sampleRate <= 0.0) sampleRate = 32768.0;
 
-        if (auto* player = dynamic_cast<beiklive::BKAudioPlayer*>(
-                brls::Application::getAudioPlayer()))
-        {
-            constexpr std::chrono::milliseconds kAudioPlayerWaitTimeout{500};
-            auto deadline = std::chrono::steady_clock::now() + kAudioPlayerWaitTimeout;
-            while (player->isPlaying() &&
-                   std::chrono::steady_clock::now() < deadline)
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        _waitForUiAudioPlayer();
+
+        if (auto* output = coreAudioOutput(m_core)) {
+            brls::Logger::debug("[GameView] audio init: core-managed output sampleRate={:.0f}", sampleRate);
+            beiklive::BKAudioPlayer::setGameAudioActive(true);
+            output->SetAudioOutputEnabled(true);
+            m_audioOutputSuppressed = false;
+            m_loggedFirstAudioPush = false;
+            m_audioEmptyLogCount = 0;
+            return;
         }
+
+        beiklive::BKAudioPlayer::setGameAudioActive(false);
 
         int targetMs = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_AUDIO_TARGET_LATENCY_MS, 90);
         int maxMs = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_AUDIO_MAX_LATENCY_MS, 180);
@@ -1863,6 +1888,8 @@ namespace beiklive
         AudioManager::instance().configureLatencyMs(targetMs, maxMs);
         AudioManager::instance().setSpeed(1.0f);
         m_audioOutputSuppressed = false;
+        m_loggedFirstAudioPush = false;
+        m_audioEmptyLogCount = 0;
 
         std::vector<int16_t> initAudioDiscard;
         m_core->DrainAudio(initAudioDiscard);
@@ -1870,6 +1897,11 @@ namespace beiklive
 
     void GameView::_flushAudioForTransition()
     {
+        if (auto* output = coreAudioOutput(m_core)) {
+            output->FlushAudioOutput();
+            return;
+        }
+
         int fadeMs = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_AUDIO_TRANSITION_FADE_MS, 6);
         fadeMs = std::clamp(fadeMs, 0, 20);
         AudioManager::instance().flushRingBufferWithFade(fadeMs);
@@ -1877,11 +1909,24 @@ namespace beiklive
 
     void GameView::_pauseAudioForTransition()
     {
+        if (auto* output = coreAudioOutput(m_core)) {
+            output->SetAudioOutputEnabled(false);
+            beiklive::BKAudioPlayer::setGameAudioActive(false);
+            return;
+        }
+
         AudioManager::instance().pauseOutput();
     }
 
     void GameView::_resumeAudioForTransition()
     {
+        if (auto* output = coreAudioOutput(m_core)) {
+            _waitForUiAudioPlayer();
+            beiklive::BKAudioPlayer::setGameAudioActive(true);
+            output->SetAudioOutputEnabled(true);
+            return;
+        }
+
         int fadeMs = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_AUDIO_TRANSITION_FADE_MS, 6);
         fadeMs = std::clamp(fadeMs, 0, 20);
         AudioManager::instance().resumeOutputWithFade(fadeMs);
@@ -1910,6 +1955,7 @@ namespace beiklive
             return;
         }
 
+        _waitForUiAudioPlayer();
         if (m_core->SetupGame(m_gameEntry))
         {
             brls::Logger::debug("核心已初始化，平台={}, 路径={}",
@@ -2110,6 +2156,12 @@ namespace beiklive
                                    (ff && m_ffMute) ||
                                    rewindMuted;
 
+        if (auto* output = coreAudioOutput(m_core)) {
+            output->SetAudioOutputEnabled(!suppressAudio);
+            m_audioOutputSuppressed = suppressAudio;
+            return;
+        }
+
         if (suppressAudio) {
             m_core->DrainAudio(m_audioDrainBuf);
             if (!m_audioOutputSuppressed)
@@ -2123,11 +2175,24 @@ namespace beiklive
             m_audioOutputSuppressed = false;
         }
 
-        if (!m_core->DrainAudio(m_audioDrainBuf) || m_audioDrainBuf.empty()) return;
+        if (!m_core->DrainAudio(m_audioDrainBuf) || m_audioDrainBuf.empty()) {
+            if (isMgbaNativePlatform(m_gameEntry.platform) && m_audioEmptyLogCount < 5) {
+                ++m_audioEmptyLogCount;
+                brls::Logger::debug("[GameView] mGBA audio drain empty count={}", m_audioEmptyLogCount);
+            }
+            return;
+        }
 
         size_t frames = m_audioDrainBuf.size() / 2;
+        if (isMgbaNativePlatform(m_gameEntry.platform) && !m_loggedFirstAudioPush) {
+            brls::Logger::info("[GameView] first mGBA audio push frames={} ringBefore={} running={}",
+                               frames,
+                               AudioManager::instance().available(),
+                               AudioManager::instance().isRunning() ? 1 : 0);
+            m_loggedFirstAudioPush = true;
+        }
 
-        if (ff || isNdsPlatform(m_gameEntry.platform) || isMgbaNativePlatform(m_gameEntry.platform)) {
+        if (ff || isNdsPlatform(m_gameEntry.platform)) {
             AudioManager::instance().pushSamplesNoBlocking(m_audioDrainBuf.data(), frames);
             return;
         }
@@ -2354,6 +2419,7 @@ namespace beiklive
 
             brls::Logger::info("GameView: initializing {} core on game thread",
                                beiklive::tools::platformName(m_gameEntry.platform));
+            _waitForUiAudioPlayer();
             if (!m_core->SetupGame(m_gameEntry))
             {
                 brls::Logger::error("核心初始化失败，平台={}, 路径={}",
@@ -2708,6 +2774,7 @@ namespace beiklive
 
         // ---- 音频清理 ----
         AudioManager::instance().deinit();
+        beiklive::BKAudioPlayer::setGameAudioActive(false);
 
 #ifdef _WIN32
         timeEndPeriod(1);

@@ -187,6 +187,8 @@ namespace beiklive
             // ---- 音频排空缓冲（复用避免每帧分配）-----------------------------
             std::vector<int16_t> m_audioDrainBuf;
             bool m_audioOutputSuppressed = false; ///< 静音/快进静音/倒带静音状态是否已清过缓冲
+            bool m_loggedFirstAudioPush = false; ///< 诊断：是否已记录第一次音频推送
+            unsigned m_audioEmptyLogCount = 0; ///< 诊断：启动阶段 DrainAudio 为空次数
 
             // ---- 游戏线程 -----------------------------------------------------
             std::thread       m_gameThread;
@@ -343,6 +345,9 @@ namespace beiklive
 
             /// 根据当前核心和配置初始化 AudioManager。
             void _initAudioForCore(double fps, double sampleRate);
+
+            /// 等待 UI 音效释放共享 audout，避免游戏音频启动时抢完成事件。
+            void _waitForUiAudioPlayer();
 
             /// 清空音频缓冲并按设置为下一段音频加短淡入。
             void _flushAudioForTransition();

@@ -9,6 +9,7 @@
 #include <mgba/core/core.h>
 #include <mgba/core/serialize.h>
 #include <mgba/gb/interface.h>
+#include <mgba/internal/gba/audio.h>
 #include <mgba/internal/gb/overrides.h>
 #include <mgba-util/vfs.h>
 
@@ -17,6 +18,10 @@
 #include <cstring>
 #include <ctime>
 #include <cstdlib>
+
+#ifdef __SWITCH__
+#include <switch.h>
+#endif
 
 namespace beiklive::mgba_native
 {
@@ -188,6 +193,9 @@ bool MgbaNativeCore::SetupGame(beiklive::GameEntry gameEntry)
 {
     Cleanup();
     m_gameEntry = std::move(gameEntry);
+    m_loggedFirstAudio = false;
+    m_audioProbeFrames = 0;
+    m_audioSilentProbeFrames = 0;
 
     brls::Logger::debug("MgbaNativeCore: SetupGame begin");
     initSettingsDefaults();
@@ -228,7 +236,8 @@ void MgbaNativeCore::RunFrame()
     updateKeys();
     m_core->runFrame(m_core);
     captureVideoFrame();
-    drainMgbaAudio();
+    if (!m_audioStreamEnabled)
+        drainMgbaAudio();
 }
 
 void MgbaNativeCore::Reset()
@@ -236,7 +245,14 @@ void MgbaNativeCore::Reset()
     m_audioLowPassLeftPrev = 0;
     m_audioLowPassRightPrev = 0;
     if (m_core)
+    {
         m_core->reset(m_core);
+        if (m_core->reloadConfigOption)
+        {
+            m_core->reloadConfigOption(m_core, "mute", &m_core->config);
+            m_core->reloadConfigOption(m_core, "volume", &m_core->config);
+        }
+    }
 }
 
 bool MgbaNativeCore::Serialize(std::vector<uint8_t>& outBuf) const
@@ -292,6 +308,13 @@ LibretroLoader::VideoFrame MgbaNativeCore::GetVideoFrame() const
 
 bool MgbaNativeCore::DrainAudio(std::vector<int16_t>& out)
 {
+#ifdef __SWITCH__
+    if (m_switchAudioInitialized)
+    {
+        out.clear();
+        return false;
+    }
+#endif
     std::lock_guard<std::mutex> lock(m_audioMutex);
     out.clear();
     if (m_audioBuffer.empty())
@@ -299,6 +322,39 @@ bool MgbaNativeCore::DrainAudio(std::vector<int16_t>& out)
     out = std::move(m_audioBuffer);
     m_audioBuffer.clear();
     return true;
+}
+
+bool MgbaNativeCore::HandlesAudioOutput() const
+{
+#ifdef __SWITCH__
+    return m_switchAudioInitialized;
+#else
+    return false;
+#endif
+}
+
+void MgbaNativeCore::SetAudioOutputEnabled(bool enabled)
+{
+    m_audioOutputEnabled = enabled;
+    if (!enabled)
+        FlushAudioOutput();
+}
+
+void MgbaNativeCore::FlushAudioOutput()
+{
+#ifdef __SWITCH__
+    if (!m_switchAudioInitialized)
+        return;
+
+    constexpr uint64_t kDrainTimeoutNs = 16000000ULL;
+    for (int i = 0; m_switchAudioEnqueued > 0 && i < kSwitchAudioBufferCount * 4; ++i)
+        waitNativeAudioOutput(kDrainTimeoutNs);
+    m_switchAudioEnqueued = 0;
+    m_switchAudioActive = 0;
+#else
+    std::lock_guard<std::mutex> lock(m_audioMutex);
+    m_audioBuffer.clear();
+#endif
 }
 
 void MgbaNativeCore::SetButtonState(unsigned player, unsigned id, bool pressed)
@@ -437,12 +493,19 @@ bool MgbaNativeCore::loadRom(const std::string& romPath)
     m_coreInitialized = true;
 
     brls::Logger::debug("MgbaNativeCore: core init ok");
+#ifdef __SWITCH__
+    m_sampleRate = static_cast<double>(audoutGetSampleRate());
+    if (m_sampleRate <= 0.0)
+        m_sampleRate = 48000.0;
+#else
+    m_sampleRate = kDefaultSampleRate;
+#endif
     initConfigDefaults();
     brls::Logger::debug("MgbaNativeCore: config defaults ok");
     installPeripherals();
     brls::Logger::debug("MgbaNativeCore: peripherals ok");
     applyConfig();
-    brls::Logger::debug("MgbaNativeCore: config applied ok");
+    brls::Logger::debug("MgbaNativeCore: pre-load config applied ok");
 
     brls::Logger::debug("MgbaNativeCore: loading ROM file");
     if (!mCoreLoadFile(m_core, romPath.c_str()))
@@ -452,6 +515,8 @@ bool MgbaNativeCore::loadRom(const std::string& romPath)
         return false;
     }
     brls::Logger::debug("MgbaNativeCore: ROM file loaded");
+    applyConfig();
+    brls::Logger::debug("MgbaNativeCore: post-load config applied ok");
 
     unsigned desiredW = 0;
     unsigned desiredH = 0;
@@ -470,12 +535,7 @@ bool MgbaNativeCore::loadRom(const std::string& romPath)
     if (cycles > 0 && frequency > 0)
         m_fps = static_cast<double>(frequency) / static_cast<double>(cycles);
 
-    const size_t audioBufferSamples = m_core->platform(m_core) == mPLATFORM_GBA
-        ? static_cast<size_t>(448)
-        : static_cast<size_t>(kSampleRate / 60.0 + 4);
-    m_core->setAudioBufferSize(m_core, audioBufferSamples);
-    blip_set_rates(m_core->getAudioChannel(m_core, 0), m_core->frequency(m_core), kSampleRate);
-    blip_set_rates(m_core->getAudioChannel(m_core, 1), m_core->frequency(m_core), kSampleRate);
+    configureAudioStream();
     return true;
 }
 
@@ -509,8 +569,10 @@ void MgbaNativeCore::initConfigDefaults()
 
     mCoreInitConfig(m_core, "BeikLiveStation");
     m_configInitialized = true;
-    mCoreConfigSetDefaultIntValue(&m_core->config, "sampleRate", static_cast<int>(kSampleRate));
-    mCoreConfigSetDefaultUIntValue(&m_core->config, "audioBuffers", static_cast<unsigned>(kSampleRate / 30.0));
+    mCoreConfigSetDefaultIntValue(&m_core->config, "sampleRate", static_cast<int>(m_sampleRate));
+    mCoreConfigSetDefaultUIntValue(&m_core->config, "audioBuffers", static_cast<unsigned>(m_sampleRate / 30.0));
+    mCoreConfigSetDefaultIntValue(&m_core->config, "volume", GBA_AUDIO_VOLUME_MAX);
+    mCoreConfigSetDefaultIntValue(&m_core->config, "mute", 0);
     mCoreConfigSetDefaultIntValue(&m_core->config, "useBios", useBios() ? 1 : 0);
     mCoreConfigSetDefaultIntValue(&m_core->config, "skipBios", skipBios() ? 1 : 0);
     mCoreConfigSetDefaultIntValue(&m_core->config, "frameskip", settingInt("core.mgba_frameskip", "0", 0, 10));
@@ -541,8 +603,10 @@ void MgbaNativeCore::applyConfig()
     const bool forceGbp = settingEnabled("core.mgba_force_gbp", "OFF", "ON");
     const char* modelName = GBModelToName(gbModelFromSetting());
 
-    mCoreConfigSetOverrideIntValue(&m_core->config, "sampleRate", static_cast<int>(kSampleRate));
-    mCoreConfigSetOverrideUIntValue(&m_core->config, "audioBuffers", static_cast<unsigned>(kSampleRate / 30.0));
+    mCoreConfigSetOverrideIntValue(&m_core->config, "sampleRate", static_cast<int>(m_sampleRate));
+    mCoreConfigSetOverrideUIntValue(&m_core->config, "audioBuffers", static_cast<unsigned>(m_sampleRate / 30.0));
+    mCoreConfigSetOverrideIntValue(&m_core->config, "volume", GBA_AUDIO_VOLUME_MAX);
+    mCoreConfigSetOverrideIntValue(&m_core->config, "mute", 0);
     mCoreConfigSetOverrideIntValue(&m_core->config, "useBios", useBios() ? 1 : 0);
     mCoreConfigSetOverrideIntValue(&m_core->config, "skipBios", skipBios() ? 1 : 0);
     mCoreConfigSetOverrideIntValue(&m_core->config, "frameskip", frameskip);
@@ -563,6 +627,11 @@ void MgbaNativeCore::applyConfig()
         m_core->rtc.override = RTC_NO_OVERRIDE;
 
     mCoreLoadForeignConfig(m_core, &m_core->config);
+    brls::Logger::info("MgbaNativeCore: config loaded sampleRate={} audioBuffers={} volume={} mute={}",
+                       m_core->opts.sampleRate,
+                       m_core->opts.audioBuffers,
+                       m_core->opts.volume,
+                       m_core->opts.mute ? 1 : 0);
 }
 
 void MgbaNativeCore::applyAudioLowPassSettings()
@@ -584,19 +653,28 @@ void MgbaNativeCore::applyAudioLowPass(std::vector<int16_t>& samples)
     if (!m_audioLowPassEnabled || samples.size() < 2)
         return;
 
+    applyAudioLowPassBuffer(samples.data(), samples.size() / 2);
+}
+
+void MgbaNativeCore::applyAudioLowPassBuffer(int16_t* samples, size_t frames)
+{
+    if (!m_audioLowPassEnabled || !samples || frames == 0)
+        return;
+
     int32_t left = m_audioLowPassLeftPrev;
     int32_t right = m_audioLowPassRightPrev;
     const int32_t factorA = m_audioLowPassRange;
     const int32_t factorB = 0x10000 - factorA;
 
-    for (size_t i = 0; i + 1 < samples.size(); i += 2)
+    for (size_t frame = 0; frame < frames; ++frame)
     {
-        left = (left * factorA) + (samples[i] * factorB);
-        right = (right * factorA) + (samples[i + 1] * factorB);
+        int16_t* sample = samples + frame * 2;
+        left = (left * factorA) + (sample[0] * factorB);
+        right = (right * factorA) + (sample[1] * factorB);
         left >>= 16;
         right >>= 16;
-        samples[i] = static_cast<int16_t>(left);
-        samples[i + 1] = static_cast<int16_t>(right);
+        sample[0] = static_cast<int16_t>(left);
+        sample[1] = static_cast<int16_t>(right);
     }
 
     m_audioLowPassLeftPrev = left;
@@ -713,6 +791,285 @@ void MgbaNativeCore::updateCheats()
         set->refresh(set, device);
 }
 
+void MgbaNativeCore::configureAudioStream()
+{
+    if (!m_core)
+        return;
+
+#ifdef __SWITCH__
+    m_audioStreamEnabled = initNativeAudioOutput();
+#else
+    m_audioStreamEnabled = false;
+#endif
+    m_audioStream = {};
+    m_audioStream.owner = this;
+    m_audioStream.d.postAudioFrame = nullptr;
+    m_audioStream.d.postAudioBuffer = &MgbaNativeCore::postAudioBuffer;
+    m_core->setAVStream(m_core, &m_audioStream.d);
+
+    m_core->setAudioBufferSize(m_core, kSwitchAudioSamples);
+    const double ratio = static_cast<double>(GBAAudioCalculateRatio(1.0f, 60.0f, 1.0f));
+    const double blipSampleRate = m_sampleRate * ratio;
+    blip_set_rates(m_core->getAudioChannel(m_core, 0), m_core->frequency(m_core), blipSampleRate);
+    blip_set_rates(m_core->getAudioChannel(m_core, 1), m_core->frequency(m_core), blipSampleRate);
+    brls::Logger::debug("MgbaNativeCore: native audio stream configured sampleRate={} bufferSamples={} ratio={:.6f}",
+                        static_cast<int>(m_sampleRate), kSwitchAudioSamples, ratio);
+}
+
+bool MgbaNativeCore::initNativeAudioOutput()
+{
+#ifdef __SWITCH__
+    if (m_switchAudioInitialized)
+        return true;
+
+    Result rc = audoutInitialize();
+    if (R_FAILED(rc))
+    {
+        brls::Logger::warning("MgbaNativeCore: audoutInitialize failed rc={:#x}; falling back to drained audio", rc);
+        return false;
+    }
+
+    rc = audoutStartAudioOut();
+    if (R_FAILED(rc))
+        brls::Logger::debug("MgbaNativeCore: audout already started/shared rc={:#x}", rc);
+
+    m_switchAudioInitialized = true;
+    for (int i = 0; i < kSwitchAudioBufferCount; ++i)
+    {
+        m_switchAudioBuffers[i] = static_cast<int16_t*>(std::aligned_alloc(0x1000, kSwitchAudioBufferBytes));
+        if (!m_switchAudioBuffers[i])
+        {
+            brls::Logger::error("MgbaNativeCore: Switch direct audio buffer allocation failed");
+            shutdownNativeAudioOutput();
+            return false;
+        }
+        std::memset(m_switchAudioBuffers[i], 0, kSwitchAudioBufferBytes);
+        m_switchAudioOutBuffers[i] = {};
+        m_switchAudioOutBuffers[i].buffer = m_switchAudioBuffers[i];
+        m_switchAudioOutBuffers[i].buffer_size = kSwitchAudioBufferBytes;
+        m_switchAudioOutBuffers[i].data_size = kSwitchAudioSamples * 2 * sizeof(int16_t);
+        m_switchAudioOutBuffers[i].data_offset = 0;
+    }
+
+    m_switchAudioActive = 0;
+    m_switchAudioEnqueued = 0;
+    m_loggedFirstSwitchAppend = false;
+    m_loggedFirstNonZeroSwitchAudio = false;
+    m_switchSilentProbeBuffers = 0;
+    m_switchAudioCallbackCount = 0;
+    brls::Logger::info("MgbaNativeCore: Switch direct audio output initialized sampleRate={} samples={}",
+                       static_cast<int>(m_sampleRate), kSwitchAudioSamples);
+    return true;
+#else
+    return false;
+#endif
+}
+
+void MgbaNativeCore::shutdownNativeAudioOutput()
+{
+#ifdef __SWITCH__
+    if (m_switchAudioInitialized)
+    {
+        FlushAudioOutput();
+        audoutExit();
+    }
+
+    for (auto*& buffer : m_switchAudioBuffers)
+    {
+        std::free(buffer);
+        buffer = nullptr;
+    }
+    for (auto& outBuffer : m_switchAudioOutBuffers)
+        outBuffer = {};
+    m_switchAudioActive = 0;
+    m_switchAudioEnqueued = 0;
+    m_switchAudioInitialized = false;
+    m_loggedFirstSwitchAppend = false;
+    m_loggedFirstNonZeroSwitchAudio = false;
+    m_switchSilentProbeBuffers = 0;
+    m_switchAudioCallbackCount = 0;
+#endif
+}
+
+int MgbaNativeCore::waitNativeAudioOutput(uint64_t timeoutNs)
+{
+#ifdef __SWITCH__
+    AudioOutBuffer* releasedBuffers = nullptr;
+    uint32_t releasedCount = 0;
+    Result rc = timeoutNs
+        ? audoutWaitPlayFinish(&releasedBuffers, &releasedCount, timeoutNs)
+        : audoutGetReleasedAudioOutBuffer(&releasedBuffers, &releasedCount);
+    if (R_FAILED(rc) || !releasedBuffers || releasedCount == 0)
+        return 0;
+
+    int ownedReleased = 0;
+    for (AudioOutBuffer* buffer = releasedBuffers; buffer; buffer = buffer->next)
+    {
+        for (auto& owned : m_switchAudioOutBuffers)
+        {
+            if (buffer == &owned)
+            {
+                ++ownedReleased;
+                break;
+            }
+        }
+    }
+    if (ownedReleased > 0)
+    {
+        if (static_cast<uint32_t>(ownedReleased) > m_switchAudioEnqueued)
+            m_switchAudioEnqueued = 0;
+        else
+            m_switchAudioEnqueued -= static_cast<uint32_t>(ownedReleased);
+    }
+    return ownedReleased;
+#else
+    (void)timeoutNs;
+    return 0;
+#endif
+}
+
+void MgbaNativeCore::postAudioBuffer(mAVStream* stream, blip_t* left, blip_t* right)
+{
+    if (!stream || !left || !right)
+        return;
+
+    auto* nativeStream = reinterpret_cast<NativeAudioStream*>(stream);
+    MgbaNativeCore* owner = nativeStream->owner;
+    if (!owner || !owner->m_audioStreamEnabled)
+        return;
+
+#ifdef __SWITCH__
+    if (owner->m_switchAudioInitialized)
+    {
+        ++owner->m_switchAudioCallbackCount;
+        const int availableLeft = blip_samples_avail(left);
+        const int availableRight = blip_samples_avail(right);
+        if (owner->m_switchAudioCallbackCount <= 3 ||
+            owner->m_switchAudioCallbackCount == 60 ||
+            owner->m_switchAudioCallbackCount == 180)
+        {
+            brls::Logger::info("MgbaNativeCore: direct audio callback #{} availL={} availR={} queued={} enabled={} ff={}",
+                               owner->m_switchAudioCallbackCount,
+                               availableLeft,
+                               availableRight,
+                               owner->m_switchAudioEnqueued,
+                               owner->m_audioOutputEnabled ? 1 : 0,
+                               owner->m_fastForwarding ? 1 : 0);
+        }
+
+        owner->waitNativeAudioOutput(0);
+        if (!owner->m_audioOutputEnabled || owner->m_fastForwarding)
+        {
+            blip_clear(left);
+            blip_clear(right);
+            return;
+        }
+        while (owner->m_switchAudioEnqueued >= kSwitchAudioBufferCount - 1)
+            owner->waitNativeAudioOutput(10000000ULL);
+        if (owner->m_switchAudioEnqueued >= kSwitchAudioBufferCount)
+        {
+            blip_clear(left);
+            blip_clear(right);
+            return;
+        }
+
+        const int index = owner->m_switchAudioActive;
+        int16_t* samples = owner->m_switchAudioBuffers[index];
+        if (!samples)
+        {
+            blip_clear(left);
+            blip_clear(right);
+            return;
+        }
+
+        const int produced = blip_read_samples(left, samples, kSwitchAudioSamples, true);
+        if (produced <= 0)
+        {
+            brls::Logger::warning("MgbaNativeCore: direct audio callback produced no samples availL={} availR={}",
+                                  availableLeft, availableRight);
+            return;
+        }
+        const int producedRight = blip_read_samples(right, samples + 1, produced, true);
+        if (producedRight < produced)
+        {
+            brls::Logger::warning("MgbaNativeCore: right audio channel short read left={} right={}",
+                                  produced, producedRight);
+        }
+        if (static_cast<size_t>(produced) < kSwitchAudioSamples)
+            std::memset(samples + produced * 2, 0, (kSwitchAudioSamples - static_cast<size_t>(produced)) * 2 * sizeof(int16_t));
+        owner->applyAudioLowPassBuffer(samples, static_cast<size_t>(produced));
+        armDCacheFlush(samples, kSwitchAudioBufferBytes);
+
+        auto& outBuffer = owner->m_switchAudioOutBuffers[index];
+        outBuffer.next = nullptr;
+        outBuffer.data_size = kSwitchAudioSamples * 2 * sizeof(int16_t);
+        Result rc = audoutAppendAudioOutBuffer(&outBuffer);
+        if (R_SUCCEEDED(rc))
+        {
+            int peak = 0;
+            if (!owner->m_loggedFirstNonZeroSwitchAudio || !owner->m_loggedFirstSwitchAppend)
+            {
+                for (size_t i = 0; i < kSwitchAudioSamples * 2; ++i)
+                    peak = std::max(peak, samples[i] < 0 ? -static_cast<int>(samples[i]) : static_cast<int>(samples[i]));
+            }
+            if (!owner->m_loggedFirstSwitchAppend)
+            {
+                brls::Logger::info("MgbaNativeCore: first direct Switch audio buffer appended frames={} peak={} queued={}",
+                                   produced, peak, owner->m_switchAudioEnqueued);
+                owner->m_loggedFirstSwitchAppend = true;
+            }
+            if (!owner->m_loggedFirstNonZeroSwitchAudio)
+            {
+                if (peak > 0)
+                {
+                    brls::Logger::info("MgbaNativeCore: first non-zero Switch audio peak={} after {} silent buffers",
+                                       peak, owner->m_switchSilentProbeBuffers);
+                    owner->m_loggedFirstNonZeroSwitchAudio = true;
+                }
+                else if (++owner->m_switchSilentProbeBuffers == 180)
+                {
+                    brls::Logger::warning("MgbaNativeCore: first {} direct audio buffers were silent", owner->m_switchSilentProbeBuffers);
+                }
+            }
+            owner->m_switchAudioActive = (owner->m_switchAudioActive + 1) % kSwitchAudioBufferCount;
+            ++owner->m_switchAudioEnqueued;
+        }
+        else
+        {
+            brls::Logger::warning("MgbaNativeCore: audoutAppendAudioOutBuffer failed rc={:#x}", rc);
+        }
+        return;
+    }
+#endif
+
+    std::vector<int16_t> samples(kSwitchAudioSamples * 2);
+    const int produced = blip_read_samples(left, samples.data(), kSwitchAudioSamples, true);
+    if (produced <= 0)
+        return;
+    blip_read_samples(right, samples.data() + 1, produced, true);
+
+    if (!owner->m_loggedFirstAudio)
+    {
+        brls::Logger::info("MgbaNativeCore: first stream audio batch produced {} frames", produced);
+        owner->m_loggedFirstAudio = true;
+    }
+
+    samples.resize(static_cast<size_t>(produced) * 2);
+    owner->applyAudioLowPass(samples);
+
+    std::lock_guard<std::mutex> lock(owner->m_audioMutex);
+    if (owner->m_audioBuffer.size() + samples.size() > kAudioBufferCapacity)
+    {
+        const size_t overflow = (owner->m_audioBuffer.size() + samples.size()) - kAudioBufferCapacity;
+        if (overflow >= owner->m_audioBuffer.size())
+            owner->m_audioBuffer.clear();
+        else
+            owner->m_audioBuffer.erase(owner->m_audioBuffer.begin(),
+                                       owner->m_audioBuffer.begin() + static_cast<std::ptrdiff_t>(overflow));
+    }
+    owner->m_audioBuffer.insert(owner->m_audioBuffer.end(), samples.begin(), samples.end());
+}
+
 void MgbaNativeCore::drainMgbaAudio()
 {
     if (!m_core)
@@ -723,9 +1080,18 @@ void MgbaNativeCore::drainMgbaAudio()
     if (!left || !right)
         return;
 
-    const int available = std::min(blip_samples_avail(left), blip_samples_avail(right));
+    const int available = blip_samples_avail(left);
     if (available <= 0)
+    {
+        if (m_audioProbeFrames < 60)
+        {
+            ++m_audioProbeFrames;
+            ++m_audioSilentProbeFrames;
+            if (m_audioProbeFrames == 60)
+                brls::Logger::warning("MgbaNativeCore: no audio samples produced in first {} frames", m_audioSilentProbeFrames);
+        }
         return;
+    }
 
     std::vector<int16_t> samples(static_cast<size_t>(available) * 2);
     const int produced = blip_read_samples(left, samples.data(), available, true);
@@ -735,9 +1101,12 @@ void MgbaNativeCore::drainMgbaAudio()
 
     if (!m_loggedFirstAudio)
     {
-        brls::Logger::info("MgbaNativeCore: first audio batch produced {} frames", produced);
+        brls::Logger::info("MgbaNativeCore: first audio batch produced {} frames (available={}, silentProbeFrames={})",
+                           produced, available, m_audioSilentProbeFrames);
         m_loggedFirstAudio = true;
     }
+    if (m_audioProbeFrames < 60)
+        ++m_audioProbeFrames;
 
     samples.resize(static_cast<size_t>(produced) * 2);
     applyAudioLowPass(samples);
@@ -822,14 +1191,26 @@ void MgbaNativeCore::releaseCore()
     m_bufferWidth = 0;
     m_bufferHeight = 0;
     m_fps = 60.0;
+    m_sampleRate = kDefaultSampleRate;
     m_keyMask = 0;
     m_loggedFirstAudio = false;
+    m_audioProbeFrames = 0;
+    m_audioSilentProbeFrames = 0;
 
     if (!m_core)
+    {
+        m_audioStreamEnabled = false;
+        m_audioStream = {};
+        shutdownNativeAudioOutput();
         return;
+    }
 
     if (m_coreInitialized)
     {
+        if (m_core->setAVStream)
+            m_core->setAVStream(m_core, nullptr);
+        m_audioStreamEnabled = false;
+        m_audioStream = {};
         mCheatDevice* device = m_core->cheatDevice ? m_core->cheatDevice(m_core) : nullptr;
         if (device)
             mCheatDeviceClear(device);
@@ -846,6 +1227,7 @@ void MgbaNativeCore::releaseCore()
     m_core = nullptr;
     m_coreInitialized = false;
     m_configInitialized = false;
+    shutdownNativeAudioOutput();
 }
 
 std::string MgbaNativeCore::saveFilePath() const

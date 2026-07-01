@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <thread>
 
 // ============================================================
@@ -368,12 +369,14 @@ static constexpr size_t SWITCH_BYTES     = SWITCH_FRAMES * 2 * sizeof(int16_t);
 static constexpr int    SWITCH_N_BUFFERS = 4;
 
 struct SwitchAudioState {
-    alignas(0x1000) int16_t bufData[SWITCH_N_BUFFERS][SWITCH_FRAMES * 2];
+    int16_t*       bufData[SWITCH_N_BUFFERS] = {};
     AudioOutBuffer outBuf[SWITCH_N_BUFFERS];
     bool           queued[SWITCH_N_BUFFERS] = {};
     int            freeList[SWITCH_N_BUFFERS] = {};
     int            freeCount       = 0;
     u32            enqueuedBuffers = 0;
+    bool           loggedFirstAppend = false;
+    int            appendFailLogs = 0;
 
     bool owns(const AudioOutBuffer* buf, int* index = nullptr) const
     {
@@ -412,6 +415,18 @@ struct SwitchAudioState {
             return -1;
         return freeList[--freeCount];
     }
+
+    void freeBuffers()
+    {
+        for (int i = 0; i < SWITCH_N_BUFFERS; ++i) {
+            std::free(bufData[i]);
+            bufData[i] = nullptr;
+            outBuf[i] = {};
+        }
+        freeCount = 0;
+        enqueuedBuffers = 0;
+        std::fill(std::begin(queued), std::end(queued), false);
+    }
 };
 
 bool AudioManager::init(int sampleRate, int channels)
@@ -431,7 +446,16 @@ bool AudioManager::init(int sampleRate, int channels)
     }
 
     for (int i = 0; i < SWITCH_N_BUFFERS; ++i) {
-        memset(sw->bufData[i], 0, SWITCH_FRAMES * 2 * sizeof(int16_t));
+        sw->bufData[i] = static_cast<int16_t*>(std::aligned_alloc(0x1000, SWITCH_BYTES));
+        if (!sw->bufData[i]) {
+            brls::Logger::error("AudioManager: Switch audio buffer allocation failed ({} bytes)", SWITCH_BYTES);
+            sw->freeBuffers();
+            audoutExit();
+            delete sw;
+            m_platformState = nullptr;
+            return false;
+        }
+        memset(sw->bufData[i], 0, SWITCH_BYTES);
         sw->outBuf[i].next        = nullptr;
         sw->outBuf[i].buffer      = sw->bufData[i];
         sw->outBuf[i].buffer_size = SWITCH_BYTES;
@@ -512,6 +536,11 @@ void AudioManager::audioThreadFunc()
             continue;
 
         int16_t* dst = sw->bufData[bufIndex];
+        if (!dst) {
+            if (sw->freeCount < SWITCH_N_BUFFERS)
+                sw->freeList[sw->freeCount++] = bufIndex;
+            continue;
+        }
 
         // 动态重采样比例 = (输入采样率 / 输出采样率) * 当前模拟速度。
         // 使用跨缓冲区延续的相位，避免每个 audout 块重新起算造成边界抖动。
@@ -582,10 +611,27 @@ void AudioManager::audioThreadFunc()
 
         armDCacheFlush(dst, SWITCH_BYTES);
         sw->outBuf[bufIndex].next = nullptr;
-        if (R_SUCCEEDED(audoutAppendAudioOutBuffer(&sw->outBuf[bufIndex]))) {
+        Result appendRc = audoutAppendAudioOutBuffer(&sw->outBuf[bufIndex]);
+        if (R_SUCCEEDED(appendRc)) {
+            if (!sw->loggedFirstAppend) {
+                int16_t peak = 0;
+                for (size_t i = 0; i < SWITCH_FRAMES * 2; ++i) {
+                    const int sample = dst[i] < 0 ? -static_cast<int>(dst[i]) : static_cast<int>(dst[i]);
+                    if (sample > peak)
+                        peak = static_cast<int16_t>(std::min(sample, static_cast<int>(INT16_MAX)));
+                }
+                brls::Logger::info("AudioManager: first Switch audio buffer appended peak={} queued={}",
+                                   peak, sw->enqueuedBuffers);
+                sw->loggedFirstAppend = true;
+            }
             sw->markQueued(bufIndex);
-        } else if (sw->freeCount < SWITCH_N_BUFFERS) {
-            sw->freeList[sw->freeCount++] = bufIndex;
+        } else {
+            if (sw->appendFailLogs < 5) {
+                brls::Logger::warning("AudioManager: audoutAppendAudioOutBuffer failed rc={:#x}", appendRc);
+                ++sw->appendFailLogs;
+            }
+            if (sw->freeCount < SWITCH_N_BUFFERS)
+                sw->freeList[sw->freeCount++] = bufIndex;
         }
     }
 }
@@ -638,6 +684,7 @@ void AudioManager::deinit()
         // 注意：不调用 audoutStopAudioOut()，保持流持续运行供 BKAudioPlayer 使用
     }
     audoutExit();
+    sw->freeBuffers();
     delete sw;
     m_platformState = nullptr;
     m_ring.clear();

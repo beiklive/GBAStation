@@ -32,6 +32,18 @@
 
 namespace beiklive {
 
+std::atomic<bool> BKAudioPlayer::s_gameAudioActive{false};
+
+void BKAudioPlayer::setGameAudioActive(bool active)
+{
+    s_gameAudioActive.store(active, std::memory_order_release);
+}
+
+bool BKAudioPlayer::isGameAudioActive()
+{
+    return s_gameAudioActive.load(std::memory_order_acquire);
+}
+
 // ============================================================
 // 平台相关常量
 // ============================================================
@@ -426,7 +438,7 @@ void BKAudioPlayer::playSoundDirect(int /*soundIdx*/, const WavData& wav, float 
     // AudioManager 与 BKAudioPlayer 共用同一 audout 设备，若同时向硬件队列提交缓冲区，
     // AudioManager 的线程可能"偷走" BKAudioPlayer 的完成通知，导致 BKAudioPlayer 在
     // 音频缓冲区仍被硬件 DMA 读取时提前 free()，产生 use-after-free，引发撕裂音或音调异常。
-    if (AudioManager::instance().isRunning())
+    if (AudioManager::instance().isRunning() || BKAudioPlayer::isGameAudioActive())
         return;
 
     // pitch 影响重采样比率：pitch > 1.0 表示升调（加速播放），< 1.0 表示降调（减速播放）
