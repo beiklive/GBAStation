@@ -45,6 +45,25 @@ void FileListView::clearItems() {
     m_targetScrollY = 0.f;
 }
 
+bool FileListView::focusItemByFilename(const std::string& filename) {
+    if (filename.empty() || m_items.empty())
+        return false;
+
+    for (int i = 0; i < static_cast<int>(m_items.size()); ++i) {
+        if (m_items[i].text == filename || std::filesystem::path(m_items[i].data).filename().string() == filename) {
+            int old = m_focusedIndex;
+            m_focusedIndex = i;
+            ensureFocusedVisible();
+            m_scrollY = m_targetScrollY;
+            fireFocusCallbacks(old);
+            invalidate();
+            return true;
+        }
+    }
+
+    return false;
+}
+
 // ── Focus state ──
 
 void FileListView::saveFocusState(const std::string& path) {

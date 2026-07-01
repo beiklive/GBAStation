@@ -55,6 +55,10 @@ int main(int argc, char* argv[]) {
 		brls::Logger::error("Unable to init Borealis application");
 		return EXIT_FAILURE;
 	}
+
+	brls::Application::getPlatform()->forceEnableGamePlayRecording();
+
+
 	brls::Application::createWindow("beiklive/title"_i18n);
 
 	// brls::Application::loadFontFromFile("chinese", BK_RES("font/switch_font.ttf"));

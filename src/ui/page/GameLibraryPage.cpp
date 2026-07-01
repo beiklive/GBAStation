@@ -1118,8 +1118,9 @@ namespace beiklive
             });
 
         m_gameOptionsSidebar->addButton("设置封面图", BK_RES("img/ui/setting/display.png"),
-            [this, path, idx = m_grid->getSelectedIndex()](const beiklive::GameEntry&) {
+            [this, path, idx = m_grid->getSelectedIndex()](const beiklive::GameEntry& entry) {
                 _hideGameOptionsPanel();
+                fs::path currentLogo(entry.logoPath);
                 beiklive::openFilePicker({"png", "jpg"},
                     [this, path, idx](const std::string& selectedPath) {
                         if (beiklive::GameDB) {
@@ -1128,7 +1129,9 @@ namespace beiklive
                             m_grid->setItemImagePath(idx, selectedPath);
                         }
                         m_grid->setInteractionDisabled(false);
-                    }, beiklive::path::GetRootPath());
+                    },
+                    currentLogo.parent_path().empty() ? beiklive::path::GetRootPath() : currentLogo.parent_path().string(),
+                    currentLogo.filename().string());
             });
 
         if (beiklive::GetCoreOptions(entry.platform).size() > 1)

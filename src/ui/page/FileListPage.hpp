@@ -16,6 +16,7 @@ namespace beiklive
         std::vector<std::string>    m_filterExtensions;
         std::string                 m_currentPath;
         std::string                 m_previousPath;
+        std::string                 m_pendingFocusFilename;
         bool                        m_isAtDriveList = false;
         std::vector<beiklive::DirListData> m_dirItems;
         beiklive::FileListView*     fileListView;
@@ -65,6 +66,7 @@ namespace beiklive
         void showDriveList();
         void setFliter(beiklive::enums::FilterMode mode, std::vector<std::string> extensions);
         void setPath(const std::string path);
+        void setInitialFocusFilename(const std::string& filename);
         void setDirSelectionMode(bool on) { m_dirSelectionMode = on; }
 
         std::function<void(beiklive::DirListData)> onFileSelected;

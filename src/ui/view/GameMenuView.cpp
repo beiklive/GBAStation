@@ -1157,11 +1157,18 @@ namespace beiklive
             std::vector<std::string> extensions = {"cht"};
             if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
                 extensions.push_back("dat");
+            std::string currentCheatDir;
+            std::string currentCheatFile;
+            if (!m_gameEntry.cheatPath.empty()) {
+                std::filesystem::path currentCheatPath(m_gameEntry.cheatPath);
+                currentCheatDir = currentCheatPath.parent_path().string();
+                currentCheatFile = currentCheatPath.filename().string();
+            }
             beiklive::openFilePicker(extensions,
                 [this](const std::string& path) {
                     _loadCheatsFromPath(path);
                     if (m_cheatPathCallback) m_cheatPathCallback(path);
-                });
+                }, currentCheatDir, currentCheatFile);
             return true; });
 
         selectChtBtn->setCustomNavigationRoute(brls::FocusDirection::UP, selectChtBtn);
@@ -1513,6 +1520,32 @@ namespace beiklive
             box->addView(ffCell);
             box->addView(makeHint("小于1倍时可在快进触发时实现慢动作效果"));
 
+            if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuGBA)) {
+                auto *solarHdr = new brls::Header();
+                solarHdr->setTitle("阳光强度");
+                box->addView(solarHdr);
+
+                std::vector<std::string> solarLabels = {
+                    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"};
+                int curSolar = 5;
+                try {
+                    curSolar = std::stoi(GET_SETTING_KEY_STR("core.mgba_solar_sensor_level", "5"));
+                } catch (...) {
+                    curSolar = 5;
+                }
+                curSolar = std::clamp(curSolar, 0, 10);
+                auto *solarCell = new beiklive::SelectorButton();
+                solarCell->setText("太阳传感器等级");
+                solarCell->setOptions(solarLabels, curSolar);
+                solarCell->setOnSelect(
+                    [](int idx) {
+                        if (idx >= 0 && idx <= 10)
+                            SET_SETTING_KEY_STR("core.mgba_solar_sensor_level", std::to_string(idx));
+                    });
+                box->addView(solarCell);
+                box->addView(makeHint("太阳传感器等级，默认设置为5"));
+            }
+
             // ── GB 配色（仅 GB 平台显示）──
             if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuGB)) {
                 auto *gbHdr = new brls::Header();
@@ -1861,12 +1894,9 @@ namespace beiklive
             shaderPathcell->registerAction("选择", brls::BUTTON_A,
                                      [this](brls::View *) -> bool
                                      {
-                                         std::string dir = m_gameEntry.shaderPath;
-                                         auto pos = dir.rfind(beiklive::path::SPLIT_CHAR);
-                                         if (pos != std::string::npos)
-                                             dir = dir.substr(0, pos);
-                                         else
-                                             dir = "";
+                                         std::filesystem::path curShaderPath(m_gameEntry.shaderPath);
+                                         std::string dir = curShaderPath.parent_path().string();
+                                         std::string filename = curShaderPath.filename().string();
                                          beiklive::openFilePicker({"glslp", "glsl"}, [this](const std::string &path)
                                                                   {
                         if (m_gameEntry.shaderPath != path)
@@ -1878,7 +1908,7 @@ namespace beiklive
                         m_gameEntry.shaderPath = path;
                         shaderPathcell->setDetailText(beiklive::tools::getFileName(path));
                         if (m_shaderPathCallback) m_shaderPathCallback(path);
-                        _rebuildShaderParamUI(); }, dir);
+                        _rebuildShaderParamUI(); }, dir, filename);
                                          return true;
                                      });
             shaderPathcell->registerAction("关闭", brls::BUTTON_B, closeAct);
@@ -1978,17 +2008,14 @@ namespace beiklive
             pathCell->registerAction("选择", brls::BUTTON_A,
                                      [pathCell, this](brls::View *) -> bool
                                      {
-                                         std::string dir = m_gameEntry.overlayPath;
-                                         auto pos = dir.rfind(beiklive::path::SPLIT_CHAR);
-                                         if (pos != std::string::npos)
-                                             dir = dir.substr(0, pos);
-                                         else
-                                             dir = "";
+                                         std::filesystem::path curOverlayPath(m_gameEntry.overlayPath);
+                                         std::string dir = curOverlayPath.parent_path().string();
+                                         std::string filename = curOverlayPath.filename().string();
                                          beiklive::openFilePicker({"png"}, [pathCell, this](const std::string &path)
                                                                   {
                         m_gameEntry.overlayPath = path;
                         pathCell->setDetailText(beiklive::tools::getFileName(path));
-                        if (m_overlayPathCallback) m_overlayPathCallback(path); }, dir);
+                        if (m_overlayPathCallback) m_overlayPathCallback(path); }, dir, filename);
                                          return true;
                                      });
             pathCell->registerAction("关闭", brls::BUTTON_B, closeAct);

@@ -370,6 +370,7 @@ namespace beiklive
         m_gameOptionsSidebar->addButton("设置封面图", BK_RES("img/ui/setting/display.png"),
             [this, path, romPath](const beiklive::GameEntry& e) {
                 _hideGameOptionsPanel();
+                std::filesystem::path currentLogo(e.logoPath);
                 beiklive::openFilePicker({"png", "jpg"},
                     [this, path](const std::string& selectedPath) {
                         if (beiklive::GameDB) {
@@ -378,7 +379,8 @@ namespace beiklive
                             beiklive::GameDB->flush();
                         }
                     },
-                    beiklive::path::GetRootPath());
+                    currentLogo.parent_path().empty() ? beiklive::path::GetRootPath() : currentLogo.parent_path().string(),
+                    currentLogo.filename().string());
             });
 
         // ── 核心选择 ──

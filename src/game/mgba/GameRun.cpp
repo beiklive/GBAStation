@@ -151,7 +151,7 @@ void CoreMgba::Cleanup()
         cfg->SetDefault("core.mgba_audio_low_pass_filter",     CV(std::string("disabled")));   // 音频低通滤波器（禁用）
         cfg->SetDefault("core.mgba_audio_low_pass_range",      CV(std::string("60")));         // 低通滤波截止频率（60%）
         cfg->SetDefault("core.mgba_allow_opposing_directions", CV(std::string("no")));         // 允许同时按反方向键（否）
-        cfg->SetDefault("core.mgba_solar_sensor_level",        CV(std::string("0")));          // 太阳传感器强度（0）
+        cfg->SetDefault("core.mgba_solar_sensor_level",        CV(std::string("5")));          // 太阳传感器强度（5）
         cfg->SetDefault("core.mgba_force_gbp",                 CV(std::string("OFF")));        // 强制 GBP 振动（关闭）
         cfg->SetDefault("core.mgba_idle_optimization",         CV(std::string("Remove Known")));// 空闲循环优化（移除已知）
         cfg->SetDefault("core.mgba_frameskip",                 CV(std::string("0")));          // 跳帧数量（0=不跳帧）

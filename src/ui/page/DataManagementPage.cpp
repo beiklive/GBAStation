@@ -654,7 +654,7 @@ brls::View* DataManagementPage::buildBundleImportTab()
         {"选择NDS游戏的lpl文件",  "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)},
     };
     
-    box->addView(makeHint("lpl 文件通常位于 RetroArch 的 playlists 目录下，不动lpl文件语法规则不要自行删改"));
+    box->addView(makeHint("lpl 文件通常位于 RetroArch 的 playlists 目录下，不懂lpl文件语法规则不要自行删改"));
     for (size_t i = 0; i < sizeof(configs) / sizeof(configs[0]); ++i)
     {
         const auto& config = configs[i];
@@ -897,6 +897,7 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
     m_importing.store(true, std::memory_order_release);
 
     m_importThread = std::thread([this, importItems = std::move(importItems), config, lplPath]() {
+        std::string lplStem = stemFromPath(expandTilde(lplPath));
         for (int i = 0; i < static_cast<int>(importItems.size()); ++i)
         {
             const auto& item = importItems[i];
@@ -936,7 +937,10 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
                     static_cast<beiklive::enums::EmuPlatform>(config.platform));
             }
 
-            std::string savePath = beiklive::tools::defaultGameSavePath(config.platform, romPath);
+            std::string savePath = (fs::path(beiklive::path::savePath()) /
+                                    "retroarch" /
+                                    lplStem /
+                                    romStem).string();
 
             try
             {

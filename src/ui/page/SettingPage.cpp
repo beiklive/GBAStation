@@ -18,6 +18,7 @@
 
 #include <chrono>
 #include <cmath>
+#include <filesystem>
 #include <sstream>
 #include <iomanip>
 #include <string>
@@ -565,7 +566,7 @@ brls::View *SettingPage::buildUITab()
     auto *box    = makeContentBox();
 
     // ── GBA/GBC 核心设置 ──────────────────────────────────────────────────────
-    box->addView(makeHeader("GBA/GBC 核心设置"));
+    box->addView(makeHeader("mgba 核心设置"));
 
     {
         std::vector<std::string> gbModels = {
@@ -601,6 +602,12 @@ brls::View *SettingPage::buildUITab()
         box->addView(gbColorCell);
         box->addView(makeHint("为 GB/GBC 单色游戏着色，不影响 GBA 游戏"));
     }
+
+    auto *sgbBorderCell = new brls::BooleanCell();
+    sgbBorderCell->init("SGB 边框", cfgGetStr("core.mgba_sgb_borders", "ON") == "ON",
+                        [](bool v) { cfgSetStr("core.mgba_sgb_borders", v ? "ON" : "OFF"); });
+    box->addView(sgbBorderCell);
+    box->addView(makeHint("为 Super Game Boy 游戏绘制专属边框图案"));
 
     {
         std::vector<std::string> rtcModes = {"持久化 RTC", "跟随当前系统时间"};
@@ -739,20 +746,15 @@ brls::View *SettingPage::buildUITab()
         bgPathCell->setDetailText(curPath.empty() ? "未设置" : beiklive::tools::getFileName(curPath));
         bgPathCell->registerAction("选择", brls::BUTTON_A,
             [this, bgPathCell](brls::View*) -> bool {
-                std::string dir = cfgGetStr(beiklive::SettingKey::KEY_UI_BG_IMAGE_PATH, "");
-                auto pos = dir.rfind('/');
-#ifdef _WIN32
-                auto posW = dir.rfind('\\');
-                if (posW != std::string::npos && (pos == std::string::npos || posW > pos)) pos = posW;
-#endif
-                if (pos != std::string::npos) dir = dir.substr(0, pos); else dir = "";
+                std::filesystem::path currentPath(cfgGetStr(beiklive::SettingKey::KEY_UI_BG_IMAGE_PATH, ""));
                 beiklive::openFilePicker({"png"},
                     [this, bgPathCell](const std::string& path) {
                         cfgSetStr(beiklive::SettingKey::KEY_UI_BG_IMAGE_PATH, path);
                         bgPathCell->setDetailText(beiklive::tools::getFileName(path));
                         this->setBackgroundImage(path);
                     },
-                    dir);
+                    currentPath.parent_path().string(),
+                    currentPath.filename().string());
                 return true;
             });
         box->addView(bgPathCell);
@@ -1004,17 +1006,11 @@ brls::View *SettingPage::buildDisplayTab()
         cell->setDetailText(cur.empty() ? "未设置" : beiklive::tools::getFileName(cur));
         cell->registerAction(" 选择", brls::BUTTON_A,
             [cell, cfgKey](brls::View *) {
-                std::string dir = cfgGetStr(cfgKey, "");
-                auto pos = dir.rfind('/');
-#ifdef _WIN32
-                auto posW = dir.rfind('\\');
-                if (posW != std::string::npos && (pos == std::string::npos || posW > pos)) pos = posW;
-#endif
-                if (pos != std::string::npos) dir = dir.substr(0, pos); else dir = "";
+                std::filesystem::path currentPath(cfgGetStr(cfgKey, ""));
                 openFilePicker({"png"}, [cell, cfgKey](const std::string &path) {
                     cfgSetStr(cfgKey, path);
                     cell->setDetailText(beiklive::tools::getFileName(path));
-                }, dir);
+                }, currentPath.parent_path().string(), currentPath.filename().string());
                 return true;
             }, false, false, brls::SOUND_CLICK);
         return cell;
@@ -1038,17 +1034,11 @@ brls::View *SettingPage::buildDisplayTab()
         cell->setDetailText(cur.empty() ? "未设置" : beiklive::tools::getFileName(cur));
         cell->registerAction("选择", brls::BUTTON_A,
             [cell, cfgKey](brls::View *) {
-                std::string dir = cfgGetStr(cfgKey, "");
-                auto pos = dir.rfind('/');
-#ifdef _WIN32
-                auto posW = dir.rfind('\\');
-                if (posW != std::string::npos && (pos == std::string::npos || posW > pos)) pos = posW;
-#endif
-                if (pos != std::string::npos) dir = dir.substr(0, pos); else dir = "";
+                std::filesystem::path currentPath(cfgGetStr(cfgKey, ""));
                 openFilePicker({"glslp", "glsl"}, [cell, cfgKey](const std::string &path) {
                     cfgSetStr(cfgKey, path);
                     cell->setDetailText(beiklive::tools::getFileName(path));
-                }, dir);
+                }, currentPath.parent_path().string(), currentPath.filename().string());
                 return true;
             }, false, false, brls::SOUND_CLICK);
         return cell;

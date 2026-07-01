@@ -520,6 +520,11 @@ namespace beiklive
         m_filterExtensions = extensions;
     }
 
+    void FileListPage::setInitialFocusFilename(const std::string& filename)
+    {
+        m_pendingFocusFilename = filename;
+    }
+
     FileListPage::~FileListPage()
     {
         _cancelThumbnail();
@@ -650,6 +655,10 @@ namespace beiklive
             brls::sync([this, dd = std::move(dirData), it = std::move(items)]() {
                 m_dirItems = std::move(dd);
                 fileListView->setItems(it);
+                if (!m_pendingFocusFilename.empty()) {
+                    fileListView->focusItemByFilename(m_pendingFocusFilename);
+                    m_pendingFocusFilename.clear();
+                }
                 fileListView->setInteractionDisabled(false);
                 brls::Application::unblockInputs();
             });

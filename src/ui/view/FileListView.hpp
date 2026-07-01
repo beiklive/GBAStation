@@ -18,6 +18,7 @@ public:
 
     void setItems(const std::vector<beiklive::ListItem>& items);
     void clearItems();
+    bool focusItemByFilename(const std::string& filename);
 
     void setInteractionDisabled(bool disabled) { m_interactionDisabled = disabled; if (!disabled) _captureInputState(); }
     int getFocusedIndex() const { return m_focusedIndex; }
