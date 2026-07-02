@@ -20,11 +20,11 @@ struct Teakra::Impl {
     SharedMemory shared_memory;
     MemoryInterfaceUnit miu;
     ICU icu;
-    Apbp apbp_from_cpu, apbp_from_dsp;
-    std::array<Timer, 2> timer{{{core_timing}, {core_timing}}};
+    Apbp apbp_from_cpu{0}, apbp_from_dsp{1};
+    std::array<Timer, 2> timer{{{core_timing, 0}, {core_timing, 1}}};
     Ahbm ahbm;
     Dma dma{shared_memory, ahbm};
-    std::array<Btdmp, 2> btdmp{{{core_timing}, {core_timing}}};
+    std::array<Btdmp, 2> btdmp{{{core_timing, 0}, {core_timing, 1}}};
     MMIORegion mmio{miu, icu, apbp_from_cpu, apbp_from_dsp, timer, dma, ahbm, btdmp};
     MemoryInterface memory_interface{shared_memory, miu};
     Processor processor{core_timing, memory_interface};
@@ -44,13 +44,13 @@ struct Teakra::Impl {
         apbp_from_cpu.SetSemaphoreHandler([this]() { icu.TriggerSingle(0xE); });
 
         btdmp[0].SetInterruptHandler([this]() { icu.TriggerSingle(0xB); });
-        btdmp[1].SetInterruptHandler([this]() { icu.TriggerSingle(0xB); });
+        btdmp[1].SetInterruptHandler([this]() { icu.TriggerSingle(0xC); });
 
         dma.SetInterruptHandler([this]() { icu.TriggerSingle(0xF); });
     }
 
     void Reset() {
-        shared_memory.raw.fill(0);
+        icu.Reset();
         miu.Reset();
         apbp_from_cpu.Reset();
         apbp_from_dsp.Reset();
@@ -62,6 +62,20 @@ struct Teakra::Impl {
         btdmp[1].Reset();
         processor.Reset();
     }
+
+    void DoSavestate(melonDS::Savestate* file) {
+        icu.DoSavestate(file);
+        miu.DoSavestate(file);
+        apbp_from_cpu.DoSavestate(file);
+        apbp_from_dsp.DoSavestate(file);
+        timer[0].DoSavestate(file);
+        timer[1].DoSavestate(file);
+        ahbm.DoSavestate(file);
+        dma.DoSavestate(file);
+        btdmp[0].DoSavestate(file);
+        btdmp[1].DoSavestate(file);
+        processor.DoSavestate(file);
+    }
 };
 
 Teakra::Teakra() : impl(new Impl) {}
@@ -71,16 +85,16 @@ void Teakra::Reset() {
     impl->Reset();
 }
 
-std::array<std::uint8_t, 0x80000>& Teakra::GetDspMemory() {
-    return impl->shared_memory.raw;
-}
-
-const std::array<std::uint8_t, 0x80000>& Teakra::GetDspMemory() const {
-    return impl->shared_memory.raw;
+void Teakra::DoSavestate(melonDS::Savestate* file) {
+    impl->DoSavestate(file);
 }
 
 void Teakra::Run(unsigned cycle) {
     impl->processor.Run(cycle);
+}
+
+void Teakra::SampleClock(std::int16_t output[2], std::int16_t input) {
+    impl->btdmp[0].SampleClock(output, input);
 }
 
 bool Teakra::SendDataIsEmpty(std::uint8_t index) const {
@@ -117,6 +131,9 @@ void Teakra::ClearSemaphore(std::uint16_t value) {
 void Teakra::MaskSemaphore(std::uint16_t value) {
     impl->apbp_from_dsp.MaskSemaphore(value);
 }
+void Teakra::SetSharedMemoryCallback(const SharedMemoryCallback& callback) {
+    impl->shared_memory.SetExternalMemoryCallback(callback.read16, callback.write16);
+}
 void Teakra::SetAHBMCallback(const AHBMCallback& callback) {
     impl->ahbm.SetExternalMemoryCallback(callback.read8, callback.write8,
         callback.read16, callback.write16,
@@ -148,6 +165,10 @@ void Teakra::AHBMWrite32(std::uint32_t addr, std::uint32_t value) {
 
 void Teakra::SetAudioCallback(std::function<void(std::array<s16, 2>)> callback) {
     impl->btdmp[0].SetAudioCallback(std::move(callback));
+}
+
+void Teakra::SetMicEnableCallback(std::function<void(bool)> cb) {
+    impl->btdmp[0].SetMicEnableCallback(std::move(cb));
 }
 
 std::uint16_t Teakra::ProgramRead(std::uint32_t address) const {

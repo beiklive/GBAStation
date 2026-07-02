@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2021 Arisotura
+    Copyright 2016-2025 melonDS team
 
     This file is part of melonDS.
 
@@ -19,44 +19,65 @@
 #ifndef ARCODEFILE_H
 #define ARCODEFILE_H
 
+#include <string>
 #include <list>
-
+#include <vector>
+#include <unordered_map>
+#include <variant>
 #include "types.h"
+
+namespace melonDS
+{
+
+struct ARCodeCat;
 
 struct ARCode
 {
-    char Name[128];
+    ARCodeCat* Parent;
+    std::string Name;
+    std::string Description;
     bool Enabled;
-    u32 CodeLen;
-    u32 Code[2*64];
+    std::vector<u32> Code;
 };
 
-typedef std::list<ARCode> ARCodeList;
+typedef std::variant<ARCode, ARCodeCat> ARCodeItem;
+typedef std::list<ARCodeItem> ARCodeItemList;
 
 struct ARCodeCat
 {
-    char Name[128];
-    ARCodeList Codes;
+    ARCodeCat* Parent;
+    std::string Name;
+    std::string Description;
+    bool OnlyOneCodeEnabled;
+    ARCodeItemList Children;
 };
 
-typedef std::list<ARCodeCat> ARCodeCatList;
+struct ARDatabaseEntry;
+typedef std::unordered_map<ARCode*, bool> ARCodeEnableMap;
 
 
 class ARCodeFile
 {
 public:
-    ARCodeFile(const char* filename);
-    ~ARCodeFile();
+    ARCodeFile(const std::string& filename);
+    ~ARCodeFile() noexcept = default;
 
-    bool Error;
+    [[nodiscard]] std::vector<ARCode> GetCodes() const noexcept;
+
+    bool Error = false;
 
     bool Load();
     bool Save();
 
-    ARCodeCatList Categories;
+    void Import(ARDatabaseEntry& dbentry, ARCodeEnableMap& enablemap, bool clear);
+
+    ARCodeCat RootCat {};
 
 private:
-    char Filename[1024];
+    std::string Filename;
+
+    void FinalizeList();
 };
 
+}
 #endif // ARCODEFILE_H

@@ -3,6 +3,7 @@
 #include <mutex>
 #include <utility>
 #include "apbp.h"
+#include "../../Savestate.h"
 
 namespace Teakra {
 class DataChannel {
@@ -12,9 +13,15 @@ public:
         data = 0;
     }
 
+    void DoSavestate(melonDS::Savestate* file) {
+        file->Bool32(&ready);
+        file->Var16(&data);
+        file->Var16(&disable_interrupt);
+    }
+
     void Send(u16 data) {
         {
-            std::lock_guard lock(mutex);
+            //std::lock_guard lock(mutex);
             ready = true;
             this->data = data;
             if (disable_interrupt)
@@ -24,20 +31,20 @@ public:
             handler();
     }
     u16 Recv() {
-        std::lock_guard lock(mutex);
+        //std::lock_guard lock(mutex);
         ready = false;
         return data;
     }
     u16 Peek() const {
-        std::lock_guard lock(mutex);
+        //std::lock_guard lock(mutex);
         return data;
     }
     bool IsReady() const {
-        std::lock_guard lock(mutex);
+        //std::lock_guard lock(mutex);
         return ready;
     }
     u16 GetDisableInterrupt() const {
-        std::lock_guard lock(mutex);
+        //std::lock_guard lock(mutex);
         return disable_interrupt;
     }
     void SetDisableInterrupt(u16 v) {
@@ -55,6 +62,7 @@ private:
 
 class Apbp::Impl {
 public:
+    int num;
     std::array<DataChannel, 3> data_channels;
     u16 semaphore = 0;
     u16 semaphore_mask = 0;
@@ -69,13 +77,27 @@ public:
         semaphore_mask = 0;
         semaphore_master_signal = false;
     }
+
+    void DoSavestate(melonDS::Savestate* file) {
+        file->Section(num ? "TKa1" : "TKa0");
+
+        for (auto& c : data_channels)
+            c.DoSavestate(file);
+        file->Var16(&semaphore);
+        file->Var16(&semaphore_mask);
+        file->Bool32(&semaphore_master_signal);
+    }
 };
 
-Apbp::Apbp() : impl(new Impl) {}
+Apbp::Apbp(int num) : impl(new Impl) {impl->num = num;}
 Apbp::~Apbp() = default;
 
 void Apbp::Reset() {
     impl->Reset();
+}
+
+void Apbp::DoSavestate(melonDS::Savestate *file) {
+    impl->DoSavestate(file);
 }
 
 void Apbp::SendData(unsigned channel, u16 data) {
@@ -107,7 +129,7 @@ void Apbp::SetDataHandler(unsigned channel, std::function<void()> handler) {
 }
 
 void Apbp::SetSemaphore(u16 bits) {
-    std::lock_guard lock(impl->semaphore_mutex);
+    //std::lock_guard lock(impl->semaphore_mutex);
     impl->semaphore |= bits;
     bool new_signal = (impl->semaphore & ~impl->semaphore_mask) != 0;
     if (new_signal && impl->semaphore_handler) {
@@ -117,33 +139,33 @@ void Apbp::SetSemaphore(u16 bits) {
 }
 
 void Apbp::ClearSemaphore(u16 bits) {
-    std::lock_guard lock(impl->semaphore_mutex);
+    //std::lock_guard lock(impl->semaphore_mutex);
     impl->semaphore &= ~bits;
     impl->semaphore_master_signal = (impl->semaphore & ~impl->semaphore_mask) != 0;
 }
 
 u16 Apbp::GetSemaphore() const {
-    std::lock_guard lock(impl->semaphore_mutex);
+    //std::lock_guard lock(impl->semaphore_mutex);
     return impl->semaphore;
 }
 
 void Apbp::MaskSemaphore(u16 bits) {
-    std::lock_guard lock(impl->semaphore_mutex);
+    //std::lock_guard lock(impl->semaphore_mutex);
     impl->semaphore_mask = bits;
 }
 
 u16 Apbp::GetSemaphoreMask() const {
-    std::lock_guard lock(impl->semaphore_mutex);
+    //std::lock_guard lock(impl->semaphore_mutex);
     return impl->semaphore_mask;
 }
 
 void Apbp::SetSemaphoreHandler(std::function<void()> handler) {
-    std::lock_guard lock(impl->semaphore_mutex);
+    //std::lock_guard lock(impl->semaphore_mutex);
     impl->semaphore_handler = std::move(handler);
 }
 
 bool Apbp::IsSemaphoreSignaled() const {
-    std::lock_guard lock(impl->semaphore_mutex);
+    //std::lock_guard lock(impl->semaphore_mutex);
     return impl->semaphore_master_signal;
 }
 } // namespace Teakra

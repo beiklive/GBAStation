@@ -5,7 +5,16 @@
 #include <functional>
 #include <memory>
 
+#include "../../../DSi_DSP.h"
+
 namespace Teakra {
+
+const std::uint32_t ID = 0x7EAC0000;
+
+struct SharedMemoryCallback {
+    std::function<std::uint16_t(std::uint32_t address)> read16;
+    std::function<void(std::uint32_t address, std::uint16_t value)> write16;
+};
 
 struct AHBMCallback {
     std::function<std::uint8_t(std::uint32_t address)> read8;
@@ -18,15 +27,15 @@ struct AHBMCallback {
     std::function<void(std::uint32_t address, std::uint32_t value)> write32;
 };
 
-class Teakra {
+class Teakra : public melonDS::DSPInterface {
 public:
     Teakra();
     ~Teakra();
 
     void Reset();
+    void DoSavestate(melonDS::Savestate* file);
 
-    std::array<std::uint8_t, 0x80000>& GetDspMemory();
-    const std::array<std::uint8_t, 0x80000>& GetDspMemory() const;
+    std::uint32_t GetID() { return ID; }
 
     // APBP Data
     bool SendDataIsEmpty(std::uint8_t index) const;
@@ -70,9 +79,14 @@ public:
     // core
     void Run(unsigned cycle);
 
+    void SetSharedMemoryCallback(const SharedMemoryCallback& callback);
     void SetAHBMCallback(const AHBMCallback& callback);
 
     void SetAudioCallback(std::function<void(std::array<std::int16_t, 2>)> callback);
+
+    void SetMicEnableCallback(std::function<void(bool)> cb);
+
+    void SampleClock(std::int16_t output[2], std::int16_t input);
 
 private:
     struct Impl;

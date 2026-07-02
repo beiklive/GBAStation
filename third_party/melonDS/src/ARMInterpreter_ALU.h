@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2021 Arisotura
+    Copyright 2016-2025 melonDS team
 
     This file is part of melonDS.
 
@@ -19,6 +19,8 @@
 #ifndef ARMINTERPRETER_ALU_H
 #define ARMINTERPRETER_ALU_H
 
+namespace melonDS
+{
 namespace ARMInterpreter
 {
 
@@ -134,4 +136,5 @@ void T_ADD_SP(ARM* cpu);
 
 }
 
+}
 #endif

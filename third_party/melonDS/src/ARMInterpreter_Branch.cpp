@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2021 Arisotura
+    Copyright 2016-2025 melonDS team
 
     This file is part of melonDS.
 
@@ -16,12 +16,13 @@
     with melonDS. If not, see http://www.gnu.org/licenses/.
 */
 
-#include <stdio.h>
 #include "ARM.h"
+#include "Platform.h"
 
-
-namespace ARMInterpreter
+namespace melonDS::ARMInterpreter
 {
+using Platform::Log;
+using Platform::LogLevel;
 
 
 void A_B(ARM* cpu)
@@ -79,7 +80,7 @@ void T_BLX_REG(ARM* cpu)
 {
     if (cpu->Num==1)
     {
-        printf("!! THUMB BLX_REG ON ARM7\n");
+        Log(LogLevel::Warn, "!! THUMB BLX_REG ON ARM7\n");
         return;
     }
 
@@ -105,11 +106,22 @@ void T_BL_LONG_2(ARM* cpu)
 {
     s32 offset = (cpu->CurInstr & 0x7FF) << 1;
     u32 pc = cpu->R[14] + offset;
-    cpu->R[14] = (cpu->R[15] - 2) | 1;
 
-    if ((cpu->Num==1) || (cpu->CurInstr & (1<<12)))
+    if ((cpu->Num==1) || (cpu->CurInstr & (1<<12))) // BL
+    {
         pc |= 1;
+    }
+    else // BLX
+    {
+        if (cpu->CurInstr & 1) // lsb of immediate is set, implying halfword offset; this raises undefined.
+            return T_UNK(cpu);
 
+        // instruction always switches to arm mode
+        // interworking bit should be cleared.
+        pc &= ~1;
+    }
+
+    cpu->R[14] = (cpu->R[15] - 2) | 1;
     cpu->JumpTo(pc);
 }
 

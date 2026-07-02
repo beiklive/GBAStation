@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>427</width>
-    <height>434</height>
+    <width>482</width>
+    <height>516</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -17,17 +17,11 @@
    </sizepolicy>
   </property>
   <property name="windowTitle">
-   <string>ROM Info - melonDS</string>
+   <string>ROM info - melonDS</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
    <item row="2" column="0">
     <widget class="QGroupBox" name="titles">
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
      <property name="title">
       <string>Titles</string>
      </property>
@@ -40,7 +34,7 @@
          </font>
         </property>
         <property name="text">
-         <string>Japanese Title:</string>
+         <string>Japanese title:</string>
         </property>
        </widget>
       </item>
@@ -59,7 +53,7 @@
          </font>
         </property>
         <property name="text">
-         <string>English Title:</string>
+         <string>English title:</string>
         </property>
        </widget>
       </item>
@@ -78,7 +72,7 @@
          </font>
         </property>
         <property name="text">
-         <string>French Title:</string>
+         <string>French title:</string>
         </property>
        </widget>
       </item>
@@ -97,7 +91,7 @@
          </font>
         </property>
         <property name="text">
-         <string>German Title:</string>
+         <string>German title:</string>
         </property>
        </widget>
       </item>
@@ -116,7 +110,7 @@
          </font>
         </property>
         <property name="text">
-         <string>Italian Title:</string>
+         <string>Italian title:</string>
         </property>
        </widget>
       </item>
@@ -135,7 +129,7 @@
          </font>
         </property>
         <property name="text">
-         <string>Spanish Title:</string>
+         <string>Spanish title:</string>
         </property>
        </widget>
       </item>
@@ -154,7 +148,7 @@
          </font>
         </property>
         <property name="text">
-         <string>Chinese Title:</string>
+         <string>Chinese title:</string>
         </property>
        </widget>
       </item>
@@ -173,7 +167,7 @@
          </font>
         </property>
         <property name="text">
-         <string>Korean Title:</string>
+         <string>Korean title:</string>
         </property>
        </widget>
       </item>
@@ -201,7 +195,7 @@
          </font>
         </property>
         <property name="text">
-         <string>ARM9 ROM Offset: </string>
+         <string>ARM9 ROM offset: </string>
         </property>
        </widget>
       </item>
@@ -220,7 +214,7 @@
          </font>
         </property>
         <property name="text">
-         <string>ARM9 Entry Address:</string>
+         <string>ARM9 entry address:</string>
         </property>
        </widget>
       </item>
@@ -239,7 +233,7 @@
          </font>
         </property>
         <property name="text">
-         <string>ARM9 RAM Address:</string>
+         <string>ARM9 RAM address:</string>
         </property>
        </widget>
       </item>
@@ -258,7 +252,7 @@
          </font>
         </property>
         <property name="text">
-         <string>ARM9 Size:</string>
+         <string>ARM9 size:</string>
         </property>
        </widget>
       </item>
@@ -277,7 +271,7 @@
          </font>
         </property>
         <property name="text">
-         <string>ARM7 ROM Offset: </string>
+         <string>ARM7 ROM offset: </string>
         </property>
        </widget>
       </item>
@@ -296,7 +290,7 @@
          </font>
         </property>
         <property name="text">
-         <string>ARM7 Entry Address:</string>
+         <string>ARM7 entry address:</string>
         </property>
        </widget>
       </item>
@@ -315,7 +309,7 @@
          </font>
         </property>
         <property name="text">
-         <string>ARM7 RAM Address:</string>
+         <string>ARM7 RAM address:</string>
         </property>
        </widget>
       </item>
@@ -334,7 +328,7 @@
          </font>
         </property>
         <property name="text">
-         <string>ARM7 Size:</string>
+         <string>ARM7 size:</string>
         </property>
        </widget>
       </item>
@@ -350,12 +344,6 @@
    </item>
    <item row="3" column="1">
     <widget class="QGroupBox" name="filesystem">
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
      <property name="title">
       <string>Filesystem</string>
      </property>
@@ -368,7 +356,7 @@
          </font>
         </property>
         <property name="text">
-         <string>FNT Offset:</string>
+         <string>FNT offset:</string>
         </property>
        </widget>
       </item>
@@ -387,7 +375,7 @@
          </font>
         </property>
         <property name="text">
-         <string>FNT Size:</string>
+         <string>FNT size:</string>
         </property>
        </widget>
       </item>
@@ -406,7 +394,7 @@
          </font>
         </property>
         <property name="text">
-         <string>FAT Offset:</string>
+         <string>FAT offset:</string>
         </property>
        </widget>
       </item>
@@ -425,7 +413,7 @@
          </font>
         </property>
         <property name="text">
-         <string>FAT Size:</string>
+         <string>FAT size:</string>
         </property>
        </widget>
       </item>
@@ -441,14 +429,8 @@
    </item>
    <item row="3" column="0">
     <widget class="QGroupBox" name="generalInfo">
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
      <property name="title">
-      <string>General Info</string>
+      <string>General info</string>
      </property>
      <layout class="QFormLayout" name="formLayout_3">
       <item row="0" column="0">
@@ -459,7 +441,7 @@
          </font>
         </property>
         <property name="text">
-         <string>Game Title:</string>
+         <string>Game title:</string>
         </property>
        </widget>
       </item>
@@ -478,7 +460,7 @@
          </font>
         </property>
         <property name="text">
-         <string>Game Code:</string>
+         <string>Game code:</string>
         </property>
        </widget>
       </item>
@@ -497,7 +479,7 @@
          </font>
         </property>
         <property name="text">
-         <string>Maker Code:</string>
+         <string>Maker code:</string>
         </property>
        </widget>
       </item>
@@ -516,7 +498,7 @@
          </font>
         </property>
         <property name="text">
-         <string>Card Size:</string>
+         <string>Card size:</string>
         </property>
        </widget>
       </item>
@@ -543,101 +525,193 @@
    <item row="0" column="0" colspan="2">
     <widget class="QGroupBox" name="groupBox_2">
      <layout class="QGridLayout" name="gridLayout_9">
-      <item row="0" column="1">
-       <widget class="QGroupBox" name="iconBox">
-        <property name="sizePolicy">
-         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-          <horstretch>0</horstretch>
-          <verstretch>0</verstretch>
-         </sizepolicy>
+      <item row="0" column="2">
+       <widget class="QFrame" name="frame">
+        <property name="frameShape">
+         <enum>QFrame::Box</enum>
         </property>
-        <property name="styleSheet">
-         <string notr="true">#iconBox {
-    border: 1px solid black;
-    background-color:  qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, 
-    stop: 0 white,  
-    stop: 1 lightgrey);
-}
-
-#titleBox {
-    border: 0.5px solid grey;
-    background-color: #fbfbfb;
-}
-
-#iconTitle {
-    color: black;
-}
-</string>
+        <property name="frameShadow">
+         <enum>QFrame::Plain</enum>
         </property>
-        <property name="title">
-         <string/>
+        <property name="lineWidth">
+         <number>1</number>
         </property>
-        <property name="alignment">
-         <set>Qt::AlignCenter</set>
-        </property>
-        <property name="flat">
-         <bool>false</bool>
-        </property>
-        <property name="checkable">
-         <bool>false</bool>
-        </property>
-        <layout class="QGridLayout" name="gridLayout_2">
+        <layout class="QGridLayout" name="gridLayout_3">
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
          <property name="topMargin">
-          <number>2</number>
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
          </property>
          <property name="bottomMargin">
-          <number>2</number>
+          <number>0</number>
          </property>
-         <item row="0" column="1">
-          <widget class="QLabel" name="iconImage">
+         <item row="0" column="0">
+          <widget class="QGroupBox" name="iconBox">
            <property name="sizePolicy">
-            <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+            <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
              <horstretch>0</horstretch>
              <verstretch>0</verstretch>
             </sizepolicy>
            </property>
            <property name="minimumSize">
             <size>
-             <width>32</width>
-             <height>32</height>
+             <width>187</width>
+             <height>43</height>
             </size>
            </property>
            <property name="maximumSize">
             <size>
-             <width>32</width>
-             <height>32</height>
+             <width>187</width>
+             <height>45</height>
             </size>
            </property>
-           <property name="text">
-            <string>[icon]</string>
-           </property>
-          </widget>
-         </item>
-         <item row="0" column="2">
-          <widget class="QGroupBox" name="titleBox">
-           <property name="sizePolicy">
-            <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-             <horstretch>0</horstretch>
-             <verstretch>0</verstretch>
-            </sizepolicy>
+           <property name="styleSheet">
+            <string notr="true">#iconBox {
+	border: 1px solid white;
+	background-color: qlineargradient(
+		x1: 0, y1: 1,
+		x2: 0, y2: 0,
+		stop: 0 #c3c3c3,
+		stop: 0.199 #c3c3c3,
+		stop: 0.2 #d3d3d3,
+		stop: 0.399 #d3d3d3,
+		stop: 0.4 #e3e3e3,
+		stop: 0.599 #e3e3e3,
+		stop: 0.6 #f3f3f3,
+		stop: 0.799 #f3f3f3,
+		stop: 0.8 #fbfbfb,
+		stop: 1 #fbfbfb
+	);
+}
+
+#iconTitle {
+	border: 1px solid #a2a2a2;
+	border-left-color: #797979;
+	letter-spacing: -0.5px;
+	background-color: qlineargradient(
+		x1: 0, y1: 0,
+		x2: 0, y2: 1,
+		stop: 0.000000 #fbfbfb,
+		stop: 0.024380 #fbfbfb,
+		stop: 0.024390 #e3e3e3,
+		stop: 0.048770 #e3e3e3,
+		stop: 0.048780 #fbfbfb,
+		stop: 0.073161 #fbfbfb,
+		stop: 0.073171 #e3e3e3,
+		stop: 0.097551 #e3e3e3,
+		stop: 0.097561 #fbfbfb,
+		stop: 0.121941 #fbfbfb,
+		stop: 0.121951 #e3e3e3,
+		stop: 0.146331 #e3e3e3,
+		stop: 0.146341 #fbfbfb,
+		stop: 0.170722 #fbfbfb,
+		stop: 0.170732 #e3e3e3,
+		stop: 0.195112 #e3e3e3,
+		stop: 0.195122 #fbfbfb,
+		stop: 0.219502 #fbfbfb,
+		stop: 0.219512 #e3e3e3,
+		stop: 0.243892 #e3e3e3,
+		stop: 0.243902 #fbfbfb,
+		stop: 0.268283 #fbfbfb,
+		stop: 0.268293 #e3e3e3,
+		stop: 0.292673 #e3e3e3,
+		stop: 0.292683 #fbfbfb,
+		stop: 0.317063 #fbfbfb,
+		stop: 0.317073 #e3e3e3,
+		stop: 0.341453 #e3e3e3,
+		stop: 0.341463 #fbfbfb,
+		stop: 0.365844 #fbfbfb,
+		stop: 0.365854 #e3e3e3,
+		stop: 0.390234 #e3e3e3,
+		stop: 0.390244 #fbfbfb,
+		stop: 0.414624 #fbfbfb,
+		stop: 0.414634 #e3e3e3,
+		stop: 0.439014 #e3e3e3,
+		stop: 0.439024 #fbfbfb,
+		stop: 0.463405 #fbfbfb,
+		stop: 0.463415 #e3e3e3,
+		stop: 0.487795 #e3e3e3,
+		stop: 0.487805 #fbfbfb,
+		stop: 0.512185 #fbfbfb,
+		stop: 0.512195 #e3e3e3,
+		stop: 0.536575 #e3e3e3,
+		stop: 0.536585 #fbfbfb,
+		stop: 0.560966 #fbfbfb,
+		stop: 0.560976 #e3e3e3,
+		stop: 0.585356 #e3e3e3,
+		stop: 0.585366 #fbfbfb,
+		stop: 0.609746 #fbfbfb,
+		stop: 0.609756 #e3e3e3,
+		stop: 0.634136 #e3e3e3,
+		stop: 0.634146 #fbfbfb,
+		stop: 0.658527 #fbfbfb,
+		stop: 0.658537 #e3e3e3,
+		stop: 0.682917 #e3e3e3,
+		stop: 0.682927 #fbfbfb,
+		stop: 0.707307 #fbfbfb,
+		stop: 0.707317 #e3e3e3,
+		stop: 0.731697 #e3e3e3,
+		stop: 0.731707 #fbfbfb,
+		stop: 0.756088 #fbfbfb,
+		stop: 0.756098 #e3e3e3,
+		stop: 0.780478 #e3e3e3,
+		stop: 0.780488 #fbfbfb,
+		stop: 0.804868 #fbfbfb,
+		stop: 0.804878 #e3e3e3,
+		stop: 0.829258 #e3e3e3,
+		stop: 0.829268 #fbfbfb,
+		stop: 0.853649 #fbfbfb,
+		stop: 0.853659 #e3e3e3,
+		stop: 0.878039 #e3e3e3,
+		stop: 0.878049 #fbfbfb,
+		stop: 0.902429 #fbfbfb,
+		stop: 0.902439 #e3e3e3,
+		stop: 0.926819 #e3e3e3,
+		stop: 0.926829 #fbfbfb,
+		stop: 0.951210 #fbfbfb,
+		stop: 0.951220 #e3e3e3,
+		stop: 0.975600 #e3e3e3,
+		stop: 0.975610 #fbfbfb
+	);
+}
+</string>
            </property>
            <property name="title">
             <string/>
            </property>
-           <layout class="QGridLayout" name="gridLayout_4">
+           <property name="alignment">
+            <set>Qt::AlignCenter</set>
+           </property>
+           <property name="flat">
+            <bool>false</bool>
+           </property>
+           <property name="checkable">
+            <bool>false</bool>
+           </property>
+           <layout class="QGridLayout" name="gridLayout_2">
             <property name="leftMargin">
-             <number>1</number>
+             <number>5</number>
             </property>
             <property name="topMargin">
-             <number>1</number>
+             <number>0</number>
             </property>
             <property name="rightMargin">
-             <number>1</number>
+             <number>0</number>
             </property>
             <property name="bottomMargin">
-             <number>1</number>
+             <number>0</number>
             </property>
-            <item row="0" column="0">
+            <property name="horizontalSpacing">
+             <number>6</number>
+            </property>
+            <property name="verticalSpacing">
+             <number>0</number>
+            </property>
+            <item row="0" column="2">
              <widget class="QLabel" name="iconTitle">
               <property name="sizePolicy">
                <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
@@ -647,11 +721,8 @@
               </property>
               <property name="font">
                <font>
-                <family>Courier New</family>
                 <pointsize>8</pointsize>
-                <weight>50</weight>
-                <italic>false</italic>
-                <bold>false</bold>
+                <stylestrategy>NoAntialias</stylestrategy>
                </font>
               </property>
               <property name="text">
@@ -662,16 +733,67 @@
               </property>
              </widget>
             </item>
+            <item row="0" column="1">
+             <widget class="QLabel" name="iconImage">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="minimumSize">
+               <size>
+                <width>32</width>
+                <height>32</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>32</width>
+                <height>32</height>
+               </size>
+              </property>
+              <property name="text">
+               <string>[icon]</string>
+              </property>
+             </widget>
+            </item>
            </layout>
           </widget>
          </item>
         </layout>
        </widget>
       </item>
-      <item row="0" column="3">
+      <item row="0" column="0" rowspan="2">
+       <spacer name="horizontalSpacer">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>0</width>
+          <height>0</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+      <item row="0" column="4" rowspan="2">
+       <spacer name="horizontalSpacer_3">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>0</width>
+          <height>0</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+      <item row="0" column="3" alignment="Qt::AlignHCenter">
        <widget class="QGroupBox" name="dsiIconBox">
         <property name="sizePolicy">
-         <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+         <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
           <horstretch>0</horstretch>
           <verstretch>0</verstretch>
          </sizepolicy>
@@ -742,49 +864,20 @@
         </layout>
        </widget>
       </item>
-      <item row="0" column="0">
-       <spacer name="horizontalSpacer">
-        <property name="orientation">
-         <enum>Qt::Horizontal</enum>
-        </property>
-        <property name="sizeHint" stdset="0">
-         <size>
-          <width>55</width>
-          <height>20</height>
-         </size>
-        </property>
-       </spacer>
-      </item>
-      <item row="0" column="4">
-       <spacer name="horizontalSpacer_3">
-        <property name="orientation">
-         <enum>Qt::Horizontal</enum>
-        </property>
-        <property name="sizeHint" stdset="0">
-         <size>
-          <width>40</width>
-          <height>20</height>
-         </size>
-        </property>
-       </spacer>
-      </item>
-      <item row="0" column="2">
-       <spacer name="horizontalSpacer_2">
-        <property name="orientation">
-         <enum>Qt::Horizontal</enum>
-        </property>
-        <property name="sizeHint" stdset="0">
-         <size>
-          <width>40</width>
-          <height>20</height>
-         </size>
-        </property>
-       </spacer>
-      </item>
-      <item row="1" column="1">
+      <item row="1" column="2">
        <widget class="QPushButton" name="saveIconButton">
         <property name="text">
-         <string>Save Icon</string>
+         <string>Save icon</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="3">
+       <widget class="QPushButton" name="saveAnimatedIconButton">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="text">
+         <string>Save animated icon</string>
         </property>
        </widget>
       </item>

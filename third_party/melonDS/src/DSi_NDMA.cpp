@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2021 Arisotura
+    Copyright 2016-2025 melonDS team
 
     This file is part of melonDS.
 
@@ -22,10 +22,14 @@
 #include "DSi_NDMA.h"
 #include "GPU.h"
 #include "DSi_AES.h"
+#include "GPU3D.h"
 
+namespace melonDS
+{
+using Platform::Log;
+using Platform::LogLevel;
 
-
-DSi_NDMA::DSi_NDMA(u32 cpu, u32 num)
+DSi_NDMA::DSi_NDMA(u32 cpu, u32 num, melonDS::DSi& dsi) : DSi(dsi), CPU(cpu), Num(num)
 {
     CPU = cpu;
     Num = num;
@@ -63,7 +67,31 @@ void DSi_NDMA::Reset()
 
 void DSi_NDMA::DoSavestate(Savestate* file)
 {
-    // TODO!
+    char magic[5] = "NDMx";
+    magic[3] = '0' + Num + (CPU*4);
+    file->Section(magic);
+
+    file->Var32(&SrcAddr);
+    file->Var32(&DstAddr);
+    file->Var32(&TotalLength);
+    file->Var32(&BlockLength);
+    file->Var32(&SubblockTimer);
+    file->Var32(&FillData);
+    file->Var32(&Cnt);
+
+    file->Var32(&StartMode);
+    file->Var32(&CurSrcAddr);
+    file->Var32(&CurDstAddr);
+    file->Var32(&SubblockLength);
+    file->Var32(&RemCount);
+    file->Var32(&IterCount);
+    file->Var32(&TotalRemCount);
+    file->Var32(&SrcAddrInc);
+    file->Var32(&DstAddrInc);
+
+    file->Var32(&Running);
+    file->Bool32(&InProgress);
+    file->Bool32(&IsGXFIFODMA);
 }
 
 void DSi_NDMA::WriteCnt(u32 val)
@@ -82,7 +110,7 @@ void DSi_NDMA::WriteCnt(u32 val)
         case 0: DstAddrInc = 1; break;
         case 1: DstAddrInc = -1; break;
         case 2: DstAddrInc = 0; break;
-        case 3: DstAddrInc = 1; printf("BAD NDMA DST INC MODE 3\n"); break;
+        case 3: DstAddrInc = 1; Log(LogLevel::Warn, "BAD NDMA DST INC MODE 3\n"); break;
         }
 
         switch ((Cnt >> 13) & 0x3)
@@ -99,11 +127,16 @@ void DSi_NDMA::WriteCnt(u32 val)
 
         if ((StartMode & 0x1F) == 0x10)
             Start();
+        else if (StartMode == 0x0A)
+            DSi.GPU.GPU3D.CheckFIFODMA();
 
-        if (StartMode != 0x10 && StartMode != 0x30 &&
-            StartMode != 0x04 && StartMode != 0x06 && StartMode != 0x07 && StartMode != 0x08 && StartMode != 0x09 && StartMode != 0x0B &&
-            StartMode != 0x24 && StartMode != 0x26 && StartMode != 0x28 && StartMode != 0x29 && StartMode != 0x2A && StartMode != 0x2B)
-            printf("UNIMPLEMENTED ARM%d NDMA%d START MODE %02X, %08X->%08X LEN=%d BLK=%d CNT=%08X\n",
+        // TODO: unsupported start modes:
+        // * timers (00-03)
+        // * NDS-wifi?? (ARM7 07, likely not working)
+
+        if (StartMode <= 0x03 || StartMode == 0x05 || (StartMode >= 0x0C && StartMode <= 0x0F) ||
+            (StartMode >= 0x20 && StartMode <= 0x23) || StartMode == 0x25 || StartMode == 0x27 || (StartMode >= 0x2D && StartMode <= 0x2F))
+            Log(LogLevel::Warn, "UNIMPLEMENTED ARM%d NDMA%d START MODE %02X, %08X->%08X LEN=%d BLK=%d CNT=%08X\n",
                    CPU?7:9, Num, StartMode, SrcAddr, DstAddr, TotalLength, BlockLength, Cnt);
     }
 }
@@ -119,8 +152,12 @@ void DSi_NDMA::Start()
             RemCount = 0x1000000;
     }
 
-    // TODO: how does GXFIFO DMA work with all the block shito?
-    IterCount = RemCount;
+    // CHECKME: this is assumed to work the same as the old DMA version
+    // also not really certain how this interacts with the block subdivision system here
+    if (StartMode == 0x0A && RemCount > 112)
+        IterCount = 112;
+    else
+        IterCount = RemCount;
 
     if (((StartMode & 0x1F) != 0x10) && !(Cnt & (1<<29)))
     {
@@ -143,13 +180,13 @@ void DSi_NDMA::Start()
     //if (SubblockTimer & 0xFFFF)
     //    printf("TODO! NDMA SUBBLOCK TIMER: %08X\n", SubblockTimer);
 
-    if (NDS::DMAsRunning(CPU))
+    if (DSi.DMAsRunning(CPU))
         Running = 1;
     else
         Running = 2;
 
     InProgress = true;
-    NDS::StopCPU(CPU, 1<<(Num+4));
+    DSi.StopCPU(CPU, 1<<(Num+4));
 }
 
 void DSi_NDMA::Run()
@@ -161,7 +198,7 @@ void DSi_NDMA::Run()
 
 void DSi_NDMA::Run9()
 {
-    if (NDS::ARM9Timestamp >= NDS::ARM9Target) return;
+    if (DSi.ARM9Timestamp >= DSi.ARM9Target) return;
 
     Executing = true;
 
@@ -176,11 +213,11 @@ void DSi_NDMA::Run9()
 
     if ((CurSrcAddr >> 24) == 0x02 && (CurDstAddr >> 24) == 0x02)
     {
-        unitcycles = NDS::ARM9MemTimings[CurSrcAddr >> 14][2] + NDS::ARM9MemTimings[CurDstAddr >> 14][2];
+        unitcycles = DSi.ARM9MemTimings[CurSrcAddr >> 14][2] + DSi.ARM9MemTimings[CurDstAddr >> 14][2];
     }
     else
     {
-        unitcycles = NDS::ARM9MemTimings[CurSrcAddr >> 14][3] + NDS::ARM9MemTimings[CurDstAddr >> 14][3];
+        unitcycles = DSi.ARM9MemTimings[CurSrcAddr >> 14][3] + DSi.ARM9MemTimings[CurDstAddr >> 14][3];
         if ((CurSrcAddr >> 24) == (CurDstAddr >> 24))
             unitcycles++;
         else if ((CurSrcAddr >> 24) == 0x02)
@@ -196,12 +233,12 @@ void DSi_NDMA::Run9()
 
     while (IterCount > 0 && !Stall)
     {
-        NDS::ARM9Timestamp += (unitcycles << NDS::ARM9ClockShift);
+        DSi.ARM9Timestamp += (unitcycles << DSi.ARM9ClockShift);
 
         if (dofill)
-            DSi::ARM9Write32(CurDstAddr, FillData);
+            DSi.ARM9Write32(CurDstAddr, FillData);
         else
-            DSi::ARM9Write32(CurDstAddr, DSi::ARM9Read32(CurSrcAddr));
+            DSi.ARM9Write32(CurDstAddr, DSi.ARM9Read32(CurSrcAddr));
 
         CurSrcAddr += SrcAddrInc<<2;
         CurDstAddr += DstAddrInc<<2;
@@ -209,7 +246,7 @@ void DSi_NDMA::Run9()
         RemCount--;
         TotalRemCount--;
 
-        if (NDS::ARM9Timestamp >= NDS::ARM9Target) break;
+        if (DSi.ARM9Timestamp >= DSi.ARM9Target) break;
     }
 
     Executing = false;
@@ -220,10 +257,10 @@ void DSi_NDMA::Run9()
         if (IterCount == 0)
         {
             Running = 0;
-            NDS::ResumeCPU(0, 1<<(Num+4));
+            DSi.ResumeCPU(0, 1<<(Num+4));
 
-            //if (StartMode == 0x07)
-            //    GPU3D::CheckFIFODMA();
+            if (StartMode == 0x0A)
+                DSi.GPU.GPU3D.CheckFIFODMA();
         }
 
         return;
@@ -231,26 +268,33 @@ void DSi_NDMA::Run9()
 
     if ((StartMode & 0x1F) == 0x10) // CHECKME
     {
+        // no repeat
         Cnt &= ~(1<<31);
-        if (Cnt & (1<<30)) NDS::SetIRQ(0, NDS::IRQ_DSi_NDMA0 + Num);
+        if (Cnt & (1<<30)) DSi.SetIRQ(0, IRQ_DSi_NDMA0 + Num);
     }
-    else if (!(Cnt & (1<<29)))
+    else if (Cnt & (1<<29))
     {
+        // repeat infinitely
+        if (Cnt & (1<<30)) DSi.SetIRQ(0, IRQ_DSi_NDMA0 + Num);
+    }
+    else
+    {
+        // repeat until total count is reached
         if (TotalRemCount == 0)
         {
             Cnt &= ~(1<<31);
-            if (Cnt & (1<<30)) NDS::SetIRQ(0, NDS::IRQ_DSi_NDMA0 + Num);
+            if (Cnt & (1<<30)) DSi.SetIRQ(0, IRQ_DSi_NDMA0 + Num);
         }
     }
 
     Running = 0;
     InProgress = false;
-    NDS::ResumeCPU(0, 1<<(Num+4));
+    DSi.ResumeCPU(0, 1<<(Num+4));
 }
 
 void DSi_NDMA::Run7()
 {
-    if (NDS::ARM7Timestamp >= NDS::ARM7Target) return;
+    if (DSi.ARM7Timestamp >= DSi.ARM7Target) return;
 
     Executing = true;
 
@@ -265,11 +309,11 @@ void DSi_NDMA::Run7()
 
     if ((CurSrcAddr >> 24) == 0x02 && (CurDstAddr >> 24) == 0x02)
     {
-        unitcycles = NDS::ARM7MemTimings[CurSrcAddr >> 15][2] + NDS::ARM7MemTimings[CurDstAddr >> 15][2];
+        unitcycles = DSi.ARM7MemTimings[CurSrcAddr >> 15][2] + DSi.ARM7MemTimings[CurDstAddr >> 15][2];
     }
     else
     {
-        unitcycles = NDS::ARM7MemTimings[CurSrcAddr >> 15][3] + NDS::ARM7MemTimings[CurDstAddr >> 15][3];
+        unitcycles = DSi.ARM7MemTimings[CurSrcAddr >> 15][3] + DSi.ARM7MemTimings[CurDstAddr >> 15][3];
         if ((CurSrcAddr >> 23) == (CurDstAddr >> 23))
             unitcycles++;
         else if ((CurSrcAddr >> 24) == 0x02)
@@ -285,12 +329,12 @@ void DSi_NDMA::Run7()
 
     while (IterCount > 0 && !Stall)
     {
-        NDS::ARM7Timestamp += unitcycles;
+        DSi.ARM7Timestamp += unitcycles;
 
         if (dofill)
-            DSi::ARM7Write32(CurDstAddr, FillData);
+            DSi.ARM7Write32(CurDstAddr, FillData);
         else
-            DSi::ARM7Write32(CurDstAddr, DSi::ARM7Read32(CurSrcAddr));
+            DSi.ARM7Write32(CurDstAddr, DSi.ARM7Read32(CurSrcAddr));
 
         CurSrcAddr += SrcAddrInc<<2;
         CurDstAddr += DstAddrInc<<2;
@@ -298,7 +342,7 @@ void DSi_NDMA::Run7()
         RemCount--;
         TotalRemCount--;
 
-        if (NDS::ARM7Timestamp >= NDS::ARM7Target) break;
+        if (DSi.ARM7Timestamp >= DSi.ARM7Target) break;
     }
 
     Executing = false;
@@ -309,10 +353,10 @@ void DSi_NDMA::Run7()
         if (IterCount == 0)
         {
             Running = 0;
-            NDS::ResumeCPU(1, 1<<(Num+4));
+            DSi.ResumeCPU(1, 1<<(Num+4));
 
-            DSi_AES::CheckInputDMA();
-            DSi_AES::CheckOutputDMA();
+            DSi.AES.CheckInputDMA();
+            DSi.AES.CheckOutputDMA();
         }
 
         return;
@@ -320,22 +364,31 @@ void DSi_NDMA::Run7()
 
     if ((StartMode & 0x1F) == 0x10) // CHECKME
     {
+        // no repeat
         Cnt &= ~(1<<31);
-        if (Cnt & (1<<30)) NDS::SetIRQ(1, NDS::IRQ_DSi_NDMA0 + Num);
+        if (Cnt & (1<<30)) DSi.SetIRQ(1, IRQ_DSi_NDMA0 + Num);
     }
-    else if (!(Cnt & (1<<29)))
+    else if (Cnt & (1<<29))
     {
+        // repeat infinitely
+        if (Cnt & (1<<30)) DSi.SetIRQ(1, IRQ_DSi_NDMA0 + Num);
+    }
+    else
+    {
+        // repeat until total count is reached
         if (TotalRemCount == 0)
         {
             Cnt &= ~(1<<31);
-            if (Cnt & (1<<30)) NDS::SetIRQ(1, NDS::IRQ_DSi_NDMA0 + Num);
+            if (Cnt & (1<<30)) DSi.SetIRQ(1, IRQ_DSi_NDMA0 + Num);
         }
     }
 
     Running = 0;
     InProgress = false;
-    NDS::ResumeCPU(1, 1<<(Num+4));
+    DSi.ResumeCPU(1, 1<<(Num+4));
 
-    DSi_AES::CheckInputDMA();
-    DSi_AES::CheckOutputDMA();
+    DSi.AES.CheckInputDMA();
+    DSi.AES.CheckOutputDMA();
+}
+
 }

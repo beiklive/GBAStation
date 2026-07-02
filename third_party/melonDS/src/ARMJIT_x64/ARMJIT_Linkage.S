@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2021 Arisotura, RSDuck
+    Copyright 2016-2025 melonDS team
 
     This file is part of melonDS.
 
@@ -19,6 +19,11 @@
 .intel_syntax noprefix
 
 #include "ARMJIT_Offsets.h"
+
+// Fixes a stupid bug on clang-cl builds (defines _WIN64 but not _MSC_VER (this one is correct) or WIN64 (this one is MinGW weirdness))
+#if !defined(WIN64) && defined(_WIN64)
+#define WIN64 _WIN64
+#endif
 
 .text
 
@@ -104,3 +109,8 @@ ARM_Ret:
 #endif
 
     ret
+
+#if !defined(__APPLE__) && !defined(WIN64) && !defined(_MSC_VER)
+.section .note.GNU-stack,"",@progbits
+#endif
+

@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2021 Arisotura, RSDuck
+    Copyright 2016-2025 melonDS team
 
     This file is part of melonDS.
 
@@ -21,7 +21,7 @@
 
 #include "types.h"
 
-namespace ARMInstrInfo
+namespace melonDS::ARMInstrInfo
 {
 
 // Instruction kinds, for faster dispatch
@@ -222,7 +222,7 @@ enum
     tk_POP,
     tk_LDMIA,
     tk_STMIA,
-    
+
     tk_BCOND,
     tk_BX,
     tk_BLX_REG,
@@ -274,7 +274,7 @@ struct Info
     }
 };
 
-Info Decode(bool thumb, u32 num, u32 instr);
+Info Decode(bool thumb, u32 num, u32 instr, bool literaloptimizations);
 
 }
 

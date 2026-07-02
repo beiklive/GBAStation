@@ -14,8 +14,14 @@ public:
     Dma(SharedMemory& shared_memory, Ahbm& ahbm) : shared_memory(shared_memory), ahbm(ahbm) {}
 
     void Reset();
+    void DoSavestate(melonDS::Savestate* file);
 
     void EnableChannel(u16 value) {
+        u16 chk = value & ~enable_channel;
+        for (int i = 0; i < 8; i++) {
+            if (chk & (1<<i))
+                DoDma(i);
+        }
         enable_channel = value;
     }
     u16 GetChannelEnabled() const {

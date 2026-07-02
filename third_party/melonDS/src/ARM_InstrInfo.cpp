@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2021 Arisotura, RSDuck
+    Copyright 2016-2025 melonDS team
 
     This file is part of melonDS.
 
@@ -20,9 +20,9 @@
 
 #include <stdio.h>
 
-#include "Config.h"
+#include "ARMJIT.h"
 
-namespace ARMInstrInfo
+namespace melonDS::ARMInstrInfo
 {
 
 #define ak(x) ((x) << 23)
@@ -230,7 +230,7 @@ enum {
     T_SetMaybeC     = 1 << 17,
     T_ReadC         = 1 << 18,
     T_SetC          = 1 << 19,
-    
+
     T_WriteMem      = 1 << 20,
     T_LoadMem       = 1 << 21,
 };
@@ -315,7 +315,7 @@ const u32 T_SVC = T_BranchAlways | T_WriteR14 | tk(tk_SVC);
 #include "ARM_InstrTable.h"
 #undef INSTRFUNC_PROTO
 
-Info Decode(bool thumb, u32 num, u32 instr)
+Info Decode(bool thumb, u32 num, u32 instr, bool literaloptimizations)
 {
     const u8 FlagsReadPerCond[7] = {
         flag_Z,
@@ -345,7 +345,7 @@ Info Decode(bool thumb, u32 num, u32 instr)
             res.DstRegs |= 1 << (instr & 0x7);
         if (data & T_Write8)
             res.DstRegs |= 1 << ((instr >> 8) & 0x7);
-        
+
         if (data & T_ReadHi0)
             res.SrcRegs |= 1 << ((instr & 0x7) | ((instr >> 4) & 0x8));
         if (data & T_ReadHi3)
@@ -381,12 +381,12 @@ Info Decode(bool thumb, u32 num, u32 instr)
 
         if (data & T_WriteMem)
             res.SpecialKind = special_WriteMem;
-        
+
         if (data & T_LoadMem)
         {
             if (res.Kind == tk_LDR_PCREL)
             {
-                if (!Config::JIT_LiteralOptimisations)
+                if (!literaloptimizations)
                     res.SrcRegs |= 1 << 15;
                 res.SpecialKind = special_LoadLiteral;
             }
@@ -471,18 +471,18 @@ Info Decode(bool thumb, u32 num, u32 instr)
             res.SrcRegs |= 1 << ((instr >> 8) & 0xF);
         if (data & A_Read12)
             res.SrcRegs |= 1 << ((instr >> 12) & 0xF);
-        
+
         if (data & A_Write12)
             res.DstRegs |= 1 << ((instr >> 12) & 0xF);
         if (data & A_Write16)
             res.DstRegs |= 1 << ((instr >> 16) & 0xF);
-        
+
         if (data & A_MemWriteback && instr & (1 << 21))
             res.DstRegs |= 1 << ((instr >> 16) & 0xF);
 
         if (data & A_BranchAlways)
             res.DstRegs |= 1 << 15;
-        
+
         if (data & A_Read12Double)
         {
             res.SrcRegs |= 1 << ((instr >> 12) & 0xF);
@@ -530,7 +530,7 @@ Info Decode(bool thumb, u32 num, u32 instr)
             else
                 res.SpecialKind = special_LoadMem;
         }
-        
+
         if (res.Kind == ak_LDM)
         {
             u16 set = (instr & 0xFFFF);

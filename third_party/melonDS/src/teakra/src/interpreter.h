@@ -1,11 +1,11 @@
 #pragma once
+#include <utility>
 #include <atomic>
 #include <stdexcept>
 #include <tuple>
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
-#include <utility>
 #include "bit.h"
 #include "core_timing.h"
 #include "crash.h"
@@ -13,18 +13,52 @@
 #include "memory_interface.h"
 #include "operand.h"
 #include "register.h"
+#include "../../Savestate.h"
 
 namespace Teakra {
 
 class UnimplementedException : public std::runtime_error {
 public:
     UnimplementedException() : std::runtime_error("unimplemented") {}
+    UnimplementedException(const char* err) : std::runtime_error(err) {}
 };
 
 class Interpreter {
 public:
     Interpreter(CoreTiming& core_timing, RegisterState& regs, MemoryInterface& mem)
         : core_timing(core_timing), regs(regs), mem(mem) {}
+
+    void Reset() {
+        interrupt_pending[0] = false;
+        interrupt_pending[1] = false;
+        interrupt_pending[2] = false;
+        vinterrupt_pending = false;
+        vinterrupt_context_switch = false;
+        vinterrupt_address = 0;
+
+        idle = false;
+    }
+
+    void DoSavestate(melonDS::Savestate* file) {
+        bool tmpb; u32 tmp32;
+        if (file->Saving) {
+            tmpb = interrupt_pending[0]; file->Bool32(&tmpb);
+            tmpb = interrupt_pending[1]; file->Bool32(&tmpb);
+            tmpb = interrupt_pending[2]; file->Bool32(&tmpb);
+            tmpb = vinterrupt_pending; file->Bool32(&tmpb);
+            tmpb = vinterrupt_context_switch; file->Bool32(&tmpb);
+            tmp32 = vinterrupt_address; file->Var32(&tmp32);
+        } else {
+            file->Bool32(&tmpb); interrupt_pending[0] = tmpb;
+            file->Bool32(&tmpb); interrupt_pending[1] = tmpb;
+            file->Bool32(&tmpb); interrupt_pending[2] = tmpb;
+            file->Bool32(&tmpb); vinterrupt_pending = tmpb;
+            file->Bool32(&tmpb); vinterrupt_context_switch = tmpb;
+            file->Var32(&tmp32); vinterrupt_address = tmp32;
+        }
+
+        file->Bool32(&idle);
+    }
 
     void PushPC() {
         u16 l = (u16)(regs.pc & 0xFFFF);
@@ -261,7 +295,7 @@ public:
         SatAndSetAccAndFlag(d1, v); // only this one affects flags (except for fl)
     }
     void trap() {
-        throw UnimplementedException();
+        throw UnimplementedException("trap");
     }
 
     void DoMultiplication(u32 unit, bool x_sign, bool y_sign) {
@@ -448,7 +482,7 @@ public:
                 AlmOp::Or, AlmOp::And, AlmOp::Xor, AlmOp::Add, AlmOp::Cmp, AlmOp::Sub,
             };
             if (allowed_instruction.count(op.GetName()) == 0)
-                throw UnimplementedException(); // weird effect. probably undefined
+                throw UnimplementedException("weird alm"); // weird effect. probably undefined
         };
         switch (a.GetName()) {
         // need more test
@@ -600,7 +634,7 @@ public:
         if (b.GetName() == RegName::p) {
             bv = (u16)(ProductToBus40(Px{0}) >> 16);
         } else if (b.GetName() == RegName::a0 || b.GetName() == RegName::a1) {
-            throw UnimplementedException(); // weird effect;
+            throw UnimplementedException("weird alb"); // weird effect;
         } else {
             bv = RegToBus16(b.GetName());
         }
@@ -1180,7 +1214,21 @@ public:
         }
     }
     void retd() {
-        throw UnimplementedException();
+        // TODO: this is grossly inaccurate
+        // retd is supposed to kick in after 2 cycles
+
+        for (int i = 0; i < 2; i++) {
+            u16 opcode = mem.ProgramRead((regs.pc++) | (regs.prpage << 18));
+            auto& decoder = decoders[opcode];
+            u16 expand_value = 0;
+            if (decoder.NeedExpansion()) {
+                expand_value = mem.ProgramRead((regs.pc++) | (regs.prpage << 18));
+            }
+
+            decoder.call(*this, opcode, expand_value);
+        }
+
+        PopPC();
     }
     void reti(Cond c) {
         if (regs.ConditionPass(c)) {
@@ -3430,7 +3478,7 @@ private:
         } else { // OffsetValue::MinusOne
             if (!emod)
                 return address - 1;
-            throw UnimplementedException();
+            //throw UnimplementedException("weird OffsetAddress");
             // TODO: sometimes this would return two addresses,
             // neither of which is the original Rn value.
             // This only happens for memory writing, but not for memory reading.
