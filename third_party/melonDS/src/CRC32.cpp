@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2025 melonDS team
+    Copyright 2016-2021 Arisotura
 
     This file is part of melonDS.
 
@@ -20,9 +20,10 @@
 
 // http://www.codeproject.com/KB/recipes/crc32_large.aspx
 
-namespace melonDS
-{
-constexpr u32 _reflect(u32 refl, char ch)
+u32 crctable[256];
+bool tableinited = false;
+
+u32 _reflect(u32 refl, char ch)
 {
     u32 value = 0;
 
@@ -36,42 +37,33 @@ constexpr u32 _reflect(u32 refl, char ch)
 	return value;
 }
 
-constexpr auto GetCRC32Table()
+void _inittable()
 {
-    std::array<u32, 256> Crc32Table { 0 };
 	u32 polynomial = 0x04C11DB7;
 
 	for (int i = 0; i < 0x100; i++)
     {
-        Crc32Table[i] = _reflect(i, 8) << 24;
+        crctable[i] = _reflect(i, 8) << 24;
 
         for (int j = 0; j < 8; j++)
-            Crc32Table[i] = (Crc32Table[i] << 1) ^ (Crc32Table[i] & (1 << 31) ? polynomial : 0);
+            crctable[i] = (crctable[i] << 1) ^ (crctable[i] & (1 << 31) ? polynomial : 0);
 
-        Crc32Table[i] = _reflect(Crc32Table[i],  32);
+        crctable[i] = _reflect(crctable[i],  32);
     }
-    return Crc32Table;
 }
 
-u32 CRC32(const u8 *data, int len, u32 start)
+u32 CRC32(u8 *data, int len)
 {
-    auto Crc32Table = GetCRC32Table();
-
-	u32 crc = start ^ 0xFFFFFFFF;
-
-    if (data)
+    if (!tableinited)
     {
-        while (len--)
-            crc = (crc >> 8) ^ Crc32Table[(crc & 0xFF) ^ *data++];
+        _inittable();
+        tableinited = true;
     }
-    else
-    {
-        // null data acts like checksumming a block of zeros
-        while (len--)
-            crc = (crc >> 8) ^ Crc32Table[(crc & 0xFF)];
-    }
+
+	u32 crc = 0xFFFFFFFF;
+
+	while (len--)
+        crc = (crc >> 8) ^ crctable[(crc & 0xFF) ^ *data++];
 
 	return (crc ^ 0xFFFFFFFF);
-}
-
 }

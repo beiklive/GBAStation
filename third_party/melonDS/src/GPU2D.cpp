@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2025 melonDS team
+    Copyright 2016-2021 Arisotura
 
     This file is part of melonDS.
 
@@ -20,12 +20,7 @@
 #include <string.h>
 #include "NDS.h"
 #include "GPU.h"
-#include "GPU3D.h"
 
-namespace melonDS
-{
-using Platform::Log;
-using Platform::LogLevel;
 
 // notes on color conversion
 //
@@ -87,8 +82,10 @@ using Platform::LogLevel;
 
 namespace GPU2D
 {
-Unit::Unit(u32 num, melonDS::GPU& gpu) : Num(num), GPU(gpu)
+
+Unit::Unit(u32 num)
 {
+    Num = num;
 }
 
 void Unit::Reset()
@@ -221,7 +218,7 @@ u8 Unit::Read8(u32 addr)
     case 0x04D: return 0;
     }
 
-    Log(LogLevel::Debug, "unknown GPU read8 %08X\n", addr);
+    printf("unknown GPU read8 %08X\n", addr);
     return 0;
 }
 
@@ -250,7 +247,7 @@ u16 Unit::Read16(u32 addr)
     case 0x06C: return MasterBrightness;
     }
 
-    Log(LogLevel::Debug, "unknown GPU read16 %08X\n", addr);
+    printf("unknown GPU read16 %08X\n", addr);
     return 0;
 }
 
@@ -288,10 +285,10 @@ void Unit::Write8(u32 addr, u8 val)
         return;
 
     case 0x10:
-        if (!Num) GPU.GPU3D.SetRenderXPos((GPU.GPU3D.GetRenderXPos() & 0xFF00) | val);
+        if (!Num) GPU3D::SetRenderXPos((GPU3D::RenderXPos & 0xFF00) | val);
         break;
     case 0x11:
-        if (!Num) GPU.GPU3D.SetRenderXPos((GPU.GPU3D.GetRenderXPos() & 0x00FF) | (val << 8));
+        if (!Num) GPU3D::SetRenderXPos((GPU3D::RenderXPos & 0x00FF) | (val << 8));
         break;
     }
 
@@ -367,7 +364,7 @@ void Unit::Write8(u32 addr, u8 val)
         return;
     }
 
-    Log(LogLevel::Debug, "unknown GPU write8 %08X %02X\n", addr, val);
+    printf("unknown GPU write8 %08X %02X\n", addr, val);
 }
 
 void Unit::Write16(u32 addr, u16 val)
@@ -384,16 +381,8 @@ void Unit::Write16(u32 addr, u16 val)
         return;
 
     case 0x010:
-        if (!Num) GPU.GPU3D.SetRenderXPos(val);
+        if (!Num) GPU3D::SetRenderXPos(val);
         break;
-
-    case 0x064:
-        CaptureCnt = (CaptureCnt & 0xFFFF0000) | (val & 0xEF3F1F1F);
-        return;
-
-    case 0x066:
-        CaptureCnt = (CaptureCnt & 0xFFFF) | ((val << 16) & 0xEF3F1F1F);
-        return;
 
     case 0x068:
         DispFIFO[DispFIFOWritePtr] = val;
@@ -431,21 +420,21 @@ void Unit::Write16(u32 addr, u16 val)
     case 0x026: BGRotD[0] = val; return;
     case 0x028:
         BGXRef[0] = (BGXRef[0] & 0xFFFF0000) | val;
-        if (GPU.VCount < 192) BGXRefInternal[0] = BGXRef[0];
+        if (GPU::VCount < 192) BGXRefInternal[0] = BGXRef[0];
         return;
     case 0x02A:
         if (val & 0x0800) val |= 0xF000;
         BGXRef[0] = (BGXRef[0] & 0xFFFF) | (val << 16);
-        if (GPU.VCount < 192) BGXRefInternal[0] = BGXRef[0];
+        if (GPU::VCount < 192) BGXRefInternal[0] = BGXRef[0];
         return;
     case 0x02C:
         BGYRef[0] = (BGYRef[0] & 0xFFFF0000) | val;
-        if (GPU.VCount < 192) BGYRefInternal[0] = BGYRef[0];
+        if (GPU::VCount < 192) BGYRefInternal[0] = BGYRef[0];
         return;
     case 0x02E:
         if (val & 0x0800) val |= 0xF000;
         BGYRef[0] = (BGYRef[0] & 0xFFFF) | (val << 16);
-        if (GPU.VCount < 192) BGYRefInternal[0] = BGYRef[0];
+        if (GPU::VCount < 192) BGYRefInternal[0] = BGYRef[0];
         return;
 
     case 0x030: BGRotA[1] = val; return;
@@ -454,21 +443,21 @@ void Unit::Write16(u32 addr, u16 val)
     case 0x036: BGRotD[1] = val; return;
     case 0x038:
         BGXRef[1] = (BGXRef[1] & 0xFFFF0000) | val;
-        if (GPU.VCount < 192) BGXRefInternal[1] = BGXRef[1];
+        if (GPU::VCount < 192) BGXRefInternal[1] = BGXRef[1];
         return;
     case 0x03A:
         if (val & 0x0800) val |= 0xF000;
         BGXRef[1] = (BGXRef[1] & 0xFFFF) | (val << 16);
-        if (GPU.VCount < 192) BGXRefInternal[1] = BGXRef[1];
+        if (GPU::VCount < 192) BGXRefInternal[1] = BGXRef[1];
         return;
     case 0x03C:
         BGYRef[1] = (BGYRef[1] & 0xFFFF0000) | val;
-        if (GPU.VCount < 192) BGYRefInternal[1] = BGYRef[1];
+        if (GPU::VCount < 192) BGYRefInternal[1] = BGYRef[1];
         return;
     case 0x03E:
         if (val & 0x0800) val |= 0xF000;
         BGYRef[1] = (BGYRef[1] & 0xFFFF) | (val << 16);
-        if (GPU.VCount < 192) BGYRefInternal[1] = BGYRef[1];
+        if (GPU::VCount < 192) BGYRefInternal[1] = BGYRef[1];
         return;
 
     case 0x040:
@@ -532,6 +521,8 @@ void Unit::Write32(u32 addr, u32 val)
         return;
 
     case 0x064:
+        // TODO: check what happens when writing to it during display
+        // esp. if a capture is happening
         CaptureCnt = val & 0xEF3F1F1F;
         return;
 
@@ -543,32 +534,31 @@ void Unit::Write32(u32 addr, u32 val)
         return;
     }
 
-    if (Enabled)
-    {
-        switch (addr & 0x00000FFF)
-        {
-        case 0x028:
-            if (val & 0x08000000) val |= 0xF0000000;
-            BGXRef[0] = val;
-            if (GPU.VCount < 192) BGXRefInternal[0] = BGXRef[0];
-            return;
-        case 0x02C:
-            if (val & 0x08000000) val |= 0xF0000000;
-            BGYRef[0] = val;
-            if (GPU.VCount < 192) BGYRefInternal[0] = BGYRef[0];
-            return;
+    if (!Enabled) return;
 
-        case 0x038:
-            if (val & 0x08000000) val |= 0xF0000000;
-            BGXRef[1] = val;
-            if (GPU.VCount < 192) BGXRefInternal[1] = BGXRef[1];
-            return;
-        case 0x03C:
-            if (val & 0x08000000) val |= 0xF0000000;
-            BGYRef[1] = val;
-            if (GPU.VCount < 192) BGYRefInternal[1] = BGYRef[1];
-            return;
-        }
+    switch (addr & 0x00000FFF)
+    {
+    case 0x028:
+        if (val & 0x08000000) val |= 0xF0000000;
+        BGXRef[0] = val;
+        if (GPU::VCount < 192) BGXRefInternal[0] = BGXRef[0];
+        return;
+    case 0x02C:
+        if (val & 0x08000000) val |= 0xF0000000;
+        BGYRef[0] = val;
+        if (GPU::VCount < 192) BGYRefInternal[0] = BGYRef[0];
+        return;
+
+    case 0x038:
+        if (val & 0x08000000) val |= 0xF0000000;
+        BGXRef[1] = val;
+        if (GPU::VCount < 192) BGXRefInternal[1] = BGXRef[1];
+        return;
+    case 0x03C:
+        if (val & 0x08000000) val |= 0xF0000000;
+        BGYRef[1] = val;
+        if (GPU::VCount < 192) BGYRefInternal[1] = BGYRef[1];
+        return;
     }
 
     Write16(addr, val&0xFFFF);
@@ -637,15 +627,15 @@ u16* Unit::GetBGExtPal(u32 slot, u32 pal)
     const u32 PaletteSize = 256 * 2;
     const u32 SlotSize = PaletteSize * 16;
     return (u16*)&(Num == 0
-         ? GPU.VRAMFlat_ABGExtPal
-         : GPU.VRAMFlat_BBGExtPal)[slot * SlotSize + pal * PaletteSize];
+         ? GPU::VRAMFlat_ABGExtPal
+         : GPU::VRAMFlat_BBGExtPal)[slot * SlotSize + pal * PaletteSize];
 }
 
 u16* Unit::GetOBJExtPal()
 {
     return Num == 0
-         ? (u16*)GPU.VRAMFlat_AOBJExtPal
-         : (u16*)GPU.VRAMFlat_BOBJExtPal;
+         ? (u16*)GPU::VRAMFlat_AOBJExtPal
+         : (u16*)GPU::VRAMFlat_BOBJExtPal;
 }
 
 void Unit::CheckWindows(u32 line)
@@ -657,7 +647,7 @@ void Unit::CheckWindows(u32 line)
     else if (line == Win1Coords[2]) Win1Active |=  0x1;
 }
 
-void Unit::CalculateWindowMask(u32 line, u8* windowMask, const u8* objWindow)
+void Unit::CalculateWindowMask(u32 line, u8* windowMask, u8* objWindow)
 {
     for (u32 i = 0; i < 256; i++)
         windowMask[i] = WinCnt[2]; // window outside
@@ -703,33 +693,32 @@ void Unit::CalculateWindowMask(u32 line, u8* windowMask, const u8* objWindow)
     }
 }
 
-void Unit::GetBGVRAM(u8*& data, u32& mask) const
+void Unit::GetBGVRAM(u8*& data, u32& mask)
 {
     if (Num == 0)
     {
-        data = GPU.VRAMFlat_ABG;
+        data = GPU::VRAMFlat_ABG;
         mask = 0x7FFFF;
     }
     else
     {
-        data = GPU.VRAMFlat_BBG;
+        data = GPU::VRAMFlat_BBG;
         mask = 0x1FFFF;
     }
 }
 
-void Unit::GetOBJVRAM(u8*& data, u32& mask) const
+void Unit::GetOBJVRAM(u8*& data, u32& mask)
 {
     if (Num == 0)
     {
-        data = GPU.VRAMFlat_AOBJ;
+        data = GPU::VRAMFlat_AOBJ;
         mask = 0x3FFFF;
     }
     else
     {
-        data = GPU.VRAMFlat_BOBJ;
+        data = GPU::VRAMFlat_BOBJ;
         mask = 0x1FFFF;
     }
 }
 
-}
 }

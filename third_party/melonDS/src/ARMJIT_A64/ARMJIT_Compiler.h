@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2025 melonDS team, RSDuck
+    Copyright 2016-2021 Arisotura, RSDuck
 
     This file is part of melonDS.
 
@@ -19,9 +19,8 @@
 #ifndef ARMJIT_A64_COMPILER_H
 #define ARMJIT_A64_COMPILER_H
 
-#if defined(JIT_ENABLED) && defined(__aarch64__)
-
 #include "../ARM.h"
+#include "../ARMJIT.h"
 
 #include "../dolphin/Arm64Emitter.h"
 
@@ -30,9 +29,9 @@
 
 #include <unordered_map>
 
-namespace melonDS
+namespace ARMJIT
 {
-class ARMJIT;
+
 const Arm64Gen::ARM64Reg RMemBase = Arm64Gen::X26;
 const Arm64Gen::ARM64Reg RCPSR = Arm64Gen::W27;
 const Arm64Gen::ARM64Reg RCycles = Arm64Gen::W28;
@@ -69,7 +68,7 @@ struct Op2
     bool IsSimpleReg()
     { return !IsImm && !Reg.ShiftAmount && Reg.ShiftType == Arm64Gen::ST_LSL; }
     bool ImmFits12Bit()
-    { return IsImm && ((Imm & 0xFFF) == Imm); }
+    { return IsImm && (Imm & 0xFFF == Imm); }
     bool IsZero()
     { return IsImm && !Imm; }
 
@@ -98,8 +97,8 @@ class Compiler : public Arm64Gen::ARM64XEmitter
 public:
     typedef void (Compiler::*CompileFunc)();
 
-    explicit Compiler(melonDS::NDS& nds);
-    ~Compiler() override;
+    Compiler();
+    ~Compiler();
 
     void PushRegs(bool saveHiRegs, bool saveRegsToBeChanged, bool allowUnload = true);
     void PopRegs(bool saveHiRegs, bool saveRegsToBeChanged);
@@ -114,7 +113,7 @@ public:
 
     bool CanCompile(bool thumb, u16 kind);
 
-    bool FlagsNZNeeded() const
+    bool FlagsNZNeeded()
     {
         return CurInstr.SetFlags & 0xC;
     }
@@ -234,7 +233,7 @@ public:
         return (u8*)entry - GetRXBase();
     }
 
-    bool IsJITFault(const u8* pc);
+    bool IsJITFault(u8* pc);
     u8* RewriteMemAccess(u8* pc);
 
     void SwapCodeRegion()
@@ -244,7 +243,6 @@ public:
         OtherCodeRegion = offset;
     }
 
-    melonDS::NDS& NDS;
     ptrdiff_t OtherCodeRegion;
 
     bool Exit;
@@ -275,7 +273,6 @@ public:
     void* JitRWStart;
     void* JitRXStart;
 #endif
-    void* CodeMemBase;
 
     void* ReadBanked, *WriteBanked;
 
@@ -288,7 +285,5 @@ public:
 };
 
 }
-
-#endif
 
 #endif

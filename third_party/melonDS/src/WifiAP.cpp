@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2025 melonDS team
+    Copyright 2016-2021 Arisotura
 
     This file is part of melonDS.
 
@@ -27,15 +27,10 @@
 #include <stddef.h>
 #endif
 
-namespace melonDS
+namespace WifiAP
 {
-using Platform::Log;
-using Platform::LogLevel;
 
-
-const char* WifiAP::APName = "melonAP";
-const u8 WifiAP::APMac[6] = {0x00, 0xF0, 0x77, 0x77, 0x77, 0x77};
-const u8 WifiAP::APChannel = 6;
+const u8 APMac[6] = {AP_MAC};
 
 #define PWRITE_8(p, v)      *p++ = v;
 #define PWRITE_16(p, v)     *(u16*)p = v; p += 2;
@@ -56,7 +51,7 @@ const u8 WifiAP::APChannel = 6;
     PWRITE_16(p, 0); \
     PWRITE_16(p, 0); \
     PWRITE_8(p, rate); \
-    PWRITE_8(p, APChannel); \
+    PWRITE_8(p, 0); \
     PWRITE_16(p, len);
 
 //#define PALIGN_4(p, base)  p += ((4 - ((ptrdiff_t)(p-base) & 0x3)) & 0x3);
@@ -67,22 +62,36 @@ const u8 WifiAP::APChannel = 6;
 #define PALIGN_4(p, base)  while (PLEN(p,base) & 0x3) *p++ = 0xFF;
 
 
-bool MACEqual(const u8* a, const u8* b);
-bool MACIsBroadcast(const u8* a);
+u64 USCounter;
+
+u16 SeqNo;
+
+bool BeaconDue;
+
+u8 PacketBuffer[2048];
+int PacketLen;
+int RXNum;
+
+u8 LANBuffer[2048];
+
+// this is a lazy AP, we only keep track of one client
+// 0=disconnected 1=authenticated 2=associated
+int ClientStatus;
 
 
-WifiAP::WifiAP(Wifi* client, void* userdata) : Client(client), UserData(userdata)
+bool Init()
+{
+    return true;
+}
+
+void DeInit()
 {
 }
 
-WifiAP::~WifiAP()
-{
-}
-
-void WifiAP::Reset()
+void Reset()
 {
     // random starting point for the counter
-    USCounter = 0x428888000ULL;
+    USCounter = 0x428888017ULL;
     SeqNo = 0x0120;
 
     BeaconDue = false;
@@ -95,7 +104,30 @@ void WifiAP::Reset()
 }
 
 
-void WifiAP::MSTimer()
+bool MACEqual(u8* a, u8* b)
+{
+    return (*(u32*)&a[0] == *(u32*)&b[0]) && (*(u16*)&a[4] == *(u16*)&b[4]);
+}
+
+bool MACIsBroadcast(u8* a)
+{
+    return (*(u32*)&a[0] == 0xFFFFFFFF) && (*(u16*)&a[4] == 0xFFFF);
+}
+
+
+void USTimer()
+{
+    USCounter++;
+
+    u32 chk = (u32)USCounter;
+    if (!(chk & 0x1FFFF))
+    {
+        // send beacon every 128ms
+        BeaconDue = true;
+    }
+}
+
+void MSTimer()
 {
     USCounter += 0x400;
 
@@ -108,7 +140,7 @@ void WifiAP::MSTimer()
 }
 
 
-int WifiAP::HandleManagementFrame(const u8* data, int len)
+int HandleManagementFrame(u8* data, int len)
 {
     // TODO: perfect this
     // noting that frames sent pre-auth/assoc don't have a proper BSSID
@@ -117,7 +149,7 @@ int WifiAP::HandleManagementFrame(const u8* data, int len)
 
     if (RXNum)
     {
-        Log(LogLevel::Warn, "wifiAP: can't reply!!\n");
+        printf("wifiAP: can't reply!!\n");
         return 0;
     }
 
@@ -135,12 +167,12 @@ int WifiAP::HandleManagementFrame(const u8* data, int len)
 
             if (ClientStatus != 1)
             {
-                Log(LogLevel::Error, "wifiAP: bad assoc request, needs auth prior\n");
+                printf("wifiAP: bad assoc request, needs auth prior\n");
                 return 0;
             }
 
             ClientStatus = 2;
-            Log(LogLevel::Debug, "wifiAP: client associated\n");
+            printf("wifiAP: client associated\n");
 
             PWRITE_16(p, 0x0010);
             PWRITE_16(p, 0x0000); // duration??
@@ -175,9 +207,9 @@ int WifiAP::HandleManagementFrame(const u8* data, int len)
             PWRITE_16(p, 128); // beacon interval
             PWRITE_16(p, 0x0021); // capability
             PWRITE_8(p, 0x01); PWRITE_8(p, 0x02); PWRITE_8(p, 0x82); PWRITE_8(p, 0x84); // rates
-            PWRITE_8(p, 0x03); PWRITE_8(p, 0x01); PWRITE_8(p, APChannel); // current channel
-            PWRITE_8(p, 0x00); PWRITE_8(p, strlen(APName));
-            memcpy(p, APName, strlen(APName)); p += strlen(APName);
+            PWRITE_8(p, 0x03); PWRITE_8(p, 0x01); PWRITE_8(p, 0x06); // current channel
+            PWRITE_8(p, 0x00); PWRITE_8(p, strlen(AP_NAME));
+            memcpy(p, AP_NAME, strlen(AP_NAME)); p += strlen(AP_NAME);
 
             PacketLen = PLEN(p, base);
             RXNum = 1;
@@ -190,7 +222,7 @@ int WifiAP::HandleManagementFrame(const u8* data, int len)
                 return 0;
 
             ClientStatus = 1;
-            Log(LogLevel::Debug, "wifiAP: client deassociated\n");
+            printf("wifiAP: client deassociated\n");
 
             PWRITE_16(p, 0x00A0);
             PWRITE_16(p, 0x0000); // duration??
@@ -212,7 +244,7 @@ int WifiAP::HandleManagementFrame(const u8* data, int len)
                 return 0;
 
             ClientStatus = 1;
-            Log(LogLevel::Debug, "wifiAP: client authenticated\n");
+            printf("wifiAP: client authenticated\n");
 
             PWRITE_16(p, 0x00B0);
             PWRITE_16(p, 0x0000); // duration??
@@ -236,7 +268,7 @@ int WifiAP::HandleManagementFrame(const u8* data, int len)
                 return 0;
 
             ClientStatus = 0;
-            Log(LogLevel::Debug, "wifiAP: client deauthenticated\n");
+            printf("wifiAP: client deauthenticated\n");
 
             PWRITE_16(p, 0x00C0);
             PWRITE_16(p, 0x0000); // duration??
@@ -253,17 +285,14 @@ int WifiAP::HandleManagementFrame(const u8* data, int len)
         return len;
 
     default:
-        Log(LogLevel::Warn, "wifiAP: unknown management frame type %X\n", (framectl>>4)&0xF);
+        printf("wifiAP: unknown management frame type %X\n", (framectl>>4)&0xF);
         return 0;
     }
 }
 
 
-int WifiAP::SendPacket(const u8* data, int len)
+int SendPacket(u8* data, int len)
 {
-    if (data[9] != APChannel)
-        return 0;
-
     data += 12;
 
     u16 framectl = *(u16*)&data[0];
@@ -280,7 +309,7 @@ int WifiAP::SendPacket(const u8* data, int len)
         {
             if ((framectl & 0x0300) != 0x0100)
             {
-                Log(LogLevel::Error, "wifiAP: got data frame with bad fromDS/toDS bits %04X\n", framectl);
+                printf("wifiAP: got data frame with bad fromDS/toDS bits %04X\n", framectl);
                 return 0;
             }
 
@@ -290,7 +319,7 @@ int WifiAP::SendPacket(const u8* data, int len)
             {
                 if (ClientStatus != 2)
                 {
-                    Log(LogLevel::Warn, "wifiAP: trying to send shit without being associated\n");
+                    printf("wifiAP: trying to send shit without being associated\n");
                     return 0;
                 }
 
@@ -301,7 +330,7 @@ int WifiAP::SendPacket(const u8* data, int len)
                 *(u16*)&LANBuffer[12] = *(u16*)&data[30]; // type
                 memcpy(&LANBuffer[14], &data[32], lan_len - 14);
 
-                Platform::Net_SendPacket(LANBuffer, lan_len, UserData);
+                Platform::LAN_SendPacket(LANBuffer, lan_len);
             }
         }
         return len;
@@ -310,7 +339,7 @@ int WifiAP::SendPacket(const u8* data, int len)
     return 0;
 }
 
-int WifiAP::RecvPacket(u8* data)
+int RecvPacket(u8* data)
 {
     if (BeaconDue)
     {
@@ -331,10 +360,10 @@ int WifiAP::RecvPacket(u8* data)
         PWRITE_16(p, 128); // beacon interval
         PWRITE_16(p, 0x0021); // capability
         PWRITE_8(p, 0x01); PWRITE_8(p, 0x02); PWRITE_8(p, 0x82); PWRITE_8(p, 0x84); // rates
-        PWRITE_8(p, 0x03); PWRITE_8(p, 0x01); PWRITE_8(p, APChannel); // current channel
+        PWRITE_8(p, 0x03); PWRITE_8(p, 0x01); PWRITE_8(p, 0x06); // current channel
         PWRITE_8(p, 0x05); PWRITE_8(p, 0x04); PWRITE_8(p, 0); PWRITE_8(p, 0); PWRITE_8(p, 0); PWRITE_8(p, 0); // TIM
-        PWRITE_8(p, 0x00); PWRITE_8(p, strlen(APName));
-        memcpy(p, APName, strlen(APName)); p += strlen(APName);
+        PWRITE_8(p, 0x00); PWRITE_8(p, strlen(AP_NAME));
+        memcpy(p, AP_NAME, strlen(AP_NAME)); p += strlen(AP_NAME);
 
         PALIGN_4(p, base);
         PWRITE_32(p, 0xDEADBEEF); // checksum. doesn't matter for now
@@ -368,23 +397,14 @@ int WifiAP::RecvPacket(u8* data)
 
     if (ClientStatus < 2) return 0;
 
-    int rxlen = Platform::Net_RecvPacket(LANBuffer, UserData);
-    while (rxlen > 0)
+    int rxlen = Platform::LAN_RecvPacket(LANBuffer);
+    if (rxlen > 0)
     {
         // check destination MAC
         if (!MACIsBroadcast(&LANBuffer[0]))
         {
-            if (!MACEqual(&LANBuffer[0], Client->GetMAC()))
-            {
-                rxlen = Platform::Net_RecvPacket(LANBuffer, UserData);
-                continue;
-            }
-        }
-
-        if (MACEqual(&LANBuffer[6], Client->GetMAC()))
-        {
-            rxlen = Platform::Net_RecvPacket(LANBuffer, UserData);
-            continue;
+            if (!MACEqual(&LANBuffer[0], Wifi::GetMAC()))
+                return 0;
         }
 
         // packet is good

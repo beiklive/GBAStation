@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2025 melonDS team
+    Copyright 2016-2021 Arisotura
 
     This file is part of melonDS.
 
@@ -21,8 +21,7 @@
 
 #define kShaderHeader "#version 140"
 
-namespace melonDS
-{
+
 const char* kClearVS = kShaderHeader R"(
 
 in vec2 vPosition;
@@ -681,7 +680,6 @@ void main()
 
     vec4 fpos;
     fpos.xy = (((vec2(vPosition.xy) ) * 2.0) / uScreenSize) - 1.0;
-    fpos.z = 0.0;
     fZ = float(vPosition.z << zshift) / 16777216.0;
     fpos.w = float(vPosition.w) / 65536.0f;
     fpos.xy *= fpos.w;
@@ -804,5 +802,5 @@ void main()
     gl_FragDepth = fZ;
 }
 )";
-}
+
 #endif // GPU3D_OPENGL_SHADERS_H

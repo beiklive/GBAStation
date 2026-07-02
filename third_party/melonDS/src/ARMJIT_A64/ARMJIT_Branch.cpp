@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2025 melonDS team, RSDuck
+    Copyright 2016-2021 Arisotura, RSDuck
 
     This file is part of melonDS.
 
@@ -17,14 +17,13 @@
 */
 
 #include "ARMJIT_Compiler.h"
-#include "../NDS.h"
 
 using namespace Arm64Gen;
 
 // hack
 const int kCodeCacheTiming = 3;
 
-namespace melonDS
+namespace ARMJIT
 {
 
 template <typename T>
@@ -83,7 +82,7 @@ void Compiler::Comp_JumpTo(u32 addr, bool forceNonConstantCycles)
             // doesn't matter if we put garbage in the MSbs there
             if (addr & 0x2)
             {
-                cpu9->CodeRead32(addr-2, true);
+                cpu9->CodeRead32(addr-2, true) >> 16;
                 cycles += cpu9->CodeCycles;
                 cpu9->CodeRead32(addr+2, false);
                 cycles += CurCPU->CodeCycles;
@@ -133,7 +132,7 @@ void Compiler::Comp_JumpTo(u32 addr, bool forceNonConstantCycles)
             u32 compileTimePC = CurCPU->R[15];
             CurCPU->R[15] = newPC;
 
-            cycles += NDS.ARM7MemTimings[codeCycles][0] + NDS.ARM7MemTimings[codeCycles][1];
+            cycles += NDS::ARM7MemTimings[codeCycles][0] + NDS::ARM7MemTimings[codeCycles][1];
 
             CurCPU->R[15] = compileTimePC;
         }
@@ -145,7 +144,7 @@ void Compiler::Comp_JumpTo(u32 addr, bool forceNonConstantCycles)
             u32 compileTimePC = CurCPU->R[15];
             CurCPU->R[15] = newPC;
 
-            cycles += NDS.ARM7MemTimings[codeCycles][2] + NDS.ARM7MemTimings[codeCycles][3];
+            cycles += NDS::ARM7MemTimings[codeCycles][2] + NDS::ARM7MemTimings[codeCycles][3];
 
             CurCPU->R[15] = compileTimePC;
         }
@@ -236,7 +235,7 @@ void* Compiler::Gen_JumpTo7(int kind)
     LSR(W1, W0, 15);
     STR(INDEX_UNSIGNED, W1, RCPU, offsetof(ARM, CodeCycles));
 
-    MOVP2R(X2, NDS.ARM7MemTimings);
+    MOVP2R(X2, NDS::ARM7MemTimings);
     LDR(W3, X2, ArithOption(W1, true));
 
     FixupBranch switchToThumb;
@@ -389,7 +388,7 @@ void Compiler::T_Comp_BranchXchangeReg()
     {
         if (Num == 1)
         {
-            Log(LogLevel::Warn, "BLX unsupported on ARM7!!!\n");
+            printf("BLX unsupported on ARM7!!!\n");
             return;
         }
         MOV(W0, MapReg(CurInstr.A_Reg(3)));

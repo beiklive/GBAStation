@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2025 melonDS team
+    Copyright 2016-2021 Arisotura, RSDuck
 
     This file is part of melonDS.
 
@@ -18,22 +18,25 @@
 
 #include "ARMJIT_Compiler.h"
 
-#include "../ARMJIT.h"
 #include "../ARMInterpreter.h"
-#include "../NDS.h"
-#include "../ARMJIT_Global.h"
+#include "../Config.h"
 
 #include <assert.h>
-#include <stdarg.h>
 
 #include "../dolphin/CommonFuncs.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <sys/mman.h>
+#include <unistd.h>
+#endif
+
 using namespace Gen;
-using namespace Common;
 
 extern "C" void ARM_Ret();
 
-namespace melonDS
+namespace ARMJIT
 {
 template <>
 const X64Reg RegisterCache<Compiler, X64Reg>::NativeRegAllocOrder[] =
@@ -137,7 +140,7 @@ void Compiler::A_Comp_MSR()
     Comp_AddCycles_C();
 
     OpArg val = CurInstr.Instr & (1 << 25)
-        ? Imm32(melonDS::ROR((CurInstr.Instr & 0xFF), ((CurInstr.Instr >> 7) & 0x1E)))
+        ? Imm32(::ROR((CurInstr.Instr & 0xFF), ((CurInstr.Instr >> 7) & 0x1E)))
         : MapReg(CurInstr.A_Reg(0));
 
     u32 mask = 0;
@@ -216,23 +219,46 @@ void Compiler::A_Comp_MSR()
             MOV(32, R(ABI_PARAM3), R(RCPSR));
             MOV(32, R(ABI_PARAM2), R(RSCRATCH3));
             MOV(64, R(ABI_PARAM1), R(RCPU));
-            ABI_CallFunction(UpdateModeTrampoline);
+            CALL((void*)&UpdateModeTrampoline);
 
             PopRegs(true, true);
         }
     }
 }
 
-Compiler::Compiler(melonDS::NDS& nds) : XEmitter(), NDS(nds)
+/*
+    We'll repurpose this .bss memory
+
+ */
+u8 CodeMemory[1024 * 1024 * 32];
+
+Compiler::Compiler()
 {
-    ARMJIT_Global::Init();
+    {
+    #ifdef _WIN32
+        SYSTEM_INFO sysInfo;
+        GetSystemInfo(&sysInfo);
 
-    CodeMemBase = static_cast<u8*>(ARMJIT_Global::AllocateCodeMem());
-    nds.JIT.JitEnableWrite();
+        u64 pageSize = (u64)sysInfo.dwPageSize;
+    #else
+        u64 pageSize = sysconf(_SC_PAGE_SIZE);
+    #endif
 
-    CodeMemSize = ARMJIT_Global::CodeMemorySliceSize;
+        u8* pageAligned = (u8*)(((u64)CodeMemory & ~(pageSize - 1)) + pageSize);
+        u64 alignedSize = (((u64)CodeMemory + sizeof(CodeMemory)) & ~(pageSize - 1)) - (u64)pageAligned;
 
-    ResetStart = CodeMemBase;
+    #ifdef _WIN32
+        DWORD dummy;
+        VirtualProtect(pageAligned, alignedSize, PAGE_EXECUTE_READWRITE, &dummy);
+    #elif defined(__APPLE__)
+        pageAligned = (u8*)mmap(NULL, 1024*1024*32, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS ,-1, 0);
+    #else
+        mprotect(pageAligned, alignedSize, PROT_EXEC | PROT_READ | PROT_WRITE);
+    #endif
+
+        ResetStart = pageAligned;
+        CodeMemSize = alignedSize;
+    }
 
     Reset();
 
@@ -272,10 +298,6 @@ Compiler::Compiler(melonDS::NDS& nds) : XEmitter(), NDS(nds)
         SetJumpTarget(und);
         MOV(32, R(RSCRATCH3), MComplex(RCPU, RSCRATCH2, SCALE_4, offsetof(ARM, R_UND)));
         RET();
-
-#ifdef JIT_PROFILING_ENABLED
-        CreateMethod("ReadBanked", ReadBanked);
-#endif
     }
     {
         // RSCRATCH  mode
@@ -319,10 +341,6 @@ Compiler::Compiler(melonDS::NDS& nds) : XEmitter(), NDS(nds)
         MOV(32, MComplex(RCPU, RSCRATCH2, SCALE_4, offsetof(ARM, R_UND)), R(RSCRATCH3));
         CLC();
         RET();
-
-#ifdef JIT_PROFILING_ENABLED
-        CreateMethod("WriteBanked", WriteBanked);
-#endif
     }
 
     for (int consoleType = 0; consoleType < 2; consoleType++)
@@ -383,10 +401,6 @@ Compiler::Compiler(melonDS::NDS& nds) : XEmitter(), NDS(nds)
                     ABI_PopRegistersAndAdjustStack(CallerSavedPushRegs, 8);
                     RET();
 
-#ifdef JIT_PROFILING_ENABLED
-                    CreateMethod("FastMemStorePatch%d_%d_%d", PatchedStoreFuncs[consoleType][num][size][reg], num, size, reg);
-#endif
-
                     for (int signextend = 0; signextend < 2; signextend++)
                     {
                         PatchedLoadFuncs[consoleType][num][size][signextend][reg] = GetWritableCodePtr();
@@ -425,10 +439,6 @@ Compiler::Compiler(melonDS::NDS& nds) : XEmitter(), NDS(nds)
                         else
                             MOVZX(32, 8 << size, rdMapped, R(RSCRATCH));
                         RET();
-
-#ifdef JIT_PROFILING_ENABLED
-                        CreateMethod("FastMemLoadPatch%d_%d_%d_%d", PatchedLoadFuncs[consoleType][num][size][signextend][reg], num, size, reg, signextend);
-#endif
                     }
                 }
             }
@@ -444,13 +454,6 @@ Compiler::Compiler(melonDS::NDS& nds) : XEmitter(), NDS(nds)
 
     NearSize = FarStart - ResetStart;
     FarSize = (ResetStart + CodeMemSize) - FarStart;
-}
-
-Compiler::~Compiler()
-{
-    ARMJIT_Global::FreeCodeMem(CodeMemBase);
-
-    ARMJIT_Global::DeInit();
 }
 
 void Compiler::LoadCPSR()
@@ -618,18 +621,18 @@ const Compiler::CompileFunc T_Comp[ARMInstrInfo::tk_Count] = {
     // LDR/STR sp rel
     F(T_Comp_MemSPRel), F(T_Comp_MemSPRel),
     // PUSH/POP
-    F(T_Comp_PUSH_POP), F(T_Comp_PUSH_POP),
+    F(T_Comp_PUSH_POP), F(T_Comp_PUSH_POP), 
     // LDMIA, STMIA
-    F(T_Comp_LDMIA_STMIA), F(T_Comp_LDMIA_STMIA),
+    F(T_Comp_LDMIA_STMIA), F(T_Comp_LDMIA_STMIA), 
     // Branch
-    F(T_Comp_BCOND), F(T_Comp_BranchXchangeReg), F(T_Comp_BranchXchangeReg), F(T_Comp_B), F(T_Comp_BL_LONG_1), F(T_Comp_BL_LONG_2),
+    F(T_Comp_BCOND), F(T_Comp_BranchXchangeReg), F(T_Comp_BranchXchangeReg), F(T_Comp_B), F(T_Comp_BL_LONG_1), F(T_Comp_BL_LONG_2), 
     // Unk, SVC
     NULL, NULL,
     F(T_Comp_BL_Merged)
 };
 #undef F
 
-bool Compiler::CanCompile(bool thumb, u16 kind) const
+bool Compiler::CanCompile(bool thumb, u16 kind)
 {
     return (thumb ? T_Comp[kind] : A_Comp[kind]) != NULL;
 }
@@ -645,7 +648,7 @@ void Compiler::Reset()
     LoadStorePatches.clear();
 }
 
-bool Compiler::IsJITFault(const u8* addr)
+bool Compiler::IsJITFault(u8* addr)
 {
     return (u64)addr >= (u64)ResetStart && (u64)addr < (u64)ResetStart + CodeMemSize;
 }
@@ -660,45 +663,22 @@ void Compiler::Comp_SpecialBranchBehaviour(bool taken)
     {
         RegCache.PrepareExit();
 
-        if (ConstantCycles)
-            ADD(32, MDisp(RCPU, offsetof(ARM, Cycles)), Imm32(ConstantCycles));
-        ABI_TailCall(ARM_Ret);
+        ADD(32, MDisp(RCPU, offsetof(ARM, Cycles)), Imm32(ConstantCycles));
+        JMP((u8*)&ARM_Ret, true);
     }
 }
-
-#ifdef JIT_PROFILING_ENABLED
-void Compiler::CreateMethod(const char* namefmt, void* start, ...)
-{
-    if (iJIT_IsProfilingActive())
-    {
-        va_list args;
-        va_start(args, start);
-        char name[64];
-        vsprintf(name, namefmt, args);
-        va_end(args);
-
-        iJIT_Method_Load method = {0};
-        method.method_id = iJIT_GetNewMethodID();
-        method.method_name = name;
-        method.method_load_address = start;
-        method.method_size = GetWritableCodePtr() - (u8*)start;
-
-        iJIT_NotifyEvent(iJVM_EVENT_TYPE_METHOD_LOAD_FINISHED, (void*)&method);
-    }
-}
-#endif
 
 JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[], int instrsCount, bool hasMemoryInstr)
 {
     if (NearSize - (GetCodePtr() - NearStart) < 1024 * 32) // guess...
     {
-        Log(LogLevel::Debug, "near reset\n");
-        NDS.JIT.ResetBlockCache();
+        printf("near reset\n");
+        ResetBlockCache();
     }
     if (FarSize - (FarCode - FarStart) < 1024 * 32) // guess...
     {
-        Log(LogLevel::Debug, "far reset\n");
-        NDS.JIT.ResetBlockCache();
+        printf("far reset\n");
+        ResetBlockCache();
     }
 
     ConstantCycles = 0;
@@ -812,7 +792,7 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
                         SetJumpTarget(skipExecute);
                     }
                 }
-
+                
             }
         }
 
@@ -822,13 +802,8 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
 
     RegCache.Flush();
 
-    if (ConstantCycles)
-        ADD(32, MDisp(RCPU, offsetof(ARM, Cycles)), Imm32(ConstantCycles));
-    ABI_TailCall(ARM_Ret);
-
-#ifdef JIT_PROFILING_ENABLED
-    CreateMethod("JIT_Block_%d_%d_%08X", (void*)res, Num, Thumb, instrs[0].Addr);
-#endif
+    ADD(32, MDisp(RCPU, offsetof(ARM, Cycles)), Imm32(ConstantCycles));
+    JMP((u8*)ARM_Ret, true);
 
     /*FILE* codeout = fopen("codeout", "a");
     fprintf(codeout, "beginning block argargarg__ %x!!!", instrs[0].Addr);
@@ -842,7 +817,7 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
 void Compiler::Comp_AddCycles_C(bool forceNonConstant)
 {
     s32 cycles = Num ?
-        NDS.ARM7MemTimings[CurInstr.CodeCycles][Thumb ? 1 : 3]
+        NDS::ARM7MemTimings[CurInstr.CodeCycles][Thumb ? 1 : 3]
         : ((R15 & 0x2) ? 0 : CurInstr.CodeCycles);
 
     if ((!Thumb && CurInstr.Cond() < 0xE) || forceNonConstant)
@@ -854,7 +829,7 @@ void Compiler::Comp_AddCycles_C(bool forceNonConstant)
 void Compiler::Comp_AddCycles_CI(u32 i)
 {
     s32 cycles = (Num ?
-        NDS.ARM7MemTimings[CurInstr.CodeCycles][Thumb ? 0 : 2]
+        NDS::ARM7MemTimings[CurInstr.CodeCycles][Thumb ? 0 : 2]
         : ((R15 & 0x2) ? 0 : CurInstr.CodeCycles)) + i;
 
     if (!Thumb && CurInstr.Cond() < 0xE)
@@ -866,9 +841,9 @@ void Compiler::Comp_AddCycles_CI(u32 i)
 void Compiler::Comp_AddCycles_CI(Gen::X64Reg i, int add)
 {
     s32 cycles = Num ?
-        NDS.ARM7MemTimings[CurInstr.CodeCycles][Thumb ? 0 : 2]
+        NDS::ARM7MemTimings[CurInstr.CodeCycles][Thumb ? 0 : 2]
         : ((R15 & 0x2) ? 0 : CurInstr.CodeCycles);
-
+    
     if (!Thumb && CurInstr.Cond() < 0xE)
     {
         LEA(32, RSCRATCH, MDisp(i, add + cycles));
@@ -891,7 +866,7 @@ void Compiler::Comp_AddCycles_CDI()
 
         s32 cycles;
 
-        s32 numC = NDS.ARM7MemTimings[CurInstr.CodeCycles][Thumb ? 0 : 2];
+        s32 numC = NDS::ARM7MemTimings[CurInstr.CodeCycles][Thumb ? 0 : 2];
         s32 numD = CurInstr.DataCycles;
 
         if ((CurInstr.DataRegion >> 24) == 0x02) // mainRAM
@@ -913,7 +888,7 @@ void Compiler::Comp_AddCycles_CDI()
         {
             cycles = numC + numD + 1;
         }
-
+        
         if (!Thumb && CurInstr.Cond() < 0xE)
             ADD(32, MDisp(RCPU, offsetof(ARM, Cycles)), Imm8(cycles));
         else
@@ -936,7 +911,7 @@ void Compiler::Comp_AddCycles_CD()
     }
     else
     {
-        s32 numC = NDS.ARM7MemTimings[CurInstr.CodeCycles][Thumb ? 0 : 2];
+        s32 numC = NDS::ARM7MemTimings[CurInstr.CodeCycles][Thumb ? 0 : 2];
         s32 numD = CurInstr.DataCycles;
 
         if ((CurInstr.DataRegion >> 4) == 0x02)

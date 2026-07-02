@@ -1,6 +1,5 @@
 #include "crash.h"
 #include "timer.h"
-#include "../../Savestate.h"
 
 namespace Teakra {
 
@@ -15,21 +14,6 @@ void Timer::Reset() {
     counter = 0;
     counter_high = 0;
     counter_low = 0;
-}
-
-void Timer::DoSavestate(melonDS::Savestate *file) {
-    file->Section(num ? "TKt1" : "TKt0");
-
-    file->Var16(&update_mmio);
-    file->Var16(&pause);
-    file->Var16((u16*)&count_mode);
-    file->Var16(&scale);
-
-    file->Var16(&start_high);
-    file->Var16(&start_low);
-    file->Var32(&counter);
-    file->Var16(&counter_high);
-    file->Var16(&counter_low);
 }
 
 void Timer::Restart() {
@@ -122,8 +106,7 @@ void Timer::Skip(u64 ticks) {
     UpdateMMIO();
 }
 
-Timer::Timer(CoreTiming& core_timing, int num) {
-    this->num = num;
+Timer::Timer(CoreTiming& core_timing) {
     core_timing.RegisterCallbacks(this);
 }
 

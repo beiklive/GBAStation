@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>575</width>
-    <height>556</height>
+    <height>254</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -21,7 +21,7 @@
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <property name="sizeConstraint">
-    <enum>QLayout::SizeConstraint::SetFixedSize</enum>
+    <enum>QLayout::SetFixedSize</enum>
    </property>
    <item>
     <widget class="QTabWidget" name="tabWidget">
@@ -59,7 +59,7 @@
        <item row="3" column="0">
         <spacer name="verticalSpacer_2">
          <property name="orientation">
-          <enum>Qt::Orientation::Vertical</enum>
+          <enum>Qt::Vertical</enum>
          </property>
          <property name="sizeHint" stdset="0">
           <size>
@@ -89,41 +89,72 @@
        <string>DS-mode</string>
       </attribute>
       <layout class="QGridLayout" name="gridLayout">
-       <item row="3" column="2">
-        <widget class="QPushButton" name="btnFirmwareBrowse">
-         <property name="text">
-          <string>Browse...</string>
+       <item row="1" column="1">
+        <widget class="QPathInput" name="txtBIOS7Path">
+         <property name="whatsThis">
+          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;DS-mode ARM7 BIOS&lt;/p&gt;&lt;p&gt;Size should be 16 KB&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
          </property>
         </widget>
        </item>
-       <item row="4" column="0">
-        <spacer name="verticalSpacer_5">
-         <property name="orientation">
-          <enum>Qt::Orientation::Vertical</enum>
+       <item row="2" column="1">
+        <widget class="QPathInput" name="txtFirmwarePath">
+         <property name="whatsThis">
+          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;DS-mode firmware&lt;/p&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;p&gt;Possible firmwares:&lt;/p&gt;&lt;p&gt;* 128 KB: DS-mode firmware from a DSi or 3DS. Not bootable.&lt;/p&gt;&lt;p&gt;* 256 KB: regular DS firmware.&lt;/p&gt;&lt;p&gt;* 512 KB: iQue DS firmware.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
          </property>
-         <property name="sizeHint" stdset="0">
-          <size>
-           <width>20</width>
-           <height>40</height>
-          </size>
-         </property>
-        </spacer>
+        </widget>
        </item>
-       <item row="3" column="0">
+       <item row="2" column="0">
         <widget class="QLabel" name="label_3">
          <property name="text">
           <string>DS firmware:</string>
          </property>
         </widget>
        </item>
-       <item row="2" column="2">
+       <item row="1" column="0">
+        <widget class="QLabel" name="label_2">
+         <property name="text">
+          <string>DS ARM7 BIOS:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="2">
         <widget class="QPushButton" name="btnBIOS7Browse">
          <property name="text">
           <string>Browse...</string>
          </property>
         </widget>
        </item>
-       <item row="1" column="1">
+       <item row="2" column="2">
+        <widget class="QPushButton" name="btnFirmwareBrowse">
+         <property name="text">
+          <string>Browse...</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="2">
+        <widget class="QPushButton" name="btnBIOS9Browse">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="text">
+          <string>Browse...</string>
+         </property>
+         <property name="autoDefault">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="0">
+        <widget class="QLabel" name="label">
+         <property name="text">
+          <string>DS ARM9 BIOS:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="1">
         <widget class="QPathInput" name="txtBIOS9Path">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
@@ -145,59 +176,18 @@
          </property>
         </widget>
        </item>
-       <item row="2" column="0">
-        <widget class="QLabel" name="label_2">
-         <property name="text">
-          <string>DS ARM7 BIOS:</string>
+       <item row="3" column="0">
+        <spacer name="verticalSpacer_5">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
          </property>
-        </widget>
-       </item>
-       <item row="2" column="1">
-        <widget class="QPathInput" name="txtBIOS7Path">
-         <property name="whatsThis">
-          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;DS-mode ARM7 BIOS&lt;/p&gt;&lt;p&gt;Size should be 16 KB&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>40</height>
+          </size>
          </property>
-        </widget>
-       </item>
-       <item row="3" column="1">
-        <widget class="QPathInput" name="txtFirmwarePath">
-         <property name="whatsThis">
-          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;DS-mode firmware&lt;/p&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;p&gt;Possible firmwares:&lt;/p&gt;&lt;p&gt;* 128 KB: DS-mode firmware from a DSi or 3DS. Not bootable.&lt;/p&gt;&lt;p&gt;* 256 KB: regular DS firmware.&lt;/p&gt;&lt;p&gt;* 512 KB: iQue DS firmware.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-         </property>
-        </widget>
-       </item>
-       <item row="1" column="0">
-        <widget class="QLabel" name="label">
-         <property name="text">
-          <string>DS ARM9 BIOS:</string>
-         </property>
-        </widget>
-       </item>
-       <item row="1" column="2">
-        <widget class="QPushButton" name="btnBIOS9Browse">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="text">
-          <string>Browse...</string>
-         </property>
-         <property name="autoDefault">
-          <bool>false</bool>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="0" colspan="3">
-        <widget class="QCheckBox" name="chkExternalBIOS">
-         <property name="whatsThis">
-          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Allows using external user-provided BIOS and firmware dumps.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-         </property>
-         <property name="text">
-          <string>Use external BIOS/firmware files</string>
-         </property>
-        </widget>
+        </spacer>
        </item>
       </layout>
      </widget>
@@ -206,142 +196,70 @@
        <string>DSi-mode</string>
       </attribute>
       <layout class="QGridLayout" name="gridLayout_2">
-       <item row="14" column="2">
-        <widget class="QPushButton" name="btnDSiSDFolderBrowse">
-         <property name="text">
-          <string>Browse...</string>
-         </property>
-        </widget>
-       </item>
-       <item row="11" column="1">
-        <widget class="QPathInput" name="txtDSiSDPath">
-         <property name="whatsThis">
-          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;SD image file for emulating the DSi's SD card. A blank image file will be created if it doesn't already exist.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-         </property>
-        </widget>
-       </item>
-       <item row="12" column="1">
-        <widget class="QComboBox" name="cbxDSiSDSize">
-         <property name="whatsThis">
-          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Size of the SD image.&lt;/p&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;p&gt;If set to Auto:&lt;/p&gt;&lt;p&gt;* if an image file exists, the volume size will be that of the image file&lt;/p&gt;&lt;p&gt;* if no image file exists and folder sync is enabled, the volume size will be determined from the synced folder's contents&lt;/p&gt;&lt;p&gt;* otherwise, the volume size will default to 512 MB&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-         </property>
-        </widget>
-       </item>
-       <item row="10" column="0" colspan="3">
-        <widget class="QCheckBox" name="cbDSiSDEnable">
-         <property name="whatsThis">
-          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Simulate a SD card being inserted in the DSi's SD slot.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-         </property>
-         <property name="text">
-          <string>Enable DSi SD card</string>
-         </property>
-        </widget>
-       </item>
-       <item row="4" column="2">
-        <widget class="QPushButton" name="btnDSiNANDBrowse">
-         <property name="text">
-          <string>Browse...</string>
-         </property>
-        </widget>
-       </item>
-       <item row="3" column="1">
-        <widget class="QPathInput" name="txtDSiFirmwarePath">
-         <property name="whatsThis">
-          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;DSi-mode firmware (used for DS-mode backwards compatibility)&lt;/p&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;p&gt;Size should be 128 KB&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-         </property>
-        </widget>
-       </item>
-       <item row="14" column="0">
-        <widget class="QCheckBox" name="cbDSiSDFolder">
-         <property name="whatsThis">
-          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Sync the emulated SD card to the given folder. The folder's contents will be copied to the SD image, and any change made to the SD image will be reflected to the folder.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-         </property>
-         <property name="text">
-          <string>Sync SD to folder:</string>
-         </property>
-        </widget>
-       </item>
-       <item row="4" column="1">
-        <widget class="QPathInput" name="txtDSiNANDPath">
-         <property name="whatsThis">
-          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;DSi NAND dump&lt;/p&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;p&gt;Should have 'nocash footer' at the end&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-         </property>
-        </widget>
-       </item>
-       <item row="7" column="0" colspan="3">
-        <widget class="QLabel" name="label_14">
-         <property name="text">
-          <string/>
-         </property>
-        </widget>
-       </item>
-       <item row="4" column="0">
-        <widget class="QLabel" name="label_8">
-         <property name="text">
-          <string>DSi NAND:</string>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="0" colspan="3">
-        <widget class="QLabel" name="label_15">
-         <property name="text">
-          <string>DSi mode requires external DSi BIOS/firmware/NAND</string>
-         </property>
-        </widget>
-       </item>
-       <item row="5" column="0" colspan="3">
-        <widget class="QCheckBox" name="cbDSiFullBIOSBoot">
-         <property name="whatsThis">
-          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Boot the system from scratch by running the full boot ROMs, instead of starting with the second-stage loader. Requires a full BIOS/bootROM dump.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-         </property>
-         <property name="text">
-          <string>Full BIOS boot</string>
-         </property>
-        </widget>
-       </item>
-       <item row="2" column="1">
+       <item row="1" column="1">
         <widget class="QPathInput" name="txtDSiBIOS7Path">
          <property name="whatsThis">
           <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;DSi-mode ARM7 BIOS&lt;/p&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;p&gt;Size should be 64 KB&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
          </property>
         </widget>
        </item>
-       <item row="12" column="0">
-        <widget class="QLabel" name="label_13">
-         <property name="text">
-          <string>Image size:</string>
-         </property>
-        </widget>
-       </item>
-       <item row="14" column="1">
-        <widget class="QLineEdit" name="txtDSiSDFolder">
-         <property name="whatsThis">
-          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Sync the emulated SD card to the given folder. The folder's contents will be copied to the SD image, and any change made to the SD image will be reflected to the folder.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-         </property>
-        </widget>
-       </item>
-       <item row="3" column="0">
-        <widget class="QLabel" name="label_7">
-         <property name="text">
-          <string>DSi firmware:</string>
-         </property>
-        </widget>
-       </item>
-       <item row="11" column="0">
-        <widget class="QLabel" name="label_10">
-         <property name="text">
-          <string>SD card image:</string>
-         </property>
-        </widget>
-       </item>
-       <item row="2" column="2">
-        <widget class="QPushButton" name="btnDSiBIOS7Browse">
+       <item row="5" column="2">
+        <widget class="QPushButton" name="btnDSiSDBrowse">
          <property name="text">
           <string>Browse...</string>
          </property>
         </widget>
        </item>
-       <item row="1" column="1">
+       <item row="3" column="0">
+        <widget class="QLabel" name="label_8">
+         <property name="text">
+          <string>DSi NAND:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="3" column="2">
+        <widget class="QPushButton" name="btnDSiNANDBrowse">
+         <property name="text">
+          <string>Browse...</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="0">
+        <widget class="QLabel" name="label_6">
+         <property name="text">
+          <string>DSi ARM7 BIOS:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="2">
+        <widget class="QPushButton" name="btnDSiFirmwareBrowse">
+         <property name="text">
+          <string>Browse...</string>
+         </property>
+        </widget>
+       </item>
+       <item row="3" column="1">
+        <widget class="QPathInput" name="txtDSiNANDPath">
+         <property name="whatsThis">
+          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;DSi NAND dump&lt;/p&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;p&gt;Should have 'nocash footer' at the end&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="2">
+        <widget class="QPushButton" name="btnDSiBIOS9Browse">
+         <property name="text">
+          <string>Browse...</string>
+         </property>
+        </widget>
+       </item>
+       <item row="5" column="0">
+        <widget class="QLabel" name="label_10">
+         <property name="text">
+          <string>DSi SD card:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="1">
         <widget class="QPathInput" name="txtDSiBIOS9Path">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
@@ -354,62 +272,48 @@
          </property>
         </widget>
        </item>
-       <item row="1" column="2">
-        <widget class="QPushButton" name="btnDSiBIOS9Browse">
-         <property name="text">
-          <string>Browse...</string>
-         </property>
-        </widget>
-       </item>
-       <item row="11" column="2">
-        <widget class="QPushButton" name="btnDSiSDBrowse">
-         <property name="text">
-          <string>Browse...</string>
-         </property>
-        </widget>
-       </item>
        <item row="2" column="0">
-        <widget class="QLabel" name="label_6">
+        <widget class="QLabel" name="label_7">
          <property name="text">
-          <string>DSi ARM7 BIOS:</string>
+          <string>DSi firmware:</string>
          </property>
         </widget>
        </item>
-       <item row="3" column="2">
-        <widget class="QPushButton" name="btnDSiFirmwareBrowse">
-         <property name="text">
-          <string>Browse...</string>
-         </property>
-        </widget>
-       </item>
-       <item row="13" column="0">
-        <widget class="QCheckBox" name="cbDSiSDReadOnly">
-         <property name="whatsThis">
-          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Make the emulated SD card read-only.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-         </property>
-         <property name="text">
-          <string>Read-only SD</string>
-         </property>
-        </widget>
-       </item>
-       <item row="1" column="0">
+       <item row="0" column="0">
         <widget class="QLabel" name="label_5">
          <property name="text">
           <string>DSi ARM9 BIOS:</string>
          </property>
         </widget>
        </item>
-       <item row="9" column="0" colspan="2">
-        <widget class="QLabel" name="label_20">
-         <property name="text">
-          <string/>
+       <item row="2" column="1">
+        <widget class="QPathInput" name="txtDSiFirmwarePath">
+         <property name="whatsThis">
+          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;DSi-mode firmware (used for DS-mode backwards compatibility)&lt;/p&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;p&gt;Size should be 128 KB&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
          </property>
         </widget>
        </item>
-       <item row="8" column="0" colspan="2">
-        <widget class="QCheckBox" name="cbDSPHLE">
+       <item row="5" column="1">
+        <widget class="QPathInput" name="txtDSiSDPath">
+         <property name="whatsThis">
+          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;SD image file for emulating the DSi's SD card&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+         </property>
+        </widget>
+       </item>
+       <item row="4" column="0" colspan="3">
+        <widget class="QCheckBox" name="cbDSiSDEnable">
+         <property name="whatsThis">
+          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Simulate a SD card being inserted in the DSi's SD slot. Requires a SD card image.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+         </property>
          <property name="text">
-          <string>DSP HLE</string>
+          <string>Enable DSi SD card</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="2">
+        <widget class="QPushButton" name="btnDSiBIOS7Browse">
+         <property name="text">
+          <string>Browse...</string>
          </property>
         </widget>
        </item>
@@ -450,28 +354,28 @@
        <item row="2" column="0">
         <widget class="QCheckBox" name="chkJITBranchOptimisations">
          <property name="text">
-          <string>Branch optimisations</string>
+          <string>Branch Optimisations</string>
          </property>
         </widget>
        </item>
        <item row="3" column="0">
         <widget class="QCheckBox" name="chkJITLiteralOptimisations">
          <property name="text">
-          <string>Literal optimisations</string>
+          <string>Literal Optimisations</string>
          </property>
         </widget>
        </item>
        <item row="4" column="0">
         <widget class="QCheckBox" name="chkJITFastMemory">
          <property name="text">
-          <string>Fast memory</string>
+          <string>Fast Memory</string>
          </property>
         </widget>
        </item>
        <item row="5" column="0">
         <spacer name="verticalSpacer">
          <property name="orientation">
-          <enum>Qt::Orientation::Vertical</enum>
+          <enum>Qt::Vertical</enum>
          </property>
          <property name="sizeHint" stdset="0">
           <size>
@@ -488,6 +392,16 @@
        <string>DLDI</string>
       </attribute>
       <layout class="QGridLayout" name="gridLayout_4">
+       <item row="0" column="0" colspan="3">
+        <widget class="QCheckBox" name="cbDLDIEnable">
+         <property name="whatsThis">
+          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Enable the built-in DLDI driver, to let homebrew access files from a given SD image.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+         </property>
+         <property name="text">
+          <string>Enable DLDI (for homebrew)</string>
+         </property>
+        </widget>
+       </item>
        <item row="1" column="2">
         <widget class="QPushButton" name="btnDLDISDBrowse">
          <property name="text">
@@ -495,109 +409,20 @@
          </property>
         </widget>
        </item>
-       <item row="4" column="2">
-        <widget class="QPushButton" name="btnDLDIFolderBrowse">
-         <property name="text">
-          <string>Browse...</string>
-         </property>
-        </widget>
-       </item>
-       <item row="4" column="1">
-        <widget class="QLineEdit" name="txtDLDIFolder">
-         <property name="whatsThis">
-          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Sync the emulated SD card to the given folder. The folder's contents will be copied to the SD image, and any change made to the SD image will be reflected to the folder.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-         </property>
-        </widget>
-       </item>
-       <item row="2" column="0">
-        <widget class="QLabel" name="label_12">
-         <property name="text">
-          <string>Image size:</string>
-         </property>
-        </widget>
-       </item>
-       <item row="4" column="0">
-        <widget class="QCheckBox" name="cbDLDIFolder">
-         <property name="whatsThis">
-          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Sync the emulated SD card to the given folder. The folder's contents will be copied to the SD image, and any change made to the SD image will be reflected to the folder.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-         </property>
-         <property name="text">
-          <string>Sync SD to folder:</string>
-         </property>
-        </widget>
-       </item>
-       <item row="2" column="1">
-        <widget class="QComboBox" name="cbxDLDISize">
-         <property name="whatsThis">
-          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Size of the SD image.&lt;/p&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;p&gt;If set to Auto:&lt;/p&gt;&lt;p&gt;* if an image file exists, the volume size will be that of the image file&lt;/p&gt;&lt;p&gt;* if no image file exists and folder sync is enabled, the volume size will be determined from the synced folder's contents&lt;/p&gt;&lt;p&gt;* otherwise, the volume size will default to 512 MB&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="0" colspan="3">
-        <widget class="QCheckBox" name="cbDLDIEnable">
-         <property name="whatsThis">
-          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Enable the built-in DLDI driver, to let homebrew access files from an emulated SD card.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-         </property>
-         <property name="text">
-          <string>Enable DLDI (for homebrew)</string>
-         </property>
-        </widget>
-       </item>
        <item row="1" column="1">
-        <widget class="QPathInput" name="txtDLDISDPath">
-         <property name="whatsThis">
-          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;SD card image file to be used for DLDI. A blank image file will be created if it doesn't already exist.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-         </property>
-        </widget>
-       </item>
-       <item row="5" column="0">
-        <spacer name="verticalSpacer_3">
-         <property name="orientation">
-          <enum>Qt::Orientation::Vertical</enum>
-         </property>
-         <property name="sizeHint" stdset="0">
-          <size>
-           <width>20</width>
-           <height>40</height>
-          </size>
-         </property>
-        </spacer>
+        <widget class="QPathInput" name="txtDLDISDPath"/>
        </item>
        <item row="1" column="0">
         <widget class="QLabel" name="label_11">
          <property name="text">
-          <string>SD card image:</string>
+          <string>DLDI SD card:</string>
          </property>
         </widget>
        </item>
-       <item row="3" column="0" colspan="3">
-        <widget class="QCheckBox" name="cbDLDIReadOnly">
-         <property name="whatsThis">
-          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Make the emulated SD card read-only.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-         </property>
-         <property name="text">
-          <string>Read-only SD</string>
-         </property>
-        </widget>
-       </item>
-      </layout>
-     </widget>
-     <widget class="QWidget" name="tab_6">
-      <attribute name="title">
-       <string>Devtools</string>
-      </attribute>
-      <layout class="QGridLayout" name="gridLayout_3">
-       <item row="1" column="0">
-        <widget class="QLabel" name="label_16">
-         <property name="text">
-          <string>ARM9 port</string>
-         </property>
-        </widget>
-       </item>
-       <item row="5" column="0">
-        <spacer name="verticalSpacer_4">
+       <item row="2" column="0">
+        <spacer name="verticalSpacer_3">
          <property name="orientation">
-          <enum>Qt::Orientation::Vertical</enum>
+          <enum>Qt::Vertical</enum>
          </property>
          <property name="sizeHint" stdset="0">
           <size>
@@ -606,74 +431,6 @@
           </size>
          </property>
         </spacer>
-       </item>
-       <item row="2" column="0">
-        <widget class="QLabel" name="label_17">
-         <property name="text">
-          <string>ARM7 port</string>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="0" colspan="3">
-        <widget class="QCheckBox" name="cbGdbEnabled">
-         <property name="text">
-          <string>Enable GDB stub</string>
-         </property>
-        </widget>
-       </item>
-       <item row="4" column="0" colspan="7">
-        <widget class="QLabel" name="label_18">
-         <property name="text">
-          <string>Note: melonDS must be restarted in order for these changes to have effect</string>
-         </property>
-        </widget>
-       </item>
-       <item row="3" column="0" colspan="7">
-        <widget class="QLabel" name="label_19">
-         <property name="text">
-          <string>Note: GDB stub cannot be used together with the JIT recompiler</string>
-         </property>
-        </widget>
-       </item>
-       <item row="1" column="6">
-        <widget class="QCheckBox" name="cbGdbBOSA9">
-         <property name="text">
-          <string>Break on startup</string>
-         </property>
-        </widget>
-       </item>
-       <item row="1" column="1" colspan="5">
-        <widget class="QSpinBox" name="intGdbPortA9">
-         <property name="minimum">
-          <number>1000</number>
-         </property>
-         <property name="maximum">
-          <number>65535</number>
-         </property>
-         <property name="value">
-          <number>3333</number>
-         </property>
-        </widget>
-       </item>
-       <item row="2" column="1" colspan="5">
-        <widget class="QSpinBox" name="intGdbPortA7">
-         <property name="minimum">
-          <number>1000</number>
-         </property>
-         <property name="maximum">
-          <number>65535</number>
-         </property>
-         <property name="value">
-          <number>3334</number>
-         </property>
-        </widget>
-       </item>
-       <item row="2" column="6">
-        <widget class="QCheckBox" name="cbGdbBOSA7">
-         <property name="text">
-          <string>Break on startup</string>
-         </property>
-        </widget>
        </item>
       </layout>
      </widget>
@@ -682,10 +439,10 @@
    <item>
     <widget class="QDialogButtonBox" name="buttonBox">
      <property name="orientation">
-      <enum>Qt::Orientation::Horizontal</enum>
+      <enum>Qt::Horizontal</enum>
      </property>
      <property name="standardButtons">
-      <set>QDialogButtonBox::StandardButton::Cancel|QDialogButtonBox::StandardButton::Ok</set>
+      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
      </property>
     </widget>
    </item>
@@ -701,42 +458,8 @@
  <tabstops>
   <tabstop>cbxConsoleType</tabstop>
   <tabstop>chkDirectBoot</tabstop>
-  <tabstop>chkExternalBIOS</tabstop>
-  <tabstop>txtBIOS9Path</tabstop>
-  <tabstop>btnBIOS9Browse</tabstop>
-  <tabstop>txtBIOS7Path</tabstop>
-  <tabstop>btnBIOS7Browse</tabstop>
-  <tabstop>txtFirmwarePath</tabstop>
-  <tabstop>btnFirmwareBrowse</tabstop>
-  <tabstop>txtDSiBIOS9Path</tabstop>
-  <tabstop>btnDSiBIOS9Browse</tabstop>
-  <tabstop>txtDSiBIOS7Path</tabstop>
-  <tabstop>btnDSiBIOS7Browse</tabstop>
-  <tabstop>txtDSiFirmwarePath</tabstop>
-  <tabstop>btnDSiFirmwareBrowse</tabstop>
-  <tabstop>txtDSiNANDPath</tabstop>
-  <tabstop>btnDSiNANDBrowse</tabstop>
-  <tabstop>cbDSiSDEnable</tabstop>
-  <tabstop>txtDSiSDPath</tabstop>
-  <tabstop>btnDSiSDBrowse</tabstop>
-  <tabstop>cbxDSiSDSize</tabstop>
-  <tabstop>cbDSiSDReadOnly</tabstop>
-  <tabstop>cbDSiSDFolder</tabstop>
-  <tabstop>txtDSiSDFolder</tabstop>
-  <tabstop>btnDSiSDFolderBrowse</tabstop>
   <tabstop>chkEnableJIT</tabstop>
   <tabstop>spnJITMaximumBlockSize</tabstop>
-  <tabstop>chkJITBranchOptimisations</tabstop>
-  <tabstop>chkJITLiteralOptimisations</tabstop>
-  <tabstop>chkJITFastMemory</tabstop>
-  <tabstop>cbDLDIEnable</tabstop>
-  <tabstop>txtDLDISDPath</tabstop>
-  <tabstop>btnDLDISDBrowse</tabstop>
-  <tabstop>cbxDLDISize</tabstop>
-  <tabstop>cbDLDIReadOnly</tabstop>
-  <tabstop>cbDLDIFolder</tabstop>
-  <tabstop>txtDLDIFolder</tabstop>
-  <tabstop>btnDLDIFolderBrowse</tabstop>
  </tabstops>
  <resources/>
  <connections>
@@ -747,8 +470,8 @@
    <slot>accept()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>266</x>
-     <y>379</y>
+     <x>257</x>
+     <y>349</y>
     </hint>
     <hint type="destinationlabel">
      <x>157</x>
@@ -763,8 +486,8 @@
    <slot>reject()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>334</x>
-     <y>379</y>
+     <x>325</x>
+     <y>349</y>
     </hint>
     <hint type="destinationlabel">
      <x>286</x>

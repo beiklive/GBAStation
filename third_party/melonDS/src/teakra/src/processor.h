@@ -13,7 +13,6 @@ public:
     Processor(CoreTiming& core_timing, MemoryInterface& memory_interface);
     ~Processor();
     void Reset();
-    void DoSavestate(melonDS::Savestate* file);
     void Run(unsigned cycles);
     void SignalInterrupt(u32 i);
     void SignalVectoredInterrupt(u32 address, bool context_switch);

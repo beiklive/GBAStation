@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2025 melonDS team
+    Copyright 2016-2021 Arisotura
 
     This file is part of melonDS.
 
@@ -26,7 +26,6 @@ uniform vec2 uScreenSize;
 uniform ivec2 uOSDPos;
 uniform ivec2 uOSDSize;
 uniform float uScaleFactor;
-uniform float uTexScale;
 
 in vec2 vPosition;
 
@@ -36,8 +35,8 @@ void main()
 {
     vec4 fpos;
 
-    vec2 osdpos = (vPosition * vec2(uOSDSize));
-    fTexcoord = osdpos * uTexScale;
+    vec2 osdpos = (vPosition * vec2(uOSDSize * uScaleFactor));
+    fTexcoord = osdpos;
     osdpos += uOSDPos;
 
     fpos.xy = ((osdpos * 2.0) / uScreenSize * uScaleFactor) - 1.0;

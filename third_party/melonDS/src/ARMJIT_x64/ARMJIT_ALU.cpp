@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2025 melonDS team
+    Copyright 2016-2021 Arisotura, RSDuck
 
     This file is part of melonDS.
 
@@ -17,11 +17,10 @@
 */
 
 #include "ARMJIT_Compiler.h"
-#include "../ARM.h"
 
 using namespace Gen;
 
-namespace melonDS
+namespace ARMJIT
 {
 
 // uses RSCRATCH3
@@ -129,7 +128,7 @@ OpArg Compiler::A_Comp_GetALUOp2(bool S, bool& carryUsed)
         Comp_AddCycles_C();
 
         u32 shift = (CurInstr.Instr >> 7) & 0x1E;
-        u32 imm = melonDS::ROR(CurInstr.Instr & 0xFF, shift);
+        u32 imm = ::ROR(CurInstr.Instr & 0xFF, shift);
 
         carryUsed = false;
         if (S && shift)
@@ -228,7 +227,7 @@ void Compiler::A_Comp_Arith()
         Comp_ArithTriOp(&Compiler::AND, rd, rn, op2, carryUsed, sFlag|opSymmetric|opInvertOp2);
         break;
     default:
-        Log(LogLevel::Error, "this is a JIT bug! %04x\n", op);
+        printf("this is a JIT bug! %04x\n", op);
         abort();
     }
 
@@ -365,7 +364,7 @@ void Compiler::A_Comp_Mul_Long()
         {
             BSR(32, RSCRATCH, R(RSCRATCH3));
         }
-
+        
         SHR(32, R(RSCRATCH), Imm8(3));
         SetJumpTarget(zeroBSR); // fortunately that's even right
         Comp_AddCycles_CI(RSCRATCH, 2);
@@ -618,7 +617,7 @@ void Compiler::T_Comp_AddSub_()
     int op = (CurInstr.Instr >> 9) & 0x3;
 
     OpArg rn = op >= 2 ? Imm32((CurInstr.Instr >> 6) & 0x7) : MapReg(CurInstr.T_Reg(6));
-
+    
     Comp_AddCycles_C();
 
     // special case for thumb mov being alias to add rd, rn, #0

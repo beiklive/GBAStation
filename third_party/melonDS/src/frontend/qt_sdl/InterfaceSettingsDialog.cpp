@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2025 melonDS team
+    Copyright 2016-2021 Arisotura, WaluigiWare64
 
     This file is part of melonDS.
 
@@ -16,45 +16,25 @@
     with melonDS. If not, see http://www.gnu.org/licenses/.
 */
 
-#include <QStyleFactory>
 #include "InterfaceSettingsDialog.h"
 #include "ui_InterfaceSettingsDialog.h"
 
 #include "types.h"
 #include "Platform.h"
 #include "Config.h"
-#include "main.h"
+#include "PlatformConfig.h"
 
 InterfaceSettingsDialog* InterfaceSettingsDialog::currentDlg = nullptr;
+
 InterfaceSettingsDialog::InterfaceSettingsDialog(QWidget* parent) : QDialog(parent), ui(new Ui::InterfaceSettingsDialog)
 {
     ui->setupUi(this);
     setAttribute(Qt::WA_DeleteOnClose);
 
-    emuInstance = ((MainWindow*)parent)->getEmuInstance();
-
-    auto& cfg = emuInstance->getGlobalConfig();
-
-    ui->cbMouseHide->setChecked(cfg.GetBool("Mouse.Hide"));
-    ui->spinMouseHideSeconds->setEnabled(ui->cbMouseHide->isChecked());
-    ui->spinMouseHideSeconds->setValue(cfg.GetInt("Mouse.HideSeconds"));
-    ui->cbPauseLostFocus->setChecked(cfg.GetBool("PauseLostFocus"));
-    ui->spinTargetFPS->setValue(cfg.GetDouble("TargetFPS"));
-    ui->spinFFW->setValue(cfg.GetDouble("FastForwardFPS"));
-    ui->spinSlow->setValue(cfg.GetDouble("SlowmoFPS"));
-
-    const QList<QString> themeKeys = QStyleFactory::keys();
-    const QString currentTheme = qApp->style()->objectName();
-    QString cfgTheme = cfg.GetQString("UITheme");
-
-    ui->cbxUITheme->addItem("System default", "");
-
-    for (int i = 0; i < themeKeys.length(); i++)
-    {
-        ui->cbxUITheme->addItem(themeKeys[i], themeKeys[i]);
-        if (!cfgTheme.isEmpty() && themeKeys[i].compare(currentTheme, Qt::CaseInsensitive) == 0)
-            ui->cbxUITheme->setCurrentIndex(i + 1);
-    }
+    ui->cbMouseHide->setChecked(Config::MouseHide != 0);
+    ui->spinMouseHideSeconds->setEnabled(Config::MouseHide != 0);
+    ui->spinMouseHideSeconds->setValue(Config::MouseHideSeconds);
+    ui->cbPauseLostFocus->setChecked(Config::PauseLostFocus != 0);
 }
 
 InterfaceSettingsDialog::~InterfaceSettingsDialog()
@@ -64,84 +44,27 @@ InterfaceSettingsDialog::~InterfaceSettingsDialog()
 
 void InterfaceSettingsDialog::on_cbMouseHide_clicked()
 {
-    ui->spinMouseHideSeconds->setEnabled(ui->cbMouseHide->isChecked());
-}
-
-void InterfaceSettingsDialog::on_pbClean_clicked()
-{
-    ui->spinTargetFPS->setValue(60.0000);
-}
-
-void InterfaceSettingsDialog::on_pbAccurate_clicked()
-{
-    ui->spinTargetFPS->setValue(59.8261);
-}
-
-void InterfaceSettingsDialog::on_pb2x_clicked()
-{
-    ui->spinFFW->setValue(ui->spinTargetFPS->value() * 2.0);
-}
-
-void InterfaceSettingsDialog::on_pb3x_clicked()
-{
-    ui->spinFFW->setValue(ui->spinTargetFPS->value() * 3.0);
-}
-
-void InterfaceSettingsDialog::on_pbMAX_clicked()
-{
-    ui->spinFFW->setValue(1000.0);
-}
-
-void InterfaceSettingsDialog::on_pbHalf_clicked()
-{
-    ui->spinSlow->setValue(ui->spinTargetFPS->value() / 2.0);
-}
-
-void InterfaceSettingsDialog::on_pbQuarter_clicked()
-{
-    ui->spinSlow->setValue(ui->spinTargetFPS->value() / 4.0);
+    if (ui->spinMouseHideSeconds->isEnabled())
+    {
+        ui->spinMouseHideSeconds->setEnabled(false);
+    }
+    else
+    {
+        ui->spinMouseHideSeconds->setEnabled(true);
+    }
 }
 
 void InterfaceSettingsDialog::done(int r)
 {
-    if (!((MainWindow*)parent())->getEmuInstance())
-    {
-        QDialog::done(r);
-        closeDlg();
-        return;
-    }
-
     if (r == QDialog::Accepted)
     {
-        auto& cfg = emuInstance->getGlobalConfig();
-
-        cfg.SetBool("Mouse.Hide", ui->cbMouseHide->isChecked());
-        cfg.SetInt("Mouse.HideSeconds", ui->spinMouseHideSeconds->value());
-        cfg.SetBool("PauseLostFocus", ui->cbPauseLostFocus->isChecked());
-
-        double val = ui->spinTargetFPS->value();
-        if (val == 0.0) cfg.SetDouble("TargetFPS", 0.0001);
-        else cfg.SetDouble("TargetFPS", val);
-        
-        val = ui->spinFFW->value();
-        if (val == 0.0) cfg.SetDouble("FastForwardFPS", 0.0001);
-        else cfg.SetDouble("FastForwardFPS", val);
-        
-        val = ui->spinSlow->value();
-        if (val == 0.0) cfg.SetDouble("SlowmoFPS", 0.0001);
-        else cfg.SetDouble("SlowmoFPS", val);
-
-        QString themeName = ui->cbxUITheme->currentData().toString();
-        cfg.SetQString("UITheme", themeName);
+        Config::MouseHide = ui->cbMouseHide->isChecked() ? 1:0;
+        Config::MouseHideSeconds = ui->spinMouseHideSeconds->value();
+        Config::PauseLostFocus = ui->cbPauseLostFocus->isChecked() ? 1:0;
 
         Config::Save();
 
-        if (!themeName.isEmpty())
-            qApp->setStyle(themeName);
-        else
-            qApp->setStyle(*systemThemeName);
-
-        emit updateInterfaceSettings();
+        emit updateMouseTimer();
     }
 
     QDialog::done(r);

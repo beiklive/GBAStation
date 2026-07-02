@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2025 melonDS team
+    Copyright 2016-2021 Arisotura, WaluigiWare64
 
     This file is part of melonDS.
 
@@ -34,12 +34,10 @@
 
 namespace Archive
 {
-
-using namespace melonDS;
-QVector<QString> ListArchive(QString path);
-s32 ExtractFileFromArchive(QString path, QString wantedFile, std::unique_ptr<u8[]>& filedata, u32* filesize);
-//QVector<QString> ExtractFileFromArchive(QString path, QString wantedFile, QByteArray *romBuffer);
-//u32 ExtractFileFromArchive(const char* path, const char* wantedFile, u8 **romdata);
+    
+QVector<QString> ListArchive(const char* path);
+QVector<QString> ExtractFileFromArchive(const char* path, const char* wantedFile, QByteArray *romBuffer);
+u32 ExtractFileFromArchive(const char* path, const char* wantedFile, u8 **romdata);
 
 }
 

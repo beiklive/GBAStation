@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2025 melonDS team
+    Copyright 2016-2021 Arisotura, RSDuck
 
     This file is part of melonDS.
 
@@ -17,7 +17,7 @@
 */
 
 #include "ARMJIT.h"
-#include "ARMJIT_Memory.h"
+
 #include <string.h>
 #include <assert.h>
 #include <unordered_map>
@@ -25,12 +25,11 @@
 #define XXH_STATIC_LINKING_ONLY
 #include "xxhash/xxhash.h"
 
-#include "Platform.h"
+#include "Config.h"
 
 #include "ARMJIT_Internal.h"
 #include "ARMJIT_Memory.h"
 #include "ARMJIT_Compiler.h"
-#include "ARMJIT_Global.h"
 
 #include "ARMInterpreter_ALU.h"
 #include "ARMInterpreter_LoadStore.h"
@@ -43,52 +42,131 @@
 #include "SPU.h"
 #include "Wifi.h"
 #include "NDSCart.h"
-#include "Platform.h"
+
+
 #include "ARMJIT_x64/ARMJIT_Offsets.h"
-
-namespace melonDS
-{
-using Platform::Log;
-using Platform::LogLevel;
-
 static_assert(offsetof(ARM, CPSR) == ARM_CPSR_offset, "");
 static_assert(offsetof(ARM, Cycles) == ARM_Cycles_offset, "");
 static_assert(offsetof(ARM, StopExecution) == ARM_StopExecution_offset, "");
 
+namespace ARMJIT
+{
 
 #define JIT_DEBUGPRINT(msg, ...)
-//#define JIT_DEBUGPRINT(msg, ...) Platform::Log(Platform::LogLevel::Debug, msg, ## __VA_ARGS__)
+//#define JIT_DEBUGPRINT(msg, ...) printf(msg, ## __VA_ARGS__)
+
+Compiler* JITCompiler;
+
+
+std::unordered_map<u32, JitBlock*> JitBlocks9;
+std::unordered_map<u32, JitBlock*> JitBlocks7;
+
+std::unordered_map<u32, JitBlock*> RestoreCandidates;
+
+TinyVector<u32> InvalidLiterals;
+
+AddressRange CodeIndexITCM[ITCMPhysicalSize / 512];
+AddressRange CodeIndexMainRAM[NDS::MainRAMMaxSize / 512];
+AddressRange CodeIndexSWRAM[NDS::SharedWRAMSize / 512];
+AddressRange CodeIndexVRAM[0x100000 / 512];
+AddressRange CodeIndexARM9BIOS[sizeof(NDS::ARM9BIOS) / 512];
+AddressRange CodeIndexARM7BIOS[sizeof(NDS::ARM7BIOS) / 512];
+AddressRange CodeIndexARM7WRAM[NDS::ARM7WRAMSize / 512];
+AddressRange CodeIndexARM7WVRAM[0x40000 / 512];
+AddressRange CodeIndexBIOS9DSi[0x10000 / 512];
+AddressRange CodeIndexBIOS7DSi[0x10000 / 512];
+AddressRange CodeIndexNWRAM_A[DSi::NWRAMSize / 512];
+AddressRange CodeIndexNWRAM_B[DSi::NWRAMSize / 512];
+AddressRange CodeIndexNWRAM_C[DSi::NWRAMSize / 512];
+
+u64 FastBlockLookupITCM[ITCMPhysicalSize / 2];
+u64 FastBlockLookupMainRAM[NDS::MainRAMMaxSize / 2];
+u64 FastBlockLookupSWRAM[NDS::SharedWRAMSize / 2];
+u64 FastBlockLookupVRAM[0x100000 / 2];
+u64 FastBlockLookupARM9BIOS[sizeof(NDS::ARM9BIOS) / 2];
+u64 FastBlockLookupARM7BIOS[sizeof(NDS::ARM7BIOS) / 2];
+u64 FastBlockLookupARM7WRAM[NDS::ARM7WRAMSize / 2];
+u64 FastBlockLookupARM7WVRAM[0x40000 / 2];
+u64 FastBlockLookupBIOS9DSi[0x10000 / 2];
+u64 FastBlockLookupBIOS7DSi[0x10000 / 2];
+u64 FastBlockLookupNWRAM_A[DSi::NWRAMSize / 2];
+u64 FastBlockLookupNWRAM_B[DSi::NWRAMSize / 2];
+u64 FastBlockLookupNWRAM_C[DSi::NWRAMSize / 2];
 
 const u32 CodeRegionSizes[ARMJIT_Memory::memregions_Count] =
 {
     0,
     ITCMPhysicalSize,
     0,
-    ARM9BIOSSize,
-    MainRAMMaxSize,
-    SharedWRAMSize,
+    sizeof(NDS::ARM9BIOS),
+    NDS::MainRAMMaxSize,
+    NDS::SharedWRAMSize,
     0,
     0x100000,
-    ARM7BIOSSize,
-    ARM7WRAMSize,
+    sizeof(NDS::ARM7BIOS),
+    NDS::ARM7WRAMSize,
     0,
     0,
     0x40000,
     0x10000,
     0x10000,
-    NWRAMSize,
-    NWRAMSize,
-    NWRAMSize,
+    DSi::NWRAMSize,
+    DSi::NWRAMSize,
+    DSi::NWRAMSize,
 };
 
-u32 ARMJIT::LocaliseCodeAddress(u32 num, u32 addr) const noexcept
+AddressRange* const CodeMemRegions[ARMJIT_Memory::memregions_Count] =
+{
+    NULL,
+    CodeIndexITCM,
+    NULL,
+    CodeIndexARM9BIOS,
+    CodeIndexMainRAM,
+    CodeIndexSWRAM,
+    NULL,
+    CodeIndexVRAM,
+    CodeIndexARM7BIOS,
+    CodeIndexARM7WRAM,
+    NULL,
+    NULL,
+    CodeIndexARM7WVRAM,
+    CodeIndexBIOS9DSi,
+    CodeIndexBIOS7DSi,
+    CodeIndexNWRAM_A,
+    CodeIndexNWRAM_B,
+    CodeIndexNWRAM_C
+};
+
+u64* const FastBlockLookupRegions[ARMJIT_Memory::memregions_Count] =
+{
+    NULL,
+    FastBlockLookupITCM,
+    NULL,
+    FastBlockLookupARM9BIOS,
+    FastBlockLookupMainRAM,
+    FastBlockLookupSWRAM,
+    NULL,
+    FastBlockLookupVRAM,
+    FastBlockLookupARM7BIOS,
+    FastBlockLookupARM7WRAM,
+    NULL,
+    NULL,
+    FastBlockLookupARM7WVRAM,
+    FastBlockLookupBIOS9DSi,
+    FastBlockLookupBIOS7DSi,
+    FastBlockLookupNWRAM_A,
+    FastBlockLookupNWRAM_B,
+    FastBlockLookupNWRAM_C
+};
+
+u32 LocaliseCodeAddress(u32 num, u32 addr)
 {
     int region = num == 0
-        ? Memory.ClassifyAddress9(addr)
-        : Memory.ClassifyAddress7(addr);
+        ? ARMJIT_Memory::ClassifyAddress9(addr)
+        : ARMJIT_Memory::ClassifyAddress7(addr);
 
     if (CodeMemRegions[region])
-        return Memory.LocaliseAddress(region, num, addr);
+        return ARMJIT_Memory::LocaliseAddress(region, num, addr);
     return 0;
 }
 
@@ -101,34 +179,14 @@ T SlowRead9(u32 addr, ARMv5* cpu)
     T val;
     if (addr < cpu->ITCMSize)
         val = *(T*)&cpu->ITCM[addr & 0x7FFF];
-    else if ((addr & cpu->DTCMMask) == cpu->DTCMBase)
-        val = *(T*)&cpu->DTCM[addr & 0x3FFF];
+    else if (addr >= cpu->DTCMBase && addr < (cpu->DTCMBase + cpu->DTCMSize))
+        val = *(T*)&cpu->DTCM[(addr - cpu->DTCMBase) & 0x3FFF];
     else if (std::is_same<T, u32>::value)
-        val = NDS::Current->ARM9Read32(addr);
+        val = (ConsoleType == 0 ? NDS::ARM9Read32 : DSi::ARM9Read32)(addr);
     else if (std::is_same<T, u16>::value)
-        val = NDS::Current->ARM9Read16(addr);
+        val = (ConsoleType == 0 ? NDS::ARM9Read16 : DSi::ARM9Read16)(addr);
     else
-        val = NDS::Current->ARM9Read8(addr);
-
-    if (std::is_same<T, u32>::value)
-        return ROR(val, offset << 3);
-    else
-        return val;
-}
-
-template <typename T, int ConsoleType>
-T SlowRead7(u32 addr)
-{
-    u32 offset = addr & 0x3;
-    addr &= ~(sizeof(T) - 1);
-
-    T val;
-    if (std::is_same<T, u32>::value)
-        val = NDS::Current->ARM7Read32(addr);
-    else if (std::is_same<T, u16>::value)
-        val = NDS::Current->ARM7Read16(addr);
-    else
-        val = NDS::Current->ARM7Read8(addr);
+        val = (ConsoleType == 0 ? NDS::ARM9Read8 : DSi::ARM9Read8)(addr);
 
     if (std::is_same<T, u32>::value)
         return ROR(val, offset << 3);
@@ -143,25 +201,45 @@ void SlowWrite9(u32 addr, ARMv5* cpu, u32 val)
 
     if (addr < cpu->ITCMSize)
     {
-        cpu->NDS.JIT.CheckAndInvalidate<0, ARMJIT_Memory::memregion_ITCM>(addr);
+        CheckAndInvalidate<0, ARMJIT_Memory::memregion_ITCM>(addr);
         *(T*)&cpu->ITCM[addr & 0x7FFF] = val;
     }
-    else if ((addr & cpu->DTCMMask) == cpu->DTCMBase)
+    else if (addr >= cpu->DTCMBase && addr < (cpu->DTCMBase + cpu->DTCMSize))
     {
-        *(T*)&cpu->DTCM[addr & 0x3FFF] = val;
+        *(T*)&cpu->DTCM[(addr - cpu->DTCMBase) & 0x3FFF] = val;
     }
     else if (std::is_same<T, u32>::value)
     {
-        NDS::Current->ARM9Write32(addr, val);
+        (ConsoleType == 0 ? NDS::ARM9Write32 : DSi::ARM9Write32)(addr, val);
     }
     else if (std::is_same<T, u16>::value)
     {
-        NDS::Current->ARM9Write16(addr, val);
+        (ConsoleType == 0 ? NDS::ARM9Write16 : DSi::ARM9Write16)(addr, val);
     }
     else
     {
-        NDS::Current->ARM9Write8(addr, val);
+        (ConsoleType == 0 ? NDS::ARM9Write8 : DSi::ARM9Write8)(addr, val);
     }
+}
+
+template <typename T, int ConsoleType>
+T SlowRead7(u32 addr)
+{
+    u32 offset = addr & 0x3;
+    addr &= ~(sizeof(T) - 1);
+
+    T val;
+    if (std::is_same<T, u32>::value)
+        val = (ConsoleType == 0 ? NDS::ARM7Read32 : DSi::ARM7Read32)(addr);
+    else if (std::is_same<T, u16>::value)
+        val = (ConsoleType == 0 ? NDS::ARM7Read16 : DSi::ARM7Read16)(addr);
+    else
+        val = (ConsoleType == 0 ? NDS::ARM7Read8 : DSi::ARM7Read8)(addr);
+
+    if (std::is_same<T, u32>::value)
+        return ROR(val, offset << 3);
+    else
+        return val;
 }
 
 template <typename T, int ConsoleType>
@@ -170,11 +248,11 @@ void SlowWrite7(u32 addr, u32 val)
     addr &= ~(sizeof(T) - 1);
 
     if (std::is_same<T, u32>::value)
-        NDS::Current->ARM7Write32(addr, val);
+        (ConsoleType == 0 ? NDS::ARM7Write32 : DSi::ARM7Write32)(addr, val);
     else if (std::is_same<T, u16>::value)
-        NDS::Current->ARM7Write16(addr, val);
+        (ConsoleType == 0 ? NDS::ARM7Write16 : DSi::ARM7Write16)(addr, val);
     else
-        NDS::Current->ARM7Write8(addr, val);
+        (ConsoleType == 0 ? NDS::ARM7Write8 : DSi::ARM7Write8)(addr, val);
 }
 
 template <bool Write, int ConsoleType>
@@ -230,22 +308,28 @@ void SlowBlockTransfer7(u32 addr, u64* data, u32 num)
 INSTANTIATE_SLOWMEM(0)
 INSTANTIATE_SLOWMEM(1)
 
-ARMJIT::~ARMJIT() noexcept
+void Init()
 {
-    JitEnableWrite();
-    ResetBlockCache();
+    JITCompiler = new Compiler();
+
+    ARMJIT_Memory::Init();
 }
 
-void ARMJIT::Reset() noexcept
+void DeInit()
 {
-    Log(LogLevel::Debug, "melonDS: ARMJIT.Reset begin\n");
     JitEnableWrite();
-    Log(LogLevel::Debug, "melonDS: ARMJIT.Reset JitEnableWrite end\n");
     ResetBlockCache();
-    Log(LogLevel::Debug, "melonDS: ARMJIT.Reset ResetBlockCache end\n");
+    ARMJIT_Memory::DeInit();
 
-    Memory.Reset();
-    Log(LogLevel::Debug, "melonDS: ARMJIT.Reset end\n");
+    delete JITCompiler;
+}
+
+void Reset()
+{
+    JitEnableWrite();
+    ResetBlockCache();
+
+    ARMJIT_Memory::Reset();
 }
 
 void FloodFillSetFlags(FetchedInstr instrs[], int start, u8 flags)
@@ -293,7 +377,7 @@ bool DecodeLiteral(bool thumb, const FetchedInstr& instr, u32& addr)
     return false;
 }
 
-bool DecodeBranch(bool thumb, const FetchedInstr& instr, u32& cond, bool hasLink, u32 lr, bool& link,
+bool DecodeBranch(bool thumb, const FetchedInstr& instr, u32& cond, bool hasLink, u32 lr, bool& link, 
     u32& linkAddr, u32& targetAddr)
 {
     if (thumb)
@@ -336,7 +420,7 @@ bool DecodeBranch(bool thumb, const FetchedInstr& instr, u32& cond, bool hasLink
         linkAddr = instr.Addr + 4;
 
         cond = instr.Cond();
-        if (instr.Info.Kind == ARMInstrInfo::ak_BL
+        if (instr.Info.Kind == ARMInstrInfo::ak_BL 
             || instr.Info.Kind == ARMInstrInfo::ak_B)
         {
             s32 offset = (s32)(instr.Instr << 8) >> 6;
@@ -377,7 +461,7 @@ bool IsIdleLoop(bool thumb, FetchedInstr* instrs, int instrsCount)
         u16 dstRegs = instrs[i].Info.DstRegs & ~(1 << 15);
 
         regsDisallowedToWrite |= srcRegs & ~regsWrittenTo;
-
+        
         if (dstRegs & regsDisallowedToWrite)
             return false;
         regsWrittenTo |= dstRegs;
@@ -467,22 +551,12 @@ InterpreterFunc InterpretTHUMB[ARMInstrInfo::tk_Count] =
     F(LDRB_IMM), F(STRH_IMM), F(LDRH_IMM), F(STR_SPREL), F(LDR_SPREL),
     F(PUSH), F(POP), F(LDMIA), F(STMIA),
     F(BCOND), F(BX), F(BLX_REG), F(B), F(BL_LONG_1), F(BL_LONG_2),
-    F(UNK), F(SVC),
+    F(UNK), F(SVC), 
     T_BL_LONG // BL_LONG psudo opcode
 };
 #undef F
 
-ARMJIT::ARMJIT(melonDS::NDS& nds, std::optional<JITArgs> jit) noexcept : 
-        NDS(nds),
-        Memory(nds),
-        JITCompiler(nds),
-        MaxBlockSize(jit.has_value() ? std::clamp(jit->MaxBlockSize, 1u, 32u) : 32),
-        LiteralOptimizations(jit.has_value() ? jit->LiteralOptimizations : false),
-        BranchOptimizations(jit.has_value() ? jit->BranchOptimizations : false),
-        FastMemory((jit.has_value() ? jit->FastMemory : false) && ARMJIT_Memory::IsFastMemSupported())
-{}
-
-void ARMJIT::RetireJitBlock(JitBlock* block) noexcept
+void RetireJitBlock(JitBlock* block)
 {
     auto it = RestoreCandidates.find(block->InstrHash);
     if (it != RestoreCandidates.end())
@@ -496,53 +570,21 @@ void ARMJIT::RetireJitBlock(JitBlock* block) noexcept
     }
 }
 
-void ARMJIT::SetJITArgs(JITArgs args) noexcept
-{
-    args.FastMemory = args.FastMemory && ARMJIT_Memory::IsFastMemSupported();
-    args.MaxBlockSize = std::clamp(args.MaxBlockSize, 1u, 32u);
-
-    if (MaxBlockSize != args.MaxBlockSize
-        || LiteralOptimizations != args.LiteralOptimizations
-        || BranchOptimizations != args.BranchOptimizations
-        || FastMemory != args.FastMemory)
-        ResetBlockCache();
-
-    MaxBlockSize = args.MaxBlockSize;
-    LiteralOptimizations = args.LiteralOptimizations;
-    BranchOptimizations = args.BranchOptimizations;
-    FastMemory = args.FastMemory;
-}
-
-void ARMJIT::SetMaxBlockSize(int size) noexcept
-{
-    SetJITArgs(JITArgs{static_cast<unsigned>(size), LiteralOptimizations, LiteralOptimizations, FastMemory});
-}
-
-void ARMJIT::SetLiteralOptimizations(bool enabled) noexcept
-{
-    SetJITArgs(JITArgs{static_cast<unsigned>(MaxBlockSize), enabled, BranchOptimizations, FastMemory});
-}
-
-void ARMJIT::SetBranchOptimizations(bool enabled) noexcept
-{
-    SetJITArgs(JITArgs{static_cast<unsigned>(MaxBlockSize), LiteralOptimizations, enabled, FastMemory});
-}
-
-void ARMJIT::SetFastMemory(bool enabled) noexcept
-{
-    SetJITArgs(JITArgs{static_cast<unsigned>(MaxBlockSize), LiteralOptimizations, BranchOptimizations, enabled});
-}
-
-void ARMJIT::CompileBlock(ARM* cpu) noexcept
+void CompileBlock(ARM* cpu)
 {
     bool thumb = cpu->CPSR & 0x20;
+
+    if (Config::JIT_MaxBlockSize < 1)
+        Config::JIT_MaxBlockSize = 1;
+    if (Config::JIT_MaxBlockSize > 32)
+        Config::JIT_MaxBlockSize = 32;
 
     u32 blockAddr = cpu->R[15] - (thumb ? 2 : 4);
 
     u32 localAddr = LocaliseCodeAddress(cpu->Num, blockAddr);
     if (!localAddr)
     {
-        Log(LogLevel::Warn, "trying to compile non executable code? %x\n", blockAddr);
+        printf("trying to compile non executable code? %x\n", blockAddr);
     }
 
     auto& map = cpu->Num == 0 ? JitBlocks9 : JitBlocks7;
@@ -560,34 +602,31 @@ void ARMJIT::CompileBlock(ARM* cpu) noexcept
 
             u64* entry = &FastBlockLookupRegions[localAddr >> 27][(localAddr & 0x7FFFFFF) / 2];
             *entry = ((u64)blockAddr | cpu->Num) << 32;
-            *entry |= JITCompiler.SubEntryOffset(existingBlockIt->second->EntryPoint);
+            *entry |= JITCompiler->SubEntryOffset(existingBlockIt->second->EntryPoint);
             return;
         }
 
         // some memory has been remapped
-        RetireJitBlock(existingBlockIt->second);
+        RetireJitBlock(existingBlockIt->second);        
         map.erase(existingBlockIt);
     }
 
-    FetchedInstr instrs[MaxBlockSize];
+    FetchedInstr instrs[Config::JIT_MaxBlockSize];
     int i = 0;
     u32 r15 = cpu->R[15];
 
-    u32 addressRanges[MaxBlockSize];
-    u32 addressMasks[MaxBlockSize];
-    memset(addressMasks, 0, MaxBlockSize * sizeof(u32));
+    u32 addressRanges[Config::JIT_MaxBlockSize];
+    u32 addressMasks[Config::JIT_MaxBlockSize];
+    memset(addressMasks, 0, Config::JIT_MaxBlockSize * sizeof(u32));
     u32 numAddressRanges = 0;
 
     u32 numLiterals = 0;
-    u32 literalLoadAddrs[MaxBlockSize];
+    u32 literalLoadAddrs[Config::JIT_MaxBlockSize];
     // they are going to be hashed
-    u32 literalValues[MaxBlockSize];
-    u32 instrValues[MaxBlockSize];
+    u32 literalValues[Config::JIT_MaxBlockSize];
+    u32 instrValues[Config::JIT_MaxBlockSize];
     // due to instruction merging i might not reflect the amount of actual instructions
     u32 numInstrs = 0;
-
-    u32 writeAddrs[MaxBlockSize];
-    u32 numWriteAddrs = 0, writeAddrsTranslated = 0;
 
     cpu->FillPipeline();
     u32 nextInstr[2] = {cpu->NextInstr[0], cpu->NextInstr[1]};
@@ -661,7 +700,7 @@ void ARMJIT::CompileBlock(ARM* cpu) noexcept
                 nextInstr[1] = cpuv4->CodeRead32(r15);
             instrs[i].CodeCycles = cpu->CodeCycles;
         }
-        instrs[i].Info = ARMInstrInfo::Decode(thumb, cpu->Num, instrs[i].Instr, LiteralOptimizations);
+        instrs[i].Info = ARMInstrInfo::Decode(thumb, cpu->Num, instrs[i].Instr);
 
         hasMemoryInstr |= thumb
             ? (instrs[i].Info.Kind >= ARMInstrInfo::tk_LDR_PCREL && instrs[i].Info.Kind <= ARMInstrInfo::tk_STMIA)
@@ -705,34 +744,30 @@ void ARMJIT::CompileBlock(ARM* cpu) noexcept
         instrs[i].DataRegion = cpu->DataRegion;
 
         u32 literalAddr;
-        if (LiteralOptimizations
+        if (Config::JIT_LiteralOptimisations
             && instrs[i].Info.SpecialKind == ARMInstrInfo::special_LoadLiteral
             && DecodeLiteral(thumb, instrs[i], literalAddr))
         {
             u32 translatedAddr = LocaliseCodeAddress(cpu->Num, literalAddr);
             if (!translatedAddr)
             {
-                Log(LogLevel::Warn,"literal in non executable memory?\n");
+                printf("literal in non executable memory?\n");
             }
-            if (InvalidLiterals.Find(translatedAddr) == -1)
-            {
-                u32 translatedAddrRounded = translatedAddr & ~0x1FF;
+            u32 translatedAddrRounded = translatedAddr & ~0x1FF;
 
-                u32 j = 0;
-                for (; j < numAddressRanges; j++)
-                    if (addressRanges[j] == translatedAddrRounded)
-                        break;
-                if (j == numAddressRanges)
-                    addressRanges[numAddressRanges++] = translatedAddrRounded;
-                addressMasks[j] |= 1 << ((translatedAddr & 0x1FF) / 16);
-                JIT_DEBUGPRINT("literal loading %08x %08x %08x %08x\n", literalAddr, translatedAddr, addressMasks[j], addressRanges[j]);
-                cpu->DataRead32(literalAddr, &literalValues[numLiterals]);
-                literalLoadAddrs[numLiterals++] = translatedAddr;
-            }
+            u32 j = 0;
+            for (; j < numAddressRanges; j++)
+                if (addressRanges[j] == translatedAddrRounded)
+                    break;
+            if (j == numAddressRanges)
+                addressRanges[numAddressRanges++] = translatedAddrRounded;
+            addressMasks[j] |= 1 << ((translatedAddr & 0x1FF) / 16);
+            JIT_DEBUGPRINT("literal loading %08x %08x %08x %08x\n", literalAddr, translatedAddr, addressMasks[j], addressRanges[j]);
+            cpu->DataRead32(literalAddr, &literalValues[numLiterals]);
+            literalLoadAddrs[numLiterals++] = translatedAddr;
         }
-        else if (instrs[i].Info.SpecialKind == ARMInstrInfo::special_WriteMem)
-            writeAddrs[numWriteAddrs++] = instrs[i].DataRegion;
-        else if (thumb && instrs[i].Info.Kind == ARMInstrInfo::tk_BL_LONG_2 && i > 0
+
+        if (thumb && instrs[i].Info.Kind == ARMInstrInfo::tk_BL_LONG_2 && i > 0
             && instrs[i - 1].Info.Kind == ARMInstrInfo::tk_BL_LONG_1)
         {
             i--;
@@ -744,8 +779,7 @@ void ARMJIT::CompileBlock(ARM* cpu) noexcept
             JIT_DEBUGPRINT("merged BL\n");
         }
 
-        if (instrs[i].Info.Branches() && BranchOptimizations
-            && instrs[i].Info.Kind != (thumb ? ARMInstrInfo::tk_SVC : ARMInstrInfo::ak_SVC))
+        if (instrs[i].Info.Branches() && Config::JIT_BranchOptimisations)
         {
             bool hasBranched = cpu->R[15] != r15;
 
@@ -763,7 +797,7 @@ void ARMJIT::CompileBlock(ARM* cpu) noexcept
                 {
                     for (int j = 0; j < i; j++)
                     {
-                        if (instrs[j].Addr == target)
+                        if (instrs[i].Addr == target)
                         {
                             isBackJump = true;
                             break;
@@ -781,14 +815,14 @@ void ARMJIT::CompileBlock(ARM* cpu) noexcept
                         JIT_DEBUGPRINT("found %s idle loop %d in block %08x\n", thumb ? "thumb" : "arm", cpu->Num, blockAddr);
                     }
                 }
-                else if (hasBranched && !isBackJump && i + 1 < MaxBlockSize)
+                else if (hasBranched && !isBackJump && i + 1 < Config::JIT_MaxBlockSize)
                 {
                     if (link)
                     {
                         lr = linkAddr;
                         hasLink = true;
                     }
-
+                    
                     r15 = target + (thumb ? 2 : 4);
                     assert(r15 == cpu->R[15]);
 
@@ -809,9 +843,8 @@ void ARMJIT::CompileBlock(ARM* cpu) noexcept
                 }
             }
 
-            if (!hasBranched && cond < 0xE && i + 1 < MaxBlockSize)
+            if (!hasBranched && cond < 0xE && i + 1 < Config::JIT_MaxBlockSize)
             {
-                JIT_DEBUGPRINT("block lengthened by untaken branch\n");
                 instrs[i].Info.EndBlock = false;
                 instrs[i].BranchFlags |= branch_FollowCondNotTaken;
             }
@@ -819,31 +852,11 @@ void ARMJIT::CompileBlock(ARM* cpu) noexcept
 
         i++;
 
-        bool canCompile = JITCompiler.CanCompile(thumb, instrs[i - 1].Info.Kind);
+        bool canCompile = JITCompiler->CanCompile(thumb, instrs[i - 1].Info.Kind);
         bool secondaryFlagReadCond = !canCompile || (instrs[i - 1].BranchFlags & (branch_FollowCondTaken | branch_FollowCondNotTaken));
         if (instrs[i - 1].Info.ReadFlags != 0 || secondaryFlagReadCond)
             FloodFillSetFlags(instrs, i - 2, !secondaryFlagReadCond ? instrs[i - 1].Info.ReadFlags : 0xF);
-    } while(!instrs[i - 1].Info.EndBlock && i < MaxBlockSize && !cpu->Halted && (!cpu->IRQ || (cpu->CPSR & 0x80)));
-
-    if (numLiterals)
-    {
-        for (u32 j = 0; j < numWriteAddrs; j++)
-        {
-            u32 translatedAddr = LocaliseCodeAddress(cpu->Num, writeAddrs[j]);
-            if (translatedAddr)
-            {
-                for (u32 k = 0; k < numLiterals; k++)
-                {
-                    if (literalLoadAddrs[k] == translatedAddr)
-                    {
-                        if (InvalidLiterals.Find(translatedAddr) == -1)
-                            InvalidLiterals.Add(translatedAddr);
-                        break;
-                    }
-                }
-            }
-        }
-    }
+    } while(!instrs[i - 1].Info.EndBlock && i < Config::JIT_MaxBlockSize && !cpu->Halted && (!cpu->IRQ || (cpu->CPSR & 0x80)));
 
     u32 literalHash = (u32)XXH3_64bits(literalValues, numLiterals * 4);
     u32 instrHash = (u32)XXH3_64bits(instrValues, numInstrs * 4);
@@ -898,9 +911,9 @@ void ARMJIT::CompileBlock(ARM* cpu) noexcept
         block->StartAddrLocal = localAddr;
 
         FloodFillSetFlags(instrs, i - 1, 0xF);
-
+        
         JitEnableWrite();
-        block->EntryPoint = JITCompiler.CompileBlock(cpu, thumb, instrs, i, hasMemoryInstr);
+        block->EntryPoint = JITCompiler->CompileBlock(cpu, thumb, instrs, i, hasMemoryInstr);
         JitEnableExecute();
 
         JIT_DEBUGPRINT("block start %p\n", block->EntryPoint);
@@ -920,8 +933,8 @@ void ARMJIT::CompileBlock(ARM* cpu) noexcept
 
         AddressRange* region = CodeMemRegions[addressRanges[j] >> 27];
 
-        if (!PageContainsCode(&region[(addressRanges[j] & 0x7FFF000 & ~(Memory.PageSize - 1)) / 512], Memory.PageSize))
-            Memory.SetCodeProtection(addressRanges[j] >> 27, addressRanges[j] & 0x7FFFFFF, true);
+        if (!PageContainsCode(&region[(addressRanges[j] & 0x7FFF000) / 512]))
+            ARMJIT_Memory::SetCodeProtection(addressRanges[j] >> 27, addressRanges[j] & 0x7FFFFFF, true);
 
         AddressRange* range = &region[(addressRanges[j] & 0x7FFFFFF) / 512];
         range->Code |= addressMasks[j];
@@ -935,10 +948,10 @@ void ARMJIT::CompileBlock(ARM* cpu) noexcept
 
     u64* entry = &FastBlockLookupRegions[(localAddr >> 27)][(localAddr & 0x7FFFFFF) / 2];
     *entry = ((u64)blockAddr | cpu->Num) << 32;
-    *entry |= JITCompiler.SubEntryOffset(block->EntryPoint);
+    *entry |= JITCompiler->SubEntryOffset(block->EntryPoint);
 }
 
-void ARMJIT::InvalidateByAddr(u32 localAddr) noexcept
+void InvalidateByAddr(u32 localAddr)
 {
     JIT_DEBUGPRINT("invalidating by addr %x\n", localAddr);
 
@@ -973,9 +986,9 @@ void ARMJIT::InvalidateByAddr(u32 localAddr) noexcept
         range->Blocks.Remove(i);
 
         if (range->Blocks.Length == 0
-            && !PageContainsCode(&region[(localAddr & 0x7FFF000 & ~(Memory.PageSize - 1)) / 512], Memory.PageSize))
+            && !PageContainsCode(&region[(localAddr & 0x7FFF000) / 512]))
         {
-            Memory.SetCodeProtection(localAddr >> 27, localAddr & 0x7FFFFFF, false);
+            ARMJIT_Memory::SetCodeProtection(localAddr >> 27, localAddr & 0x7FFFFFF, false);
         }
 
         bool literalInvalidation = false;
@@ -984,7 +997,7 @@ void ARMJIT::InvalidateByAddr(u32 localAddr) noexcept
             u32 addr = block->Literals()[j];
             if (addr == localAddr)
             {
-                if (InvalidLiterals.Find(localAddr) == -1)
+                if (InvalidLiterals.Find(localAddr) != -1)
                 {
                     InvalidLiterals.Add(localAddr);
                     JIT_DEBUGPRINT("found invalid literal %d\n", InvalidLiterals.Length);
@@ -1007,8 +1020,8 @@ void ARMJIT::InvalidateByAddr(u32 localAddr) noexcept
 
                 if (otherRange->Blocks.Length == 0)
                 {
-                    if (!PageContainsCode(&otherRegion[(addr & 0x7FFF000 & ~(Memory.PageSize - 1)) / 512], Memory.PageSize))
-                        Memory.SetCodeProtection(addr >> 27, addr & 0x7FFFFFF, false);
+                    if (!PageContainsCode(&otherRegion[(addr & 0x7FFF000) / 512]))
+                        ARMJIT_Memory::SetCodeProtection(addr >> 27, addr & 0x7FFFFFF, false);
 
                     otherRange->Code = 0;
                 }
@@ -1032,64 +1045,49 @@ void ARMJIT::InvalidateByAddr(u32 localAddr) noexcept
     }
 }
 
-void ARMJIT::CheckAndInvalidateITCM() noexcept
+void CheckAndInvalidateITCM()
 {
-    for (u32 i = 0; i < ITCMPhysicalSize; i+=512)
+    for (u32 i = 0; i < ITCMPhysicalSize; i+=16)
     {
-        if (CodeIndexITCM[i / 512].Code)
+        if (CodeIndexITCM[i / 512].Code & (1 << ((i & 0x1FF) / 16)))
         {
-            // maybe using bitscan would be better here?
-            // The thing is that in densely populated sets
-            // The old fashioned way can actually be faster
-            for (u32 j = 0; j < 512; j += 16)
-            {
-                if (CodeIndexITCM[i / 512].Code & (1 << ((j & 0x1FF) / 16)))
-                    InvalidateByAddr((i+j) | (ARMJIT_Memory::memregion_ITCM << 27));
-            }
+            InvalidateByAddr(i | (ARMJIT_Memory::memregion_ITCM << 27));
         }
     }
 }
 
-void ARMJIT::CheckAndInvalidateWVRAM(int bank) noexcept
+template <u32 num, int region>
+void CheckAndInvalidate(u32 addr)
 {
-    u32 start = bank == 1 ? 0x20000 : 0;
-    for (u32 i = start; i < start+0x20000; i+=512)
-    {
-        if (CodeIndexARM7WVRAM[i / 512].Code)
-        {
-            for (u32 j = 0; j < 512; j += 16)
-            {
-                if (CodeIndexARM7WVRAM[i / 512].Code & (1 << ((j & 0x1FF) / 16)))
-                    InvalidateByAddr((i+j) | (ARMJIT_Memory::memregion_VWRAM << 27));
-            }
-        }
-    }
+    u32 localAddr = ARMJIT_Memory::LocaliseAddress(region, num, addr);
+    if (CodeMemRegions[region][(localAddr & 0x7FFFFFF) / 512].Code & (1 << ((localAddr & 0x1FF) / 16)))
+        InvalidateByAddr(localAddr);
 }
 
-JitBlockEntry ARMJIT::LookUpBlock(u32 num, u64* entries, u32 offset, u32 addr) noexcept
+JitBlockEntry LookUpBlock(u32 num, u64* entries, u32 offset, u32 addr)
 {
     u64* entry = &entries[offset / 2];
     if (*entry >> 32 == (addr | num))
-        return JITCompiler.AddEntryOffset((u32)*entry);
+        return JITCompiler->AddEntryOffset((u32)*entry);
     return NULL;
 }
 
-void ARMJIT::blockSanityCheck(u32 num, u32 blockAddr, JitBlockEntry entry) noexcept
+void blockSanityCheck(u32 num, u32 blockAddr, JitBlockEntry entry)
 {
     u32 localAddr = LocaliseCodeAddress(num, blockAddr);
-    assert(JITCompiler.AddEntryOffset((u32)FastBlockLookupRegions[localAddr >> 27][(localAddr & 0x7FFFFFF) / 2]) == entry);
+    assert(JITCompiler->AddEntryOffset((u32)FastBlockLookupRegions[localAddr >> 27][(localAddr & 0x7FFFFFF) / 2]) == entry);
 }
 
-bool ARMJIT::SetupExecutableRegion(u32 num, u32 blockAddr, u64*& entry, u32& start, u32& size) noexcept
+bool SetupExecutableRegion(u32 num, u32 blockAddr, u64*& entry, u32& start, u32& size)
 {
     // amazingly ignoring the DTCM is the proper behaviour for code fetches
     int region = num == 0
-        ? Memory.ClassifyAddress9(blockAddr)
-        : Memory.ClassifyAddress7(blockAddr);
+        ? ARMJIT_Memory::ClassifyAddress9(blockAddr)
+        : ARMJIT_Memory::ClassifyAddress7(blockAddr);
 
     u32 memoryOffset;
     if (FastBlockLookupRegions[region]
-        && Memory.GetMirrorLocation(region, num, blockAddr, memoryOffset, start, size))
+        && ARMJIT_Memory::GetMirrorLocation(region, num, blockAddr, memoryOffset, start, size))
     {
         //printf("setup exec region %d %d %08x %08x %x %x\n", num, region, blockAddr, start, size, memoryOffset);
         entry = FastBlockLookupRegions[region] + memoryOffset / 2;
@@ -1098,28 +1096,28 @@ bool ARMJIT::SetupExecutableRegion(u32 num, u32 blockAddr, u64*& entry, u32& sta
     return false;
 }
 
-template void ARMJIT::CheckAndInvalidate<0, ARMJIT_Memory::memregion_MainRAM>(u32) noexcept;
-template void ARMJIT::CheckAndInvalidate<1, ARMJIT_Memory::memregion_MainRAM>(u32) noexcept;
-template void ARMJIT::CheckAndInvalidate<0, ARMJIT_Memory::memregion_SharedWRAM>(u32) noexcept;
-template void ARMJIT::CheckAndInvalidate<1, ARMJIT_Memory::memregion_SharedWRAM>(u32) noexcept;
-template void ARMJIT::CheckAndInvalidate<1, ARMJIT_Memory::memregion_WRAM7>(u32) noexcept;
-template void ARMJIT::CheckAndInvalidate<1, ARMJIT_Memory::memregion_VWRAM>(u32) noexcept;
-template void ARMJIT::CheckAndInvalidate<0, ARMJIT_Memory::memregion_VRAM>(u32) noexcept;
-template void ARMJIT::CheckAndInvalidate<0, ARMJIT_Memory::memregion_ITCM>(u32) noexcept;
-template void ARMJIT::CheckAndInvalidate<0, ARMJIT_Memory::memregion_NewSharedWRAM_A>(u32) noexcept;
-template void ARMJIT::CheckAndInvalidate<1, ARMJIT_Memory::memregion_NewSharedWRAM_A>(u32) noexcept;
-template void ARMJIT::CheckAndInvalidate<0, ARMJIT_Memory::memregion_NewSharedWRAM_B>(u32) noexcept;
-template void ARMJIT::CheckAndInvalidate<1, ARMJIT_Memory::memregion_NewSharedWRAM_B>(u32) noexcept;
-template void ARMJIT::CheckAndInvalidate<0, ARMJIT_Memory::memregion_NewSharedWRAM_C>(u32) noexcept;
-template void ARMJIT::CheckAndInvalidate<1, ARMJIT_Memory::memregion_NewSharedWRAM_C>(u32) noexcept;
+template void CheckAndInvalidate<0, ARMJIT_Memory::memregion_MainRAM>(u32);
+template void CheckAndInvalidate<1, ARMJIT_Memory::memregion_MainRAM>(u32);
+template void CheckAndInvalidate<0, ARMJIT_Memory::memregion_SharedWRAM>(u32);
+template void CheckAndInvalidate<1, ARMJIT_Memory::memregion_SharedWRAM>(u32);
+template void CheckAndInvalidate<1, ARMJIT_Memory::memregion_WRAM7>(u32);
+template void CheckAndInvalidate<1, ARMJIT_Memory::memregion_VWRAM>(u32);
+template void CheckAndInvalidate<0, ARMJIT_Memory::memregion_VRAM>(u32);
+template void CheckAndInvalidate<0, ARMJIT_Memory::memregion_ITCM>(u32);
+template void CheckAndInvalidate<0, ARMJIT_Memory::memregion_NewSharedWRAM_A>(u32);
+template void CheckAndInvalidate<1, ARMJIT_Memory::memregion_NewSharedWRAM_A>(u32);
+template void CheckAndInvalidate<0, ARMJIT_Memory::memregion_NewSharedWRAM_B>(u32);
+template void CheckAndInvalidate<1, ARMJIT_Memory::memregion_NewSharedWRAM_B>(u32);
+template void CheckAndInvalidate<0, ARMJIT_Memory::memregion_NewSharedWRAM_C>(u32);
+template void CheckAndInvalidate<1, ARMJIT_Memory::memregion_NewSharedWRAM_C>(u32);
 
-void ARMJIT::ResetBlockCache() noexcept
+void ResetBlockCache()
 {
-    Log(LogLevel::Debug, "Resetting JIT block cache...\n");
+    printf("Resetting JIT block cache...\n");
 
     // could be replace through a function which only resets
     // the permissions but we're too lazy
-    Memory.Reset();
+    ARMJIT_Memory::Reset();
 
     InvalidLiterals.Clear();
     for (int i = 0; i < ARMJIT_Memory::memregions_Count; i++)
@@ -1157,26 +1155,22 @@ void ARMJIT::ResetBlockCache() noexcept
     JitBlocks9.clear();
     JitBlocks7.clear();
 
-    JITCompiler.Reset();
+    JITCompiler->Reset();
 }
 
-void ARMJIT::JitEnableWrite() noexcept
+void JitEnableWrite()
 {
     #if defined(__APPLE__) && defined(__aarch64__)
         if (__builtin_available(macOS 11.0, *))
             pthread_jit_write_protect_np(false);
-    #elif defined(__NetBSD__)
-        mprotect(JITCompiler.CodeMemBase, ARMJIT_Global::CodeMemorySliceSize, PROT_READ | PROT_WRITE);
     #endif
 }
 
-void ARMJIT::JitEnableExecute() noexcept
+void JitEnableExecute()
 {
     #if defined(__APPLE__) && defined(__aarch64__)
         if (__builtin_available(macOS 11.0, *))
             pthread_jit_write_protect_np(true);
-    #elif defined(__NetBSD__)
-        mprotect(JITCompiler.CodeMemBase, ARMJIT_Global::CodeMemorySliceSize, PROT_READ | PROT_EXEC);
     #endif
 }
 

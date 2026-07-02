@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2025 melonDS team, RSDuck
+    Copyright 2016-2021 Arisotura, RSDuck
 
     This file is part of melonDS.
 
@@ -26,8 +26,8 @@
 #include <initializer_list>
 #include <algorithm>
 
-namespace melonDS
-{
+// like std::bitset but less stupid and optimised for 
+// our use case (keeping track of memory invalidations)
 
 inline u64 GetRangedBitMask(u32 idx, u32 startBit, u32 bitsCount)
 {
@@ -40,23 +40,20 @@ inline u64 GetRangedBitMask(u32 idx, u32 startBit, u32 bitsCount)
             return 0xFFFFFFFFFFFFFFFF << (startBit & 0x3F);
         if (((startBit + bitsCount) & 0x3F) && idx == startEntry + entriesCount - 1)
             return ~(0xFFFFFFFFFFFFFFFF << ((startBit + bitsCount) & 0x3F));
+        else
+            return 0xFFFFFFFFFFFFFFFF;
 
         return 0xFFFFFFFFFFFFFFFF;
     }
     else if (idx == startEntry)
     {
-        return bitsCount == 64
-            ? 0xFFFFFFFFFFFFFFFF
-            : ((1ULL << bitsCount) - 1) << (startBit & 0x3F);
+        return ((1ULL << bitsCount) - 1) << (startBit & 0x3F);
     }
     else
     {
         return 0;
     }
 }
-
-// like std::bitset but less stupid and optimised for 
-// our use case (keeping track of memory invalidations)
 
 template <u32 Size>
 struct NonStupidBitField
@@ -69,7 +66,7 @@ struct NonStupidBitField
         NonStupidBitField<Size>& BitField;
         u32 Idx;
 
-        operator bool() const
+        operator bool()
         {
             return BitField.Data[Idx >> 6] & (1ULL << (Idx & 0x3F));
         }
@@ -89,13 +86,13 @@ struct NonStupidBitField
         u32 BitIdx;
         u64 RemainingBits;
 
-        u32 operator*() const { return DataIdx * 64 + BitIdx; }
+        u32 operator*() { return DataIdx * 64 + BitIdx; }
 
-        bool operator==(const Iterator& other) const
+        bool operator==(const Iterator& other)
         {
             return other.DataIdx == DataIdx;
         }
-        bool operator!=(const Iterator& other) const
+        bool operator!=(const Iterator& other)
         {
             return other.DataIdx != DataIdx;
         }
@@ -173,11 +170,10 @@ struct NonStupidBitField
     {
         for (u32 i = 0; i < DataLength; i++)
         {
-            if (Data[i])
+            u32 idx = __builtin_ctzll(Data[i]);
+            if (Data[i] && idx + i * 64 < Size)
             {
-                u32 idx = __builtin_ctzll(Data[i]);
-                if (idx + i * 64 < Size)
-                    return {*this, i, idx, Data[i] & ~(1ULL << idx)};
+                return {*this, i, idx, Data[i] & ~(1ULL << idx)};
             }
         }
         return End();
@@ -247,7 +243,6 @@ struct NonStupidBitField
         }
         return *this;
     }
-
     NonStupidBitField& operator&=(const NonStupidBitField<Size>& other)
     {
         for (u32 i = 0; i < DataLength; i++)
@@ -257,7 +252,16 @@ struct NonStupidBitField
         return *this;
     }
 
-    operator bool() const
+    template<u32 OtherSize>
+    NonStupidBitField& operator=(const NonStupidBitField<OtherSize>& other)
+    {
+        memcpy(Data, other.Data, std::min(other.DataLength, DataLength));
+        if (Size > OtherSize)
+            memset(Data + other.DataLength, 0, DataLength - other.DataLength);
+        return *this;
+    }
+
+    operator bool()
     {
         for (int i = 0; i < DataLength - 1; i++)
         {
@@ -272,6 +276,5 @@ struct NonStupidBitField
     }
 };
 
-}
 
 #endif

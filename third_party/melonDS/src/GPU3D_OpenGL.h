@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2025 melonDS team
+    Copyright 2016-2021 Arisotura
 
     This file is part of melonDS.
 
@@ -18,42 +18,31 @@
 
 #pragma once
 
-#ifdef OGLRENDERER_ENABLED
 #include "GPU3D.h"
-#include "GPU_OpenGL.h"
+
 #include "OpenGLSupport.h"
 
-namespace melonDS
-{
-class GPU;
 
+namespace GPU3D
+{
 class GLRenderer : public Renderer3D
 {
 public:
-    ~GLRenderer() override;
-    void Reset(GPU& gpu) override;
+    GLRenderer();
+    virtual ~GLRenderer() override {};
+    virtual bool Init() override;
+    virtual void DeInit() override;
+    virtual void Reset() override;
 
-    void SetRenderSettings(bool betterpolygons, int scale) noexcept;
-    void SetBetterPolygons(bool betterpolygons) noexcept;
-    void SetScaleFactor(int scale) noexcept;
-    [[nodiscard]] bool GetBetterPolygons() const noexcept { return BetterPolygons; }
-    [[nodiscard]] int GetScaleFactor() const noexcept { return ScaleFactor; }
+    virtual void SetRenderSettings(GPU::RenderSettings& settings) override;
 
-    void VCount144(GPU& gpu) override {};
-    void RenderFrame(GPU& gpu) override;
-    void Stop(const GPU& gpu) override;
-    u32* GetLine(int line) override;
+    virtual void VCount144() override {};
+    virtual void RenderFrame() override;
+    virtual u32* GetLine(int line) override;
 
-    void SetupAccelFrame() override;
-    void PrepareCaptureFrame() override;
-    void Blit(const GPU& gpu) override;
-
-    void BindOutputTexture(int buffer) override;
-
-    static std::unique_ptr<GLRenderer> New() noexcept;
+    void SetupAccelFrame();
+    void PrepareCaptureFrame();
 private:
-    // Used by New()
-    GLRenderer(GLCompositor&& compositor) noexcept;
 
     // GL version requirements
     // * texelFetch: 3.0 (GLSL 1.30)     (3.2/1.50 for MS)
@@ -73,18 +62,17 @@ private:
         u32 RenderKey;
     };
 
-    GLCompositor CurGLCompositor;
-    RendererPolygon PolygonList[2048] {};
+    RendererPolygon PolygonList[2048];
 
-    bool BuildRenderShader(u32 flags, const std::string& vs, const std::string& fs);
+    bool BuildRenderShader(u32 flags, const char* vs, const char* fs);
     void UseRenderShader(u32 flags);
-    void SetupPolygon(RendererPolygon* rp, Polygon* polygon) const;
-    u32* SetupVertex(const Polygon* poly, int vid, const Vertex* vtx, u32 vtxattr, u32* vptr) const;
+    void SetupPolygon(RendererPolygon* rp, Polygon* polygon);
+    u32* SetupVertex(Polygon* poly, int vid, Vertex* vtx, u32 vtxattr, u32* vptr);
     void BuildPolygons(RendererPolygon* polygons, int npolys);
-    int RenderSinglePolygon(int i) const;
-    int RenderPolygonBatch(int i) const;
-    int RenderPolygonEdgeBatch(int i) const;
-    void RenderSceneChunk(const GPU3D& gpu3d, int y, int h);
+    int RenderSinglePolygon(int i);
+    int RenderPolygonBatch(int i);
+    int RenderPolygonEdgeBatch(int i);
+    void RenderSceneChunk(int y, int h);
 
     enum
     {
@@ -95,13 +83,13 @@ private:
     };
 
 
-    GLuint ClearShaderPlain {};
+    GLuint ClearShaderPlain[3];
 
-    GLuint RenderShader[16] {};
+    GLuint RenderShader[16][3];
     GLuint CurShaderID = -1;
 
-    GLuint FinalPassEdgeShader {};
-    GLuint FinalPassFogShader {};
+    GLuint FinalPassEdgeShader[3];
+    GLuint FinalPassFogShader[3];
 
     // std140 compliant structure
     struct
@@ -116,13 +104,13 @@ private:
         u32 uFogOffset;             // int        304 / 1
         u32 uFogShift;              // int        305 / 1
         u32 _pad1[2];               // int        306 / 2
-    } ShaderConfig {};
+    } ShaderConfig;
 
-    GLuint ShaderConfigUBO {};
-    int NumFinalPolys {}, NumOpaqueFinalPolys {};
+    GLuint ShaderConfigUBO;
+    int NumFinalPolys, NumOpaqueFinalPolys;
 
-    GLuint ClearVertexBufferID = 0, ClearVertexArrayID {};
-    GLint ClearUniformLoc[4] {};
+    GLuint ClearVertexBufferID, ClearVertexArrayID;
+    GLint ClearUniformLoc[4];
 
     // vertex buffer
     // * XYZW: 4x16bit
@@ -136,30 +124,29 @@ private:
     // * bit8: front-facing (?)
     // * bit9: W-buffering (?)
 
-    GLuint VertexBufferID {};
-    u32 VertexBuffer[10240 * 7] {};
-    u32 NumVertices {};
+    GLuint VertexBufferID;
+    u32 VertexBuffer[10240 * 7];
+    u32 NumVertices;
 
-    GLuint VertexArrayID {};
-    GLuint IndexBufferID {};
-    u16 IndexBuffer[2048 * 40] {};
-    u32 NumIndices {}, NumEdgeIndices {};
+    GLuint VertexArrayID;
+    GLuint IndexBufferID;
+    u16 IndexBuffer[2048 * 40];
+    u32 NumIndices, NumEdgeIndices;
 
     const u32 EdgeIndicesOffset = 2048 * 30;
 
-    GLuint TexMemID {};
-    GLuint TexPalMemID {};
+    GLuint TexMemID;
+    GLuint TexPalMemID;
 
-    int ScaleFactor {};
-    bool BetterPolygons {};
-    int ScreenW {}, ScreenH {};
+    int ScaleFactor;
+    bool BetterPolygons;
+    int ScreenW, ScreenH;
 
-    GLuint ColorBufferTex {}, DepthBufferTex {}, AttrBufferTex {};
-    GLuint DownScaleBufferTex {};
-    GLuint PixelbufferID {};
+    GLuint FramebufferTex[8];
+    int FrontBuffer;
+    GLuint FramebufferID[4], PixelbufferID;
+    u32 Framebuffer[256*192];
 
-    GLuint MainFramebuffer {}, DownscaleFramebuffer {};
-    u32 Framebuffer[256*192] {};
+
 };
 }
-#endif

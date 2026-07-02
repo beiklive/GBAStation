@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2025 melonDS team
+    Copyright 2016-2021 Arisotura
 
     This file is part of melonDS.
 
@@ -21,14 +21,11 @@
 #include "NDS.h"
 #include "DSi.h"
 #include "ARM.h"
-#include "Platform.h"
-#include "ARMJIT_Memory.h"
-#include "ARMJIT.h"
 
-namespace melonDS
-{
-using Platform::Log;
-using Platform::LogLevel;
+#ifdef JIT_ENABLED
+#include "ARMJIT.h"
+#include "ARMJIT_Memory.h"
+#endif
 
 // access timing for cached regions
 // this would be an average between cache hits and cache misses
@@ -41,34 +38,23 @@ const int kCodeCacheTiming = 3;//5;
 
 void ARMv5::CP15Reset()
 {
-    Log(LogLevel::Debug, "melonDS: CP15Reset begin\n");
     CP15Control = 0x2078; // dunno
 
     RNGSeed = 44203;
-    TraceProcessID = 0;
 
     DTCMSetting = 0;
     ITCMSetting = 0;
 
-    Log(LogLevel::Debug, "melonDS: CP15Reset clear ITCM begin\n");
     memset(ITCM, 0, ITCMPhysicalSize);
-    Log(LogLevel::Debug, "melonDS: CP15Reset clear ITCM end\n");
-    Log(LogLevel::Debug, "melonDS: CP15Reset clear DTCM begin ptr=%p size=%u\n", DTCM, DTCMPhysicalSize);
     memset(DTCM, 0, DTCMPhysicalSize);
-    Log(LogLevel::Debug, "melonDS: CP15Reset clear DTCM end\n");
 
     ITCMSize = 0;
     DTCMBase = 0xFFFFFFFF;
-    DTCMMask = 0;
+    DTCMSize = 0;
 
-    Log(LogLevel::Debug, "melonDS: CP15Reset clear ICache begin\n");
     memset(ICache, 0, 0x2000);
-    Log(LogLevel::Debug, "melonDS: CP15Reset clear ICache end\n");
-    Log(LogLevel::Debug, "melonDS: CP15Reset invalidate ICache begin\n");
     ICacheInvalidateAll();
-    Log(LogLevel::Debug, "melonDS: CP15Reset invalidate ICache end\n");
     memset(ICacheCount, 0, 64);
-    Log(LogLevel::Debug, "melonDS: CP15Reset clear ICacheCount end\n");
 
     PU_CodeCacheable = 0;
     PU_DataCacheable = 0;
@@ -78,9 +64,7 @@ void ARMv5::CP15Reset()
     PU_DataRW = 0;
 
     memset(PU_Region, 0, 8*sizeof(u32));
-    Log(LogLevel::Debug, "melonDS: CP15Reset UpdatePURegions begin\n");
     UpdatePURegions(true);
-    Log(LogLevel::Debug, "melonDS: CP15Reset end\n");
 
     CurICacheLine = NULL;
 }
@@ -118,28 +102,26 @@ void ARMv5::CP15DoSavestate(Savestate* file)
 void ARMv5::UpdateDTCMSetting()
 {
     u32 newDTCMBase;
-    u32 newDTCMMask;
     u32 newDTCMSize;
-
     if (CP15Control & (1<<16))
     {
+        newDTCMBase = DTCMSetting & 0xFFFFF000;
         newDTCMSize = 0x200 << ((DTCMSetting >> 1) & 0x1F);
-        if (newDTCMSize < 0x1000) newDTCMSize = 0x1000;
-        newDTCMMask = 0xFFFFF000 & ~(newDTCMSize-1);
-        newDTCMBase = DTCMSetting & newDTCMMask;
+        //printf("DTCM [%08X] enabled at %08X, size %X\n", DTCMSetting, newDTCMBase, newDTCMSize);
     }
     else
     {
-        newDTCMSize = 0;
         newDTCMBase = 0xFFFFFFFF;
-        newDTCMMask = 0;
+        newDTCMSize = 0;
+        //printf("DTCM disabled\n");
     }
-
-    if (newDTCMBase != DTCMBase || newDTCMMask != DTCMMask)
+    if (newDTCMBase != DTCMBase || newDTCMSize != DTCMSize)
     {
-        NDS.JIT.Memory.RemapDTCM(newDTCMBase, newDTCMSize);
+#ifdef JIT_ENABLED
+        ARMJIT_Memory::RemapDTCM(newDTCMBase, newDTCMSize);
+#endif
         DTCMBase = newDTCMBase;
-        DTCMMask = newDTCMMask;
+        DTCMSize = newDTCMSize;
     }
 }
 
@@ -148,13 +130,12 @@ void ARMv5::UpdateITCMSetting()
     if (CP15Control & (1<<18))
     {
         ITCMSize = 0x200 << ((ITCMSetting >> 1) & 0x1F);
-#ifdef JIT_ENABLED
-        FastBlockLookupSize = 0;
-#endif
+        //printf("ITCM [%08X] enabled at %08X, size %X\n", ITCMSetting, 0, ITCMSize);
     }
     else
     {
         ITCMSize = 0;
+        //printf("ITCM disabled\n");
     }
 }
 
@@ -163,9 +144,6 @@ void ARMv5::UpdateITCMSetting()
 // (not to the region range/enabled status)
 void ARMv5::UpdatePURegion(u32 n)
 {
-    if (!(CP15Control & (1<<0)))
-        return;
-
     u32 coderw = (PU_CodeRW >> (4*n)) & 0xF;
     u32 datarw = (PU_DataRW >> (4*n)) & 0xF;
 
@@ -199,14 +177,10 @@ void ARMv5::UpdatePURegion(u32 n)
         return;
     }
 
-    // notes:
-    // * min size of a pu region is 4KiB (12 bits)
-    // * size is calculated as size + 1, but the 12 lsb of address space are ignored, therefore we need it as size + 1 - 12, or size - 11
-    // * pu regions are aligned based on their size
-    u32 size = std::max((int)((rgn>>1) & 0x1F) - 11, 0); // obtain the size, subtract 11 and clamp to a min of 0.
-    u32 start = ((rgn >> 12) >> size) << size; // determine the start offset, and use shifts to force alignment with a multiple of the size.
-    u32 end = start + (1<<size); // add 1 left shifted by size to start to determine end point
-    // dont need to bounds check the end point because the force alignment inherently prevents it from breaking
+    u32 start = rgn >> 12;
+    u32 sz = 2 << ((rgn >> 1) & 0x1F);
+    u32 end = start + (sz >> 12);
+    // TODO: check alignment of start
 
     u8 usermask = 0;
     u8 privmask = 0;
@@ -219,7 +193,7 @@ void ARMv5::UpdatePURegion(u32 n)
     case 3: privmask |= 0x03; usermask |= 0x03; break;
     case 5: privmask |= 0x01; break;
     case 6: privmask |= 0x01; usermask |= 0x01; break;
-    default: Log(LogLevel::Warn, "!! BAD DATARW VALUE %d\n", datarw&0xF);
+    default: printf("!! BAD DATARW VALUE %d\n", datarw&0xF);
     }
 
     switch (coderw)
@@ -230,7 +204,7 @@ void ARMv5::UpdatePURegion(u32 n)
     case 3: privmask |= 0x04; usermask |= 0x04; break;
     case 5: privmask |= 0x04; break;
     case 6: privmask |= 0x04; usermask |= 0x04; break;
-    default: Log(LogLevel::Warn, "!! BAD CODERW VALUE %d\n", datarw&0xF);
+    default: printf("!! BAD CODERW VALUE %d\n", datarw&0xF);
     }
 
     if (datacache & 0x1)
@@ -251,17 +225,7 @@ void ARMv5::UpdatePURegion(u32 n)
         usermask |= 0x40;
     }
 
-    Log(
-        LogLevel::Debug,
-        "PU region %d: %08X-%08X, user=%02X priv=%02X, %08X/%08X\n",
-        n,
-        start << 12,
-        (end << 12) - 1,
-        usermask,
-        privmask,
-        PU_DataRW,
-        PU_CodeRW
-    );
+    //printf("PU region %d: %08X-%08X, user=%02X priv=%02X\n", n, start<<12, end<<12, usermask, privmask);
 
     for (u32 i = start; i < end; i++)
     {
@@ -269,7 +233,7 @@ void ARMv5::UpdatePURegion(u32 n)
         PU_PrivMap[i] = privmask;
     }
 
-    UpdateRegionTimings(start, end);
+    UpdateRegionTimings(start<<12, end<<12);
 }
 
 void ARMv5::UpdatePURegions(bool update_all)
@@ -285,7 +249,7 @@ void ARMv5::UpdatePURegions(bool update_all)
         memset(PU_UserMap, mask, 0x100000);
         memset(PU_PrivMap, mask, 0x100000);
 
-        UpdateRegionTimings(0x00000, 0x100000);
+        UpdateRegionTimings(0x00000000, 0xFFFFFFFF);
         return;
     }
 
@@ -302,17 +266,20 @@ void ARMv5::UpdatePURegions(bool update_all)
 
     // TODO: this is way unoptimized
     // should be okay unless the game keeps changing shit, tho
-    if (update_all) UpdateRegionTimings(0x00000, 0x100000);
-
-    // TODO: throw exception if the region we're running in has become non-executable, I guess
+    if (update_all) UpdateRegionTimings(0x00000000, 0xFFFFFFFF);
 }
 
 void ARMv5::UpdateRegionTimings(u32 addrstart, u32 addrend)
 {
+    addrstart >>= 12;
+    addrend   >>= 12;
+
+    if (addrend == 0xFFFFF) addrend++;
+
     for (u32 i = addrstart; i < addrend; i++)
     {
         u8 pu = PU_Map[i];
-        u8* bustimings = NDS.ARM9MemTimings[i >> 2];
+        u8* bustimings = NDS::ARM9MemTimings[i >> 2];
 
         if (pu & 0x40)
         {
@@ -320,7 +287,7 @@ void ARMv5::UpdateRegionTimings(u32 addrstart, u32 addrend)
         }
         else
         {
-            MemTimings[i][0] = bustimings[2] << NDS.ARM9ClockShift;
+            MemTimings[i][0] = bustimings[2] << NDS::ARM9ClockShift;
         }
 
         if (pu & 0x10)
@@ -331,9 +298,9 @@ void ARMv5::UpdateRegionTimings(u32 addrstart, u32 addrend)
         }
         else
         {
-            MemTimings[i][1] = bustimings[0] << NDS.ARM9ClockShift;
-            MemTimings[i][2] = bustimings[2] << NDS.ARM9ClockShift;
-            MemTimings[i][3] = bustimings[3] << NDS.ARM9ClockShift;
+            MemTimings[i][1] = bustimings[0] << NDS::ARM9ClockShift;
+            MemTimings[i][2] = bustimings[2] << NDS::ARM9ClockShift;
+            MemTimings[i][3] = bustimings[3] << NDS::ARM9ClockShift;
         }
     }
 }
@@ -405,14 +372,14 @@ void ARMv5::ICacheLookup(u32 addr)
     else
     {
         for (int i = 0; i < 32; i+=4)
-            *(u32*)&ptr[i] = NDS.ARM9Read32(addr+i);
+            *(u32*)&ptr[i] = NDS::ARM9Read32(addr+i);
     }
 
     ICacheTags[line] = tag;
 
     // ouch :/
     //printf("cache miss %08X: %d/%d\n", addr, NDS::ARM9MemTimings[addr >> 14][2], NDS::ARM9MemTimings[addr >> 14][3]);
-    CodeCycles = (NDS.ARM9MemTimings[addr >> 14][2] + (NDS.ARM9MemTimings[addr >> 14][3] * 7)) << NDS.ARM9ClockShift;
+    CodeCycles = (NDS::ARM9MemTimings[addr >> 14][2] + (NDS::ARM9MemTimings[addr >> 14][3] * 7)) << NDS::ARM9ClockShift;
     CurICacheLine = ptr;
 }
 
@@ -453,7 +420,7 @@ void ARMv5::ICacheInvalidateAll()
 
 void ARMv5::CP15Write(u32 id, u32 val)
 {
-    //if(id!=0x704)printf("CP15 write op %03X %08X %08X\n", id, val, R[15]);
+    //printf("CP15 write op %03X %08X %08X\n", id, val, R[15]);
 
     switch (id)
     {
@@ -470,7 +437,7 @@ void ARMv5::CP15Write(u32 id, u32 val)
             {
                 UpdatePURegions((old & 0x1) != (val & 0x1));
             }
-            if (val & (1<<7)) Log(LogLevel::Warn, "!!!! ARM9 BIG ENDIAN MODE. VERY BAD. SHIT GONNA ASPLODE NOW\n");
+            if (val & (1<<7)) printf("!!!! ARM9 BIG ENDIAN MODE. VERY BAD. SHIT GONNA ASPLODE NOW\n");
             if (val & (1<<13)) ExceptionBase = 0xFFFF0000;
             else               ExceptionBase = 0x00000000;
         }
@@ -591,21 +558,11 @@ void ARMv5::CP15Write(u32 id, u32 val)
     case 0x661:
     case 0x670:
     case 0x671:
-        char log_output[1024];
         PU_Region[(id >> 4) & 0xF] = val;
-
-        std::snprintf(log_output,
-                 sizeof(log_output),
-                 "PU: region %d = %08X : %s, start: %08X size: %02X\n",
-                 (id >> 4) & 0xF,
-                 val,
-                 val & 1 ? "enabled" : "disabled",
-                 val & 0xFFFFF000,
-                 (val & 0x3E) >> 1
-        );
-        Log(LogLevel::Debug, "%s", log_output);
-        // Some implementations of Log imply a newline, so we build up the line before printing it
-
+        printf("PU: region %d = %08X : ", (id>>4)&0xF, val);
+        printf("%s, ", val&1 ? "enabled":"disabled");
+        printf("%08X-", val&0xFFFFF000);
+        printf("%08X\n", (val&0xFFFFF000)+(2<<((val&0x3E)>>1)));
         // TODO: smarter region update for this?
         UpdatePURegions(true);
         return;
@@ -626,7 +583,7 @@ void ARMv5::CP15Write(u32 id, u32 val)
         //Halt(255);
         return;
     case 0x752:
-        Log(LogLevel::Warn, "CP15: ICACHE INVALIDATE WEIRD. %08X\n", val);
+        printf("CP15: ICACHE INVALIDATE WEIRD. %08X\n", val);
         //Halt(255);
         return;
 
@@ -647,17 +604,13 @@ void ARMv5::CP15Write(u32 id, u32 val)
 
 
     case 0x910:
-        DTCMSetting = val & 0xFFFFF03E;
+        DTCMSetting = val;
         UpdateDTCMSetting();
         return;
 
     case 0x911:
-        ITCMSetting = val & 0x0000003E;
+        ITCMSetting = val;
         UpdateITCMSetting();
-        return;
-
-    case 0xD01:
-        TraceProcessID = val;
         return;
 
     case 0xF00:
@@ -686,10 +639,10 @@ void ARMv5::CP15Write(u32 id, u32 val)
         return;
 
     if ((id & 0xF00) != 0x700)
-        Log(LogLevel::Debug, "unknown CP15 write op %03X %08X\n", id, val);
+        printf("unknown CP15 write op %03X %08X\n", id, val);
 }
 
-u32 ARMv5::CP15Read(u32 id) const
+u32 ARMv5::CP15Read(u32 id)
 {
     //printf("CP15 read op %03X %08X\n", id, NDS::ARM9->R[15]);
 
@@ -777,15 +730,12 @@ u32 ARMv5::CP15Read(u32 id) const
         return DTCMSetting;
     case 0x911:
         return ITCMSetting;
-
-    case 0xD01:
-        return TraceProcessID;
     }
 
     if ((id & 0xF00) == 0xF00) // test/debug shit?
         return 0;
 
-    Log(LogLevel::Debug, "unknown CP15 read op %03X\n", id);
+    printf("unknown CP15 read op %03X\n", id);
     return 0;
 }
 
@@ -795,15 +745,6 @@ u32 ARMv5::CP15Read(u32 id) const
 
 u32 ARMv5::CodeRead32(u32 addr, bool branch)
 {
-    /*if (branch || (!(addr & 0xFFF)))
-    {
-        if (!(PU_Map[addr>>12] & 0x04))
-        {
-            PrefetchAbort();
-            return 0;
-        }
-    }*/
-
     if (addr < ITCMSize)
     {
         CodeCycles = 1;
@@ -829,12 +770,6 @@ u32 ARMv5::CodeRead32(u32 addr, bool branch)
 
 void ARMv5::DataRead8(u32 addr, u32* val)
 {
-    if (!(PU_Map[addr>>12] & 0x01))
-    {
-        DataAbort();
-        return;
-    }
-
     DataRegion = addr;
 
     if (addr < ITCMSize)
@@ -843,10 +778,10 @@ void ARMv5::DataRead8(u32 addr, u32* val)
         *val = *(u8*)&ITCM[addr & (ITCMPhysicalSize - 1)];
         return;
     }
-    if ((addr & DTCMMask) == DTCMBase)
+    if (addr >= DTCMBase && addr < (DTCMBase + DTCMSize))
     {
         DataCycles = 1;
-        *val = *(u8*)&DTCM[addr & (DTCMPhysicalSize - 1)];
+        *val = *(u8*)&DTCM[(addr - DTCMBase) & (DTCMPhysicalSize - 1)];
         return;
     }
 
@@ -856,12 +791,6 @@ void ARMv5::DataRead8(u32 addr, u32* val)
 
 void ARMv5::DataRead16(u32 addr, u32* val)
 {
-    if (!(PU_Map[addr>>12] & 0x01))
-    {
-        DataAbort();
-        return;
-    }
-
     DataRegion = addr;
 
     addr &= ~1;
@@ -872,10 +801,10 @@ void ARMv5::DataRead16(u32 addr, u32* val)
         *val = *(u16*)&ITCM[addr & (ITCMPhysicalSize - 1)];
         return;
     }
-    if ((addr & DTCMMask) == DTCMBase)
+    if (addr >= DTCMBase && addr < (DTCMBase + DTCMSize))
     {
         DataCycles = 1;
-        *val = *(u16*)&DTCM[addr & (DTCMPhysicalSize - 1)];
+        *val = *(u16*)&DTCM[(addr - DTCMBase) & (DTCMPhysicalSize - 1)];
         return;
     }
 
@@ -885,12 +814,6 @@ void ARMv5::DataRead16(u32 addr, u32* val)
 
 void ARMv5::DataRead32(u32 addr, u32* val)
 {
-    if (!(PU_Map[addr>>12] & 0x01))
-    {
-        DataAbort();
-        return;
-    }
-
     DataRegion = addr;
 
     addr &= ~3;
@@ -901,10 +824,10 @@ void ARMv5::DataRead32(u32 addr, u32* val)
         *val = *(u32*)&ITCM[addr & (ITCMPhysicalSize - 1)];
         return;
     }
-    if ((addr & DTCMMask) == DTCMBase)
+    if (addr >= DTCMBase && addr < (DTCMBase + DTCMSize))
     {
         DataCycles = 1;
-        *val = *(u32*)&DTCM[addr & (DTCMPhysicalSize - 1)];
+        *val = *(u32*)&DTCM[(addr - DTCMBase) & (DTCMPhysicalSize - 1)];
         return;
     }
 
@@ -922,10 +845,10 @@ void ARMv5::DataRead32S(u32 addr, u32* val)
         *val = *(u32*)&ITCM[addr & (ITCMPhysicalSize - 1)];
         return;
     }
-    if ((addr & DTCMMask) == DTCMBase)
+    if (addr >= DTCMBase && addr < (DTCMBase + DTCMSize))
     {
         DataCycles += 1;
-        *val = *(u32*)&DTCM[addr & (DTCMPhysicalSize - 1)];
+        *val = *(u32*)&DTCM[(addr - DTCMBase) & (DTCMPhysicalSize - 1)];
         return;
     }
 
@@ -935,25 +858,21 @@ void ARMv5::DataRead32S(u32 addr, u32* val)
 
 void ARMv5::DataWrite8(u32 addr, u8 val)
 {
-    if (!(PU_Map[addr>>12] & 0x02))
-    {
-        DataAbort();
-        return;
-    }
-
     DataRegion = addr;
 
     if (addr < ITCMSize)
     {
         DataCycles = 1;
         *(u8*)&ITCM[addr & (ITCMPhysicalSize - 1)] = val;
-        NDS.JIT.CheckAndInvalidate<0, ARMJIT_Memory::memregion_ITCM>(addr);
+#ifdef JIT_ENABLED
+        ARMJIT::CheckAndInvalidate<0, ARMJIT_Memory::memregion_ITCM>(addr);
+#endif
         return;
     }
-    if ((addr & DTCMMask) == DTCMBase)
+    if (addr >= DTCMBase && addr < (DTCMBase + DTCMSize))
     {
         DataCycles = 1;
-        *(u8*)&DTCM[addr & (DTCMPhysicalSize - 1)] = val;
+        *(u8*)&DTCM[(addr - DTCMBase) & (DTCMPhysicalSize - 1)] = val;
         return;
     }
 
@@ -963,12 +882,6 @@ void ARMv5::DataWrite8(u32 addr, u8 val)
 
 void ARMv5::DataWrite16(u32 addr, u16 val)
 {
-    if (!(PU_Map[addr>>12] & 0x02))
-    {
-        DataAbort();
-        return;
-    }
-
     DataRegion = addr;
 
     addr &= ~1;
@@ -977,13 +890,15 @@ void ARMv5::DataWrite16(u32 addr, u16 val)
     {
         DataCycles = 1;
         *(u16*)&ITCM[addr & (ITCMPhysicalSize - 1)] = val;
-        NDS.JIT.CheckAndInvalidate<0, ARMJIT_Memory::memregion_ITCM>(addr);
+#ifdef JIT_ENABLED
+        ARMJIT::CheckAndInvalidate<0, ARMJIT_Memory::memregion_ITCM>(addr);
+#endif
         return;
     }
-    if ((addr & DTCMMask) == DTCMBase)
+    if (addr >= DTCMBase && addr < (DTCMBase + DTCMSize))
     {
         DataCycles = 1;
-        *(u16*)&DTCM[addr & (DTCMPhysicalSize - 1)] = val;
+        *(u16*)&DTCM[(addr - DTCMBase) & (DTCMPhysicalSize - 1)] = val;
         return;
     }
 
@@ -993,12 +908,6 @@ void ARMv5::DataWrite16(u32 addr, u16 val)
 
 void ARMv5::DataWrite32(u32 addr, u32 val)
 {
-    if (!(PU_Map[addr>>12] & 0x02))
-    {
-        DataAbort();
-        return;
-    }
-
     DataRegion = addr;
 
     addr &= ~3;
@@ -1007,13 +916,15 @@ void ARMv5::DataWrite32(u32 addr, u32 val)
     {
         DataCycles = 1;
         *(u32*)&ITCM[addr & (ITCMPhysicalSize - 1)] = val;
-        NDS.JIT.CheckAndInvalidate<0, ARMJIT_Memory::memregion_ITCM>(addr);
+#ifdef JIT_ENABLED
+        ARMJIT::CheckAndInvalidate<0, ARMJIT_Memory::memregion_ITCM>(addr);
+#endif
         return;
     }
-    if ((addr & DTCMMask) == DTCMBase)
+    if (addr >= DTCMBase && addr < (DTCMBase + DTCMSize))
     {
         DataCycles = 1;
-        *(u32*)&DTCM[addr & (DTCMPhysicalSize - 1)] = val;
+        *(u32*)&DTCM[(addr - DTCMBase) & (DTCMPhysicalSize - 1)] = val;
         return;
     }
 
@@ -1030,14 +941,14 @@ void ARMv5::DataWrite32S(u32 addr, u32 val)
         DataCycles += 1;
         *(u32*)&ITCM[addr & (ITCMPhysicalSize - 1)] = val;
 #ifdef JIT_ENABLED
-        NDS.JIT.CheckAndInvalidate<0, ARMJIT_Memory::memregion_ITCM>(addr);
+        ARMJIT::CheckAndInvalidate<0, ARMJIT_Memory::memregion_ITCM>(addr);
 #endif
         return;
     }
-    if ((addr & DTCMMask) == DTCMBase)
+    if (addr >= DTCMBase && addr < (DTCMBase + DTCMSize))
     {
         DataCycles += 1;
-        *(u32*)&DTCM[addr & (DTCMPhysicalSize - 1)] = val;
+        *(u32*)&DTCM[(addr - DTCMBase) & (DTCMPhysicalSize - 1)] = val;
         return;
     }
 
@@ -1045,7 +956,7 @@ void ARMv5::DataWrite32S(u32 addr, u32 val)
     DataCycles += MemTimings[addr >> 12][3];
 }
 
-void ARMv5::GetCodeMemRegion(u32 addr, MemRegion* region)
+void ARMv5::GetCodeMemRegion(u32 addr, NDS::MemRegion* region)
 {
     /*if (addr < ITCMSize)
     {
@@ -1054,7 +965,6 @@ void ARMv5::GetCodeMemRegion(u32 addr, MemRegion* region)
         return;
     }*/
 
-    NDS.ARM9GetMemRegion(addr, false, &CodeMem);
+    GetMemRegion(addr, false, &CodeMem);
 }
 
-}

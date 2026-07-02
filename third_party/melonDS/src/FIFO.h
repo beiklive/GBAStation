@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2025 melonDS team
+    Copyright 2016-2021 Arisotura
 
     This file is part of melonDS.
 
@@ -20,10 +20,6 @@
 #define FIFO_H
 
 #include "types.h"
-#include "Savestate.h"
-
-namespace melonDS
-{
 
 template<typename T, u32 NumEntries>
 class FIFO
@@ -63,10 +59,9 @@ public:
 
     T Read()
     {
-        if (IsEmpty())
-            return Entries[((ReadPos==0) ? NumEntries : ReadPos) - 1];
-
         T ret = Entries[ReadPos];
+        if (IsEmpty())
+            return ret;
 
         ReadPos++;
         if (ReadPos >= NumEntries)
@@ -76,12 +71,12 @@ public:
         return ret;
     }
 
-    T Peek() const
+    T Peek()
     {
         return Entries[ReadPos];
     }
 
-    T Peek(u32 offset) const
+    T Peek(u32 offset)
     {
         u32 pos = ReadPos + offset;
         if (pos >= NumEntries)
@@ -90,11 +85,11 @@ public:
         return Entries[pos];
     }
 
-    u32 Level() const { return NumOccupied; }
-    bool IsEmpty() const { return NumOccupied == 0; }
-    bool IsFull() const { return NumOccupied >= NumEntries; }
+    u32 Level() { return NumOccupied; }
+    bool IsEmpty() { return NumOccupied == 0; }
+    bool IsFull() { return NumOccupied >= NumEntries; }
 
-    bool CanFit(u32 num) const { return ((NumOccupied + num) <= NumEntries); }
+    bool CanFit(u32 num) { return ((NumOccupied + num) <= NumEntries); }
 
 private:
     T Entries[NumEntries] = {0};
@@ -166,12 +161,12 @@ public:
         return ret;
     }
 
-    T Peek() const
+    T Peek()
     {
         return Entries[ReadPos];
     }
 
-    T Peek(u32 offset) const
+    T Peek(u32 offset)
     {
         u32 pos = ReadPos + offset;
         if (pos >= NumEntries)
@@ -180,11 +175,11 @@ public:
         return Entries[pos];
     }
 
-    u32 Level() const { return NumOccupied; }
-    bool IsEmpty() const { return NumOccupied == 0; }
-    bool IsFull() const { return NumOccupied >= NumEntries; }
+    u32 Level() { return NumOccupied; }
+    bool IsEmpty() { return NumOccupied == 0; }
+    bool IsFull() { return NumOccupied >= NumEntries; }
 
-    bool CanFit(u32 num) const { return ((NumOccupied + num) <= NumEntries); }
+    bool CanFit(u32 num) { return ((NumOccupied + num) <= NumEntries); }
 
 private:
     u32 NumEntries;
@@ -192,122 +187,5 @@ private:
     u32 NumOccupied;
     u32 ReadPos, WritePos;
 };
-
-template<u32 Size>
-class RingBuffer
-{
-public:
-    void Clear()
-    {
-        NumOccupied = 0;
-        ReadPos = 0;
-        WritePos = 0;
-        memset(Buffer, 0, Size);
-    }
-
-
-    void DoSavestate(Savestate* file)
-    {
-        file->Var32(&NumOccupied);
-        file->Var32(&ReadPos);
-        file->Var32(&WritePos);
-
-        file->VarArray(Buffer, Size);
-    }
-
-
-    bool Write(const void* data, u32 len)
-    {
-        if (!CanFit(len)) return false;
-
-        if ((WritePos + len) >= Size)
-        {
-            u32 part1 = Size - WritePos;
-            memcpy(&Buffer[WritePos], data, part1);
-            if (len > part1)
-                memcpy(Buffer, &((const u8*)data)[part1], len - part1);
-            WritePos = len - part1;
-        }
-        else
-        {
-            memcpy(&Buffer[WritePos], data, len);
-            WritePos += len;
-        }
-
-        NumOccupied += len;
-
-        return true;
-    }
-
-    bool Read(void* data, u32 len)
-    {
-        if (NumOccupied < len) return false;
-
-        u32 readpos = ReadPos;
-        if ((readpos + len) >= Size)
-        {
-            u32 part1 = Size - readpos;
-            memcpy(data, &Buffer[readpos], part1);
-            if (len > part1)
-                memcpy(&((u8*)data)[part1], Buffer, len - part1);
-            ReadPos = len - part1;
-        }
-        else
-        {
-            memcpy(data, &Buffer[readpos], len);
-            ReadPos += len;
-        }
-
-        NumOccupied -= len;
-        return true;
-    }
-
-    bool Peek(void* data, u32 offset, u32 len)
-    {
-        if (NumOccupied < len) return false;
-
-        u32 readpos = ReadPos + offset;
-        if (readpos >= Size) readpos -= Size;
-
-        if ((readpos + len) >= Size)
-        {
-            u32 part1 = Size - readpos;
-            memcpy(data, &Buffer[readpos], part1);
-            if (len > part1)
-                memcpy(&((u8*)data)[part1], Buffer, len - part1);
-        }
-        else
-        {
-            memcpy(data, &Buffer[readpos], len);
-        }
-
-        return true;
-    }
-
-    bool Skip(u32 len)
-    {
-        if (NumOccupied < len) return false;
-
-        ReadPos += len;
-        if (ReadPos >= Size)
-            ReadPos -= Size;
-
-        NumOccupied -= len;
-        return true;
-    }
-
-    u32 Level() const { return NumOccupied; }
-    bool IsEmpty() const { return NumOccupied == 0; }
-    bool IsFull() const { return NumOccupied >= Size; }
-
-    bool CanFit(u32 num) const { return ((NumOccupied + num) <= Size); }
-
-private:
-    u8 Buffer[Size] = {0};
-    u32 NumOccupied = 0;
-    u32 ReadPos = 0, WritePos = 0;
-};
-
-}
 
 #endif

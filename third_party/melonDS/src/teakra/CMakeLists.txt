@@ -61,11 +61,6 @@ else()
         -Wno-missing-braces
         -Wno-unused-parameter)
 
-    if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-        list(APPEND TEAKRA_CXX_FLAGS
-             -Wno-error=maybe-uninitialized)
-    endif()
-
     if (TEAKRA_WARNINGS_AS_ERRORS)
         list(APPEND TEAKRA_CXX_FLAGS
              -Werror)

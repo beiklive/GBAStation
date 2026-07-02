@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2025 melonDS team
+    Copyright 2016-2021 Arisotura
 
     This file is part of melonDS.
 
@@ -22,10 +22,11 @@
 #include "types.h"
 #include "Platform.h"
 #include "Config.h"
-#include "main.h"
+#include "PlatformConfig.h"
 
-#include "Net.h"
-#include "Net_PCap.h"
+#include "LAN_Socket.h"
+#include "LAN_PCap.h"
+#include "Wifi.h"
 
 #include "WifiSettingsDialog.h"
 #include "ui_WifiSettingsDialog.h"
@@ -37,51 +38,41 @@
 #define PCAP_NAME "libpcap"
 #endif
 
-extern std::optional<melonDS::LibPCap> pcap;
-extern melonDS::Net net;
 
 WifiSettingsDialog* WifiSettingsDialog::currentDlg = nullptr;
 
 bool WifiSettingsDialog::needsReset = false;
 
-void NetInit();
+extern bool RunningSomething;
+
 
 WifiSettingsDialog::WifiSettingsDialog(QWidget* parent) : QDialog(parent), ui(new Ui::WifiSettingsDialog)
 {
     ui->setupUi(this);
     setAttribute(Qt::WA_DeleteOnClose);
 
-    emuInstance = ((MainWindow*)parent)->getEmuInstance();
-    auto& cfg = emuInstance->getGlobalConfig();
-
-    if (!pcap)
-        pcap = melonDS::LibPCap::New();
-
-    haspcap = pcap.has_value();
-    if (pcap)
-        adapters = pcap->GetAdapters();
+    LAN_Socket::Init();
+    haspcap = LAN_PCap::Init(false);
 
     ui->rbDirectMode->setText("Direct mode (requires " PCAP_NAME " and ethernet connection)");
 
-    ui->lblAdapterMAC->setText("(none)");
-    ui->lblAdapterIP->setText("(none)");
+    ui->cbBindAnyAddr->setChecked(Config::SocketBindAnyAddr != 0);
+    ui->cbRandomizeMAC->setChecked(Config::RandomizeMAC != 0);
 
     int sel = 0;
-    for (int i = 0; i < adapters.size(); i++)
+    for (int i = 0; i < LAN_PCap::NumAdapters; i++)
     {
-        melonDS::AdapterData& adapter = adapters[i];
+        LAN_PCap::AdapterData* adapter = &LAN_PCap::Adapters[i];
 
-        ui->cbxDirectAdapter->addItem(QString(adapter.FriendlyName));
+        ui->cbxDirectAdapter->addItem(QString(adapter->FriendlyName));
 
-        if (!strncmp(adapter.DeviceName, cfg.GetString("LAN.Device").c_str(), 128))
+        if (!strncmp(adapter->DeviceName, Config::LANDevice, 128))
             sel = i;
     }
     ui->cbxDirectAdapter->setCurrentIndex(sel);
 
-    // errrr???
-    bool direct = cfg.GetBool("LAN.DirectMode");
-    ui->rbDirectMode->setChecked(direct);
-    ui->rbIndirectMode->setChecked(!direct);
+    ui->rbDirectMode->setChecked(Config::DirectLAN != 0);
+    ui->rbIndirectMode->setChecked(Config::DirectLAN == 0);
     if (!haspcap) ui->rbDirectMode->setEnabled(false);
 
     updateAdapterControls();
@@ -94,39 +85,41 @@ WifiSettingsDialog::~WifiSettingsDialog()
 
 void WifiSettingsDialog::done(int r)
 {
-    if (!((MainWindow*)parent())->getEmuInstance())
-    {
-        QDialog::done(r);
-        closeDlg();
-        return;
-    }
-
     needsReset = false;
 
     if (r == QDialog::Accepted)
     {
-        auto& cfg = emuInstance->getGlobalConfig();
+        int randommac = ui->cbRandomizeMAC->isChecked() ? 1:0;
 
-        cfg.SetBool("LAN.DirectMode", ui->rbDirectMode->isChecked());
+        if (randommac != Config::RandomizeMAC)
+        {
+            if (RunningSomething
+                && QMessageBox::warning(this, "Reset necessary to apply changes",
+                    "The emulation will be reset for the changes to take place.",
+                    QMessageBox::Ok, QMessageBox::Cancel) != QMessageBox::Ok)
+                return;
+        }
+
+        Config::SocketBindAnyAddr = ui->cbBindAnyAddr->isChecked() ? 1:0;
+        Config::RandomizeMAC = randommac;
+        Config::DirectLAN = ui->rbDirectMode->isChecked() ? 1:0;
 
         int sel = ui->cbxDirectAdapter->currentIndex();
-        if (sel < 0 || sel >= adapters.size()) sel = 0;
-        if (adapters.empty())
+        if (sel < 0 || sel >= LAN_PCap::NumAdapters) sel = 0;
+        if (LAN_PCap::NumAdapters < 1)
         {
-            cfg.SetString("LAN.Device", "");
+            Config::LANDevice[0] = '\0';
         }
         else
         {
-            cfg.SetString("LAN.Device", adapters[sel].DeviceName);
+            strncpy(Config::LANDevice, LAN_PCap::Adapters[sel].DeviceName, 127);
+            Config::LANDevice[127] = '\0';
         }
 
         Config::Save();
+
+        needsReset = true;
     }
-
-    Config::Table cfg = Config::GetGlobalTable();
-    std::string devicename = cfg.GetString("LAN.Device");
-
-    NetInit();
 
     QDialog::done(r);
 
@@ -137,29 +130,28 @@ void WifiSettingsDialog::on_rbDirectMode_clicked()
 {
     updateAdapterControls();
 }
-
 void WifiSettingsDialog::on_rbIndirectMode_clicked()
 {
     updateAdapterControls();
 }
-
 void WifiSettingsDialog::on_cbxDirectAdapter_currentIndexChanged(int sel)
 {
     if (!haspcap) return;
 
-    if (sel < 0 || sel >= adapters.size() || adapters.empty()) return;
+    if (sel < 0 || sel >= LAN_PCap::NumAdapters) return;
+    if (LAN_PCap::NumAdapters < 1) return;
 
-    melonDS::AdapterData* adapter = &adapters[sel];
+    LAN_PCap::AdapterData* adapter = &LAN_PCap::Adapters[sel];
     char tmp[64];
 
-    snprintf(tmp, sizeof(tmp), "%02X:%02X:%02X:%02X:%02X:%02X",
-             adapter->MAC[0], adapter->MAC[1], adapter->MAC[2],
-             adapter->MAC[3], adapter->MAC[4], adapter->MAC[5]);
+    sprintf(tmp, "MAC: %02X:%02X:%02X:%02X:%02X:%02X",
+            adapter->MAC[0], adapter->MAC[1], adapter->MAC[2],
+            adapter->MAC[3], adapter->MAC[4], adapter->MAC[5]);
     ui->lblAdapterMAC->setText(QString(tmp));
 
-    snprintf(tmp, sizeof(tmp), "%d.%d.%d.%d",
-             adapter->IP_v4[0], adapter->IP_v4[1],
-             adapter->IP_v4[2], adapter->IP_v4[3]);
+    sprintf(tmp, "IP: %d.%d.%d.%d",
+            adapter->IP_v4[0], adapter->IP_v4[1],
+            adapter->IP_v4[2], adapter->IP_v4[3]);
     ui->lblAdapterIP->setText(QString(tmp));
 }
 

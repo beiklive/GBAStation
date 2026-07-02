@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2025 melonDS team
+    Copyright 2016-2021 Arisotura
 
     This file is part of melonDS.
 
@@ -19,56 +19,35 @@
 #ifndef DSI_SD_H
 #define DSI_SD_H
 
-#include <cstring>
-#include <variant>
+#include <string.h>
 #include "FIFO.h"
-#include "FATStorage.h"
-#include "DSi_NAND.h"
-#include "Savestate.h"
 
-namespace melonDS
-{
+
 class DSi_SDDevice;
-class DSi;
 
-using Nothing = std::monostate;
-using DSiStorage = std::variant<std::monostate, FATStorage, DSi_NAND::NANDImage>;
 
 class DSi_SDHost
 {
 public:
-    /// Creates an SDMMC host.
-    DSi_SDHost(melonDS::DSi& dsi, DSi_NAND::NANDImage&& nand, std::optional<FATStorage>&& sdcard = std::nullopt) noexcept;
-
-    /// Creates an SDIO host
-    explicit DSi_SDHost(melonDS::DSi& dsi) noexcept;
+    DSi_SDHost(u32 num);
     ~DSi_SDHost();
 
     void Reset();
 
     void DoSavestate(Savestate* file);
 
-    void FinishRX(u32 param);
-    void FinishTX(u32 param);
+    static void FinishRX(u32 param);
+    static void FinishTX(u32 param);
     void SendResponse(u32 val, bool last);
-    u32 DataRX(const u8* data, u32 len);
+    u32 DataRX(u8* data, u32 len);
     u32 DataTX(u8* data, u32 len);
-    u32 GetTransferrableLen(u32 len) const;
+    u32 GetTransferrableLen(u32 len);
 
     void CheckRX();
     void CheckTX();
     bool TXReq;
 
     void SetCardIRQ();
-
-    [[nodiscard]] FATStorage* GetSDCard() noexcept;
-    [[nodiscard]] const FATStorage* GetSDCard() const noexcept;
-    [[nodiscard]] DSi_NAND::NANDImage* GetNAND() noexcept;
-    [[nodiscard]] const DSi_NAND::NANDImage* GetNAND() const noexcept;
-
-    void SetSDCard(FATStorage&& sdcard) noexcept;
-    void SetSDCard(std::optional<FATStorage>&& sdcard) noexcept;
-    void SetNAND(DSi_NAND::NANDImage&& nand) noexcept;
 
     u16 Read(u32 addr);
     void Write(u32 addr, u16 val);
@@ -81,7 +60,6 @@ public:
     void CheckSwapFIFO();
 
 private:
-    melonDS::DSi& DSi;
     u32 Num;
 
     u16 PortSelect;
@@ -107,7 +85,7 @@ private:
     u32 Param;
     u16 ResponseBuffer[8];
 
-    std::array<std::unique_ptr<DSi_SDDevice>, 2> Ports {};
+    DSi_SDDevice* Ports[2];
 
     u32 CurFIFO; // FIFO accessible for read/write
     FIFO<u16, 0x100> DataFIFO[2];
@@ -124,18 +102,15 @@ private:
 class DSi_SDDevice
 {
 public:
-    DSi_SDDevice(DSi_SDHost* host) { Host = host; IRQ = false; ReadOnly = false; }
+    DSi_SDDevice(DSi_SDHost* host) { Host = host; IRQ = false; }
     virtual ~DSi_SDDevice() {}
 
     virtual void Reset() = 0;
-
-    virtual void DoSavestate(Savestate* file) = 0;
 
     virtual void SendCMD(u8 cmd, u32 param) = 0;
     virtual void ContinueTransfer() = 0;
 
     bool IRQ;
-    bool ReadOnly;
 
 protected:
     DSi_SDHost* Host;
@@ -145,53 +120,21 @@ protected:
 class DSi_MMCStorage : public DSi_SDDevice
 {
 public:
-    DSi_MMCStorage(melonDS::DSi& dsi, DSi_SDHost* host, DSi_NAND::NANDImage&& nand) noexcept;
-    DSi_MMCStorage(melonDS::DSi& dsi, DSi_SDHost* host, FATStorage&& sdcard) noexcept;
-    ~DSi_MMCStorage() override;
+    DSi_MMCStorage(DSi_SDHost* host, bool internal, FILE* file);
+    ~DSi_MMCStorage();
 
-    [[nodiscard]] FATStorage* GetSDCard() noexcept { return std::get_if<FATStorage>(&Storage); }
-    [[nodiscard]] const FATStorage* GetSDCard() const noexcept { return std::get_if<FATStorage>(&Storage); }
-    [[nodiscard]] DSi_NAND::NANDImage* GetNAND() noexcept { return std::get_if<DSi_NAND::NANDImage>(&Storage); }
-    [[nodiscard]] const DSi_NAND::NANDImage* GetNAND() const noexcept { return std::get_if<DSi_NAND::NANDImage>(&Storage); }
+    void Reset();
 
-    void SetNAND(DSi_NAND::NANDImage&& nand) noexcept { Storage = std::move(nand); }
-    void SetSDCard(FATStorage&& sdcard) noexcept { Storage = std::move(sdcard); }
-    void SetSDCard(std::optional<FATStorage>&& sdcard) noexcept
-    {
-        if (sdcard)
-        { // If we're setting a new SD card...
-            Storage = std::move(*sdcard);
-            sdcard = std::nullopt;
-        }
-        else
-        {
-            Storage = Nothing();
-        }
-    }
+    void SetCID(u8* cid) { memcpy(CID, cid, 16); }
 
-    void SetStorage(DSiStorage&& storage) noexcept
-    {
-        Storage = std::move(storage);
-        storage = Nothing();
-        // not sure if a moved-from variant is empty or contains a moved-from object;
-        // better to be safe than sorry
-    }
-
-    void Reset() override;
-
-    void DoSavestate(Savestate* file) override;
-
-    void SetCID(const u8* cid) { memcpy(CID, cid, sizeof(CID)); }
-
-    void SendCMD(u8 cmd, u32 param) override;
+    void SendCMD(u8 cmd, u32 param);
     void SendACMD(u8 cmd, u32 param);
 
-    void ContinueTransfer() override;
+    void ContinueTransfer();
 
 private:
-    static constexpr u8 DSiSDCardCID[16] = {0xBD, 0x12, 0x34, 0x56, 0x78, 0x03, 0x4D, 0x30, 0x30, 0x46, 0x50, 0x41, 0x00, 0x00, 0x15, 0x00};
-    melonDS::DSi& DSi;
-    DSiStorage Storage;
+    bool Internal;
+    FILE* File;
 
     u8 CID[16];
     u8 CSD[16];
@@ -212,5 +155,4 @@ private:
     u32 WriteBlock(u64 addr);
 };
 
-}
 #endif // DSI_SD_H

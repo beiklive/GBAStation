@@ -7,11 +7,10 @@
 namespace Teakra {
 class Apbp {
 public:
-    explicit Apbp(int num);
+    Apbp();
     ~Apbp();
 
     void Reset();
-    void DoSavestate(melonDS::Savestate* file);
 
     void SendData(unsigned channel, u16 data);
     u16 RecvData(unsigned channel);

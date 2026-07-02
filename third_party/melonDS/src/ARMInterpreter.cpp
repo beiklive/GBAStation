@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2025 melonDS team
+    Copyright 2016-2021 Arisotura
 
     This file is part of melonDS.
 
@@ -22,24 +22,15 @@
 #include "ARMInterpreter_ALU.h"
 #include "ARMInterpreter_Branch.h"
 #include "ARMInterpreter_LoadStore.h"
-#include "Platform.h"
 
-#ifdef GDBSTUB_ENABLED
-#include "debug/GdbStub.h"
-#endif
 
-namespace melonDS::ARMInterpreter
+namespace ARMInterpreter
 {
-    using Platform::Log;
-    using Platform::LogLevel;
 
 
 void A_UNK(ARM* cpu)
 {
-    Log(LogLevel::Warn, "undefined ARM%d instruction %08X @ %08X\n", cpu->Num?7:9, cpu->CurInstr, cpu->R[15]-8);
-#ifdef GDBSTUB_ENABLED
-    cpu->GdbStub.Enter(cpu->GdbStub.IsConnected(), Gdb::TgtStatus::FaultInsn, cpu->R[15]-8);
-#endif
+    printf("undefined ARM%d instruction %08X @ %08X\n", cpu->Num?7:9, cpu->CurInstr, cpu->R[15]-8);
     //for (int i = 0; i < 16; i++) printf("R%d: %08X\n", i, cpu->R[i]);
     //NDS::Halt();
     u32 oldcpsr = cpu->CPSR;
@@ -54,10 +45,7 @@ void A_UNK(ARM* cpu)
 
 void T_UNK(ARM* cpu)
 {
-    Log(LogLevel::Warn, "undefined THUMB%d instruction %04X @ %08X\n", cpu->Num?7:9, cpu->CurInstr, cpu->R[15]-4);
-#ifdef GDBSTUB_ENABLED
-    cpu->GdbStub.Enter(cpu->GdbStub.IsConnected(), Gdb::TgtStatus::FaultInsn, cpu->R[15]-4);
-#endif
+    printf("undefined THUMB%d instruction %04X @ %08X\n", cpu->Num?7:9, cpu->CurInstr, cpu->R[15]-4);
     //NDS::Halt();
     u32 oldcpsr = cpu->CPSR;
     cpu->CPSR &= ~0xBF;
@@ -81,17 +69,9 @@ void A_MSR_IMM(ARM* cpu)
             case 0x11: psr = &cpu->R_FIQ[7]; break;
             case 0x12: psr = &cpu->R_IRQ[2]; break;
             case 0x13: psr = &cpu->R_SVC[2]; break;
-            case 0x14:
-            case 0x15:
-            case 0x16:
             case 0x17: psr = &cpu->R_ABT[2]; break;
-            case 0x18:
-            case 0x19:
-            case 0x1A:
             case 0x1B: psr = &cpu->R_UND[2]; break;
-            default:
-                cpu->AddCycles_C();
-                return;
+            default: printf("bad CPU mode %08X\n", cpu->CPSR); return;
         }
     }
     else
@@ -112,9 +92,6 @@ void A_MSR_IMM(ARM* cpu)
 
     u32 val = ROR((cpu->CurInstr & 0xFF), ((cpu->CurInstr >> 7) & 0x1E));
 
-    // bit4 is forced to 1
-    val |= 0x00000010;
-
     *psr &= ~mask;
     *psr |= (val & mask);
 
@@ -134,17 +111,9 @@ void A_MSR_REG(ARM* cpu)
             case 0x11: psr = &cpu->R_FIQ[7]; break;
             case 0x12: psr = &cpu->R_IRQ[2]; break;
             case 0x13: psr = &cpu->R_SVC[2]; break;
-            case 0x14:
-            case 0x15:
-            case 0x16:
             case 0x17: psr = &cpu->R_ABT[2]; break;
-            case 0x18:
-            case 0x19:
-            case 0x1A:
             case 0x1B: psr = &cpu->R_UND[2]; break;
-            default:
-                cpu->AddCycles_C();
-                return;
+            default: printf("bad CPU mode %08X\n", cpu->CPSR); return;
         }
     }
     else
@@ -165,9 +134,6 @@ void A_MSR_REG(ARM* cpu)
 
     u32 val = cpu->R[cpu->CurInstr & 0xF];
 
-    // bit4 is forced to 1
-    val |= 0x00000010;
-
     *psr &= ~mask;
     *psr |= (val & mask);
 
@@ -187,15 +153,9 @@ void A_MRS(ARM* cpu)
             case 0x11: psr = cpu->R_FIQ[7]; break;
             case 0x12: psr = cpu->R_IRQ[2]; break;
             case 0x13: psr = cpu->R_SVC[2]; break;
-            case 0x14:
-            case 0x15:
-            case 0x16:
             case 0x17: psr = cpu->R_ABT[2]; break;
-            case 0x18:
-            case 0x19:
-            case 0x1A:
             case 0x1B: psr = cpu->R_UND[2]; break;
-            default: psr = cpu->CPSR; break;
+            default: printf("bad CPU mode %08X\n", cpu->CPSR); return;
         }
     }
     else
@@ -208,9 +168,6 @@ void A_MRS(ARM* cpu)
 
 void A_MCR(ARM* cpu)
 {
-    if ((cpu->CPSR & 0x1F) == 0x10)
-        return A_UNK(cpu);
-
     u32 cp = (cpu->CurInstr >> 8) & 0xF;
     //u32 op = (cpu->CurInstr >> 21) & 0x7;
     u32 cn = (cpu->CurInstr >> 16) & 0xF;
@@ -223,11 +180,11 @@ void A_MCR(ARM* cpu)
     }
     else if (cpu->Num==1 && cp==14)
     {
-        Log(LogLevel::Debug, "MCR p14,%d,%d,%d on ARM7\n", cn, cm, cpinfo);
+        printf("MCR p14,%d,%d,%d on ARM7\n", cn, cm, cpinfo);
     }
     else
     {
-        Log(LogLevel::Warn, "bad MCR opcode p%d,%d,%d,%d on ARM%d\n", cp, cn, cm, cpinfo, cpu->Num?7:9);
+        printf("bad MCR opcode p%d,%d,%d,%d on ARM%d\n", cp, cn, cm, cpinfo, cpu->Num?7:9);
         return A_UNK(cpu); // TODO: check what kind of exception it really is
     }
 
@@ -236,9 +193,6 @@ void A_MCR(ARM* cpu)
 
 void A_MRC(ARM* cpu)
 {
-    if ((cpu->CPSR & 0x1F) == 0x10)
-        return A_UNK(cpu);
-
     u32 cp = (cpu->CurInstr >> 8) & 0xF;
     //u32 op = (cpu->CurInstr >> 21) & 0x7;
     u32 cn = (cpu->CurInstr >> 16) & 0xF;
@@ -251,11 +205,11 @@ void A_MRC(ARM* cpu)
     }
     else if (cpu->Num==1 && cp==14)
     {
-        Log(LogLevel::Debug, "MRC p14,%d,%d,%d on ARM7\n", cn, cm, cpinfo);
+        printf("MRC p14,%d,%d,%d on ARM7\n", cn, cm, cpinfo);
     }
     else
     {
-        Log(LogLevel::Warn, "bad MRC opcode p%d,%d,%d,%d on ARM%d\n", cp, cn, cm, cpinfo, cpu->Num?7:9);
+        printf("bad MRC opcode p%d,%d,%d,%d on ARM%d\n", cp, cn, cm, cpinfo, cpu->Num?7:9);
         return A_UNK(cpu); // TODO: check what kind of exception it really is
     }
 

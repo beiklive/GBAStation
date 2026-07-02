@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2025 melonDS team
+    Copyright 2016-2021 Arisotura
 
     This file is part of melonDS.
 
@@ -23,8 +23,6 @@
 
 namespace Ui { class EmuSettingsDialog; }
 class EmuSettingsDialog;
-
-class EmuInstance;
 
 class EmuSettingsDialog : public QDialog
 {
@@ -60,34 +58,20 @@ private slots:
     void on_btnBIOS9Browse_clicked();
     void on_btnBIOS7Browse_clicked();
     void on_btnFirmwareBrowse_clicked();
-
-    void on_cbDLDIEnable_toggled();
     void on_btnDLDISDBrowse_clicked();
-    void on_cbDLDIFolder_toggled();
-    void on_btnDLDIFolderBrowse_clicked();
 
     void on_btnDSiBIOS9Browse_clicked();
     void on_btnDSiBIOS7Browse_clicked();
     void on_btnDSiFirmwareBrowse_clicked();
     void on_btnDSiNANDBrowse_clicked();
-
-    void on_cbDSiSDEnable_toggled();
     void on_btnDSiSDBrowse_clicked();
-    void on_cbDSiSDFolder_toggled();
-    void on_btnDSiSDFolderBrowse_clicked();
 
     void on_chkEnableJIT_toggled();
-    void on_chkExternalBIOS_toggled();
-
-    void on_cbGdbEnabled_toggled();
 
 private:
     void verifyFirmware();
-    void updateLastBIOSFolder(QString& filename);
 
     Ui::EmuSettingsDialog* ui;
-    EmuInstance* emuInstance;
-    QString lastBIOSFolder;
 };
 
 #endif // EMUSETTINGSDIALOG_H

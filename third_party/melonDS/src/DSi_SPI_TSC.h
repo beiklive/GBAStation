@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2025 melonDS team
+    Copyright 2016-2021 Arisotura
 
     This file is part of melonDS.
 
@@ -19,38 +19,22 @@
 #ifndef DSI_SPI_TSC
 #define DSI_SPI_TSC
 
-#include "types.h"
-#include "Savestate.h"
-#include "SPI.h"
-
-namespace melonDS
+namespace DSi_SPI_TSC
 {
-class DSi;
-class DSi_TSC : public TSC
-{
-public:
-    DSi_TSC(melonDS::DSi& dsi);
-    ~DSi_TSC() override;
 
-    void Reset() override;
+extern u32 DataPos;
 
-    void DoSavestate(Savestate* file) override;
+bool Init();
+void DeInit();
+void Reset();
+void DoSavestate(Savestate* file);
 
-    // 00=DS-mode 01=normal
-    void SetMode(u8 mode);
+void SetTouchCoords(u16 x, u16 y);
+void MicInputFrame(s16* data, int samples);
 
-    void SetTouchCoords(u16 x, u16 y) override;
-
-    void Write(u8 val) override;
-    void Release() override;
-
-private:
-    u8 Index;
-    u8 Bank;
-
-    u8 Bank3Regs[0x80];
-    u8 TSCMode;
-};
+u8 Read();
+void Write(u8 val, u32 hold);
 
 }
+
 #endif // DSI_SPI_TSC

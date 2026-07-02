@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2025 melonDS team
+    Copyright 2016-2021 Arisotura
 
     This file is part of melonDS.
 
@@ -20,13 +20,9 @@
 #define WIFISETTINGSDIALOG_H
 
 #include <QDialog>
-#include <vector>
-#include "Net_PCap.h"
 
 namespace Ui { class WifiSettingsDialog; }
 class WifiSettingsDialog;
-
-class EmuInstance;
 
 class WifiSettingsDialog : public QDialog
 {
@@ -65,12 +61,10 @@ private slots:
 
 private:
     Ui::WifiSettingsDialog* ui;
-    EmuInstance* emuInstance;
 
     bool haspcap;
 
     void updateAdapterControls();
-    std::vector<melonDS::AdapterData> adapters;
 };
 
 #endif // WIFISETTINGSDIALOG_H

@@ -14,8 +14,6 @@
 
 namespace Arm64Gen
 {
-using namespace melonDS;
-using namespace Common;
 // X30 serves a dual purpose as a link register
 // Encoded as <u3:type><u5:reg>
 // Types:

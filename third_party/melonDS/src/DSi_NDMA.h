@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2025 melonDS team
+    Copyright 2016-2021 Arisotura
 
     This file is part of melonDS.
 
@@ -20,16 +20,11 @@
 #define DSI_NDMA_H
 
 #include "types.h"
-#include "Savestate.h"
-
-namespace melonDS
-{
-class DSi;
 
 class DSi_NDMA
 {
 public:
-    DSi_NDMA(u32 cpu, u32 num, melonDS::DSi& dsi);
+    DSi_NDMA(u32 cpu, u32 num);
     ~DSi_NDMA();
 
     void Reset();
@@ -44,12 +39,12 @@ public:
     void Run9();
     void Run7();
 
-    bool IsInMode(u32 mode) const
+    bool IsInMode(u32 mode)
     {
         return ((mode == StartMode) && (Cnt & 0x80000000));
     }
 
-    bool IsRunning() const { return Running!=0; }
+    bool IsRunning() { return Running!=0; }
 
     void StartIfNeeded(u32 mode)
     {
@@ -77,7 +72,6 @@ public:
     u32 Cnt;
 
 private:
-    melonDS::DSi& DSi;
     u32 CPU, Num;
 
     u32 StartMode;
@@ -99,5 +93,4 @@ private:
     bool IsGXFIFODMA;
 };
 
-}
 #endif // DSI_NDMA_H

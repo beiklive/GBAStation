@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2025 melonDS team
+    Copyright 2016-2021 Arisotura
 
     This file is part of melonDS.
 
@@ -27,33 +27,11 @@
 
 #include "ARCodeFile.h"
 
+Q_DECLARE_METATYPE(ARCodeList::iterator)
+Q_DECLARE_METATYPE(ARCodeCatList::iterator)
+
 namespace Ui { class CheatsDialog; }
 class CheatsDialog;
-class CheatImportDialog;
-
-class EmuInstance;
-
-namespace melonDS
-{
-    class ARDatabaseDAT;
-}
-
-class CheatListModel : public QStandardItemModel
-{
-    Q_OBJECT
-
-public:
-    CheatListModel(QObject* parent = nullptr) : QStandardItemModel(parent) {}
-
-    void populateCheatListCat(QStandardItem* parentitem, melonDS::ARCodeCat& parentcat);
-
-    Qt::DropActions supportedDragActions() const override { return Qt::MoveAction; }
-    Qt::DropActions supportedDropActions() const override { return Qt::MoveAction; }
-
-    QMimeData* mimeData(const QModelIndexList& indexes) const override;
-    bool canDropMimeData(const QMimeData* mime, Qt::DropAction action, int row, int column, const QModelIndex& parent) const override;
-    bool dropMimeData(const QMimeData* mime, Qt::DropAction action, int row, int column, const QModelIndex& parent) override;
-};
 
 class ARCodeChecker : public QSyntaxHighlighter
 {
@@ -94,40 +72,23 @@ public:
     }
 
 private slots:
-    void done(int r) override;
+    void on_CheatsDialog_accepted();
+    void on_CheatsDialog_rejected();
 
     void on_btnNewCat_clicked();
     void on_btnNewARCode_clicked();
     void on_btnDeleteCode_clicked();
-    void on_btnImportCheats_clicked();
-    void onImportCheatsFinished(int res);
 
     void onCheatSelectionChanged(const QItemSelection& sel, const QItemSelection& desel);
     void onCheatEntryModified(QStandardItem* item);
 
-    void on_btnEditCode_clicked();
-    void on_btnSaveCode_clicked();
-    void on_btnCancelEdit_clicked();
+    void on_txtCode_textChanged();
 
 private:
     Ui::CheatsDialog* ui;
 
-    EmuInstance* emuInstance;
-
-    melonDS::u32 gameCode;
-    melonDS::u32 gameChecksum;
-
-    melonDS::ARCodeFile* codeFile;
+    ARCodeFile* codeFile;
     ARCodeChecker* codeChecker;
-
-    melonDS::ARDatabaseDAT* importDB;
-    CheatImportDialog* importDlg;
-
-    bool updatingEnableChk;
-
-    void populateCheatList();
-    void populateCheatInfo();
-    std::vector<melonDS::u32> convertCodeInput();
 };
 
 #endif // CHEATSDIALOG_H

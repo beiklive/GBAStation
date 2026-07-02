@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2025 melonDS team
+    Copyright 2016-2021 Arisotura
 
     This file is part of melonDS.
 
@@ -20,52 +20,49 @@
 
 #include "OpenGLSupport.h"
 
-#include <array>
-#include <optional>
-
-namespace melonDS
+namespace GPU
 {
-class GPU;
+
 struct RenderSettings;
-class GLRenderer;
-class Renderer3D;
+
 class GLCompositor
 {
 public:
-    static std::optional<GLCompositor> New() noexcept;
+    GLCompositor() = default;
     GLCompositor(const GLCompositor&) = delete;
     GLCompositor& operator=(const GLCompositor&) = delete;
-    GLCompositor(GLCompositor&&) noexcept;
-    GLCompositor& operator=(GLCompositor&&) noexcept;
-    ~GLCompositor();
 
-    void SetScaleFactor(int scale) noexcept;
-    [[nodiscard]] int GetScaleFactor() const noexcept { return Scale; }
+    bool Init();
+    void DeInit();
+    void Reset();
 
-    void Stop(const GPU& gpu) noexcept;
-    void RenderFrame(const GPU& gpu, Renderer3D& renderer) noexcept;
+    void SetRenderSettings(RenderSettings& settings);
+
+    void Stop();
+    void RenderFrame();
     void BindOutputTexture(int buf);
 private:
-    GLCompositor(GLuint CompShader) noexcept;
-    int Scale = 0;
-    int ScreenH = 0, ScreenW = 0;
 
-    GLuint CompShader {};
-    GLuint CompScaleLoc = 0;
+    int Scale;
+    int ScreenH, ScreenW;
 
-    GLuint CompVertexBufferID = 0;
-    GLuint CompVertexArrayID = 0;
+    GLuint CompShader[1][3];
+    GLuint CompScaleLoc[1];
+    GLuint Comp3DXPosLoc[1];
+
+    GLuint CompVertexBufferID;
+    GLuint CompVertexArrayID;
 
     struct CompVertex
     {
-        std::array<float, 2> Position {};
-        std::array<float, 2> Texcoord {};
+        float Position[2];
+        float Texcoord[2];
     };
-    std::array<CompVertex, 2*3*2> CompVertices {};
+    CompVertex CompVertices[2 * 3*2];
 
-    GLuint CompScreenInputTex = 0;
-    std::array<GLuint, 2> CompScreenOutputTex {};
-    std::array<GLuint, 2> CompScreenOutputFB {};
+    GLuint CompScreenInputTex;
+    GLuint CompScreenOutputTex[2];
+    GLuint CompScreenOutputFB[2];
 };
 
 }

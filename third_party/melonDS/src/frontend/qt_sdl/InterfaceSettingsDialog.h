@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2025 melonDS team
+    Copyright 2016-2021 Arisotura, WaluigiWare64
 
     This file is part of melonDS.
 
@@ -23,8 +23,6 @@
 
 namespace Ui { class InterfaceSettingsDialog; }
 class InterfaceSettingsDialog;
-
-class EmuInstance;
 
 class InterfaceSettingsDialog : public QDialog
 {
@@ -53,27 +51,15 @@ public:
     }
 
 signals:
-    void updateInterfaceSettings();
+    void updateMouseTimer();
 
 private slots:
     void done(int r);
 
     void on_cbMouseHide_clicked();
 
-    void on_pbClean_clicked();
-    void on_pbAccurate_clicked();
-
-    void on_pb2x_clicked();
-    void on_pb3x_clicked();
-    void on_pbMAX_clicked();
-
-    void on_pbHalf_clicked();
-    void on_pbQuarter_clicked();
-
 private:
     Ui::InterfaceSettingsDialog* ui;
-
-    EmuInstance* emuInstance;
 };
 
 #endif // INTERFACESETTINGSDIALOG_H

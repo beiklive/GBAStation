@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2025 melonDS team
+    Copyright 2016-2021 Arisotura
 
     This file is part of melonDS.
 
@@ -21,19 +21,14 @@
 
 #include "DSi_SD.h"
 #include "FIFO.h"
-#include "Savestate.h"
 
-namespace melonDS
-{
 class DSi_NWifi : public DSi_SDDevice
 {
 public:
-    DSi_NWifi(melonDS::DSi& dsi, DSi_SDHost* host);
+    DSi_NWifi(DSi_SDHost* host);
     ~DSi_NWifi();
 
     void Reset();
-
-    void DoSavestate(Savestate* file);
 
     void SendCMD(u8 cmd, u32 param);
     void SendACMD(u8 cmd, u32 param);
@@ -42,10 +37,11 @@ public:
 
     void SetIRQ_F1_Counter(u32 n);
 
-    void MSTimer(u32 param);
+    void _MSTimer();
+
+    static void MSTimer(u32 param);
 
 private:
-    melonDS::DSi& DSi;
     u32 TransferCmd;
     u32 TransferAddr;
     u32 RemSize;
@@ -147,9 +143,6 @@ private:
     u32 ConnectionStatus;
 
     u8 LANBuffer[2048];
-
-    bool SendBSSInfo;
 };
 
-}
 #endif // DSI_NWIFI_H

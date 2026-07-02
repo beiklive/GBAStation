@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2025 melonDS team, RSDuck
+    Copyright 2016-2021 Arisotura, RSDuck
 
     This file is part of melonDS.
 
@@ -17,7 +17,7 @@
 */
 
 #include "../ARM.h"
-using namespace melonDS;
+
 int main(int argc, char* argv[])
 {
     FILE* f = fopen("ARMJIT_Offsets.h", "w");

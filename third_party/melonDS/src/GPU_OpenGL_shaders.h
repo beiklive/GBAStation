@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2025 melonDS team
+    Copyright 2016-2021 Arisotura
 
     This file is part of melonDS.
 
@@ -19,8 +19,6 @@
 #ifndef GPU_OPENGL_SHADERS_H
 #define GPU_OPENGL_SHADERS_H
 
-namespace melonDS
-{
 const char* kCompositorVS = R"(#version 140
 
 in vec2 vPosition;
@@ -43,6 +41,7 @@ void main()
 const char* kCompositorFS_Nearest = R"(#version 140
 
 uniform uint u3DScale;
+uniform int u3DXPos;
 
 uniform usampler2D ScreenTex;
 uniform sampler2D _3DTex;
@@ -55,12 +54,10 @@ void main()
 {
     ivec4 pixel = ivec4(texelFetch(ScreenTex, ivec2(fTexcoord), 0));
 
+    float _3dxpos = float(u3DXPos);
+
     ivec4 mbright = ivec4(texelFetch(ScreenTex, ivec2(256*3, int(fTexcoord.y)), 0));
     int dispmode = mbright.b & 0x3;
-
-    // mbright.a == HOFS bit0..7
-    // mbright.b bit7 == HOFS bit8 (sign)
-    float _3dxpos = float(mbright.a - ((mbright.b & 0x80) * 2));
 
     if (dispmode == 1)
     {
@@ -85,7 +82,8 @@ void main()
                 eva = (_3dpix.a & 0x1F) + 1;
                 evb = 32 - eva;
 
-                val1 = ((_3dpix * eva) + (val1 * evb) + 0x10) >> 5;
+                val1 = ((_3dpix * eva) + (val1 * evb)) >> 5;
+                if (eva <= 16) val1 += ivec4(1,1,1,0);
                 val1 = min(val1, 0x3F);
             }
             else
@@ -105,7 +103,7 @@ void main()
                 eva = val3.g;
                 evb = val3.b;
 
-                val1 = ((val1 * eva) + (_3dpix * evb) + 0x8) >> 4;
+                val1 = ((val1 * eva) + (_3dpix * evb)) >> 4;
                 val1 = min(val1, 0x3F);
             }
             else
@@ -125,8 +123,8 @@ void main()
                 evy = val3.g;
 
                 val1 = _3dpix;
-                if      (compmode == 2) val1 += (((0x3F - val1) * evy) + 0x8) >> 4;
-                else if (compmode == 3) val1 -= ((val1 * evy) + 0x7) >> 4;
+                if      (compmode == 2) val1 += ((ivec4(0x3F,0x3F,0x3F,0) - val1) * evy) >> 4;
+                else if (compmode == 3) val1 -= (val1 * evy) >> 4;
             }
             else
                 val1 = val2;
@@ -144,7 +142,7 @@ void main()
             int evy = mbright.r & 0x1F;
             if (evy > 16) evy = 16;
 
-            pixel += ((0x3F - pixel) * evy) >> 4;
+            pixel += ((ivec4(0x3F,0x3F,0x3F,0) - pixel) * evy) >> 4;
         }
         else if (brightmode == 2)
         {
@@ -152,7 +150,7 @@ void main()
             int evy = mbright.r & 0x1F;
             if (evy > 16) evy = 16;
 
-            pixel -= ((pixel * evy) + 0xF) >> 4;
+            pixel -= (pixel * evy) >> 4;
         }
     }
 
@@ -869,6 +867,5 @@ void main()
 
 
 
-}
 
 #endif // GPU_OPENGL_SHADERS_H

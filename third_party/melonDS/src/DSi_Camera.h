@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2025 melonDS team
+    Copyright 2016-2021 Arisotura
 
     This file is part of melonDS.
 
@@ -20,49 +20,44 @@
 #define DSI_CAMERA_H
 
 #include "types.h"
-#include "Savestate.h"
-#include "DSi_I2C.h"
 
-namespace melonDS
-{
-class DSi;
-class DSi_CamModule;
-
-class DSi_Camera : public DSi_I2CDevice
+class DSi_Camera
 {
 public:
-    DSi_Camera(melonDS::DSi& dsi, DSi_I2CHost* host, u32 num);
+    static bool Init();
+    static void DeInit();
+    static void Reset();
+
+    static void IRQ(u32 param);
+    static void RequestFrame(u32 cam);
+
+    static void Transfer(u32 pos);
+
+    DSi_Camera(u32 num);
     ~DSi_Camera();
 
-    void DoSavestate(Savestate* file) override;
+    void ResetCam();
+    bool IsActivated();
 
-    void Reset() override;
-    void ReleaseReset();
-    void Stop();
-    bool IsActivated() const;
+    void I2C_Start();
+    u8 I2C_Read(bool last);
+    void I2C_Write(u8 val, bool last);
 
-    void StartTransfer();
-    bool TransferDone() const;
-
-    // lengths in words
-    int TransferScanline(u32* buffer, int maxlen, int& nlines);
-
-    void Acquire() override;
-    u8 Read(bool last) override;
-    void Write(u8 val, bool last) override;
-
-    void InputFrame(const u32* data, int width, int height, bool rgb);
+    static u8 Read8(u32 addr);
+    static u16 Read16(u32 addr);
+    static u32 Read32(u32 addr);
+    static void Write8(u32 addr, u8 val);
+    static void Write16(u32 addr, u16 val);
+    static void Write32(u32 addr, u32 val);
 
     u32 Num;
 
 private:
-    bool ResetHeld;
-
     u32 DataPos;
     u32 RegAddr;
     u16 RegData;
 
-    u16 I2C_ReadReg(u16 addr) const;
+    u16 I2C_ReadReg(u16 addr);
     void I2C_WriteReg(u16 addr, u16 val);
 
     u16 PLLDiv;
@@ -73,75 +68,20 @@ private:
     u16 MiscCnt;
 
     u16 MCUAddr;
+    u16* MCUData;
+
     u8 MCURegs[0x8000];
 
-    u8 MCU_Read(u16 addr) const;
-    void MCU_Write(u16 addr, u8 val);
+    static u16 ModuleCnt;
+    static u16 Cnt;
 
-    u16 FrameWidth, FrameHeight;
-    u16 FrameReadMode, FrameFormat;
-    int InternalY;
-    int TransferY;
-    u32 FrameBuffer[640*480/2]; // YUYV framebuffer, two pixels per word
+    static u8 FrameBuffer[640*480*4];
+    static u32 TransferPos;
+    static u32 FrameLength;
 };
 
 
-class DSi_CamModule
-{
-public:
-    DSi_CamModule(melonDS::DSi& dsi);
-    ~DSi_CamModule();
-    void Reset();
-    void Stop();
-    void DoSavestate(Savestate* file);
+extern DSi_Camera* DSi_Camera0;
+extern DSi_Camera* DSi_Camera1;
 
-    const DSi_Camera* GetOuterCamera() const { return Camera0; }
-    DSi_Camera* GetOuterCamera() { return Camera0; }
-    const DSi_Camera* GetInnerCamera() const { return Camera1; }
-    DSi_Camera* GetInnerCamera() { return Camera1; }
-
-    void IRQ(u32 param);
-
-    void TransferScanline(u32 line);
-
-    u8 Read8(u32 addr);
-    u16 Read16(u32 addr);
-    u32 Read32(u32 addr);
-    void Write8(u32 addr, u8 val);
-    void Write16(u32 addr, u16 val);
-    void Write32(u32 addr, u32 val);
-
-private:
-    melonDS::DSi& DSi;
-    DSi_Camera* Camera0; // 78 / facing outside
-    DSi_Camera* Camera1; // 7A / selfie cam
-
-    u16 ModuleCnt;
-    u16 Cnt;
-
-    u32 CropStart, CropEnd;
-
-    bool Transferring;
-
-    // pixel data buffers hold a maximum of 512 words, regardless of how long scanlines are
-    typedef struct
-    {
-        u32 Data[512];
-        u32 ReadPos, WritePos;
-
-    } sPixelBuffer;
-    sPixelBuffer PixelBuffer[2];
-    u8 CurPixelBuffer;
-    u32 BufferNumLines;
-    DSi_Camera* CurCamera;
-
-    static const u32 kIRQInterval;
-    static const u32 kScanlineTime;
-    static const u32 kTransferStart;
-
-    void SwapPixelBuffers();
-    bool IsTransferring();
-};
-
-}
 #endif // DSI_CAMERA_H

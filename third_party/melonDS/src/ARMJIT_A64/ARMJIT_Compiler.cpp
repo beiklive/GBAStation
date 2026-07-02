@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2025 melonDS team, RSDuck
+    Copyright 2016-2021 Arisotura, RSDuck
 
     This file is part of melonDS.
 
@@ -20,13 +20,15 @@
 
 #include "../ARMJIT_Internal.h"
 #include "../ARMInterpreter.h"
-#include "../ARMJIT.h"
-#include "../NDS.h"
-#include "../ARMJIT_Global.h"
+#include "../Config.h"
 
-#if defined(__SWITCH__)
+#ifdef __SWITCH__
 #include <switch.h>
+
 extern char __start__;
+#else
+#include <sys/mman.h>
+#include <unistd.h>
 #endif
 
 #include <stdlib.h>
@@ -35,7 +37,7 @@ using namespace Arm64Gen;
 
 extern "C" void ARM_Ret();
 
-namespace melonDS
+namespace ARMJIT
 {
 
 /*
@@ -61,8 +63,9 @@ const int RegisterCache<Compiler, ARM64Reg>::NativeRegsAvailable = 15;
 
 const BitSet32 CallerSavedPushRegs({W8, W9, W10, W11, W12, W13, W14, W15});
 
-#if defined(__SWITCH__)
 const int JitMemSize = 16 * 1024 * 1024;
+#ifndef __SWITCH__
+u8 JitMem[JitMemSize];
 #endif
 
 void Compiler::MovePC()
@@ -101,7 +104,7 @@ void Compiler::A_Comp_MSR()
     if (CurInstr.Instr & (1 << 25))
     {
         val = W0;
-        MOVI2R(val, melonDS::ROR((CurInstr.Instr & 0xFF), ((CurInstr.Instr >> 7) & 0x1E)));
+        MOVI2R(val, ::ROR((CurInstr.Instr & 0xFF), ((CurInstr.Instr >> 7) & 0x1E)));
     }
     else
     {
@@ -215,7 +218,7 @@ void Compiler::PopRegs(bool saveHiRegs, bool saveRegsToBeChanged)
     }
 }
 
-Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+Compiler::Compiler()
 {
 #ifdef __SWITCH__
     JitRWBase = aligned_alloc(0x1000, JitMemSize);
@@ -235,7 +238,7 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
             break;
         if (i++ > 8)
         {
-            Log(LogLevel::Error, "couldn't find unmapped place for jit memory\n");
+            printf("couldn't find unmapped place for jit memory\n");
             JitRXStart = NULL;
         }
     }
@@ -254,13 +257,18 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
     SetCodeBase((u8*)JitRWStart, (u8*)JitRXStart);
     JitMemMainSize = JitMemSize;
 #else
-    ARMJIT_Global::Init();
+    u64 pageSize = sysconf(_SC_PAGE_SIZE);
+    u8* pageAligned = (u8*)(((u64)JitMem & ~(pageSize - 1)) + pageSize);
+    u64 alignedSize = (((u64)JitMem + sizeof(JitMem)) & ~(pageSize - 1)) - (u64)pageAligned;
+    #ifdef __APPLE__
+        pageAligned = (u8*)mmap(NULL, 1024*1024*16, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS | MAP_JIT,-1, 0);
+        JitEnableWrite();
+    #else
+        mprotect(pageAligned, alignedSize, PROT_EXEC | PROT_READ | PROT_WRITE);
+    #endif
 
-    CodeMemBase = ARMJIT_Global::AllocateCodeMem();
-    nds.JIT.JitEnableWrite();
-
-    SetCodeBase(reinterpret_cast<u8*>(CodeMemBase), reinterpret_cast<u8*>(CodeMemBase));
-    JitMemMainSize = ARMJIT_Global::CodeMemorySliceSize;
+    SetCodeBase(pageAligned, pageAligned);
+    JitMemMainSize = alignedSize;
 #endif
     SetCodePtr(0);
 
@@ -471,9 +479,6 @@ Compiler::~Compiler()
         free(JitRWBase);
     }
 #endif
-
-    ARMJIT_Global::FreeCodeMem(CodeMemBase);
-    ARMJIT_Global::DeInit();
 }
 
 void Compiler::LoadCycles()
@@ -676,8 +681,7 @@ void Compiler::Comp_BranchSpecialBehaviour(bool taken)
     {
         RegCache.PrepareExit();
 
-        if (ConstantCycles)
-            ADD(RCycles, RCycles, ConstantCycles);
+        ADD(RCycles, RCycles, ConstantCycles);
         QuickTailCall(X0, ARM_Ret);
     }
 }
@@ -686,13 +690,13 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
 {
     if (JitMemMainSize - GetCodeOffset() < 1024 * 16)
     {
-        Log(LogLevel::Debug, "JIT near memory full, resetting...\n");
-        NDS.JIT.ResetBlockCache();
+        printf("JIT near memory full, resetting...\n");
+        ResetBlockCache();
     }
     if ((JitMemMainSize +  JitMemSecondarySize) - OtherCodeRegion < 1024 * 8)
     {
-        Log(LogLevel::Debug, "JIT far memory full, resetting...\n");
-        NDS.JIT.ResetBlockCache();
+        printf("JIT far memory full, resetting...\n");
+        ResetBlockCache();
     }
 
     JitBlockEntry res = (JitBlockEntry)GetRXPtr();
@@ -705,7 +709,7 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
     CPSRDirty = false;
 
     if (hasMemInstr)
-        MOVP2R(RMemBase, Num == 0 ? NDS.JIT.Memory.FastMem9Start : NDS.JIT.Memory.FastMem7Start);
+        MOVP2R(RMemBase, Num == 0 ? ARMJIT_Memory::FastMem9Start : ARMJIT_Memory::FastMem7Start);
 
     for (int i = 0; i < instrsCount; i++)
     {
@@ -828,8 +832,7 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
 
     RegCache.Flush();
 
-    if (ConstantCycles)
-        ADD(RCycles, RCycles, ConstantCycles);
+    ADD(RCycles, RCycles, ConstantCycles);
     QuickTailCall(X0, ARM_Ret);
 
     FlushIcache();
@@ -853,7 +856,7 @@ void Compiler::Reset()
 void Compiler::Comp_AddCycles_C(bool forceNonConstant)
 {
     s32 cycles = Num ?
-        NDS.ARM7MemTimings[CurInstr.CodeCycles][Thumb ? 1 : 3]
+        NDS::ARM7MemTimings[CurInstr.CodeCycles][Thumb ? 1 : 3]
         : ((R15 & 0x2) ? 0 : CurInstr.CodeCycles);
 
     if (forceNonConstant)
@@ -867,7 +870,7 @@ void Compiler::Comp_AddCycles_CI(u32 numI)
     IrregularCycles = true;
 
     s32 cycles = (Num ?
-        NDS.ARM7MemTimings[CurInstr.CodeCycles][Thumb ? 0 : 2]
+        NDS::ARM7MemTimings[CurInstr.CodeCycles][Thumb ? 0 : 2]
         : ((R15 & 0x2) ? 0 : CurInstr.CodeCycles)) + numI;
 
     if (Thumb || CurInstr.Cond() == 0xE)
@@ -881,7 +884,7 @@ void Compiler::Comp_AddCycles_CI(u32 c, ARM64Reg numI, ArithOption shift)
     IrregularCycles = true;
 
     s32 cycles = (Num ?
-        NDS.ARM7MemTimings[CurInstr.CodeCycles][Thumb ? 0 : 2]
+        NDS::ARM7MemTimings[CurInstr.CodeCycles][Thumb ? 0 : 2]
         : ((R15 & 0x2) ? 0 : CurInstr.CodeCycles)) + c;
 
     ADD(RCycles, RCycles, cycles);
@@ -901,7 +904,7 @@ void Compiler::Comp_AddCycles_CDI()
 
         s32 cycles;
 
-        s32 numC = NDS.ARM7MemTimings[CurInstr.CodeCycles][Thumb ? 0 : 2];
+        s32 numC = NDS::ARM7MemTimings[CurInstr.CodeCycles][Thumb ? 0 : 2];
         s32 numD = CurInstr.DataCycles;
 
         if ((CurInstr.DataRegion >> 24) == 0x02) // mainRAM
@@ -946,7 +949,7 @@ void Compiler::Comp_AddCycles_CD()
     }
     else
     {
-        s32 numC = NDS.ARM7MemTimings[CurInstr.CodeCycles][Thumb ? 0 : 2];
+        s32 numC = NDS::ARM7MemTimings[CurInstr.CodeCycles][Thumb ? 0 : 2];
         s32 numD = CurInstr.DataCycles;
 
         if ((CurInstr.DataRegion >> 24) == 0x02)

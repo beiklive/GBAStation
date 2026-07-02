@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2025 melonDS team
+    Copyright 2016-2021 Arisotura, WaluigiWare64
 
     This file is part of melonDS.
 
@@ -25,11 +25,10 @@
 #include <QImage>
 
 #include "types.h"
+#include "FrontendUtil.h"
 
 namespace Ui { class ROMInfoDialog; }
 class ROMInfoDialog;
-class EmuInstance;
-namespace melonDS::NDSCart { class CartCommon; }
 
 class ROMInfoDialog : public QDialog
 {
@@ -59,19 +58,16 @@ public:
 
 private slots:
     void done(int r);
-
+     
     void on_saveIconButton_clicked();
-    void on_saveAnimatedIconButton_clicked();
 
     void iconSetFrame(int frame);
 
 private:
     Ui::ROMInfoDialog* ui;
-    EmuInstance* emuInstance;
 
     QImage iconImage;
     QTimeLine* iconTimeline;
-    melonDS::u32 animatedIconData[64][32*32] = {0};
     std::vector<QPixmap> animatedIconImages;
     std::vector<int> animatedSequence;
 };

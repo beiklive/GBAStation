@@ -12,8 +12,6 @@
 #include "Compat.h"
 #include "CommonFuncs.h"
 
-using namespace melonDS;
-
 namespace Gen
 {
 // TODO(ector): Add EAX special casing, for ever so slightly smaller code.

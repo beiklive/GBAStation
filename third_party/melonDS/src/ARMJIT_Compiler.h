@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2025 melonDS team, RSDuck
+    Copyright 2016-2021 Arisotura, RSDuck
 
     This file is part of melonDS.
 
@@ -19,8 +19,6 @@
 #ifndef ARMJIT_COMPILER_H
 #define ARMJIT_COMPILER_H
 
-#ifdef JIT_ENABLED
-
 #if defined(__x86_64__)
 #include "ARMJIT_x64/ARMJIT_Compiler.h"
 #elif defined(__aarch64__)
@@ -29,6 +27,9 @@
 #error "The current target platform doesn't have a JIT backend"
 #endif
 
-#endif
+namespace ARMJIT
+{
+extern Compiler* JITCompiler;
+}
 
 #endif

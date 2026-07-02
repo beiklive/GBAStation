@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2025 melonDS team
+    Copyright 2016-2021 Arisotura
 
     This file is part of melonDS.
 
@@ -18,34 +18,32 @@
 
 #pragma once
 
-#include "GPU.h"
 #include "GPU3D.h"
 #include "Platform.h"
 #include <thread>
 #include <atomic>
 
-namespace melonDS
+namespace GPU3D
 {
 class SoftRenderer : public Renderer3D
 {
 public:
-    SoftRenderer(bool threaded = false) noexcept;
-    ~SoftRenderer() override;
-    void Reset(GPU& gpu) override;
+    SoftRenderer();
+    virtual ~SoftRenderer() override {};
+    virtual bool Init() override;
+    virtual void DeInit() override;
+    virtual void Reset() override;
 
-    void SetThreaded(bool threaded, GPU& gpu) noexcept;
-    [[nodiscard]] bool IsThreaded() const noexcept { return Threaded; }
+    virtual void SetRenderSettings(GPU::RenderSettings& settings) override;
 
-    void VCount144(GPU& gpu) override;
-    void RenderFrame(GPU& gpu) override;
-    void RestartFrame(GPU& gpu) override;
-    u32* GetLine(int line) override;
+    virtual void VCount144() override;
+    virtual void RenderFrame() override;
+    virtual void RestartFrame() override;
+    virtual u32* GetLine(int line) override;
 
-    void SetupRenderThread(GPU& gpu);
-    void EnableRenderThread();
+    void SetupRenderThread();
     void StopRenderThread();
 private:
-    friend void GPU3D::DoSavestate(Savestate* file) noexcept;
     // Notes on the interpolator:
     //
     // This is a theory on how the DS hardware interpolates values. It matches hardware output
@@ -68,25 +66,25 @@ private:
     class Interpolator
     {
     public:
-        constexpr Interpolator() {}
-        constexpr Interpolator(s32 x0, s32 x1, s32 w0, s32 w1, bool wbuffer)
+        Interpolator() {}
+        Interpolator(s32 x0, s32 x1, s32 w0, s32 w1)
         {
-            Setup(x0, x1, w0, w1, wbuffer);
+            Setup(x0, x1, w0, w1);
         }
 
-        constexpr void Setup(s32 x0, s32 x1, s32 w0, s32 w1, bool wbuffer)
+        void Setup(s32 x0, s32 x1, s32 w0, s32 w1)
         {
             this->x0 = x0;
             this->x1 = x1;
             this->xdiff = x1 - x0;
-            this->wbuffer = wbuffer;
 
-            // calculate reciprocal for Z interpolation
+            // calculate reciprocals for linear mode and Z interpolation
             // TODO eventually: use a faster reciprocal function?
             if (this->xdiff != 0)
-                this->xrecip_z = (1<<22) / this->xdiff;
+                this->xrecip = (1<<30) / this->xdiff;
             else
-                this->xrecip_z = 0;
+                this->xrecip = 0;
+            this->xrecip_z = this->xrecip >> 8;
 
             // linear mode is used if both W values are equal and have
             // low-order bits cleared (0-6 along X, 1-6 along Y)
@@ -100,9 +98,18 @@ private:
             {
                 // along Y
 
-                this->w0n = w0 >> 1;
-                this->w0d = (w0 + ((w0 & ~w1) & 1)) >> 1;
-                this->w1d = w1 >> 1;
+                if ((w0 & 0x1) && !(w1 & 0x1))
+                {
+                    this->w0n = w0 - 1;
+                    this->w0d = w0 + 1;
+                    this->w1d = w1;
+                }
+                else
+                {
+                    this->w0n = w0 & 0xFFFE;
+                    this->w0d = w0 & 0xFFFE;
+                    this->w1d = w1 & 0xFFFE;
+                }
 
                 this->shift = 9;
             }
@@ -118,23 +125,23 @@ private:
             }
         }
 
-        constexpr void SetX(s32 x)
+        void SetX(s32 x)
         {
             x -= x0;
             this->x = x;
-            if ((xdiff != 0) && ((!linear) || wbuffer))
+            if (xdiff != 0 && !linear)
             {
-                u32 num = (x * w0n) << shift;
-                u32 den = (x * w0d) + ((xdiff-x) * w1d);
+                s64 num = ((s64)x * w0n) << shift;
+                s32 den = (x * w0d) + ((xdiff-x) * w1d);
 
                 // this seems to be a proper division on hardware :/
                 // I haven't been able to find cases that produce imperfect output
                 if (den == 0) yfactor = 0;
-                else          yfactor = num / den;
+                else          yfactor = (s32)(num / den);
             }
         }
 
-        constexpr s32 Interpolate(s32 y0, s32 y1) const
+        s32 Interpolate(s32 y0, s32 y1)
         {
             if (xdiff == 0 || y0 == y1) return y0;
 
@@ -149,14 +156,15 @@ private:
             else
             {
                 // linear interpolation
+                // checkme: the rounding bias there (3<<24) is a guess
                 if (y0 < y1)
-                    return y0 + (s64)(y1-y0) * x / xdiff;
+                    return y0 + ((((s64)(y1-y0) * x * xrecip) + (3<<24)) >> 30);
                 else
-                    return y1 + (s64)(y0-y1) * (xdiff - x) / xdiff;
+                    return y1 + ((((s64)(y0-y1) * (xdiff-x) * xrecip) + (3<<24)) >> 30);
             }
         }
 
-        constexpr s32 InterpolateZ(s32 z0, s32 z1) const
+        s32 InterpolateZ(s32 z0, s32 z1, bool wbuffer)
         {
             if (xdiff == 0 || z0 == z1) return z0;
 
@@ -172,7 +180,7 @@ private:
             {
                 // Z-buffering: linear interpolation
                 // still doesn't quite match hardware...
-                s32 base = 0, disp = 0, factor = 0;
+                s32 base, disp, factor;
 
                 if (z0 < z1)
                 {
@@ -211,9 +219,8 @@ private:
 
         int shift;
         bool linear;
-        bool wbuffer;
 
-        s32 xrecip_z;
+        s32 xrecip, xrecip_z;
         s32 w0n, w0d, w1d;
 
         u32 yfactor;
@@ -224,11 +231,19 @@ private:
     class Slope
     {
     public:
-        constexpr Slope() {}
+        Slope() {}
 
-        constexpr s32 SetupDummy(s32 x0, bool wbuffer)
+        s32 SetupDummy(s32 x0)
         {
-            dx = 0;
+            if (side)
+            {
+                dx = -0x40000;
+                x0--;
+            }
+            else
+            {
+                dx = 0;
+            }
 
             this->x0 = x0;
             this->xmin = x0;
@@ -237,7 +252,7 @@ private:
             Increment = 0;
             XMajor = false;
 
-            Interp.Setup(0, 0, 0, 0, wbuffer);
+            Interp.Setup(0, 0, 0, 0);
             Interp.SetX(0);
 
             xcov_incr = 0;
@@ -245,7 +260,7 @@ private:
             return x0;
         }
 
-        constexpr s32 Setup(s32 x0, s32 x1, s32 y0, s32 y1, s32 w0, s32 w1, s32 y, bool wbuffer)
+        s32 Setup(s32 x0, s32 x1, s32 y0, s32 y1, s32 w0, s32 w1, s32 y)
         {
             this->x0 = x0;
             this->y = y;
@@ -265,6 +280,7 @@ private:
             else
             {
                 this->xmin = x0;
+                if (side) this->xmin--;
                 this->xmax = this->xmin;
                 this->Negative = false;
             }
@@ -278,7 +294,7 @@ private:
             // TODO: this is still not perfect (see for example x=169 y=33)
             if (ylen == 0)
                 Increment = 0;
-            else if (ylen == xlen && xlen != 1)
+            else if (ylen == xlen)
                 Increment = 0x40000;
             else
             {
@@ -289,13 +305,13 @@ private:
 
             XMajor = (Increment > 0x40000);
 
-            if constexpr (side)
+            if (side)
             {
                 // right
 
                 if (XMajor)              dx = Negative ? (0x20000 + 0x40000) : (Increment - 0x20000);
                 else if (Increment != 0) dx = Negative ? 0x40000 : 0;
-                else                     dx = 0;
+                else                     dx = -0x40000;
             }
             else
             {
@@ -310,29 +326,44 @@ private:
 
             s32 x = XVal();
 
-            int interpoffset = (Increment >= 0x40000) && (side ^ Negative);
-            Interp.Setup(y0-interpoffset, y1-interpoffset, w0, w1, wbuffer);
-            Interp.SetX(y);
+            if (XMajor)
+            {
+                if (side) Interp.Setup(x0-1, x1-1, w0, w1); // checkme
+                else      Interp.Setup(x0, x1, w0, w1);
+                Interp.SetX(x);
 
-            // used for calculating AA coverage
-            if (XMajor) xcov_incr = (ylen << 10) / xlen;
+                // used for calculating AA coverage
+                xcov_incr = (ylen << 10) / xlen;
+            }
+            else
+            {
+                Interp.Setup(y0, y1, w0, w1);
+                Interp.SetX(y);
+            }
 
             return x;
         }
 
-        constexpr s32 Step()
+        s32 Step()
         {
             dx += Increment;
             y++;
 
             s32 x = XVal();
-            Interp.SetX(y);
+            if (XMajor)
+            {
+                Interp.SetX(x);
+            }
+            else
+            {
+                Interp.SetX(y);
+            }
             return x;
         }
 
-        constexpr s32 XVal() const
+        s32 XVal()
         {
-            s32 ret = 0;
+            s32 ret;
             if (Negative) ret = x0 - (dx >> 18);
             else          ret = x0 + (dx >> 18);
 
@@ -341,18 +372,12 @@ private:
             return ret;
         }
 
-        template<bool swapped>
-        constexpr void EdgeParams_XMajor(s32* length, s32* coverage) const
+        void EdgeParams_XMajor(s32* length, s32* coverage)
         {
-            // only do length calc for right side when swapped as it's
-            // only needed for aa calcs, as actual line spans are broken
-            if constexpr (!swapped || side)
-            {
-                if (side ^ Negative)
-                    *length = (dx >> 18) - ((dx-Increment) >> 18);
-                else
-                    *length = ((dx+Increment) >> 18) - (dx >> 18);
-            }
+            if (side ^ Negative)
+                *length = (dx >> 18) - ((dx-Increment) >> 18);
+            else
+                *length = ((dx+Increment) >> 18) - (dx >> 18);
 
             // for X-major edges, we return the coverage
             // for the first pixel, and the increment for
@@ -363,49 +388,33 @@ private:
 
             s32 startcov = (((startx << 10) + 0x1FF) * ylen) / xlen;
             *coverage = (1<<31) | ((startcov & 0x3FF) << 12) | (xcov_incr & 0x3FF);
-
-            if constexpr (swapped) *length = 1;
         }
 
-        template<bool swapped>
-        constexpr void EdgeParams_YMajor(s32* length, s32* coverage) const
+        void EdgeParams_YMajor(s32* length, s32* coverage)
         {
             *length = 1;
 
             if (Increment == 0)
             {
-                // for some reason vertical edges' aa values
-                // are inverted too when the edges are swapped
-                if constexpr (swapped)
-                    *coverage = 0;
-                else
-                    *coverage = 31;
+                *coverage = 31;
             }
             else
             {
                 s32 cov = ((dx >> 9) + (Increment >> 10)) >> 4;
                 if ((cov >> 5) != (dx >> 18)) cov = 31;
                 cov &= 0x1F;
-                if constexpr (swapped)
-                {
-                    if (side ^ Negative) cov = 0x1F - cov;
-                }
-                else
-                {
-                    if (!(side ^ Negative)) cov = 0x1F - cov;
-                }
+                if (!(side ^ Negative)) cov = 0x1F - cov;
 
                 *coverage = cov;
             }
         }
 
-        template<bool swapped>
-        constexpr void EdgeParams(s32* length, s32* coverage) const
+        void EdgeParams(s32* length, s32* coverage)
         {
             if (XMajor)
-                return EdgeParams_XMajor<swapped>(length, coverage);
+                return EdgeParams_XMajor(length, coverage);
             else
-                return EdgeParams_YMajor<swapped>(length, coverage);
+                return EdgeParams_YMajor(length, coverage);
         }
 
         s32 Increment;
@@ -423,7 +432,16 @@ private:
         s32 ycoverage, ycov_incr;
     };
 
-    u32 AlphaBlend(const GPU3D& gpu3d, u32 srccolor, u32 dstcolor, u32 alpha) const noexcept;
+    template <typename T>
+    inline T ReadVRAM_Texture(u32 addr)
+    {
+        return *(T*)&GPU::VRAMFlat_Texture[addr & 0x7FFFF];
+    }
+    template <typename T>
+    inline T ReadVRAM_TexPal(u32 addr)
+    {
+        return *(T*)&GPU::VRAMFlat_TexPal[addr & 0x1FFFF];
+    }
 
     struct RendererPolygon
     {
@@ -438,21 +456,21 @@ private:
     };
 
     RendererPolygon PolygonList[2048];
-    void TextureLookup(const GPU& gpu, u32 texparam, u32 texpal, s16 s, s16 t, u16* color, u8* alpha) const;
-    u32 RenderPixel(const GPU& gpu, const Polygon* polygon, u8 vr, u8 vg, u8 vb, s16 s, s16 t) const;
-    void PlotTranslucentPixel(const GPU3D& gpu3d, u32 pixeladdr, u32 color, u32 z, u32 polyattr, u32 shadow);
-    void SetupPolygonLeftEdge(RendererPolygon* rp, s32 y) const;
-    void SetupPolygonRightEdge(RendererPolygon* rp, s32 y) const;
-    void SetupPolygon(RendererPolygon* rp, Polygon* polygon) const;
-    void RenderShadowMaskScanline(const GPU3D& gpu3d, RendererPolygon* rp, s32 y);
-    void RenderPolygonScanline(const GPU& gpu, RendererPolygon* rp, s32 y);
-    void RenderScanline(const GPU& gpu, s32 y, int npolys);
-    u32 CalculateFogDensity(const GPU3D& gpu3d, u32 pixeladdr) const;
-    void ScanlineFinalPass(const GPU3D& gpu3d, s32 y);
-    void ClearBuffers(const GPU& gpu);
-    void RenderPolygons(const GPU& gpu, bool threaded, Polygon** polygons, int npolys);
+    void TextureLookup(u32 texparam, u32 texpal, s16 s, s16 t, u16* color, u8* alpha);
+    u32 RenderPixel(Polygon* polygon, u8 vr, u8 vg, u8 vb, s16 s, s16 t);
+    void PlotTranslucentPixel(u32 pixeladdr, u32 color, u32 z, u32 polyattr, u32 shadow);
+    void SetupPolygonLeftEdge(RendererPolygon* rp, s32 y);
+    void SetupPolygonRightEdge(RendererPolygon* rp, s32 y);
+    void SetupPolygon(RendererPolygon* rp, Polygon* polygon);
+    void RenderShadowMaskScanline(RendererPolygon* rp, s32 y);
+    void RenderPolygonScanline(RendererPolygon* rp, s32 y);
+    void RenderScanline(s32 y, int npolys);
+    u32 CalculateFogDensity(u32 pixeladdr);
+    void ScanlineFinalPass(s32 y);
+    void ClearBuffers();
+    void RenderPolygons(bool threaded, Polygon** polygons, int npolys);
 
-    void RenderThreadFunc(GPU& gpu);
+    void RenderThreadFunc();
 
     // buffer dimensions are 258x194 to add a offscreen 1px border
     // which simplifies edge marking tests
@@ -487,19 +505,12 @@ private:
 
     // threading
 
-    bool Threaded = false;
+    bool Threaded;
     Platform::Thread* RenderThread;
     std::atomic_bool RenderThreadRunning;
     std::atomic_bool RenderThreadRendering;
-
-    // Used by the main thread to tell the render thread to start rendering a frame
     Platform::Semaphore* Sema_RenderStart;
-
-    // Used by the render thread to tell the main thread that it's done rendering a frame
     Platform::Semaphore* Sema_RenderDone;
-
-    // Used to allow the main thread to read some scanlines
-    // before (the 3D portion of) the entire frame is rasterized.
     Platform::Semaphore* Sema_ScanlineCount;
 };
 }
