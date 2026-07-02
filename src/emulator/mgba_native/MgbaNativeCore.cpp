@@ -981,6 +981,7 @@ bool MgbaNativeCore::initNativeAudioOutput()
     m_loggedFirstNonZeroSwitchAudio = false;
     m_switchSilentProbeBuffers = 0;
     m_switchAudioCallbackCount = 0;
+    m_switchAudioWaitDropCount = 0;
     brls::Logger::info("MgbaNativeCore: Switch direct audio output initialized sampleRate={} samples={}",
                        static_cast<int>(m_sampleRate), kSwitchAudioSamples);
     return true;
@@ -1012,6 +1013,7 @@ void MgbaNativeCore::shutdownNativeAudioOutput()
     m_loggedFirstNonZeroSwitchAudio = false;
     m_switchSilentProbeBuffers = 0;
     m_switchAudioCallbackCount = 0;
+    m_switchAudioWaitDropCount = 0;
 #endif
 }
 
@@ -1088,12 +1090,27 @@ void MgbaNativeCore::postAudioBuffer(mAVStream* stream, blip_t* left, blip_t* ri
             blip_clear(right);
             return;
         }
-        while (owner->m_switchAudioEnqueued >= kSwitchAudioBufferCount - 1)
-            owner->waitNativeAudioOutput(10000000ULL);
-        if (owner->m_switchAudioEnqueued >= kSwitchAudioBufferCount)
+        constexpr uint64_t kAudioQueueWaitNs = 1000000ULL;
+        constexpr int kAudioQueueWaitAttempts = 2;
+        for (int attempt = 0;
+             owner->m_switchAudioEnqueued >= kSwitchAudioBufferCount - 1 &&
+             attempt < kAudioQueueWaitAttempts;
+             ++attempt)
+        {
+            if (owner->waitNativeAudioOutput(kAudioQueueWaitNs) > 0)
+                break;
+        }
+        if (owner->m_switchAudioEnqueued >= kSwitchAudioBufferCount - 1)
         {
             blip_clear(left);
             blip_clear(right);
+            if (owner->m_switchAudioWaitDropCount < 5)
+            {
+                ++owner->m_switchAudioWaitDropCount;
+                brls::Logger::warning("MgbaNativeCore: direct audio queue full; dropped batch queued={} drops={}",
+                                      owner->m_switchAudioEnqueued,
+                                      owner->m_switchAudioWaitDropCount);
+            }
             return;
         }
 

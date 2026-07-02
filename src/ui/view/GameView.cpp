@@ -2376,7 +2376,6 @@ namespace beiklive
             std::this_thread::sleep_for(coarse);
 
 #ifdef __SWITCH__
-        if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
         {
             auto remaining = std::chrono::duration_cast<std::chrono::nanoseconds>(nextTarget - Clock::now());
             if (remaining.count() > 0)

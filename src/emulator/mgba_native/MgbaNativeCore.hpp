@@ -160,6 +160,7 @@ private:
     bool m_loggedFirstNonZeroSwitchAudio = false;
     unsigned m_switchSilentProbeBuffers = 0;
     uint32_t m_switchAudioCallbackCount = 0;
+    uint32_t m_switchAudioWaitDropCount = 0;
 #endif
 
     std::array<std::array<bool, kMaxButtons>, kMaxInputPorts> m_buttons{};
