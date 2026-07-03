@@ -1279,3 +1279,70 @@ GBAStationNDSStub.nro 2.16 MB
   - 游戏重新从启动流程开始。
   - 日志出现 `Deko reset LoadROM loaded=1`。
 - 如果仍崩溃，优先查看最后一条日志是否停在 `Deko reset begin`、队列 idle、还是 `LoadROM loaded` 之后。
+
+## 2026-07-03 阶段O：Stub 画面过滤、菜单输入屏蔽、快进与分辨率入口
+
+### 目标
+
+- 当前游戏画面默认改为 Nearest 输出，避免 Linear 放大导致像素发糊。
+- 关闭模拟器菜单后，菜单确认/返回按键不能穿透给游戏。
+- 在 Stub 模拟器菜单内加入快进倍率和内部分辨率倍率设置，默认均为 x1，档位为 x1/x2/x3/x4。
+
+### 已实施
+
+- `NdsGameLayer` 增加画面过滤状态：
+
+```text
+Nearest 默认
+Linear 可在菜单内切换
+```
+
+- 绘制 NDS 双屏时根据菜单设置选择 Deko sampler：
+
+```text
+Nearest + ClampToEdge
+Linear  + ClampToEdge
+```
+
+- `NdsMenuLayer` 新增菜单项和设置状态：
+
+```text
+画面过滤：Nearest / Linear
+快进倍率：x1 / x2 / x3 / x4
+内部分辨率：x1 / x2 / x3 / x4
+```
+
+- 关闭/切换菜单后启用输入屏蔽：
+
+```text
+等待所有按键释放
+等待触摸屏释放
+之后才恢复 NDS 按键和触摸输入
+```
+
+- 右摇杆按下不再映射为 NDS Start，改为 Stub 快进热键。
+- 非菜单状态下按住右摇杆，并且菜单倍率大于 x1 时，主循环每次运行多帧 `NDS::RunFrame()`：
+
+```text
+x1：正常速度
+x2：每轮 2 帧
+x3：每轮 3 帧
+x4：每轮 4 帧
+```
+
+- 快进激活时跳过 60FPS sleep 限速，日志 heartbeat 会输出当前快进、分辨率和过滤状态。
+
+### 分辨率说明
+
+- Stub 侧已经接通 `GPU::SetRenderSettings(0, RenderSettings{true, scale, false})`。
+- 但 ArcDelta Deko 3D renderer 当前 `GPU3D::DekoRenderer::SetRenderSettings()` 为空实现，且 Deko 2D/3D 路径大量固定为 `256x192`。
+- 因此本阶段完成的是菜单入口与设置链路；真正 x2/x3/x4 内部高分辨率渲染需要后续改造 ArcDelta 的 Deko renderer framebuffer、tile buffer、compute dispatch 和 2D 合成尺寸。
+
+### 验证重点
+
+- 进入 NDS 游戏后画面默认应为 Nearest 像素风格。
+- 菜单内切换 Linear 后画面应变为平滑放大。
+- 用 A/B/ZR 关闭菜单后，关闭菜单用到的按键不应立刻传入游戏。
+- 触摸屏按住菜单关闭区域时，释放前不应传入 NDS 下屏触摸。
+- 设置快进倍率为 x2/x3/x4 后，非菜单状态按住右摇杆应触发快进。
+- 内部分辨率菜单项和日志应能变化；实际清晰度提升等待后续 Deko renderer 改造。

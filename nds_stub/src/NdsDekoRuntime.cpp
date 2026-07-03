@@ -85,6 +85,12 @@ bool fileExists(const char* path)
     return true;
 }
 
+bool touchScreenPressed()
+{
+    HidTouchScreenState state {};
+    return hidGetTouchScreenStates(&state, 1) && state.count > 0;
+}
+
 uint32_t dsKeyMaskFromPad(const PadState& pad)
 {
     uint32_t mask = 0x0FFFu;
@@ -104,7 +110,6 @@ uint32_t dsKeyMaskFromPad(const PadState& pad)
     press(HidNpadButton_ZL, kNdsKeyL);
     press(HidNpadButton_Plus, kNdsKeyStart);
     press(HidNpadButton_Minus, kNdsKeySelect);
-    press(HidNpadButton_StickR, kNdsKeyStart);
     press(HidNpadButton_StickL, kNdsKeySelect);
     press(HidNpadButton_AnyUp, kNdsKeyUp);
     press(HidNpadButton_AnyDown, kNdsKeyDown);
@@ -589,6 +594,24 @@ int RunDekoRuntime(const DekoRunOptions& options)
     uint64_t totalFrames = 0;
     long long lastRunMs = 0;
     auto fpsStart = std::chrono::steady_clock::now();
+    bool blockGameInputUntilRelease = false;
+    bool lastFastForwardActive = false;
+    int currentResolutionScale = 1;
+
+    auto applyResolutionScale = [&](int scale) {
+        scale = std::clamp(scale, 1, 4);
+        if (scale == currentResolutionScale)
+            return;
+
+        appendStubLog("GBAStationNDSStub: Deko resolution scale request x%d", scale);
+        Gfx::PresentQueue.waitIdle();
+        Gfx::EmuQueue.waitIdle();
+
+        GPU::RenderSettings newSettings {true, scale, false};
+        GPU::SetRenderSettings(0, newSettings);
+        currentResolutionScale = scale;
+        appendStubLog("GBAStationNDSStub: Deko resolution scale applied x%d (Deko renderer may still render x1)", scale);
+    };
 
     while (appletMainLoop() && running)
     {
@@ -599,8 +622,22 @@ int RunDekoRuntime(const DekoRunOptions& options)
         const auto frameBegin = std::chrono::steady_clock::now();
         padUpdate(&pad);
         const u64 down = padGetButtonsDown(&pad);
+        const u64 held = padGetButtons(&pad);
 
+        const bool wasMenuVisible = menuLayer.visible();
         const NdsMenuAction menuAction = menuLayer.update(down);
+        if (wasMenuVisible != menuLayer.visible())
+            blockGameInputUntilRelease = true;
+
+        if (menuAction == NdsMenuAction::DisplaySettingsChanged)
+        {
+            gameLayer.setLinearFiltering(menuLayer.linearFiltering());
+            applyResolutionScale(menuLayer.resolutionScale());
+            appendStubLog("GBAStationNDSStub: Deko display settings filter=%s ff=x%d res=x%d",
+                          menuLayer.linearFiltering() ? "linear" : "nearest",
+                          menuLayer.fastForwardMultiplier(),
+                          menuLayer.resolutionScale());
+        }
         if (menuAction == NdsMenuAction::ResetGame)
         {
             appendStubLog("GBAStationNDSStub: Deko reset begin");
@@ -636,12 +673,28 @@ int RunDekoRuntime(const DekoRunOptions& options)
         }
 
         const bool menuVisible = menuLayer.visible();
-        const uint32_t keyMask = menuVisible ? 0x0FFFu : dsKeyMaskFromPad(pad);
+        const bool touchHeld = touchScreenPressed();
+        if (blockGameInputUntilRelease && held == 0 && !touchHeld)
+            blockGameInputUntilRelease = false;
+        const bool suppressGameInput = menuVisible || blockGameInputUntilRelease;
+        const bool fastForwardActive =
+            !suppressGameInput &&
+            menuLayer.fastForwardMultiplier() > 1 &&
+            (held & HidNpadButton_StickR);
+        if (fastForwardActive != lastFastForwardActive)
+        {
+            appendStubLog("GBAStationNDSStub: Deko fastforward %s x%d",
+                          fastForwardActive ? "on" : "off",
+                          menuLayer.fastForwardMultiplier());
+            lastFastForwardActive = fastForwardActive;
+        }
+
+        const uint32_t keyMask = suppressGameInput ? 0x0FFFu : dsKeyMaskFromPad(pad);
         NDS::SetKeyMask(keyMask);
 
         u16 touchX = 0;
         u16 touchY = 0;
-        if (!menuVisible && gameLayer.readTouch(touchX, touchY))
+        if (!suppressGameInput && gameLayer.readTouch(touchX, touchY))
             NDS::TouchScreen(touchX, touchY);
         else
             NDS::ReleaseScreen();
@@ -650,7 +703,9 @@ int RunDekoRuntime(const DekoRunOptions& options)
         if (traceFrame)
             appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu RunFrame begin",
                           static_cast<unsigned long long>(totalFrames));
-        NDS::RunFrame();
+        const int framesToRun = fastForwardActive ? menuLayer.fastForwardMultiplier() : 1;
+        for (int i = 0; i < framesToRun; ++i)
+            NDS::RunFrame();
         if (traceFrame)
             appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu RunFrame ok",
                           static_cast<unsigned long long>(totalFrames));
@@ -684,7 +739,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
         if (traceFrame)
             appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu menuLayer.draw begin",
                           static_cast<unsigned long long>(totalFrames));
-        menuLayer.draw(fps, lastRunMs);
+        menuLayer.draw(fps, lastRunMs, fastForwardActive);
         if (traceFrame)
             appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu menuLayer.draw ok",
                           static_cast<unsigned long long>(totalFrames));
@@ -705,14 +760,17 @@ int RunDekoRuntime(const DekoRunOptions& options)
             appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu Gfx::EndFrame ok",
                           static_cast<unsigned long long>(totalFrames));
 
-        ++fpsFrames;
+        fpsFrames += framesToRun;
         ++totalFrames;
         if (totalFrames % 60 == 0)
         {
-            appendStubLog("GBAStationNDSStub: Deko heartbeat frame=%llu fps=%.1f run=%lldms",
+            appendStubLog("GBAStationNDSStub: Deko heartbeat frame=%llu fps=%.1f run=%lldms ff=%d res=%d filter=%s",
                           static_cast<unsigned long long>(totalFrames),
                           fps,
-                          lastRunMs);
+                          lastRunMs,
+                          fastForwardActive ? menuLayer.fastForwardMultiplier() : 1,
+                          currentResolutionScale,
+                          menuLayer.linearFiltering() ? "linear" : "nearest");
         }
         const auto now = std::chrono::steady_clock::now();
         const auto fpsElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - fpsStart).count();
@@ -726,7 +784,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
         const auto frameEnd = std::chrono::steady_clock::now();
         constexpr auto frameBudget = std::chrono::microseconds(16667);
         const auto used = std::chrono::duration_cast<std::chrono::microseconds>(frameEnd - frameBegin);
-        if (used < frameBudget)
+        if (!fastForwardActive && used < frameBudget)
         {
             const auto sleepUs = std::chrono::duration_cast<std::chrono::microseconds>(frameBudget - used).count();
             if (sleepUs > 500)

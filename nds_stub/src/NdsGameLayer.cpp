@@ -81,7 +81,8 @@ void NdsGameLayer::drawScreens() const
     const RectF top = topRect();
     const RectF bottom = bottomRect();
 
-    Gfx::SetSampler(Gfx::sampler_Linear | Gfx::sampler_ClampToEdge);
+    Gfx::SetSampler((m_linearFiltering ? Gfx::sampler_Linear : Gfx::sampler_Nearest) |
+                    Gfx::sampler_ClampToEdge);
     if (m_waitForFramebufferReady)
         Gfx::WaitForFenceReady(m_renderer->FramebufferReady[GPU::FrontBuffer]);
     Gfx::DrawRectangle(m_framebufferTextures[GPU::FrontBuffer][0],
