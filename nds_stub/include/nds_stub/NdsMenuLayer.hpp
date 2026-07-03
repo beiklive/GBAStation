@@ -16,6 +16,7 @@ public:
     void draw(double fps, long long runMs) const;
 
     bool visible() const { return m_visible; }
+    void close() { m_visible = false; }
 
 private:
     bool m_visible = false;

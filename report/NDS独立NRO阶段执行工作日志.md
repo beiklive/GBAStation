@@ -1172,3 +1172,110 @@ GBAStationNDSStub.nro 2.16 MB
 - 进入游戏后听音频是否还存在明显电流声/爆音。
 - `ZR` 是否打开/关闭模拟器菜单。
 - 菜单中文是否完整显示。
+
+## 2026-07-03 阶段M：整理主程序 NDS 功能迁移清单
+
+### 背景
+
+后续需要在 `GBAStationNDSStub.nro` 中复刻主程序 `GameView` 和 `GameMenuView` 中与 NDS 相关的运行时、渲染、触摸、菜单和 GameDB 设置能力。
+
+### 产物
+
+已新增报告：
+
+```text
+report/NDS主程序GameView_GameMenuView功能梳理.md
+```
+
+### 主要结论
+
+- 主程序 NDS 功能由 `GameView` 运行时逻辑、`GameMenuView` TabFrame 菜单、以及 `GamePage` callback 注入共同组成。
+- 需要迁移的核心字段包括：
+  - `ndsScreenLayout`
+  - `ndsScreenOrientation`
+  - `ndsIntegerScale`
+  - `ndsTopOffsetX/Y/Scale`
+  - `ndsBottomOffsetX/Y/Scale`
+  - `ndsInternalResolution`
+  - `cheatPath`
+  - `savePath`
+- Switch 版主程序已强制 NDS `ndsInternalResolution = 1`，stub 当前也应继续保持 x1 优先。
+- 主程序 OpenGL 渲染链、CPU 重排整张画布、以及 NDS 快进只跑 1 帧的保守策略不建议照搬到 Deko stub。
+- 建议先在 stub 内新增独立 `NdsLayout` 纯计算模块，再让 `NdsGameLayer` 和 `NdsMenuLayer` 共享布局、UV 和触摸映射。
+
+### 后续建议
+
+下一阶段优先补：
+
+1. `NdsLayout`：布局矩形、旋转 UV、触摸坐标映射。
+2. `NdsGameLayer`：支持七种屏幕布局。
+3. `NdsMenuLayer`：还原 TabFrame 风格菜单结构。
+4. 保存/读取状态 10 槽位。
+5. 金手指读取、列表、开关和应用。
+
+## 2026-07-03 阶段N：修复 Stub 菜单重置游戏崩溃
+
+### 现象
+
+- 在 `GBAStationNDSStub.nro` 的模拟器菜单中执行“重置游戏”会导致程序崩溃。
+
+### 原因判断
+
+- 原实现直接在运行中的 Deko 主循环里调用：
+
+```cpp
+NDS::Reset();
+NDS::SetupDirectBoot();
+```
+
+- `NDS::Reset()` 会重置 GPU、SPU、卡带、Wifi、JIT 等全局模块。
+- Stub 当前有独立音频线程持续调用 `SPU::ReadOutput()`，直接 Reset 可能与音频线程并发访问 SPU 音频缓冲。
+- 单独调用 `NDS::SetupDirectBoot()` 也不等价于完整 ROM 重新加载，卡带侧 direct boot setup、SRAM 路径和 ROM 装载状态不够完整。
+
+### 已实施
+
+- `DekoAudioOutput` 新增 reset 暂停栅栏：
+
+```cpp
+pauseForCoreReset()
+resumeAfterCoreReset()
+```
+
+- 音频线程读取 SPU 前增加 `m_spuReadMutex`，重置前会等待当前 `SPU::ReadOutput()` 退出，并阻止新的 SPU 读取。
+- 菜单 Reset 动作改为安全重载当前 ROM：
+
+```text
+关闭菜单
+释放 NDS 按键和触摸
+暂停音频线程读取 SPU
+等待 PresentQueue / EmuQueue idle
+Flush SRAM
+NDS::LoadROM(currentRom, currentSave, true)
+恢复音频线程
+```
+
+- 重置后会写日志：
+
+```text
+GBAStationNDSStub: Deko reset begin
+GBAStationNDSStub: Deko reset LoadROM loaded=1
+```
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.16 MB
+```
+
+### 验证重点
+
+- 进入 NDS 游戏后打开菜单，执行重置游戏。
+- 预期：
+  - 程序不崩溃。
+  - 菜单关闭。
+  - 游戏重新从启动流程开始。
+  - 日志出现 `Deko reset LoadROM loaded=1`。
+- 如果仍崩溃，优先查看最后一条日志是否停在 `Deko reset begin`、队列 idle、还是 `LoadROM loaded` 之后。

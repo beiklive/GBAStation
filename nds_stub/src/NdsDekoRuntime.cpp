@@ -236,6 +236,20 @@ public:
         }
     }
 
+    void pauseForCoreReset()
+    {
+        m_paused.store(true, std::memory_order_release);
+
+        // Wait until any in-flight SPU::ReadOutput() call has left the melonDS
+        // audio buffer before NDS::LoadROM()/NDS::Reset() reinitializes SPU.
+        std::lock_guard<std::mutex> lock(m_spuReadMutex);
+    }
+
+    void resumeAfterCoreReset()
+    {
+        m_paused.store(false, std::memory_order_release);
+    }
+
     void push(const int16_t* samples, size_t stereoFrames)
     {
         (void)samples;
@@ -263,6 +277,12 @@ private:
 
         while (m_running.load(std::memory_order_acquire))
         {
+            if (m_paused.load(std::memory_order_acquire))
+            {
+                svcSleepThread(1000000);
+                continue;
+            }
+
             AudioDriverWaveBuf* refill = nullptr;
             for (auto& buffer : buffers)
             {
@@ -280,8 +300,14 @@ private:
 
                 int frames = 0;
                 while (m_running.load(std::memory_order_acquire) &&
-                       !(frames = SPU::ReadOutput(data, static_cast<int>(kBufferFrames))))
+                       !m_paused.load(std::memory_order_acquire))
                 {
+                    {
+                        std::lock_guard<std::mutex> lock(m_spuReadMutex);
+                        frames = SPU::ReadOutput(data, static_cast<int>(kBufferFrames));
+                    }
+                    if (frames > 0)
+                        break;
                     svcSleepThread(10000);
                 }
 
@@ -304,6 +330,8 @@ private:
     }
 
     std::atomic<bool> m_running{false};
+    std::atomic<bool> m_paused{false};
+    std::mutex m_spuReadMutex;
     std::thread m_thread;
     AudioDriver m_driver {};
     void* m_memPool = nullptr;
@@ -575,8 +603,31 @@ int RunDekoRuntime(const DekoRunOptions& options)
         const NdsMenuAction menuAction = menuLayer.update(down);
         if (menuAction == NdsMenuAction::ResetGame)
         {
-            NDS::Reset();
-            NDS::SetupDirectBoot();
+            appendStubLog("GBAStationNDSStub: Deko reset begin");
+            menuLayer.close();
+            NDS::SetKeyMask(0x0FFFu);
+            NDS::ReleaseScreen();
+
+            audio.pauseForCoreReset();
+            Gfx::PresentQueue.waitIdle();
+            Gfx::EmuQueue.waitIdle();
+            NDSCart::FlushSRAMFile();
+
+            loaded = NDS::LoadROM(options.romPath.c_str(), savePath.c_str(), true);
+            appendStubLog("GBAStationNDSStub: Deko reset LoadROM loaded=%d", loaded ? 1 : 0);
+            audio.resumeAfterCoreReset();
+
+            if (!loaded)
+            {
+                running = false;
+                continue;
+            }
+
+            fps = 0.0;
+            fpsFrames = 0;
+            lastRunMs = 0;
+            fpsStart = std::chrono::steady_clock::now();
+            continue;
         }
         else if (menuAction == NdsMenuAction::ExitGame)
         {
