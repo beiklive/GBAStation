@@ -2,6 +2,11 @@
 
 #cmakedefine ShowBitmap
 #cmakedefine ComposeBGOBJ
+#cmakedefine NDS_DEKO_COMPOSE_SCALE @NDS_DEKO_COMPOSE_SCALE@
+
+#ifndef NDS_DEKO_COMPOSE_SCALE
+#define NDS_DEKO_COMPOSE_SCALE 1
+#endif
 
 layout (binding = 0) uniform usampler2D BGLayer0;
 layout (binding = 1) uniform usampler2D BGLayer1;
@@ -92,7 +97,8 @@ void PalettisePixel(uint indexed, out uint rb, out uint g)
 
 void main()
 {
-    ivec2 position = ivec2(gl_FragCoord.xy);
+    ivec2 targetPosition = ivec2(gl_FragCoord.xy);
+    ivec2 position = targetPosition / NDS_DEKO_COMPOSE_SCALE;
     uint finalColorRB, finalColorG;
 #ifdef ComposeBGOBJ
     // find out the two top most layers

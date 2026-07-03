@@ -16,7 +16,9 @@ void NdsGameLayer::init(GPU2D::DekoRenderer* renderer)
         for (int screen = 0; screen < 2; ++screen)
         {
             m_framebufferTextures[front][screen] =
-                Gfx::TextureCreateExternal(kDsWidth, kDsHeight, m_renderer->GetFramebuffer(front, screen));
+                Gfx::TextureCreateExternal(m_renderer->GetFramebufferTextureWidth(),
+                                           m_renderer->GetFramebufferTextureHeight(),
+                                           m_renderer->GetFramebuffer(front, screen));
         }
     }
 }
@@ -80,6 +82,8 @@ void NdsGameLayer::drawScreens() const
 
     const RectF top = topRect();
     const RectF bottom = bottomRect();
+    const float srcWidth = static_cast<float>(m_renderer->GetFramebufferWidth());
+    const float srcHeight = static_cast<float>(m_renderer->GetFramebufferHeight());
 
     Gfx::SetSampler((m_linearFiltering ? Gfx::sampler_Linear : Gfx::sampler_Nearest) |
                     Gfx::sampler_ClampToEdge);
@@ -89,13 +93,13 @@ void NdsGameLayer::drawScreens() const
                        {top.x, top.y},
                        {top.w, top.h},
                        {0.0f, 0.0f},
-                       {static_cast<float>(kDsWidth), static_cast<float>(kDsHeight)},
+                       {srcWidth, srcHeight},
                        {1.0f, 1.0f, 1.0f, 1.0f});
     Gfx::DrawRectangle(m_framebufferTextures[GPU::FrontBuffer][1],
                        {bottom.x, bottom.y},
                        {bottom.w, bottom.h},
                        {0.0f, 0.0f},
-                       {static_cast<float>(kDsWidth), static_cast<float>(kDsHeight)},
+                       {srcWidth, srcHeight},
                        {1.0f, 1.0f, 1.0f, 1.0f});
     Gfx::SignalFence(m_renderer->FramebufferPresented[GPU::FrontBuffer]);
 }

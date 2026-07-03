@@ -3,6 +3,7 @@
 
 #include <arm_neon.h>
 #include <assert.h>
+#include <stdio.h>
 
 #include "frontend/switch/Gfx.h"
 
@@ -16,6 +17,22 @@ using Gfx::EmuQueue;
 namespace GPU2D
 {
 
+namespace
+{
+
+void LoadScaledFragmentShader(const char* baseName, int scale, dk::Shader& shader)
+{
+    char path[128];
+    if (scale <= 1)
+        snprintf(path, sizeof(path), "romfs:/shaders/%s.dksh", baseName);
+    else
+        snprintf(path, sizeof(path), "romfs:/shaders/%s_x%d.dksh", baseName, scale);
+
+    Gfx::LoadShader(path, shader);
+}
+
+}
+
 DekoRenderer::DekoRenderer() :
     CmdMem(*Gfx::DataHeap, 1024*1024*2)
 {
@@ -24,7 +41,7 @@ DekoRenderer::DekoRenderer() :
 
     dk::ImageLayout finalFbLayout;
     dk::ImageLayoutMaker{Gfx::Device}
-        .setDimensions(256, 192)
+        .setDimensions(MaxFramebufferWidth, MaxFramebufferHeight)
         .setFlags(DkImageFlags_UsageRender)
         .setFormat(DkImageFormat_RGBA8_Unorm)
         .initialize(finalFbLayout);
@@ -53,8 +70,14 @@ DekoRenderer::DekoRenderer() :
             IntermedFramebufferMemory.Offset + intermedFbLayout.getSize() * i);
     }
 
-    _3DFramebufferMemory = Gfx::TextureHeap->Alloc(intermedFbLayout.getSize(), intermedFbLayout.getAlignment());
-    _3DFramebuffer.initialize(intermedFbLayout, Gfx::TextureHeap->MemBlock, _3DFramebufferMemory.Offset);
+    dk::ImageLayout hires3DFbLayout;
+    dk::ImageLayoutMaker{Gfx::Device}
+        .setDimensions(MaxFramebufferWidth, MaxFramebufferHeight)
+        .setFlags(DkImageFlags_UsageRender|DkImageFlags_UsageLoadStore|DkImageFlags_Usage2DEngine)
+        .setFormat(DkImageFormat_R32_Uint)
+        .initialize(hires3DFbLayout);
+    _3DFramebufferMemory = Gfx::TextureHeap->Alloc(hires3DFbLayout.getSize(), hires3DFbLayout.getAlignment());
+    _3DFramebuffer.initialize(hires3DFbLayout, Gfx::TextureHeap->MemBlock, _3DFramebufferMemory.Offset);
 
     dk::ImageLayout objWindowLayout;
     dk::ImageLayoutMaker{Gfx::Device}
@@ -166,9 +189,7 @@ DekoRenderer::DekoRenderer() :
     Gfx::DataHeap->CpuAddr<dk::SamplerDescriptor>(SamplerDescriptors)->initialize(dk::Sampler{});
 
     Gfx::LoadShader("romfs:/shaders/FullscreenQuad_vsh.dksh", ShaderFullscreenQuad);
-    Gfx::LoadShader("romfs:/shaders/ComposeBGOBJ_fsh.dksh", ShaderComposeBGOBJ);
-    Gfx::LoadShader("romfs:/shaders/ComposeBGOBJDirectBitmapOnly_fsh.dksh", ShaderComposeBGOBJDirectBitmapOnly);
-    Gfx::LoadShader("romfs:/shaders/ComposeBGOBJShowBitmap_fsh.dksh", ShaderComposeBGOBJShowBitmap);
+    LoadComposeShadersForScale(1);
     Gfx::LoadShader("romfs:/shaders/BGText4bpp_fsh.dksh", ShaderBGText4Bpp[0]);
     Gfx::LoadShader("romfs:/shaders/BGText4bppMosaic_fsh.dksh", ShaderBGText4Bpp[1]);
     Gfx::LoadShader("romfs:/shaders/BGText8bpp_fsh.dksh", ShaderBGText8Bpp[0]);
@@ -215,6 +236,34 @@ DekoRenderer::DekoRenderer() :
 
 DekoRenderer::~DekoRenderer()
 {
+}
+
+void DekoRenderer::LoadComposeShadersForScale(int scale)
+{
+    if (scale < 1) scale = 1;
+    if (scale > MaxScaleFactor) scale = MaxScaleFactor;
+    if (ComposeShaderScaleLoaded[scale])
+        return;
+
+    LoadScaledFragmentShader("ComposeBGOBJ_fsh", scale, ShaderComposeBGOBJ[scale]);
+    LoadScaledFragmentShader("ComposeBGOBJDirectBitmapOnly_fsh", scale, ShaderComposeBGOBJDirectBitmapOnly[scale]);
+    LoadScaledFragmentShader("ComposeBGOBJShowBitmap_fsh", scale, ShaderComposeBGOBJShowBitmap[scale]);
+
+    ComposeShaderScaleLoaded[scale] = true;
+    printf("GPU2D::DekoRenderer loaded compose shader scale x%d\n", scale);
+}
+
+void DekoRenderer::SetScaleFactor(int scale)
+{
+    if (scale < 1) scale = 1;
+    if (scale > MaxScaleFactor) scale = MaxScaleFactor;
+    if (ScaleFactor == scale)
+        return;
+
+    LoadComposeShadersForScale(scale);
+    ScaleFactor = scale;
+    printf("GPU2D::DekoRenderer scale x%d output=%dx%d\n",
+           ScaleFactor, GetFramebufferWidth(), GetFramebufferHeight());
 }
 
 template <u32 Size>
@@ -706,7 +755,7 @@ void DekoRenderer::DoCapture()
 
     u8* srcA = Gfx::DataHeap->CpuAddr<u8>(DisplayCaptureMemory);
 
-    u32 srcBaddr;
+    u32 srcBaddr = 0;
     u16* srcB = NULL;
 
     if (CaptureCnt & (1<<25))
@@ -880,8 +929,8 @@ void DekoRenderer::DoCapture()
                         uint16x8_t finalBHi = vmull_high_u8(pixelsA.val[2], veva);
 
                         uint8x16_t finalR = vshrn_high_n_u16(vshrn_n_u16(finalRLo, 4), finalRHi, 4);
-                        uint8x16_t finalG = vshrn_high_n_u16(vshrn_n_u16(finalRLo, 4), finalGHi, 4);
-                        uint8x16_t finalB = vshrn_high_n_u16(vshrn_n_u16(finalRLo, 4), finalBHi, 4);
+                        uint8x16_t finalG = vshrn_high_n_u16(vshrn_n_u16(finalGLo, 4), finalGHi, 4);
+                        uint8x16_t finalB = vshrn_high_n_u16(vshrn_n_u16(finalBLo, 4), finalBHi, 4);
 
                         uint8x16_t alpha = vandq_u8(evaMask, vtstq_u8(pixelsA.val[3], pixelsA.val[3]));
 
@@ -1841,8 +1890,12 @@ void DekoRenderer::ComposeBGOBJ()
 {
     dk::ImageView colorTarget{FinalFramebuffers[GPU::FrontBuffer^1][CurUnit->Num == UnitAIsTop]};
     dk::Shader* shader;
+    const int scale = ScaleFactor;
     bool capture = CurUnit->Num == 0 && CaptureLatch && !(CaptureCnt & (1<<24));
     EmuCmdBuf.bindVtxAttribState({});
+
+    DkViewport composeViewport = {0.f, 0.f, (float)GetFramebufferWidth(), (float)GetFramebufferHeight(), 0.f, 1.f};
+    EmuCmdBuf.setViewports(0, {composeViewport, composeViewport});
 
     EmuCmdBuf.bindTextures(DkStage_Fragment, 5,
     {
@@ -1895,16 +1948,16 @@ void DekoRenderer::ComposeBGOBJ()
         {
             dk::ImageView bgobj{BGOBJTexture};
             EmuCmdBuf.bindRenderTargets({&colorTarget, &bgobj});
-            shader = showDirectBitmap ? &ShaderComposeBGOBJShowBitmap : &ShaderComposeBGOBJ;
+            shader = showDirectBitmap ? &ShaderComposeBGOBJShowBitmap[scale] : &ShaderComposeBGOBJ[scale];
         }
         else
         {
             EmuCmdBuf.bindRenderTargets({&colorTarget});
-            shader = showDirectBitmap ? &ShaderComposeBGOBJDirectBitmapOnly : &ShaderComposeBGOBJ;
+            shader = showDirectBitmap ? &ShaderComposeBGOBJDirectBitmapOnly[scale] : &ShaderComposeBGOBJ[scale];
         }
         EmuCmdBuf.bindShaders(DkStageFlag_GraphicsMask, {&ShaderFullscreenQuad, shader});
 
-        DkScissor scissor = {0, firstLine, 256, region.LinesCount};
+        DkScissor scissor = {0, firstLine * (u32)scale, (u32)GetFramebufferWidth(), region.LinesCount * (u32)scale};
         EmuCmdBuf.setScissors(0, {scissor, scissor});
         //printf("compositing region %d %d\n", firstLine, region.LinesCount);
 
@@ -1988,6 +2041,9 @@ void DekoRenderer::ComposeBGOBJ()
         firstLine += region.LinesCount;
     }
     assert(firstLine == 192);
+
+    DkViewport nativeViewport = {0.f, 0.f, 256.f, 192.f, 0.f, 1.f};
+    EmuCmdBuf.setViewports(0, {nativeViewport, nativeViewport});
 
     ComposeRegions[CurUnit->Num].clear();
 

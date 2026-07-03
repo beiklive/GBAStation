@@ -1549,3 +1549,351 @@ GBAStationNDSStub.nro 2.17 MB
 
 - 阶段 2：为 Deko compute shader 生成 x1/x2/x3/x4 变体。
 - 阶段 3：让 `GPU3D_Deko` 按 scale 重新分配 3D buffer，并输出 high-res 3D framebuffer。
+
+## 2026-07-03 阶段T：实施 Deko3D 多倍分辨率阶段 2
+
+### 目标
+
+- 为 Deko 3D compute shader 增加 x1/x2/x3/x4 编译期尺寸变体。
+- 继续保持当前运行路径为 x1，不在本阶段启用 high-res 渲染。
+
+### 已实施
+
+- `GPU3D_Comp.glsl` 增加尺寸宏：
+
+```glsl
+NDS_DEKO_SCREEN_WIDTH
+NDS_DEKO_SCREEN_HEIGHT
+NDS_DEKO_TILE_SIZE
+NDS_DEKO_WORK_TILE_MULTIPLIER
+```
+
+- 默认值保持原生 DS 尺寸：
+
+```text
+ScreenWidth  = 256
+ScreenHeight = 192
+TileSize     = 8
+WorkTileMultiplier = 48
+```
+
+- shader 内部以下尺寸改为使用编译期参数：
+
+```text
+FramebufferStride
+TilesPerLine
+TileLines
+MaxWorkTiles
+ColorResult / DepthResult / AttrResult
+DepthBlend / FinalPass result offset stride
+```
+
+- `nds_stub/CMakeLists.txt` 新增 `nds_stub_compile_gpu3d_shader_scaled()`。
+- 现在会额外生成所有 Deko 3D compute shader 的 scale 变体：
+
+```text
+*_x1.dksh
+*_x2.dksh
+*_x3.dksh
+*_x4.dksh
+```
+
+### x3/x4 的特殊处理
+
+- 首次尝试让 x3/x4 沿用 x1 的 `MaxWorkTiles * 48` 时，`uam` 报错：
+
+```text
+shader storage block TilesBuffer larger than maximum allowed 134217728
+```
+
+- 因此阶段 2 对 high scale 变体先使用保守 work tile multiplier：
+
+```text
+x1: 48
+x2: 48
+x3: 16
+x4: 8
+```
+
+- 这保证 shader 能通过 Deko 编译，但后续真正启用 x3/x4 时必须加入运行时 work overflow 保护和 fallback。
+
+### 当前状态
+
+- RomFS 中已包含 x1/x2/x3/x4 shader 变体。
+- `GPU3D_Deko` 当前仍加载原始 shader 名称，实际渲染仍为 x1。
+- 下一阶段需要让 renderer 按 scale 加载/选择这些 shader，并按 scale 分配 high-res 3D buffer。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 3.12 MB
+```
+
+### 下一步
+
+- 阶段 3A：把 `GPU3D_Deko` 的 shader 成员改成 scale-aware shader set，并按当前 scale 选择 shader。
+- 阶段 3B：让 x2 先真实分配 high-res 3D buffers，并只开放 x2 实验路径。
+
+---
+
+## 阶段 3：接通 Deko3D 多倍分辨率运行路径
+
+### 目标
+
+解决菜单中 x2/x3/x4 分辨率切换后画面没有变化的问题。上一阶段只生成了 shader 变体，但运行时仍固定加载和绑定 x1 shader，最终 framebuffer 也仍是 256x192。
+
+### 已实施
+
+- `GPU3D_Deko` 改为 scale-aware shader set：
+
+```text
+ShaderInterpXSpans[scale][z/w]
+ShaderBinCombined[scale]
+ShaderDepthBlend[scale][z/w]
+ShaderRasterise...[scale][z/w]
+ShaderFinalPass[scale][variant]
+```
+
+- 运行时按当前 `ScaleFactor` 绑定对应的 x1/x2/x3/x4 compute shader。
+- `GPU3D_Deko::ConfigureScale()` 现在会真正设置：
+
+```text
+ScreenWidth  = 256 * scale
+ScreenHeight = 192 * scale
+TilesPerLine / TileLines / RuntimeMaxWorkTiles
+RuntimeMaxYSpanIndices / RuntimeMaxYSpanSetups
+```
+
+- 多边形扫描转换阶段改为按 scale 生成坐标：
+
+```text
+FinalPosition * ScaleFactor
+或 BetterPolygons 时 HiresPosition * ScaleFactor >> 4
+```
+
+- GPU3D 工作缓冲初始化时按保守最大需求预分配，避免菜单切换倍率时重建 GPU 资源。
+  - Tile buffer 按 x2 最大 work tile 需求分配；
+  - BinResult buffer 按 x4 最大 mask 需求分配；
+  - FinalTile buffer 按 x4 输出尺寸分配。
+- `GPU2D_Deko` 最终 framebuffer 和 3D framebuffer 预留到 x4 尺寸：
+
+```text
+max output = 1024x768
+current output = 256x192 / 512x384 / 768x576 / 1024x768
+```
+
+- `ComposeBGOBJ_fsh.glsl` 增加 `NDS_DEKO_COMPOSE_SCALE`：
+  - 2D BG / OBJ / Window / DirectBitmap 仍按原生 256x192 坐标采样；
+  - 3D BG 按 high-res 坐标采样；
+  - final framebuffer 按当前 scale 输出。
+- `nds_stub/CMakeLists.txt` 生成 2D compose shader 的 x1-x4 变体。
+- `NdsGameLayer` 创建外部纹理时使用实际 image 最大尺寸，绘制时只采样当前有效输出区域。
+- `NdsDekoRuntime` 的分辨率切换同时通知 GPU3D 与 GPU2D。
+
+### 注意事项
+
+- x2/x3/x4 提升的是 3D 图层分辨率；纯 2D 游戏或纯 2D 场景只会按原生图层放大，不会变成真正高清。
+- x3/x4 的 `MaxWorkTiles` 为了通过 Deko shader 编译限制做了保守下调，复杂 3D 场景仍需要后续加入 overflow 检测和 fallback。
+- Display Capture 路径目前沿用原生 256x192 复制逻辑，高倍率下如果游戏大量使用 capture，后续可能需要专门做 downsample/copy 适配。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 3.16 MB
+```
+
+---
+
+## 阶段 3.4：恢复 DisplayCapture / BGOBJ 中间纹理格式
+
+### 现象
+
+阶段 3.3 修正 shader uniform 后，真机反馈宝可梦黑2、黄金太阳等标题/开始界面仍然整屏偏红，但游戏内普通场景基本正常。
+
+### 判断
+
+异常仍集中在标题界面，说明更可能是 `DirectBitmap / DisplayCapture` 使用的中间纹理格式错误。高分辨率改造期间 `BGOBJTexture` 被改成了最终输出用的 `RGBA8_Unorm` 布局，但 capture 路径会把该纹理作为 `R32_Uint` 风格的 BG/OBJ 合成结果复制回内存，再交给 NDS capture 逻辑处理。格式不一致会导致 direct bitmap / capture 场景颜色串位。
+
+### 已实施
+
+- `GPU2D_Deko.cpp` 中 `BGOBJTexture` 分配和初始化恢复使用 `intermedFbLayout`：
+
+```cpp
+BGOBJTextureMemory = Gfx::TextureHeap->Alloc(intermedFbLayout.getSize(), intermedFbLayout.getAlignment());
+BGOBJTexture.initialize(intermedFbLayout, Gfx::TextureHeap->MemBlock, BGOBJTextureMemory.Offset);
+```
+
+### 当前状态
+
+- high-res runtime 仍保持 x1 安全锁定。
+- 本次只恢复 capture 中间纹理格式，不影响主程序、libretro、mGBA 渲染路径。
+
+### 追加修复
+
+- `DoCapture()` 中 `srcBaddr` 改为显式初始化为 `0`，避免 source B 地址在部分 capture 模式下读取未定义值。
+- 修复 source A 单独参与 capture 混合时的 NEON 通道错误：
+
+```cpp
+uint8x16_t finalG = vshrn_high_n_u16(vshrn_n_u16(finalGLo, 4), finalGHi, 4);
+uint8x16_t finalB = vshrn_high_n_u16(vshrn_n_u16(finalBLo, 4), finalBHi, 4);
+```
+
+此前 G/B 使用了 R 的低半累加器，可能导致标题界面、开场画面等大量使用 display capture 的场景整体偏红。
+
+### 下一步
+
+- 真机验证 x2/x3/x4：
+  - 是否能看到 3D 场景清晰度变化；
+  - 菜单切换后是否黑屏/闪退；
+  - x3/x4 在复杂场景是否出现 work overflow 或异常画面。
+- 根据真机日志继续补 runtime overflow fallback。
+
+---
+
+## 阶段 3.1：优化打开 NDS 游戏时单核 100% 的启动卡顿
+
+### 现象
+
+真机打开 NDS 游戏时，核心 1 会长时间 100%，核心 0 和核心 2 基本为 0%。这说明当前瓶颈集中在单线程初始化路径，而不是多线程运行时负载。
+
+### 原因分析
+
+阶段 3 为多倍分辨率接通了 x1/x2/x3/x4 shader set，但初版在启动时一次性加载了：
+
+- GPU3D compute shader 的 x1-x4 全套变体；
+- GPU2D compose shader 的 x1-x4 变体。
+
+这些 shader 加载和 deko shader 初始化都发生在主启动线程上，因此会表现为单核长时间满载。
+
+### 已实施
+
+- `GPU3D_Deko` 改为按需加载倍率 shader：
+  - 启动只加载 x1；
+  - 首次切换到 x2/x3/x4 时再加载对应倍率；
+  - 加载后缓存，后续切换复用。
+- `GPU2D_Deko` 的 compose shader 同样改为按需加载：
+  - 启动只加载 x1；
+  - 首次切换倍率时加载对应 xN compose shader。
+- 增加启动/切换日志：
+
+```text
+DekoRenderer loaded GPU3D shader scale xN
+GPU2D::DekoRenderer loaded compose shader scale xN
+```
+
+### 预期效果
+
+- 打开 NDS 游戏时，核心 1 长时间 100% 的阶段应明显缩短。
+- 第一次从菜单切到 x2/x3/x4 时可能出现一次短暂停顿，这是懒加载的成本转移；第二次切换同倍率不应再卡。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 3.16 MB
+```
+
+---
+
+## 阶段 3.2：启动黑屏单核 100% 的安全回退与诊断
+
+### 现象
+
+真机反馈：打开 NDS 游戏后仍长时间黑屏，核心 1 持续 100%，等待几分钟仍不进入画面。
+
+### 判断
+
+这已经不是 shader 懒加载能够解释的短卡顿，更像启动路径中某个初始化调用卡住。高风险点是阶段 3 中引入的 high-res runtime 预分配：
+
+- GPU3D 工作缓冲曾按 x2/x4 规模预分配；
+- GPU2D final / 3D framebuffer 曾按 x4 尺寸预分配；
+- 这些资源在 Switch 上可能导致 deko heap 分配、映射或 GPU 同步卡住。
+
+### 已实施
+
+- 临时把 `GPU3D_Deko::MaxScaleFactor` 锁回 `1`。
+- 临时把 `GPU2D_Deko::MaxScaleFactor` 锁回 `1`。
+- 菜单中 x2/x3/x4 的请求会记录日志并保持 x1：
+
+```text
+GBAStationNDSStub: Deko resolution scale xN temporarily disabled; runtime stays x1
+```
+
+- 在启动路径加入毫秒级耗时日志：
+
+```text
+config done ms=...
+Gfx::Init ok ms=...
+NDS::Init ok ms=...
+GPU::InitRenderer ok ms=...
+GPU::SetRenderSettings ok ms=...
+gameLayer.init ok ms=...
+LoadROM loaded=... ms=...
+audio.start result=... ms=...
+```
+
+### 当前目的
+
+先恢复 x1 启动稳定性，避免 high-res 资源参与启动。下一份真机日志应能直接定位黑屏卡在：
+
+- `Gfx::Init`
+- `NDS::Init`
+- `GPU::InitRenderer`
+- `GPU::SetRenderSettings`
+- `LoadROM`
+- audio start
+- 第一帧 RunFrame / StartFrame / EndFrame
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 3.16 MB
+```
+
+---
+
+## 阶段 3.3：修复部分标题界面整屏偏红
+
+### 现象
+
+真机反馈：x1 安全版可以启动，但部分画面整屏变红，例如：
+
+- 宝可梦黑2开始界面；
+- 黄金太阳开始界面；
+- 进入游戏后普通场景基本正常。
+
+### 判断
+
+异常集中在标题界面，而普通游戏场景正常，说明问题更可能在 `ShowBitmap / DirectBitmap / DisplayCapture` 相关路径，而不是普通 BG/OBJ 合成。阶段 3 为高分辨率合成在 `ComposeUniform` 中插入了 `BGIs3DMask[4]`，会改变 shader 与 C++ 侧 uniform buffer 的布局；即使当前运行时锁回 x1，也可能让部分 compose shader 读取错字段，导致颜色异常。
+
+### 已实施
+
+- `ComposeBGOBJ_fsh.glsl` 移除 `BGIs3DMask0..3`。
+- BG0..3 的采样恢复为原始 `position` 坐标。
+- `GPU2D_Deko::ComposeUniform` 移除 `BGIs3DMask[4]`。
+- `ComposeBGOBJ()` 移除 `BGIs3DMask` 赋值逻辑。
+
+### 当前状态
+
+- high-res runtime 仍保持 x1 安全锁定。
+- 2D compose uniform 布局恢复到原始结构，优先保证标题界面、DirectBitmap、DisplayCapture 路径颜色正确。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 3.16 MB
+```

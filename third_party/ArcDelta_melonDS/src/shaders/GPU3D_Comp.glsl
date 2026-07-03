@@ -26,6 +26,24 @@
 #cmakedefine Highlight
 #cmakedefine ShadowMask
 
+#cmakedefine NDS_DEKO_SCREEN_WIDTH @NDS_DEKO_SCREEN_WIDTH@
+#cmakedefine NDS_DEKO_SCREEN_HEIGHT @NDS_DEKO_SCREEN_HEIGHT@
+#cmakedefine NDS_DEKO_TILE_SIZE @NDS_DEKO_TILE_SIZE@
+#cmakedefine NDS_DEKO_WORK_TILE_MULTIPLIER @NDS_DEKO_WORK_TILE_MULTIPLIER@
+
+#ifndef NDS_DEKO_SCREEN_WIDTH
+#define NDS_DEKO_SCREEN_WIDTH 256
+#endif
+#ifndef NDS_DEKO_SCREEN_HEIGHT
+#define NDS_DEKO_SCREEN_HEIGHT 192
+#endif
+#ifndef NDS_DEKO_TILE_SIZE
+#define NDS_DEKO_TILE_SIZE 8
+#endif
+#ifndef NDS_DEKO_WORK_TILE_MULTIPLIER
+#define NDS_DEKO_WORK_TILE_MULTIPLIER 48
+#endif
+
 #extension GL_ARB_shader_ballot : require
 #extension GL_ARB_gpu_shader_int64 : require
 
@@ -119,20 +137,22 @@ layout (std140, binding = 2) readonly buffer PolygonBuffer
     Polygon Polygons[];
 };
 
-const int TileSize = 8;
+const int TileSize = NDS_DEKO_TILE_SIZE;
 const int CoarseTileCountX = 8;
 const int CoarseTileCountY = 4;
 const int CoarseTileW = CoarseTileCountX * TileSize;
 const int CoarseTileH = CoarseTileCountY * TileSize;
 
-const int FramebufferStride = 256*192;
-const int TilesPerLine = 256/TileSize;
-const int TileLines = 192/TileSize;
+const int ScreenWidth = NDS_DEKO_SCREEN_WIDTH;
+const int ScreenHeight = NDS_DEKO_SCREEN_HEIGHT;
+const int FramebufferStride = ScreenWidth*ScreenHeight;
+const int TilesPerLine = ScreenWidth/TileSize;
+const int TileLines = ScreenHeight/TileSize;
 
 const int BinStride = 2048/32;
 const int CoarseBinStride = BinStride/32;
 
-const int MaxWorkTiles = TilesPerLine*TileLines*48;
+const int MaxWorkTiles = TilesPerLine*TileLines*NDS_DEKO_WORK_TILE_MULTIPLIER;
 const int MaxVariants = 256;
 
 layout (std430, binding = 3)
@@ -175,9 +195,9 @@ readonly
 #endif
 buffer RasterResult
 {
-    uint ColorResult[256*192*2];
-    uint DepthResult[256*192*2];
-    uint AttrResult[256*192*2];
+    uint ColorResult[ScreenWidth*ScreenHeight*2];
+    uint DepthResult[ScreenWidth*ScreenHeight*2];
+    uint AttrResult[ScreenWidth*ScreenHeight*2];
 };
 
 layout (std140, binding = 0) uniform MetaUniform
@@ -1271,7 +1291,7 @@ void main()
     ProcessCoarseMask(linearTile, coarseMaskLo, 0, color, depth, attr, stencil, prevIsShadowMask);
     ProcessCoarseMask(linearTile, coarseMaskHi, BinStride/2, color, depth, attr, stencil, prevIsShadowMask);
 
-    int resultOffset = int(gl_GlobalInvocationID.x) + int(gl_GlobalInvocationID.y) * 256;
+    int resultOffset = int(gl_GlobalInvocationID.x) + int(gl_GlobalInvocationID.y) * ScreenWidth;
     ColorResult[resultOffset] = color.x;
     ColorResult[resultOffset+FramebufferStride] = color.y;
     DepthResult[resultOffset] = depth.x;
@@ -1334,7 +1354,7 @@ uint BlendFog(uint color, uint depth)
 void main()
 {
     int srcX = (int(gl_GlobalInvocationID.x) + XScroll) & 0x1FF;
-    int resultOffset = int(srcX) + int(gl_GlobalInvocationID.y) * 256;
+    int resultOffset = int(srcX) + int(gl_GlobalInvocationID.y) * ScreenWidth;
 
     uvec2 color = uvec2(0);
     uvec2 depth = uvec2(0);
@@ -1364,13 +1384,13 @@ void main()
         }
         if (gl_GlobalInvocationID.y > 0U)
         {
-            otherAttr.z = AttrResult[resultOffset-256];
-            otherDepth.z = DepthResult[resultOffset-256];
+            otherAttr.z = AttrResult[resultOffset-ScreenWidth];
+            otherDepth.z = DepthResult[resultOffset-ScreenWidth];
         }
         if (gl_GlobalInvocationID.y < 191U)
         {
-            otherAttr.w = AttrResult[resultOffset+256];
-            otherDepth.w = DepthResult[resultOffset+256];
+            otherAttr.w = AttrResult[resultOffset+ScreenWidth];
+            otherDepth.w = DepthResult[resultOffset+ScreenWidth];
         }
 
         uint polyId = bitfieldExtract(attr.x, 24, 5);

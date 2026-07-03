@@ -85,6 +85,12 @@ bool fileExists(const char* path)
     return true;
 }
 
+long long elapsedMs(std::chrono::steady_clock::time_point begin)
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - begin).count();
+}
+
 bool touchScreenPressed()
 {
     HidTouchScreenState state {};
@@ -571,39 +577,52 @@ int RunDekoRuntime(const DekoRunOptions& options)
         return 1;
     }
 
+    auto checkpointBegin = std::chrono::steady_clock::now();
     configureArcDelta();
-    appendStubLog("GBAStationNDSStub: Deko checkpoint config done");
+    appendStubLog("GBAStationNDSStub: Deko checkpoint config done ms=%lld", elapsedMs(checkpointBegin));
 
     appendStubLog("GBAStationNDSStub: Deko checkpoint Gfx::Init begin");
+    checkpointBegin = std::chrono::steady_clock::now();
     Gfx::Init();
-    appendStubLog("GBAStationNDSStub: Deko checkpoint Gfx::Init ok");
+    appendStubLog("GBAStationNDSStub: Deko checkpoint Gfx::Init ok ms=%lld", elapsedMs(checkpointBegin));
     appendStubLog("GBAStationNDSStub: Deko checkpoint NDS::Init begin");
+    checkpointBegin = std::chrono::steady_clock::now();
     NDS::Init();
-    appendStubLog("GBAStationNDSStub: Deko checkpoint NDS::Init ok");
+    appendStubLog("GBAStationNDSStub: Deko checkpoint NDS::Init ok ms=%lld", elapsedMs(checkpointBegin));
     appendStubLog("GBAStationNDSStub: Deko checkpoint GPU::InitRenderer begin");
+    checkpointBegin = std::chrono::steady_clock::now();
     GPU::InitRenderer(0);
-    appendStubLog("GBAStationNDSStub: Deko checkpoint GPU::InitRenderer ok");
+    appendStubLog("GBAStationNDSStub: Deko checkpoint GPU::InitRenderer ok ms=%lld", elapsedMs(checkpointBegin));
     GPU::RenderSettings settings {true, 1, false};
     appendStubLog("GBAStationNDSStub: Deko checkpoint GPU::SetRenderSettings begin");
+    checkpointBegin = std::chrono::steady_clock::now();
     GPU::SetRenderSettings(0, settings);
-    appendStubLog("GBAStationNDSStub: Deko checkpoint GPU::SetRenderSettings ok");
+    appendStubLog("GBAStationNDSStub: Deko checkpoint GPU::SetRenderSettings ok ms=%lld", elapsedMs(checkpointBegin));
 
     auto* deko2d = static_cast<GPU2D::DekoRenderer*>(GPU::GPU2D_Renderer.get());
     NdsGameLayer gameLayer;
     appendStubLog("GBAStationNDSStub: Deko checkpoint gameLayer.init begin renderer=%p", deko2d);
+    checkpointBegin = std::chrono::steady_clock::now();
     gameLayer.init(deko2d);
     gameLayer.setWaitForFramebufferReady(false);
     appendStubLog("GBAStationNDSStub: Deko display fence mode=signal-presented-only");
-    appendStubLog("GBAStationNDSStub: Deko checkpoint gameLayer.init ok");
+    appendStubLog("GBAStationNDSStub: Deko checkpoint gameLayer.init ok ms=%lld", elapsedMs(checkpointBegin));
 
     appendStubLog("GBAStationNDSStub: Deko checkpoint LoadROM begin");
+    checkpointBegin = std::chrono::steady_clock::now();
     bool loaded = NDS::LoadROM(options.romPath.c_str(), savePath.c_str(), true);
-    appendStubLog("GBAStationNDSStub: Deko LoadROM loaded=%d save=%s", loaded ? 1 : 0, savePath.c_str());
+    appendStubLog("GBAStationNDSStub: Deko LoadROM loaded=%d ms=%lld save=%s",
+                  loaded ? 1 : 0,
+                  elapsedMs(checkpointBegin),
+                  savePath.c_str());
 
     DekoAudioOutput audio;
     appendStubLog("GBAStationNDSStub: Deko checkpoint audio.start begin");
+    checkpointBegin = std::chrono::steady_clock::now();
     const bool audioStarted = audio.start();
-    appendStubLog("GBAStationNDSStub: Deko checkpoint audio.start result=%d", audioStarted ? 1 : 0);
+    appendStubLog("GBAStationNDSStub: Deko checkpoint audio.start result=%d ms=%lld",
+                  audioStarted ? 1 : 0,
+                  elapsedMs(checkpointBegin));
 
     bool running = loaded;
     bool pendingReturn = false;
@@ -623,13 +642,20 @@ int RunDekoRuntime(const DekoRunOptions& options)
             return;
 
         appendStubLog("GBAStationNDSStub: Deko resolution scale request x%d", scale);
+        if (scale != 1)
+        {
+            appendStubLog("GBAStationNDSStub: Deko resolution scale x%d temporarily disabled; runtime stays x1", scale);
+            currentResolutionScale = 1;
+            return;
+        }
         Gfx::PresentQueue.waitIdle();
         Gfx::EmuQueue.waitIdle();
 
         GPU::RenderSettings newSettings {true, scale, false};
         GPU::SetRenderSettings(0, newSettings);
+        deko2d->SetScaleFactor(scale);
         currentResolutionScale = scale;
-        appendStubLog("GBAStationNDSStub: Deko resolution scale request accepted x%d (stage1 renderer output remains x1)", scale);
+        appendStubLog("GBAStationNDSStub: Deko resolution scale request accepted x%d", scale);
     };
 
     while (appletMainLoop() && running)

@@ -39,22 +39,27 @@ public:
     //dk::Fence FrameReady = {};
     //dk::Fence FrameReserveFence = {};
 private:
-    dk::Shader ShaderInterpXSpans[2];
-    dk::Shader ShaderBinCombined;
-    dk::Shader ShaderDepthBlend[2];
-    dk::Shader ShaderRasteriseNoTexture[2];
-    dk::Shader ShaderRasteriseNoTextureToon[2];
-    dk::Shader ShaderRasteriseNoTextureHighlight[2];
-    dk::Shader ShaderRasteriseUseTextureDecal[2];
-    dk::Shader ShaderRasteriseUseTextureModulate[2];
-    dk::Shader ShaderRasteriseUseTextureToon[2];
-    dk::Shader ShaderRasteriseUseTextureHighlight[2];
-    dk::Shader ShaderRasteriseShadowMask[2];
-    dk::Shader ShaderClearCoarseBinMask;
-    dk::Shader ShaderClearIndirectWorkCount;
-    dk::Shader ShaderCalculateWorkListOffset;
-    dk::Shader ShaderSortWork;
-    dk::Shader ShaderFinalPass[8];
+    // High-res runtime allocation is disabled until buffers can be rebuilt safely on scale changes.
+    static constexpr int MaxScaleFactor = 1;
+    static constexpr int ScaleSlotCount = MaxScaleFactor + 1;
+
+    dk::Shader ShaderInterpXSpans[ScaleSlotCount][2];
+    dk::Shader ShaderBinCombined[ScaleSlotCount];
+    dk::Shader ShaderDepthBlend[ScaleSlotCount][2];
+    dk::Shader ShaderRasteriseNoTexture[ScaleSlotCount][2];
+    dk::Shader ShaderRasteriseNoTextureToon[ScaleSlotCount][2];
+    dk::Shader ShaderRasteriseNoTextureHighlight[ScaleSlotCount][2];
+    dk::Shader ShaderRasteriseUseTextureDecal[ScaleSlotCount][2];
+    dk::Shader ShaderRasteriseUseTextureModulate[ScaleSlotCount][2];
+    dk::Shader ShaderRasteriseUseTextureToon[ScaleSlotCount][2];
+    dk::Shader ShaderRasteriseUseTextureHighlight[ScaleSlotCount][2];
+    dk::Shader ShaderRasteriseShadowMask[ScaleSlotCount][2];
+    dk::Shader ShaderClearCoarseBinMask[ScaleSlotCount];
+    dk::Shader ShaderClearIndirectWorkCount[ScaleSlotCount];
+    dk::Shader ShaderCalculateWorkListOffset[ScaleSlotCount];
+    dk::Shader ShaderSortWork[ScaleSlotCount];
+    dk::Shader ShaderFinalPass[ScaleSlotCount][8];
+    bool ShaderScaleLoaded[ScaleSlotCount] = {};
 
     CmdMemRing<2> CmdMem;
     GpuMemHeap::Allocation YSpanIndicesTextureMemory;
@@ -226,6 +231,7 @@ private:
     int RuntimeMaxWorkTiles = MaxWorkTiles;
     int RuntimeMaxYSpanIndices = MaxYSpanIndices;
     int RuntimeMaxYSpanSetups = MaxYSpanSetups;
+    bool BetterPolygons = false;
 
     std::vector<SetupIndices> YSpanIndices;
     std::vector<SpanSetupY> YSpanSetups;
@@ -269,13 +275,16 @@ private:
     TexCacheEntry& GetTexture(u32 textureParam, u32 paletteParam);
 
     void ConfigureScale(int scale);
+    void LoadShadersForScale(int scale);
+    int WorkTileMultiplierForScale(int scale) const;
+    int ActiveShaderScale() const { return ScaleFactor; }
     size_t BinResultSize() const;
     size_t TileMemorySize() const;
     size_t FinalTileMemorySize() const;
 
     void SetupAttrs(SpanSetupY* span, Polygon* poly, int from, int to);
-    void SetupYSpan(int polynum, SpanSetupY* span, Polygon* poly, int from, int to, u32 y, int side);
-    void SetupYSpanDummy(SpanSetupY* span, Polygon* poly, int vertex, int side);
+    void SetupYSpan(int polynum, SpanSetupY* span, Polygon* poly, int from, int to, u32 y, int side, const s32 scaledPositions[][2]);
+    void SetupYSpanDummy(SpanSetupY* span, Polygon* poly, int vertex, int side, const s32 scaledPositions[][2]);
 };
 
 }
