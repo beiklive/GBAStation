@@ -432,6 +432,8 @@ void MelonDSCore::Cleanup()
         ScopedMelonDSGLContext glScope(m_glContext.get());
         if (glScope.active && m_usingAcceleratedRenderer)
             melonDS::OpenGL::SaveShaderCache();
+        if (glScope.active)
+            releaseAcceleratedReadbackPbos();
         if (m_ready.load(std::memory_order_acquire))
             saveSram();
         FlushAsyncBinaryWrites();
@@ -444,6 +446,10 @@ void MelonDSCore::Cleanup()
     m_glContext.reset();
     m_romData.clear();
     m_acceleratedReadback.clear();
+    m_acceleratedReadbackPbos.fill(0);
+    m_acceleratedReadbackPboBytes = 0;
+    m_acceleratedReadbackPboIndex = 0;
+    m_acceleratedReadbackPboFrames = 0;
     m_audio.Reset();
     m_input.Reset();
     m_video.Reset();
@@ -451,6 +457,7 @@ void MelonDSCore::Cleanup()
     m_usingComputeRenderer = false;
     m_acceleratedReadbackFailed = false;
     m_skipAcceleratedReadbackFrames = 0;
+    m_slowFrameLogBudget = 40;
     m_ready.store(false, std::memory_order_release);
     m_initialized.store(false, std::memory_order_release);
 }
@@ -608,8 +615,17 @@ void MelonDSCore::RunFrame()
     const auto scanlines = m_nds->RunFrame();
     const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - frameStart).count();
-    if (elapsedMs > 1000)
-        brls::Logger::warning("melonDS: RunFrame took {} ms (scanlines={})", elapsedMs, scanlines);
+    if (elapsedMs > 17 && m_slowFrameLogBudget > 0)
+    {
+        --m_slowFrameLogBudget;
+        brls::Logger::warning(
+            "melonDS: slow RunFrame {} ms (scanlines={} renderer={} x{} readback={})",
+            elapsedMs,
+            scanlines,
+            m_usingAcceleratedRenderer ? (m_usingComputeRenderer ? "Compute" : "OpenGL") : "Software",
+            m_internalResolution,
+            m_acceleratedFrameReadbackEnabled.load(std::memory_order_acquire));
+    }
 
     std::array<int16_t, 4096> temp {};
     int available = m_nds->SPU.GetOutputSize();
@@ -625,7 +641,6 @@ void MelonDSCore::RunFrame()
 
     const bool needAcceleratedReadback =
         m_usingAcceleratedRenderer &&
-        m_internalResolution > 1 &&
         m_acceleratedFrameReadbackEnabled.load(std::memory_order_acquire);
     if (needAcceleratedReadback)
     {
@@ -683,6 +698,9 @@ void MelonDSCore::NotifyConfigUpdated()
     int newScale = m_gameEntry.ndsInternalResolution;
     if (beiklive::GameDB && !m_gameEntry.path.empty())
         newScale = beiklive::GameDB->get(m_gameEntry.path, "ndsInternalResolution", 1).get<int>();
+#ifdef __SWITCH__
+    newScale = 1;
+#endif
     newScale = std::clamp(newScale, 1, 4);
     if (newScale == m_internalResolution)
         return;
@@ -695,6 +713,7 @@ void MelonDSCore::NotifyConfigUpdated()
         m_glContext->makeCurrent();
         m_nds->GPU.Stop();
         glFinish();
+        releaseAcceleratedReadbackPbos();
         m_glContext->restore();
     }
     else
@@ -703,6 +722,9 @@ void MelonDSCore::NotifyConfigUpdated()
     }
 
     m_acceleratedReadback.clear();
+    m_acceleratedReadbackPboBytes = 0;
+    m_acceleratedReadbackPboIndex = 0;
+    m_acceleratedReadbackPboFrames = 0;
     m_video.Reset();
 
     auto renderer = createRenderer3D();
@@ -725,9 +747,6 @@ bool MelonDSCore::GetVideoTexture(beiklive::EmulatorVideoTexture& out)
     out = {};
     if (!m_ready.load(std::memory_order_acquire) || !m_nds || !m_usingAcceleratedRenderer || !m_glContext)
         return false;
-#ifdef __SWITCH__
-    return false;
-#endif
 
     std::unique_lock<std::mutex> lock(m_ndsMutex, std::try_to_lock);
     if (!lock.owns_lock())
@@ -777,6 +796,11 @@ bool MelonDSCore::Serialize(std::vector<uint8_t>& outBuf) const
     if (!m_ready.load(std::memory_order_acquire) || !m_nds)
         return false;
 
+    std::lock_guard<std::mutex> lock(m_ndsMutex);
+    ScopedMelonDSGLContext glScope(m_glContext.get());
+    if (m_usingAcceleratedRenderer && !glScope.active)
+        return false;
+
     melonDS::Savestate state;
     if (!m_nds->DoSavestate(&state) || state.Error)
         return false;
@@ -794,12 +818,37 @@ bool MelonDSCore::Unserialize(const std::vector<uint8_t>& buf)
     if (!m_ready.load(std::memory_order_acquire) || !m_nds || buf.empty() || buf.size() > std::numeric_limits<melonDS::u32>::max())
         return false;
 
+    std::lock_guard<std::mutex> lock(m_ndsMutex);
+    ScopedMelonDSGLContext glScope(m_glContext.get());
+    if (m_usingAcceleratedRenderer && !glScope.active)
+        return false;
+
     melonDS::Savestate state(const_cast<uint8_t*>(buf.data()), static_cast<melonDS::u32>(buf.size()), false);
     if (state.Error)
         return false;
+
+    if (m_usingAcceleratedRenderer)
+    {
+        m_nds->GPU.Stop();
+        glFinish();
+    }
+
+    m_video.Reset();
+    m_audio.Reset();
+    m_acceleratedReadback.clear();
+    m_acceleratedReadbackPboIndex = 0;
+    m_acceleratedReadbackPboFrames = 0;
+    m_acceleratedReadbackFailed = false;
+    m_skipAcceleratedReadbackFrames = m_usingAcceleratedRenderer ? 3 : 0;
+
     const bool ok = m_nds->DoSavestate(&state) && !state.Error;
     if (ok)
+    {
         syncRtcToHostTime();
+        m_nds->GPU.StartFrame();
+        if (!m_nds->IsRunning())
+            m_nds->Start();
+    }
     return ok;
 }
 
@@ -1011,6 +1060,10 @@ void MelonDSCore::syncRtcToHostTime()
 std::unique_ptr<melonDS::Renderer3D> MelonDSCore::createRenderer3D()
 {
     m_internalResolution = std::clamp(m_gameEntry.ndsInternalResolution, 1, 4);
+#ifdef __SWITCH__
+    m_internalResolution = 1;
+    m_gameEntry.ndsInternalResolution = 1;
+#endif
     m_usingAcceleratedRenderer = false;
     m_usingComputeRenderer = false;
 
@@ -1033,6 +1086,10 @@ std::unique_ptr<melonDS::Renderer3D> MelonDSCore::createRenderer3D()
         return std::make_unique<melonDS::SoftRenderer>(true);
     }
 
+#ifdef __SWITCH__
+    return fallbackToSoftware("high internal resolution is disabled on Switch");
+#endif
+
     if (!m_glContext)
         m_glContext = createSharedGLContext();
     ScopedMelonDSGLContext glScope(m_glContext.get());
@@ -1047,7 +1104,8 @@ std::unique_ptr<melonDS::Renderer3D> MelonDSCore::createRenderer3D()
         if (auto compute = melonDS::ComputeRenderer::New())
         {
             brls::Logger::info("melonDS: Compute 3D renderer created; applying render settings");
-            compute->SetRenderSettings(m_internalResolution, true);
+            compute->SetRenderSettings(m_internalResolution, false);
+            brls::Logger::info("melonDS: Compute high-resolution coordinates disabled on Switch for bandwidth");
             int current = 0;
             int count = 0;
             while (compute->NeedsShaderCompile())
@@ -1111,9 +1169,78 @@ std::unique_ptr<melonDS::Renderer3D> MelonDSCore::createRenderer3D()
 #endif
 }
 
+bool MelonDSCore::ensureAcceleratedReadbackPbos(size_t bytes)
+{
+    if (bytes == 0)
+        return false;
+
+    bool hasPbos = true;
+    for (const auto pbo : m_acceleratedReadbackPbos)
+        hasPbos = hasPbos && pbo != 0;
+
+    if (hasPbos && m_acceleratedReadbackPboBytes == bytes)
+        return true;
+
+    releaseAcceleratedReadbackPbos();
+
+    std::array<GLuint, kAcceleratedReadbackPboCount> pbos {};
+    glGenBuffers(static_cast<GLsizei>(pbos.size()), pbos.data());
+    GLenum error = glGetError();
+    if (error != GL_NO_ERROR)
+    {
+        brls::Logger::warning("melonDS: failed to create async readback PBOs (glError=0x{:x})",
+                              static_cast<unsigned>(error));
+        return false;
+    }
+
+    for (size_t i = 0; i < pbos.size(); ++i)
+    {
+        m_acceleratedReadbackPbos[i] = static_cast<uint32_t>(pbos[i]);
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[i]);
+        glBufferData(GL_PIXEL_PACK_BUFFER, static_cast<GLsizeiptr>(bytes), nullptr, GL_STREAM_READ);
+    }
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+
+    error = glGetError();
+    if (error != GL_NO_ERROR)
+    {
+        brls::Logger::warning("melonDS: failed to allocate async readback PBOs ({} bytes, glError=0x{:x})",
+                              bytes,
+                              static_cast<unsigned>(error));
+        releaseAcceleratedReadbackPbos();
+        return false;
+    }
+
+    m_acceleratedReadbackPboBytes = bytes;
+    m_acceleratedReadbackPboIndex = 0;
+    m_acceleratedReadbackPboFrames = 0;
+    brls::Logger::info("melonDS: async accelerated readback PBOs ready ({} buffers, {} bytes)",
+                       kAcceleratedReadbackPboCount,
+                       bytes);
+    return true;
+}
+
+void MelonDSCore::releaseAcceleratedReadbackPbos()
+{
+    std::array<GLuint, kAcceleratedReadbackPboCount> pbos {};
+    GLsizei count = 0;
+    for (auto& pbo : m_acceleratedReadbackPbos)
+    {
+        if (pbo != 0)
+            pbos[static_cast<size_t>(count++)] = static_cast<GLuint>(pbo);
+        pbo = 0;
+    }
+    if (count > 0)
+        glDeleteBuffers(count, pbos.data());
+
+    m_acceleratedReadbackPboBytes = 0;
+    m_acceleratedReadbackPboIndex = 0;
+    m_acceleratedReadbackPboFrames = 0;
+}
+
 bool MelonDSCore::captureAcceleratedFrame()
 {
-    if (!m_nds || !m_usingAcceleratedRenderer || !m_glContext || m_internalResolution <= 1)
+    if (!m_nds || !m_usingAcceleratedRenderer || !m_glContext)
         return false;
     if (m_skipAcceleratedReadbackFrames > 0)
     {
@@ -1147,13 +1274,16 @@ bool MelonDSCore::captureAcceleratedFrame()
     renderer.BindOutputTexture(m_nds->GPU.FrontBuffer);
     GLint texture = 0;
     glGetIntegerv(GL_TEXTURE_BINDING_2D, &texture);
-    if (texture <= 0)
-    {
-        glBindBuffer(GL_PIXEL_PACK_BUFFER, static_cast<GLuint>(previousPackBuffer));
+    auto restoreReadbackState = [&]() {
         glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(previousReadFramebuffer));
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, static_cast<GLuint>(previousPackBuffer));
         glPixelStorei(GL_PACK_ALIGNMENT, previousPackAlignment);
         glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(previousTexture));
         glActiveTexture(static_cast<GLenum>(previousActive));
+    };
+    if (texture <= 0)
+    {
+        restoreReadbackState();
         if (!m_acceleratedReadbackFailed)
         {
             brls::Logger::warning("melonDS: accelerated renderer output texture unavailable; using CPU capture");
@@ -1163,19 +1293,85 @@ bool MelonDSCore::captureAcceleratedFrame()
     }
 
     glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
     glPixelStorei(GL_PACK_ALIGNMENT, 4);
+
+#if defined(__SWITCH__) && 0
+    const size_t readbackBytes = pixelCount * sizeof(uint32_t);
+    if (ensureAcceleratedReadbackPbos(readbackBytes))
+    {
+        const GLuint writePbo = static_cast<GLuint>(
+            m_acceleratedReadbackPbos[m_acceleratedReadbackPboIndex]);
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, writePbo);
+        glBufferData(GL_PIXEL_PACK_BUFFER, static_cast<GLsizeiptr>(readbackBytes), nullptr, GL_STREAM_READ);
+
+        const auto readbackStart = std::chrono::steady_clock::now();
+        glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        GLenum error = glGetError();
+        const auto submitUs = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now() - readbackStart).count();
+
+        const bool canMapOldFrame = m_acceleratedReadbackPboFrames >= (kAcceleratedReadbackPboCount - 1);
+        const size_t readIndex = (m_acceleratedReadbackPboIndex + 1) % kAcceleratedReadbackPboCount;
+        m_acceleratedReadbackPboIndex =
+            (m_acceleratedReadbackPboIndex + 1) % kAcceleratedReadbackPboCount;
+        m_acceleratedReadbackPboFrames =
+            std::min(m_acceleratedReadbackPboFrames + 1, kAcceleratedReadbackPboCount);
+
+        if (error == GL_NO_ERROR && canMapOldFrame)
+        {
+            const GLuint readPbo = static_cast<GLuint>(m_acceleratedReadbackPbos[readIndex]);
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, readPbo);
+            void* mapped = glMapBufferRange(GL_PIXEL_PACK_BUFFER,
+                                            0,
+                                            static_cast<GLsizeiptr>(readbackBytes),
+                                            GL_MAP_READ_BIT);
+            error = glGetError();
+            if (mapped && error == GL_NO_ERROR)
+            {
+                std::memcpy(m_acceleratedReadback.data(), mapped, readbackBytes);
+                const GLboolean unmapped = glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+                error = glGetError();
+                restoreReadbackState();
+
+                if (unmapped == GL_TRUE && error == GL_NO_ERROR)
+                {
+                    m_acceleratedReadbackFailed = false;
+                    m_video.CaptureAcceleratedRgba(m_acceleratedReadback.data(), width, height, scale);
+                    return true;
+                }
+            }
+            else if (mapped)
+            {
+                glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+            }
+        }
+
+        restoreReadbackState();
+        if (error == GL_NO_ERROR)
+            return true;
+
+        if (!m_acceleratedReadbackFailed)
+        {
+            brls::Logger::warning("melonDS: async accelerated readback failed (glError=0x{:x}); using sync readback",
+                                  static_cast<unsigned>(error));
+            m_acceleratedReadbackFailed = true;
+        }
+        releaseAcceleratedReadbackPbos();
+        glActiveTexture(GL_TEXTURE0);
+        renderer.BindOutputTexture(m_nds->GPU.FrontBuffer);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+        glPixelStorei(GL_PACK_ALIGNMENT, 4);
+    }
+#endif
+
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
     const auto readbackStart = std::chrono::steady_clock::now();
     glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, m_acceleratedReadback.data());
     const auto readbackMs = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - readbackStart).count();
     const GLenum error = glGetError();
 
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(previousReadFramebuffer));
-    glBindBuffer(GL_PIXEL_PACK_BUFFER, static_cast<GLuint>(previousPackBuffer));
-    glPixelStorei(GL_PACK_ALIGNMENT, previousPackAlignment);
-    glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(previousTexture));
-    glActiveTexture(static_cast<GLenum>(previousActive));
+    restoreReadbackState();
 
     if (error != GL_NO_ERROR)
     {

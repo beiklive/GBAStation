@@ -11,6 +11,7 @@
 #include "emulator/melonds/MelonDSVideo.h"
 #include "ARCodeFile.h"
 
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <mutex>
@@ -91,6 +92,13 @@ public:
     void SetTouch(int x, int y, bool down) override;
     const uint32_t* GetFrameBuffer() const { return m_video.GetFrameBuffer(); }
     bool GetVideoTexture(beiklive::EmulatorVideoTexture& out) override;
+    bool IsVideoTextureReady() const override
+    {
+        return m_ready.load(std::memory_order_acquire) &&
+               m_usingAcceleratedRenderer &&
+               m_internalResolution > 1 &&
+               m_glContext != nullptr;
+    }
 
 private:
     beiklive::GameEntry m_gameEntry;
@@ -118,7 +126,13 @@ private:
     std::atomic<bool> m_acceleratedFrameReadbackEnabled{true};
     std::unique_ptr<MelonDSGLContext> m_glContext;
     std::vector<uint32_t> m_acceleratedReadback;
+    static constexpr size_t kAcceleratedReadbackPboCount = 3;
+    std::array<uint32_t, kAcceleratedReadbackPboCount> m_acceleratedReadbackPbos {};
+    size_t m_acceleratedReadbackPboBytes = 0;
+    size_t m_acceleratedReadbackPboIndex = 0;
+    size_t m_acceleratedReadbackPboFrames = 0;
     int m_skipAcceleratedReadbackFrames = 0;
+    int m_slowFrameLogBudget = 40;
     mutable std::mutex m_ndsMutex;
 
     bool loadBiosFiles(melonDS::NDSArgs& args);
@@ -128,6 +142,8 @@ private:
     std::string defaultCheatPath() const;
     std::unique_ptr<melonDS::Renderer3D> createRenderer3D();
     bool captureAcceleratedFrame();
+    bool ensureAcceleratedReadbackPbos(size_t bytes);
+    void releaseAcceleratedReadbackPbos();
     std::string defaultSaveDir() const;
     std::string defaultBiosDir() const;
 };

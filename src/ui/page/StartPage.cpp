@@ -6,6 +6,10 @@
 #include <borealis/views/dropdown.hpp>
 #include <filesystem>
 
+#ifdef __SWITCH__
+#include "platform/switch/NroLauncher.hpp"
+#endif
+
 namespace
 {
 
@@ -29,6 +33,47 @@ namespace beiklive
     namespace
     {
         constexpr long START_PAGE_REFRESH_DEFER_MS = 260;
+
+        bool shouldUseNdsExternalNro(const beiklive::GameEntry& entry)
+        {
+#ifdef __SWITCH__
+            return entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS);
+#else
+            (void)entry;
+            return false;
+#endif
+        }
+
+        bool shouldUseNdsExternalNro(const beiklive::DirListData& dirItem)
+        {
+#ifdef __SWITCH__
+            return dirItem.itemType == beiklive::enums::FileType::NDS_ROM;
+#else
+            (void)dirItem;
+            return false;
+#endif
+        }
+
+#ifdef __SWITCH__
+        bool launchNdsExternalNro(const std::string& romPath, const std::string& title)
+        {
+            const std::string nroPath = GET_SETTING_KEY_STR("nds.externalNro.path", "/GBAStation/core/GBAStationNDSStub.nro");
+            const std::string returnPath = GET_SETTING_KEY_STR("nds.externalNro.returnPath", "sdmc:/switch/GBAStation.nro");
+
+            auto result = beiklive::switch_platform::launchNroOnExit({nroPath, romPath, returnPath});
+            if (!result.success)
+            {
+                brls::Logger::error("NDS external NRO launch failed for {}: {}", title, result.message);
+                brls::Application::notify("NDS独立NRO启动失败：" + result.message);
+                return false;
+            }
+
+            brls::Logger::info("NDS external NRO configured for {}: {}", title, result.message);
+            brls::Application::notify("正在启动NDS独立NRO...");
+            brls::sync([]() { brls::Application::quit(); });
+            return true;
+        }
+#endif
     }
 
     StartPage::StartPage()
@@ -145,6 +190,46 @@ namespace beiklive
         onResume();
     }
 
+    void StartPage::_pushGameActivity(const beiklive::GameEntry& entry, beiklive::Box* previousPage)
+    {
+        if (shouldUseNdsExternalNro(entry))
+        {
+#ifdef __SWITCH__
+            launchNdsExternalNro(entry.path, entry.title);
+            return;
+#endif
+        }
+
+        auto* gamePage = new beiklive::GamePage(entry);
+        m_gamePage = gamePage;
+        auto* frame = new brls::AppletFrame(gamePage);
+        HIDE_BRLS_BAR(frame);
+        brls::Logger::info("Pushing GamePage activity for: " + entry.title);
+        brls::sync([frame, previousPage, gamePage]() {
+            beiklive::pushActivity(frame, previousPage, gamePage, [gamePage]() { gamePage->startGame(); });
+        });
+    }
+
+    void StartPage::_pushGameActivity(const beiklive::DirListData& dirItem, beiklive::Box* previousPage)
+    {
+        if (shouldUseNdsExternalNro(dirItem))
+        {
+#ifdef __SWITCH__
+            launchNdsExternalNro(dirItem.fullPath, dirItem.fileName);
+            return;
+#endif
+        }
+
+        auto* gamePage = new beiklive::GamePage(dirItem);
+        m_gamePage = gamePage;
+        auto* frame = new brls::AppletFrame(gamePage);
+        HIDE_BRLS_BAR(frame);
+        brls::Logger::info("Pushing GamePage activity for: " + dirItem.fileName);
+        brls::sync([frame, previousPage, gamePage]() {
+            beiklive::pushActivity(frame, previousPage, gamePage, [gamePage]() { gamePage->startGame(); });
+        });
+    }
+
     void StartPage::_useSwitchLayout()
     {
         brls::Logger::debug("Using SWITCH theme layout");
@@ -160,15 +245,7 @@ namespace beiklive
                 : std::optional<beiklive::GameEntry>{};
             const auto& e = fresh.has_value() ? *fresh : entry;
             brls::Logger::info("Game activated: " + e.title);
-            {
-                m_gamePage = new beiklive::GamePage(e);
-                auto *frame = new brls::AppletFrame(m_gamePage);
-                HIDE_BRLS_BAR(frame);
-                brls::Logger::info("Pushing GamePage activity for: " + e.title);
-                brls::sync([this, frame]()
-                           { beiklive::pushActivity(frame, this, m_gamePage,
-                                [this]() { m_gamePage->startGame(); }); });
-            }
+            _pushGameActivity(e, this);
         };
     switchLayout->onGameOptions = [this](const beiklive::GameEntry &entry)
         {
@@ -228,15 +305,7 @@ namespace beiklive
         gameLibraryPage->onGameSelected = [this, gameLibraryPage](const beiklive::GameEntry &entry)
         {
             brls::Logger::info("Game selected from library: " + entry.title);
-            {
-                m_gamePage = new beiklive::GamePage(entry);
-                auto *frame = new brls::AppletFrame(m_gamePage);
-                HIDE_BRLS_BAR(frame);
-                brls::Logger::info("Pushing GamePage activity for: " + entry.title);
-                brls::sync([this, frame, gameLibraryPage]()
-                           { beiklive::pushActivity(frame, gameLibraryPage, m_gamePage,
-                                [this]() { m_gamePage->startGame(); }); });
-            }
+            _pushGameActivity(entry, gameLibraryPage);
         };
 
         HIDE_BRLS_BAR(frame);
@@ -275,15 +344,7 @@ namespace beiklive
             case beiklive::enums::FileType::SNES_ROM:
             case beiklive::enums::FileType::NDS_ROM:
                 brls::Application::notify("启动游戏：" + dirItem.fileName);
-                {
-                    m_gamePage = new beiklive::GamePage(dirItem);
-                    auto *frame = new brls::AppletFrame(m_gamePage);
-                    HIDE_BRLS_BAR(frame);
-                    brls::Logger::info("Pushing GamePage activity for: " + dirItem.fileName);
-                    brls::sync([this, frame]()
-                               { beiklive::pushActivity(frame, this, m_gamePage,
-                                    [this]() { m_gamePage->startGame(); }); });
-                }
+                _pushGameActivity(dirItem, this);
                 break;
             default:
                 brls::Logger::debug("Selected item: " + dirItem.fileName + ", type: " + std::to_string((int)dirItem.itemType));

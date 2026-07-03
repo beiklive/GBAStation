@@ -33,6 +33,8 @@ namespace beiklive
         void _openDataManagement();
         void _applyRuntimeUiSettings();
         void _requestRecentGamesRefresh(bool defer);
+        void _pushGameActivity(const beiklive::GameEntry& entry, beiklive::Box* previousPage);
+        void _pushGameActivity(const beiklive::DirListData& dirItem, beiklive::Box* previousPage);
 
         /// 显示游戏选项侧边栏
         void _showGameOptionsPanel(const beiklive::GameEntry& entry);
@@ -41,7 +43,7 @@ namespace beiklive
 
         beiklive::FileListPage* m_fileListPage = nullptr;
         beiklive::SwitchLayout* switchLayout = nullptr;
-        beiklive::GamePage* m_gamePage = nullptr;
+        beiklive::Box* m_gamePage = nullptr;
         beiklive::GameOptionsSidebar* m_gameOptionsSidebar = nullptr;
         std::atomic<bool> m_alive{true};
         std::atomic<int> m_recentRefreshGen{0};

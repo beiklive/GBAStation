@@ -191,8 +191,14 @@ echo ""
 echo "[3/4] 打包 NRO..."
 
 cmake --build . --target GBAStation.nro
+cmake --build . --target GBAStationNDSStub.nro
 
 cd ..
+
+mkdir -p "${BUILD_DIR}/GBAStation/core"
+if [ -f "${BUILD_DIR}/GBAStationNDSStub.nro" ]; then
+    cp "${BUILD_DIR}/GBAStationNDSStub.nro" "${BUILD_DIR}/GBAStation/core/GBAStationNDSStub.nro"
+fi
 
 # ────────────────────────────────────────────────────────────
 # 输出大小
@@ -219,8 +225,28 @@ else
 
 fi
 
+if [ -f "${BUILD_DIR}/GBAStationNDSStub.nro" ]; then
+
+    if [ "$PLATFORM" = "mac" ]; then
+        SIZE=$(stat -f%z "${BUILD_DIR}/GBAStationNDSStub.nro")
+    else
+        SIZE=$(stat -c%s "${BUILD_DIR}/GBAStationNDSStub.nro")
+    fi
+
+    SIZE_MB=$(awk "BEGIN {printf \"%.2f\", ${SIZE}/1024/1024}")
+
+    echo "✅ GBAStationNDSStub.nro : ${SIZE_MB} MB"
+
+else
+
+    echo "❌ GBAStationNDSStub.nro 不存在"
+
+fi
+
 echo "=================================================="
 
 echo ""
 echo "[完成]"
 echo "${BUILD_DIR}/GBAStation.nro"
+echo "${BUILD_DIR}/GBAStationNDSStub.nro"
+echo "${BUILD_DIR}/GBAStation/core/GBAStationNDSStub.nro"

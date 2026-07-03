@@ -36,6 +36,8 @@ set(PROJECT_AUTHOR "beiklive")
 set(PROJECT_ICON ${CMAKE_CURRENT_SOURCE_DIR}/resources/icon/default.png)
 set(PROJECT_RESOURCES ${CMAKE_CURRENT_SOURCE_DIR}/resources)
 
+set(BUILD_MELONDS_CORE OFF CACHE BOOL "Build the embedded melonDS native core" FORCE)
+
 if (USE_LIBROMFS)
     add_libromfs(${PROJECT_NAME} ${PROJECT_RESOURCES})
 endif ()
@@ -128,8 +130,12 @@ endif ()
 include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/src)
 include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/third_party/miniz)
 include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mongoose)
-include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/third_party/melonDS/src)
 file(GLOB_RECURSE MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
+list(FILTER MAIN_SRC EXCLUDE REGEX ".*/src/platform/switch/nds_stub/.*")
+list(FILTER MAIN_SRC EXCLUDE REGEX ".*/src/emulator/melonds/.*")
+list(FILTER MAIN_SRC EXCLUDE REGEX ".*/src/ui/page/NdsDekoGamePage\\.cpp$")
+list(FILTER MAIN_SRC EXCLUDE REGEX ".*/src/ui/view/NdsDekoGameView\\.cpp$")
+list(FILTER MAIN_SRC EXCLUDE REGEX ".*/src/ui/view/NdsDekoGameMenuView\\.cpp$")
 list(FILTER MAIN_SRC EXCLUDE REGEX ".*/src/game/mgba/.*")
 list(APPEND MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/third_party/miniz/miniz.c)
 list(APPEND MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mongoose/mongoose.c)
@@ -209,6 +215,20 @@ elseif (PLATFORM_SWITCH)
         COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/resources/font
         COMMAND ${NX_ELF2NRO_EXE} ${PROJECT_NAME}.elf ${PROJECT_NAME}.nro --icon=${PROJECT_ICON} --nacp=${PROJECT_NAME}.nacp --romfsdir=${CMAKE_BINARY_DIR}/resources
     )
+
+    add_executable(GBAStationNDSStub
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/platform/switch/nds_stub/NdsStubMain.cpp
+    )
+    set_target_properties(GBAStationNDSStub PROPERTIES CXX_STANDARD 17)
+    target_include_directories(GBAStationNDSStub PRIVATE
+        ${BOREALIS_LIBRARY}/include/borealis/extern
+    )
+    target_compile_options(GBAStationNDSStub PRIVATE -ffunction-sections -fdata-sections ${APP_PLATFORM_OPTION})
+    target_link_libraries(GBAStationNDSStub PRIVATE nx)
+    add_custom_target(GBAStationNDSStub.nro ALL DEPENDS GBAStationNDSStub
+        COMMAND ${NX_NACPTOOL_EXE} --create "GBAStation NDS Stub" "${PROJECT_AUTHOR}" "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_ALTER}" GBAStationNDSStub.nacp
+        COMMAND ${NX_ELF2NRO_EXE} $<TARGET_FILE:GBAStationNDSStub> GBAStationNDSStub.nro --icon=${PROJECT_ICON} --nacp=GBAStationNDSStub.nacp
+    )
 endif ()
 
 
@@ -228,7 +248,7 @@ endif()
 # Snes9x        – SNES / SFC          (libretro, snes9x_retro_*)
 # Nestopia      – NES / Famicom       (libretro, nestopia_retro_*)
 # Snes9x 2005   – SNES / SFC          (libretro, snes9x2005_retro_*)
-# melonDS       – NDS                 (native)
+# NDS runs in GBAStationNDSStub.nro, launched as a separate Switch NRO.
 #
 # mGBA 不再构建/加载 mgba_libretro，也不复制 mgba 动态库。
 # ============================================================
@@ -248,15 +268,6 @@ if (TARGET snes9x2005_core)
     target_link_libraries(${PROJECT_NAME} PRIVATE snes9x2005_core)
     message(STATUS "Linking Snes9x 2005 (SNES) core statically")
 endif()
-if (TARGET melonds_core)
-    target_link_libraries(${PROJECT_NAME} PRIVATE melonds_core)
-    target_include_directories(${PROJECT_NAME} PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/melonDS/src
-        ${CMAKE_BINARY_DIR}/third_party/melonDS_version
-    )
-    message(STATUS "Linking melonDS (NDS) native core statically")
-endif()
-
 if (TARGET mgba)
     target_link_libraries(${PROJECT_NAME} PRIVATE mgba)
     target_include_directories(${PROJECT_NAME} PRIVATE

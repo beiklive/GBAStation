@@ -140,6 +140,9 @@ namespace beiklive
             m_ndsScreenOrientation = normalizeNdsScreenRotation(m_gameEntry.ndsScreenOrientation);
             m_gameEntry.ndsScreenOrientation = m_ndsScreenOrientation;
             m_ndsIntegerScale = m_gameEntry.ndsIntegerScale;
+#ifdef __SWITCH__
+            m_gameEntry.ndsInternalResolution = 1;
+#endif
         }
 
         // 读取连发速率（Hz）
@@ -382,7 +385,16 @@ namespace beiklive
             unsigned gh = m_core->GameHeight() > 0 ? m_core->GameHeight() : beiklive::GetGamePixelHeight(m_gameEntry.platform);
             // 若游戏条目启用了着色器且路径有效，则传入着色器路径初始化渲染链
             std::string shaderPath;
-            if (m_gameEntry.shaderEnabled && !m_gameEntry.shaderPath.empty()) {
+            bool allowShader = m_gameEntry.shaderEnabled && !m_gameEntry.shaderPath.empty();
+#ifdef __SWITCH__
+            if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
+                allowShader = false;
+#else
+            if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS) &&
+                m_gameEntry.ndsInternalResolution > 1)
+                allowShader = false;
+#endif
+            if (allowShader) {
                 shaderPath = m_gameEntry.shaderPath;
                 // _onShaderToggle(true); // 同步着色器开关状态，确保启用着色器
             }
@@ -397,7 +409,7 @@ namespace beiklive
         }
 
         // 上传待渲染帧（游戏线程已写入 m_pendingFrame）
-        {
+        if (m_rendererReady) {
             std::lock_guard<std::recursive_mutex> glLock(beiklive::EmulatorGLMutex());
             _uploadPendingFrame();
         }
@@ -594,13 +606,8 @@ namespace beiklive
         }
 
         if (hasFrame) {
-            if (_useNdsAcceleratedTexture()) {
-                auto* textureCore = dynamic_cast<beiklive::IEmulatorVideoTexture*>(m_core);
-                beiklive::EmulatorVideoTexture videoTex;
-                if (textureCore && textureCore->GetVideoTexture(videoTex) &&
-                    videoTex.texture != 0 && videoTex.width != 0 && videoTex.height != 0)
-                    return;
-            }
+            if (_useNdsAcceleratedTexture())
+                return;
             if (m_ndsSplitShaderRenderer) {
                 _uploadNdsSplitShaderFrame(frame);
                 return;
@@ -623,17 +630,28 @@ namespace beiklive
 
     bool GameView::_useNdsSplitShader() const
     {
-        return m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS) &&
-               m_gameEntry.shaderEnabled &&
-               !m_gameEntry.shaderPath.empty();
+        if (m_gameEntry.platform != static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
+            return false;
+#ifndef __SWITCH__
+        return m_gameEntry.shaderEnabled &&
+               !m_gameEntry.shaderPath.empty() &&
+               m_gameEntry.ndsInternalResolution <= 1;
+#else
+        return false;
+#endif
     }
 
     bool GameView::_useNdsAcceleratedTexture() const
     {
+#ifdef __SWITCH__
+        return false;
+#else
+        auto* textureCore = dynamic_cast<beiklive::IEmulatorVideoTexture*>(m_core);
         return m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS) &&
                !m_ndsSplitShaderRenderer &&
-               m_core != nullptr &&
-               dynamic_cast<beiklive::IEmulatorVideoTexture*>(m_core) != nullptr;
+               textureCore != nullptr &&
+               textureCore->IsVideoTextureReady();
+#endif
     }
 
     void GameView::_syncNdsVideoFrameMode()
@@ -645,7 +663,17 @@ namespace beiklive
         if (!frameMode)
             return;
 
-        frameMode->SetAcceleratedFrameReadbackEnabled(_useNdsSplitShader());
+        const bool readbackEnabled =
+#ifdef __SWITCH__
+            false;
+#else
+            _useNdsSplitShader() ||
+            (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS) &&
+             m_gameEntry.ndsInternalResolution > 1);
+#endif
+        frameMode->SetAcceleratedFrameReadbackEnabled(readbackEnabled);
+        brls::Logger::info("GameView: NDS accelerated readback {}",
+                           readbackEnabled ? "enabled" : "disabled");
     }
 
     void GameView::_applySavedShaderParams(beiklive::GameRenderer& renderer) const
@@ -2088,14 +2116,10 @@ namespace beiklive
             return 1u;
         }
 
-        if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS) &&
-            m_ffMultiplier >= 1.0f) {
-            const unsigned frames = std::max(1u, static_cast<unsigned>(std::lround(m_ffMultiplier)));
-            for (unsigned i = 0; i < frames; ++i) {
-                if (i == 0) _saveRewindState();
-                m_core->RunFrame();
-            }
-            return frames;
+        if (isNdsPlatform(m_gameEntry.platform) && m_ffMultiplier >= 1.0f) {
+            _saveRewindState();
+            m_core->RunFrame();
+            return 1u;
         }
 
         if (m_ffMultiplier >= 1.0f) {
@@ -2152,8 +2176,9 @@ namespace beiklive
     {
         const bool rewindMuted = GameSignal::instance().isRewinding() &&
                                  GET_SETTING_KEY_INT("rewind.mute", 0) != 0;
+        const bool isNds = isNdsPlatform(m_gameEntry.platform);
         const bool suppressAudio = GameSignal::instance().isMuted() ||
-                                   (ff && m_ffMute) ||
+                                   (ff && m_ffMute && !isNds) ||
                                    rewindMuted;
 
         if (auto* output = coreAudioOutput(m_core)) {
@@ -2629,8 +2654,10 @@ namespace beiklive
             processCheatSignals(sig, false);
 
             // ---- 核心配置刷新 ----
-            if (sig.consumeConfigUpdate() && m_core)
+            if (sig.consumeConfigUpdate() && m_core) {
                 m_core->NotifyConfigUpdated();
+                _syncNdsVideoFrameMode();
+            }
 
             // ---- 退出自动存档 ----
             {
@@ -2706,7 +2733,7 @@ namespace beiklive
             // 同步倍速到音频重采样器
             {
                 static float s_lastSpeed = 1.0f;
-                float curSpeed = (ff && !m_ffMute) ? m_ffMultiplier : 1.0f;
+                float curSpeed = (ff && !m_ffMute && !isNds) ? m_ffMultiplier : 1.0f;
                 if (curSpeed != s_lastSpeed) {
                     AudioManager::instance().setSpeed(curSpeed);
                     s_lastSpeed = curSpeed;
@@ -3124,7 +3151,16 @@ namespace beiklive
         brls::Logger::debug("GameView: Shader {} (enabled={})", m_gameEntry.shaderPath, m_gameEntry.shaderEnabled);
         unsigned gw = m_core && m_core->GameWidth() > 0 ? m_core->GameWidth() : beiklive::GetGamePixelWidth(m_gameEntry.platform);
         unsigned gh = m_core && m_core->GameHeight() > 0 ? m_core->GameHeight() : beiklive::GetGamePixelHeight(m_gameEntry.platform);
-        const std::string path = (on && !m_gameEntry.shaderPath.empty()) ? m_gameEntry.shaderPath : "";
+        const bool skipNdsShaderForAccel =
+            m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS) &&
+#ifdef __SWITCH__
+            true;
+#else
+            m_gameEntry.ndsInternalResolution > 1;
+#endif
+        const std::string path = (on && !skipNdsShaderForAccel && !m_gameEntry.shaderPath.empty())
+            ? m_gameEntry.shaderPath
+            : "";
         m_rendererReady = _initGameRenderers(gw, gh, path);
         _requestLastFrameUpload();
     }
@@ -3156,7 +3192,14 @@ namespace beiklive
         }
         unsigned gw = m_core && m_core->GameWidth() > 0 ? m_core->GameWidth() : beiklive::GetGamePixelWidth(m_gameEntry.platform);
         unsigned gh = m_core && m_core->GameHeight() > 0 ? m_core->GameHeight() : beiklive::GetGamePixelHeight(m_gameEntry.platform);
-        const std::string shaderPath = (shaderOn && !path.empty()) ? path : "";
+        const bool skipNdsShaderForAccel =
+            m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS) &&
+#ifdef __SWITCH__
+            true;
+#else
+            m_gameEntry.ndsInternalResolution > 1;
+#endif
+        const std::string shaderPath = (shaderOn && !skipNdsShaderForAccel && !path.empty()) ? path : "";
         m_rendererReady = _initGameRenderers(gw, gh, shaderPath);
         _requestLastFrameUpload();
     }
@@ -3303,11 +3346,32 @@ namespace beiklive
         if (m_gameEntry.platform != static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
             return;
 
+#ifdef __SWITCH__
+        scale = 1;
+#endif
         m_gameEntry.ndsInternalResolution = std::clamp(scale, 1, 4);
         if (beiklive::GameDB && !m_gameEntry.path.empty()) {
             beiklive::GameDB->set(m_gameEntry.path, "ndsInternalResolution",
                 nlohmann::json(m_gameEntry.ndsInternalResolution));
             beiklive::GameDB->flush();
+        }
+
+        if (m_rendererReady) {
+            unsigned gw = m_core && m_core->GameWidth() > 0
+                ? m_core->GameWidth()
+                : beiklive::GetGamePixelWidth(m_gameEntry.platform);
+            unsigned gh = m_core && m_core->GameHeight() > 0
+                ? m_core->GameHeight()
+                : beiklive::GetGamePixelHeight(m_gameEntry.platform);
+            bool allowShader = m_gameEntry.ndsInternalResolution <= 1 &&
+                               m_gameEntry.shaderEnabled &&
+                               !m_gameEntry.shaderPath.empty();
+#ifdef __SWITCH__
+            allowShader = false;
+#endif
+            const std::string shaderPath = allowShader ? m_gameEntry.shaderPath : "";
+            m_rendererReady = _initGameRenderers(gw, gh, shaderPath);
+            _requestLastFrameUpload();
         }
 
         GameSignal::instance().requestConfigUpdate();

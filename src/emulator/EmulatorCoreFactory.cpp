@@ -1,7 +1,6 @@
 #include "IEmulatorCore.hpp"
 #include "emulator/CoreFceumm.hpp"
 #include "emulator/CoreSnes9x.hpp"
-#include "emulator/melonds/MelonDSCore.h"
 #include "emulator/mgba_native/MgbaNativeCore.hpp"
 
 namespace beiklive {
@@ -27,7 +26,7 @@ IEmulatorCore* CreateEmulatorCore(const beiklive::GameEntry& entry)
             return new beiklive::snes9x::CoreSnes9x(beiklive::CoreType::Snes9x, "Snes9x");
         return new beiklive::snes9x::CoreSnes9x(beiklive::CoreType::Snes9x2005, "Snes9x 2005");
     case beiklive::enums::EmuPlatform::EmuNDS:
-        return new beiklive::melonds::MelonDSCore();
+        return nullptr;
     default:
         return nullptr;
     }

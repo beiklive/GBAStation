@@ -11,6 +11,8 @@ set(NESTOPIA_PATH      ${CMAKE_CURRENT_SOURCE_DIR}/nestopia)
 set(SNES9X2005_PATH    ${CMAKE_CURRENT_SOURCE_DIR}/snes9x2005)
 set(MELONDS_PATH       ${CMAKE_CURRENT_SOURCE_DIR}/melonDS)
 
+option(BUILD_MELONDS_CORE "Build the embedded melonDS native core" OFF)
+
 # =========================================================
 # borealis UI 框架
 # =========================================================
@@ -472,9 +474,9 @@ add_isolated_libretro_core(snes9x2005_core snes9x2005_core_obj snes9x2005)
 # =========================================================
 # melonDS (NDS) 原生核心
 #
-# 只编译 melonDS 核心源码；不 add_subdirectory(third_party/melonDS)，
-# 避免拉入 frontend / Qt / SDL / libui / libretro 相关前端代码。
+# 主程序不再内嵌 NDS 运行时；需要独立 NDS NRO 时再显式开启。
 # =========================================================
+if (BUILD_MELONDS_CORE)
 set(MELONDS_SRC_DIR ${MELONDS_PATH}/src)
 
 set(MELONDS_CORE_SRC
@@ -607,3 +609,4 @@ if (PLATFORM_SWITCH)
 endif()
 
 target_link_libraries(melonds_core PRIVATE teakra)
+endif()

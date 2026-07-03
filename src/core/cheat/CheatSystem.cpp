@@ -1,9 +1,12 @@
 #include "core/cheat/CheatSystem.hpp"
 
+#include "core/common.h"
+
+#ifdef GBASTATION_ENABLE_MELONDS_CHEAT_DAT
 #include "ARDatabaseDAT.h"
 #include "CRC32.h"
 #include "NDS_Header.h"
-#include "core/common.h"
+#endif
 
 #include <algorithm>
 #include <array>
@@ -164,6 +167,7 @@ std::string ndsWordsToText(const std::vector<uint32_t>& words)
     return oss.str();
 }
 
+#ifdef GBASTATION_ENABLE_MELONDS_CHEAT_DAT
 std::vector<uint32_t> wordsFromMelonCode(const melonDS::ARCode& code)
 {
     std::vector<uint32_t> words;
@@ -227,6 +231,7 @@ void appendNdsDatCheatsFromCat(const melonDS::ARCodeCat& cat,
         out.push_back(std::move(entry));
     }
 }
+#endif
 
 } // namespace
 
@@ -375,6 +380,11 @@ std::vector<beiklive::CheatEntry> loadNdsUsrCheatDat(const std::string& datPath,
                                                      const std::string& romPath)
 {
     std::vector<beiklive::CheatEntry> result;
+#ifndef GBASTATION_ENABLE_MELONDS_CHEAT_DAT
+    (void)datPath;
+    (void)romPath;
+    return result;
+#else
     if (datPath.empty() || romPath.empty())
         return result;
     if (!std::filesystem::exists(datPath) || !std::filesystem::exists(romPath))
@@ -426,6 +436,7 @@ std::vector<beiklive::CheatEntry> loadNdsUsrCheatDat(const std::string& datPath,
     }
 
     return result;
+#endif
 }
 
 LoadResult loadCheats(const LoadRequest& request)

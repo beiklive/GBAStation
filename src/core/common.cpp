@@ -405,6 +405,20 @@ namespace beiklive
         SettingManager->SetDefault(KEY_REWIND_UI_ITEM_COUNT, ConfigValue(10));
         SettingManager->SetDefault(KEY_REWIND_THUMB_COMPRESSION, ConfigValue(0));
 
+        // NDS Deko 实验路径：页面分流和 Deko probe 分开控制，避免一开 NDS 就触发图形上下文切换。
+        SettingManager->SetDefault("nds.dekoMode.enabled", ConfigValue(0));
+        SettingManager->SetDefault("nds.dekoMode.probe.enabled", ConfigValue(0));
+        SettingManager->SetDefault("nds.dekoMode.probe.level", ConfigValue(1));
+        SettingManager->SetDefault("nds.externalNro.enabled", ConfigValue(1));
+        SettingManager->SetDefault("nds.externalNro.path", ConfigValue(std::string("/GBAStation/core/GBAStationNDSStub.nro")));
+        SettingManager->SetDefault("nds.externalNro.returnPath", ConfigValue(std::string("sdmc:/switch/GBAStation.nro")));
+        if (auto pathValue = SettingManager->Get("nds.externalNro.path"))
+        {
+            const auto path = pathValue->AsString().value_or("");
+            if (path == "sdmc:/switch/GBAStationNDSStub.nro")
+                SettingManager->Set("nds.externalNro.path", ConfigValue(std::string("/GBAStation/core/GBAStationNDSStub.nro")));
+        }
+
         // 核心设置
         SettingManager->SetDefault("core.mgba_gb_model", ConfigValue(std::string("Autodetect")));
         SettingManager->SetDefault("core.mgba_use_bios", ConfigValue(std::string("ON")));

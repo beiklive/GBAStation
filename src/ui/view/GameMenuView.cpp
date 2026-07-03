@@ -1710,15 +1710,31 @@ namespace beiklive
                 });
                 box->addView(ndsBottomCell);
 
-                std::vector<std::string> ndsResLabels = {"x1 原生", "x2", "x3", "x4"};
+                std::vector<std::string> ndsResLabels = {
+#ifdef __SWITCH__
+                    "x1 原生"
+#else
+                    "x1 原生", "x2", "x3", "x4"
+#endif
+                };
+#ifdef __SWITCH__
+                m_gameEntry.ndsInternalResolution = 1;
+                const int curNdsRes = 1;
+#else
                 const int curNdsRes = std::clamp(m_gameEntry.ndsInternalResolution, 1, 4);
+#endif
                 auto* ndsResCell = new beiklive::SelectorButton();
                 ndsResCell->setText("NDS内部分辨率");
                 ndsResCell->setOptions(ndsResLabels, curNdsRes - 1);
                 ndsResCell->setOnSelect([this](int idx) {
+#ifdef __SWITCH__
+                    (void)idx;
+                    m_gameEntry.ndsInternalResolution = 1;
+#else
                     if (idx < 0 || idx > 3)
                         return;
                     m_gameEntry.ndsInternalResolution = idx + 1;
+#endif
                     // if (beiklive::GameDB && !m_gameEntry.path.empty()) {
                     //     beiklive::GameDB->set(m_gameEntry.path, "ndsInternalResolution",
                     //         nlohmann::json(m_gameEntry.ndsInternalResolution));
@@ -1728,7 +1744,11 @@ namespace beiklive
                         m_ndsInternalResolutionCallback(m_gameEntry.ndsInternalResolution);
                 });
                 box->addView(ndsResCell);
+#ifdef __SWITCH__
+                box->addView(makeHint("Switch版当前锁定x1原生分辨率，优先保证稳定60帧"));
+#else
                 box->addView(makeHint("默认1倍，目前为测试性功能，开启高倍可能会导致程序崩溃，请谨慎使用"));
+#endif
             }
 
             if (!isNds) {

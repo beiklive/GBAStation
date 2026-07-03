@@ -166,7 +166,7 @@ void GameRenderer::drawExternalTexture(GLuint tex, unsigned texW, unsigned texH,
     const auto finalUv = scaleUv(uv, m_renderChain.outputU(), m_renderChain.outputV());
     m_renderChain.drawToScreen(finalTex, virtX, virtY, virtW, virtH,
                                windowScale, windowW, windowH, finalUv,
-                               finalTex == tex ? swizzleRB : false);
+                               swizzleRB);
 }
 
 } // namespace beiklive

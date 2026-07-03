@@ -15,6 +15,7 @@ struct EmulatorVideoTexture {
 class IEmulatorVideoTexture {
 public:
     virtual ~IEmulatorVideoTexture() = default;
+    virtual bool IsVideoTextureReady() const { return false; }
     virtual bool GetVideoTexture(EmulatorVideoTexture& out) = 0;
 };
 
