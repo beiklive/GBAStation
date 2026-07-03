@@ -22,7 +22,7 @@ ThreadPool::ThreadPool(size_t threadCount) {
                     m_cv.wait(lock, [this]() {
                         return m_stop.load() || !m_tasks.empty();
                     });
-                    if (m_stop.load() && m_tasks.empty())
+                    if (m_stop.load())
                         return;
                     task = std::move(m_tasks.front());
                     m_tasks.pop();
@@ -34,6 +34,19 @@ ThreadPool::ThreadPool(size_t threadCount) {
 }
 
 ThreadPool::~ThreadPool() {
+    shutdown();
+}
+
+void ThreadPool::shutdown() {
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (m_stop.exchange(true))
+            return;
+
+        std::queue<std::function<void()>> empty;
+        m_tasks.swap(empty);
+    }
+
     m_stop.store(true);
     m_cv.notify_all();
     for (auto& worker : m_workers) {
@@ -45,6 +58,8 @@ ThreadPool::~ThreadPool() {
 void ThreadPool::enqueue(std::function<void()> task) {
     {
         std::lock_guard<std::mutex> lock(m_mutex);
+        if (m_stop.load())
+            return;
         m_tasks.push(std::move(task));
     }
     m_cv.notify_one();

@@ -15,6 +15,7 @@ public:
     static ThreadPool& instance();
 
     void enqueue(std::function<void()> task);
+    void shutdown();
 
     ~ThreadPool();
 

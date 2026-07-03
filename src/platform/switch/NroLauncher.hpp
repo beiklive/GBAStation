@@ -16,5 +16,6 @@ struct NroLaunchResult {
 };
 
 NroLaunchResult launchNroOnExit(const NroLaunchRequest& request);
+NroLaunchResult commitPendingNroLaunch();
 
 } // namespace beiklive::switch_platform

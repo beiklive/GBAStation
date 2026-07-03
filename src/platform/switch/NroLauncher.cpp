@@ -1,6 +1,7 @@
 #include "platform/switch/NroLauncher.hpp"
 
 #include <cstdio>
+#include <mutex>
 #include <sstream>
 
 #ifdef __SWITCH__
@@ -10,6 +11,14 @@
 namespace beiklive::switch_platform {
 
 namespace {
+
+struct PendingNroLaunch {
+    std::string nroPath;
+    std::string argv;
+};
+
+std::mutex g_pendingMutex;
+PendingNroLaunch g_pendingLaunch;
 
 std::string quoteArg(const std::string& value)
 {
@@ -73,7 +82,35 @@ NroLaunchResult launchNroOnExit(const NroLaunchRequest& request)
     if (!request.returnNroPath.empty())
         argv << " --return " << quoteArg(request.returnNroPath);
 
-    const Result rc = envSetNextLoad(request.nroPath.c_str(), argv.str().c_str());
+    {
+        std::lock_guard<std::mutex> lock(g_pendingMutex);
+        g_pendingLaunch.nroPath = request.nroPath;
+        g_pendingLaunch.argv = argv.str();
+    }
+
+    return {true, "Next NRO pending: " + request.nroPath};
+#endif
+}
+
+NroLaunchResult commitPendingNroLaunch()
+{
+#ifndef __SWITCH__
+    return {false, "NRO chainload is only available on Switch"};
+#else
+    PendingNroLaunch pending;
+    {
+        std::lock_guard<std::mutex> lock(g_pendingMutex);
+        pending = g_pendingLaunch;
+        g_pendingLaunch = {};
+    }
+
+    if (pending.nroPath.empty())
+        return {true, "No pending NRO launch"};
+
+    if (!envHasNextLoad())
+        return {false, "Current homebrew loader does not support envSetNextLoad"};
+
+    const Result rc = envSetNextLoad(pending.nroPath.c_str(), pending.argv.c_str());
     if (R_FAILED(rc))
     {
         std::ostringstream msg;
@@ -81,7 +118,7 @@ NroLaunchResult launchNroOnExit(const NroLaunchRequest& request)
         return {false, msg.str()};
     }
 
-    return {true, "Next NRO configured: " + request.nroPath};
+    return {true, "Next NRO configured: " + pending.nroPath};
 #endif
 }
 

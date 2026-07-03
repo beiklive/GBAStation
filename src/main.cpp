@@ -1,10 +1,12 @@
 #ifdef __SWITCH__
 #include <switch.h>
+#include "platform/switch/NroLauncher.hpp"
 #endif
 
 
 #include "core/common.h"
 #include "core/AppUpdater.hpp"
+#include "core/ThreadPool.hpp"
 #include "ui/utils/BKAudioPlayer.hpp"
 #include "ui/page/StartPage.hpp"
 #include "ui/utils/MyActivity.hpp"
@@ -67,7 +69,8 @@ int main(int argc, char* argv[]) {
 	if (beiklive::getKeyInt(beiklive::SettingManager, "debug.logOverlay", 0))
 		brls::Application::enableDebuggingView(true);
 
-	brls::Application::setAudioPlayer(new beiklive::BKAudioPlayer());
+	auto* audioPlayer = new beiklive::BKAudioPlayer();
+	brls::Application::setAudioPlayer(audioPlayer);
 
 	brls::Application::getPlatform()->setThemeVariant(brls::ThemeVariant::DARK);
 	beiklive::RegisterStyles();
@@ -124,6 +127,19 @@ int main(int argc, char* argv[]) {
 		updateThread.join();
 
 	beiklive::network::WebService::Stop();
+	beiklive::ThreadPool::instance().shutdown();
+
+	brls::Application::setAudioPlayer(nullptr);
+	delete audioPlayer;
+	audioPlayer = nullptr;
+
+#ifdef __SWITCH__
+	auto launchResult = beiklive::switch_platform::commitPendingNroLaunch();
+	if (!launchResult.success)
+		brls::Logger::error("Pending NRO launch commit failed: {}", launchResult.message);
+	else if (launchResult.message != "No pending NRO launch")
+		brls::Logger::info("{}", launchResult.message);
+#endif
 
 	// Cleanup
 	// Exit
