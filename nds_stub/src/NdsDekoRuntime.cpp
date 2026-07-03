@@ -592,6 +592,8 @@ int RunDekoRuntime(const DekoRunOptions& options)
     NdsGameLayer gameLayer;
     appendStubLog("GBAStationNDSStub: Deko checkpoint gameLayer.init begin renderer=%p", deko2d);
     gameLayer.init(deko2d);
+    gameLayer.setWaitForFramebufferReady(false);
+    appendStubLog("GBAStationNDSStub: Deko display fence mode=signal-presented-only");
     appendStubLog("GBAStationNDSStub: Deko checkpoint gameLayer.init ok");
 
     appendStubLog("GBAStationNDSStub: Deko checkpoint LoadROM begin");
@@ -608,13 +610,16 @@ int RunDekoRuntime(const DekoRunOptions& options)
     NdsMenuLayer menuLayer;
     double fps = 0.0;
     int fpsFrames = 0;
+    uint64_t totalFrames = 0;
     long long lastRunMs = 0;
     auto fpsStart = std::chrono::steady_clock::now();
 
     while (appletMainLoop() && running)
     {
-        if (fpsFrames == 0)
-            appendStubLog("GBAStationNDSStub: Deko checkpoint first loop begin");
+        const bool traceFrame = totalFrames < 5;
+        if (traceFrame)
+            appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu loop begin",
+                          static_cast<unsigned long long>(totalFrames));
         const auto frameBegin = std::chrono::steady_clock::now();
         padUpdate(&pad);
         const u64 down = padGetButtonsDown(&pad);
@@ -643,11 +648,13 @@ int RunDekoRuntime(const DekoRunOptions& options)
             NDS::ReleaseScreen();
 
         const auto runBegin = std::chrono::steady_clock::now();
-        if (fpsFrames == 0)
-            appendStubLog("GBAStationNDSStub: Deko checkpoint first RunFrame begin");
+        if (traceFrame)
+            appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu RunFrame begin",
+                          static_cast<unsigned long long>(totalFrames));
         NDS::RunFrame();
-        if (fpsFrames == 0)
-            appendStubLog("GBAStationNDSStub: Deko checkpoint first RunFrame ok");
+        if (traceFrame)
+            appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu RunFrame ok",
+                          static_cast<unsigned long long>(totalFrames));
         const auto runEnd = std::chrono::steady_clock::now();
         lastRunMs = std::chrono::duration_cast<std::chrono::milliseconds>(runEnd - runBegin).count();
 
@@ -663,21 +670,63 @@ int RunDekoRuntime(const DekoRunOptions& options)
             available = SPU::GetOutputSize();
         }
 
-        if (fpsFrames == 0)
-            appendStubLog("GBAStationNDSStub: Deko checkpoint first Gfx::StartFrame begin");
+        if (traceFrame)
+            appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu Gfx::StartFrame begin",
+                          static_cast<unsigned long long>(totalFrames));
         Gfx::StartFrame();
-        if (fpsFrames == 0)
-            appendStubLog("GBAStationNDSStub: Deko checkpoint first Gfx::StartFrame ok");
-        gameLayer.drawScreens();
-        menuLayer.draw(fps, lastRunMs);
+        if (traceFrame)
+            appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu Gfx::StartFrame ok",
+                          static_cast<unsigned long long>(totalFrames));
 
-        if (fpsFrames == 0)
-            appendStubLog("GBAStationNDSStub: Deko checkpoint first Gfx::EndFrame begin");
+        if (traceFrame)
+            appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu Gfx::PushScissor begin",
+                          static_cast<unsigned long long>(totalFrames));
+        Gfx::PushScissor(0, 0, kScreenWidth, kScreenHeight);
+        if (traceFrame)
+            appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu Gfx::PushScissor ok",
+                          static_cast<unsigned long long>(totalFrames));
+
+        if (traceFrame)
+            appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu gameLayer.drawScreens begin",
+                          static_cast<unsigned long long>(totalFrames));
+        gameLayer.drawScreens();
+        if (traceFrame)
+            appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu gameLayer.drawScreens ok",
+                          static_cast<unsigned long long>(totalFrames));
+
+        if (traceFrame)
+            appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu menuLayer.draw begin",
+                          static_cast<unsigned long long>(totalFrames));
+        menuLayer.draw(fps, lastRunMs);
+        if (traceFrame)
+            appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu menuLayer.draw ok",
+                          static_cast<unsigned long long>(totalFrames));
+
+        if (traceFrame)
+            appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu Gfx::PopScissor begin",
+                          static_cast<unsigned long long>(totalFrames));
+        Gfx::PopScissor();
+        if (traceFrame)
+            appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu Gfx::PopScissor ok",
+                          static_cast<unsigned long long>(totalFrames));
+
+        if (traceFrame)
+            appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu Gfx::EndFrame begin",
+                          static_cast<unsigned long long>(totalFrames));
         Gfx::EndFrame({0.015f, 0.020f, 0.026f, 1.0f}, 0);
-        if (fpsFrames == 0)
-            appendStubLog("GBAStationNDSStub: Deko checkpoint first Gfx::EndFrame ok");
+        if (traceFrame)
+            appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu Gfx::EndFrame ok",
+                          static_cast<unsigned long long>(totalFrames));
 
         ++fpsFrames;
+        ++totalFrames;
+        if (totalFrames % 60 == 0)
+        {
+            appendStubLog("GBAStationNDSStub: Deko heartbeat frame=%llu fps=%.1f run=%lldms",
+                          static_cast<unsigned long long>(totalFrames),
+                          fps,
+                          lastRunMs);
+        }
         const auto now = std::chrono::steady_clock::now();
         const auto fpsElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - fpsStart).count();
         if (fpsElapsed >= 1000)

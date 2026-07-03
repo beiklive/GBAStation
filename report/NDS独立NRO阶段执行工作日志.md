@@ -903,3 +903,205 @@ GBAStationNDSStub.nro 2.16 MB
 - 当前已经接管 Stub 业务层，之后个性化菜单、显示布局、滤镜、按键逻辑应优先修改 `nds_stub`。
 - 下一步可以把 `arcdelta_melonds_core` / `arcdelta_switch_gfx` 的 CMake target 从 `third_party/CMakeLists.txt` 搬到 `nds_stub/CMakeLists.txt`，使 NDS 专用三方库只暴露给 Stub 子项目。
 - 再下一步如果需要深改 ArcDelta/melonDS，可在 `nds_stub/vendor` 或独立 fork 目录中维护 Stub 专属补丁，避免污染主程序和其他模拟器核心。
+
+## 2026-07-03 阶段I：修复 Deko 首帧绘制阶段闪退
+
+### 现象
+
+用户日志显示首帧已经完成：
+
+```text
+first RunFrame ok
+first Gfx::StartFrame begin
+first Gfx::StartFrame ok
+```
+
+随后闪退，说明崩溃点位于：
+
+```text
+Gfx::StartFrame
+  -> Stub 绘制双屏 / 菜单 / FPS
+  -> Gfx::EndFrame
+```
+
+之间。
+
+### 原因判断
+
+- ArcDelta 的 `Gfx::DrawRectangle()` / `Gfx::DrawText()` 内部会读取 `ScissorStack[ScissorStack.size() - 1]`。
+- ArcDelta 原版前端在每帧 `StartFrame()` 后都会调用：
+
+```cpp
+Gfx::PushScissor(0, 0, screenWidth, screenHeight);
+```
+
+并在 `EndFrame()` 前调用：
+
+```cpp
+Gfx::PopScissor();
+```
+
+- Stub 之前直接调用 `DrawRectangle()` / `DrawText()`，但没有初始化 scissor stack，第一次绘制就可能访问空 vector 并崩溃。
+
+### 已实施
+
+- 在 `NdsDekoRuntime.cpp` 的每帧 Deko 绘制阶段补齐：
+
+```cpp
+Gfx::PushScissor(0, 0, kScreenWidth, kScreenHeight);
+gameLayer.drawScreens();
+menuLayer.draw(fps, lastRunMs);
+Gfx::PopScissor();
+```
+
+- 增加首帧 checkpoint：
+
+```text
+first Gfx::PushScissor begin/ok
+first gameLayer.drawScreens begin/ok
+first menuLayer.draw begin/ok
+first Gfx::PopScissor begin/ok
+first Gfx::EndFrame begin/ok
+```
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.16 MB
+```
+
+### 验证重点
+
+- 若新日志能到 `first Gfx::EndFrame ok`，说明首帧 Deko 绘制闪退已修复。
+- 若仍闪退，查看最后一条 checkpoint，即可继续定位到双屏绘制、菜单文字绘制或 EndFrame/present。
+
+## 2026-07-03 阶段J：扩展首帧后崩溃定位日志
+
+### 背景
+
+- 最新测试已经能走到：
+
+```text
+first Gfx::EndFrame ok
+```
+
+- 说明上一阶段的 scissor stack 修复有效，首帧 Deko 绘制和 present 已经通过。
+- 但如果仍存在启动后短时间退出，需要定位第 2 帧、第 3 帧或音频线程/后续 present 是否异常。
+
+### 已实施
+
+- 将原来复用 `fpsFrames == 0` 的“首帧日志”改为独立 `totalFrames`。
+- 详细记录前 5 帧的关键阶段：
+
+```text
+frame=N loop begin
+frame=N RunFrame begin/ok
+frame=N Gfx::StartFrame begin/ok
+frame=N Gfx::PushScissor begin/ok
+frame=N gameLayer.drawScreens begin/ok
+frame=N menuLayer.draw begin/ok
+frame=N Gfx::PopScissor begin/ok
+frame=N Gfx::EndFrame begin/ok
+```
+
+- 每 60 帧输出一次 heartbeat：
+
+```text
+Deko heartbeat frame=60 fps=... run=...ms
+```
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.16 MB
+```
+
+### 验证重点
+
+- 如果能看到 `Deko heartbeat frame=60`，说明 Stub 已经稳定运行至少约 1 秒。
+- 如果只能停在某个 `frame=1..4` 的某一步，下一步直接针对最后一条 checkpoint 所在模块修复。
+
+## 2026-07-03 阶段K：验证第三帧 acquireImage 卡死的 framebuffer fence 互锁
+
+### 现象
+
+最新日志停在：
+
+```text
+frame=2 Gfx::StartFrame begin
+```
+
+未打印：
+
+```text
+frame=2 Gfx::StartFrame ok
+```
+
+`Gfx::StartFrame()` 第一行是：
+
+```cpp
+SwapchainSlot = PresentQueue.acquireImage(Swapchain);
+```
+
+这说明前两帧已经 submit/present，但第三帧获取 swapchain image 时卡住或崩溃。结合 Deko 双缓冲，较像前两帧 present 队列中存在未完成等待，导致 swapchain image 没释放。
+
+### 判断
+
+- Stub 原先按 ArcDelta 原版顺序提交：
+
+```text
+WaitForFenceReady(FramebufferReady[FrontBuffer])
+DrawRectangle(...)
+SignalFence(FramebufferPresented[FrontBuffer])
+```
+
+- 如果 `FramebufferReady` 没有在当前 Stub 调度下正确 signal，present 队列会等住。
+- present 队列一旦等住，前两个 swapchain image 被占满，第三帧 `acquireImage()` 就会卡住。
+
+### 已实施
+
+- 在 `NdsGameLayer` 增加 `setWaitForFramebufferReady(bool)`。
+- 当前验证模式设置为：
+
+```cpp
+gameLayer.setWaitForFramebufferReady(false);
+```
+
+- 即：
+
+```text
+暂不等待 FramebufferReady
+仍然 SignalFramebufferPresented
+```
+
+- 启动日志会显示：
+
+```text
+Deko display fence mode=signal-presented-only
+```
+
+### 验证目的
+
+- 如果此模式能跑到：
+
+```text
+Deko heartbeat frame=60
+```
+
+则说明第三帧卡死基本由 `FramebufferReady` wait 互锁造成。
+- 下一步需要实现更正确的同步策略，例如只在 ready fence 确认已可等待后再加入 present 队列，或改用 CPU/队列 idle 方式验证后再优化。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.16 MB
+```
