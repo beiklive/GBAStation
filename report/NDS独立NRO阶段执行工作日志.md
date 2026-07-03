@@ -318,3 +318,125 @@ build_switch/GBAStation.nro
 build_switch/GBAStationNDSStub.nro
 build_switch/GBAStation/core/GBAStationNDSStub.nro
 ```
+
+## 2026-07-03 阶段E：Stub 接入真实 melonDS 软件渲染运行链
+
+### 目标
+
+- 让 `GBAStationNDSStub.nro` 不再只是占位画面，而是能直接启动传入的 NDS ROM。
+- 保持 NDS 运行逻辑只存在于 Stub NRO，不把 melonDS 链回 `GBAStation.nro`。
+- 先使用 x1 软件渲染 framebuffer，避免重新引入 OpenGL/deko 切换风险。
+
+### 已实施
+
+- CMake：
+  - Switch 构建时重新构建 `melonds_core`。
+  - `melonds_core` 只链接到 `GBAStationNDSStub`，主程序仍不链接 melonDS。
+- 新增 Stub 专用 melonDS 平台层：
+  - `src/platform/switch/nds_stub/NdsStubMelonPlatform.hpp`
+  - `src/platform/switch/nds_stub/NdsStubMelonPlatform.cpp`
+  - 提供 melonDS 需要的文件、线程、信号量、互斥锁、时间、日志、SRAM 写回、麦克风/摄像头/网络空实现。
+- `NdsStubMain.cpp`：
+  - 新增最小 `NdsRuntime`。
+  - 加载：
+
+```text
+sdmc:/GBAStation/bios/nds/bios9.bin
+sdmc:/GBAStation/bios/nds/bios7.bin
+sdmc:/GBAStation/bios/nds/firmware.bin
+```
+
+  - 使用 ARM64 JIT，`FastMemory=false`。
+  - 使用 melonDS threaded software renderer。
+  - 读取 ROM path 并 `ParseROM -> SetNDSCart -> Reset -> SetupDirectBoot -> Start`。
+  - 每帧执行 `RunFrame()`，抓取 `GPU.Framebuffer[FrontBuffer]`。
+  - 上屏绘制到左侧 512x384，下屏绘制到右侧 512x384。
+  - 退出前调用 `runtime.stop()`，保存 SRAM 并停止 NDS。
+  - `Reset Game` 已连接到真实 NDS reset。
+  - Plus/Minus 保持菜单触发；临时将 NDS Start/Select 额外映射到右摇杆按下/左摇杆按下。
+
+### 当前限制
+
+- 暂未接音频。
+- 暂未接触摸。
+- 菜单里的保存状态/读取状态仍是占位，当前只做 SRAM 自动保存。
+- 目前是 x1 软件渲染路径，用于先验证真实游戏启动、画面、退出和 SRAM。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.50 MB
+```
+
+- 输出路径：
+
+```text
+build_switch/GBAStation.nro
+build_switch/GBAStationNDSStub.nro
+build_switch/GBAStation/core/GBAStationNDSStub.nro
+```
+
+## 2026-07-03 阶段F：Stub 补齐音频、触摸与 TabFrame 风格菜单
+
+### 目标
+
+- 在独立 `GBAStationNDSStub.nro` 内补齐基础游戏音频。
+- 接入 Switch 触摸屏到 NDS 下屏触摸。
+- 将占位右侧滑入菜单改为尽量接近 `GameMenuView` 的 TabFrame 结构。
+
+### 已实施
+
+- 音频：
+  - 新增 Stub 内部 `NdsAudioOutput`。
+  - 使用 libnx `audout`，4 个 1024-frame 双声道 PCM16 buffer。
+  - 每帧从 `m_nds->SPU.GetOutputSize()` / `ReadOutput()` 抽取 48kHz stereo PCM。
+  - 音频线程绑定到核心 2。
+  - 退出时停止音频线程、等待本 Stub 自己提交的 audout buffer 释放，然后 `audoutStopAudioOut()` / `audoutExit()`。
+- 触摸：
+  - 初始化 `hidInitializeTouchScreen()`。
+  - 使用 `hidGetTouchScreenStates()` 读取第一个触点。
+  - 按当前右侧下屏绘制区域 512x384 反算到 NDS 下屏 256x192。
+  - 菜单打开时不向 NDS 发送触摸，避免误触。
+- 菜单：
+  - 替换原先右侧滑入菜单。
+  - 改为全屏半透明遮罩 + 居中大面板。
+  - 左侧为 tab 栏，右侧为当前 tab 内容区，结构对齐 `GameMenuView` / `TabFrame`。
+  - 保留菜单项：
+
+```text
+Resume Game
+Save State
+Load State
+Cheats
+Display Settings
+Reset Game
+Exit Game
+```
+
+  - 当前 Stub 字体仍是内置 ASCII 点阵，因此菜单文字暂用英文；后续若要完全中文化，需要接入字体位图或移植 Borealis/NVG 字体渲染。
+
+### 当前限制
+
+- 音频为基础直出版，尚未做动态延迟统计和复杂重采样；输入/输出当前均按 48kHz 处理。
+- 即时存档/读取状态仍未接真实 savestate。
+- 金手指与显示设置面板仍是内容占位，但 TabFrame 结构已搭好。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.52 MB
+```
+
+- 输出路径：
+
+```text
+build_switch/GBAStation.nro
+build_switch/GBAStationNDSStub.nro
+build_switch/GBAStation/core/GBAStationNDSStub.nro
+```

@@ -36,7 +36,11 @@ set(PROJECT_AUTHOR "beiklive")
 set(PROJECT_ICON ${CMAKE_CURRENT_SOURCE_DIR}/resources/icon/default.png)
 set(PROJECT_RESOURCES ${CMAKE_CURRENT_SOURCE_DIR}/resources)
 
-set(BUILD_MELONDS_CORE OFF CACHE BOOL "Build the embedded melonDS native core" FORCE)
+if (PLATFORM_SWITCH)
+    set(BUILD_MELONDS_CORE ON CACHE BOOL "Build melonDS only for the external NDS Stub NRO" FORCE)
+else()
+    set(BUILD_MELONDS_CORE OFF CACHE BOOL "Build the embedded melonDS native core" FORCE)
+endif()
 
 if (USE_LIBROMFS)
     add_libromfs(${PROJECT_NAME} ${PROJECT_RESOURCES})
@@ -218,13 +222,14 @@ elseif (PLATFORM_SWITCH)
 
     add_executable(GBAStationNDSStub
         ${CMAKE_CURRENT_SOURCE_DIR}/src/platform/switch/nds_stub/NdsStubMain.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/platform/switch/nds_stub/NdsStubMelonPlatform.cpp
     )
     set_target_properties(GBAStationNDSStub PROPERTIES CXX_STANDARD 17)
     target_include_directories(GBAStationNDSStub PRIVATE
         ${BOREALIS_LIBRARY}/include/borealis/extern
     )
     target_compile_options(GBAStationNDSStub PRIVATE -ffunction-sections -fdata-sections ${APP_PLATFORM_OPTION})
-    target_link_libraries(GBAStationNDSStub PRIVATE nx)
+    target_link_libraries(GBAStationNDSStub PRIVATE nx melonds_core)
     add_custom_target(GBAStationNDSStub.nro ALL DEPENDS GBAStationNDSStub
         COMMAND ${NX_NACPTOOL_EXE} --create "GBAStation NDS Stub" "${PROJECT_AUTHOR}" "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_ALTER}" GBAStationNDSStub.nacp
         COMMAND ${NX_ELF2NRO_EXE} $<TARGET_FILE:GBAStationNDSStub> GBAStationNDSStub.nro --icon=${PROJECT_ICON} --nacp=GBAStationNDSStub.nacp
