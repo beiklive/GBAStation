@@ -255,6 +255,22 @@ public:
         m_paused.store(false, std::memory_order_release);
     }
 
+    void setFastForwardActive(bool enabled)
+    {
+        if (m_fastForwardAudio.exchange(enabled, std::memory_order_acq_rel) == enabled)
+            return;
+
+        std::lock_guard<std::mutex> lock(m_spuReadMutex);
+        if (enabled)
+        {
+            SPU::TrimOutput();
+        }
+        else
+        {
+            SPU::DrainOutput();
+        }
+    }
+
     void push(const int16_t* samples, size_t stereoFrames)
     {
         (void)samples;
@@ -309,6 +325,8 @@ private:
                 {
                     {
                         std::lock_guard<std::mutex> lock(m_spuReadMutex);
+                        if (m_fastForwardAudio.load(std::memory_order_acquire))
+                            SPU::Sync(false);
                         frames = SPU::ReadOutput(data, static_cast<int>(kBufferFrames));
                     }
                     if (frames > 0)
@@ -336,6 +354,7 @@ private:
 
     std::atomic<bool> m_running{false};
     std::atomic<bool> m_paused{false};
+    std::atomic<bool> m_fastForwardAudio{false};
     std::mutex m_spuReadMutex;
     std::thread m_thread;
     AudioDriver m_driver {};
@@ -679,13 +698,13 @@ int RunDekoRuntime(const DekoRunOptions& options)
         const bool suppressGameInput = menuVisible || blockGameInputUntilRelease;
         const bool fastForwardActive =
             !suppressGameInput &&
-            menuLayer.fastForwardMultiplier() > 1 &&
-            (held & HidNpadButton_StickR);
+            menuLayer.fastForwardMultiplier() > 1;
         if (fastForwardActive != lastFastForwardActive)
         {
             appendStubLog("GBAStationNDSStub: Deko fastforward %s x%d",
                           fastForwardActive ? "on" : "off",
                           menuLayer.fastForwardMultiplier());
+            audio.setFastForwardActive(fastForwardActive);
             lastFastForwardActive = fastForwardActive;
         }
 
@@ -705,7 +724,11 @@ int RunDekoRuntime(const DekoRunOptions& options)
                           static_cast<unsigned long long>(totalFrames));
         const int framesToRun = fastForwardActive ? menuLayer.fastForwardMultiplier() : 1;
         for (int i = 0; i < framesToRun; ++i)
+        {
             NDS::RunFrame();
+            if (fastForwardActive)
+                SPU::Sync(false);
+        }
         if (traceFrame)
             appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu RunFrame ok",
                           static_cast<unsigned long long>(totalFrames));

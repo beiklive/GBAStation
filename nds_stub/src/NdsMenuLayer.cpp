@@ -177,7 +177,7 @@ void NdsMenuLayer::draw(double fps, long long runMs, bool fastForwardActive) con
     Gfx::DrawText(Gfx::SystemFontChinese, {540.0f, 308.0f}, 21.0f,
                   {0.80f, 0.90f, 0.98f, 1.0f}, "B 或 ZR 返回游戏");
     Gfx::DrawText(Gfx::SystemFontChinese, {540.0f, 376.0f}, 19.0f,
-                  {1.00f, 0.86f, 0.58f, 1.0f}, "按住右摇杆执行快进");
+                  {1.00f, 0.86f, 0.58f, 1.0f}, "快进倍率高于 x1 后立即生效");
     Gfx::DrawText(Gfx::SystemFontChinese, {540.0f, 420.0f}, 17.0f,
                   {0.70f, 0.78f, 0.84f, 1.0f}, "Deko 多倍分辨率当前为实验入口");
 }
