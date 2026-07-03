@@ -11,7 +11,9 @@
 
 #include "NonStupidBitfield.h"
 
+#include <cstddef>
 #include <unordered_map>
+#include <vector>
 
 namespace GPU3D
 {
@@ -213,9 +215,21 @@ private:
     // though real hw shouldn't be eable to render all 2048 polygons on every line either
     static const int MaxYSpanIndices = 64*2048;
     static const int MaxYSpanSetups = 6144*2;
-    SetupIndices YSpanIndices[MaxYSpanIndices];
-    SpanSetupY YSpanSetups[MaxYSpanSetups];
-    RenderPolygon RenderPolygons[2048];
+
+    int RequestedScaleFactor = 1;
+    int ScaleFactor = 1;
+    int ScreenWidth = 256;
+    int ScreenHeight = 192;
+    int RuntimeTileSize = TileSize;
+    int RuntimeTilesPerLine = TilesPerLine;
+    int RuntimeTileLines = TileLines;
+    int RuntimeMaxWorkTiles = MaxWorkTiles;
+    int RuntimeMaxYSpanIndices = MaxYSpanIndices;
+    int RuntimeMaxYSpanSetups = MaxYSpanSetups;
+
+    std::vector<SetupIndices> YSpanIndices;
+    std::vector<SpanSetupY> YSpanSetups;
+    std::vector<RenderPolygon> RenderPolygons;
 
     struct TexArrayEntry
     {
@@ -253,6 +267,11 @@ private:
     u32 TextureDecodingBuffer[1024*1024];
 
     TexCacheEntry& GetTexture(u32 textureParam, u32 paletteParam);
+
+    void ConfigureScale(int scale);
+    size_t BinResultSize() const;
+    size_t TileMemorySize() const;
+    size_t FinalTileMemorySize() const;
 
     void SetupAttrs(SpanSetupY* span, Polygon* poly, int from, int to);
     void SetupYSpan(int polynum, SpanSetupY* span, Polygon* poly, int from, int to, u32 y, int side);

@@ -629,7 +629,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
         GPU::RenderSettings newSettings {true, scale, false};
         GPU::SetRenderSettings(0, newSettings);
         currentResolutionScale = scale;
-        appendStubLog("GBAStationNDSStub: Deko resolution scale applied x%d (Deko renderer may still render x1)", scale);
+        appendStubLog("GBAStationNDSStub: Deko resolution scale request accepted x%d (stage1 renderer output remains x1)", scale);
     };
 
     while (appletMainLoop() && running)

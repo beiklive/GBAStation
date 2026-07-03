@@ -31,28 +31,67 @@ DekoRenderer::DekoRenderer()
 DekoRenderer::~DekoRenderer()
 {}
 
+void DekoRenderer::ConfigureScale(int scale)
+{
+    RequestedScaleFactor = scale;
+
+    // Stage 1 only abstracts dimensions. The current Deko shader set and
+    // GPU2D compositor are still native-resolution, so keep the applied scale
+    // at x1 until scale-specific shaders and high-res compositing land.
+    ScaleFactor = 1;
+    ScreenWidth = 256;
+    ScreenHeight = 192;
+    RuntimeTileSize = TileSize;
+    RuntimeTilesPerLine = TilesPerLine;
+    RuntimeTileLines = TileLines;
+    RuntimeMaxWorkTiles = MaxWorkTiles;
+    RuntimeMaxYSpanIndices = MaxYSpanIndices;
+    RuntimeMaxYSpanSetups = MaxYSpanSetups;
+
+    YSpanIndices.resize(RuntimeMaxYSpanIndices);
+    YSpanSetups.resize(RuntimeMaxYSpanSetups);
+    RenderPolygons.resize(2048);
+}
+
+size_t DekoRenderer::BinResultSize() const
+{
+    return sizeof(BinResult);
+}
+
+size_t DekoRenderer::TileMemorySize() const
+{
+    return sizeof(Tiles);
+}
+
+size_t DekoRenderer::FinalTileMemorySize() const
+{
+    return sizeof(FinalTiles);
+}
+
 bool DekoRenderer::Init()
 {
+    ConfigureScale(1);
+
     for (int i = 0; i < 2; i++)
     {
-        YSpanSetupMemory[i] = Gfx::DataHeap->Alloc(sizeof(SpanSetupY)*MaxYSpanSetups, 4);
+        YSpanSetupMemory[i] = Gfx::DataHeap->Alloc(sizeof(SpanSetupY)*RuntimeMaxYSpanSetups, 4);
 
         RenderPolygonMemory[i] = Gfx::DataHeap->Alloc(sizeof(RenderPolygon)*2048, 4);
     }
 
-    TileMemory = Gfx::DataHeap->Alloc(sizeof(Tiles), alignof(Tiles));
+    TileMemory = Gfx::DataHeap->Alloc(TileMemorySize(), alignof(Tiles));
 
-    XSpanSetupMemory = Gfx::DataHeap->Alloc(sizeof(SpanSetupX)*MaxYSpanIndices, alignof(SpanSetupX));
+    XSpanSetupMemory = Gfx::DataHeap->Alloc(sizeof(SpanSetupX)*RuntimeMaxYSpanIndices, alignof(SpanSetupX));
 
-    BinResultMemory = Gfx::DataHeap->Alloc(sizeof(BinResult), alignof(BinResult));
-    memset(Gfx::DataHeap->CpuAddr<void>(BinResultMemory), 0, sizeof(BinResult));
+    BinResultMemory = Gfx::DataHeap->Alloc(BinResultSize(), alignof(BinResult));
+    memset(Gfx::DataHeap->CpuAddr<void>(BinResultMemory), 0, BinResultSize());
 
-    FinalTileMemory = Gfx::DataHeap->Alloc(sizeof(FinalTiles), alignof(FinalTiles));
+    FinalTileMemory = Gfx::DataHeap->Alloc(FinalTileMemorySize(), alignof(FinalTiles));
 
     dk::ImageLayout yspanIndicesLayout;
     dk::ImageLayoutMaker{Gfx::Device}
         .setType(DkImageType_Buffer)
-        .setDimensions(MaxYSpanIndices)
+        .setDimensions(RuntimeMaxYSpanIndices)
         .setFormat(DkImageFormat_RGBA16_Uint)
         .initialize(yspanIndicesLayout);
     YSpanIndicesTextureMemory = Gfx::TextureHeap->Alloc(yspanIndicesLayout.getSize(), yspanIndicesLayout.getAlignment());
@@ -145,7 +184,17 @@ void DekoRenderer::Reset()
 
 void DekoRenderer::SetRenderSettings(GPU::RenderSettings& settings)
 {
+    int requestedScale = settings.GL_ScaleFactor;
+    if (requestedScale < 1) requestedScale = 1;
+    if (requestedScale > 4) requestedScale = 4;
 
+    if (requestedScale != RequestedScaleFactor)
+    {
+        printf("DekoRenderer::SetRenderSettings requested scale x%d; high-res Deko path is staged, using x1\n",
+               requestedScale);
+    }
+
+    ConfigureScale(requestedScale);
 }
 
 void DekoRenderer::VCount144()
@@ -1030,10 +1079,10 @@ void DekoRenderer::RenderFrame()
             if (polygon->Vertices[j]->FinalPosition[0] < polygon->Vertices[vtop]->FinalPosition[0]) vtop = j;
             if (polygon->Vertices[j]->FinalPosition[0] > polygon->Vertices[vbot]->FinalPosition[0]) vbot = j;
 
-            assert(numYSpans < MaxYSpanSetups);
+            assert(numYSpans < RuntimeMaxYSpanSetups);
             u32 curSpanL = numYSpans;
             SetupYSpanDummy(&YSpanSetups[numYSpans++], polygon, vtop, 0);
-            assert(numYSpans < MaxYSpanSetups);
+            assert(numYSpans < RuntimeMaxYSpanSetups);
             u32 curSpanR = numYSpans;
             SetupYSpanDummy(&YSpanSetups[numYSpans++], polygon, vbot, 1);
 
@@ -1047,7 +1096,7 @@ void DekoRenderer::RenderFrame()
                 std::swap(minXY, maxXY);
             }
 
-            assert(numSetupIndices < MaxYSpanIndices);
+            assert(numSetupIndices < RuntimeMaxYSpanIndices);
             YSpanIndices[numSetupIndices].PolyIdx = i;
             YSpanIndices[numSetupIndices].SpanIdxL = curSpanL;
             YSpanIndices[numSetupIndices].SpanIdxR = curSpanR;
@@ -1057,10 +1106,10 @@ void DekoRenderer::RenderFrame()
         else
         {
             u32 curSpanL = numYSpans;
-            assert(numYSpans < MaxYSpanSetups);
+            assert(numYSpans < RuntimeMaxYSpanSetups);
             SetupYSpan(i, &YSpanSetups[numYSpans++], polygon, curVL, nextVL, ytop, 0);
             u32 curSpanR = numYSpans;
-            assert(numYSpans < MaxYSpanSetups);
+            assert(numYSpans < RuntimeMaxYSpanSetups);
             SetupYSpan(i, &YSpanSetups[numYSpans++], polygon, curVR, nextVR, ytop, 1);
 
             for (u32 y = ytop; y < ybot; y++)
@@ -1095,7 +1144,7 @@ void DekoRenderer::RenderFrame()
                         maxXY = polygon->Vertices[curVL]->FinalPosition[1];
                     }
 
-                    assert(numYSpans < MaxYSpanSetups);
+                    assert(numYSpans < RuntimeMaxYSpanSetups);
                     curSpanL = numYSpans;
                     SetupYSpan(i,&YSpanSetups[numYSpans++], polygon, curVL, nextVL, y, 0);
                 }
@@ -1129,12 +1178,12 @@ void DekoRenderer::RenderFrame()
                         maxXY = polygon->Vertices[curVR]->FinalPosition[1];
                     }
 
-                    assert(numYSpans < MaxYSpanSetups);
+                    assert(numYSpans < RuntimeMaxYSpanSetups);
                     curSpanR = numYSpans;
                     SetupYSpan(i,&YSpanSetups[numYSpans++], polygon, curVR, nextVR, y, 1);
                 }
 
-                assert(numSetupIndices < MaxYSpanIndices);
+                assert(numSetupIndices < RuntimeMaxYSpanIndices);
                 YSpanIndices[numSetupIndices].PolyIdx = i;
                 YSpanIndices[numSetupIndices].SpanIdxL = curSpanL;
                 YSpanIndices[numSetupIndices].SpanIdxR = curSpanR;
@@ -1186,10 +1235,10 @@ void DekoRenderer::RenderFrame()
     if (numYSpans > 0)
     {
         SpanSetupY* yspans = Gfx::DataHeap->CpuAddr<SpanSetupY>(YSpanSetupMemory[curSlice]);
-        memcpy(yspans, YSpanSetups, sizeof(SpanSetupY)*numYSpans);
-        UploadBuf.UploadAndCopyData(EmuCmdBuf, Gfx::TextureHeap->GpuAddr(YSpanIndicesTextureMemory), (u8*)YSpanIndices, numSetupIndices*4*2);
+        memcpy(yspans, YSpanSetups.data(), sizeof(SpanSetupY)*numYSpans);
+        UploadBuf.UploadAndCopyData(EmuCmdBuf, Gfx::TextureHeap->GpuAddr(YSpanIndicesTextureMemory), (u8*)YSpanIndices.data(), numSetupIndices*4*2);
 
-        memcpy(Gfx::DataHeap->CpuAddr<void>(RenderPolygonMemory[curSlice]), RenderPolygons, RenderNumPolygons*sizeof(RenderPolygon));
+        memcpy(Gfx::DataHeap->CpuAddr<void>(RenderPolygonMemory[curSlice]), RenderPolygons.data(), RenderNumPolygons*sizeof(RenderPolygon));
 
         // we haven't accessed image data yet, so we don't need to invalidate anything
         EmuCmdBuf.barrier(DkBarrier_Full, DkInvalidateFlags_Image|DkInvalidateFlags_Descriptors|DkInvalidateFlags_L2Cache);
@@ -1266,7 +1315,7 @@ void DekoRenderer::RenderFrame()
     EmuCmdBuf.pushConstants(gpuAddrMetaUniform, MetaUniformSize, 0, sizeof(MetaUniform), &meta);
 
     EmuCmdBuf.bindShaders(DkStageFlag_Compute, {&ShaderClearCoarseBinMask});
-    EmuCmdBuf.dispatchCompute(TilesPerLine*TileLines/32, 1, 1);
+    EmuCmdBuf.dispatchCompute(RuntimeTilesPerLine*RuntimeTileLines/32, 1, 1);
 
     bool wbuffer = false;
     if (numYSpans > 0)
@@ -1284,7 +1333,7 @@ void DekoRenderer::RenderFrame()
 
         // bin polygons
         EmuCmdBuf.bindShaders(DkStageFlag_Compute, {&ShaderBinCombined});
-        EmuCmdBuf.dispatchCompute(((RenderNumPolygons + 31) / 32), 256/CoarseTileW, 192/CoarseTileH);
+        EmuCmdBuf.dispatchCompute(((RenderNumPolygons + 31) / 32), ScreenWidth/CoarseTileW, ScreenHeight/CoarseTileH);
         EmuCmdBuf.barrier(DkBarrier_Primitives, 0);
 
         // calculate list offsets
@@ -1368,7 +1417,7 @@ void DekoRenderer::RenderFrame()
 
     // compose final image
     EmuCmdBuf.bindShaders(DkStageFlag_Compute, {&ShaderDepthBlend[wbuffer]});
-    EmuCmdBuf.dispatchCompute(256/8, 192/8, 1);
+    EmuCmdBuf.dispatchCompute(ScreenWidth/RuntimeTileSize, ScreenHeight/RuntimeTileSize, 1);
     EmuCmdBuf.barrier(DkBarrier_Primitives, 0);
 
     EmuCmdBuf.bindImages(DkStage_Compute, 0, {dkMakeImageHandle(descriptorOffset_FinalFB)});
@@ -1380,7 +1429,7 @@ void DekoRenderer::RenderFrame()
     if (RenderDispCnt & (1<<5))
         finalPassShader |= 0x1;
     EmuCmdBuf.bindShaders(DkStageFlag_Compute, {&ShaderFinalPass[finalPassShader]});
-    EmuCmdBuf.dispatchCompute(256/32, 192, 1);
+    EmuCmdBuf.dispatchCompute(ScreenWidth/32, ScreenHeight, 1);
     EmuCmdBuf.barrier(DkBarrier_Primitives, 0);
 
     DkCmdList cmdlist = CmdMem.End(EmuCmdBuf);

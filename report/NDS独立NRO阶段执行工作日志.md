@@ -1423,3 +1423,129 @@ SPU::Sync(false);
 - x1 正常速度下声音应保持原状。
 - x2/x3/x4 快进时应明显减少或消除爆音。
 - 从 x4 改回 x1 后，不应继续播放快进期间积压的旧声音。
+
+## 2026-07-03 阶段R：评估 Deko3D 多倍分辨率实现
+
+### 目标
+
+- 实现基于 Deko3D 加速的 NDS 多倍内部分辨率。
+- 参考 `third_party/melonDS` 和 `third_party/melonDS-switch` 中的多倍分辨率代码。
+
+### 结论
+
+- `third_party/melonDS` 和 `third_party/melonDS-switch` 中存在 OpenGL / OpenGL Compute 的多倍分辨率实现。
+- 当前使用的 `third_party/ArcDelta_melonDS` Deko renderer 没有对应实现。
+- `GPU3D::DekoRenderer::SetRenderSettings()` 为空。
+- Deko 3D compute shader、3D buffer、2D compositor、最终 framebuffer 都固定 `256x192`。
+
+### 关键判断
+
+- 只改 Stub 菜单或调用 `GPU::SetRenderSettings()` 不会产生真实多倍分辨率。
+- 只把 3D framebuffer 放大也不够，因为最终 `GPU2D_Deko::FinalFramebuffers` 仍是 `256x192`，高分辨率 3D 会被压回原生尺寸。
+- 真正可见的多倍分辨率必须同时改：
+
+```text
+GPU3D_Deko runtime dimensions
+GPU3D_Deko buffer allocation
+GPU3D_Deko shader scale variants
+GPU2D_Deko high-res 3D framebuffer
+GPU2D_Deko high-res final framebuffer
+ComposeBGOBJ scale-aware compositor
+NdsGameLayer external texture recreation
+```
+
+### 产出
+
+- 已制定完整分阶段实现方案：
+
+```text
+report/NDS_Deko3D多倍分辨率实现方案.md
+```
+
+### 下一步建议
+
+- 先实施方案中的阶段 1：Deko 3D 尺寸抽象，但保持 x1 行为不变。
+- 阶段 1 通过实机验证后，再进入 shader scale variant 和高分辨率 compositor 改造。
+
+## 2026-07-03 阶段S：实施 Deko3D 多倍分辨率阶段 1
+
+### 目标
+
+- 开始实施 `report/NDS_Deko3D多倍分辨率实现方案.md`。
+- 本阶段只做 Deko 3D 尺寸抽象，保持 x1 渲染行为不变。
+- 不改 libretro、mGBA、主程序 OpenGL 渲染和音频逻辑。
+
+### 已实施
+
+- `GPU3D_Deko.h` 增加运行期尺寸状态：
+
+```cpp
+RequestedScaleFactor
+ScaleFactor
+ScreenWidth
+ScreenHeight
+RuntimeTileSize
+RuntimeTilesPerLine
+RuntimeTileLines
+RuntimeMaxWorkTiles
+RuntimeMaxYSpanIndices
+RuntimeMaxYSpanSetups
+```
+
+- CPU 侧固定数组改为运行期容器：
+
+```cpp
+std::vector<SetupIndices> YSpanIndices;
+std::vector<SpanSetupY> YSpanSetups;
+std::vector<RenderPolygon> RenderPolygons;
+```
+
+- 新增尺寸配置入口：
+
+```cpp
+ConfigureScale(int scale)
+BinResultSize()
+TileMemorySize()
+FinalTileMemorySize()
+```
+
+- `GPU3D_Deko::Init()` 的 GPU buffer 分配改为运行期尺寸计算：
+
+```text
+YSpanSetupMemory      -> RuntimeMaxYSpanSetups
+XSpanSetupMemory      -> RuntimeMaxYSpanIndices
+YSpanIndicesTexture   -> RuntimeMaxYSpanIndices
+BinResultMemory       -> BinResultSize()
+TileMemory            -> TileMemorySize()
+FinalTileMemory       -> FinalTileMemorySize()
+```
+
+- RenderFrame 上传路径改为 vector `.data()`。
+- span 容量断言改为运行期容量。
+- compute dispatch 中的部分 `256/192` 替换为 `ScreenWidth/ScreenHeight` 和 runtime tile 值。
+- `GPU3D::DekoRenderer::SetRenderSettings()` 现在会接收 x1/x2/x3/x4 请求，但阶段 1 仍安全钳制实际渲染为 x1。
+- Stub 日志改为：
+
+```text
+Deko resolution scale request accepted xN (stage1 renderer output remains x1)
+```
+
+### 当前状态
+
+- x1 行为应保持原样。
+- 菜单 x2/x3/x4 会被 Deko renderer 接收并记录请求。
+- 真实高分辨率输出尚未开启，因为 Deko shader scale variants 和 GPU2D high-res compositor 尚未完成。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.17 MB
+```
+
+### 下一步
+
+- 阶段 2：为 Deko compute shader 生成 x1/x2/x3/x4 变体。
+- 阶段 3：让 `GPU3D_Deko` 按 scale 重新分配 3D buffer，并输出 high-res 3D framebuffer。
