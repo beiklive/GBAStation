@@ -246,6 +246,316 @@ build_switch/GBAStationNDSStub.nro
 build_switch/GBAStation/core/GBAStationNDSStub.nro
 ```
 
+## 2026-07-03 阶段G：Stub 切换到 ArcDelta Deko-only 渲染路径
+
+### 目标
+
+- 解决宝可梦黑 2 大场景 `RUN/EMU` 约 19ms、GPU 仅约 2% 的 CPU 软件 3D 瓶颈。
+- 让 `GBAStationNDSStub.nro` 使用 ArcDelta_melonDS 的 Deko GPU2D/GPU3D 路径。
+- 保持主程序 `GBAStation.nro`、libretro、mGBA 的 OpenGL/音频路径不参与 NDS Deko 初始化。
+
+### 已实施
+
+- 新增 `src/platform/switch/nds_stub/NdsDekoRuntime.cpp/.hpp`：
+  - 初始化 `romfs + Gfx::Init() + NDS::Init() + GPU::InitRenderer(0)`。
+  - 在 `DEKOGPU_ENABLED` 下，ArcDelta 的 `GPU::InitRenderer(0)` 会创建 Deko 3D renderer。
+  - 使用 `GPU2D::DekoRenderer::GetFramebuffer()` 创建外部 Deko texture。
+  - 每帧等待 `FramebufferReady` fence，绘制上下屏，再 signal `FramebufferPresented` fence。
+  - 添加基础 FPS/RUN 耗时 overlay。
+  - 保留基础音频、触摸、PLUS 菜单、重置、退出回主程序。
+- 新增 `src/platform/switch/nds_stub/NdsDekoStubMain.cpp`：
+  - `GBAStationNDSStub.nro` 改为 Deko-only 主入口。
+  - 继续从启动参数读取 ROM path 和 `--return`。
+  - 继续根据 ROM path 查询 `/GBAStation/data/GameData_NDS.json`，读取标题和 `savePath`。
+- 新增 Stub 专用 Deko shader romfs 构建：
+  - 在根 `CMakeLists.txt` 中生成 ArcDelta 所需的 `romfs:/shaders/*.dksh`。
+  - `GBAStationNDSStub.nro` 通过 `--romfsdir=${CMAKE_BINARY_DIR}/nds_stub_romfs` 打包 shader。
+- `GBAStationNDSStub` target 改为：
+  - 只链接 `arcdelta_melonds_core` 和 `arcdelta_switch_gfx`。
+  - 不再链接 upstream `melonds_core`，避免两个 melonDS JIT 同时定义 libnx exception handler。
+- 新增 `src/platform/switch/nds_stub/NdsArcDeltaDsiDspStub.cpp`：
+  - 临时替换 ArcDelta `DSi_DSP.cpp`，避免引入与当前 upstream Teakra 不兼容的 DSi DSP 依赖。
+  - 该 stub 只用于先验证普通 DS 游戏路径，不提供 DSi DSP 功能。
+
+### 关键问题与处理
+
+- 同时链接 upstream melonDS JIT 和 ArcDelta melonDS JIT 会发生：
+
+```text
+multiple definition of __libnx_exception_handler
+multiple definition of __nx_exception_stack
+```
+
+  因此 Stub 不能同时保留两个 NDS core。已切为 Deko-only。
+
+- ArcDelta 的 shader 不是可选资源，缺少 `romfs:/shaders/*.dksh` 会在 `Gfx::LoadShader()` assert。已完整打包。
+
+- ArcDelta `DSi_DSP.cpp` 依赖其自身 Teakra API 的 `GetDspMemory()`。当前阶段先不支持 DSi DSP，避免把 upstream Teakra/Savestate 符号重新带进 Stub。
+
+### 当前限制
+
+- 当前 `GBAStationNDSStub.nro` 已是 Deko-only；旧 x1 软件渲染 Stub 源码仍在仓库中，但不再参与 Stub target。
+- 菜单是 Deko runtime 内的简化菜单，不是此前软件路径里的完整 TabFrame 菜单。
+- DSi 模式/DSP 暂不支持；普通 NDS ROM 优先。
+- 需要真机验证：
+  - 是否能正常启动宝可梦黑 2。
+  - 大场景 GPU 使用率是否明显上升。
+  - FPS 是否回到或接近稳定 60。
+  - 音频/触摸/退出回主程序是否稳定。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.16 MB
+```
+
+- 输出路径：
+
+```text
+build_switch/GBAStation.nro
+build_switch/GBAStationNDSStub.nro
+build_switch/GBAStation/core/GBAStationNDSStub.nro
+```
+
+## 2026-07-03 阶段G：Stub 中文字体、FPS 叠加与 x1 绘制节流优化
+
+### 目标
+
+- 在 `GBAStationNDSStub.nro` 内直接读取 Switch 系统字体，支持中文菜单显示。
+- 在游戏层绘制 FPS 和单帧模拟耗时，便于真机区分模拟瓶颈和绘制瓶颈。
+- 优化主循环节流，避免固定 sleep 导致有效帧时间被额外拉长。
+- 在不触碰 libretro、mGBA、主程序 OpenGL 路径的前提下，降低 Stub x1 软件显示路径的 CPU 开销。
+
+### 已实施
+
+- 字体：
+  - 新增 Stub 内部 `FontRenderer`。
+  - 使用 `plInitialize(PlServiceType_User)` 和 `plGetSharedFontByType()` 读取 Switch 共享字体。
+  - 字体候选包含 Standard、简体中文、扩展简体中文、繁体中文、韩文和 NintendoExt。
+  - 将共享字体数据复制到 Stub 自己的 `std::vector<uint8_t>` 后再 `plExit()`，避免字体映射生命周期问题。
+  - 使用 `stb_truetype` 按 codepoint/字号缓存 glyph bitmap。
+  - 系统字体不可用时，尝试从 SD/romfs 的字体路径 fallback；最终仍保留 ASCII 点阵兜底。
+- 中文 UI：
+  - 菜单项恢复为中文：返回游戏、保存状态、读取状态、金手指、画面设置、重置游戏、退出游戏。
+  - 菜单内容区说明文字改为中文。
+- 性能监控：
+  - 游戏画面右上角显示 `FPS` 和 `EMU xxMS`。
+  - `EMU` 统计范围为 `RunFrame()` + 音频 drain + framebuffer capture，用来判断瓶颈是否在 melonDS 每帧模拟侧。
+  - 当单帧模拟超过约 18ms 时写入限量 slow frame 日志，便于和真机 FPS 反馈对齐。
+- 帧节流：
+  - 主循环从固定每帧 sleep 16.667ms 改为按实际耗时计算剩余预算。
+  - 当前帧已耗时低于 16.667ms 时才 sleep 剩余时间，避免“模拟/绘制耗时 + 固定 sleep”造成低帧率。
+- 绘制优化：
+  - `blitNdsScreen2x()` 增加 framebuffer 内 fast path。
+  - 双屏 2x 拷贝在目标区域完全在屏幕内时，不再在每个源像素内做边界判断，也不重复计算行指针。
+  - 优化只作用于 Stub 的软件 framebuffer 绘制层，不影响主程序和其他模拟器。
+- 线程：
+  - Stub 主线程绑定到 core 1。
+  - 音频线程仍绑定到 core 2。
+  - melonDS 平台线程仍由 `NdsStubMelonPlatform.cpp` 绑定到 core 3。
+
+### 验证记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.55 MB
+```
+
+- 输出路径：
+
+```text
+build_switch/GBAStation.nro
+build_switch/GBAStationNDSStub.nro
+build_switch/GBAStation/core/GBAStationNDSStub.nro
+```
+
+### 后续真机观察点
+
+- 菜单中文是否正常显示，日志中是否出现 `fonts loaded count=<n>`。
+- 游戏右上角 FPS 是否稳定接近 60。
+- 若 FPS 低且 `EMU` 持续大于 16ms，瓶颈主要在 melonDS 模拟/软件渲染。
+- 若 `EMU` 低于 16ms 但 FPS 低，继续优化 Stub framebuffer 绘制、UI 文字绘制或 pacing。
+- 若首次打开菜单短暂卡顿，优先怀疑首次中文字形生成；后续可增加启动时预热常用菜单 glyph。
+
+## 2026-07-03 阶段H：根据黑2真机数据定位 CPU 瓶颈并启用 JIT FastMemory
+
+### 用户观测
+
+- 宝可梦黑2小场景：
+  - FPS 稳定 60。
+  - `EMU` 在 11ms 到 12ms 波动。
+- 宝可梦黑2大场景：
+  - FPS 降到约 40。
+  - `EMU` 在 16ms 到 20ms 波动。
+  - GPU 基本没有明显消耗。
+  - 核心 1 和核心 2 都在约 80% 波动。
+
+### 判断
+
+- 小场景 `EMU 11-12ms` 且 FPS 60，说明 Stub framebuffer present、主循环 pacing、x1 显示路径本身不是固定瓶颈。
+- 大场景 `EMU 16-20ms` 与 FPS 同步下降，且 GPU 不忙，说明瓶颈主要在 CPU 侧：
+  - melonDS `RunFrame()`。
+  - x1 软件 3D 渲染线程。
+  - 或 Stub 的 `drainAudio()` / `captureFrame()` 辅助路径。
+- 需要拆分 `EMU` 指标，避免继续盲目优化显示层。
+
+### 已实施
+
+- JIT：
+  - 将 Stub 中手动关闭的 `jitArgs.FastMemory = false` 改为按 `melonDS::ARMJIT_Memory::IsFastMemSupported()` 启用。
+  - Switch 平台在当前 melonDS 代码中返回支持 FastMemory。
+  - 启动日志新增 `GBAStationNDSStub: JIT fastmem requested=1/0`。
+  - 该改动只作用于 `GBAStationNDSStub.nro` 的 melonDS JIT 内存访问路径，不影响主程序、libretro、mGBA。
+- 性能指标：
+  - `runFrame()` 返回 `NdsFrameTimings`。
+  - 右上角显示拆为：
+
+```text
+FPS xx  EMU xxMS
+RUN xx  AUD xx  CAP xx
+```
+
+  - `RUN`：`m_nds->RunFrame()`。
+  - `AUD`：SPU 输出 drain 到 Stub audout ring。
+  - `CAP`：从 melonDS GPU framebuffer 转换/复制到 Stub x1 显示 buffer。
+  - 慢帧日志改为 `slow frame total/run/audio/capture`。
+- 音频线程：
+  - `NdsAudioOutput::readSamples()` 从“有一对 stereo sample 就唤醒”改为“尽量等待填满一个 audout buffer，12ms 超时后再补齐”。
+  - 目标是减少音频线程过早醒来和提交半空 buffer 的概率，降低核心 2 被音频线程占用的风险。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.55 MB
+```
+
+- 输出路径：
+
+```text
+build_switch/GBAStation.nro
+build_switch/GBAStationNDSStub.nro
+build_switch/GBAStation/core/GBAStationNDSStub.nro
+```
+
+### 下一轮真机判读
+
+- 如果大场景 `RUN` 接近 `EMU`，主要瓶颈就是 melonDS 核心/软件 3D，需要继续研究 ArcDelta 的 deko3d/渲染器移植或更激进的 threaded/software renderer 优化。
+- 如果 `AUD` 偶尔升高，继续扩大 audout buffer 或改为更低唤醒频率。
+- 如果 `CAP` 明显升高，继续优化 framebuffer 转换和双屏拷贝。
+- 如果启用 FastMemory 后出现崩溃，优先回退 `jitArgs.FastMemory`，并记录崩溃日志。
+
+## 2026-07-03 阶段I：确认 SoftRenderer CPU 瓶颈并加入 Stub CPU Boost
+
+### 用户观测
+
+- 宝可梦黑2大场景：
+  - FPS 约 45。
+  - `EMU` 在 19ms 波动。
+  - `RUN` 在 19ms 波动。
+  - `AUD` 和 `CAP` 一直为 0。
+  - 核心 0/1/2/3 占用约为 60-90% / 80-90% / 0-33% / 26%。
+  - GPU 占用始终约 2%。
+
+### 判断
+
+- `RUN` 基本等于 `EMU`，而 `AUD/CAP` 为 0，说明瓶颈不在 Stub 的音频输出、framebuffer capture 或 UI 绘制。
+- 当前 Stub 使用的是 upstream melonDS `SoftRenderer(true)`：
+  - NDS 3D 仍由 CPU 软件渲染。
+  - GPU 只参与最终系统 framebuffer present，2% 占用符合预期。
+- ArcDelta_melonDS 的高性能路径不是一个简单开关，而是完整的 Switch/Deko 渲染体系：
+  - `GPU2D_Deko.cpp/.h`
+  - `GPU3D_Deko.cpp/.h`
+  - `frontend/switch/Gfx.cpp/.h`
+  - `GpuMemHeap`
+  - `UploadBuffer`
+  - deko shader romfs
+  - GPU framebuffer fence/present 链路
+- 因此根治方向是把 Stub 从 `SoftRenderer` 切到 ArcDelta 的 Deko renderer，或将 Stub 重建到 ArcDelta core/frontend 架构上。
+
+### 已实施：CPU Boost 验证版
+
+- 新增 Stub 内部 `SwitchCpuBoost`。
+- 游戏启动前将 CPU bus 从默认 1020MHz 提升到 1224MHz。
+- 退出 Stub 或返回主程序前恢复到 1020MHz。
+- 支持旧系统 `pcv` 和新系统 `clkrst` 两套 API。
+- 日志新增：
+
+```text
+GBAStationNDSStub: CPU clock set setting=<n> hz=<hz>
+```
+
+- 游戏底部状态显示当前 CPU 频率：
+
+```text
+CPU: 1224MHz
+```
+
+### 目的
+
+- 如果 1224MHz 后黑2大场景 `RUN` 从约 19ms 降到 16ms 以内，说明当前 x1 软件渲染可以先靠轻度 CPU boost 稳住。
+- 如果仍然高于 16ms，则说明 CPU 频率也无法兜住，必须进入 Deko renderer 移植阶段。
+- 该改动不影响主程序、libretro、mGBA，也不改变当前 audout 和 framebuffer capture 链路。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.56 MB
+```
+
+- 输出路径：
+
+```text
+build_switch/GBAStation.nro
+build_switch/GBAStationNDSStub.nro
+build_switch/GBAStation/core/GBAStationNDSStub.nro
+```
+
+### 下一步
+
+- 真机验证 1224MHz 下黑2大场景 `RUN` 和 FPS。
+- 若 `RUN <= 16ms`，保留 1224MHz 作为临时性能档，并后续做菜单可调。
+- 若 `RUN > 16ms`，进入 ArcDelta Deko renderer 接入阶段：
+  - 优先尝试构建独立 `ArcDelta core + Gfx + Deko renderer` 的 Stub 专用目标。
+  - 让 `GBAStationNDSStub.nro` 直接使用 Deko framebuffer，而不是当前 software framebuffer。
+  - 保持主程序仍不链接 melonDS，不影响 libretro 和 mGBA。
+
+### 追加：CPU Boost 已撤销
+
+- 用户已在系统层将 CPU 超频到 1785MHz，不需要 Stub 内部再修改 CPU clock。
+- Stub 内部 `SwitchCpuBoost` 已删除。
+- 不再调用 `pcvInitialize` / `clkrstInitialize` / `clkrstSetClockRate`。
+- 退出 Stub 时也不会恢复 CPU 频率，避免干扰用户外部超频配置。
+- 底部 `CPU: 1224MHz` 显示已移除。
+- 后续性能优化方向回到 ArcDelta Deko renderer 接入。
+
+### 撤销构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.55 MB
+```
+
+- 输出路径：
+
+```text
+build_switch/GBAStation.nro
+build_switch/GBAStationNDSStub.nro
+build_switch/GBAStation/core/GBAStationNDSStub.nro
+```
+
 ### 待实机验证
 
 - 打开 NDS 游戏后应进入 Stub 占位游戏画面。
@@ -346,7 +656,7 @@ sdmc:/GBAStation/bios/nds/bios7.bin
 sdmc:/GBAStation/bios/nds/firmware.bin
 ```
 
-  - 使用 ARM64 JIT，`FastMemory=false`。
+  - 初版使用 ARM64 JIT，`FastMemory=false`；阶段 H 已改为 Switch 支持时启用 FastMemory。
   - 使用 melonDS threaded software renderer。
   - 读取 ROM path 并 `ParseROM -> SetNDSCart -> Reset -> SetupDirectBoot -> Start`。
   - 每帧执行 `RunFrame()`，抓取 `GPU.Framebuffer[FrontBuffer]`。
@@ -440,3 +750,156 @@ build_switch/GBAStation.nro
 build_switch/GBAStationNDSStub.nro
 build_switch/GBAStation/core/GBAStationNDSStub.nro
 ```
+
+## 2026-07-03 阶段G：Stub 根目录独立化与崩溃断点日志
+
+### 目标
+
+- 将 `GBAStationNDSStub` 的业务代码从主程序 `src/platform/switch/nds_stub` 迁移到根目录 `nds_stub`。
+- 让 Stub 以后可以更自然地拆成独立子项目。
+- 保持主程序 `GBAStation.nro` 不链接 NDS 运行时。
+- 解决 Stub 日志重复写入，补充 `LoadROM` 后的崩溃断点。
+
+### 已实施
+
+- 新增根目录 Stub 子项目：
+
+```text
+nds_stub/CMakeLists.txt
+nds_stub/include/nds_stub/NdsDekoRuntime.hpp
+nds_stub/include/nds_stub/StubLog.hpp
+nds_stub/src/NdsDekoStubMain.cpp
+nds_stub/src/NdsDekoRuntime.cpp
+nds_stub/src/NdsArcDeltaDsiDspStub.cpp
+```
+
+- 根 `CMakeLists.txt` 中启用：
+
+```cmake
+add_subdirectory(nds_stub)
+```
+
+- `GBAStationNDSStub` 现在从 `nds_stub/src` 编译，构建日志中可见：
+
+```text
+nds_stub/CMakeFiles/GBAStationNDSStub.dir/src/NdsDekoStubMain.o
+nds_stub/CMakeFiles/GBAStationNDSStub.dir/src/NdsDekoRuntime.o
+```
+
+- ArcDelta 的 DSi DSP stub 改为引用：
+
+```text
+nds_stub/src/NdsArcDeltaDsiDspStub.cpp
+```
+
+- Stub 日志改为第一个可写路径成功后停止，避免 `sdmc:/...` 和 `/...` 别名导致同一行重复写入。
+- 在 Deko runtime 中补充 `LoadROM` 后的断点日志：
+
+```text
+audio.start begin/result
+first loop begin
+first RunFrame begin/ok
+first Gfx::StartFrame begin/ok
+first Gfx::EndFrame begin/ok
+```
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.16 MB
+```
+
+- 输出路径：
+
+```text
+build_switch/GBAStation.nro
+build_switch/GBAStationNDSStub.nro
+build_switch/GBAStation/core/GBAStationNDSStub.nro
+```
+
+### 当前判断
+
+- `GBAStation.nro` 未链接 `melonds_core` / `arcdelta_melonds_core`。
+- `third_party` 里旧 `melonds_core` 目标仍会被构建，但不进入主程序链接链；后续可以继续清理为仅 Stub 需要时构建。
+- 若再次在 `LoadROM loaded=1` 后崩溃，新日志应能判断崩在 `audout`、第一帧模拟、Deko 开帧或 Deko 结束帧。
+
+## 2026-07-03 阶段H：Stub 拆分为游戏层与模拟器菜单层
+
+### 目标
+
+- 让 `GBAStationNDSStub` 的个性化修改集中在 Stub 自己内部。
+- 将原本混在 `NdsDekoRuntime.cpp` 主循环中的画面布局、触摸映射和菜单 UI 拆成独立层。
+- 保持 ArcDelta/melonDS 调用顺序不变，降低引入新崩溃变量的风险。
+
+### 已实施
+
+- 新增通用类型：
+
+```text
+nds_stub/include/nds_stub/NdsStubTypes.hpp
+```
+
+- 新增游戏层：
+
+```text
+nds_stub/include/nds_stub/NdsGameLayer.hpp
+nds_stub/src/NdsGameLayer.cpp
+```
+
+职责：
+
+```text
+NDS 双屏布局
+Deko 外部 framebuffer texture 创建/释放
+上下屏绘制
+Switch 触摸坐标 -> NDS 下屏坐标
+```
+
+- 新增菜单层：
+
+```text
+nds_stub/include/nds_stub/NdsMenuLayer.hpp
+nds_stub/src/NdsMenuLayer.cpp
+```
+
+职责：
+
+```text
+Plus/Minus 打开菜单
+B 返回游戏
+X 请求重置游戏
+A 请求退出游戏
+FPS/RUN 指标绘制
+TabFrame 风格菜单绘制雏形
+```
+
+- `NdsDekoRuntime.cpp` 现在主要作为调度器：
+
+```text
+输入读取
+菜单动作分发
+NDS::RunFrame
+SPU 音频抽取
+Gfx::StartFrame
+NdsGameLayer::drawScreens
+NdsMenuLayer::draw
+Gfx::EndFrame
+```
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.16 MB
+```
+
+### 后续接管方向
+
+- 当前已经接管 Stub 业务层，之后个性化菜单、显示布局、滤镜、按键逻辑应优先修改 `nds_stub`。
+- 下一步可以把 `arcdelta_melonds_core` / `arcdelta_switch_gfx` 的 CMake target 从 `third_party/CMakeLists.txt` 搬到 `nds_stub/CMakeLists.txt`，使 NDS 专用三方库只暴露给 Stub 子项目。
+- 再下一步如果需要深改 ArcDelta/melonDS，可在 `nds_stub/vendor` 或独立 fork 目录中维护 Stub 专属补丁，避免污染主程序和其他模拟器核心。

@@ -609,4 +609,111 @@ if (PLATFORM_SWITCH)
 endif()
 
 target_link_libraries(melonds_core PRIVATE teakra)
+
+if (PLATFORM_SWITCH)
+set(ARCDELTA_MELONDS_PATH ${CMAKE_CURRENT_SOURCE_DIR}/ArcDelta_melonDS)
+set(ARCDELTA_MELONDS_SRC_DIR ${ARCDELTA_MELONDS_PATH}/src)
+set(ARCDELTA_MELONDS_CORE_SRC
+    ${ARCDELTA_MELONDS_SRC_DIR}/ARCodeFile.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/AREngine.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/ARM.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/ARMInterpreter.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/ARMInterpreter_ALU.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/ARMInterpreter_Branch.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/ARMInterpreter_LoadStore.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/Config.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/CP15.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/CRC32.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/DMA.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/DSi.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/DSi_AES.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/DSi_Camera.cpp
+    ${CMAKE_SOURCE_DIR}/nds_stub/src/NdsArcDeltaDsiDspStub.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/DSi_I2C.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/DSi_NDMA.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/DSi_NWifi.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/DSi_SD.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/DSi_SPI_TSC.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/GBACart.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/GPU.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/GPU2D.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/GPU2D_Soft.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/GPU2D_Deko.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/GPU3D.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/GPU3D_Transform.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/GPU3D_Soft.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/GPU3D_Deko.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/NDS.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/NDSCart.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/NDSCart_SRAMManager.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/RTC.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/Savestate.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/SPI.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/SPU.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/Wifi.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/WifiAP.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/ARM_InstrInfo.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/ARMJIT.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/ARMJIT_Memory.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/dolphin/CommonFuncs.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/dolphin/Arm64Emitter.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/dolphin/MathUtil.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/ARMJIT_A64/ARMJIT_Compiler.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/ARMJIT_A64/ARMJIT_ALU.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/ARMJIT_A64/ARMJIT_LoadStore.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/ARMJIT_A64/ARMJIT_Branch.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/ARMJIT_A64/ARMJIT_Linkage.S
+    ${ARCDELTA_MELONDS_SRC_DIR}/frontend/switch/PlatformConfig.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/frontend/switch/FaultHandler.cpp
+    ${ARCDELTA_MELONDS_SRC_DIR}/tiny-AES-c/aes.c
+    ${ARCDELTA_MELONDS_SRC_DIR}/xxhash/xxhash.c
+)
+
+add_library(arcdelta_melonds_core STATIC ${ARCDELTA_MELONDS_CORE_SRC})
+target_include_directories(arcdelta_melonds_core PUBLIC
+    ${ARCDELTA_MELONDS_SRC_DIR}
+)
+target_compile_definitions(arcdelta_melonds_core PUBLIC
+    DEKOGPU_ENABLED
+    JIT_ENABLED
+    MELONDS_VERSION="AD"
+    __SWITCH__
+    SWITCH
+    HAVE_LIBNX
+    ARCHITECTURE_ARM64=1
+)
+target_compile_options(arcdelta_melonds_core PUBLIC -fwrapv)
+target_compile_options(arcdelta_melonds_core PRIVATE
+    -O3
+    -mcpu=cortex-a57
+    -ffast-math
+    -fomit-frame-pointer
+    "$<$<COMPILE_LANGUAGE:CXX>:-Wno-invalid-offsetof>"
+)
+target_link_libraries(arcdelta_melonds_core PRIVATE teakra nx deko3d)
+
+set(ARCDELTA_SWITCH_FRONTEND_DIR ${ARCDELTA_MELONDS_SRC_DIR}/frontend/switch)
+add_library(arcdelta_switch_gfx STATIC
+    ${ARCDELTA_SWITCH_FRONTEND_DIR}/Gfx.cpp
+    ${ARCDELTA_SWITCH_FRONTEND_DIR}/GpuMemHeap.cpp
+    ${ARCDELTA_SWITCH_FRONTEND_DIR}/UploadBuffer.cpp
+    ${ARCDELTA_SWITCH_FRONTEND_DIR}/mm_vec/mm_vec.c
+    ${ARCDELTA_SWITCH_FRONTEND_DIR}/stb_truetype/stb_truetype.c
+)
+target_include_directories(arcdelta_switch_gfx PUBLIC
+    ${ARCDELTA_SWITCH_FRONTEND_DIR}
+    ${ARCDELTA_MELONDS_SRC_DIR}
+)
+target_compile_definitions(arcdelta_switch_gfx PUBLIC
+    __SWITCH__
+    SWITCH
+    HAVE_LIBNX
+)
+target_compile_options(arcdelta_switch_gfx PRIVATE
+    -O3
+    -mcpu=cortex-a57
+    -ffast-math
+)
+target_link_libraries(arcdelta_switch_gfx PRIVATE nx deko3d)
+endif()
 endif()

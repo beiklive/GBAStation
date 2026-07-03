@@ -252,9 +252,9 @@ int ClipPolygon(Vertex* vertices, int nverts, int clipstart)
 
 void TransformVertex(s16* inVertex, s32* outVertex)
 {
-    s64 x = input[0];
-    s64 y = input[1];
-    s64 z = input[2];
+    s64 x = inVertex[0];
+    s64 y = inVertex[1];
+    s64 z = inVertex[2];
     outVertex[0] = ((x*ClipMatrix[0] + y*ClipMatrix[4] + z*ClipMatrix[8]) >> 12) + ClipMatrix[12];
     outVertex[1] = ((x*ClipMatrix[1] + y*ClipMatrix[5] + z*ClipMatrix[9]) >> 12) + ClipMatrix[13];
     outVertex[2] = ((x*ClipMatrix[2] + y*ClipMatrix[6] + z*ClipMatrix[10]) >> 12) + ClipMatrix[14];

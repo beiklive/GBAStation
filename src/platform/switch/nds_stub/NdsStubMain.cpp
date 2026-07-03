@@ -17,18 +17,24 @@
 #include <mutex>
 #include <optional>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 #include <string>
 
 #include <nlohmann/json.hpp>
 #include <switch.h>
 
+#define STB_TRUETYPE_IMPLEMENTATION
+#include "nanovg/stb_truetype.h"
+
+#include "ARMJIT_Memory.h"
 #include "Args.h"
 #include "GPU.h"
 #include "GPU3D.h"
 #include "NDS.h"
 #include "NDSCart.h"
 #include "RTC.h"
+#include "platform/switch/nds_stub/NdsDekoRuntime.hpp"
 #include "platform/switch/nds_stub/NdsStubMelonPlatform.hpp"
 
 namespace {
@@ -74,13 +80,13 @@ struct MenuItem {
 };
 
 constexpr MenuItem kMenuItems[] = {
-    {"Resume Game", MenuAction::Resume},
-    {"Save State", MenuAction::SaveState},
-    {"Load State", MenuAction::LoadState},
-    {"Cheats", MenuAction::Cheats},
-    {"Display Settings", MenuAction::Display},
-    {"Reset Game", MenuAction::Reset},
-    {"Exit Game", MenuAction::Exit},
+    {"返回游戏", MenuAction::Resume},
+    {"保存状态", MenuAction::SaveState},
+    {"读取状态", MenuAction::LoadState},
+    {"金手指", MenuAction::Cheats},
+    {"画面设置", MenuAction::Display},
+    {"重置游戏", MenuAction::Reset},
+    {"退出游戏", MenuAction::Exit},
 };
 
 constexpr int kNdsWidth = 256;
@@ -167,6 +173,13 @@ struct NdsTouchState {
     bool down = false;
     int x = 0;
     int y = 0;
+};
+
+struct NdsFrameTimings {
+    long long totalMs = 0;
+    long long runMs = 0;
+    long long audioMs = 0;
+    long long captureMs = 0;
 };
 
 class NdsAudioOutput {
@@ -324,8 +337,8 @@ private:
     size_t readSamples(int16_t* out, size_t sampleCount)
     {
         std::unique_lock<std::mutex> lock(m_mutex);
-        m_cv.wait_for(lock, std::chrono::milliseconds(20), [&] {
-            return !m_running.load(std::memory_order_acquire) || m_available >= kChannels;
+        m_cv.wait_for(lock, std::chrono::milliseconds(12), [&] {
+            return !m_running.load(std::memory_order_acquire) || m_available >= sampleCount;
         });
 
         size_t count = std::min(sampleCount, m_available);
@@ -444,10 +457,11 @@ public:
 
         melonDS::NDSArgs args;
         melonDS::JITArgs jitArgs;
-        jitArgs.FastMemory = false;
+        jitArgs.FastMemory = melonDS::ARMJIT_Memory::IsFastMemSupported();
         args.JIT = jitArgs;
         args.OutputSampleRate = 48000.0;
         args.Renderer3D = std::make_unique<melonDS::SoftRenderer>(true);
+        appendLog("GBAStationNDSStub: JIT fastmem requested=%d", jitArgs.FastMemory ? 1 : 0);
 
         auto arm9 = std::make_unique<melonDS::ARM9BIOSImage>();
         auto arm7 = std::make_unique<melonDS::ARM7BIOSImage>();
@@ -545,10 +559,10 @@ public:
         m_status = "RESET";
     }
 
-    void runFrame(uint32_t keyMask, const NdsTouchState& touch)
+    NdsFrameTimings runFrame(uint32_t keyMask, const NdsTouchState& touch)
     {
         if (!m_ready || !m_nds)
-            return;
+            return {};
         m_nds->SetKeyMask(keyMask);
         if (touch.down)
             m_nds->TouchScreen(static_cast<melonDS::u16>(std::clamp(touch.x, 0, 255)),
@@ -558,15 +572,24 @@ public:
 
         const auto begin = std::chrono::steady_clock::now();
         m_nds->RunFrame();
+        const auto afterRun = std::chrono::steady_clock::now();
         drainAudio();
+        const auto afterAudio = std::chrono::steady_clock::now();
         captureFrame();
-        const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - begin).count();
-        if (elapsedMs > 18 && m_slowLogBudget > 0)
+        const auto end = std::chrono::steady_clock::now();
+
+        NdsFrameTimings timings;
+        timings.runMs = std::chrono::duration_cast<std::chrono::milliseconds>(afterRun - begin).count();
+        timings.audioMs = std::chrono::duration_cast<std::chrono::milliseconds>(afterAudio - afterRun).count();
+        timings.captureMs = std::chrono::duration_cast<std::chrono::milliseconds>(end - afterAudio).count();
+        timings.totalMs = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
+        if (timings.totalMs > 18 && m_slowLogBudget > 0)
         {
             --m_slowLogBudget;
-            appendLog("GBAStationNDSStub: slow RunFrame %lld ms", static_cast<long long>(elapsedMs));
+            appendLog("GBAStationNDSStub: slow frame total=%lld run=%lld audio=%lld capture=%lld",
+                      timings.totalMs, timings.runMs, timings.audioMs, timings.captureMs);
         }
+        return timings;
     }
 
     const std::vector<uint32_t>& frame() const { return m_frame; }
@@ -968,6 +991,248 @@ uint32_t blendColor(uint32_t dst, uint32_t src, uint8_t alpha)
         255);
 }
 
+uint8_t alphaFromColor(uint32_t rgba)
+{
+    return static_cast<uint8_t>((rgba >> 24) & 0xff);
+}
+
+std::vector<uint32_t> decodeUtf8(const std::string& text)
+{
+    std::vector<uint32_t> out;
+    for (size_t i = 0; i < text.size();)
+    {
+        const uint8_t c = static_cast<uint8_t>(text[i]);
+        if (c < 0x80)
+        {
+            out.push_back(c);
+            ++i;
+        }
+        else if ((c & 0xE0) == 0xC0 && i + 1 < text.size())
+        {
+            out.push_back(((c & 0x1F) << 6) |
+                          (static_cast<uint8_t>(text[i + 1]) & 0x3F));
+            i += 2;
+        }
+        else if ((c & 0xF0) == 0xE0 && i + 2 < text.size())
+        {
+            out.push_back(((c & 0x0F) << 12) |
+                          ((static_cast<uint8_t>(text[i + 1]) & 0x3F) << 6) |
+                          (static_cast<uint8_t>(text[i + 2]) & 0x3F));
+            i += 3;
+        }
+        else if ((c & 0xF8) == 0xF0 && i + 3 < text.size())
+        {
+            out.push_back(((c & 0x07) << 18) |
+                          ((static_cast<uint8_t>(text[i + 1]) & 0x3F) << 12) |
+                          ((static_cast<uint8_t>(text[i + 2]) & 0x3F) << 6) |
+                          (static_cast<uint8_t>(text[i + 3]) & 0x3F));
+            i += 4;
+        }
+        else
+        {
+            out.push_back('?');
+            ++i;
+        }
+    }
+    return out;
+}
+
+class FontRenderer {
+public:
+    void ensureLoaded()
+    {
+        if (m_loaded)
+            return;
+        m_loaded = true;
+
+        if (R_SUCCEEDED(plInitialize(PlServiceType_User)))
+        {
+            const PlSharedFontType candidates[] = {
+                PlSharedFontType_Standard,
+                PlSharedFontType_ChineseSimplified,
+                PlSharedFontType_ExtChineseSimplified,
+                PlSharedFontType_ChineseTraditional,
+                PlSharedFontType_KO,
+                PlSharedFontType_NintendoExt,
+            };
+
+            for (PlSharedFontType type : candidates)
+            {
+                PlFontData sharedFont {};
+                if (R_SUCCEEDED(plGetSharedFontByType(&sharedFont, type)) &&
+                    sharedFont.address != nullptr && sharedFont.size > 0)
+                {
+                    const auto* bytes = static_cast<const uint8_t*>(sharedFont.address);
+                    std::vector<uint8_t> data(bytes, bytes + sharedFont.size);
+                    addFont(std::move(data));
+                }
+            }
+            plExit();
+        }
+
+        if (m_fonts.empty())
+        {
+            tryAppendFont("sdmc:/GBAStation/resources/font/switch_font.ttf");
+            tryAppendFont("sdmc:/GBAStation/resources/font/font.ttf");
+            tryAppendFont("sdmc:/GBAStation/font/switch_font.ttf");
+            tryAppendFont("romfs:/font/switch_font.ttf");
+        }
+
+        tryAppendFont("sdmc:/GBAStation/resources/material/MaterialIcons-Regular.ttf");
+        appendLog("GBAStationNDSStub: fonts loaded count=%zu", m_fonts.size());
+    }
+
+    bool available()
+    {
+        ensureLoaded();
+        return !m_fonts.empty();
+    }
+
+    void draw(UiFrame& frame, int x, int y, const std::string& text, uint32_t rgba, int px)
+    {
+        ensureLoaded();
+        if (m_fonts.empty())
+            return;
+
+        int cursor = x;
+        const auto codepoints = decodeUtf8(text);
+        for (uint32_t cp : codepoints)
+        {
+            if (cp == '\n')
+            {
+                cursor = x;
+                y += px + 6;
+                continue;
+            }
+            if (cp == '\r')
+                continue;
+            if (cp == ' ')
+            {
+                cursor += px / 3;
+                continue;
+            }
+
+            const Glyph* glyph = glyphFor(cp, px);
+            if (!glyph)
+            {
+                cursor += px / 2;
+                continue;
+            }
+
+            const int gx = cursor + glyph->xoff;
+            const int gy = y + glyph->yoff;
+            for (int row = 0; row < glyph->h; ++row)
+            {
+                const int dy = gy + row;
+                if (dy < 0 || dy >= frame.height)
+                    continue;
+                uint32_t* dst = frame.pixels + dy * frame.stridePixels;
+                const uint8_t* src = glyph->bitmap.data() + static_cast<size_t>(row) * glyph->w;
+                for (int col = 0; col < glyph->w; ++col)
+                {
+                    const int dx = gx + col;
+                    if (dx < 0 || dx >= frame.width)
+                        continue;
+                    const uint8_t a = static_cast<uint8_t>((static_cast<int>(src[col]) * alphaFromColor(rgba)) / 255);
+                    if (a)
+                        dst[dx] = blendColor(dst[dx], rgba, a);
+                }
+            }
+            cursor += glyph->advance;
+        }
+    }
+
+private:
+    struct FontFace {
+        std::vector<uint8_t> data;
+        stbtt_fontinfo info {};
+    };
+
+    struct Glyph {
+        int w = 0;
+        int h = 0;
+        int xoff = 0;
+        int yoff = 0;
+        int advance = 0;
+        std::vector<uint8_t> bitmap;
+    };
+
+    uint64_t keyFor(size_t fontIndex, uint32_t cp, int px) const
+    {
+        return (static_cast<uint64_t>(fontIndex) << 48) |
+               (static_cast<uint64_t>(px & 0xffff) << 32) |
+               static_cast<uint64_t>(cp);
+    }
+
+    void addFont(std::vector<uint8_t> data)
+    {
+        if (data.empty())
+            return;
+        FontFace face;
+        face.data = std::move(data);
+        if (stbtt_InitFont(&face.info, face.data.data(), stbtt_GetFontOffsetForIndex(face.data.data(), 0)))
+            m_fonts.push_back(std::move(face));
+    }
+
+    void tryAppendFont(const char* path)
+    {
+        std::vector<uint8_t> data;
+        if (readWholeFile(path, data))
+            addFont(std::move(data));
+    }
+
+    const Glyph* glyphFor(uint32_t cp, int px)
+    {
+        for (size_t i = 0; i < m_fonts.size(); ++i)
+        {
+            if (stbtt_FindGlyphIndex(&m_fonts[i].info, static_cast<int>(cp)) == 0)
+                continue;
+
+            const uint64_t key = keyFor(i, cp, px);
+            auto found = m_cache.find(key);
+            if (found != m_cache.end())
+                return &found->second;
+
+            const float scale = stbtt_ScaleForPixelHeight(&m_fonts[i].info, static_cast<float>(px));
+            int advance = 0;
+            int lsb = 0;
+            stbtt_GetCodepointHMetrics(&m_fonts[i].info, static_cast<int>(cp), &advance, &lsb);
+            int x0 = 0, y0 = 0, x1 = 0, y1 = 0;
+            stbtt_GetCodepointBitmapBox(&m_fonts[i].info, static_cast<int>(cp), scale, scale, &x0, &y0, &x1, &y1);
+
+            Glyph glyph;
+            glyph.w = std::max(0, x1 - x0);
+            glyph.h = std::max(0, y1 - y0);
+            glyph.xoff = x0;
+            glyph.yoff = y0 + px;
+            glyph.advance = std::max(1, static_cast<int>(advance * scale + 0.5f));
+            glyph.bitmap.assign(static_cast<size_t>(glyph.w) * glyph.h, 0);
+            if (glyph.w > 0 && glyph.h > 0)
+            {
+                stbtt_MakeCodepointBitmap(&m_fonts[i].info,
+                                          glyph.bitmap.data(),
+                                          glyph.w,
+                                          glyph.h,
+                                          glyph.w,
+                                          scale,
+                                          scale,
+                                          static_cast<int>(cp));
+            }
+
+            auto [it, inserted] = m_cache.emplace(key, std::move(glyph));
+            (void)inserted;
+            return &it->second;
+        }
+        return nullptr;
+    }
+
+    bool m_loaded = false;
+    std::vector<FontFace> m_fonts;
+    std::unordered_map<uint64_t, Glyph> m_cache;
+};
+
+FontRenderer g_fontRenderer;
+
 void fillRect(UiFrame& frame, Rect rect, uint32_t rgba)
 {
     const int x0 = std::max(0, rect.x);
@@ -1059,6 +1324,12 @@ uint8_t glyphRow(char ch, int row)
 
 void drawText(UiFrame& frame, int x, int y, const std::string& text, uint32_t rgba, int scale = 3)
 {
+    if (g_fontRenderer.available())
+    {
+        g_fontRenderer.draw(frame, x, y, text, rgba, std::max(12, scale * 8));
+        return;
+    }
+
     int cursor = x;
     for (char ch : text)
     {
@@ -1129,6 +1400,27 @@ void blitNdsScreen2x(UiFrame& frame, Rect dst, const std::vector<uint32_t>& ndsF
     const int drawH = kNdsScreenHeight * scale;
     const int x0 = dst.x + (dst.w - drawW) / 2;
     const int y0 = dst.y + (dst.h - drawH) / 2;
+
+    if (x0 >= 0 && y0 >= 0 && x0 + drawW <= frame.width && y0 + drawH <= frame.height)
+    {
+        for (int y = 0; y < kNdsScreenHeight; ++y)
+        {
+            const uint32_t* src = ndsFrame.data() + static_cast<size_t>(srcY + y) * kNdsWidth;
+            uint32_t* row0 = frame.pixels + static_cast<size_t>(y0 + y * scale) * frame.stridePixels + x0;
+            uint32_t* row1 = row0 + frame.stridePixels;
+            for (int x = 0; x < kNdsWidth; ++x)
+            {
+                const uint32_t px = src[x];
+                const int dx = x * scale;
+                row0[dx] = px;
+                row0[dx + 1] = px;
+                row1[dx] = px;
+                row1[dx + 1] = px;
+            }
+        }
+        return;
+    }
+
     for (int y = 0; y < kNdsScreenHeight; ++y)
     {
         const uint32_t* src = ndsFrame.data() + static_cast<size_t>(srcY + y) * kNdsWidth;
@@ -1154,12 +1446,18 @@ void drawGameLayer(UiFrame& frame,
                    int tick,
                    const std::string& status,
                    const std::vector<uint32_t>& ndsFrame,
-                   bool ndsReady)
+                   bool ndsReady,
+                   double fps,
+                   const NdsFrameTimings& timings)
 {
     fillRect(frame, {0, 0, frame.width, frame.height}, color(10, 13, 18));
     fillRect(frame, {0, 0, frame.width, 74}, color(18, 26, 34));
     drawText(frame, 38, 28, "GBASTATION NDS", color(218, 239, 255), 3);
-    drawText(frame, 940, 30, "PLUS MENU", color(128, 180, 210), 2);
+    drawText(frame, 930, 24, "FPS " + std::to_string(static_cast<int>(fps + 0.5)) +
+        "  EMU " + std::to_string(timings.totalMs) + "MS", color(128, 180, 210), 2);
+    drawText(frame, 930, 48, "RUN " + std::to_string(timings.runMs) +
+        "  AUD " + std::to_string(timings.audioMs) +
+        "  CAP " + std::to_string(timings.captureMs), color(98, 145, 172), 2);
 
     const uint32_t topTint = color(31, 92, 126);
     const uint32_t bottomTint = color(45, 82, 63);
@@ -1195,8 +1493,8 @@ void drawGameLayer(UiFrame& frame,
         drawText(frame, bottom.x + 28, bottom.y + 84, status, color(185, 229, 184), 2);
     }
 
-    drawText(frame, 44, 612, "GAME: " + game.title, color(226, 229, 231), 2);
-    drawText(frame, 44, 644, "IR: X" + std::to_string(game.internalResolution), color(145, 174, 190), 2);
+    drawText(frame, 44, 612, "游戏: " + game.title, color(226, 229, 231), 2);
+    drawText(frame, 44, 644, "分辨率: X" + std::to_string(game.internalResolution) + "  菜单: PLUS", color(145, 174, 190), 2);
     if (!status.empty())
         drawText(frame, 440, 644, status, color(248, 211, 120), 2);
 }
@@ -1219,8 +1517,8 @@ void drawMenuLayer(UiFrame& frame, int selected, float transition)
     fillRect(frame, {panelX, panelY, panelW, panelH}, color(18, 20, 25));
     drawRect(frame, {panelX, panelY, panelW, panelH}, color(72, 84, 98), 2);
     fillRect(frame, {panelX, panelY, panelW, 74}, color(28, 32, 40));
-    drawText(frame, panelX + 34, panelY + 26, "GAME MENU", color(238, 246, 255), 4);
-    drawText(frame, panelX + panelW - 270, panelY + 32, "A SELECT  B BACK", color(144, 166, 178), 2);
+    drawText(frame, panelX + 34, panelY + 24, "游戏菜单", color(238, 246, 255), 4);
+    drawText(frame, panelX + panelW - 285, panelY + 30, "A 确认  B 返回", color(144, 166, 178), 2);
 
     const int tabW = panelW / 4;
     const int tabX = panelX + 18;
@@ -1258,32 +1556,32 @@ void drawMenuLayer(UiFrame& frame, int selected, float transition)
     switch (active.action)
     {
     case MenuAction::Resume:
-        drawText(frame, contentX + 34, contentY + 130, "RETURN TO THE GAME WITHOUT CHANGING STATE", color(186, 205, 216), 2);
-        drawText(frame, contentX + 34, contentY + 178, "PRESS A TO RESUME", color(245, 198, 96), 3);
+        drawText(frame, contentX + 34, contentY + 130, "返回当前游戏，不改变模拟状态。", color(186, 205, 216), 2);
+        drawText(frame, contentX + 34, contentY + 178, "按 A 返回游戏", color(245, 198, 96), 3);
         break;
     case MenuAction::SaveState:
-        drawText(frame, contentX + 34, contentY + 130, "STATE SAVE SLOTS WILL BE ADDED HERE", color(186, 205, 216), 2);
-        drawText(frame, contentX + 34, contentY + 178, "SRAM IS SAVED ON EXIT NOW", color(245, 198, 96), 3);
+        drawText(frame, contentX + 34, contentY + 130, "即时存档槽位稍后接入。", color(186, 205, 216), 2);
+        drawText(frame, contentX + 34, contentY + 178, "当前已支持退出时自动保存 SRAM", color(245, 198, 96), 3);
         break;
     case MenuAction::LoadState:
-        drawText(frame, contentX + 34, contentY + 130, "STATE LOAD SLOTS WILL BE ADDED HERE", color(186, 205, 216), 2);
-        drawText(frame, contentX + 34, contentY + 178, "CURRENT SAVE DATA LOADS AT STARTUP", color(245, 198, 96), 3);
+        drawText(frame, contentX + 34, contentY + 130, "即时读档槽位稍后接入。", color(186, 205, 216), 2);
+        drawText(frame, contentX + 34, contentY + 178, "当前启动时会读取电池存档", color(245, 198, 96), 3);
         break;
     case MenuAction::Cheats:
-        drawText(frame, contentX + 34, contentY + 130, "CHEAT LIST AND TOGGLES WILL BE ADDED HERE", color(186, 205, 216), 2);
-        drawText(frame, contentX + 34, contentY + 178, "GAME DB CHEAT PATH IS ALREADY READ", color(245, 198, 96), 3);
+        drawText(frame, contentX + 34, contentY + 130, "金手指列表和开关稍后接入。", color(186, 205, 216), 2);
+        drawText(frame, contentX + 34, contentY + 178, "GameDB 金手指路径已读取", color(245, 198, 96), 3);
         break;
     case MenuAction::Display:
-        drawText(frame, contentX + 34, contentY + 130, "DISPLAY OPTIONS WILL LIVE IN THIS PANEL", color(186, 205, 216), 2);
-        drawText(frame, contentX + 34, contentY + 178, "CURRENT MODE IS X1 SOFTWARE RENDER", color(245, 198, 96), 3);
+        drawText(frame, contentX + 34, contentY + 130, "画面布局、比例和滤镜设置稍后接入。", color(186, 205, 216), 2);
+        drawText(frame, contentX + 34, contentY + 178, "当前模式为 X1 软件渲染", color(245, 198, 96), 3);
         break;
     case MenuAction::Reset:
-        drawText(frame, contentX + 34, contentY + 130, "RESTART THE CURRENT NDS GAME", color(186, 205, 216), 2);
-        drawText(frame, contentX + 34, contentY + 178, "PRESS A TO RESET", color(245, 198, 96), 3);
+        drawText(frame, contentX + 34, contentY + 130, "重新启动当前 NDS 游戏。", color(186, 205, 216), 2);
+        drawText(frame, contentX + 34, contentY + 178, "按 A 重置游戏", color(245, 198, 96), 3);
         break;
     case MenuAction::Exit:
-        drawText(frame, contentX + 34, contentY + 130, "SAVE SRAM AND RETURN TO GBASTATION", color(186, 205, 216), 2);
-        drawText(frame, contentX + 34, contentY + 178, "PRESS A TO EXIT", color(245, 198, 96), 3);
+        drawText(frame, contentX + 34, contentY + 130, "保存 SRAM 并返回 GBAStation 主程序。", color(186, 205, 216), 2);
+        drawText(frame, contentX + 34, contentY + 178, "按 A 退出游戏", color(245, 198, 96), 3);
         break;
     }
 }
@@ -1341,6 +1639,7 @@ uint32_t dsKeyMaskFromPad(const PadState& pad)
 
 int main(int argc, char* argv[])
 {
+    svcSetThreadCoreMask(CUR_THREAD_HANDLE, 1, 1ULL << 1);
     appendLog("GBAStationNDSStub: start argc=%d", argc);
     for (int i = 0; i < argc; ++i)
         appendLog("GBAStationNDSStub: argv[%d]=%s", i, argv[i] ? argv[i] : "(null)");
@@ -1384,6 +1683,16 @@ int main(int argc, char* argv[])
     GameInfo game = buildGameInfo(romPath ? romPath : "", record);
     appendLog("GBAStationNDSStub: ui start title=%s", game.title.c_str());
 
+    if (beiklive::nds_stub::ShouldUseDekoRuntime())
+    {
+        beiklive::nds_stub::DekoRunOptions dekoOptions;
+        dekoOptions.romPath = game.romPath;
+        dekoOptions.title = game.title;
+        dekoOptions.savePath = game.savePath;
+        dekoOptions.returnNroPath = returnNroPath;
+        return beiklive::nds_stub::RunDekoRuntime(dekoOptions);
+    }
+
     padConfigureInput(1, HidNpadStyleSet_NpadStandard);
     hidInitializeTouchScreen();
     PadState pad;
@@ -1407,6 +1716,8 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    g_fontRenderer.ensureLoaded();
+
     bool running = true;
     bool pendingReturnToMain = false;
     bool menuVisible = false;
@@ -1418,9 +1729,14 @@ int main(int argc, char* argv[])
     NdsRuntime runtime;
     runtime.start(game);
     status = runtime.status();
+    double displayedFps = 0.0;
+    int fpsFrames = 0;
+    NdsFrameTimings lastTimings;
+    auto fpsWindowStart = std::chrono::steady_clock::now();
 
     while (appletMainLoop() && running)
     {
+        const auto frameStart = std::chrono::steady_clock::now();
         padUpdate(&pad);
         const u64 down = padGetButtonsDown(&pad);
 
@@ -1479,7 +1795,7 @@ int main(int argc, char* argv[])
         {
             const uint32_t keyMask = menuVisible ? 0x0FFFu : dsKeyMaskFromPad(pad);
             const NdsTouchState touch = touchStateFromScreen(menuVisible);
-            runtime.runFrame(keyMask, touch);
+            lastTimings = runtime.runFrame(keyMask, touch);
             if (status == "RUNNING" || status == "RESUME" || status == "LOADING")
                 status = runtime.status();
         }
@@ -1498,13 +1814,38 @@ int main(int argc, char* argv[])
             UiFrame frame;
             frame.pixels = static_cast<uint32_t*>(frameBuf);
             frame.stridePixels = static_cast<int>(stride / sizeof(uint32_t));
-            drawGameLayer(frame, game, tick, status, runtime.frame(), runtime.ready());
+            drawGameLayer(frame,
+                          game,
+                          tick,
+                          status,
+                          runtime.frame(),
+                          runtime.ready(),
+                          displayedFps,
+                          lastTimings);
             drawMenuLayer(frame, selected, menuTransition);
         }
         framebufferEnd(&fb);
 
         ++tick;
-        svcSleepThread(16'666'667);
+        ++fpsFrames;
+        const auto now = std::chrono::steady_clock::now();
+        const auto fpsElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - fpsWindowStart).count();
+        if (fpsElapsed >= 1000)
+        {
+            displayedFps = static_cast<double>(fpsFrames) * 1000.0 / static_cast<double>(fpsElapsed);
+            fpsFrames = 0;
+            fpsWindowStart = now;
+        }
+
+        const auto frameEnd = std::chrono::steady_clock::now();
+        constexpr auto kFrameBudget = std::chrono::microseconds(16667);
+        const auto used = std::chrono::duration_cast<std::chrono::microseconds>(frameEnd - frameStart);
+        if (used < kFrameBudget)
+        {
+            const auto sleepUs = std::chrono::duration_cast<std::chrono::microseconds>(kFrameBudget - used).count();
+            if (sleepUs > 500)
+                svcSleepThread(static_cast<int64_t>(sleepUs) * 1000);
+        }
     }
 
     runtime.stop();
