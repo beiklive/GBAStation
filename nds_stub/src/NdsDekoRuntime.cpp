@@ -102,7 +102,6 @@ uint32_t dsKeyMaskFromPad(const PadState& pad)
     press(HidNpadButton_L, kNdsKeyL);
     press(HidNpadButton_R, kNdsKeyR);
     press(HidNpadButton_ZL, kNdsKeyL);
-    press(HidNpadButton_ZR, kNdsKeyR);
     press(HidNpadButton_Plus, kNdsKeyStart);
     press(HidNpadButton_Minus, kNdsKeySelect);
     press(HidNpadButton_StickR, kNdsKeyStart);
@@ -162,41 +161,57 @@ public:
         if (m_running.load(std::memory_order_acquire))
             return true;
 
-        Result rc = audoutInitialize();
+        const AudioRendererConfig config = {
+            .output_rate = AudioRendererOutputRate_48kHz,
+            .num_voices = 4,
+            .num_effects = 0,
+            .num_sinks = 1,
+            .num_mix_objs = 1,
+            .num_mix_buffers = 2,
+        };
+
+        Result rc = audrenInitialize(&config);
         if (R_FAILED(rc))
         {
-            beiklive::nds_stub::appendStubLog("GBAStationNDSStub: deko audoutInitialize failed rc=0x%x", rc);
+            beiklive::nds_stub::appendStubLog("GBAStationNDSStub: deko audrenInitialize failed rc=0x%x", rc);
             return false;
         }
 
-        rc = audoutStartAudioOut();
+        rc = audrvCreate(&m_driver, &config, 2);
         if (R_FAILED(rc))
-            beiklive::nds_stub::appendStubLog("GBAStationNDSStub: deko audoutStartAudioOut rc=0x%x", rc);
-
-        for (size_t i = 0; i < m_bufferData.size(); ++i)
         {
-            m_bufferData[i] = static_cast<int16_t*>(std::aligned_alloc(0x1000, kBufferBytes));
-            if (!m_bufferData[i])
-            {
-                stop();
-                return false;
-            }
-            std::memset(m_bufferData[i], 0, kBufferBytes);
-            m_outBuffers[i] = {};
-            m_outBuffers[i].buffer = m_bufferData[i];
-            m_outBuffers[i].buffer_size = kBufferBytes;
-            m_outBuffers[i].data_size = kBufferBytes;
-            m_outBuffers[i].data_offset = 0;
-            m_freeList[m_freeCount++] = static_cast<int>(i);
+            beiklive::nds_stub::appendStubLog("GBAStationNDSStub: deko audrvCreate failed rc=0x%x", rc);
+            audrenExit();
+            return false;
         }
 
+        m_memPool = std::aligned_alloc(AUDREN_MEMPOOL_ALIGNMENT, kPoolBytes);
+        if (!m_memPool)
         {
-            std::lock_guard<std::mutex> lock(m_mutex);
-            m_ring.fill(0);
-            m_read = 0;
-            m_write = 0;
-            m_available = 0;
+            audrvClose(&m_driver);
+            audrenExit();
+            return false;
         }
+        std::memset(m_memPool, 0, kPoolBytes);
+
+        m_memPoolId = audrvMemPoolAdd(&m_driver, m_memPool, kPoolBytes);
+        audrvMemPoolAttach(&m_driver, m_memPoolId);
+
+        static const u8 sinkChannels[] = {0, 1};
+        audrvDeviceSinkAdd(&m_driver, AUDREN_DEFAULT_DEVICE_NAME, 2, sinkChannels);
+        audrvUpdate(&m_driver);
+
+        rc = audrenStartAudioRenderer();
+        if (R_FAILED(rc))
+            beiklive::nds_stub::appendStubLog("GBAStationNDSStub: deko audrenStartAudioRenderer rc=0x%x", rc);
+
+        if (!audrvVoiceInit(&m_driver, 0, 2, PcmFormat_Int16, kInputSampleRate))
+            beiklive::nds_stub::appendStubLog("GBAStationNDSStub: deko audrvVoiceInit failed");
+
+        audrvVoiceSetDestinationMix(&m_driver, 0, AUDREN_FINAL_MIX_ID);
+        audrvVoiceSetMixFactor(&m_driver, 0, 1.0f, 0, 0);
+        audrvVoiceSetMixFactor(&m_driver, 0, 1.0f, 1, 1);
+        audrvVoiceStart(&m_driver, 0);
 
         m_running.store(true, std::memory_order_release);
         m_thread = std::thread(&DekoAudioOutput::threadMain, this);
@@ -207,159 +222,92 @@ public:
     {
         if (m_running.exchange(false, std::memory_order_acq_rel))
         {
-            m_cv.notify_all();
             if (m_thread.joinable())
                 m_thread.join();
         }
 
-        drainQueuedBuffers();
-        audoutStopAudioOut();
-        audoutExit();
+        audrvClose(&m_driver);
+        audrenExit();
 
-        for (auto*& ptr : m_bufferData)
+        if (m_memPool)
         {
-            std::free(ptr);
-            ptr = nullptr;
+            std::free(m_memPool);
+            m_memPool = nullptr;
         }
-
-        m_outBuffers = {};
-        m_queued = {};
-        m_freeCount = 0;
     }
 
     void push(const int16_t* samples, size_t stereoFrames)
     {
-        if (!samples || stereoFrames == 0 || !m_running.load(std::memory_order_acquire))
-            return;
-
-        const size_t values = stereoFrames * 2;
-        std::lock_guard<std::mutex> lock(m_mutex);
-        for (size_t i = 0; i < values; ++i)
-        {
-            if (m_available == m_ring.size())
-            {
-                m_read = (m_read + 1) % m_ring.size();
-                --m_available;
-            }
-            m_ring[m_write] = samples[i];
-            m_write = (m_write + 1) % m_ring.size();
-            ++m_available;
-        }
-        m_cv.notify_one();
+        (void)samples;
+        (void)stereoFrames;
     }
 
 private:
-    static constexpr size_t kBufferSamples = 2048 * 2;
-    static constexpr size_t kBufferBytes = kBufferSamples * sizeof(int16_t);
-    static constexpr size_t kBufferCount = 4;
-    static constexpr size_t kRingSamples = 48000 * 2;
+    static constexpr int kInputSampleRate = 32823;
+    static constexpr size_t kBufferFrames = 768;
+    static constexpr size_t kBufferCount = 2;
+    static constexpr size_t kBufferBytes = kBufferFrames * 2 * sizeof(int16_t);
+    static constexpr size_t kPoolBytes = (kBufferBytes * kBufferCount + (AUDREN_MEMPOOL_ALIGNMENT - 1)) &
+                                         ~(AUDREN_MEMPOOL_ALIGNMENT - 1);
 
     void threadMain()
     {
+        std::array<AudioDriverWaveBuf, kBufferCount> buffers {};
+        for (size_t i = 0; i < kBufferCount; ++i)
+        {
+            buffers[i].data_pcm16 = static_cast<int16_t*>(m_memPool);
+            buffers[i].size = kBufferBytes;
+            buffers[i].start_sample_offset = static_cast<u32>(i * kBufferFrames);
+            buffers[i].end_sample_offset = static_cast<u32>((i + 1) * kBufferFrames);
+        }
+
         while (m_running.load(std::memory_order_acquire))
         {
-            collectReleased(nullptr);
-
-            int idx = -1;
-            if (m_freeCount > 0)
-                idx = m_freeList[--m_freeCount];
-
-            if (idx < 0)
+            AudioDriverWaveBuf* refill = nullptr;
+            for (auto& buffer : buffers)
             {
-                svcSleepThread(1000000);
-                continue;
-            }
-
-            size_t copied = 0;
-            {
-                std::unique_lock<std::mutex> lock(m_mutex);
-                if (m_available < kBufferSamples / 2)
-                    m_cv.wait_for(lock, std::chrono::milliseconds(3));
-
-                while (copied < kBufferSamples && m_available > 0)
+                if (buffer.state == AudioDriverWaveBufState_Free ||
+                    buffer.state == AudioDriverWaveBufState_Done)
                 {
-                    m_bufferData[idx][copied++] = m_ring[m_read];
-                    m_read = (m_read + 1) % m_ring.size();
-                    --m_available;
-                }
-            }
-
-            if (copied < kBufferSamples)
-                std::memset(m_bufferData[idx] + copied, 0, (kBufferSamples - copied) * sizeof(int16_t));
-
-            m_outBuffers[idx].data_size = kBufferBytes;
-            const Result rc = audoutAppendAudioOutBuffer(&m_outBuffers[idx]);
-            if (R_SUCCEEDED(rc))
-            {
-                m_queued[idx] = true;
-            }
-            else
-            {
-                m_freeList[m_freeCount++] = idx;
-                svcSleepThread(1000000);
-            }
-        }
-    }
-
-    void collectReleased(u32* releasedCount)
-    {
-        AudioOutBuffer* released = nullptr;
-        u32 count = 0;
-        const Result rc = audoutGetReleasedAudioOutBuffer(&released, &count);
-        if (R_FAILED(rc) || !released || count == 0)
-        {
-            if (releasedCount)
-                *releasedCount = 0;
-            return;
-        }
-
-        for (u32 i = 0; i < count; ++i)
-        {
-            for (size_t j = 0; j < m_outBuffers.size(); ++j)
-            {
-                if (&m_outBuffers[j] == &released[i] || m_outBuffers[j].buffer == released[i].buffer)
-                {
-                    if (m_queued[j])
-                    {
-                        m_queued[j] = false;
-                        m_freeList[m_freeCount++] = static_cast<int>(j);
-                    }
+                    refill = &buffer;
                     break;
                 }
             }
-        }
-        if (releasedCount)
-            *releasedCount = count;
-    }
 
-    void drainQueuedBuffers()
-    {
-        for (int tries = 0; tries < 16; ++tries)
-        {
-            u32 released = 0;
-            collectReleased(&released);
-            bool anyQueued = false;
-            for (bool queued : m_queued)
-                anyQueued = anyQueued || queued;
-            if (!anyQueued)
-                break;
-            svcSleepThread(1000000);
+            if (refill)
+            {
+                auto* data = static_cast<int16_t*>(m_memPool) + refill->start_sample_offset * 2;
+
+                int frames = 0;
+                while (m_running.load(std::memory_order_acquire) &&
+                       !(frames = SPU::ReadOutput(data, static_cast<int>(kBufferFrames))))
+                {
+                    svcSleepThread(10000);
+                }
+
+                if (frames > 0)
+                {
+                    const u32 lastStereo = reinterpret_cast<u32*>(data)[frames - 1];
+                    while (frames < static_cast<int>(kBufferFrames))
+                        reinterpret_cast<u32*>(data)[frames++] = lastStereo;
+
+                    armDCacheFlush(data, frames * 2 * sizeof(int16_t));
+                    refill->end_sample_offset = refill->start_sample_offset + frames;
+                    audrvVoiceAddWaveBuf(&m_driver, 0, refill);
+                    audrvVoiceStart(&m_driver, 0);
+                }
+            }
+
+            audrvUpdate(&m_driver);
+            audrenWaitFrame();
         }
     }
 
     std::atomic<bool> m_running{false};
     std::thread m_thread;
-    std::mutex m_mutex;
-    std::condition_variable m_cv;
-    std::array<int16_t, kRingSamples> m_ring {};
-    size_t m_read = 0;
-    size_t m_write = 0;
-    size_t m_available = 0;
-    std::array<int16_t*, kBufferCount> m_bufferData {};
-    std::array<AudioOutBuffer, kBufferCount> m_outBuffers {};
-    std::array<bool, kBufferCount> m_queued {};
-    std::array<int, kBufferCount> m_freeList {};
-    int m_freeCount = 0;
+    AudioDriver m_driver {};
+    void* m_memPool = nullptr;
+    int m_memPoolId = -1;
 };
 
 } // namespace
@@ -657,18 +605,6 @@ int RunDekoRuntime(const DekoRunOptions& options)
                           static_cast<unsigned long long>(totalFrames));
         const auto runEnd = std::chrono::steady_clock::now();
         lastRunMs = std::chrono::duration_cast<std::chrono::milliseconds>(runEnd - runBegin).count();
-
-        std::array<int16_t, 4096> samples {};
-        int available = SPU::GetOutputSize();
-        while (available > 0)
-        {
-            const int toRead = std::min<int>(available, static_cast<int>(samples.size() / 2));
-            const int read = SPU::ReadOutput(samples.data(), toRead);
-            if (read <= 0)
-                break;
-            audio.push(samples.data(), static_cast<size_t>(read));
-            available = SPU::GetOutputSize();
-        }
 
         if (traceFrame)
             appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu Gfx::StartFrame begin",

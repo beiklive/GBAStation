@@ -464,11 +464,24 @@ PackedGlyph& FontGetGlyph(u32 idx, u32 codepoint, float scale)
 
 u32 SystemFontStandard;
 u32 SystemFontNintendoExt;
+u32 SystemFontChinese;
 
 u8* SystemFontStandardData;
 u8* SystemFontNintendoExtData;
+u8* SystemFontChineseData;
 
 u32 WhiteTexture;
+
+u8* CopySharedFont(PlSharedFontType type)
+{
+    PlFontData font {};
+    if (R_FAILED(plGetSharedFontByType(&font, type)) || !font.address || font.size == 0)
+        return nullptr;
+
+    u8* data = new u8[font.size];
+    memcpy(data, font.address, font.size);
+    return data;
+}
 
 struct DkshHeader
 {
@@ -600,17 +613,18 @@ void Init()
 
     // load system font
     plInitialize(PlServiceType_User);
-    PlFontData font;
-
-    plGetSharedFontByType(&font, PlSharedFontType_Standard);
-    SystemFontStandardData = new u8[font.size];
-    memcpy(SystemFontStandardData, font.address, font.size);
+    SystemFontStandardData = CopySharedFont(PlSharedFontType_Standard);
     SystemFontStandard = FontLoad(SystemFontStandardData);
 
-    plGetSharedFontByType(&font, PlSharedFontType_NintendoExt);
-    SystemFontNintendoExtData = new u8[font.size];
-    memcpy(SystemFontNintendoExtData, font.address, font.size);
+    SystemFontNintendoExtData = CopySharedFont(PlSharedFontType_NintendoExt);
     SystemFontNintendoExt = FontLoad(SystemFontNintendoExtData);
+
+    SystemFontChineseData = CopySharedFont(PlSharedFontType_ChineseSimplified);
+    if (!SystemFontChineseData)
+        SystemFontChineseData = CopySharedFont(PlSharedFontType_ExtChineseSimplified);
+    if (!SystemFontChineseData)
+        SystemFontChineseData = SystemFontStandardData;
+    SystemFontChinese = FontLoad(SystemFontChineseData);
     plExit();
 
     WhiteTexture = TextureCreate(8, 8, DkImageFormat_R8_Unorm);
@@ -621,8 +635,11 @@ void DeInit()
 {
     FontDelete(SystemFontNintendoExt);
     FontDelete(SystemFontStandard);
+    FontDelete(SystemFontChinese);
     delete[] SystemFontStandardData;
     delete[] SystemFontNintendoExtData;
+    if (SystemFontChineseData != SystemFontStandardData)
+        delete[] SystemFontChineseData;
 
     FontAtlas.Destroy();
 

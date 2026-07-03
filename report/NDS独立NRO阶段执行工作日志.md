@@ -1105,3 +1105,70 @@ Deko heartbeat frame=60
 GBAStation.nro        24.92 MB
 GBAStationNDSStub.nro 2.16 MB
 ```
+
+## 2026-07-03 阶段L：修复音频电流声、菜单键与中文字体
+
+### 现象
+
+- Deko Stub 画面运行流畅，但声音存在严重电流声。
+- 模拟器菜单触发键需要改为 `ZR`。
+- 菜单中文显示不完整，判断为未加载 Switch 中文系统字体。
+
+### 音频修复
+
+- 原 Stub 使用 `audout`，实际按 48kHz 输出。
+- ArcDelta/melonDS 的 `SPU::ReadOutput()` 输出约为 32823Hz。
+- 直接把 32823Hz PCM 塞到 48kHz audout，会造成采样率错配、补零和爆音。
+- 已改为贴近 ArcDelta 原版的 `audren` + `audrv`：
+
+```text
+AudioRenderer output: 48kHz
+Voice sample rate:    32823Hz
+Buffer frame size:    768 stereo frames
+```
+
+- 音频线程现在直接从 `SPU::ReadOutput()` 读取，不再由主循环抽样后 push 到 audout ring。
+
+### 菜单按键
+
+- 菜单打开/关闭键改为：
+
+```text
+ZR
+```
+
+- `ZR` 不再映射为 NDS 的 `R` 键，避免关闭菜单瞬间误触发游戏内 R。
+- `R` 仍映射为 NDS 的 `R`，`ZL` 仍映射为 NDS 的 `L`。
+
+### 中文字体
+
+- 在 ArcDelta Switch Gfx 层新增：
+
+```cpp
+Gfx::SystemFontChinese
+```
+
+- 加载顺序：
+
+```text
+PlSharedFontType_ChineseSimplified
+PlSharedFontType_ExtChineseSimplified
+fallback: Standard
+```
+
+- Stub 菜单中文文本改用 `Gfx::SystemFontChinese` 绘制。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.16 MB
+```
+
+### 验证重点
+
+- 进入游戏后听音频是否还存在明显电流声/爆音。
+- `ZR` 是否打开/关闭模拟器菜单。
+- 菜单中文是否完整显示。

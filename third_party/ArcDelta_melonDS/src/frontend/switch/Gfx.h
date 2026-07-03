@@ -165,6 +165,7 @@ void FontDelete(u32 idx);
 
 extern u32 SystemFontStandard;
 extern u32 SystemFontNintendoExt;
+extern u32 SystemFontChinese;
 
 extern u32 WhiteTexture;
 
