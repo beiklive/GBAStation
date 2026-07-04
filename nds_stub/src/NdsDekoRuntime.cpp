@@ -12,6 +12,7 @@
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
+#include <ctime>
 #include <cstring>
 #include <functional>
 #include <filesystem>
@@ -86,6 +87,67 @@ std::string statePath(const std::string& stateDir, const std::string& romPath, i
 {
     slot = std::max(0, slot);
     return joinPath(stateDir, pathStem(romPath) + ".ss" + std::to_string(slot));
+}
+
+std::string stateThumbPath(const std::string& stateDir, const std::string& romPath, int slot)
+{
+    return statePath(stateDir, romPath, slot) + ".png";
+}
+
+std::string formatFileTime(const std::string& path)
+{
+    std::error_code ec;
+    auto ftime = std::filesystem::last_write_time(path, ec);
+    if (ec)
+        return {};
+    const auto sysTime = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+        ftime - std::filesystem::file_time_type::clock::now() + std::chrono::system_clock::now());
+    const std::time_t tt = std::chrono::system_clock::to_time_t(sysTime);
+    std::tm* tm = std::localtime(&tt);
+    if (!tm)
+        return {};
+    char buffer[32] = {};
+    std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M", tm);
+    return buffer;
+}
+
+std::array<beiklive::nds_stub::NdsStateSlotInfo, 10>
+loadStateSlots(const std::string& stateDir, const std::string& romPath)
+{
+    std::array<beiklive::nds_stub::NdsStateSlotInfo, 10> slots {};
+    for (int slot = 0; slot < static_cast<int>(slots.size()); ++slot)
+    {
+        auto& info = slots[slot];
+        info.statePath = statePath(stateDir, romPath, slot);
+        info.thumbnailPath = stateThumbPath(stateDir, romPath, slot);
+        info.exists = std::filesystem::exists(info.statePath);
+        if (info.exists)
+            info.modifiedTime = formatFileTime(info.statePath);
+    }
+    return slots;
+}
+
+bool writePlaceholderThumbnail(const std::string& path)
+{
+    static constexpr unsigned char kOnePixelPng[] = {
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+        0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41,
+        0x54, 0x78, 0x9C, 0x63, 0x60, 0xF8, 0xCF, 0xC0,
+        0x00, 0x00, 0x04, 0x00, 0x01, 0x5B, 0xC3, 0x55,
+        0xBA, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E,
+        0x44, 0xAE, 0x42, 0x60, 0x82,
+    };
+    std::error_code ec;
+    std::filesystem::create_directories(std::filesystem::path(path).parent_path(), ec);
+    FILE* fp = std::fopen(path.c_str(), "wb");
+    if (!fp)
+        return false;
+    const bool ok = std::fwrite(kOnePixelPng, 1, sizeof(kOnePixelPng), fp) == sizeof(kOnePixelPng);
+    std::fclose(fp);
+    return ok;
 }
 
 bool saveStateFile(const std::string& path)
@@ -416,9 +478,9 @@ public:
     bool fastForwardEnabled() const { return intValue("fastforward.enabled", 1) != 0; }
     bool fastForwardToggleMode() const { return value("fastforward.mode", "hold") == "toggle"; }
     bool fastForwardMute() const { return intValue("fastforward.mute", 1) != 0; }
-    int fastForwardMultiplier() const
+    float fastForwardMultiplier() const
     {
-        return std::clamp(static_cast<int>(std::lround(floatValue("fastforward.multiplier", 4.0f))), 1, 10);
+        return std::clamp(floatValue("fastforward.multiplier", 4.0f), 0.1f, 5.0f);
     }
 
     int turboIntervalFrames() const
@@ -491,9 +553,9 @@ constexpr NdsInputConfig::ButtonBinding NdsInputConfig::kButtonBindings[];
 
 std::string resolveStateDir(const beiklive::nds_stub::DekoRunOptions& options, const NdsInputConfig& inputConfig)
 {
-    std::string dir = inputConfig.value("save.stateDir", "");
+    std::string dir = options.savePath;
     if (dir.empty())
-        dir = options.savePath;
+        dir = inputConfig.value("save.stateDir", "");
     if (dir.empty())
         dir = joinPath("sdmc:/GBAStation/states/NDS", pathStem(options.romPath));
     std::error_code ec;
@@ -1045,6 +1107,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
     bool pendingReturn = false;
     NdsMenuLayer menuLayer;
     menuLayer.setFastForwardMultiplier(inputConfig.fastForwardMultiplier());
+    menuLayer.setStateSlots(loadStateSlots(stateDir, options.romPath));
     double fps = 0.0;
     int fpsFrames = 0;
     uint64_t totalFrames = 0;
@@ -1066,6 +1129,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
     bool turboAOn = false;
     bool turboBOn = false;
     int turboFrameCount = 0;
+    double fastForwardFrameCredit = 0.0;
     const int turboIntervalFrames = inputConfig.turboIntervalFrames();
     const int autoLoadSlot = inputConfig.intValue("save.autoLoadState0", 0);
     const int autoSaveSlot = inputConfig.intValue("save.autoSaveState", 0);
@@ -1080,9 +1144,12 @@ int RunDekoRuntime(const DekoRunOptions& options)
         Gfx::PresentQueue.waitIdle();
         Gfx::EmuQueue.waitIdle();
         const bool ok = saveStateFile(path);
+        if (ok)
+            writePlaceholderThumbnail(stateThumbPath(stateDir, options.romPath, slot));
         NDSCart::FlushSRAMFile();
         audio.resumeAfterCoreReset();
         appendStubLog("GBAStationNDSStub: savestate save %s slot=%d", ok ? "ok" : "failed", slot);
+        menuLayer.setStateSlots(loadStateSlots(stateDir, options.romPath));
         return ok;
     };
 
@@ -1098,6 +1165,20 @@ int RunDekoRuntime(const DekoRunOptions& options)
         audio.resumeAfterCoreReset();
         appendStubLog("GBAStationNDSStub: savestate load %s slot=%d", ok ? "ok" : "failed", slot);
         return ok;
+    };
+
+    auto doDeleteState = [&](int slot) {
+        const std::string path = statePath(stateDir, options.romPath, slot);
+        const std::string thumb = stateThumbPath(stateDir, options.romPath, slot);
+        std::error_code ec;
+        const bool removedState = std::filesystem::remove(path, ec);
+        ec.clear();
+        const bool removedThumb = std::filesystem::remove(thumb, ec);
+        appendStubLog("GBAStationNDSStub: savestate delete slot=%d state=%d thumb=%d",
+                      slot,
+                      removedState ? 1 : 0,
+                      removedThumb ? 1 : 0);
+        menuLayer.setStateSlots(loadStateSlots(stateDir, options.romPath));
     };
 
     if (autoLoadSlot > 0)
@@ -1158,31 +1239,36 @@ int RunDekoRuntime(const DekoRunOptions& options)
                 appendStubLog("GBAStationNDSStub: swap screens=%d", screensSwapped ? 1 : 0);
             }
             if (anyComboDown(inputConfig.button("nds.hotkey.quicksave.pad"), input))
-                doSaveState(1);
+                doSaveState(0);
             if (anyComboDown(inputConfig.button("nds.hotkey.quickload.pad"), input))
-                doLoadState(1);
+                doLoadState(0);
             if (anyComboDown(inputConfig.button("nds.hotkey.screenshot.pad"), input))
                 logScreenshotRequest(options.savePath.empty() ? stateDir : options.savePath);
         }
 
         const bool wasMenuVisible = menuLayer.visible();
-        const NdsMenuResult menuResult = menuLayer.update(input.down);
+        const NdsMenuResult menuResult = menuLayer.update(input.down, input.held);
         const NdsMenuAction menuAction = menuResult.action;
         if (wasMenuVisible != menuLayer.visible())
             blockGameInputUntilRelease = true;
 
         if (menuAction == NdsMenuAction::SaveState)
         {
-            doSaveState(menuResult.slot + 1);
+            doSaveState(menuResult.slot);
         }
         else if (menuAction == NdsMenuAction::LoadState)
         {
-            doLoadState(menuResult.slot + 1);
+            if (doLoadState(menuResult.slot))
+                menuLayer.close();
+        }
+        else if (menuAction == NdsMenuAction::DeleteState)
+        {
+            doDeleteState(menuResult.slot);
         }
         else if (menuAction == NdsMenuAction::DisplaySettingsChanged)
         {
             gameLayer.setLinearFiltering(menuLayer.linearFiltering());
-            appendStubLog("GBAStationNDSStub: Deko display settings filter=%s ff=x%d",
+            appendStubLog("GBAStationNDSStub: Deko display settings filter=%s ff=%.2f",
                           menuLayer.linearFiltering() ? "linear" : "nearest",
                           menuLayer.fastForwardMultiplier());
         }
@@ -1231,12 +1317,12 @@ int RunDekoRuntime(const DekoRunOptions& options)
             !suppressGameInput &&
             inputConfig.fastForwardEnabled() &&
             fastForwardHeld &&
-            menuLayer.fastForwardMultiplier() > 1;
+            std::fabs(menuLayer.fastForwardMultiplier() - 1.0f) > 0.01f;
         if (fastForwardActive != lastFastForwardActive)
         {
             appendStubLog("GBAStationNDSStub: Deko fastforward %s x%d",
                           fastForwardActive ? "on" : "off",
-                          menuLayer.fastForwardMultiplier());
+                          static_cast<int>(std::round(menuLayer.fastForwardMultiplier())));
             audio.setFastForwardActive(fastForwardActive);
             lastFastForwardActive = fastForwardActive;
         }
@@ -1303,7 +1389,19 @@ int RunDekoRuntime(const DekoRunOptions& options)
         if (traceFrame)
             appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu RunFrame begin",
                           static_cast<unsigned long long>(totalFrames));
-        const int framesToRun = fastForwardActive ? menuLayer.fastForwardMultiplier() : 1;
+        int framesToRun = 1;
+        if (fastForwardActive)
+        {
+            fastForwardFrameCredit += menuLayer.fastForwardMultiplier();
+            framesToRun = static_cast<int>(fastForwardFrameCredit);
+            fastForwardFrameCredit -= framesToRun;
+            if (framesToRun < 0)
+                framesToRun = 0;
+        }
+        else
+        {
+            fastForwardFrameCredit = 0.0;
+        }
         const bool emulationPaused = menuActive || runtimePaused;
         int framesRan = 0;
         for (int i = 0; i < framesToRun && !emulationPaused; ++i)
@@ -1399,7 +1497,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
                           static_cast<unsigned long long>(totalFrames),
                           fps,
                           lastRunMs,
-                          fastForwardActive ? menuLayer.fastForwardMultiplier() : 1,
+                          fastForwardActive ? static_cast<int>(std::round(menuLayer.fastForwardMultiplier())) : 1,
                           menuLayer.linearFiltering() ? "linear" : "nearest");
         }
         const auto now = std::chrono::steady_clock::now();
@@ -1414,7 +1512,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
         const auto frameEnd = std::chrono::steady_clock::now();
         constexpr auto frameBudget = std::chrono::microseconds(16667);
         const auto used = std::chrono::duration_cast<std::chrono::microseconds>(frameEnd - frameBegin);
-        if (!fastForwardActive && used < frameBudget)
+        if ((!fastForwardActive || menuLayer.fastForwardMultiplier() < 1.0f) && used < frameBudget)
         {
             const auto sleepUs = std::chrono::duration_cast<std::chrono::microseconds>(frameBudget - used).count();
             if (sleepUs > 500)

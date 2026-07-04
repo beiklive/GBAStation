@@ -1,6 +1,8 @@
 #include "nds_stub/NdsMenuLayer.hpp"
 
 #include <algorithm>
+#include <cmath>
+#include <iterator>
 #include <switch.h>
 
 #include "nds_stub/ui/UiComponents.hpp"
@@ -12,6 +14,11 @@ using namespace ui;
 namespace {
 
 constexpr float kPanelAnimationMs = 220.0f;
+constexpr float kSelectorInitialDelayMs = 320.0f;
+
+constexpr float kFastForwardValues[] = {
+    0.1f, 0.5f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 3.0f, 4.0f, 5.0f,
+};
 
 bool isDirectionUp(std::uint64_t buttons)
 {
@@ -34,6 +41,11 @@ bool isDirectionRight(std::uint64_t buttons)
 }
 
 } // namespace
+
+void NdsMenuLayer::setStateSlots(const std::array<NdsStateSlotInfo, 10>& slots)
+{
+    m_slots = slots;
+}
 
 void NdsMenuLayer::beginSelectionAnimation(int oldSelected, int newSelected)
 {
@@ -102,9 +114,9 @@ float NdsMenuLayer::panelProgress() const
     return m_panelOpening ? progress : 1.0f - progress;
 }
 
-void NdsMenuLayer::setFastForwardMultiplier(int multiplier)
+void NdsMenuLayer::setFastForwardMultiplier(float multiplier)
 {
-    m_fastForwardMultiplier = std::clamp(multiplier, 1, 10);
+    m_display.fastForwardMultiplier = std::clamp(multiplier, 0.1f, 5.0f);
 }
 
 bool NdsMenuLayer::itemHasContent(Item item) const
@@ -119,9 +131,9 @@ int NdsMenuLayer::contentControlCount(Item item) const
     {
     case Item::SaveState:
     case Item::LoadState:
-        return 6;
+        return 10;
     case Item::Display:
-        return 2;
+        return 11;
     case Item::Cheats:
         return 1;
     default:
@@ -129,7 +141,134 @@ int NdsMenuLayer::contentControlCount(Item item) const
     }
 }
 
-NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown)
+int NdsMenuLayer::nextFocusableDisplayRow(int from, int direction) const
+{
+    int row = from;
+    for (int i = 0; i < contentControlCount(Item::Display); ++i)
+    {
+        row = (row + direction + contentControlCount(Item::Display)) % contentControlCount(Item::Display);
+        if (row == 4 && m_display.layout != 4)
+            continue;
+        return row;
+    }
+    return from;
+}
+
+bool NdsMenuLayer::activateDisplayControl()
+{
+    switch (m_contentFocus)
+    {
+    case 2:
+        m_display.integerScale = !m_display.integerScale;
+        return true;
+    case 4:
+    case 6:
+    case 7:
+    case 8:
+    case 9:
+    case 10:
+        return false;
+    default:
+        return false;
+    }
+}
+
+bool NdsMenuLayer::cycleCurrentSetting(int direction)
+{
+    if (static_cast<Item>(m_selected) != Item::Display || direction == 0)
+        return false;
+
+    auto cycleIndex = [direction](int value, int count) {
+        return (value + direction + count) % count;
+    };
+
+    switch (m_contentFocus)
+    {
+    case 0:
+    {
+        int idx = 2;
+        for (int i = 0; i < static_cast<int>(std::size(kFastForwardValues)); ++i)
+        {
+            if (std::fabs(kFastForwardValues[i] - m_display.fastForwardMultiplier) < 0.01f)
+            {
+                idx = i;
+                break;
+            }
+        }
+        idx = cycleIndex(idx, static_cast<int>(std::size(kFastForwardValues)));
+        m_display.fastForwardMultiplier = kFastForwardValues[idx];
+        return true;
+    }
+    case 1:
+        m_display.linearFiltering = !m_display.linearFiltering;
+        return true;
+    case 3:
+        m_display.layout = cycleIndex(m_display.layout, 5);
+        if (m_contentFocus == 4 && m_display.layout != 4)
+            m_contentFocus = nextFocusableDisplayRow(m_contentFocus, direction);
+        return true;
+    case 5:
+        m_display.orientation = cycleIndex(m_display.orientation, 4);
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool NdsMenuLayer::updateHeldSelector(std::uint64_t buttonsHeld)
+{
+    if (m_focusScope != FocusScope::Content ||
+        static_cast<Item>(m_selected) != Item::Display ||
+        (buttonsHeld & (HidNpadButton_L | HidNpadButton_R)) == 0)
+    {
+        m_selectorDirection = 0;
+        return false;
+    }
+
+    const int direction = (buttonsHeld & HidNpadButton_R) ? 1 : -1;
+    const std::uint64_t now = armGetSystemTick();
+    if (m_selectorDirection != direction)
+    {
+        m_selectorDirection = direction;
+        m_selectorRepeatStartTick = now;
+        m_selectorLastStepTick = now;
+        return false;
+    }
+
+    const float heldMs = static_cast<float>(armTicksToNs(now - m_selectorRepeatStartTick)) / 1000000.0f;
+    if (heldMs < kSelectorInitialDelayMs)
+        return false;
+
+    const float intervalMs = std::max(52.0f, 180.0f - (heldMs - kSelectorInitialDelayMs) * 0.25f);
+    const float sinceLastMs = static_cast<float>(armTicksToNs(now - m_selectorLastStepTick)) / 1000000.0f;
+    if (sinceLastMs < intervalMs)
+        return false;
+
+    m_selectorLastStepTick = now;
+    return cycleCurrentSetting(direction);
+}
+
+void NdsMenuLayer::openDeleteDialog()
+{
+    if (m_focusScope != FocusScope::Content)
+        return;
+    const Item item = static_cast<Item>(m_selected);
+    if (item != Item::SaveState && item != Item::LoadState)
+        return;
+    if (m_contentFocus < 0 || m_contentFocus >= static_cast<int>(m_slots.size()) || !m_slots[m_contentFocus].exists)
+        return;
+
+    m_deleteSlot = m_contentFocus;
+    m_deleteDialogVisible = true;
+}
+
+void NdsMenuLayer::closeDeleteDialog()
+{
+    m_deleteDialogVisible = false;
+    m_deleteSlot = -1;
+}
+
+NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t buttonsHeld)
 {
     if (!active())
         return {};
@@ -139,6 +278,22 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown)
 
     if (!m_visible)
         return {};
+
+    if (m_deleteDialogVisible)
+    {
+        if (buttonsDown & HidNpadButton_B)
+        {
+            closeDeleteDialog();
+            return {};
+        }
+        if (buttonsDown & HidNpadButton_A)
+        {
+            const int slot = m_deleteSlot;
+            closeDeleteDialog();
+            return {NdsMenuAction::DeleteState, slot};
+        }
+        return {};
+    }
 
     if (buttonsDown & HidNpadButton_B)
     {
@@ -184,24 +339,33 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown)
                 return {currentItem == Item::SaveState ? NdsMenuAction::SaveState : NdsMenuAction::LoadState,
                         m_contentFocus};
             }
+            if (buttonsDown & HidNpadButton_X)
+                openDeleteDialog();
             return {};
         }
 
         if (currentItem == Item::Display)
         {
-            if (isDirectionUp(buttonsDown) || isDirectionDown(buttonsDown))
-                m_contentFocus = m_contentFocus == 0 ? 1 : 0;
+            if (isDirectionUp(buttonsDown))
+                m_contentFocus = nextFocusableDisplayRow(m_contentFocus, -1);
+            if (isDirectionDown(buttonsDown))
+                m_contentFocus = nextFocusableDisplayRow(m_contentFocus, 1);
 
+            if (buttonsDown & HidNpadButton_L)
+                return cycleCurrentSetting(-1) ? NdsMenuResult{NdsMenuAction::DisplaySettingsChanged, -1}
+                                               : NdsMenuResult{};
+            if (buttonsDown & HidNpadButton_R)
+                return cycleCurrentSetting(1) ? NdsMenuResult{NdsMenuAction::DisplaySettingsChanged, -1}
+                                              : NdsMenuResult{};
+            if (updateHeldSelector(buttonsHeld))
+                return {NdsMenuAction::DisplaySettingsChanged, -1};
             if (isDirectionLeft(buttonsDown) || isDirectionRight(buttonsDown))
                 return cycleCurrentSetting(isDirectionRight(buttonsDown) ? 1 : -1)
                     ? NdsMenuResult{NdsMenuAction::DisplaySettingsChanged, -1}
                     : NdsMenuResult{};
 
-            if ((buttonsDown & HidNpadButton_A) && m_contentFocus == 0)
-            {
-                m_linearFiltering = !m_linearFiltering;
+            if ((buttonsDown & HidNpadButton_A) && activateDisplayControl())
                 return {NdsMenuAction::DisplaySettingsChanged, -1};
-            }
             return {};
         }
 
@@ -237,27 +401,18 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown)
     return {};
 }
 
-bool NdsMenuLayer::cycleCurrentSetting(int direction)
-{
-    if (static_cast<Item>(m_selected) != Item::Display)
-        return false;
-
-    m_fastForwardMultiplier = std::clamp(m_fastForwardMultiplier + direction, 1, 10);
-    return true;
-}
-
 void NdsMenuLayer::draw(double fps, long long runMs, bool fastForwardActive) const
 {
     Gfx::DrawText(Gfx::SystemFontStandard,
                   {28.0f, 24.0f},
                   20.0f,
                   {0.78f, 0.90f, 1.0f, 1.0f},
-                  "FPS %.1f  RUN %lldMS  FF x%d%s  %s",
+                  "FPS %.1f  RUN %lldMS  FF x%.2g%s  %s",
                   fps,
                   runMs,
-                  m_fastForwardMultiplier,
+                  static_cast<double>(m_display.fastForwardMultiplier),
                   fastForwardActive ? "*" : "",
-                  filterLabel(m_linearFiltering));
+                  filterLabel(m_display.linearFiltering));
 
     if (!active())
         return;
@@ -275,6 +430,11 @@ void NdsMenuLayer::draw(double fps, long long runMs, bool fastForwardActive) con
         : 1.0f;
 
     const bool contentFocused = m_focusScope == FocusScope::Content;
+    const Item currentItem = static_cast<Item>(m_selected);
+    const bool canDelete = contentFocused &&
+        (currentItem == Item::SaveState || currentItem == Item::LoadState) &&
+        m_contentFocus >= 0 && m_contentFocus < static_cast<int>(m_slots.size()) &&
+        m_slots[m_contentFocus].exists;
     drawOverlay(panel);
     drawHeader(slideY);
     drawLeftMenu(m_selected, m_previousSelected, selectionProgress, !contentFocused, slideY);
@@ -282,12 +442,14 @@ void NdsMenuLayer::draw(double fps, long long runMs, bool fastForwardActive) con
     drawTabFrame(static_cast<Item>(m_selected),
                  static_cast<Item>(m_previousSelected),
                  pageProgress,
-                 m_linearFiltering,
-                 m_fastForwardMultiplier,
+                 m_display,
+                 m_slots,
                  m_contentFocus,
                  contentFocused,
                  slideY);
-    drawFooter(contentFocused, slideY);
+    drawFooter(contentFocused, canDelete, slideY);
+    if (m_deleteDialogVisible)
+        drawDeleteDialog(m_deleteSlot, panel);
 }
 
 } // namespace beiklive::nds_stub
