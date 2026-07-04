@@ -9,11 +9,43 @@
 
 #include <nlohmann/json.hpp>
 #include <switch.h>
+#include <unistd.h>
 
 #include "nds_stub/NdsDekoRuntime.hpp"
 #include "nds_stub/StubLog.hpp"
 
 namespace beiklive::nds_stub {
+
+namespace {
+
+void ensureLogDirectories()
+{
+    static bool attempted = false;
+    if (attempted)
+        return;
+    attempted = true;
+
+    constexpr const char* dirs[] = {
+        "sdmc:/GBAStation/log",
+        "/GBAStation/log",
+    };
+
+    for (const char* dir : dirs)
+    {
+        std::error_code ec;
+        std::filesystem::create_directories(dir, ec);
+    }
+}
+
+void flushLogFile(FILE* fp)
+{
+    std::fflush(fp);
+    const int fd = fileno(fp);
+    if (fd >= 0)
+        fsync(fd);
+}
+
+} // namespace
 
 void appendStubLog(const char* format, ...)
 {
@@ -31,19 +63,28 @@ void appendStubLog(const char* format, ...)
         "/GBAStationNDSStub.log",
     };
 
+    ensureLogDirectories();
+    const u64 tick = armGetSystemTick();
     for (const char* path : paths)
     {
         FILE* fp = std::fopen(path, "a");
         if (!fp)
             continue;
-        std::fprintf(fp, "%s\n", line);
-        std::fflush(fp);
+        std::fprintf(fp, "[%llu] %s\n",
+                     static_cast<unsigned long long>(tick),
+                     line);
+        flushLogFile(fp);
         std::fclose(fp);
         break;
     }
 }
 
 } // namespace beiklive::nds_stub
+
+extern "C" void GBAStationNDSStubLogLine(const char* line)
+{
+    beiklive::nds_stub::appendStubLog("%s", line ? line : "(null)");
+}
 
 namespace {
 

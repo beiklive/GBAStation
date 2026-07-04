@@ -32,23 +32,16 @@ public:
     {
         return _3DFramebuffer;
     }
-    void SetScaleFactor(int scale);
-    int GetScaleFactor() const { return ScaleFactor; }
-    int GetFramebufferWidth() const { return 256 * ScaleFactor; }
-    int GetFramebufferHeight() const { return 192 * ScaleFactor; }
+    int GetFramebufferWidth() const { return 256; }
+    int GetFramebufferHeight() const { return 192; }
     int GetFramebufferTextureWidth() const { return MaxFramebufferWidth; }
     int GetFramebufferTextureHeight() const { return MaxFramebufferHeight; }
 
     dk::Fence FramebufferReady[2] = {};
     dk::Fence FramebufferPresented[2] = {};
 private:
-    // High-res runtime allocation is disabled until buffers can be rebuilt safely on scale changes.
-    static constexpr int MaxScaleFactor = 1;
-    static constexpr int ScaleSlotCount = MaxScaleFactor + 1;
-    static constexpr int MaxFramebufferWidth = 256 * MaxScaleFactor;
-    static constexpr int MaxFramebufferHeight = 192 * MaxScaleFactor;
-
-    int ScaleFactor = 1;
+    static constexpr int MaxFramebufferWidth = 256;
+    static constexpr int MaxFramebufferHeight = 192;
 
     u16 DispFIFOFramebuffer[256*192];
 
@@ -138,10 +131,9 @@ private:
     dk::Shader ShaderBGExtendedBitmap8pp[2];
     dk::Shader ShaderBGExtendedBitmapDirect[2];
     dk::Shader ShaderBGExtendedMixed[2];
-    dk::Shader ShaderComposeBGOBJ[ScaleSlotCount];
-    dk::Shader ShaderComposeBGOBJDirectBitmapOnly[ScaleSlotCount];
-    dk::Shader ShaderComposeBGOBJShowBitmap[ScaleSlotCount];
-    bool ComposeShaderScaleLoaded[ScaleSlotCount] = {};
+    dk::Shader ShaderComposeBGOBJ;
+    dk::Shader ShaderComposeBGOBJDirectBitmapOnly;
+    dk::Shader ShaderComposeBGOBJShowBitmap;
     dk::Shader ShaderOBJRegular;
     dk::Shader ShaderOBJAffine;
     dk::Shader ShaderOBJ4bpp;
@@ -230,7 +222,6 @@ private:
     std::vector<ComposeRegion> ComposeRegions[2];
 
     void DoCapture();
-    void LoadComposeShadersForScale(int scale);
 
     template <u32 Size>
     void UploadVRAM(const NonStupidBitField<Size>& dirty, u8* src, DkGpuAddr dst);

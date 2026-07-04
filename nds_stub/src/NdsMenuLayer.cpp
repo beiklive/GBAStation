@@ -66,7 +66,6 @@ NdsMenuAction NdsMenuLayer::update(std::uint64_t buttonsDown)
             return NdsMenuAction::None;
         case Item::Filtering:
         case Item::FastForward:
-        case Item::Resolution:
             return cycleCurrentSetting(1) ? NdsMenuAction::DisplaySettingsChanged : NdsMenuAction::None;
         case Item::Reset:
             return NdsMenuAction::ResetGame;
@@ -90,9 +89,6 @@ bool NdsMenuLayer::cycleCurrentSetting(int direction)
     case Item::FastForward:
         m_fastForwardMultiplier = std::clamp(m_fastForwardMultiplier + direction, 1, 4);
         return true;
-    case Item::Resolution:
-        m_resolutionScale = std::clamp(m_resolutionScale + direction, 1, 4);
-        return true;
     default:
         return false;
     }
@@ -104,12 +100,11 @@ void NdsMenuLayer::draw(double fps, long long runMs, bool fastForwardActive) con
                   {28.0f, 24.0f},
                   20.0f,
                   {0.78f, 0.90f, 1.0f, 1.0f},
-                  "FPS %.1f  RUN %lldMS  FF x%d%s  RES x%d  %s",
+                  "FPS %.1f  RUN %lldMS  FF x%d%s  %s",
                   fps,
                   runMs,
                   m_fastForwardMultiplier,
                   fastForwardActive ? "*" : "",
-                  m_resolutionScale,
                   filterLabel(m_linearFiltering));
 
     if (!m_visible)
@@ -125,9 +120,7 @@ void NdsMenuLayer::draw(double fps, long long runMs, bool fastForwardActive) con
     };
 
     char ffValue[16];
-    char resValue[16];
     std::snprintf(ffValue, sizeof(ffValue), "x%d", m_fastForwardMultiplier);
-    std::snprintf(resValue, sizeof(resValue), "x%d", m_resolutionScale);
 
     const std::array<Row, itemIndex(Item::Count)> rows {{
         {"返回游戏", ""},
@@ -137,7 +130,6 @@ void NdsMenuLayer::draw(double fps, long long runMs, bool fastForwardActive) con
         {"画面设置", ""},
         {"画面过滤", filterLabel(m_linearFiltering)},
         {"快进倍率", ffValue},
-        {"内部分辨率", resValue},
         {"重置游戏", ""},
         {"退出游戏", ""},
     }};
@@ -178,8 +170,6 @@ void NdsMenuLayer::draw(double fps, long long runMs, bool fastForwardActive) con
                   {0.80f, 0.90f, 0.98f, 1.0f}, "B 或 ZR 返回游戏");
     Gfx::DrawText(Gfx::SystemFontChinese, {540.0f, 376.0f}, 19.0f,
                   {1.00f, 0.86f, 0.58f, 1.0f}, "快进倍率高于 x1 后立即生效");
-    Gfx::DrawText(Gfx::SystemFontChinese, {540.0f, 420.0f}, 17.0f,
-                  {0.70f, 0.78f, 0.84f, 1.0f}, "Deko 多倍分辨率当前为实验入口");
 }
 
 } // namespace beiklive::nds_stub

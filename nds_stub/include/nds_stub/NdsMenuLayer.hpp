@@ -21,7 +21,6 @@ public:
         Display,
         Filtering,
         FastForward,
-        Resolution,
         Reset,
         Exit,
         Count,
@@ -34,7 +33,6 @@ public:
     void close() { m_visible = false; }
     bool linearFiltering() const { return m_linearFiltering; }
     int fastForwardMultiplier() const { return m_fastForwardMultiplier; }
-    int resolutionScale() const { return m_resolutionScale; }
 
 private:
     bool cycleCurrentSetting(int direction);
@@ -43,7 +41,6 @@ private:
     int m_selected = 0;
     bool m_linearFiltering = false;
     int m_fastForwardMultiplier = 1;
-    int m_resolutionScale = 1;
 };
 
 } // namespace beiklive::nds_stub

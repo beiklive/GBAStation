@@ -6,6 +6,7 @@
 #include "frontend/switch/Gfx.h"
 
 #include <assert.h>
+#include <cstdarg>
 #include <stdio.h>
 #include <switch.h>
 
@@ -24,18 +25,23 @@ u32 stupidTextureNum = 0;
 namespace GPU3D
 {
 
+extern "C" void GBAStationNDSStubLogLine(const char* line) __attribute__((weak));
+
 namespace
 {
 
-void LoadScaledComputeShader(const char* baseName, int scale, dk::Shader& shader)
+void DekoLog(const char* format, ...)
 {
-    char path[128];
-    if (scale <= 1)
-        snprintf(path, sizeof(path), "romfs:/shaders/%s.dksh", baseName);
-    else
-        snprintf(path, sizeof(path), "romfs:/shaders/%s_x%d.dksh", baseName, scale);
+    char line[512] = {};
+    va_list args;
+    va_start(args, format);
+    vsnprintf(line, sizeof(line), format, args);
+    va_end(args);
 
-    Gfx::LoadShader(path, shader);
+    if (GBAStationNDSStubLogLine)
+        GBAStationNDSStubLogLine(line);
+    else
+        printf("%s\n", line);
 }
 
 }
@@ -43,146 +49,107 @@ void LoadScaledComputeShader(const char* baseName, int scale, dk::Shader& shader
 DekoRenderer::DekoRenderer()
     : Renderer3D(false),
     CmdMem(*Gfx::DataHeap, 1024*128)
-{}
+{
+    DekoLog("GBAStationNDSStub: GPU3D_Deko ctor x1-only");
+}
 
 DekoRenderer::~DekoRenderer()
 {}
 
-void DekoRenderer::ConfigureScale(int scale)
+void DekoRenderer::LoadShaders()
 {
-    if (scale < 1) scale = 1;
-    if (scale > MaxScaleFactor) scale = MaxScaleFactor;
-    RequestedScaleFactor = scale;
+    Gfx::LoadShader("romfs:/shaders/InterpXSpansZBuffer.dksh", ShaderInterpXSpans[0]);
+    Gfx::LoadShader("romfs:/shaders/InterpXSpansWBuffer.dksh", ShaderInterpXSpans[1]);
+    Gfx::LoadShader("romfs:/shaders/BinCombined.dksh", ShaderBinCombined);
+    Gfx::LoadShader("romfs:/shaders/DepthBlendZBuffer.dksh", ShaderDepthBlend[0]);
+    Gfx::LoadShader("romfs:/shaders/DepthBlendWBuffer.dksh", ShaderDepthBlend[1]);
+    Gfx::LoadShader("romfs:/shaders/RasteriseNoTextureZBuffer.dksh", ShaderRasteriseNoTexture[0]);
+    Gfx::LoadShader("romfs:/shaders/RasteriseNoTextureZBufferToon.dksh", ShaderRasteriseNoTextureToon[0]);
+    Gfx::LoadShader("romfs:/shaders/RasteriseNoTextureZBufferHighlight.dksh", ShaderRasteriseNoTextureHighlight[0]);
+    Gfx::LoadShader("romfs:/shaders/RasteriseUseTextureDecalZBuffer.dksh", ShaderRasteriseUseTextureDecal[0]);
+    Gfx::LoadShader("romfs:/shaders/RasteriseUseTextureModulateZBuffer.dksh", ShaderRasteriseUseTextureModulate[0]);
+    Gfx::LoadShader("romfs:/shaders/RasteriseUseTextureToonZBuffer.dksh", ShaderRasteriseUseTextureToon[0]);
+    Gfx::LoadShader("romfs:/shaders/RasteriseUseTextureHighlightZBuffer.dksh", ShaderRasteriseUseTextureHighlight[0]);
+    Gfx::LoadShader("romfs:/shaders/RasteriseShadowMaskZBuffer.dksh", ShaderRasteriseShadowMask[0]);
+    Gfx::LoadShader("romfs:/shaders/RasteriseNoTextureWBuffer.dksh", ShaderRasteriseNoTexture[1]);
+    Gfx::LoadShader("romfs:/shaders/RasteriseNoTextureWBufferToon.dksh", ShaderRasteriseNoTextureToon[1]);
+    Gfx::LoadShader("romfs:/shaders/RasteriseNoTextureWBufferHighlight.dksh", ShaderRasteriseNoTextureHighlight[1]);
+    Gfx::LoadShader("romfs:/shaders/RasteriseUseTextureDecalWBuffer.dksh", ShaderRasteriseUseTextureDecal[1]);
+    Gfx::LoadShader("romfs:/shaders/RasteriseUseTextureModulateWBuffer.dksh", ShaderRasteriseUseTextureModulate[1]);
+    Gfx::LoadShader("romfs:/shaders/RasteriseUseTextureToonWBuffer.dksh", ShaderRasteriseUseTextureToon[1]);
+    Gfx::LoadShader("romfs:/shaders/RasteriseUseTextureHighlightWBuffer.dksh", ShaderRasteriseUseTextureHighlight[1]);
+    Gfx::LoadShader("romfs:/shaders/RasteriseShadowMaskWBuffer.dksh", ShaderRasteriseShadowMask[1]);
+    Gfx::LoadShader("romfs:/shaders/ClearCoarseBinMask.dksh", ShaderClearCoarseBinMask);
+    Gfx::LoadShader("romfs:/shaders/ClearIndirectWorkCount.dksh", ShaderClearIndirectWorkCount);
+    Gfx::LoadShader("romfs:/shaders/CalculateWorkOffsets.dksh", ShaderCalculateWorkListOffset);
+    Gfx::LoadShader("romfs:/shaders/SortWork.dksh", ShaderSortWork);
+    Gfx::LoadShader("romfs:/shaders/FinalPass.dksh", ShaderFinalPass[0]);
+    Gfx::LoadShader("romfs:/shaders/FinalPassEdge.dksh", ShaderFinalPass[1]);
+    Gfx::LoadShader("romfs:/shaders/FinalPassFog.dksh", ShaderFinalPass[2]);
+    Gfx::LoadShader("romfs:/shaders/FinalPassEdgeFog.dksh", ShaderFinalPass[3]);
+    Gfx::LoadShader("romfs:/shaders/FinalPassAA.dksh", ShaderFinalPass[4]);
+    Gfx::LoadShader("romfs:/shaders/FinalPassEdgeAA.dksh", ShaderFinalPass[5]);
+    Gfx::LoadShader("romfs:/shaders/FinalPassFogAA.dksh", ShaderFinalPass[6]);
+    Gfx::LoadShader("romfs:/shaders/FinalPassEdgeFogAA.dksh", ShaderFinalPass[7]);
 
-    ScaleFactor = scale;
-    ScreenWidth = 256 * ScaleFactor;
-    ScreenHeight = 192 * ScaleFactor;
-    RuntimeTileSize = TileSize;
-    RuntimeTilesPerLine = ScreenWidth / RuntimeTileSize;
-    RuntimeTileLines = ScreenHeight / RuntimeTileSize;
-    RuntimeMaxWorkTiles = RuntimeTilesPerLine * RuntimeTileLines * WorkTileMultiplierForScale(ScaleFactor);
-    RuntimeMaxYSpanIndices = MaxYSpanIndices * ScaleFactor;
-    RuntimeMaxYSpanSetups = MaxYSpanSetups * ScaleFactor;
-
-    YSpanIndices.resize(RuntimeMaxYSpanIndices);
-    YSpanSetups.resize(RuntimeMaxYSpanSetups);
-    RenderPolygons.resize(2048);
-}
-
-int DekoRenderer::WorkTileMultiplierForScale(int scale) const
-{
-    if (scale < 3)
-        return 48;
-    if (scale == 3)
-        return 16;
-    return 8;
-}
-
-void DekoRenderer::LoadShadersForScale(int scale)
-{
-    if (scale < 1) scale = 1;
-    if (scale > MaxScaleFactor) scale = MaxScaleFactor;
-    if (ShaderScaleLoaded[scale])
-        return;
-
-    LoadScaledComputeShader("InterpXSpansZBuffer", scale, ShaderInterpXSpans[scale][0]);
-    LoadScaledComputeShader("InterpXSpansWBuffer", scale, ShaderInterpXSpans[scale][1]);
-    LoadScaledComputeShader("BinCombined", scale, ShaderBinCombined[scale]);
-    LoadScaledComputeShader("DepthBlendZBuffer", scale, ShaderDepthBlend[scale][0]);
-    LoadScaledComputeShader("DepthBlendWBuffer", scale, ShaderDepthBlend[scale][1]);
-    LoadScaledComputeShader("RasteriseNoTextureZBuffer", scale, ShaderRasteriseNoTexture[scale][0]);
-    LoadScaledComputeShader("RasteriseNoTextureZBufferToon", scale, ShaderRasteriseNoTextureToon[scale][0]);
-    LoadScaledComputeShader("RasteriseNoTextureZBufferHighlight", scale, ShaderRasteriseNoTextureHighlight[scale][0]);
-    LoadScaledComputeShader("RasteriseUseTextureDecalZBuffer", scale, ShaderRasteriseUseTextureDecal[scale][0]);
-    LoadScaledComputeShader("RasteriseUseTextureModulateZBuffer", scale, ShaderRasteriseUseTextureModulate[scale][0]);
-    LoadScaledComputeShader("RasteriseUseTextureToonZBuffer", scale, ShaderRasteriseUseTextureToon[scale][0]);
-    LoadScaledComputeShader("RasteriseUseTextureHighlightZBuffer", scale, ShaderRasteriseUseTextureHighlight[scale][0]);
-    LoadScaledComputeShader("RasteriseShadowMaskZBuffer", scale, ShaderRasteriseShadowMask[scale][0]);
-    LoadScaledComputeShader("RasteriseNoTextureWBuffer", scale, ShaderRasteriseNoTexture[scale][1]);
-    LoadScaledComputeShader("RasteriseNoTextureWBufferToon", scale, ShaderRasteriseNoTextureToon[scale][1]);
-    LoadScaledComputeShader("RasteriseNoTextureWBufferHighlight", scale, ShaderRasteriseNoTextureHighlight[scale][1]);
-    LoadScaledComputeShader("RasteriseUseTextureDecalWBuffer", scale, ShaderRasteriseUseTextureDecal[scale][1]);
-    LoadScaledComputeShader("RasteriseUseTextureModulateWBuffer", scale, ShaderRasteriseUseTextureModulate[scale][1]);
-    LoadScaledComputeShader("RasteriseUseTextureToonWBuffer", scale, ShaderRasteriseUseTextureToon[scale][1]);
-    LoadScaledComputeShader("RasteriseUseTextureHighlightWBuffer", scale, ShaderRasteriseUseTextureHighlight[scale][1]);
-    LoadScaledComputeShader("RasteriseShadowMaskWBuffer", scale, ShaderRasteriseShadowMask[scale][1]);
-    LoadScaledComputeShader("ClearCoarseBinMask", scale, ShaderClearCoarseBinMask[scale]);
-    LoadScaledComputeShader("ClearIndirectWorkCount", scale, ShaderClearIndirectWorkCount[scale]);
-    LoadScaledComputeShader("CalculateWorkOffsets", scale, ShaderCalculateWorkListOffset[scale]);
-    LoadScaledComputeShader("SortWork", scale, ShaderSortWork[scale]);
-    LoadScaledComputeShader("FinalPass", scale, ShaderFinalPass[scale][0]);
-    LoadScaledComputeShader("FinalPassEdge", scale, ShaderFinalPass[scale][1]);
-    LoadScaledComputeShader("FinalPassFog", scale, ShaderFinalPass[scale][2]);
-    LoadScaledComputeShader("FinalPassEdgeFog", scale, ShaderFinalPass[scale][3]);
-    LoadScaledComputeShader("FinalPassAA", scale, ShaderFinalPass[scale][4]);
-    LoadScaledComputeShader("FinalPassEdgeAA", scale, ShaderFinalPass[scale][5]);
-    LoadScaledComputeShader("FinalPassFogAA", scale, ShaderFinalPass[scale][6]);
-    LoadScaledComputeShader("FinalPassEdgeFogAA", scale, ShaderFinalPass[scale][7]);
-
-    ShaderScaleLoaded[scale] = true;
-    printf("DekoRenderer loaded GPU3D shader scale x%d\n", scale);
-}
-
-size_t DekoRenderer::BinResultSize() const
-{
-    const size_t tileCount = (size_t)RuntimeTilesPerLine * RuntimeTileLines;
-    const size_t maxWorkTiles = (size_t)RuntimeMaxWorkTiles;
-    size_t size = 0;
-    size += MaxVariants * 16;                 // VariantWorkCount
-    size += MaxVariants * sizeof(u32);        // SortedWorkOffset
-    size += 16;                               // SortWorkWorkCount
-    size += maxWorkTiles * 2 * sizeof(u32);   // UnsortedWorkDescs
-    size += maxWorkTiles * 2 * sizeof(u32);   // SortedWork
-    size += tileCount * CoarseBinStride * sizeof(u32);
-    size += tileCount * BinStride * sizeof(u32);
-    size += tileCount * BinStride * sizeof(u32);
-    return size;
-}
-
-size_t DekoRenderer::TileMemorySize() const
-{
-    return (size_t)RuntimeMaxWorkTiles * RuntimeTileSize * RuntimeTileSize * 3 * sizeof(u32);
-}
-
-size_t DekoRenderer::FinalTileMemorySize() const
-{
-    return (size_t)ScreenWidth * ScreenHeight * 2 * 3 * sizeof(u32);
+    DekoLog("GBAStationNDSStub: GPU3D_Deko shaders loaded x1");
 }
 
 bool DekoRenderer::Init()
 {
-    ConfigureScale(MaxScaleFactor);
+    DekoLog("GBAStationNDSStub: GPU3D_Deko init begin");
+    YSpanIndices.resize(MaxYSpanIndices);
+    YSpanSetups.resize(MaxYSpanSetups);
+    RenderPolygons.resize(2048);
 
     for (int i = 0; i < 2; i++)
     {
-        YSpanSetupMemory[i] = Gfx::DataHeap->Alloc(sizeof(SpanSetupY)*RuntimeMaxYSpanSetups, 4);
+        YSpanSetupMemory[i] = Gfx::DataHeap->Alloc(sizeof(SpanSetupY)*MaxYSpanSetups, 4);
 
         RenderPolygonMemory[i] = Gfx::DataHeap->Alloc(sizeof(RenderPolygon)*2048, 4);
+        DekoLog("GBAStationNDSStub: GPU3D_Deko alloc slice=%d ySpanSetup=%llu renderPoly=%llu",
+                i,
+                static_cast<unsigned long long>(sizeof(SpanSetupY) * MaxYSpanSetups),
+                static_cast<unsigned long long>(sizeof(RenderPolygon) * 2048));
     }
 
-    XSpanSetupMemory = Gfx::DataHeap->Alloc(sizeof(SpanSetupX)*RuntimeMaxYSpanIndices, alignof(SpanSetupX));
+    XSpanSetupMemory = Gfx::DataHeap->Alloc(sizeof(SpanSetupX)*MaxYSpanIndices, alignof(SpanSetupX));
+    DekoLog("GBAStationNDSStub: GPU3D_Deko alloc xSpan=%llu",
+            static_cast<unsigned long long>(sizeof(SpanSetupX) * MaxYSpanIndices));
 
     dk::ImageLayout yspanIndicesLayout;
     dk::ImageLayoutMaker{Gfx::Device}
         .setType(DkImageType_Buffer)
-        .setDimensions(RuntimeMaxYSpanIndices)
+        .setDimensions(MaxYSpanIndices)
         .setFormat(DkImageFormat_RGBA16_Uint)
         .initialize(yspanIndicesLayout);
     YSpanIndicesTextureMemory = Gfx::TextureHeap->Alloc(yspanIndicesLayout.getSize(), yspanIndicesLayout.getAlignment());
     YSpanIndicesTexture.initialize(yspanIndicesLayout, Gfx::TextureHeap->MemBlock, YSpanIndicesTextureMemory.Offset);
+    DekoLog("GBAStationNDSStub: GPU3D_Deko alloc ySpanTexture layoutSize=%llu align=%u",
+            static_cast<unsigned long long>(yspanIndicesLayout.getSize()),
+            yspanIndicesLayout.getAlignment());
 
-    ConfigureScale(2);
+    DekoLog("GBAStationNDSStub: GPU3D_Deko alloc tileMemory begin bytes=%llu maxWork=%d",
+            static_cast<unsigned long long>(sizeof(Tiles)),
+            MaxWorkTiles);
+    TileMemory = Gfx::DataHeap->Alloc(sizeof(Tiles), alignof(Tiles));
+    DekoLog("GBAStationNDSStub: GPU3D_Deko alloc tileMemory ok bytes=%llu",
+            static_cast<unsigned long long>(sizeof(Tiles)));
 
-    TileMemory = Gfx::DataHeap->Alloc(TileMemorySize(), alignof(Tiles));
+    DekoLog("GBAStationNDSStub: GPU3D_Deko alloc binResult begin bytes=%llu",
+            static_cast<unsigned long long>(sizeof(BinResult)));
+    BinResultMemory = Gfx::DataHeap->Alloc(sizeof(BinResult), alignof(BinResult));
+    memset(Gfx::DataHeap->CpuAddr<void>(BinResultMemory), 0, sizeof(BinResult));
+    DekoLog("GBAStationNDSStub: GPU3D_Deko alloc binResult ok bytes=%llu",
+            static_cast<unsigned long long>(sizeof(BinResult)));
 
-    ConfigureScale(MaxScaleFactor);
+    DekoLog("GBAStationNDSStub: GPU3D_Deko alloc finalTile begin bytes=%llu",
+            static_cast<unsigned long long>(sizeof(FinalTiles)));
+    FinalTileMemory = Gfx::DataHeap->Alloc(sizeof(FinalTiles), alignof(FinalTiles));
+    DekoLog("GBAStationNDSStub: GPU3D_Deko alloc finalTile ok bytes=%llu",
+            static_cast<unsigned long long>(sizeof(FinalTiles)));
 
-    BinResultMemory = Gfx::DataHeap->Alloc(BinResultSize(), alignof(BinResult));
-    memset(Gfx::DataHeap->CpuAddr<void>(BinResultMemory), 0, BinResultSize());
-
-    FinalTileMemory = Gfx::DataHeap->Alloc(FinalTileMemorySize(), alignof(FinalTiles));
-
-    LoadShadersForScale(1);
+    LoadShaders();
 
     {
         ImageDescriptors = Gfx::DataHeap->Alloc(sizeof(dk::ImageDescriptor)*descriptorOffset_Count, DK_IMAGE_DESCRIPTOR_ALIGNMENT);
@@ -206,8 +173,7 @@ bool DekoRenderer::Init()
 
     MetaUniformMemory = Gfx::DataHeap->Alloc(MetaUniformSize, DK_UNIFORM_BUF_ALIGNMENT);
 
-    ConfigureScale(1);
-
+    DekoLog("GBAStationNDSStub: GPU3D_Deko init ok");
     return true;
 }
 
@@ -239,19 +205,7 @@ void DekoRenderer::Reset()
 
 void DekoRenderer::SetRenderSettings(GPU::RenderSettings& settings)
 {
-    int requestedScale = settings.GL_ScaleFactor;
-    if (requestedScale < 1) requestedScale = 1;
-    if (requestedScale > 4) requestedScale = 4;
     BetterPolygons = settings.GL_BetterPolygons;
-
-    if (requestedScale != RequestedScaleFactor)
-    {
-        printf("DekoRenderer::SetRenderSettings scale x%d output=%dx%d\n",
-               requestedScale, 256 * requestedScale, 192 * requestedScale);
-    }
-
-    LoadShadersForScale(requestedScale);
-    ConfigureScale(requestedScale);
 }
 
 void DekoRenderer::VCount144()
@@ -1028,19 +982,19 @@ void DekoRenderer::RenderFrame()
         u32 nverts = polygon->NumVertices;
         u32 vtop = polygon->VTop, vbot = polygon->VBottom;
         s32 scaledPositions[10][2];
-        s32 ytop = ScreenHeight;
+        s32 ytop = 192;
         s32 ybot = 0;
         for (u32 j = 0; j < nverts; j++)
         {
             if (BetterPolygons)
             {
-                scaledPositions[j][0] = (polygon->Vertices[j]->HiresPosition[0] * ScaleFactor) >> 4;
-                scaledPositions[j][1] = (polygon->Vertices[j]->HiresPosition[1] * ScaleFactor) >> 4;
+                scaledPositions[j][0] = polygon->Vertices[j]->HiresPosition[0] >> 4;
+                scaledPositions[j][1] = polygon->Vertices[j]->HiresPosition[1] >> 4;
             }
             else
             {
-                scaledPositions[j][0] = polygon->Vertices[j]->FinalPosition[0] * ScaleFactor;
-                scaledPositions[j][1] = polygon->Vertices[j]->FinalPosition[1] * ScaleFactor;
+                scaledPositions[j][0] = polygon->Vertices[j]->FinalPosition[0];
+                scaledPositions[j][1] = polygon->Vertices[j]->FinalPosition[1];
             }
             if (scaledPositions[j][1] < ytop) ytop = scaledPositions[j][1];
             if (scaledPositions[j][1] > ybot) ybot = scaledPositions[j][1];
@@ -1153,10 +1107,10 @@ void DekoRenderer::RenderFrame()
             if (scaledPositions[j][0] < scaledPositions[vtop][0]) vtop = j;
             if (scaledPositions[j][0] > scaledPositions[vbot][0]) vbot = j;
 
-            assert(numYSpans < RuntimeMaxYSpanSetups);
+            assert(numYSpans < MaxYSpanSetups);
             u32 curSpanL = numYSpans;
             SetupYSpanDummy(&YSpanSetups[numYSpans++], polygon, vtop, 0, scaledPositions);
-            assert(numYSpans < RuntimeMaxYSpanSetups);
+            assert(numYSpans < MaxYSpanSetups);
             u32 curSpanR = numYSpans;
             SetupYSpanDummy(&YSpanSetups[numYSpans++], polygon, vbot, 1, scaledPositions);
 
@@ -1170,7 +1124,7 @@ void DekoRenderer::RenderFrame()
                 std::swap(minXY, maxXY);
             }
 
-            assert(numSetupIndices < RuntimeMaxYSpanIndices);
+            assert(numSetupIndices < MaxYSpanIndices);
             YSpanIndices[numSetupIndices].PolyIdx = i;
             YSpanIndices[numSetupIndices].SpanIdxL = curSpanL;
             YSpanIndices[numSetupIndices].SpanIdxR = curSpanR;
@@ -1180,10 +1134,10 @@ void DekoRenderer::RenderFrame()
         else
         {
             u32 curSpanL = numYSpans;
-            assert(numYSpans < RuntimeMaxYSpanSetups);
+            assert(numYSpans < MaxYSpanSetups);
             SetupYSpan(i, &YSpanSetups[numYSpans++], polygon, curVL, nextVL, ytop, 0, scaledPositions);
             u32 curSpanR = numYSpans;
-            assert(numYSpans < RuntimeMaxYSpanSetups);
+            assert(numYSpans < MaxYSpanSetups);
             SetupYSpan(i, &YSpanSetups[numYSpans++], polygon, curVR, nextVR, ytop, 1, scaledPositions);
 
             for (u32 y = ytop; y < ybot; y++)
@@ -1218,7 +1172,7 @@ void DekoRenderer::RenderFrame()
                         maxXY = scaledPositions[curVL][1];
                     }
 
-                    assert(numYSpans < RuntimeMaxYSpanSetups);
+                    assert(numYSpans < MaxYSpanSetups);
                     curSpanL = numYSpans;
                     SetupYSpan(i,&YSpanSetups[numYSpans++], polygon, curVL, nextVL, y, 0, scaledPositions);
                 }
@@ -1252,12 +1206,12 @@ void DekoRenderer::RenderFrame()
                         maxXY = scaledPositions[curVR][1];
                     }
 
-                    assert(numYSpans < RuntimeMaxYSpanSetups);
+                    assert(numYSpans < MaxYSpanSetups);
                     curSpanR = numYSpans;
                     SetupYSpan(i,&YSpanSetups[numYSpans++], polygon, curVR, nextVR, y, 1, scaledPositions);
                 }
 
-                assert(numSetupIndices < RuntimeMaxYSpanIndices);
+                assert(numSetupIndices < MaxYSpanIndices);
                 YSpanIndices[numSetupIndices].PolyIdx = i;
                 YSpanIndices[numSetupIndices].SpanIdxL = curSpanL;
                 YSpanIndices[numSetupIndices].SpanIdxR = curSpanR;
@@ -1388,37 +1342,35 @@ void DekoRenderer::RenderFrame()
     EmuCmdBuf.bindUniformBuffer(DkStage_Compute, 0, Gfx::DataHeap->GpuAddr(MetaUniformMemory), MetaUniformSize);
     EmuCmdBuf.pushConstants(gpuAddrMetaUniform, MetaUniformSize, 0, sizeof(MetaUniform), &meta);
 
-    const int shaderScale = ActiveShaderScale();
-
-    EmuCmdBuf.bindShaders(DkStageFlag_Compute, {&ShaderClearCoarseBinMask[shaderScale]});
-    EmuCmdBuf.dispatchCompute(RuntimeTilesPerLine*RuntimeTileLines/32, 1, 1);
+    EmuCmdBuf.bindShaders(DkStageFlag_Compute, {&ShaderClearCoarseBinMask});
+    EmuCmdBuf.dispatchCompute(TilesPerLine*TileLines/32, 1, 1);
 
     bool wbuffer = false;
     if (numYSpans > 0)
     {
         wbuffer = RenderPolygonRAM[0]->WBuffer;
 
-        EmuCmdBuf.bindShaders(DkStageFlag_Compute, {&ShaderClearIndirectWorkCount[shaderScale]});
+        EmuCmdBuf.bindShaders(DkStageFlag_Compute, {&ShaderClearIndirectWorkCount});
         EmuCmdBuf.dispatchCompute((numVariants+31)/32, 1, 1);
 
         // calculate x-spans
         EmuCmdBuf.bindImages(DkStage_Compute, 0, {dkMakeImageHandle(descriptorOffset_YSpanIndices)});
-        EmuCmdBuf.bindShaders(DkStageFlag_Compute, {&ShaderInterpXSpans[shaderScale][wbuffer]});
+        EmuCmdBuf.bindShaders(DkStageFlag_Compute, {&ShaderInterpXSpans[wbuffer]});
         EmuCmdBuf.dispatchCompute((numSetupIndices + 31) / 32, 1, 1);
         EmuCmdBuf.barrier(DkBarrier_Primitives, 0);
 
         // bin polygons
-        EmuCmdBuf.bindShaders(DkStageFlag_Compute, {&ShaderBinCombined[shaderScale]});
-        EmuCmdBuf.dispatchCompute(((RenderNumPolygons + 31) / 32), ScreenWidth/CoarseTileW, ScreenHeight/CoarseTileH);
+        EmuCmdBuf.bindShaders(DkStageFlag_Compute, {&ShaderBinCombined});
+        EmuCmdBuf.dispatchCompute(((RenderNumPolygons + 31) / 32), 256/CoarseTileW, 192/CoarseTileH);
         EmuCmdBuf.barrier(DkBarrier_Primitives, 0);
 
         // calculate list offsets
-        EmuCmdBuf.bindShaders(DkStageFlag_Compute, {&ShaderCalculateWorkListOffset[shaderScale]});
+        EmuCmdBuf.bindShaders(DkStageFlag_Compute, {&ShaderCalculateWorkListOffset});
         EmuCmdBuf.dispatchCompute((numVariants + 31) / 32, 1, 1);
         EmuCmdBuf.barrier(DkBarrier_Primitives, 0);
 
         // sort shader work
-        EmuCmdBuf.bindShaders(DkStageFlag_Compute, {&ShaderSortWork[shaderScale]});
+        EmuCmdBuf.bindShaders(DkStageFlag_Compute, {&ShaderSortWork});
         EmuCmdBuf.dispatchComputeIndirect(gpuAddrBinResult + offsetof(BinResult, SortWorkWorkCount));
         EmuCmdBuf.barrier(DkBarrier_Primitives, 0);
 
@@ -1428,23 +1380,23 @@ void DekoRenderer::RenderFrame()
 
             dk::Shader* shadersNoTexture[] =
             {
-                &ShaderRasteriseNoTexture[shaderScale][wbuffer],
-                &ShaderRasteriseNoTexture[shaderScale][wbuffer],
+                &ShaderRasteriseNoTexture[wbuffer],
+                &ShaderRasteriseNoTexture[wbuffer],
                 highLightMode
-                    ? &ShaderRasteriseNoTextureHighlight[shaderScale][wbuffer]
-                    : &ShaderRasteriseNoTextureToon[shaderScale][wbuffer],
-                &ShaderRasteriseNoTexture[shaderScale][wbuffer],
-                &ShaderRasteriseShadowMask[shaderScale][wbuffer]
+                    ? &ShaderRasteriseNoTextureHighlight[wbuffer]
+                    : &ShaderRasteriseNoTextureToon[wbuffer],
+                &ShaderRasteriseNoTexture[wbuffer],
+                &ShaderRasteriseShadowMask[wbuffer]
             };
             dk::Shader* shadersUseTexture[] =
             {
-                &ShaderRasteriseUseTextureModulate[shaderScale][wbuffer],
-                &ShaderRasteriseUseTextureDecal[shaderScale][wbuffer],
+                &ShaderRasteriseUseTextureModulate[wbuffer],
+                &ShaderRasteriseUseTextureDecal[wbuffer],
                 highLightMode
-                    ? &ShaderRasteriseUseTextureHighlight[shaderScale][wbuffer]
-                    : &ShaderRasteriseUseTextureToon[shaderScale][wbuffer],
-                &ShaderRasteriseUseTextureDecal[shaderScale][wbuffer],
-                &ShaderRasteriseShadowMask[shaderScale][wbuffer]
+                    ? &ShaderRasteriseUseTextureHighlight[wbuffer]
+                    : &ShaderRasteriseUseTextureToon[wbuffer],
+                &ShaderRasteriseUseTextureDecal[wbuffer],
+                &ShaderRasteriseShadowMask[wbuffer]
             };
 
             dk::Shader* prevShader = NULL;
@@ -1492,8 +1444,8 @@ void DekoRenderer::RenderFrame()
     }
 
     // compose final image
-    EmuCmdBuf.bindShaders(DkStageFlag_Compute, {&ShaderDepthBlend[shaderScale][wbuffer]});
-    EmuCmdBuf.dispatchCompute(ScreenWidth/RuntimeTileSize, ScreenHeight/RuntimeTileSize, 1);
+    EmuCmdBuf.bindShaders(DkStageFlag_Compute, {&ShaderDepthBlend[wbuffer]});
+    EmuCmdBuf.dispatchCompute(256/TileSize, 192/TileSize, 1);
     EmuCmdBuf.barrier(DkBarrier_Primitives, 0);
 
     EmuCmdBuf.bindImages(DkStage_Compute, 0, {dkMakeImageHandle(descriptorOffset_FinalFB)});
@@ -1504,8 +1456,8 @@ void DekoRenderer::RenderFrame()
         finalPassShader |= 0x2;
     if (RenderDispCnt & (1<<5))
         finalPassShader |= 0x1;
-    EmuCmdBuf.bindShaders(DkStageFlag_Compute, {&ShaderFinalPass[shaderScale][finalPassShader]});
-    EmuCmdBuf.dispatchCompute(ScreenWidth/32, ScreenHeight, 1);
+    EmuCmdBuf.bindShaders(DkStageFlag_Compute, {&ShaderFinalPass[finalPassShader]});
+    EmuCmdBuf.dispatchCompute(256/32, 192, 1);
     EmuCmdBuf.barrier(DkBarrier_Primitives, 0);
 
     DkCmdList cmdlist = CmdMem.End(EmuCmdBuf);

@@ -26,24 +26,6 @@
 #cmakedefine Highlight
 #cmakedefine ShadowMask
 
-#cmakedefine NDS_DEKO_SCREEN_WIDTH @NDS_DEKO_SCREEN_WIDTH@
-#cmakedefine NDS_DEKO_SCREEN_HEIGHT @NDS_DEKO_SCREEN_HEIGHT@
-#cmakedefine NDS_DEKO_TILE_SIZE @NDS_DEKO_TILE_SIZE@
-#cmakedefine NDS_DEKO_WORK_TILE_MULTIPLIER @NDS_DEKO_WORK_TILE_MULTIPLIER@
-
-#ifndef NDS_DEKO_SCREEN_WIDTH
-#define NDS_DEKO_SCREEN_WIDTH 256
-#endif
-#ifndef NDS_DEKO_SCREEN_HEIGHT
-#define NDS_DEKO_SCREEN_HEIGHT 192
-#endif
-#ifndef NDS_DEKO_TILE_SIZE
-#define NDS_DEKO_TILE_SIZE 8
-#endif
-#ifndef NDS_DEKO_WORK_TILE_MULTIPLIER
-#define NDS_DEKO_WORK_TILE_MULTIPLIER 48
-#endif
-
 #extension GL_ARB_shader_ballot : require
 #extension GL_ARB_gpu_shader_int64 : require
 
@@ -137,14 +119,14 @@ layout (std140, binding = 2) readonly buffer PolygonBuffer
     Polygon Polygons[];
 };
 
-const int TileSize = NDS_DEKO_TILE_SIZE;
+const int TileSize = 8;
 const int CoarseTileCountX = 8;
 const int CoarseTileCountY = 4;
 const int CoarseTileW = CoarseTileCountX * TileSize;
 const int CoarseTileH = CoarseTileCountY * TileSize;
 
-const int ScreenWidth = NDS_DEKO_SCREEN_WIDTH;
-const int ScreenHeight = NDS_DEKO_SCREEN_HEIGHT;
+const int ScreenWidth = 256;
+const int ScreenHeight = 192;
 const int FramebufferStride = ScreenWidth*ScreenHeight;
 const int TilesPerLine = ScreenWidth/TileSize;
 const int TileLines = ScreenHeight/TileSize;
@@ -152,7 +134,7 @@ const int TileLines = ScreenHeight/TileSize;
 const int BinStride = 2048/32;
 const int CoarseBinStride = BinStride/32;
 
-const int MaxWorkTiles = TilesPerLine*TileLines*NDS_DEKO_WORK_TILE_MULTIPLIER;
+const int MaxWorkTiles = TilesPerLine*TileLines*48;
 const int MaxVariants = 256;
 
 layout (std430, binding = 3)

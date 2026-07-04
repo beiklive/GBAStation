@@ -634,29 +634,6 @@ int RunDekoRuntime(const DekoRunOptions& options)
     auto fpsStart = std::chrono::steady_clock::now();
     bool blockGameInputUntilRelease = false;
     bool lastFastForwardActive = false;
-    int currentResolutionScale = 1;
-
-    auto applyResolutionScale = [&](int scale) {
-        scale = std::clamp(scale, 1, 4);
-        if (scale == currentResolutionScale)
-            return;
-
-        appendStubLog("GBAStationNDSStub: Deko resolution scale request x%d", scale);
-        if (scale != 1)
-        {
-            appendStubLog("GBAStationNDSStub: Deko resolution scale x%d temporarily disabled; runtime stays x1", scale);
-            currentResolutionScale = 1;
-            return;
-        }
-        Gfx::PresentQueue.waitIdle();
-        Gfx::EmuQueue.waitIdle();
-
-        GPU::RenderSettings newSettings {true, scale, false};
-        GPU::SetRenderSettings(0, newSettings);
-        deko2d->SetScaleFactor(scale);
-        currentResolutionScale = scale;
-        appendStubLog("GBAStationNDSStub: Deko resolution scale request accepted x%d", scale);
-    };
 
     while (appletMainLoop() && running)
     {
@@ -677,11 +654,9 @@ int RunDekoRuntime(const DekoRunOptions& options)
         if (menuAction == NdsMenuAction::DisplaySettingsChanged)
         {
             gameLayer.setLinearFiltering(menuLayer.linearFiltering());
-            applyResolutionScale(menuLayer.resolutionScale());
-            appendStubLog("GBAStationNDSStub: Deko display settings filter=%s ff=x%d res=x%d",
+            appendStubLog("GBAStationNDSStub: Deko display settings filter=%s ff=x%d",
                           menuLayer.linearFiltering() ? "linear" : "nearest",
-                          menuLayer.fastForwardMultiplier(),
-                          menuLayer.resolutionScale());
+                          menuLayer.fastForwardMultiplier());
         }
         if (menuAction == NdsMenuAction::ResetGame)
         {
@@ -813,12 +788,11 @@ int RunDekoRuntime(const DekoRunOptions& options)
         ++totalFrames;
         if (totalFrames % 60 == 0)
         {
-            appendStubLog("GBAStationNDSStub: Deko heartbeat frame=%llu fps=%.1f run=%lldms ff=%d res=%d filter=%s",
+            appendStubLog("GBAStationNDSStub: Deko heartbeat frame=%llu fps=%.1f run=%lldms ff=%d filter=%s",
                           static_cast<unsigned long long>(totalFrames),
                           fps,
                           lastRunMs,
                           fastForwardActive ? menuLayer.fastForwardMultiplier() : 1,
-                          currentResolutionScale,
                           menuLayer.linearFiltering() ? "linear" : "nearest");
         }
         const auto now = std::chrono::steady_clock::now();

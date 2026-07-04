@@ -1710,6 +1710,260 @@ GBAStationNDSStub.nro 3.16 MB
 
 ---
 
+## 阶段 3.6：移除多倍分辨率并恢复 x1-only
+
+### 目标
+
+用户确认暂时放弃 NDS 多倍分辨率功能，只保留默认 1 倍分辨率，优先恢复稳定启动和稳定运行。
+
+### 已实施
+
+- 移除 NDS Stub 菜单中的“内部分辨率”项目。
+- 移除 `NdsDekoRuntime` 中的分辨率切换逻辑，`GPU::RenderSettings` 固定为 `GL_ScaleFactor = 1`。
+- 移除 `GPU2D_Deko` 的 `SetScaleFactor`、多倍率 compose shader 加载、scale 下标访问和高倍 3D 采样参数。
+- 移除 `GPU3D_Deko` 的倍率状态、动态工作缓冲 sizing、`*_xN` shader 加载和高倍 dispatch 路径。
+- 恢复 compose 和 GPU3D shader 为固定 256x192 原生路径。
+- 在 `nds_stub/CMakeLists.txt` 中移除 `_x1/_x2/_x3/_x4` shader 生成目标，并在配置阶段清理旧构建目录中的 `_x1.._x4` 残留 shader，避免被 RomFS 继续打包。
+- 保留实时日志、菜单、音频、触摸、快进、过滤方式和之前的标题界面红屏修复。
+
+### 验证
+
+- `git diff --check` 通过。
+- 关键残留搜索无命中：`BGIs3DMask`、`Source3DScale`、`SetScaleFactor`、`LoadShadersForScale`、`ConfigureScale`、`*_x2/_x3/_x4`。
+- `build_switch/nds_stub_romfs/shaders` 中无 `_x*.dksh` 残留。
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.17 MB
+```
+
+### 当前状态
+
+NDS Stub 只走原生 1 倍 Deko 渲染路径。后续性能优化应基于 x1 稳定性继续推进，不再引入多倍分辨率相关资源或运行时切换。
+
+---
+
+## 阶段 3.4：重新实装 Deko x2 内部分辨率并强化实时日志
+
+### 目标
+
+只推进 x2，不继续扩展 x3/x4。要求每一步都留下可定位日志，避免真机如果再次黑屏或卡死时只剩现象，无法判断卡在资源分配、shader 加载、3D compute、2D compose 还是 display capture。
+
+### 已实施
+
+- Stub 日志系统改为实时落盘：
+  - 每条日志带 `armGetSystemTick()` tick；
+  - 每次写入后执行 `fflush + fsync + fclose`；
+  - 启动时尝试创建 `sdmc:/GBAStation/log`；
+  - 暴露 `extern "C" GBAStationNDSStubLogLine()`，供 ArcDelta Deko 内部直接写入同一份日志。
+- NDS stub 默认以 x2 启动：
+  - 启动时写入 `Deko resolution initial x2 forceX1=0`；
+  - 如需临时救援，可放置 `sdmc:/GBAStation/config/nds_stub_x1.flag` 强制 x1；
+  - 菜单内部分辨率限制为 x1/x2，当前不开放 x3/x4。
+- `GPU2D_Deko` 开放 `MaxScaleFactor = 2`：
+  - Final framebuffer 与 3D framebuffer 按 512x384 分配；
+  - 记录 framebuffer layout size、3D framebuffer size、compose shader scale 加载、scale 应用结果；
+  - `ComposeBGOBJ()` 添加前 24 次和之后每 240 次的关键日志。
+- `GPU3D_Deko` 开放 `MaxScaleFactor = 2`：
+  - 初始化按 x2 最大资源分配，再运行时切回请求倍率；
+  - 预加载 x1/x2 compute shader，避免运行中首次切换加载；
+  - 记录 configure、各类 buffer 分配大小、shader 加载、SetRenderSettings。
+- `ComposeBGOBJ_fsh.glsl` 恢复 scale-aware 3D BG 采样：
+  - 2D BG/OBJ 仍按原生 256x192 采样；
+  - 只有 BG0 作为 3D 层时使用 `Source3DScale` 采样 512x384 3D framebuffer。
+- `GPU2D_Deko::ComposeBGOBJ()` 对 display capture 做拆分：
+  - capture pass 使用 native viewport/scissor 写 256x192 `BGOBJTexture`；
+  - display pass 再写 x2 final framebuffer；
+  - palette/uniform 上传只保留一次，降低重复 pass 对资源状态的扰动。
+- `GPU3D_Comp.glsl` 修正 x2 final pass 的横向滚动和边缘判断：
+  - `XScroll` 按 `ScreenWidth / 256` 缩放；
+  - `srcX`、右边界、下边界不再写死 256/255/191。
+
+### 新增关键日志
+
+```text
+GBAStationNDSStub: Deko resolution initial x2 forceX1=0
+GBAStationNDSStub: Deko checkpoint GPU2D::SetScaleFactor begin scale=2
+GBAStationNDSStub: GPU2D_Deko ctor begin maxScale=2 maxFb=512x384
+GBAStationNDSStub: GPU2D_Deko compose begin seq=... unit=... scale=2 capture=...
+GBAStationNDSStub: GPU3D_Deko init begin
+GBAStationNDSStub: GPU3D_Deko configure scale=x2 screen=512x384 ...
+GBAStationNDSStub: GPU3D_Deko alloc tileMemory=...
+GBAStationNDSStub: GPU3D_Deko shaders loaded scale=x2
+```
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 3.17 MB
+```
+
+### 真机验证重点
+
+- 首次打开 NDS 是否能直接进入游戏画面；
+- 宝可梦黑2、黄金太阳标题界面是否仍有整屏偏红；
+- x2 下复杂 3D 场景 GPU 占用是否上升，画面是否比 x1 更清晰；
+- 若黑屏或卡死，直接查看 `sdmc:/GBAStation/log/GBAStationNDSStub.log` 最后一条日志。
+
+---
+
+## 阶段 3.5：根据真机日志降低 x2 GPU3D TileMemory 压力
+
+### 真机日志
+
+本次日志停在：
+
+```text
+GPU3D_Deko configure scale=x2 screen=512x384 tiles=64x48 maxWork=147456 ...
+GPU3D_Deko alloc ySpanTexture layoutSize=2097152 align=8
+```
+
+下一步应进入 `TileMemory` 分配，但没有出现 `alloc tileMemory` 日志。因此高概率卡在 x2 TileMemory 分配处。
+
+### 判断
+
+上一版 x2 沿用了 x1 的 `WorkTileMultiplier=48`。x2 下 tile 数变为 64x48，导致：
+
+```text
+RuntimeMaxWorkTiles = 64 * 48 * 48 = 147456
+TileMemory ~= 147456 * 8 * 8 * 3 * 4 = 108 MB
+```
+
+这个分配量对 Switch DataHeap 压力过高，容易在初始化阶段直接卡死或崩溃。
+
+### 已实施
+
+- `GPU3D_Deko::WorkTileMultiplierForScale()` 调整：
+  - x1 保持 48；
+  - x2 改为 16；
+  - x3/x4 暂按 8，但当前 runtime 仍只开放 x1/x2。
+- `nds_stub/CMakeLists.txt` 同步 shader 常量：
+  - x1 `NDS_DEKO_WORK_TILE_MULTIPLIER=48`；
+  - x2 `NDS_DEKO_WORK_TILE_MULTIPLIER=16`；
+  - x3/x4 `NDS_DEKO_WORK_TILE_MULTIPLIER=8`。
+- GPU3D 初始化日志改为分配前后都记录：
+
+```text
+GPU3D_Deko alloc tileMemory begin bytes=... maxWork=... multiplier=...
+GPU3D_Deko alloc tileMemory ok bytes=...
+GPU3D_Deko alloc binResult begin bytes=...
+GPU3D_Deko alloc binResult ok bytes=...
+GPU3D_Deko alloc finalTile begin bytes=...
+GPU3D_Deko alloc finalTile ok bytes=...
+```
+
+### 预期变化
+
+x2 的 TileMemory 从约 108MB 降到约 36MB：
+
+```text
+RuntimeMaxWorkTiles = 64 * 48 * 16 = 49152
+TileMemory ~= 49152 * 8 * 8 * 3 * 4 = 36 MB
+```
+
+这不是回退 x2，而是把 x2 的 GPU work buffer 预算从“原生比例直接放大”改为 Switch 更可能稳定承载的规模。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 3.17 MB
+```
+
+---
+
+## 阶段 3.6：回收 x2 实验路径，恢复 x1 稳定包
+
+### 现象
+
+真机反馈阶段 3.5 的 x2 首轮实现会导致：
+
+- 核心 1 占用约 80% 后程序崩溃；
+- 或核心 1 长时间 100%，黑屏卡住。
+
+### 判断
+
+x2 路径仍存在启动期资源/同步问题。风险点包括：
+
+- `GPU2D_Deko / GPU3D_Deko` 的最大 scale 提升后，启动初始化会重新触发更大的 framebuffer / compute buffer / shader 资源路径；
+- `ComposeBGOBJ()` 的 native capture pass + scaled display pass 会让同一批 compose region 里的 palette copy 和 render target 绑定被重复执行，可能踩到 Deko 命令同步或资源状态问题；
+- 当前阶段继续保留 x2 会破坏 x1 稳定性，因此先回收实验入口。
+
+### 已实施
+
+- `GPU2D_Deko::MaxScaleFactor` 恢复为 `1`。
+- `GPU3D_Deko::MaxScaleFactor` 恢复为 `1`。
+- 移除 x2 实验新增的 `CaptureColorTexture`。
+- `ComposeBGOBJ_fsh.glsl` 移除 `BGIs3DMask / Source3DScale`，恢复稳定 x1 shader uniform 布局。
+- `GPU2D_Deko::ComposeBGOBJ()` 恢复为单 pass 合成。
+- NDS stub 菜单中的内部分辨率临时锁定为 `x1`。
+- `NdsDekoRuntime` 中分辨率切换请求会记录日志并保持 x1。
+
+### 保留内容
+
+没有回退已验证有效的红屏修复：
+
+- `BGOBJTexture` 继续使用 `intermedFbLayout` / `R32_Uint`；
+- `DoCapture()` 中 `srcBaddr` 初始化修复保留；
+- `DoCapture()` 中 source A 分支 G/B 通道使用错误修复保留。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 3.16 MB
+```
+
+---
+
+## 阶段 3.5：开放 Deko x2 多倍分辨率首轮验证
+
+### 目标
+
+在不破坏 x1 稳定性和 display capture 颜色正确性的前提下，让 NDS stub 的多倍分辨率开始真正生效。首轮只开放 x1 / x2，x3 / x4 暂缓，避免再次触发高资源初始化导致的黑屏长卡。
+
+### 已实施
+
+- `GPU2D_Deko::MaxScaleFactor` 从 `1` 提升到 `2`。
+- `GPU3D_Deko::MaxScaleFactor` 从 `1` 提升到 `2`。
+- NDS stub 菜单中的“内部分辨率”暂时限制为 `x1 / x2`。
+- `NdsDekoRuntime` 中实际应用分辨率时最大限制为 `x2`，日志会记录：
+
+```text
+GBAStationNDSStub: Deko resolution scale request xN apply xM
+```
+
+- `ComposeBGOBJ_fsh.glsl` 重新加入 `BGIs3DMask`，但这次同时加入 `Source3DScale`，只对 3D BG 层使用高分辨率采样坐标，普通 2D BG/OBJ 仍使用 NDS 原生坐标。
+- `GPU2D_Deko::ComposeBGOBJ()` 拆分为两类 pass：
+  - display pass：按当前 scale 输出到最终屏幕帧缓冲；
+  - capture pass：如果 NDS display capture 生效，额外用 256x192 native pass 写入 `BGOBJTexture`，保证 capture 写回 VRAM 的格式和尺寸不被 x2 污染。
+- 新增 `CaptureColorTexture` 作为 capture pass 的原生颜色输出目标，避免 x2 最终帧缓冲与 native capture target 混合作为双 render target。
+
+### 当前限制
+
+- x3 / x4 仍未开放。
+- x2 下 display capture 帧会多一次 native compose pass，优先保证兼容性；性能数据需要真机继续观察。
+- 主程序、libretro、mGBA 渲染与音频路径未修改。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 3.16 MB
+```
+
+---
+
 ## 阶段 3.4：恢复 DisplayCapture / BGOBJ 中间纹理格式
 
 ### 现象
