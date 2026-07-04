@@ -2,6 +2,7 @@
 
 #include "nds_stub/NdsGameLayer.hpp"
 #include "nds_stub/NdsMenuLayer.hpp"
+#include "nds_stub/ui/UiComponents.hpp"
 
 #include <algorithm>
 #include <array>
@@ -435,6 +436,7 @@ public:
                 if (key.rfind("nds.", 0) != 0 &&
                     key.rfind("fastforward.", 0) != 0 &&
                     key.rfind("save.", 0) != 0 &&
+                    key.rfind("display.", 0) != 0 &&
                     key != "turbo.rate")
                     continue;
 
@@ -1064,6 +1066,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
     checkpointBegin = std::chrono::steady_clock::now();
     Gfx::Init();
     appendStubLog("GBAStationNDSStub: Deko checkpoint Gfx::Init ok ms=%lld", elapsedMs(checkpointBegin));
+
     appendStubLog("GBAStationNDSStub: Deko checkpoint NDS::Init begin");
     checkpointBegin = std::chrono::steady_clock::now();
     NDS::Init();
@@ -1465,10 +1468,17 @@ int RunDekoRuntime(const DekoRunOptions& options)
             Gfx::DrawRectangle({px - 1.5f, py - 10.0f}, {3.0f, 20.0f}, cursorColor);
         }
 
+        if (!menuLayer.active())
+            beiklive::nds_stub::ui::drawGameStatusBadges(fps,
+                                                         inputConfig.intValue("display.showFps", 0) != 0,
+                                                         fastForwardActive,
+                                                         inputConfig.intValue("display.showFfOverlay", 1) != 0,
+                                                         runtimePaused);
+
         if (traceFrame)
             appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu menuLayer.draw begin",
                           static_cast<unsigned long long>(totalFrames));
-        menuLayer.draw(fps, lastRunMs, fastForwardActive);
+        menuLayer.draw();
         if (traceFrame)
             appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu menuLayer.draw ok",
                           static_cast<unsigned long long>(totalFrames));

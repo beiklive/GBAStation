@@ -15,6 +15,11 @@ namespace {
 
 constexpr float kPanelAnimationMs = 220.0f;
 constexpr float kSelectorInitialDelayMs = 320.0f;
+constexpr float kContentBodyH = 450.0f;
+constexpr float kSaveCardH = 94.0f;
+constexpr float kSaveCardGapY = 14.0f;
+constexpr float kSettingRowH = 42.0f;
+constexpr float kSettingStepY = 48.0f;
 
 constexpr float kFastForwardValues[] = {
     0.1f, 0.5f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 3.0f, 4.0f, 5.0f,
@@ -40,6 +45,36 @@ bool isDirectionRight(std::uint64_t buttons)
     return (buttons & HidNpadButton_AnyRight) != 0;
 }
 
+float focusedScroll(float focusedTop, float focusedH, float contentH)
+{
+    const float maxScroll = std::max(0.0f, contentH - kContentBodyH);
+    float scroll = 0.0f;
+    if (focusedTop + focusedH > kContentBodyH)
+        scroll = focusedTop + focusedH - kContentBodyH;
+    if (focusedTop < scroll)
+        scroll = focusedTop;
+    return std::clamp(scroll, 0.0f, maxScroll);
+}
+
+float displayRowY(int row)
+{
+    switch (row)
+    {
+    case 0: return 0.0f;
+    case 1: return kSettingStepY;
+    case 2: return kSettingStepY * 2.0f;
+    case 3: return kSettingStepY * 3.0f;
+    case 4: return kSettingStepY * 4.0f;
+    case 5: return kSettingStepY * 5.0f;
+    case 6: return kSettingStepY * 6.0f + 36.0f;
+    case 7: return kSettingStepY * 7.0f + 36.0f;
+    case 8: return kSettingStepY * 8.0f + 72.0f;
+    case 9: return kSettingStepY * 9.0f + 72.0f;
+    case 10: return kSettingStepY * 10.0f + 72.0f;
+    default: return 0.0f;
+    }
+}
+
 } // namespace
 
 void NdsMenuLayer::setStateSlots(const std::array<NdsStateSlotInfo, 10>& slots)
@@ -58,6 +93,7 @@ void NdsMenuLayer::beginSelectionAnimation(int oldSelected, int newSelected)
     m_selectionAnimating = true;
     m_focusScope = FocusScope::Tabs;
     m_contentFocus = 0;
+    resetContentScroll();
 }
 
 void NdsMenuLayer::beginPanelAnimation(bool opening)
@@ -74,6 +110,7 @@ void NdsMenuLayer::open()
     m_visible = true;
     m_focusScope = FocusScope::Tabs;
     m_contentFocus = 0;
+    resetContentScroll();
     m_previousSelected = m_selected;
     m_selectionAnimStartTick = armGetSystemTick();
     m_selectionAnimating = true;
@@ -87,6 +124,7 @@ void NdsMenuLayer::close()
     m_visible = false;
     m_focusScope = FocusScope::Tabs;
     m_contentFocus = 0;
+    resetContentScroll();
     beginPanelAnimation(false);
 }
 
@@ -112,6 +150,56 @@ float NdsMenuLayer::panelProgress() const
 
     const float progress = easeOutCubic(animationProgress(m_panelAnimStartTick, kPanelAnimationMs));
     return m_panelOpening ? progress : 1.0f - progress;
+}
+
+void NdsMenuLayer::resetContentScroll()
+{
+    m_contentScrollY = 0.0f;
+    m_contentScrollLastTick = 0;
+}
+
+float NdsMenuLayer::targetContentScrollY() const
+{
+    const Item item = static_cast<Item>(m_selected);
+    switch (item)
+    {
+    case Item::SaveState:
+    case Item::LoadState:
+    {
+        const int row = std::clamp(m_contentFocus, 0, 9) / 2;
+        const float focusedTop = row * (kSaveCardH + kSaveCardGapY);
+        const float contentH = 5.0f * kSaveCardH + 4.0f * kSaveCardGapY;
+        return focusedScroll(focusedTop, kSaveCardH, contentH);
+    }
+    case Item::Display:
+    {
+        const int row = std::clamp(m_contentFocus, 0, 10);
+        const float contentH = displayRowY(10) + kSettingRowH;
+        return focusedScroll(displayRowY(row), kSettingRowH, contentH);
+    }
+    default:
+        return 0.0f;
+    }
+}
+
+float NdsMenuLayer::smoothedContentScrollY() const
+{
+    const float target = targetContentScrollY();
+    const std::uint64_t now = armGetSystemTick();
+    if (m_contentScrollLastTick == 0)
+    {
+        m_contentScrollLastTick = now;
+        m_contentScrollY = target;
+        return m_contentScrollY;
+    }
+
+    const float dtMs = static_cast<float>(armTicksToNs(now - m_contentScrollLastTick)) / 1000000.0f;
+    m_contentScrollLastTick = now;
+    const float t = 1.0f - std::exp(-dtMs / 72.0f);
+    m_contentScrollY += (target - m_contentScrollY) * std::clamp(t, 0.0f, 1.0f);
+    if (std::fabs(target - m_contentScrollY) < 0.5f)
+        m_contentScrollY = target;
+    return m_contentScrollY;
 }
 
 void NdsMenuLayer::setFastForwardMultiplier(float multiplier)
@@ -300,6 +388,7 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
         if (m_focusScope == FocusScope::Content)
         {
             m_focusScope = FocusScope::Tabs;
+            resetContentScroll();
             return {};
         }
 
@@ -387,6 +476,7 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
             {
                 m_focusScope = FocusScope::Content;
                 m_contentFocus = 0;
+                resetContentScroll();
             }
             return {};
         case Item::Reset:
@@ -401,19 +491,8 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
     return {};
 }
 
-void NdsMenuLayer::draw(double fps, long long runMs, bool fastForwardActive) const
+void NdsMenuLayer::draw() const
 {
-    Gfx::DrawText(Gfx::SystemFontStandard,
-                  {28.0f, 24.0f},
-                  20.0f,
-                  {0.78f, 0.90f, 1.0f, 1.0f},
-                  "FPS %.1f  RUN %lldMS  FF x%.2g%s  %s",
-                  fps,
-                  runMs,
-                  static_cast<double>(m_display.fastForwardMultiplier),
-                  fastForwardActive ? "*" : "",
-                  filterLabel(m_display.linearFiltering));
-
     if (!active())
         return;
 
@@ -446,6 +525,7 @@ void NdsMenuLayer::draw(double fps, long long runMs, bool fastForwardActive) con
                  m_slots,
                  m_contentFocus,
                  contentFocused,
+                 smoothedContentScrollY(),
                  slideY);
     drawFooter(contentFocused, canDelete, slideY);
     if (m_deleteDialogVisible)

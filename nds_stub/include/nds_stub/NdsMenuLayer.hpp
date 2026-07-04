@@ -50,7 +50,7 @@ public:
     };
 
     NdsMenuResult update(std::uint64_t buttonsDown, std::uint64_t buttonsHeld);
-    void draw(double fps, long long runMs, bool fastForwardActive) const;
+    void draw() const;
     void setStateSlots(const std::array<NdsStateSlotInfo, 10>& slots);
 
     void open();
@@ -79,6 +79,9 @@ private:
     bool updateHeldSelector(std::uint64_t buttonsHeld);
     void openDeleteDialog();
     void closeDeleteDialog();
+    float targetContentScrollY() const;
+    float smoothedContentScrollY() const;
+    void resetContentScroll();
 
     bool m_visible = false;
     int m_selected = 0;
@@ -97,6 +100,8 @@ private:
     std::uint64_t m_selectorRepeatStartTick = 0;
     std::uint64_t m_selectorLastStepTick = 0;
     int m_selectorDirection = 0;
+    mutable float m_contentScrollY = 0.0f;
+    mutable std::uint64_t m_contentScrollLastTick = 0;
 };
 
 } // namespace beiklive::nds_stub

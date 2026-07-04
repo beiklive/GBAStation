@@ -228,6 +228,11 @@ enum
 #define GFX_NINTENDOFONT_WII_HAND "\uE062"
 #define GFX_NINTENDOFONT_WII_HAND_HOLD "\uE05D"
 
+
+
+
+
+
 Vector2f MeasureText(u32 fontIdx, float size, const char* text);
 
 Vector2f DrawText(u32 fontIdx, Vector2f position, float size, Color color, int horizontalAlign, int verticalAlign, const char* text);

@@ -21,6 +21,67 @@ const char* orientationLabel(int index)
     return labels[std::clamp(index, 0, 3)];
 }
 
+constexpr float kContentBodyTop = 58.0f;
+constexpr float kContentBodyH = 450.0f;
+constexpr float kSaveCardW = 386.0f;
+constexpr float kSaveCardH = 94.0f;
+constexpr float kSaveCardGapX = 18.0f;
+constexpr float kSaveCardGapY = 14.0f;
+constexpr float kSettingStepY = 48.0f;
+constexpr float kContentScissorPad = 14.0f;
+
+void pushContentBodyScissor(float offsetY)
+{
+    constexpr float minH = 1.0f;
+    float x = kContentX - kContentScissorPad;
+    float y = kContentY + kContentBodyTop + offsetY - kContentScissorPad;
+    float w = kContentW + kContentScissorPad * 2.0f;
+    float h = kContentBodyH + kContentScissorPad * 2.0f;
+
+    if (x < 0.0f)
+    {
+        w += x;
+        x = 0.0f;
+    }
+    if (x + w > kScreenW)
+        w = kScreenW - x;
+
+    if (y < 0.0f)
+    {
+        h += y;
+        y = 0.0f;
+    }
+    if (y >= kScreenH)
+    {
+        y = kScreenH - minH;
+        h = minH;
+    }
+    else if (y + h > kScreenH)
+    {
+        h = kScreenH - y;
+    }
+
+    Gfx::PushScissor(static_cast<u32>(x),
+                     static_cast<u32>(y),
+                     static_cast<u32>(std::max(minH, w)),
+                     static_cast<u32>(std::max(minH, h)));
+}
+
+void drawBadge(Vector2f pos, Vector2f minSize, const char* text, Color bgColor, Color textColor)
+{
+    const float fontSize = 14.0f;
+    const Vector2f textSize = Gfx::MeasureText(Gfx::SystemFontStandard, fontSize, text);
+    const Vector2f size{std::max(minSize.X, textSize.X + 22.0f), minSize.Y};
+    drawRect(pos, size, bgColor, true);
+    Gfx::DrawText(Gfx::SystemFontStandard,
+                  pos + size * 0.5f,
+                  fontSize,
+                  textColor,
+                  Gfx::align_Center,
+                  Gfx::align_Center,
+                  text);
+}
+
 void drawLrSelectorRow(Vector2f pos,
                        const char* label,
                        const char* value,
@@ -38,13 +99,13 @@ void drawLrSelectorRow(Vector2f pos,
                   {1.0f, 1.0f, 1.0f, enabled ? 0.88f * opacity : 0.34f * opacity}, "%s", label);
     Gfx::DrawText(Gfx::SystemFontNintendoExt, pos + Vector2f{610.0f, 21.0f}, 24.0f,
                   {0.80f, 0.92f, 1.0f, enabled ? 0.90f * opacity : 0.28f * opacity},
-                  Gfx::align_Center, Gfx::align_Center, "L");
+                  Gfx::align_Center, Gfx::align_Center, NDS_STUB_KEYICON_LB);
     Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{692.0f, 12.0f}, 17.0f,
                   {0.78f, 0.92f, 1.0f, enabled ? 0.96f * opacity : 0.28f * opacity},
                   "%s", value);
     Gfx::DrawText(Gfx::SystemFontNintendoExt, pos + Vector2f{770.0f, 21.0f}, 24.0f,
                   {0.80f, 0.92f, 1.0f, enabled ? 0.90f * opacity : 0.28f * opacity},
-                  Gfx::align_Center, Gfx::align_Center, "R");
+                  Gfx::align_Center, Gfx::align_Center, NDS_STUB_KEYICON_RB);
 }
 
 void drawSwitchRow(Vector2f pos, const char* label, bool value, bool focused, float opacity)
@@ -108,36 +169,6 @@ const char* itemLabel(NdsMenuLayer::Item item)
     }
 }
 
-const char* itemIcon(NdsMenuLayer::Item item)
-{
-    switch (item)
-    {
-    case NdsMenuLayer::Item::Resume: return ">";
-    case NdsMenuLayer::Item::SaveState: return "S";
-    case NdsMenuLayer::Item::LoadState: return "L";
-    case NdsMenuLayer::Item::Cheats: return "C";
-    case NdsMenuLayer::Item::Display: return "D";
-    case NdsMenuLayer::Item::Reset: return "R";
-    case NdsMenuLayer::Item::Exit: return "X";
-    default: return "";
-    }
-}
-
-const char* itemIconPath(NdsMenuLayer::Item item)
-{
-    switch (item)
-    {
-    case NdsMenuLayer::Item::Resume: return "romfs:/ui/menu/resume.png";
-    case NdsMenuLayer::Item::SaveState: return "romfs:/ui/menu/save_state.png";
-    case NdsMenuLayer::Item::LoadState: return "romfs:/ui/menu/load_state.png";
-    case NdsMenuLayer::Item::Cheats: return "romfs:/ui/menu/cheats.png";
-    case NdsMenuLayer::Item::Display: return "romfs:/ui/menu/display.png";
-    case NdsMenuLayer::Item::Reset: return "romfs:/ui/menu/reset.png";
-    case NdsMenuLayer::Item::Exit: return "romfs:/ui/menu/exit.png";
-    default: return "";
-    }
-}
-
 float menuItemY(int index)
 {
     float y = kLeftY + index * (kItemH + kItemGap);
@@ -173,6 +204,36 @@ void drawHeader(float offsetY)
     drawLine({56.0f, 92.0f + offsetY}, {1168.0f, 1.0f}, {1.0f, 1.0f, 1.0f, 0.18f});
 }
 
+void drawGameStatusBadges(double fps,
+                          bool showFps,
+                          bool fastForwardActive,
+                          bool showFastForward,
+                          bool paused)
+{
+    if (showFps && fps > 0.0)
+    {
+        char buf[32];
+        std::snprintf(buf, sizeof(buf), "FPS: %.1f", fps);
+        drawBadge({4.0f, 4.0f}, {90.0f, 22.0f}, buf,
+                  {0.0f, 0.0f, 0.0f, 0.63f},
+                  {0.0f, 1.0f, 0.31f, 0.90f});
+    }
+
+    if (fastForwardActive && showFastForward)
+    {
+        drawBadge({kScreenW - 94.0f, 4.0f}, {90.0f, 22.0f}, ">>>",
+                  {0.0f, 0.0f, 0.0f, 0.63f},
+                  {0.39f, 0.86f, 1.0f, 0.90f});
+    }
+
+    if (paused && !fastForwardActive)
+    {
+        drawBadge({(kScreenW - 90.0f) * 0.5f, 4.0f}, {90.0f, 22.0f}, "Paused",
+                  {0.0f, 0.0f, 0.0f, 0.70f},
+                  {1.0f, 0.86f, 0.24f, 0.90f});
+    }
+}
+
 void drawMenuSeparator(float offsetY)
 {
     const float y = menuItemY(itemIndex(NdsMenuLayer::Item::Reset)) - 14.0f;
@@ -204,26 +265,11 @@ void drawLeftMenu(int selected,
             drawRect({kLeftX + 4.0f, y + offsetY + 4.0f}, {kMenuW - 8.0f, kItemH - 8.0f},
                      {0.12f, 0.38f, 0.66f, tabsFocused ? 0.16f : 0.26f}, true);
 
-        const Color iconColor = isSelected ? Color{0.66f, 0.88f, 1.0f, 1.0f}
-                                           : Color{1.0f, 1.0f, 1.0f, 0.74f};
         const Color textColor = isSelected ? Color{1.0f, 1.0f, 1.0f, 1.0f}
                                            : Color{1.0f, 1.0f, 1.0f, 0.78f};
 
-        const Vector2f iconPos{kLeftX + 17.0f, y + offsetY + 17.0f};
-        drawRect(iconPos, {24.0f, 24.0f}, isSelected ? Color{0.30f, 0.62f, 0.92f, 0.30f}
-                                                      : Color{1.0f, 1.0f, 1.0f, 0.07f}, true);
-        drawBorder(iconPos, {24.0f, 24.0f}, 1.0f, isSelected ? Color{0.70f, 0.88f, 1.0f, 0.42f}
-                                                             : Color{1.0f, 1.0f, 1.0f, 0.10f});
-        (void)itemIconPath(item);
-        Gfx::DrawText(Gfx::SystemFontStandard,
-                      {kLeftX + 29.0f, y + offsetY + kItemH * 0.5f},
-                      15.0f,
-                      iconColor,
-                      Gfx::align_Center,
-                      Gfx::align_Center,
-                      itemIcon(item));
         Gfx::DrawText(Gfx::SystemFontChinese,
-                      {kLeftX + 56.0f, y + offsetY + 19.0f},
+                      {kLeftX + 28.0f, y + offsetY + 19.0f},
                       18.0f,
                       textColor,
                       "%s", itemLabel(item));
@@ -238,32 +284,35 @@ void drawFooter(bool contentFocused, bool canDelete, float offsetY)
     drawLine({0.0f, 648.0f + offsetY}, {kScreenW, 1.0f}, {1.0f, 1.0f, 1.0f, 0.14f});
 
     const float y = 682.0f + offsetY;
-    const float right = 1194.0f;
-    float x = right - (canDelete ? 314.0f : 190.0f);
-    Gfx::DrawText(Gfx::SystemFontNintendoExt, {right - 190.0f, y}, 30.0f,
-                  {1.0f, 1.0f, 1.0f, 0.92f}, Gfx::align_Center, Gfx::align_Center,
-                  GFX_NINTENDOFONT_B_BUTTON);
-    Gfx::DrawText(Gfx::SystemFontChinese, {right - 166.0f, y - 10.0f}, 20.0f,
-                  {1.0f, 1.0f, 1.0f, 0.76f}, contentFocused ? "返回列表" : "返回");
-    Gfx::DrawText(Gfx::SystemFontNintendoExt, {right - 72.0f, y}, 30.0f,
-                  {1.0f, 1.0f, 1.0f, 0.92f}, Gfx::align_Center, Gfx::align_Center,
-                  GFX_NINTENDOFONT_A_BUTTON);
-    Gfx::DrawText(Gfx::SystemFontChinese, {right - 48.0f, y - 10.0f}, 20.0f,
-                  {1.0f, 1.0f, 1.0f, 0.76f}, "确定");
+    float right = 1194.0f;
+    auto drawHint = [&](const char* icon, const char* text) {
+        constexpr float iconSize = 30.0f;
+        constexpr float textSize = 20.0f;
+        constexpr float iconTextGap = 10.0f;
+        constexpr float groupGap = 28.0f;
+
+        const Vector2f textSizePx = Gfx::MeasureText(Gfx::SystemFontChinese, textSize, text);
+        const float textW = std::max(28.0f, textSizePx.X);
+        const float groupW = iconSize + iconTextGap + textW;
+        const float x = right - groupW;
+
+        Gfx::DrawText(Gfx::SystemFontNintendoExt, {x + iconSize * 0.5f, y}, iconSize,
+                      {1.0f, 1.0f, 1.0f, 0.92f}, Gfx::align_Center, Gfx::align_Center, icon);
+        Gfx::DrawText(Gfx::SystemFontChinese, {x + iconSize + iconTextGap, y - 10.0f}, textSize,
+                      {1.0f, 1.0f, 1.0f, 0.76f}, "%s", text);
+        right = x - groupGap;
+    };
+
+    drawHint(NDS_STUB_KEYICON_A, "确定");
+    drawHint(NDS_STUB_KEYICON_B, contentFocused ? "返回列表" : "返回");
     if (canDelete)
-    {
-        Gfx::DrawText(Gfx::SystemFontNintendoExt, {x, y}, 30.0f,
-                      {1.0f, 1.0f, 1.0f, 0.92f}, Gfx::align_Center, Gfx::align_Center,
-                      GFX_NINTENDOFONT_X_BUTTON);
-        Gfx::DrawText(Gfx::SystemFontChinese, {x + 24.0f, y - 10.0f}, 20.0f,
-                      {1.0f, 1.0f, 1.0f, 0.76f}, "删除");
-    }
+        drawHint(NDS_STUB_KEYICON_X, "删除");
 }
 
 void drawSaveSlotCard(int slot, Vector2f pos, bool focused, const NdsStateSlotInfo& info, float offsetY)
 {
     pos.Y += offsetY;
-    const Vector2f size{790.0f, 44.0f};
+    const Vector2f size{kSaveCardW, kSaveCardH};
     const Vector2f drawPos = focused ? pos - Vector2f{3.0f, 2.0f} : pos;
     const Vector2f drawSize = focused ? size + Vector2f{6.0f, 4.0f} : size;
     if (focused)
@@ -274,30 +323,31 @@ void drawSaveSlotCard(int slot, Vector2f pos, bool focused, const NdsStateSlotIn
                focused ? Color{0.31f, 0.70f, 1.0f, 0.96f}
                        : Color{1.0f, 1.0f, 1.0f, info.exists ? 0.10f : 0.06f});
 
-    const Vector2f thumbPos = drawPos + Vector2f{10.0f, 6.0f};
-    drawRect(thumbPos, {58.0f, 32.0f}, info.exists ? Color{0.13f, 0.18f, 0.23f, 0.95f}
-                                                   : Color{1.0f, 1.0f, 1.0f, 0.025f});
-    drawBorder(thumbPos, {58.0f, 32.0f}, 1.0f, {1.0f, 1.0f, 1.0f, info.exists ? 0.10f : 0.16f});
+    const Vector2f thumbSize{112.0f, 72.0f};
+    const Vector2f thumbPos = drawPos + Vector2f{12.0f, 11.0f};
+    drawRect(thumbPos, thumbSize, info.exists ? Color{0.12f, 0.17f, 0.22f, 0.96f}
+                                              : Color{1.0f, 1.0f, 1.0f, 0.025f});
+    drawBorder(thumbPos, thumbSize, 1.0f, {1.0f, 1.0f, 1.0f, info.exists ? 0.12f : 0.16f});
 
     char title[32];
     std::snprintf(title, sizeof(title), "槽位 %d", slot);
     if (info.exists)
     {
-        Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{84.0f, 7.0f}, 17.0f,
+        Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{142.0f, 22.0f}, 20.0f,
                       {1.0f, 1.0f, 1.0f, 0.96f}, "%s", title);
-        Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{220.0f, 7.0f}, 15.0f,
+        Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{142.0f, 54.0f}, 14.0f,
                       {1.0f, 1.0f, 1.0f, 0.55f}, "%s", info.modifiedTime.empty() ? "已有状态" : info.modifiedTime.c_str());
-        Gfx::DrawText(Gfx::SystemFontStandard, thumbPos + Vector2f{29.0f, 16.0f}, 13.0f,
+        Gfx::DrawText(Gfx::SystemFontStandard, thumbPos + thumbSize * 0.5f, 13.0f,
                       {0.75f, 0.88f, 1.0f, 0.46f}, Gfx::align_Center, Gfx::align_Center,
-                      info.thumbnailPath.empty() ? "NDS" : "PNG");
+                      info.thumbnailPath.empty() ? "NDS" : "SCREEN");
     }
     else
     {
-        Gfx::DrawText(Gfx::SystemFontStandard, thumbPos + Vector2f{29.0f, 14.0f}, 24.0f,
+        Gfx::DrawText(Gfx::SystemFontStandard, thumbPos + thumbSize * 0.5f, 34.0f,
                       {1.0f, 1.0f, 1.0f, 0.45f}, Gfx::align_Center, Gfx::align_Center, "+");
-        Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{84.0f, 7.0f}, 17.0f,
+        Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{142.0f, 22.0f}, 20.0f,
                       {1.0f, 1.0f, 1.0f, 0.88f}, "%s", title);
-        Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{220.0f, 7.0f}, 15.0f,
+        Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{142.0f, 54.0f}, 14.0f,
                       {1.0f, 1.0f, 1.0f, 0.48f}, "空存档槽");
     }
 }
@@ -305,17 +355,27 @@ void drawSaveSlotCard(int slot, Vector2f pos, bool focused, const NdsStateSlotIn
 void drawSaveSlotGrid(const std::array<NdsStateSlotInfo, 10>& slots,
                       int focusedSlot,
                       bool contentFocused,
+                      float offsetX,
+                      float scrollY,
+                      float opacity,
                       float offsetY)
 {
-    constexpr float cardH = 44.0f;
-    constexpr float gapY = 6.0f;
-    const Vector2f start{kContentX, kContentY + 58.0f};
+    const Vector2f start{kContentX + offsetX, kContentY + kContentBodyTop - scrollY};
 
     for (int i = 0; i < 10; ++i)
     {
-        const Vector2f pos = start + Vector2f{0.0f, i * (cardH + gapY)};
+        const int col = i % 2;
+        const int row = i / 2;
+        const Vector2f pos = start + Vector2f{col * (kSaveCardW + kSaveCardGapX),
+                                              row * (kSaveCardH + kSaveCardGapY)};
+        if (pos.Y + offsetY > kContentY + kContentH || pos.Y + offsetY + kSaveCardH < kContentY)
+            continue;
         drawSaveSlotCard(i, pos, contentFocused && i == focusedSlot, slots[i], offsetY);
     }
+
+    if (opacity > 0.5f && scrollY > 1.0f)
+        drawRect({kContentX + kContentW - 4.0f, kContentY + kContentBodyTop + offsetY},
+                 {3.0f, kContentBodyH}, {1.0f, 1.0f, 1.0f, 0.08f});
 }
 
 void drawInfoPage(const char* title, const char* body, float offsetX, float offsetY, float opacity)
@@ -338,7 +398,8 @@ void drawDisplayPage(bool linearFiltering,
                      bool contentFocused,
                      float offsetX,
                      float offsetY,
-                     float opacity)
+                     float opacity,
+                     float scrollY)
 {
     const Vector2f base{kContentX + offsetX, kContentY + offsetY};
     Gfx::DrawText(Gfx::SystemFontChinese, base, 20.0f, {1.0f, 1.0f, 1.0f, opacity}, "画面设置");
@@ -352,21 +413,29 @@ void drawDisplayPage(bool linearFiltering,
     else
         std::snprintf(ffValue, sizeof(ffValue), "%.2fx", fastForwardMultiplier);
 
-    float y = 62.0f;
+    pushContentBodyScissor(offsetY);
+
+    float y = kContentBodyTop - scrollY;
     auto rowPos = [&](float rowY) { return base + Vector2f{0.0f, rowY}; };
-    drawLrSelectorRow(rowPos(y), "快进倍率", ffValue, contentFocused && focusedRow == 0, true, opacity); y += 48.0f;
-    drawLrSelectorRow(rowPos(y), "画面过滤", filterLabel(linearFiltering), contentFocused && focusedRow == 1, true, opacity); y += 48.0f;
-    drawSwitchRow(rowPos(y), "整数倍缩放", integerScale, contentFocused && focusedRow == 2, opacity); y += 48.0f;
-    drawLrSelectorRow(rowPos(y), "画面布局", layoutLabel(layout), contentFocused && focusedRow == 3, true, opacity); y += 48.0f;
-    drawSubPageRow(rowPos(y), "自定义画面布局", contentFocused && focusedRow == 4, layout == 4, opacity); y += 48.0f;
+    drawLrSelectorRow(rowPos(y), "快进倍率", ffValue, contentFocused && focusedRow == 0, true, opacity); y += kSettingStepY;
+    drawLrSelectorRow(rowPos(y), "画面过滤", filterLabel(linearFiltering), contentFocused && focusedRow == 1, true, opacity); y += kSettingStepY;
+    drawSwitchRow(rowPos(y), "整数倍缩放", integerScale, contentFocused && focusedRow == 2, opacity); y += kSettingStepY;
+    drawLrSelectorRow(rowPos(y), "画面布局", layoutLabel(layout), contentFocused && focusedRow == 3, true, opacity); y += kSettingStepY;
+    drawSubPageRow(rowPos(y), "自定义画面布局", contentFocused && focusedRow == 4, layout == 4, opacity); y += kSettingStepY;
     drawLrSelectorRow(rowPos(y), "画面方向", orientationLabel(orientation), contentFocused && focusedRow == 5, true, opacity); y += 54.0f;
     drawSectionLabel(rowPos(y + 2.0f), "个性化设置", opacity); y += 30.0f;
-    drawSubPageRow(rowPos(y), "遮罩选择", contentFocused && focusedRow == 6, true, opacity); y += 48.0f;
+    drawSubPageRow(rowPos(y), "遮罩选择", contentFocused && focusedRow == 6, true, opacity); y += kSettingStepY;
     drawSubPageRow(rowPos(y), "滤镜选择", contentFocused && focusedRow == 7, true, opacity); y += 54.0f;
     drawSectionLabel(rowPos(y + 2.0f), "同步设置", opacity); y += 30.0f;
-    drawButtonRow(rowPos(y), "同步画面设置", contentFocused && focusedRow == 8, opacity); y += 48.0f;
-    drawButtonRow(rowPos(y), "同步遮罩设置", contentFocused && focusedRow == 9, opacity); y += 48.0f;
+    drawButtonRow(rowPos(y), "同步画面设置", contentFocused && focusedRow == 8, opacity); y += kSettingStepY;
+    drawButtonRow(rowPos(y), "同步遮罩设置", contentFocused && focusedRow == 9, opacity); y += kSettingStepY;
     drawButtonRow(rowPos(y), "同步滤镜设置", contentFocused && focusedRow == 10, opacity);
+
+    if (opacity > 0.5f && scrollY > 1.0f)
+        drawRect({kContentX + kContentW - 4.0f, kContentY + kContentBodyTop + offsetY},
+                 {3.0f, kContentBodyH}, {1.0f, 1.0f, 1.0f, 0.08f});
+
+    Gfx::PopScissor();
 }
 
 void drawDeleteDialog(int slot, float opacity)
@@ -384,12 +453,12 @@ void drawDeleteDialog(int slot, float opacity)
     const float y = pos.Y + 162.0f;
     Gfx::DrawText(Gfx::SystemFontNintendoExt, {pos.X + 328.0f, y}, 28.0f,
                   {1.0f, 1.0f, 1.0f, 0.92f * opacity}, Gfx::align_Center, Gfx::align_Center,
-                  GFX_NINTENDOFONT_B_BUTTON);
+                  NDS_STUB_KEYICON_B);
     Gfx::DrawText(Gfx::SystemFontChinese, {pos.X + 350.0f, y - 9.0f}, 18.0f,
                   {1.0f, 1.0f, 1.0f, 0.76f * opacity}, "取消");
     Gfx::DrawText(Gfx::SystemFontNintendoExt, {pos.X + 424.0f, y}, 28.0f,
                   {1.0f, 1.0f, 1.0f, 0.92f * opacity}, Gfx::align_Center, Gfx::align_Center,
-                  GFX_NINTENDOFONT_A_BUTTON);
+                  NDS_STUB_KEYICON_A);
     Gfx::DrawText(Gfx::SystemFontChinese, {pos.X + 446.0f, y - 9.0f}, 18.0f,
                   {0.38f, 0.78f, 1.0f, 0.92f * opacity}, "删除");
 }
@@ -401,6 +470,7 @@ void drawTabFrame(NdsMenuLayer::Item item,
                   const std::array<NdsStateSlotInfo, 10>& slots,
                   int contentFocus,
                   bool contentFocused,
+                  float contentScrollY,
                   float offsetY)
 {
     if (item == NdsMenuLayer::Item::Resume ||
@@ -420,7 +490,17 @@ void drawTabFrame(NdsMenuLayer::Item item,
             drawLine({kContentX + offsetX, kContentY + offsetY + 44.0f}, {kContentW, 1.0f},
                      {1.0f, 1.0f, 1.0f, 0.10f * opacity});
             if (opacity > 0.5f)
-                drawSaveSlotGrid(slots, contentFocus, contentFocused, offsetY);
+            {
+                pushContentBodyScissor(offsetY);
+                drawSaveSlotGrid(slots,
+                                 contentFocus,
+                                 contentFocused,
+                                 offsetX,
+                                 contentScrollY,
+                                 opacity,
+                                 offsetY);
+                Gfx::PopScissor();
+            }
             break;
         case NdsMenuLayer::Item::LoadState:
             Gfx::DrawText(Gfx::SystemFontChinese, {kContentX + offsetX, kContentY + offsetY}, 20.0f,
@@ -428,7 +508,17 @@ void drawTabFrame(NdsMenuLayer::Item item,
             drawLine({kContentX + offsetX, kContentY + offsetY + 44.0f}, {kContentW, 1.0f},
                      {1.0f, 1.0f, 1.0f, 0.10f * opacity});
             if (opacity > 0.5f)
-                drawSaveSlotGrid(slots, contentFocus, contentFocused, offsetY);
+            {
+                pushContentBodyScissor(offsetY);
+                drawSaveSlotGrid(slots,
+                                 contentFocus,
+                                 contentFocused,
+                                 offsetX,
+                                 contentScrollY,
+                                 opacity,
+                                 offsetY);
+                Gfx::PopScissor();
+            }
             break;
         case NdsMenuLayer::Item::Display:
             drawDisplayPage(display.linearFiltering,
@@ -440,7 +530,8 @@ void drawTabFrame(NdsMenuLayer::Item item,
                             contentFocused,
                             offsetX,
                             offsetY,
-                            opacity);
+                            opacity,
+                            contentScrollY);
             break;
         case NdsMenuLayer::Item::Cheats:
             drawInfoPage("金手指设置", "金手指列表将在后续阶段接入。", offsetX, offsetY, opacity);

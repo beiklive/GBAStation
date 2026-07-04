@@ -31,8 +31,6 @@ constexpr int itemIndex(NdsMenuLayer::Item item)
 
 const char* filterLabel(bool linear);
 const char* itemLabel(NdsMenuLayer::Item item);
-const char* itemIcon(NdsMenuLayer::Item item);
-const char* itemIconPath(NdsMenuLayer::Item item);
 float menuItemY(int index);
 
 // 绘制菜单背景半透明遮罩
@@ -40,6 +38,12 @@ float menuItemY(int index);
 void drawOverlay(float alphaScale = 1.0f);
 // 绘制顶部标题栏：显示"游戏菜单"文字 + 底部分割线
 void drawHeader(float offsetY = 0.0f);
+// 绘制游戏层状态徽标：FPS 左上、快进右上、暂停顶部居中。
+void drawGameStatusBadges(double fps,
+                          bool showFps,
+                          bool fastForwardActive,
+                          bool showFastForward,
+                          bool paused);
 // 绘制左侧菜单中"重置游戏"项上方的分割线，将菜单分为两部分
 void drawMenuSeparator(float offsetY = 0.0f);
 // 绘制左侧菜单栏：渐变高亮选中项、图标+文字标签列表、分割线
@@ -60,6 +64,9 @@ void drawSaveSlotCard(int slot, Vector2f pos, bool focused, const NdsStateSlotIn
 void drawSaveSlotGrid(const std::array<NdsStateSlotInfo, 10>& slots,
                       int focusedSlot,
                       bool contentFocused,
+                      float offsetX,
+                      float scrollY,
+                      float opacity,
                       float offsetY = 0.0f);
 // 绘制通用信息页面：标题 + 分割线 + 描述文本（用于金手指/重置/退出/返回等页）
 void drawInfoPage(const char* title, const char* body, float offsetX, float offsetY, float opacity);
@@ -75,7 +82,8 @@ void drawDisplayPage(bool linearFiltering,
                      bool contentFocused,
                      float offsetX,
                      float offsetY,
-                     float opacity);
+                     float opacity,
+                     float scrollY = 0.0f);
 void drawDeleteDialog(int slot, float opacity);
 // 绘制右侧内容区框架
 // 半透明背景面板 + 当前页面内容 + 页面切换动画（旧页向左滑出，新页从右侧滑入）
@@ -86,6 +94,7 @@ void drawTabFrame(NdsMenuLayer::Item item,
                   const std::array<NdsStateSlotInfo, 10>& slots,
                   int contentFocus,
                   bool contentFocused,
+                  float contentScrollY,
                   float offsetY = 0.0f);
 
 } // namespace beiklive::nds_stub::ui

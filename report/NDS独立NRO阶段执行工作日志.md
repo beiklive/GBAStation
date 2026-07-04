@@ -1710,6 +1710,292 @@ GBAStationNDSStub.nro 3.16 MB
 
 ---
 
+## 阶段 4.4：NDS Stub 菜单子页面滚动与存档两列布局
+
+### 需求
+
+- 保存状态、读取状态、画面设置等右侧子页面内容过多时需要可滚动。
+- 保存/读取页面的即时存档槽改为两列布局。
+- 继续保持当前安全策略：不重新引入菜单 Tab 图标 PNG 加载，避免图片上传路径再次导致黑屏或崩溃。
+
+### 已实施
+
+- 右侧内容区标题和分割线固定，正文区域使用 `Gfx::PushScissor/PopScissor` 裁剪。
+- 保存/读取页面改为 2 列 x 5 行：
+  - 每个槽位为左右布局；
+  - 左侧保留缩略图占位区；
+  - 右侧显示槽位名称和存档时间；
+  - 焦点仍按两列逻辑移动，与输入逻辑保持一致。
+- 保存/读取页面根据当前焦点自动计算滚动偏移，底部槽位获得焦点时会滚入可视区域。
+- 画面设置页面根据当前焦点自动计算滚动偏移，超出区域的设置项会滚入可视区域。
+- 对正文裁剪区域增加屏幕边界保护，避免菜单底部滑出/滑入动画期间提交越界 scissor。
+
+### 截图显示说明
+
+当前即时存档截图仍未接入真实 PNG 解码和 Deko 纹理缓存，菜单中显示的是缩略图占位区。后续若要显示真实 `ss0.png` / `ss1.png`，建议单独做稳定图片管线：
+
+- PNG 解码：`stb_image` 或 libpng；
+- PNG 写入：`stb_image_write` 或现有最小 PNG 写入器；
+- 纹理上传：在菜单打开前或存档列表刷新时集中加载，禁止在每帧绘制过程中懒加载。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.24 MB
+```
+
+---
+
+## 阶段 4.5：游戏层状态徽标、平滑滚动与 Borealis 风格高亮
+
+### 需求
+
+- 去掉 NDS Stub 游戏层左上角的调试型 `FPS/RUN/FF/filter` 文本。
+- 游戏层的 FPS、快进、暂停状态改成与主程序 `GameView` / `GameOverlayRenderer` 类似的徽标。
+- 菜单子页面滚动过于生硬，需要平滑滚动。
+- scissor 裁剪不应切掉焦点高亮框顶部和底部。
+- 焦点高亮参考 Borealis `View::drawHighlight` 的阴影和流动渐变边框效果。
+
+### 已实施
+
+- 移除 `NdsMenuLayer::draw()` 中直接绘制的调试状态文字。
+- 在游戏层绘制状态徽标：
+  - FPS：左上角，受 `display.showFps` 控制；
+  - 快进：右上角，受 `display.showFfOverlay` 控制；
+  - 暂停：顶部居中，仅运行时暂停且非快进时显示；
+  - 菜单打开时不额外显示游戏层徽标，避免和菜单 overlay 干扰。
+- `InputConfig` 增加读取 `display.*` 配置项。
+- 子页面滚动改为根据焦点目标进行指数平滑追踪，避免瞬间跳动。
+- 内容区 scissor 增加上下左右 padding，并保留屏幕边界保护，避免高亮框边缘被裁掉。
+- `drawGradientBorder()` 改为 Borealis 风格近似：
+  - 外侧阴影；
+  - 环形渐变流动边框；
+  - 内部保持透明；
+  - 取消旧的左侧光柱样式。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.24 MB
+```
+
+---
+
+## 阶段 3.5：NDS Stub 菜单 Hint 自适应与 Tab 图标资源
+
+### 目标
+
+- 底部 hint 根据文字实际宽度动态排布，避免 `返回列表 / 返回 / 删除 / 确定` 等字符串互相重叠。
+- 左侧 tab 图标使用主程序 `GameMenuView` 同一组图片资源。
+
+### 已实施
+
+- `drawFooter()` 改为从右向左动态布局：
+  - 使用 `Gfx::MeasureText()` 测量中文文本宽度；
+  - 每个 hint 组按 `图标宽度 + 间距 + 文本宽度` 计算实际占用；
+  - 支持 `X 删除` 出现/隐藏时自动让位。
+- `drawLeftMenu()` 改为优先绘制 PNG 图标：
+  - 返回游戏：`img/ui/menu/back.png`
+  - 保存状态：`img/ui/menu/save.png`
+  - 读取状态：`img/ui/menu/load.png`
+  - 金手指设置：`img/ui/menu/cheat.png`
+  - 画面设置：`img/ui/menu/display.png`
+  - 重置游戏：`img/ui/menu/reset.png`
+  - 退出游戏：`img/ui/menu/exit.png`
+- 新增轻量 PNG 纹理缓存：
+  - 首次绘制时通过 `stb_image` 加载；
+  - 上传为 Deko `RGBA8_Unorm` 纹理；
+  - 加载失败时自动回退到原来的文字占位图标，不影响菜单可用性。
+- `nds_stub/CMakeLists.txt` 增加菜单资源打包：
+  - 将 `resources/img/ui/menu/*.png` 复制到 NDS Stub romfs 的 `img/ui/menu/`；
+  - `GBAStationNDSStub.nro` 构建时已确认写入这些 PNG。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.32 MB
+```
+
+---
+
+## 阶段 3.8：移除 NDS Stub 菜单图片图标链路
+
+### 目标
+
+用户决定菜单不再使用图片图标，左侧 tab 只显示文字，避免 PNG 解码、Deko 纹理上传、RomFS 图片资源带来的不稳定因素。
+
+### 已实施
+
+- `drawLeftMenu()` 移除 tab 图片/字母图标绘制，只保留菜单文字。
+- 删除 `itemIcon()`、`itemIconPath()`、`preloadMenuImages()`。
+- 删除 `UiPrimitives` 中的 PNG 图片缓存、`preloadImage()`、`drawImage()`。
+- 移除 `stb_image` include 与 `stb_image.c` 链接。
+- 移除 NDS Stub 菜单图片资源复制 target。
+- CMake 配置阶段清理旧的 `nds_stub_romfs/img/ui/menu` 目录，避免历史构建残留继续进入 NRO。
+
+### 当前状态
+
+- NDS Stub 菜单不再读取、解码、上传任何 tab 图片资源。
+- `GBAStationNDSStub.nro` 的 RomFS 不再包含 `img/ui/menu/*.png`。
+- 底部 hint 仍保留按键字符提示，这是字体 glyph，不走图片/纹理文件加载链路。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.24 MB
+```
+
+---
+
+## 阶段 3.7：修复启动阶段菜单图片预热导致黑屏
+
+### 现象
+
+真机反馈：打开 `GBAStationNDSStub.nro` 后一直黑屏，日志停在：
+
+```text
+GBAStationNDSStub: Deko checkpoint preload menu images begin
+```
+
+### 判断
+
+阶段 3.6 把菜单 PNG 预加载放在 `Gfx::Init()` 之后，并额外调用了一个启动阶段预热帧：
+
+```cpp
+Gfx::StartFrame();
+preloadMenuImages();
+Gfx::EndFrame(...);
+PresentQueue.waitIdle();
+```
+
+这个位置早于 NDS/GPU renderer/game layer 的正常运行循环，真机上可能卡在 swapchain acquire/present 相关路径，导致游戏画面还没出现就黑屏。
+
+### 已实施
+
+- 移除 `Gfx::Init()` 后的启动阶段预热帧。
+- 启动链只记录：
+
+```text
+GBAStationNDSStub: Deko menu images preload deferred to render loop
+```
+
+- 新增 `menuImagesPreloadPending`，把菜单图片预加载延迟到正常渲染循环中：
+  - 先完成 ROM 加载、音频启动和模拟器主循环；
+  - 第 3 个正常渲染帧中，在稳定的 `Gfx::StartFrame()` 之后执行一次 `ui::preloadMenuImages()`；
+  - 之后 `drawImage()` 只绘制已加载纹理，失败仍回退到文字占位。
+
+### 当前状态
+
+- 启动阶段不再等待菜单 PNG 预加载，不应再卡在黑屏。
+- 菜单图片上传发生在原本稳定的渲染循环内。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.32 MB
+```
+
+---
+
+## 阶段 3.6：修复打开菜单时 PNG 图标路径导致崩溃
+
+### 现象
+
+真机反馈：游戏运行稳定，按菜单热键后日志停在：
+
+```text
+GBAStationNDSStub: menu hotkey toggle visible=0->1
+```
+
+随后程序崩溃。
+
+### 判断
+
+崩溃点与阶段 3.5 新增的 `drawLeftMenu()` PNG 图标绘制高度相关。原实现会在菜单第一次绘制时执行：
+
+- RomFS 文件读取；
+- PNG 解码；
+- Deko 纹理创建；
+- `TextureUpload()` 提交。
+
+这些操作混在菜单第一帧绘制路径里，容易与字体 atlas 上传、Deko staging buffer 当前 swapchain slot 发生时序问题。尤其 `TextureUpload()` 使用当前 `SwapchainSlot` 的 staging buffer，因此不应在没有明确 `Gfx::StartFrame()` 的时机懒加载。
+
+### 已实施
+
+- `drawImage()` 改为只绘制已经预加载的纹理，不再在绘制时触发文件 IO / PNG 解码 / 纹理上传。
+- 新增 `preloadImage()` 与 `preloadMenuImages()`。
+- 在 `Gfx::Init()` 后增加菜单图片预加载检查点：
+  - 先调用 `Gfx::StartFrame()` 获取明确的 swapchain slot；
+  - 预加载并上传所有菜单 PNG；
+  - 调用 `Gfx::EndFrame()` 完成上传；
+  - `PresentQueue.waitIdle()` 等待预热帧完成。
+- 增加实时日志：
+
+```text
+GBAStationNDSStub: Deko checkpoint preload menu images begin
+GBAStationNDSStub: Deko checkpoint preload menu images result=...
+```
+
+### 当前状态
+
+- 菜单打开时只绘制已存在的 Deko 纹理，不再动态加载图片。
+- 如果某个图标预加载失败，`drawLeftMenu()` 会自动退回原文字占位图标，保证菜单可用。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.32 MB
+```
+
+---
+
+## 阶段 3.4：菜单按键图标统一为 Borealis Hint 字符码
+
+### 目标
+
+用户要求 NDS Stub 菜单不再依赖 `GFX_NINTENDOFONT_*` 系列定义，改为使用 Borealis `Hint::getKeyIcon()` 中同一套私有区 Unicode 字符码。
+
+### 已实施
+
+- 在 `nds_stub/include/nds_stub/ui/UiPrimitives.hpp` 中新增 `NDS_STUB_KEYICON_*` 宏：
+  - A/B/X/Y、L/R、ZL/ZR、左右摇杆、START/BACK、方向键、UNKNOWN。
+- `nds_stub/src/ui/UiComponents.cpp` 中底栏提示与 LR 选择器全部改用 `NDS_STUB_KEYICON_*`。
+- LR 选择器左右提示从普通文本 `L` / `R` 改为 Switch 按键图标字符。
+
+### 当前状态
+
+- `nds_stub/include` 与 `nds_stub/src` 下已经没有 `GFX_NINTENDOFONT` 引用。
+- 菜单按键图标现在与 Borealis `Hint::getKeyIcon()` 的字符码保持一致。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.24 MB
+```
+
+---
+
 ## 阶段 4.1：NDS Stub 菜单暂停、配置输入与热键接入
 
 ### 目标
