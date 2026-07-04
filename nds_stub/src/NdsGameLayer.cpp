@@ -57,13 +57,18 @@ RectF NdsGameLayer::bottomRect() const
             kDsHeight * scale};
 }
 
+RectF NdsGameLayer::touchRect() const
+{
+    return m_screensSwapped ? topRect() : bottomRect();
+}
+
 bool NdsGameLayer::readTouch(u16& outX, u16& outY) const
 {
     HidTouchScreenState state {};
     if (!hidGetTouchScreenStates(&state, 1) || state.count == 0)
         return false;
 
-    const RectF rect = bottomRect();
+    const RectF rect = touchRect();
     const float sx = static_cast<float>(state.touches[0].x);
     const float sy = static_cast<float>(state.touches[0].y);
     if (sx < rect.x || sx >= rect.x + rect.w ||
@@ -82,6 +87,8 @@ void NdsGameLayer::drawScreens() const
 
     const RectF top = topRect();
     const RectF bottom = bottomRect();
+    const int topScreen = m_screensSwapped ? 1 : 0;
+    const int bottomScreen = m_screensSwapped ? 0 : 1;
     const float srcWidth = static_cast<float>(m_renderer->GetFramebufferWidth());
     const float srcHeight = static_cast<float>(m_renderer->GetFramebufferHeight());
 
@@ -89,13 +96,13 @@ void NdsGameLayer::drawScreens() const
                     Gfx::sampler_ClampToEdge);
     if (m_waitForFramebufferReady)
         Gfx::WaitForFenceReady(m_renderer->FramebufferReady[GPU::FrontBuffer]);
-    Gfx::DrawRectangle(m_framebufferTextures[GPU::FrontBuffer][0],
+    Gfx::DrawRectangle(m_framebufferTextures[GPU::FrontBuffer][topScreen],
                        {top.x, top.y},
                        {top.w, top.h},
                        {0.0f, 0.0f},
                        {srcWidth, srcHeight},
                        {1.0f, 1.0f, 1.0f, 1.0f});
-    Gfx::DrawRectangle(m_framebufferTextures[GPU::FrontBuffer][1],
+    Gfx::DrawRectangle(m_framebufferTextures[GPU::FrontBuffer][bottomScreen],
                        {bottom.x, bottom.y},
                        {bottom.w, bottom.h},
                        {0.0f, 0.0f},

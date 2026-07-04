@@ -25,12 +25,17 @@ public:
     void setWaitForFramebufferReady(bool enabled) { m_waitForFramebufferReady = enabled; }
     void setLinearFiltering(bool enabled) { m_linearFiltering = enabled; }
     bool linearFiltering() const { return m_linearFiltering; }
+    void setScreensSwapped(bool enabled) { m_screensSwapped = enabled; }
+    bool screensSwapped() const { return m_screensSwapped; }
 
 private:
+    RectF touchRect() const;
+
     GPU2D::DekoRenderer* m_renderer = nullptr;
     std::array<std::array<u32, 2>, 2> m_framebufferTextures {};
     bool m_waitForFramebufferReady = false;
     bool m_linearFiltering = false;
+    bool m_screensSwapped = false;
 };
 
 } // namespace beiklive::nds_stub

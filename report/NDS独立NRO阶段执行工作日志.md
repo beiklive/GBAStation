@@ -1710,6 +1710,54 @@ GBAStationNDSStub.nro 3.16 MB
 
 ---
 
+## 阶段 4.1：NDS Stub 菜单暂停、配置输入与热键接入
+
+### 目标
+
+- 菜单打开期间真正暂停 NDS 核心，打开时从底部滑出，关闭时滑入底部。
+- 左侧 tab 保留“图片 + 文字”接口，当前无图片资源时使用稳定占位图标。
+- tab 点击后焦点进入右侧子页面第一个控件。
+- Stub 独立读取 `/GBAStation/config/config.cfg` 中的 `nds.*`、`fastforward.*`、`save.*`、`turbo.rate` 配置，补齐 NDS 按键、摇杆方向和常用热键。
+
+### 已实施
+
+- `NdsMenuLayer` 增加：
+  - `open()` / `close()` / `toggle()`；
+  - `active()` 用于菜单动画期间暂停游戏和拦截残余按键；
+  - tab 焦点与子页面焦点分离；
+  - 保存/读取状态动作携带 slot；
+  - 底部滑入/滑出动画。
+- `UiComponents` 增加：
+  - `itemIconPath()` 图片路径接口；
+  - tab 图标占位框；
+  - 子页面焦点渲染；
+  - 菜单整体 `offsetY` 绘制参数。
+- `NdsDekoRuntime` 增加独立配置解析：
+  - 读取 `sdmc:/GBAStation/config/config.cfg` 或 `/GBAStation/config/config.cfg`；
+  - 支持 `|` 多绑定、`+` 组合键；
+  - 支持实体按键与左右摇杆方向虚拟按键；
+  - 支持 NDS 普通键、快进、快速存档、快速读档、截图请求、菜单、静音、暂停、指针模式、指针点击、上下屏交换、A/B 连发。
+- 菜单活跃期间不再调用 `NDS::RunFrame()`，只绘制最后一帧与菜单动画。
+- 状态保存/读取改为使用 ArcDelta melonDS 的 `Savestate` + `NDS::DoSavestate()`。
+- 执行保存/读取/重置时暂停音频线程并等待 Deko 队列空闲。
+- `NdsGameLayer` 增加上下屏交换，触摸区域跟随交换后的下屏。
+
+### 当前限制
+
+- 截图热键已接入并实时写日志，但当前 Deko Gfx 层没有暴露 framebuffer readback，暂不生成 PNG。
+- tab 图片加载只留接口，等待后续把图片资源放入 NDS Stub romfs 后接入纹理加载。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.22 MB
+```
+
+---
+
 ## 阶段 3.6：移除多倍分辨率并恢复 x1-only
 
 ### 目标

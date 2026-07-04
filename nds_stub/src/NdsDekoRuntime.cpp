@@ -9,14 +9,19 @@
 #include <chrono>
 #include <cmath>
 #include <condition_variable>
+#include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <functional>
 #include <filesystem>
+#include <fstream>
+#include <map>
 #include <mutex>
+#include <sstream>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include <switch.h>
 
@@ -30,6 +35,7 @@
 #include "../../third_party/ArcDelta_melonDS/src/NDS.h"
 #include "../../third_party/ArcDelta_melonDS/src/NDSCart.h"
 #include "../../third_party/ArcDelta_melonDS/src/Platform.h"
+#include "../../third_party/ArcDelta_melonDS/src/Savestate.h"
 #include "../../third_party/ArcDelta_melonDS/src/SPU.h"
 #include "../../third_party/ArcDelta_melonDS/src/frontend/switch/PlatformConfig.h"
 #include "../../third_party/ArcDelta_melonDS/src/frontend/switch/Gfx.h"
@@ -76,6 +82,38 @@ std::string resolveSavePath(const beiklive::nds_stub::DekoRunOptions& options)
     return joinPath(saveDir, pathStem(options.romPath) + ".sav");
 }
 
+std::string statePath(const std::string& stateDir, const std::string& romPath, int slot)
+{
+    slot = std::max(0, slot);
+    return joinPath(stateDir, pathStem(romPath) + ".ss" + std::to_string(slot));
+}
+
+bool saveStateFile(const std::string& path)
+{
+    std::error_code ec;
+    std::filesystem::create_directories(std::filesystem::path(path).parent_path(), ec);
+    Savestate state(path.c_str(), true);
+    if (state.Error)
+        return false;
+    return NDS::DoSavestate(&state) && !state.Error;
+}
+
+bool loadStateFile(const std::string& path)
+{
+    if (!std::filesystem::exists(path))
+        return false;
+    Savestate state(path.c_str(), false);
+    if (state.Error)
+        return false;
+    return NDS::DoSavestate(&state) && !state.Error;
+}
+
+void logScreenshotRequest(const std::string& saveDir)
+{
+    beiklive::nds_stub::appendStubLog("GBAStationNDSStub: screenshot requested saveDir=%s readback=unsupported",
+                                      saveDir.c_str());
+}
+
 bool fileExists(const char* path)
 {
     FILE* fp = std::fopen(path, "rb");
@@ -95,6 +133,372 @@ bool touchScreenPressed()
 {
     HidTouchScreenState state {};
     return hidGetTouchScreenStates(&state, 1) && state.count > 0;
+}
+
+std::string trim(std::string value)
+{
+    auto isSpace = [](unsigned char c) { return std::isspace(c) != 0; };
+    while (!value.empty() && isSpace(static_cast<unsigned char>(value.front())))
+        value.erase(value.begin());
+    while (!value.empty() && isSpace(static_cast<unsigned char>(value.back())))
+        value.pop_back();
+    return value;
+}
+
+std::string upper(std::string value)
+{
+    for (char& c : value)
+        c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    return value;
+}
+
+std::vector<std::string> split(const std::string& value, char delimiter)
+{
+    std::vector<std::string> result;
+    std::stringstream stream(value);
+    std::string item;
+    while (std::getline(stream, item, delimiter))
+    {
+        item = trim(item);
+        if (!item.empty())
+            result.push_back(item);
+    }
+    return result;
+}
+
+std::string configValuePayload(std::string value)
+{
+    if (value.size() >= 2 && value[1] == '|')
+        value.erase(0, 2);
+    std::string out;
+    out.reserve(value.size());
+    for (size_t i = 0; i < value.size(); ++i)
+    {
+        if (value[i] == '\\' && i + 1 < value.size())
+        {
+            out.push_back(value[i + 1]);
+            ++i;
+        }
+        else
+        {
+            out.push_back(value[i]);
+        }
+    }
+    return trim(out);
+}
+
+struct InputCombo {
+    u64 hid = 0;
+    std::uint32_t virtualBits = 0;
+
+    bool empty() const { return hid == 0 && virtualBits == 0; }
+};
+
+enum VirtualInputBit : std::uint32_t {
+    VirtualLeftStickUp = 1u << 0,
+    VirtualLeftStickDown = 1u << 1,
+    VirtualLeftStickLeft = 1u << 2,
+    VirtualLeftStickRight = 1u << 3,
+    VirtualRightStickUp = 1u << 4,
+    VirtualRightStickDown = 1u << 5,
+    VirtualRightStickLeft = 1u << 6,
+    VirtualRightStickRight = 1u << 7,
+};
+
+struct InputSnapshot {
+    u64 held = 0;
+    u64 down = 0;
+    std::uint32_t virtualHeld = 0;
+    std::uint32_t virtualDown = 0;
+    HidAnalogStickState leftStick {};
+    HidAnalogStickState rightStick {};
+};
+
+u64 hidFromToken(const std::string& token)
+{
+    const std::string t = upper(trim(token));
+    if (t == "PAD_A") return HidNpadButton_A;
+    if (t == "PAD_B") return HidNpadButton_B;
+    if (t == "PAD_X") return HidNpadButton_X;
+    if (t == "PAD_Y") return HidNpadButton_Y;
+    if (t == "PAD_LB" || t == "LB") return HidNpadButton_L;
+    if (t == "PAD_RB" || t == "RB") return HidNpadButton_R;
+    if (t == "PAD_LT" || t == "LT") return HidNpadButton_ZL;
+    if (t == "PAD_RT" || t == "RT") return HidNpadButton_ZR;
+    if (t == "PAD_LSB" || t == "LSB") return HidNpadButton_StickL;
+    if (t == "PAD_RSB" || t == "RSB") return HidNpadButton_StickR;
+    if (t == "PAD_START" || t == "START") return HidNpadButton_Plus;
+    if (t == "PAD_BACK" || t == "BACK" || t == "SELECT") return HidNpadButton_Minus;
+    if (t == "PAD_UP") return HidNpadButton_Up;
+    if (t == "PAD_DOWN") return HidNpadButton_Down;
+    if (t == "PAD_LEFT") return HidNpadButton_Left;
+    if (t == "PAD_RIGHT") return HidNpadButton_Right;
+    return 0;
+}
+
+std::uint32_t virtualFromToken(const std::string& token)
+{
+    const std::string t = upper(trim(token));
+    if (t == "PAD_LEFTSTICKUP") return VirtualLeftStickUp;
+    if (t == "PAD_LEFTSTICKDOWN") return VirtualLeftStickDown;
+    if (t == "PAD_LEFTSTICKLEFT") return VirtualLeftStickLeft;
+    if (t == "PAD_LEFTSTICKRIGHT") return VirtualLeftStickRight;
+    if (t == "PAD_RIGHTSTICKUP") return VirtualRightStickUp;
+    if (t == "PAD_RIGHTSTICKDOWN") return VirtualRightStickDown;
+    if (t == "PAD_RIGHTSTICKLEFT") return VirtualRightStickLeft;
+    if (t == "PAD_RIGHTSTICKRIGHT") return VirtualRightStickRight;
+    return 0;
+}
+
+InputCombo parseCombo(const std::string& comboText)
+{
+    InputCombo combo;
+    for (const std::string& part : split(comboText, '+'))
+    {
+        const std::string token = upper(part);
+        if (token == "NONE")
+            return {};
+        combo.hid |= hidFromToken(token);
+        combo.virtualBits |= virtualFromToken(token);
+    }
+    return combo;
+}
+
+std::vector<InputCombo> parseCombos(const std::string& value)
+{
+    std::vector<InputCombo> combos;
+    for (const std::string& comboText : split(value, '|'))
+    {
+        InputCombo combo = parseCombo(comboText);
+        if (!combo.empty())
+            combos.push_back(combo);
+    }
+    return combos;
+}
+
+bool comboHeld(const InputCombo& combo, const InputSnapshot& input)
+{
+    return (input.held & combo.hid) == combo.hid &&
+           (input.virtualHeld & combo.virtualBits) == combo.virtualBits;
+}
+
+bool comboDown(const InputCombo& combo, const InputSnapshot& input)
+{
+    if (!comboHeld(combo, input))
+        return false;
+    return ((input.down & combo.hid) != 0) || ((input.virtualDown & combo.virtualBits) != 0);
+}
+
+bool anyComboHeld(const std::vector<InputCombo>& combos, const InputSnapshot& input)
+{
+    for (const InputCombo& combo : combos)
+    {
+        if (comboHeld(combo, input))
+            return true;
+    }
+    return false;
+}
+
+bool anyComboDown(const std::vector<InputCombo>& combos, const InputSnapshot& input)
+{
+    for (const InputCombo& combo : combos)
+    {
+        if (comboDown(combo, input))
+            return true;
+    }
+    return false;
+}
+
+InputSnapshot makeInputSnapshot(PadState& pad, std::uint32_t& previousVirtualHeld)
+{
+    InputSnapshot input;
+    input.held = padGetButtons(&pad);
+    input.down = padGetButtonsDown(&pad);
+    input.leftStick = padGetStickPos(&pad, 0);
+    input.rightStick = padGetStickPos(&pad, 1);
+
+    constexpr int kStickThreshold = 12000;
+    auto addStick = [&](const HidAnalogStickState& stick,
+                        VirtualInputBit up,
+                        VirtualInputBit down,
+                        VirtualInputBit left,
+                        VirtualInputBit right) {
+        if (stick.y > kStickThreshold)
+            input.virtualHeld |= up;
+        if (stick.y < -kStickThreshold)
+            input.virtualHeld |= down;
+        if (stick.x < -kStickThreshold)
+            input.virtualHeld |= left;
+        if (stick.x > kStickThreshold)
+            input.virtualHeld |= right;
+    };
+
+    addStick(input.leftStick, VirtualLeftStickUp, VirtualLeftStickDown,
+             VirtualLeftStickLeft, VirtualLeftStickRight);
+    addStick(input.rightStick, VirtualRightStickUp, VirtualRightStickDown,
+             VirtualRightStickLeft, VirtualRightStickRight);
+    input.virtualDown = input.virtualHeld & ~previousVirtualHeld;
+    previousVirtualHeld = input.virtualHeld;
+    return input;
+}
+
+class NdsInputConfig {
+public:
+    struct ButtonBinding {
+        const char* key;
+        uint32_t ndsBit;
+        const char* fallback;
+    };
+
+    void load()
+    {
+        constexpr const char* paths[] = {
+            "sdmc:/GBAStation/config/config.cfg",
+            "/GBAStation/config/config.cfg",
+        };
+
+        for (const char* path : paths)
+        {
+            std::ifstream file(path);
+            if (!file)
+                continue;
+
+            std::string line;
+            while (std::getline(file, line))
+            {
+                const size_t eq = line.find('=');
+                if (eq == std::string::npos)
+                    continue;
+                std::string key = trim(line.substr(0, eq));
+                if (key.rfind("nds.", 0) != 0 &&
+                    key.rfind("fastforward.", 0) != 0 &&
+                    key.rfind("save.", 0) != 0 &&
+                    key != "turbo.rate")
+                    continue;
+
+                m_values[key] = configValuePayload(line.substr(eq + 1));
+            }
+
+            beiklive::nds_stub::appendStubLog("GBAStationNDSStub: input config loaded path=%s keys=%u",
+                                             path,
+                                             static_cast<unsigned>(m_values.size()));
+            break;
+        }
+
+        buildMappings();
+    }
+
+    const std::vector<InputCombo>& button(const char* key) const
+    {
+        static const std::vector<InputCombo> empty;
+        auto it = m_comboValues.find(key);
+        return it == m_comboValues.end() ? empty : it->second;
+    }
+
+    std::string value(const std::string& key, const std::string& fallback) const
+    {
+        auto it = m_values.find(key);
+        return it == m_values.end() || it->second.empty() ? fallback : it->second;
+    }
+
+    int intValue(const std::string& key, int fallback) const
+    {
+        try { return std::stoi(value(key, std::to_string(fallback))); }
+        catch (...) { return fallback; }
+    }
+
+    float floatValue(const std::string& key, float fallback) const
+    {
+        try { return std::stof(value(key, std::to_string(fallback))); }
+        catch (...) { return fallback; }
+    }
+
+    bool fastForwardEnabled() const { return intValue("fastforward.enabled", 1) != 0; }
+    bool fastForwardToggleMode() const { return value("fastforward.mode", "hold") == "toggle"; }
+    bool fastForwardMute() const { return intValue("fastforward.mute", 1) != 0; }
+    int fastForwardMultiplier() const
+    {
+        return std::clamp(static_cast<int>(std::lround(floatValue("fastforward.multiplier", 4.0f))), 1, 10);
+    }
+
+    int turboIntervalFrames() const
+    {
+        float turboHz = std::clamp(floatValue("turbo.rate", 10.0f), 1.0f, 30.0f);
+        return std::max(1, static_cast<int>(60.0f / (turboHz * 2.0f)));
+    }
+
+    uint32_t dsKeyMask(const InputSnapshot& input, bool turboAOn, bool turboBOn) const
+    {
+        uint32_t mask = 0x0FFFu;
+        for (const auto& binding : kButtonBindings)
+        {
+            if (anyComboHeld(button(binding.key), input))
+                mask &= ~binding.ndsBit;
+        }
+        if (turboAOn)
+            mask &= ~kNdsKeyA;
+        if (turboBOn)
+            mask &= ~kNdsKeyB;
+        return mask;
+    }
+
+private:
+    void buildMappings()
+    {
+        for (const auto& binding : kButtonBindings)
+            m_comboValues[binding.key] = parseCombos(value(binding.key, binding.fallback));
+
+        const std::pair<const char*, const char*> hotkeys[] = {
+            {"nds.handle.fastforward", "PAD_LSB"},
+            {"nds.handle.a_turbo", "none"},
+            {"nds.handle.b_turbo", "none"},
+            {"nds.hotkey.menu.pad", "PAD_LT+PAD_RT"},
+            {"nds.hotkey.quicksave.pad", "none"},
+            {"nds.hotkey.quickload.pad", "none"},
+            {"nds.hotkey.screenshot.pad", "none"},
+            {"nds.hotkey.mute.pad", "none"},
+            {"nds.hotkey.pause.pad", "none"},
+            {"nds.hotkey.pointer_mode.pad", "none"},
+            {"nds.hotkey.pointer_click.pad", "PAD_RT"},
+            {"nds.hotkey.swap_screens.pad", "none"},
+            {"nds.layout.next", "none"},
+            {"nds.pointer.touch", "none"},
+        };
+        for (const auto& hotkey : hotkeys)
+            m_comboValues[hotkey.first] = parseCombos(value(hotkey.first, hotkey.second));
+    }
+
+    static constexpr ButtonBinding kButtonBindings[] = {
+        {"nds.handle.a", kNdsKeyA, "PAD_A"},
+        {"nds.handle.b", kNdsKeyB, "PAD_B"},
+        {"nds.handle.select", kNdsKeySelect, "PAD_BACK"},
+        {"nds.handle.start", kNdsKeyStart, "PAD_START"},
+        {"nds.handle.right", kNdsKeyRight, "PAD_RIGHT"},
+        {"nds.handle.left", kNdsKeyLeft, "PAD_LEFT"},
+        {"nds.handle.up", kNdsKeyUp, "PAD_UP"},
+        {"nds.handle.down", kNdsKeyDown, "PAD_DOWN"},
+        {"nds.handle.r", kNdsKeyR, "PAD_RB"},
+        {"nds.handle.l", kNdsKeyL, "PAD_LB"},
+        {"nds.handle.x", kNdsKeyX, "PAD_X"},
+        {"nds.handle.y", kNdsKeyY, "PAD_Y"},
+    };
+
+    std::map<std::string, std::string> m_values;
+    std::map<std::string, std::vector<InputCombo>> m_comboValues;
+};
+
+constexpr NdsInputConfig::ButtonBinding NdsInputConfig::kButtonBindings[];
+
+std::string resolveStateDir(const beiklive::nds_stub::DekoRunOptions& options, const NdsInputConfig& inputConfig)
+{
+    std::string dir = inputConfig.value("save.stateDir", "");
+    if (dir.empty())
+        dir = options.savePath;
+    if (dir.empty())
+        dir = joinPath("sdmc:/GBAStation/states/NDS", pathStem(options.romPath));
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    return dir;
 }
 
 uint32_t dsKeyMaskFromPad(const PadState& pad)
@@ -277,6 +681,11 @@ public:
         }
     }
 
+    void setMuted(bool enabled)
+    {
+        m_muted.store(enabled, std::memory_order_release);
+    }
+
     void push(const int16_t* samples, size_t stereoFrames)
     {
         (void)samples;
@@ -342,6 +751,9 @@ private:
 
                 if (frames > 0)
                 {
+                    if (m_muted.load(std::memory_order_acquire))
+                        std::memset(data, 0, frames * 2 * sizeof(int16_t));
+
                     const u32 lastStereo = reinterpret_cast<u32*>(data)[frames - 1];
                     while (frames < static_cast<int>(kBufferFrames))
                         reinterpret_cast<u32*>(data)[frames++] = lastStereo;
@@ -361,6 +773,7 @@ private:
     std::atomic<bool> m_running{false};
     std::atomic<bool> m_paused{false};
     std::atomic<bool> m_fastForwardAudio{false};
+    std::atomic<bool> m_muted{false};
     std::mutex m_spuReadMutex;
     std::thread m_thread;
     AudioDriver m_driver {};
@@ -564,12 +977,16 @@ int RunDekoRuntime(const DekoRunOptions& options)
         return 1;
     }
 
+    NdsInputConfig inputConfig;
+    inputConfig.load();
     const std::string savePath = resolveSavePath(options);
+    const std::string stateDir = resolveStateDir(options, inputConfig);
 
     padConfigureInput(1, HidNpadStyleSet_NpadStandard);
     hidInitializeTouchScreen();
     PadState pad;
     padInitializeDefault(&pad);
+    std::uint32_t previousVirtualHeld = 0;
 
     if (R_FAILED(romfsInit()))
     {
@@ -627,6 +1044,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
     bool running = loaded;
     bool pendingReturn = false;
     NdsMenuLayer menuLayer;
+    menuLayer.setFastForwardMultiplier(inputConfig.fastForwardMultiplier());
     double fps = 0.0;
     int fpsFrames = 0;
     uint64_t totalFrames = 0;
@@ -634,6 +1052,56 @@ int RunDekoRuntime(const DekoRunOptions& options)
     auto fpsStart = std::chrono::steady_clock::now();
     bool blockGameInputUntilRelease = false;
     bool lastFastForwardActive = false;
+    bool fastForwardToggle = false;
+    bool runtimePaused = false;
+    bool muted = false;
+    bool screensSwapped = false;
+    bool pointerMode = false;
+    bool pointerClickHeld = false;
+    float pointerX = 128.0f;
+    float pointerY = 96.0f;
+    auto pointerLastUpdate = std::chrono::steady_clock::now();
+    bool turboAHeld = false;
+    bool turboBHeld = false;
+    bool turboAOn = false;
+    bool turboBOn = false;
+    int turboFrameCount = 0;
+    const int turboIntervalFrames = inputConfig.turboIntervalFrames();
+    const int autoLoadSlot = inputConfig.intValue("save.autoLoadState0", 0);
+    const int autoSaveSlot = inputConfig.intValue("save.autoSaveState", 0);
+    const int autoSaveInterval = inputConfig.intValue("save.autoSaveInterval", 0);
+    const bool autoSaveOnExit = inputConfig.intValue("save.autoSaveOnExit", 0) != 0;
+    auto autoSaveStart = std::chrono::steady_clock::now();
+
+    auto doSaveState = [&](int slot) {
+        const std::string path = statePath(stateDir, options.romPath, slot);
+        appendStubLog("GBAStationNDSStub: savestate save begin slot=%d path=%s", slot, path.c_str());
+        audio.pauseForCoreReset();
+        Gfx::PresentQueue.waitIdle();
+        Gfx::EmuQueue.waitIdle();
+        const bool ok = saveStateFile(path);
+        NDSCart::FlushSRAMFile();
+        audio.resumeAfterCoreReset();
+        appendStubLog("GBAStationNDSStub: savestate save %s slot=%d", ok ? "ok" : "failed", slot);
+        return ok;
+    };
+
+    auto doLoadState = [&](int slot) {
+        const std::string path = statePath(stateDir, options.romPath, slot);
+        appendStubLog("GBAStationNDSStub: savestate load begin slot=%d path=%s", slot, path.c_str());
+        NDS::SetKeyMask(0x0FFFu);
+        NDS::ReleaseScreen();
+        audio.pauseForCoreReset();
+        Gfx::PresentQueue.waitIdle();
+        Gfx::EmuQueue.waitIdle();
+        const bool ok = loadStateFile(path);
+        audio.resumeAfterCoreReset();
+        appendStubLog("GBAStationNDSStub: savestate load %s slot=%d", ok ? "ok" : "failed", slot);
+        return ok;
+    };
+
+    if (autoLoadSlot > 0)
+        doLoadState(autoLoadSlot - 1);
 
     while (appletMainLoop() && running)
     {
@@ -643,15 +1111,75 @@ int RunDekoRuntime(const DekoRunOptions& options)
                           static_cast<unsigned long long>(totalFrames));
         const auto frameBegin = std::chrono::steady_clock::now();
         padUpdate(&pad);
-        const u64 down = padGetButtonsDown(&pad);
-        const u64 held = padGetButtons(&pad);
+        const InputSnapshot input = makeInputSnapshot(pad, previousVirtualHeld);
+        const bool touchHeld = touchScreenPressed();
+
+        if (anyComboDown(inputConfig.button("nds.hotkey.menu.pad"), input))
+        {
+            const bool wasVisible = menuLayer.visible();
+            menuLayer.toggle();
+            blockGameInputUntilRelease = true;
+            appendStubLog("GBAStationNDSStub: menu hotkey toggle visible=%d->%d",
+                          wasVisible ? 1 : 0,
+                          menuLayer.visible() ? 1 : 0);
+        }
+
+        if (!menuLayer.active())
+        {
+            if (inputConfig.fastForwardEnabled() &&
+                anyComboDown(inputConfig.button("nds.handle.fastforward"), input) &&
+                inputConfig.fastForwardToggleMode())
+            {
+                fastForwardToggle = !fastForwardToggle;
+                appendStubLog("GBAStationNDSStub: fastforward toggle=%d", fastForwardToggle ? 1 : 0);
+            }
+            if (anyComboDown(inputConfig.button("nds.hotkey.pause.pad"), input))
+            {
+                runtimePaused = !runtimePaused;
+                appendStubLog("GBAStationNDSStub: runtime pause=%d", runtimePaused ? 1 : 0);
+            }
+            if (anyComboDown(inputConfig.button("nds.hotkey.mute.pad"), input))
+            {
+                muted = !muted;
+                appendStubLog("GBAStationNDSStub: mute=%d", muted ? 1 : 0);
+            }
+            if (anyComboDown(inputConfig.button("nds.hotkey.pointer_mode.pad"), input))
+            {
+                pointerMode = !pointerMode;
+                pointerClickHeld = false;
+                pointerLastUpdate = std::chrono::steady_clock::now();
+                appendStubLog("GBAStationNDSStub: pointer mode=%d", pointerMode ? 1 : 0);
+            }
+            if (anyComboDown(inputConfig.button("nds.hotkey.swap_screens.pad"), input) ||
+                anyComboDown(inputConfig.button("nds.layout.next"), input))
+            {
+                screensSwapped = !screensSwapped;
+                gameLayer.setScreensSwapped(screensSwapped);
+                appendStubLog("GBAStationNDSStub: swap screens=%d", screensSwapped ? 1 : 0);
+            }
+            if (anyComboDown(inputConfig.button("nds.hotkey.quicksave.pad"), input))
+                doSaveState(1);
+            if (anyComboDown(inputConfig.button("nds.hotkey.quickload.pad"), input))
+                doLoadState(1);
+            if (anyComboDown(inputConfig.button("nds.hotkey.screenshot.pad"), input))
+                logScreenshotRequest(options.savePath.empty() ? stateDir : options.savePath);
+        }
 
         const bool wasMenuVisible = menuLayer.visible();
-        const NdsMenuAction menuAction = menuLayer.update(down);
+        const NdsMenuResult menuResult = menuLayer.update(input.down);
+        const NdsMenuAction menuAction = menuResult.action;
         if (wasMenuVisible != menuLayer.visible())
             blockGameInputUntilRelease = true;
 
-        if (menuAction == NdsMenuAction::DisplaySettingsChanged)
+        if (menuAction == NdsMenuAction::SaveState)
+        {
+            doSaveState(menuResult.slot + 1);
+        }
+        else if (menuAction == NdsMenuAction::LoadState)
+        {
+            doLoadState(menuResult.slot + 1);
+        }
+        else if (menuAction == NdsMenuAction::DisplaySettingsChanged)
         {
             gameLayer.setLinearFiltering(menuLayer.linearFiltering());
             appendStubLog("GBAStationNDSStub: Deko display settings filter=%s ff=x%d",
@@ -692,13 +1220,17 @@ int RunDekoRuntime(const DekoRunOptions& options)
             running = false;
         }
 
-        const bool menuVisible = menuLayer.visible();
-        const bool touchHeld = touchScreenPressed();
-        if (blockGameInputUntilRelease && held == 0 && !touchHeld)
+        const bool menuActive = menuLayer.active();
+        if (blockGameInputUntilRelease && input.held == 0 && input.virtualHeld == 0 && !touchHeld)
             blockGameInputUntilRelease = false;
-        const bool suppressGameInput = menuVisible || blockGameInputUntilRelease;
+        const bool suppressGameInput = menuActive || runtimePaused || blockGameInputUntilRelease;
+        const bool fastForwardHeld = inputConfig.fastForwardToggleMode()
+            ? fastForwardToggle
+            : anyComboHeld(inputConfig.button("nds.handle.fastforward"), input);
         const bool fastForwardActive =
             !suppressGameInput &&
+            inputConfig.fastForwardEnabled() &&
+            fastForwardHeld &&
             menuLayer.fastForwardMultiplier() > 1;
         if (fastForwardActive != lastFastForwardActive)
         {
@@ -708,14 +1240,62 @@ int RunDekoRuntime(const DekoRunOptions& options)
             audio.setFastForwardActive(fastForwardActive);
             lastFastForwardActive = fastForwardActive;
         }
+        audio.setMuted(muted || (fastForwardActive && inputConfig.fastForwardMute()));
 
-        const uint32_t keyMask = suppressGameInput ? 0x0FFFu : dsKeyMaskFromPad(pad);
+        if (!suppressGameInput)
+        {
+            turboAHeld = anyComboHeld(inputConfig.button("nds.handle.a_turbo"), input);
+            turboBHeld = anyComboHeld(inputConfig.button("nds.handle.b_turbo"), input);
+            ++turboFrameCount;
+            if (turboFrameCount >= turboIntervalFrames)
+            {
+                turboFrameCount = 0;
+                if (turboAHeld)
+                    turboAOn = !turboAOn;
+                if (turboBHeld)
+                    turboBOn = !turboBOn;
+            }
+            if (!turboAHeld)
+                turboAOn = false;
+            if (!turboBHeld)
+                turboBOn = false;
+        }
+        else
+        {
+            turboAHeld = false;
+            turboBHeld = false;
+            turboAOn = false;
+            turboBOn = false;
+        }
+
+        const uint32_t keyMask = suppressGameInput ? 0x0FFFu : inputConfig.dsKeyMask(input, turboAOn, turboBOn);
         NDS::SetKeyMask(keyMask);
 
         u16 touchX = 0;
         u16 touchY = 0;
+        pointerClickHeld = anyComboHeld(inputConfig.button("nds.hotkey.pointer_click.pad"), input) ||
+                           anyComboHeld(inputConfig.button("nds.pointer.touch"), input);
+        if (pointerMode && !suppressGameInput)
+        {
+            const auto now = std::chrono::steady_clock::now();
+            float dt = std::chrono::duration<float>(now - pointerLastUpdate).count();
+            pointerLastUpdate = now;
+            dt = std::clamp(dt, 0.0f, 0.05f);
+            constexpr float kStickMax = 32767.0f;
+            constexpr float kDeadzone = 0.18f;
+            constexpr float kPointerSpeed = 320.0f;
+            float sx = static_cast<float>(input.rightStick.x) / kStickMax;
+            float sy = static_cast<float>(input.rightStick.y) / kStickMax;
+            if (std::fabs(sx) < kDeadzone) sx = 0.0f;
+            if (std::fabs(sy) < kDeadzone) sy = 0.0f;
+            pointerX = std::clamp(pointerX + sx * kPointerSpeed * dt, 0.0f, 255.0f);
+            pointerY = std::clamp(pointerY - sy * kPointerSpeed * dt, 0.0f, 191.0f);
+        }
+
         if (!suppressGameInput && gameLayer.readTouch(touchX, touchY))
             NDS::TouchScreen(touchX, touchY);
+        else if (!suppressGameInput && pointerMode && pointerClickHeld)
+            NDS::TouchScreen(static_cast<u16>(pointerX + 0.5f), static_cast<u16>(pointerY + 0.5f));
         else
             NDS::ReleaseScreen();
 
@@ -724,9 +1304,12 @@ int RunDekoRuntime(const DekoRunOptions& options)
             appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu RunFrame begin",
                           static_cast<unsigned long long>(totalFrames));
         const int framesToRun = fastForwardActive ? menuLayer.fastForwardMultiplier() : 1;
-        for (int i = 0; i < framesToRun; ++i)
+        const bool emulationPaused = menuActive || runtimePaused;
+        int framesRan = 0;
+        for (int i = 0; i < framesToRun && !emulationPaused; ++i)
         {
             NDS::RunFrame();
+            ++framesRan;
             if (fastForwardActive)
                 SPU::Sync(false);
         }
@@ -734,7 +1317,19 @@ int RunDekoRuntime(const DekoRunOptions& options)
             appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu RunFrame ok",
                           static_cast<unsigned long long>(totalFrames));
         const auto runEnd = std::chrono::steady_clock::now();
-        lastRunMs = std::chrono::duration_cast<std::chrono::milliseconds>(runEnd - runBegin).count();
+        lastRunMs = emulationPaused ? 0 :
+            std::chrono::duration_cast<std::chrono::milliseconds>(runEnd - runBegin).count();
+
+        if (!emulationPaused && autoSaveSlot > 0 && autoSaveInterval > 0)
+        {
+            const auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+                std::chrono::steady_clock::now() - autoSaveStart).count();
+            if (elapsed >= autoSaveInterval)
+            {
+                doSaveState(autoSaveSlot - 1);
+                autoSaveStart = std::chrono::steady_clock::now();
+            }
+        }
 
         if (traceFrame)
             appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu Gfx::StartFrame begin",
@@ -760,6 +1355,18 @@ int RunDekoRuntime(const DekoRunOptions& options)
             appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu gameLayer.drawScreens ok",
                           static_cast<unsigned long long>(totalFrames));
 
+        if (pointerMode && !menuLayer.active())
+        {
+            const RectF pointerRect = screensSwapped ? gameLayer.topRect() : gameLayer.bottomRect();
+            const float px = pointerRect.x + (pointerX / 255.0f) * pointerRect.w;
+            const float py = pointerRect.y + (pointerY / 191.0f) * pointerRect.h;
+            const Gfx::Color cursorColor = pointerClickHeld
+                ? Gfx::Color{1.0f, 0.92f, 0.35f, 0.95f}
+                : Gfx::Color{0.35f, 0.78f, 1.0f, 0.92f};
+            Gfx::DrawRectangle({px - 10.0f, py - 1.5f}, {20.0f, 3.0f}, cursorColor);
+            Gfx::DrawRectangle({px - 1.5f, py - 10.0f}, {3.0f, 20.0f}, cursorColor);
+        }
+
         if (traceFrame)
             appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu menuLayer.draw begin",
                           static_cast<unsigned long long>(totalFrames));
@@ -784,7 +1391,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
             appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu Gfx::EndFrame ok",
                           static_cast<unsigned long long>(totalFrames));
 
-        fpsFrames += framesToRun;
+        fpsFrames += framesRan;
         ++totalFrames;
         if (totalFrames % 60 == 0)
         {
@@ -815,6 +1422,11 @@ int RunDekoRuntime(const DekoRunOptions& options)
         }
     }
 
+    if (autoSaveOnExit && autoSaveSlot > 0 && loaded)
+        doSaveState(autoSaveSlot - 1);
+
+    audio.setFastForwardActive(false);
+    audio.setMuted(false);
     audio.stop();
     NDSCart::FlushSRAMFile();
     gameLayer.deinit();
