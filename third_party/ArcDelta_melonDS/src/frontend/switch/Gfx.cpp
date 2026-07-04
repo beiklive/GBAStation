@@ -11,6 +11,7 @@
 #include <array>
 #include <unordered_map>
 #include <algorithm>
+#include <cmath>
 
 #include <stdio.h>
 
@@ -529,8 +530,78 @@ void LoadShader(const char* path, dk::Shader& out)
 }
 
 std::vector<DkScissor> ScissorStack;
+
+struct DrawTransform
+{
+    float M00 = 1.0f;
+    float M01 = 0.0f;
+    float M02 = 0.0f;
+    float M10 = 0.0f;
+    float M11 = 1.0f;
+    float M12 = 0.0f;
+};
+
+std::vector<DrawTransform> DrawTransformStack;
+
+DrawTransform CurrentDrawTransform()
+{
+    if (DrawTransformStack.empty())
+        return {};
+    return DrawTransformStack.back();
+}
+
+Vector2f TransformPoint(Vector2f point)
+{
+    const DrawTransform transform = CurrentDrawTransform();
+    return {
+        transform.M00 * point.X + transform.M01 * point.Y + transform.M02,
+        transform.M10 * point.X + transform.M11 * point.Y + transform.M12,
+    };
+}
+
+bool HasDrawTransform()
+{
+    const DrawTransform transform = CurrentDrawTransform();
+    return transform.M00 != 1.0f || transform.M01 != 0.0f || transform.M02 != 0.0f ||
+           transform.M10 != 0.0f || transform.M11 != 1.0f || transform.M12 != 0.0f;
+}
+
+void PushDrawTransform(float m00, float m01, float m02, float m10, float m11, float m12)
+{
+    const DrawTransform parent = CurrentDrawTransform();
+    DrawTransform next {};
+    next.M00 = m00 * parent.M00 + m01 * parent.M10;
+    next.M01 = m00 * parent.M01 + m01 * parent.M11;
+    next.M02 = m00 * parent.M02 + m01 * parent.M12 + m02;
+    next.M10 = m10 * parent.M00 + m11 * parent.M10;
+    next.M11 = m10 * parent.M01 + m11 * parent.M11;
+    next.M12 = m10 * parent.M02 + m11 * parent.M12 + m12;
+    DrawTransformStack.push_back(next);
+}
+
+void PopDrawTransform()
+{
+    if (!DrawTransformStack.empty())
+        DrawTransformStack.pop_back();
+}
+
 void PushScissor(u32 x, u32 y, u32 w, u32 h)
 {
+    if (HasDrawTransform())
+    {
+        const Vector2f p0 = TransformPoint({static_cast<float>(x), static_cast<float>(y)});
+        const Vector2f p1 = TransformPoint({static_cast<float>(x + w), static_cast<float>(y)});
+        const Vector2f p2 = TransformPoint({static_cast<float>(x), static_cast<float>(y + h)});
+        const Vector2f p3 = TransformPoint({static_cast<float>(x + w), static_cast<float>(y + h)});
+        const float minX = std::max(0.0f, std::floor(std::min({p0.X, p1.X, p2.X, p3.X})));
+        const float minY = std::max(0.0f, std::floor(std::min({p0.Y, p1.Y, p2.Y, p3.Y})));
+        const float maxX = std::min(1280.0f, std::ceil(std::max({p0.X, p1.X, p2.X, p3.X})));
+        const float maxY = std::min(720.0f, std::ceil(std::max({p0.Y, p1.Y, p2.Y, p3.Y})));
+        x = static_cast<u32>(minX);
+        y = static_cast<u32>(minY);
+        w = static_cast<u32>(std::max(1.0f, maxX - minX));
+        h = static_cast<u32>(std::max(1.0f, maxY - minY));
+    }
     ScissorStack.push_back({x, y, w, h});
 }
 
@@ -701,6 +772,7 @@ void Rotate90Deg(u32& outX, u32& outY, u32 inX, u32 inY, int rotation)
 void StartFrame()
 {
     SwapchainSlot = PresentQueue.acquireImage(Swapchain);
+    DrawTransformStack.clear();
 
     AnimationTimestamp = armTicksToNs(armGetSystemTick()) * 0.000000001;
     if (!DoSkipTimestep)
@@ -965,21 +1037,25 @@ void DrawRectangle(u32 texIdx,
     float coolTransparencyMax = coolTransparency ? 0.9f : 1.f;
 
     Vector2f outerBounds = position + size;
+    const Vector2f p0 = TransformPoint(position);
+    const Vector2f p1 = TransformPoint({outerBounds.X, position.Y});
+    const Vector2f p2 = TransformPoint({position.X, outerBounds.Y});
+    const Vector2f p3 = TransformPoint(outerBounds);
 
     assert(CurClientVertex + 4 <= MaxVertices);
-    VertexDataClient[CurClientVertex + 0] = {position.X, position.Y,
+    VertexDataClient[CurClientVertex + 0] = {p0.X, p0.Y,
         uvMin.X, uvMin.Y,
         tintR8, tintG8, tintB8, tintA8,
         coolTransparencyMin, coolTransparencyMax};
-    VertexDataClient[CurClientVertex + 1] = {outerBounds.X, position.Y,
+    VertexDataClient[CurClientVertex + 1] = {p1.X, p1.Y,
         uvMax.X, uvMin.Y, tintR8,
         tintG8, tintB8, tintA8,
         coolTransparencyMin, coolTransparencyMax};
-    VertexDataClient[CurClientVertex + 2] = {position.X, outerBounds.Y,
+    VertexDataClient[CurClientVertex + 2] = {p2.X, p2.Y,
         uvMin.X, uvMax.Y,
         tintR8, tintG8, tintB8, tintA8,
         coolTransparencyMin, coolTransparencyMax};
-    VertexDataClient[CurClientVertex + 3] = {outerBounds.X, outerBounds.Y,
+    VertexDataClient[CurClientVertex + 3] = {p3.X, p3.Y,
         uvMax.X, uvMax.Y,
         tintR8, tintG8, tintB8, tintA8,
         coolTransparencyMin, coolTransparencyMax};
@@ -1017,6 +1093,10 @@ void DrawRectangle(u32 texIdx,
     Vector2f rcpTexSize{1.f / texture.Width, 1.f / texture.Height};
     Vector2f uvMin = subPosition * rcpTexSize;
     Vector2f uvMax = uvMin + subSize * rcpTexSize;
+    p0 = TransformPoint(p0);
+    p1 = TransformPoint(p1);
+    p2 = TransformPoint(p2);
+    p3 = TransformPoint(p3);
 
     assert(CurClientVertex + 4 <= MaxVertices);
     VertexDataClient[CurClientVertex + 0] = {p0.X, p0.Y, uvMin.X, uvMin.Y, 255, 255, 255, 255, 1.f, 1.f};

@@ -2,6 +2,71 @@
 
 namespace beiklive::nds_stub::ui {
 
+namespace {
+
+constexpr UiMetrics kLandscapeMetrics {
+    1280.0f, 720.0f,
+    56.0f, 120.0f,
+    280.0f, 58.0f, 18.0f,
+    340.0f, 110.0f, 500.0f,
+    380.0f, 110.0f, 840.0f, 520.0f,
+    58.0f, 450.0f,
+    386.0f, 94.0f, 18.0f, 14.0f,
+    48.0f, 14.0f,
+    2,
+};
+
+constexpr UiMetrics kPortraitMetrics {
+    720.0f, 1280.0f,
+    36.0f, 120.0f,
+    210.0f, 58.0f, 18.0f,
+    268.0f, 110.0f, 1040.0f,
+    300.0f, 110.0f, 384.0f, 1040.0f,
+    58.0f, 970.0f,
+    384.0f, 94.0f, 0.0f, 14.0f,
+    48.0f, 14.0f,
+    1,
+};
+
+int gMenuOrientation = 0;
+
+} // namespace
+
+const UiMetrics& menuMetrics()
+{
+    return (gMenuOrientation == 1 || gMenuOrientation == 3) ? kPortraitMetrics : kLandscapeMetrics;
+}
+
+void setMenuMetricsOrientation(int orientation)
+{
+    gMenuOrientation = std::clamp(orientation, 0, 3);
+}
+
+int saveSlotColumns()
+{
+    return menuMetrics().saveColumns;
+}
+
+float contentBodyHeight()
+{
+    return menuMetrics().contentBodyH;
+}
+
+float saveCardHeight()
+{
+    return menuMetrics().saveCardH;
+}
+
+float saveCardGapY()
+{
+    return menuMetrics().saveCardGapY;
+}
+
+float settingStepY()
+{
+    return menuMetrics().settingStepY;
+}
+
 const char* filterLabel(bool linear)
 {
     return linear ? "Linear" : "Nearest";
@@ -11,8 +76,8 @@ namespace {
 
 const char* layoutLabel(int index)
 {
-    static const char* labels[] = {"纵向对称", "横向对称", "上屏优先", "下屏优先", "混合横向", "自定义"};
-    return labels[std::clamp(index, 0, 5)];
+    static const char* labels[] = {"纵向对称", "横向对称", "上屏优先", "下屏优先", "混合横向", "单上屏", "单下屏", "自定义"};
+    return labels[std::clamp(index, 0, 7)];
 }
 
 const char* orientationLabel(int index)
@@ -21,14 +86,19 @@ const char* orientationLabel(int index)
     return labels[std::clamp(index, 0, 3)];
 }
 
-constexpr float kContentBodyTop = 58.0f;
-constexpr float kContentBodyH = 450.0f;
-constexpr float kSaveCardW = 386.0f;
-constexpr float kSaveCardH = 94.0f;
-constexpr float kSaveCardGapX = 18.0f;
-constexpr float kSaveCardGapY = 14.0f;
-constexpr float kSettingStepY = 48.0f;
-constexpr float kContentScissorPad = 14.0f;
+#define kContentBodyTop (::beiklive::nds_stub::ui::menuMetrics().contentBodyTop)
+#define kContentBodyH (::beiklive::nds_stub::ui::menuMetrics().contentBodyH)
+#define kSaveCardW (::beiklive::nds_stub::ui::menuMetrics().saveCardW)
+#define kSaveCardH (::beiklive::nds_stub::ui::menuMetrics().saveCardH)
+#define kSaveCardGapX (::beiklive::nds_stub::ui::menuMetrics().saveCardGapX)
+#define kSaveCardGapY (::beiklive::nds_stub::ui::menuMetrics().saveCardGapY)
+#define kSettingStepY (::beiklive::nds_stub::ui::menuMetrics().settingStepY)
+#define kContentScissorPad (::beiklive::nds_stub::ui::menuMetrics().contentScissorPad)
+
+float settingRowW()
+{
+    return std::max(320.0f, kContentW - 50.0f);
+}
 
 void pushContentBodyScissor(float offsetY)
 {
@@ -89,35 +159,37 @@ void drawLrSelectorRow(Vector2f pos,
                        bool enabled,
                        float opacity)
 {
+    const float rowW = settingRowW();
     const Color rowBg = enabled ? Color{1.0f, 1.0f, 1.0f, 0.045f * opacity}
                                 : Color{1.0f, 1.0f, 1.0f, 0.020f * opacity};
     if (focused)
-        drawGradientBorder(pos - Vector2f{3.0f, 3.0f}, {796.0f, 48.0f}, 3.0f);
-    drawRect(pos, {790.0f, 42.0f}, rowBg, true);
-    drawBorder(pos, {790.0f, 42.0f}, 1.0f, {1.0f, 1.0f, 1.0f, enabled ? 0.10f * opacity : 0.04f * opacity});
+        drawGradientBorder(pos - Vector2f{3.0f, 3.0f}, {rowW + 6.0f, 48.0f}, 3.0f);
+    drawRect(pos, {rowW, 42.0f}, rowBg, true);
+    drawBorder(pos, {rowW, 42.0f}, 1.0f, {1.0f, 1.0f, 1.0f, enabled ? 0.10f * opacity : 0.04f * opacity});
     Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{18.0f, 12.0f}, 17.0f,
                   {1.0f, 1.0f, 1.0f, enabled ? 0.88f * opacity : 0.34f * opacity}, "%s", label);
-    Gfx::DrawText(Gfx::SystemFontNintendoExt, pos + Vector2f{610.0f, 21.0f}, 24.0f,
+    Gfx::DrawText(Gfx::SystemFontNintendoExt, pos + Vector2f{rowW - 180.0f, 21.0f}, 24.0f,
                   {0.80f, 0.92f, 1.0f, enabled ? 0.90f * opacity : 0.28f * opacity},
                   Gfx::align_Center, Gfx::align_Center, NDS_STUB_KEYICON_LB);
-    Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{690.0f, 21.0f}, 17.0f,
+    Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{rowW - 100.0f, 21.0f}, 17.0f,
                   {0.78f, 0.92f, 1.0f, enabled ? 0.96f * opacity : 0.28f * opacity},
                   Gfx::align_Center, Gfx::align_Center,
                   value);
-    Gfx::DrawText(Gfx::SystemFontNintendoExt, pos + Vector2f{770.0f, 21.0f}, 24.0f,
+    Gfx::DrawText(Gfx::SystemFontNintendoExt, pos + Vector2f{rowW - 20.0f, 21.0f}, 24.0f,
                   {0.80f, 0.92f, 1.0f, enabled ? 0.90f * opacity : 0.28f * opacity},
                   Gfx::align_Center, Gfx::align_Center, NDS_STUB_KEYICON_RB);
 }
 
 void drawSwitchRow(Vector2f pos, const char* label, bool value, bool focused, float opacity)
 {
+    const float rowW = settingRowW();
     if (focused)
-        drawGradientBorder(pos - Vector2f{3.0f, 3.0f}, {796.0f, 48.0f}, 3.0f);
-    drawRect(pos, {790.0f, 42.0f}, {1.0f, 1.0f, 1.0f, 0.045f * opacity}, true);
-    drawBorder(pos, {790.0f, 42.0f}, 1.0f, {1.0f, 1.0f, 1.0f, 0.10f * opacity});
+        drawGradientBorder(pos - Vector2f{3.0f, 3.0f}, {rowW + 6.0f, 48.0f}, 3.0f);
+    drawRect(pos, {rowW, 42.0f}, {1.0f, 1.0f, 1.0f, 0.045f * opacity}, true);
+    drawBorder(pos, {rowW, 42.0f}, 1.0f, {1.0f, 1.0f, 1.0f, 0.10f * opacity});
     Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{18.0f, 12.0f}, 17.0f,
                   {1.0f, 1.0f, 1.0f, 0.88f * opacity}, "%s", label);
-    Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{746.0f, 12.0f}, 17.0f,
+    Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{rowW - 44.0f, 12.0f}, 17.0f,
                   value ? Color{0.34f, 0.78f, 1.0f, 0.96f * opacity}
                         : Color{0.60f, 0.64f, 0.68f, 0.80f * opacity},
                   Gfx::align_Right, Gfx::align_Left, value ? "开" : "关");
@@ -125,32 +197,38 @@ void drawSwitchRow(Vector2f pos, const char* label, bool value, bool focused, fl
 
 void drawSubPageRow(Vector2f pos, const char* label, bool focused, bool enabled, float opacity)
 {
+    const float rowW = settingRowW();
     if (focused && enabled)
-        drawGradientBorder(pos - Vector2f{3.0f, 3.0f}, {796.0f, 48.0f}, 3.0f);
-    drawRect(pos, {790.0f, 42.0f}, {1.0f, 1.0f, 1.0f, enabled ? 0.045f * opacity : 0.020f * opacity}, true);
-    drawBorder(pos, {790.0f, 42.0f}, 1.0f, {1.0f, 1.0f, 1.0f, enabled ? 0.10f * opacity : 0.04f * opacity});
+        drawGradientBorder(pos - Vector2f{3.0f, 3.0f}, {rowW + 6.0f, 48.0f}, 3.0f);
+    drawRect(pos, {rowW, 42.0f}, {1.0f, 1.0f, 1.0f, enabled ? 0.045f * opacity : 0.020f * opacity}, true);
+    drawBorder(pos, {rowW, 42.0f}, 1.0f, {1.0f, 1.0f, 1.0f, enabled ? 0.10f * opacity : 0.04f * opacity});
     Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{18.0f, 12.0f}, 17.0f,
                   {1.0f, 1.0f, 1.0f, enabled ? 0.88f * opacity : 0.34f * opacity}, "%s", label);
-    Gfx::DrawText(Gfx::SystemFontStandard, pos + Vector2f{752.0f, 7.0f}, 28.0f,
+    Gfx::DrawText(Gfx::SystemFontStandard, pos + Vector2f{rowW - 38.0f, 7.0f}, 28.0f,
                   {0.32f, 0.75f, 1.0f, enabled ? 0.96f * opacity : 0.25f * opacity}, ">");
 }
 
 void drawButtonRow(Vector2f pos, const char* label, bool focused, float opacity)
 {
+    const float rowW = settingRowW();
     if (focused)
-        drawGradientBorder(pos - Vector2f{3.0f, 3.0f}, {796.0f, 48.0f}, 3.0f);
-    drawRect(pos, {790.0f, 42.0f}, {1.0f, 1.0f, 1.0f, 0.045f * opacity}, true);
-    drawBorder(pos, {790.0f, 42.0f}, 1.0f, {1.0f, 1.0f, 1.0f, 0.10f * opacity});
+        drawGradientBorder(pos - Vector2f{3.0f, 3.0f}, {rowW + 6.0f, 48.0f}, 3.0f);
+    drawRect(pos, {rowW, 42.0f}, {1.0f, 1.0f, 1.0f, 0.045f * opacity}, true);
+    drawBorder(pos, {rowW, 42.0f}, 1.0f, {1.0f, 1.0f, 1.0f, 0.10f * opacity});
     Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{18.0f, 12.0f}, 17.0f,
                   {1.0f, 1.0f, 1.0f, 0.88f * opacity}, "%s", label);
 }
 
 void drawSectionLabel(Vector2f pos, const char* label, float opacity)
 {
-    drawLine(pos + Vector2f{0.0f, 10.0f}, {250.0f, 1.0f}, {1.0f, 1.0f, 1.0f, 0.10f * opacity});
-    Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{268.0f, 0.0f}, 16.0f,
+    const float rowW = settingRowW();
+    const float leftW = std::max(72.0f, rowW * 0.30f);
+    drawLine(pos + Vector2f{0.0f, 10.0f}, {leftW, 1.0f}, {1.0f, 1.0f, 1.0f, 0.10f * opacity});
+    Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{leftW + 18.0f, 0.0f}, 16.0f,
                   {0.72f, 0.82f, 0.92f, 0.70f * opacity}, "%s", label);
-    drawLine(pos + Vector2f{390.0f, 10.0f}, {400.0f, 1.0f}, {1.0f, 1.0f, 1.0f, 0.10f * opacity});
+    drawLine(pos + Vector2f{leftW + 140.0f, 10.0f},
+             {std::max(24.0f, rowW - leftW - 140.0f), 1.0f},
+             {1.0f, 1.0f, 1.0f, 0.10f * opacity});
 }
 
 } // namespace
@@ -200,9 +278,10 @@ void drawOverlay(float alphaScale)
 
 void drawHeader(float offsetY)
 {
-    Gfx::DrawText(Gfx::SystemFontChinese, {64.0f, 30.0f + offsetY}, 26.0f,
+    const float padX = (kScreenW <= 720.0f) ? 36.0f : 64.0f;
+    Gfx::DrawText(Gfx::SystemFontChinese, {padX, 30.0f + offsetY}, 26.0f,
                   {1.0f, 1.0f, 1.0f, 1.0f}, "游戏菜单");
-    drawLine({56.0f, 92.0f + offsetY}, {1168.0f, 1.0f}, {1.0f, 1.0f, 1.0f, 0.18f});
+    drawLine({padX - 8.0f, 92.0f + offsetY}, {kScreenW - (padX - 8.0f) * 2.0f, 1.0f}, {1.0f, 1.0f, 1.0f, 0.18f});
 }
 
 void drawGameStatusBadges(double fps,
@@ -281,11 +360,12 @@ void drawLeftMenu(int selected,
 
 void drawFooter(bool contentFocused, bool canDelete, float offsetY)
 {
-    drawRect({0.0f, 648.0f + offsetY}, {kScreenW, 72.0f}, {0.0f, 0.0f, 0.0f, 0.40f}, true);
-    drawLine({0.0f, 648.0f + offsetY}, {kScreenW, 1.0f}, {1.0f, 1.0f, 1.0f, 0.14f});
+    const float footerY = kScreenH - 72.0f + offsetY;
+    drawRect({0.0f, footerY}, {kScreenW, 72.0f}, {0.0f, 0.0f, 0.0f, 0.40f}, true);
+    drawLine({0.0f, footerY}, {kScreenW, 1.0f}, {1.0f, 1.0f, 1.0f, 0.14f});
 
-    const float y = 682.0f + offsetY;
-    float right = 1194.0f;
+    const float y = kScreenH - 38.0f + offsetY;
+    float right = kScreenW - 86.0f;
     auto drawHint = [&](const char* icon, const char* text) {
         constexpr float iconSize = 30.0f;
         constexpr float textSize = 20.0f;
@@ -358,9 +438,10 @@ void drawSaveSlotCard(int slot, Vector2f pos, bool focused, const NdsStateSlotIn
     std::snprintf(title, sizeof(title), "槽位 %d", slot);
     if (info.exists)
     {
-        Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{142.0f, 22.0f}, 20.0f,
+        const float textX = std::min(142.0f, drawSize.X * 0.38f);
+        Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{textX, 22.0f}, 20.0f,
                       {1.0f, 1.0f, 1.0f, 0.96f}, "%s", title);
-        Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{142.0f, 54.0f}, 14.0f,
+        Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{textX, 54.0f}, 14.0f,
                       {1.0f, 1.0f, 1.0f, 0.55f}, "%s", info.modifiedTime.empty() ? "已有状态" : info.modifiedTime.c_str());
         if (info.thumbnailTexture == 0)
             Gfx::DrawText(Gfx::SystemFontStandard, thumbPos + thumbSize * 0.5f, 13.0f,
@@ -372,9 +453,10 @@ void drawSaveSlotCard(int slot, Vector2f pos, bool focused, const NdsStateSlotIn
     {
         Gfx::DrawText(Gfx::SystemFontStandard, thumbPos + thumbSize * 0.5f, 34.0f,
                       {1.0f, 1.0f, 1.0f, 0.45f}, Gfx::align_Center, Gfx::align_Center, "+");
-        Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{142.0f, 22.0f}, 20.0f,
+        const float textX = std::min(142.0f, drawSize.X * 0.38f);
+        Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{textX, 22.0f}, 20.0f,
                       {1.0f, 1.0f, 1.0f, 0.88f}, "%s", title);
-        Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{142.0f, 54.0f}, 14.0f,
+        Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{textX, 54.0f}, 14.0f,
                       {1.0f, 1.0f, 1.0f, 0.48f}, "空存档槽");
     }
 }
@@ -388,11 +470,12 @@ void drawSaveSlotGrid(const std::array<NdsStateSlotInfo, 10>& slots,
                       float offsetY)
 {
     const Vector2f start{kContentX + offsetX, kContentY + kContentBodyTop - scrollY};
+    const int columns = saveSlotColumns();
 
     for (int i = 0; i < 10; ++i)
     {
-        const int col = i % 2;
-        const int row = i / 2;
+        const int col = i % columns;
+        const int row = i / columns;
         const Vector2f pos = start + Vector2f{col * (kSaveCardW + kSaveCardGapX),
                                               row * (kSaveCardH + kSaveCardGapY)};
         if (pos.Y + offsetY > kContentY + kContentH || pos.Y + offsetY + kSaveCardH < kContentY)
@@ -448,7 +531,7 @@ void drawDisplayPage(bool linearFiltering,
     drawLrSelectorRow(rowPos(y), "画面过滤", filterLabel(linearFiltering), contentFocused && focusedRow == 1, true, opacity); y += kSettingStepY;
     drawSwitchRow(rowPos(y), "整数倍缩放", integerScale, contentFocused && focusedRow == 2, opacity); y += kSettingStepY;
     drawLrSelectorRow(rowPos(y), "画面布局", layoutLabel(layout), contentFocused && focusedRow == 3, true, opacity); y += kSettingStepY;
-    drawSubPageRow(rowPos(y), "自定义画面布局", contentFocused && focusedRow == 4, layout == 5, opacity); y += kSettingStepY;
+    drawSubPageRow(rowPos(y), "自定义画面布局", contentFocused && focusedRow == 4, layout == 7, opacity); y += kSettingStepY;
     drawLrSelectorRow(rowPos(y), "画面方向", orientationLabel(orientation), contentFocused && focusedRow == 5, true, opacity); y += 54.0f;
     drawSectionLabel(rowPos(y + 2.0f), "个性化设置", opacity); y += 30.0f;
     drawSubPageRow(rowPos(y), "遮罩选择", contentFocused && focusedRow == 6, true, opacity); y += kSettingStepY;
@@ -469,8 +552,8 @@ void drawDeleteDialog(int slot, float opacity)
 {
     opacity = clamp01(opacity);
     drawRect({0.0f, 0.0f}, {kScreenW, kScreenH}, {0.0f, 0.0f, 0.0f, 0.54f * opacity}, true);
-    const Vector2f pos{390.0f, 248.0f};
-    const Vector2f size{500.0f, 210.0f};
+    const Vector2f size{std::min(500.0f, kScreenW - 72.0f), 210.0f};
+    const Vector2f pos{(kScreenW - size.X) * 0.5f, (kScreenH - size.Y) * 0.5f};
     drawRect(pos, size, {0.04f, 0.055f, 0.075f, 0.96f * opacity}, true);
     drawBorder(pos, size, 1.0f, {1.0f, 1.0f, 1.0f, 0.16f * opacity});
     Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{34.0f, 30.0f}, 24.0f,

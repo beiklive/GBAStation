@@ -188,6 +188,9 @@ void SkipTimestep();
 
 void SetSampler(u32 sampler);
 
+void PushDrawTransform(float m00, float m01, float m02, float m10, float m11, float m12);
+void PopDrawTransform();
+
 void PushScissor(u32 x, u32 y, u32 w, u32 h);
 void PopScissor();
 

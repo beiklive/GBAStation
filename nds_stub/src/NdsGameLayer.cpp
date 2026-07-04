@@ -1,6 +1,7 @@
 #include "nds_stub/NdsGameLayer.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 #include "../../third_party/ArcDelta_melonDS/src/GPU.h"
 #include "../../third_party/ArcDelta_melonDS/src/GPU2D_Deko.h"
@@ -35,6 +36,12 @@ RectF fitInteger(const RectF& region, float scale)
             region.y + (region.h - h) * 0.5f,
             w,
             h};
+}
+
+RectF fitMaxInteger(const RectF& region)
+{
+    const float scale = std::max(1.0f, std::floor(std::min(region.w / 256.0f, region.h / 192.0f)));
+    return fitInteger(region, scale);
 }
 
 bool validRect(const RectF& rect)
@@ -92,53 +99,56 @@ RectF NdsGameLayer::touchRect() const
 
 void NdsGameLayer::setScreenLayout(int layout)
 {
-    m_layout = static_cast<ScreenLayout>(std::clamp(layout, 0, 5));
+    m_layout = static_cast<ScreenLayout>(std::clamp(layout, 0, 7));
 }
 
 std::vector<NdsGameLayer::ScreenDrawRect> NdsGameLayer::computeScreenRects() const
 {
     std::vector<ScreenDrawRect> rects;
+    const RectF bounds = layoutBounds();
     auto source = [&](bool layoutTop) {
         return m_screensSwapped ? !layoutTop : layoutTop;
     };
     auto add = [&](bool layoutTop, const RectF& rect) {
         if (validRect(rect))
-            rects.push_back({source(layoutTop), rect});
+            rects.push_back({source(layoutTop), rotateScreenRect(rect, bounds), rect});
     };
 
     switch (m_layout)
     {
     case ScreenLayout::Horizontal:
     {
-        const RectF left{0.0f, 0.0f, kScreenWidth * 0.5f, kScreenHeight};
-        const RectF right{kScreenWidth * 0.5f, 0.0f, kScreenWidth * 0.5f, kScreenHeight};
+        const RectF left{bounds.x, bounds.y, bounds.w * 0.5f, bounds.h};
+        const RectF right{bounds.x + bounds.w * 0.5f, bounds.y, bounds.w * 0.5f, bounds.h};
         add(true, m_integerScale ? fitInteger(left, 2.0f) : fitAspect(left));
         add(false, m_integerScale ? fitInteger(right, 2.0f) : fitAspect(right));
         break;
     }
     case ScreenLayout::TopPriority:
     {
-        const RectF topRegion{0.0f, 0.0f, m_integerScale ? 768.0f : 960.0f, kScreenHeight};
+        const RectF topRegion{bounds.x, bounds.y, m_integerScale ? 768.0f : bounds.w * 0.75f, bounds.h};
         RectF top = m_integerScale ? fitInteger(topRegion, 3.0f) : fitAspect(topRegion);
-        const RectF bottomRegion{top.x + top.w, 0.0f, std::max(0.0f, kScreenWidth - (top.x + top.w)), kScreenHeight};
+        const RectF bottomRegion{top.x + top.w, bounds.y, std::max(0.0f, bounds.x + bounds.w - (top.x + top.w)), bounds.h};
         add(true, top);
         add(false, m_integerScale ? fitInteger(bottomRegion, 2.0f) : fitAspect(bottomRegion));
         break;
     }
     case ScreenLayout::BottomPriority:
     {
-        const RectF bottomRegion{m_integerScale ? 512.0f : 320.0f, 0.0f,
-                                 m_integerScale ? 768.0f : 960.0f, kScreenHeight};
+        const RectF bottomRegion{bounds.x + (m_integerScale ? bounds.w - 768.0f : bounds.w * 0.25f),
+                                 bounds.y,
+                                 m_integerScale ? 768.0f : bounds.w * 0.75f,
+                                 bounds.h};
         RectF bottom = m_integerScale ? fitInteger(bottomRegion, 3.0f) : fitAspect(bottomRegion);
-        const RectF topRegion{0.0f, 0.0f, std::max(0.0f, bottom.x), kScreenHeight};
+        const RectF topRegion{bounds.x, bounds.y, std::max(0.0f, bottom.x - bounds.x), bounds.h};
         add(true, m_integerScale ? fitInteger(topRegion, 2.0f) : fitAspect(topRegion));
         add(false, bottom);
         break;
     }
     case ScreenLayout::HybridHorizontal:
     {
-        const RectF left{0.0f, 0.0f, kScreenWidth * 0.7f, kScreenHeight};
-        const RectF right{kScreenWidth * 0.7f, 0.0f, kScreenWidth * 0.3f, kScreenHeight};
+        const RectF left{bounds.x, bounds.y, bounds.w * 0.7f, bounds.h};
+        const RectF right{bounds.x + bounds.w * 0.7f, bounds.y, bounds.w * 0.3f, bounds.h};
         const RectF rightTop{right.x, right.y, right.w, right.h * 0.5f};
         const RectF rightBottom{right.x, right.y + right.h * 0.5f, right.w, right.h * 0.5f};
         add(true, m_integerScale ? fitInteger(left, 3.0f) : fitAspect(left));
@@ -146,10 +156,20 @@ std::vector<NdsGameLayer::ScreenDrawRect> NdsGameLayer::computeScreenRects() con
         add(false, m_integerScale ? fitInteger(rightBottom, 1.0f) : fitAspect(rightBottom));
         break;
     }
+    case ScreenLayout::SingleTop:
+    {
+        add(true, m_integerScale ? fitMaxInteger(bounds) : fitAspect(bounds));
+        break;
+    }
+    case ScreenLayout::SingleBottom:
+    {
+        add(false, m_integerScale ? fitMaxInteger(bounds) : fitAspect(bounds));
+        break;
+    }
     case ScreenLayout::Custom:
     {
-        const RectF left{0.0f, 0.0f, kScreenWidth * 0.5f, kScreenHeight};
-        const RectF right{kScreenWidth * 0.5f, 0.0f, kScreenWidth * 0.5f, kScreenHeight};
+        const RectF left{bounds.x, bounds.y, bounds.w * 0.5f, bounds.h};
+        const RectF right{bounds.x + bounds.w * 0.5f, bounds.y, bounds.w * 0.5f, bounds.h};
         add(true, fitAspect(left));
         add(false, fitAspect(right));
         break;
@@ -157,14 +177,95 @@ std::vector<NdsGameLayer::ScreenDrawRect> NdsGameLayer::computeScreenRects() con
     case ScreenLayout::Vertical:
     default:
     {
-        const RectF upper{0.0f, 0.0f, kScreenWidth, kScreenHeight * 0.5f};
-        const RectF lower{0.0f, kScreenHeight * 0.5f, kScreenWidth, kScreenHeight * 0.5f};
+        const RectF upper{bounds.x, bounds.y, bounds.w, bounds.h * 0.5f};
+        const RectF lower{bounds.x, bounds.y + bounds.h * 0.5f, bounds.w, bounds.h * 0.5f};
         add(true, m_integerScale ? fitInteger(upper, 1.0f) : fitAspect(upper));
         add(false, m_integerScale ? fitInteger(lower, 1.0f) : fitAspect(lower));
         break;
     }
     }
     return rects;
+}
+
+RectF NdsGameLayer::layoutBounds() const
+{
+    if (m_orientation == 1 || m_orientation == 3)
+    {
+        const float cx = kScreenWidth * 0.5f;
+        const float cy = kScreenHeight * 0.5f;
+        return {cx - kScreenHeight * 0.5f,
+                cy - kScreenWidth * 0.5f,
+                kScreenHeight,
+                kScreenWidth};
+    }
+    return {0.0f, 0.0f, kScreenWidth, kScreenHeight};
+}
+
+RectF NdsGameLayer::rotateScreenRect(const RectF& rect, const RectF& layoutRect) const
+{
+    if (m_orientation == 0)
+        return rect;
+
+    const RectF oriented{0.0f, 0.0f, kScreenWidth, kScreenHeight};
+    const float relX = rect.x - layoutRect.x;
+    const float relY = rect.y - layoutRect.y;
+
+    if (m_orientation == 2)
+    {
+        return {oriented.x + (layoutRect.w - relX - rect.w),
+                oriented.y + (layoutRect.h - relY - rect.h),
+                rect.w,
+                rect.h};
+    }
+    if (m_orientation == 1)
+    {
+        return {oriented.x + (layoutRect.h - relY - rect.h),
+                oriented.y + relX,
+                rect.h,
+                rect.w};
+    }
+    if (m_orientation == 3)
+    {
+        return {oriented.x + relY,
+                oriented.y + (layoutRect.w - relX - rect.w),
+                rect.h,
+                rect.w};
+    }
+    return rect;
+}
+
+bool NdsGameLayer::mapPointToUnrotated(float x, float y, const ScreenDrawRect& item, float& outX, float& outY) const
+{
+    const RectF& oriented = item.rect;
+    const RectF& layout = item.layoutRect;
+    if (oriented.w <= 0.0f || oriented.h <= 0.0f ||
+        x < oriented.x || y < oriented.y ||
+        x >= oriented.x + oriented.w || y >= oriented.y + oriented.h)
+        return false;
+
+    const float rx = x - oriented.x;
+    const float ry = y - oriented.y;
+    if (m_orientation == 1)
+    {
+        outX = layout.x + ry;
+        outY = layout.y + (layout.h - rx);
+    }
+    else if (m_orientation == 3)
+    {
+        outX = layout.x + (layout.w - ry);
+        outY = layout.y + rx;
+    }
+    else if (m_orientation == 2)
+    {
+        outX = layout.x + (layout.w - rx);
+        outY = layout.y + (layout.h - ry);
+    }
+    else
+    {
+        outX = layout.x + rx;
+        outY = layout.y + ry;
+    }
+    return true;
 }
 
 RectF NdsGameLayer::firstRectForSource(bool sourceTop) const
@@ -183,16 +284,24 @@ bool NdsGameLayer::readTouch(u16& outX, u16& outY) const
     if (!hidGetTouchScreenStates(&state, 1) || state.count == 0)
         return false;
 
-    const RectF rect = touchRect();
     const float sx = static_cast<float>(state.touches[0].x);
     const float sy = static_cast<float>(state.touches[0].y);
-    if (sx < rect.x || sx >= rect.x + rect.w ||
-        sy < rect.y || sy >= rect.y + rect.h)
-        return false;
 
-    outX = static_cast<u16>(std::clamp((sx - rect.x) * kDsWidth / rect.w, 0.0f, 255.0f));
-    outY = static_cast<u16>(std::clamp((sy - rect.y) * kDsHeight / rect.h, 0.0f, 191.0f));
-    return true;
+    for (const auto& item : computeScreenRects())
+    {
+        if (item.sourceTop)
+            continue;
+
+        float ux = 0.0f;
+        float uy = 0.0f;
+        if (!mapPointToUnrotated(sx, sy, item, ux, uy))
+            continue;
+
+        outX = static_cast<u16>(std::clamp((ux - item.layoutRect.x) * kDsWidth / item.layoutRect.w, 0.0f, 255.0f));
+        outY = static_cast<u16>(std::clamp((uy - item.layoutRect.y) * kDsHeight / item.layoutRect.h, 0.0f, 191.0f));
+        return true;
+    }
+    return false;
 }
 
 bool NdsGameLayer::captureCurrentFrameRgba(std::vector<std::uint8_t>& outRgba,
@@ -246,12 +355,55 @@ void NdsGameLayer::drawScreens() const
     for (const auto& item : rects)
     {
         const int sourceScreen = item.sourceTop ? 0 : 1;
-        Gfx::DrawRectangle(m_framebufferTextures[GPU::FrontBuffer][sourceScreen],
-                           {item.rect.x, item.rect.y},
-                           {item.rect.w, item.rect.h},
-                           {0.0f, 0.0f},
-                           {srcWidth, srcHeight},
-                           {1.0f, 1.0f, 1.0f, 1.0f});
+        const u32 texture = m_framebufferTextures[GPU::FrontBuffer][sourceScreen];
+        if (m_orientation == 0)
+        {
+            Gfx::DrawRectangle(texture,
+                               {item.rect.x, item.rect.y},
+                               {item.rect.w, item.rect.h},
+                               {0.0f, 0.0f},
+                               {srcWidth, srcHeight},
+                               {1.0f, 1.0f, 1.0f, 1.0f});
+        }
+        else
+        {
+            const Gfx::Vector2f tl{item.rect.x, item.rect.y};
+            const Gfx::Vector2f tr{item.rect.x + item.rect.w, item.rect.y};
+            const Gfx::Vector2f bl{item.rect.x, item.rect.y + item.rect.h};
+            const Gfx::Vector2f br{item.rect.x + item.rect.w, item.rect.y + item.rect.h};
+            Gfx::Vector2f p0 = tl;
+            Gfx::Vector2f p1 = tr;
+            Gfx::Vector2f p2 = bl;
+            Gfx::Vector2f p3 = br;
+            if (m_orientation == 1)
+            {
+                p0 = tr;
+                p1 = br;
+                p2 = tl;
+                p3 = bl;
+            }
+            else if (m_orientation == 2)
+            {
+                p0 = br;
+                p1 = bl;
+                p2 = tr;
+                p3 = tl;
+            }
+            else if (m_orientation == 3)
+            {
+                p0 = bl;
+                p1 = tl;
+                p2 = br;
+                p3 = tr;
+            }
+            Gfx::DrawRectangle(texture,
+                               p0,
+                               p1,
+                               p2,
+                               p3,
+                               {0.0f, 0.0f},
+                               {srcWidth, srcHeight});
+        }
     }
     Gfx::SignalFence(m_renderer->FramebufferPresented[GPU::FrontBuffer]);
 }

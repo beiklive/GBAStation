@@ -15,7 +15,6 @@ namespace {
 
 constexpr float kPanelAnimationMs = 220.0f;
 constexpr float kSelectorInitialDelayMs = 320.0f;
-constexpr float kContentBodyH = 450.0f;
 constexpr float kSaveCardH = 94.0f;
 constexpr float kSaveCardGapY = 14.0f;
 constexpr float kSettingRowH = 42.0f;
@@ -47,10 +46,11 @@ bool isDirectionRight(std::uint64_t buttons)
 
 float focusedScroll(float focusedTop, float focusedH, float contentH)
 {
-    const float maxScroll = std::max(0.0f, contentH - kContentBodyH);
+    const float bodyH = contentBodyHeight();
+    const float maxScroll = std::max(0.0f, contentH - bodyH);
     float scroll = 0.0f;
-    if (focusedTop + focusedH > kContentBodyH)
-        scroll = focusedTop + focusedH - kContentBodyH;
+    if (focusedTop + focusedH > bodyH)
+        scroll = focusedTop + focusedH - bodyH;
     if (focusedTop < scroll)
         scroll = focusedTop;
     return std::clamp(scroll, 0.0f, maxScroll);
@@ -73,6 +73,27 @@ float displayRowY(int row)
     case 10: return kSettingStepY * 10.0f + 72.0f;
     default: return 0.0f;
     }
+}
+
+bool pushMenuOrientationTransform(int orientation)
+{
+    orientation = std::clamp(orientation, 0, 3);
+    if (orientation == 0)
+        return false;
+
+    if (orientation == 1)
+    {
+        Gfx::PushDrawTransform(0.0f, -1.0f, 1280.0f, 1.0f, 0.0f, 0.0f);
+        return true;
+    }
+    if (orientation == 2)
+    {
+        Gfx::PushDrawTransform(-1.0f, 0.0f, 1280.0f, 0.0f, -1.0f, 720.0f);
+        return true;
+    }
+
+    Gfx::PushDrawTransform(0.0f, 1.0f, 0.0f, -1.0f, 0.0f, 720.0f);
+    return true;
 }
 
 } // namespace
@@ -160,16 +181,20 @@ void NdsMenuLayer::resetContentScroll()
 
 float NdsMenuLayer::targetContentScrollY() const
 {
+    setMenuMetricsOrientation(m_display.orientation);
     const Item item = static_cast<Item>(m_selected);
     switch (item)
     {
     case Item::SaveState:
     case Item::LoadState:
     {
-        const int row = std::clamp(m_contentFocus, 0, 9) / 2;
-        const float focusedTop = row * (kSaveCardH + kSaveCardGapY);
-        const float contentH = 5.0f * kSaveCardH + 4.0f * kSaveCardGapY;
-        return focusedScroll(focusedTop, kSaveCardH, contentH);
+        const int columns = saveSlotColumns();
+        const int rows = (10 + columns - 1) / columns;
+        const int row = std::clamp(m_contentFocus, 0, 9) / columns;
+        const float focusedTop = row * (saveCardHeight() + saveCardGapY());
+        const float contentH = static_cast<float>(rows) * saveCardHeight() +
+            static_cast<float>(std::max(0, rows - 1)) * saveCardGapY();
+        return focusedScroll(focusedTop, saveCardHeight(), contentH);
     }
     case Item::Display:
     {
@@ -211,7 +236,7 @@ void NdsMenuLayer::setDisplaySettings(const NdsDisplaySettings& settings)
 {
     m_display = settings;
     m_display.fastForwardMultiplier = std::clamp(m_display.fastForwardMultiplier, 0.1f, 5.0f);
-    m_display.layout = std::clamp(m_display.layout, 0, 5);
+    m_display.layout = std::clamp(m_display.layout, 0, 7);
     m_display.orientation = std::clamp(m_display.orientation, 0, 3);
 }
 
@@ -243,7 +268,7 @@ int NdsMenuLayer::nextFocusableDisplayRow(int from, int direction) const
     for (int i = 0; i < contentControlCount(Item::Display); ++i)
     {
         row = (row + direction + contentControlCount(Item::Display)) % contentControlCount(Item::Display);
-        if (row == 4 && m_display.layout != 5)
+        if (row == 4 && m_display.layout != 7)
             continue;
         return row;
     }
@@ -299,8 +324,8 @@ bool NdsMenuLayer::cycleCurrentSetting(int direction)
         m_display.linearFiltering = !m_display.linearFiltering;
         return true;
     case 3:
-        m_display.layout = cycleIndex(m_display.layout, 6);
-        if (m_contentFocus == 4 && m_display.layout != 5)
+        m_display.layout = cycleIndex(m_display.layout, 8);
+        if (m_contentFocus == 4 && m_display.layout != 7)
             m_contentFocus = nextFocusableDisplayRow(m_contentFocus, direction);
         return true;
     case 5:
@@ -421,15 +446,16 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
     {
         if (currentItem == Item::SaveState || currentItem == Item::LoadState)
         {
-            const int col = m_contentFocus % 2;
-            if (isDirectionLeft(buttonsDown) && col > 0)
+            const int columns = (m_display.orientation == 1 || m_display.orientation == 3) ? 1 : 2;
+            const int col = m_contentFocus % columns;
+            if (columns > 1 && isDirectionLeft(buttonsDown) && col > 0)
                 --m_contentFocus;
-            else if (isDirectionRight(buttonsDown) && col < 1 && m_contentFocus + 1 < contentControlCount(currentItem))
+            else if (columns > 1 && isDirectionRight(buttonsDown) && col < columns - 1 && m_contentFocus + 1 < contentControlCount(currentItem))
                 ++m_contentFocus;
-            else if (isDirectionUp(buttonsDown) && m_contentFocus >= 2)
-                m_contentFocus -= 2;
-            else if (isDirectionDown(buttonsDown) && m_contentFocus + 2 < contentControlCount(currentItem))
-                m_contentFocus += 2;
+            else if (isDirectionUp(buttonsDown) && m_contentFocus >= columns)
+                m_contentFocus -= columns;
+            else if (isDirectionDown(buttonsDown) && m_contentFocus + columns < contentControlCount(currentItem))
+                m_contentFocus += columns;
 
             if (buttonsDown & HidNpadButton_A)
             {
@@ -504,9 +530,13 @@ void NdsMenuLayer::draw() const
     if (!active())
         return;
 
+    setMenuMetricsOrientation(m_display.orientation);
     const float panel = panelProgress();
     if (panel <= 0.0f)
+    {
+        setMenuMetricsOrientation(0);
         return;
+    }
 
     const float slideY = (1.0f - panel) * kScreenH;
     const float selectionProgress = m_selectionAnimating
@@ -522,10 +552,13 @@ void NdsMenuLayer::draw() const
         (currentItem == Item::SaveState || currentItem == Item::LoadState) &&
         m_contentFocus >= 0 && m_contentFocus < static_cast<int>(m_slots.size()) &&
         m_slots[m_contentFocus].exists;
+    const bool transformed = pushMenuOrientationTransform(m_display.orientation);
     drawOverlay(panel);
     drawHeader(slideY);
     drawLeftMenu(m_selected, m_previousSelected, selectionProgress, !contentFocused, slideY);
-    drawLine({kSeparatorX, 110.0f + slideY}, {1.0f, 500.0f}, {1.0f, 1.0f, 1.0f, 0.08f});
+    drawLine({kSeparatorX, menuMetrics().separatorY + slideY},
+             {1.0f, menuMetrics().separatorH},
+             {1.0f, 1.0f, 1.0f, 0.08f});
     drawTabFrame(static_cast<Item>(m_selected),
                  static_cast<Item>(m_previousSelected),
                  pageProgress,
@@ -538,6 +571,9 @@ void NdsMenuLayer::draw() const
     drawFooter(contentFocused, canDelete, slideY);
     if (m_deleteDialogVisible)
         drawDeleteDialog(m_deleteSlot, panel);
+    if (transformed)
+        Gfx::PopDrawTransform();
+    setMenuMetricsOrientation(0);
 }
 
 } // namespace beiklive::nds_stub

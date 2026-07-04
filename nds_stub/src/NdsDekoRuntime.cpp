@@ -111,9 +111,11 @@ const char* layoutIdFromIndex(int layout)
         "priority_top",
         "priority_bottom",
         "hybrid",
+        "top",
+        "bottom",
         "custom",
     };
-    return ids[std::clamp(layout, 0, 5)];
+    return ids[std::clamp(layout, 0, 7)];
 }
 
 int layoutIndexFromId(const std::string& layout)
@@ -122,7 +124,9 @@ int layoutIndexFromId(const std::string& layout)
     if (layout == "priority_top" || layout == "top_priority") return 2;
     if (layout == "priority_bottom" || layout == "bottom_priority") return 3;
     if (layout == "hybrid") return 4;
-    if (layout == "custom" || layout == "separate") return 5;
+    if (layout == "top" || layout == "single_top") return 5;
+    if (layout == "bottom" || layout == "single_bottom") return 6;
+    if (layout == "custom" || layout == "separate") return 7;
     return 0;
 }
 
@@ -1395,10 +1399,12 @@ int RunDekoRuntime(const DekoRunOptions& options)
     gameLayer.setLinearFiltering(initialDisplay.linearFiltering);
     gameLayer.setIntegerScale(initialDisplay.integerScale);
     gameLayer.setScreenLayout(initialDisplay.layout);
-    appendStubLog("GBAStationNDSStub: display init filter=%s integer=%d layout=%s",
+    gameLayer.setOrientation(initialDisplay.orientation);
+    appendStubLog("GBAStationNDSStub: display init filter=%s integer=%d layout=%s orientation=%d",
                   initialDisplay.linearFiltering ? "linear" : "nearest",
                   initialDisplay.integerScale ? 1 : 0,
-                  layoutIdFromIndex(initialDisplay.layout));
+                  layoutIdFromIndex(initialDisplay.layout),
+                  initialDisplay.orientation * 90);
     auto stateSlots = loadStateSlots(stateDir, options.romPath);
     menuLayer.setStateSlots(stateSlots);
     bool stateSlotTexturesDirty = true;
@@ -1556,7 +1562,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
             if (anyComboDown(inputConfig.button("nds.layout.next"), input))
             {
                 NdsDisplaySettings nextDisplay = menuLayer.displaySettings();
-                nextDisplay.layout = (nextDisplay.layout + 1) % 6;
+                nextDisplay.layout = (nextDisplay.layout + 1) % 8;
                 menuLayer.setDisplaySettings(nextDisplay);
                 gameLayer.setScreenLayout(nextDisplay.layout);
                 inputConfig.saveValue("nds.screenLayout", "s", layoutIdFromIndex(nextDisplay.layout));
@@ -1602,15 +1608,18 @@ int RunDekoRuntime(const DekoRunOptions& options)
             gameLayer.setLinearFiltering(menuLayer.linearFiltering());
             gameLayer.setIntegerScale(menuLayer.integerScale());
             gameLayer.setScreenLayout(menuLayer.screenLayout());
+            gameLayer.setOrientation(menuLayer.displaySettings().orientation);
             inputConfig.saveValue("display.filter", "s", menuLayer.linearFiltering() ? "linear" : "nearest");
             inputConfig.saveValue("fastforward.multiplier", "f", std::to_string(menuLayer.fastForwardMultiplier()));
             inputConfig.saveValue("nds.integerScale", "i", menuLayer.integerScale() ? "1" : "0");
             inputConfig.saveValue("nds.screenLayout", "s", layoutIdFromIndex(menuLayer.screenLayout()));
-            appendStubLog("GBAStationNDSStub: Deko display settings filter=%s ff=%.2f integer=%d layout=%s",
+            inputConfig.saveValue("nds.screenOrientation", "i", std::to_string(menuLayer.displaySettings().orientation * 90));
+            appendStubLog("GBAStationNDSStub: Deko display settings filter=%s ff=%.2f integer=%d layout=%s orientation=%d",
                           menuLayer.linearFiltering() ? "linear" : "nearest",
                           menuLayer.fastForwardMultiplier(),
                           menuLayer.integerScale() ? 1 : 0,
-                          layoutIdFromIndex(menuLayer.screenLayout()));
+                          layoutIdFromIndex(menuLayer.screenLayout()),
+                          menuLayer.displaySettings().orientation * 90);
         }
         if (menuAction == NdsMenuAction::ResetGame)
         {

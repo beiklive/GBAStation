@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <vector>
@@ -22,7 +23,9 @@ public:
         TopPriority = 2,
         BottomPriority = 3,
         HybridHorizontal = 4,
-        Custom = 5,
+        SingleTop = 5,
+        SingleBottom = 6,
+        Custom = 7,
     };
 
     void init(GPU2D::DekoRenderer* renderer);
@@ -45,15 +48,21 @@ public:
     int screenLayout() const { return static_cast<int>(m_layout); }
     void setIntegerScale(bool enabled) { m_integerScale = enabled; }
     bool integerScale() const { return m_integerScale; }
+    void setOrientation(int orientation) { m_orientation = std::clamp(orientation, 0, 3); }
+    int orientation() const { return m_orientation; }
 
 private:
     struct ScreenDrawRect {
         bool sourceTop = true;
         RectF rect {};
+        RectF layoutRect {};
     };
 
     RectF touchRect() const;
     std::vector<ScreenDrawRect> computeScreenRects() const;
+    RectF layoutBounds() const;
+    RectF rotateScreenRect(const RectF& rect, const RectF& layoutRect) const;
+    bool mapPointToUnrotated(float x, float y, const ScreenDrawRect& item, float& outX, float& outY) const;
     RectF firstRectForSource(bool sourceTop) const;
 
     GPU2D::DekoRenderer* m_renderer = nullptr;
@@ -63,6 +72,7 @@ private:
     bool m_screensSwapped = false;
     bool m_integerScale = false;
     ScreenLayout m_layout = ScreenLayout::Vertical;
+    int m_orientation = 0;
 };
 
 } // namespace beiklive::nds_stub

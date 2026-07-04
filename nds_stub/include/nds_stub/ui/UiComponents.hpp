@@ -11,18 +11,52 @@ namespace beiklive::nds_stub::ui {
 using Gfx::Color;
 using Gfx::Vector2f;
 
-constexpr float kScreenW = 1280.0f;
-constexpr float kScreenH = 720.0f;
-constexpr float kLeftX = 56.0f;
-constexpr float kLeftY = 120.0f;
-constexpr float kMenuW = 280.0f;
-constexpr float kItemH = 58.0f;
-constexpr float kItemGap = 18.0f;
-constexpr float kSeparatorX = 340.0f;
-constexpr float kContentX = 380.0f;
-constexpr float kContentY = 110.0f;
-constexpr float kContentW = 840.0f;
-constexpr float kContentH = 520.0f;
+struct UiMetrics {
+    float screenW;
+    float screenH;
+    float leftX;
+    float leftY;
+    float menuW;
+    float itemH;
+    float itemGap;
+    float separatorX;
+    float separatorY;
+    float separatorH;
+    float contentX;
+    float contentY;
+    float contentW;
+    float contentH;
+    float contentBodyTop;
+    float contentBodyH;
+    float saveCardW;
+    float saveCardH;
+    float saveCardGapX;
+    float saveCardGapY;
+    float settingStepY;
+    float contentScissorPad;
+    int saveColumns;
+};
+
+const UiMetrics& menuMetrics();
+void setMenuMetricsOrientation(int orientation);
+int saveSlotColumns();
+float contentBodyHeight();
+float saveCardHeight();
+float saveCardGapY();
+float settingStepY();
+
+#define kScreenW (::beiklive::nds_stub::ui::menuMetrics().screenW)
+#define kScreenH (::beiklive::nds_stub::ui::menuMetrics().screenH)
+#define kLeftX (::beiklive::nds_stub::ui::menuMetrics().leftX)
+#define kLeftY (::beiklive::nds_stub::ui::menuMetrics().leftY)
+#define kMenuW (::beiklive::nds_stub::ui::menuMetrics().menuW)
+#define kItemH (::beiklive::nds_stub::ui::menuMetrics().itemH)
+#define kItemGap (::beiklive::nds_stub::ui::menuMetrics().itemGap)
+#define kSeparatorX (::beiklive::nds_stub::ui::menuMetrics().separatorX)
+#define kContentX (::beiklive::nds_stub::ui::menuMetrics().contentX)
+#define kContentY (::beiklive::nds_stub::ui::menuMetrics().contentY)
+#define kContentW (::beiklive::nds_stub::ui::menuMetrics().contentW)
+#define kContentH (::beiklive::nds_stub::ui::menuMetrics().contentH)
 
 constexpr int itemIndex(NdsMenuLayer::Item item)
 {
