@@ -122,6 +122,8 @@ add_executable(GBAStationNDSStub
     ${NDS_STUB_DIR}/src/NdsDekoRuntime.cpp
     ${NDS_STUB_DIR}/src/NdsGameLayer.cpp
     ${NDS_STUB_DIR}/src/NdsMenuLayer.cpp
+    ${NDS_STUB_DIR}/src/ui/UiPrimitives.cpp
+    ${NDS_STUB_DIR}/src/ui/UiComponents.cpp
 )
 set_target_properties(GBAStationNDSStub PROPERTIES CXX_STANDARD 17)
 target_include_directories(GBAStationNDSStub PRIVATE
