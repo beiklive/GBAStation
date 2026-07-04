@@ -19,8 +19,6 @@ public:
         LoadState,
         Cheats,
         Display,
-        Filtering,
-        FastForward,
         Reset,
         Exit,
         Count,
@@ -36,11 +34,15 @@ public:
 
 private:
     bool cycleCurrentSetting(int direction);
+    void beginSelectionAnimation(int oldSelected, int newSelected);
 
     bool m_visible = false;
     int m_selected = 0;
     bool m_linearFiltering = false;
     int m_fastForwardMultiplier = 1;
+    int m_previousSelected = 0;
+    std::uint64_t m_selectionAnimStartTick = 0;
+    bool m_selectionAnimating = false;
 };
 
 } // namespace beiklive::nds_stub
