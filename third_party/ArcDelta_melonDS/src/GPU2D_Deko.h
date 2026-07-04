@@ -36,6 +36,7 @@ public:
     int GetFramebufferHeight() const { return 192; }
     int GetFramebufferTextureWidth() const { return MaxFramebufferWidth; }
     int GetFramebufferTextureHeight() const { return MaxFramebufferHeight; }
+    bool ReadFramebufferRGBA(std::vector<u8>& outTop, std::vector<u8>& outBottom);
 
     dk::Fence FramebufferReady[2] = {};
     dk::Fence FramebufferPresented[2] = {};

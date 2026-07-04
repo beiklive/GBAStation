@@ -213,13 +213,16 @@ void TextureDelete(u32 idx)
 
 void TextureUpload(u32 index, u32 x, u32 y, u32 width, u32 height, void* data, u32 dataStride)
 {
-    assert(TextureStagingBufferOffset + dataStride * height <= TextureStagingBuffer[0].Size);
+    const u32 uploadSize = dataStride * height;
+    const u32 alignedUploadSize = (uploadSize + DK_IMAGE_LINEAR_STRIDE_ALIGNMENT - 1) &
+                                  ~(DK_IMAGE_LINEAR_STRIDE_ALIGNMENT - 1);
+    assert(TextureStagingBufferOffset + alignedUploadSize <= TextureStagingBuffer[0].Size);
     assert(!Textures[index].External);
 
     TextureUploadsPending.push_back({index, x, y, width, height, dataStride});
     u8* stagingBufferCpuAddr = DataHeap->CpuAddr<u8>(TextureStagingBuffer[SwapchainSlot]) + TextureStagingBufferOffset;
-    memcpy(stagingBufferCpuAddr, data, dataStride * height);
-    TextureStagingBufferOffset += dataStride * height;
+    memcpy(stagingBufferCpuAddr, data, uploadSize);
+    TextureStagingBufferOffset += alignedUploadSize;
 }
 
 void TextureSetSwizzle(u32 idx, DkImageSwizzle red, DkImageSwizzle green, DkImageSwizzle blue, DkImageSwizzle alpha)

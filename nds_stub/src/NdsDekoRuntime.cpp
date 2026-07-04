@@ -12,6 +12,7 @@
 #include <condition_variable>
 #include <cctype>
 #include <cstdio>
+#include <cstdint>
 #include <cstdlib>
 #include <ctime>
 #include <cstring>
@@ -41,6 +42,8 @@
 #include "../../third_party/ArcDelta_melonDS/src/SPU.h"
 #include "../../third_party/ArcDelta_melonDS/src/frontend/switch/PlatformConfig.h"
 #include "../../third_party/ArcDelta_melonDS/src/frontend/switch/Gfx.h"
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "../../third_party/borealis/library/lib/extern/glfw/deps/stb_image_write.h"
 #include "nds_stub/StubLog.hpp"
 
 namespace {
@@ -95,6 +98,34 @@ std::string stateThumbPath(const std::string& stateDir, const std::string& romPa
     return statePath(stateDir, romPath, slot) + ".png";
 }
 
+std::string stateThumbCachePath(const std::string& stateDir, const std::string& romPath, int slot)
+{
+    return statePath(stateDir, romPath, slot) + ".thumb";
+}
+
+const char* layoutIdFromIndex(int layout)
+{
+    static constexpr const char* ids[] = {
+        "vertical",
+        "horizontal",
+        "priority_top",
+        "priority_bottom",
+        "hybrid",
+        "custom",
+    };
+    return ids[std::clamp(layout, 0, 5)];
+}
+
+int layoutIndexFromId(const std::string& layout)
+{
+    if (layout == "horizontal") return 1;
+    if (layout == "priority_top" || layout == "top_priority") return 2;
+    if (layout == "priority_bottom" || layout == "bottom_priority") return 3;
+    if (layout == "hybrid") return 4;
+    if (layout == "custom" || layout == "separate") return 5;
+    return 0;
+}
+
 std::string formatFileTime(const std::string& path)
 {
     std::error_code ec;
@@ -121,34 +152,240 @@ loadStateSlots(const std::string& stateDir, const std::string& romPath)
         auto& info = slots[slot];
         info.statePath = statePath(stateDir, romPath, slot);
         info.thumbnailPath = stateThumbPath(stateDir, romPath, slot);
+        info.thumbnailCachePath = stateThumbCachePath(stateDir, romPath, slot);
         info.exists = std::filesystem::exists(info.statePath);
+        info.thumbnailCacheAvailable = std::filesystem::exists(info.thumbnailCachePath);
         if (info.exists)
             info.modifiedTime = formatFileTime(info.statePath);
     }
     return slots;
 }
 
-bool writePlaceholderThumbnail(const std::string& path)
+std::string timestampString()
 {
-    static constexpr unsigned char kOnePixelPng[] = {
-        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
-        0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41,
-        0x54, 0x78, 0x9C, 0x63, 0x60, 0xF8, 0xCF, 0xC0,
-        0x00, 0x00, 0x04, 0x00, 0x01, 0x5B, 0xC3, 0x55,
-        0xBA, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E,
-        0x44, 0xAE, 0x42, 0x60, 0x82,
-    };
+    const std::time_t now = std::time(nullptr);
+    std::tm* tm = std::localtime(&now);
+    char buffer[32] = {};
+    if (tm)
+        std::strftime(buffer, sizeof(buffer), "%Y%m%d_%H%M%S", tm);
+    return buffer[0] ? buffer : "unknown_time";
+}
+
+bool writeRgbaPng(const std::string& path,
+                  const std::vector<std::uint8_t>& rgba,
+                  int width,
+                  int height)
+{
+    if (rgba.empty() || width <= 0 || height <= 0)
+        return false;
     std::error_code ec;
     std::filesystem::create_directories(std::filesystem::path(path).parent_path(), ec);
-    FILE* fp = std::fopen(path.c_str(), "wb");
-    if (!fp)
+    return stbi_write_png(path.c_str(), width, height, 4, rgba.data(), width * 4) != 0;
+}
+
+bool captureAndWritePng(const beiklive::nds_stub::NdsGameLayer& gameLayer, const std::string& path)
+{
+    std::vector<std::uint8_t> rgba;
+    int width = 0;
+    int height = 0;
+    if (!gameLayer.captureCurrentFrameRgba(rgba, width, height))
         return false;
-    const bool ok = std::fwrite(kOnePixelPng, 1, sizeof(kOnePixelPng), fp) == sizeof(kOnePixelPng);
-    std::fclose(fp);
-    return ok;
+    return writeRgbaPng(path, rgba, width, height);
+}
+
+bool writeRgbaThumbCache(const std::string& path,
+                         const std::vector<std::uint8_t>& rgba,
+                         int width,
+                         int height)
+{
+    if (rgba.empty() || width <= 0 || height <= 0)
+        return false;
+
+    const std::uint32_t w = static_cast<std::uint32_t>(width);
+    const std::uint32_t h = static_cast<std::uint32_t>(height);
+    const std::uint32_t magic = 0x4244544Eu; // "NTDB", little-endian
+    const std::uint32_t version = 1;
+    const std::uint32_t bytes = static_cast<std::uint32_t>(rgba.size());
+
+    std::error_code ec;
+    std::filesystem::create_directories(std::filesystem::path(path).parent_path(), ec);
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    if (!out)
+        return false;
+
+    out.write(reinterpret_cast<const char*>(&magic), sizeof(magic));
+    out.write(reinterpret_cast<const char*>(&version), sizeof(version));
+    out.write(reinterpret_cast<const char*>(&w), sizeof(w));
+    out.write(reinterpret_cast<const char*>(&h), sizeof(h));
+    out.write(reinterpret_cast<const char*>(&bytes), sizeof(bytes));
+    out.write(reinterpret_cast<const char*>(rgba.data()), static_cast<std::streamsize>(rgba.size()));
+    return out.good();
+}
+
+bool readRgbaThumbCache(const std::string& path,
+                        std::vector<std::uint8_t>& rgba,
+                        int& width,
+                        int& height)
+{
+    width = 0;
+    height = 0;
+    rgba.clear();
+
+    std::ifstream in(path, std::ios::binary);
+    if (!in)
+        return false;
+
+    std::uint32_t magic = 0;
+    std::uint32_t version = 0;
+    std::uint32_t w = 0;
+    std::uint32_t h = 0;
+    std::uint32_t bytes = 0;
+    in.read(reinterpret_cast<char*>(&magic), sizeof(magic));
+    in.read(reinterpret_cast<char*>(&version), sizeof(version));
+    in.read(reinterpret_cast<char*>(&w), sizeof(w));
+    in.read(reinterpret_cast<char*>(&h), sizeof(h));
+    in.read(reinterpret_cast<char*>(&bytes), sizeof(bytes));
+    if (!in || magic != 0x4244544Eu || version != 1 || w == 0 || h == 0 ||
+        w > 1024 || h > 1024 || bytes != w * h * 4)
+        return false;
+
+    rgba.resize(bytes);
+    in.read(reinterpret_cast<char*>(rgba.data()), static_cast<std::streamsize>(rgba.size()));
+    if (!in)
+    {
+        rgba.clear();
+        return false;
+    }
+
+    width = static_cast<int>(w);
+    height = static_cast<int>(h);
+    return true;
+}
+
+bool captureAndWriteStateThumbnail(const beiklive::nds_stub::NdsGameLayer& gameLayer,
+                                   const std::string& pngPath,
+                                   const std::string& cachePath)
+{
+    std::vector<std::uint8_t> rgba;
+    int width = 0;
+    int height = 0;
+    if (!gameLayer.captureCurrentFrameRgba(rgba, width, height))
+        return false;
+
+    const bool cacheOk = writeRgbaThumbCache(cachePath, rgba, width, height);
+    const bool pngOk = writeRgbaPng(pngPath, rgba, width, height);
+    beiklive::nds_stub::appendStubLog("GBAStationNDSStub: savestate thumbnail write cache=%d png=%d size=%dx%d",
+                                      cacheOk ? 1 : 0,
+                                      pngOk ? 1 : 0,
+                                      width,
+                                      height);
+    return cacheOk;
+}
+
+void releaseStateSlotTextures(std::array<beiklive::nds_stub::NdsStateSlotInfo, 10>& slots)
+{
+    for (auto& slot : slots)
+    {
+        if (slot.thumbnailTexture != 0)
+        {
+            Gfx::TextureDelete(slot.thumbnailTexture);
+            slot.thumbnailTexture = 0;
+        }
+        slot.thumbnailWidth = 0;
+        slot.thumbnailHeight = 0;
+        slot.thumbnailLoadAttempted = false;
+    }
+}
+
+bool hasPendingStateSlotTextures(const std::array<beiklive::nds_stub::NdsStateSlotInfo, 10>& slots)
+{
+    for (const auto& slot : slots)
+    {
+        if (slot.exists &&
+            slot.thumbnailTexture == 0 &&
+            !slot.thumbnailLoadAttempted &&
+            !slot.thumbnailCachePath.empty() &&
+            std::filesystem::exists(slot.thumbnailCachePath))
+            return true;
+    }
+    return false;
+}
+
+bool loadStateSlotTexture(beiklive::nds_stub::NdsStateSlotInfo& slot, int slotIndex)
+{
+    if (!slot.exists || slot.thumbnailTexture != 0 || slot.thumbnailLoadAttempted ||
+        slot.thumbnailCachePath.empty() || !std::filesystem::exists(slot.thumbnailCachePath))
+        return false;
+
+    slot.thumbnailLoadAttempted = true;
+    beiklive::nds_stub::appendStubLog("GBAStationNDSStub: state thumbnail cache load begin slot=%d path=%s",
+                                      slotIndex,
+                                      slot.thumbnailCachePath.c_str());
+
+    std::vector<std::uint8_t> pixels;
+    int width = 0;
+    int height = 0;
+    if (!readRgbaThumbCache(slot.thumbnailCachePath, pixels, width, height))
+    {
+        beiklive::nds_stub::appendStubLog("GBAStationNDSStub: state thumbnail cache load failed slot=%d", slotIndex);
+        return false;
+    }
+
+    slot.thumbnailTexture = Gfx::TextureCreate(static_cast<u32>(width),
+                                               static_cast<u32>(height),
+                                               DkImageFormat_RGBA8_Unorm);
+    slot.thumbnailWidth = width;
+    slot.thumbnailHeight = height;
+    Gfx::TextureUpload(slot.thumbnailTexture,
+                       0,
+                       0,
+                       static_cast<u32>(width),
+                       static_cast<u32>(height),
+                       pixels.data(),
+                       static_cast<u32>(width * 4));
+    beiklive::nds_stub::appendStubLog("GBAStationNDSStub: state thumbnail upload queued slot=%d size=%dx%d",
+                                      slotIndex,
+                                      width,
+                                      height);
+    return true;
+}
+
+int loadStateSlotTexturesStep(std::array<beiklive::nds_stub::NdsStateSlotInfo, 10>& slots, int maxUploads)
+{
+    int uploads = 0;
+    for (int i = 0; i < static_cast<int>(slots.size()) && uploads < maxUploads; ++i)
+    {
+        if (loadStateSlotTexture(slots[i], i))
+            ++uploads;
+    }
+    return uploads;
+}
+
+std::array<beiklive::nds_stub::NdsStateSlotInfo, 10>
+reloadStateSlots(const std::string& stateDir,
+                 const std::string& romPath,
+                 std::array<beiklive::nds_stub::NdsStateSlotInfo, 10>& oldSlots)
+{
+    releaseStateSlotTextures(oldSlots);
+    return loadStateSlots(stateDir, romPath);
+}
+
+bool writeScreenshot(const beiklive::nds_stub::NdsGameLayer& gameLayer, const std::string& saveDir)
+{
+    std::error_code ec;
+    std::filesystem::create_directories(saveDir, ec);
+    if (ec)
+        return false;
+
+    std::filesystem::path out = std::filesystem::path(saveDir) / ("screenshot_" + timestampString() + ".png");
+    for (int suffix = 1; std::filesystem::exists(out, ec) && suffix < 1000; ++suffix)
+    {
+        ec.clear();
+        out = std::filesystem::path(saveDir) /
+            ("screenshot_" + timestampString() + "_" + std::to_string(suffix) + ".png");
+    }
+
+    return captureAndWritePng(gameLayer, out.string());
 }
 
 bool saveStateFile(const std::string& path)
@@ -169,12 +406,6 @@ bool loadStateFile(const std::string& path)
     if (state.Error)
         return false;
     return NDS::DoSavestate(&state) && !state.Error;
-}
-
-void logScreenshotRequest(const std::string& saveDir)
-{
-    beiklive::nds_stub::appendStubLog("GBAStationNDSStub: screenshot requested saveDir=%s readback=unsupported",
-                                      saveDir.c_str());
 }
 
 bool fileExists(const char* path)
@@ -446,6 +677,7 @@ public:
             beiklive::nds_stub::appendStubLog("GBAStationNDSStub: input config loaded path=%s keys=%u",
                                              path,
                                              static_cast<unsigned>(m_values.size()));
+            m_loadedPath = path;
             break;
         }
 
@@ -475,6 +707,49 @@ public:
     {
         try { return std::stof(value(key, std::to_string(fallback))); }
         catch (...) { return fallback; }
+    }
+
+    void setValue(const std::string& key, const std::string& value)
+    {
+        m_values[key] = value;
+        buildMappings();
+    }
+
+    bool saveValue(const std::string& key, const std::string& type, const std::string& value)
+    {
+        setValue(key, value);
+        std::string path = m_loadedPath.empty() ? "sdmc:/GBAStation/config/config.cfg" : m_loadedPath;
+        std::vector<std::string> lines;
+        {
+            std::ifstream in(path);
+            std::string line;
+            while (std::getline(in, line))
+                lines.push_back(line);
+        }
+
+        bool replaced = false;
+        const std::string prefix = key + "=";
+        const std::string encoded = key + "=" + type + "|" + value;
+        for (std::string& line : lines)
+        {
+            if (line.rfind(prefix, 0) == 0)
+            {
+                line = encoded;
+                replaced = true;
+                break;
+            }
+        }
+        if (!replaced)
+            lines.push_back(encoded);
+
+        std::error_code ec;
+        std::filesystem::create_directories(std::filesystem::path(path).parent_path(), ec);
+        std::ofstream out(path, std::ios::trunc);
+        if (!out)
+            return false;
+        for (const std::string& line : lines)
+            out << line << '\n';
+        return out.good();
     }
 
     bool fastForwardEnabled() const { return intValue("fastforward.enabled", 1) != 0; }
@@ -549,6 +824,7 @@ private:
 
     std::map<std::string, std::string> m_values;
     std::map<std::string, std::vector<InputCombo>> m_comboValues;
+    std::string m_loadedPath;
 };
 
 constexpr NdsInputConfig::ButtonBinding NdsInputConfig::kButtonBindings[];
@@ -1109,8 +1385,24 @@ int RunDekoRuntime(const DekoRunOptions& options)
     bool running = loaded;
     bool pendingReturn = false;
     NdsMenuLayer menuLayer;
-    menuLayer.setFastForwardMultiplier(inputConfig.fastForwardMultiplier());
-    menuLayer.setStateSlots(loadStateSlots(stateDir, options.romPath));
+    NdsDisplaySettings initialDisplay {};
+    initialDisplay.fastForwardMultiplier = inputConfig.fastForwardMultiplier();
+    initialDisplay.linearFiltering = inputConfig.value("display.filter", "nearest") == "linear";
+    initialDisplay.integerScale = inputConfig.intValue("nds.integerScale", 0) != 0;
+    initialDisplay.layout = layoutIndexFromId(inputConfig.value("nds.screenLayout", "vertical"));
+    initialDisplay.orientation = std::clamp(inputConfig.intValue("nds.screenOrientation", 0) / 90, 0, 3);
+    menuLayer.setDisplaySettings(initialDisplay);
+    gameLayer.setLinearFiltering(initialDisplay.linearFiltering);
+    gameLayer.setIntegerScale(initialDisplay.integerScale);
+    gameLayer.setScreenLayout(initialDisplay.layout);
+    appendStubLog("GBAStationNDSStub: display init filter=%s integer=%d layout=%s",
+                  initialDisplay.linearFiltering ? "linear" : "nearest",
+                  initialDisplay.integerScale ? 1 : 0,
+                  layoutIdFromIndex(initialDisplay.layout));
+    auto stateSlots = loadStateSlots(stateDir, options.romPath);
+    menuLayer.setStateSlots(stateSlots);
+    bool stateSlotTexturesDirty = true;
+    bool stateSlotTextureLoadStarted = false;
     double fps = 0.0;
     int fpsFrames = 0;
     uint64_t totalFrames = 0;
@@ -1148,11 +1440,23 @@ int RunDekoRuntime(const DekoRunOptions& options)
         Gfx::EmuQueue.waitIdle();
         const bool ok = saveStateFile(path);
         if (ok)
-            writePlaceholderThumbnail(stateThumbPath(stateDir, options.romPath, slot));
+        {
+            const bool thumbOk = captureAndWriteStateThumbnail(gameLayer,
+                                                               stateThumbPath(stateDir, options.romPath, slot),
+                                                               stateThumbCachePath(stateDir, options.romPath, slot));
+            appendStubLog("GBAStationNDSStub: savestate thumbnail %s slot=%d",
+                          thumbOk ? "ok" : "failed",
+                          slot);
+        }
         NDSCart::FlushSRAMFile();
         audio.resumeAfterCoreReset();
         appendStubLog("GBAStationNDSStub: savestate save %s slot=%d", ok ? "ok" : "failed", slot);
-        menuLayer.setStateSlots(loadStateSlots(stateDir, options.romPath));
+        Gfx::PresentQueue.waitIdle();
+        Gfx::EmuQueue.waitIdle();
+        stateSlots = reloadStateSlots(stateDir, options.romPath, stateSlots);
+        stateSlotTexturesDirty = true;
+        stateSlotTextureLoadStarted = false;
+        menuLayer.setStateSlots(stateSlots);
         return ok;
     };
 
@@ -1173,15 +1477,24 @@ int RunDekoRuntime(const DekoRunOptions& options)
     auto doDeleteState = [&](int slot) {
         const std::string path = statePath(stateDir, options.romPath, slot);
         const std::string thumb = stateThumbPath(stateDir, options.romPath, slot);
+        const std::string thumbCache = stateThumbCachePath(stateDir, options.romPath, slot);
         std::error_code ec;
         const bool removedState = std::filesystem::remove(path, ec);
         ec.clear();
         const bool removedThumb = std::filesystem::remove(thumb, ec);
-        appendStubLog("GBAStationNDSStub: savestate delete slot=%d state=%d thumb=%d",
+        ec.clear();
+        const bool removedThumbCache = std::filesystem::remove(thumbCache, ec);
+        appendStubLog("GBAStationNDSStub: savestate delete slot=%d state=%d thumb=%d cache=%d",
                       slot,
                       removedState ? 1 : 0,
-                      removedThumb ? 1 : 0);
-        menuLayer.setStateSlots(loadStateSlots(stateDir, options.romPath));
+                      removedThumb ? 1 : 0,
+                      removedThumbCache ? 1 : 0);
+        Gfx::PresentQueue.waitIdle();
+        Gfx::EmuQueue.waitIdle();
+        stateSlots = reloadStateSlots(stateDir, options.romPath, stateSlots);
+        stateSlotTexturesDirty = true;
+        stateSlotTextureLoadStarted = false;
+        menuLayer.setStateSlots(stateSlots);
     };
 
     if (autoLoadSlot > 0)
@@ -1234,19 +1547,35 @@ int RunDekoRuntime(const DekoRunOptions& options)
                 pointerLastUpdate = std::chrono::steady_clock::now();
                 appendStubLog("GBAStationNDSStub: pointer mode=%d", pointerMode ? 1 : 0);
             }
-            if (anyComboDown(inputConfig.button("nds.hotkey.swap_screens.pad"), input) ||
-                anyComboDown(inputConfig.button("nds.layout.next"), input))
+            if (anyComboDown(inputConfig.button("nds.hotkey.swap_screens.pad"), input))
             {
                 screensSwapped = !screensSwapped;
                 gameLayer.setScreensSwapped(screensSwapped);
                 appendStubLog("GBAStationNDSStub: swap screens=%d", screensSwapped ? 1 : 0);
+            }
+            if (anyComboDown(inputConfig.button("nds.layout.next"), input))
+            {
+                NdsDisplaySettings nextDisplay = menuLayer.displaySettings();
+                nextDisplay.layout = (nextDisplay.layout + 1) % 6;
+                menuLayer.setDisplaySettings(nextDisplay);
+                gameLayer.setScreenLayout(nextDisplay.layout);
+                inputConfig.saveValue("nds.screenLayout", "s", layoutIdFromIndex(nextDisplay.layout));
+                appendStubLog("GBAStationNDSStub: layout next=%s", layoutIdFromIndex(nextDisplay.layout));
             }
             if (anyComboDown(inputConfig.button("nds.hotkey.quicksave.pad"), input))
                 doSaveState(0);
             if (anyComboDown(inputConfig.button("nds.hotkey.quickload.pad"), input))
                 doLoadState(0);
             if (anyComboDown(inputConfig.button("nds.hotkey.screenshot.pad"), input))
-                logScreenshotRequest(options.savePath.empty() ? stateDir : options.savePath);
+            {
+                const std::string screenshotDir = options.savePath.empty() ? stateDir : options.savePath;
+                Gfx::PresentQueue.waitIdle();
+                Gfx::EmuQueue.waitIdle();
+                const bool ok = writeScreenshot(gameLayer, screenshotDir);
+                appendStubLog("GBAStationNDSStub: screenshot %s dir=%s",
+                              ok ? "ok" : "failed",
+                              screenshotDir.c_str());
+            }
         }
 
         const bool wasMenuVisible = menuLayer.visible();
@@ -1271,9 +1600,17 @@ int RunDekoRuntime(const DekoRunOptions& options)
         else if (menuAction == NdsMenuAction::DisplaySettingsChanged)
         {
             gameLayer.setLinearFiltering(menuLayer.linearFiltering());
-            appendStubLog("GBAStationNDSStub: Deko display settings filter=%s ff=%.2f",
+            gameLayer.setIntegerScale(menuLayer.integerScale());
+            gameLayer.setScreenLayout(menuLayer.screenLayout());
+            inputConfig.saveValue("display.filter", "s", menuLayer.linearFiltering() ? "linear" : "nearest");
+            inputConfig.saveValue("fastforward.multiplier", "f", std::to_string(menuLayer.fastForwardMultiplier()));
+            inputConfig.saveValue("nds.integerScale", "i", menuLayer.integerScale() ? "1" : "0");
+            inputConfig.saveValue("nds.screenLayout", "s", layoutIdFromIndex(menuLayer.screenLayout()));
+            appendStubLog("GBAStationNDSStub: Deko display settings filter=%s ff=%.2f integer=%d layout=%s",
                           menuLayer.linearFiltering() ? "linear" : "nearest",
-                          menuLayer.fastForwardMultiplier());
+                          menuLayer.fastForwardMultiplier(),
+                          menuLayer.integerScale() ? 1 : 0,
+                          layoutIdFromIndex(menuLayer.screenLayout()));
         }
         if (menuAction == NdsMenuAction::ResetGame)
         {
@@ -1307,6 +1644,25 @@ int RunDekoRuntime(const DekoRunOptions& options)
         {
             pendingReturn = true;
             running = false;
+        }
+
+        if (stateSlotTexturesDirty && menuLayer.visible() && totalFrames > 2)
+        {
+            if (!stateSlotTextureLoadStarted)
+            {
+                stateSlotTextureLoadStarted = true;
+                appendStubLog("GBAStationNDSStub: state thumbnail lazy load begin");
+            }
+
+            const int uploads = loadStateSlotTexturesStep(stateSlots, 1);
+            if (uploads > 0)
+                menuLayer.setStateSlots(stateSlots);
+
+            if (!hasPendingStateSlotTextures(stateSlots))
+            {
+                stateSlotTexturesDirty = false;
+                appendStubLog("GBAStationNDSStub: state thumbnail lazy load done");
+            }
         }
 
         const bool menuActive = menuLayer.active();
@@ -1537,6 +1893,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
     audio.setMuted(false);
     audio.stop();
     NDSCart::FlushSRAMFile();
+    releaseStateSlotTextures(stateSlots);
     gameLayer.deinit();
     GPU::DeInitRenderer();
     NDS::DeInit();

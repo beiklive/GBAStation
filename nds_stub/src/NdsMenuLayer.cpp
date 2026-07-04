@@ -207,6 +207,14 @@ void NdsMenuLayer::setFastForwardMultiplier(float multiplier)
     m_display.fastForwardMultiplier = std::clamp(multiplier, 0.1f, 5.0f);
 }
 
+void NdsMenuLayer::setDisplaySettings(const NdsDisplaySettings& settings)
+{
+    m_display = settings;
+    m_display.fastForwardMultiplier = std::clamp(m_display.fastForwardMultiplier, 0.1f, 5.0f);
+    m_display.layout = std::clamp(m_display.layout, 0, 5);
+    m_display.orientation = std::clamp(m_display.orientation, 0, 3);
+}
+
 bool NdsMenuLayer::itemHasContent(Item item) const
 {
     return item == Item::SaveState || item == Item::LoadState ||
@@ -235,7 +243,7 @@ int NdsMenuLayer::nextFocusableDisplayRow(int from, int direction) const
     for (int i = 0; i < contentControlCount(Item::Display); ++i)
     {
         row = (row + direction + contentControlCount(Item::Display)) % contentControlCount(Item::Display);
-        if (row == 4 && m_display.layout != 4)
+        if (row == 4 && m_display.layout != 5)
             continue;
         return row;
     }
@@ -291,8 +299,8 @@ bool NdsMenuLayer::cycleCurrentSetting(int direction)
         m_display.linearFiltering = !m_display.linearFiltering;
         return true;
     case 3:
-        m_display.layout = cycleIndex(m_display.layout, 5);
-        if (m_contentFocus == 4 && m_display.layout != 4)
+        m_display.layout = cycleIndex(m_display.layout, 6);
+        if (m_contentFocus == 4 && m_display.layout != 5)
             m_contentFocus = nextFocusableDisplayRow(m_contentFocus, direction);
         return true;
     case 5:

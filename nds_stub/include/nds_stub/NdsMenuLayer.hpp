@@ -25,7 +25,13 @@ struct NdsStateSlotInfo {
     bool exists = false;
     std::string statePath;
     std::string thumbnailPath;
+    std::string thumbnailCachePath;
     std::string modifiedTime;
+    std::uint32_t thumbnailTexture = 0;
+    int thumbnailWidth = 0;
+    int thumbnailHeight = 0;
+    bool thumbnailLoadAttempted = false;
+    bool thumbnailCacheAvailable = false;
 };
 
 struct NdsDisplaySettings {
@@ -59,8 +65,12 @@ public:
     bool visible() const { return m_visible; }
     bool active() const;
     bool linearFiltering() const { return m_display.linearFiltering; }
+    bool integerScale() const { return m_display.integerScale; }
+    int screenLayout() const { return m_display.layout; }
     float fastForwardMultiplier() const { return m_display.fastForwardMultiplier; }
     void setFastForwardMultiplier(float multiplier);
+    void setDisplaySettings(const NdsDisplaySettings& settings);
+    const NdsDisplaySettings& displaySettings() const { return m_display; }
 
 private:
     enum class FocusScope {

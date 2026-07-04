@@ -11,8 +11,8 @@ namespace {
 
 const char* layoutLabel(int index)
 {
-    static const char* labels[] = {"对称", "大屏优先", "小屏优先", "混合", "自定义"};
-    return labels[std::clamp(index, 0, 4)];
+    static const char* labels[] = {"纵向对称", "横向对称", "上屏优先", "下屏优先", "混合横向", "自定义"};
+    return labels[std::clamp(index, 0, 5)];
 }
 
 const char* orientationLabel(int index)
@@ -100,9 +100,10 @@ void drawLrSelectorRow(Vector2f pos,
     Gfx::DrawText(Gfx::SystemFontNintendoExt, pos + Vector2f{610.0f, 21.0f}, 24.0f,
                   {0.80f, 0.92f, 1.0f, enabled ? 0.90f * opacity : 0.28f * opacity},
                   Gfx::align_Center, Gfx::align_Center, NDS_STUB_KEYICON_LB);
-    Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{692.0f, 12.0f}, 17.0f,
+    Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{690.0f, 21.0f}, 17.0f,
                   {0.78f, 0.92f, 1.0f, enabled ? 0.96f * opacity : 0.28f * opacity},
-                  "%s", value);
+                  Gfx::align_Center, Gfx::align_Center,
+                  value);
     Gfx::DrawText(Gfx::SystemFontNintendoExt, pos + Vector2f{770.0f, 21.0f}, 24.0f,
                   {0.80f, 0.92f, 1.0f, enabled ? 0.90f * opacity : 0.28f * opacity},
                   Gfx::align_Center, Gfx::align_Center, NDS_STUB_KEYICON_RB);
@@ -180,7 +181,7 @@ float menuItemY(int index)
 void drawOverlay(float alphaScale)
 {
     alphaScale = clamp01(alphaScale);
-    drawRect({0.0f, 0.0f}, {kScreenW, kScreenH}, {0.0f, 0.0f, 0.0f, 0.54f * alphaScale}, true);
+    drawRect({0.0f, 0.0f}, {kScreenW, kScreenH}, {0.0f, 0.0f, 0.0f, 0.70f * alphaScale}, true);
 
     constexpr int bands = 8;
     for (int i = 0; i < bands; ++i)
@@ -192,7 +193,7 @@ void drawOverlay(float alphaScale)
                  {lerp(0.16f, 0.0f, t),
                   lerp(0.16f, 0.0f, t),
                   lerp(0.16f, 0.0f, t),
-                  lerp(0.38f, 0.68f, t) * alphaScale},
+                  lerp(0.48f, 0.82f, t) * alphaScale},
                  true);
     }
 }
@@ -327,6 +328,30 @@ void drawSaveSlotCard(int slot, Vector2f pos, bool focused, const NdsStateSlotIn
     const Vector2f thumbPos = drawPos + Vector2f{12.0f, 11.0f};
     drawRect(thumbPos, thumbSize, info.exists ? Color{0.12f, 0.17f, 0.22f, 0.96f}
                                               : Color{1.0f, 1.0f, 1.0f, 0.025f});
+    if (info.exists && info.thumbnailTexture != 0 && info.thumbnailWidth > 0 && info.thumbnailHeight > 0)
+    {
+        const float texAspect = static_cast<float>(info.thumbnailWidth) / static_cast<float>(info.thumbnailHeight);
+        const float boxAspect = thumbSize.X / thumbSize.Y;
+        Vector2f fittedSize = thumbSize;
+        if (texAspect > boxAspect)
+        {
+            fittedSize.Y = thumbSize.X / texAspect;
+        }
+        else
+        {
+            fittedSize.X = thumbSize.Y * texAspect;
+        }
+        const Vector2f fittedPos = thumbPos + (thumbSize - fittedSize) * 0.5f;
+        Gfx::SetSampler(Gfx::sampler_Linear | Gfx::sampler_ClampToEdge);
+        Gfx::DrawRectangle(info.thumbnailTexture,
+                           fittedPos,
+                           fittedSize,
+                           {0.0f, 0.0f},
+                           {static_cast<float>(info.thumbnailWidth),
+                            static_cast<float>(info.thumbnailHeight)},
+                           {1.0f, 1.0f, 1.0f, 1.0f});
+        Gfx::SetSampler(Gfx::sampler_Nearest | Gfx::sampler_ClampToEdge);
+    }
     drawBorder(thumbPos, thumbSize, 1.0f, {1.0f, 1.0f, 1.0f, info.exists ? 0.12f : 0.16f});
 
     char title[32];
@@ -337,9 +362,11 @@ void drawSaveSlotCard(int slot, Vector2f pos, bool focused, const NdsStateSlotIn
                       {1.0f, 1.0f, 1.0f, 0.96f}, "%s", title);
         Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{142.0f, 54.0f}, 14.0f,
                       {1.0f, 1.0f, 1.0f, 0.55f}, "%s", info.modifiedTime.empty() ? "已有状态" : info.modifiedTime.c_str());
-        Gfx::DrawText(Gfx::SystemFontStandard, thumbPos + thumbSize * 0.5f, 13.0f,
-                      {0.75f, 0.88f, 1.0f, 0.46f}, Gfx::align_Center, Gfx::align_Center,
-                      info.thumbnailPath.empty() ? "NDS" : "SCREEN");
+        if (info.thumbnailTexture == 0)
+            Gfx::DrawText(Gfx::SystemFontStandard, thumbPos + thumbSize * 0.5f, 13.0f,
+                          {0.75f, 0.88f, 1.0f, 0.46f}, Gfx::align_Center, Gfx::align_Center,
+                          !info.thumbnailCacheAvailable ? "NO THUMB" :
+                          (info.thumbnailLoadAttempted ? "LOAD FAIL" : "SCREEN"));
     }
     else
     {
@@ -421,7 +448,7 @@ void drawDisplayPage(bool linearFiltering,
     drawLrSelectorRow(rowPos(y), "画面过滤", filterLabel(linearFiltering), contentFocused && focusedRow == 1, true, opacity); y += kSettingStepY;
     drawSwitchRow(rowPos(y), "整数倍缩放", integerScale, contentFocused && focusedRow == 2, opacity); y += kSettingStepY;
     drawLrSelectorRow(rowPos(y), "画面布局", layoutLabel(layout), contentFocused && focusedRow == 3, true, opacity); y += kSettingStepY;
-    drawSubPageRow(rowPos(y), "自定义画面布局", contentFocused && focusedRow == 4, layout == 4, opacity); y += kSettingStepY;
+    drawSubPageRow(rowPos(y), "自定义画面布局", contentFocused && focusedRow == 4, layout == 5, opacity); y += kSettingStepY;
     drawLrSelectorRow(rowPos(y), "画面方向", orientationLabel(orientation), contentFocused && focusedRow == 5, true, opacity); y += 54.0f;
     drawSectionLabel(rowPos(y + 2.0f), "个性化设置", opacity); y += 30.0f;
     drawSubPageRow(rowPos(y), "遮罩选择", contentFocused && focusedRow == 6, true, opacity); y += kSettingStepY;

@@ -1710,6 +1710,219 @@ GBAStationNDSStub.nro 3.16 MB
 
 ---
 
+## 阶段 4.6：存档槽截图、截图热键与菜单显示细节
+
+### 需求
+
+- 保存/读取状态页面的槽位显示对应 `ssN.png` 缩略图。
+- 保存状态后同步生成并刷新缩略图。
+- 如果截图功能缺失，补全截图输出。
+- 修正画面设置 LR 选择器中间选项文字的居中方式。
+- 加深菜单层背景，降低与底层游戏画面的混淆。
+
+### 已实施
+
+- 在 `GPU2D_Deko` 增加 `ReadFramebufferRGBA()`：
+  - 从当前前台 top/bottom framebuffer 读回 RGBA；
+  - 读回前检查命令缓冲状态，读回后等待 `EmuQueue` idle；
+  - 输出两个 256x192 RGBA buffer。
+- 在 `NdsGameLayer` 增加 `captureCurrentFrameRgba()`：
+  - 组合为 512x192 横向双屏截图；
+  - 遵循当前上下屏交换状态，截图顺序与实际显示一致。
+- 在 NDS Stub runtime 增加 PNG 写入：
+  - 保存状态时写入 `{romName}.ssN.png`；
+  - 截图热键写入 `screenshot_YYYYMMDD_HHMMSS.png`；
+  - 写入前等待 `PresentQueue` 和 `EmuQueue`，减少读到半帧或 GPU 未完成资源的风险。
+- 在保存/读取槽位加载 PNG 缩略图：
+  - 使用 `stbi_load(..., 4)` 读取 RGBA；
+  - 创建 Deko UI texture 并上传；
+  - 删除存档或重新加载槽位时释放旧 texture，避免纹理泄漏。
+- `GBAStationNDSStub` target 单独加入 `stb_image.c`，让 PNG 读取 implementation 只存在于 NDS Stub 目标中。
+- LR 选择器的当前值改为以中点对齐绘制，避免文字起点落在中间导致视觉偏右。
+- 菜单 overlay 加深：
+  - 黑色底遮罩 alpha 提升到约 `0.70`；
+  - 渐变 alpha 提升到约 `0.48 -> 0.82`。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.32 MB
+```
+
+### 真机验证重点
+
+- 打开保存/读取状态页面，已有 `ssN.png` 应显示在对应槽位。
+- 保存状态后，对应槽位截图应立即刷新，不应继续显示旧缓存。
+- 删除状态后，对应槽位截图应消失。
+- 截图热键应在当前游戏 savePath 下生成 `screenshot_*.png`。
+- 打开菜单后背景应明显更暗，文字与卡片层次更清楚。
+
+---
+
+## 阶段 4.7：修复缩略图启动崩溃与任意尺寸纹理上传对齐
+
+### 现象
+
+真机日志停在：
+
+```text
+GBAStationNDSStub: Deko checkpoint audio.start result=1 ms=0
+```
+
+之后游戏画面尚未显示即崩溃。此位置之后原先会立即扫描存档槽并加载 `ssN.png` 缩略图，包含 PNG 解码、Deko texture 创建和 `Gfx::TextureUpload()`。
+
+### 判断
+
+原实现有两个风险：
+
+- 启动首帧前就加载缩略图，导致游戏进入画面前介入额外 Deko 纹理上传路径。
+- `Gfx::TextureUpload()` 写入 staging buffer 后没有按 `DK_IMAGE_LINEAR_STRIDE_ALIGNMENT` 推进 offset；而 `Gfx::StartFrame()` 处理 pending upload 时会按对齐后的 GPU 地址推进并断言最终 offset 相等。任意尺寸 PNG 只要 `width * 4 * height` 不是对齐大小，就可能在首帧上传时崩溃。
+
+### 已实施
+
+- 启动阶段只加载即时存档元数据，不再加载 PNG 缩略图。
+- 缩略图改为菜单可见后懒加载：
+  - 游戏至少完成数帧后才启动；
+  - 每帧最多上传 1 张缩略图；
+  - 解码失败、文件过大或文件不存在时只显示占位，不阻断游戏。
+- 保存/删除状态后只刷新存档元数据并标记缩略图 dirty，后续由懒加载刷新图片。
+- `Gfx::TextureUpload()` 的 staging offset 改为按 `DK_IMAGE_LINEAR_STRIDE_ALIGNMENT` 对齐推进，支持任意尺寸 RGBA PNG 上传。
+- 增加缩略图加载实时日志：
+
+```text
+state thumbnail lazy load begin
+state thumbnail load begin slot=N path=...
+state thumbnail upload queued slot=N size=WxH
+state thumbnail load failed slot=N decode
+state thumbnail skipped slot=N too_large=WxH
+state thumbnail lazy load done
+```
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.32 MB
+```
+
+### 真机验证重点
+
+- 打开 NDS 游戏后，应先进入游戏画面，不应再停在 `audio.start` 后崩溃。
+- 首次打开菜单时，日志应出现 `state thumbnail lazy load begin`，随后逐张加载。
+- 如果某个旧截图尺寸异常或损坏，应只显示占位并继续运行。
+
+---
+
+## 阶段 4.8：移除菜单运行时 PNG 解码，改用固定 RGBA 缩略图缓存
+
+### 现象
+
+真机打开菜单后崩溃，日志停在：
+
+```text
+state thumbnail lazy load begin
+state thumbnail load begin slot=0 path=...ss0.png
+```
+
+没有后续 `decode failed` 或 `upload queued`，说明崩溃发生在 `stbi_load()` 内部或其文件读取路径中，还没有进入 Deko texture 创建。
+
+### 判断
+
+继续在菜单打开时解码外部 PNG 风险过高：
+
+- 旧 `ssN.png` 可能来自不同版本或格式参数；
+- `stbi_load()` 内部不可控，崩溃时无法优雅降级；
+- 菜单打开是高频路径，不应依赖复杂图片解码。
+
+### 已实施
+
+- 菜单不再读取或解码 `ssN.png`。
+- NDS Stub 不再链接 `stb_image.c`，只保留 `stb_image_write` 用于输出 PNG。
+- 保存状态时同时写两份截图：
+  - `{rom}.ssN.png`：给外部查看；
+  - `{rom}.ssN.thumb`：菜单专用固定 RGBA 缓存。
+- 菜单缩略图懒加载只读取 `.thumb`：
+  - 固定 header：magic/version/width/height/bytes；
+  - 固定 RGBA8 像素；
+  - 不进入 PNG decoder；
+  - 文件不存在或校验失败时只显示占位。
+- 删除状态时同步删除 `.ssN`、`.ssN.png`、`.ssN.thumb`。
+
+### 兼容说明
+
+已有旧 `ssN.png` 不会再被菜单显示。对对应槽位重新保存一次状态后，会生成新的 `.thumb`，菜单即可显示缩略图。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.26 MB
+```
+
+---
+
+## 阶段 4.9：柔化聚焦框、缩略图状态提示与 NDS 多布局实装
+
+### 需求
+
+- 聚焦框四角不能有明显像素感，需要更平滑。
+- 保存/读取槽位仍然看不到图片时，需要能区分是未生成缩略图还是加载失败。
+- 画面布局增加并实装：
+  - 纵向对称；
+  - 横向对称；
+  - 上屏优先；
+  - 下屏优先；
+  - 混合横向；
+  - 自定义占位。
+- 布局状态保存到 `nds.screenLayout` 字段。
+
+### 已实施
+
+- `drawGradientBorder()` 改为柔和圆角 halo：
+  - 移除原先逐段矩形拼接边框；
+  - 使用多层 `coolTransparency` 圆角矩形形成外发光和柔和内层高亮；
+  - 避免四角出现硬像素折线。
+- 存档槽缩略图状态更明确：
+  - 没有 `.thumb` 显示 `NO THUMB`；
+  - `.thumb` 加载失败显示 `LOAD FAIL`；
+  - 成功加载后按比例居中显示，不拉伸变形。
+- `NdsGameLayer` 实装多布局绘制：
+  - 纵向对称：上屏上半区域居中，下屏下半区域居中；整数倍为 1x/1x。
+  - 横向对称：上屏左半区域居中，下屏右半区域居中；整数倍为 2x/2x。
+  - 上屏优先：上屏靠左主画面，下屏占右侧剩余区域；整数倍为 3x/2x。
+  - 下屏优先：与上屏优先相反；整数倍为 2x/3x。
+  - 混合横向：左侧 0.7 宽度为上屏主画面，右侧上下堆叠上屏和下屏；整数倍为 3x/1x/1x。
+  - 自定义：暂时保留为左右对称占位。
+- 触摸映射改为查找当前显示中的下屏区域，适配交换屏幕和多布局。
+- 菜单布局选项更新为：
+
+```text
+纵向对称 / 横向对称 / 上屏优先 / 下屏优先 / 混合横向 / 自定义
+```
+
+- 配置读写：
+  - 启动读取 `nds.screenLayout`、`nds.integerScale`、`display.filter`、`fastforward.multiplier`；
+  - 菜单修改后写回 `sdmc:/GBAStation/config/config.cfg`；
+  - `nds.layout.next` 热键改为循环切换布局，不再与交换上下屏混用。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.27 MB
+```
+
+---
+
 ## 阶段 4.4：NDS Stub 菜单子页面滚动与存档两列布局
 
 ### 需求

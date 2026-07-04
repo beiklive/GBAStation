@@ -111,58 +111,29 @@ void drawBorder(Vector2f pos, Vector2f size, float width, Color color)
 void drawGradientBorder(Vector2f pos, Vector2f size, float width)
 {
     const float animationOffset = gradientFocusAnimationOffset();
-    const float alpha = 1.0f;
-    const float borderWidth = std::max(2.0f, width * 1.8f);
-    const float outerPad = borderWidth;
-    const Vector2f innerPos = pos + Vector2f{outerPad, outerPad};
-    const Vector2f innerSize = size - Vector2f{outerPad * 2.0f, outerPad * 2.0f};
-    const float perimeter = std::max(1.0f, innerSize.X * 2.0f + innerSize.Y * 2.0f);
+    const Color c0 = gradientFocusColor(animationOffset, 1.0f);
+    const Color c1 = gradientFocusColor(animationOffset + 0.16f, 1.0f);
+    const Color c2 = gradientFocusColor(animationOffset + 0.34f, 1.0f);
+    const float borderWidth = std::max(2.0f, width);
 
-    for (int i = 3; i >= 1; --i)
+    for (int i = 5; i >= 1; --i)
     {
-        const float p = static_cast<float>(i) * 4.0f;
-        const float a = 0.045f * static_cast<float>(i);
+        const float p = static_cast<float>(i) * 3.2f;
+        const float a = 0.020f * static_cast<float>(i);
         drawRect(pos - Vector2f{p, p},
-                 size + Vector2f{p * 2.0f, p * 2.0f + 2.0f},
-                 {0.0f, 0.0f, 0.0f, a},
+                 size + Vector2f{p * 2.0f, p * 2.0f},
+                 {c0.R, c0.G, c0.B, a},
                  true);
     }
 
-    auto drawFlowSegment = [&](Vector2f segmentPos, Vector2f segmentSize, float pathCenter) {
-        const float lutPos = (pathCenter / perimeter) + animationOffset;
-        drawRect(segmentPos, segmentSize, gradientFocusColor(lutPos, alpha));
-    };
-
-    constexpr int horizontalSegments = 36;
-    constexpr int verticalSegments = 8;
-    const float topW = innerSize.X / horizontalSegments;
-    const float sideH = innerSize.Y / verticalSegments;
-
-    for (int i = 0; i < horizontalSegments; ++i)
-    {
-        const float x = i * topW;
-        drawFlowSegment({innerPos.X + x, innerPos.Y - borderWidth},
-                        {topW + 0.75f, borderWidth},
-                        (i + 0.5f) * topW);
-
-        const float bottomX = innerSize.X - (i + 1) * topW;
-        drawFlowSegment({innerPos.X + bottomX, innerPos.Y + innerSize.Y},
-                        {topW + 0.75f, borderWidth},
-                        innerSize.X + innerSize.Y + (i + 0.5f) * topW);
-    }
-
-    for (int i = 0; i < verticalSegments; ++i)
-    {
-        const float y = i * sideH;
-        drawFlowSegment({innerPos.X + innerSize.X, innerPos.Y + y},
-                        {borderWidth, sideH + 0.75f},
-                        innerSize.X + (i + 0.5f) * sideH);
-
-        const float leftY = innerSize.Y - (i + 1) * sideH;
-        drawFlowSegment({innerPos.X - borderWidth, innerPos.Y + leftY},
-                        {borderWidth, sideH + 0.75f},
-                        innerSize.X * 2.0f + innerSize.Y + (i + 0.5f) * sideH);
-    }
+    drawRect(pos - Vector2f{borderWidth, borderWidth},
+             size + Vector2f{borderWidth * 2.0f, borderWidth * 2.0f},
+             {c1.R, c1.G, c1.B, 0.26f},
+             true);
+    drawRect(pos + Vector2f{1.5f, 1.5f},
+             size - Vector2f{3.0f, 3.0f},
+             {c2.R, c2.G, c2.B, 0.13f},
+             true);
 }
 
 } // namespace beiklive::nds_stub::ui

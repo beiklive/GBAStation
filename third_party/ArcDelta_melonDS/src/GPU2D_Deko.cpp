@@ -251,6 +251,33 @@ DekoRenderer::DekoRenderer() :
     DekoLog("GBAStationNDSStub: GPU2D_Deko ctor ok");
 }
 
+bool DekoRenderer::ReadFramebufferRGBA(std::vector<u8>& outTop, std::vector<u8>& outBottom)
+{
+    if (CmdBufOpen)
+        return false;
+
+    constexpr u32 screenBytes = MaxFramebufferWidth * MaxFramebufferHeight * 4;
+    auto readback = Gfx::DataHeap->Alloc(screenBytes * 2, DK_MEMBLOCK_ALIGNMENT);
+
+    CmdMem.Begin(EmuCmdBuf);
+    dk::ImageView topView{FinalFramebuffers[GPU::FrontBuffer][0]};
+    dk::ImageView bottomView{FinalFramebuffers[GPU::FrontBuffer][1]};
+    EmuCmdBuf.copyImageToBuffer(topView,
+                                {0, 0, 0, MaxFramebufferWidth, MaxFramebufferHeight, 1},
+                                {Gfx::DataHeap->GpuAddr(readback)});
+    EmuCmdBuf.copyImageToBuffer(bottomView,
+                                {0, 0, 0, MaxFramebufferWidth, MaxFramebufferHeight, 1},
+                                {Gfx::DataHeap->GpuAddr(readback) + screenBytes});
+    EmuQueue.submitCommands(CmdMem.End(EmuCmdBuf));
+    EmuQueue.waitIdle();
+
+    const u8* src = Gfx::DataHeap->CpuAddr<u8>(readback);
+    outTop.assign(src, src + screenBytes);
+    outBottom.assign(src + screenBytes, src + screenBytes * 2);
+    Gfx::DataHeap->Free(readback);
+    return true;
+}
+
 DekoRenderer::~DekoRenderer()
 {
 }
