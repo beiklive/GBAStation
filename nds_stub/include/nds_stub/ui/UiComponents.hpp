@@ -135,6 +135,7 @@ void drawDisplayPage(bool linearFiltering,
 void drawDeleteDialog(int slot, float opacity);
 void drawSyncConfirmDialog(NdsMenuAction action, float opacity);
 void drawSyncResultDialog(NdsMenuAction action, int count, float opacity);
+void drawToast(const std::string& message, float progress, float opacity);
 void drawCustomLayoutSidebar(const NdsCustomLayoutSettings& settings,
                              int focusedRow,
                              float progress,

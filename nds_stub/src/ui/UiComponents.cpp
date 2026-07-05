@@ -1385,6 +1385,40 @@ void drawSyncResultDialog(NdsMenuAction action, int count, float opacity)
                         opacity);
 }
 
+void drawToast(const std::string& message, float progress, float opacity)
+{
+    if (message.empty())
+        return;
+
+    progress = easeOutQuart(clamp01(progress));
+    opacity = clamp01(opacity);
+    std::string text = message;
+    constexpr std::size_t kMaxBytes = 54;
+    if (text.size() > kMaxBytes)
+    {
+        text.resize(utf8SafePrefix(text, kMaxBytes));
+        text += "...";
+    }
+
+    const float estimatedTextW = std::min(480.0f, 26.0f * static_cast<float>(text.size()) * 0.54f);
+    const Vector2f size{std::clamp(estimatedTextW + 58.0f, 260.0f, 540.0f), 64.0f};
+    const float margin = 28.0f;
+    const float hiddenX = kScreenW + 18.0f;
+    const float shownX = kScreenW - size.X - margin;
+    const float x = lerp(hiddenX, shownX, progress);
+    const float y = margin;
+
+    drawRect({x, y}, size, {0.117f, 0.117f, 0.117f, 0.96f * opacity}, false);
+    drawRect({x, y}, {4.0f, size.Y}, {0.0f, 0.48f, 0.80f, 0.95f * opacity}, false);
+    drawBorder({x, y}, size, 1.0f, {1.0f, 1.0f, 1.0f, 0.13f * opacity});
+    Gfx::DrawText(Gfx::SystemFontChinese,
+                  {x + 26.0f, y + 18.0f},
+                  22.0f,
+                  {0.90f, 0.96f, 1.0f, 0.95f * opacity},
+                  "%s",
+                  text.c_str());
+}
+
 void drawCustomLayoutSidebar(const NdsCustomLayoutSettings& settings,
                              int focusedRow,
                              float progress,

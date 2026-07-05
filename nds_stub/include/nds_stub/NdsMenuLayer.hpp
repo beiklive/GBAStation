@@ -119,6 +119,7 @@ public:
     void setCustomLayoutSettings(const NdsCustomLayoutSettings& settings);
     const NdsCustomLayoutSettings& customLayoutSettings() const { return m_display.customLayout; }
     void showSyncResult(NdsMenuAction action, int count);
+    void showToast(const std::string& message);
 
 private:
     enum class FocusScope {
@@ -236,6 +237,8 @@ private:
     mutable int m_statePreviewSlot = -1;
     mutable std::string m_statePreviewPath;
     mutable bool m_statePreviewAttempted = false;
+    mutable std::string m_toastMessage;
+    mutable std::uint64_t m_toastStartTick = 0;
 };
 
 } // namespace beiklive::nds_stub

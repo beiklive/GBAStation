@@ -2015,7 +2015,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
     int pendingMenuSaveSlot = -1;
     int pendingMenuSaveFrames = 0;
 
-    auto doSaveState = [&](int slot) {
+    auto doSaveState = [&](int slot, bool showToast) {
         const std::string path = statePath(stateDir, options.romPath, slot);
         const std::string thumbPath = stateThumbPath(stateDir, options.romPath, slot);
         std::vector<std::uint8_t> thumbnailRgba;
@@ -2030,6 +2030,20 @@ int RunDekoRuntime(const DekoRunOptions& options)
                       slot,
                       thumbnailWidth,
                       thumbnailHeight);
+        if (slot >= 0 && slot < static_cast<int>(stateSlots.size()))
+            releaseStateSlotTexture(stateSlots[slot]);
+        std::error_code removeEc;
+        const bool removedOldState = std::filesystem::remove(path, removeEc);
+        const bool removeStateFailed = static_cast<bool>(removeEc);
+        removeEc.clear();
+        const bool removedOldThumb = std::filesystem::remove(thumbPath, removeEc);
+        const bool removeThumbFailed = static_cast<bool>(removeEc);
+        appendStubLog("GBAStationNDSStub: savestate old files remove slot=%d state=%d stateErr=%d thumb=%d thumbErr=%d",
+                      slot,
+                      removedOldState ? 1 : 0,
+                      removeStateFailed ? 1 : 0,
+                      removedOldThumb ? 1 : 0,
+                      removeThumbFailed ? 1 : 0);
         audio.pauseForCoreReset();
         Gfx::PresentQueue.waitIdle();
         Gfx::EmuQueue.waitIdle();
@@ -2064,10 +2078,12 @@ int RunDekoRuntime(const DekoRunOptions& options)
             stateSlots[slot] = refreshed[slot];
         }
         menuLayer.setStateSlots(stateSlots);
+        if (showToast)
+            menuLayer.showToast(ok ? "保存状态完成" : "保存状态失败");
         return ok;
     };
 
-    auto doLoadState = [&](int slot) {
+    auto doLoadState = [&](int slot, bool showToast) {
         const std::string path = statePath(stateDir, options.romPath, slot);
         appendStubLog("GBAStationNDSStub: savestate load begin slot=%d path=%s", slot, path.c_str());
         NDS::SetKeyMask(0x0FFFu);
@@ -2078,6 +2094,8 @@ int RunDekoRuntime(const DekoRunOptions& options)
         const bool ok = loadStateFile(path);
         audio.resumeAfterCoreReset();
         appendStubLog("GBAStationNDSStub: savestate load %s slot=%d", ok ? "ok" : "failed", slot);
+        if (showToast)
+            menuLayer.showToast(ok ? "读取状态完成" : "读取状态失败");
         return ok;
     };
 
@@ -2104,7 +2122,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
     };
 
     if (autoLoadSlot > 0)
-        doLoadState(autoLoadSlot - 1);
+        doLoadState(autoLoadSlot - 1, false);
 
     while (appletMainLoop() && running)
     {
@@ -2180,9 +2198,9 @@ int RunDekoRuntime(const DekoRunOptions& options)
                 appendStubLog("GBAStationNDSStub: layout next=%s", layoutIdFromIndex(nextDisplay.layout));
             }
             if (anyComboDown(inputConfig.button("nds.hotkey.quicksave.pad"), input))
-                doSaveState(0);
+                doSaveState(0, true);
             if (anyComboDown(inputConfig.button("nds.hotkey.quickload.pad"), input))
-                doLoadState(0);
+                doLoadState(0, true);
             if (anyComboDown(inputConfig.button("nds.hotkey.screenshot.pad"), input))
             {
                 const std::string screenshotDir = options.savePath.empty() ? stateDir : options.savePath;
@@ -2212,7 +2230,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
         }
         else if (menuAction == NdsMenuAction::LoadState)
         {
-            if (doLoadState(menuResult.slot))
+            if (doLoadState(menuResult.slot, true))
                 menuLayer.close();
         }
         else if (menuAction == NdsMenuAction::DeleteState)
@@ -2483,7 +2501,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
                 std::chrono::steady_clock::now() - autoSaveStart).count();
             if (elapsed >= autoSaveInterval)
             {
-                doSaveState(autoSaveSlot - 1);
+                doSaveState(autoSaveSlot - 1, false);
                 autoSaveStart = std::chrono::steady_clock::now();
             }
         }
@@ -2574,7 +2592,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
                 const int slot = pendingMenuSaveSlot;
                 pendingMenuSaveSlot = -1;
                 pendingMenuSaveFrames = 0;
-                doSaveState(slot);
+                doSaveState(slot, true);
             }
         }
 
@@ -2610,7 +2628,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
     }
 
     if (autoSaveOnExit && autoSaveSlot > 0 && loaded)
-        doSaveState(autoSaveSlot - 1);
+        doSaveState(autoSaveSlot - 1, false);
 
     audio.setFastForwardActive(false);
     audio.setMuted(false);

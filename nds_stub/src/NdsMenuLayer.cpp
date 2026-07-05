@@ -770,6 +770,12 @@ bool NdsMenuLayer::active() const
     return m_panelAnimating && animationProgress(m_panelAnimStartTick, kPanelAnimationMs) < 1.0f;
 }
 
+void NdsMenuLayer::showToast(const std::string& message)
+{
+    m_toastMessage = message;
+    m_toastStartTick = armGetSystemTick();
+}
+
 float NdsMenuLayer::panelProgress() const
 {
     if (!m_panelAnimating)
@@ -1845,8 +1851,42 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
 
 void NdsMenuLayer::draw() const
 {
+    auto drawToastIfNeeded = [&]() {
+        if (m_toastMessage.empty() || m_toastStartTick == 0)
+            return;
+
+        constexpr float kToastInMs = 180.0f;
+        constexpr float kToastHoldMs = 2000.0f;
+        constexpr float kToastOutMs = 180.0f;
+        const std::uint64_t now = armGetSystemTick();
+        const float elapsedMs = static_cast<float>(armTicksToNs(now - m_toastStartTick)) / 1000000.0f;
+        const float totalMs = kToastInMs + kToastHoldMs + kToastOutMs;
+        if (elapsedMs >= totalMs)
+        {
+            m_toastMessage.clear();
+            m_toastStartTick = 0;
+            return;
+        }
+
+        float progress = 1.0f;
+        if (elapsedMs < kToastInMs)
+            progress = elapsedMs / kToastInMs;
+        else if (elapsedMs > kToastInMs + kToastHoldMs)
+            progress = 1.0f - (elapsedMs - kToastInMs - kToastHoldMs) / kToastOutMs;
+
+        setMenuMetricsOrientation(m_display.orientation);
+        const bool transformed = pushMenuOrientationTransform(m_display.orientation);
+        drawToast(m_toastMessage, progress, 1.0f);
+        if (transformed)
+            Gfx::PopDrawTransform();
+        setMenuMetricsOrientation(0);
+    };
+
     if (!active())
+    {
+        drawToastIfNeeded();
         return;
+    }
 
     if (m_filePickerVisible)
     {
@@ -1889,6 +1929,7 @@ void NdsMenuLayer::draw() const
                 Gfx::PopDrawTransform();
         }
         setMenuMetricsOrientation(0);
+        drawToastIfNeeded();
         return;
     }
 
@@ -1904,6 +1945,7 @@ void NdsMenuLayer::draw() const
                 Gfx::PopDrawTransform();
         }
         setMenuMetricsOrientation(0);
+        drawToastIfNeeded();
         return;
     }
 
@@ -1921,6 +1963,7 @@ void NdsMenuLayer::draw() const
                 Gfx::PopDrawTransform();
         }
         setMenuMetricsOrientation(0);
+        drawToastIfNeeded();
         return;
     }
 
@@ -1938,6 +1981,7 @@ void NdsMenuLayer::draw() const
                 Gfx::PopDrawTransform();
         }
         setMenuMetricsOrientation(0);
+        drawToastIfNeeded();
         return;
     }
 
@@ -1996,6 +2040,7 @@ void NdsMenuLayer::draw() const
     if (transformed)
         Gfx::PopDrawTransform();
     setMenuMetricsOrientation(0);
+    drawToastIfNeeded();
 }
 
 } // namespace beiklive::nds_stub
