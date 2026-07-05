@@ -103,11 +103,6 @@ std::string stateThumbPath(const std::string& stateDir, const std::string& romPa
     return statePath(stateDir, romPath, slot) + ".png";
 }
 
-std::string stateThumbCachePath(const std::string& stateDir, const std::string& romPath, int slot)
-{
-    return statePath(stateDir, romPath, slot) + ".thumb";
-}
-
 const char* layoutIdFromIndex(int layout)
 {
     static constexpr const char* ids[] = {
@@ -344,9 +339,8 @@ loadStateSlots(const std::string& stateDir, const std::string& romPath)
         auto& info = slots[slot];
         info.statePath = statePath(stateDir, romPath, slot);
         info.thumbnailPath = stateThumbPath(stateDir, romPath, slot);
-        info.thumbnailCachePath = stateThumbCachePath(stateDir, romPath, slot);
         info.exists = std::filesystem::exists(info.statePath);
-        info.thumbnailCacheAvailable = std::filesystem::exists(info.thumbnailCachePath);
+        info.thumbnailAvailable = std::filesystem::exists(info.thumbnailPath);
         if (info.exists)
             info.modifiedTime = formatFileTime(info.statePath);
     }
@@ -385,78 +379,8 @@ bool captureAndWritePng(const beiklive::nds_stub::NdsGameLayer& gameLayer, const
     return writeRgbaPng(path, rgba, width, height);
 }
 
-bool writeRgbaThumbCache(const std::string& path,
-                         const std::vector<std::uint8_t>& rgba,
-                         int width,
-                         int height)
-{
-    if (rgba.empty() || width <= 0 || height <= 0)
-        return false;
-
-    const std::uint32_t w = static_cast<std::uint32_t>(width);
-    const std::uint32_t h = static_cast<std::uint32_t>(height);
-    const std::uint32_t magic = 0x4244544Eu; // "NTDB", little-endian
-    const std::uint32_t version = 1;
-    const std::uint32_t bytes = static_cast<std::uint32_t>(rgba.size());
-
-    std::error_code ec;
-    std::filesystem::create_directories(std::filesystem::path(path).parent_path(), ec);
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
-    if (!out)
-        return false;
-
-    out.write(reinterpret_cast<const char*>(&magic), sizeof(magic));
-    out.write(reinterpret_cast<const char*>(&version), sizeof(version));
-    out.write(reinterpret_cast<const char*>(&w), sizeof(w));
-    out.write(reinterpret_cast<const char*>(&h), sizeof(h));
-    out.write(reinterpret_cast<const char*>(&bytes), sizeof(bytes));
-    out.write(reinterpret_cast<const char*>(rgba.data()), static_cast<std::streamsize>(rgba.size()));
-    return out.good();
-}
-
-bool readRgbaThumbCache(const std::string& path,
-                        std::vector<std::uint8_t>& rgba,
-                        int& width,
-                        int& height)
-{
-    width = 0;
-    height = 0;
-    rgba.clear();
-
-    std::ifstream in(path, std::ios::binary);
-    if (!in)
-        return false;
-
-    std::uint32_t magic = 0;
-    std::uint32_t version = 0;
-    std::uint32_t w = 0;
-    std::uint32_t h = 0;
-    std::uint32_t bytes = 0;
-    in.read(reinterpret_cast<char*>(&magic), sizeof(magic));
-    in.read(reinterpret_cast<char*>(&version), sizeof(version));
-    in.read(reinterpret_cast<char*>(&w), sizeof(w));
-    in.read(reinterpret_cast<char*>(&h), sizeof(h));
-    in.read(reinterpret_cast<char*>(&bytes), sizeof(bytes));
-    if (!in || magic != 0x4244544Eu || version != 1 || w == 0 || h == 0 ||
-        w > 1024 || h > 1024 || bytes != w * h * 4)
-        return false;
-
-    rgba.resize(bytes);
-    in.read(reinterpret_cast<char*>(rgba.data()), static_cast<std::streamsize>(rgba.size()));
-    if (!in)
-    {
-        rgba.clear();
-        return false;
-    }
-
-    width = static_cast<int>(w);
-    height = static_cast<int>(h);
-    return true;
-}
-
 bool captureAndWriteStateThumbnail(const beiklive::nds_stub::NdsGameLayer& gameLayer,
-                                   const std::string& pngPath,
-                                   const std::string& cachePath)
+                                   const std::string& pngPath)
 {
     std::vector<std::uint8_t> rgba;
     int width = 0;
@@ -464,14 +388,50 @@ bool captureAndWriteStateThumbnail(const beiklive::nds_stub::NdsGameLayer& gameL
     if (!gameLayer.captureCurrentFrameRgba(rgba, width, height))
         return false;
 
-    const bool cacheOk = writeRgbaThumbCache(cachePath, rgba, width, height);
     const bool pngOk = writeRgbaPng(pngPath, rgba, width, height);
-    beiklive::nds_stub::appendStubLog("GBAStationNDSStub: savestate thumbnail write cache=%d png=%d size=%dx%d",
-                                      cacheOk ? 1 : 0,
+    beiklive::nds_stub::appendStubLog("GBAStationNDSStub: savestate thumbnail write png=%d size=%dx%d",
                                       pngOk ? 1 : 0,
                                       width,
                                       height);
-    return cacheOk;
+    return pngOk;
+}
+
+bool writeStateThumbnailFromRgba(const std::vector<std::uint8_t>& rgba,
+                                 int width,
+                                 int height,
+                                 const std::string& pngPath)
+{
+    const bool pngOk = writeRgbaPng(pngPath, rgba, width, height);
+    beiklive::nds_stub::appendStubLog("GBAStationNDSStub: savestate thumbnail write memory png=%d size=%dx%d",
+                                      pngOk ? 1 : 0,
+                                      width,
+                                      height);
+    return pngOk;
+}
+
+bool readRgbaPngFile(const std::string& path,
+                     std::vector<std::uint8_t>& rgba,
+                     int& width,
+                     int& height)
+{
+    width = 0;
+    height = 0;
+    rgba.clear();
+
+    int comp = 0;
+    unsigned char* pixels = stbi_load(path.c_str(), &width, &height, &comp, 4);
+    if (!pixels || width <= 0 || height <= 0 || width > 1024 || height > 1024)
+    {
+        if (pixels)
+            stbi_image_free(pixels);
+        width = 0;
+        height = 0;
+        return false;
+    }
+
+    rgba.assign(pixels, pixels + static_cast<std::size_t>(width) * height * 4);
+    stbi_image_free(pixels);
+    return true;
 }
 
 void releaseStateSlotTextures(std::array<beiklive::nds_stub::NdsStateSlotInfo, 10>& slots)
@@ -489,6 +449,18 @@ void releaseStateSlotTextures(std::array<beiklive::nds_stub::NdsStateSlotInfo, 1
     }
 }
 
+void releaseStateSlotTexture(beiklive::nds_stub::NdsStateSlotInfo& slot)
+{
+    if (slot.thumbnailTexture != 0)
+    {
+        Gfx::TextureDelete(slot.thumbnailTexture);
+        slot.thumbnailTexture = 0;
+    }
+    slot.thumbnailWidth = 0;
+    slot.thumbnailHeight = 0;
+    slot.thumbnailLoadAttempted = false;
+}
+
 bool hasPendingStateSlotTextures(const std::array<beiklive::nds_stub::NdsStateSlotInfo, 10>& slots)
 {
     for (const auto& slot : slots)
@@ -496,33 +468,24 @@ bool hasPendingStateSlotTextures(const std::array<beiklive::nds_stub::NdsStateSl
         if (slot.exists &&
             slot.thumbnailTexture == 0 &&
             !slot.thumbnailLoadAttempted &&
-            !slot.thumbnailCachePath.empty() &&
-            std::filesystem::exists(slot.thumbnailCachePath))
+            !slot.thumbnailPath.empty() &&
+            std::filesystem::exists(slot.thumbnailPath))
             return true;
     }
     return false;
 }
 
-bool loadStateSlotTexture(beiklive::nds_stub::NdsStateSlotInfo& slot, int slotIndex)
+bool uploadStateSlotTexture(beiklive::nds_stub::NdsStateSlotInfo& slot,
+                            const std::vector<std::uint8_t>& pixels,
+                            int width,
+                            int height,
+                            int slotIndex)
 {
-    if (!slot.exists || slot.thumbnailTexture != 0 || slot.thumbnailLoadAttempted ||
-        slot.thumbnailCachePath.empty() || !std::filesystem::exists(slot.thumbnailCachePath))
+    if (pixels.empty() || width <= 0 || height <= 0)
         return false;
 
+    releaseStateSlotTexture(slot);
     slot.thumbnailLoadAttempted = true;
-    beiklive::nds_stub::appendStubLog("GBAStationNDSStub: state thumbnail cache load begin slot=%d path=%s",
-                                      slotIndex,
-                                      slot.thumbnailCachePath.c_str());
-
-    std::vector<std::uint8_t> pixels;
-    int width = 0;
-    int height = 0;
-    if (!readRgbaThumbCache(slot.thumbnailCachePath, pixels, width, height))
-    {
-        beiklive::nds_stub::appendStubLog("GBAStationNDSStub: state thumbnail cache load failed slot=%d", slotIndex);
-        return false;
-    }
-
     slot.thumbnailTexture = Gfx::TextureCreate(static_cast<u32>(width),
                                                static_cast<u32>(height),
                                                DkImageFormat_RGBA8_Unorm);
@@ -533,13 +496,39 @@ bool loadStateSlotTexture(beiklive::nds_stub::NdsStateSlotInfo& slot, int slotIn
                        0,
                        static_cast<u32>(width),
                        static_cast<u32>(height),
-                       pixels.data(),
+                       const_cast<std::uint8_t*>(pixels.data()),
                        static_cast<u32>(width * 4));
-    beiklive::nds_stub::appendStubLog("GBAStationNDSStub: state thumbnail upload queued slot=%d size=%dx%d",
+    beiklive::nds_stub::appendStubLog("GBAStationNDSStub: state thumbnail upload queued slot=%d size=%dx%d tex=%u",
                                       slotIndex,
                                       width,
-                                      height);
-    return true;
+                                      height,
+                                      slot.thumbnailTexture);
+    return slot.thumbnailTexture != 0;
+}
+
+bool loadStateSlotTexture(beiklive::nds_stub::NdsStateSlotInfo& slot, int slotIndex)
+{
+    if (!slot.exists || slot.thumbnailTexture != 0 || slot.thumbnailLoadAttempted ||
+        slot.thumbnailPath.empty() || !std::filesystem::exists(slot.thumbnailPath))
+        return false;
+
+    slot.thumbnailLoadAttempted = true;
+    beiklive::nds_stub::appendStubLog("GBAStationNDSStub: state thumbnail png load begin slot=%d path=%s",
+                                      slotIndex,
+                                      slot.thumbnailPath.c_str());
+
+    std::vector<std::uint8_t> pixels;
+    int width = 0;
+    int height = 0;
+    if (!readRgbaPngFile(slot.thumbnailPath, pixels, width, height))
+    {
+        beiklive::nds_stub::appendStubLog("GBAStationNDSStub: state thumbnail png load failed slot=%d path=%s",
+                                          slotIndex,
+                                          slot.thumbnailPath.c_str());
+        return false;
+    }
+
+    return uploadStateSlotTexture(slot, pixels, width, height, slotIndex);
 }
 
 bool endsWithNoCase(const std::string& value, const char* suffix)
@@ -1894,16 +1883,37 @@ int RunDekoRuntime(const DekoRunOptions& options)
 
     auto doSaveState = [&](int slot) {
         const std::string path = statePath(stateDir, options.romPath, slot);
+        const std::string thumbPath = stateThumbPath(stateDir, options.romPath, slot);
+        std::vector<std::uint8_t> thumbnailRgba;
+        int thumbnailWidth = 0;
+        int thumbnailHeight = 0;
         appendStubLog("GBAStationNDSStub: savestate save begin slot=%d path=%s", slot, path.c_str());
         audio.pauseForCoreReset();
         Gfx::PresentQueue.waitIdle();
         Gfx::EmuQueue.waitIdle();
+        const bool thumbnailCaptured = gameLayer.captureCurrentFrameRgba(thumbnailRgba,
+                                                                         thumbnailWidth,
+                                                                         thumbnailHeight);
+        appendStubLog("GBAStationNDSStub: savestate thumbnail capture %s slot=%d size=%dx%d",
+                      thumbnailCaptured ? "ok" : "failed",
+                      slot,
+                      thumbnailWidth,
+                      thumbnailHeight);
         const bool ok = saveStateFile(path);
+        bool thumbOk = false;
         if (ok)
         {
-            const bool thumbOk = captureAndWriteStateThumbnail(gameLayer,
-                                                               stateThumbPath(stateDir, options.romPath, slot),
-                                                               stateThumbCachePath(stateDir, options.romPath, slot));
+            if (thumbnailCaptured)
+            {
+                thumbOk = writeStateThumbnailFromRgba(thumbnailRgba,
+                                                      thumbnailWidth,
+                                                      thumbnailHeight,
+                                                      thumbPath);
+            }
+            else
+            {
+                thumbOk = captureAndWriteStateThumbnail(gameLayer, thumbPath);
+            }
             appendStubLog("GBAStationNDSStub: savestate thumbnail %s slot=%d",
                           thumbOk ? "ok" : "failed",
                           slot);
@@ -1913,9 +1923,22 @@ int RunDekoRuntime(const DekoRunOptions& options)
         appendStubLog("GBAStationNDSStub: savestate save %s slot=%d", ok ? "ok" : "failed", slot);
         Gfx::PresentQueue.waitIdle();
         Gfx::EmuQueue.waitIdle();
-        stateSlots = reloadStateSlots(stateDir, options.romPath, stateSlots);
-        stateSlotTexturesDirty = true;
-        stateSlotTextureLoadStarted = false;
+        if (slot >= 0 && slot < static_cast<int>(stateSlots.size()))
+        {
+            releaseStateSlotTexture(stateSlots[slot]);
+            auto refreshed = loadStateSlots(stateDir, options.romPath);
+            stateSlots[slot] = refreshed[slot];
+            if (ok && thumbOk && thumbnailCaptured)
+            {
+                uploadStateSlotTexture(stateSlots[slot],
+                                       thumbnailRgba,
+                                       thumbnailWidth,
+                                       thumbnailHeight,
+                                       slot);
+            }
+        }
+        stateSlotTexturesDirty = hasPendingStateSlotTextures(stateSlots);
+        stateSlotTextureLoadStarted = !stateSlotTexturesDirty;
         menuLayer.setStateSlots(stateSlots);
         return ok;
     };
@@ -1937,23 +1960,24 @@ int RunDekoRuntime(const DekoRunOptions& options)
     auto doDeleteState = [&](int slot) {
         const std::string path = statePath(stateDir, options.romPath, slot);
         const std::string thumb = stateThumbPath(stateDir, options.romPath, slot);
-        const std::string thumbCache = stateThumbCachePath(stateDir, options.romPath, slot);
         std::error_code ec;
         const bool removedState = std::filesystem::remove(path, ec);
         ec.clear();
         const bool removedThumb = std::filesystem::remove(thumb, ec);
-        ec.clear();
-        const bool removedThumbCache = std::filesystem::remove(thumbCache, ec);
-        appendStubLog("GBAStationNDSStub: savestate delete slot=%d state=%d thumb=%d cache=%d",
+        appendStubLog("GBAStationNDSStub: savestate delete slot=%d state=%d thumb=%d",
                       slot,
                       removedState ? 1 : 0,
-                      removedThumb ? 1 : 0,
-                      removedThumbCache ? 1 : 0);
+                      removedThumb ? 1 : 0);
         Gfx::PresentQueue.waitIdle();
         Gfx::EmuQueue.waitIdle();
-        stateSlots = reloadStateSlots(stateDir, options.romPath, stateSlots);
-        stateSlotTexturesDirty = true;
-        stateSlotTextureLoadStarted = false;
+        if (slot >= 0 && slot < static_cast<int>(stateSlots.size()))
+        {
+            releaseStateSlotTexture(stateSlots[slot]);
+            auto refreshed = loadStateSlots(stateDir, options.romPath);
+            stateSlots[slot] = refreshed[slot];
+        }
+        stateSlotTexturesDirty = hasPendingStateSlotTextures(stateSlots);
+        stateSlotTextureLoadStarted = !stateSlotTexturesDirty;
         menuLayer.setStateSlots(stateSlots);
     };
 

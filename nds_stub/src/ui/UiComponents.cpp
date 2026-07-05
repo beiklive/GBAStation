@@ -968,8 +968,8 @@ void drawSaveSlotCard(int slot, Vector2f pos, bool focused, const NdsStateSlotIn
                focused ? Color{0.31f, 0.70f, 1.0f, 0.96f}
                        : Color{1.0f, 1.0f, 1.0f, info.exists ? 0.10f : 0.06f});
 
-    const Vector2f thumbSize{134.0f, 86.0f};
-    const Vector2f thumbPos = drawPos + Vector2f{14.0f, 13.0f};
+    const Vector2f thumbSize{72.0f, 96.0f};
+    const Vector2f thumbPos = drawPos + Vector2f{18.0f, 8.0f};
     drawRect(thumbPos, thumbSize, info.exists ? Color{0.12f, 0.17f, 0.22f, 0.96f}
                                               : Color{1.0f, 1.0f, 1.0f, 0.025f});
     if (info.exists && info.thumbnailTexture != 0 && info.thumbnailWidth > 0 && info.thumbnailHeight > 0)
@@ -1002,7 +1002,7 @@ void drawSaveSlotCard(int slot, Vector2f pos, bool focused, const NdsStateSlotIn
     std::snprintf(title, sizeof(title), "槽位 %d", slot);
     if (info.exists)
     {
-        const float textX = std::min(162.0f, drawSize.X * 0.42f);
+        const float textX = 112.0f;
         Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{textX, 24.0f}, 24.0f,
                       {1.0f, 1.0f, 1.0f, 0.96f}, "%s", title);
         Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{textX, 64.0f}, 17.0f,
@@ -1010,14 +1010,14 @@ void drawSaveSlotCard(int slot, Vector2f pos, bool focused, const NdsStateSlotIn
         if (info.thumbnailTexture == 0)
             Gfx::DrawText(Gfx::SystemFontStandard, thumbPos + thumbSize * 0.5f, 15.0f,
                           {0.75f, 0.88f, 1.0f, 0.46f}, Gfx::align_Center, Gfx::align_Center,
-                          !info.thumbnailCacheAvailable ? "NO THUMB" :
+                          !info.thumbnailAvailable ? "NO THUMB" :
                           (info.thumbnailLoadAttempted ? "LOAD FAIL" : "SCREEN"));
     }
     else
     {
         Gfx::DrawText(Gfx::SystemFontStandard, thumbPos + thumbSize * 0.5f, 40.0f,
                       {1.0f, 1.0f, 1.0f, 0.45f}, Gfx::align_Center, Gfx::align_Center, "+");
-        const float textX = std::min(162.0f, drawSize.X * 0.42f);
+        const float textX = 112.0f;
         Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{textX, 24.0f}, 24.0f,
                       {1.0f, 1.0f, 1.0f, 0.88f}, "%s", title);
         Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{textX, 64.0f}, 17.0f,

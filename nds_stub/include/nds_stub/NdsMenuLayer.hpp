@@ -37,13 +37,12 @@ struct NdsStateSlotInfo {
     bool exists = false;
     std::string statePath;
     std::string thumbnailPath;
-    std::string thumbnailCachePath;
     std::string modifiedTime;
     std::uint32_t thumbnailTexture = 0;
     int thumbnailWidth = 0;
     int thumbnailHeight = 0;
     bool thumbnailLoadAttempted = false;
-    bool thumbnailCacheAvailable = false;
+    bool thumbnailAvailable = false;
 };
 
 struct NdsDisplaySettings {
