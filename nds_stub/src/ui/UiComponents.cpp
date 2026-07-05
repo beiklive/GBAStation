@@ -2,7 +2,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cctype>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -178,7 +180,7 @@ std::string ellipsizeText(const std::string& source, float maxTextW, float fontS
     std::size_t lo = 0;
     std::size_t hi = source.size();
     std::size_t best = 0;
-    for (int i = 0; i < 12 && lo <= hi; ++i)
+    while (lo <= hi)
     {
         const std::size_t mid = lo + (hi - lo) / 2;
         const std::size_t cut = utf8SafePrefix(source, mid);
@@ -195,7 +197,15 @@ std::string ellipsizeText(const std::string& source, float maxTextW, float fontS
             hi = mid - 1;
         }
     }
-    return best == 0 ? suffix : source.substr(0, best) + suffix;
+
+    std::string result = best == 0 ? suffix : source.substr(0, best) + suffix;
+    while (result.size() > suffix.size() &&
+           Gfx::MeasureText(Gfx::SystemFontChinese, fontSize, result.c_str()).X > maxTextW)
+    {
+        const std::size_t trimmed = utf8SafePrefix(result, result.size() - suffix.size() - 1);
+        result = source.substr(0, trimmed) + suffix;
+    }
+    return result;
 }
 
 std::string formatBytes(std::uint64_t bytes)
@@ -211,6 +221,22 @@ std::string formatBytes(std::uint64_t bytes)
     std::ostringstream out;
     out << std::fixed << std::setprecision(unit == 0 ? 0 : 1) << value << ' ' << units[unit];
     return out.str();
+}
+
+bool endsWithNoCase(const std::string& value, const char* suffix)
+{
+    const std::size_t suffixLen = std::strlen(suffix);
+    if (value.size() < suffixLen)
+        return false;
+
+    const std::size_t offset = value.size() - suffixLen;
+    for (std::size_t i = 0; i < suffixLen; ++i)
+    {
+        if (std::tolower(static_cast<unsigned char>(value[offset + i])) !=
+            std::tolower(static_cast<unsigned char>(suffix[i])))
+            return false;
+    }
+    return true;
 }
 
 #define kContentBodyTop (::beiklive::nds_stub::ui::menuMetrics().contentBodyTop)
@@ -291,6 +317,20 @@ void pushRectScissor(Vector2f pos, Vector2f size)
                      static_cast<u32>(std::max(0.0f, y)),
                      static_cast<u32>(std::max(minSize, w)),
                      static_cast<u32>(std::max(minSize, h)));
+}
+
+void pushIntersectedRectScissor(Vector2f pos, Vector2f size, Vector2f clipPos, Vector2f clipSize)
+{
+    const float x0 = std::max(pos.X, clipPos.X);
+    const float y0 = std::max(pos.Y, clipPos.Y);
+    const float x1 = std::min(pos.X + size.X, clipPos.X + clipSize.X);
+    const float y1 = std::min(pos.Y + size.Y, clipPos.Y + clipSize.Y);
+    if (x1 <= x0 || y1 <= y0)
+    {
+        pushRectScissor({clipPos.X, clipPos.Y}, {1.0f, 1.0f});
+        return;
+    }
+    pushRectScissor({x0, y0}, {std::max(1.0f, x1 - x0), std::max(1.0f, y1 - y0)});
 }
 
 void drawBadge(Vector2f pos, Vector2f minSize, const char* text, Color bgColor, Color textColor)
@@ -1258,33 +1298,34 @@ void drawFilePicker(const std::string& directory,
                     std::uint32_t previewTexture,
                     int previewWidth,
                     int previewHeight,
+                    const std::string& previewPath,
+                    bool previewVisible,
                     float progress,
                     float opacity)
 {
     opacity = clamp01(opacity);
     progress = easeOutQuart(clamp01(progress));
     const float offsetY = (1.0f - progress) * kScreenH;
-    const float topH = 64.0f;
-    const float footerH = 64.0f;
-    const float bodyY = topH + offsetY;
-    const float bodyH = kScreenH - topH - footerH;
-    const float listW = kScreenW * 0.70f;
-    const float infoX = listW;
-    const float rowH = 46.0f;
+    const float topH = 96.0f;
+    const float footerH = 96.0f;
+    const float bodyPad = 18.0f;
+    const float bodyY = topH + bodyPad + offsetY;
+    const float bodyH = kScreenH - topH - footerH - bodyPad * 2.0f;
+    const float listW = kScreenW;
+    const float rowH = 84.0f;
 
     drawRect({0.0f, offsetY}, {kScreenW, kScreenH}, {0.010f, 0.014f, 0.020f, 0.985f * opacity}, true);
     drawRect({0.0f, offsetY}, {kScreenW, topH}, {0.0f, 0.0f, 0.0f, 0.42f * opacity}, true);
     drawLine({0.0f, offsetY + topH}, {kScreenW, 1.0f}, {1.0f, 1.0f, 1.0f, 0.12f * opacity});
-    drawLine({listW, bodyY}, {1.0f, bodyH}, {1.0f, 1.0f, 1.0f, 0.10f * opacity});
 
-    const std::string shownDir = ellipsizeText(directory.empty() ? "/" : directory, listW - 42.0f, 16.0f);
-    Gfx::DrawText(Gfx::SystemFontChinese, {24.0f, offsetY + 23.0f}, 16.0f,
+    const std::string shownDir = ellipsizeText(directory.empty() ? "/" : directory, kScreenW - 220.0f, 24.0f);
+    Gfx::DrawText(Gfx::SystemFontChinese, {32.0f, offsetY + 34.0f}, 24.0f,
                   {0.90f, 0.96f, 1.0f, 0.88f * opacity}, "%s", shownDir.c_str());
     char indexText[64];
     std::snprintf(indexText, sizeof(indexText), "%d / %d",
                   entries.empty() ? 0 : std::clamp(focusedRow + 1, 1, static_cast<int>(entries.size())),
                   static_cast<int>(entries.size()));
-    Gfx::DrawText(Gfx::SystemFontChinese, {kScreenW - 24.0f, offsetY + 23.0f}, 16.0f,
+    Gfx::DrawText(Gfx::SystemFontChinese, {kScreenW - 34.0f, offsetY + 35.0f}, 23.0f,
                   {0.78f, 0.88f, 0.96f, 0.76f * opacity}, Gfx::align_Right, Gfx::align_Left,
                   indexText);
 
@@ -1299,35 +1340,46 @@ void drawFilePicker(const std::string& directory,
         const float y = bodyY + static_cast<float>(i) * rowH - scrollY;
         const bool focused = i == focusedRow;
         if (focused)
-            drawGradientBorder({20.0f, y + 4.0f}, {listW - 40.0f, rowH - 8.0f}, 3.0f);
+            drawGradientBorder({30.0f, y + 7.0f}, {listW - 60.0f, rowH - 14.0f}, 3.0f);
         else
-            drawRect({20.0f, y + 5.0f}, {listW - 40.0f, rowH - 10.0f},
+            drawRect({30.0f, y + 8.0f}, {listW - 60.0f, rowH - 16.0f},
                      {1.0f, 1.0f, 1.0f, 0.025f * opacity}, true);
 
         const char* icon = entry.isDirectory ? "\uE2C7" : "\uE3F4";
         if (iconFont != 0)
-            Gfx::DrawText(iconFont, {48.0f, y + rowH * 0.5f}, 24.0f,
+            Gfx::DrawText(iconFont, {78.0f, y + rowH * 0.5f}, 45.0f,
                           entry.isDirectory ? Color{0.50f, 0.78f, 1.0f, 0.92f * opacity}
                                             : Color{0.66f, 0.90f, 0.74f, 0.88f * opacity},
                           Gfx::align_Center, Gfx::align_Center, icon);
         else
-            Gfx::DrawText(Gfx::SystemFontStandard, {48.0f, y + rowH * 0.5f}, 20.0f,
+            Gfx::DrawText(Gfx::SystemFontStandard, {78.0f, y + rowH * 0.5f}, 30.0f,
                           {0.70f, 0.86f, 1.0f, 0.84f * opacity},
                           Gfx::align_Center, Gfx::align_Center, entry.isDirectory ? "[D]" : "[I]");
 
-        const float textX = 78.0f;
-        const float textW = listW - textX - 38.0f;
-        const float nameW = Gfx::MeasureText(Gfx::SystemFontChinese, 16.0f, entry.name.c_str()).X;
-        pushRectScissor({textX, y + 6.0f}, {textW, 34.0f});
+        const float textX = 128.0f;
+        const float textW = std::max(24.0f, listW - textX - 54.0f);
+        const float nameFont = 27.0f;
+        const float nameW = Gfx::MeasureText(Gfx::SystemFontChinese, nameFont, entry.name.c_str()).X;
+        pushIntersectedRectScissor({textX, y + 11.0f},
+                                   {textW, rowH - 22.0f},
+                                   {0.0f, bodyY},
+                                   {listW, bodyH});
         if (focused && nameW > textW)
-            Gfx::DrawText(Gfx::SystemFontChinese, {textX - focusedMarqueeOffset(nameW, textW), y + 14.0f}, 16.0f,
+            Gfx::DrawText(Gfx::SystemFontChinese, {textX - focusedMarqueeOffset(nameW, textW), y + 17.0f}, nameFont,
                           {1.0f, 1.0f, 1.0f, 0.92f * opacity}, "%s", entry.name.c_str());
         else
         {
-            const std::string shown = ellipsizeText(entry.name, textW, 16.0f);
-            Gfx::DrawText(Gfx::SystemFontChinese, {textX, y + 14.0f}, 16.0f,
+            const std::string shown = ellipsizeText(entry.name, textW, nameFont);
+            Gfx::DrawText(Gfx::SystemFontChinese, {textX, y + 17.0f}, nameFont,
                           {1.0f, 1.0f, 1.0f, focused ? 0.96f * opacity : 0.78f * opacity}, "%s", shown.c_str());
         }
+        const std::string meta = entry.isDirectory
+            ? (entry.name == ".." ? "上级目录" : "文件夹")
+            : (formatBytes(entry.size) + (entry.modifiedTime.empty() ? "" : "   " + entry.modifiedTime));
+        const std::string shownMeta = ellipsizeText(meta, textW, 17.0f);
+        Gfx::DrawText(Gfx::SystemFontChinese, {textX, y + 53.0f}, 17.0f,
+                      {0.72f, 0.82f, 0.90f, focused ? 0.72f * opacity : 0.50f * opacity},
+                      "%s", shownMeta.c_str());
         Gfx::PopScissor();
     }
     Gfx::PopScissor();
@@ -1335,67 +1387,58 @@ void drawFilePicker(const std::string& directory,
     const NdsFilePickerEntry* selected = nullptr;
     if (!entries.empty() && focusedRow >= 0 && focusedRow < static_cast<int>(entries.size()))
         selected = &entries[focusedRow];
-    const float infoW = kScreenW - infoX;
-    const Vector2f previewPos{infoX + 34.0f, bodyY + 44.0f};
-    const Vector2f previewSize{infoW - 68.0f, std::min(260.0f, bodyH * 0.42f)};
-    drawRect(previewPos, previewSize, {1.0f, 1.0f, 1.0f, 0.035f * opacity}, true);
-    drawBorder(previewPos, previewSize, 1.0f, {1.0f, 1.0f, 1.0f, 0.10f * opacity});
-    if (selected && !selected->isDirectory && previewTexture != 0 && previewWidth > 0 && previewHeight > 0)
+    const bool selectedImage = selected && !selected->isDirectory && endsWithNoCase(selected->path, ".png");
+
+    if (previewVisible && previewTexture != 0 && previewWidth > 0 && previewHeight > 0)
     {
+        drawRect({0.0f, offsetY}, {kScreenW, kScreenH}, {0.0f, 0.0f, 0.0f, 0.82f * opacity}, true);
+        const float maxW = kScreenW - 120.0f;
+        const float maxH = kScreenH - footerH - 120.0f;
         const float texAspect = static_cast<float>(previewWidth) / static_cast<float>(previewHeight);
-        const float boxAspect = previewSize.X / previewSize.Y;
-        Vector2f drawSize = previewSize - Vector2f{18.0f, 18.0f};
-        if (texAspect > boxAspect)
-            drawSize.Y = drawSize.X / texAspect;
-        else
-            drawSize.X = drawSize.Y * texAspect;
-        const Vector2f drawPos = previewPos + (previewSize - drawSize) * 0.5f;
+        Vector2f drawSize{maxW, maxW / texAspect};
+        if (drawSize.Y > maxH)
+            drawSize = {maxH * texAspect, maxH};
+        const Vector2f drawPos{(kScreenW - drawSize.X) * 0.5f,
+                               offsetY + 76.0f + (maxH - drawSize.Y) * 0.5f};
+        drawRect(drawPos - Vector2f{12.0f, 12.0f}, drawSize + Vector2f{24.0f, 24.0f},
+                 {1.0f, 1.0f, 1.0f, 0.055f * opacity}, true);
         Gfx::SetSampler(Gfx::sampler_Linear | Gfx::sampler_ClampToEdge);
         Gfx::DrawRectangle(previewTexture,
                            drawPos,
                            drawSize,
                            {0.0f, 0.0f},
                            {static_cast<float>(previewWidth), static_cast<float>(previewHeight)},
-                           {1.0f, 1.0f, 1.0f, 1.0f});
+                           {1.0f, 1.0f, 1.0f, opacity});
         Gfx::SetSampler(Gfx::sampler_Nearest | Gfx::sampler_ClampToEdge);
-    }
-    else
-    {
-        const std::uint32_t iconFont = materialFont();
-        if (iconFont != 0)
-            Gfx::DrawText(iconFont, previewPos + previewSize * 0.5f, 72.0f,
-                          {0.70f, 0.86f, 1.0f, 0.36f * opacity},
-                          Gfx::align_Center, Gfx::align_Center,
-                          selected && selected->isDirectory ? "\uE2C7" : "\uE3F4");
-    }
 
-    if (selected)
-    {
-        const float textX = infoX + 34.0f;
-        float y = previewPos.Y + previewSize.Y + 32.0f;
-        const float textW = infoW - 68.0f;
-        const std::string shownName = ellipsizeText(selected->name, textW, 17.0f);
-        Gfx::DrawText(Gfx::SystemFontChinese, {textX, y}, 17.0f,
-                      {1.0f, 1.0f, 1.0f, 0.92f * opacity}, "%s", shownName.c_str());
-        y += 34.0f;
-        Gfx::DrawText(Gfx::SystemFontChinese, {textX, y}, 14.0f,
-                      {0.76f, 0.86f, 0.94f, 0.68f * opacity}, "%s", selected->isDirectory ? "文件夹" : formatBytes(selected->size).c_str());
-        y += 28.0f;
-        Gfx::DrawText(Gfx::SystemFontChinese, {textX, y}, 14.0f,
-                      {0.76f, 0.86f, 0.94f, 0.68f * opacity}, "%s", selected->modifiedTime.empty() ? "修改时间未知" : selected->modifiedTime.c_str());
+        const std::string title = ellipsizeText(previewPath.empty() ? "图片预览" : std::filesystem::path(previewPath).filename().string(),
+                                                kScreenW - 120.0f,
+                                                24.0f);
+        Gfx::DrawText(Gfx::SystemFontChinese, {60.0f, offsetY + 34.0f}, 24.0f,
+                      {1.0f, 1.0f, 1.0f, 0.92f * opacity}, "%s", title.c_str());
     }
 
     const float footerY = kScreenH - footerH + offsetY;
     drawRect({0.0f, footerY}, {kScreenW, footerH}, {0.0f, 0.0f, 0.0f, 0.42f * opacity}, true);
     drawLine({0.0f, footerY}, {kScreenW, 1.0f}, {1.0f, 1.0f, 1.0f, 0.12f * opacity});
-    Gfx::DrawText(Gfx::SystemFontNintendoExt, {kScreenW - 220.0f, footerY + 33.0f}, 28.0f,
-                  {1.0f, 1.0f, 1.0f, 0.92f * opacity}, Gfx::align_Center, Gfx::align_Center, NDS_STUB_KEYICON_B);
-    Gfx::DrawText(Gfx::SystemFontChinese, {kScreenW - 198.0f, footerY + 24.0f}, 18.0f,
-                  {1.0f, 1.0f, 1.0f, 0.76f * opacity}, "返回");
-    Gfx::DrawText(Gfx::SystemFontNintendoExt, {kScreenW - 116.0f, footerY + 33.0f}, 28.0f,
-                  {1.0f, 1.0f, 1.0f, 0.92f * opacity}, Gfx::align_Center, Gfx::align_Center, NDS_STUB_KEYICON_A);
-    Gfx::DrawText(Gfx::SystemFontChinese, {kScreenW - 94.0f, footerY + 24.0f}, 18.0f,
-                  {0.38f, 0.78f, 1.0f, 0.92f * opacity}, "选择");
+
+    float hintX = kScreenW - 36.0f;
+    auto drawHint = [&](const char* icon, const char* text, Color textColor) {
+        const float textSize = 26.0f;
+        const float iconSize = 38.0f;
+        const float textW = Gfx::MeasureText(Gfx::SystemFontChinese, textSize, text).X;
+        const float groupW = iconSize + 12.0f + textW;
+        hintX -= groupW;
+        Gfx::DrawText(Gfx::SystemFontNintendoExt, {hintX + iconSize * 0.5f, footerY + 50.0f}, iconSize,
+                      {1.0f, 1.0f, 1.0f, 0.92f * opacity}, Gfx::align_Center, Gfx::align_Center, icon);
+        Gfx::DrawText(Gfx::SystemFontChinese, {hintX + iconSize + 12.0f, footerY + 36.0f}, textSize,
+                      textColor, "%s", text);
+        hintX -= 34.0f;
+    };
+    drawHint(NDS_STUB_KEYICON_A, previewVisible ? "关闭" : "选择", {0.38f, 0.78f, 1.0f, 0.92f * opacity});
+    drawHint(NDS_STUB_KEYICON_B, previewVisible ? "关闭" : "返回", {1.0f, 1.0f, 1.0f, 0.76f * opacity});
+    if (!previewVisible && selectedImage)
+        drawHint(NDS_STUB_KEYICON_X, "预览", {0.78f, 0.90f, 1.0f, 0.86f * opacity});
 }
 
 void drawTabFrame(NdsMenuLayer::Item item,

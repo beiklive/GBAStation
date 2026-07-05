@@ -141,6 +141,8 @@ void drawFilePicker(const std::string& directory,
                     std::uint32_t previewTexture,
                     int previewWidth,
                     int previewHeight,
+                    const std::string& previewPath,
+                    bool previewVisible,
                     float progress,
                     float opacity = 1.0f);
 // 绘制右侧内容区框架

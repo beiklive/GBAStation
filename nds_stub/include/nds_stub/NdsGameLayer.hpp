@@ -35,6 +35,7 @@ public:
     RectF bottomRect() const;
 
     bool readTouch(u16& outX, u16& outY) const;
+    bool ndsPointToScreen(bool sourceTop, float ndsX, float ndsY, float& outX, float& outY) const;
     void drawScreens() const;
     bool captureCurrentFrameRgba(std::vector<std::uint8_t>& outRgba,
                                  int& outWidth,
@@ -71,6 +72,7 @@ private:
     RectF layoutBounds() const;
     RectF rotateScreenRect(const RectF& rect, const RectF& layoutRect) const;
     bool mapPointToUnrotated(float x, float y, const ScreenDrawRect& item, float& outX, float& outY) const;
+    bool mapNdsPointToScreen(float ndsX, float ndsY, const ScreenDrawRect& item, float& outX, float& outY) const;
     RectF firstRectForSource(bool sourceTop) const;
 
     GPU2D::DekoRenderer* m_renderer = nullptr;

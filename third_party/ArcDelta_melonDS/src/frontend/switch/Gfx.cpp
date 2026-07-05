@@ -153,12 +153,15 @@ struct PendingTextureUpload
     u32 TextureIdx;
     u32 X, Y, Width, Height;
     u32 DataStrideBytes;
+    u32 StagingSlot;
+    u32 StagingOffsetBytes;
 };
 
 Registry<Texture> Textures;
 
 std::vector<u32> UsedTextures;
 std::vector<PendingTextureUpload> TextureUploadsPending;
+bool FrameActive = false;
 
 u32 TextureCreate(u32 width, u32 height, DkImageFormat format)
 {
@@ -214,13 +217,18 @@ void TextureDelete(u32 idx)
 
 void TextureUpload(u32 index, u32 x, u32 y, u32 width, u32 height, void* data, u32 dataStride)
 {
+    if (!FrameActive)
+        PresentQueue.waitIdle();
+
     const u32 uploadSize = dataStride * height;
     const u32 alignedUploadSize = (uploadSize + DK_IMAGE_LINEAR_STRIDE_ALIGNMENT - 1) &
                                   ~(DK_IMAGE_LINEAR_STRIDE_ALIGNMENT - 1);
     assert(TextureStagingBufferOffset + alignedUploadSize <= TextureStagingBuffer[0].Size);
     assert(!Textures[index].External);
 
-    TextureUploadsPending.push_back({index, x, y, width, height, dataStride});
+    const u32 stagingSlot = static_cast<u32>(SwapchainSlot);
+    const u32 stagingOffset = TextureStagingBufferOffset;
+    TextureUploadsPending.push_back({index, x, y, width, height, dataStride, stagingSlot, stagingOffset});
     u8* stagingBufferCpuAddr = DataHeap->CpuAddr<u8>(TextureStagingBuffer[SwapchainSlot]) + TextureStagingBufferOffset;
     memcpy(stagingBufferCpuAddr, data, uploadSize);
     TextureStagingBufferOffset += alignedUploadSize;
@@ -772,6 +780,7 @@ void Rotate90Deg(u32& outX, u32& outY, u32 inX, u32 inY, int rotation)
 void StartFrame()
 {
     SwapchainSlot = PresentQueue.acquireImage(Swapchain);
+    FrameActive = true;
     DrawTransformStack.clear();
 
     AnimationTimestamp = armTicksToNs(armGetSystemTick()) * 0.000000001;
@@ -808,20 +817,15 @@ void EndFrame(Color clearColor, int rotation)
 
     CmdMem->Begin(PresentCmdBuf);
 
-    DkGpuAddr stagingBufferGpuAddr = DataHeap->GpuAddr(TextureStagingBuffer[SwapchainSlot]);
     for (u32 i = 0; i < TextureUploadsPending.size(); i++)
     {
         PendingTextureUpload& upload = TextureUploadsPending[i];
         Texture& texture = Textures[upload.TextureIdx];
         dk::ImageView view{texture.Image};
+        DkGpuAddr stagingBufferGpuAddr = DataHeap->GpuAddr(TextureStagingBuffer[upload.StagingSlot]) + upload.StagingOffsetBytes;
         assert((stagingBufferGpuAddr & (DK_IMAGE_LINEAR_STRIDE_ALIGNMENT - 1)) == 0);
         PresentCmdBuf.copyBufferToImage({stagingBufferGpuAddr, upload.DataStrideBytes, upload.Height}, view, {upload.X, upload.Y, 0, upload.Width, upload.Height, 1});
-
-        u32 stride = upload.DataStrideBytes * upload.Height;
-        stagingBufferGpuAddr += stride;
-        stagingBufferGpuAddr = (stagingBufferGpuAddr + DK_IMAGE_LINEAR_STRIDE_ALIGNMENT - 1) & ~(DK_IMAGE_LINEAR_STRIDE_ALIGNMENT - 1);
     }
-    assert(stagingBufferGpuAddr - DataHeap->GpuAddr(TextureStagingBuffer[SwapchainSlot]) == TextureStagingBufferOffset);
     if (TextureUploadsPending.size() > 0)
     {
         TextureStagingBufferOffset = 0;
@@ -953,6 +957,7 @@ void EndFrame(Color clearColor, int rotation)
 
     PresentQueue.submitCommands(CmdMem->End(PresentCmdBuf));
     PresentQueue.presentImage(Swapchain, SwapchainSlot);
+    FrameActive = false;
 
     DrawCalls.clear();
     for (u32 i = 0; i < UsedTextures.size(); i++)

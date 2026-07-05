@@ -32,9 +32,10 @@ constexpr float kSettingRowH = 42.0f;
 constexpr float kSettingStepY = 48.0f;
 constexpr float kCheatRowH = 42.0f;
 constexpr float kCheatStepY = 48.0f;
-constexpr float kFilePickerRowH = 46.0f;
-constexpr float kFilePickerTopH = 64.0f;
-constexpr float kFilePickerFooterH = 64.0f;
+constexpr float kFilePickerRowH = 84.0f;
+constexpr float kFilePickerTopH = 96.0f;
+constexpr float kFilePickerFooterH = 96.0f;
+constexpr float kFilePickerBodyPad = 18.0f;
 
 constexpr float kFastForwardValues[] = {
     0.1f, 0.5f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 3.0f, 4.0f, 5.0f,
@@ -120,6 +121,13 @@ float focusedScroll(float focusedTop, float focusedH, float contentH)
     return std::clamp(scroll, 0.0f, maxScroll);
 }
 
+float centeredFocusedScroll(float focusedTop, float focusedH, float contentH, float bodyH)
+{
+    const float maxScroll = std::max(0.0f, contentH - bodyH);
+    const float focusedCenter = focusedTop + focusedH * 0.5f;
+    return std::clamp(focusedCenter - bodyH * 0.5f, 0.0f, maxScroll);
+}
+
 bool endsWithNoCase(const std::string& value, const char* suffix)
 {
     const size_t suffixLen = std::strlen(suffix);
@@ -170,16 +178,10 @@ std::string formatFileTime(const std::filesystem::path& path)
 
 float filePickerTargetScroll(int focus, int count)
 {
-    const float bodyH = menuMetrics().screenH - kFilePickerTopH - kFilePickerFooterH;
+    const float bodyH = menuMetrics().screenH - kFilePickerTopH - kFilePickerFooterH - kFilePickerBodyPad * 2.0f;
     const float contentH = static_cast<float>(std::max(0, count)) * kFilePickerRowH;
-    const float maxScroll = std::max(0.0f, contentH - bodyH);
     const float focusedTop = static_cast<float>(std::max(0, focus)) * kFilePickerRowH;
-    float scroll = 0.0f;
-    if (focusedTop + kFilePickerRowH > bodyH)
-        scroll = focusedTop + kFilePickerRowH - bodyH;
-    if (focusedTop < scroll)
-        scroll = focusedTop;
-    return std::clamp(scroll, 0.0f, maxScroll);
+    return centeredFocusedScroll(focusedTop, kFilePickerRowH, contentH, bodyH);
 }
 
 bool loadPngTextureFromFile(const std::string& path, std::uint32_t& texture, int& width, int& height)
@@ -461,8 +463,10 @@ bool NdsMenuLayer::consumeCheatSettingsDirty()
 
 void NdsMenuLayer::releaseFilePickerPreview()
 {
+    m_filePickerImagePreviewVisible = false;
     if (m_filePickerPreviewTexture != 0)
     {
+        Gfx::PresentQueue.waitIdle();
         Gfx::TextureDelete(m_filePickerPreviewTexture);
         m_filePickerPreviewTexture = 0;
     }
@@ -480,6 +484,7 @@ void NdsMenuLayer::reloadFilePickerEntries(const std::string& directory, const s
     m_filePickerFocus = 0;
     m_filePickerScrollY = 0.0f;
     m_filePickerScrollLastTick = 0;
+    m_filePickerImagePreviewVisible = false;
 
     std::error_code ec;
     if (!std::filesystem::exists(m_filePickerDirectory, ec))
@@ -556,9 +561,6 @@ void NdsMenuLayer::ensureFilePickerPreview()
         return;
     }
 
-    if (m_filePickerPreviewPath == entry.path && m_filePickerPreviewAttempted)
-        return;
-
     releaseFilePickerPreview();
     m_filePickerPreviewPath = entry.path;
     m_filePickerPreviewAttempted = true;
@@ -571,10 +573,12 @@ void NdsMenuLayer::ensureFilePickerPreview()
         appendStubLog("GBAStationNDSStub: file picker preview load ok size=%dx%d",
                       m_filePickerPreviewWidth,
                       m_filePickerPreviewHeight);
+        m_filePickerImagePreviewVisible = true;
     }
     else
     {
         appendStubLog("GBAStationNDSStub: file picker preview load failed path=%s", entry.path.c_str());
+        m_filePickerImagePreviewVisible = false;
     }
 }
 
@@ -731,7 +735,10 @@ float NdsMenuLayer::targetContentScrollY() const
         const int count = contentControlCount(Item::Cheats);
         const int row = std::clamp(m_contentFocus, 0, std::max(0, count - 1));
         const float contentH = static_cast<float>(count) * kCheatStepY;
-        return focusedScroll(static_cast<float>(row) * kCheatStepY, kCheatRowH, contentH);
+        return centeredFocusedScroll(static_cast<float>(row) * kCheatStepY,
+                                     kCheatRowH,
+                                     contentH,
+                                     contentBodyHeight());
     }
     default:
         return 0.0f;
@@ -1388,6 +1395,13 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
         if (m_filePickerClosing)
             return {};
 
+        if (m_filePickerImagePreviewVisible)
+        {
+            if (buttonsDown & (HidNpadButton_A | HidNpadButton_B))
+                releaseFilePickerPreview();
+            return {};
+        }
+
         const std::uint64_t navButtons = buttonsDown | updateHeldNavigation(buttonsDown, buttonsHeld);
         if (buttonsDown & HidNpadButton_B)
         {
@@ -1417,7 +1431,14 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
             }
         }
 
-        ensureFilePickerPreview();
+        if ((buttonsDown & HidNpadButton_X) &&
+            m_filePickerFocus >= 0 &&
+            m_filePickerFocus < static_cast<int>(m_filePickerEntries.size()))
+        {
+            const auto& entry = m_filePickerEntries[m_filePickerFocus];
+            if (!entry.isDirectory && endsWithNoCase(entry.path, ".png"))
+                ensureFilePickerPreview();
+        }
         return {};
     }
 
@@ -1716,6 +1737,8 @@ void NdsMenuLayer::draw() const
                            m_filePickerPreviewTexture,
                            m_filePickerPreviewWidth,
                            m_filePickerPreviewHeight,
+                           m_filePickerPreviewPath,
+                           m_filePickerImagePreviewVisible,
                            progress,
                            progress);
             if (transformed)

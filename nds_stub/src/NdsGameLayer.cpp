@@ -143,6 +143,7 @@ void NdsGameLayer::clearOverlayTexture()
 {
     if (m_overlayTexture != 0)
     {
+        Gfx::PresentQueue.waitIdle();
         Gfx::TextureDelete(m_overlayTexture);
         m_overlayTexture = 0;
     }
@@ -378,6 +379,37 @@ bool NdsGameLayer::mapPointToUnrotated(float x, float y, const ScreenDrawRect& i
     return true;
 }
 
+bool NdsGameLayer::mapNdsPointToScreen(float ndsX, float ndsY, const ScreenDrawRect& item, float& outX, float& outY) const
+{
+    const RectF& oriented = item.rect;
+    if (oriented.w <= 0.0f || oriented.h <= 0.0f)
+        return false;
+
+    const float u = std::clamp(ndsX / 255.0f, 0.0f, 1.0f);
+    const float v = std::clamp(ndsY / 191.0f, 0.0f, 1.0f);
+    if (m_orientation == 1)
+    {
+        outX = oriented.x + oriented.w * (1.0f - v);
+        outY = oriented.y + oriented.h * u;
+    }
+    else if (m_orientation == 3)
+    {
+        outX = oriented.x + oriented.w * v;
+        outY = oriented.y + oriented.h * (1.0f - u);
+    }
+    else if (m_orientation == 2)
+    {
+        outX = oriented.x + oriented.w * (1.0f - u);
+        outY = oriented.y + oriented.h * (1.0f - v);
+    }
+    else
+    {
+        outX = oriented.x + oriented.w * u;
+        outY = oriented.y + oriented.h * v;
+    }
+    return true;
+}
+
 RectF NdsGameLayer::firstRectForSource(bool sourceTop) const
 {
     for (const auto& item : computeScreenRects())
@@ -386,6 +418,16 @@ RectF NdsGameLayer::firstRectForSource(bool sourceTop) const
             return item.rect;
     }
     return {};
+}
+
+bool NdsGameLayer::ndsPointToScreen(bool sourceTop, float ndsX, float ndsY, float& outX, float& outY) const
+{
+    for (const auto& item : computeScreenRects())
+    {
+        if (item.sourceTop == sourceTop)
+            return mapNdsPointToScreen(ndsX, ndsY, item, outX, outY);
+    }
+    return false;
 }
 
 bool NdsGameLayer::readTouch(u16& outX, u16& outY) const

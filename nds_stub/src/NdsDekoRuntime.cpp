@@ -1801,10 +1801,10 @@ int RunDekoRuntime(const DekoRunOptions& options)
     gameLayer.setScreenGap(static_cast<float>(initialDisplay.screenGap));
     gameLayer.setCustomLayoutSettings(initialDisplay.customLayout);
     auto reloadOverlayTexture = [&](const NdsDisplaySettings& display) {
-        gameLayer.setOverlayEnabled(display.overlayEnabled);
-        gameLayer.clearOverlayTexture();
         if (!display.overlayEnabled || display.overlayPath.empty())
         {
+            gameLayer.setOverlayEnabled(false);
+            gameLayer.clearOverlayTexture();
             appendStubLog("GBAStationNDSStub: overlay disabled enabled=%d path=%s",
                           display.overlayEnabled ? 1 : 0,
                           display.overlayPath.c_str());
@@ -1822,6 +1822,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
         }
 
         gameLayer.setOverlayTexture(texture, width, height);
+        gameLayer.setOverlayEnabled(true);
         appendStubLog("GBAStationNDSStub: overlay load ok size=%dx%d", width, height);
         return true;
     };
@@ -2354,14 +2355,16 @@ int RunDekoRuntime(const DekoRunOptions& options)
 
         if (pointerMode && !menuLayer.active())
         {
-            const RectF pointerRect = screensSwapped ? gameLayer.topRect() : gameLayer.bottomRect();
-            const float px = pointerRect.x + (pointerX / 255.0f) * pointerRect.w;
-            const float py = pointerRect.y + (pointerY / 191.0f) * pointerRect.h;
-            const Gfx::Color cursorColor = pointerClickHeld
-                ? Gfx::Color{1.0f, 0.92f, 0.35f, 0.95f}
-                : Gfx::Color{0.35f, 0.78f, 1.0f, 0.92f};
-            Gfx::DrawRectangle({px - 10.0f, py - 1.5f}, {20.0f, 3.0f}, cursorColor);
-            Gfx::DrawRectangle({px - 1.5f, py - 10.0f}, {3.0f, 20.0f}, cursorColor);
+            float px = 0.0f;
+            float py = 0.0f;
+            if (gameLayer.ndsPointToScreen(false, pointerX, pointerY, px, py))
+            {
+                const Gfx::Color cursorColor = pointerClickHeld
+                    ? Gfx::Color{1.0f, 0.92f, 0.35f, 0.95f}
+                    : Gfx::Color{0.35f, 0.78f, 1.0f, 0.92f};
+                Gfx::DrawRectangle({px - 10.0f, py - 1.5f}, {20.0f, 3.0f}, cursorColor);
+                Gfx::DrawRectangle({px - 1.5f, py - 10.0f}, {3.0f, 20.0f}, cursorColor);
+            }
         }
 
         if (!menuLayer.active())

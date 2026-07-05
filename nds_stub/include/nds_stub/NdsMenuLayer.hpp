@@ -209,6 +209,7 @@ private:
     int m_filePickerPreviewHeight = 0;
     std::string m_filePickerPreviewPath;
     bool m_filePickerPreviewAttempted = false;
+    bool m_filePickerImagePreviewVisible = false;
     std::uint64_t m_selectorRepeatStartTick = 0;
     std::uint64_t m_selectorLastStepTick = 0;
     int m_selectorDirection = 0;
