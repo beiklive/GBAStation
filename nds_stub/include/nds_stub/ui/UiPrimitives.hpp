@@ -15,6 +15,7 @@ using Gfx::Vector2f;
 
 constexpr float kGradientFocusFlowCycleMs = 3600.0f;
 constexpr float kGradientFocusBrightness = 1.0f;
+constexpr float kGradientFocusCornerRadius = 0.0f;
 
 #define NDS_STUB_KEYICON_A "\uE0E0"
 #define NDS_STUB_KEYICON_B "\uE0E1"
@@ -49,8 +50,11 @@ void drawRect(Vector2f pos, Vector2f size, Color color, bool cool = false);
 void drawLine(Vector2f pos, Vector2f size, Color color);
 // 绘制矩形边框（用4条细线拼出上/下/左/右四条边）
 void drawBorder(Vector2f pos, Vector2f size, float width, Color color);
-// 绘制选中项的外发光渐变边框，风格近似 Borealis View::drawHighlight：
-// 外侧阴影 + 环形渐变流动边框，内部保持透明。
-void drawGradientBorder(Vector2f pos, Vector2f size, float width);
+// 绘制选中项的纹理渐变边框，风格近似 Borealis View::drawHighlight：
+// 使用 img/ui/border_gradient.png 作为流动 LUT，内部保持透明。
+void drawGradientBorder(Vector2f pos,
+                        Vector2f size,
+                        float width,
+                        float cornerRadius = kGradientFocusCornerRadius);
 
 } // namespace beiklive::nds_stub::ui

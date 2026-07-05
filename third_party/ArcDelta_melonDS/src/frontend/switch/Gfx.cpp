@@ -1093,6 +1093,15 @@ void DrawRectangle(u32 texIdx,
     Vector2f p0, Vector2f p1, Vector2f p2, Vector2f p3,
     Vector2f subPosition, Vector2f subSize)
 {
+    DrawRectangle(texIdx, p0, p1, p2, p3, subPosition, subSize, {1.0f, 1.0f, 1.0f, 1.0f});
+}
+
+void DrawRectangle(u32 texIdx,
+    Vector2f p0, Vector2f p1, Vector2f p2, Vector2f p3,
+    Vector2f subPosition, Vector2f subSize,
+    Color tint,
+    bool coolTransparency)
+{
     Texture& texture = Textures[texIdx];
 
     Vector2f rcpTexSize{1.f / texture.Width, 1.f / texture.Height};
@@ -1103,11 +1112,31 @@ void DrawRectangle(u32 texIdx,
     p2 = TransformPoint(p2);
     p3 = TransformPoint(p3);
 
+    u8 tintR8 = tint.R * 255;
+    u8 tintG8 = tint.G * 255;
+    u8 tintB8 = tint.B * 255;
+    u8 tintA8 = tint.A * 255;
+
+    float coolTransparencyMin = coolTransparency ? 0.6f : 1.f;
+    float coolTransparencyMax = coolTransparency ? 0.9f : 1.f;
+
     assert(CurClientVertex + 4 <= MaxVertices);
-    VertexDataClient[CurClientVertex + 0] = {p0.X, p0.Y, uvMin.X, uvMin.Y, 255, 255, 255, 255, 1.f, 1.f};
-    VertexDataClient[CurClientVertex + 1] = {p1.X, p1.Y, uvMax.X, uvMin.Y, 255, 255, 255, 255, 1.f, 1.f};
-    VertexDataClient[CurClientVertex + 2] = {p2.X, p2.Y, uvMin.X, uvMax.Y, 255, 255, 255, 255, 1.f, 1.f};
-    VertexDataClient[CurClientVertex + 3] = {p3.X, p3.Y, uvMax.X, uvMax.Y, 255, 255, 255, 255, 1.f, 1.f};
+    VertexDataClient[CurClientVertex + 0] = {p0.X, p0.Y,
+        uvMin.X, uvMin.Y,
+        tintR8, tintG8, tintB8, tintA8,
+        coolTransparencyMin, coolTransparencyMax};
+    VertexDataClient[CurClientVertex + 1] = {p1.X, p1.Y,
+        uvMax.X, uvMin.Y,
+        tintR8, tintG8, tintB8, tintA8,
+        coolTransparencyMin, coolTransparencyMax};
+    VertexDataClient[CurClientVertex + 2] = {p2.X, p2.Y,
+        uvMin.X, uvMax.Y,
+        tintR8, tintG8, tintB8, tintA8,
+        coolTransparencyMin, coolTransparencyMax};
+    VertexDataClient[CurClientVertex + 3] = {p3.X, p3.Y,
+        uvMax.X, uvMax.Y,
+        tintR8, tintG8, tintB8, tintA8,
+        coolTransparencyMin, coolTransparencyMax};
 
     assert(CurClientIndex + 6 <= MaxIndices);
     IndexDataClient[CurClientIndex + 0] = CurClientVertex;
