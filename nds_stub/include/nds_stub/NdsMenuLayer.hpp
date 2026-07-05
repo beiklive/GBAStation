@@ -3,6 +3,7 @@
 #include <array>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "nds_stub/NdsStubTypes.hpp"
 
@@ -16,6 +17,7 @@ enum class NdsMenuAction {
     DisplaySettingsChanged,
     CustomLayoutChanged,
     CustomLayoutCommitted,
+    CheatSettingsChanged,
     ResetGame,
     ExitGame,
 };
@@ -48,6 +50,21 @@ struct NdsDisplaySettings {
     NdsCustomLayoutSettings customLayout {};
 };
 
+struct NdsCheatItem {
+    enum class Type {
+        Category,
+        Code,
+    };
+
+    Type type = Type::Code;
+    std::string name;
+    int parent = -1;
+    int depth = 0;
+    bool expanded = false;
+    bool enabled = false;
+    std::vector<std::uint32_t> words;
+};
+
 class NdsMenuLayer {
 public:
     enum class Item {
@@ -64,6 +81,9 @@ public:
     NdsMenuResult update(std::uint64_t buttonsDown, std::uint64_t buttonsHeld);
     void draw() const;
     void setStateSlots(const std::array<NdsStateSlotInfo, 10>& slots);
+    void setCheatItems(const std::vector<NdsCheatItem>& cheats);
+    const std::vector<NdsCheatItem>& cheatItems() const { return m_cheats; }
+    bool consumeCheatSettingsDirty();
 
     void open();
     void close();
@@ -90,6 +110,7 @@ private:
     bool cycleCustomLayoutSetting(int direction);
     bool resetCustomLayoutSetting();
     bool activateDisplayControl();
+    bool activateCheatControl();
     void beginCustomLayoutEditor();
     void beginSelectionAnimation(int oldSelected, int newSelected);
     void beginPanelAnimation(bool opening);
@@ -97,9 +118,14 @@ private:
     float customLayoutEditorProgress() const;
     bool itemHasContent(Item item) const;
     int contentControlCount(Item item) const;
+    const std::vector<int>& visibleCheatIndices() const;
+    int visibleCheatIndex(int visibleRow) const;
+    void invalidateVisibleCheatCache();
+    void rebuildVisibleCheatCache() const;
     int nextFocusableDisplayRow(int from, int direction) const;
     bool updateHeldSelector(std::uint64_t buttonsHeld);
     bool updateHeldCustomSelector(std::uint64_t buttonsHeld);
+    std::uint64_t updateHeldNavigation(std::uint64_t buttonsDown, std::uint64_t buttonsHeld);
     void openDeleteDialog();
     void closeDeleteDialog();
     float targetContentScrollY() const;
@@ -112,6 +138,10 @@ private:
     int m_contentFocus = 0;
     NdsDisplaySettings m_display {};
     std::array<NdsStateSlotInfo, 10> m_slots {};
+    std::vector<NdsCheatItem> m_cheats {};
+    mutable std::vector<int> m_visibleCheatCache {};
+    mutable bool m_visibleCheatCacheDirty = true;
+    bool m_cheatSettingsDirty = false;
     int m_previousSelected = 0;
     std::uint64_t m_selectionAnimStartTick = 0;
     bool m_selectionAnimating = false;
@@ -128,6 +158,9 @@ private:
     std::uint64_t m_selectorRepeatStartTick = 0;
     std::uint64_t m_selectorLastStepTick = 0;
     int m_selectorDirection = 0;
+    std::uint64_t m_navRepeatStartTick = 0;
+    std::uint64_t m_navLastStepTick = 0;
+    int m_navDirection = 0;
     mutable float m_contentScrollY = 0.0f;
     mutable std::uint64_t m_contentScrollLastTick = 0;
 };

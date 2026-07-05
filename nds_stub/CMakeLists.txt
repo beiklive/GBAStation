@@ -121,6 +121,7 @@ add_custom_target(GBAStationNDSStubDekoShaders DEPENDS ${NDS_STUB_DEKO_SHADERS})
 add_executable(GBAStationNDSStub
     ${NDS_STUB_DIR}/src/NdsDekoStubMain.cpp
     ${NDS_STUB_DIR}/src/NdsDekoRuntime.cpp
+    ${NDS_STUB_DIR}/src/NdsCheatDatabase.cpp
     ${NDS_STUB_DIR}/src/NdsGameLayer.cpp
     ${NDS_STUB_DIR}/src/NdsMenuLayer.cpp
     ${NDS_STUB_DIR}/src/ui/UiPrimitives.cpp

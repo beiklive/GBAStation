@@ -1,5 +1,6 @@
 #include "nds_stub/NdsDekoRuntime.hpp"
 
+#include "nds_stub/NdsCheatDatabase.hpp"
 #include "nds_stub/NdsGameLayer.hpp"
 #include "nds_stub/NdsMenuLayer.hpp"
 #include "nds_stub/ui/UiComponents.hpp"
@@ -20,6 +21,7 @@
 #include <filesystem>
 #include <fstream>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <sstream>
 #include <string>
@@ -34,6 +36,8 @@
 #endif
 
 #include "../../third_party/ArcDelta_melonDS/src/Config.h"
+#include "../../third_party/ArcDelta_melonDS/src/ARCodeFile.h"
+#include "../../third_party/ArcDelta_melonDS/src/AREngine.h"
 #include "../../third_party/ArcDelta_melonDS/src/GPU.h"
 #include "../../third_party/ArcDelta_melonDS/src/GPU2D_Deko.h"
 #include "../../third_party/ArcDelta_melonDS/src/NDS.h"
@@ -261,6 +265,53 @@ bool saveNdsSettingsToGameDb(const std::string& romPath,
     beiklive::nds_stub::appendStubLog("GBAStationNDSStub: NDS settings GameDB save skipped no match rom=%s",
                                       romPath.c_str());
     return false;
+}
+
+std::unique_ptr<ARCodeFile> buildRuntimeCheatFile(const std::vector<beiklive::nds_stub::NdsCheatItem>& items,
+                                                  int& enabledCount,
+                                                  int& truncatedCount)
+{
+    enabledCount = 0;
+    truncatedCount = 0;
+
+    auto file = std::make_unique<ARCodeFile>("");
+    file->Categories.clear();
+
+    ARCodeCat cat {};
+    std::strncpy(cat.Name, "GBAStation", sizeof(cat.Name) - 1);
+    cat.Name[sizeof(cat.Name) - 1] = '\0';
+
+    for (const auto& item : items)
+    {
+        if (item.type != beiklive::nds_stub::NdsCheatItem::Type::Code ||
+            !item.enabled ||
+            item.words.size() < 2)
+            continue;
+
+        ARCode code {};
+        std::strncpy(code.Name,
+                     item.name.empty() ? "NDS AR Code" : item.name.c_str(),
+                     sizeof(code.Name) - 1);
+        code.Name[sizeof(code.Name) - 1] = '\0';
+        code.Enabled = true;
+
+        std::size_t wordCount = item.words.size() & ~std::size_t(1);
+        if (wordCount > 128)
+        {
+            wordCount = 128;
+            ++truncatedCount;
+        }
+        code.CodeLen = static_cast<u32>(wordCount);
+        for (std::size_t i = 0; i < wordCount; ++i)
+            code.Code[i] = item.words[i];
+
+        cat.Codes.push_back(code);
+        ++enabledCount;
+    }
+
+    if (enabledCount > 0)
+        file->Categories.push_back(cat);
+    return file;
 }
 
 std::string formatFileTime(const std::string& path)
@@ -1551,6 +1602,22 @@ int RunDekoRuntime(const DekoRunOptions& options)
                   initialDisplay.customLayout.bottomOffsetY);
     auto stateSlots = loadStateSlots(stateDir, options.romPath);
     menuLayer.setStateSlots(stateSlots);
+    NdsCheatLoadResult cheatLoad = LoadUsrCheatDatForRom(options.romPath);
+    menuLayer.setCheatItems(cheatLoad.items);
+    std::unique_ptr<ARCodeFile> runtimeCheatFile;
+    bool cheatApplyPending = false;
+    auto applyMenuCheats = [&]() {
+        int enabledCount = 0;
+        int truncatedCount = 0;
+        auto nextCheatFile = buildRuntimeCheatFile(menuLayer.cheatItems(), enabledCount, truncatedCount);
+        runtimeCheatFile = std::move(nextCheatFile);
+        AREngine::SetCodeFile(enabledCount > 0 ? runtimeCheatFile.get() : nullptr);
+        appendStubLog("GBAStationNDSStub: cheats apply enabled=%d truncated=%d source=%s",
+                      enabledCount,
+                      truncatedCount,
+                      cheatLoad.sourcePath.c_str());
+    };
+    applyMenuCheats();
     bool stateSlotTexturesDirty = true;
     bool stateSlotTextureLoadStarted = false;
     double fps = 0.0;
@@ -1747,6 +1814,11 @@ int RunDekoRuntime(const DekoRunOptions& options)
         {
             doDeleteState(menuResult.slot);
         }
+        else if (menuAction == NdsMenuAction::CheatSettingsChanged)
+        {
+            cheatApplyPending = true;
+            appendStubLog("GBAStationNDSStub: cheats changed pending apply");
+        }
         else if (menuAction == NdsMenuAction::DisplaySettingsChanged)
         {
             gameLayer.setLinearFiltering(menuLayer.linearFiltering());
@@ -1819,6 +1891,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
                 continue;
             }
 
+            applyMenuCheats();
             fps = 0.0;
             fpsFrames = 0;
             lastRunMs = 0;
@@ -1829,6 +1902,12 @@ int RunDekoRuntime(const DekoRunOptions& options)
         {
             pendingReturn = true;
             running = false;
+        }
+
+        if (cheatApplyPending && !menuLayer.active())
+        {
+            applyMenuCheats();
+            cheatApplyPending = false;
         }
 
         if (stateSlotTexturesDirty && menuLayer.visible() && totalFrames > 2)
@@ -2077,6 +2156,8 @@ int RunDekoRuntime(const DekoRunOptions& options)
     audio.setFastForwardActive(false);
     audio.setMuted(false);
     audio.stop();
+    AREngine::SetCodeFile(nullptr);
+    runtimeCheatFile.reset();
     NDSCart::FlushSRAMFile();
     releaseStateSlotTextures(stateSlots);
     gameLayer.deinit();

@@ -16,10 +16,13 @@ namespace {
 constexpr float kPanelAnimationMs = 220.0f;
 constexpr float kSidebarAnimationMs = 180.0f;
 constexpr float kSelectorInitialDelayMs = 320.0f;
+constexpr float kNavInitialDelayMs = 280.0f;
 constexpr float kSaveCardH = 94.0f;
 constexpr float kSaveCardGapY = 14.0f;
 constexpr float kSettingRowH = 42.0f;
 constexpr float kSettingStepY = 48.0f;
+constexpr float kCheatRowH = 42.0f;
+constexpr float kCheatStepY = 48.0f;
 
 constexpr float kFastForwardValues[] = {
     0.1f, 0.5f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 3.0f, 4.0f, 5.0f,
@@ -56,6 +59,31 @@ bool isDirectionLeft(std::uint64_t buttons)
 bool isDirectionRight(std::uint64_t buttons)
 {
     return (buttons & HidNpadButton_AnyRight) != 0;
+}
+
+int navDirectionFromButtons(std::uint64_t buttons)
+{
+    if (isDirectionUp(buttons))
+        return 1;
+    if (isDirectionDown(buttons))
+        return 2;
+    if (isDirectionLeft(buttons))
+        return 3;
+    if (isDirectionRight(buttons))
+        return 4;
+    return 0;
+}
+
+std::uint64_t buttonsFromNavDirection(int direction)
+{
+    switch (direction)
+    {
+    case 1: return HidNpadButton_AnyUp;
+    case 2: return HidNpadButton_AnyDown;
+    case 3: return HidNpadButton_AnyLeft;
+    case 4: return HidNpadButton_AnyRight;
+    default: return 0;
+    }
 }
 
 float focusedScroll(float focusedTop, float focusedH, float contentH)
@@ -135,6 +163,27 @@ bool pushMenuOrientationTransform(int orientation)
 void NdsMenuLayer::setStateSlots(const std::array<NdsStateSlotInfo, 10>& slots)
 {
     m_slots = slots;
+}
+
+void NdsMenuLayer::setCheatItems(const std::vector<NdsCheatItem>& cheats)
+{
+    m_cheats = cheats;
+    for (auto& cheat : m_cheats)
+    {
+        if (cheat.type == NdsCheatItem::Type::Category)
+            cheat.expanded = false;
+    }
+    invalidateVisibleCheatCache();
+    if (static_cast<Item>(m_selected) == Item::Cheats)
+        m_contentFocus = std::clamp(m_contentFocus, 0, std::max(0, contentControlCount(Item::Cheats) - 1));
+    resetContentScroll();
+}
+
+bool NdsMenuLayer::consumeCheatSettingsDirty()
+{
+    const bool dirty = m_cheatSettingsDirty;
+    m_cheatSettingsDirty = false;
+    return dirty;
 }
 
 void NdsMenuLayer::beginSelectionAnimation(int oldSelected, int newSelected)
@@ -254,6 +303,13 @@ float NdsMenuLayer::targetContentScrollY() const
         const float contentH = displayRowY(11) + kSettingRowH;
         return focusedScroll(displayRowY(row), kSettingRowH, contentH);
     }
+    case Item::Cheats:
+    {
+        const int count = contentControlCount(Item::Cheats);
+        const int row = std::clamp(m_contentFocus, 0, std::max(0, count - 1));
+        const float contentH = static_cast<float>(count) * kCheatStepY;
+        return focusedScroll(static_cast<float>(row) * kCheatStepY, kCheatRowH, contentH);
+    }
     default:
         return 0.0f;
     }
@@ -321,10 +377,62 @@ int NdsMenuLayer::contentControlCount(Item item) const
     case Item::Display:
         return 12;
     case Item::Cheats:
-        return 1;
+        return static_cast<int>(visibleCheatIndices().size());
     default:
         return 0;
     }
+}
+
+void NdsMenuLayer::invalidateVisibleCheatCache()
+{
+    m_visibleCheatCacheDirty = true;
+}
+
+void NdsMenuLayer::rebuildVisibleCheatCache() const
+{
+    if (!m_visibleCheatCacheDirty)
+        return;
+
+    m_visibleCheatCache.clear();
+    m_visibleCheatCache.reserve(m_cheats.size());
+    for (int i = 0; i < static_cast<int>(m_cheats.size()); ++i)
+    {
+        int parent = m_cheats[i].parent;
+        bool visible = true;
+        int guard = 0;
+        while (parent >= 0 && parent < static_cast<int>(m_cheats.size()))
+        {
+            if (parent == i || ++guard > static_cast<int>(m_cheats.size()))
+            {
+                visible = false;
+                break;
+            }
+            if (!m_cheats[parent].expanded)
+            {
+                visible = false;
+                break;
+            }
+            parent = m_cheats[parent].parent;
+        }
+        if (visible)
+            m_visibleCheatCache.push_back(i);
+    }
+    m_visibleCheatCacheDirty = false;
+}
+
+const std::vector<int>& NdsMenuLayer::visibleCheatIndices() const
+{
+    rebuildVisibleCheatCache();
+    return m_visibleCheatCache;
+}
+
+int NdsMenuLayer::visibleCheatIndex(int visibleRow) const
+{
+    const auto& visible = visibleCheatIndices();
+    if (visible.empty())
+        return -1;
+    visibleRow = std::clamp(visibleRow, 0, static_cast<int>(visible.size()) - 1);
+    return visible[visibleRow];
 }
 
 int NdsMenuLayer::nextFocusableDisplayRow(int from, int direction) const
@@ -364,6 +472,28 @@ bool NdsMenuLayer::activateDisplayControl()
     default:
         return false;
     }
+}
+
+bool NdsMenuLayer::activateCheatControl()
+{
+    const int index = visibleCheatIndex(m_contentFocus);
+    if (index < 0 || index >= static_cast<int>(m_cheats.size()))
+        return false;
+
+    auto& item = m_cheats[index];
+    if (item.type == NdsCheatItem::Type::Category)
+    {
+        item.expanded = !item.expanded;
+        invalidateVisibleCheatCache();
+        const int count = contentControlCount(Item::Cheats);
+        m_contentFocus = std::clamp(m_contentFocus, 0, std::max(0, count - 1));
+        resetContentScroll();
+        return false;
+    }
+
+    item.enabled = !item.enabled;
+    m_cheatSettingsDirty = true;
+    return true;
 }
 
 void NdsMenuLayer::beginCustomLayoutEditor()
@@ -567,6 +697,38 @@ bool NdsMenuLayer::updateHeldCustomSelector(std::uint64_t buttonsHeld)
     return cycleCustomLayoutSetting(direction);
 }
 
+std::uint64_t NdsMenuLayer::updateHeldNavigation(std::uint64_t buttonsDown, std::uint64_t buttonsHeld)
+{
+    const int heldDirection = navDirectionFromButtons(buttonsHeld);
+    if (heldDirection == 0)
+    {
+        m_navDirection = 0;
+        return 0;
+    }
+
+    const std::uint64_t now = armGetSystemTick();
+    const int downDirection = navDirectionFromButtons(buttonsDown);
+    if (downDirection != 0 || m_navDirection != heldDirection)
+    {
+        m_navDirection = heldDirection;
+        m_navRepeatStartTick = now;
+        m_navLastStepTick = now;
+        return 0;
+    }
+
+    const float heldMs = static_cast<float>(armTicksToNs(now - m_navRepeatStartTick)) / 1000000.0f;
+    if (heldMs < kNavInitialDelayMs)
+        return 0;
+
+    const float intervalMs = std::max(48.0f, 128.0f - (heldMs - kNavInitialDelayMs) * 0.12f);
+    const float sinceLastMs = static_cast<float>(armTicksToNs(now - m_navLastStepTick)) / 1000000.0f;
+    if (sinceLastMs < intervalMs)
+        return 0;
+
+    m_navLastStepTick = now;
+    return buttonsFromNavDirection(heldDirection);
+}
+
 void NdsMenuLayer::openDeleteDialog()
 {
     if (m_focusScope != FocusScope::Content)
@@ -612,6 +774,8 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
         if (m_customLayoutEditorClosing)
             return {};
 
+        const std::uint64_t navButtons = buttonsDown | updateHeldNavigation(buttonsDown, buttonsHeld);
+
         if (buttonsDown & HidNpadButton_B)
         {
             m_customLayoutEditorClosing = true;
@@ -620,9 +784,9 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
             m_selectorDirection = 0;
             return {NdsMenuAction::CustomLayoutCommitted, -1};
         }
-        if (isDirectionUp(buttonsDown))
+        if (isDirectionUp(navButtons))
             m_customLayoutFocus = (m_customLayoutFocus + kCustomLayoutControlCount - 1) % kCustomLayoutControlCount;
-        if (isDirectionDown(buttonsDown))
+        if (isDirectionDown(navButtons))
             m_customLayoutFocus = (m_customLayoutFocus + 1) % kCustomLayoutControlCount;
 
         if (buttonsDown & HidNpadButton_L)
@@ -676,12 +840,13 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
     }
 
     const int itemCount = itemIndex(Item::Count);
-    if (m_focusScope == FocusScope::Tabs && isDirectionUp(buttonsDown))
+    const std::uint64_t navButtons = buttonsDown | updateHeldNavigation(buttonsDown, buttonsHeld);
+    if (m_focusScope == FocusScope::Tabs && isDirectionUp(navButtons))
     {
         beginSelectionAnimation(m_selected, (m_selected + itemCount - 1) % itemCount);
         return {};
     }
-    if (m_focusScope == FocusScope::Tabs && isDirectionDown(buttonsDown))
+    if (m_focusScope == FocusScope::Tabs && isDirectionDown(navButtons))
     {
         beginSelectionAnimation(m_selected, (m_selected + 1) % itemCount);
         return {};
@@ -694,13 +859,13 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
         {
             const int columns = (m_display.orientation == 1 || m_display.orientation == 3) ? 1 : 2;
             const int col = m_contentFocus % columns;
-            if (columns > 1 && isDirectionLeft(buttonsDown) && col > 0)
+            if (columns > 1 && isDirectionLeft(navButtons) && col > 0)
                 --m_contentFocus;
-            else if (columns > 1 && isDirectionRight(buttonsDown) && col < columns - 1 && m_contentFocus + 1 < contentControlCount(currentItem))
+            else if (columns > 1 && isDirectionRight(navButtons) && col < columns - 1 && m_contentFocus + 1 < contentControlCount(currentItem))
                 ++m_contentFocus;
-            else if (isDirectionUp(buttonsDown) && m_contentFocus >= columns)
+            else if (isDirectionUp(navButtons) && m_contentFocus >= columns)
                 m_contentFocus -= columns;
-            else if (isDirectionDown(buttonsDown) && m_contentFocus + columns < contentControlCount(currentItem))
+            else if (isDirectionDown(navButtons) && m_contentFocus + columns < contentControlCount(currentItem))
                 m_contentFocus += columns;
 
             if (buttonsDown & HidNpadButton_A)
@@ -715,9 +880,9 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
 
         if (currentItem == Item::Display)
         {
-            if (isDirectionUp(buttonsDown))
+            if (isDirectionUp(navButtons))
                 m_contentFocus = nextFocusableDisplayRow(m_contentFocus, -1);
-            if (isDirectionDown(buttonsDown))
+            if (isDirectionDown(navButtons))
                 m_contentFocus = nextFocusableDisplayRow(m_contentFocus, 1);
 
             if (buttonsDown & HidNpadButton_L)
@@ -735,6 +900,36 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
 
             if ((buttonsDown & HidNpadButton_A) && activateDisplayControl())
                 return {NdsMenuAction::DisplaySettingsChanged, -1};
+            return {};
+        }
+
+        if (currentItem == Item::Cheats)
+        {
+            const int count = contentControlCount(Item::Cheats);
+            if (count <= 0)
+                return {};
+
+            if (isDirectionUp(navButtons))
+                m_contentFocus = std::max(0, m_contentFocus - 1);
+            if (isDirectionDown(navButtons))
+                m_contentFocus = std::min(count - 1, m_contentFocus + 1);
+
+            if (buttonsDown & HidNpadButton_A)
+                return activateCheatControl() ? NdsMenuResult{NdsMenuAction::CheatSettingsChanged, -1}
+                                              : NdsMenuResult{};
+            if (isDirectionLeft(buttonsDown) || isDirectionRight(buttonsDown))
+            {
+                const int index = visibleCheatIndex(m_contentFocus);
+                if (index >= 0 && index < static_cast<int>(m_cheats.size()) &&
+                    m_cheats[index].type == NdsCheatItem::Type::Category)
+                {
+                    m_cheats[index].expanded = isDirectionRight(buttonsDown);
+                    invalidateVisibleCheatCache();
+                    const int nextCount = contentControlCount(Item::Cheats);
+                    m_contentFocus = std::clamp(m_contentFocus, 0, std::max(0, nextCount - 1));
+                    resetContentScroll();
+                }
+            }
             return {};
         }
 
@@ -825,6 +1020,8 @@ void NdsMenuLayer::draw() const
                  pageProgress,
                  m_display,
                  m_slots,
+                 m_cheats,
+                 visibleCheatIndices(),
                  m_contentFocus,
                  contentFocused,
                  smoothedContentScrollY(),

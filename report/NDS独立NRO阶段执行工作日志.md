@@ -1754,6 +1754,52 @@ GBAStationNDSStub.nro 2.32 MB
 
 ---
 
+## 阶段 4.22：NDS Stub usrcheat.dat 金手指菜单与运行时应用
+
+### 目标
+
+- 在 Stub 的暂停菜单中实现 `金手指设置` 子页面；
+- 从 `GBAStation/cheats/usrcheat.dat` 解析当前 NDS 游戏对应的金手指；
+- 保留 usrcheat.dat 的目录层级，目录行支持展开/收起；
+- 金手指条目使用开关选择器；
+- 菜单关闭后把当前打开的金手指写入 melonDS AR 引擎并生效。
+
+### 已实施
+
+- 新增 Stub 独立解析器：
+  - `nds_stub/include/nds_stub/NdsCheatDatabase.hpp`
+  - `nds_stub/src/NdsCheatDatabase.cpp`
+- 解析逻辑：
+  - 查找 `sdmc:/GBAStation/cheats/usrcheat.dat`，兼容 `/GBAStation/cheats/usrcheat.dat`；
+  - 读取 ROM 前 `512` 字节 header；
+  - 使用 header `GameCode` 和 `~CRC32(header)` 匹配 usrcheat.dat 游戏条目；
+  - 解析 R4 usrcheat.dat 的 category / code 层级；
+  - 生成 Stub 菜单可用的 `NdsCheatItem` 列表。
+- 菜单层新增：
+  - 目录行：左侧名称，右侧 `展开 / 收起`；
+  - 金手指行：左侧名称，右侧 `开 / 关`；
+  - 折叠目录后子项不参与焦点和滚动；
+  - `A` 键展开/收起目录或切换金手指；
+  - 左右键可直接展开/收起目录。
+- 运行时应用：
+  - 新增 `CheatSettingsChanged` 菜单动作；
+  - 菜单关闭动画结束后统一提交当前启用项；
+  - 生成运行时 `ARCodeFile`，传给 `AREngine::SetCodeFile()`；
+  - 单条 AR code 超过 ArcDelta 上限 `128 words` 时截断并记录日志；
+  - 重置游戏后会重新应用当前启用金手指；
+  - 退出时清空 `AREngine` 的 code file 指针。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.35 MB
+```
+
+---
+
 ## 阶段 4.21：NDS 显示配置完全迁移到 GameDB 默认值
 
 ### 目标
@@ -3158,6 +3204,149 @@ GBAStationNDSStub.nro 2.29 MB
 ```text
 GBAStation.nro        24.92 MB
 GBAStationNDSStub.nro 2.29 MB
+```
+
+---
+
+## 阶段 4.23：修复 usrcheat 解析失败后闪退
+
+### 现象
+
+- 加载宝可梦黑 2 后，日志停在：
+
+```text
+usrcheat load ... matched=0 items=1072 ...
+```
+
+- 随后程序闪退。
+
+### 原因
+
+- `usrcheat.dat` 当前匹配到同 GameCode 条目，但具体金手指段解析失败；
+- 解析函数返回失败时仍保留了半解析出来的 `items`，导致菜单和运行时继续使用不完整数据；
+- 运行时构造 melonDS `ARCodeCat` 时对包含 `std::list` 的结构体执行了 `memset`，破坏 C++ 容器内部状态，存在直接崩溃风险。
+
+### 已实施
+
+- `NdsCheatDatabase` 在解析失败时：
+  - 清空半解析 `items`；
+  - 记录 `usrcheat parse failed` 日志，包含 offset、partialItems 和 gameName；
+  - 金手指菜单会显示为空，不再接触半成品数据。
+- 按 melonDS `ARDatabaseDAT.cpp` 的 usrcheat.dat 格式修正解析器：
+  - 顶层 `itemCount` 作为线性条目数读取；
+  - 目录条目只声明后续多少条金手指属于该目录，不再递归重复消费；
+  - 普通金手指按 `item flags` 的总长度校验读取；
+  - ROM header checksum 不精确匹配时，会尝试同 GameCode 的其他候选条目，兼容汉化 ROM 常见的 checksum 不一致。
+- 进一步核对 R4 / Action Replay DAT 格式后修正：
+  - Header 改为只强校验前 12 字节 `"R4 CheatCode"`，版本号写入日志，避免不同 R4 内核版本被误判为无效；
+  - Cheat Tree 改用目录栈维护父子关系，支持线性前序数据中的嵌套目录；
+  - 保留 `item flags` 长度校验，防止错误格式导致读偏移失控。
+- `NdsDekoRuntime` 构造 `ARCodeCat` / `ARCode` 时：
+  - 移除对 `ARCodeCat` 的 `memset`；
+  - 保留 `std::list` 的正常构造状态；
+  - 字符数组显式写入末尾 `\0`。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.35 MB
+```
+
+---
+
+## 阶段 4.24：修复切到金手指设置时 UI 单核 100%
+
+### 现象
+
+- 打开菜单后，从 `读取状态` 移动到 `金手指设置` 时卡住；
+- 真机观察核心 1 CPU 占用达到 100%。
+
+### 原因
+
+- 金手指条目数量较多时，菜单层每帧多次调用 `visibleCheatIndices()`；
+- 该函数每次都会重新分配并沿父节点链遍历所有金手指条目；
+- 绘制层虽然只绘制屏幕内行，但仍从第 0 行循环到所有可见行；
+- 如果 DAT 数据异常导致 parent 链成环，旧逻辑存在 while 卡住风险。
+
+### 已实施
+
+- `NdsMenuLayer` 新增可见金手指索引缓存：
+  - `setCheatItems()` 后失效；
+  - 展开/收起目录后失效；
+  - 普通帧直接复用缓存。
+- 可见索引构建加入 parent 链 guard：
+  - 防止 parent 指向自身或形成环导致死循环。
+- `drawCheatPage()` 改为根据 `scrollY` 计算首末行：
+  - 只遍历当前可见区域附近的金手指行；
+  - 避免每帧扫完整个 usrcheat 列表。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.35 MB
+```
+
+---
+
+## 阶段 4.25：金手指列表默认收起与竖屏卡顿收敛
+
+### 目标
+
+- 90 度 / 270 度菜单方向下，进入 `金手指设置` 不再因窄内容区文本处理卡住；
+- 金手指目录默认全部收起。
+
+### 已实施
+
+- `NdsCheatItem::expanded` 默认改为 `false`。
+- `NdsCheatDatabase` 解析目录节点时默认收起。
+- `NdsMenuLayer::setCheatItems()` 加载金手指后强制目录全部收起，避免历史状态或解析默认值展开整棵树。
+- `drawCheatRow()` 的名称截断改为二分截断：
+  - 移除按字节逐个 `pop_back + MeasureText` 的循环；
+  - 加入 UTF-8 边界保护；
+  - 降低 90/270 窄宽度下长名称造成的 CPU 压力。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.35 MB
+```
+
+---
+
+## 阶段 4.26：菜单长文本跑马灯与方向键连续移动
+
+### 目标
+
+- 被截断的长文本在聚焦时滚动显示完整内容；
+- 菜单焦点支持方向键按住连续移动。
+
+### 已实施
+
+- 金手指列表行新增聚焦跑马灯：
+  - 非聚焦状态继续显示省略号，降低绘制成本；
+  - 聚焦且文本宽度超过可用区域时，使用行内 scissor 裁剪并横向滚动完整文本；
+  - 保留 UTF-8 边界安全截断，避免中文字符串被切坏。
+- `NdsMenuLayer` 新增独立导航 repeat 状态：
+  - 与 LR 数值选择器 repeat 分离；
+  - 支持左侧 tab、存档槽位、画面设置、金手指列表、自定义布局侧栏的方向键长按连续移动；
+  - 初始延迟后逐步加快移动节奏。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.35 MB
 ```
 
 ---

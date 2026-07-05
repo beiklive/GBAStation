@@ -1,5 +1,11 @@
 #include "nds_stub/ui/UiComponents.hpp"
 
+#include <algorithm>
+#include <cmath>
+#include <string>
+
+#include <switch.h>
+
 namespace beiklive::nds_stub::ui {
 
 namespace {
@@ -135,6 +141,35 @@ void pushContentBodyScissor(float offsetY)
                      static_cast<u32>(y),
                      static_cast<u32>(std::max(minH, w)),
                      static_cast<u32>(std::max(minH, h)));
+}
+
+void pushRectScissor(Vector2f pos, Vector2f size)
+{
+    constexpr float minSize = 1.0f;
+    float x = pos.X;
+    float y = pos.Y;
+    float w = size.X;
+    float h = size.Y;
+
+    if (x < 0.0f)
+    {
+        w += x;
+        x = 0.0f;
+    }
+    if (y < 0.0f)
+    {
+        h += y;
+        y = 0.0f;
+    }
+    if (x + w > kScreenW)
+        w = kScreenW - x;
+    if (y + h > kScreenH)
+        h = kScreenH - y;
+
+    Gfx::PushScissor(static_cast<u32>(std::max(0.0f, x)),
+                     static_cast<u32>(std::max(0.0f, y)),
+                     static_cast<u32>(std::max(minSize, w)),
+                     static_cast<u32>(std::max(minSize, h)));
 }
 
 void drawBadge(Vector2f pos, Vector2f minSize, const char* text, Color bgColor, Color textColor)
@@ -289,6 +324,158 @@ void drawSwitchRow(Vector2f pos, const char* label, bool value, bool focused, fl
                   value ? Color{0.34f, 0.78f, 1.0f, 0.96f * opacity}
                         : Color{0.60f, 0.64f, 0.68f, 0.80f * opacity},
                   Gfx::align_Right, Gfx::align_Left, value ? "开" : "关");
+}
+
+std::size_t utf8SafePrefix(const std::string& text, std::size_t bytes)
+{
+    bytes = std::min(bytes, text.size());
+    while (bytes > 0 && bytes < text.size() &&
+           (static_cast<unsigned char>(text[bytes]) & 0xC0u) == 0x80u)
+        --bytes;
+    return bytes;
+}
+
+std::string ellipsizeCheatLabel(const std::string& source, float maxTextW)
+{
+    if (source.empty() || maxTextW <= 18.0f)
+        return source.empty() ? source : "...";
+    if (Gfx::MeasureText(Gfx::SystemFontChinese, 16.0f, source.c_str()).X <= maxTextW)
+        return source;
+
+    const std::string suffix = "...";
+    std::size_t lo = 0;
+    std::size_t hi = source.size();
+    std::size_t best = 0;
+    for (int i = 0; i < 10 && lo <= hi; ++i)
+    {
+        const std::size_t mid = lo + (hi - lo) / 2;
+        const std::size_t cut = utf8SafePrefix(source, mid);
+        std::string candidate = source.substr(0, cut) + suffix;
+        if (Gfx::MeasureText(Gfx::SystemFontChinese, 16.0f, candidate.c_str()).X <= maxTextW)
+        {
+            best = cut;
+            lo = mid + 1;
+        }
+        else
+        {
+            if (mid == 0)
+                break;
+            hi = mid - 1;
+        }
+    }
+
+    if (best == 0)
+        return suffix;
+    return source.substr(0, best) + suffix;
+}
+
+float focusedMarqueeOffset(float textW, float boxW)
+{
+    const float overflow = std::max(0.0f, textW - boxW);
+    if (overflow < 1.0f)
+        return 0.0f;
+
+    constexpr float holdMs = 620.0f;
+    constexpr float speedPxPerMs = 0.038f;
+    const float travel = overflow + 28.0f;
+    const float travelMs = travel / speedPxPerMs;
+    const float cycleMs = holdMs * 2.0f + travelMs * 2.0f;
+    const float nowMs = static_cast<float>(armTicksToNs(armGetSystemTick()) / 1000000ULL);
+    float t = std::fmod(nowMs, cycleMs);
+    if (t < holdMs)
+        return 0.0f;
+    t -= holdMs;
+    if (t < travelMs)
+        return std::min(overflow, t * speedPxPerMs);
+    t -= travelMs;
+    if (t < holdMs)
+        return overflow;
+    t -= holdMs;
+    return std::max(0.0f, overflow - t * speedPxPerMs);
+}
+
+void drawCheatRow(Vector2f pos,
+                  const NdsCheatItem& item,
+                  bool focused,
+                  float opacity)
+{
+    const float rowW = settingRowW();
+    const float indent = std::min(72.0f, static_cast<float>(std::max(0, item.depth)) * 22.0f);
+    if (focused)
+        drawGradientBorder(pos - Vector2f{3.0f, 3.0f}, {rowW + 6.0f, 48.0f}, 3.0f);
+
+    const bool category = item.type == NdsCheatItem::Type::Category;
+    drawRect(pos, {rowW, 42.0f},
+             category ? Color{0.14f, 0.24f, 0.34f, 0.105f * opacity}
+                      : Color{1.0f, 1.0f, 1.0f, 0.045f * opacity},
+             true);
+    drawBorder(pos, {rowW, 42.0f}, 1.0f,
+               {1.0f, 1.0f, 1.0f, category ? 0.13f * opacity : 0.10f * opacity});
+
+    if (category)
+    {
+        Gfx::DrawText(Gfx::SystemFontStandard,
+                      pos + Vector2f{18.0f + indent, 21.0f},
+                      18.0f,
+                      {0.56f, 0.84f, 1.0f, 0.86f * opacity},
+                      Gfx::align_Center,
+                      Gfx::align_Center,
+                      item.expanded ? "v" : ">");
+    }
+
+    const float textX = 34.0f + indent + (category ? 14.0f : 0.0f);
+    const float maxTextW = rowW - textX - 126.0f;
+    const std::string sourceLabel = item.name.empty() ? (category ? "未命名目录" : "未命名金手指") : item.name;
+    const float labelW = Gfx::MeasureText(Gfx::SystemFontChinese, 16.0f, sourceLabel.c_str()).X;
+    const bool labelTruncated = labelW > maxTextW;
+    const std::string label = (!focused || !labelTruncated)
+        ? ellipsizeCheatLabel(sourceLabel, maxTextW)
+        : sourceLabel;
+
+    const Color labelColor = category ? Color{0.92f, 0.98f, 1.0f, 0.92f * opacity}
+                                      : Color{1.0f, 1.0f, 1.0f, 0.88f * opacity};
+    if (focused && labelTruncated)
+    {
+        pushRectScissor(pos + Vector2f{textX, 5.0f}, {std::max(8.0f, maxTextW), 32.0f});
+        Gfx::DrawText(Gfx::SystemFontChinese,
+                      pos + Vector2f{textX - focusedMarqueeOffset(labelW, maxTextW), 12.0f},
+                      16.0f,
+                      labelColor,
+                      "%s",
+                      label.c_str());
+        Gfx::PopScissor();
+    }
+    else
+    {
+        Gfx::DrawText(Gfx::SystemFontChinese,
+                      pos + Vector2f{textX, 12.0f},
+                      16.0f,
+                      labelColor,
+                      "%s",
+                      label.c_str());
+    }
+
+    if (category)
+    {
+        Gfx::DrawText(Gfx::SystemFontChinese,
+                      pos + Vector2f{rowW - 28.0f, 12.0f},
+                      16.0f,
+                      {0.44f, 0.78f, 1.0f, 0.88f * opacity},
+                      Gfx::align_Right,
+                      Gfx::align_Left,
+                      item.expanded ? "收起" : "展开");
+    }
+    else
+    {
+        Gfx::DrawText(Gfx::SystemFontChinese,
+                      pos + Vector2f{rowW - 44.0f, 12.0f},
+                      17.0f,
+                      item.enabled ? Color{0.34f, 0.78f, 1.0f, 0.96f * opacity}
+                                   : Color{0.60f, 0.64f, 0.68f, 0.80f * opacity},
+                      Gfx::align_Right,
+                      Gfx::align_Left,
+                      item.enabled ? "开" : "关");
+    }
 }
 
 void drawSubPageRow(Vector2f pos, const char* label, bool focused, bool enabled, float opacity)
@@ -645,6 +832,59 @@ void drawDisplayPage(bool linearFiltering,
     Gfx::PopScissor();
 }
 
+void drawCheatPage(const std::vector<NdsCheatItem>& cheats,
+                   const std::vector<int>& visibleCheats,
+                   int focusedRow,
+                   bool contentFocused,
+                   float offsetX,
+                   float offsetY,
+                   float opacity,
+                   float scrollY)
+{
+    const Vector2f base{kContentX + offsetX, kContentY + offsetY};
+    Gfx::DrawText(Gfx::SystemFontChinese, base, 20.0f,
+                  {1.0f, 1.0f, 1.0f, opacity}, "金手指设置");
+    drawLine({base.X, base.Y + 44.0f}, {kContentW, 1.0f},
+             {1.0f, 1.0f, 1.0f, 0.10f * opacity});
+
+    if (cheats.empty())
+    {
+        Gfx::DrawText(Gfx::SystemFontChinese,
+                      base + Vector2f{0.0f, 96.0f},
+                      19.0f,
+                      {0.80f, 0.90f, 0.98f, 0.72f * opacity},
+                      "未找到当前游戏的 usrcheat.dat 金手指");
+        return;
+    }
+
+    pushContentBodyScissor(offsetY);
+    const Vector2f start{kContentX + offsetX, kContentY + kContentBodyTop - scrollY};
+    const float rowStep = 48.0f;
+    const int visibleCount = static_cast<int>(visibleCheats.size());
+    const int firstRow = std::max(0, static_cast<int>(scrollY / rowStep) - 2);
+    const int rowsOnScreen = static_cast<int>(kContentBodyH / rowStep) + 5;
+    const int lastRow = std::min(visibleCount, firstRow + rowsOnScreen);
+    for (int row = firstRow; row < lastRow; ++row)
+    {
+        const int cheatIndex = visibleCheats[row];
+        if (cheatIndex < 0 || cheatIndex >= static_cast<int>(cheats.size()))
+            continue;
+        const Vector2f pos = start + Vector2f{0.0f, static_cast<float>(row) * rowStep};
+        if (pos.Y + offsetY > kContentY + kContentH || pos.Y + offsetY + 42.0f < kContentY)
+            continue;
+        drawCheatRow(pos + Vector2f{0.0f, offsetY},
+                     cheats[cheatIndex],
+                     contentFocused && row == focusedRow,
+                     opacity);
+    }
+
+    if (opacity > 0.5f && scrollY > 1.0f)
+        drawRect({kContentX + kContentW - 4.0f, kContentY + kContentBodyTop + offsetY},
+                 {3.0f, kContentBodyH}, {1.0f, 1.0f, 1.0f, 0.08f});
+
+    Gfx::PopScissor();
+}
+
 void drawDeleteDialog(int slot, float opacity)
 {
     opacity = clamp01(opacity);
@@ -722,6 +962,8 @@ void drawTabFrame(NdsMenuLayer::Item item,
                   float pageProgress,
                   const NdsDisplaySettings& display,
                   const std::array<NdsStateSlotInfo, 10>& slots,
+                  const std::vector<NdsCheatItem>& cheats,
+                  const std::vector<int>& visibleCheats,
                   int contentFocus,
                   bool contentFocused,
                   float contentScrollY,
@@ -789,7 +1031,14 @@ void drawTabFrame(NdsMenuLayer::Item item,
                             contentScrollY);
             break;
         case NdsMenuLayer::Item::Cheats:
-            drawInfoPage("金手指设置", "金手指列表将在后续阶段接入。", offsetX, offsetY, opacity);
+            drawCheatPage(cheats,
+                          visibleCheats,
+                          contentFocus,
+                          contentFocused,
+                          offsetX,
+                          offsetY,
+                          opacity,
+                          contentScrollY);
             break;
         case NdsMenuLayer::Item::Reset:
             drawInfoPage("重置游戏", "按 A 将重新加载当前游戏。", offsetX, offsetY, opacity);

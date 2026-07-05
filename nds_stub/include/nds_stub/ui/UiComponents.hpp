@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdio>
+#include <vector>
 
 #include "nds_stub/NdsMenuLayer.hpp"
 #include "nds_stub/ui/UiPrimitives.hpp"
@@ -131,6 +132,8 @@ void drawTabFrame(NdsMenuLayer::Item item,
                   float pageProgress,
                   const NdsDisplaySettings& display,
                   const std::array<NdsStateSlotInfo, 10>& slots,
+                  const std::vector<NdsCheatItem>& cheats,
+                  const std::vector<int>& visibleCheats,
                   int contentFocus,
                   bool contentFocused,
                   float contentScrollY,
