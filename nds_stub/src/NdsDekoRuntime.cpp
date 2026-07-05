@@ -177,6 +177,161 @@ std::string jsonString(const nlohmann::json& item, const char* key)
     return item.at(key).get<std::string>();
 }
 
+std::string currentLastPlayedTimestamp()
+{
+    const auto now = std::chrono::system_clock::now();
+    const std::time_t tt = std::chrono::system_clock::to_time_t(now);
+    std::tm* tm = std::localtime(&tt);
+    if (!tm)
+        return {};
+    char buffer[64] = {};
+    std::strftime(buffer, sizeof(buffer), "%y-%m-%d %H-%M-%S", tm);
+    return buffer;
+}
+
+struct NdsPlayStats {
+    int playCount = 0;
+    int playTime = 0;
+    bool found = false;
+};
+
+NdsPlayStats loadAndIncrementNdsPlayCount(const std::string& romPath)
+{
+    NdsPlayStats stats {};
+    const std::string normalizedRom = normalizePathForCompare(romPath);
+    constexpr const char* paths[] = {
+        "sdmc:/GBAStation/data/GameData_NDS.json",
+        "/GBAStation/data/GameData_NDS.json",
+    };
+
+    for (const char* dbPath : paths)
+    {
+        std::ifstream in(dbPath);
+        if (!in)
+            continue;
+
+        try
+        {
+            nlohmann::json data;
+            in >> data;
+            in.close();
+            if (!data.is_array())
+                continue;
+
+            bool updated = false;
+            for (auto& item : data)
+            {
+                const std::string itemPath = normalizePathForCompare(jsonString(item, "path"));
+                if (itemPath != normalizedRom)
+                    continue;
+
+                stats.playCount = item.value("playCount", 0);
+                stats.playTime = item.value("playTime", 0);
+                ++stats.playCount;
+                item["playCount"] = stats.playCount;
+                item["playTime"] = stats.playTime;
+                stats.found = true;
+                updated = true;
+                break;
+            }
+
+            if (!updated)
+                continue;
+
+            std::ofstream out(dbPath, std::ios::trunc);
+            if (!out)
+                return stats;
+            out << data.dump(4) << '\n';
+            const bool ok = out.good();
+            beiklive::nds_stub::appendStubLog("GBAStationNDSStub: play stats start save %s path=%s playCount=%d playTime=%d",
+                                              ok ? "ok" : "failed",
+                                              dbPath,
+                                              stats.playCount,
+                                              stats.playTime);
+            return stats;
+        }
+        catch (const std::exception& e)
+        {
+            beiklive::nds_stub::appendStubLog("GBAStationNDSStub: play stats start exception path=%s error=%s",
+                                              dbPath,
+                                              e.what());
+        }
+    }
+
+    beiklive::nds_stub::appendStubLog("GBAStationNDSStub: play stats start skipped no match rom=%s",
+                                      romPath.c_str());
+    return stats;
+}
+
+bool saveNdsPlayStatsToGameDb(const std::string& romPath,
+                              int playCount,
+                              int playTime,
+                              const std::string& lastPlayed)
+{
+    const std::string normalizedRom = normalizePathForCompare(romPath);
+    constexpr const char* paths[] = {
+        "sdmc:/GBAStation/data/GameData_NDS.json",
+        "/GBAStation/data/GameData_NDS.json",
+    };
+
+    for (const char* dbPath : paths)
+    {
+        std::ifstream in(dbPath);
+        if (!in)
+            continue;
+
+        try
+        {
+            nlohmann::json data;
+            in >> data;
+            in.close();
+            if (!data.is_array())
+                continue;
+
+            bool updated = false;
+            for (auto& item : data)
+            {
+                const std::string itemPath = normalizePathForCompare(jsonString(item, "path"));
+                if (itemPath != normalizedRom)
+                    continue;
+
+                item["playCount"] = std::max(0, playCount);
+                item["playTime"] = std::max(0, playTime);
+                if (!lastPlayed.empty())
+                    item["lastPlayed"] = lastPlayed;
+                updated = true;
+                break;
+            }
+
+            if (!updated)
+                continue;
+
+            std::ofstream out(dbPath, std::ios::trunc);
+            if (!out)
+                return false;
+            out << data.dump(4) << '\n';
+            const bool ok = out.good();
+            beiklive::nds_stub::appendStubLog("GBAStationNDSStub: play stats exit save %s path=%s playCount=%d playTime=%d lastPlayed=%s",
+                                              ok ? "ok" : "failed",
+                                              dbPath,
+                                              std::max(0, playCount),
+                                              std::max(0, playTime),
+                                              lastPlayed.c_str());
+            return ok;
+        }
+        catch (const std::exception& e)
+        {
+            beiklive::nds_stub::appendStubLog("GBAStationNDSStub: play stats exit exception path=%s error=%s",
+                                              dbPath,
+                                              e.what());
+        }
+    }
+
+    beiklive::nds_stub::appendStubLog("GBAStationNDSStub: play stats exit skipped no match rom=%s",
+                                      romPath.c_str());
+    return false;
+}
+
 bool saveNdsSettingsToGameDb(const std::string& romPath,
                              const beiklive::nds_stub::NdsDisplaySettings& settings,
                              bool includeCustomLayout)
@@ -1828,6 +1983,12 @@ int RunDekoRuntime(const DekoRunOptions& options)
     if (options.romPath.empty())
         return 1;
 
+    NdsPlayStats playStats {};
+    int sessionPlaySeconds = 0;
+    double playTimeFraction = 0.0;
+    auto playTimeLast = std::chrono::steady_clock::now();
+    constexpr double kPlayTimeSuspendGapSec = 5.0;
+
     if (!fileExists("sdmc:/GBAStation/bios/nds/bios9.bin") ||
         !fileExists("sdmc:/GBAStation/bios/nds/bios7.bin") ||
         !fileExists("sdmc:/GBAStation/bios/nds/firmware.bin"))
@@ -1892,6 +2053,8 @@ int RunDekoRuntime(const DekoRunOptions& options)
                   loaded ? 1 : 0,
                   elapsedMs(checkpointBegin),
                   savePath.c_str());
+    if (loaded)
+        playStats = loadAndIncrementNdsPlayCount(options.romPath);
 
     DekoAudioOutput audio;
     appendStubLog("GBAStationNDSStub: Deko checkpoint audio.start begin");
@@ -2014,6 +2177,8 @@ int RunDekoRuntime(const DekoRunOptions& options)
     auto autoSaveStart = std::chrono::steady_clock::now();
     int pendingMenuSaveSlot = -1;
     int pendingMenuSaveFrames = 0;
+    bool exitAutoSavePending = false;
+    bool exitAutoSaveDrawn = false;
 
     auto doSaveState = [&](int slot, bool showToast) {
         const std::string path = statePath(stateDir, options.romPath, slot);
@@ -2123,6 +2288,8 @@ int RunDekoRuntime(const DekoRunOptions& options)
 
     if (autoLoadSlot > 0)
         doLoadState(autoLoadSlot - 1, false);
+
+    playTimeLast = std::chrono::steady_clock::now();
 
     while (appletMainLoop() && running)
     {
@@ -2374,7 +2541,21 @@ int RunDekoRuntime(const DekoRunOptions& options)
         else if (menuAction == NdsMenuAction::ExitGame)
         {
             pendingReturn = true;
-            running = false;
+            if (autoSaveOnExit && autoSaveSlot > 0 && loaded)
+            {
+                exitAutoSavePending = true;
+                exitAutoSaveDrawn = false;
+                menuLayer.close();
+                menuLayer.clearToast();
+                audio.setFastForwardActive(false);
+                lastFastForwardActive = false;
+                blockGameInputUntilRelease = true;
+                appendStubLog("GBAStationNDSStub: exit autosave pending slot=%d", autoSaveSlot - 1);
+            }
+            else
+            {
+                running = false;
+            }
         }
 
         if (cheatApplyPending && !menuLayer.active())
@@ -2386,7 +2567,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
         const bool menuActive = menuLayer.active();
         if (blockGameInputUntilRelease && input.held == 0 && input.virtualHeld == 0 && !touchHeld)
             blockGameInputUntilRelease = false;
-        const bool suppressGameInput = menuActive || runtimePaused || blockGameInputUntilRelease;
+        const bool suppressGameInput = menuActive || runtimePaused || blockGameInputUntilRelease || exitAutoSavePending;
         const bool fastForwardHeld = inputConfig.fastForwardToggleMode()
             ? fastForwardToggle
             : anyComboHeld(inputConfig.button("nds.handle.fastforward"), input);
@@ -2403,7 +2584,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
             audio.setFastForwardActive(fastForwardActive);
             lastFastForwardActive = fastForwardActive;
         }
-        audio.setMuted(muted || (fastForwardActive && inputConfig.fastForwardMute()));
+        audio.setMuted(muted || exitAutoSavePending || (fastForwardActive && inputConfig.fastForwardMute()));
 
         if (!suppressGameInput)
         {
@@ -2495,6 +2676,31 @@ int RunDekoRuntime(const DekoRunOptions& options)
         lastRunMs = emulationPaused ? 0 :
             std::chrono::duration_cast<std::chrono::milliseconds>(runEnd - runBegin).count();
 
+        if (!emulationPaused && framesRan > 0)
+        {
+            const auto nowForPlayTime = std::chrono::steady_clock::now();
+            const double elapsed = std::chrono::duration<double>(nowForPlayTime - playTimeLast).count();
+            playTimeLast = nowForPlayTime;
+            if (elapsed > 0.0 && elapsed <= kPlayTimeSuspendGapSec)
+            {
+                playTimeFraction += elapsed;
+                if (playTimeFraction >= 1.0)
+                {
+                    const int wholeSeconds = static_cast<int>(playTimeFraction);
+                    sessionPlaySeconds += wholeSeconds;
+                    playTimeFraction -= static_cast<double>(wholeSeconds);
+                }
+            }
+            else if (elapsed > kPlayTimeSuspendGapSec)
+            {
+                appendStubLog("GBAStationNDSStub: play stats ignored gap %.2fs", elapsed);
+            }
+        }
+        else
+        {
+            playTimeLast = std::chrono::steady_clock::now();
+        }
+
         if (!emulationPaused && autoSaveSlot > 0 && autoSaveInterval > 0)
         {
             const auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
@@ -2551,6 +2757,9 @@ int RunDekoRuntime(const DekoRunOptions& options)
                                                          inputConfig.intValue("display.showFfOverlay", 1) != 0,
                                                          runtimePaused);
 
+        if (exitAutoSavePending)
+            beiklive::nds_stub::ui::drawBusyDialog("正在自动保存", "保存完毕后将自动退出游戏。", 1.0f);
+
         if (traceFrame)
             appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu menuLayer.draw begin",
                           static_cast<unsigned long long>(totalFrames));
@@ -2596,6 +2805,23 @@ int RunDekoRuntime(const DekoRunOptions& options)
             }
         }
 
+        if (exitAutoSavePending && !menuLayer.active() && !runtimePaused && framesRan > 0)
+        {
+            if (!exitAutoSaveDrawn)
+            {
+                exitAutoSaveDrawn = true;
+                appendStubLog("GBAStationNDSStub: exit autosave notice drawn slot=%d", autoSaveSlot - 1);
+            }
+            else
+            {
+                appendStubLog("GBAStationNDSStub: exit autosave begin slot=%d", autoSaveSlot - 1);
+                doSaveState(autoSaveSlot - 1, false);
+                exitAutoSavePending = false;
+                running = false;
+                appendStubLog("GBAStationNDSStub: exit autosave done");
+            }
+        }
+
         fpsFrames += framesRan;
         ++totalFrames;
         if (totalFrames % 60 == 0)
@@ -2627,8 +2853,19 @@ int RunDekoRuntime(const DekoRunOptions& options)
         }
     }
 
-    if (autoSaveOnExit && autoSaveSlot > 0 && loaded)
-        doSaveState(autoSaveSlot - 1, false);
+    if (playStats.found)
+    {
+        if (playTimeFraction >= 0.5)
+            ++sessionPlaySeconds;
+        const int totalPlayTime = playStats.playTime + std::max(0, sessionPlaySeconds);
+        const std::string lastPlayed = currentLastPlayedTimestamp();
+        saveNdsPlayStatsToGameDb(options.romPath, playStats.playCount, totalPlayTime, lastPlayed);
+        appendStubLog("GBAStationNDSStub: play stats session seconds=%d total=%d count=%d lastPlayed=%s",
+                      sessionPlaySeconds,
+                      totalPlayTime,
+                      playStats.playCount,
+                      lastPlayed.c_str());
+    }
 
     audio.setFastForwardActive(false);
     audio.setMuted(false);

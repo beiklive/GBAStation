@@ -776,6 +776,12 @@ void NdsMenuLayer::showToast(const std::string& message)
     m_toastStartTick = armGetSystemTick();
 }
 
+void NdsMenuLayer::clearToast()
+{
+    m_toastMessage.clear();
+    m_toastStartTick = 0;
+}
+
 float NdsMenuLayer::panelProgress() const
 {
     if (!m_panelAnimating)

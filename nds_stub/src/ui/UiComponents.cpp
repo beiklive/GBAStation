@@ -1385,6 +1385,26 @@ void drawSyncResultDialog(NdsMenuAction action, int count, float opacity)
                         opacity);
 }
 
+void drawBusyDialog(const char* title, const char* body, float opacity)
+{
+    opacity = clamp01(opacity);
+    drawRect({0.0f, 0.0f}, {kScreenW, kScreenH}, {0.0f, 0.0f, 0.0f, 0.48f * opacity}, true);
+    const Vector2f size{std::min(520.0f, kScreenW - 72.0f), 176.0f};
+    const Vector2f pos{(kScreenW - size.X) * 0.5f, (kScreenH - size.Y) * 0.5f};
+    drawRect(pos, size, {0.117f, 0.117f, 0.117f, 0.98f * opacity}, false);
+    drawBorder(pos, size, 2.0f, {0.0f, 0.48f, 0.80f, 0.60f * opacity});
+
+    const double ms = static_cast<double>(armTicksToNs(armGetSystemTick())) / 1000000.0;
+    const int dots = static_cast<int>(ms / 360.0) % 4;
+    char titleText[96] = {};
+    std::snprintf(titleText, sizeof(titleText), "%s%.*s", title ? title : "", dots, "...");
+
+    Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{34.0f, 34.0f}, 29.0f,
+                  {1.0f, 1.0f, 1.0f, 0.96f * opacity}, "%s", titleText);
+    Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{34.0f, 94.0f}, 21.0f,
+                  {0.82f, 0.90f, 0.96f, 0.78f * opacity}, "%s", body ? body : "");
+}
+
 void drawToast(const std::string& message, float progress, float opacity)
 {
     if (message.empty())

@@ -120,6 +120,7 @@ public:
     const NdsCustomLayoutSettings& customLayoutSettings() const { return m_display.customLayout; }
     void showSyncResult(NdsMenuAction action, int count);
     void showToast(const std::string& message);
+    void clearToast();
 
 private:
     enum class FocusScope {
