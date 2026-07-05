@@ -136,6 +136,7 @@ namespace beiklive
             {"ndsIntegerScale", entry.ndsIntegerScale},
             {"ndsScreenGap", entry.ndsScreenGap},
             {"ndsInternalResolution", entry.ndsInternalResolution},
+            {"NdsShaderType", sanitizeUtf8(entry.NdsShaderType)},
             {"shaderParaPath", sanitizeUtf8(entry.shaderParaPath)},
             {"shaderParaNames", entry.shaderParaNames},
             {"shaderParaValues", entry.shaderParaValues}};
@@ -177,6 +178,7 @@ namespace beiklive
         entry.ndsIntegerScale = j.value("ndsIntegerScale", true);
         entry.ndsScreenGap = std::clamp(j.value("ndsScreenGap", 0), -256, 256);
         entry.ndsInternalResolution = std::clamp(j.value("ndsInternalResolution", 1), 1, 4);
+        entry.NdsShaderType = j.value("NdsShaderType", "dot");
         entry.shaderParaPath = j.value("shaderParaPath", "");
         entry.shaderParaNames = j.value("shaderParaNames", std::vector<std::string>());
         entry.shaderParaValues = j.value("shaderParaValues", std::vector<float>());

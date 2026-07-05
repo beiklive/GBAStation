@@ -54,6 +54,10 @@ public:
     float screenGap() const { return m_screenGap; }
     void setCustomLayoutSettings(const NdsCustomLayoutSettings& settings) { m_customLayout = settings; }
     const NdsCustomLayoutSettings& customLayoutSettings() const { return m_customLayout; }
+    void setOverlayEnabled(bool enabled) { m_overlayEnabled = enabled; }
+    bool overlayEnabled() const { return m_overlayEnabled; }
+    void setOverlayTexture(std::uint32_t texture, int width, int height);
+    void clearOverlayTexture();
 
 private:
     struct ScreenDrawRect {
@@ -79,6 +83,10 @@ private:
     int m_orientation = 0;
     float m_screenGap = 0.0f;
     NdsCustomLayoutSettings m_customLayout {};
+    bool m_overlayEnabled = false;
+    std::uint32_t m_overlayTexture = 0;
+    int m_overlayWidth = 0;
+    int m_overlayHeight = 0;
 };
 
 } // namespace beiklive::nds_stub

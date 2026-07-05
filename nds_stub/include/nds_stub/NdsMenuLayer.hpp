@@ -17,6 +17,11 @@ enum class NdsMenuAction {
     DisplaySettingsChanged,
     CustomLayoutChanged,
     CustomLayoutCommitted,
+    OverlaySettingsChanged,
+    OverlaySettingsCommitted,
+    OverlayPathSelected,
+    ShaderSettingsChanged,
+    ShaderSettingsCommitted,
     CheatSettingsChanged,
     ResetGame,
     ExitGame,
@@ -25,6 +30,7 @@ enum class NdsMenuAction {
 struct NdsMenuResult {
     NdsMenuAction action = NdsMenuAction::None;
     int slot = -1;
+    std::string path;
 };
 
 struct NdsStateSlotInfo {
@@ -47,7 +53,19 @@ struct NdsDisplaySettings {
     int layout = 0;
     int orientation = 0;
     int screenGap = 0;
+    bool overlayEnabled = false;
+    std::string overlayPath;
+    bool shaderEnabled = false;
+    std::string ndsShaderType = "dot";
     NdsCustomLayoutSettings customLayout {};
+};
+
+struct NdsFilePickerEntry {
+    std::string name;
+    std::string path;
+    std::string modifiedTime;
+    std::uint64_t size = 0;
+    bool isDirectory = false;
 };
 
 struct NdsCheatItem {
@@ -108,10 +126,21 @@ private:
 
     bool cycleCurrentSetting(int direction);
     bool cycleCustomLayoutSetting(int direction);
+    bool cycleOverlaySetting(int direction);
+    bool cycleShaderSetting(int direction);
     bool resetCustomLayoutSetting();
     bool activateDisplayControl();
     bool activateCheatControl();
     void beginCustomLayoutEditor();
+    void beginOverlaySidebar();
+    void beginShaderSidebar();
+    void beginFilePicker();
+    void closeOverlaySidebar(bool returnToMenu);
+    void closeShaderSidebar(bool returnToMenu);
+    void closeFilePicker(bool returnToOverlay);
+    void reloadFilePickerEntries(const std::string& directory, const std::string& focusPath = {});
+    void ensureFilePickerPreview();
+    void releaseFilePickerPreview();
     void beginSelectionAnimation(int oldSelected, int newSelected);
     void beginPanelAnimation(bool opening);
     float panelProgress() const;
@@ -125,6 +154,7 @@ private:
     int nextFocusableDisplayRow(int from, int direction) const;
     bool updateHeldSelector(std::uint64_t buttonsHeld);
     bool updateHeldCustomSelector(std::uint64_t buttonsHeld);
+    bool updateHeldShaderSelector(std::uint64_t buttonsHeld);
     std::uint64_t updateHeldNavigation(std::uint64_t buttonsDown, std::uint64_t buttonsHeld);
     void openDeleteDialog();
     void closeDeleteDialog();
@@ -155,6 +185,30 @@ private:
     bool m_customLayoutReturnToMenu = false;
     std::uint64_t m_customLayoutAnimStartTick = 0;
     int m_customLayoutFocus = 0;
+    bool m_overlaySidebarVisible = false;
+    bool m_overlaySidebarClosing = false;
+    bool m_overlaySidebarReturnToMenu = false;
+    std::uint64_t m_overlaySidebarAnimStartTick = 0;
+    int m_overlaySidebarFocus = 0;
+    bool m_shaderSidebarVisible = false;
+    bool m_shaderSidebarClosing = false;
+    bool m_shaderSidebarReturnToMenu = false;
+    std::uint64_t m_shaderSidebarAnimStartTick = 0;
+    int m_shaderSidebarFocus = 0;
+    bool m_filePickerVisible = false;
+    bool m_filePickerClosing = false;
+    bool m_filePickerReturnToOverlay = false;
+    std::uint64_t m_filePickerAnimStartTick = 0;
+    std::string m_filePickerDirectory;
+    std::vector<NdsFilePickerEntry> m_filePickerEntries;
+    int m_filePickerFocus = 0;
+    mutable float m_filePickerScrollY = 0.0f;
+    mutable std::uint64_t m_filePickerScrollLastTick = 0;
+    std::uint32_t m_filePickerPreviewTexture = 0;
+    int m_filePickerPreviewWidth = 0;
+    int m_filePickerPreviewHeight = 0;
+    std::string m_filePickerPreviewPath;
+    bool m_filePickerPreviewAttempted = false;
     std::uint64_t m_selectorRepeatStartTick = 0;
     std::uint64_t m_selectorLastStepTick = 0;
     int m_selectorDirection = 0;

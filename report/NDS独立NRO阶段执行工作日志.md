@@ -2927,6 +2927,50 @@ GBAStationNDSStub.nro 2.29 MB
 
 ---
 
+## 阶段 4.27：遮罩选择、滤镜选择与文件选择器
+
+### 目标
+
+- 在 NDS Stub 的画面设置中补齐遮罩选择侧边栏与滤镜选择侧边栏；
+- 制作 PNG 文件选择器，支持自动定位、白名单、预览、长文件名截断/滚动；
+- 将遮罩与滤镜配置写入每个游戏的 GameDB 字段。
+
+### 已实施
+
+- `NdsDisplaySettings` 新增 `overlayEnabled`、`overlayPath`、`shaderEnabled`、`ndsShaderType`。
+- `DekoRunOptions` 从 GameDB 读取 `overlayEnabled`、`overlayPath`、`shaderEnabled`、`NdsShaderType`。
+- `saveNdsSettingsToGameDb()` 写回遮罩/滤镜字段。
+- 主项目 `GameEntry` 新增 `NdsShaderType` 并加入 JSON 读写，防止主程序保存 GameDB 时丢失该字段。
+- 新增遮罩侧边栏：
+  - `遮罩开关` 使用开关选择器；
+  - `遮罩路径` 使用信息按钮，右侧显示文件名，长文本可滚动。
+- 新增滤镜侧边栏：
+  - `滤镜开关` 使用开关选择器；
+  - `滤镜类型` 使用 LR 选择器，列表为 `dot / scanline / crt / dot-clear`；
+  - 当前仅保存配置，未接入实际 shader 管线。
+- 新增文件选择器：
+  - 白名单 `.png`；
+  - 有 `overlayPath` 时自动进入所在目录并聚焦对应文件；
+  - 左侧文件列表，右侧文件信息/图片预览；
+  - 只为当前聚焦图片懒加载预览纹理，切换焦点时释放旧纹理；
+  - PNG 解码走“读入内存 + `stbi_load_from_memory`”，避免直接把 `sdmc:/...` 交给 stb。
+- `NdsGameLayer` 新增 overlay 纹理绘制：
+  - 遮罩在游戏画面之后、菜单之前全屏拉伸绘制；
+  - 开关关闭时保留配置但不绘制；
+  - 换图时释放旧纹理。
+- `MaterialIcons-Regular.ttf` 加入 NDS Stub romfs，并用于 tab 图标与文件选择器图标。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.93 MB
+GBAStationNDSStub.nro 2.61 MB
+```
+
+---
+
 ## 阶段 4.20：自定义布局侧边栏动画与提交保存
 
 ### 目标

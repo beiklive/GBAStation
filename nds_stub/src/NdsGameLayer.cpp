@@ -116,6 +116,7 @@ void NdsGameLayer::init(GPU2D::DekoRenderer* renderer)
 
 void NdsGameLayer::deinit()
 {
+    clearOverlayTexture();
     for (int front = 0; front < 2; ++front)
     {
         for (int screen = 0; screen < 2; ++screen)
@@ -128,6 +129,25 @@ void NdsGameLayer::deinit()
         }
     }
     m_renderer = nullptr;
+}
+
+void NdsGameLayer::setOverlayTexture(std::uint32_t texture, int width, int height)
+{
+    clearOverlayTexture();
+    m_overlayTexture = texture;
+    m_overlayWidth = width;
+    m_overlayHeight = height;
+}
+
+void NdsGameLayer::clearOverlayTexture()
+{
+    if (m_overlayTexture != 0)
+    {
+        Gfx::TextureDelete(m_overlayTexture);
+        m_overlayTexture = 0;
+    }
+    m_overlayWidth = 0;
+    m_overlayHeight = 0;
 }
 
 RectF NdsGameLayer::topRect() const
@@ -494,6 +514,17 @@ void NdsGameLayer::drawScreens() const
                                {0.0f, 0.0f},
                                {srcWidth, srcHeight});
         }
+    }
+
+    if (m_overlayEnabled && m_overlayTexture != 0 && m_overlayWidth > 0 && m_overlayHeight > 0)
+    {
+        Gfx::SetSampler(Gfx::sampler_Linear | Gfx::sampler_ClampToEdge);
+        Gfx::DrawRectangle(m_overlayTexture,
+                           {0.0f, 0.0f},
+                           {static_cast<float>(kScreenWidth), static_cast<float>(kScreenHeight)},
+                           {0.0f, 0.0f},
+                           {static_cast<float>(m_overlayWidth), static_cast<float>(m_overlayHeight)},
+                           {1.0f, 1.0f, 1.0f, 1.0f});
     }
     Gfx::SignalFence(m_renderer->FramebufferPresented[GPU::FrontBuffer]);
 }

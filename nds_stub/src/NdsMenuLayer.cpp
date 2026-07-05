@@ -1,10 +1,19 @@
 #include "nds_stub/NdsMenuLayer.hpp"
 
 #include <algorithm>
+#include <chrono>
+#include <cctype>
 #include <cmath>
+#include <cstdio>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <iterator>
 #include <switch.h>
 
+#include "../../third_party/ArcDelta_melonDS/src/frontend/switch/Gfx.h"
+#include "stb/stb_image.h"
+#include "nds_stub/StubLog.hpp"
 #include "nds_stub/ui/UiComponents.hpp"
 
 namespace beiklive::nds_stub {
@@ -23,6 +32,9 @@ constexpr float kSettingRowH = 42.0f;
 constexpr float kSettingStepY = 48.0f;
 constexpr float kCheatRowH = 42.0f;
 constexpr float kCheatStepY = 48.0f;
+constexpr float kFilePickerRowH = 46.0f;
+constexpr float kFilePickerTopH = 64.0f;
+constexpr float kFilePickerFooterH = 64.0f;
 
 constexpr float kFastForwardValues[] = {
     0.1f, 0.5f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 3.0f, 4.0f, 5.0f,
@@ -40,6 +52,16 @@ constexpr float kCustomOffsetStep = 1.0f;
 constexpr float kCustomOffsetMin = -1024.0f;
 constexpr float kCustomOffsetMax = 1024.0f;
 constexpr int kCustomLayoutControlCount = 6;
+constexpr int kOverlayControlCount = 2;
+constexpr int kShaderControlCount = 2;
+constexpr const char* kOverlayRoot = "sdmc:/GBAStation/overlays";
+
+constexpr const char* kShaderTypes[] = {
+    "dot",
+    "scanline",
+    "crt",
+    "dot-clear",
+};
 
 bool isDirectionUp(std::uint64_t buttons)
 {
@@ -96,6 +118,257 @@ float focusedScroll(float focusedTop, float focusedH, float contentH)
     if (focusedTop < scroll)
         scroll = focusedTop;
     return std::clamp(scroll, 0.0f, maxScroll);
+}
+
+bool endsWithNoCase(const std::string& value, const char* suffix)
+{
+    const size_t suffixLen = std::strlen(suffix);
+    if (value.size() < suffixLen)
+        return false;
+
+    const size_t offset = value.size() - suffixLen;
+    for (size_t i = 0; i < suffixLen; ++i)
+    {
+        if (std::tolower(static_cast<unsigned char>(value[offset + i])) !=
+            std::tolower(static_cast<unsigned char>(suffix[i])))
+            return false;
+    }
+    return true;
+}
+
+std::string parentPathOrRoot(const std::string& path)
+{
+    if (!path.empty())
+    {
+        std::filesystem::path p(path);
+        std::error_code ec;
+        if (std::filesystem::is_directory(p, ec))
+            return p.string();
+        const std::string parent = p.parent_path().string();
+        if (!parent.empty())
+            return parent;
+    }
+    return kOverlayRoot;
+}
+
+std::string formatFileTime(const std::filesystem::path& path)
+{
+    std::error_code ec;
+    const auto ftime = std::filesystem::last_write_time(path, ec);
+    if (ec)
+        return {};
+    const auto sysTime = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+        ftime - std::filesystem::file_time_type::clock::now() + std::chrono::system_clock::now());
+    const std::time_t tt = std::chrono::system_clock::to_time_t(sysTime);
+    std::tm* tm = std::localtime(&tt);
+    if (!tm)
+        return {};
+    char buffer[32] = {};
+    std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M", tm);
+    return buffer;
+}
+
+float filePickerTargetScroll(int focus, int count)
+{
+    const float bodyH = menuMetrics().screenH - kFilePickerTopH - kFilePickerFooterH;
+    const float contentH = static_cast<float>(std::max(0, count)) * kFilePickerRowH;
+    const float maxScroll = std::max(0.0f, contentH - bodyH);
+    const float focusedTop = static_cast<float>(std::max(0, focus)) * kFilePickerRowH;
+    float scroll = 0.0f;
+    if (focusedTop + kFilePickerRowH > bodyH)
+        scroll = focusedTop + kFilePickerRowH - bodyH;
+    if (focusedTop < scroll)
+        scroll = focusedTop;
+    return std::clamp(scroll, 0.0f, maxScroll);
+}
+
+bool loadPngTextureFromFile(const std::string& path, std::uint32_t& texture, int& width, int& height)
+{
+    texture = 0;
+    width = 0;
+    height = 0;
+    if (path.empty() || !endsWithNoCase(path, ".png"))
+        return false;
+
+    auto makePathCandidates = [](const std::string& source) {
+        std::vector<std::string> paths;
+        paths.push_back(source);
+        if (source.rfind("sdmc:", 0) == 0)
+            paths.push_back(source.substr(5));
+        else if (!source.empty() && source[0] == '/')
+            paths.push_back("sdmc:" + source);
+        return paths;
+    };
+
+    FILE* fp = nullptr;
+    std::string openedPath;
+    for (const auto& candidate : makePathCandidates(path))
+    {
+        appendStubLog("GBAStationNDSStub: png preview open try path=%s", candidate.c_str());
+        fp = std::fopen(candidate.c_str(), "rb");
+        if (fp)
+        {
+            openedPath = candidate;
+            break;
+        }
+    }
+    if (!fp)
+    {
+        appendStubLog("GBAStationNDSStub: png preview open failed path=%s", path.c_str());
+        return false;
+    }
+
+    if (std::fseek(fp, 0, SEEK_END) != 0)
+    {
+        std::fclose(fp);
+        appendStubLog("GBAStationNDSStub: png preview seek end failed path=%s", openedPath.c_str());
+        return false;
+    }
+    const long fileSize = std::ftell(fp);
+    if (fileSize <= 0 || fileSize > 64 * 1024 * 1024)
+    {
+        std::fclose(fp);
+        appendStubLog("GBAStationNDSStub: png preview size invalid path=%s bytes=%ld", openedPath.c_str(), fileSize);
+        return false;
+    }
+    std::rewind(fp);
+    std::vector<unsigned char> bytes(static_cast<std::size_t>(fileSize));
+    const std::size_t readBytes = std::fread(bytes.data(), 1, bytes.size(), fp);
+    std::fclose(fp);
+    if (readBytes != bytes.size())
+    {
+        appendStubLog("GBAStationNDSStub: png preview read failed path=%s read=%u expected=%u",
+                      openedPath.c_str(),
+                      static_cast<unsigned>(readBytes),
+                      static_cast<unsigned>(bytes.size()));
+        return false;
+    }
+    appendStubLog("GBAStationNDSStub: png preview read ok path=%s bytes=%u",
+                  openedPath.c_str(),
+                  static_cast<unsigned>(bytes.size()));
+
+    auto readBe32 = [](const unsigned char* p) {
+        return (static_cast<std::uint32_t>(p[0]) << 24) |
+               (static_cast<std::uint32_t>(p[1]) << 16) |
+               (static_cast<std::uint32_t>(p[2]) << 8) |
+               static_cast<std::uint32_t>(p[3]);
+    };
+    if (bytes.size() >= 33 &&
+        bytes[0] == 0x89 && bytes[1] == 'P' && bytes[2] == 'N' && bytes[3] == 'G' &&
+        bytes[12] == 'I' && bytes[13] == 'H' && bytes[14] == 'D' && bytes[15] == 'R')
+    {
+        const std::uint32_t headerW = readBe32(bytes.data() + 16);
+        const std::uint32_t headerH = readBe32(bytes.data() + 20);
+        const unsigned bitDepth = bytes[24];
+        const unsigned colorType = bytes[25];
+        appendStubLog("GBAStationNDSStub: png preview header size=%ux%u bit=%u color=%u path=%s",
+                      headerW,
+                      headerH,
+                      bitDepth,
+                      colorType,
+                      openedPath.c_str());
+    }
+    else
+    {
+        appendStubLog("GBAStationNDSStub: png preview header invalid path=%s", openedPath.c_str());
+        return false;
+    }
+
+    int comp = 0;
+    appendStubLog("GBAStationNDSStub: png preview decode file begin path=%s", openedPath.c_str());
+    unsigned char* pixels = stbi_load(openedPath.c_str(),
+                                      &width,
+                                      &height,
+                                      &comp,
+                                      4);
+    if (!pixels || width <= 0 || height <= 0 || width > 4096 || height > 4096)
+    {
+        if (pixels)
+            stbi_image_free(pixels);
+        appendStubLog("GBAStationNDSStub: png preview decode failed path=%s width=%d height=%d reason=%s",
+                      openedPath.c_str(),
+                      width,
+                      height,
+                      stbi_failure_reason() ? stbi_failure_reason() : "(null)");
+        width = 0;
+        height = 0;
+        return false;
+    }
+    appendStubLog("GBAStationNDSStub: png preview decode ok path=%s size=%dx%d comp=%d",
+                  openedPath.c_str(),
+                  width,
+                  height,
+                  comp);
+
+    std::vector<unsigned char> scaled;
+    const int decodedW = width;
+    const int decodedH = height;
+    constexpr int kMaxUploadPixels = kScreenWidth * kScreenHeight;
+    if (static_cast<long long>(width) * static_cast<long long>(height) > kMaxUploadPixels)
+    {
+        const float scale = std::sqrt(static_cast<float>(kMaxUploadPixels) /
+                                      static_cast<float>(width * height));
+        const int outW = std::max(1, static_cast<int>(std::floor(width * scale)));
+        const int outH = std::max(1, static_cast<int>(std::floor(height * scale)));
+        scaled.resize(static_cast<std::size_t>(outW) * outH * 4);
+        for (int y = 0; y < outH; ++y)
+        {
+            const int sy = std::min(height - 1, static_cast<int>((static_cast<long long>(y) * height) / outH));
+            for (int x = 0; x < outW; ++x)
+            {
+                const int sx = std::min(width - 1, static_cast<int>((static_cast<long long>(x) * width) / outW));
+                const unsigned char* src = pixels + (static_cast<std::size_t>(sy) * width + sx) * 4;
+                unsigned char* dst = scaled.data() + (static_cast<std::size_t>(y) * outW + x) * 4;
+                dst[0] = src[0];
+                dst[1] = src[1];
+                dst[2] = src[2];
+                dst[3] = src[3];
+            }
+        }
+        width = outW;
+        height = outH;
+        appendStubLog("GBAStationNDSStub: png preview downscale %dx%d -> %dx%d uploadBytes=%u",
+                      decodedW,
+                      decodedH,
+                      width,
+                      height,
+                      static_cast<unsigned>(scaled.size()));
+    }
+
+    const unsigned char* uploadPixels = scaled.empty() ? pixels : scaled.data();
+    const std::size_t uploadBytes = static_cast<std::size_t>(width) * height * 4;
+    if (uploadBytes > 7 * 1024 * 1024)
+    {
+        stbi_image_free(pixels);
+        appendStubLog("GBAStationNDSStub: png preview upload rejected path=%s uploadBytes=%u",
+                      openedPath.c_str(),
+                      static_cast<unsigned>(uploadBytes));
+        width = 0;
+        height = 0;
+        return false;
+    }
+
+    appendStubLog("GBAStationNDSStub: png preview texture create begin size=%dx%d uploadBytes=%u",
+                  width,
+                  height,
+                  static_cast<unsigned>(uploadBytes));
+    texture = Gfx::TextureCreate(static_cast<u32>(width),
+                                 static_cast<u32>(height),
+                                 DkImageFormat_RGBA8_Unorm);
+    appendStubLog("GBAStationNDSStub: png preview texture create ok tex=%u", texture);
+    appendStubLog("GBAStationNDSStub: png preview texture upload begin tex=%u stride=%u",
+                  texture,
+                  static_cast<unsigned>(width * 4));
+    Gfx::TextureUpload(texture,
+                       0,
+                       0,
+                       static_cast<u32>(width),
+                       static_cast<u32>(height),
+                       const_cast<unsigned char*>(uploadPixels),
+                       static_cast<u32>(width * 4));
+    appendStubLog("GBAStationNDSStub: png preview texture upload queued tex=%u", texture);
+    stbi_image_free(pixels);
+    return texture != 0;
 }
 
 float displayRowY(int row)
@@ -186,6 +459,125 @@ bool NdsMenuLayer::consumeCheatSettingsDirty()
     return dirty;
 }
 
+void NdsMenuLayer::releaseFilePickerPreview()
+{
+    if (m_filePickerPreviewTexture != 0)
+    {
+        Gfx::TextureDelete(m_filePickerPreviewTexture);
+        m_filePickerPreviewTexture = 0;
+    }
+    m_filePickerPreviewWidth = 0;
+    m_filePickerPreviewHeight = 0;
+    m_filePickerPreviewPath.clear();
+    m_filePickerPreviewAttempted = false;
+}
+
+void NdsMenuLayer::reloadFilePickerEntries(const std::string& directory, const std::string& focusPath)
+{
+    releaseFilePickerPreview();
+    m_filePickerEntries.clear();
+    m_filePickerDirectory = directory.empty() ? kOverlayRoot : directory;
+    m_filePickerFocus = 0;
+    m_filePickerScrollY = 0.0f;
+    m_filePickerScrollLastTick = 0;
+
+    std::error_code ec;
+    if (!std::filesystem::exists(m_filePickerDirectory, ec))
+        std::filesystem::create_directories(m_filePickerDirectory, ec);
+
+    if (std::filesystem::path(m_filePickerDirectory).has_parent_path())
+    {
+        NdsFilePickerEntry up {};
+        up.name = "..";
+        up.path = std::filesystem::path(m_filePickerDirectory).parent_path().string();
+        up.isDirectory = true;
+        m_filePickerEntries.push_back(up);
+    }
+
+    std::vector<NdsFilePickerEntry> dirs;
+    std::vector<NdsFilePickerEntry> files;
+    for (const auto& entry : std::filesystem::directory_iterator(m_filePickerDirectory, ec))
+    {
+        if (ec)
+            break;
+        NdsFilePickerEntry item {};
+        item.path = entry.path().string();
+        item.name = entry.path().filename().string();
+        item.isDirectory = entry.is_directory(ec);
+        item.modifiedTime = formatFileTime(entry.path());
+        if (!item.isDirectory)
+        {
+            if (!endsWithNoCase(item.name, ".png"))
+                continue;
+            item.size = entry.file_size(ec);
+        }
+        if (item.name.empty())
+            continue;
+        (item.isDirectory ? dirs : files).push_back(item);
+    }
+
+    auto sortByName = [](const NdsFilePickerEntry& a, const NdsFilePickerEntry& b) {
+        return a.name < b.name;
+    };
+    std::sort(dirs.begin(), dirs.end(), sortByName);
+    std::sort(files.begin(), files.end(), sortByName);
+    m_filePickerEntries.insert(m_filePickerEntries.end(), dirs.begin(), dirs.end());
+    m_filePickerEntries.insert(m_filePickerEntries.end(), files.begin(), files.end());
+
+    const std::string normalizedFocus = focusPath.empty() ? std::string{} : std::filesystem::path(focusPath).lexically_normal().string();
+    if (!normalizedFocus.empty())
+    {
+        for (int i = 0; i < static_cast<int>(m_filePickerEntries.size()); ++i)
+        {
+            if (std::filesystem::path(m_filePickerEntries[i].path).lexically_normal().string() == normalizedFocus)
+            {
+                m_filePickerFocus = i;
+                break;
+            }
+        }
+    }
+    appendStubLog("GBAStationNDSStub: file picker entries dir=%s count=%d focus=%d",
+                  m_filePickerDirectory.c_str(),
+                  static_cast<int>(m_filePickerEntries.size()),
+                  m_filePickerFocus);
+}
+
+void NdsMenuLayer::ensureFilePickerPreview()
+{
+    if (!m_filePickerVisible ||
+        m_filePickerFocus < 0 ||
+        m_filePickerFocus >= static_cast<int>(m_filePickerEntries.size()))
+        return;
+
+    const auto& entry = m_filePickerEntries[m_filePickerFocus];
+    if (entry.isDirectory || !endsWithNoCase(entry.path, ".png"))
+    {
+        releaseFilePickerPreview();
+        return;
+    }
+
+    if (m_filePickerPreviewPath == entry.path && m_filePickerPreviewAttempted)
+        return;
+
+    releaseFilePickerPreview();
+    m_filePickerPreviewPath = entry.path;
+    m_filePickerPreviewAttempted = true;
+    appendStubLog("GBAStationNDSStub: file picker preview load begin path=%s", entry.path.c_str());
+    if (loadPngTextureFromFile(entry.path,
+                               m_filePickerPreviewTexture,
+                               m_filePickerPreviewWidth,
+                               m_filePickerPreviewHeight))
+    {
+        appendStubLog("GBAStationNDSStub: file picker preview load ok size=%dx%d",
+                      m_filePickerPreviewWidth,
+                      m_filePickerPreviewHeight);
+    }
+    else
+    {
+        appendStubLog("GBAStationNDSStub: file picker preview load failed path=%s", entry.path.c_str());
+    }
+}
+
 void NdsMenuLayer::beginSelectionAnimation(int oldSelected, int newSelected)
 {
     if (oldSelected == newSelected)
@@ -214,6 +606,16 @@ void NdsMenuLayer::open()
     m_customLayoutEditorVisible = false;
     m_customLayoutEditorClosing = false;
     m_customLayoutReturnToMenu = false;
+    m_overlaySidebarVisible = false;
+    m_overlaySidebarClosing = false;
+    m_overlaySidebarReturnToMenu = false;
+    m_shaderSidebarVisible = false;
+    m_shaderSidebarClosing = false;
+    m_shaderSidebarReturnToMenu = false;
+    m_filePickerVisible = false;
+    m_filePickerClosing = false;
+    m_filePickerReturnToOverlay = false;
+    releaseFilePickerPreview();
     m_visible = true;
     m_focusScope = FocusScope::Tabs;
     m_contentFocus = 0;
@@ -226,13 +628,32 @@ void NdsMenuLayer::open()
 
 void NdsMenuLayer::close()
 {
-    if (!m_visible && !m_panelAnimating && !m_customLayoutEditorVisible)
+    if (!m_visible && !m_panelAnimating && !m_customLayoutEditorVisible &&
+        !m_overlaySidebarVisible && !m_shaderSidebarVisible && !m_filePickerVisible)
         return;
+    if (m_filePickerVisible && !m_filePickerClosing)
+    {
+        m_filePickerClosing = true;
+        m_filePickerReturnToOverlay = false;
+        m_filePickerAnimStartTick = armGetSystemTick();
+    }
     if (m_customLayoutEditorVisible && !m_customLayoutEditorClosing)
     {
         m_customLayoutEditorClosing = true;
         m_customLayoutReturnToMenu = false;
         m_customLayoutAnimStartTick = armGetSystemTick();
+    }
+    if (m_overlaySidebarVisible && !m_overlaySidebarClosing)
+    {
+        m_overlaySidebarClosing = true;
+        m_overlaySidebarReturnToMenu = false;
+        m_overlaySidebarAnimStartTick = armGetSystemTick();
+    }
+    if (m_shaderSidebarVisible && !m_shaderSidebarClosing)
+    {
+        m_shaderSidebarClosing = true;
+        m_shaderSidebarReturnToMenu = false;
+        m_shaderSidebarAnimStartTick = armGetSystemTick();
     }
     m_visible = false;
     m_focusScope = FocusScope::Tabs;
@@ -243,7 +664,8 @@ void NdsMenuLayer::close()
 
 void NdsMenuLayer::toggle()
 {
-    if (m_customLayoutEditorVisible || m_visible)
+    if (m_customLayoutEditorVisible || m_overlaySidebarVisible || m_shaderSidebarVisible ||
+        m_filePickerVisible || m_visible)
         close();
     else
         open();
@@ -251,7 +673,8 @@ void NdsMenuLayer::toggle()
 
 bool NdsMenuLayer::active() const
 {
-    if (m_visible || m_customLayoutEditorVisible)
+    if (m_visible || m_customLayoutEditorVisible || m_overlaySidebarVisible ||
+        m_shaderSidebarVisible || m_filePickerVisible)
         return true;
     return m_panelAnimating && animationProgress(m_panelAnimStartTick, kPanelAnimationMs) < 1.0f;
 }
@@ -358,6 +781,17 @@ void NdsMenuLayer::setDisplaySettings(const NdsDisplaySettings& settings)
     m_display.layout = std::clamp(m_display.layout, 0, 7);
     m_display.orientation = std::clamp(m_display.orientation, 0, 3);
     m_display.screenGap = clampScreenGap(m_display.screenGap);
+    bool validShader = false;
+    for (const char* shaderType : kShaderTypes)
+    {
+        if (m_display.ndsShaderType == shaderType)
+        {
+            validShader = true;
+            break;
+        }
+    }
+    if (!validShader)
+        m_display.ndsShaderType = "dot";
     setCustomLayoutSettings(m_display.customLayout);
 }
 
@@ -464,7 +898,12 @@ bool NdsMenuLayer::activateDisplayControl()
         if (m_display.layout == 7)
             beginCustomLayoutEditor();
         return false;
+    case 7:
+        beginOverlaySidebar();
+        return false;
     case 8:
+        beginShaderSidebar();
+        return false;
     case 9:
     case 10:
     case 11:
@@ -506,6 +945,72 @@ void NdsMenuLayer::beginCustomLayoutEditor()
     m_customLayoutAnimStartTick = armGetSystemTick();
     m_customLayoutFocus = 0;
     resetContentScroll();
+}
+
+void NdsMenuLayer::beginOverlaySidebar()
+{
+    m_visible = false;
+    m_panelAnimating = false;
+    m_overlaySidebarVisible = true;
+    m_overlaySidebarClosing = false;
+    m_overlaySidebarReturnToMenu = false;
+    m_overlaySidebarAnimStartTick = armGetSystemTick();
+    m_overlaySidebarFocus = 0;
+    m_selectorDirection = 0;
+    resetContentScroll();
+}
+
+void NdsMenuLayer::beginShaderSidebar()
+{
+    m_visible = false;
+    m_panelAnimating = false;
+    m_shaderSidebarVisible = true;
+    m_shaderSidebarClosing = false;
+    m_shaderSidebarReturnToMenu = false;
+    m_shaderSidebarAnimStartTick = armGetSystemTick();
+    m_shaderSidebarFocus = 0;
+    m_selectorDirection = 0;
+    resetContentScroll();
+}
+
+void NdsMenuLayer::beginFilePicker()
+{
+    m_overlaySidebarVisible = false;
+    m_overlaySidebarClosing = false;
+    m_filePickerVisible = true;
+    m_filePickerClosing = false;
+    m_filePickerReturnToOverlay = false;
+    m_filePickerAnimStartTick = armGetSystemTick();
+    reloadFilePickerEntries(parentPathOrRoot(m_display.overlayPath), m_display.overlayPath);
+}
+
+void NdsMenuLayer::closeOverlaySidebar(bool returnToMenu)
+{
+    if (!m_overlaySidebarVisible || m_overlaySidebarClosing)
+        return;
+    m_overlaySidebarClosing = true;
+    m_overlaySidebarReturnToMenu = returnToMenu;
+    m_overlaySidebarAnimStartTick = armGetSystemTick();
+    m_selectorDirection = 0;
+}
+
+void NdsMenuLayer::closeShaderSidebar(bool returnToMenu)
+{
+    if (!m_shaderSidebarVisible || m_shaderSidebarClosing)
+        return;
+    m_shaderSidebarClosing = true;
+    m_shaderSidebarReturnToMenu = returnToMenu;
+    m_shaderSidebarAnimStartTick = armGetSystemTick();
+    m_selectorDirection = 0;
+}
+
+void NdsMenuLayer::closeFilePicker(bool returnToOverlay)
+{
+    if (!m_filePickerVisible || m_filePickerClosing)
+        return;
+    m_filePickerClosing = true;
+    m_filePickerReturnToOverlay = returnToOverlay;
+    m_filePickerAnimStartTick = armGetSystemTick();
 }
 
 bool NdsMenuLayer::cycleCustomLayoutSetting(int direction)
@@ -581,6 +1086,41 @@ bool NdsMenuLayer::resetCustomLayoutSetting()
     case 5: return resetFloat(m_display.customLayout.bottomOffsetY, kCustomOffsetDefault);
     default: return false;
     }
+}
+
+bool NdsMenuLayer::cycleOverlaySetting(int direction)
+{
+    (void)direction;
+    if (m_overlaySidebarFocus == 0)
+    {
+        m_display.overlayEnabled = !m_display.overlayEnabled;
+        return true;
+    }
+    return false;
+}
+
+bool NdsMenuLayer::cycleShaderSetting(int direction)
+{
+    if (m_shaderSidebarFocus == 0)
+    {
+        m_display.shaderEnabled = !m_display.shaderEnabled;
+        return true;
+    }
+    if (m_shaderSidebarFocus != 1 || direction == 0)
+        return false;
+
+    int idx = 0;
+    for (int i = 0; i < static_cast<int>(std::size(kShaderTypes)); ++i)
+    {
+        if (m_display.ndsShaderType == kShaderTypes[i])
+        {
+            idx = i;
+            break;
+        }
+    }
+    idx = (idx + direction + static_cast<int>(std::size(kShaderTypes))) % static_cast<int>(std::size(kShaderTypes));
+    m_display.ndsShaderType = kShaderTypes[idx];
+    return true;
 }
 
 bool NdsMenuLayer::cycleCurrentSetting(int direction)
@@ -697,6 +1237,39 @@ bool NdsMenuLayer::updateHeldCustomSelector(std::uint64_t buttonsHeld)
     return cycleCustomLayoutSetting(direction);
 }
 
+bool NdsMenuLayer::updateHeldShaderSelector(std::uint64_t buttonsHeld)
+{
+    if (!m_shaderSidebarVisible ||
+        m_shaderSidebarFocus != 1 ||
+        (buttonsHeld & (HidNpadButton_L | HidNpadButton_R)) == 0)
+    {
+        m_selectorDirection = 0;
+        return false;
+    }
+
+    const int direction = (buttonsHeld & HidNpadButton_R) ? 1 : -1;
+    const std::uint64_t now = armGetSystemTick();
+    if (m_selectorDirection != direction)
+    {
+        m_selectorDirection = direction;
+        m_selectorRepeatStartTick = now;
+        m_selectorLastStepTick = now;
+        return false;
+    }
+
+    const float heldMs = static_cast<float>(armTicksToNs(now - m_selectorRepeatStartTick)) / 1000000.0f;
+    if (heldMs < kSelectorInitialDelayMs)
+        return false;
+
+    const float intervalMs = std::max(52.0f, 180.0f - (heldMs - kSelectorInitialDelayMs) * 0.25f);
+    const float sinceLastMs = static_cast<float>(armTicksToNs(now - m_selectorLastStepTick)) / 1000000.0f;
+    if (sinceLastMs < intervalMs)
+        return false;
+
+    m_selectorLastStepTick = now;
+    return cycleShaderSetting(direction);
+}
+
 std::uint64_t NdsMenuLayer::updateHeldNavigation(std::uint64_t buttonsDown, std::uint64_t buttonsHeld)
 {
     const int heldDirection = navDirectionFromButtons(buttonsHeld);
@@ -769,6 +1342,85 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
             open();
     }
 
+    if (m_overlaySidebarVisible && m_overlaySidebarClosing &&
+        animationProgress(m_overlaySidebarAnimStartTick, kSidebarAnimationMs) >= 1.0f)
+    {
+        m_overlaySidebarVisible = false;
+        m_overlaySidebarClosing = false;
+        const bool returnToMenu = m_overlaySidebarReturnToMenu;
+        m_overlaySidebarReturnToMenu = false;
+        m_selectorDirection = 0;
+        if (returnToMenu)
+            open();
+    }
+
+    if (m_shaderSidebarVisible && m_shaderSidebarClosing &&
+        animationProgress(m_shaderSidebarAnimStartTick, kSidebarAnimationMs) >= 1.0f)
+    {
+        m_shaderSidebarVisible = false;
+        m_shaderSidebarClosing = false;
+        const bool returnToMenu = m_shaderSidebarReturnToMenu;
+        m_shaderSidebarReturnToMenu = false;
+        m_selectorDirection = 0;
+        if (returnToMenu)
+            open();
+    }
+
+    if (m_filePickerVisible && m_filePickerClosing &&
+        animationProgress(m_filePickerAnimStartTick, kPanelAnimationMs) >= 1.0f)
+    {
+        m_filePickerVisible = false;
+        m_filePickerClosing = false;
+        const bool returnToOverlay = m_filePickerReturnToOverlay;
+        m_filePickerReturnToOverlay = false;
+        releaseFilePickerPreview();
+        if (returnToOverlay)
+        {
+            m_overlaySidebarVisible = true;
+            m_overlaySidebarClosing = false;
+            m_overlaySidebarReturnToMenu = false;
+            m_overlaySidebarAnimStartTick = armGetSystemTick();
+        }
+    }
+
+    if (m_filePickerVisible)
+    {
+        if (m_filePickerClosing)
+            return {};
+
+        const std::uint64_t navButtons = buttonsDown | updateHeldNavigation(buttonsDown, buttonsHeld);
+        if (buttonsDown & HidNpadButton_B)
+        {
+            closeFilePicker(true);
+            return {};
+        }
+        if (isDirectionUp(navButtons) && !m_filePickerEntries.empty())
+            m_filePickerFocus = std::max(0, m_filePickerFocus - 1);
+        if (isDirectionDown(navButtons) && !m_filePickerEntries.empty())
+            m_filePickerFocus = std::min(static_cast<int>(m_filePickerEntries.size()) - 1, m_filePickerFocus + 1);
+
+        if ((buttonsDown & HidNpadButton_A) &&
+            m_filePickerFocus >= 0 &&
+            m_filePickerFocus < static_cast<int>(m_filePickerEntries.size()))
+        {
+            const auto entry = m_filePickerEntries[m_filePickerFocus];
+            if (entry.isDirectory)
+            {
+                reloadFilePickerEntries(entry.path);
+                return {};
+            }
+            if (endsWithNoCase(entry.path, ".png"))
+            {
+                m_display.overlayPath = entry.path;
+                closeFilePicker(true);
+                return {NdsMenuAction::OverlayPathSelected, -1, entry.path};
+            }
+        }
+
+        ensureFilePickerPreview();
+        return {};
+    }
+
     if (m_customLayoutEditorVisible)
     {
         if (m_customLayoutEditorClosing)
@@ -804,6 +1456,66 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
         if ((buttonsDown & HidNpadButton_A) && resetCustomLayoutSetting())
             return {NdsMenuAction::CustomLayoutChanged, -1};
 
+        return {};
+    }
+
+    if (m_overlaySidebarVisible)
+    {
+        if (m_overlaySidebarClosing)
+            return {};
+        const std::uint64_t navButtons = buttonsDown | updateHeldNavigation(buttonsDown, buttonsHeld);
+        if (buttonsDown & HidNpadButton_B)
+        {
+            closeOverlaySidebar(true);
+            return {NdsMenuAction::OverlaySettingsCommitted, -1};
+        }
+        if (isDirectionUp(navButtons))
+            m_overlaySidebarFocus = (m_overlaySidebarFocus + kOverlayControlCount - 1) % kOverlayControlCount;
+        if (isDirectionDown(navButtons))
+            m_overlaySidebarFocus = (m_overlaySidebarFocus + 1) % kOverlayControlCount;
+        if (buttonsDown & HidNpadButton_A)
+        {
+            if (m_overlaySidebarFocus == 0)
+                return cycleOverlaySetting(0) ? NdsMenuResult{NdsMenuAction::OverlaySettingsChanged, -1}
+                                              : NdsMenuResult{};
+            if (m_overlaySidebarFocus == 1)
+            {
+                beginFilePicker();
+                return {};
+            }
+        }
+        return {};
+    }
+
+    if (m_shaderSidebarVisible)
+    {
+        if (m_shaderSidebarClosing)
+            return {};
+        const std::uint64_t navButtons = buttonsDown | updateHeldNavigation(buttonsDown, buttonsHeld);
+        if (buttonsDown & HidNpadButton_B)
+        {
+            closeShaderSidebar(true);
+            return {NdsMenuAction::ShaderSettingsCommitted, -1};
+        }
+        if (isDirectionUp(navButtons))
+            m_shaderSidebarFocus = (m_shaderSidebarFocus + kShaderControlCount - 1) % kShaderControlCount;
+        if (isDirectionDown(navButtons))
+            m_shaderSidebarFocus = (m_shaderSidebarFocus + 1) % kShaderControlCount;
+        if (buttonsDown & HidNpadButton_A)
+            return cycleShaderSetting(0) ? NdsMenuResult{NdsMenuAction::ShaderSettingsChanged, -1}
+                                         : NdsMenuResult{};
+        if (buttonsDown & HidNpadButton_L)
+            return cycleShaderSetting(-1) ? NdsMenuResult{NdsMenuAction::ShaderSettingsChanged, -1}
+                                          : NdsMenuResult{};
+        if (buttonsDown & HidNpadButton_R)
+            return cycleShaderSetting(1) ? NdsMenuResult{NdsMenuAction::ShaderSettingsChanged, -1}
+                                         : NdsMenuResult{};
+        if (updateHeldShaderSelector(buttonsHeld))
+            return {NdsMenuAction::ShaderSettingsChanged, -1};
+        if (isDirectionLeft(buttonsDown) || isDirectionRight(buttonsDown))
+            return cycleShaderSetting(isDirectionRight(buttonsDown) ? 1 : -1)
+                ? NdsMenuResult{NdsMenuAction::ShaderSettingsChanged, -1}
+                : NdsMenuResult{};
         return {};
     }
 
@@ -971,6 +1683,48 @@ void NdsMenuLayer::draw() const
     if (!active())
         return;
 
+    if (m_filePickerVisible)
+    {
+        setMenuMetricsOrientation(m_display.orientation);
+        const float progress = m_filePickerClosing
+            ? 1.0f - easeOutCubic(animationProgress(m_filePickerAnimStartTick, kPanelAnimationMs))
+            : easeOutCubic(animationProgress(m_filePickerAnimStartTick, kPanelAnimationMs));
+        if (progress > 0.0f)
+        {
+            const bool transformed = pushMenuOrientationTransform(m_display.orientation);
+            const float target = filePickerTargetScroll(m_filePickerFocus,
+                                                        static_cast<int>(m_filePickerEntries.size()));
+            const std::uint64_t now = armGetSystemTick();
+            if (m_filePickerScrollLastTick == 0)
+            {
+                m_filePickerScrollLastTick = now;
+                m_filePickerScrollY = target;
+            }
+            else
+            {
+                const float dtMs = static_cast<float>(armTicksToNs(now - m_filePickerScrollLastTick)) / 1000000.0f;
+                m_filePickerScrollLastTick = now;
+                const float t = 1.0f - std::exp(-dtMs / 68.0f);
+                m_filePickerScrollY += (target - m_filePickerScrollY) * std::clamp(t, 0.0f, 1.0f);
+                if (std::fabs(target - m_filePickerScrollY) < 0.5f)
+                    m_filePickerScrollY = target;
+            }
+            drawFilePicker(m_filePickerDirectory,
+                           m_filePickerEntries,
+                           m_filePickerFocus,
+                           m_filePickerScrollY,
+                           m_filePickerPreviewTexture,
+                           m_filePickerPreviewWidth,
+                           m_filePickerPreviewHeight,
+                           progress,
+                           progress);
+            if (transformed)
+                Gfx::PopDrawTransform();
+        }
+        setMenuMetricsOrientation(0);
+        return;
+    }
+
     if (m_customLayoutEditorVisible)
     {
         setMenuMetricsOrientation(m_display.orientation);
@@ -979,6 +1733,40 @@ void NdsMenuLayer::draw() const
         {
             const bool transformed = pushMenuOrientationTransform(m_display.orientation);
             drawCustomLayoutSidebar(m_display.customLayout, m_customLayoutFocus, progress, progress);
+            if (transformed)
+                Gfx::PopDrawTransform();
+        }
+        setMenuMetricsOrientation(0);
+        return;
+    }
+
+    if (m_overlaySidebarVisible)
+    {
+        setMenuMetricsOrientation(m_display.orientation);
+        const float progress = m_overlaySidebarClosing
+            ? 1.0f - easeOutCubic(animationProgress(m_overlaySidebarAnimStartTick, kSidebarAnimationMs))
+            : easeOutCubic(animationProgress(m_overlaySidebarAnimStartTick, kSidebarAnimationMs));
+        if (progress > 0.0f)
+        {
+            const bool transformed = pushMenuOrientationTransform(m_display.orientation);
+            drawOverlaySidebar(m_display, m_overlaySidebarFocus, progress, progress);
+            if (transformed)
+                Gfx::PopDrawTransform();
+        }
+        setMenuMetricsOrientation(0);
+        return;
+    }
+
+    if (m_shaderSidebarVisible)
+    {
+        setMenuMetricsOrientation(m_display.orientation);
+        const float progress = m_shaderSidebarClosing
+            ? 1.0f - easeOutCubic(animationProgress(m_shaderSidebarAnimStartTick, kSidebarAnimationMs))
+            : easeOutCubic(animationProgress(m_shaderSidebarAnimStartTick, kSidebarAnimationMs));
+        if (progress > 0.0f)
+        {
+            const bool transformed = pushMenuOrientationTransform(m_display.orientation);
+            drawShaderSidebar(m_display, m_shaderSidebarFocus, progress, progress);
             if (transformed)
                 Gfx::PopDrawTransform();
         }

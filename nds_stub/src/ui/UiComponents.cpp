@@ -2,6 +2,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <sstream>
 #include <string>
 
 #include <switch.h>
@@ -35,6 +40,9 @@ constexpr UiMetrics kPortraitMetrics {
 };
 
 int gMenuOrientation = 0;
+std::vector<std::uint8_t> gMaterialFontData;
+std::uint32_t gMaterialFont = 0;
+bool gMaterialFontAttempted = false;
 
 } // namespace
 
@@ -80,6 +88,8 @@ const char* filterLabel(bool linear)
 
 namespace {
 
+std::size_t utf8SafePrefix(const std::string& text, std::size_t bytes);
+
 const char* layoutLabel(int index)
 {
     static const char* labels[] = {"纵向对称", "横向对称", "上屏优先", "下屏优先", "混合横向", "单上屏", "单下屏", "自定义"};
@@ -90,6 +100,117 @@ const char* orientationLabel(int index)
 {
     static const char* labels[] = {"0度", "90度", "180度", "270度"};
     return labels[std::clamp(index, 0, 3)];
+}
+
+const char* shaderTypeLabel(const std::string& type)
+{
+    if (type == "scanline") return "scanline";
+    if (type == "crt") return "crt";
+    if (type == "dot-clear") return "dot-clear";
+    return "dot";
+}
+
+std::string filenameFromPath(const std::string& path)
+{
+    if (path.empty())
+        return "未选择";
+    std::string name = std::filesystem::path(path).filename().string();
+    return name.empty() ? path : name;
+}
+
+std::uint32_t materialFont()
+{
+    if (gMaterialFontAttempted)
+        return gMaterialFont;
+    gMaterialFontAttempted = true;
+
+    constexpr const char* paths[] = {
+        "romfs:/material/MaterialIcons-Regular.ttf",
+        "sdmc:/GBAStation/resources/material/MaterialIcons-Regular.ttf",
+        "/GBAStation/resources/material/MaterialIcons-Regular.ttf",
+    };
+    for (const char* path : paths)
+    {
+        std::ifstream in(path, std::ios::binary);
+        if (!in)
+            continue;
+        in.seekg(0, std::ios::end);
+        const std::streamoff size = in.tellg();
+        if (size <= 0)
+            continue;
+        in.seekg(0, std::ios::beg);
+        gMaterialFontData.resize(static_cast<std::size_t>(size));
+        in.read(reinterpret_cast<char*>(gMaterialFontData.data()), size);
+        if (!in)
+        {
+            gMaterialFontData.clear();
+            continue;
+        }
+        gMaterialFont = Gfx::FontLoad(gMaterialFontData.data());
+        break;
+    }
+    return gMaterialFont;
+}
+
+const char* tabIcon(NdsMenuLayer::Item item)
+{
+    switch (item)
+    {
+    case NdsMenuLayer::Item::Resume: return "\uE5C4";
+    case NdsMenuLayer::Item::SaveState: return "\uE161";
+    case NdsMenuLayer::Item::LoadState: return "\uE2C6";
+    case NdsMenuLayer::Item::Cheats: return "\uE3AE";
+    case NdsMenuLayer::Item::Display: return "\uE333";
+    case NdsMenuLayer::Item::Reset: return "\uE5D5";
+    case NdsMenuLayer::Item::Exit: return "\uE879";
+    default: return "";
+    }
+}
+
+std::string ellipsizeText(const std::string& source, float maxTextW, float fontSize = 16.0f)
+{
+    if (source.empty() || maxTextW <= 18.0f)
+        return source.empty() ? source : "...";
+    if (Gfx::MeasureText(Gfx::SystemFontChinese, fontSize, source.c_str()).X <= maxTextW)
+        return source;
+
+    const std::string suffix = "...";
+    std::size_t lo = 0;
+    std::size_t hi = source.size();
+    std::size_t best = 0;
+    for (int i = 0; i < 12 && lo <= hi; ++i)
+    {
+        const std::size_t mid = lo + (hi - lo) / 2;
+        const std::size_t cut = utf8SafePrefix(source, mid);
+        const std::string candidate = source.substr(0, cut) + suffix;
+        if (Gfx::MeasureText(Gfx::SystemFontChinese, fontSize, candidate.c_str()).X <= maxTextW)
+        {
+            best = cut;
+            lo = mid + 1;
+        }
+        else
+        {
+            if (mid == 0)
+                break;
+            hi = mid - 1;
+        }
+    }
+    return best == 0 ? suffix : source.substr(0, best) + suffix;
+}
+
+std::string formatBytes(std::uint64_t bytes)
+{
+    const char* units[] = {"B", "KB", "MB", "GB"};
+    double value = static_cast<double>(bytes);
+    int unit = 0;
+    while (value >= 1024.0 && unit < 3)
+    {
+        value /= 1024.0;
+        ++unit;
+    }
+    std::ostringstream out;
+    out << std::fixed << std::setprecision(unit == 0 ? 0 : 1) << value << ' ' << units[unit];
+    return out.str();
 }
 
 #define kContentBodyTop (::beiklive::nds_stub::ui::menuMetrics().contentBodyTop)
@@ -491,6 +612,52 @@ void drawSubPageRow(Vector2f pos, const char* label, bool focused, bool enabled,
                   {0.32f, 0.75f, 1.0f, enabled ? 0.96f * opacity : 0.25f * opacity}, ">");
 }
 
+void drawInfoRow(Vector2f pos,
+                 float rowW,
+                 const char* label,
+                 const std::string& value,
+                 bool focused,
+                 bool enabled,
+                 float opacity)
+{
+    if (focused && enabled)
+        drawGradientBorder(pos - Vector2f{3.0f, 3.0f}, {rowW + 6.0f, 48.0f}, 3.0f);
+    drawRect(pos, {rowW, 42.0f}, {1.0f, 1.0f, 1.0f, enabled ? 0.045f * opacity : 0.020f * opacity}, true);
+    drawBorder(pos, {rowW, 42.0f}, 1.0f, {1.0f, 1.0f, 1.0f, enabled ? 0.10f * opacity : 0.04f * opacity});
+    Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{18.0f, 12.0f}, 17.0f,
+                  {1.0f, 1.0f, 1.0f, enabled ? 0.88f * opacity : 0.34f * opacity}, "%s", label);
+
+    const float valueX = pos.X + rowW * 0.45f;
+    const float valueW = std::max(48.0f, rowW * 0.55f - 46.0f);
+    const float textW = Gfx::MeasureText(Gfx::SystemFontChinese, 16.0f, value.c_str()).X;
+    const bool marquee = focused && enabled && textW > valueW;
+    const Color valueColor{0.70f, 0.88f, 1.0f, enabled ? 0.92f * opacity : 0.28f * opacity};
+    pushRectScissor({valueX, pos.Y + 5.0f}, {valueW, 32.0f});
+    if (marquee)
+    {
+        Gfx::DrawText(Gfx::SystemFontChinese,
+                      {valueX - focusedMarqueeOffset(textW, valueW), pos.Y + 12.0f},
+                      16.0f,
+                      valueColor,
+                      "%s",
+                      value.c_str());
+    }
+    else
+    {
+        const std::string shown = ellipsizeText(value, valueW, 16.0f);
+        Gfx::DrawText(Gfx::SystemFontChinese,
+                      {valueX, pos.Y + 12.0f},
+                      16.0f,
+                      valueColor,
+                      "%s",
+                      shown.c_str());
+    }
+    Gfx::PopScissor();
+
+    Gfx::DrawText(Gfx::SystemFontStandard, pos + Vector2f{rowW - 24.0f, 7.0f}, 28.0f,
+                  {0.32f, 0.75f, 1.0f, enabled ? 0.96f * opacity : 0.25f * opacity}, ">");
+}
+
 void drawButtonRow(Vector2f pos, const char* label, bool focused, float opacity)
 {
     const float rowW = settingRowW();
@@ -512,6 +679,59 @@ void drawSectionLabel(Vector2f pos, const char* label, float opacity)
     drawLine(pos + Vector2f{leftW + 140.0f, 10.0f},
              {std::max(24.0f, rowW - leftW - 140.0f), 1.0f},
              {1.0f, 1.0f, 1.0f, 0.10f * opacity});
+}
+
+void drawPanelSwitchRow(Vector2f pos,
+                        float rowW,
+                        const char* label,
+                        bool value,
+                        bool focused,
+                        float opacity)
+{
+    if (focused)
+        drawGradientBorder(pos - Vector2f{3.0f, 3.0f}, {rowW + 6.0f, 48.0f}, 3.0f);
+    drawRect(pos, {rowW, 42.0f}, {1.0f, 1.0f, 1.0f, 0.050f * opacity}, true);
+    drawBorder(pos, {rowW, 42.0f}, 1.0f, {1.0f, 1.0f, 1.0f, 0.11f * opacity});
+    Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{16.0f, 12.0f}, 16.0f,
+                  {1.0f, 1.0f, 1.0f, 0.90f * opacity}, "%s", label);
+    Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{rowW - 22.0f, 12.0f}, 16.0f,
+                  value ? Color{0.34f, 0.78f, 1.0f, 0.96f * opacity}
+                        : Color{0.60f, 0.64f, 0.68f, 0.80f * opacity},
+                  Gfx::align_Right, Gfx::align_Left, value ? "开" : "关");
+}
+
+void drawPanelLrSelectorRow(Vector2f pos,
+                            float rowW,
+                            const char* label,
+                            const char* value,
+                            bool focused,
+                            float opacity)
+{
+    if (focused)
+        drawGradientBorder(pos - Vector2f{3.0f, 3.0f}, {rowW + 6.0f, 48.0f}, 3.0f);
+    drawRect(pos, {rowW, 42.0f}, {1.0f, 1.0f, 1.0f, 0.050f * opacity}, true);
+    drawBorder(pos, {rowW, 42.0f}, 1.0f, {1.0f, 1.0f, 1.0f, 0.11f * opacity});
+    Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{16.0f, 12.0f}, 16.0f,
+                  {1.0f, 1.0f, 1.0f, 0.90f * opacity}, "%s", label);
+    const float centerX = rowW - 92.0f;
+    Gfx::DrawText(Gfx::SystemFontNintendoExt, pos + Vector2f{rowW - 164.0f, 21.0f}, 23.0f,
+                  {0.80f, 0.92f, 1.0f, 0.90f * opacity},
+                  Gfx::align_Center, Gfx::align_Center, NDS_STUB_KEYICON_LB);
+    Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{centerX, 12.0f}, 16.0f,
+                  {0.78f, 0.92f, 1.0f, 0.96f * opacity},
+                  Gfx::align_Center, Gfx::align_Left, value);
+    Gfx::DrawText(Gfx::SystemFontNintendoExt, pos + Vector2f{rowW - 18.0f, 21.0f}, 23.0f,
+                  {0.80f, 0.92f, 1.0f, 0.90f * opacity},
+                  Gfx::align_Center, Gfx::align_Center, NDS_STUB_KEYICON_RB);
+}
+
+void drawPanelSection(float panelX, float panelW, float y, const char* text, float opacity)
+{
+    drawLine({panelX + 24.0f, y + 10.0f}, {82.0f, 1.0f}, {1.0f, 1.0f, 1.0f, 0.13f * opacity});
+    Gfx::DrawText(Gfx::SystemFontChinese, {panelX + 118.0f, y}, 15.0f,
+                  {0.72f, 0.84f, 0.96f, 0.76f * opacity}, "%s", text);
+    drawLine({panelX + 208.0f, y + 10.0f}, {panelW - 232.0f, 1.0f},
+             {1.0f, 1.0f, 1.0f, 0.13f * opacity});
 }
 
 } // namespace
@@ -631,8 +851,20 @@ void drawLeftMenu(int selected,
         const Color textColor = isSelected ? Color{1.0f, 1.0f, 1.0f, 1.0f}
                                            : Color{1.0f, 1.0f, 1.0f, 0.78f};
 
+        const std::uint32_t iconFont = materialFont();
+        if (iconFont != 0)
+        {
+            Gfx::DrawText(iconFont,
+                          {kLeftX + 28.0f, y + offsetY + 29.0f},
+                          22.0f,
+                          isSelected ? Color{0.44f, 0.80f, 1.0f, 1.0f}
+                                     : Color{1.0f, 1.0f, 1.0f, 0.55f},
+                          Gfx::align_Center,
+                          Gfx::align_Center,
+                          tabIcon(item));
+        }
         Gfx::DrawText(Gfx::SystemFontChinese,
-                      {kLeftX + 28.0f, y + offsetY + 19.0f},
+                      {kLeftX + (iconFont != 0 ? 54.0f : 28.0f), y + offsetY + 19.0f},
                       18.0f,
                       textColor,
                       "%s", itemLabel(item));
@@ -955,6 +1187,215 @@ void drawCustomLayoutSidebar(const NdsCustomLayoutSettings& settings,
     drawFloatAdjusterRow({panelX + 24.0f, bottomRowY}, rowW, "缩放", settings.bottomScale, "", 1.0f, 0.1f, focusedRow == 3, opacity, 1);
     drawFloatAdjusterRow({panelX + 24.0f, bottomRowY + rowGap}, rowW, "X偏移", settings.bottomOffsetX, "px", 0.0f, 1.0f, focusedRow == 4, opacity, 0);
     drawFloatAdjusterRow({panelX + 24.0f, bottomRowY + rowGap * 2.0f}, rowW, "Y偏移", settings.bottomOffsetY, "px", 0.0f, 1.0f, focusedRow == 5, opacity, 0);
+}
+
+void drawOverlaySidebar(const NdsDisplaySettings& display,
+                        int focusedRow,
+                        float progress,
+                        float opacity)
+{
+    opacity = clamp01(opacity);
+    progress = easeOutQuart(clamp01(progress));
+    const bool portrait = kScreenH > kScreenW;
+    const float panelW = portrait ? 340.0f : 390.0f;
+    const float panelX = kScreenW - panelW + (1.0f - progress) * panelW;
+    const float rowW = panelW - 48.0f;
+    const float headerY = portrait ? 38.0f : 30.0f;
+    const float hintY = headerY + 32.0f;
+    const float sectionY = portrait ? 144.0f : 112.0f;
+    const float rowY = sectionY + 36.0f;
+    const float rowGap = 56.0f;
+
+    drawRect({0.0f, 0.0f}, {kScreenW, kScreenH}, {0.0f, 0.0f, 0.0f, 0.24f * opacity}, true);
+    drawRect({panelX, 0.0f}, {panelW, kScreenH}, {0.015f, 0.020f, 0.030f, 0.95f * opacity}, true);
+    drawLine({panelX, 0.0f}, {1.0f, kScreenH}, {1.0f, 1.0f, 1.0f, 0.14f * opacity});
+    Gfx::DrawText(Gfx::SystemFontChinese, {panelX + 28.0f, headerY}, 23.0f,
+                  {1.0f, 1.0f, 1.0f, 0.96f * opacity}, "遮罩选择");
+    Gfx::DrawText(Gfx::SystemFontChinese, {panelX + 28.0f, hintY}, 13.0f,
+                  {0.78f, 0.86f, 0.94f, 0.62f * opacity}, "B 返回   A 确定");
+
+    drawPanelSection(panelX, panelW, sectionY, "遮罩设置", opacity);
+    drawPanelSwitchRow({panelX + 24.0f, rowY}, rowW, "遮罩开关", display.overlayEnabled, focusedRow == 0, opacity);
+    drawInfoRow({panelX + 24.0f, rowY + rowGap}, rowW, "遮罩路径",
+                filenameFromPath(display.overlayPath), focusedRow == 1, true, opacity);
+}
+
+void drawShaderSidebar(const NdsDisplaySettings& display,
+                       int focusedRow,
+                       float progress,
+                       float opacity)
+{
+    opacity = clamp01(opacity);
+    progress = easeOutQuart(clamp01(progress));
+    const bool portrait = kScreenH > kScreenW;
+    const float panelW = portrait ? 340.0f : 390.0f;
+    const float panelX = kScreenW - panelW + (1.0f - progress) * panelW;
+    const float rowW = panelW - 48.0f;
+    const float headerY = portrait ? 38.0f : 30.0f;
+    const float hintY = headerY + 32.0f;
+    const float sectionY = portrait ? 144.0f : 112.0f;
+    const float rowY = sectionY + 36.0f;
+    const float rowGap = 56.0f;
+
+    drawRect({0.0f, 0.0f}, {kScreenW, kScreenH}, {0.0f, 0.0f, 0.0f, 0.24f * opacity}, true);
+    drawRect({panelX, 0.0f}, {panelW, kScreenH}, {0.015f, 0.020f, 0.030f, 0.95f * opacity}, true);
+    drawLine({panelX, 0.0f}, {1.0f, kScreenH}, {1.0f, 1.0f, 1.0f, 0.14f * opacity});
+    Gfx::DrawText(Gfx::SystemFontChinese, {panelX + 28.0f, headerY}, 23.0f,
+                  {1.0f, 1.0f, 1.0f, 0.96f * opacity}, "滤镜选择");
+    Gfx::DrawText(Gfx::SystemFontChinese, {panelX + 28.0f, hintY}, 13.0f,
+                  {0.78f, 0.86f, 0.94f, 0.62f * opacity}, "B 返回   A 切换");
+
+    drawPanelSection(panelX, panelW, sectionY, "滤镜设置", opacity);
+    drawPanelSwitchRow({panelX + 24.0f, rowY}, rowW, "滤镜开关", display.shaderEnabled, focusedRow == 0, opacity);
+    drawPanelLrSelectorRow({panelX + 24.0f, rowY + rowGap}, rowW, "滤镜类型",
+                           shaderTypeLabel(display.ndsShaderType), focusedRow == 1, opacity);
+}
+
+void drawFilePicker(const std::string& directory,
+                    const std::vector<NdsFilePickerEntry>& entries,
+                    int focusedRow,
+                    float scrollY,
+                    std::uint32_t previewTexture,
+                    int previewWidth,
+                    int previewHeight,
+                    float progress,
+                    float opacity)
+{
+    opacity = clamp01(opacity);
+    progress = easeOutQuart(clamp01(progress));
+    const float offsetY = (1.0f - progress) * kScreenH;
+    const float topH = 64.0f;
+    const float footerH = 64.0f;
+    const float bodyY = topH + offsetY;
+    const float bodyH = kScreenH - topH - footerH;
+    const float listW = kScreenW * 0.70f;
+    const float infoX = listW;
+    const float rowH = 46.0f;
+
+    drawRect({0.0f, offsetY}, {kScreenW, kScreenH}, {0.010f, 0.014f, 0.020f, 0.985f * opacity}, true);
+    drawRect({0.0f, offsetY}, {kScreenW, topH}, {0.0f, 0.0f, 0.0f, 0.42f * opacity}, true);
+    drawLine({0.0f, offsetY + topH}, {kScreenW, 1.0f}, {1.0f, 1.0f, 1.0f, 0.12f * opacity});
+    drawLine({listW, bodyY}, {1.0f, bodyH}, {1.0f, 1.0f, 1.0f, 0.10f * opacity});
+
+    const std::string shownDir = ellipsizeText(directory.empty() ? "/" : directory, listW - 42.0f, 16.0f);
+    Gfx::DrawText(Gfx::SystemFontChinese, {24.0f, offsetY + 23.0f}, 16.0f,
+                  {0.90f, 0.96f, 1.0f, 0.88f * opacity}, "%s", shownDir.c_str());
+    char indexText[64];
+    std::snprintf(indexText, sizeof(indexText), "%d / %d",
+                  entries.empty() ? 0 : std::clamp(focusedRow + 1, 1, static_cast<int>(entries.size())),
+                  static_cast<int>(entries.size()));
+    Gfx::DrawText(Gfx::SystemFontChinese, {kScreenW - 24.0f, offsetY + 23.0f}, 16.0f,
+                  {0.78f, 0.88f, 0.96f, 0.76f * opacity}, Gfx::align_Right, Gfx::align_Left,
+                  indexText);
+
+    Gfx::PushScissor(0, static_cast<u32>(bodyY), static_cast<u32>(listW), static_cast<u32>(bodyH));
+    const int firstRow = std::max(0, static_cast<int>(scrollY / rowH) - 2);
+    const int rowCount = static_cast<int>(bodyH / rowH) + 5;
+    const int lastRow = std::min(static_cast<int>(entries.size()), firstRow + rowCount);
+    const std::uint32_t iconFont = materialFont();
+    for (int i = firstRow; i < lastRow; ++i)
+    {
+        const auto& entry = entries[i];
+        const float y = bodyY + static_cast<float>(i) * rowH - scrollY;
+        const bool focused = i == focusedRow;
+        if (focused)
+            drawGradientBorder({20.0f, y + 4.0f}, {listW - 40.0f, rowH - 8.0f}, 3.0f);
+        else
+            drawRect({20.0f, y + 5.0f}, {listW - 40.0f, rowH - 10.0f},
+                     {1.0f, 1.0f, 1.0f, 0.025f * opacity}, true);
+
+        const char* icon = entry.isDirectory ? "\uE2C7" : "\uE3F4";
+        if (iconFont != 0)
+            Gfx::DrawText(iconFont, {48.0f, y + rowH * 0.5f}, 24.0f,
+                          entry.isDirectory ? Color{0.50f, 0.78f, 1.0f, 0.92f * opacity}
+                                            : Color{0.66f, 0.90f, 0.74f, 0.88f * opacity},
+                          Gfx::align_Center, Gfx::align_Center, icon);
+        else
+            Gfx::DrawText(Gfx::SystemFontStandard, {48.0f, y + rowH * 0.5f}, 20.0f,
+                          {0.70f, 0.86f, 1.0f, 0.84f * opacity},
+                          Gfx::align_Center, Gfx::align_Center, entry.isDirectory ? "[D]" : "[I]");
+
+        const float textX = 78.0f;
+        const float textW = listW - textX - 38.0f;
+        const float nameW = Gfx::MeasureText(Gfx::SystemFontChinese, 16.0f, entry.name.c_str()).X;
+        pushRectScissor({textX, y + 6.0f}, {textW, 34.0f});
+        if (focused && nameW > textW)
+            Gfx::DrawText(Gfx::SystemFontChinese, {textX - focusedMarqueeOffset(nameW, textW), y + 14.0f}, 16.0f,
+                          {1.0f, 1.0f, 1.0f, 0.92f * opacity}, "%s", entry.name.c_str());
+        else
+        {
+            const std::string shown = ellipsizeText(entry.name, textW, 16.0f);
+            Gfx::DrawText(Gfx::SystemFontChinese, {textX, y + 14.0f}, 16.0f,
+                          {1.0f, 1.0f, 1.0f, focused ? 0.96f * opacity : 0.78f * opacity}, "%s", shown.c_str());
+        }
+        Gfx::PopScissor();
+    }
+    Gfx::PopScissor();
+
+    const NdsFilePickerEntry* selected = nullptr;
+    if (!entries.empty() && focusedRow >= 0 && focusedRow < static_cast<int>(entries.size()))
+        selected = &entries[focusedRow];
+    const float infoW = kScreenW - infoX;
+    const Vector2f previewPos{infoX + 34.0f, bodyY + 44.0f};
+    const Vector2f previewSize{infoW - 68.0f, std::min(260.0f, bodyH * 0.42f)};
+    drawRect(previewPos, previewSize, {1.0f, 1.0f, 1.0f, 0.035f * opacity}, true);
+    drawBorder(previewPos, previewSize, 1.0f, {1.0f, 1.0f, 1.0f, 0.10f * opacity});
+    if (selected && !selected->isDirectory && previewTexture != 0 && previewWidth > 0 && previewHeight > 0)
+    {
+        const float texAspect = static_cast<float>(previewWidth) / static_cast<float>(previewHeight);
+        const float boxAspect = previewSize.X / previewSize.Y;
+        Vector2f drawSize = previewSize - Vector2f{18.0f, 18.0f};
+        if (texAspect > boxAspect)
+            drawSize.Y = drawSize.X / texAspect;
+        else
+            drawSize.X = drawSize.Y * texAspect;
+        const Vector2f drawPos = previewPos + (previewSize - drawSize) * 0.5f;
+        Gfx::SetSampler(Gfx::sampler_Linear | Gfx::sampler_ClampToEdge);
+        Gfx::DrawRectangle(previewTexture,
+                           drawPos,
+                           drawSize,
+                           {0.0f, 0.0f},
+                           {static_cast<float>(previewWidth), static_cast<float>(previewHeight)},
+                           {1.0f, 1.0f, 1.0f, 1.0f});
+        Gfx::SetSampler(Gfx::sampler_Nearest | Gfx::sampler_ClampToEdge);
+    }
+    else
+    {
+        const std::uint32_t iconFont = materialFont();
+        if (iconFont != 0)
+            Gfx::DrawText(iconFont, previewPos + previewSize * 0.5f, 72.0f,
+                          {0.70f, 0.86f, 1.0f, 0.36f * opacity},
+                          Gfx::align_Center, Gfx::align_Center,
+                          selected && selected->isDirectory ? "\uE2C7" : "\uE3F4");
+    }
+
+    if (selected)
+    {
+        const float textX = infoX + 34.0f;
+        float y = previewPos.Y + previewSize.Y + 32.0f;
+        const float textW = infoW - 68.0f;
+        const std::string shownName = ellipsizeText(selected->name, textW, 17.0f);
+        Gfx::DrawText(Gfx::SystemFontChinese, {textX, y}, 17.0f,
+                      {1.0f, 1.0f, 1.0f, 0.92f * opacity}, "%s", shownName.c_str());
+        y += 34.0f;
+        Gfx::DrawText(Gfx::SystemFontChinese, {textX, y}, 14.0f,
+                      {0.76f, 0.86f, 0.94f, 0.68f * opacity}, "%s", selected->isDirectory ? "文件夹" : formatBytes(selected->size).c_str());
+        y += 28.0f;
+        Gfx::DrawText(Gfx::SystemFontChinese, {textX, y}, 14.0f,
+                      {0.76f, 0.86f, 0.94f, 0.68f * opacity}, "%s", selected->modifiedTime.empty() ? "修改时间未知" : selected->modifiedTime.c_str());
+    }
+
+    const float footerY = kScreenH - footerH + offsetY;
+    drawRect({0.0f, footerY}, {kScreenW, footerH}, {0.0f, 0.0f, 0.0f, 0.42f * opacity}, true);
+    drawLine({0.0f, footerY}, {kScreenW, 1.0f}, {1.0f, 1.0f, 1.0f, 0.12f * opacity});
+    Gfx::DrawText(Gfx::SystemFontNintendoExt, {kScreenW - 220.0f, footerY + 33.0f}, 28.0f,
+                  {1.0f, 1.0f, 1.0f, 0.92f * opacity}, Gfx::align_Center, Gfx::align_Center, NDS_STUB_KEYICON_B);
+    Gfx::DrawText(Gfx::SystemFontChinese, {kScreenW - 198.0f, footerY + 24.0f}, 18.0f,
+                  {1.0f, 1.0f, 1.0f, 0.76f * opacity}, "返回");
+    Gfx::DrawText(Gfx::SystemFontNintendoExt, {kScreenW - 116.0f, footerY + 33.0f}, 28.0f,
+                  {1.0f, 1.0f, 1.0f, 0.92f * opacity}, Gfx::align_Center, Gfx::align_Center, NDS_STUB_KEYICON_A);
+    Gfx::DrawText(Gfx::SystemFontChinese, {kScreenW - 94.0f, footerY + 24.0f}, 18.0f,
+                  {0.38f, 0.78f, 1.0f, 0.92f * opacity}, "选择");
 }
 
 void drawTabFrame(NdsMenuLayer::Item item,

@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdio>
+#include <string>
 #include <vector>
 
 #include "nds_stub/NdsMenuLayer.hpp"
@@ -125,6 +126,23 @@ void drawCustomLayoutSidebar(const NdsCustomLayoutSettings& settings,
                              int focusedRow,
                              float progress,
                              float opacity = 1.0f);
+void drawOverlaySidebar(const NdsDisplaySettings& display,
+                        int focusedRow,
+                        float progress,
+                        float opacity = 1.0f);
+void drawShaderSidebar(const NdsDisplaySettings& display,
+                       int focusedRow,
+                       float progress,
+                       float opacity = 1.0f);
+void drawFilePicker(const std::string& directory,
+                    const std::vector<NdsFilePickerEntry>& entries,
+                    int focusedRow,
+                    float scrollY,
+                    std::uint32_t previewTexture,
+                    int previewWidth,
+                    int previewHeight,
+                    float progress,
+                    float opacity = 1.0f);
 // 绘制右侧内容区框架
 // 半透明背景面板 + 当前页面内容 + 页面切换动画（旧页向左滑出，新页从右侧滑入）
 void drawTabFrame(NdsMenuLayer::Item item,

@@ -47,8 +47,8 @@
 #include "../../third_party/ArcDelta_melonDS/src/SPU.h"
 #include "../../third_party/ArcDelta_melonDS/src/frontend/switch/PlatformConfig.h"
 #include "../../third_party/ArcDelta_melonDS/src/frontend/switch/Gfx.h"
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "../../third_party/borealis/library/lib/extern/glfw/deps/stb_image_write.h"
+#include "stb/stb_image.h"
+#include "stb/stb_image_write.h"
 #include "nds_stub/StubLog.hpp"
 
 namespace {
@@ -217,6 +217,10 @@ bool saveNdsSettingsToGameDb(const std::string& romPath,
                 item["ndsScreenOrientation"] = orientationIdFromIndex(settings.orientation);
                 item["ndsIntegerScale"] = settings.integerScale;
                 item["ndsScreenGap"] = settings.screenGap;
+                item["overlayEnabled"] = settings.overlayEnabled;
+                item["overlayPath"] = settings.overlayPath;
+                item["shaderEnabled"] = settings.shaderEnabled;
+                item["NdsShaderType"] = settings.ndsShaderType.empty() ? "dot" : settings.ndsShaderType;
                 if (includeCustomLayout)
                 {
                     item["ndsTopScale"] = settings.customLayout.topScale;
@@ -536,6 +540,210 @@ bool loadStateSlotTexture(beiklive::nds_stub::NdsStateSlotInfo& slot, int slotIn
                                       width,
                                       height);
     return true;
+}
+
+bool endsWithNoCase(const std::string& value, const char* suffix)
+{
+    const size_t suffixLen = std::strlen(suffix);
+    if (value.size() < suffixLen)
+        return false;
+    const size_t offset = value.size() - suffixLen;
+    for (size_t i = 0; i < suffixLen; ++i)
+    {
+        if (std::tolower(static_cast<unsigned char>(value[offset + i])) !=
+            std::tolower(static_cast<unsigned char>(suffix[i])))
+            return false;
+    }
+    return true;
+}
+
+bool loadPngTextureFromFile(const std::string& path, std::uint32_t& texture, int& width, int& height)
+{
+    texture = 0;
+    width = 0;
+    height = 0;
+    if (path.empty() || !endsWithNoCase(path, ".png"))
+        return false;
+
+    auto makePathCandidates = [](const std::string& source) {
+        std::vector<std::string> paths;
+        paths.push_back(source);
+        if (source.rfind("sdmc:", 0) == 0)
+            paths.push_back(source.substr(5));
+        else if (!source.empty() && source[0] == '/')
+            paths.push_back("sdmc:" + source);
+        return paths;
+    };
+
+    FILE* fp = nullptr;
+    std::string openedPath;
+    for (const auto& candidate : makePathCandidates(path))
+    {
+        beiklive::nds_stub::appendStubLog("GBAStationNDSStub: png open try path=%s", candidate.c_str());
+        fp = std::fopen(candidate.c_str(), "rb");
+        if (fp)
+        {
+            openedPath = candidate;
+            break;
+        }
+    }
+    if (!fp)
+    {
+        beiklive::nds_stub::appendStubLog("GBAStationNDSStub: png open failed path=%s", path.c_str());
+        return false;
+    }
+
+    if (std::fseek(fp, 0, SEEK_END) != 0)
+    {
+        std::fclose(fp);
+        beiklive::nds_stub::appendStubLog("GBAStationNDSStub: png seek end failed path=%s", openedPath.c_str());
+        return false;
+    }
+    const long fileSize = std::ftell(fp);
+    if (fileSize <= 0 || fileSize > 64 * 1024 * 1024)
+    {
+        std::fclose(fp);
+        beiklive::nds_stub::appendStubLog("GBAStationNDSStub: png size invalid path=%s bytes=%ld", openedPath.c_str(), fileSize);
+        return false;
+    }
+    std::rewind(fp);
+    std::vector<unsigned char> bytes(static_cast<std::size_t>(fileSize));
+    const std::size_t readBytes = std::fread(bytes.data(), 1, bytes.size(), fp);
+    std::fclose(fp);
+    if (readBytes != bytes.size())
+    {
+        beiklive::nds_stub::appendStubLog("GBAStationNDSStub: png read failed path=%s read=%u expected=%u",
+                      openedPath.c_str(),
+                      static_cast<unsigned>(readBytes),
+                      static_cast<unsigned>(bytes.size()));
+        return false;
+    }
+    beiklive::nds_stub::appendStubLog("GBAStationNDSStub: png read ok path=%s bytes=%u",
+                  openedPath.c_str(),
+                  static_cast<unsigned>(bytes.size()));
+
+    auto readBe32 = [](const unsigned char* p) {
+        return (static_cast<std::uint32_t>(p[0]) << 24) |
+               (static_cast<std::uint32_t>(p[1]) << 16) |
+               (static_cast<std::uint32_t>(p[2]) << 8) |
+               static_cast<std::uint32_t>(p[3]);
+    };
+    if (bytes.size() >= 33 &&
+        bytes[0] == 0x89 && bytes[1] == 'P' && bytes[2] == 'N' && bytes[3] == 'G' &&
+        bytes[12] == 'I' && bytes[13] == 'H' && bytes[14] == 'D' && bytes[15] == 'R')
+    {
+        const std::uint32_t headerW = readBe32(bytes.data() + 16);
+        const std::uint32_t headerH = readBe32(bytes.data() + 20);
+        const unsigned bitDepth = bytes[24];
+        const unsigned colorType = bytes[25];
+        beiklive::nds_stub::appendStubLog("GBAStationNDSStub: png header size=%ux%u bit=%u color=%u path=%s",
+                                          headerW,
+                                          headerH,
+                                          bitDepth,
+                                          colorType,
+                                          openedPath.c_str());
+    }
+    else
+    {
+        beiklive::nds_stub::appendStubLog("GBAStationNDSStub: png header invalid path=%s", openedPath.c_str());
+        return false;
+    }
+
+    int comp = 0;
+    beiklive::nds_stub::appendStubLog("GBAStationNDSStub: png decode file begin path=%s", openedPath.c_str());
+    unsigned char* pixels = stbi_load(openedPath.c_str(),
+                                      &width,
+                                      &height,
+                                      &comp,
+                                      4);
+    if (!pixels || width <= 0 || height <= 0 || width > 4096 || height > 4096)
+    {
+        if (pixels)
+            stbi_image_free(pixels);
+        beiklive::nds_stub::appendStubLog("GBAStationNDSStub: png decode failed path=%s width=%d height=%d reason=%s",
+                      openedPath.c_str(),
+                      width,
+                      height,
+                      stbi_failure_reason() ? stbi_failure_reason() : "(null)");
+        width = 0;
+        height = 0;
+        return false;
+    }
+    beiklive::nds_stub::appendStubLog("GBAStationNDSStub: png decode ok path=%s size=%dx%d comp=%d",
+                  openedPath.c_str(),
+                  width,
+                  height,
+                  comp);
+
+    std::vector<unsigned char> scaled;
+    const int decodedW = width;
+    const int decodedH = height;
+    constexpr int kMaxUploadPixels = beiklive::nds_stub::kScreenWidth * beiklive::nds_stub::kScreenHeight;
+    if (static_cast<long long>(width) * static_cast<long long>(height) > kMaxUploadPixels)
+    {
+        const float scale = std::sqrt(static_cast<float>(kMaxUploadPixels) /
+                                      static_cast<float>(width * height));
+        const int outW = std::max(1, static_cast<int>(std::floor(width * scale)));
+        const int outH = std::max(1, static_cast<int>(std::floor(height * scale)));
+        scaled.resize(static_cast<std::size_t>(outW) * outH * 4);
+        for (int y = 0; y < outH; ++y)
+        {
+            const int sy = std::min(height - 1, static_cast<int>((static_cast<long long>(y) * height) / outH));
+            for (int x = 0; x < outW; ++x)
+            {
+                const int sx = std::min(width - 1, static_cast<int>((static_cast<long long>(x) * width) / outW));
+                const unsigned char* src = pixels + (static_cast<std::size_t>(sy) * width + sx) * 4;
+                unsigned char* dst = scaled.data() + (static_cast<std::size_t>(y) * outW + x) * 4;
+                dst[0] = src[0];
+                dst[1] = src[1];
+                dst[2] = src[2];
+                dst[3] = src[3];
+            }
+        }
+        width = outW;
+        height = outH;
+        beiklive::nds_stub::appendStubLog("GBAStationNDSStub: png downscale %dx%d -> %dx%d uploadBytes=%u",
+                      decodedW,
+                      decodedH,
+                      width,
+                      height,
+                      static_cast<unsigned>(scaled.size()));
+    }
+
+    const unsigned char* uploadPixels = scaled.empty() ? pixels : scaled.data();
+    const std::size_t uploadBytes = static_cast<std::size_t>(width) * height * 4;
+    if (uploadBytes > 7 * 1024 * 1024)
+    {
+        stbi_image_free(pixels);
+        beiklive::nds_stub::appendStubLog("GBAStationNDSStub: png upload rejected path=%s uploadBytes=%u",
+                      openedPath.c_str(),
+                      static_cast<unsigned>(uploadBytes));
+        width = 0;
+        height = 0;
+        return false;
+    }
+
+    beiklive::nds_stub::appendStubLog("GBAStationNDSStub: png texture create begin size=%dx%d uploadBytes=%u",
+                  width,
+                  height,
+                  static_cast<unsigned>(uploadBytes));
+    texture = Gfx::TextureCreate(static_cast<u32>(width),
+                                 static_cast<u32>(height),
+                                 DkImageFormat_RGBA8_Unorm);
+    beiklive::nds_stub::appendStubLog("GBAStationNDSStub: png texture create ok tex=%u", texture);
+    beiklive::nds_stub::appendStubLog("GBAStationNDSStub: png texture upload begin tex=%u stride=%u",
+                  texture,
+                  static_cast<unsigned>(width * 4));
+    Gfx::TextureUpload(texture,
+                       0,
+                       0,
+                       static_cast<u32>(width),
+                       static_cast<u32>(height),
+                       const_cast<unsigned char*>(uploadPixels),
+                       static_cast<u32>(width * 4));
+    beiklive::nds_stub::appendStubLog("GBAStationNDSStub: png texture upload queued tex=%u", texture);
+    stbi_image_free(pixels);
+    return texture != 0;
 }
 
 int loadStateSlotTexturesStep(std::array<beiklive::nds_stub::NdsStateSlotInfo, 10>& slots, int maxUploads)
@@ -1580,6 +1788,10 @@ int RunDekoRuntime(const DekoRunOptions& options)
     initialDisplay.layout = layoutIndexFromId(options.screenLayout.empty() ? "hybrid" : options.screenLayout);
     initialDisplay.orientation = orientationIndexFromId(options.screenOrientation.empty() ? "0" : options.screenOrientation);
     initialDisplay.screenGap = std::clamp(options.screenGap, -256, 256);
+    initialDisplay.overlayEnabled = options.overlayEnabled;
+    initialDisplay.overlayPath = options.overlayPath;
+    initialDisplay.shaderEnabled = options.shaderEnabled;
+    initialDisplay.ndsShaderType = options.ndsShaderType.empty() ? "dot" : options.ndsShaderType;
     initialDisplay.customLayout = options.customLayout;
     menuLayer.setDisplaySettings(initialDisplay);
     gameLayer.setLinearFiltering(initialDisplay.linearFiltering);
@@ -1588,12 +1800,42 @@ int RunDekoRuntime(const DekoRunOptions& options)
     gameLayer.setOrientation(initialDisplay.orientation);
     gameLayer.setScreenGap(static_cast<float>(initialDisplay.screenGap));
     gameLayer.setCustomLayoutSettings(initialDisplay.customLayout);
-    appendStubLog("GBAStationNDSStub: display init filter=%s integer=%d layout=%s orientation=%d gap=%d customTop=%.2f/%.1f/%.1f customBottom=%.2f/%.1f/%.1f",
+    auto reloadOverlayTexture = [&](const NdsDisplaySettings& display) {
+        gameLayer.setOverlayEnabled(display.overlayEnabled);
+        gameLayer.clearOverlayTexture();
+        if (!display.overlayEnabled || display.overlayPath.empty())
+        {
+            appendStubLog("GBAStationNDSStub: overlay disabled enabled=%d path=%s",
+                          display.overlayEnabled ? 1 : 0,
+                          display.overlayPath.c_str());
+            return false;
+        }
+
+        appendStubLog("GBAStationNDSStub: overlay load begin path=%s", display.overlayPath.c_str());
+        std::uint32_t texture = 0;
+        int width = 0;
+        int height = 0;
+        if (!loadPngTextureFromFile(display.overlayPath, texture, width, height))
+        {
+            appendStubLog("GBAStationNDSStub: overlay load failed path=%s", display.overlayPath.c_str());
+            return false;
+        }
+
+        gameLayer.setOverlayTexture(texture, width, height);
+        appendStubLog("GBAStationNDSStub: overlay load ok size=%dx%d", width, height);
+        return true;
+    };
+    reloadOverlayTexture(initialDisplay);
+    appendStubLog("GBAStationNDSStub: display init filter=%s integer=%d layout=%s orientation=%d gap=%d overlay=%d overlayPath=%s shader=%d shaderType=%s customTop=%.2f/%.1f/%.1f customBottom=%.2f/%.1f/%.1f",
                   initialDisplay.linearFiltering ? "linear" : "nearest",
                   initialDisplay.integerScale ? 1 : 0,
                   layoutIdFromIndex(initialDisplay.layout),
                   initialDisplay.orientation * 90,
                   initialDisplay.screenGap,
+                  initialDisplay.overlayEnabled ? 1 : 0,
+                  initialDisplay.overlayPath.c_str(),
+                  initialDisplay.shaderEnabled ? 1 : 0,
+                  initialDisplay.ndsShaderType.c_str(),
                   initialDisplay.customLayout.topScale,
                   initialDisplay.customLayout.topOffsetX,
                   initialDisplay.customLayout.topOffsetY,
@@ -1818,6 +2060,40 @@ int RunDekoRuntime(const DekoRunOptions& options)
         {
             cheatApplyPending = true;
             appendStubLog("GBAStationNDSStub: cheats changed pending apply");
+        }
+        else if (menuAction == NdsMenuAction::OverlaySettingsChanged)
+        {
+            reloadOverlayTexture(menuLayer.displaySettings());
+            appendStubLog("GBAStationNDSStub: overlay settings changed enabled=%d path=%s",
+                          menuLayer.displaySettings().overlayEnabled ? 1 : 0,
+                          menuLayer.displaySettings().overlayPath.c_str());
+        }
+        else if (menuAction == NdsMenuAction::OverlayPathSelected)
+        {
+            reloadOverlayTexture(menuLayer.displaySettings());
+            saveNdsSettingsToGameDb(options.romPath, menuLayer.displaySettings(), false);
+            appendStubLog("GBAStationNDSStub: overlay path selected path=%s", menuResult.path.c_str());
+        }
+        else if (menuAction == NdsMenuAction::OverlaySettingsCommitted)
+        {
+            reloadOverlayTexture(menuLayer.displaySettings());
+            saveNdsSettingsToGameDb(options.romPath, menuLayer.displaySettings(), false);
+            appendStubLog("GBAStationNDSStub: overlay settings commit enabled=%d path=%s",
+                          menuLayer.displaySettings().overlayEnabled ? 1 : 0,
+                          menuLayer.displaySettings().overlayPath.c_str());
+        }
+        else if (menuAction == NdsMenuAction::ShaderSettingsChanged)
+        {
+            appendStubLog("GBAStationNDSStub: shader settings changed enabled=%d type=%s",
+                          menuLayer.displaySettings().shaderEnabled ? 1 : 0,
+                          menuLayer.displaySettings().ndsShaderType.c_str());
+        }
+        else if (menuAction == NdsMenuAction::ShaderSettingsCommitted)
+        {
+            saveNdsSettingsToGameDb(options.romPath, menuLayer.displaySettings(), false);
+            appendStubLog("GBAStationNDSStub: shader settings commit enabled=%d type=%s",
+                          menuLayer.displaySettings().shaderEnabled ? 1 : 0,
+                          menuLayer.displaySettings().ndsShaderType.c_str());
         }
         else if (menuAction == NdsMenuAction::DisplaySettingsChanged)
         {

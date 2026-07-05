@@ -255,6 +255,10 @@ int main(int argc, char* argv[])
             options.screenOrientation = jsonString(*record, "ndsScreenOrientation");
             options.integerScale = jsonBool(*record, "ndsIntegerScale", true);
             options.screenGap = std::clamp(jsonInt(*record, "ndsScreenGap", 0), -256, 256);
+            options.overlayEnabled = jsonBool(*record, "overlayEnabled", false);
+            options.overlayPath = jsonString(*record, "overlayPath");
+            options.shaderEnabled = jsonBool(*record, "shaderEnabled", false);
+            options.ndsShaderType = jsonString(*record, "NdsShaderType");
             options.customLayout.topScale = jsonFloat(*record, "ndsTopScale", 1.0f);
             options.customLayout.topOffsetX = jsonFloat(*record, "ndsTopOffsetX", 0.0f);
             options.customLayout.topOffsetY = jsonFloat(*record, "ndsTopOffsetY", 0.0f);
@@ -267,13 +271,19 @@ int main(int argc, char* argv[])
                 options.screenLayout = "hybrid";
             if (options.screenOrientation.empty())
                 options.screenOrientation = "0";
-            beiklive::nds_stub::appendStubLog("GBAStationNDSStub: Deko gameDb.found=1 title=%s savePath=%s layout=%s orientation=%s integer=%d gap=%d customTop=%.2f/%.1f/%.1f customBottom=%.2f/%.1f/%.1f",
+            if (options.ndsShaderType.empty())
+                options.ndsShaderType = "dot";
+            beiklive::nds_stub::appendStubLog("GBAStationNDSStub: Deko gameDb.found=1 title=%s savePath=%s layout=%s orientation=%s integer=%d gap=%d overlay=%d overlayPath=%s shader=%d shaderType=%s customTop=%.2f/%.1f/%.1f customBottom=%.2f/%.1f/%.1f",
                                              options.title.c_str(),
                                              options.savePath.c_str(),
                                              options.screenLayout.c_str(),
                                              options.screenOrientation.c_str(),
                                              options.integerScale ? 1 : 0,
                                              options.screenGap,
+                                             options.overlayEnabled ? 1 : 0,
+                                             options.overlayPath.c_str(),
+                                             options.shaderEnabled ? 1 : 0,
+                                             options.ndsShaderType.c_str(),
                                              options.customLayout.topScale,
                                              options.customLayout.topOffsetX,
                                              options.customLayout.topOffsetY,

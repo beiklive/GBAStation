@@ -15,6 +15,10 @@ struct DekoRunOptions {
     std::string screenOrientation = "0";
     bool integerScale = true;
     int screenGap = 0;
+    bool overlayEnabled = false;
+    std::string overlayPath;
+    bool shaderEnabled = false;
+    std::string ndsShaderType = "dot";
     NdsCustomLayoutSettings customLayout;
 };
 
