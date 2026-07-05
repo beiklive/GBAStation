@@ -26,6 +26,7 @@
 #include <thread>
 #include <vector>
 
+#include <nlohmann/json.hpp>
 #include <switch.h>
 
 #ifdef OGLRENDERER_ENABLED
@@ -128,6 +129,138 @@ int layoutIndexFromId(const std::string& layout)
     if (layout == "bottom" || layout == "single_bottom") return 6;
     if (layout == "custom" || layout == "separate") return 7;
     return 0;
+}
+
+int orientationIndexFromId(std::string value)
+{
+    value.erase(std::remove_if(value.begin(), value.end(),
+                               [](unsigned char c) { return std::isspace(c) != 0; }),
+                value.end());
+    std::transform(value.begin(), value.end(), value.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+    if (value == "90" || value == "90deg" || value == "90°" || value == "horizontal")
+        return 1;
+    if (value == "180" || value == "180deg" || value == "180°" || value == "vertical_reverse")
+        return 2;
+    if (value == "270" || value == "270deg" || value == "270°" || value == "horizontal_reverse")
+        return 3;
+    return 0;
+}
+
+const char* orientationIdFromIndex(int orientation)
+{
+    static constexpr const char* ids[] = {"0", "90", "180", "270"};
+    return ids[std::clamp(orientation, 0, 3)];
+}
+
+std::string normalizePathForCompare(std::string path)
+{
+    for (char& c : path)
+    {
+        if (c == '\\')
+            c = '/';
+    }
+
+    if (path.rfind("sdmc:", 0) == 0)
+        path.erase(0, 5);
+
+    while (path.size() > 1 && path[0] == '/' && path[1] == '/')
+        path.erase(0, 1);
+
+    return path;
+}
+
+std::string jsonString(const nlohmann::json& item, const char* key)
+{
+    if (!item.contains(key) || !item.at(key).is_string())
+        return {};
+    return item.at(key).get<std::string>();
+}
+
+bool saveNdsSettingsToGameDb(const std::string& romPath,
+                             const beiklive::nds_stub::NdsDisplaySettings& settings,
+                             bool includeCustomLayout)
+{
+    const std::string normalizedRom = normalizePathForCompare(romPath);
+    constexpr const char* paths[] = {
+        "sdmc:/GBAStation/data/GameData_NDS.json",
+        "/GBAStation/data/GameData_NDS.json",
+    };
+
+    for (const char* dbPath : paths)
+    {
+        std::ifstream in(dbPath);
+        if (!in)
+            continue;
+
+        try
+        {
+            nlohmann::json data;
+            in >> data;
+            in.close();
+            if (!data.is_array())
+                continue;
+
+            bool updated = false;
+            for (auto& item : data)
+            {
+                const std::string itemPath = normalizePathForCompare(jsonString(item, "path"));
+                if (itemPath != normalizedRom)
+                    continue;
+
+                item["ndsScreenLayout"] = layoutIdFromIndex(settings.layout);
+                item["ndsScreenOrientation"] = orientationIdFromIndex(settings.orientation);
+                item["ndsIntegerScale"] = settings.integerScale;
+                item["ndsScreenGap"] = settings.screenGap;
+                if (includeCustomLayout)
+                {
+                    item["ndsTopScale"] = settings.customLayout.topScale;
+                    item["ndsTopOffsetX"] = settings.customLayout.topOffsetX;
+                    item["ndsTopOffsetY"] = settings.customLayout.topOffsetY;
+                    item["ndsBottomScale"] = settings.customLayout.bottomScale;
+                    item["ndsBottomOffsetX"] = settings.customLayout.bottomOffsetX;
+                    item["ndsBottomOffsetY"] = settings.customLayout.bottomOffsetY;
+                }
+                updated = true;
+                break;
+            }
+
+            if (!updated)
+                continue;
+
+            std::ofstream out(dbPath, std::ios::trunc);
+            if (!out)
+                return false;
+            out << data.dump(4) << '\n';
+            const bool ok = out.good();
+            beiklive::nds_stub::appendStubLog("GBAStationNDSStub: NDS settings GameDB save %s path=%s layout=%s orientation=%s integer=%d gap=%d custom=%d top=%.2f/%.1f/%.1f bottom=%.2f/%.1f/%.1f",
+                                              ok ? "ok" : "failed",
+                                              dbPath,
+                                              layoutIdFromIndex(settings.layout),
+                                              orientationIdFromIndex(settings.orientation),
+                                              settings.integerScale ? 1 : 0,
+                                              settings.screenGap,
+                                              includeCustomLayout ? 1 : 0,
+                                              settings.customLayout.topScale,
+                                              settings.customLayout.topOffsetX,
+                                              settings.customLayout.topOffsetY,
+                                              settings.customLayout.bottomScale,
+                                              settings.customLayout.bottomOffsetX,
+                                              settings.customLayout.bottomOffsetY);
+            return ok;
+        }
+        catch (const std::exception& e)
+        {
+            beiklive::nds_stub::appendStubLog("GBAStationNDSStub: NDS settings GameDB save exception path=%s error=%s",
+                                              dbPath,
+                                              e.what());
+        }
+    }
+
+    beiklive::nds_stub::appendStubLog("GBAStationNDSStub: NDS settings GameDB save skipped no match rom=%s",
+                                      romPath.c_str());
+    return false;
 }
 
 std::string formatFileTime(const std::string& path)
@@ -1392,22 +1525,30 @@ int RunDekoRuntime(const DekoRunOptions& options)
     NdsDisplaySettings initialDisplay {};
     initialDisplay.fastForwardMultiplier = inputConfig.fastForwardMultiplier();
     initialDisplay.linearFiltering = inputConfig.value("display.filter", "nearest") == "linear";
-    initialDisplay.integerScale = inputConfig.intValue("nds.integerScale", 0) != 0;
-    initialDisplay.layout = layoutIndexFromId(inputConfig.value("nds.screenLayout", "vertical"));
-    initialDisplay.orientation = std::clamp(inputConfig.intValue("nds.screenOrientation", 0) / 90, 0, 3);
-    initialDisplay.screenGap = std::clamp(inputConfig.intValue("nds.screenGap", 0), -64, 64);
+    initialDisplay.integerScale = options.integerScale;
+    initialDisplay.layout = layoutIndexFromId(options.screenLayout.empty() ? "hybrid" : options.screenLayout);
+    initialDisplay.orientation = orientationIndexFromId(options.screenOrientation.empty() ? "0" : options.screenOrientation);
+    initialDisplay.screenGap = std::clamp(options.screenGap, -256, 256);
+    initialDisplay.customLayout = options.customLayout;
     menuLayer.setDisplaySettings(initialDisplay);
     gameLayer.setLinearFiltering(initialDisplay.linearFiltering);
     gameLayer.setIntegerScale(initialDisplay.integerScale);
     gameLayer.setScreenLayout(initialDisplay.layout);
     gameLayer.setOrientation(initialDisplay.orientation);
     gameLayer.setScreenGap(static_cast<float>(initialDisplay.screenGap));
-    appendStubLog("GBAStationNDSStub: display init filter=%s integer=%d layout=%s orientation=%d gap=%d",
+    gameLayer.setCustomLayoutSettings(initialDisplay.customLayout);
+    appendStubLog("GBAStationNDSStub: display init filter=%s integer=%d layout=%s orientation=%d gap=%d customTop=%.2f/%.1f/%.1f customBottom=%.2f/%.1f/%.1f",
                   initialDisplay.linearFiltering ? "linear" : "nearest",
                   initialDisplay.integerScale ? 1 : 0,
                   layoutIdFromIndex(initialDisplay.layout),
                   initialDisplay.orientation * 90,
-                  initialDisplay.screenGap);
+                  initialDisplay.screenGap,
+                  initialDisplay.customLayout.topScale,
+                  initialDisplay.customLayout.topOffsetX,
+                  initialDisplay.customLayout.topOffsetY,
+                  initialDisplay.customLayout.bottomScale,
+                  initialDisplay.customLayout.bottomOffsetX,
+                  initialDisplay.customLayout.bottomOffsetY);
     auto stateSlots = loadStateSlots(stateDir, options.romPath);
     menuLayer.setStateSlots(stateSlots);
     bool stateSlotTexturesDirty = true;
@@ -1568,7 +1709,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
                 nextDisplay.layout = (nextDisplay.layout + 1) % 8;
                 menuLayer.setDisplaySettings(nextDisplay);
                 gameLayer.setScreenLayout(nextDisplay.layout);
-                inputConfig.saveValue("nds.screenLayout", "s", layoutIdFromIndex(nextDisplay.layout));
+                saveNdsSettingsToGameDb(options.romPath, menuLayer.displaySettings(), false);
                 appendStubLog("GBAStationNDSStub: layout next=%s", layoutIdFromIndex(nextDisplay.layout));
             }
             if (anyComboDown(inputConfig.button("nds.hotkey.quicksave.pad"), input))
@@ -1613,12 +1754,10 @@ int RunDekoRuntime(const DekoRunOptions& options)
             gameLayer.setScreenLayout(menuLayer.screenLayout());
             gameLayer.setOrientation(menuLayer.displaySettings().orientation);
             gameLayer.setScreenGap(static_cast<float>(menuLayer.displaySettings().screenGap));
+            gameLayer.setCustomLayoutSettings(menuLayer.customLayoutSettings());
             inputConfig.saveValue("display.filter", "s", menuLayer.linearFiltering() ? "linear" : "nearest");
             inputConfig.saveValue("fastforward.multiplier", "f", std::to_string(menuLayer.fastForwardMultiplier()));
-            inputConfig.saveValue("nds.integerScale", "i", menuLayer.integerScale() ? "1" : "0");
-            inputConfig.saveValue("nds.screenLayout", "s", layoutIdFromIndex(menuLayer.screenLayout()));
-            inputConfig.saveValue("nds.screenOrientation", "i", std::to_string(menuLayer.displaySettings().orientation * 90));
-            inputConfig.saveValue("nds.screenGap", "i", std::to_string(menuLayer.displaySettings().screenGap));
+            saveNdsSettingsToGameDb(options.romPath, menuLayer.displaySettings(), false);
             appendStubLog("GBAStationNDSStub: Deko display settings filter=%s ff=%.2f integer=%d layout=%s orientation=%d gap=%d",
                           menuLayer.linearFiltering() ? "linear" : "nearest",
                           menuLayer.fastForwardMultiplier(),
@@ -1626,6 +1765,37 @@ int RunDekoRuntime(const DekoRunOptions& options)
                           layoutIdFromIndex(menuLayer.screenLayout()),
                           menuLayer.displaySettings().orientation * 90,
                           menuLayer.displaySettings().screenGap);
+        }
+        else if (menuAction == NdsMenuAction::CustomLayoutChanged)
+        {
+            NdsDisplaySettings customDisplay = menuLayer.displaySettings();
+            customDisplay.layout = 7;
+            menuLayer.setDisplaySettings(customDisplay);
+            gameLayer.setScreenLayout(7);
+            gameLayer.setCustomLayoutSettings(menuLayer.customLayoutSettings());
+            appendStubLog("GBAStationNDSStub: custom layout preview top=%.2f/%.1f/%.1f bottom=%.2f/%.1f/%.1f",
+                          menuLayer.customLayoutSettings().topScale,
+                          menuLayer.customLayoutSettings().topOffsetX,
+                          menuLayer.customLayoutSettings().topOffsetY,
+                          menuLayer.customLayoutSettings().bottomScale,
+                          menuLayer.customLayoutSettings().bottomOffsetX,
+                          menuLayer.customLayoutSettings().bottomOffsetY);
+        }
+        else if (menuAction == NdsMenuAction::CustomLayoutCommitted)
+        {
+            NdsDisplaySettings customDisplay = menuLayer.displaySettings();
+            customDisplay.layout = 7;
+            menuLayer.setDisplaySettings(customDisplay);
+            gameLayer.setScreenLayout(7);
+            gameLayer.setCustomLayoutSettings(menuLayer.customLayoutSettings());
+            saveNdsSettingsToGameDb(options.romPath, menuLayer.displaySettings(), true);
+            appendStubLog("GBAStationNDSStub: custom layout commit top=%.2f/%.1f/%.1f bottom=%.2f/%.1f/%.1f",
+                          menuLayer.customLayoutSettings().topScale,
+                          menuLayer.customLayoutSettings().topOffsetX,
+                          menuLayer.customLayoutSettings().topOffsetY,
+                          menuLayer.customLayoutSettings().bottomScale,
+                          menuLayer.customLayoutSettings().bottomOffsetX,
+                          menuLayer.customLayoutSettings().bottomOffsetY);
         }
         if (menuAction == NdsMenuAction::ResetGame)
         {

@@ -64,6 +64,28 @@ RectF fitMaxInteger(const RectF& region)
     return fitInteger(region, scale);
 }
 
+RectF customCanvasRect(const RectF& bounds,
+                       float canvasW,
+                       float canvasH,
+                       float baseX,
+                       float baseY,
+                       float scale,
+                       float offsetX,
+                       float offsetY)
+{
+    scale = std::clamp(scale, 0.25f, 4.0f);
+    const float dstW = std::max(4.0f, std::round(256.0f * scale / 4.0f) * 4.0f);
+    const float dstH = std::max(3.0f, dstW * 3.0f / 4.0f);
+    const float dstX = baseX + offsetX - (dstW - 256.0f) * 0.5f;
+    const float dstY = baseY + offsetY - (dstH - 192.0f) * 0.5f;
+    return {
+        bounds.x + bounds.w * (dstX / canvasW),
+        bounds.y + bounds.h * (dstY / canvasH),
+        bounds.w * (dstW / canvasW),
+        bounds.h * (dstH / canvasH),
+    };
+}
+
 bool validRect(const RectF& rect)
 {
     return rect.w > 0.0f && rect.h > 0.0f;
@@ -212,10 +234,29 @@ std::vector<NdsGameLayer::ScreenDrawRect> NdsGameLayer::computeScreenRects() con
     }
     case ScreenLayout::Custom:
     {
-        const RectF left{bounds.x, bounds.y, bounds.w * 0.5f, bounds.h};
-        const RectF right{bounds.x + bounds.w * 0.5f, bounds.y, bounds.w * 0.5f, bounds.h};
-        add(true, fitAspect(left));
-        add(false, fitAspect(right));
+        const bool portraitCanvas = m_orientation == 1 || m_orientation == 3;
+        const float canvasW = portraitCanvas ? 720.0f : 1280.0f;
+        const float canvasH = portraitCanvas ? 1280.0f : 720.0f;
+        const float topBaseX = portraitCanvas ? (canvasW - 256.0f) * 0.5f : 224.0f;
+        const float topBaseY = portraitCanvas ? (canvasH * 0.5f - 192.0f) : 264.0f;
+        const float bottomBaseX = portraitCanvas ? topBaseX : 800.0f;
+        const float bottomBaseY = portraitCanvas ? (canvasH * 0.5f) : 264.0f;
+        add(true, customCanvasRect(bounds,
+                                   canvasW,
+                                   canvasH,
+                                   topBaseX,
+                                   topBaseY,
+                                   m_customLayout.topScale,
+                                   m_customLayout.topOffsetX,
+                                   m_customLayout.topOffsetY));
+        add(false, customCanvasRect(bounds,
+                                    canvasW,
+                                    canvasH,
+                                    bottomBaseX,
+                                    bottomBaseY,
+                                    m_customLayout.bottomScale,
+                                    m_customLayout.bottomOffsetX,
+                                    m_customLayout.bottomOffsetY));
         break;
     }
     case ScreenLayout::Vertical:

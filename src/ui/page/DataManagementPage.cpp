@@ -962,8 +962,10 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
             entry.shaderEnabled = config.shaderEnabled;
             applyDisplayDefaults(entry);
             if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)) {
-                entry.ndsScreenLayout = "vertical";
+                entry.ndsScreenLayout = "hybrid";
                 entry.ndsScreenOrientation = "0";
+                entry.ndsIntegerScale = true;
+                entry.ndsScreenGap = 0;
             }
 
             beiklive::GameDB->upsertByPath(entry);
@@ -1108,8 +1110,10 @@ void DataManagementPage::startDirImport(const std::string& dirPath)
             entry.savePath = savePath;
             applyDisplayDefaults(entry);
             if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)) {
-                entry.ndsScreenLayout = "vertical";
+                entry.ndsScreenLayout = "hybrid";
                 entry.ndsScreenOrientation = "0";
+                entry.ndsIntegerScale = true;
+                entry.ndsScreenGap = 0;
             }
 
             auto existing = beiklive::GameDB->findByPath(path);
@@ -1129,6 +1133,8 @@ void DataManagementPage::startDirImport(const std::string& dirPath)
                     entry.ndsScreenLayout = existing->ndsScreenLayout;
                 if (!existing->ndsScreenOrientation.empty())
                     entry.ndsScreenOrientation = existing->ndsScreenOrientation;
+                entry.ndsIntegerScale = existing->ndsIntegerScale;
+                entry.ndsScreenGap = existing->ndsScreenGap;
             }
 
             beiklive::GameDB->upsertByPath(entry);

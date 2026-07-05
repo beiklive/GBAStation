@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstdarg>
 #include <cctype>
 #include <cstdio>
@@ -139,6 +140,27 @@ std::string jsonString(const nlohmann::json& item, const char* key)
     return item.at(key).get<std::string>();
 }
 
+float jsonFloat(const nlohmann::json& item, const char* key, float fallback)
+{
+    if (!item.contains(key) || !item.at(key).is_number())
+        return fallback;
+    return item.at(key).get<float>();
+}
+
+int jsonInt(const nlohmann::json& item, const char* key, int fallback)
+{
+    if (!item.contains(key) || !item.at(key).is_number_integer())
+        return fallback;
+    return item.at(key).get<int>();
+}
+
+bool jsonBool(const nlohmann::json& item, const char* key, bool fallback)
+{
+    if (!item.contains(key) || !item.at(key).is_boolean())
+        return fallback;
+    return item.at(key).get<bool>();
+}
+
 std::optional<nlohmann::json> loadNdsGameDbRecord(const std::string& romPath)
 {
     const std::string normalizedRom = normalizePathForCompare(romPath);
@@ -229,11 +251,35 @@ int main(int argc, char* argv[])
         {
             options.title = jsonString(*record, "title");
             options.savePath = jsonString(*record, "savePath");
+            options.screenLayout = jsonString(*record, "ndsScreenLayout");
+            options.screenOrientation = jsonString(*record, "ndsScreenOrientation");
+            options.integerScale = jsonBool(*record, "ndsIntegerScale", true);
+            options.screenGap = std::clamp(jsonInt(*record, "ndsScreenGap", 0), -256, 256);
+            options.customLayout.topScale = jsonFloat(*record, "ndsTopScale", 1.0f);
+            options.customLayout.topOffsetX = jsonFloat(*record, "ndsTopOffsetX", 0.0f);
+            options.customLayout.topOffsetY = jsonFloat(*record, "ndsTopOffsetY", 0.0f);
+            options.customLayout.bottomScale = jsonFloat(*record, "ndsBottomScale", 1.0f);
+            options.customLayout.bottomOffsetX = jsonFloat(*record, "ndsBottomOffsetX", 0.0f);
+            options.customLayout.bottomOffsetY = jsonFloat(*record, "ndsBottomOffsetY", 0.0f);
             if (options.title.empty())
                 options.title = titleFromPath(options.romPath);
-            beiklive::nds_stub::appendStubLog("GBAStationNDSStub: Deko gameDb.found=1 title=%s savePath=%s",
+            if (options.screenLayout.empty())
+                options.screenLayout = "hybrid";
+            if (options.screenOrientation.empty())
+                options.screenOrientation = "0";
+            beiklive::nds_stub::appendStubLog("GBAStationNDSStub: Deko gameDb.found=1 title=%s savePath=%s layout=%s orientation=%s integer=%d gap=%d customTop=%.2f/%.1f/%.1f customBottom=%.2f/%.1f/%.1f",
                                              options.title.c_str(),
-                                             options.savePath.c_str());
+                                             options.savePath.c_str(),
+                                             options.screenLayout.c_str(),
+                                             options.screenOrientation.c_str(),
+                                             options.integerScale ? 1 : 0,
+                                             options.screenGap,
+                                             options.customLayout.topScale,
+                                             options.customLayout.topOffsetX,
+                                             options.customLayout.topOffsetY,
+                                             options.customLayout.bottomScale,
+                                             options.customLayout.bottomOffsetX,
+                                             options.customLayout.bottomOffsetY);
         }
         else
         {

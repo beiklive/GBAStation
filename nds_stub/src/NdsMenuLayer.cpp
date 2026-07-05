@@ -14,6 +14,7 @@ using namespace ui;
 namespace {
 
 constexpr float kPanelAnimationMs = 220.0f;
+constexpr float kSidebarAnimationMs = 180.0f;
 constexpr float kSelectorInitialDelayMs = 320.0f;
 constexpr float kSaveCardH = 94.0f;
 constexpr float kSaveCardGapY = 14.0f;
@@ -27,6 +28,15 @@ constexpr int kScreenGapDefault = 0;
 constexpr int kScreenGapStep = 1;
 constexpr int kScreenGapMin = -256;
 constexpr int kScreenGapMax = 256;
+constexpr float kCustomScaleDefault = 1.0f;
+constexpr float kCustomScaleStep = 0.1f;
+constexpr float kCustomScaleMin = 0.25f;
+constexpr float kCustomScaleMax = 4.0f;
+constexpr float kCustomOffsetDefault = 0.0f;
+constexpr float kCustomOffsetStep = 1.0f;
+constexpr float kCustomOffsetMin = -1024.0f;
+constexpr float kCustomOffsetMax = 1024.0f;
+constexpr int kCustomLayoutControlCount = 6;
 
 bool isDirectionUp(std::uint64_t buttons)
 {
@@ -92,6 +102,13 @@ int stepNumericValue(int value, int direction, int step, int minValue, int maxVa
     return std::clamp(value + direction * step, minValue, maxValue);
 }
 
+float stepFloatValue(float value, int direction, float step, float minValue, float maxValue)
+{
+    if (direction == 0 || step <= 0.0f)
+        return std::clamp(value, minValue, maxValue);
+    return std::clamp(value + static_cast<float>(direction) * step, minValue, maxValue);
+}
+
 bool pushMenuOrientationTransform(int orientation)
 {
     orientation = std::clamp(orientation, 0, 3);
@@ -145,6 +162,9 @@ void NdsMenuLayer::open()
 {
     if (m_visible && !m_panelAnimating)
         return;
+    m_customLayoutEditorVisible = false;
+    m_customLayoutEditorClosing = false;
+    m_customLayoutReturnToMenu = false;
     m_visible = true;
     m_focusScope = FocusScope::Tabs;
     m_contentFocus = 0;
@@ -157,8 +177,14 @@ void NdsMenuLayer::open()
 
 void NdsMenuLayer::close()
 {
-    if (!m_visible && !m_panelAnimating)
+    if (!m_visible && !m_panelAnimating && !m_customLayoutEditorVisible)
         return;
+    if (m_customLayoutEditorVisible && !m_customLayoutEditorClosing)
+    {
+        m_customLayoutEditorClosing = true;
+        m_customLayoutReturnToMenu = false;
+        m_customLayoutAnimStartTick = armGetSystemTick();
+    }
     m_visible = false;
     m_focusScope = FocusScope::Tabs;
     m_contentFocus = 0;
@@ -168,7 +194,7 @@ void NdsMenuLayer::close()
 
 void NdsMenuLayer::toggle()
 {
-    if (m_visible)
+    if (m_customLayoutEditorVisible || m_visible)
         close();
     else
         open();
@@ -176,7 +202,7 @@ void NdsMenuLayer::toggle()
 
 bool NdsMenuLayer::active() const
 {
-    if (m_visible)
+    if (m_visible || m_customLayoutEditorVisible)
         return true;
     return m_panelAnimating && animationProgress(m_panelAnimStartTick, kPanelAnimationMs) < 1.0f;
 }
@@ -188,6 +214,15 @@ float NdsMenuLayer::panelProgress() const
 
     const float progress = easeOutCubic(animationProgress(m_panelAnimStartTick, kPanelAnimationMs));
     return m_panelOpening ? progress : 1.0f - progress;
+}
+
+float NdsMenuLayer::customLayoutEditorProgress() const
+{
+    if (!m_customLayoutEditorVisible)
+        return 0.0f;
+
+    const float progress = easeOutCubic(animationProgress(m_customLayoutAnimStartTick, kSidebarAnimationMs));
+    return m_customLayoutEditorClosing ? 1.0f - progress : progress;
 }
 
 void NdsMenuLayer::resetContentScroll()
@@ -249,6 +284,17 @@ void NdsMenuLayer::setFastForwardMultiplier(float multiplier)
     m_display.fastForwardMultiplier = std::clamp(multiplier, 0.1f, 5.0f);
 }
 
+void NdsMenuLayer::setCustomLayoutSettings(const NdsCustomLayoutSettings& settings)
+{
+    m_display.customLayout = settings;
+    m_display.customLayout.topScale = std::clamp(m_display.customLayout.topScale, kCustomScaleMin, kCustomScaleMax);
+    m_display.customLayout.bottomScale = std::clamp(m_display.customLayout.bottomScale, kCustomScaleMin, kCustomScaleMax);
+    m_display.customLayout.topOffsetX = std::clamp(m_display.customLayout.topOffsetX, kCustomOffsetMin, kCustomOffsetMax);
+    m_display.customLayout.topOffsetY = std::clamp(m_display.customLayout.topOffsetY, kCustomOffsetMin, kCustomOffsetMax);
+    m_display.customLayout.bottomOffsetX = std::clamp(m_display.customLayout.bottomOffsetX, kCustomOffsetMin, kCustomOffsetMax);
+    m_display.customLayout.bottomOffsetY = std::clamp(m_display.customLayout.bottomOffsetY, kCustomOffsetMin, kCustomOffsetMax);
+}
+
 void NdsMenuLayer::setDisplaySettings(const NdsDisplaySettings& settings)
 {
     m_display = settings;
@@ -256,6 +302,7 @@ void NdsMenuLayer::setDisplaySettings(const NdsDisplaySettings& settings)
     m_display.layout = std::clamp(m_display.layout, 0, 7);
     m_display.orientation = std::clamp(m_display.orientation, 0, 3);
     m_display.screenGap = clampScreenGap(m_display.screenGap);
+    setCustomLayoutSettings(m_display.customLayout);
 }
 
 bool NdsMenuLayer::itemHasContent(Item item) const
@@ -306,6 +353,9 @@ bool NdsMenuLayer::activateDisplayControl()
         m_display.screenGap = kScreenGapDefault;
         return true;
     case 4:
+        if (m_display.layout == 7)
+            beginCustomLayoutEditor();
+        return false;
     case 8:
     case 9:
     case 10:
@@ -313,6 +363,93 @@ bool NdsMenuLayer::activateDisplayControl()
         return false;
     default:
         return false;
+    }
+}
+
+void NdsMenuLayer::beginCustomLayoutEditor()
+{
+    m_visible = false;
+    m_panelAnimating = false;
+    m_customLayoutEditorVisible = true;
+    m_customLayoutEditorClosing = false;
+    m_customLayoutReturnToMenu = false;
+    m_customLayoutAnimStartTick = armGetSystemTick();
+    m_customLayoutFocus = 0;
+    resetContentScroll();
+}
+
+bool NdsMenuLayer::cycleCustomLayoutSetting(int direction)
+{
+    if (direction == 0)
+        return false;
+
+    switch (m_customLayoutFocus)
+    {
+    case 0:
+        m_display.customLayout.topScale = stepFloatValue(m_display.customLayout.topScale,
+                                                         direction,
+                                                         kCustomScaleStep,
+                                                         kCustomScaleMin,
+                                                         kCustomScaleMax);
+        return true;
+    case 1:
+        m_display.customLayout.topOffsetX = stepFloatValue(m_display.customLayout.topOffsetX,
+                                                           direction,
+                                                           kCustomOffsetStep,
+                                                           kCustomOffsetMin,
+                                                           kCustomOffsetMax);
+        return true;
+    case 2:
+        m_display.customLayout.topOffsetY = stepFloatValue(m_display.customLayout.topOffsetY,
+                                                           direction,
+                                                           kCustomOffsetStep,
+                                                           kCustomOffsetMin,
+                                                           kCustomOffsetMax);
+        return true;
+    case 3:
+        m_display.customLayout.bottomScale = stepFloatValue(m_display.customLayout.bottomScale,
+                                                            direction,
+                                                            kCustomScaleStep,
+                                                            kCustomScaleMin,
+                                                            kCustomScaleMax);
+        return true;
+    case 4:
+        m_display.customLayout.bottomOffsetX = stepFloatValue(m_display.customLayout.bottomOffsetX,
+                                                              direction,
+                                                              kCustomOffsetStep,
+                                                              kCustomOffsetMin,
+                                                              kCustomOffsetMax);
+        return true;
+    case 5:
+        m_display.customLayout.bottomOffsetY = stepFloatValue(m_display.customLayout.bottomOffsetY,
+                                                              direction,
+                                                              kCustomOffsetStep,
+                                                              kCustomOffsetMin,
+                                                              kCustomOffsetMax);
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool NdsMenuLayer::resetCustomLayoutSetting()
+{
+    auto resetFloat = [](float& value, float defaultValue) {
+        if (std::fabs(value - defaultValue) < 0.001f)
+            return false;
+        value = defaultValue;
+        return true;
+    };
+
+    switch (m_customLayoutFocus)
+    {
+    case 0: return resetFloat(m_display.customLayout.topScale, kCustomScaleDefault);
+    case 1: return resetFloat(m_display.customLayout.topOffsetX, kCustomOffsetDefault);
+    case 2: return resetFloat(m_display.customLayout.topOffsetY, kCustomOffsetDefault);
+    case 3: return resetFloat(m_display.customLayout.bottomScale, kCustomScaleDefault);
+    case 4: return resetFloat(m_display.customLayout.bottomOffsetX, kCustomOffsetDefault);
+    case 5: return resetFloat(m_display.customLayout.bottomOffsetY, kCustomOffsetDefault);
+    default: return false;
     }
 }
 
@@ -398,6 +535,38 @@ bool NdsMenuLayer::updateHeldSelector(std::uint64_t buttonsHeld)
     return cycleCurrentSetting(direction);
 }
 
+bool NdsMenuLayer::updateHeldCustomSelector(std::uint64_t buttonsHeld)
+{
+    if (!m_customLayoutEditorVisible ||
+        (buttonsHeld & (HidNpadButton_L | HidNpadButton_R)) == 0)
+    {
+        m_selectorDirection = 0;
+        return false;
+    }
+
+    const int direction = (buttonsHeld & HidNpadButton_R) ? 1 : -1;
+    const std::uint64_t now = armGetSystemTick();
+    if (m_selectorDirection != direction)
+    {
+        m_selectorDirection = direction;
+        m_selectorRepeatStartTick = now;
+        m_selectorLastStepTick = now;
+        return false;
+    }
+
+    const float heldMs = static_cast<float>(armTicksToNs(now - m_selectorRepeatStartTick)) / 1000000.0f;
+    if (heldMs < kSelectorInitialDelayMs)
+        return false;
+
+    const float intervalMs = std::max(52.0f, 180.0f - (heldMs - kSelectorInitialDelayMs) * 0.25f);
+    const float sinceLastMs = static_cast<float>(armTicksToNs(now - m_selectorLastStepTick)) / 1000000.0f;
+    if (sinceLastMs < intervalMs)
+        return false;
+
+    m_selectorLastStepTick = now;
+    return cycleCustomLayoutSetting(direction);
+}
+
 void NdsMenuLayer::openDeleteDialog()
 {
     if (m_focusScope != FocusScope::Content)
@@ -425,6 +594,54 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
 
     if (m_panelAnimating && animationProgress(m_panelAnimStartTick, kPanelAnimationMs) >= 1.0f)
         m_panelAnimating = false;
+
+    if (m_customLayoutEditorVisible && m_customLayoutEditorClosing &&
+        animationProgress(m_customLayoutAnimStartTick, kSidebarAnimationMs) >= 1.0f)
+    {
+        m_customLayoutEditorVisible = false;
+        m_customLayoutEditorClosing = false;
+        const bool returnToMenu = m_customLayoutReturnToMenu;
+        m_customLayoutReturnToMenu = false;
+        m_selectorDirection = 0;
+        if (returnToMenu)
+            open();
+    }
+
+    if (m_customLayoutEditorVisible)
+    {
+        if (m_customLayoutEditorClosing)
+            return {};
+
+        if (buttonsDown & HidNpadButton_B)
+        {
+            m_customLayoutEditorClosing = true;
+            m_customLayoutReturnToMenu = true;
+            m_customLayoutAnimStartTick = armGetSystemTick();
+            m_selectorDirection = 0;
+            return {NdsMenuAction::CustomLayoutCommitted, -1};
+        }
+        if (isDirectionUp(buttonsDown))
+            m_customLayoutFocus = (m_customLayoutFocus + kCustomLayoutControlCount - 1) % kCustomLayoutControlCount;
+        if (isDirectionDown(buttonsDown))
+            m_customLayoutFocus = (m_customLayoutFocus + 1) % kCustomLayoutControlCount;
+
+        if (buttonsDown & HidNpadButton_L)
+            return cycleCustomLayoutSetting(-1) ? NdsMenuResult{NdsMenuAction::CustomLayoutChanged, -1}
+                                                : NdsMenuResult{};
+        if (buttonsDown & HidNpadButton_R)
+            return cycleCustomLayoutSetting(1) ? NdsMenuResult{NdsMenuAction::CustomLayoutChanged, -1}
+                                               : NdsMenuResult{};
+        if (updateHeldCustomSelector(buttonsHeld))
+            return {NdsMenuAction::CustomLayoutChanged, -1};
+        if (isDirectionLeft(buttonsDown) || isDirectionRight(buttonsDown))
+            return cycleCustomLayoutSetting(isDirectionRight(buttonsDown) ? 1 : -1)
+                ? NdsMenuResult{NdsMenuAction::CustomLayoutChanged, -1}
+                : NdsMenuResult{};
+        if ((buttonsDown & HidNpadButton_A) && resetCustomLayoutSetting())
+            return {NdsMenuAction::CustomLayoutChanged, -1};
+
+        return {};
+    }
 
     if (!m_visible)
         return {};
@@ -558,6 +775,21 @@ void NdsMenuLayer::draw() const
 {
     if (!active())
         return;
+
+    if (m_customLayoutEditorVisible)
+    {
+        setMenuMetricsOrientation(m_display.orientation);
+        const float progress = customLayoutEditorProgress();
+        if (progress > 0.0f)
+        {
+            const bool transformed = pushMenuOrientationTransform(m_display.orientation);
+            drawCustomLayoutSidebar(m_display.customLayout, m_customLayoutFocus, progress, progress);
+            if (transformed)
+                Gfx::PopDrawTransform();
+        }
+        setMenuMetricsOrientation(0);
+        return;
+    }
 
     setMenuMetricsOrientation(m_display.orientation);
     const float panel = panelProgress();

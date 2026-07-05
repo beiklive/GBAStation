@@ -120,6 +120,10 @@ void drawDisplayPage(bool linearFiltering,
                      float opacity,
                      float scrollY = 0.0f);
 void drawDeleteDialog(int slot, float opacity);
+void drawCustomLayoutSidebar(const NdsCustomLayoutSettings& settings,
+                             int focusedRow,
+                             float progress,
+                             float opacity = 1.0f);
 // 绘制右侧内容区框架
 // 半透明背景面板 + 当前页面内容 + 页面切换动画（旧页向左滑出，新页从右侧滑入）
 void drawTabFrame(NdsMenuLayer::Item item,

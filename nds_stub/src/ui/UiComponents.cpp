@@ -228,6 +228,54 @@ void drawNumberAdjusterRow(Vector2f pos,
                   Gfx::align_Center, Gfx::align_Center, NDS_STUB_KEYICON_RB);
 }
 
+void drawFloatAdjusterRow(Vector2f pos,
+                          float rowW,
+                          const char* label,
+                          float value,
+                          const char* unit,
+                          float defaultValue,
+                          float step,
+                          bool focused,
+                          float opacity,
+                          int decimals)
+{
+    if (focused)
+        drawGradientBorder(pos - Vector2f{3.0f, 3.0f}, {rowW + 6.0f, 48.0f}, 3.0f);
+
+    drawRect(pos, {rowW, 42.0f}, {1.0f, 1.0f, 1.0f, 0.055f * opacity}, true);
+    drawBorder(pos, {rowW, 42.0f}, 1.0f, {1.0f, 1.0f, 1.0f, 0.11f * opacity});
+    Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{16.0f, 12.0f}, 16.0f,
+                  {1.0f, 1.0f, 1.0f, 0.90f * opacity}, "%s", label);
+
+    char valueText[40];
+    if (decimals <= 0)
+        std::snprintf(valueText, sizeof(valueText), "%.0f%s", value, unit ? unit : "");
+    else
+        std::snprintf(valueText, sizeof(valueText), "%.*f%s", decimals, value, unit ? unit : "");
+
+    char metaText[56];
+    if (decimals <= 0)
+        std::snprintf(metaText, sizeof(metaText), "默认 %.0f / 步长 %.0f", defaultValue, step);
+    else
+        std::snprintf(metaText, sizeof(metaText), "默认 %.*f / 步长 %.*f", decimals, defaultValue, decimals, step);
+
+    const float valueCenterX = rowW - 92.0f;
+    Gfx::DrawText(Gfx::SystemFontNintendoExt, pos + Vector2f{rowW - 168.0f, 21.0f}, 23.0f,
+                  {0.80f, 0.92f, 1.0f, 0.90f * opacity},
+                  Gfx::align_Center, Gfx::align_Center, NDS_STUB_KEYICON_LB);
+    Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{valueCenterX, 11.0f}, 16.0f,
+                  {0.78f, 0.92f, 1.0f, 0.96f * opacity},
+                  Gfx::align_Center, Gfx::align_Left,
+                  valueText);
+    Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{valueCenterX, 29.0f}, 9.0f,
+                  {0.74f, 0.82f, 0.90f, 0.52f * opacity},
+                  Gfx::align_Center, Gfx::align_Left,
+                  metaText);
+    Gfx::DrawText(Gfx::SystemFontNintendoExt, pos + Vector2f{rowW - 18.0f, 21.0f}, 23.0f,
+                  {0.80f, 0.92f, 1.0f, 0.90f * opacity},
+                  Gfx::align_Center, Gfx::align_Center, NDS_STUB_KEYICON_RB);
+}
+
 void drawSwitchRow(Vector2f pos, const char* label, bool value, bool focused, float opacity)
 {
     const float rowW = settingRowW();
@@ -581,7 +629,7 @@ void drawDisplayPage(bool linearFiltering,
     drawLrSelectorRow(rowPos(y), "画面布局", layoutLabel(layout), contentFocused && focusedRow == 3, true, opacity); y += kSettingStepY;
     drawSubPageRow(rowPos(y), "自定义画面布局", contentFocused && focusedRow == 4, layout == 7, opacity); y += kSettingStepY;
     drawLrSelectorRow(rowPos(y), "画面方向", orientationLabel(orientation), contentFocused && focusedRow == 5, true, opacity); y += kSettingStepY;
-    drawNumberAdjusterRow(rowPos(y), "屏幕间距", screenGap, "px", 0, 2, contentFocused && focusedRow == 6, true, opacity); y += 54.0f;
+    drawNumberAdjusterRow(rowPos(y), "屏幕间距", screenGap, "px", 0, 1, contentFocused && focusedRow == 6, true, opacity); y += 54.0f;
     drawSectionLabel(rowPos(y + 2.0f), "个性化设置", opacity); y += 30.0f;
     drawSubPageRow(rowPos(y), "遮罩选择", contentFocused && focusedRow == 7, true, opacity); y += kSettingStepY;
     drawSubPageRow(rowPos(y), "滤镜选择", contentFocused && focusedRow == 8, true, opacity); y += 54.0f;
@@ -620,6 +668,53 @@ void drawDeleteDialog(int slot, float opacity)
                   NDS_STUB_KEYICON_A);
     Gfx::DrawText(Gfx::SystemFontChinese, {pos.X + 446.0f, y - 9.0f}, 18.0f,
                   {0.38f, 0.78f, 1.0f, 0.92f * opacity}, "删除");
+}
+
+void drawCustomLayoutSidebar(const NdsCustomLayoutSettings& settings,
+                             int focusedRow,
+                             float progress,
+                             float opacity)
+{
+    opacity = clamp01(opacity);
+    progress = easeOutQuart(clamp01(progress));
+    const bool portrait = kScreenH > kScreenW;
+    const float panelW = portrait ? 320.0f : 360.0f;
+    const float panelX = kScreenW - panelW + (1.0f - progress) * panelW;
+    const float rowW = panelW - 48.0f;
+    const Vector2f panelPos{panelX, 0.0f};
+    const float headerY = portrait ? 38.0f : 30.0f;
+    const float hintY = headerY + 32.0f;
+    const float topSectionY = portrait ? 144.0f : 108.0f;
+    const float topRowY = topSectionY + 34.0f;
+    const float rowGap = portrait ? 62.0f : 54.0f;
+    const float bottomSectionY = topRowY + rowGap * 3.0f + (portrait ? 50.0f : 22.0f);
+    const float bottomRowY = bottomSectionY + 34.0f;
+
+    drawRect({0.0f, 0.0f}, {kScreenW, kScreenH}, {0.0f, 0.0f, 0.0f, 0.22f * opacity}, true);
+    drawRect(panelPos, {panelW, kScreenH}, {0.015f, 0.020f, 0.030f, 0.94f * opacity}, true);
+    drawLine({panelX, 0.0f}, {1.0f, kScreenH}, {1.0f, 1.0f, 1.0f, 0.14f * opacity});
+    Gfx::DrawText(Gfx::SystemFontChinese, {panelX + 28.0f, headerY}, 23.0f,
+                  {1.0f, 1.0f, 1.0f, 0.96f * opacity}, "自定义画面布局");
+    Gfx::DrawText(Gfx::SystemFontChinese, {panelX + 28.0f, hintY}, 13.0f,
+                  {0.78f, 0.86f, 0.94f, 0.62f * opacity}, "B 返回   A 重置当前项");
+
+    auto section = [&](float y, const char* text) {
+        drawLine({panelX + 24.0f, y + 10.0f}, {82.0f, 1.0f}, {1.0f, 1.0f, 1.0f, 0.13f * opacity});
+        Gfx::DrawText(Gfx::SystemFontChinese, {panelX + 118.0f, y}, 15.0f,
+                      {0.72f, 0.84f, 0.96f, 0.76f * opacity}, "%s", text);
+        drawLine({panelX + 208.0f, y + 10.0f}, {panelW - 232.0f, 1.0f},
+                 {1.0f, 1.0f, 1.0f, 0.13f * opacity});
+    };
+
+    section(topSectionY, "上屏布局");
+    drawFloatAdjusterRow({panelX + 24.0f, topRowY}, rowW, "缩放", settings.topScale, "", 1.0f, 0.1f, focusedRow == 0, opacity, 1);
+    drawFloatAdjusterRow({panelX + 24.0f, topRowY + rowGap}, rowW, "X偏移", settings.topOffsetX, "px", 0.0f, 1.0f, focusedRow == 1, opacity, 0);
+    drawFloatAdjusterRow({panelX + 24.0f, topRowY + rowGap * 2.0f}, rowW, "Y偏移", settings.topOffsetY, "px", 0.0f, 1.0f, focusedRow == 2, opacity, 0);
+
+    section(bottomSectionY, "下屏布局");
+    drawFloatAdjusterRow({panelX + 24.0f, bottomRowY}, rowW, "缩放", settings.bottomScale, "", 1.0f, 0.1f, focusedRow == 3, opacity, 1);
+    drawFloatAdjusterRow({panelX + 24.0f, bottomRowY + rowGap}, rowW, "X偏移", settings.bottomOffsetX, "px", 0.0f, 1.0f, focusedRow == 4, opacity, 0);
+    drawFloatAdjusterRow({panelX + 24.0f, bottomRowY + rowGap * 2.0f}, rowW, "Y偏移", settings.bottomOffsetY, "px", 0.0f, 1.0f, focusedRow == 5, opacity, 0);
 }
 
 void drawTabFrame(NdsMenuLayer::Item item,

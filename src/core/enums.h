@@ -131,9 +131,10 @@ namespace beiklive // 结构体
         float ndsBottomScale = 1.0f;
         float ndsBottomOffsetX = 0.0f;
         float ndsBottomOffsetY = 0.0f;
-        std::string ndsScreenLayout = ""; // NDS 双屏布局（vertical/horizontal/custom/hybrid/top/bottom）
-        std::string ndsScreenOrientation = ""; // NDS 屏幕旋转角度（0/90/180/270，兼容旧方向字符串）
-        bool ndsIntegerScale = false; // NDS 自动最大整数倍缩放
+        std::string ndsScreenLayout = "hybrid"; // NDS 双屏布局（vertical/horizontal/custom/hybrid/top/bottom）
+        std::string ndsScreenOrientation = "0"; // NDS 屏幕旋转角度（0/90/180/270，兼容旧方向字符串）
+        bool ndsIntegerScale = true; // NDS 自动最大整数倍缩放
+        int ndsScreenGap = 0; // NDS 双屏间距（每游戏独立配置）
         int ndsInternalResolution = 1; // NDS 3D 内部分辨率倍率（1-4）
 
         std::string shaderParaPath = "";          // 着色器参数所属预设路径

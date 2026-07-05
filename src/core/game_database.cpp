@@ -134,6 +134,7 @@ namespace beiklive
             {"ndsScreenLayout", sanitizeUtf8(entry.ndsScreenLayout)},
             {"ndsScreenOrientation", sanitizeUtf8(entry.ndsScreenOrientation)},
             {"ndsIntegerScale", entry.ndsIntegerScale},
+            {"ndsScreenGap", entry.ndsScreenGap},
             {"ndsInternalResolution", entry.ndsInternalResolution},
             {"shaderParaPath", sanitizeUtf8(entry.shaderParaPath)},
             {"shaderParaNames", entry.shaderParaNames},
@@ -171,9 +172,10 @@ namespace beiklive
         entry.ndsBottomScale = j.value("ndsBottomScale", 1.0f);
         entry.ndsBottomOffsetX = j.value("ndsBottomOffsetX", 0.0f);
         entry.ndsBottomOffsetY = j.value("ndsBottomOffsetY", 0.0f);
-        entry.ndsScreenLayout = j.value("ndsScreenLayout", "");
-        entry.ndsScreenOrientation = j.value("ndsScreenOrientation", "");
-        entry.ndsIntegerScale = j.value("ndsIntegerScale", false);
+        entry.ndsScreenLayout = j.value("ndsScreenLayout", "hybrid");
+        entry.ndsScreenOrientation = j.value("ndsScreenOrientation", "0");
+        entry.ndsIntegerScale = j.value("ndsIntegerScale", true);
+        entry.ndsScreenGap = std::clamp(j.value("ndsScreenGap", 0), -256, 256);
         entry.ndsInternalResolution = std::clamp(j.value("ndsInternalResolution", 1), 1, 4);
         entry.shaderParaPath = j.value("shaderParaPath", "");
         entry.shaderParaNames = j.value("shaderParaNames", std::vector<std::string>());

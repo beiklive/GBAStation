@@ -1752,6 +1752,54 @@ GBAStation.nro        24.92 MB
 GBAStationNDSStub.nro 2.32 MB
 ```
 
+---
+
+## 阶段 4.21：NDS 显示配置完全迁移到 GameDB 默认值
+
+### 目标
+
+- `nds.screenGap` / `nds.screenLayout` / `nds.screenOrientation` / `nds.integerScale` 不再作为 `config.cfg` 全局配置来源；
+- 改为使用每个游戏 GameDB 条目中的独立字段：
+  - `ndsScreenGap`
+  - `ndsScreenLayout`
+  - `ndsScreenOrientation`
+  - `ndsIntegerScale`
+- `screenGap` 作为新增 GameDB 字段保存；
+- 缺省值对齐旧配置意图：`layout=hybrid`、`orientation=0`、`integerScale=true`、`gap=0`。
+
+### 已实施
+
+- `GameEntry` 默认值更新：
+  - `ndsScreenLayout = "hybrid"`；
+  - `ndsScreenOrientation = "0"`；
+  - `ndsIntegerScale = true`；
+  - `ndsScreenGap = 0`。
+- `game_database.cpp` 的反序列化默认值同步更新，兼容旧 GameDB 缺字段条目。
+- 新建 / 导入 NDS 游戏时写入 GameDB 默认值：
+  - `GamePage`
+  - `NdsDekoGamePage`
+  - `DataManagementPage`
+  - Web/API 上传导入路径。
+- `GBAStationNDSStub` 启动时只从 GameDB 读取 NDS 显示配置：
+  - 读取 `ndsScreenLayout`、`ndsScreenOrientation`、`ndsIntegerScale`、`ndsScreenGap`；
+  - 缺字段时使用 `hybrid / 0 / true / 0`；
+  - 保存显示设置时写回对应游戏的 GameDB 条目。
+- 全局 `config.cfg` 中的旧键：
+  - `nds.screenGap`
+  - `nds.screenLayout`
+  - `nds.screenOrientation`
+  - `nds.integerScale`
+  已无读写引用。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.32 MB
+```
+
 ### 真机验证重点
 
 - 打开保存/读取状态页面，已有 `ssN.png` 应显示在对应槽位。
@@ -2829,6 +2877,169 @@ GBAStationNDSStub.nro 2.28 MB
 ```text
 GBAStation.nro        24.92 MB
 GBAStationNDSStub.nro 2.29 MB
+```
+
+---
+
+## 阶段 4.20：自定义布局侧边栏动画与提交保存
+
+### 目标
+
+- 自定义画面布局侧边栏增加打开/关闭动画；
+- 缩放调整步长改为 `0.1`，偏移调整步长改为 `1px`；
+- 在侧边栏按 `B` 时保存当前自定义布局到 GameDB，并返回主菜单；
+- 侧边栏和自定义布局在 `90度 / 270度` 下使用竖屏逻辑布局，避免比例被整体拉伸。
+
+### 已实施
+
+- `NdsMenuLayer` 新增自定义布局编辑器动画状态：
+  - 打开时从右侧滑入；
+  - 按 `B` 后先收起侧边栏，再重新打开主菜单；
+  - 新增 `CustomLayoutCommitted` 动作区分“实时预览”和“提交保存”。
+- `NdsDekoRuntime` 调整保存时机：
+  - LR/方向键调整时只实时应用到 `NdsGameLayer`；
+  - 按 `B` 关闭侧边栏时才写入 GameDB；
+  - 日志区分 `custom layout preview` 与 `custom layout commit`。
+- `UiComponents::drawCustomLayoutSidebar()` 改为支持进度参数：
+  - 横屏使用右侧 `360px` 面板；
+  - `90度 / 270度` 使用 `720x1280` 逻辑画布和 `320px` 侧栏；
+  - 字体大小保持一致，不做整体等比缩放。
+- `NdsGameLayer` 的 Custom 布局适配方向：
+  - `0度 / 180度` 继续使用 `1280x720` 自定义画布；
+  - `90度 / 270度` 改为 `720x1280` 竖向自定义画布；
+  - 竖屏默认上屏/下屏上下贴合，偏移值在竖屏逻辑坐标中生效。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.32 MB
+```
+
+---
+
+## 阶段 4.18：自定义画面布局编辑器
+
+### 目标
+
+- 在 NDS Stub 中实现 `自定义画面布局` 功能；
+- 自定义布局使用 GameDB 字段：
+  - `ndsTopScale`
+  - `ndsTopOffsetX`
+  - `ndsTopOffsetY`
+  - `ndsBottomScale`
+  - `ndsBottomOffsetX`
+  - `ndsBottomOffsetY`
+- 自定义布局不受：
+  - `屏幕间距`
+  - `整数倍缩放`
+  的影响。
+
+### 已实施
+
+- 新增公共结构：
+  - `NdsCustomLayoutSettings`
+- `DekoRunOptions` 增加自定义布局字段，并在 `NdsDekoStubMain` 中从 `GameData_NDS.json` 读取。
+- `NdsGameLayer` 的 `Custom` 布局改为使用 GameDB 自定义字段：
+  - 上屏默认基点：`224, 264`
+  - 下屏默认基点：`800, 264`
+  - 基础尺寸：`256x192`
+  - 缩放范围：`0.25 ~ 4.0`
+  - 偏移以 1280x720 逻辑画布像素为单位。
+- `Custom` 布局不再读取：
+  - `m_integerScale`
+  - `m_screenGap`
+- 菜单中点击 `自定义画面布局` 后：
+  - 收起完整菜单；
+  - 在屏幕右侧显示自定义布局侧边栏。
+- 侧边栏内容：
+  - `上屏布局`
+    - 缩放
+    - X偏移
+    - Y偏移
+  - `下屏布局`
+    - 缩放
+    - X偏移
+    - Y偏移
+- 侧边栏操作：
+  - 上/下：切换条目；
+  - L/R 或左右方向：调整数值；
+  - 长按 L/R：连续调整；
+  - A：重置当前条目默认值；
+  - B：退出侧边栏。
+- 自定义布局变更时：
+  - 实时应用到游戏画面；
+  - 保存 `nds.screenLayout=custom` 到配置；
+  - 更新 `GameData_NDS.json` 中当前游戏记录的六个自定义布局字段。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.33 MB
+```
+
+---
+
+## 阶段 4.19：NDS 画面设置迁移到 GameDB 独立配置
+
+### 目标
+
+- 以下 NDS 画面配置不再写入全局 `config.cfg`：
+  - `nds.screenGap`
+  - `nds.screenLayout`
+  - `nds.screenOrientation`
+  - `nds.integerScale`
+- 改为写入每个游戏对应的 GameDB 记录。
+
+### 已实施
+
+- 复用 GameDB 已有字段：
+  - `ndsScreenLayout`
+  - `ndsScreenOrientation`
+  - `ndsIntegerScale`
+- 新增 GameDB 字段：
+  - `ndsScreenGap`
+- 更新 `GameEntry`：
+  - 新增 `ndsScreenGap`；
+  - JSON 序列化/反序列化支持该字段；
+  - 旧数据默认 `0`；
+  - 合法范围限制为 `-256 ~ 256`。
+- 更新新游戏/导入流程默认值：
+  - NDS 游戏默认 `ndsScreenLayout=vertical`；
+  - 默认 `ndsScreenOrientation=0`；
+  - 默认 `ndsScreenGap=0`；
+  - 重新导入时保留已有 `ndsIntegerScale` 和 `ndsScreenGap`。
+- 更新 NDS Stub 启动参数：
+  - `NdsDekoStubMain` 从 `GameData_NDS.json` 读取：
+    - `ndsScreenLayout`
+    - `ndsScreenOrientation`
+    - `ndsIntegerScale`
+    - `ndsScreenGap`
+  - `RunDekoRuntime` 初始化画面设置时使用 GameDB 值，不再读取 config 中的对应 `nds.*` key。
+- 更新 NDS Stub 写回逻辑：
+  - 菜单中修改布局、方向、整数缩放、屏幕间距时写回 `GameData_NDS.json`；
+  - `nds.layout.next` 热键也写回 GameDB；
+  - 自定义布局保存时同步写回 `ndsScreenLayout=custom` 和 `ndsScreenGap` 等画面字段。
+- 保留全局 config 中仍属于全局/功能设置的字段：
+  - `display.filter`
+  - `fastforward.multiplier`
+  - 输入映射、热键等。
+- 对齐 `screenGap` 范围和 UI：
+  - GameLayer 支持 `-256 ~ 256`；
+  - UI 数值调整器显示步长为 `1px`。
+
+### 构建记录
+
+- Switch 构建通过：
+
+```text
+GBAStation.nro        24.92 MB
+GBAStationNDSStub.nro 2.32 MB
 ```
 
 ---

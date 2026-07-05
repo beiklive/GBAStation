@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <string>
 
+#include "nds_stub/NdsStubTypes.hpp"
+
 namespace beiklive::nds_stub {
 
 enum class NdsMenuAction {
@@ -12,6 +14,8 @@ enum class NdsMenuAction {
     LoadState,
     DeleteState,
     DisplaySettingsChanged,
+    CustomLayoutChanged,
+    CustomLayoutCommitted,
     ResetGame,
     ExitGame,
 };
@@ -41,6 +45,7 @@ struct NdsDisplaySettings {
     int layout = 0;
     int orientation = 0;
     int screenGap = 0;
+    NdsCustomLayoutSettings customLayout {};
 };
 
 class NdsMenuLayer {
@@ -72,6 +77,8 @@ public:
     void setFastForwardMultiplier(float multiplier);
     void setDisplaySettings(const NdsDisplaySettings& settings);
     const NdsDisplaySettings& displaySettings() const { return m_display; }
+    void setCustomLayoutSettings(const NdsCustomLayoutSettings& settings);
+    const NdsCustomLayoutSettings& customLayoutSettings() const { return m_display.customLayout; }
 
 private:
     enum class FocusScope {
@@ -80,14 +87,19 @@ private:
     };
 
     bool cycleCurrentSetting(int direction);
+    bool cycleCustomLayoutSetting(int direction);
+    bool resetCustomLayoutSetting();
     bool activateDisplayControl();
+    void beginCustomLayoutEditor();
     void beginSelectionAnimation(int oldSelected, int newSelected);
     void beginPanelAnimation(bool opening);
     float panelProgress() const;
+    float customLayoutEditorProgress() const;
     bool itemHasContent(Item item) const;
     int contentControlCount(Item item) const;
     int nextFocusableDisplayRow(int from, int direction) const;
     bool updateHeldSelector(std::uint64_t buttonsHeld);
+    bool updateHeldCustomSelector(std::uint64_t buttonsHeld);
     void openDeleteDialog();
     void closeDeleteDialog();
     float targetContentScrollY() const;
@@ -108,6 +120,11 @@ private:
     bool m_panelOpening = false;
     bool m_deleteDialogVisible = false;
     int m_deleteSlot = -1;
+    bool m_customLayoutEditorVisible = false;
+    bool m_customLayoutEditorClosing = false;
+    bool m_customLayoutReturnToMenu = false;
+    std::uint64_t m_customLayoutAnimStartTick = 0;
+    int m_customLayoutFocus = 0;
     std::uint64_t m_selectorRepeatStartTick = 0;
     std::uint64_t m_selectorLastStepTick = 0;
     int m_selectorDirection = 0;

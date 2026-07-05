@@ -386,7 +386,7 @@ bool isRemoteEditableGameField(const std::string& key)
         "displayMode", "integerAspectRatio", "customScale", "customOffsetX", "customOffsetY",
         "ndsTopScale", "ndsTopOffsetX", "ndsTopOffsetY",
         "ndsBottomScale", "ndsBottomOffsetX", "ndsBottomOffsetY",
-        "ndsScreenLayout", "ndsScreenOrientation", "ndsIntegerScale", "ndsInternalResolution",
+        "ndsScreenLayout", "ndsScreenOrientation", "ndsIntegerScale", "ndsScreenGap", "ndsInternalResolution",
         "shaderParaPath", "shaderParaNames", "shaderParaValues",
     };
     return editable.count(key) > 0;
@@ -1129,8 +1129,10 @@ void ApiRouter::handleUploadFinish(mg_connection* c, mg_http_message* hm)
         entry.logoPath = beiklive::tools::getDefaultLogoPath(static_cast<beiklive::enums::EmuPlatform>(session.platform));
         entry.savePath = beiklive::tools::defaultGameSavePath(session.platform, session.targetPath);
         if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)) {
-            entry.ndsScreenLayout = "vertical";
+            entry.ndsScreenLayout = "hybrid";
             entry.ndsScreenOrientation = "0";
+            entry.ndsIntegerScale = true;
+            entry.ndsScreenGap = 0;
         }
         ensureDir(entry.savePath);
         bool saved = saveGame(entry);

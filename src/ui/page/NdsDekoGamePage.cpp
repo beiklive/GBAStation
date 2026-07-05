@@ -5,6 +5,7 @@
 
 #include <borealis/views/dialog.hpp>
 
+#include <algorithm>
 #include <filesystem>
 
 namespace beiklive {
@@ -59,8 +60,10 @@ void NdsDekoGamePage::_initGameEntryFromDir()
         minimal.savePath = beiklive::tools::defaultGameSavePath(platform, minimal.path);
         minimal.logoPath = beiklive::tools::getDefaultLogoPath(
             static_cast<beiklive::enums::EmuPlatform>(platform));
-        minimal.ndsScreenLayout = "vertical";
+        minimal.ndsScreenLayout = "hybrid";
         minimal.ndsScreenOrientation = "0";
+        minimal.ndsIntegerScale = true;
+        minimal.ndsScreenGap = 0;
         std::filesystem::create_directories(minimal.savePath);
         beiklive::GameDB->upsertByPath(minimal);
     }
@@ -81,9 +84,10 @@ void NdsDekoGamePage::_initGameEntryPaths()
     m_gameEntry.core = beiklive::NormalizeCoreId(m_gameEntry.platform, m_gameEntry.core);
 
     if (m_gameEntry.ndsScreenLayout.empty())
-        m_gameEntry.ndsScreenLayout = "vertical";
+        m_gameEntry.ndsScreenLayout = "hybrid";
     if (m_gameEntry.ndsScreenOrientation.empty())
         m_gameEntry.ndsScreenOrientation = "0";
+    m_gameEntry.ndsScreenGap = std::clamp(m_gameEntry.ndsScreenGap, -256, 256);
     m_gameEntry.ndsInternalResolution = 1;
 
     if (m_gameEntry.logoPath.empty()) {
