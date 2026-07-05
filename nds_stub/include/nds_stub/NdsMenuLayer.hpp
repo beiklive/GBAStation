@@ -140,6 +140,8 @@ private:
     void reloadFilePickerEntries(const std::string& directory, const std::string& focusPath = {});
     void ensureFilePickerPreview();
     void releaseFilePickerPreview();
+    void releaseStatePreviewTexture() const;
+    void ensureStatePreviewTexture() const;
     void beginSelectionAnimation(int oldSelected, int newSelected);
     void beginPanelAnimation(bool opening);
     float panelProgress() const;
@@ -217,6 +219,12 @@ private:
     int m_navDirection = 0;
     mutable float m_contentScrollY = 0.0f;
     mutable std::uint64_t m_contentScrollLastTick = 0;
+    mutable std::uint32_t m_statePreviewTexture = 0;
+    mutable int m_statePreviewWidth = 0;
+    mutable int m_statePreviewHeight = 0;
+    mutable int m_statePreviewSlot = -1;
+    mutable std::string m_statePreviewPath;
+    mutable bool m_statePreviewAttempted = false;
 };
 
 } // namespace beiklive::nds_stub

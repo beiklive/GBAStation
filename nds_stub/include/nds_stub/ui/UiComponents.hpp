@@ -104,6 +104,17 @@ void drawSaveSlotGrid(const std::array<NdsStateSlotInfo, 10>& slots,
                       float scrollY,
                       float opacity,
                       float offsetY = 0.0f);
+void drawStateSlotPage(const char* title,
+                       const std::array<NdsStateSlotInfo, 10>& slots,
+                       int focusedSlot,
+                       bool contentFocused,
+                       std::uint32_t previewTexture,
+                       int previewWidth,
+                       int previewHeight,
+                       bool previewAttempted,
+                       float offsetX,
+                       float opacity,
+                       float offsetY = 0.0f);
 // 绘制通用信息页面：标题 + 分割线 + 描述文本（用于金手指/重置/退出/返回等页）
 void drawInfoPage(const char* title, const char* body, float offsetX, float offsetY, float opacity);
 // 绘制画面设置页面
@@ -157,6 +168,10 @@ void drawTabFrame(NdsMenuLayer::Item item,
                   int contentFocus,
                   bool contentFocused,
                   float contentScrollY,
+                  std::uint32_t statePreviewTexture,
+                  int statePreviewWidth,
+                  int statePreviewHeight,
+                  bool statePreviewAttempted,
                   float offsetY = 0.0f);
 
 } // namespace beiklive::nds_stub::ui

@@ -1850,8 +1850,6 @@ int RunDekoRuntime(const DekoRunOptions& options)
                       cheatLoad.sourcePath.c_str());
     };
     applyMenuCheats();
-    bool stateSlotTexturesDirty = true;
-    bool stateSlotTextureLoadStarted = false;
     double fps = 0.0;
     int fpsFrames = 0;
     uint64_t totalFrames = 0;
@@ -1928,17 +1926,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
             releaseStateSlotTexture(stateSlots[slot]);
             auto refreshed = loadStateSlots(stateDir, options.romPath);
             stateSlots[slot] = refreshed[slot];
-            if (ok && thumbOk && thumbnailCaptured)
-            {
-                uploadStateSlotTexture(stateSlots[slot],
-                                       thumbnailRgba,
-                                       thumbnailWidth,
-                                       thumbnailHeight,
-                                       slot);
-            }
         }
-        stateSlotTexturesDirty = hasPendingStateSlotTextures(stateSlots);
-        stateSlotTextureLoadStarted = !stateSlotTexturesDirty;
         menuLayer.setStateSlots(stateSlots);
         return ok;
     };
@@ -1976,8 +1964,6 @@ int RunDekoRuntime(const DekoRunOptions& options)
             auto refreshed = loadStateSlots(stateDir, options.romPath);
             stateSlots[slot] = refreshed[slot];
         }
-        stateSlotTexturesDirty = hasPendingStateSlotTextures(stateSlots);
-        stateSlotTextureLoadStarted = !stateSlotTexturesDirty;
         menuLayer.setStateSlots(stateSlots);
     };
 
@@ -2209,25 +2195,6 @@ int RunDekoRuntime(const DekoRunOptions& options)
         {
             applyMenuCheats();
             cheatApplyPending = false;
-        }
-
-        if (stateSlotTexturesDirty && menuLayer.visible() && totalFrames > 2)
-        {
-            if (!stateSlotTextureLoadStarted)
-            {
-                stateSlotTextureLoadStarted = true;
-                appendStubLog("GBAStationNDSStub: state thumbnail lazy load begin");
-            }
-
-            const int uploads = loadStateSlotTexturesStep(stateSlots, 1);
-            if (uploads > 0)
-                menuLayer.setStateSlots(stateSlots);
-
-            if (!hasPendingStateSlotTextures(stateSlots))
-            {
-                stateSlotTexturesDirty = false;
-                appendStubLog("GBAStationNDSStub: state thumbnail lazy load done");
-            }
         }
 
         const bool menuActive = menuLayer.active();

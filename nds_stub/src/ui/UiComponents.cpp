@@ -46,6 +46,8 @@ std::vector<std::uint8_t> gMaterialFontData;
 std::uint32_t gMaterialFont = 0;
 bool gMaterialFontAttempted = false;
 
+constexpr float kMenuAlpha150 = 1.0f;
+
 } // namespace
 
 const UiMetrics& menuMetrics()
@@ -591,7 +593,7 @@ void drawCheatRow(Vector2f pos,
                       {0.56f, 0.84f, 1.0f, 0.86f * opacity},
                       Gfx::align_Center,
                       Gfx::align_Center,
-                      item.expanded ? "v" : ">");
+                      item.expanded ? "\uE5CF" : "\uE5CC");
     }
 
     const float textX = 40.0f + indent + (category ? 16.0f : 0.0f);
@@ -659,7 +661,7 @@ void drawSubPageRow(Vector2f pos, const char* label, bool focused, bool enabled,
     Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{20.0f, kUiLabelY}, kUiLabelFont,
                   {1.0f, 1.0f, 1.0f, enabled ? 0.88f * opacity : 0.34f * opacity}, "%s", label);
     Gfx::DrawText(Gfx::SystemFontStandard, pos + Vector2f{rowW - 42.0f, 8.0f}, 34.0f,
-                  {0.32f, 0.75f, 1.0f, enabled ? 0.96f * opacity : 0.25f * opacity}, ">");
+                  {0.32f, 0.75f, 1.0f, enabled ? 0.96f * opacity : 0.25f * opacity}, "\uE5CC");
 }
 
 void drawInfoRow(Vector2f pos,
@@ -811,8 +813,6 @@ float menuItemY(int index)
 
 void drawOverlay(float alphaScale)
 {
-    alphaScale = clamp01(alphaScale);
-    drawRect({0.0f, 0.0f}, {kScreenW, kScreenH}, {0.0f, 0.0f, 0.0f, 0.70f * alphaScale}, true);
 
     constexpr int bands = 8;
     for (int i = 0; i < bands; ++i)
@@ -821,10 +821,10 @@ void drawOverlay(float alphaScale)
         const float y = kScreenH * static_cast<float>(i) / static_cast<float>(bands);
         const float h = kScreenH / static_cast<float>(bands) + 1.0f;
         drawRect({0.0f, y}, {kScreenW, h},
-                 {lerp(0.16f, 0.0f, t),
-                  lerp(0.16f, 0.0f, t),
-                  lerp(0.16f, 0.0f, t),
-                  lerp(0.48f, 0.82f, t) * alphaScale},
+                 {lerp(0.145f, 0.063f, t),
+                  lerp(0.145f, 0.063f, t),
+                  lerp(0.153f, 0.071f, t),
+                  kMenuAlpha150},
                  true);
     }
 }
@@ -926,7 +926,8 @@ void drawLeftMenu(int selected,
 void drawFooter(bool contentFocused, bool canDelete, float offsetY)
 {
     const float footerY = kScreenH - 72.0f + offsetY;
-    drawRect({0.0f, footerY}, {kScreenW, 72.0f}, {0.0f, 0.0f, 0.0f, 0.40f}, true);
+    // drawRect({0.0f, footerY}, {kScreenW, 72.0f}, {0.117f, 0.117f, 0.117f, 0.f}, true);
+    // drawLine({0.0f, footerY}, {kScreenW, 1.0f}, {0.0f, 0.48f, 0.80f, 0.26f});
 
     const float y = kScreenH - 38.0f + offsetY;
     float right = kScreenW - 86.0f;
@@ -1050,6 +1051,132 @@ void drawSaveSlotGrid(const std::array<NdsStateSlotInfo, 10>& slots,
     if (opacity > 0.5f && scrollY > 1.0f)
         drawRect({kContentX + kContentW - 4.0f, kContentY + kContentBodyTop + offsetY},
                  {3.0f, kContentBodyH}, {1.0f, 1.0f, 1.0f, 0.08f});
+}
+
+void drawStateSlotPage(const char* title,
+                       const std::array<NdsStateSlotInfo, 10>& slots,
+                       int focusedSlot,
+                       bool contentFocused,
+                       std::uint32_t previewTexture,
+                       int previewWidth,
+                       int previewHeight,
+                       bool previewAttempted,
+                       float offsetX,
+                       float opacity,
+                       float offsetY)
+{
+    const Vector2f base{kContentX + offsetX, kContentY + offsetY};
+    Gfx::DrawText(Gfx::SystemFontChinese, base, 24.0f,
+                  {0.86f, 0.91f, 0.96f, opacity}, "%s", title);
+    drawLine({base.X, base.Y + 50.0f}, {kContentW, 1.0f},
+             {0.0f, 0.48f, 0.80f, 0.28f * opacity});
+
+    const float bodyY = kContentY + kContentBodyTop + offsetY;
+    const float rowH = std::min(42.0f, (kContentBodyH - 18.0f) / 10.0f);
+    const float rowGap = std::max(2.0f, (kContentBodyH - rowH * 10.0f) / 9.0f);
+    const float previewMaxH = std::min(384.0f, kContentBodyH - 8.0f);
+    const float previewW = std::min(256.0f, std::max(128.0f, previewMaxH * (256.0f / 384.0f)));
+    const float previewH = previewW * (384.0f / 256.0f);
+    const float gap = 28.0f;
+    const float listW = std::max(180.0f, kContentW - previewW - gap);
+    const Vector2f listPos{kContentX + offsetX, bodyY};
+    const Vector2f previewPos{kContentX + offsetX + listW + gap,
+                              bodyY + (kContentBodyH - previewH) * 0.5f};
+
+    drawRect(listPos - Vector2f{8.0f, 8.0f},
+             {listW + 16.0f, kContentBodyH + 16.0f},
+             {0.145f, 0.145f, 0.153f, kMenuAlpha150 * opacity},
+             true);
+    drawBorder(listPos - Vector2f{8.0f, 8.0f},
+               {listW + 16.0f, kContentBodyH + 16.0f},
+               1.0f,
+               {0.24f, 0.24f, 0.24f, 0.58f * opacity});
+
+    for (int i = 0; i < 10; ++i)
+    {
+        const auto& slot = slots[i];
+        const bool focused = contentFocused && i == focusedSlot;
+        const Vector2f rowPos{listPos.X, listPos.Y + static_cast<float>(i) * (rowH + rowGap)};
+        if (focused)
+            drawGradientBorder(rowPos - Vector2f{3.0f, 3.0f},
+                               {listW + 6.0f, rowH + 6.0f},
+                               3.0f,
+                               8.0f);
+        drawRect(rowPos,
+                 {listW, rowH},
+                 focused ? Color{0.0f, 0.30f, 0.50f, 0.52f * opacity}
+                         : Color{0.176f, 0.176f, 0.188f, 0.58f * opacity},
+                 true);
+        drawBorder(rowPos,
+                   {listW, rowH},
+                   1.0f,
+                   focused ? Color{0.0f, 0.48f, 0.80f, 0.86f * opacity}
+                           : Color{0.24f, 0.24f, 0.24f, 0.50f * opacity});
+
+        char slotName[32];
+        std::snprintf(slotName, sizeof(slotName), "档位 %d", i);
+        Gfx::DrawText(Gfx::SystemFontChinese,
+                      rowPos + Vector2f{16.0f, rowH * 0.5f - 10.0f},
+                      20.0f,
+                      {0.86f, 0.91f, 0.96f, focused ? 1.0f * opacity : 0.82f * opacity},
+                      "%s",
+                      slotName);
+        if (slot.exists && !slot.modifiedTime.empty())
+        {
+            const std::string timeText = ellipsizeText(slot.modifiedTime, listW - 146.0f, 16.0f);
+            Gfx::DrawText(Gfx::SystemFontChinese,
+                          rowPos + Vector2f{listW - 16.0f, rowH * 0.5f - 8.0f},
+                          16.0f,
+                          {0.75f, 0.82f, 0.88f, focused ? 0.95f * opacity : 0.58f * opacity},
+                          Gfx::align_Right,
+                          Gfx::align_Left,
+                          timeText.c_str());
+        }
+    }
+
+    drawRect(previewPos - Vector2f{10.0f, 10.0f},
+             {previewW + 20.0f, previewH + 20.0f},
+             {0.117f, 0.117f, 0.117f, kMenuAlpha150 * opacity},
+             true);
+    drawBorder(previewPos - Vector2f{10.0f, 10.0f},
+               {previewW + 20.0f, previewH + 20.0f},
+               1.0f,
+               {0.0f, 0.48f, 0.80f, 0.40f * opacity});
+
+    if (previewTexture != 0 && previewWidth > 0 && previewHeight > 0)
+    {
+        const float texAspect = static_cast<float>(previewWidth) / static_cast<float>(previewHeight);
+        const float boxAspect = previewW / previewH;
+        Vector2f fitted{previewW, previewH};
+        if (texAspect > boxAspect)
+            fitted.Y = previewW / texAspect;
+        else
+            fitted.X = previewH * texAspect;
+        const Vector2f fittedPos = previewPos + (Vector2f{previewW, previewH} - fitted) * 0.5f;
+        Gfx::SetSampler(Gfx::sampler_Linear | Gfx::sampler_ClampToEdge);
+        Gfx::DrawRectangle(previewTexture,
+                           fittedPos,
+                           fitted,
+                           {0.0f, 0.0f},
+                           {static_cast<float>(previewWidth),
+                            static_cast<float>(previewHeight)},
+                           {1.0f, 1.0f, 1.0f, opacity});
+        Gfx::SetSampler(Gfx::sampler_Nearest | Gfx::sampler_ClampToEdge);
+    }
+    else
+    {
+        drawRect(previewPos,
+                 {previewW, previewH},
+                 {0.05f, 0.05f, 0.055f, 0.68f * opacity},
+                 true);
+        Gfx::DrawText(Gfx::SystemFontStandard,
+                      previewPos + Vector2f{previewW * 0.5f, previewH * 0.5f - 8.0f},
+                      24.0f,
+                      {0.74f, 0.82f, 0.90f, previewAttempted ? 0.62f * opacity : 0.42f * opacity},
+                      Gfx::align_Center,
+                      Gfx::align_Center,
+                      "NO THUMB");
+    }
 }
 
 void drawInfoPage(const char* title, const char* body, float offsetX, float offsetY, float opacity)
@@ -1460,6 +1587,10 @@ void drawTabFrame(NdsMenuLayer::Item item,
                   int contentFocus,
                   bool contentFocused,
                   float contentScrollY,
+                  std::uint32_t statePreviewTexture,
+                  int statePreviewWidth,
+                  int statePreviewHeight,
+                  bool statePreviewAttempted,
                   float offsetY)
 {
     if (item == NdsMenuLayer::Item::Resume ||
@@ -1468,46 +1599,36 @@ void drawTabFrame(NdsMenuLayer::Item item,
         return;
 
     drawRect({kContentX - 22.0f, kContentY - 24.0f + offsetY}, {kContentW + 44.0f, kContentH + 34.0f},
-             {0.02f, 0.03f, 0.04f, 0.18f}, true);
+             {0.117f, 0.117f, 0.117f, kMenuAlpha150}, true);
 
     auto drawPage = [&](NdsMenuLayer::Item page, float offsetX, float opacity) {
         switch (page)
         {
         case NdsMenuLayer::Item::SaveState:
-            Gfx::DrawText(Gfx::SystemFontChinese, {kContentX + offsetX, kContentY + offsetY}, 24.0f,
-                          {1.0f, 1.0f, 1.0f, opacity}, "保存状态");
-            drawLine({kContentX + offsetX, kContentY + offsetY + 50.0f}, {kContentW, 1.0f},
-                     {1.0f, 1.0f, 1.0f, 0.10f * opacity});
-            if (opacity > 0.5f)
-            {
-                pushContentBodyScissor(offsetY);
-                drawSaveSlotGrid(slots,
-                                 contentFocus,
-                                 contentFocused,
-                                 offsetX,
-                                 contentScrollY,
-                                 opacity,
-                                 offsetY);
-                Gfx::PopScissor();
-            }
+            drawStateSlotPage("保存状态",
+                              slots,
+                              contentFocus,
+                              contentFocused,
+                              statePreviewTexture,
+                              statePreviewWidth,
+                              statePreviewHeight,
+                              statePreviewAttempted,
+                              offsetX,
+                              opacity,
+                              offsetY);
             break;
         case NdsMenuLayer::Item::LoadState:
-            Gfx::DrawText(Gfx::SystemFontChinese, {kContentX + offsetX, kContentY + offsetY}, 24.0f,
-                          {1.0f, 1.0f, 1.0f, opacity}, "读取状态");
-            drawLine({kContentX + offsetX, kContentY + offsetY + 50.0f}, {kContentW, 1.0f},
-                     {1.0f, 1.0f, 1.0f, 0.10f * opacity});
-            if (opacity > 0.5f)
-            {
-                pushContentBodyScissor(offsetY);
-                drawSaveSlotGrid(slots,
-                                 contentFocus,
-                                 contentFocused,
-                                 offsetX,
-                                 contentScrollY,
-                                 opacity,
-                                 offsetY);
-                Gfx::PopScissor();
-            }
+            drawStateSlotPage("读取状态",
+                              slots,
+                              contentFocus,
+                              contentFocused,
+                              statePreviewTexture,
+                              statePreviewWidth,
+                              statePreviewHeight,
+                              statePreviewAttempted,
+                              offsetX,
+                              opacity,
+                              offsetY);
             break;
         case NdsMenuLayer::Item::Display:
             drawDisplayPage(display.linearFiltering,

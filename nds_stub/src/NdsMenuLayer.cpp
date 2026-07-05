@@ -438,6 +438,7 @@ bool pushMenuOrientationTransform(int orientation)
 void NdsMenuLayer::setStateSlots(const std::array<NdsStateSlotInfo, 10>& slots)
 {
     m_slots = slots;
+    releaseStatePreviewTexture();
 }
 
 void NdsMenuLayer::setCheatItems(const std::vector<NdsCheatItem>& cheats)
@@ -474,6 +475,88 @@ void NdsMenuLayer::releaseFilePickerPreview()
     m_filePickerPreviewHeight = 0;
     m_filePickerPreviewPath.clear();
     m_filePickerPreviewAttempted = false;
+}
+
+void NdsMenuLayer::releaseStatePreviewTexture() const
+{
+    if (m_statePreviewTexture != 0)
+    {
+        Gfx::PresentQueue.waitIdle();
+        Gfx::TextureDelete(m_statePreviewTexture);
+        m_statePreviewTexture = 0;
+    }
+    m_statePreviewWidth = 0;
+    m_statePreviewHeight = 0;
+    m_statePreviewSlot = -1;
+    m_statePreviewPath.clear();
+    m_statePreviewAttempted = false;
+}
+
+void NdsMenuLayer::ensureStatePreviewTexture() const
+{
+    const Item item = static_cast<Item>(m_selected);
+    if (!m_visible ||
+        (item != Item::SaveState && item != Item::LoadState) ||
+        m_contentFocus < 0 ||
+        m_contentFocus >= static_cast<int>(m_slots.size()))
+    {
+        releaseStatePreviewTexture();
+        return;
+    }
+
+    const auto& slot = m_slots[m_contentFocus];
+    const bool usable = slot.exists && slot.thumbnailAvailable && !slot.thumbnailPath.empty();
+    if (!usable)
+    {
+        if (m_statePreviewTexture == 0 &&
+            m_statePreviewAttempted &&
+            m_statePreviewSlot == m_contentFocus &&
+            m_statePreviewPath == slot.thumbnailPath)
+            return;
+        releaseStatePreviewTexture();
+        m_statePreviewSlot = m_contentFocus;
+        m_statePreviewPath = slot.thumbnailPath;
+        m_statePreviewAttempted = true;
+        return;
+    }
+
+    if (m_statePreviewTexture != 0 &&
+        m_statePreviewSlot == m_contentFocus &&
+        m_statePreviewPath == slot.thumbnailPath)
+        return;
+    if (m_statePreviewTexture == 0 &&
+        m_statePreviewAttempted &&
+        m_statePreviewSlot == m_contentFocus &&
+        m_statePreviewPath == slot.thumbnailPath)
+        return;
+
+    releaseStatePreviewTexture();
+    m_statePreviewSlot = m_contentFocus;
+    m_statePreviewPath = slot.thumbnailPath;
+    m_statePreviewAttempted = true;
+    appendStubLog("GBAStationNDSStub: state preview load begin slot=%d path=%s",
+                  m_contentFocus,
+                  slot.thumbnailPath.c_str());
+    if (!loadPngTextureFromFile(slot.thumbnailPath,
+                                m_statePreviewTexture,
+                                m_statePreviewWidth,
+                                m_statePreviewHeight))
+    {
+        appendStubLog("GBAStationNDSStub: state preview load failed slot=%d path=%s",
+                      m_contentFocus,
+                      slot.thumbnailPath.c_str());
+        releaseStatePreviewTexture();
+        m_statePreviewSlot = m_contentFocus;
+        m_statePreviewPath = slot.thumbnailPath;
+        m_statePreviewAttempted = true;
+        return;
+    }
+
+    appendStubLog("GBAStationNDSStub: state preview load ok slot=%d size=%dx%d tex=%u",
+                  m_contentFocus,
+                  m_statePreviewWidth,
+                  m_statePreviewHeight,
+                  m_statePreviewTexture);
 }
 
 void NdsMenuLayer::reloadFilePickerEntries(const std::string& directory, const std::string& focusPath)
@@ -607,6 +690,7 @@ void NdsMenuLayer::open()
 {
     if (m_visible && !m_panelAnimating)
         return;
+    releaseStatePreviewTexture();
     m_customLayoutEditorVisible = false;
     m_customLayoutEditorClosing = false;
     m_customLayoutReturnToMenu = false;
@@ -635,6 +719,7 @@ void NdsMenuLayer::close()
     if (!m_visible && !m_panelAnimating && !m_customLayoutEditorVisible &&
         !m_overlaySidebarVisible && !m_shaderSidebarVisible && !m_filePickerVisible)
         return;
+    releaseStatePreviewTexture();
     if (m_filePickerVisible && !m_filePickerClosing)
     {
         m_filePickerClosing = true;
@@ -715,15 +800,7 @@ float NdsMenuLayer::targetContentScrollY() const
     {
     case Item::SaveState:
     case Item::LoadState:
-    {
-        const int columns = saveSlotColumns();
-        const int rows = (10 + columns - 1) / columns;
-        const int row = std::clamp(m_contentFocus, 0, 9) / columns;
-        const float focusedTop = row * (saveCardHeight() + saveCardGapY());
-        const float contentH = static_cast<float>(rows) * saveCardHeight() +
-            static_cast<float>(std::max(0, rows - 1)) * saveCardGapY();
-        return focusedScroll(focusedTop, saveCardHeight(), contentH);
-    }
+        return 0.0f;
     case Item::Display:
     {
         const int row = std::clamp(m_contentFocus, 0, contentControlCount(Item::Display) - 1);
@@ -1590,16 +1667,13 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
     {
         if (currentItem == Item::SaveState || currentItem == Item::LoadState)
         {
-            const int columns = (m_display.orientation == 1 || m_display.orientation == 3) ? 1 : 2;
-            const int col = m_contentFocus % columns;
-            if (columns > 1 && isDirectionLeft(navButtons) && col > 0)
-                --m_contentFocus;
-            else if (columns > 1 && isDirectionRight(navButtons) && col < columns - 1 && m_contentFocus + 1 < contentControlCount(currentItem))
-                ++m_contentFocus;
-            else if (isDirectionUp(navButtons) && m_contentFocus >= columns)
-                m_contentFocus -= columns;
-            else if (isDirectionDown(navButtons) && m_contentFocus + columns < contentControlCount(currentItem))
-                m_contentFocus += columns;
+            const int oldFocus = m_contentFocus;
+            if (isDirectionUp(navButtons))
+                m_contentFocus = std::max(0, m_contentFocus - 1);
+            else if (isDirectionDown(navButtons))
+                m_contentFocus = std::min(contentControlCount(currentItem) - 1, m_contentFocus + 1);
+            if (m_contentFocus != oldFocus)
+                releaseStatePreviewTexture();
 
             if (buttonsDown & HidNpadButton_A)
             {
@@ -1820,6 +1894,7 @@ void NdsMenuLayer::draw() const
         m_contentFocus >= 0 && m_contentFocus < static_cast<int>(m_slots.size()) &&
         m_slots[m_contentFocus].exists;
     const bool transformed = pushMenuOrientationTransform(m_display.orientation);
+    ensureStatePreviewTexture();
     drawOverlay(panel);
     drawHeader(slideY);
     drawLeftMenu(m_selected, m_previousSelected, selectionProgress, !contentFocused, slideY);
@@ -1836,6 +1911,10 @@ void NdsMenuLayer::draw() const
                  m_contentFocus,
                  contentFocused,
                  smoothedContentScrollY(),
+                 m_statePreviewTexture,
+                 m_statePreviewWidth,
+                 m_statePreviewHeight,
+                 m_statePreviewAttempted,
                  slideY);
     drawFooter(contentFocused, canDelete, slideY);
     if (m_deleteDialogVisible)
