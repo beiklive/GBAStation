@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 #include "../../third_party/ArcDelta_melonDS/src/GPU.h"
 #include "../../third_party/ArcDelta_melonDS/src/GPU2D_Deko.h"
@@ -460,35 +461,61 @@ bool NdsGameLayer::captureCurrentFrameRgba(std::vector<std::uint8_t>& outRgba,
                                            int& outWidth,
                                            int& outHeight) const
 {
+    if (refreshCaptureCache())
+    {
+        outRgba = m_lastCaptureRgba;
+        outWidth = m_lastCaptureWidth;
+        outHeight = m_lastCaptureHeight;
+        return true;
+    }
+
+    if (m_lastCaptureRgba.empty() || m_lastCaptureWidth <= 0 || m_lastCaptureHeight <= 0)
+        return false;
+    outRgba = m_lastCaptureRgba;
+    outWidth = m_lastCaptureWidth;
+    outHeight = m_lastCaptureHeight;
+    return true;
+}
+
+bool NdsGameLayer::refreshCaptureCache() const
+{
     if (!m_renderer)
         return false;
 
     std::vector<std::uint8_t> top;
     std::vector<std::uint8_t> bottom;
-    if (!m_renderer->ReadFramebufferRGBA(top, bottom))
+    if (!m_renderer->TakeCapturedFramebufferRGBA(top, bottom) &&
+        !m_renderer->ReadFramebufferRGBA(top, bottom))
         return false;
 
     const std::vector<std::uint8_t>& upper = m_screensSwapped ? bottom : top;
     const std::vector<std::uint8_t>& lower = m_screensSwapped ? top : bottom;
     constexpr int srcW = 256;
     constexpr int srcH = 192;
-    outWidth = srcW;
-    outHeight = srcH * 2;
-    outRgba.assign(static_cast<size_t>(outWidth) * outHeight * 4, 0);
+    std::vector<std::uint8_t> rgba(static_cast<size_t>(srcW) * srcH * 2 * 4, 0);
 
     for (int y = 0; y < srcH; ++y)
     {
-        auto* dst = outRgba.data() + static_cast<size_t>(y) * outWidth * 4;
+        auto* dst = rgba.data() + static_cast<size_t>(y) * srcW * 4;
         const auto* upperRow = upper.data() + static_cast<size_t>(y) * srcW * 4;
         std::copy(upperRow, upperRow + srcW * 4, dst);
     }
     for (int y = 0; y < srcH; ++y)
     {
-        auto* dst = outRgba.data() + static_cast<size_t>(y + srcH) * outWidth * 4;
+        auto* dst = rgba.data() + static_cast<size_t>(y + srcH) * srcW * 4;
         const auto* lowerRow = lower.data() + static_cast<size_t>(y) * srcW * 4;
         std::copy(lowerRow, lowerRow + srcW * 4, dst);
     }
+    m_lastCaptureRgba = std::move(rgba);
+    m_lastCaptureWidth = srcW;
+    m_lastCaptureHeight = srcH * 2;
     return true;
+}
+
+void NdsGameLayer::requestDeferredCapture() const
+{
+    if (m_renderer)
+        m_renderer->RequestFramebufferCapture();
 }
 
 void NdsGameLayer::drawScreens() const

@@ -134,39 +134,6 @@ void drawGradientQuad(const HighlightGradientTexture& gradient,
                        tint);
 }
 
-void drawCornerArc(const HighlightGradientTexture& gradient,
-                   Vector2f center,
-                   float innerRadius,
-                   float outerRadius,
-                   float startAngle,
-                   float endAngle,
-                   float uvStart,
-                   float uvLength,
-                   Color tint)
-{
-    constexpr int kSegments = 12;
-    const float angleSpan = endAngle - startAngle;
-
-    for (int i = 0; i < kSegments; ++i)
-    {
-        const float t0 = static_cast<float>(i) / static_cast<float>(kSegments);
-        const float t1 = static_cast<float>(i + 1) / static_cast<float>(kSegments);
-        const float a0 = startAngle + angleSpan * t0;
-        const float a1 = startAngle + angleSpan * t1;
-        const Vector2f dir0{std::cos(a0), std::sin(a0)};
-        const Vector2f dir1{std::cos(a1), std::sin(a1)};
-
-        drawGradientQuad(gradient,
-                         center + dir0 * outerRadius,
-                         center + dir1 * outerRadius,
-                         center + dir0 * innerRadius,
-                         center + dir1 * innerRadius,
-                         uvStart + uvLength * t0,
-                         uvLength / static_cast<float>(kSegments),
-                         tint);
-    }
-}
-
 } // namespace
 
 float clamp01(float value)
@@ -275,7 +242,7 @@ void drawBorder(Vector2f pos, Vector2f size, float width, Color color)
     drawRect({pos.X + size.X - width, pos.Y}, {width, size.Y}, color);
 }
 
-void drawGradientBorder(Vector2f pos, Vector2f size, float width, float cornerRadius)
+void drawGradientBorder(Vector2f pos, Vector2f size, float width)
 {
     const HighlightGradientTexture& gradient = getHighlightGradientTexture();
     if (gradient.texture == 0 || gradient.width <= 0 || gradient.height <= 0)
@@ -286,105 +253,56 @@ void drawGradientBorder(Vector2f pos, Vector2f size, float width, float cornerRa
 
     const float animationOffset = gradientFocusAnimationOffset();
     const float borderWidth = std::max(4.0f, width * kGradientFocusBorderWidthScale);
-    const float innerRadius = std::max(0.0f,
-                                       std::min(cornerRadius,
-                                                std::min(size.X, size.Y) * 0.5f));
-    const float outerRadius = innerRadius + borderWidth;
     const float x = pos.X;
     const float y = pos.Y;
     const float w = size.X;
     const float h = size.Y;
     const float uvOffset = animationOffset * static_cast<float>(gradient.width);
     const Color borderTint{1.0f, 1.0f, 1.0f, 0.98f};
-    const float topLen = std::max(1.0f, w - innerRadius * 2.0f);
-    const float sideLen = std::max(1.0f, h - innerRadius * 2.0f);
-    const float cornerLen = std::max(1.0f, innerRadius * 1.57079632679f);
+    const float topLen = std::max(1.0f, w);
+    const float sideLen = std::max(1.0f, h);
     float uv = uvOffset;
 
     Gfx::SetSampler(Gfx::sampler_Linear | Gfx::sampler_Repeat);
 
     drawGradientQuad(gradient,
-                     {x + innerRadius, y - borderWidth},
-                     {x + w - innerRadius, y - borderWidth},
-                     {x + innerRadius, y},
-                     {x + w - innerRadius, y},
+                     {x - borderWidth, y - borderWidth},
+                     {x + w + borderWidth, y - borderWidth},
+                     {x - borderWidth, y},
+                     {x + w + borderWidth, y},
                      uv,
-                     topLen,
+                     topLen + borderWidth * 2.0f,
                      borderTint);
-    uv += topLen;
-
-    drawCornerArc(gradient,
-                  {x + w - innerRadius, y + innerRadius},
-                  innerRadius,
-                  outerRadius,
-                  -1.57079632679f,
-                  0.0f,
-                  uv,
-                  cornerLen,
-                  borderTint);
-    uv += cornerLen;
+    uv += topLen + borderWidth * 2.0f;
 
     drawGradientQuad(gradient,
-                     {x + w, y + innerRadius},
-                     {x + w, y + h - innerRadius},
-                     {x + w + borderWidth, y + innerRadius},
-                     {x + w + borderWidth, y + h - innerRadius},
+                     {x + w, y},
+                     {x + w, y + h},
+                     {x + w + borderWidth, y},
+                     {x + w + borderWidth, y + h},
                      uv,
                      sideLen,
                      borderTint);
     uv += sideLen;
 
-    drawCornerArc(gradient,
-                  {x + w - innerRadius, y + h - innerRadius},
-                  innerRadius,
-                  outerRadius,
-                  0.0f,
-                  1.57079632679f,
-                  uv,
-                  cornerLen,
-                  borderTint);
-    uv += cornerLen;
-
     drawGradientQuad(gradient,
-                     {x + w - innerRadius, y + h},
-                     {x + innerRadius, y + h},
-                     {x + w - innerRadius, y + h + borderWidth},
-                     {x + innerRadius, y + h + borderWidth},
+                     {x + w + borderWidth, y + h},
+                     {x - borderWidth, y + h},
+                     {x + w + borderWidth, y + h + borderWidth},
+                     {x - borderWidth, y + h + borderWidth},
                      uv,
-                     topLen,
+                     topLen + borderWidth * 2.0f,
                      borderTint);
-    uv += topLen;
-
-    drawCornerArc(gradient,
-                  {x + innerRadius, y + h - innerRadius},
-                  innerRadius,
-                  outerRadius,
-                  1.57079632679f,
-                  3.14159265359f,
-                  uv,
-                  cornerLen,
-                  borderTint);
-    uv += cornerLen;
+    uv += topLen + borderWidth * 2.0f;
 
     drawGradientQuad(gradient,
-                     {x - borderWidth, y + h - innerRadius},
-                     {x - borderWidth, y + innerRadius},
-                     {x, y + h - innerRadius},
-                     {x, y + innerRadius},
+                     {x - borderWidth, y + h},
+                     {x - borderWidth, y},
+                     {x, y + h},
+                     {x, y},
                      uv,
                      sideLen,
                      borderTint);
-    uv += sideLen;
-
-    drawCornerArc(gradient,
-                  {x + innerRadius, y + innerRadius},
-                  innerRadius,
-                  outerRadius,
-                  3.14159265359f,
-                  4.71238898038f,
-                  uv,
-                  cornerLen,
-                  borderTint);
 
     Gfx::SetSampler(Gfx::sampler_Nearest | Gfx::sampler_ClampToEdge);
 }

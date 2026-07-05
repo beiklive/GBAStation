@@ -703,6 +703,7 @@ void NdsMenuLayer::open()
     m_filePickerVisible = false;
     m_filePickerClosing = false;
     m_filePickerReturnToOverlay = false;
+    closeSyncConfirmDialog();
     releaseFilePickerPreview();
     m_visible = true;
     m_focusScope = FocusScope::Tabs;
@@ -747,6 +748,7 @@ void NdsMenuLayer::close()
     m_visible = false;
     m_focusScope = FocusScope::Tabs;
     m_contentFocus = 0;
+    closeSyncConfirmDialog();
     resetContentScroll();
     beginPanelAnimation(false);
 }
@@ -1406,6 +1408,38 @@ void NdsMenuLayer::closeDeleteDialog()
     m_deleteSlot = -1;
 }
 
+void NdsMenuLayer::openSyncConfirmDialog(NdsMenuAction action)
+{
+    if (action != NdsMenuAction::SyncDisplaySettings && action != NdsMenuAction::SyncOverlaySettings)
+        return;
+    m_syncConfirmVisible = true;
+    m_syncConfirmAction = action;
+    closeSyncResultDialog();
+}
+
+void NdsMenuLayer::closeSyncConfirmDialog()
+{
+    m_syncConfirmVisible = false;
+    m_syncConfirmAction = NdsMenuAction::None;
+}
+
+void NdsMenuLayer::showSyncResult(NdsMenuAction action, int count)
+{
+    if (action != NdsMenuAction::SyncDisplaySettings && action != NdsMenuAction::SyncOverlaySettings)
+        return;
+    closeSyncConfirmDialog();
+    m_syncResultVisible = true;
+    m_syncResultAction = action;
+    m_syncResultCount = count;
+}
+
+void NdsMenuLayer::closeSyncResultDialog()
+{
+    m_syncResultVisible = false;
+    m_syncResultAction = NdsMenuAction::None;
+    m_syncResultCount = 0;
+}
+
 NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t buttonsHeld)
 {
     if (!active())
@@ -1620,6 +1654,29 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
     if (!m_visible)
         return {};
 
+    if (m_syncResultVisible)
+    {
+        if ((buttonsDown & HidNpadButton_A) || (buttonsDown & HidNpadButton_B))
+            closeSyncResultDialog();
+        return {};
+    }
+
+    if (m_syncConfirmVisible)
+    {
+        if (buttonsDown & HidNpadButton_B)
+        {
+            closeSyncConfirmDialog();
+            return {};
+        }
+        if (buttonsDown & HidNpadButton_A)
+        {
+            const NdsMenuAction action = m_syncConfirmAction;
+            closeSyncConfirmDialog();
+            return {action, -1};
+        }
+        return {};
+    }
+
     if (m_deleteDialogVisible)
     {
         if (buttonsDown & HidNpadButton_B)
@@ -1705,6 +1762,19 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
                     ? NdsMenuResult{NdsMenuAction::DisplaySettingsChanged, -1}
                     : NdsMenuResult{};
 
+            if (buttonsDown & HidNpadButton_A)
+            {
+                if (m_contentFocus == 9)
+                {
+                    openSyncConfirmDialog(NdsMenuAction::SyncDisplaySettings);
+                    return {};
+                }
+                if (m_contentFocus == 10)
+                {
+                    openSyncConfirmDialog(NdsMenuAction::SyncOverlaySettings);
+                    return {};
+                }
+            }
             if ((buttonsDown & HidNpadButton_A) && activateDisplayControl())
                 return {NdsMenuAction::DisplaySettingsChanged, -1};
             return {};
@@ -1919,6 +1989,10 @@ void NdsMenuLayer::draw() const
     drawFooter(contentFocused, canDelete, slideY);
     if (m_deleteDialogVisible)
         drawDeleteDialog(m_deleteSlot, panel);
+    if (m_syncConfirmVisible)
+        drawSyncConfirmDialog(m_syncConfirmAction, panel);
+    if (m_syncResultVisible)
+        drawSyncResultDialog(m_syncResultAction, m_syncResultCount, panel);
     if (transformed)
         Gfx::PopDrawTransform();
     setMenuMetricsOrientation(0);

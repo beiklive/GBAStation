@@ -587,9 +587,10 @@ void drawCheatRow(Vector2f pos,
 
     if (category)
     {
-        Gfx::DrawText(Gfx::SystemFontStandard,
+        const std::uint32_t iconFont = materialFont();
+        Gfx::DrawText(iconFont,
                       pos + Vector2f{20.0f + indent, kUiCenterY},
-                      22.0f,
+                      26.0f,
                       {0.56f, 0.84f, 1.0f, 0.86f * opacity},
                       Gfx::align_Center,
                       Gfx::align_Center,
@@ -660,7 +661,8 @@ void drawSubPageRow(Vector2f pos, const char* label, bool focused, bool enabled,
     drawBorder(pos, {rowW, kUiRowH}, 1.0f, {1.0f, 1.0f, 1.0f, enabled ? 0.10f * opacity : 0.04f * opacity});
     Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{20.0f, kUiLabelY}, kUiLabelFont,
                   {1.0f, 1.0f, 1.0f, enabled ? 0.88f * opacity : 0.34f * opacity}, "%s", label);
-    Gfx::DrawText(Gfx::SystemFontStandard, pos + Vector2f{rowW - 42.0f, 8.0f}, 34.0f,
+    const std::uint32_t iconFont = materialFont();
+    Gfx::DrawText(iconFont, pos + Vector2f{rowW - 42.0f, 8.0f}, 34.0f,
                   {0.32f, 0.75f, 1.0f, enabled ? 0.96f * opacity : 0.25f * opacity}, "\uE5CC");
 }
 
@@ -906,7 +908,7 @@ void drawLeftMenu(int selected,
         {
             Gfx::DrawText(iconFont,
                           {kLeftX + 32.0f, y + offsetY + kItemH * 0.5f},
-                          26.0f,
+                          30.0f,
                           isSelected ? Color{0.44f, 0.80f, 1.0f, 1.0f}
                                      : Color{1.0f, 1.0f, 1.0f, 0.55f},
                           Gfx::align_Center,
@@ -1100,8 +1102,7 @@ void drawStateSlotPage(const char* title,
         if (focused)
             drawGradientBorder(rowPos - Vector2f{3.0f, 3.0f},
                                {listW + 6.0f, rowH + 6.0f},
-                               3.0f,
-                               8.0f);
+                               3.0f);
         drawRect(rowPos,
                  {listW, rowH},
                  focused ? Color{0.0f, 0.30f, 0.50f, 0.52f * opacity}
@@ -1316,6 +1317,72 @@ void drawDeleteDialog(int slot, float opacity)
                   NDS_STUB_KEYICON_A);
     Gfx::DrawText(Gfx::SystemFontChinese, {pos.X + 450.0f, y - 11.0f}, 22.0f,
                   {0.38f, 0.78f, 1.0f, 0.92f * opacity}, "删除");
+}
+
+void drawSyncDialogFrame(const char* title,
+                         const char* body,
+                         const char* hint,
+                         const char* actionText,
+                         bool showCancel,
+                         float opacity)
+{
+    opacity = clamp01(opacity);
+    drawRect({0.0f, 0.0f}, {kScreenW, kScreenH}, {0.0f, 0.0f, 0.0f, 0.60f * opacity}, true);
+    const Vector2f size{std::min(660.0f, kScreenW - 72.0f), 248.0f};
+    const Vector2f pos{(kScreenW - size.X) * 0.5f, (kScreenH - size.Y) * 0.5f};
+    drawRect(pos, size, {0.117f, 0.117f, 0.117f, 0.98f * opacity}, false);
+    drawBorder(pos, size, 2.0f, {0.0f, 0.48f, 0.80f, 0.58f * opacity});
+    drawLine({pos.X, pos.Y + 70.0f}, {size.X, 1.0f}, {1.0f, 1.0f, 1.0f, 0.10f * opacity});
+    Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{34.0f, 26.0f}, 29.0f,
+                  {1.0f, 1.0f, 1.0f, 0.96f * opacity}, "%s", title);
+    Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{34.0f, 94.0f}, 21.0f,
+                  {0.82f, 0.90f, 0.96f, 0.78f * opacity}, "%s", body);
+    if (hint && hint[0])
+        Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{34.0f, 132.0f}, 18.0f,
+                      {0.95f, 0.76f, 0.30f, 0.82f * opacity}, "%s", hint);
+
+    const float y = pos.Y + size.Y - 48.0f;
+    float x = pos.X + size.X - 82.0f;
+    Gfx::DrawText(Gfx::SystemFontNintendoExt, {pos.X + size.X - 80.0f, y}, 34.0f,
+                  {1.0f, 1.0f, 1.0f, 0.92f * opacity}, Gfx::align_Center, Gfx::align_Center,
+                  NDS_STUB_KEYICON_A);
+    Gfx::DrawText(Gfx::SystemFontChinese, {pos.X + size.X - 54.0f, y - 11.0f}, 22.0f,
+                  {0.38f, 0.78f, 1.0f, 0.92f * opacity}, "%s", actionText);
+    x -= showCancel ? 112.0f : 0.0f;
+    if (showCancel)
+    {
+        Gfx::DrawText(Gfx::SystemFontNintendoExt, {x, y}, 34.0f,
+                      {1.0f, 1.0f, 1.0f, 0.92f * opacity}, Gfx::align_Center, Gfx::align_Center,
+                      NDS_STUB_KEYICON_B);
+        Gfx::DrawText(Gfx::SystemFontChinese, {x + 26.0f, y - 11.0f}, 22.0f,
+                      {1.0f, 1.0f, 1.0f, 0.76f * opacity}, "取消");
+    }
+}
+
+void drawSyncConfirmDialog(NdsMenuAction action, float opacity)
+{
+    const bool display = action == NdsMenuAction::SyncDisplaySettings;
+    drawSyncDialogFrame(display ? "同步画面设置" : "同步遮罩设置",
+                        display
+                            ? "同步当前游戏的布局、缩放到其他NDS游戏。"
+                            : "将当前游戏的遮罩数据同步到其他NDS游戏。",
+                        "确认后会立即开始同步。",
+                        "确定",
+                        true,
+                        opacity);
+}
+
+void drawSyncResultDialog(NdsMenuAction action, int count, float opacity)
+{
+    const bool display = action == NdsMenuAction::SyncDisplaySettings;
+    char body[128];
+    std::snprintf(body, sizeof(body), "已同步到 %d 个游戏。", std::max(0, count));
+    drawSyncDialogFrame(display ? "同步画面设置完成" : "同步遮罩设置完成",
+                        body,
+                        "",
+                        "确定",
+                        false,
+                        opacity);
 }
 
 void drawCustomLayoutSidebar(const NdsCustomLayoutSettings& settings,

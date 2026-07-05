@@ -40,6 +40,8 @@ public:
     bool captureCurrentFrameRgba(std::vector<std::uint8_t>& outRgba,
                                  int& outWidth,
                                  int& outHeight) const;
+    bool refreshCaptureCache() const;
+    void requestDeferredCapture() const;
     void setWaitForFramebufferReady(bool enabled) { m_waitForFramebufferReady = enabled; }
     void setLinearFiltering(bool enabled) { m_linearFiltering = enabled; }
     bool linearFiltering() const { return m_linearFiltering; }
@@ -89,6 +91,9 @@ private:
     std::uint32_t m_overlayTexture = 0;
     int m_overlayWidth = 0;
     int m_overlayHeight = 0;
+    mutable std::vector<std::uint8_t> m_lastCaptureRgba;
+    mutable int m_lastCaptureWidth = 0;
+    mutable int m_lastCaptureHeight = 0;
 };
 
 } // namespace beiklive::nds_stub

@@ -133,6 +133,8 @@ void drawDisplayPage(bool linearFiltering,
                      float opacity,
                      float scrollY = 0.0f);
 void drawDeleteDialog(int slot, float opacity);
+void drawSyncConfirmDialog(NdsMenuAction action, float opacity);
+void drawSyncResultDialog(NdsMenuAction action, int count, float opacity);
 void drawCustomLayoutSidebar(const NdsCustomLayoutSettings& settings,
                              int focusedRow,
                              float progress,

@@ -23,6 +23,8 @@ enum class NdsMenuAction {
     ShaderSettingsChanged,
     ShaderSettingsCommitted,
     CheatSettingsChanged,
+    SyncDisplaySettings,
+    SyncOverlaySettings,
     ResetGame,
     ExitGame,
 };
@@ -116,6 +118,7 @@ public:
     const NdsDisplaySettings& displaySettings() const { return m_display; }
     void setCustomLayoutSettings(const NdsCustomLayoutSettings& settings);
     const NdsCustomLayoutSettings& customLayoutSettings() const { return m_display.customLayout; }
+    void showSyncResult(NdsMenuAction action, int count);
 
 private:
     enum class FocusScope {
@@ -159,6 +162,9 @@ private:
     std::uint64_t updateHeldNavigation(std::uint64_t buttonsDown, std::uint64_t buttonsHeld);
     void openDeleteDialog();
     void closeDeleteDialog();
+    void openSyncConfirmDialog(NdsMenuAction action);
+    void closeSyncConfirmDialog();
+    void closeSyncResultDialog();
     float targetContentScrollY() const;
     float smoothedContentScrollY() const;
     void resetContentScroll();
@@ -181,6 +187,11 @@ private:
     bool m_panelOpening = false;
     bool m_deleteDialogVisible = false;
     int m_deleteSlot = -1;
+    bool m_syncConfirmVisible = false;
+    NdsMenuAction m_syncConfirmAction = NdsMenuAction::None;
+    bool m_syncResultVisible = false;
+    NdsMenuAction m_syncResultAction = NdsMenuAction::None;
+    int m_syncResultCount = 0;
     bool m_customLayoutEditorVisible = false;
     bool m_customLayoutEditorClosing = false;
     bool m_customLayoutReturnToMenu = false;

@@ -251,17 +251,31 @@ DekoRenderer::DekoRenderer() :
     DekoLog("GBAStationNDSStub: GPU2D_Deko ctor ok");
 }
 
-bool DekoRenderer::ReadFramebufferRGBA(std::vector<u8>& outTop, std::vector<u8>& outBottom)
+void DekoRenderer::RequestFramebufferCapture()
 {
-    if (CmdBufOpen)
-        return false;
+    FramebufferCaptureRequested = true;
+}
 
+bool DekoRenderer::TakeCapturedFramebufferRGBA(std::vector<u8>& outTop, std::vector<u8>& outBottom)
+{
+    if (CapturedFramebufferTop.empty() || CapturedFramebufferBottom.empty())
+        return false;
+    outTop = CapturedFramebufferTop;
+    outBottom = CapturedFramebufferBottom;
+    CapturedFramebufferTop.clear();
+    CapturedFramebufferBottom.clear();
+    return true;
+}
+
+bool DekoRenderer::ReadFramebufferRGBAFromIndex(int front, std::vector<u8>& outTop, std::vector<u8>& outBottom)
+{
+    front &= 1;
     constexpr u32 screenBytes = MaxFramebufferWidth * MaxFramebufferHeight * 4;
     auto readback = Gfx::DataHeap->Alloc(screenBytes * 2, DK_MEMBLOCK_ALIGNMENT);
 
     CmdMem.Begin(EmuCmdBuf);
-    dk::ImageView topView{FinalFramebuffers[GPU::FrontBuffer][0]};
-    dk::ImageView bottomView{FinalFramebuffers[GPU::FrontBuffer][1]};
+    dk::ImageView topView{FinalFramebuffers[front][0]};
+    dk::ImageView bottomView{FinalFramebuffers[front][1]};
     EmuCmdBuf.copyImageToBuffer(topView,
                                 {0, 0, 0, MaxFramebufferWidth, MaxFramebufferHeight, 1},
                                 {Gfx::DataHeap->GpuAddr(readback)});
@@ -276,6 +290,19 @@ bool DekoRenderer::ReadFramebufferRGBA(std::vector<u8>& outTop, std::vector<u8>&
     outBottom.assign(src + screenBytes, src + screenBytes * 2);
     Gfx::DataHeap->Free(readback);
     return true;
+}
+
+bool DekoRenderer::ReadFramebufferRGBA(std::vector<u8>& outTop, std::vector<u8>& outBottom)
+{
+    if (CmdBufOpen)
+    {
+        DekoLog("GBAStationNDSStub: GPU2D_Deko readback blocked CmdBufOpen=1 vcount=%u front=%d",
+                GPU::VCount,
+                GPU::FrontBuffer);
+        return false;
+    }
+
+    return ReadFramebufferRGBAFromIndex(GPU::FrontBuffer, outTop, outBottom);
 }
 
 DekoRenderer::~DekoRenderer()
@@ -676,6 +703,16 @@ void DekoRenderer::DrawScanline(u32 line, Unit* unit)
                 /*DkResult result = */DisplayCaptureFence.wait();
                 //printf("wait result %d %fms\n", result, armTicksToNs(armGetSystemTick()-startTime)*0.000001f);
                 DoCapture();
+            }
+
+            if (FramebufferCaptureRequested)
+            {
+                FramebufferCaptureRequested = false;
+                const int completedFront = GPU::FrontBuffer ^ 1;
+                if (ReadFramebufferRGBAFromIndex(completedFront, CapturedFramebufferTop, CapturedFramebufferBottom))
+                    DekoLog("GBAStationNDSStub: GPU2D_Deko deferred capture ok front=%d", completedFront);
+                else
+                    DekoLog("GBAStationNDSStub: GPU2D_Deko deferred capture failed front=%d", completedFront);
             }
         }
     }

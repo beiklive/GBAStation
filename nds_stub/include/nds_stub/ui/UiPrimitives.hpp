@@ -15,7 +15,6 @@ using Gfx::Vector2f;
 
 constexpr float kGradientFocusFlowCycleMs = 3600.0f;
 constexpr float kGradientFocusBrightness = 1.0f;
-constexpr float kGradientFocusCornerRadius = 0.0f;
 
 #define NDS_STUB_KEYICON_A "\uE0E0"
 #define NDS_STUB_KEYICON_B "\uE0E1"
@@ -54,7 +53,6 @@ void drawBorder(Vector2f pos, Vector2f size, float width, Color color);
 // 使用 img/ui/border_gradient.png 作为流动 LUT，内部保持透明。
 void drawGradientBorder(Vector2f pos,
                         Vector2f size,
-                        float width,
-                        float cornerRadius = kGradientFocusCornerRadius);
+                        float width);
 
 } // namespace beiklive::nds_stub::ui

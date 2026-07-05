@@ -266,6 +266,140 @@ bool saveNdsSettingsToGameDb(const std::string& romPath,
     return false;
 }
 
+int syncNdsDisplaySettingsToGameDb(const std::string& romPath,
+                                   const beiklive::nds_stub::NdsDisplaySettings& settings)
+{
+    const std::string normalizedRom = normalizePathForCompare(romPath);
+    constexpr const char* paths[] = {
+        "sdmc:/GBAStation/data/GameData_NDS.json",
+        "/GBAStation/data/GameData_NDS.json",
+    };
+
+    for (const char* dbPath : paths)
+    {
+        std::ifstream in(dbPath);
+        if (!in)
+            continue;
+
+        try
+        {
+            nlohmann::json data;
+            in >> data;
+            in.close();
+            if (!data.is_array())
+                continue;
+
+            int count = 0;
+            for (auto& item : data)
+            {
+                const std::string itemPath = normalizePathForCompare(jsonString(item, "path"));
+                if (itemPath.empty() || itemPath == normalizedRom)
+                    continue;
+
+                item["ndsScreenLayout"] = layoutIdFromIndex(settings.layout);
+                item["ndsScreenOrientation"] = orientationIdFromIndex(settings.orientation);
+                item["ndsIntegerScale"] = settings.integerScale;
+                item["ndsScreenGap"] = settings.screenGap;
+                item["ndsTopScale"] = settings.customLayout.topScale;
+                item["ndsTopOffsetX"] = settings.customLayout.topOffsetX;
+                item["ndsTopOffsetY"] = settings.customLayout.topOffsetY;
+                item["ndsBottomScale"] = settings.customLayout.bottomScale;
+                item["ndsBottomOffsetX"] = settings.customLayout.bottomOffsetX;
+                item["ndsBottomOffsetY"] = settings.customLayout.bottomOffsetY;
+                ++count;
+            }
+
+            std::ofstream out(dbPath, std::ios::trunc);
+            if (!out)
+                return -1;
+            out << data.dump(4) << '\n';
+            if (!out.good())
+                return -1;
+
+            beiklive::nds_stub::appendStubLog("GBAStationNDSStub: NDS display settings synced count=%d path=%s layout=%s orientation=%s integer=%d gap=%d",
+                                              count,
+                                              dbPath,
+                                              layoutIdFromIndex(settings.layout),
+                                              orientationIdFromIndex(settings.orientation),
+                                              settings.integerScale ? 1 : 0,
+                                              settings.screenGap);
+            return count;
+        }
+        catch (const std::exception& e)
+        {
+            beiklive::nds_stub::appendStubLog("GBAStationNDSStub: NDS display sync exception path=%s error=%s",
+                                              dbPath,
+                                              e.what());
+        }
+    }
+
+    beiklive::nds_stub::appendStubLog("GBAStationNDSStub: NDS display sync skipped no db rom=%s",
+                                      romPath.c_str());
+    return -1;
+}
+
+int syncNdsOverlaySettingsToGameDb(const std::string& romPath,
+                                   const beiklive::nds_stub::NdsDisplaySettings& settings)
+{
+    const std::string normalizedRom = normalizePathForCompare(romPath);
+    constexpr const char* paths[] = {
+        "sdmc:/GBAStation/data/GameData_NDS.json",
+        "/GBAStation/data/GameData_NDS.json",
+    };
+
+    for (const char* dbPath : paths)
+    {
+        std::ifstream in(dbPath);
+        if (!in)
+            continue;
+
+        try
+        {
+            nlohmann::json data;
+            in >> data;
+            in.close();
+            if (!data.is_array())
+                continue;
+
+            int count = 0;
+            for (auto& item : data)
+            {
+                const std::string itemPath = normalizePathForCompare(jsonString(item, "path"));
+                if (itemPath.empty() || itemPath == normalizedRom)
+                    continue;
+
+                item["overlayEnabled"] = settings.overlayEnabled;
+                item["overlayPath"] = settings.overlayPath;
+                ++count;
+            }
+
+            std::ofstream out(dbPath, std::ios::trunc);
+            if (!out)
+                return -1;
+            out << data.dump(4) << '\n';
+            if (!out.good())
+                return -1;
+
+            beiklive::nds_stub::appendStubLog("GBAStationNDSStub: NDS overlay settings synced count=%d path=%s enabled=%d overlayPath=%s",
+                                              count,
+                                              dbPath,
+                                              settings.overlayEnabled ? 1 : 0,
+                                              settings.overlayPath.c_str());
+            return count;
+        }
+        catch (const std::exception& e)
+        {
+            beiklive::nds_stub::appendStubLog("GBAStationNDSStub: NDS overlay sync exception path=%s error=%s",
+                                              dbPath,
+                                              e.what());
+        }
+    }
+
+    beiklive::nds_stub::appendStubLog("GBAStationNDSStub: NDS overlay sync skipped no db rom=%s",
+                                      romPath.c_str());
+    return -1;
+}
+
 std::unique_ptr<ARCodeFile> buildRuntimeCheatFile(const std::vector<beiklive::nds_stub::NdsCheatItem>& items,
                                                   int& enabledCount,
                                                   int& truncatedCount)
@@ -1878,6 +2012,8 @@ int RunDekoRuntime(const DekoRunOptions& options)
     const int autoSaveInterval = inputConfig.intValue("save.autoSaveInterval", 0);
     const bool autoSaveOnExit = inputConfig.intValue("save.autoSaveOnExit", 0) != 0;
     auto autoSaveStart = std::chrono::steady_clock::now();
+    int pendingMenuSaveSlot = -1;
+    int pendingMenuSaveFrames = 0;
 
     auto doSaveState = [&](int slot) {
         const std::string path = statePath(stateDir, options.romPath, slot);
@@ -1886,9 +2022,6 @@ int RunDekoRuntime(const DekoRunOptions& options)
         int thumbnailWidth = 0;
         int thumbnailHeight = 0;
         appendStubLog("GBAStationNDSStub: savestate save begin slot=%d path=%s", slot, path.c_str());
-        audio.pauseForCoreReset();
-        Gfx::PresentQueue.waitIdle();
-        Gfx::EmuQueue.waitIdle();
         const bool thumbnailCaptured = gameLayer.captureCurrentFrameRgba(thumbnailRgba,
                                                                          thumbnailWidth,
                                                                          thumbnailHeight);
@@ -1897,6 +2030,9 @@ int RunDekoRuntime(const DekoRunOptions& options)
                       slot,
                       thumbnailWidth,
                       thumbnailHeight);
+        audio.pauseForCoreReset();
+        Gfx::PresentQueue.waitIdle();
+        Gfx::EmuQueue.waitIdle();
         const bool ok = saveStateFile(path);
         bool thumbOk = false;
         if (ok)
@@ -1984,11 +2120,22 @@ int RunDekoRuntime(const DekoRunOptions& options)
         if (anyComboDown(inputConfig.button("nds.hotkey.menu.pad"), input))
         {
             const bool wasVisible = menuLayer.visible();
-            menuLayer.toggle();
-            blockGameInputUntilRelease = true;
-            appendStubLog("GBAStationNDSStub: menu hotkey toggle visible=%d->%d",
-                          wasVisible ? 1 : 0,
-                          menuLayer.visible() ? 1 : 0);
+            if (!wasVisible)
+            {
+                menuLayer.open();
+                blockGameInputUntilRelease = true;
+                appendStubLog("GBAStationNDSStub: menu hotkey toggle visible=%d->%d",
+                              wasVisible ? 1 : 0,
+                              menuLayer.visible() ? 1 : 0);
+            }
+            else
+            {
+                menuLayer.close();
+                blockGameInputUntilRelease = true;
+                appendStubLog("GBAStationNDSStub: menu hotkey toggle visible=%d->%d",
+                              wasVisible ? 1 : 0,
+                              menuLayer.visible() ? 1 : 0);
+            }
         }
 
         if (!menuLayer.active())
@@ -2056,7 +2203,12 @@ int RunDekoRuntime(const DekoRunOptions& options)
 
         if (menuAction == NdsMenuAction::SaveState)
         {
-            doSaveState(menuResult.slot);
+            pendingMenuSaveSlot = menuResult.slot;
+            pendingMenuSaveFrames = 1;
+            gameLayer.requestDeferredCapture();
+            menuLayer.close();
+            blockGameInputUntilRelease = true;
+            appendStubLog("GBAStationNDSStub: savestate menu save deferred slot=%d", menuResult.slot);
         }
         else if (menuAction == NdsMenuAction::LoadState)
         {
@@ -2124,6 +2276,22 @@ int RunDekoRuntime(const DekoRunOptions& options)
                           layoutIdFromIndex(menuLayer.screenLayout()),
                           menuLayer.displaySettings().orientation * 90,
                           menuLayer.displaySettings().screenGap);
+        }
+        else if (menuAction == NdsMenuAction::SyncDisplaySettings)
+        {
+            saveNdsSettingsToGameDb(options.romPath, menuLayer.displaySettings(), true);
+            const int count = syncNdsDisplaySettingsToGameDb(options.romPath, menuLayer.displaySettings());
+            menuLayer.showSyncResult(NdsMenuAction::SyncDisplaySettings, count);
+            appendStubLog("GBAStationNDSStub: sync display settings result count=%d", count);
+        }
+        else if (menuAction == NdsMenuAction::SyncOverlaySettings)
+        {
+            saveNdsSettingsToGameDb(options.romPath, menuLayer.displaySettings(), false);
+            const int count = syncNdsOverlaySettingsToGameDb(options.romPath, menuLayer.displaySettings());
+            inputConfig.saveValue("display.overlay.ndsPath", "s", menuLayer.displaySettings().overlayPath);
+            inputConfig.saveValue("display.overlay.enabled", "i", menuLayer.displaySettings().overlayEnabled ? "1" : "0");
+            menuLayer.showSyncResult(NdsMenuAction::SyncOverlaySettings, count);
+            appendStubLog("GBAStationNDSStub: sync overlay settings result count=%d", count);
         }
         else if (menuAction == NdsMenuAction::CustomLayoutChanged)
         {
@@ -2388,6 +2556,27 @@ int RunDekoRuntime(const DekoRunOptions& options)
         if (traceFrame)
             appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu Gfx::EndFrame ok",
                           static_cast<unsigned long long>(totalFrames));
+
+        if (pendingMenuSaveSlot >= 0 && !menuLayer.active() && !runtimePaused && framesRan > 0)
+        {
+            const bool cached = gameLayer.refreshCaptureCache();
+            appendStubLog("GBAStationNDSStub: savestate deferred capture cache %s slot=%d wait=%d",
+                          cached ? "ok" : "failed",
+                          pendingMenuSaveSlot,
+                          pendingMenuSaveFrames);
+            if (pendingMenuSaveFrames > 0)
+            {
+                --pendingMenuSaveFrames;
+                gameLayer.requestDeferredCapture();
+            }
+            else
+            {
+                const int slot = pendingMenuSaveSlot;
+                pendingMenuSaveSlot = -1;
+                pendingMenuSaveFrames = 0;
+                doSaveState(slot);
+            }
+        }
 
         fpsFrames += framesRan;
         ++totalFrames;

@@ -36,6 +36,8 @@ public:
     int GetFramebufferHeight() const { return 192; }
     int GetFramebufferTextureWidth() const { return MaxFramebufferWidth; }
     int GetFramebufferTextureHeight() const { return MaxFramebufferHeight; }
+    void RequestFramebufferCapture();
+    bool TakeCapturedFramebufferRGBA(std::vector<u8>& outTop, std::vector<u8>& outBottom);
     bool ReadFramebufferRGBA(std::vector<u8>& outTop, std::vector<u8>& outBottom);
 
     dk::Fence FramebufferReady[2] = {};
@@ -48,6 +50,9 @@ private:
 
     dk::Image FinalFramebuffers[2][2];
     GpuMemHeap::Allocation FinalFramebufferMemory;
+    bool FramebufferCaptureRequested = false;
+    std::vector<u8> CapturedFramebufferTop;
+    std::vector<u8> CapturedFramebufferBottom;
 
     dk::Image _3DFramebuffer;
     GpuMemHeap::Allocation _3DFramebufferMemory;
@@ -238,6 +243,7 @@ private:
     bool CmdBufOpen = false;
 
     void OpenCmdBuf();
+    bool ReadFramebufferRGBAFromIndex(int front, std::vector<u8>& outTop, std::vector<u8>& outBottom);
 
     u8 BGOBJRedrawn[2] = {0};
 
