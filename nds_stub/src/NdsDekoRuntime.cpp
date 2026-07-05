@@ -1395,16 +1395,19 @@ int RunDekoRuntime(const DekoRunOptions& options)
     initialDisplay.integerScale = inputConfig.intValue("nds.integerScale", 0) != 0;
     initialDisplay.layout = layoutIndexFromId(inputConfig.value("nds.screenLayout", "vertical"));
     initialDisplay.orientation = std::clamp(inputConfig.intValue("nds.screenOrientation", 0) / 90, 0, 3);
+    initialDisplay.screenGap = std::clamp(inputConfig.intValue("nds.screenGap", 0), -64, 64);
     menuLayer.setDisplaySettings(initialDisplay);
     gameLayer.setLinearFiltering(initialDisplay.linearFiltering);
     gameLayer.setIntegerScale(initialDisplay.integerScale);
     gameLayer.setScreenLayout(initialDisplay.layout);
     gameLayer.setOrientation(initialDisplay.orientation);
-    appendStubLog("GBAStationNDSStub: display init filter=%s integer=%d layout=%s orientation=%d",
+    gameLayer.setScreenGap(static_cast<float>(initialDisplay.screenGap));
+    appendStubLog("GBAStationNDSStub: display init filter=%s integer=%d layout=%s orientation=%d gap=%d",
                   initialDisplay.linearFiltering ? "linear" : "nearest",
                   initialDisplay.integerScale ? 1 : 0,
                   layoutIdFromIndex(initialDisplay.layout),
-                  initialDisplay.orientation * 90);
+                  initialDisplay.orientation * 90,
+                  initialDisplay.screenGap);
     auto stateSlots = loadStateSlots(stateDir, options.romPath);
     menuLayer.setStateSlots(stateSlots);
     bool stateSlotTexturesDirty = true;
@@ -1609,17 +1612,20 @@ int RunDekoRuntime(const DekoRunOptions& options)
             gameLayer.setIntegerScale(menuLayer.integerScale());
             gameLayer.setScreenLayout(menuLayer.screenLayout());
             gameLayer.setOrientation(menuLayer.displaySettings().orientation);
+            gameLayer.setScreenGap(static_cast<float>(menuLayer.displaySettings().screenGap));
             inputConfig.saveValue("display.filter", "s", menuLayer.linearFiltering() ? "linear" : "nearest");
             inputConfig.saveValue("fastforward.multiplier", "f", std::to_string(menuLayer.fastForwardMultiplier()));
             inputConfig.saveValue("nds.integerScale", "i", menuLayer.integerScale() ? "1" : "0");
             inputConfig.saveValue("nds.screenLayout", "s", layoutIdFromIndex(menuLayer.screenLayout()));
             inputConfig.saveValue("nds.screenOrientation", "i", std::to_string(menuLayer.displaySettings().orientation * 90));
-            appendStubLog("GBAStationNDSStub: Deko display settings filter=%s ff=%.2f integer=%d layout=%s orientation=%d",
+            inputConfig.saveValue("nds.screenGap", "i", std::to_string(menuLayer.displaySettings().screenGap));
+            appendStubLog("GBAStationNDSStub: Deko display settings filter=%s ff=%.2f integer=%d layout=%s orientation=%d gap=%d",
                           menuLayer.linearFiltering() ? "linear" : "nearest",
                           menuLayer.fastForwardMultiplier(),
                           menuLayer.integerScale() ? 1 : 0,
                           layoutIdFromIndex(menuLayer.screenLayout()),
-                          menuLayer.displaySettings().orientation * 90);
+                          menuLayer.displaySettings().orientation * 90,
+                          menuLayer.displaySettings().screenGap);
         }
         if (menuAction == NdsMenuAction::ResetGame)
         {

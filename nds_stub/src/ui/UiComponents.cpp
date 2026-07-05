@@ -180,6 +180,54 @@ void drawLrSelectorRow(Vector2f pos,
                   Gfx::align_Center, Gfx::align_Center, NDS_STUB_KEYICON_RB);
 }
 
+void drawNumberAdjusterRow(Vector2f pos,
+                           const char* label,
+                           int value,
+                           const char* unit,
+                           int defaultValue,
+                           int step,
+                           bool focused,
+                           bool enabled,
+                           float opacity)
+{
+    const float rowW = settingRowW();
+    const Color rowBg = enabled ? Color{1.0f, 1.0f, 1.0f, 0.045f * opacity}
+                                : Color{1.0f, 1.0f, 1.0f, 0.020f * opacity};
+    if (focused)
+        drawGradientBorder(pos - Vector2f{3.0f, 3.0f}, {rowW + 6.0f, 48.0f}, 3.0f);
+
+    drawRect(pos, {rowW, 42.0f}, rowBg, true);
+    drawBorder(pos, {rowW, 42.0f}, 1.0f, {1.0f, 1.0f, 1.0f, enabled ? 0.10f * opacity : 0.04f * opacity});
+    Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{18.0f, 12.0f}, 17.0f,
+                  {1.0f, 1.0f, 1.0f, enabled ? 0.88f * opacity : 0.34f * opacity}, "%s", label);
+
+    char valueText[32];
+    std::snprintf(valueText, sizeof(valueText), "%d%s", value, unit ? unit : "");
+
+    char metaText[48];
+    std::snprintf(metaText,
+                  sizeof(metaText),
+                  value == defaultValue ? "默认 / 步长 %d" : "默认 %d / 步长 %d",
+                  value == defaultValue ? step : defaultValue,
+                  step);
+
+    const float valueCenterX = rowW - 100.0f;
+    Gfx::DrawText(Gfx::SystemFontNintendoExt, pos + Vector2f{rowW - 180.0f, 21.0f}, 24.0f,
+                  {0.80f, 0.92f, 1.0f, enabled ? 0.90f * opacity : 0.28f * opacity},
+                  Gfx::align_Center, Gfx::align_Center, NDS_STUB_KEYICON_LB);
+    Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{valueCenterX, 12.0f}, 17.0f,
+                  {0.78f, 0.92f, 1.0f, enabled ? 0.96f * opacity : 0.28f * opacity},
+                  Gfx::align_Center, Gfx::align_Left,
+                  valueText);
+    Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{valueCenterX, 29.0f}, 10.0f,
+                  {0.74f, 0.82f, 0.90f, enabled ? 0.52f * opacity : 0.18f * opacity},
+                  Gfx::align_Center, Gfx::align_Left,
+                  metaText);
+    Gfx::DrawText(Gfx::SystemFontNintendoExt, pos + Vector2f{rowW - 20.0f, 21.0f}, 24.0f,
+                  {0.80f, 0.92f, 1.0f, enabled ? 0.90f * opacity : 0.28f * opacity},
+                  Gfx::align_Center, Gfx::align_Center, NDS_STUB_KEYICON_RB);
+}
+
 void drawSwitchRow(Vector2f pos, const char* label, bool value, bool focused, float opacity)
 {
     const float rowW = settingRowW();
@@ -504,6 +552,7 @@ void drawDisplayPage(bool linearFiltering,
                      bool integerScale,
                      int layout,
                      int orientation,
+                     int screenGap,
                      int focusedRow,
                      bool contentFocused,
                      float offsetX,
@@ -522,7 +571,6 @@ void drawDisplayPage(bool linearFiltering,
         std::snprintf(ffValue, sizeof(ffValue), "%.0fx", fastForwardMultiplier);
     else
         std::snprintf(ffValue, sizeof(ffValue), "%.2fx", fastForwardMultiplier);
-
     pushContentBodyScissor(offsetY);
 
     float y = kContentBodyTop - scrollY;
@@ -532,14 +580,15 @@ void drawDisplayPage(bool linearFiltering,
     drawSwitchRow(rowPos(y), "整数倍缩放", integerScale, contentFocused && focusedRow == 2, opacity); y += kSettingStepY;
     drawLrSelectorRow(rowPos(y), "画面布局", layoutLabel(layout), contentFocused && focusedRow == 3, true, opacity); y += kSettingStepY;
     drawSubPageRow(rowPos(y), "自定义画面布局", contentFocused && focusedRow == 4, layout == 7, opacity); y += kSettingStepY;
-    drawLrSelectorRow(rowPos(y), "画面方向", orientationLabel(orientation), contentFocused && focusedRow == 5, true, opacity); y += 54.0f;
+    drawLrSelectorRow(rowPos(y), "画面方向", orientationLabel(orientation), contentFocused && focusedRow == 5, true, opacity); y += kSettingStepY;
+    drawNumberAdjusterRow(rowPos(y), "屏幕间距", screenGap, "px", 0, 2, contentFocused && focusedRow == 6, true, opacity); y += 54.0f;
     drawSectionLabel(rowPos(y + 2.0f), "个性化设置", opacity); y += 30.0f;
-    drawSubPageRow(rowPos(y), "遮罩选择", contentFocused && focusedRow == 6, true, opacity); y += kSettingStepY;
-    drawSubPageRow(rowPos(y), "滤镜选择", contentFocused && focusedRow == 7, true, opacity); y += 54.0f;
+    drawSubPageRow(rowPos(y), "遮罩选择", contentFocused && focusedRow == 7, true, opacity); y += kSettingStepY;
+    drawSubPageRow(rowPos(y), "滤镜选择", contentFocused && focusedRow == 8, true, opacity); y += 54.0f;
     drawSectionLabel(rowPos(y + 2.0f), "同步设置", opacity); y += 30.0f;
-    drawButtonRow(rowPos(y), "同步画面设置", contentFocused && focusedRow == 8, opacity); y += kSettingStepY;
-    drawButtonRow(rowPos(y), "同步遮罩设置", contentFocused && focusedRow == 9, opacity); y += kSettingStepY;
-    drawButtonRow(rowPos(y), "同步滤镜设置", contentFocused && focusedRow == 10, opacity);
+    drawButtonRow(rowPos(y), "同步画面设置", contentFocused && focusedRow == 9, opacity); y += kSettingStepY;
+    drawButtonRow(rowPos(y), "同步遮罩设置", contentFocused && focusedRow == 10, opacity); y += kSettingStepY;
+    drawButtonRow(rowPos(y), "同步滤镜设置", contentFocused && focusedRow == 11, opacity);
 
     if (opacity > 0.5f && scrollY > 1.0f)
         drawRect({kContentX + kContentW - 4.0f, kContentY + kContentBodyTop + offsetY},
@@ -636,6 +685,7 @@ void drawTabFrame(NdsMenuLayer::Item item,
                             display.integerScale,
                             display.layout,
                             display.orientation,
+                            display.screenGap,
                             contentFocus,
                             contentFocused,
                             offsetX,

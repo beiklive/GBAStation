@@ -50,6 +50,8 @@ public:
     bool integerScale() const { return m_integerScale; }
     void setOrientation(int orientation) { m_orientation = std::clamp(orientation, 0, 3); }
     int orientation() const { return m_orientation; }
+    void setScreenGap(float gap) { m_screenGap = std::clamp(gap, -64.0f, 64.0f); }
+    float screenGap() const { return m_screenGap; }
 
 private:
     struct ScreenDrawRect {
@@ -73,6 +75,7 @@ private:
     bool m_integerScale = false;
     ScreenLayout m_layout = ScreenLayout::Vertical;
     int m_orientation = 0;
+    float m_screenGap = 0.0f;
 };
 
 } // namespace beiklive::nds_stub

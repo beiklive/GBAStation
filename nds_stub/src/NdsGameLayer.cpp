@@ -28,6 +28,16 @@ RectF fitAspect(const RectF& region)
             h};
 }
 
+RectF fitAspectAligned(const RectF& region, float alignX, float alignY)
+{
+    RectF rect = fitAspect(region);
+    alignX = std::clamp(alignX, 0.0f, 1.0f);
+    alignY = std::clamp(alignY, 0.0f, 1.0f);
+    rect.x = region.x + (region.w - rect.w) * alignX;
+    rect.y = region.y + (region.h - rect.h) * alignY;
+    return rect;
+}
+
 RectF fitInteger(const RectF& region, float scale)
 {
     const float w = 256.0f * scale;
@@ -36,6 +46,16 @@ RectF fitInteger(const RectF& region, float scale)
             region.y + (region.h - h) * 0.5f,
             w,
             h};
+}
+
+RectF fitIntegerAligned(const RectF& region, float scale, float alignX, float alignY)
+{
+    RectF rect = fitInteger(region, scale);
+    alignX = std::clamp(alignX, 0.0f, 1.0f);
+    alignY = std::clamp(alignY, 0.0f, 1.0f);
+    rect.x = region.x + (region.w - rect.w) * alignX;
+    rect.y = region.y + (region.h - rect.h) * alignY;
+    return rect;
 }
 
 RectF fitMaxInteger(const RectF& region)
@@ -47,6 +67,12 @@ RectF fitMaxInteger(const RectF& region)
 bool validRect(const RectF& rect)
 {
     return rect.w > 0.0f && rect.h > 0.0f;
+}
+
+float clampGap(float gap, float available)
+{
+    const float limit = std::max(0.0f, available - 2.0f);
+    return std::clamp(gap, -limit, limit);
 }
 
 } // namespace
@@ -118,42 +144,60 @@ std::vector<NdsGameLayer::ScreenDrawRect> NdsGameLayer::computeScreenRects() con
     {
     case ScreenLayout::Horizontal:
     {
-        const RectF left{bounds.x, bounds.y, bounds.w * 0.5f, bounds.h};
-        const RectF right{bounds.x + bounds.w * 0.5f, bounds.y, bounds.w * 0.5f, bounds.h};
-        add(true, m_integerScale ? fitInteger(left, 2.0f) : fitAspect(left));
-        add(false, m_integerScale ? fitInteger(right, 2.0f) : fitAspect(right));
+        const float gap = clampGap(m_screenGap, bounds.w);
+        const float sideW = (bounds.w - gap) * 0.5f;
+        const RectF left{bounds.x, bounds.y, sideW, bounds.h};
+        const RectF right{bounds.x + sideW + gap, bounds.y, sideW, bounds.h};
+
+        float integerScale = (m_orientation == 1 || m_orientation == 3) ? 1.0f : 2.0f;
+
+        add(true, m_integerScale ? fitIntegerAligned(left, integerScale, 1.0f, 0.5f) : fitAspectAligned(left, 1.0f, 0.5f));
+        add(false, m_integerScale ? fitIntegerAligned(right, integerScale, 0.0f, 0.5f) : fitAspectAligned(right, 0.0f, 0.5f));
         break;
     }
     case ScreenLayout::TopPriority:
     {
-        const RectF topRegion{bounds.x, bounds.y, m_integerScale ? 768.0f : bounds.w * 0.75f, bounds.h};
-        RectF top = m_integerScale ? fitInteger(topRegion, 3.0f) : fitAspect(topRegion);
-        const RectF bottomRegion{top.x + top.w, bounds.y, std::max(0.0f, bounds.x + bounds.w - (top.x + top.w)), bounds.h};
+        const float gap = clampGap(m_screenGap, bounds.w);
+        const float topRegionW = m_integerScale ? 768.0f : std::max(1.0f, bounds.w * 0.75f - gap * 0.5f);
+        const RectF topRegion{bounds.x, bounds.y, topRegionW, bounds.h};
+        RectF top = m_integerScale ? fitIntegerAligned(topRegion, 3.0f, 1.0f, 0.5f) : fitAspectAligned(topRegion, 1.0f, 0.5f);
+        const RectF bottomRegion{top.x + top.w + gap, bounds.y, std::max(0.0f, bounds.x + bounds.w - (top.x + top.w + gap)), bounds.h};
         add(true, top);
-        add(false, m_integerScale ? fitInteger(bottomRegion, 2.0f) : fitAspect(bottomRegion));
+        add(false, m_integerScale ? fitIntegerAligned(bottomRegion, 2.0f, 0.0f, 0.5f) : fitAspectAligned(bottomRegion, 0.0f, 0.5f));
         break;
     }
     case ScreenLayout::BottomPriority:
     {
-        const RectF bottomRegion{bounds.x + (m_integerScale ? bounds.w - 768.0f : bounds.w * 0.25f),
+        const float gap = clampGap(m_screenGap, bounds.w);
+        const float bottomRegionW = m_integerScale ? 768.0f : std::max(1.0f, bounds.w * 0.75f - gap * 0.5f);
+        const RectF bottomRegion{bounds.x + bounds.w - bottomRegionW,
                                  bounds.y,
-                                 m_integerScale ? 768.0f : bounds.w * 0.75f,
+                                 bottomRegionW,
                                  bounds.h};
-        RectF bottom = m_integerScale ? fitInteger(bottomRegion, 3.0f) : fitAspect(bottomRegion);
-        const RectF topRegion{bounds.x, bounds.y, std::max(0.0f, bottom.x - bounds.x), bounds.h};
-        add(true, m_integerScale ? fitInteger(topRegion, 2.0f) : fitAspect(topRegion));
+        RectF bottom = m_integerScale ? fitIntegerAligned(bottomRegion, 3.0f, 0.0f, 0.5f) : fitAspectAligned(bottomRegion, 0.0f, 0.5f);
+        const RectF topRegion{bounds.x, bounds.y, std::max(0.0f, bottom.x - bounds.x - gap), bounds.h};
+        add(true, m_integerScale ? fitIntegerAligned(topRegion, 2.0f, 1.0f, 0.5f) : fitAspectAligned(topRegion, 1.0f, 0.5f));
         add(false, bottom);
         break;
     }
     case ScreenLayout::HybridHorizontal:
     {
-        const RectF left{bounds.x, bounds.y, bounds.w * 0.7f, bounds.h};
-        const RectF right{bounds.x + bounds.w * 0.7f, bounds.y, bounds.w * 0.3f, bounds.h};
-        const RectF rightTop{right.x, right.y, right.w, right.h * 0.5f};
-        const RectF rightBottom{right.x, right.y + right.h * 0.5f, right.w, right.h * 0.5f};
-        add(true, m_integerScale ? fitInteger(left, 3.0f) : fitAspect(left));
-        add(true, m_integerScale ? fitInteger(rightTop, 1.0f) : fitAspect(rightTop));
-        add(false, m_integerScale ? fitInteger(rightBottom, 1.0f) : fitAspect(rightBottom));
+        const float gap = clampGap(m_screenGap, bounds.w);
+        constexpr float leftWeight = 10.0f / 3.0f;
+        constexpr float rightWeight = 5.0f / 3.0f;
+        constexpr float totalWeight = leftWeight + rightWeight;
+        const float leftW = (bounds.w - gap) * (leftWeight / totalWeight);
+        const float rightW = bounds.w - gap - leftW;
+        const RectF left{bounds.x, bounds.y, leftW, bounds.h};
+        const RectF right{bounds.x + leftW + gap, bounds.y, rightW, bounds.h};
+        const float verticalGap = clampGap(m_screenGap, right.h);
+        const float rightScreenH = (right.h - verticalGap) * 0.5f;
+        const RectF rightTop{right.x, right.y, right.w, rightScreenH};
+        const RectF rightBottom{right.x, right.y + rightScreenH + verticalGap, right.w, rightScreenH};
+
+        add(true, m_integerScale ? fitIntegerAligned(left, 2.0f, 1.0f, 0.5f) : fitAspectAligned(left, 1.0f, 0.5f));
+        add(true, m_integerScale ? fitIntegerAligned(rightTop, 1.0f, 0.0f, 1.0f) : fitAspectAligned(rightTop, 0.0f, 1.0f));
+        add(false, m_integerScale ? fitIntegerAligned(rightBottom, 1.0f, 0.0f, 0.0f) : fitAspectAligned(rightBottom, 0.0f, 0.0f));
         break;
     }
     case ScreenLayout::SingleTop:
@@ -177,10 +221,15 @@ std::vector<NdsGameLayer::ScreenDrawRect> NdsGameLayer::computeScreenRects() con
     case ScreenLayout::Vertical:
     default:
     {
-        const RectF upper{bounds.x, bounds.y, bounds.w, bounds.h * 0.5f};
-        const RectF lower{bounds.x, bounds.y + bounds.h * 0.5f, bounds.w, bounds.h * 0.5f};
-        add(true, m_integerScale ? fitInteger(upper, 1.0f) : fitAspect(upper));
-        add(false, m_integerScale ? fitInteger(lower, 1.0f) : fitAspect(lower));
+        const float gap = clampGap(m_screenGap, bounds.h);
+        const float sideH = (bounds.h - gap) * 0.5f;
+        const RectF upper{bounds.x, bounds.y, bounds.w, sideH};
+        const RectF lower{bounds.x, bounds.y + sideH + gap, bounds.w, sideH};
+
+        float integerScale = (m_orientation == 1 || m_orientation == 3) ? 2.0f : 1.0f;
+
+        add(true, m_integerScale ? fitIntegerAligned(upper, integerScale, 0.5f, 1.0f) : fitAspectAligned(upper, 0.5f, 1.0f));
+        add(false, m_integerScale ? fitIntegerAligned(lower, integerScale, 0.5f, 0.0f) : fitAspectAligned(lower, 0.5f, 0.0f));
         break;
     }
     }

@@ -40,6 +40,7 @@ struct NdsDisplaySettings {
     bool integerScale = false;
     int layout = 0;
     int orientation = 0;
+    int screenGap = 0;
 };
 
 class NdsMenuLayer {

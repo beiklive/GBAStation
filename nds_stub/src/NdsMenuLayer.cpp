@@ -23,6 +23,10 @@ constexpr float kSettingStepY = 48.0f;
 constexpr float kFastForwardValues[] = {
     0.1f, 0.5f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 3.0f, 4.0f, 5.0f,
 };
+constexpr int kScreenGapDefault = 0;
+constexpr int kScreenGapStep = 1;
+constexpr int kScreenGapMin = -256;
+constexpr int kScreenGapMax = 256;
 
 bool isDirectionUp(std::uint64_t buttons)
 {
@@ -68,11 +72,24 @@ float displayRowY(int row)
     case 5: return kSettingStepY * 5.0f;
     case 6: return kSettingStepY * 6.0f + 36.0f;
     case 7: return kSettingStepY * 7.0f + 36.0f;
-    case 8: return kSettingStepY * 8.0f + 72.0f;
+    case 8: return kSettingStepY * 8.0f + 36.0f;
     case 9: return kSettingStepY * 9.0f + 72.0f;
     case 10: return kSettingStepY * 10.0f + 72.0f;
+    case 11: return kSettingStepY * 11.0f + 72.0f;
     default: return 0.0f;
     }
+}
+
+int clampScreenGap(int value)
+{
+    return std::clamp(value, kScreenGapMin, kScreenGapMax);
+}
+
+int stepNumericValue(int value, int direction, int step, int minValue, int maxValue)
+{
+    if (direction == 0 || step <= 0)
+        return std::clamp(value, minValue, maxValue);
+    return std::clamp(value + direction * step, minValue, maxValue);
 }
 
 bool pushMenuOrientationTransform(int orientation)
@@ -198,8 +215,8 @@ float NdsMenuLayer::targetContentScrollY() const
     }
     case Item::Display:
     {
-        const int row = std::clamp(m_contentFocus, 0, 10);
-        const float contentH = displayRowY(10) + kSettingRowH;
+        const int row = std::clamp(m_contentFocus, 0, contentControlCount(Item::Display) - 1);
+        const float contentH = displayRowY(11) + kSettingRowH;
         return focusedScroll(displayRowY(row), kSettingRowH, contentH);
     }
     default:
@@ -238,6 +255,7 @@ void NdsMenuLayer::setDisplaySettings(const NdsDisplaySettings& settings)
     m_display.fastForwardMultiplier = std::clamp(m_display.fastForwardMultiplier, 0.1f, 5.0f);
     m_display.layout = std::clamp(m_display.layout, 0, 7);
     m_display.orientation = std::clamp(m_display.orientation, 0, 3);
+    m_display.screenGap = clampScreenGap(m_display.screenGap);
 }
 
 bool NdsMenuLayer::itemHasContent(Item item) const
@@ -254,7 +272,7 @@ int NdsMenuLayer::contentControlCount(Item item) const
     case Item::LoadState:
         return 10;
     case Item::Display:
-        return 11;
+        return 12;
     case Item::Cheats:
         return 1;
     default:
@@ -282,12 +300,16 @@ bool NdsMenuLayer::activateDisplayControl()
     case 2:
         m_display.integerScale = !m_display.integerScale;
         return true;
-    case 4:
     case 6:
-    case 7:
+        if (m_display.screenGap == kScreenGapDefault)
+            return false;
+        m_display.screenGap = kScreenGapDefault;
+        return true;
+    case 4:
     case 8:
     case 9:
     case 10:
+    case 11:
         return false;
     default:
         return false;
@@ -330,6 +352,13 @@ bool NdsMenuLayer::cycleCurrentSetting(int direction)
         return true;
     case 5:
         m_display.orientation = cycleIndex(m_display.orientation, 4);
+        return true;
+    case 6:
+        m_display.screenGap = stepNumericValue(m_display.screenGap,
+                                               direction,
+                                               kScreenGapStep,
+                                               kScreenGapMin,
+                                               kScreenGapMax);
         return true;
     default:
         return false;
