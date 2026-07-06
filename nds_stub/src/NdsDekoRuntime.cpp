@@ -1748,7 +1748,6 @@ private:
             {"nds.hotkey.pointer_click.pad", "PAD_RT"},
             {"nds.hotkey.swap_screens.pad", "none"},
             {"nds.hotkey.mic_blow.pad", "none"},
-            {"nds.layout.next", "none"},
             {"nds.pointer.touch", "none"},
         };
         for (const auto& hotkey : hotkeys)
@@ -1953,25 +1952,30 @@ public:
         m_paused.store(false, std::memory_order_release);
     }
 
-    void setFastForwardActive(bool enabled)
+    void setFastForwardActive(bool enabled, float multiplier)
     {
+        const int pitchPermille = enabled
+            ? std::clamp(static_cast<int>(std::lround(multiplier * 1000.0f)), 100, 5000)
+            : 1000;
+        m_fastForwardPitchPermille.store(pitchPermille, std::memory_order_release);
+
         if (m_fastForwardAudio.exchange(enabled, std::memory_order_acq_rel) == enabled)
             return;
 
-        std::lock_guard<std::mutex> lock(m_spuReadMutex);
-        if (enabled)
+        if (!enabled)
         {
-            SPU::TrimOutput();
-        }
-        else
-        {
+            std::lock_guard<std::mutex> lock(m_spuReadMutex);
             SPU::DrainOutput();
         }
     }
 
     void setMuted(bool enabled)
     {
-        m_muted.store(enabled, std::memory_order_release);
+        if (m_muted.exchange(enabled, std::memory_order_acq_rel) == enabled)
+            return;
+
+        std::lock_guard<std::mutex> lock(m_spuReadMutex);
+        SPU::DrainOutput();
     }
 
     void push(const int16_t* samples, size_t stereoFrames)
@@ -1999,12 +2003,35 @@ private:
             buffers[i].end_sample_offset = static_cast<u32>((i + 1) * kBufferFrames);
         }
 
+        bool driverMuted = false;
+        int driverPitchPermille = 1000;
+
         while (m_running.load(std::memory_order_acquire))
         {
             if (m_paused.load(std::memory_order_acquire))
             {
                 svcSleepThread(1000000);
                 continue;
+            }
+
+            const bool muted = m_muted.load(std::memory_order_acquire);
+            if (muted != driverMuted)
+            {
+                const float mix = muted ? 0.0f : 1.0f;
+                audrvVoiceSetMixFactor(&m_driver, 0, mix, 0, 0);
+                audrvVoiceSetMixFactor(&m_driver, 0, mix, 1, 1);
+                driverMuted = muted;
+            }
+            const int pitchPermille = m_fastForwardPitchPermille.load(std::memory_order_acquire);
+            if (pitchPermille != driverPitchPermille)
+            {
+                audrvVoiceSetPitch(&m_driver, 0, static_cast<float>(pitchPermille) / 1000.0f);
+                driverPitchPermille = pitchPermille;
+            }
+            if (muted)
+            {
+                std::lock_guard<std::mutex> lock(m_spuReadMutex);
+                SPU::DrainOutput();
             }
 
             AudioDriverWaveBuf* refill = nullptr;
@@ -2022,35 +2049,45 @@ private:
             {
                 auto* data = static_cast<int16_t*>(m_memPool) + refill->start_sample_offset * 2;
 
-                int frames = 0;
-                while (m_running.load(std::memory_order_acquire) &&
-                       !m_paused.load(std::memory_order_acquire))
+                int frames = static_cast<int>(kBufferFrames);
+                if (muted)
                 {
-                    {
-                        std::lock_guard<std::mutex> lock(m_spuReadMutex);
-                        if (m_fastForwardAudio.load(std::memory_order_acquire))
-                            SPU::Sync(false);
-                        frames = SPU::ReadOutput(data, static_cast<int>(kBufferFrames));
-                    }
-                    if (frames > 0)
-                        break;
-                    svcSleepThread(10000);
+                    std::memset(data, 0, kBufferBytes);
                 }
-
-                if (frames > 0)
+                else
                 {
-                    if (m_muted.load(std::memory_order_acquire))
-                        std::memset(data, 0, frames * 2 * sizeof(int16_t));
+                    frames = 0;
+                    while (m_running.load(std::memory_order_acquire) &&
+                           !m_paused.load(std::memory_order_acquire) &&
+                           !m_muted.load(std::memory_order_acquire))
+                    {
+                        {
+                            std::lock_guard<std::mutex> lock(m_spuReadMutex);
+                            if (m_fastForwardAudio.load(std::memory_order_acquire))
+                                SPU::Sync(false);
+                            frames = SPU::ReadOutput(data, static_cast<int>(kBufferFrames));
+                        }
+                        if (frames > 0)
+                            break;
+                        svcSleepThread(10000);
+                    }
+
+                    if (frames <= 0)
+                    {
+                        audrvUpdate(&m_driver);
+                        audrenWaitFrame();
+                        continue;
+                    }
 
                     const u32 lastStereo = reinterpret_cast<u32*>(data)[frames - 1];
                     while (frames < static_cast<int>(kBufferFrames))
                         reinterpret_cast<u32*>(data)[frames++] = lastStereo;
-
-                    armDCacheFlush(data, frames * 2 * sizeof(int16_t));
-                    refill->end_sample_offset = refill->start_sample_offset + frames;
-                    audrvVoiceAddWaveBuf(&m_driver, 0, refill);
-                    audrvVoiceStart(&m_driver, 0);
                 }
+
+                armDCacheFlush(data, frames * 2 * sizeof(int16_t));
+                refill->end_sample_offset = refill->start_sample_offset + frames;
+                audrvVoiceAddWaveBuf(&m_driver, 0, refill);
+                audrvVoiceStart(&m_driver, 0);
             }
 
             audrvUpdate(&m_driver);
@@ -2062,6 +2099,7 @@ private:
     std::atomic<bool> m_paused{false};
     std::atomic<bool> m_fastForwardAudio{false};
     std::atomic<bool> m_muted{false};
+    std::atomic<int> m_fastForwardPitchPermille{1000};
     std::mutex m_spuReadMutex;
     std::thread m_thread;
     AudioDriver m_driver {};
@@ -2707,15 +2745,6 @@ int RunDekoRuntime(const DekoRunOptions& options)
                 gameLayer.setScreensSwapped(screensSwapped);
                 appendStubLog("GBAStationNDSStub: swap screens=%d", screensSwapped ? 1 : 0);
             }
-            if (anyComboDown(inputConfig.button("nds.layout.next"), input))
-            {
-                NdsDisplaySettings nextDisplay = menuLayer.displaySettings();
-                nextDisplay.layout = (nextDisplay.layout + 1) % 8;
-                menuLayer.setDisplaySettings(nextDisplay);
-                gameLayer.setScreenLayout(nextDisplay.layout);
-                saveNdsSettingsToGameDb(options.romPath, menuLayer.displaySettings(), false);
-                appendStubLog("GBAStationNDSStub: layout next=%s", layoutIdFromIndex(nextDisplay.layout));
-            }
             if (anyComboDown(inputConfig.button("nds.hotkey.quicksave.pad"), input))
                 doSaveState(0, true);
             if (anyComboDown(inputConfig.button("nds.hotkey.quickload.pad"), input))
@@ -2920,8 +2949,9 @@ int RunDekoRuntime(const DekoRunOptions& options)
                 exitAutoSaveDrawn = false;
                 menuLayer.close();
                 menuLayer.clearToast();
-                audio.setFastForwardActive(false);
+                audio.setFastForwardActive(false, 1.0f);
                 lastFastForwardActive = false;
+                gameLayer.requestDeferredCapture();
                 blockGameInputUntilRelease = true;
                 appendStubLog("GBAStationNDSStub: exit autosave pending slot=%d", autoSaveSlot - 1);
             }
@@ -2956,7 +2986,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
             appendStubLog("GBAStationNDSStub: Deko fastforward %s x%d",
                           fastForwardActive ? "on" : "off",
                           static_cast<int>(std::round(menuLayer.fastForwardMultiplier())));
-            audio.setFastForwardActive(fastForwardActive);
+            audio.setFastForwardActive(fastForwardActive, menuLayer.fastForwardMultiplier());
             lastFastForwardActive = fastForwardActive;
         }
         audio.setMuted(muted || exitAutoSavePending || (fastForwardActive && inputConfig.fastForwardMute()));
@@ -3186,9 +3216,15 @@ int RunDekoRuntime(const DekoRunOptions& options)
 
         if (exitAutoSavePending && !menuLayer.active() && !runtimePaused && framesRan > 0)
         {
+            const bool cached = gameLayer.refreshCaptureCache();
+            appendStubLog("GBAStationNDSStub: exit autosave capture cache %s slot=%d drawn=%d",
+                          cached ? "ok" : "failed",
+                          autoSaveSlot - 1,
+                          exitAutoSaveDrawn ? 1 : 0);
             if (!exitAutoSaveDrawn)
             {
                 exitAutoSaveDrawn = true;
+                gameLayer.requestDeferredCapture();
                 appendStubLog("GBAStationNDSStub: exit autosave notice drawn slot=%d", autoSaveSlot - 1);
             }
             else
@@ -3247,7 +3283,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
     }
 
     uiAudio.stop();
-    audio.setFastForwardActive(false);
+    audio.setFastForwardActive(false, 1.0f);
     audio.setMuted(false);
     audio.stop();
     AREngine::SetCodeFile(nullptr);
