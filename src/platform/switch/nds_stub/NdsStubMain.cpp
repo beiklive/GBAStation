@@ -1,4 +1,3 @@
-#include <cstdarg>
 #include <algorithm>
 #include <cctype>
 #include <chrono>
@@ -719,65 +718,10 @@ private:
 
 void appendLog(const char* format, ...)
 {
-    char line[1024] = {};
-
-    va_list args;
-    va_start(args, format);
-    std::vsnprintf(line, sizeof(line), format, args);
-    va_end(args);
-
-    constexpr const char* paths[] = {
-        "sdmc:/GBAStation/log/GBAStationNDSStub.log",
-        "/GBAStation/log/GBAStationNDSStub.log",
-        "sdmc:/GBAStationNDSStub.log",
-        "/GBAStationNDSStub.log",
-    };
-
-    for (const char* path : paths)
-    {
-        FILE* fp = std::fopen(path, "a");
-        if (!fp)
-            continue;
-
-        std::fprintf(fp, "%s\n", line);
-        std::fflush(fp);
-        std::fclose(fp);
-    }
+    (void)format;
 }
 
 } // namespace
-
-namespace beiklive::nds_stub {
-
-void appendStubLog(const char* format, ...)
-{
-    char line[1024] = {};
-
-    va_list args;
-    va_start(args, format);
-    std::vsnprintf(line, sizeof(line), format, args);
-    va_end(args);
-
-    constexpr const char* paths[] = {
-        "sdmc:/GBAStation/log/GBAStationNDSStub.log",
-        "/GBAStation/log/GBAStationNDSStub.log",
-        "sdmc:/GBAStationNDSStub.log",
-        "/GBAStationNDSStub.log",
-    };
-
-    for (const char* path : paths)
-    {
-        FILE* fp = std::fopen(path, "a");
-        if (!fp)
-            continue;
-
-        std::fprintf(fp, "%s\n", line);
-        std::fflush(fp);
-        std::fclose(fp);
-    }
-}
-
-} // namespace beiklive::nds_stub
 
 namespace {
 

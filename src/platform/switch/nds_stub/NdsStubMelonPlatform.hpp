@@ -9,6 +9,8 @@ struct MelonPlatformData {
     std::string firmwarePath;
 };
 
-void appendStubLog(const char* format, ...);
+inline void appendStubLog(const char*, ...)
+{
+}
 
 } // namespace beiklive::nds_stub

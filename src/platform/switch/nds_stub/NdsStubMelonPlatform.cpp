@@ -206,12 +206,8 @@ u64 FileLength(FileHandle* file)
 
 void Log(LogLevel level, const char* fmt, ...)
 {
-    char buffer[2048] = {};
-    va_list args;
-    va_start(args, fmt);
-    std::vsnprintf(buffer, sizeof(buffer), fmt, args);
-    va_end(args);
-    beiklive::nds_stub::appendStubLog("melonDS[%d]: %s", static_cast<int>(level), buffer);
+    (void)level;
+    (void)fmt;
 }
 
 struct Thread {
