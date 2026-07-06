@@ -1252,6 +1252,7 @@ namespace
                 box->addView(cell);
             }
             box->addView(makeHint("切换为指针模式后使用右摇杆控制指针"));
+            box->addView(makeHint("模拟吹气开关：按下热键后会持续模拟吹气，再按一次取消"));
         }
 
         box->addView(makeHeader("连发按键绑定"));

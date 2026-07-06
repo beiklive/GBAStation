@@ -45,6 +45,7 @@
 #include "../../third_party/ArcDelta_melonDS/src/Platform.h"
 #include "../../third_party/ArcDelta_melonDS/src/Savestate.h"
 #include "../../third_party/ArcDelta_melonDS/src/SPU.h"
+#include "../../third_party/ArcDelta_melonDS/src/frontend/mic_blow.h"
 #include "../../third_party/ArcDelta_melonDS/src/frontend/switch/PlatformConfig.h"
 #include "../../third_party/ArcDelta_melonDS/src/frontend/switch/Gfx.h"
 #include "stb/stb_image.h"
@@ -1103,6 +1104,25 @@ bool touchScreenPressed()
     return hidGetTouchScreenStates(&state, 1) && state.count > 0;
 }
 
+void feedMicSilence()
+{
+    NDS::MicInputFrame(nullptr, 0);
+}
+
+void feedMicBlow()
+{
+    static int samplePos = 0;
+    constexpr int kMicFrameSamples = 735;
+    s16 samples[kMicFrameSamples] {};
+    const int sampleCount = static_cast<int>(sizeof(mic_blow) / sizeof(mic_blow[0]));
+    for (int i = 0; i < kMicFrameSamples; ++i)
+    {
+        samples[i] = static_cast<s16>(mic_blow[samplePos]);
+        samplePos = (samplePos + 1) % sampleCount;
+    }
+    NDS::MicInputFrame(samples, kMicFrameSamples);
+}
+
 std::string trim(std::string value)
 {
     auto isSpace = [](unsigned char c) { return std::isspace(c) != 0; };
@@ -1474,6 +1494,7 @@ private:
             {"nds.hotkey.pointer_mode.pad", "none"},
             {"nds.hotkey.pointer_click.pad", "PAD_RT"},
             {"nds.hotkey.swap_screens.pad", "none"},
+            {"nds.hotkey.mic_blow.pad", "none"},
             {"nds.layout.next", "none"},
             {"nds.pointer.touch", "none"},
         };
@@ -2158,6 +2179,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
     bool runtimePaused = false;
     bool muted = false;
     bool screensSwapped = false;
+    bool micBlowActive = false;
     bool pointerMode = false;
     bool pointerClickHeld = false;
     float pointerX = 128.0f;
@@ -2341,6 +2363,11 @@ int RunDekoRuntime(const DekoRunOptions& options)
             {
                 muted = !muted;
                 appendStubLog("GBAStationNDSStub: mute=%d", muted ? 1 : 0);
+            }
+            if (anyComboDown(inputConfig.button("nds.hotkey.mic_blow.pad"), input))
+            {
+                micBlowActive = !micBlowActive;
+                appendStubLog("GBAStationNDSStub: mic blow=%d", micBlowActive ? 1 : 0);
             }
             if (anyComboDown(inputConfig.button("nds.hotkey.pointer_mode.pad"), input))
             {
@@ -2664,6 +2691,10 @@ int RunDekoRuntime(const DekoRunOptions& options)
         int framesRan = 0;
         for (int i = 0; i < framesToRun && !emulationPaused; ++i)
         {
+            if (micBlowActive)
+                feedMicBlow();
+            else
+                feedMicSilence();
             NDS::RunFrame();
             ++framesRan;
             if (fastForwardActive)
