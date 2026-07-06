@@ -128,22 +128,21 @@ float zfastPlainWeight(vec2 uv)
 
 vec3 applyScanlines(vec3 color, vec2 uv, int mode)
 {
-    float amount = 170.0;
-    float intensity = 0.5;
-    float pos0 = (uv.x + 1.0) * amount;
-    float pos1 = (uv.y + 1.0) * amount;
-    float pos2 = cos((fract(pos0 + pos1) - 0.5) * kPi * intensity);
-    float pos3 = cos((fract(pos0 - pos1) - 0.5) * kPi * intensity);
+    vec2 texSize = vec2(textureSize(inTexture, 0));
+    vec2 pixel = uv * texSize * (kNdsScreenHeight / texSize.y);
+    float line = fract(pixel.y * (mode == 19 || mode == 20 ? 0.5 : 1.0));
+    float scan = smoothstep(0.12, 0.48, line) * smoothstep(0.98, 0.58, line);
+    float strength = mode == 18 || mode == 20 ? 0.48 : 0.34;
+    vec3 outColor = color * mix(1.0 - strength, 1.08, scan);
 
-    vec3 contrastColor = color * 0.6;
     if (mode == 18 || mode == 20)
-        contrastColor = color * 0.4 + 0.24 * color * color;
-
-    float mask = pos2 * (mode == 17 || mode == 18 ? 1.5 : 0.8);
+        outColor = outColor * 0.86 + outColor * outColor * 0.22;
     if (mode == 19 || mode == 20)
-        mask = (pos2 + pos3) * 0.8;
-
-    return mix(vec3(0.0), contrastColor, clamp(mask, 0.0, 1.0));
+    {
+        float diagonal = smoothstep(0.0, 0.5, fract((pixel.x + pixel.y) * 0.5));
+        outColor *= mix(0.82, 1.12, diagonal);
+    }
+    return clamp(outColor, 0.0, 1.0);
 }
 
 vec3 applyDot(vec2 uv, bool hv4)
@@ -175,6 +174,82 @@ vec3 applyDot(vec2 uv, bool hv4)
     vec3 midDot = mid * exp(-gammaValue * sqrt(dot(centerDelta, centerDelta)) *
                              mix(1.0 + shine, 1.0 - shine, dot(mid, vec3(0.30, 0.59, 0.11))));
     return mix(1.2 * midDot, color, blend);
+}
+
+vec3 applyCartoon(vec2 uv)
+{
+    vec2 texSize = vec2(textureSize(inTexture, 0));
+    vec2 texel = 0.8 / texSize;
+    vec3 c00 = texture(inTexture, uv + texel * vec2(-1.0, -1.0)).rgb;
+    vec3 c10 = texture(inTexture, uv + texel * vec2( 0.0, -1.0)).rgb;
+    vec3 c20 = texture(inTexture, uv + texel * vec2( 1.0, -1.0)).rgb;
+    vec3 c01 = texture(inTexture, uv + texel * vec2(-1.0,  0.0)).rgb;
+    vec3 c11 = texture(inTexture, uv).rgb;
+    vec3 c21 = texture(inTexture, uv + texel * vec2( 1.0,  0.0)).rgb;
+    vec3 c02 = texture(inTexture, uv + texel * vec2(-1.0,  1.0)).rgb;
+    vec3 c12 = texture(inTexture, uv + texel * vec2( 0.0,  1.0)).rgb;
+    vec3 c22 = texture(inTexture, uv + texel * vec2( 1.0,  1.0)).rgb;
+
+    vec3 dt = vec3(1.0);
+    float d1 = dot(abs(c00 - c22), dt);
+    float d2 = dot(abs(c20 - c02), dt);
+    float hl = dot(abs(c01 - c21), dt);
+    float vl = dot(abs(c10 - c12), dt);
+    float edge = clamp(0.45 * (d1 + d2 + hl + vl) / (dot(c11, dt) + 0.15), 0.0, 1.0);
+
+    float lum = length(c11);
+    float bands = floor(lum * 5.0) / 5.0;
+    vec3 poster = floor(c11 * 5.0 + 0.35) / 5.0;
+    poster = mix(poster, normalize(max(c11, vec3(0.001))) * bands, 0.22);
+    return clamp(poster * (1.12 - edge * 0.85), 0.0, 1.0);
+}
+
+vec3 crtMask(vec2 uv, float strength)
+{
+    vec2 texSize = vec2(textureSize(inTexture, 0));
+    vec2 pixel = uv * texSize * (kNdsScreenHeight / texSize.y);
+    float phase = mod(floor(pixel.x), 3.0);
+    vec3 mask = vec3(1.0 - strength);
+    if (phase < 1.0)
+        mask.r = 1.0;
+    else if (phase < 2.0)
+        mask.g = 1.0;
+    else
+        mask.b = 1.0;
+    return mask;
+}
+
+vec3 applyCrt(vec2 uv, bool colorShift)
+{
+    vec2 texSize = vec2(textureSize(inTexture, 0));
+    vec2 texel = 1.0 / texSize;
+    vec2 centered = uv * 2.0 - 1.0;
+    vec2 warpedUv = uv + centered * dot(centered, centered) * 0.018;
+    if (warpedUv.x < 0.0 || warpedUv.x > 1.0 || warpedUv.y < 0.0 || warpedUv.y > 1.0)
+        return vec3(0.0);
+
+    vec3 color;
+    if (colorShift)
+    {
+        color.r = texture(inTexture, warpedUv + vec2(texel.x * 0.45, 0.0)).r;
+        color.g = texture(inTexture, warpedUv - vec2(texel.x * 0.25, 0.0)).g;
+        color.b = texture(inTexture, warpedUv).b;
+    }
+    else
+    {
+        color = texture(inTexture, warpedUv).rgb;
+    }
+
+    color = pow(max(color, vec3(0.0)), vec3(1.15));
+    vec2 pixel = warpedUv * texSize * (kNdsScreenHeight / texSize.y);
+    float line = fract(pixel.y);
+    float scan = smoothstep(0.08, 0.42, line) * smoothstep(1.0, 0.58, line);
+    color *= mix(0.62, 1.12, scan);
+    color *= crtMask(warpedUv, colorShift ? 0.18 : 0.26);
+
+    float vignette = 1.0 - 0.34 * dot(centered, centered);
+    color *= clamp(vignette, 0.58, 1.0);
+    return clamp(color, 0.0, 1.0);
 }
 
 void main()
@@ -238,6 +313,18 @@ void main()
     else if (mode == 22)
     {
         rgb = applyDot(inUV, true);
+    }
+    else if (mode == 23)
+    {
+        rgb = applyCartoon(inUV);
+    }
+    else if (mode == 24)
+    {
+        rgb = applyCrt(inUV, false);
+    }
+    else if (mode == 25)
+    {
+        rgb = applyCrt(inUV, true);
     }
 
     float alpha = sampled.a * inColor.a;

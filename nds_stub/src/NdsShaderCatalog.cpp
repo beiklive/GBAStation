@@ -159,6 +159,11 @@ const std::map<std::string, int>& drasticSimpleShaderCodes()
         {"drastic-scanlinesd-color-x", 20},
         {"drastic-dot-d4", 21},
         {"drastic-dot-hv4", 22},
+        {"drastic-cartoon", 23},
+        {"drastic-crt", 24},
+        {"drastic-crtc", 25},
+        {"drastic-crt-geom", 24},
+        {"drastic-crt-geom-no-curvature", 24},
     };
     return codes;
 }
@@ -396,7 +401,9 @@ int drasticSimpleShaderCode(const std::string& type)
         return 19;
     if (key.find("scanlinesd-color") != std::string::npos || key.find("scanlinesdcolor") != std::string::npos)
         return 18;
-    if (key.find("scanlinesd") != std::string::npos || key.find("scanline") != std::string::npos || key.find("crt") != std::string::npos)
+    if (key.find("crt") != std::string::npos)
+        return key.find("crtc") != std::string::npos ? 25 : 24;
+    if (key.find("scanlinesd") != std::string::npos || key.find("scanline") != std::string::npos)
         return 17;
     if (key.find("dot-d4") != std::string::npos)
         return 21;
@@ -407,13 +414,14 @@ int drasticSimpleShaderCode(const std::string& type)
     if (key.find("fxaa") != std::string::npos ||
         key.find("smaa") != std::string::npos ||
         key.find("aa") != std::string::npos ||
-        key.find("cartoon") != std::string::npos ||
         key.find("bloom") != std::string::npos ||
         key.find("luna") != std::string::npos ||
         key.find("nataa") != std::string::npos)
     {
         return 15;
     }
+    if (key.find("cartoon") != std::string::npos)
+        return 23;
     return -1;
 }
 

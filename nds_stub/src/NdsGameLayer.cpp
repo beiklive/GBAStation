@@ -145,7 +145,9 @@ bool ndsShaderPassChain(const std::string& type,
     int finalCode = -1;
     if (key.find("lcd") != std::string::npos)
         finalCode = 5;
-    else if (key.find("crt") != std::string::npos || key.find("scanline") != std::string::npos)
+    else if (key.find("crt") != std::string::npos)
+        finalCode = key.find("crtc") != std::string::npos ? 25 : 24;
+    else if (key.find("scanline") != std::string::npos)
         finalCode = 17;
     else if (key.find("-1x") != std::string::npos ||
              key.find("-2x") != std::string::npos ||
