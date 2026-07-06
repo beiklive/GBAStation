@@ -1952,6 +1952,12 @@ public:
         m_paused.store(false, std::memory_order_release);
     }
 
+    bool runWithSpuReadLock(const std::function<bool()>& fn)
+    {
+        std::lock_guard<std::mutex> lock(m_spuReadMutex);
+        return fn();
+    }
+
     void setFastForwardActive(bool enabled, float multiplier)
     {
         const int pitchPermille = enabled
@@ -2568,6 +2574,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
         std::vector<std::uint8_t> thumbnailRgba;
         int thumbnailWidth = 0;
         int thumbnailHeight = 0;
+        const auto saveTotalBegin = std::chrono::steady_clock::now();
         appendStubLog("GBAStationNDSStub: savestate save begin slot=%d path=%s", slot, path.c_str());
         const bool thumbnailCaptured = gameLayer.captureCurrentFrameRgba(thumbnailRgba,
                                                                          thumbnailWidth,
@@ -2591,13 +2598,26 @@ int RunDekoRuntime(const DekoRunOptions& options)
                       removeStateFailed ? 1 : 0,
                       removedOldThumb ? 1 : 0,
                       removeThumbFailed ? 1 : 0);
-        audio.pauseForCoreReset();
+        const auto saveIoBegin = std::chrono::steady_clock::now();
         Gfx::PresentQueue.waitIdle();
         Gfx::EmuQueue.waitIdle();
-        const bool ok = saveStateFile(path);
+        appendStubLog("GBAStationNDSStub: savestate gfx idle slot=%d ms=%lld",
+                      slot,
+                      elapsedMs(saveIoBegin));
+
+        const auto stateWriteBegin = std::chrono::steady_clock::now();
+        const bool ok = audio.runWithSpuReadLock([&]() {
+            return saveStateFile(path);
+        });
+        appendStubLog("GBAStationNDSStub: savestate core write %s slot=%d ms=%lld",
+                      ok ? "ok" : "failed",
+                      slot,
+                      elapsedMs(stateWriteBegin));
+
         bool thumbOk = false;
         if (ok)
         {
+            const auto thumbWriteBegin = std::chrono::steady_clock::now();
             if (thumbnailCaptured)
             {
                 thumbOk = writeStateThumbnailFromRgba(thumbnailRgba,
@@ -2612,10 +2632,19 @@ int RunDekoRuntime(const DekoRunOptions& options)
             appendStubLog("GBAStationNDSStub: savestate thumbnail %s slot=%d",
                           thumbOk ? "ok" : "failed",
                           slot);
+            appendStubLog("GBAStationNDSStub: savestate thumbnail write slot=%d ms=%lld",
+                          slot,
+                          elapsedMs(thumbWriteBegin));
         }
+        const auto sramFlushBegin = std::chrono::steady_clock::now();
         NDSCart::FlushSRAMFile();
-        audio.resumeAfterCoreReset();
-        appendStubLog("GBAStationNDSStub: savestate save %s slot=%d", ok ? "ok" : "failed", slot);
+        appendStubLog("GBAStationNDSStub: savestate sram flush slot=%d ms=%lld",
+                      slot,
+                      elapsedMs(sramFlushBegin));
+        appendStubLog("GBAStationNDSStub: savestate save %s slot=%d totalMs=%lld",
+                      ok ? "ok" : "failed",
+                      slot,
+                      elapsedMs(saveTotalBegin));
         Gfx::PresentQueue.waitIdle();
         Gfx::EmuQueue.waitIdle();
         if (slot >= 0 && slot < static_cast<int>(stateSlots.size()))
