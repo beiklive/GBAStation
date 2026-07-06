@@ -8,6 +8,12 @@ layout (location = 2) in vec3 coolTransparency;
 
 layout (binding = 0) uniform sampler2D inTexture;
 
+layout (std140, binding = 1) uniform NdsShaderParams
+{
+    vec4 param0;
+    vec4 param1;
+} ndsParams;
+
 #define BLEND_NONE 0
 #define BLEND_NORMAL 1
 #define BLEND_DOMINANT 2
@@ -46,6 +52,42 @@ float getLeftRatio(vec2 center, vec2 origin, vec2 direction, vec2 scale)
 
 bool eq(vec3 a, vec3 b) { return a == b; }
 bool neq(vec3 a, vec3 b) { return a != b; }
+
+float effectStrength()
+{
+    return clamp(ndsParams.param0.x, 0.0, 1.0);
+}
+
+float brightnessValue()
+{
+    return max(ndsParams.param0.y, 0.0);
+}
+
+float contrastValue()
+{
+    return max(ndsParams.param0.z, 0.0);
+}
+
+float saturationValue()
+{
+    return max(ndsParams.param0.w, 0.0);
+}
+
+float shaderGammaValue()
+{
+    return max(ndsParams.param1.x, 0.01);
+}
+
+vec3 applyFinalAdjustments(vec3 filtered, vec3 original)
+{
+    vec3 color = mix(original, filtered, effectStrength());
+    color = (color - vec3(0.5)) * contrastValue() + vec3(0.5);
+    color *= brightnessValue();
+    float luma = dot(color, vec3(0.299, 0.587, 0.114));
+    color = mix(vec3(luma), color, saturationValue());
+    color = pow(clamp(color, 0.0, 1.0), vec3(1.0 / shaderGammaValue()));
+    return clamp(color, 0.0, 1.0);
+}
 
 vec3 samplePixel(vec2 coord, vec2 texel, vec2 offset)
 {
@@ -224,6 +266,8 @@ void main()
         vec3 blendPix = mix(D, B, step(distYCbCr(E, B), distYCbCr(E, D)));
         res = mix(res, blendPix, getLeftRatio(pos, origin, direction, scale));
     }
+
+    res = applyFinalAdjustments(res, E);
 
     float alpha = texture(inTexture, inUV).a * inColor.a;
     alpha *= clamp(sqrt(coolTransparency.x), coolTransparency.y, coolTransparency.z);

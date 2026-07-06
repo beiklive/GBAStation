@@ -187,6 +187,7 @@ std::vector<beiklive::nds_stub::NdsShaderParam> defaultNdsShaderParams(const std
 {
     using beiklive::nds_stub::NdsShaderParam;
     const std::string shader = normalizeNdsShaderType(type);
+    const bool drasticShader = beiklive::nds_stub::ndsShaderMatchKey(shader).rfind("drastic-", 0) == 0;
     if (shader == "RetroArch_dot")
     {
         return {
@@ -215,6 +216,18 @@ std::vector<beiklive::nds_stub::NdsShaderParam> defaultNdsShaderParams(const std
             {"ambient", "Ambient", 0.0f, 0.0f, 0.0f, 0.5f, 0.01f, 2},
             {"bgr", "BGR", 1.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0},
             {"nds_color", "NDS Color", 1.0f, 1.0f, 0.0f, 1.0f, 0.05f, 2},
+        };
+    }
+    if (drasticShader)
+    {
+        return {
+            {"effect_strength", "Effect", 1.0f, 1.0f, 0.0f, 1.0f, 0.05f, 2},
+            {"brightness", "Brightness", 1.0f, 1.0f, 0.5f, 1.8f, 0.05f, 2},
+            {"contrast", "Contrast", 1.0f, 1.0f, 0.5f, 1.8f, 0.05f, 2},
+            {"saturation", "Saturation", 1.0f, 1.0f, 0.0f, 2.0f, 0.05f, 2},
+            {"gamma", "Gamma", 1.0f, 1.0f, 0.5f, 2.5f, 0.05f, 2},
+            {"pattern_strength", "Pattern", 1.0f, 1.0f, 0.0f, 2.0f, 0.05f, 2},
+            {"curvature", "Curvature", 1.0f, 1.0f, 0.0f, 2.0f, 0.05f, 2},
         };
     }
     return {};
@@ -331,6 +344,17 @@ std::array<float, 8> ndsShaderParamUniforms(const std::string& type,
     else
     {
         const int drasticCode = drasticSimpleShaderCode(shader);
+        const bool drasticShader = beiklive::nds_stub::ndsShaderMatchKey(shader).rfind("drastic-", 0) == 0;
+        if (drasticShader || shader == "RetroArch_xbrz-freescale")
+        {
+            values[0] = valueOf("effect_strength", 1.0f);
+            values[1] = valueOf("brightness", 1.0f);
+            values[2] = valueOf("contrast", 1.0f);
+            values[3] = valueOf("saturation", 1.0f);
+            values[4] = valueOf("gamma", 1.0f);
+            values[5] = valueOf("pattern_strength", 1.0f);
+            values[6] = valueOf("curvature", 1.0f);
+        }
         if (drasticCode >= 0)
             values[7] = static_cast<float>(drasticCode);
     }

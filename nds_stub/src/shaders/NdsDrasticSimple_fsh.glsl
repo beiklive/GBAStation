@@ -17,6 +17,52 @@ layout (std140, binding = 1) uniform NdsShaderParams
 const float kPi = 3.141592654;
 const float kNdsScreenHeight = 192.0;
 
+float effectStrength()
+{
+    return clamp(ndsParams.param0.x, 0.0, 1.0);
+}
+
+float brightnessValue()
+{
+    return max(ndsParams.param0.y, 0.0);
+}
+
+float contrastValue()
+{
+    return max(ndsParams.param0.z, 0.0);
+}
+
+float saturationValue()
+{
+    return max(ndsParams.param0.w, 0.0);
+}
+
+float shaderGammaValue()
+{
+    return max(ndsParams.param1.x, 0.01);
+}
+
+float patternStrength()
+{
+    return max(ndsParams.param1.y, 0.0);
+}
+
+float curvatureValue()
+{
+    return max(ndsParams.param1.z, 0.0);
+}
+
+vec3 applyFinalAdjustments(vec3 filtered, vec3 original)
+{
+    vec3 color = mix(original, filtered, effectStrength());
+    color = (color - vec3(0.5)) * contrastValue() + vec3(0.5);
+    color *= brightnessValue();
+    float luma = dot(color, vec3(0.299, 0.587, 0.114));
+    color = mix(vec3(luma), color, saturationValue());
+    color = pow(clamp(color, 0.0, 1.0), vec3(1.0 / shaderGammaValue()));
+    return clamp(color, 0.0, 1.0);
+}
+
 vec3 applyNdsColor(vec3 color)
 {
     const float targetGamma = 1.91;
@@ -126,26 +172,26 @@ float zfastPlainWeight(vec2 uv)
     return yFactor * xFactor;
 }
 
-vec3 applyScanlines(vec3 color, vec2 uv, int mode)
+vec3 applyScanlines(vec3 color, vec2 uv, int mode, float pattern)
 {
     vec2 texSize = vec2(textureSize(inTexture, 0));
     vec2 pixel = uv * texSize * (kNdsScreenHeight / texSize.y);
     float line = fract(pixel.y * (mode == 19 || mode == 20 ? 0.5 : 1.0));
     float scan = smoothstep(0.12, 0.48, line) * smoothstep(0.98, 0.58, line);
-    float strength = mode == 18 || mode == 20 ? 0.48 : 0.34;
+    float strength = (mode == 18 || mode == 20 ? 0.48 : 0.34) * pattern;
     vec3 outColor = color * mix(1.0 - strength, 1.08, scan);
 
     if (mode == 18 || mode == 20)
-        outColor = outColor * 0.86 + outColor * outColor * 0.22;
+        outColor = mix(outColor, outColor * 0.86 + outColor * outColor * 0.22, clamp(pattern, 0.0, 1.0));
     if (mode == 19 || mode == 20)
     {
         float diagonal = smoothstep(0.0, 0.5, fract((pixel.x + pixel.y) * 0.5));
-        outColor *= mix(0.82, 1.12, diagonal);
+        outColor *= mix(1.0, mix(0.82, 1.12, diagonal), clamp(pattern, 0.0, 1.0));
     }
     return clamp(outColor, 0.0, 1.0);
 }
 
-vec3 applyDot(vec2 uv, bool hv4)
+vec3 applyDot(vec2 uv, bool hv4, float pattern)
 {
     vec2 texSize = vec2(textureSize(inTexture, 0));
     vec2 texel = 1.0 / texSize;
@@ -173,7 +219,8 @@ vec3 applyDot(vec2 uv, bool hv4)
     vec2 centerDelta = fract(pixelNo) - vec2(0.5);
     vec3 midDot = mid * exp(-gammaValue * sqrt(dot(centerDelta, centerDelta)) *
                              mix(1.0 + shine, 1.0 - shine, dot(mid, vec3(0.30, 0.59, 0.11))));
-    return mix(1.05 * midDot, color * (hv4 ? 0.58 : 0.44), blend);
+    vec3 dotColor = mix(1.05 * midDot, color * (hv4 ? 0.58 : 0.44), blend);
+    return mix(mid, dotColor, clamp(pattern, 0.0, 1.0));
 }
 
 vec3 crtMask(vec2 uv, float strength)
@@ -191,12 +238,12 @@ vec3 crtMask(vec2 uv, float strength)
     return mask;
 }
 
-vec3 applyCrt(vec2 uv, bool colorShift)
+vec3 applyCrt(vec2 uv, bool colorShift, float pattern, float curvature)
 {
     vec2 texSize = vec2(textureSize(inTexture, 0));
     vec2 texel = 1.0 / texSize;
     vec2 centered = uv * 2.0 - 1.0;
-    vec2 warpedUv = uv + centered * dot(centered, centered) * 0.018;
+    vec2 warpedUv = uv + centered * dot(centered, centered) * 0.018 * curvature;
     if (warpedUv.x < 0.0 || warpedUv.x > 1.0 || warpedUv.y < 0.0 || warpedUv.y > 1.0)
         return vec3(0.0);
 
@@ -216,8 +263,8 @@ vec3 applyCrt(vec2 uv, bool colorShift)
     vec2 pixel = warpedUv * texSize * (kNdsScreenHeight / texSize.y);
     float line = fract(pixel.y);
     float scan = smoothstep(0.08, 0.42, line) * smoothstep(1.0, 0.58, line);
-    color *= mix(0.62, 1.12, scan);
-    color *= crtMask(warpedUv, colorShift ? 0.18 : 0.26);
+    color *= mix(1.0, mix(0.62, 1.12, scan), clamp(pattern, 0.0, 1.0));
+    color *= crtMask(warpedUv, (colorShift ? 0.18 : 0.26) * pattern);
 
     float vignette = 1.0 - 0.34 * dot(centered, centered);
     color *= clamp(vignette, 0.58, 1.0);
@@ -229,6 +276,8 @@ void main()
     int mode = int(floor(ndsParams.param1.w + 0.5));
     vec4 sampled = texture(inTexture, inUV);
     vec3 rgb = sampled.rgb;
+    vec3 originalRgb = rgb;
+    float pattern = patternStrength();
 
     if (mode == 0)
     {
@@ -256,11 +305,11 @@ void main()
             rgb = applyNdsColor(rgb);
         if (mode == 7 || mode == 8)
             rgb = applyNaturalVision(rgb);
-        rgb *= lcd1xWeight(inUV);
+        rgb *= mix(1.0, lcd1xWeight(inUV), pattern);
     }
     else if (mode == 9)
     {
-        rgb *= zfastPlainWeight(inUV);
+        rgb *= mix(1.0, zfastPlainWeight(inUV), pattern);
     }
     else if (mode >= 10 && mode <= 14)
     {
@@ -268,7 +317,7 @@ void main()
             rgb = applyNdsColor(rgb);
         if (mode == 13 || mode == 14)
             rgb = applyNaturalVision(rgb);
-        rgb *= zfastWeight(inUV, mode == 11);
+        rgb *= mix(1.0, zfastWeight(inUV, mode == 11), pattern);
     }
     else if (mode == 15)
     {
@@ -276,24 +325,26 @@ void main()
     }
     else if (mode >= 17 && mode <= 20)
     {
-        rgb = applyScanlines(rgb, inUV, mode);
+        rgb = applyScanlines(rgb, inUV, mode, pattern);
     }
     else if (mode == 21)
     {
-        rgb = applyDot(inUV, false);
+        rgb = applyDot(inUV, false, pattern);
     }
     else if (mode == 22)
     {
-        rgb = applyDot(inUV, true);
+        rgb = applyDot(inUV, true, pattern);
     }
     else if (mode == 24)
     {
-        rgb = applyCrt(inUV, false);
+        rgb = applyCrt(inUV, false, pattern, curvatureValue());
     }
     else if (mode == 25)
     {
-        rgb = applyCrt(inUV, true);
+        rgb = applyCrt(inUV, true, pattern, curvatureValue());
     }
+
+    rgb = applyFinalAdjustments(rgb, originalRgb);
 
     float alpha = sampled.a * inColor.a;
     alpha *= clamp(sqrt(coolTransparency.x), coolTransparency.y, coolTransparency.z);
