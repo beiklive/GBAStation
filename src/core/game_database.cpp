@@ -4,6 +4,7 @@
 #include <fstream>
 #include <stdexcept>
 #include <filesystem>
+#include <vector>
 
 namespace fs = std::filesystem;
 
@@ -69,13 +70,50 @@ namespace beiklive
             return false;
         }
 
+        std::vector<std::string> fallbackNdsShaderTypes()
+        {
+            return {"dot"};
+        }
+
+        std::vector<std::string> loadNdsShaderTypes()
+        {
+            std::ifstream in(beiklive::res_path("config/nds_shaders.json"));
+            if (!in)
+                return fallbackNdsShaderTypes();
+
+            auto parsed = nlohmann::json::parse(in, nullptr, false);
+            if (parsed.is_discarded() || !parsed.is_array())
+                return fallbackNdsShaderTypes();
+
+            std::vector<std::string> result;
+            for (const auto& item : parsed)
+            {
+                if (!item.is_string())
+                    continue;
+                const std::string value = item.get<std::string>();
+                if (value.empty() ||
+                    std::find(result.begin(), result.end(), value) != result.end())
+                {
+                    continue;
+                }
+                result.push_back(value);
+            }
+
+            if (std::find(result.begin(), result.end(), "dot") == result.end())
+                result.insert(result.begin(), "dot");
+            return result.empty() ? fallbackNdsShaderTypes() : result;
+        }
+
+        const std::vector<std::string>& ndsShaderTypes()
+        {
+            static const std::vector<std::string> types = loadNdsShaderTypes();
+            return types;
+        }
+
         std::string normalizeNdsShaderType(const std::string& type)
         {
-            if (type == "dot-clear" ||
-                type == "xbrz-freescale" ||
-                type == "lcd-grid-v2-nds-color" ||
-                type == "scanline" ||
-                type == "crt")
+            const auto& types = ndsShaderTypes();
+            if (std::find(types.begin(), types.end(), type) != types.end())
                 return type;
             return "dot";
         }

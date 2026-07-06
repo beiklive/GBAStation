@@ -108,12 +108,7 @@ const char* orientationLabel(int index)
 
 const char* shaderTypeLabel(const std::string& type)
 {
-    if (type == "xbrz-freescale") return "xbrz-freescale";
-    if (type == "lcd-grid-v2-nds-color") return "lcd-grid-v2-nds-color";
-    if (type == "scanline") return "scanline";
-    if (type == "crt") return "crt";
-    if (type == "dot-clear") return "dot-clear";
-    return "dot";
+    return type.empty() ? "dot" : type.c_str();
 }
 
 std::string filenameFromPath(const std::string& path)
@@ -1644,6 +1639,10 @@ void drawShaderListOverlay(const std::vector<std::string>& shaderTypes,
     const float rowH = 58.0f;
     const float bodyY = panelY + headerH;
     const float bodyH = panelH - headerH - footerH;
+    const float listPadTop = 24.0f;
+    const float listPadBottom = 14.0f;
+    const float listBodyY = bodyY + listPadTop;
+    const float listBodyH = std::max(1.0f, bodyH - listPadTop - listPadBottom);
     const float rowW = panelW - 56.0f;
 
     drawRect({panelX, panelY}, {panelW, panelH}, {0.015f, 0.020f, 0.030f, 0.98f * opacity}, false);
@@ -1657,13 +1656,14 @@ void drawShaderListOverlay(const std::vector<std::string>& shaderTypes,
                   {0.78f, 0.86f, 0.94f, 0.68f * opacity}, "A 确定   B 返回");
 
     Gfx::PushScissor(static_cast<u32>(std::max(0.0f, panelX + 18.0f)),
-                     static_cast<u32>(std::max(0.0f, bodyY + 8.0f)),
+                     static_cast<u32>(std::max(0.0f, listBodyY - 6.0f)),
                      static_cast<u32>(std::max(1.0f, panelW - 36.0f)),
-                     static_cast<u32>(std::max(1.0f, bodyH - 16.0f)));
+                     static_cast<u32>(std::max(1.0f, listBodyH + 12.0f)));
+    const std::uint32_t iconFont = materialFont();
     for (int i = 0; i < static_cast<int>(shaderTypes.size()); ++i)
     {
-        const float y = bodyY + 10.0f + static_cast<float>(i) * rowH - scrollY;
-        if (y > bodyY + bodyH || y + 50.0f < bodyY)
+        const float y = listBodyY + static_cast<float>(i) * rowH - scrollY;
+        if (y > listBodyY + listBodyH || y + 50.0f < listBodyY)
             continue;
         const bool focused = i == focusedRow;
         const bool selected = shaderTypes[i] == currentType;
@@ -1677,9 +1677,23 @@ void drawShaderListOverlay(const std::vector<std::string>& shaderTypes,
         drawBorder(pos, {rowW, 50.0f}, 1.0f,
                    selected ? Color{0.42f, 0.82f, 1.0f, 0.28f * opacity}
                             : Color{1.0f, 1.0f, 1.0f, 0.10f * opacity});
-        Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{20.0f, 14.0f}, 20.0f,
-                      selected ? Color{0.58f, 0.88f, 1.0f, 0.96f * opacity}
-                               : Color{1.0f, 1.0f, 1.0f, 0.88f * opacity},
+        const Color itemTextColor = selected ? Color{0.58f, 0.88f, 1.0f, 0.96f * opacity}
+                                             : Color{1.0f, 1.0f, 1.0f, 0.88f * opacity};
+        if (iconFont != 0)
+        {
+            Gfx::DrawText(iconFont,
+                          pos + Vector2f{26.0f, 25.0f},
+                          24.0f,
+                          selected ? Color{0.58f, 0.88f, 1.0f, 0.94f * opacity}
+                                   : Color{1.0f, 1.0f, 1.0f, 0.58f * opacity},
+                          Gfx::align_Center,
+                          Gfx::align_Center,
+                          "\uE3E9");
+        }
+        Gfx::DrawText(Gfx::SystemFontChinese,
+                      pos + Vector2f{iconFont != 0 ? 54.0f : 20.0f, 14.0f},
+                      20.0f,
+                      itemTextColor,
                       "%s", shaderTypeLabel(shaderTypes[i]));
         if (selected)
         {
@@ -1691,13 +1705,13 @@ void drawShaderListOverlay(const std::vector<std::string>& shaderTypes,
     Gfx::PopScissor();
 
     const float contentH = static_cast<float>(shaderTypes.size()) * rowH;
-    if (contentH > bodyH + 1.0f)
+    if (contentH > listBodyH + 1.0f)
     {
-        const float trackH = bodyH - 22.0f;
-        const float thumbH = std::max(28.0f, trackH * bodyH / contentH);
-        const float maxScroll = std::max(1.0f, contentH - bodyH);
-        const float thumbY = bodyY + 11.0f + (trackH - thumbH) * std::clamp(scrollY / maxScroll, 0.0f, 1.0f);
-        drawRect({panelX + panelW - 16.0f, bodyY + 11.0f}, {3.0f, trackH},
+        const float trackH = listBodyH;
+        const float thumbH = std::max(28.0f, trackH * listBodyH / contentH);
+        const float maxScroll = std::max(1.0f, contentH - listBodyH);
+        const float thumbY = listBodyY + (trackH - thumbH) * std::clamp(scrollY / maxScroll, 0.0f, 1.0f);
+        drawRect({panelX + panelW - 16.0f, listBodyY}, {3.0f, trackH},
                  {1.0f, 1.0f, 1.0f, 0.08f * opacity}, false);
         drawRect({panelX + panelW - 17.0f, thumbY}, {5.0f, thumbH},
                  {0.42f, 0.82f, 1.0f, 0.55f * opacity}, false);

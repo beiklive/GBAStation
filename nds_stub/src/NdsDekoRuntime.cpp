@@ -3,6 +3,7 @@
 #include "nds_stub/NdsCheatDatabase.hpp"
 #include "nds_stub/NdsGameLayer.hpp"
 #include "nds_stub/NdsMenuLayer.hpp"
+#include "nds_stub/NdsShaderCatalog.hpp"
 #include "nds_stub/ui/UiComponents.hpp"
 
 #include <algorithm>
@@ -53,6 +54,8 @@
 #include "nds_stub/StubLog.hpp"
 
 namespace {
+
+using beiklive::nds_stub::normalizeNdsShaderType;
 
 constexpr uint32_t kNdsKeyA      = 1u << 0;
 constexpr uint32_t kNdsKeyB      = 1u << 1;
@@ -178,23 +181,10 @@ std::string jsonString(const nlohmann::json& item, const char* key)
     return item.at(key).get<std::string>();
 }
 
-std::string normalizedNdsShaderType(const std::string& type)
-{
-    if (type == "dot-clear" ||
-        type == "xbrz-freescale" ||
-        type == "lcd-grid-v2-nds-color" ||
-        type == "scanline" ||
-        type == "crt")
-    {
-        return type;
-    }
-    return "dot";
-}
-
 std::vector<beiklive::nds_stub::NdsShaderParam> defaultNdsShaderParams(const std::string& type)
 {
     using beiklive::nds_stub::NdsShaderParam;
-    const std::string shader = normalizedNdsShaderType(type);
+    const std::string shader = normalizeNdsShaderType(type);
     if (shader == "dot")
     {
         return {
@@ -230,7 +220,7 @@ std::vector<beiklive::nds_stub::NdsShaderParam> defaultNdsShaderParams(const std
 
 std::string ndsShaderConfigPath(const std::string& type)
 {
-    return joinPath("sdmc:/GBAStation/config/ndsshaderconfig", normalizedNdsShaderType(type) + ".ini");
+    return joinPath("sdmc:/GBAStation/config/ndsshaderconfig", normalizeNdsShaderType(type) + ".ini");
 }
 
 std::vector<beiklive::nds_stub::NdsShaderParam> loadNdsShaderParams(const std::string& type)
@@ -290,7 +280,7 @@ void saveNdsShaderParams(const std::string& type,
         return;
     }
     out << "# GBAStation NDS shader config\n";
-    out << "shader=" << normalizedNdsShaderType(type) << "\n";
+    out << "shader=" << normalizeNdsShaderType(type) << "\n";
     for (const auto& param : params)
         out << param.name << '=' << param.value << "\n";
     beiklive::nds_stub::appendStubLog("GBAStationNDSStub: shader config saved path=%s params=%d",
@@ -302,7 +292,7 @@ std::array<float, 8> ndsShaderParamUniforms(const std::string& type,
                                             const std::vector<beiklive::nds_stub::NdsShaderParam>& params)
 {
     std::array<float, 8> values {};
-    const std::string shader = normalizedNdsShaderType(type);
+    const std::string shader = normalizeNdsShaderType(type);
     auto valueOf = [&](const char* name, float fallback) {
         for (const auto& param : params)
         {
@@ -532,7 +522,7 @@ bool saveNdsSettingsToGameDb(const std::string& romPath,
                 item["overlayEnabled"] = settings.overlayEnabled;
                 item["overlayPath"] = settings.overlayPath;
                 item["shaderEnabled"] = settings.shaderEnabled;
-                const std::string shaderType = normalizedNdsShaderType(settings.ndsShaderType);
+                const std::string shaderType = normalizeNdsShaderType(settings.ndsShaderType);
                 item["NdsShaderType"] = shaderType;
                 item["shaderParaPath"] = shaderType;
                 item["shaderParaNames"] = nlohmann::json::array();
@@ -2263,7 +2253,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
     initialDisplay.overlayEnabled = options.overlayEnabled;
     initialDisplay.overlayPath = options.overlayPath;
     initialDisplay.shaderEnabled = options.shaderEnabled;
-    initialDisplay.ndsShaderType = normalizedNdsShaderType(options.ndsShaderType);
+    initialDisplay.ndsShaderType = normalizeNdsShaderType(options.ndsShaderType);
     initialDisplay.shaderParams = loadNdsShaderParams(initialDisplay.ndsShaderType);
     initialDisplay.customLayout = options.customLayout;
     menuLayer.setDisplaySettings(initialDisplay);
@@ -2330,7 +2320,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
     };
     auto applyShaderSettings = [&](bool saveConfig) {
         NdsDisplaySettings display = menuLayer.displaySettings();
-        const std::string shaderType = normalizedNdsShaderType(display.ndsShaderType);
+        const std::string shaderType = normalizeNdsShaderType(display.ndsShaderType);
         if (display.ndsShaderType != shaderType)
             display.ndsShaderType = shaderType;
 

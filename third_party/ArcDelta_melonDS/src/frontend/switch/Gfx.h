@@ -195,8 +195,6 @@ enum ShaderMode
     shaderMode_NdsDotClear,
     shaderMode_NdsXbrzFreescale,
     shaderMode_NdsLcdGridNdsColor,
-    shaderMode_NdsScanline,
-    shaderMode_NdsCrt,
     shaderMode_Count
 };
 

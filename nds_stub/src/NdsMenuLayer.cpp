@@ -13,6 +13,7 @@
 
 #include "../../third_party/ArcDelta_melonDS/src/frontend/switch/Gfx.h"
 #include "stb/stb_image.h"
+#include "nds_stub/NdsShaderCatalog.hpp"
 #include "nds_stub/StubLog.hpp"
 #include "nds_stub/ui/UiComponents.hpp"
 
@@ -59,15 +60,6 @@ constexpr float kShaderParamRowH = 50.0f;
 constexpr float kShaderParamStepY = 58.0f;
 constexpr float kShaderListRowH = 58.0f;
 constexpr const char* kOverlayRoot = "sdmc:/GBAStation/overlays";
-
-constexpr const char* kShaderTypes[] = {
-    "dot",
-    "dot-clear",
-    "xbrz-freescale",
-    "lcd-grid-v2-nds-color",
-    "scanline",
-    "crt",
-};
 
 bool isDirectionUp(std::uint64_t buttons)
 {
@@ -921,9 +913,10 @@ void NdsMenuLayer::resetShaderParamScroll()
 
 int NdsMenuLayer::currentShaderTypeIndex() const
 {
-    for (int i = 0; i < static_cast<int>(std::size(kShaderTypes)); ++i)
+    const auto& shaderTypes = availableNdsShaderTypes();
+    for (int i = 0; i < static_cast<int>(shaderTypes.size()); ++i)
     {
-        if (m_display.ndsShaderType == kShaderTypes[i])
+        if (m_display.ndsShaderType == shaderTypes[i])
             return i;
     }
     return 0;
@@ -933,10 +926,12 @@ float NdsMenuLayer::shaderListTargetScroll() const
 {
     setMenuMetricsOrientation(m_display.orientation);
     const float bodyH = std::max(1.0f, menuMetrics().screenH - 220.0f);
-    const float contentH = static_cast<float>(std::size(kShaderTypes)) * kShaderListRowH;
+    const auto& shaderTypes = availableNdsShaderTypes();
+    const int shaderCount = std::max(1, static_cast<int>(shaderTypes.size()));
+    const float contentH = static_cast<float>(shaderCount) * kShaderListRowH;
     const float focusedTop = static_cast<float>(std::clamp(m_shaderListFocus,
                                                            0,
-                                                           static_cast<int>(std::size(kShaderTypes)) - 1)) * kShaderListRowH;
+                                                           shaderCount - 1)) * kShaderListRowH;
     return centeredFocusedScroll(focusedTop, kShaderListRowH, contentH, bodyH);
 }
 
@@ -1004,17 +999,7 @@ void NdsMenuLayer::setDisplaySettings(const NdsDisplaySettings& settings)
     m_display.layout = std::clamp(m_display.layout, 0, 7);
     m_display.orientation = std::clamp(m_display.orientation, 0, 3);
     m_display.screenGap = clampScreenGap(m_display.screenGap);
-    bool validShader = false;
-    for (const char* shaderType : kShaderTypes)
-    {
-        if (m_display.ndsShaderType == shaderType)
-        {
-            validShader = true;
-            break;
-        }
-    }
-    if (!validShader)
-        m_display.ndsShaderType = "dot";
+    m_display.ndsShaderType = normalizeNdsShaderType(m_display.ndsShaderType);
     m_shaderListFocus = currentShaderTypeIndex();
     for (auto& param : m_display.shaderParams)
     {
@@ -1777,21 +1762,20 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
         if (m_shaderListVisible)
         {
             const std::uint64_t navButtons = buttonsDown | updateHeldNavigation(buttonsDown, buttonsHeld);
+            const auto& shaderTypes = availableNdsShaderTypes();
+            const int shaderCount = std::max(1, static_cast<int>(shaderTypes.size()));
             if (buttonsDown & HidNpadButton_B)
             {
                 closeShaderList();
                 return {};
             }
             if (isDirectionUp(navButtons))
-                m_shaderListFocus = (m_shaderListFocus + static_cast<int>(std::size(kShaderTypes)) - 1) %
-                                    static_cast<int>(std::size(kShaderTypes));
+                m_shaderListFocus = (m_shaderListFocus + shaderCount - 1) % shaderCount;
             if (isDirectionDown(navButtons))
-                m_shaderListFocus = (m_shaderListFocus + 1) % static_cast<int>(std::size(kShaderTypes));
+                m_shaderListFocus = (m_shaderListFocus + 1) % shaderCount;
             if (buttonsDown & HidNpadButton_A)
             {
-                const std::string nextType = kShaderTypes[std::clamp(m_shaderListFocus,
-                                                                      0,
-                                                                      static_cast<int>(std::size(kShaderTypes)) - 1)];
+                const std::string nextType = shaderTypes[std::clamp(m_shaderListFocus, 0, shaderCount - 1)];
                 closeShaderList();
                 if (nextType == m_display.ndsShaderType)
                     return {};
@@ -2159,11 +2143,7 @@ void NdsMenuLayer::draw() const
             drawShaderSidebar(m_display, m_shaderSidebarFocus, smoothedShaderParamScroll(), progress, progress);
             if (m_shaderListVisible)
             {
-                std::vector<std::string> shaderTypes;
-                shaderTypes.reserve(std::size(kShaderTypes));
-                for (const char* type : kShaderTypes)
-                    shaderTypes.emplace_back(type);
-                drawShaderListOverlay(shaderTypes,
+                drawShaderListOverlay(availableNdsShaderTypes(),
                                       m_display.ndsShaderType,
                                       m_shaderListFocus,
                                       smoothedShaderListScroll(),

@@ -7,6 +7,7 @@
 #include "../../third_party/ArcDelta_melonDS/src/GPU.h"
 #include "../../third_party/ArcDelta_melonDS/src/GPU2D_Deko.h"
 #include "../../third_party/ArcDelta_melonDS/src/frontend/switch/Gfx.h"
+#include "nds_stub/NdsShaderCatalog.hpp"
 
 namespace beiklive::nds_stub {
 
@@ -100,10 +101,6 @@ Gfx::ShaderMode shaderModeFromType(const std::string& type)
         return Gfx::shaderMode_NdsXbrzFreescale;
     if (type == "lcd-grid-v2-nds-color")
         return Gfx::shaderMode_NdsLcdGridNdsColor;
-    if (type == "scanline")
-        return Gfx::shaderMode_NdsScanline;
-    if (type == "crt")
-        return Gfx::shaderMode_NdsCrt;
     return Gfx::shaderMode_NdsDot;
 }
 
@@ -198,11 +195,7 @@ void NdsGameLayer::setScreenLayout(int layout)
 
 void NdsGameLayer::setShaderType(const std::string& type)
 {
-    if (type == "dot-clear" ||
-        type == "xbrz-freescale" ||
-        type == "lcd-grid-v2-nds-color" ||
-        type == "scanline" ||
-        type == "crt")
+    if (isKnownNdsShaderType(type))
     {
         m_shaderType = type;
     }

@@ -8,6 +8,7 @@ endif()
 
 set(NDS_STUB_ROMFS_DIR ${CMAKE_BINARY_DIR}/nds_stub_romfs)
 set(NDS_STUB_SHADER_DIR ${NDS_STUB_ROMFS_DIR}/shaders)
+set(NDS_STUB_CONFIG_DIR ${NDS_STUB_ROMFS_DIR}/config)
 set(NDS_STUB_MATERIAL_DIR ${NDS_STUB_ROMFS_DIR}/material)
 set(NDS_STUB_IMAGE_UI_DIR ${NDS_STUB_ROMFS_DIR}/img/ui)
 set(NDS_STUB_GENERATED_SHADER_DIR ${CMAKE_BINARY_DIR}/nds_stub_generated_shaders)
@@ -16,9 +17,12 @@ set(ARCDELTA_SWITCH_SHADER_DIR ${NDS_STUB_REPO_ROOT}/third_party/ArcDelta_melonD
 set(ARCDELTA_CORE_SHADER_DIR ${NDS_STUB_REPO_ROOT}/third_party/ArcDelta_melonDS/src/shaders)
 
 file(MAKE_DIRECTORY ${NDS_STUB_SHADER_DIR})
+file(MAKE_DIRECTORY ${NDS_STUB_CONFIG_DIR})
 file(MAKE_DIRECTORY ${NDS_STUB_MATERIAL_DIR})
 file(MAKE_DIRECTORY ${NDS_STUB_IMAGE_UI_DIR})
 file(MAKE_DIRECTORY ${NDS_STUB_GENERATED_SHADER_DIR})
+configure_file(${NDS_STUB_REPO_ROOT}/resources/config/nds_shaders.json
+               ${NDS_STUB_CONFIG_DIR}/nds_shaders.json COPYONLY)
 configure_file(${NDS_STUB_REPO_ROOT}/resources/material/MaterialIcons-Regular.ttf
                ${NDS_STUB_MATERIAL_DIR}/MaterialIcons-Regular.ttf COPYONLY)
 configure_file(${NDS_STUB_REPO_ROOT}/resources/img/ui/border_gradient.png
@@ -136,6 +140,7 @@ add_executable(GBAStationNDSStub
     ${NDS_STUB_DIR}/src/NdsDekoRuntime.cpp
     ${NDS_STUB_DIR}/src/NdsStb.cpp
     ${NDS_STUB_DIR}/src/NdsCheatDatabase.cpp
+    ${NDS_STUB_DIR}/src/NdsShaderCatalog.cpp
     ${NDS_STUB_DIR}/src/NdsGameLayer.cpp
     ${NDS_STUB_DIR}/src/NdsMenuLayer.cpp
     ${NDS_STUB_DIR}/src/ui/UiPrimitives.cpp
