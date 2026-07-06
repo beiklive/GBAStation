@@ -96,6 +96,10 @@ Gfx::ShaderMode shaderModeFromType(const std::string& type)
 {
     if (type == "dot-clear")
         return Gfx::shaderMode_NdsDotClear;
+    if (type == "xbrz-freescale")
+        return Gfx::shaderMode_NdsXbrzFreescale;
+    if (type == "lcd-grid-v2-nds-color")
+        return Gfx::shaderMode_NdsLcdGridNdsColor;
     if (type == "scanline")
         return Gfx::shaderMode_NdsScanline;
     if (type == "crt")
@@ -194,10 +198,18 @@ void NdsGameLayer::setScreenLayout(int layout)
 
 void NdsGameLayer::setShaderType(const std::string& type)
 {
-    if (type == "dot-clear" || type == "scanline" || type == "crt")
+    if (type == "dot-clear" ||
+        type == "xbrz-freescale" ||
+        type == "lcd-grid-v2-nds-color" ||
+        type == "scanline" ||
+        type == "crt")
+    {
         m_shaderType = type;
+    }
     else
+    {
         m_shaderType = "dot";
+    }
 }
 
 std::vector<NdsGameLayer::ScreenDrawRect> NdsGameLayer::computeScreenRects() const

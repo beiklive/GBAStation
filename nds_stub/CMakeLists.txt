@@ -70,6 +70,8 @@ nds_stub_compile_shader(vert ${ARCDELTA_SWITCH_SHADER_DIR}/Default_vsh Default_v
 nds_stub_compile_shader(frag ${ARCDELTA_SWITCH_SHADER_DIR}/Default_fsh Default_fsh)
 nds_stub_compile_shader(frag ${NDS_STUB_SHADER_SOURCE_DIR}/NdsDot_fsh NdsDot_fsh)
 nds_stub_compile_shader(frag ${NDS_STUB_SHADER_SOURCE_DIR}/NdsDotClear_fsh NdsDotClear_fsh)
+nds_stub_compile_shader(frag ${NDS_STUB_SHADER_SOURCE_DIR}/NdsXbrzFreescale_fsh NdsXbrzFreescale_fsh)
+nds_stub_compile_shader(frag ${NDS_STUB_SHADER_SOURCE_DIR}/NdsLcdGridNdsColor_fsh NdsLcdGridNdsColor_fsh)
 nds_stub_compile_shader(vert ${ARCDELTA_CORE_SHADER_DIR}/FullscreenQuad_vsh FullscreenQuad_vsh)
 nds_stub_compile_shader_instance(frag ${ARCDELTA_CORE_SHADER_DIR}/ComposeBGOBJ_fsh ComposeBGOBJ_fsh "ComposeBGOBJ")
 nds_stub_compile_shader_instance(frag ${ARCDELTA_CORE_SHADER_DIR}/ComposeBGOBJ_fsh ComposeBGOBJDirectBitmapOnly_fsh "ShowBitmap")

@@ -526,22 +526,40 @@ struct DkshHeader
     uint32_t num_programs;
 };
 
-void LoadShader(const char* path, dk::Shader& out)
+bool LoadShader(const char* path, dk::Shader& out)
 {
     FILE* f = fopen(path, "rb");
     if (f)
     {
         DkshHeader header;
-        fread(&header, sizeof(DkshHeader), 1, f);
+        size_t read = fread(&header, sizeof(DkshHeader), 1, f);
+        if (!read)
+        {
+            printf("couldn't read shader header %s\n", path);
+            fclose(f);
+            return false;
+        }
 
         rewind(f);
         u8* ctrlmem = new u8[header.control_sz];
-        size_t read = fread(ctrlmem, header.control_sz, 1, f);
-        assert(read);
+        read = fread(ctrlmem, header.control_sz, 1, f);
+        if (!read)
+        {
+            printf("couldn't read shader control %s\n", path);
+            delete[] ctrlmem;
+            fclose(f);
+            return false;
+        }
 
         GpuMemHeap::Allocation data = ShaderCodeHeap->Alloc(header.code_sz, DK_SHADER_CODE_ALIGNMENT);
         read = fread(ShaderCodeHeap->CpuAddr<void>(data), header.code_sz, 1, f);
-        assert(read);
+        if (!read)
+        {
+            printf("couldn't read shader code %s\n", path);
+            delete[] ctrlmem;
+            fclose(f);
+            return false;
+        }
 
         dk::ShaderMaker{ShaderCodeHeap->MemBlock, data.Offset}
             .setControl(ctrlmem)
@@ -550,11 +568,12 @@ void LoadShader(const char* path, dk::Shader& out)
 
         delete[] ctrlmem;
         fclose(f);
+        return true;
     }
     else
     {
         printf("couldn't open shader file %s\n", path);
-        assert(false);
+        return false;
     }
 }
 
@@ -686,12 +705,24 @@ void Init()
 
     Swapchain = dk::SwapchainMaker{Device, Window, fbArray}.create();
 
-    LoadShader("romfs:/shaders/Default_vsh.dksh", VertexShader);
-    LoadShader("romfs:/shaders/Default_fsh.dksh", FragmentShaders[shaderMode_Default]);
-    LoadShader("romfs:/shaders/NdsDot_fsh.dksh", FragmentShaders[shaderMode_NdsDot]);
-    LoadShader("romfs:/shaders/NdsDotClear_fsh.dksh", FragmentShaders[shaderMode_NdsDotClear]);
-    LoadShader("romfs:/shaders/Default_fsh.dksh", FragmentShaders[shaderMode_NdsScanline]);
-    LoadShader("romfs:/shaders/Default_fsh.dksh", FragmentShaders[shaderMode_NdsCrt]);
+    const bool defaultVertexLoaded = LoadShader("romfs:/shaders/Default_vsh.dksh", VertexShader);
+    const bool defaultFragmentLoaded = LoadShader("romfs:/shaders/Default_fsh.dksh", FragmentShaders[shaderMode_Default]);
+    assert(defaultVertexLoaded);
+    assert(defaultFragmentLoaded);
+
+    auto loadFragmentOrFallback = [](const char* path, ShaderMode mode, ShaderMode fallback) {
+        if (!LoadShader(path, FragmentShaders[mode]))
+        {
+            printf("falling back shader %s to mode %d\n", path, fallback);
+            FragmentShaders[mode] = FragmentShaders[fallback];
+        }
+    };
+    loadFragmentOrFallback("romfs:/shaders/NdsDot_fsh.dksh", shaderMode_NdsDot, shaderMode_Default);
+    loadFragmentOrFallback("romfs:/shaders/NdsDotClear_fsh.dksh", shaderMode_NdsDotClear, shaderMode_NdsDot);
+    loadFragmentOrFallback("romfs:/shaders/NdsXbrzFreescale_fsh.dksh", shaderMode_NdsXbrzFreescale, shaderMode_NdsDot);
+    loadFragmentOrFallback("romfs:/shaders/NdsLcdGridNdsColor_fsh.dksh", shaderMode_NdsLcdGridNdsColor, shaderMode_NdsDot);
+    FragmentShaders[shaderMode_NdsScanline] = FragmentShaders[shaderMode_Default];
+    FragmentShaders[shaderMode_NdsCrt] = FragmentShaders[shaderMode_Default];
 
     for (int i = 0; i < 2; i++)
     {

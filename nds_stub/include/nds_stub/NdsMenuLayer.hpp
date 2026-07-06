@@ -137,6 +137,12 @@ private:
     float shaderParamTargetScroll() const;
     float smoothedShaderParamScroll() const;
     void resetShaderParamScroll();
+    int currentShaderTypeIndex() const;
+    float shaderListTargetScroll() const;
+    float smoothedShaderListScroll() const;
+    void resetShaderListScroll();
+    void beginShaderList();
+    void closeShaderList();
     bool resetCustomLayoutSetting();
     bool activateDisplayControl();
     bool activateCheatControl();
@@ -216,6 +222,10 @@ private:
     int m_shaderSidebarFocus = 0;
     mutable float m_shaderParamScrollY = 0.0f;
     mutable std::uint64_t m_shaderParamScrollLastTick = 0;
+    bool m_shaderListVisible = false;
+    int m_shaderListFocus = 0;
+    mutable float m_shaderListScrollY = 0.0f;
+    mutable std::uint64_t m_shaderListScrollLastTick = 0;
     bool m_filePickerVisible = false;
     bool m_filePickerClosing = false;
     bool m_filePickerReturnToOverlay = false;

@@ -182,7 +182,7 @@ enum
     sampler_ClampToEdge = 1 << 1,
 };
 
-void LoadShader(const char* path, dk::Shader& out);
+bool LoadShader(const char* path, dk::Shader& out);
 
 void StartFrame();
 void EndFrame(Color clearColor, int rotation);
@@ -193,6 +193,8 @@ enum ShaderMode
     shaderMode_Default = 0,
     shaderMode_NdsDot,
     shaderMode_NdsDotClear,
+    shaderMode_NdsXbrzFreescale,
+    shaderMode_NdsLcdGridNdsColor,
     shaderMode_NdsScanline,
     shaderMode_NdsCrt,
     shaderMode_Count

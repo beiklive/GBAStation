@@ -180,8 +180,14 @@ std::string jsonString(const nlohmann::json& item, const char* key)
 
 std::string normalizedNdsShaderType(const std::string& type)
 {
-    if (type == "dot-clear" || type == "scanline" || type == "crt")
+    if (type == "dot-clear" ||
+        type == "xbrz-freescale" ||
+        type == "lcd-grid-v2-nds-color" ||
+        type == "scanline" ||
+        type == "crt")
+    {
         return type;
+    }
     return "dot";
 }
 
@@ -206,6 +212,17 @@ std::vector<beiklive::nds_stub::NdsShaderParam> defaultNdsShaderParams(const std
             {"dot_scale_y", "Dot Scale Y", 1.1f, 1.1f, 0.5f, 3.0f, 0.1f, 1},
             {"dot_opacity", "Dot Opacity", 0.7f, 0.7f, 0.0f, 1.0f, 0.05f, 2},
             {"halftone_strength", "Halftone", 0.7f, 0.7f, 0.0f, 1.0f, 0.05f, 2},
+        };
+    }
+    if (shader == "lcd-grid-v2-nds-color")
+    {
+        return {
+            {"gain", "Gain", 1.5f, 1.5f, 0.5f, 2.0f, 0.05f, 2},
+            {"gamma", "LCD Gamma", 2.2f, 2.2f, 0.5f, 5.0f, 0.1f, 1},
+            {"blacklevel", "Black Level", 0.0f, 0.0f, 0.0f, 0.5f, 0.01f, 2},
+            {"ambient", "Ambient", 0.0f, 0.0f, 0.0f, 0.5f, 0.01f, 2},
+            {"bgr", "BGR", 1.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0},
+            {"nds_color", "NDS Color", 1.0f, 1.0f, 0.0f, 1.0f, 0.05f, 2},
         };
     }
     return {};
@@ -309,6 +326,15 @@ std::array<float, 8> ndsShaderParamUniforms(const std::string& type,
         values[3] = valueOf("dot_scale_y", 1.1f);
         values[4] = valueOf("dot_opacity", 0.7f);
         values[5] = valueOf("halftone_strength", 0.7f);
+    }
+    else if (shader == "lcd-grid-v2-nds-color")
+    {
+        values[0] = valueOf("gain", 1.5f);
+        values[1] = valueOf("gamma", 2.2f);
+        values[2] = valueOf("blacklevel", 0.0f);
+        values[3] = valueOf("ambient", 0.0f);
+        values[4] = valueOf("bgr", 1.0f);
+        values[5] = valueOf("nds_color", 1.0f);
     }
     return values;
 }

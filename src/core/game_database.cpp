@@ -71,7 +71,11 @@ namespace beiklive
 
         std::string normalizeNdsShaderType(const std::string& type)
         {
-            if (type == "dot-clear" || type == "scanline" || type == "crt")
+            if (type == "dot-clear" ||
+                type == "xbrz-freescale" ||
+                type == "lcd-grid-v2-nds-color" ||
+                type == "scanline" ||
+                type == "crt")
                 return type;
             return "dot";
         }

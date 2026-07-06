@@ -108,6 +108,8 @@ const char* orientationLabel(int index)
 
 const char* shaderTypeLabel(const std::string& type)
 {
+    if (type == "xbrz-freescale") return "xbrz-freescale";
+    if (type == "lcd-grid-v2-nds-color") return "lcd-grid-v2-nds-color";
     if (type == "scanline") return "scanline";
     if (type == "crt") return "crt";
     if (type == "dot-clear") return "dot-clear";
@@ -1589,12 +1591,12 @@ void drawShaderSidebar(const NdsDisplaySettings& display,
     Gfx::DrawText(Gfx::SystemFontChinese, {panelX + 30.0f, headerY}, 28.0f,
                   {1.0f, 1.0f, 1.0f, 0.96f * opacity}, "滤镜选择");
     Gfx::DrawText(Gfx::SystemFontChinese, {panelX + 30.0f, hintY}, 16.0f,
-                  {0.78f, 0.86f, 0.94f, 0.62f * opacity}, "B 返回   LR 调整   A 开关/默认");
+                  {0.78f, 0.86f, 0.94f, 0.62f * opacity}, "B 返回   A 选择/开关   LR 调整参数");
 
     drawPanelSection(panelX, panelW, sectionY, "滤镜设置", opacity);
     drawPanelSwitchRow({panelX + 29.0f, rowY}, rowW, "滤镜开关", display.shaderEnabled, focusedRow == 0, opacity);
-    drawPanelLrSelectorRow({panelX + 29.0f, rowY + rowGap}, rowW, "滤镜类型",
-                           shaderTypeLabel(display.ndsShaderType), focusedRow == 1, opacity);
+    drawInfoRow({panelX + 29.0f, rowY + rowGap}, rowW, "滤镜类型",
+                shaderTypeLabel(display.ndsShaderType), focusedRow == 1, true, opacity);
 
     drawPanelSection(panelX, panelW, paramSectionY, "参数设置", opacity);
     if (display.shaderParams.empty())
@@ -1621,6 +1623,85 @@ void drawShaderSidebar(const NdsDisplaySettings& display,
                                   opacity);
     }
     Gfx::PopScissor();
+}
+
+void drawShaderListOverlay(const std::vector<std::string>& shaderTypes,
+                           const std::string& currentType,
+                           int focusedRow,
+                           float scrollY,
+                           float opacity)
+{
+    opacity = clamp01(opacity);
+    drawRect({0.0f, 0.0f}, {kScreenW, kScreenH}, {0.0f, 0.0f, 0.0f, 0.54f * opacity}, true);
+
+    const bool portrait = kScreenH > kScreenW;
+    const float panelW = portrait ? std::min(640.0f, kScreenW - 72.0f) : 640.0f;
+    const float panelH = std::min(kScreenH - 128.0f, 470.0f);
+    const float panelX = (kScreenW - panelW) * 0.5f;
+    const float panelY = (kScreenH - panelH) * 0.5f;
+    const float headerH = 78.0f;
+    const float footerH = 54.0f;
+    const float rowH = 58.0f;
+    const float bodyY = panelY + headerH;
+    const float bodyH = panelH - headerH - footerH;
+    const float rowW = panelW - 56.0f;
+
+    drawRect({panelX, panelY}, {panelW, panelH}, {0.015f, 0.020f, 0.030f, 0.98f * opacity}, false);
+    drawBorder({panelX, panelY}, {panelW, panelH}, 1.0f, {1.0f, 1.0f, 1.0f, 0.16f * opacity});
+    drawLine({panelX, panelY + headerH}, {panelW, 1.0f}, {1.0f, 1.0f, 1.0f, 0.12f * opacity});
+    drawLine({panelX, panelY + panelH - footerH}, {panelW, 1.0f}, {1.0f, 1.0f, 1.0f, 0.12f * opacity});
+
+    Gfx::DrawText(Gfx::SystemFontChinese, {panelX + 28.0f, panelY + 24.0f}, 26.0f,
+                  {1.0f, 1.0f, 1.0f, 0.96f * opacity}, "选择滤镜");
+    Gfx::DrawText(Gfx::SystemFontChinese, {panelX + 28.0f, panelY + panelH - 36.0f}, 17.0f,
+                  {0.78f, 0.86f, 0.94f, 0.68f * opacity}, "A 确定   B 返回");
+
+    Gfx::PushScissor(static_cast<u32>(std::max(0.0f, panelX + 18.0f)),
+                     static_cast<u32>(std::max(0.0f, bodyY + 8.0f)),
+                     static_cast<u32>(std::max(1.0f, panelW - 36.0f)),
+                     static_cast<u32>(std::max(1.0f, bodyH - 16.0f)));
+    for (int i = 0; i < static_cast<int>(shaderTypes.size()); ++i)
+    {
+        const float y = bodyY + 10.0f + static_cast<float>(i) * rowH - scrollY;
+        if (y > bodyY + bodyH || y + 50.0f < bodyY)
+            continue;
+        const bool focused = i == focusedRow;
+        const bool selected = shaderTypes[i] == currentType;
+        const Vector2f pos{panelX + 28.0f, y};
+        if (focused)
+            drawGradientBorder(pos - Vector2f{3.0f, 3.0f}, {rowW + 6.0f, 58.0f}, 3.0f);
+        drawRect(pos, {rowW, 50.0f},
+                 selected ? Color{0.12f, 0.33f, 0.52f, 0.25f * opacity}
+                          : Color{1.0f, 1.0f, 1.0f, 0.045f * opacity},
+                 true);
+        drawBorder(pos, {rowW, 50.0f}, 1.0f,
+                   selected ? Color{0.42f, 0.82f, 1.0f, 0.28f * opacity}
+                            : Color{1.0f, 1.0f, 1.0f, 0.10f * opacity});
+        Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{20.0f, 14.0f}, 20.0f,
+                      selected ? Color{0.58f, 0.88f, 1.0f, 0.96f * opacity}
+                               : Color{1.0f, 1.0f, 1.0f, 0.88f * opacity},
+                      "%s", shaderTypeLabel(shaderTypes[i]));
+        if (selected)
+        {
+            Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{rowW - 24.0f, 14.0f}, 20.0f,
+                          {0.44f, 0.82f, 1.0f, 0.92f * opacity},
+                          Gfx::align_Right, Gfx::align_Left, "当前");
+        }
+    }
+    Gfx::PopScissor();
+
+    const float contentH = static_cast<float>(shaderTypes.size()) * rowH;
+    if (contentH > bodyH + 1.0f)
+    {
+        const float trackH = bodyH - 22.0f;
+        const float thumbH = std::max(28.0f, trackH * bodyH / contentH);
+        const float maxScroll = std::max(1.0f, contentH - bodyH);
+        const float thumbY = bodyY + 11.0f + (trackH - thumbH) * std::clamp(scrollY / maxScroll, 0.0f, 1.0f);
+        drawRect({panelX + panelW - 16.0f, bodyY + 11.0f}, {3.0f, trackH},
+                 {1.0f, 1.0f, 1.0f, 0.08f * opacity}, false);
+        drawRect({panelX + panelW - 17.0f, thumbY}, {5.0f, thumbH},
+                 {0.42f, 0.82f, 1.0f, 0.55f * opacity}, false);
+    }
 }
 
 void drawFilePicker(const std::string& directory,

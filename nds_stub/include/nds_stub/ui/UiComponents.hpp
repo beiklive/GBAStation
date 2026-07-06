@@ -150,6 +150,11 @@ void drawShaderSidebar(const NdsDisplaySettings& display,
                        float paramScrollY,
                        float progress,
                        float opacity = 1.0f);
+void drawShaderListOverlay(const std::vector<std::string>& shaderTypes,
+                           const std::string& currentType,
+                           int focusedRow,
+                           float scrollY,
+                           float opacity = 1.0f);
 void drawFilePicker(const std::string& directory,
                     const std::vector<NdsFilePickerEntry>& entries,
                     int focusedRow,

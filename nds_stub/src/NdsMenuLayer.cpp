@@ -57,13 +57,16 @@ constexpr int kOverlayControlCount = 2;
 constexpr int kShaderBaseControlCount = 2;
 constexpr float kShaderParamRowH = 50.0f;
 constexpr float kShaderParamStepY = 58.0f;
+constexpr float kShaderListRowH = 58.0f;
 constexpr const char* kOverlayRoot = "sdmc:/GBAStation/overlays";
 
 constexpr const char* kShaderTypes[] = {
     "dot",
+    "dot-clear",
+    "xbrz-freescale",
+    "lcd-grid-v2-nds-color",
     "scanline",
     "crt",
-    "dot-clear",
 };
 
 bool isDirectionUp(std::uint64_t buttons)
@@ -916,6 +919,68 @@ void NdsMenuLayer::resetShaderParamScroll()
     m_shaderParamScrollLastTick = 0;
 }
 
+int NdsMenuLayer::currentShaderTypeIndex() const
+{
+    for (int i = 0; i < static_cast<int>(std::size(kShaderTypes)); ++i)
+    {
+        if (m_display.ndsShaderType == kShaderTypes[i])
+            return i;
+    }
+    return 0;
+}
+
+float NdsMenuLayer::shaderListTargetScroll() const
+{
+    setMenuMetricsOrientation(m_display.orientation);
+    const float bodyH = std::max(1.0f, menuMetrics().screenH - 220.0f);
+    const float contentH = static_cast<float>(std::size(kShaderTypes)) * kShaderListRowH;
+    const float focusedTop = static_cast<float>(std::clamp(m_shaderListFocus,
+                                                           0,
+                                                           static_cast<int>(std::size(kShaderTypes)) - 1)) * kShaderListRowH;
+    return centeredFocusedScroll(focusedTop, kShaderListRowH, contentH, bodyH);
+}
+
+float NdsMenuLayer::smoothedShaderListScroll() const
+{
+    const float target = shaderListTargetScroll();
+    const std::uint64_t now = armGetSystemTick();
+    if (m_shaderListScrollLastTick == 0)
+    {
+        m_shaderListScrollLastTick = now;
+        m_shaderListScrollY = target;
+        return m_shaderListScrollY;
+    }
+
+    const float dtMs = static_cast<float>(armTicksToNs(now - m_shaderListScrollLastTick)) / 1000000.0f;
+    m_shaderListScrollLastTick = now;
+    const float t = 1.0f - std::exp(-dtMs / 72.0f);
+    m_shaderListScrollY += (target - m_shaderListScrollY) * std::clamp(t, 0.0f, 1.0f);
+    if (std::fabs(target - m_shaderListScrollY) < 0.5f)
+        m_shaderListScrollY = target;
+    return m_shaderListScrollY;
+}
+
+void NdsMenuLayer::resetShaderListScroll()
+{
+    m_shaderListScrollY = 0.0f;
+    m_shaderListScrollLastTick = 0;
+}
+
+void NdsMenuLayer::beginShaderList()
+{
+    m_shaderListVisible = true;
+    m_shaderListFocus = currentShaderTypeIndex();
+    resetShaderListScroll();
+    m_navDirection = 0;
+}
+
+void NdsMenuLayer::closeShaderList()
+{
+    m_shaderListVisible = false;
+    resetShaderListScroll();
+    m_navDirection = 0;
+}
+
 void NdsMenuLayer::setFastForwardMultiplier(float multiplier)
 {
     m_display.fastForwardMultiplier = std::clamp(multiplier, 0.1f, 5.0f);
@@ -950,6 +1015,7 @@ void NdsMenuLayer::setDisplaySettings(const NdsDisplaySettings& settings)
     }
     if (!validShader)
         m_display.ndsShaderType = "dot";
+    m_shaderListFocus = currentShaderTypeIndex();
     for (auto& param : m_display.shaderParams)
     {
         param.minValue = std::min(param.minValue, param.maxValue);
@@ -1134,8 +1200,10 @@ void NdsMenuLayer::beginShaderSidebar()
     m_shaderSidebarReturnToMenu = false;
     m_shaderSidebarAnimStartTick = armGetSystemTick();
     m_shaderSidebarFocus = 0;
+    m_shaderListVisible = false;
     m_selectorDirection = 0;
     resetShaderParamScroll();
+    resetShaderListScroll();
     resetContentScroll();
 }
 
@@ -1164,6 +1232,7 @@ void NdsMenuLayer::closeShaderSidebar(bool returnToMenu)
 {
     if (!m_shaderSidebarVisible || m_shaderSidebarClosing)
         return;
+    m_shaderListVisible = false;
     m_shaderSidebarClosing = true;
     m_shaderSidebarReturnToMenu = returnToMenu;
     m_shaderSidebarAnimStartTick = armGetSystemTick();
@@ -1288,21 +1357,7 @@ bool NdsMenuLayer::cycleShaderSetting(int direction)
         return true;
     }
 
-    if (m_shaderSidebarFocus != 1 || direction == 0)
-        return false;
-
-    int idx = 0;
-    for (int i = 0; i < static_cast<int>(std::size(kShaderTypes)); ++i)
-    {
-        if (m_display.ndsShaderType == kShaderTypes[i])
-        {
-            idx = i;
-            break;
-        }
-    }
-    idx = (idx + direction + static_cast<int>(std::size(kShaderTypes))) % static_cast<int>(std::size(kShaderTypes));
-    m_display.ndsShaderType = kShaderTypes[idx];
-    return true;
+    return false;
 }
 
 bool NdsMenuLayer::cycleCurrentSetting(int direction)
@@ -1422,7 +1477,7 @@ bool NdsMenuLayer::updateHeldCustomSelector(std::uint64_t buttonsHeld)
 bool NdsMenuLayer::updateHeldShaderSelector(std::uint64_t buttonsHeld)
 {
     if (!m_shaderSidebarVisible ||
-        m_shaderSidebarFocus == 0 ||
+        m_shaderSidebarFocus < kShaderBaseControlCount ||
         (buttonsHeld & (HidNpadButton_L | HidNpadButton_R)) == 0)
     {
         m_selectorDirection = 0;
@@ -1719,6 +1774,33 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
     {
         if (m_shaderSidebarClosing)
             return {};
+        if (m_shaderListVisible)
+        {
+            const std::uint64_t navButtons = buttonsDown | updateHeldNavigation(buttonsDown, buttonsHeld);
+            if (buttonsDown & HidNpadButton_B)
+            {
+                closeShaderList();
+                return {};
+            }
+            if (isDirectionUp(navButtons))
+                m_shaderListFocus = (m_shaderListFocus + static_cast<int>(std::size(kShaderTypes)) - 1) %
+                                    static_cast<int>(std::size(kShaderTypes));
+            if (isDirectionDown(navButtons))
+                m_shaderListFocus = (m_shaderListFocus + 1) % static_cast<int>(std::size(kShaderTypes));
+            if (buttonsDown & HidNpadButton_A)
+            {
+                const std::string nextType = kShaderTypes[std::clamp(m_shaderListFocus,
+                                                                      0,
+                                                                      static_cast<int>(std::size(kShaderTypes)) - 1)];
+                closeShaderList();
+                if (nextType == m_display.ndsShaderType)
+                    return {};
+                m_display.ndsShaderType = nextType;
+                resetShaderParamScroll();
+                return {NdsMenuAction::ShaderSettingsChanged, -1};
+            }
+            return {};
+        }
         const std::uint64_t navButtons = buttonsDown | updateHeldNavigation(buttonsDown, buttonsHeld);
         if (buttonsDown & HidNpadButton_B)
         {
@@ -1731,8 +1813,15 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
         if (isDirectionDown(navButtons))
             m_shaderSidebarFocus = (m_shaderSidebarFocus + 1) % shaderCount;
         if (buttonsDown & HidNpadButton_A)
+        {
+            if (m_shaderSidebarFocus == 1)
+            {
+                beginShaderList();
+                return {};
+            }
             return cycleShaderSetting(0) ? NdsMenuResult{NdsMenuAction::ShaderSettingsChanged, -1}
                                          : NdsMenuResult{};
+        }
         if (buttonsDown & HidNpadButton_L)
             return cycleShaderSetting(-1) ? NdsMenuResult{NdsMenuAction::ShaderSettingsChanged, -1}
                                           : NdsMenuResult{};
@@ -2068,6 +2157,18 @@ void NdsMenuLayer::draw() const
         {
             const bool transformed = pushMenuOrientationTransform(m_display.orientation);
             drawShaderSidebar(m_display, m_shaderSidebarFocus, smoothedShaderParamScroll(), progress, progress);
+            if (m_shaderListVisible)
+            {
+                std::vector<std::string> shaderTypes;
+                shaderTypes.reserve(std::size(kShaderTypes));
+                for (const char* type : kShaderTypes)
+                    shaderTypes.emplace_back(type);
+                drawShaderListOverlay(shaderTypes,
+                                      m_display.ndsShaderType,
+                                      m_shaderListFocus,
+                                      smoothedShaderListScroll(),
+                                      progress);
+            }
             if (transformed)
                 Gfx::PopDrawTransform();
         }
