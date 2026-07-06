@@ -192,6 +192,7 @@ u32 TextureCreate(u32 width, u32 height, DkImageFormat format)
     texture.ComponentSwizzle[1] = DkImageSwizzle_Green;
     texture.ComponentSwizzle[2] = DkImageSwizzle_Blue;
     texture.ComponentSwizzle[3] = DkImageSwizzle_Alpha;
+    texture.ImageDescriptorIdx = -1;
     texture.GpuMem = TextureHeap->Alloc(layout.getSize(), layout.getAlignment());
 
     texture.Image.initialize(layout, TextureHeap->MemBlock, texture.GpuMem.Offset);
@@ -211,6 +212,7 @@ u32 TextureCreateExternal(u32 width, u32 height, dk::Image& image)
     texture.ComponentSwizzle[1] = DkImageSwizzle_Green;
     texture.ComponentSwizzle[2] = DkImageSwizzle_Blue;
     texture.ComponentSwizzle[3] = DkImageSwizzle_Alpha;
+    texture.ImageDescriptorIdx = -1;
 
     return idx;
 }
@@ -218,6 +220,15 @@ u32 TextureCreateExternal(u32 width, u32 height, dk::Image& image)
 void TextureDelete(u32 idx)
 {
     Texture& texture = Textures[idx];
+
+    TextureUploadsPending.erase(
+        std::remove_if(TextureUploadsPending.begin(),
+                       TextureUploadsPending.end(),
+                       [idx](const PendingTextureUpload& upload) {
+                           return upload.TextureIdx == idx;
+                       }),
+        TextureUploadsPending.end());
+    texture.ImageDescriptorIdx = -1;
 
     if (!texture.External)
         TextureHeap->Free(texture.GpuMem);
@@ -1033,7 +1044,10 @@ void IssueDrawCall(u32 texture, u32 count)
         }
 
         if (prevDrawCall.Fence)
+        {
             lastWasFence = true;
+            dirty = ~(drawCallDirty_WaitFence|drawCallDirty_SignalFence);
+        }
     }
     else
     {
@@ -1287,6 +1301,7 @@ Vector2f DrawText(u32 fontIdx, Vector2f position, float size, Color color, int h
         }
     }
 
+    SetSampler(sampler_Nearest|sampler_ClampToEdge);
     bounds.X = std::max(bounds.X, offset.X);
 
     return bounds;

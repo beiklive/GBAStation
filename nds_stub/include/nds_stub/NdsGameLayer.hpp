@@ -43,6 +43,9 @@ public:
                                  int& outHeight) const;
     bool refreshCaptureCache() const;
     void requestDeferredCapture() const;
+    bool refreshMenuFreezeTexture();
+    void setMenuFreezeEnabled(bool enabled) { m_menuFreezeEnabled = enabled && m_menuFreezeTexture != 0; }
+    bool menuFreezeEnabled() const { return m_menuFreezeEnabled; }
     void setWaitForFramebufferReady(bool enabled) { m_waitForFramebufferReady = enabled; }
     void setLinearFiltering(bool enabled) { m_linearFiltering = enabled; }
     bool linearFiltering() const { return m_linearFiltering; }
@@ -82,6 +85,9 @@ private:
     bool mapPointToUnrotated(float x, float y, const ScreenDrawRect& item, float& outX, float& outY) const;
     bool mapNdsPointToScreen(float ndsX, float ndsY, const ScreenDrawRect& item, float& outX, float& outY) const;
     RectF firstRectForSource(bool sourceTop) const;
+    void drawScreenTexture(const ScreenDrawRect& item,
+                           std::uint32_t texture,
+                           const RectF& sourceRect) const;
 
     GPU2D::DekoRenderer* m_renderer = nullptr;
     std::array<std::array<u32, 2>, 2> m_framebufferTextures {};
@@ -97,6 +103,10 @@ private:
     std::uint32_t m_overlayTexture = 0;
     int m_overlayWidth = 0;
     int m_overlayHeight = 0;
+    bool m_menuFreezeEnabled = false;
+    std::uint32_t m_menuFreezeTexture = 0;
+    int m_menuFreezeWidth = 0;
+    int m_menuFreezeHeight = 0;
     bool m_shaderEnabled = false;
     std::string m_shaderType = "dot";
     std::array<float, 8> m_shaderParams {2.4f, 0.05f, 0.65f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};

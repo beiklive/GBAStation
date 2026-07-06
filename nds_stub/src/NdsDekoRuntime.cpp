@@ -2250,29 +2250,55 @@ int RunDekoRuntime(const DekoRunOptions& options)
     gameLayer.setShaderEnabled(initialDisplay.shaderEnabled);
     gameLayer.setShaderType(initialDisplay.ndsShaderType);
     gameLayer.setShaderParams(ndsShaderParamUniforms(initialDisplay.ndsShaderType, initialDisplay.shaderParams));
+    bool appliedOverlayValid = false;
+    bool appliedOverlayEnabled = false;
+    std::string appliedOverlayPath;
     auto reloadOverlayTexture = [&](const NdsDisplaySettings& display) {
-        if (!display.overlayEnabled || display.overlayPath.empty())
+        const bool wantOverlay = display.overlayEnabled && !display.overlayPath.empty();
+        const std::string wantPath = wantOverlay ? display.overlayPath : std::string();
+        if (appliedOverlayValid &&
+            appliedOverlayEnabled == wantOverlay &&
+            appliedOverlayPath == wantPath)
         {
-            gameLayer.setOverlayEnabled(false);
-            gameLayer.clearOverlayTexture();
-            appendStubLog("GBAStationNDSStub: overlay disabled enabled=%d path=%s",
-                          display.overlayEnabled ? 1 : 0,
-                          display.overlayPath.c_str());
+            appendStubLog("GBAStationNDSStub: overlay unchanged enabled=%d path=%s",
+                          wantOverlay ? 1 : 0,
+                          wantPath.c_str());
             return false;
         }
 
-        appendStubLog("GBAStationNDSStub: overlay load begin path=%s", display.overlayPath.c_str());
+        if (!wantOverlay)
+        {
+            gameLayer.setOverlayEnabled(false);
+            gameLayer.clearOverlayTexture();
+            appliedOverlayValid = true;
+            appliedOverlayEnabled = false;
+            appliedOverlayPath.clear();
+            appendStubLog("GBAStationNDSStub: overlay disabled enabled=%d path=%s",
+                          display.overlayEnabled ? 1 : 0,
+                          display.overlayPath.c_str());
+            return true;
+        }
+
+        appendStubLog("GBAStationNDSStub: overlay load begin path=%s", wantPath.c_str());
         std::uint32_t texture = 0;
         int width = 0;
         int height = 0;
-        if (!loadPngTextureFromFile(display.overlayPath, texture, width, height))
+        if (!loadPngTextureFromFile(wantPath, texture, width, height))
         {
-            appendStubLog("GBAStationNDSStub: overlay load failed path=%s", display.overlayPath.c_str());
-            return false;
+            gameLayer.setOverlayEnabled(false);
+            gameLayer.clearOverlayTexture();
+            appliedOverlayValid = true;
+            appliedOverlayEnabled = false;
+            appliedOverlayPath.clear();
+            appendStubLog("GBAStationNDSStub: overlay load failed path=%s", wantPath.c_str());
+            return true;
         }
 
         gameLayer.setOverlayTexture(texture, width, height);
         gameLayer.setOverlayEnabled(true);
+        appliedOverlayValid = true;
+        appliedOverlayEnabled = true;
+        appliedOverlayPath = wantPath;
         appendStubLog("GBAStationNDSStub: overlay load ok size=%dx%d", width, height);
         return true;
     };
@@ -2305,6 +2331,13 @@ int RunDekoRuntime(const DekoRunOptions& options)
         gameLayer.setShaderParams(ndsShaderParamUniforms(applied.ndsShaderType, applied.shaderParams));
         if (saveConfig)
             saveNdsShaderParams(applied.ndsShaderType, applied.shaderParams);
+    };
+    auto refreshMenuFreeze = [&](const char* reason) {
+        const bool ok = gameLayer.refreshMenuFreezeTexture();
+        appendStubLog("GBAStationNDSStub: menu freeze refresh %s reason=%s",
+                      ok ? "ok" : "failed",
+                      reason ? reason : "");
+        return ok;
     };
     reloadOverlayTexture(initialDisplay);
     applyShaderSettings(false);
@@ -2503,6 +2536,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
             const bool wasVisible = menuLayer.visible();
             if (!wasVisible)
             {
+                refreshMenuFreeze("open");
                 menuLayer.open();
                 blockGameInputUntilRelease = true;
                 appendStubLog("GBAStationNDSStub: menu hotkey toggle visible=%d->%d",
@@ -2612,20 +2646,23 @@ int RunDekoRuntime(const DekoRunOptions& options)
         }
         else if (menuAction == NdsMenuAction::OverlaySettingsChanged)
         {
-            reloadOverlayTexture(menuLayer.displaySettings());
+            if (reloadOverlayTexture(menuLayer.displaySettings()))
+                refreshMenuFreeze("overlay_changed");
             appendStubLog("GBAStationNDSStub: overlay settings changed enabled=%d path=%s",
                           menuLayer.displaySettings().overlayEnabled ? 1 : 0,
                           menuLayer.displaySettings().overlayPath.c_str());
         }
         else if (menuAction == NdsMenuAction::OverlayPathSelected)
         {
-            reloadOverlayTexture(menuLayer.displaySettings());
+            if (reloadOverlayTexture(menuLayer.displaySettings()))
+                refreshMenuFreeze("overlay_path");
             saveNdsSettingsToGameDb(options.romPath, menuLayer.displaySettings(), false);
             appendStubLog("GBAStationNDSStub: overlay path selected path=%s", menuResult.path.c_str());
         }
         else if (menuAction == NdsMenuAction::OverlaySettingsCommitted)
         {
-            reloadOverlayTexture(menuLayer.displaySettings());
+            if (reloadOverlayTexture(menuLayer.displaySettings()))
+                refreshMenuFreeze("overlay_commit");
             saveNdsSettingsToGameDb(options.romPath, menuLayer.displaySettings(), false);
             appendStubLog("GBAStationNDSStub: overlay settings commit enabled=%d path=%s",
                           menuLayer.displaySettings().overlayEnabled ? 1 : 0,
@@ -2634,6 +2671,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
         else if (menuAction == NdsMenuAction::ShaderSettingsChanged)
         {
             applyShaderSettings(true);
+            refreshMenuFreeze("shader_changed");
             appendStubLog("GBAStationNDSStub: shader settings changed enabled=%d type=%s params=%d",
                           menuLayer.displaySettings().shaderEnabled ? 1 : 0,
                           menuLayer.displaySettings().ndsShaderType.c_str(),
@@ -2642,6 +2680,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
         else if (menuAction == NdsMenuAction::ShaderSettingsCommitted)
         {
             applyShaderSettings(true);
+            refreshMenuFreeze("shader_commit");
             saveNdsSettingsToGameDb(options.romPath, menuLayer.displaySettings(), false);
             appendStubLog("GBAStationNDSStub: shader settings commit enabled=%d type=%s params=%d",
                           menuLayer.displaySettings().shaderEnabled ? 1 : 0,
@@ -2770,6 +2809,8 @@ int RunDekoRuntime(const DekoRunOptions& options)
         }
 
         const bool menuActive = menuLayer.active();
+        if (!menuActive && gameLayer.menuFreezeEnabled())
+            gameLayer.setMenuFreezeEnabled(false);
         if (blockGameInputUntilRelease && input.held == 0 && input.virtualHeld == 0 && !touchHeld)
             blockGameInputUntilRelease = false;
         const bool suppressGameInput = menuActive || runtimePaused || blockGameInputUntilRelease || exitAutoSavePending;

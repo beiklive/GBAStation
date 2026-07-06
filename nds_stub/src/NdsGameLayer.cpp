@@ -129,6 +129,15 @@ void NdsGameLayer::init(GPU2D::DekoRenderer* renderer)
 void NdsGameLayer::deinit()
 {
     clearOverlayTexture();
+    if (m_menuFreezeTexture != 0)
+    {
+        Gfx::PresentQueue.waitIdle();
+        Gfx::TextureDelete(m_menuFreezeTexture);
+        m_menuFreezeTexture = 0;
+    }
+    m_menuFreezeEnabled = false;
+    m_menuFreezeWidth = 0;
+    m_menuFreezeHeight = 0;
     for (int front = 0; front < 2; ++front)
     {
         for (int screen = 0; screen < 2; ++screen)
@@ -537,14 +546,112 @@ void NdsGameLayer::requestDeferredCapture() const
         m_renderer->RequestFramebufferCapture();
 }
 
+bool NdsGameLayer::refreshMenuFreezeTexture()
+{
+    std::vector<std::uint8_t> rgba;
+    int width = 0;
+    int height = 0;
+    if (!captureCurrentFrameRgba(rgba, width, height) || rgba.empty() || width <= 0 || height <= 0)
+        return false;
+
+    if (m_menuFreezeTexture != 0 && (m_menuFreezeWidth != width || m_menuFreezeHeight != height))
+    {
+        Gfx::PresentQueue.waitIdle();
+        Gfx::TextureDelete(m_menuFreezeTexture);
+        m_menuFreezeTexture = 0;
+        m_menuFreezeWidth = 0;
+        m_menuFreezeHeight = 0;
+    }
+
+    if (m_menuFreezeTexture == 0)
+    {
+        m_menuFreezeTexture = Gfx::TextureCreate(static_cast<u32>(width),
+                                                 static_cast<u32>(height),
+                                                 DkImageFormat_RGBA8_Unorm);
+        m_menuFreezeWidth = width;
+        m_menuFreezeHeight = height;
+    }
+
+    if (m_menuFreezeTexture == 0)
+        return false;
+
+    Gfx::TextureUpload(m_menuFreezeTexture,
+                       0,
+                       0,
+                       static_cast<u32>(width),
+                       static_cast<u32>(height),
+                       rgba.data(),
+                       static_cast<u32>(width * 4));
+    m_menuFreezeEnabled = true;
+    return true;
+}
+
+void NdsGameLayer::drawScreenTexture(const ScreenDrawRect& item,
+                                     std::uint32_t texture,
+                                     const RectF& sourceRect) const
+{
+    const Gfx::Vector2f subPosition{sourceRect.x, sourceRect.y};
+    const Gfx::Vector2f subSize{sourceRect.w, sourceRect.h};
+    if (m_orientation == 0)
+    {
+        Gfx::DrawRectangle(texture,
+                           {item.rect.x, item.rect.y},
+                           {item.rect.w, item.rect.h},
+                           subPosition,
+                           subSize,
+                           {1.0f, 1.0f, 1.0f, 1.0f});
+        return;
+    }
+
+    const Gfx::Vector2f tl{item.rect.x, item.rect.y};
+    const Gfx::Vector2f tr{item.rect.x + item.rect.w, item.rect.y};
+    const Gfx::Vector2f bl{item.rect.x, item.rect.y + item.rect.h};
+    const Gfx::Vector2f br{item.rect.x + item.rect.w, item.rect.y + item.rect.h};
+    Gfx::Vector2f p0 = tl;
+    Gfx::Vector2f p1 = tr;
+    Gfx::Vector2f p2 = bl;
+    Gfx::Vector2f p3 = br;
+    if (m_orientation == 1)
+    {
+        p0 = tr;
+        p1 = br;
+        p2 = tl;
+        p3 = bl;
+    }
+    else if (m_orientation == 2)
+    {
+        p0 = br;
+        p1 = bl;
+        p2 = tr;
+        p3 = tl;
+    }
+    else if (m_orientation == 3)
+    {
+        p0 = bl;
+        p1 = tl;
+        p2 = br;
+        p3 = tr;
+    }
+    Gfx::DrawRectangle(texture,
+                       p0,
+                       p1,
+                       p2,
+                       p3,
+                       subPosition,
+                       subSize);
+}
+
 void NdsGameLayer::drawScreens() const
 {
     if (!m_renderer)
         return;
 
-    const float srcWidth = static_cast<float>(m_renderer->GetFramebufferWidth());
-    const float srcHeight = static_cast<float>(m_renderer->GetFramebufferHeight());
+    const float liveSrcWidth = static_cast<float>(m_renderer->GetFramebufferWidth());
+    const float liveSrcHeight = static_cast<float>(m_renderer->GetFramebufferHeight());
     const auto rects = computeScreenRects();
+    const bool useFreeze = m_menuFreezeEnabled && m_menuFreezeTexture != 0 &&
+                           m_menuFreezeWidth >= kDsWidth &&
+                           m_menuFreezeHeight >= kDsHeight * 2;
 
     const bool useShader = m_shaderEnabled;
     const u32 screenSampler = (useShader ? Gfx::sampler_Nearest :
@@ -558,54 +665,21 @@ void NdsGameLayer::drawScreens() const
     for (const auto& item : rects)
     {
         const int sourceScreen = item.sourceTop ? 0 : 1;
-        const u32 texture = m_framebufferTextures[GPU::FrontBuffer][sourceScreen];
-        if (m_orientation == 0)
+        if (useFreeze)
         {
-            Gfx::DrawRectangle(texture,
-                               {item.rect.x, item.rect.y},
-                               {item.rect.w, item.rect.h},
-                               {0.0f, 0.0f},
-                               {srcWidth, srcHeight},
-                               {1.0f, 1.0f, 1.0f, 1.0f});
+            drawScreenTexture(item,
+                              m_menuFreezeTexture,
+                              {0.0f,
+                               static_cast<float>(sourceScreen * kDsHeight),
+                               static_cast<float>(kDsWidth),
+                               static_cast<float>(kDsHeight)});
         }
         else
         {
-            const Gfx::Vector2f tl{item.rect.x, item.rect.y};
-            const Gfx::Vector2f tr{item.rect.x + item.rect.w, item.rect.y};
-            const Gfx::Vector2f bl{item.rect.x, item.rect.y + item.rect.h};
-            const Gfx::Vector2f br{item.rect.x + item.rect.w, item.rect.y + item.rect.h};
-            Gfx::Vector2f p0 = tl;
-            Gfx::Vector2f p1 = tr;
-            Gfx::Vector2f p2 = bl;
-            Gfx::Vector2f p3 = br;
-            if (m_orientation == 1)
-            {
-                p0 = tr;
-                p1 = br;
-                p2 = tl;
-                p3 = bl;
-            }
-            else if (m_orientation == 2)
-            {
-                p0 = br;
-                p1 = bl;
-                p2 = tr;
-                p3 = tl;
-            }
-            else if (m_orientation == 3)
-            {
-                p0 = bl;
-                p1 = tl;
-                p2 = br;
-                p3 = tr;
-            }
-            Gfx::DrawRectangle(texture,
-                               p0,
-                               p1,
-                               p2,
-                               p3,
-                               {0.0f, 0.0f},
-                               {srcWidth, srcHeight});
+            const u32 texture = m_framebufferTextures[GPU::FrontBuffer][sourceScreen];
+            drawScreenTexture(item,
+                              texture,
+                              {0.0f, 0.0f, liveSrcWidth, liveSrcHeight});
         }
     }
     Gfx::SetShaderMode(Gfx::shaderMode_Default);
