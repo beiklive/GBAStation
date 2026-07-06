@@ -186,7 +186,7 @@ std::vector<beiklive::nds_stub::NdsShaderParam> defaultNdsShaderParams(const std
 {
     using beiklive::nds_stub::NdsShaderParam;
     const std::string shader = normalizeNdsShaderType(type);
-    if (shader == "dot")
+    if (shader == "RetroArch_dot")
     {
         return {
             {"gamma", "Gamma", 2.4f, 2.4f, 0.5f, 6.0f, 0.1f, 1},
@@ -194,7 +194,7 @@ std::vector<beiklive::nds_stub::NdsShaderParam> defaultNdsShaderParams(const std
             {"blend", "Blend", 0.65f, 0.65f, 0.0f, 1.0f, 0.05f, 2},
         };
     }
-    if (shader == "dot-clear")
+    if (shader == "RetroArch_dot-clear")
     {
         return {
             {"screen_gamma", "Screen Gamma", 2.2f, 2.2f, 0.5f, 4.0f, 0.1f, 1},
@@ -205,7 +205,7 @@ std::vector<beiklive::nds_stub::NdsShaderParam> defaultNdsShaderParams(const std
             {"halftone_strength", "Halftone", 0.7f, 0.7f, 0.0f, 1.0f, 0.05f, 2},
         };
     }
-    if (shader == "lcd-grid-v2-nds-color")
+    if (shader == "RetroArch_lcd-grid-v2-nds-color")
     {
         return {
             {"gain", "Gain", 1.5f, 1.5f, 0.5f, 2.0f, 0.05f, 2},
@@ -303,13 +303,13 @@ std::array<float, 8> ndsShaderParamUniforms(const std::string& type,
         return fallback;
     };
 
-    if (shader == "dot")
+    if (shader == "RetroArch_dot")
     {
         values[0] = valueOf("gamma", 2.4f);
         values[1] = valueOf("shine", 0.05f);
         values[2] = valueOf("blend", 0.65f);
     }
-    else if (shader == "dot-clear")
+    else if (shader == "RetroArch_dot-clear")
     {
         values[0] = valueOf("screen_gamma", 2.2f);
         values[1] = valueOf("dot_gamma", 2.2f);
@@ -318,7 +318,7 @@ std::array<float, 8> ndsShaderParamUniforms(const std::string& type,
         values[4] = valueOf("dot_opacity", 0.7f);
         values[5] = valueOf("halftone_strength", 0.7f);
     }
-    else if (shader == "lcd-grid-v2-nds-color")
+    else if (shader == "RetroArch_lcd-grid-v2-nds-color")
     {
         values[0] = valueOf("gain", 1.5f);
         values[1] = valueOf("gamma", 2.2f);

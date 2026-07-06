@@ -57,7 +57,7 @@ struct NdsDisplaySettings {
     bool overlayEnabled = false;
     std::string overlayPath;
     bool shaderEnabled = false;
-    std::string ndsShaderType = "dot";
+    std::string ndsShaderType = "RetroArch_dot";
     std::vector<NdsShaderParam> shaderParams;
     NdsCustomLayoutSettings customLayout {};
 };
@@ -224,6 +224,7 @@ private:
     mutable std::uint64_t m_shaderParamScrollLastTick = 0;
     bool m_shaderListVisible = false;
     int m_shaderListFocus = 0;
+    std::vector<std::string> m_shaderListPath;
     mutable float m_shaderListScrollY = 0.0f;
     mutable std::uint64_t m_shaderListScrollLastTick = 0;
     bool m_filePickerVisible = false;

@@ -95,30 +95,33 @@ bool validRect(const RectF& rect)
 
 Gfx::ShaderMode shaderModeFromType(const std::string& type)
 {
+    const std::string shader = normalizeNdsShaderType(type);
+    const std::string key = ndsShaderMatchKey(shader);
     if (isDrasticSimpleShaderType(type))
         return Gfx::shaderMode_NdsDrasticSimple;
-    if (type.find("xbr") != std::string::npos ||
-        type.find("sabr") != std::string::npos ||
-        type.find("hq") != std::string::npos ||
-        type.find("scale2x") != std::string::npos)
+    if (key.find("xbr") != std::string::npos ||
+        key.find("sabr") != std::string::npos ||
+        key.find("hq") != std::string::npos ||
+        key.find("scale2x") != std::string::npos)
     {
         return Gfx::shaderMode_NdsXbrzFreescale;
     }
-    if (type == "dot-clear")
+    if (shader == "RetroArch_dot-clear")
         return Gfx::shaderMode_NdsDotClear;
-    if (type == "xbrz-freescale")
+    if (shader == "RetroArch_xbrz-freescale")
         return Gfx::shaderMode_NdsXbrzFreescale;
-    if (type == "lcd-grid-v2-nds-color")
+    if (shader == "RetroArch_lcd-grid-v2-nds-color")
         return Gfx::shaderMode_NdsLcdGridNdsColor;
     return Gfx::shaderMode_NdsDot;
 }
 
 bool isXbrLikeShader(const std::string& type)
 {
-    return type.find("xbr") != std::string::npos ||
-           type.find("sabr") != std::string::npos ||
-           type.find("hq") != std::string::npos ||
-           type.find("scale2x") != std::string::npos;
+    const std::string key = ndsShaderMatchKey(type);
+    return key.find("xbr") != std::string::npos ||
+           key.find("sabr") != std::string::npos ||
+           key.find("hq") != std::string::npos ||
+           key.find("scale2x") != std::string::npos;
 }
 
 bool ndsShaderPassChain(const std::string& type,
@@ -129,7 +132,8 @@ bool ndsShaderPassChain(const std::string& type,
     passCount = 0;
     tempScale = 1;
 
-    if (!isXbrLikeShader(type) && type != "drastic-fxaa-hq" && type != "drastic-smaa")
+    const std::string key = ndsShaderMatchKey(type);
+    if (!isXbrLikeShader(type) && key != "drastic-fxaa-hq" && key != "drastic-smaa")
         return false;
 
     passes[passCount++] = {isXbrLikeShader(type) ? Gfx::shaderMode_NdsXbrzFreescale : Gfx::shaderMode_NdsDrasticSimple,
@@ -139,15 +143,15 @@ bool ndsShaderPassChain(const std::string& type,
     tempScale = 2;
 
     int finalCode = -1;
-    if (type.find("lcd") != std::string::npos)
+    if (key.find("lcd") != std::string::npos)
         finalCode = 5;
-    else if (type.find("crt") != std::string::npos || type.find("scanline") != std::string::npos)
+    else if (key.find("crt") != std::string::npos || key.find("scanline") != std::string::npos)
         finalCode = 17;
-    else if (type.find("-1x") != std::string::npos ||
-             type.find("-2x") != std::string::npos ||
-             type.find("linear2x") != std::string::npos ||
-             type == "drastic-fxaa-hq" ||
-             type == "drastic-smaa")
+    else if (key.find("-1x") != std::string::npos ||
+             key.find("-2x") != std::string::npos ||
+             key.find("linear2x") != std::string::npos ||
+             key == "drastic-fxaa-hq" ||
+             key == "drastic-smaa")
     {
         finalCode = 0;
     }
@@ -298,14 +302,7 @@ void NdsGameLayer::setScreenLayout(int layout)
 
 void NdsGameLayer::setShaderType(const std::string& type)
 {
-    if (isKnownNdsShaderType(type))
-    {
-        m_shaderType = type;
-    }
-    else
-    {
-        m_shaderType = "dot";
-    }
+    m_shaderType = normalizeNdsShaderType(type);
 }
 
 std::vector<NdsGameLayer::ScreenDrawRect> NdsGameLayer::computeScreenRects() const

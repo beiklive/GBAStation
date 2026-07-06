@@ -205,7 +205,7 @@ int main(int argc, char* argv[])
             if (options.screenOrientation.empty())
                 options.screenOrientation = "0";
             if (options.ndsShaderType.empty())
-                options.ndsShaderType = "dot";
+                options.ndsShaderType = "RetroArch_dot";
             beiklive::nds_stub::appendStubLog("GBAStationNDSStub: Deko gameDb.found=1 title=%s savePath=%s layout=%s orientation=%s integer=%d gap=%d overlay=%d overlayPath=%s shader=%d shaderType=%s customTop=%.2f/%.1f/%.1f customBottom=%.2f/%.1f/%.1f",
                                              options.title.c_str(),
                                              options.savePath.c_str(),

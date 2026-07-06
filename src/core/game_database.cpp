@@ -1,9 +1,11 @@
 #include "game_database.hpp"
 #include "common.h"
 #include <algorithm>
+#include <cctype>
 #include <fstream>
 #include <stdexcept>
 #include <filesystem>
+#include <utility>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -72,7 +74,82 @@ namespace beiklive
 
         std::vector<std::string> fallbackNdsShaderTypes()
         {
-            return {"dot"};
+            return {"RetroArch_dot"};
+        }
+
+        std::string lowerAscii(std::string value)
+        {
+            std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
+                return static_cast<char>(std::tolower(c));
+            });
+            return value;
+        }
+
+        std::string trimCopy(std::string value)
+        {
+            value.erase(value.begin(), std::find_if(value.begin(), value.end(), [](unsigned char c) {
+                return std::isspace(c) == 0;
+            }));
+            value.erase(std::find_if(value.rbegin(), value.rend(), [](unsigned char c) {
+                return std::isspace(c) == 0;
+            }).base(), value.end());
+            return value;
+        }
+
+        bool startsWith(const std::string& value, const char* prefix)
+        {
+            const std::string p(prefix);
+            return value.size() >= p.size() &&
+                   std::equal(p.begin(), p.end(), value.begin());
+        }
+
+        std::string canonicalNdsShaderStem(std::string value)
+        {
+            value = trimCopy(lowerAscii(std::move(value)));
+            std::string out;
+            out.reserve(value.size());
+            bool lastWasDash = true;
+            for (unsigned char c : value)
+            {
+                if (std::isalnum(c) != 0)
+                {
+                    out.push_back(static_cast<char>(c));
+                    lastWasDash = false;
+                    continue;
+                }
+                if (!lastWasDash)
+                {
+                    out.push_back('-');
+                    lastWasDash = true;
+                }
+            }
+            while (!out.empty() && out.back() == '-')
+                out.pop_back();
+            return out;
+        }
+
+        std::string ndsShaderMatchKey(const std::string& type)
+        {
+            if (startsWith(type, "DraStic_"))
+                return "drastic-" + canonicalNdsShaderStem(type.substr(8));
+            if (startsWith(type, "drastic-"))
+                return canonicalNdsShaderStem(type);
+            if (startsWith(type, "RetroArch_"))
+                return "retroarch-" + canonicalNdsShaderStem(type.substr(10));
+            return canonicalNdsShaderStem(type);
+        }
+
+        std::string oldRetroArchNdsShaderName(const std::string& type)
+        {
+            if (type == "dot")
+                return "RetroArch_dot";
+            if (type == "dot-clear")
+                return "RetroArch_dot-clear";
+            if (type == "xbrz-freescale")
+                return "RetroArch_xbrz-freescale";
+            if (type == "lcd-grid-v2-nds-color")
+                return "RetroArch_lcd-grid-v2-nds-color";
+            return {};
         }
 
         std::vector<std::string> loadNdsShaderTypes()
@@ -99,8 +176,8 @@ namespace beiklive
                 result.push_back(value);
             }
 
-            if (std::find(result.begin(), result.end(), "dot") == result.end())
-                result.insert(result.begin(), "dot");
+            if (std::find(result.begin(), result.end(), "RetroArch_dot") == result.end())
+                result.insert(result.begin(), "RetroArch_dot");
             return result.empty() ? fallbackNdsShaderTypes() : result;
         }
 
@@ -115,7 +192,21 @@ namespace beiklive
             const auto& types = ndsShaderTypes();
             if (std::find(types.begin(), types.end(), type) != types.end())
                 return type;
-            return "dot";
+
+            const std::string oldRetro = oldRetroArchNdsShaderName(type);
+            if (!oldRetro.empty() &&
+                std::find(types.begin(), types.end(), oldRetro) != types.end())
+            {
+                return oldRetro;
+            }
+
+            const std::string key = ndsShaderMatchKey(type);
+            for (const auto& candidate : types)
+            {
+                if (ndsShaderMatchKey(candidate) == key)
+                    return candidate;
+            }
+            return "RetroArch_dot";
         }
     }
 
@@ -236,7 +327,7 @@ namespace beiklive
         if (entry.platform == (int)beiklive::enums::EmuPlatform::EmuNDS)
         {
             if (entry.NdsShaderType.empty())
-                entry.NdsShaderType = entry.shaderParaPath.empty() ? "dot" : entry.shaderParaPath;
+                entry.NdsShaderType = entry.shaderParaPath.empty() ? "RetroArch_dot" : entry.shaderParaPath;
             entry.NdsShaderType = normalizeNdsShaderType(entry.NdsShaderType);
             entry.shaderParaPath = entry.NdsShaderType;
             entry.shaderParaNames.clear();

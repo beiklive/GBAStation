@@ -109,36 +109,8 @@ const char* orientationLabel(int index)
 const char* shaderTypeLabel(const std::string& type)
 {
     static std::string generatedLabel;
-    if (type.empty()) return "dot";
-    if (type == "drastic-linear") return "DraStic Linear";
-    if (type == "drastic-grayscale") return "DraStic Grayscale";
-    if (type == "drastic-nds-color") return "DraStic NDS Color";
-    if (type == "drastic-natural-vision") return "DraStic Natural Vision";
-    if (type == "drastic-nds-color-natural-vision") return "DraStic NDS + Natural";
-    if (type == "drastic-lcd1x") return "DraStic LCD1x";
-    if (type == "drastic-lcd1x-nds-color") return "DraStic LCD1x + NDS";
-    if (type == "drastic-lcd1x-natural-vision") return "DraStic LCD1x + Natural";
-    if (type == "drastic-lcd1x-nds-color-natural-vision") return "DraStic LCD1x + NDS/Natural";
-    if (type == "drastic-zfast") return "DraStic zFast";
-    if (type == "drastic-zfast-lcd") return "DraStic zFast LCD";
-    if (type == "drastic-zfast-lcd-brightness") return "DraStic zFast LCD Bright";
-    if (type == "drastic-zfast-lcd-nds-color") return "DraStic zFast LCD + NDS";
-    if (type == "drastic-zfast-lcd-natural-vision") return "DraStic zFast LCD + Natural";
-    if (type == "drastic-zfast-lcd-nds-color-natural-vision") return "DraStic zFast LCD + NDS/Natural";
-    if (type == "drastic-quilez") return "DraStic Quilez";
-    if (type == "drastic-scanlinesd") return "DraStic Scanlines";
-    if (type == "drastic-scanlinesd-color") return "DraStic Scanlines Color";
-    if (type == "drastic-scanlinesd-x") return "DraStic Scanlines X";
-    if (type == "drastic-scanlinesd-color-x") return "DraStic Scanlines Color X";
-    if (type == "drastic-dot-d4") return "DraStic Dot D4";
-    if (type == "drastic-dot-hv4") return "DraStic Dot HV4";
-    if (type.rfind("drastic-", 0) == 0)
-    {
-        generatedLabel = type.substr(8);
-        std::replace(generatedLabel.begin(), generatedLabel.end(), '-', ' ');
-        return generatedLabel.c_str();
-    }
-    return type.c_str();
+    generatedLabel = ndsShaderDisplayName(type);
+    return generatedLabel.c_str();
 }
 
 std::string filenameFromPath(const std::string& path)
@@ -1650,7 +1622,8 @@ void drawShaderSidebar(const NdsDisplaySettings& display,
     Gfx::PopScissor();
 }
 
-void drawShaderListOverlay(const std::vector<std::string>& shaderTypes,
+void drawShaderListOverlay(const std::vector<NdsShaderListEntry>& entries,
+                           const std::vector<std::string>& path,
                            const std::string& currentType,
                            int focusedRow,
                            float scrollY,
@@ -1669,7 +1642,7 @@ void drawShaderListOverlay(const std::vector<std::string>& shaderTypes,
     const float rowH = 58.0f;
     const float bodyY = panelY + headerH;
     const float bodyH = panelH - headerH - footerH;
-    const float listPadTop = 24.0f;
+    const float listPadTop = 30.0f;
     const float listPadBottom = 14.0f;
     const float listBodyY = bodyY + listPadTop;
     const float listBodyH = std::max(1.0f, bodyH - listPadTop - listPadBottom);
@@ -1682,6 +1655,18 @@ void drawShaderListOverlay(const std::vector<std::string>& shaderTypes,
 
     Gfx::DrawText(Gfx::SystemFontChinese, {panelX + 28.0f, panelY + 24.0f}, 26.0f,
                   {1.0f, 1.0f, 1.0f, 0.96f * opacity}, "选择滤镜");
+    if (!path.empty())
+    {
+        std::string breadcrumb;
+        for (std::size_t i = 0; i < path.size(); ++i)
+        {
+            if (i != 0)
+                breadcrumb += " / ";
+            breadcrumb += path[i];
+        }
+        Gfx::DrawText(Gfx::SystemFontChinese, {panelX + 154.0f, panelY + 31.0f}, 16.0f,
+                      {0.70f, 0.80f, 0.90f, 0.72f * opacity}, "%s", breadcrumb.c_str());
+    }
     Gfx::DrawText(Gfx::SystemFontChinese, {panelX + 28.0f, panelY + panelH - 36.0f}, 17.0f,
                   {0.78f, 0.86f, 0.94f, 0.68f * opacity}, "A 确定   B 返回");
 
@@ -1690,13 +1675,14 @@ void drawShaderListOverlay(const std::vector<std::string>& shaderTypes,
                      static_cast<u32>(std::max(1.0f, panelW - 36.0f)),
                      static_cast<u32>(std::max(1.0f, listBodyH + 12.0f)));
     const std::uint32_t iconFont = materialFont();
-    for (int i = 0; i < static_cast<int>(shaderTypes.size()); ++i)
+    for (int i = 0; i < static_cast<int>(entries.size()); ++i)
     {
         const float y = listBodyY + static_cast<float>(i) * rowH - scrollY;
         if (y > listBodyY + listBodyH || y + 50.0f < listBodyY)
             continue;
         const bool focused = i == focusedRow;
-        const bool selected = shaderTypes[i] == currentType;
+        const bool isDirectory = entries[i].kind == NdsShaderListEntry::Kind::Directory;
+        const bool selected = !isDirectory && entries[i].shaderType == currentType;
         const Vector2f pos{panelX + 28.0f, y};
         if (focused)
             drawGradientBorder(pos - Vector2f{3.0f, 3.0f}, {rowW + 6.0f, 58.0f}, 3.0f);
@@ -1718,13 +1704,19 @@ void drawShaderListOverlay(const std::vector<std::string>& shaderTypes,
                                    : Color{1.0f, 1.0f, 1.0f, 0.58f * opacity},
                           Gfx::align_Center,
                           Gfx::align_Center,
-                          "\uE3E9");
+                          isDirectory ? "\uE2C7" : "\uE3E9");
         }
         Gfx::DrawText(Gfx::SystemFontChinese,
                       pos + Vector2f{iconFont != 0 ? 54.0f : 20.0f, 14.0f},
                       20.0f,
                       itemTextColor,
-                      "%s", shaderTypeLabel(shaderTypes[i]));
+                      "%s", entries[i].label.c_str());
+        if (isDirectory)
+        {
+            Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{rowW - 24.0f, 14.0f}, 20.0f,
+                          {0.78f, 0.86f, 0.94f, 0.64f * opacity},
+                          Gfx::align_Right, Gfx::align_Left, "进入");
+        }
         if (selected)
         {
             Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{rowW - 24.0f, 14.0f}, 20.0f,
@@ -1734,7 +1726,7 @@ void drawShaderListOverlay(const std::vector<std::string>& shaderTypes,
     }
     Gfx::PopScissor();
 
-    const float contentH = static_cast<float>(shaderTypes.size()) * rowH;
+    const float contentH = static_cast<float>(entries.size()) * rowH;
     if (contentH > listBodyH + 1.0f)
     {
         const float trackH = listBodyH;

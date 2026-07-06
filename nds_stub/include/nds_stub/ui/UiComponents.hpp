@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "nds_stub/NdsMenuLayer.hpp"
+#include "nds_stub/NdsShaderCatalog.hpp"
 #include "nds_stub/ui/UiPrimitives.hpp"
 
 namespace beiklive::nds_stub::ui {
@@ -150,7 +151,8 @@ void drawShaderSidebar(const NdsDisplaySettings& display,
                        float paramScrollY,
                        float progress,
                        float opacity = 1.0f);
-void drawShaderListOverlay(const std::vector<std::string>& shaderTypes,
+void drawShaderListOverlay(const std::vector<NdsShaderListEntry>& entries,
+                           const std::vector<std::string>& path,
                            const std::string& currentType,
                            int focusedRow,
                            float scrollY,

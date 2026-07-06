@@ -913,11 +913,14 @@ void NdsMenuLayer::resetShaderParamScroll()
 
 int NdsMenuLayer::currentShaderTypeIndex() const
 {
-    const auto& shaderTypes = availableNdsShaderTypes();
-    for (int i = 0; i < static_cast<int>(shaderTypes.size()); ++i)
+    const auto entries = ndsShaderListEntries(m_shaderListPath);
+    for (int i = 0; i < static_cast<int>(entries.size()); ++i)
     {
-        if (m_display.ndsShaderType == shaderTypes[i])
+        if (entries[i].kind == NdsShaderListEntry::Kind::Shader &&
+            m_display.ndsShaderType == entries[i].shaderType)
+        {
             return i;
+        }
     }
     return 0;
 }
@@ -926,12 +929,12 @@ float NdsMenuLayer::shaderListTargetScroll() const
 {
     setMenuMetricsOrientation(m_display.orientation);
     const float bodyH = std::max(1.0f, menuMetrics().screenH - 220.0f);
-    const auto& shaderTypes = availableNdsShaderTypes();
-    const int shaderCount = std::max(1, static_cast<int>(shaderTypes.size()));
-    const float contentH = static_cast<float>(shaderCount) * kShaderListRowH;
+    const auto entries = ndsShaderListEntries(m_shaderListPath);
+    const int entryCount = std::max(1, static_cast<int>(entries.size()));
+    const float contentH = static_cast<float>(entryCount) * kShaderListRowH;
     const float focusedTop = static_cast<float>(std::clamp(m_shaderListFocus,
                                                            0,
-                                                           shaderCount - 1)) * kShaderListRowH;
+                                                           entryCount - 1)) * kShaderListRowH;
     return centeredFocusedScroll(focusedTop, kShaderListRowH, contentH, bodyH);
 }
 
@@ -964,6 +967,7 @@ void NdsMenuLayer::resetShaderListScroll()
 void NdsMenuLayer::beginShaderList()
 {
     m_shaderListVisible = true;
+    m_shaderListPath = ndsShaderListPathForType(m_display.ndsShaderType);
     m_shaderListFocus = currentShaderTypeIndex();
     resetShaderListScroll();
     m_navDirection = 0;
@@ -972,6 +976,7 @@ void NdsMenuLayer::beginShaderList()
 void NdsMenuLayer::closeShaderList()
 {
     m_shaderListVisible = false;
+    m_shaderListPath.clear();
     resetShaderListScroll();
     m_navDirection = 0;
 }
@@ -1000,6 +1005,8 @@ void NdsMenuLayer::setDisplaySettings(const NdsDisplaySettings& settings)
     m_display.orientation = std::clamp(m_display.orientation, 0, 3);
     m_display.screenGap = clampScreenGap(m_display.screenGap);
     m_display.ndsShaderType = normalizeNdsShaderType(m_display.ndsShaderType);
+    if (m_shaderListVisible)
+        m_shaderListPath = ndsShaderListPathForType(m_display.ndsShaderType);
     m_shaderListFocus = currentShaderTypeIndex();
     for (auto& param : m_display.shaderParams)
     {
@@ -1762,11 +1769,31 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
         if (m_shaderListVisible)
         {
             const std::uint64_t navButtons = buttonsDown | updateHeldNavigation(buttonsDown, buttonsHeld);
-            const auto& shaderTypes = availableNdsShaderTypes();
-            const int shaderCount = std::max(1, static_cast<int>(shaderTypes.size()));
+            auto shaderEntries = ndsShaderListEntries(m_shaderListPath);
+            const int shaderCount = std::max(1, static_cast<int>(shaderEntries.size()));
             if (buttonsDown & HidNpadButton_B)
             {
-                closeShaderList();
+                if (m_shaderListPath.empty())
+                {
+                    closeShaderList();
+                }
+                else
+                {
+                    const std::string previous = m_shaderListPath.back();
+                    m_shaderListPath.pop_back();
+                    shaderEntries = ndsShaderListEntries(m_shaderListPath);
+                    m_shaderListFocus = 0;
+                    for (int i = 0; i < static_cast<int>(shaderEntries.size()); ++i)
+                    {
+                        if (shaderEntries[i].kind == NdsShaderListEntry::Kind::Directory &&
+                            shaderEntries[i].label == previous)
+                        {
+                            m_shaderListFocus = i;
+                            break;
+                        }
+                    }
+                    resetShaderListScroll();
+                }
                 return {};
             }
             if (isDirectionUp(navButtons))
@@ -1775,7 +1802,17 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
                 m_shaderListFocus = (m_shaderListFocus + 1) % shaderCount;
             if (buttonsDown & HidNpadButton_A)
             {
-                const std::string nextType = shaderTypes[std::clamp(m_shaderListFocus, 0, shaderCount - 1)];
+                if (shaderEntries.empty())
+                    return {};
+                const auto& entry = shaderEntries[std::clamp(m_shaderListFocus, 0, static_cast<int>(shaderEntries.size()) - 1)];
+                if (entry.kind == NdsShaderListEntry::Kind::Directory)
+                {
+                    m_shaderListPath = entry.path;
+                    m_shaderListFocus = currentShaderTypeIndex();
+                    resetShaderListScroll();
+                    return {};
+                }
+                const std::string nextType = entry.shaderType;
                 closeShaderList();
                 if (nextType == m_display.ndsShaderType)
                     return {};
@@ -2143,7 +2180,8 @@ void NdsMenuLayer::draw() const
             drawShaderSidebar(m_display, m_shaderSidebarFocus, smoothedShaderParamScroll(), progress, progress);
             if (m_shaderListVisible)
             {
-                drawShaderListOverlay(availableNdsShaderTypes(),
+                drawShaderListOverlay(ndsShaderListEntries(m_shaderListPath),
+                                      m_shaderListPath,
                                       m_display.ndsShaderType,
                                       m_shaderListFocus,
                                       smoothedShaderListScroll(),

@@ -18,7 +18,7 @@ struct DekoRunOptions {
     bool overlayEnabled = false;
     std::string overlayPath;
     bool shaderEnabled = false;
-    std::string ndsShaderType = "dot";
+    std::string ndsShaderType = "RetroArch_dot";
     NdsCustomLayoutSettings customLayout;
 };
 

@@ -122,7 +122,7 @@ private:
     int m_menuFreezeWidth = 0;
     int m_menuFreezeHeight = 0;
     bool m_shaderEnabled = false;
-    std::string m_shaderType = "dot";
+    std::string m_shaderType = "RetroArch_dot";
     std::array<float, 8> m_shaderParams {2.4f, 0.05f, 0.65f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
     mutable std::array<std::uint32_t, 2> m_shaderPassTextures {};
     mutable int m_shaderPassTextureWidth = 0;
