@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include <switch.h>
@@ -61,6 +62,11 @@ public:
     bool overlayEnabled() const { return m_overlayEnabled; }
     void setOverlayTexture(std::uint32_t texture, int width, int height);
     void clearOverlayTexture();
+    void setShaderEnabled(bool enabled) { m_shaderEnabled = enabled; }
+    bool shaderEnabled() const { return m_shaderEnabled; }
+    void setShaderType(const std::string& type);
+    const std::string& shaderType() const { return m_shaderType; }
+    void setShaderParams(const std::array<float, 8>& params) { m_shaderParams = params; }
 
 private:
     struct ScreenDrawRect {
@@ -91,6 +97,9 @@ private:
     std::uint32_t m_overlayTexture = 0;
     int m_overlayWidth = 0;
     int m_overlayHeight = 0;
+    bool m_shaderEnabled = false;
+    std::string m_shaderType = "dot";
+    std::array<float, 8> m_shaderParams {2.4f, 0.05f, 0.65f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
     mutable std::vector<std::uint8_t> m_lastCaptureRgba;
     mutable int m_lastCaptureWidth = 0;
     mutable int m_lastCaptureHeight = 0;

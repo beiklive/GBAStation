@@ -178,6 +178,141 @@ std::string jsonString(const nlohmann::json& item, const char* key)
     return item.at(key).get<std::string>();
 }
 
+std::string normalizedNdsShaderType(const std::string& type)
+{
+    if (type == "dot-clear" || type == "scanline" || type == "crt")
+        return type;
+    return "dot";
+}
+
+std::vector<beiklive::nds_stub::NdsShaderParam> defaultNdsShaderParams(const std::string& type)
+{
+    using beiklive::nds_stub::NdsShaderParam;
+    const std::string shader = normalizedNdsShaderType(type);
+    if (shader == "dot")
+    {
+        return {
+            {"gamma", "Gamma", 2.4f, 2.4f, 0.5f, 6.0f, 0.1f, 1},
+            {"shine", "Shine", 0.05f, 0.05f, 0.0f, 0.5f, 0.01f, 2},
+            {"blend", "Blend", 0.65f, 0.65f, 0.0f, 1.0f, 0.05f, 2},
+        };
+    }
+    if (shader == "dot-clear")
+    {
+        return {
+            {"screen_gamma", "Screen Gamma", 2.2f, 2.2f, 0.5f, 4.0f, 0.1f, 1},
+            {"dot_gamma", "Dot Gamma", 2.2f, 2.2f, 0.5f, 4.0f, 0.1f, 1},
+            {"dot_scale_x", "Dot Scale X", 1.1f, 1.1f, 0.5f, 3.0f, 0.1f, 1},
+            {"dot_scale_y", "Dot Scale Y", 1.1f, 1.1f, 0.5f, 3.0f, 0.1f, 1},
+            {"dot_opacity", "Dot Opacity", 0.7f, 0.7f, 0.0f, 1.0f, 0.05f, 2},
+            {"halftone_strength", "Halftone", 0.7f, 0.7f, 0.0f, 1.0f, 0.05f, 2},
+        };
+    }
+    return {};
+}
+
+std::string ndsShaderConfigPath(const std::string& type)
+{
+    return joinPath("sdmc:/GBAStation/config/ndsshaderconfig", normalizedNdsShaderType(type) + ".ini");
+}
+
+std::vector<beiklive::nds_stub::NdsShaderParam> loadNdsShaderParams(const std::string& type)
+{
+    auto params = defaultNdsShaderParams(type);
+    const std::string path = ndsShaderConfigPath(type);
+    std::ifstream in(path);
+    if (!in)
+        return params;
+
+    std::map<std::string, float> values;
+    std::string line;
+    while (std::getline(in, line))
+    {
+        const auto comment = line.find_first_of("#;");
+        if (comment != std::string::npos)
+            line.erase(comment);
+        const auto eq = line.find('=');
+        if (eq == std::string::npos)
+            continue;
+        std::string key = line.substr(0, eq);
+        std::string value = line.substr(eq + 1);
+        auto trim = [](std::string& s) {
+            s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char c) { return std::isspace(c) == 0; }));
+            s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char c) { return std::isspace(c) == 0; }).base(), s.end());
+        };
+        trim(key);
+        trim(value);
+        try
+        {
+            values[key] = std::stof(value);
+        }
+        catch (...)
+        {
+        }
+    }
+
+    for (auto& param : params)
+    {
+        const auto it = values.find(param.name);
+        if (it != values.end())
+            param.value = std::clamp(it->second, param.minValue, param.maxValue);
+    }
+    return params;
+}
+
+void saveNdsShaderParams(const std::string& type,
+                         const std::vector<beiklive::nds_stub::NdsShaderParam>& params)
+{
+    const std::string path = ndsShaderConfigPath(type);
+    std::error_code ec;
+    std::filesystem::create_directories(std::filesystem::path(path).parent_path(), ec);
+    std::ofstream out(path, std::ios::trunc);
+    if (!out)
+    {
+        beiklive::nds_stub::appendStubLog("GBAStationNDSStub: shader config save failed open path=%s", path.c_str());
+        return;
+    }
+    out << "# GBAStation NDS shader config\n";
+    out << "shader=" << normalizedNdsShaderType(type) << "\n";
+    for (const auto& param : params)
+        out << param.name << '=' << param.value << "\n";
+    beiklive::nds_stub::appendStubLog("GBAStationNDSStub: shader config saved path=%s params=%d",
+                                      path.c_str(),
+                                      static_cast<int>(params.size()));
+}
+
+std::array<float, 8> ndsShaderParamUniforms(const std::string& type,
+                                            const std::vector<beiklive::nds_stub::NdsShaderParam>& params)
+{
+    std::array<float, 8> values {};
+    const std::string shader = normalizedNdsShaderType(type);
+    auto valueOf = [&](const char* name, float fallback) {
+        for (const auto& param : params)
+        {
+            if (param.name == name)
+                return param.value;
+        }
+        return fallback;
+    };
+
+    if (shader == "dot")
+    {
+        values[0] = valueOf("gamma", 2.4f);
+        values[1] = valueOf("shine", 0.05f);
+        values[2] = valueOf("blend", 0.65f);
+    }
+    else if (shader == "dot-clear")
+    {
+        values[0] = valueOf("screen_gamma", 2.2f);
+        values[1] = valueOf("dot_gamma", 2.2f);
+        values[2] = valueOf("dot_scale_x", 1.1f);
+        values[3] = valueOf("dot_scale_y", 1.1f);
+        values[4] = valueOf("dot_opacity", 0.7f);
+        values[5] = valueOf("halftone_strength", 0.7f);
+    }
+    return values;
+}
+
 std::string currentLastPlayedTimestamp()
 {
     const auto now = std::chrono::system_clock::now();
@@ -371,7 +506,11 @@ bool saveNdsSettingsToGameDb(const std::string& romPath,
                 item["overlayEnabled"] = settings.overlayEnabled;
                 item["overlayPath"] = settings.overlayPath;
                 item["shaderEnabled"] = settings.shaderEnabled;
-                item["NdsShaderType"] = settings.ndsShaderType.empty() ? "dot" : settings.ndsShaderType;
+                const std::string shaderType = normalizedNdsShaderType(settings.ndsShaderType);
+                item["NdsShaderType"] = shaderType;
+                item["shaderParaPath"] = shaderType;
+                item["shaderParaNames"] = nlohmann::json::array();
+                item["shaderParaValues"] = nlohmann::json::array();
                 if (includeCustomLayout)
                 {
                     item["ndsTopScale"] = settings.customLayout.topScale;
@@ -2098,7 +2237,8 @@ int RunDekoRuntime(const DekoRunOptions& options)
     initialDisplay.overlayEnabled = options.overlayEnabled;
     initialDisplay.overlayPath = options.overlayPath;
     initialDisplay.shaderEnabled = options.shaderEnabled;
-    initialDisplay.ndsShaderType = options.ndsShaderType.empty() ? "dot" : options.ndsShaderType;
+    initialDisplay.ndsShaderType = normalizedNdsShaderType(options.ndsShaderType);
+    initialDisplay.shaderParams = loadNdsShaderParams(initialDisplay.ndsShaderType);
     initialDisplay.customLayout = options.customLayout;
     menuLayer.setDisplaySettings(initialDisplay);
     gameLayer.setLinearFiltering(initialDisplay.linearFiltering);
@@ -2107,6 +2247,9 @@ int RunDekoRuntime(const DekoRunOptions& options)
     gameLayer.setOrientation(initialDisplay.orientation);
     gameLayer.setScreenGap(static_cast<float>(initialDisplay.screenGap));
     gameLayer.setCustomLayoutSettings(initialDisplay.customLayout);
+    gameLayer.setShaderEnabled(initialDisplay.shaderEnabled);
+    gameLayer.setShaderType(initialDisplay.ndsShaderType);
+    gameLayer.setShaderParams(ndsShaderParamUniforms(initialDisplay.ndsShaderType, initialDisplay.shaderParams));
     auto reloadOverlayTexture = [&](const NdsDisplaySettings& display) {
         if (!display.overlayEnabled || display.overlayPath.empty())
         {
@@ -2133,7 +2276,38 @@ int RunDekoRuntime(const DekoRunOptions& options)
         appendStubLog("GBAStationNDSStub: overlay load ok size=%dx%d", width, height);
         return true;
     };
+    auto applyShaderSettings = [&](bool saveConfig) {
+        NdsDisplaySettings display = menuLayer.displaySettings();
+        const std::string shaderType = normalizedNdsShaderType(display.ndsShaderType);
+        if (display.ndsShaderType != shaderType)
+            display.ndsShaderType = shaderType;
+
+        const auto defaults = defaultNdsShaderParams(shaderType);
+        bool sameShape = display.shaderParams.size() == defaults.size();
+        if (sameShape)
+        {
+            for (std::size_t i = 0; i < defaults.size(); ++i)
+            {
+                if (display.shaderParams[i].name != defaults[i].name)
+                {
+                    sameShape = false;
+                    break;
+                }
+            }
+        }
+        if (!sameShape)
+            display.shaderParams = loadNdsShaderParams(shaderType);
+
+        menuLayer.setDisplaySettings(display);
+        const NdsDisplaySettings& applied = menuLayer.displaySettings();
+        gameLayer.setShaderEnabled(applied.shaderEnabled);
+        gameLayer.setShaderType(applied.ndsShaderType);
+        gameLayer.setShaderParams(ndsShaderParamUniforms(applied.ndsShaderType, applied.shaderParams));
+        if (saveConfig)
+            saveNdsShaderParams(applied.ndsShaderType, applied.shaderParams);
+    };
     reloadOverlayTexture(initialDisplay);
+    applyShaderSettings(false);
     appendStubLog("GBAStationNDSStub: display init filter=%s integer=%d layout=%s orientation=%d gap=%d overlay=%d overlayPath=%s shader=%d shaderType=%s customTop=%.2f/%.1f/%.1f customBottom=%.2f/%.1f/%.1f",
                   initialDisplay.linearFiltering ? "linear" : "nearest",
                   initialDisplay.integerScale ? 1 : 0,
@@ -2459,16 +2633,20 @@ int RunDekoRuntime(const DekoRunOptions& options)
         }
         else if (menuAction == NdsMenuAction::ShaderSettingsChanged)
         {
-            appendStubLog("GBAStationNDSStub: shader settings changed enabled=%d type=%s",
+            applyShaderSettings(true);
+            appendStubLog("GBAStationNDSStub: shader settings changed enabled=%d type=%s params=%d",
                           menuLayer.displaySettings().shaderEnabled ? 1 : 0,
-                          menuLayer.displaySettings().ndsShaderType.c_str());
+                          menuLayer.displaySettings().ndsShaderType.c_str(),
+                          static_cast<int>(menuLayer.displaySettings().shaderParams.size()));
         }
         else if (menuAction == NdsMenuAction::ShaderSettingsCommitted)
         {
+            applyShaderSettings(true);
             saveNdsSettingsToGameDb(options.romPath, menuLayer.displaySettings(), false);
-            appendStubLog("GBAStationNDSStub: shader settings commit enabled=%d type=%s",
+            appendStubLog("GBAStationNDSStub: shader settings commit enabled=%d type=%s params=%d",
                           menuLayer.displaySettings().shaderEnabled ? 1 : 0,
-                          menuLayer.displaySettings().ndsShaderType.c_str());
+                          menuLayer.displaySettings().ndsShaderType.c_str(),
+                          static_cast<int>(menuLayer.displaySettings().shaderParams.size()));
         }
         else if (menuAction == NdsMenuAction::DisplaySettingsChanged)
         {

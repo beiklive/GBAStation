@@ -14,6 +14,7 @@
 #include <borealis/views/rectangle.hpp>
 #include <cctype>
 #include <chrono>
+#include <cmath>
 #include <iomanip>
 #include <sstream>
 
@@ -2273,7 +2274,7 @@ namespace beiklive
         float initX = topScreen ? m_gameEntry.ndsTopOffsetX : m_gameEntry.ndsBottomOffsetX;
         float initY = topScreen ? m_gameEntry.ndsTopOffsetY : m_gameEntry.ndsBottomOffsetY;
         float initScale = topScreen ? m_gameEntry.ndsTopScale : m_gameEntry.ndsBottomScale;
-        if (initScale <= 0.f) initScale = 1.f;
+        initScale = std::clamp(initScale, 1.0f, 10.0f);
 
         auto apply = [this, topScreen](float x, float y, float scale) {
             if (topScreen) {
@@ -2333,10 +2334,16 @@ namespace beiklive
         sBtn->setValue(initScale);
         sBtn->setStep(0.1f);
         sBtn->setDecimal(1);
-        sBtn->setOnChange([this, topScreen, apply](double v) {
+        sBtn->setOnChange([this, topScreen, apply, sBtn](double v) {
+            const float scale = std::clamp(static_cast<float>(v), 1.0f, 10.0f);
+            if (std::fabs(scale - static_cast<float>(v)) > 0.0001f)
+            {
+                sBtn->setValue(scale);
+                return;
+            }
             float x = topScreen ? m_gameEntry.ndsTopOffsetX : m_gameEntry.ndsBottomOffsetX;
             float y = topScreen ? m_gameEntry.ndsTopOffsetY : m_gameEntry.ndsBottomOffsetY;
-            apply(x, y, static_cast<float>(v));
+            apply(x, y, scale);
         });
         sBtn->registerAction("关闭", brls::BUTTON_B, closeAct);
         panel->addView(sBtn);

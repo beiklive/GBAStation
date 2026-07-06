@@ -58,6 +58,7 @@ struct NdsDisplaySettings {
     std::string overlayPath;
     bool shaderEnabled = false;
     std::string ndsShaderType = "dot";
+    std::vector<NdsShaderParam> shaderParams;
     NdsCustomLayoutSettings customLayout {};
 };
 
@@ -132,6 +133,10 @@ private:
     bool cycleCustomLayoutSetting(int direction);
     bool cycleOverlaySetting(int direction);
     bool cycleShaderSetting(int direction);
+    int shaderControlCount() const;
+    float shaderParamTargetScroll() const;
+    float smoothedShaderParamScroll() const;
+    void resetShaderParamScroll();
     bool resetCustomLayoutSetting();
     bool activateDisplayControl();
     bool activateCheatControl();
@@ -209,6 +214,8 @@ private:
     bool m_shaderSidebarReturnToMenu = false;
     std::uint64_t m_shaderSidebarAnimStartTick = 0;
     int m_shaderSidebarFocus = 0;
+    mutable float m_shaderParamScrollY = 0.0f;
+    mutable std::uint64_t m_shaderParamScrollLastTick = 0;
     bool m_filePickerVisible = false;
     bool m_filePickerClosing = false;
     bool m_filePickerReturnToOverlay = false;

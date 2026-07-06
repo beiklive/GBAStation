@@ -871,7 +871,7 @@ namespace beiklive
             constexpr float canvasH = 720.f;
             auto place = [&](bool topScreen) {
                 const float scale = std::clamp(topScreen ? m_gameEntry.ndsTopScale : m_gameEntry.ndsBottomScale,
-                                               0.25f, 4.0f);
+                                               1.0f, 10.0f);
                 const float offsetX = topScreen ? m_gameEntry.ndsTopOffsetX : m_gameEntry.ndsBottomOffsetX;
                 const float offsetY = topScreen ? m_gameEntry.ndsTopOffsetY : m_gameEntry.ndsBottomOffsetY;
                 const float baseX = topScreen ? 224.0f : 800.0f;
@@ -1770,7 +1770,7 @@ namespace beiklive
 
             auto place = [&](bool topScreen) {
                 const float scale = std::clamp(topScreen ? m_gameEntry.ndsTopScale : m_gameEntry.ndsBottomScale,
-                                               0.25f, 4.0f);
+                                               1.0f, 10.0f);
                 const float offsetX = topScreen ? m_gameEntry.ndsTopOffsetX : m_gameEntry.ndsBottomOffsetX;
                 const float offsetY = topScreen ? m_gameEntry.ndsTopOffsetY : m_gameEntry.ndsBottomOffsetY;
                 const float baseX = topScreen ? 224.0f : 800.0f;
@@ -3311,7 +3311,7 @@ namespace beiklive
 
     void GameView::_onNdsScreenValuesChanged(bool topScreen, float x, float y, float scale)
     {
-        scale = std::clamp(scale, 0.25f, 4.0f);
+        scale = std::clamp(scale, 1.0f, 10.0f);
         if (topScreen) {
             m_gameEntry.ndsTopOffsetX = x;
             m_gameEntry.ndsTopOffsetY = y;

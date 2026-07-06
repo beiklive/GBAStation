@@ -147,6 +147,7 @@ void drawOverlaySidebar(const NdsDisplaySettings& display,
                         float opacity = 1.0f);
 void drawShaderSidebar(const NdsDisplaySettings& display,
                        int focusedRow,
+                       float paramScrollY,
                        float progress,
                        float opacity = 1.0f);
 void drawFilePicker(const std::string& directory,

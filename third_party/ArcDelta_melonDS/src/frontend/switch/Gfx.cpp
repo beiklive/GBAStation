@@ -46,6 +46,12 @@ struct Transformation
     float Pad[3];
 };
 
+struct NdsShaderUniform
+{
+    float Param0[4];
+    float Param1[4];
+};
+
 int SwapchainSlot = 0;
 
 std::optional<GpuMemHeap> TextureHeap;
@@ -72,6 +78,8 @@ u32 CurClientVertex = 0;
 u32 CurClientIndex = 0;
 
 u32 CurSampler = 0;
+ShaderMode CurShaderMode = shaderMode_Default;
+std::array<float, 8> CurNdsShaderParams {2.4f, 0.05f, 0.65f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
 
 enum
 {
@@ -86,6 +94,7 @@ struct DrawCall
 {
     u32 Dirty;
     u32 TextureIdx, Sampler;
+    ShaderMode Shader;
     u32 Count;
     DkScissor Scissor;
     dk::Fence* Fence;
@@ -95,11 +104,12 @@ std::vector<DrawCall> DrawCalls;
 GpuMemHeap::Allocation VertexData[2];
 GpuMemHeap::Allocation IndexData[2];
 GpuMemHeap::Allocation UniformBuffer;
+GpuMemHeap::Allocation NdsShaderUniformBuffer;
 
 GpuMemHeap::Allocation TextureStagingBuffer[2];
 u32 TextureStagingBufferOffset;
 
-dk::Shader VertexShader, FragmentShader;
+dk::Shader VertexShader, FragmentShaders[shaderMode_Count];
 
 NWindow* Window;
 
@@ -666,7 +676,11 @@ void Init()
     Swapchain = dk::SwapchainMaker{Device, Window, fbArray}.create();
 
     LoadShader("romfs:/shaders/Default_vsh.dksh", VertexShader);
-    LoadShader("romfs:/shaders/Default_fsh.dksh", FragmentShader);
+    LoadShader("romfs:/shaders/Default_fsh.dksh", FragmentShaders[shaderMode_Default]);
+    LoadShader("romfs:/shaders/NdsDot_fsh.dksh", FragmentShaders[shaderMode_NdsDot]);
+    LoadShader("romfs:/shaders/NdsDotClear_fsh.dksh", FragmentShaders[shaderMode_NdsDotClear]);
+    LoadShader("romfs:/shaders/Default_fsh.dksh", FragmentShaders[shaderMode_NdsScanline]);
+    LoadShader("romfs:/shaders/Default_fsh.dksh", FragmentShaders[shaderMode_NdsCrt]);
 
     for (int i = 0; i < 2; i++)
     {
@@ -678,6 +692,7 @@ void Init()
         ImageDescriptors[i] = DataHeap->Alloc(sizeof(dk::ImageDescriptor) * 1024, DK_IMAGE_DESCRIPTOR_ALIGNMENT);
     }
     UniformBuffer = DataHeap->Alloc(sizeof(Transformation), DK_UNIFORM_BUF_ALIGNMENT);
+    NdsShaderUniformBuffer = DataHeap->Alloc(sizeof(NdsShaderUniform), DK_UNIFORM_BUF_ALIGNMENT);
 
     {
         SamplerDescriptor = DataHeap->Alloc(sizeof(dk::SamplerDescriptor) * 4, DK_SAMPLER_DESCRIPTOR_ALIGNMENT);
@@ -782,6 +797,8 @@ void StartFrame()
     SwapchainSlot = PresentQueue.acquireImage(Swapchain);
     FrameActive = true;
     DrawTransformStack.clear();
+    CurShaderMode = shaderMode_Default;
+    CurSampler = sampler_Nearest | sampler_ClampToEdge;
 
     AnimationTimestamp = armTicksToNs(armGetSystemTick()) * 0.000000001;
     if (!DoSkipTimestep)
@@ -878,6 +895,23 @@ void EndFrame(Color clearColor, int rotation)
         PresentCmdBuf.pushConstants(DataHeap->GpuAddr(UniformBuffer), UniformBuffer.Size, 0, sizeof(Transformation), &transformation);
         PresentCmdBuf.bindUniformBuffer(DkStage_Vertex, 0, DataHeap->GpuAddr(UniformBuffer), UniformBuffer.Size);
     }
+    {
+        NdsShaderUniform params {};
+        for (int i = 0; i < 4; ++i)
+        {
+            params.Param0[i] = CurNdsShaderParams[i];
+            params.Param1[i] = CurNdsShaderParams[i + 4];
+        }
+        PresentCmdBuf.pushConstants(DataHeap->GpuAddr(NdsShaderUniformBuffer),
+                                    NdsShaderUniformBuffer.Size,
+                                    0,
+                                    sizeof(NdsShaderUniform),
+                                    &params);
+        PresentCmdBuf.bindUniformBuffer(DkStage_Fragment,
+                                        1,
+                                        DataHeap->GpuAddr(NdsShaderUniformBuffer),
+                                        NdsShaderUniformBuffer.Size);
+    }
 
     memcpy(DataHeap->CpuAddr<void>(VertexData[SwapchainSlot]), VertexDataClient, sizeof(Vertex)*CurClientVertex);
     memcpy(DataHeap->CpuAddr<void>(IndexData[SwapchainSlot]), IndexDataClient, sizeof(u16)*CurClientIndex);
@@ -947,7 +981,7 @@ void EndFrame(Color clearColor, int rotation)
             }
             if (drawCall.Dirty & drawCallDirty_Shader)
             {
-                PresentCmdBuf.bindShaders(DkStageFlag_GraphicsMask, {&VertexShader, &FragmentShader});
+                PresentCmdBuf.bindShaders(DkStageFlag_GraphicsMask, {&VertexShader, &FragmentShaders[drawCall.Shader]});
             }
 
             PresentCmdBuf.drawIndexed(DkPrimitive_Triangles, drawCall.Count, 1, indexBufferOffset, 0, 0);
@@ -967,12 +1001,12 @@ void EndFrame(Color clearColor, int rotation)
 
 void WaitForFenceReady(dk::Fence& fence)
 {
-    DrawCalls.push_back({drawCallDirty_WaitFence, 0, 0, 0, DkScissor(), &fence});
+    DrawCalls.push_back({drawCallDirty_WaitFence, 0, 0, shaderMode_Default, 0, DkScissor(), &fence});
 }
 
 void SignalFence(dk::Fence& fence)
 {
-    DrawCalls.push_back({drawCallDirty_SignalFence, 0, 0, 0, DkScissor(), &fence});
+    DrawCalls.push_back({drawCallDirty_SignalFence, 0, 0, shaderMode_Default, 0, DkScissor(), &fence});
 }
 
 void IssueDrawCall(u32 texture, u32 count)
@@ -987,6 +1021,8 @@ void IssueDrawCall(u32 texture, u32 count)
             dirty |= drawCallDirty_Texture;
         if (prevDrawCall.Sampler != CurSampler)
             dirty |= drawCallDirty_Sampler;
+        if (prevDrawCall.Shader != CurShaderMode)
+            dirty |= drawCallDirty_Shader;
 
         if (prevDrawCall.Scissor.x != curScissor.x
             || prevDrawCall.Scissor.y != curScissor.y
@@ -1011,9 +1047,19 @@ void IssueDrawCall(u32 texture, u32 count)
     }
 
     if (dirty || lastWasFence)
-        DrawCalls.push_back({dirty, texture, CurSampler, count, curScissor, nullptr});
+        DrawCalls.push_back({dirty, texture, CurSampler, CurShaderMode, count, curScissor, nullptr});
     else
         DrawCalls[DrawCalls.size() - 1].Count += count;
+}
+
+void SetShaderMode(ShaderMode mode)
+{
+    CurShaderMode = (mode >= shaderMode_Default && mode < shaderMode_Count) ? mode : shaderMode_Default;
+}
+
+void SetNdsShaderParams(const std::array<float, 8>& params)
+{
+    CurNdsShaderParams = params;
 }
 
 void SetSampler(u32 sampler)

@@ -190,6 +190,8 @@ int main(int argc, char* argv[])
             options.overlayPath = jsonString(*record, "overlayPath");
             options.shaderEnabled = jsonBool(*record, "shaderEnabled", false);
             options.ndsShaderType = jsonString(*record, "NdsShaderType");
+            if (options.ndsShaderType.empty())
+                options.ndsShaderType = jsonString(*record, "shaderParaPath");
             options.customLayout.topScale = jsonFloat(*record, "ndsTopScale", 1.0f);
             options.customLayout.topOffsetX = jsonFloat(*record, "ndsTopOffsetX", 0.0f);
             options.customLayout.topOffsetY = jsonFloat(*record, "ndsTopOffsetY", 0.0f);

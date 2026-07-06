@@ -46,15 +46,17 @@ constexpr int kScreenGapMin = -256;
 constexpr int kScreenGapMax = 256;
 constexpr float kCustomScaleDefault = 1.0f;
 constexpr float kCustomScaleStep = 0.1f;
-constexpr float kCustomScaleMin = 0.25f;
-constexpr float kCustomScaleMax = 4.0f;
+constexpr float kCustomScaleMin = 1.0f;
+constexpr float kCustomScaleMax = 10.0f;
 constexpr float kCustomOffsetDefault = 0.0f;
 constexpr float kCustomOffsetStep = 1.0f;
 constexpr float kCustomOffsetMin = -1024.0f;
 constexpr float kCustomOffsetMax = 1024.0f;
 constexpr int kCustomLayoutControlCount = 6;
 constexpr int kOverlayControlCount = 2;
-constexpr int kShaderControlCount = 2;
+constexpr int kShaderBaseControlCount = 2;
+constexpr float kShaderParamRowH = 50.0f;
+constexpr float kShaderParamStepY = 58.0f;
 constexpr const char* kOverlayRoot = "sdmc:/GBAStation/overlays";
 
 constexpr const char* kShaderTypes[] = {
@@ -856,6 +858,64 @@ float NdsMenuLayer::smoothedContentScrollY() const
     return m_contentScrollY;
 }
 
+int NdsMenuLayer::shaderControlCount() const
+{
+    return kShaderBaseControlCount + static_cast<int>(m_display.shaderParams.size());
+}
+
+float NdsMenuLayer::shaderParamTargetScroll() const
+{
+    if (m_display.shaderParams.empty() || m_shaderSidebarFocus < kShaderBaseControlCount)
+        return 0.0f;
+
+    setMenuMetricsOrientation(m_display.orientation);
+    const bool portrait = menuMetrics().screenH > menuMetrics().screenW;
+    const float sectionY = portrait ? 158.0f : 122.0f;
+    const float rowY = sectionY + 44.0f;
+    const float rowGap = 67.0f;
+    const float paramSectionY = rowY + rowGap * 2.0f + 28.0f;
+    const float paramListY = paramSectionY + 42.0f;
+    const float bodyH = std::max(1.0f, menuMetrics().screenH - paramListY - 28.0f);
+    const int paramIndex = std::clamp(m_shaderSidebarFocus - kShaderBaseControlCount,
+                                      0,
+                                      static_cast<int>(m_display.shaderParams.size()) - 1);
+    const float contentH = static_cast<float>(m_display.shaderParams.size()) * kShaderParamStepY;
+    const float focusedTop = static_cast<float>(paramIndex) * kShaderParamStepY;
+    const float maxScroll = std::max(0.0f, contentH - bodyH);
+    float scroll = m_shaderParamScrollY;
+    if (focusedTop + kShaderParamRowH > scroll + bodyH)
+        scroll = focusedTop + kShaderParamRowH - bodyH;
+    if (focusedTop < scroll)
+        scroll = focusedTop;
+    return std::clamp(scroll, 0.0f, maxScroll);
+}
+
+float NdsMenuLayer::smoothedShaderParamScroll() const
+{
+    const float target = shaderParamTargetScroll();
+    const std::uint64_t now = armGetSystemTick();
+    if (m_shaderParamScrollLastTick == 0)
+    {
+        m_shaderParamScrollLastTick = now;
+        m_shaderParamScrollY = target;
+        return m_shaderParamScrollY;
+    }
+
+    const float dtMs = static_cast<float>(armTicksToNs(now - m_shaderParamScrollLastTick)) / 1000000.0f;
+    m_shaderParamScrollLastTick = now;
+    const float t = 1.0f - std::exp(-dtMs / 72.0f);
+    m_shaderParamScrollY += (target - m_shaderParamScrollY) * std::clamp(t, 0.0f, 1.0f);
+    if (std::fabs(target - m_shaderParamScrollY) < 0.5f)
+        m_shaderParamScrollY = target;
+    return m_shaderParamScrollY;
+}
+
+void NdsMenuLayer::resetShaderParamScroll()
+{
+    m_shaderParamScrollY = 0.0f;
+    m_shaderParamScrollLastTick = 0;
+}
+
 void NdsMenuLayer::setFastForwardMultiplier(float multiplier)
 {
     m_display.fastForwardMultiplier = std::clamp(multiplier, 0.1f, 5.0f);
@@ -890,6 +950,13 @@ void NdsMenuLayer::setDisplaySettings(const NdsDisplaySettings& settings)
     }
     if (!validShader)
         m_display.ndsShaderType = "dot";
+    for (auto& param : m_display.shaderParams)
+    {
+        param.minValue = std::min(param.minValue, param.maxValue);
+        param.step = std::max(0.0001f, param.step);
+        param.value = std::clamp(param.value, param.minValue, param.maxValue);
+    }
+    m_shaderSidebarFocus = std::clamp(m_shaderSidebarFocus, 0, std::max(0, shaderControlCount() - 1));
     setCustomLayoutSettings(m_display.customLayout);
 }
 
@@ -1068,6 +1135,7 @@ void NdsMenuLayer::beginShaderSidebar()
     m_shaderSidebarAnimStartTick = armGetSystemTick();
     m_shaderSidebarFocus = 0;
     m_selectorDirection = 0;
+    resetShaderParamScroll();
     resetContentScroll();
 }
 
@@ -1204,6 +1272,22 @@ bool NdsMenuLayer::cycleShaderSetting(int direction)
         m_display.shaderEnabled = !m_display.shaderEnabled;
         return true;
     }
+    if (m_shaderSidebarFocus >= kShaderBaseControlCount)
+    {
+        const int paramIndex = m_shaderSidebarFocus - kShaderBaseControlCount;
+        if (paramIndex < 0 || paramIndex >= static_cast<int>(m_display.shaderParams.size()))
+            return false;
+
+        auto& param = m_display.shaderParams[paramIndex];
+        const float next = direction == 0
+            ? param.defaultValue
+            : stepFloatValue(param.value, direction, param.step, param.minValue, param.maxValue);
+        if (std::fabs(next - param.value) < 0.0001f)
+            return false;
+        param.value = next;
+        return true;
+    }
+
     if (m_shaderSidebarFocus != 1 || direction == 0)
         return false;
 
@@ -1338,7 +1422,7 @@ bool NdsMenuLayer::updateHeldCustomSelector(std::uint64_t buttonsHeld)
 bool NdsMenuLayer::updateHeldShaderSelector(std::uint64_t buttonsHeld)
 {
     if (!m_shaderSidebarVisible ||
-        m_shaderSidebarFocus != 1 ||
+        m_shaderSidebarFocus == 0 ||
         (buttonsHeld & (HidNpadButton_L | HidNpadButton_R)) == 0)
     {
         m_selectorDirection = 0;
@@ -1641,10 +1725,11 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
             closeShaderSidebar(true);
             return {NdsMenuAction::ShaderSettingsCommitted, -1};
         }
+        const int shaderCount = std::max(1, shaderControlCount());
         if (isDirectionUp(navButtons))
-            m_shaderSidebarFocus = (m_shaderSidebarFocus + kShaderControlCount - 1) % kShaderControlCount;
+            m_shaderSidebarFocus = (m_shaderSidebarFocus + shaderCount - 1) % shaderCount;
         if (isDirectionDown(navButtons))
-            m_shaderSidebarFocus = (m_shaderSidebarFocus + 1) % kShaderControlCount;
+            m_shaderSidebarFocus = (m_shaderSidebarFocus + 1) % shaderCount;
         if (buttonsDown & HidNpadButton_A)
             return cycleShaderSetting(0) ? NdsMenuResult{NdsMenuAction::ShaderSettingsChanged, -1}
                                          : NdsMenuResult{};
@@ -1982,7 +2067,7 @@ void NdsMenuLayer::draw() const
         if (progress > 0.0f)
         {
             const bool transformed = pushMenuOrientationTransform(m_display.orientation);
-            drawShaderSidebar(m_display, m_shaderSidebarFocus, progress, progress);
+            drawShaderSidebar(m_display, m_shaderSidebarFocus, smoothedShaderParamScroll(), progress, progress);
             if (transformed)
                 Gfx::PopDrawTransform();
         }

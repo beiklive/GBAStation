@@ -1,6 +1,8 @@
 #ifndef GFX_H
 #define GFX_H
 
+#include <array>
+
 #include <switch.h>
 #include <deko3d.hpp>
 
@@ -186,6 +188,18 @@ void StartFrame();
 void EndFrame(Color clearColor, int rotation);
 void SkipTimestep();
 
+enum ShaderMode
+{
+    shaderMode_Default = 0,
+    shaderMode_NdsDot,
+    shaderMode_NdsDotClear,
+    shaderMode_NdsScanline,
+    shaderMode_NdsCrt,
+    shaderMode_Count
+};
+
+void SetShaderMode(ShaderMode mode);
+void SetNdsShaderParams(const std::array<float, 8>& params);
 void SetSampler(u32 sampler);
 
 void PushDrawTransform(float m00, float m01, float m02, float m10, float m11, float m12);

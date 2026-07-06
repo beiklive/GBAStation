@@ -68,6 +68,13 @@ namespace beiklive
             fs::remove(tmp, removeEc);
             return false;
         }
+
+        std::string normalizeNdsShaderType(const std::string& type)
+        {
+            if (type == "dot-clear" || type == "scanline" || type == "crt")
+                return type;
+            return "dot";
+        }
     }
 
     /// 确保字符串为合法 UTF-8（剔除非法字节）
@@ -102,6 +109,8 @@ namespace beiklive
 
     void to_json(nlohmann::json &j, const GameEntry &entry)
     {
+        const bool isNds = entry.platform == (int)beiklive::enums::EmuPlatform::EmuNDS;
+        const std::string ndsShaderType = normalizeNdsShaderType(entry.NdsShaderType);
         j = nlohmann::json{
             {"path", sanitizeUtf8(entry.path)},
             {"title", sanitizeUtf8(entry.title)},
@@ -136,10 +145,10 @@ namespace beiklive
             {"ndsIntegerScale", entry.ndsIntegerScale},
             {"ndsScreenGap", entry.ndsScreenGap},
             {"ndsInternalResolution", entry.ndsInternalResolution},
-            {"NdsShaderType", sanitizeUtf8(entry.NdsShaderType)},
-            {"shaderParaPath", sanitizeUtf8(entry.shaderParaPath)},
-            {"shaderParaNames", entry.shaderParaNames},
-            {"shaderParaValues", entry.shaderParaValues}};
+            {"NdsShaderType", sanitizeUtf8(ndsShaderType)},
+            {"shaderParaPath", sanitizeUtf8(isNds ? ndsShaderType : entry.shaderParaPath)},
+            {"shaderParaNames", isNds ? std::vector<std::string>() : entry.shaderParaNames},
+            {"shaderParaValues", isNds ? std::vector<float>() : entry.shaderParaValues}};
     }
 
     void from_json(const nlohmann::json &j, GameEntry &entry)
@@ -178,10 +187,19 @@ namespace beiklive
         entry.ndsIntegerScale = j.value("ndsIntegerScale", true);
         entry.ndsScreenGap = std::clamp(j.value("ndsScreenGap", 0), -256, 256);
         entry.ndsInternalResolution = std::clamp(j.value("ndsInternalResolution", 1), 1, 4);
-        entry.NdsShaderType = j.value("NdsShaderType", "dot");
+        entry.NdsShaderType = j.value("NdsShaderType", "");
         entry.shaderParaPath = j.value("shaderParaPath", "");
         entry.shaderParaNames = j.value("shaderParaNames", std::vector<std::string>());
         entry.shaderParaValues = j.value("shaderParaValues", std::vector<float>());
+        if (entry.platform == (int)beiklive::enums::EmuPlatform::EmuNDS)
+        {
+            if (entry.NdsShaderType.empty())
+                entry.NdsShaderType = entry.shaderParaPath.empty() ? "dot" : entry.shaderParaPath;
+            entry.NdsShaderType = normalizeNdsShaderType(entry.NdsShaderType);
+            entry.shaderParaPath = entry.NdsShaderType;
+            entry.shaderParaNames.clear();
+            entry.shaderParaValues.clear();
+        }
     }
 
     // ==================== GameDatabase 实现（单线程版） ====================

@@ -74,7 +74,7 @@ RectF customCanvasRect(const RectF& bounds,
                        float offsetX,
                        float offsetY)
 {
-    scale = std::clamp(scale, 0.25f, 4.0f);
+    scale = std::clamp(scale, 1.0f, 10.0f);
     const float dstW = std::max(4.0f, std::round(256.0f * scale / 4.0f) * 4.0f);
     const float dstH = std::max(3.0f, dstW * 3.0f / 4.0f);
     const float dstX = baseX + offsetX - (dstW - 256.0f) * 0.5f;
@@ -90,6 +90,17 @@ RectF customCanvasRect(const RectF& bounds,
 bool validRect(const RectF& rect)
 {
     return rect.w > 0.0f && rect.h > 0.0f;
+}
+
+Gfx::ShaderMode shaderModeFromType(const std::string& type)
+{
+    if (type == "dot-clear")
+        return Gfx::shaderMode_NdsDotClear;
+    if (type == "scanline")
+        return Gfx::shaderMode_NdsScanline;
+    if (type == "crt")
+        return Gfx::shaderMode_NdsCrt;
+    return Gfx::shaderMode_NdsDot;
 }
 
 float clampGap(float gap, float available)
@@ -170,6 +181,14 @@ RectF NdsGameLayer::touchRect() const
 void NdsGameLayer::setScreenLayout(int layout)
 {
     m_layout = static_cast<ScreenLayout>(std::clamp(layout, 0, 7));
+}
+
+void NdsGameLayer::setShaderType(const std::string& type)
+{
+    if (type == "dot-clear" || type == "scanline" || type == "crt")
+        m_shaderType = type;
+    else
+        m_shaderType = "dot";
 }
 
 std::vector<NdsGameLayer::ScreenDrawRect> NdsGameLayer::computeScreenRects() const
@@ -527,8 +546,13 @@ void NdsGameLayer::drawScreens() const
     const float srcHeight = static_cast<float>(m_renderer->GetFramebufferHeight());
     const auto rects = computeScreenRects();
 
-    Gfx::SetSampler((m_linearFiltering ? Gfx::sampler_Linear : Gfx::sampler_Nearest) |
-                    Gfx::sampler_ClampToEdge);
+    const bool useShader = m_shaderEnabled;
+    const u32 screenSampler = (useShader ? Gfx::sampler_Nearest :
+                              (m_linearFiltering ? Gfx::sampler_Linear : Gfx::sampler_Nearest)) |
+                              Gfx::sampler_ClampToEdge;
+    Gfx::SetSampler(screenSampler);
+    Gfx::SetNdsShaderParams(m_shaderParams);
+    Gfx::SetShaderMode(useShader ? shaderModeFromType(m_shaderType) : Gfx::shaderMode_Default);
     if (m_waitForFramebufferReady)
         Gfx::WaitForFenceReady(m_renderer->FramebufferReady[GPU::FrontBuffer]);
     for (const auto& item : rects)
@@ -584,6 +608,8 @@ void NdsGameLayer::drawScreens() const
                                {srcWidth, srcHeight});
         }
     }
+    Gfx::SetShaderMode(Gfx::shaderMode_Default);
+    Gfx::SetSampler(Gfx::sampler_Nearest | Gfx::sampler_ClampToEdge);
 
     if (m_overlayEnabled && m_overlayTexture != 0 && m_overlayWidth > 0 && m_overlayHeight > 0)
     {
@@ -595,6 +621,7 @@ void NdsGameLayer::drawScreens() const
                            {static_cast<float>(m_overlayWidth), static_cast<float>(m_overlayHeight)},
                            {1.0f, 1.0f, 1.0f, 1.0f});
     }
+    Gfx::SetSampler(Gfx::sampler_Nearest | Gfx::sampler_ClampToEdge);
     Gfx::SignalFence(m_renderer->FramebufferPresented[GPU::FrontBuffer]);
 }
 

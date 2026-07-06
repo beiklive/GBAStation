@@ -779,6 +779,51 @@ void drawPanelLrSelectorRow(Vector2f pos,
                   Gfx::align_Center, Gfx::align_Center, NDS_STUB_KEYICON_RB);
 }
 
+void drawPanelFloatAdjusterRow(Vector2f pos,
+                               float rowW,
+                               const NdsShaderParam& param,
+                               bool focused,
+                               float opacity)
+{
+    if (focused)
+        drawGradientBorder(pos - Vector2f{3.0f, 3.0f}, {rowW + 6.0f, kUiRowFocusH}, 3.0f);
+    drawRect(pos, {rowW, kUiRowH}, {1.0f, 1.0f, 1.0f, 0.050f * opacity}, true);
+    drawBorder(pos, {rowW, kUiRowH}, 1.0f, {1.0f, 1.0f, 1.0f, 0.11f * opacity});
+
+    const std::string label = ellipsizeText(param.label.empty() ? param.name : param.label, rowW - 220.0f, kUiValueFont);
+    Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{18.0f, kUiLabelY}, kUiValueFont,
+                  {1.0f, 1.0f, 1.0f, 0.90f * opacity}, "%s", label.c_str());
+
+    char valueText[40];
+    const int decimals = std::clamp(param.decimals, 0, 3);
+    if (decimals <= 0)
+        std::snprintf(valueText, sizeof(valueText), "%.0f", param.value);
+    else
+        std::snprintf(valueText, sizeof(valueText), "%.*f", decimals, param.value);
+
+    char metaText[72];
+    if (decimals <= 0)
+        std::snprintf(metaText, sizeof(metaText), "默认 %.0f / 步长 %.0f", param.defaultValue, param.step);
+    else
+        std::snprintf(metaText, sizeof(metaText), "默认 %.*f / 步长 %.*f", decimals, param.defaultValue, decimals, param.step);
+
+    const float valueCenterX = rowW - 102.0f;
+    Gfx::DrawText(Gfx::SystemFontNintendoExt, pos + Vector2f{rowW - 184.0f, kUiCenterY}, kUiIconFont,
+                  {0.80f, 0.92f, 1.0f, 0.90f * opacity},
+                  Gfx::align_Center, Gfx::align_Center, NDS_STUB_KEYICON_LB);
+    Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{valueCenterX, 13.0f}, kUiValueFont,
+                  {0.78f, 0.92f, 1.0f, 0.96f * opacity},
+                  Gfx::align_Center, Gfx::align_Left,
+                  valueText);
+    Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{valueCenterX, kUiMetaY}, kUiMetaFont,
+                  {0.74f, 0.82f, 0.90f, 0.52f * opacity},
+                  Gfx::align_Center, Gfx::align_Left,
+                  metaText);
+    Gfx::DrawText(Gfx::SystemFontNintendoExt, pos + Vector2f{rowW - 20.0f, kUiCenterY}, kUiIconFont,
+                  {0.80f, 0.92f, 1.0f, 0.90f * opacity},
+                  Gfx::align_Center, Gfx::align_Center, NDS_STUB_KEYICON_RB);
+}
+
 void drawPanelSection(float panelX, float panelW, float y, const char* text, float opacity)
 {
     drawLine({panelX + 28.0f, y + 12.0f}, {88.0f, 1.0f}, {1.0f, 1.0f, 1.0f, 0.13f * opacity});
@@ -1519,6 +1564,7 @@ void drawOverlaySidebar(const NdsDisplaySettings& display,
 
 void drawShaderSidebar(const NdsDisplaySettings& display,
                        int focusedRow,
+                       float paramScrollY,
                        float progress,
                        float opacity)
 {
@@ -1533,6 +1579,9 @@ void drawShaderSidebar(const NdsDisplaySettings& display,
     const float sectionY = portrait ? 158.0f : 122.0f;
     const float rowY = sectionY + 44.0f;
     const float rowGap = 67.0f;
+    const float paramSectionY = rowY + rowGap * 2.0f + 28.0f;
+    const float paramListY = paramSectionY + 42.0f;
+    const float paramListH = std::max(1.0f, kScreenH - paramListY - 28.0f);
 
     drawRect({0.0f, 0.0f}, {kScreenW, kScreenH}, {0.0f, 0.0f, 0.0f, 0.24f * opacity}, true);
     drawRect({panelX, 0.0f}, {panelW, kScreenH}, {0.015f, 0.020f, 0.030f, 0.95f * opacity}, true);
@@ -1540,12 +1589,38 @@ void drawShaderSidebar(const NdsDisplaySettings& display,
     Gfx::DrawText(Gfx::SystemFontChinese, {panelX + 30.0f, headerY}, 28.0f,
                   {1.0f, 1.0f, 1.0f, 0.96f * opacity}, "滤镜选择");
     Gfx::DrawText(Gfx::SystemFontChinese, {panelX + 30.0f, hintY}, 16.0f,
-                  {0.78f, 0.86f, 0.94f, 0.62f * opacity}, "B 返回   A 切换");
+                  {0.78f, 0.86f, 0.94f, 0.62f * opacity}, "B 返回   LR 调整   A 开关/默认");
 
     drawPanelSection(panelX, panelW, sectionY, "滤镜设置", opacity);
     drawPanelSwitchRow({panelX + 29.0f, rowY}, rowW, "滤镜开关", display.shaderEnabled, focusedRow == 0, opacity);
     drawPanelLrSelectorRow({panelX + 29.0f, rowY + rowGap}, rowW, "滤镜类型",
                            shaderTypeLabel(display.ndsShaderType), focusedRow == 1, opacity);
+
+    drawPanelSection(panelX, panelW, paramSectionY, "参数设置", opacity);
+    if (display.shaderParams.empty())
+    {
+        Gfx::DrawText(Gfx::SystemFontChinese, {panelX + 31.0f, paramListY + 14.0f}, 18.0f,
+                      {0.70f, 0.78f, 0.86f, 0.50f * opacity}, "当前滤镜暂无可调参数");
+        return;
+    }
+
+    Gfx::PushScissor(static_cast<u32>(std::max(0.0f, panelX + 22.0f)),
+                     static_cast<u32>(std::max(0.0f, paramListY - 4.0f)),
+                     static_cast<u32>(std::max(1.0f, panelW - 44.0f)),
+                     static_cast<u32>(std::max(1.0f, paramListH + 8.0f)));
+    constexpr float paramStepY = 58.0f;
+    for (int i = 0; i < static_cast<int>(display.shaderParams.size()); ++i)
+    {
+        const float y = paramListY + static_cast<float>(i) * paramStepY - paramScrollY;
+        if (y > paramListY + paramListH || y + kUiRowH < paramListY - 8.0f)
+            continue;
+        drawPanelFloatAdjusterRow({panelX + 29.0f, y},
+                                  rowW,
+                                  display.shaderParams[i],
+                                  focusedRow == i + 2,
+                                  opacity);
+    }
+    Gfx::PopScissor();
 }
 
 void drawFilePicker(const std::string& directory,
