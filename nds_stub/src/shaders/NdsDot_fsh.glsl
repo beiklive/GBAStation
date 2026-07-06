@@ -24,7 +24,7 @@ float colorBloom(vec3 color)
 {
     const vec3 grayCoeff = vec3(0.30, 0.59, 0.11);
     float bright = dot(color, grayCoeff);
-    float shine = ndsParams.param0.y;
+    float shine = ndsParams.param0.y * 0.35;
     return mix(1.0 + shine, 1.0 - shine, bright);
 }
 
@@ -32,7 +32,7 @@ vec3 lookup(vec2 pixelNo, vec2 sampleUV, vec2 offset)
 {
     vec3 color = texture(inTexture, sampleUV).rgb;
     float delta = dist2(fract(pixelNo), offset + vec2(0.5, 0.5));
-    float gammaValue = max(ndsParams.param0.x, 0.01);
+    float gammaValue = max(ndsParams.param0.x * 1.25, 0.01);
     return color * exp(-gammaValue * delta * colorBloom(color));
 }
 
@@ -54,8 +54,8 @@ void main()
     color += lookup(pixelNo, inUV + texel * vec2( 0.0,  1.0), vec2( 0.0,  1.0));
     color += lookup(pixelNo, inUV + texel * vec2( 1.0,  1.0), vec2( 1.0,  1.0));
 
-    float blend = clamp(ndsParams.param0.z, 0.0, 1.0);
-    vec3 outRgb = mix(1.2 * midColor, color, blend) * inColor.rgb;
+    float blend = clamp(ndsParams.param0.z * 0.55, 0.0, 1.0);
+    vec3 outRgb = mix(1.05 * midColor, color * 0.42, blend) * inColor.rgb;
     float alpha = texture(inTexture, inUV).a * inColor.a;
     alpha *= clamp(sqrt(coolTransparency.x), coolTransparency.y, coolTransparency.z);
     outColor = vec4(outRgb, alpha);

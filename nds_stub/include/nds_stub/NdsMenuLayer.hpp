@@ -25,8 +25,17 @@ enum class NdsMenuAction {
     CheatSettingsChanged,
     SyncDisplaySettings,
     SyncOverlaySettings,
+    SyncShaderSettings,
     ResetGame,
     ExitGame,
+};
+
+enum class NdsMenuSound {
+    Focus,
+    Click,
+    Back,
+    Error,
+    Slider,
 };
 
 struct NdsMenuResult {
@@ -122,6 +131,7 @@ public:
     void showSyncResult(NdsMenuAction action, int count);
     void showToast(const std::string& message);
     void clearToast();
+    std::vector<NdsMenuSound> consumeSounds();
 
 private:
     enum class FocusScope {
@@ -181,6 +191,8 @@ private:
     float targetContentScrollY() const;
     float smoothedContentScrollY() const;
     void resetContentScroll();
+    void reopenDisplayContent(int focusedRow);
+    void queueSound(NdsMenuSound sound);
 
     bool m_visible = false;
     int m_selected = 0;
@@ -258,6 +270,7 @@ private:
     mutable bool m_statePreviewAttempted = false;
     mutable std::string m_toastMessage;
     mutable std::uint64_t m_toastStartTick = 0;
+    std::vector<NdsMenuSound> m_pendingSounds;
 };
 
 } // namespace beiklive::nds_stub

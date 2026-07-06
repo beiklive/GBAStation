@@ -66,6 +66,12 @@ constexpr float kShaderListFooterH = 54.0f;
 constexpr float kShaderListPadTop = 30.0f;
 constexpr float kShaderListPadBottom = 14.0f;
 constexpr const char* kOverlayRoot = "sdmc:/GBAStation/overlays";
+constexpr int kDisplayRowCustomLayout = 4;
+constexpr int kDisplayRowOverlay = 7;
+constexpr int kDisplayRowShader = 8;
+constexpr int kDisplayRowSyncDisplay = 9;
+constexpr int kDisplayRowSyncOverlay = 10;
+constexpr int kDisplayRowSyncShader = 11;
 
 bool isDirectionUp(std::uint64_t buttons)
 {
@@ -785,6 +791,29 @@ void NdsMenuLayer::clearToast()
     m_toastStartTick = 0;
 }
 
+std::vector<NdsMenuSound> NdsMenuLayer::consumeSounds()
+{
+    std::vector<NdsMenuSound> sounds;
+    sounds.swap(m_pendingSounds);
+    return sounds;
+}
+
+void NdsMenuLayer::queueSound(NdsMenuSound sound)
+{
+    m_pendingSounds.push_back(sound);
+}
+
+void NdsMenuLayer::reopenDisplayContent(int focusedRow)
+{
+    open();
+    m_selected = itemIndex(Item::Display);
+    m_previousSelected = m_selected;
+    m_selectionAnimating = false;
+    m_focusScope = FocusScope::Content;
+    m_contentFocus = std::clamp(focusedRow, 0, std::max(0, contentControlCount(Item::Display) - 1));
+    resetContentScroll();
+}
+
 float NdsMenuLayer::panelProgress() const
 {
     if (!m_panelAnimating)
@@ -1127,19 +1156,19 @@ bool NdsMenuLayer::activateDisplayControl()
             return false;
         m_display.screenGap = kScreenGapDefault;
         return true;
-    case 4:
+    case kDisplayRowCustomLayout:
         if (m_display.layout == 7)
             beginCustomLayoutEditor();
         return false;
-    case 7:
+    case kDisplayRowOverlay:
         beginOverlaySidebar();
         return false;
-    case 8:
+    case kDisplayRowShader:
         beginShaderSidebar();
         return false;
-    case 9:
-    case 10:
-    case 11:
+    case kDisplayRowSyncDisplay:
+    case kDisplayRowSyncOverlay:
+    case kDisplayRowSyncShader:
         return false;
     default:
         return false;
@@ -1563,7 +1592,9 @@ void NdsMenuLayer::closeDeleteDialog()
 
 void NdsMenuLayer::openSyncConfirmDialog(NdsMenuAction action)
 {
-    if (action != NdsMenuAction::SyncDisplaySettings && action != NdsMenuAction::SyncOverlaySettings)
+    if (action != NdsMenuAction::SyncDisplaySettings &&
+        action != NdsMenuAction::SyncOverlaySettings &&
+        action != NdsMenuAction::SyncShaderSettings)
         return;
     m_syncConfirmVisible = true;
     m_syncConfirmAction = action;
@@ -1578,7 +1609,9 @@ void NdsMenuLayer::closeSyncConfirmDialog()
 
 void NdsMenuLayer::showSyncResult(NdsMenuAction action, int count)
 {
-    if (action != NdsMenuAction::SyncDisplaySettings && action != NdsMenuAction::SyncOverlaySettings)
+    if (action != NdsMenuAction::SyncDisplaySettings &&
+        action != NdsMenuAction::SyncOverlaySettings &&
+        action != NdsMenuAction::SyncShaderSettings)
         return;
     closeSyncConfirmDialog();
     m_syncResultVisible = true;
@@ -1610,7 +1643,7 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
         m_customLayoutReturnToMenu = false;
         m_selectorDirection = 0;
         if (returnToMenu)
-            open();
+            reopenDisplayContent(kDisplayRowCustomLayout);
     }
 
     if (m_overlaySidebarVisible && m_overlaySidebarClosing &&
@@ -1622,7 +1655,7 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
         m_overlaySidebarReturnToMenu = false;
         m_selectorDirection = 0;
         if (returnToMenu)
-            open();
+            reopenDisplayContent(kDisplayRowOverlay);
     }
 
     if (m_shaderSidebarVisible && m_shaderSidebarClosing &&
@@ -1634,7 +1667,7 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
         m_shaderSidebarReturnToMenu = false;
         m_selectorDirection = 0;
         if (returnToMenu)
-            open();
+            reopenDisplayContent(kDisplayRowShader);
     }
 
     if (m_filePickerVisible && m_filePickerClosing &&
@@ -1662,20 +1695,27 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
         if (m_filePickerImagePreviewVisible)
         {
             if (buttonsDown & (HidNpadButton_A | HidNpadButton_B))
+            {
+                queueSound((buttonsDown & HidNpadButton_B) ? NdsMenuSound::Back : NdsMenuSound::Click);
                 releaseFilePickerPreview();
+            }
             return {};
         }
 
         const std::uint64_t navButtons = buttonsDown | updateHeldNavigation(buttonsDown, buttonsHeld);
         if (buttonsDown & HidNpadButton_B)
         {
+            queueSound(NdsMenuSound::Back);
             closeFilePicker(true);
             return {};
         }
+        const int oldFocus = m_filePickerFocus;
         if (isDirectionUp(navButtons) && !m_filePickerEntries.empty())
             m_filePickerFocus = std::max(0, m_filePickerFocus - 1);
         if (isDirectionDown(navButtons) && !m_filePickerEntries.empty())
             m_filePickerFocus = std::min(static_cast<int>(m_filePickerEntries.size()) - 1, m_filePickerFocus + 1);
+        if (m_filePickerFocus != oldFocus)
+            queueSound(NdsMenuSound::Focus);
 
         if ((buttonsDown & HidNpadButton_A) &&
             m_filePickerFocus >= 0 &&
@@ -1684,15 +1724,18 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
             const auto entry = m_filePickerEntries[m_filePickerFocus];
             if (entry.isDirectory)
             {
+                queueSound(NdsMenuSound::Click);
                 reloadFilePickerEntries(entry.path);
                 return {};
             }
             if (endsWithNoCase(entry.path, ".png"))
             {
+                queueSound(NdsMenuSound::Click);
                 m_display.overlayPath = entry.path;
                 closeFilePicker(true);
                 return {NdsMenuAction::OverlayPathSelected, -1, entry.path};
             }
+            queueSound(NdsMenuSound::Error);
         }
 
         if ((buttonsDown & HidNpadButton_X) &&
@@ -1701,7 +1744,14 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
         {
             const auto& entry = m_filePickerEntries[m_filePickerFocus];
             if (!entry.isDirectory && endsWithNoCase(entry.path, ".png"))
+            {
+                queueSound(NdsMenuSound::Click);
                 ensureFilePickerPreview();
+            }
+            else
+            {
+                queueSound(NdsMenuSound::Error);
+            }
         }
         return {};
     }
@@ -1715,31 +1765,60 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
 
         if (buttonsDown & HidNpadButton_B)
         {
+            queueSound(NdsMenuSound::Back);
             m_customLayoutEditorClosing = true;
             m_customLayoutReturnToMenu = true;
             m_customLayoutAnimStartTick = armGetSystemTick();
             m_selectorDirection = 0;
             return {NdsMenuAction::CustomLayoutCommitted, -1};
         }
+        const int oldFocus = m_customLayoutFocus;
         if (isDirectionUp(navButtons))
             m_customLayoutFocus = (m_customLayoutFocus + kCustomLayoutControlCount - 1) % kCustomLayoutControlCount;
         if (isDirectionDown(navButtons))
             m_customLayoutFocus = (m_customLayoutFocus + 1) % kCustomLayoutControlCount;
+        if (m_customLayoutFocus != oldFocus)
+            queueSound(NdsMenuSound::Focus);
 
         if (buttonsDown & HidNpadButton_L)
-            return cycleCustomLayoutSetting(-1) ? NdsMenuResult{NdsMenuAction::CustomLayoutChanged, -1}
-                                                : NdsMenuResult{};
+        {
+            if (cycleCustomLayoutSetting(-1))
+            {
+                queueSound(NdsMenuSound::Slider);
+                return {NdsMenuAction::CustomLayoutChanged, -1};
+            }
+            return {};
+        }
         if (buttonsDown & HidNpadButton_R)
-            return cycleCustomLayoutSetting(1) ? NdsMenuResult{NdsMenuAction::CustomLayoutChanged, -1}
-                                               : NdsMenuResult{};
+        {
+            if (cycleCustomLayoutSetting(1))
+            {
+                queueSound(NdsMenuSound::Slider);
+                return {NdsMenuAction::CustomLayoutChanged, -1};
+            }
+            return {};
+        }
         if (updateHeldCustomSelector(buttonsHeld))
+        {
+            queueSound(NdsMenuSound::Slider);
             return {NdsMenuAction::CustomLayoutChanged, -1};
+        }
         if (isDirectionLeft(buttonsDown) || isDirectionRight(buttonsDown))
-            return cycleCustomLayoutSetting(isDirectionRight(buttonsDown) ? 1 : -1)
-                ? NdsMenuResult{NdsMenuAction::CustomLayoutChanged, -1}
-                : NdsMenuResult{};
+        {
+            if (cycleCustomLayoutSetting(isDirectionRight(buttonsDown) ? 1 : -1))
+            {
+                queueSound(NdsMenuSound::Slider);
+                return {NdsMenuAction::CustomLayoutChanged, -1};
+            }
+            return {};
+        }
         if ((buttonsDown & HidNpadButton_A) && resetCustomLayoutSetting())
+        {
+            queueSound(NdsMenuSound::Click);
             return {NdsMenuAction::CustomLayoutChanged, -1};
+        }
+        if (buttonsDown & HidNpadButton_A)
+            queueSound(NdsMenuSound::Error);
 
         return {};
     }
@@ -1751,20 +1830,31 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
         const std::uint64_t navButtons = buttonsDown | updateHeldNavigation(buttonsDown, buttonsHeld);
         if (buttonsDown & HidNpadButton_B)
         {
+            queueSound(NdsMenuSound::Back);
             closeOverlaySidebar(true);
             return {NdsMenuAction::OverlaySettingsCommitted, -1};
         }
+        const int oldFocus = m_overlaySidebarFocus;
         if (isDirectionUp(navButtons))
             m_overlaySidebarFocus = (m_overlaySidebarFocus + kOverlayControlCount - 1) % kOverlayControlCount;
         if (isDirectionDown(navButtons))
             m_overlaySidebarFocus = (m_overlaySidebarFocus + 1) % kOverlayControlCount;
+        if (m_overlaySidebarFocus != oldFocus)
+            queueSound(NdsMenuSound::Focus);
         if (buttonsDown & HidNpadButton_A)
         {
             if (m_overlaySidebarFocus == 0)
-                return cycleOverlaySetting(0) ? NdsMenuResult{NdsMenuAction::OverlaySettingsChanged, -1}
-                                              : NdsMenuResult{};
+            {
+                if (cycleOverlaySetting(0))
+                {
+                    queueSound(NdsMenuSound::Click);
+                    return {NdsMenuAction::OverlaySettingsChanged, -1};
+                }
+                return {};
+            }
             if (m_overlaySidebarFocus == 1)
             {
+                queueSound(NdsMenuSound::Click);
                 beginFilePicker();
                 return {};
             }
@@ -1783,6 +1873,7 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
             const int shaderCount = std::max(1, static_cast<int>(shaderEntries.size()));
             if (buttonsDown & HidNpadButton_B)
             {
+                queueSound(NdsMenuSound::Back);
                 if (m_shaderListPath.empty())
                 {
                     closeShaderList();
@@ -1806,17 +1897,24 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
                 }
                 return {};
             }
+            const int oldFocus = m_shaderListFocus;
             if (isDirectionUp(navButtons))
                 m_shaderListFocus = (m_shaderListFocus + shaderCount - 1) % shaderCount;
             if (isDirectionDown(navButtons))
                 m_shaderListFocus = (m_shaderListFocus + 1) % shaderCount;
+            if (m_shaderListFocus != oldFocus)
+                queueSound(NdsMenuSound::Focus);
             if (buttonsDown & HidNpadButton_A)
             {
                 if (shaderEntries.empty())
+                {
+                    queueSound(NdsMenuSound::Error);
                     return {};
+                }
                 const auto& entry = shaderEntries[std::clamp(m_shaderListFocus, 0, static_cast<int>(shaderEntries.size()) - 1)];
                 if (entry.kind == NdsShaderListEntry::Kind::Directory)
                 {
+                    queueSound(NdsMenuSound::Click);
                     m_shaderListPath = entry.path;
                     m_shaderListFocus = currentShaderTypeIndex();
                     resetShaderListScroll();
@@ -1825,7 +1923,11 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
                 const std::string nextType = entry.shaderType;
                 closeShaderList();
                 if (nextType == m_display.ndsShaderType)
+                {
+                    queueSound(NdsMenuSound::Click);
                     return {};
+                }
+                queueSound(NdsMenuSound::Click);
                 m_display.ndsShaderType = nextType;
                 resetShaderParamScroll();
                 return {NdsMenuAction::ShaderSettingsChanged, -1};
@@ -1835,36 +1937,66 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
         const std::uint64_t navButtons = buttonsDown | updateHeldNavigation(buttonsDown, buttonsHeld);
         if (buttonsDown & HidNpadButton_B)
         {
+            queueSound(NdsMenuSound::Back);
             closeShaderSidebar(true);
             return {NdsMenuAction::ShaderSettingsCommitted, -1};
         }
         const int shaderCount = std::max(1, shaderControlCount());
+        const int oldFocus = m_shaderSidebarFocus;
         if (isDirectionUp(navButtons))
             m_shaderSidebarFocus = (m_shaderSidebarFocus + shaderCount - 1) % shaderCount;
         if (isDirectionDown(navButtons))
             m_shaderSidebarFocus = (m_shaderSidebarFocus + 1) % shaderCount;
+        if (m_shaderSidebarFocus != oldFocus)
+            queueSound(NdsMenuSound::Focus);
         if (buttonsDown & HidNpadButton_A)
         {
             if (m_shaderSidebarFocus == 1)
             {
+                queueSound(NdsMenuSound::Click);
                 beginShaderList();
                 return {};
             }
-            return cycleShaderSetting(0) ? NdsMenuResult{NdsMenuAction::ShaderSettingsChanged, -1}
-                                         : NdsMenuResult{};
+            if (cycleShaderSetting(0))
+            {
+                queueSound(NdsMenuSound::Click);
+                return {NdsMenuAction::ShaderSettingsChanged, -1};
+            }
+            queueSound(NdsMenuSound::Error);
+            return {};
         }
         if (buttonsDown & HidNpadButton_L)
-            return cycleShaderSetting(-1) ? NdsMenuResult{NdsMenuAction::ShaderSettingsChanged, -1}
-                                          : NdsMenuResult{};
+        {
+            if (cycleShaderSetting(-1))
+            {
+                queueSound(NdsMenuSound::Slider);
+                return {NdsMenuAction::ShaderSettingsChanged, -1};
+            }
+            return {};
+        }
         if (buttonsDown & HidNpadButton_R)
-            return cycleShaderSetting(1) ? NdsMenuResult{NdsMenuAction::ShaderSettingsChanged, -1}
-                                         : NdsMenuResult{};
+        {
+            if (cycleShaderSetting(1))
+            {
+                queueSound(NdsMenuSound::Slider);
+                return {NdsMenuAction::ShaderSettingsChanged, -1};
+            }
+            return {};
+        }
         if (updateHeldShaderSelector(buttonsHeld))
+        {
+            queueSound(NdsMenuSound::Slider);
             return {NdsMenuAction::ShaderSettingsChanged, -1};
+        }
         if (isDirectionLeft(buttonsDown) || isDirectionRight(buttonsDown))
-            return cycleShaderSetting(isDirectionRight(buttonsDown) ? 1 : -1)
-                ? NdsMenuResult{NdsMenuAction::ShaderSettingsChanged, -1}
-                : NdsMenuResult{};
+        {
+            if (cycleShaderSetting(isDirectionRight(buttonsDown) ? 1 : -1))
+            {
+                queueSound(NdsMenuSound::Slider);
+                return {NdsMenuAction::ShaderSettingsChanged, -1};
+            }
+            return {};
+        }
         return {};
     }
 
@@ -1874,7 +2006,10 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
     if (m_syncResultVisible)
     {
         if ((buttonsDown & HidNpadButton_A) || (buttonsDown & HidNpadButton_B))
+        {
+            queueSound((buttonsDown & HidNpadButton_B) ? NdsMenuSound::Back : NdsMenuSound::Click);
             closeSyncResultDialog();
+        }
         return {};
     }
 
@@ -1882,11 +2017,13 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
     {
         if (buttonsDown & HidNpadButton_B)
         {
+            queueSound(NdsMenuSound::Back);
             closeSyncConfirmDialog();
             return {};
         }
         if (buttonsDown & HidNpadButton_A)
         {
+            queueSound(NdsMenuSound::Click);
             const NdsMenuAction action = m_syncConfirmAction;
             closeSyncConfirmDialog();
             return {action, -1};
@@ -1898,11 +2035,13 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
     {
         if (buttonsDown & HidNpadButton_B)
         {
+            queueSound(NdsMenuSound::Back);
             closeDeleteDialog();
             return {};
         }
         if (buttonsDown & HidNpadButton_A)
         {
+            queueSound(NdsMenuSound::Click);
             const int slot = m_deleteSlot;
             closeDeleteDialog();
             return {NdsMenuAction::DeleteState, slot};
@@ -1912,6 +2051,7 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
 
     if (buttonsDown & HidNpadButton_B)
     {
+        queueSound(NdsMenuSound::Back);
         if (m_focusScope == FocusScope::Content)
         {
             m_focusScope = FocusScope::Tabs;
@@ -1927,11 +2067,13 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
     const std::uint64_t navButtons = buttonsDown | updateHeldNavigation(buttonsDown, buttonsHeld);
     if (m_focusScope == FocusScope::Tabs && isDirectionUp(navButtons))
     {
+        queueSound(NdsMenuSound::Focus);
         beginSelectionAnimation(m_selected, (m_selected + itemCount - 1) % itemCount);
         return {};
     }
     if (m_focusScope == FocusScope::Tabs && isDirectionDown(navButtons))
     {
+        queueSound(NdsMenuSound::Focus);
         beginSelectionAnimation(m_selected, (m_selected + 1) % itemCount);
         return {};
     }
@@ -1947,53 +2089,102 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
             else if (isDirectionDown(navButtons))
                 m_contentFocus = std::min(contentControlCount(currentItem) - 1, m_contentFocus + 1);
             if (m_contentFocus != oldFocus)
+            {
+                queueSound(NdsMenuSound::Focus);
                 releaseStatePreviewTexture();
+            }
 
             if (buttonsDown & HidNpadButton_A)
             {
+                queueSound(NdsMenuSound::Click);
                 return {currentItem == Item::SaveState ? NdsMenuAction::SaveState : NdsMenuAction::LoadState,
                         m_contentFocus};
             }
             if (buttonsDown & HidNpadButton_X)
+            {
                 openDeleteDialog();
+                queueSound(m_deleteDialogVisible ? NdsMenuSound::Click : NdsMenuSound::Error);
+            }
             return {};
         }
 
         if (currentItem == Item::Display)
         {
+            const int oldFocus = m_contentFocus;
             if (isDirectionUp(navButtons))
                 m_contentFocus = nextFocusableDisplayRow(m_contentFocus, -1);
             if (isDirectionDown(navButtons))
                 m_contentFocus = nextFocusableDisplayRow(m_contentFocus, 1);
+            if (m_contentFocus != oldFocus)
+                queueSound(NdsMenuSound::Focus);
 
             if (buttonsDown & HidNpadButton_L)
-                return cycleCurrentSetting(-1) ? NdsMenuResult{NdsMenuAction::DisplaySettingsChanged, -1}
-                                               : NdsMenuResult{};
+            {
+                if (cycleCurrentSetting(-1))
+                {
+                    queueSound(NdsMenuSound::Slider);
+                    return {NdsMenuAction::DisplaySettingsChanged, -1};
+                }
+                return {};
+            }
             if (buttonsDown & HidNpadButton_R)
-                return cycleCurrentSetting(1) ? NdsMenuResult{NdsMenuAction::DisplaySettingsChanged, -1}
-                                              : NdsMenuResult{};
+            {
+                if (cycleCurrentSetting(1))
+                {
+                    queueSound(NdsMenuSound::Slider);
+                    return {NdsMenuAction::DisplaySettingsChanged, -1};
+                }
+                return {};
+            }
             if (updateHeldSelector(buttonsHeld))
+            {
+                queueSound(NdsMenuSound::Slider);
                 return {NdsMenuAction::DisplaySettingsChanged, -1};
+            }
             if (isDirectionLeft(buttonsDown) || isDirectionRight(buttonsDown))
-                return cycleCurrentSetting(isDirectionRight(buttonsDown) ? 1 : -1)
-                    ? NdsMenuResult{NdsMenuAction::DisplaySettingsChanged, -1}
-                    : NdsMenuResult{};
+            {
+                if (cycleCurrentSetting(isDirectionRight(buttonsDown) ? 1 : -1))
+                {
+                    queueSound(NdsMenuSound::Slider);
+                    return {NdsMenuAction::DisplaySettingsChanged, -1};
+                }
+                return {};
+            }
 
             if (buttonsDown & HidNpadButton_A)
             {
-                if (m_contentFocus == 9)
+                if (m_contentFocus == kDisplayRowSyncDisplay)
                 {
+                    queueSound(NdsMenuSound::Click);
                     openSyncConfirmDialog(NdsMenuAction::SyncDisplaySettings);
                     return {};
                 }
-                if (m_contentFocus == 10)
+                if (m_contentFocus == kDisplayRowSyncOverlay)
                 {
+                    queueSound(NdsMenuSound::Click);
                     openSyncConfirmDialog(NdsMenuAction::SyncOverlaySettings);
                     return {};
                 }
+                if (m_contentFocus == kDisplayRowSyncShader)
+                {
+                    queueSound(NdsMenuSound::Click);
+                    openSyncConfirmDialog(NdsMenuAction::SyncShaderSettings);
+                    return {};
+                }
             }
+            const bool opensDisplaySubPage =
+                (m_contentFocus == kDisplayRowCustomLayout && m_display.layout == 7) ||
+                m_contentFocus == kDisplayRowOverlay ||
+                m_contentFocus == kDisplayRowShader;
             if ((buttonsDown & HidNpadButton_A) && activateDisplayControl())
+            {
+                queueSound(NdsMenuSound::Click);
                 return {NdsMenuAction::DisplaySettingsChanged, -1};
+            }
+            if ((buttonsDown & HidNpadButton_A) && opensDisplaySubPage)
+                queueSound(NdsMenuSound::Click);
+            else if ((buttonsDown & HidNpadButton_A) && m_contentFocus == kDisplayRowCustomLayout)
+                queueSound(NdsMenuSound::Error);
             return {};
         }
 
@@ -2003,20 +2194,27 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
             if (count <= 0)
                 return {};
 
+            const int oldFocus = m_contentFocus;
             if (isDirectionUp(navButtons))
                 m_contentFocus = std::max(0, m_contentFocus - 1);
             if (isDirectionDown(navButtons))
                 m_contentFocus = std::min(count - 1, m_contentFocus + 1);
+            if (m_contentFocus != oldFocus)
+                queueSound(NdsMenuSound::Focus);
 
             if (buttonsDown & HidNpadButton_A)
+            {
+                queueSound(NdsMenuSound::Click);
                 return activateCheatControl() ? NdsMenuResult{NdsMenuAction::CheatSettingsChanged, -1}
                                               : NdsMenuResult{};
+            }
             if (isDirectionLeft(buttonsDown) || isDirectionRight(buttonsDown))
             {
                 const int index = visibleCheatIndex(m_contentFocus);
                 if (index >= 0 && index < static_cast<int>(m_cheats.size()) &&
                     m_cheats[index].type == NdsCheatItem::Type::Category)
                 {
+                    queueSound(NdsMenuSound::Click);
                     m_cheats[index].expanded = isDirectionRight(buttonsDown);
                     invalidateVisibleCheatCache();
                     const int nextCount = contentControlCount(Item::Cheats);
@@ -2035,6 +2233,7 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
         switch (currentItem)
         {
         case Item::Resume:
+            queueSound(NdsMenuSound::Click);
             close();
             return {};
         case Item::SaveState:
@@ -2043,14 +2242,17 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
         case Item::Display:
             if (itemHasContent(currentItem))
             {
+                queueSound(NdsMenuSound::Click);
                 m_focusScope = FocusScope::Content;
                 m_contentFocus = 0;
                 resetContentScroll();
             }
             return {};
         case Item::Reset:
+            queueSound(NdsMenuSound::Click);
             return {NdsMenuAction::ResetGame, -1};
         case Item::Exit:
+            queueSound(NdsMenuSound::Click);
             return {NdsMenuAction::ExitGame, -1};
         default:
             return {};

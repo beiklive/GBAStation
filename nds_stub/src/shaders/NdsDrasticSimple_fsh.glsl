@@ -150,9 +150,9 @@ vec3 applyDot(vec2 uv, bool hv4)
     vec2 texSize = vec2(textureSize(inTexture, 0));
     vec2 texel = 1.0 / texSize;
     vec2 pixelNo = uv * texSize;
-    float gammaValue = hv4 ? 2.0 : 1.8;
-    float shine = 0.05;
-    float blend = 0.65;
+    float gammaValue = hv4 ? 2.6 : 2.35;
+    float shine = 0.0;
+    float blend = hv4 ? 0.32 : 0.36;
 
     vec3 mid = texture(inTexture, uv).rgb;
     vec3 color = vec3(0.0);
@@ -173,35 +173,7 @@ vec3 applyDot(vec2 uv, bool hv4)
     vec2 centerDelta = fract(pixelNo) - vec2(0.5);
     vec3 midDot = mid * exp(-gammaValue * sqrt(dot(centerDelta, centerDelta)) *
                              mix(1.0 + shine, 1.0 - shine, dot(mid, vec3(0.30, 0.59, 0.11))));
-    return mix(1.2 * midDot, color, blend);
-}
-
-vec3 applyCartoon(vec2 uv)
-{
-    vec2 texSize = vec2(textureSize(inTexture, 0));
-    vec2 texel = 0.8 / texSize;
-    vec3 c00 = texture(inTexture, uv + texel * vec2(-1.0, -1.0)).rgb;
-    vec3 c10 = texture(inTexture, uv + texel * vec2( 0.0, -1.0)).rgb;
-    vec3 c20 = texture(inTexture, uv + texel * vec2( 1.0, -1.0)).rgb;
-    vec3 c01 = texture(inTexture, uv + texel * vec2(-1.0,  0.0)).rgb;
-    vec3 c11 = texture(inTexture, uv).rgb;
-    vec3 c21 = texture(inTexture, uv + texel * vec2( 1.0,  0.0)).rgb;
-    vec3 c02 = texture(inTexture, uv + texel * vec2(-1.0,  1.0)).rgb;
-    vec3 c12 = texture(inTexture, uv + texel * vec2( 0.0,  1.0)).rgb;
-    vec3 c22 = texture(inTexture, uv + texel * vec2( 1.0,  1.0)).rgb;
-
-    vec3 dt = vec3(1.0);
-    float d1 = dot(abs(c00 - c22), dt);
-    float d2 = dot(abs(c20 - c02), dt);
-    float hl = dot(abs(c01 - c21), dt);
-    float vl = dot(abs(c10 - c12), dt);
-    float edge = clamp(0.45 * (d1 + d2 + hl + vl) / (dot(c11, dt) + 0.15), 0.0, 1.0);
-
-    float lum = length(c11);
-    float bands = floor(lum * 5.0) / 5.0;
-    vec3 poster = floor(c11 * 5.0 + 0.35) / 5.0;
-    poster = mix(poster, normalize(max(c11, vec3(0.001))) * bands, 0.22);
-    return clamp(poster * (1.12 - edge * 0.85), 0.0, 1.0);
+    return mix(1.05 * midDot, color * (hv4 ? 0.58 : 0.44), blend);
 }
 
 vec3 crtMask(vec2 uv, float strength)
@@ -313,10 +285,6 @@ void main()
     else if (mode == 22)
     {
         rgb = applyDot(inUV, true);
-    }
-    else if (mode == 23)
-    {
-        rgb = applyCartoon(inUV);
     }
     else if (mode == 24)
     {

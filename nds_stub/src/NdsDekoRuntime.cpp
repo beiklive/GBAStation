@@ -4,6 +4,7 @@
 #include "nds_stub/NdsGameLayer.hpp"
 #include "nds_stub/NdsMenuLayer.hpp"
 #include "nds_stub/NdsShaderCatalog.hpp"
+#include "nds_stub/NdsUiAudio.hpp"
 #include "nds_stub/ui/UiComponents.hpp"
 
 #include <algorithm>
@@ -714,6 +715,72 @@ int syncNdsOverlaySettingsToGameDb(const std::string& romPath,
     }
 
     beiklive::nds_stub::appendStubLog("GBAStationNDSStub: NDS overlay sync skipped no db rom=%s",
+                                      romPath.c_str());
+    return -1;
+}
+
+int syncNdsShaderSettingsToGameDb(const std::string& romPath,
+                                  const beiklive::nds_stub::NdsDisplaySettings& settings)
+{
+    const std::string normalizedRom = normalizePathForCompare(romPath);
+    const std::string shaderType = beiklive::nds_stub::normalizeNdsShaderType(settings.ndsShaderType);
+    constexpr const char* paths[] = {
+        "sdmc:/GBAStation/data/GameData_NDS.json",
+        "/GBAStation/data/GameData_NDS.json",
+    };
+
+    for (const char* dbPath : paths)
+    {
+        std::ifstream in(dbPath);
+        if (!in)
+            continue;
+
+        try
+        {
+            nlohmann::json data;
+            in >> data;
+            in.close();
+            if (!data.is_array())
+                continue;
+
+            int count = 0;
+            for (auto& item : data)
+            {
+                const std::string itemPath = normalizePathForCompare(jsonString(item, "path"));
+                if (itemPath.empty() || itemPath == normalizedRom)
+                    continue;
+
+                item["shaderEnabled"] = settings.shaderEnabled;
+                item["NdsShaderType"] = shaderType;
+                item["shaderParaPath"] = shaderType;
+                item["shaderParaNames"] = nlohmann::json::array();
+                item["shaderParaValues"] = nlohmann::json::array();
+                ++count;
+            }
+
+            std::ofstream out(dbPath, std::ios::trunc);
+            if (!out)
+                return -1;
+            out << data.dump(4) << '\n';
+            if (!out.good())
+                return -1;
+
+            beiklive::nds_stub::appendStubLog("GBAStationNDSStub: NDS shader settings synced count=%d path=%s enabled=%d type=%s",
+                                              count,
+                                              dbPath,
+                                              settings.shaderEnabled ? 1 : 0,
+                                              shaderType.c_str());
+            return count;
+        }
+        catch (const std::exception& e)
+        {
+            beiklive::nds_stub::appendStubLog("GBAStationNDSStub: NDS shader sync exception path=%s error=%s",
+                                              dbPath,
+                                              e.what());
+        }
+    }
+
+    beiklive::nds_stub::appendStubLog("GBAStationNDSStub: NDS shader sync skipped no db rom=%s",
                                       romPath.c_str());
     return -1;
 }
@@ -2250,6 +2317,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
     bool running = loaded;
     bool pendingReturn = false;
     NdsMenuLayer menuLayer;
+    NdsUiAudioPlayer uiAudio;
     NdsDisplaySettings initialDisplay {};
     initialDisplay.fastForwardMultiplier = inputConfig.fastForwardMultiplier();
     initialDisplay.linearFiltering = inputConfig.value("display.filter", "nearest") == "linear";
@@ -2561,6 +2629,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
             {
                 refreshMenuFreeze("open");
                 menuLayer.open();
+                uiAudio.play(NdsMenuSound::Click);
                 blockGameInputUntilRelease = true;
                 appendStubLog("GBAStationNDSStub: menu hotkey toggle visible=%d->%d",
                               wasVisible ? 1 : 0,
@@ -2569,6 +2638,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
             else
             {
                 menuLayer.close();
+                uiAudio.play(NdsMenuSound::Back);
                 blockGameInputUntilRelease = true;
                 appendStubLog("GBAStationNDSStub: menu hotkey toggle visible=%d->%d",
                               wasVisible ? 1 : 0,
@@ -2641,6 +2711,8 @@ int RunDekoRuntime(const DekoRunOptions& options)
         const bool wasMenuVisible = menuLayer.visible();
         const NdsMenuResult menuResult = menuLayer.update(input.down, input.held);
         const NdsMenuAction menuAction = menuResult.action;
+        for (NdsMenuSound sound : menuLayer.consumeSounds())
+            uiAudio.play(sound);
         if (wasMenuVisible != menuLayer.visible())
             blockGameInputUntilRelease = true;
 
@@ -2744,6 +2816,16 @@ int RunDekoRuntime(const DekoRunOptions& options)
             inputConfig.saveValue("display.overlay.enabled", "i", menuLayer.displaySettings().overlayEnabled ? "1" : "0");
             menuLayer.showSyncResult(NdsMenuAction::SyncOverlaySettings, count);
             appendStubLog("GBAStationNDSStub: sync overlay settings result count=%d", count);
+        }
+        else if (menuAction == NdsMenuAction::SyncShaderSettings)
+        {
+            applyShaderSettings(true);
+            saveNdsSettingsToGameDb(options.romPath, menuLayer.displaySettings(), false);
+            const int count = syncNdsShaderSettingsToGameDb(options.romPath, menuLayer.displaySettings());
+            inputConfig.saveValue("display.shader.enabled", "i", menuLayer.displaySettings().shaderEnabled ? "1" : "0");
+            inputConfig.saveValue("display.shader.ndsType", "s", menuLayer.displaySettings().ndsShaderType);
+            menuLayer.showSyncResult(NdsMenuAction::SyncShaderSettings, count);
+            appendStubLog("GBAStationNDSStub: sync shader settings result count=%d", count);
         }
         else if (menuAction == NdsMenuAction::CustomLayoutChanged)
         {

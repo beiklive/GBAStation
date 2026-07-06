@@ -15,6 +15,7 @@ set(NDS_STUB_GENERATED_SHADER_DIR ${CMAKE_BINARY_DIR}/nds_stub_generated_shaders
 set(NDS_STUB_SHADER_SOURCE_DIR ${NDS_STUB_DIR}/src/shaders)
 set(ARCDELTA_SWITCH_SHADER_DIR ${NDS_STUB_REPO_ROOT}/third_party/ArcDelta_melonDS/src/frontend/switch)
 set(ARCDELTA_CORE_SHADER_DIR ${NDS_STUB_REPO_ROOT}/third_party/ArcDelta_melonDS/src/shaders)
+set(NDS_STUB_PULSAR_DIR ${NDS_STUB_REPO_ROOT}/third_party/borealis/library/lib/extern/switch-libpulsar)
 
 file(MAKE_DIRECTORY ${NDS_STUB_SHADER_DIR})
 file(MAKE_DIRECTORY ${NDS_STUB_CONFIG_DIR})
@@ -136,12 +137,21 @@ nds_stub_compile_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp Sor
 
 add_custom_target(GBAStationNDSStubDekoShaders DEPENDS ${NDS_STUB_DEKO_SHADERS})
 
+file(GLOB_RECURSE NDS_STUB_PULSAR_SRC
+    ${NDS_STUB_PULSAR_DIR}/src/*.c
+)
+add_library(nds_stub_pulsar STATIC ${NDS_STUB_PULSAR_SRC})
+target_include_directories(nds_stub_pulsar PUBLIC ${NDS_STUB_PULSAR_DIR}/include)
+target_compile_definitions(nds_stub_pulsar PRIVATE HAVE_LIBNX SWITCH __SWITCH__)
+target_link_libraries(nds_stub_pulsar PUBLIC nx)
+
 add_executable(GBAStationNDSStub
     ${NDS_STUB_DIR}/src/NdsDekoStubMain.cpp
     ${NDS_STUB_DIR}/src/NdsDekoRuntime.cpp
     ${NDS_STUB_DIR}/src/NdsStb.cpp
     ${NDS_STUB_DIR}/src/NdsCheatDatabase.cpp
     ${NDS_STUB_DIR}/src/NdsShaderCatalog.cpp
+    ${NDS_STUB_DIR}/src/NdsUiAudio.cpp
     ${NDS_STUB_DIR}/src/NdsGameLayer.cpp
     ${NDS_STUB_DIR}/src/NdsMenuLayer.cpp
     ${NDS_STUB_DIR}/src/ui/UiPrimitives.cpp
@@ -150,10 +160,11 @@ add_executable(GBAStationNDSStub
 set_target_properties(GBAStationNDSStub PROPERTIES CXX_STANDARD 17)
 target_include_directories(GBAStationNDSStub PRIVATE
     ${NDS_STUB_DIR}/include
+    ${NDS_STUB_PULSAR_DIR}/include
     ${NDS_STUB_REPO_ROOT}/third_party/borealis/library/include/borealis/extern
 )
 target_compile_options(GBAStationNDSStub PRIVATE -ffunction-sections -fdata-sections ${APP_PLATFORM_OPTION})
-target_link_libraries(GBAStationNDSStub PRIVATE nx deko3d arcdelta_melonds_core arcdelta_switch_gfx)
+target_link_libraries(GBAStationNDSStub PRIVATE nx deko3d arcdelta_melonds_core arcdelta_switch_gfx nds_stub_pulsar)
 add_dependencies(GBAStationNDSStub GBAStationNDSStubDekoShaders)
 
 add_custom_target(GBAStationNDSStub.nro ALL DEPENDS GBAStationNDSStub

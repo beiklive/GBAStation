@@ -1406,10 +1406,13 @@ void drawSyncDialogFrame(const char* title,
 void drawSyncConfirmDialog(NdsMenuAction action, float opacity)
 {
     const bool display = action == NdsMenuAction::SyncDisplaySettings;
-    drawSyncDialogFrame(display ? "同步画面设置" : "同步遮罩设置",
+    const bool overlay = action == NdsMenuAction::SyncOverlaySettings;
+    drawSyncDialogFrame(display ? "同步画面设置" : (overlay ? "同步遮罩设置" : "同步滤镜设置"),
                         display
                             ? "同步当前游戏的布局、缩放到其他NDS游戏。"
-                            : "将当前游戏的遮罩数据同步到其他NDS游戏。",
+                            : (overlay
+                                ? "将当前游戏的遮罩数据同步到其他NDS游戏。"
+                                : "将当前游戏的滤镜开关和滤镜名称同步到其他NDS游戏。"),
                         "确认后会立即开始同步。",
                         "确定",
                         true,
@@ -1419,9 +1422,10 @@ void drawSyncConfirmDialog(NdsMenuAction action, float opacity)
 void drawSyncResultDialog(NdsMenuAction action, int count, float opacity)
 {
     const bool display = action == NdsMenuAction::SyncDisplaySettings;
+    const bool overlay = action == NdsMenuAction::SyncOverlaySettings;
     char body[128];
     std::snprintf(body, sizeof(body), "已同步到 %d 个游戏。", std::max(0, count));
-    drawSyncDialogFrame(display ? "同步画面设置完成" : "同步遮罩设置完成",
+    drawSyncDialogFrame(display ? "同步画面设置完成" : (overlay ? "同步遮罩设置完成" : "同步滤镜设置完成"),
                         body,
                         "",
                         "确定",

@@ -94,6 +94,21 @@ std::string oldRetroArchName(const std::string& type)
     return {};
 }
 
+bool isUnsupportedNdsShaderType(const std::string& type)
+{
+    const std::string key = ndsShaderMatchKey(type);
+    if (!startsWith(key, "drastic-"))
+        return false;
+
+    return key.find("cartoon") != std::string::npos ||
+           key.find("fxaa") != std::string::npos ||
+           key.find("smaa") != std::string::npos ||
+           key.find("nataa") != std::string::npos ||
+           key.find("aacolor") != std::string::npos ||
+           key.find("aa2") != std::string::npos ||
+           key == "drastic-aa";
+}
+
 std::string drasticCategory(const std::string& type)
 {
     const std::string key = ndsShaderMatchKey(type);
@@ -102,13 +117,6 @@ std::string drasticCategory(const std::string& type)
     if (key.find("lcd") != std::string::npos) return "LCD";
     if (key.find("crt") != std::string::npos) return "CRT";
     if (key.find("scanline") != std::string::npos) return "Scanline";
-    if (key.find("fxaa") != std::string::npos ||
-        key.find("smaa") != std::string::npos ||
-        key.find("-aa") != std::string::npos ||
-        key == "drastic-aa")
-    {
-        return "AA";
-    }
     if (key.find("dot") != std::string::npos) return "Dot";
     if (key.find("scale") != std::string::npos ||
         key.find("hq") != std::string::npos ||
@@ -119,7 +127,6 @@ std::string drasticCategory(const std::string& type)
     {
         return "Scale";
     }
-    if (key.find("cartoon") != std::string::npos) return "Cartoon";
     return "other";
 }
 
@@ -159,7 +166,6 @@ const std::map<std::string, int>& drasticSimpleShaderCodes()
         {"drastic-scanlinesd-color-x", 20},
         {"drastic-dot-d4", 21},
         {"drastic-dot-hv4", 22},
-        {"drastic-cartoon", 23},
         {"drastic-crt", 24},
         {"drastic-crtc", 25},
         {"drastic-crt-geom", 24},
@@ -185,6 +191,7 @@ std::vector<std::string> loadShaderTypesFromFile(const char* path)
             continue;
         const std::string type = item.get<std::string>();
         if (type.empty() ||
+            isUnsupportedNdsShaderType(type) ||
             std::find(result.begin(), result.end(), type) != result.end())
         {
             continue;
@@ -411,17 +418,12 @@ int drasticSimpleShaderCode(const std::string& type)
         return 22;
     if (key.find("dot") != std::string::npos)
         return 21;
-    if (key.find("fxaa") != std::string::npos ||
-        key.find("smaa") != std::string::npos ||
-        key.find("aa") != std::string::npos ||
-        key.find("bloom") != std::string::npos ||
+    if (key.find("bloom") != std::string::npos ||
         key.find("luna") != std::string::npos ||
         key.find("nataa") != std::string::npos)
     {
         return 15;
     }
-    if (key.find("cartoon") != std::string::npos)
-        return 23;
     return -1;
 }
 

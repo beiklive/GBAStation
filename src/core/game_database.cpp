@@ -152,6 +152,21 @@ namespace beiklive
             return {};
         }
 
+        bool isUnsupportedNdsShaderType(const std::string& type)
+        {
+            const std::string key = ndsShaderMatchKey(type);
+            if (!startsWith(key, "drastic-"))
+                return false;
+
+            return key.find("cartoon") != std::string::npos ||
+                   key.find("fxaa") != std::string::npos ||
+                   key.find("smaa") != std::string::npos ||
+                   key.find("nataa") != std::string::npos ||
+                   key.find("aacolor") != std::string::npos ||
+                   key.find("aa2") != std::string::npos ||
+                   key == "drastic-aa";
+        }
+
         std::vector<std::string> loadNdsShaderTypes()
         {
             std::ifstream in(beiklive::res_path("config/nds_shaders.json"));
@@ -169,6 +184,7 @@ namespace beiklive
                     continue;
                 const std::string value = item.get<std::string>();
                 if (value.empty() ||
+                    isUnsupportedNdsShaderType(value) ||
                     std::find(result.begin(), result.end(), value) != result.end())
                 {
                     continue;
