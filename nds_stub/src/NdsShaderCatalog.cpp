@@ -192,6 +192,7 @@ std::vector<std::string> loadShaderTypesFromFile(const char* path)
         const std::string type = item.get<std::string>();
         if (type.empty() ||
             isUnsupportedNdsShaderType(type) ||
+            (isDraSticShader(type) && drasticCategory(type) == "other") ||
             std::find(result.begin(), result.end(), type) != result.end())
         {
             continue;
@@ -308,7 +309,7 @@ std::vector<NdsShaderListEntry> ndsShaderListEntries(const std::vector<std::stri
     if (path.size() == 1 && path[0] == "DraStic")
     {
         static const char* order[] = {
-            "XBR", "SABR", "LCD", "CRT", "AA", "Dot", "Scanline", "Scale", "Cartoon", "other",
+            "XBR", "SABR", "LCD", "CRT", "Dot", "Scanline", "Scale",
         };
         std::set<std::string> categories;
         for (const auto& type : types)

@@ -3222,6 +3222,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
                       lastPlayed.c_str());
     }
 
+    uiAudio.stop();
     audio.setFastForwardActive(false);
     audio.setMuted(false);
     audio.stop();
