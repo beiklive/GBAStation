@@ -56,6 +56,7 @@
 namespace {
 
 using beiklive::nds_stub::normalizeNdsShaderType;
+using beiklive::nds_stub::drasticSimpleShaderCode;
 
 constexpr uint32_t kNdsKeyA      = 1u << 0;
 constexpr uint32_t kNdsKeyB      = 1u << 1;
@@ -325,6 +326,12 @@ std::array<float, 8> ndsShaderParamUniforms(const std::string& type,
         values[3] = valueOf("ambient", 0.0f);
         values[4] = valueOf("bgr", 1.0f);
         values[5] = valueOf("nds_color", 1.0f);
+    }
+    else
+    {
+        const int drasticCode = drasticSimpleShaderCode(shader);
+        if (drasticCode >= 0)
+            values[7] = static_cast<float>(drasticCode);
     }
     return values;
 }

@@ -108,7 +108,30 @@ const char* orientationLabel(int index)
 
 const char* shaderTypeLabel(const std::string& type)
 {
-    return type.empty() ? "dot" : type.c_str();
+    if (type.empty()) return "dot";
+    if (type == "drastic-linear") return "DraStic Linear";
+    if (type == "drastic-grayscale") return "DraStic Grayscale";
+    if (type == "drastic-nds-color") return "DraStic NDS Color";
+    if (type == "drastic-natural-vision") return "DraStic Natural Vision";
+    if (type == "drastic-nds-color-natural-vision") return "DraStic NDS + Natural";
+    if (type == "drastic-lcd1x") return "DraStic LCD1x";
+    if (type == "drastic-lcd1x-nds-color") return "DraStic LCD1x + NDS";
+    if (type == "drastic-lcd1x-natural-vision") return "DraStic LCD1x + Natural";
+    if (type == "drastic-lcd1x-nds-color-natural-vision") return "DraStic LCD1x + NDS/Natural";
+    if (type == "drastic-zfast") return "DraStic zFast";
+    if (type == "drastic-zfast-lcd") return "DraStic zFast LCD";
+    if (type == "drastic-zfast-lcd-brightness") return "DraStic zFast LCD Bright";
+    if (type == "drastic-zfast-lcd-nds-color") return "DraStic zFast LCD + NDS";
+    if (type == "drastic-zfast-lcd-natural-vision") return "DraStic zFast LCD + Natural";
+    if (type == "drastic-zfast-lcd-nds-color-natural-vision") return "DraStic zFast LCD + NDS/Natural";
+    if (type == "drastic-quilez") return "DraStic Quilez";
+    if (type == "drastic-scanlinesd") return "DraStic Scanlines";
+    if (type == "drastic-scanlinesd-color") return "DraStic Scanlines Color";
+    if (type == "drastic-scanlinesd-x") return "DraStic Scanlines X";
+    if (type == "drastic-scanlinesd-color-x") return "DraStic Scanlines Color X";
+    if (type == "drastic-dot-d4") return "DraStic Dot D4";
+    if (type == "drastic-dot-hv4") return "DraStic Dot HV4";
+    return type.c_str();
 }
 
 std::string filenameFromPath(const std::string& path)

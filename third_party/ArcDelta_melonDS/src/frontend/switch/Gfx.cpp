@@ -721,6 +721,7 @@ void Init()
     loadFragmentOrFallback("romfs:/shaders/NdsDotClear_fsh.dksh", shaderMode_NdsDotClear, shaderMode_NdsDot);
     loadFragmentOrFallback("romfs:/shaders/NdsXbrzFreescale_fsh.dksh", shaderMode_NdsXbrzFreescale, shaderMode_NdsDot);
     loadFragmentOrFallback("romfs:/shaders/NdsLcdGridNdsColor_fsh.dksh", shaderMode_NdsLcdGridNdsColor, shaderMode_NdsDot);
+    loadFragmentOrFallback("romfs:/shaders/NdsDrasticSimple_fsh.dksh", shaderMode_NdsDrasticSimple, shaderMode_NdsDot);
 
     for (int i = 0; i < 2; i++)
     {

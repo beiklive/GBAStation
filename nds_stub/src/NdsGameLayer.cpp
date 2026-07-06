@@ -95,6 +95,8 @@ bool validRect(const RectF& rect)
 
 Gfx::ShaderMode shaderModeFromType(const std::string& type)
 {
+    if (isDrasticSimpleShaderType(type))
+        return Gfx::shaderMode_NdsDrasticSimple;
     if (type == "dot-clear")
         return Gfx::shaderMode_NdsDotClear;
     if (type == "xbrz-freescale")
