@@ -90,14 +90,41 @@ enum
     drawCallDirty_WaitFence = 1 << 4,
     drawCallDirty_SignalFence = 1 << 5,
 };
+
+enum class DrawCallKind
+{
+    Draw,
+    WaitFence,
+    SignalFence,
+    NdsMultiPass,
+};
+
+struct NdsMultiPassDraw
+{
+    u32 SourceTexture = 0;
+    u32 TempTextureA = 0;
+    u32 TempTextureB = 0;
+    u32 TempWidth = 0;
+    u32 TempHeight = 0;
+    u32 InitialIndexOffset = 0;
+    u32 IntermediateIndexOffset = 0;
+    u32 FinalIndexOffset = 0;
+    int PassCount = 0;
+    std::array<NdsFilterPass, 4> Passes {};
+    DkScissor Scissor {};
+};
+
 struct DrawCall
 {
+    DrawCallKind Kind;
     u32 Dirty;
     u32 TextureIdx, Sampler;
     ShaderMode Shader;
+    u32 IndexOffset;
     u32 Count;
     DkScissor Scissor;
     dk::Fence* Fence;
+    NdsMultiPassDraw MultiPass;
 };
 std::vector<DrawCall> DrawCalls;
 
@@ -173,7 +200,16 @@ std::vector<u32> UsedTextures;
 std::vector<PendingTextureUpload> TextureUploadsPending;
 bool FrameActive = false;
 
-u32 TextureCreate(u32 width, u32 height, DkImageFormat format)
+void UseTexture(u32 textureIdx)
+{
+    if (Textures[textureIdx].ImageDescriptorIdx == -1)
+    {
+        Textures[textureIdx].ImageDescriptorIdx = UsedTextures.size();
+        UsedTextures.push_back(textureIdx);
+    }
+}
+
+u32 TextureCreateWithFlags(u32 width, u32 height, DkImageFormat format, int flags)
 {
     u32 idx = Textures.Alloc();
 
@@ -185,6 +221,7 @@ u32 TextureCreate(u32 width, u32 height, DkImageFormat format)
 
     dk::ImageLayout layout;
     dk::ImageLayoutMaker{Device}
+        .setFlags(flags)
         .setFormat(format)
         .setDimensions(width, height)
         .initialize(layout);
@@ -198,6 +235,16 @@ u32 TextureCreate(u32 width, u32 height, DkImageFormat format)
     texture.Image.initialize(layout, TextureHeap->MemBlock, texture.GpuMem.Offset);
 
     return idx;
+}
+
+u32 TextureCreate(u32 width, u32 height, DkImageFormat format)
+{
+    return TextureCreateWithFlags(width, height, format, 0);
+}
+
+u32 TextureCreateRenderTarget(u32 width, u32 height, DkImageFormat format)
+{
+    return TextureCreateWithFlags(width, height, format, DkImageFlags_UsageRender);
 }
 
 u32 TextureCreateExternal(u32 width, u32 height, dk::Image& image)
@@ -920,7 +967,7 @@ void EndFrame(Color clearColor, int rotation)
     PresentCmdBuf.bindVtxBufferState({{sizeof(Vertex), 0}});
     PresentCmdBuf.bindIdxBuffer(DkIdxFormat_Uint16, DataHeap->GpuAddr(IndexData[SwapchainSlot]));
 
-    {
+    auto bindScreenProjection = [&]() {
         Transformation transformation;
         xm4_orthographic(transformation.Projection, -1280.f/2, 1280.f/2, 720.f/2.f, -720.f/2, -1.f, 1.f);
         float rot[16];
@@ -935,13 +982,29 @@ void EndFrame(Color clearColor, int rotation)
         transformation.InvHeight = 1.f / screenHeight;
         PresentCmdBuf.pushConstants(DataHeap->GpuAddr(UniformBuffer), UniformBuffer.Size, 0, sizeof(Transformation), &transformation);
         PresentCmdBuf.bindUniformBuffer(DkStage_Vertex, 0, DataHeap->GpuAddr(UniformBuffer), UniformBuffer.Size);
-    }
-    {
+    };
+    auto bindOffscreenProjection = [&](u32 width, u32 height) {
+        Transformation transformation;
+        xm4_orthographic(transformation.Projection,
+                         -static_cast<float>(width) / 2.0f,
+                          static_cast<float>(width) / 2.0f,
+                          static_cast<float>(height) / 2.0f,
+                         -static_cast<float>(height) / 2.0f,
+                         -1.0f,
+                          1.0f);
+        float trans[16];
+        xm4_translatev(trans, -static_cast<float>(width) / 2.0f, -static_cast<float>(height) / 2.0f, 0.0f);
+        xm4_mul(transformation.Projection, trans, transformation.Projection);
+        transformation.InvHeight = 1.0f / static_cast<float>(std::max<u32>(height, 1));
+        PresentCmdBuf.pushConstants(DataHeap->GpuAddr(UniformBuffer), UniformBuffer.Size, 0, sizeof(Transformation), &transformation);
+        PresentCmdBuf.bindUniformBuffer(DkStage_Vertex, 0, DataHeap->GpuAddr(UniformBuffer), UniformBuffer.Size);
+    };
+    auto bindNdsParams = [&](const std::array<float, 8>& values) {
         NdsShaderUniform params {};
         for (int i = 0; i < 4; ++i)
         {
-            params.Param0[i] = CurNdsShaderParams[i];
-            params.Param1[i] = CurNdsShaderParams[i + 4];
+            params.Param0[i] = values[i];
+            params.Param1[i] = values[i + 4];
         }
         PresentCmdBuf.pushConstants(DataHeap->GpuAddr(NdsShaderUniformBuffer),
                                     NdsShaderUniformBuffer.Size,
@@ -952,7 +1015,9 @@ void EndFrame(Color clearColor, int rotation)
                                         1,
                                         DataHeap->GpuAddr(NdsShaderUniformBuffer),
                                         NdsShaderUniformBuffer.Size);
-    }
+    };
+    bindScreenProjection();
+    bindNdsParams(CurNdsShaderParams);
 
     memcpy(DataHeap->CpuAddr<void>(VertexData[SwapchainSlot]), VertexDataClient, sizeof(Vertex)*CurClientVertex);
     memcpy(DataHeap->CpuAddr<void>(IndexData[SwapchainSlot]), IndexDataClient, sizeof(u16)*CurClientIndex);
@@ -975,24 +1040,97 @@ void EndFrame(Color clearColor, int rotation)
         PresentCmdBuf.bindImageDescriptorSet(DataHeap->GpuAddr(ImageDescriptors[SwapchainSlot]), UsedTextures.size());
     }
 
-    u32 indexBufferOffset = 0;
+    bool gpuStateDirty = true;
 
     for (u32 i = 0; i < DrawCalls.size(); i++)
     {
         DrawCall& drawCall = DrawCalls[i];
-        if (drawCall.Dirty & drawCallDirty_WaitFence)
+        if (drawCall.Kind == DrawCallKind::WaitFence)
         {
             assert(drawCall.Fence);
             PresentCmdBuf.waitFence(*drawCall.Fence);
+            gpuStateDirty = true;
         }
-        else if (drawCall.Dirty & drawCallDirty_SignalFence)
+        else if (drawCall.Kind == DrawCallKind::SignalFence)
         {
             assert(drawCall.Fence);
             PresentCmdBuf.signalFence(*drawCall.Fence);
+            gpuStateDirty = true;
+        }
+        else if (drawCall.Kind == DrawCallKind::NdsMultiPass)
+        {
+            NdsMultiPassDraw& multi = drawCall.MultiPass;
+            if (multi.PassCount < 2)
+            {
+                gpuStateDirty = true;
+                continue;
+            }
+
+            auto bindTexture = [&](u32 texture, u32 sampler) {
+                assert(Textures[texture].ImageDescriptorIdx != -1);
+                assert(Textures[texture].ImageDescriptorIdx < UsedTextures.size());
+                PresentCmdBuf.bindTextures(DkStage_Fragment, 0,
+                    dkMakeTextureHandle(Textures[texture].ImageDescriptorIdx, sampler));
+            };
+            auto bindPassParams = [&](const NdsFilterPass& pass) {
+                std::array<float, 8> values = CurNdsShaderParams;
+                values[7] = static_cast<float>(pass.Code);
+                bindNdsParams(values);
+            };
+
+            u32 sourceTexture = multi.SourceTexture;
+            for (int passIndex = 0; passIndex < multi.PassCount - 1; ++passIndex)
+            {
+                const NdsFilterPass& pass = multi.Passes[passIndex];
+                const u32 targetTexture = (passIndex % 2 == 0) ? multi.TempTextureA : multi.TempTextureB;
+                Texture& target = Textures[targetTexture];
+                dk::ImageView targetView{target.Image};
+                PresentCmdBuf.bindRenderTargets(&targetView);
+                PresentCmdBuf.setViewports(0, {{0.0f, 0.0f, static_cast<float>(multi.TempWidth), static_cast<float>(multi.TempHeight)}});
+                PresentCmdBuf.setScissors(0, {{0, 0, multi.TempWidth, multi.TempHeight}});
+                PresentCmdBuf.clearColor(0, DkColorMask_RGBA, 0.0f, 0.0f, 0.0f, 0.0f);
+                bindOffscreenProjection(multi.TempWidth, multi.TempHeight);
+                bindPassParams(pass);
+                bindTexture(sourceTexture, pass.Sampler);
+                PresentCmdBuf.bindShaders(DkStageFlag_GraphicsMask, {&VertexShader, &FragmentShaders[pass.Shader]});
+                const u32 indexOffset = (passIndex == 0) ? multi.InitialIndexOffset : multi.IntermediateIndexOffset;
+                PresentCmdBuf.drawIndexed(DkPrimitive_Triangles, 6, 1, indexOffset, 0, 0);
+                PresentCmdBuf.barrier(DkBarrier_Full, 0);
+                sourceTexture = targetTexture;
+            }
+
+            dk::ImageView mainTarget{Framebuffers[SwapchainSlot]};
+            PresentCmdBuf.bindRenderTargets(&mainTarget);
+            PresentCmdBuf.setViewports(0, {{0.0f, 0.0f, static_cast<float>(fbPixelWidth), static_cast<float>(fbPixelHeight)}});
+            DkScissor scissor = multi.Scissor;
+            u32 x1, y1, x2, y2;
+            Rotate90DegInv(x1, y1, scissor.x, scissor.y, rotation);
+            Rotate90DegInv(x2, y2, scissor.x + scissor.width, scissor.y + scissor.height, rotation);
+            scissor.x = std::min(x1, x2);
+            scissor.y = std::min(y1, y2);
+            scissor.width = abs((s32)x1 - (s32)x2);
+            scissor.height = abs((s32)y1 - (s32)y2);
+            if (fbPixelHeight == 1080)
+            {
+                scissor.x = scissor.x * 3 / 2;
+                scissor.y = scissor.y * 3 / 2;
+                scissor.width = scissor.width * 3 / 2;
+                scissor.height = scissor.height * 3 / 2;
+            }
+            PresentCmdBuf.setScissors(0, {scissor});
+            bindScreenProjection();
+
+            const NdsFilterPass& finalPass = multi.Passes[multi.PassCount - 1];
+            bindPassParams(finalPass);
+            bindTexture(sourceTexture, finalPass.Sampler);
+            PresentCmdBuf.bindShaders(DkStageFlag_GraphicsMask, {&VertexShader, &FragmentShaders[finalPass.Shader]});
+            PresentCmdBuf.drawIndexed(DkPrimitive_Triangles, 6, 1, multi.FinalIndexOffset, 0, 0);
+            bindNdsParams(CurNdsShaderParams);
+            gpuStateDirty = true;
         }
         else
         {
-            if (drawCall.Dirty & drawCallDirty_Scissor)
+            if ((drawCall.Dirty & drawCallDirty_Scissor) || gpuStateDirty)
             {
                 // hacky
                 DkScissor scissor = drawCall.Scissor;
@@ -1013,20 +1151,20 @@ void EndFrame(Color clearColor, int rotation)
                 }
                 PresentCmdBuf.setScissors(0, {scissor});
             }
-            if (drawCall.Dirty & (drawCallDirty_Texture|drawCallDirty_Sampler))
+            if ((drawCall.Dirty & (drawCallDirty_Texture|drawCallDirty_Sampler)) || gpuStateDirty)
             {
                 assert(Textures[drawCall.TextureIdx].ImageDescriptorIdx != -1);
                 assert(Textures[drawCall.TextureIdx].ImageDescriptorIdx < UsedTextures.size());
                 PresentCmdBuf.bindTextures(DkStage_Fragment, 0,
                     dkMakeTextureHandle(Textures[drawCall.TextureIdx].ImageDescriptorIdx, drawCall.Sampler));
             }
-            if (drawCall.Dirty & drawCallDirty_Shader)
+            if ((drawCall.Dirty & drawCallDirty_Shader) || gpuStateDirty)
             {
                 PresentCmdBuf.bindShaders(DkStageFlag_GraphicsMask, {&VertexShader, &FragmentShaders[drawCall.Shader]});
             }
 
-            PresentCmdBuf.drawIndexed(DkPrimitive_Triangles, drawCall.Count, 1, indexBufferOffset, 0, 0);
-            indexBufferOffset += drawCall.Count;
+            PresentCmdBuf.drawIndexed(DkPrimitive_Triangles, drawCall.Count, 1, drawCall.IndexOffset, 0, 0);
+            gpuStateDirty = false;
         }
     }
 
@@ -1042,15 +1180,15 @@ void EndFrame(Color clearColor, int rotation)
 
 void WaitForFenceReady(dk::Fence& fence)
 {
-    DrawCalls.push_back({drawCallDirty_WaitFence, 0, 0, shaderMode_Default, 0, DkScissor(), &fence});
+    DrawCalls.push_back({DrawCallKind::WaitFence, drawCallDirty_WaitFence, 0, 0, shaderMode_Default, 0, 0, DkScissor(), &fence, {}});
 }
 
 void SignalFence(dk::Fence& fence)
 {
-    DrawCalls.push_back({drawCallDirty_SignalFence, 0, 0, shaderMode_Default, 0, DkScissor(), &fence});
+    DrawCalls.push_back({DrawCallKind::SignalFence, drawCallDirty_SignalFence, 0, 0, shaderMode_Default, 0, 0, DkScissor(), &fence, {}});
 }
 
-void IssueDrawCall(u32 texture, u32 count)
+void IssueDrawCall(u32 texture, u32 count, u32 indexOffset)
 {
     u32 dirty = 0;
     DkScissor& curScissor = ScissorStack[ScissorStack.size() - 1];
@@ -1058,25 +1196,27 @@ void IssueDrawCall(u32 texture, u32 count)
     if (DrawCalls.size() > 0)
     {
         DrawCall& prevDrawCall = DrawCalls[DrawCalls.size() - 1];
-        if (prevDrawCall.TextureIdx != texture)
-            dirty |= drawCallDirty_Texture;
-        if (prevDrawCall.Sampler != CurSampler)
-            dirty |= drawCallDirty_Sampler;
-        if (prevDrawCall.Shader != CurShaderMode)
-            dirty |= drawCallDirty_Shader;
-
-        if (prevDrawCall.Scissor.x != curScissor.x
-            || prevDrawCall.Scissor.y != curScissor.y
-            || prevDrawCall.Scissor.width != curScissor.width
-            || prevDrawCall.Scissor.height != curScissor.height)
+        if (prevDrawCall.Kind != DrawCallKind::Draw)
         {
-            dirty |= drawCallDirty_Scissor;
-        }
-
-        if (prevDrawCall.Fence)
-        {
-            lastWasFence = true;
             dirty = ~(drawCallDirty_WaitFence|drawCallDirty_SignalFence);
+            lastWasFence = true;
+        }
+        else if (prevDrawCall.TextureIdx != texture)
+            dirty |= drawCallDirty_Texture;
+        if (prevDrawCall.Kind == DrawCallKind::Draw)
+        {
+            if (prevDrawCall.Sampler != CurSampler)
+                dirty |= drawCallDirty_Sampler;
+            if (prevDrawCall.Shader != CurShaderMode)
+                dirty |= drawCallDirty_Shader;
+
+            if (prevDrawCall.Scissor.x != curScissor.x
+                || prevDrawCall.Scissor.y != curScissor.y
+                || prevDrawCall.Scissor.width != curScissor.width
+                || prevDrawCall.Scissor.height != curScissor.height)
+            {
+                dirty |= drawCallDirty_Scissor;
+            }
         }
     }
     else
@@ -1084,14 +1224,10 @@ void IssueDrawCall(u32 texture, u32 count)
         dirty = ~(drawCallDirty_WaitFence|drawCallDirty_SignalFence);
     }
 
-    if (Textures[texture].ImageDescriptorIdx == -1)
-    {
-        Textures[texture].ImageDescriptorIdx = UsedTextures.size();
-        UsedTextures.push_back(texture);
-    }
+    UseTexture(texture);
 
     if (dirty || lastWasFence)
-        DrawCalls.push_back({dirty, texture, CurSampler, CurShaderMode, count, curScissor, nullptr});
+        DrawCalls.push_back({DrawCallKind::Draw, dirty, texture, CurSampler, CurShaderMode, indexOffset, count, curScissor, nullptr, {}});
     else
         DrawCalls[DrawCalls.size() - 1].Count += count;
 }
@@ -1163,7 +1299,7 @@ void DrawRectangle(u32 texIdx,
     IndexDataClient[CurClientIndex + 4] = CurClientVertex + 3;
     IndexDataClient[CurClientIndex + 5] = CurClientVertex + 1;
 
-    IssueDrawCall(texIdx, 6);
+    IssueDrawCall(texIdx, 6, CurClientIndex);
 
     CurClientVertex += 4;
     CurClientIndex += 6;
@@ -1236,10 +1372,106 @@ void DrawRectangle(u32 texIdx,
     IndexDataClient[CurClientIndex + 4] = CurClientVertex + 3;
     IndexDataClient[CurClientIndex + 5] = CurClientVertex + 1;
 
-    IssueDrawCall(texIdx, 6);
+    IssueDrawCall(texIdx, 6, CurClientIndex);
 
     CurClientVertex += 4;
     CurClientIndex += 6;
+}
+
+void DrawNdsMultiPassRectangle(u32 texIdx,
+    Vector2f p0, Vector2f p1, Vector2f p2, Vector2f p3,
+    Vector2f subPosition, Vector2f subSize,
+    const NdsFilterPass* passes,
+    int passCount,
+    u32 tempTextureA,
+    u32 tempTextureB,
+    u32 tempWidth,
+    u32 tempHeight)
+{
+    passCount = std::clamp(passCount, 0, 4);
+    if (passCount < 2 || !passes || tempTextureA == 0 || tempTextureB == 0 || tempWidth == 0 || tempHeight == 0)
+    {
+        DrawRectangle(texIdx, p0, p1, p2, p3, subPosition, subSize);
+        return;
+    }
+
+    UseTexture(texIdx);
+    UseTexture(tempTextureA);
+    UseTexture(tempTextureB);
+
+    auto appendQuad = [&](Vector2f q0, Vector2f q1, Vector2f q2, Vector2f q3,
+                          Vector2f uvMin, Vector2f uvMax,
+                          bool applyTransform) {
+        if (applyTransform)
+        {
+            q0 = TransformPoint(q0);
+            q1 = TransformPoint(q1);
+            q2 = TransformPoint(q2);
+            q3 = TransformPoint(q3);
+        }
+        const u32 indexOffset = CurClientIndex;
+        assert(CurClientVertex + 4 <= MaxVertices);
+        VertexDataClient[CurClientVertex + 0] = {q0.X, q0.Y, uvMin.X, uvMin.Y, 255, 255, 255, 255, 1.0f, 1.0f};
+        VertexDataClient[CurClientVertex + 1] = {q1.X, q1.Y, uvMax.X, uvMin.Y, 255, 255, 255, 255, 1.0f, 1.0f};
+        VertexDataClient[CurClientVertex + 2] = {q2.X, q2.Y, uvMin.X, uvMax.Y, 255, 255, 255, 255, 1.0f, 1.0f};
+        VertexDataClient[CurClientVertex + 3] = {q3.X, q3.Y, uvMax.X, uvMax.Y, 255, 255, 255, 255, 1.0f, 1.0f};
+        assert(CurClientIndex + 6 <= MaxIndices);
+        IndexDataClient[CurClientIndex + 0] = CurClientVertex;
+        IndexDataClient[CurClientIndex + 1] = CurClientVertex + 2;
+        IndexDataClient[CurClientIndex + 2] = CurClientVertex + 3;
+        IndexDataClient[CurClientIndex + 3] = CurClientVertex;
+        IndexDataClient[CurClientIndex + 4] = CurClientVertex + 3;
+        IndexDataClient[CurClientIndex + 5] = CurClientVertex + 1;
+        CurClientVertex += 4;
+        CurClientIndex += 6;
+        return indexOffset;
+    };
+
+    Texture& sourceTexture = Textures[texIdx];
+    const Vector2f sourceUvMin{subPosition.X / static_cast<float>(sourceTexture.Width),
+                               subPosition.Y / static_cast<float>(sourceTexture.Height)};
+    const Vector2f sourceUvMax{sourceUvMin.X + subSize.X / static_cast<float>(sourceTexture.Width),
+                               sourceUvMin.Y + subSize.Y / static_cast<float>(sourceTexture.Height)};
+    const u32 initialOffset = appendQuad({0.0f, 0.0f},
+                                         {static_cast<float>(tempWidth), 0.0f},
+                                         {0.0f, static_cast<float>(tempHeight)},
+                                         {static_cast<float>(tempWidth), static_cast<float>(tempHeight)},
+                                         sourceUvMin,
+                                         sourceUvMax,
+                                         false);
+    const u32 intermediateOffset = appendQuad({0.0f, 0.0f},
+                                              {static_cast<float>(tempWidth), 0.0f},
+                                              {0.0f, static_cast<float>(tempHeight)},
+                                              {static_cast<float>(tempWidth), static_cast<float>(tempHeight)},
+                                              {0.0f, 0.0f},
+                                              {1.0f, 1.0f},
+                                              false);
+    const u32 finalOffset = appendQuad(p0, p1, p2, p3, {0.0f, 0.0f}, {1.0f, 1.0f}, true);
+
+    NdsMultiPassDraw multi {};
+    multi.SourceTexture = texIdx;
+    multi.TempTextureA = tempTextureA;
+    multi.TempTextureB = tempTextureB;
+    multi.TempWidth = tempWidth;
+    multi.TempHeight = tempHeight;
+    multi.InitialIndexOffset = initialOffset;
+    multi.IntermediateIndexOffset = intermediateOffset;
+    multi.FinalIndexOffset = finalOffset;
+    multi.PassCount = passCount;
+    for (int i = 0; i < passCount; ++i)
+        multi.Passes[i] = passes[i];
+    multi.Scissor = ScissorStack[ScissorStack.size() - 1];
+
+    DrawCalls.push_back({DrawCallKind::NdsMultiPass,
+                         static_cast<u32>(~(drawCallDirty_WaitFence | drawCallDirty_SignalFence)),
+                         texIdx,
+                         CurSampler,
+                         CurShaderMode,
+                         finalOffset,
+                         6,
+                         multi.Scissor,
+                         nullptr,
+                         multi});
 }
 
 Vector2f MeasureText(u32 fontIdx, float size, const char* text)

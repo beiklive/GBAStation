@@ -13,6 +13,9 @@
 namespace GPU2D {
 class DekoRenderer;
 }
+namespace Gfx {
+struct NdsFilterPass;
+}
 
 namespace beiklive::nds_stub {
 
@@ -88,6 +91,17 @@ private:
     void drawScreenTexture(const ScreenDrawRect& item,
                            std::uint32_t texture,
                            const RectF& sourceRect) const;
+    void drawScreenTextureMultiPass(const ScreenDrawRect& item,
+                                    std::uint32_t texture,
+                                    const RectF& sourceRect,
+                                    const Gfx::NdsFilterPass* passes,
+                                    int passCount,
+                                    std::uint32_t tempTextureA,
+                                    std::uint32_t tempTextureB,
+                                    int tempWidth,
+                                    int tempHeight) const;
+    void clearShaderPassTextures() const;
+    bool ensureShaderPassTextures(int width, int height) const;
 
     GPU2D::DekoRenderer* m_renderer = nullptr;
     std::array<std::array<u32, 2>, 2> m_framebufferTextures {};
@@ -110,6 +124,9 @@ private:
     bool m_shaderEnabled = false;
     std::string m_shaderType = "dot";
     std::array<float, 8> m_shaderParams {2.4f, 0.05f, 0.65f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+    mutable std::array<std::uint32_t, 2> m_shaderPassTextures {};
+    mutable int m_shaderPassTextureWidth = 0;
+    mutable int m_shaderPassTextureHeight = 0;
     mutable std::vector<std::uint8_t> m_lastCaptureRgba;
     mutable int m_lastCaptureWidth = 0;
     mutable int m_lastCaptureHeight = 0;

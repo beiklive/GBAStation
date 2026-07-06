@@ -108,6 +108,7 @@ const char* orientationLabel(int index)
 
 const char* shaderTypeLabel(const std::string& type)
 {
+    static std::string generatedLabel;
     if (type.empty()) return "dot";
     if (type == "drastic-linear") return "DraStic Linear";
     if (type == "drastic-grayscale") return "DraStic Grayscale";
@@ -131,6 +132,12 @@ const char* shaderTypeLabel(const std::string& type)
     if (type == "drastic-scanlinesd-color-x") return "DraStic Scanlines Color X";
     if (type == "drastic-dot-d4") return "DraStic Dot D4";
     if (type == "drastic-dot-hv4") return "DraStic Dot HV4";
+    if (type.rfind("drastic-", 0) == 0)
+    {
+        generatedLabel = type.substr(8);
+        std::replace(generatedLabel.begin(), generatedLabel.end(), '-', ' ');
+        return generatedLabel.c_str();
+    }
     return type.c_str();
 }
 

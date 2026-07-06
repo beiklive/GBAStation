@@ -115,7 +115,78 @@ int drasticSimpleShaderCode(const std::string& type)
 {
     const auto& codes = drasticSimpleShaderCodes();
     const auto it = codes.find(type);
-    return it == codes.end() ? -1 : it->second;
+    if (it != codes.end())
+        return it->second;
+
+    if (type == "drastic-none" || type == "drastic-linear" || type == "drastic-linear2x")
+        return 0;
+    if (type.find("sharp-bilinear-nds-color-natural") != std::string::npos)
+        return 4;
+    if (type.find("sharp-bilinear-nds-color") != std::string::npos || type.find("scale-color-correction") != std::string::npos)
+        return 2;
+    if (type.find("sharp-bilinear-natural") != std::string::npos)
+        return 3;
+    if (type.find("sharp-bilinear") != std::string::npos)
+        return 0;
+    if (type.find("grayscale") != std::string::npos)
+        return 1;
+    if (type.find("nds-color-natural") != std::string::npos)
+        return 4;
+    if (type.find("nds-color") != std::string::npos && type.find("lcd") == std::string::npos && type.find("zfast") == std::string::npos)
+        return 2;
+    if ((type.find("natural-vision") != std::string::npos || type == "drastic-natural") &&
+        type.find("lcd") == std::string::npos &&
+        type.find("zfast") == std::string::npos)
+    {
+        return 3;
+    }
+    if (type.find("lcd1x-nds-color-natural") != std::string::npos || type.find("lcd3x-nds-color-natural") != std::string::npos)
+        return 8;
+    if (type.find("lcd1x-nds-color") != std::string::npos || type.find("lcd3x-nds-color") != std::string::npos)
+        return 6;
+    if (type.find("lcd1x-natural") != std::string::npos || type.find("lcd3x-natural") != std::string::npos)
+        return 7;
+    if (type.find("lcd1x") != std::string::npos || type.find("lcd3x") != std::string::npos)
+        return 5;
+    if (type.find("zfast-lcd-nds-color-natural") != std::string::npos)
+        return 14;
+    if (type.find("zfast-lcd-nds-color") != std::string::npos)
+        return 12;
+    if (type.find("zfast-lcd-natural") != std::string::npos)
+        return 13;
+    if (type.find("zfast-lcd-brightness") != std::string::npos)
+        return 11;
+    if (type.find("zfast-lcd") != std::string::npos)
+        return 10;
+    if (type.find("zfast") != std::string::npos)
+        return 9;
+    if (type.find("quilez") != std::string::npos)
+        return 15;
+    if (type.find("scanlinesd-color-x") != std::string::npos || type.find("scanlinesdcolorx") != std::string::npos)
+        return 20;
+    if (type.find("scanlinesd-x") != std::string::npos || type.find("scanlinesdx") != std::string::npos)
+        return 19;
+    if (type.find("scanlinesd-color") != std::string::npos || type.find("scanlinesdcolor") != std::string::npos)
+        return 18;
+    if (type.find("scanlinesd") != std::string::npos || type.find("scanline") != std::string::npos || type.find("crt") != std::string::npos)
+        return 17;
+    if (type.find("dot-d4") != std::string::npos)
+        return 21;
+    if (type.find("dot-hv4") != std::string::npos)
+        return 22;
+    if (type.find("dot") != std::string::npos)
+        return 21;
+    if (type.find("fxaa") != std::string::npos ||
+        type.find("smaa") != std::string::npos ||
+        type.find("aa") != std::string::npos ||
+        type.find("cartoon") != std::string::npos ||
+        type.find("bloom") != std::string::npos ||
+        type.find("luna") != std::string::npos ||
+        type.find("nataa") != std::string::npos)
+    {
+        return 15;
+    }
+    return -1;
 }
 
 bool isDrasticSimpleShaderType(const std::string& type)

@@ -155,6 +155,7 @@ void Init();
 void DeInit();
 
 u32 TextureCreate(u32 width, u32 height, DkImageFormat format);
+u32 TextureCreateRenderTarget(u32 width, u32 height, DkImageFormat format);
 u32 TextureCreateExternal(u32 width, u32 height, dk::Image& image);
 void TextureDelete(u32 idx);
 // this is meant to be used sparsely
@@ -203,6 +204,14 @@ void SetShaderMode(ShaderMode mode);
 void SetNdsShaderParams(const std::array<float, 8>& params);
 void SetSampler(u32 sampler);
 
+struct NdsFilterPass
+{
+    ShaderMode Shader = shaderMode_Default;
+    int Code = 0;
+    int OutputScale = 1;
+    u32 Sampler = sampler_Nearest | sampler_ClampToEdge;
+};
+
 void PushDrawTransform(float m00, float m01, float m02, float m10, float m11, float m12);
 void PopDrawTransform();
 
@@ -231,6 +240,15 @@ void DrawRectangle(u32 texIdx,
     Vector2f subPosition, Vector2f subSize,
     Color tint,
     bool coolTransparency = false);
+void DrawNdsMultiPassRectangle(u32 texIdx,
+    Vector2f p0, Vector2f p1, Vector2f p2, Vector2f p3,
+    Vector2f subPosition, Vector2f subSize,
+    const NdsFilterPass* passes,
+    int passCount,
+    u32 tempTextureA,
+    u32 tempTextureB,
+    u32 tempWidth,
+    u32 tempHeight);
 
 enum
 {

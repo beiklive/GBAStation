@@ -97,6 +97,13 @@ Gfx::ShaderMode shaderModeFromType(const std::string& type)
 {
     if (isDrasticSimpleShaderType(type))
         return Gfx::shaderMode_NdsDrasticSimple;
+    if (type.find("xbr") != std::string::npos ||
+        type.find("sabr") != std::string::npos ||
+        type.find("hq") != std::string::npos ||
+        type.find("scale2x") != std::string::npos)
+    {
+        return Gfx::shaderMode_NdsXbrzFreescale;
+    }
     if (type == "dot-clear")
         return Gfx::shaderMode_NdsDotClear;
     if (type == "xbrz-freescale")
@@ -104,6 +111,58 @@ Gfx::ShaderMode shaderModeFromType(const std::string& type)
     if (type == "lcd-grid-v2-nds-color")
         return Gfx::shaderMode_NdsLcdGridNdsColor;
     return Gfx::shaderMode_NdsDot;
+}
+
+bool isXbrLikeShader(const std::string& type)
+{
+    return type.find("xbr") != std::string::npos ||
+           type.find("sabr") != std::string::npos ||
+           type.find("hq") != std::string::npos ||
+           type.find("scale2x") != std::string::npos;
+}
+
+bool ndsShaderPassChain(const std::string& type,
+                        std::array<Gfx::NdsFilterPass, 4>& passes,
+                        int& passCount,
+                        int& tempScale)
+{
+    passCount = 0;
+    tempScale = 1;
+
+    if (!isXbrLikeShader(type) && type != "drastic-fxaa-hq" && type != "drastic-smaa")
+        return false;
+
+    passes[passCount++] = {isXbrLikeShader(type) ? Gfx::shaderMode_NdsXbrzFreescale : Gfx::shaderMode_NdsDrasticSimple,
+                           drasticSimpleShaderCode(type),
+                           2,
+                           Gfx::sampler_Nearest | Gfx::sampler_ClampToEdge};
+    tempScale = 2;
+
+    int finalCode = -1;
+    if (type.find("lcd") != std::string::npos)
+        finalCode = 5;
+    else if (type.find("crt") != std::string::npos || type.find("scanline") != std::string::npos)
+        finalCode = 17;
+    else if (type.find("-1x") != std::string::npos ||
+             type.find("-2x") != std::string::npos ||
+             type.find("linear2x") != std::string::npos ||
+             type == "drastic-fxaa-hq" ||
+             type == "drastic-smaa")
+    {
+        finalCode = 0;
+    }
+
+    if (finalCode < 0)
+    {
+        passCount = 0;
+        return false;
+    }
+
+    passes[passCount++] = {Gfx::shaderMode_NdsDrasticSimple,
+                           finalCode,
+                           1,
+                           Gfx::sampler_Linear | Gfx::sampler_ClampToEdge};
+    return true;
 }
 
 float clampGap(float gap, float available)
@@ -132,6 +191,7 @@ void NdsGameLayer::init(GPU2D::DekoRenderer* renderer)
 void NdsGameLayer::deinit()
 {
     clearOverlayTexture();
+    clearShaderPassTextures();
     if (m_menuFreezeTexture != 0)
     {
         Gfx::PresentQueue.waitIdle();
@@ -153,6 +213,47 @@ void NdsGameLayer::deinit()
         }
     }
     m_renderer = nullptr;
+}
+
+void NdsGameLayer::clearShaderPassTextures() const
+{
+    for (auto& texture : m_shaderPassTextures)
+    {
+        if (texture != 0)
+        {
+            Gfx::PresentQueue.waitIdle();
+            Gfx::TextureDelete(texture);
+            texture = 0;
+        }
+    }
+    m_shaderPassTextureWidth = 0;
+    m_shaderPassTextureHeight = 0;
+}
+
+bool NdsGameLayer::ensureShaderPassTextures(int width, int height) const
+{
+    width = std::max(width, 1);
+    height = std::max(height, 1);
+    if (m_shaderPassTextureWidth != width || m_shaderPassTextureHeight != height)
+        clearShaderPassTextures();
+
+    for (auto& texture : m_shaderPassTextures)
+    {
+        if (texture == 0)
+        {
+            texture = Gfx::TextureCreateRenderTarget(static_cast<u32>(width),
+                                                     static_cast<u32>(height),
+                                                     DkImageFormat_RGBA8_Unorm);
+            if (texture == 0)
+            {
+                clearShaderPassTextures();
+                return false;
+            }
+        }
+    }
+    m_shaderPassTextureWidth = width;
+    m_shaderPassTextureHeight = height;
+    return true;
 }
 
 void NdsGameLayer::setOverlayTexture(std::uint32_t texture, int width, int height)
@@ -648,6 +749,84 @@ void NdsGameLayer::drawScreenTexture(const ScreenDrawRect& item,
                        subSize);
 }
 
+void NdsGameLayer::drawScreenTextureMultiPass(const ScreenDrawRect& item,
+                                              std::uint32_t texture,
+                                              const RectF& sourceRect,
+                                              const Gfx::NdsFilterPass* passes,
+                                              int passCount,
+                                              std::uint32_t tempTextureA,
+                                              std::uint32_t tempTextureB,
+                                              int tempWidth,
+                                              int tempHeight) const
+{
+    const Gfx::Vector2f subPosition{sourceRect.x, sourceRect.y};
+    const Gfx::Vector2f subSize{sourceRect.w, sourceRect.h};
+    if (m_orientation == 0)
+    {
+        const Gfx::Vector2f p0{item.rect.x, item.rect.y};
+        const Gfx::Vector2f p1{item.rect.x + item.rect.w, item.rect.y};
+        const Gfx::Vector2f p2{item.rect.x, item.rect.y + item.rect.h};
+        const Gfx::Vector2f p3{item.rect.x + item.rect.w, item.rect.y + item.rect.h};
+        Gfx::DrawNdsMultiPassRectangle(texture,
+                                       p0,
+                                       p1,
+                                       p2,
+                                       p3,
+                                       subPosition,
+                                       subSize,
+                                       passes,
+                                       passCount,
+                                       tempTextureA,
+                                       tempTextureB,
+                                       static_cast<u32>(tempWidth),
+                                       static_cast<u32>(tempHeight));
+        return;
+    }
+
+    const Gfx::Vector2f tl{item.rect.x, item.rect.y};
+    const Gfx::Vector2f tr{item.rect.x + item.rect.w, item.rect.y};
+    const Gfx::Vector2f bl{item.rect.x, item.rect.y + item.rect.h};
+    const Gfx::Vector2f br{item.rect.x + item.rect.w, item.rect.y + item.rect.h};
+    Gfx::Vector2f p0 = tl;
+    Gfx::Vector2f p1 = tr;
+    Gfx::Vector2f p2 = bl;
+    Gfx::Vector2f p3 = br;
+    if (m_orientation == 1)
+    {
+        p0 = tr;
+        p1 = br;
+        p2 = tl;
+        p3 = bl;
+    }
+    else if (m_orientation == 2)
+    {
+        p0 = br;
+        p1 = bl;
+        p2 = tr;
+        p3 = tl;
+    }
+    else if (m_orientation == 3)
+    {
+        p0 = bl;
+        p1 = tl;
+        p2 = br;
+        p3 = tr;
+    }
+    Gfx::DrawNdsMultiPassRectangle(texture,
+                                   p0,
+                                   p1,
+                                   p2,
+                                   p3,
+                                   subPosition,
+                                   subSize,
+                                   passes,
+                                   passCount,
+                                   tempTextureA,
+                                   tempTextureB,
+                                   static_cast<u32>(tempWidth),
+                                   static_cast<u32>(tempHeight));
+}
+
 void NdsGameLayer::drawScreens() const
 {
     if (!m_renderer)
@@ -661,12 +840,16 @@ void NdsGameLayer::drawScreens() const
                            m_menuFreezeHeight >= kDsHeight * 2;
 
     const bool useShader = m_shaderEnabled;
+    std::array<Gfx::NdsFilterPass, 4> passChain {};
+    int passCount = 0;
+    int passTempScale = 1;
+    const bool useMultiPassShader = useShader && ndsShaderPassChain(m_shaderType, passChain, passCount, passTempScale);
     const u32 screenSampler = (useShader ? Gfx::sampler_Nearest :
                               (m_linearFiltering ? Gfx::sampler_Linear : Gfx::sampler_Nearest)) |
                               Gfx::sampler_ClampToEdge;
     Gfx::SetSampler(screenSampler);
     Gfx::SetNdsShaderParams(m_shaderParams);
-    Gfx::SetShaderMode(useShader ? shaderModeFromType(m_shaderType) : Gfx::shaderMode_Default);
+    Gfx::SetShaderMode(useShader && !useMultiPassShader ? shaderModeFromType(m_shaderType) : Gfx::shaderMode_Default);
     if (m_waitForFramebufferReady)
         Gfx::WaitForFenceReady(m_renderer->FramebufferReady[GPU::FrontBuffer]);
     for (const auto& item : rects)
@@ -674,19 +857,65 @@ void NdsGameLayer::drawScreens() const
         const int sourceScreen = item.sourceTop ? 0 : 1;
         if (useFreeze)
         {
-            drawScreenTexture(item,
-                              m_menuFreezeTexture,
-                              {0.0f,
-                               static_cast<float>(sourceScreen * kDsHeight),
-                               static_cast<float>(kDsWidth),
-                               static_cast<float>(kDsHeight)});
+            const RectF sourceRect {0.0f,
+                                    static_cast<float>(sourceScreen * kDsHeight),
+                                    static_cast<float>(kDsWidth),
+                                    static_cast<float>(kDsHeight)};
+            if (useMultiPassShader)
+            {
+                const int tempW = static_cast<int>(std::ceil(sourceRect.w * passTempScale));
+                const int tempH = static_cast<int>(std::ceil(sourceRect.h * passTempScale));
+                if (ensureShaderPassTextures(tempW, tempH))
+                {
+                    drawScreenTextureMultiPass(item,
+                                               m_menuFreezeTexture,
+                                               sourceRect,
+                                               passChain.data(),
+                                               passCount,
+                                               m_shaderPassTextures[0],
+                                               m_shaderPassTextures[1],
+                                               tempW,
+                                               tempH);
+                }
+                else
+                {
+                    drawScreenTexture(item, m_menuFreezeTexture, sourceRect);
+                }
+            }
+            else
+            {
+                drawScreenTexture(item, m_menuFreezeTexture, sourceRect);
+            }
         }
         else
         {
             const u32 texture = m_framebufferTextures[GPU::FrontBuffer][sourceScreen];
-            drawScreenTexture(item,
-                              texture,
-                              {0.0f, 0.0f, liveSrcWidth, liveSrcHeight});
+            const RectF sourceRect {0.0f, 0.0f, liveSrcWidth, liveSrcHeight};
+            if (useMultiPassShader)
+            {
+                const int tempW = static_cast<int>(std::ceil(sourceRect.w * passTempScale));
+                const int tempH = static_cast<int>(std::ceil(sourceRect.h * passTempScale));
+                if (ensureShaderPassTextures(tempW, tempH))
+                {
+                    drawScreenTextureMultiPass(item,
+                                               texture,
+                                               sourceRect,
+                                               passChain.data(),
+                                               passCount,
+                                               m_shaderPassTextures[0],
+                                               m_shaderPassTextures[1],
+                                               tempW,
+                                               tempH);
+                }
+                else
+                {
+                    drawScreenTexture(item, texture, sourceRect);
+                }
+            }
+            else
+            {
+                drawScreenTexture(item, texture, sourceRect);
+            }
         }
     }
     Gfx::SetShaderMode(Gfx::shaderMode_Default);
