@@ -123,6 +123,17 @@ std::string drasticCategory(const std::string& type)
     return "other";
 }
 
+void sortShaderEntries(std::vector<NdsShaderListEntry>& entries)
+{
+    std::sort(entries.begin(), entries.end(), [](const NdsShaderListEntry& lhs, const NdsShaderListEntry& rhs) {
+        const std::string a = lowerAscii(lhs.label);
+        const std::string b = lowerAscii(rhs.label);
+        if (a != b)
+            return a < b;
+        return lhs.label < rhs.label;
+    });
+}
+
 const std::map<std::string, int>& drasticSimpleShaderCodes()
 {
     static const std::map<std::string, int> codes {
@@ -267,6 +278,7 @@ std::vector<NdsShaderListEntry> ndsShaderListEntries(const std::vector<std::stri
             result.push_back({NdsShaderListEntry::Kind::Directory, "RetroArch", {}, {"RetroArch"}});
         if (hasDrastic)
             result.push_back({NdsShaderListEntry::Kind::Directory, "DraStic", {}, {"DraStic"}});
+        sortShaderEntries(result);
         return result;
     }
 
@@ -277,6 +289,7 @@ std::vector<NdsShaderListEntry> ndsShaderListEntries(const std::vector<std::stri
             if (isRetroArchShader(type))
                 result.push_back({NdsShaderListEntry::Kind::Shader, ndsShaderDisplayName(type), type, path});
         }
+        sortShaderEntries(result);
         return result;
     }
 
@@ -296,6 +309,7 @@ std::vector<NdsShaderListEntry> ndsShaderListEntries(const std::vector<std::stri
             if (categories.find(category) != categories.end())
                 result.push_back({NdsShaderListEntry::Kind::Directory, category, {}, {"DraStic", category}});
         }
+        sortShaderEntries(result);
         return result;
     }
 
@@ -306,6 +320,7 @@ std::vector<NdsShaderListEntry> ndsShaderListEntries(const std::vector<std::stri
             if (isDraSticShader(type) && drasticCategory(type) == path[1])
                 result.push_back({NdsShaderListEntry::Kind::Shader, ndsShaderDisplayName(type), type, path});
         }
+        sortShaderEntries(result);
     }
     return result;
 }
@@ -323,6 +338,9 @@ std::vector<std::string> ndsShaderListPathForType(const std::string& type)
 int drasticSimpleShaderCode(const std::string& type)
 {
     const std::string key = ndsShaderMatchKey(type);
+    if (!startsWith(key, "drastic-"))
+        return -1;
+
     const auto& codes = drasticSimpleShaderCodes();
     const auto it = codes.find(key);
     if (it != codes.end())

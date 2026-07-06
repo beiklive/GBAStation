@@ -59,6 +59,12 @@ constexpr int kShaderBaseControlCount = 2;
 constexpr float kShaderParamRowH = 50.0f;
 constexpr float kShaderParamStepY = 58.0f;
 constexpr float kShaderListRowH = 58.0f;
+constexpr float kShaderListPanelMaxH = 610.0f;
+constexpr float kShaderListPanelVerticalMargin = 80.0f;
+constexpr float kShaderListHeaderH = 78.0f;
+constexpr float kShaderListFooterH = 54.0f;
+constexpr float kShaderListPadTop = 30.0f;
+constexpr float kShaderListPadBottom = 14.0f;
 constexpr const char* kOverlayRoot = "sdmc:/GBAStation/overlays";
 
 bool isDirectionUp(std::uint64_t buttons)
@@ -928,7 +934,11 @@ int NdsMenuLayer::currentShaderTypeIndex() const
 float NdsMenuLayer::shaderListTargetScroll() const
 {
     setMenuMetricsOrientation(m_display.orientation);
-    const float bodyH = std::max(1.0f, menuMetrics().screenH - 220.0f);
+    const float panelH = std::min(menuMetrics().screenH - kShaderListPanelVerticalMargin,
+                                  kShaderListPanelMaxH);
+    const float bodyH = std::max(1.0f,
+                                 panelH - kShaderListHeaderH - kShaderListFooterH -
+                                     kShaderListPadTop - kShaderListPadBottom);
     const auto entries = ndsShaderListEntries(m_shaderListPath);
     const int entryCount = std::max(1, static_cast<int>(entries.size()));
     const float contentH = static_cast<float>(entryCount) * kShaderListRowH;

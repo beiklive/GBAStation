@@ -1633,8 +1633,8 @@ void drawShaderListOverlay(const std::vector<NdsShaderListEntry>& entries,
     drawRect({0.0f, 0.0f}, {kScreenW, kScreenH}, {0.0f, 0.0f, 0.0f, 0.54f * opacity}, true);
 
     const bool portrait = kScreenH > kScreenW;
-    const float panelW = portrait ? std::min(640.0f, kScreenW - 72.0f) : 640.0f;
-    const float panelH = std::min(kScreenH - 128.0f, 470.0f);
+    const float panelW = portrait ? std::min(680.0f, kScreenW - 48.0f) : 840.0f;
+    const float panelH = std::min(kScreenH - 80.0f, 610.0f);
     const float panelX = (kScreenW - panelW) * 0.5f;
     const float panelY = (kScreenH - panelH) * 0.5f;
     const float headerH = 78.0f;
