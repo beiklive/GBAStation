@@ -2448,7 +2448,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
     initialDisplay.fastForwardMultiplier = inputConfig.fastForwardMultiplier();
     initialDisplay.linearFiltering = inputConfig.value("display.filter", "nearest") == "linear";
     initialDisplay.integerScale = options.integerScale;
-    initialDisplay.layout = layoutIndexFromId(options.screenLayout.empty() ? "hybrid" : options.screenLayout);
+    initialDisplay.layout = layoutIndexFromId(options.screenLayout.empty() ? "priority_top" : options.screenLayout);
     initialDisplay.orientation = orientationIndexFromId(options.screenOrientation.empty() ? "0" : options.screenOrientation);
     initialDisplay.screenGap = std::clamp(options.screenGap, -256, 256);
     initialDisplay.overlayEnabled = options.overlayEnabled;

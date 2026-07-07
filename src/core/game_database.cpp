@@ -331,7 +331,7 @@ namespace beiklive
         entry.ndsBottomScale = j.value("ndsBottomScale", 1.0f);
         entry.ndsBottomOffsetX = j.value("ndsBottomOffsetX", 0.0f);
         entry.ndsBottomOffsetY = j.value("ndsBottomOffsetY", 0.0f);
-        entry.ndsScreenLayout = j.value("ndsScreenLayout", "hybrid");
+        entry.ndsScreenLayout = j.value("ndsScreenLayout", "priority_top");
         entry.ndsScreenOrientation = j.value("ndsScreenOrientation", "0");
         entry.ndsIntegerScale = j.value("ndsIntegerScale", true);
         entry.ndsScreenGap = std::clamp(j.value("ndsScreenGap", 0), -256, 256);

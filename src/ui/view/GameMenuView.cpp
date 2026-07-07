@@ -1603,7 +1603,7 @@ namespace beiklive
             if (isNds) {
                 std::vector<std::string> ndsLayouts = {"上下屏", "左右屏", "上屏优先", "自定义", "混合", "仅上屏", "仅下屏"};
                 std::vector<std::string> ndsLayoutIds = {"vertical", "horizontal", "priority_top", "custom", "hybrid", "top", "bottom"};
-                std::string currentLayout = m_gameEntry.ndsScreenLayout.empty() ? "vertical" : m_gameEntry.ndsScreenLayout;
+                std::string currentLayout = m_gameEntry.ndsScreenLayout.empty() ? "priority_top" : m_gameEntry.ndsScreenLayout;
                 if (currentLayout == "separate") {
                     currentLayout = "custom";
                 }

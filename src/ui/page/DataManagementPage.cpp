@@ -962,7 +962,7 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
             entry.shaderEnabled = config.shaderEnabled;
             applyDisplayDefaults(entry);
             if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)) {
-                entry.ndsScreenLayout = "hybrid";
+                entry.ndsScreenLayout = "priority_top";
                 entry.ndsScreenOrientation = "0";
                 entry.ndsIntegerScale = true;
                 entry.ndsScreenGap = 0;
@@ -1110,7 +1110,7 @@ void DataManagementPage::startDirImport(const std::string& dirPath)
             entry.savePath = savePath;
             applyDisplayDefaults(entry);
             if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)) {
-                entry.ndsScreenLayout = "hybrid";
+                entry.ndsScreenLayout = "priority_top";
                 entry.ndsScreenOrientation = "0";
                 entry.ndsIntegerScale = true;
                 entry.ndsScreenGap = 0;

@@ -108,7 +108,7 @@ private:
     bool m_waitForFramebufferReady = false;
     bool m_linearFiltering = false;
     bool m_screensSwapped = false;
-    bool m_integerScale = false;
+    bool m_integerScale = true;
     ScreenLayout m_layout = ScreenLayout::Vertical;
     int m_orientation = 0;
     float m_screenGap = 0.0f;

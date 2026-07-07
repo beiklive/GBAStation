@@ -127,14 +127,14 @@ namespace beiklive
         m_cachedThumbCompression = GET_SETTING_KEY_INT(
             beiklive::SettingKey::KEY_REWIND_THUMB_COMPRESSION, 0);
         if (isNds) {
-            m_ndsLayout = m_gameEntry.ndsScreenLayout.empty() ? "vertical" : m_gameEntry.ndsScreenLayout;
+            m_ndsLayout = m_gameEntry.ndsScreenLayout.empty() ? "priority_top" : m_gameEntry.ndsScreenLayout;
             if (m_ndsLayout == "separate")
                 m_ndsLayout = "custom";
             if (m_ndsLayout != "vertical" && m_ndsLayout != "horizontal" &&
                 m_ndsLayout != "priority_top" &&
                 m_ndsLayout != "custom" && m_ndsLayout != "hybrid" &&
                 m_ndsLayout != "top" && m_ndsLayout != "bottom")
-                m_ndsLayout = "vertical";
+                m_ndsLayout = "priority_top";
             m_gameEntry.ndsScreenLayout = m_ndsLayout;
 
             m_ndsScreenOrientation = normalizeNdsScreenRotation(m_gameEntry.ndsScreenOrientation);
@@ -3281,7 +3281,7 @@ namespace beiklive
         else if (layout == "separate")
             m_ndsLayout = "custom";
         else
-            m_ndsLayout = "vertical";
+            m_ndsLayout = "priority_top";
 
         m_gameEntry.ndsScreenLayout = m_ndsLayout;
         if (beiklive::GameDB && !m_gameEntry.path.empty()) {

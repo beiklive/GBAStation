@@ -54,6 +54,68 @@ namespace beiklive
 #endif
         }
 
+        void ensureGameDbEntryForFileLaunch(const beiklive::DirListData& dirItem)
+        {
+            if (!beiklive::GameDB || dirItem.fullPath.empty())
+                return;
+
+            auto entryOpt = beiklive::GameDB->findByPath(dirItem.fullPath);
+            beiklive::GameEntry entry = entryOpt.value_or(beiklive::GameEntry{});
+            bool changed = !entryOpt.has_value();
+
+            const int platform = static_cast<int>(dirItem.itemType);
+            const std::string stem = beiklive::tools::getFileNameWithoutExtension(dirItem.fileName);
+
+            if (entry.path.empty()) {
+                entry.path = dirItem.fullPath;
+                changed = true;
+            }
+            if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::NONE)) {
+                entry.platform = platform;
+                changed = true;
+            }
+            if (entry.core.empty()) {
+                entry.core = beiklive::GetDefaultCoreId(platform);
+                changed = true;
+            }
+            entry.core = beiklive::NormalizeCoreId(entry.platform, entry.core);
+            if (entry.title.empty()) {
+                entry.title = GET_MAPPING_KEY_STR(stem, stem);
+                changed = true;
+            }
+            if (entry.savePath.empty()) {
+                entry.savePath = beiklive::tools::defaultGameSavePath(entry.platform, entry.path);
+                changed = true;
+            }
+            if (entry.logoPath.empty()) {
+                entry.logoPath = beiklive::tools::getDefaultLogoPath(
+                    static_cast<beiklive::enums::EmuPlatform>(entry.platform));
+                changed = true;
+            }
+            if (entry.screenShotPath.empty()) {
+                entry.screenShotPath = beiklive::path::screenshotPath();
+                changed = true;
+            }
+
+            if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)) {
+                if (entry.ndsScreenLayout.empty()) {
+                    entry.ndsScreenLayout = "priority_top";
+                    changed = true;
+                }
+                if (entry.ndsScreenOrientation.empty()) {
+                    entry.ndsScreenOrientation = "0";
+                    changed = true;
+                }
+            }
+
+            std::error_code ec;
+            std::filesystem::create_directories(entry.savePath, ec);
+            beiklive::GameDB->upsertByPath(entry);
+            if (changed)
+                brls::Logger::info("StartPage: added file launch entry to GameDB: {}", entry.path);
+            beiklive::GameDB->flush();
+        }
+
 #ifdef __SWITCH__
         bool launchNdsExternalNro(const std::string& romPath, const std::string& title)
         {
@@ -214,6 +276,7 @@ namespace beiklive
     {
         if (shouldUseNdsExternalNro(dirItem))
         {
+            ensureGameDbEntryForFileLaunch(dirItem);
 #ifdef __SWITCH__
             launchNdsExternalNro(dirItem.fullPath, dirItem.fileName);
             return;

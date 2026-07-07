@@ -11,7 +11,7 @@ struct DekoRunOptions {
     std::string title;
     std::string savePath;
     std::string returnNroPath;
-    std::string screenLayout = "hybrid";
+    std::string screenLayout = "priority_top";
     std::string screenOrientation = "0";
     bool integerScale = true;
     int screenGap = 0;

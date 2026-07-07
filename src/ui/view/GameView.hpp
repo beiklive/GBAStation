@@ -162,7 +162,7 @@ namespace beiklive
             beiklive::DisplayRect m_ndsTouchRect; ///< NDS 下屏在视图中的绘制区域
             std::string m_ndsLayout = "vertical"; ///< NDS 双屏布局
             std::string m_ndsScreenOrientation = "0"; ///< NDS 屏幕旋转角度（0/90/180/270）
-            bool m_ndsIntegerScale = false; ///< NDS 是否自动最大整数倍缩放
+            bool m_ndsIntegerScale = true; ///< NDS 是否自动最大整数倍缩放
             bool m_ndsScreensSwapped = false; ///< NDS 是否交换上下屏显示位置
             bool m_ndsTouchActive = false; ///< NDS 原始触摸轮询是否处于按下状态
             bool m_ndsVirtualPointerMode = false; ///< NDS 虚拟指针模式是否开启

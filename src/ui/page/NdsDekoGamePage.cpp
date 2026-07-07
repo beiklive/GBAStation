@@ -60,7 +60,7 @@ void NdsDekoGamePage::_initGameEntryFromDir()
         minimal.savePath = beiklive::tools::defaultGameSavePath(platform, minimal.path);
         minimal.logoPath = beiklive::tools::getDefaultLogoPath(
             static_cast<beiklive::enums::EmuPlatform>(platform));
-        minimal.ndsScreenLayout = "hybrid";
+        minimal.ndsScreenLayout = "priority_top";
         minimal.ndsScreenOrientation = "0";
         minimal.ndsIntegerScale = true;
         minimal.ndsScreenGap = 0;
@@ -84,7 +84,7 @@ void NdsDekoGamePage::_initGameEntryPaths()
     m_gameEntry.core = beiklive::NormalizeCoreId(m_gameEntry.platform, m_gameEntry.core);
 
     if (m_gameEntry.ndsScreenLayout.empty())
-        m_gameEntry.ndsScreenLayout = "hybrid";
+        m_gameEntry.ndsScreenLayout = "priority_top";
     if (m_gameEntry.ndsScreenOrientation.empty())
         m_gameEntry.ndsScreenOrientation = "0";
     m_gameEntry.ndsScreenGap = std::clamp(m_gameEntry.ndsScreenGap, -256, 256);

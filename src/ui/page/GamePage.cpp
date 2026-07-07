@@ -90,7 +90,7 @@ namespace beiklive
                 beiklive::tools::getFileNameWithoutExtension(m_gameData.fileName));
             minimal.savePath = beiklive::tools::defaultGameSavePath(minimal.platform, minimal.path);
             if (minimal.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)) {
-                minimal.ndsScreenLayout = "hybrid";
+                minimal.ndsScreenLayout = "priority_top";
                 minimal.ndsScreenOrientation = "0";
                 minimal.ndsIntegerScale = true;
                 minimal.ndsScreenGap = 0;
@@ -131,7 +131,7 @@ namespace beiklive
         db->setDefault(path, "integerAspectRatio",
                        GET_SETTING_KEY_INT("display.integer_scale_mult", 0));
         if ((int)m_gameData.itemType == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)) {
-            db->setDefault(path, "ndsScreenLayout", std::string("hybrid"));
+            db->setDefault(path, "ndsScreenLayout", std::string("priority_top"));
             db->setDefault(path, "ndsScreenOrientation", std::string("0"));
             db->setDefault(path, "ndsIntegerScale", true);
             db->setDefault(path, "ndsScreenGap", 0);
@@ -230,7 +230,7 @@ namespace beiklive
         if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS) &&
             m_gameEntry.ndsScreenLayout.empty())
         {
-            m_gameEntry.ndsScreenLayout = "hybrid";
+            m_gameEntry.ndsScreenLayout = "priority_top";
         }
         if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS) &&
             m_gameEntry.ndsScreenOrientation.empty())

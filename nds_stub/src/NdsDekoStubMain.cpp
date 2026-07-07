@@ -201,7 +201,7 @@ int main(int argc, char* argv[])
             if (options.title.empty())
                 options.title = titleFromPath(options.romPath);
             if (options.screenLayout.empty())
-                options.screenLayout = "hybrid";
+                options.screenLayout = "priority_top";
             if (options.screenOrientation.empty())
                 options.screenOrientation = "0";
             if (options.ndsShaderType.empty())
