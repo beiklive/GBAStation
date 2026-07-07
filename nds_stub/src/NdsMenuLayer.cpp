@@ -2096,6 +2096,11 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
 
             if (buttonsDown & HidNpadButton_A)
             {
+                if (currentItem == Item::LoadState && !m_slots[m_contentFocus].loadable)
+                {
+                    queueSound(NdsMenuSound::Error);
+                    return {};
+                }
                 queueSound(NdsMenuSound::Click);
                 return {currentItem == Item::SaveState ? NdsMenuAction::SaveState : NdsMenuAction::LoadState,
                         m_contentFocus};

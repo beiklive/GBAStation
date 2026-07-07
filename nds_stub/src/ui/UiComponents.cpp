@@ -1052,8 +1052,11 @@ void drawSaveSlotCard(int slot, Vector2f pos, bool focused, const NdsStateSlotIn
         const float textX = 112.0f;
         Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{textX, 24.0f}, 24.0f,
                       {1.0f, 1.0f, 1.0f, 0.96f}, "%s", title);
+        const char* stateText = !info.stateFileAvailable ? "残留截图" :
+            (!info.loadable ? "无效状态" :
+             (info.modifiedTime.empty() ? "已有状态" : info.modifiedTime.c_str()));
         Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{textX, 64.0f}, 17.0f,
-                      {1.0f, 1.0f, 1.0f, 0.55f}, "%s", info.modifiedTime.empty() ? "已有状态" : info.modifiedTime.c_str());
+                      {1.0f, 1.0f, 1.0f, 0.55f}, "%s", stateText);
         if (info.thumbnailTexture == 0)
             Gfx::DrawText(Gfx::SystemFontStandard, thumbPos + thumbSize * 0.5f, 15.0f,
                           {0.75f, 0.88f, 1.0f, 0.46f}, Gfx::align_Center, Gfx::align_Center,
@@ -1166,9 +1169,12 @@ void drawStateSlotPage(const char* title,
                       {0.86f, 0.91f, 0.96f, focused ? 1.0f * opacity : 0.82f * opacity},
                       "%s",
                       slotName);
-        if (slot.exists && !slot.modifiedTime.empty())
+        if (slot.exists)
         {
-            const std::string timeText = ellipsizeText(slot.modifiedTime, listW - 146.0f, 16.0f);
+            const char* stateText = !slot.stateFileAvailable ? "残留截图" :
+                (!slot.loadable ? "无效状态" :
+                 (slot.modifiedTime.empty() ? "已有状态" : slot.modifiedTime.c_str()));
+            const std::string timeText = ellipsizeText(stateText, listW - 146.0f, 16.0f);
             Gfx::DrawText(Gfx::SystemFontChinese,
                           rowPos + Vector2f{listW - 16.0f, rowH * 0.5f - 8.0f},
                           16.0f,

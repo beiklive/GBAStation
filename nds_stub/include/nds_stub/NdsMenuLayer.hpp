@@ -46,6 +46,8 @@ struct NdsMenuResult {
 
 struct NdsStateSlotInfo {
     bool exists = false;
+    bool stateFileAvailable = false;
+    bool loadable = false;
     std::string statePath;
     std::string thumbnailPath;
     std::string modifiedTime;

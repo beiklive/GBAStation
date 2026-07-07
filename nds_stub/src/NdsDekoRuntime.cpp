@@ -22,6 +22,7 @@
 #include <functional>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -873,6 +874,34 @@ std::string formatFileTime(const std::string& path)
     return buffer;
 }
 
+bool isSavestateHeaderValid(const std::string& path)
+{
+    std::error_code ec;
+    const auto size = std::filesystem::file_size(path, ec);
+    if (ec || size < 16 || size > std::numeric_limits<std::uint32_t>::max())
+        return false;
+
+    std::ifstream in(path, std::ios::binary);
+    if (!in)
+        return false;
+
+    char magic[4] = {};
+    std::uint16_t major = 0;
+    std::uint16_t minor = 0;
+    std::uint32_t length = 0;
+    in.read(magic, sizeof(magic));
+    in.read(reinterpret_cast<char*>(&major), sizeof(major));
+    in.read(reinterpret_cast<char*>(&minor), sizeof(minor));
+    in.read(reinterpret_cast<char*>(&length), sizeof(length));
+    if (!in)
+        return false;
+
+    return std::memcmp(magic, "MELN", 4) == 0 &&
+        major == SAVESTATE_MAJOR &&
+        minor <= SAVESTATE_MINOR &&
+        length == size;
+}
+
 std::array<beiklive::nds_stub::NdsStateSlotInfo, 10>
 loadStateSlots(const std::string& stateDir, const std::string& romPath)
 {
@@ -882,10 +911,14 @@ loadStateSlots(const std::string& stateDir, const std::string& romPath)
         auto& info = slots[slot];
         info.statePath = statePath(stateDir, romPath, slot);
         info.thumbnailPath = stateThumbPath(stateDir, romPath, slot);
-        info.exists = std::filesystem::exists(info.statePath);
+        info.stateFileAvailable = std::filesystem::exists(info.statePath);
         info.thumbnailAvailable = std::filesystem::exists(info.thumbnailPath);
-        if (info.exists)
+        info.exists = info.stateFileAvailable || info.thumbnailAvailable;
+        info.loadable = info.stateFileAvailable && isSavestateHeaderValid(info.statePath);
+        if (info.stateFileAvailable)
             info.modifiedTime = formatFileTime(info.statePath);
+        else if (info.thumbnailAvailable)
+            info.modifiedTime = formatFileTime(info.thumbnailPath);
     }
     return slots;
 }
@@ -1320,15 +1353,40 @@ bool saveStateFile(const std::string& path)
 {
     std::error_code ec;
     std::filesystem::create_directories(std::filesystem::path(path).parent_path(), ec);
-    Savestate state(path.c_str(), true);
-    if (state.Error)
+    const std::string tempPath = path + ".tmp";
+    std::filesystem::remove(tempPath, ec);
+    ec.clear();
+
+    bool ok = false;
+    {
+        Savestate state(tempPath.c_str(), true);
+        if (state.Error)
+            return false;
+        ok = NDS::DoSavestate(&state) && !state.Error;
+    }
+
+    if (!ok || !isSavestateHeaderValid(tempPath))
+    {
+        std::filesystem::remove(tempPath, ec);
         return false;
-    return NDS::DoSavestate(&state) && !state.Error;
+    }
+
+    std::filesystem::remove(path, ec);
+    ec.clear();
+    std::filesystem::rename(tempPath, path, ec);
+    if (ec)
+    {
+        std::error_code copyEc;
+        std::filesystem::copy_file(tempPath, path, std::filesystem::copy_options::overwrite_existing, copyEc);
+        std::filesystem::remove(tempPath, ec);
+        return !copyEc && isSavestateHeaderValid(path);
+    }
+    return true;
 }
 
 bool loadStateFile(const std::string& path)
 {
-    if (!std::filesystem::exists(path))
+    if (!isSavestateHeaderValid(path))
         return false;
     Savestate state(path.c_str(), false);
     if (state.Error)
@@ -2587,9 +2645,8 @@ int RunDekoRuntime(const DekoRunOptions& options)
         if (slot >= 0 && slot < static_cast<int>(stateSlots.size()))
             releaseStateSlotTexture(stateSlots[slot]);
         std::error_code removeEc;
-        const bool removedOldState = std::filesystem::remove(path, removeEc);
-        const bool removeStateFailed = static_cast<bool>(removeEc);
-        removeEc.clear();
+        const bool removedOldState = false;
+        const bool removeStateFailed = false;
         const bool removedOldThumb = std::filesystem::remove(thumbPath, removeEc);
         const bool removeThumbFailed = static_cast<bool>(removeEc);
         appendStubLog("GBAStationNDSStub: savestate old files remove slot=%d state=%d stateErr=%d thumb=%d thumbErr=%d",
