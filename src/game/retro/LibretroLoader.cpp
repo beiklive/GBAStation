@@ -19,7 +19,7 @@
 // ============================================================
 // 静态链接核心的外部符号声明
 //
-// mGBA now uses the native source API. The remaining libretro cores are
+// mGBA runs in its external Switch stub. The remaining libretro cores are
 // compiled with -Dretro_xxx=prefix_retro_xxx to avoid symbol collisions.
 // ============================================================
 extern "C" {
@@ -314,7 +314,7 @@ bool LibretroLoader::load(CoreType coreType)
     // 根据核心类型选择对应的符号集
     switch (coreType) {
         case CoreType::Mgba:
-            brls::Logger::error("[LibretroLoader] mGBA libretro backend is disabled; use MgbaNativeCore");
+            brls::Logger::error("[LibretroLoader] mGBA libretro backend is disabled; use the external mGBA stub");
             return false;
 
         case CoreType::Fceumm:

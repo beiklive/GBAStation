@@ -412,6 +412,9 @@ namespace beiklive
         SettingManager->SetDefault("nds.externalNro.enabled", ConfigValue(1));
         SettingManager->SetDefault("nds.externalNro.path", ConfigValue(std::string("/GBAStation/core/GBAStationNDSStub.nro")));
         SettingManager->SetDefault("nds.externalNro.returnPath", ConfigValue(std::string("sdmc:/switch/GBAStation.nro")));
+        SettingManager->SetDefault("mgba.externalNro.enabled", ConfigValue(1));
+        SettingManager->SetDefault("mgba.externalNro.path", ConfigValue(std::string("/GBAStation/core/GBAStationMgbaStub.nro")));
+        SettingManager->SetDefault("mgba.externalNro.returnPath", ConfigValue(std::string("sdmc:/switch/GBAStation.nro")));
         if (auto pathValue = SettingManager->Get("nds.externalNro.path"))
         {
             const auto path = pathValue->AsString().value_or("");

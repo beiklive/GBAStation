@@ -1,7 +1,6 @@
 #include "IEmulatorCore.hpp"
 #include "emulator/CoreFceumm.hpp"
 #include "emulator/CoreSnes9x.hpp"
-#include "emulator/mgba_native/MgbaNativeCore.hpp"
 
 namespace beiklive {
 
@@ -14,7 +13,7 @@ IEmulatorCore* CreateEmulatorCore(const beiklive::GameEntry& entry)
     case beiklive::enums::EmuPlatform::EmuGBA:
     case beiklive::enums::EmuPlatform::EmuGBC:
     case beiklive::enums::EmuPlatform::EmuGB:
-        return new beiklive::mgba_native::MgbaNativeCore();
+        return nullptr;
     case beiklive::enums::EmuPlatform::EmuNES:
         if (coreId == "nestopia")
             return new beiklive::fceumm::CoreFceumm(beiklive::CoreType::Nestopia, "Nestopia");

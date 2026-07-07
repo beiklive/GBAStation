@@ -37,7 +37,22 @@ namespace beiklive
         bool shouldUseNdsExternalNro(const beiklive::GameEntry& entry)
         {
 #ifdef __SWITCH__
-            return entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS);
+            return GET_SETTING_KEY_INT("nds.externalNro.enabled", 1) != 0 &&
+                   entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS);
+#else
+            (void)entry;
+            return false;
+#endif
+        }
+
+        bool shouldUseMgbaExternalNro(const beiklive::GameEntry& entry)
+        {
+#ifdef __SWITCH__
+            if (GET_SETTING_KEY_INT("mgba.externalNro.enabled", 1) == 0)
+                return false;
+            return entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuGBA) ||
+                   entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuGBC) ||
+                   entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuGB);
 #else
             (void)entry;
             return false;
@@ -47,7 +62,22 @@ namespace beiklive
         bool shouldUseNdsExternalNro(const beiklive::DirListData& dirItem)
         {
 #ifdef __SWITCH__
-            return dirItem.itemType == beiklive::enums::FileType::NDS_ROM;
+            return GET_SETTING_KEY_INT("nds.externalNro.enabled", 1) != 0 &&
+                   dirItem.itemType == beiklive::enums::FileType::NDS_ROM;
+#else
+            (void)dirItem;
+            return false;
+#endif
+        }
+
+        bool shouldUseMgbaExternalNro(const beiklive::DirListData& dirItem)
+        {
+#ifdef __SWITCH__
+            if (GET_SETTING_KEY_INT("mgba.externalNro.enabled", 1) == 0)
+                return false;
+            return dirItem.itemType == beiklive::enums::FileType::GBA_ROM ||
+                   dirItem.itemType == beiklive::enums::FileType::GBC_ROM ||
+                   dirItem.itemType == beiklive::enums::FileType::GB_ROM;
 #else
             (void)dirItem;
             return false;
@@ -132,6 +162,25 @@ namespace beiklive
 
             brls::Logger::info("NDS external NRO configured for {}: {}", title, result.message);
             brls::Application::notify("正在启动NDS独立NRO...");
+            brls::sync([]() { brls::Application::quit(); });
+            return true;
+        }
+
+        bool launchMgbaExternalNro(const std::string& romPath, const std::string& title)
+        {
+            const std::string nroPath = GET_SETTING_KEY_STR("mgba.externalNro.path", "/GBAStation/core/GBAStationMgbaStub.nro");
+            const std::string returnPath = GET_SETTING_KEY_STR("mgba.externalNro.returnPath", "sdmc:/switch/GBAStation.nro");
+
+            auto result = beiklive::switch_platform::launchNroOnExit({nroPath, romPath, returnPath});
+            if (!result.success)
+            {
+                brls::Logger::error("mGBA external NRO launch failed for {}: {}", title, result.message);
+                brls::Application::notify("mGBA独立NRO启动失败：" + result.message);
+                return false;
+            }
+
+            brls::Logger::info("mGBA external NRO configured for {}: {}", title, result.message);
+            brls::Application::notify("正在启动mGBA独立NRO...");
             brls::sync([]() { brls::Application::quit(); });
             return true;
         }
@@ -261,6 +310,13 @@ namespace beiklive
             return;
 #endif
         }
+        if (shouldUseMgbaExternalNro(entry))
+        {
+#ifdef __SWITCH__
+            launchMgbaExternalNro(entry.path, entry.title);
+            return;
+#endif
+        }
 
         auto* gamePage = new beiklive::GamePage(entry);
         m_gamePage = gamePage;
@@ -279,6 +335,14 @@ namespace beiklive
             ensureGameDbEntryForFileLaunch(dirItem);
 #ifdef __SWITCH__
             launchNdsExternalNro(dirItem.fullPath, dirItem.fileName);
+            return;
+#endif
+        }
+        if (shouldUseMgbaExternalNro(dirItem))
+        {
+            ensureGameDbEntryForFileLaunch(dirItem);
+#ifdef __SWITCH__
+            launchMgbaExternalNro(dirItem.fullPath, dirItem.fileName);
             return;
 #endif
         }

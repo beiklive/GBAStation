@@ -63,17 +63,9 @@ namespace
         return platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS);
     }
 
-    bool isMgbaNativePlatform(int platform)
-    {
-        using beiklive::enums::EmuPlatform;
-        return platform == static_cast<int>(EmuPlatform::EmuGBA) ||
-               platform == static_cast<int>(EmuPlatform::EmuGBC) ||
-               platform == static_cast<int>(EmuPlatform::EmuGB);
-    }
-
     bool shouldSetupCoreOnGameThread(int platform)
     {
-        return isNdsPlatform(platform) || isMgbaNativePlatform(platform);
+        return isNdsPlatform(platform);
     }
 
     beiklive::IEmulatorAudioOutput* coreAudioOutput(beiklive::IEmulatorCore* core)
@@ -1892,8 +1884,6 @@ namespace beiklive
             beiklive::BKAudioPlayer::setGameAudioActive(true);
             output->SetAudioOutputEnabled(true);
             m_audioOutputSuppressed = false;
-            m_loggedFirstAudioPush = false;
-            m_audioEmptyLogCount = 0;
             return;
         }
 
@@ -1916,8 +1906,6 @@ namespace beiklive
         AudioManager::instance().configureLatencyMs(targetMs, maxMs);
         AudioManager::instance().setSpeed(1.0f);
         m_audioOutputSuppressed = false;
-        m_loggedFirstAudioPush = false;
-        m_audioEmptyLogCount = 0;
 
         std::vector<int16_t> initAudioDiscard;
         m_core->DrainAudio(initAudioDiscard);
@@ -2201,22 +2189,10 @@ namespace beiklive
         }
 
         if (!m_core->DrainAudio(m_audioDrainBuf) || m_audioDrainBuf.empty()) {
-            if (isMgbaNativePlatform(m_gameEntry.platform) && m_audioEmptyLogCount < 5) {
-                ++m_audioEmptyLogCount;
-                brls::Logger::debug("[GameView] mGBA audio drain empty count={}", m_audioEmptyLogCount);
-            }
             return;
         }
 
         size_t frames = m_audioDrainBuf.size() / 2;
-        if (isMgbaNativePlatform(m_gameEntry.platform) && !m_loggedFirstAudioPush) {
-            brls::Logger::info("[GameView] first mGBA audio push frames={} ringBefore={} running={}",
-                               frames,
-                               AudioManager::instance().available(),
-                               AudioManager::instance().isRunning() ? 1 : 0);
-            m_loggedFirstAudioPush = true;
-        }
-
         if (ff || isNdsPlatform(m_gameEntry.platform)) {
             AudioManager::instance().pushSamplesNoBlocking(m_audioDrainBuf.data(), frames);
             return;

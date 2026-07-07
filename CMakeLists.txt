@@ -137,6 +137,7 @@ include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mongoose)
 file(GLOB_RECURSE MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
 list(FILTER MAIN_SRC EXCLUDE REGEX ".*/src/platform/switch/nds_stub/.*")
 list(FILTER MAIN_SRC EXCLUDE REGEX ".*/src/emulator/melonds/.*")
+list(FILTER MAIN_SRC EXCLUDE REGEX ".*/src/emulator/mgba_native/.*")
 list(FILTER MAIN_SRC EXCLUDE REGEX ".*/src/ui/page/NdsDekoGamePage\\.cpp$")
 list(FILTER MAIN_SRC EXCLUDE REGEX ".*/src/ui/view/NdsDekoGameView\\.cpp$")
 list(FILTER MAIN_SRC EXCLUDE REGEX ".*/src/ui/view/NdsDekoGameMenuView\\.cpp$")
@@ -221,6 +222,7 @@ elseif (PLATFORM_SWITCH)
     )
 
     add_subdirectory(nds_stub)
+    add_subdirectory(mgba_stub)
 
     if (FALSE)
     find_program(NDS_STUB_UAM_EXE NAMES uam HINTS "$ENV{DEVKITPRO}/tools/bin")
@@ -353,14 +355,14 @@ endif()
 # ============================================================
 # 静态链接模拟器核心
 #
-# mGBA          – GBA / GBC / GB      (native source API)
 # FCEUmm        – NES / Famicom       (libretro, fceumm_retro_*)
 # Snes9x        – SNES / SFC          (libretro, snes9x_retro_*)
 # Nestopia      – NES / Famicom       (libretro, nestopia_retro_*)
 # Snes9x 2005   – SNES / SFC          (libretro, snes9x2005_retro_*)
 # NDS runs in GBAStationNDSStub.nro, launched as a separate Switch NRO.
+# mGBA runs in GBAStationMgbaStub.nro, launched as a separate Switch NRO.
 #
-# mGBA 不再构建/加载 mgba_libretro，也不复制 mgba 动态库。
+# 主程序 GameView 不再运行 mGBA native/libretro。
 # ============================================================
 if (TARGET fceumm_core)
     target_link_libraries(${PROJECT_NAME} PRIVATE fceumm_core)
@@ -377,12 +379,4 @@ endif()
 if (TARGET snes9x2005_core)
     target_link_libraries(${PROJECT_NAME} PRIVATE snes9x2005_core)
     message(STATUS "Linking Snes9x 2005 (SNES) core statically")
-endif()
-if (TARGET mgba)
-    target_link_libraries(${PROJECT_NAME} PRIVATE mgba)
-    target_include_directories(${PROJECT_NAME} PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mgba/include
-        ${CMAKE_BINARY_DIR}/third_party/mgba/include
-    )
-    message(STATUS "Linking mGBA native core")
 endif()
