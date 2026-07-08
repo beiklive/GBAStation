@@ -88,7 +88,7 @@ std::string joinPath(const std::string& dir, const std::string& name)
 
 std::string defaultSaveDir(const std::string& romPath)
 {
-    return joinPath(joinPath("sdmc:/GBAStation/save/NDS", pathStem(romPath)), "");
+    return joinPath(joinPath("sdmc:/GBAStation/saves/NDS", pathStem(romPath)), "");
 }
 
 std::string resolveSavePath(const beiklive::nds_stub::DekoRunOptions& options)

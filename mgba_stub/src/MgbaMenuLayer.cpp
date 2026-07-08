@@ -39,21 +39,17 @@ constexpr float kFilePickerFooterH = 96.0f;
 constexpr float kFilePickerBodyPad = 18.0f;
 
 constexpr float kFastForwardValues[] = {
-    0.1f, 0.5f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 3.0f, 4.0f, 5.0f,
+    0.1f, 0.5f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f
 };
-constexpr int kScreenGapDefault = 0;
-constexpr int kScreenGapStep = 1;
-constexpr int kScreenGapMin = -256;
-constexpr int kScreenGapMax = 256;
 constexpr float kCustomScaleDefault = 1.0f;
 constexpr float kCustomScaleStep = 0.1f;
 constexpr float kCustomScaleMin = 1.0f;
-constexpr float kCustomScaleMax = 10.0f;
+constexpr float kCustomScaleMax = 15.0f;
 constexpr float kCustomOffsetDefault = 0.0f;
 constexpr float kCustomOffsetStep = 1.0f;
 constexpr float kCustomOffsetMin = -1024.0f;
 constexpr float kCustomOffsetMax = 1024.0f;
-constexpr int kCustomLayoutControlCount = 6;
+constexpr int kCustomLayoutControlCount = 3;
 constexpr int kOverlayControlCount = 2;
 constexpr int kShaderBaseControlCount = 2;
 constexpr float kShaderParamRowH = 50.0f;
@@ -67,11 +63,13 @@ constexpr float kShaderListPadTop = 30.0f;
 constexpr float kShaderListPadBottom = 14.0f;
 constexpr const char* kOverlayRoot = "sdmc:/GBAStation/overlays";
 constexpr int kDisplayRowCustomLayout = 4;
-constexpr int kDisplayRowOverlay = 7;
-constexpr int kDisplayRowShader = 8;
-constexpr int kDisplayRowSyncDisplay = 9;
-constexpr int kDisplayRowSyncOverlay = 10;
-constexpr int kDisplayRowSyncShader = 11;
+constexpr int kDisplayRowOverlay = 5;
+constexpr int kDisplayRowShader = 6;
+constexpr int kDisplayRowSyncDisplay = 7;
+constexpr int kDisplayRowSyncOverlay = 8;
+constexpr int kDisplayRowSyncShader = 9;
+constexpr int kDisplayRowCount = 10;
+constexpr int kCustomLayoutMode = 5;
 
 bool isDirectionUp(std::uint64_t buttons)
 {
@@ -391,27 +389,13 @@ float displayRowY(int row)
     case 2: return kSettingStepY * 2.0f;
     case 3: return kSettingStepY * 3.0f;
     case 4: return kSettingStepY * 4.0f;
-    case 5: return kSettingStepY * 5.0f;
+    case 5: return kSettingStepY * 5.0f + 43.0f;
     case 6: return kSettingStepY * 6.0f + 43.0f;
-    case 7: return kSettingStepY * 7.0f + 43.0f;
-    case 8: return kSettingStepY * 8.0f + 43.0f;
+    case 7: return kSettingStepY * 7.0f + 86.0f;
+    case 8: return kSettingStepY * 8.0f + 86.0f;
     case 9: return kSettingStepY * 9.0f + 86.0f;
-    case 10: return kSettingStepY * 10.0f + 86.0f;
-    case 11: return kSettingStepY * 11.0f + 86.0f;
     default: return 0.0f;
     }
-}
-
-int clampScreenGap(int value)
-{
-    return std::clamp(value, kScreenGapMin, kScreenGapMax);
-}
-
-int stepNumericValue(int value, int direction, int step, int minValue, int maxValue)
-{
-    if (direction == 0 || step <= 0)
-        return std::clamp(value, minValue, maxValue);
-    return std::clamp(value + direction * step, minValue, maxValue);
 }
 
 float stepFloatValue(float value, int direction, float step, float minValue, float maxValue)
@@ -840,7 +824,7 @@ void MgbaMenuLayer::resetContentScroll()
 
 float MgbaMenuLayer::targetContentScrollY() const
 {
-    setMenuMetricsOrientation(m_display.orientation);
+    setMenuMetricsOrientation(0);
     const Item item = static_cast<Item>(m_selected);
     switch (item)
     {
@@ -850,7 +834,7 @@ float MgbaMenuLayer::targetContentScrollY() const
     case Item::Display:
     {
         const int row = std::clamp(m_contentFocus, 0, contentControlCount(Item::Display) - 1);
-        const float contentH = displayRowY(11) + kSettingRowH;
+        const float contentH = displayRowY(kDisplayRowCount - 1) + kSettingRowH;
         return focusedScroll(displayRowY(row), kSettingRowH, contentH);
     }
     case Item::Cheats:
@@ -898,7 +882,7 @@ float MgbaMenuLayer::shaderParamTargetScroll() const
     if (m_display.shaderParams.empty() || m_shaderSidebarFocus < kShaderBaseControlCount)
         return 0.0f;
 
-    setMenuMetricsOrientation(m_display.orientation);
+    setMenuMetricsOrientation(0);
     const bool portrait = menuMetrics().screenH > menuMetrics().screenW;
     const float sectionY = portrait ? 158.0f : 122.0f;
     const float rowY = sectionY + 44.0f;
@@ -962,7 +946,7 @@ int MgbaMenuLayer::currentShaderTypeIndex() const
 
 float MgbaMenuLayer::shaderListTargetScroll() const
 {
-    setMenuMetricsOrientation(m_display.orientation);
+    setMenuMetricsOrientation(0);
     const float panelH = std::min(menuMetrics().screenH - kShaderListPanelVerticalMargin,
                                   kShaderListPanelMaxH);
     const float bodyH = std::max(1.0f,
@@ -1029,11 +1013,11 @@ void MgbaMenuLayer::setCustomLayoutSettings(const MgbaCustomLayoutSettings& sett
 {
     m_display.customLayout = settings;
     m_display.customLayout.topScale = std::clamp(m_display.customLayout.topScale, kCustomScaleMin, kCustomScaleMax);
-    m_display.customLayout.bottomScale = std::clamp(m_display.customLayout.bottomScale, kCustomScaleMin, kCustomScaleMax);
     m_display.customLayout.topOffsetX = std::clamp(m_display.customLayout.topOffsetX, kCustomOffsetMin, kCustomOffsetMax);
     m_display.customLayout.topOffsetY = std::clamp(m_display.customLayout.topOffsetY, kCustomOffsetMin, kCustomOffsetMax);
-    m_display.customLayout.bottomOffsetX = std::clamp(m_display.customLayout.bottomOffsetX, kCustomOffsetMin, kCustomOffsetMax);
-    m_display.customLayout.bottomOffsetY = std::clamp(m_display.customLayout.bottomOffsetY, kCustomOffsetMin, kCustomOffsetMax);
+    m_display.customLayout.bottomScale = m_display.customLayout.topScale;
+    m_display.customLayout.bottomOffsetX = m_display.customLayout.topOffsetX;
+    m_display.customLayout.bottomOffsetY = m_display.customLayout.topOffsetY;
 }
 
 void MgbaMenuLayer::setDisplaySettings(const MgbaDisplaySettings& settings)
@@ -1041,9 +1025,8 @@ void MgbaMenuLayer::setDisplaySettings(const MgbaDisplaySettings& settings)
     m_display = settings;
     m_display.fastForwardMultiplier = std::clamp(m_display.fastForwardMultiplier, 0.1f, 5.0f);
     m_display.integerScaleMultiplier = std::clamp(m_display.integerScaleMultiplier, 0, 8);
-    m_display.layout = std::clamp(m_display.layout, 0, 7);
+    m_display.layout = std::clamp(m_display.layout, 0, 5);
     m_display.orientation = std::clamp(m_display.orientation, 0, 3);
-    m_display.screenGap = clampScreenGap(m_display.screenGap);
     m_display.mgbaShaderType = normalizeMgbaShaderType(m_display.mgbaShaderType);
     if (m_shaderListVisible)
         m_shaderListPath = MgbaShaderListPathForType(m_display.mgbaShaderType);
@@ -1072,7 +1055,7 @@ int MgbaMenuLayer::contentControlCount(Item item) const
     case Item::LoadState:
         return 10;
     case Item::Display:
-        return 12;
+        return kDisplayRowCount;
     case Item::Cheats:
         return static_cast<int>(visibleCheatIndices().size());
     default:
@@ -1138,7 +1121,7 @@ int MgbaMenuLayer::nextFocusableDisplayRow(int from, int direction) const
     for (int i = 0; i < contentControlCount(Item::Display); ++i)
     {
         row = (row + direction + contentControlCount(Item::Display)) % contentControlCount(Item::Display);
-        if (row == 4 && m_display.layout != 7)
+        if (row == kDisplayRowCustomLayout && m_display.layout != kCustomLayoutMode)
             continue;
         return row;
     }
@@ -1151,13 +1134,8 @@ bool MgbaMenuLayer::activateDisplayControl()
     {
     case 2:
         return cycleCurrentSetting(1);
-    case 6:
-        if (m_display.screenGap == kScreenGapDefault)
-            return false;
-        m_display.screenGap = kScreenGapDefault;
-        return true;
     case kDisplayRowCustomLayout:
-        if (m_display.layout == 7)
+        if (m_display.layout == kCustomLayoutMode)
             beginCustomLayoutEditor();
         return false;
     case kDisplayRowOverlay:
@@ -1292,6 +1270,7 @@ bool MgbaMenuLayer::cycleCustomLayoutSetting(int direction)
                                                          kCustomScaleStep,
                                                          kCustomScaleMin,
                                                          kCustomScaleMax);
+        m_display.customLayout.bottomScale = m_display.customLayout.topScale;
         return true;
     case 1:
         m_display.customLayout.topOffsetX = stepFloatValue(m_display.customLayout.topOffsetX,
@@ -1299,6 +1278,7 @@ bool MgbaMenuLayer::cycleCustomLayoutSetting(int direction)
                                                            kCustomOffsetStep,
                                                            kCustomOffsetMin,
                                                            kCustomOffsetMax);
+        m_display.customLayout.bottomOffsetX = m_display.customLayout.topOffsetX;
         return true;
     case 2:
         m_display.customLayout.topOffsetY = stepFloatValue(m_display.customLayout.topOffsetY,
@@ -1306,27 +1286,7 @@ bool MgbaMenuLayer::cycleCustomLayoutSetting(int direction)
                                                            kCustomOffsetStep,
                                                            kCustomOffsetMin,
                                                            kCustomOffsetMax);
-        return true;
-    case 3:
-        m_display.customLayout.bottomScale = stepFloatValue(m_display.customLayout.bottomScale,
-                                                            direction,
-                                                            kCustomScaleStep,
-                                                            kCustomScaleMin,
-                                                            kCustomScaleMax);
-        return true;
-    case 4:
-        m_display.customLayout.bottomOffsetX = stepFloatValue(m_display.customLayout.bottomOffsetX,
-                                                              direction,
-                                                              kCustomOffsetStep,
-                                                              kCustomOffsetMin,
-                                                              kCustomOffsetMax);
-        return true;
-    case 5:
-        m_display.customLayout.bottomOffsetY = stepFloatValue(m_display.customLayout.bottomOffsetY,
-                                                              direction,
-                                                              kCustomOffsetStep,
-                                                              kCustomOffsetMin,
-                                                              kCustomOffsetMax);
+        m_display.customLayout.bottomOffsetY = m_display.customLayout.topOffsetY;
         return true;
     default:
         return false;
@@ -1344,12 +1304,24 @@ bool MgbaMenuLayer::resetCustomLayoutSetting()
 
     switch (m_customLayoutFocus)
     {
-    case 0: return resetFloat(m_display.customLayout.topScale, kCustomScaleDefault);
-    case 1: return resetFloat(m_display.customLayout.topOffsetX, kCustomOffsetDefault);
-    case 2: return resetFloat(m_display.customLayout.topOffsetY, kCustomOffsetDefault);
-    case 3: return resetFloat(m_display.customLayout.bottomScale, kCustomScaleDefault);
-    case 4: return resetFloat(m_display.customLayout.bottomOffsetX, kCustomOffsetDefault);
-    case 5: return resetFloat(m_display.customLayout.bottomOffsetY, kCustomOffsetDefault);
+    case 0:
+    {
+        const bool changed = resetFloat(m_display.customLayout.topScale, kCustomScaleDefault);
+        m_display.customLayout.bottomScale = m_display.customLayout.topScale;
+        return changed;
+    }
+    case 1:
+    {
+        const bool changed = resetFloat(m_display.customLayout.topOffsetX, kCustomOffsetDefault);
+        m_display.customLayout.bottomOffsetX = m_display.customLayout.topOffsetX;
+        return changed;
+    }
+    case 2:
+    {
+        const bool changed = resetFloat(m_display.customLayout.topOffsetY, kCustomOffsetDefault);
+        m_display.customLayout.bottomOffsetY = m_display.customLayout.topOffsetY;
+        return changed;
+    }
     default: return false;
     }
 }
@@ -1429,19 +1401,9 @@ bool MgbaMenuLayer::cycleCurrentSetting(int direction)
         return true;
     }
     case 3:
-        m_display.layout = cycleIndex(m_display.layout, 8);
-        if (m_contentFocus == 4 && m_display.layout != 7)
+        m_display.layout = cycleIndex(m_display.layout, 6);
+        if (m_contentFocus == kDisplayRowCustomLayout && m_display.layout != kCustomLayoutMode)
             m_contentFocus = nextFocusableDisplayRow(m_contentFocus, direction);
-        return true;
-    case 5:
-        m_display.orientation = cycleIndex(m_display.orientation, 4);
-        return true;
-    case 6:
-        m_display.screenGap = stepNumericValue(m_display.screenGap,
-                                               direction,
-                                               kScreenGapStep,
-                                               kScreenGapMin,
-                                               kScreenGapMax);
         return true;
     default:
         return false;
@@ -2186,7 +2148,7 @@ MgbaMenuResult MgbaMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t bu
                 }
             }
             const bool opensDisplaySubPage =
-                (m_contentFocus == kDisplayRowCustomLayout && m_display.layout == 7) ||
+                (m_contentFocus == kDisplayRowCustomLayout && m_display.layout == kCustomLayoutMode) ||
                 m_contentFocus == kDisplayRowOverlay ||
                 m_contentFocus == kDisplayRowShader;
             if ((buttonsDown & HidNpadButton_A) && activateDisplayControl())
@@ -2300,8 +2262,8 @@ void MgbaMenuLayer::draw() const
         else if (elapsedMs > kToastInMs + kToastHoldMs)
             progress = 1.0f - (elapsedMs - kToastInMs - kToastHoldMs) / kToastOutMs;
 
-        setMenuMetricsOrientation(m_display.orientation);
-        const bool transformed = pushMenuOrientationTransform(m_display.orientation);
+        setMenuMetricsOrientation(0);
+        const bool transformed = pushMenuOrientationTransform(0);
         drawToast(m_toastMessage, progress, 1.0f);
         if (transformed)
             Gfx::PopDrawTransform();
@@ -2316,13 +2278,13 @@ void MgbaMenuLayer::draw() const
 
     if (m_filePickerVisible)
     {
-        setMenuMetricsOrientation(m_display.orientation);
+        setMenuMetricsOrientation(0);
         const float progress = m_filePickerClosing
             ? 1.0f - easeOutCubic(animationProgress(m_filePickerAnimStartTick, kPanelAnimationMs))
             : easeOutCubic(animationProgress(m_filePickerAnimStartTick, kPanelAnimationMs));
         if (progress > 0.0f)
         {
-            const bool transformed = pushMenuOrientationTransform(m_display.orientation);
+            const bool transformed = pushMenuOrientationTransform(0);
             const float target = filePickerTargetScroll(m_filePickerFocus,
                                                         static_cast<int>(m_filePickerEntries.size()));
             const std::uint64_t now = armGetSystemTick();
@@ -2361,11 +2323,11 @@ void MgbaMenuLayer::draw() const
 
     if (m_customLayoutEditorVisible)
     {
-        setMenuMetricsOrientation(m_display.orientation);
+        setMenuMetricsOrientation(0);
         const float progress = customLayoutEditorProgress();
         if (progress > 0.0f)
         {
-            const bool transformed = pushMenuOrientationTransform(m_display.orientation);
+            const bool transformed = pushMenuOrientationTransform(0);
             drawCustomLayoutSidebar(m_display.customLayout, m_customLayoutFocus, progress, progress);
             if (transformed)
                 Gfx::PopDrawTransform();
@@ -2377,13 +2339,13 @@ void MgbaMenuLayer::draw() const
 
     if (m_overlaySidebarVisible)
     {
-        setMenuMetricsOrientation(m_display.orientation);
+        setMenuMetricsOrientation(0);
         const float progress = m_overlaySidebarClosing
             ? 1.0f - easeOutCubic(animationProgress(m_overlaySidebarAnimStartTick, kSidebarAnimationMs))
             : easeOutCubic(animationProgress(m_overlaySidebarAnimStartTick, kSidebarAnimationMs));
         if (progress > 0.0f)
         {
-            const bool transformed = pushMenuOrientationTransform(m_display.orientation);
+            const bool transformed = pushMenuOrientationTransform(0);
             drawOverlaySidebar(m_display, m_overlaySidebarFocus, progress, progress);
             if (transformed)
                 Gfx::PopDrawTransform();
@@ -2395,13 +2357,13 @@ void MgbaMenuLayer::draw() const
 
     if (m_shaderSidebarVisible)
     {
-        setMenuMetricsOrientation(m_display.orientation);
+        setMenuMetricsOrientation(0);
         const float progress = m_shaderSidebarClosing
             ? 1.0f - easeOutCubic(animationProgress(m_shaderSidebarAnimStartTick, kSidebarAnimationMs))
             : easeOutCubic(animationProgress(m_shaderSidebarAnimStartTick, kSidebarAnimationMs));
         if (progress > 0.0f)
         {
-            const bool transformed = pushMenuOrientationTransform(m_display.orientation);
+            const bool transformed = pushMenuOrientationTransform(0);
             drawShaderSidebar(m_display, m_shaderSidebarFocus, smoothedShaderParamScroll(), progress, progress);
             if (m_shaderListVisible)
             {
@@ -2420,7 +2382,7 @@ void MgbaMenuLayer::draw() const
         return;
     }
 
-    setMenuMetricsOrientation(m_display.orientation);
+    setMenuMetricsOrientation(0);
     const float panel = panelProgress();
     if (panel <= 0.0f)
     {
@@ -2442,7 +2404,7 @@ void MgbaMenuLayer::draw() const
         (currentItem == Item::SaveState || currentItem == Item::LoadState) &&
         m_contentFocus >= 0 && m_contentFocus < static_cast<int>(m_slots.size()) &&
         m_slots[m_contentFocus].exists;
-    const bool transformed = pushMenuOrientationTransform(m_display.orientation);
+    const bool transformed = pushMenuOrientationTransform(0);
     ensureStatePreviewTexture();
     drawOverlay(panel);
     drawHeader(slideY);

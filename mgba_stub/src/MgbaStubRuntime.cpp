@@ -137,7 +137,7 @@ std::string platformSuffix(int platform)
 
 std::string defaultSaveDir(const beiklive::mgba_stub::RunOptions& options)
 {
-    return joinPath(joinPath("sdmc:/GBAStation/save", platformName(options.platform)),
+    return joinPath(joinPath("sdmc:/GBAStation/saves/GBA", platformName(options.platform)),
                     pathStem(options.romPath));
 }
 
@@ -335,11 +335,12 @@ std::string shaderConfigKey(int platform)
 
 int uiLayoutFromConfigMode(const std::string& mode)
 {
+    if (mode == "fit") return 0;
     if (mode == "fill") return 1;
     if (mode == "original") return 2;
     if (mode == "four_three" || mode == "4:3") return 3;
     if (mode == "integer") return 4;
-    if (mode == "custom") return 7;
+    if (mode == "custom") return 5;
     return 4;
 }
 
@@ -347,13 +348,13 @@ int uiLayoutFromScreenMode(int mode)
 {
     switch (mode)
     {
+    case 0: return 0;
     case 1: return 1;
     case 2: return 4;
-    case 3: return 7;
+    case 3: return 5;
     case 4: return 3;
-    case 0:
     default:
-        return 4;
+        return 0;
     }
 }
 
@@ -364,6 +365,7 @@ int screenModeFromUiLayout(int layout)
     case 1: return 1;
     case 3: return 4;
     case 4: return 2;
+    case 5: return 3;
     case 7: return 3;
     default: return 0;
     }
@@ -820,12 +822,50 @@ bool loadPngTextureFromFile(const std::string& path, std::uint32_t& texture, int
         return false;
     }
 
+    std::vector<unsigned char> scaled;
+    constexpr int kMaxUploadPixels = beiklive::mgba_stub::kScreenWidth *
+                                     beiklive::mgba_stub::kScreenHeight;
+    if (static_cast<long long>(width) * static_cast<long long>(height) > kMaxUploadPixels)
+    {
+        const float scale = std::sqrt(static_cast<float>(kMaxUploadPixels) /
+                                      static_cast<float>(width * height));
+        const int outW = std::max(1, static_cast<int>(std::floor(width * scale)));
+        const int outH = std::max(1, static_cast<int>(std::floor(height * scale)));
+        scaled.resize(static_cast<std::size_t>(outW) * outH * 4);
+        for (int y = 0; y < outH; ++y)
+        {
+            const int sy = std::min(height - 1, static_cast<int>((static_cast<long long>(y) * height) / outH));
+            for (int x = 0; x < outW; ++x)
+            {
+                const int sx = std::min(width - 1, static_cast<int>((static_cast<long long>(x) * width) / outW));
+                const unsigned char* src = pixels + (static_cast<std::size_t>(sy) * width + sx) * 4;
+                unsigned char* dst = scaled.data() + (static_cast<std::size_t>(y) * outW + x) * 4;
+                dst[0] = src[0];
+                dst[1] = src[1];
+                dst[2] = src[2];
+                dst[3] = src[3];
+            }
+        }
+        width = outW;
+        height = outH;
+    }
+
+    const unsigned char* uploadPixels = scaled.empty() ? pixels : scaled.data();
+    const std::size_t uploadBytes = static_cast<std::size_t>(width) * height * 4;
+    if (uploadBytes > 7 * 1024 * 1024)
+    {
+        stbi_image_free(pixels);
+        width = 0;
+        height = 0;
+        return false;
+    }
+
     texture = Gfx::TextureCreate(static_cast<u32>(width),
                                  static_cast<u32>(height),
                                  DkImageFormat_RGBA8_Unorm);
     if (texture != 0)
     {
-        Gfx::TextureUpload(texture, 0, 0, width, height, pixels, width * 4);
+        Gfx::TextureUpload(texture, 0, 0, width, height, const_cast<unsigned char*>(uploadPixels), width * 4);
     }
     stbi_image_free(pixels);
     return texture != 0;
@@ -1298,6 +1338,8 @@ public:
     {
         if (!core)
             return false;
+        m_core = core;
+        m_fps = std::max(1.0, fps);
         Result rc = audoutInitialize();
         if (R_FAILED(rc))
             return false;
@@ -1319,14 +1361,7 @@ public:
         core->setAudioBufferSize(core, kAudioSamples);
         m_sampleRate = static_cast<int>(audoutGetSampleRate());
         setLowPass(lowPassEnabled, lowPassRangePercent);
-        const double ratio = GBAAudioCalculateRatio(1.0f, static_cast<float>(std::max(1.0, fps)), 1.0f);
-        if (core->getAudioChannel)
-        {
-            if (blip_t* left = core->getAudioChannel(core, 0))
-                blip_set_rates(left, core->frequency(core), static_cast<double>(m_sampleRate) * ratio);
-            if (blip_t* right = core->getAudioChannel(core, 1))
-                blip_set_rates(right, core->frequency(core), static_cast<double>(m_sampleRate) * ratio);
-        }
+        applyCoreAudioRates();
         core->setAVStream(core, &m_stream.stream);
         return true;
     }
@@ -1342,6 +1377,15 @@ public:
     }
 
     void setMuted(bool muted) { m_muted = muted; }
+
+    void setSpeed(float speed)
+    {
+        const float next = std::clamp(speed, 0.1f, 10.0f);
+        if (std::fabs(next - m_speed) < 0.001f)
+            return;
+        m_speed = next;
+        applyCoreAudioRates();
+    }
 
     void setLowPass(bool enabled, int rangePercent)
     {
@@ -1431,6 +1475,18 @@ private:
     static constexpr int kMaxActiveSounds = 6;
     static constexpr std::size_t kAudioBufferSize =
         (kAudioSamples * sizeof(mStereoSample)) < 0x1000 ? 0x1000 : (kAudioSamples * sizeof(mStereoSample));
+
+    void applyCoreAudioRates()
+    {
+        if (!m_core || !m_core->getAudioChannel)
+            return;
+        const double ratio = GBAAudioCalculateRatio(1.0f, static_cast<float>(m_fps), 1.0f);
+        const double effectiveRate = (static_cast<double>(m_sampleRate) * ratio) / std::max(0.1f, m_speed);
+        if (blip_t* left = m_core->getAudioChannel(m_core, 0))
+            blip_set_rates(left, m_core->frequency(m_core), effectiveRate);
+        if (blip_t* right = m_core->getAudioChannel(m_core, 1))
+            blip_set_rates(right, m_core->frequency(m_core), effectiveRate);
+    }
 
     int audioWait(uint64_t timeout)
     {
@@ -1548,6 +1604,9 @@ private:
     int m_activeBuffer = 0;
     int m_enqueuedBuffers = 0;
     int m_sampleRate = 48000;
+    mCore* m_core = nullptr;
+    double m_fps = 60.0;
+    float m_speed = 1.0f;
     bool m_initialized = false;
     bool m_started = false;
     bool m_frameLimiter = true;
@@ -1999,9 +2058,12 @@ int RunRuntime(const RunOptions& options)
     display.integerScaleMultiplier = options.hasDisplaySettings
                                          ? std::clamp(options.integerScaleMultiplier, 0, 8)
                                          : std::clamp(configInt(configValues, "display.integer_scale_mult", 0), 0, 8);
-    display.customLayout.topScale = std::clamp(options.hasDisplaySettings ? options.customScale : 1.0f, 1.0f, 10.0f);
+    display.customLayout.topScale = std::clamp(options.hasDisplaySettings ? options.customScale : 1.0f, 1.0f, 15.0f);
     display.customLayout.topOffsetX = std::clamp(options.hasDisplaySettings ? options.customOffsetX : 0.0f, -1024.0f, 1024.0f);
     display.customLayout.topOffsetY = std::clamp(options.hasDisplaySettings ? options.customOffsetY : 0.0f, -1024.0f, 1024.0f);
+    display.customLayout.bottomScale = display.customLayout.topScale;
+    display.customLayout.bottomOffsetX = display.customLayout.topOffsetX;
+    display.customLayout.bottomOffsetY = display.customLayout.topOffsetY;
     display.overlayEnabled = options.hasDisplaySettings
                                  ? options.overlayEnabled
                                  : configBool(configValues, "display.overlay.enabled", false);
@@ -2033,19 +2095,71 @@ int RunRuntime(const RunOptions& options)
     uint32_t overlayTexture = 0;
     int overlayWidth = 0;
     int overlayHeight = 0;
+    bool appliedOverlayValid = false;
+    bool appliedOverlayEnabled = false;
+    std::string appliedOverlayPath;
     auto reloadOverlay = [&]() {
-        if (overlayTexture != 0)
-        {
-            Gfx::TextureDelete(overlayTexture);
-            overlayTexture = 0;
-        }
-        overlayWidth = 0;
-        overlayHeight = 0;
         const MgbaDisplaySettings& d = menuLayer.displaySettings();
-        if (d.overlayEnabled && loadPngTextureFromFile(d.overlayPath, overlayTexture, overlayWidth, overlayHeight))
-            gameLayer.setOverlay(overlayTexture, overlayWidth, overlayHeight);
-        else
+        const bool wantOverlay = d.overlayEnabled && !d.overlayPath.empty();
+        const std::string wantPath = wantOverlay ? d.overlayPath : std::string();
+        if (appliedOverlayValid &&
+            appliedOverlayEnabled == wantOverlay &&
+            appliedOverlayPath == wantPath)
+            return false;
+
+        if (!wantOverlay)
+        {
+            const uint32_t oldTexture = overlayTexture;
+            overlayTexture = 0;
+            overlayWidth = 0;
+            overlayHeight = 0;
             gameLayer.clearOverlay();
+            if (oldTexture != 0)
+            {
+                Gfx::PresentQueue.waitIdle();
+                Gfx::TextureDelete(oldTexture);
+            }
+            appliedOverlayValid = true;
+            appliedOverlayEnabled = false;
+            appliedOverlayPath.clear();
+            return true;
+        }
+
+        uint32_t newTexture = 0;
+        int newWidth = 0;
+        int newHeight = 0;
+        if (!loadPngTextureFromFile(wantPath, newTexture, newWidth, newHeight))
+        {
+            const uint32_t oldTexture = overlayTexture;
+            overlayTexture = 0;
+            overlayWidth = 0;
+            overlayHeight = 0;
+            gameLayer.clearOverlay();
+            if (oldTexture != 0)
+            {
+                Gfx::PresentQueue.waitIdle();
+                Gfx::TextureDelete(oldTexture);
+            }
+            appliedOverlayValid = true;
+            appliedOverlayEnabled = false;
+            appliedOverlayPath.clear();
+            return true;
+        }
+
+        const uint32_t oldTexture = overlayTexture;
+        overlayTexture = newTexture;
+        overlayWidth = newWidth;
+        overlayHeight = newHeight;
+        gameLayer.setOverlay(overlayTexture, overlayWidth, overlayHeight);
+        if (oldTexture != 0)
+        {
+            Gfx::PresentQueue.waitIdle();
+            Gfx::TextureDelete(oldTexture);
+        }
+        appliedOverlayValid = true;
+        appliedOverlayEnabled = true;
+        appliedOverlayPath = wantPath;
+        return true;
     };
     reloadOverlay();
 
@@ -2101,8 +2215,24 @@ int RunRuntime(const RunOptions& options)
         menuLayer.setDisplaySettings(d);
         gameLayer.setDisplaySettings(menuLayer.displaySettings());
     };
+    bool displayDirty = false;
+    auto markDisplayDirty = [&]() {
+        displayDirty = true;
+    };
     auto flushDisplay = [&]() {
+        if (!displayDirty)
+            return;
         saveRuntimeDisplaySettings(options, menuLayer.displaySettings());
+        displayDirty = false;
+    };
+    auto uploadCurrentFrame = [&]() {
+        if (core.captureFrame())
+        {
+            gameLayer.uploadFrame(core.rgbaBuffer().data(),
+                                  core.width(),
+                                  core.height(),
+                                  core.width() * sizeof(uint32_t));
+        }
     };
 
     PlayStats playStats = loadAndIncrementPlayCount(options);
@@ -2142,6 +2272,7 @@ int RunRuntime(const RunOptions& options)
     double fps = 0.0;
     int fpsFrames = 0;
     auto fpsStart = std::chrono::steady_clock::now();
+    bool menuWasActive = menuLayer.active();
 
     while (appletMainLoop() && running)
     {
@@ -2173,16 +2304,22 @@ int RunRuntime(const RunOptions& options)
         case MgbaMenuAction::DisplaySettingsChanged:
         case MgbaMenuAction::CustomLayoutChanged:
             applyDisplay();
-            flushDisplay();
+            markDisplayDirty();
             break;
         case MgbaMenuAction::CustomLayoutCommitted:
             applyDisplay();
+            markDisplayDirty();
             flushDisplay();
             break;
         case MgbaMenuAction::OverlaySettingsChanged:
+            applyDisplay();
+            reloadOverlay();
+            markDisplayDirty();
+            break;
         case MgbaMenuAction::OverlaySettingsCommitted:
             applyDisplay();
             reloadOverlay();
+            markDisplayDirty();
             flushDisplay();
             break;
         case MgbaMenuAction::OverlayPathSelected:
@@ -2193,17 +2330,19 @@ int RunRuntime(const RunOptions& options)
             menuLayer.setDisplaySettings(d);
             applyDisplay();
             reloadOverlay();
+            markDisplayDirty();
             flushDisplay();
             break;
         }
         case MgbaMenuAction::ShaderSettingsChanged:
             applyDisplay();
-            flushDisplay();
+            markDisplayDirty();
             break;
         case MgbaMenuAction::ShaderSettingsCommitted:
             saveShaderParams(menuLayer.displaySettings().mgbaShaderType,
                              menuLayer.displaySettings().shaderParams);
             applyDisplay();
+            markDisplayDirty();
             flushDisplay();
             break;
         case MgbaMenuAction::SyncDisplaySettings:
@@ -2248,6 +2387,10 @@ int RunRuntime(const RunOptions& options)
         default:
             break;
         }
+        const bool menuActiveAfterUpdate = menuLayer.active();
+        if (menuWasActive && !menuActiveAfterUpdate)
+            flushDisplay();
+        menuWasActive = menuActiveAfterUpdate;
 
         if (!menuLayer.active())
         {
@@ -2299,7 +2442,8 @@ int RunRuntime(const RunOptions& options)
             (inputConfig.rewindToggleMode()
                  ? rewindToggle
                  : inputConfig.comboHeldFor("handle.rewind", input));
-        gameAudio.setFrameLimiter(!fastForwardActive || !inputConfig.fastForwardMute());
+        gameAudio.setFrameLimiter(!fastForwardActive);
+        gameAudio.setSpeed(fastForwardActive && !inputConfig.fastForwardMute() ? multiplier : 1.0f);
         gameAudio.setMuted(muted ||
                            (fastForwardActive && inputConfig.fastForwardMute()) ||
                            (rewindActive && inputConfig.rewindMute()));
@@ -2334,7 +2478,9 @@ int RunRuntime(const RunOptions& options)
                     rewindActive = false;
                     break;
                 }
+                core.runFrame(inputConfig.keyMask(input, false, false));
                 ++framesRan;
+                uploadCurrentFrame();
             }
             fastForwardAccumulator = 0.0;
         }
@@ -2376,6 +2522,7 @@ int RunRuntime(const RunOptions& options)
         else
         {
             gameAudio.setFrameLimiter(true);
+            gameAudio.setSpeed(1.0f);
             fastForwardAccumulator = 0.0;
         }
         if ((menuActive || runtimePaused || framesRan == 0) && !rewindActive)
@@ -2403,8 +2550,8 @@ int RunRuntime(const RunOptions& options)
             playTimeLast = std::chrono::steady_clock::now();
         }
 
-        if (core.captureFrame())
-            gameLayer.uploadFrame(core.rgbaBuffer().data(), core.width(), core.height(), core.width() * sizeof(uint32_t));
+        if (!rewindActive)
+            uploadCurrentFrame();
 
         Gfx::StartFrame();
         Gfx::PushScissor(0, 0, kScreenWidth, kScreenHeight);
@@ -2453,7 +2600,10 @@ int RunRuntime(const RunOptions& options)
     gameRumble.stop();
     gameAudio.deinit();
     if (overlayTexture != 0)
+    {
+        Gfx::PresentQueue.waitIdle();
         Gfx::TextureDelete(overlayTexture);
+    }
     core.release();
     Gfx::DeInit();
     romfsExit();

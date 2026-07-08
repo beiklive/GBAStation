@@ -96,14 +96,15 @@ std::size_t utf8SafePrefix(const std::string& text, std::size_t bytes);
 
 const char* layoutLabel(int index)
 {
-    static const char* labels[] = {"纵向对称", "横向对称", "上屏优先", "下屏优先", "混合横向", "单上屏", "单下屏", "自定义"};
-    return labels[std::clamp(index, 0, 7)];
-}
-
-const char* orientationLabel(int index)
-{
-    static const char* labels[] = {"0度", "90度", "180度", "270度"};
-    return labels[std::clamp(index, 0, 3)];
+    static const char* labels[] = {
+        "(保持比例)Fit",
+        "(填充)Fill",
+        "(原始)Original",
+        "4:3",
+        "(整数倍)Integer",
+        "(自定义)Custom",
+    };
+    return labels[std::clamp(index, 0, 5)];
 }
 
 const char* shaderTypeLabel(const std::string& type)
@@ -1255,8 +1256,6 @@ void drawDisplayPage(bool linearFiltering,
                      bool integerScale,
                      int integerScaleMultiplier,
                      int layout,
-                     int orientation,
-                     int screenGap,
                      int focusedRow,
                      bool contentFocused,
                      float offsetX,
@@ -1288,16 +1287,14 @@ void drawDisplayPage(bool linearFiltering,
     drawLrSelectorRow(rowPos(y), "画面过滤", filterLabel(linearFiltering), contentFocused && focusedRow == 1, true, opacity); y += kSettingStepY;
     drawLrSelectorRow(rowPos(y), "整数倍缩放倍率", integerValue, contentFocused && focusedRow == 2, true, opacity); y += kSettingStepY;
     drawLrSelectorRow(rowPos(y), "画面布局", layoutLabel(layout), contentFocused && focusedRow == 3, true, opacity); y += kSettingStepY;
-    drawSubPageRow(rowPos(y), "自定义画面布局", contentFocused && focusedRow == 4, layout == 7, opacity); y += kSettingStepY;
-    drawLrSelectorRow(rowPos(y), "画面方向", orientationLabel(orientation), contentFocused && focusedRow == 5, true, opacity); y += kSettingStepY;
-    drawNumberAdjusterRow(rowPos(y), "屏幕间距", screenGap, "px", 0, 1, contentFocused && focusedRow == 6, true, opacity); y += 65.0f;
+    drawSubPageRow(rowPos(y), "自定义画面布局", contentFocused && focusedRow == 4, layout == 5, opacity); y += 65.0f;
     drawSectionLabel(rowPos(y + 2.0f), "个性化设置", opacity); y += 36.0f;
-    drawSubPageRow(rowPos(y), "遮罩选择", contentFocused && focusedRow == 7, true, opacity); y += kSettingStepY;
-    drawSubPageRow(rowPos(y), "滤镜选择", contentFocused && focusedRow == 8, true, opacity); y += 65.0f;
+    drawSubPageRow(rowPos(y), "遮罩选择", contentFocused && focusedRow == 5, true, opacity); y += kSettingStepY;
+    drawSubPageRow(rowPos(y), "滤镜选择", contentFocused && focusedRow == 6, true, opacity); y += 65.0f;
     drawSectionLabel(rowPos(y + 2.0f), "同步设置", opacity); y += 36.0f;
-    drawButtonRow(rowPos(y), "同步画面设置", contentFocused && focusedRow == 9, opacity); y += kSettingStepY;
-    drawButtonRow(rowPos(y), "同步遮罩设置", contentFocused && focusedRow == 10, opacity); y += kSettingStepY;
-    drawButtonRow(rowPos(y), "同步滤镜设置", contentFocused && focusedRow == 11, opacity);
+    drawButtonRow(rowPos(y), "同步画面设置", contentFocused && focusedRow == 7, opacity); y += kSettingStepY;
+    drawButtonRow(rowPos(y), "同步遮罩设置", contentFocused && focusedRow == 8, opacity); y += kSettingStepY;
+    drawButtonRow(rowPos(y), "同步滤镜设置", contentFocused && focusedRow == 9, opacity);
 
     if (opacity > 0.5f && scrollY > 1.0f)
         drawRect({kContentX + kContentW - 4.0f, kContentY + kContentBodyTop + offsetY},
@@ -1522,11 +1519,9 @@ void drawCustomLayoutSidebar(const MgbaCustomLayoutSettings& settings,
     const Vector2f panelPos{panelX, 0.0f};
     const float headerY = portrait ? 38.0f : 30.0f;
     const float hintY = headerY + 38.0f;
-    const float topSectionY = portrait ? 158.0f : 116.0f;
-    const float topRowY = topSectionY + 42.0f;
+    const float sectionY = portrait ? 158.0f : 122.0f;
+    const float rowY = sectionY + 44.0f;
     const float rowGap = portrait ? 74.0f : 65.0f;
-    const float bottomSectionY = topRowY + rowGap * 3.0f + (portrait ? 60.0f : 26.0f);
-    const float bottomRowY = bottomSectionY + 42.0f;
 
     drawRect({0.0f, 0.0f}, {kScreenW, kScreenH}, {0.0f, 0.0f, 0.0f, 0.22f * opacity}, true);
     drawRect(panelPos, {panelW, kScreenH}, {0.015f, 0.020f, 0.030f, 0.94f * opacity}, true);
@@ -1544,15 +1539,10 @@ void drawCustomLayoutSidebar(const MgbaCustomLayoutSettings& settings,
                  {1.0f, 1.0f, 1.0f, 0.13f * opacity});
     };
 
-    section(topSectionY, "上屏布局");
-    drawFloatAdjusterRow({panelX + 29.0f, topRowY}, rowW, "缩放", settings.topScale, "", 1.0f, 0.1f, focusedRow == 0, opacity, 1);
-    drawFloatAdjusterRow({panelX + 29.0f, topRowY + rowGap}, rowW, "X偏移", settings.topOffsetX, "px", 0.0f, 1.0f, focusedRow == 1, opacity, 0);
-    drawFloatAdjusterRow({panelX + 29.0f, topRowY + rowGap * 2.0f}, rowW, "Y偏移", settings.topOffsetY, "px", 0.0f, 1.0f, focusedRow == 2, opacity, 0);
-
-    section(bottomSectionY, "下屏布局");
-    drawFloatAdjusterRow({panelX + 29.0f, bottomRowY}, rowW, "缩放", settings.bottomScale, "", 1.0f, 0.1f, focusedRow == 3, opacity, 1);
-    drawFloatAdjusterRow({panelX + 29.0f, bottomRowY + rowGap}, rowW, "X偏移", settings.bottomOffsetX, "px", 0.0f, 1.0f, focusedRow == 4, opacity, 0);
-    drawFloatAdjusterRow({panelX + 29.0f, bottomRowY + rowGap * 2.0f}, rowW, "Y偏移", settings.bottomOffsetY, "px", 0.0f, 1.0f, focusedRow == 5, opacity, 0);
+    section(sectionY, "画面布局");
+    drawFloatAdjusterRow({panelX + 29.0f, rowY}, rowW, "缩放", settings.topScale, "", 1.0f, 0.1f, focusedRow == 0, opacity, 1);
+    drawFloatAdjusterRow({panelX + 29.0f, rowY + rowGap}, rowW, "X偏移", settings.topOffsetX, "px", 0.0f, 1.0f, focusedRow == 1, opacity, 0);
+    drawFloatAdjusterRow({panelX + 29.0f, rowY + rowGap * 2.0f}, rowW, "Y偏移", settings.topOffsetY, "px", 0.0f, 1.0f, focusedRow == 2, opacity, 0);
 }
 
 void drawOverlaySidebar(const MgbaDisplaySettings& display,
@@ -1974,8 +1964,6 @@ void drawTabFrame(MgbaMenuLayer::Item item,
                             display.integerScale,
                             display.integerScaleMultiplier,
                             display.layout,
-                            display.orientation,
-                            display.screenGap,
                             contentFocus,
                             contentFocused,
                             offsetX,

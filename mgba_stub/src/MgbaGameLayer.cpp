@@ -100,6 +100,13 @@ MgbaGameLayer::DrawRect MgbaGameLayer::computeDrawRect() const
 
     switch (m_display.layout)
     {
+    case 0:
+    {
+        const float scale = std::min(screenW / gameW, screenH / gameH);
+        rect.w = gameW * scale;
+        rect.h = gameH * scale;
+        break;
+    }
     case 1:
         return {0.0f, 0.0f, screenW, screenH};
     case 2:
@@ -110,10 +117,10 @@ MgbaGameLayer::DrawRect MgbaGameLayer::computeDrawRect() const
         rect.h = screenH;
         rect.w = screenH * (4.0f / 3.0f);
         break;
-    case 7:
     case 5:
+    case 7:
     {
-        const float scale = std::clamp(m_display.customLayout.topScale, 1.0f, 10.0f);
+        const float scale = std::clamp(m_display.customLayout.topScale, 1.0f, 15.0f);
         rect.w = gameW * scale;
         rect.h = gameH * scale;
         rect.x = (screenW - rect.w) * 0.5f + m_display.customLayout.topOffsetX;
@@ -121,16 +128,18 @@ MgbaGameLayer::DrawRect MgbaGameLayer::computeDrawRect() const
         return rect;
     }
     case 4:
-    default:
     {
         const float base = std::min(screenW / gameW, screenH / gameH);
-        float scale = base;
-        if (m_display.integerScale)
-        {
-            scale = m_display.integerScaleMultiplier > 0
-                        ? static_cast<float>(m_display.integerScaleMultiplier)
-                        : std::max(1.0f, std::floor(base));
-        }
+        const float scale = m_display.integerScaleMultiplier > 0
+                                ? static_cast<float>(m_display.integerScaleMultiplier)
+                                : std::max(1.0f, std::floor(base));
+        rect.w = gameW * scale;
+        rect.h = gameH * scale;
+        break;
+    }
+    default:
+    {
+        const float scale = std::min(screenW / gameW, screenH / gameH);
         rect.w = gameW * scale;
         rect.h = gameH * scale;
         break;

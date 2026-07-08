@@ -42,7 +42,7 @@ inline std::string GetRootPath()
     constexpr const char *SAVE_DIR          = "saves";
     constexpr const char *CHEATS_DIR        = "cheats";
     constexpr const char *SHADER_DIR        = "shaders";
-    constexpr const char *CORE_DIR        = "cores";
+    constexpr const char *CORE_DIR        = "core";
     constexpr const char *BIOS_DIR        = "bios";
     constexpr const char *DBS_DIR         = "dbs";
 
