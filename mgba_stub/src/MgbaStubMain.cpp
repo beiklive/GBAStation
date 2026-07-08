@@ -69,6 +69,13 @@ int jsonInt(const nlohmann::json& item, const char* key, int fallback)
     return item.at(key).get<int>();
 }
 
+float jsonFloat(const nlohmann::json& item, const char* key, float fallback)
+{
+    if (!item.contains(key) || !item.at(key).is_number())
+        return fallback;
+    return item.at(key).get<float>();
+}
+
 std::optional<nlohmann::json> loadGameDbRecord(const std::string& romPath)
 {
     const std::string normalizedRom = normalizePathForCompare(romPath);
@@ -162,6 +169,12 @@ int main(int argc, char* argv[])
                 options.title = title;
             options.savePath = savePath;
             options.platform = jsonInt(*record, "platform", options.platform);
+            options.hasDisplaySettings = true;
+            options.displayMode = jsonInt(*record, "displayMode", options.displayMode);
+            options.integerAspectRatio = jsonFloat(*record, "integerAspectRatio", options.integerAspectRatio);
+            options.customScale = jsonFloat(*record, "customScale", options.customScale);
+            options.customOffsetX = jsonFloat(*record, "customOffsetX", options.customOffsetX);
+            options.customOffsetY = jsonFloat(*record, "customOffsetY", options.customOffsetY);
         }
     }
 

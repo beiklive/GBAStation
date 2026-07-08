@@ -40,11 +40,10 @@ constexpr float kFilePickerBodyPad = 18.0f;
 
 constexpr float kFastForwardValues[] = {
     0.1f, 0.5f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 3.0f, 4.0f, 5.0f,
+    6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
 };
-constexpr int kScreenGapDefault = 0;
-constexpr int kScreenGapStep = 1;
-constexpr int kScreenGapMin = -256;
-constexpr int kScreenGapMax = 256;
+constexpr int kIntegerScaleMin = 0;
+constexpr int kIntegerScaleMax = 8;
 constexpr float kCustomScaleDefault = 1.0f;
 constexpr float kCustomScaleStep = 0.1f;
 constexpr float kCustomScaleMin = 1.0f;
@@ -53,7 +52,7 @@ constexpr float kCustomOffsetDefault = 0.0f;
 constexpr float kCustomOffsetStep = 1.0f;
 constexpr float kCustomOffsetMin = -1024.0f;
 constexpr float kCustomOffsetMax = 1024.0f;
-constexpr int kCustomLayoutControlCount = 6;
+constexpr int kCustomLayoutControlCount = 3;
 constexpr int kOverlayControlCount = 2;
 constexpr int kShaderBaseControlCount = 2;
 constexpr float kShaderParamRowH = 50.0f;
@@ -67,11 +66,11 @@ constexpr float kShaderListPadTop = 30.0f;
 constexpr float kShaderListPadBottom = 14.0f;
 constexpr const char* kOverlayRoot = "sdmc:/GBAStation/overlays";
 constexpr int kDisplayRowCustomLayout = 4;
-constexpr int kDisplayRowOverlay = 7;
-constexpr int kDisplayRowShader = 8;
-constexpr int kDisplayRowSyncDisplay = 9;
-constexpr int kDisplayRowSyncOverlay = 10;
-constexpr int kDisplayRowSyncShader = 11;
+constexpr int kDisplayRowOverlay = 5;
+constexpr int kDisplayRowShader = 6;
+constexpr int kDisplayRowSyncDisplay = 7;
+constexpr int kDisplayRowSyncOverlay = 8;
+constexpr int kDisplayRowSyncShader = 9;
 
 bool isDirectionUp(std::uint64_t buttons)
 {
@@ -391,20 +390,13 @@ float displayRowY(int row)
     case 2: return kSettingStepY * 2.0f;
     case 3: return kSettingStepY * 3.0f;
     case 4: return kSettingStepY * 4.0f;
-    case 5: return kSettingStepY * 5.0f;
+    case 5: return kSettingStepY * 5.0f + 43.0f;
     case 6: return kSettingStepY * 6.0f + 43.0f;
-    case 7: return kSettingStepY * 7.0f + 43.0f;
-    case 8: return kSettingStepY * 8.0f + 43.0f;
+    case 7: return kSettingStepY * 7.0f + 86.0f;
+    case 8: return kSettingStepY * 8.0f + 86.0f;
     case 9: return kSettingStepY * 9.0f + 86.0f;
-    case 10: return kSettingStepY * 10.0f + 86.0f;
-    case 11: return kSettingStepY * 11.0f + 86.0f;
     default: return 0.0f;
     }
-}
-
-int clampScreenGap(int value)
-{
-    return std::clamp(value, kScreenGapMin, kScreenGapMax);
 }
 
 int stepNumericValue(int value, int direction, int step, int minValue, int maxValue)
@@ -850,7 +842,7 @@ float MgbaMenuLayer::targetContentScrollY() const
     case Item::Display:
     {
         const int row = std::clamp(m_contentFocus, 0, contentControlCount(Item::Display) - 1);
-        const float contentH = displayRowY(11) + kSettingRowH;
+        const float contentH = displayRowY(contentControlCount(Item::Display) - 1) + kSettingRowH;
         return focusedScroll(displayRowY(row), kSettingRowH, contentH);
     }
     case Item::Cheats:
@@ -1022,7 +1014,7 @@ void MgbaMenuLayer::closeShaderList()
 
 void MgbaMenuLayer::setFastForwardMultiplier(float multiplier)
 {
-    m_display.fastForwardMultiplier = std::clamp(multiplier, 0.1f, 5.0f);
+    m_display.fastForwardMultiplier = std::clamp(multiplier, 0.1f, 10.0f);
 }
 
 void MgbaMenuLayer::setCustomLayoutSettings(const MgbaCustomLayoutSettings& settings)
@@ -1039,10 +1031,12 @@ void MgbaMenuLayer::setCustomLayoutSettings(const MgbaCustomLayoutSettings& sett
 void MgbaMenuLayer::setDisplaySettings(const MgbaDisplaySettings& settings)
 {
     m_display = settings;
-    m_display.fastForwardMultiplier = std::clamp(m_display.fastForwardMultiplier, 0.1f, 5.0f);
-    m_display.layout = std::clamp(m_display.layout, 0, 7);
+    m_display.fastForwardMultiplier = std::clamp(m_display.fastForwardMultiplier, 0.1f, 10.0f);
+    m_display.layout = std::clamp(m_display.layout, 0, 5);
+    m_display.integerScaleMultiplier = std::clamp(m_display.integerScaleMultiplier,
+                                                  kIntegerScaleMin,
+                                                  kIntegerScaleMax);
     m_display.orientation = std::clamp(m_display.orientation, 0, 3);
-    m_display.screenGap = clampScreenGap(m_display.screenGap);
     m_display.ndsShaderType = normalizeMgbaShaderType(m_display.ndsShaderType);
     if (m_shaderListVisible)
         m_shaderListPath = ndsShaderListPathForType(m_display.ndsShaderType);
@@ -1073,7 +1067,7 @@ int MgbaMenuLayer::contentControlCount(Item item) const
     case Item::Display:
         if (m_displayPagePlaceholder)
             return 0;
-        return 12;
+        return 10;
     case Item::Cheats:
         if (m_cheatPagePlaceholder)
             return 0;
@@ -1144,7 +1138,9 @@ int MgbaMenuLayer::nextFocusableDisplayRow(int from, int direction) const
     for (int i = 0; i < contentControlCount(Item::Display); ++i)
     {
         row = (row + direction + contentControlCount(Item::Display)) % contentControlCount(Item::Display);
-        if (row == 4 && m_display.layout != 7)
+        if (row == 3 && m_display.layout != 4)
+            continue;
+        if (row == kDisplayRowCustomLayout && m_display.layout != 5)
             continue;
         return row;
     }
@@ -1155,16 +1151,8 @@ bool MgbaMenuLayer::activateDisplayControl()
 {
     switch (m_contentFocus)
     {
-    case 2:
-        m_display.integerScale = !m_display.integerScale;
-        return true;
-    case 6:
-        if (m_display.screenGap == kScreenGapDefault)
-            return false;
-        m_display.screenGap = kScreenGapDefault;
-        return true;
     case kDisplayRowCustomLayout:
-        if (m_display.layout == 7)
+        if (m_display.layout == 5)
             beginCustomLayoutEditor();
         return false;
     case kDisplayRowOverlay:
@@ -1314,27 +1302,6 @@ bool MgbaMenuLayer::cycleCustomLayoutSetting(int direction)
                                                            kCustomOffsetMin,
                                                            kCustomOffsetMax);
         return true;
-    case 3:
-        m_display.customLayout.bottomScale = stepFloatValue(m_display.customLayout.bottomScale,
-                                                            direction,
-                                                            kCustomScaleStep,
-                                                            kCustomScaleMin,
-                                                            kCustomScaleMax);
-        return true;
-    case 4:
-        m_display.customLayout.bottomOffsetX = stepFloatValue(m_display.customLayout.bottomOffsetX,
-                                                              direction,
-                                                              kCustomOffsetStep,
-                                                              kCustomOffsetMin,
-                                                              kCustomOffsetMax);
-        return true;
-    case 5:
-        m_display.customLayout.bottomOffsetY = stepFloatValue(m_display.customLayout.bottomOffsetY,
-                                                              direction,
-                                                              kCustomOffsetStep,
-                                                              kCustomOffsetMin,
-                                                              kCustomOffsetMax);
-        return true;
     default:
         return false;
     }
@@ -1354,9 +1321,6 @@ bool MgbaMenuLayer::resetCustomLayoutSetting()
     case 0: return resetFloat(m_display.customLayout.topScale, kCustomScaleDefault);
     case 1: return resetFloat(m_display.customLayout.topOffsetX, kCustomOffsetDefault);
     case 2: return resetFloat(m_display.customLayout.topOffsetY, kCustomOffsetDefault);
-    case 3: return resetFloat(m_display.customLayout.bottomScale, kCustomScaleDefault);
-    case 4: return resetFloat(m_display.customLayout.bottomOffsetX, kCustomOffsetDefault);
-    case 5: return resetFloat(m_display.customLayout.bottomOffsetY, kCustomOffsetDefault);
     default: return false;
     }
 }
@@ -1427,20 +1391,17 @@ bool MgbaMenuLayer::cycleCurrentSetting(int direction)
     case 1:
         m_display.linearFiltering = !m_display.linearFiltering;
         return true;
-    case 3:
-        m_display.layout = cycleIndex(m_display.layout, 8);
-        if (m_contentFocus == 4 && m_display.layout != 7)
+    case 2:
+        m_display.layout = cycleIndex(m_display.layout, 6);
+        if (m_contentFocus == kDisplayRowCustomLayout && m_display.layout != 5)
             m_contentFocus = nextFocusableDisplayRow(m_contentFocus, direction);
         return true;
-    case 5:
-        m_display.orientation = cycleIndex(m_display.orientation, 4);
-        return true;
-    case 6:
-        m_display.screenGap = stepNumericValue(m_display.screenGap,
-                                               direction,
-                                               kScreenGapStep,
-                                               kScreenGapMin,
-                                               kScreenGapMax);
+    case 3:
+        m_display.integerScaleMultiplier = stepNumericValue(m_display.integerScaleMultiplier,
+                                                            direction,
+                                                            1,
+                                                            kIntegerScaleMin,
+                                                            kIntegerScaleMax);
         return true;
     default:
         return false;
@@ -2188,7 +2149,7 @@ MgbaMenuResult MgbaMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t bu
                 }
             }
             const bool opensDisplaySubPage =
-                (m_contentFocus == kDisplayRowCustomLayout && m_display.layout == 7) ||
+                (m_contentFocus == kDisplayRowCustomLayout && m_display.layout == 5) ||
                 m_contentFocus == kDisplayRowOverlay ||
                 m_contentFocus == kDisplayRowShader;
             if ((buttonsDown & HidNpadButton_A) && activateDisplayControl())

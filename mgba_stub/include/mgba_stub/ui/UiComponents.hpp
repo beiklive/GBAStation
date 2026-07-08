@@ -118,15 +118,10 @@ void drawStateSlotPage(const char* title,
                        float offsetY = 0.0f);
 // 绘制通用信息页面：标题 + 分割线 + 描述文本（用于金手指/重置/退出/返回等页）
 void drawInfoPage(const char* title, const char* body, float offsetX, float offsetY, float opacity);
-// 绘制画面设置页面
-// 显示两行设置项：画面过滤（Linear/Nearest）和快进倍率（x1~x4）
-// 底部提示"A 切换过滤，左右键调整快进倍率"
 void drawDisplayPage(bool linearFiltering,
                      float fastForwardMultiplier,
-                     bool integerScale,
+                     int integerScaleMultiplier,
                      int layout,
-                     int orientation,
-                     int screenGap,
                      int focusedRow,
                      bool contentFocused,
                      float offsetX,

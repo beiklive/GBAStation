@@ -23,10 +23,12 @@
 #include <filesystem>
 #include <fstream>
 #include <map>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <vector>
 
+#include <nlohmann/json.hpp>
 #include <fcntl.h>
 #include <switch.h>
 
@@ -252,6 +254,334 @@ std::string configValuePayload(std::string value)
     return trim(out);
 }
 
+bool fileExists(const std::string& path)
+{
+    std::ifstream file(path, std::ios::binary);
+    return static_cast<bool>(file);
+}
+
+std::string normalizePathForCompare(std::string path)
+{
+    for (char& c : path)
+    {
+        if (c == '\\')
+            c = '/';
+    }
+    if (path.rfind("sdmc:", 0) == 0)
+        path.erase(0, 5);
+    while (path.size() > 1 && path[0] == '/' && path[1] == '/')
+        path.erase(0, 1);
+    return path;
+}
+
+constexpr const char* kConfigPaths[] = {
+    "sdmc:/GBAStation/config/config.cfg",
+    "/GBAStation/config/config.cfg",
+};
+
+constexpr const char* kGameDataPaths[] = {
+    "sdmc:/GBAStation/data/GameData_GBA.json",
+    "sdmc:/GBAStation/data/GameData_GBC.json",
+    "sdmc:/GBAStation/data/GameData_GB.json",
+    "/GBAStation/data/GameData_GBA.json",
+    "/GBAStation/data/GameData_GBC.json",
+    "/GBAStation/data/GameData_GB.json",
+};
+
+std::map<std::string, std::string> loadConfigValues()
+{
+    std::map<std::string, std::string> values;
+    for (const char* path : kConfigPaths)
+    {
+        std::ifstream file(path);
+        if (!file)
+            continue;
+
+        std::string line;
+        while (std::getline(file, line))
+        {
+            const size_t eq = line.find('=');
+            if (eq == std::string::npos)
+                continue;
+            const std::string key = trim(line.substr(0, eq));
+            if (!key.empty())
+                values[key] = configValuePayload(line.substr(eq + 1));
+        }
+        break;
+    }
+    return values;
+}
+
+std::string configString(const std::map<std::string, std::string>& values,
+                         const std::string& key,
+                         const std::string& fallback)
+{
+    const auto it = values.find(key);
+    return it == values.end() || it->second.empty() ? fallback : it->second;
+}
+
+float configFloat(const std::map<std::string, std::string>& values,
+                  const std::string& key,
+                  float fallback)
+{
+    const auto text = configString(values, key, {});
+    if (text.empty())
+        return fallback;
+    try
+    {
+        return std::stof(text);
+    }
+    catch (...)
+    {
+        return fallback;
+    }
+}
+
+int configInt(const std::map<std::string, std::string>& values,
+              const std::string& key,
+              int fallback)
+{
+    const auto text = configString(values, key, {});
+    if (text.empty())
+        return fallback;
+    try
+    {
+        return std::stoi(text);
+    }
+    catch (...)
+    {
+        return fallback;
+    }
+}
+
+bool writeConfigValue(const std::string& key, const std::string& typedValue)
+{
+    std::string path;
+    for (const char* candidate : kConfigPaths)
+    {
+        if (fileExists(candidate))
+        {
+            path = candidate;
+            break;
+        }
+    }
+    if (path.empty())
+        path = kConfigPaths[0];
+
+    std::vector<std::string> lines;
+    {
+        std::ifstream in(path);
+        std::string line;
+        while (std::getline(in, line))
+            lines.push_back(line);
+    }
+
+    bool replaced = false;
+    for (std::string& line : lines)
+    {
+        const size_t eq = line.find('=');
+        if (eq == std::string::npos)
+            continue;
+        if (trim(line.substr(0, eq)) == key)
+        {
+            line = key + "=" + typedValue;
+            replaced = true;
+            break;
+        }
+    }
+    if (!replaced)
+        lines.push_back(key + "=" + typedValue);
+
+    std::error_code ec;
+    std::filesystem::create_directories(std::filesystem::path(path).parent_path(), ec);
+    std::ofstream out(path, std::ios::trunc);
+    if (!out)
+        return false;
+    for (const std::string& line : lines)
+        out << line << '\n';
+    return true;
+}
+
+int uiLayoutFromConfigMode(const std::string& mode)
+{
+    if (mode == "fill")
+        return 1;
+    if (mode == "original")
+        return 2;
+    if (mode == "four_three" || mode == "4:3")
+        return 3;
+    if (mode == "integer")
+        return 4;
+    if (mode == "custom")
+        return 5;
+    return 0;
+}
+
+int uiLayoutFromScreenMode(int mode)
+{
+    switch (mode)
+    {
+    case 1: return 1;
+    case 2: return 4;
+    case 3: return 5;
+    case 4: return 3;
+    case 0:
+    default:
+        return 0;
+    }
+}
+
+int screenModeFromUiLayout(int layout)
+{
+    switch (layout)
+    {
+    case 1: return 1;
+    case 3: return 4;
+    case 4: return 2;
+    case 5: return 3;
+    case 0:
+    case 2:
+    default:
+        return 0;
+    }
+}
+
+std::optional<std::string> findGameDataPathForRom(const std::string& romPath)
+{
+    const std::string normalizedRom = normalizePathForCompare(romPath);
+    for (const char* dbPath : kGameDataPaths)
+    {
+        if (!fileExists(dbPath))
+            continue;
+        try
+        {
+            std::ifstream file(dbPath);
+            nlohmann::json data;
+            file >> data;
+            if (!data.is_array())
+                continue;
+            for (const auto& item : data)
+            {
+                if (item.is_object() &&
+                    normalizePathForCompare(item.value("path", std::string{})) == normalizedRom)
+                    return std::string(dbPath);
+            }
+        }
+        catch (...)
+        {
+        }
+    }
+    return std::nullopt;
+}
+
+bool saveDisplaySettingsToGameData(const std::string& romPath,
+                                   const beiklive::mgba_stub::MgbaDisplaySettings& display)
+{
+    const auto dbPath = findGameDataPathForRom(romPath);
+    if (!dbPath)
+        return false;
+
+    try
+    {
+        std::ifstream in(*dbPath);
+        nlohmann::json data;
+        in >> data;
+        if (!data.is_array())
+            return false;
+
+        const std::string normalizedRom = normalizePathForCompare(romPath);
+        bool changed = false;
+        for (auto& item : data)
+        {
+            if (!item.is_object() ||
+                normalizePathForCompare(item.value("path", std::string{})) != normalizedRom)
+                continue;
+
+            item["displayMode"] = screenModeFromUiLayout(display.layout);
+            item["integerAspectRatio"] = static_cast<float>(display.integerScaleMultiplier);
+            item["customScale"] = display.customLayout.topScale;
+            item["customOffsetX"] = display.customLayout.topOffsetX;
+            item["customOffsetY"] = display.customLayout.topOffsetY;
+            changed = true;
+            break;
+        }
+        if (!changed)
+            return false;
+
+        std::ofstream out(*dbPath, std::ios::trunc);
+        if (!out)
+            return false;
+        out << data.dump(4);
+        return true;
+    }
+    catch (...)
+    {
+        return false;
+    }
+}
+
+int syncDisplaySettingsToGameData(const std::string& romPath,
+                                  const beiklive::mgba_stub::MgbaDisplaySettings& display)
+{
+    const std::string normalizedRom = normalizePathForCompare(romPath);
+    int count = 0;
+
+    for (const char* dbPath : kGameDataPaths)
+    {
+        if (!fileExists(dbPath))
+            continue;
+
+        try
+        {
+            std::ifstream in(dbPath);
+            nlohmann::json data;
+            in >> data;
+            if (!data.is_array())
+                continue;
+
+            bool changed = false;
+            for (auto& item : data)
+            {
+                if (!item.is_object())
+                    continue;
+                const std::string itemPath = normalizePathForCompare(item.value("path", std::string{}));
+                if (itemPath.empty() || itemPath == normalizedRom)
+                    continue;
+
+                item["displayMode"] = screenModeFromUiLayout(display.layout);
+                item["integerAspectRatio"] = static_cast<float>(display.integerScaleMultiplier);
+                item["customScale"] = display.customLayout.topScale;
+                item["customOffsetX"] = display.customLayout.topOffsetX;
+                item["customOffsetY"] = display.customLayout.topOffsetY;
+                changed = true;
+                ++count;
+            }
+
+            if (!changed)
+                continue;
+
+            std::ofstream out(dbPath, std::ios::trunc);
+            if (out)
+                out << data.dump(4);
+        }
+        catch (...)
+        {
+        }
+    }
+
+    return count;
+}
+
+void saveRuntimeDisplaySettings(const std::string& romPath,
+                                const beiklive::mgba_stub::MgbaDisplaySettings& display)
+{
+    writeConfigValue("fastforward.multiplier",
+                     "f|" + std::to_string(display.fastForwardMultiplier));
+    writeConfigValue("display.filter",
+                     std::string("s|") + (display.linearFiltering ? "linear" : "nearest"));
+    saveDisplaySettingsToGameData(romPath, display);
+}
+
 struct InputCombo {
     uint64_t hid = 0;
     std::uint32_t virtualBits = 0;
@@ -464,6 +794,11 @@ public:
         return anyComboDown(button(hotkeyKey("hotkey.menu.pad")), input);
     }
 
+    bool fastForwardHeld(const InputSnapshot& input) const
+    {
+        return anyComboHeld(button(handleKey("fastforward")), input);
+    }
+
     uint32_t keyMask(const InputSnapshot& input) const
     {
         uint32_t keys = 0;
@@ -515,6 +850,9 @@ private:
 
         const std::string menuKey = hotkeyKey("hotkey.menu.pad");
         m_comboValues[menuKey] = parseCombos(value(menuKey, "PAD_LT+PAD_RT"));
+
+        const std::string fastForwardKey = handleKey("fastforward");
+        m_comboValues[fastForwardKey] = parseCombos(value(fastForwardKey, "PAD_LSB"));
     }
 
     static constexpr ButtonBinding kButtonBindings[] = {
@@ -736,25 +1074,87 @@ private:
     std::vector<uint32_t> m_rgbaBuffer;
 };
 
-void drawGameTexture(uint32_t texture, unsigned width, unsigned height)
+struct DrawRect {
+    float x = 0.0f;
+    float y = 0.0f;
+    float w = 0.0f;
+    float h = 0.0f;
+};
+
+DrawRect computeGameDrawRect(unsigned width,
+                             unsigned height,
+                             const beiklive::mgba_stub::MgbaDisplaySettings& display)
+{
+    DrawRect rect;
+    if (width == 0 || height == 0)
+        return rect;
+
+    constexpr float screenW = static_cast<float>(kScreenWidth);
+    constexpr float screenH = static_cast<float>(kScreenHeight);
+    const float gameW = static_cast<float>(width);
+    const float gameH = static_cast<float>(height);
+
+    switch (display.layout)
+    {
+    case 1:
+        return {0.0f, 0.0f, screenW, screenH};
+    case 2:
+        rect.w = gameW;
+        rect.h = gameH;
+        break;
+    case 3:
+        rect.h = screenH;
+        rect.w = screenH * (4.0f / 3.0f);
+        break;
+    case 4:
+    {
+        const float maxScale = std::max(1.0f, std::floor(std::min(screenW / gameW, screenH / gameH)));
+        const float scale = display.integerScaleMultiplier > 0
+                                ? static_cast<float>(display.integerScaleMultiplier)
+                                : maxScale;
+        rect.w = gameW * std::max(1.0f, scale);
+        rect.h = gameH * std::max(1.0f, scale);
+        break;
+    }
+    case 5:
+    {
+        const float scale = std::clamp(display.customLayout.topScale, 1.0f, 10.0f);
+        rect.w = gameW * scale;
+        rect.h = gameH * scale;
+        rect.x = (screenW - rect.w) * 0.5f + display.customLayout.topOffsetX;
+        rect.y = (screenH - rect.h) * 0.5f + display.customLayout.topOffsetY;
+        return rect;
+    }
+    case 0:
+    default:
+    {
+        const float scale = std::min(screenW / gameW, screenH / gameH);
+        rect.w = gameW * scale;
+        rect.h = gameH * scale;
+        break;
+    }
+    }
+
+    rect.x = (screenW - rect.w) * 0.5f;
+    rect.y = (screenH - rect.h) * 0.5f;
+    return rect;
+}
+
+void drawGameTexture(uint32_t texture,
+                     unsigned width,
+                     unsigned height,
+                     const beiklive::mgba_stub::MgbaDisplaySettings& display)
 {
     if (texture == 0 || width == 0 || height == 0)
         return;
 
-    constexpr float screenW = static_cast<float>(kScreenWidth);
-    constexpr float screenH = static_cast<float>(kScreenHeight);
-    const float scale = std::floor(std::min(screenW / static_cast<float>(width),
-                                            screenH / static_cast<float>(height)));
-    const float finalScale = std::max(1.0f, scale);
-    const float drawW = static_cast<float>(width) * finalScale;
-    const float drawH = static_cast<float>(height) * finalScale;
-    const float x = (screenW - drawW) * 0.5f;
-    const float y = (screenH - drawH) * 0.5f;
+    const DrawRect rect = computeGameDrawRect(width, height, display);
 
-    Gfx::SetSampler(Gfx::sampler_Nearest | Gfx::sampler_ClampToEdge);
+    Gfx::SetSampler((display.linearFiltering ? Gfx::sampler_Linear : Gfx::sampler_Nearest) |
+                    Gfx::sampler_ClampToEdge);
     Gfx::DrawRectangle(texture,
-                       {x, y},
-                       {drawW, drawH},
+                       {rect.x, rect.y},
+                       {rect.w, rect.h},
                        {0.0f, 0.0f},
                        {static_cast<float>(width), static_cast<float>(height)},
                        {1.0f, 1.0f, 1.0f, 1.0f});
@@ -813,13 +1213,35 @@ int RunRuntime(const RunOptions& options)
     MgbaMenuLayer menuLayer;
     MgbaUiAudioPlayer uiAudio;
     menuLayer.setCheatPagePlaceholder(true);
-    menuLayer.setDisplayPagePlaceholder(true);
+    menuLayer.setDisplayPagePlaceholder(false);
+    const auto configValues = loadConfigValues();
+    MgbaDisplaySettings displaySettings;
+    displaySettings.fastForwardMultiplier = std::clamp(
+        configFloat(configValues, "fastforward.multiplier", 4.0f),
+        0.1f,
+        10.0f);
+    displaySettings.linearFiltering = configString(configValues, "display.filter", "nearest") == "linear";
+    displaySettings.layout = options.hasDisplaySettings
+                                 ? uiLayoutFromScreenMode(options.displayMode)
+                                 : uiLayoutFromConfigMode(configString(configValues, "display.mode", "original"));
+    displaySettings.integerScaleMultiplier = std::clamp(
+        options.hasDisplaySettings
+            ? static_cast<int>(std::lround(options.integerAspectRatio))
+            : configInt(configValues, "display.integer_scale_mult", 0),
+        0,
+        8);
+    displaySettings.customLayout.topScale = std::clamp(options.customScale, 1.0f, 10.0f);
+    displaySettings.customLayout.topOffsetX = std::clamp(options.customOffsetX, -1024.0f, 1024.0f);
+    displaySettings.customLayout.topOffsetY = std::clamp(options.customOffsetY, -1024.0f, 1024.0f);
+    menuLayer.setDisplaySettings(displaySettings);
     auto stateSlots = loadStateSlots(states, options.romPath);
     menuLayer.setStateSlots(stateSlots);
 
     double fps = 0.0;
     int fpsFrames = 0;
     uint64_t totalFrames = 0;
+    double fastForwardAccumulator = 0.0;
+    bool fastForwardActive = false;
     auto fpsStart = std::chrono::steady_clock::now();
 
     auto refreshSlots = [&]() {
@@ -869,6 +1291,18 @@ int RunRuntime(const RunOptions& options)
 
         switch (result.action)
         {
+        case MgbaMenuAction::DisplaySettingsChanged:
+        case MgbaMenuAction::CustomLayoutChanged:
+        case MgbaMenuAction::CustomLayoutCommitted:
+            saveRuntimeDisplaySettings(options.romPath, menuLayer.displaySettings());
+            break;
+        case MgbaMenuAction::SyncDisplaySettings:
+        {
+            saveRuntimeDisplaySettings(options.romPath, menuLayer.displaySettings());
+            const int count = syncDisplaySettingsToGameData(options.romPath, menuLayer.displaySettings());
+            menuLayer.showSyncResult(MgbaMenuAction::SyncDisplaySettings, count);
+            break;
+        }
         case MgbaMenuAction::SaveState:
             saveState(result.slot);
             break;
@@ -897,10 +1331,42 @@ int RunRuntime(const RunOptions& options)
         }
 
         int framesRan = 0;
+        fastForwardActive = false;
         if (!menuLayer.active())
         {
-            core.runFrame(inputConfig.keyMask(input));
-            framesRan = 1;
+            const uint32_t keyMask = inputConfig.keyMask(input);
+            const bool fastForwardHeld = inputConfig.fastForwardHeld(input);
+            const float multiplier = fastForwardHeld
+                                         ? std::clamp(menuLayer.fastForwardMultiplier(), 0.1f, 10.0f)
+                                         : 1.0f;
+            fastForwardActive = fastForwardHeld && std::fabs(multiplier - 1.0f) > 0.001f;
+            if (!fastForwardHeld)
+                fastForwardAccumulator = 0.0;
+
+            if (multiplier >= 1.0f)
+            {
+                fastForwardAccumulator += static_cast<double>(multiplier);
+                int framesToRun = static_cast<int>(std::floor(fastForwardAccumulator));
+                fastForwardAccumulator -= static_cast<double>(framesToRun);
+                framesToRun = std::clamp(framesToRun, 1, 10);
+                for (int i = 0; i < framesToRun; ++i)
+                    core.runFrame(keyMask);
+                framesRan = framesToRun;
+            }
+            else
+            {
+                fastForwardAccumulator += static_cast<double>(multiplier);
+                if (fastForwardAccumulator >= 1.0)
+                {
+                    fastForwardAccumulator -= 1.0;
+                    core.runFrame(keyMask);
+                    framesRan = 1;
+                }
+            }
+        }
+        else
+        {
+            fastForwardAccumulator = 0.0;
         }
 
         if (core.captureFrame() && gameTexture != 0)
@@ -916,9 +1382,9 @@ int RunRuntime(const RunOptions& options)
 
         Gfx::StartFrame();
         Gfx::PushScissor(0, 0, kScreenWidth, kScreenHeight);
-        drawGameTexture(gameTexture, core.width(), core.height());
+        drawGameTexture(gameTexture, core.width(), core.height(), menuLayer.displaySettings());
         if (!menuLayer.active())
-            beiklive::mgba_stub::ui::drawGameStatusBadges(fps, true, false, true, false);
+            beiklive::mgba_stub::ui::drawGameStatusBadges(fps, true, false, true, fastForwardActive);
         menuLayer.draw();
         Gfx::PopScissor();
         Gfx::EndFrame({0.015f, 0.020f, 0.026f, 1.0f}, 0);

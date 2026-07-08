@@ -62,6 +62,7 @@ struct MgbaDisplaySettings {
     float fastForwardMultiplier = 1.0f;
     bool linearFiltering = false;
     bool integerScale = true;
+    int integerScaleMultiplier = 0;
     int layout = 0;
     int orientation = 0;
     int screenGap = 0;
