@@ -13,6 +13,7 @@ public:
     ~MgbaGameLayer();
 
     bool createTexture(unsigned width, unsigned height);
+    void releaseGraphicsResources();
     void uploadFrame(const void* rgba, unsigned width, unsigned height, unsigned strideBytes);
     void setOverlay(std::uint32_t texture, int width, int height);
     void clearOverlay();

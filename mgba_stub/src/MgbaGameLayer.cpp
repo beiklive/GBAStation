@@ -42,8 +42,20 @@ float paramValue(const std::vector<MgbaShaderParam>& params, const char* name, f
 
 MgbaGameLayer::~MgbaGameLayer()
 {
+    releaseGraphicsResources();
+}
+
+void MgbaGameLayer::releaseGraphicsResources()
+{
     if (m_gameTexture != 0)
+    {
+        Gfx::PresentQueue.waitIdle();
         Gfx::TextureDelete(m_gameTexture);
+        m_gameTexture = 0;
+    }
+    m_width = 0;
+    m_height = 0;
+    clearOverlay();
 }
 
 bool MgbaGameLayer::createTexture(unsigned width, unsigned height)

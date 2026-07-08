@@ -85,6 +85,18 @@ float settingStepY()
     return menuMetrics().settingStepY;
 }
 
+void releaseComponentGraphicsResources()
+{
+    if (gMaterialFont != 0)
+    {
+        Gfx::FontDelete(gMaterialFont);
+        gMaterialFont = 0;
+    }
+    gMaterialFontData.clear();
+    gMaterialFontData.shrink_to_fit();
+    gMaterialFontAttempted = false;
+}
+
 const char* filterLabel(bool linear)
 {
     return linear ? "Linear" : "Nearest";

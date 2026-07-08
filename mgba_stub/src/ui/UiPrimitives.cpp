@@ -307,4 +307,14 @@ void drawGradientBorder(Vector2f pos, Vector2f size, float width)
     Gfx::SetSampler(Gfx::sampler_Nearest | Gfx::sampler_ClampToEdge);
 }
 
+void releasePrimitiveGraphicsResources()
+{
+    if (gHighlightGradient.texture != 0)
+    {
+        Gfx::PresentQueue.waitIdle();
+        Gfx::TextureDelete(gHighlightGradient.texture);
+    }
+    gHighlightGradient = {};
+}
+
 } // namespace beiklive::mgba_stub::ui

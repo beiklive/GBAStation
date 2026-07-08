@@ -166,10 +166,9 @@ std::string saveFilePath(const std::string& saveDir, const std::string& romPath)
 
 std::string stateDir(const std::string& saveDir)
 {
-    const std::string dir = joinPath(saveDir, "state");
     std::error_code ec;
-    std::filesystem::create_directories(dir, ec);
-    return dir;
+    std::filesystem::create_directories(saveDir, ec);
+    return saveDir;
 }
 
 std::string statePath(const std::string& dir, const std::string& romPath, int slot)
@@ -453,27 +452,11 @@ std::array<beiklive::mgba_stub::MgbaStateSlotInfo, 10>
 loadStateSlots(const std::string& dir, const std::string& romPath)
 {
     std::array<beiklive::mgba_stub::MgbaStateSlotInfo, 10> slots {};
-    std::string legacyDir;
-    const std::filesystem::path dirPath(dir);
-    if (dirPath.filename() == "state")
-        legacyDir = dirPath.parent_path().string();
     for (int slot = 0; slot < static_cast<int>(slots.size()); ++slot)
     {
         auto& info = slots[slot];
         info.statePath = statePath(dir, romPath, slot);
         info.thumbnailPath = stateThumbPath(dir, romPath, slot);
-        if (!legacyDir.empty() && !std::filesystem::exists(info.statePath))
-        {
-            const std::string legacyState = statePath(legacyDir, romPath, slot);
-            if (std::filesystem::exists(legacyState))
-                info.statePath = legacyState;
-        }
-        if (!legacyDir.empty() && !std::filesystem::exists(info.thumbnailPath))
-        {
-            const std::string legacyThumb = stateThumbPath(legacyDir, romPath, slot);
-            if (std::filesystem::exists(legacyThumb))
-                info.thumbnailPath = legacyThumb;
-        }
         info.stateFileAvailable = std::filesystem::exists(info.statePath);
         info.thumbnailAvailable = std::filesystem::exists(info.thumbnailPath);
         info.exists = info.stateFileAvailable || info.thumbnailAvailable;
@@ -531,6 +514,17 @@ std::string gameDataPathForPlatform(int platform)
         fallback = "/GBAStation/data/GameData_GB.json";
     }
     return fileExists(primary) || !fileExists(fallback) ? primary : fallback;
+}
+
+std::string defaultLogoPathForPlatform(int platform)
+{
+    switch (platform)
+    {
+    case 1: return "romfs:/img/ui/gba.png";
+    case 2: return "romfs:/img/ui/gbc.png";
+    case 3: return "romfs:/img/ui/gb.png";
+    default: return "romfs:/img/ui/gba.png";
+    }
 }
 
 std::optional<std::string> findGameDataPathForRom(const std::string& romPath)
@@ -648,12 +642,21 @@ void saveDisplaySettingsToGameData(const beiklive::mgba_stub::RunOptions& option
 
 void savePlayStats(const beiklive::mgba_stub::RunOptions& options,
                    int playCount,
-                   int playTime)
+                   int playTime,
+                   const std::string& savestateThumbPath,
+                   bool useSavestateThumb)
 {
     updateGameDataRecord(options, [&](nlohmann::json& target) {
         target["playCount"] = std::max(0, playCount);
         target["playTime"] = std::max(0, playTime);
         target["lastPlayed"] = currentLastPlayedTimestamp();
+        if (useSavestateThumb && !savestateThumbPath.empty() && fileExists(savestateThumbPath))
+        {
+            const std::string defaultLogo = defaultLogoPathForPlatform(options.platform);
+            const std::string logoPath = target.value("logoPath", std::string{});
+            if (logoPath.empty() || logoPath == defaultLogo)
+                target["logoPath"] = savestateThumbPath;
+        }
     });
 }
 
@@ -2716,16 +2719,25 @@ int RunRuntime(const RunOptions& options)
 
     core.saveSram();
     flushDisplay();
-    savePlayStats(options, playStats.playCount, playStats.playTime + std::max(0, sessionPlaySeconds));
+    savePlayStats(options,
+                  playStats.playCount,
+                  playStats.playTime + std::max(0, sessionPlaySeconds),
+                  stateThumbPath(states, options.romPath, 0),
+                  configBool(configValues, "UI.useSavestateThumbnail", false));
     if (rewindContextInitialized)
         mCoreRewindContextDeinit(&rewindContext);
     gameRumble.stop();
     gameAudio.deinit();
+    Gfx::PresentQueue.waitIdle();
+    menuLayer.releaseGraphicsResources();
+    gameLayer.releaseGraphicsResources();
     if (overlayTexture != 0)
     {
-        Gfx::PresentQueue.waitIdle();
         Gfx::TextureDelete(overlayTexture);
+        overlayTexture = 0;
     }
+    ui::releasePrimitiveGraphicsResources();
+    ui::releaseComponentGraphicsResources();
     core.release();
     Gfx::DeInit();
     romfsExit();

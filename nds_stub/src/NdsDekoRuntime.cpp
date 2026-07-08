@@ -110,6 +110,11 @@ std::string stateThumbPath(const std::string& stateDir, const std::string& romPa
     return statePath(stateDir, romPath, slot) + ".png";
 }
 
+std::string defaultNdsLogoPath()
+{
+    return "romfs:/img/ui/nds.png";
+}
+
 const char* layoutIdFromIndex(int layout)
 {
     static constexpr const char* ids[] = {
@@ -451,7 +456,9 @@ NdsPlayStats loadAndIncrementNdsPlayCount(const std::string& romPath)
 bool saveNdsPlayStatsToGameDb(const std::string& romPath,
                               int playCount,
                               int playTime,
-                              const std::string& lastPlayed)
+                              const std::string& lastPlayed,
+                              const std::string& savestateThumbPath,
+                              bool useSavestateThumb)
 {
     const std::string normalizedRom = normalizePathForCompare(romPath);
     constexpr const char* paths[] = {
@@ -484,6 +491,15 @@ bool saveNdsPlayStatsToGameDb(const std::string& romPath,
                 item["playTime"] = std::max(0, playTime);
                 if (!lastPlayed.empty())
                     item["lastPlayed"] = lastPlayed;
+                if (useSavestateThumb &&
+                    !savestateThumbPath.empty() &&
+                    std::filesystem::exists(savestateThumbPath))
+                {
+                    const std::string logoPath = jsonString(item, "logoPath");
+                    const std::string defaultLogo = defaultNdsLogoPath();
+                    if (logoPath.empty() || logoPath == defaultLogo)
+                        item["logoPath"] = savestateThumbPath;
+                }
                 updated = true;
                 break;
             }
@@ -1673,6 +1689,7 @@ public:
                     key.rfind("fastforward.", 0) != 0 &&
                     key.rfind("save.", 0) != 0 &&
                     key.rfind("display.", 0) != 0 &&
+                    key != "UI.useSavestateThumbnail" &&
                     key != "turbo.rate")
                     continue;
 
@@ -3360,7 +3377,12 @@ int RunDekoRuntime(const DekoRunOptions& options)
             ++sessionPlaySeconds;
         const int totalPlayTime = playStats.playTime + std::max(0, sessionPlaySeconds);
         const std::string lastPlayed = currentLastPlayedTimestamp();
-        saveNdsPlayStatsToGameDb(options.romPath, playStats.playCount, totalPlayTime, lastPlayed);
+        saveNdsPlayStatsToGameDb(options.romPath,
+                                 playStats.playCount,
+                                 totalPlayTime,
+                                 lastPlayed,
+                                 stateThumbPath(stateDir, options.romPath, 0),
+                                 inputConfig.intValue("UI.useSavestateThumbnail", 0) != 0);
         appendStubLog("GBAStationNDSStub: play stats session seconds=%d total=%d count=%d lastPlayed=%s",
                       sessionPlaySeconds,
                       totalPlayTime,

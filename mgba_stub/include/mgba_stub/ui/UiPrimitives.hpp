@@ -54,5 +54,6 @@ void drawBorder(Vector2f pos, Vector2f size, float width, Color color);
 void drawGradientBorder(Vector2f pos,
                         Vector2f size,
                         float width);
+void releasePrimitiveGraphicsResources();
 
 } // namespace beiklive::mgba_stub::ui

@@ -47,6 +47,7 @@ float contentBodyHeight();
 float saveCardHeight();
 float saveCardGapY();
 float settingStepY();
+void releaseComponentGraphicsResources();
 
 #define kScreenW (::beiklive::mgba_stub::ui::menuMetrics().screenW)
 #define kScreenH (::beiklive::mgba_stub::ui::menuMetrics().screenH)

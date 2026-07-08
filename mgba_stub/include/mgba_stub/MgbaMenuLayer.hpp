@@ -114,6 +114,7 @@ public:
 
     MgbaMenuResult update(std::uint64_t buttonsDown, std::uint64_t buttonsHeld);
     void draw() const;
+    void releaseGraphicsResources();
     void setStateSlots(const std::array<MgbaStateSlotInfo, 10>& slots);
     void setCheatItems(const std::vector<MgbaCheatItem>& cheats);
     const std::vector<MgbaCheatItem>& cheatItems() const { return m_cheats; }

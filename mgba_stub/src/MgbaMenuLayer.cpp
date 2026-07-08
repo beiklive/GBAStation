@@ -432,6 +432,11 @@ bool pushMenuOrientationTransform(int orientation)
 
 MgbaMenuLayer::~MgbaMenuLayer()
 {
+    releaseGraphicsResources();
+}
+
+void MgbaMenuLayer::releaseGraphicsResources()
+{
     releaseStateSlotTextures();
     releaseStatePreviewTexture();
     releaseFilePickerPreview();
