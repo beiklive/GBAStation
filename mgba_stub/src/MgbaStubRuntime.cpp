@@ -1,6 +1,8 @@
 #include "mgba_stub/MgbaStubRuntime.hpp"
 
 #include "mgba_stub/MgbaMenuLayer.hpp"
+#include "mgba_stub/MgbaUiAudio.hpp"
+#include "mgba_stub/ui/UiComponents.hpp"
 
 #include <mgba-util/vfs.h>
 #include <mgba/core/config.h>
@@ -12,6 +14,7 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <cctype>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -19,6 +22,8 @@
 #include <ctime>
 #include <filesystem>
 #include <fstream>
+#include <map>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -122,12 +127,25 @@ loadStateSlots(const std::string& dir, const std::string& romPath)
     {
         auto& info = slots[slot];
         info.statePath = statePath(dir, romPath, slot);
-        info.exists = std::filesystem::exists(info.statePath);
-        info.loadable = info.exists;
-        if (info.exists)
+        info.stateFileAvailable = std::filesystem::exists(info.statePath);
+        info.exists = info.stateFileAvailable;
+        info.loadable = info.stateFileAvailable;
+        if (info.stateFileAvailable)
             info.modifiedTime = formatFileTime(info.statePath);
     }
     return slots;
+}
+
+void releaseStateSlotTextures(std::array<beiklive::mgba_stub::MgbaStateSlotInfo, 10>& slots)
+{
+    for (auto& slot : slots)
+    {
+        if (slot.thumbnailTexture != 0)
+        {
+            Gfx::TextureDelete(slot.thumbnailTexture);
+            slot.thumbnailTexture = 0;
+        }
+    }
 }
 
 bool setReturnNro(const std::string& returnNro)
@@ -182,30 +200,340 @@ uint32_t nativeColorToRgba(color_t px)
 #endif
 }
 
-uint32_t keyMaskFromPad(const PadState& pad)
+std::string trim(std::string value)
 {
-    const uint64_t held = padGetButtons(&pad);
-    uint32_t keys = 0;
-    auto press = [&](HidNpadButton button, uint32_t bit) {
-        if ((held & button) != 0)
-            keys |= bit;
+    auto isSpace = [](unsigned char c) { return std::isspace(c) != 0; };
+    while (!value.empty() && isSpace(static_cast<unsigned char>(value.front())))
+        value.erase(value.begin());
+    while (!value.empty() && isSpace(static_cast<unsigned char>(value.back())))
+        value.pop_back();
+    return value;
+}
+
+std::string upper(std::string value)
+{
+    for (char& c : value)
+        c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    return value;
+}
+
+std::vector<std::string> split(const std::string& value, char delimiter)
+{
+    std::vector<std::string> result;
+    std::stringstream stream(value);
+    std::string item;
+    while (std::getline(stream, item, delimiter))
+    {
+        item = trim(item);
+        if (!item.empty())
+            result.push_back(item);
+    }
+    return result;
+}
+
+std::string configValuePayload(std::string value)
+{
+    if (value.size() >= 2 && value[1] == '|')
+        value.erase(0, 2);
+    std::string out;
+    out.reserve(value.size());
+    for (size_t i = 0; i < value.size(); ++i)
+    {
+        if (value[i] == '\\' && i + 1 < value.size())
+        {
+            out.push_back(value[i + 1]);
+            ++i;
+        }
+        else
+        {
+            out.push_back(value[i]);
+        }
+    }
+    return trim(out);
+}
+
+struct InputCombo {
+    uint64_t hid = 0;
+    std::uint32_t virtualBits = 0;
+
+    bool empty() const { return hid == 0 && virtualBits == 0; }
+};
+
+enum VirtualInputBit : std::uint32_t {
+    VirtualLeftStickUp = 1u << 0,
+    VirtualLeftStickDown = 1u << 1,
+    VirtualLeftStickLeft = 1u << 2,
+    VirtualLeftStickRight = 1u << 3,
+    VirtualRightStickUp = 1u << 4,
+    VirtualRightStickDown = 1u << 5,
+    VirtualRightStickLeft = 1u << 6,
+    VirtualRightStickRight = 1u << 7,
+};
+
+struct InputSnapshot {
+    uint64_t held = 0;
+    uint64_t down = 0;
+    std::uint32_t virtualHeld = 0;
+    std::uint32_t virtualDown = 0;
+    HidAnalogStickState leftStick {};
+    HidAnalogStickState rightStick {};
+};
+
+uint64_t hidFromToken(const std::string& token)
+{
+    const std::string t = upper(trim(token));
+    if (t == "PAD_A") return HidNpadButton_A;
+    if (t == "PAD_B") return HidNpadButton_B;
+    if (t == "PAD_X") return HidNpadButton_X;
+    if (t == "PAD_Y") return HidNpadButton_Y;
+    if (t == "PAD_LB" || t == "LB") return HidNpadButton_L;
+    if (t == "PAD_RB" || t == "RB") return HidNpadButton_R;
+    if (t == "PAD_LT" || t == "LT") return HidNpadButton_ZL;
+    if (t == "PAD_RT" || t == "RT") return HidNpadButton_ZR;
+    if (t == "PAD_LSB" || t == "LSB") return HidNpadButton_StickL;
+    if (t == "PAD_RSB" || t == "RSB") return HidNpadButton_StickR;
+    if (t == "PAD_START" || t == "START") return HidNpadButton_Plus;
+    if (t == "PAD_BACK" || t == "BACK" || t == "SELECT") return HidNpadButton_Minus;
+    if (t == "PAD_UP") return HidNpadButton_Up;
+    if (t == "PAD_DOWN") return HidNpadButton_Down;
+    if (t == "PAD_LEFT") return HidNpadButton_Left;
+    if (t == "PAD_RIGHT") return HidNpadButton_Right;
+    return 0;
+}
+
+std::uint32_t virtualFromToken(const std::string& token)
+{
+    const std::string t = upper(trim(token));
+    if (t == "PAD_LEFTSTICKUP") return VirtualLeftStickUp;
+    if (t == "PAD_LEFTSTICKDOWN") return VirtualLeftStickDown;
+    if (t == "PAD_LEFTSTICKLEFT") return VirtualLeftStickLeft;
+    if (t == "PAD_LEFTSTICKRIGHT") return VirtualLeftStickRight;
+    if (t == "PAD_RIGHTSTICKUP") return VirtualRightStickUp;
+    if (t == "PAD_RIGHTSTICKDOWN") return VirtualRightStickDown;
+    if (t == "PAD_RIGHTSTICKLEFT") return VirtualRightStickLeft;
+    if (t == "PAD_RIGHTSTICKRIGHT") return VirtualRightStickRight;
+    return 0;
+}
+
+InputCombo parseCombo(const std::string& comboText)
+{
+    InputCombo combo;
+    for (const std::string& part : split(comboText, '+'))
+    {
+        const std::string token = upper(part);
+        if (token == "NONE")
+            return {};
+        combo.hid |= hidFromToken(token);
+        combo.virtualBits |= virtualFromToken(token);
+    }
+    return combo;
+}
+
+std::vector<InputCombo> parseCombos(const std::string& value)
+{
+    std::vector<InputCombo> combos;
+    for (const std::string& comboText : split(value, '|'))
+    {
+        InputCombo combo = parseCombo(comboText);
+        if (!combo.empty())
+            combos.push_back(combo);
+    }
+    return combos;
+}
+
+bool comboHeld(const InputCombo& combo, const InputSnapshot& input)
+{
+    return (input.held & combo.hid) == combo.hid &&
+           (input.virtualHeld & combo.virtualBits) == combo.virtualBits;
+}
+
+bool comboDown(const InputCombo& combo, const InputSnapshot& input)
+{
+    if (!comboHeld(combo, input))
+        return false;
+    return ((input.down & combo.hid) != 0) || ((input.virtualDown & combo.virtualBits) != 0);
+}
+
+bool anyComboHeld(const std::vector<InputCombo>& combos, const InputSnapshot& input)
+{
+    for (const InputCombo& combo : combos)
+    {
+        if (comboHeld(combo, input))
+            return true;
+    }
+    return false;
+}
+
+bool anyComboDown(const std::vector<InputCombo>& combos, const InputSnapshot& input)
+{
+    for (const InputCombo& combo : combos)
+    {
+        if (comboDown(combo, input))
+            return true;
+    }
+    return false;
+}
+
+InputSnapshot makeInputSnapshot(PadState& pad, std::uint32_t& previousVirtualHeld)
+{
+    InputSnapshot input;
+    input.held = padGetButtons(&pad);
+    input.down = padGetButtonsDown(&pad);
+    input.leftStick = padGetStickPos(&pad, 0);
+    input.rightStick = padGetStickPos(&pad, 1);
+
+    constexpr int kStickThreshold = 12000;
+    auto addStick = [&](const HidAnalogStickState& stick,
+                        VirtualInputBit up,
+                        VirtualInputBit down,
+                        VirtualInputBit left,
+                        VirtualInputBit right) {
+        if (stick.y > kStickThreshold)
+            input.virtualHeld |= up;
+        if (stick.y < -kStickThreshold)
+            input.virtualHeld |= down;
+        if (stick.x < -kStickThreshold)
+            input.virtualHeld |= left;
+        if (stick.x > kStickThreshold)
+            input.virtualHeld |= right;
     };
 
-    press(HidNpadButton_A, 1u << 0);
-    press(HidNpadButton_B, 1u << 1);
-    press(HidNpadButton_Minus, 1u << 2);
-    press(HidNpadButton_StickL, 1u << 2);
-    press(HidNpadButton_Plus, 1u << 3);
-    press(HidNpadButton_AnyRight, 1u << 4);
-    press(HidNpadButton_AnyLeft, 1u << 5);
-    press(HidNpadButton_AnyUp, 1u << 6);
-    press(HidNpadButton_AnyDown, 1u << 7);
-    press(HidNpadButton_R, 1u << 8);
-    press(HidNpadButton_ZR, 1u << 8);
-    press(HidNpadButton_L, 1u << 9);
-    press(HidNpadButton_ZL, 1u << 9);
-    return keys;
+    addStick(input.leftStick, VirtualLeftStickUp, VirtualLeftStickDown,
+             VirtualLeftStickLeft, VirtualLeftStickRight);
+    addStick(input.rightStick, VirtualRightStickUp, VirtualRightStickDown,
+             VirtualRightStickLeft, VirtualRightStickRight);
+    input.virtualDown = input.virtualHeld & ~previousVirtualHeld;
+    previousVirtualHeld = input.virtualHeld;
+    return input;
 }
+
+std::string inputPrefixForPlatform(int platform)
+{
+    switch (platform)
+    {
+    case 2: return "gbc.";
+    case 3: return "gb.";
+    case 1:
+    default:
+        return "";
+    }
+}
+
+class MgbaInputConfig {
+public:
+    explicit MgbaInputConfig(int platform)
+        : m_prefix(inputPrefixForPlatform(platform))
+    {
+    }
+
+    void load()
+    {
+        constexpr const char* paths[] = {
+            "sdmc:/GBAStation/config/config.cfg",
+            "/GBAStation/config/config.cfg",
+        };
+
+        for (const char* path : paths)
+        {
+            std::ifstream file(path);
+            if (!file)
+                continue;
+
+            std::string line;
+            while (std::getline(file, line))
+            {
+                const size_t eq = line.find('=');
+                if (eq == std::string::npos)
+                    continue;
+                const std::string key = trim(line.substr(0, eq));
+                if (!key.empty())
+                    m_values[key] = configValuePayload(line.substr(eq + 1));
+            }
+
+            appendMgbaStubLog("GBAStationMgbaStub: input config loaded path=%s keys=%u",
+                              path,
+                              static_cast<unsigned>(m_values.size()));
+            break;
+        }
+
+        buildMappings();
+    }
+
+    bool menuDown(const InputSnapshot& input) const
+    {
+        return anyComboDown(button(hotkeyKey("hotkey.menu.pad")), input);
+    }
+
+    uint32_t keyMask(const InputSnapshot& input) const
+    {
+        uint32_t keys = 0;
+        for (const auto& binding : kButtonBindings)
+        {
+            if (anyComboHeld(button(handleKey(binding.suffix)), input))
+                keys |= binding.mgbaBit;
+        }
+        return keys;
+    }
+
+private:
+    struct ButtonBinding {
+        const char* suffix;
+        uint32_t mgbaBit;
+        const char* fallback;
+    };
+
+    const std::vector<InputCombo>& button(const std::string& key) const
+    {
+        static const std::vector<InputCombo> empty;
+        const auto it = m_comboValues.find(key);
+        return it == m_comboValues.end() ? empty : it->second;
+    }
+
+    std::string value(const std::string& key, const std::string& fallback) const
+    {
+        const auto it = m_values.find(key);
+        return it == m_values.end() || it->second.empty() ? fallback : it->second;
+    }
+
+    std::string handleKey(const char* suffix) const
+    {
+        return m_prefix + "handle." + suffix;
+    }
+
+    std::string hotkeyKey(const char* key) const
+    {
+        return m_prefix + key;
+    }
+
+    void buildMappings()
+    {
+        for (const auto& binding : kButtonBindings)
+        {
+            const std::string key = handleKey(binding.suffix);
+            m_comboValues[key] = parseCombos(value(key, binding.fallback));
+        }
+
+        const std::string menuKey = hotkeyKey("hotkey.menu.pad");
+        m_comboValues[menuKey] = parseCombos(value(menuKey, "PAD_LT+PAD_RT"));
+    }
+
+    static constexpr ButtonBinding kButtonBindings[] = {
+        {"a", 1u << 0, "PAD_A"},
+        {"b", 1u << 1, "PAD_B"},
+        {"select", 1u << 2, "PAD_BACK"},
+        {"start", 1u << 3, "PAD_START"},
+        {"right", 1u << 4, "PAD_RIGHT"},
+        {"left", 1u << 5, "PAD_LEFT"},
+        {"up", 1u << 6, "PAD_UP"},
+        {"down", 1u << 7, "PAD_DOWN"},
+        {"r", 1u << 8, "PAD_RB"},
+        {"l", 1u << 9, "PAD_LB"},
+    };
+
+    std::string m_prefix;
+    std::map<std::string, std::string> m_values;
+    std::map<std::string, std::vector<InputCombo>> m_comboValues;
+};
 
 class MgbaRuntimeCore {
 public:
@@ -447,6 +775,9 @@ int RunRuntime(const RunOptions& options)
     hidInitializeTouchScreen();
     PadState pad;
     padInitializeDefault(&pad);
+    std::uint32_t previousVirtualHeld = 0;
+    MgbaInputConfig inputConfig(options.platform);
+    inputConfig.load();
 
     if (R_FAILED(romfsInit()))
     {
@@ -480,6 +811,9 @@ int RunRuntime(const RunOptions& options)
     }
 
     MgbaMenuLayer menuLayer;
+    MgbaUiAudioPlayer uiAudio;
+    menuLayer.setCheatPagePlaceholder(true);
+    menuLayer.setDisplayPagePlaceholder(true);
     auto stateSlots = loadStateSlots(states, options.romPath);
     menuLayer.setStateSlots(stateSlots);
 
@@ -489,6 +823,7 @@ int RunRuntime(const RunOptions& options)
     auto fpsStart = std::chrono::steady_clock::now();
 
     auto refreshSlots = [&]() {
+        releaseStateSlotTextures(stateSlots);
         stateSlots = loadStateSlots(states, options.romPath);
         menuLayer.setStateSlots(stateSlots);
     };
@@ -510,22 +845,27 @@ int RunRuntime(const RunOptions& options)
     {
         const auto frameBegin = std::chrono::steady_clock::now();
         padUpdate(&pad);
+        const InputSnapshot input = makeInputSnapshot(pad, previousVirtualHeld);
         const uint64_t buttonsDown = padGetButtonsDown(&pad);
         const uint64_t buttonsHeld = padGetButtons(&pad);
 
-        if ((buttonsDown & HidNpadButton_Plus) != 0)
+        if (inputConfig.menuDown(input))
         {
             if (menuLayer.visible())
             {
                 menuLayer.close();
+                uiAudio.play(MgbaMenuSound::Back);
             }
             else
             {
                 menuLayer.open();
+                uiAudio.play(MgbaMenuSound::Click);
             }
         }
 
         const MgbaMenuResult result = menuLayer.update(buttonsDown, buttonsHeld);
+        for (MgbaMenuSound sound : menuLayer.consumeSounds())
+            uiAudio.play(sound);
 
         switch (result.action)
         {
@@ -559,7 +899,7 @@ int RunRuntime(const RunOptions& options)
         int framesRan = 0;
         if (!menuLayer.active())
         {
-            core.runFrame(keyMaskFromPad(pad));
+            core.runFrame(inputConfig.keyMask(input));
             framesRan = 1;
         }
 
@@ -578,7 +918,7 @@ int RunRuntime(const RunOptions& options)
         Gfx::PushScissor(0, 0, kScreenWidth, kScreenHeight);
         drawGameTexture(gameTexture, core.width(), core.height());
         if (!menuLayer.active())
-            drawMgbaGameStatusBadges(fps, true, false, true, false);
+            beiklive::mgba_stub::ui::drawGameStatusBadges(fps, true, false, true, false);
         menuLayer.draw();
         Gfx::PopScissor();
         Gfx::EndFrame({0.015f, 0.020f, 0.026f, 1.0f}, 0);
@@ -607,6 +947,8 @@ int RunRuntime(const RunOptions& options)
     }
 
     core.saveSram();
+    uiAudio.stop();
+    releaseStateSlotTextures(stateSlots);
     if (gameTexture != 0)
         Gfx::TextureDelete(gameTexture);
     core.release();

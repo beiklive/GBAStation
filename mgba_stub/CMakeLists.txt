@@ -8,7 +8,12 @@ set(MGBA_STUB_ROMFS_DIR ${NDS_STUB_ROMFS_DIR})
 add_executable(GBAStationMgbaStub
     ${MGBA_STUB_DIR}/src/MgbaStubMain.cpp
     ${MGBA_STUB_DIR}/src/MgbaStubRuntime.cpp
+    ${MGBA_STUB_DIR}/src/MgbaStb.cpp
+    ${MGBA_STUB_DIR}/src/MgbaShaderCatalog.cpp
+    ${MGBA_STUB_DIR}/src/MgbaUiAudio.cpp
     ${MGBA_STUB_DIR}/src/MgbaMenuLayer.cpp
+    ${MGBA_STUB_DIR}/src/ui/UiPrimitives.cpp
+    ${MGBA_STUB_DIR}/src/ui/UiComponents.cpp
 )
 
 set_target_properties(GBAStationMgbaStub PROPERTIES CXX_STANDARD 17)
