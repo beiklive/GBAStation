@@ -137,6 +137,7 @@ namespace beiklive // 结构体
         int ndsScreenGap = 0; // NDS 双屏间距（每游戏独立配置）
         int ndsInternalResolution = 1; // NDS 3D 内部分辨率倍率（1-4）
         std::string NdsShaderType = "RetroArch_dot"; // NDS Stub 滤镜类型（UI 配置）
+        std::string MgbaShaderType = "RetroArch_dot"; // mGBA Stub 滤镜类型（UI 配置）
 
         std::string shaderParaPath = "";          // 着色器参数所属预设路径
         std::vector<std::string> shaderParaNames; // 着色器参数名称列表

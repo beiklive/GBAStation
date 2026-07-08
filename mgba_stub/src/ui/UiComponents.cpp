@@ -97,12 +97,12 @@ std::size_t utf8SafePrefix(const std::string& text, std::size_t bytes);
 const char* layoutLabel(int index)
 {
     static const char* labels[] = {
-        "(保持比例)Fit",
-        "(填充)Fill",
-        "(原始)Original",
-        "4:3",
-        "(整数倍)Integer",
-        "(自定义)Custom",
+        "保持比例",
+        "填充",
+        "原始分辨率",
+        "4:3填充",
+        "整数倍",
+        "自定义",
     };
     return labels[std::clamp(index, 0, 5)];
 }
@@ -1275,7 +1275,8 @@ void drawDisplayPage(bool linearFiltering,
     else
         std::snprintf(ffValue, sizeof(ffValue), "%.2fx", fastForwardMultiplier);
     char integerValue[16] = {};
-    if (!integerScale || integerScaleMultiplier <= 0)
+    (void)integerScale;
+    if (integerScaleMultiplier <= 0)
         std::snprintf(integerValue, sizeof(integerValue), "auto");
     else
         std::snprintf(integerValue, sizeof(integerValue), "x%d", integerScaleMultiplier);
@@ -1285,8 +1286,8 @@ void drawDisplayPage(bool linearFiltering,
     auto rowPos = [&](float rowY) { return base + Vector2f{0.0f, rowY}; };
     drawLrSelectorRow(rowPos(y), "快进倍率", ffValue, contentFocused && focusedRow == 0, true, opacity); y += kSettingStepY;
     drawLrSelectorRow(rowPos(y), "画面过滤", filterLabel(linearFiltering), contentFocused && focusedRow == 1, true, opacity); y += kSettingStepY;
-    drawLrSelectorRow(rowPos(y), "整数倍缩放倍率", integerValue, contentFocused && focusedRow == 2, true, opacity); y += kSettingStepY;
-    drawLrSelectorRow(rowPos(y), "画面布局", layoutLabel(layout), contentFocused && focusedRow == 3, true, opacity); y += kSettingStepY;
+    drawLrSelectorRow(rowPos(y), "画面布局", layoutLabel(layout), contentFocused && focusedRow == 2, true, opacity); y += kSettingStepY;
+    drawLrSelectorRow(rowPos(y), "整数倍缩放倍率", integerValue, contentFocused && focusedRow == 3, layout == 4, opacity); y += kSettingStepY;
     drawSubPageRow(rowPos(y), "自定义画面布局", contentFocused && focusedRow == 4, layout == 5, opacity); y += 65.0f;
     drawSectionLabel(rowPos(y + 2.0f), "个性化设置", opacity); y += 36.0f;
     drawSubPageRow(rowPos(y), "遮罩选择", contentFocused && focusedRow == 5, true, opacity); y += kSettingStepY;
@@ -1442,8 +1443,12 @@ void drawSyncResultDialog(MgbaMenuAction action, int count, float opacity)
     const bool display = action == MgbaMenuAction::SyncDisplaySettings;
     const bool overlay = action == MgbaMenuAction::SyncOverlaySettings;
     char body[128];
-    std::snprintf(body, sizeof(body), "已同步到 %d 个游戏。", std::max(0, count));
-    drawSyncDialogFrame(display ? "同步画面设置完成" : (overlay ? "同步遮罩设置完成" : "同步滤镜设置完成"),
+    if (count < 0)
+        std::snprintf(body, sizeof(body), "同步失败，请检查GameDB文件是否可写。");
+    else
+        std::snprintf(body, sizeof(body), "已同步到 %d 个游戏。", count);
+    drawSyncDialogFrame(count < 0 ? "同步失败" :
+                            (display ? "同步画面设置完成" : (overlay ? "同步遮罩设置完成" : "同步滤镜设置完成")),
                         body,
                         "",
                         "确定",

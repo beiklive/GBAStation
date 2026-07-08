@@ -41,6 +41,8 @@ constexpr float kFilePickerBodyPad = 18.0f;
 constexpr float kFastForwardValues[] = {
     0.1f, 0.5f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f
 };
+constexpr float kFastForwardMin = kFastForwardValues[0];
+constexpr float kFastForwardMax = kFastForwardValues[std::size(kFastForwardValues) - 1];
 constexpr float kCustomScaleDefault = 1.0f;
 constexpr float kCustomScaleStep = 0.1f;
 constexpr float kCustomScaleMin = 1.0f;
@@ -1006,7 +1008,7 @@ void MgbaMenuLayer::closeShaderList()
 
 void MgbaMenuLayer::setFastForwardMultiplier(float multiplier)
 {
-    m_display.fastForwardMultiplier = std::clamp(multiplier, 0.1f, 5.0f);
+    m_display.fastForwardMultiplier = std::clamp(multiplier, kFastForwardMin, kFastForwardMax);
 }
 
 void MgbaMenuLayer::setCustomLayoutSettings(const MgbaCustomLayoutSettings& settings)
@@ -1023,7 +1025,7 @@ void MgbaMenuLayer::setCustomLayoutSettings(const MgbaCustomLayoutSettings& sett
 void MgbaMenuLayer::setDisplaySettings(const MgbaDisplaySettings& settings)
 {
     m_display = settings;
-    m_display.fastForwardMultiplier = std::clamp(m_display.fastForwardMultiplier, 0.1f, 5.0f);
+    m_display.fastForwardMultiplier = std::clamp(m_display.fastForwardMultiplier, kFastForwardMin, kFastForwardMax);
     m_display.integerScaleMultiplier = std::clamp(m_display.integerScaleMultiplier, 0, 8);
     m_display.layout = std::clamp(m_display.layout, 0, 5);
     m_display.orientation = std::clamp(m_display.orientation, 0, 3);
@@ -1132,7 +1134,9 @@ bool MgbaMenuLayer::activateDisplayControl()
 {
     switch (m_contentFocus)
     {
-    case 2:
+    case 3:
+        if (m_display.layout != 4)
+            return false;
         return cycleCurrentSetting(1);
     case kDisplayRowCustomLayout:
         if (m_display.layout == kCustomLayoutMode)
@@ -1393,18 +1397,20 @@ bool MgbaMenuLayer::cycleCurrentSetting(int direction)
         m_display.linearFiltering = !m_display.linearFiltering;
         return true;
     case 2:
+        m_display.layout = cycleIndex(m_display.layout, 6);
+        if (m_contentFocus == kDisplayRowCustomLayout && m_display.layout != kCustomLayoutMode)
+            m_contentFocus = nextFocusableDisplayRow(m_contentFocus, direction);
+        return true;
+    case 3:
     {
+        if (m_display.layout != 4)
+            return false;
         int idx = std::clamp(m_display.integerScaleMultiplier, 0, 8);
         idx = cycleIndex(idx, 9);
         m_display.integerScale = true;
         m_display.integerScaleMultiplier = idx;
         return true;
     }
-    case 3:
-        m_display.layout = cycleIndex(m_display.layout, 6);
-        if (m_contentFocus == kDisplayRowCustomLayout && m_display.layout != kCustomLayoutMode)
-            m_contentFocus = nextFocusableDisplayRow(m_contentFocus, direction);
-        return true;
     default:
         return false;
     }

@@ -178,6 +178,12 @@ int main(int argc, char* argv[])
                 options.shaderType = jsonString(*record, "shaderType");
             if (options.shaderType.empty())
                 options.shaderType = jsonString(*record, "NdsShaderType");
+            if (options.shaderType.empty())
+            {
+                const std::string paraPath = jsonString(*record, "shaderParaPath");
+                if (paraPath.rfind("RetroArch_", 0) == 0)
+                    options.shaderType = paraPath;
+            }
             options.shaderPath = jsonString(*record, "shaderPath");
             if (options.shaderPath.empty())
                 options.shaderPath = jsonString(*record, "shaderParaPath");

@@ -295,6 +295,7 @@ namespace beiklive
             {"ndsScreenGap", entry.ndsScreenGap},
             {"ndsInternalResolution", entry.ndsInternalResolution},
             {"NdsShaderType", sanitizeUtf8(ndsShaderType)},
+            {"MgbaShaderType", sanitizeUtf8(entry.MgbaShaderType)},
             {"shaderParaPath", sanitizeUtf8(isNds ? ndsShaderType : entry.shaderParaPath)},
             {"shaderParaNames", isNds ? std::vector<std::string>() : entry.shaderParaNames},
             {"shaderParaValues", isNds ? std::vector<float>() : entry.shaderParaValues}};
@@ -337,6 +338,11 @@ namespace beiklive
         entry.ndsScreenGap = std::clamp(j.value("ndsScreenGap", 0), -256, 256);
         entry.ndsInternalResolution = std::clamp(j.value("ndsInternalResolution", 1), 1, 4);
         entry.NdsShaderType = j.value("NdsShaderType", "");
+        entry.MgbaShaderType = j.value("MgbaShaderType", "");
+        if (entry.MgbaShaderType.empty())
+            entry.MgbaShaderType = j.value("shaderType", "");
+        if (entry.MgbaShaderType.empty())
+            entry.MgbaShaderType = "RetroArch_dot";
         entry.shaderParaPath = j.value("shaderParaPath", "");
         entry.shaderParaNames = j.value("shaderParaNames", std::vector<std::string>());
         entry.shaderParaValues = j.value("shaderParaValues", std::vector<float>());

@@ -97,6 +97,16 @@ bool fileExists(const std::string& path)
     return static_cast<bool>(file);
 }
 
+bool writeJsonFileChecked(const std::string& path, const nlohmann::json& data)
+{
+    std::ofstream out(path, std::ios::trunc);
+    if (!out)
+        return false;
+    out << data.dump(4) << '\n';
+    out.close();
+    return out.good();
+}
+
 std::string normalizePathForCompare(std::string path)
 {
     for (char& c : path)
@@ -233,6 +243,23 @@ int configInt(const std::map<std::string, std::string>& values,
         return fallback;
     try { return std::stoi(text); }
     catch (...) { return fallback; }
+}
+
+int jsonIntValue(const nlohmann::json& item, const char* key, int fallback)
+{
+    const auto it = item.find(key);
+    if (it == item.end())
+        return fallback;
+    if (it->is_number_integer())
+        return it->get<int>();
+    if (it->is_number_float())
+        return static_cast<int>(it->get<float>());
+    if (it->is_string())
+    {
+        try { return std::stoi(it->get<std::string>()); }
+        catch (...) { return fallback; }
+    }
+    return fallback;
 }
 
 float configFloat(const std::map<std::string, std::string>& values,
@@ -550,11 +577,7 @@ bool updateGameDataRecord(const beiklive::mgba_stub::RunOptions& options, Update
         updater(*target);
         std::error_code ec;
         std::filesystem::create_directories(std::filesystem::path(dbPath).parent_path(), ec);
-        std::ofstream out(dbPath, std::ios::trunc);
-        if (!out)
-            return false;
-        out << data.dump(4);
-        return true;
+        return writeJsonFileChecked(dbPath, data);
     }
     catch (...)
     {
@@ -585,16 +608,16 @@ void saveDisplaySettingsToGameData(const beiklive::mgba_stub::RunOptions& option
                                    const beiklive::mgba_stub::MgbaDisplaySettings& display)
 {
     updateGameDataRecord(options, [&](nlohmann::json& target) {
+        const std::string shaderType = beiklive::mgba_stub::normalizeMgbaShaderType(display.mgbaShaderType);
         target["displayMode"] = screenModeFromUiLayout(display.layout);
-        target["integerAspectRatio"] = display.integerScale ? display.integerScaleMultiplier : 0;
+        target["integerAspectRatio"] = display.layout == 4 ? display.integerScaleMultiplier : 0;
         target["customScale"] = display.customLayout.topScale;
         target["customOffsetX"] = display.customLayout.topOffsetX;
         target["customOffsetY"] = display.customLayout.topOffsetY;
         target["overlayEnabled"] = display.overlayEnabled;
         target["overlayPath"] = display.overlayPath;
         target["shaderEnabled"] = display.shaderEnabled;
-        target["MgbaShaderType"] = display.mgbaShaderType;
-        target["shaderType"] = display.mgbaShaderType;
+        target["MgbaShaderType"] = shaderType;
     });
 }
 
@@ -611,60 +634,64 @@ void savePlayStats(const beiklive::mgba_stub::RunOptions& options,
 
 int syncDisplaySettingsToGameData(const std::string& romPath,
                                   const beiklive::mgba_stub::MgbaDisplaySettings& display,
+                                  int platform,
                                   int mode)
 {
     const std::string normalizedRom = normalizePathForCompare(romPath);
+    const std::string dbPath = findGameDataPathForRom(romPath).value_or(
+        gameDataPathForPlatform(platform));
     int count = 0;
-    for (const char* dbPath : kGameDataPaths)
+    if (!fileExists(dbPath))
+        return 0;
+    try
     {
-        if (!fileExists(dbPath))
-            continue;
-        try
+        std::ifstream in(dbPath);
+        nlohmann::json data;
+        in >> data;
+        in.close();
+        if (!data.is_array())
+            return 0;
+
+        const std::string shaderType = beiklive::mgba_stub::normalizeMgbaShaderType(display.mgbaShaderType);
+
+        bool changed = false;
+        for (auto& item : data)
         {
-            std::ifstream in(dbPath);
-            nlohmann::json data;
-            in >> data;
-            if (!data.is_array())
+            if (!item.is_object())
                 continue;
-            bool changed = false;
-            for (auto& item : data)
+            const std::string itemPath = normalizePathForCompare(item.value("path", std::string{}));
+            if (itemPath.empty() || itemPath == normalizedRom)
+                continue;
+            if (jsonIntValue(item, "platform", platform) != platform)
+                continue;
+            if (mode == 0)
             {
-                if (!item.is_object())
-                    continue;
-                const std::string itemPath = normalizePathForCompare(item.value("path", std::string{}));
-                if (itemPath.empty() || itemPath == normalizedRom)
-                    continue;
-                if (mode == 0)
-                {
-                    item["displayMode"] = screenModeFromUiLayout(display.layout);
-                    item["integerAspectRatio"] = display.integerScale ? display.integerScaleMultiplier : 0;
-                    item["customScale"] = display.customLayout.topScale;
-                    item["customOffsetX"] = display.customLayout.topOffsetX;
-                    item["customOffsetY"] = display.customLayout.topOffsetY;
-                }
-                else if (mode == 1)
-                {
-                    item["overlayEnabled"] = display.overlayEnabled;
-                    item["overlayPath"] = display.overlayPath;
-                }
-                else
-                {
-                    item["shaderEnabled"] = display.shaderEnabled;
-                    item["MgbaShaderType"] = display.mgbaShaderType;
-                    item["shaderType"] = display.mgbaShaderType;
-                }
-                changed = true;
-                ++count;
+                item["displayMode"] = screenModeFromUiLayout(display.layout);
+                item["integerAspectRatio"] = display.layout == 4 ? display.integerScaleMultiplier : 0;
+                item["customScale"] = display.customLayout.topScale;
+                item["customOffsetX"] = display.customLayout.topOffsetX;
+                item["customOffsetY"] = display.customLayout.topOffsetY;
             }
-            if (changed)
+            else if (mode == 1)
             {
-                std::ofstream out(dbPath, std::ios::trunc);
-                if (out)
-                    out << data.dump(4);
+                item["overlayEnabled"] = display.overlayEnabled;
+                item["overlayPath"] = display.overlayPath;
             }
+            else
+            {
+                item["shaderEnabled"] = display.shaderEnabled;
+                item["MgbaShaderType"] = shaderType;
+            }
+            changed = true;
+            ++count;
         }
-        catch (...) {}
+        if (changed)
+        {
+            if (!writeJsonFileChecked(dbPath, data))
+                return -1;
+        }
     }
+    catch (...) { return -1; }
     return count;
 }
 
@@ -2073,16 +2100,16 @@ int RunRuntime(const RunOptions& options)
     display.shaderEnabled = options.hasDisplaySettings
                                 ? options.shaderEnabled
                                 : configBool(configValues, "display.shader.enabled", false);
-    display.mgbaShaderType = normalizeMgbaShaderType(
-        !options.shaderType.empty()
-            ? options.shaderType
-            : configString(configValues,
-                           "display.shader.mgbaType",
-                           configString(configValues,
-                                        "display.shader.ndsType",
-                                        shaderTypeFromPath(!options.shaderPath.empty()
-                                                               ? options.shaderPath
-                                                               : configString(configValues, shaderConfigKey(options.platform), {})))));
+    std::string shaderTypeCandidate = options.shaderType;
+    if (shaderTypeCandidate.empty())
+        shaderTypeCandidate = configString(configValues, "display.shader.mgbaType", {});
+    if (shaderTypeCandidate.empty())
+        shaderTypeCandidate = configString(configValues, "display.shader.ndsType", {});
+    if (shaderTypeCandidate.empty() && !options.shaderPath.empty())
+        shaderTypeCandidate = options.shaderPath;
+    if (shaderTypeCandidate.empty())
+        shaderTypeCandidate = shaderTypeFromPath(configString(configValues, shaderConfigKey(options.platform), {}));
+    display.mgbaShaderType = normalizeMgbaShaderType(shaderTypeCandidate);
     display.shaderParams = loadShaderParams(display.mgbaShaderType);
 
     MgbaGameLayer gameLayer;
@@ -2348,17 +2375,28 @@ int RunRuntime(const RunOptions& options)
         case MgbaMenuAction::SyncDisplaySettings:
             flushDisplay();
             menuLayer.showSyncResult(MgbaMenuAction::SyncDisplaySettings,
-                                     syncDisplaySettingsToGameData(options.romPath, menuLayer.displaySettings(), 0));
+                                     syncDisplaySettingsToGameData(options.romPath,
+                                                                   menuLayer.displaySettings(),
+                                                                   options.platform,
+                                                                   0));
             break;
         case MgbaMenuAction::SyncOverlaySettings:
             flushDisplay();
             menuLayer.showSyncResult(MgbaMenuAction::SyncOverlaySettings,
-                                     syncDisplaySettingsToGameData(options.romPath, menuLayer.displaySettings(), 1));
+                                     syncDisplaySettingsToGameData(options.romPath,
+                                                                   menuLayer.displaySettings(),
+                                                                   options.platform,
+                                                                   1));
             break;
         case MgbaMenuAction::SyncShaderSettings:
             flushDisplay();
+            saveShaderParams(menuLayer.displaySettings().mgbaShaderType,
+                             menuLayer.displaySettings().shaderParams);
             menuLayer.showSyncResult(MgbaMenuAction::SyncShaderSettings,
-                                     syncDisplaySettingsToGameData(options.romPath, menuLayer.displaySettings(), 2));
+                                     syncDisplaySettingsToGameData(options.romPath,
+                                                                   menuLayer.displaySettings(),
+                                                                   options.platform,
+                                                                   2));
             break;
         case MgbaMenuAction::SaveState:
             saveState(result.slot);
