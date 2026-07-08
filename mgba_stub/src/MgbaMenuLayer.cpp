@@ -430,8 +430,16 @@ bool pushMenuOrientationTransform(int orientation)
 
 } // namespace
 
+MgbaMenuLayer::~MgbaMenuLayer()
+{
+    releaseStateSlotTextures();
+    releaseStatePreviewTexture();
+    releaseFilePickerPreview();
+}
+
 void MgbaMenuLayer::setStateSlots(const std::array<MgbaStateSlotInfo, 10>& slots)
 {
+    releaseStateSlotTextures();
     m_slots = slots;
     releaseStatePreviewTexture();
 }
@@ -485,6 +493,33 @@ void MgbaMenuLayer::releaseStatePreviewTexture() const
     m_statePreviewSlot = -1;
     m_statePreviewPath.clear();
     m_statePreviewAttempted = false;
+}
+
+void MgbaMenuLayer::releaseStateSlotTextures() const
+{
+    bool wait = false;
+    for (auto& slot : m_slots)
+    {
+        if (slot.thumbnailTexture != 0)
+        {
+            wait = true;
+            break;
+        }
+    }
+    if (wait)
+        Gfx::PresentQueue.waitIdle();
+
+    for (auto& slot : m_slots)
+    {
+        if (slot.thumbnailTexture != 0)
+        {
+            Gfx::TextureDelete(slot.thumbnailTexture);
+            slot.thumbnailTexture = 0;
+        }
+        slot.thumbnailWidth = 0;
+        slot.thumbnailHeight = 0;
+        slot.thumbnailLoadAttempted = false;
+    }
 }
 
 void MgbaMenuLayer::ensureStatePreviewTexture() const
@@ -552,6 +587,40 @@ void MgbaMenuLayer::ensureStatePreviewTexture() const
                   m_statePreviewWidth,
                   m_statePreviewHeight,
                   m_statePreviewTexture);
+}
+
+void MgbaMenuLayer::ensureStateSlotTextures() const
+{
+    const Item item = static_cast<Item>(m_selected);
+    if (!m_visible || (item != Item::SaveState && item != Item::LoadState))
+        return;
+
+    for (int i = 0; i < static_cast<int>(m_slots.size()); ++i)
+    {
+        auto& slot = m_slots[i];
+        if (!slot.exists ||
+            slot.thumbnailTexture != 0 ||
+            slot.thumbnailLoadAttempted ||
+            slot.thumbnailPath.empty() ||
+            !std::filesystem::exists(slot.thumbnailPath))
+        {
+            continue;
+        }
+
+        slot.thumbnailLoadAttempted = true;
+        if (!loadPngTextureFromFile(slot.thumbnailPath,
+                                    slot.thumbnailTexture,
+                                    slot.thumbnailWidth,
+                                    slot.thumbnailHeight))
+        {
+            appendStubLog("GBAStationMgbaStub: state grid thumbnail load failed slot=%d path=%s",
+                          i,
+                          slot.thumbnailPath.c_str());
+            slot.thumbnailTexture = 0;
+            slot.thumbnailWidth = 0;
+            slot.thumbnailHeight = 0;
+        }
+    }
 }
 
 void MgbaMenuLayer::reloadFilePickerEntries(const std::string& directory, const std::string& focusPath)
@@ -2060,10 +2129,15 @@ MgbaMenuResult MgbaMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t bu
         if (currentItem == Item::SaveState || currentItem == Item::LoadState)
         {
             const int oldFocus = m_contentFocus;
+            const int count = contentControlCount(currentItem);
             if (isDirectionUp(navButtons))
-                m_contentFocus = std::max(0, m_contentFocus - 1);
+                m_contentFocus = std::max(0, m_contentFocus - 2);
             else if (isDirectionDown(navButtons))
-                m_contentFocus = std::min(contentControlCount(currentItem) - 1, m_contentFocus + 1);
+                m_contentFocus = std::min(count - 1, m_contentFocus + 2);
+            else if (isDirectionLeft(navButtons) && (m_contentFocus % 2) == 1)
+                m_contentFocus = std::max(0, m_contentFocus - 1);
+            else if (isDirectionRight(navButtons) && (m_contentFocus % 2) == 0)
+                m_contentFocus = std::min(count - 1, m_contentFocus + 1);
             if (m_contentFocus != oldFocus)
             {
                 queueSound(MgbaMenuSound::Focus);
@@ -2411,7 +2485,7 @@ void MgbaMenuLayer::draw() const
         m_contentFocus >= 0 && m_contentFocus < static_cast<int>(m_slots.size()) &&
         m_slots[m_contentFocus].exists;
     const bool transformed = pushMenuOrientationTransform(0);
-    ensureStatePreviewTexture();
+    ensureStateSlotTextures();
     drawOverlay(panel);
     drawHeader(slideY);
     drawLeftMenu(m_selected, m_previousSelected, selectionProgress, !contentFocused, slideY);

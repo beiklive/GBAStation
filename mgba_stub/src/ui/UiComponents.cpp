@@ -24,7 +24,7 @@ constexpr UiMetrics kLaMgbacapeMetrics {
     404.0f, 110.0f, 500.0f,
     432.0f, 110.0f, 790.0f, 520.0f,
     64.0f, 444.0f,
-    386.0f, 112.0f, 18.0f, 16.0f,
+    378.0f, 78.0f, 18.0f, 10.0f,
     58.0f, 18.0f,
     2,
 };
@@ -36,7 +36,7 @@ constexpr UiMetrics kPortraitMetrics {
     282.0f, 110.0f, 1040.0f,
     300.0f, 110.0f, 384.0f, 1040.0f,
     64.0f, 964.0f,
-    384.0f, 112.0f, 0.0f, 16.0f,
+    176.0f, 132.0f, 16.0f, 12.0f,
     58.0f, 18.0f,
     1,
 };
@@ -1015,8 +1015,8 @@ void drawSaveSlotCard(int slot, Vector2f pos, bool focused, const MgbaStateSlotI
 {
     pos.Y += offsetY;
     const Vector2f size{kSaveCardW, kSaveCardH};
-    const Vector2f drawPos = focused ? pos - Vector2f{3.0f, 2.0f} : pos;
-    const Vector2f drawSize = focused ? size + Vector2f{6.0f, 4.0f} : size;
+    const Vector2f drawPos = focused ? pos - Vector2f{2.0f, 2.0f} : pos;
+    const Vector2f drawSize = focused ? size + Vector2f{4.0f, 4.0f} : size;
     if (focused)
         drawGradientBorder(drawPos - Vector2f{3.0f, 3.0f}, drawSize + Vector2f{6.0f, 6.0f}, 3.0f);
 
@@ -1025,8 +1025,14 @@ void drawSaveSlotCard(int slot, Vector2f pos, bool focused, const MgbaStateSlotI
                focused ? Color{0.31f, 0.70f, 1.0f, 0.96f}
                        : Color{1.0f, 1.0f, 1.0f, info.exists ? 0.10f : 0.06f});
 
-    const Vector2f thumbSize{72.0f, 96.0f};
-    const Vector2f thumbPos = drawPos + Vector2f{18.0f, 8.0f};
+    const float thumbH = drawSize.Y;
+    const float fallbackAspect = 240.0f / 160.0f;
+    const float sourceAspect = (info.thumbnailWidth > 0 && info.thumbnailHeight > 0)
+                                   ? static_cast<float>(info.thumbnailWidth) / static_cast<float>(info.thumbnailHeight)
+                                   : fallbackAspect;
+    const float thumbW = std::clamp(thumbH * sourceAspect, 78.0f, drawSize.X * 0.48f);
+    const Vector2f thumbSize{thumbW, thumbH};
+    const Vector2f thumbPos = drawPos;
     drawRect(thumbPos, thumbSize, info.exists ? Color{0.12f, 0.17f, 0.22f, 0.96f}
                                               : Color{1.0f, 1.0f, 1.0f, 0.025f});
     if (info.exists && info.thumbnailTexture != 0 && info.thumbnailWidth > 0 && info.thumbnailHeight > 0)
@@ -1057,31 +1063,30 @@ void drawSaveSlotCard(int slot, Vector2f pos, bool focused, const MgbaStateSlotI
 
     char title[32];
     std::snprintf(title, sizeof(title), "槽位 %d", slot);
+    const float textX = thumbSize.X + 18.0f;
+    const float textW = std::max(80.0f, drawSize.X - textX - 14.0f);
     if (info.exists)
     {
-        const float textX = 112.0f;
-        Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{textX, 24.0f}, 24.0f,
+        Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{textX, 16.0f}, 22.0f,
                       {1.0f, 1.0f, 1.0f, 0.96f}, "%s", title);
         const char* stateText = !info.stateFileAvailable ? "残留截图" :
             (!info.loadable ? "无效状态" :
              (info.modifiedTime.empty() ? "已有状态" : info.modifiedTime.c_str()));
-        Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{textX, 64.0f}, 17.0f,
-                      {1.0f, 1.0f, 1.0f, 0.55f}, "%s", stateText);
+        const std::string timeText = ellipsizeText(stateText, textW, 17.0f);
+        Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{textX, 46.0f}, 17.0f,
+                      {1.0f, 1.0f, 1.0f, 0.55f}, "%s", timeText.c_str());
         if (info.thumbnailTexture == 0)
             Gfx::DrawText(Gfx::SystemFontStandard, thumbPos + thumbSize * 0.5f, 15.0f,
                           {0.75f, 0.88f, 1.0f, 0.46f}, Gfx::align_Center, Gfx::align_Center,
-                          !info.thumbnailAvailable ? "NO THUMB" :
-                          (info.thumbnailLoadAttempted ? "LOAD FAIL" : "SCREEN"));
+                          "NO THUMB");
     }
     else
     {
-        Gfx::DrawText(Gfx::SystemFontStandard, thumbPos + thumbSize * 0.5f, 40.0f,
-                      {1.0f, 1.0f, 1.0f, 0.45f}, Gfx::align_Center, Gfx::align_Center, "+");
-        const float textX = 112.0f;
-        Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{textX, 24.0f}, 24.0f,
+        Gfx::DrawText(Gfx::SystemFontStandard, thumbPos + thumbSize * 0.5f, 15.0f,
+                      {0.75f, 0.88f, 1.0f, 0.42f}, Gfx::align_Center, Gfx::align_Center,
+                      "NO THUMB");
+        Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{textX, 16.0f}, 22.0f,
                       {1.0f, 1.0f, 1.0f, 0.88f}, "%s", title);
-        Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{textX, 64.0f}, 17.0f,
-                      {1.0f, 1.0f, 1.0f, 0.48f}, "空存档槽");
     }
 }
 
@@ -1093,7 +1098,10 @@ void drawSaveSlotGrid(const std::array<MgbaStateSlotInfo, 10>& slots,
                       float opacity,
                       float offsetY)
 {
-    const Vector2f start{kContentX + offsetX, kContentY + kContentBodyTop - scrollY};
+    constexpr float gridPadX = 8.0f;
+    constexpr float gridPadY = 7.0f;
+    const Vector2f start{kContentX + offsetX + gridPadX,
+                         kContentY + kContentBodyTop + gridPadY - scrollY};
     const int columns = saveSlotColumns();
 
     for (int i = 0; i < 10; ++i)
@@ -1124,120 +1132,24 @@ void drawStateSlotPage(const char* title,
                        float opacity,
                        float offsetY)
 {
+    (void)previewTexture;
+    (void)previewWidth;
+    (void)previewHeight;
+    (void)previewAttempted;
+
     const Vector2f base{kContentX + offsetX, kContentY + offsetY};
     Gfx::DrawText(Gfx::SystemFontChinese, base, 24.0f,
                   {0.86f, 0.91f, 0.96f, opacity}, "%s", title);
     drawLine({base.X, base.Y + 50.0f}, {kContentW, 1.0f},
              {0.0f, 0.48f, 0.80f, 0.28f * opacity});
 
-    const float bodyY = kContentY + kContentBodyTop + offsetY;
-    const float rowH = std::min(42.0f, (kContentBodyH - 18.0f) / 10.0f);
-    const float rowGap = std::max(2.0f, (kContentBodyH - rowH * 10.0f) / 9.0f);
-    const float previewMaxH = std::min(384.0f, kContentBodyH - 8.0f);
-    const float previewW = std::min(256.0f, std::max(128.0f, previewMaxH * (256.0f / 384.0f)));
-    const float previewH = previewW * (384.0f / 256.0f);
-    const float gap = 28.0f;
-    const float listW = std::max(180.0f, kContentW - previewW - gap);
-    const Vector2f listPos{kContentX + offsetX, bodyY};
-    const Vector2f previewPos{kContentX + offsetX + listW + gap,
-                              bodyY + (kContentBodyH - previewH) * 0.5f};
-
-    drawRect(listPos - Vector2f{8.0f, 8.0f},
-             {listW + 16.0f, kContentBodyH + 16.0f},
-             {0.145f, 0.145f, 0.153f, kMenuAlpha150 * opacity},
-             true);
-    drawBorder(listPos - Vector2f{8.0f, 8.0f},
-               {listW + 16.0f, kContentBodyH + 16.0f},
-               1.0f,
-               {0.24f, 0.24f, 0.24f, 0.58f * opacity});
-
-    for (int i = 0; i < 10; ++i)
-    {
-        const auto& slot = slots[i];
-        const bool focused = contentFocused && i == focusedSlot;
-        const Vector2f rowPos{listPos.X, listPos.Y + static_cast<float>(i) * (rowH + rowGap)};
-        if (focused)
-            drawGradientBorder(rowPos - Vector2f{3.0f, 3.0f},
-                               {listW + 6.0f, rowH + 6.0f},
-                               3.0f);
-        drawRect(rowPos,
-                 {listW, rowH},
-                 focused ? Color{0.0f, 0.30f, 0.50f, 0.52f * opacity}
-                         : Color{0.176f, 0.176f, 0.188f, 0.58f * opacity},
-                 true);
-        drawBorder(rowPos,
-                   {listW, rowH},
-                   1.0f,
-                   focused ? Color{0.0f, 0.48f, 0.80f, 0.86f * opacity}
-                           : Color{0.24f, 0.24f, 0.24f, 0.50f * opacity});
-
-        char slotName[32];
-        std::snprintf(slotName, sizeof(slotName), "档位 %d", i);
-        Gfx::DrawText(Gfx::SystemFontChinese,
-                      rowPos + Vector2f{16.0f, rowH * 0.5f - 10.0f},
-                      20.0f,
-                      {0.86f, 0.91f, 0.96f, focused ? 1.0f * opacity : 0.82f * opacity},
-                      "%s",
-                      slotName);
-        if (slot.exists)
-        {
-            const char* stateText = !slot.stateFileAvailable ? "残留截图" :
-                (!slot.loadable ? "无效状态" :
-                 (slot.modifiedTime.empty() ? "已有状态" : slot.modifiedTime.c_str()));
-            const std::string timeText = ellipsizeText(stateText, listW - 146.0f, 16.0f);
-            Gfx::DrawText(Gfx::SystemFontChinese,
-                          rowPos + Vector2f{listW - 16.0f, rowH * 0.5f - 8.0f},
-                          16.0f,
-                          {0.75f, 0.82f, 0.88f, focused ? 0.95f * opacity : 0.58f * opacity},
-                          Gfx::align_Right,
-                          Gfx::align_Left,
-                          timeText.c_str());
-        }
-    }
-
-    drawRect(previewPos - Vector2f{10.0f, 10.0f},
-             {previewW + 20.0f, previewH + 20.0f},
-             {0.117f, 0.117f, 0.117f, kMenuAlpha150 * opacity},
-             true);
-    drawBorder(previewPos - Vector2f{10.0f, 10.0f},
-               {previewW + 20.0f, previewH + 20.0f},
-               1.0f,
-               {0.0f, 0.48f, 0.80f, 0.40f * opacity});
-
-    if (previewTexture != 0 && previewWidth > 0 && previewHeight > 0)
-    {
-        const float texAspect = static_cast<float>(previewWidth) / static_cast<float>(previewHeight);
-        const float boxAspect = previewW / previewH;
-        Vector2f fitted{previewW, previewH};
-        if (texAspect > boxAspect)
-            fitted.Y = previewW / texAspect;
-        else
-            fitted.X = previewH * texAspect;
-        const Vector2f fittedPos = previewPos + (Vector2f{previewW, previewH} - fitted) * 0.5f;
-        Gfx::SetSampler(Gfx::sampler_Linear | Gfx::sampler_ClampToEdge);
-        Gfx::DrawRectangle(previewTexture,
-                           fittedPos,
-                           fitted,
-                           {0.0f, 0.0f},
-                           {static_cast<float>(previewWidth),
-                            static_cast<float>(previewHeight)},
-                           {1.0f, 1.0f, 1.0f, opacity});
-        Gfx::SetSampler(Gfx::sampler_Nearest | Gfx::sampler_ClampToEdge);
-    }
-    else
-    {
-        drawRect(previewPos,
-                 {previewW, previewH},
-                 {0.05f, 0.05f, 0.055f, 0.68f * opacity},
-                 true);
-        Gfx::DrawText(Gfx::SystemFontStandard,
-                      previewPos + Vector2f{previewW * 0.5f, previewH * 0.5f - 8.0f},
-                      24.0f,
-                      {0.74f, 0.82f, 0.90f, previewAttempted ? 0.62f * opacity : 0.42f * opacity},
-                      Gfx::align_Center,
-                      Gfx::align_Center,
-                      "NO THUMB");
-    }
+    drawSaveSlotGrid(slots,
+                     focusedSlot,
+                     contentFocused,
+                     offsetX,
+                     0.0f,
+                     opacity,
+                     offsetY);
 }
 
 void drawInfoPage(const char* title, const char* body, float offsetX, float offsetY, float opacity)

@@ -110,6 +110,8 @@ public:
         Count,
     };
 
+    ~MgbaMenuLayer();
+
     MgbaMenuResult update(std::uint64_t buttonsDown, std::uint64_t buttonsHeld);
     void draw() const;
     void setStateSlots(const std::array<MgbaStateSlotInfo, 10>& slots);
@@ -170,7 +172,9 @@ private:
     void ensureFilePickerPreview();
     void releaseFilePickerPreview();
     void releaseStatePreviewTexture() const;
+    void releaseStateSlotTextures() const;
     void ensureStatePreviewTexture() const;
+    void ensureStateSlotTextures() const;
     void beginSelectionAnimation(int oldSelected, int newSelected);
     void beginPanelAnimation(bool opening);
     float panelProgress() const;
@@ -202,7 +206,7 @@ private:
     FocusScope m_focusScope = FocusScope::Tabs;
     int m_contentFocus = 0;
     MgbaDisplaySettings m_display {};
-    std::array<MgbaStateSlotInfo, 10> m_slots {};
+    mutable std::array<MgbaStateSlotInfo, 10> m_slots {};
     std::vector<MgbaCheatItem> m_cheats {};
     mutable std::vector<int> m_visibleCheatCache {};
     mutable bool m_visibleCheatCacheDirty = true;

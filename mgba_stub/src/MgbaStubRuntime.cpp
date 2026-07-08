@@ -177,6 +177,11 @@ std::string statePath(const std::string& dir, const std::string& romPath, int sl
     return joinPath(dir, pathStem(romPath) + ".ss" + std::to_string(std::clamp(slot, 0, 9)));
 }
 
+std::string stateThumbPath(const std::string& dir, const std::string& romPath, int slot)
+{
+    return statePath(dir, romPath, slot) + ".png";
+}
+
 std::string configValuePayload(std::string value)
 {
     if (value.size() >= 2 && value[1] == '|')
@@ -452,11 +457,15 @@ loadStateSlots(const std::string& dir, const std::string& romPath)
     {
         auto& info = slots[slot];
         info.statePath = statePath(dir, romPath, slot);
+        info.thumbnailPath = stateThumbPath(dir, romPath, slot);
         info.stateFileAvailable = std::filesystem::exists(info.statePath);
-        info.exists = info.stateFileAvailable;
+        info.thumbnailAvailable = std::filesystem::exists(info.thumbnailPath);
+        info.exists = info.stateFileAvailable || info.thumbnailAvailable;
         info.loadable = info.stateFileAvailable;
         if (info.stateFileAvailable)
             info.modifiedTime = formatFileTime(info.statePath);
+        else if (info.thumbnailAvailable)
+            info.modifiedTime = formatFileTime(info.thumbnailPath);
     }
     return slots;
 }
@@ -2040,6 +2049,25 @@ bool writeScreenshot(const std::vector<uint32_t>& rgba,
                           static_cast<int>(width * sizeof(uint32_t))) != 0;
 }
 
+bool writePngImage(const std::vector<uint32_t>& rgba,
+                   unsigned width,
+                   unsigned height,
+                   const std::string& path)
+{
+    if (rgba.empty() || width == 0 || height == 0 || path.empty())
+        return false;
+    std::error_code ec;
+    std::filesystem::create_directories(std::filesystem::path(path).parent_path(), ec);
+    if (ec)
+        return false;
+    return stbi_write_png(path.c_str(),
+                          static_cast<int>(width),
+                          static_cast<int>(height),
+                          4,
+                          rgba.data(),
+                          static_cast<int>(width * sizeof(uint32_t))) != 0;
+}
+
 } // namespace
 
 namespace beiklive::mgba_stub {
@@ -2218,7 +2246,13 @@ int RunRuntime(const RunOptions& options)
         menuLayer.setStateSlots(stateSlots);
     };
     auto saveState = [&](int slot) {
-        const bool ok = core.saveState(statePath(states, options.romPath, slot));
+        const std::string path = statePath(states, options.romPath, slot);
+        const std::string thumbPath = stateThumbPath(states, options.romPath, slot);
+        std::error_code ec;
+        std::filesystem::remove(thumbPath, ec);
+        const bool ok = core.saveState(path);
+        if (ok && core.captureFrame())
+            writePngImage(core.rgbaBuffer(), core.width(), core.height(), thumbPath);
         refreshSlots();
         menuLayer.showToast(ok ? "保存状态完成" : "保存状态失败");
         return ok;
@@ -2409,6 +2443,7 @@ int RunRuntime(const RunOptions& options)
         {
             std::error_code ec;
             std::filesystem::remove(statePath(states, options.romPath, result.slot), ec);
+            std::filesystem::remove(stateThumbPath(states, options.romPath, result.slot), ec);
             refreshSlots();
             menuLayer.showToast("状态已删除");
             break;
