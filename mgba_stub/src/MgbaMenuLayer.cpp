@@ -901,7 +901,20 @@ float MgbaMenuLayer::targetContentScrollY() const
     {
     case Item::SaveState:
     case Item::LoadState:
-        return 0.0f;
+    {
+        const int count = contentControlCount(item);
+        const int columns = std::max(1, saveSlotColumns());
+        const int row = std::clamp(m_contentFocus, 0, std::max(0, count - 1)) / columns;
+        const int rows = (count + columns - 1) / columns;
+        constexpr float gridPadY = 7.0f;
+        const float stepY = saveCardHeight() + saveCardGapY();
+        const float contentH = gridPadY * 2.0f +
+                               static_cast<float>(rows) * saveCardHeight() +
+                               static_cast<float>(std::max(0, rows - 1)) * saveCardGapY();
+        return focusedScroll(gridPadY + static_cast<float>(row) * stepY,
+                             saveCardHeight(),
+                             contentH);
+    }
     case Item::Display:
     {
         const int row = std::clamp(m_contentFocus, 0, contentControlCount(Item::Display) - 1);

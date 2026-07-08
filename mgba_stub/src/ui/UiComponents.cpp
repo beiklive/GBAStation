@@ -24,7 +24,7 @@ constexpr UiMetrics kLaMgbacapeMetrics {
     404.0f, 110.0f, 500.0f,
     432.0f, 110.0f, 790.0f, 520.0f,
     64.0f, 444.0f,
-    378.0f, 78.0f, 18.0f, 10.0f,
+    378.0f, 90.0f, 18.0f, 10.0f,
     58.0f, 18.0f,
     2,
 };
@@ -1015,24 +1015,26 @@ void drawSaveSlotCard(int slot, Vector2f pos, bool focused, const MgbaStateSlotI
 {
     pos.Y += offsetY;
     const Vector2f size{kSaveCardW, kSaveCardH};
-    const Vector2f drawPos = focused ? pos - Vector2f{2.0f, 2.0f} : pos;
-    const Vector2f drawSize = focused ? size + Vector2f{4.0f, 4.0f} : size;
+    const Vector2f drawPos = pos;
+    const Vector2f drawSize = size;
+
+    drawRect(drawPos + Vector2f{3.0f, 4.0f}, drawSize, {0.0f, 0.0f, 0.0f, 0.16f}, true);
     if (focused)
-        drawGradientBorder(drawPos - Vector2f{3.0f, 3.0f}, drawSize + Vector2f{6.0f, 6.0f}, 3.0f);
+        drawGradientBorder(drawPos - Vector2f{2.0f, 2.0f}, drawSize + Vector2f{4.0f, 4.0f}, 3.0f);
 
-    drawRect(drawPos, drawSize, {1.0f, 1.0f, 1.0f, info.exists ? 0.045f : 0.026f}, true);
-    drawBorder(drawPos, drawSize, focused ? 2.0f : 1.0f,
-               focused ? Color{0.31f, 0.70f, 1.0f, 0.96f}
-                       : Color{1.0f, 1.0f, 1.0f, info.exists ? 0.10f : 0.06f});
+    drawBorder(drawPos, drawSize, 1.0f, {1.0f, 1.0f, 1.0f, info.exists ? 0.13f : 0.08f});
 
-    const float thumbH = drawSize.Y;
+    constexpr float innerPad = 8.0f;
+    const Vector2f innerPos = drawPos + Vector2f{innerPad, innerPad};
+    const Vector2f innerSize = drawSize - Vector2f{innerPad * 2.0f, innerPad * 2.0f};
+    const float thumbH = innerSize.Y;
     const float fallbackAspect = 240.0f / 160.0f;
     const float sourceAspect = (info.thumbnailWidth > 0 && info.thumbnailHeight > 0)
                                    ? static_cast<float>(info.thumbnailWidth) / static_cast<float>(info.thumbnailHeight)
                                    : fallbackAspect;
-    const float thumbW = std::clamp(thumbH * sourceAspect, 78.0f, drawSize.X * 0.48f);
+    const float thumbW = std::clamp(thumbH * sourceAspect, 78.0f, innerSize.X * 0.46f);
     const Vector2f thumbSize{thumbW, thumbH};
-    const Vector2f thumbPos = drawPos;
+    const Vector2f thumbPos = innerPos;
     drawRect(thumbPos, thumbSize, info.exists ? Color{0.12f, 0.17f, 0.22f, 0.96f}
                                               : Color{1.0f, 1.0f, 1.0f, 0.025f});
     if (info.exists && info.thumbnailTexture != 0 && info.thumbnailWidth > 0 && info.thumbnailHeight > 0)
@@ -1063,17 +1065,17 @@ void drawSaveSlotCard(int slot, Vector2f pos, bool focused, const MgbaStateSlotI
 
     char title[32];
     std::snprintf(title, sizeof(title), "槽位 %d", slot);
-    const float textX = thumbSize.X + 18.0f;
-    const float textW = std::max(80.0f, drawSize.X - textX - 14.0f);
+    const float textX = innerPad + thumbSize.X + 14.0f;
+    const float textW = std::max(80.0f, drawSize.X - textX - innerPad);
     if (info.exists)
     {
-        Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{textX, 16.0f}, 22.0f,
+        Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{textX, innerPad + 6.0f}, 22.0f,
                       {1.0f, 1.0f, 1.0f, 0.96f}, "%s", title);
         const char* stateText = !info.stateFileAvailable ? "残留截图" :
             (!info.loadable ? "无效状态" :
              (info.modifiedTime.empty() ? "已有状态" : info.modifiedTime.c_str()));
         const std::string timeText = ellipsizeText(stateText, textW, 17.0f);
-        Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{textX, 46.0f}, 17.0f,
+        Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{textX, innerPad + 36.0f}, 17.0f,
                       {1.0f, 1.0f, 1.0f, 0.55f}, "%s", timeText.c_str());
         if (info.thumbnailTexture == 0)
             Gfx::DrawText(Gfx::SystemFontStandard, thumbPos + thumbSize * 0.5f, 15.0f,
@@ -1085,7 +1087,7 @@ void drawSaveSlotCard(int slot, Vector2f pos, bool focused, const MgbaStateSlotI
         Gfx::DrawText(Gfx::SystemFontStandard, thumbPos + thumbSize * 0.5f, 15.0f,
                       {0.75f, 0.88f, 1.0f, 0.42f}, Gfx::align_Center, Gfx::align_Center,
                       "NO THUMB");
-        Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{textX, 16.0f}, 22.0f,
+        Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{textX, innerPad + 6.0f}, 22.0f,
                       {1.0f, 1.0f, 1.0f, 0.88f}, "%s", title);
     }
 }
@@ -1130,7 +1132,8 @@ void drawStateSlotPage(const char* title,
                        bool previewAttempted,
                        float offsetX,
                        float opacity,
-                       float offsetY)
+                       float offsetY,
+                       float scrollY)
 {
     (void)previewTexture;
     (void)previewWidth;
@@ -1143,13 +1146,15 @@ void drawStateSlotPage(const char* title,
     drawLine({base.X, base.Y + 50.0f}, {kContentW, 1.0f},
              {0.0f, 0.48f, 0.80f, 0.28f * opacity});
 
+    pushContentBodyScissor(offsetY);
     drawSaveSlotGrid(slots,
                      focusedSlot,
                      contentFocused,
                      offsetX,
-                     0.0f,
+                     scrollY,
                      opacity,
                      offsetY);
+    Gfx::PopScissor();
 }
 
 void drawInfoPage(const char* title, const char* body, float offsetX, float offsetY, float opacity)
@@ -1843,9 +1848,6 @@ void drawTabFrame(MgbaMenuLayer::Item item,
         item == MgbaMenuLayer::Item::Exit)
         return;
 
-    drawRect({kContentX - 22.0f, kContentY - 24.0f + offsetY}, {kContentW + 44.0f, kContentH + 34.0f},
-             {0.117f, 0.117f, 0.117f, kMenuAlpha150}, true);
-
     auto drawPage = [&](MgbaMenuLayer::Item page, float offsetX, float opacity) {
         switch (page)
         {
@@ -1860,7 +1862,8 @@ void drawTabFrame(MgbaMenuLayer::Item item,
                               statePreviewAttempted,
                               offsetX,
                               opacity,
-                              offsetY);
+                              offsetY,
+                              contentScrollY);
             break;
         case MgbaMenuLayer::Item::LoadState:
             drawStateSlotPage("读取状态",
@@ -1873,7 +1876,8 @@ void drawTabFrame(MgbaMenuLayer::Item item,
                               statePreviewAttempted,
                               offsetX,
                               opacity,
-                              offsetY);
+                              offsetY,
+                              contentScrollY);
             break;
         case MgbaMenuLayer::Item::Display:
             drawDisplayPage(display.linearFiltering,

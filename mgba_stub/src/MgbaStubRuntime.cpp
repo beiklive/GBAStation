@@ -453,11 +453,27 @@ std::array<beiklive::mgba_stub::MgbaStateSlotInfo, 10>
 loadStateSlots(const std::string& dir, const std::string& romPath)
 {
     std::array<beiklive::mgba_stub::MgbaStateSlotInfo, 10> slots {};
+    std::string legacyDir;
+    const std::filesystem::path dirPath(dir);
+    if (dirPath.filename() == "state")
+        legacyDir = dirPath.parent_path().string();
     for (int slot = 0; slot < static_cast<int>(slots.size()); ++slot)
     {
         auto& info = slots[slot];
         info.statePath = statePath(dir, romPath, slot);
         info.thumbnailPath = stateThumbPath(dir, romPath, slot);
+        if (!legacyDir.empty() && !std::filesystem::exists(info.statePath))
+        {
+            const std::string legacyState = statePath(legacyDir, romPath, slot);
+            if (std::filesystem::exists(legacyState))
+                info.statePath = legacyState;
+        }
+        if (!legacyDir.empty() && !std::filesystem::exists(info.thumbnailPath))
+        {
+            const std::string legacyThumb = stateThumbPath(legacyDir, romPath, slot);
+            if (std::filesystem::exists(legacyThumb))
+                info.thumbnailPath = legacyThumb;
+        }
         info.stateFileAvailable = std::filesystem::exists(info.statePath);
         info.thumbnailAvailable = std::filesystem::exists(info.thumbnailPath);
         info.exists = info.stateFileAvailable || info.thumbnailAvailable;
@@ -2246,8 +2262,21 @@ int RunRuntime(const RunOptions& options)
         menuLayer.setStateSlots(stateSlots);
     };
     auto saveState = [&](int slot) {
-        const std::string path = statePath(states, options.romPath, slot);
-        const std::string thumbPath = stateThumbPath(states, options.romPath, slot);
+        const std::string defaultPath = statePath(states, options.romPath, slot);
+        const std::string defaultThumbPath = stateThumbPath(states, options.romPath, slot);
+        std::string path = defaultPath;
+        std::string thumbPath = defaultThumbPath;
+        if (slot >= 0 && slot < static_cast<int>(stateSlots.size()))
+        {
+            const MgbaStateSlotInfo& slotInfo = stateSlots[slot];
+            if (slotInfo.stateFileAvailable && !slotInfo.statePath.empty())
+            {
+                path = slotInfo.statePath;
+                thumbPath = slotInfo.thumbnailAvailable && !slotInfo.thumbnailPath.empty()
+                                ? slotInfo.thumbnailPath
+                                : (path + ".png");
+            }
+        }
         std::error_code ec;
         std::filesystem::remove(thumbPath, ec);
         const bool ok = core.saveState(path);
@@ -2258,7 +2287,13 @@ int RunRuntime(const RunOptions& options)
         return ok;
     };
     auto loadState = [&](int slot) {
-        const bool ok = core.loadState(statePath(states, options.romPath, slot));
+        std::string path = statePath(states, options.romPath, slot);
+        if (slot >= 0 && slot < static_cast<int>(stateSlots.size()) &&
+            stateSlots[slot].stateFileAvailable && !stateSlots[slot].statePath.empty())
+        {
+            path = stateSlots[slot].statePath;
+        }
+        const bool ok = core.loadState(path);
         menuLayer.showToast(ok ? "读取状态完成" : "读取状态失败");
         return ok;
     };
@@ -2442,8 +2477,22 @@ int RunRuntime(const RunOptions& options)
         case MgbaMenuAction::DeleteState:
         {
             std::error_code ec;
-            std::filesystem::remove(statePath(states, options.romPath, result.slot), ec);
-            std::filesystem::remove(stateThumbPath(states, options.romPath, result.slot), ec);
+            const std::string defaultPath = statePath(states, options.romPath, result.slot);
+            const std::string defaultThumbPath = stateThumbPath(states, options.romPath, result.slot);
+            auto removeIfPresent = [&](const std::string& path) {
+                if (!path.empty())
+                    std::filesystem::remove(path, ec);
+            };
+            removeIfPresent(defaultPath);
+            removeIfPresent(defaultThumbPath);
+            if (result.slot >= 0 && result.slot < static_cast<int>(stateSlots.size()))
+            {
+                const MgbaStateSlotInfo& slotInfo = stateSlots[result.slot];
+                removeIfPresent(slotInfo.statePath);
+                removeIfPresent(slotInfo.thumbnailPath);
+                if (!slotInfo.statePath.empty())
+                    removeIfPresent(slotInfo.statePath + ".png");
+            }
             refreshSlots();
             menuLayer.showToast("状态已删除");
             break;

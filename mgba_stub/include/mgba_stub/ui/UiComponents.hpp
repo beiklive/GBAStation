@@ -117,7 +117,8 @@ void drawStateSlotPage(const char* title,
                        bool previewAttempted,
                        float offsetX,
                        float opacity,
-                       float offsetY = 0.0f);
+                       float offsetY = 0.0f,
+                       float scrollY = 0.0f);
 // 绘制通用信息页面：标题 + 分割线 + 描述文本（用于金手指/重置/退出/返回等页）
 void drawInfoPage(const char* title, const char* body, float offsetX, float offsetY, float opacity);
 // 绘制画面设置页面
