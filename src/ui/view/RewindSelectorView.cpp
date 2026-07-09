@@ -1,290 +1,470 @@
 #include "RewindSelectorView.hpp"
-#include "ui/utils/AnimationHelper.hpp"
-#include "core/GameSignal.hpp"
 
-#include <borealis.hpp>
+#include <algorithm>
+#include <cmath>
+#include <cstdio>
 
 namespace beiklive
 {
-    // =========================================================================
-    // 辅助函数：RGB565 → RGBA8888
-    // =========================================================================
-    static std::vector<uint8_t> rgb565ToRgba8888(
-        const std::vector<uint16_t>& src, unsigned w, unsigned h)
+    namespace
     {
-        std::vector<uint8_t> dst(w * h * 4, 255);
-        for (unsigned i = 0; i < w * h; ++i) {
-            uint16_t px = src[i];
-            uint8_t r = static_cast<uint8_t>(((px >> 11) & 0x1F) << 3);
-            uint8_t g = static_cast<uint8_t>(((px >>  5) & 0x3F) << 2);
-            uint8_t b = static_cast<uint8_t>(( px        & 0x1F) << 3);
-            dst[i * 4 + 0] = r;
-            dst[i * 4 + 1] = g;
-            dst[i * 4 + 2] = b;
-            dst[i * 4 + 3] = 255;
-        }
-        return dst;
-    }
+        constexpr float kPanelH = 240.0f;
+        constexpr float kInfoH = 30.0f;
+        constexpr float kItemAreaH = 180.0f;
+        constexpr float kViewportPad = 32.0f;
+        constexpr float kGap = 14.0f;
+        constexpr float kItemW = 202.0f;
+        constexpr float kItemH = 164.0f;
+        constexpr float kThumbH = 124.0f;
+        constexpr float kHoldInitialDelay = 0.26f;
+        constexpr float kHoldMinInterval = 0.048f;
+        constexpr float kHoldStartInterval = 0.128f;
 
-    // =========================================================================
-    // RewindThumbItem 实现
-    // =========================================================================
+        std::vector<std::uint8_t> rgb565ToRgba8888(const std::vector<std::uint16_t>& src,
+                                                   unsigned width,
+                                                   unsigned height)
+        {
+            if (width == 0 || height == 0 ||
+                src.size() < static_cast<std::size_t>(width) * height)
+                return {};
 
-    RewindThumbItem::RewindThumbItem(int frameIndex, int secondsAgo, const std::vector<uint16_t>& thumb)
-        : m_frameIndex(frameIndex), m_secondsAgo(secondsAgo)
-    {
-        setAxis(brls::Axis::COLUMN);
-        setAlignItems(brls::AlignItems::CENTER);
-        setJustifyContent(brls::JustifyContent::FLEX_START);
-        setWidth(ITEM_W);
-        setHeight(ITEM_H);
-        setFocusable(true);
-        setMargins(4.f, 4.f, 4.f, 4.f);
-        setBorderColor(nvgRGBA(100, 100, 100, 150));
-        setBorderThickness(1.f);
-        setCornerRadius(4.f);
-        setHideHighlightBackground(true);
-        setShadowVisibility(true);
-        setShadowType(brls::ShadowType::GENERIC);
-
-        // 预先将 RGB565 转换为 RGBA8888，首次 draw 时再创建 NVG 图像
-        if (!thumb.empty()) {
-            m_rgbaData = rgb565ToRgba8888(
-                thumb, RewindFrame::THUMB_W, RewindFrame::THUMB_H);
-        }
-
-        // 时间标签（底部居中）：显示距当前多少秒
-        m_indexLabel = new brls::Label();
-        char frameIndexText[16];
-        std::snprintf(frameIndexText, sizeof(frameIndexText), "-%d秒", m_secondsAgo);
-        m_indexLabel->setText(frameIndexText);
-        m_indexLabel->setFontSize(12.f);
-        m_indexLabel->setTextColor(nvgRGBA(200, 200, 200, 230));
-        m_indexLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
-        m_indexLabel->setFocusable(false);
-        m_indexLabel->setMarginTop(4.f);
-        this->addView(m_indexLabel);
-
-        // 无缩略图占位标签（仅在没有图像数据时显示）
-        if (thumb.empty()) {
-            m_noThumbLabel = new brls::Label();
-            m_noThumbLabel->setText("暂无画面");
-            m_noThumbLabel->setFontSize(12.f);
-            m_noThumbLabel->setTextColor(nvgRGBA(160, 160, 160, 200));
-            m_noThumbLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
-            m_noThumbLabel->setFocusable(false);
-            m_noThumbLabel->setGrow(1.f);
-            this->addView(m_noThumbLabel);
-        }
-
-        // A 键确认：触发回调
-        registerAction("确认", brls::BUTTON_A, [this](brls::View*) -> bool {
-            if (onItemClicked)
-                onItemClicked(m_frameIndex);
-            return true;
-        }, false, false, brls::SOUND_CLICK);
-    }
-
-    RewindThumbItem::~RewindThumbItem()
-    {
-        // NVG 图像需通过 nvgDeleteImage(vg, handle) 释放，但析构时 NVG 上下文可能已失效
-        // borealis 的 NVG 后端在上下文重置时会统一回收所有已注册的图像资源
-    }
-
-    void RewindThumbItem::_createNvgImage(NVGcontext* vg)
-    {
-        if (m_imgCreated || m_rgbaData.empty()) {
-            m_imgCreated = true;
-            return;
-        }
-        m_nvgImage = nvgCreateImageRGBA(
-            vg,
-            static_cast<int>(RewindFrame::THUMB_W),
-            static_cast<int>(RewindFrame::THUMB_H),
-            NVG_IMAGE_NEAREST,
-            m_rgbaData.data());
-        m_imgCreated = true;
-        // 释放本地 RGBA 副本，节省内存
-        m_rgbaData.clear();
-        m_rgbaData.shrink_to_fit();
-    }
-
-    void RewindThumbItem::draw(NVGcontext* vg, float x, float y, float w, float h,
-                               brls::Style style, brls::FrameContext* ctx)
-    {
-        // 延迟创建 NVG 图像（首次 draw 时 NVG 上下文已就绪）
-        if (!m_imgCreated)
-            _createNvgImage(vg);
-
-        Box::draw(vg, x, y, w, h, style, ctx);
-
-        if (m_nvgImage != 0) {
-            // 在卡片内显示缩略图（顶部留出标签高度，保持 GBA 宽高比 240:160 = 3:2）
-            constexpr float labelH = 20.f;
-            float imgW = w - 8.f;
-            float imgH = imgW * static_cast<float>(RewindFrame::THUMB_H)
-                              / static_cast<float>(RewindFrame::THUMB_W);
-            float availH = h - labelH - 8.f;
-            if (imgH > availH) {
-                imgH = availH;
-                imgW = imgH * static_cast<float>(RewindFrame::THUMB_W)
-                            / static_cast<float>(RewindFrame::THUMB_H);
+            std::vector<std::uint8_t> dst(static_cast<std::size_t>(width) * height * 4, 255);
+            for (std::size_t i = 0; i < static_cast<std::size_t>(width) * height; ++i)
+            {
+                const std::uint16_t px = src[i];
+                const std::uint8_t r5 = static_cast<std::uint8_t>((px >> 11) & 0x1F);
+                const std::uint8_t g6 = static_cast<std::uint8_t>((px >> 5) & 0x3F);
+                const std::uint8_t b5 = static_cast<std::uint8_t>(px & 0x1F);
+                dst[i * 4 + 0] = static_cast<std::uint8_t>((r5 << 3) | (r5 >> 2));
+                dst[i * 4 + 1] = static_cast<std::uint8_t>((g6 << 2) | (g6 >> 4));
+                dst[i * 4 + 2] = static_cast<std::uint8_t>((b5 << 3) | (b5 >> 2));
+                dst[i * 4 + 3] = 255;
             }
-            float imgX = x + (w - imgW) * 0.5f;
-            float imgY = y + labelH + (availH - imgH) * 0.5f;
+            return dst;
+        }
 
-            NVGpaint paint = nvgImagePattern(vg, imgX, imgY, imgW, imgH, 0.f, m_nvgImage, 1.f);
-            nvgBeginPath(vg);
-            nvgRoundedRect(vg, imgX, imgY, imgW, imgH, 2.f);
-            nvgFillPaint(vg, paint);
-            nvgFill(vg);
+        float alphaScale(float channel, float alpha)
+        {
+            return std::clamp(channel * alpha, 0.0f, 255.0f);
+        }
+
+        NVGcolor rgba(int r, int g, int b, int a, float alpha = 1.0f)
+        {
+            return nvgRGBA(static_cast<unsigned char>(r),
+                           static_cast<unsigned char>(g),
+                           static_cast<unsigned char>(b),
+                           static_cast<unsigned char>(alphaScale(static_cast<float>(a), alpha)));
         }
     }
-
-    void RewindThumbItem::onFocusGained()
-    {
-        Box::onFocusGained();
-        // 获得焦点时高亮边框为紫色（GBA 风格）
-        setBorderColor(nvgRGBA(120, 80, 200, 255));
-        setBorderThickness(2.5f);
-    }
-
-    void RewindThumbItem::onFocusLost()
-    {
-        Box::onFocusLost();
-        setBorderColor(nvgRGBA(100, 100, 100, 150));
-        setBorderThickness(1.f);
-    }
-
-    // =========================================================================
-    // RewindSelectorView 实现
-    // =========================================================================
 
     RewindSelectorView::RewindSelectorView()
     {
-        _initLayout();
-    }
+        setFocusable(true);
+        setHideHighlightBackground(true);
+        setHideHighlightBorder(true);
+        setHideClickAnimation(true);
+        setBackground(brls::ViewBackground::NONE);
+        setClipsToBounds(false);
+        setFocusSound(brls::SOUND_NONE);
+        setCustomNavigationRoute(brls::FocusDirection::UP, this);
+        setCustomNavigationRoute(brls::FocusDirection::DOWN, this);
+        setCustomNavigationRoute(brls::FocusDirection::LEFT, this);
+        setCustomNavigationRoute(brls::FocusDirection::RIGHT, this);
 
-    void RewindSelectorView::_initLayout()
-    {
-        setAxis(brls::Axis::COLUMN);
-        setAlignItems(brls::AlignItems::CENTER);
-        setJustifyContent(brls::JustifyContent::FLEX_END);
-        // 不让容器自身接受焦点，由 getDefaultFocus() 将焦点导向具体卡片
-        setFocusable(false);
+        m_font = brls::Application::getDefaultFont();
+        m_lastFrameTime = std::chrono::steady_clock::now();
 
-        // ── 半透明底部面板 ──────────────────────────────────────────────────
-        m_panel = new brls::Box(brls::Axis::COLUMN);
-        m_panel->setWidthPercentage(100.f);
-        // 高度为屏幕高度的四分之一
-        m_panel->setHeightPercentage(25.f);
-        m_panel->setAlignItems(brls::AlignItems::CENTER);
-        m_panel->setJustifyContent(brls::JustifyContent::FLEX_START);
-        m_panel->setPadding(10.f, 16.f, 10.f, 16.f);
-        m_panel->setFocusable(false);
-        m_panel->setBackgroundColor(nvgRGBA(20, 20, 30, 210));
-        m_panel->setCornerRadius(12.f);
-        m_panel->setShadowVisibility(true);
+        registerAction("读取", brls::BUTTON_A, [this](brls::View*) -> bool {
+            _selectCurrent();
+            return true;
+        }, false, false, brls::SOUND_CLICK);
 
-        // ── 标题行 ──────────────────────────────────────────────────────────
-        m_titleRow = new brls::Box(brls::Axis::ROW);
-        m_titleRow->setWidthPercentage(100.f);
-        m_titleRow->setHeight(28.f);
-        m_titleRow->setAlignItems(brls::AlignItems::CENTER);
-        m_titleRow->setJustifyContent(brls::JustifyContent::SPACE_BETWEEN);
-        m_titleRow->setFocusable(false);
-        m_titleRow->setMarginBottom(6.f);
-
-        m_titleLabel = new brls::Label();
-        m_titleLabel->setText("可视化倒带");
-        m_titleLabel->setFontSize(16.f);
-        m_titleLabel->setTextColor(nvgRGBA(220, 220, 255, 255));
-
-        m_hintLabel = new brls::Label();
-        m_hintLabel->setText("← → 选择  A 确认  B 取消");
-        m_hintLabel->setFontSize(12.f);
-        m_hintLabel->setTextColor(nvgRGBA(160, 160, 180, 220));
-
-        m_titleRow->addView(m_titleLabel);
-        m_titleRow->addView(m_hintLabel);
-        m_panel->addView(m_titleRow);
-
-        // ── 横向滚动帧 ──────────────────────────────────────────────────────
-        m_scrollFrame = new brls::HScrollingFrame();
-        m_scrollFrame->setWidthPercentage(100.f);
-        m_scrollFrame->setGrow(1.f);
-        // CENTERED 模式使 getDefaultFocus() 不依赖 frame 坐标，避免布局未完成时焦点失败
-        m_scrollFrame->setScrollingBehavior(brls::ScrollingBehavior::CENTERED);
-        m_scrollFrame->setScrollingIndicatorVisible(false);
-        m_scrollFrame->setFocusable(false);
-
-        // 卡片容器（ROW 方向，在 HScrollingFrame 内横向排列）
-        m_itemBox = new brls::Box(brls::Axis::ROW);
-        m_itemBox->setAlignItems(brls::AlignItems::CENTER);
-        m_itemBox->setJustifyContent(brls::JustifyContent::FLEX_START);
-        m_itemBox->setPadding(4.f, 8.f, 4.f, 8.f);
-        m_itemBox->setFocusable(false);
-
-        m_scrollFrame->setContentView(m_itemBox);
-        m_panel->addView(m_scrollFrame);
-
-        this->addView(m_panel);
-
-        // B 键注册在父容器上，供焦点在卡片上时也能触发（通过动作冒泡）
-        this->registerAction("取消", brls::BUTTON_B, [this](brls::View*) -> bool {
-            if (m_onClose)
-                m_onClose();
+        registerAction("返回", brls::BUTTON_B, [this](brls::View*) -> bool {
+            _close();
             return true;
         }, false, false, brls::SOUND_BACK);
+
+        auto consumeNavigation = [](brls::View*) -> bool { return true; };
+        registerAction("", brls::BUTTON_NAV_UP, consumeNavigation, true, true, brls::SOUND_NONE);
+        registerAction("", brls::BUTTON_NAV_DOWN, consumeNavigation, true, true, brls::SOUND_NONE);
+        registerAction("", brls::BUTTON_NAV_LEFT, consumeNavigation, true, true, brls::SOUND_NONE);
+        registerAction("", brls::BUTTON_NAV_RIGHT, consumeNavigation, true, true, brls::SOUND_NONE);
+        registerAction("", brls::BUTTON_UP, consumeNavigation, true, true, brls::SOUND_NONE);
+        registerAction("", brls::BUTTON_DOWN, consumeNavigation, true, true, brls::SOUND_NONE);
+        registerAction("", brls::BUTTON_LEFT, consumeNavigation, true, true, brls::SOUND_NONE);
+        registerAction("", brls::BUTTON_RIGHT, consumeNavigation, true, true, brls::SOUND_NONE);
+    }
+
+    RewindSelectorView::~RewindSelectorView()
+    {
+        _clearItems(brls::Application::getNVGContext());
     }
 
     brls::View* RewindSelectorView::getDefaultFocus()
     {
-        // 焦点落在最右边的卡片（最新帧），即列表的最后一项
-        if (!m_items.empty())
-            return m_items.back();
-        return nullptr;
+        return this;
     }
 
-    void RewindSelectorView::_clearItems()
+    brls::View* RewindSelectorView::getNextFocus(brls::FocusDirection direction, brls::View* currentView)
     {
-        for (auto* item : m_items)
-            m_itemBox->removeView(item, true);
+        (void)direction;
+        (void)currentView;
+        return this;
+    }
+
+    void RewindSelectorView::_clearItems(NVGcontext* vg)
+    {
+        if (vg)
+        {
+            for (auto& item : m_items)
+            {
+                if (item.nvgImage > 0)
+                    nvgDeleteImage(vg, item.nvgImage);
+                item.nvgImage = 0;
+            }
+        }
         m_items.clear();
+        m_selected = 0;
     }
 
-    void RewindSelectorView::openWithFrames(
-        std::vector<RewindThumbSnapshot> frames)
+    void RewindSelectorView::openWithFrames(std::vector<RewindThumbSnapshot> frames)
     {
-        _clearItems();
+        _clearItems(brls::Application::getNVGContext());
 
-        if (frames.empty()) {
+        if (frames.empty())
+        {
             brls::Application::notify("暂无倒带记录");
-            if (m_onClose) m_onClose();
+            if (m_onClose)
+                m_onClose();
             return;
         }
 
-        // frames 已按时间顺序排列（最旧帧在前，最新帧在后），逐一创建缩略图卡片
-        for (auto& snap : frames) {
-            auto* item = new RewindThumbItem(snap.bufferIdx, snap.secondsAgo, snap.thumb);
-            item->onItemClicked = [this](int frameIndex) {
-                if (m_onFrameSelected)
-                    m_onFrameSelected(frameIndex);
-            };
-            // 禁用 UP/DOWN 导航，保证焦点只在横向卡片列表内移动
-            item->setCustomNavigationRoute(brls::FocusDirection::UP,   item);
-            item->setCustomNavigationRoute(brls::FocusDirection::DOWN, item);
-            m_itemBox->addView(item);
-            m_items.push_back(item);
+        m_items.reserve(frames.size());
+        for (const auto& snap : frames)
+        {
+            ThumbItem item;
+            item.frameIndex = snap.bufferIdx;
+            item.secondsAgo = snap.secondsAgo;
+            item.width = snap.thumbW;
+            item.height = snap.thumbH;
+            item.rgba = rgb565ToRgba8888(snap.thumb, item.width, item.height);
+            item.imageCreated = item.rgba.empty();
+            m_items.push_back(std::move(item));
         }
 
-        // 焦点由 getDefaultFocus() 统一管理，返回最右侧卡片（最新帧）
+        m_selected = static_cast<int>(m_items.size()) - 1;
+        _captureInputState();
+        _notifyFrameFocused();
+        invalidate();
+    }
+
+    void RewindSelectorView::_captureInputState()
+    {
+        const auto& state = brls::Application::getControllerState();
+        m_prevLeft = state.buttons[brls::BUTTON_LEFT] || state.buttons[brls::BUTTON_NAV_LEFT];
+        m_prevRight = state.buttons[brls::BUTTON_RIGHT] || state.buttons[brls::BUTTON_NAV_RIGHT];
+        m_holdLeftTime = 0.0f;
+        m_holdRightTime = 0.0f;
+        m_holdLeftRepeat = 0.0f;
+        m_holdRightRepeat = 0.0f;
+        m_lastFrameTime = std::chrono::steady_clock::now();
+    }
+
+    void RewindSelectorView::_moveSelection(int delta)
+    {
+        if (m_items.empty() || delta == 0)
+            return;
+
+        const int previous = m_selected;
+        m_selected = std::clamp(m_selected + delta, 0, static_cast<int>(m_items.size()) - 1);
+        if (m_selected != previous)
+        {
+            _notifyFrameFocused();
+            if (auto* player = brls::Application::getAudioPlayer())
+                player->play(brls::SOUND_FOCUS_CHANGE);
+            invalidate();
+        }
+        else if (auto* player = brls::Application::getAudioPlayer())
+        {
+            player->play(brls::SOUND_FOCUS_ERROR);
+        }
+    }
+
+    void RewindSelectorView::_notifyFrameFocused()
+    {
+        if (m_items.empty() || !m_onFrameFocused)
+            return;
+
+        m_selected = std::clamp(m_selected, 0, static_cast<int>(m_items.size()) - 1);
+        m_onFrameFocused(m_items[static_cast<std::size_t>(m_selected)].frameIndex);
+    }
+
+    void RewindSelectorView::_selectCurrent()
+    {
+        if (m_items.empty())
+        {
+            _close();
+            return;
+        }
+        m_selected = std::clamp(m_selected, 0, static_cast<int>(m_items.size()) - 1);
+        if (m_onFrameSelected)
+            m_onFrameSelected(m_items[static_cast<std::size_t>(m_selected)].frameIndex);
+    }
+
+    void RewindSelectorView::_close()
+    {
+        if (m_onClose)
+            m_onClose();
+    }
+
+    void RewindSelectorView::frame(brls::FrameContext* ctx)
+    {
+        brls::Box::frame(ctx);
+
+        if (!isFocused() || m_items.empty() || isHidden())
+            return;
+
+        const auto now = std::chrono::steady_clock::now();
+        float dt = std::chrono::duration<float>(now - m_lastFrameTime).count();
+        m_lastFrameTime = now;
+        if (dt <= 0.0f || dt > 0.5f)
+            dt = 0.016f;
+
+        const auto& state = brls::Application::getControllerState();
+        const bool leftNow = state.buttons[brls::BUTTON_LEFT] || state.buttons[brls::BUTTON_NAV_LEFT];
+        const bool rightNow = state.buttons[brls::BUTTON_RIGHT] || state.buttons[brls::BUTTON_NAV_RIGHT];
+
+        auto processHold = [&](bool nowDown, bool& previous, float& holdTime, float& repeatTime, int delta) {
+            if (nowDown && !previous)
+            {
+                holdTime = 0.0f;
+                repeatTime = 0.0f;
+                _moveSelection(delta);
+            }
+
+            if (nowDown)
+            {
+                holdTime += dt;
+                if (holdTime > kHoldInitialDelay)
+                {
+                    repeatTime += dt;
+                    const float interval = std::max(kHoldMinInterval,
+                                                    kHoldStartInterval - (holdTime - kHoldInitialDelay) * 0.12f);
+                    while (repeatTime >= interval)
+                    {
+                        repeatTime -= interval;
+                        _moveSelection(delta);
+                    }
+                }
+            }
+            else
+            {
+                holdTime = 0.0f;
+                repeatTime = 0.0f;
+            }
+            previous = nowDown;
+        };
+
+        if (leftNow && rightNow)
+        {
+            m_prevLeft = true;
+            m_prevRight = true;
+            m_holdLeftTime = m_holdRightTime = 0.0f;
+            m_holdLeftRepeat = m_holdRightRepeat = 0.0f;
+            return;
+        }
+
+        processHold(leftNow, m_prevLeft, m_holdLeftTime, m_holdLeftRepeat, -1);
+        processHold(rightNow, m_prevRight, m_holdRightTime, m_holdRightRepeat, 1);
+    }
+
+    void RewindSelectorView::_createImage(NVGcontext* vg, ThumbItem& item)
+    {
+        if (item.imageCreated)
+            return;
+
+        if (!item.rgba.empty())
+        {
+            item.nvgImage = nvgCreateImageRGBA(vg,
+                                               static_cast<int>(item.width),
+                                               static_cast<int>(item.height),
+                                               NVG_IMAGE_NEAREST,
+                                               item.rgba.data());
+            item.rgba.clear();
+            item.rgba.shrink_to_fit();
+        }
+        item.imageCreated = true;
+    }
+
+    void RewindSelectorView::_drawText(NVGcontext* vg, float x, float y, float size,
+                                       NVGcolor color, int align, const char* text) const
+    {
+        nvgFontFaceId(vg, m_font);
+        nvgFontSize(vg, size);
+        nvgTextAlign(vg, align);
+        nvgFillColor(vg, color);
+        nvgText(vg, x, y, text, nullptr);
+    }
+
+    void RewindSelectorView::_drawFocusBorder(NVGcontext* vg, float x, float y,
+                                              float w, float h, float alpha) const
+    {
+        const float border = 3.0f;
+        const float radius = 8.0f;
+        NVGpaint paint = nvgLinearGradient(vg, x, y, x + w, y + h,
+                                           rgba(96, 206, 255, 245, alpha),
+                                           rgba(176, 116, 255, 235, alpha));
+
+        nvgSave(vg);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, x - border, y - border, w + border * 2.0f, h + border * 2.0f, radius + border);
+        nvgRoundedRect(vg, x, y, w, h, radius);
+        nvgPathWinding(vg, NVG_HOLE);
+        nvgFillPaint(vg, paint);
+        nvgFill(vg);
+        nvgRestore(vg);
     }
 
     void RewindSelectorView::draw(NVGcontext* vg, float x, float y, float w, float h,
                                   brls::Style style, brls::FrameContext* ctx)
     {
-        Box::draw(vg, x, y, w, h, style, ctx);
+        (void)style;
+        (void)ctx;
+
+        if (m_font < 0)
+            m_font = brls::Application::getDefaultFont();
+
+        const float panelH = std::min(kPanelH, std::max(210.0f, h * 0.34f));
+        const float panelY = y + h - panelH;
+        const float panelW = w;
+        const float alpha = 1.0f;
+
+        nvgSave(vg);
+
+        nvgBeginPath(vg);
+        nvgRect(vg, x, panelY, panelW, panelH);
+        nvgFillColor(vg, rgba(5, 7, 11, 230, alpha));
+        nvgFill(vg);
+
+        nvgBeginPath(vg);
+        nvgRect(vg, x, panelY, panelW, 1.5f);
+        nvgFillColor(vg, rgba(87, 184, 255, 140, alpha));
+        nvgFill(vg);
+
+        _drawText(vg, x + 32.0f, panelY + 20.0f, 18.0f,
+                  rgba(219, 237, 255, 235, alpha), NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE, "倒带");
+        _drawText(vg, x + panelW - 324.0f, panelY + 21.0f, 15.0f,
+                  rgba(184, 209, 235, 210, alpha), NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE, "← → 选择");
+        _drawText(vg, x + panelW - 194.0f, panelY + 21.0f, 15.0f,
+                  rgba(184, 209, 235, 210, alpha), NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE, "A 读取");
+        _drawText(vg, x + panelW - 96.0f, panelY + 21.0f, 15.0f,
+                  rgba(184, 209, 235, 210, alpha), NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE, "B 返回");
+
+        if (m_items.empty())
+        {
+            _drawText(vg, x + panelW * 0.5f, panelY + panelH * 0.58f, 24.0f,
+                      rgba(204, 224, 245, 158, alpha), NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE, "暂无倒带缓存");
+            nvgRestore(vg);
+            return;
+        }
+
+        const int count = static_cast<int>(m_items.size());
+        m_selected = std::clamp(m_selected, 0, count - 1);
+
+        const float viewportX = x + kViewportPad;
+        const float viewportW = std::max(1.0f, panelW - kViewportPad * 2.0f);
+        const float totalW = kItemW * static_cast<float>(count) + kGap * static_cast<float>(std::max(0, count - 1));
+        const float selectedCenter = static_cast<float>(m_selected) * (kItemW + kGap) + kItemW * 0.5f;
+        const float scrollX = std::clamp(selectedCenter - viewportW * 0.5f,
+                                         0.0f,
+                                         std::max(0.0f, totalW - viewportW));
+        const float startX = viewportX - scrollX;
+        const float itemAreaY = panelY + kInfoH;
+        const float itemY = itemAreaY + 8.0f;
+
+        nvgSave(vg);
+        nvgIntersectScissor(vg, viewportX - 8.0f, itemAreaY, viewportW + 16.0f, kItemAreaH);
+
+        for (int i = 0; i < count; ++i)
+        {
+            ThumbItem& item = m_items[static_cast<std::size_t>(i)];
+            _createImage(vg, item);
+
+            const float itemX = startX + static_cast<float>(i) * (kItemW + kGap);
+            if (itemX > viewportX + viewportW || itemX + kItemW < viewportX)
+                continue;
+
+            const bool focused = (i == m_selected);
+            nvgBeginPath(vg);
+            nvgRoundedRect(vg, itemX, itemY, kItemW, kItemH, 7.0f);
+            nvgFillColor(vg, focused ? rgba(31, 54, 79, 235, alpha) : rgba(20, 25, 36, 200, alpha));
+            nvgFill(vg);
+
+            if (focused)
+                _drawFocusBorder(vg, itemX, itemY, kItemW, kItemH, alpha);
+            else
+            {
+                nvgBeginPath(vg);
+                nvgRoundedRect(vg, itemX + 0.5f, itemY + 0.5f, kItemW - 1.0f, kItemH - 1.0f, 7.0f);
+                nvgStrokeWidth(vg, 1.0f);
+                nvgStrokeColor(vg, rgba(89, 109, 132, 72, alpha));
+                nvgStroke(vg);
+            }
+
+            constexpr float innerPad = 8.0f;
+            const float aspect = item.height > 0
+                ? static_cast<float>(item.width) / static_cast<float>(item.height)
+                : static_cast<float>(RewindFrame::DEFAULT_THUMB_W) /
+                      static_cast<float>(RewindFrame::DEFAULT_THUMB_H);
+            const float thumbW = std::min(kItemW - innerPad * 2.0f,
+                                          kThumbH * aspect);
+            const float thumbX = itemX + (kItemW - thumbW) * 0.5f;
+            const float thumbY = itemY + innerPad;
+
+            if (item.nvgImage > 0)
+            {
+                NVGpaint img = nvgImagePattern(vg, thumbX, thumbY, thumbW, kThumbH,
+                                               0.0f, item.nvgImage, focused ? 1.0f : 0.92f);
+                nvgBeginPath(vg);
+                nvgRoundedRect(vg, thumbX, thumbY, thumbW, kThumbH, 3.0f);
+                nvgFillPaint(vg, img);
+                nvgFill(vg);
+            }
+            else
+            {
+                nvgBeginPath(vg);
+                nvgRoundedRect(vg, thumbX, thumbY, thumbW, kThumbH, 3.0f);
+                nvgFillColor(vg, rgba(12, 16, 24, 210, alpha));
+                nvgFill(vg);
+                _drawText(vg, thumbX + thumbW * 0.5f, thumbY + kThumbH * 0.5f, 14.0f,
+                          rgba(166, 199, 235, 128, alpha), NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE, "NO THUMB");
+            }
+
+            char timeText[32] = {};
+            std::snprintf(timeText, sizeof(timeText), "-%d秒", std::max(1, item.secondsAgo));
+            _drawText(vg, itemX + kItemW * 0.5f, itemY + 146.0f, 16.0f,
+                      rgba(209, 230, 255, focused ? 230 : 190, alpha),
+                      NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE, timeText);
+        }
+
+        nvgRestore(vg);
+
+        const float progressW = std::min(360.0f, panelW - 64.0f);
+        const float progressX = x + (panelW - progressW) * 0.5f;
+        const float progressY = panelY + kInfoH + kItemAreaH + 9.0f;
+        const float ratio = count > 1 ? static_cast<float>(m_selected) / static_cast<float>(count - 1) : 1.0f;
+
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, progressX, progressY, progressW, 4.0f, 2.0f);
+        nvgFillColor(vg, rgba(74, 91, 111, 120, alpha));
+        nvgFill(vg);
+
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, progressX, progressY, std::max(4.0f, progressW * ratio), 4.0f, 2.0f);
+        nvgFillColor(vg, rgba(87, 184, 255, 190, alpha));
+        nvgFill(vg);
+
+        nvgRestore(vg);
     }
 
 } // namespace beiklive

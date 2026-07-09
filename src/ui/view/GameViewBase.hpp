@@ -16,15 +16,21 @@ namespace beiklive
     struct RewindFrame {
         std::vector<uint8_t> state;
         std::vector<uint16_t> thumb;
+        unsigned thumbW = 0;
+        unsigned thumbH = 0;
 
-        static constexpr unsigned THUMB_W = 120;
-        static constexpr unsigned THUMB_H = 80;
+        static constexpr unsigned DEFAULT_THUMB_W = 240;
+        static constexpr unsigned DEFAULT_THUMB_H = 160;
+        static constexpr unsigned MAX_THUMB_W = 320;
+        static constexpr unsigned MAX_THUMB_H = 240;
     };
 
     struct RewindThumbSnapshot {
         int bufferIdx = 0;
         int secondsAgo = 0;
         std::vector<uint16_t> thumb;
+        unsigned thumbW = 0;
+        unsigned thumbH = 0;
     };
 
     class GameViewBase : public brls::Box
@@ -40,6 +46,7 @@ namespace beiklive
         virtual std::string getStateThumbPath(int slot) const = 0;
         virtual bool stateExists(int slot) const = 0;
         virtual std::vector<RewindThumbSnapshot> snapshotRewindThumbs() const = 0;
+        virtual void requestPreviewRewindFrame(int frameIndex) = 0;
         virtual void requestRestoreRewindFrame(int frameIndex) = 0;
 
         virtual void requestCheatPathUpdate(const std::string& path) = 0;

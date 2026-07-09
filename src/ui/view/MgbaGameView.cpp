@@ -15,6 +15,7 @@
 #include <fstream>
 #include <cmath>
 #include <mutex>
+#include <utility>
 
 // stb_image_write 用于保存存档缩略图（PNG 格式）
 #include "third_party/borealis/library/lib/extern/glfw/deps/stb_image_write.h"
@@ -73,6 +74,46 @@ namespace
     bool shouldSetupCoreOnGameThread(int platform)
     {
         return isNdsPlatform(platform) || isMgbaNativePlatform(platform);
+    }
+
+    std::pair<unsigned, unsigned> rewindThumbSizeForFrame(unsigned srcW, unsigned srcH)
+    {
+        if (srcW == 0 || srcH == 0)
+            return {beiklive::RewindFrame::DEFAULT_THUMB_W, beiklive::RewindFrame::DEFAULT_THUMB_H};
+
+        const double scale = std::min(1.0,
+            std::min(static_cast<double>(beiklive::RewindFrame::MAX_THUMB_W) / srcW,
+                     static_cast<double>(beiklive::RewindFrame::MAX_THUMB_H) / srcH));
+        return {std::max(1u, static_cast<unsigned>(std::lround(srcW * scale))),
+                std::max(1u, static_cast<unsigned>(std::lround(srcH * scale)))};
+    }
+
+    beiklive::LibretroLoader::VideoFrame rewindThumbToPreviewFrame(const std::vector<uint16_t>& thumb,
+                                                                   unsigned width,
+                                                                   unsigned height)
+    {
+        beiklive::LibretroLoader::VideoFrame frame;
+        if (width == 0 || height == 0 ||
+            thumb.size() < static_cast<std::size_t>(width) * height)
+            return frame;
+
+        frame.width = width;
+        frame.height = height;
+        frame.pixels.resize(static_cast<std::size_t>(frame.width) * frame.height);
+
+        for (std::size_t i = 0; i < frame.pixels.size(); ++i)
+        {
+            const uint16_t px = thumb[i];
+            const uint8_t r5 = static_cast<uint8_t>((px >> 11) & 0x1F);
+            const uint8_t g6 = static_cast<uint8_t>((px >> 5) & 0x3F);
+            const uint8_t b5 = static_cast<uint8_t>(px & 0x1F);
+            const uint32_t r = static_cast<uint32_t>((r5 << 3) | (r5 >> 2));
+            const uint32_t g = static_cast<uint32_t>((g6 << 2) | (g6 >> 4));
+            const uint32_t b = static_cast<uint32_t>((b5 << 3) | (b5 >> 2));
+            frame.pixels[i] = r | (g << 8) | (b << 16) | (0xFFu << 24);
+        }
+
+        return frame;
     }
 
     beiklive::IEmulatorAudioOutput* coreAudioOutput(beiklive::IEmulatorCore* core)
@@ -2069,9 +2110,12 @@ namespace beiklive
         if (m_rewindShowUI) {
             auto videoFrame = m_core->GetVideoFrame();
             if (!videoFrame.pixels.empty() && videoFrame.width > 0 && videoFrame.height > 0) {
+                const auto [thumbW, thumbH] = rewindThumbSizeForFrame(videoFrame.width, videoFrame.height);
+                frame.thumbW = thumbW;
+                frame.thumbH = thumbH;
                 frame.thumb = _downsampleToRGB565(
                     videoFrame.pixels, videoFrame.width, videoFrame.height,
-                    RewindFrame::THUMB_W, RewindFrame::THUMB_H);
+                    thumbW, thumbH);
             }
         }
 
@@ -3131,6 +3175,8 @@ namespace beiklive
                 snap.bufferIdx  = i;
                 snap.secondsAgo = i * m_rewindSaveInterval / 60;
                 snap.thumb      = m_rewindBuffer[i].thumb;
+                snap.thumbW     = m_rewindBuffer[i].thumbW;
+                snap.thumbH     = m_rewindBuffer[i].thumbH;
                 result.push_back(std::move(snap));
             }
         } else if (maxItems == 1) {
@@ -3139,6 +3185,8 @@ namespace beiklive
             snap.bufferIdx  = 0;
             snap.secondsAgo = 0;
             snap.thumb      = m_rewindBuffer[0].thumb;
+            snap.thumbW     = m_rewindBuffer[0].thumbW;
+            snap.thumbH     = m_rewindBuffer[0].thumbH;
             result.push_back(std::move(snap));
         } else {
             // 均匀采样：在 [0, total-1] 范围内选取 maxItems 个索引（maxItems >= 2，不会除零）
@@ -3149,6 +3197,8 @@ namespace beiklive
                 snap.bufferIdx  = idx;
                 snap.secondsAgo = idx * m_rewindSaveInterval / 60;
                 snap.thumb      = m_rewindBuffer[idx].thumb;
+                snap.thumbW     = m_rewindBuffer[idx].thumbW;
+                snap.thumbH     = m_rewindBuffer[idx].thumbH;
                 result.push_back(std::move(snap));
             }
         }
@@ -3157,6 +3207,34 @@ namespace beiklive
         // 显示时最旧帧在左侧，最新帧在右侧，焦点默认放在最右边（最新帧）
         std::reverse(result.begin(), result.end());
         return result;
+    }
+
+    // ============================================================
+    // requestPreviewRewindFrame – 预览倒带帧缩略图（UI线程调用）
+    // ============================================================
+    void MgbaGameView::requestPreviewRewindFrame(int frameIndex)
+    {
+        if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
+            return;
+        if (!m_rendererReady || frameIndex < 0)
+            return;
+
+        std::vector<uint16_t> thumb;
+        unsigned thumbW = 0;
+        unsigned thumbH = 0;
+        {
+            std::lock_guard<std::mutex> lk(m_rewindMutex);
+            if (frameIndex >= static_cast<int>(m_rewindBuffer.size()))
+                return;
+            const auto& rewindFrame = m_rewindBuffer[static_cast<std::size_t>(frameIndex)];
+            thumb = rewindFrame.thumb;
+            thumbW = rewindFrame.thumbW;
+            thumbH = rewindFrame.thumbH;
+        }
+
+        auto frame = rewindThumbToPreviewFrame(thumb, thumbW, thumbH);
+        if (!frame.pixels.empty())
+            m_renderer.uploadFrame(frame);
     }
 
     // ============================================================

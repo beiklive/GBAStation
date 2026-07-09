@@ -70,6 +70,9 @@ namespace beiklive
             std::vector<RewindThumbSnapshot>
             snapshotRewindThumbs() const;
 
+            /// 预览指定倒带帧的缩略图画面（UI线程调用，不改变核心状态）。
+            void requestPreviewRewindFrame(int frameIndex);
+
             /// 恢复指定倒带帧（弹出缓冲区到该帧并反序列化），供 RewindSelectorView 调用。
             /// 需在游戏线程中调用（通过 GameSignal 传递请求）。
             void requestRestoreRewindFrame(int frameIndex);

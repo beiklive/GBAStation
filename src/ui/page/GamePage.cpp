@@ -494,8 +494,8 @@ namespace beiklive
         m_rewindSelectorView = new RewindSelectorView();
         m_rewindSelectorView->setWidthPercentage(100.f);
         m_rewindSelectorView->setHeightPercentage(100.f);
-        // 不让容器自身接受焦点，由 RewindSelectorView::getDefaultFocus() 将焦点导向具体卡片
-        m_rewindSelectorView->setFocusable(false);
+        // 自绘倒带面板自身处理焦点和输入。
+        m_rewindSelectorView->setFocusable(true);
         m_rewindSelectorView->setPositionType(brls::PositionType::ABSOLUTE);
         m_rewindSelectorView->setPositionTop(0);
         m_rewindSelectorView->setPositionLeft(0);
@@ -513,6 +513,12 @@ namespace beiklive
                     brls::Application::giveFocus(m_gameView);
                 });
             });
+        });
+
+        // 焦点移动时同步预览对应倒带缓存的画面。
+        m_rewindSelectorView->setOnFrameFocused([this](int frameIndex) {
+            if (m_gameView)
+                m_gameView->requestPreviewRewindFrame(frameIndex);
         });
 
         // B 键取消：直接关闭倒带界面并恢复游戏
