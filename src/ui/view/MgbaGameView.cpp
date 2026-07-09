@@ -224,6 +224,7 @@ namespace beiklive
             m_frameReady = false;
             m_hasLastRawFrame = false;
         }
+        m_firstFrameUploaded.store(false, std::memory_order_release);
 
         {
             std::lock_guard<std::mutex> lk(m_rewindMutex);
@@ -609,6 +610,7 @@ namespace beiklive
                 return;
             if (m_ndsSplitShaderRenderer) {
                 _uploadNdsSplitShaderFrame(frame);
+                m_firstFrameUploaded.store(true, std::memory_order_release);
                 return;
             }
             if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS) &&
@@ -617,6 +619,7 @@ namespace beiklive
             const bool isNds = m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS);
             const auto uploadStart = std::chrono::steady_clock::now();
             m_renderer.uploadFrame(frame);
+            m_firstFrameUploaded.store(true, std::memory_order_release);
             if (isNds) {
                 const auto uploadUs = std::chrono::duration_cast<std::chrono::microseconds>(
                     std::chrono::steady_clock::now() - uploadStart).count();
@@ -1889,10 +1892,12 @@ namespace beiklive
         if (auto* output = coreAudioOutput(m_core)) {
             brls::Logger::debug("[MgbaGameView] audio init: core-managed output sampleRate={:.0f}", sampleRate);
             beiklive::BKAudioPlayer::setGameAudioActive(true);
-            output->SetAudioOutputEnabled(true);
+            const bool waitForFirstFrame = isMgbaNativePlatform(m_gameEntry.platform) &&
+                                           !m_firstFrameUploaded.load(std::memory_order_acquire);
+            output->SetAudioOutputEnabled(!waitForFirstFrame);
             output->SetAudioOutputSpeed(1.0f);
             m_audioSpeed = 1.0f;
-            m_audioOutputSuppressed = false;
+            m_audioOutputSuppressed = waitForFirstFrame;
             m_loggedFirstAudioPush = false;
             m_audioEmptyLogCount = 0;
             return;
@@ -1968,6 +1973,7 @@ namespace beiklive
     void MgbaGameView::_registerGameRuntime()
     {
         brls::Logger::debug("[MgbaGameView] _registerGameRuntime: platform={}", m_gameEntry.platform);
+        m_firstFrameUploaded.store(false, std::memory_order_release);
         m_core = CreateEmulatorCore(m_gameEntry);
         if (!m_core) {
             brls::Logger::warning("[MgbaGameView] _registerGameRuntime: unsupported platform={}", m_gameEntry.platform);
@@ -2179,9 +2185,12 @@ namespace beiklive
         const bool rewindMuted = GameSignal::instance().isRewinding() &&
                                  GET_SETTING_KEY_INT("rewind.mute", 0) != 0;
         const bool isNds = isNdsPlatform(m_gameEntry.platform);
+        const bool waitingFirstMgbaFrame = isMgbaNativePlatform(m_gameEntry.platform) &&
+                                           !m_firstFrameUploaded.load(std::memory_order_acquire);
         const bool suppressAudio = GameSignal::instance().isMuted() ||
                                    (ff && m_ffMute && !isNds) ||
-                                   rewindMuted;
+                                   rewindMuted ||
+                                   waitingFirstMgbaFrame;
 
         if (auto* output = coreAudioOutput(m_core)) {
             output->SetAudioOutputEnabled(!suppressAudio);
@@ -2460,6 +2469,7 @@ namespace beiklive
                                 m_gameEntry.path);
             double fps = m_core->Fps();
             double srate = m_core->SampleRate();
+            _captureVideoFrame();
             _initAudioForCore(fps, srate);
             _initPlayTimeTracking();
         }
@@ -2589,6 +2599,13 @@ namespace beiklive
                     _pauseAudioForTransition(); // 暂停期间停止继续提交硬件音频缓冲
                     wasPaused = true;
                 }
+                bool hasAnyFrame = false;
+                {
+                    std::lock_guard<std::mutex> lk(m_frameMutex);
+                    hasAnyFrame = m_hasLastRawFrame || m_frameReady;
+                }
+                if (!hasAnyFrame)
+                    _captureVideoFrame();
                 // 暂停菜单中切换/编辑金手指时，也要及时同步到核心。
                 processCheatSignals(sig, true);
                 // 暂停时允许截图，便于在菜单暂停后保存当前画面。

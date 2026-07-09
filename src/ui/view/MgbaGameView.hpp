@@ -175,6 +175,7 @@ namespace beiklive
             bool m_loggedFirstAudioPush = false; ///< 诊断：是否已记录第一次音频推送
             unsigned m_audioEmptyLogCount = 0; ///< 诊断：启动阶段 DrainAudio 为空次数
             float m_audioSpeed = 1.0f; ///< 当前通用 AudioManager 倍速，按 MgbaGameView 实例隔离
+            std::atomic<bool> m_firstFrameUploaded{false}; ///< mGBA 首帧上传前延后音频，避免先出声后出画
 
             // ---- 游戏线程 -----------------------------------------------------
             std::thread       m_gameThread;
