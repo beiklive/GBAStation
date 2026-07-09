@@ -2,7 +2,9 @@
 #include "core/common.h"
 #include <functional>
 
+#include "ui/view/GameViewBase.hpp"
 #include "ui/view/GameView.hpp"
+#include "ui/view/MgbaGameView.hpp"
 #include "ui/view/GameMenuView.hpp"
 #include "ui/view/RewindSelectorView.hpp"
 
@@ -38,7 +40,7 @@ namespace beiklive
 
         beiklive::DirListData m_gameData;
         beiklive::GameEntry m_gameEntry;                          // 游戏条目数据，包含路径、标题等信息
-        GameView *m_gameView                   = nullptr;         // 游戏视图实例，负责游戏的渲染显示和输入处理
+        GameViewBase *m_gameView               = nullptr;         // 游戏视图实例，负责游戏的渲染显示和输入处理
         GameMenuView *m_gameMenuView           = nullptr;         // 游戏菜单视图实例，负责游戏菜单的渲染显示和输入处理
         RewindSelectorView *m_rewindSelectorView = nullptr;       // 可视化倒带选择界面（显示倒带缩略图列表）
         bool m_exitRequested = false;                            // 防止退出流程重复触发

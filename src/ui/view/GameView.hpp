@@ -3,6 +3,7 @@
 #include "core/common.h"
 #include "core/GameSignal.hpp"
 #include "core/GameTimer.hpp"
+#include "ui/view/GameViewBase.hpp"
 #include "game/control/GameInputManager.hpp"
 #include "emulator/IEmulatorCore.hpp"
 #include "emulator/IEmulatorStopRequest.hpp"
@@ -29,24 +30,8 @@ namespace beiklive
     class GameMenuView;         // 前置声明
     class RewindSelectorView;   // 前置声明
 
-    /// 倒带帧：包含核心序列化状态和可选的缩略图（RGB565 格式）
-    struct RewindFrame {
-        std::vector<uint8_t>  state;  ///< 核心序列化状态（~128KB）
-        std::vector<uint16_t> thumb;  ///< RGB565 缩略图（120×80，可能为空）
-
-        static constexpr unsigned THUMB_W = 120; ///< 缩略图宽度（像素）
-        static constexpr unsigned THUMB_H = 80;  ///< 缩略图高度（像素）
-    };
-
-    /// 可视化倒带快照：包含缓冲区索引（用于恢复）、秒数（用于显示）和缩略图
-    struct RewindThumbSnapshot {
-        int bufferIdx;                ///< m_rewindBuffer 中的索引（0=最新帧）
-        int secondsAgo;               ///< 距当前的秒数（用于显示 "-X秒"）
-        std::vector<uint16_t> thumb;  ///< RGB565 缩略图数据（可能为空）
-    };
-
     // 游戏视图，负责游戏的渲染显示，输入处理等功能
-    class GameView : public brls::Box
+    class GameView : public GameViewBase
     {
         public:
             GameView(beiklive::GameEntry gameData);
@@ -189,6 +174,7 @@ namespace beiklive
             bool m_audioOutputSuppressed = false; ///< 静音/快进静音/倒带静音状态是否已清过缓冲
             bool m_loggedFirstAudioPush = false; ///< 诊断：是否已记录第一次音频推送
             unsigned m_audioEmptyLogCount = 0; ///< 诊断：启动阶段 DrainAudio 为空次数
+            float m_audioSpeed = 1.0f; ///< 当前通用 AudioManager 倍速，按 GameView 实例隔离
 
             // ---- 游戏线程 -----------------------------------------------------
             std::thread       m_gameThread;

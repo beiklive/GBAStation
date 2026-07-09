@@ -16,6 +16,18 @@ namespace beiklive
     static constexpr int EXIT_SAVE_POLL_MS = 30; ///< 退出自动存档完成状态轮询间隔
     static constexpr int EXIT_SAVE_TIMEOUT_MS = 8000; ///< 自动存档异常未回执时的最大等待时间
     static constexpr int EXIT_CLEANUP_DIALOG_DELAY_MS = 120; ///< 给退出清理对话框留出可见首帧
+
+    namespace
+    {
+        bool isMgbaPlatform(int platform)
+        {
+            using beiklive::enums::EmuPlatform;
+            return platform == static_cast<int>(EmuPlatform::EmuGBA) ||
+                   platform == static_cast<int>(EmuPlatform::EmuGBC) ||
+                   platform == static_cast<int>(EmuPlatform::EmuGB);
+        }
+    }
+
     GamePage::GamePage(beiklive::DirListData gameData)
     {
 
@@ -270,7 +282,9 @@ namespace beiklive
     void GamePage::GameViewInitialize()
     {
         #undef ABSOLUTE
-        m_gameView = new GameView(m_gameEntry);
+        m_gameView = isMgbaPlatform(m_gameEntry.platform)
+            ? static_cast<GameViewBase*>(new MgbaGameView(m_gameEntry))
+            : static_cast<GameViewBase*>(new GameView(m_gameEntry));
         m_gameView->setWidthPercentage(100.f);
         m_gameView->setHeightPercentage(100.f);
         // m_gameView->setBackgroundColor(nvgRGBA(114, 187, 255, 255)); // 设置游戏视图背景为黑色

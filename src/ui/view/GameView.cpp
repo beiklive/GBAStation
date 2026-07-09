@@ -1,7 +1,6 @@
 #include "GameView.hpp"
 #include "GameMenuView.hpp"
 #include "RewindSelectorView.hpp"
-#include "emulator/IEmulatorAudioOutput.hpp"
 #include "game/audio/AudioManager.hpp"
 #include "game/control/InputMappingDefaults.hpp"
 #include "ui/utils/BKAudioPlayer.hpp"
@@ -63,23 +62,9 @@ namespace
         return platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS);
     }
 
-    bool isMgbaNativePlatform(int platform)
-    {
-        using beiklive::enums::EmuPlatform;
-        return platform == static_cast<int>(EmuPlatform::EmuGBA) ||
-               platform == static_cast<int>(EmuPlatform::EmuGBC) ||
-               platform == static_cast<int>(EmuPlatform::EmuGB);
-    }
-
     bool shouldSetupCoreOnGameThread(int platform)
     {
-        return isNdsPlatform(platform) || isMgbaNativePlatform(platform);
-    }
-
-    beiklive::IEmulatorAudioOutput* coreAudioOutput(beiklive::IEmulatorCore* core)
-    {
-        auto* output = dynamic_cast<beiklive::IEmulatorAudioOutput*>(core);
-        return output && output->HandlesAudioOutput() ? output : nullptr;
+        return isNdsPlatform(platform);
     }
 
     bool isNdsRightStickMapping(const char* suffix)
@@ -1887,16 +1872,6 @@ namespace beiklive
 
         _waitForUiAudioPlayer();
 
-        if (auto* output = coreAudioOutput(m_core)) {
-            brls::Logger::debug("[GameView] audio init: core-managed output sampleRate={:.0f}", sampleRate);
-            beiklive::BKAudioPlayer::setGameAudioActive(true);
-            output->SetAudioOutputEnabled(true);
-            m_audioOutputSuppressed = false;
-            m_loggedFirstAudioPush = false;
-            m_audioEmptyLogCount = 0;
-            return;
-        }
-
         beiklive::BKAudioPlayer::setGameAudioActive(false);
 
         int targetMs = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_AUDIO_TARGET_LATENCY_MS, 90);
@@ -1915,6 +1890,7 @@ namespace beiklive
             brls::Logger::warning("[GameView] audio init failed, continuing without audio output");
         AudioManager::instance().configureLatencyMs(targetMs, maxMs);
         AudioManager::instance().setSpeed(1.0f);
+        m_audioSpeed = 1.0f;
         m_audioOutputSuppressed = false;
         m_loggedFirstAudioPush = false;
         m_audioEmptyLogCount = 0;
@@ -1925,11 +1901,6 @@ namespace beiklive
 
     void GameView::_flushAudioForTransition()
     {
-        if (auto* output = coreAudioOutput(m_core)) {
-            output->FlushAudioOutput();
-            return;
-        }
-
         int fadeMs = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_AUDIO_TRANSITION_FADE_MS, 6);
         fadeMs = std::clamp(fadeMs, 0, 20);
         AudioManager::instance().flushRingBufferWithFade(fadeMs);
@@ -1937,24 +1908,11 @@ namespace beiklive
 
     void GameView::_pauseAudioForTransition()
     {
-        if (auto* output = coreAudioOutput(m_core)) {
-            output->SetAudioOutputEnabled(false);
-            beiklive::BKAudioPlayer::setGameAudioActive(false);
-            return;
-        }
-
         AudioManager::instance().pauseOutput();
     }
 
     void GameView::_resumeAudioForTransition()
     {
-        if (auto* output = coreAudioOutput(m_core)) {
-            _waitForUiAudioPlayer();
-            beiklive::BKAudioPlayer::setGameAudioActive(true);
-            output->SetAudioOutputEnabled(true);
-            return;
-        }
-
         int fadeMs = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_AUDIO_TRANSITION_FADE_MS, 6);
         fadeMs = std::clamp(fadeMs, 0, 20);
         AudioManager::instance().resumeOutputWithFade(fadeMs);
@@ -2181,12 +2139,6 @@ namespace beiklive
                                    (ff && m_ffMute && !isNds) ||
                                    rewindMuted;
 
-        if (auto* output = coreAudioOutput(m_core)) {
-            output->SetAudioOutputEnabled(!suppressAudio);
-            m_audioOutputSuppressed = suppressAudio;
-            return;
-        }
-
         if (suppressAudio) {
             m_core->DrainAudio(m_audioDrainBuf);
             if (!m_audioOutputSuppressed)
@@ -2201,21 +2153,10 @@ namespace beiklive
         }
 
         if (!m_core->DrainAudio(m_audioDrainBuf) || m_audioDrainBuf.empty()) {
-            if (isMgbaNativePlatform(m_gameEntry.platform) && m_audioEmptyLogCount < 5) {
-                ++m_audioEmptyLogCount;
-                brls::Logger::debug("[GameView] mGBA audio drain empty count={}", m_audioEmptyLogCount);
-            }
             return;
         }
 
         size_t frames = m_audioDrainBuf.size() / 2;
-        if (isMgbaNativePlatform(m_gameEntry.platform) && !m_loggedFirstAudioPush) {
-            brls::Logger::info("[GameView] first mGBA audio push frames={} ringBefore={} running={}",
-                               frames,
-                               AudioManager::instance().available(),
-                               AudioManager::instance().isRunning() ? 1 : 0);
-            m_loggedFirstAudioPush = true;
-        }
 
         if (ff || isNdsPlatform(m_gameEntry.platform)) {
             AudioManager::instance().pushSamplesNoBlocking(m_audioDrainBuf.data(), frames);
@@ -2732,11 +2673,10 @@ namespace beiklive
 
             // 同步倍速到音频重采样器
             {
-                static float s_lastSpeed = 1.0f;
                 float curSpeed = (ff && !m_ffMute && !isNds) ? m_ffMultiplier : 1.0f;
-                if (curSpeed != s_lastSpeed) {
+                if (curSpeed != m_audioSpeed) {
                     AudioManager::instance().setSpeed(curSpeed);
-                    s_lastSpeed = curSpeed;
+                    m_audioSpeed = curSpeed;
                 }
             }
 

@@ -1,6 +1,7 @@
 #include "GameMenuView.hpp"
 #include "core/Tools.hpp"
 #include "core/cheat/CheatSystem.hpp"
+#include "emulator/mgba_native/MgbaCheatSystem.hpp"
 #include "game/control/GameInputManager.hpp"
 #include "ui/widget/HintsBar.hpp"
 #include "ui/utils/FilePickerHelper.hpp"
@@ -38,6 +39,33 @@ namespace beiklive
             if (value == "270" || value == "270deg" || value == "270°" || value == "horizontal_reverse")
                 return "270";
             return "0";
+        }
+
+        bool isMgbaNativePlatform(int platform)
+        {
+            return beiklive::mgba_native::cheats::IsMgbaPlatform(platform);
+        }
+
+        bool isMgbaGbaPlatform(int platform)
+        {
+            return platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuGBA);
+        }
+
+        std::string mgbaCheatCodeTypeLabel(const CheatEntry& cheat)
+        {
+            std::string codeType = beiklive::mgba_native::cheats::NormalizeCodeType(cheat.codeType);
+            if (codeType.empty())
+                codeType = beiklive::mgba_native::cheats::DetectCodeType(cheat.code);
+            if (codeType.empty())
+                codeType = "Auto";
+            return codeType;
+        }
+
+        std::string cheatRowText(const CheatEntry& cheat, bool showMgbaCodeType)
+        {
+            if (!showMgbaCodeType || cheat.code.empty())
+                return cheat.desc;
+            return cheat.desc + " [" + mgbaCheatCodeTypeLabel(cheat) + "]";
         }
 
         struct NesButtonBindInfo
@@ -1198,7 +1226,9 @@ namespace beiklive
                                 CheatEntry entry;
                                 entry.desc = name;
                                 entry.code = code;
-                                entry.enabled = true;
+                                entry.enabled = !isMgbaNativePlatform(m_gameEntry.platform);
+                                if (isMgbaNativePlatform(m_gameEntry.platform))
+                                    entry.codeType = beiklive::mgba_native::cheats::DetectCodeType(entry.code);
                                 m_cheats.push_back(entry);
                                 _saveEditableCheats();
                                 _notifyCheatsChanged();
@@ -1250,9 +1280,18 @@ namespace beiklive
 
         void GameMenuView::_loadCheatsFromPath(const std::string &path)
     {
-        auto loaded = beiklive::cheat::loadCheats({path, m_gameEntry.path, m_gameEntry.platform});
-        m_cheatFileReadOnly = !loaded.editable;
-        m_cheats = std::move(loaded.entries);
+        if (isMgbaNativePlatform(m_gameEntry.platform))
+        {
+            auto loaded = beiklive::mgba_native::cheats::LoadCheats(path);
+            m_cheatFileReadOnly = !loaded.editable;
+            m_cheats = std::move(loaded.entries);
+        }
+        else
+        {
+            auto loaded = beiklive::cheat::loadCheats({path, m_gameEntry.path, m_gameEntry.platform});
+            m_cheatFileReadOnly = !loaded.editable;
+            m_cheats = std::move(loaded.entries);
+        }
         m_gameEntry.cheatPath = path;
         if (cheatPathLabel)
             cheatPathLabel->setText(beiklive::tools::getFileName(m_gameEntry.cheatPath));
@@ -1269,7 +1308,14 @@ namespace beiklive
     {
         if (!m_cheatFileReadOnly && !m_gameEntry.cheatPath.empty())
         {
-            beiklive::saveChtFile(m_gameEntry.cheatPath, m_cheats);
+            if (isMgbaNativePlatform(m_gameEntry.platform))
+            {
+                beiklive::mgba_native::cheats::SaveChtFile(m_gameEntry.cheatPath, m_cheats);
+            }
+            else
+            {
+                beiklive::saveChtFile(m_gameEntry.cheatPath, m_cheats);
+            }
         }
     }
 
@@ -1299,6 +1345,7 @@ namespace beiklive
         }
         else
         {
+            const bool showMgbaCodeType = isMgbaGbaPlatform(m_gameEntry.platform);
             for (int i = 0; i < (int)m_cheats.size(); ++i)
             {
                 if (m_cheats[i].code.empty())
@@ -1324,7 +1371,7 @@ namespace beiklive
                     return true;
                 });
 
-                sw->setText(m_cheats[i].desc);
+                sw->setText(cheatRowText(m_cheats[i], showMgbaCodeType));
                 sw->setState(m_cheats[i].enabled);
                 int idx = i;
                 sw->setOnToggle([this, idx](bool on)
@@ -1347,6 +1394,25 @@ namespace beiklive
                         _updateCheatCount();
                         _saveEditableCheats();
                     } });
+
+                if (showMgbaCodeType)
+                {
+                    sw->registerAction("码型", brls::BUTTON_LB, [this, idx, sw](brls::View *) -> bool {
+                        if (idx >= (int)m_cheats.size())
+                            return true;
+                        std::string current = beiklive::mgba_native::cheats::NormalizeCodeType(m_cheats[idx].codeType);
+                        if (current.empty())
+                            current = beiklive::mgba_native::cheats::DetectCodeType(m_cheats[idx].code);
+                        m_cheats[idx].codeType = current == "RAW" ? "GS/CB" : "RAW";
+                        sw->setText(cheatRowText(m_cheats[idx], true));
+                        brls::Logger::info("GameMenuView: mGBA cheat type idx={} type={} code={}",
+                                           idx, m_cheats[idx].codeType, m_cheats[idx].code);
+                        _saveEditableCheats();
+                        _notifyCheatsChanged();
+                        brls::Application::notify("码型: " + m_cheats[idx].codeType);
+                        return true;
+                    });
+                }
 
                 // BUTTON_X: 修改金手指代码
                 sw->registerAction("修改代码", brls::BUTTON_X, [this, idx](brls::View *) -> bool {
@@ -1373,8 +1439,11 @@ namespace beiklive
                                 // }
                                 if (idx >= (int)m_cheats.size()) return;
                                 m_cheats[idx].code = code;
+                                if (isMgbaNativePlatform(m_gameEntry.platform))
+                                    m_cheats[idx].codeType = beiklive::mgba_native::cheats::DetectCodeType(m_cheats[idx].code);
                                 _saveEditableCheats();
                                 _notifyCheatsChanged();
+                                _rebuildCheatItems();
                             },
                             "修改金手指代码",
                             "",

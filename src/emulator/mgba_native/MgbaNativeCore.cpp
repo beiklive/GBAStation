@@ -1,20 +1,26 @@
 #include "MgbaNativeCore.hpp"
 
 #include "core/Tools.hpp"
-#include "core/cheat/CheatSystem.hpp"
+#include "emulator/mgba_native/MgbaCheatSystem.hpp"
 
 #include <mgba/core/blip_buf.h>
 #include <mgba/core/cheats.h>
 #include <mgba/core/config.h>
+#include <mgba/core/cpu.h>
 #include <mgba/core/core.h>
 #include <mgba/core/serialize.h>
+#include <mgba/internal/arm/arm.h>
 #include <mgba/gb/interface.h>
 #include <mgba/internal/gba/audio.h>
+#include <mgba/internal/gba/cheats.h>
+#include <mgba/internal/gb/cheats.h>
 #include <mgba/internal/gb/overrides.h>
+#include <mgba/internal/sm83/sm83.h>
 #include <mgba-util/vfs.h>
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstring>
 #include <ctime>
 #include <cstdlib>
@@ -28,6 +34,8 @@ namespace beiklive::mgba_native
 {
 namespace
 {
+constexpr unsigned kMgbaAudioBuffers = 0x400;
+
 uint32_t makeRGBA8888(uint8_t r, uint8_t g, uint8_t b)
 {
     return static_cast<uint32_t>(r) |
@@ -140,6 +148,37 @@ bool hasOnlyHex(const std::string& text)
     });
 }
 
+bool hasOnlyHexWithSize(const std::string& text, size_t size)
+{
+    return text.size() == size && hasOnlyHex(text);
+}
+
+bool isMgbaGamePlatform(int platform)
+{
+    using beiklive::enums::EmuPlatform;
+    return platform == static_cast<int>(EmuPlatform::EmuGBA) ||
+           platform == static_cast<int>(EmuPlatform::EmuGBC) ||
+           platform == static_cast<int>(EmuPlatform::EmuGB);
+}
+
+bool isLikelyGbaRawAddress(const std::string& value)
+{
+    if (value.size() != 8 || !hasOnlyHex(value) || value[0] != '0')
+        return false;
+    const char high = static_cast<char>(std::toupper(static_cast<unsigned char>(value[1])));
+    return high >= '2' && high <= 'E';
+}
+
+bool codeTypeForcesRaw(const std::string& value)
+{
+    return beiklive::mgba_native::cheats::NormalizeCodeType(value) == "RAW";
+}
+
+bool codeTypeForcesGsCb(const std::string& value)
+{
+    return beiklive::mgba_native::cheats::NormalizeCodeType(value) == "GS/CB";
+}
+
 std::vector<std::string> splitCheatTokens(const std::string& code)
 {
     std::vector<std::string> tokens;
@@ -176,10 +215,14 @@ bool canTryMgbaCheat(const beiklive::CheatEntry& cheat)
            cheat.payloadType == beiklive::CheatPayloadType::FrontendMemoryPatch;
 }
 
-size_t addGbaCheatLines(mCheatSet* set, const std::string& code, size_t& rejected)
+std::vector<std::string> splitGbaCheatLines(const std::string& code, const std::string& codeType)
 {
-    size_t accepted = 0;
+    std::vector<std::string> lines;
     const auto tokens = splitCheatTokens(code);
+    lines.reserve(tokens.size());
+    const bool forceRaw = codeTypeForcesRaw(codeType);
+    const bool forceGsCb = codeTypeForcesGsCb(codeType);
+
     for (size_t i = 0; i < tokens.size(); ++i)
     {
         const std::string& token = tokens[i];
@@ -189,27 +232,35 @@ size_t addGbaCheatLines(mCheatSet* set, const std::string& code, size_t& rejecte
         std::string line = token;
         if (token.find(':') == std::string::npos)
         {
-            if ((token.size() == 12 || token.size() == 16) && hasOnlyHex(token))
+            if ((token.size() == 10 || token.size() == 12) && hasOnlyHex(token))
             {
-                line = token.substr(0, 8) + " " + token.substr(8);
+                line = token.substr(0, 8) + ":" + token.substr(8);
             }
-            else if (token.size() == 8 && hasOnlyHex(token) && i + 1 < tokens.size() &&
-                     (tokens[i + 1].size() == 4 || tokens[i + 1].size() == 8) &&
-                     hasOnlyHex(tokens[i + 1]))
+            else if (token.size() == 16 && hasOnlyHex(token))
             {
-                line = token + " " + tokens[++i];
+                line = token.substr(0, 8) + (forceRaw ? ":" : " ") + token.substr(8);
+            }
+            else if (hasOnlyHexWithSize(token, 8) && i + 1 < tokens.size() &&
+                     (hasOnlyHexWithSize(tokens[i + 1], 2) ||
+                      hasOnlyHexWithSize(tokens[i + 1], 4) ||
+                      hasOnlyHexWithSize(tokens[i + 1], 8)))
+            {
+                const std::string& value = tokens[i + 1];
+                const bool raw = forceRaw ||
+                                 (!forceGsCb &&
+                                  (value.size() == 2 ||
+                                   (value.size() == 4 && isLikelyGbaRawAddress(token))));
+                line = raw ? (token + ":" + value) : (token + " " + value);
+                ++i;
             }
         }
 
-        if (addCheatLine(set, line))
-            ++accepted;
-        else
-            ++rejected;
+        lines.push_back(std::move(line));
     }
-    return accepted;
+    return lines;
 }
 
-size_t addGbCheatLines(mCheatSet* set, const std::string& code, size_t& rejected)
+size_t addGbCheatLines(mCheatSet* set, const std::string& code, size_t& rejected, std::string& failedLine)
 {
     size_t accepted = 0;
     const auto tokens = splitCheatTokens(code);
@@ -238,9 +289,34 @@ size_t addGbCheatLines(mCheatSet* set, const std::string& code, size_t& rejected
         if (addCheatLine(set, line))
             ++accepted;
         else
+        {
             ++rejected;
+            if (failedLine.empty())
+                failedLine = line;
+        }
     }
     return accepted;
+}
+
+void clearMgbaCheats(mCheatDevice* device)
+{
+    if (!device)
+        return;
+
+    while (mCheatSetsSize(&device->cheats) > 0)
+    {
+        mCheatSet* set = *mCheatSetsGetPointer(&device->cheats, 0);
+        if (!set)
+        {
+            mCheatSetsShift(&device->cheats, 0, 1);
+            continue;
+        }
+
+        set->enabled = false;
+        mCheatRefresh(device, set);
+        mCheatRemoveSet(device, set);
+        mCheatSetDeinit(set);
+    }
 }
 
 } // namespace
@@ -260,6 +336,12 @@ bool MgbaNativeCore::SetupGame(beiklive::GameEntry gameEntry)
     m_loggedFirstAudio = false;
     m_audioProbeFrames = 0;
     m_audioSilentProbeFrames = 0;
+
+    if (!isMgbaGamePlatform(m_gameEntry.platform))
+    {
+        brls::Logger::error("MgbaNativeCore: rejected non-mGBA platform={}", m_gameEntry.platform);
+        return false;
+    }
 
     brls::Logger::debug("MgbaNativeCore: SetupGame begin");
     initSettingsDefaults();
@@ -400,6 +482,17 @@ void MgbaNativeCore::SetAudioOutputEnabled(bool enabled)
     m_audioOutputEnabled = enabled;
     if (!enabled)
         FlushAudioOutput();
+}
+
+void MgbaNativeCore::SetAudioOutputSpeed(float speed)
+{
+    const float next = std::clamp(speed, 0.1f, 10.0f);
+    if (std::fabs(next - m_audioOutputSpeed) < 0.001f)
+        return;
+
+    m_audioOutputSpeed = next;
+    applyCoreAudioRates();
+    brls::Logger::debug("MgbaNativeCore: audio output speed set to {:.2f}", m_audioOutputSpeed);
 }
 
 void MgbaNativeCore::FlushAudioOutput()
@@ -619,6 +712,7 @@ void MgbaNativeCore::initSettingsDefaults()
     beiklive::SettingManager->SetDefault("core.mgba_sgb_borders", CV(std::string("ON")));
     beiklive::SettingManager->SetDefault("core.mgba_audio_low_pass_filter", CV(std::string("disabled")));
     beiklive::SettingManager->SetDefault("core.mgba_audio_low_pass_range", CV(std::string("60")));
+    beiklive::SettingManager->SetDefault("fastforward.mgba_mute", CV(0));
     beiklive::SettingManager->SetDefault("core.mgba_allow_opposing_directions", CV(std::string("no")));
     beiklive::SettingManager->SetDefault("core.mgba_solar_sensor_level", CV(std::string("5")));
     beiklive::SettingManager->SetDefault("core.mgba_force_gbp", CV(std::string("OFF")));
@@ -636,7 +730,7 @@ void MgbaNativeCore::initConfigDefaults()
     mCoreInitConfig(m_core, "BeikLiveStation");
     m_configInitialized = true;
     mCoreConfigSetDefaultIntValue(&m_core->config, "sampleRate", static_cast<int>(m_sampleRate));
-    mCoreConfigSetDefaultUIntValue(&m_core->config, "audioBuffers", static_cast<unsigned>(m_sampleRate / 30.0));
+    mCoreConfigSetDefaultUIntValue(&m_core->config, "audioBuffers", kMgbaAudioBuffers);
     mCoreConfigSetDefaultIntValue(&m_core->config, "volume", GBA_AUDIO_VOLUME_MAX);
     mCoreConfigSetDefaultIntValue(&m_core->config, "mute", 0);
     mCoreConfigSetDefaultIntValue(&m_core->config, "useBios", useBios() ? 1 : 0);
@@ -670,7 +764,7 @@ void MgbaNativeCore::applyConfig()
     const char* modelName = GBModelToName(gbModelFromSetting());
 
     mCoreConfigSetOverrideIntValue(&m_core->config, "sampleRate", static_cast<int>(m_sampleRate));
-    mCoreConfigSetOverrideUIntValue(&m_core->config, "audioBuffers", static_cast<unsigned>(m_sampleRate / 30.0));
+    mCoreConfigSetOverrideUIntValue(&m_core->config, "audioBuffers", kMgbaAudioBuffers);
     mCoreConfigSetOverrideIntValue(&m_core->config, "volume", GBA_AUDIO_VOLUME_MAX);
     mCoreConfigSetOverrideIntValue(&m_core->config, "mute", 0);
     mCoreConfigSetOverrideIntValue(&m_core->config, "useBios", useBios() ? 1 : 0);
@@ -809,26 +903,148 @@ bool MgbaNativeCore::loadCheats()
         return true;
     }
 
-    auto loaded = beiklive::cheat::loadCheats(
-        {m_gameEntry.cheatPath, m_gameEntry.path, m_gameEntry.platform});
+    auto loaded = beiklive::mgba_native::cheats::LoadCheats(m_gameEntry.cheatPath);
     m_cheats = std::move(loaded.entries);
-    brls::Logger::info("MgbaNativeCore: loaded {} cheats from {} format={} editable={}",
+    brls::Logger::info("MgbaNativeCore: loaded {} mGBA cheats from {} editable={}",
                        m_cheats.size(), m_gameEntry.cheatPath,
-                       static_cast<int>(loaded.format), loaded.editable);
+                       loaded.editable);
     updateCheats();
     return true;
 }
 
+mCheatDevice* MgbaNativeCore::cheatDevice()
+{
+    if (!m_core)
+        return nullptr;
+    if (m_fallbackCheatDevice)
+        return m_fallbackCheatDevice;
+    if (m_core->cheatDevice)
+    {
+        if (mCheatDevice* device = m_core->cheatDevice(m_core))
+            return device;
+        brls::Logger::warning("MgbaNativeCore: native cheatDevice returned null, trying fallback");
+    }
+    if (!m_core->platform || !m_core->cpu)
+    {
+        brls::Logger::warning("MgbaNativeCore: cheat device fallback failed: missing platform or cpu");
+        return nullptr;
+    }
+
+    const mPlatform platform = m_core->platform(m_core);
+    if (platform == mPLATFORM_GBA)
+    {
+        auto* cpu = static_cast<ARMCore*>(m_core->cpu);
+        if (!cpu || !cpu->components || CPU_COMPONENT_CHEAT_DEVICE >= cpu->numComponents)
+        {
+            brls::Logger::warning("MgbaNativeCore: cheat device fallback failed: invalid GBA cpu components");
+            return nullptr;
+        }
+        m_fallbackCheatDevice = GBACheatDeviceCreate();
+        if (!m_fallbackCheatDevice)
+        {
+            brls::Logger::warning("MgbaNativeCore: cheat device fallback failed: GBACheatDeviceCreate returned null");
+            return nullptr;
+        }
+        m_fallbackCheatDevice->p = m_core;
+        cpu->components[CPU_COMPONENT_CHEAT_DEVICE] = &m_fallbackCheatDevice->d;
+        ARMHotplugAttach(cpu, CPU_COMPONENT_CHEAT_DEVICE);
+        m_fallbackCheatPlatform = static_cast<int>(platform);
+        m_fallbackCheatAttached = true;
+        brls::Logger::info("MgbaNativeCore: cheat device fallback ok: GBA device attached");
+        return m_fallbackCheatDevice;
+    }
+
+    if (platform == mPLATFORM_GB)
+    {
+        auto* cpu = static_cast<SM83Core*>(m_core->cpu);
+        if (!cpu || !cpu->components || CPU_COMPONENT_CHEAT_DEVICE >= cpu->numComponents)
+        {
+            brls::Logger::warning("MgbaNativeCore: cheat device fallback failed: invalid GB cpu components");
+            return nullptr;
+        }
+        m_fallbackCheatDevice = GBCheatDeviceCreate();
+        if (!m_fallbackCheatDevice)
+        {
+            brls::Logger::warning("MgbaNativeCore: cheat device fallback failed: GBCheatDeviceCreate returned null");
+            return nullptr;
+        }
+        m_fallbackCheatDevice->p = m_core;
+        cpu->components[CPU_COMPONENT_CHEAT_DEVICE] = &m_fallbackCheatDevice->d;
+        SM83HotplugAttach(cpu, CPU_COMPONENT_CHEAT_DEVICE);
+        m_fallbackCheatPlatform = static_cast<int>(platform);
+        m_fallbackCheatAttached = true;
+        brls::Logger::info("MgbaNativeCore: cheat device fallback ok: GB device attached");
+        return m_fallbackCheatDevice;
+    }
+
+    brls::Logger::warning("MgbaNativeCore: cheat device fallback failed: unsupported platform={}",
+                          static_cast<int>(platform));
+    return nullptr;
+}
+
+void MgbaNativeCore::releaseFallbackCheatDevice()
+{
+    if (!m_fallbackCheatDevice)
+        return;
+
+    if (m_fallbackCheatAttached && m_core && m_core->cpu)
+    {
+        if (m_fallbackCheatPlatform == static_cast<int>(mPLATFORM_GBA))
+        {
+            auto* cpu = static_cast<ARMCore*>(m_core->cpu);
+            if (cpu && cpu->components && CPU_COMPONENT_CHEAT_DEVICE < cpu->numComponents &&
+                cpu->components[CPU_COMPONENT_CHEAT_DEVICE] == &m_fallbackCheatDevice->d)
+            {
+                ARMHotplugDetach(cpu, CPU_COMPONENT_CHEAT_DEVICE);
+                cpu->components[CPU_COMPONENT_CHEAT_DEVICE] = nullptr;
+            }
+        }
+        else if (m_fallbackCheatPlatform == static_cast<int>(mPLATFORM_GB))
+        {
+            auto* cpu = static_cast<SM83Core*>(m_core->cpu);
+            if (cpu && cpu->components && CPU_COMPONENT_CHEAT_DEVICE < cpu->numComponents &&
+                cpu->components[CPU_COMPONENT_CHEAT_DEVICE] == &m_fallbackCheatDevice->d)
+            {
+                SM83HotplugDetach(cpu, CPU_COMPONENT_CHEAT_DEVICE);
+                cpu->components[CPU_COMPONENT_CHEAT_DEVICE] = nullptr;
+            }
+        }
+    }
+
+    mCheatDeviceDestroy(m_fallbackCheatDevice);
+    m_fallbackCheatDevice = nullptr;
+    m_fallbackCheatAttached = false;
+    m_fallbackCheatPlatform = -1;
+}
+
 void MgbaNativeCore::updateCheats()
 {
-    if (!m_core || !m_core->cheatDevice)
+    if (!m_core)
+    {
+        brls::Logger::warning("MgbaNativeCore: apply cheats skipped: core is null");
         return;
+    }
 
-    mCheatDevice* device = m_core->cheatDevice(m_core);
+    mCheatDevice* device = cheatDevice();
     if (!device)
+    {
+        brls::Logger::warning("MgbaNativeCore: apply cheats skipped: cheat device is null");
         return;
+    }
+    if (!device->createSet)
+    {
+        brls::Logger::warning("MgbaNativeCore: apply cheats skipped: cheat device createSet is null");
+        return;
+    }
 
-    mCheatDeviceClear(device);
+    clearMgbaCheats(device);
+
+    size_t enabledCount = 0;
+    for (const auto& cheat : m_cheats)
+    {
+        if (cheat.enabled)
+            ++enabledCount;
+    }
 
     size_t createdSets = 0;
     size_t acceptedLines = 0;
@@ -839,8 +1055,11 @@ void MgbaNativeCore::updateCheats()
     size_t categoryEntries = 0;
     size_t emptyCodeEntries = 0;
     const bool isGba = m_core->platform(m_core) == mPLATFORM_GBA;
+    brls::Logger::info("MgbaNativeCore: apply begin total={} enabled={} platform={} deviceReady=1",
+                       m_cheats.size(), enabledCount,
+                       m_core->platform ? static_cast<int>(m_core->platform(m_core)) : -1);
 
-    for (const auto& cheat : m_cheats)
+    for (auto& cheat : m_cheats)
     {
         if (cheat.payloadType == beiklive::CheatPayloadType::Category)
         {
@@ -868,19 +1087,69 @@ void MgbaNativeCore::updateCheats()
             continue;
         }
 
+        const std::string codeType = isGba
+            ? beiklive::mgba_native::cheats::NormalizeCodeType(
+                  cheat.codeType.empty()
+                      ? beiklive::mgba_native::cheats::DetectCodeType(cheat.code)
+                      : cheat.codeType)
+            : cheat.codeType;
+        cheat.codeType = codeType;
+        cheat.valid = true;
+        cheat.diagnostic.clear();
         const std::string setName = cheat.desc.empty() ? "BeikLiveStation cheat" : cheat.desc;
         mCheatSet* set = device->createSet(device, setName.c_str());
         if (!set)
+        {
+            brls::Logger::warning("MgbaNativeCore: createSet failed name={} codeType={} code={}",
+                                  setName, codeType, cheat.code);
+            cheat.valid = false;
+            cheat.enabled = false;
+            cheat.diagnostic = "createSet failed";
+            ++invalidEntries;
             continue;
+        }
 
         size_t setRejectedLines = 0;
-        const size_t setAcceptedLines = isGba
-            ? addGbaCheatLines(set, cheat.code, setRejectedLines)
-            : addGbCheatLines(set, cheat.code, setRejectedLines);
+        std::string failedLine;
+        size_t setAcceptedLines = 0;
+        if (isGba)
+        {
+            const auto lines = splitGbaCheatLines(cheat.code, codeType);
+            if (lines.empty())
+            {
+                failedLine = "<empty>";
+            }
+            else
+            {
+                bool valid = true;
+                for (const auto& line : lines)
+                {
+                    if (!addCheatLine(set, line))
+                    {
+                        valid = false;
+                        failedLine = line;
+                        break;
+                    }
+                    ++setAcceptedLines;
+                }
+                if (!valid)
+                    setRejectedLines = 1;
+            }
+        }
+        else
+        {
+            setAcceptedLines = addGbCheatLines(set, cheat.code, setRejectedLines, failedLine);
+        }
         rejectedLines += setRejectedLines;
 
-        if (setAcceptedLines == 0)
+        if (setAcceptedLines == 0 || setRejectedLines > 0)
         {
+            brls::Logger::warning("MgbaNativeCore: reject mGBA cheat name={} codeType={} failedLine={} rawCode={}",
+                                  setName, codeType, failedLine, cheat.code);
+            cheat.valid = false;
+            cheat.enabled = false;
+            cheat.diagnostic = failedLine.empty() ? "parse failed" : ("parse failed: " + failedLine);
+            ++invalidEntries;
             mCheatSetDeinit(set);
             continue;
         }
@@ -891,6 +1160,8 @@ void MgbaNativeCore::updateCheats()
 
         ++createdSets;
         acceptedLines += setAcceptedLines;
+        brls::Logger::info("MgbaNativeCore: registered cheat name={} codeType={} lines={} rawCode={}",
+                           setName, codeType, setAcceptedLines, cheat.code);
     }
 
     if (createdSets == 0)
@@ -923,7 +1194,7 @@ void MgbaNativeCore::configureAudioStream()
 #ifdef __SWITCH__
     m_audioStreamEnabled = initNativeAudioOutput();
 #else
-    m_audioStreamEnabled = false;
+    m_audioStreamEnabled = true;
 #endif
     m_audioStream = {};
     m_audioStream.owner = this;
@@ -932,12 +1203,23 @@ void MgbaNativeCore::configureAudioStream()
     m_core->setAVStream(m_core, &m_audioStream.d);
 
     m_core->setAudioBufferSize(m_core, kSwitchAudioSamples);
-    const double ratio = static_cast<double>(GBAAudioCalculateRatio(1.0f, 60.0f, 1.0f));
-    const double blipSampleRate = m_sampleRate * ratio;
-    blip_set_rates(m_core->getAudioChannel(m_core, 0), m_core->frequency(m_core), blipSampleRate);
-    blip_set_rates(m_core->getAudioChannel(m_core, 1), m_core->frequency(m_core), blipSampleRate);
-    brls::Logger::debug("MgbaNativeCore: native audio stream configured sampleRate={} bufferSamples={} ratio={:.6f}",
-                        static_cast<int>(m_sampleRate), kSwitchAudioSamples, ratio);
+    m_audioOutputSpeed = 1.0f;
+    applyCoreAudioRates();
+    brls::Logger::debug("MgbaNativeCore: native audio stream configured sampleRate={} bufferSamples={} fps={:.3f}",
+                        static_cast<int>(m_sampleRate), kSwitchAudioSamples, m_fps);
+}
+
+void MgbaNativeCore::applyCoreAudioRates()
+{
+    if (!m_core || !m_core->getAudioChannel)
+        return;
+
+    const double ratio = static_cast<double>(GBAAudioCalculateRatio(1.0f, static_cast<float>(m_fps), 1.0f));
+    const double effectiveRate = (m_sampleRate * ratio) / std::max(0.1f, m_audioOutputSpeed);
+    if (blip_t* left = m_core->getAudioChannel(m_core, 0))
+        blip_set_rates(left, m_core->frequency(m_core), effectiveRate);
+    if (blip_t* right = m_core->getAudioChannel(m_core, 1))
+        blip_set_rates(right, m_core->frequency(m_core), effectiveRate);
 }
 
 bool MgbaNativeCore::initNativeAudioOutput()
@@ -1084,7 +1366,7 @@ void MgbaNativeCore::postAudioBuffer(mAVStream* stream, blip_t* left, blip_t* ri
         }
 
         owner->waitNativeAudioOutput(0);
-        if (!owner->m_audioOutputEnabled || owner->m_fastForwarding)
+        if (!owner->m_audioOutputEnabled)
         {
             blip_clear(left);
             blip_clear(right);
@@ -1102,6 +1384,13 @@ void MgbaNativeCore::postAudioBuffer(mAVStream* stream, blip_t* left, blip_t* ri
         }
         if (owner->m_switchAudioEnqueued >= kSwitchAudioBufferCount - 1)
         {
+            if (owner->m_fastForwarding)
+            {
+                std::vector<int16_t> drop(kSwitchAudioSamples * 2);
+                blip_read_samples(left, drop.data(), kSwitchAudioSamples, true);
+                blip_read_samples(right, drop.data() + 1, kSwitchAudioSamples, true);
+                return;
+            }
             blip_clear(left);
             blip_clear(right);
             if (owner->m_switchAudioWaitDropCount < 5)
@@ -1184,6 +1473,13 @@ void MgbaNativeCore::postAudioBuffer(mAVStream* stream, blip_t* left, blip_t* ri
 #endif
 
     std::vector<int16_t> samples(kSwitchAudioSamples * 2);
+    if (!owner->m_audioOutputEnabled)
+    {
+        blip_clear(left);
+        blip_clear(right);
+        return;
+    }
+
     const int produced = blip_read_samples(left, samples.data(), kSwitchAudioSamples, true);
     if (produced <= 0)
         return;
@@ -1342,6 +1638,7 @@ void MgbaNativeCore::releaseCore()
     {
         m_audioStreamEnabled = false;
         m_audioStream = {};
+        releaseFallbackCheatDevice();
         shutdownNativeAudioOutput();
         return;
     }
@@ -1352,9 +1649,11 @@ void MgbaNativeCore::releaseCore()
             m_core->setAVStream(m_core, nullptr);
         m_audioStreamEnabled = false;
         m_audioStream = {};
-        mCheatDevice* device = m_core->cheatDevice ? m_core->cheatDevice(m_core) : nullptr;
-        if (device)
-            mCheatDeviceClear(device);
+        if (m_fallbackCheatDevice)
+        {
+            clearMgbaCheats(m_fallbackCheatDevice);
+            releaseFallbackCheatDevice();
+        }
 
         m_core->unloadROM(m_core);
         if (m_configInitialized)
@@ -1363,6 +1662,7 @@ void MgbaNativeCore::releaseCore()
     }
     else
     {
+        releaseFallbackCheatDevice();
         std::free(m_core);
     }
     m_core = nullptr;

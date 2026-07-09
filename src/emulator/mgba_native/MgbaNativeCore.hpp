@@ -16,6 +16,7 @@
 #endif
 
 struct mCore;
+struct mCheatDevice;
 
 namespace beiklive::mgba_native
 {
@@ -60,11 +61,12 @@ public:
     bool saveSram() override;
     bool HandlesAudioOutput() const override;
     void SetAudioOutputEnabled(bool enabled) override;
+    void SetAudioOutputSpeed(float speed) override;
     void FlushAudioOutput() override;
 
 private:
-    static constexpr double kDefaultSampleRate = 32768.0;
-    static constexpr size_t kSwitchAudioSamples = 0x200;
+    static constexpr double kDefaultSampleRate = 48000.0;
+    static constexpr size_t kSwitchAudioSamples = 0x400;
     static constexpr unsigned kMaxVideoWidth = 256;
     static constexpr unsigned kMaxVideoHeight = 224;
     static constexpr size_t kAudioBufferCapacity = 32768;
@@ -83,12 +85,15 @@ private:
     bool loadSram();
     bool loadCheats();
     void updateCheats();
+    mCheatDevice* cheatDevice();
+    void releaseFallbackCheatDevice();
     void drainMgbaAudio();
     void captureVideoFrame();
     void updateKeys();
     void releaseCore();
     std::string saveFilePath() const;
     void configureAudioStream();
+    void applyCoreAudioRates();
     bool initNativeAudioOutput();
     void shutdownNativeAudioOutput();
     int waitNativeAudioOutput(uint64_t timeoutNs);
@@ -116,6 +121,9 @@ private:
     bool m_coreInitialized = false;
     bool m_configInitialized = false;
     bool m_ready = false;
+    mCheatDevice* m_fallbackCheatDevice = nullptr;
+    bool m_fallbackCheatAttached = false;
+    int m_fallbackCheatPlatform = -1;
     bool m_fastForwarding = false;
 
     unsigned m_width = 0;
@@ -147,9 +155,10 @@ private:
     NativeAudioStream m_audioStream{};
     bool m_audioStreamEnabled = false;
     bool m_audioOutputEnabled = true;
+    float m_audioOutputSpeed = 1.0f;
 
 #ifdef __SWITCH__
-    static constexpr size_t kSwitchAudioBufferBytes = 0x1000;
+    static constexpr size_t kSwitchAudioBufferBytes = kSwitchAudioSamples * 2 * sizeof(int16_t);
     static constexpr int kSwitchAudioBufferCount = 4;
     std::array<int16_t*, kSwitchAudioBufferCount> m_switchAudioBuffers{};
     std::array<AudioOutBuffer, kSwitchAudioBufferCount> m_switchAudioOutBuffers{};

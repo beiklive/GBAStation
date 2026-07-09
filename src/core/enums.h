@@ -198,6 +198,7 @@ namespace beiklive // 结构体
         std::string diagnostic;
         int exclusiveGroup = -1;
 
+        std::string codeType; ///< mGBA 原生金手指码型（RAW/VBA、GS/CB、GG 等），其他核心忽略
         std::vector<uint32_t> ndsWords; ///< melonDS AR 引擎使用的预解析 words
     };
     struct RetroNameMap
