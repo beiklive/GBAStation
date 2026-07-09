@@ -1155,6 +1155,7 @@ public:
     bool rewindEnabled() const { return intValue("rewind.enabled", 0) != 0; }
     bool rewindToggleMode() const { return lower(value("rewind.mode", "hold")) == "toggle"; }
     bool rewindMute() const { return intValue("rewind.mute", 0) != 0; }
+    bool rewindShowUi() const { return intValue("rewind.showUI", 0) != 0; }
     int rewindSaveInterval() const { return std::clamp(intValue("rewind.saveInterval", 1), 1, 120); }
     int rewindBufferSize() const { return std::clamp(intValue("rewind.bufferSize", 300), 10, 1800); }
     int rewindStep() const { return std::clamp(intValue("rewind.step", 1), 1, 10); }
@@ -1999,11 +2000,45 @@ public:
         saveSram();
         return ok;
     }
+    bool saveStateToMemory(std::vector<std::uint8_t>& out)
+    {
+        out.clear();
+        if (!m_ready || !m_core)
+            return false;
+        VFile* vf = VFileMemChunk(nullptr, 0);
+        if (!vf)
+            return false;
+        const bool ok = mCoreSaveStateNamed(m_core, vf, SAVESTATE_SAVEDATA | SAVESTATE_RTC);
+        if (ok)
+        {
+            const ssize_t size = vf->size(vf);
+            if (size > 0)
+            {
+                out.resize(static_cast<std::size_t>(size));
+                vf->seek(vf, 0, SEEK_SET);
+                if (vf->read(vf, out.data(), out.size()) != size)
+                    out.clear();
+            }
+        }
+        vf->close(vf);
+        return ok && !out.empty();
+    }
     bool loadState(const std::string& path)
     {
         if (!m_ready || !m_core)
             return false;
         VFile* vf = VFileOpen(path.c_str(), O_RDONLY);
+        if (!vf)
+            return false;
+        const bool ok = mCoreLoadStateNamed(m_core, vf, SAVESTATE_RTC);
+        vf->close(vf);
+        return ok;
+    }
+    bool loadStateFromMemory(const std::vector<std::uint8_t>& state)
+    {
+        if (!m_ready || !m_core || state.empty())
+            return false;
+        VFile* vf = VFileFromConstMemory(state.data(), state.size());
         if (!vf)
             return false;
         const bool ok = mCoreLoadStateNamed(m_core, vf, SAVESTATE_RTC);
@@ -2085,6 +2120,232 @@ bool writePngImage(const std::vector<uint32_t>& rgba,
                           4,
                           rgba.data(),
                           static_cast<int>(width * sizeof(uint32_t))) != 0;
+}
+
+struct VisualRewindFrame {
+    std::vector<std::uint8_t> state;
+    std::vector<std::uint32_t> rgba;
+    unsigned width = 0;
+    unsigned height = 0;
+    std::uint32_t texture = 0;
+    int secondsAgo = 0;
+};
+
+void releaseVisualRewindFrame(VisualRewindFrame& frame)
+{
+    if (frame.texture != 0)
+    {
+        Gfx::PresentQueue.waitIdle();
+        Gfx::TextureDelete(frame.texture);
+        frame.texture = 0;
+    }
+    frame.state.clear();
+    frame.rgba.clear();
+    frame.width = 0;
+    frame.height = 0;
+    frame.secondsAgo = 0;
+}
+
+void releaseVisualRewindFrames(std::deque<VisualRewindFrame>& frames)
+{
+    for (auto& frame : frames)
+        releaseVisualRewindFrame(frame);
+    frames.clear();
+}
+
+bool createVisualRewindTexture(VisualRewindFrame& frame)
+{
+    if (frame.texture != 0)
+        return true;
+    if (frame.rgba.empty() || frame.width == 0 || frame.height == 0)
+        return false;
+    frame.texture = Gfx::TextureCreate(frame.width, frame.height, DkImageFormat_RGBA8_Unorm);
+    if (frame.texture == 0)
+        return false;
+    Gfx::TextureUpload(frame.texture,
+                       0,
+                       0,
+                       frame.width,
+                       frame.height,
+                       frame.rgba.data(),
+                       frame.width * sizeof(std::uint32_t));
+    return true;
+}
+
+std::vector<int> buildVisualRewindDisplayIndices(std::size_t frameCount, int rewindSaveInterval)
+{
+    constexpr int kDisplayCount = 30;
+    std::vector<int> indices;
+    if (frameCount == 0)
+        return indices;
+    const int count = static_cast<int>(frameCount);
+    const int step = std::max(1, 60 / std::max(1, rewindSaveInterval));
+    indices.reserve(static_cast<std::size_t>(std::min(kDisplayCount, count)));
+    for (int index = count - 1; index >= 0 && static_cast<int>(indices.size()) < kDisplayCount; index -= step)
+        indices.push_back(index);
+    std::reverse(indices.begin(), indices.end());
+    return indices;
+}
+
+void drawVisualRewindBar(const std::deque<VisualRewindFrame>& frames,
+                         const std::vector<int>& displayIndices,
+                         int selected,
+                         float progress)
+{
+    progress = std::clamp(progress, 0.0f, 1.0f);
+    const float eased = 1.0f - (1.0f - progress) * (1.0f - progress) * (1.0f - progress);
+    constexpr float kInfoH = 30.0f;
+    constexpr float kItemAreaH = 180.0f;
+    constexpr float kBottomPadH = 30.0f;
+    constexpr float panelH = kInfoH + kItemAreaH + kBottomPadH;
+    const float panelY = static_cast<float>(beiklive::mgba_stub::kScreenHeight) - panelH * eased;
+    const float panelW = static_cast<float>(beiklive::mgba_stub::kScreenWidth);
+    const float opacity = eased;
+
+    Gfx::DrawRectangle({0.0f, panelY},
+                       {panelW, panelH},
+                       {0.018f, 0.022f, 0.030f, 0.90f * opacity},
+                       true);
+    Gfx::DrawRectangle({0.0f, panelY},
+                       {panelW, 1.5f},
+                       {0.34f, 0.72f, 1.0f, 0.55f * opacity});
+
+    Gfx::DrawText(Gfx::SystemFontChinese,
+                  {32.0f, panelY + 5.0f},
+                  18.0f,
+                  {0.86f, 0.93f, 1.0f, 0.92f * opacity},
+                  "倒带");
+    const Gfx::Color hintColor {0.72f, 0.82f, 0.92f, 0.82f * opacity};
+    const float hintY = panelY + 6.0f;
+    Gfx::DrawText(Gfx::SystemFontNintendoExt,
+                  {panelW - 324.0f, hintY + 1.0f},
+                  21.0f,
+                  hintColor,
+                  Gfx::align_Left,
+                  Gfx::align_Left,
+                  "\uE0ED \uE0EE");
+    Gfx::DrawText(Gfx::SystemFontChinese,
+                  {panelW - 264.0f, hintY + 3.0f},
+                  15.0f,
+                  hintColor,
+                  "选择");
+    Gfx::DrawText(Gfx::SystemFontNintendoExt,
+                  {panelW - 192.0f, hintY + 1.0f},
+                  21.0f,
+                  hintColor,
+                  Gfx::align_Left,
+                  Gfx::align_Left,
+                  "\uE0E0");
+    Gfx::DrawText(Gfx::SystemFontChinese,
+                  {panelW - 164.0f, hintY + 3.0f},
+                  15.0f,
+                  hintColor,
+                  "读取");
+    Gfx::DrawText(Gfx::SystemFontNintendoExt,
+                  {panelW - 96.0f, hintY + 1.0f},
+                  21.0f,
+                  hintColor,
+                  Gfx::align_Left,
+                  Gfx::align_Left,
+                  "\uE0E1");
+    Gfx::DrawText(Gfx::SystemFontChinese,
+                  {panelW - 68.0f, hintY + 3.0f},
+                  15.0f,
+                  hintColor,
+                  "返回");
+
+    if (frames.empty() || displayIndices.empty())
+    {
+        Gfx::DrawText(Gfx::SystemFontChinese,
+                      {panelW * 0.5f, panelY + 145.0f},
+                      24.0f,
+                      {0.8f, 0.88f, 0.96f, 0.62f * opacity},
+                      Gfx::align_Center,
+                      Gfx::align_Center,
+                      "暂无倒带缓存");
+        return;
+    }
+
+    const int count = static_cast<int>(displayIndices.size());
+    selected = std::clamp(selected, 0, count - 1);
+    const float gap = 14.0f;
+    const float itemH = 164.0f;
+    const float thumbH = 124.0f;
+    const float itemW = 202.0f;
+    const float viewportX = 32.0f;
+    const float viewportW = panelW - 64.0f;
+    const float totalW = itemW * static_cast<float>(count) + gap * static_cast<float>(std::max(0, count - 1));
+    const float selectedCenter = static_cast<float>(selected) * (itemW + gap) + itemW * 0.5f;
+    const float maxScroll = std::max(0.0f, totalW - viewportW);
+    const float scrollX = std::clamp(selectedCenter - viewportW * 0.5f, 0.0f, maxScroll);
+    const float startX = viewportX - scrollX;
+    const float itemAreaY = panelY + kInfoH;
+    const float y = itemAreaY + 8.0f;
+    const float focusPad = 8.0f;
+
+    Gfx::PushScissor(static_cast<u32>(std::max(0.0f, viewportX - focusPad)),
+                     static_cast<u32>(std::max(0.0f, itemAreaY)),
+                     static_cast<u32>(std::min(panelW, viewportW + focusPad * 2.0f)),
+                     static_cast<u32>(kItemAreaH));
+
+    for (int i = 0; i < count; ++i)
+    {
+        const int frameIndex = std::clamp(displayIndices[static_cast<std::size_t>(i)],
+                                          0,
+                                          static_cast<int>(frames.size()) - 1);
+        const auto& frame = frames[static_cast<std::size_t>(frameIndex)];
+        const float x = startX + static_cast<float>(i) * (itemW + gap);
+        if (x > viewportX + viewportW || x + itemW < viewportX)
+            continue;
+        const bool focus = i == selected;
+        const Gfx::Color cardColor = focus
+            ? Gfx::Color{0.12f, 0.21f, 0.31f, 0.92f * opacity}
+            : Gfx::Color{0.08f, 0.10f, 0.14f, 0.78f * opacity};
+        Gfx::DrawRectangle({x, y}, {itemW, itemH}, cardColor, true);
+        if (focus)
+        {
+            beiklive::mgba_stub::ui::drawGradientBorder({x - 3.0f, y - 3.0f},
+                                                        {itemW + 6.0f, itemH + 6.0f},
+                                                        2.0f);
+        }
+
+        const float innerPad = 8.0f;
+        const float aspect = frame.height > 0 ? static_cast<float>(frame.width) / static_cast<float>(frame.height) : 1.5f;
+        const float thumbW = std::min(itemW - innerPad * 2.0f, thumbH * aspect);
+        const float thumbX = x + (itemW - thumbW) * 0.5f;
+        const float thumbY = y + innerPad;
+        if (frame.texture != 0 && frame.width > 0 && frame.height > 0)
+        {
+            Gfx::SetSampler(Gfx::sampler_Linear | Gfx::sampler_ClampToEdge);
+            Gfx::DrawRectangle(frame.texture,
+                               {thumbX, thumbY},
+                               {thumbW, thumbH},
+                               {0.0f, 0.0f},
+                               {static_cast<float>(frame.width), static_cast<float>(frame.height)},
+                               {1.0f, 1.0f, 1.0f, 0.95f * opacity});
+            Gfx::SetSampler(Gfx::sampler_Nearest | Gfx::sampler_ClampToEdge);
+        }
+        else
+        {
+            Gfx::DrawText(Gfx::SystemFontStandard,
+                          {x + itemW * 0.5f, thumbY + thumbH * 0.5f},
+                          14.0f,
+                          {0.65f, 0.78f, 0.92f, 0.50f * opacity},
+                          Gfx::align_Center,
+                          Gfx::align_Center,
+                          "NO THUMB");
+        }
+        char indexText[32] = {};
+        std::snprintf(indexText, sizeof(indexText), "#%02d", count - 1 - i);
+        Gfx::DrawText(Gfx::SystemFontChinese,
+                      {x + itemW * 0.5f, y + 146.0f},
+                      16.0f,
+                      {0.82f, 0.90f, 1.0f, 0.78f * opacity},
+                      Gfx::align_Center,
+                      Gfx::align_Center,
+                      indexText);
+    }
+    Gfx::PopScissor();
 }
 
 } // namespace
@@ -2264,7 +2525,7 @@ int RunRuntime(const RunOptions& options)
         stateSlots = loadStateSlots(states, options.romPath);
         menuLayer.setStateSlots(stateSlots);
     };
-    auto saveState = [&](int slot) {
+    auto saveState = [&](int slot, bool showToast = true) {
         const std::string defaultPath = statePath(states, options.romPath, slot);
         const std::string defaultThumbPath = stateThumbPath(states, options.romPath, slot);
         std::string path = defaultPath;
@@ -2286,10 +2547,11 @@ int RunRuntime(const RunOptions& options)
         if (ok && core.captureFrame())
             writePngImage(core.rgbaBuffer(), core.width(), core.height(), thumbPath);
         refreshSlots();
-        menuLayer.showToast(ok ? "保存状态完成" : "保存状态失败");
+        if (showToast)
+            menuLayer.showToast(ok ? "保存状态完成" : "保存状态失败");
         return ok;
     };
-    auto loadState = [&](int slot) {
+    auto loadState = [&](int slot, bool showToast = true) {
         std::string path = statePath(states, options.romPath, slot);
         if (slot >= 0 && slot < static_cast<int>(stateSlots.size()) &&
             stateSlots[slot].stateFileAvailable && !stateSlots[slot].statePath.empty())
@@ -2297,7 +2559,8 @@ int RunRuntime(const RunOptions& options)
             path = stateSlots[slot].statePath;
         }
         const bool ok = core.loadState(path);
-        menuLayer.showToast(ok ? "读取状态完成" : "读取状态失败");
+        if (showToast)
+            menuLayer.showToast(ok ? "读取状态完成" : "读取状态失败");
         return ok;
     };
     auto takeScreenshot = [&]() {
@@ -2344,8 +2607,15 @@ int RunRuntime(const RunOptions& options)
     bool rewindContextInitialized = false;
     const int rewindSaveInterval = inputConfig.rewindSaveInterval();
     const int rewindStep = inputConfig.rewindStep();
+    const bool visualRewindEnabled = inputConfig.rewindEnabled() && inputConfig.rewindShowUi();
+    const int visualRewindCapacity = std::max(1, inputConfig.rewindBufferSize() / std::max(1, rewindSaveInterval));
+    const int autoLoadSlot = std::clamp(configInt(configValues, "save.autoLoadState0", 0), 0, 10);
+    const int autoSaveSlot = std::clamp(configInt(configValues, "save.autoSaveState", 0), 0, 10);
+    const int autoSaveInterval = std::max(0, configInt(configValues, "save.autoSaveInterval", 0));
+    const bool autoSaveOnExit = configInt(configValues, "save.autoSaveOnExit", 0) != 0;
+    auto autoSaveStart = std::chrono::steady_clock::now();
     int rewindFrameCounter = 0;
-    if (inputConfig.rewindEnabled())
+    if (inputConfig.rewindEnabled() && !visualRewindEnabled)
     {
         const size_t rewindEntries = static_cast<size_t>(
             std::max(1, inputConfig.rewindBufferSize() / std::max(1, rewindSaveInterval)));
@@ -2355,6 +2625,8 @@ int RunRuntime(const RunOptions& options)
 
     bool running = true;
     bool pendingReturn = false;
+    bool exitAutoSavePending = false;
+    bool exitAutoSaveDrawn = false;
     bool runtimePaused = false;
     bool muted = false;
     bool fastForwardToggle = false;
@@ -2372,6 +2644,154 @@ int RunRuntime(const RunOptions& options)
     int fpsFrames = 0;
     auto fpsStart = std::chrono::steady_clock::now();
     bool menuWasActive = menuLayer.active();
+    std::deque<VisualRewindFrame> visualRewindFrames;
+    bool visualRewindOpen = false;
+    bool visualRewindClosing = false;
+    bool visualRewindAccepting = false;
+    std::uint64_t visualRewindAnimStartTick = 0;
+    int visualRewindSelected = 0;
+    std::vector<int> visualRewindDisplayIndices;
+    int visualRewindNavDirection = 0;
+    std::uint64_t visualRewindNavRepeatStartTick = 0;
+    std::uint64_t visualRewindNavLastStepTick = 0;
+    std::vector<std::uint8_t> visualRewindReturnState;
+    constexpr float kVisualRewindAnimationMs = 180.0f;
+    constexpr float kVisualRewindNavInitialDelayMs = 260.0f;
+
+    auto refreshVisualRewindDisplayIndices = [&]() {
+        visualRewindDisplayIndices = buildVisualRewindDisplayIndices(visualRewindFrames.size(),
+                                                                      rewindSaveInterval);
+        if (visualRewindDisplayIndices.empty())
+            visualRewindSelected = 0;
+        else
+            visualRewindSelected = std::clamp(visualRewindSelected,
+                                              0,
+                                              static_cast<int>(visualRewindDisplayIndices.size()) - 1);
+    };
+
+    auto selectedVisualRewindFrameIndex = [&]() -> int {
+        if (visualRewindDisplayIndices.empty())
+            return -1;
+        visualRewindSelected = std::clamp(visualRewindSelected,
+                                          0,
+                                          static_cast<int>(visualRewindDisplayIndices.size()) - 1);
+        return std::clamp(visualRewindDisplayIndices[static_cast<std::size_t>(visualRewindSelected)],
+                          0,
+                          static_cast<int>(visualRewindFrames.size()) - 1);
+    };
+
+    auto captureVisualRewindFrame = [&]() {
+        if (!visualRewindEnabled)
+            return;
+        VisualRewindFrame frame;
+        if (!core.saveStateToMemory(frame.state))
+            return;
+        if (core.captureFrame())
+        {
+            frame.width = core.width();
+            frame.height = core.height();
+            frame.rgba = core.rgbaBuffer();
+            createVisualRewindTexture(frame);
+        }
+        visualRewindFrames.push_back(std::move(frame));
+        while (static_cast<int>(visualRewindFrames.size()) > visualRewindCapacity)
+        {
+            releaseVisualRewindFrame(visualRewindFrames.front());
+            visualRewindFrames.pop_front();
+        }
+        const int count = static_cast<int>(visualRewindFrames.size());
+        for (int i = 0; i < count; ++i)
+        {
+            const int newestDistance = count - 1 - i;
+            visualRewindFrames[static_cast<std::size_t>(i)].secondsAgo =
+                std::max(1, newestDistance * rewindSaveInterval / static_cast<int>(std::max(1.0, core.fps())));
+        }
+    };
+
+    auto previewVisualRewindSelection = [&]() {
+        if (visualRewindFrames.empty() || visualRewindDisplayIndices.empty())
+            return;
+        const int frameIndex = selectedVisualRewindFrameIndex();
+        if (frameIndex < 0)
+            return;
+        const auto& frame = visualRewindFrames[static_cast<std::size_t>(frameIndex)];
+        if (!frame.rgba.empty() && frame.width > 0 && frame.height > 0)
+        {
+            gameLayer.uploadFrame(frame.rgba.data(),
+                                  frame.width,
+                                  frame.height,
+                                  frame.width * sizeof(std::uint32_t));
+        }
+    };
+
+    auto openVisualRewind = [&]() {
+        if (!visualRewindEnabled || visualRewindOpen || visualRewindClosing || menuLayer.active())
+            return;
+        visualRewindReturnState.clear();
+        core.saveStateToMemory(visualRewindReturnState);
+        if (core.captureFrame())
+            gameLayer.uploadFrame(core.rgbaBuffer().data(), core.width(), core.height(), core.width() * sizeof(std::uint32_t));
+        visualRewindOpen = true;
+        visualRewindClosing = false;
+        visualRewindAccepting = false;
+        visualRewindAnimStartTick = armGetSystemTick();
+        refreshVisualRewindDisplayIndices();
+        visualRewindSelected = visualRewindDisplayIndices.empty()
+                                   ? 0
+                                   : static_cast<int>(visualRewindDisplayIndices.size()) - 1;
+        visualRewindNavDirection = 0;
+        previewVisualRewindSelection();
+        gameAudio.playSound(MgbaMenuSound::Click);
+    };
+
+    auto closeVisualRewind = [&](bool accept) {
+        if (!visualRewindOpen || visualRewindClosing)
+            return;
+        visualRewindAccepting = accept;
+        visualRewindClosing = true;
+        visualRewindAnimStartTick = armGetSystemTick();
+        gameAudio.playSound(accept ? MgbaMenuSound::Click : MgbaMenuSound::Back);
+    };
+
+    auto visualRewindNavStep = [&](std::uint64_t down, std::uint64_t held) -> int {
+        auto directionFromButtons = [](std::uint64_t buttons) {
+            if (buttons & HidNpadButton_Right)
+                return 1;
+            if (buttons & HidNpadButton_Left)
+                return -1;
+            return 0;
+        };
+        const int heldDirection = directionFromButtons(held);
+        if (heldDirection == 0)
+        {
+            visualRewindNavDirection = 0;
+            return 0;
+        }
+        const std::uint64_t now = armGetSystemTick();
+        const int downDirection = directionFromButtons(down);
+        if (downDirection != 0 || visualRewindNavDirection != heldDirection)
+        {
+            visualRewindNavDirection = heldDirection;
+            visualRewindNavRepeatStartTick = now;
+            visualRewindNavLastStepTick = now;
+            return downDirection != 0 ? downDirection : 0;
+        }
+        const float heldMs = static_cast<float>(armTicksToNs(now - visualRewindNavRepeatStartTick)) / 1000000.0f;
+        if (heldMs < kVisualRewindNavInitialDelayMs)
+            return 0;
+        const float intervalMs = std::max(48.0f, 128.0f - (heldMs - kVisualRewindNavInitialDelayMs) * 0.12f);
+        const float sinceLastMs = static_cast<float>(armTicksToNs(now - visualRewindNavLastStepTick)) / 1000000.0f;
+        if (sinceLastMs < intervalMs)
+            return 0;
+        visualRewindNavLastStepTick = now;
+        return heldDirection;
+    };
+
+    if (autoLoadSlot > 0)
+    {
+        loadState(autoLoadSlot - 1, false);
+        uploadCurrentFrame();
+    }
 
     while (appletMainLoop() && running)
     {
@@ -2381,7 +2801,52 @@ int RunRuntime(const RunOptions& options)
         const uint64_t buttonsDown = padGetButtonsDown(&pad);
         const uint64_t buttonsHeld = padGetButtons(&pad);
 
-        if (inputConfig.menuDown(input))
+        if (visualRewindOpen && visualRewindClosing &&
+            beiklive::mgba_stub::ui::animationProgress(visualRewindAnimStartTick, kVisualRewindAnimationMs) >= 1.0f)
+        {
+            const int selectedFrameIndex = selectedVisualRewindFrameIndex();
+            if (visualRewindAccepting && selectedFrameIndex >= 0)
+            {
+                const auto& selectedFrame = visualRewindFrames[static_cast<std::size_t>(selectedFrameIndex)];
+                if (core.loadStateFromMemory(selectedFrame.state))
+                    uploadCurrentFrame();
+                releaseVisualRewindFrames(visualRewindFrames);
+                visualRewindDisplayIndices.clear();
+            }
+            else
+            {
+                if (!visualRewindReturnState.empty())
+                    core.loadStateFromMemory(visualRewindReturnState);
+                uploadCurrentFrame();
+            }
+            visualRewindOpen = false;
+            visualRewindClosing = false;
+            visualRewindAccepting = false;
+            visualRewindReturnState.clear();
+        }
+
+        if (visualRewindOpen && !visualRewindClosing)
+        {
+            const int navStep = visualRewindNavStep(buttonsDown, buttonsHeld);
+            if (navStep != 0 && !visualRewindDisplayIndices.empty())
+            {
+                const int previousSelected = visualRewindSelected;
+                visualRewindSelected = std::clamp(visualRewindSelected + navStep,
+                                                  0,
+                                                  static_cast<int>(visualRewindDisplayIndices.size()) - 1);
+                if (visualRewindSelected != previousSelected)
+                {
+                    previewVisualRewindSelection();
+                    gameAudio.playSound(MgbaMenuSound::Focus);
+                }
+            }
+            if (buttonsDown & HidNpadButton_A)
+                closeVisualRewind(!visualRewindDisplayIndices.empty());
+            if (buttonsDown & HidNpadButton_B)
+                closeVisualRewind(false);
+        }
+
+        if (!visualRewindOpen && !exitAutoSavePending && inputConfig.menuDown(input))
         {
             if (menuLayer.visible())
             {
@@ -2394,7 +2859,9 @@ int RunRuntime(const RunOptions& options)
             }
         }
 
-        const MgbaMenuResult result = menuLayer.update(buttonsDown, buttonsHeld);
+        const MgbaMenuResult result = (visualRewindOpen || exitAutoSavePending)
+                                          ? MgbaMenuResult{}
+                                          : menuLayer.update(buttonsDown, buttonsHeld);
         for (const MgbaMenuSound sound : menuLayer.consumeSounds())
             gameAudio.playSound(sound);
 
@@ -2475,7 +2942,11 @@ int RunRuntime(const RunOptions& options)
             break;
         case MgbaMenuAction::LoadState:
             if (loadState(result.slot))
+            {
+                releaseVisualRewindFrames(visualRewindFrames);
+                visualRewindDisplayIndices.clear();
                 menuLayer.close();
+            }
             break;
         case MgbaMenuAction::DeleteState:
         {
@@ -2502,12 +2973,27 @@ int RunRuntime(const RunOptions& options)
         }
         case MgbaMenuAction::ResetGame:
             core.reset();
+            releaseVisualRewindFrames(visualRewindFrames);
+            visualRewindDisplayIndices.clear();
             menuLayer.close();
             break;
         case MgbaMenuAction::ExitGame:
             flushDisplay();
             pendingReturn = true;
-            running = false;
+            if (autoSaveOnExit && autoSaveSlot > 0)
+            {
+                exitAutoSavePending = true;
+                exitAutoSaveDrawn = false;
+                menuLayer.close();
+                menuLayer.clearToast();
+                gameAudio.setFrameLimiter(true);
+                gameAudio.setSpeed(1.0f);
+                gameAudio.setMuted(true);
+            }
+            else
+            {
+                running = false;
+            }
             break;
         default:
             break;
@@ -2517,13 +3003,16 @@ int RunRuntime(const RunOptions& options)
             flushDisplay();
         menuWasActive = menuActiveAfterUpdate;
 
-        if (!menuLayer.active())
+        if (!menuLayer.active() && !visualRewindOpen && !exitAutoSavePending)
         {
             if (inputConfig.fastForwardEnabled() &&
                 inputConfig.fastForwardToggleMode() &&
                 inputConfig.fastForwardDown(input))
                 fastForwardToggle = !fastForwardToggle;
-            if (inputConfig.rewindEnabled() &&
+            if (visualRewindEnabled && inputConfig.rewindEnabled() && inputConfig.comboDownFor("handle.rewind", input))
+                openVisualRewind();
+            else if (inputConfig.rewindEnabled() &&
+                !visualRewindEnabled &&
                 inputConfig.rewindToggleMode() &&
                 inputConfig.comboDownFor("handle.rewind", input))
                 rewindToggle = !rewindToggle;
@@ -2537,7 +3026,11 @@ int RunRuntime(const RunOptions& options)
             if (inputConfig.comboDownFor("hotkey.quicksave.pad", input))
                 saveState(0);
             if (inputConfig.comboDownFor("hotkey.quickload.pad", input))
+            {
                 loadState(0);
+                releaseVisualRewindFrames(visualRewindFrames);
+                visualRewindDisplayIndices.clear();
+            }
             if (inputConfig.comboDownFor("hotkey.screenshot.pad", input))
                 takeScreenshot();
         }
@@ -2546,7 +3039,7 @@ int RunRuntime(const RunOptions& options)
         fastForwardActive = false;
         rewindActive = false;
         const bool menuActive = menuLayer.active();
-        const bool suppressGameInput = menuActive || runtimePaused;
+        const bool suppressGameInput = menuActive || runtimePaused || visualRewindOpen || exitAutoSavePending;
         const bool fastForwardHeld = inputConfig.fastForwardToggleMode()
                                          ? fastForwardToggle
                                          : inputConfig.fastForwardHeld(input);
@@ -2571,7 +3064,8 @@ int RunRuntime(const RunOptions& options)
         gameAudio.setSpeed(fastForwardActive && !inputConfig.fastForwardMute() ? multiplier : 1.0f);
         gameAudio.setMuted(muted ||
                            (fastForwardActive && inputConfig.fastForwardMute()) ||
-                           (rewindActive && inputConfig.rewindMute()));
+                           (rewindActive && inputConfig.rewindMute()) ||
+                           exitAutoSavePending);
 
         if (!suppressGameInput)
         {
@@ -2634,13 +3128,16 @@ int RunRuntime(const RunOptions& options)
                     framesRan = 1;
                 }
             }
-            if (rewindContextInitialized && framesRan > 0)
+            if ((rewindContextInitialized || visualRewindEnabled) && framesRan > 0)
             {
                 rewindFrameCounter += framesRan;
                 while (rewindFrameCounter >= rewindSaveInterval)
                 {
                     rewindFrameCounter -= rewindSaveInterval;
-                    mCoreRewindAppend(&rewindContext, core.nativeCore());
+                    if (rewindContextInitialized)
+                        mCoreRewindAppend(&rewindContext, core.nativeCore());
+                    if (visualRewindEnabled)
+                        captureVisualRewindFrame();
                 }
             }
         }
@@ -2653,7 +3150,7 @@ int RunRuntime(const RunOptions& options)
         if ((menuActive || runtimePaused || framesRan == 0) && !rewindActive)
             gameAudio.pumpUiAudio();
 
-        const bool emulationPaused = menuActive || runtimePaused;
+        const bool emulationPaused = menuActive || runtimePaused || visualRewindOpen || exitAutoSavePending;
         if (!emulationPaused && !rewindActive && framesRan > 0)
         {
             const auto nowForPlayTime = std::chrono::steady_clock::now();
@@ -2675,7 +3172,18 @@ int RunRuntime(const RunOptions& options)
             playTimeLast = std::chrono::steady_clock::now();
         }
 
-        if (!rewindActive)
+        if (!emulationPaused && !rewindActive && framesRan > 0 && autoSaveSlot > 0 && autoSaveInterval > 0)
+        {
+            const auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+                std::chrono::steady_clock::now() - autoSaveStart).count();
+            if (elapsed >= autoSaveInterval)
+            {
+                saveState(autoSaveSlot - 1, false);
+                autoSaveStart = std::chrono::steady_clock::now();
+            }
+        }
+
+        if (!rewindActive && !visualRewindOpen)
             uploadCurrentFrame();
 
         Gfx::StartFrame();
@@ -2690,6 +3198,16 @@ int RunRuntime(const RunOptions& options)
                                      rewindActive,
                                      inputConfig.showRewindOverlay(),
                                      runtimePaused);
+        if (exitAutoSavePending)
+            ui::drawBusyDialog("正在自动保存", "保存完毕后将自动退出游戏。", 1.0f);
+        if (visualRewindOpen)
+        {
+            float progress = beiklive::mgba_stub::ui::animationProgress(visualRewindAnimStartTick,
+                                                                        kVisualRewindAnimationMs);
+            if (visualRewindClosing)
+                progress = 1.0f - progress;
+            drawVisualRewindBar(visualRewindFrames, visualRewindDisplayIndices, visualRewindSelected, progress);
+        }
         menuLayer.draw();
         gameRumble.flush();
         Gfx::PopScissor();
@@ -2715,6 +3233,20 @@ int RunRuntime(const RunOptions& options)
             if (sleepUs > 500)
                 svcSleepThread(static_cast<int64_t>(sleepUs) * 1000);
         }
+
+        if (exitAutoSavePending)
+        {
+            if (!exitAutoSaveDrawn)
+            {
+                exitAutoSaveDrawn = true;
+            }
+            else
+            {
+                saveState(autoSaveSlot - 1, false);
+                exitAutoSavePending = false;
+                running = false;
+            }
+        }
     }
 
     core.saveSram();
@@ -2726,6 +3258,8 @@ int RunRuntime(const RunOptions& options)
                   configBool(configValues, "UI.useSavestateThumbnail", false));
     if (rewindContextInitialized)
         mCoreRewindContextDeinit(&rewindContext);
+    releaseVisualRewindFrames(visualRewindFrames);
+    visualRewindDisplayIndices.clear();
     gameRumble.stop();
     gameAudio.deinit();
     Gfx::PresentQueue.waitIdle();
