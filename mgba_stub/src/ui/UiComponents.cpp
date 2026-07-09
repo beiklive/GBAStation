@@ -790,20 +790,7 @@ float menuItemY(int index)
 
 void drawOverlay(float alphaScale)
 {
-
-    constexpr int baMgba = 8;
-    for (int i = 0; i < baMgba; ++i)
-    {
-        const float t = static_cast<float>(i) / static_cast<float>(baMgba - 1);
-        const float y = kScreenH * static_cast<float>(i) / static_cast<float>(baMgba);
-        const float h = kScreenH / static_cast<float>(baMgba) + 1.0f;
-        drawRect({0.0f, y}, {kScreenW, h},
-                 {lerp(0.145f, 0.063f, t),
-                  lerp(0.145f, 0.063f, t),
-                  lerp(0.153f, 0.071f, t),
-                  kMenuAlpha150},
-                 true);
-    }
+    drawRect({0.0f, 0.0f}, {kScreenW, kScreenH}, {0.0f, 0.0f, 0.0f, 0.80f * alphaScale}, false);
 }
 
 void drawHeader(float offsetY)
@@ -912,7 +899,7 @@ void drawLeftMenu(int selected,
 void drawFooter(bool contentFocused, bool canDelete, MgbaMenuLayer::Item item, float offsetY)
 {
     const float footerY = kScreenH - 72.0f + offsetY;
-    drawRect({0.0f, footerY}, {kScreenW, 72.0f}, {0.0f, 0.0f, 0.0f, 0.86f}, false);
+    drawRect({0.0f, footerY}, {kScreenW, 72.0f}, {0.0f, 0.0f, 0.0f, 0.0f}, false);
 
     const float y = kScreenH - 38.0f + offsetY;
     float right = kScreenW - 86.0f;
@@ -928,9 +915,9 @@ void drawFooter(bool contentFocused, bool canDelete, MgbaMenuLayer::Item item, f
         const float x = right - groupW;
 
         Gfx::DrawText(Gfx::SystemFontNintendoExt, {x + iconSize * 0.5f, y}, iconSize,
-                      {1.0f, 1.0f, 1.0f, 0.92f}, Gfx::align_Center, Gfx::align_Center, icon);
+                      {1.0f, 1.0f, 1.0f, 1.0f}, Gfx::align_Center, Gfx::align_Center, icon);
         Gfx::DrawText(Gfx::SystemFontChinese, {x + iconSize + iconTextGap, y - 10.0f}, textSize,
-                      {1.0f, 1.0f, 1.0f, 0.76f}, "%s", text);
+                      {1.0f, 1.0f, 1.0f, 1.0f}, "%s", text);
         right = x - groupGap;
     };
 
@@ -1873,7 +1860,7 @@ void drawFilePicker(const std::string& directory,
     }
 
     const float footerY = kScreenH - footerH + offsetY;
-    drawRect({0.0f, footerY}, {kScreenW, footerH}, {0.0f, 0.0f, 0.0f, 0.86f * opacity}, false);
+    drawRect({0.0f, footerY}, {kScreenW, footerH}, {0.0f, 0.0f, 0.0f, 0.0f}, false);
 
     float hintX = kScreenW - 36.0f;
     auto drawHint = [&](const char* icon, const char* text, Color textColor) {
@@ -1883,9 +1870,9 @@ void drawFilePicker(const std::string& directory,
         const float groupW = iconSize + 12.0f + textW;
         hintX -= groupW;
         Gfx::DrawText(Gfx::SystemFontNintendoExt, {hintX + iconSize * 0.5f, footerY + 50.0f}, iconSize,
-                      {1.0f, 1.0f, 1.0f, 0.92f * opacity}, Gfx::align_Center, Gfx::align_Center, icon);
+                      {1.0f, 1.0f, 1.0f, 1.0f}, Gfx::align_Center, Gfx::align_Center, icon);
         Gfx::DrawText(Gfx::SystemFontChinese, {hintX + iconSize + 12.0f, footerY + 36.0f}, textSize,
-                      textColor, "%s", text);
+                      textColor.WithAlpha(1.0f), "%s", text);
         hintX -= 34.0f;
     };
     drawHint(mgba_stub_KEYICON_A, previewVisible ? "关闭" : "选择", {0.38f, 0.78f, 1.0f, 0.92f * opacity});

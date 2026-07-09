@@ -749,20 +749,7 @@ float menuItemY(int index)
 
 void drawOverlay(float alphaScale)
 {
-
-    constexpr int bands = 8;
-    for (int i = 0; i < bands; ++i)
-    {
-        const float t = static_cast<float>(i) / static_cast<float>(bands - 1);
-        const float y = kScreenH * static_cast<float>(i) / static_cast<float>(bands);
-        const float h = kScreenH / static_cast<float>(bands) + 1.0f;
-        drawRect({0.0f, y}, {kScreenW, h},
-                 {lerp(0.145f, 0.063f, t),
-                  lerp(0.145f, 0.063f, t),
-                  lerp(0.153f, 0.071f, t),
-                  kMenuAlpha150},
-                 true);
-    }
+    drawRect({0.0f, 0.0f}, {kScreenW, kScreenH}, {0.0f, 0.0f, 0.0f, 0.80f * alphaScale}, false);
 }
 
 void drawHeader(float offsetY)
@@ -862,7 +849,7 @@ void drawLeftMenu(int selected,
 void drawFooter(bool contentFocused, bool canDelete, float offsetY)
 {
     const float footerY = kScreenH - 72.0f + offsetY;
-    drawRect({0.0f, footerY}, {kScreenW, 72.0f}, {0.0f, 0.0f, 0.0f, 0.86f}, false);
+    drawRect({0.0f, footerY}, {kScreenW, 72.0f}, {0.0f, 0.0f, 0.0f, 0.0f}, false);
 
     const float y = kScreenH - 38.0f + offsetY;
     float right = kScreenW - 86.0f;
@@ -878,9 +865,9 @@ void drawFooter(bool contentFocused, bool canDelete, float offsetY)
         const float x = right - groupW;
 
         Gfx::DrawText(Gfx::SystemFontNintendoExt, {x + iconSize * 0.5f, y}, iconSize,
-                      {1.0f, 1.0f, 1.0f, 0.92f}, Gfx::align_Center, Gfx::align_Center, icon);
+                      {1.0f, 1.0f, 1.0f, 1.0f}, Gfx::align_Center, Gfx::align_Center, icon);
         Gfx::DrawText(Gfx::SystemFontChinese, {x + iconSize + iconTextGap, y - 10.0f}, textSize,
-                      {1.0f, 1.0f, 1.0f, 0.76f}, "%s", text);
+                      {1.0f, 1.0f, 1.0f, 1.0f}, "%s", text);
         right = x - groupGap;
     };
 
@@ -1021,14 +1008,14 @@ void drawStateSlotPage(const char* title,
     const Vector2f previewPos{kContentX + offsetX + listW + gap,
                               bodyY + (kContentBodyH - previewH) * 0.5f};
 
-    drawRect(listPos - Vector2f{8.0f, 8.0f},
-             {listW + 16.0f, kContentBodyH + 16.0f},
-             {0.145f, 0.145f, 0.153f, kMenuAlpha150 * opacity},
-             true);
-    drawBorder(listPos - Vector2f{8.0f, 8.0f},
-               {listW + 16.0f, kContentBodyH + 16.0f},
-               1.0f,
-               {0.24f, 0.24f, 0.24f, 0.58f * opacity});
+    // drawRect(listPos - Vector2f{8.0f, 8.0f},
+    //          {listW + 16.0f, kContentBodyH + 16.0f},
+    //          {0.145f, 0.145f, 0.153f, kMenuAlpha150 * opacity},
+    //          true);
+    // drawBorder(listPos - Vector2f{8.0f, 8.0f},
+    //            {listW + 16.0f, kContentBodyH + 16.0f},
+    //            1.0f,
+    //            {0.24f, 0.24f, 0.24f, 0.58f * opacity});
 
     for (int i = 0; i < 10; ++i)
     {
@@ -1074,10 +1061,10 @@ void drawStateSlotPage(const char* title,
         }
     }
 
-    drawRect(previewPos - Vector2f{10.0f, 10.0f},
-             {previewW + 20.0f, previewH + 20.0f},
-             {0.117f, 0.117f, 0.117f, kMenuAlpha150 * opacity},
-             true);
+    // drawRect(previewPos - Vector2f{10.0f, 10.0f},
+    //          {previewW + 20.0f, previewH + 20.0f},
+    //          {0.117f, 0.117f, 0.117f, kMenuAlpha150 * opacity},
+    //          true);
     drawBorder(previewPos - Vector2f{10.0f, 10.0f},
                {previewW + 20.0f, previewH + 20.0f},
                1.0f,
@@ -1767,7 +1754,7 @@ void drawFilePicker(const std::string& directory,
     }
 
     const float footerY = kScreenH - footerH + offsetY;
-    drawRect({0.0f, footerY}, {kScreenW, footerH}, {0.0f, 0.0f, 0.0f, 0.86f * opacity}, false);
+    drawRect({0.0f, footerY}, {kScreenW, footerH}, {0.0f, 0.0f, 0.0f, 0.0f}, false);
 
     float hintX = kScreenW - 36.0f;
     auto drawHint = [&](const char* icon, const char* text, Color textColor) {
@@ -1777,9 +1764,9 @@ void drawFilePicker(const std::string& directory,
         const float groupW = iconSize + 12.0f + textW;
         hintX -= groupW;
         Gfx::DrawText(Gfx::SystemFontNintendoExt, {hintX + iconSize * 0.5f, footerY + 50.0f}, iconSize,
-                      {1.0f, 1.0f, 1.0f, 0.92f * opacity}, Gfx::align_Center, Gfx::align_Center, icon);
+                      {1.0f, 1.0f, 1.0f, 1.0f}, Gfx::align_Center, Gfx::align_Center, icon);
         Gfx::DrawText(Gfx::SystemFontChinese, {hintX + iconSize + 12.0f, footerY + 36.0f}, textSize,
-                      textColor, "%s", text);
+                      textColor.WithAlpha(1.0f), "%s", text);
         hintX -= 34.0f;
     };
     drawHint(NDS_STUB_KEYICON_A, previewVisible ? "关闭" : "选择", {0.38f, 0.78f, 1.0f, 0.92f * opacity});
@@ -1809,8 +1796,8 @@ void drawTabFrame(NdsMenuLayer::Item item,
         item == NdsMenuLayer::Item::Exit)
         return;
 
-    drawRect({kContentX - 22.0f, kContentY - 24.0f + offsetY}, {kContentW + 44.0f, kContentH + 34.0f},
-             {0.117f, 0.117f, 0.117f, kMenuAlpha150}, true);
+    // drawRect({kContentX - 22.0f, kContentY - 24.0f + offsetY}, {kContentW + 44.0f, kContentH + 34.0f},
+    //          {0.117f, 0.117f, 0.117f, kMenuAlpha150}, true);
 
     auto drawPage = [&](NdsMenuLayer::Item page, float offsetX, float opacity) {
         switch (page)
