@@ -208,6 +208,8 @@ private:
     void closeDeleteDialog();
     void openCheatDeleteDialog();
     void closeCheatDeleteDialog();
+    void openCheatHelpDialog();
+    void closeCheatHelpDialog();
     void openSyncConfirmDialog(MgbaMenuAction action);
     void closeSyncConfirmDialog();
     void closeSyncResultDialog();
@@ -237,6 +239,7 @@ private:
     int m_deleteSlot = -1;
     bool m_cheatDeleteDialogVisible = false;
     int m_deleteCheatEntry = -1;
+    bool m_cheatHelpDialogVisible = false;
     bool m_syncConfirmVisible = false;
     MgbaMenuAction m_syncConfirmAction = MgbaMenuAction::None;
     bool m_syncResultVisible = false;

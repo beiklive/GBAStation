@@ -10,15 +10,21 @@
 
 #include <mgba-util/vfs.h>
 #include <mgba/core/blip_buf.h>
+#include <mgba/core/cheats.h>
 #include <mgba/core/config.h>
+#include <mgba/core/cpu.h>
 #include <mgba/core/core.h>
 #include <mgba/core/interface.h>
 #include <mgba/core/rewind.h>
 #include <mgba/core/serialize.h>
+#include <mgba/internal/arm/arm.h>
+#include <mgba/internal/gba/cheats.h>
 #include <mgba/gba/interface.h>
 #include <mgba/internal/gba/audio.h>
 #include <mgba/internal/gba/input.h>
+#include <mgba/internal/gb/cheats.h>
 #include <mgba/internal/gb/overrides.h>
+#include <mgba/internal/sm83/sm83.h>
 
 #include <algorithm>
 #include <array>
@@ -1999,6 +2005,7 @@ public:
         m_fps = 60.0;
         if (!m_core)
             return;
+        releaseFallbackCheatDevice();
         if (m_coreInitialized)
         {
             m_core->unloadROM(m_core);
@@ -2125,13 +2132,120 @@ public:
     unsigned height() const { return m_height; }
     double fps() const { return m_fps; }
     mCore* nativeCore() const { return m_core; }
+    mCheatDevice* cheatDevice()
+    {
+        if (!m_core)
+            return nullptr;
+        if (m_fallbackCheatDevice)
+            return m_fallbackCheatDevice;
+        if (m_core->cheatDevice)
+        {
+            if (mCheatDevice* device = m_core->cheatDevice(m_core))
+                return device;
+            beiklive::mgba_stub::AppendCheatLog("runtime cheat device: native accessor returned null, trying fallback");
+        }
+        if (!m_core->platform || !m_core->cpu)
+        {
+            beiklive::mgba_stub::AppendCheatLog("runtime cheat device fallback failed: missing platform or cpu");
+            return nullptr;
+        }
+
+        const mPlatform platform = m_core->platform(m_core);
+        if (platform == mPLATFORM_GBA)
+        {
+            auto* cpu = static_cast<ARMCore*>(m_core->cpu);
+            if (!cpu || !cpu->components || CPU_COMPONENT_CHEAT_DEVICE >= cpu->numComponents)
+            {
+                beiklive::mgba_stub::AppendCheatLog("runtime cheat device fallback failed: invalid GBA cpu components");
+                return nullptr;
+            }
+            m_fallbackCheatDevice = GBACheatDeviceCreate();
+            if (!m_fallbackCheatDevice)
+            {
+                beiklive::mgba_stub::AppendCheatLog("runtime cheat device fallback failed: GBACheatDeviceCreate returned null");
+                return nullptr;
+            }
+            m_fallbackCheatDevice->p = m_core;
+            cpu->components[CPU_COMPONENT_CHEAT_DEVICE] = &m_fallbackCheatDevice->d;
+            ARMHotplugAttach(cpu, CPU_COMPONENT_CHEAT_DEVICE);
+            m_fallbackCheatPlatform = platform;
+            m_fallbackCheatAttached = true;
+            beiklive::mgba_stub::AppendCheatLog("runtime cheat device fallback ok: GBA device attached");
+            return m_fallbackCheatDevice;
+        }
+        if (platform == mPLATFORM_GB)
+        {
+            auto* cpu = static_cast<SM83Core*>(m_core->cpu);
+            if (!cpu || !cpu->components || CPU_COMPONENT_CHEAT_DEVICE >= cpu->numComponents)
+            {
+                beiklive::mgba_stub::AppendCheatLog("runtime cheat device fallback failed: invalid GB cpu components");
+                return nullptr;
+            }
+            m_fallbackCheatDevice = GBCheatDeviceCreate();
+            if (!m_fallbackCheatDevice)
+            {
+                beiklive::mgba_stub::AppendCheatLog("runtime cheat device fallback failed: GBCheatDeviceCreate returned null");
+                return nullptr;
+            }
+            m_fallbackCheatDevice->p = m_core;
+            cpu->components[CPU_COMPONENT_CHEAT_DEVICE] = &m_fallbackCheatDevice->d;
+            SM83HotplugAttach(cpu, CPU_COMPONENT_CHEAT_DEVICE);
+            m_fallbackCheatPlatform = platform;
+            m_fallbackCheatAttached = true;
+            beiklive::mgba_stub::AppendCheatLog("runtime cheat device fallback ok: GB device attached");
+            return m_fallbackCheatDevice;
+        }
+        beiklive::mgba_stub::AppendCheatLog("runtime cheat device fallback failed: unsupported platform=" +
+                                           std::to_string(static_cast<int>(platform)));
+        return nullptr;
+    }
     std::vector<uint32_t>& rgbaBuffer() { return m_rgbaBuffer; }
 
 private:
+    void releaseFallbackCheatDevice()
+    {
+        if (!m_fallbackCheatDevice)
+            return;
+        if (m_fallbackCheatAttached && m_core && m_core->cpu)
+        {
+            if (m_fallbackCheatPlatform == mPLATFORM_GBA)
+            {
+                auto* cpu = static_cast<ARMCore*>(m_core->cpu);
+                if (cpu && cpu->components && CPU_COMPONENT_CHEAT_DEVICE < cpu->numComponents)
+                {
+                    if (cpu->components[CPU_COMPONENT_CHEAT_DEVICE] == &m_fallbackCheatDevice->d)
+                    {
+                        ARMHotplugDetach(cpu, CPU_COMPONENT_CHEAT_DEVICE);
+                        cpu->components[CPU_COMPONENT_CHEAT_DEVICE] = nullptr;
+                    }
+                }
+            }
+            else if (m_fallbackCheatPlatform == mPLATFORM_GB)
+            {
+                auto* cpu = static_cast<SM83Core*>(m_core->cpu);
+                if (cpu && cpu->components && CPU_COMPONENT_CHEAT_DEVICE < cpu->numComponents)
+                {
+                    if (cpu->components[CPU_COMPONENT_CHEAT_DEVICE] == &m_fallbackCheatDevice->d)
+                    {
+                        SM83HotplugDetach(cpu, CPU_COMPONENT_CHEAT_DEVICE);
+                        cpu->components[CPU_COMPONENT_CHEAT_DEVICE] = nullptr;
+                    }
+                }
+            }
+        }
+        mCheatDeviceDestroy(m_fallbackCheatDevice);
+        m_fallbackCheatDevice = nullptr;
+        m_fallbackCheatAttached = false;
+        m_fallbackCheatPlatform = mPLATFORM_NONE;
+    }
+
     mCore* m_core = nullptr;
     bool m_coreInitialized = false;
     bool m_configInitialized = false;
     bool m_ready = false;
+    mCheatDevice* m_fallbackCheatDevice = nullptr;
+    bool m_fallbackCheatAttached = false;
+    mPlatform m_fallbackCheatPlatform = mPLATFORM_NONE;
     std::string m_savePath;
     unsigned m_width = 0;
     unsigned m_height = 0;
@@ -2504,25 +2618,53 @@ int RunRuntime(const RunOptions& options)
     auto refreshCheatMenu = [&]() {
         menuLayer.setCheatItems(beiklive::mgba_stub::BuildCheatMenuItems(cheats));
     };
+    auto enabledCheatCount = [&]() {
+        int count = 0;
+        for (const auto& cheat : cheats)
+        {
+            if (cheat.enabled)
+                ++count;
+        }
+        return count;
+    };
+    bool cheatsAppliedToCore = false;
     auto applyCheats = [&]() {
-        const MgbaCheatApplyResult result =
-            beiklive::mgba_stub::ApplyCheatsToCore(core.nativeCore(), cheats);
+        MgbaCheatApplyResult result;
+        const int enabledCount = enabledCheatCount();
+        if (enabledCount > 0 || cheatsAppliedToCore)
+        {
+            int platform = -1;
+            if (core.nativeCore() && core.nativeCore()->platform)
+                platform = static_cast<int>(core.nativeCore()->platform(core.nativeCore()));
+            result = beiklive::mgba_stub::ApplyCheatsToDevice(core.cheatDevice(),
+                                                              platform,
+                                                              cheats,
+                                                              "runtime");
+            if (result.ok)
+                cheatsAppliedToCore = result.appliedCount > 0;
+        }
         refreshCheatMenu();
         return result;
     };
-    auto saveAndApplyCheats = [&](const char* successMessage) {
+    auto syncCheatsFromMenu = [&]() {
         beiklive::mgba_stub::UpdateCheatsFromMenuItems(menuLayer.cheatItems(), cheats);
-        const MgbaCheatApplyResult result = applyCheats();
+    };
+    auto saveCheats = [&](const char* successMessage) {
         const bool saved = beiklive::mgba_stub::SaveRetroArchCheats(cheatPath, cheats);
-        if (!saved)
-            menuLayer.showToast("金手指写入失败");
-        else if (!result.ok)
-            menuLayer.showToast("金手指应用失败");
+        menuLayer.showToast(saved ? (successMessage ? successMessage : "金手指已保存")
+                                  : "金手指写入失败");
+        return saved;
+    };
+    auto applyRuntimeCheats = [&](const char* successMessage) {
+        syncCheatsFromMenu();
+        const MgbaCheatApplyResult result = applyCheats();
+        if (!result.ok)
+            menuLayer.showToast(result.diagnostic.empty() ? "金手指应用失败" : "金手指应用失败，已写入日志");
         else if (result.invalidCount > 0)
-            menuLayer.showToast("金手指已保存，部分代码无效");
+            menuLayer.showToast("金手指部分代码无效");
         else
-            menuLayer.showToast(successMessage ? successMessage : "金手指已保存");
-        return saved && result.ok;
+            menuLayer.showToast(successMessage ? successMessage : "金手指已更新");
+        return result.ok;
     };
     applyCheats();
     if (!cheatsLoaded)
@@ -3013,7 +3155,7 @@ int RunRuntime(const RunOptions& options)
             flushDisplay();
             break;
         case MgbaMenuAction::CheatSettingsChanged:
-            saveAndApplyCheats("金手指已更新");
+            applyRuntimeCheats("金手指已更新");
             break;
         case MgbaMenuAction::CheatPathSelected:
         {
@@ -3027,8 +3169,8 @@ int RunRuntime(const RunOptions& options)
             cheats = std::move(loadedCheats);
             saveCheatPathToGameData(options, cheatPath);
             menuLayer.setCheatPath(cheatPath);
-            const MgbaCheatApplyResult applyResult = applyCheats();
-            menuLayer.showToast(applyResult.invalidCount > 0 ? "已载入，部分代码无效" : "金手指文件已载入");
+            applyCheats();
+            menuLayer.showToast("金手指文件已载入");
             break;
         }
         case MgbaMenuAction::CheatAddRequested:
@@ -3048,10 +3190,11 @@ int RunRuntime(const RunOptions& options)
             MgbaCheatEntry entry;
             entry.name = *name;
             entry.code = normalizedCode;
-            entry.enabled = true;
+            entry.enabled = false;
             cheats.push_back(std::move(entry));
             refreshCheatMenu();
-            saveAndApplyCheats("金手指已新增");
+            if (saveCheats("金手指已新增"))
+                applyCheats();
             break;
         }
         case MgbaMenuAction::CheatRenameRequested:
@@ -3066,7 +3209,8 @@ int RunRuntime(const RunOptions& options)
                 break;
             cheats[static_cast<std::size_t>(result.slot)].name = *name;
             refreshCheatMenu();
-            saveAndApplyCheats("金手指名称已更新");
+            if (saveCheats("金手指名称已更新"))
+                applyCheats();
             break;
         }
         case MgbaMenuAction::CheatCodeEditRequested:
@@ -3090,7 +3234,8 @@ int RunRuntime(const RunOptions& options)
             cheats[static_cast<std::size_t>(result.slot)].valid = true;
             cheats[static_cast<std::size_t>(result.slot)].diagnostic.clear();
             refreshCheatMenu();
-            saveAndApplyCheats("金手指代码已更新");
+            if (saveCheats("金手指代码已更新"))
+                applyCheats();
             break;
         }
         case MgbaMenuAction::CheatDeleteRequested:
@@ -3099,7 +3244,8 @@ int RunRuntime(const RunOptions& options)
                 break;
             cheats.erase(cheats.begin() + result.slot);
             refreshCheatMenu();
-            saveAndApplyCheats("金手指已删除");
+            if (saveCheats("金手指已删除"))
+                applyCheats();
             break;
         }
         case MgbaMenuAction::SyncDisplaySettings:

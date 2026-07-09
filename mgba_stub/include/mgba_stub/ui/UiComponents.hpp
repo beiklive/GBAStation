@@ -141,6 +141,7 @@ void drawDisplayPage(bool linearFiltering,
                      float scrollY = 0.0f);
 void drawDeleteDialog(int slot, float opacity);
 void drawCheatDeleteDialog(const std::string& name, float opacity);
+void drawCheatHelpDialog(float opacity);
 void drawSyncConfirmDialog(MgbaMenuAction action, float opacity);
 void drawSyncResultDialog(MgbaMenuAction action, int count, float opacity);
 void drawBusyDialog(const char* title, const char* body, float opacity);

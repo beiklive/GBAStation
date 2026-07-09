@@ -940,8 +940,10 @@ void drawFooter(bool contentFocused, bool canDelete, MgbaMenuLayer::Item item, f
     {
         drawHint(mgba_stub_KEYICON_Y, "新增");
         drawHint(mgba_stub_KEYICON_X, "代码");
-        drawHint(mgba_stub_KEYICON_RB, "改名");
+        drawHint(mgba_stub_KEYICON_LB, "类型");
+        drawHint(mgba_stub_KEYICON_RB, "名称");
         drawHint(mgba_stub_KEYICON_BACK, "删除");
+        drawHint(mgba_stub_KEYICON_START, "帮助");
     }
     else if (canDelete)
         drawHint(mgba_stub_KEYICON_X, "删除");
@@ -1169,6 +1171,24 @@ void drawCheatPage(const std::vector<MgbaCheatItem>& cheats,
     const Vector2f base{kContentX + offsetX, kContentY + offsetY};
     Gfx::DrawText(Gfx::SystemFontChinese, base, 24.0f,
                   {1.0f, 1.0f, 1.0f, opacity}, "金手指设置");
+    int enabledCount = 0;
+    int totalCount = 0;
+    for (const auto& cheat : cheats)
+    {
+        if (cheat.type != MgbaCheatItem::Type::Code || cheat.entryIndex < 0)
+            continue;
+        ++totalCount;
+        if (cheat.enabled)
+            ++enabledCount;
+    }
+    char countText[32] {};
+    std::snprintf(countText, sizeof(countText), "%d / %d", enabledCount, totalCount);
+    Gfx::DrawText(Gfx::SystemFontStandard,
+                  base + Vector2f{158.0f, 5.0f},
+                  20.0f,
+                  {0.60f, 0.82f, 0.96f, 0.78f * opacity},
+                  "%s",
+                  countText);
 
     const float buttonW = 210.0f;
     const float buttonH = 42.0f;
@@ -1296,6 +1316,55 @@ void drawCheatDeleteDialog(const std::string& name, float opacity)
                   mgba_stub_KEYICON_A);
     Gfx::DrawText(Gfx::SystemFontChinese, {pos.X + size.X - 50.0f, y - 11.0f}, 22.0f,
                   {1.0f, 0.55f, 0.38f, 0.92f * opacity}, "删除");
+}
+
+void drawCheatHelpDialog(float opacity)
+{
+    opacity = clamp01(opacity);
+    drawRect({0.0f, 0.0f}, {kScreenW, kScreenH}, {0.0f, 0.0f, 0.0f, 0.54f * opacity}, true);
+    const Vector2f size{std::min(660.0f, kScreenW - 80.0f), 360.0f};
+    const Vector2f pos{(kScreenW - size.X) * 0.5f, (kScreenH - size.Y) * 0.5f};
+    drawRect(pos, size, {0.04f, 0.055f, 0.075f, 0.97f * opacity}, true);
+    drawBorder(pos, size, 1.0f, {1.0f, 1.0f, 1.0f, 0.16f * opacity});
+
+    Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{34.0f, 26.0f}, 28.0f,
+                  {1.0f, 1.0f, 1.0f, 0.96f * opacity}, "金手指类型");
+    drawLine(pos + Vector2f{34.0f, 72.0f}, {size.X - 68.0f, 1.0f},
+             {0.36f, 0.76f, 1.0f, 0.26f * opacity});
+
+    const Color titleColor{0.54f, 0.84f, 1.0f, 0.94f * opacity};
+    const Color textColor{0.86f, 0.92f, 0.98f, 0.78f * opacity};
+    float y = pos.Y + 96.0f;
+    auto drawBlock = [&](const char* title, const char* body1, const char* body2) {
+        Gfx::DrawText(Gfx::SystemFontChinese, {pos.X + 38.0f, y}, 21.0f,
+                      titleColor, "%s", title);
+        y += 34.0f;
+        Gfx::DrawText(Gfx::SystemFontChinese, {pos.X + 54.0f, y}, 18.0f,
+                      textColor, "%s", body1);
+        y += 28.0f;
+        Gfx::DrawText(Gfx::SystemFontChinese, {pos.X + 54.0f, y}, 18.0f,
+                      textColor, "%s", body2);
+        y += 46.0f;
+    };
+
+    drawBlock("RAW / VBA Raw",
+              "直接写入内存地址，适合 0200xxxx A0 这类地址和值。",
+              "例：02002AEA A0 会按 02002AEA:A0 应用。");
+    drawBlock("GS / CB",
+              "GameShark 或 CodeBreaker 码，常见为两段编码。",
+              "例：32FEAB84 0000，按 L 可切换到此类型。");
+
+    Gfx::DrawText(Gfx::SystemFontChinese, {pos.X + 38.0f, pos.Y + size.Y - 75.0f}, 18.0f,
+                  {1.0f, 0.86f, 0.52f, 0.82f * opacity},
+                  "不确定时先用自动识别；无效时按 L 切换类型再试。");
+
+    const float hintY = pos.Y + size.Y - 34.0f;
+    Gfx::DrawText(Gfx::SystemFontNintendoExt, {pos.X + size.X - 118.0f, hintY}, 32.0f,
+                  {1.0f, 1.0f, 1.0f, 0.92f * opacity}, Gfx::align_Center, Gfx::align_Center,
+                  mgba_stub_KEYICON_A);
+    Gfx::DrawText(Gfx::SystemFontChinese, {pos.X + size.X - 192.0f, hintY - 10.0f}, 21.0f,
+                  {1.0f, 1.0f, 1.0f, 0.78f * opacity}, "关闭");
+
 }
 
 void drawSyncDialogFrame(const char* title,

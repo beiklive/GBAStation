@@ -1729,6 +1729,18 @@ void MgbaMenuLayer::closeCheatDeleteDialog()
     m_deleteCheatEntry = -1;
 }
 
+void MgbaMenuLayer::openCheatHelpDialog()
+{
+    if (m_focusScope != FocusScope::Content || static_cast<Item>(m_selected) != Item::Cheats)
+        return;
+    m_cheatHelpDialogVisible = true;
+}
+
+void MgbaMenuLayer::closeCheatHelpDialog()
+{
+    m_cheatHelpDialogVisible = false;
+}
+
 void MgbaMenuLayer::openSyncConfirmDialog(MgbaMenuAction action)
 {
     if (action != MgbaMenuAction::SyncDisplaySettings &&
@@ -2237,6 +2249,18 @@ MgbaMenuResult MgbaMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t bu
         return {};
     }
 
+    if (m_cheatHelpDialogVisible)
+    {
+        if ((buttonsDown & HidNpadButton_A) ||
+            (buttonsDown & HidNpadButton_B) ||
+            (buttonsDown & HidNpadButton_Plus))
+        {
+            queueSound((buttonsDown & HidNpadButton_B) ? MgbaMenuSound::Back : MgbaMenuSound::Click);
+            closeCheatHelpDialog();
+        }
+        return {};
+    }
+
     if (buttonsDown & HidNpadButton_B)
     {
         queueSound(MgbaMenuSound::Back);
@@ -2410,6 +2434,12 @@ MgbaMenuResult MgbaMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t bu
                 queueSound(MgbaMenuSound::Click);
                 return {MgbaMenuAction::CheatAddRequested, -1};
             }
+            if (buttonsDown & HidNpadButton_Plus)
+            {
+                queueSound(MgbaMenuSound::Click);
+                openCheatHelpDialog();
+                return {};
+            }
             if (count <= 0)
                 return {};
 
@@ -2439,6 +2469,17 @@ MgbaMenuResult MgbaMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t bu
             const int selectedEntry = selectedIndex >= 0 && selectedIndex < static_cast<int>(m_cheats.size())
                                           ? m_cheats[selectedIndex].entryIndex
                                           : -1;
+            if ((buttonsDown & HidNpadButton_L) && selectedEntry >= 0)
+            {
+                auto& item = m_cheats[selectedIndex];
+                if (item.type == MgbaCheatItem::Type::Code)
+                {
+                    item.codeType = item.codeType == "RAW" ? "GS/CB" : "RAW";
+                    m_cheatSettingsDirty = true;
+                    queueSound(MgbaMenuSound::Slider);
+                    return {MgbaMenuAction::CheatSettingsChanged, -1};
+                }
+            }
             if ((buttonsDown & HidNpadButton_X) && selectedEntry >= 0)
             {
                 queueSound(MgbaMenuSound::Click);
@@ -2719,6 +2760,8 @@ void MgbaMenuLayer::draw() const
         }
         drawCheatDeleteDialog(name, panel);
     }
+    if (m_cheatHelpDialogVisible)
+        drawCheatHelpDialog(panel);
     if (m_syncConfirmVisible)
         drawSyncConfirmDialog(m_syncConfirmAction, panel);
     if (m_syncResultVisible)
