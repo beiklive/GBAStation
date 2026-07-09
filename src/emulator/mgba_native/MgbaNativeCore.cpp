@@ -733,6 +733,7 @@ void MgbaNativeCore::initConfigDefaults()
     mCoreConfigSetDefaultUIntValue(&m_core->config, "audioBuffers", kMgbaAudioBuffers);
     mCoreConfigSetDefaultIntValue(&m_core->config, "volume", GBA_AUDIO_VOLUME_MAX);
     mCoreConfigSetDefaultIntValue(&m_core->config, "mute", 0);
+    mCoreConfigSetDefaultIntValue(&m_core->config, "threadedVideo", 0);
     mCoreConfigSetDefaultIntValue(&m_core->config, "useBios", useBios() ? 1 : 0);
     mCoreConfigSetDefaultIntValue(&m_core->config, "skipBios", skipBios() ? 1 : 0);
     mCoreConfigSetDefaultIntValue(&m_core->config, "frameskip", settingInt("core.mgba_frameskip", "0", 0, 10));
@@ -767,6 +768,7 @@ void MgbaNativeCore::applyConfig()
     mCoreConfigSetOverrideUIntValue(&m_core->config, "audioBuffers", kMgbaAudioBuffers);
     mCoreConfigSetOverrideIntValue(&m_core->config, "volume", GBA_AUDIO_VOLUME_MAX);
     mCoreConfigSetOverrideIntValue(&m_core->config, "mute", 0);
+    mCoreConfigSetOverrideIntValue(&m_core->config, "threadedVideo", 0);
     mCoreConfigSetOverrideIntValue(&m_core->config, "useBios", useBios() ? 1 : 0);
     mCoreConfigSetOverrideIntValue(&m_core->config, "skipBios", skipBios() ? 1 : 0);
     mCoreConfigSetOverrideIntValue(&m_core->config, "frameskip", frameskip);

@@ -173,6 +173,7 @@ namespace beiklive
             delete m_core;
             m_core = nullptr;
         }
+        m_coreAudioOutput = nullptr;
 
         if (m_overlayImage) {
             m_overlayImage->clear();
@@ -202,6 +203,7 @@ namespace beiklive
             delete m_core;
             m_core = nullptr;
         }
+        m_coreAudioOutput = nullptr;
 
         m_rendererReady = false;
         m_ndsSplitShaderRenderer = false;
@@ -338,8 +340,12 @@ namespace beiklive
 
         GameInputManager::instance().setActivePlatform(m_gameEntry.platform);
         GameInputManager::instance().handleInput(); // 每帧获取输入
-        _pollNdsTouchInput();
-        _updateNdsVirtualPointer();
+        const bool isNdsView = isNdsPlatform(m_gameEntry.platform);
+        if (isNdsView)
+        {
+            _pollNdsTouchInput();
+            _updateNdsVirtualPointer();
+        }
 
         // // 消费退出信号：异步弹出活动，本帧仍继续渲染避免闪烁
         // if (GameSignal::instance().consumeExit()) {
@@ -547,7 +553,8 @@ namespace beiklive
         }
 
         // 绘制状态覆盖层
-        _drawNdsVirtualPointer(vg);
+        if (isNdsView)
+            _drawNdsVirtualPointer(vg);
         _drawOverlays(vg, x, y, width, height);
     }
 
@@ -1889,7 +1896,8 @@ namespace beiklive
 
         _waitForUiAudioPlayer();
 
-        if (auto* output = coreAudioOutput(m_core)) {
+        m_coreAudioOutput = coreAudioOutput(m_core);
+        if (auto* output = m_coreAudioOutput) {
             brls::Logger::debug("[MgbaGameView] audio init: core-managed output sampleRate={:.0f}", sampleRate);
             beiklive::BKAudioPlayer::setGameAudioActive(true);
             const bool waitForFirstFrame = isMgbaNativePlatform(m_gameEntry.platform) &&
@@ -1932,7 +1940,7 @@ namespace beiklive
 
     void MgbaGameView::_flushAudioForTransition()
     {
-        if (auto* output = coreAudioOutput(m_core)) {
+        if (auto* output = m_coreAudioOutput) {
             output->FlushAudioOutput();
             return;
         }
@@ -1944,7 +1952,7 @@ namespace beiklive
 
     void MgbaGameView::_pauseAudioForTransition()
     {
-        if (auto* output = coreAudioOutput(m_core)) {
+        if (auto* output = m_coreAudioOutput) {
             output->SetAudioOutputEnabled(false);
             beiklive::BKAudioPlayer::setGameAudioActive(false);
             return;
@@ -1955,7 +1963,7 @@ namespace beiklive
 
     void MgbaGameView::_resumeAudioForTransition()
     {
-        if (auto* output = coreAudioOutput(m_core)) {
+        if (auto* output = m_coreAudioOutput) {
             _waitForUiAudioPlayer();
             beiklive::BKAudioPlayer::setGameAudioActive(true);
             output->SetAudioOutputEnabled(true);
@@ -1975,6 +1983,7 @@ namespace beiklive
         brls::Logger::debug("[MgbaGameView] _registerGameRuntime: platform={}", m_gameEntry.platform);
         m_firstFrameUploaded.store(false, std::memory_order_release);
         m_core = CreateEmulatorCore(m_gameEntry);
+        m_coreAudioOutput = nullptr;
         if (!m_core) {
             brls::Logger::warning("[MgbaGameView] _registerGameRuntime: unsupported platform={}", m_gameEntry.platform);
             return;
@@ -2167,6 +2176,12 @@ namespace beiklive
     // ============================================================
     void MgbaGameView::_captureVideoFrame()
     {
+        {
+            std::lock_guard<std::mutex> lk(m_frameMutex);
+            if (m_frameReady)
+                return;
+        }
+
         auto frame = m_core->GetVideoFrame();
         if (!frame.pixels.empty()) {
             std::lock_guard<std::mutex> lk(m_frameMutex);
@@ -2192,7 +2207,7 @@ namespace beiklive
                                    rewindMuted ||
                                    waitingFirstMgbaFrame;
 
-        if (auto* output = coreAudioOutput(m_core)) {
+        if (auto* output = m_coreAudioOutput) {
             output->SetAudioOutputEnabled(!suppressAudio);
             m_audioOutputSuppressed = suppressAudio;
             return;
@@ -2436,6 +2451,17 @@ namespace beiklive
     {
         using Clock = std::chrono::steady_clock;
 
+#ifdef __SWITCH__
+        if (isMgbaNativePlatform(m_gameEntry.platform))
+        {
+            Result rc = svcSetThreadCoreMask(CUR_THREAD_HANDLE, 1, 1ULL << 1);
+            if (R_FAILED(rc))
+                brls::Logger::warning("MgbaGameView: failed to pin mGBA game thread to core1 rc={:#x}", rc);
+            else
+                brls::Logger::info("MgbaGameView: mGBA game thread pinned to core1");
+        }
+#endif
+
         if (!m_core) return;
 
         brls::Logger::debug("[MgbaGameView] _gameLoop enter");
@@ -2449,7 +2475,8 @@ namespace beiklive
         if (setupOnGameThread && !m_core->IsReady())
         {
 #ifdef __SWITCH__
-            svcSetThreadCoreMask(CUR_THREAD_HANDLE, 1, 1ULL << 1);
+            if (!isMgbaNativePlatform(m_gameEntry.platform))
+                svcSetThreadCoreMask(CUR_THREAD_HANDLE, 1, 1ULL << 1);
 #endif
 
             brls::Logger::info("MgbaGameView: initializing {} core on game thread",
@@ -2750,7 +2777,7 @@ namespace beiklive
             m_core->SetFastForwarding(fastForwardActive);
 
             // 同步倍速到音频重采样器
-            if (auto* output = coreAudioOutput(m_core)) {
+            if (auto* output = m_coreAudioOutput) {
                 float curSpeed = (fastForwardActive && !m_ffMute && !isNds) ? m_ffMultiplier : 1.0f;
                 if (curSpeed != m_audioSpeed) {
                     output->SetAudioOutputSpeed(curSpeed);
