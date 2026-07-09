@@ -1,5 +1,6 @@
 set(MGBA_STUB_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(MGBA_STUB_REPO_ROOT ${CMAKE_SOURCE_DIR})
+set(STUB_UI_DIR ${MGBA_STUB_REPO_ROOT}/stub_ui)
 
 add_executable(GBAStationMgbaStub
     ${MGBA_STUB_DIR}/src/MgbaStubMain.cpp
@@ -8,13 +9,15 @@ add_executable(GBAStationMgbaStub
     ${MGBA_STUB_DIR}/src/MgbaStb.cpp
     ${MGBA_STUB_DIR}/src/MgbaShaderCatalog.cpp
     ${MGBA_STUB_DIR}/src/MgbaMenuLayer.cpp
-    ${MGBA_STUB_DIR}/src/ui/UiPrimitives.cpp
+    ${STUB_UI_DIR}/src/UiPrimitives.cpp
+    ${STUB_UI_DIR}/src/UiText.cpp
     ${MGBA_STUB_DIR}/src/ui/UiComponents.cpp
 )
 
 set_target_properties(GBAStationMgbaStub PROPERTIES CXX_STANDARD 17)
 target_include_directories(GBAStationMgbaStub PRIVATE
     ${MGBA_STUB_DIR}/include
+    ${STUB_UI_DIR}/include
     ${MGBA_STUB_REPO_ROOT}/third_party/borealis/library/include/borealis/extern
 )
 target_compile_definitions(GBAStationMgbaStub PRIVATE COLOR_16_BIT COLOR_5_6_5)

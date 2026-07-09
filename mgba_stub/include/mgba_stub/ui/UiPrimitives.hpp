@@ -1,59 +1,27 @@
 #pragma once
 
-#include <algorithm>
-#include <cmath>
-#include <cstdint>
-
-#include <switch.h>
-
-#include "../../../third_party/ArcDelta_melonDS/src/frontend/switch/Gfx.h"
+#include "stub_ui/UiPrimitives.hpp"
 
 namespace beiklive::mgba_stub::ui {
 
-using Gfx::Color;
-using Gfx::Vector2f;
-
-constexpr float kGradientFocusFlowCycleMs = 3600.0f;
-constexpr float kGradientFocusBrightness = 1.0f;
-
-#define mgba_stub_KEYICON_A "\uE0E0"
-#define mgba_stub_KEYICON_B "\uE0E1"
-#define mgba_stub_KEYICON_X "\uE0E2"
-#define mgba_stub_KEYICON_Y "\uE0E3"
-#define mgba_stub_KEYICON_LSB "\uE104"
-#define mgba_stub_KEYICON_RSB "\uE105"
-#define mgba_stub_KEYICON_LT "\uE0E6"
-#define mgba_stub_KEYICON_RT "\uE0E7"
-#define mgba_stub_KEYICON_LB "\uE0E4"
-#define mgba_stub_KEYICON_RB "\uE0E5"
-#define mgba_stub_KEYICON_START "\uE0EF"
-#define mgba_stub_KEYICON_BACK "\uE0F0"
-#define mgba_stub_KEYICON_LEFT "\uE0ED"
-#define mgba_stub_KEYICON_UP "\uE0EB"
-#define mgba_stub_KEYICON_RIGHT "\uE0EE"
-#define mgba_stub_KEYICON_DOWN "\uE0EC"
-#define mgba_stub_KEYICON_UNKNOWN "\uE152"
-
-float clamp01(float value);
-float easeOutCubic(float t);
-float easeOutQuart(float t);
-float lerp(float a, float b, float t);
-float animationProgress(std::uint64_t startTick, float durationMs);
-float gradientFocusAnimationOffset();
-Color mixColor(Color a, Color b, float t);
-Color gradientFocusColor(float offset, float alpha);
-
-// 绘制填充矩形（cool=true 时启用圆角/高斯模糊效果）
-void drawRect(Vector2f pos, Vector2f size, Color color, bool cool = false);
-// 绘制水平/垂直细线（本质上是极细的矩形）
-void drawLine(Vector2f pos, Vector2f size, Color color);
-// 绘制矩形边框（用4条细线拼出上/下/左/右四条边）
-void drawBorder(Vector2f pos, Vector2f size, float width, Color color);
-// 绘制选中项的纹理渐变边框，风格近似 Borealis View::drawHighlight：
-// 使用 img/ui/border_gradient.png 作为流动 LUT，内部保持透明。
-void drawGradientBorder(Vector2f pos,
-                        Vector2f size,
-                        float width);
-void releasePrimitiveGraphicsResources();
+using namespace beiklive::stub_ui;
 
 } // namespace beiklive::mgba_stub::ui
+
+#define mgba_stub_KEYICON_A STUB_UI_KEYICON_A
+#define mgba_stub_KEYICON_B STUB_UI_KEYICON_B
+#define mgba_stub_KEYICON_X STUB_UI_KEYICON_X
+#define mgba_stub_KEYICON_Y STUB_UI_KEYICON_Y
+#define mgba_stub_KEYICON_LSB STUB_UI_KEYICON_LSB
+#define mgba_stub_KEYICON_RSB STUB_UI_KEYICON_RSB
+#define mgba_stub_KEYICON_LT STUB_UI_KEYICON_LT
+#define mgba_stub_KEYICON_RT STUB_UI_KEYICON_RT
+#define mgba_stub_KEYICON_LB STUB_UI_KEYICON_LB
+#define mgba_stub_KEYICON_RB STUB_UI_KEYICON_RB
+#define mgba_stub_KEYICON_START STUB_UI_KEYICON_START
+#define mgba_stub_KEYICON_BACK STUB_UI_KEYICON_BACK
+#define mgba_stub_KEYICON_LEFT STUB_UI_KEYICON_LEFT
+#define mgba_stub_KEYICON_UP STUB_UI_KEYICON_UP
+#define mgba_stub_KEYICON_RIGHT STUB_UI_KEYICON_RIGHT
+#define mgba_stub_KEYICON_DOWN STUB_UI_KEYICON_DOWN
+#define mgba_stub_KEYICON_UNKNOWN STUB_UI_KEYICON_UNKNOWN

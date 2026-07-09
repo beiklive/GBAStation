@@ -1,13 +1,13 @@
-#include "nds_stub/ui/UiPrimitives.hpp"
+#include "stub_ui/UiPrimitives.hpp"
 
 #include <array>
+#include <cstdarg>
 #include <cstdio>
 #include <string>
 
-#include "nds_stub/StubLog.hpp"
 #include "stb/stb_image.h"
 
-namespace beiklive::nds_stub::ui {
+namespace beiklive::stub_ui {
 
 namespace {
 
@@ -29,6 +29,15 @@ bool fileExists(const char* path)
         return false;
     std::fclose(fp);
     return true;
+}
+
+void logPrimitive(const char* format, ...)
+{
+    std::va_list args;
+    va_start(args, format);
+    std::vfprintf(stderr, format, args);
+    std::fputc('\n', stderr);
+    va_end(args);
 }
 
 const HighlightGradientTexture& getHighlightGradientTexture()
@@ -57,7 +66,7 @@ const HighlightGradientTexture& getHighlightGradientTexture()
 
     if (!openedPath)
     {
-        appendStubLog("GBAStationNDSStub: highlight gradient image not found");
+        logPrimitive("GBAStationStubUI: highlight gradient image not found");
         return gHighlightGradient;
     }
 
@@ -75,9 +84,9 @@ const HighlightGradientTexture& getHighlightGradientTexture()
     {
         if (pixels)
             stbi_image_free(pixels);
-        appendStubLog("GBAStationNDSStub: highlight gradient decode failed path=%s reason=%s",
-                      openedPath,
-                      stbi_failure_reason() ? stbi_failure_reason() : "(null)");
+        logPrimitive("GBAStationStubUI: highlight gradient decode failed path=%s reason=%s",
+                     openedPath,
+                     stbi_failure_reason() ? stbi_failure_reason() : "(null)");
         gHighlightGradient.width = 0;
         gHighlightGradient.height = 0;
         return gHighlightGradient;
@@ -95,11 +104,11 @@ const HighlightGradientTexture& getHighlightGradientTexture()
                        static_cast<u32>(gHighlightGradient.width * 4));
     stbi_image_free(pixels);
 
-    appendStubLog("GBAStationNDSStub: highlight gradient loaded path=%s size=%dx%d tex=%u",
-                  openedPath,
-                  gHighlightGradient.width,
-                  gHighlightGradient.height,
-                  gHighlightGradient.texture);
+    logPrimitive("GBAStationStubUI: highlight gradient loaded path=%s size=%dx%d tex=%u",
+                 openedPath,
+                 gHighlightGradient.width,
+                 gHighlightGradient.height,
+                 gHighlightGradient.texture);
     return gHighlightGradient;
 }
 
@@ -307,4 +316,14 @@ void drawGradientBorder(Vector2f pos, Vector2f size, float width)
     Gfx::SetSampler(Gfx::sampler_Nearest | Gfx::sampler_ClampToEdge);
 }
 
-} // namespace beiklive::nds_stub::ui
+void releasePrimitiveGraphicsResources()
+{
+    if (gHighlightGradient.texture != 0)
+    {
+        Gfx::PresentQueue.waitIdle();
+        Gfx::TextureDelete(gHighlightGradient.texture);
+    }
+    gHighlightGradient = {};
+}
+
+} // namespace beiklive::stub_ui

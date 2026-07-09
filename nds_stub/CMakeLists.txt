@@ -1,5 +1,6 @@
 set(NDS_STUB_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(NDS_STUB_REPO_ROOT ${CMAKE_SOURCE_DIR})
+set(STUB_UI_DIR ${NDS_STUB_REPO_ROOT}/stub_ui)
 
 find_program(NDS_STUB_UAM_EXE NAMES uam HINTS "$ENV{DEVKITPRO}/tools/bin")
 if (NOT NDS_STUB_UAM_EXE)
@@ -152,12 +153,14 @@ add_executable(GBAStationNDSStub
     ${NDS_STUB_DIR}/src/NdsUiAudio.cpp
     ${NDS_STUB_DIR}/src/NdsGameLayer.cpp
     ${NDS_STUB_DIR}/src/NdsMenuLayer.cpp
-    ${NDS_STUB_DIR}/src/ui/UiPrimitives.cpp
+    ${STUB_UI_DIR}/src/UiPrimitives.cpp
+    ${STUB_UI_DIR}/src/UiText.cpp
     ${NDS_STUB_DIR}/src/ui/UiComponents.cpp
 )
 set_target_properties(GBAStationNDSStub PROPERTIES CXX_STANDARD 17)
 target_include_directories(GBAStationNDSStub PRIVATE
     ${NDS_STUB_DIR}/include
+    ${STUB_UI_DIR}/include
     ${NDS_STUB_REPO_ROOT}/third_party/borealis/library/include/borealis/extern
 )
 target_compile_options(GBAStationNDSStub PRIVATE -ffunction-sections -fdata-sections ${APP_PLATFORM_OPTION})
