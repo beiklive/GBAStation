@@ -8,6 +8,7 @@ struct RunOptions {
     std::string romPath;
     std::string title;
     std::string savePath;
+    std::string cheatPath;
     std::string returnNroPath;
     int platform = 1;
     bool hasDisplaySettings = false;

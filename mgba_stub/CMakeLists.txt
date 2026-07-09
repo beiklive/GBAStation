@@ -5,6 +5,7 @@ set(STUB_UI_DIR ${MGBA_STUB_REPO_ROOT}/stub_ui)
 add_executable(GBAStationMgbaStub
     ${MGBA_STUB_DIR}/src/MgbaStubMain.cpp
     ${MGBA_STUB_DIR}/src/MgbaStubRuntime.cpp
+    ${MGBA_STUB_DIR}/src/MgbaCheatManager.cpp
     ${MGBA_STUB_DIR}/src/MgbaGameLayer.cpp
     ${MGBA_STUB_DIR}/src/MgbaStb.cpp
     ${MGBA_STUB_DIR}/src/MgbaShaderCatalog.cpp

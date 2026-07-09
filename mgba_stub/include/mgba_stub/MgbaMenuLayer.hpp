@@ -23,6 +23,11 @@ enum class MgbaMenuAction {
     ShaderSettingsChanged,
     ShaderSettingsCommitted,
     CheatSettingsChanged,
+    CheatPathSelected,
+    CheatAddRequested,
+    CheatRenameRequested,
+    CheatCodeEditRequested,
+    CheatDeleteRequested,
     SyncDisplaySettings,
     SyncOverlaySettings,
     SyncShaderSettings,
@@ -94,6 +99,12 @@ struct MgbaCheatItem {
     int depth = 0;
     bool expanded = false;
     bool enabled = false;
+    bool valid = true;
+    bool editable = true;
+    int entryIndex = -1;
+    std::string code;
+    std::string codeType;
+    std::string diagnostic;
     std::vector<std::uint32_t> words;
 };
 
@@ -117,6 +128,7 @@ public:
     void releaseGraphicsResources();
     void setStateSlots(const std::array<MgbaStateSlotInfo, 10>& slots);
     void setCheatItems(const std::vector<MgbaCheatItem>& cheats);
+    void setCheatPath(const std::string& path);
     const std::vector<MgbaCheatItem>& cheatItems() const { return m_cheats; }
     bool consumeCheatSettingsDirty();
 
@@ -166,6 +178,7 @@ private:
     void beginOverlaySidebar();
     void beginShaderSidebar();
     void beginFilePicker();
+    void beginCheatFilePicker();
     void closeOverlaySidebar(bool returnToMenu);
     void closeShaderSidebar(bool returnToMenu);
     void closeFilePicker(bool returnToOverlay);
@@ -193,6 +206,8 @@ private:
     std::uint64_t updateHeldNavigation(std::uint64_t buttonsDown, std::uint64_t buttonsHeld);
     void openDeleteDialog();
     void closeDeleteDialog();
+    void openCheatDeleteDialog();
+    void closeCheatDeleteDialog();
     void openSyncConfirmDialog(MgbaMenuAction action);
     void closeSyncConfirmDialog();
     void closeSyncResultDialog();
@@ -220,6 +235,8 @@ private:
     bool m_panelOpening = false;
     bool m_deleteDialogVisible = false;
     int m_deleteSlot = -1;
+    bool m_cheatDeleteDialogVisible = false;
+    int m_deleteCheatEntry = -1;
     bool m_syncConfirmVisible = false;
     MgbaMenuAction m_syncConfirmAction = MgbaMenuAction::None;
     bool m_syncResultVisible = false;
@@ -248,6 +265,11 @@ private:
     mutable float m_shaderListScrollY = 0.0f;
     mutable std::uint64_t m_shaderListScrollLastTick = 0;
     bool m_filePickerVisible = false;
+    enum class FilePickerMode {
+        Overlay,
+        Cheat,
+    };
+    FilePickerMode m_filePickerMode = FilePickerMode::Overlay;
     bool m_filePickerClosing = false;
     bool m_filePickerReturnToOverlay = false;
     std::uint64_t m_filePickerAnimStartTick = 0;
@@ -262,6 +284,7 @@ private:
     std::string m_filePickerPreviewPath;
     bool m_filePickerPreviewAttempted = false;
     bool m_filePickerImagePreviewVisible = false;
+    std::string m_cheatPath;
     std::uint64_t m_selectorRepeatStartTick = 0;
     std::uint64_t m_selectorLastStepTick = 0;
     int m_selectorDirection = 0;

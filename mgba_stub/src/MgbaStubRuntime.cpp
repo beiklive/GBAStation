@@ -1,5 +1,6 @@
 #include "mgba_stub/MgbaStubRuntime.hpp"
 
+#include "mgba_stub/MgbaCheatManager.hpp"
 #include "mgba_stub/MgbaGameLayer.hpp"
 #include "mgba_stub/MgbaMenuLayer.hpp"
 #include "mgba_stub/MgbaShaderCatalog.hpp"
@@ -105,6 +106,57 @@ bool writeJsonFileChecked(const std::string& path, const nlohmann::json& data)
     out << data.dump(4) << '\n';
     out.close();
     return out.good();
+}
+
+std::string convertCheatCode(const std::string& input)
+{
+    std::string result;
+    bool lastWasSeparator = true;
+    for (unsigned char c : input)
+    {
+        const bool separator = std::isspace(c) || c == '+' || c == ',' || c == ';';
+        if (separator)
+        {
+            if (!result.empty() && !lastWasSeparator)
+                result += '+';
+            lastWasSeparator = true;
+            continue;
+        }
+        if (c == '"' || c == '\'')
+            continue;
+        result += static_cast<char>(c);
+        lastWasSeparator = false;
+    }
+    while (!result.empty() && result.back() == '+')
+        result.pop_back();
+    return result;
+}
+
+std::optional<std::string> showTextKeyboard(const char* title,
+                                            const char* subText,
+                                            const std::string& initial,
+                                            int maxLen,
+                                            bool multiline = false)
+{
+    SwkbdConfig keyboard {};
+    if (R_FAILED(swkbdCreate(&keyboard, 0)))
+        return std::nullopt;
+
+    swkbdConfigMakePresetDefault(&keyboard);
+    swkbdConfigSetType(&keyboard, SwkbdType_All);
+    swkbdConfigSetHeaderText(&keyboard, title ? title : "");
+    swkbdConfigSetSubText(&keyboard, subText ? subText : "");
+    swkbdConfigSetStringLenMax(&keyboard, std::clamp(maxLen, 1, 1023));
+    swkbdConfigSetInitialText(&keyboard, initial.c_str());
+    swkbdConfigSetReturnButtonFlag(&keyboard, multiline);
+    swkbdConfigSetBlurBackground(&keyboard, true);
+
+    char buffer[1024] = {};
+    const Result rc = swkbdShow(&keyboard, buffer, sizeof(buffer));
+    swkbdClose(&keyboard);
+    if (R_FAILED(rc))
+        return std::nullopt;
+    return std::string(buffer);
 }
 
 std::string normalizePathForCompare(std::string path)
@@ -637,6 +689,14 @@ void saveDisplaySettingsToGameData(const beiklive::mgba_stub::RunOptions& option
         target["overlayPath"] = display.overlayPath;
         target["shaderEnabled"] = display.shaderEnabled;
         target["MgbaShaderType"] = shaderType;
+    });
+}
+
+void saveCheatPathToGameData(const beiklive::mgba_stub::RunOptions& options,
+                             const std::string& cheatPath)
+{
+    updateGameDataRecord(options, [&](nlohmann::json& target) {
+        target["cheatPath"] = cheatPath;
     });
 }
 
@@ -2427,6 +2487,47 @@ int RunRuntime(const RunOptions& options)
     auto stateSlots = loadStateSlots(states, options.romPath);
     menuLayer.setStateSlots(stateSlots);
 
+    auto defaultCheatPathForRuntime = [&]() {
+        const std::string cheatDir = configString(configValues, "cheat.dir", {});
+        if (cheatDir.empty())
+            return beiklive::mgba_stub::DefaultCheatPath(options.romPath);
+        const std::string stem = pathStem(options.romPath);
+        return (std::filesystem::path(cheatDir) / (stem + ".cht")).string();
+    };
+    std::string cheatPath = options.cheatPath.empty()
+                                ? defaultCheatPathForRuntime()
+                                : options.cheatPath;
+    std::vector<MgbaCheatEntry> cheats;
+    const bool cheatsLoaded = beiklive::mgba_stub::LoadRetroArchCheats(cheatPath, cheats);
+    saveCheatPathToGameData(options, cheatPath);
+    menuLayer.setCheatPath(cheatPath);
+    auto refreshCheatMenu = [&]() {
+        menuLayer.setCheatItems(beiklive::mgba_stub::BuildCheatMenuItems(cheats));
+    };
+    auto applyCheats = [&]() {
+        const MgbaCheatApplyResult result =
+            beiklive::mgba_stub::ApplyCheatsToCore(core.nativeCore(), cheats);
+        refreshCheatMenu();
+        return result;
+    };
+    auto saveAndApplyCheats = [&](const char* successMessage) {
+        beiklive::mgba_stub::UpdateCheatsFromMenuItems(menuLayer.cheatItems(), cheats);
+        const MgbaCheatApplyResult result = applyCheats();
+        const bool saved = beiklive::mgba_stub::SaveRetroArchCheats(cheatPath, cheats);
+        if (!saved)
+            menuLayer.showToast("金手指写入失败");
+        else if (!result.ok)
+            menuLayer.showToast("金手指应用失败");
+        else if (result.invalidCount > 0)
+            menuLayer.showToast("金手指已保存，部分代码无效");
+        else
+            menuLayer.showToast(successMessage ? successMessage : "金手指已保存");
+        return saved && result.ok;
+    };
+    applyCheats();
+    if (!cheatsLoaded)
+        menuLayer.showToast("金手指文件读取失败");
+
     uint32_t overlayTexture = 0;
     int overlayWidth = 0;
     int overlayHeight = 0;
@@ -2911,6 +3012,96 @@ int RunRuntime(const RunOptions& options)
             markDisplayDirty();
             flushDisplay();
             break;
+        case MgbaMenuAction::CheatSettingsChanged:
+            saveAndApplyCheats("金手指已更新");
+            break;
+        case MgbaMenuAction::CheatPathSelected:
+        {
+            std::vector<MgbaCheatEntry> loadedCheats;
+            if (!beiklive::mgba_stub::LoadRetroArchCheats(result.path, loadedCheats))
+            {
+                menuLayer.showToast("金手指文件读取失败");
+                break;
+            }
+            cheatPath = result.path;
+            cheats = std::move(loadedCheats);
+            saveCheatPathToGameData(options, cheatPath);
+            menuLayer.setCheatPath(cheatPath);
+            const MgbaCheatApplyResult applyResult = applyCheats();
+            menuLayer.showToast(applyResult.invalidCount > 0 ? "已载入，部分代码无效" : "金手指文件已载入");
+            break;
+        }
+        case MgbaMenuAction::CheatAddRequested:
+        {
+            const auto name = showTextKeyboard("金手指名称", "输入新金手指名称", "", 128);
+            if (!name || name->empty())
+                break;
+            const auto code = showTextKeyboard("金手指代码", "多行代码可用空格、换行或 + 分隔", "", 512, true);
+            if (!code)
+                break;
+            const std::string normalizedCode = convertCheatCode(*code);
+            if (normalizedCode.empty())
+            {
+                menuLayer.showToast("金手指代码为空");
+                break;
+            }
+            MgbaCheatEntry entry;
+            entry.name = *name;
+            entry.code = normalizedCode;
+            entry.enabled = true;
+            cheats.push_back(std::move(entry));
+            refreshCheatMenu();
+            saveAndApplyCheats("金手指已新增");
+            break;
+        }
+        case MgbaMenuAction::CheatRenameRequested:
+        {
+            if (result.slot < 0 || result.slot >= static_cast<int>(cheats.size()))
+                break;
+            const auto name = showTextKeyboard("修改金手指名称",
+                                               "输入新的金手指名称",
+                                               cheats[static_cast<std::size_t>(result.slot)].name,
+                                               128);
+            if (!name || name->empty())
+                break;
+            cheats[static_cast<std::size_t>(result.slot)].name = *name;
+            refreshCheatMenu();
+            saveAndApplyCheats("金手指名称已更新");
+            break;
+        }
+        case MgbaMenuAction::CheatCodeEditRequested:
+        {
+            if (result.slot < 0 || result.slot >= static_cast<int>(cheats.size()))
+                break;
+            const auto code = showTextKeyboard("修改金手指代码",
+                                               "多行代码可用空格、换行或 + 分隔",
+                                               cheats[static_cast<std::size_t>(result.slot)].code,
+                                               512,
+                                               true);
+            if (!code)
+                break;
+            const std::string normalizedCode = convertCheatCode(*code);
+            if (normalizedCode.empty())
+            {
+                menuLayer.showToast("金手指代码为空");
+                break;
+            }
+            cheats[static_cast<std::size_t>(result.slot)].code = normalizedCode;
+            cheats[static_cast<std::size_t>(result.slot)].valid = true;
+            cheats[static_cast<std::size_t>(result.slot)].diagnostic.clear();
+            refreshCheatMenu();
+            saveAndApplyCheats("金手指代码已更新");
+            break;
+        }
+        case MgbaMenuAction::CheatDeleteRequested:
+        {
+            if (result.slot < 0 || result.slot >= static_cast<int>(cheats.size()))
+                break;
+            cheats.erase(cheats.begin() + result.slot);
+            refreshCheatMenu();
+            saveAndApplyCheats("金手指已删除");
+            break;
+        }
         case MgbaMenuAction::SyncDisplaySettings:
             flushDisplay();
             menuLayer.showSyncResult(MgbaMenuAction::SyncDisplaySettings,

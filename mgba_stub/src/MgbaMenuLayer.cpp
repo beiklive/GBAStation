@@ -64,6 +64,7 @@ constexpr float kShaderListFooterH = 54.0f;
 constexpr float kShaderListPadTop = 30.0f;
 constexpr float kShaderListPadBottom = 14.0f;
 constexpr const char* kOverlayRoot = "sdmc:/GBAStation/overlays";
+constexpr const char* kCheatRoot = "sdmc:/GBAStation/cheats";
 constexpr int kDisplayRowCustomLayout = 4;
 constexpr int kDisplayRowOverlay = 5;
 constexpr int kDisplayRowShader = 6;
@@ -166,6 +167,21 @@ std::string parentPathOrRoot(const std::string& path)
             return parent;
     }
     return kOverlayRoot;
+}
+
+std::string parentPathOrDefault(const std::string& path, const char* fallbackRoot)
+{
+    if (!path.empty())
+    {
+        std::filesystem::path p(path);
+        std::error_code ec;
+        if (std::filesystem::is_directory(p, ec))
+            return p.string();
+        const std::string parent = p.parent_path().string();
+        if (!parent.empty())
+            return parent;
+    }
+    return fallbackRoot ? fallbackRoot : ".";
 }
 
 std::string formatFileTime(const std::filesystem::path& path)
@@ -463,6 +479,11 @@ void MgbaMenuLayer::setCheatItems(const std::vector<MgbaCheatItem>& cheats)
     resetContentScroll();
 }
 
+void MgbaMenuLayer::setCheatPath(const std::string& path)
+{
+    m_cheatPath = path;
+}
+
 bool MgbaMenuLayer::consumeCheatSettingsDirty()
 {
     const bool dirty = m_cheatSettingsDirty;
@@ -649,7 +670,8 @@ void MgbaMenuLayer::reloadFilePickerEntries(const std::string& directory, const 
 {
     releaseFilePickerPreview();
     m_filePickerEntries.clear();
-    m_filePickerDirectory = directory.empty() ? kOverlayRoot : directory;
+    const char* fallbackRoot = m_filePickerMode == FilePickerMode::Cheat ? kCheatRoot : kOverlayRoot;
+    m_filePickerDirectory = directory.empty() ? fallbackRoot : directory;
     m_filePickerFocus = 0;
     m_filePickerScrollY = 0.0f;
     m_filePickerScrollLastTick = 0;
@@ -681,7 +703,10 @@ void MgbaMenuLayer::reloadFilePickerEntries(const std::string& directory, const 
         item.modifiedTime = formatFileTime(entry.path());
         if (!item.isDirectory)
         {
-            if (!eMgbaWithNoCase(item.name, ".png"))
+            const bool accepted = m_filePickerMode == FilePickerMode::Cheat
+                                      ? eMgbaWithNoCase(item.name, ".cht")
+                                      : eMgbaWithNoCase(item.name, ".png");
+            if (!accepted)
                 continue;
             item.size = entry.file_size(ec);
         }
@@ -724,7 +749,7 @@ void MgbaMenuLayer::ensureFilePickerPreview()
         return;
 
     const auto& entry = m_filePickerEntries[m_filePickerFocus];
-    if (entry.isDirectory || !eMgbaWithNoCase(entry.path, ".png"))
+    if (m_filePickerMode != FilePickerMode::Overlay || entry.isDirectory || !eMgbaWithNoCase(entry.path, ".png"))
     {
         releaseFilePickerPreview();
         return;
@@ -946,8 +971,10 @@ float MgbaMenuLayer::targetContentScrollY() const
     case Item::Cheats:
     {
         const int count = contentControlCount(Item::Cheats);
-        const int row = std::clamp(m_contentFocus, 0, std::max(0, count - 1));
-        const float contentH = static_cast<float>(count) * kCheatStepY;
+        const int row = std::clamp(m_contentFocus - 1, 0, std::max(0, count - 2));
+        const float contentH = static_cast<float>(std::max(0, count - 1)) * kCheatStepY;
+        if (m_contentFocus <= 0)
+            return 0.0f;
         return centeredFocusedScroll(static_cast<float>(row) * kCheatStepY,
                                      kCheatRowH,
                                      contentH,
@@ -1163,7 +1190,7 @@ int MgbaMenuLayer::contentControlCount(Item item) const
     case Item::Display:
         return kDisplayRowCount;
     case Item::Cheats:
-        return static_cast<int>(visibleCheatIndices().size());
+        return 1 + static_cast<int>(visibleCheatIndices().size());
     default:
         return 0;
     }
@@ -1215,10 +1242,10 @@ const std::vector<int>& MgbaMenuLayer::visibleCheatIndices() const
 int MgbaMenuLayer::visibleCheatIndex(int visibleRow) const
 {
     const auto& visible = visibleCheatIndices();
-    if (visible.empty())
+    const int row = visibleRow - 1;
+    if (row < 0 || row >= static_cast<int>(visible.size()))
         return -1;
-    visibleRow = std::clamp(visibleRow, 0, static_cast<int>(visible.size()) - 1);
-    return visible[visibleRow];
+    return visible[row];
 }
 
 int MgbaMenuLayer::nextFocusableDisplayRow(int from, int direction) const
@@ -1326,6 +1353,7 @@ void MgbaMenuLayer::beginShaderSidebar()
 
 void MgbaMenuLayer::beginFilePicker()
 {
+    m_filePickerMode = FilePickerMode::Overlay;
     m_overlaySidebarVisible = false;
     m_overlaySidebarClosing = false;
     m_filePickerVisible = true;
@@ -1333,6 +1361,18 @@ void MgbaMenuLayer::beginFilePicker()
     m_filePickerReturnToOverlay = false;
     m_filePickerAnimStartTick = armGetSystemTick();
     reloadFilePickerEntries(parentPathOrRoot(m_display.overlayPath), m_display.overlayPath);
+}
+
+void MgbaMenuLayer::beginCheatFilePicker()
+{
+    m_filePickerMode = FilePickerMode::Cheat;
+    m_visible = false;
+    m_panelAnimating = false;
+    m_filePickerVisible = true;
+    m_filePickerClosing = false;
+    m_filePickerReturnToOverlay = true;
+    m_filePickerAnimStartTick = armGetSystemTick();
+    reloadFilePickerEntries(parentPathOrDefault(m_cheatPath, kCheatRoot), m_cheatPath);
 }
 
 void MgbaMenuLayer::closeOverlaySidebar(bool returnToMenu)
@@ -1670,6 +1710,25 @@ void MgbaMenuLayer::closeDeleteDialog()
     m_deleteSlot = -1;
 }
 
+void MgbaMenuLayer::openCheatDeleteDialog()
+{
+    if (m_focusScope != FocusScope::Content || static_cast<Item>(m_selected) != Item::Cheats)
+        return;
+    const int index = visibleCheatIndex(m_contentFocus);
+    if (index < 0 || index >= static_cast<int>(m_cheats.size()) ||
+        m_cheats[index].entryIndex < 0)
+        return;
+
+    m_deleteCheatEntry = m_cheats[index].entryIndex;
+    m_cheatDeleteDialogVisible = true;
+}
+
+void MgbaMenuLayer::closeCheatDeleteDialog()
+{
+    m_cheatDeleteDialogVisible = false;
+    m_deleteCheatEntry = -1;
+}
+
 void MgbaMenuLayer::openSyncConfirmDialog(MgbaMenuAction action)
 {
     if (action != MgbaMenuAction::SyncDisplaySettings &&
@@ -1760,10 +1819,22 @@ MgbaMenuResult MgbaMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t bu
         releaseFilePickerPreview();
         if (returnToOverlay)
         {
-            m_overlaySidebarVisible = true;
-            m_overlaySidebarClosing = false;
-            m_overlaySidebarReturnToMenu = false;
-            m_overlaySidebarAnimStartTick = armGetSystemTick();
+            if (m_filePickerMode == FilePickerMode::Cheat)
+            {
+                m_visible = true;
+                m_panelAnimating = false;
+                m_focusScope = FocusScope::Content;
+                m_selected = itemIndex(Item::Cheats);
+                m_contentFocus = std::clamp(m_contentFocus, 0, std::max(0, contentControlCount(Item::Cheats) - 1));
+                resetContentScroll();
+            }
+            else
+            {
+                m_overlaySidebarVisible = true;
+                m_overlaySidebarClosing = false;
+                m_overlaySidebarReturnToMenu = false;
+                m_overlaySidebarAnimStartTick = armGetSystemTick();
+            }
         }
     }
 
@@ -1810,12 +1881,19 @@ MgbaMenuResult MgbaMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t bu
                 reloadFilePickerEntries(entry.path);
                 return {};
             }
-            if (eMgbaWithNoCase(entry.path, ".png"))
+            if (m_filePickerMode == FilePickerMode::Overlay && eMgbaWithNoCase(entry.path, ".png"))
             {
                 queueSound(MgbaMenuSound::Click);
                 m_display.overlayPath = entry.path;
                 closeFilePicker(true);
                 return {MgbaMenuAction::OverlayPathSelected, -1, entry.path};
+            }
+            if (m_filePickerMode == FilePickerMode::Cheat && eMgbaWithNoCase(entry.path, ".cht"))
+            {
+                queueSound(MgbaMenuSound::Click);
+                m_cheatPath = entry.path;
+                closeFilePicker(true);
+                return {MgbaMenuAction::CheatPathSelected, -1, entry.path};
             }
             queueSound(MgbaMenuSound::Error);
         }
@@ -1825,7 +1903,9 @@ MgbaMenuResult MgbaMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t bu
             m_filePickerFocus < static_cast<int>(m_filePickerEntries.size()))
         {
             const auto& entry = m_filePickerEntries[m_filePickerFocus];
-            if (!entry.isDirectory && eMgbaWithNoCase(entry.path, ".png"))
+            if (m_filePickerMode == FilePickerMode::Overlay &&
+                !entry.isDirectory &&
+                eMgbaWithNoCase(entry.path, ".png"))
             {
                 queueSound(MgbaMenuSound::Click);
                 ensureFilePickerPreview();
@@ -2139,6 +2219,24 @@ MgbaMenuResult MgbaMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t bu
         return {};
     }
 
+    if (m_cheatDeleteDialogVisible)
+    {
+        if (buttonsDown & HidNpadButton_B)
+        {
+            queueSound(MgbaMenuSound::Back);
+            closeCheatDeleteDialog();
+            return {};
+        }
+        if (buttonsDown & HidNpadButton_A)
+        {
+            queueSound(MgbaMenuSound::Click);
+            const int entry = m_deleteCheatEntry;
+            closeCheatDeleteDialog();
+            return {MgbaMenuAction::CheatDeleteRequested, entry};
+        }
+        return {};
+    }
+
     if (buttonsDown & HidNpadButton_B)
     {
         queueSound(MgbaMenuSound::Back);
@@ -2307,6 +2405,11 @@ MgbaMenuResult MgbaMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t bu
         if (currentItem == Item::Cheats)
         {
             const int count = contentControlCount(Item::Cheats);
+            if (buttonsDown & HidNpadButton_Y)
+            {
+                queueSound(MgbaMenuSound::Click);
+                return {MgbaMenuAction::CheatAddRequested, -1};
+            }
             if (count <= 0)
                 return {};
 
@@ -2322,9 +2425,35 @@ MgbaMenuResult MgbaMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t bu
 
             if (buttonsDown & HidNpadButton_A)
             {
+                if (m_contentFocus == 0)
+                {
+                    queueSound(MgbaMenuSound::Click);
+                    beginCheatFilePicker();
+                    return {};
+                }
                 queueSound(MgbaMenuSound::Click);
                 return activateCheatControl() ? MgbaMenuResult{MgbaMenuAction::CheatSettingsChanged, -1}
                                               : MgbaMenuResult{};
+            }
+            const int selectedIndex = visibleCheatIndex(m_contentFocus);
+            const int selectedEntry = selectedIndex >= 0 && selectedIndex < static_cast<int>(m_cheats.size())
+                                          ? m_cheats[selectedIndex].entryIndex
+                                          : -1;
+            if ((buttonsDown & HidNpadButton_X) && selectedEntry >= 0)
+            {
+                queueSound(MgbaMenuSound::Click);
+                return {MgbaMenuAction::CheatCodeEditRequested, selectedEntry};
+            }
+            if ((buttonsDown & HidNpadButton_R) && selectedEntry >= 0)
+            {
+                queueSound(MgbaMenuSound::Click);
+                return {MgbaMenuAction::CheatRenameRequested, selectedEntry};
+            }
+            if ((buttonsDown & HidNpadButton_Minus) && selectedEntry >= 0)
+            {
+                queueSound(MgbaMenuSound::Click);
+                openCheatDeleteDialog();
+                return {};
             }
             if (isDirectionLeft(buttonsDown) || isDirectionRight(buttonsDown))
             {
@@ -2574,9 +2703,22 @@ void MgbaMenuLayer::draw() const
                  m_statePreviewHeight,
                  m_statePreviewAttempted,
                  slideY);
-    drawFooter(contentFocused, canDelete, slideY);
+    drawFooter(contentFocused, canDelete, currentItem, slideY);
     if (m_deleteDialogVisible)
         drawDeleteDialog(m_deleteSlot, panel);
+    if (m_cheatDeleteDialogVisible)
+    {
+        std::string name = "当前金手指";
+        for (const auto& cheat : m_cheats)
+        {
+            if (cheat.entryIndex == m_deleteCheatEntry)
+            {
+                name = cheat.name.empty() ? "未命名金手指" : cheat.name;
+                break;
+            }
+        }
+        drawCheatDeleteDialog(name, panel);
+    }
     if (m_syncConfirmVisible)
         drawSyncConfirmDialog(m_syncConfirmAction, panel);
     if (m_syncResultVisible)

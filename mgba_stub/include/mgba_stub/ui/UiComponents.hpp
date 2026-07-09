@@ -93,7 +93,10 @@ void drawLeftMenu(int selected,
                   bool tabsFocused,
                   float offsetY = 0.0f);
 // 绘制底部操作提示栏：半透明背景 + 分割线 + B按钮(返回)和A按钮(确定)图标及文字
-void drawFooter(bool contentFocused, bool canDelete, float offsetY = 0.0f);
+void drawFooter(bool contentFocused,
+                bool canDelete,
+                MgbaMenuLayer::Item item,
+                float offsetY = 0.0f);
 // 绘制单个存档槽卡片
 // 左侧为缩略图区域（已有存档显示"Mgba"水印，空槽显示"+"号）
 // 右侧为槽位编号和状态文本（"已有状态"或"空存档槽"）
@@ -137,6 +140,7 @@ void drawDisplayPage(bool linearFiltering,
                      float opacity,
                      float scrollY = 0.0f);
 void drawDeleteDialog(int slot, float opacity);
+void drawCheatDeleteDialog(const std::string& name, float opacity);
 void drawSyncConfirmDialog(MgbaMenuAction action, float opacity);
 void drawSyncResultDialog(MgbaMenuAction action, int count, float opacity);
 void drawBusyDialog(const char* title, const char* body, float opacity);

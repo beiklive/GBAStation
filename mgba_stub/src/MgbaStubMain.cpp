@@ -163,6 +163,7 @@ int main(int argc, char* argv[])
             if (!title.empty())
                 options.title = title;
             options.savePath = jsonString(*record, "savePath");
+            options.cheatPath = jsonString(*record, "cheatPath");
             options.platform = jsonInt(*record, "platform", options.platform);
             options.hasDisplaySettings = true;
             options.displayMode = jsonInt(*record, "displayMode", options.displayMode);

@@ -21,7 +21,7 @@ namespace {
 constexpr UiMetrics kLaMgbacapeMetrics {
     1280.0f, 720.0f,
     48.0f, 116.0f,
-    336.0f, 70.0f, 10.0f,
+    336.0f, 62.0f, 6.0f,
     404.0f, 110.0f, 500.0f,
     432.0f, 110.0f, 790.0f, 520.0f,
     64.0f, 444.0f,
@@ -33,7 +33,7 @@ constexpr UiMetrics kLaMgbacapeMetrics {
 constexpr UiMetrics kPortraitMetrics {
     720.0f, 1280.0f,
     30.0f, 116.0f,
-    250.0f, 70.0f, 10.0f,
+    250.0f, 62.0f, 6.0f,
     282.0f, 110.0f, 1040.0f,
     300.0f, 110.0f, 384.0f, 1040.0f,
     64.0f, 964.0f,
@@ -493,7 +493,7 @@ void drawCheatRow(Vector2f pos,
     }
 
     const float textX = 40.0f + indent + (category ? 16.0f : 0.0f);
-    const float maxTextW = rowW - textX - 146.0f;
+    const float maxTextW = rowW - textX - (category ? 146.0f : 220.0f);
     const std::string sourceLabel = item.name.empty() ? (category ? "未命名目录" : "未命名金手指") : item.name;
     const float labelW = Gfx::MeasureText(Gfx::SystemFontChinese, kUiValueFont, sourceLabel.c_str()).X;
     const bool labelTruncated = labelW > maxTextW;
@@ -502,7 +502,8 @@ void drawCheatRow(Vector2f pos,
         : sourceLabel;
 
     const Color labelColor = category ? Color{0.92f, 0.98f, 1.0f, 0.92f * opacity}
-                                      : Color{1.0f, 1.0f, 1.0f, 0.88f * opacity};
+                                      : (item.valid ? Color{1.0f, 1.0f, 1.0f, 0.88f * opacity}
+                                                    : Color{1.0f, 0.58f, 0.32f, 0.90f * opacity});
     if (focused && labelTruncated)
     {
         pushRectScissor(pos + Vector2f{textX, 7.0f}, {std::max(8.0f, maxTextW), 38.0f});
@@ -536,14 +537,48 @@ void drawCheatRow(Vector2f pos,
     }
     else
     {
+        const float switchW = 84.0f;
+        const float switchH = 30.0f;
+        const Vector2f switchPos{pos.X + rowW - switchW - 18.0f, pos.Y + 10.0f};
+        const bool usable = item.valid;
+        const Color switchBg = !usable ? Color{0.45f, 0.12f, 0.08f, 0.28f * opacity}
+                             : item.enabled ? Color{0.12f, 0.42f, 0.62f, 0.82f * opacity}
+                                            : Color{0.18f, 0.21f, 0.25f, 0.78f * opacity};
+        const Color switchBorder = !usable ? Color{1.0f, 0.44f, 0.28f, 0.40f * opacity}
+                                 : item.enabled ? Color{0.36f, 0.82f, 1.0f, 0.62f * opacity}
+                                                : Color{1.0f, 1.0f, 1.0f, 0.16f * opacity};
+        drawRect(switchPos, {switchW, switchH}, switchBg, true);
+        drawBorder(switchPos, {switchW, switchH}, focused ? 2.0f : 1.0f, switchBorder);
+        const float knobX = item.enabled && usable ? switchPos.X + switchW - 27.0f : switchPos.X + 5.0f;
+        drawRect({knobX, switchPos.Y + 5.0f}, {22.0f, 20.0f},
+                 usable ? Color{0.92f, 0.98f, 1.0f, 0.94f * opacity}
+                        : Color{1.0f, 0.58f, 0.42f, 0.86f * opacity},
+                 true);
         Gfx::DrawText(Gfx::SystemFontChinese,
-                      pos + Vector2f{rowW - 48.0f, kUiLabelY},
-                      kUiValueFont,
-                      item.enabled ? Color{0.34f, 0.78f, 1.0f, 0.96f * opacity}
-                                   : Color{0.60f, 0.64f, 0.68f, 0.80f * opacity},
-                      Gfx::align_Right,
+                      switchPos + Vector2f{item.enabled && usable ? 20.0f : 62.0f, 8.0f},
+                      13.0f,
+                      usable ? Color{1.0f, 1.0f, 1.0f, 0.82f * opacity}
+                             : Color{1.0f, 0.64f, 0.48f, 0.88f * opacity},
+                      Gfx::align_Center,
                       Gfx::align_Left,
-                      item.enabled ? "开" : "关");
+                      !usable ? "BAD" : (item.enabled ? "ON" : "OFF"));
+
+        if (!item.codeType.empty())
+        {
+            const Vector2f typePos{pos.X + rowW - switchW - 74.0f, pos.Y + 14.0f};
+            drawRect(typePos, {48.0f, 22.0f},
+                     {0.26f, 0.34f, 0.42f, 0.42f * opacity},
+                     true);
+            drawBorder(typePos, {48.0f, 22.0f}, 1.0f,
+                       {1.0f, 1.0f, 1.0f, 0.10f * opacity});
+            Gfx::DrawText(Gfx::SystemFontChinese,
+                          typePos + Vector2f{24.0f, 4.0f},
+                          13.0f,
+                          {0.74f, 0.86f, 0.96f, 0.72f * opacity},
+                          Gfx::align_Center,
+                          Gfx::align_Left,
+                          item.codeType.c_str());
+        }
     }
 }
 
@@ -749,7 +784,7 @@ float menuItemY(int index)
 {
     float y = kLeftY + index * (kItemH + kItemGap);
     if (index >= itemIndex(MgbaMenuLayer::Item::Reset))
-        y += 18.0f;
+        y += 10.0f;
     return y;
 }
 
@@ -820,7 +855,7 @@ void drawGameStatusBadges(double fps,
 
 void drawMenuSeparator(float offsetY)
 {
-    const float y = menuItemY(itemIndex(MgbaMenuLayer::Item::Reset)) - 14.0f;
+    const float y = menuItemY(itemIndex(MgbaMenuLayer::Item::Reset)) - 9.0f;
     drawLine({kLeftX + 18.0f, y + offsetY}, {kMenuW - 36.0f, 1.0f}, {1.0f, 1.0f, 1.0f, 0.14f});
 }
 
@@ -857,7 +892,7 @@ void drawLeftMenu(int selected,
         {
             Gfx::DrawText(iconFont,
                           {kLeftX + 32.0f, y + offsetY + kItemH * 0.5f},
-                          30.0f,
+                          28.0f,
                           isSelected ? Color{0.44f, 0.80f, 1.0f, 1.0f}
                                      : Color{1.0f, 1.0f, 1.0f, 0.55f},
                           Gfx::align_Center,
@@ -865,8 +900,8 @@ void drawLeftMenu(int selected,
                           tabIcon(item));
         }
         Gfx::DrawText(Gfx::SystemFontChinese,
-                      {kLeftX + (iconFont != 0 ? 64.0f : 30.0f), y + offsetY + 23.0f},
-                      22.0f,
+                      {kLeftX + (iconFont != 0 ? 62.0f : 30.0f), y + offsetY + 20.0f},
+                      20.0f,
                       textColor,
                       "%s", itemLabel(item));
     }
@@ -874,7 +909,7 @@ void drawLeftMenu(int selected,
     drawMenuSeparator(offsetY);
 }
 
-void drawFooter(bool contentFocused, bool canDelete, float offsetY)
+void drawFooter(bool contentFocused, bool canDelete, MgbaMenuLayer::Item item, float offsetY)
 {
     const float footerY = kScreenH - 72.0f + offsetY;
     drawRect({0.0f, footerY}, {kScreenW, 72.0f}, {0.0f, 0.0f, 0.0f, 0.86f}, false);
@@ -901,7 +936,14 @@ void drawFooter(bool contentFocused, bool canDelete, float offsetY)
 
     drawHint(mgba_stub_KEYICON_A, "确定");
     drawHint(mgba_stub_KEYICON_B, contentFocused ? "返回列表" : "返回");
-    if (canDelete)
+    if (contentFocused && item == MgbaMenuLayer::Item::Cheats)
+    {
+        drawHint(mgba_stub_KEYICON_Y, "新增");
+        drawHint(mgba_stub_KEYICON_X, "代码");
+        drawHint(mgba_stub_KEYICON_RB, "改名");
+        drawHint(mgba_stub_KEYICON_BACK, "删除");
+    }
+    else if (canDelete)
         drawHint(mgba_stub_KEYICON_X, "删除");
 }
 
@@ -1127,22 +1169,58 @@ void drawCheatPage(const std::vector<MgbaCheatItem>& cheats,
     const Vector2f base{kContentX + offsetX, kContentY + offsetY};
     Gfx::DrawText(Gfx::SystemFontChinese, base, 24.0f,
                   {1.0f, 1.0f, 1.0f, opacity}, "金手指设置");
+
+    const float buttonW = 210.0f;
+    const float buttonH = 42.0f;
+    const Vector2f buttonPos{base.X + kContentW - buttonW, base.Y - 7.0f};
+    const bool buttonFocused = contentFocused && focusedRow == 0;
+    if (buttonFocused)
+        drawGradientBorder(buttonPos - Vector2f{3.0f, 3.0f}, {buttonW + 6.0f, buttonH + 6.0f}, 3.0f);
+    drawRect(buttonPos,
+             {buttonW, buttonH},
+             buttonFocused ? Color{0.12f, 0.34f, 0.52f, 0.34f * opacity}
+                           : Color{1.0f, 1.0f, 1.0f, 0.060f * opacity},
+             true);
+    drawBorder(buttonPos,
+               {buttonW, buttonH},
+               1.0f,
+               buttonFocused ? Color{0.40f, 0.82f, 1.0f, 0.42f * opacity}
+                             : Color{1.0f, 1.0f, 1.0f, 0.12f * opacity});
+    const std::uint32_t iconFont = materialFont();
+    if (iconFont != 0)
+    {
+        Gfx::DrawText(iconFont,
+                      buttonPos + Vector2f{28.0f, buttonH * 0.5f},
+                      25.0f,
+                      {0.54f, 0.84f, 1.0f, 0.92f * opacity},
+                      Gfx::align_Center,
+                      Gfx::align_Center,
+                      "\uE2C7");
+    }
+    Gfx::DrawText(Gfx::SystemFontChinese,
+                  buttonPos + Vector2f{iconFont != 0 ? 54.0f : 20.0f, 11.0f},
+                  18.0f,
+                  {1.0f, 1.0f, 1.0f, 0.86f * opacity},
+                  "选择 CHT");
+
     drawLine({base.X, base.Y + 50.0f}, {kContentW, 1.0f},
              {1.0f, 1.0f, 1.0f, 0.10f * opacity});
-
-    if (cheats.empty())
-    {
-        Gfx::DrawText(Gfx::SystemFontChinese,
-                      base + Vector2f{0.0f, 96.0f},
-                      23.0f,
-                      {0.80f, 0.90f, 0.98f, 0.72f * opacity},
-                      "未找到当前游戏的 usrcheat.dat 金手指");
-        return;
-    }
 
     pushContentBodyScissor(offsetY);
     const Vector2f start{kContentX + offsetX, kContentY + kContentBodyTop - scrollY};
     const float rowStep = 58.0f;
+
+    if (cheats.empty())
+    {
+        Gfx::DrawText(Gfx::SystemFontChinese,
+                      start + Vector2f{0.0f, 22.0f + offsetY},
+                      22.0f,
+                      {0.80f, 0.90f, 0.98f, 0.62f * opacity},
+                      "当前文件无金手指条目，按 Y 可新增");
+        Gfx::PopScissor();
+        return;
+    }
+
     const int visibleCount = static_cast<int>(visibleCheats.size());
     const int firstRow = std::max(0, static_cast<int>(scrollY / rowStep) - 2);
     const int rowsOnScreen = static_cast<int>(kContentBodyH / rowStep) + 5;
@@ -1157,7 +1235,7 @@ void drawCheatPage(const std::vector<MgbaCheatItem>& cheats,
             continue;
         drawCheatRow(pos + Vector2f{0.0f, offsetY},
                      cheats[cheatIndex],
-                     contentFocused && row == focusedRow,
+                     contentFocused && (row + 1) == focusedRow,
                      opacity);
     }
 
@@ -1191,6 +1269,33 @@ void drawDeleteDialog(int slot, float opacity)
                   mgba_stub_KEYICON_A);
     Gfx::DrawText(Gfx::SystemFontChinese, {pos.X + 450.0f, y - 11.0f}, 22.0f,
                   {0.38f, 0.78f, 1.0f, 0.92f * opacity}, "删除");
+}
+
+void drawCheatDeleteDialog(const std::string& name, float opacity)
+{
+    opacity = clamp01(opacity);
+    drawRect({0.0f, 0.0f}, {kScreenW, kScreenH}, {0.0f, 0.0f, 0.0f, 0.54f * opacity}, true);
+    const Vector2f size{std::min(560.0f, kScreenW - 72.0f), 218.0f};
+    const Vector2f pos{(kScreenW - size.X) * 0.5f, (kScreenH - size.Y) * 0.5f};
+    drawRect(pos, size, {0.04f, 0.055f, 0.075f, 0.96f * opacity}, true);
+    drawBorder(pos, size, 1.0f, {1.0f, 1.0f, 1.0f, 0.16f * opacity});
+    Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{34.0f, 26.0f}, 29.0f,
+                  {1.0f, 1.0f, 1.0f, 0.96f * opacity}, "删除金手指");
+    const std::string shownName = ellipsizeText(name, size.X - 70.0f, 20.0f);
+    Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{34.0f, 86.0f}, 20.0f,
+                  {1.0f, 1.0f, 1.0f, 0.72f * opacity}, "确认删除 \"%s\"？", shownName.c_str());
+
+    const float y = pos.Y + 168.0f;
+    Gfx::DrawText(Gfx::SystemFontNintendoExt, {pos.X + size.X - 184.0f, y}, 34.0f,
+                  {1.0f, 1.0f, 1.0f, 0.92f * opacity}, Gfx::align_Center, Gfx::align_Center,
+                  mgba_stub_KEYICON_B);
+    Gfx::DrawText(Gfx::SystemFontChinese, {pos.X + size.X - 158.0f, y - 11.0f}, 22.0f,
+                  {1.0f, 1.0f, 1.0f, 0.76f * opacity}, "取消");
+    Gfx::DrawText(Gfx::SystemFontNintendoExt, {pos.X + size.X - 76.0f, y}, 34.0f,
+                  {1.0f, 1.0f, 1.0f, 0.92f * opacity}, Gfx::align_Center, Gfx::align_Center,
+                  mgba_stub_KEYICON_A);
+    Gfx::DrawText(Gfx::SystemFontChinese, {pos.X + size.X - 50.0f, y - 11.0f}, 22.0f,
+                  {1.0f, 0.55f, 0.38f, 0.92f * opacity}, "删除");
 }
 
 void drawSyncDialogFrame(const char* title,
