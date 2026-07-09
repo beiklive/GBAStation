@@ -43,6 +43,17 @@ float gradientFocusAnimationOffset();
 Color mixColor(Color a, Color b, float t);
 Color gradientFocusColor(float offset, float alpha);
 
+enum class FocusBounceDirection {
+    None,
+    Up,
+    Down,
+    Left,
+    Right,
+};
+
+void triggerFocusBounce(FocusBounceDirection direction);
+Vector2f focusBounceOffset();
+
 void drawRect(Vector2f pos, Vector2f size, Color color, bool cool = false);
 void drawLine(Vector2f pos, Vector2f size, Color color);
 void drawBorder(Vector2f pos, Vector2f size, float width, Color color);

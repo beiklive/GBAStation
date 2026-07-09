@@ -862,8 +862,7 @@ void drawLeftMenu(int selected,
 void drawFooter(bool contentFocused, bool canDelete, float offsetY)
 {
     const float footerY = kScreenH - 72.0f + offsetY;
-    // drawRect({0.0f, footerY}, {kScreenW, 72.0f}, {0.117f, 0.117f, 0.117f, 0.f}, true);
-    // drawLine({0.0f, footerY}, {kScreenW, 1.0f}, {0.0f, 0.48f, 0.80f, 0.26f});
+    drawRect({0.0f, footerY}, {kScreenW, 72.0f}, {0.0f, 0.0f, 0.0f, 0.86f}, false);
 
     const float y = kScreenH - 38.0f + offsetY;
     float right = kScreenW - 86.0f;
@@ -1768,8 +1767,7 @@ void drawFilePicker(const std::string& directory,
     }
 
     const float footerY = kScreenH - footerH + offsetY;
-    drawRect({0.0f, footerY}, {kScreenW, footerH}, {0.0f, 0.0f, 0.0f, 0.42f * opacity}, true);
-    drawLine({0.0f, footerY}, {kScreenW, 1.0f}, {1.0f, 1.0f, 1.0f, 0.12f * opacity});
+    drawRect({0.0f, footerY}, {kScreenW, footerH}, {0.0f, 0.0f, 0.0f, 0.86f * opacity}, false);
 
     float hintX = kScreenW - 36.0f;
     auto drawHint = [&](const char* icon, const char* text, Color textColor) {

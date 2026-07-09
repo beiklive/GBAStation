@@ -527,6 +527,23 @@ void MgbaMenuLayer::releaseStateSlotTextures() const
     }
 }
 
+void triggerFocusBounceForButtons(std::uint64_t buttons)
+{
+    if (isDirectionUp(buttons))
+        triggerFocusBounce(FocusBounceDirection::Up);
+    else if (isDirectionDown(buttons))
+        triggerFocusBounce(FocusBounceDirection::Down);
+    else if (isDirectionLeft(buttons))
+        triggerFocusBounce(FocusBounceDirection::Left);
+    else if (isDirectionRight(buttons))
+        triggerFocusBounce(FocusBounceDirection::Right);
+}
+
+void triggerHorizontalBounce(int direction)
+{
+    triggerFocusBounce(direction < 0 ? FocusBounceDirection::Left : FocusBounceDirection::Right);
+}
+
 void MgbaMenuLayer::ensureStatePreviewTexture() const
 {
     const Item item = static_cast<Item>(m_selected);
@@ -1779,6 +1796,8 @@ MgbaMenuResult MgbaMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t bu
             m_filePickerFocus = std::min(static_cast<int>(m_filePickerEntries.size()) - 1, m_filePickerFocus + 1);
         if (m_filePickerFocus != oldFocus)
             queueSound(MgbaMenuSound::Focus);
+        else if ((isDirectionUp(navButtons) || isDirectionDown(navButtons)) && !m_filePickerEntries.empty())
+            triggerFocusBounceForButtons(navButtons);
 
         if ((buttonsDown & HidNpadButton_A) &&
             m_filePickerFocus >= 0 &&
@@ -1850,6 +1869,7 @@ MgbaMenuResult MgbaMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t bu
                 queueSound(MgbaMenuSound::Slider);
                 return {MgbaMenuAction::CustomLayoutChanged, -1};
             }
+            triggerFocusBounce(FocusBounceDirection::Left);
             return {};
         }
         if (buttonsDown & HidNpadButton_R)
@@ -1859,6 +1879,7 @@ MgbaMenuResult MgbaMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t bu
                 queueSound(MgbaMenuSound::Slider);
                 return {MgbaMenuAction::CustomLayoutChanged, -1};
             }
+            triggerFocusBounce(FocusBounceDirection::Right);
             return {};
         }
         if (updateHeldCustomSelector(buttonsHeld))
@@ -1868,11 +1889,13 @@ MgbaMenuResult MgbaMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t bu
         }
         if (isDirectionLeft(buttonsDown) || isDirectionRight(buttonsDown))
         {
-            if (cycleCustomLayoutSetting(isDirectionRight(buttonsDown) ? 1 : -1))
+            const int direction = isDirectionRight(buttonsDown) ? 1 : -1;
+            if (cycleCustomLayoutSetting(direction))
             {
                 queueSound(MgbaMenuSound::Slider);
                 return {MgbaMenuAction::CustomLayoutChanged, -1};
             }
+            triggerHorizontalBounce(direction);
             return {};
         }
         if ((buttonsDown & HidNpadButton_A) && resetCustomLayoutSetting())
@@ -2035,6 +2058,7 @@ MgbaMenuResult MgbaMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t bu
                 queueSound(MgbaMenuSound::Slider);
                 return {MgbaMenuAction::ShaderSettingsChanged, -1};
             }
+            triggerFocusBounce(FocusBounceDirection::Left);
             return {};
         }
         if (buttonsDown & HidNpadButton_R)
@@ -2044,6 +2068,7 @@ MgbaMenuResult MgbaMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t bu
                 queueSound(MgbaMenuSound::Slider);
                 return {MgbaMenuAction::ShaderSettingsChanged, -1};
             }
+            triggerFocusBounce(FocusBounceDirection::Right);
             return {};
         }
         if (updateHeldShaderSelector(buttonsHeld))
@@ -2053,11 +2078,13 @@ MgbaMenuResult MgbaMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t bu
         }
         if (isDirectionLeft(buttonsDown) || isDirectionRight(buttonsDown))
         {
-            if (cycleShaderSetting(isDirectionRight(buttonsDown) ? 1 : -1))
+            const int direction = isDirectionRight(buttonsDown) ? 1 : -1;
+            if (cycleShaderSetting(direction))
             {
                 queueSound(MgbaMenuSound::Slider);
                 return {MgbaMenuAction::ShaderSettingsChanged, -1};
             }
+            triggerHorizontalBounce(direction);
             return {};
         }
         return {};
@@ -2140,6 +2167,11 @@ MgbaMenuResult MgbaMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t bu
         beginSelectionAnimation(m_selected, (m_selected + 1) % itemCount);
         return {};
     }
+    if (m_focusScope == FocusScope::Tabs && (isDirectionLeft(navButtons) || isDirectionRight(navButtons)))
+    {
+        triggerFocusBounceForButtons(navButtons);
+        return {};
+    }
 
     const Item currentItem = static_cast<Item>(m_selected);
     if (m_focusScope == FocusScope::Content)
@@ -2160,6 +2192,11 @@ MgbaMenuResult MgbaMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t bu
             {
                 queueSound(MgbaMenuSound::Focus);
                 releaseStatePreviewTexture();
+            }
+            else if (isDirectionUp(navButtons) || isDirectionDown(navButtons) ||
+                     isDirectionLeft(navButtons) || isDirectionRight(navButtons))
+            {
+                triggerFocusBounceForButtons(navButtons);
             }
 
             if (buttonsDown & HidNpadButton_A)
@@ -2190,6 +2227,8 @@ MgbaMenuResult MgbaMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t bu
                 m_contentFocus = nextFocusableDisplayRow(m_contentFocus, 1);
             if (m_contentFocus != oldFocus)
                 queueSound(MgbaMenuSound::Focus);
+            else if (isDirectionUp(navButtons) || isDirectionDown(navButtons))
+                triggerFocusBounceForButtons(navButtons);
 
             if (buttonsDown & HidNpadButton_L)
             {
@@ -2198,6 +2237,7 @@ MgbaMenuResult MgbaMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t bu
                     queueSound(MgbaMenuSound::Slider);
                     return {MgbaMenuAction::DisplaySettingsChanged, -1};
                 }
+                triggerFocusBounce(FocusBounceDirection::Left);
                 return {};
             }
             if (buttonsDown & HidNpadButton_R)
@@ -2207,6 +2247,7 @@ MgbaMenuResult MgbaMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t bu
                     queueSound(MgbaMenuSound::Slider);
                     return {MgbaMenuAction::DisplaySettingsChanged, -1};
                 }
+                triggerFocusBounce(FocusBounceDirection::Right);
                 return {};
             }
             if (updateHeldSelector(buttonsHeld))
@@ -2216,11 +2257,13 @@ MgbaMenuResult MgbaMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t bu
             }
             if (isDirectionLeft(buttonsDown) || isDirectionRight(buttonsDown))
             {
-                if (cycleCurrentSetting(isDirectionRight(buttonsDown) ? 1 : -1))
+                const int direction = isDirectionRight(buttonsDown) ? 1 : -1;
+                if (cycleCurrentSetting(direction))
                 {
                     queueSound(MgbaMenuSound::Slider);
                     return {MgbaMenuAction::DisplaySettingsChanged, -1};
                 }
+                triggerHorizontalBounce(direction);
                 return {};
             }
 
@@ -2274,6 +2317,8 @@ MgbaMenuResult MgbaMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t bu
                 m_contentFocus = std::min(count - 1, m_contentFocus + 1);
             if (m_contentFocus != oldFocus)
                 queueSound(MgbaMenuSound::Focus);
+            else if (isDirectionUp(navButtons) || isDirectionDown(navButtons))
+                triggerFocusBounceForButtons(navButtons);
 
             if (buttonsDown & HidNpadButton_A)
             {
@@ -2293,6 +2338,10 @@ MgbaMenuResult MgbaMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t bu
                     const int nextCount = contentControlCount(Item::Cheats);
                     m_contentFocus = std::clamp(m_contentFocus, 0, std::max(0, nextCount - 1));
                     resetContentScroll();
+                }
+                else
+                {
+                    triggerFocusBounceForButtons(buttonsDown);
                 }
             }
             return {};

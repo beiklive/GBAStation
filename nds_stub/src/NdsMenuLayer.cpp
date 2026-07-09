@@ -118,6 +118,23 @@ std::uint64_t buttonsFromNavDirection(int direction)
     }
 }
 
+void triggerFocusBounceForButtons(std::uint64_t buttons)
+{
+    if (isDirectionUp(buttons))
+        triggerFocusBounce(FocusBounceDirection::Up);
+    else if (isDirectionDown(buttons))
+        triggerFocusBounce(FocusBounceDirection::Down);
+    else if (isDirectionLeft(buttons))
+        triggerFocusBounce(FocusBounceDirection::Left);
+    else if (isDirectionRight(buttons))
+        triggerFocusBounce(FocusBounceDirection::Right);
+}
+
+void triggerHorizontalBounce(int direction)
+{
+    triggerFocusBounce(direction < 0 ? FocusBounceDirection::Left : FocusBounceDirection::Right);
+}
+
 float focusedScroll(float focusedTop, float focusedH, float contentH)
 {
     const float bodyH = contentBodyHeight();
@@ -1716,6 +1733,8 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
             m_filePickerFocus = std::min(static_cast<int>(m_filePickerEntries.size()) - 1, m_filePickerFocus + 1);
         if (m_filePickerFocus != oldFocus)
             queueSound(NdsMenuSound::Focus);
+        else if ((isDirectionUp(navButtons) || isDirectionDown(navButtons)) && !m_filePickerEntries.empty())
+            triggerFocusBounceForButtons(navButtons);
 
         if ((buttonsDown & HidNpadButton_A) &&
             m_filePickerFocus >= 0 &&
@@ -1787,6 +1806,7 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
                 queueSound(NdsMenuSound::Slider);
                 return {NdsMenuAction::CustomLayoutChanged, -1};
             }
+            triggerFocusBounce(FocusBounceDirection::Left);
             return {};
         }
         if (buttonsDown & HidNpadButton_R)
@@ -1796,6 +1816,7 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
                 queueSound(NdsMenuSound::Slider);
                 return {NdsMenuAction::CustomLayoutChanged, -1};
             }
+            triggerFocusBounce(FocusBounceDirection::Right);
             return {};
         }
         if (updateHeldCustomSelector(buttonsHeld))
@@ -1805,11 +1826,13 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
         }
         if (isDirectionLeft(buttonsDown) || isDirectionRight(buttonsDown))
         {
-            if (cycleCustomLayoutSetting(isDirectionRight(buttonsDown) ? 1 : -1))
+            const int direction = isDirectionRight(buttonsDown) ? 1 : -1;
+            if (cycleCustomLayoutSetting(direction))
             {
                 queueSound(NdsMenuSound::Slider);
                 return {NdsMenuAction::CustomLayoutChanged, -1};
             }
+            triggerHorizontalBounce(direction);
             return {};
         }
         if ((buttonsDown & HidNpadButton_A) && resetCustomLayoutSetting())
@@ -1972,6 +1995,7 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
                 queueSound(NdsMenuSound::Slider);
                 return {NdsMenuAction::ShaderSettingsChanged, -1};
             }
+            triggerFocusBounce(FocusBounceDirection::Left);
             return {};
         }
         if (buttonsDown & HidNpadButton_R)
@@ -1981,6 +2005,7 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
                 queueSound(NdsMenuSound::Slider);
                 return {NdsMenuAction::ShaderSettingsChanged, -1};
             }
+            triggerFocusBounce(FocusBounceDirection::Right);
             return {};
         }
         if (updateHeldShaderSelector(buttonsHeld))
@@ -1990,11 +2015,13 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
         }
         if (isDirectionLeft(buttonsDown) || isDirectionRight(buttonsDown))
         {
-            if (cycleShaderSetting(isDirectionRight(buttonsDown) ? 1 : -1))
+            const int direction = isDirectionRight(buttonsDown) ? 1 : -1;
+            if (cycleShaderSetting(direction))
             {
                 queueSound(NdsMenuSound::Slider);
                 return {NdsMenuAction::ShaderSettingsChanged, -1};
             }
+            triggerHorizontalBounce(direction);
             return {};
         }
         return {};
@@ -2077,6 +2104,11 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
         beginSelectionAnimation(m_selected, (m_selected + 1) % itemCount);
         return {};
     }
+    if (m_focusScope == FocusScope::Tabs && (isDirectionLeft(navButtons) || isDirectionRight(navButtons)))
+    {
+        triggerFocusBounceForButtons(navButtons);
+        return {};
+    }
 
     const Item currentItem = static_cast<Item>(m_selected);
     if (m_focusScope == FocusScope::Content)
@@ -2092,6 +2124,10 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
             {
                 queueSound(NdsMenuSound::Focus);
                 releaseStatePreviewTexture();
+            }
+            else if (isDirectionUp(navButtons) || isDirectionDown(navButtons))
+            {
+                triggerFocusBounceForButtons(navButtons);
             }
 
             if (buttonsDown & HidNpadButton_A)
@@ -2122,6 +2158,8 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
                 m_contentFocus = nextFocusableDisplayRow(m_contentFocus, 1);
             if (m_contentFocus != oldFocus)
                 queueSound(NdsMenuSound::Focus);
+            else if (isDirectionUp(navButtons) || isDirectionDown(navButtons))
+                triggerFocusBounceForButtons(navButtons);
 
             if (buttonsDown & HidNpadButton_L)
             {
@@ -2130,6 +2168,7 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
                     queueSound(NdsMenuSound::Slider);
                     return {NdsMenuAction::DisplaySettingsChanged, -1};
                 }
+                triggerFocusBounce(FocusBounceDirection::Left);
                 return {};
             }
             if (buttonsDown & HidNpadButton_R)
@@ -2139,6 +2178,7 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
                     queueSound(NdsMenuSound::Slider);
                     return {NdsMenuAction::DisplaySettingsChanged, -1};
                 }
+                triggerFocusBounce(FocusBounceDirection::Right);
                 return {};
             }
             if (updateHeldSelector(buttonsHeld))
@@ -2148,11 +2188,13 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
             }
             if (isDirectionLeft(buttonsDown) || isDirectionRight(buttonsDown))
             {
-                if (cycleCurrentSetting(isDirectionRight(buttonsDown) ? 1 : -1))
+                const int direction = isDirectionRight(buttonsDown) ? 1 : -1;
+                if (cycleCurrentSetting(direction))
                 {
                     queueSound(NdsMenuSound::Slider);
                     return {NdsMenuAction::DisplaySettingsChanged, -1};
                 }
+                triggerHorizontalBounce(direction);
                 return {};
             }
 
@@ -2206,6 +2248,8 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
                 m_contentFocus = std::min(count - 1, m_contentFocus + 1);
             if (m_contentFocus != oldFocus)
                 queueSound(NdsMenuSound::Focus);
+            else if (isDirectionUp(navButtons) || isDirectionDown(navButtons))
+                triggerFocusBounceForButtons(navButtons);
 
             if (buttonsDown & HidNpadButton_A)
             {
@@ -2225,6 +2269,10 @@ NdsMenuResult NdsMenuLayer::update(std::uint64_t buttonsDown, std::uint64_t butt
                     const int nextCount = contentControlCount(Item::Cheats);
                     m_contentFocus = std::clamp(m_contentFocus, 0, std::max(0, nextCount - 1));
                     resetContentScroll();
+                }
+                else
+                {
+                    triggerFocusBounceForButtons(buttonsDown);
                 }
             }
             return {};

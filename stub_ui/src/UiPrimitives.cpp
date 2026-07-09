@@ -12,6 +12,8 @@ namespace beiklive::stub_ui {
 namespace {
 
 constexpr float kGradientFocusBorderWidthScale = 2.0f;
+constexpr float kFocusBounceDurationMs = 240.0f;
+constexpr float kFocusBounceAmplitude = 12.0f;
 
 struct HighlightGradientTexture {
     bool attempted = false;
@@ -21,6 +23,8 @@ struct HighlightGradientTexture {
 };
 
 HighlightGradientTexture gHighlightGradient;
+FocusBounceDirection gFocusBounceDirection = FocusBounceDirection::None;
+std::uint64_t gFocusBounceStartTick = 0;
 
 bool fileExists(const char* path)
 {
@@ -143,6 +147,28 @@ void drawGradientQuad(const HighlightGradientTexture& gradient,
                        tint);
 }
 
+void snapRect(Vector2f& pos, Vector2f& size)
+{
+    const float left = std::floor(pos.X);
+    const float top = std::floor(pos.Y);
+    const float right = std::ceil(pos.X + size.X);
+    const float bottom = std::ceil(pos.Y + size.Y);
+    pos = {left, top};
+    size = {std::max(0.0f, right - left), std::max(0.0f, bottom - top)};
+}
+
+Vector2f focusBounceDirectionVector(FocusBounceDirection direction)
+{
+    switch (direction)
+    {
+    case FocusBounceDirection::Up: return {0.0f, -1.0f};
+    case FocusBounceDirection::Down: return {0.0f, 1.0f};
+    case FocusBounceDirection::Left: return {-1.0f, 0.0f};
+    case FocusBounceDirection::Right: return {1.0f, 0.0f};
+    default: return {0.0f, 0.0f};
+    }
+}
+
 } // namespace
 
 float clamp01(float value)
@@ -233,8 +259,37 @@ Color gradientFocusColor(float offset, float alpha)
     return color;
 }
 
+void triggerFocusBounce(FocusBounceDirection direction)
+{
+    if (direction == FocusBounceDirection::None)
+        return;
+
+    gFocusBounceDirection = direction;
+    gFocusBounceStartTick = armGetSystemTick();
+}
+
+Vector2f focusBounceOffset()
+{
+    if (gFocusBounceDirection == FocusBounceDirection::None || gFocusBounceStartTick == 0)
+        return {0.0f, 0.0f};
+
+    const float t = animationProgress(gFocusBounceStartTick, kFocusBounceDurationMs);
+    if (t >= 1.0f)
+    {
+        gFocusBounceDirection = FocusBounceDirection::None;
+        gFocusBounceStartTick = 0;
+        return {0.0f, 0.0f};
+    }
+
+    const float impulse = std::sin(t * 3.14159265f * 3.2f) * std::exp(-4.6f * t);
+    const Vector2f dir = focusBounceDirectionVector(gFocusBounceDirection);
+    return {dir.X * kFocusBounceAmplitude * impulse,
+            dir.Y * kFocusBounceAmplitude * impulse};
+}
+
 void drawRect(Vector2f pos, Vector2f size, Color color, bool cool)
 {
+    snapRect(pos, size);
     Gfx::DrawRectangle(pos, size, color, cool);
 }
 
@@ -245,6 +300,7 @@ void drawLine(Vector2f pos, Vector2f size, Color color)
 
 void drawBorder(Vector2f pos, Vector2f size, float width, Color color)
 {
+    snapRect(pos, size);
     drawRect(pos, {size.X, width}, color);
     drawRect({pos.X, pos.Y + size.Y - width}, {size.X, width}, color);
     drawRect(pos, {width, size.Y}, color);
@@ -253,6 +309,8 @@ void drawBorder(Vector2f pos, Vector2f size, float width, Color color)
 
 void drawGradientBorder(Vector2f pos, Vector2f size, float width)
 {
+    pos = pos + focusBounceOffset();
+    snapRect(pos, size);
     const HighlightGradientTexture& gradient = getHighlightGradientTexture();
     if (gradient.texture == 0 || gradient.width <= 0 || gradient.height <= 0)
     {

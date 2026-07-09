@@ -3198,7 +3198,7 @@ int RunRuntime(const RunOptions& options)
                                      rewindActive,
                                      inputConfig.showRewindOverlay(),
                                      runtimePaused);
-        if (exitAutoSavePending)
+        if (exitAutoSavePending && !menuLayer.active())
             ui::drawBusyDialog("正在自动保存", "保存完毕后将自动退出游戏。", 1.0f);
         if (visualRewindOpen)
         {
@@ -3234,7 +3234,7 @@ int RunRuntime(const RunOptions& options)
                 svcSleepThread(static_cast<int64_t>(sleepUs) * 1000);
         }
 
-        if (exitAutoSavePending)
+        if (exitAutoSavePending && !menuLayer.active())
         {
             if (!exitAutoSaveDrawn)
             {
