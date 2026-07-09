@@ -37,10 +37,10 @@ namespace beiklive
             [this](brls::View*) -> bool
             {
                 if (onX)
-                    onX(m_index);
-                return true;
+                    return onX(m_index);
+                return false;
             },
-            false,
+            true,
             false,
             brls::SOUND_CLICK);
 
@@ -50,10 +50,10 @@ namespace beiklive
             [this](brls::View*) -> bool
             {
                 if (onY)
-                    onY(m_index);
-                return true;
+                    return onY(m_index);
+                return false;
             },
-            false,
+            true,
             false,
             brls::SOUND_CLICK);
     }
@@ -172,11 +172,17 @@ namespace beiklive
         cell->onFocused = [this](int index) {
             if (onItemFocused) onItemFocused(index);
         };
-        cell->onX = [this](int index) {
-            if (onItemX) onItemX(index);
+        cell->onX = [this](int index) -> bool {
+            if (!onItemX)
+                return false;
+            onItemX(index);
+            return true;
         };
-        cell->onY = [this](int index) {
-            if (onItemY) onItemY(index);
+        cell->onY = [this](int index) -> bool {
+            if (!onItemY)
+                return false;
+            onItemY(index);
+            return true;
         };
         return cell;
     }
