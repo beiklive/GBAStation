@@ -145,6 +145,10 @@ namespace beiklive
                    {
         this->showHeader(false);
         this->hideFooterLine();
+        this->registerAction("多人游戏", brls::BUTTON_BACK, [this](brls::View*) -> bool {
+            _openMultiplayer();
+            return true;
+        });
         // this->showFooter(false);
         // this->showBackground(true);
         // 动态背景由 Box::setupShaderLayer 根据配置初始化
@@ -453,6 +457,16 @@ namespace beiklive
         HIDE_BRLS_BAR(frame);
         brls::sync([this, frame, dataPage]()
                    { beiklive::pushActivity(frame, this, dataPage); });
+    }
+
+    void StartPage::_openMultiplayer()
+    {
+        brls::Logger::debug("Opening Multiplayer Page");
+        auto *multiplayerPage = new beiklive::MultiplayerPage();
+        auto *frame           = new brls::AppletFrame(multiplayerPage);
+        HIDE_BRLS_BAR(frame);
+        brls::sync([this, frame, multiplayerPage]()
+                   { beiklive::pushActivity(frame, this, multiplayerPage); });
     }
 
     void StartPage::_showGameOptionsPanel(const beiklive::GameEntry& entry)

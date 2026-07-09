@@ -9,6 +9,7 @@
 #include "ui/page/AboutPage.hpp"
 #include "ui/page/GameLibraryPage.hpp"
 #include "ui/page/DataManagementPage.hpp"
+#include "ui/page/MultiplayerPage.hpp"
 #include "ui/widget/Box.hpp"
 #include "ui/view/GameOptionsSidebar.hpp"
 
@@ -31,6 +32,7 @@ namespace beiklive
         void _openSettings();
         void _openAbout();
         void _openDataManagement();
+        void _openMultiplayer();
         void _applyRuntimeUiSettings();
         void _requestRecentGamesRefresh(bool defer);
         void _pushGameActivity(const beiklive::GameEntry& entry, beiklive::Box* previousPage);
