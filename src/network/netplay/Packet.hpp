@@ -40,6 +40,8 @@ enum class PacketType : uint16_t
     Heartbeat,
     Disconnect,
     LinkData,
+    CoreReady,
+    RunGo,
 };
 
 struct PacketHeader
@@ -75,9 +77,12 @@ struct RoomInfo
 struct LinkDataPacket
 {
     uint64_t cycle = 0;
-    uint16_t data = 0;
+    uint32_t data = 0;
+    uint16_t siocnt = 0;
+    uint16_t rcnt = 0;
     uint8_t flags = 0;
     uint8_t playerId = 0;
+    uint8_t mode = 0;
 };
 
 struct StartGamePacket
@@ -89,6 +94,18 @@ struct StartGamePacket
     std::array<PlayerInfo, MAX_LINK_PLAYERS> players{};
 };
 
+struct PendingJoinRequest
+{
+    bool active = false;
+    bool approvalReady = false;
+    uint64_t roomId = 0;
+    std::string name;
+    uint8_t avatar = 0;
+    uint32_t crc32 = 0;
+    std::string title;
+    std::string endpoint;
+};
+
 struct NetplaySnapshot
 {
     NetplayState state = NetplayState::Idle;
@@ -97,6 +114,7 @@ struct NetplaySnapshot
     std::string nickname;
     std::string statusText;
     RoomInfo currentRoom;
+    PendingJoinRequest pendingJoin;
     std::vector<RoomInfo> rooms;
     std::array<PlayerInfo, MAX_LINK_PLAYERS> players{};
     uint8_t localPlayerId = 0;

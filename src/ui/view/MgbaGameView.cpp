@@ -1,9 +1,11 @@
 #include "MgbaGameView.hpp"
 #include "GameMenuView.hpp"
+#include "NetplayGameMenuView.hpp"
 #include "RewindSelectorView.hpp"
 #include "emulator/IEmulatorAudioOutput.hpp"
 #include "game/audio/AudioManager.hpp"
 #include "game/control/InputMappingDefaults.hpp"
+#include "network/netplay/NetplayManager.hpp"
 #include "ui/utils/BKAudioPlayer.hpp"
 #include "ui/utils/AnimationHelper.hpp"
 #include "core/Tools.hpp"
@@ -74,6 +76,12 @@ namespace
     bool shouldSetupCoreOnGameThread(int platform)
     {
         return isNdsPlatform(platform) || isMgbaNativePlatform(platform);
+    }
+
+    bool isNetplayStartupState(beiklive::netplay::NetplayState state)
+    {
+        return state == beiklive::netplay::NetplayState::LoadingGame ||
+               state == beiklive::netplay::NetplayState::WaitingReady;
     }
 
     std::pair<unsigned, unsigned> rewindThumbSizeForFrame(unsigned srcW, unsigned srcH)
@@ -287,6 +295,7 @@ namespace beiklive
         brls::Logger::debug("MgbaGameView gained focus");
 
         // 获得焦点时恢复游戏运行
+        m_netplayMenuOpen = false;
         GameSignal::instance().requestPause(false);
         GameInputManager::instance().setInputEnabled(true);
 
@@ -301,6 +310,19 @@ namespace beiklive
     {
         Box::onFocusLost();
         brls::Logger::debug("MgbaGameView lost focus");
+
+        if (m_netplayMenuOpen)
+        {
+            // 联机菜单打开期间只锁输入，不暂停游戏线程，保证两端同步继续推进。
+            GameInputManager::instance().setInputEnabled(false);
+            GameInputManager::instance().dropInput();
+            if (_brls_inputLocked)
+            {
+                _brls_inputLocked = false;
+                brls::Application::unblockInputs();
+            }
+            return;
+        }
 
         // 失去焦点时暂停游戏
         GameSignal::instance().requestPause(true);
@@ -398,8 +420,18 @@ namespace beiklive
 
         // 消费打开菜单信号：异步触发菜单入场，本帧仍继续渲染避免闪烁
         if (GameSignal::instance().consumeOpenMenu()) {
-            GameSignal::instance().requestPause(true);
-            if (m_gameMenuView) {
+            if (m_netplayGameMenuView) {
+                brls::sync([this](){
+                    // 联机模式菜单直接显示，不请求暂停，底层游戏继续运行。
+                    m_netplayMenuOpen = true;
+                    GameInputManager::instance().setInputEnabled(false);
+                    GameInputManager::instance().dropInput();
+                    m_netplayGameMenuView->open();
+                });
+            } else {
+                GameSignal::instance().requestPause(true);
+            }
+            if (!m_netplayGameMenuView && m_gameMenuView) {
                 brls::sync([this](){
                     // 菜单从底部滑入，入场动画（120ms）
                     AnimationHelper::slideInFromBottom(m_gameMenuView, 60.f, 120, [this]() {
@@ -1270,7 +1302,10 @@ namespace beiklive
                     EmuFunctionKey::EMU_OPEN_MENU, {combo},
                     [this]() {
                         brls::Logger::debug("打开菜单热键触发！");
-                        GameSignal::instance().requestPause(true);
+                        if (!m_netplayGameMenuView)
+                            GameSignal::instance().requestPause(true);
+                        else
+                            m_netplayMenuOpen = true;
                         GameSignal::instance().requestOpenMenu();
                         this->setFocusable(false);
                     });
@@ -2547,6 +2582,43 @@ namespace beiklive
 
         if (!m_core->IsReady()) return;
 
+        bool netplaySession = false;
+        {
+            auto netplaySnapshot = beiklive::netplay::NetplayManager::instance().snapshot();
+            netplaySession = isMgbaNativePlatform(m_gameEntry.platform) &&
+                             netplaySnapshot.currentRoom.roomId != 0;
+            if (netplaySession && isNetplayStartupState(netplaySnapshot.state))
+            {
+                brls::Logger::info("MgbaGameView: netplay core loaded, waiting RunGo room={} state={}",
+                                   netplaySnapshot.currentRoom.roomId,
+                                   beiklive::netplay::toString(netplaySnapshot.state));
+                beiklive::netplay::NetplayManager::instance().markCoreReady();
+
+                while (m_running.load(std::memory_order_acquire))
+                {
+                    beiklive::netplay::NetplayManager::instance().poll();
+                    netplaySnapshot = beiklive::netplay::NetplayManager::instance().snapshot();
+                    if (netplaySnapshot.state == beiklive::netplay::NetplayState::Running)
+                    {
+                        brls::Logger::info("MgbaGameView: netplay RunGo released room={}",
+                                           netplaySnapshot.currentRoom.roomId);
+                        break;
+                    }
+                    if (netplaySnapshot.currentRoom.roomId == 0 ||
+                        netplaySnapshot.state == beiklive::netplay::NetplayState::Idle ||
+                        netplaySnapshot.state == beiklive::netplay::NetplayState::Disconnected)
+                    {
+                        brls::Logger::warning("MgbaGameView: netplay startup aborted state={} room={}",
+                                              beiklive::netplay::toString(netplaySnapshot.state),
+                                              netplaySnapshot.currentRoom.roomId);
+                        m_running.store(false, std::memory_order_release);
+                        break;
+                    }
+                    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                }
+            }
+        }
+
         // 从核心获取目标帧率
         double coreFps = m_core->Fps();
         if (coreFps <= 0.0 || coreFps > MAX_REASONABLE_FPS)
@@ -2583,6 +2655,8 @@ namespace beiklive
         int autoLoadSlot = GET_SETTING_KEY_INT("save.autoLoadState0", 0);
         int autoSaveSlot = GET_SETTING_KEY_INT("save.autoSaveState", 0);
         int autoSaveSecs = GET_SETTING_KEY_INT("save.autoSaveInterval", 0);
+        if (netplaySession)
+            autoLoadSlot = 0;
         m_autoSaveTimer = Clock::now();
         bool autoLoadDone = false;
 

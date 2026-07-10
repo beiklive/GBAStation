@@ -2,6 +2,8 @@
 
 #include "core/Tools.hpp"
 #include "emulator/mgba_native/MgbaCheatSystem.hpp"
+#include "emulator/mgba_native/MgbaNativeLink.hpp"
+#include "network/netplay/NetplayManager.hpp"
 
 #include <mgba/core/blip_buf.h>
 #include <mgba/core/cheats.h>
@@ -19,11 +21,13 @@
 #include <mgba-util/vfs.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cctype>
 #include <cmath>
 #include <cstring>
 #include <ctime>
 #include <cstdlib>
+#include <thread>
 #include <utility>
 
 #ifdef __SWITCH__
@@ -378,7 +382,25 @@ void MgbaNativeCore::RunFrame()
         return;
 
     updateKeys();
+    if (m_netplayLink)
+    {
+        m_netplayLink->Pump();
+        if (m_netplayLink->IsWaitingForPeer())
+        {
+            const auto waitUntil = std::chrono::steady_clock::now() + std::chrono::milliseconds(3);
+            do
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                m_netplayLink->Pump();
+            } while (m_netplayLink->IsWaitingForPeer() && std::chrono::steady_clock::now() < waitUntil);
+
+            if (m_netplayLink->IsWaitingForPeer())
+                return;
+        }
+    }
     m_core->runFrame(m_core);
+    if (m_netplayLink)
+        m_netplayLink->Pump();
     captureVideoFrame();
     if (!m_audioStreamEnabled)
         drainMgbaAudio();
@@ -676,6 +698,35 @@ bool MgbaNativeCore::loadRom(const std::string& romPath)
     brls::Logger::debug("MgbaNativeCore: post-load config applied ok");
     loadSram();
     brls::Logger::debug("MgbaNativeCore: SRAM setup ok");
+
+    const auto netplaySnapshot = beiklive::netplay::NetplayManager::instance().snapshot();
+    const bool netplayLinkActive =
+        netplaySnapshot.currentRoom.roomId != 0 &&
+        (netplaySnapshot.state == beiklive::netplay::NetplayState::LoadingGame ||
+         netplaySnapshot.state == beiklive::netplay::NetplayState::WaitingReady ||
+         netplaySnapshot.state == beiklive::netplay::NetplayState::Running);
+    if (mgbaPlatform == mPLATFORM_GBA && netplayLinkActive)
+    {
+        m_netplayLink = std::make_unique<MgbaNativeLink>();
+        if (m_netplayLink->AttachGbaCore(m_core))
+            brls::Logger::info("MgbaNativeCore: netplay GBA SIO driver attached playerId={}",
+                               static_cast<int>(netplaySnapshot.localPlayerId));
+        else
+        {
+            brls::Logger::warning("MgbaNativeCore: failed to attach netplay GBA SIO driver");
+            m_netplayLink.reset();
+        }
+    }
+    else
+    {
+        brls::Logger::info("MgbaNativeCore: netplay SIO not attached platform={} netplayState={} hosting={} playerId={} room={} crc={:#x}",
+                           static_cast<int>(mgbaPlatform),
+                           beiklive::netplay::toString(netplaySnapshot.state),
+                           netplaySnapshot.hosting ? 1 : 0,
+                           static_cast<int>(netplaySnapshot.localPlayerId),
+                           netplaySnapshot.currentRoom.roomId,
+                           netplaySnapshot.currentRoom.crc32);
+    }
 
     unsigned desiredW = 0;
     unsigned desiredH = 0;
@@ -1638,6 +1689,7 @@ void MgbaNativeCore::releaseCore()
 
     if (!m_core)
     {
+        m_netplayLink.reset();
         m_audioStreamEnabled = false;
         m_audioStream = {};
         releaseFallbackCheatDevice();
@@ -1647,6 +1699,11 @@ void MgbaNativeCore::releaseCore()
 
     if (m_coreInitialized)
     {
+        if (m_netplayLink)
+        {
+            m_netplayLink->DetachGbaCore(m_core);
+            m_netplayLink.reset();
+        }
         if (m_core->setAVStream)
             m_core->setAVStream(m_core, nullptr);
         m_audioStreamEnabled = false;
@@ -1664,6 +1721,7 @@ void MgbaNativeCore::releaseCore()
     }
     else
     {
+        m_netplayLink.reset();
         releaseFallbackCheatDevice();
         std::free(m_core);
     }

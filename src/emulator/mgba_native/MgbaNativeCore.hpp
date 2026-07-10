@@ -4,12 +4,14 @@
 #include "core/GameSignal.hpp"
 #include "emulator/IEmulatorAudioOutput.hpp"
 #include "emulator/IEmulatorCore.hpp"
+#include "emulator/mgba_native/MgbaNativeLink.hpp"
 
 #include <mgba/core/interface.h>
 #include <mgba/gba/interface.h>
 
 #include <array>
 #include <ctime>
+#include <memory>
 
 #ifdef __SWITCH__
 #include <switch.h>
@@ -125,6 +127,7 @@ private:
     bool m_fallbackCheatAttached = false;
     int m_fallbackCheatPlatform = -1;
     bool m_fastForwarding = false;
+    std::unique_ptr<MgbaNativeLink> m_netplayLink;
 
     unsigned m_width = 0;
     unsigned m_height = 0;

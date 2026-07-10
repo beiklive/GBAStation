@@ -30,6 +30,8 @@ public:
     bool AttachGbaCore(mCore* core);
     void DetachGbaCore(mCore* core);
     void Reset();
+    void Pump();
+    bool IsWaitingForPeer() const;
 
     void SetCallback(IMGbaLinkCallback* callback) { m_callback = callback; }
     void SendLinkData(const beiklive::netplay::LinkDataPacket& packet);

@@ -6,6 +6,7 @@
 #include "ui/view/GameView.hpp"
 #include "ui/view/MgbaGameView.hpp"
 #include "ui/view/GameMenuView.hpp"
+#include "ui/view/NetplayGameMenuView.hpp"
 #include "ui/view/RewindSelectorView.hpp"
 
 namespace beiklive
@@ -20,6 +21,7 @@ namespace beiklive
         GamePage(beiklive::GameEntry gameEntry);
         ~GamePage();
 
+        void setNetplayMode(bool enabled) { m_netplayMode = enabled; }
         void startGame();
 
     private:
@@ -30,7 +32,9 @@ namespace beiklive
         void updateGameCount();
         void GameViewInitialize();
         void GameMenuInitialize();
+        void NetplayGameMenuInitialize();
         void RewindSelectorViewInitialize(); // 初始化倒带选择界面
+        void _closeNetplayAndExit();
         void _finishExitAndPop();
         void _waitExitAutoSaveThenPop();
         void _showExitCleanupDialogThenPop();
@@ -42,7 +46,9 @@ namespace beiklive
         beiklive::GameEntry m_gameEntry;                          // 游戏条目数据，包含路径、标题等信息
         GameViewBase *m_gameView               = nullptr;         // 游戏视图实例，负责游戏的渲染显示和输入处理
         GameMenuView *m_gameMenuView           = nullptr;         // 游戏菜单视图实例，负责游戏菜单的渲染显示和输入处理
+        NetplayGameMenuView* m_netplayGameMenuView = nullptr;     // 联机模式菜单视图，仅保留返回游戏/关闭联机
         RewindSelectorView *m_rewindSelectorView = nullptr;       // 可视化倒带选择界面（显示倒带缩略图列表）
+        bool m_netplayMode = false;                              // 联机模式下使用轻量菜单，打开菜单不暂停游戏
         bool m_exitRequested = false;                            // 防止退出流程重复触发
         bool m_exitCleanupStarted = false;                        // 防止退出清理重复执行
         int m_exitAutoSavePolls = 0;                              // 退出自动存档完成状态轮询次数

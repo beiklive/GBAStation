@@ -28,6 +28,7 @@
 namespace beiklive
 {
     class GameMenuView;         // 前置声明
+    class NetplayGameMenuView;  // 前置声明
     class RewindSelectorView;   // 前置声明
     class IEmulatorAudioOutput;
 
@@ -48,6 +49,9 @@ namespace beiklive
 
             /// 设置关联的游戏菜单视图（由 GamePage 调用）
             void setGameMenuView(GameMenuView* menuView) { m_gameMenuView = menuView; }
+
+            /// 设置联机模式轻量菜单视图（由 GamePage 调用）
+            void setNetplayGameMenuView(NetplayGameMenuView* menuView) { m_netplayGameMenuView = menuView; }
 
             /// 设置关联的倒带选择视图（由 GamePage 调用）
             void setRewindSelectorView(RewindSelectorView* view) { m_rewindSelectorView = view; }
@@ -199,7 +203,9 @@ namespace beiklive
 
             // ---- 视图（由 GamePage 注入）-------------------------------------
             GameMenuView*       m_gameMenuView       = nullptr;
+            NetplayGameMenuView* m_netplayGameMenuView = nullptr;
             RewindSelectorView* m_rewindSelectorView = nullptr;
+            bool m_netplayMenuOpen = false;
 
             // ---- 杂项 --------------------------------------------------------
             std::string m_playTimeTempPath;    ///< 时长临时文件路径，退出时合并到 GameDB

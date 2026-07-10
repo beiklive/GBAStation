@@ -5,6 +5,8 @@
 #include <switch.h>
 #endif
 
+#include <mutex>
+
 namespace beiklive::network
 {
 
@@ -12,6 +14,10 @@ namespace
 {
 #ifdef __SWITCH__
 constexpr std::size_t SOCKET_BUFFER_SIZE = 0x100000;
+std::mutex g_socketMutex;
+void* g_socketBuffer = nullptr;
+int g_socketRefCount = 0;
+bool g_socketOwned = false;
 #endif
 }
 
@@ -21,19 +27,29 @@ bool NetworkManager::Initialize()
     if (initialized_)
         return true;
 
-    socketBuffer_ = memalign(0x1000, SOCKET_BUFFER_SIZE);
-    if (!socketBuffer_)
-        return false;
-
-    Result rc = socketInitializeDefault();
-    if (R_FAILED(rc))
+    std::lock_guard<std::mutex> lock(g_socketMutex);
+    if (g_socketRefCount == 0)
     {
-        // Some platforms/libraries may have already initialized sockets.
-        // In that case keep the buffer unused and let listen() report a real failure if sockets are unavailable.
-        free(socketBuffer_);
-        socketBuffer_ = nullptr;
-        return true;
+        g_socketBuffer = memalign(0x1000, SOCKET_BUFFER_SIZE);
+        if (!g_socketBuffer)
+            return false;
+
+        Result rc = socketInitializeDefault();
+        if (R_FAILED(rc))
+        {
+            // Some platforms/libraries may have already initialized sockets.
+            // In that case keep our reference alive without owning socketExit().
+            free(g_socketBuffer);
+            g_socketBuffer = nullptr;
+            g_socketOwned = false;
+        }
+        else
+        {
+            g_socketOwned = true;
+        }
     }
+
+    ++g_socketRefCount;
     initialized_ = true;
 #endif
     return true;
@@ -42,16 +58,25 @@ bool NetworkManager::Initialize()
 void NetworkManager::Shutdown()
 {
 #ifdef __SWITCH__
-    if (initialized_)
-    {
-        socketExit();
-        initialized_ = false;
-    }
+    if (!initialized_)
+        return;
 
-    if (socketBuffer_)
+    std::lock_guard<std::mutex> lock(g_socketMutex);
+    initialized_ = false;
+    if (g_socketRefCount > 0)
+        --g_socketRefCount;
+
+    if (g_socketRefCount == 0)
     {
-        free(socketBuffer_);
-        socketBuffer_ = nullptr;
+        if (g_socketOwned)
+            socketExit();
+        g_socketOwned = false;
+
+        if (g_socketBuffer)
+        {
+            free(g_socketBuffer);
+            g_socketBuffer = nullptr;
+        }
     }
 #endif
 }

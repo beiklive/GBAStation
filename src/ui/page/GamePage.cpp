@@ -1,6 +1,7 @@
 #include "GamePage.hpp"
 #include "core/Tools.hpp"
 #include "core/GameSignal.hpp"
+#include "network/netplay/NetplayManager.hpp"
 #include "ui/utils/AnimationHelper.hpp"
 
 #include <borealis/views/dialog.hpp>
@@ -298,6 +299,9 @@ namespace beiklive
 
     void GamePage::GameMenuInitialize()
     {
+        if (m_netplayMode)
+            return;
+
         #undef ABSOLUTE
         m_gameMenuView = new GameMenuView(m_gameEntry);
         m_gameMenuView->setWidthPercentage(100.f);
@@ -488,6 +492,38 @@ namespace beiklive
 
     }
 
+    void GamePage::NetplayGameMenuInitialize()
+    {
+        if (!m_netplayMode)
+            return;
+
+        #undef ABSOLUTE
+        m_netplayGameMenuView = new NetplayGameMenuView();
+        m_netplayGameMenuView->setWidthPercentage(100.f);
+        m_netplayGameMenuView->setHeightPercentage(100.f);
+        m_netplayGameMenuView->setFocusable(false);
+        m_netplayGameMenuView->setPositionType(brls::PositionType::ABSOLUTE);
+        m_netplayGameMenuView->setPositionTop(0);
+        m_netplayGameMenuView->setPositionLeft(0);
+        this->getContentBox()->addView(m_netplayGameMenuView);
+
+        m_netplayGameMenuView->setOnResume([this]() {
+            brls::sync([this]() {
+                if (m_netplayGameMenuView)
+                    m_netplayGameMenuView->close();
+                if (m_gameView)
+                    m_gameView->setFocusable(true);
+                brls::Application::giveFocus(m_gameView);
+            });
+        });
+
+        m_netplayGameMenuView->setOnCloseNetplay([this]() {
+            brls::sync([this]() {
+                _closeNetplayAndExit();
+            });
+        });
+    }
+
     void GamePage::RewindSelectorViewInitialize()
     {
         #undef ABSOLUTE
@@ -541,11 +577,18 @@ namespace beiklive
         PageInit();
         GameViewInitialize();
         GameMenuInitialize();
+        NetplayGameMenuInitialize();
         RewindSelectorViewInitialize();
 
         // 将菜单视图引用注入 GameView，以便菜单热键触发时可打开菜单
         if (m_gameView && m_gameMenuView)
             m_gameView->setGameMenuView(m_gameMenuView);
+        if (m_netplayMode && m_netplayGameMenuView)
+        {
+            auto* mgbaView = dynamic_cast<MgbaGameView*>(m_gameView);
+            if (mgbaView)
+                mgbaView->setNetplayGameMenuView(m_netplayGameMenuView);
+        }
 
         // 将倒带选择视图引用注入 GameView，以便倒带键触发时可打开可视化倒带界面
         if (m_gameView && m_rewindSelectorView)
@@ -559,6 +602,23 @@ namespace beiklive
     {
         if (!m_gameView)
             _setupGame();
+    }
+
+    void GamePage::_closeNetplayAndExit()
+    {
+        if (m_exitRequested)
+            return;
+
+        m_exitRequested = true;
+        beiklive::netplay::NetplayManager::instance().leaveRoom();
+        if (m_gameView)
+            m_gameView->setFocusable(false);
+        if (m_netplayGameMenuView)
+            m_netplayGameMenuView->setFocusable(false);
+        if (m_gameMenuView)
+            m_gameMenuView->setFocusable(false);
+        GameSignal::instance().requestPause(true);
+        _finishExitAndPop();
     }
 
     void GamePage::_finishExitAndPop()
