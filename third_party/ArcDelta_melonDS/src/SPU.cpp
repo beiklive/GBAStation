@@ -62,7 +62,11 @@ const s16 PSGTable[8][8] =
     {-0x7FFF, -0x7FFF, -0x7FFF, -0x7FFF, -0x7FFF, -0x7FFF, -0x7FFF, -0x7FFF}
 };
 
-const u32 OutputBufferSize = 2*2048;
+// Fast-forward can produce up to five emulated frames before the audio thread
+// gets another scheduling slice.  The old 4096-frame FIFO was too small for
+// that burst and wrapped by dropping individual samples, which is audible as
+// repeated clicks.  16384 stereo frames still only use 64 KiB per buffer.
+const u32 OutputBufferSize = 8*2048;
 s16 OutputBackbuffer[2 * OutputBufferSize];
 u32 OutputBackbufferWritePosition;
 

@@ -592,26 +592,39 @@ enum
     outputFmt_BGRA8
 };
 
+template<typename T>
+static inline T ReadFlatTexture(u32 addr)
+{
+    return *(T*)&GPU::VRAMFlat_Texture[addr & 0x7FFFF];
+}
+
+template<typename T>
+static inline T ReadFlatTexPal(u32 addr)
+{
+    return *(T*)&GPU::VRAMFlat_TexPal[addr & 0x1FFFF];
+}
+
 template <int outputFmt>
-void ConvertCompressedTexture(u32 width, u32 height, u32* output, u8* texData, u8* texAuxData, u16* palData)
+void ConvertCompressedTexture(u32 width, u32 height, u32* output, u32 texAddr, u32 texAuxAddr, u32 palAddr)
 {
     // we process a whole block at the time
     for (int y = 0; y < height / 4; y++)
     {
         for (int x = 0; x < width / 4; x++)
         {
-            u32 data = ((u32*)texData)[x + y * (width / 4)];
-            u16 auxData = ((u16*)texAuxData)[x + y * (width / 4)];
+            u32 block = x + y * (width / 4);
+            u32 data = ReadFlatTexture<u32>(texAddr + block * 4);
+            u16 auxData = ReadFlatTexture<u16>(texAuxAddr + block * 2);
 
-            u32 paletteOffset = auxData & 0x3FFF;
-            u16 color0 = palData[paletteOffset*2] | 0x8000;
-            u16 color1 = palData[paletteOffset*2+1] | 0x8000;
+            u32 paletteOffset = palAddr + (auxData & 0x3FFF) * 4;
+            u16 color0 = ReadFlatTexPal<u16>(paletteOffset) | 0x8000;
+            u16 color1 = ReadFlatTexPal<u16>(paletteOffset + 2) | 0x8000;
             u16 color2, color3;
 
             switch ((auxData >> 14) & 0x3)
             {
             case 0:
-                color2 = palData[paletteOffset*2+2] | 0x8000;
+                color2 = ReadFlatTexPal<u16>(paletteOffset + 4) | 0x8000;
                 color3 = 0;
                 break;
             case 1:
@@ -631,8 +644,8 @@ void ConvertCompressedTexture(u32 width, u32 height, u32* output, u8* texData, u
                 color3 = 0;
                 break;
             case 2:
-                color2 = palData[paletteOffset*2+2] | 0x8000;
-                color3 = palData[paletteOffset*2+3] | 0x8000;
+                color2 = ReadFlatTexPal<u16>(paletteOffset + 4) | 0x8000;
+                color3 = ReadFlatTexPal<u16>(paletteOffset + 6) | 0x8000;
                 break;
             case 3:
                 {
@@ -673,7 +686,8 @@ void ConvertCompressedTexture(u32 width, u32 height, u32* output, u8* texData, u
             {
                 for (int i = 0; i < 4; i++)
                 {
-                    u16 color = (packed >> 16 * (data >> 2 * (i + j * 4))) & 0xFFFF;
+                    u32 colorIdx = 16 * ((data >> (2 * (i + j * 4))) & 0x3);
+                    u16 color = (packed >> colorIdx) & 0xFFFF;
                     u32 res;
                     switch (outputFmt)
                     {
@@ -692,17 +706,17 @@ void ConvertCompressedTexture(u32 width, u32 height, u32* output, u8* texData, u
 }
 
 template <int outputFmt, int X, int Y>
-void ConvertAXIYTexture(u32 width, u32 height, u32* output, u8* texData, u16* palData)
+void ConvertAXIYTexture(u32 width, u32 height, u32* output, u32 texAddr, u32 palAddr)
 {
     for (int y = 0; y < height; y++)
     {
         for (int x = 0; x < width; x++)
         {
-            u8 val = texData[x + y * width];
+            u8 val = ReadFlatTexture<u8>(texAddr + x + y * width);
 
             u32 idx = val & ((1 << Y) - 1);
 
-            u16 color = palData[idx];
+            u16 color = ReadFlatTexPal<u16>(palAddr + idx * 2);
             u32 alpha = (val >> Y) & ((1 << X) - 1);
             if (X != 5)
                 alpha = alpha * 4 + alpha / 2;
@@ -757,18 +771,19 @@ void Convert16ColorsTexture(u32 width, u32 height, u32* output, u8* texData, u16
 }
 
 template <int outputFmt, int colorBits>
-void ConvertNColorsTexture(u32 width, u32 height, u32* output, u8* texData, u16* palData, bool color0Transparent)
+void ConvertNColorsTexture(u32 width, u32 height, u32* output,
+    u32 texAddr, u32 palAddr, bool color0Transparent)
 {
     for (int y = 0; y < height; y++)
     {
         for (int x = 0; x < width / (8 / colorBits); x++)
         {
-            u8 val = texData[x + y * (width / (8 / colorBits))];
+            u8 val = ReadFlatTexture<u8>(texAddr + x + y * (width / (8 / colorBits)));
 
             for (int i = 0; i < 8 / colorBits; i++)
             {
                 u32 index = (val >> (i * colorBits)) & ((1 << colorBits) - 1);
-                u16 color = palData[index];
+                u16 color = ReadFlatTexPal<u16>(palAddr + index * 2);
 
                 bool transparent = color0Transparent && index == 0;
                 u32 res;
@@ -785,6 +800,43 @@ void ConvertNColorsTexture(u32 width, u32 height, u32* output, u8* texData, u16*
             }
         }
     }
+}
+
+static u64 MaskedVRAMHash(const u8* vram, u32 vramSize, u32 addr, u32 size)
+{
+    u64 hash = 0;
+    addr &= vramSize - 1;
+
+    while (size > 0)
+    {
+        u32 pieceSize = std::min(size, vramSize - addr);
+        hash = XXH64(&vram[addr], pieceSize, hash);
+        size -= pieceSize;
+        addr = (addr + pieceSize) & (vramSize - 1);
+    }
+
+    return hash;
+}
+
+static bool CheckVRAMRangeInvalid(u32 start, u32 size, u64 oldHash,
+    const u64* dirty, const u8* vram, u32 vramSize)
+{
+    u32 startBit = start / GPU::VRAMDirtyGranularity;
+    u32 bitsCount = ((start + size + GPU::VRAMDirtyGranularity - 1)
+        / GPU::VRAMDirtyGranularity) - startBit;
+
+    u32 startEntry = startBit >> 6;
+    u32 entriesCount = ((startBit + bitsCount + 0x3F) >> 6) - startEntry;
+    u32 dirtyEntryMask = (vramSize / GPU::VRAMDirtyGranularity / 64) - 1;
+    for (u32 j = startEntry; j < startEntry + entriesCount; j++)
+    {
+        if (GetRangedBitMask(j, startBit, bitsCount) & dirty[j & dirtyEntryMask])
+        {
+            return MaskedVRAMHash(vram, vramSize, start, size) != oldHash;
+        }
+    }
+
+    return false;
 }
 
 DekoRenderer::TexCacheEntry& DekoRenderer::GetTexture(u32 texParam, u32 palBase)
@@ -827,33 +879,19 @@ DekoRenderer::TexCacheEntry& DekoRenderer::GetTexture(u32 texParam, u32 palBase)
     {
         entry.TextureRAMSize[0] = width*height*2;
 
-        for (u32 i = 0; i < width*height; i += 16)
+        for (u32 i = 0; i < width*height; i++)
         {
-            uint8x16x2_t pixels = vld2q_u8(&GPU::VRAMFlat_Texture[addr + i * 2]);
-
-            uint8x16_t red, green, blue;
-            RGB5ToRGB6(pixels.val[0], pixels.val[1], red, green, blue);
-            uint8x16_t alpha = vbslq_u8(vtstq_u8(pixels.val[1], vdupq_n_u8(0x80)), vdupq_n_u8(0x1F), vdupq_n_u8(0));
-
-            vst4q_u8((u8*)&TextureDecodingBuffer[i],
-            {
-                red,
-                green,
-                blue,
-                alpha
-            });
+            u16 color = ReadFlatTexture<u16>(addr + i * 2);
+            TextureDecodingBuffer[i] = ConvertRGB5ToRGB6(color)
+                | ((color & 0x8000) ? 0x1F000000 : 0);
         }
 
     }
     else if (fmt == 5)
     {
-        u8* texData = &GPU::VRAMFlat_Texture[addr];
         u32 slot1addr = 0x20000 + ((addr & 0x1FFFC) >> 1);
         if (addr >= 0x40000)
             slot1addr += 0x10000;
-        u8* texAuxData = &GPU::VRAMFlat_Texture[slot1addr];
-
-        u16* palData = (u16*)(GPU::VRAMFlat_TexPal + palBase*16);
 
         entry.TextureRAMSize[0] = width*height/16*4;
         entry.TextureRAMStart[1] = slot1addr;
@@ -861,7 +899,8 @@ DekoRenderer::TexCacheEntry& DekoRenderer::GetTexture(u32 texParam, u32 palBase)
         entry.TexPalStart = palBase*16;
         entry.TexPalSize = 0x10000;
 
-        ConvertCompressedTexture<outputFmt_RGB6A5>(width, height, TextureDecodingBuffer, texData, texAuxData, palData);
+        ConvertCompressedTexture<outputFmt_RGB6A5>(width, height, TextureDecodingBuffer,
+            addr, slot1addr, entry.TexPalStart);
     }
     else
     {
@@ -884,30 +923,27 @@ DekoRenderer::TexCacheEntry& DekoRenderer::GetTexture(u32 texParam, u32 palBase)
         entry.TexPalStart = palAddr;
         entry.TexPalSize = numPalEntries*2;
 
-        u8* texData = &GPU::VRAMFlat_Texture[addr];
-        u16* palData = (u16*)(GPU::VRAMFlat_TexPal + palAddr);
-
-        //assert(entry.TexPalStart+entry.TexPalSize <= 128*1024*1024);
-
         bool color0Transparent = texParam & (1 << 29);
 
         switch (fmt)
         {
-        case 1: ConvertAXIYTexture<outputFmt_RGB6A5, 3, 5>(width, height, TextureDecodingBuffer, texData, palData); break;
-        case 6: ConvertAXIYTexture<outputFmt_RGB6A5, 5, 3>(width, height, TextureDecodingBuffer, texData, palData); break;
-        case 2: ConvertNColorsTexture<outputFmt_RGB6A5, 2>(width, height, TextureDecodingBuffer, texData, palData, color0Transparent); break;
-        case 3: Convert16ColorsTexture(width, height, TextureDecodingBuffer, texData, palData, color0Transparent); break;
-        case 4: ConvertNColorsTexture<outputFmt_RGB6A5, 8>(width, height, TextureDecodingBuffer, texData, palData, color0Transparent); break;
+        case 1: ConvertAXIYTexture<outputFmt_RGB6A5, 3, 5>(width, height, TextureDecodingBuffer, addr, palAddr); break;
+        case 6: ConvertAXIYTexture<outputFmt_RGB6A5, 5, 3>(width, height, TextureDecodingBuffer, addr, palAddr); break;
+        case 2: ConvertNColorsTexture<outputFmt_RGB6A5, 2>(width, height, TextureDecodingBuffer, addr, palAddr, color0Transparent); break;
+        case 3: ConvertNColorsTexture<outputFmt_RGB6A5, 4>(width, height, TextureDecodingBuffer, addr, palAddr, color0Transparent); break;
+        case 4: ConvertNColorsTexture<outputFmt_RGB6A5, 8>(width, height, TextureDecodingBuffer, addr, palAddr, color0Transparent); break;
         }
     }
 
     for (int i = 0; i < 2; i++)
     {
         if (entry.TextureRAMSize[i])
-            entry.TextureHash[i] = XXH3_64bits(&GPU::VRAMFlat_Texture[entry.TextureRAMStart[i]], entry.TextureRAMSize[i]);
+            entry.TextureHash[i] = MaskedVRAMHash(GPU::VRAMFlat_Texture,
+                sizeof(GPU::VRAMFlat_Texture), entry.TextureRAMStart[i], entry.TextureRAMSize[i]);
     }
     if (entry.TexPalSize)
-        entry.TexPalHash = XXH3_64bits(&GPU::VRAMFlat_TexPal[entry.TexPalStart], entry.TexPalSize);
+        entry.TexPalHash = MaskedVRAMHash(GPU::VRAMFlat_TexPal,
+            sizeof(GPU::VRAMFlat_TexPal), entry.TexPalStart, entry.TexPalSize);
 
     auto& texArrays = TexArrays[widthLog2][heightLog2];
     auto& freeTextures = FreeTextures[widthLog2][heightLog2];
@@ -1011,40 +1047,19 @@ void DekoRenderer::RenderFrame()
             {
                 for (u32 i = 0; i < 2; i++)
                 {
-                    u32 startBit = entry.TextureRAMStart[i] / GPU::VRAMDirtyGranularity;
-                    u32 bitsCount = ((entry.TextureRAMStart[i] + entry.TextureRAMSize[i] + GPU::VRAMDirtyGranularity - 1) / GPU::VRAMDirtyGranularity) - startBit;
-
-                    u32 startEntry = startBit >> 6;
-                    u64 entriesCount = ((startBit + bitsCount + 0x3F) >> 6) - startEntry;
-                    for (u32 j = startEntry; j < startEntry + entriesCount; j++)
-                    {
-                        if (GetRangedBitMask(j, startBit, bitsCount) & textureDirty.Data[j])
-                        {
-                            u64 newTexHash = XXH3_64bits(&GPU::VRAMFlat_Texture[entry.TextureRAMStart[i]], entry.TextureRAMSize[i]);
-
-                            if (newTexHash != entry.TextureHash[i])
-                                goto invalidate;
-                        }
-                    }
+                    if (entry.TextureRAMSize[i] && CheckVRAMRangeInvalid(
+                        entry.TextureRAMStart[i], entry.TextureRAMSize[i], entry.TextureHash[i],
+                        textureDirty.Data, GPU::VRAMFlat_Texture, sizeof(GPU::VRAMFlat_Texture)))
+                        goto invalidate;
                 }
             }
 
             if (texPalChanged && entry.TexPalSize > 0)
             {
-                u32 startBit = entry.TexPalStart / GPU::VRAMDirtyGranularity;
-                u32 bitsCount = ((entry.TexPalStart + entry.TexPalSize + GPU::VRAMDirtyGranularity - 1) / GPU::VRAMDirtyGranularity) - startBit;
-
-                u32 startEntry = startBit >> 6;
-                u64 entriesCount = ((startBit + bitsCount + 0x3F) >> 6) - startEntry;
-                for (u32 j = startEntry; j < startEntry + entriesCount; j++)
-                {
-                    if (GetRangedBitMask(j, startBit, bitsCount) & texPalDirty.Data[j])
-                    {
-                        u64 newPalHash = XXH3_64bits(&GPU::VRAMFlat_TexPal[entry.TexPalStart], entry.TexPalSize);
-                        if (newPalHash != entry.TexPalHash)
-                            goto invalidate;
-                    }
-                }
+                if (CheckVRAMRangeInvalid(entry.TexPalStart, entry.TexPalSize,
+                    entry.TexPalHash, texPalDirty.Data,
+                    GPU::VRAMFlat_TexPal, sizeof(GPU::VRAMFlat_TexPal)))
+                    goto invalidate;
             }
 
             it++;

@@ -2066,11 +2066,10 @@ public:
         if (m_fastForwardAudio.exchange(enabled, std::memory_order_acq_rel) == enabled)
             return;
 
-        if (!enabled)
-        {
-            std::lock_guard<std::mutex> lock(m_spuReadMutex);
-            SPU::DrainOutput();
-        }
+        // Do not play samples queued for the previous rate at the new pitch.
+        // Keeping them is especially noticeable when returning from 4x/5x.
+        std::lock_guard<std::mutex> lock(m_spuReadMutex);
+        SPU::DrainOutput();
     }
 
     void setMuted(bool enabled)
@@ -2091,7 +2090,12 @@ public:
 private:
     static constexpr int kInputSampleRate = 32823;
     static constexpr size_t kBufferFrames = 768;
-    static constexpr size_t kBufferCount = 2;
+    // At 5x pitch a 768-frame buffer lasts only about 4.7 ms.  Two buffers
+    // leave virtually no scheduling margin on Switch and cause voice underruns.
+    // audren exposes four wave-buffer slots per voice.  Using more leaves the
+    // fifth buffer permanently Free after audrvVoiceAddWaveBuf() rejects it,
+    // starving recycling of the four valid slots.
+    static constexpr size_t kBufferCount = 4;
     static constexpr size_t kBufferBytes = kBufferFrames * 2 * sizeof(int16_t);
     static constexpr size_t kPoolBytes = (kBufferBytes * kBufferCount + (AUDREN_MEMPOOL_ALIGNMENT - 1)) &
                                          ~(AUDREN_MEMPOOL_ALIGNMENT - 1);
@@ -2101,10 +2105,10 @@ private:
         std::array<AudioDriverWaveBuf, kBufferCount> buffers {};
         for (size_t i = 0; i < kBufferCount; ++i)
         {
-            buffers[i].data_pcm16 = static_cast<int16_t*>(m_memPool);
+            buffers[i].data_pcm16 = static_cast<int16_t*>(m_memPool) + i * kBufferFrames * 2;
             buffers[i].size = kBufferBytes;
-            buffers[i].start_sample_offset = static_cast<u32>(i * kBufferFrames);
-            buffers[i].end_sample_offset = static_cast<u32>((i + 1) * kBufferFrames);
+            buffers[i].start_sample_offset = 0;
+            buffers[i].end_sample_offset = static_cast<u32>(kBufferFrames);
         }
 
         bool driverMuted = false;
@@ -2151,7 +2155,7 @@ private:
 
             if (refill)
             {
-                auto* data = static_cast<int16_t*>(m_memPool) + refill->start_sample_offset * 2;
+                auto* data = refill->data_pcm16 + refill->start_sample_offset * 2;
 
                 int frames = static_cast<int>(kBufferFrames);
                 if (muted)
@@ -2167,8 +2171,6 @@ private:
                     {
                         {
                             std::lock_guard<std::mutex> lock(m_spuReadMutex);
-                            if (m_fastForwardAudio.load(std::memory_order_acquire))
-                                SPU::Sync(false);
                             frames = SPU::ReadOutput(data, static_cast<int>(kBufferFrames));
                         }
                         if (frames > 0)
@@ -2663,6 +2665,10 @@ int RunDekoRuntime(const DekoRunOptions& options)
     bool turboBOn = false;
     int turboFrameCount = 0;
     double fastForwardFrameCredit = 0.0;
+    auto fastForwardAudioWindowStart = std::chrono::steady_clock::now();
+    int fastForwardAudioWindowFrames = 0;
+    float fastForwardAudioMultiplier = 1.0f;
+    bool fastForwardAudioMeasured = false;
     const int turboIntervalFrames = inputConfig.turboIntervalFrames();
     const int autoLoadSlot = inputConfig.intValue("save.autoLoadState0", 0);
     const int autoSaveSlot = inputConfig.intValue("save.autoSaveState", 0);
@@ -3134,7 +3140,14 @@ int RunDekoRuntime(const DekoRunOptions& options)
             appendStubLog("GBAStationNDSStub: Deko fastforward %s x%d",
                           fastForwardActive ? "on" : "off",
                           static_cast<int>(std::round(menuLayer.fastForwardMultiplier())));
-            audio.setFastForwardActive(fastForwardActive, menuLayer.fastForwardMultiplier());
+            // The requested multiplier is only a target.  Start at normal
+            // pitch, then use completed emulation frames over wall-clock time
+            // below to follow the speed the hardware can actually sustain.
+            audio.setFastForwardActive(fastForwardActive, 1.0f);
+            fastForwardAudioWindowStart = std::chrono::steady_clock::now();
+            fastForwardAudioWindowFrames = 0;
+            fastForwardAudioMultiplier = 1.0f;
+            fastForwardAudioMeasured = false;
             lastFastForwardActive = fastForwardActive;
         }
         audio.setMuted(muted || exitAutoSavePending || (fastForwardActive && inputConfig.fastForwardMute()));
@@ -3233,8 +3246,6 @@ int RunDekoRuntime(const DekoRunOptions& options)
                 feedMicSilence();
             NDS::RunFrame();
             ++framesRan;
-            if (fastForwardActive)
-                SPU::Sync(false);
         }
         if (traceFrame)
             appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu RunFrame ok",
@@ -3242,6 +3253,42 @@ int RunDekoRuntime(const DekoRunOptions& options)
         const auto runEnd = std::chrono::steady_clock::now();
         lastRunMs = emulationPaused ? 0 :
             std::chrono::duration_cast<std::chrono::milliseconds>(runEnd - runBegin).count();
+
+        if (fastForwardActive && !emulationPaused)
+        {
+            fastForwardAudioWindowFrames += framesRan;
+            const double windowSeconds = std::chrono::duration<double>(
+                runEnd - fastForwardAudioWindowStart).count();
+            constexpr double kNdsFramesPerSecond = 59.8261;
+            constexpr double kAudioSpeedWindowSeconds = 0.150;
+            if (windowSeconds >= kAudioSpeedWindowSeconds)
+            {
+                const float measuredMultiplier = std::clamp(
+                    static_cast<float>(fastForwardAudioWindowFrames /
+                                       (windowSeconds * kNdsFramesPerSecond)),
+                    0.1f,
+                    menuLayer.fastForwardMultiplier());
+                if (!fastForwardAudioMeasured)
+                {
+                    fastForwardAudioMultiplier = measuredMultiplier;
+                    fastForwardAudioMeasured = true;
+                }
+                else
+                {
+                    constexpr float kMeasuredWeight = 0.35f;
+                    fastForwardAudioMultiplier +=
+                        (measuredMultiplier - fastForwardAudioMultiplier) * kMeasuredWeight;
+                }
+                audio.setFastForwardActive(true, fastForwardAudioMultiplier);
+                fastForwardAudioWindowStart = runEnd;
+                fastForwardAudioWindowFrames = 0;
+            }
+        }
+        else
+        {
+            fastForwardAudioWindowStart = runEnd;
+            fastForwardAudioWindowFrames = 0;
+        }
 
         if (!emulationPaused && framesRan > 0)
         {
