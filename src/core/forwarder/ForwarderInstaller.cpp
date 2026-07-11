@@ -1,6 +1,5 @@
 #include "core/forwarder/ForwarderInstaller.hpp"
 
-#include "core/ThreadPool.hpp"
 #include "core/common.h"
 
 #include <borealis.hpp>
@@ -223,16 +222,22 @@ InstallResult installGame(const beiklive::GameEntry& entry)
 void showInstallDialog(const beiklive::GameEntry& entry)
 {
     auto* dialog = new brls::Dialog("是否安装游戏到 Switch 主界面？");
-    dialog->addButton("是", [entry]() {
-        brls::Application::notify("正在安装游戏前端...");
-        ThreadPool::instance().enqueue([entry]() {
-            auto result = installGame(entry);
-            brls::sync([result = std::move(result)]() {
-                brls::Application::notify(result.message);
+    dialog->addButton("确定", [entry]() {
+        auto* installingDialog = new brls::Dialog("正在安装游戏前端...");
+        installingDialog->setCancelable(false);
+        installingDialog->open();
+
+        brls::delay(100, [entry, installingDialog]() {
+            const auto result = installGame(entry);
+            installingDialog->close([result]() {
+                auto* resultDialog = new brls::Dialog(
+                    result.success ? "安装完成" : result.message);
+                resultDialog->addButton("确认", []() {});
+                resultDialog->open();
             });
         });
     });
-    dialog->addButton("否", []() {});
+    dialog->addButton("取消", []() {});
     dialog->open();
 }
 }
