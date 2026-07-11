@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <utility>
 
 #include "../../third_party/ArcDelta_melonDS/src/GPU.h"
@@ -91,6 +92,32 @@ RectF customCanvasRect(const RectF& bounds,
 bool validRect(const RectF& rect)
 {
     return rect.w > 0.0f && rect.h > 0.0f;
+}
+
+std::vector<std::uint8_t> normalizeMenuFreezeRgba(const std::vector<std::uint8_t>& rgba,
+                                                   int width,
+                                                   int height)
+{
+    constexpr int targetWidth = static_cast<int>(kDsWidth);
+    constexpr int targetHeight = static_cast<int>(kDsHeight * 2.0f);
+    if (rgba.empty() || width <= 0 || height <= 0)
+        return {};
+    if (width == targetWidth && height == targetHeight)
+        return rgba;
+
+    std::vector<std::uint8_t> normalized(static_cast<std::size_t>(targetWidth) * targetHeight * 4);
+    for (int y = 0; y < targetHeight; ++y)
+    {
+        const int srcY = std::min((2 * y + 1) * height / (2 * targetHeight), height - 1);
+        for (int x = 0; x < targetWidth; ++x)
+        {
+            const int srcX = std::min((2 * x + 1) * width / (2 * targetWidth), width - 1);
+            const auto* src = rgba.data() + (static_cast<std::size_t>(srcY) * width + srcX) * 4;
+            auto* dst = normalized.data() + (static_cast<std::size_t>(y) * targetWidth + x) * 4;
+            std::memcpy(dst, src, 4);
+        }
+    }
+    return normalized;
 }
 
 Gfx::ShaderMode shaderModeFromType(const std::string& type)
@@ -677,6 +704,12 @@ bool NdsGameLayer::refreshMenuFreezeTexture()
         !captureCurrentFrameRgba(rgba, width, height))
         return false;
     if (rgba.empty() || width <= 0 || height <= 0)
+        return false;
+
+    rgba = normalizeMenuFreezeRgba(rgba, width, height);
+    width = static_cast<int>(kDsWidth);
+    height = static_cast<int>(kDsHeight * 2.0f);
+    if (rgba.empty())
         return false;
 
     if (m_menuFreezeTexture != 0 && (m_menuFreezeWidth != width || m_menuFreezeHeight != height))
