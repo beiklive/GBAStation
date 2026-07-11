@@ -612,6 +612,18 @@ bool NdsGameLayer::captureCurrentFrameRgba(std::vector<std::uint8_t>& outRgba,
     return true;
 }
 
+bool NdsGameLayer::copyCachedFrameRgba(std::vector<std::uint8_t>& outRgba,
+                                       int& outWidth,
+                                       int& outHeight) const
+{
+    if (m_lastCaptureRgba.empty() || m_lastCaptureWidth <= 0 || m_lastCaptureHeight <= 0)
+        return false;
+    outRgba = m_lastCaptureRgba;
+    outWidth = m_lastCaptureWidth;
+    outHeight = m_lastCaptureHeight;
+    return true;
+}
+
 bool NdsGameLayer::refreshCaptureCache() const
 {
     if (!m_renderer)
@@ -851,6 +863,10 @@ void NdsGameLayer::drawScreens() const
                               Gfx::sampler_ClampToEdge;
     Gfx::SetSampler(screenSampler);
     Gfx::SetNdsShaderParams(m_shaderParams);
+    const float shaderSourceScale = useFreeze
+        ? std::max(static_cast<float>(m_menuFreezeWidth) / kDsWidth, 1.0f)
+        : std::max(liveSrcWidth / kDsWidth, 1.0f);
+    Gfx::SetNdsSourceScale(shaderSourceScale);
     Gfx::SetShaderMode(useShader && !useMultiPassShader ? shaderModeFromType(m_shaderType) : Gfx::shaderMode_Default);
     if (m_waitForFramebufferReady)
         Gfx::WaitForFenceReady(m_renderer->FramebufferReady[GPU::FrontBuffer]);
@@ -921,6 +937,7 @@ void NdsGameLayer::drawScreens() const
         }
     }
     Gfx::SetShaderMode(Gfx::shaderMode_Default);
+    Gfx::SetNdsSourceScale(1.0f);
     Gfx::SetSampler(Gfx::sampler_Nearest | Gfx::sampler_ClampToEdge);
 
     if (m_overlayEnabled && m_overlayTexture != 0 && m_overlayWidth > 0 && m_overlayHeight > 0)

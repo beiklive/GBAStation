@@ -44,6 +44,9 @@ public:
     bool captureCurrentFrameRgba(std::vector<std::uint8_t>& outRgba,
                                  int& outWidth,
                                  int& outHeight) const;
+    bool copyCachedFrameRgba(std::vector<std::uint8_t>& outRgba,
+                             int& outWidth,
+                             int& outHeight) const;
     bool refreshCaptureCache() const;
     void requestDeferredCapture() const;
     bool refreshMenuFreezeTexture();

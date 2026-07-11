@@ -12,10 +12,21 @@ layout (std140, binding = 1) uniform NdsShaderParams
 {
     vec4 param0;
     vec4 param1;
+    vec4 runtime;
 } ndsParams;
 
 const float kPi = 3.141592654;
 const float kNdsScreenHeight = 192.0;
+
+float sourcePixelScale()
+{
+    return max(ndsParams.runtime.x, 1.0);
+}
+
+vec2 logicalPixel(vec2 uv)
+{
+    return uv * vec2(textureSize(inTexture, 0)) / sourcePixelScale();
+}
 
 float effectStrength()
 {
@@ -136,8 +147,7 @@ vec3 applyQuilez(vec2 uv)
 
 float lcd1xWeight(vec2 uv)
 {
-    vec2 texSize = vec2(textureSize(inTexture, 0));
-    vec2 angle = 2.0 * kPi * ((uv * texSize) * kNdsScreenHeight / texSize.y - 0.25);
+    vec2 angle = 2.0 * kPi * (logicalPixel(uv) - 0.25);
     float yFactor = (16.0 + sin(angle.y)) / 17.0;
     float xFactor = (4.0 + sin(angle.x)) / 5.0;
     return yFactor * xFactor;
@@ -145,8 +155,7 @@ float lcd1xWeight(vec2 uv)
 
 float zfastWeight(vec2 uv, bool brightness)
 {
-    vec2 texSize = vec2(textureSize(inTexture, 0));
-    vec2 texcoordInPixels = uv * texSize * (kNdsScreenHeight / texSize.y);
+    vec2 texcoordInPixels = logicalPixel(uv);
     vec2 centerCoord = floor(texcoordInPixels) + vec2(0.5);
     vec2 distFromCenter = abs(centerCoord - texcoordInPixels);
     float y = max(distFromCenter.x, distFromCenter.y);
@@ -157,7 +166,7 @@ float zfastWeight(vec2 uv, bool brightness)
     if (!brightness)
         return lineWeight;
 
-    vec2 angle = kPi * (uv * texSize / texSize.y);
+    vec2 angle = kPi * (texcoordInPixels / kNdsScreenHeight);
     float yFactor = (16.0 + sin(angle.y)) * (1.08 / 16.0);
     float xFactor = (4.0 + sin(angle.x)) * (1.08 / 4.0);
     return lineWeight * yFactor * xFactor;
@@ -165,8 +174,7 @@ float zfastWeight(vec2 uv, bool brightness)
 
 float zfastPlainWeight(vec2 uv)
 {
-    vec2 texSize = vec2(textureSize(inTexture, 0));
-    vec2 angle = kPi * (uv * texSize / texSize.y);
+    vec2 angle = kPi * (logicalPixel(uv) / kNdsScreenHeight);
     float yFactor = (16.0 + sin(angle.y)) * (0.945 / 16.0);
     float xFactor = (4.0 + sin(angle.x)) * (0.945 / 4.0);
     return yFactor * xFactor;
@@ -174,8 +182,7 @@ float zfastPlainWeight(vec2 uv)
 
 vec3 applyScanlines(vec3 color, vec2 uv, int mode, float pattern)
 {
-    vec2 texSize = vec2(textureSize(inTexture, 0));
-    vec2 pixel = uv * texSize * (kNdsScreenHeight / texSize.y);
+    vec2 pixel = logicalPixel(uv);
     float line = fract(pixel.y * (mode == 19 || mode == 20 ? 0.5 : 1.0));
     float scan = smoothstep(0.12, 0.48, line) * smoothstep(0.98, 0.58, line);
     float strength = (mode == 18 || mode == 20 ? 0.48 : 0.34) * pattern;
@@ -194,8 +201,8 @@ vec3 applyScanlines(vec3 color, vec2 uv, int mode, float pattern)
 vec3 applyDot(vec2 uv, bool hv4, float pattern)
 {
     vec2 texSize = vec2(textureSize(inTexture, 0));
-    vec2 texel = 1.0 / texSize;
-    vec2 pixelNo = uv * texSize;
+    vec2 texel = vec2(sourcePixelScale()) / texSize;
+    vec2 pixelNo = logicalPixel(uv);
     float gammaValue = hv4 ? 2.6 : 2.35;
     float shine = 0.0;
     float blend = hv4 ? 0.32 : 0.36;
@@ -225,8 +232,7 @@ vec3 applyDot(vec2 uv, bool hv4, float pattern)
 
 vec3 crtMask(vec2 uv, float strength)
 {
-    vec2 texSize = vec2(textureSize(inTexture, 0));
-    vec2 pixel = uv * texSize * (kNdsScreenHeight / texSize.y);
+    vec2 pixel = logicalPixel(uv);
     float phase = mod(floor(pixel.x), 3.0);
     vec3 mask = vec3(1.0 - strength);
     if (phase < 1.0)
@@ -241,7 +247,7 @@ vec3 crtMask(vec2 uv, float strength)
 vec3 applyCrt(vec2 uv, bool colorShift, float pattern, float curvature)
 {
     vec2 texSize = vec2(textureSize(inTexture, 0));
-    vec2 texel = 1.0 / texSize;
+    vec2 texel = vec2(sourcePixelScale()) / texSize;
     vec2 centered = uv * 2.0 - 1.0;
     vec2 warpedUv = uv + centered * dot(centered, centered) * 0.018 * curvature;
     if (warpedUv.x < 0.0 || warpedUv.x > 1.0 || warpedUv.y < 0.0 || warpedUv.y > 1.0)
@@ -260,7 +266,7 @@ vec3 applyCrt(vec2 uv, bool colorShift, float pattern, float curvature)
     }
 
     color = pow(max(color, vec3(0.0)), vec3(1.15));
-    vec2 pixel = warpedUv * texSize * (kNdsScreenHeight / texSize.y);
+    vec2 pixel = logicalPixel(warpedUv);
     float line = fract(pixel.y);
     float scan = smoothstep(0.08, 0.42, line) * smoothstep(1.0, 0.58, line);
     color *= mix(1.0, mix(0.62, 1.12, scan), clamp(pattern, 0.0, 1.0));

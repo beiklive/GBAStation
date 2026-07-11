@@ -12,6 +12,7 @@ layout (std140, binding = 1) uniform NdsShaderParams
 {
     vec4 param0;
     vec4 param1;
+    vec4 runtime;
 } ndsParams;
 
 #define BLEND_NONE 0
@@ -97,10 +98,11 @@ vec3 samplePixel(vec2 coord, vec2 texel, vec2 offset)
 void main()
 {
     vec2 texSize = vec2(textureSize(inTexture, 0));
-    vec2 texel = 1.0 / texSize;
-    vec2 pos = fract(inUV * texSize) - vec2(0.5);
+    float sourcePixelScale = max(ndsParams.runtime.x, 1.0);
+    vec2 texel = vec2(sourcePixelScale) / texSize;
+    vec2 pos = fract(inUV * texSize / sourcePixelScale) - vec2(0.5);
     vec2 coord = inUV - pos * texel;
-    vec2 scale = 1.0 / max(fwidth(inUV * texSize), vec2(0.001));
+    vec2 scale = 1.0 / max(fwidth(inUV * texSize / sourcePixelScale), vec2(0.001));
 
     vec3 A = samplePixel(coord, texel, vec2(-1.0, -1.0));
     vec3 B = samplePixel(coord, texel, vec2( 0.0, -1.0));

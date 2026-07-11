@@ -203,6 +203,7 @@ enum ShaderMode
 
 void SetShaderMode(ShaderMode mode);
 void SetNdsShaderParams(const std::array<float, 8>& params);
+void SetNdsSourceScale(float scale);
 void SetSampler(u32 sampler);
 
 struct NdsFilterPass

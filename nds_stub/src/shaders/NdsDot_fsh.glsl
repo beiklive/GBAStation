@@ -12,6 +12,7 @@ layout (std140, binding = 1) uniform NdsShaderParams
 {
     vec4 param0;
     vec4 param1;
+    vec4 runtime;
 } ndsParams;
 
 float dist2(vec2 coord, vec2 source)
@@ -39,8 +40,9 @@ vec3 lookup(vec2 pixelNo, vec2 sampleUV, vec2 offset)
 void main()
 {
     vec2 texSize = vec2(textureSize(inTexture, 0));
-    vec2 texel = 1.0 / texSize;
-    vec2 pixelNo = inUV * texSize;
+    float sourceScale = max(ndsParams.runtime.x, 1.0);
+    vec2 texel = vec2(sourceScale) / texSize;
+    vec2 pixelNo = inUV * texSize / sourceScale;
 
     vec3 midColor = lookup(pixelNo, inUV, vec2(0.0, 0.0));
     vec3 color = vec3(0.0);

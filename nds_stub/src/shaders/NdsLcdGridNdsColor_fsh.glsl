@@ -12,6 +12,7 @@ layout (std140, binding = 1) uniform NdsShaderParams
 {
     vec4 param0;
     vec4 param1;
+    vec4 runtime;
 } ndsParams;
 
 const float targetGamma = 1.91;
@@ -59,10 +60,12 @@ float intsmear(float x, float dx, float d, bool useY)
     return d * (intsmearFunc(zh, useY) - intsmearFunc(zl, useY)) / max(dx, 0.0001);
 }
 
-vec3 fetchOffset(ivec2 coord, ivec2 offset, float gain, float gammaValue, float blackLevel, float ambient)
+vec3 fetchOffset(ivec2 coord, ivec2 offset, float sourceScale,
+                 float gain, float gammaValue, float blackLevel, float ambient)
 {
     ivec2 size = textureSize(inTexture, 0);
-    ivec2 clampedCoord = clamp(coord + offset, ivec2(0), size - ivec2(1));
+    ivec2 physicalCoord = ivec2((vec2(coord + offset) + vec2(0.5)) * sourceScale);
+    ivec2 clampedCoord = clamp(physicalCoord, ivec2(0), size - ivec2(1));
     vec3 sampled = texelFetch(inTexture, clampedCoord, 0).rgb;
     return pow(vec3(gain) * sampled + vec3(blackLevel), vec3(gammaValue)) + vec3(ambient);
 }
@@ -87,8 +90,9 @@ void main()
 {
     vec4 sampled = texture(inTexture, inUV);
     vec2 texSize = vec2(textureSize(inTexture, 0));
-    vec2 texelSize = 1.0 / texSize;
-    vec2 sourcePerOutput = max(fwidth(inUV) * texSize, vec2(0.0001));
+    float sourceScale = max(ndsParams.runtime.x, 1.0);
+    vec2 texelSize = vec2(sourceScale) / texSize;
+    vec2 sourcePerOutput = max(fwidth(inUV) * texSize / sourceScale, vec2(0.0001));
 
     float gain = max(ndsParams.param0.x, 0.01);
     float gammaValue = max(ndsParams.param0.y, 0.01);
@@ -125,10 +129,10 @@ void main()
     float tcol = intsmear(subpix,       rsubpix, 0.63, true);
     float bcol = intsmear(subpix - 1.0, rsubpix, 0.63, true);
 
-    vec3 topLeft = fetchOffset(tli, ivec2(0, 0), gain, gammaValue, blackLevel, ambient) * lcol * vec3(tcol);
-    vec3 bottomRight = fetchOffset(tli, ivec2(1, 1), gain, gammaValue, blackLevel, ambient) * rcol * vec3(bcol);
-    vec3 bottomLeft = fetchOffset(tli, ivec2(0, 1), gain, gammaValue, blackLevel, ambient) * lcol * vec3(bcol);
-    vec3 topRight = fetchOffset(tli, ivec2(1, 0), gain, gammaValue, blackLevel, ambient) * rcol * vec3(tcol);
+    vec3 topLeft = fetchOffset(tli, ivec2(0, 0), sourceScale, gain, gammaValue, blackLevel, ambient) * lcol * vec3(tcol);
+    vec3 bottomRight = fetchOffset(tli, ivec2(1, 1), sourceScale, gain, gammaValue, blackLevel, ambient) * rcol * vec3(bcol);
+    vec3 bottomLeft = fetchOffset(tli, ivec2(0, 1), sourceScale, gain, gammaValue, blackLevel, ambient) * lcol * vec3(bcol);
+    vec3 topRight = fetchOffset(tli, ivec2(1, 0), sourceScale, gain, gammaValue, blackLevel, ambient) * rcol * vec3(tcol);
 
     vec3 gridColor = mat3(cred, cgreen, cblue) * (topLeft + bottomRight + bottomLeft + topRight);
     gridColor = pow(max(gridColor, vec3(0.0)), vec3(1.0 / 2.2));

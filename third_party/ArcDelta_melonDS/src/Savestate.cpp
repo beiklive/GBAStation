@@ -60,6 +60,10 @@ Savestate::Savestate(const char* filename, bool save)
             return;
         }
 
+        // The state contains several large RAM blocks. A larger stdio buffer avoids
+        // issuing many small writes to the SD card, especially around section seeks.
+        setvbuf(file, nullptr, _IOFBF, 1024 * 1024);
+
         VersionMajor = SAVESTATE_MAJOR;
         VersionMinor = SAVESTATE_MINOR;
 

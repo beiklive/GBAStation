@@ -936,13 +936,47 @@ std::string timestampString()
 bool writeRgbaPng(const std::string& path,
                   const std::vector<std::uint8_t>& rgba,
                   int width,
-                  int height)
+                  int height,
+                  int compressionLevel = -1)
 {
     if (rgba.empty() || width <= 0 || height <= 0)
         return false;
     std::error_code ec;
     std::filesystem::create_directories(std::filesystem::path(path).parent_path(), ec);
-    return stbi_write_png(path.c_str(), width, height, 4, rgba.data(), width * 4) != 0;
+    const int previousLevel = stbi_write_png_compression_level;
+    if (compressionLevel >= 0)
+        stbi_write_png_compression_level = compressionLevel;
+    const bool ok = stbi_write_png(path.c_str(), width, height, 4, rgba.data(), width * 4) != 0;
+    stbi_write_png_compression_level = previousLevel;
+    return ok;
+}
+
+std::vector<std::uint8_t> makeStateThumbnail(const std::vector<std::uint8_t>& rgba,
+                                             int width,
+                                             int height,
+                                             int& outWidth,
+                                             int& outHeight)
+{
+    outWidth = std::min(width, 256);
+    outHeight = std::min(height, 384);
+    if (outWidth <= 0 || outHeight <= 0 || rgba.empty())
+        return {};
+    if (outWidth == width && outHeight == height)
+        return rgba;
+
+    std::vector<std::uint8_t> result(static_cast<std::size_t>(outWidth) * outHeight * 4);
+    for (int y = 0; y < outHeight; ++y)
+    {
+        const int srcY = std::min((2 * y + 1) * height / (2 * outHeight), height - 1);
+        for (int x = 0; x < outWidth; ++x)
+        {
+            const int srcX = std::min((2 * x + 1) * width / (2 * outWidth), width - 1);
+            const auto* src = rgba.data() + (static_cast<std::size_t>(srcY) * width + srcX) * 4;
+            auto* dst = result.data() + (static_cast<std::size_t>(y) * outWidth + x) * 4;
+            std::memcpy(dst, src, 4);
+        }
+    }
+    return result;
 }
 
 bool captureAndWritePng(const beiklive::nds_stub::NdsGameLayer& gameLayer, const std::string& path)
@@ -964,11 +998,14 @@ bool captureAndWriteStateThumbnail(const beiklive::nds_stub::NdsGameLayer& gameL
     if (!gameLayer.captureCurrentFrameRgba(rgba, width, height))
         return false;
 
-    const bool pngOk = writeRgbaPng(pngPath, rgba, width, height);
+    int thumbWidth = 0;
+    int thumbHeight = 0;
+    const auto thumbnail = makeStateThumbnail(rgba, width, height, thumbWidth, thumbHeight);
+    const bool pngOk = writeRgbaPng(pngPath, thumbnail, thumbWidth, thumbHeight, 1);
     beiklive::nds_stub::appendStubLog("GBAStationNDSStub: savestate thumbnail write png=%d size=%dx%d",
                                       pngOk ? 1 : 0,
-                                      width,
-                                      height);
+                                      thumbWidth,
+                                      thumbHeight);
     return pngOk;
 }
 
@@ -977,11 +1014,14 @@ bool writeStateThumbnailFromRgba(const std::vector<std::uint8_t>& rgba,
                                  int height,
                                  const std::string& pngPath)
 {
-    const bool pngOk = writeRgbaPng(pngPath, rgba, width, height);
+    int thumbWidth = 0;
+    int thumbHeight = 0;
+    const auto thumbnail = makeStateThumbnail(rgba, width, height, thumbWidth, thumbHeight);
+    const bool pngOk = writeRgbaPng(pngPath, thumbnail, thumbWidth, thumbHeight, 1);
     beiklive::nds_stub::appendStubLog("GBAStationNDSStub: savestate thumbnail write memory png=%d size=%dx%d",
                                       pngOk ? 1 : 0,
-                                      width,
-                                      height);
+                                      thumbWidth,
+                                      thumbHeight);
     return pngOk;
 }
 
@@ -2642,9 +2682,15 @@ int RunDekoRuntime(const DekoRunOptions& options)
         int thumbnailHeight = 0;
         const auto saveTotalBegin = std::chrono::steady_clock::now();
         appendStubLog("GBAStationNDSStub: savestate save begin slot=%d path=%s", slot, path.c_str());
-        const bool thumbnailCaptured = gameLayer.captureCurrentFrameRgba(thumbnailRgba,
-                                                                         thumbnailWidth,
-                                                                         thumbnailHeight);
+        bool thumbnailCaptured = gameLayer.copyCachedFrameRgba(thumbnailRgba,
+                                                                thumbnailWidth,
+                                                                thumbnailHeight);
+        if (!thumbnailCaptured)
+        {
+            thumbnailCaptured = gameLayer.captureCurrentFrameRgba(thumbnailRgba,
+                                                                   thumbnailWidth,
+                                                                   thumbnailHeight);
+        }
         appendStubLog("GBAStationNDSStub: savestate thumbnail capture %s slot=%d size=%dx%d",
                       thumbnailCaptured ? "ok" : "failed",
                       slot,
@@ -2710,8 +2756,6 @@ int RunDekoRuntime(const DekoRunOptions& options)
                       ok ? "ok" : "failed",
                       slot,
                       elapsedMs(saveTotalBegin));
-        Gfx::PresentQueue.waitIdle();
-        Gfx::EmuQueue.waitIdle();
         if (slot >= 0 && slot < static_cast<int>(stateSlots.size()))
         {
             releaseStateSlotTexture(stateSlots[slot]);

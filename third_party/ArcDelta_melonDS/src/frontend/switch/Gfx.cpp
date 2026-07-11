@@ -70,6 +70,7 @@ struct NdsShaderUniform
 {
     float Param0[4];
     float Param1[4];
+    float Runtime[4];
 };
 
 int SwapchainSlot = 0;
@@ -100,6 +101,7 @@ u32 CurClientIndex = 0;
 u32 CurSampler = 0;
 ShaderMode CurShaderMode = shaderMode_Default;
 std::array<float, 8> CurNdsShaderParams {2.4f, 0.05f, 0.65f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+float CurNdsSourceScale = 1.0f;
 
 enum
 {
@@ -130,6 +132,7 @@ struct NdsMultiPassDraw
     u32 IntermediateIndexOffset = 0;
     u32 FinalIndexOffset = 0;
     int PassCount = 0;
+    float SourceScale = 1.0f;
     std::array<NdsFilterPass, 4> Passes {};
     DkScissor Scissor {};
 };
@@ -145,6 +148,7 @@ struct DrawCall
     DkScissor Scissor;
     dk::Fence* Fence;
     NdsMultiPassDraw MultiPass;
+    float NdsSourceScale = 1.0f;
 };
 std::vector<DrawCall> DrawCalls;
 
@@ -1071,13 +1075,14 @@ void EndFrame(Color clearColor, int rotation)
         PresentCmdBuf.pushConstants(DataHeap->GpuAddr(UniformBuffer), UniformBuffer.Size, 0, sizeof(Transformation), &transformation);
         PresentCmdBuf.bindUniformBuffer(DkStage_Vertex, 0, DataHeap->GpuAddr(UniformBuffer), UniformBuffer.Size);
     };
-    auto bindNdsParams = [&](const std::array<float, 8>& values) {
+    auto bindNdsParams = [&](const std::array<float, 8>& values, float sourceScale) {
         NdsShaderUniform params {};
         for (int i = 0; i < 4; ++i)
         {
             params.Param0[i] = values[i];
             params.Param1[i] = values[i + 4];
         }
+        params.Runtime[0] = std::max(sourceScale, 1.0f);
         PresentCmdBuf.pushConstants(DataHeap->GpuAddr(NdsShaderUniformBuffer),
                                     NdsShaderUniformBuffer.Size,
                                     0,
@@ -1089,7 +1094,7 @@ void EndFrame(Color clearColor, int rotation)
                                         NdsShaderUniformBuffer.Size);
     };
     bindScreenProjection();
-    bindNdsParams(CurNdsShaderParams);
+    bindNdsParams(CurNdsShaderParams, 1.0f);
 
     memcpy(DataHeap->CpuAddr<void>(VertexData[SwapchainSlot]), VertexDataClient, sizeof(Vertex)*CurClientVertex);
     memcpy(DataHeap->CpuAddr<void>(IndexData[SwapchainSlot]), IndexDataClient, sizeof(u16)*CurClientIndex);
@@ -1144,13 +1149,14 @@ void EndFrame(Color clearColor, int rotation)
                 PresentCmdBuf.bindTextures(DkStage_Fragment, 0,
                     dkMakeTextureHandle(Textures[texture].ImageDescriptorIdx, sampler));
             };
-            auto bindPassParams = [&](const NdsFilterPass& pass) {
+            auto bindPassParams = [&](const NdsFilterPass& pass, float sourceScale) {
                 std::array<float, 8> values = CurNdsShaderParams;
                 values[7] = static_cast<float>(pass.Code);
-                bindNdsParams(values);
+                bindNdsParams(values, sourceScale);
             };
 
             u32 sourceTexture = multi.SourceTexture;
+            float sourceScale = std::max(multi.SourceScale, 1.0f);
             for (int passIndex = 0; passIndex < multi.PassCount - 1; ++passIndex)
             {
                 const NdsFilterPass& pass = multi.Passes[passIndex];
@@ -1162,13 +1168,14 @@ void EndFrame(Color clearColor, int rotation)
                 PresentCmdBuf.setScissors(0, {{0, 0, multi.TempWidth, multi.TempHeight}});
                 PresentCmdBuf.clearColor(0, DkColorMask_RGBA, 0.0f, 0.0f, 0.0f, 0.0f);
                 bindOffscreenProjection(multi.TempWidth, multi.TempHeight);
-                bindPassParams(pass);
+                bindPassParams(pass, sourceScale);
                 bindTexture(sourceTexture, pass.Sampler);
                 PresentCmdBuf.bindShaders(DkStageFlag_GraphicsMask, {&VertexShader, &FragmentShaders[pass.Shader]});
                 const u32 indexOffset = (passIndex == 0) ? multi.InitialIndexOffset : multi.IntermediateIndexOffset;
                 PresentCmdBuf.drawIndexed(DkPrimitive_Triangles, 6, 1, indexOffset, 0, 0);
                 PresentCmdBuf.barrier(DkBarrier_Full, 0);
                 sourceTexture = targetTexture;
+                sourceScale *= std::max(pass.OutputScale, 1);
             }
 
             dk::ImageView mainTarget{Framebuffers[SwapchainSlot]};
@@ -1193,11 +1200,11 @@ void EndFrame(Color clearColor, int rotation)
             bindScreenProjection();
 
             const NdsFilterPass& finalPass = multi.Passes[multi.PassCount - 1];
-            bindPassParams(finalPass);
+            bindPassParams(finalPass, sourceScale);
             bindTexture(sourceTexture, finalPass.Sampler);
             PresentCmdBuf.bindShaders(DkStageFlag_GraphicsMask, {&VertexShader, &FragmentShaders[finalPass.Shader]});
             PresentCmdBuf.drawIndexed(DkPrimitive_Triangles, 6, 1, multi.FinalIndexOffset, 0, 0);
-            bindNdsParams(CurNdsShaderParams);
+            bindNdsParams(CurNdsShaderParams, 1.0f);
             gpuStateDirty = true;
         }
         else
@@ -1234,6 +1241,9 @@ void EndFrame(Color clearColor, int rotation)
             {
                 PresentCmdBuf.bindShaders(DkStageFlag_GraphicsMask, {&VertexShader, &FragmentShaders[drawCall.Shader]});
             }
+
+            if (drawCall.Shader != shaderMode_Default)
+                bindNdsParams(CurNdsShaderParams, drawCall.NdsSourceScale);
 
             PresentCmdBuf.drawIndexed(DkPrimitive_Triangles, drawCall.Count, 1, drawCall.IndexOffset, 0, 0);
             gpuStateDirty = false;
@@ -1281,6 +1291,8 @@ void IssueDrawCall(u32 texture, u32 count, u32 indexOffset)
                 dirty |= drawCallDirty_Sampler;
             if (prevDrawCall.Shader != CurShaderMode)
                 dirty |= drawCallDirty_Shader;
+            if (prevDrawCall.NdsSourceScale != CurNdsSourceScale)
+                dirty |= drawCallDirty_Shader;
 
             if (prevDrawCall.Scissor.x != curScissor.x
                 || prevDrawCall.Scissor.y != curScissor.y
@@ -1299,7 +1311,7 @@ void IssueDrawCall(u32 texture, u32 count, u32 indexOffset)
     UseTexture(texture);
 
     if (dirty || lastWasFence)
-        DrawCalls.push_back({DrawCallKind::Draw, dirty, texture, CurSampler, CurShaderMode, indexOffset, count, curScissor, nullptr, {}});
+        DrawCalls.push_back({DrawCallKind::Draw, dirty, texture, CurSampler, CurShaderMode, indexOffset, count, curScissor, nullptr, {}, CurNdsSourceScale});
     else
         DrawCalls[DrawCalls.size() - 1].Count += count;
 }
@@ -1312,6 +1324,11 @@ void SetShaderMode(ShaderMode mode)
 void SetNdsShaderParams(const std::array<float, 8>& params)
 {
     CurNdsShaderParams = params;
+}
+
+void SetNdsSourceScale(float scale)
+{
+    CurNdsSourceScale = std::max(scale, 1.0f);
 }
 
 void SetSampler(u32 sampler)
@@ -1530,6 +1547,7 @@ void DrawNdsMultiPassRectangle(u32 texIdx,
     multi.IntermediateIndexOffset = intermediateOffset;
     multi.FinalIndexOffset = finalOffset;
     multi.PassCount = passCount;
+    multi.SourceScale = CurNdsSourceScale;
     for (int i = 0; i < passCount; ++i)
         multi.Passes[i] = passes[i];
     multi.Scissor = ScissorStack[ScissorStack.size() - 1];
@@ -1543,7 +1561,8 @@ void DrawNdsMultiPassRectangle(u32 texIdx,
                          6,
                          multi.Scissor,
                          nullptr,
-                         multi});
+                         multi,
+                         CurNdsSourceScale});
 }
 
 Vector2f MeasureText(u32 fontIdx, float size, const char* text)

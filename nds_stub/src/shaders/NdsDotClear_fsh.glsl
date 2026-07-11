@@ -12,6 +12,7 @@ layout (std140, binding = 1) uniform NdsShaderParams
 {
     vec4 param0;
     vec4 param1;
+    vec4 runtime;
 } ndsParams;
 
 float toVideo(float l)
@@ -36,7 +37,7 @@ void main()
     vec3 texColor = pow(clamp(sampled.rgb, 0.0, 1.0), vec3(dotGamma));
 
     vec2 texSize = vec2(textureSize(inTexture, 0));
-    vec2 pixelNo = inUV * texSize;
+    vec2 pixelNo = inUV * texSize / max(ndsParams.runtime.x, 1.0);
     vec2 dotSize = vec2(max(dotScaleX, 0.1), max(dotScaleY, 0.1));
     vec2 local = fract(pixelNo) - vec2(0.5);
     local.x /= dotSize.x;
