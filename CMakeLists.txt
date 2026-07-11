@@ -174,6 +174,12 @@ set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17)
 target_compile_definitions(${PROJECT_NAME} PRIVATE APP_VERSION="${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_ALTER}")
 target_compile_definitions(${PROJECT_NAME} PRIVATE COLOR_16_BIT COLOR_5_6_5)
 if (PLATFORM_SWITCH)
+    add_subdirectory(src/core/forwarder/hbl forwarder_hbl)
+    add_dependencies(${PROJECT_NAME} gbastation_forwarder_hbl_exefs)
+    set_source_files_properties(
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/core/forwarder/ForwarderCore.cpp
+        PROPERTIES COMPILE_OPTIONS "-std=gnu++2c;--embed-dir=${GBASTATION_FORWARDER_EMBED_DIR}"
+    )
     target_compile_definitions(${PROJECT_NAME} PRIVATE MG_ARCH=MG_ARCH_UNIX)
 endif()
 
@@ -213,11 +219,13 @@ elseif (PLATFORM_SWITCH)
     add_custom_target(${PROJECT_NAME}.nro DEPENDS ${PROJECT_NAME}
         COMMAND ${NX_NACPTOOL_EXE} --create "${PROJECT_NAME}" "${PROJECT_AUTHOR}" "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_ALTER}" ${PROJECT_NAME}.nacp --titleid=${PROJECT_TITLEID}
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_RESOURCES} ${CMAKE_BINARY_DIR}/resources
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_BINARY_DIR}/GBAStationNDSStub.nro ${CMAKE_BINARY_DIR}/resources/core/GBAStationNDSStub.nro
         COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/resources/font
         COMMAND ${NX_ELF2NRO_EXE} ${PROJECT_NAME}.elf ${PROJECT_NAME}.nro --icon=${PROJECT_ICON} --nacp=${PROJECT_NAME}.nacp --romfsdir=${CMAKE_BINARY_DIR}/resources
     )
 
     add_subdirectory(nds_stub)
+    add_dependencies(${PROJECT_NAME}.nro GBAStationNDSStub.nro)
 
 endif ()
 
@@ -226,6 +234,9 @@ endif ()
 target_include_directories(${PROJECT_NAME} PRIVATE ${APP_PLATFORM_INCLUDE})
 target_compile_options(${PROJECT_NAME} PRIVATE -ffunction-sections -fdata-sections ${APP_PLATFORM_OPTION})
 target_link_libraries(${PROJECT_NAME} PRIVATE borealis ${APP_PLATFORM_LIB})
+if(PLATFORM_SWITCH)
+    target_link_libraries(${PROJECT_NAME} PRIVATE jpeg)
+endif()
 if(NOT PLATFORM_ANDROID)
     target_link_libraries(${PROJECT_NAME} PRIVATE curl)
 endif()

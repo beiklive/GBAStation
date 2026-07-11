@@ -2,6 +2,7 @@
 #include "ui/utils/FilePickerHelper.hpp"
 #include "core/Tools.hpp"
 #include "core/ThreadPool.hpp"
+#include "core/forwarder/ForwarderInstaller.hpp"
 #include "ui/utils/CheatMatcher.hpp"
 #include <borealis/views/dropdown.hpp>
 #include <filesystem>
@@ -505,6 +506,12 @@ namespace beiklive
                     },
                     currentLogo.parent_path().empty() ? beiklive::path::GetRootPath() : currentLogo.parent_path().string(),
                     currentLogo.filename().string());
+            });
+
+        m_gameOptionsSidebar->addButton("安装游戏前端", BK_RES("img/ui/setting/emu.png"),
+            [this](const beiklive::GameEntry& game) {
+                _hideGameOptionsPanel();
+                beiklive::forwarder::showInstallDialog(game);
             });
 
         // ── 核心选择 ──

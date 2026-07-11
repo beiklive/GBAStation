@@ -2489,6 +2489,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
 
     bool running = loaded;
     bool pendingReturn = false;
+    bool exitRequested = false;
     NdsMenuLayer menuLayer;
     NdsUiAudioPlayer uiAudio;
     NdsDisplaySettings initialDisplay {};
@@ -3096,7 +3097,8 @@ int RunDekoRuntime(const DekoRunOptions& options)
         }
         else if (menuAction == NdsMenuAction::ExitGame)
         {
-            pendingReturn = true;
+            exitRequested = true;
+            pendingReturn = options.returnToNroOnExit;
             if (autoSaveOnExit && autoSaveSlot > 0 && loaded)
             {
                 exitAutoSavePending = true;
@@ -3508,8 +3510,11 @@ int RunDekoRuntime(const DekoRunOptions& options)
     if (pendingReturn)
         setReturnNro(options.returnNroPath);
 
-    appendStubLog("GBAStationNDSStub: Deko runtime exit pendingReturn=%d", pendingReturn ? 1 : 0);
-    return pendingReturn ? 0 : 1;
+    appendStubLog("GBAStationNDSStub: Deko runtime exit requested=%d pendingReturn=%d target=%s",
+                  exitRequested ? 1 : 0,
+                  pendingReturn ? 1 : 0,
+                  options.returnToNroOnExit ? "nro" : "home");
+    return exitRequested ? 0 : 1;
 }
 
 } // namespace beiklive::nds_stub

@@ -28,9 +28,10 @@ namespace beiklive
         }
     }
 
-    GamePage::GamePage(beiklive::DirListData gameData)
+    GamePage::GamePage(beiklive::DirListData gameData, bool exitToApplication)
     {
 
+        m_exitToApplication = exitToApplication;
         m_gameData = std::move(gameData);
         // 检查文件是否存在
         if (!beiklive::tools::isFileExists(m_gameData.fullPath))
@@ -47,8 +48,9 @@ namespace beiklive
         }
     }
 
-    GamePage::GamePage(beiklive::GameEntry gameEntry)
+    GamePage::GamePage(beiklive::GameEntry gameEntry, bool exitToApplication)
     {
+        m_exitToApplication = exitToApplication;
         m_gameEntry = std::move(gameEntry);
         // 检查文件是否存在
         if (!beiklive::tools::isFileExists(m_gameEntry.path))
@@ -572,6 +574,11 @@ namespace beiklive
             brls::Logger::info("[GamePage] exit cleanup end");
 
             dialog->close([this]() {
+                if (m_exitToApplication)
+                {
+                    brls::Application::quit();
+                    return;
+                }
                 beiklive::popActivity(this);
             });
         });

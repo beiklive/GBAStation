@@ -16,8 +16,8 @@ namespace beiklive
     class GamePage : public beiklive::Box
     {
     public:
-        GamePage(beiklive::DirListData gameData);
-        GamePage(beiklive::GameEntry gameEntry);
+        GamePage(beiklive::DirListData gameData, bool exitToApplication = false);
+        GamePage(beiklive::GameEntry gameEntry, bool exitToApplication = false);
         ~GamePage();
 
         void startGame();
@@ -45,6 +45,7 @@ namespace beiklive
         RewindSelectorView *m_rewindSelectorView = nullptr;       // 可视化倒带选择界面（显示倒带缩略图列表）
         bool m_exitRequested = false;                            // 防止退出流程重复触发
         bool m_exitCleanupStarted = false;                        // 防止退出清理重复执行
+        bool m_exitToApplication = false;                         // 直接启动时退出游戏即关闭应用
         int m_exitAutoSavePolls = 0;                              // 退出自动存档完成状态轮询次数
     };
 

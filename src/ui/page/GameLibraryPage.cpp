@@ -1,4 +1,5 @@
 #include "GameLibraryPage.hpp"
+#include "core/forwarder/ForwarderInstaller.hpp"
 #include "ui/widget/ButtonBox.hpp"
 #include "ui/widget/GridBox.hpp"
 #include "ui/widget/GridItem.hpp"
@@ -1132,6 +1133,13 @@ namespace beiklive
                     },
                     currentLogo.parent_path().empty() ? beiklive::path::GetRootPath() : currentLogo.parent_path().string(),
                     currentLogo.filename().string());
+            });
+
+        m_gameOptionsSidebar->addButton("安装游戏前端", BK_RES("img/ui/setting/emu.png"),
+            [this](const beiklive::GameEntry& game) {
+                _hideGameOptionsPanel();
+                m_grid->setInteractionDisabled(false);
+                beiklive::forwarder::showInstallDialog(game);
             });
 
         if (beiklive::GetCoreOptions(entry.platform).size() > 1)

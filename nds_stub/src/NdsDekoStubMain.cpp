@@ -221,6 +221,7 @@ int main(int argc, char* argv[])
 
     const char* romPath = "";
     const char* returnNro = "";
+    bool exitToHome = false;
 
     for (int i = 1; i < argc; ++i)
     {
@@ -234,17 +235,28 @@ int main(int argc, char* argv[])
             continue;
         }
 
+        if (std::strcmp(argv[i], "--exit-to-home") == 0)
+        {
+            exitToHome = true;
+            continue;
+        }
+
         if (!romPath[0] && !endsWithNoCase(argv[i], ".nro"))
         {
             romPath = argv[i];
-            break;
+            continue;
         }
     }
 
     beiklive::nds_stub::DekoRunOptions options;
     options.romPath = romPath ? romPath : "";
     options.returnNroPath = returnNro && returnNro[0] ? returnNro : "sdmc:/switch/GBAStation.nro";
+    options.returnToNroOnExit = !exitToHome;
     options.title = titleFromPath(options.romPath);
+    beiklive::nds_stub::appendStubLog(
+        "GBAStationNDSStub: exit target=%s returnNro=%s",
+        options.returnToNroOnExit ? "nro" : "home",
+        options.returnNroPath.c_str());
 
     if (!options.romPath.empty())
     {
