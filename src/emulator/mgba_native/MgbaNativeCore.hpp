@@ -74,7 +74,6 @@ private:
     static constexpr unsigned kMaxButtons = RETRO_DEVICE_ID_JOYPAD_R3 + 1;
 
     bool loadRom(const std::string& romPath);
-    void initSettingsDefaults();
     void initConfigDefaults();
     void applyConfig();
     void applyAudioLowPassSettings();

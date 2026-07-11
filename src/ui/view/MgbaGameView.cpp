@@ -2590,7 +2590,7 @@ namespace beiklive
         m_ffMultiplier = GET_SETTING_KEY_FLOAT("fastforward.multiplier", 4.0f);
         if (m_ffMultiplier <= 0.0f) m_ffMultiplier = 1.0f;
         m_ffSlowAccum = 0.0f;
-        m_ffMute = GET_SETTING_KEY_INT("fastforward.mgba_mute", 0) != 0;
+        m_ffMute = GET_SETTING_KEY_INT("fastforward.mute", 1) != 0;
 
         // 读取连发速率
         {
@@ -2812,7 +2812,7 @@ namespace beiklive
                 m_ffMultiplier = 1.0f;
             else if (m_ffMultiplier < 0.1f)
                 m_ffMultiplier = 0.1f;
-            m_ffMute = GET_SETTING_KEY_INT("fastforward.mgba_mute", 0) != 0;
+            m_ffMute = GET_SETTING_KEY_INT("fastforward.mute", 1) != 0;
 
             const bool fastForwardActive = ff && m_ffMultiplier >= 1.0f;
 

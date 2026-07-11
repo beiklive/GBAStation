@@ -344,7 +344,6 @@ bool MgbaNativeCore::SetupGame(beiklive::GameEntry gameEntry)
     }
 
     brls::Logger::debug("MgbaNativeCore: SetupGame begin");
-    initSettingsDefaults();
     if (!loadRom(m_gameEntry.path))
         return false;
 
@@ -698,30 +697,6 @@ bool MgbaNativeCore::loadRom(const std::string& romPath)
     return true;
 }
 
-void MgbaNativeCore::initSettingsDefaults()
-{
-    if (!beiklive::SettingManager)
-        return;
-
-    using CV = beiklive::ConfigValue;
-    beiklive::SettingManager->SetDefault("core.mgba_gb_model", CV(std::string("Autodetect")));
-    beiklive::SettingManager->SetDefault("core.mgba_use_bios", CV(std::string("ON")));
-    beiklive::SettingManager->SetDefault("core.mgba_skip_bios", CV(std::string("OFF")));
-    beiklive::SettingManager->SetDefault("core.mgba_gb_colors", CV(std::string("Grayscale")));
-    beiklive::SettingManager->SetDefault("core.mgba_gb_colors_preset", CV(std::string("0")));
-    beiklive::SettingManager->SetDefault("core.mgba_sgb_borders", CV(std::string("ON")));
-    beiklive::SettingManager->SetDefault("core.mgba_audio_low_pass_filter", CV(std::string("disabled")));
-    beiklive::SettingManager->SetDefault("core.mgba_audio_low_pass_range", CV(std::string("60")));
-    beiklive::SettingManager->SetDefault("fastforward.mgba_mute", CV(0));
-    beiklive::SettingManager->SetDefault("core.mgba_allow_opposing_directions", CV(std::string("no")));
-    beiklive::SettingManager->SetDefault("core.mgba_solar_sensor_level", CV(std::string("5")));
-    beiklive::SettingManager->SetDefault("core.mgba_force_gbp", CV(std::string("OFF")));
-    beiklive::SettingManager->SetDefault("core.mgba_idle_optimization", CV(std::string("Remove Known")));
-    beiklive::SettingManager->SetDefault("core.mgba_frameskip", CV(std::string("0")));
-    beiklive::SettingManager->SetDefault("core.mgba_rtc_mode", CV(std::string("persist")));
-    beiklive::SettingManager->Save();
-}
-
 void MgbaNativeCore::initConfigDefaults()
 {
     if (!m_core)
@@ -781,6 +756,7 @@ void MgbaNativeCore::applyConfig()
     mCoreConfigSetOverrideIntValue(&m_core->config, "sgb.borders", sgbBorders ? 1 : 0);
     applyGbPalette(&m_core->config);
     applyAudioLowPassSettings();
+    updateLuxLevel();
 
     m_useSystemRtc = GET_SETTING_KEY_STR("core.mgba_rtc_mode", "persist") == "system";
     if (m_useSystemRtc)

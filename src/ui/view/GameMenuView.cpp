@@ -1590,8 +1590,10 @@ namespace beiklive
                 solarCell->setOptions(solarLabels, curSolar);
                 solarCell->setOnSelect(
                     [](int idx) {
-                        if (idx >= 0 && idx <= 10)
+                        if (idx >= 0 && idx <= 10) {
                             SET_SETTING_KEY_STR("core.mgba_solar_sensor_level", std::to_string(idx));
+                            GameSignal::instance().requestConfigUpdate();
+                        }
                     });
                 box->addView(solarCell);
                 box->addView(makeHint("太阳传感器等级，默认设置为5"));
