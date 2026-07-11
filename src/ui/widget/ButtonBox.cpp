@@ -1,4 +1,40 @@
 #include "ButtonBox.hpp"
+#include "core/common.h"
+
+#include <borealis/core/font.hpp>
+
+namespace
+{
+    class MaterialIconLabel final : public brls::Label
+    {
+    public:
+        MaterialIconLabel()
+        {
+            font = brls::Application::getFont(brls::FONT_MATERIAL_ICONS);
+        }
+    };
+
+    std::string encodeUtf8(char32_t codepoint)
+    {
+        std::string result;
+        if (codepoint <= 0x7F)
+        {
+            result.push_back(static_cast<char>(codepoint));
+        }
+        else if (codepoint <= 0x7FF)
+        {
+            result.push_back(static_cast<char>(0xC0 | (codepoint >> 6)));
+            result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+        }
+        else
+        {
+            result.push_back(static_cast<char>(0xE0 | (codepoint >> 12)));
+            result.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+            result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+        }
+        return result;
+    }
+}
 
 namespace beiklive
 {
@@ -25,14 +61,28 @@ namespace beiklive
         m_accent->setVisibility(brls::Visibility::INVISIBLE);
         this->addView(m_accent);
 
-        m_icon = new brls::Image();
-        m_icon->setWidth(30.f);
-        m_icon->setHeight(30.f);
-        m_icon->setMarginLeft(5.f);
-        m_icon->setMarginRight(25.f);
-        m_icon->setScalingType(brls::ImageScalingType::FIT);
-        m_icon->setInterpolation(brls::ImageInterpolation::LINEAR);
-        this->addView(m_icon);
+        m_iconImage = new brls::Image();
+        m_iconImage->setWidth(30.f);
+        m_iconImage->setHeight(30.f);
+        m_iconImage->setMarginLeft(5.f);
+        m_iconImage->setMarginRight(25.f);
+        m_iconImage->setScalingType(brls::ImageScalingType::FIT);
+        m_iconImage->setInterpolation(brls::ImageInterpolation::LINEAR);
+        m_iconImage->setVisibility(brls::Visibility::GONE);
+        this->addView(m_iconImage);
+
+        m_materialIcon = new MaterialIconLabel();
+        m_materialIcon->setWidth(30.f);
+        m_materialIcon->setHeight(30.f);
+        m_materialIcon->setFontSize(28.f);
+        m_materialIcon->setTextColor(GET_THEME_COLOR("brls/text"));
+        m_materialIcon->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+        m_materialIcon->setVerticalAlign(brls::VerticalAlign::CENTER);
+        m_materialIcon->setMarginLeft(5.f);
+        m_materialIcon->setMarginRight(25.f);
+        m_materialIcon->setFocusable(false);
+        m_materialIcon->setVisibility(brls::Visibility::GONE);
+        this->addView(m_materialIcon);
 
         m_label = new brls::Label();
         m_label->setFontSize(18.f);
@@ -46,9 +96,18 @@ namespace beiklive
 
     }
 
-    void ButtonBox::setIcon(const std::string &iconPath)
+    void ButtonBox::setIcon(const std::string& iconPath)
     {
-        m_icon->setImageFromFile(iconPath);
+        m_materialIcon->setVisibility(brls::Visibility::GONE);
+        m_iconImage->setImageFromFile(iconPath);
+        m_iconImage->setVisibility(brls::Visibility::VISIBLE);
+    }
+
+    void ButtonBox::setIcon(char32_t iconCodepoint)
+    {
+        m_iconImage->setVisibility(brls::Visibility::GONE);
+        m_materialIcon->setText(encodeUtf8(iconCodepoint));
+        m_materialIcon->setVisibility(brls::Visibility::VISIBLE);
     }
 
     void ButtonBox::setText(const std::string &text)

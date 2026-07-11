@@ -1,6 +1,7 @@
 #pragma once
 
 #include <borealis.hpp>
+#include <cstdint>
 #include <functional>
 
 namespace beiklive
@@ -11,6 +12,7 @@ class ButtonBox : public brls::Box
 public:
     ButtonBox();
     void setIcon(const std::string& iconPath);
+    void setIcon(char32_t iconCodepoint);
     void setText(const std::string& text);
     void onFocusGained() override;
     void onFocusLost() override;
@@ -20,7 +22,8 @@ public:
 
 private:
     brls::Rectangle* m_accent = nullptr;
-    brls::Image* m_icon = nullptr;
+    brls::Image* m_iconImage = nullptr;
+    brls::Label* m_materialIcon = nullptr;
     brls::Label* m_label = nullptr; 
 };
 } // namespace beiklive

@@ -20,10 +20,10 @@ namespace beiklive
     }
 
     void GameOptionsSidebar::addButton(const std::string& text,
-                                        const std::string& iconPath,
+                                        char32_t iconCodepoint,
                                         std::function<void(const beiklive::GameEntry&)> callback)
     {
-        m_buttons.push_back({text, iconPath, std::move(callback)});
+        m_buttons.push_back({text, iconCodepoint, std::move(callback)});
     }
 
     void GameOptionsSidebar::clearButtons()
@@ -130,7 +130,7 @@ namespace beiklive
 
                 auto* btn = new beiklive::ButtonBox();
                 btn->setText(cfg.text);
-                btn->setIcon(cfg.iconPath);
+                btn->setIcon(cfg.iconCodepoint);
                 btn->setMarginBottom(4.f);
 
                 // A 键：触发回调

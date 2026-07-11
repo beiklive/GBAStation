@@ -3,6 +3,8 @@
 #include "core/Tools.hpp"
 #include "core/ThreadPool.hpp"
 #include "core/forwarder/ForwarderInstaller.hpp"
+#include "ui/utils/MaterialIcons.hpp"
+#include "ui/utils/NdsEnvironment.hpp"
 #include "ui/utils/CheatMatcher.hpp"
 #include <borealis/views/dropdown.hpp>
 #include <filesystem>
@@ -258,6 +260,8 @@ namespace beiklive
         if (shouldUseNdsExternalNro(entry))
         {
 #ifdef __SWITCH__
+            if (!beiklive::ensureNdsEnvironmentReady())
+                return;
             launchNdsExternalNro(entry.path, entry.title);
             return;
 #endif
@@ -277,6 +281,8 @@ namespace beiklive
     {
         if (shouldUseNdsExternalNro(dirItem))
         {
+            if (!beiklive::ensureNdsEnvironmentReady())
+                return;
             ensureGameDbEntryForFileLaunch(dirItem);
 #ifdef __SWITCH__
             launchNdsExternalNro(dirItem.fullPath, dirItem.fileName);
@@ -469,7 +475,7 @@ namespace beiklive
         std::string filename = beiklive::tools::getFileNameWithoutExtension(entry.path);
 
         // ── 修改映射名称 ──
-        m_gameOptionsSidebar->addButton("修改映射名称", BK_RES("img/ui/setting/emu.png"),
+        m_gameOptionsSidebar->addButton("修改映射名称", beiklive::material::EDIT,
             [this, path, title = entry.title, filename](const beiklive::GameEntry& e) {
                 _hideGameOptionsPanel();
                 auto* ime = brls::Application::getPlatform()->getImeManager();
@@ -492,7 +498,7 @@ namespace beiklive
             });
 
         // ── 设置封面图 ──
-        m_gameOptionsSidebar->addButton("设置封面图", BK_RES("img/ui/setting/display.png"),
+        m_gameOptionsSidebar->addButton("设置封面图", beiklive::material::IMAGE,
             [this, path, romPath](const beiklive::GameEntry& e) {
                 _hideGameOptionsPanel();
                 std::filesystem::path currentLogo(e.logoPath);
@@ -508,7 +514,7 @@ namespace beiklive
                     currentLogo.filename().string());
             });
 
-        m_gameOptionsSidebar->addButton("安装游戏前端", BK_RES("img/ui/setting/emu.png"),
+        m_gameOptionsSidebar->addButton("安装游戏前端", beiklive::material::INSTALL_APP,
             [this](const beiklive::GameEntry& game) {
                 _hideGameOptionsPanel();
                 beiklive::forwarder::showInstallDialog(game);
@@ -517,7 +523,7 @@ namespace beiklive
         // ── 核心选择 ──
         if (beiklive::GetCoreOptions(entry.platform).size() > 1)
         {
-            m_gameOptionsSidebar->addButton("核心选择", BK_RES("img/ui/setting/emu.png"),
+            m_gameOptionsSidebar->addButton("核心选择", beiklive::material::MEMORY,
                 [this, path, platform = entry.platform, core = entry.core](const beiklive::GameEntry&) {
                     _hideGameOptionsPanel();
 
@@ -546,7 +552,7 @@ namespace beiklive
         }
 
         // ── 删除游戏 ──
-        m_gameOptionsSidebar->addButton("删除游戏", BK_RES("img/ui/menu/exit.png"),
+        m_gameOptionsSidebar->addButton("删除游戏", beiklive::material::DELETE_ICON,
             [this, path](const beiklive::GameEntry& e) {
                 _hideGameOptionsPanel();
                 auto* removeDialog = new brls::Dialog("是否从游戏库移除该游戏？");
@@ -597,7 +603,7 @@ namespace beiklive
         // ── 收藏 ──
         m_gameOptionsSidebar->addButton(
             entry.favourite ? "取消收藏" : "加入收藏",
-            BK_RES("img/ui/setting/emu.png"),
+            entry.favourite ? beiklive::material::FAVORITE : beiklive::material::FAVORITE_BORDER,
             [this, path, fav = entry.favourite](const beiklive::GameEntry&) {
                 _hideGameOptionsPanel();
                 std::string msg = fav ? "确定要取消收藏吗？" : "确定要加入收藏吗？";

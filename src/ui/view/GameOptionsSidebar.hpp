@@ -35,10 +35,10 @@ namespace beiklive
 
         /// 添加一个操作按钮
         /// @param text     按钮文字
-        /// @param iconPath 按钮图标路径
+        /// @param iconCodepoint Material Icons 字形码点
         /// @param callback A 键点击回调，参数为 open() 时传入的 GameEntry
         void addButton(const std::string& text,
-                       const std::string& iconPath,
+                       char32_t iconCodepoint,
                        std::function<void(const beiklive::GameEntry&)> callback);
 
         /// 清空所有按钮
@@ -57,7 +57,7 @@ namespace beiklive
         struct ButtonConfig
         {
             std::string text;
-            std::string iconPath;
+            char32_t iconCodepoint;
             std::function<void(const beiklive::GameEntry&)> callback;
         };
         std::vector<ButtonConfig> m_buttons;

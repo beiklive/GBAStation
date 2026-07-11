@@ -1,5 +1,7 @@
 #include "GameLibraryPage.hpp"
 #include "core/forwarder/ForwarderInstaller.hpp"
+#include "ui/utils/MaterialIcons.hpp"
+#include "ui/utils/NdsEnvironment.hpp"
 #include "ui/widget/ButtonBox.hpp"
 #include "ui/widget/GridBox.hpp"
 #include "ui/widget/GridItem.hpp"
@@ -820,13 +822,18 @@ namespace beiklive
     void GameLibraryPage::GameLibraryDS::onItemSelected(size_t index)
     {
         if (!m_page || index >= m_page->m_entries.size()) return;
-        if (m_page->onGameSelected) {
-            auto& cached = m_page->m_entries[index];
-            auto fresh = beiklive::GameDB
-                ? beiklive::GameDB->findByPath(cached.path)
-                : std::optional<beiklive::GameEntry>{};
-            m_page->onGameSelected(fresh.has_value() ? *fresh : cached);
-        }
+        auto& cached = m_page->m_entries[index];
+        auto fresh = beiklive::GameDB
+            ? beiklive::GameDB->findByPath(cached.path)
+            : std::optional<beiklive::GameEntry>{};
+        const auto& entry = fresh.has_value() ? *fresh : cached;
+
+        if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS) &&
+            !beiklive::ensureNdsEnvironmentReady())
+            return;
+
+        if (m_page->onGameSelected)
+            m_page->onGameSelected(entry);
     }
 
     void GameLibraryPage::GameLibraryDS::clearData()
@@ -1098,7 +1105,7 @@ namespace beiklive
             brls::Application::giveFocus(m_grid);
         };
 
-        m_gameOptionsSidebar->addButton("修改映射名称", BK_RES("img/ui/setting/emu.png"),
+        m_gameOptionsSidebar->addButton("修改映射名称", beiklive::material::EDIT,
             [this, path, title = entry.title, fn, idx = m_grid->getSelectedIndex()](const beiklive::GameEntry&) {
                 _hideGameOptionsPanel();
                 auto* ime = brls::Application::getPlatform()->getImeManager();
@@ -1118,7 +1125,7 @@ namespace beiklive
                     brls::KeyboardKeyDisableBitmask::KEYBOARD_DISABLE_NONE);
             });
 
-        m_gameOptionsSidebar->addButton("设置封面图", BK_RES("img/ui/setting/display.png"),
+        m_gameOptionsSidebar->addButton("设置封面图", beiklive::material::IMAGE,
             [this, path, idx = m_grid->getSelectedIndex()](const beiklive::GameEntry& entry) {
                 _hideGameOptionsPanel();
                 fs::path currentLogo(entry.logoPath);
@@ -1135,7 +1142,7 @@ namespace beiklive
                     currentLogo.filename().string());
             });
 
-        m_gameOptionsSidebar->addButton("安装游戏前端", BK_RES("img/ui/setting/emu.png"),
+        m_gameOptionsSidebar->addButton("安装游戏前端", beiklive::material::INSTALL_APP,
             [this](const beiklive::GameEntry& game) {
                 _hideGameOptionsPanel();
                 m_grid->setInteractionDisabled(false);
@@ -1144,7 +1151,7 @@ namespace beiklive
 
         if (beiklive::GetCoreOptions(entry.platform).size() > 1)
         {
-            m_gameOptionsSidebar->addButton("核心选择", BK_RES("img/ui/setting/emu.png"),
+            m_gameOptionsSidebar->addButton("核心选择", beiklive::material::MEMORY,
                 [this, path, platform = entry.platform, core = entry.core,
                  idx = m_grid->getSelectedIndex()](const beiklive::GameEntry&) {
                     _hideGameOptionsPanel();
@@ -1178,14 +1185,14 @@ namespace beiklive
                 });
         }
 
-        m_gameOptionsSidebar->addButton("游戏数据浏览", BK_RES("img/ui/menu/save.png"),
+        m_gameOptionsSidebar->addButton("游戏数据浏览", beiklive::material::STORAGE,
             [this, entry](const beiklive::GameEntry&) {
                 _hideGameOptionsPanel();
                 _openGameDataPage(entry);
                 m_grid->setInteractionDisabled(false);
             });
 
-        m_gameOptionsSidebar->addButton("删除游戏", BK_RES("img/ui/menu/exit.png"),
+        m_gameOptionsSidebar->addButton("删除游戏", beiklive::material::DELETE_ICON,
             [this, path](const beiklive::GameEntry&) {
                 _hideGameOptionsPanel();
                 auto* removeDlg = new brls::Dialog("是否从游戏库移除该游戏？");
@@ -1233,7 +1240,7 @@ namespace beiklive
 
         m_gameOptionsSidebar->addButton(
             entry.favourite ? "取消收藏" : "加入收藏",
-            BK_RES("img/ui/setting/emu.png"),
+            entry.favourite ? beiklive::material::FAVORITE : beiklive::material::FAVORITE_BORDER,
             [this, path, fav = entry.favourite, idx = m_grid->getSelectedIndex()](const beiklive::GameEntry&) {
                 _hideGameOptionsPanel();
                 std::string msg = fav ? "确定要取消收藏吗？" : "确定要加入收藏吗？";
@@ -1252,14 +1259,14 @@ namespace beiklive
 
         m_gameOptionsSidebar->addButton(
             "多选",
-            BK_RES("img/ui/setting/emu.png"),
+            beiklive::material::CHECK_BOX,
             [enterMultiSelect](const beiklive::GameEntry&) {
                 enterMultiSelect(false);
             });
 
         m_gameOptionsSidebar->addButton(
             "全选",
-            BK_RES("img/ui/setting/emu.png"),
+            beiklive::material::SELECT_ALL,
             [enterMultiSelect](const beiklive::GameEntry&) {
                 enterMultiSelect(true);
             });
@@ -1295,7 +1302,7 @@ namespace beiklive
 
         m_gameOptionsSidebar->addButton(
             "取消多选",
-            BK_RES("img/ui/setting/emu.png"),
+            beiklive::material::CLOSE,
             [this](const beiklive::GameEntry&) {
                 _hideGameOptionsPanel();
                 m_grid->clearDeleteSelection();
@@ -1306,7 +1313,7 @@ namespace beiklive
         if (count > 0) {
             m_gameOptionsSidebar->addButton(
                 "添加到收藏 (" + std::to_string(count) + ")",
-                BK_RES("img/ui/setting/emu.png"),
+                beiklive::material::FAVORITE,
                 [this](const beiklive::GameEntry&) {
                     _hideGameOptionsPanel();
                     std::vector<int> sel(m_grid->getDeleteSelection().begin(),
@@ -1342,7 +1349,7 @@ namespace beiklive
 
             m_gameOptionsSidebar->addButton(
                 "删除已选游戏 (" + std::to_string(count) + ")",
-                BK_RES("img/ui/menu/exit.png"),
+                beiklive::material::DELETE_SWEEP_ICON,
                 [this](const beiklive::GameEntry&) {
                     _hideGameOptionsPanel();
                     std::vector<int> sel(m_grid->getDeleteSelection().begin(),
