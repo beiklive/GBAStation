@@ -625,8 +625,11 @@ bool NdsGameLayer::refreshCaptureCache() const
 
     const std::vector<std::uint8_t>& upper = m_screensSwapped ? bottom : top;
     const std::vector<std::uint8_t>& lower = m_screensSwapped ? top : bottom;
-    constexpr int srcW = 256;
-    constexpr int srcH = 192;
+    const int srcW = m_renderer->GetFramebufferWidth();
+    const int srcH = m_renderer->GetFramebufferHeight();
+    const std::size_t expectedBytes = static_cast<std::size_t>(srcW) * srcH * 4;
+    if (upper.size() < expectedBytes || lower.size() < expectedBytes)
+        return false;
     std::vector<std::uint8_t> rgba(static_cast<size_t>(srcW) * srcH * 2 * 4, 0);
 
     for (int y = 0; y < srcH; ++y)
@@ -857,9 +860,9 @@ void NdsGameLayer::drawScreens() const
         if (useFreeze)
         {
             const RectF sourceRect {0.0f,
-                                    static_cast<float>(sourceScreen * kDsHeight),
-                                    static_cast<float>(kDsWidth),
-                                    static_cast<float>(kDsHeight)};
+                                    static_cast<float>(sourceScreen * (m_menuFreezeHeight / 2)),
+                                    static_cast<float>(m_menuFreezeWidth),
+                                    static_cast<float>(m_menuFreezeHeight / 2)};
             if (useMultiPassShader)
             {
                 const int tempW = static_cast<int>(std::ceil(sourceRect.w * passTempScale));

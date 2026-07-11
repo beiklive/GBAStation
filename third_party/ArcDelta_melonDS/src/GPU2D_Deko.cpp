@@ -2,6 +2,7 @@
 #include "GPU.h"
 
 #include <arm_neon.h>
+#include <algorithm>
 #include <assert.h>
 #include <cstdarg>
 #include <stdio.h>
@@ -92,6 +93,15 @@ DekoRenderer::DekoRenderer() :
     DekoLog("GBAStationNDSStub: GPU2D_Deko 3dFb layoutSize=%llu align=%u",
             static_cast<unsigned long long>(hires3DFbLayout.getSize()),
             hires3DFbLayout.getAlignment());
+
+    dk::ImageLayout lowres3DFbLayout;
+    dk::ImageLayoutMaker{Gfx::Device}
+        .setDimensions(256, 192)
+        .setFlags(DkImageFlags_UsageRender|DkImageFlags_UsageLoadStore|DkImageFlags_Usage2DEngine)
+        .setFormat(DkImageFormat_R32_Uint)
+        .initialize(lowres3DFbLayout);
+    _3DFramebufferLowResMemory = Gfx::TextureHeap->Alloc(lowres3DFbLayout.getSize(), lowres3DFbLayout.getAlignment());
+    _3DFramebufferLowRes.initialize(lowres3DFbLayout, Gfx::TextureHeap->MemBlock, _3DFramebufferLowResMemory.Offset);
 
     dk::ImageLayout objWindowLayout;
     dk::ImageLayoutMaker{Gfx::Device}
@@ -251,6 +261,17 @@ DekoRenderer::DekoRenderer() :
     DekoLog("GBAStationNDSStub: GPU2D_Deko ctor ok");
 }
 
+void DekoRenderer::SetRenderScale(int scale)
+{
+    scale = std::clamp(scale, 1, MaxRenderScale);
+    if (RenderScale == scale)
+        return;
+    Gfx::EmuQueue.waitIdle();
+    RenderScale = scale;
+    DekoLog("GBAStationNDSStub: GPU2D_Deko render scale=%d framebuffer=%dx%d",
+            RenderScale, GetFramebufferWidth(), GetFramebufferHeight());
+}
+
 void DekoRenderer::RequestFramebufferCapture()
 {
     FramebufferCaptureRequested = true;
@@ -270,17 +291,17 @@ bool DekoRenderer::TakeCapturedFramebufferRGBA(std::vector<u8>& outTop, std::vec
 bool DekoRenderer::ReadFramebufferRGBAFromIndex(int front, std::vector<u8>& outTop, std::vector<u8>& outBottom)
 {
     front &= 1;
-    constexpr u32 screenBytes = MaxFramebufferWidth * MaxFramebufferHeight * 4;
+    const u32 screenBytes = GetFramebufferWidth() * GetFramebufferHeight() * 4;
     auto readback = Gfx::DataHeap->Alloc(screenBytes * 2, DK_MEMBLOCK_ALIGNMENT);
 
     CmdMem.Begin(EmuCmdBuf);
     dk::ImageView topView{FinalFramebuffers[front][0]};
     dk::ImageView bottomView{FinalFramebuffers[front][1]};
     EmuCmdBuf.copyImageToBuffer(topView,
-                                {0, 0, 0, MaxFramebufferWidth, MaxFramebufferHeight, 1},
+                                {0, 0, 0, (u32)GetFramebufferWidth(), (u32)GetFramebufferHeight(), 1},
                                 {Gfx::DataHeap->GpuAddr(readback)});
     EmuCmdBuf.copyImageToBuffer(bottomView,
-                                {0, 0, 0, MaxFramebufferWidth, MaxFramebufferHeight, 1},
+                                {0, 0, 0, (u32)GetFramebufferWidth(), (u32)GetFramebufferHeight(), 1},
                                 {Gfx::DataHeap->GpuAddr(readback) + screenBytes});
     EmuQueue.submitCommands(CmdMem.End(EmuCmdBuf));
     EmuQueue.waitIdle();
@@ -2015,6 +2036,9 @@ void DekoRenderer::ComposeBGOBJ()
                     bgOrder[n++] = j;
 
         ComposeUniform& composeUniform = ComposeUniforms[CurUnit->Num];
+        composeUniform.ThreeDScale = RenderScale;
+        composeUniform.OutputScale = RenderScale;
+        composeUniform.ThreeDLayerMask = 0;
         int textureHandleIdx[4];
 
         for (int i = 0; i < 4; i++)
@@ -2043,6 +2067,7 @@ void DekoRenderer::ComposeBGOBJ()
             else if (bgOrder[i] == 0 && CurUnit->Num == 0 && region.DispCnt & (1<<3))
             {
                 textureHandleIdx[i] = descriptorOffset_3DFramebuffer;
+                composeUniform.ThreeDLayerMask |= 1U << i;
             }
             else
             {
@@ -2084,6 +2109,10 @@ void DekoRenderer::ComposeBGOBJ()
 
         if (capture)
         {
+            composeUniform.OutputScale = 1;
+            EmuCmdBuf.pushConstants(Gfx::DataHeap->GpuAddr(ComposeUniformMemory), ComposeUniformSize,
+                offsetof(ComposeUniform, OutputScale), sizeof(composeUniform.OutputScale),
+                &composeUniform.OutputScale);
             dk::ImageView bgobj{BGOBJTexture};
             dk::Shader* captureShader = showDirectBitmap ? &ShaderComposeBGOBJShowBitmap : &ShaderComposeBGOBJ;
             DkViewport nativeCaptureViewport = {0.f, 0.f, 256.f, 192.f, 0.f, 1.f};
@@ -2096,6 +2125,10 @@ void DekoRenderer::ComposeBGOBJ()
         }
 
         EmuCmdBuf.bindRenderTargets({&colorTarget});
+        composeUniform.OutputScale = RenderScale;
+        EmuCmdBuf.pushConstants(Gfx::DataHeap->GpuAddr(ComposeUniformMemory), ComposeUniformSize,
+            offsetof(ComposeUniform, OutputScale), sizeof(composeUniform.OutputScale),
+            &composeUniform.OutputScale);
         dk::Shader* shader = showDirectBitmap ? &ShaderComposeBGOBJDirectBitmapOnly : &ShaderComposeBGOBJ;
         if (capture)
             shader = showDirectBitmap ? &ShaderComposeBGOBJShowBitmap : &ShaderComposeBGOBJ;
@@ -2103,7 +2136,8 @@ void DekoRenderer::ComposeBGOBJ()
 
         DkViewport displayViewport = {0.f, 0.f, (float)GetFramebufferWidth(), (float)GetFramebufferHeight(), 0.f, 1.f};
         EmuCmdBuf.setViewports(0, {displayViewport, displayViewport});
-        DkScissor scissor = {0, firstLine, (u32)GetFramebufferWidth(), region.LinesCount};
+        DkScissor scissor = {0, firstLine * (u32)RenderScale,
+                             (u32)GetFramebufferWidth(), region.LinesCount * (u32)RenderScale};
         EmuCmdBuf.setScissors(0, {scissor, scissor});
         EmuCmdBuf.draw(DkPrimitive_TriangleStrip, 4, 1, 0, 0);
 
@@ -2118,27 +2152,13 @@ void DekoRenderer::ComposeBGOBJ()
 
     EmuCmdBuf.barrier(DkBarrier_Fragments, DkInvalidateFlags_Image);
 
-    for (int i = 0; i < 5; i++)
-    {
-        if (BGOBJRedrawn[CurUnit->Num] & (1 << i))
-        {
-            dk::ImageView colorTarget{IntermedFramebuffers[fb_Count * CurUnit->Num + fb_BG0 + i]};
-            EmuCmdBuf.bindRenderTargets({&colorTarget});
-            EmuCmdBuf.discardColor(0);
-        }
-    }
-    if (BGOBJRedrawn[CurUnit->Num] & (1 << 5))
-    {
-        dk::ImageView colorTarget{OBJWindow[CurUnit->Num]};
-        EmuCmdBuf.bindRenderTargets({&colorTarget});
-        EmuCmdBuf.discardColor(0);
-    }
-
+    // Unchanged BG/OBJ batches are reused across frames. Discarding these
+    // images makes the next skipped batch sample undefined tile contents.
     BGOBJRedrawn[CurUnit->Num] = 0;
 
     if (CurUnit->Num == 0 && CaptureLatch)
     {
-        dk::ImageView src{CaptureCnt & (1<<24) ? _3DFramebuffer : BGOBJTexture};
+        dk::ImageView src{CaptureCnt & (1<<24) ? _3DFramebufferLowRes : BGOBJTexture};
         EmuCmdBuf.copyImageToBuffer(src, {0, 0, 0, 256, 192, 1}, {Gfx::DataHeap->GpuAddr(DisplayCaptureMemory)});
         EmuCmdBuf.signalFence(DisplayCaptureFence, true);
     }

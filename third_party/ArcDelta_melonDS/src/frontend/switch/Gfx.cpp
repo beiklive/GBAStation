@@ -23,8 +23,28 @@
 
 #include "CmdMemRing.h"
 
+extern "C" void GBAStationNDSStubLogLine(const char* line) __attribute__((weak));
+
 namespace Gfx
 {
+
+namespace
+{
+
+void GfxLog(const char* format, ...)
+{
+    char line[768] = {};
+    va_list args;
+    va_start(args, format);
+    vsnprintf(line, sizeof(line), format, args);
+    va_end(args);
+    if (GBAStationNDSStubLogLine)
+        GBAStationNDSStubLogLine(line);
+    else
+        printf("%s\n", line);
+}
+
+}
 
 dk::Device Device;
 dk::Queue PresentQueue, EmuQueue;
@@ -132,6 +152,7 @@ GpuMemHeap::Allocation VertexData[2];
 GpuMemHeap::Allocation IndexData[2];
 GpuMemHeap::Allocation UniformBuffer;
 GpuMemHeap::Allocation NdsShaderUniformBuffer;
+bool NdsExtensionsInitialized = false;
 
 GpuMemHeap::Allocation TextureStagingBuffer[2];
 u32 TextureStagingBufferOffset;
@@ -575,6 +596,7 @@ struct DkshHeader
 
 bool LoadShader(const char* path, dk::Shader& out)
 {
+    GfxLog("GBAStationNDSStub: Gfx LoadShader begin path=%s", path ? path : "(null)");
     FILE* f = fopen(path, "rb");
     if (f)
     {
@@ -582,26 +604,35 @@ bool LoadShader(const char* path, dk::Shader& out)
         size_t read = fread(&header, sizeof(DkshHeader), 1, f);
         if (!read)
         {
+            GfxLog("GBAStationNDSStub: Gfx LoadShader header read failed path=%s", path);
             printf("couldn't read shader header %s\n", path);
             fclose(f);
             return false;
         }
+
+        GfxLog("GBAStationNDSStub: Gfx LoadShader header path=%s control=%u code=%u programs=%u",
+               path, header.control_sz, header.code_sz, header.num_programs);
 
         rewind(f);
         u8* ctrlmem = new u8[header.control_sz];
         read = fread(ctrlmem, header.control_sz, 1, f);
         if (!read)
         {
+            GfxLog("GBAStationNDSStub: Gfx LoadShader control read failed path=%s", path);
             printf("couldn't read shader control %s\n", path);
             delete[] ctrlmem;
             fclose(f);
             return false;
         }
 
+        GfxLog("GBAStationNDSStub: Gfx LoadShader code alloc begin path=%s bytes=%u", path, header.code_sz);
         GpuMemHeap::Allocation data = ShaderCodeHeap->Alloc(header.code_sz, DK_SHADER_CODE_ALIGNMENT);
+        GfxLog("GBAStationNDSStub: Gfx LoadShader code alloc ok path=%s offset=%u size=%u",
+               path, data.Offset, data.Size);
         read = fread(ShaderCodeHeap->CpuAddr<void>(data), header.code_sz, 1, f);
         if (!read)
         {
+            GfxLog("GBAStationNDSStub: Gfx LoadShader code read failed path=%s", path);
             printf("couldn't read shader code %s\n", path);
             delete[] ctrlmem;
             fclose(f);
@@ -613,12 +644,15 @@ bool LoadShader(const char* path, dk::Shader& out)
             .setProgramId(0)
             .initialize(out);
 
+        GfxLog("GBAStationNDSStub: Gfx LoadShader ok path=%s", path);
+
         delete[] ctrlmem;
         fclose(f);
         return true;
     }
     else
     {
+        GfxLog("GBAStationNDSStub: Gfx LoadShader open failed path=%s", path ? path : "(null)");
         printf("couldn't open shader file %s\n", path);
         return false;
     }
@@ -710,52 +744,10 @@ void DebugOutput(void* userData, const char* context, DkResult result, const cha
     printf("deko debug %d %s\n", result, message);
 }
 
-void Init()
+void InitNdsExtensions()
 {
-    Window = nwindowGetDefault();
-    nwindowSetDimensions(Window, 1920, 1080);
-
-    Device = dk::DeviceMaker{}.setCbDebug(DebugOutput).create();
-    PresentQueue = dk::QueueMaker{Device}
-        .setFlags(DkQueueFlags_Graphics|DkQueueFlags_DisableZcull)
-        .setCommandMemorySize(DK_QUEUE_MIN_CMDMEM_SIZE*4)
-        .setFlushThreshold(DK_QUEUE_MIN_CMDMEM_SIZE)
-        .create();
-    EmuQueue = dk::QueueMaker{Device}
-        .setFlags(DkQueueFlags_HighPrio|DkQueueFlags_Graphics|DkQueueFlags_Compute|DkQueueFlags_DisableZcull)
-        .setCommandMemorySize(DK_QUEUE_MIN_CMDMEM_SIZE*4)
-        .setFlushThreshold(DK_QUEUE_MIN_CMDMEM_SIZE)
-        .create();
-
-    TextureHeap.emplace(Device, 1024*1024*120, DkMemBlockFlags_GpuCached | DkMemBlockFlags_Image, 1024*8);
-    ShaderCodeHeap.emplace(Device, 1024*1024*12,
-        DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached | DkMemBlockFlags_Code, 64);
-    DataHeap.emplace(Device, 1024*1024*256, DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached, 128);
-
-    PresentCmdBuf = dk::CmdBufMaker{Device}.create();
-    EmuCmdBuf = dk::CmdBufMaker{Device}.create();
-    CmdMem.emplace(*DataHeap, 0x10000*2);
-
-    dk::ImageLayout fbLayout;
-    dk::ImageLayoutMaker{Device}
-        .setFlags(DkImageFlags_UsageRender | DkImageFlags_UsagePresent | DkImageFlags_HwCompression)
-        .setFormat(DkImageFormat_RGBA8_Unorm)
-        .setDimensions(1920, 1080)
-        .initialize(fbLayout);
-    std::array<DkImage const*, 2> fbArray;
-    for (int i = 0; i < 2; i++)
-    {
-        GpuMemHeap::Allocation block = TextureHeap->Alloc(fbLayout.getSize(), fbLayout.getAlignment());
-        Framebuffers[i].initialize(fbLayout, TextureHeap->MemBlock, block.Offset);
-        fbArray[i] = &Framebuffers[i];
-    }
-
-    Swapchain = dk::SwapchainMaker{Device, Window, fbArray}.create();
-
-    const bool defaultVertexLoaded = LoadShader("romfs:/shaders/Default_vsh.dksh", VertexShader);
-    const bool defaultFragmentLoaded = LoadShader("romfs:/shaders/Default_fsh.dksh", FragmentShaders[shaderMode_Default]);
-    assert(defaultVertexLoaded);
-    assert(defaultFragmentLoaded);
+    if (NdsExtensionsInitialized)
+        return;
 
     auto loadFragmentOrFallback = [](const char* path, ShaderMode mode, ShaderMode fallback) {
         if (!LoadShader(path, FragmentShaders[mode]))
@@ -770,17 +762,92 @@ void Init()
     loadFragmentOrFallback("romfs:/shaders/NdsLcdGridNdsColor_fsh.dksh", shaderMode_NdsLcdGridNdsColor, shaderMode_NdsDot);
     loadFragmentOrFallback("romfs:/shaders/NdsDrasticSimple_fsh.dksh", shaderMode_NdsDrasticSimple, shaderMode_NdsDot);
 
+    NdsShaderUniformBuffer = DataHeap->Alloc(sizeof(NdsShaderUniform), DK_UNIFORM_BUF_ALIGNMENT);
+    NdsExtensionsInitialized = true;
+}
+
+void Init()
+{
+    GfxLog("GBAStationNDSStub: Gfx Init enter textureHeapMB=120 shaderHeapMB=48 dataHeapMB=640");
+    Window = nwindowGetDefault();
+    GfxLog("GBAStationNDSStub: Gfx nwindowGetDefault ok window=%p", Window);
+    nwindowSetDimensions(Window, 1920, 1080);
+
+    GfxLog("GBAStationNDSStub: Gfx device create begin");
+    Device = dk::DeviceMaker{}.setCbDebug(DebugOutput).create();
+    GfxLog("GBAStationNDSStub: Gfx device create ok");
+    GfxLog("GBAStationNDSStub: Gfx present queue create begin");
+    PresentQueue = dk::QueueMaker{Device}
+        .setFlags(DkQueueFlags_Graphics|DkQueueFlags_DisableZcull)
+        .setCommandMemorySize(DK_QUEUE_MIN_CMDMEM_SIZE*4)
+        .setFlushThreshold(DK_QUEUE_MIN_CMDMEM_SIZE)
+        .create();
+    GfxLog("GBAStationNDSStub: Gfx present queue create ok");
+    GfxLog("GBAStationNDSStub: Gfx emu queue create begin");
+    EmuQueue = dk::QueueMaker{Device}
+        .setFlags(DkQueueFlags_HighPrio|DkQueueFlags_Graphics|DkQueueFlags_Compute|DkQueueFlags_DisableZcull)
+        .setCommandMemorySize(DK_QUEUE_MIN_CMDMEM_SIZE*4)
+        .setFlushThreshold(DK_QUEUE_MIN_CMDMEM_SIZE)
+        .create();
+    GfxLog("GBAStationNDSStub: Gfx emu queue create ok");
+
+    GfxLog("GBAStationNDSStub: Gfx TextureHeap create begin bytes=%u", 1024U*1024U*120U);
+    TextureHeap.emplace(Device, 1024*1024*120, DkMemBlockFlags_GpuCached | DkMemBlockFlags_Image, 1024*8);
+    GfxLog("GBAStationNDSStub: Gfx TextureHeap create ok");
+    GfxLog("GBAStationNDSStub: Gfx ShaderCodeHeap create begin bytes=%u", 1024U*1024U*48U);
+    ShaderCodeHeap.emplace(Device, 1024*1024*48,
+        DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached | DkMemBlockFlags_Code, 512);
+    GfxLog("GBAStationNDSStub: Gfx ShaderCodeHeap create ok");
+    GfxLog("GBAStationNDSStub: Gfx DataHeap create begin bytes=%u", 1024U*1024U*640U);
+    DataHeap.emplace(Device, 1024*1024*640, DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached, 256);
+    GfxLog("GBAStationNDSStub: Gfx DataHeap create ok");
+
+    GfxLog("GBAStationNDSStub: Gfx command buffers create begin");
+    PresentCmdBuf = dk::CmdBufMaker{Device}.create();
+    EmuCmdBuf = dk::CmdBufMaker{Device}.create();
+    CmdMem.emplace(*DataHeap, 0x10000*2);
+    GfxLog("GBAStationNDSStub: Gfx command buffers create ok");
+
+    dk::ImageLayout fbLayout;
+    dk::ImageLayoutMaker{Device}
+        .setFlags(DkImageFlags_UsageRender | DkImageFlags_UsagePresent | DkImageFlags_HwCompression)
+        .setFormat(DkImageFormat_RGBA8_Unorm)
+        .setDimensions(1920, 1080)
+        .initialize(fbLayout);
+    std::array<DkImage const*, 2> fbArray;
     for (int i = 0; i < 2; i++)
     {
+        GfxLog("GBAStationNDSStub: Gfx swapchain framebuffer alloc begin index=%d bytes=%llu",
+               i, static_cast<unsigned long long>(fbLayout.getSize()));
+        GpuMemHeap::Allocation block = TextureHeap->Alloc(fbLayout.getSize(), fbLayout.getAlignment());
+        Framebuffers[i].initialize(fbLayout, TextureHeap->MemBlock, block.Offset);
+        fbArray[i] = &Framebuffers[i];
+        GfxLog("GBAStationNDSStub: Gfx swapchain framebuffer alloc ok index=%d offset=%u size=%u",
+               i, block.Offset, block.Size);
+    }
+
+    GfxLog("GBAStationNDSStub: Gfx swapchain create begin");
+    Swapchain = dk::SwapchainMaker{Device, Window, fbArray}.create();
+    GfxLog("GBAStationNDSStub: Gfx swapchain create ok");
+
+    const bool defaultVertexLoaded = LoadShader("romfs:/shaders/Default_vsh.dksh", VertexShader);
+    const bool defaultFragmentLoaded = LoadShader("romfs:/shaders/Default_fsh.dksh", FragmentShaders[shaderMode_Default]);
+    assert(defaultVertexLoaded);
+    assert(defaultFragmentLoaded);
+    GfxLog("GBAStationNDSStub: Gfx default shaders ok");
+
+    for (int i = 0; i < 2; i++)
+    {
+        GfxLog("GBAStationNDSStub: Gfx frame resources alloc begin slot=%d", i);
         VertexData[i] = DataHeap->Alloc(MaxVertices * sizeof(Vertex), alignof(Vertex));
         IndexData[i] = DataHeap->Alloc(MaxIndices * sizeof(u16), alignof(u16));
 
         TextureStagingBuffer[i] = DataHeap->Alloc(1024*1024*8, DK_MEMBLOCK_ALIGNMENT);
 
         ImageDescriptors[i] = DataHeap->Alloc(sizeof(dk::ImageDescriptor) * 1024, DK_IMAGE_DESCRIPTOR_ALIGNMENT);
+        GfxLog("GBAStationNDSStub: Gfx frame resources alloc ok slot=%d", i);
     }
     UniformBuffer = DataHeap->Alloc(sizeof(Transformation), DK_UNIFORM_BUF_ALIGNMENT);
-    NdsShaderUniformBuffer = DataHeap->Alloc(sizeof(NdsShaderUniform), DK_UNIFORM_BUF_ALIGNMENT);
 
     {
         SamplerDescriptor = DataHeap->Alloc(sizeof(dk::SamplerDescriptor) * 4, DK_SAMPLER_DESCRIPTOR_ALIGNMENT);
@@ -796,7 +863,7 @@ void Init()
         }
     }
 
-    // load system font
+    GfxLog("GBAStationNDSStub: Gfx system fonts begin");
     plInitialize(PlServiceType_User);
     SystemFontStandardData = CopySharedFont(PlSharedFontType_Standard);
     SystemFontStandard = FontLoad(SystemFontStandardData);
@@ -811,13 +878,18 @@ void Init()
         SystemFontChineseData = SystemFontStandardData;
     SystemFontChinese = FontLoad(SystemFontChineseData);
     plExit();
+    GfxLog("GBAStationNDSStub: Gfx system fonts ok standard=%p ext=%p chinese=%p",
+           SystemFontStandardData, SystemFontNintendoExtData, SystemFontChineseData);
 
+    GfxLog("GBAStationNDSStub: Gfx white texture create begin");
     WhiteTexture = TextureCreate(8, 8, DkImageFormat_R8_Unorm);
     TextureSetSwizzle(WhiteTexture, DkImageSwizzle_One, DkImageSwizzle_One, DkImageSwizzle_One, DkImageSwizzle_One);
+    GfxLog("GBAStationNDSStub: Gfx Init ok whiteTexture=%u", WhiteTexture);
 }
 
 void DeInit()
 {
+    NdsExtensionsInitialized = false;
     FontDelete(SystemFontNintendoExt);
     FontDelete(SystemFontStandard);
     FontDelete(SystemFontChinese);

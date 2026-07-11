@@ -17,6 +17,8 @@
 #cmakedefine ZBuffer
 #cmakedefine WBuffer
 
+#define NDS_3D_SCALE @NDS_3D_SCALE@
+
 // for Rasterise
 #cmakedefine NoTexture
 #cmakedefine UseTexture
@@ -125,8 +127,8 @@ const int CoarseTileCountY = 4;
 const int CoarseTileW = CoarseTileCountX * TileSize;
 const int CoarseTileH = CoarseTileCountY * TileSize;
 
-const int ScreenWidth = 256;
-const int ScreenHeight = 192;
+const int ScreenWidth = 256 * NDS_3D_SCALE;
+const int ScreenHeight = 192 * NDS_3D_SCALE;
 const int FramebufferStride = ScreenWidth*ScreenHeight;
 const int TilesPerLine = ScreenWidth/TileSize;
 const int TileLines = ScreenHeight/TileSize;
@@ -153,6 +155,9 @@ buffer BinResultBuffer
 };
 
 #if defined(Rasterise) || defined(DepthBlend)
+const int TilePixelCount = MaxWorkTiles*TileSize*TileSize;
+const int TilePlaneHalf = TilePixelCount/2;
+
 layout (std430, binding = 4)
 #ifdef Rasterise
 writeonly
@@ -160,15 +165,68 @@ writeonly
 #ifdef DepthBlend
 readonly
 #endif
-buffer TilesBuffer
+buffer ColorTilesLowBuffer
 {
-    uint ColorTiles[MaxWorkTiles*TileSize*TileSize];
-    uint DepthTiles[MaxWorkTiles*TileSize*TileSize];
-    uint AttrTiles[MaxWorkTiles*TileSize*TileSize];
+    uint ColorTilesLow[TilePlaneHalf];
+};
+layout (std430, binding = 5)
+#ifdef Rasterise
+writeonly
+#endif
+#ifdef DepthBlend
+readonly
+#endif
+buffer ColorTilesHighBuffer
+{
+    uint ColorTilesHigh[TilePlaneHalf];
+};
+layout (std430, binding = 6)
+#ifdef Rasterise
+writeonly
+#endif
+#ifdef DepthBlend
+readonly
+#endif
+buffer DepthTilesLowBuffer
+{
+    uint DepthTilesLow[TilePlaneHalf];
+};
+layout (std430, binding = 7)
+#ifdef Rasterise
+writeonly
+#endif
+#ifdef DepthBlend
+readonly
+#endif
+buffer DepthTilesHighBuffer
+{
+    uint DepthTilesHigh[TilePlaneHalf];
+};
+layout (std430, binding = 8)
+#ifdef Rasterise
+writeonly
+#endif
+#ifdef DepthBlend
+readonly
+#endif
+buffer AttrTilesLowBuffer
+{
+    uint AttrTilesLow[TilePlaneHalf];
+};
+layout (std430, binding = 9)
+#ifdef Rasterise
+writeonly
+#endif
+#ifdef DepthBlend
+readonly
+#endif
+buffer AttrTilesHighBuffer
+{
+    uint AttrTilesHigh[TilePlaneHalf];
 };
 #endif
 
-layout (std430, binding = 5)
+layout (std430, binding = 10)
 #ifdef DepthBlend
 writeonly
 #endif
@@ -181,6 +239,38 @@ buffer RasterResult
     uint DepthResult[ScreenWidth*ScreenHeight*2];
     uint AttrResult[ScreenWidth*ScreenHeight*2];
 };
+
+#ifdef Rasterise
+void StoreColorTile(int index, uint value)
+{
+    if (index < TilePlaneHalf) ColorTilesLow[index] = value;
+    else ColorTilesHigh[index-TilePlaneHalf] = value;
+}
+void StoreDepthTile(int index, uint value)
+{
+    if (index < TilePlaneHalf) DepthTilesLow[index] = value;
+    else DepthTilesHigh[index-TilePlaneHalf] = value;
+}
+void StoreAttrTile(int index, uint value)
+{
+    if (index < TilePlaneHalf) AttrTilesLow[index] = value;
+    else AttrTilesHigh[index-TilePlaneHalf] = value;
+}
+#endif
+#ifdef DepthBlend
+uint LoadColorTile(uint index)
+{
+    return index < uint(TilePlaneHalf) ? ColorTilesLow[index] : ColorTilesHigh[index-uint(TilePlaneHalf)];
+}
+uint LoadDepthTile(uint index)
+{
+    return index < uint(TilePlaneHalf) ? DepthTilesLow[index] : DepthTilesHigh[index-uint(TilePlaneHalf)];
+}
+uint LoadAttrTile(uint index)
+{
+    return index < uint(TilePlaneHalf) ? AttrTilesLow[index] : AttrTilesHigh[index-uint(TilePlaneHalf)];
+}
+#endif
 
 layout (std140, binding = 0) uniform MetaUniform
 {
@@ -1046,17 +1136,17 @@ void main()
             {
                 color = r | (g << 8) | (b << 16) | (a << 24);
 
-                DepthTiles[tileOffset] = z;
-                AttrTiles[tileOffset] = attr;
+                StoreDepthTile(tileOffset, z);
+                StoreAttrTile(tileOffset, attr);
             }
 #else
             color = 0xFFFFFFFF; // doesn't really matter as long as it's not 0
-            DepthTiles[tileOffset] = z;
+            StoreDepthTile(tileOffset, z);
 #endif
         }
     }
 
-    ColorTiles[tileOffset] = color;
+    StoreColorTile(tileOffset, color);
 }
 
 #endif
@@ -1120,7 +1210,7 @@ void ProcessCoarseMask(int linearTile, uint coarseMask, uint coarseOffset,
             fineMask &= ~(1U << fineIdx);
 
             uint pixelindex = tileInnerOffset + workIdx * TileSize * TileSize;
-            uint tileColor = ColorTiles[pixelindex];
+            uint tileColor = LoadColorTile(pixelindex);
             workIdx++;
 
             uint polygonIdx = fineIdx + (coarseBit + coarseOffset) * 32;
@@ -1135,8 +1225,8 @@ void ProcessCoarseMask(int linearTile, uint coarseMask, uint coarseOffset,
 
                 bool equalDepthTest = (polygonAttr & (1U << 14)) != 0U;
 
-                uint tileDepth = DepthTiles[pixelindex];
-                uint tileAttr = AttrTiles[pixelindex];
+                uint tileDepth = LoadDepthTile(pixelindex);
+                uint tileAttr = LoadAttrTile(pixelindex);
 
                 uint dstattr = attr.x;
 
@@ -1289,6 +1379,7 @@ void main()
 layout (local_size_x = 32) in;
 
 layout (binding = 0, r32ui) writeonly uniform uimage2D FinalFB; 
+layout (binding = 1, r32ui) writeonly uniform uimage2D LowResFB;
 
 uint BlendFog(uint color, uint depth)
 {
@@ -1335,13 +1426,13 @@ uint BlendFog(uint color, uint depth)
 
 void main()
 {
-    int srcX = (int(gl_GlobalInvocationID.x) + XScroll) & 0x1FF;
+    int srcX = (int(gl_GlobalInvocationID.x) + XScroll * NDS_3D_SCALE) % (512 * NDS_3D_SCALE);
     int resultOffset = int(srcX) + int(gl_GlobalInvocationID.y) * ScreenWidth;
 
     uvec2 color = uvec2(0);
     uvec2 depth = uvec2(0);
     uvec2 attr = uvec2(0);
-    if (srcX < 256)
+    if (srcX < ScreenWidth)
     {
         color = uvec2(ColorResult[resultOffset], ColorResult[resultOffset+FramebufferStride]);
         depth = uvec2(DepthResult[resultOffset], DepthResult[resultOffset+FramebufferStride]);
@@ -1359,7 +1450,7 @@ void main()
             otherAttr.x = AttrResult[resultOffset-1];
             otherDepth.x = DepthResult[resultOffset-1];
         }
-        if (srcX < 255U)
+        if (srcX < ScreenWidth-1)
         {
             otherAttr.y = AttrResult[resultOffset+1];
             otherDepth.y = DepthResult[resultOffset+1];
@@ -1369,7 +1460,7 @@ void main()
             otherAttr.z = AttrResult[resultOffset-ScreenWidth];
             otherDepth.z = DepthResult[resultOffset-ScreenWidth];
         }
-        if (gl_GlobalInvocationID.y < 191U)
+        if (gl_GlobalInvocationID.y < ScreenHeight-1)
         {
             otherAttr.w = AttrResult[resultOffset+ScreenWidth];
             otherDepth.w = DepthResult[resultOffset+ScreenWidth];
@@ -1451,6 +1542,9 @@ void main()
         //color.x = 0x1F00001FU | 0x40000000U;
 
     imageStore(FinalFB, ivec2(gl_GlobalInvocationID.xy), uvec4(color.x, 0, 0, 0));
+    ivec2 highresPosition = ivec2(gl_GlobalInvocationID.xy);
+    if (all(equal(highresPosition % NDS_3D_SCALE, ivec2(0))))
+        imageStore(LowResFB, highresPosition / NDS_3D_SCALE, uvec4(color.x, 0, 0, 0));
 }
 
 #endif

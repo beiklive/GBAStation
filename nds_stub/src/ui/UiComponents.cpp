@@ -1243,6 +1243,7 @@ void drawInfoPage(const char* title, const char* body, float offsetX, float offs
 
 void drawDisplayPage(bool linearFiltering,
                      float fastForwardMultiplier,
+                     int renderScale,
                      bool integerScale,
                      int layout,
                      int orientation,
@@ -1271,18 +1272,21 @@ void drawDisplayPage(bool linearFiltering,
     auto rowPos = [&](float rowY) { return base + Vector2f{0.0f, rowY}; };
     drawLrSelectorRow(rowPos(y), "快进倍率", ffValue, contentFocused && focusedRow == 0, true, opacity); y += kSettingStepY;
     drawLrSelectorRow(rowPos(y), "画面过滤", filterLabel(linearFiltering), contentFocused && focusedRow == 1, true, opacity); y += kSettingStepY;
-    drawSwitchRow(rowPos(y), "整数倍缩放", integerScale, contentFocused && focusedRow == 2, opacity); y += kSettingStepY;
-    drawLrSelectorRow(rowPos(y), "画面布局", layoutLabel(layout), contentFocused && focusedRow == 3, true, opacity); y += kSettingStepY;
-    drawSubPageRow(rowPos(y), "自定义画面布局", contentFocused && focusedRow == 4, layout == 7, opacity); y += kSettingStepY;
-    drawLrSelectorRow(rowPos(y), "画面方向", orientationLabel(orientation), contentFocused && focusedRow == 5, true, opacity); y += kSettingStepY;
-    drawNumberAdjusterRow(rowPos(y), "屏幕间距", screenGap, "px", 0, 1, contentFocused && focusedRow == 6, true, opacity); y += 65.0f;
+    char renderScaleValue[16];
+    std::snprintf(renderScaleValue, sizeof(renderScaleValue), "%dx", std::clamp(renderScale, 1, 4));
+    drawLrSelectorRow(rowPos(y), "3D分辨率", renderScaleValue, contentFocused && focusedRow == 2, true, opacity); y += kSettingStepY;
+    drawSwitchRow(rowPos(y), "整数倍缩放", integerScale, contentFocused && focusedRow == 3, opacity); y += kSettingStepY;
+    drawLrSelectorRow(rowPos(y), "画面布局", layoutLabel(layout), contentFocused && focusedRow == 4, true, opacity); y += kSettingStepY;
+    drawSubPageRow(rowPos(y), "自定义画面布局", contentFocused && focusedRow == 5, layout == 7, opacity); y += kSettingStepY;
+    drawLrSelectorRow(rowPos(y), "画面方向", orientationLabel(orientation), contentFocused && focusedRow == 6, true, opacity); y += kSettingStepY;
+    drawNumberAdjusterRow(rowPos(y), "屏幕间距", screenGap, "px", 0, 1, contentFocused && focusedRow == 7, true, opacity); y += 65.0f;
     drawSectionLabel(rowPos(y + 2.0f), "个性化设置", opacity); y += 36.0f;
-    drawSubPageRow(rowPos(y), "遮罩选择", contentFocused && focusedRow == 7, true, opacity); y += kSettingStepY;
-    drawSubPageRow(rowPos(y), "滤镜选择", contentFocused && focusedRow == 8, true, opacity); y += 65.0f;
+    drawSubPageRow(rowPos(y), "遮罩选择", contentFocused && focusedRow == 8, true, opacity); y += kSettingStepY;
+    drawSubPageRow(rowPos(y), "滤镜选择", contentFocused && focusedRow == 9, true, opacity); y += 65.0f;
     drawSectionLabel(rowPos(y + 2.0f), "同步设置", opacity); y += 36.0f;
-    drawButtonRow(rowPos(y), "同步画面设置", contentFocused && focusedRow == 9, opacity); y += kSettingStepY;
-    drawButtonRow(rowPos(y), "同步遮罩设置", contentFocused && focusedRow == 10, opacity); y += kSettingStepY;
-    drawButtonRow(rowPos(y), "同步滤镜设置", contentFocused && focusedRow == 11, opacity);
+    drawButtonRow(rowPos(y), "同步画面设置", contentFocused && focusedRow == 10, opacity); y += kSettingStepY;
+    drawButtonRow(rowPos(y), "同步遮罩设置", contentFocused && focusedRow == 11, opacity); y += kSettingStepY;
+    drawButtonRow(rowPos(y), "同步滤镜设置", contentFocused && focusedRow == 12, opacity);
 
     if (opacity > 0.5f && scrollY > 1.0f)
         drawRect({kContentX + kContentW - 4.0f, kContentY + kContentBodyTop + offsetY},
@@ -1956,6 +1960,7 @@ void drawTabFrame(NdsMenuLayer::Item item,
         case NdsMenuLayer::Item::Display:
             drawDisplayPage(display.linearFiltering,
                             display.fastForwardMultiplier,
+                            display.renderScale,
                             display.integerScale,
                             display.layout,
                             display.orientation,

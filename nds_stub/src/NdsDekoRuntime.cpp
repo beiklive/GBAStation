@@ -551,6 +551,7 @@ bool saveNdsSettingsToGameDb(const std::string& romPath,
                 item["ndsScreenLayout"] = layoutIdFromIndex(settings.layout);
                 item["ndsScreenOrientation"] = orientationIdFromIndex(settings.orientation);
                 item["ndsIntegerScale"] = settings.integerScale;
+                item["nds3DResolutionScale"] = settings.renderScale;
                 item["ndsScreenGap"] = settings.screenGap;
                 item["overlayEnabled"] = settings.overlayEnabled;
                 item["overlayPath"] = settings.overlayPath;
@@ -643,6 +644,7 @@ int syncNdsDisplaySettingsToGameDb(const std::string& romPath,
                 item["ndsScreenLayout"] = layoutIdFromIndex(settings.layout);
                 item["ndsScreenOrientation"] = orientationIdFromIndex(settings.orientation);
                 item["ndsIntegerScale"] = settings.integerScale;
+                item["nds3DResolutionScale"] = settings.renderScale;
                 item["ndsScreenGap"] = settings.screenGap;
                 item["ndsTopScale"] = settings.customLayout.topScale;
                 item["ndsTopOffsetX"] = settings.customLayout.topOffsetX;
@@ -2407,19 +2409,24 @@ int RunDekoRuntime(const DekoRunOptions& options)
     checkpointBegin = std::chrono::steady_clock::now();
     GPU::InitRenderer(0);
     appendStubLog("GBAStationNDSStub: Deko checkpoint GPU::InitRenderer ok ms=%lld", elapsedMs(checkpointBegin));
-    GPU::RenderSettings settings {true, 1, false};
+    GPU::RenderSettings settings {true, std::clamp(options.renderScale, 1, 4), false};
     appendStubLog("GBAStationNDSStub: Deko checkpoint GPU::SetRenderSettings begin");
     checkpointBegin = std::chrono::steady_clock::now();
     GPU::SetRenderSettings(0, settings);
     appendStubLog("GBAStationNDSStub: Deko checkpoint GPU::SetRenderSettings ok ms=%lld", elapsedMs(checkpointBegin));
+
+    appendStubLog("GBAStationNDSStub: Deko checkpoint Gfx::InitNdsExtensions begin");
+    checkpointBegin = std::chrono::steady_clock::now();
+    Gfx::InitNdsExtensions();
+    appendStubLog("GBAStationNDSStub: Deko checkpoint Gfx::InitNdsExtensions ok ms=%lld", elapsedMs(checkpointBegin));
 
     auto* deko2d = static_cast<GPU2D::DekoRenderer*>(GPU::GPU2D_Renderer.get());
     NdsGameLayer gameLayer;
     appendStubLog("GBAStationNDSStub: Deko checkpoint gameLayer.init begin renderer=%p", deko2d);
     checkpointBegin = std::chrono::steady_clock::now();
     gameLayer.init(deko2d);
-    gameLayer.setWaitForFramebufferReady(false);
-    appendStubLog("GBAStationNDSStub: Deko display fence mode=signal-presented-only");
+    gameLayer.setWaitForFramebufferReady(true);
+    appendStubLog("GBAStationNDSStub: Deko display fence mode=wait-ready-and-signal-presented");
     appendStubLog("GBAStationNDSStub: Deko checkpoint gameLayer.init ok ms=%lld", elapsedMs(checkpointBegin));
 
     appendStubLog("GBAStationNDSStub: Deko checkpoint LoadROM begin");
@@ -2447,6 +2454,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
     NdsDisplaySettings initialDisplay {};
     initialDisplay.fastForwardMultiplier = inputConfig.fastForwardMultiplier();
     initialDisplay.linearFiltering = inputConfig.value("display.filter", "nearest") == "linear";
+    initialDisplay.renderScale = std::clamp(options.renderScale, 1, 4);
     initialDisplay.integerScale = options.integerScale;
     initialDisplay.layout = layoutIndexFromId(options.screenLayout.empty() ? "priority_top" : options.screenLayout);
     initialDisplay.orientation = orientationIndexFromId(options.screenOrientation.empty() ? "0" : options.screenOrientation);
@@ -2467,6 +2475,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
     gameLayer.setShaderEnabled(initialDisplay.shaderEnabled);
     gameLayer.setShaderType(initialDisplay.ndsShaderType);
     gameLayer.setShaderParams(ndsShaderParamUniforms(initialDisplay.ndsShaderType, initialDisplay.shaderParams));
+    int appliedRenderScale = initialDisplay.renderScale;
     bool appliedOverlayValid = false;
     bool appliedOverlayEnabled = false;
     std::string appliedOverlayPath;
@@ -2558,8 +2567,9 @@ int RunDekoRuntime(const DekoRunOptions& options)
     };
     reloadOverlayTexture(initialDisplay);
     applyShaderSettings(false);
-    appendStubLog("GBAStationNDSStub: display init filter=%s integer=%d layout=%s orientation=%d gap=%d overlay=%d overlayPath=%s shader=%d shaderType=%s customTop=%.2f/%.1f/%.1f customBottom=%.2f/%.1f/%.1f",
+    appendStubLog("GBAStationNDSStub: display init filter=%s 3dScale=%dx integer=%d layout=%s orientation=%d gap=%d overlay=%d overlayPath=%s shader=%d shaderType=%s customTop=%.2f/%.1f/%.1f customBottom=%.2f/%.1f/%.1f",
                   initialDisplay.linearFiltering ? "linear" : "nearest",
+                  initialDisplay.renderScale,
                   initialDisplay.integerScale ? 1 : 0,
                   layoutIdFromIndex(initialDisplay.layout),
                   initialDisplay.orientation * 90,
@@ -2766,6 +2776,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
             appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu loop begin",
                           static_cast<unsigned long long>(totalFrames));
         const auto frameBegin = std::chrono::steady_clock::now();
+
         padUpdate(&pad);
         const InputSnapshot input = makeInputSnapshot(pad, previousVirtualHeld);
         const bool touchHeld = touchScreenPressed();
@@ -2923,6 +2934,13 @@ int RunDekoRuntime(const DekoRunOptions& options)
         }
         else if (menuAction == NdsMenuAction::DisplaySettingsChanged)
         {
+            const int requestedRenderScale = std::clamp(menuLayer.displaySettings().renderScale, 1, 4);
+            if (requestedRenderScale != appliedRenderScale)
+            {
+                GPU::RenderSettings renderSettings {true, requestedRenderScale, false};
+                GPU::SetRenderSettings(0, renderSettings);
+                appliedRenderScale = requestedRenderScale;
+            }
             gameLayer.setLinearFiltering(menuLayer.linearFiltering());
             gameLayer.setIntegerScale(menuLayer.integerScale());
             gameLayer.setScreenLayout(menuLayer.screenLayout());
@@ -2932,9 +2950,10 @@ int RunDekoRuntime(const DekoRunOptions& options)
             inputConfig.saveValue("display.filter", "s", menuLayer.linearFiltering() ? "linear" : "nearest");
             inputConfig.saveValue("fastforward.multiplier", "f", std::to_string(menuLayer.fastForwardMultiplier()));
             saveNdsSettingsToGameDb(options.romPath, menuLayer.displaySettings(), false);
-            appendStubLog("GBAStationNDSStub: Deko display settings filter=%s ff=%.2f integer=%d layout=%s orientation=%d gap=%d",
+            appendStubLog("GBAStationNDSStub: Deko display settings filter=%s ff=%.2f 3dScale=%dx integer=%d layout=%s orientation=%d gap=%d",
                           menuLayer.linearFiltering() ? "linear" : "nearest",
                           menuLayer.fastForwardMultiplier(),
+                          menuLayer.displaySettings().renderScale,
                           menuLayer.integerScale() ? 1 : 0,
                           layoutIdFromIndex(menuLayer.screenLayout()),
                           menuLayer.displaySettings().orientation * 90,
@@ -3134,6 +3153,16 @@ int RunDekoRuntime(const DekoRunOptions& options)
         else
             NDS::ReleaseScreen();
 
+        // Match ArcDelta's frontend ordering: acquire the presentation frame
+        // before emulation can start producing the next GPU framebuffer.
+        if (traceFrame)
+            appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu Gfx::StartFrame begin",
+                          static_cast<unsigned long long>(totalFrames));
+        Gfx::StartFrame();
+        if (traceFrame)
+            appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu Gfx::StartFrame ok",
+                          static_cast<unsigned long long>(totalFrames));
+
         const auto runBegin = std::chrono::steady_clock::now();
         if (traceFrame)
             appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu RunFrame begin",
@@ -3206,14 +3235,6 @@ int RunDekoRuntime(const DekoRunOptions& options)
                 autoSaveStart = std::chrono::steady_clock::now();
             }
         }
-
-        if (traceFrame)
-            appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu Gfx::StartFrame begin",
-                          static_cast<unsigned long long>(totalFrames));
-        Gfx::StartFrame();
-        if (traceFrame)
-            appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu Gfx::StartFrame ok",
-                          static_cast<unsigned long long>(totalFrames));
 
         if (traceFrame)
             appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu Gfx::PushScissor begin",

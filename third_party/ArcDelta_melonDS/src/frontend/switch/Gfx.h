@@ -152,6 +152,7 @@ extern std::optional<GpuMemHeap> ShaderCodeHeap;
 extern std::optional<GpuMemHeap> DataHeap;
 
 void Init();
+void InitNdsExtensions();
 void DeInit();
 
 u32 TextureCreate(u32 width, u32 height, DkImageFormat format);

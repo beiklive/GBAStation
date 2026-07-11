@@ -77,6 +77,22 @@ function(nds_stub_compile_shader_instance stage source_no_ext output_name define
     set(NDS_STUB_DEKO_SHADERS ${NDS_STUB_DEKO_SHADERS} PARENT_SCOPE)
 endfunction()
 
+function(nds_stub_compile_3d_shader_instance stage source_no_ext output_name defines scale)
+    foreach(var IN LISTS defines)
+        set(${var} 1)
+    endforeach()
+    set(NDS_3D_SCALE ${scale})
+    set(generated_file ${NDS_STUB_GENERATED_SHADER_DIR}/${output_name}_x${scale}.glsl)
+    configure_file(${source_no_ext}.glsl ${generated_file})
+    set(out_file ${NDS_STUB_SHADER_DIR}/${output_name}_x${scale}.dksh)
+    add_custom_command(OUTPUT ${out_file}
+        COMMAND ${NDS_STUB_UAM_EXE} -s ${stage} -o ${out_file} ${generated_file}
+        DEPENDS ${generated_file}
+    )
+    list(APPEND NDS_STUB_DEKO_SHADERS ${out_file})
+    set(NDS_STUB_DEKO_SHADERS ${NDS_STUB_DEKO_SHADERS} PARENT_SCOPE)
+endfunction()
+
 nds_stub_compile_shader(vert ${ARCDELTA_SWITCH_SHADER_DIR}/Default_vsh Default_vsh)
 nds_stub_compile_shader(frag ${ARCDELTA_SWITCH_SHADER_DIR}/Default_fsh Default_fsh)
 nds_stub_compile_shader(frag ${NDS_STUB_SHADER_SOURCE_DIR}/NdsDot_fsh NdsDot_fsh)
@@ -107,39 +123,50 @@ nds_stub_compile_shader_instance(frag ${ARCDELTA_CORE_SHADER_DIR}/OBJ_fsh OBJ8bp
 nds_stub_compile_shader_instance(frag ${ARCDELTA_CORE_SHADER_DIR}/OBJ_fsh OBJBitmap_fsh "OBJBitmap")
 nds_stub_compile_shader_instance(frag ${ARCDELTA_CORE_SHADER_DIR}/OBJ_fsh OBJWindow4bpp_fsh "OBJ4bpp;OBJWindow")
 nds_stub_compile_shader_instance(frag ${ARCDELTA_CORE_SHADER_DIR}/OBJ_fsh OBJWindow8bpp_fsh "OBJ8bpp;OBJWindow")
-nds_stub_compile_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp InterpXSpansZBuffer "InterpSpans;ZBuffer")
-nds_stub_compile_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp InterpXSpansWBuffer "InterpSpans;WBuffer")
-nds_stub_compile_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp BinCombined "BinCombined")
-nds_stub_compile_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp DepthBlendWBuffer "DepthBlend;WBuffer")
-nds_stub_compile_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp DepthBlendZBuffer "DepthBlend;ZBuffer")
-nds_stub_compile_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp RasteriseNoTextureWBuffer "Rasterise;WBuffer;NoTexture")
-nds_stub_compile_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp RasteriseNoTextureWBufferToon "Rasterise;WBuffer;NoTexture;Toon")
-nds_stub_compile_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp RasteriseNoTextureWBufferHighlight "Rasterise;WBuffer;NoTexture;Highlight")
-nds_stub_compile_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp RasteriseUseTextureDecalWBuffer "Rasterise;WBuffer;UseTexture;Decal")
-nds_stub_compile_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp RasteriseUseTextureModulateWBuffer "Rasterise;WBuffer;UseTexture;Modulate")
-nds_stub_compile_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp RasteriseUseTextureToonWBuffer "Rasterise;WBuffer;UseTexture;Toon")
-nds_stub_compile_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp RasteriseUseTextureHighlightWBuffer "Rasterise;WBuffer;UseTexture;Highlight")
-nds_stub_compile_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp RasteriseShadowMaskWBuffer "Rasterise;WBuffer;ShadowMask")
-nds_stub_compile_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp RasteriseNoTextureZBuffer "Rasterise;ZBuffer;NoTexture")
-nds_stub_compile_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp RasteriseNoTextureZBufferToon "Rasterise;ZBuffer;NoTexture;Toon")
-nds_stub_compile_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp RasteriseNoTextureZBufferHighlight "Rasterise;ZBuffer;NoTexture;Highlight")
-nds_stub_compile_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp RasteriseUseTextureDecalZBuffer "Rasterise;ZBuffer;UseTexture;Decal")
-nds_stub_compile_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp RasteriseUseTextureModulateZBuffer "Rasterise;ZBuffer;UseTexture;Modulate")
-nds_stub_compile_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp RasteriseUseTextureToonZBuffer "Rasterise;ZBuffer;UseTexture;Toon")
-nds_stub_compile_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp RasteriseUseTextureHighlightZBuffer "Rasterise;ZBuffer;UseTexture;Highlight")
-nds_stub_compile_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp RasteriseShadowMaskZBuffer "Rasterise;ZBuffer;ShadowMask")
-nds_stub_compile_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp FinalPass "FinalPass")
-nds_stub_compile_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp FinalPassEdge "FinalPass;EdgeMarking")
-nds_stub_compile_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp FinalPassFog "FinalPass;Fog")
-nds_stub_compile_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp FinalPassEdgeFog "FinalPass;EdgeMarking;Fog")
-nds_stub_compile_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp FinalPassAA "FinalPass;AntiAliasing")
-nds_stub_compile_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp FinalPassEdgeAA "FinalPass;EdgeMarking;AntiAliasing")
-nds_stub_compile_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp FinalPassFogAA "FinalPass;Fog;AntiAliasing")
-nds_stub_compile_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp FinalPassEdgeFogAA "FinalPass;EdgeMarking;Fog;AntiAliasing")
-nds_stub_compile_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp ClearCoarseBinMask "ClearCoarseBinMask")
-nds_stub_compile_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp ClearIndirectWorkCount "ClearIndirectWorkCount")
-nds_stub_compile_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp CalculateWorkOffsets "CalculateWorkOffsets")
-nds_stub_compile_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp SortWork "SortWork")
+set(NDS_STUB_GPU3D_SHADER_INSTANCES
+    "InterpXSpansZBuffer|InterpSpans,ZBuffer"
+    "InterpXSpansWBuffer|InterpSpans,WBuffer"
+    "BinCombined|BinCombined"
+    "DepthBlendWBuffer|DepthBlend,WBuffer"
+    "DepthBlendZBuffer|DepthBlend,ZBuffer"
+    "RasteriseNoTextureWBuffer|Rasterise,WBuffer,NoTexture"
+    "RasteriseNoTextureWBufferToon|Rasterise,WBuffer,NoTexture,Toon"
+    "RasteriseNoTextureWBufferHighlight|Rasterise,WBuffer,NoTexture,Highlight"
+    "RasteriseUseTextureDecalWBuffer|Rasterise,WBuffer,UseTexture,Decal"
+    "RasteriseUseTextureModulateWBuffer|Rasterise,WBuffer,UseTexture,Modulate"
+    "RasteriseUseTextureToonWBuffer|Rasterise,WBuffer,UseTexture,Toon"
+    "RasteriseUseTextureHighlightWBuffer|Rasterise,WBuffer,UseTexture,Highlight"
+    "RasteriseShadowMaskWBuffer|Rasterise,WBuffer,ShadowMask"
+    "RasteriseNoTextureZBuffer|Rasterise,ZBuffer,NoTexture"
+    "RasteriseNoTextureZBufferToon|Rasterise,ZBuffer,NoTexture,Toon"
+    "RasteriseNoTextureZBufferHighlight|Rasterise,ZBuffer,NoTexture,Highlight"
+    "RasteriseUseTextureDecalZBuffer|Rasterise,ZBuffer,UseTexture,Decal"
+    "RasteriseUseTextureModulateZBuffer|Rasterise,ZBuffer,UseTexture,Modulate"
+    "RasteriseUseTextureToonZBuffer|Rasterise,ZBuffer,UseTexture,Toon"
+    "RasteriseUseTextureHighlightZBuffer|Rasterise,ZBuffer,UseTexture,Highlight"
+    "RasteriseShadowMaskZBuffer|Rasterise,ZBuffer,ShadowMask"
+    "FinalPass|FinalPass"
+    "FinalPassEdge|FinalPass,EdgeMarking"
+    "FinalPassFog|FinalPass,Fog"
+    "FinalPassEdgeFog|FinalPass,EdgeMarking,Fog"
+    "FinalPassAA|FinalPass,AntiAliasing"
+    "FinalPassEdgeAA|FinalPass,EdgeMarking,AntiAliasing"
+    "FinalPassFogAA|FinalPass,Fog,AntiAliasing"
+    "FinalPassEdgeFogAA|FinalPass,EdgeMarking,Fog,AntiAliasing"
+    "ClearCoarseBinMask|ClearCoarseBinMask"
+    "ClearIndirectWorkCount|ClearIndirectWorkCount"
+    "CalculateWorkOffsets|CalculateWorkOffsets"
+    "SortWork|SortWork"
+)
+foreach(scale RANGE 1 4)
+    foreach(instance IN LISTS NDS_STUB_GPU3D_SHADER_INSTANCES)
+        string(REPLACE "|" ";" instance_parts "${instance}")
+        list(GET instance_parts 0 output_name)
+        list(REMOVE_AT instance_parts 0)
+        string(REPLACE "," ";" instance_defines "${instance_parts}")
+        nds_stub_compile_3d_shader_instance(comp ${ARCDELTA_CORE_SHADER_DIR}/GPU3D_Comp ${output_name} "${instance_defines}" ${scale})
+    endforeach()
+endforeach()
 
 add_custom_target(GBAStationNDSStubDekoShaders DEPENDS ${NDS_STUB_DEKO_SHADERS})
 
@@ -160,7 +187,14 @@ target_include_directories(GBAStationNDSStub PRIVATE
     ${NDS_STUB_DIR}/include
     ${NDS_STUB_REPO_ROOT}/third_party/borealis/library/include/borealis/extern
 )
-target_compile_options(GBAStationNDSStub PRIVATE -ffunction-sections -fdata-sections ${APP_PLATFORM_OPTION})
+target_compile_options(GBAStationNDSStub PRIVATE
+    -ffunction-sections
+    -fdata-sections
+    -flto
+    -fPIC
+    ${APP_PLATFORM_OPTION}
+)
+target_link_options(GBAStationNDSStub PRIVATE -flto -fuse-linker-plugin -pie)
 target_link_libraries(GBAStationNDSStub PRIVATE nx deko3d arcdelta_melonds_core arcdelta_switch_gfx)
 add_dependencies(GBAStationNDSStub GBAStationNDSStubDekoShaders)
 

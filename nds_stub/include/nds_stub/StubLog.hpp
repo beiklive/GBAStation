@@ -2,8 +2,7 @@
 
 namespace beiklive::nds_stub {
 
-inline void appendStubLog(const char*, ...)
-{
-}
+void initializeStubLog();
+void appendStubLog(const char* format, ...);
 
 } // namespace beiklive::nds_stub

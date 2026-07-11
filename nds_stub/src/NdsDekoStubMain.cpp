@@ -1,11 +1,14 @@
 #include <algorithm>
+#include <cstdarg>
 #include <cctype>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <mutex>
 #include <optional>
 #include <string>
+#include <sys/stat.h>
 
 #include <nlohmann/json.hpp>
 #include <switch.h>
@@ -13,9 +16,73 @@
 #include "nds_stub/NdsDekoRuntime.hpp"
 #include "nds_stub/StubLog.hpp"
 
+namespace beiklive::nds_stub {
+
+namespace {
+
+constexpr const char* kStubLogPaths[] = {
+    "sdmc:/GBAStation/log/NdsDekoStub.log",
+    "/GBAStation/log/NdsDekoStub.log",
+};
+
+std::mutex g_stubLogMutex;
+std::uint64_t g_stubLogSequence = 0;
+
+FILE* openStubLog(const char* mode)
+{
+    mkdir("sdmc:/GBAStation", 0777);
+    mkdir("sdmc:/GBAStation/log", 0777);
+    mkdir("/GBAStation", 0777);
+    mkdir("/GBAStation/log", 0777);
+    for (const char* path : kStubLogPaths)
+    {
+        if (FILE* fp = std::fopen(path, mode))
+            return fp;
+    }
+    return nullptr;
+}
+
+} // namespace
+
+void initializeStubLog()
+{
+    std::lock_guard<std::mutex> lock(g_stubLogMutex);
+    g_stubLogSequence = 0;
+    if (FILE* fp = openStubLog("wb"))
+    {
+        std::fputs("000000 GBAStationNDSStub: log session begin\n", fp);
+        std::fflush(fp);
+        std::fclose(fp);
+    }
+}
+
+void appendStubLog(const char* format, ...)
+{
+    if (!format)
+        return;
+
+    char line[1024] = {};
+    va_list args;
+    va_start(args, format);
+    std::vsnprintf(line, sizeof(line), format, args);
+    va_end(args);
+
+    std::lock_guard<std::mutex> lock(g_stubLogMutex);
+    if (FILE* fp = openStubLog("ab"))
+    {
+        std::fprintf(fp, "%06llu %s\n",
+                     static_cast<unsigned long long>(++g_stubLogSequence),
+                     line);
+        std::fflush(fp);
+        std::fclose(fp);
+    }
+}
+
+} // namespace beiklive::nds_stub
+
 extern "C" void GBAStationNDSStubLogLine(const char* line)
 {
-    (void)line;
+    beiklive::nds_stub::appendStubLog("%s", line ? line : "(null)");
 }
 
 namespace {
@@ -143,7 +210,11 @@ std::string titleFromPath(const std::string& romPath)
 
 int main(int argc, char* argv[])
 {
+    beiklive::nds_stub::initializeStubLog();
+    beiklive::nds_stub::appendStubLog("GBAStationNDSStub: main entered");
+    beiklive::nds_stub::appendStubLog("GBAStationNDSStub: svcSetThreadCoreMask begin");
     svcSetThreadCoreMask(CUR_THREAD_HANDLE, 1, 1ULL << 1);
+    beiklive::nds_stub::appendStubLog("GBAStationNDSStub: svcSetThreadCoreMask ok");
     beiklive::nds_stub::appendStubLog("GBAStationNDSStub: Deko-only start argc=%d", argc);
     for (int i = 0; i < argc; ++i)
         beiklive::nds_stub::appendStubLog("GBAStationNDSStub: argv[%d]=%s", i, argv[i] ? argv[i] : "(null)");
@@ -185,6 +256,7 @@ int main(int argc, char* argv[])
             options.screenLayout = jsonString(*record, "ndsScreenLayout");
             options.screenOrientation = jsonString(*record, "ndsScreenOrientation");
             options.integerScale = jsonBool(*record, "ndsIntegerScale", true);
+            options.renderScale = std::clamp(jsonInt(*record, "nds3DResolutionScale", 1), 1, 4);
             options.screenGap = std::clamp(jsonInt(*record, "ndsScreenGap", 0), -256, 256);
             options.overlayEnabled = jsonBool(*record, "overlayEnabled", false);
             options.overlayPath = jsonString(*record, "overlayPath");

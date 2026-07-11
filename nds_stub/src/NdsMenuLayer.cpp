@@ -66,12 +66,12 @@ constexpr float kShaderListFooterH = 54.0f;
 constexpr float kShaderListPadTop = 30.0f;
 constexpr float kShaderListPadBottom = 14.0f;
 constexpr const char* kOverlayRoot = "sdmc:/GBAStation/overlays";
-constexpr int kDisplayRowCustomLayout = 4;
-constexpr int kDisplayRowOverlay = 7;
-constexpr int kDisplayRowShader = 8;
-constexpr int kDisplayRowSyncDisplay = 9;
-constexpr int kDisplayRowSyncOverlay = 10;
-constexpr int kDisplayRowSyncShader = 11;
+constexpr int kDisplayRowCustomLayout = 5;
+constexpr int kDisplayRowOverlay = 8;
+constexpr int kDisplayRowShader = 9;
+constexpr int kDisplayRowSyncDisplay = 10;
+constexpr int kDisplayRowSyncOverlay = 11;
+constexpr int kDisplayRowSyncShader = 12;
 
 bool isDirectionUp(std::uint64_t buttons)
 {
@@ -392,12 +392,13 @@ float displayRowY(int row)
     case 3: return kSettingStepY * 3.0f;
     case 4: return kSettingStepY * 4.0f;
     case 5: return kSettingStepY * 5.0f;
-    case 6: return kSettingStepY * 6.0f + 43.0f;
+    case 6: return kSettingStepY * 6.0f;
     case 7: return kSettingStepY * 7.0f + 43.0f;
     case 8: return kSettingStepY * 8.0f + 43.0f;
-    case 9: return kSettingStepY * 9.0f + 86.0f;
+    case 9: return kSettingStepY * 9.0f + 43.0f;
     case 10: return kSettingStepY * 10.0f + 86.0f;
     case 11: return kSettingStepY * 11.0f + 86.0f;
+    case 12: return kSettingStepY * 12.0f + 86.0f;
     default: return 0.0f;
     }
 }
@@ -850,7 +851,7 @@ float NdsMenuLayer::targetContentScrollY() const
     case Item::Display:
     {
         const int row = std::clamp(m_contentFocus, 0, contentControlCount(Item::Display) - 1);
-        const float contentH = displayRowY(11) + kSettingRowH;
+        const float contentH = displayRowY(12) + kSettingRowH;
         return focusedScroll(displayRowY(row), kSettingRowH, contentH);
     }
     case Item::Cheats:
@@ -1040,6 +1041,7 @@ void NdsMenuLayer::setDisplaySettings(const NdsDisplaySettings& settings)
 {
     m_display = settings;
     m_display.fastForwardMultiplier = std::clamp(m_display.fastForwardMultiplier, 0.1f, 5.0f);
+    m_display.renderScale = std::clamp(m_display.renderScale, 1, 4);
     m_display.layout = std::clamp(m_display.layout, 0, 7);
     m_display.orientation = std::clamp(m_display.orientation, 0, 3);
     m_display.screenGap = clampScreenGap(m_display.screenGap);
@@ -1071,7 +1073,7 @@ int NdsMenuLayer::contentControlCount(Item item) const
     case Item::LoadState:
         return 10;
     case Item::Display:
-        return 12;
+        return 13;
     case Item::Cheats:
         return static_cast<int>(visibleCheatIndices().size());
     default:
@@ -1137,7 +1139,7 @@ int NdsMenuLayer::nextFocusableDisplayRow(int from, int direction) const
     for (int i = 0; i < contentControlCount(Item::Display); ++i)
     {
         row = (row + direction + contentControlCount(Item::Display)) % contentControlCount(Item::Display);
-        if (row == 4 && m_display.layout != 7)
+        if (row == kDisplayRowCustomLayout && m_display.layout != 7)
             continue;
         return row;
     }
@@ -1148,10 +1150,10 @@ bool NdsMenuLayer::activateDisplayControl()
 {
     switch (m_contentFocus)
     {
-    case 2:
+    case 3:
         m_display.integerScale = !m_display.integerScale;
         return true;
-    case 6:
+    case 7:
         if (m_display.screenGap == kScreenGapDefault)
             return false;
         m_display.screenGap = kScreenGapDefault;
@@ -1420,15 +1422,18 @@ bool NdsMenuLayer::cycleCurrentSetting(int direction)
     case 1:
         m_display.linearFiltering = !m_display.linearFiltering;
         return true;
-    case 3:
+    case 2:
+        m_display.renderScale = cycleIndex(m_display.renderScale - 1, 4) + 1;
+        return true;
+    case 4:
         m_display.layout = cycleIndex(m_display.layout, 8);
-        if (m_contentFocus == 4 && m_display.layout != 7)
+        if (m_contentFocus == kDisplayRowCustomLayout && m_display.layout != 7)
             m_contentFocus = nextFocusableDisplayRow(m_contentFocus, direction);
         return true;
-    case 5:
+    case 6:
         m_display.orientation = cycleIndex(m_display.orientation, 4);
         return true;
-    case 6:
+    case 7:
         m_display.screenGap = stepNumericValue(m_display.screenGap,
                                                direction,
                                                kScreenGapStep,

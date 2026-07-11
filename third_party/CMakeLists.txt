@@ -682,12 +682,10 @@ target_compile_definitions(arcdelta_melonds_core PUBLIC
     HAVE_LIBNX
     ARCHITECTURE_ARM64=1
 )
-target_compile_options(arcdelta_melonds_core PUBLIC -fwrapv)
 target_compile_options(arcdelta_melonds_core PRIVATE
     -O3
-    -mcpu=cortex-a57
-    -ffast-math
-    -fomit-frame-pointer
+    -flto
+    -fPIC
     "$<$<COMPILE_LANGUAGE:CXX>:-Wno-invalid-offsetof>"
 )
 target_link_libraries(arcdelta_melonds_core PRIVATE teakra nx deko3d)
@@ -711,8 +709,8 @@ target_compile_definitions(arcdelta_switch_gfx PUBLIC
 )
 target_compile_options(arcdelta_switch_gfx PRIVATE
     -O3
-    -mcpu=cortex-a57
-    -ffast-math
+    -flto
+    -fPIC
 )
 target_link_libraries(arcdelta_switch_gfx PRIVATE nx deko3d)
 endif()

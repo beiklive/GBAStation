@@ -123,6 +123,7 @@ void drawInfoPage(const char* title, const char* body, float offsetX, float offs
 // 底部提示"A 切换过滤，左右键调整快进倍率"
 void drawDisplayPage(bool linearFiltering,
                      float fastForwardMultiplier,
+                     int renderScale,
                      bool integerScale,
                      int layout,
                      int orientation,

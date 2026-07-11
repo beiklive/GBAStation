@@ -484,6 +484,9 @@ void SetRenderSettings(int renderer, RenderSettings& settings)
 
     if (Renderer == 0)
     {
+#ifdef DEKOGPU_ENABLED
+        static_cast<GPU2D::DekoRenderer*>(GPU2D_Renderer.get())->SetRenderScale(settings.GL_ScaleFactor);
+#endif
         GPU3D::CurrentRenderer->SetRenderSettings(settings);
     }
 #ifdef OGLRENDERER_ENABLED

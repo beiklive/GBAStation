@@ -32,8 +32,14 @@ public:
     {
         return _3DFramebuffer;
     }
-    int GetFramebufferWidth() const { return 256; }
-    int GetFramebufferHeight() const { return 192; }
+    dk::Image& Get3DFramebufferLowRes()
+    {
+        return _3DFramebufferLowRes;
+    }
+    void SetRenderScale(int scale);
+    int GetRenderScale() const { return RenderScale; }
+    int GetFramebufferWidth() const { return 256 * RenderScale; }
+    int GetFramebufferHeight() const { return 192 * RenderScale; }
     int GetFramebufferTextureWidth() const { return MaxFramebufferWidth; }
     int GetFramebufferTextureHeight() const { return MaxFramebufferHeight; }
     void RequestFramebufferCapture();
@@ -43,8 +49,10 @@ public:
     dk::Fence FramebufferReady[2] = {};
     dk::Fence FramebufferPresented[2] = {};
 private:
-    static constexpr int MaxFramebufferWidth = 256;
-    static constexpr int MaxFramebufferHeight = 192;
+    static constexpr int MaxRenderScale = 4;
+    static constexpr int MaxFramebufferWidth = 256 * MaxRenderScale;
+    static constexpr int MaxFramebufferHeight = 192 * MaxRenderScale;
+    int RenderScale = 1;
 
     u16 DispFIFOFramebuffer[256*192];
 
@@ -56,6 +64,8 @@ private:
 
     dk::Image _3DFramebuffer;
     GpuMemHeap::Allocation _3DFramebufferMemory;
+    dk::Image _3DFramebufferLowRes;
+    GpuMemHeap::Allocation _3DFramebufferLowResMemory;
 
     dk::Image BGOBJTexture;
     GpuMemHeap::Allocation BGOBJTextureMemory;
@@ -178,6 +188,7 @@ private:
         u32 BlendCnt, StandardColorEffect;
         u32 EVA, EVB, EVY;
         u32 BGNumMask[4];
+        u32 ThreeDScale, OutputScale, ThreeDLayerMask, __pad0;
         u32 Window[192*4];
     };
     const u32 ComposeUniformSize = (sizeof(ComposeUniform) + DK_UNIFORM_BUF_ALIGNMENT - 1) & ~(DK_UNIFORM_BUF_ALIGNMENT - 1);

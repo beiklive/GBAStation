@@ -61,6 +61,7 @@ struct NdsStateSlotInfo {
 struct NdsDisplaySettings {
     float fastForwardMultiplier = 1.0f;
     bool linearFiltering = false;
+    int renderScale = 1;
     bool integerScale = true;
     int layout = 0;
     int orientation = 0;

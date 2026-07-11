@@ -14,6 +14,7 @@ struct DekoRunOptions {
     std::string screenLayout = "priority_top";
     std::string screenOrientation = "0";
     bool integerScale = true;
+    int renderScale = 1;
     int screenGap = 0;
     bool overlayEnabled = false;
     std::string overlayPath;

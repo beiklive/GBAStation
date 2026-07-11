@@ -39,22 +39,24 @@ public:
     //dk::Fence FrameReady = {};
     //dk::Fence FrameReserveFence = {};
 private:
-    dk::Shader ShaderInterpXSpans[2];
-    dk::Shader ShaderBinCombined;
-    dk::Shader ShaderDepthBlend[2];
-    dk::Shader ShaderRasteriseNoTexture[2];
-    dk::Shader ShaderRasteriseNoTextureToon[2];
-    dk::Shader ShaderRasteriseNoTextureHighlight[2];
-    dk::Shader ShaderRasteriseUseTextureDecal[2];
-    dk::Shader ShaderRasteriseUseTextureModulate[2];
-    dk::Shader ShaderRasteriseUseTextureToon[2];
-    dk::Shader ShaderRasteriseUseTextureHighlight[2];
-    dk::Shader ShaderRasteriseShadowMask[2];
-    dk::Shader ShaderClearCoarseBinMask;
-    dk::Shader ShaderClearIndirectWorkCount;
-    dk::Shader ShaderCalculateWorkListOffset;
-    dk::Shader ShaderSortWork;
-    dk::Shader ShaderFinalPass[8];
+    static constexpr int MaxScaleFactor = 4;
+    dk::Shader ShaderInterpXSpans[MaxScaleFactor][2];
+    dk::Shader ShaderBinCombined[MaxScaleFactor];
+    dk::Shader ShaderDepthBlend[MaxScaleFactor][2];
+    dk::Shader ShaderRasteriseNoTexture[MaxScaleFactor][2];
+    dk::Shader ShaderRasteriseNoTextureToon[MaxScaleFactor][2];
+    dk::Shader ShaderRasteriseNoTextureHighlight[MaxScaleFactor][2];
+    dk::Shader ShaderRasteriseUseTextureDecal[MaxScaleFactor][2];
+    dk::Shader ShaderRasteriseUseTextureModulate[MaxScaleFactor][2];
+    dk::Shader ShaderRasteriseUseTextureToon[MaxScaleFactor][2];
+    dk::Shader ShaderRasteriseUseTextureHighlight[MaxScaleFactor][2];
+    dk::Shader ShaderRasteriseShadowMask[MaxScaleFactor][2];
+    dk::Shader ShaderClearCoarseBinMask[MaxScaleFactor];
+    dk::Shader ShaderClearIndirectWorkCount[MaxScaleFactor];
+    dk::Shader ShaderCalculateWorkListOffset[MaxScaleFactor];
+    dk::Shader ShaderSortWork[MaxScaleFactor];
+    dk::Shader ShaderFinalPass[MaxScaleFactor][8];
+    bool ShaderScaleLoaded[MaxScaleFactor] = {};
 
     CmdMemRing<2> CmdMem;
     GpuMemHeap::Allocation YSpanIndicesTextureMemory;
@@ -68,6 +70,7 @@ private:
 
     GpuMemHeap::Allocation ImageDescriptors;
     GpuMemHeap::Allocation SamplerDescriptors;
+    bool DescriptorsInitialized = false;
 
     struct MetaUniform
     {
@@ -99,6 +102,7 @@ private:
     {
         descriptorOffset_YSpanIndices,
         descriptorOffset_FinalFB,
+        descriptorOffset_LowResFB,
         descriptorOffset_WhiteTexture,
         descriptorOffset_TexcacheStart,
         descriptorOffset_Count = descriptorOffset_TexcacheStart + TexCacheMaxImages
@@ -174,47 +178,19 @@ private:
     static const int CoarseTileW = CoarseTileCountX * TileSize;
     static const int CoarseTileH = CoarseTileCountY * TileSize;
 
-    static const int TilesPerLine = 256/TileSize;
-    static const int TileLines = 192/TileSize;
-
     static const int BinStride = 2048/32;
     static const int CoarseBinStride = BinStride/32;
-
-    static const int MaxWorkTiles = TilesPerLine*TileLines*48;
     static const int MaxVariants = 256;
 
-    struct BinResult
-    {
-        u32 VariantWorkCount[MaxVariants*4];
-        u32 SortedWorkOffset[MaxVariants];
-
-        u32 SortWorkWorkCount[4];
-        u32 UnsortedWorkDescs[MaxWorkTiles*2];
-        u32 SortedWork[MaxWorkTiles*2];
-
-        u32 BinnedMaskCoarse[TilesPerLine*TileLines*CoarseBinStride];
-        u32 BinnedMask[TilesPerLine*TileLines*BinStride];
-        u32 WorkOffsets[TilesPerLine*TileLines*BinStride];
-    };
-
-    struct Tiles
-    {
-        u32 ColorTiles[MaxWorkTiles*TileSize*TileSize];
-        u32 DepthTiles[MaxWorkTiles*TileSize*TileSize];
-        u32 AttrStencilTiles[MaxWorkTiles*TileSize*TileSize];
-    };
-
-    struct FinalTiles
-    {
-        u32 ColorResult[256*192*2];
-        u32 DepthResult[256*192*2];
-        u32 AttrResult[256*192*2];
-    };
-
-    // eh those are pretty bad guesses
-    // though real hw shouldn't be eable to render all 2048 polygons on every line either
-    static const int MaxYSpanIndices = 64*2048;
-    static const int MaxYSpanSetups = 6144*2;
+    int ScaleFactor = 1;
+    int ScreenWidth = 256;
+    int ScreenHeight = 192;
+    int TilesPerLine = 256/TileSize;
+    int TileLines = 192/TileSize;
+    int MaxWorkTiles = (256/TileSize)*(192/TileSize)*48;
+    int MaxYSpanIndices = 64*2048;
+    int MaxYSpanSetups = 6144*2;
+    bool ScaleResourcesAllocated = false;
 
     bool BetterPolygons = false;
 
@@ -259,7 +235,14 @@ private:
 
     TexCacheEntry& GetTexture(u32 textureParam, u32 paletteParam);
 
-    void LoadShaders();
+    void LoadShaders(int scale);
+    void AllocateScaleResources(int scale);
+    void FreeScaleResources();
+    std::size_t BinResultSize() const;
+    std::size_t TilesSize() const;
+    std::size_t FinalTilesSize() const;
+    std::size_t VariantWorkCountOffset() const { return 0; }
+    std::size_t SortWorkWorkCountOffset() const;
 
     void SetupAttrs(SpanSetupY* span, Polygon* poly, int from, int to);
     void SetupYSpan(int polynum, SpanSetupY* span, Polygon* poly, int from, int to, u32 y, int side, const s32 scaledPositions[][2]);
