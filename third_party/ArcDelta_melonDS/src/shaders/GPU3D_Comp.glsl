@@ -311,7 +311,7 @@ const uint startTable[256] = uint[256](
 157, 156, 154, 153, 152, 151, 149, 148, 147, 146, 144, 143, 142, 141, 139, 138, 137, 136, 135, 134, 132, 131, 130, 129, 128, 127, 126, 125, 123, 122, 121, 120, 119, 118, 117, 116, 115, 114, 113, 112, 111, 110, 109, 108, 107, 106, 105, 104, 103, 102, 101, 100, 99, 98, 97, 96, 95, 94, 93, 92, 91, 90, 89, 88, 88, 87, 86, 85, 84, 83, 82, 81, 80, 80, 79, 78, 77, 76, 75, 74, 74, 73, 72, 71, 70, 70, 69, 68, 67, 66, 66, 65, 64, 63, 62, 62, 61, 60, 59, 59, 58, 57, 56, 56, 55, 54, 53, 53, 52, 51, 50, 50, 49, 48, 48, 47, 46, 46, 45, 44, 43, 43, 42, 41, 41, 40, 39, 39, 38, 37, 37, 36, 35, 35, 34, 33, 33, 32, 32, 31, 30, 30, 29, 28, 28, 27, 27, 26, 25, 25, 24, 24, 23, 22, 22, 21, 21, 20, 19, 19, 18, 18, 17, 17, 16, 15, 15, 14, 14, 13, 13, 12, 12, 11, 10, 10, 9, 9, 8, 8, 7, 7, 6, 6, 5, 5, 4, 4, 3, 3, 2, 2, 1, 1, 0, 0
 );
 
-uint Div(uint x, uint y)
+uint Div(uint x, uint y, out uint remainder)
 {
     // https://www.microsoft.com/en-us/research/publication/software-integer-division/
     uint k = 31 - findMSB(y);
@@ -324,19 +324,59 @@ uint Div(uint x, uint y)
     z += Umulh(z, my * z);
 
     uint q = Umulh(x, z);
-    uint r = x - y * q;
-    if(r >= y)
+    remainder = x - y * q;
+    if(remainder >= y)
     {
-        r = r - y;
+        remainder = remainder - y;
         q = q + 1;
-        if(r >= y)
+        if(remainder >= y)
         {
-            r = r - y;
+            remainder = remainder - y;
             q = q + 1;
         }
     }
 
     return q;
+}
+
+uint Div(uint x, uint y)
+{
+    uint remainder;
+    return Div(x, y, remainder);
+}
+
+uint Div64_32_32(uint numHi, uint numLo, uint den)
+{
+    // Divide a 64-bit numerator (numHi:numLo) by a 32-bit denominator without
+    // overflowing the 32-bit integer operations available in the shader.
+    const uint base = 1U << 16;
+    uint shift = 31U - uint(findMSB(den));
+    den <<= shift;
+    numHi <<= shift;
+    numHi |= (numLo >> (-shift & 31U)) & uint(-int(shift) >> 31);
+    numLo <<= shift;
+
+    uint num1 = numLo >> 16;
+    uint num0 = numLo & 0xFFFFU;
+    uint den1 = den >> 16;
+    uint den0 = den & 0xFFFFU;
+
+    uint remainder;
+    uint estimate = Div(numHi, den1, remainder);
+    uint product = estimate * den0;
+    uint partial = remainder * base + num1;
+    if (product > partial)
+        estimate -= (product - partial > den) ? 2U : 1U;
+    uint quotient1 = estimate & 0xFFFFU;
+
+    uint trueRemainder = numHi * base + num1 - quotient1 * den;
+    estimate = Div(trueRemainder, den1, remainder);
+    product = estimate * den0;
+    partial = remainder * base + num0;
+    if (product > partial)
+        estimate -= (product - partial > den) ? 2U : 1U;
+
+    return bitfieldInsert(estimate, quotient1, 16, 16);
 }
 
 #ifdef InterpSpans
@@ -347,8 +387,11 @@ const int Shift = 8;
 
 int CalcYFactorY(YSpanSetup span, int i)
 {
-    int num = abs((i) * span.W0n) << Shift;
-    int den = abs(((i) * span.W0d) + (((span.I1 - span.I0 - i) * span.W1d)));
+    uint numLo = uint(abs(i)) * uint(span.W0n);
+    uint numHi = numLo >> (32U - uint(Shift));
+    numLo <<= uint(Shift);
+    uint den = uint(abs(i)) * uint(span.W0d)
+             + uint(abs(span.I1 - span.I0 - i)) * uint(span.W1d);
 
     if (den == 0)
     {
@@ -356,10 +399,7 @@ int CalcYFactorY(YSpanSetup span, int i)
     }
     else
     {
-        int q = int(Div(num, den));
-        //if ((num < 0) != (den < 0))
-        //    return -q;
-        return q;
+        return int(Div64_32_32(numHi, numLo, den));
     }
 }
 
@@ -369,13 +409,15 @@ int CalcYFactorX(XSpanSetup span, int x)
 
     if (span.X0 != span.X1)
     {
-        uint num = (uint(x) * span.W0) << Shift;
+        uint numLo = uint(x) * uint(span.W0);
+        uint numHi = numLo >> (32U - uint(Shift));
+        numLo <<= uint(Shift);
         uint den = (uint(x) * span.W0) + (uint(span.X1 - span.X0 - x) * span.W1);
 
         if (den == 0)
             return 0;
         else
-            return int(Div(num, den));
+            return int(Div64_32_32(numHi, numLo, den));
     }
     else
     {
