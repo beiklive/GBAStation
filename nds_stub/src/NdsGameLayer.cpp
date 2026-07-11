@@ -673,7 +673,10 @@ bool NdsGameLayer::refreshMenuFreezeTexture()
     std::vector<std::uint8_t> rgba;
     int width = 0;
     int height = 0;
-    if (!captureCurrentFrameRgba(rgba, width, height) || rgba.empty() || width <= 0 || height <= 0)
+    if (!copyCachedFrameRgba(rgba, width, height) &&
+        !captureCurrentFrameRgba(rgba, width, height))
+        return false;
+    if (rgba.empty() || width <= 0 || height <= 0)
         return false;
 
     if (m_menuFreezeTexture != 0 && (m_menuFreezeWidth != width || m_menuFreezeHeight != height))

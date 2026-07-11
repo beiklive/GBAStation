@@ -2671,6 +2671,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
     auto autoSaveStart = std::chrono::steady_clock::now();
     int pendingMenuSaveSlot = -1;
     int pendingMenuSaveFrames = 0;
+    bool pendingMenuOpen = false;
     bool exitAutoSavePending = false;
     bool exitAutoSaveDrawn = false;
 
@@ -2828,13 +2829,10 @@ int RunDekoRuntime(const DekoRunOptions& options)
             const bool wasVisible = menuLayer.visible();
             if (!wasVisible)
             {
-                refreshMenuFreeze("open");
-                menuLayer.open();
-                uiAudio.play(NdsMenuSound::Click);
+                pendingMenuOpen = true;
+                gameLayer.requestDeferredCapture();
                 blockGameInputUntilRelease = true;
-                appendStubLog("GBAStationNDSStub: menu hotkey toggle visible=%d->%d",
-                              wasVisible ? 1 : 0,
-                              menuLayer.visible() ? 1 : 0);
+                appendStubLog("GBAStationNDSStub: menu open deferred for fresh background");
             }
             else
             {
@@ -3344,6 +3342,18 @@ int RunDekoRuntime(const DekoRunOptions& options)
         if (traceFrame)
             appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu Gfx::EndFrame ok",
                           static_cast<unsigned long long>(totalFrames));
+
+        if (pendingMenuOpen && !menuLayer.active() && !runtimePaused && framesRan > 0)
+        {
+            const bool cached = gameLayer.refreshCaptureCache();
+            const bool frozen = refreshMenuFreeze("open_deferred");
+            pendingMenuOpen = false;
+            menuLayer.open();
+            uiAudio.play(NdsMenuSound::Click);
+            appendStubLog("GBAStationNDSStub: menu deferred open capture=%d freeze=%d",
+                          cached ? 1 : 0,
+                          frozen ? 1 : 0);
+        }
 
         if (pendingMenuSaveSlot >= 0 && !menuLayer.active() && !runtimePaused && framesRan > 0)
         {
