@@ -398,21 +398,6 @@ namespace beiklive
         m_gameMenuView->setDisplayModeCallback([this](const std::string& mode) {
             if (m_gameView) m_gameView->_onDisplayModeChange(mode);
         });
-        m_gameMenuView->setNdsLayoutCallback([this](const std::string& layout) {
-            if (m_gameView) m_gameView->_onNdsLayoutChange(layout);
-        });
-        m_gameMenuView->setNdsScreenOrientationCallback([this](const std::string& orientation) {
-            if (m_gameView) m_gameView->_onNdsScreenOrientationChange(orientation);
-        });
-        m_gameMenuView->setNdsScreenAdjustCallback([this](bool topScreen, float x, float y, float scale) {
-            if (m_gameView) m_gameView->_onNdsScreenValuesChanged(topScreen, x, y, scale);
-        });
-        m_gameMenuView->setNdsIntegerScaleCallback([this](bool enabled) {
-            if (m_gameView) m_gameView->_onNdsIntegerScaleChange(enabled);
-        });
-        m_gameMenuView->setNdsInternalResolutionCallback([this](int scale) {
-            if (m_gameView) m_gameView->_onNdsInternalResolutionChange(scale);
-        });
         m_gameMenuView->setIntegerScaleCallback([this](float scale) {
             if (m_gameView) m_gameView->_onIntegerScaleChange(scale);
         });
@@ -438,11 +423,6 @@ namespace beiklive
         });
         m_gameMenuView->setShaderParamCallback([this](const std::string& name, float val) {
             if (m_gameView) m_gameView->_setShaderParam(name, val);
-        });
-
-        // 注入 GB 配色回调：写入配置后，核心在 retro_run() 中自动重读并应用
-        m_gameMenuView->setGbColorCallback([this](const std::string& color) {
-            if (m_gameView) m_gameView->_onConfigUpdated();
         });
 
         // 注入槽位信息查询回调：供菜单面板异步扫描存档目录

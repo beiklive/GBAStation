@@ -50,19 +50,16 @@ namespace beiklive
             void setCheatsChangedCallback(std::function<void(const std::vector<CheatEntry>&)> cb) { m_cheatsChangedCallback = std::move(cb); }
             const std::vector<CheatEntry>& getCheats() const { return m_cheats; }
 
+            /// 向画面设置页追加由具体游戏视图拥有的平台专属控件。
+            void addCoreDisplaySettingView(brls::View* view);
+
             /// 画面设置回调
             void setDisplayModeCallback(std::function<void(const std::string&)> cb) { m_displayModeCallback = std::move(cb); }
-            void setNdsLayoutCallback(std::function<void(const std::string&)> cb) { m_ndsLayoutCallback = std::move(cb); }
-            void setNdsScreenOrientationCallback(std::function<void(const std::string&)> cb) { m_ndsScreenOrientationCallback = std::move(cb); }
-            void setNdsScreenAdjustCallback(std::function<void(bool, float, float, float)> cb) { m_ndsScreenAdjustCallback = std::move(cb); }
-            void setNdsIntegerScaleCallback(std::function<void(bool)> cb) { m_ndsIntegerScaleCallback = std::move(cb); }
-            void setNdsInternalResolutionCallback(std::function<void(int)> cb) { m_ndsInternalResolutionCallback = std::move(cb); }
             void setIntegerScaleCallback(std::function<void(float)> cb) { m_integerScaleCallback = std::move(cb); }
             void setShaderToggleCallback(std::function<void(bool)> cb) { m_shaderToggleCallback = std::move(cb); }
             void setShaderPathCallback(std::function<void(const std::string&)> cb) { m_shaderPathCallback = std::move(cb); }
             void setShaderParamsCallback(std::function<std::vector<ShaderParamInfo>()> cb) { m_shaderParamsCallback = std::move(cb); }
             void setShaderParamCallback(std::function<void(const std::string&, float)> cb) { m_shaderParamCallback = std::move(cb); }
-            void setGbColorCallback(std::function<void(const std::string&)> cb) { m_gbColorCallback = std::move(cb); }
 
             /// 自定义缩放/偏移变更回调：将 x/y/scale 同步到 GameView
             void setCustomScaleCallback(std::function<void(float, float, float)> cb) { m_customScaleCallback = std::move(cb); }
@@ -81,17 +78,11 @@ namespace beiklive
             std::function<void(const std::string&)> m_cheatPathCallback;
             std::function<void(const std::vector<CheatEntry>&)> m_cheatsChangedCallback;
             std::function<void(const std::string&)> m_displayModeCallback;
-            std::function<void(const std::string&)> m_ndsLayoutCallback;
-            std::function<void(const std::string&)> m_ndsScreenOrientationCallback;
-            std::function<void(bool, float, float, float)> m_ndsScreenAdjustCallback;
-            std::function<void(bool)> m_ndsIntegerScaleCallback;
-            std::function<void(int)> m_ndsInternalResolutionCallback;
             std::function<void(float)> m_integerScaleCallback; ///< 整数倍缩放变更回调 (newScale)
             std::function<void(bool)> m_shaderToggleCallback;
             std::function<void(const std::string&)> m_shaderPathCallback;
             std::function<std::vector<ShaderParamInfo>()> m_shaderParamsCallback;
             std::function<void(const std::string&, float)> m_shaderParamCallback;
-            std::function<void(const std::string&)> m_gbColorCallback;
             std::function<void(float, float, float)> m_customScaleCallback; ///< custom x/y/scale 变更回调
             std::function<void(bool)> m_overlayToggleCallback;        ///< 遮罩开关回调
             std::function<void(const std::string&)> m_overlayPathCallback; ///< 遮罩路径变更回调
@@ -126,7 +117,6 @@ namespace beiklive
             /// 金手指面板
             brls::View* _createCheatPanel();
             void _loadCheatsFromPath(const std::string& path);
-            bool _isNdsUsrCheatDat(const std::string& path) const;
             void _saveEditableCheats();
             void _notifyCheatsChanged();
             void _rebuildCheatItems();
@@ -137,8 +127,6 @@ namespace beiklive
             void _openShaderSettings();
             void _openOverlaySettings();
             void _openCustomScaleSettings();
-            void _openNdsScreenSettings(bool topScreen);
-            void _saveNdsScreenSettings();
             void _rebuildShaderParamUI();
             brls::View* _createControllerPanel();
             brls::View* _createNesPlayerBox(int player);
@@ -159,11 +147,11 @@ namespace beiklive
 
 
             brls::DetailCell* shaderPathcell = nullptr;
+            brls::Box* m_coreDisplaySettingsBox = nullptr;
             brls::Box* m_ShaderParamBox = nullptr; ///< 着色器参数面板
             brls::Box* m_ShaderSidePanel = nullptr;  ///< 当前打开的侧边栏 overlay
             brls::Box* m_OverlaySidePanel = nullptr;  ///< 当前打开的侧边栏 overlay
             brls::Box* m_CustomSidePanel = nullptr;  ///< 当前打开的侧边栏 overlay
-            brls::Box* m_NdsScreenSidePanel = nullptr; ///< NDS 单屏位置/缩放侧边栏
     };
 
 } // namespace beiklive

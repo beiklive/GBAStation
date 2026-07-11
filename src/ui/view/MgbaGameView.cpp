@@ -6,6 +6,7 @@
 #include "game/control/InputMappingDefaults.hpp"
 #include "ui/utils/BKAudioPlayer.hpp"
 #include "ui/utils/AnimationHelper.hpp"
+#include "ui/utils/UiHelper.hpp"
 #include "core/Tools.hpp"
 
 #include <algorithm>
@@ -130,6 +131,44 @@ namespace
 
 namespace beiklive
 {
+    void MgbaGameView::setGameMenuView(GameMenuView* menuView)
+    {
+        m_gameMenuView = menuView;
+        if (!m_gameMenuView ||
+            m_gameEntry.platform != static_cast<int>(beiklive::enums::EmuPlatform::EmuGB))
+            return;
+
+        auto *header = new brls::Header();
+        header->setTitle("GB 配色");
+        m_gameMenuView->addCoreDisplaySettingView(header);
+
+        const auto& colors = beiklive::GetGbColorPresets();
+        const std::string current = GET_SETTING_KEY_STR("core.mgba_gb_colors", "Grayscale");
+        int selected = 0;
+        for (int i = 0; i < static_cast<int>(colors.size()); ++i)
+        {
+            if (colors[i] == current)
+            {
+                selected = i;
+                break;
+            }
+        }
+
+        auto *colorCell = new beiklive::SelectorButton();
+        colorCell->setText("GB 配色");
+        colorCell->setOptions(colors, selected);
+        colorCell->setOnSelect([this](int index) {
+            const auto& presets = beiklive::GetGbColorPresets();
+            if (index < 0 || index >= static_cast<int>(presets.size()))
+                return;
+            SET_SETTING_KEY_STR("core.mgba_gb_colors", presets[index]);
+            _onConfigUpdated();
+        });
+        m_gameMenuView->addCoreDisplaySettingView(colorCell);
+        m_gameMenuView->addCoreDisplaySettingView(
+            beiklive::ui::makeHint("为 GB 单色游戏着色，不影响 GBA 游戏"));
+    }
+
 
     MgbaGameView::MgbaGameView(beiklive::GameEntry gameData) : m_gameEntry(std::move(gameData))
     {
@@ -3399,111 +3438,6 @@ namespace beiklive
             beiklive::GameDB->set(m_gameEntry.path, "overlayPath",
                 nlohmann::json(path));
         }
-    }
-
-    void MgbaGameView::_onNdsLayoutChange(const std::string& layout)
-    {
-        if (layout == "vertical" || layout == "horizontal" || layout == "custom" ||
-            layout == "hybrid" || layout == "top" || layout == "bottom" ||
-            layout == "priority_top")
-            m_ndsLayout = layout;
-        else if (layout == "separate")
-            m_ndsLayout = "custom";
-        else
-            m_ndsLayout = "priority_top";
-
-        m_gameEntry.ndsScreenLayout = m_ndsLayout;
-        if (beiklive::GameDB && !m_gameEntry.path.empty()) {
-            beiklive::GameDB->set(m_gameEntry.path, "ndsScreenLayout",
-                nlohmann::json(m_gameEntry.ndsScreenLayout));
-            beiklive::GameDB->flush();
-        }
-        if (m_rendererReady && m_ndsLayout == "hybrid")
-            m_renderer.setFilter(false);
-        m_ndsTouchRect = {};
-        _requestLastFrameUpload();
-    }
-
-    void MgbaGameView::_onNdsScreenOrientationChange(const std::string& orientation)
-    {
-        m_ndsScreenOrientation = normalizeNdsScreenRotation(orientation);
-
-        m_gameEntry.ndsScreenOrientation = m_ndsScreenOrientation;
-        if (beiklive::GameDB && !m_gameEntry.path.empty()) {
-            beiklive::GameDB->set(m_gameEntry.path, "ndsScreenOrientation",
-                nlohmann::json(m_gameEntry.ndsScreenOrientation));
-            beiklive::GameDB->flush();
-        }
-        m_ndsTouchRect = {};
-        _requestLastFrameUpload();
-    }
-
-    void MgbaGameView::_onNdsScreenValuesChanged(bool topScreen, float x, float y, float scale)
-    {
-        scale = std::clamp(scale, 1.0f, 10.0f);
-        if (topScreen) {
-            m_gameEntry.ndsTopOffsetX = x;
-            m_gameEntry.ndsTopOffsetY = y;
-            m_gameEntry.ndsTopScale = scale;
-        } else {
-            m_gameEntry.ndsBottomOffsetX = x;
-            m_gameEntry.ndsBottomOffsetY = y;
-            m_gameEntry.ndsBottomScale = scale;
-        }
-        m_ndsTouchRect = {};
-        _requestLastFrameUpload();
-
-    }
-
-    void MgbaGameView::_onNdsIntegerScaleChange(bool enabled)
-    {
-        if (m_gameEntry.platform != static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
-            return;
-
-        m_ndsIntegerScale = enabled;
-        m_gameEntry.ndsIntegerScale = enabled;
-        if (beiklive::GameDB && !m_gameEntry.path.empty()) {
-            beiklive::GameDB->set(m_gameEntry.path, "ndsIntegerScale",
-                nlohmann::json(enabled));
-            beiklive::GameDB->flush();
-        }
-        m_ndsTouchRect = {};
-    }
-
-    void MgbaGameView::_onNdsInternalResolutionChange(int scale)
-    {
-        if (m_gameEntry.platform != static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
-            return;
-
-#ifdef __SWITCH__
-        scale = 1;
-#endif
-        m_gameEntry.ndsInternalResolution = std::clamp(scale, 1, 4);
-        if (beiklive::GameDB && !m_gameEntry.path.empty()) {
-            beiklive::GameDB->set(m_gameEntry.path, "ndsInternalResolution",
-                nlohmann::json(m_gameEntry.ndsInternalResolution));
-            beiklive::GameDB->flush();
-        }
-
-        if (m_rendererReady) {
-            unsigned gw = m_core && m_core->GameWidth() > 0
-                ? m_core->GameWidth()
-                : beiklive::GetGamePixelWidth(m_gameEntry.platform);
-            unsigned gh = m_core && m_core->GameHeight() > 0
-                ? m_core->GameHeight()
-                : beiklive::GetGamePixelHeight(m_gameEntry.platform);
-            bool allowShader = m_gameEntry.ndsInternalResolution <= 1 &&
-                               m_gameEntry.shaderEnabled &&
-                               !m_gameEntry.shaderPath.empty();
-#ifdef __SWITCH__
-            allowShader = false;
-#endif
-            const std::string shaderPath = allowShader ? m_gameEntry.shaderPath : "";
-            m_rendererReady = _initGameRenderers(gw, gh, shaderPath);
-            _requestLastFrameUpload();
-        }
-
-        GameSignal::instance().requestConfigUpdate();
     }
 
     void MgbaGameView::_onFilterChange(const std::string& filter)

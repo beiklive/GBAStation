@@ -23,24 +23,6 @@ namespace beiklive
 {
     namespace
     {
-        std::string normalizeNdsScreenRotation(std::string value)
-        {
-            value.erase(std::remove_if(value.begin(), value.end(),
-                [](unsigned char c) { return std::isspace(c) != 0; }), value.end());
-            std::transform(value.begin(), value.end(), value.begin(),
-                [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-
-            if (value == "0" || value == "0deg" || value == "0°" || value == "vertical")
-                return "0";
-            if (value == "90" || value == "90deg" || value == "90°" || value == "horizontal")
-                return "90";
-            if (value == "180" || value == "180deg" || value == "180°" || value == "vertical_reverse")
-                return "180";
-            if (value == "270" || value == "270deg" || value == "270°" || value == "horizontal_reverse")
-                return "270";
-            return "0";
-        }
-
         bool isMgbaNativePlatform(int platform)
         {
             return beiklive::mgba_native::cheats::IsMgbaPlatform(platform);
@@ -431,6 +413,12 @@ namespace beiklive
 
     GameMenuView::~GameMenuView()
     {
+    }
+
+    void GameMenuView::addCoreDisplaySettingView(brls::View* view)
+    {
+        if (m_coreDisplaySettingsBox && view)
+            m_coreDisplaySettingsBox->addView(view);
     }
 
     void GameMenuView::_initLayout()
@@ -1163,8 +1151,6 @@ namespace beiklive
         selectChtBtn->registerClickAction([this](brls::View *) -> bool
                                           {
             std::vector<std::string> extensions = {"cht"};
-            if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
-                extensions.push_back("dat");
             std::string currentCheatDir;
             std::string currentCheatFile;
             if (!m_gameEntry.cheatPath.empty()) {
@@ -1297,11 +1283,6 @@ namespace beiklive
             cheatPathLabel->setText(beiklive::tools::getFileName(m_gameEntry.cheatPath));
         brls::Logger::info("Loaded {} cheats from {}", m_cheats.size(), path);
         _rebuildCheatItems();
-    }
-
-    bool GameMenuView::_isNdsUsrCheatDat(const std::string& path) const
-    {
-        return beiklive::cheat::isNdsUsrCheatDat(path, m_gameEntry.platform);
     }
 
     void GameMenuView::_saveEditableCheats()
@@ -1599,42 +1580,17 @@ namespace beiklive
                 box->addView(makeHint("太阳传感器等级，默认设置为5"));
             }
 
-            // ── GB 配色（仅 GB 平台显示）──
-            if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuGB)) {
-                auto *gbHdr = new brls::Header();
-                gbHdr->setTitle("GB 配色");
-                box->addView(gbHdr);
+            m_coreDisplaySettingsBox = new brls::Box(brls::Axis::COLUMN);
+            box->addView(m_coreDisplaySettingsBox);
 
-                auto& gbColors = beiklive::GetGbColorPresets();
-                std::string curGbColor = GET_SETTING_KEY_STR("core.mgba_gb_colors", "Grayscale");
-                int gbIdx = 0;
-                for (int i = 0; i < (int)gbColors.size(); ++i)
-                    if (gbColors[i] == curGbColor) { gbIdx = i; break; }
-                auto *gbColorCell = new beiklive::SelectorButton();
-                gbColorCell->setText("GB 配色");
-                gbColorCell->setOptions(gbColors, gbIdx);
-                gbColorCell->setOnSelect(
-                    [this, &gbColors](int idx) {
-                        if (idx >= 0 && idx < (int)gbColors.size()) {
-                            SET_SETTING_KEY_STR("core.mgba_gb_colors", gbColors[idx]);
-                            if (m_gbColorCallback)
-                                m_gbColorCallback(gbColors[idx]);
-                        }
-                    });
-                box->addView(gbColorCell);
-                box->addView(makeHint("为 GB 单色游戏着色，不影响 GBA 游戏"));
-            }
-
-            const bool isNds = m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS);
             beiklive::SelectorButton *IntegerCell = nullptr;
             brls::DetailCell *customCell = nullptr;
 
-            if (!isNds) {
+            {
                 auto *hdr1 = new brls::Header();
                 hdr1->setTitle("画面设置");
                 box->addView(hdr1);
 
-                // ── 画面模式 ──
                 // ScreenMode 枚举值到 UI 索引映射: 0(Fit)→0, 1(Fill)→1, 2(IntegerScale)→4, 3(FreeScale)→5, 4(4:3)→3
                 static const int kScreenModeToUi[] = {0, 1, 4, 5, 3};
                 int idx = (m_gameEntry.displayMode >= 0 && m_gameEntry.displayMode < 5)
@@ -1647,183 +1603,31 @@ namespace beiklive
                 std::vector<std::string> modeIds = {"fit", "fill", "original", "four_three", "integer", "custom"};
 
                 IntegerCell->setFocusable(idx == 4);
-                IntegerCell->setAlpha(idx == 4? 1.0f: 0.3f);
+                IntegerCell->setAlpha(idx == 4 ? 1.0f : 0.3f);
                 customCell->setFocusable(idx == 5);
-                customCell->setAlpha(idx == 5? 1.0f: 0.3f);
+                customCell->setAlpha(idx == 5 ? 1.0f : 0.3f);
 
                 modeCell->setText("画面模式");
                 modeCell->setOptions(modes, idx);
                 modeCell->setOnSelect(
-                    [this, modeIds, IntegerCell, customCell](int idx)
+                    [this, modeIds, IntegerCell, customCell](int selected)
                     {
-                        if (idx >= 0 && idx < (int)modeIds.size())
+                        if (selected >= 0 && selected < static_cast<int>(modeIds.size()))
                         {
-                            IntegerCell->setFocusable(idx == 4);
-                            IntegerCell->setAlpha(idx == 4? 1.0f: 0.3f);
-                            customCell->setFocusable(idx == 5);
-                            customCell->setAlpha(idx == 5? 1.0f: 0.3f);
+                            IntegerCell->setFocusable(selected == 4);
+                            IntegerCell->setAlpha(selected == 4 ? 1.0f : 0.3f);
+                            customCell->setFocusable(selected == 5);
+                            customCell->setAlpha(selected == 5 ? 1.0f : 0.3f);
                             static const int kUiToScreenMode[] = {0, 1, 0, 4, 2, 3};
-                            m_gameEntry.displayMode = kUiToScreenMode[idx];
+                            m_gameEntry.displayMode = kUiToScreenMode[selected];
                             if (m_displayModeCallback)
-                                m_displayModeCallback(modeIds[idx]);
+                                m_displayModeCallback(modeIds[selected]);
                         }
                     });
                 box->addView(modeCell);
             }
 
-            if (isNds) {
-                std::vector<std::string> ndsLayouts = {"上下屏", "左右屏", "上屏优先", "自定义", "混合", "仅上屏", "仅下屏"};
-                std::vector<std::string> ndsLayoutIds = {"vertical", "horizontal", "priority_top", "custom", "hybrid", "top", "bottom"};
-                std::string currentLayout = m_gameEntry.ndsScreenLayout.empty() ? "priority_top" : m_gameEntry.ndsScreenLayout;
-                if (currentLayout == "separate") {
-                    currentLayout = "custom";
-                }
-                int layoutIdx = 0;
-                for (int i = 0; i < static_cast<int>(ndsLayoutIds.size()); ++i) {
-                    if (ndsLayoutIds[i] == currentLayout) {
-                        layoutIdx = i;
-                        break;
-                    }
-                }
-                auto *ndsDisplay = new brls::Header();
-                ndsDisplay->setTitle("NDS画面设置");
-                box->addView(ndsDisplay);
-
-                auto* ndsLayoutCell = new beiklive::SelectorButton();
-                auto* ndsTopCell = new brls::DetailCell();
-                auto* ndsBottomCell = new brls::DetailCell();
-                auto syncNdsAdjustCells = [ndsTopCell, ndsBottomCell](bool custom) {
-                    ndsTopCell->setFocusable(custom);
-                    ndsTopCell->setAlpha(custom ? 1.0f : 0.3f);
-                    ndsBottomCell->setFocusable(custom);
-                    ndsBottomCell->setAlpha(custom ? 1.0f : 0.3f);
-                };
-
-                std::vector<std::string> ndsOrientationLabels = {"0度", "90度", "180度", "270度"};
-                std::vector<std::string> ndsOrientationIds = {"0", "90", "180", "270"};
-                std::string currentOrientation = normalizeNdsScreenRotation(m_gameEntry.ndsScreenOrientation);
-                int orientationIdx = 0;
-                for (int i = 0; i < static_cast<int>(ndsOrientationIds.size()); ++i) {
-                    if (ndsOrientationIds[i] == currentOrientation) {
-                        orientationIdx = i;
-                        break;
-                    }
-                }
-
-                auto* ndsOrientationCell = new beiklive::SelectorButton();
-                ndsOrientationCell->setText("NDS屏幕方向");
-                ndsOrientationCell->setOptions(ndsOrientationLabels, orientationIdx);
-                ndsOrientationCell->setOnSelect(
-                    [this, ndsOrientationIds](int idx) {
-                        if (idx < 0 || idx >= static_cast<int>(ndsOrientationIds.size()))
-                            return;
-                        m_gameEntry.ndsScreenOrientation = ndsOrientationIds[idx];
-                        if (beiklive::GameDB && !m_gameEntry.path.empty()) {
-                            beiklive::GameDB->set(m_gameEntry.path, "ndsScreenOrientation",
-                                nlohmann::json(m_gameEntry.ndsScreenOrientation));
-                            beiklive::GameDB->flush();
-                        }
-                        if (m_ndsScreenOrientationCallback)
-                            m_ndsScreenOrientationCallback(m_gameEntry.ndsScreenOrientation);
-                    });
-                box->addView(ndsOrientationCell);
-
-                ndsLayoutCell->setText("NDS屏幕布局");
-                ndsLayoutCell->setOptions(ndsLayouts, layoutIdx);
-                ndsLayoutCell->setOnSelect(
-                    [this, ndsLayoutIds, syncNdsAdjustCells](int idx) {
-                        if (idx < 0 || idx >= static_cast<int>(ndsLayoutIds.size()))
-                            return;
-                        m_gameEntry.ndsScreenLayout = ndsLayoutIds[idx];
-                        if (beiklive::GameDB && !m_gameEntry.path.empty()) {
-                            beiklive::GameDB->set(m_gameEntry.path, "ndsScreenLayout",
-                                nlohmann::json(m_gameEntry.ndsScreenLayout));
-                            beiklive::GameDB->flush();
-                        }
-                        syncNdsAdjustCells(ndsLayoutIds[idx] == "custom");
-                        if (m_ndsLayoutCallback)
-                            m_ndsLayoutCallback(ndsLayoutIds[idx]);
-                    });
-                box->addView(ndsLayoutCell);
-
-                auto* ndsIntegerScaleCell = new brls::BooleanCell();
-                ndsIntegerScaleCell->init("NDS画面整数缩放", m_gameEntry.ndsIntegerScale,
-                    [this](bool enabled) {
-                        m_gameEntry.ndsIntegerScale = enabled;
-                        if (beiklive::GameDB && !m_gameEntry.path.empty()) {
-                            beiklive::GameDB->set(m_gameEntry.path, "ndsIntegerScale",
-                                nlohmann::json(m_gameEntry.ndsIntegerScale));
-                            beiklive::GameDB->flush();
-                        }
-                        if (m_ndsIntegerScaleCallback)
-                            m_ndsIntegerScaleCallback(enabled);
-                    });
-                box->addView(ndsIntegerScaleCell);
-                box->addView(makeHint("开启后，上下屏、左右屏、上屏优先、仅上屏、仅下屏会按窗口空间自动使用最大整数倍缩放；自定义和混合布局不受影响"));
-
-                syncNdsAdjustCells(currentLayout == "custom");
-                ndsTopCell->setText("上屏调整");
-                ndsTopCell->setDetailText("\uE14A");
-                ndsTopCell->registerClickAction([this](brls::View*) -> bool {
-                    if (m_gameEntry.ndsScreenLayout != "custom")
-                        return true;
-                    _openNdsScreenSettings(true);
-                    return true;
-                });
-                box->addView(ndsTopCell);
-
-                ndsBottomCell->setText("下屏调整");
-                ndsBottomCell->setDetailText("\uE14A");
-                ndsBottomCell->registerClickAction([this](brls::View*) -> bool {
-                    if (m_gameEntry.ndsScreenLayout != "custom")
-                        return true;
-                    _openNdsScreenSettings(false);
-                    return true;
-                });
-                box->addView(ndsBottomCell);
-
-                std::vector<std::string> ndsResLabels = {
-#ifdef __SWITCH__
-                    "x1 原生"
-#else
-                    "x1 原生", "x2", "x3", "x4"
-#endif
-                };
-#ifdef __SWITCH__
-                m_gameEntry.ndsInternalResolution = 1;
-                const int curNdsRes = 1;
-#else
-                const int curNdsRes = std::clamp(m_gameEntry.ndsInternalResolution, 1, 4);
-#endif
-                auto* ndsResCell = new beiklive::SelectorButton();
-                ndsResCell->setText("NDS内部分辨率");
-                ndsResCell->setOptions(ndsResLabels, curNdsRes - 1);
-                ndsResCell->setOnSelect([this](int idx) {
-#ifdef __SWITCH__
-                    (void)idx;
-                    m_gameEntry.ndsInternalResolution = 1;
-#else
-                    if (idx < 0 || idx > 3)
-                        return;
-                    m_gameEntry.ndsInternalResolution = idx + 1;
-#endif
-                    // if (beiklive::GameDB && !m_gameEntry.path.empty()) {
-                    //     beiklive::GameDB->set(m_gameEntry.path, "ndsInternalResolution",
-                    //         nlohmann::json(m_gameEntry.ndsInternalResolution));
-                    //     beiklive::GameDB->flush();
-                    // }
-                    if (m_ndsInternalResolutionCallback)
-                        m_ndsInternalResolutionCallback(m_gameEntry.ndsInternalResolution);
-                });
-                box->addView(ndsResCell);
-#ifdef __SWITCH__
-                box->addView(makeHint("Switch版当前锁定x1原生分辨率，优先保证稳定60帧"));
-#else
-                box->addView(makeHint("默认1倍，目前为测试性功能，开启高倍可能会导致程序崩溃，请谨慎使用"));
-#endif
-            }
-
-            if (!isNds) {
+            {
                 // ── 整数倍缩放 ──
                 std::vector<std::string> intScaleLabels = {"自动(auto)", "x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8"};
                 static const int intScaleVals[] = {0, 1, 2, 3, 4, 5, 6, 7, 8};
@@ -2232,20 +2036,6 @@ namespace beiklive
             this->addView(m_CustomSidePanel);
         }
 
-        {
-            m_NdsScreenSidePanel = new brls::Box(brls::Axis::COLUMN);
-            m_NdsScreenSidePanel->setHideHighlight(true);
-            m_NdsScreenSidePanel->setPositionType(brls::PositionType::ABSOLUTE);
-            m_NdsScreenSidePanel->setPositionTop(0);
-            m_NdsScreenSidePanel->setPositionLeft(0);
-            m_NdsScreenSidePanel->setWidthPercentage(100.f);
-            m_NdsScreenSidePanel->setHeightPercentage(100.f);
-            m_NdsScreenSidePanel->setBackgroundColor(nvgRGBA(0, 0, 0, 60));
-            m_NdsScreenSidePanel->setFocusable(false);
-            m_NdsScreenSidePanel->setVisibility(brls::Visibility::GONE);
-            this->addView(m_NdsScreenSidePanel);
-        }
-
         // ── 同步设置到其他游戏 ──
         {
             auto *syncHdr = new brls::Header();
@@ -2263,7 +2053,7 @@ namespace beiklive
             };
 
             makeSyncBtn("同步画面设置", [this]() {
-                auto *dlg = new brls::Dialog("同步画面设置\n\n将当前游戏的画面模式、整数倍缩放、自定义偏移和缩放值同步到同平台所有游戏；NDS 会同时同步屏幕布局、方向、上下屏缩放和偏移，确认继续？");
+                auto *dlg = new brls::Dialog("同步画面设置\n\n将当前游戏的画面模式、整数倍缩放、自定义偏移和缩放值同步到同平台所有游戏，确认继续？");
                 dlg->addButton("取消", []() {});
                 dlg->addButton("确认", [this]() { _syncDisplaySettings(); });
                 dlg->open();
@@ -2284,7 +2074,7 @@ namespace beiklive
             });
 
             auto *hint = new brls::Label();
-            hint->setText("将当前游戏的面板设置应用到同平台所有游戏，同步后自动保存并刷新全局默认值。画面模式=模式+整数倍+自定义偏移/缩放；NDS会同步屏幕布局、方向、上下屏偏移/缩放；遮罩=遮罩路径；着色器=GLSLP路径+参数");
+            hint->setText("将当前游戏的面板设置应用到同平台所有游戏，同步后自动保存并刷新全局默认值。画面模式=模式+整数倍+自定义偏移/缩放；遮罩=遮罩路径；着色器=GLSLP路径+参数");
             hint->setFontSize(14.f);
             hint->setTextColor(nvgRGB(154, 154, 154));
             hint->setMarginTop(10.f);
@@ -2310,169 +2100,6 @@ namespace beiklive
         this->setBackgroundColor(nvgRGBA(0, 0, 0, 10));
 
         brls::Application::giveFocus(m_CustomSidePanel);
-    }
-
-    void GameMenuView::_openNdsScreenSettings(bool topScreen)
-    {
-        if (!m_NdsScreenSidePanel)
-            return;
-
-        m_NdsScreenSidePanel->clearViews();
-
-        auto *row = new brls::Box(brls::Axis::ROW);
-        row->setGrow(1.f);
-        row->setJustifyContent(brls::JustifyContent::FLEX_END);
-        row->setFocusable(false);
-
-        auto *panel = new brls::Box(brls::Axis::COLUMN);
-        panel->setWidth(380.f);
-        panel->setHeightPercentage(100.f);
-        panel->setBackgroundColor(nvgRGBA(30, 30, 35, 50));
-        panel->setCornerRadius(12.f);
-        panel->setPadding(20.f);
-        panel->setAlignItems(brls::AlignItems::STRETCH);
-
-        auto closeAct = [this](brls::View *) {
-            _saveNdsScreenSettings();
-            _dismissSidePanel(4);
-            return true;
-        };
-
-        auto *hdr = new brls::Header();
-        hdr->setTitle(topScreen ? "NDS上屏调整" : "NDS下屏调整");
-        panel->addView(hdr);
-
-        float initX = topScreen ? m_gameEntry.ndsTopOffsetX : m_gameEntry.ndsBottomOffsetX;
-        float initY = topScreen ? m_gameEntry.ndsTopOffsetY : m_gameEntry.ndsBottomOffsetY;
-        float initScale = topScreen ? m_gameEntry.ndsTopScale : m_gameEntry.ndsBottomScale;
-        initScale = std::clamp(initScale, 1.0f, 10.0f);
-
-        auto apply = [this, topScreen](float x, float y, float scale) {
-            if (topScreen) {
-                m_gameEntry.ndsTopOffsetX = x;
-                m_gameEntry.ndsTopOffsetY = y;
-                m_gameEntry.ndsTopScale = scale;
-            } else {
-                m_gameEntry.ndsBottomOffsetX = x;
-                m_gameEntry.ndsBottomOffsetY = y;
-                m_gameEntry.ndsBottomScale = scale;
-            }
-            if (m_ndsScreenAdjustCallback)
-                m_ndsScreenAdjustCallback(topScreen, x, y, scale);
-        };
-
-        auto *hdrX = new brls::Header();
-        hdrX->setTitle("X轴偏移");
-        panel->addView(hdrX);
-        auto *xBtn = new beiklive::NumberButton();
-        DISABLE_LR_NAVIGATION(xBtn);
-        xBtn->setCustomNavigationRoute(brls::FocusDirection::UP, xBtn);
-        xBtn->setText("");
-        xBtn->setValue(initX);
-        xBtn->setStep(1.f);
-        xBtn->setDecimal(-1);
-        xBtn->setOnChange([this, topScreen, apply](double v) {
-            float y = topScreen ? m_gameEntry.ndsTopOffsetY : m_gameEntry.ndsBottomOffsetY;
-            float scale = topScreen ? m_gameEntry.ndsTopScale : m_gameEntry.ndsBottomScale;
-            apply(static_cast<float>(v), y, scale);
-        });
-        xBtn->registerAction("关闭", brls::BUTTON_B, closeAct);
-        panel->addView(xBtn);
-
-        auto *hdrY = new brls::Header();
-        hdrY->setTitle("Y轴偏移");
-        panel->addView(hdrY);
-        auto *yBtn = new beiklive::NumberButton();
-        DISABLE_LR_NAVIGATION(yBtn);
-        yBtn->setText("");
-        yBtn->setValue(initY);
-        yBtn->setStep(1.f);
-        yBtn->setDecimal(-1);
-        yBtn->setOnChange([this, topScreen, apply](double v) {
-            float x = topScreen ? m_gameEntry.ndsTopOffsetX : m_gameEntry.ndsBottomOffsetX;
-            float scale = topScreen ? m_gameEntry.ndsTopScale : m_gameEntry.ndsBottomScale;
-            apply(x, static_cast<float>(v), scale);
-        });
-        yBtn->registerAction("关闭", brls::BUTTON_B, closeAct);
-        panel->addView(yBtn);
-
-        auto *hdrS = new brls::Header();
-        hdrS->setTitle("缩放比例");
-        panel->addView(hdrS);
-        auto *sBtn = new beiklive::NumberButton();
-        DISABLE_LR_NAVIGATION(sBtn);
-        sBtn->setText("");
-        sBtn->setValue(initScale);
-        sBtn->setStep(0.1f);
-        sBtn->setDecimal(1);
-        sBtn->setOnChange([this, topScreen, apply, sBtn](double v) {
-            const float scale = std::clamp(static_cast<float>(v), 1.0f, 10.0f);
-            if (std::fabs(scale - static_cast<float>(v)) > 0.0001f)
-            {
-                sBtn->setValue(scale);
-                return;
-            }
-            float x = topScreen ? m_gameEntry.ndsTopOffsetX : m_gameEntry.ndsBottomOffsetX;
-            float y = topScreen ? m_gameEntry.ndsTopOffsetY : m_gameEntry.ndsBottomOffsetY;
-            apply(x, y, scale);
-        });
-        sBtn->registerAction("关闭", brls::BUTTON_B, closeAct);
-        panel->addView(sBtn);
-
-        auto *resetBtn = new beiklive::ButtonBox();
-        DISABLE_LR_NAVIGATION(resetBtn);
-        resetBtn->setText("复原");
-        resetBtn->setIcon(BK_RES("img/ui/menu/reset.png"));
-        resetBtn->registerClickAction([xBtn, yBtn, sBtn, apply](brls::View *) -> bool {
-            xBtn->setValue(0.f);
-            yBtn->setValue(0.f);
-            sBtn->setValue(1.f);
-            apply(0.f, 0.f, 1.f);
-            return true;
-        });
-        panel->addView(resetBtn);
-
-        auto *saveBtn = new beiklive::ButtonBox();
-        DISABLE_LR_NAVIGATION(saveBtn);
-        saveBtn->setCustomNavigationRoute(brls::FocusDirection::DOWN, saveBtn);
-        saveBtn->setText("保存");
-        saveBtn->setIcon(BK_RES("img/ui/menu/save.png"));
-        saveBtn->registerClickAction([closeAct](brls::View *) -> bool {
-            closeAct(nullptr);
-            return true;
-        });
-        panel->addView(saveBtn);
-
-        m_NdsScreenSidePanel->registerAction("关闭", brls::BUTTON_B, closeAct);
-        row->addView(panel);
-        m_NdsScreenSidePanel->addView(row);
-
-        m_NdsScreenSidePanel->setVisibility(brls::Visibility::VISIBLE);
-        m_panel->setVisibility(brls::Visibility::GONE);
-        this->showHeader(false);
-        this->showFooter(false);
-        this->setBackgroundColor(nvgRGBA(0, 0, 0, 10));
-        brls::Application::giveFocus(m_NdsScreenSidePanel);
-    }
-
-    void GameMenuView::_saveNdsScreenSettings()
-    {
-        if (!beiklive::GameDB || m_gameEntry.path.empty())
-            return;
-
-        beiklive::GameEntry entry = m_gameEntry;
-        if (auto current = beiklive::GameDB->findByPath(m_gameEntry.path))
-            entry = *current;
-        entry.ndsTopOffsetX = m_gameEntry.ndsTopOffsetX;
-        entry.ndsTopOffsetY = m_gameEntry.ndsTopOffsetY;
-        entry.ndsTopScale = m_gameEntry.ndsTopScale;
-        entry.ndsBottomOffsetX = m_gameEntry.ndsBottomOffsetX;
-        entry.ndsBottomOffsetY = m_gameEntry.ndsBottomOffsetY;
-        entry.ndsBottomScale = m_gameEntry.ndsBottomScale;
-        entry.ndsScreenLayout = m_gameEntry.ndsScreenLayout;
-        entry.ndsScreenOrientation = m_gameEntry.ndsScreenOrientation;
-        beiklive::GameDB->upsertByPath(entry);
-        beiklive::GameDB->flush();
     }
 
     // ============================================================
@@ -2528,10 +2155,6 @@ namespace beiklive
         case 3:
             m_ShaderSidePanel->setVisibility(brls::Visibility::GONE);
             break;
-        case 4:
-            if (m_NdsScreenSidePanel)
-                m_NdsScreenSidePanel->setVisibility(brls::Visibility::GONE);
-            break;
         default:
             // 处理所有侧边栏
             if (m_CustomSidePanel)
@@ -2540,8 +2163,6 @@ namespace beiklive
                 m_OverlaySidePanel->setVisibility(brls::Visibility::GONE);
             if (m_ShaderSidePanel)
                 m_ShaderSidePanel->setVisibility(brls::Visibility::GONE);
-            if (m_NdsScreenSidePanel)
-                m_NdsScreenSidePanel->setVisibility(brls::Visibility::GONE);
             break;
         }
 
@@ -2654,17 +2275,6 @@ namespace beiklive
             game.customScale      = m_gameEntry.customScale;
             game.customOffsetX    = m_gameEntry.customOffsetX;
             game.customOffsetY    = m_gameEntry.customOffsetY;
-            if (platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)) {
-                game.ndsTopScale = m_gameEntry.ndsTopScale;
-                game.ndsTopOffsetX = m_gameEntry.ndsTopOffsetX;
-                game.ndsTopOffsetY = m_gameEntry.ndsTopOffsetY;
-                game.ndsBottomScale = m_gameEntry.ndsBottomScale;
-                game.ndsBottomOffsetX = m_gameEntry.ndsBottomOffsetX;
-                game.ndsBottomOffsetY = m_gameEntry.ndsBottomOffsetY;
-                game.ndsScreenLayout = m_gameEntry.ndsScreenLayout;
-                game.ndsScreenOrientation = m_gameEntry.ndsScreenOrientation;
-                game.ndsInternalResolution = m_gameEntry.ndsInternalResolution;
-            }
             beiklive::GameDB->upsertByPath(game);
             ++count;
         }

@@ -59,11 +59,6 @@ namespace beiklive
         virtual void _onCustomValuesChanged(float x, float y, float scale) = 0;
         virtual void _onOverlayToggle(bool enabled) = 0;
         virtual void _onOverlayPathChange(const std::string& path) = 0;
-        virtual void _onNdsLayoutChange(const std::string& layout) = 0;
-        virtual void _onNdsScreenOrientationChange(const std::string& orientation) = 0;
-        virtual void _onNdsScreenValuesChanged(bool topScreen, float x, float y, float scale) = 0;
-        virtual void _onNdsIntegerScaleChange(bool enabled) = 0;
-        virtual void _onNdsInternalResolutionChange(int scale) = 0;
         virtual void _onFilterChange(const std::string& filter) = 0;
         virtual void _onConfigUpdated() = 0;
         virtual std::vector<ShaderParamInfo> _getShaderParams() const = 0;

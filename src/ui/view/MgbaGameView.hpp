@@ -47,7 +47,7 @@ namespace beiklive
             void prepareExitCleanup();
 
             /// 设置关联的游戏菜单视图（由 GamePage 调用）
-            void setGameMenuView(GameMenuView* menuView) { m_gameMenuView = menuView; }
+            void setGameMenuView(GameMenuView* menuView) override;
 
             /// 设置关联的倒带选择视图（由 GamePage 调用）
             void setRewindSelectorView(RewindSelectorView* view) { m_rewindSelectorView = view; }
@@ -96,16 +96,6 @@ namespace beiklive
             void _onOverlayToggle(bool enabled);
             /// 遮罩路径变更（UI线程调用）
             void _onOverlayPathChange(const std::string& path);
-            /// NDS 双屏布局变更（UI线程调用）
-            void _onNdsLayoutChange(const std::string& layout);
-            /// NDS 屏幕旋转角度变更（UI线程调用）
-            void _onNdsScreenOrientationChange(const std::string& orientation);
-            /// NDS 自定义双屏位置/缩放变更（UI线程调用）
-            void _onNdsScreenValuesChanged(bool topScreen, float x, float y, float scale);
-            /// NDS 自动最大整数倍缩放变更（UI线程调用）
-            void _onNdsIntegerScaleChange(bool enabled);
-            /// NDS 3D 内部分辨率倍率变更（UI线程调用）
-            void _onNdsInternalResolutionChange(int scale);
             /// 纹理过滤变更（UI线程调用）
             void _onFilterChange(const std::string& filter);
             /// 配置变更通知（UI线程调用，通知核心重读变量）
