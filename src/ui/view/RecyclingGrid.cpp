@@ -941,19 +941,23 @@ void GameGridView::_drawItem(NVGcontext* vg, const GridDrawItem& item, float x, 
             beiklive::ui::gradientFocusAnimationOffset(m_focusBorderAnimTime));
     }
 
+    const bool multiSelected = m_multiSelectMode && m_selectedForDelete.count(idx) != 0;
+
     nvgBeginPath(vg);
     nvgRoundedRect(vg, x + shakeX, y + shakeY, w, h, 3.f);
-    nvgFillColor(vg, nvgRGBA(42, 42, 42, 30));
+    nvgFillColor(vg, multiSelected
+        ? nvgRGBA(255, 60, 60, 55)
+        : nvgRGBA(42, 42, 42, 30));
     nvgFill(vg);
-    
-    nvgStrokeColor(vg, item.favorite ? nvgRGBA(224, 166, 87, 255) : nvgRGBA(110, 110, 110, 255));
-    nvgStrokeWidth(vg, 1.0f);
 
     if (m_multiSelectMode) {
-        bool sel = m_selectedForDelete.count(idx);
-        nvgStrokeColor(vg, sel ? nvgRGBA(255, 60, 60, 255) : nvgRGBA(255, 255, 255, 220));
+        nvgStrokeColor(vg, multiSelected
+            ? nvgRGBA(255, 60, 60, 255)
+            : nvgRGBA(255, 255, 255, 220));
+        nvgStrokeWidth(vg, multiSelected ? 3.0f : 1.0f);
     } else {
         nvgStrokeColor(vg, item.favorite ? nvgRGBA(224, 166, 87, 255) : nvgRGBA(110, 110, 110, 255));
+        nvgStrokeWidth(vg, 1.0f);
     }
     nvgStroke(vg);
     
