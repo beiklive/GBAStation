@@ -256,7 +256,6 @@ int main(int argc, char* argv[])
             options.screenLayout = jsonString(*record, "ndsScreenLayout");
             options.screenOrientation = jsonString(*record, "ndsScreenOrientation");
             options.integerScale = jsonBool(*record, "ndsIntegerScale", true);
-            options.renderScale = std::clamp(jsonInt(*record, "nds3DResolutionScale", 1), 1, 4);
             options.screenGap = std::clamp(jsonInt(*record, "ndsScreenGap", 0), -256, 256);
             options.overlayEnabled = jsonBool(*record, "overlayEnabled", false);
             options.overlayPath = jsonString(*record, "overlayPath");

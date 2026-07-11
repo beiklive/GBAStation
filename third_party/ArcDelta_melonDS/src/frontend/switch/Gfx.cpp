@@ -768,7 +768,7 @@ void InitNdsExtensions()
 
 void Init()
 {
-    GfxLog("GBAStationNDSStub: Gfx Init enter textureHeapMB=120 shaderHeapMB=48 dataHeapMB=640");
+    GfxLog("GBAStationNDSStub: Gfx Init enter textureHeapMB=120 shaderHeapMB=48 dataHeapMB=896");
     Window = nwindowGetDefault();
     GfxLog("GBAStationNDSStub: Gfx nwindowGetDefault ok window=%p", Window);
     nwindowSetDimensions(Window, 1920, 1080);
@@ -798,8 +798,8 @@ void Init()
     ShaderCodeHeap.emplace(Device, 1024*1024*48,
         DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached | DkMemBlockFlags_Code, 512);
     GfxLog("GBAStationNDSStub: Gfx ShaderCodeHeap create ok");
-    GfxLog("GBAStationNDSStub: Gfx DataHeap create begin bytes=%u", 1024U*1024U*640U);
-    DataHeap.emplace(Device, 1024*1024*640, DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached, 256);
+    GfxLog("GBAStationNDSStub: Gfx DataHeap create begin bytes=%u", 1024U*1024U*896U);
+    DataHeap.emplace(Device, 1024*1024*896, DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached, 256);
     GfxLog("GBAStationNDSStub: Gfx DataHeap create ok");
 
     GfxLog("GBAStationNDSStub: Gfx command buffers create begin");

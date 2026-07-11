@@ -1274,7 +1274,13 @@ void drawDisplayPage(bool linearFiltering,
     drawLrSelectorRow(rowPos(y), "画面过滤", filterLabel(linearFiltering), contentFocused && focusedRow == 1, true, opacity); y += kSettingStepY;
     char renderScaleValue[16];
     std::snprintf(renderScaleValue, sizeof(renderScaleValue), "%dx", std::clamp(renderScale, 1, 4));
-    drawLrSelectorRow(rowPos(y), "3D分辨率", renderScaleValue, contentFocused && focusedRow == 2, true, opacity); y += kSettingStepY;
+    drawLrSelectorRow(rowPos(y), "3D分辨率", renderScaleValue, contentFocused && focusedRow == 2, true, opacity);
+    Gfx::DrawText(Gfx::SystemFontChinese,
+                  rowPos(y) + Vector2f{0.0f, 56.0f},
+                  15.0f,
+                  {1.0f, 0.22f, 0.20f, 0.95f * opacity},
+                  "  注意：1-3倍为安全分辨率，4倍可能导致卡顿、内存不足或崩溃，请酌情使用");
+    y += kSettingStepY + 34.0f;
     drawSwitchRow(rowPos(y), "整数倍缩放", integerScale, contentFocused && focusedRow == 3, opacity); y += kSettingStepY;
     drawLrSelectorRow(rowPos(y), "画面布局", layoutLabel(layout), contentFocused && focusedRow == 4, true, opacity); y += kSettingStepY;
     drawSubPageRow(rowPos(y), "自定义画面布局", contentFocused && focusedRow == 5, layout == 7, opacity); y += kSettingStepY;

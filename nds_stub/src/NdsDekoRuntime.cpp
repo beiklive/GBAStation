@@ -551,7 +551,6 @@ bool saveNdsSettingsToGameDb(const std::string& romPath,
                 item["ndsScreenLayout"] = layoutIdFromIndex(settings.layout);
                 item["ndsScreenOrientation"] = orientationIdFromIndex(settings.orientation);
                 item["ndsIntegerScale"] = settings.integerScale;
-                item["nds3DResolutionScale"] = settings.renderScale;
                 item["ndsScreenGap"] = settings.screenGap;
                 item["overlayEnabled"] = settings.overlayEnabled;
                 item["overlayPath"] = settings.overlayPath;
@@ -644,7 +643,6 @@ int syncNdsDisplaySettingsToGameDb(const std::string& romPath,
                 item["ndsScreenLayout"] = layoutIdFromIndex(settings.layout);
                 item["ndsScreenOrientation"] = orientationIdFromIndex(settings.orientation);
                 item["ndsIntegerScale"] = settings.integerScale;
-                item["nds3DResolutionScale"] = settings.renderScale;
                 item["ndsScreenGap"] = settings.screenGap;
                 item["ndsTopScale"] = settings.customLayout.topScale;
                 item["ndsTopOffsetX"] = settings.customLayout.topOffsetX;
@@ -2409,7 +2407,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
     checkpointBegin = std::chrono::steady_clock::now();
     GPU::InitRenderer(0);
     appendStubLog("GBAStationNDSStub: Deko checkpoint GPU::InitRenderer ok ms=%lld", elapsedMs(checkpointBegin));
-    GPU::RenderSettings settings {true, std::clamp(options.renderScale, 1, 4), false};
+    GPU::RenderSettings settings {true, 1, false};
     appendStubLog("GBAStationNDSStub: Deko checkpoint GPU::SetRenderSettings begin");
     checkpointBegin = std::chrono::steady_clock::now();
     GPU::SetRenderSettings(0, settings);
@@ -2454,7 +2452,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
     NdsDisplaySettings initialDisplay {};
     initialDisplay.fastForwardMultiplier = inputConfig.fastForwardMultiplier();
     initialDisplay.linearFiltering = inputConfig.value("display.filter", "nearest") == "linear";
-    initialDisplay.renderScale = std::clamp(options.renderScale, 1, 4);
+    initialDisplay.renderScale = 1;
     initialDisplay.integerScale = options.integerScale;
     initialDisplay.layout = layoutIndexFromId(options.screenLayout.empty() ? "priority_top" : options.screenLayout);
     initialDisplay.orientation = orientationIndexFromId(options.screenOrientation.empty() ? "0" : options.screenOrientation);
@@ -2937,7 +2935,10 @@ int RunDekoRuntime(const DekoRunOptions& options)
             const int requestedRenderScale = std::clamp(menuLayer.displaySettings().renderScale, 1, 4);
             if (requestedRenderScale != appliedRenderScale)
             {
-                GPU::RenderSettings renderSettings {true, requestedRenderScale, false};
+                // Native resolution keeps the original DS integer coordinates. At higher
+                // scales use the 1/16-pixel coordinates, otherwise the integer rounding is
+                // magnified and moving polygon faces visibly wobble.
+                GPU::RenderSettings renderSettings {true, requestedRenderScale, requestedRenderScale > 1};
                 GPU::SetRenderSettings(0, renderSettings);
                 appliedRenderScale = requestedRenderScale;
             }

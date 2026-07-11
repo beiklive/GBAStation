@@ -31,6 +31,7 @@ constexpr float kSaveCardH = 112.0f;
 constexpr float kSaveCardGapY = 16.0f;
 constexpr float kSettingRowH = 50.0f;
 constexpr float kSettingStepY = 58.0f;
+constexpr float kRenderScaleWarningH = 34.0f;
 constexpr float kCheatRowH = 50.0f;
 constexpr float kCheatStepY = 58.0f;
 constexpr float kFilePickerRowH = 84.0f;
@@ -389,16 +390,16 @@ float displayRowY(int row)
     case 0: return 0.0f;
     case 1: return kSettingStepY;
     case 2: return kSettingStepY * 2.0f;
-    case 3: return kSettingStepY * 3.0f;
-    case 4: return kSettingStepY * 4.0f;
-    case 5: return kSettingStepY * 5.0f;
-    case 6: return kSettingStepY * 6.0f;
-    case 7: return kSettingStepY * 7.0f + 43.0f;
-    case 8: return kSettingStepY * 8.0f + 43.0f;
-    case 9: return kSettingStepY * 9.0f + 43.0f;
-    case 10: return kSettingStepY * 10.0f + 86.0f;
-    case 11: return kSettingStepY * 11.0f + 86.0f;
-    case 12: return kSettingStepY * 12.0f + 86.0f;
+    case 3: return kSettingStepY * 3.0f + kRenderScaleWarningH;
+    case 4: return kSettingStepY * 4.0f + kRenderScaleWarningH;
+    case 5: return kSettingStepY * 5.0f + kRenderScaleWarningH;
+    case 6: return kSettingStepY * 6.0f + kRenderScaleWarningH;
+    case 7: return kSettingStepY * 7.0f + kRenderScaleWarningH + 43.0f;
+    case 8: return kSettingStepY * 8.0f + kRenderScaleWarningH + 43.0f;
+    case 9: return kSettingStepY * 9.0f + kRenderScaleWarningH + 43.0f;
+    case 10: return kSettingStepY * 10.0f + kRenderScaleWarningH + 86.0f;
+    case 11: return kSettingStepY * 11.0f + kRenderScaleWarningH + 86.0f;
+    case 12: return kSettingStepY * 12.0f + kRenderScaleWarningH + 86.0f;
     default: return 0.0f;
     }
 }
