@@ -521,8 +521,9 @@ static void startResourceDownload(const OnlineResourceItem& item,
 
 class OnlineResourceCanvas final : public brls::View {
 public:
-    explicit OnlineResourceCanvas(OnlineResourceManifest manifest)
-        : m_manifest(std::move(manifest)) {
+    OnlineResourceCanvas(OnlineResourceManifest manifest, std::function<void()> onBack)
+        : m_manifest(std::move(manifest))
+        , m_onBack(std::move(onBack)) {
         this->setFocusable(true);
         this->setGrow(1.0f);
         this->setWidthPercentage(100.f);
@@ -533,10 +534,26 @@ public:
         this->setCustomNavigationRoute(brls::FocusDirection::LEFT, this);
         this->setCustomNavigationRoute(brls::FocusDirection::RIGHT, this);
 
-        auto moveLeft = [this](brls::View*) -> bool { return _moveHorizontal(-1); };
-        auto moveRight = [this](brls::View*) -> bool { return _moveHorizontal(1); };
-        auto moveUp = [this](brls::View*) -> bool { return _moveVertical(-1); };
-        auto moveDown = [this](brls::View*) -> bool { return _moveVertical(1); };
+        auto moveLeft = [this](brls::View*) -> bool {
+            if (_acceptNavigation(1))
+                _moveHorizontal(-1);
+            return true;
+        };
+        auto moveRight = [this](brls::View*) -> bool {
+            if (_acceptNavigation(2))
+                _moveHorizontal(1);
+            return true;
+        };
+        auto moveUp = [this](brls::View*) -> bool {
+            if (_acceptNavigation(3))
+                _moveVertical(-1);
+            return true;
+        };
+        auto moveDown = [this](brls::View*) -> bool {
+            if (_acceptNavigation(4))
+                _moveVertical(1);
+            return true;
+        };
 
         this->registerAction("", brls::BUTTON_LEFT, moveLeft, true, true, brls::SOUND_NONE);
         this->registerAction("", brls::BUTTON_RIGHT, moveRight, true, true, brls::SOUND_NONE);
@@ -550,8 +567,9 @@ public:
             _activateFocused();
             return true;
         }, false, false, brls::SOUND_NONE);
-        this->registerAction("返回", brls::BUTTON_B, [](brls::View*) -> bool {
-            brls::Application::popActivity(brls::TransitionAnimation::NONE);
+        this->registerAction("返回", brls::BUTTON_B, [this](brls::View*) -> bool {
+            if (m_onBack)
+                m_onBack();
             return true;
         });
 
@@ -663,6 +681,7 @@ private:
     };
 
     OnlineResourceManifest m_manifest;
+    std::function<void()> m_onBack;
     std::vector<ItemLayout> m_itemLayouts;
     std::vector<GroupLayout> m_groupLayouts;
     int m_defaultFont = -1;
@@ -675,6 +694,19 @@ private:
     float m_animTime = 0.f;
     float m_layoutWidth = -1.f;
     std::chrono::steady_clock::time_point m_lastFrameTime;
+    std::chrono::steady_clock::time_point m_lastNavigationTime;
+    int m_lastNavigationAction = 0;
+
+    bool _acceptNavigation(int action) {
+        const auto now = std::chrono::steady_clock::now();
+        const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            now - m_lastNavigationTime).count();
+        if (action == m_lastNavigationAction && elapsed >= 0 && elapsed < 80)
+            return false;
+        m_lastNavigationAction = action;
+        m_lastNavigationTime = now;
+        return true;
+    }
 
     void _rebuildLayout(float width, float height) {
         m_viewportHeight = height;
@@ -878,22 +910,33 @@ private:
     }
 };
 
-static void openOnlineResourceActivity(OnlineResourceManifest manifest) {
-    auto* canvas = new OnlineResourceCanvas(std::move(manifest));
-    auto* frame = new brls::AppletFrame(canvas);
-    frame->setTitle("在线资源");
-    brls::Application::pushActivity(new brls::Activity(frame),
-                                    brls::TransitionAnimation::NONE);
-    brls::Application::giveFocus(canvas);
+static void openOnlineResourceActivity(OnlineResourceManifest manifest,
+                                       beiklive::Box* previousPage) {
+    auto* page = new beiklive::Box(brls::Axis::COLUMN);
+    page->showHeader(true);
+    page->showFooter(true);
+    page->setGrow(1.f);
+    page->getHeader()->setTitle("在线资源");
+
+    auto* canvas = new OnlineResourceCanvas(std::move(manifest), [page]() {
+        beiklive::popActivity(page);
+    });
+    page->getContentBox()->addView(canvas);
+
+    auto* frame = new brls::AppletFrame(page);
+    HIDE_BRLS_BAR(frame);
+    beiklive::pushActivity(frame, previousPage, page, [canvas]() {
+        brls::Application::giveFocus(canvas);
+    });
 }
 
-static void checkOnlineResources() {
+static void checkOnlineResources(beiklive::Box* previousPage) {
     auto* progressDialog = new brls::Dialog("正在检测在线资源...\n\n请稍候");
     progressDialog->setFocusable(true);
     HIDE_BRLS_HIGHLIGHT(progressDialog);
     progressDialog->open();
 
-    new std::thread([progressDialog]() {
+    new std::thread([progressDialog, previousPage]() {
         std::string manifestText;
         const bool downloadOk = fetchTextUrl(cacheBustedUrl(RESOURCE_MANIFEST_URL),
                                              manifestText);
@@ -918,9 +961,9 @@ static void checkOnlineResources() {
             return;
         }
 
-        brls::sync([progressDialog, manifest = std::move(manifest)]() mutable {
+        brls::sync([progressDialog, previousPage, manifest = std::move(manifest)]() mutable {
             progressDialog->close([]() {});
-            openOnlineResourceActivity(std::move(manifest));
+            openOnlineResourceActivity(std::move(manifest), previousPage);
         });
     });
 }
@@ -1439,8 +1482,8 @@ brls::View* AboutPage::_buildUpdateTab() {
                 "当前版本更新内容  " + localVersion,
                 changelogText.empty() ? "暂无更新日志" : changelogText);
         },
-        []() {
-            checkOnlineResources();
+        [this]() {
+            checkOnlineResources(this);
         });
 }
 
