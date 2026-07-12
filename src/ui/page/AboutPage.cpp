@@ -20,7 +20,7 @@
 namespace beiklive {
 
 static constexpr const char* RESOURCE_MANIFEST_URL =
-    "https://purge.jsdelivr.net/gh/beiklive/GBAStation_Release@main/emu_res/res_version.json";
+    "https://cdn.jsdelivr.net/gh/beiklive/GBAStation_Release@main/emu_res/res_version.json";
 
 struct OnlineResourceItem {
     char32_t materialIcon = material::SEARCH;
@@ -904,6 +904,9 @@ static void checkOnlineResources() {
             });
             return;
         }
+
+        brls::Logger::info("Online resource manifest URL: {}", RESOURCE_MANIFEST_URL);
+        brls::Logger::info("res_version.json content:\n{}", manifestText);
 
         OnlineResourceManifest manifest;
         std::string error;
