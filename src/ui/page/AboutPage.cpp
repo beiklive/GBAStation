@@ -3,6 +3,8 @@
 #include "ui/widget/UpdateDialog.hpp"
 #include "ui/widget/DetailCell.hpp"
 #include "ui/utils/CheatMatcher.hpp"
+#include "ui/utils/GradientFocus.hpp"
+#include "ui/utils/MaterialIcons.hpp"
 #include "core/AppUpdater.hpp"
 #include "core/Tools.hpp"
 #include <borealis/views/applet_frame.hpp>
@@ -10,8 +12,221 @@
 #include <miniz.h>
 #include <algorithm>
 #include <array>
+#include <cctype>
+#include <chrono>
+#include <functional>
+#include <map>
 
 namespace beiklive {
+
+static constexpr const char* RESOURCE_MANIFEST_URL =
+    "http://www.example.com/xxxx/res_version.json";
+
+struct OnlineResourceItem {
+    char32_t materialIcon = material::SEARCH;
+    std::string name;
+    std::string type;
+    std::string url;
+    std::string path;
+    std::string dialog;
+    std::string version;
+    bool needsUpdate = true;
+};
+
+struct OnlineResourceGroup {
+    std::string header;
+    std::vector<OnlineResourceItem> items;
+};
+
+struct OnlineResourceManifest {
+    std::vector<OnlineResourceGroup> groups;
+};
+
+static std::string trimText(std::string text) {
+    const auto first = text.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos)
+        return "";
+    const auto last = text.find_last_not_of(" \t\r\n");
+    return text.substr(first, last - first + 1);
+}
+
+static std::string cacheBustedUrl(const std::string& url) {
+    const auto now = std::chrono::system_clock::now().time_since_epoch();
+    const auto timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
+    return url + (url.find('?') == std::string::npos ? "?t=" : "&t=")
+        + std::to_string(timestamp);
+}
+
+static bool fetchTextUrl(const std::string& url,
+                         std::string& body,
+                         const std::atomic<bool>* cancelFlag = nullptr) {
+    CURL* curl = curl_easy_init();
+    if (!curl)
+        return false;
+
+    body.clear();
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 60L);
+    curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "");
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "GBAStation-ResourceManifest");
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION,
+        static_cast<size_t(*)(void*, size_t, size_t, void*)>(
+            [](void* ptr, size_t size, size_t nmemb, void* userdata) -> size_t {
+                auto* text = static_cast<std::string*>(userdata);
+                text->append(static_cast<const char*>(ptr), size * nmemb);
+                return size * nmemb;
+            }));
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &body);
+
+    CURLcode result = CURLE_ABORTED_BY_CALLBACK;
+    if (!cancelFlag || !cancelFlag->load())
+        result = curl_easy_perform(curl);
+
+    long statusCode = 0;
+    if (result == CURLE_OK)
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &statusCode);
+    curl_easy_cleanup(curl);
+
+    return (!cancelFlag || !cancelFlag->load())
+        && result == CURLE_OK && statusCode == 200 && !body.empty();
+}
+
+static std::filesystem::path resourceVersionIniPath() {
+    return std::filesystem::path(beiklive::path::ROOT)
+        / beiklive::path::PROGRAM_NAME / "update" / "res_version.ini";
+}
+
+static std::map<std::string, std::string> readResourceVersions() {
+    std::map<std::string, std::string> versions;
+    std::ifstream input(resourceVersionIniPath());
+    std::string line;
+    while (std::getline(input, line)) {
+        const auto separator = line.find('=');
+        if (separator == std::string::npos)
+            continue;
+        std::string name = trimText(line.substr(0, separator));
+        std::string version = trimText(line.substr(separator + 1));
+        if (!name.empty())
+            versions[name] = version;
+    }
+    return versions;
+}
+
+static bool writeResourceVersion(const std::string& name, const std::string& version) {
+    if (name.empty() || name.find_first_of("\r\n=") != std::string::npos)
+        return false;
+
+    auto versions = readResourceVersions();
+    versions[name] = version;
+
+    const auto iniPath = resourceVersionIniPath();
+    std::error_code ec;
+    std::filesystem::create_directories(iniPath.parent_path(), ec);
+    if (ec)
+        return false;
+
+    std::ofstream output(iniPath, std::ios::binary | std::ios::trunc);
+    if (!output)
+        return false;
+    for (const auto& [itemName, itemVersion] : versions)
+        output << itemName << '=' << itemVersion << '\n';
+    return output.good();
+}
+
+static char32_t parseMaterialIcon(const json& value) {
+    try {
+        if (value.is_number_unsigned() || value.is_number_integer())
+            return static_cast<char32_t>(value.get<uint32_t>());
+        if (value.is_string()) {
+            const std::string text = trimText(value.get<std::string>());
+            size_t parsed = 0;
+            const auto codepoint = std::stoul(text, &parsed, 0);
+            if (parsed == text.size() && codepoint <= 0x10FFFF)
+                return static_cast<char32_t>(codepoint);
+        }
+    } catch (...) {
+    }
+    return material::SEARCH;
+}
+
+static std::string jsonString(const json& object,
+                              const char* key,
+                              const std::string& fallback = "") {
+    const auto value = object.find(key);
+    return value != object.end() && value->is_string()
+        ? value->get<std::string>() : fallback;
+}
+
+static bool parseResourceManifest(const std::string& text,
+                                  OnlineResourceManifest& manifest,
+                                  std::string& error) {
+    const json root = json::parse(text, nullptr, false);
+    if (root.is_discarded() || !root.is_object()) {
+        error = "资源清单 JSON 格式无效";
+        return false;
+    }
+
+    const auto listIt = root.find("list");
+    if (listIt == root.end() || !listIt->is_array()) {
+        error = "资源清单缺少 list 数组";
+        return false;
+    }
+
+    const auto localVersions = readResourceVersions();
+    OnlineResourceManifest parsedManifest;
+    for (const auto& groupValue : *listIt) {
+        if (!groupValue.is_object())
+            continue;
+
+        OnlineResourceGroup group;
+        group.header = jsonString(groupValue, "header", "未分类资源");
+        const auto itemsIt = groupValue.find("items");
+        if (itemsIt == groupValue.end() || !itemsIt->is_array())
+            continue;
+
+        for (const auto& itemValue : *itemsIt) {
+            if (!itemValue.is_object())
+                continue;
+
+            OnlineResourceItem item;
+            const auto iconIt = itemValue.find("material icon");
+            item.materialIcon = iconIt == itemValue.end()
+                ? material::SEARCH : parseMaterialIcon(*iconIt);
+            item.name = trimText(jsonString(itemValue, "name"));
+            item.type = trimText(jsonString(itemValue, "type"));
+            item.url = trimText(jsonString(itemValue, "url"));
+            item.path = trimText(jsonString(itemValue, "path"));
+            item.dialog = jsonString(itemValue, "dialog", "是否下载此资源？");
+            item.version = trimText(jsonString(itemValue, "version"));
+
+            std::transform(item.type.begin(), item.type.end(), item.type.begin(),
+                [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            if (item.name.empty() || item.url.empty() || item.path.empty()
+                || item.version.empty() || (item.type != "zip" && item.type != "file")) {
+                continue;
+            }
+
+            const auto localIt = localVersions.find(item.name);
+            item.needsUpdate = localIt == localVersions.end() || localIt->second != item.version;
+            group.items.push_back(std::move(item));
+        }
+
+        if (!group.items.empty())
+            parsedManifest.groups.push_back(std::move(group));
+    }
+
+    if (parsedManifest.groups.empty()) {
+        error = "资源清单中没有可用项目";
+        return false;
+    }
+
+    manifest = std::move(parsedManifest);
+    return true;
+}
 
 static std::string readTextFile(const std::string& path, const std::string& fallback = "") {
     std::ifstream file(path);
@@ -118,6 +333,125 @@ static bool extractZipFilesToDir(const std::string& zipPath,
     return remaining.empty() && (!cancelFlag || !cancelFlag->load());
 }
 
+static bool isSafeZipEntry(const std::filesystem::path& relativePath) {
+    if (relativePath.empty() || relativePath.is_absolute() || relativePath.has_root_name())
+        return false;
+    for (const auto& part : relativePath) {
+        if (part == "..")
+            return false;
+    }
+    return true;
+}
+
+static bool extractZipToDirectory(const std::filesystem::path& zipPath,
+                                  const std::filesystem::path& outputDirectory,
+                                  const std::atomic<bool>* cancelFlag,
+                                  int& extractedCount) {
+    extractedCount = 0;
+    mz_zip_archive zip;
+    memset(&zip, 0, sizeof(zip));
+    if (!mz_zip_reader_init_file(&zip, zipPath.string().c_str(), 0))
+        return false;
+
+    bool success = true;
+    std::error_code ec;
+    const mz_uint fileCount = mz_zip_reader_get_num_files(&zip);
+    for (mz_uint index = 0; index < fileCount; ++index) {
+        if (cancelFlag && cancelFlag->load()) {
+            success = false;
+            break;
+        }
+
+        mz_zip_archive_file_stat stat;
+        if (!mz_zip_reader_file_stat(&zip, index, &stat)) {
+            success = false;
+            break;
+        }
+
+        std::string entryName = stat.m_filename;
+        std::replace(entryName.begin(), entryName.end(), '\\', '/');
+        const std::filesystem::path relativePath(entryName);
+        if (!isSafeZipEntry(relativePath)) {
+            success = false;
+            break;
+        }
+
+        const auto outputPath = outputDirectory / relativePath;
+        if (mz_zip_reader_is_file_a_directory(&zip, index)) {
+            std::filesystem::create_directories(outputPath, ec);
+            if (ec) {
+                success = false;
+                break;
+            }
+            continue;
+        }
+
+        std::filesystem::create_directories(outputPath.parent_path(), ec);
+        if (ec || !mz_zip_reader_extract_to_file(&zip, index, outputPath.string().c_str(), 0)) {
+            success = false;
+            break;
+        }
+        ++extractedCount;
+    }
+
+    mz_zip_reader_end(&zip);
+    return success && (!cancelFlag || !cancelFlag->load());
+}
+
+static std::string downloadFileName(const std::string& url) {
+    std::string pathPart = url.substr(0, url.find_first_of("?#"));
+    const auto separator = pathPart.find_last_of("/\\");
+    std::string name = separator == std::string::npos
+        ? pathPart : pathPart.substr(separator + 1);
+    if (name.empty() || name == "." || name == "..")
+        name = "resource_download";
+    return name;
+}
+
+static bool installDownloadedResource(const OnlineResourceItem& item,
+                                      const std::filesystem::path& downloadedPath,
+                                      const std::atomic<bool>* cancelFlag,
+                                      std::string& resultText) {
+    const std::filesystem::path targetDirectory(item.path);
+    std::error_code ec;
+    std::filesystem::create_directories(targetDirectory, ec);
+    if (ec) {
+        resultText = "创建目标目录失败：\n" + targetDirectory.string();
+        return false;
+    }
+
+    if (item.type == "zip") {
+        int extractedCount = 0;
+        if (!extractZipToDirectory(downloadedPath, targetDirectory, cancelFlag, extractedCount)) {
+            resultText = "解压失败，请检查压缩包内容和目标目录";
+            return false;
+        }
+        resultText = "安装完成（解压 " + std::to_string(extractedCount) + " 个文件）";
+        return true;
+    }
+
+    const auto targetPath = targetDirectory / downloadFileName(item.url);
+    std::filesystem::remove(targetPath, ec);
+    ec.clear();
+    std::filesystem::rename(downloadedPath, targetPath, ec);
+    if (ec) {
+        ec.clear();
+        std::filesystem::copy_file(downloadedPath, targetPath,
+                                   std::filesystem::copy_options::overwrite_existing, ec);
+        if (!ec) {
+            std::error_code removeError;
+            std::filesystem::remove(downloadedPath, removeError);
+        }
+    }
+    if (ec) {
+        resultText = "移动文件失败：\n" + targetPath.string();
+        return false;
+    }
+
+    resultText = "下载完成：\n" + targetPath.string();
+    return true;
+}
+
 static void openChangelogApplet(const std::string& title, const std::string& content) {
     auto* scroll = new brls::ScrollingFrame();
     scroll->setGrow(1.0f);
@@ -161,6 +495,756 @@ static void openChangelogApplet(const std::string& title, const std::string& con
     brls::Application::pushActivity(new brls::Activity(frame), brls::TransitionAnimation::NONE);
     brls::Application::giveFocus(bodyLabel);
 }
+
+static std::string encodeMaterialIcon(char32_t codepoint) {
+    std::string result;
+    if (codepoint <= 0x7F) {
+        result.push_back(static_cast<char>(codepoint));
+    } else if (codepoint <= 0x7FF) {
+        result.push_back(static_cast<char>(0xC0 | (codepoint >> 6)));
+        result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+    } else if (codepoint <= 0xFFFF) {
+        result.push_back(static_cast<char>(0xE0 | (codepoint >> 12)));
+        result.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+        result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+    } else {
+        result.push_back(static_cast<char>(0xF0 | (codepoint >> 18)));
+        result.push_back(static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F)));
+        result.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+        result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+    }
+    return result;
+}
+
+static void startResourceDownload(const OnlineResourceItem& item,
+                                  std::function<void()> onSuccess);
+
+class OnlineResourceCanvas final : public brls::View {
+public:
+    explicit OnlineResourceCanvas(OnlineResourceManifest manifest)
+        : m_manifest(std::move(manifest)) {
+        this->setFocusable(true);
+        this->setGrow(1.0f);
+        this->setWidthPercentage(100.f);
+        HIDE_BRLS_HIGHLIGHT(this);
+
+        this->setCustomNavigationRoute(brls::FocusDirection::UP, this);
+        this->setCustomNavigationRoute(brls::FocusDirection::DOWN, this);
+        this->setCustomNavigationRoute(brls::FocusDirection::LEFT, this);
+        this->setCustomNavigationRoute(brls::FocusDirection::RIGHT, this);
+
+        auto moveLeft = [this](brls::View*) -> bool { return _moveHorizontal(-1); };
+        auto moveRight = [this](brls::View*) -> bool { return _moveHorizontal(1); };
+        auto moveUp = [this](brls::View*) -> bool { return _moveVertical(-1); };
+        auto moveDown = [this](brls::View*) -> bool { return _moveVertical(1); };
+
+        this->registerAction("", brls::BUTTON_LEFT, moveLeft, true, true, brls::SOUND_NONE);
+        this->registerAction("", brls::BUTTON_RIGHT, moveRight, true, true, brls::SOUND_NONE);
+        this->registerAction("", brls::BUTTON_UP, moveUp, true, true, brls::SOUND_NONE);
+        this->registerAction("", brls::BUTTON_DOWN, moveDown, true, true, brls::SOUND_NONE);
+        this->registerAction("", brls::BUTTON_NAV_LEFT, moveLeft, true, true, brls::SOUND_NONE);
+        this->registerAction("", brls::BUTTON_NAV_RIGHT, moveRight, true, true, brls::SOUND_NONE);
+        this->registerAction("", brls::BUTTON_NAV_UP, moveUp, true, true, brls::SOUND_NONE);
+        this->registerAction("", brls::BUTTON_NAV_DOWN, moveDown, true, true, brls::SOUND_NONE);
+        this->registerAction("下载", brls::BUTTON_A, [this](brls::View*) -> bool {
+            _activateFocused();
+            return true;
+        }, false, false, brls::SOUND_NONE);
+        this->registerAction("返回", brls::BUTTON_B, [](brls::View*) -> bool {
+            brls::Application::popActivity(brls::TransitionAnimation::NONE);
+            return true;
+        });
+
+        m_lastFrameTime = std::chrono::steady_clock::now();
+    }
+
+    void draw(NVGcontext* vg, float x, float y, float w, float h,
+              brls::Style style, brls::FrameContext* ctx) override {
+        (void)style;
+        (void)ctx;
+        if (m_defaultFont < 0)
+            m_defaultFont = brls::Application::getDefaultFont();
+        if (m_materialFont < 0)
+            m_materialFont = brls::Application::getFont(brls::FONT_MATERIAL_ICONS);
+
+        _rebuildLayout(w, h);
+        m_scrollOffset = std::clamp(m_scrollOffset, 0.f, _maximumScroll());
+        m_targetScroll = std::clamp(m_targetScroll, 0.f, _maximumScroll());
+
+        nvgSave(vg);
+        nvgScissor(vg, x, y, w, h);
+        const float drawOffsetY = y - m_scrollOffset;
+
+        for (const auto& group : m_groupLayouts) {
+            const float groupY = drawOffsetY + group.y;
+            if (groupY + group.h < y || groupY > y + h)
+                continue;
+
+            nvgBeginPath(vg);
+            nvgRoundedRect(vg, x + group.x, groupY, group.w, group.h, 10.f);
+            nvgFillColor(vg, nvgRGBA(0, 0, 0, 22));
+            nvgFill(vg);
+
+            nvgBeginPath(vg);
+            nvgRoundedRect(vg, x + group.x + 1.f, groupY + 1.f,
+                           group.w - 2.f, group.h - 2.f, 9.f);
+            nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 18));
+            nvgStrokeWidth(vg, 1.f);
+            nvgStroke(vg);
+
+            nvgFontFaceId(vg, m_defaultFont);
+            nvgFontSize(vg, 22.f);
+            nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+            nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
+            nvgText(vg, x + group.x + 20.f, groupY + 31.f,
+                    m_manifest.groups[group.groupIndex].header.c_str(), nullptr);
+        }
+
+        for (size_t index = 0; index < m_itemLayouts.size(); ++index) {
+            const auto& layout = m_itemLayouts[index];
+            const float itemY = drawOffsetY + layout.y;
+            if (itemY + layout.h < y || itemY > y + h)
+                continue;
+            const auto& item = m_manifest.groups[layout.groupIndex].items[layout.itemIndex];
+            _drawResourceButton(vg, x + layout.x, itemY, layout.w, layout.h,
+                                item, static_cast<int>(index) == m_focusedIndex);
+        }
+
+        if (m_contentHeight > h + 1.f) {
+            const float trackH = std::max(40.f, h - 32.f);
+            const float thumbH = std::max(36.f, trackH * h / m_contentHeight);
+            const float travel = trackH - thumbH;
+            const float thumbY = y + 16.f + (_maximumScroll() <= 0.f
+                ? 0.f : travel * m_scrollOffset / _maximumScroll());
+            nvgBeginPath(vg);
+            nvgRoundedRect(vg, x + w - 7.f, thumbY, 3.f, thumbH, 1.5f);
+            nvgFillColor(vg, nvgRGBA(255, 255, 255, 90));
+            nvgFill(vg);
+        }
+
+        nvgRestore(vg);
+    }
+
+    void frame(brls::FrameContext* ctx) override {
+        brls::View::frame(ctx);
+        const auto now = std::chrono::steady_clock::now();
+        float dt = std::chrono::duration<float>(now - m_lastFrameTime).count();
+        m_lastFrameTime = now;
+        if (dt <= 0.f || dt > 0.5f)
+            dt = 0.016f;
+        m_animTime += dt;
+
+        const float difference = m_targetScroll - m_scrollOffset;
+        if (std::abs(difference) > 0.2f)
+            m_scrollOffset += difference * std::min(1.f, dt * 12.f);
+        else
+            m_scrollOffset = m_targetScroll;
+        this->invalidate();
+    }
+
+private:
+    struct ItemLayout {
+        size_t groupIndex = 0;
+        size_t itemIndex = 0;
+        int row = 0;
+        int column = 0;
+        float x = 0.f;
+        float y = 0.f;
+        float w = 0.f;
+        float h = 0.f;
+    };
+
+    struct GroupLayout {
+        size_t groupIndex = 0;
+        float x = 0.f;
+        float y = 0.f;
+        float w = 0.f;
+        float h = 0.f;
+    };
+
+    OnlineResourceManifest m_manifest;
+    std::vector<ItemLayout> m_itemLayouts;
+    std::vector<GroupLayout> m_groupLayouts;
+    int m_defaultFont = -1;
+    int m_materialFont = -1;
+    int m_focusedIndex = 0;
+    float m_viewportHeight = 0.f;
+    float m_contentHeight = 0.f;
+    float m_scrollOffset = 0.f;
+    float m_targetScroll = 0.f;
+    float m_animTime = 0.f;
+    float m_layoutWidth = -1.f;
+    std::chrono::steady_clock::time_point m_lastFrameTime;
+
+    void _rebuildLayout(float width, float height) {
+        m_viewportHeight = height;
+        if (std::abs(m_layoutWidth - width) < 0.5f && !m_itemLayouts.empty())
+            return;
+
+        m_layoutWidth = width;
+        m_itemLayouts.clear();
+        m_groupLayouts.clear();
+
+        constexpr float pagePadding = 30.f;
+        constexpr float blockPadding = 18.f;
+        constexpr float itemGap = 16.f;
+        constexpr float minimumSquare = 124.f;
+        constexpr float maximumSquare = 154.f;
+        constexpr float headerHeight = 48.f;
+        constexpr float groupGap = 18.f;
+
+        const float blockWidth = std::max(1.f, width - pagePadding * 2.f);
+        const float availableWidth = std::max(1.f, blockWidth - blockPadding * 2.f);
+        const int columns = std::max(1, static_cast<int>(
+            std::floor((availableWidth + itemGap) / (minimumSquare + itemGap))));
+        const float square = std::min(maximumSquare,
+            (availableWidth - itemGap * static_cast<float>(columns - 1)) / columns);
+        const float gridWidth = square * columns + itemGap * (columns - 1);
+        const float gridStartX = pagePadding + blockPadding
+            + std::max(0.f, (availableWidth - gridWidth) * 0.5f);
+
+        float cursorY = 18.f;
+        int visualRow = 0;
+        for (size_t groupIndex = 0; groupIndex < m_manifest.groups.size(); ++groupIndex) {
+            const auto& group = m_manifest.groups[groupIndex];
+            const int rows = static_cast<int>((group.items.size() + columns - 1) / columns);
+            const float groupHeight = blockPadding + headerHeight
+                + rows * square + std::max(0, rows - 1) * itemGap + blockPadding;
+            m_groupLayouts.push_back({groupIndex, pagePadding, cursorY, blockWidth, groupHeight});
+
+            const float itemsY = cursorY + blockPadding + headerHeight;
+            for (size_t itemIndex = 0; itemIndex < group.items.size(); ++itemIndex) {
+                const int rowInGroup = static_cast<int>(itemIndex) / columns;
+                const int column = static_cast<int>(itemIndex) % columns;
+                m_itemLayouts.push_back({
+                    groupIndex,
+                    itemIndex,
+                    visualRow + rowInGroup,
+                    column,
+                    gridStartX + column * (square + itemGap),
+                    itemsY + rowInGroup * (square + itemGap),
+                    square,
+                    square,
+                });
+            }
+
+            visualRow += rows;
+            cursorY += groupHeight + groupGap;
+        }
+        m_contentHeight = cursorY - groupGap + 18.f;
+        m_focusedIndex = std::clamp(m_focusedIndex, 0,
+            std::max(0, static_cast<int>(m_itemLayouts.size()) - 1));
+        _ensureFocusedVisible();
+    }
+
+    float _maximumScroll() const {
+        return std::max(0.f, m_contentHeight - m_viewportHeight);
+    }
+
+    void _ensureFocusedVisible() {
+        if (m_itemLayouts.empty() || m_focusedIndex < 0
+            || m_focusedIndex >= static_cast<int>(m_itemLayouts.size()))
+            return;
+        const auto& item = m_itemLayouts[m_focusedIndex];
+        constexpr float margin = 24.f;
+        if (item.y < m_targetScroll + margin)
+            m_targetScroll = item.y - margin;
+        else if (item.y + item.h > m_targetScroll + m_viewportHeight - margin)
+            m_targetScroll = item.y + item.h - m_viewportHeight + margin;
+        m_targetScroll = std::clamp(m_targetScroll, 0.f, _maximumScroll());
+    }
+
+    bool _moveHorizontal(int direction) {
+        if (m_itemLayouts.empty())
+            return true;
+        const auto& current = m_itemLayouts[m_focusedIndex];
+        int candidate = -1;
+        for (size_t index = 0; index < m_itemLayouts.size(); ++index) {
+            const auto& item = m_itemLayouts[index];
+            if (item.row != current.row)
+                continue;
+            if ((direction < 0 && item.column == current.column - 1)
+                || (direction > 0 && item.column == current.column + 1)) {
+                candidate = static_cast<int>(index);
+                break;
+            }
+        }
+        if (candidate >= 0)
+            _setFocus(candidate);
+        return true;
+    }
+
+    bool _moveVertical(int direction) {
+        if (m_itemLayouts.empty())
+            return true;
+        const auto& current = m_itemLayouts[m_focusedIndex];
+        int targetRow = direction < 0 ? -1 : std::numeric_limits<int>::max();
+        for (const auto& item : m_itemLayouts) {
+            if (direction < 0 && item.row < current.row)
+                targetRow = std::max(targetRow, item.row);
+            else if (direction > 0 && item.row > current.row)
+                targetRow = std::min(targetRow, item.row);
+        }
+        if (targetRow < 0 || targetRow == std::numeric_limits<int>::max())
+            return true;
+
+        int candidate = -1;
+        int columnDistance = std::numeric_limits<int>::max();
+        for (size_t index = 0; index < m_itemLayouts.size(); ++index) {
+            const auto& item = m_itemLayouts[index];
+            if (item.row != targetRow)
+                continue;
+            const int distance = std::abs(item.column - current.column);
+            if (distance < columnDistance) {
+                columnDistance = distance;
+                candidate = static_cast<int>(index);
+            }
+        }
+        if (candidate >= 0)
+            _setFocus(candidate);
+        return true;
+    }
+
+    void _setFocus(int index) {
+        if (index == m_focusedIndex)
+            return;
+        m_focusedIndex = index;
+        _ensureFocusedVisible();
+        brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_SIDEBAR);
+        this->invalidate();
+    }
+
+    void _activateFocused() {
+        if (m_itemLayouts.empty())
+            return;
+        const auto layout = m_itemLayouts[m_focusedIndex];
+        const auto item = m_manifest.groups[layout.groupIndex].items[layout.itemIndex];
+        brls::Application::getAudioPlayer()->play(brls::SOUND_CLICK);
+
+        auto* dialog = new brls::Dialog(item.dialog.empty() ? "是否下载此资源？" : item.dialog);
+        dialog->addButton("取消", []() {});
+        dialog->addButton("确认", [this, item, layout]() {
+            startResourceDownload(item, [this, layout]() {
+                if (layout.groupIndex < m_manifest.groups.size()
+                    && layout.itemIndex < m_manifest.groups[layout.groupIndex].items.size()) {
+                    m_manifest.groups[layout.groupIndex].items[layout.itemIndex].needsUpdate = false;
+                    this->invalidate();
+                }
+            });
+        });
+        dialog->open();
+    }
+
+    void _drawResourceButton(NVGcontext* vg, float x, float y, float w, float h,
+                             const OnlineResourceItem& item, bool focused) {
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, x, y, w, h, 10.f);
+        nvgFillColor(vg, focused ? nvgRGBA(79, 193, 255, 54) : nvgRGBA(255, 255, 255, 10));
+        nvgFill(vg);
+
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, x + 1.f, y + 1.f, w - 2.f, h - 2.f, 9.f);
+        nvgStrokeColor(vg, focused ? nvgRGBA(79, 193, 255, 190) : nvgRGBA(255, 255, 255, 24));
+        nvgStrokeWidth(vg, 1.f);
+        nvgStroke(vg);
+
+        if (focused && this->isFocused()) {
+            beiklive::ui::drawGradientFocusBorder(vg, x, y, w, h, 10.f, 3.f, 1.f,
+                beiklive::ui::gradientFocusAnimationOffset(m_animTime));
+        }
+
+        const std::string icon = encodeMaterialIcon(item.materialIcon);
+        nvgFontFaceId(vg, m_materialFont);
+        nvgFontSize(vg, 43.f);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, focused ? nvgRGBA(255, 255, 255, 255) : GET_THEME_COLOR("brls/text"));
+        nvgText(vg, x + w * 0.5f, y + h * 0.34f, icon.c_str(), nullptr);
+
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgFontSize(vg, 17.f);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_TOP);
+        nvgFillColor(vg, focused ? nvgRGBA(255, 255, 255, 255) : GET_THEME_COLOR("brls/text"));
+        nvgSave(vg);
+        nvgIntersectScissor(vg, x + 8.f, y + h * 0.56f, w - 16.f, h * 0.29f);
+        nvgTextBox(vg, x + 10.f, y + h * 0.58f, w - 20.f, item.name.c_str(), nullptr);
+        nvgRestore(vg);
+
+        nvgFontSize(vg, 13.f);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+        nvgFillColor(vg, item.needsUpdate
+            ? nvgRGBA(255, 190, 80, 235) : nvgRGBA(100, 220, 150, 225));
+        const char* status = item.needsUpdate ? "可更新" : "已安装";
+        nvgText(vg, x + w * 0.5f, y + h - 11.f, status, nullptr);
+    }
+};
+
+static void openOnlineResourceActivity(OnlineResourceManifest manifest) {
+    auto* canvas = new OnlineResourceCanvas(std::move(manifest));
+    auto* frame = new brls::AppletFrame(canvas);
+    frame->setTitle("在线资源");
+    brls::Application::pushActivity(new brls::Activity(frame),
+                                    brls::TransitionAnimation::NONE);
+    brls::Application::giveFocus(canvas);
+}
+
+static void checkOnlineResources() {
+    auto* progressDialog = new brls::Dialog("正在检测在线资源...\n\n请稍候");
+    progressDialog->setFocusable(true);
+    HIDE_BRLS_HIGHLIGHT(progressDialog);
+    progressDialog->open();
+
+    new std::thread([progressDialog]() {
+        std::string manifestText;
+        const bool downloadOk = fetchTextUrl(cacheBustedUrl(RESOURCE_MANIFEST_URL),
+                                             manifestText);
+        if (!downloadOk) {
+            brls::sync([progressDialog]() {
+                progressDialog->close([]() {});
+                showMessageDialog("资源清单下载失败，请检查网络或资源地址");
+            });
+            return;
+        }
+
+        OnlineResourceManifest manifest;
+        std::string error;
+        if (!parseResourceManifest(manifestText, manifest, error)) {
+            brls::sync([progressDialog, error]() {
+                progressDialog->close([]() {});
+                showMessageDialog(error);
+            });
+            return;
+        }
+
+        brls::sync([progressDialog, manifest = std::move(manifest)]() mutable {
+            progressDialog->close([]() {});
+            openOnlineResourceActivity(std::move(manifest));
+        });
+    });
+}
+
+static void startResourceDownload(const OnlineResourceItem& item,
+                                  std::function<void()> onSuccess) {
+    auto* progressDialog = new brls::Dialog(
+        "正在下载并安装 " + item.name + "...\n\n请稍候");
+    progressDialog->setFocusable(true);
+    HIDE_BRLS_HIGHLIGHT(progressDialog);
+    progressDialog->open();
+
+    new std::thread([progressDialog, item, onSuccess = std::move(onSuccess)]() {
+        std::error_code ec;
+        const auto cacheDirectory = std::filesystem::path(beiklive::path::cachePath())
+            / "online_resources";
+        std::filesystem::create_directories(cacheDirectory, ec);
+        if (ec) {
+            brls::sync([progressDialog]() {
+                progressDialog->close([]() {});
+                showMessageDialog("创建下载缓存目录失败");
+            });
+            return;
+        }
+
+        const auto uniqueId = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count();
+        const auto downloadPath = cacheDirectory
+            / (std::to_string(uniqueId) + "_" + downloadFileName(item.url));
+
+        if (!downloadFileToPath(cacheBustedUrl(item.url), downloadPath.string())) {
+            std::filesystem::remove(downloadPath, ec);
+            brls::sync([progressDialog]() {
+                progressDialog->close([]() {});
+                showMessageDialog("下载失败，请稍后重试");
+            });
+            return;
+        }
+
+        std::string resultText;
+        const bool installOk = installDownloadedResource(item, downloadPath, nullptr, resultText);
+        std::filesystem::remove(downloadPath, ec);
+
+        if (!installOk) {
+            brls::sync([progressDialog, resultText]() {
+                progressDialog->close([]() {});
+                showMessageDialog(resultText);
+            });
+            return;
+        }
+
+        const bool versionSaved = writeResourceVersion(item.name, item.version);
+        brls::sync([progressDialog, resultText, versionSaved, onSuccess]() {
+            progressDialog->close([]() {});
+            if (versionSaved) {
+                if (onSuccess)
+                    onSuccess();
+                showMessageDialog("更新完成\n\n" + resultText);
+            } else {
+                showMessageDialog("资源已安装\n\n" + resultText
+                    + "\n但版本记录写入失败");
+            }
+        });
+    });
+}
+
+class UpdateTabCanvas final : public brls::View {
+public:
+    UpdateTabCanvas(std::string version,
+                    std::string updateSource,
+                    std::function<void()> onCheckUpdate,
+                    std::function<void()> onChangelog,
+                    std::function<void()> onResourceCheck)
+        : m_version(std::move(version))
+        , m_updateSource(std::move(updateSource))
+        , m_onCheckUpdate(std::move(onCheckUpdate))
+        , m_onChangelog(std::move(onChangelog))
+        , m_onResourceCheck(std::move(onResourceCheck)) {
+        this->setFocusable(true);
+        this->setGrow(1.0f);
+        this->setWidthPercentage(100.f);
+        HIDE_BRLS_HIGHLIGHT(this);
+
+        this->setCustomNavigationRoute(brls::FocusDirection::UP, this);
+        this->setCustomNavigationRoute(brls::FocusDirection::DOWN, this);
+        this->setCustomNavigationRoute(brls::FocusDirection::LEFT, this);
+        this->setCustomNavigationRoute(brls::FocusDirection::RIGHT, this);
+
+        auto moveLeft = [this](brls::View*) -> bool {
+            if (m_focusedIndex == 1)
+                _setFocus(0);
+            return true;
+        };
+        auto moveRight = [this](brls::View*) -> bool {
+            if (m_focusedIndex == 0)
+                _setFocus(1);
+            return true;
+        };
+        auto moveUp = [this](brls::View*) -> bool {
+            if (m_focusedIndex == 2)
+                _setFocus(0);
+            return true;
+        };
+        auto moveDown = [this](brls::View*) -> bool {
+            if (m_focusedIndex != 2)
+                _setFocus(2);
+            return true;
+        };
+
+        this->registerAction("", brls::BUTTON_LEFT, moveLeft, true, true, brls::SOUND_NONE);
+        this->registerAction("", brls::BUTTON_RIGHT, moveRight, true, true, brls::SOUND_NONE);
+        this->registerAction("", brls::BUTTON_UP, moveUp, true, true, brls::SOUND_NONE);
+        this->registerAction("", brls::BUTTON_DOWN, moveDown, true, true, brls::SOUND_NONE);
+        this->registerAction("", brls::BUTTON_NAV_LEFT, moveLeft, true, true, brls::SOUND_NONE);
+        this->registerAction("", brls::BUTTON_NAV_RIGHT, moveRight, true, true, brls::SOUND_NONE);
+        this->registerAction("", brls::BUTTON_NAV_UP, moveUp, true, true, brls::SOUND_NONE);
+        this->registerAction("", brls::BUTTON_NAV_DOWN, moveDown, true, true, brls::SOUND_NONE);
+        this->registerAction("打开", brls::BUTTON_A, [this](brls::View*) -> bool {
+            _activateFocused();
+            return true;
+        }, false, false, brls::SOUND_NONE);
+        m_lastFrameTime = std::chrono::steady_clock::now();
+    }
+
+    void draw(NVGcontext* vg, float x, float y, float w, float h,
+              brls::Style style, brls::FrameContext* ctx) override {
+        (void)style;
+        (void)ctx;
+
+        if (m_defaultFont < 0)
+            m_defaultFont = brls::Application::getDefaultFont();
+        if (m_materialFont < 0)
+            m_materialFont = brls::Application::getFont(brls::FONT_MATERIAL_ICONS);
+
+        const float padX = 40.f;
+        const float padY = 24.f;
+        const float gap = 18.f;
+        const float contentW = std::max(1.f, w - padX * 2.f);
+        const float square = std::min(154.f, std::max(128.f, contentW * 0.15f));
+        const float topH = square;
+        const float versionW = std::max(260.f, contentW - square * 2.f - gap * 2.f);
+
+        const float topX = x + padX;
+        const float topY = y + padY;
+        m_checkRect = {topX + versionW + gap, topY, square, topH};
+        m_changelogRect = {m_checkRect.x + square + gap, topY, square, topH};
+
+        _drawVersionCard(vg, topX, topY, versionW, topH);
+        _drawSquareButton(vg, m_checkRect, material::UPDATE, "检测更新", m_focusedIndex == 0);
+        _drawSquareButton(vg, m_changelogRect, material::DESCRIPTION, "更新日志", m_focusedIndex == 1);
+
+        const float dividerY = topY + topH + 30.f;
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, topX, dividerY);
+        nvgLineTo(vg, x + w - padX, dividerY);
+        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 32));
+        nvgStrokeWidth(vg, 1.f);
+        nvgStroke(vg);
+
+        m_resourceRect = {topX, dividerY + 26.f, contentW, 72.f};
+        _drawWideButton(vg, m_resourceRect, material::SEARCH, "在线资源检测", m_focusedIndex == 2);
+    }
+
+    void frame(brls::FrameContext* ctx) override {
+        brls::View::frame(ctx);
+
+        auto now = std::chrono::steady_clock::now();
+        float dt = std::chrono::duration<float>(now - m_lastFrameTime).count();
+        m_lastFrameTime = now;
+        if (dt <= 0.f || dt > 0.5f)
+            dt = 0.016f;
+        m_animTime += dt;
+
+        if (!this->isFocused() || this->isHidden())
+            return;
+
+        this->invalidate();
+    }
+
+    void onFocusGained() override {
+        brls::View::onFocusGained();
+        this->invalidate();
+    }
+
+    void onFocusLost() override {
+        brls::View::onFocusLost();
+        this->invalidate();
+    }
+
+private:
+    struct Rect {
+        float x = 0.f;
+        float y = 0.f;
+        float w = 0.f;
+        float h = 0.f;
+    };
+
+    std::string m_version;
+    std::string m_updateSource;
+    std::function<void()> m_onCheckUpdate;
+    std::function<void()> m_onChangelog;
+    std::function<void()> m_onResourceCheck;
+
+    int m_defaultFont = -1;
+    int m_materialFont = -1;
+    int m_focusedIndex = 0;
+    float m_animTime = 0.f;
+    std::chrono::steady_clock::time_point m_lastFrameTime;
+
+    Rect m_checkRect;
+    Rect m_changelogRect;
+    Rect m_resourceRect;
+
+    void _drawVersionCard(NVGcontext* vg, float x, float y, float w, float h) {
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, x, y, w, h, 14.f);
+        nvgFillColor(vg, nvgRGBA(0, 0, 0, 28));
+        nvgFill(vg);
+
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, x + 1.f, y + 1.f, w - 2.f, h - 2.f, 13.f);
+        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 18));
+        nvgStrokeWidth(vg, 1.f);
+        nvgStroke(vg);
+
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+
+        nvgFontSize(vg, 22.f);
+        nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
+        nvgText(vg, x + 28.f, y + 30.f, "当前版本信息", nullptr);
+
+        _drawInfoRow(vg, x + 28.f, y + 66.f, "版本号", m_version);
+        _drawInfoRow(vg, x + 28.f, y + 92.f, "更新源", m_updateSource);
+    }
+
+    void _drawInfoRow(NVGcontext* vg, float x, float y, const char* label, const std::string& value) {
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgFontSize(vg, 17.f);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(200, 200, 200, 210));
+        nvgText(vg, x, y, label, nullptr);
+
+        nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
+        nvgText(vg, x + 86.f, y, value.c_str(), nullptr);
+    }
+
+    void _drawSquareButton(NVGcontext* vg, const Rect& r, char32_t icon, const char* label, bool focused) {
+        _drawButtonBase(vg, r, focused, 14.f);
+
+        const std::string iconText = encodeMaterialIcon(icon);
+        nvgFontFaceId(vg, m_materialFont);
+        nvgFontSize(vg, 46.f);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, focused ? nvgRGBA(255, 255, 255, 255) : GET_THEME_COLOR("brls/text"));
+        nvgText(vg, r.x + r.w * 0.5f, r.y + r.h * 0.38f, iconText.c_str(), nullptr);
+
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgFontSize(vg, 17.f);
+        nvgFillColor(vg, focused ? nvgRGBA(255, 255, 255, 255) : nvgRGBA(220, 220, 220, 230));
+        nvgText(vg, r.x + r.w * 0.5f, r.y + r.h - 28.f, label, nullptr);
+    }
+
+    void _drawWideButton(NVGcontext* vg, const Rect& r, char32_t icon, const char* label, bool focused) {
+        _drawButtonBase(vg, r, focused, 12.f);
+
+        const float centerY = r.y + r.h * 0.5f;
+        const float groupX = r.x + 36.f;
+        const std::string iconText = encodeMaterialIcon(icon);
+
+        nvgFontFaceId(vg, m_materialFont);
+        nvgFontSize(vg, 34.f);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, focused ? nvgRGBA(255, 255, 255, 255) : GET_THEME_COLOR("brls/text"));
+        nvgText(vg, groupX, centerY, iconText.c_str(), nullptr);
+
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgFontSize(vg, 20.f);
+        nvgFillColor(vg, focused ? nvgRGBA(255, 255, 255, 255) : GET_THEME_COLOR("brls/text"));
+        nvgText(vg, groupX + 50.f, centerY, label, nullptr);
+    }
+
+    void _drawButtonBase(NVGcontext* vg, const Rect& r, bool focused, float radius) {
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, r.x, r.y, r.w, r.h, radius);
+        nvgFillColor(vg, focused ? nvgRGBA(79, 193, 255, 56) : nvgRGBA(0, 0, 0, 28));
+        nvgFill(vg);
+
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, r.x + 1.f, r.y + 1.f, r.w - 2.f, r.h - 2.f, radius - 1.f);
+        nvgStrokeColor(vg, focused ? nvgRGBA(79, 193, 255, 180) : nvgRGBA(255, 255, 255, 18));
+        nvgStrokeWidth(vg, 1.f);
+        nvgStroke(vg);
+
+        if (focused && this->isFocused()) {
+            beiklive::ui::drawGradientFocusBorder(
+                vg,
+                r.x,
+                r.y,
+                r.w,
+                r.h,
+                radius,
+                3.f,
+                1.f,
+                beiklive::ui::gradientFocusAnimationOffset(m_animTime));
+        }
+    }
+
+    void _setFocus(int index) {
+        if (m_focusedIndex == index)
+            return;
+        m_focusedIndex = index;
+        brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_SIDEBAR);
+        this->invalidate();
+    }
+
+    void _activateFocused() {
+        brls::Application::getAudioPlayer()->play(brls::SOUND_CLICK);
+        if (m_focusedIndex == 0 && m_onCheckUpdate)
+            m_onCheckUpdate();
+        else if (m_focusedIndex == 1 && m_onChangelog)
+            m_onChangelog();
+        else if (m_focusedIndex == 2 && m_onResourceCheck)
+            m_onResourceCheck();
+    }
+
+};
 
 AboutPage::AboutPage() {
     brls::sync([this]() {
@@ -338,143 +1422,23 @@ brls::View* AboutPage::_buildInfoTab() {
 // ── 更新 ──────────────────────────────────────────────────
 
 brls::View* AboutPage::_buildUpdateTab() {
-    auto* scroll = new brls::ScrollingFrame();
-    scroll->setGrow(1.0f);
-    scroll->setScrollingBehavior(brls::ScrollingBehavior::NATURAL);
-    scroll->setScrollingIndicatorVisible(false);
-    scroll->setFocusable(false);
-
-    auto* box = new brls::Box(brls::Axis::COLUMN);
-    box->setAlignItems(brls::AlignItems::CENTER);
-    box->setWidthPercentage(100.f);
-    box->setPadding(20.f, 40.f, 30.f, 40.f);
-
     std::string localVersion = APP_VERSION;
     std::string changelogText = readTextFile(BK_RES("changelog"), "暂无更新日志");
 
-    // 版本信息卡片
-    auto* versionCard = new brls::Box(brls::Axis::COLUMN);
-    versionCard->setCornerRadius(14.f);
-    versionCard->setBackgroundColor(nvgRGBA(0, 0, 0, 20));
-    versionCard->setShadowVisibility(true);
-    versionCard->setShadowType(brls::ShadowType::GENERIC);
-    versionCard->setPadding(20.f, 24.f, 20.f, 24.f);
-    versionCard->setMarginBottom(10.f);
-    versionCard->setWidthPercentage(100.f);
-    versionCard->setFocusable(false);
-    versionCard->setHideHighlightBackground(true);
-
-    auto* verTitle = new brls::Label();
-    verTitle->setText("当前版本信息");
-    verTitle->setFontSize(22.f);
-    verTitle->setTextColor(GET_THEME_COLOR("brls/text"));
-    verTitle->setMarginBottom(14.f);
-    verTitle->setFocusable(false);
-    versionCard->addView(verTitle);
-
-    auto addInfoRow = [&](const std::string& label, const std::string& value) {
-        auto* row = new brls::Box(brls::Axis::ROW);
-        row->setFocusable(false);
-        row->setMarginBottom(6.f);
-
-        auto* lbl = new brls::Label();
-        lbl->setText(label);
-        lbl->setFontSize(17.f);
-        lbl->setTextColor(nvgRGBA(200, 200, 200, 200));
-        lbl->setWidth(80.f);
-        lbl->setFocusable(false);
-        row->addView(lbl);
-
-        auto* val = new brls::Label();
-        val->setText(value);
-        val->setFontSize(17.f);
-        val->setTextColor(GET_THEME_COLOR("brls/text"));
-        val->setFocusable(false);
-        row->addView(val);
-
-        versionCard->addView(row);
-    };
-
-    addInfoRow("版本号", localVersion);
-    addInfoRow("更新源", "download.nswiki.cn");
-
-    box->addView(versionCard);
-
-    auto* changelogBtn = new beiklive::DetailCell();
-    changelogBtn->setLeftText("查看当前版本更新内容");
-    changelogBtn->setRightText("\uE14A");
-    changelogBtn->registerAction("打开", brls::BUTTON_A,
-        [localVersion, changelogText](brls::View*) -> bool {
+    return new UpdateTabCanvas(
+        localVersion,
+        "download.nswiki.cn",
+        [this]() {
+            _checkUpdate();
+        },
+        [localVersion, changelogText]() {
             openChangelogApplet(
                 "当前版本更新内容  " + localVersion,
                 changelogText.empty() ? "暂无更新日志" : changelogText);
-            return true;
+        },
+        []() {
+            checkOnlineResources();
         });
-    box->addView(changelogBtn);
-
-    // // 更新金手指数据库按钮
-    // auto* cheatBtn = new brls::Button();
-    // cheatBtn->setText("更新金手指数据库");
-    // cheatBtn->setWidthPercentage(100.f);
-    // cheatBtn->setMarginBottom(12.f);
-    // cheatBtn->registerClickAction([this](brls::View*) -> bool {
-    //     _updateCheatDatabase();
-    //     return true;
-    // });
-    // box->addView(cheatBtn);
-
-    // 检测模拟器更新按钮
-    auto* checkBtn = new brls::Button();
-    checkBtn->setText("检测模拟器更新");
-    checkBtn->setWidthPercentage(100.f);
-    checkBtn->registerClickAction([this](brls::View*) -> bool {
-        _checkUpdate();
-        return true;
-    });
-
-    box->addView(checkBtn);
-
-    auto* hint = new brls::Label();
-    hint->setText("连接到服务器检测最新版本，如有更新可自动下载安装");
-    hint->setFontSize(14.f);
-    hint->setTextColor(nvgRGBA(200, 200, 200, 200));
-    hint->setMarginTop(15.f);
-    hint->setMarginLeft(20.f);
-    hint->setFocusable(false);
-    box->addView(hint);
-
-
-    auto *h1 = new brls::Header();
-    h1->setTitle("资源下载");
-    box->addView(h1);
-
-    auto* ndsFirmwareBtn = new brls::Button();
-    ndsFirmwareBtn->setText("下载 NDS 固件");
-    ndsFirmwareBtn->setWidthPercentage(100.f);
-    ndsFirmwareBtn->setMarginBottom(12.f);
-    ndsFirmwareBtn->registerClickAction([this](brls::View*) -> bool {
-        _downloadNdsFirmware();
-        return true;
-    });
-    box->addView(ndsFirmwareBtn);
-
-    auto* ndsCheatBtn = new brls::Button();
-    ndsCheatBtn->setText("下载 NDS 金手指");
-    ndsCheatBtn->setWidthPercentage(100.f);
-    ndsCheatBtn->registerClickAction([this](brls::View*) -> bool {
-        _downloadNdsCheatDatabase();
-        return true;
-    });
-    box->addView(ndsCheatBtn);
-
-    box->addView(new brls::Padding());
-    scroll->setContentView(box);
-
-    auto* container = new brls::Box(brls::Axis::COLUMN);
-    container->setWidthPercentage(100.f);
-    container->setGrow(1.0f);
-    container->addView(scroll);
-    return container;
 }
 
 void AboutPage::_checkUpdate() {
