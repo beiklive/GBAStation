@@ -604,7 +604,7 @@ brls::View *SettingPage::buildUITab()
     }
 
     auto *sgbBorderCell = new brls::BooleanCell();
-    sgbBorderCell->init("SGB 边框", cfgGetStr("core.mgba_sgb_borders", "ON") == "ON",
+    sgbBorderCell->init("SGB 边框", cfgGetStr("core.mgba_sgb_borders", "OFF") == "ON",
                         [](bool v) { cfgSetStr("core.mgba_sgb_borders", v ? "ON" : "OFF"); });
     box->addView(sgbBorderCell);
     box->addView(makeHint("为 Super Game Boy 游戏绘制专属边框图案"));

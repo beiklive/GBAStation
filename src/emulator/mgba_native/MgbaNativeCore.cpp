@@ -723,7 +723,7 @@ void MgbaNativeCore::initConfigDefaults()
     mCoreConfigSetDefaultValue(&m_core->config, "sgb.model", modelName);
     mCoreConfigSetDefaultValue(&m_core->config, "cgb.model", modelName);
     mCoreConfigSetDefaultIntValue(&m_core->config, "sgb.borders",
-                                  settingEnabled("core.mgba_sgb_borders", "ON", "ON") ? 1 : 0);
+                                  settingEnabled("core.mgba_sgb_borders", "OFF", "ON") ? 1 : 0);
     applyGbPalette(&m_core->config);
     applyAudioLowPassSettings();
 }
@@ -735,7 +735,7 @@ void MgbaNativeCore::applyConfig()
 
     const int frameskip = settingInt("core.mgba_frameskip", "0", 0, 10);
     const bool allowOpposing = settingEnabled("core.mgba_allow_opposing_directions", "no", "yes");
-    const bool sgbBorders = settingEnabled("core.mgba_sgb_borders", "ON", "ON");
+    const bool sgbBorders = settingEnabled("core.mgba_sgb_borders", "OFF", "ON");
     const bool forceGbp = settingEnabled("core.mgba_force_gbp", "OFF", "ON");
     const char* modelName = GBModelToName(gbModelFromSetting());
 

@@ -147,7 +147,7 @@ void CoreMgba::Cleanup()
         cfg->SetDefault("core.mgba_skip_bios",                 CV(std::string("OFF")));        // 跳过 BIOS 开机画面（关闭）
         cfg->SetDefault("core.mgba_gb_colors",                 CV(std::string("Grayscale")));  // GB 颜色方案（灰阶）
         cfg->SetDefault("core.mgba_gb_colors_preset",          CV(std::string("0")));          // GB 颜色预设编号
-        cfg->SetDefault("core.mgba_sgb_borders",               CV(std::string("ON")));         // 超级 GB 边框（开启）
+        cfg->SetDefault("core.mgba_sgb_borders",               CV(std::string("OFF")));        // 超级 GB 边框（关闭）
         cfg->SetDefault("core.mgba_audio_low_pass_filter",     CV(std::string("disabled")));   // 音频低通滤波器（禁用）
         cfg->SetDefault("core.mgba_audio_low_pass_range",      CV(std::string("60")));         // 低通滤波截止频率（60%）
         cfg->SetDefault("core.mgba_allow_opposing_directions", CV(std::string("no")));         // 允许同时按反方向键（否）
