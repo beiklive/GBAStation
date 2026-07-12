@@ -1,6 +1,7 @@
 #include "UpdatePage.hpp"
 
 #include "core/Tools.hpp"
+#include "ui/utils/MaterialIcons.hpp"
 
 #include <borealis/views/button.hpp>
 #include <borealis/views/label.hpp>
@@ -17,15 +18,252 @@ namespace beiklive {
 namespace
 {
 
-struct UpdatePageRefs
-{
-    brls::Label* titleLabel = nullptr;
-    brls::Label* statusLabel = nullptr;
-    brls::Label* speedLabel = nullptr;
-    brls::Label* sizeLabel = nullptr;
-    brls::Label* etaLabel = nullptr;
-    brls::Label* pctLabel = nullptr;
-    brls::Rectangle* progressBar = nullptr;
+enum class UpdateVisualState {
+    Connecting = 0,
+    Downloading,
+    Extracting,
+    Installing,
+    Success,
+    Error,
+    Manual,
+};
+
+static std::string encodeMaterialIcon(char32_t codepoint) {
+    std::string result;
+    if (codepoint <= 0x7F) {
+        result.push_back(static_cast<char>(codepoint));
+    } else if (codepoint <= 0x7FF) {
+        result.push_back(static_cast<char>(0xC0 | (codepoint >> 6)));
+        result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+    } else if (codepoint <= 0xFFFF) {
+        result.push_back(static_cast<char>(0xE0 | (codepoint >> 12)));
+        result.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+        result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+    } else {
+        result.push_back(static_cast<char>(0xF0 | (codepoint >> 18)));
+        result.push_back(static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F)));
+        result.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+        result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+    }
+    return result;
+}
+
+class UpdateProgressCanvas final : public brls::View {
+public:
+    UpdateProgressCanvas() {
+        this->setWidth(620.f);
+        this->setHeight(310.f);
+        this->setFocusable(false);
+        m_lastFrameTime = std::chrono::steady_clock::now();
+        setState(UpdateVisualState::Connecting, "正在连接服务器...");
+    }
+
+    void setProgress(float pct, std::string speed, std::string size, std::string eta) {
+        m_targetProgress = std::clamp(pct / 100.f, 0.f, 1.f);
+        m_speed = std::move(speed);
+        m_size = std::move(size);
+        m_eta = eta.empty() ? "计算剩余时间" : std::move(eta);
+        this->invalidate();
+    }
+
+    void setState(UpdateVisualState state, std::string status) {
+        m_state = state;
+        m_status = std::move(status);
+        switch (state) {
+            case UpdateVisualState::Connecting:
+            case UpdateVisualState::Downloading:
+                m_icon = 0xE2C4;
+                _setAccent(79, 193, 255);
+                break;
+            case UpdateVisualState::Extracting:
+                m_icon = 0xE149;
+                _setAccent(255, 184, 77);
+                break;
+            case UpdateVisualState::Installing:
+                m_icon = material::INSTALL_APP;
+                _setAccent(111, 207, 151);
+                break;
+            case UpdateVisualState::Success:
+                m_icon = 0xE5CA;
+                _setAccent(111, 207, 151);
+                m_targetProgress = 1.f;
+                break;
+            case UpdateVisualState::Error:
+                m_icon = 0xE000;
+                _setAccent(255, 112, 112);
+                break;
+            case UpdateVisualState::Manual:
+                m_icon = material::DESCRIPTION;
+                _setAccent(255, 184, 77);
+                m_targetProgress = 1.f;
+                break;
+        }
+        this->invalidate();
+    }
+
+    void reset() {
+        m_targetProgress = 0.f;
+        m_displayProgress = 0.f;
+        m_speed = "0 B/s";
+        m_size = "0 B / 0 B";
+        m_eta = "计算剩余时间";
+        setState(UpdateVisualState::Downloading, "正在下载更新包...");
+    }
+
+    void draw(NVGcontext* vg, float x, float y, float w, float h,
+              brls::Style style, brls::FrameContext* ctx) override {
+        (void)style;
+        (void)ctx;
+        if (m_defaultFont < 0)
+            m_defaultFont = brls::Application::getDefaultFont();
+        if (m_materialFont < 0)
+            m_materialFont = brls::Application::getFont(brls::FONT_MATERIAL_ICONS);
+
+        constexpr float pad = 34.f;
+        constexpr float iconSize = 70.f;
+        const float iconX = x + pad;
+        const float iconY = y + 31.f;
+        const float textX = iconX + iconSize + 22.f;
+        const float barX = x + pad;
+        const float barW = w - pad * 2.f;
+        const float barY = y + 180.f;
+
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, iconX, iconY, iconSize, iconSize, 8.f);
+        nvgFillColor(vg, nvgRGBA(m_accentR, m_accentG, m_accentB, 34));
+        nvgFill(vg);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, iconX + 1.f, iconY + 1.f, iconSize - 2.f, iconSize - 2.f, 7.f);
+        nvgStrokeColor(vg, nvgRGBA(m_accentR, m_accentG, m_accentB, 110));
+        nvgStrokeWidth(vg, 1.f);
+        nvgStroke(vg);
+
+        const std::string icon = encodeMaterialIcon(m_icon);
+        nvgFontFaceId(vg, m_materialFont);
+        nvgFontSize(vg, 39.f);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        const float pulse = 0.84f + std::sin(m_animTime * 3.f) * 0.1f;
+        nvgFillColor(vg, nvgRGBA(m_accentR, m_accentG, m_accentB,
+                                static_cast<unsigned char>(255.f * pulse)));
+        nvgText(vg, iconX + iconSize * 0.5f, iconY + iconSize * 0.5f,
+                icon.c_str(), nullptr);
+
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
+        nvgFontSize(vg, 25.f);
+        nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
+        nvgText(vg, textX, y + 37.f, "模拟器更新", nullptr);
+        nvgFontSize(vg, 18.f);
+        nvgFillColor(vg, nvgRGBA(m_accentR, m_accentG, m_accentB, 235));
+        nvgText(vg, textX, y + 78.f, m_status.c_str(), nullptr);
+
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, x + pad, y + 125.f);
+        nvgLineTo(vg, x + w - pad, y + 125.f);
+        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 24));
+        nvgStrokeWidth(vg, 1.f);
+        nvgStroke(vg);
+
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgFontSize(vg, 15.f);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(205, 210, 220, 210));
+        nvgText(vg, x + pad, y + 151.f, m_size.c_str(), nullptr);
+
+        const std::string percent = std::to_string(
+            static_cast<int>(m_targetProgress * 100.f + 0.5f)) + "%";
+        nvgFontSize(vg, 18.f);
+        nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
+        nvgText(vg, x + w - pad, y + 151.f, percent.c_str(), nullptr);
+
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, barX, barY, barW, 10.f, 5.f);
+        nvgFillColor(vg, nvgRGBA(255, 255, 255, 28));
+        nvgFill(vg);
+        const float fillW = barW * std::clamp(m_displayProgress, 0.f, 1.f);
+        if (fillW > 0.5f) {
+            nvgBeginPath(vg);
+            nvgRoundedRect(vg, barX, barY, fillW, 10.f, 5.f);
+            nvgFillColor(vg, nvgRGBA(m_accentR, m_accentG, m_accentB, 235));
+            nvgFill(vg);
+            if (fillW > 12.f) {
+                nvgBeginPath(vg);
+                nvgCircle(vg, barX + fillW - 5.f, barY + 5.f, 2.f);
+                nvgFillColor(vg, nvgRGBA(255, 255, 255, 205));
+                nvgFill(vg);
+            }
+        }
+
+        _drawMetric(vg, x + pad, y + 228.f, 0xE640, "下载速度", m_speed);
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, x + w * 0.5f, y + 216.f);
+        nvgLineTo(vg, x + w * 0.5f, y + 273.f);
+        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 24));
+        nvgStrokeWidth(vg, 1.f);
+        nvgStroke(vg);
+        _drawMetric(vg, x + w * 0.5f + 24.f, y + 228.f, 0xE8B5, "剩余时间", m_eta);
+    }
+
+    void frame(brls::FrameContext* ctx) override {
+        brls::View::frame(ctx);
+        const auto now = std::chrono::steady_clock::now();
+        float dt = std::chrono::duration<float>(now - m_lastFrameTime).count();
+        m_lastFrameTime = now;
+        if (dt <= 0.f || dt > 0.5f)
+            dt = 0.016f;
+        m_animTime += dt;
+        const float difference = m_targetProgress - m_displayProgress;
+        m_displayProgress += difference * std::min(1.f, dt * 10.f);
+        if (std::abs(difference) < 0.001f)
+            m_displayProgress = m_targetProgress;
+        this->invalidate();
+    }
+
+private:
+    UpdateVisualState m_state = UpdateVisualState::Connecting;
+    std::string m_status = "正在连接服务器...";
+    std::string m_speed = "0 B/s";
+    std::string m_size = "0 B / 0 B";
+    std::string m_eta = "计算剩余时间";
+    char32_t m_icon = 0xE2C4;
+    unsigned char m_accentR = 79;
+    unsigned char m_accentG = 193;
+    unsigned char m_accentB = 255;
+    int m_defaultFont = -1;
+    int m_materialFont = -1;
+    float m_targetProgress = 0.f;
+    float m_displayProgress = 0.f;
+    float m_animTime = 0.f;
+    std::chrono::steady_clock::time_point m_lastFrameTime;
+
+    void _setAccent(unsigned char r, unsigned char g, unsigned char b) {
+        m_accentR = r;
+        m_accentG = g;
+        m_accentB = b;
+    }
+
+    void _drawMetric(NVGcontext* vg, float x, float y, char32_t icon,
+                     const char* label, const std::string& value) {
+        const std::string iconText = encodeMaterialIcon(icon);
+        nvgFontFaceId(vg, m_materialFont);
+        nvgFontSize(vg, 22.f);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
+        nvgFillColor(vg, nvgRGBA(180, 188, 202, 185));
+        nvgText(vg, x, y, iconText.c_str(), nullptr);
+
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgFontSize(vg, 13.f);
+        nvgFillColor(vg, nvgRGBA(170, 178, 192, 170));
+        nvgText(vg, x + 31.f, y - 1.f, label, nullptr);
+        nvgFontSize(vg, 16.f);
+        nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
+        nvgText(vg, x + 31.f, y + 22.f, value.c_str(), nullptr);
+    }
+};
+
+struct UpdatePageRefs {
+    UpdateProgressCanvas* canvas = nullptr;
 };
 
 static UpdatePageRefs g_updatePageRefs;
@@ -79,115 +317,30 @@ brls::Box* UpdatePage::buildDialogContent(UpdatePage* self) {
     g_updatePageRefs = {};
 
     auto* root = new brls::Box(brls::Axis::COLUMN);
-    root->setWidthPercentage(100.f);
-    root->setHeightPercentage(100.f);
-    root->setPadding(24.f, 30.f, 10.f, 30.f);
+    root->setWidth(620.f);
+    root->setHeight(310.f);
     root->setFocusable(false);
-
-    g_updatePageRefs.titleLabel = new brls::Label();
-    g_updatePageRefs.titleLabel->setText("模拟器更新");
-    g_updatePageRefs.titleLabel->setFontSize(30.f);
-    g_updatePageRefs.titleLabel->setTextColor(nvgRGB(255, 255, 255));
-    g_updatePageRefs.titleLabel->setHorizontalAlign(brls::HorizontalAlign::LEFT);
-    g_updatePageRefs.titleLabel->setMarginBottom(18.f);
-    g_updatePageRefs.titleLabel->setFocusable(false);
-    root->addView(g_updatePageRefs.titleLabel);
-
-    g_updatePageRefs.statusLabel = new brls::Label();
-    g_updatePageRefs.statusLabel->setText("正在连接服务器...");
-    g_updatePageRefs.statusLabel->setFontSize(20.f);
-    g_updatePageRefs.statusLabel->setTextColor(nvgRGBA(255, 255, 255, 200));
-    g_updatePageRefs.statusLabel->setHorizontalAlign(brls::HorizontalAlign::LEFT);
-    g_updatePageRefs.statusLabel->setMarginBottom(24.f);
-    g_updatePageRefs.statusLabel->setFocusable(false);
-    root->addView(g_updatePageRefs.statusLabel);
-
-    auto* progressTrack = new brls::Box(brls::Axis::ROW);
-    progressTrack->setWidthPercentage(100.f);
-    progressTrack->setHeight(12.f);
-    progressTrack->setCornerRadius(6.f);
-    progressTrack->setBackgroundColor(nvgRGBA(255, 255, 255, 32));
-    progressTrack->setMarginBottom(12.f);
-    progressTrack->setFocusable(false);
-
-    g_updatePageRefs.progressBar = new brls::Rectangle(nvgRGB(59, 167, 255));
-    g_updatePageRefs.progressBar->setHeight(12.f);
-    g_updatePageRefs.progressBar->setWidth(0.f);
-    g_updatePageRefs.progressBar->setCornerRadius(6.f);
-    g_updatePageRefs.progressBar->setFocusable(false);
-    progressTrack->addView(g_updatePageRefs.progressBar);
-    root->addView(progressTrack);
-
-    g_updatePageRefs.pctLabel = new brls::Label();
-    g_updatePageRefs.pctLabel->setText("0%");
-    g_updatePageRefs.pctLabel->setFontSize(46.f);
-    g_updatePageRefs.pctLabel->setTextColor(nvgRGB(255, 255, 255));
-    g_updatePageRefs.pctLabel->setHorizontalAlign(brls::HorizontalAlign::LEFT);
-    g_updatePageRefs.pctLabel->setMarginBottom(18.f);
-    g_updatePageRefs.pctLabel->setFocusable(false);
-    root->addView(g_updatePageRefs.pctLabel);
-
-    auto* infoRow = new brls::Box(brls::Axis::ROW);
-    infoRow->setWidthPercentage(100.f);
-    infoRow->setJustifyContent(brls::JustifyContent::SPACE_BETWEEN);
-    infoRow->setMarginBottom(10.f);
-    infoRow->setFocusable(false);
-
-    g_updatePageRefs.speedLabel = new brls::Label();
-    g_updatePageRefs.speedLabel->setFontSize(18.f);
-    g_updatePageRefs.speedLabel->setTextColor(nvgRGBA(255, 255, 255, 120));
-    g_updatePageRefs.speedLabel->setFocusable(false);
-
-    g_updatePageRefs.sizeLabel = new brls::Label();
-    g_updatePageRefs.sizeLabel->setFontSize(18.f);
-    g_updatePageRefs.sizeLabel->setTextColor(nvgRGBA(255, 255, 255, 120));
-    g_updatePageRefs.sizeLabel->setFocusable(false);
-
-    infoRow->addView(g_updatePageRefs.speedLabel);
-    infoRow->addView(g_updatePageRefs.sizeLabel);
-    root->addView(infoRow);
-
-    g_updatePageRefs.etaLabel = new brls::Label();
-    g_updatePageRefs.etaLabel->setFontSize(18.f);
-    g_updatePageRefs.etaLabel->setTextColor(nvgRGBA(255, 255, 255, 120));
-    g_updatePageRefs.etaLabel->setHorizontalAlign(brls::HorizontalAlign::LEFT);
-    g_updatePageRefs.etaLabel->setMarginBottom(30.f);
-    g_updatePageRefs.etaLabel->setFocusable(false);
-    root->addView(g_updatePageRefs.etaLabel);
-
-
+    g_updatePageRefs.canvas = new UpdateProgressCanvas();
+    root->addView(g_updatePageRefs.canvas);
 
     return root;
 }
 
 UpdatePage::UpdatePage()
     : brls::Dialog(buildDialogContent(this)) {
-    m_titleLabel = g_updatePageRefs.titleLabel;
-    m_statusLabel = g_updatePageRefs.statusLabel;
-    m_speedLabel = g_updatePageRefs.speedLabel;
-    m_sizeLabel = g_updatePageRefs.sizeLabel;
-    m_etaLabel = g_updatePageRefs.etaLabel;
-    m_pctLabel = g_updatePageRefs.pctLabel;
-    m_progressBar = g_updatePageRefs.progressBar;
+    m_progressCanvas = g_updatePageRefs.canvas;
     g_updatePageRefs = {};
 
+    this->setFocusable(true);
+    HIDE_BRLS_HIGHLIGHT(this);
     this->setCancelable(false);
     this->getAppletFrame()->setWidth(620.f);
-    this->getAppletFrame()->setHeight(340.f);
-    this->addButton("取消", [this]() {
-        m_cancelled.store(true);
-        AppUpdater::instance().abort();
-        if (m_onCancel)
-            m_onCancel();
-    });
+    this->getAppletFrame()->setHeight(310.f);
     _resetActionButtons();
 
     this->registerAction("返回", brls::BUTTON_B, [this](brls::View*) -> bool {
-        m_cancelled.store(true);
-        AppUpdater::instance().abort();
-        if (m_onCancel)
-            m_onCancel();
-        _closeDialog();
+        if (m_canClose.load())
+            _closeDialog();
         return true;
     });
 }
@@ -201,34 +354,34 @@ void UpdatePage::_closeDialog() {
     this->close();
 }
 
-brls::Button* UpdatePage::_makeActionButton(
-    const std::string& text, std::function<bool(brls::View*)> onClick) {
-    auto* button = new brls::Button();
-    button->setText(text);
-    button->setWidth(176.f);
-    button->setBorderColor(nvgRGBA(255, 255, 255, 255));
-    button->setBorderThickness(1.f);
-    button->registerClickAction(std::move(onClick));
-    return button;
+void UpdatePage::_resetActionButtons() {
+    m_canClose.store(false);
+    this->clearButtons();
+    this->getAppletFrame()->setHeight(310.f);
 }
 
-void UpdatePage::_resetActionButtons() {
+void UpdatePage::_showCloseButton() {
+    m_canClose.store(true);
+    this->clearButtons();
+    this->getAppletFrame()->setHeight(382.f);
+    this->addButton("关闭", []() {});
+    brls::Application::giveFocus(button1);
 }
 
 void UpdatePage::_updateProgress(
     float pct, const std::string& speed, const std::string& size, const std::string& eta) {
     brls::sync([this, pct, speed, size, eta]() {
-        m_progressBar->setWidth(560.f * pct / 100.f);
-        m_pctLabel->setText(std::to_string(static_cast<int>(pct)) + "%");
-        m_speedLabel->setText(speed);
-        m_sizeLabel->setText(size);
-        m_etaLabel->setText(eta);
-
-        if (pct >= 100.0f) {
-            m_progressBar->setColor(nvgRGB(60, 220, 120));
-            m_statusLabel->setText("下载完成");
-        }
+        if (m_progressCanvas)
+            static_cast<UpdateProgressCanvas*>(m_progressCanvas)->setProgress(
+                pct, speed, size, eta);
     });
+}
+
+void UpdatePage::_setVisualState(const std::string& status, int state) {
+    if (!m_progressCanvas)
+        return;
+    static_cast<UpdateProgressCanvas*>(m_progressCanvas)->setState(
+        static_cast<UpdateVisualState>(state), status);
 }
 
 void UpdatePage::startDownload() {
@@ -236,13 +389,9 @@ void UpdatePage::startDownload() {
 
     brls::sync([this]() {
         _resetActionButtons();
-        m_progressBar->setWidth(0.f);
-        m_progressBar->setColor(nvgRGB(59, 167, 255));
-        m_pctLabel->setText("0%");
-        m_statusLabel->setText("正在下载...");
-        m_speedLabel->setText("0 B/s");
-        m_sizeLabel->setText("0 B / 0 B");
-        m_etaLabel->setText("");
+        if (m_progressCanvas)
+            static_cast<UpdateProgressCanvas*>(m_progressCanvas)->reset();
+        brls::Application::giveFocus(this);
     });
 
     brls::async([this]() {
@@ -252,12 +401,26 @@ void UpdatePage::startDownload() {
         size_t lastBytes = 0;
         double smoothedSpeed = 0;
         size_t totalSize = AppUpdater::instance().info().fileSize;
+        bool extractionStateShown = false;
 
         _updateProgress(0, "0 B/s", "0 B / " + formatSize(totalSize), "");
 
         bool ok = AppUpdater::instance().download([&](size_t total, size_t now) -> bool {
             if (m_cancelled.load())
                 return false;
+
+            if (!extractionStateShown && total > 0 && now >= total) {
+                extractionStateShown = true;
+                _updateProgress(
+                    100.f,
+                    "下载完成",
+                    formatSize(total) + " / " + formatSize(total),
+                    "正在处理压缩包");
+                brls::sync([this]() {
+                    _setVisualState("正在解压更新包...",
+                        static_cast<int>(UpdateVisualState::Extracting));
+                });
+            }
 
             auto t = Clock::now();
             double dt = std::chrono::duration<double>(t - lastUpdate).count();
@@ -300,20 +463,22 @@ void UpdatePage::startDownload() {
         }
 
         brls::sync([this, ok]() {
-            brls::Application::giveFocus(nullptr);
-
             if (!ok) {
-                m_statusLabel->setText("下载失败，请重试");
-                m_progressBar->setColor(nvgRGB(255, 120, 120));
+                _setVisualState("下载失败，请重试",
+                    static_cast<int>(UpdateVisualState::Error));
+                _showCloseButton();
 
                 return;
             }
 
 #ifdef __SWITCH__
-            m_statusLabel->setText("下载完成，开始安装");
+            _setVisualState("下载完成，开始安装",
+                static_cast<int>(UpdateVisualState::Installing));
             startInstall();
 #else
-            m_statusLabel->setText("下载完成，请手动替换程序文件");
+            _setVisualState("下载完成，请手动替换程序文件",
+                static_cast<int>(UpdateVisualState::Manual));
+            _showCloseButton();
 
 #endif
         });
@@ -322,8 +487,8 @@ void UpdatePage::startDownload() {
 
 void UpdatePage::startInstall() {
     brls::sync([this]() {
-        m_statusLabel->setText("正在安装...");
-        m_etaLabel->setText(" ");
+        _setVisualState("正在安装更新...",
+            static_cast<int>(UpdateVisualState::Installing));
     });
 
     brls::async([this]() {
@@ -335,23 +500,29 @@ void UpdatePage::startInstall() {
                 
 #ifdef __SWITCH__
                 AppUpdater::instance().finishInstall();
-                m_statusLabel->setText("安装完成，请重启模拟器");
+                _setVisualState("安装完成，请重启模拟器",
+                    static_cast<int>(UpdateVisualState::Success));
                 // envSetNextLoad("sdmc:/switch/GBAStation.nro", "sdmc:/switch/GBAStation.nro");
+                m_canClose.store(false);
                 this->clearButtons();
+                this->getAppletFrame()->setHeight(382.f);
                 this->addButton("重启模拟器", [this]() {
                     brls::Application::quit();
                 });
+                brls::Application::giveFocus(button1);
 #else
                     brls::Application::notify("请手动重启");
 #endif
 
             } else {
 #ifdef __SWITCH__
-                m_statusLabel->setText("安装失败");
+                _setVisualState("安装失败",
+                    static_cast<int>(UpdateVisualState::Error));
 #else
-                m_statusLabel->setText("当前平台不支持自动安装，请手动替换程序文件");
+                _setVisualState("当前平台不支持自动安装，请手动替换程序文件",
+                    static_cast<int>(UpdateVisualState::Manual));
 #endif
-                m_progressBar->setColor(nvgRGB(255, 120, 120));
+                _showCloseButton();
 
             }
         });

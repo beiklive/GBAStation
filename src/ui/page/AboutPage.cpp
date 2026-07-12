@@ -16,6 +16,7 @@
 #include <chrono>
 #include <functional>
 #include <map>
+#include <memory>
 
 namespace beiklive {
 
@@ -245,7 +246,8 @@ static void showMessageDialog(const std::string& message) {
 
 static bool downloadFileToPath(const std::string& url,
                                const std::string& outPath,
-                               const std::atomic<bool>* cancelFlag = nullptr) {
+                               const std::atomic<bool>* cancelFlag = nullptr,
+                               std::function<void(curl_off_t, curl_off_t)> progressCallback = nullptr) {
     CURL* curl = curl_easy_init();
     if (!curl)
         return false;
@@ -268,6 +270,25 @@ static bool downloadFileToPath(const std::string& url,
                 return size * nmemb;
             }));
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &body);
+
+    struct ProgressContext {
+        const std::atomic<bool>* cancelFlag;
+        std::function<void(curl_off_t, curl_off_t)> callback;
+    } progressContext{cancelFlag, std::move(progressCallback)};
+
+    curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+    curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION,
+        static_cast<int(*)(void*, curl_off_t, curl_off_t, curl_off_t, curl_off_t)>(
+            [](void* userdata, curl_off_t downloadTotal, curl_off_t downloaded,
+               curl_off_t, curl_off_t) -> int {
+                auto* context = static_cast<ProgressContext*>(userdata);
+                if (context->cancelFlag && context->cancelFlag->load())
+                    return 1;
+                if (context->callback)
+                    context->callback(downloaded, downloadTotal);
+                return 0;
+            }));
+    curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &progressContext);
 
     CURLcode res = CURLE_ABORTED_BY_CALLBACK;
     if (!cancelFlag || !cancelFlag->load())
@@ -346,7 +367,8 @@ static bool isSafeZipEntry(const std::filesystem::path& relativePath) {
 static bool extractZipToDirectory(const std::filesystem::path& zipPath,
                                   const std::filesystem::path& outputDirectory,
                                   const std::atomic<bool>* cancelFlag,
-                                  int& extractedCount) {
+                                  int& extractedCount,
+                                  const std::function<void(int, int, const std::string&)>& progressCallback) {
     extractedCount = 0;
     mz_zip_archive zip;
     memset(&zip, 0, sizeof(zip));
@@ -383,6 +405,8 @@ static bool extractZipToDirectory(const std::filesystem::path& zipPath,
                 success = false;
                 break;
             }
+            if (progressCallback)
+                progressCallback(static_cast<int>(index + 1), static_cast<int>(fileCount), entryName);
             continue;
         }
 
@@ -392,6 +416,8 @@ static bool extractZipToDirectory(const std::filesystem::path& zipPath,
             break;
         }
         ++extractedCount;
+        if (progressCallback)
+            progressCallback(static_cast<int>(index + 1), static_cast<int>(fileCount), entryName);
     }
 
     mz_zip_reader_end(&zip);
@@ -411,7 +437,8 @@ static std::string downloadFileName(const std::string& url) {
 static bool installDownloadedResource(const OnlineResourceItem& item,
                                       const std::filesystem::path& downloadedPath,
                                       const std::atomic<bool>* cancelFlag,
-                                      std::string& resultText) {
+                                      std::string& resultText,
+                                      const std::function<void(int, int, const std::string&)>& progressCallback) {
     const std::filesystem::path targetDirectory(item.path);
     std::error_code ec;
     std::filesystem::create_directories(targetDirectory, ec);
@@ -422,7 +449,8 @@ static bool installDownloadedResource(const OnlineResourceItem& item,
 
     if (item.type == "zip") {
         int extractedCount = 0;
-        if (!extractZipToDirectory(downloadedPath, targetDirectory, cancelFlag, extractedCount)) {
+        if (!extractZipToDirectory(downloadedPath, targetDirectory, cancelFlag,
+                                   extractedCount, progressCallback)) {
             resultText = "解压失败，请检查压缩包内容和目标目录";
             return false;
         }
@@ -910,6 +938,229 @@ private:
     }
 };
 
+class ResourceProgressCanvas final : public brls::View {
+public:
+    explicit ResourceProgressCanvas(std::string resourceName)
+        : m_title("正在更新 " + std::move(resourceName)) {
+        this->setWidth(620.f);
+        this->setHeight(250.f);
+        this->setFocusable(false);
+        m_lastFrameTime = std::chrono::steady_clock::now();
+    }
+
+    void setProgress(std::string stage, std::string detail, float progress) {
+        m_stage = std::move(stage);
+        m_detail = detail.empty() ? "准备中" : std::move(detail);
+        m_targetProgress = std::clamp(progress, 0.f, 1.f);
+        _updateStageStyle();
+        this->invalidate();
+    }
+
+    void draw(NVGcontext* vg, float x, float y, float w, float h,
+              brls::Style style, brls::FrameContext* ctx) override {
+        (void)style;
+        (void)ctx;
+        if (m_defaultFont < 0)
+            m_defaultFont = brls::Application::getDefaultFont();
+        if (m_materialFont < 0)
+            m_materialFont = brls::Application::getFont(brls::FONT_MATERIAL_ICONS);
+
+        constexpr float iconSize = 68.f;
+        constexpr float sidePadding = 38.f;
+        const float iconX = x + sidePadding;
+        const float iconY = y + 34.f;
+        const float textX = iconX + iconSize + 22.f;
+        const float progressX = x + sidePadding;
+        const float progressW = w - sidePadding * 2.f;
+        const float progressY = y + 184.f;
+        const float progressH = 10.f;
+
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, iconX, iconY, iconSize, iconSize, 8.f);
+        nvgFillColor(vg, nvgRGBA(m_accentR, m_accentG, m_accentB, 34));
+        nvgFill(vg);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, iconX + 1.f, iconY + 1.f, iconSize - 2.f, iconSize - 2.f, 7.f);
+        nvgStrokeColor(vg, nvgRGBA(m_accentR, m_accentG, m_accentB, 105));
+        nvgStrokeWidth(vg, 1.f);
+        nvgStroke(vg);
+
+        const std::string iconText = encodeMaterialIcon(m_icon);
+        nvgFontFaceId(vg, m_materialFont);
+        nvgFontSize(vg, 38.f);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        const float pulse = 0.82f + std::sin(m_animTime * 3.2f) * 0.12f;
+        nvgFillColor(vg, nvgRGBA(m_accentR, m_accentG, m_accentB,
+                                static_cast<unsigned char>(255.f * pulse)));
+        nvgText(vg, iconX + iconSize * 0.5f, iconY + iconSize * 0.5f,
+                iconText.c_str(), nullptr);
+
+        nvgSave(vg);
+        nvgIntersectScissor(vg, textX, y + 28.f, w - textX + x - sidePadding, 88.f);
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
+        nvgFontSize(vg, 23.f);
+        nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
+        nvgText(vg, textX, y + 39.f, m_title.c_str(), nullptr);
+        nvgFontSize(vg, 18.f);
+        nvgFillColor(vg, nvgRGBA(m_accentR, m_accentG, m_accentB, 235));
+        nvgText(vg, textX, y + 76.f, m_stage.c_str(), nullptr);
+        nvgRestore(vg);
+
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, x + sidePadding, y + 124.f);
+        nvgLineTo(vg, x + w - sidePadding, y + 124.f);
+        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 24));
+        nvgStrokeWidth(vg, 1.f);
+        nvgStroke(vg);
+
+        nvgSave(vg);
+        nvgIntersectScissor(vg, x + sidePadding, y + 138.f, progressW - 90.f, 28.f);
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgFontSize(vg, 15.f);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(205, 210, 220, 210));
+        nvgText(vg, x + sidePadding, y + 151.f, m_detail.c_str(), nullptr);
+        nvgRestore(vg);
+
+        const std::string percentText = std::to_string(
+            static_cast<int>(m_targetProgress * 100.f + 0.5f)) + "%";
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgFontSize(vg, 17.f);
+        nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
+        nvgText(vg, x + w - sidePadding, y + 151.f, percentText.c_str(), nullptr);
+
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, progressX, progressY, progressW, progressH, 5.f);
+        nvgFillColor(vg, nvgRGBA(255, 255, 255, 28));
+        nvgFill(vg);
+
+        const float fillW = progressW * std::clamp(m_displayProgress, 0.f, 1.f);
+        if (fillW > 0.5f) {
+            nvgBeginPath(vg);
+            nvgRoundedRect(vg, progressX, progressY, fillW, progressH, 5.f);
+            nvgFillColor(vg, nvgRGBA(m_accentR, m_accentG, m_accentB, 235));
+            nvgFill(vg);
+
+            if (fillW > 12.f) {
+                nvgBeginPath(vg);
+                nvgCircle(vg, progressX + fillW - 5.f, progressY + progressH * 0.5f, 2.f);
+                nvgFillColor(vg, nvgRGBA(255, 255, 255, 205));
+                nvgFill(vg);
+            }
+        }
+
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgFontSize(vg, 13.f);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(175, 180, 192, 165));
+        nvgText(vg, x + sidePadding, y + 220.f, "在线资源", nullptr);
+    }
+
+    void frame(brls::FrameContext* ctx) override {
+        brls::View::frame(ctx);
+        const auto now = std::chrono::steady_clock::now();
+        float dt = std::chrono::duration<float>(now - m_lastFrameTime).count();
+        m_lastFrameTime = now;
+        if (dt <= 0.f || dt > 0.5f)
+            dt = 0.016f;
+        m_animTime += dt;
+        const float difference = m_targetProgress - m_displayProgress;
+        m_displayProgress += difference * std::min(1.f, dt * 10.f);
+        if (std::abs(difference) < 0.001f)
+            m_displayProgress = m_targetProgress;
+        this->invalidate();
+    }
+
+private:
+    std::string m_title;
+    std::string m_stage = "正在连接服务器...";
+    std::string m_detail = "准备中";
+    char32_t m_icon = 0xE2C4;
+    unsigned char m_accentR = 79;
+    unsigned char m_accentG = 193;
+    unsigned char m_accentB = 255;
+    int m_defaultFont = -1;
+    int m_materialFont = -1;
+    float m_targetProgress = 0.f;
+    float m_displayProgress = 0.f;
+    float m_animTime = 0.f;
+    std::chrono::steady_clock::time_point m_lastFrameTime;
+
+    void _updateStageStyle() {
+        if (m_stage.find("解压") != std::string::npos) {
+            m_icon = 0xE149;
+            m_accentR = 255;
+            m_accentG = 184;
+            m_accentB = 77;
+        } else if (m_stage.find("安装") != std::string::npos) {
+            m_icon = material::INSTALL_APP;
+            m_accentR = 111;
+            m_accentG = 207;
+            m_accentB = 151;
+        } else if (m_stage.find("版本") != std::string::npos) {
+            m_icon = material::DESCRIPTION;
+            m_accentR = 111;
+            m_accentG = 207;
+            m_accentB = 151;
+        } else {
+            m_icon = 0xE2C4;
+            m_accentR = 79;
+            m_accentG = 193;
+            m_accentB = 255;
+        }
+    }
+};
+
+class ResourceTransferDialog final : public brls::Dialog {
+public:
+    explicit ResourceTransferDialog(const std::string& resourceName)
+        : ResourceTransferDialog(_buildContent(resourceName)) {
+        this->setCancelable(false);
+        this->setFocusable(true);
+        HIDE_BRLS_HIGHLIGHT(this);
+    }
+
+    void setProgress(const std::string& stage,
+                     const std::string& detail,
+                     float progress) {
+        m_canvas->setProgress(stage, detail, progress);
+    }
+
+private:
+    struct ContentParts {
+        brls::Box* root = nullptr;
+        ResourceProgressCanvas* canvas = nullptr;
+    };
+
+    ResourceProgressCanvas* m_canvas = nullptr;
+
+    explicit ResourceTransferDialog(const ContentParts& parts)
+        : brls::Dialog(parts.root)
+        , m_canvas(parts.canvas) {
+    }
+
+    static ContentParts _buildContent(const std::string& resourceName) {
+        ContentParts parts;
+        parts.root = new brls::Box(brls::Axis::COLUMN);
+        parts.root->setWidth(620.f);
+        parts.root->setHeight(250.f);
+        parts.root->setFocusable(false);
+        parts.canvas = new ResourceProgressCanvas(resourceName);
+        parts.root->addView(parts.canvas);
+        return parts;
+    }
+};
+
+static std::string formatTransferSize(curl_off_t bytes) {
+    if (bytes < 1024)
+        return std::to_string(static_cast<long long>(bytes)) + " B";
+    if (bytes < 1024 * 1024)
+        return fmt::format("{:.1f} KB", static_cast<double>(bytes) / 1024.0);
+    return fmt::format("{:.1f} MB", static_cast<double>(bytes) / (1024.0 * 1024.0));
+}
+
 static void openOnlineResourceActivity(OnlineResourceManifest manifest,
                                        beiklive::Box* previousPage) {
     auto* page = new beiklive::Box(brls::Axis::COLUMN);
@@ -970,10 +1221,7 @@ static void checkOnlineResources(beiklive::Box* previousPage) {
 
 static void startResourceDownload(const OnlineResourceItem& item,
                                   std::function<void()> onSuccess) {
-    auto* progressDialog = new brls::Dialog(
-        "正在下载并安装 " + item.name + "...\n\n请稍候");
-    progressDialog->setFocusable(true);
-    HIDE_BRLS_HIGHLIGHT(progressDialog);
+    auto* progressDialog = new ResourceTransferDialog(item.name);
     progressDialog->open();
 
     new std::thread([progressDialog, item, onSuccess = std::move(onSuccess)]() {
@@ -994,7 +1242,29 @@ static void startResourceDownload(const OnlineResourceItem& item,
         const auto downloadPath = cacheDirectory
             / (std::to_string(uniqueId) + "_" + downloadFileName(item.url));
 
-        if (!downloadFileToPath(cacheBustedUrl(item.url), downloadPath.string())) {
+        auto lastDownloadUpdate = std::make_shared<std::chrono::steady_clock::time_point>();
+        auto downloadProgress = [progressDialog, lastDownloadUpdate](
+                                    curl_off_t downloaded, curl_off_t total) {
+            const auto now = std::chrono::steady_clock::now();
+            const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                now - *lastDownloadUpdate).count();
+            if (total > 0 && downloaded < total && elapsed >= 0 && elapsed < 100)
+                return;
+            *lastDownloadUpdate = now;
+
+            const float progress = total > 0
+                ? static_cast<float>(static_cast<double>(downloaded) / static_cast<double>(total))
+                : 0.f;
+            std::string detail = formatTransferSize(downloaded);
+            if (total > 0)
+                detail += " / " + formatTransferSize(total);
+            brls::sync([progressDialog, detail = std::move(detail), progress]() {
+                progressDialog->setProgress("正在下载...", detail, progress);
+            });
+        };
+
+        if (!downloadFileToPath(cacheBustedUrl(item.url), downloadPath.string(),
+                                nullptr, std::move(downloadProgress))) {
             std::filesystem::remove(downloadPath, ec);
             brls::sync([progressDialog]() {
                 progressDialog->close([]() {});
@@ -1003,8 +1273,42 @@ static void startResourceDownload(const OnlineResourceItem& item,
             return;
         }
 
+        if (item.type == "zip") {
+            brls::sync([progressDialog]() {
+                progressDialog->setProgress("正在解压...", "正在读取压缩包", 0.f);
+            });
+        } else {
+            brls::sync([progressDialog, item]() {
+                progressDialog->setProgress("正在安装文件...", downloadFileName(item.url), 0.f);
+            });
+        }
+
+        auto lastExtractUpdate = std::make_shared<std::chrono::steady_clock::time_point>();
+        auto extractProgress = [progressDialog, lastExtractUpdate](
+                                   int current, int total, const std::string& entryName) {
+            const auto now = std::chrono::steady_clock::now();
+            const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                now - *lastExtractUpdate).count();
+            if (current < total && elapsed >= 0 && elapsed < 50)
+                return;
+            *lastExtractUpdate = now;
+
+            const float progress = total > 0
+                ? static_cast<float>(current) / static_cast<float>(total) : 0.f;
+            const std::string detail = std::to_string(current) + " / "
+                + std::to_string(total) + "  " + zipBaseName(entryName);
+            brls::sync([progressDialog, detail, progress]() {
+                progressDialog->setProgress("正在解压...", detail, progress);
+            });
+        };
+
         std::string resultText;
-        const bool installOk = installDownloadedResource(item, downloadPath, nullptr, resultText);
+        std::function<void(int, int, const std::string&)> installProgress;
+        if (item.type == "zip")
+            installProgress = extractProgress;
+        const bool installOk = installDownloadedResource(
+            item, downloadPath, nullptr, resultText,
+            installProgress);
         std::filesystem::remove(downloadPath, ec);
 
         if (!installOk) {
@@ -1015,6 +1319,9 @@ static void startResourceDownload(const OnlineResourceItem& item,
             return;
         }
 
+        brls::sync([progressDialog]() {
+            progressDialog->setProgress("正在保存版本信息...", "即将完成", 1.f);
+        });
         const bool versionSaved = writeResourceVersion(item.name, item.version);
         brls::sync([progressDialog, resultText, versionSaved, onSuccess]() {
             progressDialog->close([]() {});

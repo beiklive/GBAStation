@@ -27,23 +27,16 @@ public:
 private:
     static brls::Box* buildDialogContent(UpdatePage* self);
     void _updateProgress(float pct, const std::string& speed, const std::string& size, const std::string& eta);
-    brls::Button* _makeActionButton(
-        const std::string& text, std::function<bool(brls::View*)> onClick);
+    void _setVisualState(const std::string& status, int state);
+    void _showCloseButton();
     void _resetActionButtons();
     void _closeDialog();
 
     std::atomic<bool> m_cancelled{false};
+    std::atomic<bool> m_canClose{false};
     std::function<void()> m_onCancel;
 
-    brls::Label* m_titleLabel = nullptr;
-    brls::Label* m_statusLabel = nullptr;
-    brls::Label* m_speedLabel = nullptr;
-    brls::Label* m_sizeLabel = nullptr;
-    brls::Label* m_etaLabel = nullptr;
-    brls::Label* m_pctLabel = nullptr;
-    brls::Rectangle* m_progressBg = nullptr;
-    brls::Rectangle* m_progressBar = nullptr;
-    brls::Box* m_btnBox = nullptr;
+    brls::View* m_progressCanvas = nullptr;
 };
 
 } // namespace beiklive
