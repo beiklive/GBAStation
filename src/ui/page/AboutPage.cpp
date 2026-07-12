@@ -364,6 +364,38 @@ static bool isSafeZipEntry(const std::filesystem::path& relativePath) {
     return true;
 }
 
+static std::string normalizeZipEntryNameForFilesystem(const std::string& entryName) {
+    std::string normalized;
+    normalized.reserve(entryName.size());
+    for (size_t i = 0; i < entryName.size();) {
+        const auto byte0 = static_cast<unsigned char>(entryName[i]);
+        if (i + 2 < entryName.size() && byte0 == 0xEF) {
+            const auto byte1 = static_cast<unsigned char>(entryName[i + 1]);
+            const auto byte2 = static_cast<unsigned char>(entryName[i + 2]);
+            if (byte1 == 0xBC && byte2 >= 0x81 && byte2 <= 0xBF) {
+                normalized.push_back(static_cast<char>(0x21 + byte2 - 0x81));
+                i += 3;
+                continue;
+            }
+            if (byte1 == 0xBD && byte2 >= 0x80 && byte2 <= 0x9E) {
+                normalized.push_back(static_cast<char>(0x60 + byte2 - 0x80));
+                i += 3;
+                continue;
+            }
+        }
+        if (i + 2 < entryName.size() && byte0 == 0xE3
+            && static_cast<unsigned char>(entryName[i + 1]) == 0x80
+            && static_cast<unsigned char>(entryName[i + 2]) == 0x80) {
+            normalized.push_back(' ');
+            i += 3;
+            continue;
+        }
+        normalized.push_back(entryName[i]);
+        ++i;
+    }
+    return normalized;
+}
+
 static bool extractZipToDirectory(const std::filesystem::path& zipPath,
                                   const std::filesystem::path& outputDirectory,
                                   const std::atomic<bool>* cancelFlag,
@@ -390,10 +422,17 @@ static bool extractZipToDirectory(const std::filesystem::path& zipPath,
             break;
         }
 
-        std::string entryName = stat.m_filename;
+        const std::string archiveEntryName = stat.m_filename;
+        std::string entryName = normalizeZipEntryNameForFilesystem(archiveEntryName);
+        if (entryName != archiveEntryName) {
+            brls::Logger::info("Resource ZIP entry normalized: '{}' -> '{}'",
+                               archiveEntryName, entryName);
+        }
         std::replace(entryName.begin(), entryName.end(), '\\', '/');
         const std::filesystem::path relativePath(entryName);
         if (!isSafeZipEntry(relativePath)) {
+            brls::Logger::error("Resource ZIP contains unsafe entry: index={} name='{}'",
+                                index, entryName);
             success = false;
             break;
         }
@@ -402,6 +441,8 @@ static bool extractZipToDirectory(const std::filesystem::path& zipPath,
         if (mz_zip_reader_is_file_a_directory(&zip, index)) {
             std::filesystem::create_directories(outputPath, ec);
             if (ec) {
+                brls::Logger::error("Resource ZIP directory creation failed: index={} path='{}' error='{}'",
+                                    index, outputPath.string(), ec.message());
                 success = false;
                 break;
             }
@@ -412,6 +453,11 @@ static bool extractZipToDirectory(const std::filesystem::path& zipPath,
 
         std::filesystem::create_directories(outputPath.parent_path(), ec);
         if (ec || !mz_zip_reader_extract_to_file(&zip, index, outputPath.string().c_str(), 0)) {
+            const auto zipError = mz_zip_get_last_error(&zip);
+            brls::Logger::error(
+                "Resource ZIP extraction failed: index={} entry='{}' path='{}' fsError='{}' zipError='{}'",
+                index, entryName, outputPath.string(), ec.message(),
+                mz_zip_get_error_string(zipError));
             success = false;
             break;
         }
