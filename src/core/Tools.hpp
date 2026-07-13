@@ -40,6 +40,8 @@ std::string getIconPathPrefix();
 // 根据文件类型和预先计算的图标前缀返回图标路径（可在后台线程调用）
 std::string getIconPathWithPrefix(beiklive::enums::FileType type, const std::string& prefix);
 std::string getDefaultLogoPath(beiklive::enums::EmuPlatform platform);
+/// 启用存档截图封面时，将默认封面替换为即时存档 0 的截图。
+bool tryUseSavestateThumbnailCover(beiklive::GameEntry& entry);
 // 获取系统逻辑磁盘驱动器列表（Windows: C:\、D:\ 等；其他平台: {"/"}）
 std::vector<std::string> getLogicalDrives();
 

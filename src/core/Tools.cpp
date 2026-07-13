@@ -177,6 +177,39 @@ std::string getDefaultLogoPath(beiklive::enums::EmuPlatform platform)
             return BK_RES(path_prefix + "gba.png");
     }
 }
+
+bool tryUseSavestateThumbnailCover(beiklive::GameEntry& entry)
+{
+    if (GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_UI_USE_SAVESTATE_THUMB, 0) == 0 ||
+        entry.path.empty())
+        return false;
+
+    const auto platform = static_cast<beiklive::enums::EmuPlatform>(entry.platform);
+    const std::string defaultLogo = getDefaultLogoPath(platform);
+    bool usesDefaultLogo = entry.logoPath.empty() || entry.logoPath == defaultLogo;
+
+    // NDS ROM icons are generated automatically and are therefore also a
+    // fallback cover, not a user-selected custom cover.
+    if (!usesDefaultLogo && platform == beiklive::enums::EmuPlatform::EmuNDS)
+    {
+        const std::string ndsIcon = beiklive::GetNdsIconCachePath(entry.path);
+        usesDefaultLogo = !ndsIcon.empty() && entry.logoPath == ndsIcon;
+    }
+
+    if (!usesDefaultLogo)
+        return false;
+
+    const std::string saveDir = entry.savePath.empty()
+        ? defaultGameSavePath(entry.platform, entry.path)
+        : entry.savePath;
+    const std::string thumbPath = getStateThumbPath(saveDir, entry.path, 0);
+    std::error_code ec;
+    if (!std::filesystem::exists(thumbPath, ec) || ec)
+        return false;
+
+    entry.logoPath = thumbPath;
+    return true;
+}
 std::string getIconPath(const std::string& path) {
     return getIconPath(getFileType(path));
 }

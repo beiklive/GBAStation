@@ -226,6 +226,12 @@ namespace beiklive
                     ? beiklive::GameDB->getRecentPlayed(10)
                     : beiklive::GameList{};
 
+                for (auto& entry : recent)
+                {
+                    if (beiklive::tools::tryUseSavestateThumbnailCover(entry) && beiklive::GameDB)
+                        beiklive::GameDB->set(entry.path, "logoPath", nlohmann::json(entry.logoPath));
+                }
+
                 brls::sync([this, gen, recent = std::move(recent)]() {
                     if (!m_alive.load() || gen != m_recentRefreshGen.load() || !switchLayout) return;
 

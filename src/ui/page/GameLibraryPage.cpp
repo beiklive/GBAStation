@@ -40,6 +40,20 @@ bool deleteGameFileIfExists(const std::string& path)
     return std::filesystem::remove(path, ec) && !ec;
 }
 
+std::vector<beiklive::GameEntry> loadLibraryEntries()
+{
+    auto entries = beiklive::GameDB
+        ? beiklive::GameDB->getAll()
+        : std::vector<beiklive::GameEntry>{};
+
+    for (auto& entry : entries)
+    {
+        if (beiklive::tools::tryUseSavestateThumbnailCover(entry) && beiklive::GameDB)
+            beiklive::GameDB->set(entry.path, "logoPath", nlohmann::json(entry.logoPath));
+    }
+    return entries;
+}
+
 bool copyBinaryFile(const fs::path& src, const fs::path& dst, std::string* error = nullptr)
 {
     std::error_code ec;
@@ -748,7 +762,7 @@ namespace beiklive
                     auto* alive = &m_alive;
                     ThreadPool::instance().enqueue([this, alive]() {
                         if (!alive->load()) return;
-                        m_entries = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
+                        m_entries = loadLibraryEntries();
                         _filterEntries();
                         brls::sync([this, alive]() {
                             if (!alive->load()) return;
@@ -845,7 +859,7 @@ namespace beiklive
         auto* alive = &m_alive;
         ThreadPool::instance().enqueue([this, alive]() {
             if (!alive->load()) return;
-            m_entries = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
+            m_entries = loadLibraryEntries();
             _filterEntries();
             brls::sync([this, alive]() {
                 if (!alive->load()) return;
@@ -958,11 +972,11 @@ namespace beiklive
                         m_platformFilter = map[sel];
                         ThreadPool::instance().enqueue([this, alive]() {
                             if (!alive->load()) return;
-                            m_entries = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
+                            m_entries = loadLibraryEntries();
                             _filterEntries();
                             if (m_platformFilter == PlatformFilter::FAVORITE && m_entries.empty()) {
                                 m_platformFilter = PlatformFilter::ALL;
-                                m_entries = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
+                                m_entries = loadLibraryEntries();
                                 _filterEntries();
                                 brls::Application::notify("收藏列表为空，已切换至所有游戏");
                             }
@@ -1065,11 +1079,11 @@ namespace beiklive
         auto* alive = &m_alive;
         ThreadPool::instance().enqueue([this, alive]() {
             if (!alive->load()) return;
-            m_entries = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
+            m_entries = loadLibraryEntries();
             _filterEntries();
             if (m_platformFilter == PlatformFilter::FAVORITE && m_entries.empty()) {
                 m_platformFilter = PlatformFilter::ALL;
-                m_entries = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
+                m_entries = loadLibraryEntries();
                 _filterEntries();
                 brls::Application::notify("收藏列表为空，已切换至所有游戏");
             }
