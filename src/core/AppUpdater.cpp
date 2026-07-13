@@ -27,6 +27,10 @@ static std::string cacheNroPath() {
     return beiklive::path::cachePath() + "/update.nro";
 }
 
+static std::string cacheNdsStubPath() {
+    return beiklive::path::cachePath() + "/update_nds_stub.nro";
+}
+
 // 缓存目录中的 update.zip 路径
 static std::string cacheZipPath() {
     return beiklive::path::cachePath() + "/update.zip";
@@ -111,34 +115,48 @@ static std::string normalizeZipPath(const std::string& name) {
     return normalized;
 }
 
-static bool extractNroFromZip(const std::string& zipPath, const std::string& outPath) {
+static bool extractUpdateFilesFromZip(const std::string& zipPath,
+                                      const std::string& mainNroPath,
+                                      const std::string& ndsStubPath) {
     mz_zip_archive zip;
     memset(&zip, 0, sizeof(zip));
     if (!mz_zip_reader_init_file(&zip, zipPath.c_str(), 0))
         return false;
 
-    int preferredIndex = -1;
-    int fallbackIndex = -1;
+    int mainPreferredIndex = -1;
+    int mainFallbackIndex = -1;
+    int stubPreferredIndex = -1;
+    int stubFallbackIndex = -1;
     mz_uint numFiles = mz_zip_reader_get_num_files(&zip);
     for (mz_uint i = 0; i < numFiles; ++i) {
         char filename[512];
         mz_zip_reader_get_filename(&zip, i, filename, sizeof(filename));
         std::string normalized = normalizeZipPath(filename);
         if (normalized == "switch/GBAStation.nro") {
-            preferredIndex = static_cast<int>(i);
-            break;
+            mainPreferredIndex = static_cast<int>(i);
+        } else if (normalized == "GBAStation/core/GBAStationNDSStub.nro") {
+            stubPreferredIndex = static_cast<int>(i);
         }
-        if (zipBaseName(normalized) == "GBAStation.nro" && fallbackIndex < 0)
-            fallbackIndex = static_cast<int>(i);
+        const std::string baseName = zipBaseName(normalized);
+        if (baseName == "GBAStation.nro" && mainFallbackIndex < 0)
+            mainFallbackIndex = static_cast<int>(i);
+        else if (baseName == "GBAStationNDSStub.nro" && stubFallbackIndex < 0)
+            stubFallbackIndex = static_cast<int>(i);
     }
 
-    int extractIndex = preferredIndex >= 0 ? preferredIndex : fallbackIndex;
-    bool ok = false;
-    if (extractIndex >= 0)
-        ok = mz_zip_reader_extract_to_file(&zip, static_cast<mz_uint>(extractIndex), outPath.c_str(), 0);
+    const int mainIndex = mainPreferredIndex >= 0 ? mainPreferredIndex : mainFallbackIndex;
+    const int stubIndex = stubPreferredIndex >= 0 ? stubPreferredIndex : stubFallbackIndex;
+    bool mainOk = false;
+    bool stubOk = false;
+    if (mainIndex >= 0)
+        mainOk = mz_zip_reader_extract_to_file(
+            &zip, static_cast<mz_uint>(mainIndex), mainNroPath.c_str(), 0);
+    if (stubIndex >= 0)
+        stubOk = mz_zip_reader_extract_to_file(
+            &zip, static_cast<mz_uint>(stubIndex), ndsStubPath.c_str(), 0);
 
     mz_zip_reader_end(&zip);
-    return ok;
+    return mainOk && stubOk;
 }
 
 static std::string fetchUrl(const std::string& url) {
@@ -245,7 +263,7 @@ bool AppUpdater::checkSync() {
     m_info = UpdateInfo{};
     m_info.hasUpdate = false;
     m_info.downloadUrl = DOWNLOAD_URL;
-    m_info.changelog = "检测到新版本后，将从服务器下载并解压最新的 GBAStation.nro。";
+    m_info.changelog = "检测到新版本后，将更新 GBAStation 主程序与 NDS 运行核心。";
     m_aborted.store(false);
 
     auto ts = std::chrono::duration_cast<std::chrono::seconds>(
@@ -329,17 +347,20 @@ bool AppUpdater::download(std::function<bool(size_t, size_t)> onProgress) {
     f.write(reinterpret_cast<const char*>(m_downloadedData.data()), m_downloadedData.size());
     f.close();
 
-    if (!extractNroFromZip(cacheZipPath(), cacheNroPath())) {
+    if (!extractUpdateFilesFromZip(cacheZipPath(), cacheNroPath(), cacheNdsStubPath())) {
         std::filesystem::remove(cacheZipPath(), ec);
         std::filesystem::remove(cacheNroPath(), ec);
-        brls::Logger::error("AppUpdater: 更新包解压失败，未找到 GBAStation.nro");
+        std::filesystem::remove(cacheNdsStubPath(), ec);
+        brls::Logger::error(
+            "AppUpdater: 更新包解压失败，缺少 GBAStation.nro 或 GBAStationNDSStub.nro");
         return false;
     }
 
     std::filesystem::remove(cacheZipPath(), ec);
     m_info.fileSize = m_downloadedData.size();
 
-    brls::Logger::info("AppUpdater: 下载并解压完成 {} bytes -> {}", m_downloadedData.size(), cacheNroPath());
+    brls::Logger::info("AppUpdater: 下载并解压完成 {} bytes -> {}, {}",
+        m_downloadedData.size(), cacheNroPath(), cacheNdsStubPath());
     return true;
 }
 
@@ -347,9 +368,10 @@ bool AppUpdater::install() {
 #ifdef __SWITCH__
     // 校验缓存 NRO 是否存在
     {
-        std::ifstream test(cacheNroPath(), std::ios::binary);
-        if (!test.good()) {
-            brls::Logger::error("AppUpdater: 缓存 NRO 文件不存在");
+        std::ifstream mainNro(cacheNroPath(), std::ios::binary);
+        std::ifstream ndsStub(cacheNdsStubPath(), std::ios::binary);
+        if (!mainNro.good() || !ndsStub.good()) {
+            brls::Logger::error("AppUpdater: 缓存主程序或 NDS Stub 不存在");
             return false;
         }
     }
@@ -364,17 +386,62 @@ bool AppUpdater::install() {
 
 bool AppUpdater::finishInstall() {
 #ifdef __SWITCH__
-    std::string nroPath = "sdmc:/switch/GBAStation.nro";
+    const std::string nroPath = "sdmc:/switch/GBAStation.nro";
+    const std::string ndsStubPath = "sdmc:/GBAStation/core/GBAStationNDSStub.nro";
+    const std::string nroBackupPath = nroPath + ".update_backup";
+    const std::string ndsStubBackupPath = ndsStubPath + ".update_backup";
 
     romfsExit();
 
-    std::remove(nroPath.c_str());
-    if (std::rename(cacheNroPath().c_str(), nroPath.c_str()) != 0) {
-        brls::Logger::error("AppUpdater: NRO 替换失败");
+    std::error_code ec;
+    std::filesystem::create_directories(
+        std::filesystem::path(ndsStubPath).parent_path(), ec);
+    if (ec) {
+        brls::Logger::error("AppUpdater: 创建 NDS Stub 目录失败: {}", ec.message());
         return false;
     }
 
-    brls::Logger::info("AppUpdater: NRO 替换完成 -> {}", nroPath);
+    std::remove(nroBackupPath.c_str());
+    std::remove(ndsStubBackupPath.c_str());
+
+    const bool hadMainNro = std::filesystem::exists(nroPath, ec);
+    ec.clear();
+    const bool hadNdsStub = std::filesystem::exists(ndsStubPath, ec);
+
+    auto restoreBackup = [](const std::string& target,
+                            const std::string& backup,
+                            bool hadOriginal) {
+        std::remove(target.c_str());
+        if (hadOriginal)
+            std::rename(backup.c_str(), target.c_str());
+    };
+
+    if (hadMainNro && std::rename(nroPath.c_str(), nroBackupPath.c_str()) != 0) {
+        brls::Logger::error("AppUpdater: 无法备份现有主程序");
+        return false;
+    }
+    if (hadNdsStub && std::rename(ndsStubPath.c_str(), ndsStubBackupPath.c_str()) != 0) {
+        restoreBackup(nroPath, nroBackupPath, hadMainNro);
+        brls::Logger::error("AppUpdater: 无法备份现有 NDS Stub");
+        return false;
+    }
+
+    if (std::rename(cacheNdsStubPath().c_str(), ndsStubPath.c_str()) != 0) {
+        restoreBackup(ndsStubPath, ndsStubBackupPath, hadNdsStub);
+        restoreBackup(nroPath, nroBackupPath, hadMainNro);
+        brls::Logger::error("AppUpdater: NDS Stub 替换失败");
+        return false;
+    }
+    if (std::rename(cacheNroPath().c_str(), nroPath.c_str()) != 0) {
+        restoreBackup(ndsStubPath, ndsStubBackupPath, hadNdsStub);
+        restoreBackup(nroPath, nroBackupPath, hadMainNro);
+        brls::Logger::error("AppUpdater: 主程序 NRO 替换失败");
+        return false;
+    }
+
+    std::remove(nroBackupPath.c_str());
+    std::remove(ndsStubBackupPath.c_str());
+    brls::Logger::info("AppUpdater: 更新文件替换完成 -> {}, {}", nroPath, ndsStubPath);
     return true;
 #else
     return false;

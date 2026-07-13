@@ -499,17 +499,22 @@ void UpdatePage::startInstall() {
             if (ok) {
                 
 #ifdef __SWITCH__
-                AppUpdater::instance().finishInstall();
-                _setVisualState("安装完成，请重启模拟器",
-                    static_cast<int>(UpdateVisualState::Success));
-                // envSetNextLoad("sdmc:/switch/GBAStation.nro", "sdmc:/switch/GBAStation.nro");
-                m_canClose.store(false);
-                this->clearButtons();
-                this->getAppletFrame()->setHeight(382.f);
-                this->addButton("重启模拟器", [this]() {
-                    brls::Application::quit();
-                });
-                brls::Application::giveFocus(button1);
+                if (AppUpdater::instance().finishInstall()) {
+                    _setVisualState("安装完成，请重启模拟器",
+                        static_cast<int>(UpdateVisualState::Success));
+                    // envSetNextLoad("sdmc:/switch/GBAStation.nro", "sdmc:/switch/GBAStation.nro");
+                    m_canClose.store(false);
+                    this->clearButtons();
+                    this->getAppletFrame()->setHeight(382.f);
+                    this->addButton("重启模拟器", [this]() {
+                        brls::Application::quit();
+                    });
+                    brls::Application::giveFocus(button1);
+                } else {
+                    _setVisualState("更新文件覆盖失败，已尝试恢复旧文件",
+                        static_cast<int>(UpdateVisualState::Error));
+                    _showCloseButton();
+                }
 #else
                     brls::Application::notify("请手动重启");
 #endif

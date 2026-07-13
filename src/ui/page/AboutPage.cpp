@@ -1872,8 +1872,22 @@ void AboutPage::_checkUpdate() {
                 });
                 confirmDlg->addButton("取消", []() {});
                 confirmDlg->open();
+            } else if (!info.version.empty()) {
+                auto* latestDlg = new brls::Dialog(
+                    "当前已是最新版本，是否再次更新？");
+                latestDlg->addButton("再次更新", []() {
+                    brls::sync([]() {
+                        auto* dialog = new UpdatePage();
+                        dialog->open();
+                        brls::sync([dialog]() {
+                            dialog->startDownload();
+                        });
+                    });
+                });
+                latestDlg->addButton("取消", []() {});
+                latestDlg->open();
             } else {
-                auto* okDlg = new brls::Dialog("已是最新版本");
+                auto* okDlg = new brls::Dialog("更新检测失败，请检查网络后重试");
                 okDlg->addButton("确定", []() {});
                 okDlg->open();
             }
