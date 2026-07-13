@@ -219,6 +219,7 @@ namespace beiklive::SettingKey
 
     // 游戏库设置
     constexpr const char *KEY_UI_LIBRARY_TITLE_SIZE   = "ui.libraryTitleSize";       ///< 游戏库标题字号 (0=16 1=19 2=22)
+    constexpr const char *KEY_UI_LIBRARY_VIEW_MODE    = "ui.libraryViewMode";        ///< 游戏库视图 (0=网格 1=列表)
 
 
 } // namespace beiklive::SettingKey

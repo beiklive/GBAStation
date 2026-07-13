@@ -7,12 +7,21 @@
 #include <functional>
 #include <string>
 #include <chrono>
+#include <atomic>
+#include <deque>
+#include <memory>
+#include <mutex>
 
 #include "RecyclingGridItem.hpp"
 #include "RecyclingGridDataSource.hpp"
 
 class GameGridView : public brls::View {
 public:
+    enum class ViewMode : int {
+        GRID = 0,
+        LIST = 1,
+    };
+
     GameGridView();
     ~GameGridView() override;
 
@@ -37,6 +46,16 @@ public:
     void setFocusChangeCallback(std::function<void(int)> callback) { m_focusChangeCallback = std::move(callback); }
     void setInteractionDisabled(bool disabled) { m_interactionDisabled = disabled; }
     void setTitleFontSize(int opt);
+    void setViewMode(ViewMode mode);
+    ViewMode getViewMode() const { return m_viewMode; }
+    void toggleViewMode();
+    void setLibraryContext(std::string category, std::string detail);
+    void setPlatformCarousel(std::vector<std::string> labels, int selected, int direction);
+    void startContentTransition(int direction = 0);
+    void showLoadingSkeleton();
+    void playLaunchAnimation(size_t index, std::function<void()> completion);
+    void resetLaunchAnimation();
+    void playExitAnimation(std::function<void()> completion);
 
     void setMultiSelectMode(bool on);
     bool isMultiSelectMode() const { return m_multiSelectMode; }
@@ -60,6 +79,7 @@ private:
     std::vector<GridDrawItem> m_items;
 
     int m_selectedIndex = 0;
+    int m_preferredColumn = 0;
     uint64_t m_selectedGameId = 0;
     size_t m_defaultCellFocus = 0;
 
@@ -80,20 +100,68 @@ private:
     bool m_interactionDisabled = false;
     bool m_multiSelectMode = false;
     bool m_wasFocused = false;
+    bool m_hasPresentedData = false;
+    bool m_loadingSkeleton = false;
+    bool m_launchAnimationRunning = false;
+    bool m_exitAnimationRunning = false;
+    ViewMode m_viewMode = ViewMode::GRID;
 
     float m_shakeTime = 0.f;
     float m_shakeDir = 0.f;
     float m_focusBorderAnimTime = 0.f;
+    float m_platformTransition = 1.f;
+    float m_contentTransition = 1.f;
+    float m_detailTransition = 1.f;
+    float m_pageEntrance = 0.f;
+    float m_launchAnimationTime = 0.f;
+    int m_launchItemIndex = -1;
+    int m_platformSlideDirection = 0;
+    int m_contentSlideDirection = 0;
 
     std::function<void()> m_nextPageCallback;
     std::function<void(int)> m_focusChangeCallback;
+    std::function<void()> m_exitCompletion;
+    std::function<void()> m_launchCompletion;
 
     std::unordered_map<std::string, int> m_textureCache;
+    std::unordered_map<std::string, uint64_t> m_textureLastUsed;
+    uint64_t m_textureUseTick = 0;
     std::unordered_set<int> m_selectedForDelete;
 
     int m_fontId = -1;
+    int m_materialFontId = -1;
+    int m_switchIconFontId = -1;
     int m_titleFontSize = 16;
     int m_favIconHandle = -1;
+    std::string m_categoryLabel = "所有";
+    std::string m_detailLabel;
+    std::vector<std::string> m_platformLabels{"所有"};
+    int m_platformIndex = 0;
+
+    struct DecodedTexture {
+        std::string path;
+        uint64_t generation = 0;
+        int width = 0;
+        int height = 0;
+        std::vector<unsigned char> pixels;
+        bool failed = false;
+    };
+
+    struct TextureLoaderState {
+        std::atomic<bool> alive{true};
+        std::mutex mutex;
+        std::deque<DecodedTexture> ready;
+        uint64_t generation = 0;
+        std::unordered_set<std::string> wanted;
+        std::unordered_map<std::string, uint64_t> pending;
+    };
+
+    std::shared_ptr<TextureLoaderState> m_textureLoader;
+    std::unordered_set<std::string> m_failedTextures;
+    int m_requestedStartRow = -1;
+    int m_requestedEndRow = -1;
+    ViewMode m_requestedViewMode = ViewMode::GRID;
+    uint64_t m_requestedGameId = 0;
 
     std::chrono::steady_clock::time_point m_lastFrameTime;
 
@@ -140,7 +208,10 @@ private:
     void _captureInputState();
 
     void _drawItem(NVGcontext* vg, const GridDrawItem& item, float x, float y, float w, float h, bool focused, int idx);
-    void _drawImage(NVGcontext* vg, const GridDrawItem& item, float x, float y, float imageSize);
+    void _drawSkeletonItem(NVGcontext* vg, float x, float y, float w, float h, int idx);
+    void _drawLaunchOverlay(NVGcontext* vg, float x, float y, float w, float h);
+    void _drawImage(NVGcontext* vg, const GridDrawItem& item, float x, float y,
+                    float boxW, float boxH, bool platformDefault = false);
     void _drawBadge(NVGcontext* vg, const GridDrawItem& item, float x, float y);
     void _drawTitle(NVGcontext* vg, const GridDrawItem& item, float x, float y, float maxWidth, bool focused);
     void _drawSubText(NVGcontext* vg, const std::string& text, float x, float y, float maxWidth);
@@ -148,12 +219,30 @@ private:
     void _drawEmptyItem(NVGcontext* vg, float x, float y, float w, float h);
     void _drawScrollbar(NVGcontext* vg, float x, float y, float w, float h);
     void _drawFavourite(NVGcontext* vg, const GridDrawItem& item, float x, float y, float w, float h, float sx, float sy);
+    void _drawToolbar(NVGcontext* vg, float x, float y, float w);
+    void _drawFooter(NVGcontext* vg, float x, float y, float w, float h);
+    void _drawDetailsPanel(NVGcontext* vg, float x, float y, float w, float h);
+    void _drawSwitchButton(NVGcontext* vg, brls::ControllerButton button,
+                           float x, float y, float size, NVGcolor color);
+    void _drawHint(NVGcontext* vg, float x, float y, brls::ControllerButton button,
+                   const std::string& label, int secondButton = -1);
+    void _drawMaterialIcon(NVGcontext* vg, char32_t icon, float x, float y,
+                           float size, NVGcolor color, int align);
+    void _requestTexture(const std::string& path);
+    void _uploadDecodedTextures(NVGcontext* vg);
+    void _populateItem(size_t index);
+    void _populateVisibleItems();
 
     float _getItemX(int col);
     float _getItemY(int row);
     float _getItemWidth();
     float _getRowHeight();
     int _getRowCount();
+    float _getContentTop() const;
+    float _getFooterHeight() const;
+    float _getViewportHeight();
+    float _getListPaneWidth();
+    void _recalculateScrollBounds();
 
     NVGcolor _getBadgeColor(PlatformBadgeColor color) const;
 };

@@ -17,4 +17,6 @@ namespace beiklive::material
     constexpr char32_t UPDATE             = 0xE923;
     constexpr char32_t DESCRIPTION        = 0xE873;
     constexpr char32_t SEARCH             = 0xE8B6;
+    constexpr char32_t IMAGE_PLACEHOLDER  = 0xE3F4;
+    constexpr char32_t CHECK_BOX_OUTLINE  = 0xE835;
 }

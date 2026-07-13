@@ -1,6 +1,8 @@
 #pragma once
 
 #include <atomic>
+#include <memory>
+#include <unordered_map>
 #include "core/common.h"
 #include "core/Tools.hpp"
 #include "ui/widget/Box.hpp"
@@ -51,14 +53,14 @@ enum class PlatformFilter : int
             GameLibraryPage* m_page;
         };
 
-        static constexpr int PAGE_SIZE = 21;
-
-        GameGridView* m_grid = nullptr;
+        GameGridView* m_libraryView = nullptr;
         std::vector<beiklive::GameEntry> m_entries;
         GameLibraryDS* m_dataSource = nullptr;
         int m_visibleCount = 0;
-        bool m_loadingMore = false;
         PlatformFilter m_platformFilter = PlatformFilter::ALL;
+        std::vector<PlatformFilter> m_availableFilters{PlatformFilter::ALL};
+        std::unordered_map<int, int> m_filterFocusIndices;
+        int m_platformAnimationDirection = 0;
         SortMode m_sortMode = SortMode::LAST_PLAYED;
         std::string m_searchTerm;
         bool m_isSearching = false;
@@ -66,11 +68,30 @@ enum class PlatformFilter : int
 
         void _loadAndShowEntries();
         void _filterEntries();
-        void _loadNextPage();
-        void _reloadEntries();
+        void _reloadEntries(uint64_t requestGeneration = 0,
+                            bool useFastSnapshot = false);
+        void _presentReloadedEntries(
+            uint64_t requestGeneration,
+            std::vector<beiklive::GameEntry> entries,
+            std::vector<PlatformFilter> filters,
+            PlatformFilter resolvedFilter,
+            bool favoriteFallback,
+            bool isSearching,
+            const std::string& searchTerm);
+        void _schedulePlatformReload();
         void _showFilterDropdown();
         void _showSortSelector();
         void _updateHeader();
+        void _rebuildAvailableFilters(const std::vector<beiklive::GameEntry>& entries);
+        static std::vector<PlatformFilter> _buildAvailableFilters(
+            const std::vector<beiklive::GameEntry>& entries);
+        static void _filterAndSortEntries(std::vector<beiklive::GameEntry>& entries,
+                                          PlatformFilter platformFilter,
+                                          SortMode sortMode,
+                                          bool isSearching,
+                                          const std::string& searchTerm);
+        void _cyclePlatformFilter(int direction);
+        int _savedFocusIndex() const;
 
         static std::string _titleToSortKey(const std::string& title);
         static std::string _formatPlayTime(int seconds);
@@ -82,7 +103,12 @@ enum class PlatformFilter : int
 
         int _currentFocusedIndex = -1;
         bool m_firstAppear = true;
-        std::atomic<bool> m_alive{true};
+        bool m_isClosing = false;
+        bool m_hasPlatformReloadDelay = false;
+        size_t m_platformReloadDelayId = 0;
+        std::shared_ptr<std::atomic<bool>> m_aliveToken =
+            std::make_shared<std::atomic<bool>>(true);
+        std::atomic<uint64_t> m_reloadGeneration{0};
     };
 
 } // namespace beiklive

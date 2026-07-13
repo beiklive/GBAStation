@@ -747,12 +747,11 @@ namespace beiklive
         );
     }
 
-    void popActivity(beiklive::Box *v)
+    void popActivity(beiklive::Box *v, bool animate)
     {
         auto* box = static_cast<beiklive::Box*>(g_beiklive_boxes.back());
         g_beiklive_boxes.pop_back();
-        v->animaHide(
-            [box]() {
+        auto finishPop = [box]() {
                 auto stack = brls::Application::getActivitiesStack();
                 brls::Activity* activityToDelete = stack.empty() ? nullptr : stack.back();
                 bool popped = brls::Application::popActivity(
@@ -770,8 +769,11 @@ namespace beiklive
                     false);
                 if (!popped)
                     box->animaShow();
-            }
-        );
+            };
+        if (animate)
+            v->animaHide(std::move(finishPop));
+        else
+            finishPop();
     }
 
 } // namespace beiklive

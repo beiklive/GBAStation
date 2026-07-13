@@ -4,6 +4,7 @@
 #include "core/common.h"
 #include "ui/widget/ButtonBox.hpp"
 #include <functional>
+#include <chrono>
 #include <string>
 #include <vector>
 
@@ -33,6 +34,8 @@ namespace beiklive
         /// 是否正在显示
         bool isOpen() const { return m_isOpen; }
 
+        void frame(brls::FrameContext* ctx) override;
+
         /// 添加一个操作按钮
         /// @param text     按钮文字
         /// @param iconCodepoint Material Icons 字形码点
@@ -52,6 +55,9 @@ namespace beiklive
         void _destroyUI();
 
         bool m_isOpen = false;
+        float m_openProgress = 0.f;
+        std::chrono::steady_clock::time_point m_lastFrameTime =
+            std::chrono::steady_clock::now();
 
         // 按钮配置
         struct ButtonConfig

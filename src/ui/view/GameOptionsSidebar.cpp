@@ -1,5 +1,9 @@
 #include "GameOptionsSidebar.hpp"
+#include "core/Tools.hpp"
 #include "ui/widget/HintsBar.hpp"
+
+#include <algorithm>
+#include <cmath>
 
 namespace beiklive
 {
@@ -15,7 +19,7 @@ namespace beiklive
         this->setPositionLeft(0);
         this->setWidth(1280.f);
         this->setHeightPercentage(100.f);
-        this->setBackgroundColor(nvgRGBA(0, 0, 0, 10));
+        this->setBackgroundColor(nvgRGBA(0, 0, 0, 72));
         
     }
 
@@ -38,8 +42,27 @@ namespace beiklive
 
         m_entry  = entry;
         m_isOpen = true;
+        m_openProgress = 0.f;
+        m_lastFrameTime = std::chrono::steady_clock::now();
         _buildUI(entry);
         this->setVisibility(brls::Visibility::VISIBLE);
+        if (m_panel)
+            m_panel->setTranslationX(460.f);
+    }
+
+    void GameOptionsSidebar::frame(brls::FrameContext* ctx)
+    {
+        brls::Box::frame(ctx);
+        if (!m_isOpen || !m_panel || m_openProgress >= 1.f)
+            return;
+
+        const auto now = std::chrono::steady_clock::now();
+        float dt = std::chrono::duration<float>(now - m_lastFrameTime).count();
+        m_lastFrameTime = now;
+        if (dt <= 0.f || dt > 0.25f) dt = 0.016f;
+        m_openProgress = std::min(1.f, m_openProgress + dt * 6.0f);
+        const float eased = 1.f - std::pow(1.f - m_openProgress, 3.f);
+        m_panel->setTranslationX((1.f - eased) * 460.f);
     }
 
     void GameOptionsSidebar::close()
@@ -57,51 +80,74 @@ namespace beiklive
     {
         m_btnInstances.clear();
 
-        // ── 右侧选项面板 ──
         m_panel = new brls::Box(brls::Axis::COLUMN);
         m_panel->setFocusable(false);
-        m_panel->setWidth(400.f);
+        m_panel->setWidth(460.f);
         m_panel->setHeightPercentage(100.f);
-        m_panel->setBackgroundColor(nvgRGBA(0, 0, 0, 180));
-        m_panel->setPadding(24.f, 20.f, 0.f, 20.f);
+        m_panel->setBackgroundColor(nvgRGBA(255, 255, 255, 24));
+        m_panel->setLineColor(nvgRGBA(255, 255, 255, 62));
+        m_panel->setLineLeft(1.f);
+        m_panel->setPadding(30.f, 26.f, 0.f, 26.f);
         m_panel->setAlignItems(brls::AlignItems::STRETCH);
 
         auto* titlebox = new brls::Box(brls::Axis::ROW);
         titlebox->setFocusable(false);
         titlebox->setAlignItems(brls::AlignItems::CENTER);
-        // titlebox->setJustifyContent(brls::JustifyContent::FLEX_START);
+        titlebox->setMarginBottom(24.f);
         m_panel->addView(titlebox);
-        // 游戏图标
+
         m_iconImage = new brls::Image();
-        m_iconImage->setWidth(48.f);
-        m_iconImage->setHeight(48.f);
-        m_iconImage->setCornerRadius(8.f);
+        m_iconImage->setWidth(96.f);
+        m_iconImage->setHeight(126.f);
+        m_iconImage->setCornerRadius(6.f);
         m_iconImage->setScalingType(brls::ImageScalingType::FIT);
-        m_iconImage->setMarginBottom(10.f);
-        m_iconImage->setMarginRight(20.f);
+        m_iconImage->setMarginRight(22.f);
         m_iconImage->setFocusable(false);
         if (!entry.logoPath.empty())
             m_iconImage->setImageFromFile(entry.logoPath);
         titlebox->addView(m_iconImage);
 
-        // 游戏标题
+        auto* titleInfo = new brls::Box(brls::Axis::COLUMN);
+        titleInfo->setFocusable(false);
+        titleInfo->setGrow(1.f);
+        titleInfo->setJustifyContent(brls::JustifyContent::CENTER);
+
         m_titleLabel = new brls::Label();
         m_titleLabel->setText(entry.title.empty() ? "未知游戏" : entry.title);
-        m_titleLabel->setFontSize(22.f);
+        m_titleLabel->setFontSize(24.f);
         m_titleLabel->setTextColor(GET_THEME_COLOR("brls/text"));
-        m_titleLabel->setMarginTop(10.f);
         m_titleLabel->setFocusable(false);
         m_titleLabel->setSingleLine(true);
         m_titleLabel->setAnimated(true);
-        m_titleLabel->setMarginBottom(20.f);
-        titlebox->addView(m_titleLabel);
+        m_titleLabel->setMarginBottom(12.f);
+        titleInfo->addView(m_titleLabel);
 
-        // 分隔线
+        std::string meta = beiklive::tools::platformBadgeName(entry.platform);
+        if (entry.playTime > 0) {
+            if (!meta.empty()) meta += "  ·  ";
+            meta += beiklive::tools::formatPlayTime(entry.playTime);
+        }
+        auto* metaLabel = new brls::Label();
+        metaLabel->setText(meta.empty() ? "游戏选项" : meta);
+        metaLabel->setFontSize(16.f);
+        metaLabel->setTextColor(nvgRGBA(208, 214, 226, 210));
+        metaLabel->setFocusable(false);
+        titleInfo->addView(metaLabel);
+        titlebox->addView(titleInfo);
+
         auto* divider = new brls::Rectangle(nvgRGBA(255, 255, 255, 50));
         divider->setWidthPercentage(100);
         divider->setHeight(1.f);
-        divider->setMarginBottom(20.f);
+        divider->setMarginBottom(18.f);
         m_panel->addView(divider);
+
+        auto* sectionLabel = new brls::Label();
+        sectionLabel->setText("游戏操作");
+        sectionLabel->setFontSize(17.f);
+        sectionLabel->setTextColor(nvgRGBA(205, 211, 224, 220));
+        sectionLabel->setFocusable(false);
+        sectionLabel->setMarginBottom(12.f);
+        m_panel->addView(sectionLabel);
 
         // B 键关闭
         auto closeAction = [this](brls::View*) {
@@ -130,8 +176,16 @@ namespace beiklive
 
                 auto* btn = new beiklive::ButtonBox();
                 btn->setText(cfg.text);
-                btn->setIcon(cfg.iconCodepoint);
-                btn->setMarginBottom(4.f);
+                btn->setHeight(54.f);
+                btn->setCornerRadius(6.f);
+                btn->setBackgroundColor(nvgRGBA(255, 255, 255, 12));
+                btn->setMarginBottom(8.f);
+                btn->onFocusGainedCallback = [btn]() {
+                    btn->setBackgroundColor(nvgRGBA(255, 255, 255, 38));
+                };
+                btn->onFocusLostCallback = [btn]() {
+                    btn->setBackgroundColor(nvgRGBA(255, 255, 255, 12));
+                };
 
                 // A 键：触发回调
                 auto cb = cfg.callback; // 拷贝

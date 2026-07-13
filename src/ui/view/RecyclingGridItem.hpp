@@ -16,6 +16,7 @@ enum class PlatformBadgeColor {
 struct GridDrawItem {
     uint64_t gameId = 0;
 
+    bool populated = false;
     bool empty = true;
 
     std::string title;
@@ -27,7 +28,9 @@ struct GridDrawItem {
 
     std::string imagePath;
     std::string imageLayerPath;
+    std::string platformImagePath;
     bool imageLayerVisible = false;
+    float coverAspect = 1.f;
 
     bool favorite = false;
 
@@ -37,15 +40,19 @@ struct GridDrawItem {
     float focusGlow = 0.f;
 
     int textureHandle = -1;
+    int platformTextureHandle = -1;
     int imageLayerHandle = -1;
     bool textureLoading = false;
     bool textureReady = false;
     bool textureFailed = false;
+    bool platformTextureReady = false;
+    bool platformTextureFailed = false;
     bool imageLayerFailed = false;
 
     bool selected = false;
 
     void reset() {
+        populated = false;
         empty = true;
         title.clear();
         subText.clear();
@@ -54,17 +61,22 @@ struct GridDrawItem {
         badgeText.clear();
         imagePath.clear();
         imageLayerPath.clear();
+        platformImagePath.clear();
         imageLayerVisible = false;
+        coverAspect = 1.f;
         favorite = false;
         marqueeOffset = 0.f;
         marqueeMaxOffset = 0.f;
         focusScale = 1.f;
         focusGlow = 0.f;
         textureHandle = -1;
+        platformTextureHandle = -1;
         imageLayerHandle = -1;
         textureLoading = false;
         textureReady = false;
         textureFailed = false;
+        platformTextureReady = false;
+        platformTextureFailed = false;
         imageLayerFailed = false;
         selected = false;
     }
