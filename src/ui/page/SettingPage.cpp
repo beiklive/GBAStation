@@ -607,7 +607,7 @@ brls::View *SettingPage::buildUITab()
     sgbBorderCell->init("SGB 边框", cfgGetStr("core.mgba_sgb_borders", "OFF") == "ON",
                         [](bool v) { cfgSetStr("core.mgba_sgb_borders", v ? "ON" : "OFF"); });
     box->addView(sgbBorderCell);
-    box->addView(makeHint("为 Super Game Boy 游戏绘制专属边框图案"));
+    box->addView(makeHint("如果GB GBC游戏显示在左上角，请关闭此选项"));
 
     {
         std::vector<std::string> rtcModes = {"持久化 RTC", "跟随当前系统时间"};

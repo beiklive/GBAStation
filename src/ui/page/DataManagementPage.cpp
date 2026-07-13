@@ -397,14 +397,14 @@ void DataManagementPage::draw(
 
 void DataManagementPage::init()
 {
-    m_tabframe->addTab(
-        "扫描导入",
-        BK_RES("img/ui/setting/game.png"),
-        nullptr,
-        nullptr,
-        nullptr,
-        buildScanImportTab(),
-        m_scanDefaultFocus);
+    // m_tabframe->addTab(
+    //     "扫描导入",
+    //     BK_RES("img/ui/setting/game.png"),
+    //     nullptr,
+    //     nullptr,
+    //     nullptr,
+    //     buildScanImportTab(),
+    //     m_scanDefaultFocus);
     m_tabframe->addTab(
         "整合包导入",
         BK_RES("img/ui/setting/emu.png"),
@@ -815,7 +815,7 @@ void DataManagementPage::onSelectLpl(int platform)
     frame->setBackground(brls::ViewBackground::NONE);
     brls::Application::pushActivity(new brls::Activity(frame));
 
-    flPage->showDriveList();
+    flPage->setPath("/retroarch/playlists");
 }
 
 void DataManagementPage::startImport(const std::string& lplPath, int platform)
