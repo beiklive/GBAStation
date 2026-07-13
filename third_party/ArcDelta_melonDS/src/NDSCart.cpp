@@ -17,6 +17,7 @@
 */
 
 #include <stdio.h>
+#include <stdarg.h>
 #include <string.h>
 #include "NDS.h"
 #include "DSi.h"
@@ -32,6 +33,29 @@
 
 namespace NDSCart
 {
+
+#if defined(__GNUC__) || defined(__clang__)
+extern "C" void GBAStationNDSStubLogLine(const char* line) __attribute__((weak));
+#endif
+
+static u32 StubSPILogCount = 0;
+static u32 StubSPIUnknownLogCount = 0;
+
+static void StubDiagnosticLog(const char* format, ...)
+{
+#if defined(__GNUC__) || defined(__clang__)
+    if (!GBAStationNDSStubLogLine) return;
+
+    char line[256];
+    va_list args;
+    va_start(args, format);
+    vsnprintf(line, sizeof(line), format, args);
+    va_end(args);
+    GBAStationNDSStubLogLine(line);
+#else
+    (void)format;
+#endif
+}
 
 // SRAM TODO: emulate write delays???
 
@@ -467,11 +491,16 @@ void CartRetail::LoadSave(const char* path, u32 type)
     FILE* f = Platform::OpenFile(path, "rb");
     if (f)
     {
+        fseek(f, 0, SEEK_END);
+        long filelength = ftell(f);
         fseek(f, 0, SEEK_SET);
         fread(SRAM, 1, SRAMLength, f);
 
         fclose(f);
+        StubDiagnosticLog("NDS save existing file length=%ld expected=%u", filelength, SRAMLength);
     }
+    else
+        StubDiagnosticLog("NDS save existing file not found; initialized to FF");
 
     SRAMFileDirty = false;
     NDSCart_SRAMManager::Setup(path, SRAM, SRAMLength);
@@ -490,6 +519,9 @@ void CartRetail::LoadSave(const char* path, u32 type)
     case 10: SRAMType = 4; break; // NAND
     default: SRAMType = 0; break; // ...whatever else
     }
+
+    StubDiagnosticLog("NDS save setup type=%u length=%u device=%u path=%s",
+                      type, SRAMLength, SRAMType, path ? path : "(null)");
 }
 
 void CartRetail::RelocateSave(const char* path, bool write)
@@ -581,6 +613,13 @@ u8 CartRetail::SPIWrite(u8 val, u32 pos, bool last)
         default:
             SRAMCmd = val;
             SRAMAddr = 0;
+        }
+
+        if (StubSPILogCount < 256)
+        {
+            StubDiagnosticLog("NDS save SPI cmd=%02X last=%u type=%u status=%02X",
+                              val, last ? 1 : 0, SRAMType, SRAMStatus);
+            StubSPILogCount++;
         }
 
         return 0;
@@ -852,6 +891,12 @@ u8 CartRetail::SRAMWrite_FLASH(u8 val, u32 pos, bool last)
     default:
         if (pos == 1)
             printf("unknown FLASH save command %02X\n", SRAMCmd);
+        if (pos == 1 && StubSPIUnknownLogCount < 32)
+        {
+            StubDiagnosticLog("NDS save SPI unknown FLASH cmd=%02X status=%02X",
+                              SRAMCmd, SRAMStatus);
+            StubSPIUnknownLogCount++;
+        }
         return 0;
     }
 }
@@ -1114,11 +1159,43 @@ void CartRetailIR::DoSavestate(Savestate* file)
     file->Var8(&IRCmd);
 }
 
+static bool IsRetailSaveSPICommand(u8 cmd)
+{
+    switch (cmd)
+    {
+    case 0x01: // write status register
+    case 0x02: // page program
+    case 0x03: // read
+    case 0x04: // write disable
+    case 0x05: // read status register
+    case 0x06: // write enable
+    case 0x0A: // page write
+    case 0x0B: // fast read
+    case 0x9F: // read JEDEC ID
+    case 0xD8: // sector erase
+    case 0xDB: // page erase
+        return true;
+    default:
+        return false;
+    }
+}
+
 u8 CartRetailIR::SPIWrite(u8 val, u32 pos, bool last)
 {
     if (pos == 0)
     {
         IRCmd = val;
+        if (val != 0 && StubSPILogCount < 256)
+        {
+            StubDiagnosticLog("NDS IR SPI cmd=%02X last=%u", val, last ? 1 : 0);
+            StubSPILogCount++;
+        }
+
+        // Most infrared carts prefix save-chip commands with 0x00, but some
+        // ROM revisions access the shared save SPI bus directly.
+        if (IsRetailSaveSPICommand(IRCmd) && IRCmd != 0x08)
+            return CartRetail::SPIWrite(val, pos, last);
+
         return 0;
     }
 
@@ -1132,6 +1209,9 @@ u8 CartRetailIR::SPIWrite(u8 val, u32 pos, bool last)
     case 0x08: // ID
         return 0xAA;
     }
+
+    if (IsRetailSaveSPICommand(IRCmd))
+        return CartRetail::SPIWrite(val, pos, last);
 
     return 0;
 }
@@ -1543,6 +1623,9 @@ void DecryptSecureArea(u8* out)
 
 bool LoadROMCommon(u32 filelength, const char *sram, bool direct)
 {
+    StubSPILogCount = 0;
+    StubSPIUnknownLogCount = 0;
+
     memcpy(&Header, CartROM, sizeof(Header));
     memcpy(&Banner, CartROM + Header.BannerOffset, sizeof(Banner));
 
@@ -1557,7 +1640,8 @@ bool LoadROMCommon(u32 filelength, const char *sram, bool direct)
     CartIsDSi = (unitcode & 0x02) != 0;
 
     ROMListEntry romparams;
-    if (!ReadROMParams(gamecode, &romparams))
+    bool romparamsfound = ReadROMParams(gamecode, &romparams);
+    if (!romparamsfound)
     {
         // set defaults
         printf("ROM entry not found\n");
@@ -1571,6 +1655,10 @@ bool LoadROMCommon(u32 filelength, const char *sram, bool direct)
     }
     else
         printf("ROM entry: %08X %08X\n", romparams.ROMSize, romparams.SaveMemType);
+
+    StubDiagnosticLog("NDS ROM game=%.4s code=%08X unit=%02X params=%u saveType=%u",
+                      Header.GameCode, gamecode, unitcode, romparamsfound ? 1 : 0,
+                      romparams.SaveMemType);
 
     if (romparams.ROMSize != filelength) printf("!! bad ROM size %d (expected %d) rounded to %d\n", filelength, romparams.ROMSize, CartROMSize);
 

@@ -18,6 +18,7 @@
 
 namespace beiklive::nds_stub {
 
+#ifndef NDEBUG
 namespace {
 
 constexpr const char* kStubLogPaths[] = {
@@ -43,9 +44,11 @@ FILE* openStubLog(const char* mode)
 }
 
 } // namespace
+#endif
 
 void initializeStubLog()
 {
+#ifndef NDEBUG
     std::lock_guard<std::mutex> lock(g_stubLogMutex);
     g_stubLogSequence = 0;
     if (FILE* fp = openStubLog("wb"))
@@ -54,10 +57,14 @@ void initializeStubLog()
         std::fflush(fp);
         std::fclose(fp);
     }
+#endif
 }
 
 void appendStubLog(const char* format, ...)
 {
+#ifdef NDEBUG
+    (void)format;
+#else
     if (!format)
         return;
 
@@ -76,6 +83,7 @@ void appendStubLog(const char* format, ...)
         std::fflush(fp);
         std::fclose(fp);
     }
+#endif
 }
 
 } // namespace beiklive::nds_stub
