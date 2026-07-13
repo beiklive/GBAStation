@@ -137,7 +137,7 @@ void GameGridView::setViewMode(ViewMode mode)
     m_requestedStartRow = -1;
     m_requestedEndRow = -1;
     if (previous != mode)
-        startContentTransition(mode == ViewMode::LIST ? 1 : -1);
+        startContentTransition(mode == ViewMode::LIST ? 1 : -1, false);
     if (mode == ViewMode::LIST)
         m_detailTransition = 0.f;
 }
@@ -168,16 +168,18 @@ void GameGridView::setPlatformCarousel(std::vector<std::string> labels,
             const int backward = (m_platformIndex - selected + count) % count;
             direction = forward <= backward ? 1 : -1;
         }
-        m_platformSlideDirection = direction == 0 ? 1 : (direction < 0 ? -1 : 1);
+        m_platformSlideDirection = direction < 0 ? -1 : (direction > 0 ? 1 : 0);
+        m_platformCarouselDirection = m_platformSlideDirection;
         m_platformTransition = 0.f;
     }
     m_platformLabels = std::move(labels);
     m_platformIndex = selected;
 }
 
-void GameGridView::startContentTransition(int direction)
+void GameGridView::startContentTransition(int direction, bool wholePageSlide)
 {
     m_contentSlideDirection = direction < 0 ? -1 : (direction > 0 ? 1 : 0);
+    m_contentWholePageSlide = wholePageSlide && m_contentSlideDirection != 0;
     m_contentTransition = 0.f;
 }
 
@@ -192,15 +194,17 @@ void GameGridView::showLoadingSkeleton()
     m_items.assign(m_viewMode == ViewMode::GRID ? 15 : 9, GridDrawItem{});
     _recalculateScrollBounds();
     _updateVisibleRange();
-    startContentTransition(0);
+    startContentTransition(0, false);
 }
 
-void GameGridView::playLaunchAnimation(size_t index, std::function<void()> completion)
+void GameGridView::playLaunchAnimation(size_t index, std::function<void()> completion,
+                                       bool startCentered)
 {
     if (m_launchAnimationRunning || index >= m_items.size())
         return;
     _populateItem(index);
     m_launchAnimationRunning = true;
+    m_launchStartsCentered = startCentered;
     m_launchAnimationTime = 0.f;
     m_launchItemIndex = static_cast<int>(index);
     m_launchCompletion = std::move(completion);
@@ -210,6 +214,7 @@ void GameGridView::playLaunchAnimation(size_t index, std::function<void()> compl
 void GameGridView::resetLaunchAnimation()
 {
     m_launchAnimationRunning = false;
+    m_launchStartsCentered = false;
     m_launchAnimationTime = 0.f;
     m_launchItemIndex = -1;
     m_launchCompletion = nullptr;
@@ -258,6 +263,16 @@ void GameGridView::selectAllForDelete(size_t count)
         m_selectedForDelete.insert(static_cast<int>(i));
 }
 
+void GameGridView::deselectAllForDelete()
+{
+    m_selectedForDelete.clear();
+}
+
+bool GameGridView::isAllSelectedForDelete(size_t count) const
+{
+    return count > 0 && m_selectedForDelete.size() == count;
+}
+
 void GameGridView::clearDeleteSelection()
 {
     m_selectedForDelete.clear();
@@ -288,6 +303,46 @@ void GameGridView::setItemImagePath(size_t index, const std::string& path)
         m_requestedStartRow = -1;
         m_requestedEndRow = -1;
     }
+}
+
+void GameGridView::beginDeleteAnimation(const std::vector<int>& indices)
+{
+    m_deletingIndices.clear();
+    for (int index : indices) {
+        if (index >= 0 && static_cast<size_t>(index) < m_items.size())
+            m_deletingIndices.insert(index);
+    }
+    if (m_deletingIndices.empty())
+        return;
+    m_deleteWaiting = true;
+    m_deleteCollapsing = false;
+    m_deleteBackendFinished = false;
+    m_deleteAnimationTime = 0.f;
+    m_deleteCollapseProgress = 0.f;
+    m_deleteCompletion = nullptr;
+    m_interactionDisabled = true;
+}
+
+void GameGridView::completeDeleteAnimation(std::function<void()> completion)
+{
+    if (m_deletingIndices.empty()) {
+        if (completion) completion();
+        return;
+    }
+    m_deleteBackendFinished = true;
+    m_deleteCompletion = std::move(completion);
+}
+
+void GameGridView::cancelDeleteAnimation()
+{
+    m_deleteWaiting = false;
+    m_deleteCollapsing = false;
+    m_deleteBackendFinished = false;
+    m_deleteAnimationTime = 0.f;
+    m_deleteCollapseProgress = 0.f;
+    m_deletingIndices.clear();
+    m_deleteCompletion = nullptr;
+    m_interactionDisabled = false;
 }
 
 void GameGridView::setTitleFontSize(int opt)
@@ -405,7 +460,15 @@ void GameGridView::reloadData()
     m_requestedStartRow = -1;
     m_requestedEndRow = -1;
     m_requestedGameId = 0;
-    startContentTransition(m_platformSlideDirection);
+    if (m_reflowPending) {
+        m_contentTransition = 1.f;
+        m_contentWholePageSlide = false;
+        m_reflowTransition = 0.f;
+        m_reflowPending = false;
+    } else {
+        startContentTransition(m_platformSlideDirection, m_platformSlideDirection != 0);
+    }
+    m_platformSlideDirection = 0;
     if (m_viewMode == ViewMode::LIST)
         m_detailTransition = 0.f;
 
@@ -453,7 +516,8 @@ void GameGridView::notifyDataChanged()
     _populateVisibleItems();
 
     m_requestNextPage = false;
-    startContentTransition(m_platformSlideDirection);
+    startContentTransition(m_platformSlideDirection, m_platformSlideDirection != 0);
+    m_platformSlideDirection = 0;
 }
 
 void GameGridView::clearData()
@@ -622,6 +686,10 @@ void GameGridView::_updateScrollPhysics(float delta)
     }
 
     float diff = m_targetScrollY - m_scrollY;
+    if (diff > 0.5f)
+        m_scrollDirection = 1;
+    else if (diff < -0.5f)
+        m_scrollDirection = -1;
     if (std::abs(diff) > 0.5f)
         m_scrollY += diff * std::min(1.f, delta * 8.f);
     else
@@ -794,7 +862,6 @@ void GameGridView::_loadTextures(NVGcontext* vg)
 {
     if (!vg) return;
 
-    const bool activelyScrolling = std::abs(m_targetScrollY - m_scrollY) > 3.f;
     const int startRow = m_visibleStartRow;
     const int endRow = m_visibleEndRow;
     const uint64_t selectedGameId = m_selectedIndex >= 0 &&
@@ -803,17 +870,31 @@ void GameGridView::_loadTextures(NVGcontext* vg)
         : 0;
     const bool requestSetChanged = startRow != m_requestedStartRow ||
         endRow != m_requestedEndRow || m_viewMode != m_requestedViewMode ||
+        m_scrollDirection != m_requestedScrollDirection ||
         (m_viewMode == ViewMode::LIST && selectedGameId != m_requestedGameId);
 
     if (requestSetChanged && m_textureLoader) {
         std::unordered_set<std::string> wanted;
         const int begin = std::max(0, startRow * spanCount);
         const int end = std::min(static_cast<int>(m_items.size()), endRow * spanCount);
+        constexpr int preloadCount = 10;
+        const int preloadBegin = m_scrollDirection >= 0
+            ? end
+            : std::max(0, begin - preloadCount);
+        const int preloadEnd = m_scrollDirection >= 0
+            ? std::min(static_cast<int>(m_items.size()), end + preloadCount)
+            : begin;
+        for (int i = preloadBegin; i < preloadEnd; ++i)
+            _populateItem(static_cast<size_t>(i));
         for (int i = begin; i < end; ++i) {
             const auto& item = m_items[static_cast<size_t>(i)];
-            const std::string& path = m_viewMode == ViewMode::LIST
-                ? item.platformImagePath
-                : item.imagePath;
+            const std::string& path = item.imagePath;
+            if (!path.empty())
+                wanted.insert(path);
+        }
+        for (int i = preloadBegin; i < preloadEnd; ++i) {
+            const auto& item = m_items[static_cast<size_t>(i)];
+            const std::string& path = item.imagePath;
             if (!path.empty())
                 wanted.insert(path);
         }
@@ -837,11 +918,12 @@ void GameGridView::_loadTextures(NVGcontext* vg)
         }
         m_requestedStartRow = startRow;
         m_requestedEndRow = endRow;
+        m_requestedScrollDirection = m_scrollDirection;
         m_requestedViewMode = m_viewMode;
         m_requestedGameId = selectedGameId;
     }
 
-    auto bindTexture = [this, activelyScrolling](GridDrawItem& item, bool platformDefault) {
+    auto bindTexture = [this](GridDrawItem& item, bool platformDefault) {
         const std::string& path = platformDefault ? item.platformImagePath : item.imagePath;
         int& handle = platformDefault ? item.platformTextureHandle : item.textureHandle;
         bool& ready = platformDefault ? item.platformTextureReady : item.textureReady;
@@ -856,7 +938,7 @@ void GameGridView::_loadTextures(NVGcontext* vg)
             m_textureLastUsed[path] = ++m_textureUseTick;
         } else if (m_failedTextures.count(path) != 0) {
             failed = true;
-        } else if (!activelyScrolling) {
+        } else {
             _requestTexture(path);
         }
     };
@@ -865,7 +947,7 @@ void GameGridView::_loadTextures(NVGcontext* vg)
         if (index >= m_items.size())
             return;
         auto& item = m_items[index];
-        bindTexture(item, m_viewMode == ViewMode::LIST);
+        bindTexture(item, false);
     };
 
     // 先提交整屏请求，再额外提交列表详情封面；旧视口任务通过 generation 失效。
@@ -878,6 +960,18 @@ void GameGridView::_loadTextures(NVGcontext* vg)
     if (m_viewMode == ViewMode::LIST && m_selectedIndex >= 0 &&
         static_cast<size_t>(m_selectedIndex) < m_items.size())
         bindTexture(m_items[static_cast<size_t>(m_selectedIndex)], false);
+    constexpr int preloadCount = 10;
+    const int visibleBegin = std::max(0, startRow * spanCount);
+    const int visibleEnd = std::min(static_cast<int>(m_items.size()), endRow * spanCount);
+    const int preloadBegin = m_scrollDirection >= 0
+        ? visibleEnd
+        : std::max(0, visibleBegin - preloadCount);
+    const int preloadEnd = m_scrollDirection >= 0
+        ? std::min(static_cast<int>(m_items.size()), visibleEnd + preloadCount)
+        : visibleBegin;
+    for (int i = preloadBegin; i < preloadEnd; ++i) {
+        loadItemAt(static_cast<size_t>(i));
+    }
 }
 
 void GameGridView::_evictTextures()
@@ -1202,6 +1296,50 @@ void GameGridView::frame(brls::FrameContext* ctx)
 
     m_focusBorderAnimTime += dt;
     m_platformTransition = std::min(1.f, m_platformTransition + dt * 8.0f);
+    if (m_deleteWaiting)
+        m_deleteAnimationTime += dt;
+    if (m_deleteWaiting && m_deleteBackendFinished &&
+        m_deleteAnimationTime >= 0.42f) {
+        m_deleteWaiting = false;
+        m_deleteCollapsing = true;
+        m_deleteBackendFinished = false;
+        m_deleteCollapseProgress = 0.f;
+    }
+    if (m_deleteCollapsing) {
+        m_deleteCollapseProgress = std::min(1.f,
+            m_deleteCollapseProgress + dt * 6.5f);
+        if (m_deleteCollapseProgress >= 1.f && m_deleteCompletion) {
+            m_reflowOrigins.clear();
+            size_t validDeleteCount = 0;
+            for (int index : m_deletingIndices) {
+                if (index >= 0 && static_cast<size_t>(index) < m_items.size())
+                    ++validDeleteCount;
+            }
+            m_reflowOrigins.reserve(m_items.size() - validDeleteCount);
+            for (int i = 0; i < static_cast<int>(m_items.size()); ++i) {
+                if (m_deletingIndices.count(i) == 0)
+                    m_reflowOrigins.push_back(i);
+            }
+            m_reflowFirstMovedIndex = 0;
+            while (m_reflowFirstMovedIndex < static_cast<int>(m_reflowOrigins.size()) &&
+                   m_reflowOrigins[static_cast<size_t>(m_reflowFirstMovedIndex)] ==
+                       m_reflowFirstMovedIndex)
+                ++m_reflowFirstMovedIndex;
+            m_reflowPending = true;
+            m_deleteCollapsing = false;
+            m_deletingIndices.clear();
+            auto completion = std::move(m_deleteCompletion);
+            m_deleteCompletion = nullptr;
+            brls::sync(std::move(completion));
+        }
+    }
+    if (m_reflowTransition < 1.f) {
+        m_reflowTransition = std::min(1.f, m_reflowTransition + dt * 7.f);
+        if (m_reflowTransition >= 1.f) {
+            m_reflowOrigins.clear();
+            m_interactionDisabled = false;
+        }
+    }
     if (m_launchAnimationRunning) {
         m_launchAnimationTime += dt;
         if (m_launchAnimationTime >= 1.18f && m_launchCompletion) {
@@ -1287,6 +1425,12 @@ void GameGridView::draw(NVGcontext* vg, float x, float y, float w, float h,
     const float contentY = y + _getContentTop();
     const float contentH = _getViewportHeight();
     const float paneW = m_viewMode == ViewMode::LIST ? _getListPaneWidth() : w;
+    const float contentSlideEased = 1.f -
+        std::pow(1.f - m_contentTransition, 3.f);
+    const float wholePageOffsetX = m_contentWholePageSlide
+        ? static_cast<float>(m_contentSlideDirection) *
+            (1.f - contentSlideEased) * w
+        : 0.f;
     nvgSave(vg);
     nvgIntersectScissor(vg, x, contentY, paneW, contentH);
 
@@ -1296,7 +1440,8 @@ void GameGridView::draw(NVGcontext* vg, float x, float y, float w, float h,
             nvgFontSize(vg, 22.f);
             nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
             nvgFillColor(vg, nvgRGBA(230, 232, 238, 210));
-            nvgText(vg, x + paneW * 0.5f, contentY + contentH * 0.45f,
+            nvgText(vg, x + paneW * 0.5f + wholePageOffsetX,
+                    contentY + contentH * 0.45f,
                     "当前分类暂无游戏", nullptr);
         }
     } else {
@@ -1313,18 +1458,53 @@ void GameGridView::draw(NVGcontext* vg, float x, float y, float w, float h,
                 int ordinal = (row - m_visibleStartRow) * spanCount + col;
                 if (m_contentSlideDirection < 0)
                     ordinal = visibleItemCount - 1 - ordinal;
-                const float delay = std::min(0.32f, ordinal * 0.022f);
-                const float localProgress = m_contentTransition <= delay
+                const float delay = m_contentWholePageSlide
                     ? 0.f
-                    : std::min(1.f, (m_contentTransition - delay) / (1.f - delay));
-                const float itemEased = 1.f - std::pow(1.f - localProgress, 3.f);
-                const float bubbleEased = easeOutBack(localProgress);
-                const float enterX = static_cast<float>(m_contentSlideDirection) *
-                    (1.f - itemEased) * 34.f;
-                const float enterY = (m_contentSlideDirection == 0 ? 1.f : 0.35f) *
-                    (1.f - itemEased) * 20.f;
-                const float ix = x + _getItemX(col) + enterX;
-                const float iy = y + _getItemY(row) + enterY;
+                    : std::min(0.32f, ordinal * 0.022f);
+                const float localProgress = m_contentWholePageSlide
+                    ? m_contentTransition
+                    : (m_contentTransition <= delay
+                        ? 0.f
+                        : std::min(1.f,
+                            (m_contentTransition - delay) / (1.f - delay)));
+                const float itemEased = m_contentWholePageSlide
+                    ? contentSlideEased
+                    : 1.f - std::pow(1.f - localProgress, 3.f);
+                const float bubbleEased = m_contentWholePageSlide
+                    ? 1.f
+                    : easeOutBack(localProgress);
+                const float enterX = m_contentWholePageSlide
+                    ? wholePageOffsetX
+                    : static_cast<float>(m_contentSlideDirection) *
+                        (1.f - itemEased) * 34.f;
+                const float enterY = m_contentWholePageSlide
+                    ? 0.f
+                    : (m_contentSlideDirection == 0 ? 1.f : 0.35f) *
+                        (1.f - itemEased) * 20.f;
+                float reflowX = 0.f;
+                float reflowY = 0.f;
+                if (m_reflowTransition < 1.f &&
+                    static_cast<size_t>(idx) < m_reflowOrigins.size()) {
+                    const int oldIndex = m_reflowOrigins[static_cast<size_t>(idx)];
+                    const int oldRow = oldIndex / spanCount;
+                    const int oldCol = oldIndex % spanCount;
+                    const float delay = oldIndex == idx
+                        ? 0.f
+                        : std::min(0.32f,
+                            std::max(0, idx - m_reflowFirstMovedIndex) * 0.025f);
+                    const float localReflow = m_reflowTransition <= delay
+                        ? 0.f
+                        : std::min(1.f,
+                            (m_reflowTransition - delay) / (1.f - delay));
+                    const float reflowEased = 1.f -
+                        std::pow(1.f - localReflow, 3.f);
+                    reflowX = (_getItemX(oldCol) - _getItemX(col)) *
+                        (1.f - reflowEased);
+                    reflowY = (_getItemY(oldRow) - _getItemY(row)) *
+                        (1.f - reflowEased);
+                }
+                const float ix = x + _getItemX(col) + enterX + reflowX;
+                const float iy = y + _getItemY(row) + enterY + reflowY;
                 if (iy + itemH < contentY - 20.f || iy > contentY + contentH + 20.f)
                     continue;
                 nvgSave(vg);
@@ -1344,11 +1524,12 @@ void GameGridView::draw(NVGcontext* vg, float x, float y, float w, float h,
         }
     }
 
-    _drawScrollbar(vg, x + 1.f, contentY, paneW, contentH);
+    _drawScrollbar(vg, x + 1.f + wholePageOffsetX,
+                   contentY, paneW, contentH);
     nvgRestore(vg);
 
     if (m_viewMode == ViewMode::LIST && !m_items.empty()) {
-        const float detailX = x + paneW + 10.f;
+        const float detailX = x + paneW + 10.f + wholePageOffsetX;
         _drawDetailsPanel(vg, detailX, contentY,
                           w - paneW - 24.f, contentH);
     }
@@ -1369,6 +1550,36 @@ void GameGridView::_drawItem(NVGcontext* vg, const GridDrawItem& item, float x, 
 {
     if (m_loadingSkeleton) {
         _drawSkeletonItem(vg, x, y, w, h, idx);
+        return;
+    }
+
+    if (m_deletingIndices.count(idx) != 0) {
+        const float collapse = m_deleteCollapsing
+            ? 1.f - (1.f - std::pow(1.f - m_deleteCollapseProgress, 3.f))
+            : 1.f;
+        const float shake = m_deleteWaiting
+            ? std::sin(m_deleteAnimationTime * 58.f) * 7.f
+            : 0.f;
+        const float shakeY = m_deleteWaiting
+            ? std::cos(m_deleteAnimationTime * 47.f) * 2.5f
+            : 0.f;
+        nvgSave(vg);
+        nvgTranslate(vg, x + w * 0.5f, y + h * 0.5f);
+        nvgScale(vg, collapse, collapse);
+        nvgTranslate(vg, -(x + w * 0.5f), -(y + h * 0.5f));
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, x + shake, y + shakeY, w, h, 12.f);
+        nvgFillColor(vg, nvgRGBA(210, 65, 65, 30));
+        nvgFill(vg);
+        nvgStrokeColor(vg, nvgRGBA(240, 105, 105, 205));
+        nvgStrokeWidth(vg, 1.5f);
+        nvgStroke(vg);
+        _drawMaterialIcon(vg, beiklive::material::DELETE_ICON,
+                          x + w * 0.5f + shake, y + h * 0.5f + shakeY,
+                          std::min(58.f, h * 0.35f),
+                          nvgRGBA(246, 130, 130, 245),
+                          NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgRestore(vg);
         return;
     }
 
@@ -1406,27 +1617,42 @@ void GameGridView::_drawItem(NVGcontext* vg, const GridDrawItem& item, float x, 
 
     const bool multiSelected = m_multiSelectMode && m_selectedForDelete.count(idx) != 0;
 
-    nvgBeginPath(vg);
-    nvgRoundedRect(vg, x + shakeX, y + shakeY, w, h, 12.f);
-    nvgFillColor(vg, multiSelected
-        ? nvgRGBA(80, 132, 255, 65)
-        : (item.favorite
-            ? (focused ? nvgRGBA(230, 185, 92, 56) : nvgRGBA(224, 166, 87, 34))
-            : (focused ? nvgRGBA(255, 255, 255, 42) : nvgRGBA(255, 255, 255, 17))));
-    nvgFill(vg);
+    if (multiSelected || item.favorite) {
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, x + shakeX, y + shakeY, w, h, 12.f);
+        nvgFillColor(vg, multiSelected
+            ? nvgRGBA(80, 132, 255, 65)
+            : (focused
+                ? nvgRGBA(230, 185, 92, 56)
+                : nvgRGBA(224, 166, 87, 34)));
+        nvgFill(vg);
+    }
 
     if (m_multiSelectMode) {
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, x + shakeX, y + shakeY, w, h, 12.f);
         nvgStrokeColor(vg, multiSelected
             ? nvgRGBA(94, 151, 255, 255)
             : nvgRGBA(127, 139, 162, 210));
         nvgStrokeWidth(vg, multiSelected ? 2.5f : 1.0f);
+        nvgStroke(vg);
+    } else if (item.favorite) {
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, x + shakeX, y + shakeY, w, h, 12.f);
+        nvgStrokeColor(vg, focused
+            ? nvgRGBA(245, 200, 112, 235)
+            : nvgRGBA(224, 166, 87, 165));
+        nvgStrokeWidth(vg, focused ? 1.5f : 1.f);
+        nvgStroke(vg);
     } else {
-        nvgStrokeColor(vg, item.favorite
-            ? (focused ? nvgRGBA(245, 200, 112, 235) : nvgRGBA(224, 166, 87, 165))
-            : (focused ? nvgRGBA(235, 240, 255, 230) : nvgRGBA(255, 255, 255, 65)));
-        nvgStrokeWidth(vg, focused ? 1.5f : 1.0f);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, x + shakeX, y + shakeY, w, h, 12.f);
+        nvgStrokeColor(vg, focused
+            ? nvgRGBA(235, 240, 255, 230)
+            : nvgRGBA(255, 255, 255, 65));
+        nvgStrokeWidth(vg, focused ? 1.5f : 1.f);
+        nvgStroke(vg);
     }
-    nvgStroke(vg);
     
 
     if (item.empty) {
@@ -1444,7 +1670,7 @@ void GameGridView::_drawItem(NVGcontext* vg, const GridDrawItem& item, float x, 
     } else {
         const float imageW = 54.f;
         const float imageH = h - 10.f;
-        _drawImage(vg, item, x + 8.f, y + 5.f, imageW, imageH, true);
+        _drawImage(vg, item, x + 8.f, y + 5.f, imageW, imageH);
 
         const float textX = x + 74.f;
         const float textW = w - 106.f;
@@ -1666,7 +1892,9 @@ void GameGridView::_drawLaunchOverlay(NVGcontext* vg, float x, float y,
         return;
 
     const auto& item = m_items[static_cast<size_t>(m_launchItemIndex)];
-    const float moveProgress = std::min(1.f, m_launchAnimationTime / 0.36f);
+    const float moveProgress = m_launchStartsCentered
+        ? 1.f
+        : std::min(1.f, m_launchAnimationTime / 0.36f);
     const float moveEased = 1.f - std::pow(1.f - moveProgress, 3.f);
     const float fadeToBlack = std::max(0.f,
         std::min(1.f, (m_launchAnimationTime - 1.f) / 0.18f));
@@ -1677,21 +1905,26 @@ void GameGridView::_drawLaunchOverlay(NVGcontext* vg, float x, float y,
     const float sourceY = y + _getItemY(row);
     const float sourceW = _getItemWidth();
     const float sourceH = estimatedRowHeight;
-    const float targetW = 300.f;
-    const float targetH = 410.f;
+    const float targetW = 650.f;
+    const float targetH = 260.f;
     const float targetX = x + (w - targetW) * 0.5f;
-    const float targetY = y + (h - targetH) * 0.5f - 8.f;
+    const float targetY = y + (h - targetH) * 0.5f - 4.f;
+    const float launchFloatY = std::sin(m_launchAnimationTime * 5.2f) *
+        5.f * moveEased;
 
     const float cardX = sourceX + (targetX - sourceX) * moveEased;
-    const float cardY = sourceY + (targetY - sourceY) * moveEased;
+    const float cardY = sourceY + (targetY - sourceY) * moveEased + launchFloatY;
     const float cardW = sourceW + (targetW - sourceW) * moveEased;
     const float cardH = sourceH + (targetH - sourceH) * moveEased;
 
     nvgSave(vg);
     nvgBeginPath(vg);
     nvgRect(vg, x, y, w, h);
+    const float launchMaskAlpha = m_launchStartsCentered
+        ? 210.f
+        : moveEased * 125.f;
     nvgFillColor(vg, nvgRGBA(0, 0, 0,
-        static_cast<unsigned char>(moveEased * 125.f)));
+        static_cast<unsigned char>(launchMaskAlpha)));
     nvgFill(vg);
 
     nvgBeginPath(vg);
@@ -1704,31 +1937,66 @@ void GameGridView::_drawLaunchOverlay(NVGcontext* vg, float x, float y,
     nvgStrokeWidth(vg, 1.2f);
     nvgStroke(vg);
 
-    const float pad = 18.f;
-    const float imageH = std::max(40.f, cardH - 112.f);
-    _drawImage(vg, item, cardX + pad, cardY + pad,
-               std::max(20.f, cardW - pad * 2.f), imageH);
+    const float sourceImageX = sourceX + (m_viewMode == ViewMode::GRID ? 10.f : 8.f);
+    const float sourceImageY = sourceY + (m_viewMode == ViewMode::GRID ? 10.f : 5.f);
+    const float sourceImageW = m_viewMode == ViewMode::GRID
+        ? std::max(20.f, sourceW - 20.f)
+        : 54.f;
+    const float sourceImageH = m_viewMode == ViewMode::GRID
+        ? std::max(40.f, sourceH - 100.f)
+        : std::max(40.f, sourceH - 10.f);
+    const float targetImageX = targetX + 24.f;
+    const float targetImageY = targetY + 24.f;
+    const float targetImageW = 190.f;
+    const float targetImageH = targetH - 48.f;
+    const float imageX = sourceImageX + (targetImageX - sourceImageX) * moveEased;
+    const float imageY = sourceImageY + (targetImageY - sourceImageY) * moveEased +
+        launchFloatY;
+    const float imageW = sourceImageW + (targetImageW - sourceImageW) * moveEased;
+    const float imageH = sourceImageH + (targetImageH - sourceImageH) * moveEased;
+    _drawImage(vg, item, imageX, imageY, imageW, imageH);
 
     const float textAlpha = std::max(0.f, std::min(1.f,
         (moveProgress - 0.45f) / 0.55f));
     nvgGlobalAlpha(vg, textAlpha);
+    const float infoX = targetX + 242.f;
+    const float infoW = targetW - 270.f;
     nvgFontFaceId(vg, m_fontId);
-    nvgFontSize(vg, 24.f);
-    nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+    nvgFontSize(vg, 28.f);
+    nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
     nvgFillColor(vg, nvgRGBA(255, 255, 255, 245));
     nvgSave(vg);
-    nvgIntersectScissor(vg, cardX + 18.f, cardY + cardH - 84.f,
-                        std::max(1.f, cardW - 36.f), 30.f);
-    nvgText(vg, cardX + cardW * 0.5f, cardY + cardH - 69.f,
+    nvgIntersectScissor(vg, infoX, targetY + launchFloatY + 48.f,
+                        std::max(1.f, infoW), 72.f);
+    nvgText(vg, infoX, targetY + launchFloatY + 48.f,
             item.title.c_str(), nullptr);
     nvgRestore(vg);
 
     const int dotCount = static_cast<int>(m_launchAnimationTime * 5.f) % 4;
     std::string launching = "启动中" + std::string(static_cast<size_t>(dotCount), '.');
     nvgFontSize(vg, 18.f);
+    nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
     nvgFillColor(vg, nvgRGBA(215, 221, 232, 225));
-    nvgText(vg, cardX + cardW * 0.5f, cardY + cardH - 35.f,
+    nvgText(vg, infoX, targetY + launchFloatY + targetH - 82.f,
             launching.c_str(), nullptr);
+
+    const float barY = targetY + launchFloatY + targetH - 54.f;
+    const float barH = 12.f;
+    const float loadProgress = std::min(1.f, m_launchAnimationTime);
+    nvgBeginPath(vg);
+    nvgRoundedRect(vg, infoX, barY, infoW, barH, barH * 0.5f);
+    nvgFillColor(vg, nvgRGBA(255, 255, 255, 26));
+    nvgFill(vg);
+    if (loadProgress > 0.f) {
+        const float fillW = std::max(barH, infoW * loadProgress);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, infoX, barY, fillW, barH, barH * 0.5f);
+        NVGpaint progressPaint = nvgLinearGradient(
+            vg, infoX, barY, infoX + infoW, barY,
+            nvgRGBA(94, 185, 255, 245), nvgRGBA(247, 197, 104, 245));
+        nvgFillPaint(vg, progressPaint);
+        nvgFill(vg);
+    }
 
     nvgGlobalAlpha(vg, 1.f);
     if (fadeToBlack > 0.f) {
@@ -1773,7 +2041,7 @@ void GameGridView::_drawToolbar(NVGcontext* vg, float x, float y, float w)
     const float centerY = y + 35.f;
     const float spacing = 132.f;
     const float eased = 1.f - std::pow(1.f - m_platformTransition, 3.f);
-    const float carouselShift = static_cast<float>(m_platformSlideDirection) *
+    const float carouselShift = static_cast<float>(m_platformCarouselDirection) *
         spacing * (1.f - eased);
     const int count = static_cast<int>(m_platformLabels.size());
 
@@ -1888,12 +2156,18 @@ void GameGridView::_drawFooter(NVGcontext* vg, float x, float y, float w, float 
         cursor -= gap;
     };
 
-    drawRightAlignedHint(brls::BUTTON_A,
-                         m_multiSelectMode ? "选择" : "启动");
-    drawRightAlignedHint(brls::BUTTON_B,
-                         m_multiSelectMode ? "取消多选" : "返回");
-    drawRightAlignedHint(brls::BUTTON_X,
-                         m_multiSelectMode ? "批量操作" : "更多");
+    if (m_multiSelectMode) {
+        drawRightAlignedHint(brls::BUTTON_A, "勾选/取消勾选");
+        drawRightAlignedHint(brls::BUTTON_B, "退出多选");
+        drawRightAlignedHint(brls::BUTTON_X, "批量操作");
+        drawRightAlignedHint(brls::BUTTON_START,
+            isAllSelectedForDelete(m_items.size()) ? "取消全选" : "全选");
+        return;
+    }
+
+    drawRightAlignedHint(brls::BUTTON_A, "选择");
+    drawRightAlignedHint(brls::BUTTON_B, "返回");
+    drawRightAlignedHint(brls::BUTTON_X, "多选");
     drawRightAlignedHint(brls::BUTTON_RT, "搜索");
     drawRightAlignedHint(brls::BUTTON_LT, "排序");
 }

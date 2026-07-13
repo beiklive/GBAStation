@@ -207,11 +207,12 @@ namespace beiklive
             explicit GameDataPage(beiklive::GameEntry entry)
                 : m_entry(std::move(entry))
             {
-                showHeader(true);
-                showFooter(true);
-                getHeader()->setTitle(m_entry.title.empty() ? gameStem(m_entry) : m_entry.title);
-                getHeader()->setPath(m_entry.path);
+                showHeader(false);
+                showFooter(false);
+                // getHeader()->setTitle(m_entry.title.empty() ? gameStem(m_entry) : m_entry.title);
+                // getHeader()->setPath(m_entry.path);
                 setFocusable(false);
+                getContentBox()->setMargins(0.f, 0.f, 0.f, 0.f);
                 _initLayout();
             }
 
@@ -718,6 +719,7 @@ namespace beiklive
         this->showFooter(false);
         this->getHeader()->setTitle("游戏库");
         this->setFocusable(false);
+        this->getContentBox()->setMargins(0.f, 0.f, 0.f, 0.f);
 
         m_libraryView = new GameGridView();
         m_libraryView->setTitleFontSize(GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_UI_LIBRARY_TITLE_SIZE, 0));
@@ -735,9 +737,11 @@ namespace beiklive
         this->getContentBox()->addView(m_libraryView);
 
         m_libraryView->registerAction("退出游戏库", brls::BUTTON_B, [this](brls::View*) -> bool {
+            if (m_libraryView->isDeleteAnimationRunning())
+                return true;
             if (m_libraryView->isMultiSelectMode()) {
                 m_libraryView->clearDeleteSelection();
-                brls::Application::notify("已取消多选模式");
+                brls::Application::notify("已退出多选模式");
                 return true;
             }
             if (m_isClosing)
@@ -759,7 +763,7 @@ namespace beiklive
 
 
         m_libraryView->registerAction("切换视图", brls::BUTTON_Y, [this](brls::View*) -> bool {
-            if (m_isClosing) return true;
+            if (m_isClosing || m_libraryView->isDeleteAnimationRunning()) return true;
             m_libraryView->toggleViewMode();
             SET_SETTING_KEY_INT(beiklive::SettingKey::KEY_UI_LIBRARY_VIEW_MODE,
                 m_libraryView->getViewMode() == GameGridView::ViewMode::LIST ? 1 : 0);
@@ -768,37 +772,50 @@ namespace beiklive
         });
 
         m_libraryView->registerAction("上一平台", brls::BUTTON_LB, [this](brls::View*) -> bool {
+            if (m_libraryView->isDeleteAnimationRunning()) return true;
             _cyclePlatformFilter(-1);
             return true;
         });
 
         m_libraryView->registerAction("下一平台", brls::BUTTON_RB, [this](brls::View*) -> bool {
+            if (m_libraryView->isDeleteAnimationRunning()) return true;
             _cyclePlatformFilter(1);
             return true;
         });
 
         m_libraryView->registerAction("分类", brls::BUTTON_LSB, [this](brls::View*) -> bool {
-            if (m_isClosing) return true;
+            if (m_isClosing || m_libraryView->isDeleteAnimationRunning()) return true;
             _showFilterDropdown();
             return true;
         });
 
-        m_libraryView->registerAction("设置", brls::BUTTON_X, [this](brls::View*) -> bool {
-            if (m_isClosing) return true;
+        m_libraryView->registerAction("多选", brls::BUTTON_X, [this](brls::View*) -> bool {
+            if (m_isClosing || m_libraryView->isDeleteAnimationRunning()) return true;
             if (m_libraryView->isMultiSelectMode()) {
-                _showMultiSelectSidebar();
+                if (m_libraryView->getDeleteSelection().empty())
+                    brls::Application::notify("请先勾选至少一款游戏");
+                else
+                    _showMultiSelectSidebar();
                 return true;
             }
-            int idx = m_libraryView->getSelectedIndex();
-            if (idx < 0 || static_cast<size_t>(idx) >= m_entries.size())
-                return true;
-            m_libraryView->setInteractionDisabled(true);
-            _showGameOptionsPanel(m_entries[idx]);
+            m_libraryView->setMultiSelectMode(true);
+            brls::Application::notify("已进入多选模式");
+            return true;
+        });
+
+        m_libraryView->registerAction("全选", brls::BUTTON_START, [this](brls::View*) -> bool {
+            if (m_isClosing || m_libraryView->isDeleteAnimationRunning()) return true;
+            if (!m_libraryView->isMultiSelectMode())
+                return false;
+            if (m_libraryView->isAllSelectedForDelete(m_entries.size()))
+                m_libraryView->deselectAllForDelete();
+            else
+                m_libraryView->selectAllForDelete(m_entries.size());
             return true;
         });
 
         m_libraryView->registerAction("搜索", brls::BUTTON_RT, [this](brls::View*) -> bool {
-            if (m_isClosing) return true;
+            if (m_isClosing || m_libraryView->isDeleteAnimationRunning()) return true;
             auto* ime = brls::Application::getPlatform()->getImeManager();
             if (!ime) return true;
             ime->openForText(
@@ -813,7 +830,7 @@ namespace beiklive
         });
 
         m_libraryView->registerAction("排序", brls::BUTTON_LT, [this](brls::View*) -> bool {
-            if (m_isClosing) return true;
+            if (m_isClosing || m_libraryView->isDeleteAnimationRunning()) return true;
             _showSortSelector();
             return true;
         });
@@ -871,18 +888,9 @@ namespace beiklive
             : std::optional<beiklive::GameEntry>{};
         const auto& entry = fresh.has_value() ? *fresh : cached;
 
-        if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS) &&
-            !beiklive::ensureNdsEnvironmentReady())
-            return;
-
-        if (m_page->onGameSelected && m_page->m_libraryView) {
-            auto alive = m_page->m_aliveToken;
-            auto* page = m_page;
-            m_page->m_libraryView->playLaunchAnimation(index,
-                [page, alive, entry]() {
-                    if (alive->load() && page->onGameSelected)
-                        page->onGameSelected(entry);
-                });
+        if (m_page->m_libraryView) {
+            m_page->m_libraryView->setInteractionDisabled(true);
+            m_page->_showGameOptionsPanel(entry);
         }
     }
 
@@ -897,6 +905,12 @@ namespace beiklive
             m_libraryView->showLoadingSkeleton();
         }
         _reloadEntries();
+    }
+
+    void GameLibraryPage::resetLaunchOverlay()
+    {
+        if (m_libraryView)
+            m_libraryView->resetLaunchAnimation();
     }
 
     std::vector<GameLibraryPage::PlatformFilter> GameLibraryPage::_buildAvailableFilters(
@@ -1314,192 +1328,176 @@ namespace beiklive
     void GameLibraryPage::_showGameOptionsPanel(const beiklive::GameEntry& entry)
     {
         std::string path = entry.path;
+        const int selectedIndex = m_libraryView->getSelectedIndex();
         _hideGameOptionsPanel();
         m_gameOptionsSidebar = new beiklive::GameOptionsSidebar();
+        m_gameOptionsSidebar->setNanoVgMenu(true);
         this->getBottomBar()->setVisibility(brls::Visibility::GONE);
         std::string fn = beiklive::tools::getFileNameWithoutExtension(entry.path);
-        auto enterMultiSelect = [this](bool selectAll) {
-            _hideGameOptionsPanel();
-            m_libraryView->setMultiSelectMode(true);
-            if (selectAll)
-            {
-                m_libraryView->selectAllForDelete(m_entries.size());
-                brls::Application::notify("已全选当前列表中的全部游戏");
-            }
-            m_libraryView->setInteractionDisabled(false);
-            brls::Application::giveFocus(m_libraryView);
-        };
 
-        m_gameOptionsSidebar->addButton("修改映射名称", beiklive::material::EDIT,
-            [this, path, title = entry.title, fn, idx = m_libraryView->getSelectedIndex()](const beiklive::GameEntry&) {
-                _hideGameOptionsPanel();
-                auto* ime = brls::Application::getPlatform()->getImeManager();
-                if (!ime) { m_libraryView->setInteractionDisabled(false); return; }
-                ime->openForText(
-                    [this, path, fn, idx](std::string text) {
-                        if (!text.empty() && beiklive::GameDB) {
-                            beiklive::GameDB->set(path, "title", nlohmann::json(text));
-                            beiklive::GameDB->flush();
-                            beiklive::NameMappingManager->Set(fn, text, true);
-                            beiklive::NameMappingManager->Save();
-                            m_libraryView->setItemTitle(idx, text);
-                        }
-                        m_libraryView->setInteractionDisabled(false);
-                    },
-                    "编辑游戏名称", "", 128, title,
-                    brls::KeyboardKeyDisableBitmask::KEYBOARD_DISABLE_NONE);
-            });
-
-        m_gameOptionsSidebar->addButton("设置封面图", beiklive::material::IMAGE,
-            [this, path, idx = m_libraryView->getSelectedIndex()](const beiklive::GameEntry& entry) {
-                _hideGameOptionsPanel();
-                fs::path currentLogo(entry.logoPath);
-                beiklive::openFilePicker({"png", "jpg"},
-                    [this, path, idx](const std::string& selectedPath) {
-                        if (beiklive::GameDB) {
-                            beiklive::GameDB->set(path, "logoPath", nlohmann::json(selectedPath));
-                            beiklive::GameDB->flush();
-                            m_libraryView->setItemImagePath(idx, selectedPath);
-                        }
-                        m_libraryView->setInteractionDisabled(false);
-                    },
-                    currentLogo.parent_path().empty() ? beiklive::path::GetRootPath() : currentLogo.parent_path().string(),
-                    currentLogo.filename().string());
-            });
-
-        m_gameOptionsSidebar->addButton("安装游戏前端", beiklive::material::INSTALL_APP,
-            [this](const beiklive::GameEntry& game) {
-                _hideGameOptionsPanel();
-                m_libraryView->setInteractionDisabled(false);
-                beiklive::forwarder::showInstallDialog(game);
-            });
-
-        if (beiklive::GetCoreOptions(entry.platform).size() > 1)
-        {
-            m_gameOptionsSidebar->addButton("核心选择", beiklive::material::MEMORY,
-                [this, path, platform = entry.platform, core = entry.core,
-                 idx = m_libraryView->getSelectedIndex()](const beiklive::GameEntry&) {
-                    _hideGameOptionsPanel();
-
-                    const auto options = beiklive::GetCoreOptions(platform);
-                    std::vector<std::string> names;
-                    names.reserve(options.size());
-                    for (const auto& option : options)
-                        names.push_back(option.name);
-
-                    auto* dropdown = new brls::Dropdown(
-                        "核心选择",
-                        names,
-                        [this, path, idx, options](int selected) {
-                            if (selected < 0 || selected >= static_cast<int>(options.size()))
-                                return;
-                            if (beiklive::GameDB) {
-                                beiklive::GameDB->set(path, "core", nlohmann::json(options[selected].id));
-                                beiklive::GameDB->flush();
-                                if (idx >= 0 && static_cast<size_t>(idx) < m_entries.size())
-                                    m_entries[idx].core = options[selected].id;
-                                brls::Application::notify("已切换核心：" + options[selected].name);
-                            }
-                            m_libraryView->setInteractionDisabled(false);
-                        },
-                        beiklive::GetCoreSelectionIndex(platform, core),
-                        [this](int) {
-                            m_libraryView->setInteractionDisabled(false);
-                        });
-                    brls::Application::pushActivity(new brls::Activity(dropdown));
-                });
-        }
-
-        m_gameOptionsSidebar->addButton("游戏数据浏览", beiklive::material::STORAGE,
-            [this, entry](const beiklive::GameEntry&) {
-                _hideGameOptionsPanel();
-                _openGameDataPage(entry);
-                m_libraryView->setInteractionDisabled(false);
-            });
-
-        m_gameOptionsSidebar->addButton("删除游戏", beiklive::material::DELETE_ICON,
-            [this, path](const beiklive::GameEntry&) {
-                _hideGameOptionsPanel();
-                auto* removeDlg = new brls::Dialog("是否从游戏库移除该游戏？");
-                removeDlg->addButton("是", [this, path]() {
-                    auto* romDlg = new brls::Dialog("是否删除 ROM 文件？");
-                    auto deleteGame = [this, path](bool deleteRomFile) {
-                        if (beiklive::GameDB) {
-                            bool removedRecord = false;
-                            if ((int)beiklive::GameDB->getAll().size() <= 1)
-                            {
-                                beiklive::GameDB->clearAll();
-                                removedRecord = true;
-                            }
-                            else {
-                                removedRecord = beiklive::GameDB->removeByPath(path);
-                                if (removedRecord)
-                                    beiklive::GameDB->flush();
-                            }
-
-                            bool removedFile = true;
-                            if (removedRecord && deleteRomFile)
-                                removedFile = deleteGameFileIfExists(path);
-
-                            if (!removedRecord)
-                                brls::Application::notify("删除失败");
-                            else if (deleteRomFile)
-                                brls::Application::notify(removedFile ? "已删除游戏" : "已移除记录，ROM 文件删除失败");
-                            else
-                                brls::Application::notify("已从游戏库移除该游戏");
-                            _reloadEntries();
-                        } else {
-                            brls::Application::notify("删除失败");
-                        }
-                        m_libraryView->setInteractionDisabled(false);
-                    };
-                    romDlg->addButton("是", [deleteGame]() { deleteGame(true); });
-                    romDlg->addButton("否", [deleteGame]() { deleteGame(false); });
-                    romDlg->addButton("不删了", [this]() { m_libraryView->setInteractionDisabled(false); });
-                    romDlg->open();
-                });
-                removeDlg->addButton("否", [this]() { m_libraryView->setInteractionDisabled(false); });
-                removeDlg->addButton("不删了", [this]() { m_libraryView->setInteractionDisabled(false); });
-                removeDlg->open();
+        m_gameOptionsSidebar->addButton("启动游戏", beiklive::material::PLAY_ARROW,
+            [this, entry, selectedIndex](const beiklive::GameEntry&) {
+                if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS) &&
+                    !beiklive::ensureNdsEnvironmentReady()) {
+                    m_libraryView->setInteractionDisabled(false);
+                    return;
+                }
+                _closeGameOptionsPanelAnimated([this, entry, selectedIndex]() {
+                    auto alive = m_aliveToken;
+                    m_libraryView->playLaunchAnimation(
+                        static_cast<size_t>(std::max(0, selectedIndex)),
+                        [this, alive, entry]() {
+                            if (alive->load() && onGameSelected)
+                                onGameSelected(entry);
+                        }, true);
+                }, true);
             });
 
         m_gameOptionsSidebar->addButton(
             entry.favourite ? "取消收藏" : "加入收藏",
             entry.favourite ? beiklive::material::FAVORITE : beiklive::material::FAVORITE_BORDER,
-            [this, path, fav = entry.favourite, idx = m_libraryView->getSelectedIndex()](const beiklive::GameEntry&) {
-                _hideGameOptionsPanel();
-                std::string msg = fav ? "确定要取消收藏吗？" : "确定要加入收藏吗？";
-                auto* dlg = new brls::Dialog(msg);
-                dlg->addButton("确认", [this, path, fav, idx]() {
-                    if (beiklive::GameDB) {
-                        beiklive::GameDB->set(path, "favourite", nlohmann::json(!fav));
-                        beiklive::GameDB->flush();
-                        m_libraryView->setItemFavourite(idx, !fav);
-                    }
+            [this, path, favourite = entry.favourite, selectedIndex](const beiklive::GameEntry&) {
+                _closeGameOptionsPanelAnimated(
+                    [this, path, favourite, selectedIndex]() {
+                        if (beiklive::GameDB) {
+                            beiklive::GameDB->set(path, "favourite", nlohmann::json(!favourite));
+                            beiklive::GameDB->flush();
+                            if (selectedIndex >= 0 &&
+                                static_cast<size_t>(selectedIndex) < m_entries.size())
+                                m_entries[static_cast<size_t>(selectedIndex)].favourite = !favourite;
+                            m_libraryView->setItemFavourite(
+                                static_cast<size_t>(std::max(0, selectedIndex)), !favourite);
+                        }
+                        m_libraryView->setInteractionDisabled(false);
+                        brls::Application::giveFocus(m_libraryView);
+                        if (m_platformFilter == PlatformFilter::FAVORITE && favourite)
+                            _reloadEntries();
+                    });
+            });
+
+        const int operationsMenu = m_gameOptionsSidebar->addSubmenu(
+            "游戏操作", beiklive::material::SETTINGS);
+
+        m_gameOptionsSidebar->addSubmenuButton(operationsMenu, "修改映射名称", beiklive::material::EDIT,
+            [this, path, title = entry.title, fn, idx = m_libraryView->getSelectedIndex()](const beiklive::GameEntry&) {
+                _closeGameOptionsPanelAnimated([this, path, title, fn, idx]() {
+                    auto* ime = brls::Application::getPlatform()->getImeManager();
+                    if (!ime) { m_libraryView->setInteractionDisabled(false); return; }
+                    ime->openForText(
+                        [this, path, fn, idx](std::string text) {
+                            if (!text.empty() && beiklive::GameDB) {
+                                beiklive::GameDB->set(path, "title", nlohmann::json(text));
+                                beiklive::GameDB->flush();
+                                beiklive::NameMappingManager->Set(fn, text, true);
+                                beiklive::NameMappingManager->Save();
+                                m_libraryView->setItemTitle(idx, text);
+                            }
+                            m_libraryView->setInteractionDisabled(false);
+                        },
+                        "编辑游戏名称", "", 128, title,
+                        brls::KeyboardKeyDisableBitmask::KEYBOARD_DISABLE_NONE);
+                });
+            });
+
+        m_gameOptionsSidebar->addSubmenuButton(operationsMenu, "修改封面", beiklive::material::IMAGE,
+            [this, path, idx = m_libraryView->getSelectedIndex()](const beiklive::GameEntry& entry) {
+                const std::string logoPath = entry.logoPath;
+                _closeGameOptionsPanelAnimated([this, path, idx, logoPath]() {
+                    fs::path currentLogo(logoPath);
+                    beiklive::openFilePicker({"png", "jpg"},
+                        [this, path, idx](const std::string& selectedPath) {
+                            if (beiklive::GameDB) {
+                                beiklive::GameDB->set(path, "logoPath", nlohmann::json(selectedPath));
+                                beiklive::GameDB->flush();
+                                m_libraryView->setItemImagePath(idx, selectedPath);
+                            }
+                            m_libraryView->setInteractionDisabled(false);
+                        },
+                        currentLogo.parent_path().empty() ? beiklive::path::GetRootPath() : currentLogo.parent_path().string(),
+                        currentLogo.filename().string());
+                });
+            });
+
+        m_gameOptionsSidebar->addSubmenuButton(operationsMenu, "安装到 Switch 桌面", beiklive::material::INSTALL_APP,
+            [this](const beiklive::GameEntry& game) {
+                _closeGameOptionsPanelAnimated([this, game]() {
+                    m_libraryView->setInteractionDisabled(false);
+                    beiklive::forwarder::showInstallDialog(game);
+                });
+            });
+
+        m_gameOptionsSidebar->addButton("数据管理", beiklive::material::STORAGE,
+            [this, entry](const beiklive::GameEntry&) {
+                _closeGameOptionsPanelAnimated([this, entry]() {
+                    _openGameDataPage(entry);
                     m_libraryView->setInteractionDisabled(false);
                 });
-                dlg->addButton("取消", [this]() { m_libraryView->setInteractionDisabled(false); });
-                dlg->open();
             });
 
-        m_gameOptionsSidebar->addButton(
-            "多选",
-            beiklive::material::CHECK_BOX,
-            [enterMultiSelect](const beiklive::GameEntry&) {
-                enterMultiSelect(false);
-            });
+        if (beiklive::GetCoreOptions(entry.platform).size() > 1)
+        {
+            m_gameOptionsSidebar->addSubmenuButton(operationsMenu, "核心切换", beiklive::material::MEMORY,
+                [this, path, platform = entry.platform, core = entry.core,
+                 idx = m_libraryView->getSelectedIndex()](const beiklive::GameEntry&) {
+                    _closeGameOptionsPanelAnimated(
+                        [this, path, platform, core, idx]() {
+                            const auto options = beiklive::GetCoreOptions(platform);
+                            std::vector<std::string> names;
+                            names.reserve(options.size());
+                            for (const auto& option : options)
+                                names.push_back(option.name);
 
-        m_gameOptionsSidebar->addButton(
-            "全选",
-            beiklive::material::SELECT_ALL,
-            [enterMultiSelect](const beiklive::GameEntry&) {
-                enterMultiSelect(true);
+                            auto* dropdown = new brls::Dropdown(
+                                "核心切换",
+                                names,
+                                [this, path, idx, options](int selected) {
+                                    if (selected < 0 || selected >= static_cast<int>(options.size()))
+                                        return;
+                                    if (beiklive::GameDB) {
+                                        beiklive::GameDB->set(path, "core", nlohmann::json(options[selected].id));
+                                        beiklive::GameDB->flush();
+                                        if (idx >= 0 && static_cast<size_t>(idx) < m_entries.size())
+                                            m_entries[idx].core = options[selected].id;
+                                        brls::Application::notify("已切换核心：" + options[selected].name);
+                                    }
+                                    m_libraryView->setInteractionDisabled(false);
+                                },
+                                beiklive::GetCoreSelectionIndex(platform, core),
+                                [this](int) {
+                                    m_libraryView->setInteractionDisabled(false);
+                                });
+                            brls::Application::pushActivity(new brls::Activity(dropdown));
+                        });
+                });
+        }
+
+        m_gameOptionsSidebar->addSubmenuButton(operationsMenu, "删除游戏", beiklive::material::DELETE_ICON,
+            [this, path, selectedIndex](const beiklive::GameEntry&) {
+                _closeGameOptionsPanelAnimated([this, path, selectedIndex]() {
+                    auto* removeDlg = new brls::Dialog("是否从游戏库移除该游戏？");
+                    removeDlg->addButton("是", [this, path, selectedIndex]() {
+                        auto* romDlg = new brls::Dialog("是否删除 ROM 文件？");
+                        auto deleteGame = [this, selectedIndex](bool deleteRomFile) {
+                            _deleteEntriesAsync({selectedIndex}, deleteRomFile);
+                        };
+                        romDlg->addButton("是", [deleteGame]() { deleteGame(true); });
+                        romDlg->addButton("否", [deleteGame]() { deleteGame(false); });
+                        romDlg->addButton("不删了", [this]() { m_libraryView->setInteractionDisabled(false); });
+                        romDlg->open();
+                    });
+                    removeDlg->addButton("否", [this]() { m_libraryView->setInteractionDisabled(false); });
+                    removeDlg->addButton("不删了", [this]() { m_libraryView->setInteractionDisabled(false); });
+                    removeDlg->open();
+                });
             });
 
         m_gameOptionsSidebar->onClosed = [this]() {
             m_libraryView->setInteractionDisabled(false);
             brls::Application::giveFocus(m_libraryView);
             this->getBottomBar()->setVisibility(brls::Visibility::GONE);
+        };
+        m_gameOptionsSidebar->onCloseRequested = [this]() {
+            _closeGameOptionsPanelAnimated({});
         };
         this->addView(m_gameOptionsSidebar);
         m_libraryView->setInteractionDisabled(true);
@@ -1516,125 +1514,246 @@ namespace beiklive
         }
     }
 
+    void GameLibraryPage::_closeGameOptionsPanelAnimated(
+        std::function<void()> completion, bool launchTransition)
+    {
+        if (!m_gameOptionsSidebar) {
+            if (completion) completion();
+            return;
+        }
+        auto* sidebar = m_gameOptionsSidebar;
+        auto alive = m_aliveToken;
+        auto finishClose = [this, alive, sidebar,
+                        completion = std::move(completion)]() mutable {
+            brls::sync([this, alive, sidebar,
+                        completion = std::move(completion)]() mutable {
+                if (!alive->load()) return;
+                if (m_gameOptionsSidebar == sidebar)
+                    m_gameOptionsSidebar = nullptr;
+                sidebar->removeFromSuperView(true);
+                this->getBottomBar()->setVisibility(brls::Visibility::GONE);
+                if (completion) completion();
+            });
+        };
+        if (launchTransition)
+            sidebar->closeForLaunch(std::move(finishClose));
+        else
+            sidebar->close(std::move(finishClose));
+    }
+
+    void GameLibraryPage::_deleteEntriesAsync(std::vector<int> indices,
+                                              bool deleteRomFiles)
+    {
+        std::sort(indices.begin(), indices.end());
+        indices.erase(std::unique(indices.begin(), indices.end()), indices.end());
+        indices.erase(std::remove_if(indices.begin(), indices.end(),
+            [this](int index) {
+                return index < 0 || static_cast<size_t>(index) >= m_entries.size();
+            }), indices.end());
+        if (indices.empty()) {
+            m_libraryView->setInteractionDisabled(false);
+            return;
+        }
+
+        struct DeleteTarget {
+            int index;
+            std::string path;
+        };
+        std::vector<DeleteTarget> targets;
+        targets.reserve(indices.size());
+        for (int index : indices)
+            targets.push_back({index, m_entries[static_cast<size_t>(index)].path});
+
+        m_libraryView->beginDeleteAnimation(indices);
+        auto alive = m_aliveToken;
+        ThreadPool::instance().enqueue([
+            this, alive, targets = std::move(targets),
+            deleteRomFiles]() mutable {
+            std::vector<int> removedIndices;
+            bool allFilesRemoved = true;
+            if (alive->load() && beiklive::GameDB) {
+                const size_t databaseCount = beiklive::GameDB->getAll().size();
+                if (databaseCount > 0 && targets.size() >= databaseCount) {
+                    if (deleteRomFiles) {
+                        for (const auto& target : targets)
+                            allFilesRemoved = deleteGameFileIfExists(target.path) && allFilesRemoved;
+                    }
+                    beiklive::GameDB->clearAll();
+                    for (const auto& target : targets)
+                        removedIndices.push_back(target.index);
+                } else {
+                    for (const auto& target : targets) {
+                        if (!alive->load()) return;
+                        if (!beiklive::GameDB->removeByPath(target.path))
+                            continue;
+                        removedIndices.push_back(target.index);
+                        if (deleteRomFiles)
+                            allFilesRemoved = deleteGameFileIfExists(target.path) && allFilesRemoved;
+                    }
+                    if (!removedIndices.empty())
+                        beiklive::GameDB->flush();
+                }
+            }
+
+            if (!alive->load()) return;
+            brls::sync([this, alive, requested = targets.size(),
+                        removedIndices = std::move(removedIndices),
+                        deleteRomFiles, allFilesRemoved]() mutable {
+                if (!alive->load()) return;
+                if (removedIndices.empty()) {
+                    m_libraryView->cancelDeleteAnimation();
+                    brls::Application::notify("删除失败");
+                    return;
+                }
+                if (removedIndices.size() != requested) {
+                    m_libraryView->cancelDeleteAnimation();
+                    m_libraryView->beginDeleteAnimation(removedIndices);
+                }
+                m_libraryView->completeDeleteAnimation([
+                    this, alive, removedCount = removedIndices.size(),
+                    deleteRomFiles, allFilesRemoved]() {
+                    if (!alive->load()) return;
+                    m_libraryView->clearDeleteSelection();
+                    if (deleteRomFiles && !allFilesRemoved)
+                        brls::Application::notify("已移除记录，部分 ROM 文件删除失败");
+                    else
+                        brls::Application::notify(deleteRomFiles
+                            ? "已删除 " + std::to_string(removedCount) + " 款游戏"
+                            : "已从游戏库移除 " + std::to_string(removedCount) + " 款游戏");
+                    _reloadEntries(0, true);
+                });
+            });
+        });
+    }
+
     void GameLibraryPage::_showMultiSelectSidebar()
     {
         m_libraryView->setInteractionDisabled(true);
         _hideGameOptionsPanel();
         m_gameOptionsSidebar = new beiklive::GameOptionsSidebar();
+        m_gameOptionsSidebar->setNanoVgMenu(true);
         this->getBottomBar()->setVisibility(brls::Visibility::GONE);
 
         size_t count = m_libraryView->getDeleteSelection().size();
+        m_gameOptionsSidebar->setNanoVgPreviewIcon(
+            beiklive::material::SELECT_ALL,
+            "已选择 " + std::to_string(count) + " 款游戏");
 
         m_gameOptionsSidebar->addButton(
-            "取消多选",
+            "退出多选",
             beiklive::material::CLOSE,
             [this](const beiklive::GameEntry&) {
-                _hideGameOptionsPanel();
-                m_libraryView->clearDeleteSelection();
-                m_libraryView->setInteractionDisabled(false);
-                brls::Application::notify("已取消多选模式");
+                _closeGameOptionsPanelAnimated([this]() {
+                    m_libraryView->clearDeleteSelection();
+                    m_libraryView->setInteractionDisabled(false);
+                    brls::Application::giveFocus(m_libraryView);
+                    brls::Application::notify("已退出多选模式");
+                });
             });
 
         if (count > 0) {
             m_gameOptionsSidebar->addButton(
-                "添加到收藏 (" + std::to_string(count) + ")",
-                beiklive::material::FAVORITE,
-                [this](const beiklive::GameEntry&) {
-                    _hideGameOptionsPanel();
-                    std::vector<int> sel(m_libraryView->getDeleteSelection().begin(),
-                                         m_libraryView->getDeleteSelection().end());
-                    auto* dlg = new brls::Dialog("确认将选中的 " +
-                        std::to_string(sel.size()) + " 款游戏添加到收藏？");
-                    dlg->addButton("取消", [this]() {
-                        m_libraryView->setInteractionDisabled(false);
-                    });
-                    dlg->addButton("确认", [this, sel]() {
-                        size_t updated = 0;
-                        if (beiklive::GameDB) {
-                            for (int idx : sel) {
-                                if (idx < 0 || static_cast<size_t>(idx) >= m_entries.size())
-                                    continue;
-                                beiklive::GameDB->set(m_entries[idx].path, "favourite", nlohmann::json(true));
-                                m_entries[idx].favourite = true;
-                                m_libraryView->setItemFavourite(idx, true);
-                                ++updated;
-                            }
-                            beiklive::GameDB->flush();
-                        }
-                        m_libraryView->clearDeleteSelection();
-                        m_libraryView->setInteractionDisabled(false);
-                        brls::Application::notify(updated > 0
-                            ? "已添加到收藏：" + std::to_string(updated) + " 款"
-                            : "未选择可收藏的游戏");
-                        if (m_platformFilter == PlatformFilter::FAVORITE)
-                            _reloadEntries();
-                    });
-                    dlg->open();
-                });
-
-            m_gameOptionsSidebar->addButton(
                 "删除已选游戏 (" + std::to_string(count) + ")",
                 beiklive::material::DELETE_SWEEP_ICON,
                 [this](const beiklive::GameEntry&) {
-                    _hideGameOptionsPanel();
                     std::vector<int> sel(m_libraryView->getDeleteSelection().begin(),
                                          m_libraryView->getDeleteSelection().end());
-                    size_t n = sel.size();
-                    std::string msg = "是否从游戏库移除这 " + std::to_string(n) + " 款游戏？";
-                    auto* removeDlg = new brls::Dialog(msg);
-                    removeDlg->addButton("是", [this, sel]() {
-                        auto* romDlg = new brls::Dialog("是否删除 ROM 文件？");
-                        auto deleteSelected = [this, sel](bool deleteRomFiles) {
-                            bool allFilesRemoved = true;
-                            bool removedAnyRecord = false;
-                            if (beiklive::GameDB) {
-                                if ((int)beiklive::GameDB->getAll().size() <= (int)sel.size())
-                                {
-                                    if (deleteRomFiles) {
-                                        for (int idx : sel) {
-                                            if (idx >= 0 && static_cast<size_t>(idx) < m_entries.size())
-                                                allFilesRemoved = deleteGameFileIfExists(m_entries[idx].path) && allFilesRemoved;
-                                        }
-                                    }
-                                    beiklive::GameDB->clearAll();
-                                    removedAnyRecord = true;
-                                }
-                                else {
-                                    for (int idx : sel) {
-                                        if (idx >= 0 && static_cast<size_t>(idx) < m_entries.size()) {
-                                            const auto& path = m_entries[idx].path;
-                                            if (beiklive::GameDB->removeByPath(path)) {
-                                                removedAnyRecord = true;
-                                                if (deleteRomFiles)
-                                                    allFilesRemoved = deleteGameFileIfExists(path) && allFilesRemoved;
-                                            }
-                                        }
-                                    }
-                                    beiklive::GameDB->flush();
-                                }
-                            }
-                            if (!removedAnyRecord)
-                                brls::Application::notify("删除失败");
-                            else if (deleteRomFiles && !allFilesRemoved)
-                                brls::Application::notify("已移除记录，部分 ROM 文件删除失败");
-                            else
-                                brls::Application::notify(deleteRomFiles ? "已删除所选游戏" : "已从游戏库移除所选游戏");
-                            m_libraryView->clearDeleteSelection();
-                            _reloadEntries();
+                    _closeGameOptionsPanelAnimated([this, sel]() {
+                        size_t n = sel.size();
+                        std::string msg = "是否从游戏库移除这 " + std::to_string(n) + " 款游戏？";
+                        auto* removeDlg = new brls::Dialog(msg);
+                        removeDlg->addButton("是", [this, sel]() {
+                            auto* romDlg = new brls::Dialog("是否删除 ROM 文件？");
+                            auto deleteSelected = [this, sel](bool deleteRomFiles) {
+                                _deleteEntriesAsync(sel, deleteRomFiles);
+                            };
+                            romDlg->addButton("是", [deleteSelected]() { deleteSelected(true); });
+                            romDlg->addButton("否", [deleteSelected]() { deleteSelected(false); });
+                            romDlg->addButton("不删了", [this]() { m_libraryView->setInteractionDisabled(false); });
+                            romDlg->open();
+                        });
+                        removeDlg->addButton("否", [this]() {
                             m_libraryView->setInteractionDisabled(false);
-                        };
-                        romDlg->addButton("是", [deleteSelected]() { deleteSelected(true); });
-                        romDlg->addButton("否", [deleteSelected]() { deleteSelected(false); });
-                        romDlg->addButton("不删了", [this]() { m_libraryView->setInteractionDisabled(false); });
-                        romDlg->open();
+                        });
+                        removeDlg->addButton("不删了", [this]() {
+                            m_libraryView->setInteractionDisabled(false);
+                        });
+                        removeDlg->open();
                     });
-                    removeDlg->addButton("否", [this]() {
-                        m_libraryView->setInteractionDisabled(false);
+                });
+
+            m_gameOptionsSidebar->addButton(
+                "收藏选中游戏 (" + std::to_string(count) + ")",
+                beiklive::material::FAVORITE,
+                [this](const beiklive::GameEntry&) {
+                    std::vector<int> sel(m_libraryView->getDeleteSelection().begin(),
+                                         m_libraryView->getDeleteSelection().end());
+                    _closeGameOptionsPanelAnimated([this, sel]() {
+                        auto* dlg = new brls::Dialog("确认将选中的 " +
+                            std::to_string(sel.size()) + " 款游戏添加到收藏？");
+                        dlg->addButton("取消", [this]() {
+                            m_libraryView->setInteractionDisabled(false);
+                        });
+                        dlg->addButton("确认", [this, sel]() {
+                            size_t updated = 0;
+                            if (beiklive::GameDB) {
+                                for (int idx : sel) {
+                                    if (idx < 0 || static_cast<size_t>(idx) >= m_entries.size())
+                                        continue;
+                                    beiklive::GameDB->set(m_entries[idx].path, "favourite", nlohmann::json(true));
+                                    m_entries[idx].favourite = true;
+                                    m_libraryView->setItemFavourite(idx, true);
+                                    ++updated;
+                                }
+                                beiklive::GameDB->flush();
+                            }
+                            m_libraryView->clearDeleteSelection();
+                            m_libraryView->setInteractionDisabled(false);
+                            brls::Application::notify(updated > 0
+                                ? "已添加到收藏：" + std::to_string(updated) + " 款"
+                                : "未选择可收藏的游戏");
+                            if (m_platformFilter == PlatformFilter::FAVORITE)
+                                _reloadEntries();
+                        });
+                        dlg->open();
                     });
-                    removeDlg->addButton("不删了", [this]() {
-                        m_libraryView->setInteractionDisabled(false);
+                });
+
+            m_gameOptionsSidebar->addButton(
+                "取消收藏选中游戏 (" + std::to_string(count) + ")",
+                beiklive::material::FAVORITE_BORDER,
+                [this](const beiklive::GameEntry&) {
+                    std::vector<int> sel(m_libraryView->getDeleteSelection().begin(),
+                                         m_libraryView->getDeleteSelection().end());
+                    _closeGameOptionsPanelAnimated([this, sel]() {
+                        auto* dlg = new brls::Dialog("确认取消收藏选中的 " +
+                            std::to_string(sel.size()) + " 款游戏？");
+                        dlg->addButton("取消", [this]() {
+                            m_libraryView->setInteractionDisabled(false);
+                        });
+                        dlg->addButton("确认", [this, sel]() {
+                            size_t updated = 0;
+                            if (beiklive::GameDB) {
+                                for (int idx : sel) {
+                                    if (idx < 0 || static_cast<size_t>(idx) >= m_entries.size())
+                                        continue;
+                                    beiklive::GameDB->set(m_entries[idx].path, "favourite", nlohmann::json(false));
+                                    m_entries[idx].favourite = false;
+                                    m_libraryView->setItemFavourite(idx, false);
+                                    ++updated;
+                                }
+                                beiklive::GameDB->flush();
+                            }
+                            m_libraryView->clearDeleteSelection();
+                            m_libraryView->setInteractionDisabled(false);
+                            brls::Application::notify(updated > 0
+                                ? "已取消收藏：" + std::to_string(updated) + " 款"
+                                : "未选择可取消收藏的游戏");
+                            if (m_platformFilter == PlatformFilter::FAVORITE)
+                                _reloadEntries();
+                        });
+                        dlg->open();
                     });
-                    removeDlg->open();
                 });
         }
 
@@ -1642,6 +1761,9 @@ namespace beiklive
             m_libraryView->setInteractionDisabled(false);
             brls::Application::giveFocus(m_libraryView);
             this->getBottomBar()->setVisibility(brls::Visibility::GONE);
+        };
+        m_gameOptionsSidebar->onCloseRequested = [this]() {
+            _closeGameOptionsPanelAnimated({});
         };
         this->addView(m_gameOptionsSidebar);
         m_gameOptionsSidebar->open(beiklive::GameEntry{});

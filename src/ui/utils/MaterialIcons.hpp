@@ -14,6 +14,8 @@ namespace beiklive::material
     constexpr char32_t CHECK_BOX          = 0xE834;
     constexpr char32_t SELECT_ALL         = 0xE162;
     constexpr char32_t CLOSE              = 0xE5CD;
+    constexpr char32_t PLAY_ARROW         = 0xE037;
+    constexpr char32_t SETTINGS           = 0xE8B8;
     constexpr char32_t UPDATE             = 0xE923;
     constexpr char32_t DESCRIPTION        = 0xE873;
     constexpr char32_t SEARCH             = 0xE8B6;

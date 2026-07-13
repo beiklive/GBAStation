@@ -279,7 +279,14 @@ namespace beiklive
         HIDE_BRLS_BAR(frame);
         brls::Logger::info("Pushing GamePage activity for: " + entry.title);
         brls::sync([frame, previousPage, gamePage]() {
-            beiklive::pushActivity(frame, previousPage, gamePage, [gamePage]() { gamePage->startGame(); });
+            // GamePage 退出仍使用 beiklive::popActivity，因此保留其返回页记录，
+            // 但推入过程直接交给 Borealis，避免再次播放页面级隐藏动画。
+            beiklive::g_beiklive_boxes.push_back(previousPage);
+            brls::Application::pushActivity(
+                new brls::Activity(frame), brls::TransitionAnimation::NONE);
+            if (auto* library = dynamic_cast<beiklive::GameLibraryPage*>(previousPage))
+                library->resetLaunchOverlay();
+            gamePage->startGame();
         });
     }
 

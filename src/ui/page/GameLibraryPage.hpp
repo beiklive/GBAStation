@@ -38,6 +38,7 @@ enum class PlatformFilter : int
         ~GameLibraryPage();
 
         void willAppear(bool resetState) override;
+        void resetLaunchOverlay();
 
         std::function<void(const beiklive::GameEntry&)> onGameSelected;
 
@@ -98,7 +99,10 @@ enum class PlatformFilter : int
 
         void _showGameOptionsPanel(const beiklive::GameEntry& entry);
         void _hideGameOptionsPanel();
+        void _closeGameOptionsPanelAnimated(std::function<void()> completion,
+                                            bool launchTransition = false);
         void _showMultiSelectSidebar();
+        void _deleteEntriesAsync(std::vector<int> indices, bool deleteRomFiles);
         void _openGameDataPage(const beiklive::GameEntry& entry);
 
         int _currentFocusedIndex = -1;

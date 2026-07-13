@@ -23,18 +23,24 @@ namespace beiklive
     {
     public:
         GameOptionsSidebar();
-        ~GameOptionsSidebar() = default;
+        ~GameOptionsSidebar() override;
 
         /// 打开侧边栏，传入游戏条目信息（标题和图标显示在面板顶部）
         void open(const beiklive::GameEntry& entry);
 
         /// 关闭侧边栏
-        void close();
+        void close(std::function<void()> completion = {});
+        void closeForLaunch(std::function<void()> completion);
 
         /// 是否正在显示
         bool isOpen() const { return m_isOpen; }
 
         void frame(brls::FrameContext* ctx) override;
+        void draw(NVGcontext* vg, float x, float y, float w, float h,
+                  brls::Style style, brls::FrameContext* ctx) override;
+        brls::View* getDefaultFocus() override;
+        brls::View* getNextFocus(brls::FocusDirection direction,
+                                 brls::View* currentView) override;
 
         /// 添加一个操作按钮
         /// @param text     按钮文字
@@ -46,16 +52,40 @@ namespace beiklive
 
         /// 清空所有按钮
         void clearButtons();
+        void setShowButtonIcons(bool show) { m_showButtonIcons = show; }
+        void setNanoVgMenu(bool enabled) { m_nanoVgMenu = enabled; }
+        void setNanoVgPreviewIcon(char32_t iconCodepoint,
+                                  const std::string& label = {})
+        {
+            m_nanoPreviewIcon = iconCodepoint;
+            m_nanoPreviewLabel = label;
+        }
+        int addSubmenu(const std::string& text, char32_t iconCodepoint);
+        void addSubmenuButton(
+            int submenuIndex,
+            const std::string& text,
+            char32_t iconCodepoint,
+            std::function<void(const beiklive::GameEntry&)> callback);
 
         /// 面板关闭后回调
         std::function<void()> onClosed;
+        /// 根菜单按 B 时交由页面统一播放动画并清理视图。
+        std::function<void()> onCloseRequested;
 
     private:
         void _buildUI(const beiklive::GameEntry& entry);
         void _destroyUI();
+        void _frameNanoVg(float dt);
+        void _drawNanoVg(NVGcontext* vg, float x, float y, float w, float h);
 
         bool m_isOpen = false;
+        bool m_isClosing = false;
+        bool m_launchClosing = false;
+        bool m_showButtonIcons = false;
+        bool m_nanoVgMenu = false;
+        bool m_nanoInSubmenu = false;
         float m_openProgress = 0.f;
+        std::function<void()> m_closeCompletion;
         std::chrono::steady_clock::time_point m_lastFrameTime =
             std::chrono::steady_clock::now();
 
@@ -65,12 +95,30 @@ namespace beiklive
             std::string text;
             char32_t iconCodepoint;
             std::function<void(const beiklive::GameEntry&)> callback;
+            std::vector<ButtonConfig> children;
         };
         std::vector<ButtonConfig> m_buttons;
+        int m_nanoRootSelected = 0;
+        int m_nanoChildSelected = 0;
+        int m_nanoActiveSubmenu = -1;
+        float m_nanoSubmenuProgress = 0.f;
+        float m_nanoFloatTime = 0.f;
+        bool m_nanoPrevUp = false;
+        bool m_nanoPrevDown = false;
+        bool m_nanoPrevA = false;
+        bool m_nanoPrevB = false;
+        bool m_nanoFinalizeClose = false;
+        int m_nanoImageHandle = -1;
+        int m_nanoFontId = -1;
+        int m_nanoMaterialFontId = -1;
+        int m_nanoSwitchFontId = -1;
+        char32_t m_nanoPreviewIcon = 0;
+        std::string m_nanoPreviewLabel;
 
         // 运行时 UI 控件
         std::vector<beiklive::ButtonBox*> m_btnInstances;
         brls::Box*   m_panel      = nullptr;
+        brls::Box*   m_previewCard = nullptr;
         brls::Label* m_titleLabel = nullptr;
         brls::Image* m_iconImage  = nullptr;
 
