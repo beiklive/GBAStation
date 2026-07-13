@@ -7,6 +7,7 @@
 #include "ui/utils/NdsEnvironment.hpp"
 #include "ui/utils/CheatMatcher.hpp"
 #include <borealis/views/dropdown.hpp>
+#include <algorithm>
 #include <filesystem>
 
 #ifdef __SWITCH__
@@ -148,7 +149,7 @@ namespace beiklive
                    {
         this->showHeader(false);
         this->hideFooterLine();
-        // this->showFooter(false);
+        this->showFooter(false);
         // this->showBackground(true);
         // 动态背景由 Box::setupShaderLayer 根据配置初始化
         Init();
@@ -158,6 +159,7 @@ namespace beiklive
     StartPage::~StartPage()
     {
         m_alive.store(false);
+        m_aliveToken->store(false);
     }
 
     void StartPage::Init()
@@ -181,6 +183,13 @@ namespace beiklive
         brls::Logger::debug("StartPage onResume called");
         _applyRuntimeUiSettings();
         _requestRecentGamesRefresh(true);
+    }
+
+    void StartPage::onActivityResume()
+    {
+        if (switchLayout)
+            switchLayout->playEntranceAnimation();
+        onResume();
     }
 
     void StartPage::_applyRuntimeUiSettings()
@@ -211,7 +220,7 @@ namespace beiklive
     void StartPage::_requestRecentGamesRefresh(bool defer)
     {
         // 每次回到起始页时刷新游戏列表，获取最新的最近玩过的10款游戏
-        if (!switchLayout)
+        if (!switchLayout || m_homeDeletePending)
             return;
 
         int gen = ++m_recentRefreshGen;
@@ -222,19 +231,19 @@ namespace beiklive
             ThreadPool::instance().enqueue([this, gen]() {
                 if (!m_alive.load() || gen != m_recentRefreshGen.load()) return;
 
-                beiklive::GameList recent = beiklive::GameDB
-                    ? beiklive::GameDB->getRecentPlayed(10)
-                    : beiklive::GameList{};
+                auto prepared = beiklive::GameLibraryPage::prepareInitialData();
+                beiklive::GameList recent;
+                const size_t recentCount = std::min<size_t>(
+                    10, prepared.entries.size());
+                recent.reserve(recentCount);
+                recent.insert(recent.end(), prepared.entries.begin(),
+                              prepared.entries.begin() + recentCount);
 
-                for (auto& entry : recent)
-                {
-                    if (beiklive::tools::tryUseSavestateThumbnailCover(entry) && beiklive::GameDB)
-                        beiklive::GameDB->set(entry.path, "logoPath", nlohmann::json(entry.logoPath));
-                }
-
-                brls::sync([this, gen, recent = std::move(recent)]() {
+                brls::sync([this, gen, recent = std::move(recent),
+                            prepared = std::move(prepared)]() mutable {
                     if (!m_alive.load() || gen != m_recentRefreshGen.load() || !switchLayout) return;
 
+                    m_libraryPreparedData = std::move(prepared);
                     brls::View* currentFocus = brls::Application::getCurrentFocus();
                     bool needInitialCardFocus = !currentFocus || currentFocus == this || currentFocus->isHidden();
                     switchLayout->refreshGameList(recent);
@@ -258,18 +267,22 @@ namespace beiklive
     void StartPage::willAppear(bool resetState)
     {
         brls::Box::willAppear(resetState);
-        onResume();
+        onActivityResume();
     }
 
-    void StartPage::_pushGameActivity(const beiklive::GameEntry& entry, beiklive::Box* previousPage)
+    bool StartPage::_pushGameActivity(const beiklive::GameEntry& entry,
+                                      beiklive::Box* previousPage)
     {
+        if (!beiklive::tools::isFileExists(entry.path)) {
+            brls::Application::notify("文件不存在: " + entry.title);
+            return false;
+        }
         if (shouldUseNdsExternalNro(entry))
         {
 #ifdef __SWITCH__
             if (!beiklive::ensureNdsEnvironmentReady())
-                return;
-            launchNdsExternalNro(entry.path, entry.title);
-            return;
+                return false;
+            return launchNdsExternalNro(entry.path, entry.title);
 #endif
         }
 
@@ -278,20 +291,23 @@ namespace beiklive
         auto* frame = new brls::AppletFrame(gamePage);
         HIDE_BRLS_BAR(frame);
         brls::Logger::info("Pushing GamePage activity for: " + entry.title);
-        brls::sync([frame, previousPage, gamePage]() {
-            // GamePage 退出仍使用 beiklive::popActivity，因此保留其返回页记录，
-            // 但推入过程直接交给 Borealis，避免再次播放页面级隐藏动画。
-            beiklive::g_beiklive_boxes.push_back(previousPage);
-            brls::Application::pushActivity(
-                new brls::Activity(frame), brls::TransitionAnimation::NONE);
-            if (auto* library = dynamic_cast<beiklive::GameLibraryPage*>(previousPage))
-                library->resetLaunchOverlay();
-            gamePage->startGame();
-        });
+        // GamePage 退出仍使用 beiklive::popActivity，因此保留其返回页记录，
+        // 但推入过程直接交给 Borealis，避免再次播放页面级隐藏动画。
+        beiklive::g_beiklive_boxes.push_back(previousPage);
+        brls::Application::pushActivity(
+            new brls::Activity(frame), brls::TransitionAnimation::NONE);
+        if (auto* library = dynamic_cast<beiklive::GameLibraryPage*>(previousPage))
+            library->resetLaunchOverlay();
+        gamePage->startGame();
+        return true;
     }
 
     void StartPage::_pushGameActivity(const beiklive::DirListData& dirItem, beiklive::Box* previousPage)
     {
+        if (!beiklive::tools::isFileExists(dirItem.fullPath)) {
+            brls::Application::notify("文件不存在: " + dirItem.fileName);
+            return;
+        }
         if (shouldUseNdsExternalNro(dirItem))
         {
             if (!beiklive::ensureNdsEnvironmentReady())
@@ -318,8 +334,6 @@ namespace beiklive
         brls::Logger::debug("Using SWITCH theme layout");
         switchLayout = new beiklive::SwitchLayout();
         switchLayout->setGrow(1.f);
-        // TODO: 后续改为从数据库读取数据 参数为  游戏路径、标题、封面路径
-
         switchLayout->onGameActivated = [this](const beiklive::GameEntry &entry)
         {
             m_resetCardFocusOnNextRefresh = true;
@@ -328,9 +342,15 @@ namespace beiklive
                 : std::optional<beiklive::GameEntry>{};
             const auto& e = fresh.has_value() ? *fresh : entry;
             brls::Logger::info("Game activated: " + e.title);
-            _pushGameActivity(e, this);
+            if (!_pushGameActivity(e, this)) {
+                m_gameLaunchPending = false;
+                if (switchLayout) {
+                    switchLayout->playEntranceAnimation();
+                    switchLayout->restoreCardFocus(false);
+                }
+            }
         };
-    switchLayout->onGameOptions = [this](const beiklive::GameEntry &entry)
+        switchLayout->onGameOptions = [this](const beiklive::GameEntry &entry)
         {
             brls::Logger::info("Game options opened: " + entry.title);
             _showGameOptionsPanel(entry);
@@ -365,8 +385,13 @@ namespace beiklive
         switchLayout->onExitRequested = [this]()
         {
             brls::Logger::info("Exit requested");
-            brls::sync([this]()
-                       { brls::Application::quit(); });
+            if (switchLayout) {
+                switchLayout->playExitAnimation([]() {
+                    brls::Application::quit();
+                });
+            } else {
+                brls::Application::quit();
+            }
         };
         this->getContentBox()->addView(switchLayout);
         _requestRecentGamesRefresh(true);
@@ -374,7 +399,9 @@ namespace beiklive
 
     void StartPage::_openGameLibrary()
     {
-        if (!beiklive::GameDB || beiklive::GameDB->getAll().empty()) {
+        if (!beiklive::GameDB ||
+            (m_libraryPreparedData.ready &&
+             m_libraryPreparedData.entries.empty())) {
             auto* dialog = new brls::Dialog("游戏库为空，请从文件列表选择游戏或者从设置中进行游戏导入");
             dialog->addButton("确定", [](){});
             dialog->open();
@@ -382,23 +409,34 @@ namespace beiklive
         }
 
         brls::Logger::debug("Opening Game Library Page");
-        auto *gameLibraryPage = new beiklive::GameLibraryPage();
-        auto *frame           = new brls::AppletFrame(gameLibraryPage);
-
-        gameLibraryPage->onGameSelected = [this, gameLibraryPage](const beiklive::GameEntry &entry)
-        {
-            brls::Logger::info("Game selected from library: " + entry.title);
-            _pushGameActivity(entry, gameLibraryPage);
+        auto prepared = std::move(m_libraryPreparedData);
+        m_libraryPreparedData = {};
+        auto pushLibrary = [this, prepared = std::move(prepared)]() mutable {
+            auto* gameLibraryPage =
+                new beiklive::GameLibraryPage(std::move(prepared));
+            auto* frame = new brls::AppletFrame(gameLibraryPage);
+            gameLibraryPage->onGameSelected =
+                [this, gameLibraryPage](const beiklive::GameEntry& entry) {
+                    brls::Logger::info(
+                        "Game selected from library: " + entry.title);
+                    _pushGameActivity(entry, gameLibraryPage);
+                };
+            HIDE_BRLS_BAR(frame);
+            beiklive::g_beiklive_boxes.push_back(this);
+            brls::Application::pushActivity(
+                new brls::Activity(frame), brls::TransitionAnimation::NONE);
         };
-
-        HIDE_BRLS_BAR(frame);
-        brls::sync([frame, this, gameLibraryPage]()
-                   { beiklive::pushActivity(frame, this, gameLibraryPage); });
+        if (switchLayout)
+            switchLayout->playExitAnimation(std::move(pushLibrary));
+        else
+            pushLibrary();
     }
 
     void StartPage::_openFileList()
     {
         brls::Logger::debug("Opening File List Page");
+        if (switchLayout)
+            switchLayout->playExitAnimation();
         m_fileListPage = new beiklive::FileListPage();
 
         m_fileListPage->registerAction(
@@ -448,6 +486,8 @@ namespace beiklive
     void StartPage::_openSettings()
     {
         brls::Logger::debug("Opening Settings Page");
+        if (switchLayout)
+            switchLayout->playExitAnimation();
         auto *settingPage = new beiklive::SettingPage();
         auto *frame       = new brls::AppletFrame(settingPage);
         HIDE_BRLS_BAR(frame);
@@ -458,6 +498,8 @@ namespace beiklive
     void StartPage::_openAbout()
     {
         brls::Logger::debug("Opening About Page");
+        if (switchLayout)
+            switchLayout->playExitAnimation();
         auto *aboutPage = new beiklive::AboutPage();
         auto *frame     = new brls::AppletFrame(aboutPage);
         HIDE_BRLS_BAR(frame);
@@ -468,6 +510,8 @@ namespace beiklive
     void StartPage::_openDataManagement()
     {
         brls::Logger::debug("Opening Data Management Page");
+        if (switchLayout)
+            switchLayout->playExitAnimation();
         auto *dataPage = new beiklive::DataManagementPage();
         auto *frame    = new brls::AppletFrame(dataPage);
         HIDE_BRLS_BAR(frame);
@@ -477,165 +521,254 @@ namespace beiklive
 
     void StartPage::_showGameOptionsPanel(const beiklive::GameEntry& entry)
     {
-        auto* currentFocus = brls::Application::getCurrentFocus();
-        std::string romPath = entry.path;
-        std::string path = entry.path;
-
         _hideGameOptionsPanel();
-
         m_gameOptionsSidebar = new beiklive::GameOptionsSidebar();
-        this->getBottomBar()->setVisibility(brls::Visibility::INVISIBLE);
-        std::string filename = beiklive::tools::getFileNameWithoutExtension(entry.path);
-
-        // ── 修改映射名称 ──
-        m_gameOptionsSidebar->addButton("修改映射名称", beiklive::material::EDIT,
-            [this, path, title = entry.title, filename](const beiklive::GameEntry& e) {
-                _hideGameOptionsPanel();
-                auto* ime = brls::Application::getPlatform()->getImeManager();
-                if (!ime) return;
-                ime->openForText(
-                    [this, path, filename](std::string text) {
-                        if (!text.empty() && beiklive::GameDB) {
-                            beiklive::GameDB->set(path, "title", nlohmann::json(text));
-                            onResume();
-                            beiklive::NameMappingManager->Set(filename, text, true);
-                            beiklive::GameDB->flush();
-                            beiklive::NameMappingManager->Save();
-                        }
-                    },
-                    "编辑游戏名称",     // header
-                    "",                  // subText
-                    128,                 // maxLength
-                    title,               // initialText (当前名称)
-                    brls::KeyboardKeyDisableBitmask::KEYBOARD_DISABLE_NONE);
-            });
-
-        // ── 设置封面图 ──
-        m_gameOptionsSidebar->addButton("设置封面图", beiklive::material::IMAGE,
-            [this, path, romPath](const beiklive::GameEntry& e) {
-                _hideGameOptionsPanel();
-                std::filesystem::path currentLogo(e.logoPath);
-                beiklive::openFilePicker({"png", "jpg"},
-                    [this, path](const std::string& selectedPath) {
-                        if (beiklive::GameDB) {
-                            beiklive::GameDB->set(path, "logoPath", nlohmann::json(selectedPath));
-                            onResume();
-                            beiklive::GameDB->flush();
-                        }
-                    },
-                    currentLogo.parent_path().empty() ? beiklive::path::GetRootPath() : currentLogo.parent_path().string(),
-                    currentLogo.filename().string());
-            });
-
-        m_gameOptionsSidebar->addButton("安装游戏前端", beiklive::material::INSTALL_APP,
-            [this](const beiklive::GameEntry& game) {
-                _hideGameOptionsPanel();
-                beiklive::forwarder::showInstallDialog(game);
-            });
-
-        // ── 核心选择 ──
-        if (beiklive::GetCoreOptions(entry.platform).size() > 1)
-        {
-            m_gameOptionsSidebar->addButton("核心选择", beiklive::material::MEMORY,
-                [this, path, platform = entry.platform, core = entry.core](const beiklive::GameEntry&) {
-                    _hideGameOptionsPanel();
-
-                    const auto options = beiklive::GetCoreOptions(platform);
-                    std::vector<std::string> names;
-                    names.reserve(options.size());
-                    for (const auto& option : options)
-                        names.push_back(option.name);
-
-                    auto* dropdown = new brls::Dropdown(
-                        "核心选择",
-                        names,
-                        [this, path, options](int selected) {
-                            if (selected < 0 || selected >= static_cast<int>(options.size()))
-                                return;
-                            if (beiklive::GameDB) {
-                                beiklive::GameDB->set(path, "core", nlohmann::json(options[selected].id));
-                                beiklive::GameDB->flush();
-                                brls::Application::notify("已切换核心：" + options[selected].name);
-                                onResume();
-                            }
-                        },
-                        beiklive::GetCoreSelectionIndex(platform, core));
-                    brls::Application::pushActivity(new brls::Activity(dropdown));
-                });
+        m_gameOptionsSidebar->setNanoVgMenu(true);
+        m_gameOptionsSidebar->setLaunchFadeToBlack(true);
+        if (switchLayout) {
+            m_gameOptionsSidebar->setNanoVgPreviewImageHandle(
+                switchLayout->acquireSelectedCoverTexture());
         }
+        this->getBottomBar()->setVisibility(brls::Visibility::GONE);
 
-        // ── 删除游戏 ──
-        m_gameOptionsSidebar->addButton("删除游戏", beiklive::material::DELETE_ICON,
-            [this, path](const beiklive::GameEntry& e) {
-                _hideGameOptionsPanel();
-                auto* removeDialog = new brls::Dialog("是否从游戏库移除该游戏？");
-                removeDialog->addButton("是", [this, path]() {
-                    auto* romDialog = new brls::Dialog("是否删除 ROM 文件？");
-                    auto deleteGame = [this, path](bool deleteRomFile) {
-                        if (beiklive::GameDB) {
-                            bool removedRecord = false;
-                            if ((int)beiklive::GameDB->getAll().size() <= 1)
-                            {
-                                beiklive::GameDB->clearAll();
-                                removedRecord = true;
-                            }
-                            else {
-                                removedRecord = beiklive::GameDB->removeByPath(path);
-                                if (removedRecord)
-                                    beiklive::GameDB->flush();
-                            }
+        const std::string path = entry.path;
+        const std::string filename =
+            beiklive::tools::getFileNameWithoutExtension(entry.path);
 
-                            bool removedFile = true;
-                            if (removedRecord && deleteRomFile)
-                                removedFile = deleteGameFileIfExists(path);
-
-                            if (!removedRecord)
-                                brls::Application::notify("删除失败");
-                            else if (deleteRomFile)
-                                brls::Application::notify(removedFile ? "已删除游戏" : "已移除记录，ROM 文件删除失败");
-                            else
-                                brls::Application::notify("已从游戏库移除该游戏");
-                            onResume();
-                        } else {
-                            brls::Application::notify("删除失败");
-                        }
-                    };
-                    romDialog->addButton("是", [deleteGame]() { deleteGame(true); });
-                    romDialog->addButton("否", [deleteGame]() { deleteGame(false); });
-                    romDialog->addButton("不删了", []() {
-                    });
-                    romDialog->open();
-                });
-                removeDialog->addButton("否", []() {
-                });
-                removeDialog->addButton("不删了", []() {
-                });
-                removeDialog->open();
+        m_gameOptionsSidebar->addButton(
+            "启动游戏", beiklive::material::PLAY_ARROW,
+            [this, entry](const beiklive::GameEntry&) {
+                if (entry.platform == static_cast<int>(
+                        beiklive::enums::EmuPlatform::EmuNDS) &&
+                    !beiklive::ensureNdsEnvironmentReady())
+                    return;
+                m_gameLaunchPending = true;
+                if (switchLayout)
+                    switchLayout->playExitAnimation();
+                _closeGameOptionsPanelAnimated([this, entry]() {
+                    if (switchLayout && switchLayout->onGameActivated)
+                        switchLayout->onGameActivated(entry);
+                    m_gameLaunchPending = false;
+                }, true);
             });
 
-        // ── 收藏 ──
         m_gameOptionsSidebar->addButton(
             entry.favourite ? "取消收藏" : "加入收藏",
             entry.favourite ? beiklive::material::FAVORITE : beiklive::material::FAVORITE_BORDER,
             [this, path, fav = entry.favourite](const beiklive::GameEntry&) {
-                _hideGameOptionsPanel();
-                std::string msg = fav ? "确定要取消收藏吗？" : "确定要加入收藏吗？";
-                auto* dlg = new brls::Dialog(msg);
-                dlg->addButton("确认", [this, path, fav]() {
-                    if (beiklive::GameDB) {
-                        beiklive::GameDB->set(path, "favourite", nlohmann::json(!fav));
-                        beiklive::GameDB->flush();
-                        onResume();
-                    }
+                _closeGameOptionsPanelAnimated([this, path, fav]() {
+                    const std::string msg = fav
+                        ? "确定要取消收藏吗？"
+                        : "确定要加入收藏吗？";
+                    auto* dlg = new brls::Dialog(msg);
+                    dlg->addButton("确认", [this, path, fav]() {
+                        if (beiklive::GameDB) {
+                            beiklive::GameDB->set(
+                                path, "favourite", nlohmann::json(!fav));
+                            beiklive::GameDB->flush();
+                            _requestRecentGamesRefresh(false);
+                        }
+                    });
+                    dlg->addButton("取消", []() {});
+                    dlg->open();
                 });
-                dlg->addButton("取消", [](){});
-                dlg->open();
             });
 
-        m_gameOptionsSidebar->onClosed = [this, currentFocus]() {
-            brls::Application::giveFocus(currentFocus);
-        this->getBottomBar()->setVisibility(brls::Visibility::VISIBLE);
+        const int operationsMenu = m_gameOptionsSidebar->addSubmenu(
+            "游戏操作", beiklive::material::SETTINGS);
 
+        m_gameOptionsSidebar->addSubmenuButton(
+            operationsMenu, "修改映射名称", beiklive::material::EDIT,
+            [this, path, title = entry.title, filename](const beiklive::GameEntry&) {
+                _closeGameOptionsPanelAnimated(
+                    [this, path, title, filename]() {
+                        auto* ime = brls::Application::getPlatform()->getImeManager();
+                        if (!ime)
+                            return;
+                        ime->openForText(
+                            [this, path, filename](std::string text) {
+                                if (text.empty() || !beiklive::GameDB)
+                                    return;
+                                beiklive::GameDB->set(
+                                    path, "title", nlohmann::json(text));
+                                beiklive::NameMappingManager->Set(
+                                    filename, text, true);
+                                beiklive::GameDB->flush();
+                                beiklive::NameMappingManager->Save();
+                                _requestRecentGamesRefresh(false);
+                            },
+                            "编辑游戏名称", "", 128, title,
+                            brls::KeyboardKeyDisableBitmask::KEYBOARD_DISABLE_NONE);
+                    });
+            });
+
+        m_gameOptionsSidebar->addSubmenuButton(
+            operationsMenu, "修改封面", beiklive::material::IMAGE,
+            [this, path](const beiklive::GameEntry& game) {
+                const std::filesystem::path currentLogo(game.logoPath);
+                _closeGameOptionsPanelAnimated(
+                    [this, path, currentLogo]() {
+                        beiklive::openFilePicker(
+                            {"png", "jpg"},
+                            [this, path](const std::string& selectedPath) {
+                                if (!beiklive::GameDB)
+                                    return;
+                                beiklive::GameDB->set(
+                                    path, "logoPath", nlohmann::json(selectedPath));
+                                beiklive::GameDB->flush();
+                                _requestRecentGamesRefresh(false);
+                            },
+                            currentLogo.parent_path().empty()
+                                ? beiklive::path::GetRootPath()
+                                : currentLogo.parent_path().string(),
+                            currentLogo.filename().string());
+                    });
+            });
+
+        m_gameOptionsSidebar->addSubmenuButton(
+            operationsMenu, "安装到 Switch 桌面",
+            beiklive::material::INSTALL_APP,
+            [this](const beiklive::GameEntry& game) {
+                _closeGameOptionsPanelAnimated([game]() {
+                    beiklive::forwarder::showInstallDialog(game);
+                });
+            });
+
+        if (beiklive::GetCoreOptions(entry.platform).size() > 1) {
+            m_gameOptionsSidebar->addSubmenuButton(
+                operationsMenu, "核心切换", beiklive::material::MEMORY,
+                [this, path, platform = entry.platform,
+                 core = entry.core](const beiklive::GameEntry&) {
+                    _closeGameOptionsPanelAnimated(
+                        [this, path, platform, core]() {
+                            const auto options =
+                                beiklive::GetCoreOptions(platform);
+                            std::vector<std::string> names;
+                            names.reserve(options.size());
+                            for (const auto& option : options)
+                                names.push_back(option.name);
+                            auto* dropdown = new brls::Dropdown(
+                                "核心切换", names,
+                                [this, path, options](int selected) {
+                                    if (selected < 0 ||
+                                        selected >= static_cast<int>(options.size()))
+                                        return;
+                                    if (beiklive::GameDB) {
+                                        beiklive::GameDB->set(
+                                            path, "core",
+                                            nlohmann::json(options[selected].id));
+                                        beiklive::GameDB->flush();
+                                        brls::Application::notify(
+                                            "已切换核心：" + options[selected].name);
+                                        _requestRecentGamesRefresh(false);
+                                    }
+                                },
+                                beiklive::GetCoreSelectionIndex(platform, core));
+                            brls::Application::pushActivity(
+                                new brls::Activity(dropdown));
+                        });
+                });
+        }
+
+        m_gameOptionsSidebar->addSubmenuButton(
+            operationsMenu, "删除游戏", beiklive::material::DELETE_ICON,
+            [this, path](const beiklive::GameEntry&) {
+                _closeGameOptionsPanelAnimated([this, path]() {
+                    auto* removeDialog =
+                        new brls::Dialog("是否从游戏库移除该游戏？");
+                    removeDialog->addButton("是", [this, path]() {
+                        auto* romDialog =
+                            new brls::Dialog("是否删除 ROM 文件？");
+                        auto deleteGame = [this, path](bool deleteRomFile) {
+                            if (!beiklive::GameDB) {
+                                brls::Application::notify("删除失败");
+                                return;
+                            }
+                            m_homeDeletePending = true;
+                            ++m_recentRefreshGen;
+                            if (switchLayout)
+                                switchLayout->removeGameByPath(path);
+
+                            auto alive = m_aliveToken;
+                            ThreadPool::instance().enqueue([
+                                this, alive, path, deleteRomFile]() {
+                                bool removedRecord = false;
+                                if (alive->load() && beiklive::GameDB) {
+                                    if (beiklive::GameDB->getAll().size() <= 1) {
+                                        beiklive::GameDB->clearAll();
+                                        removedRecord = true;
+                                    } else {
+                                        removedRecord =
+                                            beiklive::GameDB->removeByPath(path);
+                                        if (removedRecord)
+                                            beiklive::GameDB->flush();
+                                    }
+                                }
+
+                                bool removedFile = true;
+                                if (removedRecord && deleteRomFile)
+                                    removedFile = deleteGameFileIfExists(path);
+                                if (!alive->load())
+                                    return;
+
+                                brls::sync([
+                                    this, alive, removedRecord, removedFile,
+                                    deleteRomFile]() {
+                                    if (!alive->load())
+                                        return;
+                                    if (!removedRecord) {
+                                        m_homeDeletePending = false;
+                                        if (switchLayout)
+                                            switchLayout->cancelGameRemoval();
+                                        brls::Application::notify("删除失败");
+                                        _requestRecentGamesRefresh(false);
+                                        return;
+                                    }
+
+                                    auto finish = [this, alive, removedFile,
+                                                   deleteRomFile]() {
+                                        if (!alive->load())
+                                            return;
+                                        m_homeDeletePending = false;
+                                        if (deleteRomFile)
+                                            brls::Application::notify(removedFile
+                                                ? "已删除游戏"
+                                                : "已移除记录，ROM 文件删除失败");
+                                        else
+                                            brls::Application::notify(
+                                                "已从游戏库移除该游戏");
+                                        _requestRecentGamesRefresh(false);
+                                    };
+                                    if (switchLayout)
+                                        switchLayout->completeGameRemoval(
+                                            std::move(finish));
+                                    else
+                                        finish();
+                                });
+                            });
+                        };
+                        romDialog->addButton(
+                            "是", [deleteGame]() { deleteGame(true); });
+                        romDialog->addButton(
+                            "否", [deleteGame]() { deleteGame(false); });
+                        romDialog->addButton("不删了", []() {});
+                        romDialog->open();
+                    });
+                    removeDialog->addButton("否", []() {});
+                    removeDialog->addButton("不删了", []() {});
+                    removeDialog->open();
+                });
+            });
+
+        m_gameOptionsSidebar->onClosed = [this]() {
+            if (switchLayout)
+                switchLayout->releaseSelectedCoverTexture();
+            if (switchLayout)
+                switchLayout->restoreCardFocus(false);
+            this->getBottomBar()->setVisibility(brls::Visibility::GONE);
+        };
+        m_gameOptionsSidebar->onCloseRequested = [this]() {
+            _closeGameOptionsPanelAnimated({});
         };
 
         this->addView(m_gameOptionsSidebar);
@@ -644,13 +777,43 @@ namespace beiklive
 
     void StartPage::_hideGameOptionsPanel()
     {
-        if (m_gameOptionsSidebar)
-        {
-            m_gameOptionsSidebar->close();
-            m_gameOptionsSidebar->removeFromSuperView(true);
-            m_gameOptionsSidebar = nullptr;
-        this->getBottomBar()->setVisibility(brls::Visibility::VISIBLE);
+        if (!m_gameOptionsSidebar)
+            return;
+        auto* stale = m_gameOptionsSidebar;
+        m_gameOptionsSidebar = nullptr;
+        if (switchLayout)
+            switchLayout->releaseSelectedCoverTexture();
+        stale->removeFromSuperView(true);
+        this->getBottomBar()->setVisibility(brls::Visibility::GONE);
+    }
 
+    void StartPage::_closeGameOptionsPanelAnimated(
+        std::function<void()> completion, bool launchTransition)
+    {
+        if (!m_gameOptionsSidebar) {
+            if (completion)
+                completion();
+            return;
         }
+        auto* sidebar = m_gameOptionsSidebar;
+        auto alive = m_aliveToken;
+        auto finishClose = [this, alive, sidebar,
+                            completion = std::move(completion)]() mutable {
+            brls::sync([this, alive, sidebar,
+                        completion = std::move(completion)]() mutable {
+                if (!alive->load())
+                    return;
+                if (m_gameOptionsSidebar == sidebar)
+                    m_gameOptionsSidebar = nullptr;
+                sidebar->removeFromSuperView(true);
+                this->getBottomBar()->setVisibility(brls::Visibility::GONE);
+                if (completion)
+                    completion();
+            });
+        };
+        if (launchTransition)
+            sidebar->closeForLaunch(std::move(finishClose));
+        else
+            sidebar->close(std::move(finishClose));
     }
 }

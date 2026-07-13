@@ -21,7 +21,7 @@
 namespace beiklive {
 
 static constexpr const char* RESOURCE_MANIFEST_URL =
-    "https://cdn.jsdelivr.net/gh/beiklive/GBAStation_Release@main/emu_res/res_version.json";
+    "https://file.beiklive.top/file/GBAStation/res_version.json";
 
 struct OnlineResourceItem {
     char32_t materialIcon = material::SEARCH;

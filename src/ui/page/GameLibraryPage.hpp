@@ -34,8 +34,18 @@ enum class PlatformFilter : int
             FIRST_LETTER,
         };
 
+        struct PreparedData
+        {
+            std::vector<beiklive::GameEntry> entries;
+            std::vector<PlatformFilter> filters;
+            bool ready = false;
+        };
+
         GameLibraryPage();
+        explicit GameLibraryPage(PreparedData preparedData);
         ~GameLibraryPage();
+
+        static PreparedData prepareInitialData();
 
         void willAppear(bool resetState) override;
         void resetLaunchOverlay();
@@ -113,6 +123,8 @@ enum class PlatformFilter : int
         std::shared_ptr<std::atomic<bool>> m_aliveToken =
             std::make_shared<std::atomic<bool>>(true);
         std::atomic<uint64_t> m_reloadGeneration{0};
+        PreparedData m_deferredPreparedData;
+        bool m_hasPresentedInitialData = false;
     };
 
 } // namespace beiklive

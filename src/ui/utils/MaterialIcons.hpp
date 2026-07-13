@@ -21,4 +21,6 @@ namespace beiklive::material
     constexpr char32_t SEARCH             = 0xE8B6;
     constexpr char32_t IMAGE_PLACEHOLDER  = 0xE3F4;
     constexpr char32_t CHECK_BOX_OUTLINE  = 0xE835;
+    constexpr char32_t WIFI               = 0xE63E;
+    constexpr char32_t WIFI_OFF           = 0xE648;
 }

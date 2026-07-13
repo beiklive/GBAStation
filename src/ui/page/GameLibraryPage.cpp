@@ -714,6 +714,11 @@ namespace beiklive
     }
 
     GameLibraryPage::GameLibraryPage()
+        : GameLibraryPage(PreparedData{})
+    {
+    }
+
+    GameLibraryPage::GameLibraryPage(PreparedData preparedData)
     {
         this->showHeader(false);
         this->showFooter(false);
@@ -841,7 +846,37 @@ namespace beiklive
                 m_filterFocusIndices[static_cast<int>(m_platformFilter)] = idx;
         });
 
-        _loadAndShowEntries();
+        if (preparedData.ready) {
+            m_deferredPreparedData = std::move(preparedData);
+            m_libraryView->setInteractionDisabled(true);
+            m_libraryView->showLoadingSkeleton();
+            auto alive = m_aliveToken;
+            brls::delay(16, [this, alive]() {
+                if (!alive->load() || !m_deferredPreparedData.ready)
+                    return;
+                auto prepared = std::move(m_deferredPreparedData);
+                m_deferredPreparedData = {};
+                const uint64_t generation = ++m_reloadGeneration;
+                _presentReloadedEntries(
+                    generation, std::move(prepared.entries),
+                    std::move(prepared.filters), PlatformFilter::ALL,
+                    false, false, "");
+            });
+        } else {
+            _loadAndShowEntries();
+        }
+    }
+
+    GameLibraryPage::PreparedData GameLibraryPage::prepareInitialData()
+    {
+        PreparedData prepared;
+        prepared.entries = loadLibraryEntries();
+        prepared.filters = _buildAvailableFilters(prepared.entries);
+        _filterAndSortEntries(
+            prepared.entries, PlatformFilter::ALL, SortMode::LAST_PLAYED,
+            false, "");
+        prepared.ready = true;
+        return prepared;
     }
 
     GameLibraryPage::~GameLibraryPage()
@@ -1041,17 +1076,17 @@ namespace beiklive
 
         switch (sortMode) {
         case SortMode::PLAY_TIME:
-            std::sort(entries.begin(), entries.end(),
+            std::stable_sort(entries.begin(), entries.end(),
                 [](const GameEntry& a, const GameEntry& b) { return a.playTime > b.playTime; });
             break;
         case SortMode::FIRST_LETTER:
-            std::sort(entries.begin(), entries.end(),
+            std::stable_sort(entries.begin(), entries.end(),
                 [](const GameEntry& a, const GameEntry& b) {
                     return _titleToSortKey(a.title) < _titleToSortKey(b.title);
                 });
             break;
         default:
-            std::sort(entries.begin(), entries.end(),
+            std::stable_sort(entries.begin(), entries.end(),
                 [](const GameEntry& a, const GameEntry& b) { return a.lastPlayed > b.lastPlayed; });
             break;
         }
@@ -1225,6 +1260,7 @@ namespace beiklive
             m_isClosing)
             return;
 
+        const bool initialPresentation = !m_hasPresentedInitialData;
         m_entries = std::move(entries);
         m_availableFilters = std::move(filters);
         m_platformFilter = resolvedFilter;
@@ -1238,6 +1274,10 @@ namespace beiklive
         m_libraryView->reloadData();
         m_libraryView->setInteractionDisabled(false);
         brls::Application::giveFocus(m_libraryView);
+        if (initialPresentation) {
+            m_hasPresentedInitialData = true;
+            m_libraryView->restartEntranceAnimation();
+        }
         if (isSearching && m_entries.empty()) {
             auto* dialog = new brls::Dialog(
                 "当前分类下无 \"" + searchTerm + "\"");

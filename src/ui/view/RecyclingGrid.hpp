@@ -56,6 +56,7 @@ public:
     void setLibraryContext(std::string category, std::string detail);
     void setPlatformCarousel(std::vector<std::string> labels, int selected, int direction);
     void startContentTransition(int direction = 0, bool wholePageSlide = false);
+    void restartEntranceAnimation();
     void showLoadingSkeleton();
     void playLaunchAnimation(size_t index, std::function<void()> completion,
                              bool startCentered = false);

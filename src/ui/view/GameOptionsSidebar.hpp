@@ -54,11 +54,18 @@ namespace beiklive
         void clearButtons();
         void setShowButtonIcons(bool show) { m_showButtonIcons = show; }
         void setNanoVgMenu(bool enabled) { m_nanoVgMenu = enabled; }
+        void setLaunchFadeToBlack(bool enabled) { m_launchFadeToBlack = enabled; }
         void setNanoVgPreviewIcon(char32_t iconCodepoint,
                                   const std::string& label = {})
         {
             m_nanoPreviewIcon = iconCodepoint;
             m_nanoPreviewLabel = label;
+        }
+        /// 复用调用方已经上传的 NanoVG 纹理；句柄所有权仍属于调用方。
+        void setNanoVgPreviewImageHandle(int handle)
+        {
+            m_nanoProvidedImageHandle = handle;
+            m_nanoHasProvidedImage = true;
         }
         int addSubmenu(const std::string& text, char32_t iconCodepoint);
         void addSubmenuButton(
@@ -108,7 +115,12 @@ namespace beiklive
         bool m_nanoPrevA = false;
         bool m_nanoPrevB = false;
         bool m_nanoFinalizeClose = false;
+        bool m_launchFadeToBlack = false;
+        float m_nanoLaunchFinishTime = 0.f;
         int m_nanoImageHandle = -1;
+        int m_nanoProvidedImageHandle = -1;
+        bool m_nanoHasProvidedImage = false;
+        bool m_nanoOwnsImageHandle = false;
         int m_nanoFontId = -1;
         int m_nanoMaterialFontId = -1;
         int m_nanoSwitchFontId = -1;

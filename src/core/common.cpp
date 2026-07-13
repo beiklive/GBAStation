@@ -749,6 +749,11 @@ namespace beiklive
 
     void popActivity(beiklive::Box *v, bool animate)
     {
+        if (g_beiklive_boxes.empty()) {
+            brls::Logger::error("Cannot restore previous page: activity page stack is empty");
+            brls::Application::popActivity(brls::TransitionAnimation::NONE);
+            return;
+        }
         auto* box = static_cast<beiklive::Box*>(g_beiklive_boxes.back());
         g_beiklive_boxes.pop_back();
         auto finishPop = [box]() {
@@ -757,7 +762,9 @@ namespace beiklive
                 bool popped = brls::Application::popActivity(
                     brls::TransitionAnimation::NONE,
                     [box, activityToDelete]() {
-                        box->animaShow();
+                        box->animaShow([box]() {
+                            box->onActivityResume();
+                        });
                         if (!activityToDelete)
                             return;
 
@@ -767,8 +774,11 @@ namespace beiklive
                         });
                     },
                     false);
-                if (!popped)
-                    box->animaShow();
+                if (!popped) {
+                    box->animaShow([box]() {
+                        box->onActivityResume();
+                    });
+                }
             };
         if (animate)
             v->animaHide(std::move(finishPop));

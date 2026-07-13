@@ -29,6 +29,7 @@ namespace beiklive
 
         void animaShow(std::function<void()> onStart = nullptr);
         void animaHide(std::function<void()> onComplete = nullptr);
+        virtual void onActivityResume() {}
 
         void frame(brls::FrameContext* ctx) override;
 

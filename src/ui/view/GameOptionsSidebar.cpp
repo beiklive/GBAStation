@@ -1,5 +1,6 @@
 #include "GameOptionsSidebar.hpp"
 #include "core/Tools.hpp"
+#include "ui/utils/GradientFocus.hpp"
 #include "ui/utils/MaterialIcons.hpp"
 #include "ui/widget/HintsBar.hpp"
 
@@ -48,11 +49,12 @@ namespace beiklive
 
     GameOptionsSidebar::~GameOptionsSidebar()
     {
-        if (m_nanoImageHandle >= 0) {
+        if (m_nanoImageHandle >= 0 && m_nanoOwnsImageHandle) {
             if (auto* vg = brls::Application::getNVGContext())
                 nvgDeleteImage(vg, m_nanoImageHandle);
-            m_nanoImageHandle = -1;
         }
+        m_nanoImageHandle = -1;
+        m_nanoOwnsImageHandle = false;
     }
 
     brls::View* GameOptionsSidebar::getDefaultFocus()
@@ -117,23 +119,30 @@ namespace beiklive
         m_nanoSubmenuProgress = 0.f;
         m_nanoFloatTime = 0.f;
         m_nanoFinalizeClose = false;
+        m_nanoLaunchFinishTime = 0.f;
         {
             auto& state = brls::Application::getControllerState();
             const float ly = state.axes[static_cast<int>(brls::LEFT_Y)];
-            m_nanoPrevUp = state.buttons[static_cast<int>(brls::BUTTON_UP)] || ly < -0.5f;
-            m_nanoPrevDown = state.buttons[static_cast<int>(brls::BUTTON_DOWN)] || ly > 0.5f;
+            const float ry = state.axes[static_cast<int>(brls::RIGHT_Y)];
+            const float navY = std::abs(ry) > std::abs(ly) ? ry : ly;
+            m_nanoPrevUp = state.buttons[static_cast<int>(brls::BUTTON_UP)] || navY < -0.5f;
+            m_nanoPrevDown = state.buttons[static_cast<int>(brls::BUTTON_DOWN)] || navY > 0.5f;
             m_nanoPrevA = state.buttons[static_cast<int>(brls::BUTTON_A)];
             m_nanoPrevB = state.buttons[static_cast<int>(brls::BUTTON_B)];
         }
         m_lastFrameTime = std::chrono::steady_clock::now();
-        if (m_nanoImageHandle >= 0) {
+        if (m_nanoImageHandle >= 0 && m_nanoOwnsImageHandle) {
             if (auto* vg = brls::Application::getNVGContext())
                 nvgDeleteImage(vg, m_nanoImageHandle);
-            m_nanoImageHandle = -1;
         }
-        if (m_nanoVgMenu && !entry.logoPath.empty()) {
+        m_nanoImageHandle = -1;
+        m_nanoOwnsImageHandle = false;
+        if (m_nanoVgMenu && m_nanoHasProvidedImage) {
+            m_nanoImageHandle = m_nanoProvidedImageHandle;
+        } else if (m_nanoVgMenu && !entry.logoPath.empty()) {
             if (auto* vg = brls::Application::getNVGContext())
                 m_nanoImageHandle = nvgCreateImage(vg, entry.logoPath.c_str(), 0);
+            m_nanoOwnsImageHandle = m_nanoImageHandle >= 0;
         }
         _buildUI(entry);
         this->setVisibility(brls::Visibility::VISIBLE);
@@ -238,8 +247,10 @@ namespace beiklive
 
         auto& state = brls::Application::getControllerState();
         const float ly = state.axes[static_cast<int>(brls::LEFT_Y)];
-        const bool up = state.buttons[static_cast<int>(brls::BUTTON_UP)] || ly < -0.5f;
-        const bool down = state.buttons[static_cast<int>(brls::BUTTON_DOWN)] || ly > 0.5f;
+        const float ry = state.axes[static_cast<int>(brls::RIGHT_Y)];
+        const float navY = std::abs(ry) > std::abs(ly) ? ry : ly;
+        const bool up = state.buttons[static_cast<int>(brls::BUTTON_UP)] || navY < -0.5f;
+        const bool down = state.buttons[static_cast<int>(brls::BUTTON_DOWN)] || navY > 0.5f;
         const bool a = state.buttons[static_cast<int>(brls::BUTTON_A)];
         const bool b = state.buttons[static_cast<int>(brls::BUTTON_B)];
 
@@ -276,17 +287,19 @@ namespace beiklive
                 }
             }
 
-            if (b && !m_nanoPrevB) {
-                if (m_nanoInSubmenu) {
-                    m_nanoInSubmenu = false;
-                    brls::Application::getAudioPlayer()->play(brls::SOUND_BACK);
-                } else {
-                    if (onCloseRequested)
-                        onCloseRequested();
-                    else
-                        close();
-                    brls::Application::getAudioPlayer()->play(brls::SOUND_BACK);
-                }
+        }
+
+        // B 从入场首帧起即可反向关闭；A 和方向键仍等待菜单基本展开。
+        if (!m_isClosing && b && !m_nanoPrevB) {
+            if (m_nanoInSubmenu) {
+                m_nanoInSubmenu = false;
+                brls::Application::getAudioPlayer()->play(brls::SOUND_BACK);
+            } else {
+                if (onCloseRequested)
+                    onCloseRequested();
+                else
+                    close();
+                brls::Application::getAudioPlayer()->play(brls::SOUND_BACK);
             }
         }
 
@@ -295,10 +308,16 @@ namespace beiklive
         m_nanoPrevA = a;
         m_nanoPrevB = b;
 
-        if (m_isClosing && m_openProgress <= 0.f &&
-            m_launchClosing && !m_nanoFinalizeClose) {
-            m_nanoFinalizeClose = true;
-            return;
+        if (m_isClosing && m_openProgress <= 0.f && m_launchClosing) {
+            if (m_launchFadeToBlack) {
+                m_nanoLaunchFinishTime += dt;
+                if (m_nanoLaunchFinishTime < 1.18f)
+                    return;
+            }
+            if (!m_nanoFinalizeClose) {
+                m_nanoFinalizeClose = true;
+                return;
+            }
         }
         if (m_isClosing && m_openProgress <= 0.f) {
             auto completion = std::move(m_closeCompletion);
@@ -501,27 +520,38 @@ namespace beiklive
 
         if (launchMorph > 0.f) {
             const float infoX = targetCardX + 242.f;
-            const float infoW = targetCardW - 270.f;
             const unsigned char launchAlpha = static_cast<unsigned char>(235.f * launchMorph);
             nvgFontSize(vg, 18.f);
             nvgFillColor(vg, nvgRGBA(215, 221, 232, launchAlpha));
             nvgText(vg, infoX, targetCardY + targetCardH - 92.f,
                     "启动中...", nullptr);
+        }
+        const bool launchPanelReady = m_launchClosing &&
+            m_openProgress <= 0.001f;
+        if (launchPanelReady) {
+            const float infoX = targetCardX + 242.f;
+            const float infoW = targetCardW - 270.f;
+            const float loadProgress = m_launchFadeToBlack
+                ? std::max(0.f, std::min(1.f, m_nanoLaunchFinishTime))
+                : 0.f;
             const float barY = targetCardY + targetCardH - 54.f;
             nvgBeginPath(vg);
             nvgRoundedRect(vg, infoX, barY, infoW, 12.f, 6.f);
             nvgFillColor(vg, nvgRGBA(255, 255, 255,
-                static_cast<unsigned char>(30.f * launchMorph)));
+                30));
             nvgFill(vg);
-            nvgBeginPath(vg);
-            nvgRoundedRect(vg, infoX, barY,
-                           std::max(12.f, infoW * launchMorph), 12.f, 6.f);
-            NVGpaint progressPaint = nvgLinearGradient(
-                vg, infoX, barY, infoX + infoW, barY,
-                nvgRGBA(94, 185, 255, launchAlpha),
-                nvgRGBA(247, 197, 104, launchAlpha));
-            nvgFillPaint(vg, progressPaint);
-            nvgFill(vg);
+            if (loadProgress > 0.f) {
+                nvgBeginPath(vg);
+                nvgRoundedRect(vg, infoX, barY,
+                               std::max(12.f, infoW * loadProgress),
+                               12.f, 6.f);
+                NVGpaint progressPaint = nvgLinearGradient(
+                    vg, infoX, barY, infoX + infoW, barY,
+                    nvgRGBA(94, 185, 255, 235),
+                    nvgRGBA(247, 197, 104, 235));
+                nvgFillPaint(vg, progressPaint);
+                nvgFill(vg);
+            }
         }
         nvgRestore(vg);
 
@@ -577,9 +607,16 @@ namespace beiklive
                     static_cast<unsigned char>((focused ? 48.f : 13.f) * itemAlpha)));
                 nvgFill(vg);
                 nvgStrokeColor(vg, nvgRGBA(255, 255, 255,
-                    static_cast<unsigned char>((focused ? 180.f : 55.f) * itemAlpha)));
-                nvgStrokeWidth(vg, focused ? 1.5f : 1.f);
+                    static_cast<unsigned char>(55.f * itemAlpha)));
+                nvgStrokeWidth(vg, 1.f);
                 nvgStroke(vg);
+                if (focused) {
+                    beiklive::ui::drawGradientFocusBorder(
+                        vg, ix, iy, mw, itemH,
+                        compact ? 8.f : 11.f, 3.f, itemAlpha,
+                        beiklive::ui::gradientFocusAnimationOffset(
+                            m_nanoFloatTime));
+                }
 
                 const std::string icon = encodeUtf8(menu[i].iconCodepoint);
                 nvgFontFaceId(vg, m_nanoFontId);
@@ -654,6 +691,18 @@ namespace beiklive
         };
         drawHint(brls::BUTTON_A, "选择", x + w - 214.f);
         drawHint(brls::BUTTON_B, "返回", x + w - 104.f);
+
+        if (m_launchClosing && m_launchFadeToBlack &&
+            m_nanoLaunchFinishTime > 1.f) {
+            const float fade = std::max(0.f, std::min(
+                1.f, (m_nanoLaunchFinishTime - 1.f) / 0.18f));
+            const float easedFade = fade * fade * (3.f - 2.f * fade);
+            nvgBeginPath(vg);
+            nvgRect(vg, x, y, w, h);
+            nvgFillColor(vg, nvgRGBA(0, 0, 0,
+                static_cast<unsigned char>(255.f * easedFade)));
+            nvgFill(vg);
+        }
 
         nvgResetScissor(vg);
         nvgRestore(vg);
@@ -876,11 +925,12 @@ namespace beiklive
     void GameOptionsSidebar::_destroyUI()
     {
         this->clearViews(true);
-        if (m_nanoImageHandle >= 0) {
+        if (m_nanoImageHandle >= 0 && m_nanoOwnsImageHandle) {
             if (auto* vg = brls::Application::getNVGContext())
                 nvgDeleteImage(vg, m_nanoImageHandle);
-            m_nanoImageHandle = -1;
         }
+        m_nanoImageHandle = -1;
+        m_nanoOwnsImageHandle = false;
         m_btnInstances.clear();
         m_panel      = nullptr;
         m_previewCard = nullptr;

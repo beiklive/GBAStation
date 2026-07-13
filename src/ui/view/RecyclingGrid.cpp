@@ -59,6 +59,21 @@ namespace
         const float t = value - 1.f;
         return 1.f + c3 * t * t * t + c1 * t * t;
     }
+
+    void strokeRoundedRectInside(NVGcontext* vg, float x, float y,
+                                 float w, float h, float radius,
+                                 float strokeWidth, NVGcolor color)
+    {
+        const float inset = strokeWidth * 0.5f;
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, x + inset, y + inset,
+                       std::max(0.f, w - strokeWidth),
+                       std::max(0.f, h - strokeWidth),
+                       std::max(0.f, radius - inset));
+        nvgStrokeColor(vg, color);
+        nvgStrokeWidth(vg, strokeWidth);
+        nvgStroke(vg);
+    }
 }
 
 GameGridView::GameGridView()
@@ -181,6 +196,17 @@ void GameGridView::startContentTransition(int direction, bool wholePageSlide)
     m_contentSlideDirection = direction < 0 ? -1 : (direction > 0 ? 1 : 0);
     m_contentWholePageSlide = wholePageSlide && m_contentSlideDirection != 0;
     m_contentTransition = 0.f;
+}
+
+void GameGridView::restartEntranceAnimation()
+{
+    m_exitAnimationRunning = false;
+    m_pageEntrance = 0.f;
+    m_contentTransition = 0.f;
+    m_detailTransition = 0.f;
+    m_contentSlideDirection = 0;
+    m_contentWholePageSlide = false;
+    m_lastFrameTime = std::chrono::steady_clock::now();
 }
 
 void GameGridView::showLoadingSkeleton()
@@ -452,6 +478,11 @@ void GameGridView::reloadData()
     if (!m_dataSource) return;
     if (!m_isLayouted) m_isLayouted = true;
 
+    const bool applyingReflow = m_reflowPending;
+    const int previousSelectedIndex = m_selectedIndex;
+    const float previousScrollY = m_scrollY;
+    const float previousTargetScrollY = m_targetScrollY;
+
     m_loadingSkeleton = false;
     size_t count = m_dataSource->getItemCount();
     m_items.clear();
@@ -460,7 +491,7 @@ void GameGridView::reloadData()
     m_requestedStartRow = -1;
     m_requestedEndRow = -1;
     m_requestedGameId = 0;
-    if (m_reflowPending) {
+    if (applyingReflow) {
         m_contentTransition = 1.f;
         m_contentWholePageSlide = false;
         m_reflowTransition = 0.f;
@@ -472,9 +503,15 @@ void GameGridView::reloadData()
     if (m_viewMode == ViewMode::LIST)
         m_detailTransition = 0.f;
 
-    m_scrollY = 0.f;
-    m_targetScrollY = 0.f;
     _recalculateScrollBounds();
+    if (applyingReflow) {
+        m_scrollY = std::max(0.f, std::min(previousScrollY, m_maxScrollY));
+        m_targetScrollY = std::max(
+            0.f, std::min(previousTargetScrollY, m_maxScrollY));
+    } else {
+        m_scrollY = 0.f;
+        m_targetScrollY = 0.f;
+    }
 
     if (m_items.empty()) {
         m_selectedIndex = -1;
@@ -486,6 +523,25 @@ void GameGridView::reloadData()
     }
 
     size_t focusIdx = m_defaultCellFocus;
+    if (applyingReflow && !m_reflowOrigins.empty()) {
+        auto selectedOrigin = std::find(
+            m_reflowOrigins.begin(), m_reflowOrigins.end(),
+            previousSelectedIndex);
+        if (selectedOrigin != m_reflowOrigins.end()) {
+            focusIdx = static_cast<size_t>(
+                std::distance(m_reflowOrigins.begin(), selectedOrigin));
+        } else {
+            auto nextOrigin = std::find_if(
+                m_reflowOrigins.begin(), m_reflowOrigins.end(),
+                [previousSelectedIndex](int origin) {
+                    return origin > previousSelectedIndex;
+                });
+            focusIdx = nextOrigin != m_reflowOrigins.end()
+                ? static_cast<size_t>(
+                    std::distance(m_reflowOrigins.begin(), nextOrigin))
+                : m_reflowOrigins.size() - 1;
+        }
+    }
     if (focusIdx >= m_items.size()) focusIdx = 0;
     m_selectedIndex = static_cast<int>(focusIdx);
     m_preferredColumn = spanCount > 0 ? m_selectedIndex % spanCount : 0;
@@ -494,8 +550,10 @@ void GameGridView::reloadData()
     if (m_focusChangeCallback) m_focusChangeCallback(m_selectedIndex);
 
     _updateVisibleRange();
-    _ensureSelectedVisible();
-    m_scrollY = m_targetScrollY;
+    if (!applyingReflow) {
+        _ensureSelectedVisible();
+        m_scrollY = m_targetScrollY;
+    }
     _updateVisibleRange();
     _populateVisibleItems();
 
@@ -1292,7 +1350,10 @@ void GameGridView::frame(brls::FrameContext* ctx)
     auto now = std::chrono::steady_clock::now();
     float dt = std::chrono::duration<float>(now - m_lastFrameTime).count();
     m_lastFrameTime = now;
-    if (dt <= 0.f || dt > 0.5f) dt = 0.016f;
+    if (dt <= 0.f)
+        dt = 0.016f;
+    else
+        dt = std::min(dt, 0.033f);
 
     m_focusBorderAnimTime += dt;
     m_platformTransition = std::min(1.f, m_platformTransition + dt * 8.0f);
@@ -1599,6 +1660,18 @@ void GameGridView::_drawItem(NVGcontext* vg, const GridDrawItem& item, float x, 
             shakeX = amount * (m_shakeDir > 0.f ? 1.f : -1.f);
     }
 
+    NVGpaint cardShadow = nvgBoxGradient(
+        vg, x + shakeX + 3.f, y + shakeY + 3.f,
+        w, h, 12.f, 5.f,
+        nvgRGBA(0, 0, 0, 72), nvgRGBA(0, 0, 0, 0));
+    nvgBeginPath(vg);
+    nvgRect(vg, x + shakeX - 2.f, y + shakeY - 2.f,
+            w + 10.f, h + 10.f);
+    nvgRoundedRect(vg, x + shakeX, y + shakeY, w, h, 12.f);
+    nvgPathWinding(vg, NVG_HOLE);
+    nvgFillPaint(vg, cardShadow);
+    nvgFill(vg);
+
     if (focused && item.focusGlow > 0.01f) {
         float gx = x + shakeX;
         float gy = y + shakeY;
@@ -1629,29 +1702,26 @@ void GameGridView::_drawItem(NVGcontext* vg, const GridDrawItem& item, float x, 
     }
 
     if (m_multiSelectMode) {
-        nvgBeginPath(vg);
-        nvgRoundedRect(vg, x + shakeX, y + shakeY, w, h, 12.f);
-        nvgStrokeColor(vg, multiSelected
-            ? nvgRGBA(94, 151, 255, 255)
-            : nvgRGBA(127, 139, 162, 210));
-        nvgStrokeWidth(vg, multiSelected ? 2.5f : 1.0f);
-        nvgStroke(vg);
+        strokeRoundedRectInside(
+            vg, x + shakeX, y + shakeY, w, h, 12.f,
+            multiSelected ? 2.5f : 1.f,
+            multiSelected
+                ? nvgRGBA(94, 151, 255, 255)
+                : nvgRGBA(127, 139, 162, 210));
     } else if (item.favorite) {
-        nvgBeginPath(vg);
-        nvgRoundedRect(vg, x + shakeX, y + shakeY, w, h, 12.f);
-        nvgStrokeColor(vg, focused
-            ? nvgRGBA(245, 200, 112, 235)
-            : nvgRGBA(224, 166, 87, 165));
-        nvgStrokeWidth(vg, focused ? 1.5f : 1.f);
-        nvgStroke(vg);
+        strokeRoundedRectInside(
+            vg, x + shakeX, y + shakeY, w, h, 12.f,
+            focused ? 1.5f : 1.f,
+            focused
+                ? nvgRGBA(245, 200, 112, 235)
+                : nvgRGBA(224, 166, 87, 165));
     } else {
-        nvgBeginPath(vg);
-        nvgRoundedRect(vg, x + shakeX, y + shakeY, w, h, 12.f);
-        nvgStrokeColor(vg, focused
-            ? nvgRGBA(235, 240, 255, 230)
-            : nvgRGBA(255, 255, 255, 65));
-        nvgStrokeWidth(vg, focused ? 1.5f : 1.f);
-        nvgStroke(vg);
+        strokeRoundedRectInside(
+            vg, x + shakeX, y + shakeY, w, h, 12.f,
+            focused ? 1.5f : 1.f,
+            focused
+                ? nvgRGBA(235, 240, 255, 230)
+                : nvgRGBA(255, 255, 255, 65));
     }
     
 
@@ -1980,22 +2050,28 @@ void GameGridView::_drawLaunchOverlay(NVGcontext* vg, float x, float y,
     nvgText(vg, infoX, targetY + launchFloatY + targetH - 82.f,
             launching.c_str(), nullptr);
 
-    const float barY = targetY + launchFloatY + targetH - 54.f;
-    const float barH = 12.f;
-    const float loadProgress = std::min(1.f, m_launchAnimationTime);
-    nvgBeginPath(vg);
-    nvgRoundedRect(vg, infoX, barY, infoW, barH, barH * 0.5f);
-    nvgFillColor(vg, nvgRGBA(255, 255, 255, 26));
-    nvgFill(vg);
-    if (loadProgress > 0.f) {
+    if (moveProgress >= 0.999f) {
+        const float barY = targetY + launchFloatY + targetH - 54.f;
+        const float barH = 12.f;
+        const float transitionTime = m_launchStartsCentered ? 0.f : 0.36f;
+        const float loadProgress = std::max(0.f, std::min(
+            1.f, (m_launchAnimationTime - transitionTime) /
+                std::max(0.01f, 1.f - transitionTime)));
         const float fillW = std::max(barH, infoW * loadProgress);
         nvgBeginPath(vg);
-        nvgRoundedRect(vg, infoX, barY, fillW, barH, barH * 0.5f);
-        NVGpaint progressPaint = nvgLinearGradient(
-            vg, infoX, barY, infoX + infoW, barY,
-            nvgRGBA(94, 185, 255, 245), nvgRGBA(247, 197, 104, 245));
-        nvgFillPaint(vg, progressPaint);
+        nvgRoundedRect(vg, infoX, barY, infoW, barH, barH * 0.5f);
+        nvgFillColor(vg, nvgRGBA(255, 255, 255, 26));
         nvgFill(vg);
+        if (loadProgress > 0.f) {
+            nvgBeginPath(vg);
+            nvgRoundedRect(vg, infoX, barY, fillW, barH, barH * 0.5f);
+            NVGpaint progressPaint = nvgLinearGradient(
+                vg, infoX, barY, infoX + infoW, barY,
+                nvgRGBA(94, 185, 255, 245),
+                nvgRGBA(247, 197, 104, 245));
+            nvgFillPaint(vg, progressPaint);
+            nvgFill(vg);
+        }
     }
 
     nvgGlobalAlpha(vg, 1.f);
@@ -2063,15 +2139,37 @@ void GameGridView::_drawToolbar(NVGcontext* vg, float x, float y, float w)
             const float prominence = std::max(0.f, 1.f - distance);
             const float alpha = 0.42f + prominence * 0.58f;
             if (prominence > 0.55f) {
+                const float selectorX = labelX - 52.f;
+                const float selectorY = centerY - 21.f;
+                constexpr float selectorW = 104.f;
+                constexpr float selectorH = 42.f;
+                constexpr float selectorRadius = 21.f;
+                NVGpaint selectorShadow = nvgBoxGradient(
+                    vg, selectorX + 3.f, selectorY + 3.f,
+                    selectorW, selectorH, selectorRadius, 5.f,
+                    nvgRGBA(0, 0, 0,
+                        static_cast<unsigned char>(72.f * prominence)),
+                    nvgRGBA(0, 0, 0, 0));
                 nvgBeginPath(vg);
-                nvgRoundedRect(vg, labelX - 52.f, centerY - 21.f, 104.f, 42.f, 21.f);
+                nvgRect(vg, selectorX - 2.f, selectorY - 2.f,
+                        selectorW + 10.f, selectorH + 10.f);
+                nvgRoundedRect(vg, selectorX, selectorY,
+                               selectorW, selectorH, selectorRadius);
+                nvgPathWinding(vg, NVG_HOLE);
+                nvgFillPaint(vg, selectorShadow);
+                nvgFill(vg);
+
+                nvgBeginPath(vg);
+                nvgRoundedRect(vg, selectorX, selectorY,
+                               selectorW, selectorH, selectorRadius);
                 nvgFillColor(vg, nvgRGBA(255, 255, 255,
                     static_cast<unsigned char>(22 + 22 * prominence)));
                 nvgFill(vg);
-                nvgStrokeColor(vg, nvgRGBA(255, 255, 255,
-                    static_cast<unsigned char>(70 + 65 * prominence)));
-                nvgStrokeWidth(vg, 1.f);
-                nvgStroke(vg);
+                strokeRoundedRectInside(
+                    vg, selectorX, selectorY, selectorW, selectorH,
+                    selectorRadius, 1.f,
+                    nvgRGBA(255, 255, 255,
+                        static_cast<unsigned char>(70 + 65 * prominence)));
             }
             nvgFontFaceId(vg, m_fontId);
             nvgFontSize(vg, 17.f + 5.f * prominence);
@@ -2092,9 +2190,23 @@ void GameGridView::_drawToolbar(NVGcontext* vg, float x, float y, float w)
     nvgText(vg, x + w - 128.f, y + 35.f,
             m_viewMode == ViewMode::GRID ? "切换为列表" : "切换为网格", nullptr);
 
+    const float dividerX = x + 18.f;
+    const float dividerY = y + _getContentTop() - 1.f;
+    const float dividerW = w - 36.f;
+    NVGpaint dividerShadow = nvgBoxGradient(
+        vg, dividerX + 2.f, dividerY + 2.f, dividerW, 1.f,
+        0.5f, 5.f, nvgRGBA(0, 0, 0, 62), nvgRGBA(0, 0, 0, 0));
     nvgBeginPath(vg);
-    nvgMoveTo(vg, x + 18.f, y + _getContentTop() - 1.f);
-    nvgLineTo(vg, x + w - 18.f, y + _getContentTop() - 1.f);
+    nvgRect(vg, dividerX - 3.f, dividerY - 3.f,
+            dividerW + 10.f, 10.f);
+    nvgRect(vg, dividerX, dividerY - 0.5f, dividerW, 1.f);
+    nvgPathWinding(vg, NVG_HOLE);
+    nvgFillPaint(vg, dividerShadow);
+    nvgFill(vg);
+
+    nvgBeginPath(vg);
+    nvgMoveTo(vg, dividerX, dividerY);
+    nvgLineTo(vg, dividerX + dividerW, dividerY);
     nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 48));
     nvgStrokeWidth(vg, 1.f);
     nvgStroke(vg);
@@ -2134,9 +2246,23 @@ void GameGridView::_drawHint(NVGcontext* vg, float x, float y,
 
 void GameGridView::_drawFooter(NVGcontext* vg, float x, float y, float w, float h)
 {
+    const float dividerX = x + 18.f;
+    const float dividerY = y + 1.f;
+    const float dividerW = w - 36.f;
+    NVGpaint dividerShadow = nvgBoxGradient(
+        vg, dividerX + 2.f, dividerY + 2.f, dividerW, 1.f,
+        0.5f, 5.f, nvgRGBA(0, 0, 0, 62), nvgRGBA(0, 0, 0, 0));
     nvgBeginPath(vg);
-    nvgMoveTo(vg, x + 18.f, y + 1.f);
-    nvgLineTo(vg, x + w - 18.f, y + 1.f);
+    nvgRect(vg, dividerX - 3.f, dividerY - 3.f,
+            dividerW + 10.f, 10.f);
+    nvgRect(vg, dividerX, dividerY - 0.5f, dividerW, 1.f);
+    nvgPathWinding(vg, NVG_HOLE);
+    nvgFillPaint(vg, dividerShadow);
+    nvgFill(vg);
+
+    nvgBeginPath(vg);
+    nvgMoveTo(vg, dividerX, dividerY);
+    nvgLineTo(vg, dividerX + dividerW, dividerY);
     nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 52));
     nvgStrokeWidth(vg, 1.f);
     nvgStroke(vg);
@@ -2186,17 +2312,29 @@ void GameGridView::_drawDetailsPanel(NVGcontext* vg, float x, float y,
                            (0.45f + eased * 0.55f));
     x += (1.f - eased) * 22.f;
 
+    const float panelY = y + 4.f;
+    const float panelH = h - 8.f;
+    NVGpaint panelShadow = nvgBoxGradient(
+        vg, x + 3.f, panelY + 3.f, w, panelH,
+        16.f, 5.f, nvgRGBA(0, 0, 0, 72), nvgRGBA(0, 0, 0, 0));
     nvgBeginPath(vg);
-    nvgRoundedRect(vg, x, y + 4.f, w, h - 8.f, 16.f);
+    nvgRect(vg, x - 2.f, panelY - 2.f, w + 10.f, panelH + 10.f);
+    nvgRoundedRect(vg, x, panelY, w, panelH, 16.f);
+    nvgPathWinding(vg, NVG_HOLE);
+    nvgFillPaint(vg, panelShadow);
+    nvgFill(vg);
+
+    nvgBeginPath(vg);
+    nvgRoundedRect(vg, x, panelY, w, panelH, 16.f);
     nvgFillColor(vg, item.favorite
         ? nvgRGBA(224, 166, 87, 30)
         : nvgRGBA(255, 255, 255, 16));
     nvgFill(vg);
-    nvgStrokeColor(vg, item.favorite
-        ? nvgRGBA(224, 166, 87, 145)
-        : nvgRGBA(255, 255, 255, 65));
-    nvgStrokeWidth(vg, 1.f);
-    nvgStroke(vg);
+    strokeRoundedRectInside(
+        vg, x, panelY, w, panelH, 16.f, 1.f,
+        item.favorite
+            ? nvgRGBA(224, 166, 87, 145)
+            : nvgRGBA(255, 255, 255, 65));
 
     const float pad = 22.f;
     const float dividerY = y + h * 0.34f;

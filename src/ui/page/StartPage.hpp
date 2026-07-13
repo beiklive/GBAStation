@@ -1,9 +1,11 @@
-#pragma once 
+#pragma once
 
 #include <atomic>
+#include <functional>
+#include <memory>
 #include "core/common.h"
 #include "ui/view/SwitchLayout.hpp"
-#include "ui/page/FileListPage.hpp" 
+#include "ui/page/FileListPage.hpp"
 #include "ui/page/GamePage.hpp"
 #include "ui/page/SettingPage.hpp"
 #include "ui/page/AboutPage.hpp"
@@ -22,6 +24,7 @@ namespace beiklive
 
         void Init();
         void onResume();
+        void onActivityResume() override;
         void willAppear(bool resetState) override;
 
     private:
@@ -33,21 +36,29 @@ namespace beiklive
         void _openDataManagement();
         void _applyRuntimeUiSettings();
         void _requestRecentGamesRefresh(bool defer);
-        void _pushGameActivity(const beiklive::GameEntry& entry, beiklive::Box* previousPage);
+        bool _pushGameActivity(const beiklive::GameEntry& entry,
+                               beiklive::Box* previousPage);
         void _pushGameActivity(const beiklive::DirListData& dirItem, beiklive::Box* previousPage);
 
         /// 显示游戏选项侧边栏
         void _showGameOptionsPanel(const beiklive::GameEntry& entry);
         /// 关闭游戏选项侧边栏
         void _hideGameOptionsPanel();
+        void _closeGameOptionsPanelAnimated(std::function<void()> completion = {},
+                                            bool launchTransition = false);
 
         beiklive::FileListPage* m_fileListPage = nullptr;
         beiklive::SwitchLayout* switchLayout = nullptr;
         beiklive::Box* m_gamePage = nullptr;
         beiklive::GameOptionsSidebar* m_gameOptionsSidebar = nullptr;
         std::atomic<bool> m_alive{true};
+        std::shared_ptr<std::atomic<bool>> m_aliveToken =
+            std::make_shared<std::atomic<bool>>(true);
         std::atomic<int> m_recentRefreshGen{0};
         bool m_resetCardFocusOnNextRefresh = false;
+        bool m_gameLaunchPending = false;
+        bool m_homeDeletePending = false;
+        beiklive::GameLibraryPage::PreparedData m_libraryPreparedData;
     };
 } // namespace beiklive
 
