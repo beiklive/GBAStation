@@ -230,7 +230,7 @@ namespace beiklive
             m_openProgress = std::max(0.f, m_openProgress - dt *
                 (m_launchClosing ? 2.8f : 3.8f));
         else
-            m_openProgress = std::min(1.f, m_openProgress + dt * 6.f);
+            m_openProgress = std::min(1.f, m_openProgress + dt * 4.2f);
 
         const float submenuTarget = m_nanoInSubmenu ? 1.f : 0.f;
         m_nanoSubmenuProgress += (submenuTarget - m_nanoSubmenuProgress) *
@@ -363,6 +363,20 @@ namespace beiklive
         const float cardY = baseCardY + (targetCardY - baseCardY) * launchMorph;
         const float cardW = baseCardW + (targetCardW - baseCardW) * launchMorph;
         const float cardH = baseCardH + (targetCardH - baseCardH) * launchMorph;
+
+        float cardEntrance = visualProgress;
+        if (!m_isClosing) {
+            const float t = m_openProgress - 1.f;
+            cardEntrance = 1.f + 2.70158f * t * t * t + 1.70158f * t * t;
+        }
+        const float cardScale = m_launchClosing
+            ? 1.f
+            : 0.84f + 0.16f * cardEntrance;
+        nvgSave(vg);
+        nvgTranslate(vg, cardX + cardW * 0.5f, cardY + cardH * 0.5f);
+        nvgScale(vg, cardScale, cardScale);
+        nvgTranslate(vg, -(cardX + cardW * 0.5f),
+                     -(cardY + cardH * 0.5f));
 
         const bool iconPreview = m_nanoPreviewIcon != 0 && !m_launchClosing;
         if (!iconPreview) {
@@ -509,6 +523,7 @@ namespace beiklive
             nvgFillPaint(vg, progressPaint);
             nvgFill(vg);
         }
+        nvgRestore(vg);
 
         const float menuAlpha = m_launchClosing
             ? closeEased
@@ -516,9 +531,27 @@ namespace beiklive
         const float rightCenterX = x + w * 0.75f;
         const float rootBaseX = rightCenterX - 315.f * 0.5f;
         const float childBaseX = rightCenterX - 350.f * 0.5f;
-        const float menuY = y + 150.f;
         const float rootX = rootBaseX - m_nanoSubmenuProgress * 350.f;
         const float childX = childBaseX + (1.f - m_nanoSubmenuProgress) * 340.f;
+        auto menuHeight = [](size_t count, bool compact) {
+            if (count == 0)
+                return 0.f;
+            const float itemH = compact ? 45.f : 64.f;
+            const float gap = compact ? 8.f : 12.f;
+            return static_cast<float>(count) * itemH +
+                static_cast<float>(count - 1) * gap;
+        };
+        const float rootMenuY = y + (h - menuHeight(m_buttons.size(), false)) * 0.5f;
+        float childMenuY = rootMenuY;
+        if (m_nanoActiveSubmenu >= 0 &&
+            static_cast<size_t>(m_nanoActiveSubmenu) < m_buttons.size()) {
+            childMenuY = y + (h - menuHeight(
+                m_buttons[static_cast<size_t>(m_nanoActiveSubmenu)].children.size(),
+                false)) * 0.5f;
+        }
+        const float menuAnimationProgress = m_launchClosing
+            ? closeEased
+            : visualProgress;
 
         auto drawMenu = [&](const std::vector<ButtonConfig>& menu, int selected,
                             float mx, float my, float mw, float alpha,
@@ -527,14 +560,24 @@ namespace beiklive
             const float gap = compact ? 8.f : 12.f;
             for (size_t i = 0; i < menu.size(); ++i) {
                 const float iy = my + static_cast<float>(i) * (itemH + gap);
+                const float delay = std::min(0.28f, static_cast<float>(i) * 0.055f);
+                const float localProgress = menuAnimationProgress <= delay
+                    ? 0.f
+                    : std::min(1.f, (menuAnimationProgress - delay) /
+                        std::max(0.01f, 1.f - delay));
+                const float itemEased = 1.f -
+                    std::pow(1.f - localProgress, 3.f);
+                const float ix = mx + (1.f - itemEased) *
+                    (compact ? 58.f : 110.f);
+                const float itemAlpha = alpha * itemEased;
                 const bool focused = static_cast<int>(i) == selected;
                 nvgBeginPath(vg);
-                nvgRoundedRect(vg, mx, iy, mw, itemH, compact ? 8.f : 11.f);
+                nvgRoundedRect(vg, ix, iy, mw, itemH, compact ? 8.f : 11.f);
                 nvgFillColor(vg, nvgRGBA(255, 255, 255,
-                    static_cast<unsigned char>((focused ? 48.f : 13.f) * alpha)));
+                    static_cast<unsigned char>((focused ? 48.f : 13.f) * itemAlpha)));
                 nvgFill(vg);
                 nvgStrokeColor(vg, nvgRGBA(255, 255, 255,
-                    static_cast<unsigned char>((focused ? 180.f : 55.f) * alpha)));
+                    static_cast<unsigned char>((focused ? 180.f : 55.f) * itemAlpha)));
                 nvgStrokeWidth(vg, focused ? 1.5f : 1.f);
                 nvgStroke(vg);
 
@@ -548,14 +591,14 @@ namespace beiklive
                 const float contentGap = compact ? 8.f : 17.f;
                 const float contentW = iconSize + contentGap +
                     (textBounds[2] - textBounds[0]);
-                const float contentCenterX = mx + mw * 0.5f -
+                const float contentCenterX = ix + mw * 0.5f -
                     (!menu[i].children.empty() ? 8.f : 0.f);
                 const float contentX = contentCenterX - contentW * 0.5f;
                 nvgFontFaceId(vg, m_nanoMaterialFontId);
                 nvgFontSize(vg, iconSize);
                 nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
                 nvgFillColor(vg, nvgRGBA(245, 247, 252,
-                    static_cast<unsigned char>(245.f * alpha)));
+                    static_cast<unsigned char>(245.f * itemAlpha)));
                 nvgText(vg, contentX + iconSize * 0.5f, iy + itemH * 0.5f,
                         icon.c_str(), nullptr);
 
@@ -568,19 +611,19 @@ namespace beiklive
                 if (!menu[i].children.empty()) {
                     nvgFontSize(vg, compact ? 16.f : 26.f);
                     nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-                    nvgText(vg, mx + mw - 22.f, iy + itemH * 0.5f, "›", nullptr);
+                    nvgText(vg, ix + mw - 22.f, iy + itemH * 0.5f, "›", nullptr);
                 }
             }
         };
 
         if (menuAlpha > 0.01f) {
-            drawMenu(m_buttons, m_nanoRootSelected, rootX, menuY, 315.f,
+            drawMenu(m_buttons, m_nanoRootSelected, rootX, rootMenuY, 315.f,
                      menuAlpha * (1.f - m_nanoSubmenuProgress * 0.65f), false);
             if (m_nanoActiveSubmenu >= 0 &&
                 static_cast<size_t>(m_nanoActiveSubmenu) < m_buttons.size()) {
                 const auto& children = m_buttons[static_cast<size_t>(m_nanoActiveSubmenu)].children;
                 if (m_nanoSubmenuProgress > 0.02f)
-                    drawMenu(children, m_nanoChildSelected, childX, menuY, 350.f,
+                    drawMenu(children, m_nanoChildSelected, childX, childMenuY, 350.f,
                              menuAlpha * m_nanoSubmenuProgress, false);
             }
             if (!m_nanoInSubmenu && m_nanoSubmenuProgress < 0.04f &&
@@ -588,7 +631,8 @@ namespace beiklive
                 static_cast<size_t>(m_nanoRootSelected) < m_buttons.size()) {
                 const auto& preview = m_buttons[static_cast<size_t>(m_nanoRootSelected)].children;
                 if (!preview.empty())
-                    drawMenu(preview, -1, x + w - 172.f, menuY + 10.f,
+                    drawMenu(preview, -1, x + w - 172.f,
+                              y + (h - menuHeight(preview.size(), true)) * 0.5f,
                               160.f, menuAlpha * 0.72f, true);
             }
         }
