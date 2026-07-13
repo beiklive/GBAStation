@@ -1018,9 +1018,11 @@ void EndFrame(Color clearColor, int rotation)
     dk::ImageView colorTarget{Framebuffers[SwapchainSlot]};
     PresentCmdBuf.bindRenderTargets(&colorTarget);
 
+    PresentCmdBuf.setScissors(0, {{0, 0, 1920, 1080}});
+    PresentCmdBuf.setViewports(0, {{0, 0, 1920.0f, 1080.0f}});
+    PresentCmdBuf.clearColor(0, DkColorMask_RGBA, clearColor.R, clearColor.G, clearColor.B, clearColor.A);
     PresentCmdBuf.setScissors(0, {{0, 0, fbPixelWidth, fbPixelHeight}});
     PresentCmdBuf.setViewports(0, {{0, 0, (float)fbPixelWidth, (float)fbPixelHeight}});
-    PresentCmdBuf.clearColor(0, DkColorMask_RGBA, clearColor.R, clearColor.G, clearColor.B, clearColor.A);
 
     PresentCmdBuf.bindDepthStencilState(dk::DepthStencilState{}
         .setDepthWriteEnable(false)

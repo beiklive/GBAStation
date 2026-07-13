@@ -638,10 +638,6 @@ int RunDekoRuntime(const DekoRunOptions& options)
     bool running = loaded;
     bool menuVisible = false;
     bool pendingReturn = false;
-    double fps = 0.0;
-    int fpsFrames = 0;
-    long long lastRunMs = 0;
-    auto fpsStart = std::chrono::steady_clock::now();
 
     while (appletMainLoop() && running)
     {
@@ -682,10 +678,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
         else
             NDS::ReleaseScreen();
 
-        const auto runBegin = std::chrono::steady_clock::now();
         NDS::RunFrame();
-        const auto runEnd = std::chrono::steady_clock::now();
-        lastRunMs = std::chrono::duration_cast<std::chrono::milliseconds>(runEnd - runBegin).count();
 
         std::array<int16_t, 4096> samples {};
         int available = SPU::GetOutputSize();
@@ -700,6 +693,10 @@ int RunDekoRuntime(const DekoRunOptions& options)
         }
 
         Gfx::StartFrame();
+        Gfx::DrawRectangle({0.0f, 0.0f},
+                           {static_cast<float>(kScreenWidth), static_cast<float>(kScreenHeight)},
+                           {0.0f, 0.0f, 0.0f, 1.0f},
+                           false);
         Gfx::SetSampler(Gfx::sampler_Linear | Gfx::sampler_ClampToEdge);
         Gfx::WaitForFenceReady(deko2d->FramebufferReady[GPU::FrontBuffer]);
         Gfx::DrawRectangle(framebufferTextures[GPU::FrontBuffer][0],
@@ -716,12 +713,6 @@ int RunDekoRuntime(const DekoRunOptions& options)
                            {1.0f, 1.0f, 1.0f, 1.0f});
         Gfx::SignalFence(deko2d->FramebufferPresented[GPU::FrontBuffer]);
 
-        Gfx::DrawText(Gfx::SystemFontStandard,
-                      {28.0f, 24.0f},
-                      20.0f,
-                      {0.78f, 0.90f, 1.0f, 1.0f},
-                      "FPS %.1f  RUN %lldMS  DEKO", fps, lastRunMs);
-
         if (menuVisible)
         {
             Gfx::DrawRectangle({390.0f, 160.0f}, {500.0f, 360.0f}, {0.04f, 0.06f, 0.08f, 0.88f}, true);
@@ -731,17 +722,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
             Gfx::DrawText(Gfx::SystemFontStandard, {430.0f, 375.0f}, 22.0f, {1.00f, 0.78f, 0.42f, 1.0f}, "A 保存并退出");
         }
 
-        Gfx::EndFrame({0.015f, 0.020f, 0.026f, 1.0f}, 0);
-
-        ++fpsFrames;
-        const auto now = std::chrono::steady_clock::now();
-        const auto fpsElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - fpsStart).count();
-        if (fpsElapsed >= 1000)
-        {
-            fps = static_cast<double>(fpsFrames) * 1000.0 / static_cast<double>(fpsElapsed);
-            fpsFrames = 0;
-            fpsStart = now;
-        }
+        Gfx::EndFrame({0.0f, 0.0f, 0.0f, 1.0f}, 0);
 
         const auto frameEnd = std::chrono::steady_clock::now();
         constexpr auto frameBudget = std::chrono::microseconds(16667);

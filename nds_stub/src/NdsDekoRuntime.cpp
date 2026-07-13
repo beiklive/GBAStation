@@ -3387,7 +3387,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
         if (traceFrame)
             appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu Gfx::EndFrame begin",
                           static_cast<unsigned long long>(totalFrames));
-        Gfx::EndFrame({0.015f, 0.020f, 0.026f, 1.0f}, 0);
+        Gfx::EndFrame({0.0f, 0.0f, 0.0f, 1.0f}, 0);
         if (traceFrame)
             appendStubLog("GBAStationNDSStub: Deko checkpoint frame=%llu Gfx::EndFrame ok",
                           static_cast<unsigned long long>(totalFrames));
