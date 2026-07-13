@@ -97,8 +97,12 @@ static bool fetchTextUrl(const std::string& url,
 }
 
 static std::filesystem::path resourceVersionIniPath() {
+#ifdef __SWITCH__
+    return std::filesystem::path("sdmc:/GBAStation/update/res_version.ini");
+#else
     return std::filesystem::path(beiklive::path::ROOT)
         / beiklive::path::PROGRAM_NAME / "update" / "res_version.ini";
+#endif
 }
 
 static std::map<std::string, std::string> readResourceVersions() {

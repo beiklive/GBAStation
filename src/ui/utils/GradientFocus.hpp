@@ -87,5 +87,60 @@ inline void drawGradientFocusBorder(
     nvgStroke(vg);
 }
 
+inline void drawGradientFocusCircle(
+    NVGcontext* vg,
+    float cx,
+    float cy,
+    float outerDiameter,
+    float borderWidth,
+    float alpha,
+    float animationOffset)
+{
+    if (!vg || alpha <= 0.0f || outerDiameter <= 0.0f ||
+        borderWidth <= 0.0f)
+        return;
+
+    const float outerRadius = outerDiameter * 0.5f;
+    const float innerRadius = std::max(0.0f, outerRadius - borderWidth);
+    const float borderAlpha = std::max(
+        0.0f, std::min(alpha * GRADIENT_FOCUS_BRIGHTNESS, 1.0f));
+
+#if defined(BOREALIS_USE_OPENGL) || defined(BOREALIS_USE_DEKO3D)
+    const int gradientImage = getGradientFocusBorderImage(vg);
+    if (gradientImage != 0 && innerRadius > 0.0f)
+    {
+        NVGpaint borderPaint = nvgBoxGradientLUT(
+            vg,
+            cx - innerRadius,
+            cy - innerRadius,
+            innerRadius * 2.0f,
+            innerRadius * 2.0f,
+            innerRadius,
+            borderWidth,
+            gradientImage,
+            borderAlpha,
+            animationOffset);
+
+        nvgBeginPath(vg);
+        nvgCircle(vg, cx, cy, outerRadius);
+        nvgCircle(vg, cx, cy, innerRadius);
+        nvgPathWinding(vg, NVG_HOLE);
+        nvgFillPaint(vg, borderPaint);
+        nvgFill(vg);
+        return;
+    }
+#endif
+
+    const float strokeRadius = std::max(
+        0.0f, outerRadius - borderWidth * 0.5f);
+    nvgBeginPath(vg);
+    nvgCircle(vg, cx, cy, strokeRadius);
+    nvgStrokeColor(vg, nvgRGBA(
+        79, 193, 255,
+        static_cast<unsigned char>(borderAlpha * 255.0f)));
+    nvgStrokeWidth(vg, borderWidth);
+    nvgStroke(vg);
+}
+
 } // namespace ui
 } // namespace beiklive

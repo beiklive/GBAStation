@@ -1171,10 +1171,8 @@ namespace beiklive
 
             if (selectedFunction) {
                 constexpr float focusSize = 91.f;
-                constexpr float focusRadius = focusSize * 0.5f;
-                beiklive::ui::drawGradientFocusBorder(
-                    vg, cx - focusRadius, centerY - focusRadius,
-                    focusSize, focusSize, focusRadius, 6.f, focus,
+                beiklive::ui::drawGradientFocusCircle(
+                    vg, cx, centerY, focusSize, 6.f, focus,
                     beiklive::ui::gradientFocusAnimationOffset(m_time));
             }
 
