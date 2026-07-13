@@ -3265,11 +3265,15 @@ int RunDekoRuntime(const DekoRunOptions& options)
             constexpr double kAudioSpeedWindowSeconds = 0.150;
             if (windowSeconds >= kAudioSpeedWindowSeconds)
             {
+                const float requestedMultiplier = menuLayer.fastForwardMultiplier();
+                const float minimumAudioMultiplier = requestedMultiplier > 1.0f
+                    ? 1.0f
+                    : requestedMultiplier;
                 const float measuredMultiplier = std::clamp(
                     static_cast<float>(fastForwardAudioWindowFrames /
                                        (windowSeconds * kNdsFramesPerSecond)),
-                    0.1f,
-                    menuLayer.fastForwardMultiplier());
+                    minimumAudioMultiplier,
+                    requestedMultiplier);
                 if (!fastForwardAudioMeasured)
                 {
                     fastForwardAudioMultiplier = measuredMultiplier;
