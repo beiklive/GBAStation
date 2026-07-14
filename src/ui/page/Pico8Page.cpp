@@ -170,7 +170,17 @@ namespace beiklive
         registerAction("", brls::BUTTON_NAV_DOWN, consume, true, true, brls::SOUND_NONE);
         registerAction("", brls::BUTTON_NAV_LEFT, consume, true, true, brls::SOUND_NONE);
         registerAction("", brls::BUTTON_NAV_RIGHT, consume, true, true, brls::SOUND_NONE);
-        registerAction("", brls::BUTTON_START, consume, true, false, brls::SOUND_NONE);
+        registerAction("", brls::BUTTON_START,
+            [this](brls::View*) {
+                if (m_state == State::Running)
+                    _beginPause();
+                else if (m_state == State::Waiting ||
+                         m_state == State::Empty ||
+                         m_state == State::Library ||
+                         m_state == State::PausedLibrary)
+                    _beginClose();
+                return true;
+            }, true, false, brls::SOUND_NONE);
         registerAction("", brls::BUTTON_LT, consume, true, false, brls::SOUND_NONE);
         registerAction("", brls::BUTTON_RT, consume, true, false, brls::SOUND_NONE);
 
@@ -479,20 +489,6 @@ namespace beiklive
         m_exitHasLibrary = !m_games.empty() && m_state != State::Waiting;
         m_exitUsesRuntimePreview =
             m_state == State::PausedLibrary && _selectedIsLoadedGame();
-        if (!m_exitHasLibrary) {
-            brls::Application::blockInputs();
-            if (m_homeLayout) {
-                m_homeLayout->beginPico8ReturnAnimation();
-                m_homeLayout->finishPico8ReturnAnimation();
-            }
-            m_popScheduled = true;
-            brls::sync([]() {
-                brls::Application::popActivity(
-                    brls::TransitionAnimation::NONE,
-                    []() { brls::Application::unblockInputs(); });
-            });
-            return;
-        }
         m_state = State::Exiting;
         m_stateTime = 0.f;
         m_homeReturnStarted = false;
@@ -534,8 +530,6 @@ namespace beiklive
                     m_stateTime = 0.f;
                     if (!m_games.empty())
                         brls::Application::blockInputs();
-                    else
-                        brls::Application::unblockInputs();
                     _captureInputState();
                 }
                 break;
@@ -1028,7 +1022,7 @@ namespace beiklive
         nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_TOP);
         nvgFillColor(vg, nvgRGBA(225, 229, 237, alphaByte(alpha * 0.9f)));
         nvgText(vg, x + width * 0.5f, logo.y + logo.height + 28.f,
-                "没有找到 p8 游戏，请去在线下载中获取。", nullptr);
+                "没有找到 p8 游戏，请去更新界面中下载。", nullptr);
         _drawHint(vg, brls::BUTTON_START, "关闭P8",
                   x + width - 126.f, y + height - 31.f, alpha);
     }
