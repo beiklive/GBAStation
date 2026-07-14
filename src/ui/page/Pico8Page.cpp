@@ -660,7 +660,7 @@ namespace beiklive
     void Pico8Page::_ensureFonts(NVGcontext* vg)
     {
         if (m_fontId < 0)
-            m_fontId = brls::Application::getFont(brls::FONT_REGULAR);
+            m_fontId = brls::Application::getFont(brls::FONT_CHINESE_SIMPLIFIED);
         if (m_switchIconFontId < 0)
             m_switchIconFontId = brls::Application::getFont(brls::FONT_SWITCH_ICONS);
         if (m_fontAttempted)
