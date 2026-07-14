@@ -36,7 +36,8 @@ namespace beiklive
 {
     namespace
     {
-        constexpr long START_PAGE_REFRESH_DEFER_MS = 260;
+        // Leave the first frame free, then prepare the complete library snapshot.
+        constexpr long START_PAGE_REFRESH_DEFER_MS = 16;
 
         bool shouldUseNdsExternalNro(const beiklive::GameEntry& entry)
         {
@@ -228,7 +229,7 @@ namespace beiklive
             if (!m_alive.load() || gen != m_recentRefreshGen.load())
                 return;
 
-            ThreadPool::instance().enqueue([this, gen]() {
+            ThreadPool::instance().enqueuePriority([this, gen]() {
                 if (!m_alive.load() || gen != m_recentRefreshGen.load()) return;
 
                 auto prepared = beiklive::GameLibraryPage::prepareInitialData();

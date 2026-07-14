@@ -47,14 +47,18 @@ namespace beiklive
 
     void Box::showBackground(bool show)
     {
-        if(backgroundLayer)
+        if(backgroundLayer) {
+            if (show)
+                ensureBackgroundImageLoaded();
             backgroundLayer->setVisibility(show ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+        }
     }
-
     void Box::setBackgroundImage(const std::string& path)
     {
-        if(backgroundLayer && !path.empty())
+        if(backgroundLayer && !path.empty()) {
             backgroundLayer->setImageFromFileForce(path);
+            backgroundImageLoaded = true;
+        }
     }
 
     void Box::showShader(bool show)
@@ -294,15 +298,24 @@ namespace beiklive
         backgroundLayer->setScalingType(brls::ImageScalingType::FIT);
         backgroundLayer->setInterpolation(brls::ImageInterpolation::LINEAR);
 
-        backgroundLayer->setImageFromFile(BK_RES("img/bg2.png")); // 默认背景图
-        // 读取配置的背景图（如果有的话）
-        std::string bgPath = GET_SETTING_KEY_STR(beiklive::SettingKey::KEY_UI_BG_IMAGE_PATH, "");
-        if (!bgPath.empty() && std::filesystem::exists(bgPath))
-            backgroundLayer->setImageFromFile(bgPath);
         // 应用所有背景设置（可见性、图片、XMB着色器与颜色）
         this->addView(backgroundLayer);
         bool showBg = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_UI_SHOW_BG_IMAGE, 0) != 0;
         showBackground(showBg);
+    }
+
+    void Box::ensureBackgroundImageLoaded()
+    {
+        if (!backgroundLayer || backgroundImageLoaded)
+            return;
+
+        const std::string bgPath = GET_SETTING_KEY_STR(
+            beiklive::SettingKey::KEY_UI_BG_IMAGE_PATH, "");
+        if (!bgPath.empty() && std::filesystem::exists(bgPath))
+            backgroundLayer->setImageFromFile(bgPath);
+        else
+            backgroundLayer->setImageFromFile(BK_RES("img/bg2.png"));
+        backgroundImageLoaded = true;
     }
 
     void Box::setupShaderLayer()

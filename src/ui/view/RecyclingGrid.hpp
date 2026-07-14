@@ -150,6 +150,8 @@ private:
 
     std::unordered_map<std::string, int> m_textureCache;
     std::unordered_map<std::string, uint64_t> m_textureLastUsed;
+    std::unordered_map<std::string, size_t> m_textureMemoryBytes;
+    size_t m_textureCacheBytes = 0;
     uint64_t m_textureUseTick = 0;
     std::unordered_set<int> m_selectedForDelete;
     std::unordered_set<int> m_deletingIndices;

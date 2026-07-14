@@ -25,7 +25,7 @@ ThreadPool::ThreadPool(size_t threadCount) {
                     if (m_stop.load())
                         return;
                     task = std::move(m_tasks.front());
-                    m_tasks.pop();
+                    m_tasks.pop_front();
                 }
                 task();
             }
@@ -43,7 +43,7 @@ void ThreadPool::shutdown() {
         if (m_stop.exchange(true))
             return;
 
-        std::queue<std::function<void()>> empty;
+        std::deque<std::function<void()>> empty;
         m_tasks.swap(empty);
     }
 
@@ -60,7 +60,17 @@ void ThreadPool::enqueue(std::function<void()> task) {
         std::lock_guard<std::mutex> lock(m_mutex);
         if (m_stop.load())
             return;
-        m_tasks.push(std::move(task));
+        m_tasks.push_back(std::move(task));
+    }
+    m_cv.notify_one();
+}
+
+void ThreadPool::enqueuePriority(std::function<void()> task) {
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (m_stop.load())
+            return;
+        m_tasks.push_front(std::move(task));
     }
     m_cv.notify_one();
 }

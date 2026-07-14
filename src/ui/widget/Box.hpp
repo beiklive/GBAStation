@@ -37,7 +37,9 @@ namespace beiklive
     private:
         // 背景层
         void setupBackgroundLayer();
+        void ensureBackgroundImageLoaded();
         brls::Image* backgroundLayer = nullptr;
+        bool backgroundImageLoaded = false;
         // Shader层
         void setupShaderLayer();
         beiklive::DynamicBackgroundBox* shaderLayer = nullptr;

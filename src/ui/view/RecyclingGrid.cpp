@@ -112,6 +112,8 @@ GameGridView::~GameGridView()
     }
     m_textureCache.clear();
     m_textureLastUsed.clear();
+    m_textureMemoryBytes.clear();
+    m_textureCacheBytes = 0;
     for (auto& item : m_items) {
         item.textureHandle = -1;
         item.platformTextureHandle = -1;
@@ -909,8 +911,12 @@ void GameGridView::_uploadDecodedTextures(NVGcontext* vg)
                                         0,
                                         decoded.pixels.data());
         if (handle >= 0) {
+            const size_t textureBytes = static_cast<size_t>(decoded.width) *
+                static_cast<size_t>(decoded.height) * 4u;
             m_textureCache[decoded.path] = handle;
             m_textureLastUsed[decoded.path] = ++m_textureUseTick;
+            m_textureMemoryBytes[decoded.path] = textureBytes;
+            m_textureCacheBytes += textureBytes;
         } else
             m_failedTextures.insert(decoded.path);
     }
@@ -1035,18 +1041,21 @@ void GameGridView::_loadTextures(NVGcontext* vg)
 void GameGridView::_evictTextures()
 {
 #ifdef __SWITCH__
-    const size_t maxCache = 72;
+    constexpr size_t textureBudgetBytes = 128u * 1024u * 1024u;
 #else
-    const size_t maxCache = 128;
+    constexpr size_t textureBudgetBytes = 512u * 1024u * 1024u;
 #endif
-    if (m_textureCache.size() <= maxCache) return;
+    if (m_textureCacheBytes <= textureBudgetBytes)
+        return;
 
     NVGcontext* vg = brls::Application::getNVGContext();
     if (!vg) return;
 
     std::unordered_set<std::string> protectedPaths;
-    const int keepStartRow = std::max(0, m_visibleStartRow - 4);
-    const int keepEndRow = std::min(_getRowCount(), m_visibleEndRow + 4);
+    const int retainedRows = m_viewMode == ViewMode::GRID ? 16 : 48;
+    const int keepStartRow = std::max(0, m_visibleStartRow - retainedRows);
+    const int keepEndRow = std::min(
+        _getRowCount(), m_visibleEndRow + retainedRows);
     for (int row = keepStartRow; row < keepEndRow; ++row) {
         for (int col = 0; col < spanCount; ++col) {
             const size_t index = static_cast<size_t>(row * spanCount + col);
@@ -1058,7 +1067,7 @@ void GameGridView::_evictTextures()
         }
     }
 
-    while (m_textureCache.size() > maxCache) {
+    while (m_textureCacheBytes > textureBudgetBytes) {
         auto victim = m_textureCache.end();
         uint64_t oldestUse = std::numeric_limits<uint64_t>::max();
         for (auto it = m_textureCache.begin(); it != m_textureCache.end(); ++it) {
@@ -1089,6 +1098,11 @@ void GameGridView::_evictTextures()
             }
         }
         nvgDeleteImage(vg, handle);
+        const auto memory = m_textureMemoryBytes.find(path);
+        if (memory != m_textureMemoryBytes.end()) {
+            m_textureCacheBytes -= std::min(m_textureCacheBytes, memory->second);
+            m_textureMemoryBytes.erase(memory);
+        }
         m_textureLastUsed.erase(path);
         m_textureCache.erase(victim);
     }
