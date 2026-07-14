@@ -4,8 +4,20 @@
 #include <string>
 #include <vector>
 
+#include "core/enums.h"
+
 namespace beiklive
 {
+
+    struct FilePickerLocation
+    {
+        std::string startPath;
+        std::string filename;
+    };
+
+    /// 获取修改游戏封面时文件选取器的初始位置。
+    /// 内置默认封面从游戏存档目录打开，自定义封面则定位到当前文件。
+    FilePickerLocation getGameCoverPickerLocation(const GameEntry& entry);
 
     /// 打开文件选取器 Activity，仅显示指定扩展名的文件
     /// @param extensions 允许的文件扩展名列表（不含点号，如 {"png", "jpg"}）

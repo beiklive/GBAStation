@@ -606,9 +606,9 @@ namespace beiklive
         m_gameOptionsSidebar->addSubmenuButton(
             operationsMenu, "修改封面", beiklive::material::IMAGE,
             [this, path](const beiklive::GameEntry& game) {
-                const std::filesystem::path currentLogo(game.logoPath);
+                const auto pickerLocation = beiklive::getGameCoverPickerLocation(game);
                 _closeGameOptionsPanelAnimated(
-                    [this, path, currentLogo]() {
+                    [this, path, pickerLocation]() {
                         beiklive::openFilePicker(
                             {"png", "jpg"},
                             [this, path](const std::string& selectedPath) {
@@ -619,10 +619,8 @@ namespace beiklive
                                 beiklive::GameDB->flush();
                                 _requestRecentGamesRefresh(false);
                             },
-                            currentLogo.parent_path().empty()
-                                ? beiklive::path::GetRootPath()
-                                : currentLogo.parent_path().string(),
-                            currentLogo.filename().string());
+                            pickerLocation.startPath,
+                            pickerLocation.filename);
                     });
             });
 

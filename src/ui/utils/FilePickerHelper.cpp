@@ -1,4 +1,5 @@
 #include "FilePickerHelper.hpp"
+#include "core/Tools.hpp"
 #include "core/common.h"
 #include "ui/page/FileListPage.hpp"
 
@@ -8,6 +9,28 @@ namespace fs = std::filesystem;
 
 namespace beiklive
 {
+
+    FilePickerLocation getGameCoverPickerLocation(const GameEntry& entry)
+    {
+        const auto platform = static_cast<beiklive::enums::EmuPlatform>(entry.platform);
+        const std::string defaultLogo = beiklive::tools::getDefaultLogoPath(platform);
+        const bool usesBuiltInLogo = entry.logoPath.empty() ||
+            entry.logoPath == defaultLogo || entry.logoPath.rfind("romfs:/", 0) == 0;
+
+        if (usesBuiltInLogo) {
+            FilePickerLocation location;
+            location.startPath = entry.savePath.empty()
+                ? beiklive::tools::defaultGameSavePath(entry.platform, entry.path)
+                : entry.savePath;
+
+            std::error_code ec;
+            fs::create_directories(location.startPath, ec);
+            return location;
+        }
+
+        const fs::path currentLogo(entry.logoPath);
+        return {currentLogo.parent_path().string(), currentLogo.filename().string()};
+    }
 
     void openFilePicker(
         const std::vector<std::string>& extensions,
