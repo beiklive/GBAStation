@@ -443,14 +443,14 @@ namespace beiklive
             const char* label;
         };
         constexpr WatchedButton watched[] = {
-            {brls::BUTTON_NAV_UP, "上"},
-            {brls::BUTTON_NAV_DOWN, "下"},
-            {brls::BUTTON_NAV_LEFT, "左"},
-            {brls::BUTTON_NAV_RIGHT, "右"},
-            {brls::BUTTON_A, "A"},
-            {brls::BUTTON_B, "B"},
-            {brls::BUTTON_X, "X"},
-            {brls::BUTTON_Y, "Y"},
+            {brls::BUTTON_NAV_UP, "↑"},
+            {brls::BUTTON_NAV_DOWN, "↓"},
+            {brls::BUTTON_NAV_LEFT, "←"},
+            {brls::BUTTON_NAV_RIGHT, "→"},
+            {brls::BUTTON_A, "O"},
+            {brls::BUTTON_B, "X"},
+            {brls::BUTTON_X, "O"},
+            {brls::BUTTON_Y, "X"},
             {brls::BUTTON_LB, "L"},
             {brls::BUTTON_RB, "R"},
             {brls::BUTTON_LT, "ZL"},
@@ -1040,7 +1040,7 @@ namespace beiklive
         _drawHeaderLogo(vg, x, y, width, height, 1.f, alpha);
         _drawGameRect(vg, rect.x, rect.y, rect.width, rect.height, alpha);
         _drawInputTrace(vg, x, y, width, height, alpha);
-        _drawGameControls(vg, x + 30.f, y + height - 31.f, alpha * 0.9f);
+        _drawGameControls(vg, x, y, width, height, alpha * 0.9f);
 
         struct HintItem
         {
@@ -1052,56 +1052,75 @@ namespace beiklive
             {brls::BUTTON_LT, "快速读档"},
             {brls::BUTTON_START, "游戏列表"},
         };
-        float cursor = x + width - 35.f;
+        const float right = x + width - 35.f;
+        const float firstY = y + height - 111.f;
         nvgFontFaceId(vg, m_fontId);
         nvgFontSize(vg, 21.f);
-        for (size_t index = 3u; index-- > 0;) {
+        for (size_t index = 0; index < 3u; ++index) {
             float bounds[4]{};
             nvgTextBounds(vg, 0.f, 0.f, hints[index].label, nullptr, bounds);
-            const float itemWidth = 42.f + bounds[2] - bounds[0];
-            cursor -= itemWidth;
+            const float labelWidth = bounds[2] - bounds[0];
+            const float glyphX = right - labelWidth - 22.f;
             _drawHint(vg, hints[index].button, hints[index].label,
-                      cursor + 14.f, y + height - 31.f, alpha * 0.88f);
-            cursor -= 18.f;
+                      glyphX, firstY + static_cast<float>(index) * 40.f,
+                      alpha * 0.88f);
         }
     }
 
     void Pico8Page::_drawGameControls(NVGcontext* vg, float x, float y,
-                                      float alpha)
+                                      float width, float height, float alpha)
     {
-        struct ControlGlyph
-        {
-            char32_t codepoint;
-            const char* label;
-            float gapAfter;
-        };
-        constexpr ControlGlyph controls[] = {
-            {0xE0C0, "", 15.f},
-            {0xE0D0, "", 15.f},
-            {0xE0E0, "", 15.f},
-            {0xE0E1, "", 0.f},
-        };
-        float cursor = x;
-        for (const auto& control : controls) {
-            const std::string glyph = encodeUtf8(control.codepoint);
+        const Rect game = runtimeRect(x, y, width, height);
+        const float left = x + 28.f;
+        const float availableWidth = game.x - left - 24.f;
+        if (availableWidth < 220.f)
+            return;
+        const float top = y + height * 0.40f;
+        const float arrowCenterX = left + 48.f;
+        const float equalsX = left + 111.f;
+        const float firstGlyphX = left + 154.f;
+        const float slashX = left + 196.f;
+        const float secondGlyphX = left + 230.f;
+
+        nvgFontFaceId(vg, m_fontId);
+        nvgFillColor(vg, nvgRGBA(255, 241, 232, alphaByte(alpha)));
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgFontSize(vg, 24.f);
+        nvgText(vg, arrowCenterX, top - 20.f, "↑", nullptr);
+        nvgText(vg, arrowCenterX, top + 12.f, "←  ↓  →", nullptr);
+        nvgFontSize(vg, 20.f);
+        nvgText(vg, equalsX, top - 2.f, "=", nullptr);
+        nvgText(vg, slashX, top - 2.f, "/", nullptr);
+
+        auto drawSwitchGlyph = [&](char32_t codepoint, float glyphX,
+                                   float glyphY, float size) {
+            const std::string glyph = encodeUtf8(codepoint);
             nvgFontFaceId(vg, m_switchIconFontId);
-            nvgFontSize(vg, 30.f);
-            nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+            nvgFontSize(vg, size);
+            nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
             nvgFillColor(vg, nvgRGBA(255, 255, 255, alphaByte(alpha)));
-            nvgText(vg, cursor, y, glyph.c_str(), nullptr);
-            float bounds[4]{};
-            nvgTextBounds(vg, cursor, y, glyph.c_str(), nullptr, bounds);
-            cursor = bounds[2] + 7.f;
-            if (control.label[0] != '\0') {
-                nvgFontSize(vg, 18.f);
-                nvgFillColor(vg, nvgRGBA(225, 229, 237,
-                    alphaByte(alpha * 0.9f)));
-                nvgText(vg, cursor, y, control.label, nullptr);
-                nvgTextBounds(vg, cursor, y, control.label, nullptr, bounds);
-                cursor = bounds[2];
-            }
-            cursor += control.gapAfter;
-        }
+            nvgText(vg, glyphX, glyphY, glyph.c_str(), nullptr);
+        };
+        drawSwitchGlyph(0xE0C0, firstGlyphX, top - 2.f, 31.f);
+        drawSwitchGlyph(0xE0D0, secondGlyphX, top - 2.f, 31.f);
+
+        const float actionTextX = left + 4.f;
+        const float actionEqualsX = left + 196.f;
+        const float actionGlyphX = left + 239.f;
+        const float oY = top + 82.f;
+        const float xY = top + 132.f;
+        nvgFontFaceId(vg, m_fontId);
+        nvgFontSize(vg, 20.f);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(225, 229, 237,
+            alphaByte(alpha * 0.94f)));
+        nvgText(vg, actionTextX, oY, "O  |  Z / C / N", nullptr);
+        nvgText(vg, actionTextX, xY, "X  |  X / V / M", nullptr);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgText(vg, actionEqualsX, oY, "=", nullptr);
+        nvgText(vg, actionEqualsX, xY, "=", nullptr);
+        drawSwitchGlyph(0xE0E0, actionGlyphX, oY, 32.f);
+        drawSwitchGlyph(0xE0E1, actionGlyphX, xY, 32.f);
     }
 
     void Pico8Page::_drawInputTrace(NVGcontext* vg, float x, float y,

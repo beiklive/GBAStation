@@ -86,7 +86,8 @@ namespace beiklive
                                 float height, float progress, float alpha);
         void _drawEmptyState(NVGcontext* vg, float x, float y, float width,
                              float height, float alpha);
-        void _drawGameControls(NVGcontext* vg, float x, float y, float alpha);
+        void _drawGameControls(NVGcontext* vg, float x, float y, float width,
+                               float height, float alpha);
         void _drawInputTrace(NVGcontext* vg, float x, float y,
                              float width, float height, float alpha);
         void _drawLibraryHints(NVGcontext* vg, float x, float y,

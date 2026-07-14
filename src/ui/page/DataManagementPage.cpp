@@ -397,14 +397,6 @@ void DataManagementPage::draw(
 
 void DataManagementPage::init()
 {
-    // m_tabframe->addTab(
-    //     "扫描导入",
-    //     BK_RES("img/ui/setting/game.png"),
-    //     nullptr,
-    //     nullptr,
-    //     nullptr,
-    //     buildScanImportTab(),
-    //     m_scanDefaultFocus);
     m_tabframe->addTab(
         "整合包导入",
         BK_RES("img/ui/setting/emu.png"),
@@ -413,6 +405,14 @@ void DataManagementPage::init()
         nullptr,
         buildBundleImportTab(),
         m_bundleDefaultFocus);
+    m_tabframe->addTab(
+        "扫描导入",
+        BK_RES("img/ui/setting/game.png"),
+        nullptr,
+        nullptr,
+        nullptr,
+        buildScanImportTab(),
+        m_scanDefaultFocus);
     m_tabframe->addTab(
         "数据处理",
         BK_RES("img/ui/setting/debug.png"),
