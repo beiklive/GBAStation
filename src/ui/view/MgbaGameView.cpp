@@ -2326,7 +2326,13 @@ namespace beiklive
             m_loggedFirstAudioPush = true;
         }
 
-        if (ff || isNdsPlatform(m_gameEntry.platform)) {
+        bool useNonBlockingPush = ff || isNdsPlatform(m_gameEntry.platform);
+#ifdef __SWITCH__
+        // Switch mGBA hardware output runs on AudioManager's core 2 worker.
+        // Never let a full software ring buffer stall the core 1 game thread.
+        useNonBlockingPush = useNonBlockingPush || isMgbaNativePlatform(m_gameEntry.platform);
+#endif
+        if (useNonBlockingPush) {
             AudioManager::instance().pushSamplesNoBlocking(m_audioDrainBuf.data(), frames);
             return;
         }

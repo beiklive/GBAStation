@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common.h"
+#include <cstdint>
 #include <filesystem>
 #include <string>
 #include <fstream>
@@ -8,6 +9,12 @@
 namespace fs = std::filesystem;
 
 namespace beiklive::tools {
+
+/// 获取 Switch 校准数据中的设备 ID，并缓存结果；非 Switch 平台返回 0。
+uint64_t getDeviceId();
+
+/// 在 URL 后追加 device_id 查询参数。
+std::string appendDeviceIdParameter(const std::string& url);
 
 // 获取文件扩展名（小写形式，不含点号）
 std::string getFileExtension(const fs::path& path);

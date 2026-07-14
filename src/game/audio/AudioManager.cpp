@@ -479,7 +479,11 @@ bool AudioManager::init(int sampleRate, int channels)
 void AudioManager::audioThreadFunc()
 {
     // 将音频输出线程绑定到核心 2（核心 0=UI，核心 1=模拟）
-    svcSetThreadCoreMask(CUR_THREAD_HANDLE, 2, 1ULL << 2);
+    Result affinityRc = svcSetThreadCoreMask(CUR_THREAD_HANDLE, 2, 1ULL << 2);
+    if (R_FAILED(affinityRc))
+        brls::Logger::warning("AudioManager: failed to pin Switch audio thread to core2 rc={:#x}", affinityRc);
+    else
+        brls::Logger::info("AudioManager: Switch audio thread pinned to core2");
 
     auto* sw = static_cast<SwitchAudioState*>(m_platformState);
     auto collectReleased = [sw](AudioOutBuffer* released) {

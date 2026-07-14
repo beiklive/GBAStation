@@ -5,6 +5,10 @@
 #include <windows.h>
 #endif
 
+#ifdef __SWITCH__
+#include <switch.h>
+#endif
+
 #include <algorithm>
 #include <cctype>
 #include <iomanip>
@@ -14,6 +18,28 @@
 // 假设 BK_RES 已在 core/common.h 中定义，此处已通过 file_tools.hpp 包含
 
 namespace beiklive::tools {
+
+uint64_t getDeviceId() {
+    static const uint64_t deviceId = []() -> uint64_t {
+#ifdef __SWITCH__
+        uint64_t value = 0;
+        if (R_SUCCEEDED(setcalInitialize())) {
+            if (R_FAILED(setcalGetDeviceId(&value)))
+                value = 0;
+            setcalExit();
+        }
+        return value;
+#else
+        return 0;
+#endif
+    }();
+    return deviceId;
+}
+
+std::string appendDeviceIdParameter(const std::string& url) {
+    return url + (url.find('?') == std::string::npos ? "?device_id=" : "&device_id=")
+        + std::to_string(getDeviceId());
+}
 
 std::string getFileExtension(const fs::path& path) {
     std::string ext = path.extension().string();

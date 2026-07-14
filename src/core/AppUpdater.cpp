@@ -262,13 +262,15 @@ void AppUpdater::check() {
 bool AppUpdater::checkSync() {
     m_info = UpdateInfo{};
     m_info.hasUpdate = false;
-    m_info.downloadUrl = DOWNLOAD_URL;
     m_info.changelog = "检测到新版本后，将更新 GBAStation 主程序与 NDS 运行核心。";
     m_aborted.store(false);
 
     auto ts = std::chrono::duration_cast<std::chrono::seconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
-    std::string url = std::string(VERSION_INI_URL) + "?t=" + std::to_string(ts);
+    std::string url = tools::appendDeviceIdParameter(
+        std::string(VERSION_INI_URL) + "?t=" + std::to_string(ts));
+    m_info.downloadUrl = tools::appendDeviceIdParameter(
+        std::string(DOWNLOAD_URL) + "?t=" + std::to_string(ts));
 
     std::string iniText = fetchUrl(url);
     if (iniText.empty()) {
@@ -286,7 +288,9 @@ bool AppUpdater::checkSync() {
     m_info.hasUpdate = isRemoteVersionNewer(m_info.version, APP_VERSION);
     if (m_info.hasUpdate) {
         std::string versionLabel = normalizeVersionLabel(m_info.version);
-        std::string changelogUrl = std::string(CHANGELOG_BASE_URL) + "/" + versionLabel + ".txt?t=" + std::to_string(ts);
+        std::string changelogUrl = tools::appendDeviceIdParameter(
+            std::string(CHANGELOG_BASE_URL) + "/" + versionLabel
+            + ".txt?t=" + std::to_string(ts));
         std::string changelogText = fetchUrl(changelogUrl);
         if (!changelogText.empty())
             m_info.changelog = changelogText;

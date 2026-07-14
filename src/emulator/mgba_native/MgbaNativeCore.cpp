@@ -1170,7 +1170,11 @@ void MgbaNativeCore::configureAudioStream()
         return;
 
 #ifdef __SWITCH__
-    m_audioStreamEnabled = initNativeAudioOutput();
+    // Keep audout waits and hardware buffer submission off the emulation thread.
+    // RunFrame drains mGBA's samples into AudioManager, whose Switch worker is
+    // pinned to core 2.
+    m_audioStreamEnabled = false;
+    brls::Logger::info("MgbaNativeCore: Switch audio routed through AudioManager core2 worker");
 #else
     m_audioStreamEnabled = true;
 #endif

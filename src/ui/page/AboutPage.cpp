@@ -54,8 +54,10 @@ static std::string trimText(std::string text) {
 static std::string cacheBustedUrl(const std::string& url) {
     const auto now = std::chrono::system_clock::now().time_since_epoch();
     const auto timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
-    return url + (url.find('?') == std::string::npos ? "?t=" : "&t=")
+    const std::string timestampedUrl = url
+        + (url.find('?') == std::string::npos ? "?t=" : "&t=")
         + std::to_string(timestamp);
+    return beiklive::tools::appendDeviceIdParameter(timestampedUrl);
 }
 
 static bool fetchTextUrl(const std::string& url,
