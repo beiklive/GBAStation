@@ -29,6 +29,7 @@ struct GridDrawItem {
     std::string imagePath;
     std::string imageLayerPath;
     std::string platformImagePath;
+    std::string platformImageSourcePath;
     bool imageLayerVisible = false;
     float coverAspect = 1.f;
 
@@ -62,6 +63,7 @@ struct GridDrawItem {
         imagePath.clear();
         imageLayerPath.clear();
         platformImagePath.clear();
+        platformImageSourcePath.clear();
         imageLayerVisible = false;
         coverAspect = 1.f;
         favorite = false;

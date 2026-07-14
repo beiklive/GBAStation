@@ -261,7 +261,9 @@ private:
                    const std::string& label, int secondButton = -1);
     void _drawMaterialIcon(NVGcontext* vg, char32_t icon, float x, float y,
                            float size, NVGcolor color, int align);
-    void _requestTexture(const std::string& path);
+    void _requestTexture(const std::string& path,
+                         const std::string& sourcePath = "",
+                         const std::string& fallbackPath = "");
     void _uploadDecodedTextures(NVGcontext* vg);
     void _populateItem(size_t index);
     void _populateVisibleItems();

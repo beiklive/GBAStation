@@ -328,6 +328,12 @@ void GameGridView::setItemImagePath(size_t index, const std::string& path)
         item.textureLoading = false;
         item.textureReady = false;
         item.textureFailed = false;
+        if (item.platformImageSourcePath.empty()) {
+            item.platformImagePath = path;
+            item.platformTextureHandle = -1;
+            item.platformTextureReady = false;
+            item.platformTextureFailed = false;
+        }
         m_requestedStartRow = -1;
         m_requestedEndRow = -1;
     }
@@ -804,7 +810,9 @@ void GameGridView::_updateMarquee(float delta)
     }
 }
 
-void GameGridView::_requestTexture(const std::string& path)
+void GameGridView::_requestTexture(const std::string& path,
+                                   const std::string& sourcePath,
+                                   const std::string& fallbackPath)
 {
     if (path.empty() || !m_textureLoader || !m_textureLoader->alive.load())
         return;
@@ -822,7 +830,8 @@ void GameGridView::_requestTexture(const std::string& path)
         state->pending[path] = generation;
     }
 
-    beiklive::ThreadPool::instance().enqueue([state, path, generation]() {
+    beiklive::ThreadPool::instance().enqueue([
+        state, path, sourcePath, fallbackPath, generation]() {
         {
             std::lock_guard<std::mutex> lock(state->mutex);
             if (!state->alive.load() || state->generation != generation ||
@@ -841,7 +850,16 @@ void GameGridView::_requestTexture(const std::string& path)
         int width = 0;
         int height = 0;
         int channels = 0;
-        unsigned char* pixels = stbi_load(path.c_str(), &width, &height, &channels, 4);
+        std::string loadPath = path;
+        if (!sourcePath.empty()) {
+            const std::string extracted = beiklive::GetOrCreateNdsIconPath(sourcePath);
+            if (!extracted.empty())
+                loadPath = extracted;
+            else if (!fallbackPath.empty())
+                loadPath = fallbackPath;
+        }
+        unsigned char* pixels = stbi_load(
+            loadPath.c_str(), &width, &height, &channels, 4);
         if (!pixels || width <= 0 || height <= 0) {
             decoded.failed = true;
         } else {
@@ -950,15 +968,20 @@ void GameGridView::_loadTextures(NVGcontext* vg)
             : begin;
         for (int i = preloadBegin; i < preloadEnd; ++i)
             _populateItem(static_cast<size_t>(i));
+        auto displayPath = [this](const GridDrawItem& item) -> const std::string& {
+            return m_viewMode == ViewMode::LIST
+                ? item.platformImagePath
+                : item.imagePath;
+        };
         for (int i = begin; i < end; ++i) {
             const auto& item = m_items[static_cast<size_t>(i)];
-            const std::string& path = item.imagePath;
+            const std::string& path = displayPath(item);
             if (!path.empty())
                 wanted.insert(path);
         }
         for (int i = preloadBegin; i < preloadEnd; ++i) {
             const auto& item = m_items[static_cast<size_t>(i)];
-            const std::string& path = item.imagePath;
+            const std::string& path = displayPath(item);
             if (!path.empty())
                 wanted.insert(path);
         }
@@ -1003,7 +1026,10 @@ void GameGridView::_loadTextures(NVGcontext* vg)
         } else if (m_failedTextures.count(path) != 0) {
             failed = true;
         } else {
-            _requestTexture(path);
+            _requestTexture(
+                path,
+                platformDefault ? item.platformImageSourcePath : "",
+                platformDefault ? item.imagePath : "");
         }
     };
 
@@ -1011,7 +1037,7 @@ void GameGridView::_loadTextures(NVGcontext* vg)
         if (index >= m_items.size())
             return;
         auto& item = m_items[index];
-        bindTexture(item, false);
+        bindTexture(item, m_viewMode == ViewMode::LIST);
     };
 
     // 先提交整屏请求，再额外提交列表详情封面；旧视口任务通过 generation 失效。
@@ -1754,7 +1780,7 @@ void GameGridView::_drawItem(NVGcontext* vg, const GridDrawItem& item, float x, 
     } else {
         const float imageW = 54.f;
         const float imageH = h - 10.f;
-        _drawImage(vg, item, x + 8.f, y + 5.f, imageW, imageH);
+        _drawImage(vg, item, x + 8.f, y + 5.f, imageW, imageH, true);
 
         const float textX = x + 74.f;
         const float textW = w - 106.f;

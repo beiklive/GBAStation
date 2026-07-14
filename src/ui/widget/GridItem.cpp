@@ -241,14 +241,11 @@ namespace beiklive
 
         item.imageLayerPath = GetGameLogoLayerPath(entry.platform);
         item.imageLayerVisible = !item.imageLayerPath.empty();
-        switch (static_cast<beiklive::enums::EmuPlatform>(entry.platform)) {
-            case beiklive::enums::EmuPlatform::EmuGBA:  item.platformImagePath = BK_RES("img/ui/gba.png"); break;
-            case beiklive::enums::EmuPlatform::EmuGBC:  item.platformImagePath = BK_RES("img/ui/gbc.png"); break;
-            case beiklive::enums::EmuPlatform::EmuGB:   item.platformImagePath = BK_RES("img/ui/gb.png"); break;
-            case beiklive::enums::EmuPlatform::EmuNES:  item.platformImagePath = BK_RES("img/ui/nes.png"); break;
-            case beiklive::enums::EmuPlatform::EmuSNES: item.platformImagePath = BK_RES("img/ui/sfc.png"); break;
-            case beiklive::enums::EmuPlatform::EmuNDS:  item.platformImagePath = BK_RES("img/ui/nds.png"); break;
-            default: item.platformImagePath = item.imageLayerPath; break;
+        item.platformImagePath = entry.logoPath;
+        if (static_cast<beiklive::enums::EmuPlatform>(entry.platform) ==
+            beiklive::enums::EmuPlatform::EmuNDS) {
+            item.platformImagePath = beiklive::GetNdsIconCachePath(entry.path);
+            item.platformImageSourcePath = entry.path;
         }
 
         // 图片载入前使用平台常见封面比例作为占位；纹理就绪后渲染器会优先

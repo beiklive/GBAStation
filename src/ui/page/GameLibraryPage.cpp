@@ -1,4 +1,5 @@
 #include "GameLibraryPage.hpp"
+#include "GameDataPage.hpp"
 #include "core/forwarder/ForwarderInstaller.hpp"
 #include "ui/utils/MaterialIcons.hpp"
 #include "ui/utils/NdsEnvironment.hpp"
@@ -201,10 +202,10 @@ namespace beiklive
             }
         };
 
-        class GameDataPage : public beiklive::Box
+        class LegacyGameDataPage : public beiklive::Box
         {
         public:
-            explicit GameDataPage(beiklive::GameEntry entry)
+            explicit LegacyGameDataPage(beiklive::GameEntry entry)
                 : m_entry(std::move(entry))
             {
                 showHeader(false);
@@ -1811,7 +1812,7 @@ namespace beiklive
 
     void GameLibraryPage::_openGameDataPage(const beiklive::GameEntry& entry)
     {
-        auto* page = new GameDataPage(entry);
+        auto* page = new beiklive::GameDataPage(entry);
         auto* frame = new brls::AppletFrame(page);
         HIDE_BRLS_BAR(frame);
         beiklive::pushActivity(frame, this, page);

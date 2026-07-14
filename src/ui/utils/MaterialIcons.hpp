@@ -23,4 +23,10 @@ namespace beiklive::material
     constexpr char32_t CHECK_BOX_OUTLINE  = 0xE835;
     constexpr char32_t WIFI               = 0xE63E;
     constexpr char32_t WIFI_OFF           = 0xE648;
+    constexpr char32_t SAVE               = 0xE161;
+    constexpr char32_t BACKUP             = 0xE864;
+    constexpr char32_t RESTORE            = 0xE8B3;
+    constexpr char32_t CLOUD_UPLOAD       = 0xE2C6;
+    constexpr char32_t CLOUD_DOWNLOAD     = 0xE2C4;
+    constexpr char32_t PHOTO_LIBRARY      = 0xE413;
 }
