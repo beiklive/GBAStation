@@ -2625,9 +2625,18 @@ int RunDekoRuntime(const DekoRunOptions& options)
                   initialDisplay.customLayout.bottomScale,
                   initialDisplay.customLayout.bottomOffsetX,
                   initialDisplay.customLayout.bottomOffsetY);
+    checkpointBegin = std::chrono::steady_clock::now();
     auto stateSlots = loadStateSlots(stateDir, options.romPath);
+    appendStubLog("GBAStationNDSStub: Deko checkpoint state slots loaded ms=%lld",
+                  elapsedMs(checkpointBegin));
     menuLayer.setStateSlots(stateSlots);
+    checkpointBegin = std::chrono::steady_clock::now();
     NdsCheatLoadResult cheatLoad = LoadUsrCheatDatForRom(options.romPath);
+    appendStubLog("GBAStationNDSStub: Deko checkpoint cheats loaded matched=%d items=%d skipped=%d ms=%lld",
+                  cheatLoad.gameMatched ? 1 : 0,
+                  static_cast<int>(cheatLoad.items.size()),
+                  cheatLoad.skippedInvalidCodes,
+                  elapsedMs(checkpointBegin));
     menuLayer.setCheatItems(cheatLoad.items);
     std::unique_ptr<ARCodeFile> runtimeCheatFile;
     bool cheatApplyPending = false;

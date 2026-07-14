@@ -2,9 +2,11 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstdint>
 #include <cstring>
 #include <fstream>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -13,6 +15,10 @@
 
 namespace beiklive::nds_stub {
 namespace {
+
+constexpr std::uint64_t kDatHeaderSize = 0x100;
+constexpr std::uint32_t kMaxCodeWords = 0x100000u;
+constexpr std::size_t kMaxStringBytes = 1024u * 1024u;
 
 struct DatEntryInfo {
     std::uint32_t gameCode = 0;
@@ -25,30 +31,69 @@ struct CategoryFrame {
     int remaining = 0;
 };
 
-std::uint32_t readLe32(const std::vector<std::uint8_t>& data, std::size_t offset)
+long long elapsedMs(const std::chrono::steady_clock::time_point& begin)
 {
-    if (offset + 4 > data.size())
-        return 0;
-    return static_cast<std::uint32_t>(data[offset]) |
-           (static_cast<std::uint32_t>(data[offset + 1]) << 8) |
-           (static_cast<std::uint32_t>(data[offset + 2]) << 16) |
-           (static_cast<std::uint32_t>(data[offset + 3]) << 24);
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - begin).count();
 }
 
-bool readFile(const std::string& path, std::vector<std::uint8_t>& out)
+std::uint32_t readLe32(const std::uint8_t* data)
 {
-    out.clear();
-    std::ifstream file(path, std::ios::binary);
-    if (!file)
+    return static_cast<std::uint32_t>(data[0]) |
+           (static_cast<std::uint32_t>(data[1]) << 8) |
+           (static_cast<std::uint32_t>(data[2]) << 16) |
+           (static_cast<std::uint32_t>(data[3]) << 24);
+}
+
+bool readLe32(std::istream& input, std::uint32_t& value)
+{
+    std::array<std::uint8_t, 4> bytes {};
+    input.read(reinterpret_cast<char*>(bytes.data()),
+               static_cast<std::streamsize>(bytes.size()));
+    if (!input)
         return false;
+    value = readLe32(bytes.data());
+    return true;
+}
+
+bool seekTo(std::istream& input, std::uint64_t offset)
+{
+    if (offset > static_cast<std::uint64_t>(std::numeric_limits<std::streamoff>::max()))
+        return false;
+    input.clear();
+    input.seekg(static_cast<std::streamoff>(offset), std::ios::beg);
+    return static_cast<bool>(input);
+}
+
+bool streamPosition(std::istream& input, std::uint64_t& position)
+{
+    const std::streampos pos = input.tellg();
+    if (pos == std::streampos(-1))
+        return false;
+    position = static_cast<std::uint64_t>(pos);
+    return true;
+}
+
+bool skipBytes(std::istream& input, std::uint64_t bytes, std::uint64_t fileSize)
+{
+    std::uint64_t pos = 0;
+    if (!streamPosition(input, pos) ||
+        bytes > fileSize - std::min(pos, fileSize) ||
+        bytes > static_cast<std::uint64_t>(std::numeric_limits<std::streamsize>::max()))
+        return false;
+    input.ignore(static_cast<std::streamsize>(bytes));
+    return static_cast<bool>(input);
+}
+
+bool getFileSize(std::ifstream& file, std::uint64_t& size)
+{
+    file.clear();
     file.seekg(0, std::ios::end);
-    const std::streamoff size = file.tellg();
-    if (size <= 0)
+    const std::streampos end = file.tellg();
+    if (end == std::streampos(-1))
         return false;
-    file.seekg(0, std::ios::beg);
-    out.resize(static_cast<std::size_t>(size));
-    file.read(reinterpret_cast<char*>(out.data()), size);
-    return file.good();
+    size = static_cast<std::uint64_t>(end);
+    return seekTo(file, 0);
 }
 
 std::string findUsrCheatDat()
@@ -56,30 +101,42 @@ std::string findUsrCheatDat()
     const char* candidates[] = {
         "sdmc:/GBAStation/cheats/usrcheat.dat",
         "/GBAStation/cheats/usrcheat.dat",
+        "sdmc:/GBAStation/usrcheat.dat",
+        "/GBAStation/usrcheat.dat",
     };
-    std::vector<std::uint8_t> probe;
     for (const char* path : candidates)
     {
-        if (readFile(path, probe))
+        std::ifstream probe(path, std::ios::binary);
+        if (probe)
             return path;
     }
     return {};
 }
 
-std::string readNtString(const std::vector<std::uint8_t>& data, std::size_t& pos)
+bool readNtString(std::istream& input, std::string& text)
 {
-    const std::size_t start = pos;
-    while (pos < data.size() && data[pos] != 0)
-        ++pos;
-    std::string text(reinterpret_cast<const char*>(data.data() + start), pos - start);
-    if (pos < data.size())
-        ++pos;
-    return text;
+    text.clear();
+    for (std::size_t i = 0; i < kMaxStringBytes; ++i)
+    {
+        char ch = 0;
+        if (!input.get(ch))
+            return false;
+        if (ch == '\0')
+            return true;
+        text.push_back(ch);
+    }
+    return false;
 }
 
-void align4(std::size_t& pos)
+bool align4(std::istream& input, std::uint64_t fileSize)
 {
-    pos = (pos + 3u) & ~std::size_t(3u);
+    std::uint64_t pos = 0;
+    if (!streamPosition(input, pos))
+        return false;
+    const std::uint64_t aligned = (pos + 3u) & ~std::uint64_t(3u);
+    if (aligned > fileSize)
+        return false;
+    return aligned == pos || seekTo(input, aligned);
 }
 
 void consumeParentSlot(std::vector<CategoryFrame>& stack)
@@ -94,27 +151,31 @@ void consumeParentSlot(std::vector<CategoryFrame>& stack)
         stack.pop_back();
 }
 
-bool parseItems(const std::vector<std::uint8_t>& data,
-                std::size_t& pos,
+bool parseItems(std::istream& input,
+                std::uint64_t fileSize,
                 std::uint32_t count,
-                std::vector<NdsCheatItem>& out)
+                std::vector<NdsCheatItem>& out,
+                int& skippedInvalidCodes)
 {
     std::vector<CategoryFrame> categoryStack;
 
     for (std::uint32_t i = 0; i < count; ++i)
     {
-        if (pos + 4 > data.size())
+        std::uint32_t flags = 0;
+        if (!readLe32(input, flags))
             return false;
 
-        const std::uint32_t flags = readLe32(data, pos);
-        pos += 4;
         const std::uint32_t totalLen = flags & 0x00FFFFFFu;
         const bool isCategory = (flags & (1u << 28)) != 0;
         const bool enabled = (flags & (1u << 24)) != 0;
 
-        std::string rawName = readNtString(data, pos);
-        const std::string desc = readNtString(data, pos);
-        align4(pos);
+        std::string rawName;
+        std::string desc;
+        if (!readNtString(input, rawName) ||
+            !readNtString(input, desc) ||
+            !align4(input, fileSize))
+            return false;
+
         std::string name = rawName;
         if (name.empty())
             name = desc.empty() ? (isCategory ? "未命名目录" : "未命名金手指") : desc;
@@ -140,18 +201,29 @@ bool parseItems(const std::vector<std::uint8_t>& data,
             continue;
         }
 
-        if (pos + 4 > data.size())
+        std::uint32_t codeLen = 0;
+        if (!readLe32(input, codeLen))
             return false;
-        const std::uint32_t codeLen = readLe32(data, pos);
-        pos += 4;
 
         std::uint32_t expectedLen = static_cast<std::uint32_t>(rawName.length() + 1 + desc.length() + 1);
         expectedLen = ((expectedLen + 3u) >> 2) + 1u + codeLen;
+        const std::uint64_t codeBytes = static_cast<std::uint64_t>(codeLen) * 4u;
         if (expectedLen != totalLen ||
-            codeLen > 0x100000u ||
-            (codeLen & 1u) != 0 ||
-            pos + static_cast<std::size_t>(codeLen) * 4u > data.size())
+            codeLen > kMaxCodeWords)
             return false;
+
+        if ((codeLen & 1u) != 0)
+        {
+            if (!skipBytes(input, codeBytes, fileSize))
+                return false;
+            ++skippedInvalidCodes;
+            appendStubLog("GBAStationNDSStub: usrcheat skipped odd codeLen=%u item=%u name=%s",
+                          codeLen,
+                          i,
+                          name.c_str());
+            consumeParentSlot(categoryStack);
+            continue;
+        }
 
         NdsCheatItem item;
         item.type = NdsCheatItem::Type::Code;
@@ -159,11 +231,13 @@ bool parseItems(const std::vector<std::uint8_t>& data,
         item.parent = parent;
         item.depth = depth;
         item.enabled = enabled;
-        item.words.reserve(codeLen);
-        for (std::uint32_t word = 0; word < codeLen; ++word)
+        item.words.resize(codeLen);
+        if (codeBytes > 0)
         {
-            item.words.push_back(readLe32(data, pos));
-            pos += 4;
+            input.read(reinterpret_cast<char*>(item.words.data()),
+                       static_cast<std::streamsize>(codeBytes));
+            if (!input)
+                return false;
         }
         out.push_back(std::move(item));
         consumeParentSlot(categoryStack);
@@ -171,25 +245,26 @@ bool parseItems(const std::vector<std::uint8_t>& data,
     return true;
 }
 
-bool parseCheatsAtOffset(const std::vector<std::uint8_t>& data,
+bool parseCheatsAtOffset(std::ifstream& file,
+                         std::uint64_t fileSize,
                          const DatEntryInfo& info,
                          NdsCheatLoadResult& result)
 {
-    if (info.offset < 0x100 || info.offset >= data.size())
+    if (info.offset < kDatHeaderSize || info.offset >= fileSize || !seekTo(file, info.offset))
         return false;
 
-    std::size_t pos = info.offset;
-    result.gameName = readNtString(data, pos);
-    align4(pos);
-    if (pos + 36 > data.size())
+    if (!readNtString(file, result.gameName) || !align4(file, fileSize))
         return false;
 
-    const std::uint32_t flags = readLe32(data, pos);
-    pos += 36;
+    std::uint32_t flags = 0;
+    if (!readLe32(file, flags) || !skipBytes(file, 32, fileSize))
+        return false;
+
     const std::uint32_t itemCount = flags & 0x00FFFFFFu;
     result.items.clear();
     result.items.reserve(std::min<std::uint32_t>(itemCount, 1024u));
-    return parseItems(data, pos, itemCount, result.items);
+    result.skippedInvalidCodes = 0;
+    return parseItems(file, fileSize, itemCount, result.items, result.skippedInvalidCodes);
 }
 
 bool readRomIdentity(const std::string& romPath, std::uint32_t& gameCode, std::uint32_t& checksum)
@@ -202,10 +277,7 @@ bool readRomIdentity(const std::string& romPath, std::uint32_t& gameCode, std::u
     if (rom.gcount() != static_cast<std::streamsize>(header.size()))
         return false;
 
-    gameCode = static_cast<std::uint32_t>(header[12]) |
-               (static_cast<std::uint32_t>(header[13]) << 8) |
-               (static_cast<std::uint32_t>(header[14]) << 16) |
-               (static_cast<std::uint32_t>(header[15]) << 24);
+    gameCode = readLe32(header.data() + 12);
     checksum = ~CRC32(header.data(), static_cast<int>(header.size()));
     return true;
 }
@@ -214,11 +286,12 @@ bool readRomIdentity(const std::string& romPath, std::uint32_t& gameCode, std::u
 
 NdsCheatLoadResult LoadUsrCheatDatForRom(const std::string& romPath)
 {
+    const auto loadBegin = std::chrono::steady_clock::now();
     NdsCheatLoadResult result;
     result.sourcePath = findUsrCheatDat();
     if (result.sourcePath.empty())
     {
-        appendStubLog("GBAStationNDSStub: usrcheat.dat not found");
+        appendStubLog("GBAStationNDSStub: usrcheat.dat not found ms=%lld", elapsedMs(loadBegin));
         return result;
     }
     result.databaseFound = true;
@@ -227,38 +300,65 @@ NdsCheatLoadResult LoadUsrCheatDatForRom(const std::string& romPath)
     std::uint32_t checksum = 0;
     if (!readRomIdentity(romPath, gameCode, checksum))
     {
-        appendStubLog("GBAStationNDSStub: usrcheat rom identity failed rom=%s", romPath.c_str());
+        appendStubLog("GBAStationNDSStub: usrcheat rom identity failed rom=%s ms=%lld",
+                      romPath.c_str(),
+                      elapsedMs(loadBegin));
         return result;
     }
 
-    std::vector<std::uint8_t> data;
-    if (!readFile(result.sourcePath, data) || data.size() < 0x110 ||
-        std::memcmp(data.data(), "R4 CheatCode", 12) != 0)
+    std::ifstream file(result.sourcePath, std::ios::binary);
+    std::uint64_t fileSize = 0;
+    std::array<std::uint8_t, 16> header {};
+    if (!file ||
+        !getFileSize(file, fileSize) ||
+        fileSize < 0x110 ||
+        !seekTo(file, 0))
     {
-        appendStubLog("GBAStationNDSStub: usrcheat invalid path=%s", result.sourcePath.c_str());
+        appendStubLog("GBAStationNDSStub: usrcheat invalid path=%s ms=%lld",
+                      result.sourcePath.c_str(),
+                      elapsedMs(loadBegin));
         return result;
     }
-    const std::uint32_t version = readLe32(data, 12);
+    file.read(reinterpret_cast<char*>(header.data()), static_cast<std::streamsize>(header.size()));
+    if (!file || std::memcmp(header.data(), "R4 CheatCode", 12) != 0)
+    {
+        appendStubLog("GBAStationNDSStub: usrcheat invalid header path=%s ms=%lld",
+                      result.sourcePath.c_str(),
+                      elapsedMs(loadBegin));
+        return result;
+    }
+    const std::uint32_t version = readLe32(header.data() + 12);
+
+    if (!seekTo(file, kDatHeaderSize))
+        return result;
 
     std::vector<DatEntryInfo> matches;
-    for (std::size_t pos = 0x100; pos + 16 <= data.size(); pos += 16)
+    while (true)
     {
+        std::array<std::uint8_t, 16> entry {};
+        file.read(reinterpret_cast<char*>(entry.data()), static_cast<std::streamsize>(entry.size()));
+        if (!file)
+            break;
+
         DatEntryInfo info;
-        info.gameCode = readLe32(data, pos);
-        info.checksum = readLe32(data, pos + 4);
-        info.offset = readLe32(data, pos + 8);
+        info.gameCode = readLe32(entry.data());
+        info.checksum = readLe32(entry.data() + 4);
+        info.offset = readLe32(entry.data() + 8);
         if (info.gameCode == 0)
             break;
-        if (info.gameCode == gameCode)
+        if (info.gameCode == gameCode &&
+            info.offset >= kDatHeaderSize &&
+            info.offset < fileSize)
             matches.push_back(info);
     }
 
     if (matches.empty())
     {
-        appendStubLog("GBAStationNDSStub: usrcheat no game match gameCode=%08X checksum=%08X path=%s",
+        appendStubLog("GBAStationNDSStub: usrcheat no game match gameCode=%08X checksum=%08X path=%s ms=%lld",
                       gameCode,
                       checksum,
-                      result.sourcePath.c_str());
+                      result.sourcePath.c_str(),
+                      elapsedMs(loadBegin));
         return result;
     }
 
@@ -281,11 +381,12 @@ NdsCheatLoadResult LoadUsrCheatDatForRom(const std::string& romPath)
     for (const DatEntryInfo* candidate : candidates)
     {
         NdsCheatLoadResult parsed;
-        if (parseCheatsAtOffset(data, *candidate, parsed))
+        if (parseCheatsAtOffset(file, fileSize, *candidate, parsed))
         {
             selected = candidate;
             result.gameName = std::move(parsed.gameName);
             result.items = std::move(parsed.items);
+            result.skippedInvalidCodes = parsed.skippedInvalidCodes;
             result.gameMatched = true;
             break;
         }
@@ -299,7 +400,7 @@ NdsCheatLoadResult LoadUsrCheatDatForRom(const std::string& romPath)
     if (!result.gameMatched)
         result.items.clear();
 
-    appendStubLog("GBAStationNDSStub: usrcheat load path=%s version=%08X gameCode=%08X checksum=%08X entryChecksum=%08X entryOffset=%08X matched=%d items=%d game=%s",
+    appendStubLog("GBAStationNDSStub: usrcheat load path=%s version=%08X gameCode=%08X checksum=%08X entryChecksum=%08X entryOffset=%08X matched=%d items=%d skipped=%d game=%s ms=%lld",
                   result.sourcePath.c_str(),
                   version,
                   gameCode,
@@ -308,7 +409,9 @@ NdsCheatLoadResult LoadUsrCheatDatForRom(const std::string& romPath)
                   selected->offset,
                   result.gameMatched ? 1 : 0,
                   static_cast<int>(result.items.size()),
-                  result.gameName.c_str());
+                  result.skippedInvalidCodes,
+                  result.gameName.c_str(),
+                  elapsedMs(loadBegin));
     return result;
 }
 

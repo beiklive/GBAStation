@@ -11,6 +11,7 @@ struct NdsCheatLoadResult {
     std::vector<NdsCheatItem> items;
     std::string sourcePath;
     std::string gameName;
+    int skippedInvalidCodes = 0;
     bool databaseFound = false;
     bool gameMatched = false;
 };

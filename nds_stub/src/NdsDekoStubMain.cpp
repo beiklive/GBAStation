@@ -62,28 +62,28 @@ void initializeStubLog()
 
 void appendStubLog(const char* format, ...)
 {
-#ifdef NDEBUG
-    (void)format;
-#else
-    if (!format)
-        return;
+// #ifdef NDEBUG
+//     (void)format;
+// #else
+//     if (!format)
+//         return;
 
-    char line[1024] = {};
-    va_list args;
-    va_start(args, format);
-    std::vsnprintf(line, sizeof(line), format, args);
-    va_end(args);
+//     char line[1024] = {};
+//     va_list args;
+//     va_start(args, format);
+//     std::vsnprintf(line, sizeof(line), format, args);
+//     va_end(args);
 
-    std::lock_guard<std::mutex> lock(g_stubLogMutex);
-    if (FILE* fp = openStubLog("ab"))
-    {
-        std::fprintf(fp, "%06llu %s\n",
-                     static_cast<unsigned long long>(++g_stubLogSequence),
-                     line);
-        std::fflush(fp);
-        std::fclose(fp);
-    }
-#endif
+//     std::lock_guard<std::mutex> lock(g_stubLogMutex);
+//     if (FILE* fp = openStubLog("ab"))
+//     {
+//         std::fprintf(fp, "%06llu %s\n",
+//                      static_cast<unsigned long long>(++g_stubLogSequence),
+//                      line);
+//         std::fflush(fp);
+//         std::fclose(fp);
+//     }
+// #endif
 }
 
 } // namespace beiklive::nds_stub
