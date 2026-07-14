@@ -39,6 +39,12 @@ namespace beiklive
         void releaseSelectedCoverTexture();
         void playEntranceAnimation();
         void playExitAnimation(std::function<void()> completion = {});
+        void playPico8ExitAnimation(std::function<void()> completion = {});
+        void beginPico8ReturnAnimation();
+        void setPico8ReturnProgress(float progress);
+        void finishPico8ReturnAnimation();
+
+        std::function<void()> onPico8Opened;
 
         void frame(brls::FrameContext* ctx) override;
         void draw(NVGcontext* vg, float x, float y, float w, float h,
@@ -114,6 +120,14 @@ namespace beiklive
         bool m_exitAnimationRunning = false;
         bool m_exitCompletionArmed = false;
         std::function<void()> m_exitCompletion;
+        bool m_pico8ExitAnimationRunning = false;
+        bool m_pico8ReturnAnimationRunning = false;
+        float m_pico8TransitionProgress = 0.f;
+        bool m_pico8HoldActive = false;
+        bool m_pico8ReleaseAnimating = false;
+        bool m_prevPico8Button = false;
+        float m_pico8ShortcutScale = 1.f;
+        float m_pico8ReleaseTime = 0.f;
         bool m_fastScroll = false;
         bool m_functionClickAnimating = false;
         int m_functionClickIndex = -1;
@@ -135,6 +149,7 @@ namespace beiklive
         int m_fontId = -1;
         int m_materialFontId = -1;
         int m_switchIconFontId = -1;
+        int m_pico8LogoImageHandle = 0;
         std::chrono::steady_clock::time_point m_lastFrameTime;
 
         std::shared_ptr<TextureLoaderState> m_textureLoader;
@@ -159,6 +174,7 @@ namespace beiklive
 
         void _captureInputState();
         void _updateStatusIndicators(float dt);
+        void _updatePico8ShortcutInput(float dt);
         void _handleInput(float dt);
         void _moveHorizontal(int direction);
         void _moveVertical(int direction);
@@ -183,6 +199,8 @@ namespace beiklive
                         float x, float y, float w, float h, float alpha);
         void _drawFunctions(NVGcontext* vg, float x, float y, float w, float h);
         void _drawFooterHint(NVGcontext* vg, float x, float y, float w, float h);
+        void _drawPico8Shortcut(NVGcontext* vg, float x, float y,
+                                float w, float h);
         void _drawMaterialIcon(NVGcontext* vg, char32_t icon,
                                float x, float y, float size, NVGcolor color);
     };

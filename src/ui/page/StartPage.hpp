@@ -10,6 +10,7 @@
 #include "ui/page/SettingPage.hpp"
 #include "ui/page/AboutPage.hpp"
 #include "ui/page/GameLibraryPage.hpp"
+#include "ui/page/Pico8Page.hpp"
 #include "ui/page/DataManagementPage.hpp"
 #include "ui/widget/Box.hpp"
 #include "ui/view/GameOptionsSidebar.hpp"
@@ -34,6 +35,7 @@ namespace beiklive
         void _openSettings();
         void _openAbout();
         void _openDataManagement();
+        void _openPico8Page();
         void _applyRuntimeUiSettings();
         void _requestRecentGamesRefresh(bool defer);
         bool _pushGameActivity(const beiklive::GameEntry& entry,

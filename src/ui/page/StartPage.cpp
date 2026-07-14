@@ -383,6 +383,11 @@ namespace beiklive
             brls::Logger::info("About opened");
             _openAbout();
         };
+        switchLayout->onPico8Opened = [this]()
+        {
+            brls::Logger::info("PICO-8 shortcut opened");
+            _openPico8Page();
+        };
         switchLayout->onExitRequested = [this]()
         {
             brls::Logger::info("Exit requested");
@@ -396,6 +401,16 @@ namespace beiklive
         };
         this->getContentBox()->addView(switchLayout);
         _requestRecentGamesRefresh(true);
+    }
+
+    void StartPage::_openPico8Page()
+    {
+        if (!switchLayout)
+            return;
+        auto* pico8Page = new beiklive::Pico8Page(switchLayout);
+        brls::Application::pushActivity(
+            new brls::Activity(pico8Page),
+            brls::TransitionAnimation::NONE);
     }
 
     void StartPage::_openGameLibrary()

@@ -4,6 +4,7 @@
 #include "core/Tools.hpp"
 #include "ui/utils/GradientFocus.hpp"
 #include "ui/utils/MaterialIcons.hpp"
+#include "ui/utils/Pico8Transition.hpp"
 
 #include <borealis/extern/nanovg/stb_image.h>
 #include <borealis/views/hint.hpp>
@@ -154,6 +155,8 @@ namespace beiklive
         registerAction("", brls::BUTTON_DOWN, consume, true, true, brls::SOUND_NONE);
         registerAction("", brls::BUTTON_LEFT, consume, true, true, brls::SOUND_NONE);
         registerAction("", brls::BUTTON_RIGHT, consume, true, true, brls::SOUND_NONE);
+        registerAction("", brls::BUTTON_LB, consume,
+                       true, false, brls::SOUND_NONE);
         _captureInputState();
     }
 
@@ -170,6 +173,8 @@ namespace beiklive
                 if (function.imageHandle > 0)
                     nvgDeleteImage(vg, function.imageHandle);
             }
+            if (m_pico8LogoImageHandle > 0)
+                nvgDeleteImage(vg, m_pico8LogoImageHandle);
         }
         m_textureCache.clear();
     }
@@ -387,6 +392,13 @@ namespace beiklive
         m_exitAnimationRunning = false;
         m_exitCompletionArmed = false;
         m_exitCompletion = nullptr;
+        m_pico8ExitAnimationRunning = false;
+        m_pico8ReturnAnimationRunning = false;
+        m_pico8TransitionProgress = 0.f;
+        m_pico8HoldActive = false;
+        m_pico8ReleaseAnimating = false;
+        m_pico8ShortcutScale = 1.f;
+        m_pico8ReleaseTime = 0.f;
         m_pageEntrance = 0.f;
         m_contentEntrance = 0.f;
         _captureInputState();
@@ -401,8 +413,69 @@ namespace beiklive
             return;
         }
         m_exitAnimationRunning = true;
+        m_pico8ExitAnimationRunning = false;
+        m_pico8ReturnAnimationRunning = false;
+        m_pico8TransitionProgress = 0.f;
+        m_pico8HoldActive = false;
+        m_pico8ReleaseAnimating = false;
+        m_pico8ShortcutScale = 1.f;
+        m_pico8ReleaseTime = 0.f;
         m_exitCompletionArmed = false;
         m_exitCompletion = std::move(completion);
+        _captureInputState();
+        invalidate();
+    }
+
+    void SwitchLayout::playPico8ExitAnimation(
+        std::function<void()> completion)
+    {
+        if (m_exitAnimationRunning) {
+            if (completion)
+                m_exitCompletion = std::move(completion);
+            return;
+        }
+        m_exitAnimationRunning = true;
+        m_pico8ExitAnimationRunning = true;
+        m_pico8ReturnAnimationRunning = false;
+        m_pico8TransitionProgress = 0.f;
+        m_pico8HoldActive = false;
+        m_pico8ReleaseAnimating = false;
+        m_pico8ShortcutScale = 1.f;
+        m_pico8ReleaseTime = 0.f;
+        m_exitCompletionArmed = false;
+        m_exitCompletion = std::move(completion);
+        _captureInputState();
+        invalidate();
+    }
+
+    void SwitchLayout::beginPico8ReturnAnimation()
+    {
+        m_exitAnimationRunning = false;
+        m_pico8ExitAnimationRunning = false;
+        m_pico8ReturnAnimationRunning = true;
+        m_pico8TransitionProgress = 1.f;
+        m_exitCompletionArmed = false;
+        m_exitCompletion = nullptr;
+        m_pageEntrance = 0.f;
+        m_contentEntrance = 0.f;
+        _captureInputState();
+        invalidate();
+    }
+
+    void SwitchLayout::setPico8ReturnProgress(float progress)
+    {
+        if (!m_pico8ReturnAnimationRunning)
+            return;
+        m_pico8TransitionProgress = 1.f - clamp01(progress);
+        invalidate();
+    }
+
+    void SwitchLayout::finishPico8ReturnAnimation()
+    {
+        m_pico8ReturnAnimationRunning = false;
+        m_pico8TransitionProgress = 0.f;
+        m_pageEntrance = 1.f;
+        m_contentEntrance = 1.f;
         _captureInputState();
         invalidate();
     }
@@ -420,7 +493,15 @@ namespace beiklive
         _updateStatusIndicators(dt);
         if (m_exitAnimationRunning) {
             m_pageEntrance = std::max(0.f, m_pageEntrance - dt * 4.8f);
-            if (m_pageEntrance <= 0.f && m_exitCompletion) {
+            if (m_pico8ExitAnimationRunning) {
+                m_pico8TransitionProgress = std::min(
+                    1.f, m_pico8TransitionProgress +
+                        dt / beiklive::pico8_transition::TRANSITION_DURATION);
+            }
+            const bool transitionFinished = m_pageEntrance <= 0.f &&
+                (!m_pico8ExitAnimationRunning ||
+                 m_pico8TransitionProgress >= 1.f);
+            if (transitionFinished && m_exitCompletion) {
                 if (!m_exitCompletionArmed) {
                     m_exitCompletionArmed = true;
                     invalidate();
@@ -528,6 +609,7 @@ namespace beiklive
             }
         }
 
+        _updatePico8ShortcutInput(dt);
         _handleInput(dt);
         _requestTexturesByPriority();
         invalidate();
@@ -547,6 +629,65 @@ namespace beiklive
         m_prevUp = state.buttons[static_cast<int>(brls::BUTTON_UP)] || navY < -0.5f;
         m_prevDown = state.buttons[static_cast<int>(brls::BUTTON_DOWN)] || navY > 0.5f;
         m_prevA = state.buttons[static_cast<int>(brls::BUTTON_A)];
+        m_prevPico8Button = state.buttons[static_cast<int>(brls::BUTTON_LB)];
+    }
+
+    void SwitchLayout::_updatePico8ShortcutInput(float dt)
+    {
+        auto& state = brls::Application::getControllerState();
+        const bool pressed =
+            state.buttons[static_cast<int>(brls::BUTTON_LB)];
+        const bool canInteract = isFocused() &&
+            !brls::Application::isInputBlocks() &&
+            !m_exitAnimationRunning &&
+            !m_pico8ReturnAnimationRunning &&
+            !m_functionClickAnimating &&
+            !isDeleteAnimationRunning() &&
+            m_pageEntrance >= 0.999f;
+
+        if (!canInteract) {
+            m_pico8HoldActive = false;
+            m_pico8ReleaseAnimating = false;
+            m_pico8ReleaseTime = 0.f;
+            m_pico8ShortcutScale += (1.f - m_pico8ShortcutScale) *
+                std::min(1.f, dt * 20.f);
+            m_prevPico8Button = pressed;
+            return;
+        }
+
+        if (pressed && !m_prevPico8Button) {
+            m_pico8ReleaseAnimating = false;
+            m_pico8HoldActive = true;
+            m_pico8ReleaseTime = 0.f;
+        }
+
+        if (!pressed && m_prevPico8Button && m_pico8HoldActive) {
+            m_pico8HoldActive = false;
+            m_pico8ReleaseAnimating = true;
+            m_pico8ReleaseTime = 0.f;
+        }
+
+        const float targetScale = m_pico8HoldActive ? 1.065f : 1.f;
+        const float scaleSpeed = m_pico8HoldActive ? 13.f : 24.f;
+        m_pico8ShortcutScale += (targetScale - m_pico8ShortcutScale) *
+            std::min(1.f, dt * scaleSpeed);
+
+        if (m_pico8ReleaseAnimating) {
+            m_pico8ReleaseTime += dt;
+            if (m_pico8ReleaseTime >= 0.13f &&
+                std::abs(m_pico8ShortcutScale - 1.f) < 0.004f) {
+                m_pico8ReleaseAnimating = false;
+                m_pico8ReleaseTime = 0.f;
+                m_pico8ShortcutScale = 1.f;
+                brls::Application::getAudioPlayer()->play(brls::SOUND_CLICK);
+                playPico8ExitAnimation([this]() {
+                    if (onPico8Opened)
+                        onPico8Opened();
+                });
+            }
+        }
+
+        m_prevPico8Button = pressed;
     }
 
     void SwitchLayout::_updateStatusIndicators(float dt)
@@ -597,7 +738,9 @@ namespace beiklive
         const bool a = state.buttons[static_cast<int>(brls::BUTTON_A)];
 
         if (!isFocused() || brls::Application::isInputBlocks() ||
-            m_exitAnimationRunning || m_functionClickAnimating ||
+            m_exitAnimationRunning || m_pico8ReturnAnimationRunning ||
+            m_pico8HoldActive || m_pico8ReleaseAnimating ||
+            m_functionClickAnimating ||
             m_deleteWaiting || m_deleteCollapsing || m_reflowRunning) {
             m_holdLeft = m_holdRight = 0.f;
             m_repeatLeft = m_repeatRight = 0.f;
@@ -746,6 +889,7 @@ namespace beiklive
         _drawFunctions(vg, x, y, w, h);
         _drawFooterHint(vg, x, y, w, h);
         nvgResetScissor(vg);
+        _drawPico8Shortcut(vg, x, y, w, h);
         nvgRestore(vg);
     }
 
@@ -1234,6 +1378,121 @@ namespace beiklive
         nvgText(vg, x + networkIconX + networkIconSize * 0.5f +
                     networkClockGap,
                 cy, m_clockText.c_str(), nullptr);
+    }
+
+    void SwitchLayout::_drawPico8Shortcut(NVGcontext* vg, float x, float y,
+                                          float w, float h)
+    {
+        if (m_pico8LogoImageHandle == 0)
+            m_pico8LogoImageHandle = nvgCreateImage(
+                vg, BK_RES("img/pico8_logo_vector.png").c_str(), 0);
+
+        const auto geometry = beiklive::pico8_transition::geometry(
+            0.f, 0.f, brls::Application::contentWidth,
+            brls::Application::contentHeight);
+        const float pageEased = m_exitAnimationRunning
+            ? smoothStep(m_pageEntrance)
+            : easeOutBack(m_pageEntrance);
+        float shortcutX = geometry.shortcutX +
+            (pageEased - 1.f) *
+                (geometry.shortcutWidth + 16.f);
+        float frameAlpha = easeOutCubic(m_pageEntrance);
+        auto logoPose = beiklive::pico8_transition::logoPose(geometry, 0.f);
+        logoPose.x = shortcutX +
+            beiklive::pico8_transition::SHORTCUT_LOGO_X;
+
+        if (m_pico8ExitAnimationRunning || m_pico8ReturnAnimationRunning) {
+            const float transition = m_pico8TransitionProgress;
+            shortcutX = geometry.shortcutX;
+            frameAlpha = 1.f - smoothStep(clamp01(
+                m_pico8TransitionProgress / 0.58f));
+            logoPose = beiklive::pico8_transition::logoPose(
+                geometry, transition);
+        }
+
+        const float interactionScale =
+            (m_pico8ExitAnimationRunning || m_pico8ReturnAnimationRunning)
+                ? 1.f
+                : m_pico8ShortcutScale;
+        nvgSave(vg);
+        if (std::abs(interactionScale - 1.f) > 0.0001f) {
+            nvgTranslate(vg, shortcutX, geometry.keyCenterY);
+            nvgScale(vg, interactionScale, interactionScale);
+            nvgTranslate(vg, -shortcutX, -geometry.keyCenterY);
+        }
+
+        if (frameAlpha > 0.001f) {
+            nvgSave(vg);
+            nvgGlobalAlpha(vg, frameAlpha);
+            const float radius = geometry.shortcutHeight * 0.5f;
+            const NVGpaint shadow = nvgBoxGradient(
+                vg, shortcutX + 4.f, geometry.shortcutY + 5.f,
+                geometry.shortcutWidth, geometry.shortcutHeight,
+                radius, 5.f, nvgRGBA(0, 0, 0, 88),
+                nvgRGBA(0, 0, 0, 0));
+            nvgBeginPath(vg);
+            nvgRect(vg, shortcutX - 1.f, geometry.shortcutY,
+                    geometry.shortcutWidth + 10.f,
+                    geometry.shortcutHeight + 11.f);
+            nvgRoundedRectVarying(
+                vg, shortcutX, geometry.shortcutY,
+                geometry.shortcutWidth, geometry.shortcutHeight,
+                0.f, radius, radius, 0.f);
+            nvgPathWinding(vg, NVG_HOLE);
+            nvgFillPaint(vg, shadow);
+            nvgFill(vg);
+
+            nvgBeginPath(vg);
+            nvgRoundedRectVarying(
+                vg, shortcutX, geometry.shortcutY,
+                geometry.shortcutWidth, geometry.shortcutHeight,
+                0.f, radius, radius, 0.f);
+            nvgFillColor(vg, nvgRGBA(255, 255, 255, 12));
+            nvgFill(vg);
+
+            constexpr float strokeWidth = 1.f;
+            constexpr float inset = strokeWidth * 0.5f;
+            nvgBeginPath(vg);
+            nvgRoundedRectVarying(
+                vg, shortcutX + inset, geometry.shortcutY + inset,
+                geometry.shortcutWidth - strokeWidth,
+                geometry.shortcutHeight - strokeWidth,
+                0.f, radius - inset, radius - inset, 0.f);
+            nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 62));
+            nvgStrokeWidth(vg, strokeWidth);
+            nvgStroke(vg);
+
+            const std::string glyph = brls::Hint::getKeyIcon(brls::BUTTON_LB);
+            nvgFontFaceId(vg, m_switchIconFontId);
+            nvgFontSize(vg, 30.f);
+            nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+            nvgFillColor(vg, nvgRGBA(255, 255, 255, 245));
+            nvgText(vg, shortcutX +
+                        beiklive::pico8_transition::SHORTCUT_L_CENTER_X,
+                    geometry.keyCenterY, glyph.c_str(), nullptr);
+            nvgRestore(vg);
+        }
+
+        const bool pageOwnsReturningLogo = m_pico8ReturnAnimationRunning;
+        if (!pageOwnsReturningLogo && m_pico8LogoImageHandle > 0) {
+            const float centerX = logoPose.x + logoPose.width * 0.5f;
+            const float centerY = logoPose.y + logoPose.height * 0.5f;
+            nvgSave(vg);
+            nvgTranslate(vg, centerX, centerY);
+            nvgRotate(vg, logoPose.rotation);
+            nvgTranslate(vg, -centerX, -centerY);
+            nvgBeginPath(vg);
+            nvgRect(vg, logoPose.x, logoPose.y,
+                    logoPose.width, logoPose.height);
+            const NVGpaint logoPaint = nvgImagePattern(
+                vg, logoPose.x, logoPose.y,
+                logoPose.width, logoPose.height, 0.f,
+                m_pico8LogoImageHandle, 1.f);
+            nvgFillPaint(vg, logoPaint);
+            nvgFill(vg);
+            nvgRestore(vg);
+        }
+        nvgRestore(vg);
     }
 
     void SwitchLayout::_drawMaterialIcon(NVGcontext* vg, char32_t icon,
