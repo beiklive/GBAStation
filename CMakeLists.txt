@@ -67,6 +67,80 @@ endif ()
 
 add_subdirectory(third_party)
 
+# FAKE-08 is embedded as a runtime-only static library. Platform hosts,
+# SDL frontends, libretro glue and the upstream main() are intentionally
+# excluded; BeikLiveStation provides its host implementation in core/pico8.
+set(FAKE08_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/fake-08-master)
+# The source archive did not contain submodule contents. libs/z8lua is the
+# upstream-pinned commit e6928578d46b61fd5ea30cfcf547e855a30a0553.
+set(FAKE08_RUNTIME_SOURCES
+    ${FAKE08_DIR}/source/Audio.cpp
+    ${FAKE08_DIR}/source/cart.cpp
+    ${FAKE08_DIR}/source/emojiconversion.cpp
+    ${FAKE08_DIR}/source/filehelpers.cpp
+    ${FAKE08_DIR}/source/filter.cpp
+    ${FAKE08_DIR}/source/fontdata.cpp
+    ${FAKE08_DIR}/source/graphics.cpp
+    ${FAKE08_DIR}/source/Input.cpp
+    ${FAKE08_DIR}/source/logger.cpp
+    ${FAKE08_DIR}/source/mathhelpers.cpp
+    ${FAKE08_DIR}/source/nibblehelpers.cpp
+    ${FAKE08_DIR}/source/picoluaapi.cpp
+    ${FAKE08_DIR}/source/printHelper.cpp
+    ${FAKE08_DIR}/source/stringToDataHelpers.cpp
+    ${FAKE08_DIR}/source/synth.cpp
+    ${FAKE08_DIR}/source/vm.cpp
+    ${FAKE08_DIR}/libs/lodepng/lodepng.cpp
+)
+set(FAKE08_LUA_SOURCES
+    ${FAKE08_DIR}/libs/z8lua/lapi.c
+    ${FAKE08_DIR}/libs/z8lua/lauxlib.c
+    ${FAKE08_DIR}/libs/z8lua/lbaselib.c
+    ${FAKE08_DIR}/libs/z8lua/lcode.c
+    ${FAKE08_DIR}/libs/z8lua/lcorolib.c
+    ${FAKE08_DIR}/libs/z8lua/lctype.c
+    ${FAKE08_DIR}/libs/z8lua/ldblib.c
+    ${FAKE08_DIR}/libs/z8lua/ldebug.c
+    ${FAKE08_DIR}/libs/z8lua/ldo.c
+    ${FAKE08_DIR}/libs/z8lua/ldump.c
+    ${FAKE08_DIR}/libs/z8lua/eris.c
+    ${FAKE08_DIR}/libs/z8lua/lfunc.c
+    ${FAKE08_DIR}/libs/z8lua/lgc.c
+    ${FAKE08_DIR}/libs/z8lua/linit.c
+    ${FAKE08_DIR}/libs/z8lua/llex.c
+    ${FAKE08_DIR}/libs/z8lua/lmem.c
+    ${FAKE08_DIR}/libs/z8lua/lobject.c
+    ${FAKE08_DIR}/libs/z8lua/lopcodes.c
+    ${FAKE08_DIR}/libs/z8lua/lparser.c
+    ${FAKE08_DIR}/libs/z8lua/lpico8lib.c
+    ${FAKE08_DIR}/libs/z8lua/lstate.c
+    ${FAKE08_DIR}/libs/z8lua/lstring.c
+    ${FAKE08_DIR}/libs/z8lua/lstrlib.c
+    ${FAKE08_DIR}/libs/z8lua/ltable.c
+    ${FAKE08_DIR}/libs/z8lua/ltablib.c
+    ${FAKE08_DIR}/libs/z8lua/ltm.c
+    ${FAKE08_DIR}/libs/z8lua/lundump.c
+    ${FAKE08_DIR}/libs/z8lua/lvm.c
+    ${FAKE08_DIR}/libs/z8lua/lzio.c
+)
+set_source_files_properties(${FAKE08_LUA_SOURCES} PROPERTIES LANGUAGE CXX)
+add_library(fake08_runtime STATIC
+    ${FAKE08_RUNTIME_SOURCES}
+    ${FAKE08_LUA_SOURCES}
+)
+target_include_directories(fake08_runtime PUBLIC
+    ${FAKE08_DIR}/source
+    ${FAKE08_DIR}/libs/z8lua
+    ${FAKE08_DIR}/libs/lodepng
+    ${FAKE08_DIR}/libs/simpleini
+    ${FAKE08_DIR}/libs/miniz
+)
+target_compile_definitions(fake08_runtime PUBLIC
+    LOAD_PACK_INS=0
+    VER_STR="v0.0.2.20"
+)
+set_target_properties(fake08_runtime PROPERTIES CXX_STANDARD 17)
+
 # mGBA: 目标创建后再补充编译宏（Switch/newlib + POSIX/GNU 扩展）
 if (TARGET mgba AND NOT WIN32)
     target_compile_definitions(mgba PRIVATE
@@ -173,6 +247,7 @@ program_target(${PROJECT_NAME} "${MAIN_SRC}")
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17)
 target_compile_definitions(${PROJECT_NAME} PRIVATE APP_VERSION="${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_ALTER}")
 target_compile_definitions(${PROJECT_NAME} PRIVATE COLOR_16_BIT COLOR_5_6_5)
+target_link_libraries(${PROJECT_NAME} PRIVATE fake08_runtime)
 if (PLATFORM_SWITCH)
     add_subdirectory(src/core/forwarder/hbl forwarder_hbl)
     add_dependencies(${PROJECT_NAME} gbastation_forwarder_hbl_exefs)

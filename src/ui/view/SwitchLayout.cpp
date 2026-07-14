@@ -444,6 +444,7 @@ namespace beiklive
         m_pico8ReleaseTime = 0.f;
         m_exitCompletionArmed = false;
         m_exitCompletion = std::move(completion);
+        brls::Application::blockInputs();
         _captureInputState();
         invalidate();
     }
@@ -683,6 +684,8 @@ namespace beiklive
                 playPico8ExitAnimation([this]() {
                     if (onPico8Opened)
                         onPico8Opened();
+                    else
+                        brls::Application::unblockInputs();
                 });
             }
         }

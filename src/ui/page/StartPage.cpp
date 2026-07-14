@@ -405,12 +405,15 @@ namespace beiklive
 
     void StartPage::_openPico8Page()
     {
-        if (!switchLayout)
+        if (!switchLayout) {
+            brls::Application::unblockInputs();
             return;
+        }
         auto* pico8Page = new beiklive::Pico8Page(switchLayout);
         brls::Application::pushActivity(
             new brls::Activity(pico8Page),
             brls::TransitionAnimation::NONE);
+        brls::Application::unblockInputs();
     }
 
     void StartPage::_openGameLibrary()
