@@ -365,8 +365,8 @@ namespace beiklive
         contentBox->setFocusable(false);
         contentBox->setPositionType(brls::PositionType::RELATIVE);
         contentBox->setGrow(1.0f);
-        contentBox->setMarginRight(GET_STYLE("brls/applet_frame/padding_sides"));
-        contentBox->setMarginLeft(GET_STYLE("brls/applet_frame/padding_sides"));
+        // contentBox->setMarginRight(GET_STYLE("brls/applet_frame/padding_sides"));
+        // contentBox->setMarginLeft(GET_STYLE("brls/applet_frame/padding_sides"));
         // contentBox->setPaddingRight(GET_STYLE("brls/applet_frame/header_padding_sides"));
         // contentBox->setPaddingLeft(GET_STYLE("brls/applet_frame/header_padding_sides"));
 

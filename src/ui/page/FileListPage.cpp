@@ -80,9 +80,10 @@ namespace beiklive
         leftPanel->setPadding(4.f, 10.f, 4.f, 0.f);
         leftPanel->setShrink(1.f);
 
-        auto* listCard = new FilePanelSurface(brls::Axis::COLUMN);
+        auto* listCard = new brls::Box(brls::Axis::COLUMN);
         listCard->setGrow(1.f);
         listCard->setClipsToBounds(true);
+        listCard->setBackground(brls::ViewBackground::NONE);
 
         fileListView = new beiklive::FileListView();
         fileListView->setGrow(1.f);
@@ -148,10 +149,7 @@ namespace beiklive
                 }
                 if (m_isAtDriveList || m_currentPath.empty()
                     || fs::path(m_currentPath).parent_path().string() == m_currentPath) {
-                    if (onRequestClose)
-                        onRequestClose();
-                    else
-                        brls::Application::popActivity(brls::TransitionAnimation::NONE);
+                    requestClose();
                     return true;
                 }
                 navigateUp();
@@ -730,13 +728,40 @@ namespace beiklive
         m_lastFrameTime = now;
         if (dt <= 0.f || dt > 0.25f) dt = 0.016f;
         m_animTime += dt;
-        m_pageEntrance = std::min(1.f, m_pageEntrance + dt * 3.f);
+        if (m_closing)
+        {
+            m_pageEntrance = std::max(0.f, m_pageEntrance - dt * 4.8f);
+            if (m_pageEntrance <= 0.f && !m_closeQueued)
+            {
+                m_closeQueued = true;
+                const auto close = onRequestClose;
+                brls::sync([close]() {
+                    if (close)
+                        close();
+                    else
+                        brls::Application::popActivity(brls::TransitionAnimation::FADE);
+                });
+            }
+        }
+        else
+        {
+            m_pageEntrance = std::min(1.f, m_pageEntrance + dt * 3.8f);
+        }
         const float eased = 1.f - std::pow(1.f - m_pageEntrance, 3.f);
         if (auto* content = getContentBox())
         {
             content->setAlpha(std::max(0.f, std::min(1.f, m_pageEntrance)));
             content->setTranslationY((1.f - eased) * 24.f);
         }
+        invalidate();
+    }
+
+    void FileListPage::requestClose()
+    {
+        if (m_closing)
+            return;
+        m_closing = true;
+        fileListView->setInteractionDisabled(true);
         invalidate();
     }
 

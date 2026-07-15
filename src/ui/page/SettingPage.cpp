@@ -4,6 +4,7 @@
 #include "ui/utils/UiHelper.hpp"
 #include "ui/utils/AnimationHelper.hpp"
 #include "ui/utils/GradientFocus.hpp"
+#include "ui/utils/MaterialIcons.hpp"
 
 #include <borealis/views/cells/cell_bool.hpp>
 #include <borealis/views/cells/cell_selector.hpp>
@@ -19,11 +20,17 @@
 #include "game/control/InputMappingDefaults.hpp"
 
 #include <chrono>
+#include <array>
+#include <algorithm>
+#include <cctype>
 #include <cmath>
+#include <cstdio>
 #include <filesystem>
+#include <functional>
 #include <sstream>
 #include <iomanip>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace beiklive
@@ -240,6 +247,25 @@ static const CapKbdKey k_capKbdKeys[] = {
 static constexpr int k_capKbdKeyCount =
     static_cast<int>(sizeof(k_capKbdKeys) / sizeof(k_capKbdKeys[0]));
 
+static std::string captureUtf8(char32_t codepoint)
+{
+    std::string result;
+    if (codepoint <= 0x7f)
+        result.push_back(static_cast<char>(codepoint));
+    else if (codepoint <= 0x7ff)
+    {
+        result.push_back(static_cast<char>(0xc0 | (codepoint >> 6)));
+        result.push_back(static_cast<char>(0x80 | (codepoint & 0x3f)));
+    }
+    else
+    {
+        result.push_back(static_cast<char>(0xe0 | (codepoint >> 12)));
+        result.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3f)));
+        result.push_back(static_cast<char>(0x80 | (codepoint & 0x3f)));
+    }
+    return result;
+}
+
 class KeyCaptureView : public beiklive::Box
 {
 public:
@@ -353,8 +379,11 @@ public:
         card->addView(m_hintLabel);
 
         this->getContentBox()->addView(card);
+        card->setVisibility(brls::Visibility::GONE);
 
         m_startTime = std::chrono::steady_clock::now();
+        m_visualStartTime = m_startTime;
+        m_lastVisualFrame = m_startTime;
 
         // 消费所有手柄导航键，防止触发父视图操作或提前关闭页面
         static const brls::ControllerButton k_swallowBtns[] = {
@@ -408,12 +437,18 @@ public:
             {
                 checkAllReleased();
                 m_startTime = std::chrono::steady_clock::now();
+                m_visualPrompt = "松开所有已按下的按键";
+                m_visualHint = "松开后开始捕获，最多可同时绑定 2 个按键";
+                m_barProgress = 1.f;
+                m_barColor = nvgRGB(255, 183, 77);
                 m_promptLabel->setText("松开所有已按下的按键...");
                 m_promptLabel->setTextColor(nvgRGB(255, 183, 77));
                 m_hintLabel->setVisibility(brls::Visibility::VISIBLE);
             }
             else
             {
+                m_visualPrompt = "按下要绑定的按键";
+                m_visualHint = "支持手柄、摇杆方向、键盘和双键组合";
                 m_promptLabel->setText("按下要绑定的按键...");
                 m_promptLabel->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
                 m_hintLabel->setVisibility(brls::Visibility::GONE);
@@ -437,18 +472,29 @@ public:
 
                     // 更新进度条宽度
                     float barProgress = remaining / m_countdownSeconds;
+                    m_barProgress = std::max(0.f, std::min(1.f, barProgress));
                     float barWidth = 240.f * barProgress;
                     m_progressBar->setWidth(barWidth);
                     if (barProgress < 0.3f)
+                    {
+                        m_barColor = nvgRGB(255, 82, 82);
                         m_progressBar->setColor(nvgRGB(255, 82, 82));  // 红色警告
+                    }
                     else if (barProgress < 0.6f)
+                    {
+                        m_barColor = nvgRGB(255, 183, 77);
                         m_progressBar->setColor(nvgRGB(255, 183, 77)); // 橙色
+                    }
                     else
+                    {
+                        m_barColor = nvgRGB(79, 193, 255);
                         m_progressBar->setColor(nvgRGB(79, 193, 255)); // 蓝色
+                    }
                 }
             }
         }
         brls::Box::draw(vg, x, y, w, h, style, ctx);
+        _drawCaptureOverlay(vg, x, y, w, h);
         if (!m_done)
             invalidate();
     }
@@ -462,10 +508,19 @@ private:
     brls::Label *m_hintLabel      = nullptr;
     brls::Rectangle *m_progressBar = nullptr;
     std::chrono::steady_clock::time_point m_startTime;
+    std::chrono::steady_clock::time_point m_visualStartTime;
+    std::chrono::steady_clock::time_point m_lastVisualFrame;
     bool m_done              = false;
     bool m_waitingForRelease = true;
     std::vector<std::string> m_capturedKeys;
     std::string m_captured;
+    std::string m_visualPrompt = "松开所有已按下的按键";
+    std::string m_visualHint = "松开后开始捕获，最多可同时绑定 2 个按键";
+    float m_barProgress = 1.f;
+    float m_keyPulse = 0.f;
+    NVGcolor m_barColor = nvgRGB(79, 193, 255);
+    int m_captureFont = -1;
+    int m_captureSwitchFont = -1;
 
     void captureGamepadButton(brls::ControllerButton btn)
     {
@@ -483,6 +538,7 @@ private:
 
         m_capturedKeys.push_back(name);
         m_captured = buildCombo(m_capturedKeys);
+        m_keyPulse = 1.f;
         m_keyLabel->setText(m_captured);
         // 捕获到第一个按键后重置倒计时
         m_startTime = std::chrono::steady_clock::now();
@@ -503,6 +559,7 @@ private:
 
         m_capturedKeys.push_back(name);
         m_captured = buildCombo(m_capturedKeys);
+        m_keyPulse = 1.f;
         m_keyLabel->setText(m_captured);
         m_startTime = std::chrono::steady_clock::now();
     }
@@ -541,6 +598,7 @@ private:
             return;
         m_capturedKeys.push_back(name);
         m_captured = buildCombo(m_capturedKeys);
+        m_keyPulse = 1.f;
         m_keyLabel->setText(m_captured);
         m_startTime = std::chrono::steady_clock::now();
     }
@@ -578,6 +636,207 @@ private:
             result += k;
         }
         return result;
+    }
+
+    struct CaptureVisual
+    {
+        std::string glyph;
+        std::string suffix;
+        bool switchGlyph = false;
+    };
+
+    CaptureVisual captureVisualFor(const std::string& token) const
+    {
+        for (int i = 0; i < k_capPadKeyCount; ++i)
+        {
+            if (token != k_capPadKeys[i].name)
+                continue;
+            if (token == "PAD_LT") return {captureUtf8(0xE0A6), "", true};
+            if (token == "PAD_RT") return {captureUtf8(0xE0A7), "", true};
+            return {brls::Hint::getKeyIcon(k_capPadKeys[i].btn), "", true};
+        }
+        if (token == "PAD_LEFTSTICKUP") return {captureUtf8(0xE0C1), "↑", true};
+        if (token == "PAD_LEFTSTICKDOWN") return {captureUtf8(0xE0C1), "↓", true};
+        if (token == "PAD_LEFTSTICKLEFT") return {captureUtf8(0xE0C1), "←", true};
+        if (token == "PAD_LEFTSTICKRIGHT") return {captureUtf8(0xE0C1), "→", true};
+        if (token == "PAD_RIGHTSTICKUP") return {captureUtf8(0xE0C2), "↑", true};
+        if (token == "PAD_RIGHTSTICKDOWN") return {captureUtf8(0xE0C2), "↓", true};
+        if (token == "PAD_RIGHTSTICKLEFT") return {captureUtf8(0xE0C2), "←", true};
+        if (token == "PAD_RIGHTSTICKRIGHT") return {captureUtf8(0xE0C2), "→", true};
+        return {token, "", false};
+    }
+
+    void drawCaptureChip(NVGcontext* vg, const CaptureVisual& visual,
+                         float centerX, float centerY, float scale)
+    {
+        nvgFontFaceId(vg, visual.switchGlyph ? m_captureSwitchFont : m_captureFont);
+        nvgFontSize(vg, (visual.switchGlyph ? 34.f : 22.f) * scale);
+        float bounds[4]{};
+        nvgTextBounds(vg, 0.f, 0.f, visual.glyph.c_str(), nullptr, bounds);
+        float suffixBounds[4]{};
+        if (!visual.suffix.empty())
+        {
+            nvgFontFaceId(vg, m_captureFont);
+            nvgFontSize(vg, 23.f * scale);
+            nvgTextBounds(vg, 0.f, 0.f, visual.suffix.c_str(), nullptr, suffixBounds);
+        }
+        const float chipW = std::max(58.f, bounds[2] - bounds[0]
+            + (visual.suffix.empty() ? 28.f : suffixBounds[2] - suffixBounds[0] + 38.f));
+        const float chipH = 54.f;
+        const float chipX = centerX - chipW * 0.5f;
+        const float chipY = centerY - chipH * 0.5f;
+        const NVGpaint shadow = nvgBoxGradient(vg, chipX + 4.f, chipY + 5.f,
+            chipW, chipH, 27.f, 5.f, nvgRGBA(0, 0, 0, 78), nvgRGBA(0, 0, 0, 0));
+        nvgBeginPath(vg);
+        nvgRect(vg, chipX - 3.f, chipY - 3.f, chipW + 14.f, chipH + 15.f);
+        nvgRoundedRect(vg, chipX, chipY, chipW, chipH, 27.f);
+        nvgPathWinding(vg, NVG_HOLE);
+        nvgFillPaint(vg, shadow);
+        nvgFill(vg);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, chipX, chipY, chipW, chipH, 27.f);
+        nvgFillColor(vg, nvgRGBA(79, 193, 255, 35));
+        nvgFill(vg);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, chipX + 1.f, chipY + 1.f, chipW - 2.f, chipH - 2.f, 26.f);
+        nvgStrokeColor(vg, nvgRGBA(119, 211, 255, 150));
+        nvgStrokeWidth(vg, 1.5f);
+        nvgStroke(vg);
+        nvgFontFaceId(vg, visual.switchGlyph ? m_captureSwitchFont : m_captureFont);
+        nvgFontSize(vg, (visual.switchGlyph ? 34.f : 22.f) * scale);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(255, 255, 255, 255));
+        const float glyphX = centerX - (visual.suffix.empty() ? 0.f : 9.f);
+        nvgText(vg, glyphX, centerY, visual.glyph.c_str(), nullptr);
+        if (!visual.suffix.empty())
+        {
+            nvgFontFaceId(vg, m_captureFont);
+            nvgFontSize(vg, 23.f * scale);
+            nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+            nvgText(vg, glyphX + 15.f, centerY, visual.suffix.c_str(), nullptr);
+        }
+    }
+
+    void _drawCaptureOverlay(NVGcontext* vg, float x, float y, float w, float h)
+    {
+        if (m_captureFont < 0)
+            m_captureFont = brls::Application::getDefaultFont();
+        if (m_captureSwitchFont < 0)
+            m_captureSwitchFont = brls::Application::getFont(brls::FONT_SWITCH_ICONS);
+        const auto now = std::chrono::steady_clock::now();
+        float dt = std::chrono::duration<float>(now - m_lastVisualFrame).count();
+        m_lastVisualFrame = now;
+        if (dt <= 0.f || dt > 0.25f) dt = 0.016f;
+        m_keyPulse = std::max(0.f, m_keyPulse - dt * 4.8f);
+        const float elapsed = std::chrono::duration<float>(now - m_visualStartTime).count();
+        const float entranceRaw = std::max(0.f, std::min(1.f, elapsed * 5.2f));
+        const float entrance = 1.f - std::pow(1.f - entranceRaw, 3.f);
+
+        nvgBeginPath(vg);
+        nvgRect(vg, x, y, w, h);
+        nvgFillColor(vg, nvgRGBA(0, 0, 0, static_cast<unsigned char>(215.f * entranceRaw)));
+        nvgFill(vg);
+
+        const float panelW = std::min(680.f, w - 100.f);
+        const float panelH = 408.f;
+        const float panelX = x + (w - panelW) * 0.5f;
+        const float panelY = y + (h - panelH) * 0.5f + (1.f - entrance) * 46.f;
+        nvgSave(vg);
+        nvgGlobalAlpha(vg, entranceRaw);
+        nvgTranslate(vg, x + w * 0.5f, y + h * 0.5f);
+        const float panelScale = 0.90f + entrance * 0.10f;
+        nvgScale(vg, panelScale, panelScale);
+        nvgTranslate(vg, -(x + w * 0.5f), -(y + h * 0.5f));
+
+        const NVGpaint shadow = nvgBoxGradient(vg, panelX + 6.f, panelY + 8.f,
+            panelW, panelH, 10.f, 7.f, nvgRGBA(0, 0, 0, 135), nvgRGBA(0, 0, 0, 0));
+        nvgBeginPath(vg);
+        nvgRect(vg, panelX - 4.f, panelY - 4.f, panelW + 20.f, panelH + 22.f);
+        nvgRoundedRect(vg, panelX, panelY, panelW, panelH, 10.f);
+        nvgPathWinding(vg, NVG_HOLE);
+        nvgFillPaint(vg, shadow);
+        nvgFill(vg);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, panelX, panelY, panelW, panelH, 10.f);
+        nvgFillColor(vg, nvgRGBA(21, 25, 31, 246));
+        nvgFill(vg);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, panelX + 1.f, panelY + 1.f, panelW - 2.f, panelH - 2.f, 9.f);
+        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 58));
+        nvgStrokeWidth(vg, 1.5f);
+        nvgStroke(vg);
+
+        nvgFontFaceId(vg, m_captureFont);
+        nvgFontSize(vg, 27.f);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(255, 255, 255, 255));
+        nvgText(vg, panelX + 34.f, panelY + 42.f, "按键捕获", nullptr);
+        nvgFontSize(vg, 15.f);
+        nvgFillColor(vg, nvgRGBA(195, 204, 217, 170));
+        nvgText(vg, panelX + 34.f, panelY + 70.f, "当前绑定会在倒计时结束后确认", nullptr);
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, panelX + 30.f, panelY + 92.f);
+        nvgLineTo(vg, panelX + panelW - 30.f, panelY + 92.f);
+        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 34));
+        nvgStrokeWidth(vg, 1.f);
+        nvgStroke(vg);
+
+        nvgFontSize(vg, 19.f);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, m_waitingForRelease
+            ? nvgRGBA(255, 190, 92, 240) : nvgRGBA(231, 236, 244, 235));
+        nvgText(vg, panelX + panelW * 0.5f, panelY + 126.f, m_visualPrompt.c_str(), nullptr);
+
+        const float chipY = panelY + 205.f;
+        if (m_capturedKeys.empty())
+        {
+            nvgFontSize(vg, 42.f);
+            nvgFillColor(vg, nvgRGBA(119, 211, 255, 65));
+            nvgText(vg, panelX + panelW * 0.5f, chipY, "...", nullptr);
+        }
+        else
+        {
+            const float pulseScale = 1.f + 0.10f * std::sin(m_keyPulse * 3.1415926f);
+            const float gap = 84.f;
+            const float firstX = panelX + panelW * 0.5f
+                - (static_cast<float>(m_capturedKeys.size()) - 1.f) * gap * 0.5f;
+            for (size_t i = 0; i < m_capturedKeys.size(); ++i)
+            {
+                drawCaptureChip(vg, captureVisualFor(m_capturedKeys[i]),
+                    firstX + static_cast<float>(i) * gap, chipY, pulseScale);
+                if (i + 1 < m_capturedKeys.size())
+                {
+                    nvgFontFaceId(vg, m_captureFont);
+                    nvgFontSize(vg, 23.f);
+                    nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+                    nvgFillColor(vg, nvgRGBA(205, 214, 226, 170));
+                    nvgText(vg, firstX + (static_cast<float>(i) + 0.5f) * gap,
+                        chipY, "+", nullptr);
+                }
+            }
+        }
+
+        const float trackX = panelX + 74.f;
+        const float trackY = panelY + 282.f;
+        const float trackW = panelW - 148.f;
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, trackX, trackY, trackW, 7.f, 3.5f);
+        nvgFillColor(vg, nvgRGBA(255, 255, 255, 24));
+        nvgFill(vg);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, trackX, trackY, trackW * m_barProgress, 7.f, 3.5f);
+        nvgFillColor(vg, m_barColor);
+        nvgFill(vg);
+        nvgFontFaceId(vg, m_captureFont);
+        nvgFontSize(vg, 15.f);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(205, 213, 225, 175));
+        nvgText(vg, panelX + panelW * 0.5f, panelY + 320.f, m_visualHint.c_str(), nullptr);
+        nvgFontSize(vg, 14.f);
+        nvgFillColor(vg, nvgRGBA(180, 190, 204, 130));
+        nvgText(vg, panelX + panelW * 0.5f, panelY + 354.f,
+            "保持按键组合，松开后等待自动确认", nullptr);
+        nvgRestore(vg);
     }
 
     void finish(const std::string &result)
@@ -986,6 +1245,1365 @@ private:
         });
     }
 };
+
+namespace
+{
+enum class NanoSettingKind
+{
+    Section,
+    Toggle,
+    Selector,
+    Action,
+    Platform,
+    Binding,
+};
+
+struct NanoSettingItem
+{
+    NanoSettingKind kind = NanoSettingKind::Action;
+    std::string title;
+    std::string hint;
+    char32_t icon = beiklive::material::SETTINGS;
+    std::function<std::string()> value;
+    std::function<void()> activate;
+    std::vector<std::string> options;
+    std::function<int()> selectedOption;
+    std::function<void(int)> applyOption;
+    std::string configKey;
+    std::string defaultBinding = "none";
+    std::string platformPrefix;
+    bool nds = false;
+};
+
+struct NanoSettingsHost
+{
+    std::function<void(bool)> showShader;
+    std::function<void(GradientTheme)> setGradientTheme;
+    std::function<void(bool)> showBackground;
+    std::function<void(const std::string&)> setBackgroundImage;
+    std::function<void()> close;
+};
+
+static std::string settingIconUtf8(char32_t codepoint)
+{
+    std::string result;
+    if (codepoint <= 0x7f)
+        result.push_back(static_cast<char>(codepoint));
+    else if (codepoint <= 0x7ff)
+    {
+        result.push_back(static_cast<char>(0xc0 | (codepoint >> 6)));
+        result.push_back(static_cast<char>(0x80 | (codepoint & 0x3f)));
+    }
+    else if (codepoint <= 0xffff)
+    {
+        result.push_back(static_cast<char>(0xe0 | (codepoint >> 12)));
+        result.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3f)));
+        result.push_back(static_cast<char>(0x80 | (codepoint & 0x3f)));
+    }
+    else
+    {
+        result.push_back(static_cast<char>(0xf0 | (codepoint >> 18)));
+        result.push_back(static_cast<char>(0x80 | ((codepoint >> 12) & 0x3f)));
+        result.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3f)));
+        result.push_back(static_cast<char>(0x80 | (codepoint & 0x3f)));
+    }
+    return result;
+}
+
+static float settingClamp(float value)
+{
+    return std::max(0.f, std::min(1.f, value));
+}
+
+static float settingSmooth(float value)
+{
+    value = settingClamp(value);
+    return value * value * (3.f - 2.f * value);
+}
+
+static float settingBack(float value)
+{
+    value = settingClamp(value);
+    constexpr float c1 = 1.25f;
+    constexpr float c3 = c1 + 1.f;
+    const float shifted = value - 1.f;
+    return 1.f + c3 * shifted * shifted * shifted + c1 * shifted * shifted;
+}
+
+static unsigned char settingAlpha(float value)
+{
+    return static_cast<unsigned char>(255.f * settingClamp(value));
+}
+
+static std::vector<std::string> splitSettingText(const std::string& text, char separator)
+{
+    std::vector<std::string> result;
+    std::istringstream stream(text);
+    std::string part;
+    while (std::getline(stream, part, separator))
+    {
+        const auto first = std::find_if_not(part.begin(), part.end(), [](unsigned char c) { return std::isspace(c); });
+        const auto last = std::find_if_not(part.rbegin(), part.rend(), [](unsigned char c) { return std::isspace(c); }).base();
+        if (first < last)
+            result.emplace_back(first, last);
+    }
+    return result;
+}
+
+class NanoSettingsCanvas final : public brls::View
+{
+public:
+    explicit NanoSettingsCanvas(NanoSettingsHost host)
+        : m_host(std::move(host))
+    {
+        setFocusable(true);
+        setGrow(1.f);
+        setWidthPercentage(100.f);
+        HIDE_BRLS_HIGHLIGHT(this);
+        setCustomNavigationRoute(brls::FocusDirection::UP, this);
+        setCustomNavigationRoute(brls::FocusDirection::DOWN, this);
+        setCustomNavigationRoute(brls::FocusDirection::LEFT, this);
+        setCustomNavigationRoute(brls::FocusDirection::RIGHT, this);
+        _buildSettings();
+
+        auto up = [this](brls::View*) -> bool { _move(-1); return true; };
+        auto down = [this](brls::View*) -> bool { _move(1); return true; };
+        auto left = [this](brls::View*) -> bool { _adjust(-1); return true; };
+        auto right = [this](brls::View*) -> bool { _adjust(1); return true; };
+        auto previousCategory = [this](brls::View*) -> bool { _switchCategory(-1); return true; };
+        auto nextCategory = [this](brls::View*) -> bool { _switchCategory(1); return true; };
+        registerAction("", brls::BUTTON_UP, up, true, true, brls::SOUND_NONE);
+        registerAction("", brls::BUTTON_DOWN, down, true, true, brls::SOUND_NONE);
+        registerAction("", brls::BUTTON_NAV_UP, up, true, true, brls::SOUND_NONE);
+        registerAction("", brls::BUTTON_NAV_DOWN, down, true, true, brls::SOUND_NONE);
+        registerAction("", brls::BUTTON_LEFT, left, true, true, brls::SOUND_NONE);
+        registerAction("", brls::BUTTON_RIGHT, right, true, true, brls::SOUND_NONE);
+        registerAction("", brls::BUTTON_NAV_LEFT, left, true, true, brls::SOUND_NONE);
+        registerAction("", brls::BUTTON_NAV_RIGHT, right, true, true, brls::SOUND_NONE);
+        registerAction("上一类", brls::BUTTON_LB, previousCategory, true, false, brls::SOUND_NONE);
+        registerAction("下一类", brls::BUTTON_RB, nextCategory, true, false, brls::SOUND_NONE);
+        registerAction("选择", brls::BUTTON_A, [this](brls::View*) -> bool {
+            _activate();
+            return true;
+        }, false, false, brls::SOUND_NONE);
+        registerAction("清除", brls::BUTTON_X, [this](brls::View*) -> bool {
+            _clearBinding();
+            return true;
+        }, false, false, brls::SOUND_NONE);
+        registerAction("返回", brls::BUTTON_B, [this](brls::View*) -> bool {
+            _back();
+            return true;
+        }, false, false, brls::SOUND_NONE);
+        m_lastFrame = std::chrono::steady_clock::now();
+        brls::sync([this]() { brls::Application::giveFocus(this); });
+    }
+
+    void frame(brls::FrameContext* ctx) override
+    {
+        brls::View::frame(ctx);
+        const auto now = std::chrono::steady_clock::now();
+        float dt = std::chrono::duration<float>(now - m_lastFrame).count();
+        m_lastFrame = now;
+        if (dt <= 0.f || dt > 0.25f)
+            dt = 0.016f;
+        m_time += dt;
+        if (m_closing)
+        {
+            m_pageEntrance = std::max(0.f, m_pageEntrance - dt * 4.6f);
+            if (m_pageEntrance <= 0.f && !m_closeQueued)
+            {
+                m_closeQueued = true;
+                const auto close = m_host.close;
+                brls::sync([close]() { if (close) close(); });
+            }
+        }
+        else
+        {
+            m_pageEntrance = std::min(1.f, m_pageEntrance + dt * 3.7f);
+            m_contentEntrance = std::min(1.f, m_contentEntrance + dt * 6.5f);
+        }
+        m_categoryMotion = std::min(1.f, m_categoryMotion + dt * 7.f);
+        m_overlayMotion += ((m_selectorOpen ? 1.f : 0.f) - m_overlayMotion)
+            * std::min(1.f, dt * 14.f);
+        m_pressMotion = std::max(0.f, m_pressMotion - dt * 5.6f);
+        float& targetScroll = _activeTargetScroll();
+        float& scroll = _activeScroll();
+        scroll += (targetScroll - scroll) * std::min(1.f, dt * 15.f);
+        invalidate();
+    }
+
+    void draw(NVGcontext* vg, float x, float y, float w, float h,
+              brls::Style style, brls::FrameContext* ctx) override
+    {
+        (void)style;
+        (void)ctx;
+        _ensureFonts();
+        const float page = settingBack(m_pageEntrance);
+        const float alpha = settingSmooth(m_pageEntrance);
+        nvgSave(vg);
+        nvgGlobalAlpha(vg, alpha);
+        _drawHeader(vg, x, y - (1.f - page) * 62.f, w);
+        nvgSave(vg);
+        const float scale = 0.965f + page * 0.035f;
+        nvgTranslate(vg, x + w * 0.5f, y + h * 0.54f + (1.f - page) * 28.f);
+        nvgScale(vg, scale, scale);
+        nvgTranslate(vg, -(x + w * 0.5f), -(y + h * 0.54f));
+        _drawContent(vg, x + 36.f, y + 116.f, w - 72.f, h - 184.f);
+        nvgRestore(vg);
+        _drawFooter(vg, x, y, w, h);
+        nvgRestore(vg);
+        if (m_overlayMotion > 0.002f)
+            _drawSelector(vg, x, y, w, h);
+    }
+
+private:
+    struct Rect { float x = 0.f; float y = 0.f; float w = 0.f; float h = 0.f; };
+    struct Category { std::string title; char32_t icon; std::vector<NanoSettingItem> items; };
+
+    NanoSettingsHost m_host;
+    std::array<Category, 6> m_categories{{
+        {"模拟器", 0xE322, {}}, {"按键", 0xE30F, {}}, {"游戏", 0xE338, {}},
+        {"显示", 0xE333, {}}, {"声音", 0xE050, {}}, {"调试", 0xE868, {}}
+    }};
+    std::vector<NanoSettingItem> m_mappingItems;
+    int m_category = 0;
+    std::array<int, 6> m_focus{{0, 0, 0, 0, 0, 0}};
+    std::array<float, 6> m_scroll{{0.f, 0.f, 0.f, 0.f, 0.f, 0.f}};
+    std::array<float, 6> m_targetScroll{{0.f, 0.f, 0.f, 0.f, 0.f, 0.f}};
+    int m_mappingFocus = 0;
+    float m_mappingScroll = 0.f;
+    float m_mappingTargetScroll = 0.f;
+    bool m_inMapping = false;
+    std::string m_mappingTitle;
+    std::string m_mappingPrefix;
+    bool m_mappingNds = false;
+    bool m_selectorOpen = false;
+    std::string m_selectorTitle;
+    std::vector<std::string> m_selectorOptions;
+    int m_selectorIndex = 0;
+    std::function<void(int)> m_selectorApply;
+    int m_defaultFont = -1;
+    int m_materialFont = -1;
+    int m_switchFont = -1;
+    float m_time = 0.f;
+    float m_pageEntrance = 0.f;
+    float m_contentEntrance = 1.f;
+    float m_categoryMotion = 1.f;
+    float m_overlayMotion = 0.f;
+    float m_pressMotion = 0.f;
+    int m_pressedItem = -1;
+    bool m_pressedInMapping = false;
+    int m_categoryDirection = 1;
+    bool m_closing = false;
+    bool m_closeQueued = false;
+    std::chrono::steady_clock::time_point m_lastFrame;
+    std::chrono::steady_clock::time_point m_lastMoveAction{};
+
+    void _ensureFonts()
+    {
+        if (m_defaultFont < 0)
+            m_defaultFont = brls::Application::getDefaultFont();
+        if (m_materialFont < 0)
+            m_materialFont = brls::Application::getFont(brls::FONT_MATERIAL_ICONS);
+        if (m_switchFont < 0)
+            m_switchFont = brls::Application::getFont(brls::FONT_SWITCH_ICONS);
+    }
+
+    static NanoSettingItem _section(const std::string& title)
+    {
+        NanoSettingItem item;
+        item.kind = NanoSettingKind::Section;
+        item.title = title;
+        return item;
+    }
+
+    static NanoSettingItem _toggle(const std::string& title, const std::string& hint,
+                                   char32_t icon, std::function<bool()> get,
+                                   std::function<void(bool)> set)
+    {
+        NanoSettingItem item;
+        item.kind = NanoSettingKind::Toggle;
+        item.title = title;
+        item.hint = hint;
+        item.icon = icon;
+        item.value = [get]() { return get() ? "开启" : "关闭"; };
+        item.activate = [get, set]() { set(!get()); };
+        return item;
+    }
+
+    static NanoSettingItem _selector(const std::string& title, const std::string& hint,
+                                     char32_t icon, std::vector<std::string> options,
+                                     std::function<int()> get,
+                                     std::function<void(int)> set)
+    {
+        NanoSettingItem item;
+        item.kind = NanoSettingKind::Selector;
+        item.title = title;
+        item.hint = hint;
+        item.icon = icon;
+        item.options = std::move(options);
+        item.selectedOption = std::move(get);
+        item.applyOption = std::move(set);
+        item.value = [options = item.options, selected = item.selectedOption]() {
+            const int index = selected ? selected() : 0;
+            return index >= 0 && index < static_cast<int>(options.size())
+                ? options[static_cast<size_t>(index)] : std::string("未设置");
+        };
+        return item;
+    }
+
+    static NanoSettingItem _action(const std::string& title, const std::string& hint,
+                                   char32_t icon, std::function<std::string()> value,
+                                   std::function<void()> action)
+    {
+        NanoSettingItem item;
+        item.kind = NanoSettingKind::Action;
+        item.title = title;
+        item.hint = hint;
+        item.icon = icon;
+        item.value = std::move(value);
+        item.activate = std::move(action);
+        return item;
+    }
+
+    void _buildSettings()
+    {
+        using namespace beiklive::SettingKey;
+        auto& emulator = m_categories[0].items;
+        emulator.push_back(_section("mGBA 核心"));
+        const std::vector<std::string> gbModels = {
+            "Autodetect", "Game Boy", "Super Game Boy", "Game Boy Color", "Game Boy Advance"};
+        emulator.push_back(_selector("GB 机型", "根据 ROM 头自动判断时请选择 Autodetect", 0xE30F, gbModels,
+            [gbModels]() { return findIndex(gbModels, cfgGetStr("core.mgba_gb_model", "Autodetect")); },
+            [gbModels](int i) { if (i >= 0 && i < static_cast<int>(gbModels.size())) cfgSetStr("core.mgba_gb_model", gbModels[i]); }));
+        emulator.push_back(_toggle("使用 BIOS", "开启后，非 BIOS 模式创建的即时存档可能失效", 0xE86F,
+            []() { return cfgGetStr("core.mgba_use_bios", "ON") == "ON"; },
+            [](bool v) { cfgSetStr("core.mgba_use_bios", v ? "ON" : "OFF"); }));
+        emulator.push_back(_toggle("跳过 BIOS 动画", "BIOS 文件位于 GBAStation/bios/gba_bios.bin", 0xE044,
+            []() { return cfgGetStr("core.mgba_skip_bios", "OFF") == "ON"; },
+            [](bool v) { cfgSetStr("core.mgba_skip_bios", v ? "ON" : "OFF"); }));
+        const std::vector<std::string> gbColors = beiklive::GetGbColorPresets();
+        emulator.push_back(_selector("GB 配色", "仅影响 GB/GBC 单色游戏", 0xE40A, gbColors,
+            [gbColors]() { return findIndex(gbColors, cfgGetStr("core.mgba_gb_colors", "Grayscale")); },
+            [gbColors](int i) { if (i >= 0 && i < static_cast<int>(gbColors.size())) cfgSetStr("core.mgba_gb_colors", gbColors[i]); }));
+        emulator.push_back(_toggle("SGB 边框", "若 GB/GBC 画面显示在左上角，请关闭此项", 0xE3F4,
+            []() { return cfgGetStr("core.mgba_sgb_borders", "OFF") == "ON"; },
+            [](bool v) { cfgSetStr("core.mgba_sgb_borders", v ? "ON" : "OFF"); }));
+        const std::vector<std::string> rtcLabels = {"持久化 RTC", "跟随系统时间"};
+        const std::vector<std::string> rtcValues = {"persist", "system"};
+        emulator.push_back(_selector("RTC 时钟模式", "选择游戏内时钟的校准方式", 0xE8B5, rtcLabels,
+            [rtcValues]() { return findIndex(rtcValues, cfgGetStr("core.mgba_rtc_mode", "persist")); },
+            [rtcValues](int i) { if (i >= 0 && i < 2) cfgSetStr("core.mgba_rtc_mode", rtcValues[i]); }));
+
+        emulator.push_back(_section("存档与封面"));
+        emulator.push_back(_selector("SRAM 存档目录", "选择 SRAM 与 ROM 同目录或模拟器统一目录", beiklive::material::STORAGE,
+            {"ROM 所在目录", "模拟器目录"},
+            []() { return cfgGetStr("save.sramDir", "").empty() ? 0 : 1; },
+            [](int i) { cfgSetStr("save.sramDir", i == 0 ? "" : beiklive::path::savePath()); }));
+        const std::vector<std::string> slots = {
+            "关闭", "档位0", "档位1", "档位2", "档位3", "档位4", "档位5", "档位6", "档位7", "档位8", "档位9"};
+        emulator.push_back(_selector("自动保存游戏状态", "启动游戏后使用的自动存档档位", beiklive::material::SAVE, slots,
+            []() { return std::clamp(cfgGetInt("save.autoSaveState", 0), 0, 10); },
+            [](int i) { cfgSetInt("save.autoSaveState", i); }));
+        const std::vector<std::string> intervalLabels = {"关闭", "1 分钟", "3 分钟", "5 分钟", "10 分钟"};
+        const std::vector<int> intervalValues = {0, 60, 180, 300, 600};
+        emulator.push_back(_selector("自动保存间隔", "定时创建即时存档，降低意外丢失进度的风险", 0xE425, intervalLabels,
+            [intervalValues]() { const int cur = cfgGetInt("save.autoSaveInterval", 0); for (int i = 0; i < 5; ++i) if (intervalValues[i] == cur) return i; return 0; },
+            [intervalValues](int i) { if (i >= 0 && i < 5) cfgSetInt("save.autoSaveInterval", intervalValues[i]); }));
+        emulator.push_back(_selector("启动时自动加载", "进入游戏时自动读取指定即时存档", beiklive::material::RESTORE, slots,
+            []() { return std::clamp(cfgGetInt("save.autoLoadState0", 0), 0, 10); },
+            [](int i) { cfgSetInt("save.autoLoadState0", i); }));
+        emulator.push_back(_selector("退出游戏时自动保存", "关闭游戏时写入指定即时存档", beiklive::material::BACKUP, slots,
+            []() { return std::clamp(cfgGetInt("save.autoSaveOnExit", 0), 0, 10); },
+            [](int i) { cfgSetInt("save.autoSaveOnExit", i); }));
+        emulator.push_back(_toggle("使用存档截图作为封面", "使用即时存档 0 的截图，且不会覆盖自定义封面", beiklive::material::PHOTO_LIBRARY,
+            []() { return cfgGetBool(KEY_UI_USE_SAVESTATE_THUMB, false); },
+            [](bool v) { cfgSetBool(KEY_UI_USE_SAVESTATE_THUMB, v); }));
+
+        emulator.push_back(_section("界面"));
+        emulator.push_back(_toggle("动态渐变背景", "显示与主页一致的动态背景", 0xE3B7,
+            []() { return cfgGetBool(KEY_UI_SHOW_SHADER, false); },
+            [this](bool v) { cfgSetBool(KEY_UI_SHOW_SHADER, v); if (m_host.showShader) m_host.showShader(v); }));
+        const std::vector<std::string> themeLabels = {"深夜蓝", "柠檬黄", "牛油果绿", "草莓红", "海洋蓝", "樱花粉", "VSCode黑"};
+        const std::vector<std::string> themeValues = {"Midnight", "LemonYellow", "AvocadoGreen", "StrawberryRed", "OceanBlue", "SakuraPink", "VscodeBlack"};
+        emulator.push_back(_selector("渐变主题", "切换后立即应用到当前页面", 0xE40A, themeLabels,
+            [themeValues]() { return findIndex(themeValues, cfgGetStr(KEY_UI_GRADIENT_THEME, "VscodeBlack"), 6); },
+            [this, themeValues](int i) {
+                if (i < 0 || i >= static_cast<int>(themeValues.size())) return;
+                cfgSetStr(KEY_UI_GRADIENT_THEME, themeValues[i]);
+                if (!m_host.setGradientTheme) return;
+                static const GradientTheme themes[] = {GradientTheme::Midnight, GradientTheme::LemonYellow,
+                    GradientTheme::AvocadoGreen, GradientTheme::StrawberryRed, GradientTheme::OceanBlue,
+                    GradientTheme::SakuraPink, GradientTheme::VscodeBlack};
+                m_host.setGradientTheme(themes[i]);
+            }));
+        emulator.push_back(_toggle("启用背景图片", "在动态背景上显示自定义 PNG 图片", beiklive::material::IMAGE,
+            []() { return cfgGetBool(KEY_UI_SHOW_BG_IMAGE, false); },
+            [this](bool v) { cfgSetBool(KEY_UI_SHOW_BG_IMAGE, v); if (m_host.showBackground) m_host.showBackground(v); }));
+        emulator.push_back(_action("背景图片路径", "从文件浏览器选择 PNG 图片", beiklive::material::IMAGE,
+            []() { const auto path = cfgGetStr(KEY_UI_BG_IMAGE_PATH, ""); return path.empty() ? "未设置" : beiklive::tools::getFileName(path); },
+            [this]() {
+                const std::filesystem::path current(cfgGetStr(KEY_UI_BG_IMAGE_PATH, ""));
+                beiklive::openFilePicker({"png"}, [this](const std::string& path) {
+                    cfgSetStr(KEY_UI_BG_IMAGE_PATH, path);
+                    if (m_host.setBackgroundImage) m_host.setBackgroundImage(path);
+                    invalidate();
+                }, current.parent_path().string(), current.filename().string());
+            }));
+        emulator.push_back(_toggle("文件列表滚动动画", "关闭后文件列表会直接跳转", 0xE8D5,
+            []() { return cfgGetBool(KEY_FILE_LIST_SCROLL_ANIM, true); },
+            [](bool v) { cfgSetBool(KEY_FILE_LIST_SCROLL_ANIM, v); }));
+        emulator.push_back(_selector("游戏库标题字号", "调整网格卡片标题的字号", 0xE245,
+            {"正常", "大", "超大"},
+            []() { return std::clamp(cfgGetInt(KEY_UI_LIBRARY_TITLE_SIZE, 0), 0, 2); },
+            [](int i) { cfgSetInt(KEY_UI_LIBRARY_TITLE_SIZE, i); }));
+
+        auto& key = m_categories[1].items;
+        key.push_back(_section("游戏平台"));
+        struct Platform { const char* name; const char* prefix; const char* hint; bool nds; };
+        static const Platform platforms[] = {
+            {"GBA 按键映射", "", "Game Boy Advance 游戏", false},
+            {"GBC 按键映射", "gbc.", "Game Boy Color 游戏", false},
+            {"GB 按键映射", "gb.", "Game Boy 游戏", false},
+            {"NES 按键映射", "nes.", "Nintendo Entertainment System 游戏", false},
+            {"SFC 按键映射", "sfc.", "Super Famicom 游戏", false},
+            {"NDS 按键映射", "nds.", "Nintendo DS 游戏与触摸指针热键", true},
+        };
+        for (const auto& platform : platforms)
+        {
+            NanoSettingItem item;
+            item.kind = NanoSettingKind::Platform;
+            item.title = platform.name;
+            item.hint = platform.hint;
+            item.icon = 0xE30F;
+            item.value = []() { return std::string("进入配置"); };
+            item.platformPrefix = platform.prefix;
+            item.nds = platform.nds;
+            key.push_back(std::move(item));
+        }
+
+        auto& game = m_categories[2].items;
+        game.push_back(_section("快进"));
+        game.push_back(_toggle("启用快进", "允许使用快进热键改变模拟速度", 0xE01F,
+            []() { return cfgGetBool("fastforward.enabled", true); }, [](bool v) { cfgSetBool("fastforward.enabled", v); }));
+        game.push_back(_selector("快进触发模式", "按住：松开即停止；切换：再次按下才停止", 0xE043,
+            {"按住", "切换"}, []() { return cfgGetStr("fastforward.mode", "hold") == "toggle" ? 1 : 0; },
+            [](int i) { cfgSetStr("fastforward.mode", i == 1 ? "toggle" : "hold"); }));
+        const std::vector<std::string> multiplierLabels = {"0.1倍", "0.5倍", "1倍", "1.25倍", "1.5倍", "1.75倍", "2倍", "3倍", "4倍", "5倍", "6倍", "7倍", "8倍", "9倍", "10倍"};
+        const std::vector<float> multiplierValues = {0.1f, 0.5f, 1.f, 1.25f, 1.5f, 1.75f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f, 9.f, 10.f};
+        game.push_back(_selector("快进倍率", "低于 1 倍可用于慢动作", 0xE8E5, multiplierLabels,
+            [multiplierValues]() { const float cur = GET_SETTING_KEY_FLOAT("fastforward.multiplier", 4.f); for (int i = 0; i < static_cast<int>(multiplierValues.size()); ++i) if (std::fabs(cur - multiplierValues[i]) < 0.001f) return i; return 8; },
+            [multiplierValues](int i) { if (i >= 0 && i < static_cast<int>(multiplierValues.size())) SET_SETTING_KEY_FLOAT("fastforward.multiplier", multiplierValues[i]); }));
+        game.push_back(_toggle("快进时静音", "避免高速播放产生刺耳音频", 0xE04F,
+            []() { return cfgGetBool("fastforward.mute", true); }, [](bool v) { cfgSetBool("fastforward.mute", v); }));
+        game.push_back(_section("倒带"));
+        game.push_back(_toggle("启用倒带", "运行时保存历史状态以便回退", 0xE166,
+            []() { return cfgGetBool("rewind.enabled", false); }, [](bool v) { cfgSetBool("rewind.enabled", v); }));
+        game.push_back(_selector("倒带触发模式", "按住或切换倒带状态", 0xE043,
+            {"按住", "切换"}, []() { return cfgGetStr("rewind.mode", "hold") == "toggle" ? 1 : 0; },
+            [](int i) { cfgSetStr("rewind.mode", i == 1 ? "toggle" : "hold"); }));
+        game.push_back(_toggle("倒带时静音", "回退期间停止播放反向音频", 0xE04F,
+            []() { return cfgGetBool("rewind.mute", false); }, [](bool v) { cfgSetBool("rewind.mute", v); }));
+        const std::vector<int> stepValues = {1, 2, 4, 8};
+        game.push_back(_selector("倒带步进", "步进越小，回退控制越精细", 0xE5D5,
+            {"1 帧", "2 帧", "4 帧", "8 帧"},
+            [stepValues]() { const int cur = cfgGetInt("rewind.step", 2); for (int i = 0; i < 4; ++i) if (stepValues[i] == cur) return i; return 1; },
+            [stepValues](int i) { if (i >= 0 && i < 4) cfgSetInt("rewind.step", stepValues[i]); }));
+        game.push_back(_toggle("可视化倒带界面", "显示历史缩略图时间轴", beiklive::material::PHOTO_LIBRARY,
+            []() { return cfgGetBool(KEY_REWIND_SHOW_UI, false); }, [](bool v) { cfgSetBool(KEY_REWIND_SHOW_UI, v); }));
+        const std::vector<int> rewindIntervals = {1, 2, 4, 8, 16, 60, 120};
+        game.push_back(_selector("状态保存间隔", "间隔越短越精确，但内存与 CPU 占用越高", 0xE425,
+            {"每帧", "每2帧", "每4帧", "每8帧", "每16帧", "每60帧（约1秒）", "每120帧（约2秒）"},
+            [rewindIntervals]() { const int cur = cfgGetInt(KEY_REWIND_SAVE_INTERVAL, 1); for (int i = 0; i < 7; ++i) if (rewindIntervals[i] == cur) return i; return 0; },
+            [rewindIntervals](int i) { if (i >= 0 && i < 7) cfgSetInt(KEY_REWIND_SAVE_INTERVAL, rewindIntervals[i]); }));
+        const std::vector<int> bufferValues = {60, 120, 600, 1800};
+        game.push_back(_selector("最大倒带缓存", "缓存越大，可回退的时间越长", 0xE1DB,
+            {"60（约1秒）", "120（约2秒）", "600（约10秒）", "1800（约30秒）"},
+            [bufferValues]() { const int cur = cfgGetInt(KEY_REWIND_BUFFER_SIZE, 600); for (int i = 0; i < 4; ++i) if (bufferValues[i] == cur) return i; return 2; },
+            [bufferValues](int i) { if (i >= 0 && i < 4) cfgSetInt(KEY_REWIND_BUFFER_SIZE, bufferValues[i]); }));
+        game.push_back(_selector("缩略图压缩策略", "最近邻速度优先，双线性画面更平滑", beiklive::material::IMAGE,
+            {"最近邻（速度优先）", "双线性（质量优先）"},
+            []() { return std::clamp(cfgGetInt(KEY_REWIND_THUMB_COMPRESSION, 0), 0, 1); },
+            [](int i) { cfgSetInt(KEY_REWIND_THUMB_COMPRESSION, i); }));
+
+        _buildDisplaySettings();
+        _buildAudioSettings();
+        _buildDebugSettings();
+        _normalizeFocus();
+    }
+
+    void _buildDisplaySettings()
+    {
+        using namespace beiklive::SettingKey;
+        auto& display = m_categories[3].items;
+        display.push_back(_section("画面"));
+        const std::vector<std::string> modeLabels = {"按比例（Fit）", "拉伸（Fill）", "原始（Original）", "4:3", "整数倍", "自定义"};
+        const std::vector<std::string> modeValues = {"fit", "fill", "original", "four_three", "integer", "custom"};
+        display.push_back(_selector("画面模式", "控制游戏画面的缩放与宽高比", 0xE8A1, modeLabels,
+            [modeValues]() { return findIndex(modeValues, cfgGetStr("display.mode", "original"), 2); },
+            [modeValues](int i) { if (i >= 0 && i < 6) cfgSetStr("display.mode", modeValues[i]); }));
+        const std::vector<int> scaleValues = {0, 1, 2, 3, 4, 5};
+        display.push_back(_selector("整数倍缩放", "画面模式为整数倍时生效", 0xE8FF,
+            {"自动", "1倍", "2倍", "3倍", "4倍", "5倍"},
+            [scaleValues]() { const int cur = cfgGetInt("display.integer_scale_mult", 0); for (int i = 0; i < 6; ++i) if (scaleValues[i] == cur) return i; return 0; },
+            [scaleValues](int i) { if (i >= 0 && i < 6) cfgSetInt("display.integer_scale_mult", scaleValues[i]); }));
+        display.push_back(_selector("纹理过滤", "像素风格更锐利，平滑模式边缘更柔和", 0xE3F4,
+            {"像素风格（Nearest）", "平滑（Linear）"},
+            []() { return cfgGetStr("display.filter", "nearest") == "linear" ? 1 : 0; },
+            [](int i) { cfgSetStr("display.filter", i == 1 ? "linear" : "nearest"); }));
+        display.push_back(_toggle("显示快进覆盖层", "快进时显示状态提示", 0xE01F,
+            []() { return cfgGetBool("display.showFfOverlay", true); }, [](bool v) { cfgSetBool("display.showFfOverlay", v); }));
+        display.push_back(_toggle("显示倒带覆盖层", "倒带时显示状态提示", 0xE166,
+            []() { return cfgGetBool("display.showRewindOverlay", true); }, [](bool v) { cfgSetBool("display.showRewindOverlay", v); }));
+        display.push_back(_toggle("显示静音覆盖层", "静音时显示状态提示", 0xE04F,
+            []() { return cfgGetBool("display.showMuteOverlay", true); }, [](bool v) { cfgSetBool("display.showMuteOverlay", v); }));
+        display.push_back(_toggle("显示 FPS 覆盖层", "在游戏画面上显示实时帧率", 0xE8E5,
+            []() { return cfgGetBool("display.showFps", false); }, [](bool v) { cfgSetBool("display.showFps", v); }));
+
+        const std::array<std::pair<const char*, const char*>, 6> platforms{{
+            {"GBA", KEY_DISPLAY_OVERLAY_GBA_PATH}, {"GBC", KEY_DISPLAY_OVERLAY_GBC_PATH},
+            {"GB", KEY_DISPLAY_OVERLAY_GB_PATH}, {"FC", KEY_DISPLAY_OVERLAY_NES_PATH},
+            {"SFC", KEY_DISPLAY_OVERLAY_SNES_PATH}, {"NDS", KEY_DISPLAY_OVERLAY_NDS_PATH}}};
+        display.push_back(_section("默认遮罩"));
+        for (const auto& platform : platforms)
+        {
+            const std::string key = platform.second;
+            display.push_back(_action(std::string(platform.first) + " 遮罩", "导入新游戏时自动套用", beiklive::material::IMAGE,
+                [key]() { const auto path = cfgGetStr(key, ""); return path.empty() ? "未设置" : beiklive::tools::getFileName(path); },
+                [this, key]() { _pickFile(key, {"png"}); }));
+        }
+        const std::array<std::pair<const char*, const char*>, 6> shaders{{
+            {"GBA", KEY_DISPLAY_SHADER_GBA_PATH}, {"GBC", KEY_DISPLAY_SHADER_GBC_PATH},
+            {"GB", KEY_DISPLAY_SHADER_GB_PATH}, {"FC", KEY_DISPLAY_SHADER_NES_PATH},
+            {"SFC", KEY_DISPLAY_SHADER_SNES_PATH}, {"NDS", KEY_DISPLAY_SHADER_NDS_PATH}}};
+        display.push_back(_section("默认着色器"));
+        for (const auto& platform : shaders)
+        {
+            const std::string key = platform.second;
+            display.push_back(_action(std::string(platform.first) + " 着色器", "导入新游戏时自动套用", 0xE3B7,
+                [key]() { const auto path = cfgGetStr(key, ""); return path.empty() ? "未设置" : beiklive::tools::getFileName(path); },
+                [this, key]() { _pickFile(key, {"glslp", "glsl"}); }));
+        }
+    }
+
+    void _buildAudioSettings()
+    {
+        using namespace beiklive::SettingKey;
+        auto& audio = m_categories[4].items;
+        audio.push_back(_section("音频输出"));
+        audio.push_back(_toggle("按钮音效", "播放界面导航和确认音效", 0xE050,
+            []() { return cfgGetBool("audio.buttonSfx", true); }, [](bool v) { cfgSetBool("audio.buttonSfx", v); }));
+        const std::vector<int> targetValues = {60, 90, 120, 160};
+        audio.push_back(_selector("目标缓冲延迟", "越低反馈越快，越高越不容易断音", 0xE425,
+            {"60 ms", "90 ms", "120 ms", "160 ms"},
+            [targetValues]() { const int cur = cfgGetInt(KEY_AUDIO_TARGET_LATENCY_MS, 90); for (int i = 0; i < 4; ++i) if (targetValues[i] == cur) return i; return 1; },
+            [targetValues](int i) { if (i >= 0 && i < 4) cfgSetInt(KEY_AUDIO_TARGET_LATENCY_MS, targetValues[i]); }));
+        const std::vector<int> maxValues = {120, 180, 240, 320};
+        audio.push_back(_selector("最大缓冲延迟", "超过该延迟会丢弃旧音频，避免声音落后画面", 0xE8B5,
+            {"120 ms", "180 ms", "240 ms", "320 ms"},
+            [maxValues]() { const int cur = cfgGetInt(KEY_AUDIO_MAX_LATENCY_MS, 180); for (int i = 0; i < 4; ++i) if (maxValues[i] == cur) return i; return 1; },
+            [maxValues](int i) { if (i >= 0 && i < 4) cfgSetInt(KEY_AUDIO_MAX_LATENCY_MS, maxValues[i]); }));
+        const std::vector<float> syncValues = {0.f, 0.008f, 0.015f, 0.025f};
+        audio.push_back(_selector("音画同步修正", "根据缓冲量微调模拟节奏，减少爆音和长期漂移", 0xE8D5,
+            {"关闭", "柔和", "标准", "强"},
+            [syncValues]() { const float cur = GET_SETTING_KEY_FLOAT(KEY_AUDIO_SYNC_STRENGTH, 0.015f); int best = 0; float delta = std::fabs(cur - syncValues[0]); for (int i = 1; i < 4; ++i) { const float d = std::fabs(cur - syncValues[i]); if (d < delta) { best = i; delta = d; } } return best; },
+            [syncValues](int i) { if (i >= 0 && i < 4) SET_SETTING_KEY_FLOAT(KEY_AUDIO_SYNC_STRENGTH, syncValues[i]); }));
+        const std::vector<int> fadeValues = {0, 4, 6, 10};
+        audio.push_back(_selector("切换淡入淡出", "暂停、静音和读档时降低咔哒声", 0xE8D5,
+            {"关闭", "4 ms", "6 ms", "10 ms"},
+            [fadeValues]() { const int cur = cfgGetInt(KEY_AUDIO_TRANSITION_FADE_MS, 6); for (int i = 0; i < 4; ++i) if (fadeValues[i] == cur) return i; return 2; },
+            [fadeValues](int i) { if (i >= 0 && i < 4) cfgSetInt(KEY_AUDIO_TRANSITION_FADE_MS, fadeValues[i]); }));
+        audio.push_back(_section("mGBA 音色"));
+        audio.push_back(_selector("低通滤波器", "模拟 GBA 硬件滤波，降低高频噪音", 0xE050,
+            {"关闭", "开启"}, []() { return cfgGetStr("core.mgba_audio_low_pass_filter", "disabled") == "enabled" ? 1 : 0; },
+            [](int i) { cfgSetStr("core.mgba_audio_low_pass_filter", i == 1 ? "enabled" : "disabled"); }));
+        const std::vector<std::string> ranges = {"20", "40", "60", "80", "100"};
+        audio.push_back(_selector("低通滤波截止频率", "数值越低，高频削减越多，音色越沉", 0xE8E5,
+            {"20%", "40%", "60%", "80%", "100%"},
+            [ranges]() { return findIndex(ranges, cfgGetStr("core.mgba_audio_low_pass_range", "60"), 2); },
+            [ranges](int i) { if (i >= 0 && i < 5) cfgSetStr("core.mgba_audio_low_pass_range", ranges[i]); }));
+    }
+
+    void _buildDebugSettings()
+    {
+        using namespace beiklive::SettingKey;
+        auto& debug = m_categories[5].items;
+        debug.push_back(_section("日志"));
+        const std::vector<std::string> logLabels = {"调试（debug）", "信息（info）", "警告（warning）", "错误（error）"};
+        const std::vector<std::string> logValues = {"debug", "info", "warning", "error"};
+        debug.push_back(_selector("日志级别", "控制写入日志的最低消息等级", beiklive::material::DESCRIPTION, logLabels,
+            [logValues]() { return findIndex(logValues, cfgGetStr(KEY_DEBUG_LOG_LEVEL, "info"), 1); },
+            [logValues](int i) {
+                if (i < 0 || i >= 4) return;
+                cfgSetStr(KEY_DEBUG_LOG_LEVEL, logValues[i]);
+                static const brls::LogLevel levels[] = {brls::LogLevel::LOG_DEBUG, brls::LogLevel::LOG_INFO, brls::LogLevel::LOG_WARNING, brls::LogLevel::LOG_ERROR};
+                brls::Logger::setLogLevel(levels[i]);
+            }));
+        debug.push_back(_toggle("输出日志到文件", "将运行日志追加写入日志文件", beiklive::material::SAVE,
+            []() { return cfgGetBool(KEY_DEBUG_LOG_FILE, false); },
+            [](bool v) {
+                cfgSetBool(KEY_DEBUG_LOG_FILE, v);
+                static FILE* logFile = nullptr;
+                if (v)
+                {
+                    if (logFile) { std::fclose(logFile); logFile = nullptr; }
+                    logFile = std::fopen(beiklive::path::logFilePath().c_str(), "a");
+                    if (logFile) brls::Logger::setLogOutput(logFile);
+                }
+                else
+                {
+                    brls::Logger::setLogOutput(nullptr);
+                    if (logFile) { std::fclose(logFile); logFile = nullptr; }
+                }
+            }));
+        debug.push_back(_toggle("调试信息覆盖层", "在屏幕上叠加帧率和帧时间等性能数据", 0xE868,
+            []() { return cfgGetBool(KEY_DEBUG_LOG_OVERLAY, false); },
+            [](bool v) { cfgSetBool(KEY_DEBUG_LOG_OVERLAY, v); brls::Application::enableDebuggingView(v); }));
+        debug.push_back(_section("核心调试"));
+        const std::vector<std::string> idle = {"Remove Known", "Detect and Remove", "Don't Remove"};
+        debug.push_back(_selector("空闲优化", "减少无意义循环造成的 CPU 占用", 0xE8EF, idle,
+            [idle]() { return findIndex(idle, cfgGetStr("core.mgba_idle_optimization", "Remove Known")); },
+            [idle](int i) { if (i >= 0 && i < 3) cfgSetStr("core.mgba_idle_optimization", idle[i]); }));
+        debug.push_back(_toggle("允许同时按下反方向", "允许左+右或上+下同时生效", 0xE5D5,
+            []() { return cfgGetStr("core.mgba_allow_opposing_directions", "no") == "yes"; },
+            [](bool v) { cfgSetStr("core.mgba_allow_opposing_directions", v ? "yes" : "no"); }));
+        debug.push_back(_toggle("强制 GBP 振动", "强制模拟 Game Boy Player 振动外设", 0xE8B8,
+            []() { return cfgGetStr("core.mgba_force_gbp", "OFF") == "ON"; },
+            [](bool v) { cfgSetStr("core.mgba_force_gbp", v ? "ON" : "OFF"); }));
+    }
+
+    void _pickFile(const std::string& key, const std::vector<std::string>& extensions)
+    {
+        const std::filesystem::path current(cfgGetStr(key, ""));
+        beiklive::openFilePicker(extensions, [this, key](const std::string& path) {
+            cfgSetStr(key, path);
+            invalidate();
+        }, current.parent_path().string(), current.filename().string());
+    }
+
+    void _buildMappingItems(const std::string& prefix, bool nds)
+    {
+        m_mappingItems.clear();
+        const unsigned mask = beiklive::input_mapping::platformMaskForPrefix(prefix);
+        m_mappingItems.push_back(_section("游戏按键"));
+        for (const auto& entry : beiklive::input_mapping::kGameButtonDefaults)
+        {
+            if ((entry.platformMask & mask) == 0) continue;
+            _addBinding(entry.label, "游戏内对应按键", beiklive::input_mapping::makeHandleKey(prefix, entry.suffix), entry.defaultValue);
+        }
+        m_mappingItems.push_back(_section("功能热键"));
+        for (const auto& entry : beiklive::input_mapping::kHotkeyDefaults)
+        {
+            if (nds && entry.hiddenOnNds) continue;
+            _addBinding(entry.label, "可绑定单键或双键组合", beiklive::input_mapping::makeKey(prefix, entry.key), entry.defaultValue);
+        }
+        if (nds)
+        {
+            m_mappingItems.push_back(_section("NDS 指针与屏幕"));
+            for (const auto& entry : beiklive::input_mapping::kNdsPointerHotkeys)
+                _addBinding(entry.label, "右摇杆控制指针；吹气热键再次按下可取消", beiklive::input_mapping::makeKey(prefix, entry.key), entry.defaultValue);
+        }
+        m_mappingItems.push_back(_section("连发"));
+        _addBinding("A 连发", "按住时自动重复触发 A", beiklive::input_mapping::makeKey(prefix, beiklive::input_mapping::kTurboAKey), beiklive::input_mapping::kTurboADefault);
+        _addBinding("B 连发", "按住时自动重复触发 B", beiklive::input_mapping::makeKey(prefix, beiklive::input_mapping::kTurboBKey), beiklive::input_mapping::kTurboBDefault);
+        const std::vector<float> rates = {1.f, 5.f, 10.f, 15.f, 30.f};
+        m_mappingItems.push_back(_selector("连发速度", "每秒自动触发次数", 0xE8E5,
+            {"每秒1次", "每秒5次", "每秒10次", "每秒15次", "每秒30次"},
+            [rates]() { const float cur = GET_SETTING_KEY_FLOAT("turbo.rate", 10.f); for (int i = 0; i < 5; ++i) if (std::fabs(cur - rates[i]) < 0.01f) return i; return 2; },
+            [rates](int i) { if (i >= 0 && i < 5) SET_SETTING_KEY_FLOAT("turbo.rate", rates[i]); }));
+        m_mappingItems.push_back(_section("摇杆"));
+        m_mappingItems.push_back(_toggle("启用左摇杆方向输入", "将左摇杆映射为方向键", 0xE30F,
+            []() { return cfgGetBool("input.joystick.enabled", true); }, [](bool v) { cfgSetBool("input.joystick.enabled", v); }));
+        m_mappingItems.push_back(_toggle("允许斜向输入", "同时触发水平与垂直方向", 0xE5D5,
+            []() { return cfgGetBool("input.joystick.diagonal", true); }, [](bool v) { cfgSetBool("input.joystick.diagonal", v); }));
+        m_mappingFocus = _firstFocusable(m_mappingItems);
+        m_mappingScroll = m_mappingTargetScroll = 0.f;
+    }
+
+    void _addBinding(const std::string& title, const std::string& hint,
+                     const std::string& key, const std::string& defaultValue)
+    {
+        NanoSettingItem item;
+        item.kind = NanoSettingKind::Binding;
+        item.title = title;
+        item.hint = hint;
+        item.icon = 0xE30F;
+        item.configKey = key;
+        item.defaultBinding = defaultValue;
+        item.value = [key, defaultValue]() { return cfgGetStr(key, defaultValue); };
+        m_mappingItems.push_back(std::move(item));
+    }
+
+    std::vector<NanoSettingItem>& _activeItems()
+    {
+        return m_inMapping ? m_mappingItems : m_categories[static_cast<size_t>(m_category)].items;
+    }
+
+    int& _activeFocus()
+    {
+        return m_inMapping ? m_mappingFocus : m_focus[static_cast<size_t>(m_category)];
+    }
+
+    float& _activeScroll()
+    {
+        return m_inMapping ? m_mappingScroll : m_scroll[static_cast<size_t>(m_category)];
+    }
+
+    float& _activeTargetScroll()
+    {
+        return m_inMapping ? m_mappingTargetScroll : m_targetScroll[static_cast<size_t>(m_category)];
+    }
+
+    static int _firstFocusable(const std::vector<NanoSettingItem>& items)
+    {
+        for (int i = 0; i < static_cast<int>(items.size()); ++i)
+            if (items[static_cast<size_t>(i)].kind != NanoSettingKind::Section)
+                return i;
+        return 0;
+    }
+
+    void _normalizeFocus()
+    {
+        for (size_t i = 0; i < m_categories.size(); ++i)
+            m_focus[i] = _firstFocusable(m_categories[i].items);
+    }
+
+    void _move(int direction)
+    {
+        if (m_closing) return;
+        const auto now = std::chrono::steady_clock::now();
+        if (m_lastMoveAction.time_since_epoch().count() != 0
+            && std::chrono::duration<float>(now - m_lastMoveAction).count() < 0.045f)
+            return;
+        m_lastMoveAction = now;
+        if (m_selectorOpen)
+        {
+            const int count = static_cast<int>(m_selectorOptions.size());
+            if (count > 0)
+                m_selectorIndex = (m_selectorIndex + (direction < 0 ? -1 : 1) + count) % count;
+            brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_CHANGE);
+            return;
+        }
+        auto& items = _activeItems();
+        if (items.empty()) return;
+        int index = _activeFocus();
+        for (int attempt = 0; attempt < static_cast<int>(items.size()); ++attempt)
+        {
+            index = (index + (direction < 0 ? -1 : 1) + static_cast<int>(items.size())) % static_cast<int>(items.size());
+            if (items[static_cast<size_t>(index)].kind != NanoSettingKind::Section)
+            {
+                _activeFocus() = index;
+                _ensureFocusedVisible();
+                brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_CHANGE);
+                break;
+            }
+        }
+    }
+
+    void _adjust(int direction)
+    {
+        (void)direction;
+    }
+
+    void _switchCategory(int direction)
+    {
+        if (m_closing || m_selectorOpen || m_categoryMotion < 0.68f) return;
+        if (m_inMapping)
+        {
+            m_inMapping = false;
+            m_mappingItems.clear();
+        }
+        m_category = (m_category + (direction < 0 ? -1 : 1) + static_cast<int>(m_categories.size())) % static_cast<int>(m_categories.size());
+        m_categoryDirection = direction < 0 ? -1 : 1;
+        m_categoryMotion = 0.f;
+        m_contentEntrance = 0.f;
+        _ensureFocusedVisible();
+        brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_CHANGE);
+    }
+
+    void _activate()
+    {
+        if (m_closing) return;
+        if (m_selectorOpen)
+        {
+            if (m_selectorApply) m_selectorApply(m_selectorIndex);
+            m_selectorOpen = false;
+            brls::Application::getAudioPlayer()->play(brls::SOUND_CLICK);
+            return;
+        }
+        auto& items = _activeItems();
+        if (items.empty()) return;
+        const int activeIndex = _activeFocus();
+        auto& item = items[static_cast<size_t>(activeIndex)];
+        m_pressedItem = activeIndex;
+        m_pressedInMapping = m_inMapping;
+        m_pressMotion = 1.f;
+        switch (item.kind)
+        {
+        case NanoSettingKind::Toggle:
+        case NanoSettingKind::Action:
+            if (item.activate) item.activate();
+            break;
+        case NanoSettingKind::Selector:
+            m_selectorTitle = item.title;
+            m_selectorOptions = item.options;
+            m_selectorIndex = item.selectedOption ? item.selectedOption() : 0;
+            m_selectorIndex = std::clamp(m_selectorIndex, 0, std::max(0, static_cast<int>(m_selectorOptions.size()) - 1));
+            m_selectorApply = item.applyOption;
+            m_selectorOpen = true;
+            break;
+        case NanoSettingKind::Platform:
+            m_mappingTitle = item.title;
+            m_mappingPrefix = item.platformPrefix;
+            m_mappingNds = item.nds;
+            _buildMappingItems(m_mappingPrefix, m_mappingNds);
+            m_inMapping = true;
+            m_contentEntrance = 0.f;
+            break;
+        case NanoSettingKind::Binding:
+        {
+            const std::string key = item.configKey;
+            openKeyCapture([this, key](const std::string& captured) {
+                if (captured.empty()) return;
+                std::string current = cfgGetStr(key, "none");
+                if (current.empty() || current == "none") current = captured;
+                else
+                {
+                    bool exists = false;
+                    for (const auto& alternative : splitSettingText(current, '|'))
+                        if (alternative == captured) { exists = true; break; }
+                    if (!exists) current += "|" + captured;
+                }
+                cfgSetStr(key, current);
+                invalidate();
+            });
+            break;
+        }
+        default:
+            break;
+        }
+        brls::Application::getAudioPlayer()->play(brls::SOUND_CLICK);
+        invalidate();
+    }
+
+    void _clearBinding()
+    {
+        if (!m_inMapping || m_selectorOpen || m_mappingItems.empty()) return;
+        auto& item = m_mappingItems[static_cast<size_t>(m_mappingFocus)];
+        if (item.kind != NanoSettingKind::Binding) return;
+        cfgSetStr(item.configKey, "none");
+        brls::Application::getAudioPlayer()->play(brls::SOUND_CLICK);
+        invalidate();
+    }
+
+    void _back()
+    {
+        if (m_closing) return;
+        if (m_selectorOpen)
+        {
+            m_selectorOpen = false;
+            brls::Application::getAudioPlayer()->play(brls::SOUND_BACK);
+            return;
+        }
+        if (m_inMapping)
+        {
+            m_inMapping = false;
+            m_contentEntrance = 0.f;
+            brls::Application::getAudioPlayer()->play(brls::SOUND_BACK);
+            return;
+        }
+        m_closing = true;
+        brls::Application::getAudioPlayer()->play(brls::SOUND_BACK);
+    }
+
+    float _itemHeight(const NanoSettingItem& item) const
+    {
+        return item.kind == NanoSettingKind::Section ? 47.f : 76.f;
+    }
+
+    float _focusOffset() const
+    {
+        const auto& items = m_inMapping ? m_mappingItems : m_categories[static_cast<size_t>(m_category)].items;
+        const int focus = m_inMapping ? m_mappingFocus : m_focus[static_cast<size_t>(m_category)];
+        float offset = 0.f;
+        for (int i = 0; i < focus && i < static_cast<int>(items.size()); ++i)
+            offset += _itemHeight(items[static_cast<size_t>(i)]) + 8.f;
+        return offset;
+    }
+
+    float _contentHeight() const
+    {
+        const auto& items = m_inMapping ? m_mappingItems : m_categories[static_cast<size_t>(m_category)].items;
+        float height = 18.f;
+        for (const auto& item : items)
+            height += _itemHeight(item) + 8.f;
+        return height;
+    }
+
+    void _ensureFocusedVisible()
+    {
+        constexpr float viewport = 470.f;
+        const float top = _focusOffset();
+        const auto& items = m_inMapping ? m_mappingItems : m_categories[static_cast<size_t>(m_category)].items;
+        const int focus = m_inMapping ? m_mappingFocus : m_focus[static_cast<size_t>(m_category)];
+        const float height = items.empty() ? 0.f : _itemHeight(items[static_cast<size_t>(focus)]);
+        float& target = _activeTargetScroll();
+        if (top < target + 18.f) target = std::max(0.f, top - 18.f);
+        if (top + height > target + viewport - 18.f) target = top + height - viewport + 18.f;
+        target = std::clamp(target, 0.f, std::max(0.f, _contentHeight() - viewport));
+    }
+
+    void _drawExternalShadow(NVGcontext* vg, const Rect& r, float radius, float alpha = 1.f)
+    {
+        const NVGpaint shadow = nvgBoxGradient(vg, r.x + 5.f, r.y + 6.f, r.w, r.h, radius, 5.f,
+            nvgRGBA(0, 0, 0, settingAlpha(0.28f * alpha)), nvgRGBA(0, 0, 0, 0));
+        nvgBeginPath(vg);
+        nvgRect(vg, r.x - 3.f, r.y - 3.f, r.w + 16.f, r.h + 17.f);
+        nvgRoundedRect(vg, r.x, r.y, r.w, r.h, radius);
+        nvgPathWinding(vg, NVG_HOLE);
+        nvgFillPaint(vg, shadow);
+        nvgFill(vg);
+    }
+
+    void _drawPanel(NVGcontext* vg, const Rect& r, float radius = 8.f, float fill = 0.035f)
+    {
+        _drawExternalShadow(vg, r, radius, 0.85f);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, r.x, r.y, r.w, r.h, radius);
+        nvgFillColor(vg, nvgRGBA(255, 255, 255, settingAlpha(fill)));
+        nvgFill(vg);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, r.x + 1.f, r.y + 1.f, r.w - 2.f, r.h - 2.f, std::max(1.f, radius - 1.f));
+        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 48));
+        nvgStrokeWidth(vg, 1.5f);
+        nvgStroke(vg);
+    }
+
+    void _drawHeader(NVGcontext* vg, float x, float y, float w)
+    {
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgFontSize(vg, 27.f);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
+        nvgText(vg, x + 36.f, y + 42.f, "设置", nullptr);
+        nvgFontSize(vg, 15.f);
+        nvgFillColor(vg, nvgRGBA(210, 216, 226, 180));
+        nvgText(vg, x + 36.f, y + 70.f, m_inMapping ? m_mappingTitle.c_str() : "模拟器、输入、游戏与系统选项", nullptr);
+
+        const float startX = x + 238.f;
+        const float available = std::max(300.f, w - 274.f);
+        const float segment = available / static_cast<float>(m_categories.size());
+        const float centerY = y + 48.f;
+        for (int i = 0; i < static_cast<int>(m_categories.size()); ++i)
+        {
+            const bool selected = i == m_category;
+            const float centerX = startX + segment * (static_cast<float>(i) + 0.5f);
+            const float pillW = std::min(142.f, segment - 7.f);
+            const Rect pill{centerX - pillW * 0.5f, centerY - 22.f, pillW, 44.f};
+            if (selected)
+            {
+                _drawExternalShadow(vg, pill, 22.f, 0.8f);
+                nvgBeginPath(vg);
+                nvgRoundedRect(vg, pill.x, pill.y, pill.w, pill.h, 22.f);
+                nvgFillColor(vg, nvgRGBA(255, 255, 255, 34));
+                nvgFill(vg);
+                nvgBeginPath(vg);
+                nvgRoundedRect(vg, pill.x + 1.f, pill.y + 1.f, pill.w - 2.f, pill.h - 2.f, 21.f);
+                nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 112));
+                nvgStrokeWidth(vg, 1.f);
+                nvgStroke(vg);
+            }
+            const std::string icon = settingIconUtf8(m_categories[static_cast<size_t>(i)].icon);
+            nvgFontFaceId(vg, m_materialFont);
+            nvgFontSize(vg, selected ? 23.f : 20.f);
+            nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+            nvgFillColor(vg, selected ? nvgRGBA(255, 255, 255, 255) : nvgRGBA(205, 212, 223, 155));
+            nvgText(vg, centerX - 29.f, centerY, icon.c_str(), nullptr);
+            nvgFontFaceId(vg, m_defaultFont);
+            nvgFontSize(vg, selected ? 21.f : 19.f);
+            nvgText(vg, centerX + 13.f, centerY, m_categories[static_cast<size_t>(i)].title.c_str(), nullptr);
+        }
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, x + 36.f, y + 98.f);
+        nvgLineTo(vg, x + w - 36.f, y + 98.f);
+        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 46));
+        nvgStrokeWidth(vg, 1.f);
+        nvgStroke(vg);
+    }
+
+    void _drawContent(NVGcontext* vg, float x, float y, float w, float h)
+    {
+        auto& items = _activeItems();
+        const int focus = _activeFocus();
+        const float transition = settingBack(m_contentEntrance);
+        const float categoryEase = settingSmooth(m_categoryMotion);
+        const float slide = (1.f - categoryEase) * static_cast<float>(m_categoryDirection) * 82.f;
+        float cursorY = y + 16.f - _activeScroll();
+        nvgSave(vg);
+        nvgIntersectScissor(vg, x + 2.f, y + 2.f, w - 4.f, h - 4.f);
+        nvgGlobalAlpha(vg, settingSmooth(m_contentEntrance));
+        nvgTranslate(vg, slide + (1.f - transition) * 30.f, 0.f);
+        for (int i = 0; i < static_cast<int>(items.size()); ++i)
+        {
+            const auto& item = items[static_cast<size_t>(i)];
+            const float itemH = _itemHeight(item);
+            if (cursorY + itemH >= y - 20.f && cursorY <= y + h + 20.f)
+            {
+                if (item.kind == NanoSettingKind::Section)
+                    _drawSection(vg, item, x + 24.f, cursorY, w - 48.f, itemH);
+                else
+                    _drawItem(vg, item, i, i == focus, x + 18.f, cursorY, w - 36.f, itemH);
+            }
+            cursorY += itemH + 8.f;
+        }
+        nvgRestore(vg);
+
+        const float contentH = _contentHeight();
+        if (contentH > h)
+        {
+            const float trackH = h - 32.f;
+            const float thumbH = std::max(42.f, trackH * h / contentH);
+            const float maxScroll = std::max(1.f, contentH - h);
+            const float thumbY = y + 16.f + (_activeScroll() / maxScroll) * (trackH - thumbH);
+            nvgBeginPath(vg);
+            nvgRoundedRect(vg, x + w - 8.f, thumbY, 3.f, thumbH, 1.5f);
+            nvgFillColor(vg, nvgRGBA(255, 255, 255, 90));
+            nvgFill(vg);
+        }
+    }
+
+    void _drawSection(NVGcontext* vg, const NanoSettingItem& item,
+                      float x, float y, float w, float h)
+    {
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, x, y + 13.f, 4.f, 23.f, 2.f);
+        nvgFillColor(vg, nvgRGBA(79, 193, 255, 230));
+        nvgFill(vg);
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgFontSize(vg, 19.f);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(236, 241, 248, 225));
+        nvgText(vg, x + 16.f, y + h * 0.5f, item.title.c_str(), nullptr);
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, x + 132.f, y + h * 0.5f);
+        nvgLineTo(vg, x + w, y + h * 0.5f);
+        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 26));
+        nvgStrokeWidth(vg, 1.f);
+        nvgStroke(vg);
+    }
+
+    void _drawItem(NVGcontext* vg, const NanoSettingItem& item, int itemIndex, bool focused,
+                   float x, float y, float w, float h)
+    {
+        const bool pressed = m_pressMotion > 0.f && m_pressedItem == itemIndex
+            && m_pressedInMapping == m_inMapping;
+        const float pressScale = pressed ? 1.f - 0.035f * settingSmooth(m_pressMotion) : 1.f;
+        nvgSave(vg);
+        if (pressed)
+        {
+            nvgTranslate(vg, x + w * 0.5f, y + h * 0.5f);
+            nvgScale(vg, pressScale, pressScale);
+            nvgTranslate(vg, -(x + w * 0.5f), -(y + h * 0.5f));
+        }
+        _drawExternalShadow(vg, {x, y, w, h}, 7.f, focused ? 0.82f : 0.48f);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, x, y, w, h, 7.f);
+        nvgFillColor(vg, focused
+            ? nvgRGBA(79, 193, 255, pressed ? 42 : 25)
+            : nvgRGBA(255, 255, 255, pressed ? 14 : 5));
+        nvgFill(vg);
+        if (focused)
+        {
+            beiklive::ui::drawGradientFocusBorder(vg, x, y, w, h, 7.f, 3.f, 1.f,
+                beiklive::ui::gradientFocusAnimationOffset(m_time));
+        }
+        else
+        {
+            nvgBeginPath(vg);
+            nvgRoundedRect(vg, x + 1.f, y + 1.f, w - 2.f, h - 2.f, 6.f);
+            nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 24));
+            nvgStrokeWidth(vg, 1.f);
+            nvgStroke(vg);
+        }
+        const Rect iconBox{x + 15.f, y + 14.f, 48.f, 48.f};
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, iconBox.x, iconBox.y, iconBox.w, iconBox.h, 7.f);
+        nvgFillColor(vg, focused ? nvgRGBA(79, 193, 255, 38) : nvgRGBA(255, 255, 255, 12));
+        nvgFill(vg);
+        nvgFontFaceId(vg, m_materialFont);
+        nvgFontSize(vg, 25.f);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, focused ? nvgRGBA(119, 211, 255, 255) : nvgRGBA(215, 221, 231, 178));
+        const std::string icon = settingIconUtf8(item.icon);
+        nvgText(vg, iconBox.x + iconBox.w * 0.5f, iconBox.y + iconBox.h * 0.5f, icon.c_str(), nullptr);
+
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFontSize(vg, focused ? 19.f : 18.f);
+        nvgFillColor(vg, focused ? nvgRGBA(255, 255, 255, 255) : nvgRGBA(230, 234, 241, 210));
+        nvgText(vg, x + 79.f, y + (item.hint.empty() ? h * 0.5f : 28.f), item.title.c_str(), nullptr);
+        if (!item.hint.empty())
+        {
+            nvgFontSize(vg, 13.5f);
+            nvgFillColor(vg, nvgRGBA(190, 199, 212, focused ? 185 : 135));
+            nvgText(vg, x + 79.f, y + 51.f, item.hint.c_str(), nullptr);
+        }
+
+        const std::string value = item.value ? item.value() : std::string();
+        if (item.kind == NanoSettingKind::Binding)
+            _drawBinding(vg, value, x + w - 24.f, y + h * 0.5f, focused);
+        else if (item.kind == NanoSettingKind::Toggle)
+            _drawToggle(vg, value == "开启", x + w - 78.f, y + h * 0.5f, focused);
+        else
+        {
+            nvgFontFaceId(vg, m_defaultFont);
+            nvgFontSize(vg, focused ? 20.f : 18.f);
+            nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
+            nvgFillColor(vg, focused ? nvgRGBA(145, 222, 255, 255) : nvgRGBA(226, 232, 240, 215));
+            nvgText(vg, x + w - 39.f, y + h * 0.5f, value.c_str(), nullptr);
+            nvgFontSize(vg, 22.f);
+            nvgText(vg, x + w - 17.f, y + h * 0.5f, ">", nullptr);
+        }
+        nvgRestore(vg);
+    }
+
+    void _drawToggle(NVGcontext* vg, bool enabled, float x, float y, bool focused)
+    {
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, x, y - 14.f, 54.f, 28.f, 14.f);
+        const NVGpaint toggleShadow = nvgBoxGradient(vg, x + 3.f, y - 10.f,
+            54.f, 28.f, 14.f, 4.f, nvgRGBA(0, 0, 0, 58), nvgRGBA(0, 0, 0, 0));
+        nvgBeginPath(vg);
+        nvgRect(vg, x - 2.f, y - 17.f, 63.f, 38.f);
+        nvgRoundedRect(vg, x, y - 14.f, 54.f, 28.f, 14.f);
+        nvgPathWinding(vg, NVG_HOLE);
+        nvgFillPaint(vg, toggleShadow);
+        nvgFill(vg);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, x, y - 14.f, 54.f, 28.f, 14.f);
+        nvgFillColor(vg, enabled ? nvgRGBA(79, 193, 255, focused ? 220 : 175) : nvgRGBA(255, 255, 255, 35));
+        nvgFill(vg);
+        const float knobX = enabled ? x + 40.f : x + 14.f;
+        nvgBeginPath(vg);
+        nvgCircle(vg, knobX, y, 10.f);
+        nvgFillColor(vg, enabled ? nvgRGBA(255, 255, 255, 255) : nvgRGBA(195, 202, 214, 220));
+        nvgFill(vg);
+    }
+
+    struct BindingVisual
+    {
+        std::string glyph;
+        std::string suffix;
+        bool switchGlyph = false;
+    };
+
+    BindingVisual _bindingToken(const std::string& token) const
+    {
+        struct ButtonToken { const char* token; brls::ControllerButton button; };
+        static const ButtonToken buttons[] = {
+            {"PAD_A", brls::BUTTON_A}, {"PAD_B", brls::BUTTON_B}, {"PAD_X", brls::BUTTON_X}, {"PAD_Y", brls::BUTTON_Y},
+            {"PAD_LB", brls::BUTTON_LB}, {"PAD_RB", brls::BUTTON_RB},
+            {"PAD_LSB", brls::BUTTON_LSB}, {"PAD_RSB", brls::BUTTON_RSB}, {"PAD_START", brls::BUTTON_START}, {"PAD_BACK", brls::BUTTON_BACK},
+            {"PAD_UP", brls::BUTTON_UP}, {"PAD_DOWN", brls::BUTTON_DOWN}, {"PAD_LEFT", brls::BUTTON_LEFT}, {"PAD_RIGHT", brls::BUTTON_RIGHT},
+        };
+        for (const auto& button : buttons)
+            if (token == button.token)
+                return {brls::Hint::getKeyIcon(button.button), "", true};
+        if (token == "PAD_LT") return {settingIconUtf8(0xE0A6), "", true};
+        if (token == "PAD_RT") return {settingIconUtf8(0xE0A7), "", true};
+        if (token == "PAD_LEFTSTICKUP") return {settingIconUtf8(0xE0C1), "↑", true};
+        if (token == "PAD_LEFTSTICKDOWN") return {settingIconUtf8(0xE0C1), "↓", true};
+        if (token == "PAD_LEFTSTICKLEFT") return {settingIconUtf8(0xE0C1), "←", true};
+        if (token == "PAD_LEFTSTICKRIGHT") return {settingIconUtf8(0xE0C1), "→", true};
+        if (token == "PAD_RIGHTSTICKUP") return {settingIconUtf8(0xE0C2), "↑", true};
+        if (token == "PAD_RIGHTSTICKDOWN") return {settingIconUtf8(0xE0C2), "↓", true};
+        if (token == "PAD_RIGHTSTICKLEFT") return {settingIconUtf8(0xE0C2), "←", true};
+        if (token == "PAD_RIGHTSTICKRIGHT") return {settingIconUtf8(0xE0C2), "→", true};
+        return {token, "", false};
+    }
+
+    void _drawBinding(NVGcontext* vg, const std::string& binding,
+                      float right, float centerY, bool focused)
+    {
+        if (binding.empty() || binding == "none")
+        {
+            nvgFontFaceId(vg, m_defaultFont);
+            nvgFontSize(vg, 15.f);
+            nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
+            nvgFillColor(vg, nvgRGBA(190, 198, 210, 150));
+            nvgText(vg, right, centerY, "未绑定", nullptr);
+            return;
+        }
+        const auto alternatives = splitSettingText(binding, '|');
+        float cursor = right;
+        for (auto alt = alternatives.rbegin(); alt != alternatives.rend(); ++alt)
+        {
+            const auto tokens = splitSettingText(*alt, '+');
+            for (auto token = tokens.rbegin(); token != tokens.rend(); ++token)
+            {
+                const auto visual = _bindingToken(*token);
+                nvgFontFaceId(vg, visual.switchGlyph ? m_switchFont : m_defaultFont);
+                nvgFontSize(vg, visual.switchGlyph ? 24.f : 14.f);
+                float bounds[4]{};
+                nvgTextBounds(vg, 0.f, 0.f, visual.glyph.c_str(), nullptr, bounds);
+                float suffixBounds[4]{};
+                if (!visual.suffix.empty())
+                {
+                    nvgFontFaceId(vg, m_defaultFont);
+                    nvgFontSize(vg, 18.f);
+                    nvgTextBounds(vg, 0.f, 0.f, visual.suffix.c_str(), nullptr, suffixBounds);
+                }
+                const float chipW = std::max(34.f, bounds[2] - bounds[0]
+                    + (visual.suffix.empty() ? 18.f : suffixBounds[2] - suffixBounds[0] + 25.f));
+                cursor -= chipW;
+                nvgBeginPath(vg);
+                nvgRoundedRect(vg, cursor, centerY - 17.f, chipW, 34.f, 17.f);
+                nvgFillColor(vg, focused ? nvgRGBA(79, 193, 255, 42) : nvgRGBA(255, 255, 255, 18));
+                nvgFill(vg);
+                nvgBeginPath(vg);
+                nvgRoundedRect(vg, cursor + 1.f, centerY - 16.f, chipW - 2.f, 32.f, 16.f);
+                nvgStrokeColor(vg, focused ? nvgRGBA(119, 211, 255, 150) : nvgRGBA(255, 255, 255, 42));
+                nvgStrokeWidth(vg, 1.f);
+                nvgStroke(vg);
+                nvgFontFaceId(vg, visual.switchGlyph ? m_switchFont : m_defaultFont);
+                nvgFontSize(vg, visual.switchGlyph ? 24.f : 14.f);
+                nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+                nvgFillColor(vg, nvgRGBA(255, 255, 255, focused ? 255 : 210));
+                const float glyphCenter = cursor + chipW * 0.5f
+                    - (visual.suffix.empty() ? 0.f : 8.f);
+                nvgText(vg, glyphCenter, centerY, visual.glyph.c_str(), nullptr);
+                if (!visual.suffix.empty())
+                {
+                    nvgFontFaceId(vg, m_defaultFont);
+                    nvgFontSize(vg, 18.f);
+                    nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+                    nvgText(vg, glyphCenter + 11.f, centerY, visual.suffix.c_str(), nullptr);
+                }
+                cursor -= 7.f;
+            }
+            if (alt + 1 != alternatives.rend())
+            {
+                nvgFontFaceId(vg, m_defaultFont);
+                nvgFontSize(vg, 13.f);
+                nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+                nvgFillColor(vg, nvgRGBA(200, 208, 220, 150));
+                cursor -= 17.f;
+                nvgText(vg, cursor + 8.f, centerY, "或", nullptr);
+                cursor -= 5.f;
+            }
+            if (cursor < right - 390.f) break;
+        }
+    }
+
+    void _drawFooter(NVGcontext* vg, float x, float y, float w, float h)
+    {
+        float cursor = x + w - 32.f;
+        const float hintY = y + h - 29.f;
+        _drawHint(vg, brls::BUTTON_B,
+                  m_selectorOpen ? "取消" : (m_inMapping ? "返回平台" : "返回"),
+                  cursor, hintY);
+        if (m_inMapping && !m_selectorOpen && !m_mappingItems.empty()
+            && m_mappingItems[static_cast<size_t>(m_mappingFocus)].kind == NanoSettingKind::Binding)
+            _drawHint(vg, brls::BUTTON_X, "清除绑定", cursor, hintY);
+        _drawHint(vg, brls::BUTTON_A, m_selectorOpen ? "确认" : "选择", cursor, hintY);
+        if (!m_inMapping && !m_selectorOpen)
+        {
+            _drawHint(vg, brls::BUTTON_RB, "下一类", cursor, hintY);
+            _drawHint(vg, brls::BUTTON_LB, "上一类", cursor, hintY);
+        }
+    }
+
+    void _drawHint(NVGcontext* vg, brls::ControllerButton button,
+                   const char* label, float& cursor, float y)
+    {
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgFontSize(vg, 17.f);
+        float bounds[4]{};
+        nvgTextBounds(vg, 0.f, 0.f, label, nullptr, bounds);
+        const float width = bounds[2] - bounds[0];
+        cursor -= width + 42.f;
+        nvgFontFaceId(vg, m_switchFont);
+        nvgFontSize(vg, 24.f);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(255, 255, 255, 245));
+        const std::string glyph = brls::Hint::getKeyIcon(button);
+        nvgText(vg, cursor + 13.f, y, glyph.c_str(), nullptr);
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgFontSize(vg, 17.f);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(230, 234, 241, 225));
+        nvgText(vg, cursor + 29.f, y, label, nullptr);
+        cursor -= 13.f;
+    }
+
+    void _drawSelector(NVGcontext* vg, float x, float y, float w, float h)
+    {
+        const float eased = settingBack(m_overlayMotion);
+        nvgSave(vg);
+        nvgGlobalAlpha(vg, settingSmooth(m_overlayMotion));
+        nvgBeginPath(vg);
+        nvgRect(vg, x, y, w, h);
+        nvgFillColor(vg, nvgRGBA(0, 0, 0, 205));
+        nvgFill(vg);
+        const int count = static_cast<int>(m_selectorOptions.size());
+        const int visible = std::min(7, std::max(1, count));
+        const float panelW = std::min(620.f, w - 120.f);
+        const float panelH = 104.f + visible * 54.f;
+        const Rect panel{x + (w - panelW) * 0.5f,
+                         y + (h - panelH) * 0.5f + (1.f - eased) * 42.f,
+                         panelW, panelH};
+        nvgTranslate(vg, x + w * 0.5f, y + h * 0.5f);
+        const float scale = 0.90f + eased * 0.10f;
+        nvgScale(vg, scale, scale);
+        nvgTranslate(vg, -(x + w * 0.5f), -(y + h * 0.5f));
+        _drawPanel(vg, panel, 8.f, 0.10f);
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgFontSize(vg, 23.f);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(255, 255, 255, 255));
+        nvgText(vg, panel.x + 28.f, panel.y + 36.f, m_selectorTitle.c_str(), nullptr);
+        nvgFontSize(vg, 17.f);
+        nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(226, 232, 240, 220));
+        const std::string counter = count > 0 ? std::to_string(m_selectorIndex + 1) + " / " + std::to_string(count) : "0 / 0";
+        nvgText(vg, panel.x + panel.w - 28.f, panel.y + 36.f, counter.c_str(), nullptr);
+        int first = std::max(0, m_selectorIndex - visible / 2);
+        first = std::min(first, std::max(0, count - visible));
+        for (int row = 0; row < visible && first + row < count; ++row)
+        {
+            const int index = first + row;
+            const float rowY = panel.y + 72.f + row * 54.f;
+            const bool selected = index == m_selectorIndex;
+            const Rect optionRect{panel.x + 18.f, rowY, panel.w - 36.f, 46.f};
+            _drawExternalShadow(vg, optionRect, 7.f, selected ? 0.70f : 0.30f);
+            nvgBeginPath(vg);
+            nvgRoundedRect(vg, optionRect.x, optionRect.y, optionRect.w, optionRect.h, 7.f);
+            nvgFillColor(vg, selected ? nvgRGBA(79, 193, 255, 34) : nvgRGBA(255, 255, 255, 5));
+            nvgFill(vg);
+            if (selected)
+            {
+                beiklive::ui::drawGradientFocusBorder(vg, panel.x + 18.f, rowY, panel.w - 36.f, 46.f,
+                    7.f, 3.f, 1.f, beiklive::ui::gradientFocusAnimationOffset(m_time));
+            }
+            nvgFontFaceId(vg, m_defaultFont);
+            nvgFontSize(vg, selected ? 19.f : 17.f);
+            nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+            nvgFillColor(vg, selected ? nvgRGBA(255, 255, 255, 255) : nvgRGBA(215, 221, 231, 180));
+            nvgText(vg, panel.x + 40.f, rowY + 23.f, m_selectorOptions[static_cast<size_t>(index)].c_str(), nullptr);
+            if (selected)
+            {
+                const std::string check = settingIconUtf8(0xE5CA);
+                nvgFontFaceId(vg, m_materialFont);
+                nvgFontSize(vg, 22.f);
+                nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
+                nvgFillColor(vg, nvgRGBA(119, 211, 255, 255));
+                nvgText(vg, panel.x + panel.w - 40.f, rowY + 23.f, check.c_str(), nullptr);
+            }
+        }
+        nvgRestore(vg);
+    }
+};
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  共享常量
@@ -1933,18 +3551,15 @@ SettingPage::~SettingPage()
 
 void SettingPage::init()
 {
-    auto* frame = new ModernSettingFrame(
-        {"模拟器", "按键", "游戏", "显示", "声音", "调试"},
-        [this]() { beiklive::popActivity(this, false); });
-    frame->addTab(buildUITab());
-    frame->addTab(buildKeyBindTab());
-    frame->addTab(buildGameTab());
-    frame->addTab(buildDisplayTab());
-    frame->addTab(buildAudioTab());
-    frame->addTab(buildDebugTab());
-    m_settingsFrame = frame;
-    this->getContentBox()->addView(frame);
-    frame->finish();
+    NanoSettingsHost host;
+    host.showShader = [this](bool visible) { this->showShader(visible); };
+    host.setGradientTheme = [this](GradientTheme theme) { this->setGradientTheme(theme); };
+    host.showBackground = [this](bool visible) { this->showBackground(visible); };
+    host.setBackgroundImage = [this](const std::string& path) { this->setBackgroundImage(path); };
+    host.close = [this]() { beiklive::popActivity(this, false); };
+    auto* canvas = new NanoSettingsCanvas(std::move(host));
+    m_settingsFrame = canvas;
+    this->getContentBox()->addView(canvas);
 }
 
 } // namespace beiklive

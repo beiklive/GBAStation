@@ -50,7 +50,7 @@ namespace beiklive
             if (fs::exists(fs::path(startPath) / filename, ec))
                 flPage->setInitialFocusFilename(filename);
         }
-        flPage->onFileSelected = [onSelected](beiklive::DirListData item)
+        flPage->onFileSelected = [flPage, onSelected](beiklive::DirListData item)
         {
             if (item.itemType != beiklive::enums::FileType::DRIVE &&
                 item.itemType != beiklive::enums::FileType::DIRECTORY)
@@ -61,7 +61,7 @@ namespace beiklive
                     return;
                 }
                 onSelected(item.fullPath);
-                brls::Application::popActivity();
+                flPage->requestClose();
             }
         };
         if (hasStartDir)
@@ -71,13 +71,14 @@ namespace beiklive
         container->setGrow(1.0f);
         container->addView(flPage);
         container->registerAction("关闭"_i18n, brls::BUTTON_START,
-                                  [](brls::View*) { brls::Application::popActivity(); return true; });
+                                  [flPage](brls::View*) { flPage->requestClose(); return true; });
 
         auto* frame = new brls::AppletFrame(container);
         frame->setHeaderVisibility(brls::Visibility::GONE);
         frame->setFooterVisibility(brls::Visibility::GONE);
         frame->setBackground(brls::ViewBackground::NONE);
-        brls::Application::pushActivity(new brls::Activity(frame));
+        brls::Application::pushActivity(new brls::Activity(frame),
+                                        brls::TransitionAnimation::FADE);
 
         if (!hasStartDir)
             flPage->showDriveList();

@@ -40,6 +40,8 @@ namespace beiklive
         int m_switchFont = -1;
         float m_pageEntrance = 0.f;
         float m_animTime = 0.f;
+        bool m_closing = false;
+        bool m_closeQueued = false;
         std::chrono::steady_clock::time_point m_lastFrameTime;
 
         void _setupDetailPanel();
@@ -79,6 +81,7 @@ namespace beiklive
         void setPath(const std::string path);
         void setInitialFocusFilename(const std::string& filename);
         void setDirSelectionMode(bool on);
+        void requestClose();
 
         std::function<void(beiklive::DirListData)> onFileSelected;
         std::function<void()> onRequestClose;
