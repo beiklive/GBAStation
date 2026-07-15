@@ -43,12 +43,13 @@ const state = {
     flipX: 1,
     flipY: 1,
     mode: 'fill',
-    background: 'transparent',
+    background: 'blur',
     outputSize: 512,
     showGrid: true,
   },
   cropPointers: new Map(),
   cropGesture: null,
+  cropBlurCache: null,
 };
 
 const romExtensions = new Set(['gba', 'gb', 'gbc', 'nes', 'fds', 'sfc', 'smc', 'nds']);
@@ -1512,6 +1513,7 @@ function setCropMode(mode) {
 
 function setCropBackground(background) {
   state.crop.background = background;
+  $('cropBgBlurBtn').classList.toggle('active', background === 'blur');
   $('cropBgTransparentBtn').classList.toggle('active', background === 'transparent');
   $('cropBgDarkBtn').classList.toggle('active', background === '#20242c');
   $('cropBgLightBtn').classList.toggle('active', background === '#f4f7fb');
@@ -1550,7 +1552,8 @@ function openCropperFromImage(img, name = '') {
   state.cropImage = img;
   state.cropImageName = name;
   state.crop.mode = 'fill';
-  state.crop.background = 'transparent';
+  state.crop.background = 'blur';
+  state.cropBlurCache = null;
   state.crop.showGrid = true;
   $('cropFillBtn').classList.add('active');
   $('cropFitBtn').classList.remove('active');
@@ -1558,7 +1561,7 @@ function openCropperFromImage(img, name = '') {
   $('cropOutputSize').value = '512';
   $('cropSourceInfo').textContent = `${name || '图片'} · ${img.naturalWidth || img.width} x ${img.naturalHeight || img.height}`;
   setCropOutputSize(512);
-  setCropBackground('transparent');
+  setCropBackground('blur');
   resetCropTransform();
   $('cropDialog').showModal();
   $('cropCanvas').focus();
@@ -1591,12 +1594,59 @@ async function openCropperFromUrl(url, name = 'switch-cover.png') {
   }
 }
 
+function drawCropBackgroundCover(ctx, width, height, img, scaleMultiplier = 1) {
+  const quarterTurn = Math.abs(state.crop.rotation / 90) % 2 === 1;
+  const rotatedWidth = quarterTurn ? img.height : img.width;
+  const rotatedHeight = quarterTurn ? img.width : img.height;
+  const scale = Math.max(width / rotatedWidth, height / rotatedHeight) * scaleMultiplier;
+
+  ctx.translate(width / 2, height / 2);
+  ctx.rotate(state.crop.rotation * Math.PI / 180);
+  ctx.scale(state.crop.flipX, state.crop.flipY);
+  ctx.drawImage(img, -img.width * scale / 2, -img.height * scale / 2, img.width * scale, img.height * scale);
+}
+
+function getBlurredCropBackground(canvas, img) {
+  const key = `${canvas.width}x${canvas.height}:${state.crop.rotation}:${state.crop.flipX}:${state.crop.flipY}`;
+  const cached = state.cropBlurCache;
+  if (cached?.image === img && cached.key === key) return cached.canvas;
+
+  const blurred = document.createElement('canvas');
+  blurred.width = canvas.width;
+  blurred.height = canvas.height;
+  const ctx = blurred.getContext('2d');
+  const blurRadius = Math.max(14, canvas.width * 0.035);
+
+  if ('filter' in ctx) {
+    ctx.save();
+    ctx.filter = `blur(${blurRadius}px)`;
+    drawCropBackgroundCover(ctx, canvas.width, canvas.height, img, 1.16);
+    ctx.restore();
+  } else {
+    const reduced = document.createElement('canvas');
+    reduced.width = 48;
+    reduced.height = 48;
+    const reducedCtx = reduced.getContext('2d');
+    reducedCtx.save();
+    drawCropBackgroundCover(reducedCtx, reduced.width, reduced.height, img, 1.16);
+    reducedCtx.restore();
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(reduced, 0, 0, canvas.width, canvas.height);
+  }
+
+  state.cropBlurCache = { image: img, key, canvas: blurred };
+  return blurred;
+}
+
 function renderCropCanvas(canvas, includeGrid) {
   const img = state.cropImage;
   if (!img) return;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  if (state.crop.background !== 'transparent') {
+  if (state.crop.background === 'blur') {
+    ctx.drawImage(getBlurredCropBackground(canvas, img), 0, 0);
+  } else if (state.crop.background !== 'transparent') {
     ctx.fillStyle = state.crop.background;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
@@ -1906,6 +1956,7 @@ function bindEvents() {
   $('cropFlipVBtn').onclick = () => { state.crop.flipY *= -1; drawCrop(); };
   $('cropResetBtn').onclick = resetCropTransform;
   $('cropOutputSize').onchange = (e) => setCropOutputSize(e.target.value);
+  $('cropBgBlurBtn').onclick = () => setCropBackground('blur');
   $('cropBgTransparentBtn').onclick = () => setCropBackground('transparent');
   $('cropBgDarkBtn').onclick = () => setCropBackground('#20242c');
   $('cropBgLightBtn').onclick = () => setCropBackground('#f4f7fb');

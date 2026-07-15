@@ -1688,6 +1688,17 @@ dialog::backdrop {
   background-size: 14px 14px;
 }
 
+.blur-swatch {
+  display: grid;
+  place-items: center;
+  color: var(--tblr-primary);
+  background: var(--tblr-bg-surface-secondary);
+}
+
+.blur-swatch .ti {
+  font-size: 18px;
+}
+
 .dark-swatch { background: #202124; }
 .light-swatch { background: #f8f9fa; }
 
