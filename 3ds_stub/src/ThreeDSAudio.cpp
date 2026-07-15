@@ -18,13 +18,13 @@ constexpr double kOutputRate = 48000.0;
 ThreeDSSwitchAudioSink::ThreeDSSwitchAudioSink(std::string_view) {
     libnx_Result rc = audoutInitialize();
     if (R_FAILED(rc)) {
-        appendLog("GBAStation3DSStub: audoutInitialize failed rc=%#x", rc);
+        logMessage(LogLevel::Error, "GBAStation3DSStub: audoutInitialize failed rc=%#x", rc);
         return;
     }
 
     rc = audoutStartAudioOut();
     if (R_FAILED(rc)) {
-        appendLog("GBAStation3DSStub: audoutStartAudioOut failed rc=%#x", rc);
+        logMessage(LogLevel::Error, "GBAStation3DSStub: audoutStartAudioOut failed rc=%#x", rc);
         audoutExit();
         return;
     }
@@ -32,7 +32,8 @@ ThreeDSSwitchAudioSink::ThreeDSSwitchAudioSink(std::string_view) {
     for (std::size_t i = 0; i < kBufferCount; ++i) {
         samples_[i] = static_cast<s16*>(aligned_alloc(0x1000, 0x1000));
         if (!samples_[i]) {
-            appendLog("GBAStation3DSStub: audio buffer allocation failed index=%zu", i);
+            logMessage(LogLevel::Error,
+                       "GBAStation3DSStub: audio buffer allocation failed index=%zu", i);
             return;
         }
         out_buffers_[i].buffer = samples_[i];
@@ -112,7 +113,8 @@ bool ThreeDSSwitchAudioSink::SubmitPending() {
     out_buffers_[index].data_size = kBufferBytes;
     const libnx_Result rc = audoutAppendAudioOutBuffer(&out_buffers_[index]);
     if (R_FAILED(rc)) {
-        appendLog("GBAStation3DSStub: audoutAppendAudioOutBuffer failed rc=%#x", rc);
+        logMessage(LogLevel::Error,
+                   "GBAStation3DSStub: audoutAppendAudioOutBuffer failed rc=%#x", rc);
         return false;
     }
     busy_[index] = true;

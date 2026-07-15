@@ -31,14 +31,14 @@ public:
     /// 是否有可用更新
     bool hasUpdate() const { return m_info.hasUpdate; }
 
-    /// 下载更新包并提取主程序与 NDS Stub 到临时目录，返回是否成功
+    /// 下载更新包并提取主程序、NDS Stub 与 3DS Stub 到临时目录，返回是否成功
     /// onProgress: (totalBytes, downloadedBytes) → 返回 false 可中断
     bool download(std::function<bool(size_t total, size_t now)> onProgress);
 
     /// 准备安装：校验缓存文件是否就绪
     bool install();
 
-    /// 完成安装：romfsExit + 替换主程序与 NDS Stub（必须在 UI 线程调用，紧接 quit）
+    /// 完成安装：romfsExit + 替换主程序、NDS Stub 与 3DS Stub（必须在 UI 线程调用，紧接 quit）
     bool finishInstall();
 
     /// 取消正在进行的网络操作

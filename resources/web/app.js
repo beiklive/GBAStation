@@ -52,7 +52,10 @@ const state = {
   cropBlurCache: null,
 };
 
-const romExtensions = new Set(['gba', 'gb', 'gbc', 'nes', 'fds', 'sfc', 'smc', 'nds']);
+const romExtensions = new Set([
+  'gba', 'gb', 'gbc', 'nes', 'fds', 'sfc', 'smc', 'nds',
+  '3ds', 'cci', 'cxi', '3dsx', 'app', 'elf',
+]);
 
 const platforms = [
   ['GBA', 'GBA'],
@@ -61,6 +64,7 @@ const platforms = [
   ['FC', 'FC'],
   ['SFC', 'SFC'],
   ['NDS', 'NDS'],
+  ['3DS', '3DS'],
 ];
 
 const coreOptionsByPlatform = {
@@ -76,6 +80,7 @@ const coreOptionsByPlatform = {
     ['snes9x', 'Snes9x'],
   ],
   NDS: [['melonds', 'melonDS']],
+  '3DS': [['azahar', 'Azahar']],
 };
 
 const gameConfigFields = [
@@ -198,7 +203,7 @@ async function api(path, options = {}) {
 }
 
 function platformOf(game) {
-  return game.platformName || ({ 1: 'GBA', 2: 'GBC', 3: 'GB', 4: 'FC', 5: 'SFC', 6: 'NDS' }[game.platform] || 'OTHER');
+  return game.platformName || ({ 1: 'GBA', 2: 'GBC', 3: 'GB', 4: 'FC', 5: 'SFC', 6: 'NDS', 7: '3DS' }[game.platform] || 'OTHER');
 }
 
 function coreOptionsForGame(game) {

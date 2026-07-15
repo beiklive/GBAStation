@@ -57,6 +57,7 @@ inline std::string GetRootPath()
     constexpr const char *DATA_BASE_FILE_NES     = "GameData_NES.json";     ///< NES 平台数据库文件
     constexpr const char *DATA_BASE_FILE_SNES    = "GameData_SNES.json";    ///< SNES 平台数据库文件
     constexpr const char *DATA_BASE_FILE_NDS     = "GameData_NDS.json";     ///< NDS 平台数据库文件
+    constexpr const char *DATA_BASE_FILE_3DS     = "GameData_3DS.json";     ///< Nintendo 3DS 平台数据库文件
 
     namespace 
     {
@@ -93,6 +94,7 @@ inline std::string GetRootPath()
             case 4: return DATA_BASE_FILE_NES;     // EmuPlatform::EmuNES
             case 5: return DATA_BASE_FILE_SNES;    // EmuPlatform::EmuSNES
             case 6: return DATA_BASE_FILE_NDS;      // EmuPlatform::EmuNDS
+            case 7: return DATA_BASE_FILE_3DS;      // EmuPlatform::Emu3DS
             default: return DATA_BASE_FILE;
             }
         }

@@ -101,7 +101,12 @@ public:
 
     void protect() {
 #if defined(__SWITCH__)
-        jitTransitionToExecutable(&m_jit);
+        // CodeMemory exposes separate RW/RX aliases. Dynarmic explicitly flushes each emitted
+        // block through invalidate(), while this transition flushes the entire JIT allocation.
+        // Keep transitions only for the legacy single-mapping fallback.
+        if (m_jit.type == JitType_SetProcessMemoryPermission) {
+            jitTransitionToExecutable(&m_jit);
+        }
 #elif defined(__APPLE__) && !TARGET_OS_IPHONE
         pthread_jit_write_protect_np(1);
 #elif defined(__APPLE__) || defined(__NetBSD__) || defined(__OpenBSD__)
@@ -111,7 +116,9 @@ public:
 
     void unprotect() {
 #if defined(__SWITCH__)
-        jitTransitionToWritable(&m_jit);
+        if (m_jit.type == JitType_SetProcessMemoryPermission) {
+            jitTransitionToWritable(&m_jit);
+        }
 #elif defined(__APPLE__) && !TARGET_OS_IPHONE
         pthread_jit_write_protect_np(0);
 #elif defined(__APPLE__) || defined(__NetBSD__) || defined(__OpenBSD__)

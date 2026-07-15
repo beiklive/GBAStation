@@ -137,6 +137,50 @@ foreach(dynarmic_source IN ITEMS
     write_if_different(${dynarmic_source} "${dynarmic_contents}")
 endforeach()
 
+# The ARM64 backend normally invalidates its full 128 MiB code cache after emitting a small
+# prelude. On Switch, invalidate only the bytes that were actually generated.
+foreach(dynarmic_address_space IN ITEMS
+        ${STAGE_SOURCE}/externals/dynarmic/src/dynarmic/backend/arm64/a32_address_space.cpp
+        ${STAGE_SOURCE}/externals/dynarmic/src/dynarmic/backend/arm64/a64_address_space.cpp)
+    file(READ ${dynarmic_address_space} dynarmic_address_space_contents)
+    string(REPLACE
+        "mem.invalidate_all();"
+        "mem.invalidate(mem.ptr(), static_cast<std::size_t>(code.offset()));"
+        dynarmic_address_space_contents
+        "${dynarmic_address_space_contents}"
+    )
+    write_if_different(${dynarmic_address_space} "${dynarmic_address_space_contents}")
+endforeach()
+
+# A 128 MiB cache is excessive per emulated ARM core and per page table on Switch. 32 MiB is
+# large enough for 3DS application code while substantially reducing committed JIT memory.
+set(arm_dynarmic_source ${STAGE_SOURCE}/src/core/arm/dynarmic/arm_dynarmic.cpp)
+file(READ ${arm_dynarmic_source} arm_dynarmic_contents)
+if (NOT arm_dynarmic_contents MATCHES "config.code_cache_size = 32")
+    string(REPLACE
+        "    config.callbacks = cb.get();"
+        "    config.callbacks = cb.get();\n#ifdef __SWITCH__\n    config.code_cache_size = 32 * 1024 * 1024;\n#endif"
+        arm_dynarmic_contents
+        "${arm_dynarmic_contents}"
+    )
+endif()
+write_if_different(${arm_dynarmic_source} "${arm_dynarmic_contents}")
+
+# Oaknut uses separate writable and executable aliases on Switch. The ARM64 Pica shader JIT must
+# write through ptr() but call and branch through xptr(). Upstream assumes both aliases are equal.
+foreach(shader_jit_source IN ITEMS
+        ${STAGE_SOURCE}/src/video_core/shader/shader_jit_a64_compiler.cpp
+        ${STAGE_SOURCE}/src/video_core/shader/shader_jit_a64_compiler.h)
+    file(READ ${shader_jit_source} shader_jit_contents)
+    string(REPLACE
+        "code_mem->ptr()) +"
+        "code_mem->xptr()) +"
+        shader_jit_contents
+        "${shader_jit_contents}"
+    )
+    write_if_different(${shader_jit_source} "${shader_jit_contents}")
+endforeach()
+
 set(common_error_source ${STAGE_SOURCE}/src/common/error.cpp)
 file(READ ${common_error_source} common_error_contents)
 string(REPLACE

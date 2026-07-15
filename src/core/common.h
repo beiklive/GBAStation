@@ -153,6 +153,9 @@ namespace beiklive // 全局功能函数
         static const std::vector<CoreOption> ndsCores = {
             {"melonds", "melonDS", CoreType::Mgba},
         };
+        static const std::vector<CoreOption> threeDsCores = {
+            {"azahar", "Azahar", CoreType::Mgba},
+        };
         static const std::vector<CoreOption> emptyCores;
 
         switch (platform)
@@ -167,6 +170,8 @@ namespace beiklive // 全局功能函数
             return snesCores;
         case (int)beiklive::enums::EmuPlatform::EmuNDS:
             return ndsCores;
+        case (int)beiklive::enums::EmuPlatform::Emu3DS:
+            return threeDsCores;
         default:
             return emptyCores;
         }
@@ -186,6 +191,8 @@ namespace beiklive // 全局功能函数
             return "snes9x2005";
         case (int)beiklive::enums::EmuPlatform::EmuNDS:
             return "melonds";
+        case (int)beiklive::enums::EmuPlatform::Emu3DS:
+            return "azahar";
         default:
             return "";
         }

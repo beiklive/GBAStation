@@ -31,6 +31,10 @@ static std::string cacheNdsStubPath() {
     return beiklive::path::cachePath() + "/update_nds_stub.nro";
 }
 
+static std::string cacheThreeDsStubPath() {
+    return beiklive::path::cachePath() + "/update_3ds_stub.nro";
+}
+
 // 缓存目录中的 update.zip 路径
 static std::string cacheZipPath() {
     return beiklive::path::cachePath() + "/update.zip";
@@ -117,7 +121,8 @@ static std::string normalizeZipPath(const std::string& name) {
 
 static bool extractUpdateFilesFromZip(const std::string& zipPath,
                                       const std::string& mainNroPath,
-                                      const std::string& ndsStubPath) {
+                                      const std::string& ndsStubPath,
+                                      const std::string& threeDsStubPath) {
     mz_zip_archive zip;
     memset(&zip, 0, sizeof(zip));
     if (!mz_zip_reader_init_file(&zip, zipPath.c_str(), 0))
@@ -127,6 +132,8 @@ static bool extractUpdateFilesFromZip(const std::string& zipPath,
     int mainFallbackIndex = -1;
     int stubPreferredIndex = -1;
     int stubFallbackIndex = -1;
+    int threeDsStubPreferredIndex = -1;
+    int threeDsStubFallbackIndex = -1;
     mz_uint numFiles = mz_zip_reader_get_num_files(&zip);
     for (mz_uint i = 0; i < numFiles; ++i) {
         char filename[512];
@@ -136,27 +143,37 @@ static bool extractUpdateFilesFromZip(const std::string& zipPath,
             mainPreferredIndex = static_cast<int>(i);
         } else if (normalized == "GBAStation/core/GBAStationNDSStub.nro") {
             stubPreferredIndex = static_cast<int>(i);
+        } else if (normalized == "GBAStation/core/GBAStation3DSStub.nro") {
+            threeDsStubPreferredIndex = static_cast<int>(i);
         }
         const std::string baseName = zipBaseName(normalized);
         if (baseName == "GBAStation.nro" && mainFallbackIndex < 0)
             mainFallbackIndex = static_cast<int>(i);
         else if (baseName == "GBAStationNDSStub.nro" && stubFallbackIndex < 0)
             stubFallbackIndex = static_cast<int>(i);
+        else if (baseName == "GBAStation3DSStub.nro" && threeDsStubFallbackIndex < 0)
+            threeDsStubFallbackIndex = static_cast<int>(i);
     }
 
     const int mainIndex = mainPreferredIndex >= 0 ? mainPreferredIndex : mainFallbackIndex;
     const int stubIndex = stubPreferredIndex >= 0 ? stubPreferredIndex : stubFallbackIndex;
+    const int threeDsStubIndex = threeDsStubPreferredIndex >= 0
+        ? threeDsStubPreferredIndex : threeDsStubFallbackIndex;
     bool mainOk = false;
     bool stubOk = false;
+    bool threeDsStubOk = false;
     if (mainIndex >= 0)
         mainOk = mz_zip_reader_extract_to_file(
             &zip, static_cast<mz_uint>(mainIndex), mainNroPath.c_str(), 0);
     if (stubIndex >= 0)
         stubOk = mz_zip_reader_extract_to_file(
             &zip, static_cast<mz_uint>(stubIndex), ndsStubPath.c_str(), 0);
+    if (threeDsStubIndex >= 0)
+        threeDsStubOk = mz_zip_reader_extract_to_file(
+            &zip, static_cast<mz_uint>(threeDsStubIndex), threeDsStubPath.c_str(), 0);
 
     mz_zip_reader_end(&zip);
-    return mainOk && stubOk;
+    return mainOk && stubOk && threeDsStubOk;
 }
 
 static std::string fetchUrl(const std::string& url) {
@@ -351,20 +368,22 @@ bool AppUpdater::download(std::function<bool(size_t, size_t)> onProgress) {
     f.write(reinterpret_cast<const char*>(m_downloadedData.data()), m_downloadedData.size());
     f.close();
 
-    if (!extractUpdateFilesFromZip(cacheZipPath(), cacheNroPath(), cacheNdsStubPath())) {
+    if (!extractUpdateFilesFromZip(
+            cacheZipPath(), cacheNroPath(), cacheNdsStubPath(), cacheThreeDsStubPath())) {
         std::filesystem::remove(cacheZipPath(), ec);
         std::filesystem::remove(cacheNroPath(), ec);
         std::filesystem::remove(cacheNdsStubPath(), ec);
+        std::filesystem::remove(cacheThreeDsStubPath(), ec);
         brls::Logger::error(
-            "AppUpdater: 更新包解压失败，缺少 GBAStation.nro 或 GBAStationNDSStub.nro");
+            "AppUpdater: 更新包解压失败，缺少主程序、NDS Stub 或 3DS Stub");
         return false;
     }
 
     std::filesystem::remove(cacheZipPath(), ec);
     m_info.fileSize = m_downloadedData.size();
 
-    brls::Logger::info("AppUpdater: 下载并解压完成 {} bytes -> {}, {}",
-        m_downloadedData.size(), cacheNroPath(), cacheNdsStubPath());
+    brls::Logger::info("AppUpdater: 下载并解压完成 {} bytes -> {}, {}, {}",
+        m_downloadedData.size(), cacheNroPath(), cacheNdsStubPath(), cacheThreeDsStubPath());
     return true;
 }
 
@@ -374,8 +393,9 @@ bool AppUpdater::install() {
     {
         std::ifstream mainNro(cacheNroPath(), std::ios::binary);
         std::ifstream ndsStub(cacheNdsStubPath(), std::ios::binary);
-        if (!mainNro.good() || !ndsStub.good()) {
-            brls::Logger::error("AppUpdater: 缓存主程序或 NDS Stub 不存在");
+        std::ifstream threeDsStub(cacheThreeDsStubPath(), std::ios::binary);
+        if (!mainNro.good() || !ndsStub.good() || !threeDsStub.good()) {
+            brls::Logger::error("AppUpdater: 缓存主程序、NDS Stub 或 3DS Stub 不存在");
             return false;
         }
     }
@@ -392,8 +412,10 @@ bool AppUpdater::finishInstall() {
 #ifdef __SWITCH__
     const std::string nroPath = "sdmc:/switch/GBAStation.nro";
     const std::string ndsStubPath = "sdmc:/GBAStation/core/GBAStationNDSStub.nro";
+    const std::string threeDsStubPath = "sdmc:/GBAStation/core/GBAStation3DSStub.nro";
     const std::string nroBackupPath = nroPath + ".update_backup";
     const std::string ndsStubBackupPath = ndsStubPath + ".update_backup";
+    const std::string threeDsStubBackupPath = threeDsStubPath + ".update_backup";
 
     romfsExit();
 
@@ -407,10 +429,13 @@ bool AppUpdater::finishInstall() {
 
     std::remove(nroBackupPath.c_str());
     std::remove(ndsStubBackupPath.c_str());
+    std::remove(threeDsStubBackupPath.c_str());
 
     const bool hadMainNro = std::filesystem::exists(nroPath, ec);
     ec.clear();
     const bool hadNdsStub = std::filesystem::exists(ndsStubPath, ec);
+    ec.clear();
+    const bool hadThreeDsStub = std::filesystem::exists(threeDsStubPath, ec);
 
     auto restoreBackup = [](const std::string& target,
                             const std::string& backup,
@@ -429,14 +454,30 @@ bool AppUpdater::finishInstall() {
         brls::Logger::error("AppUpdater: 无法备份现有 NDS Stub");
         return false;
     }
+    if (hadThreeDsStub &&
+        std::rename(threeDsStubPath.c_str(), threeDsStubBackupPath.c_str()) != 0) {
+        restoreBackup(ndsStubPath, ndsStubBackupPath, hadNdsStub);
+        restoreBackup(nroPath, nroBackupPath, hadMainNro);
+        brls::Logger::error("AppUpdater: 无法备份现有 3DS Stub");
+        return false;
+    }
 
     if (std::rename(cacheNdsStubPath().c_str(), ndsStubPath.c_str()) != 0) {
+        restoreBackup(threeDsStubPath, threeDsStubBackupPath, hadThreeDsStub);
         restoreBackup(ndsStubPath, ndsStubBackupPath, hadNdsStub);
         restoreBackup(nroPath, nroBackupPath, hadMainNro);
         brls::Logger::error("AppUpdater: NDS Stub 替换失败");
         return false;
     }
+    if (std::rename(cacheThreeDsStubPath().c_str(), threeDsStubPath.c_str()) != 0) {
+        restoreBackup(threeDsStubPath, threeDsStubBackupPath, hadThreeDsStub);
+        restoreBackup(ndsStubPath, ndsStubBackupPath, hadNdsStub);
+        restoreBackup(nroPath, nroBackupPath, hadMainNro);
+        brls::Logger::error("AppUpdater: 3DS Stub 替换失败");
+        return false;
+    }
     if (std::rename(cacheNroPath().c_str(), nroPath.c_str()) != 0) {
+        restoreBackup(threeDsStubPath, threeDsStubBackupPath, hadThreeDsStub);
         restoreBackup(ndsStubPath, ndsStubBackupPath, hadNdsStub);
         restoreBackup(nroPath, nroBackupPath, hadMainNro);
         brls::Logger::error("AppUpdater: 主程序 NRO 替换失败");
@@ -445,7 +486,9 @@ bool AppUpdater::finishInstall() {
 
     std::remove(nroBackupPath.c_str());
     std::remove(ndsStubBackupPath.c_str());
-    brls::Logger::info("AppUpdater: 更新文件替换完成 -> {}, {}", nroPath, ndsStubPath);
+    std::remove(threeDsStubBackupPath.c_str());
+    brls::Logger::info("AppUpdater: 更新文件替换完成 -> {}, {}, {}",
+        nroPath, ndsStubPath, threeDsStubPath);
     return true;
 #else
     return false;

@@ -54,7 +54,8 @@ namespace beiklive::enums
         EmuGB,
         EmuNES,
         EmuSNES,
-        EmuNDS
+        EmuNDS,
+        Emu3DS
     };
     // 文件类型,用于文件浏览器
     enum class FileType
@@ -66,6 +67,7 @@ namespace beiklive::enums
         NES_ROM, // NES/Famicom文件
         SNES_ROM,// SNES/SFC文件
         NDS_ROM, // NDS文件
+        THREEDS_ROM, // Nintendo 3DS文件
 
         // 上面的顺序必须与EmuPlatform保持一致，方便后续通过平台类型直接转换为文件类型
 

@@ -75,6 +75,9 @@ beiklive::enums::FileType getFileType(const fs::path& path) {
         return beiklive::enums::FileType::SNES_ROM;
     if (ext == "nds")
         return beiklive::enums::FileType::NDS_ROM;
+    if (ext == "3ds" || ext == "cci" || ext == "cxi" || ext == "3dsx" ||
+        ext == "app" || ext == "elf")
+        return beiklive::enums::FileType::THREEDS_ROM;
 
     return beiklive::enums::FileType::NORMAL_FILE;
 }
@@ -146,6 +149,8 @@ std::string getIconPath(beiklive::enums::FileType type) {
             return BK_RES(path_prefix + "icon_gb.png");
         case beiklive::enums::FileType::NDS_ROM:
             return BK_RES(path_prefix + "icon_gba.png");
+        case beiklive::enums::FileType::THREEDS_ROM:
+            return BK_RES(path_prefix + "icon_gba.png");
         default:
             return BK_RES(path_prefix + "wenjian.png");
     }
@@ -178,6 +183,8 @@ std::string getIconPathWithPrefix(beiklive::enums::FileType type, const std::str
             return BK_RES(prefix + "icon_gb.png");
         case beiklive::enums::FileType::NDS_ROM:
             return BK_RES(prefix + "icon_gba.png");
+        case beiklive::enums::FileType::THREEDS_ROM:
+            return BK_RES(prefix + "icon_gba.png");
         default:
             return BK_RES(prefix + "wenjian.png");
     }
@@ -199,6 +206,8 @@ std::string getDefaultLogoPath(beiklive::enums::EmuPlatform platform)
             return BK_RES(path_prefix + "sfc.png");
         case beiklive::enums::EmuPlatform::EmuNDS:
             return BK_RES(path_prefix + "nds.png");
+        case beiklive::enums::EmuPlatform::Emu3DS:
+            return BK_RES(path_prefix + "3ds.png");
         default:
             return BK_RES(path_prefix + "gba.png");
     }
@@ -403,6 +412,7 @@ std::string platformName(int platform) {
         case beiklive::enums::EmuPlatform::EmuNES: return "FC";
         case beiklive::enums::EmuPlatform::EmuSNES: return "SFC";
         case beiklive::enums::EmuPlatform::EmuNDS: return "NDS";
+        case beiklive::enums::EmuPlatform::Emu3DS: return "3DS";
         default: return "";
     }
 }
@@ -453,6 +463,7 @@ std::string platformBadgeName(int platform) {
         case beiklive::enums::EmuPlatform::EmuNES: return "FC";
         case beiklive::enums::EmuPlatform::EmuSNES: return "SFC";
         case beiklive::enums::EmuPlatform::EmuNDS: return "NDS";
+        case beiklive::enums::EmuPlatform::Emu3DS: return "3DS";
         default: return "";
     }
 }

@@ -59,6 +59,26 @@ namespace beiklive
 #endif
         }
 
+        bool shouldUseThreeDsExternalNro(const beiklive::GameEntry& entry)
+        {
+#ifdef __SWITCH__
+            return entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS);
+#else
+            (void)entry;
+            return false;
+#endif
+        }
+
+        bool shouldUseThreeDsExternalNro(const beiklive::DirListData& dirItem)
+        {
+#ifdef __SWITCH__
+            return dirItem.itemType == beiklive::enums::FileType::THREEDS_ROM;
+#else
+            (void)dirItem;
+            return false;
+#endif
+        }
+
         void ensureGameDbEntryForFileLaunch(const beiklive::DirListData& dirItem)
         {
             if (!beiklive::GameDB || dirItem.fullPath.empty())
@@ -137,6 +157,27 @@ namespace beiklive
 
             brls::Logger::info("NDS external NRO configured for {}: {}", title, result.message);
             brls::Application::notify("正在启动NDS独立NRO...");
+            brls::sync([]() { brls::Application::quit(); });
+            return true;
+        }
+
+        bool launchThreeDsExternalNro(const std::string& romPath, const std::string& title)
+        {
+            const std::string nroPath = GET_SETTING_KEY_STR(
+                "3ds.externalNro.path", "/GBAStation/core/GBAStation3DSStub.nro");
+            const std::string returnPath = GET_SETTING_KEY_STR(
+                "3ds.externalNro.returnPath", "sdmc:/switch/GBAStation.nro");
+
+            auto result = beiklive::switch_platform::launchNroOnExit({nroPath, romPath, returnPath});
+            if (!result.success)
+            {
+                brls::Logger::error("3DS external NRO launch failed for {}: {}", title, result.message);
+                brls::Application::notify("3DS独立NRO启动失败：" + result.message);
+                return false;
+            }
+
+            brls::Logger::info("3DS external NRO configured for {}: {}", title, result.message);
+            brls::Application::notify("正在启动3DS独立NRO...");
             brls::sync([]() { brls::Application::quit(); });
             return true;
         }
@@ -286,6 +327,12 @@ namespace beiklive
             return launchNdsExternalNro(entry.path, entry.title);
 #endif
         }
+        if (shouldUseThreeDsExternalNro(entry))
+        {
+#ifdef __SWITCH__
+            return launchThreeDsExternalNro(entry.path, entry.title);
+#endif
+        }
 
         auto* gamePage = new beiklive::GamePage(entry);
         m_gamePage = gamePage;
@@ -316,6 +363,14 @@ namespace beiklive
             ensureGameDbEntryForFileLaunch(dirItem);
 #ifdef __SWITCH__
             launchNdsExternalNro(dirItem.fullPath, dirItem.fileName);
+            return;
+#endif
+        }
+        if (shouldUseThreeDsExternalNro(dirItem))
+        {
+            ensureGameDbEntryForFileLaunch(dirItem);
+#ifdef __SWITCH__
+            launchThreeDsExternalNro(dirItem.fullPath, dirItem.fileName);
             return;
 #endif
         }
@@ -470,7 +525,7 @@ namespace beiklive
 
                 return true;
             });
-        m_fileListPage->setFliter(beiklive::enums::FilterMode::Whitelist, {"gba", "gbc", "gb", "nes", "fds", "sfc", "smc", "nds", "md", "gen", "bin", "smd", "sms", "gg", "sg", "cue", "png"});
+        m_fileListPage->setFliter(beiklive::enums::FilterMode::Whitelist, {"gba", "gbc", "gb", "nes", "fds", "sfc", "smc", "nds", "3ds", "cci", "cxi", "3dsx", "app", "elf", "md", "gen", "bin", "smd", "sms", "gg", "sg", "cue", "png"});
 
         m_fileListPage->onFileSelected = [this](beiklive::DirListData dirItem)
         {
@@ -485,6 +540,7 @@ namespace beiklive
             case beiklive::enums::FileType::NES_ROM:
             case beiklive::enums::FileType::SNES_ROM:
             case beiklive::enums::FileType::NDS_ROM:
+            case beiklive::enums::FileType::THREEDS_ROM:
                 brls::Application::notify("启动游戏：" + dirItem.fileName);
                 _pushGameActivity(dirItem, this);
                 break;

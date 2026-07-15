@@ -53,6 +53,7 @@ namespace beiklive
         bool m_scanNES = true;
         bool m_scanSNES = true;
         bool m_scanNDS = true;
+        bool m_scan3DS = true;
 
         std::thread m_importThread;
         std::atomic<bool> m_importing{false};

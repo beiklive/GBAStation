@@ -62,13 +62,14 @@ bool ThreeDSRenderer::Init() {
     libnx_Result rc = framebufferCreate(&framebuffer_, nwindowGetDefault(), kOutputWidth,
                                         kOutputHeight, PIXEL_FORMAT_RGBA_8888, 2);
     if (R_FAILED(rc)) {
-        appendLog("GBAStation3DSStub: framebufferCreate failed rc=%#x", rc);
+        logMessage(LogLevel::Error, "GBAStation3DSStub: framebufferCreate failed rc=%#x", rc);
         return false;
     }
 
     rc = framebufferMakeLinear(&framebuffer_);
     if (R_FAILED(rc)) {
-        appendLog("GBAStation3DSStub: framebufferMakeLinear failed rc=%#x", rc);
+        logMessage(LogLevel::Error,
+                   "GBAStation3DSStub: framebufferMakeLinear failed rc=%#x", rc);
         framebufferClose(&framebuffer_);
         return false;
     }
@@ -122,8 +123,8 @@ void ThreeDSRenderer::Present(const SwRenderer::ScreenInfo& top,
 }
 
 void ThreeDSRenderer::PresentStatus(const char* title, const char* detail) {
-    appendLog("GBAStation3DSStub: status title=%s detail=%s", title ? title : "",
-              detail ? detail : "");
+    logMessage(LogLevel::Error, "GBAStation3DSStub: status title=%s detail=%s",
+               title ? title : "", detail ? detail : "");
     Clear(0xFF18202Au);
 }
 

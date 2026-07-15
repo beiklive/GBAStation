@@ -684,6 +684,8 @@ namespace beiklive
             return 224;
         case beiklive::enums::EmuPlatform::EmuNDS:
             return 384;
+        case beiklive::enums::EmuPlatform::Emu3DS:
+            return 480;
         default:
             break;
         }
@@ -706,6 +708,8 @@ namespace beiklive
             return 256;
         case beiklive::enums::EmuPlatform::EmuNDS:
             return 256;
+        case beiklive::enums::EmuPlatform::Emu3DS:
+            return 400;
         default:
             break;
         }
@@ -727,6 +731,8 @@ namespace beiklive
         case beiklive::enums::EmuPlatform::EmuSNES:
             return BK_RES("img/LogoLayer/GBA_LOGOLAY.png");
         case beiklive::enums::EmuPlatform::EmuNDS:
+            return BK_RES("img/LogoLayer/GBA_LOGOLAY.png");
+        case beiklive::enums::EmuPlatform::Emu3DS:
             return BK_RES("img/LogoLayer/GBA_LOGOLAY.png");
         default:
             return BK_RES("img/LogoLayer/GBA_LOGOLAY.png");
