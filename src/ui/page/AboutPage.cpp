@@ -17,6 +17,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <sstream>
 
 namespace beiklive {
 
@@ -532,49 +533,7 @@ static bool installDownloadedResource(const OnlineResourceItem& item,
     return true;
 }
 
-static void openChangelogApplet(const std::string& title, const std::string& content) {
-    auto* scroll = new brls::ScrollingFrame();
-    scroll->setGrow(1.0f);
-    scroll->setScrollingBehavior(brls::ScrollingBehavior::NATURAL);
-    scroll->setScrollingIndicatorVisible(false);
-
-    auto* box = new brls::Box(brls::Axis::COLUMN);
-    box->setWidthPercentage(100.f);
-    box->setHeightPercentage(100.f);
-    box->setPadding(26.f, 34.f, 26.f, 34.f);
-    box->setAlignItems(brls::AlignItems::FLEX_START);
-    box->setJustifyContent(brls::JustifyContent::FLEX_START);
-
-    auto* bodyLabel = new brls::Label();
-    bodyLabel->setText(content.empty() ? "暂无更新日志" : content);
-    bodyLabel->setFontSize(18.f);
-    bodyLabel->setWidthPercentage(100.f);
-    bodyLabel->setTextColor(GET_THEME_COLOR("brls/text"));
-    bodyLabel->setHorizontalAlign(brls::HorizontalAlign::LEFT);
-    bodyLabel->setSingleLine(false);
-    bodyLabel->setIsWrapping(true);
-    bodyLabel->setFocusable(true);
-
-    HIDE_BRLS_HIGHLIGHT(bodyLabel);
-
-    bodyLabel->registerAction("确认", brls::BUTTON_A, [](brls::View*) -> bool {
-        brls::Application::popActivity(brls::TransitionAnimation::NONE);
-        return true;
-    });
-    bodyLabel->registerAction("返回", brls::BUTTON_B, [](brls::View*) -> bool {
-        brls::Application::popActivity(brls::TransitionAnimation::NONE);
-        return true;
-    });
-    box->addView(bodyLabel);
-
-    scroll->setContentView(box);
-
-    auto* frame = new brls::AppletFrame(scroll);
-    frame->setTitle(title);
-
-    brls::Application::pushActivity(new brls::Activity(frame), brls::TransitionAnimation::NONE);
-    brls::Application::giveFocus(bodyLabel);
-}
+static void openChangelogApplet(const std::string& title, const std::string& content);
 
 static std::string encodeMaterialIcon(char32_t codepoint) {
     std::string result;
@@ -594,6 +553,530 @@ static std::string encodeMaterialIcon(char32_t codepoint) {
         result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
     }
     return result;
+}
+
+enum class ChangelogLineKind {
+    TEXT,
+    SECTION,
+    BULLET,
+};
+
+struct ChangelogLine {
+    std::string text;
+    ChangelogLineKind kind = ChangelogLineKind::TEXT;
+    int indent = 0;
+};
+
+struct ChangelogVersion {
+    std::string version;
+    std::vector<ChangelogLine> lines;
+};
+
+static bool isChangelogVersion(const std::string& text) {
+    if (text.size() < 2 || text[0] != 'v'
+        || !std::isdigit(static_cast<unsigned char>(text[1]))) {
+        return false;
+    }
+    return std::all_of(text.begin() + 1, text.end(), [](unsigned char c) {
+        return std::isdigit(c) || c == '.' || c == '-' || c == '_';
+    });
+}
+
+static bool isChangelogSection(const std::string& text) {
+    static constexpr const char* headings[] = {
+        "声明", "新变化", "新功能", "修复", "bug修复", "Bug修复",
+        "BUG修复", "bug修复和优化", "Bug修复和优化", "优化"
+    };
+    return std::any_of(std::begin(headings), std::end(headings),
+        [&text](const char* heading) {
+            return text == heading || text == std::string(heading) + "："
+                || text == std::string(heading) + ":";
+        });
+}
+
+static bool isChangelogBullet(const std::string& text) {
+    size_t cursor = 0;
+    while (cursor < text.size()
+           && std::isdigit(static_cast<unsigned char>(text[cursor]))) {
+        ++cursor;
+    }
+    if (cursor == 0 || cursor >= text.size())
+        return false;
+    if (text[cursor] == '.' || text[cursor] == ',' || text[cursor] == ')')
+        return true;
+    return text.compare(cursor, std::string("，").size(), "，") == 0
+        || text.compare(cursor, std::string("、").size(), "、") == 0;
+}
+
+static std::vector<ChangelogVersion> parseChangelog(const std::string& content) {
+    std::vector<ChangelogVersion> versions;
+    std::istringstream stream(content);
+    std::string rawLine;
+    while (std::getline(stream, rawLine)) {
+        if (!rawLine.empty() && rawLine.back() == '\r')
+            rawLine.pop_back();
+        const std::string text = trimText(rawLine);
+        if (text.empty())
+            continue;
+        if (isChangelogVersion(text)) {
+            versions.push_back({text, {}});
+            continue;
+        }
+        if (versions.empty())
+            versions.push_back({"更新日志", {}});
+
+        int spaces = 0;
+        for (const char c : rawLine) {
+            if (c == ' ')
+                ++spaces;
+            else if (c == '\t')
+                spaces += 4;
+            else
+                break;
+        }
+        ChangelogLineKind kind = ChangelogLineKind::TEXT;
+        if (isChangelogSection(text))
+            kind = ChangelogLineKind::SECTION;
+        else if (isChangelogBullet(text))
+            kind = ChangelogLineKind::BULLET;
+        versions.back().lines.push_back({text, kind, std::clamp(spaces / 4, 0, 2)});
+    }
+    if (versions.empty())
+        versions.push_back({"更新日志", {{"暂无更新日志", ChangelogLineKind::TEXT, 0}}});
+    return versions;
+}
+
+static float detailClamp(float value) {
+    return std::max(0.f, std::min(1.f, value));
+}
+
+static float detailSmooth(float value) {
+    value = detailClamp(value);
+    return value * value * (3.f - 2.f * value);
+}
+
+static float detailBack(float value) {
+    value = detailClamp(value);
+    constexpr float c1 = 1.16f;
+    constexpr float c3 = c1 + 1.f;
+    const float shifted = value - 1.f;
+    return 1.f + c3 * shifted * shifted * shifted + c1 * shifted * shifted;
+}
+
+static unsigned char detailAlpha(float value) {
+    return static_cast<unsigned char>(255.f * detailClamp(value));
+}
+
+class ChangelogCanvas final : public brls::View {
+public:
+    ChangelogCanvas(std::string title, std::vector<ChangelogVersion> versions,
+                    std::function<void()> onBack)
+        : m_title(std::move(title))
+        , m_versions(std::move(versions))
+        , m_onBack(std::move(onBack)) {
+        this->setFocusable(true);
+        this->setGrow(1.f);
+        this->setWidthPercentage(100.f);
+        HIDE_BRLS_HIGHLIGHT(this);
+        this->setCustomNavigationRoute(brls::FocusDirection::UP, this);
+        this->setCustomNavigationRoute(brls::FocusDirection::DOWN, this);
+        this->setCustomNavigationRoute(brls::FocusDirection::LEFT, this);
+        this->setCustomNavigationRoute(brls::FocusDirection::RIGHT, this);
+
+        auto previous = [this](brls::View*) -> bool {
+            _selectVersion(-1);
+            return true;
+        };
+        auto next = [this](brls::View*) -> bool {
+            _selectVersion(1);
+            return true;
+        };
+        auto scrollUp = [this](brls::View*) -> bool {
+            _scrollDetail(-180.f);
+            return true;
+        };
+        auto scrollDown = [this](brls::View*) -> bool {
+            _scrollDetail(180.f);
+            return true;
+        };
+        this->registerAction("", brls::BUTTON_UP, previous, true, true, brls::SOUND_NONE);
+        this->registerAction("", brls::BUTTON_DOWN, next, true, true, brls::SOUND_NONE);
+        this->registerAction("", brls::BUTTON_NAV_UP, scrollUp, true, true, brls::SOUND_NONE);
+        this->registerAction("", brls::BUTTON_NAV_DOWN, scrollDown, true, true, brls::SOUND_NONE);
+        this->registerAction("上翻", brls::BUTTON_LB, scrollUp, true, false, brls::SOUND_NONE);
+        this->registerAction("下翻", brls::BUTTON_RB, scrollDown, true, false, brls::SOUND_NONE);
+        this->registerAction("返回", brls::BUTTON_B, [this](brls::View*) -> bool {
+            _beginClose();
+            return true;
+        }, false, false, brls::SOUND_NONE);
+        m_lastFrameTime = std::chrono::steady_clock::now();
+    }
+
+    void frame(brls::FrameContext* ctx) override {
+        brls::View::frame(ctx);
+        const auto now = std::chrono::steady_clock::now();
+        float dt = std::chrono::duration<float>(now - m_lastFrameTime).count();
+        m_lastFrameTime = now;
+        if (dt <= 0.f || dt > 0.25f)
+            dt = 0.016f;
+        m_time += dt;
+        if (m_closing) {
+            m_pageEntrance = std::max(0.f, m_pageEntrance - dt * 3.8f);
+            if (m_pageEntrance <= 0.f && !m_closeQueued) {
+                m_closeQueued = true;
+                const auto onBack = m_onBack;
+                brls::sync([onBack]() {
+                    if (onBack)
+                        onBack();
+                });
+            }
+        } else {
+            m_pageEntrance = std::min(1.f, m_pageEntrance + dt * 2.8f);
+            m_detailEntrance = std::min(1.f, m_detailEntrance + dt * 5.2f);
+        }
+        m_versionScroll += (m_targetVersionScroll - m_versionScroll)
+            * std::min(1.f, dt * 14.f);
+        m_detailScroll += (m_targetDetailScroll - m_detailScroll)
+            * std::min(1.f, dt * 12.f);
+        this->invalidate();
+    }
+
+    void draw(NVGcontext* vg, float x, float y, float w, float h,
+              brls::Style style, brls::FrameContext* ctx) override {
+        (void)style;
+        (void)ctx;
+        _ensureFonts();
+        const float pageProgress = detailBack(m_pageEntrance);
+        const float alpha = detailSmooth(m_pageEntrance);
+        nvgSave(vg);
+        nvgGlobalAlpha(vg, alpha);
+        _drawHeader(vg, x, y - (1.f - pageProgress) * 52.f, w);
+
+        const float contentY = y + 108.f;
+        const float contentH = std::max(1.f, h - 174.f);
+        const float leftW = std::min(270.f, w * 0.23f);
+        const Rect versions{x + 36.f, contentY, leftW, contentH};
+        const Rect detail{x + 36.f + leftW + 20.f, contentY,
+                          w - leftW - 92.f, contentH};
+        const float contentScale = 0.97f + pageProgress * 0.03f;
+        nvgTranslate(vg, x + w * 0.5f,
+                     contentY + contentH * 0.5f + (1.f - pageProgress) * 20.f);
+        nvgScale(vg, contentScale, contentScale);
+        nvgTranslate(vg, -(x + w * 0.5f), -(contentY + contentH * 0.5f));
+        _drawVersionList(vg, versions);
+        _drawDetails(vg, detail);
+        nvgRestore(vg);
+        _drawFooter(vg, x, y, w, h, alpha);
+    }
+
+private:
+    struct Rect {
+        float x = 0.f;
+        float y = 0.f;
+        float w = 0.f;
+        float h = 0.f;
+    };
+
+    std::string m_title;
+    std::vector<ChangelogVersion> m_versions;
+    std::function<void()> m_onBack;
+    int m_defaultFont = -1;
+    int m_materialFont = -1;
+    int m_switchFont = -1;
+    int m_selectedVersion = 0;
+    float m_time = 0.f;
+    float m_pageEntrance = 0.f;
+    float m_detailEntrance = 1.f;
+    float m_versionScroll = 0.f;
+    float m_targetVersionScroll = 0.f;
+    float m_detailScroll = 0.f;
+    float m_targetDetailScroll = 0.f;
+    float m_detailContentHeight = 0.f;
+    float m_detailViewportHeight = 0.f;
+    bool m_closing = false;
+    bool m_closeQueued = false;
+    std::chrono::steady_clock::time_point m_lastFrameTime;
+
+    void _ensureFonts() {
+        if (m_defaultFont < 0)
+            m_defaultFont = brls::Application::getDefaultFont();
+        if (m_materialFont < 0)
+            m_materialFont = brls::Application::getFont(brls::FONT_MATERIAL_ICONS);
+        if (m_switchFont < 0)
+            m_switchFont = brls::Application::getFont(brls::FONT_SWITCH_ICONS);
+    }
+
+    void _drawExternalShadow(NVGcontext* vg, const Rect& r, float radius,
+                             float alpha = 1.f) {
+        const NVGpaint shadow = nvgBoxGradient(
+            vg, r.x + 5.f, r.y + 6.f, r.w, r.h, radius, 5.f,
+            nvgRGBA(0, 0, 0, detailAlpha(0.30f * alpha)),
+            nvgRGBA(0, 0, 0, 0));
+        nvgBeginPath(vg);
+        nvgRect(vg, r.x - 3.f, r.y - 3.f, r.w + 16.f, r.h + 17.f);
+        nvgRoundedRect(vg, r.x, r.y, r.w, r.h, radius);
+        nvgPathWinding(vg, NVG_HOLE);
+        nvgFillPaint(vg, shadow);
+        nvgFill(vg);
+    }
+
+    void _drawPanel(NVGcontext* vg, const Rect& r, float radius = 8.f) {
+        _drawExternalShadow(vg, r, radius, 0.8f);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, r.x, r.y, r.w, r.h, radius);
+        nvgFillColor(vg, nvgRGBA(255, 255, 255, 7));
+        nvgFill(vg);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, r.x + 1.f, r.y + 1.f,
+                       r.w - 2.f, r.h - 2.f, radius - 1.f);
+        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 42));
+        nvgStrokeWidth(vg, 1.5f);
+        nvgStroke(vg);
+    }
+
+    void _drawHeader(NVGcontext* vg, float x, float y, float w) {
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFontSize(vg, 27.f);
+        nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
+        nvgText(vg, x + 36.f, y + 43.f, "更新日志", nullptr);
+        nvgFontSize(vg, 15.f);
+        nvgFillColor(vg, nvgRGBA(210, 216, 226, 180));
+        const std::string summary = std::to_string(m_versions.size()) + " 个版本记录";
+        nvgText(vg, x + 36.f, y + 72.f, summary.c_str(), nullptr);
+        nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
+        nvgFontSize(vg, 17.f);
+        nvgFillColor(vg, nvgRGBA(225, 230, 238, 200));
+        nvgText(vg, x + w - 36.f, y + 51.f, m_title.c_str(), nullptr);
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, x + 36.f, y + 94.f);
+        nvgLineTo(vg, x + w - 36.f, y + 94.f);
+        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 46));
+        nvgStrokeWidth(vg, 1.f);
+        nvgStroke(vg);
+    }
+
+    void _drawVersionList(NVGcontext* vg, const Rect& r) {
+        _drawPanel(vg, r);
+        constexpr float padding = 16.f;
+        constexpr float rowH = 52.f;
+        constexpr float gap = 9.f;
+        const float viewportH = r.h - padding * 2.f;
+        const float contentH = m_versions.size() * (rowH + gap) - gap;
+        const float maximum = std::max(0.f, contentH - viewportH);
+        m_targetVersionScroll = std::clamp(m_targetVersionScroll, 0.f, maximum);
+        m_versionScroll = std::clamp(m_versionScroll, 0.f, maximum);
+
+        nvgSave(vg);
+        nvgIntersectScissor(vg, r.x + 2.f, r.y + 2.f, r.w - 4.f, r.h - 4.f);
+        for (size_t index = 0; index < m_versions.size(); ++index) {
+            const float rowY = r.y + padding + index * (rowH + gap) - m_versionScroll;
+            if (rowY + rowH < r.y || rowY > r.y + r.h)
+                continue;
+            const bool selected = static_cast<int>(index) == m_selectedVersion;
+            if (selected) {
+                nvgBeginPath(vg);
+                nvgRoundedRect(vg, r.x + padding, rowY,
+                               r.w - padding * 2.f, rowH, 7.f);
+                nvgFillColor(vg, nvgRGBA(79, 193, 255, 35));
+                nvgFill(vg);
+                beiklive::ui::drawGradientFocusBorder(
+                    vg, r.x + padding, rowY, r.w - padding * 2.f, rowH,
+                    7.f, 3.f, 1.f,
+                    beiklive::ui::gradientFocusAnimationOffset(m_time));
+            }
+            nvgFontFaceId(vg, m_defaultFont);
+            nvgFontSize(vg, selected ? 20.f : 17.f);
+            nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+            nvgFillColor(vg, selected
+                ? nvgRGBA(255, 255, 255, 255)
+                : nvgRGBA(215, 220, 229, 185));
+            nvgText(vg, r.x + padding + 18.f, rowY + rowH * 0.5f,
+                    m_versions[index].version.c_str(), nullptr);
+        }
+        nvgRestore(vg);
+    }
+
+    void _drawDetails(NVGcontext* vg, const Rect& r) {
+        _drawPanel(vg, r);
+        if (m_versions.empty())
+            return;
+        const auto& version = m_versions[m_selectedVersion];
+        const float detailProgress = detailBack(m_detailEntrance);
+        const float innerX = r.x + 32.f;
+        const float innerY = r.y + 24.f;
+        const float innerW = r.w - 64.f;
+        const float innerH = r.h - 48.f;
+        m_detailViewportHeight = innerH;
+
+        nvgSave(vg);
+        nvgIntersectScissor(vg, r.x + 2.f, r.y + 2.f, r.w - 4.f, r.h - 4.f);
+        nvgGlobalAlpha(vg, detailSmooth(m_detailEntrance));
+        nvgTranslate(vg, (1.f - detailProgress) * 46.f, 0.f);
+
+        float cursorY = innerY - m_detailScroll;
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
+        nvgFontSize(vg, 36.f);
+        nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
+        nvgText(vg, innerX, cursorY, version.version.c_str(), nullptr);
+        cursorY += 58.f;
+
+        for (const auto& line : version.lines) {
+            const bool section = line.kind == ChangelogLineKind::SECTION;
+            const bool bullet = line.kind == ChangelogLineKind::BULLET;
+            const float lineX = innerX + (bullet ? 28.f : 0.f)
+                + static_cast<float>(line.indent) * 14.f;
+            const float lineW = std::max(40.f, innerW - (lineX - innerX));
+            if (section) {
+                cursorY += 8.f;
+                nvgFontSize(vg, 18.f);
+                float bounds[4]{};
+                nvgTextBounds(vg, 0.f, 0.f, line.text.c_str(), nullptr, bounds);
+                const float badgeW = bounds[2] - bounds[0] + 28.f;
+                nvgBeginPath(vg);
+                nvgRoundedRect(vg, innerX, cursorY, badgeW, 32.f, 6.f);
+                nvgFillColor(vg, nvgRGBA(79, 193, 255, 28));
+                nvgFill(vg);
+                nvgBeginPath(vg);
+                nvgRoundedRect(vg, innerX + 1.f, cursorY + 1.f,
+                               badgeW - 2.f, 30.f, 5.f);
+                nvgStrokeColor(vg, nvgRGBA(79, 193, 255, 145));
+                nvgStrokeWidth(vg, 1.f);
+                nvgStroke(vg);
+                nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+                nvgFillColor(vg, nvgRGBA(245, 248, 252, 240));
+                nvgText(vg, innerX + badgeW * 0.5f, cursorY + 16.f,
+                        line.text.c_str(), nullptr);
+                nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
+                cursorY += 48.f;
+                continue;
+            }
+
+            nvgFontSize(vg, bullet ? 17.f : 18.f);
+            nvgTextLineHeight(vg, 1.35f);
+            float bounds[4]{};
+            nvgTextBoxBounds(vg, lineX, cursorY, lineW,
+                             line.text.c_str(), nullptr, bounds);
+            const float textH = std::max(25.f, bounds[3] - bounds[1]);
+            if (bullet) {
+                nvgBeginPath(vg);
+                nvgCircle(vg, lineX - 15.f, cursorY + 11.f, 3.5f);
+                nvgFillColor(vg, nvgRGBA(79, 193, 255, 220));
+                nvgFill(vg);
+            }
+            nvgFillColor(vg, bullet
+                ? nvgRGBA(235, 239, 245, 230)
+                : nvgRGBA(215, 221, 231, 205));
+            nvgTextBox(vg, lineX, cursorY, lineW,
+                       line.text.c_str(), nullptr);
+            cursorY += textH + (bullet ? 11.f : 14.f);
+        }
+        m_detailContentHeight = std::max(innerH, cursorY + m_detailScroll - innerY + 8.f);
+        const float maximum = std::max(0.f, m_detailContentHeight - innerH);
+        m_targetDetailScroll = std::clamp(m_targetDetailScroll, 0.f, maximum);
+        m_detailScroll = std::clamp(m_detailScroll, 0.f, maximum);
+        nvgRestore(vg);
+
+        if (maximum > 1.f) {
+            const float trackH = innerH - 10.f;
+            const float thumbH = std::max(42.f, trackH * innerH / m_detailContentHeight);
+            const float thumbY = innerY + 5.f
+                + (trackH - thumbH) * m_detailScroll / maximum;
+            nvgBeginPath(vg);
+            nvgRoundedRect(vg, r.x + r.w - 10.f, thumbY, 3.f, thumbH, 1.5f);
+            nvgFillColor(vg, nvgRGBA(255, 255, 255, 100));
+            nvgFill(vg);
+        }
+    }
+
+    void _drawHint(NVGcontext* vg, brls::ControllerButton button,
+                   const char* label, float& cursor, float y, float alpha) {
+        const std::string glyph = brls::Hint::getKeyIcon(button);
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgFontSize(vg, 18.f);
+        float bounds[4]{};
+        nvgTextBounds(vg, 0.f, 0.f, label, nullptr, bounds);
+        cursor -= bounds[2] - bounds[0] + 43.f;
+        nvgFontFaceId(vg, m_switchFont);
+        nvgFontSize(vg, 25.f);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(255, 255, 255, detailAlpha(alpha)));
+        nvgText(vg, cursor + 13.f, y, glyph.c_str(), nullptr);
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgFontSize(vg, 18.f);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(230, 234, 241, detailAlpha(alpha)));
+        nvgText(vg, cursor + 30.f, y, label, nullptr);
+        cursor -= 16.f;
+    }
+
+    void _drawFooter(NVGcontext* vg, float x, float y, float w, float h,
+                     float alpha) {
+        const float hintY = y + h - 27.f + (1.f - detailBack(m_pageEntrance)) * 46.f;
+        float cursor = x + w - 32.f;
+        _drawHint(vg, brls::BUTTON_B, "返回", cursor, hintY, alpha);
+        _drawHint(vg, brls::BUTTON_RB, "下翻", cursor, hintY, alpha);
+        _drawHint(vg, brls::BUTTON_LB, "上翻", cursor, hintY, alpha);
+    }
+
+    void _selectVersion(int direction) {
+        if (m_closing || m_pageEntrance < 0.75f || m_versions.empty())
+            return;
+        const int next = std::clamp(m_selectedVersion + direction, 0,
+                                    static_cast<int>(m_versions.size()) - 1);
+        if (next == m_selectedVersion)
+            return;
+        m_selectedVersion = next;
+        m_detailEntrance = 0.f;
+        m_detailScroll = 0.f;
+        m_targetDetailScroll = 0.f;
+        constexpr float rowH = 52.f;
+        constexpr float gap = 9.f;
+        const float itemTop = m_selectedVersion * (rowH + gap);
+        const float viewport = std::max(1.f, this->getHeight() - 206.f);
+        if (itemTop < m_targetVersionScroll)
+            m_targetVersionScroll = itemTop;
+        else if (itemTop + rowH > m_targetVersionScroll + viewport)
+            m_targetVersionScroll = itemTop + rowH - viewport;
+        brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_SIDEBAR);
+    }
+
+    void _scrollDetail(float amount) {
+        if (m_closing || m_pageEntrance < 0.75f)
+            return;
+        const float maximum = std::max(0.f,
+            m_detailContentHeight - m_detailViewportHeight);
+        const float next = std::clamp(m_targetDetailScroll + amount, 0.f, maximum);
+        if (std::abs(next - m_targetDetailScroll) < 0.5f)
+            return;
+        m_targetDetailScroll = next;
+        brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_SIDEBAR);
+    }
+
+    void _beginClose() {
+        if (m_closing)
+            return;
+        m_closing = true;
+        brls::Application::getAudioPlayer()->play(brls::SOUND_BACK);
+    }
+};
+
+static void openChangelogApplet(const std::string& title, const std::string& content) {
+    auto* page = new beiklive::Box(brls::Axis::COLUMN);
+    page->showHeader(false);
+    page->showFooter(false);
+    page->setGrow(1.f);
+    auto* canvas = new ChangelogCanvas(
+        title, parseChangelog(content), []() {
+            brls::Application::popActivity(brls::TransitionAnimation::NONE);
+        });
+    page->getContentBox()->addView(canvas);
+    auto* frame = new brls::AppletFrame(page);
+    HIDE_BRLS_BAR(frame);
+    brls::Application::pushActivity(
+        new brls::Activity(frame), brls::TransitionAnimation::NONE);
+    brls::Application::giveFocus(canvas);
 }
 
 static void startResourceDownload(const OnlineResourceItem& item,
@@ -643,16 +1126,19 @@ public:
         this->registerAction("", brls::BUTTON_NAV_RIGHT, moveRight, true, true, brls::SOUND_NONE);
         this->registerAction("", brls::BUTTON_NAV_UP, moveUp, true, true, brls::SOUND_NONE);
         this->registerAction("", brls::BUTTON_NAV_DOWN, moveDown, true, true, brls::SOUND_NONE);
+        this->registerAction("上一类", brls::BUTTON_LB, moveLeft, true, false, brls::SOUND_NONE);
+        this->registerAction("下一类", brls::BUTTON_RB, moveRight, true, false, brls::SOUND_NONE);
         this->registerAction("下载", brls::BUTTON_A, [this](brls::View*) -> bool {
             _activateFocused();
             return true;
         }, false, false, brls::SOUND_NONE);
         this->registerAction("返回", brls::BUTTON_B, [this](brls::View*) -> bool {
-            if (m_onBack)
-                m_onBack();
+            _beginClose();
             return true;
-        });
+        }, false, false, brls::SOUND_NONE);
 
+        m_groupFocusIndices.assign(m_manifest.groups.size(), 0);
+        m_groupScrollOffsets.assign(m_manifest.groups.size(), 0.f);
         m_lastFrameTime = std::chrono::steady_clock::now();
     }
 
@@ -664,63 +1150,57 @@ public:
             m_defaultFont = brls::Application::getDefaultFont();
         if (m_materialFont < 0)
             m_materialFont = brls::Application::getFont(brls::FONT_MATERIAL_ICONS);
+        if (m_switchFont < 0)
+            m_switchFont = brls::Application::getFont(brls::FONT_SWITCH_ICONS);
 
         _rebuildLayout(w, h);
         m_scrollOffset = std::clamp(m_scrollOffset, 0.f, _maximumScroll());
         m_targetScroll = std::clamp(m_targetScroll, 0.f, _maximumScroll());
 
+        const float pageProgress = detailBack(m_pageEntrance);
+        const float pageAlpha = detailSmooth(m_pageEntrance);
+        _drawResourceHeader(vg, x, y - (1.f - pageProgress) * 54.f, w);
+
+        const float viewportY = y + 112.f;
+        const float viewportH = std::max(1.f, h - 178.f);
         nvgSave(vg);
-        nvgScissor(vg, x, y, w, h);
-        const float drawOffsetY = y - m_scrollOffset;
-
-        for (const auto& group : m_groupLayouts) {
-            const float groupY = drawOffsetY + group.y;
-            if (groupY + group.h < y || groupY > y + h)
-                continue;
-
-            nvgBeginPath(vg);
-            nvgRoundedRect(vg, x + group.x, groupY, group.w, group.h, 10.f);
-            nvgFillColor(vg, nvgRGBA(0, 0, 0, 22));
-            nvgFill(vg);
-
-            nvgBeginPath(vg);
-            nvgRoundedRect(vg, x + group.x + 1.f, groupY + 1.f,
-                           group.w - 2.f, group.h - 2.f, 9.f);
-            nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 18));
-            nvgStrokeWidth(vg, 1.f);
-            nvgStroke(vg);
-
-            nvgFontFaceId(vg, m_defaultFont);
-            nvgFontSize(vg, 22.f);
-            nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-            nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
-            nvgText(vg, x + group.x + 20.f, groupY + 31.f,
-                    m_manifest.groups[group.groupIndex].header.c_str(), nullptr);
-        }
+        nvgGlobalAlpha(vg, pageAlpha);
+        nvgScissor(vg, x, viewportY, w, viewportH);
+        const float drawOffsetY = viewportY - m_scrollOffset;
+        const float contentScale = 0.97f + pageProgress * 0.03f;
+        nvgTranslate(vg, x + w * 0.5f,
+                     viewportY + viewportH * 0.5f + (1.f - pageProgress) * 22.f);
+        nvgScale(vg, contentScale, contentScale);
+        nvgTranslate(vg, -(x + w * 0.5f), -(viewportY + viewportH * 0.5f));
+        const float groupProgress = detailBack(m_groupEntrance);
+        nvgTranslate(vg, static_cast<float>(m_groupDirection)
+                         * (1.f - groupProgress) * 54.f, 0.f);
 
         for (size_t index = 0; index < m_itemLayouts.size(); ++index) {
             const auto& layout = m_itemLayouts[index];
             const float itemY = drawOffsetY + layout.y;
-            if (itemY + layout.h < y || itemY > y + h)
+            if (itemY + layout.h < viewportY || itemY > viewportY + viewportH)
                 continue;
             const auto& item = m_manifest.groups[layout.groupIndex].items[layout.itemIndex];
             _drawResourceButton(vg, x + layout.x, itemY, layout.w, layout.h,
                                 item, static_cast<int>(index) == m_focusedIndex);
         }
 
-        if (m_contentHeight > h + 1.f) {
-            const float trackH = std::max(40.f, h - 32.f);
-            const float thumbH = std::max(36.f, trackH * h / m_contentHeight);
+        if (m_contentHeight > viewportH + 1.f) {
+            const float trackH = std::max(40.f, viewportH - 24.f);
+            const float thumbH = std::max(42.f,
+                trackH * viewportH / m_contentHeight);
             const float travel = trackH - thumbH;
-            const float thumbY = y + 16.f + (_maximumScroll() <= 0.f
+            const float thumbY = viewportY + 12.f + (_maximumScroll() <= 0.f
                 ? 0.f : travel * m_scrollOffset / _maximumScroll());
             nvgBeginPath(vg);
-            nvgRoundedRect(vg, x + w - 7.f, thumbY, 3.f, thumbH, 1.5f);
+            nvgRoundedRect(vg, x + w - 39.f, thumbY, 3.f, thumbH, 1.5f);
             nvgFillColor(vg, nvgRGBA(255, 255, 255, 90));
             nvgFill(vg);
         }
 
         nvgRestore(vg);
+        _drawResourceFooter(vg, x, y, w, h, pageAlpha);
     }
 
     void frame(brls::FrameContext* ctx) override {
@@ -731,6 +1211,20 @@ public:
         if (dt <= 0.f || dt > 0.5f)
             dt = 0.016f;
         m_animTime += dt;
+        if (m_closing) {
+            m_pageEntrance = std::max(0.f, m_pageEntrance - dt * 3.8f);
+            if (m_pageEntrance <= 0.f && !m_closeQueued) {
+                m_closeQueued = true;
+                const auto onBack = m_onBack;
+                brls::sync([onBack]() {
+                    if (onBack)
+                        onBack();
+                });
+            }
+        } else {
+            m_pageEntrance = std::min(1.f, m_pageEntrance + dt * 2.8f);
+            m_groupEntrance = std::min(1.f, m_groupEntrance + dt * 5.f);
+        }
 
         const float difference = m_targetScroll - m_scrollOffset;
         if (std::abs(difference) > 0.2f)
@@ -766,13 +1260,22 @@ private:
     std::vector<GroupLayout> m_groupLayouts;
     int m_defaultFont = -1;
     int m_materialFont = -1;
+    int m_switchFont = -1;
     int m_focusedIndex = 0;
+    int m_selectedGroup = 0;
+    int m_groupDirection = 1;
     float m_viewportHeight = 0.f;
     float m_contentHeight = 0.f;
     float m_scrollOffset = 0.f;
     float m_targetScroll = 0.f;
     float m_animTime = 0.f;
+    float m_pageEntrance = 0.f;
+    float m_groupEntrance = 1.f;
     float m_layoutWidth = -1.f;
+    std::vector<int> m_groupFocusIndices;
+    std::vector<float> m_groupScrollOffsets;
+    bool m_closing = false;
+    bool m_closeQueued = false;
     std::chrono::steady_clock::time_point m_lastFrameTime;
     std::chrono::steady_clock::time_point m_lastNavigationTime;
     int m_lastNavigationAction = 0;
@@ -789,7 +1292,7 @@ private:
     }
 
     void _rebuildLayout(float width, float height) {
-        m_viewportHeight = height;
+        m_viewportHeight = std::max(1.f, height - 178.f);
         if (std::abs(m_layoutWidth - width) < 0.5f && !m_itemLayouts.empty())
             return;
 
@@ -797,53 +1300,32 @@ private:
         m_itemLayouts.clear();
         m_groupLayouts.clear();
 
-        constexpr float pagePadding = 30.f;
-        constexpr float blockPadding = 18.f;
-        constexpr float itemGap = 16.f;
-        constexpr float minimumSquare = 124.f;
-        constexpr float maximumSquare = 154.f;
-        constexpr float headerHeight = 48.f;
-        constexpr float groupGap = 18.f;
+        constexpr float pagePadding = 36.f;
+        constexpr float itemGap = 12.f;
+        constexpr float itemHeight = 94.f;
 
         const float blockWidth = std::max(1.f, width - pagePadding * 2.f);
-        const float availableWidth = std::max(1.f, blockWidth - blockPadding * 2.f);
-        const int columns = std::max(1, static_cast<int>(
-            std::floor((availableWidth + itemGap) / (minimumSquare + itemGap))));
-        const float square = std::min(maximumSquare,
-            (availableWidth - itemGap * static_cast<float>(columns - 1)) / columns);
-        const float gridWidth = square * columns + itemGap * (columns - 1);
-        const float gridStartX = pagePadding + blockPadding
-            + std::max(0.f, (availableWidth - gridWidth) * 0.5f);
-
-        float cursorY = 18.f;
-        int visualRow = 0;
-        for (size_t groupIndex = 0; groupIndex < m_manifest.groups.size(); ++groupIndex) {
-            const auto& group = m_manifest.groups[groupIndex];
-            const int rows = static_cast<int>((group.items.size() + columns - 1) / columns);
-            const float groupHeight = blockPadding + headerHeight
-                + rows * square + std::max(0, rows - 1) * itemGap + blockPadding;
-            m_groupLayouts.push_back({groupIndex, pagePadding, cursorY, blockWidth, groupHeight});
-
-            const float itemsY = cursorY + blockPadding + headerHeight;
+        float cursorY = 8.f;
+        if (!m_manifest.groups.empty()) {
+            m_selectedGroup = std::clamp(
+                m_selectedGroup, 0, static_cast<int>(m_manifest.groups.size()) - 1);
+            const auto& group = m_manifest.groups[static_cast<size_t>(m_selectedGroup)];
             for (size_t itemIndex = 0; itemIndex < group.items.size(); ++itemIndex) {
-                const int rowInGroup = static_cast<int>(itemIndex) / columns;
-                const int column = static_cast<int>(itemIndex) % columns;
                 m_itemLayouts.push_back({
-                    groupIndex,
+                    static_cast<size_t>(m_selectedGroup),
                     itemIndex,
-                    visualRow + rowInGroup,
-                    column,
-                    gridStartX + column * (square + itemGap),
-                    itemsY + rowInGroup * (square + itemGap),
-                    square,
-                    square,
+                    static_cast<int>(itemIndex),
+                    0,
+                    pagePadding,
+                    cursorY + itemIndex * (itemHeight + itemGap),
+                    blockWidth,
+                    itemHeight,
                 });
             }
-
-            visualRow += rows;
-            cursorY += groupHeight + groupGap;
+            cursorY += group.items.size() * itemHeight
+                + std::max(0, static_cast<int>(group.items.size()) - 1) * itemGap;
         }
-        m_contentHeight = cursorY - groupGap + 18.f;
+        m_contentHeight = cursorY + 8.f;
         m_focusedIndex = std::clamp(m_focusedIndex, 0,
             std::max(0, static_cast<int>(m_itemLayouts.size()) - 1));
         _ensureFocusedVisible();
@@ -867,52 +1349,37 @@ private:
     }
 
     bool _moveHorizontal(int direction) {
-        if (m_itemLayouts.empty())
+        if (m_manifest.groups.size() <= 1 || m_closing
+            || m_pageEntrance < 0.72f || m_groupEntrance < 0.72f) {
             return true;
-        const auto& current = m_itemLayouts[m_focusedIndex];
-        int candidate = -1;
-        for (size_t index = 0; index < m_itemLayouts.size(); ++index) {
-            const auto& item = m_itemLayouts[index];
-            if (item.row != current.row)
-                continue;
-            if ((direction < 0 && item.column == current.column - 1)
-                || (direction > 0 && item.column == current.column + 1)) {
-                candidate = static_cast<int>(index);
-                break;
-            }
         }
-        if (candidate >= 0)
-            _setFocus(candidate);
+        if (m_selectedGroup >= 0
+            && m_selectedGroup < static_cast<int>(m_groupFocusIndices.size())) {
+            m_groupFocusIndices[static_cast<size_t>(m_selectedGroup)] = m_focusedIndex;
+            m_groupScrollOffsets[static_cast<size_t>(m_selectedGroup)] = m_targetScroll;
+        }
+        const int count = static_cast<int>(m_manifest.groups.size());
+        m_selectedGroup = (m_selectedGroup + (direction < 0 ? -1 : 1) + count) % count;
+        m_groupDirection = direction;
+        m_groupEntrance = 0.f;
+        m_focusedIndex = m_groupFocusIndices[static_cast<size_t>(m_selectedGroup)];
+        m_scrollOffset = m_groupScrollOffsets[static_cast<size_t>(m_selectedGroup)];
+        m_targetScroll = m_scrollOffset;
+        m_layoutWidth = -1.f;
+        m_itemLayouts.clear();
+        m_groupLayouts.clear();
+        brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_CHANGE);
+        this->invalidate();
         return true;
     }
 
     bool _moveVertical(int direction) {
-        if (m_itemLayouts.empty())
+        if (m_itemLayouts.empty() || m_closing || m_pageEntrance < 0.72f)
             return true;
-        const auto& current = m_itemLayouts[m_focusedIndex];
-        int targetRow = direction < 0 ? -1 : std::numeric_limits<int>::max();
-        for (const auto& item : m_itemLayouts) {
-            if (direction < 0 && item.row < current.row)
-                targetRow = std::max(targetRow, item.row);
-            else if (direction > 0 && item.row > current.row)
-                targetRow = std::min(targetRow, item.row);
-        }
-        if (targetRow < 0 || targetRow == std::numeric_limits<int>::max())
-            return true;
-
-        int candidate = -1;
-        int columnDistance = std::numeric_limits<int>::max();
-        for (size_t index = 0; index < m_itemLayouts.size(); ++index) {
-            const auto& item = m_itemLayouts[index];
-            if (item.row != targetRow)
-                continue;
-            const int distance = std::abs(item.column - current.column);
-            if (distance < columnDistance) {
-                columnDistance = distance;
-                candidate = static_cast<int>(index);
-            }
-        }
-        if (candidate >= 0)
+        const int candidate = std::clamp(
+            m_focusedIndex + direction, 0,
+            static_cast<int>(m_itemLayouts.size()) - 1);
+        if (candidate != m_focusedIndex)
             _setFocus(candidate);
         return true;
     }
@@ -921,13 +1388,17 @@ private:
         if (index == m_focusedIndex)
             return;
         m_focusedIndex = index;
+        if (m_selectedGroup >= 0
+            && m_selectedGroup < static_cast<int>(m_groupFocusIndices.size())) {
+            m_groupFocusIndices[static_cast<size_t>(m_selectedGroup)] = index;
+        }
         _ensureFocusedVisible();
         brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_SIDEBAR);
         this->invalidate();
     }
 
     void _activateFocused() {
-        if (m_itemLayouts.empty())
+        if (m_itemLayouts.empty() || m_closing || m_pageEntrance < 0.85f)
             return;
         const auto layout = m_itemLayouts[m_focusedIndex];
         const auto item = m_manifest.groups[layout.groupIndex].items[layout.itemIndex];
@@ -949,44 +1420,248 @@ private:
 
     void _drawResourceButton(NVGcontext* vg, float x, float y, float w, float h,
                              const OnlineResourceItem& item, bool focused) {
+        const NVGpaint shadow = nvgBoxGradient(
+            vg, x + 5.f, y + 6.f, w, h, 8.f, 5.f,
+            nvgRGBA(0, 0, 0, 72), nvgRGBA(0, 0, 0, 0));
         nvgBeginPath(vg);
-        nvgRoundedRect(vg, x, y, w, h, 10.f);
-        nvgFillColor(vg, focused ? nvgRGBA(79, 193, 255, 54) : nvgRGBA(255, 255, 255, 10));
+        nvgRect(vg, x - 3.f, y - 3.f, w + 16.f, h + 17.f);
+        nvgRoundedRect(vg, x, y, w, h, 8.f);
+        nvgPathWinding(vg, NVG_HOLE);
+        nvgFillPaint(vg, shadow);
         nvgFill(vg);
 
         nvgBeginPath(vg);
-        nvgRoundedRect(vg, x + 1.f, y + 1.f, w - 2.f, h - 2.f, 9.f);
-        nvgStrokeColor(vg, focused ? nvgRGBA(79, 193, 255, 190) : nvgRGBA(255, 255, 255, 24));
-        nvgStrokeWidth(vg, 1.f);
+        nvgRoundedRect(vg, x, y, w, h, 8.f);
+        nvgFillColor(vg, focused
+            ? nvgRGBA(79, 193, 255, 34) : nvgRGBA(255, 255, 255, 7));
+        nvgFill(vg);
+
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, x + 1.f, y + 1.f, w - 2.f, h - 2.f, 7.f);
+        nvgStrokeColor(vg, focused
+            ? nvgRGBA(255, 255, 255, 145) : nvgRGBA(255, 255, 255, 42));
+        nvgStrokeWidth(vg, 1.5f);
         nvgStroke(vg);
 
         if (focused && this->isFocused()) {
-            beiklive::ui::drawGradientFocusBorder(vg, x, y, w, h, 10.f, 3.f, 1.f,
+            beiklive::ui::drawGradientFocusBorder(vg, x, y, w, h, 8.f, 3.f, 1.f,
                 beiklive::ui::gradientFocusAnimationOffset(m_animTime));
         }
 
         const std::string icon = encodeMaterialIcon(item.materialIcon);
         nvgFontFaceId(vg, m_materialFont);
-        nvgFontSize(vg, 43.f);
+        nvgFontSize(vg, 38.f);
         nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-        nvgFillColor(vg, focused ? nvgRGBA(255, 255, 255, 255) : GET_THEME_COLOR("brls/text"));
-        nvgText(vg, x + w * 0.5f, y + h * 0.34f, icon.c_str(), nullptr);
+        nvgFillColor(vg, focused
+            ? nvgRGBA(255, 255, 255, 255) : nvgRGBA(225, 230, 238, 220));
+        nvgText(vg, x + 54.f, y + h * 0.5f, icon.c_str(), nullptr);
 
         nvgFontFaceId(vg, m_defaultFont);
-        nvgFontSize(vg, 17.f);
-        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_TOP);
-        nvgFillColor(vg, focused ? nvgRGBA(255, 255, 255, 255) : GET_THEME_COLOR("brls/text"));
-        nvgSave(vg);
-        nvgIntersectScissor(vg, x + 8.f, y + h * 0.56f, w - 16.f, h * 0.29f);
-        nvgTextBox(vg, x + 10.f, y + h * 0.58f, w - 20.f, item.name.c_str(), nullptr);
-        nvgRestore(vg);
+        nvgFontSize(vg, 21.f);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, focused
+            ? nvgRGBA(255, 255, 255, 255) : GET_THEME_COLOR("brls/text"));
+        nvgText(vg, x + 96.f, y + 29.f, item.name.c_str(), nullptr);
+
+        nvgFontSize(vg, 14.f);
+        nvgFillColor(vg, nvgRGBA(205, 212, 223, focused ? 220 : 175));
+        const std::string metadata = "版本 " + item.version + "  ·  "
+            + (item.type == "zip" ? "压缩资源" : "单文件资源");
+        nvgText(vg, x + 96.f, y + 54.f, metadata.c_str(), nullptr);
 
         nvgFontSize(vg, 13.f);
-        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+        nvgFillColor(vg, nvgRGBA(190, 198, 211, focused ? 190 : 145));
+        nvgSave(vg);
+        nvgIntersectScissor(vg, x + 96.f, y + 64.f,
+                           std::max(20.f, w - 310.f), 22.f);
+        nvgText(vg, x + 96.f, y + 76.f, item.path.c_str(), nullptr);
+        nvgRestore(vg);
+
+        const float statusW = item.needsUpdate ? 82.f : 76.f;
+        const float statusX = x + w - statusW - 24.f;
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, statusX, y + (h - 34.f) * 0.5f,
+                       statusW, 34.f, 6.f);
         nvgFillColor(vg, item.needsUpdate
-            ? nvgRGBA(255, 190, 80, 235) : nvgRGBA(100, 220, 150, 225));
+            ? nvgRGBA(255, 190, 80, 28) : nvgRGBA(100, 220, 150, 25));
+        nvgFill(vg);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, statusX + 1.f, y + (h - 34.f) * 0.5f + 1.f,
+                       statusW - 2.f, 32.f, 5.f);
+        nvgStrokeColor(vg, item.needsUpdate
+            ? nvgRGBA(255, 190, 80, 150) : nvgRGBA(100, 220, 150, 135));
+        nvgStrokeWidth(vg, 1.f);
+        nvgStroke(vg);
+        nvgFontSize(vg, 15.f);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, item.needsUpdate
+            ? nvgRGBA(255, 205, 120, 245) : nvgRGBA(135, 235, 175, 235));
         const char* status = item.needsUpdate ? "可更新" : "已安装";
-        nvgText(vg, x + w * 0.5f, y + h - 11.f, status, nullptr);
+        nvgText(vg, statusX + statusW * 0.5f, y + h * 0.5f,
+                status, nullptr);
+    }
+
+    size_t _currentGroupIndex() const {
+        if (m_manifest.groups.empty())
+            return 0;
+        return static_cast<size_t>(std::clamp(
+            m_selectedGroup, 0, static_cast<int>(m_manifest.groups.size()) - 1));
+    }
+
+    void _drawResourceHeader(NVGcontext* vg, float x, float y, float w) {
+        const float alpha = detailSmooth(m_pageEntrance);
+        nvgSave(vg);
+        nvgGlobalAlpha(vg, alpha);
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFontSize(vg, 27.f);
+        nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
+        nvgText(vg, x + 36.f, y + 43.f, "在线资源", nullptr);
+
+        size_t itemCount = 0;
+        size_t pendingCount = 0;
+        for (const auto& group : m_manifest.groups) {
+            itemCount += group.items.size();
+            pendingCount += static_cast<size_t>(std::count_if(
+                group.items.begin(), group.items.end(),
+                [](const OnlineResourceItem& item) { return item.needsUpdate; }));
+        }
+        nvgFontSize(vg, 15.f);
+        nvgFillColor(vg, nvgRGBA(210, 216, 226, 180));
+        const std::string summary = std::to_string(itemCount) + " 项资源  ·  "
+            + std::to_string(pendingCount) + " 项可更新";
+        nvgText(vg, x + 36.f, y + 72.f, summary.c_str(), nullptr);
+
+        if (!m_manifest.groups.empty()) {
+            const float centerX = x + w * 0.5f;
+            const float centerY = y + 45.f;
+            constexpr float spacing = 152.f;
+            constexpr float selectorW = 132.f;
+            constexpr float selectorH = 42.f;
+            constexpr float selectorRadius = 21.f;
+            const float eased = 1.f - std::pow(1.f - m_groupEntrance, 3.f);
+            const float carouselShift = static_cast<float>(m_groupDirection)
+                * spacing * (1.f - eased);
+            const int count = static_cast<int>(m_manifest.groups.size());
+            const int current = static_cast<int>(_currentGroupIndex());
+
+            _drawResourceSwitchButton(vg, brls::BUTTON_LB,
+                                      centerX - 290.f, centerY);
+            _drawResourceSwitchButton(vg, brls::BUTTON_RB,
+                                      centerX + 290.f, centerY);
+
+            const int firstOffset = count == 1 ? 0 : -2;
+            const int lastOffset = count == 1 ? 0 : 2;
+            for (int relative = firstOffset; relative <= lastOffset; ++relative) {
+                int index = (current + relative) % count;
+                if (index < 0)
+                    index += count;
+                const float labelX = centerX + relative * spacing + carouselShift;
+                const float distance = std::abs(labelX - centerX) / spacing;
+                if (distance > 1.55f)
+                    continue;
+                const float prominence = std::max(0.f, 1.f - distance);
+                const float labelAlpha = 0.42f + prominence * 0.58f;
+                if (prominence > 0.55f) {
+                    const float selectorX = labelX - selectorW * 0.5f;
+                    const float selectorY = centerY - selectorH * 0.5f;
+                    const NVGpaint selectorShadow = nvgBoxGradient(
+                        vg, selectorX + 3.f, selectorY + 3.f,
+                        selectorW, selectorH, selectorRadius, 5.f,
+                        nvgRGBA(0, 0, 0,
+                            static_cast<unsigned char>(72.f * prominence)),
+                        nvgRGBA(0, 0, 0, 0));
+                    nvgBeginPath(vg);
+                    nvgRect(vg, selectorX - 2.f, selectorY - 2.f,
+                            selectorW + 10.f, selectorH + 10.f);
+                    nvgRoundedRect(vg, selectorX, selectorY,
+                                   selectorW, selectorH, selectorRadius);
+                    nvgPathWinding(vg, NVG_HOLE);
+                    nvgFillPaint(vg, selectorShadow);
+                    nvgFill(vg);
+
+                    nvgBeginPath(vg);
+                    nvgRoundedRect(vg, selectorX, selectorY,
+                                   selectorW, selectorH, selectorRadius);
+                    nvgFillColor(vg, nvgRGBA(255, 255, 255,
+                        static_cast<unsigned char>(22.f + 22.f * prominence)));
+                    nvgFill(vg);
+                    nvgBeginPath(vg);
+                    nvgRoundedRect(vg, selectorX + 1.f, selectorY + 1.f,
+                                   selectorW - 2.f, selectorH - 2.f,
+                                   selectorRadius - 1.f);
+                    nvgStrokeColor(vg, nvgRGBA(255, 255, 255,
+                        static_cast<unsigned char>(70.f + 65.f * prominence)));
+                    nvgStrokeWidth(vg, 1.f);
+                    nvgStroke(vg);
+                }
+                nvgFontFaceId(vg, m_defaultFont);
+                nvgFontSize(vg, 17.f + 5.f * prominence);
+                nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+                nvgFillColor(vg, nvgRGBA(255, 255, 255,
+                    static_cast<unsigned char>(255.f * labelAlpha)));
+                nvgText(vg, labelX, centerY,
+                        m_manifest.groups[static_cast<size_t>(index)].header.c_str(),
+                        nullptr);
+            }
+        }
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, x + 36.f, y + 94.f);
+        nvgLineTo(vg, x + w - 36.f, y + 94.f);
+        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 46));
+        nvgStrokeWidth(vg, 1.f);
+        nvgStroke(vg);
+        nvgRestore(vg);
+    }
+
+    void _drawResourceSwitchButton(NVGcontext* vg,
+                                   brls::ControllerButton button,
+                                   float x, float y) {
+        const std::string glyph = brls::Hint::getKeyIcon(button);
+        nvgFontFaceId(vg, m_switchFont);
+        nvgFontSize(vg, 25.f);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(255, 255, 255, 240));
+        nvgText(vg, x, y, glyph.c_str(), nullptr);
+    }
+
+    void _drawResourceHint(NVGcontext* vg, brls::ControllerButton button,
+                           const char* label, float& cursor, float y, float alpha) {
+        const std::string glyph = brls::Hint::getKeyIcon(button);
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgFontSize(vg, 18.f);
+        float bounds[4]{};
+        nvgTextBounds(vg, 0.f, 0.f, label, nullptr, bounds);
+        cursor -= bounds[2] - bounds[0] + 43.f;
+        nvgFontFaceId(vg, m_switchFont);
+        nvgFontSize(vg, 25.f);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(255, 255, 255, detailAlpha(alpha)));
+        nvgText(vg, cursor + 13.f, y, glyph.c_str(), nullptr);
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgFontSize(vg, 18.f);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(230, 234, 241, detailAlpha(alpha)));
+        nvgText(vg, cursor + 30.f, y, label, nullptr);
+        cursor -= 16.f;
+    }
+
+    void _drawResourceFooter(NVGcontext* vg, float x, float y, float w, float h,
+                             float alpha) {
+        const float hintY = y + h - 27.f
+            + (1.f - detailBack(m_pageEntrance)) * 46.f;
+        float cursor = x + w - 32.f;
+        _drawResourceHint(vg, brls::BUTTON_B, "返回", cursor, hintY, alpha);
+        _drawResourceHint(vg, brls::BUTTON_A, "下载", cursor, hintY, alpha);
+        _drawResourceHint(vg, brls::BUTTON_RB, "下一类", cursor, hintY, alpha);
+        _drawResourceHint(vg, brls::BUTTON_LB, "上一类", cursor, hintY, alpha);
+    }
+
+    void _beginClose() {
+        if (m_closing)
+            return;
+        m_closing = true;
+        brls::Application::getAudioPlayer()->play(brls::SOUND_BACK);
     }
 };
 
@@ -1216,10 +1891,9 @@ static std::string formatTransferSize(curl_off_t bytes) {
 static void openOnlineResourceActivity(OnlineResourceManifest manifest,
                                        beiklive::Box* previousPage) {
     auto* page = new beiklive::Box(brls::Axis::COLUMN);
-    page->showHeader(true);
-    page->showFooter(true);
+    page->showHeader(false);
+    page->showFooter(false);
     page->setGrow(1.f);
-    page->getHeader()->setTitle("在线资源");
 
     auto* canvas = new OnlineResourceCanvas(std::move(manifest), [page]() {
         beiklive::popActivity(page);
@@ -1651,36 +2325,766 @@ private:
 
 };
 
+static float aboutClamp(float value) {
+    return std::max(0.f, std::min(1.f, value));
+}
+
+static float aboutSmooth(float value) {
+    value = aboutClamp(value);
+    return value * value * (3.f - 2.f * value);
+}
+
+static float aboutBack(float value) {
+    value = aboutClamp(value);
+    constexpr float c1 = 1.12f;
+    constexpr float c3 = c1 + 1.f;
+    const float shifted = value - 1.f;
+    return 1.f + c3 * shifted * shifted * shifted
+        + c1 * shifted * shifted;
+}
+
+static unsigned char aboutAlpha(float value) {
+    return static_cast<unsigned char>(255.f * aboutClamp(value));
+}
+
+class AboutMainCanvas final : public brls::View {
+public:
+    AboutMainCanvas(std::string version,
+                    std::string updateSource,
+                    std::function<void()> onCheckUpdate,
+                    std::function<void()> onChangelog,
+                    std::function<void()> onResourceCheck,
+                    std::function<void()> onBack)
+        : m_version(std::move(version))
+        , m_updateSource(std::move(updateSource))
+        , m_onCheckUpdate(std::move(onCheckUpdate))
+        , m_onChangelog(std::move(onChangelog))
+        , m_onResourceCheck(std::move(onResourceCheck))
+        , m_onBack(std::move(onBack)) {
+        this->setFocusable(true);
+        this->setGrow(1.f);
+        this->setWidthPercentage(100.f);
+        HIDE_BRLS_HIGHLIGHT(this);
+        this->setCustomNavigationRoute(brls::FocusDirection::UP, this);
+        this->setCustomNavigationRoute(brls::FocusDirection::DOWN, this);
+        this->setCustomNavigationRoute(brls::FocusDirection::LEFT, this);
+        this->setCustomNavigationRoute(brls::FocusDirection::RIGHT, this);
+
+        auto previousTab = [this](brls::View*) -> bool {
+            if (_acceptNavigation(1))
+                _switchTab(-1);
+            return true;
+        };
+        auto nextTab = [this](brls::View*) -> bool {
+            if (_acceptNavigation(2))
+                _switchTab(1);
+            return true;
+        };
+        auto moveUp = [this](brls::View*) -> bool {
+            if (_acceptNavigation(3))
+                _moveFocus(-1);
+            return true;
+        };
+        auto moveDown = [this](brls::View*) -> bool {
+            if (_acceptNavigation(4))
+                _moveFocus(1);
+            return true;
+        };
+
+        this->registerAction("", brls::BUTTON_LEFT, previousTab,
+                             true, true, brls::SOUND_NONE);
+        this->registerAction("", brls::BUTTON_RIGHT, nextTab,
+                             true, true, brls::SOUND_NONE);
+        this->registerAction("", brls::BUTTON_NAV_LEFT, previousTab,
+                             true, true, brls::SOUND_NONE);
+        this->registerAction("", brls::BUTTON_NAV_RIGHT, nextTab,
+                             true, true, brls::SOUND_NONE);
+        this->registerAction("", brls::BUTTON_LB, previousTab,
+                             true, false, brls::SOUND_NONE);
+        this->registerAction("", brls::BUTTON_RB, nextTab,
+                             true, false, brls::SOUND_NONE);
+        this->registerAction("", brls::BUTTON_UP, moveUp,
+                             true, true, brls::SOUND_NONE);
+        this->registerAction("", brls::BUTTON_DOWN, moveDown,
+                             true, true, brls::SOUND_NONE);
+        this->registerAction("", brls::BUTTON_NAV_UP, moveUp,
+                             true, true, brls::SOUND_NONE);
+        this->registerAction("", brls::BUTTON_NAV_DOWN, moveDown,
+                             true, true, brls::SOUND_NONE);
+        this->registerAction("打开", brls::BUTTON_A,
+            [this](brls::View*) -> bool {
+                _activateFocused();
+                return true;
+            }, false, false, brls::SOUND_NONE);
+        this->registerAction("返回", brls::BUTTON_B,
+            [this](brls::View*) -> bool {
+                _beginClose();
+                return true;
+            }, false, false, brls::SOUND_NONE);
+        m_lastFrameTime = std::chrono::steady_clock::now();
+    }
+
+    ~AboutMainCanvas() override {
+        if (auto* vg = brls::Application::getNVGContext()) {
+            if (m_authorImage > 0)
+                nvgDeleteImage(vg, m_authorImage);
+            if (m_qqImage > 0)
+                nvgDeleteImage(vg, m_qqImage);
+            if (m_payImage > 0)
+                nvgDeleteImage(vg, m_payImage);
+        }
+    }
+
+    void frame(brls::FrameContext* ctx) override {
+        brls::View::frame(ctx);
+        const auto now = std::chrono::steady_clock::now();
+        float dt = std::chrono::duration<float>(now - m_lastFrameTime).count();
+        m_lastFrameTime = now;
+        if (dt <= 0.f || dt > 0.25f)
+            dt = 0.016f;
+        m_time += dt;
+        if (m_closing) {
+            m_pageEntrance = std::max(0.f, m_pageEntrance - dt * 3.7f);
+            if (m_pageEntrance <= 0.f && !m_closeQueued) {
+                m_closeQueued = true;
+                const auto onBack = m_onBack;
+                brls::sync([onBack]() {
+                    if (onBack)
+                        onBack();
+                });
+            }
+        } else {
+            m_pageEntrance = std::min(1.f, m_pageEntrance + dt * 2.8f);
+            m_tabEntrance = std::min(1.f, m_tabEntrance + dt * 4.4f);
+        }
+        if (m_clicking) {
+            m_clickTime += dt;
+            if (m_clickTime >= 0.22f) {
+                m_clicking = false;
+                m_clickTime = 0.f;
+                _runFocusedAction();
+            }
+        }
+        this->invalidate();
+    }
+
+    void draw(NVGcontext* vg, float x, float y, float w, float h,
+              brls::Style style, brls::FrameContext* ctx) override {
+        (void)style;
+        (void)ctx;
+        _ensureAssets(vg);
+        _drawHeader(vg, x, y, w);
+
+        const float contentX = x + 36.f;
+        const float contentY = y + 112.f;
+        const float contentW = w - 72.f;
+        const float contentH = h - 178.f;
+        const float progress = aboutBack(m_tabEntrance);
+        const float contentOffset = static_cast<float>(m_tabDirection)
+            * (1.f - progress) * 76.f;
+        const float pageProgress = aboutBack(m_pageEntrance);
+        const float alpha = aboutSmooth(m_pageEntrance)
+            * aboutSmooth(m_tabEntrance);
+        const float contentScale = 0.965f + pageProgress * 0.035f;
+        const float contentCenterX = contentX + contentW * 0.5f;
+        const float contentCenterY = contentY + contentH * 0.5f;
+
+        nvgSave(vg);
+        nvgGlobalAlpha(vg, alpha);
+        nvgTranslate(vg, contentCenterX + contentOffset,
+                     contentCenterY + (1.f - pageProgress) * 22.f);
+        nvgScale(vg, contentScale, contentScale);
+        nvgTranslate(vg, -contentCenterX, -contentCenterY);
+        if (m_tab == 0)
+            _drawInfo(vg, contentX, contentY, contentW, contentH);
+        else if (m_tab == 1)
+            _drawUpdate(vg, contentX, contentY, contentW, contentH);
+        else
+            _drawSupport(vg, contentX, contentY, contentW, contentH);
+        nvgRestore(vg);
+
+        _drawFooter(vg, x, y, w, h);
+    }
+
+private:
+    struct Rect {
+        float x = 0.f;
+        float y = 0.f;
+        float w = 0.f;
+        float h = 0.f;
+    };
+
+    std::string m_version;
+    std::string m_updateSource;
+    std::function<void()> m_onCheckUpdate;
+    std::function<void()> m_onChangelog;
+    std::function<void()> m_onResourceCheck;
+    std::function<void()> m_onBack;
+    int m_defaultFont = -1;
+    int m_materialFont = -1;
+    int m_switchFont = -1;
+    int m_authorImage = 0;
+    int m_qqImage = 0;
+    int m_payImage = 0;
+    int m_tab = 0;
+    int m_tabDirection = 1;
+    int m_updateFocus = 0;
+    float m_time = 0.f;
+    float m_pageEntrance = 0.f;
+    float m_tabEntrance = 0.f;
+    bool m_clicking = false;
+    bool m_closing = false;
+    bool m_closeQueued = false;
+    float m_clickTime = 0.f;
+    std::chrono::steady_clock::time_point m_lastFrameTime;
+    std::chrono::steady_clock::time_point m_lastNavigationTime;
+    int m_lastNavigationAction = 0;
+
+    void _ensureAssets(NVGcontext* vg) {
+        if (m_defaultFont < 0)
+            m_defaultFont = brls::Application::getDefaultFont();
+        if (m_materialFont < 0)
+            m_materialFont = brls::Application::getFont(brls::FONT_MATERIAL_ICONS);
+        if (m_switchFont < 0)
+            m_switchFont = brls::Application::getFont(brls::FONT_SWITCH_ICONS);
+        if (m_authorImage == 0)
+            m_authorImage = nvgCreateImage(vg, BK_RES("img/beiklive.png").c_str(), 0);
+        if (m_qqImage == 0)
+            m_qqImage = nvgCreateImage(vg, BK_RES("img/QQ.png").c_str(), 0);
+        if (m_payImage == 0)
+            m_payImage = nvgCreateImage(vg, BK_RES("img/pay.png").c_str(), 0);
+    }
+
+    bool _acceptNavigation(int action) {
+        const auto now = std::chrono::steady_clock::now();
+        const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            now - m_lastNavigationTime).count();
+        if (action == m_lastNavigationAction && elapsed >= 0 && elapsed < 90)
+            return false;
+        m_lastNavigationAction = action;
+        m_lastNavigationTime = now;
+        return true;
+    }
+
+    void _switchTab(int direction) {
+        if (m_clicking || m_closing || m_pageEntrance < 0.72f)
+            return;
+        const int next = (m_tab + direction + 3) % 3;
+        if (next == m_tab)
+            return;
+        m_tab = next;
+        m_tabDirection = direction;
+        m_tabEntrance = 0.f;
+        m_updateFocus = 0;
+        brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_CHANGE);
+        this->invalidate();
+    }
+
+    void _moveFocus(int direction) {
+        if (m_tab != 1 || m_clicking || m_closing
+            || m_pageEntrance < 0.72f)
+            return;
+        const int next = std::clamp(m_updateFocus + direction, 0, 2);
+        if (next == m_updateFocus)
+            return;
+        m_updateFocus = next;
+        brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_SIDEBAR);
+        this->invalidate();
+    }
+
+    void _activateFocused() {
+        if (m_tab != 1 || m_clicking || m_closing
+            || m_pageEntrance < 0.85f || m_tabEntrance < 0.85f)
+            return;
+        m_clicking = true;
+        m_clickTime = 0.f;
+        brls::Application::getAudioPlayer()->play(brls::SOUND_CLICK);
+    }
+
+    void _runFocusedAction() {
+        if (m_updateFocus == 0 && m_onCheckUpdate)
+            m_onCheckUpdate();
+        else if (m_updateFocus == 1 && m_onChangelog)
+            m_onChangelog();
+        else if (m_updateFocus == 2 && m_onResourceCheck)
+            m_onResourceCheck();
+    }
+
+    void _beginClose() {
+        if (m_closing || m_clicking)
+            return;
+        m_closing = true;
+        brls::Application::getAudioPlayer()->play(brls::SOUND_BACK);
+        this->invalidate();
+    }
+
+    void _drawExternalShadow(NVGcontext* vg, const Rect& r, float radius,
+                             float alpha = 1.f) {
+        const NVGpaint shadow = nvgBoxGradient(
+            vg, r.x + 5.f, r.y + 6.f, r.w, r.h, radius, 5.f,
+            nvgRGBA(0, 0, 0, aboutAlpha(0.32f * alpha)),
+            nvgRGBA(0, 0, 0, 0));
+        nvgBeginPath(vg);
+        nvgRect(vg, r.x - 3.f, r.y - 3.f, r.w + 16.f, r.h + 17.f);
+        nvgRoundedRect(vg, r.x, r.y, r.w, r.h, radius);
+        nvgPathWinding(vg, NVG_HOLE);
+        nvgFillPaint(vg, shadow);
+        nvgFill(vg);
+    }
+
+    void _drawPanel(NVGcontext* vg, const Rect& r, float radius = 8.f,
+                    bool focused = false, float scale = 1.f) {
+        Rect draw = r;
+        draw.w *= scale;
+        draw.h *= scale;
+        draw.x += (r.w - draw.w) * 0.5f;
+        draw.y += (r.h - draw.h) * 0.5f;
+        _drawExternalShadow(vg, draw, radius, 0.85f);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, draw.x, draw.y, draw.w, draw.h, radius);
+        nvgFillColor(vg, focused
+            ? nvgRGBA(79, 193, 255, 36) : nvgRGBA(255, 255, 255, 7));
+        nvgFill(vg);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, draw.x + 1.f, draw.y + 1.f,
+                       draw.w - 2.f, draw.h - 2.f, std::max(1.f, radius - 1.f));
+        nvgStrokeColor(vg, focused
+            ? nvgRGBA(255, 255, 255, 150) : nvgRGBA(255, 255, 255, 42));
+        nvgStrokeWidth(vg, 1.5f);
+        nvgStroke(vg);
+        if (focused && this->isFocused()) {
+            beiklive::ui::drawGradientFocusBorder(
+                vg, draw.x, draw.y, draw.w, draw.h, radius, 3.f, 1.f,
+                beiklive::ui::gradientFocusAnimationOffset(m_time));
+        }
+    }
+
+    void _drawHeader(NVGcontext* vg, float x, float y, float w) {
+        const float headerProgress = aboutBack(m_pageEntrance / 0.72f);
+        const float headerY = y + 25.f - (1.f - headerProgress) * 58.f;
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFontSize(vg, 25.f);
+        nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
+        nvgText(vg, x + 36.f, headerY + 24.f, "GBAStation", nullptr);
+        nvgFontSize(vg, 15.f);
+        nvgFillColor(vg, nvgRGBA(210, 216, 226, 180));
+        const std::string version = "v" + m_version;
+        nvgText(vg, x + 36.f, headerY + 52.f, version.c_str(), nullptr);
+
+        constexpr const char* labels[] = {
+            "项目信息", "更新与资源", "支持作者"
+        };
+        constexpr float tabW = 154.f;
+        constexpr float gap = 12.f;
+        constexpr float tabH = 48.f;
+        const float totalW = tabW * 3.f + gap * 2.f;
+        const float startX = x + (w - totalW) * 0.5f;
+        for (int index = 0; index < 3; ++index) {
+            const float tx = startX + index * (tabW + gap);
+            const bool selected = index == m_tab;
+            if (selected) {
+                const Rect tabRect{tx, headerY + 10.f, tabW, tabH};
+                _drawExternalShadow(vg, tabRect, 7.f, 0.55f);
+                nvgBeginPath(vg);
+                nvgRoundedRect(vg, tx, headerY + 10.f, tabW, tabH, 7.f);
+                nvgFillColor(vg, nvgRGBA(255, 255, 255, 15));
+                nvgFill(vg);
+                nvgBeginPath(vg);
+                nvgRoundedRect(vg, tx + 1.f, headerY + 11.f,
+                               tabW - 2.f, tabH - 2.f, 6.f);
+                nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 72));
+                nvgStrokeWidth(vg, 1.5f);
+                nvgStroke(vg);
+                nvgBeginPath(vg);
+                nvgRoundedRect(vg, tx + 26.f, headerY + 54.f,
+                               tabW - 52.f, 3.f, 1.5f);
+                nvgFillColor(vg, nvgRGBA(79, 193, 255, 230));
+                nvgFill(vg);
+            }
+            nvgFontFaceId(vg, m_defaultFont);
+            nvgFontSize(vg, selected ? 20.f : 18.f);
+            nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+            nvgFillColor(vg, selected
+                ? nvgRGBA(255, 255, 255, 250)
+                : nvgRGBA(210, 216, 226, 175));
+            nvgText(vg, tx + tabW * 0.5f, headerY + 34.f,
+                    labels[index], nullptr);
+        }
+
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, x + 36.f, y + 95.f);
+        nvgLineTo(vg, x + w - 36.f, y + 95.f);
+        nvgStrokeColor(vg, nvgRGBA(255, 255, 255,
+            aboutAlpha(0.20f * aboutSmooth(m_pageEntrance))));
+        nvgStrokeWidth(vg, 1.f);
+        nvgStroke(vg);
+    }
+
+    void _drawImageFit(NVGcontext* vg, int image, const Rect& r,
+                       float radius, float alpha = 1.f) {
+        if (image <= 0)
+            return;
+        int iw = 0;
+        int ih = 0;
+        nvgImageSize(vg, image, &iw, &ih);
+        if (iw <= 0 || ih <= 0)
+            return;
+        const float scale = std::min(r.w / static_cast<float>(iw),
+                                     r.h / static_cast<float>(ih));
+        const float dw = iw * scale;
+        const float dh = ih * scale;
+        const float dx = r.x + (r.w - dw) * 0.5f;
+        const float dy = r.y + (r.h - dh) * 0.5f;
+        nvgSave(vg);
+        nvgGlobalAlpha(vg, alpha);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, dx, dy, dw, dh, radius);
+        nvgFillPaint(vg, nvgImagePattern(
+            vg, dx, dy, dw, dh, 0.f, image, 1.f));
+        nvgFill(vg);
+        nvgRestore(vg);
+    }
+
+    void _drawAvatar(NVGcontext* vg, float cx, float cy, float size) {
+        if (m_authorImage <= 0)
+            return;
+        int iw = 0;
+        int ih = 0;
+        nvgImageSize(vg, m_authorImage, &iw, &ih);
+        if (iw <= 0 || ih <= 0)
+            return;
+        const float scale = std::max(size / iw, size / ih);
+        const float dw = iw * scale;
+        const float dh = ih * scale;
+        const float dx = cx - dw * 0.5f;
+        const float dy = cy - dh * 0.5f;
+        nvgBeginPath(vg);
+        nvgCircle(vg, cx, cy, size * 0.5f);
+        nvgFillPaint(vg, nvgImagePattern(
+            vg, dx, dy, dw, dh, 0.f, m_authorImage, 1.f));
+        nvgFill(vg);
+        nvgBeginPath(vg);
+        nvgCircle(vg, cx, cy, size * 0.5f - 1.f);
+        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 90));
+        nvgStrokeWidth(vg, 2.f);
+        nvgStroke(vg);
+    }
+
+    void _drawBadge(NVGcontext* vg, float x, float y,
+                    const char* text, NVGcolor color) {
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgFontSize(vg, 15.f);
+        float bounds[4]{};
+        nvgTextBounds(vg, 0.f, 0.f, text, nullptr, bounds);
+        const float width = bounds[2] - bounds[0] + 24.f;
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, x, y, width, 28.f, 6.f);
+        nvgFillColor(vg, nvgRGBAf(color.r, color.g, color.b, 28.f / 255.f));
+        nvgFill(vg);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, x + 1.f, y + 1.f, width - 2.f, 26.f, 5.f);
+        nvgStrokeColor(vg, nvgRGBAf(color.r, color.g, color.b, 125.f / 255.f));
+        nvgStrokeWidth(vg, 1.f);
+        nvgStroke(vg);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(245, 248, 252, 235));
+        nvgText(vg, x + width * 0.5f, y + 14.f, text, nullptr);
+    }
+
+    void _drawInfo(NVGcontext* vg, float x, float y, float w, float h) {
+        const float gap = 20.f;
+        const float leftW = std::min(345.f, w * 0.30f);
+        const Rect author{x, y, leftW, h};
+        const Rect project{x + leftW + gap, y, w - leftW - gap, h};
+        _drawPanel(vg, author);
+        _drawPanel(vg, project);
+
+        _drawAvatar(vg, author.x + author.w * 0.5f, author.y + 92.f, 108.f);
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgFontSize(vg, 27.f);
+        nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
+        nvgText(vg, author.x + author.w * 0.5f,
+                author.y + 170.f, "beiklive", nullptr);
+        nvgFontSize(vg, 16.f);
+        nvgFillColor(vg, nvgRGBA(210, 216, 226, 190));
+        nvgText(vg, author.x + author.w * 0.5f,
+                author.y + 207.f, "项目作者与维护者", nullptr);
+
+        const Rect github{author.x + 24.f, author.y + 250.f,
+                          author.w - 48.f, 62.f};
+        const Rect bilibili{author.x + 24.f, author.y + 328.f,
+                            author.w - 48.f, 62.f};
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, github.x, github.y, github.w, github.h, 7.f);
+        nvgFillColor(vg, nvgRGBA(79, 193, 255, 22));
+        nvgFill(vg);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, bilibili.x, bilibili.y,
+                       bilibili.w, bilibili.h, 7.f);
+        nvgFillColor(vg, nvgRGBA(0, 188, 212, 20));
+        nvgFill(vg);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFontSize(vg, 16.f);
+        nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
+        nvgText(vg, github.x + 18.f, github.y + 21.f, "GitHub", nullptr);
+        nvgText(vg, bilibili.x + 18.f, bilibili.y + 21.f, "BiliBili", nullptr);
+        nvgFontSize(vg, 14.f);
+        nvgFillColor(vg, nvgRGBA(210, 216, 226, 185));
+        nvgText(vg, github.x + 18.f, github.y + 44.f,
+                "beiklive/GBAStation", nullptr);
+        nvgText(vg, bilibili.x + 18.f, bilibili.y + 44.f,
+                "BEIKLIVE", nullptr);
+
+        const float px = project.x + 30.f;
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
+        nvgFontSize(vg, 25.f);
+        nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
+        nvgText(vg, px, project.y + 27.f, "关于本项目", nullptr);
+        nvgFontSize(vg, 17.f);
+        nvgFillColor(vg, nvgRGBA(220, 225, 234, 210));
+        nvgTextBox(vg, px, project.y + 68.f, project.w - 60.f,
+            "GBAStation 是面向 Switch 平台的模拟器前端，统一管理游戏、核心、存档、封面与输入配置。", nullptr);
+
+        float badgeX = px;
+        const float badgeY = project.y + 126.f;
+        const std::array<std::pair<const char*, NVGcolor>, 6> badges{{
+            {"GB / GBC", nvgRGB(79, 193, 255)},
+            {"GBA", nvgRGB(0, 188, 212)},
+            {"FC", nvgRGB(255, 119, 168)},
+            {"SFC", nvgRGB(150, 130, 255)},
+            {"NDS", nvgRGB(100, 220, 150)},
+            {"PICO-8", nvgRGB(255, 190, 80)},
+        }};
+        for (const auto& badge : badges) {
+            _drawBadge(vg, badgeX, badgeY, badge.first, badge.second);
+            nvgFontFaceId(vg, m_defaultFont);
+            nvgFontSize(vg, 15.f);
+            float bounds[4]{};
+            nvgTextBounds(vg, 0.f, 0.f, badge.first, nullptr, bounds);
+            badgeX += bounds[2] - bounds[0] + 36.f;
+        }
+
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, px, project.y + 178.f);
+        nvgLineTo(vg, project.x + project.w - 30.f, project.y + 178.f);
+        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 34));
+        nvgStrokeWidth(vg, 1.f);
+        nvgStroke(vg);
+
+        constexpr const char* features[] = {
+            "游戏库、封面与游玩记录",
+            "目录扫描与 RetroArch 导入",
+            "即时、自动存档与倒带",
+            "按机型独立输入映射",
+            "金手指与多核心切换",
+            "着色器、遮罩与画面模式",
+            "远程管理与资源检测",
+            "原生 NDS 与 PICO-8 运行时",
+        };
+        for (int index = 0; index < 8; ++index) {
+            const int column = index % 2;
+            const int row = index / 2;
+            const float fx = px + column * (project.w - 60.f) * 0.5f;
+            const float fy = project.y + 215.f + row * 58.f;
+            const std::string icon = encodeMaterialIcon(material::CHECK_BOX);
+            nvgFontFaceId(vg, m_materialFont);
+            nvgFontSize(vg, 24.f);
+            nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+            nvgFillColor(vg, nvgRGBA(79, 193, 255, 225));
+            nvgText(vg, fx, fy, icon.c_str(), nullptr);
+            nvgFontFaceId(vg, m_defaultFont);
+            nvgFontSize(vg, 16.f);
+            nvgFillColor(vg, nvgRGBA(235, 238, 244, 225));
+            nvgText(vg, fx + 34.f, fy, features[index], nullptr);
+        }
+    }
+
+    void _drawUpdate(NVGcontext* vg, float x, float y, float w, float h) {
+        const float gap = 22.f;
+        const float leftW = std::min(390.f, w * 0.34f);
+        const Rect version{x, y, leftW, h};
+        _drawPanel(vg, version);
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
+        nvgFontSize(vg, 20.f);
+        nvgFillColor(vg, nvgRGBA(210, 216, 226, 190));
+        nvgText(vg, version.x + 28.f, version.y + 30.f,
+                "当前版本", nullptr);
+        nvgFontSize(vg, 46.f);
+        nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
+        const std::string versionText = "v" + m_version;
+        nvgText(vg, version.x + 28.f, version.y + 72.f,
+                versionText.c_str(), nullptr);
+        nvgFontSize(vg, 16.f);
+        nvgFillColor(vg, nvgRGBA(210, 216, 226, 185));
+        nvgText(vg, version.x + 28.f, version.y + 145.f,
+                "更新源", nullptr);
+        nvgFontSize(vg, 19.f);
+        nvgFillColor(vg, nvgRGBA(245, 248, 252, 235));
+        nvgTextBox(vg, version.x + 28.f, version.y + 174.f,
+                   version.w - 56.f, m_updateSource.c_str(), nullptr);
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, version.x + 28.f, version.y + 236.f);
+        nvgLineTo(vg, version.x + version.w - 28.f, version.y + 236.f);
+        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 34));
+        nvgStrokeWidth(vg, 1.f);
+        nvgStroke(vg);
+        nvgFontSize(vg, 16.f);
+        nvgFillColor(vg, nvgRGBA(210, 216, 226, 195));
+        nvgTextBox(vg, version.x + 28.f, version.y + 270.f,
+                   version.w - 56.f,
+                   "程序更新与资源更新相互独立。在线资源可单独检查并安装，不会覆盖用户配置。",
+                   nullptr);
+
+        const float actionsX = x + leftW + gap;
+        const float actionsW = w - leftW - gap;
+        const float itemGap = 18.f;
+        const float itemH = (h - itemGap * 2.f) / 3.f;
+        constexpr char32_t icons[] = {
+            material::UPDATE, material::DESCRIPTION, material::SEARCH
+        };
+        constexpr const char* titles[] = {
+            "检测程序更新", "查看更新日志", "在线资源检测"
+        };
+        constexpr const char* descriptions[] = {
+            "检查新版本并进入下载安装流程",
+            "浏览当前版本包含的功能与修复",
+            "检测 BIOS、数据库和扩展资源"
+        };
+        for (int index = 0; index < 3; ++index) {
+            const Rect item{actionsX,
+                y + index * (itemH + itemGap), actionsW, itemH};
+            const bool focused = index == m_updateFocus;
+            float clickScale = 1.f;
+            if (focused && m_clicking)
+                clickScale = 1.f - 0.035f * std::sin(
+                    3.14159265f * aboutClamp(m_clickTime / 0.22f));
+            _drawPanel(vg, item, 8.f, focused, clickScale);
+            const std::string icon = encodeMaterialIcon(icons[index]);
+            nvgFontFaceId(vg, m_materialFont);
+            nvgFontSize(vg, 42.f);
+            nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+            nvgFillColor(vg, focused
+                ? nvgRGBA(255, 255, 255, 255)
+                : nvgRGBA(220, 225, 234, 210));
+            nvgText(vg, item.x + 58.f, item.y + item.h * 0.5f,
+                    icon.c_str(), nullptr);
+            nvgFontFaceId(vg, m_defaultFont);
+            nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+            nvgFontSize(vg, 22.f);
+            nvgFillColor(vg, focused
+                ? nvgRGBA(255, 255, 255, 255)
+                : GET_THEME_COLOR("brls/text"));
+            nvgText(vg, item.x + 108.f, item.y + item.h * 0.42f,
+                    titles[index], nullptr);
+            nvgFontSize(vg, 15.f);
+            nvgFillColor(vg, nvgRGBA(210, 216, 226,
+                focused ? 225 : 175));
+            nvgText(vg, item.x + 108.f, item.y + item.h * 0.68f,
+                    descriptions[index], nullptr);
+        }
+    }
+
+    void _drawSupport(NVGcontext* vg, float x, float y, float w, float h) {
+        const float gap = 22.f;
+        const float leftW = std::min(390.f, w * 0.34f);
+        const Rect message{x, y, leftW, h};
+        const Rect payment{x + leftW + gap, y, w - leftW - gap, h};
+        _drawPanel(vg, message);
+        _drawPanel(vg, payment);
+
+        _drawAvatar(vg, message.x + message.w * 0.5f,
+                    message.y + 82.f, 86.f);
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_TOP);
+        nvgFontSize(vg, 24.f);
+        nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
+        nvgText(vg, message.x + message.w * 0.5f,
+                message.y + 142.f, "感谢你的支持", nullptr);
+        nvgFontSize(vg, 16.f);
+        nvgFillColor(vg, nvgRGBA(215, 220, 230, 195));
+        nvgTextBox(vg, message.x + 34.f, message.y + 190.f,
+                   message.w - 68.f,
+                   "反馈、测试与分享同样是对项目的重要帮助。也许下一次更新的灵感，就来自你的建议。",
+                   nullptr);
+        nvgFontSize(vg, 18.f);
+        nvgFillColor(vg, nvgRGBA(245, 248, 252, 235));
+        nvgText(vg, message.x + message.w * 0.5f,
+                message.y + 300.f, "交流与反馈", nullptr);
+        _drawImageFit(vg, m_qqImage,
+            {message.x + 24.f, message.y + 330.f,
+             message.w - 48.f, std::min(150.f, h - 350.f)}, 6.f);
+
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
+        nvgFontSize(vg, 24.f);
+        nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
+        nvgText(vg, payment.x + 30.f, payment.y + 25.f,
+                "请作者喝杯咖啡", nullptr);
+        nvgFontSize(vg, 16.f);
+        nvgFillColor(vg, nvgRGBA(210, 216, 226, 190));
+        nvgText(vg, payment.x + 30.f, payment.y + 60.f,
+                "所有支持都会用于项目维护与功能开发", nullptr);
+        _drawImageFit(vg, m_payImage,
+            {payment.x + 28.f, payment.y + 96.f,
+             payment.w - 56.f, payment.h - 122.f}, 7.f);
+    }
+
+    void _drawHint(NVGcontext* vg, brls::ControllerButton button,
+                   const char* label, float& cursor, float y, float alpha) {
+        const std::string glyph = brls::Hint::getKeyIcon(button);
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgFontSize(vg, 18.f);
+        float bounds[4]{};
+        nvgTextBounds(vg, 0.f, 0.f, label, nullptr, bounds);
+        const float labelW = bounds[2] - bounds[0];
+        cursor -= labelW + 43.f;
+        nvgFontFaceId(vg, m_switchFont);
+        nvgFontSize(vg, 25.f);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(255, 255, 255, aboutAlpha(alpha)));
+        nvgText(vg, cursor + 13.f, y, glyph.c_str(), nullptr);
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgFontSize(vg, 18.f);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(230, 234, 241, aboutAlpha(alpha)));
+        nvgText(vg, cursor + 30.f, y, label, nullptr);
+        cursor -= 16.f;
+    }
+
+    void _drawFooter(NVGcontext* vg, float x, float y, float w, float h) {
+        const float alpha = aboutSmooth(m_pageEntrance);
+        const float hintY = y + h - 27.f;
+        float cursor = x + w - 32.f;
+        _drawHint(vg, brls::BUTTON_B, "返回", cursor, hintY, alpha);
+        if (m_tab == 1)
+            _drawHint(vg, brls::BUTTON_A, "打开", cursor, hintY, alpha);
+        _drawHint(vg, brls::BUTTON_RB, "下一页", cursor, hintY, alpha);
+        _drawHint(vg, brls::BUTTON_LB, "上一页", cursor, hintY, alpha);
+    }
+};
+
 AboutPage::AboutPage() {
     brls::sync([this]() {
-        this->showFooter(true);
+        this->showFooter(false);
         this->showHeader(false);
-        this->registerAction("返回", brls::BUTTON_B, [this](brls::View*) { 
-            beiklive::popActivity(this);
-            return true;
-        });
-        m_tabFrame = new beiklive::TabFrame();
-        this->getContentBox()->addView(m_tabFrame);
-
-        m_tabFrame->addTab(
-            "关于本项目",
-            BK_RES("img/ui/setting/emu.png"),
-            nullptr, nullptr, nullptr,
-            _buildInfoTab()
-        );
-        m_tabFrame->addTab(
-            "更新",
-            BK_RES("img/ui/setting/debug.png"),
-            nullptr, nullptr, nullptr,
-            _buildUpdateTab()
-        );
-        m_tabFrame->addTab(
-            "支持作者",
-            BK_RES("img/ui/setting/display.png"),
-            nullptr, nullptr, nullptr,
-            _buildSupportTab()
-        );
-        m_tabFrame->addFinish();
+        const std::string localVersion = APP_VERSION;
+        const std::string changelogText = readTextFile(
+            BK_RES("changelog"), "暂无更新日志");
+        m_aboutCanvas = new AboutMainCanvas(
+            localVersion,
+            "download.nswiki.cn",
+            [this]() { _checkUpdate(); },
+            [localVersion, changelogText]() {
+                openChangelogApplet(
+                    "当前版本更新内容  " + localVersion,
+                    changelogText.empty() ? "暂无更新日志" : changelogText);
+            },
+            [this]() { checkOnlineResources(this); },
+            [this]() { beiklive::popActivity(this); });
+        this->getContentBox()->addView(m_aboutCanvas);
+        brls::Application::giveFocus(m_aboutCanvas);
     });
 }
 

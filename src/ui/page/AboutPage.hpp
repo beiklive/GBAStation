@@ -2,7 +2,6 @@
 
 #include "core/common.h"
 #include "ui/widget/Box.hpp"
-#include "ui/widget/TabFrame.hpp"
 
 namespace beiklive {
 
@@ -11,7 +10,7 @@ public:
     AboutPage();
 
 private:
-    beiklive::TabFrame* m_tabFrame = nullptr;
+    brls::View* m_aboutCanvas = nullptr;
 
     brls::View* _buildInfoTab();
     brls::View* _buildUpdateTab();
