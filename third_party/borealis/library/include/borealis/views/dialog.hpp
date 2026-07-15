@@ -22,6 +22,7 @@
 #include <borealis/views/applet_frame.hpp>
 #include <borealis/views/button.hpp>
 #include <borealis/views/rectangle.hpp>
+#include <cstdint>
 
 namespace brls
 {
@@ -52,6 +53,11 @@ class Dialog : public Box
     void buttonClick(DialogButton* button);
 
     bool cancelable = true;
+    bool actionPending = false;
+    uint64_t openTimeUsec = 0;
+
+    void applyModernStyle();
+    void drawButtonSurface(NVGcontext* vg, Button* button, bool focused, float animationTime);
 
   protected:
     BRLS_BIND(Button, button1, "brls/dialog/button1");
@@ -89,6 +95,9 @@ class Dialog : public Box
 
     virtual void open();
     void close(std::function<void(void)> cb = [] {});
+
+    void draw(NVGcontext* vg, float x, float y, float width, float height,
+              Style style, FrameContext* ctx) override;
 
     bool isTranslucent() override
     {

@@ -33,6 +33,9 @@ class Notification : public Box
     explicit Notification(const std::string& text);
     ~Notification() override;
 
+    void draw(NVGcontext* vg, float x, float y, float width, float height,
+              Style style, FrameContext* ctx) override;
+
     Animatable timeoutTimer;
 
   private:

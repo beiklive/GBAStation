@@ -37,9 +37,9 @@ static StyleValues styleValues = {
     { "brls/animations/notification_show", 300.0f },
 
     // Notification
-    { "brls/notification/width", 280.0f },
-    { "brls/notification/padding", 16.0f },
-    { "brls/notification/slide", 40.0f },
+    { "brls/notification/width", 390.0f },
+    { "brls/notification/padding", 18.0f },
+    { "brls/notification/slide", 72.0f },
 
     // Highlight
     { "brls/highlight/stroke_width", 5.0f },
