@@ -11,6 +11,7 @@
 #include <cctype>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <sstream>
 
 namespace fs = std::filesystem;
@@ -76,6 +77,32 @@ namespace
             result = "cart";
         return result + "_label.png";
     }
+
+    uint64_t stablePathHash(const std::string& value)
+    {
+        uint64_t hash = 1469598103934665603ULL;
+        for (unsigned char ch : value) {
+            hash ^= ch;
+            hash *= 1099511628211ULL;
+        }
+        return hash;
+    }
+
+    std::string safeStateName(const std::string& cartPath)
+    {
+        std::string stem = displayName(fs::path(cartPath));
+        for (char& ch : stem) {
+            const unsigned char value = static_cast<unsigned char>(ch);
+            if (!std::isalnum(value) && ch != '-' && ch != '_')
+                ch = '_';
+        }
+        if (stem.empty())
+            stem = "cart";
+        std::ostringstream name;
+        name << stem << '_' << std::hex << std::setw(16) << std::setfill('0')
+             << stablePathHash(cartPath) << ".p8state";
+        return name.str();
+    }
 }
 
 namespace beiklive::pico8
@@ -110,6 +137,16 @@ namespace beiklive::pico8
         return (fs::path(rootPath()) / "cdata").string();
     }
 
+    std::string Filesystem::statesPath()
+    {
+        return (fs::path(rootPath()) / "states").string();
+    }
+
+    std::string Filesystem::quickStatePath(const std::string& cartPath)
+    {
+        return (fs::path(statesPath()) / safeStateName(cartPath)).string();
+    }
+
     std::string Filesystem::runtimePath()
     {
         return (fs::path(corePath()) / "pico8.dat").string();
@@ -130,6 +167,8 @@ namespace beiklive::pico8
         fs::create_directories(cachePath(), ec);
         if (ec) return false;
         fs::create_directories(cartDataPath(), ec);
+        if (ec) return false;
+        fs::create_directories(statesPath(), ec);
         return !ec;
     }
 

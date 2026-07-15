@@ -1569,6 +1569,8 @@ private:
     void _buildSettings()
     {
         using namespace beiklive::SettingKey;
+        cfgSetBool("input.joystick.enabled", true);
+        cfgSetBool("input.joystick.diagonal", true);
         auto& emulator = m_categories[0].items;
         emulator.push_back(_section("mGBA 核心"));
         const std::vector<std::string> gbModels = {
@@ -1760,10 +1762,10 @@ private:
         display.push_back(_toggle("显示 FPS 覆盖层", "在游戏画面上显示实时帧率", 0xE8E5,
             []() { return cfgGetBool("display.showFps", false); }, [](bool v) { cfgSetBool("display.showFps", v); }));
 
-        const std::array<std::pair<const char*, const char*>, 6> platforms{{
+        const std::array<std::pair<const char*, const char*>, 5> platforms{{
             {"GBA", KEY_DISPLAY_OVERLAY_GBA_PATH}, {"GBC", KEY_DISPLAY_OVERLAY_GBC_PATH},
             {"GB", KEY_DISPLAY_OVERLAY_GB_PATH}, {"FC", KEY_DISPLAY_OVERLAY_NES_PATH},
-            {"SFC", KEY_DISPLAY_OVERLAY_SNES_PATH}, {"NDS", KEY_DISPLAY_OVERLAY_NDS_PATH}}};
+            {"SFC", KEY_DISPLAY_OVERLAY_SNES_PATH}}};
         display.push_back(_section("默认遮罩"));
         for (const auto& platform : platforms)
         {
@@ -1772,10 +1774,10 @@ private:
                 [key]() { const auto path = cfgGetStr(key, ""); return path.empty() ? "未设置" : beiklive::tools::getFileName(path); },
                 [this, key]() { _pickFile(key, {"png"}); }));
         }
-        const std::array<std::pair<const char*, const char*>, 6> shaders{{
+        const std::array<std::pair<const char*, const char*>, 5> shaders{{
             {"GBA", KEY_DISPLAY_SHADER_GBA_PATH}, {"GBC", KEY_DISPLAY_SHADER_GBC_PATH},
             {"GB", KEY_DISPLAY_SHADER_GB_PATH}, {"FC", KEY_DISPLAY_SHADER_NES_PATH},
-            {"SFC", KEY_DISPLAY_SHADER_SNES_PATH}, {"NDS", KEY_DISPLAY_SHADER_NDS_PATH}}};
+            {"SFC", KEY_DISPLAY_SHADER_SNES_PATH}}};
         display.push_back(_section("默认着色器"));
         for (const auto& platform : shaders)
         {
@@ -1911,11 +1913,6 @@ private:
             {"每秒1次", "每秒5次", "每秒10次", "每秒15次", "每秒30次"},
             [rates]() { const float cur = GET_SETTING_KEY_FLOAT("turbo.rate", 10.f); for (int i = 0; i < 5; ++i) if (std::fabs(cur - rates[i]) < 0.01f) return i; return 2; },
             [rates](int i) { if (i >= 0 && i < 5) SET_SETTING_KEY_FLOAT("turbo.rate", rates[i]); }));
-        m_mappingItems.push_back(_section("摇杆"));
-        m_mappingItems.push_back(_toggle("启用左摇杆方向输入", "将左摇杆映射为方向键", 0xE30F,
-            []() { return cfgGetBool("input.joystick.enabled", true); }, [](bool v) { cfgSetBool("input.joystick.enabled", v); }));
-        m_mappingItems.push_back(_toggle("允许斜向输入", "同时触发水平与垂直方向", 0xE5D5,
-            []() { return cfgGetBool("input.joystick.diagonal", true); }, [](bool v) { cfgSetBool("input.joystick.diagonal", v); }));
         m_mappingFocus = _firstFocusable(m_mappingItems);
         m_mappingScroll = m_mappingTargetScroll = 0.f;
     }
@@ -3076,7 +3073,6 @@ brls::View *SettingPage::buildDisplayTab()
     box->addView(makeOverlayPathCell(beiklive::SettingKey::KEY_DISPLAY_OVERLAY_GB_PATH,  "GB 遮罩"));
     box->addView(makeOverlayPathCell(beiklive::SettingKey::KEY_DISPLAY_OVERLAY_NES_PATH,  "FC 遮罩"));
     box->addView(makeOverlayPathCell(beiklive::SettingKey::KEY_DISPLAY_OVERLAY_SNES_PATH, "SFC 遮罩"));
-    box->addView(makeOverlayPathCell(beiklive::SettingKey::KEY_DISPLAY_OVERLAY_NDS_PATH, "NDS 遮罩"));
 
     // ── 着色器设置 ────────────────────────────────────────────────────────────
     box->addView(makeHeader("着色器设置"));
@@ -3104,7 +3100,6 @@ brls::View *SettingPage::buildDisplayTab()
     box->addView(makeShaderPathCell(beiklive::SettingKey::KEY_DISPLAY_SHADER_GB_PATH,  "GB 着色器"));
     box->addView(makeShaderPathCell(beiklive::SettingKey::KEY_DISPLAY_SHADER_NES_PATH,  "FC 着色器"));
     box->addView(makeShaderPathCell(beiklive::SettingKey::KEY_DISPLAY_SHADER_SNES_PATH, "SFC 着色器"));
-    box->addView(makeShaderPathCell(beiklive::SettingKey::KEY_DISPLAY_SHADER_NDS_PATH, "NDS 着色器"));
 
     scroll->setContentView(box);
     auto *container = new brls::Box(brls::Axis::COLUMN);
@@ -3343,19 +3338,6 @@ namespace
             box->addView(rateCell);
             box->addView(makeHint("按住连发按键时每秒触发的次数，次数越高反应越快"));
         }
-
-        box->addView(makeHeader("摇杆设置"));
-        auto* joystickCell = new brls::BooleanCell();
-        joystickCell->init("启用左摇杆方向键输入",
-                           cfgGetBool("input.joystick.enabled", true),
-                           [](bool v) { cfgSetBool("input.joystick.enabled", v); });
-        box->addView(joystickCell);
-
-        auto* diagonalCell = new brls::BooleanCell();
-        diagonalCell->init("允许斜向输入（同时触发 X 和 Y 方向）",
-                           cfgGetBool("input.joystick.diagonal", true),
-                           [](bool v) { cfgSetBool("input.joystick.diagonal", v); });
-        box->addView(diagonalCell);
 
         scroll->setContentView(box);
         auto* container = new brls::Box(brls::Axis::COLUMN);

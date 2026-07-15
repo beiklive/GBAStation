@@ -98,6 +98,126 @@ private:
     qrcodegen::QrCode qr;
 };
 
+class LplImportConfirmView final : public brls::Box
+{
+public:
+    LplImportConfirmView(std::string fileName, std::string platformName)
+        : brls::Box(brls::Axis::COLUMN),
+          m_fileName(std::move(fileName)),
+          m_platformName(std::move(platformName))
+    {
+        setDimensions(650.f, 272.f);
+        setBackground(brls::ViewBackground::NONE);
+        setFocusable(false);
+    }
+
+    void draw(NVGcontext* vg, float x, float y, float w, float h,
+              brls::Style style, brls::FrameContext* ctx) override
+    {
+        (void)style;
+        (void)ctx;
+        if (m_defaultFont < 0)
+            m_defaultFont = brls::Application::getDefaultFont();
+        if (m_materialFont < 0)
+            m_materialFont = brls::Application::getFont(
+                brls::FONT_MATERIAL_ICONS);
+
+        const float iconX = x + 58.f;
+        const float iconY = y + 58.f;
+        const NVGpaint iconPaint = nvgLinearGradient(
+            vg, iconX - 30.f, iconY - 30.f, iconX + 30.f, iconY + 30.f,
+            nvgRGBA(255, 77, 109, 235), nvgRGBA(49, 177, 255, 220));
+        nvgBeginPath(vg);
+        nvgCircle(vg, iconX, iconY, 31.f);
+        nvgFillPaint(vg, iconPaint);
+        nvgFill(vg);
+        nvgFontFaceId(vg, m_materialFont);
+        nvgFontSize(vg, 32.f);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(255, 255, 255, 245));
+        nvgText(vg, iconX, iconY + 1.f, "\xEE\x8B\x86", nullptr);
+
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgFontSize(vg, 27.f);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(255, 255, 255, 246));
+        nvgText(vg, x + 108.f, y + 43.f,
+                "导入 RetroArch 播放列表", nullptr);
+
+        const std::string platformLabel = "目标平台  " + m_platformName;
+        nvgFontSize(vg, 17.f);
+        float badgeBounds[4]{};
+        nvgTextBounds(vg, 0.f, 0.f, platformLabel.c_str(), nullptr,
+                      badgeBounds);
+        const float badgeW = badgeBounds[2] - badgeBounds[0] + 26.f;
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, x + 108.f, y + 69.f, badgeW, 32.f, 7.f);
+        nvgFillColor(vg, nvgRGBA(49, 177, 255, 42));
+        nvgFill(vg);
+        nvgStrokeColor(vg, nvgRGBA(90, 199, 255, 112));
+        nvgStrokeWidth(vg, 1.f);
+        nvgStroke(vg);
+        nvgFillColor(vg, nvgRGBA(199, 232, 255, 238));
+        nvgText(vg, x + 121.f, y + 85.f, platformLabel.c_str(), nullptr);
+
+        const float fileX = x + 28.f;
+        const float fileY = y + 124.f;
+        const float fileW = w - 56.f;
+        const float fileH = 75.f;
+        const NVGpaint shadow = nvgBoxGradient(
+            vg, fileX + 4.f, fileY + 5.f, fileW, fileH, 8.f, 5.f,
+            nvgRGBA(0, 0, 0, 72), nvgRGBA(0, 0, 0, 0));
+        nvgBeginPath(vg);
+        nvgRect(vg, fileX - 3.f, fileY - 3.f, fileW + 14.f, fileH + 15.f);
+        nvgRoundedRect(vg, fileX, fileY, fileW, fileH, 8.f);
+        nvgPathWinding(vg, NVG_HOLE);
+        nvgFillPaint(vg, shadow);
+        nvgFill(vg);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, fileX, fileY, fileW, fileH, 8.f);
+        nvgFillColor(vg, nvgRGBA(255, 255, 255, 10));
+        nvgFill(vg);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, fileX + 1.f, fileY + 1.f,
+                       fileW - 2.f, fileH - 2.f, 7.f);
+        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 48));
+        nvgStrokeWidth(vg, 1.5f);
+        nvgStroke(vg);
+
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, fileX + 16.f, fileY + 20.f, 52.f, 35.f, 6.f);
+        nvgFillColor(vg, nvgRGBA(255, 77, 109, 50));
+        nvgFill(vg);
+        nvgFontSize(vg, 16.f);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(255, 174, 188, 245));
+        nvgText(vg, fileX + 42.f, fileY + 38.f, "LPL", nullptr);
+
+        nvgSave(vg);
+        nvgIntersectScissor(vg, fileX + 82.f, fileY + 8.f,
+                            fileW - 100.f, fileH - 16.f);
+        nvgFontSize(vg, 21.f);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(244, 246, 252, 242));
+        nvgText(vg, fileX + 82.f, fileY + fileH * 0.5f,
+                m_fileName.c_str(), nullptr);
+        nvgRestore(vg);
+
+        nvgFontSize(vg, 16.f);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(181, 188, 202, 225));
+        nvgText(vg, x + 30.f, y + 229.f,
+                "将读取播放列表并导入有效 ROM，文件中的平台需与目标平台一致。",
+                nullptr);
+    }
+
+private:
+    std::string m_fileName;
+    std::string m_platformName;
+    int m_defaultFont = -1;
+    int m_materialFont = -1;
+};
+
 std::string expandTilde(const std::string& path)
 {
     if (!path.empty() && path[0] == '~')
@@ -187,6 +307,8 @@ ImportSharedConfig buildSharedConfig(int platform)
 
     ImportSharedConfig config;
     config.platform = platform;
+    if (platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
+        return config;
     config.overlayEnabled = beiklive::tools::shouldAutoEnableOverlayForPlatform(platform);
     config.shaderEnabled = beiklive::tools::shouldAutoEnableShaderForPlatform(platform);
 
@@ -1606,29 +1728,45 @@ void DataManagementPage::onSelectLpl(int platform)
 {
     auto* flPage = new beiklive::FileListPage();
     flPage->setFliter(beiklive::enums::FilterMode::Whitelist, {"lpl"});
-    flPage->onFileSelected = [this, platform](beiklive::DirListData item) {
+    flPage->onRequestClose = []() {
+        brls::Application::popActivity(brls::TransitionAnimation::FADE);
+    };
+    flPage->onFileSelected = [this, platform, flPage](beiklive::DirListData item) {
         if (item.itemType == beiklive::enums::FileType::DRIVE ||
             item.itemType == beiklive::enums::FileType::DIRECTORY)
             return;
 
         std::string selectedPath = item.fullPath;
-        brls::Application::popActivity(brls::TransitionAnimation::NONE);
-
-        rememberFocusBeforeModal();
-        auto* dialog = new brls::Dialog(
-            "导入游戏库\n\n文件: " + fileNameFromPath(selectedPath));
-        dialog->addButton("取消", [this]() { restoreFocusAfterModal(); });
-        dialog->addButton("确定导入", [this, selectedPath, platform]() {
-            startImport(selectedPath, platform);
-        });
-        dialog->open();
+        flPage->onRequestClose = [this, selectedPath, platform]() {
+            brls::Application::popActivity(
+                brls::TransitionAnimation::FADE,
+                [this, selectedPath, platform]() {
+                    rememberFocusBeforeModal();
+                    auto* content = new LplImportConfirmView(
+                        fileNameFromPath(selectedPath),
+                        beiklive::tools::platformName(platform));
+                    auto* dialog = new brls::Dialog(content);
+                    dialog->addButton("取消", [this]() {
+                        restoreFocusAfterModal();
+                    });
+                    dialog->addButton(
+                        "确定导入", [this, selectedPath, platform]() {
+                            startImport(selectedPath, platform);
+                        });
+                    dialog->open();
+                });
+        };
+        flPage->requestClose();
     };
 
     auto* container = new brls::Box(brls::Axis::COLUMN);
     container->setGrow(1.0f);
     container->addView(flPage);
     container->registerAction("关闭"_i18n, brls::BUTTON_START,
-                              [](brls::View*) { brls::Application::popActivity(); return true; });
+                              [flPage](brls::View*) {
+                                  flPage->requestClose();
+                                  return true;
+                              });
 
     auto* frame = new brls::AppletFrame(container);
     frame->setHeaderVisibility(brls::Visibility::GONE);

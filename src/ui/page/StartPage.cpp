@@ -325,9 +325,10 @@ namespace beiklive
         auto* frame = new brls::AppletFrame(gamePage);
         HIDE_BRLS_BAR(frame);
         brls::Logger::info("Pushing GamePage activity for: " + dirItem.fileName);
-        brls::sync([frame, previousPage, gamePage]() {
-            beiklive::pushActivity(frame, previousPage, gamePage, [gamePage]() { gamePage->startGame(); });
-        });
+        beiklive::g_beiklive_boxes.push_back(previousPage);
+        brls::Application::pushActivity(
+            new brls::Activity(frame), brls::TransitionAnimation::NONE);
+        gamePage->startGame();
     }
 
     void StartPage::_useSwitchLayout()
@@ -454,8 +455,6 @@ namespace beiklive
     void StartPage::_openFileList()
     {
         brls::Logger::debug("Opening File List Page");
-        if (switchLayout)
-            switchLayout->playExitAnimation();
         m_fileListPage = new beiklive::FileListPage();
         m_fileListPage->onRequestClose = [this]() {
             beiklive::popActivity(m_fileListPage);
@@ -497,48 +496,68 @@ namespace beiklive
 
         auto *frame = new brls::AppletFrame(m_fileListPage);
         HIDE_BRLS_BAR(frame);
-        brls::sync([this, frame]()
-                   {
-                       brls::Logger::info("Pushing FileListPage activity");
-                       beiklive::pushActivity(frame, this, m_fileListPage);
-                       m_fileListPage->showDriveList();
-                   });
+        auto pushPage = [this, frame]() {
+            brls::Logger::info("Pushing FileListPage activity");
+            beiklive::g_beiklive_boxes.push_back(this);
+            brls::Application::pushActivity(
+                new brls::Activity(frame), brls::TransitionAnimation::NONE);
+            m_fileListPage->showDriveList();
+        };
+        if (switchLayout)
+            switchLayout->playExitAnimation(std::move(pushPage));
+        else
+            pushPage();
     }
 
     void StartPage::_openSettings()
     {
         brls::Logger::debug("Opening Settings Page");
-        if (switchLayout)
-            switchLayout->playExitAnimation();
         auto *settingPage = new beiklive::SettingPage();
         auto *frame       = new brls::AppletFrame(settingPage);
         HIDE_BRLS_BAR(frame);
-        brls::sync([this, frame, settingPage]()
-                   { beiklive::pushActivity(frame, this, settingPage); });
+        auto pushPage = [this, frame]() {
+            beiklive::g_beiklive_boxes.push_back(this);
+            brls::Application::pushActivity(
+                new brls::Activity(frame), brls::TransitionAnimation::NONE);
+        };
+        if (switchLayout)
+            switchLayout->playExitAnimation(std::move(pushPage));
+        else
+            pushPage();
     }
 
     void StartPage::_openAbout()
     {
         brls::Logger::debug("Opening About Page");
-        if (switchLayout)
-            switchLayout->playExitAnimation();
         auto *aboutPage = new beiklive::AboutPage();
         auto *frame     = new brls::AppletFrame(aboutPage);
         HIDE_BRLS_BAR(frame);
-        brls::sync([this, frame, aboutPage]()
-                   { beiklive::pushActivity(frame, this, aboutPage); });
+        auto pushPage = [this, frame]() {
+            beiklive::g_beiklive_boxes.push_back(this);
+            brls::Application::pushActivity(
+                new brls::Activity(frame), brls::TransitionAnimation::NONE);
+        };
+        if (switchLayout)
+            switchLayout->playExitAnimation(std::move(pushPage));
+        else
+            pushPage();
     }
 
     void StartPage::_openDataManagement()
     {
         brls::Logger::debug("Opening Data Management Page");
-        if (switchLayout)
-            switchLayout->playExitAnimation();
         auto *dataPage = new beiklive::DataManagementPage();
         auto *frame    = new brls::AppletFrame(dataPage);
         HIDE_BRLS_BAR(frame);
-        brls::sync([this, frame, dataPage]()
-                   { beiklive::pushActivity(frame, this, dataPage); });
+        auto pushPage = [this, frame]() {
+            beiklive::g_beiklive_boxes.push_back(this);
+            brls::Application::pushActivity(
+                new brls::Activity(frame), brls::TransitionAnimation::NONE);
+        };
+        if (switchLayout)
+            switchLayout->playExitAnimation(std::move(pushPage));
+        else
+            pushPage();
     }
 
     void StartPage::_showGameOptionsPanel(const beiklive::GameEntry& entry)

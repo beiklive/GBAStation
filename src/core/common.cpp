@@ -549,8 +549,8 @@ namespace beiklive
         }
 
         // 摇杆输入设置
-        SettingManager->SetDefault("input.joystick.enabled", ConfigValue(1));
-        SettingManager->SetDefault("input.joystick.diagonal", ConfigValue(1));
+        SettingManager->Set("input.joystick.enabled", ConfigValue(1), false);
+        SettingManager->Set("input.joystick.diagonal", ConfigValue(1), false);
 
         SettingManager->Save();
         NameMappingManager->Save();

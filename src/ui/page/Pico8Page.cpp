@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
+#include <fstream>
 
 namespace
 {
@@ -404,18 +405,30 @@ namespace beiklive
 
     void Pico8Page::_quickSave()
     {
-        if (m_state != State::Running)
+        if (m_state != State::Running || m_loadedGamePath.empty())
             return;
-        if (m_core.SaveState(m_quickState))
+        std::vector<uint8_t> state;
+        if (m_core.SaveState(state) &&
+            _writeQuickState(m_loadedGamePath, state)) {
+            m_quickState = std::move(state);
+            m_quickStateGamePath = m_loadedGamePath;
             brls::Application::notify("PICO-8 快速存档完成");
-        else
+        } else {
             brls::Application::notify("PICO-8 快速存档失败，请查看 pico.log");
+        }
     }
 
     void Pico8Page::_quickLoad()
     {
         if (m_state != State::Running)
             return;
+        if (m_loadedGamePath.empty())
+            return;
+        if (m_quickState.empty() || m_quickStateGamePath != m_loadedGamePath) {
+            m_quickState.clear();
+            if (_readQuickState(m_loadedGamePath, m_quickState))
+                m_quickStateGamePath = m_loadedGamePath;
+        }
         if (m_quickState.empty()) {
             brls::Application::notify("没有可读取的 PICO-8 快速存档");
             return;
@@ -429,6 +442,71 @@ namespace beiklive
         } else {
             brls::Application::notify("PICO-8 快速读档失败，请查看 pico.log");
         }
+    }
+
+    bool Pico8Page::_writeQuickState(const std::string& gamePath,
+                                     const std::vector<uint8_t>& state)
+    {
+        if (gamePath.empty() || state.empty())
+            return false;
+        pico8::Filesystem::ensureDirectories();
+        const std::filesystem::path target(
+            pico8::Filesystem::quickStatePath(gamePath));
+        const std::filesystem::path temporary = target.string() + ".tmp";
+        std::error_code ec;
+        std::filesystem::create_directories(target.parent_path(), ec);
+        if (ec)
+            return false;
+        {
+            std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
+            if (!output)
+                return false;
+            output.write(reinterpret_cast<const char*>(state.data()),
+                         static_cast<std::streamsize>(state.size()));
+            output.flush();
+            if (!output)
+                return false;
+        }
+        std::filesystem::remove(target, ec);
+        ec.clear();
+        std::filesystem::rename(temporary, target, ec);
+        if (ec) {
+            const std::string error = ec.message();
+            std::error_code removeError;
+            std::filesystem::remove(temporary, removeError);
+            brls::Logger::error("Pico8Page: quick-state rename failed path={} error={}",
+                                target.string(), error);
+            return false;
+        }
+        brls::Logger::info("Pico8Page: quick state persisted path={} bytes={}",
+                           target.string(), state.size());
+        return true;
+    }
+
+    bool Pico8Page::_readQuickState(const std::string& gamePath,
+                                    std::vector<uint8_t>& state)
+    {
+        state.clear();
+        const std::filesystem::path path(
+            pico8::Filesystem::quickStatePath(gamePath));
+        std::error_code ec;
+        const uintmax_t size = std::filesystem::file_size(path, ec);
+        constexpr uintmax_t maxStateBytes = 40ULL * 1024ULL * 1024ULL;
+        if (ec || size == 0 || size > maxStateBytes)
+            return false;
+        std::ifstream input(path, std::ios::binary);
+        if (!input)
+            return false;
+        state.resize(static_cast<size_t>(size));
+        input.read(reinterpret_cast<char*>(state.data()),
+                   static_cast<std::streamsize>(state.size()));
+        if (!input) {
+            state.clear();
+            return false;
+        }
+        brls::Logger::info("Pico8Page: quick state loaded from disk path={} bytes={}",
+                           path.string(), state.size());
+        return true;
     }
 
     void Pico8Page::_captureTraceInput()
@@ -572,8 +650,10 @@ namespace beiklive
                         loaded = m_core.LoadGame(game.path);
                     }
                     if (loaded) {
-                        if (!m_launchUsesRuntime)
+                        if (!m_launchUsesRuntime) {
                             m_quickState.clear();
+                            m_quickStateGamePath.clear();
+                        }
                         m_loadedGamePath = game.path;
                         m_input.reset();
                         m_inputTrace.clear();
@@ -853,7 +933,7 @@ namespace beiklive
                 nvgStroke(vg);
             }
             nvgFontFaceId(vg, m_fontId);
-            nvgFontSize(vg, selected ? 21.f : 19.f);
+            nvgFontSize(vg, selected ? 24.f : 21.f);
             nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
             nvgFillColor(vg, selected
                 ? nvgRGBA(255, 255, 255, 246)

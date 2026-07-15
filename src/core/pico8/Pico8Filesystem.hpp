@@ -21,6 +21,8 @@ namespace beiklive::pico8
         static std::string corePath();
         static std::string cachePath();
         static std::string cartDataPath();
+        static std::string statesPath();
+        static std::string quickStatePath(const std::string& cartPath);
         static std::string runtimePath();
         static std::string fontPath();
 

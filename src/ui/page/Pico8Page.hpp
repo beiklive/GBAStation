@@ -50,6 +50,10 @@ namespace beiklive
         void _returnToRunningGame();
         void _quickSave();
         void _quickLoad();
+        bool _writeQuickState(const std::string& gamePath,
+                              const std::vector<uint8_t>& state);
+        bool _readQuickState(const std::string& gamePath,
+                             std::vector<uint8_t>& state);
         void _pollBackgroundTasks();
         void _handleLibraryInput(float dt);
         void _handleEmptyInput();
@@ -103,6 +107,7 @@ namespace beiklive
         std::future<bool> m_coreFuture;
         std::vector<pico8::GameEntry> m_games;
         std::vector<uint8_t> m_quickState;
+        std::string m_quickStateGamePath;
 
         struct InputTraceEntry
         {

@@ -2683,7 +2683,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
     const int autoLoadSlot = inputConfig.intValue("save.autoLoadState0", 0);
     const int autoSaveSlot = inputConfig.intValue("save.autoSaveState", 0);
     const int autoSaveInterval = inputConfig.intValue("save.autoSaveInterval", 0);
-    const bool autoSaveOnExit = inputConfig.intValue("save.autoSaveOnExit", 0) != 0;
+    const int autoSaveOnExitSlot = std::clamp(inputConfig.intValue("save.autoSaveOnExit", 0), 0, 10);
     auto autoSaveStart = std::chrono::steady_clock::now();
     int pendingMenuSaveSlot = -1;
     int pendingMenuSaveFrames = 0;
@@ -3108,7 +3108,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
         {
             exitRequested = true;
             pendingReturn = options.returnToNroOnExit;
-            if (autoSaveOnExit && autoSaveSlot > 0 && loaded)
+            if (autoSaveOnExitSlot > 0 && loaded)
             {
                 exitAutoSavePending = true;
                 exitAutoSaveDrawn = false;
@@ -3118,7 +3118,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
                 lastFastForwardActive = false;
                 gameLayer.requestDeferredCapture();
                 blockGameInputUntilRelease = true;
-                appendStubLog("GBAStationNDSStub: exit autosave pending slot=%d", autoSaveSlot - 1);
+                appendStubLog("GBAStationNDSStub: exit autosave pending slot=%d", autoSaveOnExitSlot - 1);
             }
             else
             {
@@ -3443,18 +3443,18 @@ int RunDekoRuntime(const DekoRunOptions& options)
             const bool cached = gameLayer.refreshCaptureCache();
             appendStubLog("GBAStationNDSStub: exit autosave capture cache %s slot=%d drawn=%d",
                           cached ? "ok" : "failed",
-                          autoSaveSlot - 1,
+                          autoSaveOnExitSlot - 1,
                           exitAutoSaveDrawn ? 1 : 0);
             if (!exitAutoSaveDrawn)
             {
                 exitAutoSaveDrawn = true;
                 gameLayer.requestDeferredCapture();
-                appendStubLog("GBAStationNDSStub: exit autosave notice drawn slot=%d", autoSaveSlot - 1);
+                appendStubLog("GBAStationNDSStub: exit autosave notice drawn slot=%d", autoSaveOnExitSlot - 1);
             }
             else
             {
-                appendStubLog("GBAStationNDSStub: exit autosave begin slot=%d", autoSaveSlot - 1);
-                doSaveState(autoSaveSlot - 1, false);
+                appendStubLog("GBAStationNDSStub: exit autosave begin slot=%d", autoSaveOnExitSlot - 1);
+                doSaveState(autoSaveOnExitSlot - 1, false);
                 exitAutoSavePending = false;
                 running = false;
                 appendStubLog("GBAStationNDSStub: exit autosave done");

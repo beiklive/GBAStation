@@ -479,27 +479,111 @@ namespace beiklive::pico8
             luaSize > MAX_LUA_STATE_SIZE ||
             STATE_HEADER_SIZE + RAM_SIZE + luaSize != size)
             return false;
-        PicoRam* memory = m_impl->vm->getPicoRam();
-        if (!memory)
-            return false;
-
+        const std::string gamePath = m_impl->gamePath;
         m_impl->outputAudio.pause();
+
+        auto buildRuntime = [&](std::unique_ptr<Host>& host,
+                                std::unique_ptr<Vm>& vm,
+                                bool restoreState,
+                                std::string& error) -> bool {
+            host = std::make_unique<Host>(WIDTH, HEIGHT);
+            vm = std::make_unique<Vm>(host.get());
+            if (!initializeStatePersistence(vm.get(), error))
+                return false;
+            if (!vm->LoadCart(gamePath, false)) {
+                error = vm->GetBiosError();
+                if (error.empty())
+                    error = "failed to reload cart";
+                return false;
+            }
+            vm->vm_run();
+            error = vm->GetBiosError();
+            if (!error.empty())
+                return false;
+            if (!restoreState)
+                return true;
+
+            PicoRam* candidateMemory = vm->getPicoRam();
+            if (!candidateMemory) {
+                error = "candidate PICO-8 memory is unavailable";
+                return false;
+            }
+            if (!restoreLuaState(
+                    getVmLuaState(vm.get()),
+                    data + STATE_HEADER_SIZE + RAM_SIZE,
+                    static_cast<size_t>(luaSize), error))
+                return false;
+            std::memcpy(candidateMemory->data,
+                        data + STATE_HEADER_SIZE, RAM_SIZE);
+            return true;
+        };
+
+        auto replaceRuntime = [&](std::unique_ptr<Host> host,
+                                  std::unique_ptr<Vm> vm) {
+            m_impl->vm = std::move(vm);
+            m_impl->host = std::move(host);
+        };
+
+        std::unique_ptr<Host> candidateHost;
+        std::unique_ptr<Vm> candidateVm;
         std::string stateError;
-        if (!restoreLuaState(
-                getVmLuaState(m_impl->vm.get()),
-                data + STATE_HEADER_SIZE + RAM_SIZE,
-                static_cast<size_t>(luaSize), stateError)) {
+        if (!buildRuntime(candidateHost, candidateVm, true, stateError)) {
             brls::Logger::error(
                 "Pico8Core: quick load failed path={} error={}",
-                m_impl->gamePath, stateError);
+                gamePath, stateError);
             Logger_Write("Quick load failed: %s\n", stateError.c_str());
-            m_impl->outputAudio.resume();
+
+            // FAKE-08 binds its Lua API to process-global VM pointers. Once a
+            // candidate VM has been constructed, a failed restore cannot
+            // safely resume the old VM. Rebuild the current cart so input and
+            // Lua callbacks always point at live objects.
+            candidateVm.reset();
+            candidateHost.reset();
+            std::string recoveryError;
+            if (buildRuntime(candidateHost, candidateVm, false,
+                             recoveryError)) {
+                replaceRuntime(std::move(candidateHost),
+                               std::move(candidateVm));
+                m_impl->statePersistenceReady = true;
+                m_impl->frameAccumulator = 0.f;
+                m_impl->audioAccumulator = 0.0;
+                m_impl->input = {};
+                m_impl->paused = false;
+                m_impl->runtimeErrorLogged = false;
+                m_impl->error.clear();
+                m_impl->convertFrame();
+                m_impl->outputAudio.initialize();
+                brls::Logger::warning(
+                    "Pico8Core: quick-load recovery restarted cart path={}",
+                    gamePath);
+                Logger_Write("Quick-load recovery restarted cart\n");
+            } else {
+                brls::Logger::error(
+                    "Pico8Core: quick-load recovery failed path={} error={}",
+                    gamePath, recoveryError);
+                Logger_Write("Quick-load recovery failed: %s\n",
+                             recoveryError.c_str());
+                if (m_impl->vm)
+                    m_impl->vm->CloseCart();
+                m_impl->vm.reset();
+                m_impl->host.reset();
+                m_impl->loaded = false;
+                m_impl->initialized = false;
+                m_impl->statePersistenceReady = false;
+                m_impl->gamePath.clear();
+                m_impl->error = recoveryError;
+            }
             return false;
         }
-        std::memcpy(memory->data, data + STATE_HEADER_SIZE, RAM_SIZE);
+
+        replaceRuntime(std::move(candidateHost), std::move(candidateVm));
+        m_impl->statePersistenceReady = true;
         m_impl->frameAccumulator = 0.f;
         m_impl->audioAccumulator = 0.0;
         m_impl->input = {};
+        m_impl->paused = false;
+        m_impl->runtimeErrorLogged = false;
+        m_impl->error.clear();
         host_bridge::setInput(0, 0);
         m_impl->convertFrame();
         m_impl->outputAudio.initialize();
