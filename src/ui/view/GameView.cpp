@@ -1,6 +1,7 @@
 #include "GameView.hpp"
 #include "GameMenuView.hpp"
 #include "RewindSelectorView.hpp"
+#include "game/PlayTimeCheckpointWriter.hpp"
 #include "game/audio/AudioManager.hpp"
 #include "game/control/InputMappingDefaults.hpp"
 #include "ui/utils/BKAudioPlayer.hpp"
@@ -34,6 +35,8 @@
 
 namespace
 {
+    constexpr auto kPlayTimeCheckpointInterval = std::chrono::seconds(60);
+
     constexpr int kNdsTargetLatencyFloorMs = 120;
     constexpr int kNdsMaxLatencyFloorMs = 240;
     constexpr float kNdsMaxAudioSyncStrength = 0.008f;
@@ -2254,20 +2257,18 @@ namespace beiklive
         }
 
         m_playTimeFraction += elapsed;
-        if (m_playTimeFraction < 1.0)
-            return;
+        if (m_playTimeFraction >= 1.0) {
+            int wholeSeconds = static_cast<int>(m_playTimeFraction);
+            m_gameEntry.playTime += wholeSeconds;
+            m_playTimeFraction -= static_cast<double>(wholeSeconds);
+        }
 
-        int wholeSeconds = static_cast<int>(m_playTimeFraction);
-        m_gameEntry.playTime += wholeSeconds;
-        m_playTimeFraction -= static_cast<double>(wholeSeconds);
-
-        if (!m_playTimeTempPath.empty() && m_lastPlayTimeTempWrite != m_gameEntry.playTime) {
-            std::ofstream f(m_playTimeTempPath, std::ios::trunc);
-            if (f) {
-                f << m_gameEntry.playTime;
-                f.close();
-                m_lastPlayTimeTempWrite = m_gameEntry.playTime;
-            }
+        if (m_nextPlayTimeCheckpoint.time_since_epoch().count() == 0)
+            m_nextPlayTimeCheckpoint = now + kPlayTimeCheckpointInterval;
+        if (!m_playTimeTempPath.empty() && now >= m_nextPlayTimeCheckpoint) {
+            PlayTimeCheckpointWriter::instance().submit(
+                m_playTimeTempPath, m_gameEntry.playTime);
+            m_nextPlayTimeCheckpoint = now + kPlayTimeCheckpointInterval;
         }
     }
 
@@ -2278,14 +2279,12 @@ namespace beiklive
     {
         _accumulatePlayTime();
 
-        if (!m_playTimeTempPath.empty()) {
-            std::ofstream f(m_playTimeTempPath, std::ios::trunc);
-            if (f) {
-                f << m_gameEntry.playTime;
-                f.close();
-                m_lastPlayTimeTempWrite = m_gameEntry.playTime;
-            }
-        }
+        if (!m_playTimeTempPath.empty() &&
+            !PlayTimeCheckpointWriter::instance().flush(
+                m_playTimeTempPath, m_gameEntry.playTime))
+            brls::Logger::warning("GameView: failed to flush playtime checkpoint");
+        m_nextPlayTimeCheckpoint = std::chrono::steady_clock::now() +
+                                   kPlayTimeCheckpointInterval;
     }
 
     // ============================================================
@@ -2302,8 +2301,10 @@ namespace beiklive
             beiklive::GameDB->set(m_gameEntry.path, "playTime", nlohmann::json(m_gameEntry.playTime));
             beiklive::GameDB->flush();
         }
+        PlayTimeCheckpointWriter::instance().forget(m_playTimeTempPath);
         std::error_code ec;
         std::filesystem::remove(m_playTimeTempPath, ec);
+        std::filesystem::remove(m_playTimeTempPath + ".tmp", ec);
     }
 
     // ============================================================
@@ -2328,7 +2329,8 @@ namespace beiklive
         fs::create_directories(dir, ec);
 
         m_playTimeTempPath = dir + "/" + stem + ".playtime";
-        m_lastPlayTimeTempWrite = -1;
+        m_nextPlayTimeCheckpoint = std::chrono::steady_clock::now() +
+                                   kPlayTimeCheckpointInterval;
 
         // 检查是否存在遗留的临时文件（上次异常退出或未正常终止）
         if (fs::exists(m_playTimeTempPath, ec) && !ec) {
@@ -2347,7 +2349,7 @@ namespace beiklive
                             brls::Logger::info("GameView: 已合并遗留时长 {} 秒到 GameDB，清理临时文件",
                                                legacySeconds);
                         }
-                        // 合并后删除临时文件，由热路径重新创建
+                        // 合并后删除检查点，由后台周期或暂停/退出流程重新创建
                         fs::remove(m_playTimeTempPath, ec);
                     }
                 }
@@ -2475,7 +2477,7 @@ namespace beiklive
 
         m_playStartTime = Clock::now();
         m_playTimeFraction = 0.0;
-        m_lastPlayTimeTempWrite = -1;
+        m_nextPlayTimeCheckpoint = Clock::now() + kPlayTimeCheckpointInterval;
         bool wasPaused  = false;
 
         // 初始化 SRAM 检测时间
@@ -2593,6 +2595,7 @@ namespace beiklive
             }
             if (wasPaused) {
                 m_playStartTime = Clock::now();
+                m_nextPlayTimeCheckpoint = m_playStartTime + kPlayTimeCheckpointInterval;
                 m_autoSaveTimer = Clock::now();
                 _resumeAudioForTransition();
                 wasPaused = false;

@@ -189,11 +189,11 @@ namespace beiklive
             RewindSelectorView* m_rewindSelectorView = nullptr;
 
             // ---- 杂项 --------------------------------------------------------
-            std::string m_playTimeTempPath;    ///< 时长临时文件路径，退出时合并到 GameDB
+            std::string m_playTimeTempPath;    ///< 时长容灾检查点路径，退出时合并到 GameDB
             int m_cachedThumbCompression = 0;  ///< 缓存缩略图压缩模式，避免每帧读取配置
             std::chrono::steady_clock::time_point m_playStartTime; ///< 最近一次真实游玩时长累计时刻
+            std::chrono::steady_clock::time_point m_nextPlayTimeCheckpoint; ///< 下一次后台容灾检查点
             double m_playTimeFraction = 0.0;   ///< 未满 1 秒的真实游玩时长累积
-            int m_lastPlayTimeTempWrite = -1;  ///< 上次写入临时文件的 playTime 值
 #ifdef __SWITCH__
             AppletHookCookie m_appletHookCookie{};
             std::atomic<int> m_switchFocusState{AppletFocusState_InFocus};
