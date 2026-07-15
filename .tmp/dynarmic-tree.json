@@ -1,0 +1,3880 @@
+{
+  "sha": "e77b1ba0b7da7cbe93021b01a663acfe7c4dd516",
+  "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/e77b1ba0b7da7cbe93021b01a663acfe7c4dd516",
+  "tree": [
+    {
+      "path": ".clang-format",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "4cadb9e0d680032945404a5f314e66d10bff3e6d",
+      "size": 5796,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/4cadb9e0d680032945404a5f314e66d10bff3e6d"
+    },
+    {
+      "path": ".github",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "46bf02ba5647235a4154800d99c782c88335538c",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/46bf02ba5647235a4154800d99c782c88335538c"
+    },
+    {
+      "path": ".github/workflows",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "c36f3c784155645265917954ecc2a079f3356fba",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/c36f3c784155645265917954ecc2a079f3356fba"
+    },
+    {
+      "path": ".github/workflows/aarch64.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "4bdce943a29a78d784698c7dbefba735836eebf4",
+      "size": 6133,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/4bdce943a29a78d784698c7dbefba735836eebf4"
+    },
+    {
+      "path": ".github/workflows/clang-format.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "59daae0c774934be4d4ec5dedc4e9a9230c86e72",
+      "size": 392,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/59daae0c774934be4d4ec5dedc4e9a9230c86e72"
+    },
+    {
+      "path": ".github/workflows/multiarch.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "00d82516a7fdeac7570aeb322bfecf31eaea61a8",
+      "size": 1119,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/00d82516a7fdeac7570aeb322bfecf31eaea61a8"
+    },
+    {
+      "path": ".github/workflows/riscv64.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "bae024d1609e628ef81b025c9f220db64a72f1ff",
+      "size": 1701,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/bae024d1609e628ef81b025c9f220db64a72f1ff"
+    },
+    {
+      "path": ".github/workflows/x86-64.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d543a59cc867124b0a19c1f4491ca2697314ae9f",
+      "size": 3385,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/d543a59cc867124b0a19c1f4491ca2697314ae9f"
+    },
+    {
+      "path": ".gitignore",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "4dc28a88c0c3cad919817f0b35cc03bbc405062f",
+      "size": 179,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/4dc28a88c0c3cad919817f0b35cc03bbc405062f"
+    },
+    {
+      "path": ".gitmodules",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c1e3bfe9c0791557b0310a38616416ab6fb1fb04",
+      "size": 815,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/c1e3bfe9c0791557b0310a38616416ab6fb1fb04"
+    },
+    {
+      "path": "CMakeLists.txt",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "042982c50f3c7ea632ce351c7a9b38302c7acd57",
+      "size": 8013,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/042982c50f3c7ea632ce351c7a9b38302c7acd57"
+    },
+    {
+      "path": "CMakeModules",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "3146b9c54bbea4b3fcf5e7aaf6bcf05e3236d57e",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/3146b9c54bbea4b3fcf5e7aaf6bcf05e3236d57e"
+    },
+    {
+      "path": "CMakeModules/CreateDirectoryGroups.cmake",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "175899e7dd9205f81ddf2bfe85c36a65fd1624fc",
+      "size": 859,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/175899e7dd9205f81ddf2bfe85c36a65fd1624fc"
+    },
+    {
+      "path": "CMakeModules/DetectArchitecture.cmake",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "28bd1ef2630fc138672fbd1afb9819f9d4f0936e",
+      "size": 1744,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/28bd1ef2630fc138672fbd1afb9819f9d4f0936e"
+    },
+    {
+      "path": "CMakeModules/FindUnicorn.cmake",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "71fc08ac37dd1249e3ac7e8b5f5416d20af349ce",
+      "size": 967,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/71fc08ac37dd1249e3ac7e8b5f5416d20af349ce"
+    },
+    {
+      "path": "CMakeModules/TargetArchitectureSpecificSources.cmake",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f08911c6f2ab4b7493477cfc729005b68d01db94",
+      "size": 1079,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/f08911c6f2ab4b7493477cfc729005b68d01db94"
+    },
+    {
+      "path": "CMakeModules/dynarmicConfig.cmake.in",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6a5db0162e70172d40eb58bfc02ac24524a8c1c1",
+      "size": 734,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/6a5db0162e70172d40eb58bfc02ac24524a8c1c1"
+    },
+    {
+      "path": "CMakeModules/impl",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "0e190ead3cfbdf870f9dd5d697fae7339fe33f88",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/0e190ead3cfbdf870f9dd5d697fae7339fe33f88"
+    },
+    {
+      "path": "CMakeModules/impl/TargetArchitectureSpecificSourcesWrapFile.cmake",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "82b3078a11dfaab57d0b434634858905c23510c9",
+      "size": 202,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/82b3078a11dfaab57d0b434634858905c23510c9"
+    },
+    {
+      "path": "LICENSE.txt",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a6bc0ba0425f7f56c1c9e0a616feab7baea7ea89",
+      "size": 651,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/a6bc0ba0425f7f56c1c9e0a616feab7baea7ea89"
+    },
+    {
+      "path": "README.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "1bb437d8d071095f3b4b2c300a7f10827182a530",
+      "size": 17476,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/1bb437d8d071095f3b4b2c300a7f10827182a530"
+    },
+    {
+      "path": "docs",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "689399a9ab546ed41b1f9599e675084dca3e503c",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/689399a9ab546ed41b1f9599e675084dca3e503c"
+    },
+    {
+      "path": "docs/Design.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3c0deb597221d378cdbab099a854d9f1fd0ee2a8",
+      "size": 12253,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/3c0deb597221d378cdbab099a854d9f1fd0ee2a8"
+    },
+    {
+      "path": "docs/Doxyfile",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "9d8471c282e2bf15f54ac85e7e5580db120a5a4c",
+      "size": 107574,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/9d8471c282e2bf15f54ac85e7e5580db120a5a4c"
+    },
+    {
+      "path": "docs/RegisterAllocator.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "fea6f19e6a2464f436161a331c694d81d1ab84ea",
+      "size": 3273,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/fea6f19e6a2464f436161a331c694d81d1ab84ea"
+    },
+    {
+      "path": "docs/ReturnStackBufferOptimization.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e5298cad92623578ad3acdf6f8396181d62164c8",
+      "size": 5865,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/e5298cad92623578ad3acdf6f8396181d62164c8"
+    },
+    {
+      "path": "externals",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "5f48b4d3556ef996edb9d9b5554aa6581ce300e9",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/5f48b4d3556ef996edb9d9b5554aa6581ce300e9"
+    },
+    {
+      "path": "externals/CMakeLists.txt",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f6b837bc4a94f869c66d95e19489207375faaf13",
+      "size": 1963,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/f6b837bc4a94f869c66d95e19489207375faaf13"
+    },
+    {
+      "path": "externals/biscuit",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "8bd0f7538b9ed7bedf90e789ffbd9eaeb484b28d"
+    },
+    {
+      "path": "externals/catch",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "76f70b1403dbc0781216f49e20e45b71f7eccdd8"
+    },
+    {
+      "path": "externals/fmt",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "7b273fbb541c7c9058800bc613f4291274b2d26e"
+    },
+    {
+      "path": "externals/mcl",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "5fc4beaf331037649b10625736b41365defb4f50"
+    },
+    {
+      "path": "externals/oaknut",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "94c726ce0338b054eb8cb5ea91de8fe6c19f4392"
+    },
+    {
+      "path": "externals/robin-map",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "054ec5ad67440fcd65e0497e5a27ef31f53fcc7f"
+    },
+    {
+      "path": "externals/xbyak",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "8c0098b69f95d02dea47efcdd42ab5aa2d03c72d"
+    },
+    {
+      "path": "externals/zycore",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "0b2432ced0884fd152b471d97ecf0258ff4d859f"
+    },
+    {
+      "path": "externals/zydis",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "bffbb610cfea643b98e87658b9058382f7522807"
+    },
+    {
+      "path": "src",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "9c29f8b3b716150e53520f9cb0c690aae801da54",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/9c29f8b3b716150e53520f9cb0c690aae801da54"
+    },
+    {
+      "path": "src/dynarmic",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "efcff9b66927cd527a1a091b8ef351a2e2a98479",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/efcff9b66927cd527a1a091b8ef351a2e2a98479"
+    },
+    {
+      "path": "src/dynarmic/CMakeLists.txt",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b234cd26431998921c6ba0e06604dcd73b2d163d",
+      "size": 22125,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/b234cd26431998921c6ba0e06604dcd73b2d163d"
+    },
+    {
+      "path": "src/dynarmic/backend",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "d3e695ffabafbebd060e4d0a7f87ba65ee48ffea",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/d3e695ffabafbebd060e4d0a7f87ba65ee48ffea"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "9ba00c8ed09a8588e659d9c4549244e507c515d1",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/9ba00c8ed09a8588e659d9c4549244e507c515d1"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/a32_address_space.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "bbdf925ff471bc111016c079b43c3f7c5b62e30e",
+      "size": 16706,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/bbdf925ff471bc111016c079b43c3f7c5b62e30e"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/a32_address_space.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3b9e9fb2f67d42a2f6452f4c43c2de340d5bc077",
+      "size": 933,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/3b9e9fb2f67d42a2f6452f4c43c2de340d5bc077"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/a32_core.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "86f6f284d8847e1858d5ed75f9406c53e3705db2",
+      "size": 1128,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/86f6f284d8847e1858d5ed75f9406c53e3705db2"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/a32_interface.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6b38c41093ea40fb39ad88cb0419efcd5ec63140",
+      "size": 5739,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/6b38c41093ea40fb39ad88cb0419efcd5ec63140"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/a32_jitstate.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e24654c7db56c33d8ba4e54ebe9c2360c06764cf",
+      "size": 2347,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/e24654c7db56c33d8ba4e54ebe9c2360c06764cf"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/a32_jitstate.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "978bf84ad2bfcfe2638358f2c4b9e46ccda4d3ea",
+      "size": 936,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/978bf84ad2bfcfe2638358f2c4b9e46ccda4d3ea"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/a64_address_space.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d4fe9a9cb77ca3b5965cf5c299fd8eb35a308eca",
+      "size": 22460,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/d4fe9a9cb77ca3b5965cf5c299fd8eb35a308eca"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/a64_address_space.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "86eae4dd39532688f70254f2b6e1187d0381551e",
+      "size": 933,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/86eae4dd39532688f70254f2b6e1187d0381551e"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/a64_core.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "24fbb66b380b3816f7b2459574cacb2d6902d198",
+      "size": 1128,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/24fbb66b380b3816f7b2459574cacb2d6902d198"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/a64_interface.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "7d7716783aeab6c89314afae8ed5ef02576f0108",
+      "size": 7385,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/7d7716783aeab6c89314afae8ed5ef02576f0108"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/a64_jitstate.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "215e6987f30768d095009f2dc3c0fa19038d09d9",
+      "size": 856,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/215e6987f30768d095009f2dc3c0fa19038d09d9"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/abi.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6d7b96379bd6f3e17b2f4280d175f3c29318ff13",
+      "size": 3365,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/6d7b96379bd6f3e17b2f4280d175f3c29318ff13"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/abi.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "609b06cd22881902b41fc8105401a0026b725987",
+      "size": 2262,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/609b06cd22881902b41fc8105401a0026b725987"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/address_space.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2c7ae777a64b392a1d12cccb99438c40cddcd8ff",
+      "size": 12459,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/2c7ae777a64b392a1d12cccb99438c40cddcd8ff"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/address_space.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "835566bdf37273d5606f4a3bab9c70f323b21aa6",
+      "size": 4525,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/835566bdf37273d5606f4a3bab9c70f323b21aa6"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/devirtualize.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c433fd01260bc2d02738bc0b4dc96bead920d1f0",
+      "size": 1820,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/c433fd01260bc2d02738bc0b4dc96bead920d1f0"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/emit_arm64.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "1ecb5424daeee5503c661392c3a68cb743996729",
+      "size": 9139,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/1ecb5424daeee5503c661392c3a68cb743996729"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/emit_arm64.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "58ccb0e47a1bc8be31f650ea2e1df90cbd399356",
+      "size": 5267,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/58ccb0e47a1bc8be31f650ea2e1df90cbd399356"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/emit_arm64_a32.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "909dde731b099186e26a1a249cfab3e000e15654",
+      "size": 28199,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/909dde731b099186e26a1a249cfab3e000e15654"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/emit_arm64_a32_coprocessor.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5115fbbbdb2dfe5b7264751f5e5672e26670652c",
+      "size": 9822,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/5115fbbbdb2dfe5b7264751f5e5672e26670652c"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/emit_arm64_a32_memory.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "9e8426e23046de34bae722d040678150c49eaeec",
+      "size": 3562,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/9e8426e23046de34bae722d040678150c49eaeec"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/emit_arm64_a64.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5152a54ba2616529aef3f5100866a50398d50203",
+      "size": 20100,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/5152a54ba2616529aef3f5100866a50398d50203"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/emit_arm64_a64_memory.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "099c81a4c39158408d54ae914ee091007b3fd6d5",
+      "size": 4288,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/099c81a4c39158408d54ae914ee091007b3fd6d5"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/emit_arm64_cryptography.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b0a3cb4817d0c52c8a775b637536ddfdb71f160b",
+      "size": 6221,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/b0a3cb4817d0c52c8a775b637536ddfdb71f160b"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/emit_arm64_data_processing.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "04395148c8ff0ec3637cb3b02151a46e835732d0",
+      "size": 56454,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/04395148c8ff0ec3637cb3b02151a46e835732d0"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/emit_arm64_floating_point.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "22ec0ec24a14ee92c146f2b452fcc4f5459efd12",
+      "size": 29834,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/22ec0ec24a14ee92c146f2b452fcc4f5459efd12"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/emit_arm64_memory.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "339e2c59a0a9665b28e08570e4c9900b98618c41",
+      "size": 24493,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/339e2c59a0a9665b28e08570e4c9900b98618c41"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/emit_arm64_memory.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "bfc6d71f4e592cada197830142158b7dd8d5b504",
+      "size": 889,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/bfc6d71f4e592cada197830142158b7dd8d5b504"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/emit_arm64_packed.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b9f13ac6f2624eff04cb9561243a50ebeeaf04fc",
+      "size": 14941,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/b9f13ac6f2624eff04cb9561243a50ebeeaf04fc"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/emit_arm64_saturation.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "95b8b51ee95b3f8910079803148ffe6daede0fe7",
+      "size": 8290,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/95b8b51ee95b3f8910079803148ffe6daede0fe7"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/emit_arm64_vector.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e14effca3b2bdd7a22aea7465b576174cdcdb1bc",
+      "size": 86828,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/e14effca3b2bdd7a22aea7465b576174cdcdb1bc"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/emit_arm64_vector_floating_point.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e0a53bf9e452bfa46ea7209cb19ba0639bbac2de",
+      "size": 31991,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/e0a53bf9e452bfa46ea7209cb19ba0639bbac2de"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/emit_arm64_vector_saturation.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "722a09176bce7c31e17e58d14ba9ceb816e67f24",
+      "size": 5276,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/722a09176bce7c31e17e58d14ba9ceb816e67f24"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/emit_context.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6bfc6f3cae09dcc4e723be7bc1156115015159e3",
+      "size": 1172,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/6bfc6f3cae09dcc4e723be7bc1156115015159e3"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/exclusive_monitor.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d57a29cd85e7791ed707c2359f9903eefdf67827",
+      "size": 1415,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/d57a29cd85e7791ed707c2359f9903eefdf67827"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/fastmem.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "8ed686aeaf6a072f1fecce705ebfb94e87f8df48",
+      "size": 1363,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/8ed686aeaf6a072f1fecce705ebfb94e87f8df48"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/fpsr_manager.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "1c614745552c1a3477a86941d34edafa03d2a633",
+      "size": 1146,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/1c614745552c1a3477a86941d34edafa03d2a633"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/fpsr_manager.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "9e5d68bfcf76bccdb4a2d8d398723f077058e44d",
+      "size": 645,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/9e5d68bfcf76bccdb4a2d8d398723f077058e44d"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/reg_alloc.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "90befadff7d1d73b7ac78fc1b95caea2110ebee3",
+      "size": 21195,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/90befadff7d1d73b7ac78fc1b95caea2110ebee3"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/reg_alloc.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "96801d451d92b38fe19535b7589fdb8f1fc4a806",
+      "size": 12616,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/96801d451d92b38fe19535b7589fdb8f1fc4a806"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/stack_layout.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "cf7f3259a92d0c9494c44d5d295f6f03e1d76198",
+      "size": 907,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/cf7f3259a92d0c9494c44d5d295f6f03e1d76198"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/verbose_debugging_output.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "aec0472f68d4e8c3e5a0607ba437cc88285d2786",
+      "size": 3358,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/aec0472f68d4e8c3e5a0607ba437cc88285d2786"
+    },
+    {
+      "path": "src/dynarmic/backend/arm64/verbose_debugging_output.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "73c66461394b5ea7180f3d0677771ec6f0d9839d",
+      "size": 1149,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/73c66461394b5ea7180f3d0677771ec6f0d9839d"
+    },
+    {
+      "path": "src/dynarmic/backend/block_range_information.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "47e512f5cec889eea5a44cf38c96a9b7f75b1773",
+      "size": 1527,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/47e512f5cec889eea5a44cf38c96a9b7f75b1773"
+    },
+    {
+      "path": "src/dynarmic/backend/block_range_information.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3402b155bb4559736712b223724e5aa181d2e60c",
+      "size": 801,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/3402b155bb4559736712b223724e5aa181d2e60c"
+    },
+    {
+      "path": "src/dynarmic/backend/exception_handler.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ed5c41c7b93903b88bf1880b4f02daaea371ca12",
+      "size": 1592,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/ed5c41c7b93903b88bf1880b4f02daaea371ca12"
+    },
+    {
+      "path": "src/dynarmic/backend/exception_handler_generic.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ad7df25ca66c7854b847909ec697f4f852a24cdd",
+      "size": 950,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/ad7df25ca66c7854b847909ec697f4f852a24cdd"
+    },
+    {
+      "path": "src/dynarmic/backend/exception_handler_macos.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "bac8d9c95149c673e62c7f5673e66eae9da33271",
+      "size": 9388,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/bac8d9c95149c673e62c7f5673e66eae9da33271"
+    },
+    {
+      "path": "src/dynarmic/backend/exception_handler_macos_mig.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "762a80ca42673e6fc6ff11b089b9ad45e3613985",
+      "size": 395,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/762a80ca42673e6fc6ff11b089b9ad45e3613985"
+    },
+    {
+      "path": "src/dynarmic/backend/exception_handler_posix.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2d6d6ea6d89a3eaab3017ff80d45cff4bf2a0faa",
+      "size": 9684,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/2d6d6ea6d89a3eaab3017ff80d45cff4bf2a0faa"
+    },
+    {
+      "path": "src/dynarmic/backend/exception_handler_windows.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "719c00759474e82d1107cfa6dda76dbd65840f31",
+      "size": 405,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/719c00759474e82d1107cfa6dda76dbd65840f31"
+    },
+    {
+      "path": "src/dynarmic/backend/riscv64",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "f01148899c651ffec2578efa16bb7bf392ed05db",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/f01148899c651ffec2578efa16bb7bf392ed05db"
+    },
+    {
+      "path": "src/dynarmic/backend/riscv64/a32_address_space.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "986ae4ca793f5e807ab4aece4330ea70d75fbd06",
+      "size": 4991,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/986ae4ca793f5e807ab4aece4330ea70d75fbd06"
+    },
+    {
+      "path": "src/dynarmic/backend/riscv64/a32_address_space.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "628f72c29fcc240d5f89d9e3c379107c0839cb22",
+      "size": 2394,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/628f72c29fcc240d5f89d9e3c379107c0839cb22"
+    },
+    {
+      "path": "src/dynarmic/backend/riscv64/a32_core.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b01d650d8234bd1838dc9a37159b0fb45178069d",
+      "size": 738,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/b01d650d8234bd1838dc9a37159b0fb45178069d"
+    },
+    {
+      "path": "src/dynarmic/backend/riscv64/a32_interface.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "dac4d2d2a7463600b7f1aaa2286b72a89983bf8f",
+      "size": 4702,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/dac4d2d2a7463600b7f1aaa2286b72a89983bf8f"
+    },
+    {
+      "path": "src/dynarmic/backend/riscv64/a32_jitstate.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "70482d0a7c7a0397c2a225be019f8d347a9b61fe",
+      "size": 2295,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/70482d0a7c7a0397c2a225be019f8d347a9b61fe"
+    },
+    {
+      "path": "src/dynarmic/backend/riscv64/a32_jitstate.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "9bf6834088de8c29dbc5b4753e321d0f1547343e",
+      "size": 934,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/9bf6834088de8c29dbc5b4753e321d0f1547343e"
+    },
+    {
+      "path": "src/dynarmic/backend/riscv64/abi.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d8157b002478ee2cd76369b2c6d13e11b903bf1b",
+      "size": 643,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/d8157b002478ee2cd76369b2c6d13e11b903bf1b"
+    },
+    {
+      "path": "src/dynarmic/backend/riscv64/code_block.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6ac014a51aa4fda68991d950b999280ff1c8f3f7",
+      "size": 889,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/6ac014a51aa4fda68991d950b999280ff1c8f3f7"
+    },
+    {
+      "path": "src/dynarmic/backend/riscv64/emit_context.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f6ea1b833b291db022a1e9539e4e0fe0c12e94b6",
+      "size": 527,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/f6ea1b833b291db022a1e9539e4e0fe0c12e94b6"
+    },
+    {
+      "path": "src/dynarmic/backend/riscv64/emit_riscv64.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f9302821d2fd6e15f7c239e638201cb6a05e71f7",
+      "size": 5348,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/f9302821d2fd6e15f7c239e638201cb6a05e71f7"
+    },
+    {
+      "path": "src/dynarmic/backend/riscv64/emit_riscv64.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5cfd0212c7489b16d95236b20ce46fed6e4d912e",
+      "size": 1283,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/5cfd0212c7489b16d95236b20ce46fed6e4d912e"
+    },
+    {
+      "path": "src/dynarmic/backend/riscv64/emit_riscv64_a32.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "95a11becc5e6f14e027655bd79e2a6036b14c7ed",
+      "size": 13323,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/95a11becc5e6f14e027655bd79e2a6036b14c7ed"
+    },
+    {
+      "path": "src/dynarmic/backend/riscv64/emit_riscv64_a32_coprocessor.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a014d57fc30d6783f8b861ece9d8ef03f814f6e3",
+      "size": 1514,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/a014d57fc30d6783f8b861ece9d8ef03f814f6e3"
+    },
+    {
+      "path": "src/dynarmic/backend/riscv64/emit_riscv64_a32_memory.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f9a3aabf6bf895443d78b50e2f65b786f7166fd9",
+      "size": 2794,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/f9a3aabf6bf895443d78b50e2f65b786f7166fd9"
+    },
+    {
+      "path": "src/dynarmic/backend/riscv64/emit_riscv64_a64.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "38ea167ff7b64c7dd37d6f2b2a20b41e42b30513",
+      "size": 4987,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/38ea167ff7b64c7dd37d6f2b2a20b41e42b30513"
+    },
+    {
+      "path": "src/dynarmic/backend/riscv64/emit_riscv64_a64_memory.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a5c0c1b8d394d273ca5c570da128d6cf310a6146",
+      "size": 3314,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/a5c0c1b8d394d273ca5c570da128d6cf310a6146"
+    },
+    {
+      "path": "src/dynarmic/backend/riscv64/emit_riscv64_cryptography.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c1d3fa0e26d86aac26abd83b0d24cf40768f0ce4",
+      "size": 2611,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/c1d3fa0e26d86aac26abd83b0d24cf40768f0ce4"
+    },
+    {
+      "path": "src/dynarmic/backend/riscv64/emit_riscv64_data_processing.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "51ed027a0572f241ba6b0469f01f506a79d9efab",
+      "size": 15783,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/51ed027a0572f241ba6b0469f01f506a79d9efab"
+    },
+    {
+      "path": "src/dynarmic/backend/riscv64/emit_riscv64_floating_point.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "94fa474e387789f6dd10d4caf2c86ff7eb11fa67",
+      "size": 11409,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/94fa474e387789f6dd10d4caf2c86ff7eb11fa67"
+    },
+    {
+      "path": "src/dynarmic/backend/riscv64/emit_riscv64_packed.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5272dbb114d6557249fa2dca92d5f7102f101811",
+      "size": 4896,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/5272dbb114d6557249fa2dca92d5f7102f101811"
+    },
+    {
+      "path": "src/dynarmic/backend/riscv64/emit_riscv64_saturation.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3bceeb080dd2497b8e99aeb9233125479989ea73",
+      "size": 3514,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/3bceeb080dd2497b8e99aeb9233125479989ea73"
+    },
+    {
+      "path": "src/dynarmic/backend/riscv64/emit_riscv64_vector.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "31cfd65cdf7cae74e582ff070d5977c1dcb8af86",
+      "size": 36906,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/31cfd65cdf7cae74e582ff070d5977c1dcb8af86"
+    },
+    {
+      "path": "src/dynarmic/backend/riscv64/emit_riscv64_vector_floating_point.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c3bf9708d3289e3c31a288c566b7595d00e1a7d3",
+      "size": 9156,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/c3bf9708d3289e3c31a288c566b7595d00e1a7d3"
+    },
+    {
+      "path": "src/dynarmic/backend/riscv64/emit_riscv64_vector_saturation.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0d3868ec83130edd0f3609daa70d68164c49cc55",
+      "size": 2780,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/0d3868ec83130edd0f3609daa70d68164c49cc55"
+    },
+    {
+      "path": "src/dynarmic/backend/riscv64/reg_alloc.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "467a0c85122e9fa51ff0fefe3d5e78d16c80309a",
+      "size": 11759,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/467a0c85122e9fa51ff0fefe3d5e78d16c80309a"
+    },
+    {
+      "path": "src/dynarmic/backend/riscv64/reg_alloc.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2e0756c8a437043c102dbaaf00124aeb944defbe",
+      "size": 5040,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/2e0756c8a437043c102dbaaf00124aeb944defbe"
+    },
+    {
+      "path": "src/dynarmic/backend/riscv64/stack_layout.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "03c0e6f099f578ef5374cd849a11d997c1f1aea1",
+      "size": 530,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/03c0e6f099f578ef5374cd849a11d997c1f1aea1"
+    },
+    {
+      "path": "src/dynarmic/backend/x64",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "3ad071e5bdd694f8aa9347e28af06ef8dfa9ea6e",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/3ad071e5bdd694f8aa9347e28af06ef8dfa9ea6e"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/a32_emit_x64.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "fc8e8bae21ba87bd1a45e5b8d66c6cd75bff3c7d",
+      "size": 49168,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/fc8e8bae21ba87bd1a45e5b8d66c6cd75bff3c7d"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/a32_emit_x64.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3706b30aae4f43270b9260d2e541c29a5bc9cde6",
+      "size": 6270,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/3706b30aae4f43270b9260d2e541c29a5bc9cde6"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/a32_emit_x64_memory.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f2919485bee4120d6cdfe94c8da4c2ba0f7d611e",
+      "size": 11831,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/f2919485bee4120d6cdfe94c8da4c2ba0f7d611e"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/a32_interface.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d690aadade81594ccfa87c4ac515365cce7fe190",
+      "size": 10488,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/d690aadade81594ccfa87c4ac515365cce7fe190"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/a32_jitstate.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2e201c1cc46d17951741ff2cfbcfdeac6041c6f2",
+      "size": 6973,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/2e201c1cc46d17951741ff2cfbcfdeac6041c6f2"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/a32_jitstate.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "cc13abf8e294d50c9bf880bda89d116ee7a67e31",
+      "size": 2444,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/cc13abf8e294d50c9bf880bda89d116ee7a67e31"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/a64_emit_x64.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "cec781380b42bbdc2f4748b36135b5b5247bc802",
+      "size": 29004,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/cec781380b42bbdc2f4748b36135b5b5247bc802"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/a64_emit_x64.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ed493155129d27bd9fd501f91480baa1b8700c94",
+      "size": 6117,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/ed493155129d27bd9fd501f91480baa1b8700c94"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/a64_emit_x64_memory.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "450b16d0004fd440a8f2289be03e7aad257f7788",
+      "size": 19138,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/450b16d0004fd440a8f2289be03e7aad257f7788"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/a64_interface.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b9373f79b597a3831b520c110d2b523a14298487",
+      "size": 12778,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/b9373f79b597a3831b520c110d2b523a14298487"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/a64_jitstate.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "9f983f395576ac300c4e3c8350e4c9e1c53e6d1a",
+      "size": 3508,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/9f983f395576ac300c4e3c8350e4c9e1c53e6d1a"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/a64_jitstate.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0929e81ec5e00496255a3dcff08490fca7925871",
+      "size": 2101,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/0929e81ec5e00496255a3dcff08490fca7925871"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/abi.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d6a83b65b40b4ea752c1cd3427abd958cb8ab34a",
+      "size": 4512,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/d6a83b65b40b4ea752c1cd3427abd958cb8ab34a"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/abi.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "4bddf51badcd9c544dae4bab82d066f93423e61b",
+      "size": 3169,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/4bddf51badcd9c544dae4bab82d066f93423e61b"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/block_of_code.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "22d9868fc5eb0aab556ad071bcdc3c34850002f2",
+      "size": 17509,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/22d9868fc5eb0aab556ad071bcdc3c34850002f2"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/block_of_code.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3f7573af25b94a7ea767341e9b720d535cd55fb8",
+      "size": 7008,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/3f7573af25b94a7ea767341e9b720d535cd55fb8"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/callback.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "1ecd8304f12ca8e2d256980e1810dd4380878bef",
+      "size": 1349,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/1ecd8304f12ca8e2d256980e1810dd4380878bef"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/callback.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "716555daed1549e61df90caf35e7bb4906695ac5",
+      "size": 1624,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/716555daed1549e61df90caf35e7bb4906695ac5"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/constant_pool.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ba003262b3b962576e474c9a7da46de367971394",
+      "size": 1192,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/ba003262b3b962576e474c9a7da46de367971394"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/constant_pool.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2ab6421539e13c981ccdd498350dc95d0129a2af",
+      "size": 1323,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/2ab6421539e13c981ccdd498350dc95d0129a2af"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/constants.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f8173241422e03d9a48051a9983432fd9796c9a5",
+      "size": 7357,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/f8173241422e03d9a48051a9983432fd9796c9a5"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/devirtualize.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "778536a3bb55ef8e32fadda28a289f912c860d6b",
+      "size": 2447,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/778536a3bb55ef8e32fadda28a289f912c860d6b"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/emit_x64.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "902ddef9a78ecec9ca5a5c8394b5043613a9100b",
+      "size": 12959,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/902ddef9a78ecec9ca5a5c8394b5043613a9100b"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/emit_x64.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5a46f04ee6f81ce6528af0bb43fc92c88c4fe913",
+      "size": 5508,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/5a46f04ee6f81ce6528af0bb43fc92c88c4fe913"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/emit_x64_aes.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "9430f0726bd1de0d5ca8a3e01d1c9a3e4d8f7c97",
+      "size": 3403,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/9430f0726bd1de0d5ca8a3e01d1c9a3e4d8f7c97"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/emit_x64_crc32.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "842a8612eea8ceb5fc14ed6181cfb6a33b43321e",
+      "size": 5265,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/842a8612eea8ceb5fc14ed6181cfb6a33b43321e"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/emit_x64_data_processing.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "98197c2db300a138d72d1409c5269c2a40c30ba2",
+      "size": 59945,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/98197c2db300a138d72d1409c5269c2a40c30ba2"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/emit_x64_floating_point.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "182c887538e90be3a104fc3f3a3d65b232b27c09",
+      "size": 81556,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/182c887538e90be3a104fc3f3a3d65b232b27c09"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/emit_x64_memory.cpp.inc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "272b896ae30773ed2b90a68ea1b627f4e46860ed",
+      "size": 19903,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/272b896ae30773ed2b90a68ea1b627f4e46860ed"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/emit_x64_memory.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c99980d617d5200bcb818a5379f88c112ef31d09",
+      "size": 13463,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/c99980d617d5200bcb818a5379f88c112ef31d09"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/emit_x64_packed.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "90f06a9015d77ce947654a0e29244981b1b39c5c",
+      "size": 23874,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/90f06a9015d77ce947654a0e29244981b1b39c5c"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/emit_x64_saturation.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "24fb895b613d192697b4efc83c6a1bda55113b3f",
+      "size": 9966,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/24fb895b613d192697b4efc83c6a1bda55113b3f"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/emit_x64_sha.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "92e0841d8b2c197535460e570b8393247fd501a5",
+      "size": 2210,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/92e0841d8b2c197535460e570b8393247fd501a5"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/emit_x64_sm4.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b084a92f9180a25c007b1abc15ad6c22ac8fce8e",
+      "size": 677,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/b084a92f9180a25c007b1abc15ad6c22ac8fce8e"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/emit_x64_vector.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0018237bea6b1c9c70e47f56f47b3aca3572a41a",
+      "size": 211933,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/0018237bea6b1c9c70e47f56f47b3aca3572a41a"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/emit_x64_vector_floating_point.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b8aa3eb653a5bac6f0055a7a5166161853115a95",
+      "size": 88078,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/b8aa3eb653a5bac6f0055a7a5166161853115a95"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/emit_x64_vector_saturation.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "fb30549fb04b9db6db64867661f18a916bb9c331",
+      "size": 12464,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/fb30549fb04b9db6db64867661f18a916bb9c331"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/exception_handler_windows.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a7f964337a9b89a14f08338a3ec921d95871904c",
+      "size": 9770,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/a7f964337a9b89a14f08338a3ec921d95871904c"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/exclusive_monitor.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "984b67bb02736f409efc94acb79dba1585c35f3b",
+      "size": 1415,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/984b67bb02736f409efc94acb79dba1585c35f3b"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/exclusive_monitor_friend.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "7f7fa242592dc866e6c45e22981a389d6799e6be",
+      "size": 771,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/7f7fa242592dc866e6c45e22981a389d6799e6be"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/host_feature.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "8e3b14c7bbcf7b85d194f60241abb37ff49d9bfc",
+      "size": 1701,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/8e3b14c7bbcf7b85d194f60241abb37ff49d9bfc"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/hostloc.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b5e2a5f18b591d329451c4f0141dcc601b100a5c",
+      "size": 624,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/b5e2a5f18b591d329451c4f0141dcc601b100a5c"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/hostloc.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "dbf526b77af712322e6625bd290e2634bdc17812",
+      "size": 2861,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/dbf526b77af712322e6625bd290e2634bdc17812"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/jitstate_info.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "654b3f0400701a3ddf85c330457c5c299e817a92",
+      "size": 1415,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/654b3f0400701a3ddf85c330457c5c299e817a92"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/nzcv_util.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3a70cf4f0b4a2fe72a72996feda0412124784066",
+      "size": 1622,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/3a70cf4f0b4a2fe72a72996feda0412124784066"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/oparg.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "70c60dfb15c7ba52a8d67e5d9a37b9f0b59d9aa2",
+      "size": 1856,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/70c60dfb15c7ba52a8d67e5d9a37b9f0b59d9aa2"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/perf_map.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "88691dbffcfdee317dd929c680f4da71d5b655c8",
+      "size": 1918,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/88691dbffcfdee317dd929c680f4da71d5b655c8"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/perf_map.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "7d739ae63e367f1fa6654dd2b7b15f14c5f96f40",
+      "size": 602,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/7d739ae63e367f1fa6654dd2b7b15f14c5f96f40"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/reg_alloc.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "61a3a6cd91444e4f3885d123798ed9880578bd0b",
+      "size": 24474,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/61a3a6cd91444e4f3885d123798ed9880578bd0b"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/reg_alloc.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "19debf5f48833dc12b3ca5f87de4f66dc2612c8e",
+      "size": 5320,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/19debf5f48833dc12b3ca5f87de4f66dc2612c8e"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/stack_layout.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "7e6799f1cfac4df55edbb9091b0ae848d2280e5c",
+      "size": 707,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/7e6799f1cfac4df55edbb9091b0ae848d2280e5c"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/verbose_debugging_output.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3378786c463b5a44cc4454ab3b4cdb2d0f4e7925",
+      "size": 1547,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/3378786c463b5a44cc4454ab3b4cdb2d0f4e7925"
+    },
+    {
+      "path": "src/dynarmic/backend/x64/verbose_debugging_output.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "4eb2646d7772bc668ef986788d8f2f633da2c526",
+      "size": 813,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/4eb2646d7772bc668ef986788d8f2f633da2c526"
+    },
+    {
+      "path": "src/dynarmic/common",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "8741cf5119084a5615d5ba8485a1b4871b81bcce",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/8741cf5119084a5615d5ba8485a1b4871b81bcce"
+    },
+    {
+      "path": "src/dynarmic/common/always_false.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b980fea00c26db6ecabc15c35dfd995d7df8d297",
+      "size": 261,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/b980fea00c26db6ecabc15c35dfd995d7df8d297"
+    },
+    {
+      "path": "src/dynarmic/common/atomic.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "34042d3802d1004a4f4558e8e8f31364e07acaf3",
+      "size": 934,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/34042d3802d1004a4f4558e8e8f31364e07acaf3"
+    },
+    {
+      "path": "src/dynarmic/common/cast_util.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "92c9a259b310d0b24a8953da8d47fd3beabc583e",
+      "size": 435,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/92c9a259b310d0b24a8953da8d47fd3beabc583e"
+    },
+    {
+      "path": "src/dynarmic/common/crypto",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "d8f03d066d647e8881f38c78e74b0b813269a149",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/d8f03d066d647e8881f38c78e74b0b813269a149"
+    },
+    {
+      "path": "src/dynarmic/common/crypto/aes.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c431758e579138762913cdcd4efbb0b6571538cd",
+      "size": 7721,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/c431758e579138762913cdcd4efbb0b6571538cd"
+    },
+    {
+      "path": "src/dynarmic/common/crypto/aes.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "fa6d5a81b39eb7dd1f94b7cc141cffddce9390e1",
+      "size": 606,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/fa6d5a81b39eb7dd1f94b7cc141cffddce9390e1"
+    },
+    {
+      "path": "src/dynarmic/common/crypto/crc32.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c00385078b6c310411684c49f443e876330d4206",
+      "size": 7816,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/c00385078b6c310411684c49f443e876330d4206"
+    },
+    {
+      "path": "src/dynarmic/common/crypto/crc32.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "30942327d49c2688417e9d03e5e998093f24516f",
+      "size": 1094,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/30942327d49c2688417e9d03e5e998093f24516f"
+    },
+    {
+      "path": "src/dynarmic/common/crypto/sm4.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5743e5be9a405caabcaf344897cfbaa87cebd997",
+      "size": 2160,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/5743e5be9a405caabcaf344897cfbaa87cebd997"
+    },
+    {
+      "path": "src/dynarmic/common/crypto/sm4.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "417e9b92638c4a8beafd7baa47312ad5161c3787",
+      "size": 283,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/417e9b92638c4a8beafd7baa47312ad5161c3787"
+    },
+    {
+      "path": "src/dynarmic/common/fp",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "5e0d030f66865f4a2f79b218cc28b5cd2e1ea400",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/5e0d030f66865f4a2f79b218cc28b5cd2e1ea400"
+    },
+    {
+      "path": "src/dynarmic/common/fp/fpcr.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "287f6d28895f1a3b21d44cba852498d98eb02e9e",
+      "size": 5685,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/287f6d28895f1a3b21d44cba852498d98eb02e9e"
+    },
+    {
+      "path": "src/dynarmic/common/fp/fpsr.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "fba58ebbb72328ef388b5aeec6d19d0e35ee5fc7",
+      "size": 3864,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/fba58ebbb72328ef388b5aeec6d19d0e35ee5fc7"
+    },
+    {
+      "path": "src/dynarmic/common/fp/fused.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5c32b05eb431d64ef30fdcf997758cd616d3dd6d",
+      "size": 3181,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/5c32b05eb431d64ef30fdcf997758cd616d3dd6d"
+    },
+    {
+      "path": "src/dynarmic/common/fp/fused.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0ffa2683c15484df1bf6ac723a9d6d11196412c6",
+      "size": 343,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/0ffa2683c15484df1bf6ac723a9d6d11196412c6"
+    },
+    {
+      "path": "src/dynarmic/common/fp/info.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "8cc2d29de4d71d3884789e9157f68242c1129327",
+      "size": 4713,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/8cc2d29de4d71d3884789e9157f68242c1129327"
+    },
+    {
+      "path": "src/dynarmic/common/fp/mantissa_util.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "31be52f761efee6274f6a6212a4fda50ad73ab25",
+      "size": 1244,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/31be52f761efee6274f6a6212a4fda50ad73ab25"
+    },
+    {
+      "path": "src/dynarmic/common/fp/op.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b30ff39c4497d8c743c00af0cd5662023340e8a2",
+      "size": 612,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/b30ff39c4497d8c743c00af0cd5662023340e8a2"
+    },
+    {
+      "path": "src/dynarmic/common/fp/op",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "5e5d27a3a167829b2b296bf695d1a8aa117cf376",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/5e5d27a3a167829b2b296bf695d1a8aa117cf376"
+    },
+    {
+      "path": "src/dynarmic/common/fp/op/FPCompare.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "8aeaadc5738ee147eb3bbabbd461ba3a2b3efe0f",
+      "size": 1423,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/8aeaadc5738ee147eb3bbabbd461ba3a2b3efe0f"
+    },
+    {
+      "path": "src/dynarmic/common/fp/op/FPCompare.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e0d5ca0374813334da7dc0084577a9144132338c",
+      "size": 293,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/e0d5ca0374813334da7dc0084577a9144132338c"
+    },
+    {
+      "path": "src/dynarmic/common/fp/op/FPConvert.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "85f1eaf899a2245aaa2df30951edf864811d7c76",
+      "size": 3364,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/85f1eaf899a2245aaa2df30951edf864811d7c76"
+    },
+    {
+      "path": "src/dynarmic/common/fp/op/FPConvert.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0fea22e482f1308790964c3deeaf439f5a8c2d43",
+      "size": 363,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/0fea22e482f1308790964c3deeaf439f5a8c2d43"
+    },
+    {
+      "path": "src/dynarmic/common/fp/op/FPMulAdd.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f97f88de17263294ca431b2ad10c374a01357ab6",
+      "size": 3183,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/f97f88de17263294ca431b2ad10c374a01357ab6"
+    },
+    {
+      "path": "src/dynarmic/common/fp/op/FPMulAdd.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "8e0a16cda567f486518cb22e19552bf6ca17e339",
+      "size": 393,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/8e0a16cda567f486518cb22e19552bf6ca17e339"
+    },
+    {
+      "path": "src/dynarmic/common/fp/op/FPNeg.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "4f172a598e86c9b253c9d048368d577dfb9c4762",
+      "size": 319,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/4f172a598e86c9b253c9d048368d577dfb9c4762"
+    },
+    {
+      "path": "src/dynarmic/common/fp/op/FPRSqrtEstimate.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ed28bcc5cc6a60f5a6892b8eb4e8597b7489e4a6",
+      "size": 2086,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/ed28bcc5cc6a60f5a6892b8eb4e8597b7489e4a6"
+    },
+    {
+      "path": "src/dynarmic/common/fp/op/FPRSqrtEstimate.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f51be1e8bc504a215c3a5c568336fbdb6fc0635b",
+      "size": 286,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/f51be1e8bc504a215c3a5c568336fbdb6fc0635b"
+    },
+    {
+      "path": "src/dynarmic/common/fp/op/FPRSqrtStepFused.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "06fe96d44ba2cd024d1c8bd0c1d277c4a8f44f71",
+      "size": 1846,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/06fe96d44ba2cd024d1c8bd0c1d277c4a8f44f71"
+    },
+    {
+      "path": "src/dynarmic/common/fp/op/FPRSqrtStepFused.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "384a75924d2fb7345baa0056060b6942c3844cbf",
+      "size": 297,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/384a75924d2fb7345baa0056060b6942c3844cbf"
+    },
+    {
+      "path": "src/dynarmic/common/fp/op/FPRecipEstimate.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "1fd4b924b229e71198004c465286f865db25edc0",
+      "size": 3370,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/1fd4b924b229e71198004c465286f865db25edc0"
+    },
+    {
+      "path": "src/dynarmic/common/fp/op/FPRecipEstimate.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "eaf6fee5bfd98496a94c02a0f57eae822fe00c69",
+      "size": 286,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/eaf6fee5bfd98496a94c02a0f57eae822fe00c69"
+    },
+    {
+      "path": "src/dynarmic/common/fp/op/FPRecipExponent.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "171b94e96eb571298b788fe9a303d94ecb6f7935",
+      "size": 1985,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/171b94e96eb571298b788fe9a303d94ecb6f7935"
+    },
+    {
+      "path": "src/dynarmic/common/fp/op/FPRecipExponent.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "63ff3530b2bf8d6f43088c0b61987e7e8266b46e",
+      "size": 286,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/63ff3530b2bf8d6f43088c0b61987e7e8266b46e"
+    },
+    {
+      "path": "src/dynarmic/common/fp/op/FPRecipStepFused.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b01477fecafb5e9d79c4a78e479056e168395546",
+      "size": 1824,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/b01477fecafb5e9d79c4a78e479056e168395546"
+    },
+    {
+      "path": "src/dynarmic/common/fp/op/FPRecipStepFused.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "abe447b5006acd3d3b7031aec5aa89103f8a0792",
+      "size": 297,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/abe447b5006acd3d3b7031aec5aa89103f8a0792"
+    },
+    {
+      "path": "src/dynarmic/common/fp/op/FPRoundInt.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "7325909075df4624d8b444ae9527b50365a313c7",
+      "size": 3333,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/7325909075df4624d8b444ae9527b50365a313c7"
+    },
+    {
+      "path": "src/dynarmic/common/fp/op/FPRoundInt.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e326627ce1c3bec37c4f67c5a8d870c163aa99b6",
+      "size": 368,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/e326627ce1c3bec37c4f67c5a8d870c163aa99b6"
+    },
+    {
+      "path": "src/dynarmic/common/fp/op/FPToFixed.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b1a57d31040f08bf0b0c23da55fe4621f8dba039",
+      "size": 3902,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/b1a57d31040f08bf0b0c23da55fe4621f8dba039"
+    },
+    {
+      "path": "src/dynarmic/common/fp/op/FPToFixed.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "53a952836e792691473dccd87117d78a4dd8fd7e",
+      "size": 399,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/53a952836e792691473dccd87117d78a4dd8fd7e"
+    },
+    {
+      "path": "src/dynarmic/common/fp/process_exception.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a97e0ec820d9d1ae99bbe996db42909cfd018e92",
+      "size": 1551,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/a97e0ec820d9d1ae99bbe996db42909cfd018e92"
+    },
+    {
+      "path": "src/dynarmic/common/fp/process_exception.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "436a9daa280a5958b886cde458576a6399ba6a69",
+      "size": 391,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/436a9daa280a5958b886cde458576a6399ba6a69"
+    },
+    {
+      "path": "src/dynarmic/common/fp/process_nan.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "516b92adb638ba11cfdc894f213544471110dc14",
+      "size": 3296,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/516b92adb638ba11cfdc894f213544471110dc14"
+    },
+    {
+      "path": "src/dynarmic/common/fp/process_nan.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "331b7943fc6ba901d99d7a22a148aa411f4eeaac",
+      "size": 614,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/331b7943fc6ba901d99d7a22a148aa411f4eeaac"
+    },
+    {
+      "path": "src/dynarmic/common/fp/rounding_mode.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "fcf36f61004b0ae1215d5349b46452687aa66c84",
+      "size": 904,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/fcf36f61004b0ae1215d5349b46452687aa66c84"
+    },
+    {
+      "path": "src/dynarmic/common/fp/unpacked.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f853ab07e1056526ef1d1ec7061074f36f6c0a26",
+      "size": 7931,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/f853ab07e1056526ef1d1ec7061074f36f6c0a26"
+    },
+    {
+      "path": "src/dynarmic/common/fp/unpacked.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "77f33d8966094c35bb31435e655760e85142e034",
+      "size": 2331,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/77f33d8966094c35bb31435e655760e85142e034"
+    },
+    {
+      "path": "src/dynarmic/common/fp/util.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "fda34e3ee52d85e46e9879fb087d2754c2a7e891",
+      "size": 2896,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/fda34e3ee52d85e46e9879fb087d2754c2a7e891"
+    },
+    {
+      "path": "src/dynarmic/common/llvm_disassemble.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "636ee3a2503f7f711312bf83fe3e4f6208d5cace",
+      "size": 4122,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/636ee3a2503f7f711312bf83fe3e4f6208d5cace"
+    },
+    {
+      "path": "src/dynarmic/common/llvm_disassemble.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "56de791a569a36f56493c8774da7402fe8c064a6",
+      "size": 457,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/56de791a569a36f56493c8774da7402fe8c064a6"
+    },
+    {
+      "path": "src/dynarmic/common/lut_from_list.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ed9e3dc046b24dcf828bb576af89b3a3fcf86643",
+      "size": 1032,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/ed9e3dc046b24dcf828bb576af89b3a3fcf86643"
+    },
+    {
+      "path": "src/dynarmic/common/math_util.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "32211fd979337ca9891332f90fa5f19b3d0062a6",
+      "size": 1825,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/32211fd979337ca9891332f90fa5f19b3d0062a6"
+    },
+    {
+      "path": "src/dynarmic/common/math_util.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5c1f784c89c8f07aff471adf5afcbd14cb63aa3b",
+      "size": 1344,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/5c1f784c89c8f07aff471adf5afcbd14cb63aa3b"
+    },
+    {
+      "path": "src/dynarmic/common/memory_pool.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a62cd11295a85fed134cd81483440a1bbd190a96",
+      "size": 911,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/a62cd11295a85fed134cd81483440a1bbd190a96"
+    },
+    {
+      "path": "src/dynarmic/common/memory_pool.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "1cbdd9095eb6022414a017656653a18465239870",
+      "size": 1034,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/1cbdd9095eb6022414a017656653a18465239870"
+    },
+    {
+      "path": "src/dynarmic/common/safe_ops.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "aef31347623ed22e4aa62910b734ca351b65dbb3",
+      "size": 3089,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/aef31347623ed22e4aa62910b734ca351b65dbb3"
+    },
+    {
+      "path": "src/dynarmic/common/spin_lock.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f653704db647a07674f05b9338f8e02f96953a50",
+      "size": 266,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/f653704db647a07674f05b9338f8e02f96953a50"
+    },
+    {
+      "path": "src/dynarmic/common/spin_lock_arm64.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ccf807e2d25befebf43252d840fa3066141968ea",
+      "size": 1755,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/ccf807e2d25befebf43252d840fa3066141968ea"
+    },
+    {
+      "path": "src/dynarmic/common/spin_lock_arm64.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c0a86bfed30d94a6d96c7155286c92a4757a6006",
+      "size": 350,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/c0a86bfed30d94a6d96c7155286c92a4757a6006"
+    },
+    {
+      "path": "src/dynarmic/common/spin_lock_x64.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "fdea94f4be165dc02bbaea84bfee0dcf4a6270fa",
+      "size": 1674,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/fdea94f4be165dc02bbaea84bfee0dcf4a6270fa"
+    },
+    {
+      "path": "src/dynarmic/common/spin_lock_x64.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "df6a3d7407f20b504f4059a77d64236683c92ad0",
+      "size": 380,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/df6a3d7407f20b504f4059a77d64236683c92ad0"
+    },
+    {
+      "path": "src/dynarmic/common/string_util.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "900b3aadd208a7a256c686dbf4fee2f6d752807c",
+      "size": 289,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/900b3aadd208a7a256c686dbf4fee2f6d752807c"
+    },
+    {
+      "path": "src/dynarmic/common/u128.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "dd78ac97ef85e16223c254fd64bfc5f3e96c51e8",
+      "size": 3284,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/dd78ac97ef85e16223c254fd64bfc5f3e96c51e8"
+    },
+    {
+      "path": "src/dynarmic/common/u128.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f6df1ae6cc09fbddb4b2d9a330ee045b1db06787",
+      "size": 2405,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/f6df1ae6cc09fbddb4b2d9a330ee045b1db06787"
+    },
+    {
+      "path": "src/dynarmic/common/variant_util.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "4dd7f671673102e330ad6bd41e20f1775db394b8",
+      "size": 731,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/4dd7f671673102e330ad6bd41e20f1775db394b8"
+    },
+    {
+      "path": "src/dynarmic/common/x64_disassemble.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "854de23a77fe0f65b62625e4bb77585fb1de3bfc",
+      "size": 2095,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/854de23a77fe0f65b62625e4bb77585fb1de3bfc"
+    },
+    {
+      "path": "src/dynarmic/common/x64_disassemble.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "03c511bfdab7190c6d5f8fa80115c6226ab3d235",
+      "size": 492,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/03c511bfdab7190c6d5f8fa80115c6226ab3d235"
+    },
+    {
+      "path": "src/dynarmic/frontend",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "6044ddd66c8525d140e24df906d132aeef91516e",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/6044ddd66c8525d140e24df906d132aeef91516e"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "75b4c91d627644c7bb329d172b8134be588fbc7f",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/75b4c91d627644c7bb329d172b8134be588fbc7f"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/FPSCR.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "28414e9fa1a537924f6570b5f142f45aa17c2316",
+      "size": 4499,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/28414e9fa1a537924f6570b5f142f45aa17c2316"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/ITState.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ae69fa1e3f024a5bd76df0c0540699d07980f012",
+      "size": 1377,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/ae69fa1e3f024a5bd76df0c0540699d07980f012"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/PSR.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "9af78eaae52cd9ca6f6a1a9ae2aff0dae5afecb9",
+      "size": 5675,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/9af78eaae52cd9ca6f6a1a9ae2aff0dae5afecb9"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/a32_ir_emitter.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "343e521abaf3da7e2b53b1b52ae936f809bd0617",
+      "size": 17278,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/343e521abaf3da7e2b53b1b52ae936f809bd0617"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/a32_ir_emitter.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "9fde4f8775d02a439c4c419a0f311572b8d97f2b",
+      "size": 5161,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/9fde4f8775d02a439c4c419a0f311572b8d97f2b"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/a32_location_descriptor.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ac3a374e0dc88194a0d26cc5bd00361dad30652a",
+      "size": 645,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/ac3a374e0dc88194a0d26cc5bd00361dad30652a"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/a32_location_descriptor.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c53e75d4b7452fdb548ea35f3b117f58b82b5958",
+      "size": 5429,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/c53e75d4b7452fdb548ea35f3b117f58b82b5958"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/a32_types.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a47ce0b78b384db0923d5592cf310d44c9991a57",
+      "size": 2216,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/a47ce0b78b384db0923d5592cf310d44c9991a57"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/a32_types.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6f56bea51a176277d348be2d792273c97772df12",
+      "size": 4662,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/6f56bea51a176277d348be2d792273c97772df12"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/decoder",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "f3643f87814c1d53e7f154a88ab62b05be63f312",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/f3643f87814c1d53e7f154a88ab62b05be63f312"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/decoder/arm.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "16ae52e13aab6f87953e5d6a716a728e52279808",
+      "size": 2383,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/16ae52e13aab6f87953e5d6a716a728e52279808"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/decoder/arm.inc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "90995c4c05ac72a90437d6fd9250b1e279a463fc",
+      "size": 24439,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/90995c4c05ac72a90437d6fd9250b1e279a463fc"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/decoder/asimd.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "cfcd28c6e68f8f1f1610efaa48c61fda123d9c31",
+      "size": 2446,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/cfcd28c6e68f8f1f1610efaa48c61fda123d9c31"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/decoder/asimd.inc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d0dfd86752beb1fd940fee543f339580a96a11dc",
+      "size": 15896,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/d0dfd86752beb1fd940fee543f339580a96a11dc"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/decoder/thumb16.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6a4275f726627cb02849c9b520bb1a0d0e3e401e",
+      "size": 1156,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/6a4275f726627cb02849c9b520bb1a0d0e3e401e"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/decoder/thumb16.inc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f01c98aa05ac8088b54aeefa7cc144c9343b2a23",
+      "size": 6641,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/f01c98aa05ac8088b54aeefa7cc144c9343b2a23"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/decoder/thumb32.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f3f4b3b9ee4427dba001c583bf50f66837d1d2d4",
+      "size": 1134,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/f3f4b3b9ee4427dba001c583bf50f66837d1d2d4"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/decoder/thumb32.inc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ecc7a655384d593484bb25a50d5f8eff8d874f2a",
+      "size": 24256,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/ecc7a655384d593484bb25a50d5f8eff8d874f2a"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/decoder/vfp.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f79a859bf7aa1922e955f9cac0eb75d49e52234b",
+      "size": 1734,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/f79a859bf7aa1922e955f9cac0eb75d49e52234b"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/decoder/vfp.inc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "21c9b78d79e806900f823907c02959518cffaa6f",
+      "size": 6384,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/21c9b78d79e806900f823907c02959518cffaa6f"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/disassembler",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "85c2fa4c5ac07cb33c7b623d1653a5f0255027a5",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/85c2fa4c5ac07cb33c7b623d1653a5f0255027a5"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/disassembler/disassembler.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6a61afdefae2e9b3b5ff4978460228066e7b2088",
+      "size": 328,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/6a61afdefae2e9b3b5ff4978460228066e7b2088"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/disassembler/disassembler_arm.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ff0c48a1ce87203f04c1adb67c68e28ad643a95a",
+      "size": 76351,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/ff0c48a1ce87203f04c1adb67c68e28ad643a95a"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/disassembler/disassembler_thumb.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "860181311bade3c2f311ac7ddb2ffc4f236a0937",
+      "size": 12379,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/860181311bade3c2f311ac7ddb2ffc4f236a0937"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "a2ed015a6132ae3e7d3281957b653ca1ed48a883",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/a2ed015a6132ae3e7d3281957b653ca1ed48a883"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/a32_translate.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "97a7f11adf4d73c4ee0099ddb427b4b5d97bea8b",
+      "size": 1211,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/97a7f11adf4d73c4ee0099ddb427b4b5d97bea8b"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/a32_translate.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0f2c3a121f8b69eb80fc0b26f9e10a0161d14ee0",
+      "size": 2008,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/0f2c3a121f8b69eb80fc0b26f9e10a0161d14ee0"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/conditional_state.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "8bd875c7d1ba0e5a26ef01b6e910184e480f3c43",
+      "size": 2907,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/8bd875c7d1ba0e5a26ef01b6e910184e480f3c43"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/conditional_state.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "18c8b1cccb29f892df86d168ff58342d908489d3",
+      "size": 874,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/18c8b1cccb29f892df86d168ff58342d908489d3"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "c4d319c3cdf26582f2659517791d65fa19dccd87",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/c4d319c3cdf26582f2659517791d65fa19dccd87"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/a32_branch.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d87cfcfe827bbb7ebf11ebe70a633943b4e4770b",
+      "size": 2433,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/d87cfcfe827bbb7ebf11ebe70a633943b4e4770b"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/a32_crc32.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "8ee5441013224c69458e78d3c5e6241c932a145b",
+      "size": 2912,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/8ee5441013224c69458e78d3c5e6241c932a145b"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/a32_exception_generating.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c9616b0871dbbf789c73c33b7865c497f13e351a",
+      "size": 1199,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/c9616b0871dbbf789c73c33b7865c497f13e351a"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/a32_translate_impl.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "276f8384e77c87a347ceb6527d5f047e6e8c30c2",
+      "size": 3493,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/276f8384e77c87a347ceb6527d5f047e6e8c30c2"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/a32_translate_impl.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "44ac24503c8b6fd17c70c723c0feed643182574f",
+      "size": 57598,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/44ac24503c8b6fd17c70c723c0feed643182574f"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/asimd_load_store_structures.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d444e023e9b47993f3db53d9ccbfcffb38e3c338",
+      "size": 12363,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/d444e023e9b47993f3db53d9ccbfcffb38e3c338"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/asimd_misc.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e30c438eff2744db5650fe58915bc308f7f00b27",
+      "size": 3069,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/e30c438eff2744db5650fe58915bc308f7f00b27"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/asimd_one_reg_modified_immediate.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "94e3e841e8d5afee843c265af8c9bd087097b8bd",
+      "size": 2936,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/94e3e841e8d5afee843c265af8c9bd087097b8bd"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/asimd_three_regs.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a69f39bfb62e8aa36fd4fe68dd51befdaba4d17b",
+      "size": 36876,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/a69f39bfb62e8aa36fd4fe68dd51befdaba4d17b"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/asimd_two_regs_misc.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "62b9af55a5172d7e9d80c31e639a1f98ea50360b",
+      "size": 25066,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/62b9af55a5172d7e9d80c31e639a1f98ea50360b"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/asimd_two_regs_scalar.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "8d1876a05dfc8c4781662e0394abf6d8c7a48a54",
+      "size": 7008,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/8d1876a05dfc8c4781662e0394abf6d8c7a48a54"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/asimd_two_regs_shift.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b7300f91e45f5e3eb25b75c8c7dff8f41e472707",
+      "size": 12637,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/b7300f91e45f5e3eb25b75c8c7dff8f41e472707"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/barrier.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "7d9e7459f154c40e1aeb36f941a06f28692a79c2",
+      "size": 680,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/7d9e7459f154c40e1aeb36f941a06f28692a79c2"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/coprocessor.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "29748a6eba259360b58707286e3a50ea81704547",
+      "size": 5420,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/29748a6eba259360b58707286e3a50ea81704547"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/data_processing.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "9d7ea6a17032499f944c6945e6f8c25ddf39dad7",
+      "size": 32547,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/9d7ea6a17032499f944c6945e6f8c25ddf39dad7"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/divide.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f13a257d2102f2b000834371206a62317b0cda5d",
+      "size": 1197,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/f13a257d2102f2b000834371206a62317b0cda5d"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/extension.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3ee6a670f0a2b95874eab4bc18f7c258f62b950c",
+      "size": 6734,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/3ee6a670f0a2b95874eab4bc18f7c258f62b950c"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/hint.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0ec6aeff9a078c8306bb5477c235c5e486d28049",
+      "size": 1723,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/0ec6aeff9a078c8306bb5477c235c5e486d28049"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/load_store.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "7ef8b7e89007de19f166287492bf7a27933b4b2f",
+      "size": 29131,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/7ef8b7e89007de19f166287492bf7a27933b4b2f"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/misc.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ef54b66827acb3147a2d5866e719371a419d6181",
+      "size": 5240,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/ef54b66827acb3147a2d5866e719371a419d6181"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/multiply.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2bda56a961285e353209f579f1906e4688dbba35",
+      "size": 20060,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/2bda56a961285e353209f579f1906e4688dbba35"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/packing.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5cb88fe47dca44589c43563dd5168e185a6e4bbb",
+      "size": 1477,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/5cb88fe47dca44589c43563dd5168e185a6e4bbb"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/parallel.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "666cee2c330eaa0c619add6c9bbe833f4b2e5f7f",
+      "size": 14629,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/666cee2c330eaa0c619add6c9bbe833f4b2e5f7f"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/reversal.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "4bf594919e2baa8fc1724cde3cc34cd34dec0c29",
+      "size": 2900,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/4bf594919e2baa8fc1724cde3cc34cd34dec0c29"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/saturated.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "41db115044d0c1bb4bb21aa083bc7e51542d8c24",
+      "size": 9724,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/41db115044d0c1bb4bb21aa083bc7e51542d8c24"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/status_register_access.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "60110df89189702c251fc6d86641fb3feea11900",
+      "size": 3240,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/60110df89189702c251fc6d86641fb3feea11900"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/synchronization.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e9f04b70e58e8bb158b51045519c36ea27311cd9",
+      "size": 12453,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/e9f04b70e58e8bb158b51045519c36ea27311cd9"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/thumb16.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "67a94a0e804083c2763619aaecca048b7e28a932",
+      "size": 31013,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/67a94a0e804083c2763619aaecca048b7e28a932"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/thumb32_branch.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "83734f5c70dcb761df5e8fe591197a7ef491b4e7",
+      "size": 3407,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/83734f5c70dcb761df5e8fe591197a7ef491b4e7"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/thumb32_control.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "aa039373010e4eb5301c44a8854fc63d1980040c",
+      "size": 3066,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/aa039373010e4eb5301c44a8854fc63d1980040c"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/thumb32_coprocessor.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ab7c539932fec0dbbf4fec349bbfaf15ef9e8a50",
+      "size": 3051,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/ab7c539932fec0dbbf4fec349bbfaf15ef9e8a50"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/thumb32_data_processing_modified_immediate.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0c0114f84cf39a10de0dc02a2d872addb88325f7",
+      "size": 7524,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/0c0114f84cf39a10de0dc02a2d872addb88325f7"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/thumb32_data_processing_plain_binary_immediate.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "1a6767dbeea514cfde2089f111b4c999bc18e3dd",
+      "size": 8136,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/1a6767dbeea514cfde2089f111b4c999bc18e3dd"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/thumb32_data_processing_register.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "1dda532d921ed980c2a68e05a1b3bb7444a54fce",
+      "size": 6697,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/1dda532d921ed980c2a68e05a1b3bb7444a54fce"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/thumb32_data_processing_shifted_register.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3058350043c97518c66b40c716b48ef6fc3fa954",
+      "size": 8938,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/3058350043c97518c66b40c716b48ef6fc3fa954"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/thumb32_load_byte.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "42b2ebf4aaa46ed066f488a246624cf09a8799ec",
+      "size": 6504,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/42b2ebf4aaa46ed066f488a246624cf09a8799ec"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/thumb32_load_halfword.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5b9f1639af427f06ff423af5bd41bc04b0047060",
+      "size": 4885,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/5b9f1639af427f06ff423af5bd41bc04b0047060"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/thumb32_load_store_dual.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "17d4285c231c78023e81ac525f679d6c30f500e0",
+      "size": 9869,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/17d4285c231c78023e81ac525f679d6c30f500e0"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/thumb32_load_store_multiple.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2bc782b973f4a476ee096f6ffd9d2ccc61d56f6b",
+      "size": 5228,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/2bc782b973f4a476ee096f6ffd9d2ccc61d56f6b"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/thumb32_load_word.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b92e27fc6694888d161408e4bf5b99bba1fb3151",
+      "size": 3958,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/b92e27fc6694888d161408e4bf5b99bba1fb3151"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/thumb32_long_multiply.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0a0cdd9f2ef1d0c8a87a6fffb86594517d5069d9",
+      "size": 8036,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/0a0cdd9f2ef1d0c8a87a6fffb86594517d5069d9"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/thumb32_misc.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "9edb2310b9ccdf3ca061361b832d53bf1ba9481c",
+      "size": 5186,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/9edb2310b9ccdf3ca061361b832d53bf1ba9481c"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/thumb32_multiply.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "587cbaafdb9d9ea899c9c6fc2ad876797f8bae37",
+      "size": 11113,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/587cbaafdb9d9ea899c9c6fc2ad876797f8bae37"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/thumb32_parallel.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "654940967df1f321a45d7a2f544ddb014c0e3a82",
+      "size": 15936,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/654940967df1f321a45d7a2f544ddb014c0e3a82"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/thumb32_store_single_data_item.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "93c383757ec65e4ecb338c020c63ea592b20e340",
+      "size": 7641,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/93c383757ec65e4ecb338c020c63ea592b20e340"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/impl/vfp.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a4e37f747a63919307b40a427084176593abd78d",
+      "size": 49056,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/a4e37f747a63919307b40a427084176593abd78d"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/translate_arm.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "24b5797de88f5a6a29515ea508ca125311315c0d",
+      "size": 4434,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/24b5797de88f5a6a29515ea508ca125311315c0d"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/translate_callbacks.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e0ad48ea5c19dc17a7a7b208edec986ec647d4b7",
+      "size": 1292,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/e0ad48ea5c19dc17a7a7b208edec986ec647d4b7"
+    },
+    {
+      "path": "src/dynarmic/frontend/A32/translate/translate_thumb.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d61d8ccbff369dc47fd8eb38aab4438ac908b9e8",
+      "size": 8963,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/d61d8ccbff369dc47fd8eb38aab4438ac908b9e8"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "aadfbd04972b17aa10e5709996b443000bed9746",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/aadfbd04972b17aa10e5709996b443000bed9746"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/a64_ir_emitter.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3f5a70bdc0d032d24c6719942fca7b5e920d5b94",
+      "size": 8711,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/3f5a70bdc0d032d24c6719942fca7b5e920d5b94"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/a64_ir_emitter.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "7fc8bea7c43df1ebeb65dda2f172c581d3c027a6",
+      "size": 4277,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/7fc8bea7c43df1ebeb65dda2f172c581d3c027a6"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/a64_location_descriptor.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "83a931ff4000d47a0b139b4bd5a553e946ac46a6",
+      "size": 451,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/83a931ff4000d47a0b139b4bd5a553e946ac46a6"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/a64_location_descriptor.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "122bebbcb74c71f018b2083fee0f236c8530bc18",
+      "size": 3930,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/122bebbcb74c71f018b2083fee0f236c8530bc18"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/a64_types.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ca1c59ab3670ccbbfdf4f80b93486d02987f1cfd",
+      "size": 780,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/ca1c59ab3670ccbbfdf4f80b93486d02987f1cfd"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/a64_types.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6bc7a2453663e5379911f931e724fccf4b765c99",
+      "size": 2209,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/6bc7a2453663e5379911f931e724fccf4b765c99"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/decoder",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "7d095ed841039e702dce102a31af97bd16f78c82",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/7d095ed841039e702dce102a31af97bd16f78c82"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/decoder/a64.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d6f447e575651fa7eddab5fc2dd649c5c02a7056",
+      "size": 2705,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/d6f447e575651fa7eddab5fc2dd649c5c02a7056"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/decoder/a64.inc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "23f8b71933ee771f23a2157bc6c1543b1d97cafa",
+      "size": 101402,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/23f8b71933ee771f23a2157bc6c1543b1d97cafa"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "ebf134081488f951ae0dc90d685ed3736dd12eb5",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/ebf134081488f951ae0dc90d685ed3736dd12eb5"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/a64_translate.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "05996aeb64de2050c03a0de4d287251bc41cbb09",
+      "size": 2307,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/05996aeb64de2050c03a0de4d287251bc41cbb09"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/a64_translate.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2f62ac6e507c2dabc59860a4ba50a509b748cfcf",
+      "size": 2243,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/2f62ac6e507c2dabc59860a4ba50a509b748cfcf"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "a8c6be344006266448a79bf6387d9bc59a0d62c0",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/a8c6be344006266448a79bf6387d9bc59a0d62c0"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/a64_branch.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "01cc1390c775251564508745eaddb0b9cd9fcc43",
+      "size": 4218,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/01cc1390c775251564508745eaddb0b9cd9fcc43"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/a64_exception_generating.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "460ebfa6f84ebda870dc004e30f0928759707806",
+      "size": 607,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/460ebfa6f84ebda870dc004e30f0928759707806"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/data_processing_addsub.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5df4fe1ce9e6c0280edab1faba63f099d3fe43c6",
+      "size": 8649,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/5df4fe1ce9e6c0280edab1faba63f099d3fe43c6"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/data_processing_bitfield.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "aec6729ad8f14dd3c7d9336a570d726bd64e90d2",
+      "size": 4414,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/aec6729ad8f14dd3c7d9336a570d726bd64e90d2"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/data_processing_conditional_compare.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "03725c262d40e66f9a8e6aa0caf7b244e8a645ab",
+      "size": 2411,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/03725c262d40e66f9a8e6aa0caf7b244e8a645ab"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/data_processing_conditional_select.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "49dadaa3be6b98b835efb21e97675ed9b10e9c05",
+      "size": 1676,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/49dadaa3be6b98b835efb21e97675ed9b10e9c05"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/data_processing_crc32.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a0bf932a2a65937e4debec0bfbb6d49956b4f0fd",
+      "size": 2000,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/a0bf932a2a65937e4debec0bfbb6d49956b4f0fd"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/data_processing_logical.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d280e37ee8cc1255ffc7be9c1d7a5368dea7f8d6",
+      "size": 6475,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/d280e37ee8cc1255ffc7be9c1d7a5368dea7f8d6"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/data_processing_multiply.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "60910803f0f432f67a3b81083d17793c01ae8dcc",
+      "size": 2583,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/60910803f0f432f67a3b81083d17793c01ae8dcc"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/data_processing_pcrel.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "48b860a091e0fa162774af145a8c2780ae3c86d6",
+      "size": 688,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/48b860a091e0fa162774af145a8c2780ae3c86d6"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/data_processing_register.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3484a1e3d8b155103b8de41c1eaf784b511b19b5",
+      "size": 5088,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/3484a1e3d8b155103b8de41c1eaf784b511b19b5"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/data_processing_shift.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "1b48abd7e39cc4202a086967023a31b2232d96a1",
+      "size": 1585,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/1b48abd7e39cc4202a086967023a31b2232d96a1"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/floating_point_compare.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c1835b815ddd8c95d98efb1cb190c7fe50d3ff6a",
+      "size": 1142,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/c1835b815ddd8c95d98efb1cb190c7fe50d3ff6a"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/floating_point_conditional_compare.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a0b1022410da77926379c39d7e2936c4277b5b07",
+      "size": 1243,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/a0b1022410da77926379c39d7e2936c4277b5b07"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/floating_point_conditional_select.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "11ce6f623a361095caf37c22ec53b18681701fa3",
+      "size": 697,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/11ce6f623a361095caf37c22ec53b18681701fa3"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/floating_point_conversion_fixed_point.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5fa7ac1f986f0008a523fa37290e72dba822506f",
+      "size": 3557,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/5fa7ac1f986f0008a523fa37290e72dba822506f"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/floating_point_conversion_integer.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2f98ebfb130f9e6321c46bc2102940aa3da09187",
+      "size": 6306,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/2f98ebfb130f9e6321c46bc2102940aa3da09187"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/floating_point_data_processing_one_register.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "187f0a89083ae901aae161932a706d906e8d0ae7",
+      "size": 5895,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/187f0a89083ae901aae161932a706d906e8d0ae7"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/floating_point_data_processing_three_register.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "75c38c012bf6bf4e4d2c2c415b83bf7a1a02d857",
+      "size": 2287,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/75c38c012bf6bf4e4d2c2c415b83bf7a1a02d857"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/floating_point_data_processing_two_register.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a4dbda9cce5bbcc0fbfadbd2dc76f27e8169de2e",
+      "size": 4209,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/a4dbda9cce5bbcc0fbfadbd2dc76f27e8169de2e"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/impl.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d0fd93867c32c0157e6f904b52561c909be2e576",
+      "size": 11361,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/d0fd93867c32c0157e6f904b52561c909be2e576"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/impl.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "86bc534d5ea917d3a9a3496a05574fb9d79ea4fd",
+      "size": 55064,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/86bc534d5ea917d3a9a3496a05574fb9d79ea4fd"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/load_store_exclusive.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0e67e11b4b3e36f7ca6542a38129f84aae239f55",
+      "size": 6807,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/0e67e11b4b3e36f7ca6542a38129f84aae239f55"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/load_store_load_literal.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "995aba4252378940622bf54306fe5a3048d45e21",
+      "size": 1625,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/995aba4252378940622bf54306fe5a3048d45e21"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/load_store_multiple_structures.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "77c57a965918c404e60930e1342e53edaf07872b",
+      "size": 4185,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/77c57a965918c404e60930e1342e53edaf07872b"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/load_store_no_allocate_pair.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c85cc55241cc22cde55cadcde033c9f9b97b24b2",
+      "size": 809,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/c85cc55241cc22cde55cadcde033c9f9b97b24b2"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/load_store_register_immediate.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d939c45f2ca8586bdceb710052cfc71e04e09ae5",
+      "size": 8017,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/d939c45f2ca8586bdceb710052cfc71e04e09ae5"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/load_store_register_pair.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "4c81564f7cd79aed5d155e54a797b98284e060f4",
+      "size": 4517,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/4c81564f7cd79aed5d155e54a797b98284e060f4"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/load_store_register_register_offset.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "9791095868cfb803a8a64a38d2b7daef2158356f",
+      "size": 4807,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/9791095868cfb803a8a64a38d2b7daef2158356f"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/load_store_register_unprivileged.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d3f4194ff21e4e78fe970e5eb4a55f1491f693c4",
+      "size": 4504,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/d3f4194ff21e4e78fe970e5eb4a55f1491f693c4"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/load_store_single_structure.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b4bc842942e605365f14d813bd2646c6e37d4cbd",
+      "size": 9670,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/b4bc842942e605365f14d813bd2646c6e37d4cbd"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/move_wide.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "7bd2e6e356f91c2357f612ca109e30f2082b6b58",
+      "size": 1551,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/7bd2e6e356f91c2357f612ca109e30f2082b6b58"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/simd_across_lanes.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6147a54a020eebd9f9fafaa6e307f88046c540ba",
+      "size": 6564,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/6147a54a020eebd9f9fafaa6e307f88046c540ba"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/simd_aes.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d604703ef2f3fff5769b5d3b90082a5cc4bd7ce9",
+      "size": 1155,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/d604703ef2f3fff5769b5d3b90082a5cc4bd7ce9"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/simd_copy.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b33bc8f5ad2647306bcb71864fb33710c6ca3f43",
+      "size": 4646,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/b33bc8f5ad2647306bcb71864fb33710c6ca3f43"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/simd_crypto_four_register.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "8464bba5d7ca5296d98cdd863d6145680453c646",
+      "size": 1524,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/8464bba5d7ca5296d98cdd863d6145680453c646"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/simd_crypto_three_register.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f21570f90e50e84256e91dbb7194ea4d8a787055",
+      "size": 4156,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/f21570f90e50e84256e91dbb7194ea4d8a787055"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/simd_extract.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "bb5dcbe93e399e22c7cd42073da892602ad0c777",
+      "size": 733,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/bb5dcbe93e399e22c7cd42073da892602ad0c777"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/simd_modified_immediate.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "db8e83631ad9d096ae2fac12eddd39090030a8c4",
+      "size": 4081,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/db8e83631ad9d096ae2fac12eddd39090030a8c4"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/simd_permute.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "06e15273cf9325ad2c1949b9bca3fff296264c61",
+      "size": 3408,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/06e15273cf9325ad2c1949b9bca3fff296264c61"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/simd_scalar_pairwise.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "63615b0f9a8d1e892da12c6c471646471684abcb",
+      "size": 2581,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/63615b0f9a8d1e892da12c6c471646471684abcb"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/simd_scalar_shift_by_immediate.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a0570edc7e790fc073474a0a220e905b40709b29",
+      "size": 12891,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/a0570edc7e790fc073474a0a220e905b40709b29"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/simd_scalar_three_same.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "fb9ae9d1413012f637ff3c9dee4f875218aeaad1",
+      "size": 14123,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/fb9ae9d1413012f637ff3c9dee4f875218aeaad1"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/simd_scalar_two_register_misc.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2289f5cbd150772e3f93b5fb3e32c5aabd85c1a0",
+      "size": 10873,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/2289f5cbd150772e3f93b5fb3e32c5aabd85c1a0"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/simd_scalar_x_indexed_element.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "dbbc4ce12cba3fbeb546aa1d4349744f366ce18b",
+      "size": 6142,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/dbbc4ce12cba3fbeb546aa1d4349744f366ce18b"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/simd_sha.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "795bfcdb8cfa24a19d18f191ef7f5b8ab5f08e97",
+      "size": 4845,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/795bfcdb8cfa24a19d18f191ef7f5b8ab5f08e97"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/simd_sha512.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "766109bfee69f29cac8a04ec490c275ebbefa59c",
+      "size": 10750,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/766109bfee69f29cac8a04ec490c275ebbefa59c"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/simd_shift_by_immediate.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "41b0952249143bc54a3ae5f38e3877251b76228d",
+      "size": 15162,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/41b0952249143bc54a3ae5f38e3877251b76228d"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/simd_table_lookup.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f267c13581f1e5e1a1b21556b9a1fdaa1d1b729e",
+      "size": 1252,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/f267c13581f1e5e1a1b21556b9a1fdaa1d1b729e"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/simd_three_different.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "8cc677b65265563a6d266e67891cf45d39fccfc3",
+      "size": 8917,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/8cc677b65265563a6d266e67891cf45d39fccfc3"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/simd_three_same.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5c8bf13aeb98e61001aab8b659a57ae385bc7209",
+      "size": 39175,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/5c8bf13aeb98e61001aab8b659a57ae385bc7209"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/simd_three_same_extra.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d18f4b10cb6609df480bdbe64031d3400aae58ee",
+      "size": 6213,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/d18f4b10cb6609df480bdbe64031d3400aae58ee"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/simd_two_register_misc.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ca3e3b959173c09c341158e4aaf5bac9e2887d69",
+      "size": 26440,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/ca3e3b959173c09c341158e4aaf5bac9e2887d69"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/simd_vector_x_indexed_element.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "07234fc61b1b43247c92641b8e75631cf9726013",
+      "size": 16331,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/07234fc61b1b43247c92641b8e75631cf9726013"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/sys_dc.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "aea3b5baf63ef9f5348c02b3214442ea400f102e",
+      "size": 1545,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/aea3b5baf63ef9f5348c02b3214442ea400f102e"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/sys_ic.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3c91168cab7377158b8002628852d55f1ffa5475",
+      "size": 1088,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/3c91168cab7377158b8002628852d55f1ffa5475"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/system.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "9c35a8f364abb412f7ac42dd92e36259ad5473e4",
+      "size": 4783,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/9c35a8f364abb412f7ac42dd92e36259ad5473e4"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/system_flag_format.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "cbed3c34ed6c96a222ab9c4c0d261c99a4476010",
+      "size": 1604,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/cbed3c34ed6c96a222ab9c4c0d261c99a4476010"
+    },
+    {
+      "path": "src/dynarmic/frontend/A64/translate/impl/system_flag_manipulation.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "65ec23e71c0c1ccb853adc43af5c23788e5ce70f",
+      "size": 1883,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/65ec23e71c0c1ccb853adc43af5c23788e5ce70f"
+    },
+    {
+      "path": "src/dynarmic/frontend/decoder",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "9e3311320eb6ac9c38b3a373de8e15d4287ee3c1",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/9e3311320eb6ac9c38b3a373de8e15d4287ee3c1"
+    },
+    {
+      "path": "src/dynarmic/frontend/decoder/decoder_detail.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "cf7d0e64bc7dc8edf8c32d2b0a1f28fcd3c59dc8",
+      "size": 7120,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/cf7d0e64bc7dc8edf8c32d2b0a1f28fcd3c59dc8"
+    },
+    {
+      "path": "src/dynarmic/frontend/decoder/matcher.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "adf9556dd49797628e4cd74fbfb71f4f56513e5f",
+      "size": 2277,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/adf9556dd49797628e4cd74fbfb71f4f56513e5f"
+    },
+    {
+      "path": "src/dynarmic/frontend/imm.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c802864df97000ccede3caaf25b5a566d096896e",
+      "size": 2745,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/c802864df97000ccede3caaf25b5a566d096896e"
+    },
+    {
+      "path": "src/dynarmic/frontend/imm.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "7d86abbb61afb79c20734ddef2bdf1b1b198047a",
+      "size": 4250,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/7d86abbb61afb79c20734ddef2bdf1b1b198047a"
+    },
+    {
+      "path": "src/dynarmic/interface",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "9ed429eb476e605f0a072745740818f2bbe60b2e",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/9ed429eb476e605f0a072745740818f2bbe60b2e"
+    },
+    {
+      "path": "src/dynarmic/interface/A32",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "f691b88c207fa0558284a0efbfed02a96a0fce47",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/f691b88c207fa0558284a0efbfed02a96a0fce47"
+    },
+    {
+      "path": "src/dynarmic/interface/A32/a32.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e1c5b40fd395685ac7b294feb665ab02d9d8c6a3",
+      "size": 2741,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/e1c5b40fd395685ac7b294feb665ab02d9d8c6a3"
+    },
+    {
+      "path": "src/dynarmic/interface/A32/arch_version.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "240e40ee4c258a17760a2c8d22e6b513933cbf04",
+      "size": 312,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/240e40ee4c258a17760a2c8d22e6b513933cbf04"
+    },
+    {
+      "path": "src/dynarmic/interface/A32/config.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "360df06e2ad699a6db6d848a03e639cb3da6f808",
+      "size": 11882,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/360df06e2ad699a6db6d848a03e639cb3da6f808"
+    },
+    {
+      "path": "src/dynarmic/interface/A32/coprocessor.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "7ee2e96ee34874017c4941971272e24fe2a5a6c4",
+      "size": 4751,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/7ee2e96ee34874017c4941971272e24fe2a5a6c4"
+    },
+    {
+      "path": "src/dynarmic/interface/A32/coprocessor_util.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ed695d17e943eba91c003f70f3f96e793ae1de05",
+      "size": 373,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/ed695d17e943eba91c003f70f3f96e793ae1de05"
+    },
+    {
+      "path": "src/dynarmic/interface/A32/disassembler.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "54058bf5ee4c3e7bbbb5a4a96368f581a972a5ff",
+      "size": 366,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/54058bf5ee4c3e7bbbb5a4a96368f581a972a5ff"
+    },
+    {
+      "path": "src/dynarmic/interface/A64",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "64f37224a7777702e1a89653a9dc171f40d5e481",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/64f37224a7777702e1a89653a9dc171f40d5e481"
+    },
+    {
+      "path": "src/dynarmic/interface/A64/a64.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a150da8448730608379a2e990a5bb55d4e97f2cc",
+      "size": 3692,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/a150da8448730608379a2e990a5bb55d4e97f2cc"
+    },
+    {
+      "path": "src/dynarmic/interface/A64/config.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c8ed623eb405539af9c7969149600960def0e11d",
+      "size": 13931,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/c8ed623eb405539af9c7969149600960def0e11d"
+    },
+    {
+      "path": "src/dynarmic/interface/exclusive_monitor.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "481367587319a09f4aea1320cf1de9e0b35b0c81",
+      "size": 2864,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/481367587319a09f4aea1320cf1de9e0b35b0c81"
+    },
+    {
+      "path": "src/dynarmic/interface/halt_reason.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "121a8455cc9d602d352039fb56363aebbb2410ab",
+      "size": 1488,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/121a8455cc9d602d352039fb56363aebbb2410ab"
+    },
+    {
+      "path": "src/dynarmic/interface/optimization_flags.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2f65f0bfa4891450cf0d8e6bdf17e0a6158e1600",
+      "size": 3736,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/2f65f0bfa4891450cf0d8e6bdf17e0a6158e1600"
+    },
+    {
+      "path": "src/dynarmic/ir",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "6088f5d2a4e0aa85562d5bef588673771562ee55",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/6088f5d2a4e0aa85562d5bef588673771562ee55"
+    },
+    {
+      "path": "src/dynarmic/ir/acc_type.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f259660b68d2d3ed3bcd531ae1dad9a3f48db96a",
+      "size": 413,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/f259660b68d2d3ed3bcd531ae1dad9a3f48db96a"
+    },
+    {
+      "path": "src/dynarmic/ir/basic_block.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "cc7eb48ef6158772a49c297a870d87dc84e4722c",
+      "size": 7639,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/cc7eb48ef6158772a49c297a870d87dc84e4722c"
+    },
+    {
+      "path": "src/dynarmic/ir/basic_block.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "18d7fadae59a18d237cdd420008db2e7bdecf7c3",
+      "size": 6570,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/18d7fadae59a18d237cdd420008db2e7bdecf7c3"
+    },
+    {
+      "path": "src/dynarmic/ir/cond.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5bdd05eddca8edb22b58493b42dce833022d386c",
+      "size": 361,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/5bdd05eddca8edb22b58493b42dce833022d386c"
+    },
+    {
+      "path": "src/dynarmic/ir/ir_emitter.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "fc4f69b3e06557a33556a8f0897909313d3f75fb",
+      "size": 93544,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/fc4f69b3e06557a33556a8f0897909313d3f75fb"
+    },
+    {
+      "path": "src/dynarmic/ir/ir_emitter.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d37df24572a64e1d8fc6c2fbb6310f0d926256d7",
+      "size": 23983,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/d37df24572a64e1d8fc6c2fbb6310f0d926256d7"
+    },
+    {
+      "path": "src/dynarmic/ir/location_descriptor.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e7e640561d2b453a55027a85f40bdfd3ca56fb43",
+      "size": 365,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/e7e640561d2b453a55027a85f40bdfd3ca56fb43"
+    },
+    {
+      "path": "src/dynarmic/ir/location_descriptor.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "48e5e32bb168587772f3ad58738d3bfd59013ad3",
+      "size": 1591,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/48e5e32bb168587772f3ad58738d3bfd59013ad3"
+    },
+    {
+      "path": "src/dynarmic/ir/microinstruction.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "50af036ddf3d60d6590c539c95dfc26f6c3f14d5",
+      "size": 21007,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/50af036ddf3d60d6590c539c95dfc26f6c3f14d5"
+    },
+    {
+      "path": "src/dynarmic/ir/microinstruction.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "26b6b899f39689c6631cacc3ca1b5eb2a2f86fb9",
+      "size": 6349,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/26b6b899f39689c6631cacc3ca1b5eb2a2f86fb9"
+    },
+    {
+      "path": "src/dynarmic/ir/opcodes.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "88a52d4f1d1298f736a002ca3a3900e5530bb420",
+      "size": 1821,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/88a52d4f1d1298f736a002ca3a3900e5530bb420"
+    },
+    {
+      "path": "src/dynarmic/ir/opcodes.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "404f4cdbf43553ddaa702d79db253d1bb4c08f62",
+      "size": 1295,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/404f4cdbf43553ddaa702d79db253d1bb4c08f62"
+    },
+    {
+      "path": "src/dynarmic/ir/opcodes.inc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "dd060e0a993a95b0ffe8a6e2be253d2069c8bc88",
+      "size": 103635,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/dd060e0a993a95b0ffe8a6e2be253d2069c8bc88"
+    },
+    {
+      "path": "src/dynarmic/ir/opt",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "6f464b54aadecfcb5efa45543eadd0923fac71e9",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/6f464b54aadecfcb5efa45543eadd0923fac71e9"
+    },
+    {
+      "path": "src/dynarmic/ir/opt/a32_constant_memory_reads_pass.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "9699f183450c4efab0e23924a22d111bfc0adb3e",
+      "size": 2188,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/9699f183450c4efab0e23924a22d111bfc0adb3e"
+    },
+    {
+      "path": "src/dynarmic/ir/opt/a32_get_set_elimination_pass.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "4b743bff0beb8bb9a507ec2ef3d7c50afd55bfed",
+      "size": 12793,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/4b743bff0beb8bb9a507ec2ef3d7c50afd55bfed"
+    },
+    {
+      "path": "src/dynarmic/ir/opt/a64_callback_config_pass.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "79d9769520affeb3fc41c2241e2ee1b4397425fd",
+      "size": 1888,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/79d9769520affeb3fc41c2241e2ee1b4397425fd"
+    },
+    {
+      "path": "src/dynarmic/ir/opt/a64_get_set_elimination_pass.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f49201562a7bf7b9bdb13245a64349690039914e",
+      "size": 5314,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/f49201562a7bf7b9bdb13245a64349690039914e"
+    },
+    {
+      "path": "src/dynarmic/ir/opt/a64_merge_interpret_blocks.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "00a0e1b672456cc60dd37b5d676d51dbd34dbbe4",
+      "size": 1668,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/00a0e1b672456cc60dd37b5d676d51dbd34dbbe4"
+    },
+    {
+      "path": "src/dynarmic/ir/opt/constant_propagation_pass.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "83ed84998d2ad848d338da40fd47862d3ddfcc37",
+      "size": 18018,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/83ed84998d2ad848d338da40fd47862d3ddfcc37"
+    },
+    {
+      "path": "src/dynarmic/ir/opt/dead_code_elimination_pass.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0d0de180a8d407df8d4fd140af2bf5f274b9065f",
+      "size": 671,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/0d0de180a8d407df8d4fd140af2bf5f274b9065f"
+    },
+    {
+      "path": "src/dynarmic/ir/opt/identity_removal_pass.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e87fcc335bd104b72064501a0a60f16800e1149c",
+      "size": 1150,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/e87fcc335bd104b72064501a0a60f16800e1149c"
+    },
+    {
+      "path": "src/dynarmic/ir/opt/ir_matcher.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5eb1a551009af6e678d71269e5a69d7d3f4451e6",
+      "size": 3398,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/5eb1a551009af6e678d71269e5a69d7d3f4451e6"
+    },
+    {
+      "path": "src/dynarmic/ir/opt/naming_pass.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a766bdc83f131ddde286c9d51ad2824135f871e7",
+      "size": 400,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/a766bdc83f131ddde286c9d51ad2824135f871e7"
+    },
+    {
+      "path": "src/dynarmic/ir/opt/passes.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "703145b556fc0e3b2a3905d9fa50db4ae0bd8c91",
+      "size": 1289,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/703145b556fc0e3b2a3905d9fa50db4ae0bd8c91"
+    },
+    {
+      "path": "src/dynarmic/ir/opt/polyfill_pass.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "1aa3aea91e16595f49757d8edf3978da57dac46c",
+      "size": 8025,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/1aa3aea91e16595f49757d8edf3978da57dac46c"
+    },
+    {
+      "path": "src/dynarmic/ir/opt/verification_pass.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "8bc9e6f1f09e60db314cb1f6b2c48de42d4c22c1",
+      "size": 1330,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/8bc9e6f1f09e60db314cb1f6b2c48de42d4c22c1"
+    },
+    {
+      "path": "src/dynarmic/ir/terminal.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d437ffd5b6a71116f45595a33884fb2a426ce6c9",
+      "size": 3994,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/d437ffd5b6a71116f45595a33884fb2a426ce6c9"
+    },
+    {
+      "path": "src/dynarmic/ir/type.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "7c0f6bf622f6246eb4a3a9ddb2d56068725c36bb",
+      "size": 1017,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/7c0f6bf622f6246eb4a3a9ddb2d56068725c36bb"
+    },
+    {
+      "path": "src/dynarmic/ir/type.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "65fe76dd65addc6c958d910d5d33e46d1f77e0fb",
+      "size": 1398,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/65fe76dd65addc6c958d910d5d33e46d1f77e0fb"
+    },
+    {
+      "path": "src/dynarmic/ir/value.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "20f94cb5f9f3bb9fa458b0543f1a34d35086c9b4",
+      "size": 5603,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/20f94cb5f9f3bb9fa458b0543f1a34d35086c9b4"
+    },
+    {
+      "path": "src/dynarmic/ir/value.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "8f70110a8d52c15fc8d64f3eae28c1a2bdae181d",
+      "size": 5562,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/8f70110a8d52c15fc8d64f3eae28c1a2bdae181d"
+    },
+    {
+      "path": "tests",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "e0fa12ec9badd64be2eeb278409b63f705e21822",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/e0fa12ec9badd64be2eeb278409b63f705e21822"
+    },
+    {
+      "path": "tests/A32",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "dd48f573c7184455d2ab7d81e3d4bc19ed6a8042",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/dd48f573c7184455d2ab7d81e3d4bc19ed6a8042"
+    },
+    {
+      "path": "tests/A32/fuzz_arm.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "cda424e27d7823650579b64a9243e91fa82f10ae",
+      "size": 28092,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/cda424e27d7823650579b64a9243e91fa82f10ae"
+    },
+    {
+      "path": "tests/A32/fuzz_thumb.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f13c5ee018698be356d1c369cce44f8c80f770fb",
+      "size": 23214,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/f13c5ee018698be356d1c369cce44f8c80f770fb"
+    },
+    {
+      "path": "tests/A32/test_arm_disassembler.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5cefc0be461389a03ed4f21c27a4a0a45ca17ca4",
+      "size": 22402,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/5cefc0be461389a03ed4f21c27a4a0a45ca17ca4"
+    },
+    {
+      "path": "tests/A32/test_arm_instructions.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3232f1a8f194c9bb5135c1071019b1ad0e08a5a7",
+      "size": 20730,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/3232f1a8f194c9bb5135c1071019b1ad0e08a5a7"
+    },
+    {
+      "path": "tests/A32/test_coprocessor.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "24d54efe4f90ce8aaa988528d4e175bc285e4131",
+      "size": 7804,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/24d54efe4f90ce8aaa988528d4e175bc285e4131"
+    },
+    {
+      "path": "tests/A32/test_svc.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "bec02b76f68210a9e52f7f57e694668639fdf3a6",
+      "size": 866,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/bec02b76f68210a9e52f7f57e694668639fdf3a6"
+    },
+    {
+      "path": "tests/A32/test_thumb_instructions.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "dda0fc46b58d917745370faad45473410dc576f3",
+      "size": 8493,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/dda0fc46b58d917745370faad45473410dc576f3"
+    },
+    {
+      "path": "tests/A32/testenv.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "4345663b3478b1a3b1d1fe980ea326f99db4198c",
+      "size": 6909,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/4345663b3478b1a3b1d1fe980ea326f99db4198c"
+    },
+    {
+      "path": "tests/A32/vfp_vadd_f32.inc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d0032c2e65a981f5348a10f4e803d4573aeb5825",
+      "size": 784698,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/d0032c2e65a981f5348a10f4e803d4573aeb5825"
+    },
+    {
+      "path": "tests/A32/vfp_vsub_f32.inc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "792dd49e8c65c379565b1b034e63c26bd8d530bf",
+      "size": 785498,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/792dd49e8c65c379565b1b034e63c26bd8d530bf"
+    },
+    {
+      "path": "tests/A64",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "67eca0d188843b556470fd52f53215c42db618a0",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/67eca0d188843b556470fd52f53215c42db618a0"
+    },
+    {
+      "path": "tests/A64/a64.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "246e61e12238ae36b746e06fd3d67974052e6455",
+      "size": 94439,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/246e61e12238ae36b746e06fd3d67974052e6455"
+    },
+    {
+      "path": "tests/A64/fibonacci.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "29dcbdcd729911d778add045cd37dd9cb1931b3e",
+      "size": 3787,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/29dcbdcd729911d778add045cd37dd9cb1931b3e"
+    },
+    {
+      "path": "tests/A64/fp_min_max.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "7aa1ef4407084195724bb49f04bc04288d3d6839",
+      "size": 6382,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/7aa1ef4407084195724bb49f04bc04288d3d6839"
+    },
+    {
+      "path": "tests/A64/fuzz_with_unicorn.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "1a56a982ef50aef8e08026004666c21b3c3fe1e7",
+      "size": 19075,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/1a56a982ef50aef8e08026004666c21b3c3fe1e7"
+    },
+    {
+      "path": "tests/A64/misaligned_page_table.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f54aa586410cdc5ba1d346d6b1e5c96c441fd673",
+      "size": 857,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/f54aa586410cdc5ba1d346d6b1e5c96c441fd673"
+    },
+    {
+      "path": "tests/A64/test_invalidation.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "fa35b02b7f37f45a3a203008c9174c6af6b4a567",
+      "size": 2719,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/fa35b02b7f37f45a3a203008c9174c6af6b4a567"
+    },
+    {
+      "path": "tests/A64/testenv.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "73525242c3366618d42e86340a4e3b198bf97ae4",
+      "size": 7643,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/73525242c3366618d42e86340a4e3b198bf97ae4"
+    },
+    {
+      "path": "tests/A64/verify_unicorn.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5ffe4f15b0c703e97888f23ee8139d5e4070361c",
+      "size": 1861,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/5ffe4f15b0c703e97888f23ee8139d5e4070361c"
+    },
+    {
+      "path": "tests/CMakeLists.txt",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "fba74138c56620fc0421c22f6929f8d9cf64bf87",
+      "size": 4219,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/fba74138c56620fc0421c22f6929f8d9cf64bf87"
+    },
+    {
+      "path": "tests/decoder_tests.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2028ac98cdb3aa24944098bc00279591739281c4",
+      "size": 2808,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/2028ac98cdb3aa24944098bc00279591739281c4"
+    },
+    {
+      "path": "tests/fp",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "ff7b4431ffbaa0e1273a1a496742b46c3150127d",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/ff7b4431ffbaa0e1273a1a496742b46c3150127d"
+    },
+    {
+      "path": "tests/fp/FPToFixed.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "31a684a6870a90989980e8e949c483655240ff55",
+      "size": 2082,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/31a684a6870a90989980e8e949c483655240ff55"
+    },
+    {
+      "path": "tests/fp/FPValue.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b90f5f70f44bc392ae6916d28b4876434080ff3d",
+      "size": 544,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/b90f5f70f44bc392ae6916d28b4876434080ff3d"
+    },
+    {
+      "path": "tests/fp/mantissa_util_tests.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "cff942c73f6d07e10a1c2c9735ea7926a7ad4657",
+      "size": 2267,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/cff942c73f6d07e10a1c2c9735ea7926a7ad4657"
+    },
+    {
+      "path": "tests/fp/unpacked_tests.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "827b85ac9e681d1637b60de30628af90c02942df",
+      "size": 4094,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/827b85ac9e681d1637b60de30628af90c02942df"
+    },
+    {
+      "path": "tests/fuzz_util.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "12dc850b4217f576861441f475c4f32a5249d8e1",
+      "size": 1604,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/12dc850b4217f576861441f475c4f32a5249d8e1"
+    },
+    {
+      "path": "tests/fuzz_util.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "953030772528f09613b6876b5be4331405b5a76d",
+      "size": 642,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/953030772528f09613b6876b5be4331405b5a76d"
+    },
+    {
+      "path": "tests/print_info.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a8580b7b03584f09a5cdec8287deec228337bc09",
+      "size": 11728,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/a8580b7b03584f09a5cdec8287deec228337bc09"
+    },
+    {
+      "path": "tests/rand_int.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3997a4313067df1b812ec671be71975c11d5c19c",
+      "size": 734,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/3997a4313067df1b812ec671be71975c11d5c19c"
+    },
+    {
+      "path": "tests/rsqrt_test.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "7adbe39e123b25a891051ad4fb1815fe807c3ffe",
+      "size": 4185,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/7adbe39e123b25a891051ad4fb1815fe807c3ffe"
+    },
+    {
+      "path": "tests/rsqrt_test_fn.s",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "fa8dadee01d9c3fb44fbef183dc5ffb456412fd6",
+      "size": 5333,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/fa8dadee01d9c3fb44fbef183dc5ffb456412fd6"
+    },
+    {
+      "path": "tests/test_generator.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "cfdd8ea436a6d6a6c85fcc025d869328548e432b",
+      "size": 25364,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/cfdd8ea436a6d6a6c85fcc025d869328548e432b"
+    },
+    {
+      "path": "tests/test_reader.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "44d6e966ea2ed02236459e7bb83fee4ea2c7c108",
+      "size": 13561,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/44d6e966ea2ed02236459e7bb83fee4ea2c7c108"
+    },
+    {
+      "path": "tests/unicorn_emu",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "4d0c6acc7c1fec3ee07b5b78c10e8a5db53bc85a",
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/trees/4d0c6acc7c1fec3ee07b5b78c10e8a5db53bc85a"
+    },
+    {
+      "path": "tests/unicorn_emu/a32_unicorn.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "db704c97df5af400a4ccbf094f199dacf77d1f8c",
+      "size": 11480,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/db704c97df5af400a4ccbf094f199dacf77d1f8c"
+    },
+    {
+      "path": "tests/unicorn_emu/a32_unicorn.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d4fe3c41a43330b52ec91468f7b4b339d81e30e9",
+      "size": 2166,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/d4fe3c41a43330b52ec91468f7b4b339d81e30e9"
+    },
+    {
+      "path": "tests/unicorn_emu/a64_unicorn.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3c202c7c8e56164c93de61523f1b5a87fee88f19",
+      "size": 9128,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/3c202c7c8e56164c93de61523f1b5a87fee88f19"
+    },
+    {
+      "path": "tests/unicorn_emu/a64_unicorn.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "57759605f01313babf0dcada3afc69d474182a01",
+      "size": 2096,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/57759605f01313babf0dcada3afc69d474182a01"
+    },
+    {
+      "path": "tests/x64_cpu_info.cpp",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "9d28d4c366ac9c2f8c085f6f446c1abc641d8351",
+      "size": 2665,
+      "url": "https://api.github.com/repos/azahar-emu/dynarmic/git/blobs/9d28d4c366ac9c2f8c085f6f446c1abc641d8351"
+    }
+  ],
+  "truncated": false
+}

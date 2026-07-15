@@ -1,0 +1,21 @@
+{
+  "sha": "d33f14fa23106f89bad2050de65e458f9c43f8ce",
+  "url": "https://api.github.com/repos/azahar-emu/azahar/git/trees/d33f14fa23106f89bad2050de65e458f9c43f8ce",
+  "tree": [
+    {
+      "path": "CMakeLists.txt",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "87ea66eb6252b033ac006528e3079faa7655fc97",
+      "size": 3409,
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/blobs/87ea66eb6252b033ac006528e3079faa7655fc97"
+    },
+    {
+      "path": "faad2",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "216f00e8ddba6f2c64caf481a04f1ddd78b93e78"
+    }
+  ],
+  "truncated": false
+}

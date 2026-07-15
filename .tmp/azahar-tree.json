@@ -1,0 +1,142 @@
+{
+  "sha": "b42d0916ba9799297ae0e27c07d56801da1b5de5",
+  "url": "https://api.github.com/repos/azahar-emu/azahar/git/trees/b42d0916ba9799297ae0e27c07d56801da1b5de5",
+  "tree": [
+    {
+      "path": ".ci",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "0b387a86db2cc298a4cdcae6f25025efe6e2dc80",
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/trees/0b387a86db2cc298a4cdcae6f25025efe6e2dc80"
+    },
+    {
+      "path": ".gitattributes",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ab861a396506127829a90c00d887a866d5ebacd8",
+      "size": 126,
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/blobs/ab861a396506127829a90c00d887a866d5ebacd8"
+    },
+    {
+      "path": ".github",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "c1d25dce4c829acb01b6af44c554319abf9eb27d",
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/trees/c1d25dce4c829acb01b6af44c554319abf9eb27d"
+    },
+    {
+      "path": ".gitignore",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b234d6bc5403a5071ce45c7698e36d2f582964fd",
+      "size": 928,
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/blobs/b234d6bc5403a5071ce45c7698e36d2f582964fd"
+    },
+    {
+      "path": ".gitmodules",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "18c5cc79a85c7542e437d448c915b501412b4319",
+      "size": 3606,
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/blobs/18c5cc79a85c7542e437d448c915b501412b4319"
+    },
+    {
+      "path": "AI-POLICY.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a4b77b67c6d54cacfc181b5dc6b52a4523a28f32",
+      "size": 1716,
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/blobs/a4b77b67c6d54cacfc181b5dc6b52a4523a28f32"
+    },
+    {
+      "path": "CMakeLists.txt",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3d58cc70d23c42a656870983a414485fb492cdbb",
+      "size": 22337,
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/blobs/3d58cc70d23c42a656870983a414485fb492cdbb"
+    },
+    {
+      "path": "CMakeModules",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "e6e59da6c88f97f80bbfc0cf19ebeb68df97dfac",
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/trees/e6e59da6c88f97f80bbfc0cf19ebeb68df97dfac"
+    },
+    {
+      "path": "CONTRIBUTING.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3e98984c4cd2ef035d342eaf71953a319db21f3e",
+      "size": 106,
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/blobs/3e98984c4cd2ef035d342eaf71953a319db21f3e"
+    },
+    {
+      "path": "Doxyfile",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6ddf2cf2198780c65d9713051798a4006cc68a4f",
+      "size": 103293,
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/blobs/6ddf2cf2198780c65d9713051798a4006cc68a4f"
+    },
+    {
+      "path": "README.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b26ebc2cd788e6be77de296b144ce060cf09d662",
+      "size": 6790,
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/blobs/b26ebc2cd788e6be77de296b144ce060cf09d662"
+    },
+    {
+      "path": "dist",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "3025aae333c95f71a6918f5f4999ffebade3f71a",
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/trees/3025aae333c95f71a6918f5f4999ffebade3f71a"
+    },
+    {
+      "path": "docker",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "9f0b3a9295ae27232b568759f7992bcff3e11d87",
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/trees/9f0b3a9295ae27232b568759f7992bcff3e11d87"
+    },
+    {
+      "path": "externals",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "f792f347bacfc7be998e7c258002b6a596cebde2",
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/trees/f792f347bacfc7be998e7c258002b6a596cebde2"
+    },
+    {
+      "path": "hooks",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "420d5cba89e347ab493fdae19ab79e25d1c27190",
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/trees/420d5cba89e347ab493fdae19ab79e25d1c27190"
+    },
+    {
+      "path": "license.txt",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "7b0e5ad1bddc73ac44aca523174d22ee0d0dcc56",
+      "size": 19281,
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/blobs/7b0e5ad1bddc73ac44aca523174d22ee0d0dcc56"
+    },
+    {
+      "path": "src",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "b509cb61738582fbf73f3a0127f77e2c077051f3",
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/trees/b509cb61738582fbf73f3a0127f77e2c077051f3"
+    },
+    {
+      "path": "tools",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "0986a7c095e283f21500eccefd7f2f863214a288",
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/trees/0986a7c095e283f21500eccefd7f2f863214a288"
+    }
+  ],
+  "truncated": false
+}

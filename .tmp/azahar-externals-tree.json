@@ -1,0 +1,288 @@
+{
+  "sha": "f792f347bacfc7be998e7c258002b6a596cebde2",
+  "url": "https://api.github.com/repos/azahar-emu/azahar/git/trees/f792f347bacfc7be998e7c258002b6a596cebde2",
+  "tree": [
+    {
+      "path": "CMakeLists.txt",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2ff9e4c624d949eef19d9bc48f7825ddc6803009",
+      "size": 18495,
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/blobs/2ff9e4c624d949eef19d9bc48f7825ddc6803009"
+    },
+    {
+      "path": "boost",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "6a85c3100499e886e11c87a5c2109eedacea0a61"
+    },
+    {
+      "path": "catch2",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "914aeecfe23b1e16af6ea675a4fb5dbd5a5b8d0a"
+    },
+    {
+      "path": "cmake-modules",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "088131a6d3a0b201fc85b0f54a064c4196951695",
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/trees/088131a6d3a0b201fc85b0f54a064c4196951695"
+    },
+    {
+      "path": "cpp-jwt",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "4a970bc302d671476122cbc6b43cc89fbf4a96ec"
+    },
+    {
+      "path": "cryptopp",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "60f81a77e0c9a0e7ffc1ca1bc438ddfa2e43b78e"
+    },
+    {
+      "path": "cryptopp-cmake",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "00a151f8489daaa32434ab1f340e6750793ddf0c"
+    },
+    {
+      "path": "cubeb",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "832fcf38e600bf80b4b728a3e0227403088d992c"
+    },
+    {
+      "path": "dds-ktx",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "c3ca8febc2457ab5c581604f3236a8a511fc2e45"
+    },
+    {
+      "path": "discord-rpc",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "049826c3f42875c2f9599552f425e76435789cc7"
+    },
+    {
+      "path": "dynarmic",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "e77b1ba0b7da7cbe93021b01a663acfe7c4dd516"
+    },
+    {
+      "path": "enet",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "2662c0de09e36f2a2030ccc2c528a3e4c9e8138a"
+    },
+    {
+      "path": "faad2",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "d33f14fa23106f89bad2050de65e458f9c43f8ce",
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/trees/d33f14fa23106f89bad2050de65e458f9c43f8ce"
+    },
+    {
+      "path": "fmt",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "e424e3f2e607da02742f73db84873b8084fc714c"
+    },
+    {
+      "path": "gamemode",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "b2b838b77691b63b987f8336c41e0555ce01d730",
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/trees/b2b838b77691b63b987f8336c41e0555ce01d730"
+    },
+    {
+      "path": "getopt",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "3746be8dbdeceb477fa96fc1931f7fc97f844a78",
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/trees/3746be8dbdeceb477fa96fc1931f7fc97f844a78"
+    },
+    {
+      "path": "glad",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "1a292d3a08dfdde8560b5446259dc1fe4b749089",
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/trees/1a292d3a08dfdde8560b5446259dc1fe4b749089"
+    },
+    {
+      "path": "glslang",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "fc9889c889561c5882e83819dcaffef5ed45529b"
+    },
+    {
+      "path": "httplib",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "f45128fc8247190c9b99e13c43be2bb81352dc94",
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/trees/f45128fc8247190c9b99e13c43be2bb81352dc94"
+    },
+    {
+      "path": "inih",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "38a609497097f4258778ac8946f0d9640dd5c7e3",
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/trees/38a609497097f4258778ac8946f0d9640dd5c7e3"
+    },
+    {
+      "path": "json",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "7977fc0a0a0aef875f68caf2f36549116dbeabef",
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/trees/7977fc0a0a0aef875f68caf2f36549116dbeabef"
+    },
+    {
+      "path": "libadrenotools",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "8fae8ce254dfc1344527e05301e43f37dea2df80"
+    },
+    {
+      "path": "library-headers",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "3b3e28dbe6d033395ce2967fa8030825e7b89de7"
+    },
+    {
+      "path": "libressl",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "88b8e41b71099fabc57813bc06d8bc1aba050a19"
+    },
+    {
+      "path": "libretro-common",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "fe0a0f45f4c9fa0221d3e8d389caf52e2e1342d0",
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/trees/fe0a0f45f4c9fa0221d3e8d389caf52e2e1342d0"
+    },
+    {
+      "path": "libusb",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "08525dc3217f0af9c54b561d85a943d87690661d",
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/trees/08525dc3217f0af9c54b561d85a943d87690661d"
+    },
+    {
+      "path": "libyuv",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "6f729fbe658a40dfd993fa8b22bd612bb17cde5c"
+    },
+    {
+      "path": "lodepng",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "97ec26486b9fc87a00f64690f5126dc93d6d359c",
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/trees/97ec26486b9fc87a00f64690f5126dc93d6d359c"
+    },
+    {
+      "path": "microprofile",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "b56e18782a85f118876e121298324e07b88d7f82",
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/trees/b56e18782a85f118876e121298324e07b88d7f82"
+    },
+    {
+      "path": "nihstro",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "f4d8659decbfe5d234f04134b5002b82dc515a44"
+    },
+    {
+      "path": "oaknut",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "6b1d57ea7ed4882d32a91eeaa6557b0ecb4da152"
+    },
+    {
+      "path": "open_source_archives",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "f79d3524fcc98dae9c45046fa4df994df6796216",
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/trees/f79d3524fcc98dae9c45046fa4df994df6796216"
+    },
+    {
+      "path": "openal-soft",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "90191edd20bb877c5cbddfdac7ec0fe49ad93727"
+    },
+    {
+      "path": "sdl2",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "356d67a716a14f5e99345d0d8d1eaeaf1a64898e",
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/trees/356d67a716a14f5e99345d0d8d1eaeaf1a64898e"
+    },
+    {
+      "path": "sirit",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "4b5eee724df1a47a4b1d1348199877e87839273f",
+      "url": "https://api.github.com/repos/azahar-emu/azahar/git/trees/4b5eee724df1a47a4b1d1348199877e87839273f"
+    },
+    {
+      "path": "soundtouch",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "9ef8458d8561d9471dd20e9619e3be4cfe564796"
+    },
+    {
+      "path": "spirv-headers",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "aa6cef192b8e693916eb713e7a9ccadf06062ceb"
+    },
+    {
+      "path": "spirv-tools",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "a62abcb402009b9ca5975e6167c09f237f630e0e"
+    },
+    {
+      "path": "teakra",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "3d697a18df504f4677b65129d9ab14c7c597e3eb"
+    },
+    {
+      "path": "vma",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "c788c52156f3ef7bc7ab769cb03c110a53ac8fcb"
+    },
+    {
+      "path": "vulkan-headers",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "409c16be502e39fe70dd6fe2d9ad4842ef2c9a53"
+    },
+    {
+      "path": "xbyak",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "0d67fd1530016b7c56f3cd74b3fca920f4c3e2b4"
+    },
+    {
+      "path": "xxHash",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "e626a72bc2321cd320e953a0ccf1584cad60f363"
+    },
+    {
+      "path": "zstd",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "f8745da6ff1ad1e7bab384bd1f9d742439278e99"
+    }
+  ],
+  "truncated": false
+}

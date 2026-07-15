@@ -50,11 +50,13 @@ jobs:
 
           NRO_FILE="build_switch/GBAStation.nro"
           NDS_STUB_NRO_FILE="build_switch/GBAStationNDSStub.nro"
+          THREEDS_STUB_NRO_FILE="build_switch/GBAStation3DSStub.nro"
 
           mkdir -p switch
           mkdir -p GBAStation/core
           cp "$NRO_FILE" switch/GBAStation.nro
           cp "$NDS_STUB_NRO_FILE" GBAStation/core/GBAStationNDSStub.nro
+          cp "$THREEDS_STUB_NRO_FILE" GBAStation/core/GBAStation3DSStub.nro
           cmake -E tar cf "$ZIP_FILE" --format=zip switch GBAStation
           rm -rf switch GBAStation
 
@@ -87,6 +89,8 @@ jobs:
 
           NDS_STUB_NRO_FILE="build_switch/GBAStationNDSStub.nro"
           NDS_STUB_ZIP_FILE="GBAStationNDSStub.zip"
+          THREEDS_STUB_NRO_FILE="build_switch/GBAStation3DSStub.nro"
+          THREEDS_STUB_ZIP_FILE="GBAStation3DSStub.zip"
 
           mkdir -p nds_stub_package
           cp "$NDS_STUB_NRO_FILE" nds_stub_package/GBAStationNDSStub.nro
@@ -96,8 +100,15 @@ jobs:
           mkdir -p "release_repo/emu_res/core"
           cp "$NDS_STUB_ZIP_FILE" "release_repo/emu_res/core/GBAStationNDSStub.zip"
 
+          mkdir -p 3ds_stub_package
+          cp "$THREEDS_STUB_NRO_FILE" 3ds_stub_package/GBAStation3DSStub.nro
+          cmake -E chdir 3ds_stub_package cmake -E tar cf "../$THREEDS_STUB_ZIP_FILE" --format=zip GBAStation3DSStub.nro
+          rm -rf 3ds_stub_package
+          cp "$THREEDS_STUB_ZIP_FILE" "release_repo/emu_res/core/GBAStation3DSStub.zip"
+
           echo "===== NDS STUB ZIP FILE ====="
           ls -lh "release_repo/emu_res/core/GBAStationNDSStub.zip"
+          ls -lh "release_repo/emu_res/core/GBAStation3DSStub.zip"
 
       - name: 更新 README 更新说明
         run: |

@@ -295,12 +295,15 @@ elseif (PLATFORM_SWITCH)
         COMMAND ${NX_NACPTOOL_EXE} --create "${PROJECT_NAME}" "${PROJECT_AUTHOR}" "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_ALTER}" ${PROJECT_NAME}.nacp --titleid=${PROJECT_TITLEID}
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_RESOURCES} ${CMAKE_BINARY_DIR}/resources
         COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_BINARY_DIR}/GBAStationNDSStub.nro ${CMAKE_BINARY_DIR}/resources/core/GBAStationNDSStub.nro
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_BINARY_DIR}/GBAStation3DSStub.nro ${CMAKE_BINARY_DIR}/resources/core/GBAStation3DSStub.nro
         COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/resources/font
         COMMAND ${NX_ELF2NRO_EXE} ${PROJECT_NAME}.elf ${PROJECT_NAME}.nro --icon=${PROJECT_ICON} --nacp=${PROJECT_NAME}.nacp --romfsdir=${CMAKE_BINARY_DIR}/resources
     )
 
     add_subdirectory(nds_stub)
+    add_subdirectory(3ds_stub)
     add_dependencies(${PROJECT_NAME}.nro GBAStationNDSStub.nro)
+    add_dependencies(${PROJECT_NAME}.nro GBAStation3DSStub.nro)
 
 endif ()
 
@@ -324,7 +327,7 @@ endif()
 # Snes9x        – SNES / SFC          (libretro, snes9x_retro_*)
 # Nestopia      – NES / Famicom       (libretro, nestopia_retro_*)
 # Snes9x 2005   – SNES / SFC          (libretro, snes9x2005_retro_*)
-# NDS runs in GBAStationNDSStub.nro, launched as a separate Switch NRO.
+# NDS and 3DS run in separate Switch NROs.
 #
 # mGBA 不再构建/加载 mgba_libretro，也不复制 mgba 动态库。
 # ============================================================

@@ -192,12 +192,16 @@ echo "[3/4] 打包 NRO..."
 
 cmake --build . --target GBAStation.nro
 cmake --build . --target GBAStationNDSStub.nro
+cmake --build . --target GBAStation3DSStub.nro
 
 cd ..
 
 mkdir -p "${BUILD_DIR}/GBAStation/core"
 if [ -f "${BUILD_DIR}/GBAStationNDSStub.nro" ]; then
     cp "${BUILD_DIR}/GBAStationNDSStub.nro" "${BUILD_DIR}/GBAStation/core/GBAStationNDSStub.nro"
+fi
+if [ -f "${BUILD_DIR}/GBAStation3DSStub.nro" ]; then
+    cp "${BUILD_DIR}/GBAStation3DSStub.nro" "${BUILD_DIR}/GBAStation/core/GBAStation3DSStub.nro"
 fi
 
 # ────────────────────────────────────────────────────────────
@@ -243,10 +247,30 @@ else
 
 fi
 
+if [ -f "${BUILD_DIR}/GBAStation3DSStub.nro" ]; then
+
+    if [ "$PLATFORM" = "mac" ]; then
+        SIZE=$(stat -f%z "${BUILD_DIR}/GBAStation3DSStub.nro")
+    else
+        SIZE=$(stat -c%s "${BUILD_DIR}/GBAStation3DSStub.nro")
+    fi
+
+    SIZE_MB=$(awk "BEGIN {printf \"%.2f\", ${SIZE}/1024/1024}")
+
+    echo "GBAStation3DSStub.nro : ${SIZE_MB} MB"
+
+else
+
+    echo "GBAStation3DSStub.nro does not exist"
+
+fi
+
 echo "=================================================="
 
 echo ""
 echo "[完成]"
 echo "${BUILD_DIR}/GBAStation.nro"
 echo "${BUILD_DIR}/GBAStationNDSStub.nro"
+echo "${BUILD_DIR}/GBAStation3DSStub.nro"
 echo "${BUILD_DIR}/GBAStation/core/GBAStationNDSStub.nro"
+echo "${BUILD_DIR}/GBAStation/core/GBAStation3DSStub.nro"
