@@ -1,0 +1,123 @@
+// Copyright Citra Emulator Project / Azahar Emulator Project
+// Licensed under GPLv2 or any later version
+// Refer to the license.txt file included.
+
+#pragma once
+
+#include <array>
+#include <span>
+#include <vector>
+#include "common/bit_field.h"
+#include "common/common_funcs.h"
+#include "common/common_types.h"
+#include "common/swap.h"
+
+namespace Loader {
+
+/**
+ * Tests if data is a valid SMDH by its length and magic number.
+ * @param smdh_data data buffer to test
+ * @return bool test result
+ */
+bool IsValidSMDH(std::span<const u8> smdh_data);
+
+/// SMDH data structure that contains titles, icons etc. See https://www.3dbrew.org/wiki/SMDH
+struct SMDH {
+    u32_le magic;
+    u16_le version;
+    INSERT_PADDING_BYTES(2);
+
+    struct Title {
+        std::array<char16_t, 0x40> short_title;
+        std::array<char16_t, 0x80> long_title;
+        std::array<char16_t, 0x40> publisher;
+    };
+    std::array<Title, 16> titles;
+
+    std::array<u8, 16> ratings;
+    u32_le region_lockout;
+    u32_le match_maker_id;
+    u64_le match_maker_bit_id;
+    union {
+        u32_le raw;
+
+        BitField<0, 1, u32> visible;
+        BitField<1, 1, u32> autoboot;
+        BitField<2, 1, u32> allow_3D;
+        BitField<3, 1, u32> require_eula;
+        BitField<4, 1, u32> autosave;
+        BitField<5, 1, u32> extended_banner;
+        BitField<6, 1, u32> rating_required;
+        BitField<7, 1, u32> uses_savedata;
+        BitField<8, 1, u32> record_usage;
+        BitField<10, 1, u32> disable_save_backup;
+        BitField<12, 1, u32> n3ds_exclusive;
+        BitField<14, 1, u32> parental_restricted;
+    } flags;
+
+    u16_le eula_version;
+    INSERT_PADDING_BYTES(2);
+    float_le banner_animation_frame;
+    u32_le cec_id;
+    INSERT_PADDING_BYTES(8);
+
+    std::array<u8, 0x480> small_icon;
+    std::array<u8, 0x1200> large_icon;
+
+    /// indicates the language used for each title entry
+    enum class TitleLanguage {
+        Japanese = 0,
+        English = 1,
+        French = 2,
+        German = 3,
+        Italian = 4,
+        Spanish = 5,
+        SimplifiedChinese = 6,
+        Korean = 7,
+        Dutch = 8,
+        Portuguese = 9,
+        Russian = 10,
+        TraditionalChinese = 11
+    };
+
+    enum class GameRegion {
+        Japan = 0,
+        NorthAmerica = 1,
+        Europe = 2,
+        Australia = 3,
+        China = 4,
+        Korea = 5,
+        Taiwan = 6,
+    };
+
+    /**
+     * Checks if SMDH is valid.
+     */
+    bool IsValid() const;
+
+    /**
+     * Gets game icon from SMDH
+     * @param large If true, returns large icon (48x48), otherwise returns small icon (24x24)
+     * @return vector of RGB565 data
+     */
+    std::vector<u16> GetIcon(bool large) const;
+
+    /**
+     * Gets the short game title from SMDH
+     * @param language title language
+     * @return UTF-16 array of the short title
+     */
+    std::array<char16_t, 0x40> GetShortTitle(Loader::SMDH::TitleLanguage language) const;
+
+    /**
+     * Gets the long game title from SMDH
+     * @param language title language
+     * @return UTF-16 array of the long title
+     */
+    std::array<char16_t, 0x80> GetLongTitle(Loader::SMDH::TitleLanguage language) const;
+
+    std::vector<GameRegion> GetRegions() const;
+};
+static_assert(sizeof(SMDH) == 0x36C0, "SMDH structure size is wrong");
+
+} // namespace Loader

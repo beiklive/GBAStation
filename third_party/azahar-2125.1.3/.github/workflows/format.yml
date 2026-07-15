@@ -1,0 +1,22 @@
+name: citra-format
+
+on:
+  push:
+    branches: [ "*" ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  clang-format:
+    runs-on: ubuntu-latest
+    container:
+      image: opensauce04/azahar-build-environment:latest
+      options: -u 1001
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build
+        env:
+          COMMIT_RANGE: ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}
+        run: ./.ci/clang-format.sh

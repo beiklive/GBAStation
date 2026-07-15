@@ -1,0 +1,34 @@
+QPushButton#GraphicsAPIStatusBarButton {
+    color: #656565;
+    border: 1px solid transparent;
+    background-color: transparent;
+    padding: 0px 3px 0px 3px;
+    text-align: center;
+    min-width: 60px;
+    min-height: 20px;
+}
+
+QPushButton#GraphicsAPIStatusBarButton:hover {
+    border: 1px solid #76797C;
+}
+
+QPushButton#TogglableStatusBarButton {
+    color: #959595;
+    border: 1px solid transparent;
+    background-color: transparent;
+    padding: 0px 3px 0px 3px;
+    text-align: center;
+}
+
+QPushButton#TogglableStatusBarButton:checked {
+    color: #00FF00;
+}
+
+QPushButton#TogglableStatusBarButton:hover {
+    border: 1px solid #76797C;
+}
+
+QPushButton#button_reset_defaults {
+    min-width: 57px;
+    padding: 4px 8px;
+}

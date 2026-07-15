@@ -1,0 +1,253 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ConfigureAudio</class>
+ <widget class="QWidget" name="ConfigureAudio">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>696</width>
+    <height>527</height>
+   </rect>
+  </property>
+  <layout class="QVBoxLayout">
+   <item>
+    <widget class="QGroupBox" name="groupBox">
+     <property name="title">
+      <string>Output</string>
+     </property>
+     <layout class="QVBoxLayout">
+      <item>
+      <widget class="QWidget" name="widget_emulation" native="true">
+        <layout class="QHBoxLayout" name="horizontalLayout_emulation">
+            <property name="leftMargin">
+            <number>0</number>
+            </property>
+            <property name="topMargin">
+            <number>0</number>
+            </property>
+            <property name="rightMargin">
+            <number>0</number>
+            </property>
+            <property name="bottomMargin">
+            <number>0</number>
+            </property>
+            <item>
+            <widget class="QLabel" name="label_emulation">
+            <property name="text">
+            <string>Emulation</string>
+            </property>
+            </widget>
+            </item>
+            <item>
+            <widget class="QComboBox" name="emulation_combo_box">
+            <item>
+            <property name="text">
+                <string>HLE (fast)</string>
+            </property>
+            </item>
+            <item>
+            <property name="text">
+                <string>LLE (accurate)</string>
+            </property>
+            </item>
+            <item>
+            <property name="text">
+                <string>LLE multi-core</string>
+            </property>
+            </item>
+            </widget>
+            </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <layout class="QGridLayout" name="output_layout" columnstretch="1,1">
+        <item row="0" column="0">
+         <widget class="QLabel" name="output_type_label">
+          <property name="text">
+           <string>Output Type</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="QComboBox" name="output_type_combo_box"/>
+        </item>
+        <item row="1" column="0">
+         <widget class="QLabel" name="output_device_label">
+          <property name="text">
+           <string>Output Device</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="QComboBox" name="output_device_combo_box"/>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="toggle_audio_stretching">
+        <property name="toolTip">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;This post-processing effect adjusts audio speed to match emulation speed and helps prevent audio stutter. This however increases audio latency.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+        <property name="text">
+         <string>Enable audio stretching</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="toggle_realtime_audio">
+        <property name="toolTip">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Scales audio playback speed to account for drops in emulation framerate. This means that audio will play at full speed even while the application framerate is low. May cause audio desync issues.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+        <property name="text">
+         <string>Enable realtime audio</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QWidget" name="volume_layout" native="true">
+        <layout class="QHBoxLayout" name="horizontalLayout_2">
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QComboBox" name="volume_combo_box">
+           <item>
+            <property name="text">
+             <string>Use global volume</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>Set volume:</string>
+            </property>
+           </item>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="volume_label">
+           <property name="text">
+            <string>Volume:</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="horizontalSpacer">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>30</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+         <item>
+          <widget class="QSlider" name="volume_slider">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="maximum">
+            <number>100</number>
+           </property>
+           <property name="pageStep">
+            <number>5</number>
+           </property>
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="volume_indicator">
+           <property name="minimumSize">
+            <size>
+             <width>32</width>
+             <height>0</height>
+            </size>
+           </property>
+           <property name="text">
+            <string>0 %</string>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignCenter</set>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="input_layout">
+     <property name="title">
+      <string>Microphone</string>
+     </property>
+     <layout class="QGridLayout" name="input_inner_layout" columnstretch="1,1">
+      <item row="0" column="0">
+       <widget class="QLabel" name="input_type_label">
+        <property name="text">
+         <string>Input Type</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QComboBox" name="input_type_combo_box"/>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="input_device_label">
+        <property name="text">
+         <string>Input Device</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QComboBox" name="input_device_combo_box"/>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <spacer>
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>167</width>
+       <height>55</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <tabstops>
+  <tabstop>emulation_combo_box</tabstop>
+  <tabstop>toggle_audio_stretching</tabstop>
+  <tabstop>volume_slider</tabstop>
+  <tabstop>output_type_combo_box</tabstop>
+  <tabstop>output_device_combo_box</tabstop>
+  <tabstop>input_type_combo_box</tabstop>
+  <tabstop>input_device_combo_box</tabstop>
+ </tabstops>
+ <resources/>
+ <connections/>
+</ui>

@@ -1,0 +1,67 @@
+// Copyright Citra Emulator Project / Azahar Emulator Project
+// Licensed under GPLv2 or any later version
+// Refer to the license.txt file included.
+
+package org.citra.citra_emu.utils
+
+import android.content.Context
+import android.content.Intent
+import android.content.SharedPreferences
+import android.net.Uri
+import android.os.Build
+import android.provider.DocumentsContract
+import androidx.activity.result.ActivityResultLauncher
+import androidx.preference.PreferenceManager
+import androidx.documentfile.provider.DocumentFile
+import org.citra.citra_emu.CitraApplication
+
+object PermissionsHandler {
+    const val CITRA_DIRECTORY = "CITRA_DIRECTORY"
+    val preferences: SharedPreferences =
+        PreferenceManager.getDefaultSharedPreferences(CitraApplication.appContext)
+
+    fun hasWriteAccess(context: Context): Boolean {
+        try {
+            if (citraDirectory.toString().isEmpty()) {
+                return false
+            }
+
+            val uri = citraDirectory
+            val takeFlags =
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            context.contentResolver.takePersistableUriPermission(uri, takeFlags)
+            val root = DocumentFile.fromTreeUri(context, uri)
+            if (root != null && root.exists()) {
+                return true
+            }
+
+            context.contentResolver.releasePersistableUriPermission(uri, takeFlags)
+        } catch (e: Exception) {
+            // Do not use native library logging, as the native library may not be loaded yet
+            android.util.Log.e("PermissionsHandler", "Cannot check citra data directory permission, error: ${e.message}")
+        }
+        return false
+    }
+
+    val citraDirectory: Uri
+        get() {
+            val directoryString = preferences.getString(CITRA_DIRECTORY, "")
+            return Uri.parse(directoryString)
+        }
+
+    fun setCitraDirectory(uriString: String?) =
+        preferences.edit().putString(CITRA_DIRECTORY, uriString).apply()
+
+    fun compatibleSelectDirectory(activityLauncher: ActivityResultLauncher<Uri?>) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            activityLauncher.launch(null)
+        } else {
+            val initialUri = DocumentsContract.buildRootUri(
+                "com.android.externalstorage.documents",
+                "primary"
+            )
+            activityLauncher.launch(initialUri)
+        }
+
+    }
+}

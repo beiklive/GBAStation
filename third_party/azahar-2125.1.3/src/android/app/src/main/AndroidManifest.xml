@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-feature
+        android:name="android.hardware.touchscreen"
+        android:required="false"/>
+    <uses-feature
+        android:name="android.hardware.gamepad"
+        android:required="false"/>
+    <uses-feature
+        android:name="android.hardware.microphone"
+        android:required="false"/>
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false"/>
+    <uses-feature
+        android:name="android.hardware.camera.any"
+        android:required="false"/>
+    <uses-feature
+        android:name="android.hardware.camera.autofocus"
+        android:required="false"/>
+    <uses-feature
+        android:name="android.software.leanback"
+        android:required="false"/>
+
+    <uses-feature android:glEsVersion="0x00030002" android:required="true" />
+    <uses-feature android:name="android.hardware.opengles.aep" android:required="true" />
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+
+    <application
+        android:name="org.citra.citra_emu.CitraApplication"
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:appCategory="game"
+        android:allowBackup="false"
+        android:supportsRtl="true"
+        android:banner="@mipmap/ic_launcher"
+        android:requestLegacyExternalStorage="true">
+
+        <meta-data android:name="android.game_mode_config"
+            android:resource="@xml/game_mode_config" />
+
+        <activity
+            android:name="org.citra.citra_emu.ui.main.MainActivity"
+            android:theme="@style/Theme.Citra.Splash.Main"
+            android:exported="true">
+
+            <!-- This intentfilter marks this Activity as the one that gets launched from Home screen. -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name="org.citra.citra_emu.features.settings.ui.SettingsActivity"
+            android:configChanges="orientation|screenSize|uiMode"
+            android:theme="@style/Theme.Citra.Main"
+            android:label="@string/preferences_settings"/>
+
+        <activity
+            android:name="org.citra.citra_emu.activities.EmulationActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Citra.Main"
+            android:launchMode="singleTop">
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data
+                    android:mimeType="application/octet-stream"
+                    android:scheme="content" />
+            </intent-filter>
+
+        </activity>
+
+        <activity
+            android:name="org.citra.citra_emu.features.cheats.ui.CheatsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Citra.Main"
+            android:label="@string/cheats"/>
+    </application>
+
+</manifest>
