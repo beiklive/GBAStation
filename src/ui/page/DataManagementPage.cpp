@@ -2,6 +2,8 @@
 
 #include "ui/page/FileListPage.hpp"
 #include "ui/utils/UiHelper.hpp"
+#include "ui/utils/GradientFocus.hpp"
+#include "ui/utils/MaterialIcons.hpp"
 #include "ui/widget/DetailCell.hpp"
 #include "core/Tools.hpp"
 #include "network/WebService.h"
@@ -15,11 +17,14 @@
 #include <borealis/views/rectangle.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <sstream>
 #include <unordered_set>
 
@@ -263,23 +268,749 @@ int findUnexpectedLplPlatform(const json& items, int expectedPlatform)
 namespace beiklive
 {
 
+static std::string encodeDataIcon(char32_t codepoint)
+{
+    std::string result;
+    if (codepoint <= 0x7F)
+    {
+        result.push_back(static_cast<char>(codepoint));
+    }
+    else if (codepoint <= 0x7FF)
+    {
+        result.push_back(static_cast<char>(0xC0 | (codepoint >> 6)));
+        result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+    }
+    else if (codepoint <= 0xFFFF)
+    {
+        result.push_back(static_cast<char>(0xE0 | (codepoint >> 12)));
+        result.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+        result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+    }
+    else
+    {
+        result.push_back(static_cast<char>(0xF0 | (codepoint >> 18)));
+        result.push_back(static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F)));
+        result.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+        result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+    }
+    return result;
+}
+
+static float dataClamp(float value)
+{
+    return std::max(0.f, std::min(1.f, value));
+}
+
+static float dataSmooth(float value)
+{
+    value = dataClamp(value);
+    return value * value * (3.f - 2.f * value);
+}
+
+static float dataBack(float value)
+{
+    value = dataClamp(value);
+    constexpr float c1 = 1.16f;
+    constexpr float c3 = c1 + 1.f;
+    const float shifted = value - 1.f;
+    return 1.f + c3 * shifted * shifted * shifted + c1 * shifted * shifted;
+}
+
+static unsigned char dataAlpha(float value)
+{
+    return static_cast<unsigned char>(255.f * dataClamp(value));
+}
+
+class DataManagementCanvas final : public brls::View
+{
+public:
+    struct Item
+    {
+        std::string title;
+        std::string description;
+        std::string badge;
+        char32_t icon = material::STORAGE;
+        std::function<void()> action;
+        bool* toggle = nullptr;
+        bool danger = false;
+    };
+
+    struct Tab
+    {
+        std::string title;
+        std::string summary;
+        std::string detail;
+        char32_t icon = material::STORAGE;
+        std::vector<Item> items;
+    };
+
+    DataManagementCanvas(std::vector<Tab> tabs, std::function<void()> onBack)
+        : m_tabs(std::move(tabs))
+        , m_onBack(std::move(onBack))
+    {
+        setFocusable(true);
+        setGrow(1.f);
+        setWidthPercentage(100.f);
+        HIDE_BRLS_HIGHLIGHT(this);
+        setCustomNavigationRoute(brls::FocusDirection::UP, this);
+        setCustomNavigationRoute(brls::FocusDirection::DOWN, this);
+        setCustomNavigationRoute(brls::FocusDirection::LEFT, this);
+        setCustomNavigationRoute(brls::FocusDirection::RIGHT, this);
+
+        auto previousTab = [this](brls::View*) -> bool {
+            if (_acceptNavigation(1))
+                _switchTab(-1);
+            return true;
+        };
+        auto nextTab = [this](brls::View*) -> bool {
+            if (_acceptNavigation(2))
+                _switchTab(1);
+            return true;
+        };
+        auto moveUp = [this](brls::View*) -> bool {
+            if (_acceptNavigation(3))
+                _moveFocus(-1);
+            return true;
+        };
+        auto moveDown = [this](brls::View*) -> bool {
+            if (_acceptNavigation(4))
+                _moveFocus(1);
+            return true;
+        };
+        registerAction("", brls::BUTTON_LEFT, previousTab, true, true, brls::SOUND_NONE);
+        registerAction("", brls::BUTTON_RIGHT, nextTab, true, true, brls::SOUND_NONE);
+        registerAction("", brls::BUTTON_NAV_LEFT, previousTab, true, true, brls::SOUND_NONE);
+        registerAction("", brls::BUTTON_NAV_RIGHT, nextTab, true, true, brls::SOUND_NONE);
+        registerAction("上一页", brls::BUTTON_LB, previousTab, true, false, brls::SOUND_NONE);
+        registerAction("下一页", brls::BUTTON_RB, nextTab, true, false, brls::SOUND_NONE);
+        registerAction("", brls::BUTTON_UP, moveUp, true, true, brls::SOUND_NONE);
+        registerAction("", brls::BUTTON_DOWN, moveDown, true, true, brls::SOUND_NONE);
+        registerAction("", brls::BUTTON_NAV_UP, moveUp, true, true, brls::SOUND_NONE);
+        registerAction("", brls::BUTTON_NAV_DOWN, moveDown, true, true, brls::SOUND_NONE);
+        registerAction("选择", brls::BUTTON_A, [this](brls::View*) -> bool {
+            _activateFocused();
+            return true;
+        }, false, false, brls::SOUND_NONE);
+        registerAction("返回", brls::BUTTON_B, [this](brls::View*) -> bool {
+            _beginClose();
+            return true;
+        }, false, false, brls::SOUND_NONE);
+
+        m_focusIndices.assign(m_tabs.size(), 0);
+        m_savedScroll.assign(m_tabs.size(), 0.f);
+        m_lastFrameTime = std::chrono::steady_clock::now();
+    }
+
+    void frame(brls::FrameContext* ctx) override
+    {
+        brls::View::frame(ctx);
+        const auto now = std::chrono::steady_clock::now();
+        float dt = std::chrono::duration<float>(now - m_lastFrameTime).count();
+        m_lastFrameTime = now;
+        if (dt <= 0.f || dt > 0.25f)
+            dt = 0.016f;
+        m_time += dt;
+
+        if (m_closing)
+        {
+            m_pageEntrance = std::max(0.f, m_pageEntrance - dt * 3.8f);
+            if (m_pageEntrance <= 0.f && !m_closeQueued)
+            {
+                m_closeQueued = true;
+                const auto callback = m_onBack;
+                brls::sync([callback]() {
+                    if (callback)
+                        callback();
+                });
+            }
+        }
+        else
+        {
+            m_pageEntrance = std::min(1.f, m_pageEntrance + dt * 2.8f);
+            m_tabEntrance = std::min(1.f, m_tabEntrance + dt * 4.8f);
+        }
+
+        if (m_clicking)
+        {
+            m_clickTime += dt;
+            if (m_clickTime >= 0.2f)
+            {
+                m_clicking = false;
+                m_clickTime = 0.f;
+                _runFocusedAction();
+            }
+        }
+
+        m_scroll += (m_targetScroll - m_scroll) * std::min(1.f, dt * 13.f);
+        invalidate();
+    }
+
+    void draw(NVGcontext* vg, float x, float y, float w, float h,
+              brls::Style style, brls::FrameContext* ctx) override
+    {
+        (void)style;
+        (void)ctx;
+        _ensureFonts();
+        const float pageProgress = dataBack(m_pageEntrance);
+        const float pageAlpha = dataSmooth(m_pageEntrance);
+        _drawHeader(vg, x, y - (1.f - pageProgress) * 56.f, w, pageAlpha);
+
+        const float contentY = y + 112.f;
+        const float contentH = std::max(1.f, h - 178.f);
+        const float leftW = std::min(350.f, w * 0.29f);
+        const Rect overview{x + 36.f, contentY, leftW, contentH};
+        const Rect list{x + 36.f + leftW + 22.f, contentY,
+                        w - leftW - 94.f, contentH};
+        const float tabProgress = dataBack(m_tabEntrance);
+        const float tabAlpha = dataSmooth(m_tabEntrance);
+        const float centerX = x + w * 0.5f;
+        const float centerY = contentY + contentH * 0.5f;
+        const float scale = 0.968f + pageProgress * 0.032f;
+
+        nvgSave(vg);
+        nvgGlobalAlpha(vg, pageAlpha * tabAlpha);
+        nvgTranslate(vg, centerX + static_cast<float>(m_tabDirection)
+                         * (1.f - tabProgress) * 68.f,
+                     centerY + (1.f - pageProgress) * 22.f);
+        nvgScale(vg, scale, scale);
+        nvgTranslate(vg, -centerX, -centerY);
+        _drawOverview(vg, overview);
+        _drawItems(vg, list);
+        nvgRestore(vg);
+
+        _drawFooter(vg, x, y, w, h, pageAlpha);
+    }
+
+private:
+    struct Rect
+    {
+        float x = 0.f;
+        float y = 0.f;
+        float w = 0.f;
+        float h = 0.f;
+    };
+
+    std::vector<Tab> m_tabs;
+    std::function<void()> m_onBack;
+    std::vector<int> m_focusIndices;
+    std::vector<float> m_savedScroll;
+    int m_tab = 0;
+    int m_tabDirection = 1;
+    int m_defaultFont = -1;
+    int m_materialFont = -1;
+    int m_switchFont = -1;
+    float m_time = 0.f;
+    float m_pageEntrance = 0.f;
+    float m_tabEntrance = 1.f;
+    float m_scroll = 0.f;
+    float m_targetScroll = 0.f;
+    float m_contentHeight = 0.f;
+    float m_viewportHeight = 0.f;
+    float m_itemHeight = 72.f;
+    float m_clickTime = 0.f;
+    bool m_clicking = false;
+    bool m_closing = false;
+    bool m_closeQueued = false;
+    std::chrono::steady_clock::time_point m_lastFrameTime;
+    std::chrono::steady_clock::time_point m_lastNavigationTime;
+    int m_lastNavigationAction = 0;
+
+    void _ensureFonts()
+    {
+        if (m_defaultFont < 0)
+            m_defaultFont = brls::Application::getDefaultFont();
+        if (m_materialFont < 0)
+            m_materialFont = brls::Application::getFont(brls::FONT_MATERIAL_ICONS);
+        if (m_switchFont < 0)
+            m_switchFont = brls::Application::getFont(brls::FONT_SWITCH_ICONS);
+    }
+
+    bool _acceptNavigation(int action)
+    {
+        const auto now = std::chrono::steady_clock::now();
+        const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            now - m_lastNavigationTime).count();
+        if (action == m_lastNavigationAction && elapsed >= 0 && elapsed < 85)
+            return false;
+        m_lastNavigationAction = action;
+        m_lastNavigationTime = now;
+        return true;
+    }
+
+    const Tab& _currentTab() const
+    {
+        return m_tabs[static_cast<size_t>(m_tab)];
+    }
+
+    int _focusIndex() const
+    {
+        if (m_tab < 0 || m_tab >= static_cast<int>(m_focusIndices.size()))
+            return 0;
+        return m_focusIndices[static_cast<size_t>(m_tab)];
+    }
+
+    void _drawExternalShadow(NVGcontext* vg, const Rect& r, float radius,
+                             float alpha = 1.f)
+    {
+        const NVGpaint shadow = nvgBoxGradient(
+            vg, r.x + 5.f, r.y + 6.f, r.w, r.h, radius, 5.f,
+            nvgRGBA(0, 0, 0, dataAlpha(0.31f * alpha)),
+            nvgRGBA(0, 0, 0, 0));
+        nvgBeginPath(vg);
+        nvgRect(vg, r.x - 3.f, r.y - 3.f, r.w + 16.f, r.h + 17.f);
+        nvgRoundedRect(vg, r.x, r.y, r.w, r.h, radius);
+        nvgPathWinding(vg, NVG_HOLE);
+        nvgFillPaint(vg, shadow);
+        nvgFill(vg);
+    }
+
+    void _drawPanel(NVGcontext* vg, const Rect& r, float radius = 8.f)
+    {
+        _drawExternalShadow(vg, r, radius, 0.82f);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, r.x, r.y, r.w, r.h, radius);
+        nvgFillColor(vg, nvgRGBA(255, 255, 255, 7));
+        nvgFill(vg);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, r.x + 1.f, r.y + 1.f,
+                       r.w - 2.f, r.h - 2.f, radius - 1.f);
+        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 42));
+        nvgStrokeWidth(vg, 1.5f);
+        nvgStroke(vg);
+    }
+
+    void _drawSwitchButton(NVGcontext* vg, brls::ControllerButton button,
+                           float x, float y)
+    {
+        const std::string glyph = brls::Hint::getKeyIcon(button);
+        nvgFontFaceId(vg, m_switchFont);
+        nvgFontSize(vg, 25.f);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(255, 255, 255, 240));
+        nvgText(vg, x, y, glyph.c_str(), nullptr);
+    }
+
+    void _drawHeader(NVGcontext* vg, float x, float y, float w, float alpha)
+    {
+        nvgSave(vg);
+        nvgGlobalAlpha(vg, alpha);
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFontSize(vg, 27.f);
+        nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
+        nvgText(vg, x + 36.f, y + 43.f, "数据管理", nullptr);
+        nvgFontSize(vg, 15.f);
+        nvgFillColor(vg, nvgRGBA(210, 216, 226, 180));
+        nvgText(vg, x + 36.f, y + 72.f, "导入、维护与远程管理游戏库", nullptr);
+
+        const float centerX = x + w * 0.5f;
+        const float centerY = y + 45.f;
+        constexpr float spacing = 152.f;
+        constexpr float selectorW = 132.f;
+        constexpr float selectorH = 42.f;
+        constexpr float selectorRadius = 21.f;
+        const float eased = 1.f - std::pow(1.f - m_tabEntrance, 3.f);
+        const float shift = static_cast<float>(m_tabDirection)
+            * spacing * (1.f - eased);
+        const int count = static_cast<int>(m_tabs.size());
+
+        _drawSwitchButton(vg, brls::BUTTON_LB, centerX - 290.f, centerY);
+        _drawSwitchButton(vg, brls::BUTTON_RB, centerX + 290.f, centerY);
+        for (int relative = count == 1 ? 0 : -2;
+             relative <= (count == 1 ? 0 : 2); ++relative)
+        {
+            int index = (m_tab + relative) % count;
+            if (index < 0)
+                index += count;
+            const float labelX = centerX + relative * spacing + shift;
+            const float distance = std::abs(labelX - centerX) / spacing;
+            if (distance > 1.55f)
+                continue;
+            const float prominence = std::max(0.f, 1.f - distance);
+            const float labelAlpha = 0.42f + prominence * 0.58f;
+            if (prominence > 0.55f)
+            {
+                const Rect selector{labelX - selectorW * 0.5f,
+                                    centerY - selectorH * 0.5f,
+                                    selectorW, selectorH};
+                _drawExternalShadow(vg, selector, selectorRadius,
+                                    0.62f * prominence);
+                nvgBeginPath(vg);
+                nvgRoundedRect(vg, selector.x, selector.y,
+                               selector.w, selector.h, selectorRadius);
+                nvgFillColor(vg, nvgRGBA(255, 255, 255,
+                    static_cast<unsigned char>(22.f + 22.f * prominence)));
+                nvgFill(vg);
+                nvgBeginPath(vg);
+                nvgRoundedRect(vg, selector.x + 1.f, selector.y + 1.f,
+                               selector.w - 2.f, selector.h - 2.f,
+                               selectorRadius - 1.f);
+                nvgStrokeColor(vg, nvgRGBA(255, 255, 255,
+                    static_cast<unsigned char>(70.f + 65.f * prominence)));
+                nvgStrokeWidth(vg, 1.f);
+                nvgStroke(vg);
+            }
+            nvgFontFaceId(vg, m_defaultFont);
+            nvgFontSize(vg, 17.f + 5.f * prominence);
+            nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+            nvgFillColor(vg, nvgRGBA(255, 255, 255,
+                static_cast<unsigned char>(255.f * labelAlpha)));
+            nvgText(vg, labelX, centerY,
+                    m_tabs[static_cast<size_t>(index)].title.c_str(), nullptr);
+        }
+
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, x + 36.f, y + 94.f);
+        nvgLineTo(vg, x + w - 36.f, y + 94.f);
+        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 46));
+        nvgStrokeWidth(vg, 1.f);
+        nvgStroke(vg);
+        nvgRestore(vg);
+    }
+
+    void _drawBadge(NVGcontext* vg, float x, float y,
+                    const std::string& text, NVGcolor color)
+    {
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgFontSize(vg, 14.f);
+        float bounds[4]{};
+        nvgTextBounds(vg, 0.f, 0.f, text.c_str(), nullptr, bounds);
+        const float width = bounds[2] - bounds[0] + 22.f;
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, x, y, width, 28.f, 6.f);
+        nvgFillColor(vg, nvgRGBAf(color.r, color.g, color.b, 0.11f));
+        nvgFill(vg);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, x + 1.f, y + 1.f, width - 2.f, 26.f, 5.f);
+        nvgStrokeColor(vg, nvgRGBAf(color.r, color.g, color.b, 0.5f));
+        nvgStrokeWidth(vg, 1.f);
+        nvgStroke(vg);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(240, 244, 249, 230));
+        nvgText(vg, x + width * 0.5f, y + 14.f, text.c_str(), nullptr);
+    }
+
+    void _drawOverview(NVGcontext* vg, const Rect& r)
+    {
+        _drawPanel(vg, r);
+        const Tab& tab = _currentTab();
+        const std::string icon = encodeDataIcon(tab.icon);
+        nvgFontFaceId(vg, m_materialFont);
+        nvgFontSize(vg, 62.f);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(79, 193, 255, 235));
+        nvgText(vg, r.x + r.w * 0.5f, r.y + 82.f, icon.c_str(), nullptr);
+
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgFontSize(vg, 27.f);
+        nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
+        nvgText(vg, r.x + r.w * 0.5f, r.y + 145.f,
+                tab.title.c_str(), nullptr);
+        nvgFontSize(vg, 17.f);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
+        nvgTextLineHeight(vg, 1.42f);
+        nvgFillColor(vg, nvgRGBA(215, 221, 231, 200));
+        nvgTextBox(vg, r.x + 30.f, r.y + 190.f, r.w - 60.f,
+                   tab.summary.c_str(), nullptr);
+
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, r.x + 28.f, r.y + 280.f);
+        nvgLineTo(vg, r.x + r.w - 28.f, r.y + 280.f);
+        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 35));
+        nvgStrokeWidth(vg, 1.f);
+        nvgStroke(vg);
+
+        nvgFontSize(vg, 15.f);
+        nvgFillColor(vg, nvgRGBA(200, 208, 220, 185));
+        nvgTextBox(vg, r.x + 30.f, r.y + 310.f, r.w - 60.f,
+                   tab.detail.c_str(), nullptr);
+
+        float badgeX = r.x + 30.f;
+        const float badgeY = r.y + r.h - 58.f;
+        if (m_tab == 0)
+        {
+            _drawBadge(vg, badgeX, badgeY, "LPL", nvgRGB(79, 193, 255));
+            badgeX += 62.f;
+            _drawBadge(vg, badgeX, badgeY, "6 平台", nvgRGB(100, 220, 150));
+        }
+        else if (m_tab == 1)
+        {
+            int enabled = 0;
+            for (const auto& item : tab.items)
+                if (item.toggle && *item.toggle)
+                    ++enabled;
+            _drawBadge(vg, badgeX, badgeY,
+                       std::to_string(enabled) + " 项已开启",
+                       nvgRGB(100, 220, 150));
+        }
+        else
+        {
+            _drawBadge(vg, badgeX, badgeY, "谨慎操作", nvgRGB(255, 190, 80));
+        }
+    }
+
+    void _drawItems(NVGcontext* vg, const Rect& r)
+    {
+        const auto& items = _currentTab().items;
+        const float gap = 10.f;
+        m_itemHeight = items.size() <= 3 ? 116.f : (items.size() <= 6 ? 74.f : 62.f);
+        m_viewportHeight = r.h;
+        m_contentHeight = items.empty() ? 0.f
+            : items.size() * m_itemHeight + (items.size() - 1) * gap;
+        const float maximum = std::max(0.f, m_contentHeight - r.h);
+        m_targetScroll = std::clamp(m_targetScroll, 0.f, maximum);
+        m_scroll = std::clamp(m_scroll, 0.f, maximum);
+
+        nvgSave(vg);
+        nvgIntersectScissor(vg, r.x - 8.f, r.y - 8.f, r.w + 20.f, r.h + 16.f);
+        for (size_t index = 0; index < items.size(); ++index)
+        {
+            const float itemY = r.y + index * (m_itemHeight + gap) - m_scroll;
+            if (itemY + m_itemHeight < r.y || itemY > r.y + r.h)
+                continue;
+            const bool focused = static_cast<int>(index) == _focusIndex();
+            float clickScale = 1.f;
+            if (focused && m_clicking)
+                clickScale = 1.f - 0.035f * std::sin(
+                    3.14159265f * dataClamp(m_clickTime / 0.2f));
+            Rect itemRect{r.x, itemY, r.w, m_itemHeight};
+            itemRect.w *= clickScale;
+            itemRect.h *= clickScale;
+            itemRect.x += (r.w - itemRect.w) * 0.5f;
+            itemRect.y += (m_itemHeight - itemRect.h) * 0.5f;
+            _drawItem(vg, itemRect, items[index], focused);
+        }
+        nvgRestore(vg);
+
+        if (maximum > 1.f)
+        {
+            const float trackH = r.h - 18.f;
+            const float thumbH = std::max(40.f, trackH * r.h / m_contentHeight);
+            const float thumbY = r.y + 9.f
+                + (trackH - thumbH) * m_scroll / maximum;
+            nvgBeginPath(vg);
+            nvgRoundedRect(vg, r.x + r.w + 8.f, thumbY, 3.f, thumbH, 1.5f);
+            nvgFillColor(vg, nvgRGBA(255, 255, 255, 95));
+            nvgFill(vg);
+        }
+    }
+
+    void _drawItem(NVGcontext* vg, const Rect& r, const Item& item, bool focused)
+    {
+        _drawExternalShadow(vg, r, 8.f, 0.78f);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, r.x, r.y, r.w, r.h, 8.f);
+        nvgFillColor(vg, item.danger
+            ? (focused ? nvgRGBA(255, 96, 96, 34) : nvgRGBA(255, 96, 96, 9))
+            : (focused ? nvgRGBA(79, 193, 255, 34) : nvgRGBA(255, 255, 255, 7)));
+        nvgFill(vg);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, r.x + 1.f, r.y + 1.f,
+                       r.w - 2.f, r.h - 2.f, 7.f);
+        nvgStrokeColor(vg, focused
+            ? nvgRGBA(255, 255, 255, 145) : nvgRGBA(255, 255, 255, 42));
+        nvgStrokeWidth(vg, 1.5f);
+        nvgStroke(vg);
+        if (focused && isFocused())
+        {
+            beiklive::ui::drawGradientFocusBorder(
+                vg, r.x, r.y, r.w, r.h, 8.f, 3.f, 1.f,
+                beiklive::ui::gradientFocusAnimationOffset(m_time));
+        }
+
+        const std::string icon = encodeDataIcon(item.icon);
+        nvgFontFaceId(vg, m_materialFont);
+        nvgFontSize(vg, m_itemHeight > 80.f ? 42.f : 34.f);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, item.danger
+            ? nvgRGBA(255, 135, 135, 235)
+            : (focused ? nvgRGBA(255, 255, 255, 255)
+                       : nvgRGBA(220, 226, 235, 220)));
+        nvgText(vg, r.x + 54.f, r.y + r.h * 0.5f, icon.c_str(), nullptr);
+
+        const float textX = r.x + 96.f;
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgFontSize(vg, m_itemHeight > 80.f ? 22.f : 19.f);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, focused
+            ? nvgRGBA(255, 255, 255, 255) : GET_THEME_COLOR("brls/text"));
+        const float titleY = m_itemHeight > 80.f ? r.y + r.h * 0.39f
+                                                 : r.y + r.h * 0.43f;
+        nvgText(vg, textX, titleY, item.title.c_str(), nullptr);
+        if (m_itemHeight > 68.f)
+        {
+            nvgFontSize(vg, 14.f);
+            nvgFillColor(vg, nvgRGBA(205, 212, 223, focused ? 215 : 165));
+            nvgText(vg, textX, r.y + r.h * 0.68f,
+                    item.description.c_str(), nullptr);
+        }
+
+        if (item.toggle)
+        {
+            const bool enabled = *item.toggle;
+            const float switchW = 52.f;
+            const float switchH = 28.f;
+            const float switchX = r.x + r.w - switchW - 26.f;
+            const float switchY = r.y + (r.h - switchH) * 0.5f;
+            nvgBeginPath(vg);
+            nvgRoundedRect(vg, switchX, switchY, switchW, switchH, 14.f);
+            nvgFillColor(vg, enabled
+                ? nvgRGBA(79, 193, 255, 150) : nvgRGBA(255, 255, 255, 28));
+            nvgFill(vg);
+            nvgBeginPath(vg);
+            nvgCircle(vg, enabled ? switchX + switchW - 14.f : switchX + 14.f,
+                      switchY + 14.f, 10.f);
+            nvgFillColor(vg, enabled
+                ? nvgRGBA(255, 255, 255, 250) : nvgRGBA(190, 197, 208, 220));
+            nvgFill(vg);
+        }
+        else
+        {
+            if (!item.badge.empty())
+            {
+                nvgFontFaceId(vg, m_defaultFont);
+                nvgFontSize(vg, 14.f);
+                nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
+                nvgFillColor(vg, nvgRGBA(205, 212, 223, 180));
+                nvgText(vg, r.x + r.w - 48.f, r.y + r.h * 0.5f,
+                        item.badge.c_str(), nullptr);
+            }
+            const std::string arrow = encodeDataIcon(material::PLAY_ARROW);
+            nvgFontFaceId(vg, m_materialFont);
+            nvgFontSize(vg, 24.f);
+            nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+            nvgFillColor(vg, nvgRGBA(225, 230, 238, 190));
+            nvgText(vg, r.x + r.w - 24.f, r.y + r.h * 0.5f,
+                    arrow.c_str(), nullptr);
+        }
+    }
+
+    void _drawHint(NVGcontext* vg, brls::ControllerButton button,
+                   const char* label, float& cursor, float y, float alpha)
+    {
+        const std::string glyph = brls::Hint::getKeyIcon(button);
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgFontSize(vg, 18.f);
+        float bounds[4]{};
+        nvgTextBounds(vg, 0.f, 0.f, label, nullptr, bounds);
+        cursor -= bounds[2] - bounds[0] + 43.f;
+        nvgFontFaceId(vg, m_switchFont);
+        nvgFontSize(vg, 25.f);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(255, 255, 255, dataAlpha(alpha)));
+        nvgText(vg, cursor + 13.f, y, glyph.c_str(), nullptr);
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgFontSize(vg, 18.f);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(230, 234, 241, dataAlpha(alpha)));
+        nvgText(vg, cursor + 30.f, y, label, nullptr);
+        cursor -= 16.f;
+    }
+
+    void _drawFooter(NVGcontext* vg, float x, float y, float w, float h,
+                     float alpha)
+    {
+        const float hintY = y + h - 27.f
+            + (1.f - dataBack(m_pageEntrance)) * 46.f;
+        float cursor = x + w - 32.f;
+        _drawHint(vg, brls::BUTTON_B, "返回", cursor, hintY, alpha);
+        _drawHint(vg, brls::BUTTON_A,
+                  _currentTab().items[static_cast<size_t>(_focusIndex())].toggle
+                      ? "切换" : "选择",
+                  cursor, hintY, alpha);
+        _drawHint(vg, brls::BUTTON_RB, "下一页", cursor, hintY, alpha);
+        _drawHint(vg, brls::BUTTON_LB, "上一页", cursor, hintY, alpha);
+    }
+
+    void _switchTab(int direction)
+    {
+        if (m_closing || m_clicking || m_pageEntrance < 0.72f
+            || m_tabEntrance < 0.72f || m_tabs.size() <= 1)
+            return;
+        m_savedScroll[static_cast<size_t>(m_tab)] = m_targetScroll;
+        const int count = static_cast<int>(m_tabs.size());
+        m_tab = (m_tab + (direction < 0 ? -1 : 1) + count) % count;
+        m_tabDirection = direction < 0 ? -1 : 1;
+        m_tabEntrance = 0.f;
+        m_scroll = m_savedScroll[static_cast<size_t>(m_tab)];
+        m_targetScroll = m_scroll;
+        brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_CHANGE);
+    }
+
+    void _moveFocus(int direction)
+    {
+        if (m_closing || m_clicking || m_pageEntrance < 0.72f
+            || m_tabEntrance < 0.72f)
+            return;
+        const int count = static_cast<int>(_currentTab().items.size());
+        if (count <= 0)
+            return;
+        const int next = std::clamp(_focusIndex() + direction, 0, count - 1);
+        if (next == _focusIndex())
+            return;
+        m_focusIndices[static_cast<size_t>(m_tab)] = next;
+        _ensureFocusedVisible();
+        brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_SIDEBAR);
+    }
+
+    void _ensureFocusedVisible()
+    {
+        const float gap = 10.f;
+        const float top = _focusIndex() * (m_itemHeight + gap);
+        constexpr float margin = 12.f;
+        if (top < m_targetScroll + margin)
+            m_targetScroll = top - margin;
+        else if (top + m_itemHeight > m_targetScroll + m_viewportHeight - margin)
+            m_targetScroll = top + m_itemHeight - m_viewportHeight + margin;
+        const float maximum = std::max(0.f, m_contentHeight - m_viewportHeight);
+        m_targetScroll = std::clamp(m_targetScroll, 0.f, maximum);
+    }
+
+    void _activateFocused()
+    {
+        if (m_closing || m_clicking || m_pageEntrance < 0.85f
+            || m_tabEntrance < 0.85f || _currentTab().items.empty())
+            return;
+        m_clicking = true;
+        m_clickTime = 0.f;
+        brls::Application::getAudioPlayer()->play(brls::SOUND_CLICK);
+    }
+
+    void _runFocusedAction()
+    {
+        Item& item = m_tabs[static_cast<size_t>(m_tab)]
+            .items[static_cast<size_t>(_focusIndex())];
+        if (item.toggle)
+        {
+            *item.toggle = !*item.toggle;
+            invalidate();
+        }
+        else if (item.action)
+        {
+            item.action();
+        }
+    }
+
+    void _beginClose()
+    {
+        if (m_closing || m_clicking)
+            return;
+        m_closing = true;
+        brls::Application::getAudioPlayer()->play(brls::SOUND_BACK);
+    }
+};
+
 DataManagementPage::DataManagementPage()
 {
-    this->showHeader(true);
-    this->showFooter(true);
-    this->getHeader()->setTitle("数据管理");
+    this->showHeader(false);
+    this->showFooter(false);
     this->setFocusable(false);
-
-    this->registerAction("返回", brls::BUTTON_B, [this](brls::View*) { 
-        beiklive::popActivity(this);
-        return true;
-    });
-
-
-    m_tabframe = new beiklive::TabFrame();
-    this->getContentBox()->addView(m_tabframe);
-    setupProgressOverlay();
     init();
+    setupProgressOverlay();
+    brls::sync([this]() {
+        if (m_mainCanvas)
+            brls::Application::giveFocus(m_mainCanvas);
+    });
 }
 
 DataManagementPage::~DataManagementPage()
@@ -397,31 +1128,121 @@ void DataManagementPage::draw(
 
 void DataManagementPage::init()
 {
-    m_tabframe->addTab(
-        "整合包导入",
-        BK_RES("img/ui/setting/emu.png"),
+    using Canvas = DataManagementCanvas;
+    std::vector<Canvas::Tab> tabs;
+
+    Canvas::Tab bundle;
+    bundle.title = "整合包导入";
+    bundle.summary = "从 RetroArch 播放列表导入游戏，并沿用列表中的游戏名称与现有缩略图。";
+    bundle.detail = "请选择与播放列表内容一致的平台。导入前会检查 ROM 类型，选择错误时不会写入游戏库。";
+    bundle.icon = material::DESCRIPTION;
+    struct BundlePlatform
+    {
+        const char* title;
+        const char* badge;
+        int platform;
+    };
+    const BundlePlatform bundlePlatforms[] = {
+        {"导入 GBA 播放列表", "GBA · .lpl", static_cast<int>(enums::EmuPlatform::EmuGBA)},
+        {"导入 GBC 播放列表", "GBC · .lpl", static_cast<int>(enums::EmuPlatform::EmuGBC)},
+        {"导入 GB 播放列表", "GB · .lpl", static_cast<int>(enums::EmuPlatform::EmuGB)},
+        {"导入 FC 播放列表", "FC · .lpl", static_cast<int>(enums::EmuPlatform::EmuNES)},
+        {"导入 SFC 播放列表", "SFC · .lpl", static_cast<int>(enums::EmuPlatform::EmuSNES)},
+        {"导入 NDS 播放列表", "NDS · .lpl", static_cast<int>(enums::EmuPlatform::EmuNDS)},
+    };
+    for (const auto& platform : bundlePlatforms)
+    {
+        bundle.items.push_back({
+            platform.title,
+            "选择 RetroArch playlists 目录中的对应文件",
+            platform.badge,
+            material::DESCRIPTION,
+            [this, value = platform.platform]() {
+                if (!m_importing.load(std::memory_order_acquire))
+                    onSelectLpl(value);
+            },
+            nullptr,
+            false,
+        });
+    }
+    tabs.push_back(std::move(bundle));
+
+    Canvas::Tab scan;
+    scan.title = "扫描导入";
+    scan.summary = "扫描指定目录中的 ROM 文件，根据扩展名识别平台并批量加入游戏库。";
+    scan.detail = "先设置扫描范围和平台开关，再选择目录。关闭全部平台时不会找到可导入的游戏。";
+    scan.icon = material::SEARCH;
+    scan.items.push_back({
+        "选择 ROM 目录并开始扫描",
+        "打开目录浏览器，确认后在后台完成扫描和导入",
+        "选择目录",
+        material::SEARCH,
+        [this]() {
+            if (!m_importing.load(std::memory_order_acquire))
+                selectRomDir();
+        },
         nullptr,
+        false,
+    });
+    scan.items.push_back({"扫描子目录", "同时扫描所选目录下的所有子目录", "",
+                          material::STORAGE, {}, &m_autoSubDir, false});
+    scan.items.push_back({"读取映射名称", "存在名称映射时使用中文或规范化标题", "",
+                          material::EDIT, {}, &m_useNameMapping, false});
+    scan.items.push_back({"扫描 GBA 游戏", "识别 .gba 文件", "",
+                          material::MEMORY, {}, &m_scanGBA, false});
+    scan.items.push_back({"扫描 GBC 游戏", "识别 .gbc 文件", "",
+                          material::MEMORY, {}, &m_scanGBC, false});
+    scan.items.push_back({"扫描 GB 游戏", "识别 .gb 文件", "",
+                          material::MEMORY, {}, &m_scanGB, false});
+    scan.items.push_back({"扫描 FC 游戏", "识别 .nes 与 .fds 文件", "",
+                          material::MEMORY, {}, &m_scanNES, false});
+    scan.items.push_back({"扫描 SFC 游戏", "识别 .sfc 与 .smc 文件", "",
+                          material::MEMORY, {}, &m_scanSNES, false});
+    scan.items.push_back({"扫描 NDS 游戏", "识别 .nds 文件", "",
+                          material::MEMORY, {}, &m_scanNDS, false});
+    tabs.push_back(std::move(scan));
+
+    Canvas::Tab process;
+    process.title = "数据处理";
+    process.summary = "维护游戏库记录，或启动局域网 Web 服务进行远程管理。";
+    process.detail = "清理无效记录不会删除 ROM。清空游戏库会删除数据库内容，但不会删除游戏文件和存档。";
+    process.icon = material::STORAGE;
+    process.items.push_back({
+        "启动 Web 管理服务",
+        "在同一局域网中上传 ROM、导入存档和修改封面",
+        "局域网",
+        material::WIFI,
+        [this]() { startWebService(); },
         nullptr,
+        false,
+    });
+    process.items.push_back({
+        "移除无效游戏记录",
+        "检查 ROM 是否存在，只移除文件已经丢失的数据库记录",
+        "不会删除 ROM",
+        material::DELETE_SWEEP_ICON,
+        [this]() { removeInvalidGames(); },
         nullptr,
-        buildBundleImportTab(),
-        m_bundleDefaultFocus);
-    m_tabframe->addTab(
-        "扫描导入",
-        BK_RES("img/ui/setting/game.png"),
+        false,
+    });
+    process.items.push_back({
+        "清空游戏库",
+        "清除游戏库数据库，保留 ROM 文件和游戏存档",
+        "危险操作",
+        material::DELETE_ICON,
+        [this]() { clearGameLibrary(); },
         nullptr,
-        nullptr,
-        nullptr,
-        buildScanImportTab(),
-        m_scanDefaultFocus);
-    m_tabframe->addTab(
-        "数据处理",
-        BK_RES("img/ui/setting/debug.png"),
-        nullptr,
-        nullptr,
-        nullptr,
-        buildDataProcessingTab(),
-        m_processDefaultFocus);
-    m_tabframe->addFinish();
+        true,
+    });
+    tabs.push_back(std::move(process));
+
+    m_mainCanvas = new DataManagementCanvas(std::move(tabs), [this]() {
+        beiklive::popActivity(this);
+    });
+    m_bundleDefaultFocus = m_mainCanvas;
+    m_scanDefaultFocus = m_mainCanvas;
+    m_processDefaultFocus = m_mainCanvas;
+    this->getContentBox()->addView(m_mainCanvas);
 }
 
 void DataManagementPage::setupProgressOverlay()

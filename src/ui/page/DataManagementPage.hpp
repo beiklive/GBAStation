@@ -2,7 +2,6 @@
 
 #include "core/common.h"
 #include "ui/widget/Box.hpp"
-#include "ui/widget/TabFrame.hpp"
 
 #include <atomic>
 #include <mutex>
@@ -15,8 +14,8 @@ namespace beiklive
     /**
      * DataManagementPage – 数据管理页面
      *
-     * 布局：使用 TabFrame 展示子页面。
-     * 当前提供“扫描导入”“整合包导入”“数据处理”三个标签页。
+     * 布局：使用统一绘制画布展示“整合包导入”“扫描导入”
+     * 和“数据处理”三个标签页。
      */
     class DataManagementPage : public beiklive::Box
     {
@@ -34,7 +33,7 @@ namespace beiklive
             Cleanup,
         };
 
-        beiklive::TabFrame* m_tabframe = nullptr;
+        brls::View* m_mainCanvas = nullptr;
         brls::View* m_scanDefaultFocus = nullptr;
         brls::View* m_bundleDefaultFocus = nullptr;
         brls::View* m_processDefaultFocus = nullptr;
