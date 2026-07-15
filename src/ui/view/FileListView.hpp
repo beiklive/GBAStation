@@ -21,6 +21,7 @@ public:
     bool focusItemByFilename(const std::string& filename);
 
     void setInteractionDisabled(bool disabled) { m_interactionDisabled = disabled; if (!disabled) _captureInputState(); }
+    void setLoading(bool loading) { m_loading = loading; invalidate(); }
     int getFocusedIndex() const { return m_focusedIndex; }
 
     void saveFocusState(const std::string& path);
@@ -49,13 +50,15 @@ private:
     float m_targetScrollY = 0.f;
     float m_viewHeight = 0.f;
     float m_lastLayoutHeight = 0.f;
-    float m_itemHeight = 72.f;
-    float m_iconSize = 48.f;
+    float m_itemHeight = 70.f;
+    float m_iconSize = 44.f;
     float m_animTime = 0.f;
+    float m_contentEntrance = 0.f;
     float m_shakeTime = 0.f;
     int m_shakeDir = 0;
 
     bool m_interactionDisabled = false;
+    bool m_loading = false;
 
     // Input state
     bool m_prevUp = false;
@@ -103,7 +106,8 @@ private:
 
     void loadVisibleIcons(NVGcontext* vg, int first, int last);
     int getCachedIcon(const std::string& path) const;
-    void drawItem(NVGcontext* vg, int index, float itemY, float w, NVGcolor textColor);
+    void drawItem(NVGcontext* vg, int index, float itemX, float itemY,
+                  float w, NVGcolor textColor);
     void drawScrollbar(NVGcontext* vg, float x, float y, float w, float h);
 };
 

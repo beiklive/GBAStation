@@ -33,7 +33,11 @@ void FileListView::setItems(const std::vector<beiklive::ListItem>& items) {
         m_focusedIndex = std::max(0, (int)m_items.size() - 1);
     m_scrollY = 0.f;
     m_targetScrollY = 0.f;
+    m_contentEntrance = 0.f;
     ensureFocusedVisible();
+    if (m_focusedIndex >= 0 && m_focusedIndex < static_cast<int>(m_items.size())
+        && onItemFocused)
+        onItemFocused(m_items[static_cast<size_t>(m_focusedIndex)]);
 }
 
 void FileListView::clearItems() {
@@ -43,6 +47,7 @@ void FileListView::clearItems() {
     m_focusedIndex = -1;
     m_scrollY = 0.f;
     m_targetScrollY = 0.f;
+    m_contentEntrance = 0.f;
 }
 
 bool FileListView::focusItemByFilename(const std::string& filename) {
@@ -103,7 +108,11 @@ void FileListView::applyFilter(const std::string& keyword) {
     m_focusedIndex = m_items.empty() ? -1 : 0;
     m_scrollY = 0.f;
     m_targetScrollY = 0.f;
+    m_contentEntrance = 0.f;
     ensureFocusedVisible();
+    if (m_focusedIndex >= 0 && m_focusedIndex < static_cast<int>(m_items.size())
+        && onItemFocused)
+        onItemFocused(m_items[static_cast<size_t>(m_focusedIndex)]);
     this->invalidate();
 }
 
@@ -114,6 +123,10 @@ void FileListView::removeFilter() {
     if (m_focusedIndex >= (int)m_items.size())
         m_focusedIndex = std::max(0, (int)m_items.size() - 1);
     ensureFocusedVisible();
+    m_contentEntrance = 0.f;
+    if (m_focusedIndex >= 0 && m_focusedIndex < static_cast<int>(m_items.size())
+        && onItemFocused)
+        onItemFocused(m_items[static_cast<size_t>(m_focusedIndex)]);
     this->invalidate();
 }
 
@@ -133,13 +146,39 @@ void FileListView::draw(NVGcontext* vg, float x, float y, float w, float h,
     nvgSave(vg);
     nvgScissor(vg, x, y, w, h);
 
-    // Background
-    // nvgBeginPath(vg);
-    // nvgRect(vg, x, y, w, h);
-    // nvgFillColor(vg, nvgRGBA(0, 0, 0, 40));
-    // nvgFill(vg);
+    if (m_loading) {
+        const float cx = x + w * 0.5f;
+        const float cy = y + h * 0.5f - 18.f;
+        nvgBeginPath(vg);
+        nvgArc(vg, cx, cy, 22.f, m_animTime * 4.8f,
+               m_animTime * 4.8f + 4.4f, NVG_CW);
+        nvgStrokeColor(vg, nvgRGBA(79, 193, 255, 230));
+        nvgStrokeWidth(vg, 4.f);
+        nvgLineCap(vg, NVG_ROUND);
+        nvgStroke(vg);
+        nvgFontFaceId(vg, m_font);
+        nvgFontSize(vg, 20.f);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(225, 230, 238, 220));
+        nvgText(vg, cx, cy + 48.f, "正在加载目录...", nullptr);
+        nvgFontSize(vg, 14.f);
+        nvgFillColor(vg, nvgRGBA(195, 203, 215, 150));
+        nvgText(vg, cx, cy + 74.f, "文件较多时可能需要一些时间", nullptr);
+        nvgRestore(vg);
+        return;
+    }
 
     if (m_items.empty()) {
+        nvgFontFaceId(vg, m_font);
+        nvgFontSize(vg, 22.f);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(205, 212, 223, 175));
+        nvgText(vg, x + w * 0.5f, y + h * 0.5f - 8.f,
+                m_filterActive ? "没有匹配的文件" : "此目录为空", nullptr);
+        nvgFontSize(vg, 15.f);
+        nvgFillColor(vg, nvgRGBA(190, 198, 211, 135));
+        nvgText(vg, x + w * 0.5f, y + h * 0.5f + 24.f,
+                m_filterActive ? "按 B 关闭搜索" : "返回上一级或选择其他目录", nullptr);
         nvgRestore(vg);
         return;
     }
@@ -156,24 +195,56 @@ void FileListView::draw(NVGcontext* vg, float x, float y, float w, float h,
     for (int i = first; i < last; i++) {
         float itemY = y + i * m_itemHeight - m_scrollY;
         bool focused = (i == m_focusedIndex);
-        drawItem(vg, i, itemY, w, focused ? nvgRGB(255, 255, 255) : textColor);
+        const float stagger = std::max(0.f, std::min(1.f,
+            m_contentEntrance * 1.35f - static_cast<float>(i - first) * 0.055f));
+        const float eased = 1.f - std::pow(1.f - stagger, 3.f);
+        nvgSave(vg);
+        nvgGlobalAlpha(vg, stagger);
+        nvgTranslate(vg, (1.f - eased) * 34.f, 0.f);
+        drawItem(vg, i, x, itemY, w,
+                 focused ? nvgRGB(255, 255, 255) : textColor);
+        nvgRestore(vg);
     }
 
-    // Scrollbar
-    // int vr = visibleRows();
-    // if (vr > 0 && (int)m_items.size() > vr)
-    //     drawScrollbar(vg, x + w, y, w, h);
+    int vr = visibleRows();
+    if (vr > 0 && static_cast<int>(m_items.size()) > vr)
+        drawScrollbar(vg, x + w, y, w, h);
 
     nvgRestore(vg);
 }
 
-void FileListView::drawItem(NVGcontext* vg, int index, float itemY, float w, NVGcolor textColor) {
+void FileListView::drawItem(NVGcontext* vg, int index, float itemX, float itemY,
+                            float w, NVGcolor textColor) {
     const auto& item = m_items[index];
-    float padX = 48.f;
+    const float rowX = itemX + 12.f;
+    const float rowW = w - 24.f;
+    const float baseY = itemY + 6.f;
+    const float baseH = m_itemHeight - 12.f;
+    float padX = rowX + 18.f;
     float padY = (m_itemHeight - m_iconSize) * 0.5f;
     float textX = padX + m_iconSize + 12.f;
 
-    // Focus highlight - flowing gradient rounded border + left accent bar
+    const NVGpaint baseShadow = nvgBoxGradient(
+        vg, rowX + 4.f, baseY + 5.f, rowW, baseH, 8.f, 5.f,
+        nvgRGBA(0, 0, 0, 48), nvgRGBA(0, 0, 0, 0));
+    nvgBeginPath(vg);
+    nvgRect(vg, rowX - 3.f, baseY - 3.f, rowW + 14.f, baseH + 15.f);
+    nvgRoundedRect(vg, rowX, baseY, rowW, baseH, 8.f);
+    nvgPathWinding(vg, NVG_HOLE);
+    nvgFillPaint(vg, baseShadow);
+    nvgFill(vg);
+    nvgBeginPath(vg);
+    nvgRoundedRect(vg, rowX, baseY, rowW, baseH, 8.f);
+    nvgFillColor(vg, nvgRGBA(255, 255, 255, 6));
+    nvgFill(vg);
+    nvgBeginPath(vg);
+    nvgRoundedRect(vg, rowX + 1.f, baseY + 1.f,
+                   rowW - 2.f, baseH - 2.f, 7.f);
+    nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 34));
+    nvgStrokeWidth(vg, 1.f);
+    nvgStroke(vg);
+
+    // Focus highlight - flowing gradient rounded border
     if (index == m_focusedIndex && m_focusedIndex >= 0) {
         float shakeY = 0.f;
         if (m_shakeTime > 0.f && m_shakeDir != 0) {
@@ -183,10 +254,29 @@ void FileListView::drawItem(NVGcontext* vg, int index, float itemY, float w, NVG
             shakeY = std::sin(m_shakeTime * freq) * 6.f * decay * m_shakeDir;
         }
 
-        float rx = 36.f;
+        float rx = rowX;
         float ry = itemY + 6.f + shakeY;
-        float rw = w - 16.f;
+        float rw = rowW;
         float rh = m_itemHeight - 12.f;
+
+        const NVGpaint shadow = nvgBoxGradient(
+            vg, rx + 4.f, ry + 5.f, rw, rh, 8.f, 5.f,
+            nvgRGBA(0, 0, 0, 65), nvgRGBA(0, 0, 0, 0));
+        nvgBeginPath(vg);
+        nvgRect(vg, rx - 3.f, ry - 3.f, rw + 14.f, rh + 15.f);
+        nvgRoundedRect(vg, rx, ry, rw, rh, 8.f);
+        nvgPathWinding(vg, NVG_HOLE);
+        nvgFillPaint(vg, shadow);
+        nvgFill(vg);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, rx, ry, rw, rh, 8.f);
+        nvgFillColor(vg, nvgRGBA(79, 193, 255, 30));
+        nvgFill(vg);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, rx + 1.f, ry + 1.f, rw - 2.f, rh - 2.f, 7.f);
+        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 125));
+        nvgStrokeWidth(vg, 1.5f);
+        nvgStroke(vg);
 
         beiklive::ui::drawGradientFocusBorder(
             vg,
@@ -195,14 +285,10 @@ void FileListView::drawItem(NVGcontext* vg, int index, float itemY, float w, NVG
             rw,
             rh,
             8.0f,
-            4.0f,
+            3.0f,
             1.0f,
             beiklive::ui::gradientFocusAnimationOffset(m_animTime));
 
-        nvgBeginPath(vg);
-        nvgRect(vg, rx, itemY + (m_itemHeight - 40.f) * 0.5f, 5.f, 40.f);
-        nvgFillColor(vg, nvgRGBA(79, 193, 255, 255));
-        nvgFill(vg);
     }
 
     // Icon
@@ -220,13 +306,14 @@ void FileListView::drawItem(NVGcontext* vg, int index, float itemY, float w, NVG
     nvgFontFaceId(vg, m_font);
     // Title + Subtitle (horizontal: title left, subtitle right)
     float centerY = itemY + m_itemHeight * 0.5f + 2.f;
-    float textMarginR = 4.f;
+    float textMarginR = rowX + rowW - 18.f;
 
     nvgFontSize(vg, 22.f);
     nvgFillColor(vg, textColor);
     nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
     nvgSave(vg);
-    nvgIntersectScissor(vg, textX, itemY, std::max(1.0f, w - textX - 120.0f), m_itemHeight);
+    nvgIntersectScissor(vg, textX, itemY,
+                       std::max(1.0f, rowX + rowW - textX - 150.0f), m_itemHeight);
     nvgText(vg, textX, centerY, item.text.c_str(), nullptr);
     nvgRestore(vg);
 
@@ -234,15 +321,16 @@ void FileListView::drawItem(NVGcontext* vg, int index, float itemY, float w, NVG
     nvgFillColor(vg, textColor);
     nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
     nvgSave(vg);
-    nvgIntersectScissor(vg, std::max(textX, w - 120.0f), itemY, 120.0f, m_itemHeight);
-    nvgText(vg, w - textMarginR, centerY, item.subText.c_str(), nullptr);
+    nvgIntersectScissor(vg, std::max(textX, rowX + rowW - 135.0f), itemY,
+                       120.0f, m_itemHeight);
+    nvgText(vg, textMarginR, centerY, item.subText.c_str(), nullptr);
     nvgRestore(vg);
 
     // Separator line
     nvgBeginPath(vg);
     nvgMoveTo(vg, textX, itemY + m_itemHeight - 1.f);
-    nvgLineTo(vg, w - padX - 4.f, itemY + m_itemHeight - 1.f);
-    nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 10));
+    nvgLineTo(vg, rowX + rowW - 18.f, itemY + m_itemHeight - 1.f);
+    nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 18));
     nvgStrokeWidth(vg, 1.f);
     nvgStroke(vg);
 }
@@ -252,11 +340,11 @@ void FileListView::drawScrollbar(NVGcontext* vg, float x, float y, float w, floa
     if (maxScroll <= 0.f) return;
 
     float barH = std::max(20.f, (m_viewHeight / (m_items.size() * m_itemHeight)) * m_viewHeight);
-    float barY = (m_scrollY / maxScroll) * (m_viewHeight - barH);
+    float barY = y + (m_scrollY / maxScroll) * (m_viewHeight - barH);
 
     nvgBeginPath(vg);
     nvgRoundedRect(vg, x - 6.f, barY, 3.f, barH, 1.5f);
-    nvgFillColor(vg, nvgRGBA(255, 255, 255, 60));
+    nvgFillColor(vg, nvgRGBA(255, 255, 255, 90));
     nvgFill(vg);
 }
 
@@ -309,6 +397,9 @@ void FileListView::frame(brls::FrameContext* ctx) {
     if (dt <= 0.f || dt > 0.5f) dt = 0.016f;
 
     m_animTime += dt;
+    m_contentEntrance = std::min(1.f, m_contentEntrance + dt * 4.2f);
+    if (m_loading || m_contentEntrance < 1.f)
+        invalidate();
 
     if (m_shakeTime > 0.f)
         m_shakeTime -= dt;

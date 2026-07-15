@@ -2,11 +2,10 @@
 
 #include "core/common.h"
 #include "ui/widget/Box.hpp"
-#include "ui/widget/TabFrame.hpp"
 
 namespace beiklive
 {
-    /// 设置页面：使用 TabFrame 展示多分类设置
+    /// 设置页面：使用顶部分类轮播展示多分类设置
     class SettingPage : public beiklive::Box
     {
     public:
@@ -14,7 +13,7 @@ namespace beiklive
         ~SettingPage();
 
     private:
-        beiklive::TabFrame *m_tabframe = nullptr;
+        brls::View *m_settingsFrame = nullptr;
 
 
         // 构建各标签页

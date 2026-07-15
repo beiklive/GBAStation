@@ -457,6 +457,9 @@ namespace beiklive
         if (switchLayout)
             switchLayout->playExitAnimation();
         m_fileListPage = new beiklive::FileListPage();
+        m_fileListPage->onRequestClose = [this]() {
+            beiklive::popActivity(m_fileListPage);
+        };
 
         m_fileListPage->registerAction(
             "关闭列表",

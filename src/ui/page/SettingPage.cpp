@@ -2,6 +2,8 @@
 #include "ui/page/FileListPage.hpp"
 #include "ui/utils/FilePickerHelper.hpp"
 #include "ui/utils/UiHelper.hpp"
+#include "ui/utils/AnimationHelper.hpp"
+#include "ui/utils/GradientFocus.hpp"
 
 #include <borealis/views/cells/cell_bool.hpp>
 #include <borealis/views/cells/cell_selector.hpp>
@@ -64,10 +66,81 @@ static void cfgSetStr(const std::string &key, const std::string &val)
 // ─────────────────────────────────────────────────────────────────────────────
 //  布局辅助函数（已移至 ui/utils/UiHelper.hpp）
 // ─────────────────────────────────────────────────────────────────────────────
-using beiklive::ui::makeHint;
-using beiklive::ui::makeHeader;
-using beiklive::ui::makeContentBox;
-using beiklive::ui::makeScrollTab;
+class SettingsSectionHeaderView final : public brls::View
+{
+public:
+    explicit SettingsSectionHeaderView(std::string title)
+        : m_title(std::move(title))
+    {
+        setHeight(58.f);
+        setFocusable(false);
+    }
+
+    void draw(NVGcontext* vg, float x, float y, float w, float h,
+              brls::Style style, brls::FrameContext* ctx) override
+    {
+        (void)style;
+        (void)ctx;
+        if (m_font < 0)
+            m_font = brls::Application::getDefaultFont();
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, x + 2.f, y + 17.f, 4.f, 24.f, 2.f);
+        nvgFillColor(vg, nvgRGBA(79, 193, 255, 225));
+        nvgFill(vg);
+        nvgFontFaceId(vg, m_font);
+        nvgFontSize(vg, 20.f);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(240, 244, 249, 235));
+        nvgText(vg, x + 18.f, y + 29.f, m_title.c_str(), nullptr);
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, x + 18.f, y + 52.f);
+        nvgLineTo(vg, x + w - 6.f, y + 52.f);
+        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 30));
+        nvgStrokeWidth(vg, 1.f);
+        nvgStroke(vg);
+    }
+
+private:
+    std::string m_title;
+    int m_font = -1;
+};
+
+static brls::Label* makeHint(const std::string& text)
+{
+    auto* label = new brls::Label();
+    label->setText(text);
+    label->setFontSize(14.f);
+    label->setTextColor(nvgRGBA(195, 203, 215, 175));
+    label->setMarginTop(4.f);
+    label->setMarginBottom(10.f);
+    label->setMarginLeft(16.f);
+    label->setMarginRight(16.f);
+    label->setSingleLine(false);
+    label->setFocusable(false);
+    return label;
+}
+
+static SettingsSectionHeaderView* makeHeader(const std::string& title)
+{
+    return new SettingsSectionHeaderView(title);
+}
+
+static brls::Box* makeContentBox()
+{
+    auto* box = new brls::Box(brls::Axis::COLUMN);
+    box->setPadding(12.f, 24.f, 24.f, 24.f);
+    return box;
+}
+
+static brls::ScrollingFrame* makeScrollTab()
+{
+    auto* scroll = new brls::ScrollingFrame();
+    scroll->setGrow(1.f);
+    scroll->setScrollingBehavior(brls::ScrollingBehavior::NATURAL);
+    scroll->setScrollingIndicatorVisible(false);
+    scroll->setFocusable(false);
+    return scroll;
+}
 
 static int findIndex(const std::vector<std::string> &options,
                      const std::string &val, int defaultIdx = 0)
@@ -549,6 +622,370 @@ static void openKeyCapture(std::function<void(const std::string &)> onDone)
     brls::Application::pushActivity(new brls::Activity(frame),
                                     brls::TransitionAnimation::NONE);
 }
+
+class SettingsFooterBar final : public brls::View
+{
+public:
+    SettingsFooterBar()
+    {
+        setHeight(58.f);
+        setFocusable(false);
+    }
+
+    void setContentMode(bool contentMode)
+    {
+        m_contentMode = contentMode;
+        invalidate();
+    }
+
+    void draw(NVGcontext* vg, float x, float y, float w, float h,
+              brls::Style style, brls::FrameContext* ctx) override
+    {
+        (void)style;
+        (void)ctx;
+        if (m_font < 0)
+            m_font = brls::Application::getDefaultFont();
+        if (m_switchFont < 0)
+            m_switchFont = brls::Application::getFont(brls::FONT_SWITCH_ICONS);
+        float cursor = x + w - 32.f;
+        _drawHint(vg, brls::BUTTON_B, m_contentMode ? "返回分类" : "返回",
+                  cursor, y + h * 0.5f);
+        _drawHint(vg, brls::BUTTON_A, m_contentMode ? "修改" : "进入",
+                  cursor, y + h * 0.5f);
+    }
+
+private:
+    int m_font = -1;
+    int m_switchFont = -1;
+    bool m_contentMode = false;
+
+    void _drawHint(NVGcontext* vg, brls::ControllerButton button,
+                   const char* label, float& cursor, float y)
+    {
+        const std::string glyph = brls::Hint::getKeyIcon(button);
+        nvgFontFaceId(vg, m_font);
+        nvgFontSize(vg, 18.f);
+        float bounds[4]{};
+        nvgTextBounds(vg, 0.f, 0.f, label, nullptr, bounds);
+        cursor -= bounds[2] - bounds[0] + 43.f;
+        nvgFontFaceId(vg, m_switchFont);
+        nvgFontSize(vg, 25.f);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(255, 255, 255, 245));
+        nvgText(vg, cursor + 13.f, y, glyph.c_str(), nullptr);
+        nvgFontFaceId(vg, m_font);
+        nvgFontSize(vg, 18.f);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(230, 234, 241, 225));
+        nvgText(vg, cursor + 30.f, y, label, nullptr);
+        cursor -= 16.f;
+    }
+};
+
+class SettingsCategoryBar final : public brls::View
+{
+public:
+    SettingsCategoryBar(std::vector<std::string> labels,
+                        std::function<void(int, int)> onSwitch,
+                        std::function<void()> onEnter,
+                        std::function<void()> onBack)
+        : m_labels(std::move(labels))
+        , m_onSwitch(std::move(onSwitch))
+        , m_onEnter(std::move(onEnter))
+        , m_onBack(std::move(onBack))
+    {
+        setHeight(104.f);
+        setFocusable(true);
+        HIDE_BRLS_HIGHLIGHT(this);
+        setCustomNavigationRoute(brls::FocusDirection::UP, this);
+        setCustomNavigationRoute(brls::FocusDirection::DOWN, this);
+        setCustomNavigationRoute(brls::FocusDirection::LEFT, this);
+        setCustomNavigationRoute(brls::FocusDirection::RIGHT, this);
+        auto previous = [this](brls::View*) -> bool { _switch(-1); return true; };
+        auto next = [this](brls::View*) -> bool { _switch(1); return true; };
+        registerAction("", brls::BUTTON_LEFT, previous, true, true, brls::SOUND_NONE);
+        registerAction("", brls::BUTTON_RIGHT, next, true, true, brls::SOUND_NONE);
+        registerAction("", brls::BUTTON_NAV_LEFT, previous, true, true, brls::SOUND_NONE);
+        registerAction("", brls::BUTTON_NAV_RIGHT, next, true, true, brls::SOUND_NONE);
+        registerAction("进入", brls::BUTTON_A, [this](brls::View*) -> bool {
+            if (m_onEnter) m_onEnter();
+            return true;
+        }, false, false, brls::SOUND_NONE);
+        registerAction("", brls::BUTTON_DOWN, [this](brls::View*) -> bool {
+            if (m_onEnter) m_onEnter();
+            return true;
+        }, false, true, brls::SOUND_NONE);
+        registerAction("返回", brls::BUTTON_B, [this](brls::View*) -> bool {
+            if (m_onBack) m_onBack();
+            return true;
+        }, false, false, brls::SOUND_NONE);
+        m_lastFrame = std::chrono::steady_clock::now();
+    }
+
+    int selectedIndex() const { return m_selected; }
+    void switchRelative(int direction) { _switch(direction); }
+
+    void frame(brls::FrameContext* ctx) override
+    {
+        brls::View::frame(ctx);
+        const auto now = std::chrono::steady_clock::now();
+        float dt = std::chrono::duration<float>(now - m_lastFrame).count();
+        m_lastFrame = now;
+        if (dt <= 0.f || dt > 0.25f) dt = 0.016f;
+        m_time += dt;
+        m_entrance = std::min(1.f, m_entrance + dt * 3.f);
+        m_transition = std::min(1.f, m_transition + dt * 5.f);
+        invalidate();
+    }
+
+    void draw(NVGcontext* vg, float x, float y, float w, float h,
+              brls::Style style, brls::FrameContext* ctx) override
+    {
+        (void)style;
+        (void)ctx;
+        if (m_font < 0)
+            m_font = brls::Application::getDefaultFont();
+        if (m_switchFont < 0)
+            m_switchFont = brls::Application::getFont(brls::FONT_SWITCH_ICONS);
+        const float entrance = 1.f - std::pow(1.f - m_entrance, 3.f);
+        nvgSave(vg);
+        nvgGlobalAlpha(vg, std::max(0.f, std::min(1.f, m_entrance)));
+        nvgTranslate(vg, 0.f, -(1.f - entrance) * 54.f);
+        nvgFontFaceId(vg, m_font);
+        nvgFontSize(vg, 27.f);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
+        nvgText(vg, x + 36.f, y + 43.f, "设置", nullptr);
+        nvgFontSize(vg, 15.f);
+        nvgFillColor(vg, nvgRGBA(210, 216, 226, 180));
+        nvgText(vg, x + 36.f, y + 72.f, "模拟器、画面、声音与输入配置", nullptr);
+
+        const float centerY = y + 45.f;
+        const float startX = x + 250.f;
+        const float availableW = std::max(120.f, w - 286.f);
+        const int count = static_cast<int>(m_labels.size());
+        const float segmentW = availableW / static_cast<float>(count);
+        constexpr float selectorH = 42.f;
+        const float eased = 1.f - std::pow(1.f - m_transition, 3.f);
+        for (int index = 0; index < count; ++index)
+        {
+            const bool selected = index == m_selected;
+            const float labelX = startX + segmentW * (static_cast<float>(index) + 0.5f);
+            const float selectorW = std::min(132.f, segmentW - 8.f);
+            const float prominence = selected ? (0.78f + eased * 0.22f) : 0.f;
+            if (selected)
+            {
+                const float sx = labelX - selectorW * 0.5f;
+                const float sy = centerY - selectorH * 0.5f;
+                const NVGpaint shadow = nvgBoxGradient(
+                    vg, sx + 3.f, sy + 3.f, selectorW, selectorH, 21.f, 5.f,
+                    nvgRGBA(0, 0, 0, static_cast<unsigned char>(72.f * prominence)),
+                    nvgRGBA(0, 0, 0, 0));
+                nvgBeginPath(vg);
+                nvgRect(vg, sx - 2.f, sy - 2.f, selectorW + 10.f, selectorH + 10.f);
+                nvgRoundedRect(vg, sx, sy, selectorW, selectorH, 21.f);
+                nvgPathWinding(vg, NVG_HOLE);
+                nvgFillPaint(vg, shadow);
+                nvgFill(vg);
+                nvgBeginPath(vg);
+                nvgRoundedRect(vg, sx, sy, selectorW, selectorH, 21.f);
+                nvgFillColor(vg, nvgRGBA(255, 255, 255,
+                    static_cast<unsigned char>(22.f + 22.f * prominence)));
+                nvgFill(vg);
+                nvgBeginPath(vg);
+                nvgRoundedRect(vg, sx + 1.f, sy + 1.f,
+                               selectorW - 2.f, selectorH - 2.f, 20.f);
+                nvgStrokeColor(vg, nvgRGBA(255, 255, 255,
+                    static_cast<unsigned char>(70.f + 65.f * prominence)));
+                nvgStrokeWidth(vg, 1.f);
+                nvgStroke(vg);
+            }
+            nvgFontFaceId(vg, m_font);
+            nvgFontSize(vg, selected ? 20.f : 17.f);
+            nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+            nvgFillColor(vg, selected
+                ? nvgRGBA(255, 255, 255, 255)
+                : nvgRGBA(205, 212, 223, 165));
+            nvgText(vg, labelX, centerY,
+                    m_labels[static_cast<size_t>(index)].c_str(), nullptr);
+        }
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, x + 36.f, y + 94.f);
+        nvgLineTo(vg, x + w - 36.f, y + 94.f);
+        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 46));
+        nvgStrokeWidth(vg, 1.f);
+        nvgStroke(vg);
+        nvgRestore(vg);
+    }
+
+private:
+    std::vector<std::string> m_labels;
+    std::function<void(int, int)> m_onSwitch;
+    std::function<void()> m_onEnter;
+    std::function<void()> m_onBack;
+    int m_selected = 0;
+    int m_direction = 1;
+    int m_font = -1;
+    int m_switchFont = -1;
+    float m_time = 0.f;
+    float m_entrance = 0.f;
+    float m_transition = 1.f;
+    std::chrono::steady_clock::time_point m_lastFrame;
+
+    void _switch(int direction)
+    {
+        if (m_transition < 0.72f || m_labels.size() <= 1) return;
+        const int count = static_cast<int>(m_labels.size());
+        m_selected = (m_selected + (direction < 0 ? -1 : 1) + count) % count;
+        m_direction = direction < 0 ? -1 : 1;
+        m_transition = 0.f;
+        brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_CHANGE);
+        if (m_onSwitch) m_onSwitch(m_selected, m_direction);
+    }
+};
+
+class ModernSettingFrame final : public brls::Box
+{
+public:
+    ModernSettingFrame(std::vector<std::string> labels, std::function<void()> onBack)
+        : brls::Box(brls::Axis::COLUMN)
+        , m_onBack(std::move(onBack))
+    {
+        setGrow(1.f);
+        setWidthPercentage(100.f);
+        setFocusable(false);
+        m_bar = new SettingsCategoryBar(
+            std::move(labels),
+            [this](int index, int direction) { _showTab(index, direction); },
+            [this]() { _enterContent(); },
+            [this]() { _close(); });
+        addView(m_bar);
+        m_content = new brls::Box(brls::Axis::COLUMN);
+        m_content->setGrow(1.f);
+        m_content->setWidthPercentage(100.f);
+        m_content->setPadding(4.f, 26.f, 2.f, 26.f);
+        m_content->setFocusable(false);
+        addView(m_content);
+        m_footer = new SettingsFooterBar();
+        addView(m_footer);
+    }
+
+    void addTab(brls::View* view)
+    {
+        const int index = static_cast<int>(m_views.size());
+        class ContentSurface final : public brls::Box
+        {
+        public:
+            ContentSurface() : brls::Box(brls::Axis::COLUMN)
+            {
+                setGrow(1.f);
+                setWidthPercentage(100.f);
+                setPadding(8.f, 10.f, 8.f, 10.f);
+                setBackground(brls::ViewBackground::NONE);
+            }
+
+            void draw(NVGcontext* vg, float x, float y, float w, float h,
+                      brls::Style style, brls::FrameContext* ctx) override
+            {
+                const NVGpaint shadow = nvgBoxGradient(
+                    vg, x + 5.f, y + 6.f, w, h, 8.f, 5.f,
+                    nvgRGBA(0, 0, 0, 74), nvgRGBA(0, 0, 0, 0));
+                nvgBeginPath(vg);
+                nvgRect(vg, x - 3.f, y - 3.f, w + 16.f, h + 17.f);
+                nvgRoundedRect(vg, x, y, w, h, 8.f);
+                nvgPathWinding(vg, NVG_HOLE);
+                nvgFillPaint(vg, shadow);
+                nvgFill(vg);
+                nvgBeginPath(vg);
+                nvgRoundedRect(vg, x, y, w, h, 8.f);
+                nvgFillColor(vg, nvgRGBA(255, 255, 255, 7));
+                nvgFill(vg);
+                nvgBeginPath(vg);
+                nvgRoundedRect(vg, x + 1.f, y + 1.f, w - 2.f, h - 2.f, 7.f);
+                nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 42));
+                nvgStrokeWidth(vg, 1.5f);
+                nvgStroke(vg);
+                brls::Box::draw(vg, x, y, w, h, style, ctx);
+            }
+        };
+
+        auto* surface = new ContentSurface();
+        view->setGrow(1.f);
+        view->setWidthPercentage(100.f);
+        surface->addView(view);
+        surface->setVisibility(index == 0 ? brls::Visibility::VISIBLE
+                                          : brls::Visibility::GONE);
+        surface->registerAction("返回分类", brls::BUTTON_B,
+            [this](brls::View*) -> bool {
+                _leaveContent();
+                return true;
+            }, false, false, brls::SOUND_BACK);
+        m_views.push_back(surface);
+        m_content->addView(surface);
+    }
+
+    void finish()
+    {
+        brls::sync([this]() { brls::Application::giveFocus(m_bar); });
+    }
+
+private:
+    SettingsCategoryBar* m_bar = nullptr;
+    SettingsFooterBar* m_footer = nullptr;
+    brls::Box* m_content = nullptr;
+    std::vector<brls::View*> m_views;
+    std::function<void()> m_onBack;
+    int m_selected = 0;
+    bool m_contentMode = false;
+    bool m_closing = false;
+
+    void _showTab(int index, int direction)
+    {
+        if (index < 0 || index >= static_cast<int>(m_views.size()) || index == m_selected)
+            return;
+        m_views[static_cast<size_t>(m_selected)]->setVisibility(brls::Visibility::GONE);
+        m_selected = index;
+        auto* view = m_views[static_cast<size_t>(m_selected)];
+        AnimationHelper::slideInFromRight(view, static_cast<float>(direction) * 82.f, 220);
+        AnimationHelper::fadeIn(view, 190);
+        if (m_contentMode)
+        {
+            brls::sync([view]() {
+                brls::View* target = view->getDefaultFocus();
+                brls::Application::giveFocus(target ? target : view);
+            });
+        }
+    }
+
+    void _enterContent()
+    {
+        if (m_closing || m_views.empty()) return;
+        m_contentMode = true;
+        m_footer->setContentMode(true);
+        auto* view = m_views[static_cast<size_t>(m_selected)];
+        brls::View* target = view->getDefaultFocus();
+        brls::Application::giveFocus(target ? target : view);
+    }
+
+    void _leaveContent()
+    {
+        m_contentMode = false;
+        m_footer->setContentMode(false);
+        brls::Application::giveFocus(m_bar);
+    }
+
+    void _close()
+    {
+        if (m_closing) return;
+        m_closing = true;
+        brls::Application::blockInputs();
+        brls::Application::getAudioPlayer()->play(brls::SOUND_BACK);
+        AnimationHelper::fadeOut(this, 220, false, [this]() {
+            brls::Application::unblockInputs();
+            if (m_onBack) m_onBack();
+        });
+    }
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  共享常量
@@ -1484,16 +1921,10 @@ brls::View *SettingPage::buildDebugTab()
 
 SettingPage::SettingPage()
 {
-        this->showHeader(true);
-        this->getHeader()->setTitle("设置");
-        this->showFooter(true);
-        this->registerAction("返回", brls::BUTTON_B, [this](brls::View*) { 
-            beiklive::popActivity(this);
-            return true;
-        });
-        m_tabframe = new beiklive::TabFrame();
-        this->getContentBox()->addView(m_tabframe);
-        init();
+    this->showHeader(false);
+    this->showFooter(false);
+    this->setFocusable(false);
+    init();
 }
 
 SettingPage::~SettingPage()
@@ -1502,48 +1933,18 @@ SettingPage::~SettingPage()
 
 void SettingPage::init()
 {
-    m_tabframe->addTab(
-        "模拟器",  
-        BK_RES("img/ui/setting/emu.png"), 
-        nullptr, 
-        nullptr, 
-        nullptr,  
-        buildUITab()
-    );
-    m_tabframe->addDivider();
-    m_tabframe->addTab("按键",   
-        BK_RES("img/ui/setting/control.png"), 
-        nullptr, 
-        nullptr, 
-        nullptr,  
-        buildKeyBindTab());
-    m_tabframe->addTab("游戏",   
-        BK_RES("img/ui/setting/game.png"), 
-        nullptr, 
-        nullptr, 
-        nullptr,  
-        buildGameTab());
-    m_tabframe->addTab("显示",   
-        BK_RES("img/ui/setting/display.png"), 
-        nullptr, 
-        nullptr, 
-        nullptr,  
-        buildDisplayTab());
-    m_tabframe->addTab("声音",   
-        BK_RES("img/ui/setting/sound.png"), 
-        nullptr, 
-        nullptr, 
-        nullptr,  
-        buildAudioTab());
-    m_tabframe->addDivider();
-    m_tabframe->addTab("调试",   
-        BK_RES("img/ui/setting/debug.png"), 
-        nullptr, 
-        nullptr, 
-        nullptr,      
-        buildDebugTab());
-
-    m_tabframe->addFinish();
+    auto* frame = new ModernSettingFrame(
+        {"模拟器", "按键", "游戏", "显示", "声音", "调试"},
+        [this]() { beiklive::popActivity(this, false); });
+    frame->addTab(buildUITab());
+    frame->addTab(buildKeyBindTab());
+    frame->addTab(buildGameTab());
+    frame->addTab(buildDisplayTab());
+    frame->addTab(buildAudioTab());
+    frame->addTab(buildDebugTab());
+    m_settingsFrame = frame;
+    this->getContentBox()->addView(frame);
+    frame->finish();
 }
 
 } // namespace beiklive

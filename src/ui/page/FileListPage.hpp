@@ -4,6 +4,7 @@
 #include "ui/view/FileListView.hpp"
 #include "core/Tools.hpp"
 #include <atomic>
+#include <chrono>
 #include <functional>
 
 namespace beiklive
@@ -34,6 +35,12 @@ namespace beiklive
         bool m_panelVisible     = true;
         bool m_dirSelectionMode = false;
         std::string m_focusedFullPath;
+        std::string m_positionText;
+        int m_defaultFont = -1;
+        int m_switchFont = -1;
+        float m_pageEntrance = 0.f;
+        float m_animTime = 0.f;
+        std::chrono::steady_clock::time_point m_lastFrameTime;
 
         void _setupDetailPanel();
         void _updateDetailPanel(const beiklive::DirListData& data);
@@ -63,13 +70,18 @@ namespace beiklive
         FileListPage();
         ~FileListPage();
 
+        void draw(NVGcontext* vg, float x, float y, float w, float h,
+                  brls::Style style, brls::FrameContext* ctx) override;
+        void frame(brls::FrameContext* ctx) override;
+
         void showDriveList();
         void setFliter(beiklive::enums::FilterMode mode, std::vector<std::string> extensions);
         void setPath(const std::string path);
         void setInitialFocusFilename(const std::string& filename);
-        void setDirSelectionMode(bool on) { m_dirSelectionMode = on; }
+        void setDirSelectionMode(bool on);
 
         std::function<void(beiklive::DirListData)> onFileSelected;
+        std::function<void()> onRequestClose;
     };
 
 } // namespace beiklive

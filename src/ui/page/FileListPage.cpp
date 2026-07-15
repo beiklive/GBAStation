@@ -11,6 +11,40 @@ namespace beiklive
 
     namespace
     {
+        class FilePanelSurface final : public brls::Box
+        {
+        public:
+            explicit FilePanelSurface(brls::Axis axis = brls::Axis::COLUMN)
+                : brls::Box(axis)
+            {
+                setBackground(brls::ViewBackground::NONE);
+            }
+
+            void draw(NVGcontext* vg, float x, float y, float w, float h,
+                      brls::Style style, brls::FrameContext* ctx) override
+            {
+                const NVGpaint shadow = nvgBoxGradient(
+                    vg, x + 5.f, y + 6.f, w, h, 8.f, 5.f,
+                    nvgRGBA(0, 0, 0, 76), nvgRGBA(0, 0, 0, 0));
+                nvgBeginPath(vg);
+                nvgRect(vg, x - 3.f, y - 3.f, w + 16.f, h + 17.f);
+                nvgRoundedRect(vg, x, y, w, h, 8.f);
+                nvgPathWinding(vg, NVG_HOLE);
+                nvgFillPaint(vg, shadow);
+                nvgFill(vg);
+                nvgBeginPath(vg);
+                nvgRoundedRect(vg, x, y, w, h, 8.f);
+                nvgFillColor(vg, nvgRGBA(255, 255, 255, 7));
+                nvgFill(vg);
+                nvgBeginPath(vg);
+                nvgRoundedRect(vg, x + 1.f, y + 1.f, w - 2.f, h - 2.f, 7.f);
+                nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 42));
+                nvgStrokeWidth(vg, 1.5f);
+                nvgStroke(vg);
+                brls::Box::draw(vg, x, y, w, h, style, ctx);
+            }
+        };
+
         std::string resolveFileListIcon(beiklive::enums::FileType fileType,
                                         const std::string& fullPath,
                                         const std::string& fallbackIcon)
@@ -37,20 +71,18 @@ namespace beiklive
     FileListPage::FileListPage()
     {
         brls::Logger::debug("FileListPage initialized");
+        m_lastFrameTime = std::chrono::steady_clock::now();
 
         // ── 左侧：文件列表 ──
         auto* leftPanel = new brls::Box(brls::Axis::COLUMN);
         leftPanel->setGrow(1.f);
         leftPanel->setHeightPercentage(100.f);
-        leftPanel->setPadding(12.f, 8.f, 12.f, 0.f);
+        leftPanel->setPadding(4.f, 10.f, 4.f, 0.f);
         leftPanel->setShrink(1.f);
 
-        auto* listCard = new brls::Box(brls::Axis::COLUMN);
-        listCard->setCornerRadius(12.f);
-        listCard->setBackgroundColor(nvgRGBA(255, 255, 255, 10));
-        listCard->setShadowType(brls::ShadowType::GENERIC);
-        listCard->setShadowVisibility(true);
+        auto* listCard = new FilePanelSurface(brls::Axis::COLUMN);
         listCard->setGrow(1.f);
+        listCard->setClipsToBounds(true);
 
         fileListView = new beiklive::FileListView();
         fileListView->setGrow(1.f);
@@ -78,8 +110,9 @@ namespace beiklive
             for (const auto& d : m_dirItems) {
                 if (d.fullPath == item.data) {
                     _updateDetailPanel(d);
-                    this->getHeader()->setInfo(
-                        std::to_string(idx + 1) + "/" + std::to_string(m_dirItems.size()));
+                    m_positionText = std::to_string(idx + 1) + " / "
+                        + std::to_string(m_dirItems.size());
+                    invalidate();
                     break;
                 }
                 idx++;
@@ -100,17 +133,25 @@ namespace beiklive
         mainRow->addView(leftPanel);
         mainRow->addView(m_detailPanel);
 
+        this->getContentBox()->setPadding(104.f, 32.f, 62.f, 32.f);
         this->getContentBox()->addView(mainRow);
 
-        this->showHeader(true);
-        this->showFooter(true);
-        this->getHeader()->setTitle("文件浏览");
+        this->showHeader(false);
+        this->showFooter(false);
 
         // B = 返回上一级
         this->registerAction("返回", brls::BUTTON_B,
             [this](brls::View*) {
                 if (fileListView->hasActiveFilter()) {
                     fileListView->removeFilter();
+                    return true;
+                }
+                if (m_isAtDriveList || m_currentPath.empty()
+                    || fs::path(m_currentPath).parent_path().string() == m_currentPath) {
+                    if (onRequestClose)
+                        onRequestClose();
+                    else
+                        brls::Application::popActivity(brls::TransitionAnimation::NONE);
                     return true;
                 }
                 navigateUp();
@@ -149,8 +190,12 @@ namespace beiklive
         this->registerAction("面板", brls::BUTTON_RB, [this](brls::View*) -> bool {
             _cancelThumbnail();
             m_panelVisible = !m_panelVisible;
-            m_detailPanel->setVisibility(
-                m_panelVisible ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+            if (m_panelVisible) {
+                beiklive::AnimationHelper::slideInFromRight(m_detailPanel, 72.f, 220);
+                beiklive::AnimationHelper::fadeIn(m_detailPanel, 180);
+            } else {
+                beiklive::AnimationHelper::fadeOut(m_detailPanel, 160, true);
+            }
             if (m_panelVisible && !m_focusedFullPath.empty()) {
                 for (const auto& item : m_dirItems) {
                     if (item.fullPath == m_focusedFullPath) {
@@ -195,13 +240,13 @@ namespace beiklive
     void FileListPage::_setupDetailPanel()
     {
         m_detailPanel = new brls::Box(brls::Axis::COLUMN);
-        m_detailPanel->setWidthPercentage(30.f);
+        m_detailPanel->setWidthPercentage(34.f);
         m_detailPanel->setHeightPercentage(100.f);
-        m_detailPanel->setPadding(12.f, 12.f, 12.f, 8.f);
+        m_detailPanel->setPadding(4.f, 0.f, 4.f, 10.f);
 
-        auto* detailCard = new brls::Box(brls::Axis::COLUMN);
+        auto* detailCard = new FilePanelSurface(brls::Axis::COLUMN);
         detailCard->setGrow(1.f);
-        detailCard->setPadding(16.f);
+        detailCard->setPadding(20.f);
         detailCard->setAlignItems(brls::AlignItems::CENTER);
         detailCard->setBackground(brls::ViewBackground::NONE);
         detailCard->setClipsToBounds(true);
@@ -512,6 +557,13 @@ namespace beiklive
     void FileListPage::updatePath()
     {
         this->getHeader()->setPath(m_currentPath);
+        invalidate();
+    }
+
+    void FileListPage::setDirSelectionMode(bool on)
+    {
+        m_dirSelectionMode = on;
+        invalidate();
     }
 
     void FileListPage::setFliter(beiklive::enums::FilterMode mode, std::vector<std::string> extensions)
@@ -568,12 +620,14 @@ namespace beiklive
         brls::Application::blockInputs();
         fileListView->saveFocusState(m_currentPath);
         fileListView->setInteractionDisabled(true);
+        fileListView->setLoading(true);
         m_previousPath = m_currentPath;
         m_currentPath = path;
         m_isAtDriveList = false;
 
         fileListView->clearItems();
         m_dirItems.clear();
+        m_positionText.clear();
         updatePath();
         fileListView->restoreFocusState(m_currentPath);
 
@@ -655,14 +709,130 @@ namespace beiklive
             brls::sync([this, dd = std::move(dirData), it = std::move(items)]() {
                 m_dirItems = std::move(dd);
                 fileListView->setItems(it);
+                m_positionText = m_dirItems.empty()
+                    ? "0 / 0" : "1 / " + std::to_string(m_dirItems.size());
                 if (!m_pendingFocusFilename.empty()) {
                     fileListView->focusItemByFilename(m_pendingFocusFilename);
                     m_pendingFocusFilename.clear();
                 }
                 fileListView->setInteractionDisabled(false);
+                fileListView->setLoading(false);
                 brls::Application::unblockInputs();
             });
         });
+    }
+
+    void FileListPage::frame(brls::FrameContext* ctx)
+    {
+        beiklive::Box::frame(ctx);
+        const auto now = std::chrono::steady_clock::now();
+        float dt = std::chrono::duration<float>(now - m_lastFrameTime).count();
+        m_lastFrameTime = now;
+        if (dt <= 0.f || dt > 0.25f) dt = 0.016f;
+        m_animTime += dt;
+        m_pageEntrance = std::min(1.f, m_pageEntrance + dt * 3.f);
+        const float eased = 1.f - std::pow(1.f - m_pageEntrance, 3.f);
+        if (auto* content = getContentBox())
+        {
+            content->setAlpha(std::max(0.f, std::min(1.f, m_pageEntrance)));
+            content->setTranslationY((1.f - eased) * 24.f);
+        }
+        invalidate();
+    }
+
+    void FileListPage::draw(NVGcontext* vg, float x, float y, float w, float h,
+                            brls::Style style, brls::FrameContext* ctx)
+    {
+        beiklive::Box::draw(vg, x, y, w, h, style, ctx);
+        if (m_defaultFont < 0)
+            m_defaultFont = brls::Application::getDefaultFont();
+        if (m_switchFont < 0)
+            m_switchFont = brls::Application::getFont(brls::FONT_SWITCH_ICONS);
+        const float alpha = std::max(0.f, std::min(1.f, m_pageEntrance));
+        const float eased = 1.f - std::pow(1.f - m_pageEntrance, 3.f);
+
+        nvgSave(vg);
+        nvgGlobalAlpha(vg, alpha);
+        nvgTranslate(vg, 0.f, -(1.f - eased) * 52.f);
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgFontSize(vg, 27.f);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
+        nvgText(vg, x + 36.f, y + 42.f, "文件浏览", nullptr);
+
+        nvgFontSize(vg, 16.f);
+        nvgFillColor(vg, nvgRGBA(210, 216, 226, 190));
+        const std::string pathText = m_currentPath.empty() ? "驱动器" : m_currentPath;
+        nvgSave(vg);
+        nvgIntersectScissor(vg, x + 190.f, y + 22.f,
+                           std::max(20.f, w - 370.f), 46.f);
+        nvgText(vg, x + 190.f, y + 45.f, pathText.c_str(), nullptr);
+        nvgRestore(vg);
+
+        nvgFontSize(vg, 16.f);
+        nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(225, 230, 238, 205));
+        nvgText(vg, x + w - 36.f, y + 45.f, m_positionText.c_str(), nullptr);
+
+        const float dividerX = x + 32.f;
+        const float dividerY = y + 94.f;
+        const float dividerW = w - 64.f;
+        const NVGpaint dividerShadow = nvgBoxGradient(
+            vg, dividerX + 2.f, dividerY + 2.f, dividerW, 1.f, 0.5f, 5.f,
+            nvgRGBA(0, 0, 0, 62), nvgRGBA(0, 0, 0, 0));
+        nvgBeginPath(vg);
+        nvgRect(vg, dividerX - 3.f, dividerY - 3.f, dividerW + 10.f, 10.f);
+        nvgRect(vg, dividerX, dividerY - 0.5f, dividerW, 1.f);
+        nvgPathWinding(vg, NVG_HOLE);
+        nvgFillPaint(vg, dividerShadow);
+        nvgFill(vg);
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, dividerX, dividerY);
+        nvgLineTo(vg, dividerX + dividerW, dividerY);
+        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 46));
+        nvgStrokeWidth(vg, 1.f);
+        nvgStroke(vg);
+        nvgRestore(vg);
+
+        auto drawHint = [this, vg](brls::ControllerButton button,
+                                   const char* label, float& cursor, float hintY) {
+            const std::string glyph = brls::Hint::getKeyIcon(button);
+            nvgFontFaceId(vg, m_defaultFont);
+            nvgFontSize(vg, 17.f);
+            float bounds[4]{};
+            nvgTextBounds(vg, 0.f, 0.f, label, nullptr, bounds);
+            cursor -= bounds[2] - bounds[0] + 40.f;
+            nvgFontFaceId(vg, m_switchFont);
+            nvgFontSize(vg, 24.f);
+            nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+            nvgFillColor(vg, nvgRGBA(255, 255, 255, 245));
+            nvgText(vg, cursor + 12.f, hintY, glyph.c_str(), nullptr);
+            nvgFontFaceId(vg, m_defaultFont);
+            nvgFontSize(vg, 17.f);
+            nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+            nvgFillColor(vg, nvgRGBA(230, 234, 241, 225));
+            nvgText(vg, cursor + 28.f, hintY, label, nullptr);
+            cursor -= 13.f;
+        };
+
+        nvgSave(vg);
+        nvgGlobalAlpha(vg, alpha);
+        const float hintY = y + h - 27.f + (1.f - eased) * 44.f;
+        float cursor = x + w - 30.f;
+        const bool atRoot = m_isAtDriveList || m_currentPath.empty()
+            || fs::path(m_currentPath).parent_path().string() == m_currentPath;
+        drawHint(brls::BUTTON_B,
+                 fileListView->hasActiveFilter() ? "关闭搜索"
+                     : (atRoot ? "返回" : "上一级"),
+                 cursor, hintY);
+        drawHint(brls::BUTTON_A, "打开/选择", cursor, hintY);
+        if (m_dirSelectionMode)
+            drawHint(brls::BUTTON_Y, "选择目录", cursor, hintY);
+        drawHint(brls::BUTTON_X, "映射名称", cursor, hintY);
+        drawHint(brls::BUTTON_RT, "搜索", cursor, hintY);
+        drawHint(brls::BUTTON_RB, m_panelVisible ? "隐藏详情" : "显示详情",
+                 cursor, hintY);
+        nvgRestore(vg);
     }
 
     void FileListPage::showDriveList()
@@ -672,9 +842,11 @@ namespace beiklive
         return;
 #endif
         fileListView->setInteractionDisabled(true);
+        fileListView->setLoading(true);
         brls::Application::blockInputs();
         m_isAtDriveList = true;
         m_currentPath = "";
+        m_positionText.clear();
 
         fileListView->clearItems();
         m_dirItems.clear();
@@ -698,7 +870,10 @@ namespace beiklive
             brls::sync([this, dd = std::move(dirData), it = std::move(items)]() {
                 m_dirItems = std::move(dd);
                 fileListView->setItems(it);
+                m_positionText = m_dirItems.empty()
+                    ? "0 / 0" : "1 / " + std::to_string(m_dirItems.size());
                 fileListView->setInteractionDisabled(false);
+                fileListView->setLoading(false);
                 brls::Application::unblockInputs();
             });
         });
