@@ -25,6 +25,7 @@ namespace
 {
 constexpr std::uint64_t MAX_UPLOAD_SIZE = 512ull * 1024ull * 1024ull;
 constexpr std::uint64_t MAX_TEXT_EDIT_SIZE = 2ull * 1024ull * 1024ull;
+constexpr std::size_t MAX_ROM_STEM_SIZE = 40;
 constexpr const char* JSON_HEADERS = "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n";
 constexpr const char* CORS_HEADERS = "Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET,POST,PUT,DELETE,OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\n";
 constexpr const char* ALBUM_ROOT = "sdmc:/emuMMC/SD00/Nintendo/Album";
@@ -233,6 +234,41 @@ std::string safeStemFromTitle(const std::string& stem)
     while (!out.empty() && out.front() == '_')
         out.erase(out.begin());
     return out.empty() ? "game" : out;
+}
+
+std::string shortStableHash(const std::string& value)
+{
+    std::uint64_t hash = 14695981039346656037ull;
+    for (unsigned char c : value)
+    {
+        hash ^= c;
+        hash *= 1099511628211ull;
+    }
+
+    static constexpr char HEX[] = "0123456789abcdef";
+    std::string result(8, '0');
+    for (size_t i = 0; i < result.size(); ++i)
+    {
+        result[result.size() - 1 - i] = HEX[hash & 0x0F];
+        hash >>= 4;
+    }
+    return result;
+}
+
+std::string safeRomStemFromTitle(const std::string& stem)
+{
+    std::string safe = safeStemFromTitle(stem);
+    if (safe.size() <= MAX_ROM_STEM_SIZE)
+        return safe;
+
+    const std::string hash = shortStableHash(stem);
+    const size_t prefixSize = MAX_ROM_STEM_SIZE - hash.size() - 1;
+    safe.resize(prefixSize);
+    while (!safe.empty() && safe.back() == '_')
+        safe.pop_back();
+    if (safe.empty())
+        safe = "game";
+    return safe + "_" + hash;
 }
 
 std::string safePathComponent(const std::string& name, bool fallbackFile)
@@ -965,6 +1001,7 @@ void ApiRouter::handleUploadStart(mg_connection* c, mg_http_message* hm)
 
     std::string stem = original.stem().string();
     std::string safeStem = safeStemFromTitle(stem);
+    std::string storageStem = kind == "rom" ? safeRomStemFromTitle(stem) : safeStem;
     bool stemHasChinese = containsChineseChar(stem);
     std::string target;
     std::string finalPath;
@@ -995,7 +1032,7 @@ void ApiRouter::handleUploadStart(mg_connection* c, mg_http_message* hm)
     {
         std::string targetDir = uploadDirForKind(kind, platform);
         ensureDir(targetDir);
-        target = uniquePath(targetDir, safeStem, ext);
+        target = uniquePath(targetDir, storageStem, ext);
         finalPath = target;
     }
 

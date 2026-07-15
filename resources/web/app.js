@@ -18,6 +18,15 @@ const state = {
   albumRoot: '',
   albumItems: [],
   albumView: 'grid',
+  albumFilter: 'all',
+  albumSearch: '',
+  albumSort: 'newest',
+  albumPage: 1,
+  albumPageSize: window.innerWidth <= 680 ? 24 : 48,
+  albumViewerItems: [],
+  albumViewerIndex: -1,
+  albumViewerZoom: 1,
+  albumViewerRotation: 0,
   editingTextPath: '',
   selectionMode: false,
   selectedIds: new Set(),
@@ -26,6 +35,20 @@ const state = {
   uploadCancelAll: false,
   uploadNextId: 1,
   importNameMapping: false,
+  crop: {
+    zoom: 1,
+    offsetX: 0,
+    offsetY: 0,
+    rotation: 0,
+    flipX: 1,
+    flipY: 1,
+    mode: 'fill',
+    background: 'transparent',
+    outputSize: 512,
+    showGrid: true,
+  },
+  cropPointers: new Map(),
+  cropGesture: null,
 };
 
 const romExtensions = new Set(['gba', 'gb', 'gbc', 'nes', 'fds', 'sfc', 'smc', 'nds']);
@@ -115,6 +138,41 @@ const gameConfigFields = [
 ];
 
 const $ = (id) => document.getElementById(id);
+
+function matchingElements(root, selector) {
+  const elements = [];
+  if (root instanceof Element && root.matches(selector)) elements.push(root);
+  if (root.querySelectorAll) elements.push(...root.querySelectorAll(selector));
+  return elements;
+}
+
+function enhanceTablerComponents(root = document) {
+  const unstyledButtons = '.game-card, .file-main, .album-open, .save-thumb-preview, .swatch';
+  for (const button of matchingElements(root, 'button')) {
+    if (button.matches(unstyledButtons)) continue;
+    button.classList.add('btn');
+    if (button.classList.contains('primary-action') || button.classList.contains('upload-zone')) {
+      button.classList.add('btn-primary');
+    } else if (button.classList.contains('danger')) {
+      button.classList.add('btn-outline-danger');
+      button.classList.remove('btn-outline-secondary');
+    } else if (button.classList.contains('viewer-nav')) {
+      button.classList.add('btn-ghost-secondary');
+    } else if (!button.classList.contains('btn-primary')) {
+      button.classList.add('btn-outline-secondary');
+    }
+    if (button.querySelector('i') && !button.querySelector('span')) button.classList.add('btn-icon');
+  }
+
+  for (const input of matchingElements(root, 'input')) {
+    if (['file', 'hidden', 'color'].includes(input.type)) continue;
+    if (input.type === 'checkbox') input.classList.add('form-check-input');
+    else if (input.type === 'range') input.classList.add('form-range');
+    else input.classList.add('form-control');
+  }
+  for (const select of matchingElements(root, 'select')) select.classList.add('form-select');
+  for (const textarea of matchingElements(root, 'textarea')) textarea.classList.add('form-control');
+}
 
 function toast(text) {
   const el = $('toast');
@@ -431,7 +489,7 @@ function renderTabs() {
     const count = state.games.filter((g) => platformOf(g) === key).length;
     const btn = document.createElement('button');
     btn.className = `${key === state.filter ? 'active ' : ''}${platformClass(key)}`;
-    btn.innerHTML = `<span><i class="fa-solid fa-layer-group"></i> ${label}</span><b>${count}</b>`;
+    btn.innerHTML = `<span><i class="ti ti-stack-2"></i> ${label}</span><b>${count}</b>`;
     btn.onclick = () => {
       state.filter = key;
       state.page = 1;
@@ -482,7 +540,7 @@ function renderGames() {
       card.className = `${state.view === 'list' ? 'game-card list-card' : 'game-card'}${state.selectionMode ? ' selectable' : ''}${selected ? ' selected' : ''}`;
       card.setAttribute('aria-pressed', state.selectionMode ? String(selected) : 'false');
       card.innerHTML = `
-        ${state.selectionMode ? `<span class="select-indicator"><i class="fa-solid fa-check"></i></span>` : ''}
+        ${state.selectionMode ? `<span class="select-indicator"><i class="ti ti-check"></i></span>` : ''}
         <img loading="lazy" alt="${escapeHtml(game.title || 'cover')}" src="/api/game/${gameUrl(game)}/cover">
         <div>
           <strong>${escapeHtml(game.title || '未命名游戏')}</strong>
@@ -503,6 +561,7 @@ function setMode(mode) {
   const library = mode === 'library';
   const files = mode === 'files';
   const album = mode === 'album';
+  $('pageTitle').textContent = library ? '游戏库' : files ? '文件管理' : '相册浏览';
   $('libraryModeBtn').classList.toggle('active', library);
   $('filesModeBtn').classList.toggle('active', files);
   $('albumModeBtn').classList.toggle('active', album);
@@ -511,6 +570,9 @@ function setMode(mode) {
   $('pager').hidden = !library || filteredGames().length <= state.pageSize;
   $('filePanel').hidden = !files;
   $('albumPanel').hidden = !album;
+  $('searchInput').closest('.search').hidden = !library;
+  $('sortSelect').closest('.select-field').hidden = !library;
+  $('multiSelectBtn').closest('.selection-tools').hidden = !library;
   $('searchInput').disabled = !library;
   $('sortSelect').disabled = !library;
   $('gridViewBtn').disabled = false;
@@ -550,12 +612,12 @@ async function loadFiles(path = state.filePath) {
 }
 
 function fileIcon(entry) {
-  if (entry.isDir) return 'fa-folder';
+  if (entry.isDir) return 'ti-folder';
   const ext = String(entry.ext || '').toLowerCase();
-  if (['png', 'jpg', 'jpeg', 'webp', 'bmp'].includes(ext)) return 'fa-image';
-  if (isVideoEntry(entry)) return 'fa-video';
-  if (['zip', '7z', 'rar'].includes(ext)) return 'fa-file-zipper';
-  return 'fa-file';
+  if (['png', 'jpg', 'jpeg', 'webp', 'bmp'].includes(ext)) return 'ti-photo';
+  if (isVideoEntry(entry)) return 'ti-video';
+  if (['zip', '7z', 'rar'].includes(ext)) return 'ti-file-zip';
+  return 'ti-file';
 }
 
 function isImageEntry(entry) {
@@ -591,7 +653,7 @@ function renderFiles() {
       ? `<img class="file-thumb" loading="lazy" alt="${escapeHtml(entry.name)}" src="/api/files/view?path=${encodeURIComponent(entry.path)}">`
       : isVideoEntry(entry)
         ? `<video class="file-thumb" preload="metadata" muted playsinline src="/api/files/view?path=${encodeURIComponent(entry.path)}"></video>`
-        : `<span class="file-thumb file-thumb-icon"><i class="fa-solid ${fileIcon(entry)}"></i></span>`;
+        : `<span class="file-thumb file-thumb-icon"><i class="ti ${fileIcon(entry)}"></i></span>`;
     row.innerHTML = state.fileView === 'grid' ? `
       <button class="file-main" title="${escapeHtml(entry.path)}">
         ${preview}
@@ -602,23 +664,23 @@ function renderFiles() {
         <span>${escapeHtml(entry.modified || '')}</span>
       </div>
       <div class="file-row-actions">
-        <button title="${entry.isDir ? '下载为 ZIP' : '下载'}"><i class="fa-solid fa-download"></i></button>
-        <button title="改名"><i class="fa-solid fa-pen"></i></button>
-        <button title="移动"><i class="fa-solid fa-arrows-up-down-left-right"></i></button>
-        <button class="danger" title="删除"><i class="fa-solid fa-trash-can"></i></button>
+        <button title="${entry.isDir ? '下载为 ZIP' : '下载'}"><i class="ti ti-download"></i></button>
+        <button title="改名"><i class="ti ti-pencil"></i></button>
+        <button title="移动"><i class="ti ti-arrows-move"></i></button>
+        <button class="danger" title="删除"><i class="ti ti-trash"></i></button>
       </div>
     ` : `
       <button class="file-main" title="${escapeHtml(entry.path)}">
-        <i class="fa-solid ${fileIcon(entry)}"></i>
+        <i class="ti ${fileIcon(entry)}"></i>
         <span>${escapeHtml(entry.name)}</span>
       </button>
       <span class="file-meta">${entry.isDir ? '文件夹' : formatSize(entry.size)}</span>
       <span class="file-meta">${escapeHtml(entry.modified || '')}</span>
       <div class="file-row-actions">
-        <button title="${entry.isDir ? '下载为 ZIP' : '下载'}"><i class="fa-solid fa-download"></i></button>
-        <button title="改名"><i class="fa-solid fa-pen"></i></button>
-        <button title="移动"><i class="fa-solid fa-arrows-up-down-left-right"></i></button>
-        <button class="danger" title="删除"><i class="fa-solid fa-trash-can"></i></button>
+        <button title="${entry.isDir ? '下载为 ZIP' : '下载'}"><i class="ti ti-download"></i></button>
+        <button title="改名"><i class="ti ti-pencil"></i></button>
+        <button title="移动"><i class="ti ti-arrows-move"></i></button>
+        <button class="danger" title="删除"><i class="ti ti-trash"></i></button>
       </div>
     `;
     row.querySelector('.file-main').onclick = () => {
@@ -667,43 +729,162 @@ async function loadAlbum() {
   const data = await api('/api/album/list');
   state.albumRoot = data.root || '';
   state.albumItems = data.items || [];
+  state.albumPage = 1;
   renderAlbum();
 }
 
+function filteredAlbumItems() {
+  const query = state.albumSearch.trim().toLowerCase();
+  const items = state.albumItems.filter((item) => {
+    const typeMatch = state.albumFilter === 'all' || item.type === state.albumFilter;
+    const searchMatch = !query || String(item.name || '').toLowerCase().includes(query);
+    return typeMatch && searchMatch;
+  });
+  return items.sort((a, b) => {
+    if (state.albumSort === 'oldest') return String(a.modified || '').localeCompare(String(b.modified || ''));
+    if (state.albumSort === 'name') return String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hans');
+    if (state.albumSort === 'size') return Number(b.size || 0) - Number(a.size || 0);
+    return String(b.modified || '').localeCompare(String(a.modified || ''));
+  });
+}
+
+function albumPageCount(items = filteredAlbumItems()) {
+  return Math.max(1, Math.ceil(items.length / state.albumPageSize));
+}
+
+function setAlbumFilter(filter) {
+  state.albumFilter = filter;
+  state.albumPage = 1;
+  $('albumAllBtn').classList.toggle('active', filter === 'all');
+  $('albumImagesBtn').classList.toggle('active', filter === 'image');
+  $('albumVideosBtn').classList.toggle('active', filter === 'video');
+  renderAlbum();
+}
+
+function downloadAlbumItem(item) {
+  if (!item?.url) return;
+  const link = document.createElement('a');
+  link.href = item.url;
+  link.download = item.name || 'album-media';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
 function renderAlbum() {
+  const items = filteredAlbumItems();
+  const totalPages = albumPageCount(items);
+  state.albumPage = Math.min(Math.max(1, state.albumPage), totalPages);
+  const start = (state.albumPage - 1) * state.albumPageSize;
+  const pageItems = items.slice(start, start + state.albumPageSize);
+  const imageCount = state.albumItems.filter((item) => item.type === 'image').length;
+  const videoCount = state.albumItems.filter((item) => item.type === 'video').length;
+  const totalSize = state.albumItems.reduce((sum, item) => sum + Number(item.size || 0), 0);
+
   $('albumSummary').textContent = `${state.albumItems.length} 个媒体文件 · ${state.albumRoot || 'sdmc:/emuMMC/SD00/Nintendo/Album'}`;
   $('summaryText').textContent = `相册浏览：${state.albumRoot || 'Album'}`;
+  $('albumResultCount').textContent = items.length;
+  $('albumImageCount').textContent = imageCount;
+  $('albumVideoCount').textContent = videoCount;
+  $('albumTotalSize').textContent = formatSize(totalSize);
+  $('albumPageText').textContent = `${state.albumPage} / ${totalPages}`;
+  $('albumPrevPageBtn').disabled = state.albumPage <= 1;
+  $('albumNextPageBtn').disabled = state.albumPage >= totalPages;
+  $('albumPager').hidden = items.length <= state.albumPageSize;
+
   const root = $('albumList');
   root.className = state.albumView === 'grid' ? 'album-grid' : 'album-list';
   root.innerHTML = '';
-  if (!state.albumItems.length) {
-    root.innerHTML = '<div class="empty compact-empty">没有找到图片或视频</div>';
+  if (!pageItems.length) {
+    root.innerHTML = `<div class="empty compact-empty">${state.albumItems.length ? '没有匹配的媒体文件' : '没有找到图片或视频'}</div>`;
     return;
   }
 
-  for (const item of state.albumItems) {
+  for (const item of pageItems) {
     const isVideo = item.type === 'video';
-    const card = document.createElement('button');
+    const card = document.createElement('article');
     card.className = state.albumView === 'grid' ? 'album-card' : 'album-row';
     const media = isVideo
-      ? `<video preload="metadata" muted playsinline src="${item.url}"></video>`
+      ? `<video preload="metadata" muted playsinline src="${item.url}"></video><span class="media-play"><i class="ti ti-player-play"></i></span>`
       : `<img loading="lazy" alt="${escapeHtml(item.name)}" src="${item.url}">`;
     card.innerHTML = `
-      ${media}
-      <span class="album-kind"><i class="fa-solid ${isVideo ? 'fa-video' : 'fa-image'}"></i>${isVideo ? '视频' : '图片'}</span>
-      <strong>${escapeHtml(item.name)}</strong>
-      <small>${formatSize(item.size)} · ${escapeHtml(item.modified || '')}</small>
+      <button class="album-open" title="${escapeHtml(item.name)}">
+        <span class="album-media">${media}</span>
+        <span class="album-copy">
+          <span class="album-kind"><i class="ti ${isVideo ? 'ti-video' : 'ti-photo'}"></i>${isVideo ? '视频' : '图片'}</span>
+          <strong>${escapeHtml(item.name)}</strong>
+          <small>${formatSize(item.size)} · ${escapeHtml(item.modified || '')}</small>
+        </span>
+      </button>
+      <button class="album-download" title="下载"><i class="ti ti-download"></i></button>
     `;
-    card.onclick = () => {
-      if (isVideo) openVideo(item.name, `${item.url}&t=${Date.now()}`);
-      else {
-        $('fileImageTitle').textContent = item.name || '图片预览';
-        $('fileImagePreview').src = `${item.url}&t=${Date.now()}`;
-        $('fileImageDialog').showModal();
-      }
-    };
+    card.querySelector('.album-open').onclick = () => openAlbumViewer(item, items);
+    card.querySelector('.album-download').onclick = () => downloadAlbumItem(item);
     root.appendChild(card);
   }
+}
+
+function openAlbumViewer(item, items = filteredAlbumItems()) {
+  state.albumViewerItems = items;
+  state.albumViewerIndex = Math.max(0, items.findIndex((entry) => entry.path === item.path));
+  state.albumViewerZoom = 1;
+  state.albumViewerRotation = 0;
+  renderAlbumViewer();
+  $('albumViewerDialog').showModal();
+}
+
+function renderAlbumViewer() {
+  const item = state.albumViewerItems[state.albumViewerIndex];
+  if (!item) return;
+  const isVideo = item.type === 'video';
+  const image = $('albumViewerImage');
+  const video = $('albumViewerVideo');
+  video.pause();
+  video.removeAttribute('src');
+  video.load();
+
+  $('albumViewerTitle').textContent = item.name || '相册预览';
+  $('albumViewerKind').textContent = isVideo ? '视频' : '图片';
+  $('albumViewerDate').textContent = item.modified || '';
+  $('albumViewerSize').textContent = formatSize(item.size);
+  $('albumViewerPosition').textContent = `${state.albumViewerIndex + 1} / ${state.albumViewerItems.length}`;
+  $('albumViewerPrevBtn').disabled = state.albumViewerIndex <= 0;
+  $('albumViewerNextBtn').disabled = state.albumViewerIndex >= state.albumViewerItems.length - 1;
+  $('albumViewerZoomControls').hidden = isVideo;
+
+  image.hidden = isVideo;
+  video.hidden = !isVideo;
+  if (isVideo) {
+    image.removeAttribute('src');
+    video.src = `${item.url}&t=${Date.now()}`;
+    video.load();
+  } else {
+    image.src = `${item.url}&t=${Date.now()}`;
+  }
+  updateAlbumViewerTransform();
+}
+
+function updateAlbumViewerTransform() {
+  const image = $('albumViewerImage');
+  image.style.transform = `scale(${state.albumViewerZoom}) rotate(${state.albumViewerRotation}deg)`;
+  $('albumZoomText').textContent = `${Math.round(state.albumViewerZoom * 100)}%`;
+}
+
+function moveAlbumViewer(delta) {
+  const next = state.albumViewerIndex + delta;
+  if (next < 0 || next >= state.albumViewerItems.length) return;
+  state.albumViewerIndex = next;
+  state.albumViewerZoom = 1;
+  state.albumViewerRotation = 0;
+  renderAlbumViewer();
+}
+
+function closeAlbumViewer() {
+  const video = $('albumViewerVideo');
+  video.pause();
+  video.removeAttribute('src');
+  video.load();
+  $('albumViewerDialog').close();
 }
 
 async function openTextEditor(entry) {
@@ -798,7 +979,7 @@ function renderSaveThumbs(states) {
       <button class="save-thumb-preview" title="查看截图">
         <img alt="槽位 ${item.slot} 截图" src="${item.thumbUrl}">
       </button>
-      <figcaption><span>槽位 ${item.slot}</span><button class="danger" title="删除截图"><i class="fa-solid fa-trash-can"></i></button></figcaption>
+      <figcaption><span>槽位 ${item.slot}</span><button class="danger" title="删除截图"><i class="ti ti-trash"></i></button></figcaption>
     `;
     figure.querySelector('.save-thumb-preview').onclick = () => openSaveThumb(item);
     figure.querySelector('figcaption button').onclick = () => deleteSave(item.thumbPath);
@@ -831,9 +1012,9 @@ function renderSaveList(rootId, saves, type) {
         <span>${escapeHtml(item.name)} · ${formatSize(item.size)} · ${escapeHtml(item.modified || '')}</span>
       </div>
       <div class="save-row-actions">
-        <button title="导出"><i class="fa-solid fa-download"></i></button>
-        <button title="本地选择替换"><i class="fa-solid fa-file-import"></i></button>
-        <button class="danger" title="删除"><i class="fa-solid fa-trash-can"></i></button>
+        <button title="导出"><i class="ti ti-download"></i></button>
+        <button title="本地选择替换"><i class="ti ti-file-import"></i></button>
+        <button class="danger" title="删除"><i class="ti ti-trash"></i></button>
       </div>
     `;
     const [exportBtn, replaceBtn, deleteBtn] = row.querySelectorAll('button');
@@ -1127,7 +1308,7 @@ function renderUploadDialog() {
         </div>
       </div>
       <div class="upload-row-actions">
-        <button class="danger" ${canCancel ? '' : 'disabled'} title="取消上传"><i class="fa-solid fa-ban"></i><span>取消</span></button>
+        <button class="danger" ${canCancel ? '' : 'disabled'} title="取消上传"><i class="ti ti-ban"></i><span>取消</span></button>
       </div>
     `;
     row.querySelector('button').onclick = () => cancelUploadTask(task.id);
@@ -1311,30 +1492,91 @@ async function reloadSelectedGame() {
   }
 }
 
-function openCropperFromImage(img) {
-  state.cropImage = img;
-  const canvas = $('cropCanvas');
-  const halfW = Math.floor(canvas.width / 2);
-  const halfH = Math.floor(canvas.height / 2);
-  $('cropScale').value = '1';
-  $('cropX').value = '0';
-  $('cropY').value = '0';
-  $('cropX').min = String(-halfW);
-  $('cropX').max = String(halfW);
-  $('cropY').min = String(-halfH);
-  $('cropY').max = String(halfH);
+function resetCropTransform() {
+  state.crop.zoom = 1;
+  state.crop.offsetX = 0;
+  state.crop.offsetY = 0;
+  state.crop.rotation = 0;
+  state.crop.flipX = 1;
+  state.crop.flipY = 1;
+  updateCropControls();
   drawCrop();
+}
+
+function setCropMode(mode) {
+  state.crop.mode = mode;
+  $('cropFillBtn').classList.toggle('active', mode === 'fill');
+  $('cropFitBtn').classList.toggle('active', mode === 'fit');
+  resetCropTransform();
+}
+
+function setCropBackground(background) {
+  state.crop.background = background;
+  $('cropBgTransparentBtn').classList.toggle('active', background === 'transparent');
+  $('cropBgDarkBtn').classList.toggle('active', background === '#20242c');
+  $('cropBgLightBtn').classList.toggle('active', background === '#f4f7fb');
+  drawCrop();
+}
+
+function setCropOutputSize(size) {
+  const canvas = $('cropCanvas');
+  const next = Number(size) || 512;
+  const ratio = next / Math.max(1, canvas.width);
+  state.crop.offsetX *= ratio;
+  state.crop.offsetY *= ratio;
+  state.crop.outputSize = next;
+  canvas.width = next;
+  canvas.height = next;
+  $('cropX').min = String(-next);
+  $('cropX').max = String(next);
+  $('cropY').min = String(-next);
+  $('cropY').max = String(next);
+  updateCropControls();
+  drawCrop();
+}
+
+function updateCropControls() {
+  $('cropScale').value = String(state.crop.zoom);
+  $('cropX').value = String(Math.round(state.crop.offsetX));
+  $('cropY').value = String(Math.round(state.crop.offsetY));
+  $('cropScaleText').textContent = `${Math.round(state.crop.zoom * 100)}%`;
+  $('cropXText').textContent = String(Math.round(state.crop.offsetX));
+  $('cropYText').textContent = String(Math.round(state.crop.offsetY));
+  $('cropFlipHBtn').classList.toggle('active', state.crop.flipX < 0);
+  $('cropFlipVBtn').classList.toggle('active', state.crop.flipY < 0);
+}
+
+function openCropperFromImage(img, name = '') {
+  state.cropImage = img;
+  state.cropImageName = name;
+  state.crop.mode = 'fill';
+  state.crop.background = 'transparent';
+  state.crop.showGrid = true;
+  $('cropFillBtn').classList.add('active');
+  $('cropFitBtn').classList.remove('active');
+  $('cropGridSwitch').checked = true;
+  $('cropOutputSize').value = '512';
+  $('cropSourceInfo').textContent = `${name || '图片'} · ${img.naturalWidth || img.width} x ${img.naturalHeight || img.height}`;
+  setCropOutputSize(512);
+  setCropBackground('transparent');
+  resetCropTransform();
   $('cropDialog').showModal();
+  $('cropCanvas').focus();
 }
 
 function openCropper(file) {
   if (!file) return;
   const img = new Image();
+  const url = URL.createObjectURL(file);
   img.onload = () => {
-    openCropperFromImage(img);
-    URL.revokeObjectURL(img.src);
+    openCropperFromImage(img, file.name);
+    URL.revokeObjectURL(url);
   };
-  img.src = URL.createObjectURL(file);
+  img.onerror = () => {
+    URL.revokeObjectURL(url);
+    toast('无法读取图片');
+  };
+  img.src = url;
 }
 
 async function openCropperFromUrl(url, name = 'switch-cover.png') {
@@ -1349,27 +1591,170 @@ async function openCropperFromUrl(url, name = 'switch-cover.png') {
   }
 }
 
-function drawCrop() {
+function renderCropCanvas(canvas, includeGrid) {
   const img = state.cropImage;
   if (!img) return;
-  const canvas = $('cropCanvas');
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--panel-2');
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  const scale = Number($('cropScale').value);
-  const base = Math.max(canvas.width / img.width, canvas.height / img.height);
-  const w = img.width * base * scale;
-  const h = img.height * base * scale;
-  const x = (canvas.width - w) / 2 + Number($('cropX').value);
-  const y = (canvas.height - h) / 2 + Number($('cropY').value);
-  ctx.drawImage(img, x, y, w, h);
+  if (state.crop.background !== 'transparent') {
+    ctx.fillStyle = state.crop.background;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
+  const quarterTurn = Math.abs(state.crop.rotation / 90) % 2 === 1;
+  const rotatedWidth = quarterTurn ? img.height : img.width;
+  const rotatedHeight = quarterTurn ? img.width : img.height;
+  const fitScale = state.crop.mode === 'fit'
+    ? Math.min(canvas.width / rotatedWidth, canvas.height / rotatedHeight)
+    : Math.max(canvas.width / rotatedWidth, canvas.height / rotatedHeight);
+  const scale = fitScale * state.crop.zoom;
+
+  ctx.save();
+  ctx.translate(canvas.width / 2 + state.crop.offsetX, canvas.height / 2 + state.crop.offsetY);
+  ctx.rotate(state.crop.rotation * Math.PI / 180);
+  ctx.scale(state.crop.flipX, state.crop.flipY);
+  ctx.drawImage(img, -img.width * scale / 2, -img.height * scale / 2, img.width * scale, img.height * scale);
+  ctx.restore();
+
+  if (includeGrid && state.crop.showGrid) {
+    const unit = canvas.width / 3;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(0, 0, 0, .48)';
+    ctx.lineWidth = Math.max(2, canvas.width / 256);
+    for (let i = 1; i <= 2; i++) {
+      ctx.beginPath();
+      ctx.moveTo(unit * i, 0);
+      ctx.lineTo(unit * i, canvas.height);
+      ctx.moveTo(0, unit * i);
+      ctx.lineTo(canvas.width, unit * i);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(255, 255, 255, .72)';
+    ctx.lineWidth = Math.max(1, canvas.width / 512);
+    for (let i = 1; i <= 2; i++) {
+      ctx.beginPath();
+      ctx.moveTo(unit * i, 0);
+      ctx.lineTo(unit * i, canvas.height);
+      ctx.moveTo(0, unit * i);
+      ctx.lineTo(canvas.width, unit * i);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+function drawCrop() {
+  renderCropCanvas($('cropCanvas'), true);
+  updateCropControls();
+}
+
+function adjustCropZoom(delta) {
+  state.crop.zoom = Math.max(0.2, Math.min(5, state.crop.zoom + delta));
+  drawCrop();
+}
+
+function createWheelZoomHandler(onStep, isEnabled = () => true) {
+  let gestureActive = false;
+  let releaseTimer = 0;
+
+  return (event) => {
+    if (!isEnabled()) return;
+    event.preventDefault();
+    if (!event.deltaY) return;
+
+    if (!gestureActive) {
+      gestureActive = true;
+      onStep(event.deltaY < 0 ? 1 : -1);
+    }
+
+    clearTimeout(releaseTimer);
+    releaseTimer = setTimeout(() => {
+      gestureActive = false;
+    }, 160);
+  };
+}
+
+function rotateCrop(delta) {
+  state.crop.rotation = (state.crop.rotation + delta + 360) % 360;
+  drawCrop();
+}
+
+function beginCropGesture() {
+  const pointers = [...state.cropPointers.values()];
+  if (pointers.length === 1) {
+    state.cropGesture = { type: 'pan', x: pointers[0].x, y: pointers[0].y };
+  } else if (pointers.length >= 2) {
+    const [a, b] = pointers;
+    state.cropGesture = {
+      type: 'pinch',
+      distance: Math.hypot(a.x - b.x, a.y - b.y),
+      centerX: (a.x + b.x) / 2,
+      centerY: (a.y + b.y) / 2,
+      zoom: state.crop.zoom,
+      offsetX: state.crop.offsetX,
+      offsetY: state.crop.offsetY,
+    };
+  }
+}
+
+function cropPointerPosition(event) {
+  const canvas = $('cropCanvas');
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: (event.clientX - rect.left) * canvas.width / Math.max(1, rect.width),
+    y: (event.clientY - rect.top) * canvas.height / Math.max(1, rect.height),
+  };
+}
+
+function handleCropPointerDown(event) {
+  event.preventDefault();
+  $('cropCanvas').setPointerCapture(event.pointerId);
+  state.cropPointers.set(event.pointerId, cropPointerPosition(event));
+  beginCropGesture();
+}
+
+function handleCropPointerMove(event) {
+  if (!state.cropPointers.has(event.pointerId)) return;
+  event.preventDefault();
+  state.cropPointers.set(event.pointerId, cropPointerPosition(event));
+  const pointers = [...state.cropPointers.values()];
+  const gesture = state.cropGesture;
+  if (!gesture) return;
+
+  if (pointers.length === 1 && gesture.type === 'pan') {
+    state.crop.offsetX += pointers[0].x - gesture.x;
+    state.crop.offsetY += pointers[0].y - gesture.y;
+    gesture.x = pointers[0].x;
+    gesture.y = pointers[0].y;
+  } else if (pointers.length >= 2) {
+    const [a, b] = pointers;
+    if (gesture.type !== 'pinch') {
+      beginCropGesture();
+      return;
+    }
+    const distance = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
+    const centerX = (a.x + b.x) / 2;
+    const centerY = (a.y + b.y) / 2;
+    state.crop.zoom = Math.max(0.2, Math.min(5, gesture.zoom * distance / Math.max(1, gesture.distance)));
+    state.crop.offsetX = gesture.offsetX + centerX - gesture.centerX;
+    state.crop.offsetY = gesture.offsetY + centerY - gesture.centerY;
+  }
+  drawCrop();
+}
+
+function handleCropPointerUp(event) {
+  state.cropPointers.delete(event.pointerId);
+  beginCropGesture();
 }
 
 async function uploadCroppedCover() {
   const game = state.selected;
   if (!game) return;
-  $('cropCanvas').toBlob(async (blob) => {
+  const output = document.createElement('canvas');
+  output.width = state.crop.outputSize;
+  output.height = state.crop.outputSize;
+  renderCropCanvas(output, false);
+  output.toBlob(async (blob) => {
     if (!blob) return;
     const file = new File([blob], `${game.title || 'cover'}.png`, { type: 'image/png' });
     showProgress('上传封面');
@@ -1431,6 +1816,49 @@ function bindEvents() {
   };
   $('closeFileImageBtn').onclick = () => $('fileImageDialog').close();
   $('albumRefreshBtn').onclick = () => loadAlbum().catch((err) => toast(err.message));
+  $('albumSearchInput').oninput = (e) => {
+    state.albumSearch = e.target.value;
+    state.albumPage = 1;
+    renderAlbum();
+  };
+  $('albumAllBtn').onclick = () => setAlbumFilter('all');
+  $('albumImagesBtn').onclick = () => setAlbumFilter('image');
+  $('albumVideosBtn').onclick = () => setAlbumFilter('video');
+  $('albumSortSelect').onchange = (e) => {
+    state.albumSort = e.target.value;
+    state.albumPage = 1;
+    renderAlbum();
+  };
+  $('albumPrevPageBtn').onclick = () => { state.albumPage--; renderAlbum(); };
+  $('albumNextPageBtn').onclick = () => { state.albumPage++; renderAlbum(); };
+  $('closeAlbumViewerBtn').onclick = closeAlbumViewer;
+  $('albumViewerPrevBtn').onclick = () => moveAlbumViewer(-1);
+  $('albumViewerNextBtn').onclick = () => moveAlbumViewer(1);
+  $('albumDownloadBtn').onclick = () => {
+    const item = state.albumViewerItems[state.albumViewerIndex];
+    if (item) downloadAlbumItem(item);
+  };
+  $('albumZoomOutBtn').onclick = () => {
+    state.albumViewerZoom = Math.max(0.25, state.albumViewerZoom - 0.25);
+    updateAlbumViewerTransform();
+  };
+  $('albumZoomResetBtn').onclick = () => {
+    state.albumViewerZoom = 1;
+    state.albumViewerRotation = 0;
+    updateAlbumViewerTransform();
+  };
+  $('albumZoomInBtn').onclick = () => {
+    state.albumViewerZoom = Math.min(5, state.albumViewerZoom + 0.25);
+    updateAlbumViewerTransform();
+  };
+  $('albumRotateBtn').onclick = () => {
+    state.albumViewerRotation = (state.albumViewerRotation + 90) % 360;
+    updateAlbumViewerTransform();
+  };
+  $('albumViewerStage').onwheel = createWheelZoomHandler((direction) => {
+    state.albumViewerZoom = Math.max(0.25, Math.min(5, state.albumViewerZoom + direction * 0.1));
+    updateAlbumViewerTransform();
+  }, () => !$('albumViewerImage').hidden);
   $('closeVideoBtn').onclick = () => {
     const video = $('videoPreview');
     video.pause();
@@ -1462,10 +1890,45 @@ function bindEvents() {
   };
   $('coverInput').onchange = (e) => openCropper(e.target.files[0]);
   $('closeImageDialogBtn').onclick = () => $('imageDialog').close();
-  $('closeCropDialogBtn').onclick = () => $('cropDialog').close();
-  $('cropScale').oninput = drawCrop;
-  $('cropX').oninput = drawCrop;
-  $('cropY').oninput = drawCrop;
+  $('closeCropDialogBtn').onclick = () => {
+    state.cropPointers.clear();
+    state.cropGesture = null;
+    $('cropDialog').close();
+  };
+  $('cropScale').oninput = (e) => { state.crop.zoom = Number(e.target.value); drawCrop(); };
+  $('cropX').oninput = (e) => { state.crop.offsetX = Number(e.target.value); drawCrop(); };
+  $('cropY').oninput = (e) => { state.crop.offsetY = Number(e.target.value); drawCrop(); };
+  $('cropFillBtn').onclick = () => setCropMode('fill');
+  $('cropFitBtn').onclick = () => setCropMode('fit');
+  $('cropRotateLeftBtn').onclick = () => rotateCrop(-90);
+  $('cropRotateRightBtn').onclick = () => rotateCrop(90);
+  $('cropFlipHBtn').onclick = () => { state.crop.flipX *= -1; drawCrop(); };
+  $('cropFlipVBtn').onclick = () => { state.crop.flipY *= -1; drawCrop(); };
+  $('cropResetBtn').onclick = resetCropTransform;
+  $('cropOutputSize').onchange = (e) => setCropOutputSize(e.target.value);
+  $('cropBgTransparentBtn').onclick = () => setCropBackground('transparent');
+  $('cropBgDarkBtn').onclick = () => setCropBackground('#20242c');
+  $('cropBgLightBtn').onclick = () => setCropBackground('#f4f7fb');
+  $('cropBgColor').oninput = (e) => setCropBackground(e.target.value);
+  $('cropGridSwitch').onchange = (e) => { state.crop.showGrid = e.target.checked; drawCrop(); };
+  $('cropCanvas').onpointerdown = handleCropPointerDown;
+  $('cropCanvas').onpointermove = handleCropPointerMove;
+  $('cropCanvas').onpointerup = handleCropPointerUp;
+  $('cropCanvas').onpointercancel = handleCropPointerUp;
+  $('cropCanvas').onwheel = createWheelZoomHandler((direction) => adjustCropZoom(direction * 0.04));
+  $('cropCanvas').onkeydown = (e) => {
+    const step = e.shiftKey ? 10 : 2;
+    if (e.key === 'ArrowLeft') state.crop.offsetX -= step;
+    else if (e.key === 'ArrowRight') state.crop.offsetX += step;
+    else if (e.key === 'ArrowUp') state.crop.offsetY -= step;
+    else if (e.key === 'ArrowDown') state.crop.offsetY += step;
+    else if (e.key === '+' || e.key === '=') adjustCropZoom(0.05);
+    else if (e.key === '-') adjustCropZoom(-0.05);
+    else if (e.key.toLowerCase() === 'r') rotateCrop(90);
+    else return;
+    e.preventDefault();
+    drawCrop();
+  };
   $('uploadCroppedBtn').onclick = uploadCroppedCover;
   $('sortSelect').onchange = (e) => { state.sort = e.target.value; state.page = 1; renderGames(); };
   $('gridViewBtn').onclick = () => setView('grid');
@@ -1482,15 +1945,30 @@ function bindEvents() {
   $('darkBtn').onclick = () => setTheme('dark');
   window.addEventListener('resize', () => {
     const nextSize = window.innerWidth <= 680 ? 12 : 36;
+    const nextAlbumSize = window.innerWidth <= 680 ? 24 : 48;
     if (nextSize !== state.pageSize) {
       state.pageSize = nextSize;
       state.page = 1;
       renderGames();
     }
+    if (nextAlbumSize !== state.albumPageSize) {
+      state.albumPageSize = nextAlbumSize;
+      state.albumPage = 1;
+      renderAlbum();
+    }
+  });
+  window.addEventListener('keydown', (e) => {
+    if (!$('albumViewerDialog').open) return;
+    if (e.key === 'ArrowLeft') moveAlbumViewer(-1);
+    else if (e.key === 'ArrowRight') moveAlbumViewer(1);
+    else if (e.key === 'Escape') closeAlbumViewer();
+    else return;
+    e.preventDefault();
   });
 }
 
 function setTheme(theme) {
+  document.documentElement.setAttribute('data-bs-theme', theme);
   document.body.classList.toggle('dark', theme === 'dark');
   $('lightBtn').classList.toggle('active', theme === 'light');
   $('darkBtn').classList.toggle('active', theme === 'dark');
@@ -1512,6 +1990,15 @@ function setView(view) {
   $('listViewBtn').classList.toggle('active', view === 'list');
 }
 
+enhanceTablerComponents();
+new MutationObserver((mutations) => {
+  for (const mutation of mutations) {
+    for (const node of mutation.addedNodes) {
+      if (node.nodeType === Node.ELEMENT_NODE) enhanceTablerComponents(node);
+    }
+  }
+}).observe(document.body, { childList: true, subtree: true });
+
 bindEvents();
-setTheme(localStorage.getItem('bls-theme') || 'light');
+setTheme(localStorage.getItem('bls-theme') || 'dark');
 loadGames().catch((err) => toast(err.message));

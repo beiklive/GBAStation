@@ -1,68 +1,76 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-bs-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>GBAStation Web 管理器</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <link rel="stylesheet" href="./vendor/tabler/tabler.min.css">
+  <link rel="stylesheet" href="./vendor/tabler/tabler-icons.min.css">
   <link rel="stylesheet" href="./style.css">
 </head>
-<body>
-  <header class="app-titlebar">
-    <div class="brand">
+<body class="layout-fluid">
+  <header class="navbar app-titlebar">
+    <div class="navbar-brand brand">
       <span class="brand-mark"><img src="/api/logo" alt="GBAStation"></span>
       <div class="brand-copy">
         <strong>GBAStation</strong>
-        <span>Web Manager</span>
+        <span>局域网管理器</span>
+      </div>
+    </div>
+    <div class="titlebar-actions">
+      <span class="service-state"><i></i>Web 服务运行中</span>
+      <div class="segmented theme-toggle" aria-label="主题">
+        <button id="lightBtn" title="浅色"><i class="ti ti-sun"></i></button>
+        <button id="darkBtn" class="active" title="深色"><i class="ti ti-moon"></i></button>
       </div>
     </div>
   </header>
 
   <div class="app-shell">
-    <aside class="sidebar">
-      <button class="upload-zone" id="uploadZone">
-        <i class="fa-solid fa-cloud-arrow-up"></i>
-        <span>导入 ROM</span>
-        <small>游戏会被自动添加到游戏库</small>
-      </button>
-      <div class="upload-actions">
-        <button id="chooseRomFilesBtn"><i class="fa-solid fa-file-arrow-up"></i><span>选择文件</span></button>
-        <button id="chooseRomFolderBtn"><i class="fa-solid fa-folder-open"></i><span>选择目录</span></button>
+    <aside class="navbar navbar-vertical sidebar">
+      <div class="sidebar-import">
+        <div class="sidebar-import-heading">
+          <strong>导入游戏</strong>
+          <span>添加 ROM 到游戏库</span>
+        </div>
+        <button class="btn btn-primary upload-zone" id="uploadZone">
+          <i class="ti ti-cloud-upload"></i>
+          <span>导入 ROM</span>
+          <small>拖放文件或从设备选择</small>
+        </button>
+        <div class="upload-actions">
+          <button class="btn btn-outline-secondary" id="chooseRomFilesBtn"><i class="ti ti-file-upload"></i><span>选择文件</span></button>
+          <button class="btn btn-outline-secondary" id="chooseRomFolderBtn"><i class="ti ti-folder-open"></i><span>选择目录</span></button>
+        </div>
+        <label class="form-check form-switch upload-option">
+          <span>保存中文名称映射</span>
+          <input id="importNameMappingSwitch" type="checkbox" role="switch">
+        </label>
       </div>
-      <label class="upload-option">
-        <span>导入名称到映射文件</span>
-        <input id="importNameMappingSwitch" type="checkbox">
-      </label>
+
+      <span class="sidebar-label">管理</span>
+      <div class="sidebar-nav">
+        <button id="libraryModeBtn" class="active"><i class="ti ti-device-gamepad-2"></i><span>游戏库</span></button>
+        <button id="filesModeBtn"><i class="ti ti-folder-open"></i><span>文件管理</span></button>
+        <button id="albumModeBtn"><i class="ti ti-photo"></i><span>相册浏览</span></button>
+      </div>
+
+      <span class="sidebar-label platform-label">平台</span>
+      <nav class="platform-tabs" id="platformTabs"></nav>
       <input id="romInput" type="file" multiple accept=".gba,.gb,.gbc,.nes,.fds,.sfc,.smc,.nds" hidden>
       <input id="romFolderInput" type="file" multiple webkitdirectory directory hidden>
       <input id="fileBrowserInput" type="file" multiple hidden>
       <input id="folderBrowserInput" type="file" multiple webkitdirectory directory hidden>
-
-      <div class="sidebar-nav">
-        <button id="libraryModeBtn" class="active"><i class="fa-solid fa-gamepad"></i><span>游戏库</span></button>
-        <button id="filesModeBtn"><i class="fa-solid fa-folder-open"></i><span>文件管理</span></button>
-        <button id="albumModeBtn"><i class="fa-solid fa-images"></i><span>相册浏览</span></button>
-      </div>
-
-      <nav class="platform-tabs" id="platformTabs"></nav>
-
-      <div class="theme-box">
-        <span>主题</span>
-        <div class="segmented">
-          <button id="lightBtn" class="active" title="浅色"><i class="fa-solid fa-sun"></i></button>
-          <button id="darkBtn" title="VS Code 深色"><i class="fa-solid fa-moon"></i></button>
-        </div>
-      </div>
     </aside>
 
-    <main class="content">
+    <main class="page-wrapper content">
       <header class="topbar">
-        <div>
-          <h1>游戏库</h1>
+        <div class="page-heading">
+          <h1 id="pageTitle">游戏库</h1>
           <p id="summaryText">正在读取 Switch 游戏库</p>
         </div>
         <label class="search">
-          <i class="fa-solid fa-magnifying-glass"></i>
+          <i class="ti ti-search"></i>
           <input id="searchInput" type="search" placeholder="搜索游戏名、路径或平台">
         </label>
         <div class="library-tools">
@@ -75,19 +83,19 @@
             </select>
           </label>
           <div class="segmented view-toggle">
-            <button id="gridViewBtn" class="active" title="网格"><i class="fa-solid fa-grip"></i></button>
-            <button id="listViewBtn" title="列表"><i class="fa-solid fa-list"></i></button>
+            <button id="gridViewBtn" class="active" title="网格"><i class="ti ti-layout-grid"></i></button>
+            <button id="listViewBtn" title="列表"><i class="ti ti-list"></i></button>
           </div>
           <div class="selection-tools">
-            <button id="multiSelectBtn" class="flat"><i class="fa-solid fa-square-check"></i><span>多选</span></button>
-            <button id="selectPageBtn" class="flat" hidden><i class="fa-solid fa-list-check"></i><span>全选本页</span></button>
-            <button id="deleteSelectedBtn" class="flat danger" hidden><i class="fa-solid fa-trash-can"></i><span>删除选中</span></button>
-            <button id="cancelSelectionBtn" class="flat" hidden><i class="fa-solid fa-xmark"></i><span>取消</span></button>
+            <button id="multiSelectBtn" class="flat"><i class="ti ti-checkbox"></i><span>多选</span></button>
+            <button id="selectPageBtn" class="flat" hidden><i class="ti ti-list-check"></i><span>全选本页</span></button>
+            <button id="deleteSelectedBtn" class="flat danger" hidden><i class="ti ti-trash"></i><span>删除选中</span></button>
+            <button id="cancelSelectionBtn" class="flat" hidden><i class="ti ti-x"></i><span>取消</span></button>
           </div>
         </div>
       </header>
 
-      <section class="progress-panel" id="progressPanel" hidden>
+      <section class="card progress-panel" id="progressPanel" hidden>
         <div>
           <strong id="progressTitle">处理中</strong>
           <span id="progressText">准备执行</span>
@@ -97,47 +105,76 @@
 
       <section id="filePanel" class="file-panel" hidden>
         <div class="file-head">
-          <div>
-            <h2>文件管理</h2>
+          <div class="section-context">
             <p id="fileSummary">浏览 Switch 内存卡文件</p>
           </div>
           <div class="file-actions">
-            <button id="fileUploadBtn"><i class="fa-solid fa-file-arrow-up"></i><span>上传文件</span></button>
-            <button id="folderUploadBtn"><i class="fa-solid fa-folder-open"></i><span>上传文件夹</span></button>
-            <button id="newFolderBtn"><i class="fa-solid fa-folder-plus"></i><span>新建文件夹</span></button>
+            <button id="fileUploadBtn"><i class="ti ti-file-upload"></i><span>上传文件</span></button>
+            <button id="folderUploadBtn"><i class="ti ti-folder-open"></i><span>上传文件夹</span></button>
+            <button id="newFolderBtn"><i class="ti ti-folder-plus"></i><span>新建文件夹</span></button>
           </div>
         </div>
         <div class="file-toolbar">
-          <button id="fileHomeBtn" title="根目录"><i class="fa-solid fa-house"></i></button>
-          <button id="fileUpBtn" title="上级目录"><i class="fa-solid fa-arrow-up"></i></button>
-          <button id="fileRefreshBtn" title="刷新"><i class="fa-solid fa-rotate"></i></button>
+          <button id="fileHomeBtn" title="根目录"><i class="ti ti-home"></i></button>
+          <button id="fileUpBtn" title="上级目录"><i class="ti ti-arrow-up"></i></button>
+          <button id="fileRefreshBtn" title="刷新"><i class="ti ti-refresh"></i></button>
           <label class="file-path-field">
-            <i class="fa-solid fa-folder-open"></i>
+            <i class="ti ti-folder-open"></i>
             <input id="filePathInput" type="text" spellcheck="false" placeholder="sdmc:/">
           </label>
-          <button id="fileGoBtn"><i class="fa-solid fa-arrow-right"></i><span>打开</span></button>
+          <button id="fileGoBtn"><i class="ti ti-arrow-right"></i><span>打开</span></button>
         </div>
         <div id="fileList" class="file-list"></div>
       </section>
 
       <section id="albumPanel" class="album-panel" hidden>
         <div class="file-head">
-          <div>
-            <h2>相册浏览</h2>
+          <div class="section-context">
             <p id="albumSummary">按时间顺序显示 Album 中的图片和视频</p>
           </div>
           <div class="file-actions">
-            <button id="albumRefreshBtn"><i class="fa-solid fa-rotate"></i><span>刷新</span></button>
+            <button id="albumRefreshBtn"><i class="ti ti-refresh"></i><span>刷新</span></button>
           </div>
         </div>
+        <div class="album-toolbar">
+          <label class="search album-search">
+            <i class="ti ti-search"></i>
+            <input id="albumSearchInput" type="search" placeholder="搜索媒体文件名">
+          </label>
+          <div class="segmented album-type-filter" aria-label="媒体类型">
+            <button id="albumAllBtn" class="active">全部</button>
+            <button id="albumImagesBtn">图片</button>
+            <button id="albumVideosBtn">视频</button>
+          </div>
+          <label class="select-field album-sort-field">
+            <span>排序</span>
+            <select id="albumSortSelect">
+              <option value="newest">最新优先</option>
+              <option value="oldest">最早优先</option>
+              <option value="name">文件名称</option>
+              <option value="size">文件大小</option>
+            </select>
+          </label>
+        </div>
+        <div class="album-stats" aria-live="polite">
+          <span><b id="albumResultCount">0</b>当前结果</span>
+          <span><b id="albumImageCount">0</b>图片</span>
+          <span><b id="albumVideoCount">0</b>视频</span>
+          <span><b id="albumTotalSize">0 B</b>占用空间</span>
+        </div>
         <div id="albumList" class="album-list"></div>
+        <nav class="pager album-pager" id="albumPager" aria-label="相册分页" hidden>
+          <button id="albumPrevPageBtn"><i class="ti ti-chevron-left"></i><span>上一页</span></button>
+          <span id="albumPageText">1 / 1</span>
+          <button id="albumNextPageBtn"><span>下一页</span><i class="ti ti-chevron-right"></i></button>
+        </nav>
       </section>
 
       <section id="gameSections" class="game-sections"></section>
       <nav class="pager" id="pager" aria-label="游戏分页">
-        <button id="prevPageBtn"><i class="fa-solid fa-chevron-left"></i><span>上一页</span></button>
+        <button id="prevPageBtn"><i class="ti ti-chevron-left"></i><span>上一页</span></button>
         <span id="pageText">1 / 1</span>
-        <button id="nextPageBtn"><span>下一页</span><i class="fa-solid fa-chevron-right"></i></button>
+        <button id="nextPageBtn"><span>下一页</span><i class="ti ti-chevron-right"></i></button>
       </nav>
     </main>
   </div>
@@ -148,31 +185,31 @@
         <span id="detailPlatform" class="badge">GBA</span>
         <h2 id="detailTitle">游戏详情</h2>
       </div>
-      <button class="icon-btn" id="closeGameDialogBtn" title="关闭"><i class="fa-solid fa-xmark"></i></button>
+      <button class="icon-btn" id="closeGameDialogBtn" title="关闭"><i class="ti ti-x"></i></button>
     </div>
 
     <div class="detail-layout">
       <section class="detail-primary">
         <img id="detailCover" class="detail-cover" alt="游戏封面">
         <div class="stats">
-          <span><i class="fa-solid fa-clock"></i><b id="playTimeText">0 分钟</b></span>
-          <span><i class="fa-solid fa-play"></i><b id="playCountText">0 次</b></span>
+          <span><i class="ti ti-clock"></i><b id="playTimeText">0 分钟</b></span>
+          <span><i class="ti ti-player-play"></i><b id="playCountText">0 次</b></span>
         </div>
         <label class="field">
           <span>映射名称</span>
           <input id="titleInput" type="text">
         </label>
         <div class="actions compact-actions">
-          <button id="saveTitleBtn"><i class="fa-solid fa-floppy-disk"></i><span>保存名称</span></button>
-          <button id="replaceCoverBtn"><i class="fa-solid fa-image"></i><span>替换封面</span></button>
-          <button id="removeBtn" class="danger"><i class="fa-solid fa-trash-can"></i><span>移除游戏</span></button>
+          <button id="saveTitleBtn"><i class="ti ti-device-floppy"></i><span>保存名称</span></button>
+          <button id="replaceCoverBtn"><i class="ti ti-photo"></i><span>替换封面</span></button>
+          <button id="removeBtn" class="danger"><i class="ti ti-trash"></i><span>移除游戏</span></button>
         </div>
       </section>
 
       <section class="save-panel">
         <div class="save-section-head">
           <h3>存档截图</h3>
-          <button id="refreshSavesBtn"><i class="fa-solid fa-rotate"></i><span>刷新</span></button>
+          <button id="refreshSavesBtn"><i class="ti ti-refresh"></i><span>刷新</span></button>
         </div>
         <div id="saveThumbs" class="save-thumbs"></div>
 
@@ -183,7 +220,7 @@
 
         <div class="save-section-head">
           <h3>电池存档</h3>
-          <button id="replaceBatteryBtn"><i class="fa-solid fa-file-import"></i><span>替换 SAV</span></button>
+          <button id="replaceBatteryBtn"><i class="ti ti-file-import"></i><span>替换 SAV</span></button>
         </div>
         <div id="batterySaveList" class="save-list"></div>
       </section>
@@ -191,7 +228,7 @@
       <section class="config-panel">
         <div class="save-section-head">
           <h3>配置信息</h3>
-          <button id="saveConfigBtn"><i class="fa-solid fa-floppy-disk"></i><span>保存配置</span></button>
+          <button id="saveConfigBtn"><i class="ti ti-device-floppy"></i><span>保存配置</span></button>
         </div>
         <div id="gameConfigFields" class="config-fields"></div>
       </section>
@@ -204,18 +241,18 @@
   <dialog id="coverChoiceDialog" class="choice-dialog">
     <div class="dialog-head">
       <h3>替换封面</h3>
-      <button class="icon-btn" id="closeCoverChoiceBtn" title="关闭"><i class="fa-solid fa-xmark"></i></button>
+      <button class="icon-btn" id="closeCoverChoiceBtn" title="关闭"><i class="ti ti-x"></i></button>
     </div>
     <div class="choice-actions">
-      <button id="chooseSwitchCoverBtn"><i class="fa-solid fa-images"></i><span>从 Switch 选择</span></button>
-      <button id="chooseLocalCoverBtn"><i class="fa-solid fa-crop-simple"></i><span>从本地裁剪</span></button>
+      <button id="chooseSwitchCoverBtn"><i class="ti ti-photo"></i><span>从 Switch 选择</span></button>
+      <button id="chooseLocalCoverBtn"><i class="ti ti-crop"></i><span>从本地裁剪</span></button>
     </div>
   </dialog>
 
   <dialog id="imageDialog" class="image-dialog">
     <div class="dialog-head">
       <h3>选择 Switch 图片</h3>
-      <button class="icon-btn" id="closeImageDialogBtn" title="关闭"><i class="fa-solid fa-xmark"></i></button>
+      <button class="icon-btn" id="closeImageDialogBtn" title="关闭"><i class="ti ti-x"></i></button>
     </div>
     <div id="imageGrid" class="image-grid"></div>
   </dialog>
@@ -223,7 +260,7 @@
   <dialog id="fileImageDialog" class="file-image-dialog">
     <div class="dialog-head">
       <h3 id="fileImageTitle">图片预览</h3>
-      <button class="icon-btn" id="closeFileImageBtn" title="关闭"><i class="fa-solid fa-xmark"></i></button>
+      <button class="icon-btn" id="closeFileImageBtn" title="关闭"><i class="ti ti-x"></i></button>
     </div>
     <img id="fileImagePreview" alt="图片预览">
   </dialog>
@@ -231,9 +268,43 @@
   <dialog id="videoDialog" class="file-image-dialog">
     <div class="dialog-head">
       <h3 id="videoTitle">视频预览</h3>
-      <button class="icon-btn" id="closeVideoBtn" title="关闭"><i class="fa-solid fa-xmark"></i></button>
+      <button class="icon-btn" id="closeVideoBtn" title="关闭"><i class="ti ti-x"></i></button>
     </div>
     <video id="videoPreview" controls playsinline></video>
+  </dialog>
+
+  <dialog id="albumViewerDialog" class="album-viewer-dialog">
+    <div class="dialog-head album-viewer-head">
+      <div>
+        <span id="albumViewerKind" class="badge">图片</span>
+        <h3 id="albumViewerTitle">相册预览</h3>
+      </div>
+      <div class="dialog-head-actions">
+        <button id="albumDownloadBtn" title="下载"><i class="ti ti-download"></i></button>
+        <button class="icon-btn" id="closeAlbumViewerBtn" title="关闭"><i class="ti ti-x"></i></button>
+      </div>
+    </div>
+    <div class="album-viewer-layout">
+      <button class="viewer-nav" id="albumViewerPrevBtn" title="上一个"><i class="ti ti-chevron-left"></i></button>
+      <div class="album-viewer-stage" id="albumViewerStage">
+        <img id="albumViewerImage" alt="相册图片预览" hidden>
+        <video id="albumViewerVideo" controls playsinline preload="metadata" hidden></video>
+      </div>
+      <button class="viewer-nav" id="albumViewerNextBtn" title="下一个"><i class="ti ti-chevron-right"></i></button>
+    </div>
+    <div class="album-viewer-footer">
+      <div class="album-viewer-meta">
+        <span id="albumViewerDate"></span>
+        <span id="albumViewerSize"></span>
+        <span id="albumViewerPosition"></span>
+      </div>
+      <div class="viewer-zoom-controls" id="albumViewerZoomControls">
+        <button id="albumZoomOutBtn" title="缩小"><i class="ti ti-zoom-out"></i></button>
+        <button id="albumZoomResetBtn" title="恢复"><span id="albumZoomText">100%</span></button>
+        <button id="albumZoomInBtn" title="放大"><i class="ti ti-zoom-in"></i></button>
+        <button id="albumRotateBtn" title="旋转"><i class="ti ti-rotate-clockwise-2"></i></button>
+      </div>
+    </div>
   </dialog>
 
   <dialog id="textEditorDialog" class="text-editor-dialog">
@@ -242,25 +313,78 @@
         <h3 id="textEditorTitle">文本编辑</h3>
         <p id="textEditorPath"></p>
       </div>
-      <button class="icon-btn" id="closeTextEditorBtn" title="关闭"><i class="fa-solid fa-xmark"></i></button>
+      <button class="icon-btn" id="closeTextEditorBtn" title="关闭"><i class="ti ti-x"></i></button>
     </div>
     <textarea id="textEditorContent" spellcheck="false"></textarea>
     <div class="text-editor-actions">
-      <button id="saveTextEditorBtn"><i class="fa-solid fa-floppy-disk"></i><span>保存</span></button>
+      <button id="saveTextEditorBtn"><i class="ti ti-device-floppy"></i><span>保存</span></button>
     </div>
   </dialog>
 
   <dialog id="cropDialog" class="crop-dialog">
     <div class="dialog-head">
-      <h3>裁剪封面</h3>
-      <button class="icon-btn" id="closeCropDialogBtn" title="关闭"><i class="fa-solid fa-xmark"></i></button>
+      <div>
+        <h3>裁剪封面</h3>
+        <p id="cropSourceInfo">正方形封面预览</p>
+      </div>
+      <button class="icon-btn" id="closeCropDialogBtn" title="关闭"><i class="ti ti-x"></i></button>
     </div>
-    <canvas id="cropCanvas" width="480" height="480"></canvas>
-    <div class="crop-controls">
-      <label>缩放 <input id="cropScale" type="range" min="1" max="3" step="0.05" value="1"></label>
-      <label>X <input id="cropX" type="range" min="-240" max="240" step="1" value="0"></label>
-      <label>Y <input id="cropY" type="range" min="-160" max="160" step="1" value="0"></label>
-      <button id="uploadCroppedBtn"><i class="fa-solid fa-upload"></i><span>上传封面</span></button>
+    <div class="crop-workspace">
+      <div class="crop-stage-wrap">
+        <div class="crop-stage">
+          <canvas id="cropCanvas" width="512" height="512" tabindex="0" aria-label="封面裁剪预览"></canvas>
+        </div>
+        <div class="crop-quick-tools">
+          <button id="cropRotateLeftBtn" title="向左旋转"><i class="ti ti-rotate-2"></i></button>
+          <button id="cropRotateRightBtn" title="向右旋转"><i class="ti ti-rotate-clockwise-2"></i></button>
+          <button id="cropFlipHBtn" title="水平翻转"><i class="ti ti-arrows-horizontal"></i></button>
+          <button id="cropFlipVBtn" title="垂直翻转"><i class="ti ti-arrows-vertical"></i></button>
+          <button id="cropResetBtn" title="重置"><i class="ti ti-refresh"></i></button>
+        </div>
+      </div>
+      <div class="crop-controls">
+        <section>
+          <h4>构图</h4>
+          <div class="segmented crop-mode-toggle">
+            <button id="cropFillBtn" class="active">填满</button>
+            <button id="cropFitBtn">适应</button>
+          </div>
+          <label class="range-field">
+            <span>缩放 <b id="cropScaleText">100%</b></span>
+            <input id="cropScale" type="range" min="0.2" max="5" step="0.01" value="1">
+          </label>
+          <label class="range-field">
+            <span>水平位置 <b id="cropXText">0</b></span>
+            <input id="cropX" type="range" min="-512" max="512" step="1" value="0">
+          </label>
+          <label class="range-field">
+            <span>垂直位置 <b id="cropYText">0</b></span>
+            <input id="cropY" type="range" min="-512" max="512" step="1" value="0">
+          </label>
+        </section>
+        <section>
+          <h4>画布</h4>
+          <label class="select-field crop-output-field">
+            <span>输出尺寸</span>
+            <select id="cropOutputSize">
+              <option value="256">256 x 256</option>
+              <option value="512" selected>512 x 512</option>
+              <option value="1024">1024 x 1024</option>
+            </select>
+          </label>
+          <div class="crop-background-field">
+            <span>背景</span>
+            <div class="background-swatches">
+              <button id="cropBgTransparentBtn" class="swatch transparent active" title="透明"></button>
+              <button id="cropBgDarkBtn" class="swatch dark-swatch" title="深色"></button>
+              <button id="cropBgLightBtn" class="swatch light-swatch" title="浅色"></button>
+              <label class="color-swatch" title="自定义颜色"><input id="cropBgColor" type="color" value="#20242c"></label>
+            </div>
+          </div>
+          <label class="crop-grid-option"><input id="cropGridSwitch" type="checkbox" checked><span>显示构图网格</span></label>
+        </section>
+        <button id="uploadCroppedBtn" class="primary-action"><i class="ti ti-upload"></i><span>上传封面</span></button>
+      </div>
     </div>
   </dialog>
 
@@ -270,7 +394,7 @@
         <h3>上传队列</h3>
         <p id="uploadSummaryText">等待选择 ROM 文件</p>
       </div>
-      <button class="icon-btn" id="closeUploadDialogBtn" title="关闭"><i class="fa-solid fa-xmark"></i></button>
+      <button class="icon-btn" id="closeUploadDialogBtn" title="关闭"><i class="ti ti-x"></i></button>
     </div>
     <div class="upload-overview">
       <div>
@@ -288,7 +412,7 @@
     </div>
     <div class="progress-track upload-total-track"><span id="uploadTotalBar"></span></div>
     <div class="upload-dialog-tools">
-      <button id="cancelAllUploadsBtn" class="danger"><i class="fa-solid fa-ban"></i><span>全部取消</span></button>
+      <button id="cancelAllUploadsBtn" class="danger"><i class="ti ti-ban"></i><span>全部取消</span></button>
     </div>
     <div id="uploadQueueList" class="upload-queue-list"></div>
   </dialog>

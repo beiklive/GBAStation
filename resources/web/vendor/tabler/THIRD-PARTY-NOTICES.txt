@@ -1,0 +1,12 @@
+Tabler Core 1.4.0
+Package: @tabler/core
+Author: codecalm
+License: MIT
+Source: https://github.com/tabler/tabler
+
+Tabler Icons Webfont 3.44.0
+Package: @tabler/icons-webfont
+License: MIT
+Source: https://github.com/tabler/tabler-icons
+
+The Tabler Icons license text is included in TABLER-ICONS-LICENSE.txt.
