@@ -119,7 +119,7 @@ public:
             shader.Create(source, type, async_compile);
             OGLProgram& program = std::get<OGLProgram>(shader_or_program);
             program.Create(true, std::array{shader.handle}, async_compile);
-            async_pending = async_compile && SupportsParallelShaderCompile();
+            async_pending = async_compile;
         }
     }
 
@@ -178,7 +178,7 @@ public:
             result = CodeGenerator(config, args...);
             const bool async_compile =
                 separable && Settings::values.async_shader_compilation.GetValue() &&
-                SupportsParallelShaderCompile();
+                ShouldUseParallelShaderCompile();
             cached_shader.Create(result->c_str(), ShaderType, async_compile);
         }
         return {iter->first, cached_shader.GetHandle(), std::move(result)};
@@ -231,7 +231,7 @@ public:
                 result = std::move(program);
                 const bool async_compile =
                     separable && Settings::values.async_shader_compilation.GetValue() &&
-                    SupportsParallelShaderCompile();
+                    ShouldUseParallelShaderCompile();
                 cached_shader.Create((*result).c_str(), ShaderType, async_compile);
             }
             shader_map[key_hash] = &cached_shader;

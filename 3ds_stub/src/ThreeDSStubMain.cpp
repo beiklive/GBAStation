@@ -119,7 +119,9 @@ int main(int argc, char* argv[]) {
 
     // Keep emulation preferentially on Core 1, but do not inherit a single-core affinity mask
     // into Mesa and Azahar worker threads. Shader/cache work can then run on the idle cores.
-    constexpr u32 kApplicationCoreMask = 0xF;
+    // Horizon reserves Core 0 for this application configuration. Requesting 0xF fails with
+    // 0xE201, leaving the inherited affinity unchanged. Cores 1-3 are available to homebrew.
+    constexpr u32 kApplicationCoreMask = 0xE;
     const Result core_mask_rc = svcSetThreadCoreMask(CUR_THREAD_HANDLE, 1, kApplicationCoreMask);
     logMessage(R_SUCCEEDED(core_mask_rc) ? LogLevel::Info : LogLevel::Warning,
                "GBAStation3DSStub: svcSetThreadCoreMask rc=%#x ideal_core=1 mask=%#llx current_cpu=%u",

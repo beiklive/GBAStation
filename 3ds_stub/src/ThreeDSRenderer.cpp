@@ -339,7 +339,11 @@ void ThreeDSRenderer::DrawFps(double fps) {
     glGetBooleanv(GL_COLOR_WRITEMASK, previous_color_mask);
 
     EGLint surface_height = 720;
-    eglQuerySurface(display_, surface_, EGL_HEIGHT, &surface_height);
+    EGLint queried_surface_height = 0;
+    if (eglQuerySurface(display_, surface_, EGL_HEIGHT, &queried_surface_height) == EGL_TRUE &&
+        queried_surface_height > 0) {
+        surface_height = queried_surface_height;
+    }
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
     // Azahar's render FBO can leave a color-attachment draw target in the GL state cache. The
     // Switch window framebuffer needs GL_BACK explicitly, otherwise glClear-based glyphs vanish.

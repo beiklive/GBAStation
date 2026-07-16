@@ -129,9 +129,9 @@ public:
         : renderer_(renderer), input_(input) {
         window_info.type = Frontend::WindowSystemType::Headless;
         window_info.render_surface = nwindowGetDefault();
-        // Mesa supports shared EGL contexts. Allow Azahar to rebuild the disk shader cache on
-        // worker threads instead of serializing all compilation on the render thread.
-        strict_context_required = false;
+        // The Switch Mesa build exposes no EGL PBuffer configuration, so shared worker contexts
+        // cannot be created safely. Runtime shader compilation still uses Mesa's parallel compiler.
+        strict_context_required = true;
         Layout::FramebufferLayout layout{};
         layout.width = kOutputWidth;
         layout.height = kOutputHeight;
@@ -280,10 +280,18 @@ bool ThreeDSRuntime::Init() {
     Common::Log::Initialize("azahar.log");
     Common::Log::Start();
     impl_->azahar_logging_started = true;
-    const auto azahar_log_level = AzaharLogLevel(currentLogLevel());
+    const LogLevel requested_azahar_level = currentLogLevel();
+    // Immediate DEBUG service logging produces thousands of DSP lines per minute and measurable
+    // SD-card/CPU overhead. Keep the Stub's own detailed log, but cap Azahar at INFO for gameplay.
+    const LogLevel effective_azahar_level =
+        requested_azahar_level == LogLevel::Trace || requested_azahar_level == LogLevel::Debug
+            ? LogLevel::Info
+            : requested_azahar_level;
+    const auto azahar_log_level = AzaharLogLevel(effective_azahar_level);
     Common::Log::SetGlobalFilter(Common::Log::Filter{azahar_log_level});
-    logMessage(LogLevel::Info, "GBAStation3DSStub: Azahar logging started file=azahar.log level=%s",
-               logLevelName(currentLogLevel()));
+    logMessage(LogLevel::Info,
+               "GBAStation3DSStub: Azahar logging started file=azahar.log requested_level=%s effective_level=%s",
+               logLevelName(requested_azahar_level), logLevelName(effective_azahar_level));
 
     logMessage(LogLevel::Debug, "GBAStation3DSStub: configuring service modules");
     std::size_t service_count = 0;

@@ -31,6 +31,10 @@ GLuint LoadProgram(bool separable_program, std::span<const GLuint> shaders,
 /// Enables GL_KHR/ARB_parallel_shader_compile when the driver exposes it.
 bool SupportsParallelShaderCompile();
 
+/// Uses bounded batches so the old Switch nouveau driver cannot accumulate hundreds of pending
+/// compiler jobs and exhaust memory during effect-heavy scenes.
+bool ShouldUseParallelShaderCompile();
+
 /// Non-blocking completion check followed by link validation for an asynchronously built program.
 bool FinishAsyncProgram(GLuint program);
 

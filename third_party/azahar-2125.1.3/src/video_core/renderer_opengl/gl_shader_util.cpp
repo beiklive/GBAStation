@@ -74,6 +74,18 @@ bool SupportsParallelShaderCompile() {
     return parallel_compile_support != 0;
 }
 
+bool ShouldUseParallelShaderCompile() {
+    if (!SupportsParallelShaderCompile()) {
+        return false;
+    }
+    // A synchronous compile after seven queued programs applies back-pressure to Mesa's compiler
+    // queue. This retains parallelism without allowing effect-heavy games to enqueue hundreds of
+    // live compiler jobs, which can make nouveau terminate the process without a crash report.
+    static unsigned batch_position = 0;
+    batch_position = (batch_position + 1) % 8;
+    return batch_position != 0;
+}
+
 bool FinishAsyncProgram(GLuint program) {
     GLint complete = GL_FALSE;
     glGetProgramiv(program, GL_COMPLETION_STATUS_KHR, &complete);
