@@ -317,6 +317,7 @@ void ThreeDSRenderer::DoneCurrent() {
 void ThreeDSRenderer::PreparePresent() {
     if (initialized_) {
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+        glDrawBuffer(GL_BACK);
     }
 }
 
@@ -326,11 +327,13 @@ void ThreeDSRenderer::DrawFps(double fps) {
     }
 
     GLint previous_framebuffer = 0;
+    GLint previous_draw_buffer = GL_BACK;
     GLint previous_scissor[4]{};
     GLfloat previous_clear_color[4]{};
     GLboolean previous_color_mask[4]{};
     const GLboolean scissor_was_enabled = glIsEnabled(GL_SCISSOR_TEST);
     glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &previous_framebuffer);
+    glGetIntegerv(GL_DRAW_BUFFER, &previous_draw_buffer);
     glGetIntegerv(GL_SCISSOR_BOX, previous_scissor);
     glGetFloatv(GL_COLOR_CLEAR_VALUE, previous_clear_color);
     glGetBooleanv(GL_COLOR_WRITEMASK, previous_color_mask);
@@ -338,6 +341,9 @@ void ThreeDSRenderer::DrawFps(double fps) {
     EGLint surface_height = 720;
     eglQuerySurface(display_, surface_, EGL_HEIGHT, &surface_height);
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    // Azahar's render FBO can leave a color-attachment draw target in the GL state cache. The
+    // Switch window framebuffer needs GL_BACK explicitly, otherwise glClear-based glyphs vanish.
+    glDrawBuffer(GL_BACK);
     glEnable(GL_SCISSOR_TEST);
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 
@@ -386,6 +392,14 @@ void ThreeDSRenderer::DrawFps(double fps) {
         glDisable(GL_SCISSOR_TEST);
     }
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, previous_framebuffer);
+    glDrawBuffer(previous_draw_buffer);
+    if (!fps_overlay_logged_) {
+        const GLenum error = glGetError();
+        logMessage(error == GL_NO_ERROR ? LogLevel::Info : LogLevel::Warning,
+                   "GBAStation3DSStub: FPS overlay initialized surface_height=%d gl_error=%#x",
+                   surface_height, error);
+        fps_overlay_logged_ = true;
+    }
 }
 
 void ThreeDSRenderer::SwapBuffers() {

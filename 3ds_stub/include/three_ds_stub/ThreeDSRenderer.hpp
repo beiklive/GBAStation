@@ -35,6 +35,7 @@ private:
     EGLSurface surface_ = EGL_NO_SURFACE;
     EGLContext context_ = EGL_NO_CONTEXT;
     bool initialized_ = false;
+    bool fps_overlay_logged_ = false;
 };
 
 } // namespace beiklive::three_ds_stub

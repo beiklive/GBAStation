@@ -180,6 +180,11 @@ public:
                 fps_sample_frames_ = 0;
                 fps_sample_start_ = now;
             }
+            if (now - fps_log_start_ >= std::chrono::seconds{5}) {
+                logMessage(LogLevel::Info, "GBAStation3DSStub: present_fps=%.1f polls=%llu",
+                           displayed_fps_, static_cast<unsigned long long>(poll_count_));
+                fps_log_start_ = now;
+            }
             renderer_.DrawFps(displayed_fps_);
             renderer_.SwapBuffers();
         }
@@ -236,6 +241,7 @@ private:
     std::uint64_t fps_sample_frames_ = 0;
     std::chrono::steady_clock::time_point fps_sample_start_ =
         std::chrono::steady_clock::now();
+    std::chrono::steady_clock::time_point fps_log_start_ = std::chrono::steady_clock::now();
     double displayed_fps_ = 0.0;
 };
 
