@@ -15,7 +15,8 @@ namespace OpenGL {
  * @param type Type of the shader (GL_VERTEX_SHADER, GL_GEOMETRY_SHADER or GL_FRAGMENT_SHADER)
  * @param debug_name debug name to show in logs
  */
-GLuint LoadShader(std::string_view source, GLenum type, const std::string& debug_name);
+GLuint LoadShader(std::string_view source, GLenum type, const std::string& debug_name,
+                  bool async_compile = false);
 
 /**
  * Utility function to create and link an OpenGL GLSL shader program
@@ -25,6 +26,12 @@ GLuint LoadShader(std::string_view source, GLenum type, const std::string& debug
  * @returns Handle of the newly created OpenGL program object
  */
 GLuint LoadProgram(bool separable_program, std::span<const GLuint> shaders,
-                   const std::string& debug_name);
+                   const std::string& debug_name, bool async_compile = false);
+
+/// Enables GL_KHR/ARB_parallel_shader_compile when the driver exposes it.
+bool SupportsParallelShaderCompile();
+
+/// Non-blocking completion check followed by link validation for an asynchronously built program.
+bool FinishAsyncProgram(GLuint program);
 
 } // namespace OpenGL

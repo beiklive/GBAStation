@@ -108,7 +108,7 @@ public:
         return *this;
     }
 
-    void Create(std::string_view source, GLenum type);
+    void Create(std::string_view source, GLenum type, bool async_compile = false);
 
     void Release();
 
@@ -139,7 +139,8 @@ public:
     }
 
     /// Creates a new program from given shader objects
-    void Create(bool separable_program, std::span<const GLuint> shaders);
+    void Create(bool separable_program, std::span<const GLuint> shaders,
+                bool async_compile = false);
 
     /// Creates a new program from given shader soruce code
     void Create(std::string_view vert_shader, std::string_view frag_shader);

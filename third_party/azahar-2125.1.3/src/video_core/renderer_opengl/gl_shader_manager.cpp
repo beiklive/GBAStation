@@ -17,6 +17,7 @@
 #include "video_core/renderer_opengl/gl_resource_manager.h"
 #include "video_core/renderer_opengl/gl_shader_disk_cache.h"
 #include "video_core/renderer_opengl/gl_shader_manager.h"
+#include "video_core/renderer_opengl/gl_shader_util.h"
 #include "video_core/renderer_opengl/gl_state.h"
 #include "video_core/shader/generator/glsl_fs_shader_gen.h"
 #include "video_core/shader/generator/glsl_shader_gen.h"
@@ -110,18 +111,26 @@ public:
         }
     }
 
-    void Create(const char* source, GLenum type) {
+    void Create(const char* source, GLenum type, bool async_compile = false) {
         if (shader_or_program.index() == 0) {
-            std::get<OGLShader>(shader_or_program).Create(source, type);
+            std::get<OGLShader>(shader_or_program).Create(source, type, async_compile);
         } else {
             OGLShader shader;
-            shader.Create(source, type);
+            shader.Create(source, type, async_compile);
             OGLProgram& program = std::get<OGLProgram>(shader_or_program);
-            program.Create(true, std::array{shader.handle});
+            program.Create(true, std::array{shader.handle}, async_compile);
+            async_pending = async_compile && SupportsParallelShaderCompile();
         }
     }
 
     GLuint GetHandle() const {
+        if (async_pending) {
+            const GLuint handle = std::get<OGLProgram>(shader_or_program).handle;
+            if (!FinishAsyncProgram(handle)) {
+                return 0;
+            }
+            async_pending = false;
+        }
         if (shader_or_program.index() == 0) {
             return std::get<OGLShader>(shader_or_program).handle;
         } else {
@@ -135,6 +144,7 @@ public:
 
 private:
     std::variant<OGLShader, OGLProgram> shader_or_program;
+    mutable bool async_pending = false;
 };
 
 class TrivialVertexShader {
@@ -166,7 +176,10 @@ public:
         std::optional<std::string> result{};
         if (new_shader) {
             result = CodeGenerator(config, args...);
-            cached_shader.Create(result->c_str(), ShaderType);
+            const bool async_compile =
+                separable && Settings::values.async_shader_compilation.GetValue() &&
+                SupportsParallelShaderCompile();
+            cached_shader.Create(result->c_str(), ShaderType, async_compile);
         }
         return {iter->first, cached_shader.GetHandle(), std::move(result)};
     }
@@ -216,7 +229,10 @@ public:
             OGLShaderStage& cached_shader = iter->second;
             if (new_shader) {
                 result = std::move(program);
-                cached_shader.Create((*result).c_str(), ShaderType);
+                const bool async_compile =
+                    separable && Settings::values.async_shader_compilation.GetValue() &&
+                    SupportsParallelShaderCompile();
+                cached_shader.Create((*result).c_str(), ShaderType, async_compile);
             }
             shader_map[key_hash] = &cached_shader;
             return {key_hash, cached_shader.GetHandle(), std::move(result)};
@@ -363,11 +379,6 @@ bool ShaderProgramManager::UseProgrammableVertexShader(const Pica::RegsInternal&
     ExtraVSConfig extra = impl->CalcExtraConfig(config, accurate_mul);
 
     auto [hash, handle, result] = impl->programmable_vertex_shaders.Get(config, extra, setup);
-    if (handle == 0)
-        return false;
-    impl->current.vs = handle;
-    impl->current.vs_hash = hash;
-
     // Save VS to the disk cache if its a new shader
     if (result) {
         auto& disk_cache = impl->disk_cache;
@@ -381,6 +392,10 @@ bool ShaderProgramManager::UseProgrammableVertexShader(const Pica::RegsInternal&
         disk_cache.SaveRaw(raw);
         disk_cache.SaveDecompiled(unique_identifier, *result, accurate_mul);
     }
+    if (handle == 0)
+        return false;
+    impl->current.vs = handle;
+    impl->current.vs_hash = hash;
     return true;
 }
 
@@ -397,8 +412,10 @@ void ShaderProgramManager::UseFixedGeometryShader(const Pica::RegsInternal& regs
     };
 
     auto [hash, handle, _] = impl->fixed_geometry_shaders.Get(gs_config, extra);
-    impl->current.gs = handle;
-    impl->current.gs_hash = hash;
+    if (handle != 0) {
+        impl->current.gs = handle;
+        impl->current.gs_hash = hash;
+    }
 }
 
 void ShaderProgramManager::UseTrivialGeometryShader() {
@@ -410,8 +427,10 @@ void ShaderProgramManager::UseFragmentShader(const Pica::RegsInternal& regs,
                                              const Pica::Shader::UserConfig& user) {
     const FSConfig fs_config{regs};
     auto [hash, handle, result] = impl->fragment_shaders.Get(fs_config, user, impl->profile);
-    impl->current.fs = handle;
-    impl->current.fs_hash = hash;
+    if (handle != 0) {
+        impl->current.fs = handle;
+        impl->current.fs_hash = hash;
+    }
     // Save FS to the disk cache if its a new shader
     if (result) {
         auto& disk_cache = impl->disk_cache;
@@ -683,7 +702,12 @@ void ShaderProgramManager::LoadDiskCache(const std::atomic_bool& stop_loading,
     };
 
     if (!strict_context_required) {
+#ifdef __SWITCH__
+        const std::size_t num_workers{
+            std::min(2U, std::max(1U, std::thread::hardware_concurrency()))};
+#else
         const std::size_t num_workers{std::max(1U, std::thread::hardware_concurrency())};
+#endif
         const std::size_t bucket_size{load_raws_size / num_workers};
         std::vector<std::unique_ptr<Frontend::GraphicsContext>> contexts(num_workers);
         std::vector<std::thread> threads(num_workers);

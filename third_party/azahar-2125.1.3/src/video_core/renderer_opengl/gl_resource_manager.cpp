@@ -103,14 +103,14 @@ void OGLSampler::Release() {
     handle = 0;
 }
 
-void OGLShader::Create(std::string_view source, GLenum type) {
+void OGLShader::Create(std::string_view source, GLenum type, bool async_compile) {
     if (handle != 0)
         return;
     if (source.empty())
         return;
 
     MICROPROFILE_SCOPE(OpenGL_ResourceCreation);
-    handle = LoadShader(source, type, debug_name);
+    handle = LoadShader(source, type, debug_name, async_compile);
 }
 
 void OGLShader::Release() {
@@ -122,12 +122,13 @@ void OGLShader::Release() {
     handle = 0;
 }
 
-void OGLProgram::Create(bool separable_program, std::span<const GLuint> shaders) {
+void OGLProgram::Create(bool separable_program, std::span<const GLuint> shaders,
+                        bool async_compile) {
     if (handle != 0)
         return;
 
     MICROPROFILE_SCOPE(OpenGL_ResourceCreation);
-    handle = LoadProgram(separable_program, shaders, debug_name);
+    handle = LoadProgram(separable_program, shaders, debug_name, async_compile);
 }
 
 void OGLProgram::Create(std::string_view vert_shader, std::string_view frag_shader) {
