@@ -1,11 +1,14 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
+
+#include <EGL/egl.h>
 
 #include "three_ds_stub/ThreeDSSwitch.hpp"
 
-namespace SwRenderer {
-struct ScreenInfo;
+namespace Frontend {
+class GraphicsContext;
 }
 
 namespace beiklive::three_ds_stub {
@@ -14,13 +17,23 @@ class ThreeDSRenderer {
 public:
     bool Init();
     void Shutdown();
-    void Present(const SwRenderer::ScreenInfo& top, const SwRenderer::ScreenInfo& bottom);
+    bool IsInitialized() const;
+    bool MakeCurrent();
+    void DoneCurrent();
+    void PreparePresent();
+    void DrawFps(double fps);
+    void SwapBuffers();
+    std::unique_ptr<Frontend::GraphicsContext> CreateSharedContext() const;
     void PresentStatus(const char* title, const char* detail);
 
 private:
-    void Clear(std::uint32_t color);
+    void Clear(float red, float green, float blue);
 
-    Framebuffer framebuffer_{};
+    EGLDisplay display_ = EGL_NO_DISPLAY;
+    EGLConfig config_{};
+    EGLConfig shared_config_{};
+    EGLSurface surface_ = EGL_NO_SURFACE;
+    EGLContext context_ = EGL_NO_CONTEXT;
     bool initialized_ = false;
 };
 

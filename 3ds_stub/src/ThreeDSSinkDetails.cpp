@@ -9,7 +9,7 @@ namespace AudioCore {
 namespace {
 
 const std::array sink_details = {
-    SinkDetails{SinkType::Null, "Nintendo Switch audout",
+    SinkDetails{SinkType::Auto, "Nintendo Switch audout",
                 &beiklive::three_ds_stub::CreateThreeDSSwitchAudioSink,
                 &beiklive::three_ds_stub::ListThreeDSSwitchAudioDevices},
 };
@@ -25,4 +25,3 @@ const SinkDetails& GetSinkDetails(SinkType) {
 }
 
 } // namespace AudioCore
-

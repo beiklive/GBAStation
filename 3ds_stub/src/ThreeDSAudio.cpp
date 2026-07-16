@@ -29,6 +29,11 @@ ThreeDSSwitchAudioSink::ThreeDSSwitchAudioSink(std::string_view) {
         return;
     }
 
+    logMessage(LogLevel::Info,
+               "GBAStation3DSStub: audout initialized sample_rate=%u channels=%u format=%u",
+               audoutGetSampleRate(), audoutGetChannelCount(),
+               static_cast<unsigned>(audoutGetPcmFormat()));
+
     for (std::size_t i = 0; i < kBufferCount; ++i) {
         samples_[i] = static_cast<s16*>(aligned_alloc(0x1000, 0x1000));
         if (!samples_[i]) {
@@ -37,6 +42,7 @@ ThreeDSSwitchAudioSink::ThreeDSSwitchAudioSink(std::string_view) {
             return;
         }
         out_buffers_[i].buffer = samples_[i];
+        out_buffers_[i].next = nullptr;
         out_buffers_[i].buffer_size = 0x1000;
         out_buffers_[i].data_offset = 0;
         out_buffers_[i].data_size = kBufferBytes;
@@ -60,7 +66,7 @@ ThreeDSSwitchAudioSink::~ThreeDSSwitchAudioSink() {
 }
 
 unsigned int ThreeDSSwitchAudioSink::GetNativeSampleRate() const {
-    return AudioCore::native_sample_rate;
+    return static_cast<unsigned int>(kOutputRate);
 }
 
 void ThreeDSSwitchAudioSink::SetCallback(std::function<void(s16*, std::size_t)>) {}
@@ -110,6 +116,7 @@ bool ThreeDSSwitchAudioSink::SubmitPending() {
     const std::size_t index = static_cast<std::size_t>(free_it - busy_.begin());
     std::memcpy(samples_[index], pending_.data(), kBufferBytes);
     armDCacheFlush(samples_[index], 0x1000);
+    out_buffers_[index].next = nullptr;
     out_buffers_[index].data_size = kBufferBytes;
     const libnx_Result rc = audoutAppendAudioOutBuffer(&out_buffers_[index]);
     if (R_FAILED(rc)) {
@@ -118,6 +125,12 @@ bool ThreeDSSwitchAudioSink::SubmitPending() {
         return false;
     }
     busy_[index] = true;
+    if (!first_submit_logged_) {
+        logMessage(LogLevel::Info,
+                   "GBAStation3DSStub: first audout buffer submitted frames=%zu bytes=%zu",
+                   kFramesPerBuffer, kBufferBytes);
+        first_submit_logged_ = true;
+    }
     pending_.erase(pending_.begin(), pending_.begin() + kFramesPerBuffer * kChannels);
     return true;
 }
@@ -125,6 +138,13 @@ bool ThreeDSSwitchAudioSink::SubmitPending() {
 void ThreeDSSwitchAudioSink::PushSamples(const void* data, std::size_t num_samples) {
     if (!initialized_ || !data || num_samples == 0) {
         return;
+    }
+
+    if (!first_push_logged_) {
+        logMessage(LogLevel::Info,
+                   "GBAStation3DSStub: first audio PushSamples frames=%zu source_rate=%.0f output_rate=%.0f",
+                   num_samples, kSourceRate, kOutputRate);
+        first_push_logged_ = true;
     }
 
     const auto* source = static_cast<const s16*>(data);

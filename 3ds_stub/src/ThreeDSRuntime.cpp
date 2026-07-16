@@ -23,7 +23,7 @@
 #include "three_ds_stub/ThreeDSLog.hpp"
 #include "three_ds_stub/ThreeDSRenderer.hpp"
 #include "video_core/gpu.h"
-#include "video_core/renderer_software/renderer_software.h"
+#include "video_core/renderer_base.h"
 
 namespace beiklive::three_ds_stub {
 namespace {
@@ -31,6 +31,24 @@ namespace {
 constexpr unsigned kOutputWidth = 1280;
 constexpr unsigned kOutputHeight = 720;
 constexpr auto kSlowRunLoopThreshold = std::chrono::milliseconds{500};
+
+void LogProcessMemory(const char* stage) {
+    u64 used = 0;
+    u64 total = 0;
+    const libnx_Result used_rc =
+        svcGetInfo(&used, InfoType_UsedMemorySize, CUR_PROCESS_HANDLE, 0);
+    const libnx_Result total_rc =
+        svcGetInfo(&total, InfoType_TotalMemorySize, CUR_PROCESS_HANDLE, 0);
+    if (R_SUCCEEDED(used_rc) && R_SUCCEEDED(total_rc)) {
+        logMessage(LogLevel::Info,
+                   "GBAStation3DSStub: memory stage=%s used_mib=%llu total_mib=%llu free_mib=%llu",
+                   stage ? stage : "unknown",
+                   static_cast<unsigned long long>(used / (1024 * 1024)),
+                   static_cast<unsigned long long>(total / (1024 * 1024)),
+                   static_cast<unsigned long long>((total - std::min(total, used)) /
+                                                   (1024 * 1024)));
+    }
+}
 
 Common::Log::Level AzaharLogLevel(LogLevel level) {
     switch (level) {
@@ -110,6 +128,10 @@ public:
     ThreeDSEmuWindow(ThreeDSRenderer& renderer, ThreeDSInput& input)
         : renderer_(renderer), input_(input) {
         window_info.type = Frontend::WindowSystemType::Headless;
+        window_info.render_surface = nwindowGetDefault();
+        // Mesa supports shared EGL contexts. Allow Azahar to rebuild the disk shader cache on
+        // worker threads instead of serializing all compilation on the render thread.
+        strict_context_required = false;
         Layout::FramebufferLayout layout{};
         layout.width = kOutputWidth;
         layout.height = kOutputHeight;
@@ -117,7 +139,9 @@ public:
         layout.bottom_screen_enabled = true;
         layout.top_screen = {240, 0, 1040, 480};
         layout.bottom_screen = {480, 480, 800, 720};
-        layout.is_rotated = false;
+        // The 3DS LCD memory is stored rotated. Landscape tells Azahar to rotate it back into the
+        // normal horizontal 400x240 / 320x240 screen orientation.
+        layout.is_rotated = true;
         NotifyFramebufferLayoutChanged(layout);
     }
 
@@ -141,20 +165,53 @@ public:
 
         auto& system = Core::System::GetInstance();
         if (system.IsPoweredOn()) {
-            auto& software =
-                static_cast<SwRenderer::RendererSoftware&>(system.GPU().Renderer());
-            const auto& top = software.Screen(VideoCore::ScreenId::TopLeft);
-            const auto& bottom = software.Screen(VideoCore::ScreenId::Bottom);
             if (!screen_info_logged_) {
-                logMessage(LogLevel::Info,
-                           "GBAStation3DSStub: first screen buffers top=%ux%u bytes=%zu bottom=%ux%u bytes=%zu",
-                           top.width, top.height, top.pixels.size(), bottom.width, bottom.height,
-                           bottom.pixels.size());
+                logMessage(LogLevel::Info, "GBAStation3DSStub: first OpenGL frame present");
                 screen_info_logged_ = true;
             }
-            renderer_.Present(top, bottom);
+            renderer_.PreparePresent();
+            system.GPU().Renderer().TryPresent(0, false);
+            ++fps_sample_frames_;
+            const auto now = std::chrono::steady_clock::now();
+            const auto elapsed = now - fps_sample_start_;
+            if (elapsed >= std::chrono::milliseconds{500}) {
+                displayed_fps_ = static_cast<double>(fps_sample_frames_) /
+                                 std::chrono::duration<double>(elapsed).count();
+                fps_sample_frames_ = 0;
+                fps_sample_start_ = now;
+            }
+            renderer_.DrawFps(displayed_fps_);
+            renderer_.SwapBuffers();
         }
         frame_ready_ = true;
+    }
+
+    bool IsGLES() override {
+        return false;
+    }
+
+    void SwapBuffers() override {
+        renderer_.SwapBuffers();
+    }
+
+    void MakeCurrent() override {
+        renderer_.MakeCurrent();
+    }
+
+    void DoneCurrent() override {
+        renderer_.DoneCurrent();
+    }
+
+    std::unique_ptr<Frontend::GraphicsContext> CreateSharedContext() const override {
+        return renderer_.CreateSharedContext();
+    }
+
+    void SaveContext() override {
+        renderer_.DoneCurrent();
+    }
+
+    void RestoreContext() override {
+        renderer_.MakeCurrent();
     }
 
     void BeginFrame() {
@@ -176,6 +233,10 @@ private:
     bool touch_active_ = false;
     bool screen_info_logged_ = false;
     std::uint64_t poll_count_ = 0;
+    std::uint64_t fps_sample_frames_ = 0;
+    std::chrono::steady_clock::time_point fps_sample_start_ =
+        std::chrono::steady_clock::now();
+    double displayed_fps_ = 0.0;
 };
 
 } // namespace
@@ -243,7 +304,7 @@ bool ThreeDSRuntime::Init() {
 
     logMessage(LogLevel::Debug, "GBAStation3DSStub: framebuffer init begin");
     if (!impl_->renderer.Init()) {
-        impl_->last_error = "Switch framebuffer initialization failed";
+        impl_->last_error = "Switch OpenGL initialization failed";
         logMessage(LogLevel::Error, "GBAStation3DSStub: %s", impl_->last_error.c_str());
         return false;
     }
@@ -262,27 +323,29 @@ bool ThreeDSRuntime::LoadGame(const std::string& path) {
         return false;
     }
 
-    Settings::values.graphics_api = Settings::GraphicsAPI::Software;
+    Settings::values.graphics_api = Settings::GraphicsAPI::OpenGL;
     Settings::values.use_cpu_jit = true;
-    // The ARM64 Pica shader JIT corrupts host state on Switch after entering real 3D draws.
-    // Keep the CPU Dynarmic JIT enabled, but use the safe shader interpreter for now.
-    Settings::values.use_shader_jit = false;
-    Settings::values.use_hw_shader = false;
-    Settings::values.use_disk_shader_cache = false;
-    Settings::values.async_shader_compilation = false;
+    Settings::values.is_new_3ds = false;
+    // The Switch ARM64 shader JIT has a patched main/subroutine return stack slot. Keeping this
+    // enabled avoids interpreting every Pica vertex shader, which is prohibitively slow.
+    Settings::values.use_shader_jit = true;
+    Settings::values.use_hw_shader = true;
+    Settings::values.shaders_accurate_mul = false;
+    Settings::values.use_disk_shader_cache = true;
+    Settings::values.async_shader_compilation = true;
     Settings::values.async_presentation = false;
     Settings::values.resolution_factor = 1;
     Settings::values.frame_limit = 100.0;
     Settings::values.audio_emulation = Settings::AudioEmulation::HLE;
     Settings::values.enable_audio_stretching = false;
-    Settings::values.output_type = AudioCore::SinkType::Null;
+    Settings::values.output_type = AudioCore::SinkType::Auto;
     Settings::values.output_device = "Nintendo Switch audout";
     Settings::values.input_type = AudioCore::InputType::Null;
     Settings::values.use_virtual_sd = true;
     Settings::values.plugin_loader_enabled = false;
 
     logMessage(LogLevel::Info,
-               "GBAStation3DSStub: settings graphics=software cpu_jit=true shader_jit=false hw_shader=false disk_shader_cache=false async_shader=false async_present=false resolution=1 frame_limit=100 audio=HLE output=null virtual_sd=true plugins=false");
+               "GBAStation3DSStub: settings model=old3ds graphics=opengl cpu_jit=true shader_jit=true hw_shader=true accurate_mul=false disk_shader_cache=true async_shader=true async_present=false resolution=1 frame_limit=100 audio=HLE output=audout virtual_sd=true plugins=false");
 
     auto& system = Core::System::GetInstance();
     logMessage(LogLevel::Info, "GBAStation3DSStub: system.Load begin path=%s", path.c_str());
@@ -308,6 +371,7 @@ bool ThreeDSRuntime::LoadGame(const std::string& path) {
     impl_->loaded = true;
     logMessage(LogLevel::Info, "GBAStation3DSStub: game loaded path=%s title_id=%016llx",
                path.c_str(), static_cast<unsigned long long>(program_id));
+    LogProcessMemory("game_loaded");
     return true;
 }
 
@@ -373,12 +437,15 @@ bool ThreeDSRuntime::RunFrame() {
 
     if (impl_->window->FrameReady()) {
         ++impl_->frame_count;
-        if (impl_->frame_count == 1 || impl_->frame_count % 60 == 0) {
+        if (impl_->frame_count == 1 || impl_->frame_count % 300 == 0) {
             logMessage(LogLevel::Debug,
                        "GBAStation3DSStub: frame heartbeat frame=%llu run_loop_calls=%llu polls=%llu",
                        static_cast<unsigned long long>(impl_->frame_count),
                        static_cast<unsigned long long>(impl_->run_loop_count),
                        static_cast<unsigned long long>(impl_->window->PollCount()));
+            if (impl_->frame_count % 300 == 0) {
+                LogProcessMemory("frame_heartbeat");
+            }
         }
     }
     return !impl_->input.ExitRequested();

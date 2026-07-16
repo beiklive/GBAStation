@@ -81,11 +81,11 @@ void ConfigureAzaharBindings() {
     profile.buttons.fill("engine:null");
     profile.analogs.fill("engine:null");
 
-    // Nintendo labels differ between Switch and 3DS physical placement.
-    profile.buttons[Settings::NativeButton::A] = ButtonParam(HidNpadButton_B);
-    profile.buttons[Settings::NativeButton::B] = ButtonParam(HidNpadButton_A);
-    profile.buttons[Settings::NativeButton::X] = ButtonParam(HidNpadButton_Y);
-    profile.buttons[Settings::NativeButton::Y] = ButtonParam(HidNpadButton_X);
+    // Switch and 3DS both use Nintendo's A-right, B-bottom, X-top, Y-left layout.
+    profile.buttons[Settings::NativeButton::A] = ButtonParam(HidNpadButton_A);
+    profile.buttons[Settings::NativeButton::B] = ButtonParam(HidNpadButton_B);
+    profile.buttons[Settings::NativeButton::X] = ButtonParam(HidNpadButton_X);
+    profile.buttons[Settings::NativeButton::Y] = ButtonParam(HidNpadButton_Y);
     profile.buttons[Settings::NativeButton::Up] = ButtonParam(HidNpadButton_Up);
     profile.buttons[Settings::NativeButton::Down] = ButtonParam(HidNpadButton_Down);
     profile.buttons[Settings::NativeButton::Left] = ButtonParam(HidNpadButton_Left);

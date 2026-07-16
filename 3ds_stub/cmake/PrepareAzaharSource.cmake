@@ -7,7 +7,7 @@ endif()
 set(STAGE_SOURCE ${STAGE_ROOT}/source)
 set(DOWNLOAD_DIR ${STAGE_ROOT}/downloads)
 file(MAKE_DIRECTORY ${STAGE_SOURCE} ${DOWNLOAD_DIR})
-set(BASE_SOURCE_MARKER ${STAGE_SOURCE}/.gbastation-azahar-2125.1.3-v2)
+set(BASE_SOURCE_MARKER ${STAGE_SOURCE}/.gbastation-azahar-2125.1.3-v3)
 if (NOT EXISTS ${BASE_SOURCE_MARKER})
     file(COPY ${AZAHAR_SOURCE_DIR}/ DESTINATION ${STAGE_SOURCE})
     file(WRITE ${BASE_SOURCE_MARKER} "2125.1.3\n")
@@ -152,19 +152,95 @@ foreach(dynarmic_address_space IN ITEMS
     write_if_different(${dynarmic_address_space} "${dynarmic_address_space_contents}")
 endforeach()
 
-# A 128 MiB cache is excessive per emulated ARM core and per page table on Switch. 32 MiB is
-# large enough for 3DS application code while substantially reducing committed JIT memory.
+# A 128 MiB cache is excessive per emulated ARM core and per page table on Switch. The stub runs
+# Old 3DS software with two cores, and 16 MiB per core leaves enough room for Mesa's shader cache.
 set(arm_dynarmic_source ${STAGE_SOURCE}/src/core/arm/dynarmic/arm_dynarmic.cpp)
 file(READ ${arm_dynarmic_source} arm_dynarmic_contents)
-if (NOT arm_dynarmic_contents MATCHES "config.code_cache_size = 32")
+string(REPLACE
+    "config.code_cache_size = 32 * 1024 * 1024;"
+    "config.code_cache_size = 16 * 1024 * 1024;"
+    arm_dynarmic_contents
+    "${arm_dynarmic_contents}"
+)
+if (NOT arm_dynarmic_contents MATCHES "config.code_cache_size = 16")
     string(REPLACE
         "    config.callbacks = cb.get();"
-        "    config.callbacks = cb.get();\n#ifdef __SWITCH__\n    config.code_cache_size = 32 * 1024 * 1024;\n#endif"
+        "    config.callbacks = cb.get();\n#ifdef __SWITCH__\n    config.code_cache_size = 16 * 1024 * 1024;\n#endif"
         arm_dynarmic_contents
         "${arm_dynarmic_contents}"
     )
 endif()
 write_if_different(${arm_dynarmic_source} "${arm_dynarmic_contents}")
+
+# DynCom is linked as a fallback even though the Switch runtime always uses Dynarmic. Its upstream
+# translation cache reserves 125 MiB of BSS, so keep only a small emergency fallback cache.
+set(arm_dyncom_header ${STAGE_SOURCE}/src/core/arm/dyncom/arm_dyncom_trans.h)
+file(READ ${arm_dyncom_header} arm_dyncom_header_contents)
+if (NOT arm_dyncom_header_contents MATCHES "GBASTATION_SWITCH_DYNCOM_CACHE")
+    string(REPLACE
+        "#define TRANS_CACHE_SIZE (64 * 1024 * 2000)"
+        "#ifdef __SWITCH__\n#define GBASTATION_SWITCH_DYNCOM_CACHE 1\n#define TRANS_CACHE_SIZE (4 * 1024 * 1024)\n#else\n#define TRANS_CACHE_SIZE (64 * 1024 * 2000)\n#endif"
+        arm_dyncom_header_contents
+        "${arm_dyncom_header_contents}"
+    )
+endif()
+write_if_different(${arm_dyncom_header} "${arm_dyncom_header_contents}")
+
+# Upstream always allocates the full 256 MiB New 3DS FCRAM buffer. Allocate only the 128 MiB Old
+# 3DS buffer when that model is selected, and report the matching backing-memory size.
+set(memory_source ${STAGE_SOURCE}/src/core/memory.cpp)
+file(READ ${memory_source} memory_contents)
+if (NOT memory_contents MATCHES "GBASTATION_SWITCH_MODEL_FCRAM")
+    string(REPLACE
+        "    std::unique_ptr<u8[]> fcram = std::make_unique<u8[]>(Memory::FCRAM_N3DS_SIZE);"
+        "#ifdef __SWITCH__\n    static constexpr bool GBASTATION_SWITCH_MODEL_FCRAM = true;\n    std::unique_ptr<u8[]> fcram = std::make_unique<u8[]>(\n        Settings::values.is_new_3ds.GetValue() ? Memory::FCRAM_N3DS_SIZE : Memory::FCRAM_SIZE);\n#else\n    std::unique_ptr<u8[]> fcram = std::make_unique<u8[]>(Memory::FCRAM_N3DS_SIZE);\n#endif"
+        memory_contents
+        "${memory_contents}"
+    )
+    string(REPLACE
+        "        case Region::FCRAM:\n            return FCRAM_N3DS_SIZE;"
+        "        case Region::FCRAM:\n            return Settings::values.is_new_3ds.GetValue() ? FCRAM_N3DS_SIZE : FCRAM_SIZE;"
+        memory_contents
+        "${memory_contents}"
+    )
+    string(REPLACE
+        "        std::make_pair(FCRAM_PADDR, FCRAM_N3DS_SIZE),"
+        "        std::make_pair(FCRAM_PADDR, Settings::values.is_new_3ds.GetValue()\n                                             ? FCRAM_N3DS_SIZE\n                                             : FCRAM_SIZE),"
+        memory_contents
+        "${memory_contents}"
+    )
+    string(REPLACE
+        "impl->fcram.get() + Memory::FCRAM_N3DS_SIZE"
+        "impl->fcram.get() + impl->GetSize(Region::FCRAM)"
+        memory_contents
+        "${memory_contents}"
+    )
+    string(REPLACE
+        "ASSERT(offset <= Memory::FCRAM_N3DS_SIZE);"
+        "ASSERT(offset <= impl->GetSize(Region::FCRAM));"
+        memory_contents
+        "${memory_contents}"
+    )
+endif()
+string(REPLACE
+    "    constexpr std::array memory_areas = {"
+    "    const std::array memory_areas = {"
+    memory_contents
+    "${memory_contents}"
+)
+write_if_different(${memory_source} "${memory_contents}")
+
+# The standalone Switch frontend supplies its own audout sink registry. CMake source properties
+# applied after audio_core has already been declared do not remove the upstream object, and the
+# static linker can then select the upstream NullSink registry first. Keep the upstream translation
+# unit empty on Switch so ThreeDSSinkDetails.cpp is the only provider of these symbols.
+set(audio_sink_details_source ${STAGE_SOURCE}/src/audio_core/sink_details.cpp)
+file(READ ${audio_sink_details_source} audio_sink_details_contents)
+if (NOT audio_sink_details_contents MATCHES "GBASTATION_SWITCH_AUDIO_SINK_REGISTRY")
+    set(audio_sink_details_contents
+        "#ifndef __SWITCH__\n// GBASTATION_SWITCH_AUDIO_SINK_REGISTRY\n${audio_sink_details_contents}\n#endif\n")
+endif()
+write_if_different(${audio_sink_details_source} "${audio_sink_details_contents}")
 
 # Oaknut uses separate writable and executable aliases on Switch. The ARM64 Pica shader JIT must
 # write through ptr() but call and branch through xptr(). Upstream assumes both aliases are equal.
@@ -180,6 +256,40 @@ foreach(shader_jit_source IN ITEMS
     )
     write_if_different(${shader_jit_source} "${shader_jit_contents}")
 endforeach()
+
+# The ARM64 shader JIT uses SP+16 to distinguish a shader subroutine return from the main shader
+# body. Upstream reserves only 16 bytes and writes the main-body sentinel at SP+8, so SP+16 aliases
+# the saved host x19 register. When the caller's x19 (the current vertex id in LoadVertices) happens
+# to equal a shader return offset, the JIT returns without restoring its stack frame. Reserve a full
+# 32-byte scratch area and place the sentinel in the slot that Compile_Return actually reads.
+set(shader_jit_a64_source
+    ${STAGE_SOURCE}/src/video_core/shader/shader_jit_a64_compiler.cpp)
+file(READ ${shader_jit_a64_source} shader_jit_a64_contents)
+string(REPLACE
+    "    ABI_PushRegisters(*this, ABI_ALL_CALLEE_SAVED, 16);\n    MVN(XSCRATCH0, XZR);\n    STR(XSCRATCH0, SP, 8);"
+    "    ABI_PushRegisters(*this, ABI_ALL_CALLEE_SAVED, 32);\n    MVN(XSCRATCH0, XZR);\n    STR(XSCRATCH0, SP, 16);"
+    shader_jit_a64_contents
+    "${shader_jit_a64_contents}"
+)
+string(REPLACE
+    "    ABI_PopRegisters(*this, ABI_ALL_CALLEE_SAVED, 16);"
+    "    ABI_PopRegisters(*this, ABI_ALL_CALLEE_SAVED, 32);"
+    shader_jit_a64_contents
+    "${shader_jit_a64_contents}"
+)
+string(REPLACE
+    "    // The stack pointer is 8 modulo 16 at the entry of a procedure\n    // We reserve 16 bytes and assign a dummy value to the first 8 bytes, to catch any potential\n    // return checks (see Compile_Return) that happen in shader main routine."
+    "    // Reserve scratch slots for CALL bookkeeping and the main-body return sentinel.\n    // Compile_Return reads SP+16 in the main body and the pushed return offset in subroutines."
+    shader_jit_a64_contents
+    "${shader_jit_a64_contents}"
+)
+if (NOT shader_jit_a64_contents MATCHES
+        "ABI_PushRegisters\\(\\*this, ABI_ALL_CALLEE_SAVED, 32\\).+STR\\(XSCRATCH0, SP, 16\\)"
+    OR NOT shader_jit_a64_contents MATCHES
+        "ABI_PopRegisters\\(\\*this, ABI_ALL_CALLEE_SAVED, 32\\)")
+    message(FATAL_ERROR "Failed to apply the ARM64 shader JIT return-stack fix")
+endif()
+write_if_different(${shader_jit_a64_source} "${shader_jit_a64_contents}")
 
 set(common_error_source ${STAGE_SOURCE}/src/common/error.cpp)
 file(READ ${common_error_source} common_error_contents)

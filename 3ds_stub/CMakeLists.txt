@@ -29,12 +29,16 @@ if (PROJECT_NAME STREQUAL "citra" AND GBASTATION_3DS_STUB_IN_TREE)
     target_include_directories(GBAStation3DSStub PRIVATE
         ${THREEDS_STUB_DIR}/include
         ${THREEDS_STUB_AZAHAR_DIR}/src
+        $ENV{DEVKITPRO}/portlibs/switch/include
+    )
+    target_link_directories(GBAStation3DSStub PRIVATE
+        $ENV{DEVKITPRO}/portlibs/switch/lib
     )
     target_compile_definitions(GBAStation3DSStub PRIVATE
         __SWITCH__
         SWITCH
         HAVE_LIBNX
-        ENABLE_SOFTWARE_RENDERER
+        ENABLE_OPENGL
     )
     target_compile_options(GBAStation3DSStub PRIVATE
         -O3
@@ -46,7 +50,14 @@ if (PROJECT_NAME STREQUAL "citra" AND GBASTATION_3DS_STUB_IN_TREE)
         -pie
         -Wl,--gc-sections
     )
-    target_link_libraries(GBAStation3DSStub PRIVATE azahar_core nx)
+    target_link_libraries(GBAStation3DSStub PRIVATE
+        azahar_core
+        glad
+        EGL
+        glapi
+        drm_nouveau
+        nx
+    )
 
     # The Switch build replaces Azahar's desktop sink registry with a libnx audout sink.
     set_source_files_properties(
@@ -135,7 +146,7 @@ ExternalProject_Add(GBAStation3DSStubExternal
         -DENABLE_OPENAL=OFF
         -DENABLE_LIBUSB=OFF
         -DENABLE_SOFTWARE_RENDERER=ON
-        -DENABLE_OPENGL=OFF
+        -DENABLE_OPENGL=ON
         -DENABLE_VULKAN=OFF
         -DUSE_DISCORD_PRESENCE=OFF
         -DENABLE_MICROPROFILE=OFF

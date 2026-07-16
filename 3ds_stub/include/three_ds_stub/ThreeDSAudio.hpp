@@ -41,6 +41,8 @@ private:
     std::vector<s16> pending_;
     double resample_position_ = 0.0;
     bool initialized_ = false;
+    bool first_push_logged_ = false;
+    bool first_submit_logged_ = false;
 };
 
 std::unique_ptr<AudioCore::Sink> CreateThreeDSSwitchAudioSink(std::string_view device_id);
