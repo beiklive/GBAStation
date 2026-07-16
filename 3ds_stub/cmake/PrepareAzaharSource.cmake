@@ -7,7 +7,7 @@ endif()
 set(STAGE_SOURCE ${STAGE_ROOT}/source)
 set(DOWNLOAD_DIR ${STAGE_ROOT}/downloads)
 file(MAKE_DIRECTORY ${STAGE_SOURCE} ${DOWNLOAD_DIR})
-set(BASE_SOURCE_MARKER ${STAGE_SOURCE}/.gbastation-azahar-2125.1.3-v3)
+set(BASE_SOURCE_MARKER ${STAGE_SOURCE}/.gbastation-azahar-2125.1.3-v4)
 if (NOT EXISTS ${BASE_SOURCE_MARKER})
     file(COPY ${AZAHAR_SOURCE_DIR}/ DESTINATION ${STAGE_SOURCE})
     file(WRITE ${BASE_SOURCE_MARKER} "2125.1.3\n")
@@ -229,6 +229,19 @@ string(REPLACE
     "${memory_contents}"
 )
 write_if_different(${memory_source} "${memory_contents}")
+
+# Rebuild cached OpenGL shaders on the two otherwise idle Switch CPU cores. Limiting this to two
+# shared contexts avoids the memory overhead of one Mesa context per reported hardware thread.
+set(gl_shader_manager_source
+    ${STAGE_SOURCE}/src/video_core/renderer_opengl/gl_shader_manager.cpp)
+file(READ ${gl_shader_manager_source} gl_shader_manager_contents)
+string(REPLACE
+    "    if (!strict_context_required) {\n        const std::size_t num_workers{std::max(1U, std::thread::hardware_concurrency())};"
+    "    if (!strict_context_required) {\n#ifdef __SWITCH__\n        const std::size_t num_workers{\n            std::min(2U, std::max(1U, std::thread::hardware_concurrency()))};\n#else\n        const std::size_t num_workers{std::max(1U, std::thread::hardware_concurrency())};\n#endif"
+    gl_shader_manager_contents
+    "${gl_shader_manager_contents}"
+)
+write_if_different(${gl_shader_manager_source} "${gl_shader_manager_contents}")
 
 # The standalone Switch frontend supplies its own audout sink registry. CMake source properties
 # applied after audio_core has already been declared do not remove the upstream object, and the
