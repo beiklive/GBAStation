@@ -1230,12 +1230,16 @@ NonStupidBitField<Size/VRAMDirtyGranularity> VRAMTrackingSet<Size, MappingGranul
                 static_assert(VRAMDirtyGranularity == 512, "");
                 if (MappingGranularity == 16*1024)
                 {
-                    u32 dirty = ((u32*)VRAMDirty[num].Data)[i & (VRAMMask[num] >> 14)];
+                    const u32 dirtyIndex = i & (VRAMMask[num] >> 14);
+                    const u32 dirty = (u32)(VRAMDirty[num].Data[dirtyIndex >> 1]
+                        >> ((dirtyIndex & 1) * 32));
                     result.Data[i / 2] |= (u64)dirty << ((i&1)*32);
                 }
                 else if (MappingGranularity == 8*1024)
                 {
-                    u16 dirty = ((u16*)VRAMDirty[num].Data)[i & (VRAMMask[num] >> 13)];
+                    const u32 dirtyIndex = i & (VRAMMask[num] >> 13);
+                    const u16 dirty = (u16)(VRAMDirty[num].Data[dirtyIndex >> 2]
+                        >> ((dirtyIndex & 3) * 16));
                     result.Data[i / 4] |= (u64)dirty << ((i&3)*16);
                 }
                 else if (MappingGranularity == 128*1024)

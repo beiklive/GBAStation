@@ -29,7 +29,7 @@ include(${BOREALIS_LIBRARY}/cmake/toolchain.cmake)
 project(GBAStation)
 set(VERSION_MAJOR "0")
 set(VERSION_MINOR "3")
-set(VERSION_ALTER "0")
+set(VERSION_ALTER "1")
 set(VERSION_BUILD "0")
 set(PACKAGE_NAME "com.beiklive.GBAStation")
 set(PROJECT_AUTHOR "beiklive")
@@ -294,13 +294,12 @@ elseif (PLATFORM_SWITCH)
     add_custom_target(${PROJECT_NAME}.nro DEPENDS ${PROJECT_NAME}
         COMMAND ${NX_NACPTOOL_EXE} --create "${PROJECT_NAME}" "${PROJECT_AUTHOR}" "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_ALTER}" ${PROJECT_NAME}.nacp --titleid=${PROJECT_TITLEID}
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_RESOURCES} ${CMAKE_BINARY_DIR}/resources
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_BINARY_DIR}/GBAStationNDSStub.nro ${CMAKE_BINARY_DIR}/resources/core/GBAStationNDSStub.nro
+        COMMAND ${CMAKE_COMMAND} -E rm -f ${CMAKE_BINARY_DIR}/resources/core/GBAStationNDSStub.nro
         COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/resources/font
         COMMAND ${NX_ELF2NRO_EXE} ${PROJECT_NAME}.elf ${PROJECT_NAME}.nro --icon=${PROJECT_ICON} --nacp=${PROJECT_NAME}.nacp --romfsdir=${CMAKE_BINARY_DIR}/resources
     )
 
     add_subdirectory(nds_stub)
-    add_dependencies(${PROJECT_NAME}.nro GBAStationNDSStub.nro)
 
 endif ()
 

@@ -2520,7 +2520,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
     NdsDisplaySettings initialDisplay {};
     initialDisplay.fastForwardMultiplier = inputConfig.fastForwardMultiplier();
     initialDisplay.linearFiltering = inputConfig.value("display.filter", "nearest") == "linear";
-    initialDisplay.renderScale = 1;
+    initialDisplay.renderScale = std::clamp(inputConfig.intValue("core.melonds_render_scale", 1), 1, 4);
     initialDisplay.integerScale = options.integerScale;
     initialDisplay.layout = layoutIndexFromId(options.screenLayout.empty() ? "priority_top" : options.screenLayout);
     initialDisplay.orientation = orientationIndexFromId(options.screenOrientation.empty() ? "0" : options.screenOrientation);
@@ -3018,10 +3018,10 @@ int RunDekoRuntime(const DekoRunOptions& options)
             const int requestedRenderScale = std::clamp(menuLayer.displaySettings().renderScale, 1, 4);
             if (requestedRenderScale != appliedRenderScale)
             {
-                // Native resolution keeps the original DS integer coordinates. At higher
-                // scales use the 1/16-pixel coordinates, otherwise the integer rounding is
-                // magnified and moving polygon faces visibly wobble.
-                GPU::RenderSettings renderSettings {true, requestedRenderScale, requestedRenderScale > 1};
+                GPU::RenderSettings renderSettings {
+                    inputConfig.intValue("core.melonds_threaded_renderer", 1) != 0,
+                    requestedRenderScale,
+                    inputConfig.intValue("core.melonds_better_polygons", 0) != 0};
                 GPU::SetRenderSettings(0, renderSettings);
                 appliedRenderScale = requestedRenderScale;
             }

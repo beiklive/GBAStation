@@ -31,28 +31,23 @@
 
 inline u64 GetRangedBitMask(u32 idx, u32 startBit, u32 bitsCount)
 {
-    u32 startEntry = startBit >> 6;
-    u64 entriesCount = ((startBit + bitsCount + 0x3F) >> 6) - startEntry;
-
-    if (entriesCount > 1)
-    {
-        if (idx == startEntry)
-            return 0xFFFFFFFFFFFFFFFF << (startBit & 0x3F);
-        if (((startBit + bitsCount) & 0x3F) && idx == startEntry + entriesCount - 1)
-            return ~(0xFFFFFFFFFFFFFFFF << ((startBit + bitsCount) & 0x3F));
-        else
-            return 0xFFFFFFFFFFFFFFFF;
-
-        return 0xFFFFFFFFFFFFFFFF;
-    }
-    else if (idx == startEntry)
-    {
-        return ((1ULL << bitsCount) - 1) << (startBit & 0x3F);
-    }
-    else
-    {
+    if (bitsCount == 0)
         return 0;
-    }
+
+    const u64 rangeStart = startBit;
+    const u64 rangeEnd = rangeStart + bitsCount;
+    const u64 entryStart = (u64)idx * 64;
+    const u64 entryEnd = entryStart + 64;
+    if (rangeStart >= entryEnd || rangeEnd <= entryStart)
+        return 0;
+
+    const u32 firstBit = (u32)(std::max(rangeStart, entryStart) - entryStart);
+    const u32 endBit = (u32)(std::min(rangeEnd, entryEnd) - entryStart);
+    const u64 lowMask = firstBit == 0 ? 0xFFFFFFFFFFFFFFFFULL
+                                     : 0xFFFFFFFFFFFFFFFFULL << firstBit;
+    const u64 highMask = endBit == 64 ? 0xFFFFFFFFFFFFFFFFULL
+                                     : (1ULL << endBit) - 1;
+    return lowMask & highMask;
 }
 
 template <u32 Size>
@@ -118,7 +113,7 @@ struct NonStupidBitField
             BitIdx = __builtin_ctzll(RemainingBits);
             RemainingBits &= ~(1ULL << BitIdx);
 
-            if ((Size & 0x3F) && BitIdx >= Size)
+            if ((Size & 0x3F) && DataIdx == DataLength - 1 && BitIdx >= (Size & 0x3F))
                 DataIdx = DataLength;
         }
 
@@ -196,23 +191,14 @@ struct NonStupidBitField
 
     void SetRange(u32 startBit, u32 bitsCount)
     {
-        u32 startEntry = startBit >> 6;
-        u64 entriesCount = (((startBit + bitsCount + 0x3F) & ~0x3F) >> 6) - startEntry;
+        if (bitsCount == 0 || startBit >= Size)
+            return;
 
-        if (entriesCount > 1)
-        {
-            Data[startEntry] |= 0xFFFFFFFFFFFFFFFF << (startBit & 0x3F);
-            if ((startBit + bitsCount) & 0x3F)
-                Data[startEntry + entriesCount - 1] |= ~(0xFFFFFFFFFFFFFFFF << ((startBit + bitsCount) & 0x3F));
-            else
-                Data[startEntry + entriesCount - 1] = 0xFFFFFFFFFFFFFFFF;
-            for (u64 i = startEntry + 1; i < startEntry + entriesCount - 1; i++)
-                Data[i] = 0xFFFFFFFFFFFFFFFF;
-        }
-        else
-        {
-            Data[startEntry] |= ((1ULL << bitsCount) - 1) << (startBit & 0x3F);
-        }
+        bitsCount = std::min(bitsCount, Size - startBit);
+        const u32 firstEntry = startBit >> 6;
+        const u32 lastEntry = (startBit + bitsCount - 1) >> 6;
+        for (u32 i = firstEntry; i <= lastEntry; i++)
+            Data[i] |= GetRangedBitMask(i, startBit, bitsCount);
     }
 
     int Min() const
@@ -255,9 +241,9 @@ struct NonStupidBitField
     template<u32 OtherSize>
     NonStupidBitField& operator=(const NonStupidBitField<OtherSize>& other)
     {
-        memcpy(Data, other.Data, std::min(other.DataLength, DataLength));
+        memcpy(Data, other.Data, std::min(other.DataLength, DataLength) * sizeof(u64));
         if (Size > OtherSize)
-            memset(Data + other.DataLength, 0, DataLength - other.DataLength);
+            memset(Data + other.DataLength, 0, (DataLength - other.DataLength) * sizeof(u64));
         return *this;
     }
 

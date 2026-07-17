@@ -675,7 +675,8 @@ void DekoRenderer::DrawScanline(u32 line, Unit* unit)
     }
 
     if (uploadBarrier)
-        EmuCmdBuf.barrier(DkBarrier_Full, DkInvalidateFlags_Image);
+        EmuCmdBuf.barrier(DkBarrier_Full,
+            DkInvalidateFlags_Image | DkInvalidateFlags_L2Cache);
 
     if (n3dline == 191)
     {
@@ -747,15 +748,7 @@ void DekoRenderer::DrawSprites(u32 line, Unit* unit)
 
     OpenCmdBuf();
 
-    // DrawSprites(0) is called during the last VBlank scanline and prepares
-    // the OBJ state for the next frame.  Refresh OAM unconditionally there.
-    //
-    // The Deko renderer keeps a shadow copy and normally relies on OAMDirty.
-    // A missed/consumed dirty bit leaves individual hardware sprites pointing
-    // at stale tile numbers, which shows up as a small square copied from a
-    // different character.  A 1 KiB refresh once per frame is cheap and makes
-    // the GPU-side shadow deterministic.
-    bool oamDirty = line == 0;
+    bool oamDirty = false;
     if (GPU::OAMDirty & (1 << num))
     {
         oamDirty = true;
@@ -768,13 +761,6 @@ void DekoRenderer::DrawSprites(u32 line, Unit* unit)
     if (num == 0)
     {
         auto objDirty = GPU::VRAMDirty_AOBJ.DeriveState(GPU::VRAMMap_AOBJ);
-
-        // Do one authoritative OBJ VRAM refresh at the frame boundary.  Keep
-        // the normal dirty-range uploads below for mid-frame changes.  This
-        // prevents stale 8x8 tiles when a game streams character animation
-        // data during VBlank and one of the fine-grained dirty flags is lost.
-        if (line == 0)
-            objDirty.SetRange(0, 256*1024 / GPU::VRAMDirtyGranularity);
 
         if (oamDirty || objDirty || objFmtChanged)
             FlushOBJDraw(line);
@@ -789,9 +775,6 @@ void DekoRenderer::DrawSprites(u32 line, Unit* unit)
     {
         auto objDirty = GPU::VRAMDirty_BOBJ.DeriveState(GPU::VRAMMap_BOBJ);
 
-        if (line == 0)
-            objDirty.SetRange(0, 128*1024 / GPU::VRAMDirtyGranularity);
-
         if (oamDirty || objDirty || objFmtChanged)
             FlushOBJDraw(line);
 
@@ -803,7 +786,8 @@ void DekoRenderer::DrawSprites(u32 line, Unit* unit)
     }
 
     if (uploadBarrier)
-        EmuCmdBuf.barrier(DkBarrier_Full, DkInvalidateFlags_Image);
+        EmuCmdBuf.barrier(DkBarrier_Full,
+            DkInvalidateFlags_Image | DkInvalidateFlags_L2Cache);
 
     if (oamDirty)
     {
@@ -2039,7 +2023,8 @@ void DekoRenderer::ComposeBGOBJ()
         }
         if (region.StdPalSize || region.BGExtPalSize || region.OBJExtPalSize)
         {
-            EmuCmdBuf.barrier(DkBarrier_Full, DkInvalidateFlags_Image);
+            EmuCmdBuf.barrier(DkBarrier_Full,
+                DkInvalidateFlags_Image | DkInvalidateFlags_L2Cache);
         }
 
         u32 dispmode = region.DispCnt >> 16;
