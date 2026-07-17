@@ -1713,6 +1713,7 @@ public:
                     key.rfind("fastforward.", 0) != 0 &&
                     key.rfind("save.", 0) != 0 &&
                     key.rfind("display.", 0) != 0 &&
+                    key.rfind("core.melonds_", 0) != 0 &&
                     key != "turbo.rate")
                     continue;
 
@@ -1934,24 +1935,37 @@ bool setReturnNro(const std::string& returnNro)
     return R_SUCCEEDED(rc);
 }
 
-void configureArcDelta()
+void configureArcDelta(const NdsInputConfig& config)
 {
-    std::strncpy(Config::BIOS9Path, "sdmc:/GBAStation/bios/nds/bios9.bin", sizeof(Config::BIOS9Path) - 1);
-    std::strncpy(Config::BIOS7Path, "sdmc:/GBAStation/bios/nds/bios7.bin", sizeof(Config::BIOS7Path) - 1);
-    std::strncpy(Config::FirmwarePath, "sdmc:/GBAStation/bios/nds/firmware.bin", sizeof(Config::FirmwarePath) - 1);
-    Config::DLDIEnable = 0;
-    Config::RandomizeMAC = 0;
+    auto copyPath = [](char* target, size_t size, const std::string& value) {
+        if (!target || size == 0) return;
+        std::strncpy(target, value.c_str(), size - 1);
+        target[size - 1] = '\0';
+    };
+    copyPath(Config::BIOS9Path, sizeof(Config::BIOS9Path),
+        config.value("core.melonds_bios9_path", "sdmc:/GBAStation/bios/nds/bios9.bin"));
+    copyPath(Config::BIOS7Path, sizeof(Config::BIOS7Path),
+        config.value("core.melonds_bios7_path", "sdmc:/GBAStation/bios/nds/bios7.bin"));
+    copyPath(Config::FirmwarePath, sizeof(Config::FirmwarePath),
+        config.value("core.melonds_firmware_path", "sdmc:/GBAStation/bios/nds/firmware.bin"));
+    Config::DLDIEnable = config.intValue("core.melonds_dldi_enabled", 0) != 0;
+    copyPath(Config::DLDISDPath, sizeof(Config::DLDISDPath),
+        config.value("core.melonds_dldi_path", ""));
+    Config::RandomizeMAC = config.intValue("core.melonds_randomize_mac", 0) != 0;
+    Config::FirmwareLanguage = std::clamp(
+        config.intValue("core.melonds_firmware_language", -1), -1, 6);
 
 #ifdef JIT_ENABLED
-    Config::JIT_Enable = 1;
-    Config::JIT_MaxBlockSize = 32;
-    Config::JIT_BranchOptimisations = 1;
-    Config::JIT_LiteralOptimisations = 1;
-    Config::JIT_FastMemory = 1;
+    Config::JIT_Enable = config.intValue("core.melonds_jit_enabled", 1) != 0;
+    Config::JIT_MaxBlockSize = std::clamp(config.intValue("core.melonds_jit_block_size", 32), 1, 64);
+    Config::JIT_BranchOptimisations = config.intValue("core.melonds_jit_branch", 1) != 0;
+    Config::JIT_LiteralOptimisations = config.intValue("core.melonds_jit_literal", 1) != 0;
+    Config::JIT_FastMemory = config.intValue("core.melonds_jit_fast_memory", 1) != 0;
 #endif
 
     Config::ConsoleType = 0;
-    Config::DirectBoot = 1;
+    Config::DirectBoot = config.intValue("core.melonds_direct_boot", 1) != 0;
+    Config::FirmwareBootMenu = Config::DirectBoot ? 0 : 1;
 }
 
 class DekoAudioOutput {
@@ -2407,16 +2421,21 @@ int RunDekoRuntime(const DekoRunOptions& options)
     auto playTimeLast = std::chrono::steady_clock::now();
     constexpr double kPlayTimeSuspendGapSec = 5.0;
 
-    if (!fileExists("sdmc:/GBAStation/bios/nds/bios9.bin") ||
-        !fileExists("sdmc:/GBAStation/bios/nds/bios7.bin") ||
-        !fileExists("sdmc:/GBAStation/bios/nds/firmware.bin"))
+    NdsInputConfig inputConfig;
+    inputConfig.load();
+    const std::string bios9Path = inputConfig.value(
+        "core.melonds_bios9_path", "sdmc:/GBAStation/bios/nds/bios9.bin");
+    const std::string bios7Path = inputConfig.value(
+        "core.melonds_bios7_path", "sdmc:/GBAStation/bios/nds/bios7.bin");
+    const std::string firmwarePath = inputConfig.value(
+        "core.melonds_firmware_path", "sdmc:/GBAStation/bios/nds/firmware.bin");
+    if (!fileExists(bios9Path.c_str()) || !fileExists(bios7Path.c_str()) ||
+        !fileExists(firmwarePath.c_str()))
     {
         appendStubLog("GBAStationNDSStub: Deko runtime missing DS BIOS/firmware");
         return 1;
     }
 
-    NdsInputConfig inputConfig;
-    inputConfig.load();
     const std::string savePath = resolveSavePath(options);
     const std::string stateDir = resolveStateDir(options, inputConfig);
 
@@ -2433,7 +2452,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
     }
 
     auto checkpointBegin = std::chrono::steady_clock::now();
-    configureArcDelta();
+    configureArcDelta(inputConfig);
     appendStubLog("GBAStationNDSStub: Deko checkpoint config done ms=%lld", elapsedMs(checkpointBegin));
 
     appendStubLog("GBAStationNDSStub: Deko checkpoint Gfx::Init begin");
@@ -2449,7 +2468,10 @@ int RunDekoRuntime(const DekoRunOptions& options)
     checkpointBegin = std::chrono::steady_clock::now();
     GPU::InitRenderer(0);
     appendStubLog("GBAStationNDSStub: Deko checkpoint GPU::InitRenderer ok ms=%lld", elapsedMs(checkpointBegin));
-    GPU::RenderSettings settings {true, 1, false};
+    GPU::RenderSettings settings {
+        inputConfig.intValue("core.melonds_threaded_renderer", 1) != 0,
+        std::clamp(inputConfig.intValue("core.melonds_render_scale", 1), 1, 4),
+        inputConfig.intValue("core.melonds_better_polygons", 0) != 0};
     appendStubLog("GBAStationNDSStub: Deko checkpoint GPU::SetRenderSettings begin");
     checkpointBegin = std::chrono::steady_clock::now();
     GPU::SetRenderSettings(0, settings);
@@ -2471,9 +2493,12 @@ int RunDekoRuntime(const DekoRunOptions& options)
 
     appendStubLog("GBAStationNDSStub: Deko checkpoint LoadROM begin");
     checkpointBegin = std::chrono::steady_clock::now();
-    bool loaded = NDS::LoadROM(options.romPath.c_str(), savePath.c_str(), true);
-    appendStubLog("GBAStationNDSStub: Deko LoadROM loaded=%d ms=%lld save=%s",
+    const bool directBoot = Config::DirectBoot != 0;
+    bool loaded = NDS::LoadROM(options.romPath.c_str(), savePath.c_str(), directBoot);
+    appendStubLog("GBAStationNDSStub: Deko LoadROM loaded=%d directBoot=%d language=%d ms=%lld save=%s",
                   loaded ? 1 : 0,
+                  directBoot ? 1 : 0,
+                  Config::FirmwareLanguage,
                   elapsedMs(checkpointBegin),
                   savePath.c_str());
     if (loaded)
@@ -3087,7 +3112,7 @@ int RunDekoRuntime(const DekoRunOptions& options)
             Gfx::EmuQueue.waitIdle();
             NDSCart::FlushSRAMFile();
 
-            loaded = NDS::LoadROM(options.romPath.c_str(), savePath.c_str(), true);
+            loaded = NDS::LoadROM(options.romPath.c_str(), savePath.c_str(), directBoot);
             appendStubLog("GBAStationNDSStub: Deko reset LoadROM loaded=%d", loaded ? 1 : 0);
             audio.resumeAfterCoreReset();
 

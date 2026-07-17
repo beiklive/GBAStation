@@ -42,7 +42,7 @@
 
 .vs/
 out/
-
+.tmp/
 build
 build_*
 build-*

@@ -434,6 +434,22 @@ namespace beiklive
         SettingManager->SetDefault("core.mgba_force_gbp", ConfigValue(std::string("OFF")));
         SettingManager->SetDefault("core.mgba_frameskip", ConfigValue(std::string("0")));
 
+        SettingManager->SetDefault("core.melonds_bios9_path", ConfigValue(std::string("sdmc:/GBAStation/bios/nds/bios9.bin")));
+        SettingManager->SetDefault("core.melonds_bios7_path", ConfigValue(std::string("sdmc:/GBAStation/bios/nds/bios7.bin")));
+        SettingManager->SetDefault("core.melonds_firmware_path", ConfigValue(std::string("sdmc:/GBAStation/bios/nds/firmware.bin")));
+        SettingManager->SetDefault("core.melonds_direct_boot", ConfigValue(1));
+        SettingManager->SetDefault("core.melonds_jit_enabled", ConfigValue(1));
+        SettingManager->SetDefault("core.melonds_jit_block_size", ConfigValue(std::string("32")));
+        SettingManager->SetDefault("core.melonds_jit_branch", ConfigValue(1));
+        SettingManager->SetDefault("core.melonds_jit_literal", ConfigValue(1));
+        SettingManager->SetDefault("core.melonds_jit_fast_memory", ConfigValue(1));
+        SettingManager->SetDefault("core.melonds_threaded_renderer", ConfigValue(1));
+        SettingManager->SetDefault("core.melonds_render_scale", ConfigValue(std::string("1")));
+        SettingManager->SetDefault("core.melonds_better_polygons", ConfigValue(0));
+        SettingManager->SetDefault("core.melonds_dldi_enabled", ConfigValue(0));
+        SettingManager->SetDefault("core.melonds_dldi_path", ConfigValue(std::string("")));
+        SettingManager->SetDefault("core.melonds_randomize_mac", ConfigValue(0));
+
         // BIOS 路径设置
         SettingManager->SetDefault("bios.path", ConfigValue(beiklive::path::biosPath()));
 

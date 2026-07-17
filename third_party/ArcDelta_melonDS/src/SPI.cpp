@@ -180,8 +180,14 @@ void Reset()
         Firmware[userdata+0x62] = 255;
         Firmware[userdata+0x63] = 191;
 
-        // disable autoboot
-        //Firmware[userdata+0x64] &= 0xBF;
+        if (Config::FirmwareLanguage >= 0 && Config::FirmwareLanguage <= 6)
+        {
+            u16& settings = *(u16*)&Firmware[userdata+0x64];
+            settings = (settings & ~0x0007u) | static_cast<u16>(Config::FirmwareLanguage);
+        }
+
+        if (Config::FirmwareBootMenu)
+            Firmware[userdata+0x64] &= 0xBF;
 
         *(u16*)&Firmware[userdata+0x72] = CRC16(&Firmware[userdata], 0x70, 0xFFFF);
 

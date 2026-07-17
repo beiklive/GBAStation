@@ -5,6 +5,7 @@
 #include <cstdarg>
 #include <ctime>
 #include <algorithm>
+#include <array>
 #include <fstream>
 
 #if defined(_WIN32)
@@ -226,6 +227,60 @@ static void RETRO_CALLCONV s_perfLog(void) {}
 static uint64_t RETRO_CALLCONV s_perfGetCpuFeatures(void) { return 0; }
 
 namespace beiklive {
+
+namespace {
+std::array<std::vector<LibretroLoader::CoreOptionDefinition>, 5> g_coreOptions;
+
+size_t coreOptionIndex(CoreType type)
+{
+    return std::min<size_t>(static_cast<size_t>(type), g_coreOptions.size() - 1);
+}
+
+void registerCoreOptions(LibretroLoader* loader,
+                         const retro_core_options_v2* options)
+{
+    if (!loader || !options || !options->definitions)
+        return;
+    auto& output = g_coreOptions[coreOptionIndex(loader->coreType())];
+    output.clear();
+    for (const retro_core_option_v2_definition* def = options->definitions;
+         def && def->key; ++def) {
+        LibretroLoader::CoreOptionDefinition item;
+        item.key = def->key;
+        item.title = def->desc ? def->desc : def->key;
+        item.description = def->info ? def->info : "";
+        item.category = def->category_key ? def->category_key : "general";
+        item.defaultValue = def->default_value ? def->default_value : "";
+        for (const retro_core_option_value* value = def->values;
+             value && value->value; ++value) {
+            item.values.push_back({value->value,
+                value->label ? value->label : value->value});
+        }
+        if (loader->configManager() && !item.defaultValue.empty())
+            loader->configManager()->SetDefault(
+                "core." + item.key, ConfigValue(item.defaultValue));
+        output.push_back(std::move(item));
+    }
+    if (loader->configManager())
+        loader->configManager()->Save();
+}
+}
+
+void LibretroLoader::discoverCoreOptions(CoreType coreType, ConfigManager* config)
+{
+    if (!g_coreOptions[coreOptionIndex(coreType)].empty())
+        return;
+    LibretroLoader loader;
+    loader.setConfigManager(config);
+    loader.load(coreType);
+    loader.unload();
+}
+
+const std::vector<LibretroLoader::CoreOptionDefinition>&
+LibretroLoader::coreOptions(CoreType coreType)
+{
+    return g_coreOptions[coreOptionIndex(coreType)];
+}
 
 // ---- 静态实例指针 ----------------------------------------
 LibretroLoader* LibretroLoader::s_current = nullptr;
@@ -797,6 +852,11 @@ bool LibretroLoader::s_environmentCallback(unsigned cmd, void* data)
     if (!s_current) return false;
 
     switch (cmd) {
+        case RETRO_ENVIRONMENT_GET_LANGUAGE: {
+            unsigned* language = static_cast<unsigned*>(data);
+            if (language) *language = RETRO_LANGUAGE_CHINESE_SIMPLIFIED;
+            return true;
+        }
         case RETRO_ENVIRONMENT_GET_CAN_DUPE: {
             bool* b = static_cast<bool*>(data);
             if (b) *b = true;
@@ -864,10 +924,17 @@ bool LibretroLoader::s_environmentCallback(unsigned cmd, void* data)
             if (ver) *ver = 2;
             return true;
         }
-        case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2:
-        case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL:
-            // V2 选项接口已声明支持，直接返回 true
+        case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2: {
+            registerCoreOptions(s_current,
+                static_cast<const retro_core_options_v2*>(data));
             return true;
+        }
+        case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL: {
+            const auto* intl = static_cast<const retro_core_options_v2_intl*>(data);
+            registerCoreOptions(s_current,
+                intl ? (intl->local ? intl->local : intl->us) : nullptr);
+            return true;
+        }
         // ---- 核心声明变量及默认值 ----------------------
         case RETRO_ENVIRONMENT_SET_VARIABLES: {
             const retro_variable* vars = static_cast<const retro_variable*>(data);

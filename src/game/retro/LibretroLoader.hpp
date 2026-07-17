@@ -21,6 +21,16 @@ namespace beiklive {
 /// 以及回调注册和生命周期管理。
 class LibretroLoader {
 public:
+    struct CoreOptionValue { std::string value; std::string label; };
+    struct CoreOptionDefinition {
+        std::string key;
+        std::string title;
+        std::string description;
+        std::string category;
+        std::string defaultValue;
+        std::vector<CoreOptionValue> values;
+    };
+
     static constexpr unsigned kMaxInputPorts = 2;
 
     LibretroLoader()  = default;
@@ -126,6 +136,7 @@ public:
     /// 提供ConfigManager以读取核心变量值。
     /// 在load()之前调用，使retro_set_environment()能获取到配置。
     void setConfigManager(beiklive::ConfigManager* cfg) { m_configManager = cfg; }
+    ConfigManager* configManager() const { return m_configManager; }
 
     // ---- 快进状态 ---------------------------------------------------
 
@@ -134,6 +145,9 @@ public:
 
     /// 通知核心配置已更新，下次 GET_VARIABLE_UPDATE 返回 true，触发核心重读变量
     void notifyConfigUpdated() { m_configChanged.store(true, std::memory_order_release); }
+
+    static void discoverCoreOptions(CoreType coreType, ConfigManager* config);
+    static const std::vector<CoreOptionDefinition>& coreOptions(CoreType coreType);
 
 private:
     // ---- 核心类型 ---------------------------------------------------
