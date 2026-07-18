@@ -9,6 +9,7 @@
 #include "ui/view/RecyclingGrid.hpp"
 #include "ui/view/RecyclingGridDataSource.hpp"
 #include "ui/view/GameOptionsSidebar.hpp"
+#include "ui/view/NanoSearchOverlay.hpp"
 
 namespace beiklive
 {
@@ -76,6 +77,8 @@ enum class PlatformFilter : int
         std::string m_searchTerm;
         bool m_isSearching = false;
         beiklive::GameOptionsSidebar* m_gameOptionsSidebar = nullptr;
+        beiklive::NanoSearchOverlay* m_searchOverlay = nullptr;
+        bool m_searchOverlaySubmitted = false;
 
         void _loadAndShowEntries();
         void _filterEntries();

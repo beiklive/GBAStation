@@ -94,4 +94,40 @@ namespace beiklive::pico8_transition
         pose.rotation = 0.045f * std::sin(2.f * PI * transition);
         return pose;
     }
+
+    inline LogoPose returnLogoPose(const Geometry& geometry, float progress)
+    {
+        progress = clamp01(progress);
+        // 先轻微蓄力，再沿弧线快速落回快捷入口；末段带一点回弹和旋转。
+        float travel = 0.f;
+        if (progress < 0.14f) {
+            const float anticipation = progress / 0.14f;
+            travel = -0.055f * std::sin(anticipation * PI * 0.5f);
+        } else {
+            const float local = (progress - 0.14f) / 0.86f;
+            travel = easeOutBack(local);
+        }
+        const float arc = -46.f * std::sin(PI * progress);
+        const float wobble = 9.f * std::sin(3.f * PI * progress) *
+            (1.f - progress);
+        const float squash = 1.f + 0.065f * std::sin(2.f * PI * progress) *
+            (1.f - 0.45f * progress);
+
+        LogoPose pose;
+        pose.x = geometry.centerLogoX +
+            (geometry.logoX - geometry.centerLogoX) * travel;
+        pose.y = geometry.centerLogoY +
+            (geometry.logoY - geometry.centerLogoY) * travel + arc + wobble;
+        const float baseWidth = geometry.centerLogoWidth +
+            (geometry.logoWidth - geometry.centerLogoWidth) * travel;
+        const float baseHeight = geometry.centerLogoHeight +
+            (geometry.logoHeight - geometry.centerLogoHeight) * travel;
+        pose.width = baseWidth * squash;
+        pose.height = baseHeight / std::max(0.82f, squash);
+        pose.x -= (pose.width - baseWidth) * 0.5f;
+        pose.y -= (pose.height - baseHeight) * 0.5f;
+        pose.rotation = -0.085f * std::sin(PI * progress) +
+            0.035f * std::sin(4.f * PI * progress) * (1.f - progress);
+        return pose;
+    }
 }

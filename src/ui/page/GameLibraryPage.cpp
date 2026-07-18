@@ -1,5 +1,7 @@
 #include "GameLibraryPage.hpp"
 #include "GameDataPage.hpp"
+#include "SteamGridDbPage.hpp"
+#include "core/SteamGridDb.hpp"
 #include "core/forwarder/ForwarderInstaller.hpp"
 #include "ui/utils/MaterialIcons.hpp"
 #include "ui/utils/NdsEnvironment.hpp"
@@ -741,6 +743,16 @@ namespace beiklive
         m_libraryView->setGrow(1.f);
 
         this->getContentBox()->addView(m_libraryView);
+        m_searchOverlay = new beiklive::NanoSearchOverlay();
+        m_searchOverlay->onClosed = [this]() {
+            if (!m_isClosing && m_libraryView) {
+                if (!m_searchOverlaySubmitted)
+                    m_libraryView->setInteractionDisabled(false);
+                m_searchOverlaySubmitted = false;
+                brls::Application::giveFocus(m_libraryView);
+            }
+        };
+        this->getContentBox()->addView(m_searchOverlay);
 
         m_libraryView->registerAction("退出游戏库", brls::BUTTON_B, [this](brls::View*) -> bool {
             if (m_libraryView->isDeleteAnimationRunning())
@@ -822,16 +834,15 @@ namespace beiklive
 
         m_libraryView->registerAction("搜索", brls::BUTTON_RT, [this](brls::View*) -> bool {
             if (m_isClosing || m_libraryView->isDeleteAnimationRunning()) return true;
-            auto* ime = brls::Application::getPlatform()->getImeManager();
-            if (!ime) return true;
-            ime->openForText(
-                [this](std::string text) {
-                    m_isSearching = !text.empty();
-                    m_searchTerm = text;
-                    _reloadEntries();
-                },
-                "搜索游戏", "", 128, m_searchTerm,
-                brls::KeyboardKeyDisableBitmask::KEYBOARD_DISABLE_NONE);
+            if (!m_searchOverlay || m_searchOverlay->isOpen()) return true;
+            m_libraryView->setInteractionDisabled(true);
+            m_searchOverlaySubmitted = false;
+            m_searchOverlay->open(m_searchTerm, [this](const std::string& text) {
+                m_searchOverlaySubmitted = true;
+                m_isSearching = !text.empty();
+                m_searchTerm = text;
+                _reloadEntries();
+            });
             return true;
         });
 
@@ -1440,7 +1451,34 @@ namespace beiklive
                 });
             });
 
-        m_gameOptionsSidebar->addSubmenuButton(operationsMenu, "修改封面", beiklive::material::IMAGE,
+        const int coverMenu = m_gameOptionsSidebar->addNestedSubmenu(
+            operationsMenu, "修改封面", beiklive::material::IMAGE);
+
+        m_gameOptionsSidebar->addNestedSubmenuButton(
+            operationsMenu, coverMenu, "从 SteamGridDB 获取",
+            beiklive::material::CLOUD_DOWNLOAD,
+            [this, entry, idx = m_libraryView->getSelectedIndex()](const beiklive::GameEntry&) {
+                _closeGameOptionsPanelAnimated([this, entry, idx]() {
+                    if (!beiklive::steamgriddb::hasApiKey()) {
+                        m_libraryView->setInteractionDisabled(false);
+                        brls::Application::giveFocus(m_libraryView);
+                        brls::Application::notify(
+                            "请去设置-模拟器页面输入 SteamGridDB Api Key");
+                        return;
+                    }
+                    beiklive::openSteamGridDbPage(entry,
+                        [this, idx](const std::string& coverPath) {
+                            if (idx >= 0 && static_cast<size_t>(idx) < m_entries.size())
+                                m_entries[static_cast<size_t>(idx)].logoPath = coverPath;
+                            if (idx >= 0)
+                                m_libraryView->setItemImagePath(idx, coverPath);
+                        });
+                    m_libraryView->setInteractionDisabled(false);
+                });
+            });
+
+        m_gameOptionsSidebar->addNestedSubmenuButton(
+            operationsMenu, coverMenu, "从本地选择", 0xE2C8,
             [this, path, idx = m_libraryView->getSelectedIndex()](const beiklive::GameEntry& entry) {
                 const auto pickerLocation = beiklive::getGameCoverPickerLocation(entry);
                 _closeGameOptionsPanelAnimated([this, path, idx, pickerLocation]() {
@@ -1512,22 +1550,23 @@ namespace beiklive
         }
 
         m_gameOptionsSidebar->addSubmenuButton(operationsMenu, "删除游戏", beiklive::material::DELETE_ICON,
-            [this, path, selectedIndex](const beiklive::GameEntry&) {
-                _closeGameOptionsPanelAnimated([this, path, selectedIndex]() {
-                    auto* removeDlg = new brls::Dialog("是否从游戏库移除该游戏？");
-                    removeDlg->addButton("是", [this, path, selectedIndex]() {
-                        auto* romDlg = new brls::Dialog("是否删除 ROM 文件？");
-                        auto deleteGame = [this, selectedIndex](bool deleteRomFile) {
-                            _deleteEntriesAsync({selectedIndex}, deleteRomFile);
-                        };
-                        romDlg->addButton("是", [deleteGame]() { deleteGame(true); });
-                        romDlg->addButton("否", [deleteGame]() { deleteGame(false); });
-                        romDlg->addButton("不删了", [this]() { m_libraryView->setInteractionDisabled(false); });
-                        romDlg->open();
+            [this, selectedIndex](const beiklive::GameEntry&) {
+                _closeGameOptionsPanelAnimated([this, selectedIndex]() {
+                    auto deleteGame = [this, selectedIndex](bool deleteRomFile) {
+                        _deleteEntriesAsync({selectedIndex}, deleteRomFile);
+                    };
+                    auto* dialog = new brls::Dialog(
+                        "请选择游戏的删除方式");
+                    dialog->addButton("仅从库中移除",
+                        [deleteGame]() { deleteGame(false); });
+                    dialog->addButton("移除并删除文件",
+                        [deleteGame]() { deleteGame(true); });
+                    dialog->addButton("取消", [this]() {
+                        m_libraryView->setInteractionDisabled(false);
+                        brls::Application::giveFocus(m_libraryView);
                     });
-                    removeDlg->addButton("否", [this]() { m_libraryView->setInteractionDisabled(false); });
-                    removeDlg->addButton("不删了", [this]() { m_libraryView->setInteractionDisabled(false); });
-                    removeDlg->open();
+                    dialog->setCancelable(false);
+                    dialog->open();
                 });
             });
 
@@ -1700,25 +1739,22 @@ namespace beiklive
                                          m_libraryView->getDeleteSelection().end());
                     _closeGameOptionsPanelAnimated([this, sel]() {
                         size_t n = sel.size();
-                        std::string msg = "是否从游戏库移除这 " + std::to_string(n) + " 款游戏？";
-                        auto* removeDlg = new brls::Dialog(msg);
-                        removeDlg->addButton("是", [this, sel]() {
-                            auto* romDlg = new brls::Dialog("是否删除 ROM 文件？");
-                            auto deleteSelected = [this, sel](bool deleteRomFiles) {
-                                _deleteEntriesAsync(sel, deleteRomFiles);
-                            };
-                            romDlg->addButton("是", [deleteSelected]() { deleteSelected(true); });
-                            romDlg->addButton("否", [deleteSelected]() { deleteSelected(false); });
-                            romDlg->addButton("不删了", [this]() { m_libraryView->setInteractionDisabled(false); });
-                            romDlg->open();
-                        });
-                        removeDlg->addButton("否", [this]() {
+                        auto deleteSelected = [this, sel](bool deleteRomFiles) {
+                            _deleteEntriesAsync(sel, deleteRomFiles);
+                        };
+                        auto* dialog = new brls::Dialog(
+                            "请选择这 " + std::to_string(n) +
+                            " 款游戏的删除方式");
+                        dialog->addButton("仅从库中移除",
+                            [deleteSelected]() { deleteSelected(false); });
+                        dialog->addButton("移除并删除文件",
+                            [deleteSelected]() { deleteSelected(true); });
+                        dialog->addButton("取消", [this]() {
                             m_libraryView->setInteractionDisabled(false);
+                            brls::Application::giveFocus(m_libraryView);
                         });
-                        removeDlg->addButton("不删了", [this]() {
-                            m_libraryView->setInteractionDisabled(false);
-                        });
-                        removeDlg->open();
+                        dialog->setCancelable(false);
+                        dialog->open();
                     });
                 });
 

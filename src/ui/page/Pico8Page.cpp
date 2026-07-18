@@ -846,8 +846,8 @@ namespace beiklive
         if (m_logoImageHandle <= 0 || alpha <= 0.f)
             return;
         const auto geometry = pico8_transition::geometry(x, y, width, height);
-        const auto pose = pico8_transition::logoPose(
-            geometry, 1.f - clamp01(progress));
+        const auto pose = pico8_transition::returnLogoPose(
+            geometry, clamp01(progress));
         const float centerX = pose.x + pose.width * 0.5f;
         const float centerY = pose.y + pose.height * 0.5f;
         nvgSave(vg);

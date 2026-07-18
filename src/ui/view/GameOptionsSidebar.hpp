@@ -68,8 +68,18 @@ namespace beiklive
             m_nanoHasProvidedImage = true;
         }
         int addSubmenu(const std::string& text, char32_t iconCodepoint);
-        void addSubmenuButton(
+        int addSubmenuButton(
             int submenuIndex,
+            const std::string& text,
+            char32_t iconCodepoint,
+            std::function<void(const beiklive::GameEntry&)> callback);
+        int addNestedSubmenu(
+            int submenuIndex,
+            const std::string& text,
+            char32_t iconCodepoint);
+        void addNestedSubmenuButton(
+            int submenuIndex,
+            int nestedSubmenuIndex,
             const std::string& text,
             char32_t iconCodepoint,
             std::function<void(const beiklive::GameEntry&)> callback);
@@ -91,6 +101,7 @@ namespace beiklive
         bool m_showButtonIcons = false;
         bool m_nanoVgMenu = false;
         bool m_nanoInSubmenu = false;
+        bool m_nanoInNestedSubmenu = false;
         float m_openProgress = 0.f;
         std::function<void()> m_closeCompletion;
         std::chrono::steady_clock::time_point m_lastFrameTime =
@@ -109,6 +120,9 @@ namespace beiklive
         int m_nanoChildSelected = 0;
         int m_nanoActiveSubmenu = -1;
         float m_nanoSubmenuProgress = 0.f;
+        int m_nanoNestedSelected = 0;
+        int m_nanoActiveNestedSubmenu = -1;
+        float m_nanoNestedProgress = 0.f;
         float m_nanoFloatTime = 0.f;
         bool m_nanoPrevUp = false;
         bool m_nanoPrevDown = false;

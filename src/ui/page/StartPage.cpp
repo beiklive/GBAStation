@@ -1,4 +1,6 @@
 #include "StartPage.hpp"
+#include "SteamGridDbPage.hpp"
+#include "core/SteamGridDb.hpp"
 #include "ui/utils/FilePickerHelper.hpp"
 #include "core/Tools.hpp"
 #include "core/ThreadPool.hpp"
@@ -643,8 +645,28 @@ namespace beiklive
                     });
             });
 
-        m_gameOptionsSidebar->addSubmenuButton(
-            operationsMenu, "修改封面", beiklive::material::IMAGE,
+        const int coverMenu = m_gameOptionsSidebar->addNestedSubmenu(
+            operationsMenu, "修改封面", beiklive::material::IMAGE);
+
+        m_gameOptionsSidebar->addNestedSubmenuButton(
+            operationsMenu, coverMenu, "从 SteamGridDB 获取",
+            beiklive::material::CLOUD_DOWNLOAD,
+            [this, entry](const beiklive::GameEntry&) {
+                _closeGameOptionsPanelAnimated([this, entry]() {
+                    if (!beiklive::steamgriddb::hasApiKey()) {
+                        brls::Application::notify(
+                            "请去设置-模拟器页面输入 SteamGridDB Api Key");
+                        return;
+                    }
+                    beiklive::openSteamGridDbPage(entry,
+                        [this](const std::string&) {
+                            _requestRecentGamesRefresh(false);
+                        });
+                });
+            });
+
+        m_gameOptionsSidebar->addNestedSubmenuButton(
+            operationsMenu, coverMenu, "从本地选择", 0xE2C8,
             [this, path](const beiklive::GameEntry& game) {
                 const auto pickerLocation = beiklive::getGameCoverPickerLocation(game);
                 _closeGameOptionsPanelAnimated(
@@ -713,12 +735,7 @@ namespace beiklive
             operationsMenu, "删除游戏", beiklive::material::DELETE_ICON,
             [this, path](const beiklive::GameEntry&) {
                 _closeGameOptionsPanelAnimated([this, path]() {
-                    auto* removeDialog =
-                        new brls::Dialog("是否从游戏库移除该游戏？");
-                    removeDialog->addButton("是", [this, path]() {
-                        auto* romDialog =
-                            new brls::Dialog("是否删除 ROM 文件？");
-                        auto deleteGame = [this, path](bool deleteRomFile) {
+                    auto deleteGame = [this, path](bool deleteRomFile) {
                             if (!beiklive::GameDB) {
                                 brls::Application::notify("删除失败");
                                 return;
@@ -785,17 +802,16 @@ namespace beiklive
                                         finish();
                                 });
                             });
-                        };
-                        romDialog->addButton(
-                            "是", [deleteGame]() { deleteGame(true); });
-                        romDialog->addButton(
-                            "否", [deleteGame]() { deleteGame(false); });
-                        romDialog->addButton("不删了", []() {});
-                        romDialog->open();
-                    });
-                    removeDialog->addButton("否", []() {});
-                    removeDialog->addButton("不删了", []() {});
-                    removeDialog->open();
+                    };
+                    auto* dialog = new brls::Dialog(
+                        "请选择游戏的删除方式");
+                    dialog->addButton("仅从库中移除",
+                        [deleteGame]() { deleteGame(false); });
+                    dialog->addButton("移除并删除文件",
+                        [deleteGame]() { deleteGame(true); });
+                    dialog->addButton("取消", []() {});
+                    dialog->setCancelable(false);
+                    dialog->open();
                 });
             });
 

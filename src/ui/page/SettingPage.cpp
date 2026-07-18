@@ -16,12 +16,15 @@
 #include <borealis/views/applet_frame.hpp>
 
 #include "core/Tools.hpp"
+#include "core/SteamGridDb.hpp"
+#include "core/ThreadPool.hpp"
 #include "core/constexpr.h"
 #include "game/control/InputMappingDefaults.hpp"
 #include "game/retro/LibretroLoader.hpp"
 
 #include <chrono>
 #include <array>
+#include <atomic>
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -30,6 +33,7 @@
 #include <functional>
 #include <sstream>
 #include <iomanip>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -1373,12 +1377,8 @@ public:
         auto right = [this](brls::View*) -> bool { _adjust(1); return true; };
         auto previousCategory = [this](brls::View*) -> bool { _switchCategory(-1); return true; };
         auto nextCategory = [this](brls::View*) -> bool { _switchCategory(1); return true; };
-        registerAction("", brls::BUTTON_UP, up, true, true, brls::SOUND_NONE);
-        registerAction("", brls::BUTTON_DOWN, down, true, true, brls::SOUND_NONE);
         registerAction("", brls::BUTTON_NAV_UP, up, true, true, brls::SOUND_NONE);
         registerAction("", brls::BUTTON_NAV_DOWN, down, true, true, brls::SOUND_NONE);
-        registerAction("", brls::BUTTON_LEFT, left, true, true, brls::SOUND_NONE);
-        registerAction("", brls::BUTTON_RIGHT, right, true, true, brls::SOUND_NONE);
         registerAction("", brls::BUTTON_NAV_LEFT, left, true, true, brls::SOUND_NONE);
         registerAction("", brls::BUTTON_NAV_RIGHT, right, true, true, brls::SOUND_NONE);
         registerAction("上一类", brls::BUTTON_LB, previousCategory, true, false, brls::SOUND_NONE);
@@ -1397,6 +1397,11 @@ public:
         }, false, false, brls::SOUND_NONE);
         m_lastFrame = std::chrono::steady_clock::now();
         brls::sync([this]() { brls::Application::giveFocus(this); });
+    }
+
+    ~NanoSettingsCanvas() override
+    {
+        m_aliveToken->store(false);
     }
 
     void frame(brls::FrameContext* ctx) override
@@ -1426,6 +1431,8 @@ public:
         m_categoryMotion = std::min(1.f, m_categoryMotion + dt * 7.f);
         m_overlayMotion += ((m_selectorOpen ? 1.f : 0.f) - m_overlayMotion)
             * std::min(1.f, dt * 14.f);
+        m_steamOverlayMotion += ((m_steamDialog != SteamDialog::None ? 1.f : 0.f)
+            - m_steamOverlayMotion) * std::min(1.f, dt * 14.f);
         m_pressMotion = std::max(0.f, m_pressMotion - dt * 5.6f);
         float& targetScroll = _activeTargetScroll();
         float& scroll = _activeScroll();
@@ -1455,9 +1462,14 @@ public:
         nvgRestore(vg);
         if (m_overlayMotion > 0.002f)
             _drawSelector(vg, x, y, w, h);
+        if (m_steamOverlayMotion > 0.002f)
+            _drawSteamDialog(vg, x, y, w, h);
     }
 
 private:
+    enum class SteamDialog {
+        None, ApiInfo, ApiModify, ConfirmCacheClear, Working, Result
+    };
     struct Rect { float x = 0.f; float y = 0.f; float w = 0.f; float h = 0.f; };
     struct Category { std::string title; char32_t icon; std::vector<NanoSettingItem> items; };
 
@@ -1485,6 +1497,14 @@ private:
     std::string m_mappingPrefix;
     bool m_mappingNds = false;
     bool m_selectorOpen = false;
+    SteamDialog m_steamDialog = SteamDialog::None;
+    int m_steamDialogChoice = 0;
+    std::string m_steamDialogTitle;
+    std::string m_steamDialogMessage;
+    bool m_steamDialogSuccess = false;
+    float m_steamOverlayMotion = 0.f;
+    std::shared_ptr<std::atomic<bool>> m_aliveToken =
+        std::make_shared<std::atomic<bool>>(true);
     std::string m_selectorTitle;
     std::vector<std::string> m_selectorOptions;
     int m_selectorIndex = 0;
@@ -1663,6 +1683,20 @@ private:
             {"正常", "大", "超大"},
             []() { return std::clamp(cfgGetInt(KEY_UI_LIBRARY_TITLE_SIZE, 0), 0, 2); },
             [](int i) { cfgSetInt(KEY_UI_LIBRARY_TITLE_SIZE, i); }));
+
+        emulator.push_back(_section("SteamGridDB"));
+        emulator.push_back(_action(
+            "SteamGridDB API Key",
+            "用于在线搜索游戏封面；密钥保存在 GBAStation/SteamGirdDB/api",
+            0xE0DA,
+            []() { return beiklive::steamgriddb::hasApiKey() ? "已输入  >" : "空  >"; },
+            [this]() { _openSteamApiDialog(); }));
+        emulator.push_back(_action(
+            "清空 SteamGridDB 缓存",
+            "清理本地 API 查询结果和已下载的预览图片",
+            0xE872,
+            []() { return std::string("清理  >"); },
+            [this]() { _beginSteamCacheClear(); }));
 
         auto& key = m_categories[1].items;
         key.push_back(_section("游戏平台"));
@@ -2171,6 +2205,134 @@ private:
         _finishCorePage("melonDS 核心设置");
     }
 
+    void _openSteamApiDialog()
+    {
+        m_steamDialogChoice = 0;
+        if (beiklive::steamgriddb::hasApiKey()) {
+            m_steamDialog = SteamDialog::ApiModify;
+            m_steamDialogTitle = "SteamGridDB API Key";
+            m_steamDialogMessage =
+                "当前已经保存 API Key。是否重新输入并验证新的密钥？";
+        } else {
+            m_steamDialog = SteamDialog::ApiInfo;
+            m_steamDialogTitle = "获取 SteamGridDB API Key";
+            m_steamDialogMessage =
+                "请登录 steamgriddb.com，进入个人设置中的 API 页面，创建并复制 API Key。\n"
+                "密钥只保存在本机，不会写入游戏数据库。";
+        }
+    }
+
+    void _openSteamApiIme()
+    {
+        auto* ime = brls::Application::getPlatform()->getImeManager();
+        if (!ime) {
+            m_steamDialog = SteamDialog::Result;
+            m_steamDialogTitle = "无法输入";
+            m_steamDialogMessage = "当前平台未提供文本输入服务。";
+            m_steamDialogSuccess = false;
+            return;
+        }
+        const std::string current = beiklive::steamgriddb::loadApiKey();
+        ime->openForText([this, alive = m_aliveToken](std::string key) {
+            if (!alive->load() || key.empty()) return;
+            std::string error;
+            if (!beiklive::steamgriddb::saveApiKey(key, &error)) {
+                m_steamDialog = SteamDialog::Result;
+                m_steamDialogTitle = "保存失败";
+                m_steamDialogMessage = error.empty() ? "无法保存 API Key" : error;
+                m_steamDialogSuccess = false;
+                return;
+            }
+            _beginSteamApiValidation(key);
+        }, "SteamGridDB API Key", "请输入 API Key", 256, current,
+            brls::KeyboardKeyDisableBitmask::KEYBOARD_DISABLE_NONE);
+    }
+
+    void _beginSteamApiValidation(std::string key)
+    {
+        m_steamDialog = SteamDialog::Working;
+        m_steamDialogTitle = "正在验证 API Key";
+        m_steamDialogMessage = "正在连接 SteamGridDB 并尝试获取搜索数据...";
+        auto alive = m_aliveToken;
+        ThreadPool::instance().enqueuePriority([
+            this, alive, key = std::move(key)]() {
+            auto result = beiklive::steamgriddb::validateApiKey(key);
+            brls::sync([this, alive, result = std::move(result)]() mutable {
+                if (!alive->load()) return;
+                m_steamDialog = SteamDialog::Result;
+                m_steamDialogChoice = 0;
+                m_steamDialogSuccess = result.ok;
+                if (result.ok) {
+                    m_steamDialogTitle = "验证成功";
+                    m_steamDialogMessage =
+                        "API Key 可以正常访问 SteamGridDB，封面搜索功能已经可用。";
+                } else {
+                    m_steamDialogTitle = result.networkError
+                        ? "网络异常" : "API Key 无效";
+                    m_steamDialogMessage = result.error.empty()
+                        ? "无法验证 API Key，请重新输入。" : result.error;
+                }
+                invalidate();
+            });
+        });
+    }
+
+    void _beginSteamCacheClear()
+    {
+        m_steamDialog = SteamDialog::ConfirmCacheClear;
+        m_steamDialogChoice = 1;
+        m_steamDialogTitle = "确认清空缓存";
+        m_steamDialogMessage =
+            "将删除 SteamGridDB 搜索结果和图片预览缓存。\n"
+            "已经保存到游戏目录中的封面不会被删除。";
+        m_steamDialogSuccess = false;
+    }
+
+    void _performSteamCacheClear()
+    {
+        m_steamDialog = SteamDialog::Working;
+        m_steamDialogTitle = "正在清空缓存";
+        m_steamDialogMessage =
+            "正在删除 GBAStation/SteamGirdDB/cache 中的本地缓存...";
+        auto alive = m_aliveToken;
+        ThreadPool::instance().enqueuePriority([this, alive]() {
+            std::string error;
+            const bool ok = beiklive::steamgriddb::clearCache(&error);
+            brls::sync([this, alive, ok, error = std::move(error)]() {
+                if (!alive->load()) return;
+                m_steamDialog = SteamDialog::Result;
+                m_steamDialogChoice = 0;
+                m_steamDialogSuccess = ok;
+                m_steamDialogTitle = ok ? "缓存已清空" : "清理失败";
+                m_steamDialogMessage = ok
+                    ? "SteamGridDB API 结果和图片预览缓存已经清理。"
+                    : (error.empty() ? "无法清理缓存目录。" : error);
+                invalidate();
+            });
+        });
+    }
+
+    bool _handleSteamDialogActivate()
+    {
+        if (m_steamDialog == SteamDialog::None) return false;
+        if (m_steamDialog == SteamDialog::Working) return true;
+        if (m_steamDialog == SteamDialog::Result) {
+            m_steamDialog = SteamDialog::None;
+            return true;
+        }
+        if (m_steamDialog == SteamDialog::ConfirmCacheClear) {
+            if (m_steamDialogChoice == 0)
+                _performSteamCacheClear();
+            else
+                m_steamDialog = SteamDialog::None;
+        } else if (m_steamDialogChoice == 0) {
+            _openSteamApiIme();
+        } else {
+            m_steamDialog = SteamDialog::None;
+        }
+        return true;
+    }
+
     void _buildMappingItems(const std::string& prefix, bool nds)
     {
         m_mappingItems.clear();
@@ -2264,6 +2426,16 @@ private:
     void _move(int direction)
     {
         if (m_closing) return;
+        if (m_steamDialog != SteamDialog::None) {
+            if (m_steamDialog == SteamDialog::ApiInfo ||
+                m_steamDialog == SteamDialog::ApiModify ||
+                m_steamDialog == SteamDialog::ConfirmCacheClear) {
+                m_steamDialogChoice = (m_steamDialogChoice +
+                    (direction < 0 ? -1 : 1) + 2) % 2;
+                brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_CHANGE);
+            }
+            return;
+        }
         const auto now = std::chrono::steady_clock::now();
         if (m_lastMoveAction.time_since_epoch().count() != 0
             && std::chrono::duration<float>(now - m_lastMoveAction).count() < 0.045f)
@@ -2295,12 +2467,21 @@ private:
 
     void _adjust(int direction)
     {
-        (void)direction;
+        if (m_steamDialog == SteamDialog::ApiInfo ||
+            m_steamDialog == SteamDialog::ApiModify ||
+            m_steamDialog == SteamDialog::ConfirmCacheClear) {
+            m_steamDialogChoice = (m_steamDialogChoice +
+                (direction < 0 ? -1 : 1) + 2) % 2;
+            brls::Application::getAudioPlayer()->play(
+                brls::SOUND_FOCUS_CHANGE);
+            invalidate();
+        }
     }
 
     void _switchCategory(int direction)
     {
-        if (m_closing || m_selectorOpen || m_categoryMotion < 0.68f) return;
+        if (m_closing || m_selectorOpen || m_steamDialog != SteamDialog::None ||
+            m_categoryMotion < 0.68f) return;
         if (m_inMapping)
         {
             m_inMapping = false;
@@ -2318,6 +2499,11 @@ private:
     void _activate()
     {
         if (m_closing) return;
+        if (_handleSteamDialogActivate()) {
+            brls::Application::getAudioPlayer()->play(brls::SOUND_CLICK);
+            invalidate();
+            return;
+        }
         if (m_selectorOpen)
         {
             if (m_selectorApply) m_selectorApply(m_selectorIndex);
@@ -2393,6 +2579,12 @@ private:
     void _back()
     {
         if (m_closing) return;
+        if (m_steamDialog != SteamDialog::None) {
+            if (m_steamDialog != SteamDialog::Working)
+                m_steamDialog = SteamDialog::None;
+            brls::Application::getAudioPlayer()->play(brls::SOUND_BACK);
+            return;
+        }
         if (m_selectorOpen)
         {
             m_selectorOpen = false;
@@ -2903,6 +3095,140 @@ private:
                 nvgFillColor(vg, nvgRGBA(119, 211, 255, 255));
                 nvgText(vg, panel.x + panel.w - 40.f, rowY + 23.f, check.c_str(), nullptr);
             }
+        }
+        nvgRestore(vg);
+    }
+
+    void _drawSteamDialog(NVGcontext* vg, float x, float y, float w, float h)
+    {
+        const float alpha = settingSmooth(m_steamOverlayMotion);
+        const float eased = settingBack(m_steamOverlayMotion);
+        nvgSave(vg);
+        nvgGlobalAlpha(vg, alpha);
+        nvgBeginPath(vg);
+        nvgRect(vg, x, y, w, h);
+        nvgFillColor(vg, nvgRGBA(0, 0, 0, 214));
+        nvgFill(vg);
+        const float panelW = 680.f;
+        const float panelH = 360.f;
+        const Rect panel{x + (w - panelW) * 0.5f,
+                         y + (h - panelH) * 0.5f + (1.f - eased) * 38.f,
+                         panelW, panelH};
+        _drawExternalShadow(vg, panel, 18.f, 0.75f);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, panel.x, panel.y, panel.w, panel.h, 18.f);
+        nvgFillColor(vg, nvgRGBA(25, 29, 39, 248));
+        nvgFill(vg);
+        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 74));
+        nvgStrokeWidth(vg, 1.f);
+        nvgStroke(vg);
+
+        char32_t iconCode = 0xE0DA;
+        NVGcolor accent = nvgRGBA(92, 193, 255, 245);
+        if (m_steamDialog == SteamDialog::Working) iconCode = 0xE863;
+        else if (m_steamDialog == SteamDialog::ConfirmCacheClear) {
+            iconCode = 0xE872;
+            accent = nvgRGBA(255, 181, 92, 245);
+        }
+        else if (m_steamDialog == SteamDialog::Result) {
+            iconCode = m_steamDialogSuccess ? 0xE86C : 0xE000;
+            accent = m_steamDialogSuccess
+                ? nvgRGBA(111, 207, 151, 245)
+                : nvgRGBA(255, 111, 145, 245);
+        }
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, panel.x + 30.f, panel.y + 28.f, 68.f, 68.f, 13.f);
+        nvgFillColor(vg, nvgRGBA(accent.r * 255, accent.g * 255,
+                                 accent.b * 255, 32));
+        nvgFill(vg);
+        nvgFontFaceId(vg, m_materialFont);
+        nvgFontSize(vg, 40.f);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, accent);
+        const std::string icon = settingIconUtf8(iconCode);
+        nvgSave(vg);
+        if (m_steamDialog == SteamDialog::Working) {
+            const float cx = panel.x + 64.f;
+            const float cy = panel.y + 62.f;
+            nvgTranslate(vg, cx, cy);
+            nvgRotate(vg, m_time * 2.8f);
+            nvgTranslate(vg, -cx, -cy);
+        }
+        nvgText(vg, panel.x + 64.f, panel.y + 62.f, icon.c_str(), nullptr);
+        nvgRestore(vg);
+
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgFontSize(vg, 26.f);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(247, 249, 252, 248));
+        nvgText(vg, panel.x + 120.f, panel.y + 50.f,
+                m_steamDialogTitle.c_str(), nullptr);
+        nvgFontSize(vg, 15.f);
+        nvgFillColor(vg, nvgRGBA(190, 200, 215, 190));
+        nvgText(vg, panel.x + 120.f, panel.y + 78.f,
+                "SteamGridDB 在线封面服务", nullptr);
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, panel.x + 30.f, panel.y + 116.f);
+        nvgLineTo(vg, panel.x + panel.w - 30.f, panel.y + 116.f);
+        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 28));
+        nvgStrokeWidth(vg, 1.f);
+        nvgStroke(vg);
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgFontSize(vg, 18.f);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
+        nvgFillColor(vg, nvgRGBA(220, 225, 235, 225));
+        nvgTextBox(vg, panel.x + 34.f, panel.y + 140.f,
+                   panel.w - 68.f, m_steamDialogMessage.c_str(), nullptr);
+
+        if (m_steamDialog == SteamDialog::ApiInfo ||
+            m_steamDialog == SteamDialog::ApiModify ||
+            m_steamDialog == SteamDialog::ConfirmCacheClear) {
+            const char* labels[2] = {
+                m_steamDialog == SteamDialog::ConfirmCacheClear
+                    ? "确认清理"
+                    : (m_steamDialog == SteamDialog::ApiInfo
+                        ? "我要输入" : "修改密钥"),
+                "取消"};
+            for (int i = 0; i < 2; ++i) {
+                const float buttonW = 210.f;
+                const float buttonX = panel.x + panel.w * 0.5f - 220.f + i * 230.f;
+                const float buttonY = panel.y + panel.h - 76.f;
+                const bool focused = i == m_steamDialogChoice;
+                nvgBeginPath(vg);
+                nvgRoundedRect(vg, buttonX, buttonY, buttonW, 52.f, 10.f);
+                nvgFillColor(vg, nvgRGBA(255, 255, 255, focused ? 36 : 9));
+                nvgFill(vg);
+                nvgStrokeColor(vg, nvgRGBA(255, 255, 255, focused ? 112 : 42));
+                nvgStrokeWidth(vg, 1.f);
+                nvgStroke(vg);
+                if (focused)
+                    beiklive::ui::drawGradientFocusBorder(
+                        vg, buttonX, buttonY, buttonW, 52.f, 10.f, 3.f, 1.f,
+                        beiklive::ui::gradientFocusAnimationOffset(m_time));
+                nvgFontFaceId(vg, m_defaultFont);
+                nvgFontSize(vg, 20.f);
+                nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+                nvgFillColor(vg, nvgRGBA(242, 245, 250, 242));
+                nvgText(vg, buttonX + buttonW * 0.5f, buttonY + 26.f,
+                        labels[i], nullptr);
+            }
+        } else if (m_steamDialog == SteamDialog::Result) {
+            const float buttonW = 220.f;
+            const float buttonX = panel.x + (panel.w - buttonW) * 0.5f;
+            const float buttonY = panel.y + panel.h - 76.f;
+            nvgBeginPath(vg);
+            nvgRoundedRect(vg, buttonX, buttonY, buttonW, 52.f, 10.f);
+            nvgFillColor(vg, nvgRGBA(255, 255, 255, 34));
+            nvgFill(vg);
+            beiklive::ui::drawGradientFocusBorder(
+                vg, buttonX, buttonY, buttonW, 52.f, 10.f, 3.f, 1.f,
+                beiklive::ui::gradientFocusAnimationOffset(m_time));
+            nvgFontFaceId(vg, m_defaultFont);
+            nvgFontSize(vg, 20.f);
+            nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+            nvgFillColor(vg, nvgRGBA(242, 245, 250, 242));
+            nvgText(vg, buttonX + buttonW * 0.5f, buttonY + 26.f,
+                    "知道了", nullptr);
         }
         nvgRestore(vg);
     }

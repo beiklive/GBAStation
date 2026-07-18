@@ -89,7 +89,7 @@ namespace beiklive
         return static_cast<int>(m_buttons.size()) - 1;
     }
 
-    void GameOptionsSidebar::addSubmenuButton(
+    int GameOptionsSidebar::addSubmenuButton(
         int submenuIndex,
         const std::string& text,
         char32_t iconCodepoint,
@@ -97,8 +97,40 @@ namespace beiklive
     {
         if (submenuIndex < 0 ||
             static_cast<size_t>(submenuIndex) >= m_buttons.size())
+            return -1;
+        auto& children = m_buttons[static_cast<size_t>(submenuIndex)].children;
+        children.push_back({text, iconCodepoint, std::move(callback), {}});
+        return static_cast<int>(children.size()) - 1;
+    }
+
+    int GameOptionsSidebar::addNestedSubmenu(
+        int submenuIndex,
+        const std::string& text,
+        char32_t iconCodepoint)
+    {
+        if (submenuIndex < 0 ||
+            static_cast<size_t>(submenuIndex) >= m_buttons.size())
+            return -1;
+        auto& children = m_buttons[static_cast<size_t>(submenuIndex)].children;
+        children.push_back({text, iconCodepoint, nullptr, {}});
+        return static_cast<int>(children.size()) - 1;
+    }
+
+    void GameOptionsSidebar::addNestedSubmenuButton(
+        int submenuIndex,
+        int nestedSubmenuIndex,
+        const std::string& text,
+        char32_t iconCodepoint,
+        std::function<void(const beiklive::GameEntry&)> callback)
+    {
+        if (submenuIndex < 0 ||
+            static_cast<size_t>(submenuIndex) >= m_buttons.size())
             return;
-        m_buttons[static_cast<size_t>(submenuIndex)].children.push_back(
+        auto& children = m_buttons[static_cast<size_t>(submenuIndex)].children;
+        if (nestedSubmenuIndex < 0 ||
+            static_cast<size_t>(nestedSubmenuIndex) >= children.size())
+            return;
+        children[static_cast<size_t>(nestedSubmenuIndex)].children.push_back(
             {text, iconCodepoint, std::move(callback), {}});
     }
 
@@ -113,10 +145,14 @@ namespace beiklive
         m_launchClosing = false;
         m_openProgress = 0.f;
         m_nanoInSubmenu = false;
+        m_nanoInNestedSubmenu = false;
         m_nanoRootSelected = 0;
         m_nanoChildSelected = 0;
         m_nanoActiveSubmenu = -1;
         m_nanoSubmenuProgress = 0.f;
+        m_nanoNestedSelected = 0;
+        m_nanoActiveNestedSubmenu = -1;
+        m_nanoNestedProgress = 0.f;
         m_nanoFloatTime = 0.f;
         m_nanoFinalizeClose = false;
         m_nanoLaunchFinishTime = 0.f;
@@ -244,6 +280,9 @@ namespace beiklive
         const float submenuTarget = m_nanoInSubmenu ? 1.f : 0.f;
         m_nanoSubmenuProgress += (submenuTarget - m_nanoSubmenuProgress) *
             std::min(1.f, dt * 13.f);
+        const float nestedTarget = m_nanoInNestedSubmenu ? 1.f : 0.f;
+        m_nanoNestedProgress += (nestedTarget - m_nanoNestedProgress) *
+            std::min(1.f, dt * 14.f);
 
         auto& state = brls::Application::getControllerState();
         const float ly = state.axes[static_cast<int>(brls::LEFT_Y)];
@@ -261,6 +300,11 @@ namespace beiklive
                 static_cast<size_t>(m_nanoActiveSubmenu) < m_buttons.size()) {
                 menu = &m_buttons[static_cast<size_t>(m_nanoActiveSubmenu)].children;
                 selected = &m_nanoChildSelected;
+                if (m_nanoInNestedSubmenu && m_nanoActiveNestedSubmenu >= 0 &&
+                    static_cast<size_t>(m_nanoActiveNestedSubmenu) < menu->size()) {
+                    menu = &(*menu)[static_cast<size_t>(m_nanoActiveNestedSubmenu)].children;
+                    selected = &m_nanoNestedSelected;
+                }
             }
 
             if (!menu->empty()) {
@@ -275,10 +319,16 @@ namespace beiklive
                 }
                 if (a && !m_nanoPrevA) {
                     auto& item = (*menu)[static_cast<size_t>(*selected)];
-                    if (!item.children.empty() && !m_nanoInSubmenu) {
-                        m_nanoActiveSubmenu = *selected;
-                        m_nanoChildSelected = 0;
-                        m_nanoInSubmenu = true;
+                    if (!item.children.empty()) {
+                        if (!m_nanoInSubmenu) {
+                            m_nanoActiveSubmenu = *selected;
+                            m_nanoChildSelected = 0;
+                            m_nanoInSubmenu = true;
+                        } else if (!m_nanoInNestedSubmenu) {
+                            m_nanoActiveNestedSubmenu = *selected;
+                            m_nanoNestedSelected = 0;
+                            m_nanoInNestedSubmenu = true;
+                        }
                         brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_SIDEBAR);
                     } else if (item.callback) {
                         auto callback = item.callback;
@@ -291,7 +341,10 @@ namespace beiklive
 
         // B 从入场首帧起即可反向关闭；A 和方向键仍等待菜单基本展开。
         if (!m_isClosing && b && !m_nanoPrevB) {
-            if (m_nanoInSubmenu) {
+            if (m_nanoInNestedSubmenu) {
+                m_nanoInNestedSubmenu = false;
+                brls::Application::getAudioPlayer()->play(brls::SOUND_BACK);
+            } else if (m_nanoInSubmenu) {
                 m_nanoInSubmenu = false;
                 brls::Application::getAudioPlayer()->play(brls::SOUND_BACK);
             } else {
@@ -562,7 +615,9 @@ namespace beiklive
         const float rootBaseX = rightCenterX - 315.f * 0.5f;
         const float childBaseX = rightCenterX - 350.f * 0.5f;
         const float rootX = rootBaseX - m_nanoSubmenuProgress * 350.f;
-        const float childX = childBaseX + (1.f - m_nanoSubmenuProgress) * 340.f;
+        const float childX = childBaseX + (1.f - m_nanoSubmenuProgress) * 340.f
+            - m_nanoNestedProgress * 370.f;
+        const float nestedX = childBaseX + (1.f - m_nanoNestedProgress) * 360.f;
         auto menuHeight = [](size_t count, bool compact) {
             if (count == 0)
                 return 0.f;
@@ -573,11 +628,18 @@ namespace beiklive
         };
         const float rootMenuY = y + (h - menuHeight(m_buttons.size(), false)) * 0.5f;
         float childMenuY = rootMenuY;
+        float nestedMenuY = rootMenuY;
         if (m_nanoActiveSubmenu >= 0 &&
             static_cast<size_t>(m_nanoActiveSubmenu) < m_buttons.size()) {
-            childMenuY = y + (h - menuHeight(
-                m_buttons[static_cast<size_t>(m_nanoActiveSubmenu)].children.size(),
-                false)) * 0.5f;
+            const auto& children =
+                m_buttons[static_cast<size_t>(m_nanoActiveSubmenu)].children;
+            childMenuY = y + (h - menuHeight(children.size(), false)) * 0.5f;
+            if (m_nanoActiveNestedSubmenu >= 0 &&
+                static_cast<size_t>(m_nanoActiveNestedSubmenu) < children.size()) {
+                nestedMenuY = y + (h - menuHeight(
+                    children[static_cast<size_t>(m_nanoActiveNestedSubmenu)].children.size(),
+                    false)) * 0.5f;
+            }
         }
         const float menuAnimationProgress = m_launchClosing
             ? closeEased
@@ -661,7 +723,16 @@ namespace beiklive
                 const auto& children = m_buttons[static_cast<size_t>(m_nanoActiveSubmenu)].children;
                 if (m_nanoSubmenuProgress > 0.02f)
                     drawMenu(children, m_nanoChildSelected, childX, childMenuY, 350.f,
-                             menuAlpha * m_nanoSubmenuProgress, false);
+                             menuAlpha * m_nanoSubmenuProgress *
+                                (1.f - m_nanoNestedProgress * 0.65f), false);
+                if (m_nanoActiveNestedSubmenu >= 0 &&
+                    static_cast<size_t>(m_nanoActiveNestedSubmenu) < children.size() &&
+                    m_nanoNestedProgress > 0.02f) {
+                    const auto& nested = children[
+                        static_cast<size_t>(m_nanoActiveNestedSubmenu)].children;
+                    drawMenu(nested, m_nanoNestedSelected, nestedX, nestedMenuY,
+                             350.f, menuAlpha * m_nanoNestedProgress, false);
+                }
             }
             if (!m_nanoInSubmenu && m_nanoSubmenuProgress < 0.04f &&
                 m_nanoRootSelected >= 0 &&
@@ -671,6 +742,21 @@ namespace beiklive
                     drawMenu(preview, -1, x + w - 172.f,
                               y + (h - menuHeight(preview.size(), true)) * 0.5f,
                               160.f, menuAlpha * 0.72f, true);
+            }
+            if (m_nanoInSubmenu && !m_nanoInNestedSubmenu &&
+                m_nanoActiveSubmenu >= 0 &&
+                static_cast<size_t>(m_nanoActiveSubmenu) < m_buttons.size()) {
+                const auto& children =
+                    m_buttons[static_cast<size_t>(m_nanoActiveSubmenu)].children;
+                if (m_nanoChildSelected >= 0 &&
+                    static_cast<size_t>(m_nanoChildSelected) < children.size()) {
+                    const auto& preview = children[
+                        static_cast<size_t>(m_nanoChildSelected)].children;
+                    if (!preview.empty())
+                        drawMenu(preview, -1, x + w - 172.f,
+                            y + (h - menuHeight(preview.size(), true)) * 0.5f,
+                            160.f, menuAlpha * 0.72f, true);
+                }
             }
         }
 
