@@ -2,6 +2,7 @@
 
 #include "core/enums.h"
 
+#include <atomic>
 #include <array>
 #include <cstdint>
 #include <string>
@@ -74,14 +75,17 @@ namespace beiklive::steamgriddb
     bool clearCache(std::string* error = nullptr);
 
     Result<std::vector<SearchGame>> searchGames(
-        const std::vector<std::string>& terms);
+        const std::vector<std::string>& terms,
+        const std::atomic<bool>* active = nullptr);
     Result<AssetGroups> fetchAllAssets(
-        const std::vector<SearchGame>& games, int page = 0);
+        const std::vector<SearchGame>& games, int page = 0,
+        const std::atomic<bool>* active = nullptr);
     std::vector<Asset> applyFilters(
         const std::vector<Asset>& source, const Filters& filters);
 
     bool ensureAssetCached(Asset& asset, bool thumbnail,
-                           std::string* error = nullptr);
+                           std::string* error = nullptr,
+                           const std::atomic<bool>* active = nullptr);
     bool saveAssetAsCover(const Asset& asset, const GameEntry& entry,
                           std::string& outputPath,
                           std::string* error = nullptr);

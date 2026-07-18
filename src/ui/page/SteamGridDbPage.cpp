@@ -664,7 +664,7 @@ namespace
             auto alive = m_alive;
             ThreadPool::instance().enqueuePriority([
                 this, alive, generation, terms = std::move(terms)]() mutable {
-                auto games = steamgriddb::searchGames(terms);
+                auto games = steamgriddb::searchGames(terms, alive.get());
                 if (!games.ok) {
                     brls::sync([this, alive, generation, error = games.error]() {
                         if (!alive->load() || generation != m_generation.load()) return;
@@ -673,7 +673,8 @@ namespace
                     });
                     return;
                 }
-                auto assets = steamgriddb::fetchAllAssets(games.value);
+                auto assets = steamgriddb::fetchAllAssets(
+                    games.value, 0, alive.get());
                 brls::sync([this, alive, generation, assets = std::move(assets)]() mutable {
                     if (!alive->load() || generation != m_generation.load()) return;
                     if (!assets.ok) {
@@ -730,7 +731,8 @@ namespace
                                                 asset = std::move(asset)]() mutable {
                     std::string error;
                     const bool loaded =
-                        steamgriddb::ensureAssetCached(asset, true, &error);
+                        steamgriddb::ensureAssetCached(
+                            asset, true, &error, alive.get());
                     brls::sync([this, alive, generation, loaded,
                                 error = std::move(error),
                                 asset = std::move(asset)]() mutable {
@@ -921,6 +923,7 @@ namespace
             }
             if (!m_closing) {
                 m_closing = true;
+                m_alive->store(false, std::memory_order_relaxed);
                 ++m_generation;
                 brls::Application::getAudioPlayer()->play(brls::SOUND_BACK);
             }

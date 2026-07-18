@@ -19,6 +19,7 @@
 #include <fstream>
 #include <iomanip>
 #include <mutex>
+#include <shared_mutex>
 #include <set>
 #include <sstream>
 #include <unordered_set>
@@ -39,6 +40,58 @@ namespace
     };
 
     std::once_flag g_curlInit;
+    std::shared_mutex g_cacheAccessMutex;
+
+    bool removeCacheTree(const fs::path& path, std::string& failedPath,
+                         std::error_code& error)
+    {
+        error.clear();
+        std::error_code statusError;
+        const bool directory = fs::is_directory(path, statusError);
+        if (statusError) {
+            failedPath = path.string();
+            error = statusError;
+            return false;
+        }
+
+        if (directory) {
+            std::vector<fs::path> children;
+            {
+                fs::directory_iterator iterator(path, error);
+                if (error) {
+                    failedPath = path.string();
+                    return false;
+                }
+                const fs::directory_iterator end;
+                while (iterator != end) {
+                    children.push_back(iterator->path());
+                    iterator.increment(error);
+                    if (error) {
+                        failedPath = path.string();
+                        return false;
+                    }
+                }
+            }
+            for (const auto& child : children) {
+                if (!removeCacheTree(child, failedPath, error)) return false;
+            }
+        }
+
+        const bool removed = fs::remove(path, error);
+        if (error) {
+            failedPath = path.string();
+            return false;
+        }
+        if (!removed) {
+            std::error_code existsError;
+            if (fs::exists(path, existsError)) {
+                failedPath = path.string();
+                error = std::make_error_code(std::errc::io_error);
+                return false;
+            }
+        }
+        return true;
+    }
 
     void ensureCurl()
     {
@@ -104,6 +157,18 @@ namespace
         return bytes;
     }
 
+    bool requestActive(const std::atomic<bool>* active)
+    {
+        return !active || active->load(std::memory_order_relaxed);
+    }
+
+    int cancelTransfer(void* user, curl_off_t, curl_off_t,
+                       curl_off_t, curl_off_t)
+    {
+        const auto* active = static_cast<const std::atomic<bool>*>(user);
+        return requestActive(active) ? 0 : 1;
+    }
+
     std::uint64_t fnv1a(const std::string& text)
     {
         std::uint64_t hash = 1469598103934665603ULL;
@@ -141,14 +206,23 @@ namespace
 
     void removeJsonCache(const std::string& url)
     {
+        std::shared_lock<std::shared_mutex> cacheAccess(g_cacheAccessMutex);
         std::error_code ec;
         fs::remove(jsonCachePath(url), ec);
     }
 
     HttpResponse httpGet(const std::string& url, const std::string& apiKey,
-                         bool useCache, bool writeCache)
+                         bool useCache, bool writeCache,
+                         const std::atomic<bool>* active = nullptr)
     {
+        std::shared_lock<std::shared_mutex> cacheAccess(
+            g_cacheAccessMutex, std::defer_lock);
+        if (useCache || writeCache) cacheAccess.lock();
         HttpResponse response;
+        if (!requestActive(active)) {
+            response.curlCode = CURLE_ABORTED_BY_CALLBACK;
+            return response;
+        }
         const fs::path cachePath = jsonCachePath(url);
         if (useCache) {
             response.body = readText(cachePath);
@@ -185,6 +259,11 @@ namespace
         curl_easy_setopt(curl, CURLOPT_USERAGENT, "GBAStation-SteamGridDB/1.0");
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeString);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response.body);
+        if (active) {
+            curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+            curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, cancelTransfer);
+            curl_easy_setopt(curl, CURLOPT_XFERINFODATA, active);
+        }
         brls::Logger::info("[SteamGridDB] GET {}", url);
         response.curlCode = curl_easy_perform(curl);
         curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response.status);
@@ -293,16 +372,31 @@ namespace
     }
 
     bool downloadFile(const std::string& url, const fs::path& destination,
-                      std::string* error)
+                      std::string* error, const std::atomic<bool>* active)
     {
+        if (!requestActive(active)) {
+            if (error) *error = "下载已取消";
+            return false;
+        }
         const std::string existing = readText(destination);
         if (!existing.empty()) return true;
-        const HttpResponse response = httpGet(url, "", false, false);
+        const HttpResponse response = httpGet(
+            url, "", false, false, active);
         if (response.curlCode != CURLE_OK || response.status < 200 ||
             response.status >= 300 || response.body.empty()) {
+            if (response.curlCode == CURLE_ABORTED_BY_CALLBACK) {
+                if (error) *error = "下载已取消";
+                brls::Logger::info(
+                    "[SteamGridDB] image download cancelled: {}", url);
+                return false;
+            }
             if (error) *error = response.curlCode != CURLE_OK
                 ? "图片下载网络异常"
                 : "图片下载失败（HTTP " + std::to_string(response.status) + "）";
+            return false;
+        }
+        if (!requestActive(active)) {
+            if (error) *error = "下载已取消";
             return false;
         }
         return writeBytes(destination, response.body, error);
@@ -414,6 +508,10 @@ Result<bool> validateApiKey(const std::string& key)
 
 bool clearCache(std::string* error)
 {
+    // Wait until all thumbnail/API cache jobs finish before touching the
+    // directory tree. Multiple downloads may hold this lock concurrently;
+    // clearing takes it exclusively.
+    std::unique_lock<std::shared_mutex> cacheAccess(g_cacheAccessMutex);
     if (error) error->clear();
     const fs::path root(cacheDirectory());
     std::error_code ec;
@@ -426,38 +524,40 @@ bool clearCache(std::string* error)
         return false;
     }
 
-    // Keep the cache root itself. Removing and immediately recreating the
-    // mounted SD-card directory can return EIO on libnx even though deleting
-    // its children is supported.
-    fs::directory_iterator iterator(root, ec);
-    if (ec) {
-        if (error) *error = "无法读取缓存目录：" + ec.message();
-        brls::Logger::error(
-            "[SteamGridDB] cannot enumerate cache directory {}: {}",
-            root.string(), ec.message());
-        return false;
-    }
-    const fs::directory_iterator end;
-    while (iterator != end) {
-        const fs::path entry = iterator->path();
-        iterator.increment(ec);
+    // Read all root entries first so the FAT directory iterator is closed
+    // before deleting anything below it.
+    std::vector<fs::path> entries;
+    {
+        fs::directory_iterator iterator(root, ec);
         if (ec) {
-            if (error) *error = "读取缓存项目失败：" + ec.message();
+            if (error) *error = "无法读取缓存目录：" + ec.message();
             brls::Logger::error(
-                "[SteamGridDB] cache iteration failed after {}: {}",
-                entry.string(), ec.message());
+                "[SteamGridDB] cannot enumerate cache directory {}: {}",
+                root.string(), ec.message());
             return false;
         }
+        const fs::directory_iterator end;
+        while (iterator != end) {
+            entries.push_back(iterator->path());
+            iterator.increment(ec);
+            if (ec) {
+                if (error) *error = "读取缓存项目失败：" + ec.message();
+                return false;
+            }
+        }
+    }
+
+    for (const auto& entry : entries) {
+        std::string failedPath;
         std::error_code removeError;
-        fs::remove_all(entry, removeError);
-        if (removeError) {
+        if (!removeCacheTree(entry, failedPath, removeError)) {
             if (error) {
-                *error = "无法删除 " + entry.filename().string() +
-                    "：" + removeError.message();
+                *error = "无法删除 " + failedPath + "：" +
+                    removeError.message();
             }
             brls::Logger::error(
-                "[SteamGridDB] cannot remove cache entry {}: {}",
-                entry.string(), removeError.message());
+                "[SteamGridDB] cannot remove cache path {}: {}",
+                failedPath, removeError.message());
             return false;
         }
     }
@@ -465,9 +565,14 @@ bool clearCache(std::string* error)
     return true;
 }
 
-Result<std::vector<SearchGame>> searchGames(const std::vector<std::string>& terms)
+Result<std::vector<SearchGame>> searchGames(
+    const std::vector<std::string>& terms, const std::atomic<bool>* active)
 {
     Result<std::vector<SearchGame>> result;
+    if (!requestActive(active)) {
+        result.error = "搜索已取消";
+        return result;
+    }
     const std::string key = loadApiKey();
     if (key.empty()) {
         result.error = "请先在设置中输入 SteamGridDB API Key";
@@ -477,12 +582,17 @@ Result<std::vector<SearchGame>> searchGames(const std::vector<std::string>& term
                        terms.size());
     std::unordered_set<std::int64_t> seen;
     for (const std::string& rawTerm : terms) {
+        if (!requestActive(active)) {
+            result.error = "搜索已取消";
+            return result;
+        }
         const std::string term = trim(rawTerm);
         if (term.empty()) continue;
         brls::Logger::info("[SteamGridDB] searching game term: {}", term);
         const std::string url = std::string(kApiBase) +
             "/search/autocomplete/" + encoded(term);
-        const HttpResponse response = httpGet(url, key, true, true);
+        const HttpResponse response = httpGet(
+            url, key, true, true, active);
         if (response.curlCode != CURLE_OK || response.status < 200 ||
             response.status >= 300) {
             if (result.value.empty()) return responseError<std::vector<SearchGame>>(response);
@@ -516,9 +626,15 @@ Result<std::vector<SearchGame>> searchGames(const std::vector<std::string>& term
     return result;
 }
 
-Result<AssetGroups> fetchAllAssets(const std::vector<SearchGame>& games, int page)
+Result<AssetGroups> fetchAllAssets(
+    const std::vector<SearchGame>& games, int page,
+    const std::atomic<bool>* active)
 {
     Result<AssetGroups> result;
+    if (!requestActive(active)) {
+        result.error = "素材读取已取消";
+        return result;
+    }
     const std::string key = loadApiKey();
     if (key.empty()) {
         result.error = "请先在设置中输入 SteamGridDB API Key";
@@ -534,15 +650,24 @@ Result<AssetGroups> fetchAllAssets(const std::vector<SearchGame>& games, int pag
         "[SteamGridDB] asset search started: {} candidate games, page {}",
         gameCount, page);
     for (int typeIndex = 0; typeIndex < static_cast<int>(AssetType::Count); ++typeIndex) {
+        if (!requestActive(active)) {
+            result.error = "素材读取已取消";
+            return result;
+        }
         const AssetType type = static_cast<AssetType>(typeIndex);
         std::unordered_set<std::string> seen;
         auto& output = result.value[static_cast<size_t>(type)];
         for (size_t gameIndex = 0; gameIndex < gameCount; ++gameIndex) {
+            if (!requestActive(active)) {
+                result.error = "素材读取已取消";
+                return result;
+            }
             if (output.size() >= 30) break;
             const std::string url = std::string(kApiBase) + "/" + endpoint(type) +
                 "/game/" + std::to_string(games[gameIndex].id) +
                 "?page=" + std::to_string(std::max(0, page));
-            HttpResponse response = httpGet(url, key, true, true);
+            HttpResponse response = httpGet(
+                url, key, true, true, active);
             if (response.curlCode != CURLE_OK || response.status < 200 ||
                 response.status >= 300) {
                 brls::Logger::warning(
@@ -642,8 +767,14 @@ std::vector<Asset> applyFilters(const std::vector<Asset>& source,
     return output;
 }
 
-bool ensureAssetCached(Asset& asset, bool thumbnail, std::string* error)
+bool ensureAssetCached(Asset& asset, bool thumbnail, std::string* error,
+                       const std::atomic<bool>* active)
 {
+    std::shared_lock<std::shared_mutex> cacheAccess(g_cacheAccessMutex);
+    if (!requestActive(active)) {
+        if (error) *error = "下载已取消";
+        return false;
+    }
     const fs::path path = assetCachePath(asset, thumbnail);
     std::error_code ec;
     if (fs::exists(path, ec) && fs::is_regular_file(path, ec)) {
@@ -653,7 +784,7 @@ bool ensureAssetCached(Asset& asset, bool thumbnail, std::string* error)
     }
     const std::string& url = thumbnail && !asset.thumbnailUrl.empty()
         ? asset.thumbnailUrl : asset.url;
-    if (!downloadFile(url, path, error)) {
+    if (!downloadFile(url, path, error, active)) {
         brls::Logger::warning(
             "[SteamGridDB] image download failed: {} ({})", url,
             error && !error->empty() ? *error : "unknown error");
