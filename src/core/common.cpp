@@ -412,6 +412,8 @@ namespace beiklive
         SettingManager->SetDefault("nds.externalNro.enabled", ConfigValue(1));
         SettingManager->SetDefault("nds.externalNro.path", ConfigValue(std::string("/GBAStation/core/GBAStationNDSStub.nro")));
         SettingManager->SetDefault("nds.externalNro.returnPath", ConfigValue(std::string("sdmc:/switch/GBAStation.nro")));
+        SettingManager->SetDefault("3ds.externalNro.path", ConfigValue(std::string("/GBAStation/core/GBAStation3DSStub.nro")));
+        SettingManager->SetDefault("3ds.externalNro.returnPath", ConfigValue(std::string("sdmc:/switch/GBAStation.nro")));
         if (auto pathValue = SettingManager->Get("nds.externalNro.path"))
         {
             const auto path = pathValue->AsString().value_or("");
@@ -486,7 +488,7 @@ namespace beiklive
         SettingManager->SetDefault("cheat.dir", ConfigValue(std::string("")));
 
         // 按键绑定默认值。GBA 保持无前缀；GBC/GB 独立前缀首次默认继承旧的无前缀配置。
-        const std::string mappingPrefixes[] = {"", "gbc.", "gb.", "nes.", "sfc.", "nds."};
+        const std::string mappingPrefixes[] = {"", "gbc.", "gb.", "nes.", "sfc.", "nds.", "3ds."};
         for (const auto& prefix : mappingPrefixes)
         {
             const unsigned platformMask = beiklive::input_mapping::platformMaskForPrefix(prefix);
@@ -512,6 +514,9 @@ namespace beiklive
             }
             for (const auto& entry : beiklive::input_mapping::kHotkeyDefaults)
             {
+                if ((prefix == "nds." && entry.hiddenOnNds) ||
+                    (prefix == "3ds." && entry.hiddenOnThreeDs))
+                    continue;
                 std::string defaultValue = entry.defaultValue;
                 if (beiklive::input_mapping::usesLegacyGbFamilyFallback(prefix))
                 {
@@ -557,6 +562,8 @@ namespace beiklive
                 beiklive::input_mapping::makeKey(prefix, beiklive::input_mapping::kTurboBKey),
                 ConfigValue(turboBDefault));
         }
+        // 3DS 独立运行时不支持倒带，清理旧版本可能写入的无效绑定。
+        SettingManager->Remove("3ds.handle.rewind");
         for (const auto& entry : beiklive::input_mapping::kNdsPointerHotkeys)
         {
             SettingManager->SetDefault(
@@ -700,6 +707,8 @@ namespace beiklive
             return 224;
         case beiklive::enums::EmuPlatform::EmuNDS:
             return 384;
+        case beiklive::enums::EmuPlatform::Emu3DS:
+            return 480;
         default:
             break;
         }
@@ -722,6 +731,8 @@ namespace beiklive
             return 256;
         case beiklive::enums::EmuPlatform::EmuNDS:
             return 256;
+        case beiklive::enums::EmuPlatform::Emu3DS:
+            return 400;
         default:
             break;
         }
@@ -743,6 +754,8 @@ namespace beiklive
         case beiklive::enums::EmuPlatform::EmuSNES:
             return BK_RES("img/LogoLayer/GBA_LOGOLAY.png");
         case beiklive::enums::EmuPlatform::EmuNDS:
+            return BK_RES("img/LogoLayer/GBA_LOGOLAY.png");
+        case beiklive::enums::EmuPlatform::Emu3DS:
             return BK_RES("img/LogoLayer/GBA_LOGOLAY.png");
         default:
             return BK_RES("img/LogoLayer/GBA_LOGOLAY.png");

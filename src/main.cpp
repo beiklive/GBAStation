@@ -50,6 +50,12 @@ bool isDirectLaunchRomType(beiklive::enums::FileType type)
 		   type == FileType::SNES_ROM;
 }
 
+bool isLibraryRomType(beiklive::enums::FileType type)
+{
+	return isDirectLaunchRomType(type) ||
+		   type == beiklive::enums::FileType::THREEDS_ROM;
+}
+
 std::optional<std::string> parseDirectLaunchRom(int argc, char* argv[])
 {
 	for (int i = 1; i < argc; ++i)
@@ -85,7 +91,7 @@ std::optional<std::string> parseDirectLaunchRom(int argc, char* argv[])
 
 void ensureDirectGameDbEntry(const std::string& romPath, beiklive::enums::FileType fileType)
 {
-	if (!beiklive::GameDB || romPath.empty() || !isDirectLaunchRomType(fileType))
+	if (!beiklive::GameDB || romPath.empty() || !isLibraryRomType(fileType))
 		return;
 
 	auto entryOpt = beiklive::GameDB->findByPath(romPath);
@@ -143,13 +149,37 @@ void ensureDirectGameDbEntry(const std::string& romPath, beiklive::enums::FileTy
 bool launchDirectGameActivity(const std::string& romPath)
 {
 	const auto fileType = beiklive::tools::getFileType(romPath);
-	if (!isDirectLaunchRomType(fileType))
+	if (!isLibraryRomType(fileType))
 	{
 		brls::Logger::error("Direct launch path is not a supported ROM: {}", romPath);
 		return false;
 	}
 
 	ensureDirectGameDbEntry(romPath, fileType);
+
+#ifdef __SWITCH__
+	if (fileType == beiklive::enums::FileType::THREEDS_ROM)
+	{
+		const std::string nroPath = GET_SETTING_KEY_STR(
+			"3ds.externalNro.path", "/GBAStation/core/GBAStation3DSStub.nro");
+		const std::string returnPath = GET_SETTING_KEY_STR(
+			"3ds.externalNro.returnPath", "sdmc:/switch/GBAStation.nro");
+		auto result = beiklive::switch_platform::launchNroOnExit(
+			{nroPath, romPath, returnPath});
+		if (!result.success)
+		{
+			brls::Logger::error("Direct 3DS NRO launch failed: {}", result.message);
+			brls::Application::notify("3DS独立NRO启动失败：" + result.message);
+			return false;
+		}
+		brls::Logger::info("Direct 3DS NRO launch configured: {}", result.message);
+		brls::Application::quit();
+		return true;
+	}
+#endif
+
+	if (!isDirectLaunchRomType(fileType))
+		return false;
 
 	beiklive::GamePage* gamePage = nullptr;
 	if (beiklive::GameDB)

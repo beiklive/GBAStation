@@ -226,6 +226,7 @@ namespace beiklive
             case PlatformBadgeColor::NES:     return nvgRGBA(218, 41,  28,  220);
             case PlatformBadgeColor::SNES:    return nvgRGBA(160, 100, 180, 220);
             case PlatformBadgeColor::NDS:     return nvgRGBA(54,  150, 190, 220);
+            case PlatformBadgeColor::THREEDS: return nvgRGBA(230, 79,  91,  220);
             default:                          return nvgRGBA(100, 100, 100, 200);
         }
     }
@@ -257,6 +258,7 @@ namespace beiklive
             case beiklive::enums::EmuPlatform::EmuNES:  item.coverAspect = 0.73f; break;
             case beiklive::enums::EmuPlatform::EmuSNES: item.coverAspect = 1.00f; break;
             case beiklive::enums::EmuPlatform::EmuNDS:  item.coverAspect = 0.90f; break;
+            case beiklive::enums::EmuPlatform::Emu3DS:  item.coverAspect = 0.89f; break;
             default:                                     item.coverAspect = 0.78f; break;
         }
 
@@ -274,6 +276,7 @@ namespace beiklive
         case beiklive::enums::EmuPlatform::EmuNES: item.badgeColor = PlatformBadgeColor::NES; break;
         case beiklive::enums::EmuPlatform::EmuSNES: item.badgeColor = PlatformBadgeColor::SNES; break;
         case beiklive::enums::EmuPlatform::EmuNDS: item.badgeColor = PlatformBadgeColor::NDS; break;
+        case beiklive::enums::EmuPlatform::Emu3DS: item.badgeColor = PlatformBadgeColor::THREEDS; break;
         default: item.badgeColor = PlatformBadgeColor::NONE; break;
     }
         item.badgeText = badgeText;

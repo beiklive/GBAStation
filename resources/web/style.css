@@ -432,6 +432,7 @@ button:disabled {
 .platform-fc { --platform-color: #d63939; --platform-bg: rgba(214, 57, 57, .12); }
 .platform-sfc { --platform-color: #f59f00; --platform-bg: rgba(245, 159, 0, .14); }
 .platform-nds { --platform-color: #0ca678; --platform-bg: rgba(12, 166, 120, .12); }
+.platform-3ds { --platform-color: #e64f5b; --platform-bg: rgba(230, 79, 91, .12); }
 .platform-other { --platform-color: #6c7a91; --platform-bg: rgba(108, 122, 145, .12); }
 
 .platform-dot {

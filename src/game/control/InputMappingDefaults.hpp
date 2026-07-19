@@ -10,7 +10,8 @@ namespace beiklive::input_mapping
     inline constexpr unsigned kPlatformNes = 1u << 1;
     inline constexpr unsigned kPlatformSfc = 1u << 2;
     inline constexpr unsigned kPlatformNds = 1u << 3;
-    inline constexpr unsigned kPlatformAll = kPlatformGbFamily | kPlatformNes | kPlatformSfc | kPlatformNds;
+    inline constexpr unsigned kPlatformThreeDs = 1u << 4;
+    inline constexpr unsigned kPlatformAll = kPlatformGbFamily | kPlatformNes | kPlatformSfc | kPlatformNds | kPlatformThreeDs;
 
     struct GameButtonDefault
     {
@@ -23,28 +24,28 @@ namespace beiklive::input_mapping
     inline constexpr GameButtonDefault kGameButtonDefaults[] = {
         {"A键", "a", "PAD_A", kPlatformAll},
         {"B键", "b", "PAD_B", kPlatformAll},
-        {"X键", "x", "PAD_X", kPlatformSfc | kPlatformNds},
-        {"Y键", "y", "PAD_Y", kPlatformSfc | kPlatformNds},
+        {"X键", "x", "PAD_X", kPlatformSfc | kPlatformNds | kPlatformThreeDs},
+        {"Y键", "y", "PAD_Y", kPlatformSfc | kPlatformNds | kPlatformThreeDs},
         {"方向键上", "up", "PAD_UP", kPlatformAll},
         {"方向键下", "down", "PAD_DOWN", kPlatformAll},
         {"方向键左", "left", "PAD_LEFT", kPlatformAll},
         {"方向键右", "right", "PAD_RIGHT", kPlatformAll},
-        {"L键", "l", "PAD_LB", kPlatformGbFamily | kPlatformSfc | kPlatformNds},
-        {"R键", "r", "PAD_RB", kPlatformGbFamily | kPlatformSfc | kPlatformNds},
-        {"L2键", "l2", "PAD_LT", 0},
-        {"R2键", "r2", "PAD_RT", 0},
+        {"L键", "l", "PAD_LB", kPlatformGbFamily | kPlatformSfc | kPlatformNds | kPlatformThreeDs},
+        {"R键", "r", "PAD_RB", kPlatformGbFamily | kPlatformSfc | kPlatformNds | kPlatformThreeDs},
+        {"ZL键", "l2", "PAD_LT", kPlatformThreeDs},
+        {"ZR键", "r2", "PAD_RT", kPlatformThreeDs},
         {"L3键", "l3", "PAD_LSB", 0},
         {"R3键", "r3", "PAD_RSB", 0},
         {"开始键", "start", "PAD_START", kPlatformAll},
         {"选择键", "select", "PAD_BACK", kPlatformAll},
-        {"左摇杆上", "lstick_up", "PAD_LEFTSTICKUP", 0},
-        {"左摇杆下", "lstick_down", "PAD_LEFTSTICKDOWN", 0},
-        {"左摇杆左", "lstick_left", "PAD_LEFTSTICKLEFT", 0},
-        {"左摇杆右", "lstick_right", "PAD_LEFTSTICKRIGHT", 0},
-        {"右摇杆上", "rstick_up", "PAD_RIGHTSTICKUP", 0},
-        {"右摇杆下", "rstick_down", "PAD_RIGHTSTICKDOWN", 0},
-        {"右摇杆左", "rstick_left", "PAD_RIGHTSTICKLEFT", 0},
-        {"右摇杆右", "rstick_right", "PAD_RIGHTSTICKRIGHT", 0},
+        {"左摇杆上", "lstick_up", "PAD_LEFTSTICKUP", kPlatformThreeDs},
+        {"左摇杆下", "lstick_down", "PAD_LEFTSTICKDOWN", kPlatformThreeDs},
+        {"左摇杆左", "lstick_left", "PAD_LEFTSTICKLEFT", kPlatformThreeDs},
+        {"左摇杆右", "lstick_right", "PAD_LEFTSTICKRIGHT", kPlatformThreeDs},
+        {"右摇杆上", "rstick_up", "PAD_RIGHTSTICKUP", kPlatformThreeDs},
+        {"右摇杆下", "rstick_down", "PAD_RIGHTSTICKDOWN", kPlatformThreeDs},
+        {"右摇杆左", "rstick_left", "PAD_RIGHTSTICKLEFT", kPlatformThreeDs},
+        {"右摇杆右", "rstick_right", "PAD_RIGHTSTICKRIGHT", kPlatformThreeDs},
     };
 
     struct HotkeyDefault
@@ -53,17 +54,18 @@ namespace beiklive::input_mapping
         const char* label;
         const char* defaultValue;
         bool hiddenOnNds = false;
+        bool hiddenOnThreeDs = false;
     };
 
     inline constexpr HotkeyDefault kHotkeyDefaults[] = {
-        {"handle.fastforward", "快进", "PAD_LSB", false},
-        {"handle.rewind", "倒带", "none", true},
-        {"hotkey.quicksave.pad", "快速保存", "none", false},
-        {"hotkey.quickload.pad", "快速读取", "none", false},
-        {"hotkey.screenshot.pad", "截图", "none", false},
-        {"hotkey.menu.pad", "打开菜单", "PAD_LT+PAD_RT", false},
-        {"hotkey.mute.pad", "静音", "none", false},
-        {"hotkey.pause.pad", "暂停", "none", false},
+        {"handle.fastforward", "快进", "PAD_LSB", false, false},
+        {"handle.rewind", "倒带", "none", true, true},
+        {"hotkey.quicksave.pad", "快速保存", "none", false, false},
+        {"hotkey.quickload.pad", "快速读取", "none", false, false},
+        {"hotkey.screenshot.pad", "截图", "none", false, false},
+        {"hotkey.menu.pad", "打开菜单", "PAD_LT+PAD_RT", false, false},
+        {"hotkey.mute.pad", "静音", "none", false, false},
+        {"hotkey.pause.pad", "暂停", "none", false, false},
     };
 
     inline constexpr HotkeyDefault kNdsPointerHotkeys[] = {
@@ -97,6 +99,8 @@ namespace beiklive::input_mapping
             return "sfc.";
         case beiklive::enums::EmuPlatform::EmuNDS:
             return "nds.";
+        case beiklive::enums::EmuPlatform::Emu3DS:
+            return "3ds.";
         default:
             return "";
         }
@@ -112,6 +116,8 @@ namespace beiklive::input_mapping
             return kPlatformSfc;
         case beiklive::enums::EmuPlatform::EmuNDS:
             return kPlatformNds;
+        case beiklive::enums::EmuPlatform::Emu3DS:
+            return kPlatformThreeDs;
         case beiklive::enums::EmuPlatform::EmuGBA:
         case beiklive::enums::EmuPlatform::EmuGBC:
         case beiklive::enums::EmuPlatform::EmuGB:
@@ -128,6 +134,8 @@ namespace beiklive::input_mapping
             return kPlatformSfc;
         if (prefix == "nds.")
             return kPlatformNds;
+        if (prefix == "3ds.")
+            return kPlatformThreeDs;
         return kPlatformGbFamily;
     }
 

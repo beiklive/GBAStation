@@ -2845,16 +2845,17 @@ private:
         nvgFontSize(vg, 17.f);
         nvgFillColor(vg, nvgRGBA(220, 225, 234, 210));
         nvgTextBox(vg, px, project.y + 68.f, project.w - 60.f,
-            "GBAStation 是面向 Switch 平台的模拟器前端，统一管理游戏、核心、存档、封面与输入配置。", nullptr);
+            "GBAStation 是面向 Switch 平台的模拟器前端，统一管理游戏、核心、存档、封面与输入配置；3DS 游戏由 Azahar 独立运行时启动。", nullptr);
 
         float badgeX = px;
         const float badgeY = project.y + 126.f;
-        const std::array<std::pair<const char*, NVGcolor>, 6> badges{{
+        const std::array<std::pair<const char*, NVGcolor>, 7> badges{{
             {"GB / GBC", nvgRGB(79, 193, 255)},
             {"GBA", nvgRGB(0, 188, 212)},
             {"FC", nvgRGB(255, 119, 168)},
             {"SFC", nvgRGB(150, 130, 255)},
             {"NDS", nvgRGB(100, 220, 150)},
+            {"3DS", nvgRGB(230, 79, 91)},
             {"PICO-8", nvgRGB(255, 190, 80)},
         }};
         for (const auto& badge : badges) {
@@ -2881,7 +2882,7 @@ private:
             "金手指与多核心切换",
             "着色器、遮罩与画面模式",
             "远程管理与资源检测",
-            "原生 NDS 与 PICO-8 运行时",
+            "原生 NDS、3DS 与 PICO-8 运行时",
         };
         for (int index = 0; index < 8; ++index) {
             const int column = index % 2;
@@ -3192,15 +3193,15 @@ brls::View* AboutPage::_buildInfoTab() {
 
     std::vector<std::string> descLines = {
         "GBAStation 是一个基于 borealis UI 的跨平台模拟器前端，整合 libretro 核心并移植 melonDS 核心代码。",
-        "当前支持 GB、GBC、GBA、FC、SFC、NDS(NDS性能较弱，仍在优化中)",
-        "内置核心包含 mGBA、Nestopia、FCEUmm、Snes9x 2005、Snes9x 与 melonDS。",
+        "当前支持 GB、GBC、GBA、FC、SFC、NDS 与 3DS（NDS/3DS 性能仍在优化中）。",
+        "内置核心包含 mGBA、Nestopia、FCEUmm、Snes9x 2005、Snes9x、melonDS 与 Azahar。",
         "",
         "目前已实现功能：",
         "  •  游戏库功能、游戏封面、游玩时长、游戏次数",
         "  •  支持目录扫描、RetroArch 游戏库导入、Web 局域网管理游戏库与封面自定义",
         "  •  支持即时存档 / 读档、自动存档 / 自动存读档",
         "  •  支持金手指（不支持raw格式）",
-        "  •  按机型独立按键映射、A / B 连发",
+        "  •  按机型独立按键映射（含 3DS 双摇杆与 ZL / ZR）、A / B 连发",
         "  •  快进、倒带",
         "  •  遮罩、RetroArch GLSL 着色器与参数调整",
         "  •  多种画面模式"

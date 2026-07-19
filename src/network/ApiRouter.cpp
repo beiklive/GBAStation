@@ -23,7 +23,7 @@ namespace beiklive::network
 
 namespace
 {
-constexpr std::uint64_t MAX_UPLOAD_SIZE = 512ull * 1024ull * 1024ull;
+constexpr std::uint64_t MAX_UPLOAD_SIZE = 4ull * 1024ull * 1024ull * 1024ull;
 constexpr std::uint64_t MAX_TEXT_EDIT_SIZE = 2ull * 1024ull * 1024ull;
 constexpr std::size_t MAX_ROM_STEM_SIZE = 40;
 constexpr const char* JSON_HEADERS = "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n";
@@ -56,6 +56,8 @@ int platformFromExt(const std::string& ext)
     if (ext == "nes" || ext == "fds") return static_cast<int>(beiklive::enums::EmuPlatform::EmuNES);
     if (ext == "sfc" || ext == "smc") return static_cast<int>(beiklive::enums::EmuPlatform::EmuSNES);
     if (ext == "nds") return static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS);
+    if (ext == "cia" || ext == "cci" || ext == "3ds")
+        return static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS);
     return 0;
 }
 

@@ -268,6 +268,8 @@ int platformFromExtension(const std::string& ext)
     if (ext == "nes" || ext == "fds") return static_cast<int>(beiklive::enums::EmuPlatform::EmuNES);
     if (ext == "sfc" || ext == "smc") return static_cast<int>(beiklive::enums::EmuPlatform::EmuSNES);
     if (ext == "nds") return static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS);
+    if (ext == "cia" || ext == "cci" || ext == "3ds")
+        return static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS);
     return -1;
 }
 
@@ -307,7 +309,8 @@ ImportSharedConfig buildSharedConfig(int platform)
 
     ImportSharedConfig config;
     config.platform = platform;
-    if (platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
+    if (platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS) ||
+        platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS))
         return config;
     config.overlayEnabled = beiklive::tools::shouldAutoEnableOverlayForPlatform(platform);
     config.shaderEnabled = beiklive::tools::shouldAutoEnableShaderForPlatform(platform);
@@ -1271,6 +1274,7 @@ void DataManagementPage::init()
         {"导入 FC 播放列表", "FC · .lpl", static_cast<int>(enums::EmuPlatform::EmuNES)},
         {"导入 SFC 播放列表", "SFC · .lpl", static_cast<int>(enums::EmuPlatform::EmuSNES)},
         {"导入 NDS 播放列表", "NDS · .lpl", static_cast<int>(enums::EmuPlatform::EmuNDS)},
+        {"导入 3DS 播放列表", "3DS · .lpl", static_cast<int>(enums::EmuPlatform::Emu3DS)},
     };
     for (const auto& platform : bundlePlatforms)
     {
@@ -1322,6 +1326,8 @@ void DataManagementPage::init()
                           material::MEMORY, {}, &m_scanSNES, false});
     scan.items.push_back({"扫描 NDS 游戏", "识别 .nds 文件", "",
                           material::MEMORY, {}, &m_scanNDS, false});
+    scan.items.push_back({"扫描 3DS 游戏", "识别 .cia、.cci 与 .3ds 文件", "",
+                          material::MEMORY, {}, &m_scan3DS, false});
     tabs.push_back(std::move(scan));
 
     Canvas::Tab process;
@@ -1560,6 +1566,10 @@ brls::View* DataManagementPage::buildScanImportTab()
     ndsSwitch->init("扫描NDS游戏", m_scanNDS, [this](bool on) { m_scanNDS = on; });
     box->addView(ndsSwitch);
 
+    auto* threeDsSwitch = new brls::BooleanCell();
+    threeDsSwitch->init("扫描3DS游戏", m_scan3DS, [this](bool on) { m_scan3DS = on; });
+    box->addView(threeDsSwitch);
+
 
     scroll->setContentView(box);
 
@@ -1595,6 +1605,7 @@ brls::View* DataManagementPage::buildBundleImportTab()
         {"选择FC游戏的lpl文件",   "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuNES)},
         {"选择SFC游戏的lpl文件",  "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuSNES)},
         {"选择NDS游戏的lpl文件",  "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)},
+        {"选择3DS游戏的lpl文件",  "img/ui/3ds.png", static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS)},
     };
     
     box->addView(makeHint("lpl 文件通常位于 RetroArch 的 playlists 目录下，不懂lpl文件语法规则不要自行删改"));
@@ -1977,6 +1988,7 @@ void DataManagementPage::startDirImport(const std::string& dirPath)
     if (m_scanNES) { exts.insert("nes"); exts.insert("fds"); }
     if (m_scanSNES) { exts.insert("sfc"); exts.insert("smc"); }
     if (m_scanNDS) exts.insert("nds");
+    if (m_scan3DS) { exts.insert("cia"); exts.insert("cci"); exts.insert("3ds"); }
 
     m_importing.store(true, std::memory_order_release);
 

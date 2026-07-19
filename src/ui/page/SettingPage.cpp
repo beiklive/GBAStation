@@ -1708,6 +1708,7 @@ private:
             {"NES 按键映射", "nes.", "Nintendo Entertainment System 游戏", false},
             {"SFC 按键映射", "sfc.", "Super Famicom 游戏", false},
             {"NDS 按键映射", "nds.", "Nintendo DS 游戏与触摸指针热键", true},
+            {"3DS 按键映射", "3ds.", "Nintendo 3DS 游戏与双摇杆控制", false},
         };
         for (const auto& platform : platforms)
         {
@@ -2346,7 +2347,9 @@ private:
         m_mappingItems.push_back(_section("功能热键"));
         for (const auto& entry : beiklive::input_mapping::kHotkeyDefaults)
         {
-            if (nds && entry.hiddenOnNds) continue;
+            if ((nds && entry.hiddenOnNds) ||
+                (prefix == "3ds." && entry.hiddenOnThreeDs))
+                continue;
             _addBinding(entry.label, "可绑定单键或双键组合", beiklive::input_mapping::makeKey(prefix, entry.key), entry.defaultValue);
         }
         if (nds)
@@ -3914,7 +3917,8 @@ namespace
         box->addView(makeHeader("功能热键绑定"));
         for (const auto& entry : beiklive::input_mapping::kHotkeyDefaults)
         {
-            if (nds && entry.hiddenOnNds)
+            if ((nds && entry.hiddenOnNds) ||
+                (prefix == "3ds." && entry.hiddenOnThreeDs))
                 continue;
             std::string cfgKey = beiklive::input_mapping::makeKey(prefix, entry.key);
             auto* cell = new beiklive::DetailCell();

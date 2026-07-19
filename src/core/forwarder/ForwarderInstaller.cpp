@@ -190,15 +190,20 @@ InstallResult installGame(const beiklive::GameEntry& entry)
 
     const bool isNds =
         entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS);
+    const bool isThreeDs =
+        entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS);
     const std::string mainNro = "sdmc:/switch/GBAStation.nro";
     const std::string nroPath = isNds
         ? normalizeNroPath(GET_SETTING_KEY_STR(
               "nds.externalNro.path", "/GBAStation/core/GBAStationNDSStub.nro"))
-        : mainNro;
+        : isThreeDs
+            ? normalizeNroPath(GET_SETTING_KEY_STR(
+                  "3ds.externalNro.path", "/GBAStation/core/GBAStation3DSStub.nro"))
+            : mainNro;
 
     std::string args = quoteArgument(entry.path);
     std::string legacyArgs;
-    if (isNds)
+    if (isNds || isThreeDs)
     {
         legacyArgs = args + " --return " + quoteArgument(mainNro);
         args += " --exit-to-home";
