@@ -423,7 +423,7 @@ bool isRemoteEditableGameField(const std::string& key)
         "overlayEnabled", "shaderEnabled",
         "displayMode", "integerAspectRatio", "customScale", "customOffsetX", "customOffsetY",
         "ndsTopScale", "ndsTopOffsetX", "ndsTopOffsetY",
-        "ndsBottomScale", "ndsBottomOffsetX", "ndsBottomOffsetY",
+        "ndsBottomScale", "ndsBottomOffsetX", "ndsBottomOffsetY", "ndsBottomOpacity",
         "ndsScreenLayout", "ndsScreenOrientation", "ndsIntegerScale", "ndsScreenGap", "ndsInternalResolution",
         "shaderParaPath", "shaderParaNames", "shaderParaValues",
     };
@@ -1172,6 +1172,7 @@ void ApiRouter::handleUploadFinish(mg_connection* c, mg_http_message* hm)
             entry.ndsScreenOrientation = "0";
             entry.ndsIntegerScale = true;
             entry.ndsScreenGap = 0;
+            entry.ndsBottomOpacity = 1.0f;
         }
         ensureDir(entry.savePath);
         bool saved = saveGame(entry);

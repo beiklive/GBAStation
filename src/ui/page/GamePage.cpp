@@ -108,6 +108,7 @@ namespace beiklive
                 minimal.ndsScreenOrientation = "0";
                 minimal.ndsIntegerScale = true;
                 minimal.ndsScreenGap = 0;
+                minimal.ndsBottomOpacity = 1.0f;
             }
             std::filesystem::create_directories(minimal.savePath);
             db->upsertByPath(minimal);
@@ -149,6 +150,7 @@ namespace beiklive
             db->setDefault(path, "ndsScreenOrientation", std::string("0"));
             db->setDefault(path, "ndsIntegerScale", true);
             db->setDefault(path, "ndsScreenGap", 0);
+            db->setDefault(path, "ndsBottomOpacity", 1.0f);
         }
 
         m_gameEntry = db->findByPath(path).value();

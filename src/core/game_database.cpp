@@ -289,6 +289,7 @@ namespace beiklive
             {"ndsBottomScale", entry.ndsBottomScale},
             {"ndsBottomOffsetX", entry.ndsBottomOffsetX},
             {"ndsBottomOffsetY", entry.ndsBottomOffsetY},
+            {"ndsBottomOpacity", entry.ndsBottomOpacity},
             {"ndsScreenLayout", sanitizeUtf8(entry.ndsScreenLayout)},
             {"ndsScreenOrientation", sanitizeUtf8(entry.ndsScreenOrientation)},
             {"ndsIntegerScale", entry.ndsIntegerScale},
@@ -331,6 +332,7 @@ namespace beiklive
         entry.ndsBottomScale = j.value("ndsBottomScale", 1.0f);
         entry.ndsBottomOffsetX = j.value("ndsBottomOffsetX", 0.0f);
         entry.ndsBottomOffsetY = j.value("ndsBottomOffsetY", 0.0f);
+        entry.ndsBottomOpacity = std::clamp(j.value("ndsBottomOpacity", 1.0f), 0.0f, 1.0f);
         entry.ndsScreenLayout = j.value("ndsScreenLayout", "priority_top");
         entry.ndsScreenOrientation = j.value("ndsScreenOrientation", "0");
         entry.ndsIntegerScale = j.value("ndsIntegerScale", true);

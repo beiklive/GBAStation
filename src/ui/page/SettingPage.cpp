@@ -2561,7 +2561,12 @@ private:
         {
             m_mappingItems.push_back(_section(nds ? "NDS 指针与屏幕" : "3DS 指针与屏幕"));
             for (const auto& entry : beiklive::input_mapping::kPointerHotkeys)
+            {
+                if ((nds && entry.hiddenOnNds) ||
+                    (prefix == "3ds." && entry.hiddenOnThreeDs))
+                    continue;
                 _addBinding(entry.label, "右摇杆控制指针；麦克风热键再次按下可取消", beiklive::input_mapping::makeKey(prefix, entry.key), entry.defaultValue);
+            }
         }
         m_mappingItems.push_back(_section("连发"));
         _addBinding("A 连发", "按住时自动重复触发 A", beiklive::input_mapping::makeKey(prefix, beiklive::input_mapping::kTurboAKey), beiklive::input_mapping::kTurboADefault);
@@ -4137,6 +4142,9 @@ namespace
         {
             for (const auto& entry : beiklive::input_mapping::kPointerHotkeys)
             {
+                if ((nds && entry.hiddenOnNds) ||
+                    (prefix == "3ds." && entry.hiddenOnThreeDs))
+                    continue;
                 std::string cfgKey = beiklive::input_mapping::makeKey(prefix, entry.key);
                 auto* cell = new beiklive::DetailCell();
                 cell->setLeftText(std::string(entry.label));

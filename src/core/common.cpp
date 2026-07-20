@@ -454,7 +454,6 @@ namespace beiklive
         SettingManager->SetDefault("core.azahar.display_orientation", ConfigValue(std::string("horizontal")));
         SettingManager->SetDefault("core.azahar.display_rotation", ConfigValue(std::string("0")));
         SettingManager->SetDefault("core.azahar.display_size", ConfigValue(std::string("default")));
-        SettingManager->SetDefault("core.azahar.swap_screens", ConfigValue(0));
         SettingManager->SetDefault("core.azahar.large_screen_proportion", ConfigValue(4.0f));
         SettingManager->SetDefault("core.azahar.audio_emulation", ConfigValue(std::string("hle")));
         SettingManager->SetDefault("core.azahar.audio_stretching", ConfigValue(0));
@@ -602,10 +601,14 @@ namespace beiklive
         }
         // 3DS 独立运行时不支持倒带，清理旧版本可能写入的无效绑定。
         SettingManager->Remove("3ds.handle.rewind");
+        SettingManager->Remove("3ds.hotkey.swap_screens.pad");
+        SettingManager->Remove("core.azahar.swap_screens");
         for (const char* prefix : {"nds.", "3ds."})
         {
             for (const auto& entry : beiklive::input_mapping::kPointerHotkeys)
             {
+                if (std::strcmp(prefix, "3ds.") == 0 && entry.hiddenOnThreeDs)
+                    continue;
                 SettingManager->SetDefault(
                     beiklive::input_mapping::makeKey(prefix, entry.key),
                     ConfigValue(std::string(entry.defaultValue)));

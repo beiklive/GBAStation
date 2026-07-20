@@ -1936,6 +1936,7 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
                 entry.ndsScreenOrientation = "0";
                 entry.ndsIntegerScale = true;
                 entry.ndsScreenGap = 0;
+                entry.ndsBottomOpacity = 1.0f;
             }
 
             beiklive::GameDB->upsertByPath(entry);
@@ -2085,6 +2086,7 @@ void DataManagementPage::startDirImport(const std::string& dirPath)
                 entry.ndsScreenOrientation = "0";
                 entry.ndsIntegerScale = true;
                 entry.ndsScreenGap = 0;
+                entry.ndsBottomOpacity = 1.0f;
             }
 
             auto existing = beiklive::GameDB->findByPath(path);
@@ -2106,6 +2108,7 @@ void DataManagementPage::startDirImport(const std::string& dirPath)
                     entry.ndsScreenOrientation = existing->ndsScreenOrientation;
                 entry.ndsIntegerScale = existing->ndsIntegerScale;
                 entry.ndsScreenGap = existing->ndsScreenGap;
+                entry.ndsBottomOpacity = existing->ndsBottomOpacity;
             }
 
             beiklive::GameDB->upsertByPath(entry);

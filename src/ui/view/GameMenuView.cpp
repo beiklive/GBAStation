@@ -2275,6 +2275,7 @@ namespace beiklive
             game.customScale      = m_gameEntry.customScale;
             game.customOffsetX    = m_gameEntry.customOffsetX;
             game.customOffsetY    = m_gameEntry.customOffsetY;
+            game.ndsBottomOpacity = m_gameEntry.ndsBottomOpacity;
             beiklive::GameDB->upsertByPath(game);
             ++count;
         }

@@ -56,6 +56,7 @@ void preserveThreeDsMenuSettings(json& root, const std::filesystem::path& file)
         "ndsBottomScale",
         "ndsBottomOffsetX",
         "ndsBottomOffsetY",
+        "ndsBottomOpacity",
         "overlayEnabled",
         "overlayPath",
     };
@@ -153,7 +154,6 @@ namespace beiklive
             putStr("display_orientation", "core.azahar.display_orientation", "horizontal");
             putStr("display_rotation", "core.azahar.display_rotation", "0");
             putStr("display_size", "core.azahar.display_size", "default");
-            putInt("swap_screens", "core.azahar.swap_screens", 0);
             putFloat("large_screen_proportion", "core.azahar.large_screen_proportion", 4.0f);
             putStr("audio_emulation", "core.azahar.audio_emulation", "hle");
             putInt("audio_stretching", "core.azahar.audio_stretching", 0);
