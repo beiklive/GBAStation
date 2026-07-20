@@ -33,6 +33,39 @@ bool deleteGameFileIfExists(const std::string& path)
     return std::filesystem::remove(path, ec) && !ec;
 }
 
+void preserveThreeDsMenuSettings(json& root, const std::filesystem::path& file)
+{
+    std::ifstream in(file);
+    if (!in.is_open())
+        return;
+
+    json existing = json::parse(in, nullptr, false);
+    if (!existing.is_object())
+        return;
+
+    constexpr const char* keys[] = {
+        "fastforward.multiplier",
+        "ndsScreenLayout",
+        "ndsScreenOrientation",
+        "ndsInternalResolution",
+        "ndsIntegerScale",
+        "ndsScreenGap",
+        "ndsTopScale",
+        "ndsTopOffsetX",
+        "ndsTopOffsetY",
+        "ndsBottomScale",
+        "ndsBottomOffsetX",
+        "ndsBottomOffsetY",
+        "overlayEnabled",
+        "overlayPath",
+    };
+    for (const char* key : keys)
+    {
+        if (!root.contains(key) && existing.contains(key))
+            root[key] = existing[key];
+    }
+}
+
 } // namespace
 
 namespace beiklive
@@ -135,6 +168,7 @@ namespace beiklive
                 "GBAStation" / "3ds" / "config" / "cores";
             const std::filesystem::path file = dir / "azahar.jsonc";
 #endif
+            preserveThreeDsMenuSettings(root, file);
             std::error_code ec;
             std::filesystem::create_directories(dir, ec);
             if (ec) {
