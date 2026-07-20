@@ -422,6 +422,44 @@ namespace beiklive
         }
 
         // 核心设置
+        SettingManager->SetDefault("core.azahar.upscale", ConfigValue(1));
+        SettingManager->SetDefault("core.azahar.use_cpu_jit", ConfigValue(1));
+        SettingManager->SetDefault("core.azahar.new_3ds", ConfigValue(1));
+        SettingManager->SetDefault("core.azahar.cpu_clock", ConfigValue(100));
+        SettingManager->SetDefault("core.azahar.region", ConfigValue(std::string("auto")));
+        SettingManager->SetDefault("core.azahar.language", ConfigValue(std::string("")));
+        SettingManager->SetDefault("core.azahar.username", ConfigValue(std::string("")));
+        SettingManager->SetDefault("core.azahar.input_type", ConfigValue(std::string("null")));
+        SettingManager->SetDefault("core.azahar.use_hw_shader", ConfigValue(1));
+        SettingManager->SetDefault("core.azahar.use_shader_jit", ConfigValue(1));
+        SettingManager->SetDefault("core.azahar.accurate_mul", ConfigValue(1));
+        SettingManager->SetDefault("core.azahar.disk_shader_cache", ConfigValue(1));
+        SettingManager->SetDefault("core.azahar.async_shaders", ConfigValue(1));
+        SettingManager->SetDefault("core.azahar.async_presentation", ConfigValue(1));
+        SettingManager->SetDefault("core.azahar.spirv_shader_gen", ConfigValue(1));
+        SettingManager->SetDefault("core.azahar.disable_spirv_optimizer", ConfigValue(1));
+        SettingManager->SetDefault("core.azahar.vsync", ConfigValue(1));
+        SettingManager->SetDefault("core.azahar.frame_limit", ConfigValue(100.0f));
+        SettingManager->SetDefault("core.azahar.simulate_3ds_gpu_timings", ConfigValue(0));
+        SettingManager->SetDefault("core.azahar.renderer_debug", ConfigValue(0));
+        SettingManager->SetDefault("core.azahar.dump_command_buffers", ConfigValue(0));
+        SettingManager->SetDefault("core.azahar.disable_right_eye", ConfigValue(1));
+        SettingManager->SetDefault("core.azahar.texture_filter", ConfigValue(std::string("none")));
+        SettingManager->SetDefault("core.azahar.texture_sampling", ConfigValue(std::string("game")));
+        SettingManager->SetDefault("core.azahar.custom_textures", ConfigValue(0));
+        SettingManager->SetDefault("core.azahar.dump_textures", ConfigValue(0));
+        SettingManager->SetDefault("core.azahar.use_virtual_sd", ConfigValue(1));
+        SettingManager->SetDefault("core.azahar.layout", ConfigValue(std::string("default")));
+        SettingManager->SetDefault("core.azahar.small_screen_position", ConfigValue(std::string("bottom_right")));
+        SettingManager->SetDefault("core.azahar.display_orientation", ConfigValue(std::string("horizontal")));
+        SettingManager->SetDefault("core.azahar.display_rotation", ConfigValue(std::string("0")));
+        SettingManager->SetDefault("core.azahar.display_size", ConfigValue(std::string("default")));
+        SettingManager->SetDefault("core.azahar.swap_screens", ConfigValue(0));
+        SettingManager->SetDefault("core.azahar.large_screen_proportion", ConfigValue(4.0f));
+        SettingManager->SetDefault("core.azahar.audio_emulation", ConfigValue(std::string("hle")));
+        SettingManager->SetDefault("core.azahar.audio_stretching", ConfigValue(0));
+        SettingManager->SetDefault("core.azahar.realtime_audio", ConfigValue(1));
+
         SettingManager->SetDefault("core.mgba_gb_model", ConfigValue(std::string("Autodetect")));
         SettingManager->SetDefault("core.mgba_use_bios", ConfigValue(std::string("ON")));
         SettingManager->SetDefault("core.mgba_skip_bios", ConfigValue(std::string("OFF")));
