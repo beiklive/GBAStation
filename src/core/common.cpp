@@ -602,11 +602,14 @@ namespace beiklive
         }
         // 3DS 独立运行时不支持倒带，清理旧版本可能写入的无效绑定。
         SettingManager->Remove("3ds.handle.rewind");
-        for (const auto& entry : beiklive::input_mapping::kNdsPointerHotkeys)
+        for (const char* prefix : {"nds.", "3ds."})
         {
-            SettingManager->SetDefault(
-                beiklive::input_mapping::makeKey("nds.", entry.key),
-                ConfigValue(std::string(entry.defaultValue)));
+            for (const auto& entry : beiklive::input_mapping::kPointerHotkeys)
+            {
+                SettingManager->SetDefault(
+                    beiklive::input_mapping::makeKey(prefix, entry.key),
+                    ConfigValue(std::string(entry.defaultValue)));
+            }
         }
 
         // 摇杆输入设置

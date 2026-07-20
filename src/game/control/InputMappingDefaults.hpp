@@ -68,11 +68,11 @@ namespace beiklive::input_mapping
         {"hotkey.pause.pad", "暂停", "none", false, false},
     };
 
-    inline constexpr HotkeyDefault kNdsPointerHotkeys[] = {
-        {"hotkey.pointer_mode.pad", "NDS 指针模式切换", "none", false},
-        {"hotkey.pointer_click.pad", "NDS 指针点击", "none", false},
+    inline constexpr HotkeyDefault kPointerHotkeys[] = {
+        {"hotkey.pointer_mode.pad", "指针模式切换", "none", false},
+        {"hotkey.pointer_click.pad", "指针点击", "none", false},
         {"hotkey.swap_screens.pad", "交换上下屏", "none", false},
-        {"hotkey.mic_blow.pad", "模拟吹气开关", "none", false},
+        {"hotkey.mic_input.pad", "模拟麦克风输入", "none", false},
     };
 
     inline constexpr const char* kTurboAKey = "handle.a_turbo";

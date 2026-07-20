@@ -2556,11 +2556,12 @@ private:
                 continue;
             _addBinding(entry.label, "可绑定单键或双键组合", beiklive::input_mapping::makeKey(prefix, entry.key), entry.defaultValue);
         }
-        if (nds)
+        const bool pointerHotkeys = nds || prefix == "3ds.";
+        if (pointerHotkeys)
         {
-            m_mappingItems.push_back(_section("NDS 指针与屏幕"));
-            for (const auto& entry : beiklive::input_mapping::kNdsPointerHotkeys)
-                _addBinding(entry.label, "右摇杆控制指针；吹气热键再次按下可取消", beiklive::input_mapping::makeKey(prefix, entry.key), entry.defaultValue);
+            m_mappingItems.push_back(_section(nds ? "NDS 指针与屏幕" : "3DS 指针与屏幕"));
+            for (const auto& entry : beiklive::input_mapping::kPointerHotkeys)
+                _addBinding(entry.label, "右摇杆控制指针；麦克风热键再次按下可取消", beiklive::input_mapping::makeKey(prefix, entry.key), entry.defaultValue);
         }
         m_mappingItems.push_back(_section("连发"));
         _addBinding("A 连发", "按住时自动重复触发 A", beiklive::input_mapping::makeKey(prefix, beiklive::input_mapping::kTurboAKey), beiklive::input_mapping::kTurboADefault);
@@ -4131,9 +4132,10 @@ namespace
             registerKeyBindActions(cell, cfgKey);
             box->addView(cell);
         }
-        if (nds)
+        const bool pointerHotkeys = nds || prefix == "3ds.";
+        if (pointerHotkeys)
         {
-            for (const auto& entry : beiklive::input_mapping::kNdsPointerHotkeys)
+            for (const auto& entry : beiklive::input_mapping::kPointerHotkeys)
             {
                 std::string cfgKey = beiklive::input_mapping::makeKey(prefix, entry.key);
                 auto* cell = new beiklive::DetailCell();
@@ -4143,7 +4145,7 @@ namespace
                 box->addView(cell);
             }
             box->addView(makeHint("切换为指针模式后使用右摇杆控制指针"));
-            box->addView(makeHint("模拟吹气开关：按下热键后会持续模拟吹气，再按一次取消"));
+            box->addView(makeHint("模拟麦克风输入：按下热键后持续输入静态噪声，再按一次取消"));
         }
 
         box->addView(makeHeader("连发按键绑定"));
