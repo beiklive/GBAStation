@@ -274,7 +274,6 @@ namespace beiklive
             {"savePath", sanitizeUtf8(entry.savePath)},
             {"screenShotPath", sanitizeUtf8(entry.screenShotPath)},
             {"cheatPath", sanitizeUtf8(entry.cheatPath)},
-            {"3ds_id", sanitizeUtf8(entry.threeDsId)},
             {"overlayPath", sanitizeUtf8(entry.overlayPath)},
             {"shaderPath", sanitizeUtf8(entry.shaderPath)},
             {"overlayEnabled", entry.overlayEnabled},
@@ -318,7 +317,6 @@ namespace beiklive
         entry.savePath = j.value("savePath", "");
         entry.screenShotPath = j.value("screenShotPath", "");
         entry.cheatPath = j.value("cheatPath", "");
-        entry.threeDsId = j.value("3ds_id", "");
         entry.overlayPath = j.value("overlayPath", "");
         entry.shaderPath = j.value("shaderPath", "");
         entry.overlayEnabled = j.value("overlayEnabled", false);

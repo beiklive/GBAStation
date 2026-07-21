@@ -8,7 +8,6 @@ struct NroLaunchRequest {
     std::string nroPath;
     std::string romPath;
     std::string returnNroPath;
-    std::string extraArguments;
 };
 
 struct NroLaunchResult {

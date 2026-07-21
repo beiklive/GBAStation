@@ -45,79 +45,6 @@ namespace
         return true;
     }
 
-    bool copyDirectoryTree(const fs::path& source, const fs::path& target,
-                           std::string* error = nullptr)
-    {
-        std::error_code ec;
-        if (!fs::is_directory(source, ec) || ec) {
-            if (error) *error = "source directory does not exist";
-            return false;
-        }
-        fs::create_directories(target, ec);
-        if (ec) {
-            if (error) *error = ec.message();
-            return false;
-        }
-        for (const auto& entry : fs::recursive_directory_iterator(
-                 source, fs::directory_options::skip_permission_denied, ec)) {
-            if (ec) {
-                if (error) *error = ec.message();
-                return false;
-            }
-            const fs::path relative = fs::relative(entry.path(), source, ec);
-            if (ec) {
-                if (error) *error = ec.message();
-                return false;
-            }
-            const fs::path destination = target / relative;
-            if (entry.is_directory(ec)) {
-                fs::create_directories(destination, ec);
-                if (ec) {
-                    if (error) *error = ec.message();
-                    return false;
-                }
-            } else if (entry.is_regular_file(ec)) {
-                if (!copyBinaryFile(entry.path(), destination, error))
-                    return false;
-            }
-        }
-        return true;
-    }
-
-    bool replaceDirectoryTree(const fs::path& source, const fs::path& target,
-                              std::string* error = nullptr)
-    {
-        std::error_code ec;
-        const fs::path temporary = target.string() + ".importing";
-        const fs::path previous = target.string() + ".previous";
-        fs::remove_all(temporary, ec);
-        ec.clear();
-        if (!copyDirectoryTree(source, temporary, error)) {
-            fs::remove_all(temporary, ec);
-            return false;
-        }
-        fs::remove_all(previous, ec);
-        ec.clear();
-        if (fs::exists(target, ec)) {
-            fs::rename(target, previous, ec);
-            if (ec) {
-                if (error) *error = ec.message();
-                fs::remove_all(temporary, ec);
-                return false;
-            }
-        }
-        fs::rename(temporary, target, ec);
-        if (ec) {
-            std::error_code restoreError;
-            if (fs::exists(previous, restoreError))
-                fs::rename(previous, target, restoreError);
-            if (error) *error = ec.message();
-            return false;
-        }
-        fs::remove_all(previous, ec);
-        return true;
-    }
-
     std::string gameStem(const beiklive::GameEntry& entry)
     {
         const std::string stem = fs::path(entry.path).stem().string();
@@ -175,20 +102,6 @@ namespace beiklive
 
     std::string GameDataPage::_saveDir() const
     {
-        if (_isThreeDs()) {
-            const std::string id = _threeDsId();
-            if (id.size() == 16) {
-                std::string high = id.substr(0, 8);
-                std::string low = id.substr(8, 8);
-                std::transform(high.begin(), high.end(), high.begin(), ::tolower);
-                std::transform(low.begin(), low.end(), low.begin(), ::tolower);
-                const fs::path directory = fs::path("sdmc:/GBAStation/3ds/sdmc/Nintendo 3DS") /
-                    "00000000000000000000000000000000" /
-                    "00000000000000000000000000000000" / "title" / high / low /
-                    "data" / "00000001";
-                return directory.string();
-            }
-        }
         std::string directory = m_entry.savePath.empty()
             ? beiklive::tools::defaultGameSavePath(m_entry.platform, m_entry.path)
             : m_entry.savePath;
@@ -199,54 +112,17 @@ namespace beiklive
 
     std::string GameDataPage::_statePath(int slot) const
     {
-        if (_isThreeDs() && _threeDsId().size() == 16) {
-            std::ostringstream path;
-            path << "sdmc:/GBAStation/3ds/states/" << _threeDsId() << '.'
-                 << std::setw(2) << std::setfill('0') << (slot + 1) << ".cst";
-            return path.str();
-        }
         return beiklive::tools::getStatePath(_saveDir(), m_entry.path, slot);
     }
 
     std::string GameDataPage::_stateThumbPath(int slot) const
     {
-        if (_isThreeDs() && _threeDsId().size() == 16) {
-            fs::path state(_statePath(slot));
-            state.replace_extension(".png");
-            return state.string();
-        }
         return beiklive::tools::getStateThumbPath(_saveDir(), m_entry.path, slot);
     }
 
     std::string GameDataPage::_savPath() const
     {
-        if (_isThreeDs())
-            return _saveDir();
         return (fs::path(_saveDir()) / (gameStem(m_entry) + ".sav")).string();
-    }
-
-    bool GameDataPage::_isThreeDs() const
-    {
-        return m_entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS);
-    }
-
-    std::string GameDataPage::_threeDsId() const
-    {
-        std::string id = m_entry.threeDsId;
-        id.erase(std::remove_if(id.begin(), id.end(), [](unsigned char ch) {
-            return std::isxdigit(ch) == 0;
-        }), id.end());
-        std::transform(id.begin(), id.end(), id.begin(), [](unsigned char ch) {
-            return static_cast<char>(std::toupper(ch));
-        });
-        return id.size() == 16 ? id : std::string{};
-    }
-
-    std::string GameDataPage::_backupDir() const
-    {
-        if (_isThreeDs())
-            return (fs::path("sdmc:/GBAStation/3ds/save_backups") / _threeDsId()).string();
-        return _saveDir();
     }
 
     void GameDataPage::_initView()
@@ -312,16 +188,7 @@ namespace beiklive
     void GameDataPage::_refreshScreenshotList()
     {
         if (!m_view) return;
-        m_screenshotPaths = listImages(_isThreeDs() ? "sdmc:/GBAStation/3ds/states" : _saveDir());
-        if (_isThreeDs()) {
-            const std::string prefix = _threeDsId() + ".";
-            m_screenshotPaths.erase(
-                std::remove_if(m_screenshotPaths.begin(), m_screenshotPaths.end(),
-                    [&](const fs::path& path) {
-                        return path.filename().string().rfind(prefix, 0) != 0;
-                    }),
-                m_screenshotPaths.end());
-        }
+        m_screenshotPaths = listImages(_saveDir());
         std::vector<GameDataView::MediaItem> items;
         items.reserve(m_screenshotPaths.size());
         for (const auto& path : m_screenshotPaths) {
@@ -340,14 +207,12 @@ namespace beiklive
         const fs::path save = _savPath();
         const std::string prefix = save.filename().string() + ".bak_";
         std::error_code ec;
-        fs::create_directories(_backupDir(), ec);
-        ec.clear();
-        for (const auto& item : fs::directory_iterator(_backupDir(), ec)) {
-            if (ec) continue;
-            if (_isThreeDs() && !item.is_directory()) continue;
-            if (!_isThreeDs() && !item.is_regular_file()) continue;
+        for (const auto& item : fs::directory_iterator(_saveDir(), ec)) {
+            if (ec || !item.is_regular_file()) continue;
             const std::string name = item.path().filename().string();
-            if (!_isThreeDs() && name.rfind(prefix, 0) != 0) continue;
+            if (name.rfind(prefix, 0) != 0) continue;
+            std::error_code sizeError;
+            if (fs::file_size(item.path(), sizeError) == 0 || sizeError) continue;
             m_backupPaths.push_back(item.path());
         }
         std::sort(m_backupPaths.begin(), m_backupPaths.end(), std::greater<fs::path>());
@@ -428,21 +293,9 @@ namespace beiklive
         }
         auto* dialog = new brls::Dialog("确认导出当前电池存档？");
         dialog->addButton("取消", []() {});
-        dialog->addButton("导出", [this, source]() {
+        dialog->addButton("导出", [source]() {
             const fs::path directory("sdmc:/GBAStation/export");
             std::string error;
-            if (_isThreeDs()) {
-                const fs::path target = directory / (_threeDsId() + "_savedata");
-                std::error_code ec;
-                fs::remove_all(target, ec);
-                if (!copyDirectoryTree(source, target, &error)) {
-                    brls::Logger::warning("导出 3DS 存档失败: {}", error);
-                    brls::Application::notify("导出失败");
-                    return;
-                }
-                brls::Application::notify("已导出 3DS 存档目录");
-                return;
-            }
             if (!copyBinaryFile(source, directory / fs::path(source).filename(), &error)) {
                 brls::Logger::warning("导出电池存档失败: {}", error);
                 brls::Application::notify("导出失败");
@@ -455,27 +308,10 @@ namespace beiklive
 
     void GameDataPage::_importSav()
     {
-        auto* dialog = new brls::Dialog(_isThreeDs()
-            ? "确认导入 3DS 存档目录并覆盖当前存档？"
-            : "确认导入外部 .sav 并覆盖当前电池存档？");
+        auto* dialog = new brls::Dialog("确认导入外部 .sav 并覆盖当前电池存档？");
         dialog->addButton("取消", []() {});
         const auto alive = m_alive;
         dialog->addButton("选择文件", [this, alive]() {
-            if (_isThreeDs()) {
-                beiklive::openDirectoryPicker([this, alive](const std::string& selected) {
-                    if (!alive->load()) return;
-                    std::string error;
-                    if (!replaceDirectoryTree(selected, _savPath(), &error)) {
-                        brls::Logger::warning("导入 3DS 存档失败: {}", error);
-                        brls::Application::notify("导入失败");
-                        return;
-                    }
-                    brls::Application::notify("已导入 3DS 存档");
-                    _refreshBackupList();
-                    m_view->restoreFocus();
-                }, "sdmc:/GBAStation/export");
-                return;
-            }
             beiklive::openFilePicker({"sav"}, [this, alive](const std::string& selected) {
                 if (!alive->load()) return;
                 std::string error;
@@ -503,18 +339,11 @@ namespace beiklive
         auto* dialog = new brls::Dialog("确认为当前电池存档创建备份？");
         dialog->addButton("取消", []() {});
         dialog->addButton("备份", [this, source]() {
-            const fs::path backup = _isThreeDs()
-                ? fs::path(_backupDir()) / timestampForFile()
-                : fs::path(source + ".bak_" + timestampForFile());
+            const fs::path backup = source + ".bak_" + timestampForFile();
             std::string error;
-            const bool copied = _isThreeDs() ? copyDirectoryTree(source, backup, &error)
-                                             : copyBinaryFile(source, backup, &error);
-            if (!copied) {
+            if (!copyBinaryFile(source, backup, &error)) {
                 std::error_code removeError;
-                if (_isThreeDs())
-                    fs::remove_all(backup, removeError);
-                else
-                    fs::remove(backup, removeError);
+                fs::remove(backup, removeError);
                 brls::Logger::warning("备份电池存档失败: {}", error);
                 brls::Application::notify("备份失败");
                 return;
@@ -534,9 +363,7 @@ namespace beiklive
         dialog->addButton("取消", []() {});
         dialog->addButton("还原", [this, backup]() {
             std::string error;
-            const bool restored = _isThreeDs() ? replaceDirectoryTree(backup, _savPath(), &error)
-                                               : copyBinaryFile(backup, _savPath(), &error);
-            if (!restored) {
+            if (!copyBinaryFile(backup, _savPath(), &error)) {
                 brls::Logger::warning("还原电池存档失败: {}", error);
                 brls::Application::notify("还原失败");
                 return;
@@ -556,10 +383,7 @@ namespace beiklive
         dialog->addButton("取消", []() {});
         dialog->addButton("删除", [this, backup]() {
             std::error_code ec;
-            if (_isThreeDs())
-                fs::remove_all(backup, ec);
-            else
-                fs::remove(backup, ec);
+            fs::remove(backup, ec);
             brls::Application::notify(ec ? "删除失败" : "已删除备份");
             _refreshBackupList();
             m_view->restoreFocus();

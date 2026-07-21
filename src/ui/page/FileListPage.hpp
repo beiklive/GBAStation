@@ -84,8 +84,6 @@ namespace beiklive
         void requestClose();
 
         std::function<void(beiklive::DirListData)> onFileSelected;
-        std::function<void(beiklive::DirListData)> onCiaInstallRequested;
-        std::function<void(const std::string&)> onDirectorySelected;
         std::function<void()> onRequestClose;
     };
 

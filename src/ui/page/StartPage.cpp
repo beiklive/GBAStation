@@ -33,51 +33,6 @@ bool deleteGameFileIfExists(const std::string& path)
     return std::filesystem::remove(path, ec) && !ec;
 }
 
-void consumeCiaInstallResult()
-{
-    const std::filesystem::path resultPath = "sdmc:/GBAStation/3ds/cia_install_result.json";
-    std::ifstream input(resultPath);
-    if (!input)
-        return;
-    json result = json::parse(input, nullptr, false);
-    input.close();
-    std::error_code ec;
-    std::filesystem::remove(resultPath, ec);
-    if (!result.is_object())
-        return;
-
-    const std::string source = result.value("source_path", "");
-    const std::string title = result.value("title", std::filesystem::path(source).stem().string());
-    if (!result.value("success", false))
-    {
-        const std::string status = result.value("status_name", "unknown");
-        std::string reason = "未知错误";
-        if (status == "open_failed") reason = "无法打开文件";
-        else if (status == "file_not_found") reason = "文件不存在";
-        else if (status == "aborted") reason = "解密或写入中止";
-        else if (status == "invalid_cia") reason = "CIA 文件无效或不完整";
-        else if (status == "encrypted_content") reason = "安装后仍检测到加密内容";
-        auto* dialog = new brls::Dialog("CIA 安装失败：" + title + "\n原因：" + reason +
-                                        "\n请检查 keys.txt、seeddb.bin 和调试日志。");
-        dialog->addButton("确定", []() {});
-        dialog->open();
-        return;
-    }
-
-    const bool libraryAdded = result.value("library_added", false);
-    auto* dialog = new brls::Dialog(
-        "CIA 安装完成：" + title +
-        (libraryAdded ? "\n游戏已加入游戏库。" : "\n已安装更新/DLC 或非可执行内容。") +
-        "\n是否删除原 CIA 文件？");
-    dialog->addButton("删除原文件", [source]() {
-        std::error_code removeError;
-        const bool removed = !source.empty() && std::filesystem::remove(source, removeError);
-        brls::Application::notify(removed ? "原 CIA 文件已删除" : "删除原 CIA 文件失败");
-    });
-    dialog->addButton("保留", []() {});
-    dialog->open();
-}
-
 void preserveThreeDsMenuSettings(json& root, const std::filesystem::path& file)
 {
     std::ifstream in(file);
@@ -334,27 +289,6 @@ namespace beiklive
             brls::sync([]() { brls::Application::quit(); });
             return true;
         }
-
-        bool launchThreeDsCiaInstaller(const std::string& ciaPath, const std::string& title)
-        {
-            exportThreeDsCoreConfig();
-            const std::string nroPath = GET_SETTING_KEY_STR(
-                "3ds.externalNro.path", "/GBAStation/core/GBAStation3DSStub.nro");
-            const std::string returnPath = GET_SETTING_KEY_STR(
-                "3ds.externalNro.returnPath", "sdmc:/switch/GBAStation.nro");
-            auto result = beiklive::switch_platform::launchNroOnExit(
-                {nroPath, ciaPath, returnPath, "--install-cia"});
-            if (!result.success)
-            {
-                brls::Logger::error("3DS CIA installer launch failed for {}: {}", title,
-                                    result.message);
-                brls::Application::notify("CIA 安装器启动失败：" + result.message);
-                return false;
-            }
-            brls::Application::notify("正在启动 CIA 安装器...");
-            brls::sync([]() { brls::Application::quit(); });
-            return true;
-        }
 #endif
     }
 
@@ -369,7 +303,6 @@ namespace beiklive
         // this->showBackground(true);
         // 动态背景由 Box::setupShaderLayer 根据配置初始化
         Init();
-        consumeCiaInstallResult();
         brls::Application::giveFocus(this); });
     }
 
@@ -706,13 +639,7 @@ namespace beiklive
 
                 return true;
             });
-        m_fileListPage->setFliter(beiklive::enums::FilterMode::Whitelist, {"gba", "gbc", "gb", "nes", "fds", "sfc", "smc", "nds", "cia", "zcia", "cci", "3ds", "md", "gen", "bin", "smd", "sms", "gg", "sg", "cue", "png"});
-
-#ifdef __SWITCH__
-        m_fileListPage->onCiaInstallRequested = [](beiklive::DirListData dirItem) {
-            launchThreeDsCiaInstaller(dirItem.fullPath, dirItem.fileName);
-        };
-#endif
+        m_fileListPage->setFliter(beiklive::enums::FilterMode::Whitelist, {"gba", "gbc", "gb", "nes", "fds", "sfc", "smc", "nds", "cia", "cci", "3ds", "md", "gen", "bin", "smd", "sms", "gg", "sg", "cue", "png"});
 
         m_fileListPage->onFileSelected = [this](beiklive::DirListData dirItem)
         {

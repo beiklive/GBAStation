@@ -98,20 +98,6 @@ namespace beiklive
                     } else if (dirItem.itemType == beiklive::enums::FileType::NONE) {
                         navigateUp();
                     } else {
-                        const std::string extension = beiklive::tools::getFileExtension(dirItem.fullPath);
-                        if ((extension == "cia" || extension == "zcia") &&
-                            onCiaInstallRequested) {
-                            auto* dialog = new brls::Dialog(
-                                "是否将 \"" + dirItem.fileName +
-                                "\" 安装到 3DS 模拟 NAND？\n安装期间将暂时退出启动器。");
-                            dialog->addButton("安装", [this, dirItem]() {
-                                if (onCiaInstallRequested)
-                                    onCiaInstallRequested(dirItem);
-                            });
-                            dialog->addButton("取消", []() {});
-                            dialog->open();
-                            break;
-                        }
                         if (onFileSelected) onFileSelected(dirItem);
                     }
                     break;
@@ -170,19 +156,6 @@ namespace beiklive
                 return true;
             },
             false, false, brls::SOUND_BACK);
-
-        this->registerAction("选择目录", brls::BUTTON_Y,
-            [this](brls::View*) {
-                if (!m_dirSelectionMode || m_currentPath.empty() || m_isAtDriveList)
-                    return false;
-                std::error_code ec;
-                if (!fs::is_directory(m_currentPath, ec) || ec)
-                    return false;
-                if (onDirectorySelected)
-                    onDirectorySelected(m_currentPath);
-                requestClose();
-                return true;
-            });
 
         // X = 设置映射名
         this->registerAction("设置映射名", brls::BUTTON_X,
