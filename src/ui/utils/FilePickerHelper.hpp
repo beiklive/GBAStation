@@ -30,4 +30,8 @@ namespace beiklive
         const std::string& startPath = "",
         const std::string& filename = "");
 
+    void openDirectoryPicker(
+        std::function<void(const std::string&)> onSelected,
+        const std::string& startPath = "");
+
 } // namespace beiklive

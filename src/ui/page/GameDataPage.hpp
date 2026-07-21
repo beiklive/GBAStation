@@ -30,6 +30,9 @@ namespace beiklive
         std::string _statePath(int slot) const;
         std::string _stateThumbPath(int slot) const;
         std::string _savPath() const;
+        bool _isThreeDs() const;
+        std::string _threeDsId() const;
+        std::string _backupDir() const;
 
         void _initView();
         void _closeAnimated();

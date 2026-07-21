@@ -84,4 +84,33 @@ namespace beiklive
             flPage->showDriveList();
     }
 
+    void openDirectoryPicker(std::function<void(const std::string&)> onSelected,
+                             const std::string& startPath)
+    {
+        auto* flPage = new beiklive::FileListPage();
+        flPage->setDirSelectionMode(true);
+        flPage->onDirectorySelected = [onSelected = std::move(onSelected)](
+                                          const std::string& path) {
+            onSelected(path);
+        };
+        std::error_code ec;
+        const bool hasStartDir = !startPath.empty() && fs::is_directory(startPath, ec) && !ec;
+        if (hasStartDir)
+            flPage->setPath(startPath);
+
+        auto* container = new brls::Box(brls::Axis::COLUMN);
+        container->setGrow(1.0f);
+        container->addView(flPage);
+        container->registerAction("关闭"_i18n, brls::BUTTON_START,
+                                  [flPage](brls::View*) { flPage->requestClose(); return true; });
+        auto* frame = new brls::AppletFrame(container);
+        frame->setHeaderVisibility(brls::Visibility::GONE);
+        frame->setFooterVisibility(brls::Visibility::GONE);
+        frame->setBackground(brls::ViewBackground::NONE);
+        brls::Application::pushActivity(new brls::Activity(frame),
+                                        brls::TransitionAnimation::FADE);
+        if (!hasStartDir)
+            flPage->showDriveList();
+    }
+
 } // namespace beiklive

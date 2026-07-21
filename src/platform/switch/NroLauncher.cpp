@@ -79,6 +79,8 @@ NroLaunchResult launchNroOnExit(const NroLaunchRequest& request)
 
     std::ostringstream argv;
     argv << quoteArg(request.nroPath) << ' ' << quoteArg(request.romPath);
+    if (!request.extraArguments.empty())
+        argv << ' ' << request.extraArguments;
     if (!request.returnNroPath.empty())
         argv << " --return " << quoteArg(request.returnNroPath);
 

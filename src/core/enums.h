@@ -116,6 +116,7 @@ namespace beiklive // 结构体
         std::string screenShotPath = ""; // 游戏截图路径
         std::string logoPath = "";       // 游戏封面图片路径
         std::string cheatPath = "";      // 金手指文件路径
+        std::string threeDsId = "";      // 3DS Title ID（用于组合模拟 NAND 存档路径）
         std::string overlayPath = "";    // 游戏专属遮罩图片路径
         std::string shaderPath = "";     // 游戏专属着色器预设路径
 

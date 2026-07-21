@@ -720,7 +720,9 @@ namespace beiklive
         nvgFillColor(vg, nvgRGBA(247, 248, 252, 255));
         nvgText(vg, x + 30.f, y + 35.f, "游戏数据", nullptr);
 
-        const char* labels[] = {"即时存档", "游戏图片", "电池存档"};
+        const bool isThreeDs = m_entry.platform ==
+            static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS);
+        const char* labels[] = {"即时存档", "游戏图片", isThreeDs ? "游戏存档" : "电池存档"};
         const float centerX = x + w * 0.5f;
         const float centerY = y + 35.f;
         const int selected = static_cast<int>(m_section);
@@ -802,7 +804,9 @@ namespace beiklive
             m_batterySaveExists ? "存在" : "不存在",
             std::to_string(m_backups.size())
         };
-        const char* names[] = {"即时存档", "游戏图片", "电池存档", "备份数量"};
+        const bool isThreeDs = m_entry.platform ==
+            static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS);
+        const char* names[] = {"即时存档", "游戏图片", isThreeDs ? "游戏存档" : "电池存档", "备份数量"};
         const float startY = coverY + coverH + 126.f;
         for (int i = 0; i < 4; ++i) {
             const float rowY = startY + i * 35.f;
@@ -963,7 +967,8 @@ namespace beiklive
             nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
             nvgFillColor(vg, nvgRGBA(255, 255, 255, 120));
             nvgText(vg, listX + listW * 0.5f, y + h * 0.60f,
-                    "暂无电池存档备份", nullptr);
+                    m_entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS)
+                        ? "暂无 3DS 存档备份" : "暂无电池存档备份", nullptr);
             return;
         }
 
