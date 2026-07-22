@@ -9,6 +9,10 @@
 #include "network/WebService.h"
 #include "third_party/qrcodegen/qrcodegen.hpp"
 
+#ifdef __SWITCH__
+#include "platform/switch/NroLauncher.hpp"
+#endif
+
 #include <borealis/views/applet_frame.hpp>
 #include <borealis/views/cells/cell_bool.hpp>
 #include <borealis/views/dialog.hpp>
@@ -326,6 +330,116 @@ ImportSharedConfig buildSharedConfig(int platform)
         config.shaderPath = GET_SETTING_KEY_STR(sk::KEY_DISPLAY_SHADER_PATH, "");
 
     return config;
+}
+
+void preserveThreeDsMenuSettings(json& root, const std::filesystem::path& file)
+{
+    std::ifstream in(file);
+    if (!in.is_open())
+        return;
+
+    json existing = json::parse(in, nullptr, false);
+    if (!existing.is_object())
+        return;
+
+    constexpr const char* keys[] = {
+        "fastforward.multiplier",
+        "ndsScreenLayout",
+        "ndsScreenOrientation",
+        "ndsInternalResolution",
+        "ndsIntegerScale",
+        "ndsScreenGap",
+        "ndsTopScale",
+        "ndsTopOffsetX",
+        "ndsTopOffsetY",
+        "ndsBottomScale",
+        "ndsBottomOffsetX",
+        "ndsBottomOffsetY",
+        "ndsBottomOpacity",
+        "overlayEnabled",
+        "overlayPath",
+    };
+    for (const char* key : keys)
+    {
+        if (!root.contains(key) && existing.contains(key))
+            root[key] = existing[key];
+    }
+}
+
+bool exportThreeDsCoreConfigForDataPage()
+{
+    if (!beiklive::SettingManager)
+        return false;
+
+    json root = json::object();
+    const auto putInt = [&root](const char* outKey, const char* settingKey, int def) {
+        root[outKey] = GET_SETTING_KEY_INT(settingKey, def);
+    };
+    const auto putFloat = [&root](const char* outKey, const char* settingKey, float def) {
+        root[outKey] = GET_SETTING_KEY_FLOAT(settingKey, def);
+    };
+    const auto putStr = [&root](const char* outKey, const char* settingKey, const char* def) {
+        root[outKey] = GET_SETTING_KEY_STR(settingKey, def);
+    };
+
+    putInt("upscale", "core.azahar.upscale", 1);
+    putInt("use_cpu_jit", "core.azahar.use_cpu_jit", 1);
+    putInt("new_3ds", "core.azahar.new_3ds", 1);
+    putInt("cpu_clock", "core.azahar.cpu_clock", 100);
+    putStr("region", "core.azahar.region", "auto");
+    putStr("language", "core.azahar.language", "");
+    putStr("username", "core.azahar.username", "");
+    putStr("input_type", "core.azahar.input_type", "null");
+    putInt("use_hw_shader", "core.azahar.use_hw_shader", 1);
+    putInt("use_shader_jit", "core.azahar.use_shader_jit", 1);
+    putInt("accurate_mul", "core.azahar.accurate_mul", 1);
+    putInt("disk_shader_cache", "core.azahar.disk_shader_cache", 1);
+    putInt("async_shaders", "core.azahar.async_shaders", 1);
+    putInt("async_presentation", "core.azahar.async_presentation", 1);
+    putInt("spirv_shader_gen", "core.azahar.spirv_shader_gen", 1);
+    putInt("disable_spirv_optimizer", "core.azahar.disable_spirv_optimizer", 1);
+    putInt("vsync", "core.azahar.vsync", 1);
+    putFloat("frame_limit", "core.azahar.frame_limit", 100.0f);
+    putInt("simulate_3ds_gpu_timings", "core.azahar.simulate_3ds_gpu_timings", 0);
+    putInt("renderer_debug", "core.azahar.renderer_debug", 0);
+    putInt("dump_command_buffers", "core.azahar.dump_command_buffers", 0);
+    putInt("disable_right_eye", "core.azahar.disable_right_eye", 1);
+    putStr("texture_filter", "core.azahar.texture_filter", "none");
+    putStr("texture_sampling", "core.azahar.texture_sampling", "game");
+    putInt("custom_textures", "core.azahar.custom_textures", 0);
+    putInt("dump_textures", "core.azahar.dump_textures", 0);
+    putInt("use_virtual_sd", "core.azahar.use_virtual_sd", 1);
+    putStr("layout", "core.azahar.layout", "default");
+    putStr("small_screen_position", "core.azahar.small_screen_position", "bottom_right");
+    putStr("display_orientation", "core.azahar.display_orientation", "horizontal");
+    putStr("display_rotation", "core.azahar.display_rotation", "0");
+    putStr("display_size", "core.azahar.display_size", "default");
+    putFloat("large_screen_proportion", "core.azahar.large_screen_proportion", 4.0f);
+    putStr("audio_emulation", "core.azahar.audio_emulation", "hle");
+    putInt("audio_stretching", "core.azahar.audio_stretching", 0);
+    putInt("realtime_audio", "core.azahar.realtime_audio", 1);
+    root["fastforward.multiplier"] = GET_SETTING_KEY_FLOAT("fastforward.multiplier", 4.0f);
+
+#ifdef __SWITCH__
+    const std::filesystem::path dir("sdmc:/GBAStation/3ds/config/cores");
+    const std::filesystem::path file("sdmc:/GBAStation/3ds/config/cores/azahar.jsonc");
+#else
+    const std::filesystem::path dir = std::filesystem::path(beiklive::path::ROOT) /
+        "GBAStation" / "3ds" / "config" / "cores";
+    const std::filesystem::path file = dir / "azahar.jsonc";
+#endif
+    preserveThreeDsMenuSettings(root, file);
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    if (ec)
+        return false;
+
+    std::ofstream out(file, std::ios::trunc);
+    if (!out.is_open())
+        return false;
+
+    out << root.dump(2) << "\n";
+    return true;
 }
 
 void applyDisplayDefaults(beiklive::GameEntry& entry)
@@ -1345,6 +1459,15 @@ void DataManagementPage::init()
         false,
     });
     process.items.push_back({
+        "安装 CIA 文件",
+        "解密cia并将CIA游戏安装到数据库中",
+        "3DS",
+        material::INSTALL_APP,
+        [this]() { launchCiaInstaller(); },
+        nullptr,
+        false,
+    });
+    process.items.push_back({
         "移除无效游戏记录",
         "检查 ROM 是否存在，只移除文件已经丢失的数据库记录",
         "不会删除 ROM",
@@ -2201,6 +2324,39 @@ void DataManagementPage::clearGameLibrary()
         secondDialog->open();
     });
     firstDialog->open();
+}
+
+void DataManagementPage::launchCiaInstaller()
+{
+    if (m_importing.load(std::memory_order_acquire))
+        return;
+
+#ifndef __SWITCH__
+    brls::Application::notify("CIA安装器仅支持Switch");
+#else
+    exportThreeDsCoreConfigForDataPage();
+    const std::string nroPath = GET_SETTING_KEY_STR(
+        "3ds.externalNro.path", "/GBAStation/core/GBAStation3DSStub.nro");
+    const std::string returnPath = GET_SETTING_KEY_STR(
+        "3ds.externalNro.returnPath", "sdmc:/switch/GBAStation.nro");
+
+    auto result = beiklive::switch_platform::launchNroOnExit({
+        nroPath,
+        "",
+        returnPath,
+        {"--install-cia"},
+    });
+    if (!result.success)
+    {
+        brls::Logger::error("3DS CIA installer launch failed: {}", result.message);
+        brls::Application::notify("CIA安装器启动失败：" + result.message);
+        return;
+    }
+
+    brls::Logger::info("3DS CIA installer configured: {}", result.message);
+    brls::Application::notify("正在启动CIA安装器...");
+    brls::sync([]() { brls::Application::quit(); });
+#endif
 }
 
 void DataManagementPage::startWebService()

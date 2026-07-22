@@ -87,6 +87,7 @@ namespace beiklive
         void removeInvalidGames();
         void clearGameLibrary();
         void startWebService();
+        void launchCiaInstaller();
         void updateProgressName(const std::string& name);
         void setErrorMessage(const std::string& msg);
         void finishWorker();

@@ -68,17 +68,19 @@ NroLaunchResult launchNroOnExit(const NroLaunchRequest& request)
 #else
     if (request.nroPath.empty())
         return {false, "NRO path is empty"};
-    if (request.romPath.empty())
-        return {false, "ROM path is empty"};
     if (!fileExistsWithSdmcAlias(request.nroPath))
         return {false, "NRO does not exist: " + request.nroPath};
-    if (!fileExistsWithSdmcAlias(request.romPath))
+    if (!request.romPath.empty() && !fileExistsWithSdmcAlias(request.romPath))
         return {false, "ROM does not exist: " + request.romPath};
     if (!envHasNextLoad())
         return {false, "Current homebrew loader does not support envSetNextLoad"};
 
     std::ostringstream argv;
-    argv << quoteArg(request.nroPath) << ' ' << quoteArg(request.romPath);
+    argv << quoteArg(request.nroPath);
+    if (!request.romPath.empty())
+        argv << ' ' << quoteArg(request.romPath);
+    for (const auto& arg : request.extraArgs)
+        argv << ' ' << quoteArg(arg);
     if (!request.returnNroPath.empty())
         argv << " --return " << quoteArg(request.returnNroPath);
 
