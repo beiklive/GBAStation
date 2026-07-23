@@ -219,6 +219,7 @@ namespace beiklive
             putInt("accurate_mul", "core.azahar.accurate_mul", 1);
             putInt("disk_shader_cache", "core.azahar.disk_shader_cache", 1);
             putInt("async_shaders", "core.azahar.async_shaders", 1);
+            putInt("show_shader_compile_notice", "core.azahar.show_shader_compile_notice", 1);
             putInt("async_presentation", "core.azahar.async_presentation", 1);
             putInt("spirv_shader_gen", "core.azahar.spirv_shader_gen", 1);
             putInt("disable_spirv_optimizer", "core.azahar.disable_spirv_optimizer", 1);

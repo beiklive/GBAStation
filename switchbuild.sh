@@ -138,6 +138,7 @@ echo "[线程] ${JOBS}"
 
 ROOT_DIR="$(pwd)"
 BUILD_DIR="${ROOT_DIR}/build_switch"
+THREEDS_STUB_SOURCE="${ROOT_DIR}/../GBAStation_3DS/GBAStation3DSStub.nro"
 
 mkdir -p "${BUILD_DIR}"
 
@@ -199,6 +200,12 @@ mkdir -p "${BUILD_DIR}/GBAStation/core"
 if [ -f "${BUILD_DIR}/GBAStationNDSStub.nro" ]; then
     cp "${BUILD_DIR}/GBAStationNDSStub.nro" "${BUILD_DIR}/GBAStation/core/GBAStationNDSStub.nro"
 fi
+if [ -f "${THREEDS_STUB_SOURCE}" ]; then
+    cp "${THREEDS_STUB_SOURCE}" "${BUILD_DIR}/GBAStation/core/GBAStation3DSStub.nro"
+    echo "[3DS] 已复制最新 GBAStation3DSStub.nro"
+else
+    echo "[警告] 未找到 3DS Stub: ${THREEDS_STUB_SOURCE}"
+fi
 
 # ────────────────────────────────────────────────────────────
 # 输出大小
@@ -243,6 +250,18 @@ else
 
 fi
 
+if [ -f "${BUILD_DIR}/GBAStation/core/GBAStation3DSStub.nro" ]; then
+    if [ "$PLATFORM" = "mac" ]; then
+        SIZE=$(stat -f%z "${BUILD_DIR}/GBAStation/core/GBAStation3DSStub.nro")
+    else
+        SIZE=$(stat -c%s "${BUILD_DIR}/GBAStation/core/GBAStation3DSStub.nro")
+    fi
+    SIZE_MB=$(awk "BEGIN {printf \"%.2f\", ${SIZE}/1024/1024}")
+    echo "✅ GBAStation/core/GBAStation3DSStub.nro : ${SIZE_MB} MB"
+else
+    echo "❌ GBAStation/core/GBAStation3DSStub.nro 不存在"
+fi
+
 echo "=================================================="
 
 echo ""
@@ -250,3 +269,4 @@ echo "[完成]"
 echo "${BUILD_DIR}/GBAStation.nro"
 echo "${BUILD_DIR}/GBAStationNDSStub.nro"
 echo "${BUILD_DIR}/GBAStation/core/GBAStationNDSStub.nro"
+echo "${BUILD_DIR}/GBAStation/core/GBAStation3DSStub.nro"

@@ -435,6 +435,7 @@ namespace beiklive
         SettingManager->SetDefault("core.azahar.accurate_mul", ConfigValue(1));
         SettingManager->SetDefault("core.azahar.disk_shader_cache", ConfigValue(1));
         SettingManager->SetDefault("core.azahar.async_shaders", ConfigValue(1));
+        SettingManager->SetDefault("core.azahar.show_shader_compile_notice", ConfigValue(1));
         SettingManager->SetDefault("core.azahar.async_presentation", ConfigValue(1));
         SettingManager->SetDefault("core.azahar.spirv_shader_gen", ConfigValue(1));
         SettingManager->SetDefault("core.azahar.disable_spirv_optimizer", ConfigValue(1));

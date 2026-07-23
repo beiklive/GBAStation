@@ -2285,20 +2285,37 @@ private:
         m_coreItems.push_back(_toggle("精确乘法", "提高着色器精度，可能降低性能", 0xE3F4,
             [key]() { return cfgGetBool(key("accurate_mul"), true); },
             [key](bool v) { cfgSetBool(key("accurate_mul"), v); }));
-        m_coreItems.push_back(_toggle("磁盘 Shader 缓存", "保存编译结果以减少后续卡顿", beiklive::material::SAVE,
+        m_coreItems.push_back(_toggle(
+            "磁盘 Shader 缓存", "保存编译结果以减少后续卡顿",
+            beiklive::material::SAVE,
             [key]() { return cfgGetBool(key("disk_shader_cache"), true); },
             [key](bool v) { cfgSetBool(key("disk_shader_cache"), v); }));
-        m_coreItems.push_back(_toggle("异步 Shader 编译", "减少运行时卡顿，少数游戏可能闪烁", 0xE8D5,
+        m_coreItems.push_back(_toggle(
+            "异步 Shader 编译", "减少运行时卡顿，少数游戏可能闪烁", 0xE8D5,
             [key]() { return cfgGetBool(key("async_shaders"), true); },
             [key](bool v) { cfgSetBool(key("async_shaders"), v); }));
-        m_coreItems.push_back(_toggle("异步呈现", "允许渲染和呈现解耦，通常可改善流畅度", 0xE8D5,
+        m_coreItems.push_back(_toggle(
+            "显示着色器编译文字", "在画面上显示后台着色器编译进度", 0xE8D5,
+            [key]() {
+              return cfgGetBool(key("show_shader_compile_notice"), true);
+            },
+            [key](bool v) {
+              cfgSetBool(key("show_shader_compile_notice"), v);
+            }));
+        m_coreItems.push_back(_toggle(
+            "异步呈现", "允许渲染和呈现解耦，通常可改善流畅度", 0xE8D5,
             [key]() { return cfgGetBool(key("async_presentation"), true); },
             [key](bool v) { cfgSetBool(key("async_presentation"), v); }));
-        m_coreItems.push_back(_toggle("SPIR-V Shader 生成", "Vulkan 后端使用 SPIR-V 着色器路径", 0xE3B7,
+        m_coreItems.push_back(_toggle(
+            "SPIR-V Shader 生成", "Vulkan 后端使用 SPIR-V 着色器路径", 0xE3B7,
             [key]() { return cfgGetBool(key("spirv_shader_gen"), true); },
             [key](bool v) { cfgSetBool(key("spirv_shader_gen"), v); }));
-        m_coreItems.push_back(_toggle("禁用 SPIR-V 优化器", "保持当前 Switch NVK 更稳定的默认路径", 0xE868,
-            [key]() { return cfgGetBool(key("disable_spirv_optimizer"), true); },
+        m_coreItems.push_back(_toggle(
+            "禁用 SPIR-V 优化器", "保持当前 Switch NVK 更稳定的默认路径",
+            0xE868,
+            [key]() {
+              return cfgGetBool(key("disable_spirv_optimizer"), true);
+            },
             [key](bool v) { cfgSetBool(key("disable_spirv_optimizer"), v); }));
         m_coreItems.push_back(_toggle("垂直同步", "同步显示刷新，减少撕裂", 0xE8B5,
             [key]() { return cfgGetBool(key("vsync"), true); },
