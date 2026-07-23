@@ -43,6 +43,90 @@ bool deleteGameFileIfExists(const std::string& path)
     return std::filesystem::remove(path, ec) && !ec;
 }
 
+std::string normalizeThreeDsPath(std::string path)
+{
+    std::replace(path.begin(), path.end(), '\\', '/');
+    if (path.rfind("sdmc:", 0) == 0)
+        path.erase(0, 5);
+    return path;
+}
+
+std::string extractThreeDsTitleIdFromPath(const std::string& path)
+{
+    const std::string normalized = normalizeThreeDsPath(path);
+    const std::string titleMarker = "/title/";
+    const size_t titlePos = normalized.find(titleMarker);
+    if (titlePos != std::string::npos)
+    {
+        const size_t highBegin = titlePos + titleMarker.size();
+        const size_t highEnd = normalized.find('/', highBegin);
+        const size_t lowBegin = highEnd == std::string::npos ? std::string::npos : highEnd + 1;
+        const size_t lowEnd = lowBegin == std::string::npos ? std::string::npos : normalized.find('/', lowBegin);
+        if (highEnd != std::string::npos && lowEnd != std::string::npos &&
+            highEnd - highBegin == 8 && lowEnd - lowBegin == 8)
+            return normalized.substr(highBegin, 8) + normalized.substr(lowBegin, 8);
+    }
+
+    const std::string saveMarker = "/saves/3DS/";
+    const size_t savePos = normalized.find(saveMarker);
+    if (savePos != std::string::npos)
+    {
+        const size_t begin = savePos + saveMarker.size();
+        const size_t end = normalized.find('/', begin);
+        const std::string id = normalized.substr(begin, end == std::string::npos ? std::string::npos : end - begin);
+        if (id.size() == 16)
+            return id;
+    }
+    return {};
+}
+
+std::string threeDsContentDirectoryFromPath(const std::string& path)
+{
+    std::string normalized = path;
+    std::replace(normalized.begin(), normalized.end(), '\\', '/');
+    const std::string marker = "/content/";
+    const size_t pos = normalized.find(marker);
+    if (pos == std::string::npos)
+        return {};
+    return normalized.substr(0, pos + marker.size());
+}
+
+std::string threeDsSaveDirectoryForEntry(const beiklive::GameEntry& entry)
+{
+    if (!entry.savePath.empty())
+        return entry.savePath;
+    const std::string titleId = extractThreeDsTitleIdFromPath(entry.path);
+    return titleId.empty() ? std::string{} : "sdmc:/GBAStation/saves/3DS/" + titleId;
+}
+
+bool deleteDirectoryRecursivelyIfExists(const std::string& path)
+{
+    if (path.empty())
+        return false;
+    std::error_code ec;
+    if (!std::filesystem::exists(path, ec))
+        return true;
+    ec.clear();
+    std::filesystem::remove_all(path, ec);
+    return !ec && !std::filesystem::exists(path, ec);
+}
+
+bool deleteGameFilesForEntry(const beiklive::GameEntry& entry)
+{
+    if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS))
+    {
+        const std::string contentDir = threeDsContentDirectoryFromPath(entry.path);
+        if (contentDir.empty())
+            return deleteGameFileIfExists(entry.path);
+        const std::string saveDir = threeDsSaveDirectoryForEntry(entry);
+        if (saveDir.empty())
+            return false;
+        return deleteDirectoryRecursivelyIfExists(contentDir) &&
+               deleteDirectoryRecursivelyIfExists(saveDir);
+    }
+    return deleteGameFileIfExists(entry.path);
+}
+
 std::vector<beiklive::GameEntry> loadLibraryEntries()
 {
     auto entries = beiklive::GameDB
@@ -1643,12 +1727,12 @@ namespace beiklive
 
         struct DeleteTarget {
             int index;
-            std::string path;
+            beiklive::GameEntry entry;
         };
         std::vector<DeleteTarget> targets;
         targets.reserve(indices.size());
         for (int index : indices)
-            targets.push_back({index, m_entries[static_cast<size_t>(index)].path});
+            targets.push_back({index, m_entries[static_cast<size_t>(index)]});
 
         m_libraryView->beginDeleteAnimation(indices);
         auto alive = m_aliveToken;
@@ -1662,7 +1746,7 @@ namespace beiklive
                 if (databaseCount > 0 && targets.size() >= databaseCount) {
                     if (deleteRomFiles) {
                         for (const auto& target : targets)
-                            allFilesRemoved = deleteGameFileIfExists(target.path) && allFilesRemoved;
+                            allFilesRemoved = deleteGameFilesForEntry(target.entry) && allFilesRemoved;
                     }
                     beiklive::GameDB->clearAll();
                     for (const auto& target : targets)
@@ -1670,11 +1754,11 @@ namespace beiklive
                 } else {
                     for (const auto& target : targets) {
                         if (!alive->load()) return;
-                        if (!beiklive::GameDB->removeByPath(target.path))
+                        if (!beiklive::GameDB->removeByPath(target.entry.path))
                             continue;
                         removedIndices.push_back(target.index);
                         if (deleteRomFiles)
-                            allFilesRemoved = deleteGameFileIfExists(target.path) && allFilesRemoved;
+                            allFilesRemoved = deleteGameFilesForEntry(target.entry) && allFilesRemoved;
                     }
                     if (!removedIndices.empty())
                         beiklive::GameDB->flush();
@@ -1701,7 +1785,7 @@ namespace beiklive
                     if (!alive->load()) return;
                     m_libraryView->clearDeleteSelection();
                     if (deleteRomFiles && !allFilesRemoved)
-                        brls::Application::notify("已移除记录，部分 ROM 文件删除失败");
+                        brls::Application::notify("已移除记录，部分游戏文件删除失败");
                     else
                         brls::Application::notify(deleteRomFiles
                             ? "已删除 " + std::to_string(removedCount) + " 款游戏"
