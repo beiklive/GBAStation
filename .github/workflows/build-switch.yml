@@ -37,6 +37,14 @@ jobs:
           echo "===== NRO FILES ====="
           find . -name "*.nro"
 
+      - name: 下载 GBAStation_3DS 最新 Release Stub
+        run: |
+          curl -fL --retry 3 --retry-all-errors \
+            -o GBAStation3DSStub.nro \
+            https://github.com/beiklive/GBAStation_3DS/releases/latest/download/GBAStation3DSStub.nro
+          echo "===== GBAStation_3DS STUB ====="
+          ls -lh GBAStation3DSStub.nro
+
       - name: 生成发布文件
         id: prep
         run: |
@@ -50,10 +58,12 @@ jobs:
 
           NRO_FILE="build_switch/GBAStation.nro"
           NDS_STUB_NRO_FILE="build_switch/GBAStationNDSStub.nro"
+          THREEDS_STUB_NRO_FILE="GBAStation3DSStub.nro"
 
           mkdir -p switch
           mkdir -p GBAStation/core
           cp "$NRO_FILE" switch/GBAStation.nro
+          cp "$THREEDS_STUB_NRO_FILE" GBAStation/core/GBAStation3DSStub.nro
           cp "$NDS_STUB_NRO_FILE" GBAStation/core/GBAStationNDSStub.nro
           cmake -E tar cf "$ZIP_FILE" --format=zip switch GBAStation
           rm -rf switch GBAStation
