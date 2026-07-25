@@ -2341,6 +2341,34 @@ private:
             [key]() { return cfgGetBool(key("disable_right_eye"), true); },
             [key](bool v) { cfgSetBool(key("disable_right_eye"), v); }));
 
+        m_coreItems.push_back(_section("视频流"));
+        m_coreItems.push_back(_toggle(
+            "视频 CPU 节流加速", "实验性：播放过场视频时临时降低 3DS Core Clock，可能改善部分游戏视频卡顿",
+            0xE8EF,
+            [key]() { return cfgGetBool(key("movie_cpu_throttle"), true); },
+            [key](bool v) { cfgSetBool(key("movie_cpu_throttle"), v); }));
+        const std::vector<int> movieClockValues = {10, 25, 40, 50, 75, 100};
+        m_coreItems.push_back(_selector("视频节流时钟", "视频加速开启时使用的 3DS Core Clock 百分比",
+            0xE8E5,
+            {"10%", "25%", "40%", "50%", "75%", "100%"},
+            [key, movieClockValues]() {
+                const int cur = cfgGetInt(key("movie_throttle_clock"), 50);
+                int best = 3;
+                int delta = std::abs(cur - movieClockValues[3]);
+                for (int i = 0; i < static_cast<int>(movieClockValues.size()); ++i) {
+                    const int d = std::abs(cur - movieClockValues[static_cast<size_t>(i)]);
+                    if (d < delta) {
+                        best = i;
+                        delta = d;
+                    }
+                }
+                return best;
+            },
+            [key, movieClockValues](int i) {
+                if (i >= 0 && i < static_cast<int>(movieClockValues.size()))
+                    cfgSetInt(key("movie_throttle_clock"), movieClockValues[static_cast<size_t>(i)]);
+            }));
+
         m_coreItems.push_back(_section("纹理"));
         const std::vector<std::string> filterValues = {"none", "anime4k", "bicubic", "scaleforce", "xbrz", "mmpx"};
         m_coreItems.push_back(_selector("纹理滤镜", "对游戏纹理做放大滤镜处理", 0xE3F4,
