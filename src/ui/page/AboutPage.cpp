@@ -361,6 +361,43 @@ static bool extractZipFilesToDir(const std::string& zipPath,
     return remaining.empty() && (!cancelFlag || !cancelFlag->load());
 }
 
+static bool extractOptionalZipFileToDir(const std::string& zipPath,
+                                        const std::string& outDir,
+                                        const std::string& expectedFile,
+                                        const std::atomic<bool>* cancelFlag,
+                                        bool& extracted) {
+    extracted = false;
+
+    mz_zip_archive zip;
+    memset(&zip, 0, sizeof(zip));
+    if (!mz_zip_reader_init_file(&zip, zipPath.c_str(), 0))
+        return false;
+
+    bool success = true;
+    mz_uint numFiles = mz_zip_reader_get_num_files(&zip);
+    for (mz_uint i = 0; i < numFiles && (!cancelFlag || !cancelFlag->load()); ++i) {
+        char filename[512];
+        mz_zip_reader_get_filename(&zip, i, filename, sizeof(filename));
+        if (zipBaseName(filename) != expectedFile)
+            continue;
+
+        std::error_code ec;
+        std::filesystem::create_directories(outDir, ec);
+        if (ec) {
+            success = false;
+            break;
+        }
+
+        const std::string outPath = (std::filesystem::path(outDir) / expectedFile).string();
+        success = mz_zip_reader_extract_to_file(&zip, i, outPath.c_str(), 0);
+        extracted = success;
+        break;
+    }
+
+    mz_zip_reader_end(&zip);
+    return success && (!cancelFlag || !cancelFlag->load());
+}
+
 static bool isSafeZipEntry(const std::filesystem::path& relativePath) {
     if (relativePath.empty() || relativePath.is_absolute() || relativePath.has_root_name())
         return false;
@@ -507,7 +544,16 @@ static bool installDownloadedResource(const OnlineResourceItem& item,
             resultText = "解压失败，请检查压缩包内容和目标目录";
             return false;
         }
+        bool installed3dsStub = false;
+        if (!extractOptionalZipFileToDir(downloadedPath.string(), "sdmc:/GBAStation/core",
+                                         "GBAStation3DSStub.nro", cancelFlag,
+                                         installed3dsStub)) {
+            resultText = "3DS 运行核心安装失败，请检查压缩包内容和目标目录";
+            return false;
+        }
         resultText = "安装完成（解压 " + std::to_string(extractedCount) + " 个文件）";
+        if (installed3dsStub)
+            resultText += "\n3DS 运行核心已安装";
         return true;
     }
 
