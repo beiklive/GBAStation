@@ -14,6 +14,7 @@
 #include "ui/view/ImageView.hpp"
 #include "core/ThreadPool.hpp"
 #include "ui/utils/CheatMatcher.hpp"
+#include <borealis/core/logger.hpp>
 #include <borealis/views/applet_frame.hpp>
 #include <borealis/views/dropdown.hpp>
 #include <borealis/views/image.hpp>
@@ -33,28 +34,62 @@ namespace fs = std::filesystem;
 
 bool deleteGameFileIfExists(const std::string& path)
 {
-    if (path.empty())
+    if (path.empty()) {
+        brls::Logger::info("[Game Delete] entry path empty, nothing to remove");
         return true;
+    }
 
     std::error_code ec;
-    if (!std::filesystem::exists(path, ec))
+    const bool exists = std::filesystem::exists(path, ec);
+    if (ec) {
+        brls::Logger::warning(
+            "[Game Delete] entry exists failed: path={} code={} error={}",
+            path, ec.value(), ec.message());
+        return false;
+    }
+    if (!exists) {
+        brls::Logger::info("[Game Delete] entry already missing: {}", path);
         return true;
+    }
 
     ec.clear();
-    return std::filesystem::remove(path, ec) && !ec;
+    const bool removed = std::filesystem::remove(path, ec);
+    if (ec || !removed) {
+        brls::Logger::warning(
+            "[Game Delete] entry remove failed: path={} removed={} code={} error={}",
+            path, removed, ec.value(), ec ? ec.message() : "remove returned false");
+        return false;
+    }
+    brls::Logger::info("[Game Delete] entry removed: {}", path);
+    return true;
 }
 
 bool deleteGameFilesForEntry(const beiklive::GameEntry& entry)
 {
+    brls::Logger::info(
+        "[Game Delete] file removal begin: platform={} path={} stored_title_id={}",
+        entry.platform, entry.path, entry.threeDsTitleId);
     if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS))
     {
         const std::string titleId = beiklive::three_ds::resolveTitleId(
             entry.threeDsTitleId, entry.path);
+        if (titleId.empty())
+            brls::Logger::warning(
+                "[Game Delete] unable to resolve 3DS title id: path={}", entry.path);
         const bool titleFilesRemoved = titleId.empty() ||
             beiklive::three_ds::deleteInstalledContentAndShaderCache(titleId);
-        return deleteGameFileIfExists(entry.path) && titleFilesRemoved;
+        const bool entryFileRemoved = deleteGameFileIfExists(entry.path);
+        brls::Logger::info(
+            "[Game Delete] 3DS file removal result: path={} title_id={} "
+            "title_files_removed={} entry_file_removed={} success={}",
+            entry.path, titleId, titleFilesRemoved, entryFileRemoved,
+            titleFilesRemoved && entryFileRemoved);
+        return entryFileRemoved && titleFilesRemoved;
     }
-    return deleteGameFileIfExists(entry.path);
+    const bool removed = deleteGameFileIfExists(entry.path);
+    brls::Logger::info(
+        "[Game Delete] file removal result: path={} success={}", entry.path, removed);
+    return removed;
 }
 
 std::vector<beiklive::GameEntry> loadLibraryEntries()
@@ -1672,23 +1707,42 @@ namespace beiklive
             std::vector<int> removedIndices;
             bool allFilesRemoved = true;
             if (alive->load() && beiklive::GameDB) {
-                const size_t databaseCount = beiklive::GameDB->getAll().size();
-                if (databaseCount > 0 && targets.size() >= databaseCount) {
-                    if (deleteRomFiles) {
-                        for (const auto& target : targets)
-                            allFilesRemoved = deleteGameFilesForEntry(target.entry) && allFilesRemoved;
+                std::vector<DeleteTarget> databaseTargets;
+                databaseTargets.reserve(targets.size());
+                for (const auto& target : targets) {
+                    if (!alive->load()) return;
+                    const bool filesRemoved = !deleteRomFiles ||
+                        deleteGameFilesForEntry(target.entry);
+                    if (!filesRemoved) {
+                        allFilesRemoved = false;
+                        brls::Logger::warning(
+                            "[Game Delete] file removal failed, database record retained: path={}",
+                            target.entry.path);
+                        continue;
                     }
+                    databaseTargets.push_back(target);
+                }
+
+                const size_t databaseCount = beiklive::GameDB->getAll().size();
+                if (databaseCount > 0 && databaseTargets.size() >= databaseCount) {
+                    brls::Logger::info(
+                        "[Game Delete] clearing entire database: targets={} database_count={} "
+                        "delete_files={}",
+                        databaseTargets.size(), databaseCount, deleteRomFiles);
                     beiklive::GameDB->clearAll();
-                    for (const auto& target : targets)
+                    for (const auto& target : databaseTargets)
                         removedIndices.push_back(target.index);
                 } else {
-                    for (const auto& target : targets) {
+                    for (const auto& target : databaseTargets) {
                         if (!alive->load()) return;
-                        if (!beiklive::GameDB->removeByPath(target.entry.path))
+                        const bool removedRecord =
+                            beiklive::GameDB->removeByPath(target.entry.path);
+                        brls::Logger::info(
+                            "[Game Delete] database remove result: path={} removed={}",
+                            target.entry.path, removedRecord);
+                        if (!removedRecord)
                             continue;
                         removedIndices.push_back(target.index);
-                        if (deleteRomFiles)
-                            allFilesRemoved = deleteGameFilesForEntry(target.entry) && allFilesRemoved;
                     }
                     if (!removedIndices.empty())
                         beiklive::GameDB->flush();
@@ -1702,7 +1756,10 @@ namespace beiklive
                 if (!alive->load()) return;
                 if (removedIndices.empty()) {
                     m_libraryView->cancelDeleteAnimation();
-                    brls::Application::notify("删除失败");
+                    brls::Application::notify(
+                        deleteRomFiles && !allFilesRemoved
+                            ? "游戏文件删除失败，记录已保留"
+                            : "删除失败");
                     return;
                 }
                 if (removedIndices.size() != requested) {
@@ -1715,7 +1772,7 @@ namespace beiklive
                     if (!alive->load()) return;
                     m_libraryView->clearDeleteSelection();
                     if (deleteRomFiles && !allFilesRemoved)
-                        brls::Application::notify("已移除记录，部分游戏文件删除失败");
+                        brls::Application::notify("部分游戏删除失败，失败记录已保留");
                     else
                         brls::Application::notify(deleteRomFiles
                             ? "已删除 " + std::to_string(removedCount) + " 款游戏"

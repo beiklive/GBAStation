@@ -54,12 +54,29 @@ NanoSearchOverlay::NanoSearchOverlay()
     setCustomNavigationRoute(brls::FocusDirection::DOWN, this);
     setCustomNavigationRoute(brls::FocusDirection::LEFT, this);
     setCustomNavigationRoute(brls::FocusDirection::RIGHT, this);
-    auto up = [this](brls::View*) { _move(-1); return true; };
-    auto down = [this](brls::View*) { _move(1); return true; };
-    registerAction("", brls::BUTTON_UP, up, true, true, brls::SOUND_NONE);
-    registerAction("", brls::BUTTON_DOWN, down, true, true, brls::SOUND_NONE);
-    registerAction("", brls::BUTTON_NAV_UP, up, true, true, brls::SOUND_NONE);
-    registerAction("", brls::BUTTON_NAV_DOWN, down, true, true, brls::SOUND_NONE);
+    auto up = [this](brls::View*) {
+        if (!m_open) return false;
+        if (m_closing) return true;
+        _move(-1);
+        return true;
+    };
+    auto down = [this](brls::View*) {
+        if (!m_open) return false;
+        if (m_closing) return true;
+        _move(1);
+        return true;
+    };
+    auto consume = [this](brls::View*) {
+        return m_open;
+    };
+    registerAction("", brls::BUTTON_UP, up, true, false, brls::SOUND_NONE);
+    registerAction("", brls::BUTTON_DOWN, down, true, false, brls::SOUND_NONE);
+    registerAction("", brls::BUTTON_LEFT, consume, true, false, brls::SOUND_NONE);
+    registerAction("", brls::BUTTON_RIGHT, consume, true, false, brls::SOUND_NONE);
+    registerAction("", brls::BUTTON_NAV_UP, up, true, false, brls::SOUND_NONE);
+    registerAction("", brls::BUTTON_NAV_DOWN, down, true, false, brls::SOUND_NONE);
+    registerAction("", brls::BUTTON_NAV_LEFT, consume, true, false, brls::SOUND_NONE);
+    registerAction("", brls::BUTTON_NAV_RIGHT, consume, true, false, brls::SOUND_NONE);
     registerAction("选择", brls::BUTTON_A,
         [this](brls::View*) { _activate(); return true; },
         false, false, brls::SOUND_NONE);

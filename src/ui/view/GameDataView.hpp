@@ -1,7 +1,9 @@
 #pragma once
 
 #include <borealis.hpp>
+#include <array>
 #include <chrono>
+#include <cstddef>
 #include <functional>
 #include <string>
 #include <unordered_map>
@@ -19,6 +21,9 @@ namespace beiklive
             STATES = 0,
             SCREENSHOTS,
             BATTERY,
+            CHEATS,
+            LOAD_CONTENT,
+            ADDONS,
         };
 
         struct StateSlot
@@ -36,12 +41,35 @@ namespace beiklive
             std::string time;
         };
 
+        struct CheatItem
+        {
+            std::string name;
+            std::string code;
+            std::string comments;
+            bool enabled = false;
+        };
+
+        struct ManagedContentItem
+        {
+            std::string label;
+            std::string emptyText;
+            std::string enabledPath;
+            std::string disabledPath;
+            bool enabledExists = false;
+            bool disabledExists = false;
+            std::size_t enabledFileCount = 0;
+            std::size_t disabledFileCount = 0;
+        };
+
         explicit GameDataView(beiklive::GameEntry entry);
         ~GameDataView() override;
 
         void setStateSlots(std::vector<StateSlot> slots);
         void setScreenshots(std::vector<MediaItem> screenshots);
         void setBackups(std::vector<MediaItem> backups, bool batterySaveExists);
+        void setCheats(std::vector<CheatItem> cheats);
+        void setLoadContent(ManagedContentItem textures, ManagedContentItem mods);
+        void setAddons(ManagedContentItem update, ManagedContentItem dlc);
         void setCoverPath(const std::string& path);
         void openImagePreview(int index);
         void restoreFocus();
@@ -59,14 +87,22 @@ namespace beiklive
         std::function<void()> onExportSave;
         std::function<void()> onImportSave;
         std::function<void()> onBackupSave;
+        std::function<void()> onClearShaderCache;
         std::function<void(int)> onRestoreBackup;
         std::function<void(int)> onDeleteBackup;
+        std::function<void()> onAddCheat;
+        std::function<void(int)> onCheatOptions;
+        std::function<void(Section, int)> onToggleManagedContent;
+        std::function<void(Section, int)> onDeleteManagedContent;
 
     private:
         beiklive::GameEntry m_entry;
         std::vector<StateSlot> m_states;
         std::vector<MediaItem> m_screenshots;
         std::vector<MediaItem> m_backups;
+        std::vector<CheatItem> m_cheats;
+        std::array<ManagedContentItem, 2> m_loadContent;
+        std::array<ManagedContentItem, 2> m_addons;
         bool m_batterySaveExists = false;
 
         Section m_section = Section::STATES;
@@ -75,6 +111,10 @@ namespace beiklive
         int m_actionIndex = 0;
         int m_backupIndex = 0;
         int m_batteryPane = 0;
+        int m_cheatPane = 0;
+        int m_cheatIndex = 0;
+        int m_managedIndex = 0;
+        int m_managedAction = 0;
         int m_sectionDirection = 0;
 
         float m_pageEntrance = 0.f;
@@ -130,12 +170,16 @@ namespace beiklive
         void _handleDirectionInput(float dt);
         void _updateScrollTarget(float viewportHeight);
         int _currentScreenshotColumns() const { return 4; }
+        bool _isThreeDs() const;
 
         void _drawHeader(NVGcontext* vg, float x, float y, float w);
         void _drawSummary(NVGcontext* vg, float x, float y, float w, float h);
         void _drawStates(NVGcontext* vg, float x, float y, float w, float h);
         void _drawScreenshots(NVGcontext* vg, float x, float y, float w, float h);
         void _drawBattery(NVGcontext* vg, float x, float y, float w, float h);
+        void _drawCheats(NVGcontext* vg, float x, float y, float w, float h);
+        void _drawManagedContent(NVGcontext* vg, float x, float y, float w, float h,
+                                 const std::array<ManagedContentItem, 2>& items);
         void _drawFooter(NVGcontext* vg, float x, float y, float w, float h);
         void _drawImagePreview(NVGcontext* vg, float x, float y, float w, float h);
         void _drawPanel(NVGcontext* vg, float x, float y, float w, float h,

@@ -17,6 +17,8 @@
 
 namespace beiklive
 {
+    class HomeShortcutSettingsOverlay;
+
     class StartPage : public beiklive::Box
     {
     public:
@@ -36,6 +38,7 @@ namespace beiklive
         void _openAbout();
         void _openDataManagement();
         void _openPico8Page();
+        void _showShortcutSettings();
         void _applyRuntimeUiSettings();
         void _requestRecentGamesRefresh(bool defer);
         bool _pushGameActivity(const beiklive::GameEntry& entry,
@@ -51,6 +54,7 @@ namespace beiklive
 
         beiklive::FileListPage* m_fileListPage = nullptr;
         beiklive::SwitchLayout* switchLayout = nullptr;
+        beiklive::HomeShortcutSettingsOverlay* m_shortcutSettingsOverlay = nullptr;
         beiklive::Box* m_gamePage = nullptr;
         beiklive::GameOptionsSidebar* m_gameOptionsSidebar = nullptr;
         std::atomic<bool> m_alive{true};

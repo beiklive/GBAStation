@@ -9,10 +9,15 @@
 #include "ui/utils/MaterialIcons.hpp"
 #include "ui/utils/NdsEnvironment.hpp"
 #include "ui/utils/CheatMatcher.hpp"
+#include <borealis/core/logger.hpp>
 #include <borealis/views/dropdown.hpp>
+#include <borealis/views/hint.hpp>
 #include <algorithm>
+#include <chrono>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <vector>
 
 #ifdef __SWITCH__
 #include "platform/switch/NroLauncher.hpp"
@@ -23,28 +28,62 @@ namespace
 
 bool deleteGameFileIfExists(const std::string& path)
 {
-    if (path.empty())
+    if (path.empty()) {
+        brls::Logger::info("[Game Delete] entry path empty, nothing to remove");
         return true;
+    }
 
     std::error_code ec;
-    if (!std::filesystem::exists(path, ec))
+    const bool exists = std::filesystem::exists(path, ec);
+    if (ec) {
+        brls::Logger::warning(
+            "[Game Delete] entry exists failed: path={} code={} error={}",
+            path, ec.value(), ec.message());
+        return false;
+    }
+    if (!exists) {
+        brls::Logger::info("[Game Delete] entry already missing: {}", path);
         return true;
+    }
 
     ec.clear();
-    return std::filesystem::remove(path, ec) && !ec;
+    const bool removed = std::filesystem::remove(path, ec);
+    if (ec || !removed) {
+        brls::Logger::warning(
+            "[Game Delete] entry remove failed: path={} removed={} code={} error={}",
+            path, removed, ec.value(), ec ? ec.message() : "remove returned false");
+        return false;
+    }
+    brls::Logger::info("[Game Delete] entry removed: {}", path);
+    return true;
 }
 
 bool deleteGameFilesForEntry(const beiklive::GameEntry& entry)
 {
+    brls::Logger::info(
+        "[Game Delete] file removal begin: platform={} path={} stored_title_id={}",
+        entry.platform, entry.path, entry.threeDsTitleId);
     if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS))
     {
         const std::string titleId = beiklive::three_ds::resolveTitleId(
             entry.threeDsTitleId, entry.path);
+        if (titleId.empty())
+            brls::Logger::warning(
+                "[Game Delete] unable to resolve 3DS title id: path={}", entry.path);
         const bool titleFilesRemoved = titleId.empty() ||
             beiklive::three_ds::deleteInstalledContentAndShaderCache(titleId);
-        return deleteGameFileIfExists(entry.path) && titleFilesRemoved;
+        const bool entryFileRemoved = deleteGameFileIfExists(entry.path);
+        brls::Logger::info(
+            "[Game Delete] 3DS file removal result: path={} title_id={} "
+            "title_files_removed={} entry_file_removed={} success={}",
+            entry.path, titleId, titleFilesRemoved, entryFileRemoved,
+            titleFilesRemoved && entryFileRemoved);
+        return entryFileRemoved && titleFilesRemoved;
     }
-    return deleteGameFileIfExists(entry.path);
+    const bool removed = deleteGameFileIfExists(entry.path);
+    brls::Logger::info(
+        "[Game Delete] file removal result: path={} success={}", entry.path, removed);
+    return removed;
 }
 
 void preserveThreeDsMenuSettings(json& root, const std::filesystem::path& file)
@@ -85,6 +124,300 @@ void preserveThreeDsMenuSettings(json& root, const std::filesystem::path& file)
 
 namespace beiklive
 {
+    class HomeShortcutSettingsOverlay final : public brls::View
+    {
+    public:
+        HomeShortcutSettingsOverlay()
+        {
+            setFocusable(true);
+            setVisibility(brls::Visibility::GONE);
+#ifdef ABSOLUTE
+#undef ABSOLUTE
+#endif
+            setPositionType(brls::PositionType::ABSOLUTE);
+            setPositionTop(0.f);
+            setPositionLeft(0.f);
+            setWidth(1280.f);
+            setHeight(720.f);
+            HIDE_BRLS_HIGHLIGHT(this);
+            setCustomNavigationRoute(brls::FocusDirection::UP, this);
+            setCustomNavigationRoute(brls::FocusDirection::DOWN, this);
+            setCustomNavigationRoute(brls::FocusDirection::LEFT, this);
+            setCustomNavigationRoute(brls::FocusDirection::RIGHT, this);
+
+            auto toggle = [this](brls::View*) -> bool {
+                if (!m_open || m_closing)
+                    return m_open;
+                m_pico8Visible = !m_pico8Visible;
+                m_press = 1.f;
+                brls::Application::getAudioPlayer()->play(brls::SOUND_CLICK);
+                if (onPico8VisibleChanged)
+                    onPico8VisibleChanged(m_pico8Visible);
+                invalidate();
+                return true;
+            };
+            auto consume = [this](brls::View*) -> bool { return m_open; };
+            auto closeAction = [this](brls::View*) -> bool {
+                if (!m_open)
+                    return false;
+                close();
+                return true;
+            };
+
+            registerAction("切换", brls::BUTTON_A, toggle, false, false, brls::SOUND_NONE);
+            registerAction("", brls::BUTTON_LEFT, consume, true, false, brls::SOUND_NONE);
+            registerAction("", brls::BUTTON_RIGHT, consume, true, false, brls::SOUND_NONE);
+            registerAction("", brls::BUTTON_NAV_LEFT, consume, true, false, brls::SOUND_NONE);
+            registerAction("", brls::BUTTON_NAV_RIGHT, consume, true, false, brls::SOUND_NONE);
+            registerAction("", brls::BUTTON_UP, consume, true, false, brls::SOUND_NONE);
+            registerAction("", brls::BUTTON_DOWN, consume, true, false, brls::SOUND_NONE);
+            registerAction("", brls::BUTTON_NAV_UP, consume, true, false, brls::SOUND_NONE);
+            registerAction("", brls::BUTTON_NAV_DOWN, consume, true, false, brls::SOUND_NONE);
+            registerAction("返回", brls::BUTTON_B, closeAction, false, false, brls::SOUND_NONE);
+            registerAction("关闭", brls::BUTTON_START, closeAction, false, false, brls::SOUND_NONE);
+        }
+
+        void open(bool pico8Visible)
+        {
+            m_pico8Visible = pico8Visible;
+            m_open = true;
+            m_closing = false;
+            m_progress = 0.f;
+            m_press = 0.f;
+            m_lastFrame = std::chrono::steady_clock::now();
+            setVisibility(brls::Visibility::VISIBLE);
+            brls::Application::giveFocus(this);
+        }
+
+        void close()
+        {
+            if (!m_open || m_closing)
+                return;
+            m_closing = true;
+            brls::Application::getAudioPlayer()->play(brls::SOUND_BACK);
+        }
+
+        bool isOpen() const { return m_open; }
+        brls::View* getDefaultFocus() override { return this; }
+        brls::View* getNextFocus(brls::FocusDirection, brls::View*) override { return this; }
+
+        void frame(brls::FrameContext* ctx) override
+        {
+            brls::View::frame(ctx);
+            if (!m_open)
+                return;
+            const auto now = std::chrono::steady_clock::now();
+            float dt = std::chrono::duration<float>(now - m_lastFrame).count();
+            m_lastFrame = now;
+            if (dt <= 0.f || dt > 0.25f)
+                dt = 0.016f;
+            m_press = std::max(0.f, m_press - dt * 7.f);
+            m_progress += (m_closing ? -1.f : 1.f) * dt *
+                (m_closing ? 5.4f : 4.6f);
+            m_progress = _clamp01(m_progress);
+            if (m_closing && m_progress <= 0.f)
+                _finishClose();
+            invalidate();
+        }
+
+        void draw(NVGcontext* vg, float x, float y, float w, float h,
+                  brls::Style, brls::FrameContext*) override
+        {
+            if (!m_open || !vg)
+                return;
+            if (m_defaultFont < 0)
+                m_defaultFont = brls::Application::getDefaultFont();
+            if (m_materialFont < 0)
+                m_materialFont = brls::Application::getFont(brls::FONT_MATERIAL_ICONS);
+            if (m_switchFont < 0)
+                m_switchFont = brls::Application::getFont(brls::FONT_SWITCH_ICONS);
+
+            const float alpha = _smooth(m_progress);
+            const float eased = _back(m_progress);
+            nvgBeginPath(vg);
+            nvgRect(vg, x, y, w, h);
+            nvgFillColor(vg, nvgRGBA(0, 0, 0,
+                static_cast<unsigned char>(205.f * alpha)));
+            nvgFill(vg);
+
+            const float panelW = 720.f;
+            const float panelH = 326.f;
+            const float panelX = x + (w - panelW) * 0.5f;
+            const float panelY = y + (h - panelH) * 0.5f + (1.f - eased) * 42.f;
+            const NVGpaint shadow = nvgBoxGradient(
+                vg, panelX + 5.f, panelY + 7.f, panelW, panelH, 18.f, 8.f,
+                nvgRGBA(0, 0, 0, 115), nvgRGBA(0, 0, 0, 0));
+            nvgBeginPath(vg);
+            nvgRect(vg, panelX - 4.f, panelY - 4.f, panelW + 18.f, panelH + 20.f);
+            nvgRoundedRect(vg, panelX, panelY, panelW, panelH, 18.f);
+            nvgPathWinding(vg, NVG_HOLE);
+            nvgFillPaint(vg, shadow);
+            nvgFill(vg);
+
+            nvgBeginPath(vg);
+            nvgRoundedRect(vg, panelX, panelY, panelW, panelH, 18.f);
+            nvgFillColor(vg, nvgRGBA(25, 29, 39, 248));
+            nvgFill(vg);
+            nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 74));
+            nvgStrokeWidth(vg, 1.f);
+            nvgStroke(vg);
+
+            const std::string settingsIcon = _utf8(beiklive::material::SETTINGS);
+            nvgFontFaceId(vg, m_materialFont);
+            nvgFontSize(vg, 37.f);
+            nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+            nvgFillColor(vg, nvgRGBA(91, 193, 255, 245));
+            nvgText(vg, panelX + 34.f, panelY + 50.f, settingsIcon.c_str(), nullptr);
+            nvgFontFaceId(vg, m_defaultFont);
+            nvgFontSize(vg, 28.f);
+            nvgFillColor(vg, nvgRGBA(246, 248, 252, 248));
+            nvgText(vg, panelX + 84.f, panelY + 50.f, "首页功能", nullptr);
+            nvgFontSize(vg, 15.f);
+            nvgFillColor(vg, nvgRGBA(192, 201, 215, 190));
+            nvgText(vg, panelX + 35.f, panelY + 83.f,
+                    "首页快捷按键显示设置", nullptr);
+
+            const float rowX = panelX + 28.f;
+            const float rowY = panelY + 124.f;
+            const float rowW = panelW - 56.f;
+            const float rowH = 78.f;
+            const float rowScale = 1.f - m_press * 0.018f;
+            nvgSave(vg);
+            nvgTranslate(vg, rowX + rowW * 0.5f, rowY + rowH * 0.5f);
+            nvgScale(vg, rowScale, rowScale);
+            nvgTranslate(vg, -(rowX + rowW * 0.5f), -(rowY + rowH * 0.5f));
+            nvgBeginPath(vg);
+            nvgRoundedRect(vg, rowX, rowY, rowW, rowH, 12.f);
+            nvgFillColor(vg, nvgRGBA(255, 255, 255, 32));
+            nvgFill(vg);
+            nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 112));
+            nvgStrokeWidth(vg, 1.f);
+            nvgStroke(vg);
+            nvgFontFaceId(vg, m_materialFont);
+            nvgFontSize(vg, 30.f);
+            nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+            nvgFillColor(vg, nvgRGBA(96, 195, 255, 245));
+            nvgText(vg, rowX + 24.f, rowY + rowH * 0.5f, settingsIcon.c_str(), nullptr);
+            nvgFontFaceId(vg, m_defaultFont);
+            nvgFontSize(vg, 22.f);
+            nvgFillColor(vg, nvgRGBA(242, 245, 250, 242));
+            nvgText(vg, rowX + 72.f, rowY + rowH * 0.5f,
+                    "PICO-8入口显示", nullptr);
+            _drawChoice(vg, rowX + rowW - 220.f, rowY + 17.f, "是", m_pico8Visible);
+            _drawChoice(vg, rowX + rowW - 112.f, rowY + 17.f, "否", !m_pico8Visible);
+            nvgRestore(vg);
+
+            float cursor = panelX + panelW - 30.f;
+            _drawHint(vg, brls::BUTTON_START, "关闭", cursor, panelY + panelH - 27.f, alpha);
+            _drawHint(vg, brls::BUTTON_B, "返回", cursor, panelY + panelH - 27.f, alpha);
+            _drawHint(vg, brls::BUTTON_A, "切换", cursor, panelY + panelH - 27.f, alpha);
+        }
+
+        std::function<void(bool)> onPico8VisibleChanged;
+        std::function<void()> onClosed;
+
+    private:
+        static float _clamp01(float value)
+        {
+            return std::max(0.f, std::min(1.f, value));
+        }
+
+        static float _smooth(float value)
+        {
+            value = _clamp01(value);
+            return value * value * (3.f - 2.f * value);
+        }
+
+        static float _back(float value)
+        {
+            value = _clamp01(value);
+            constexpr float c1 = 1.35f;
+            constexpr float c3 = c1 + 1.f;
+            const float shifted = value - 1.f;
+            return 1.f + c3 * shifted * shifted * shifted + c1 * shifted * shifted;
+        }
+
+        static std::string _utf8(char32_t codepoint)
+        {
+            std::string out;
+            if (codepoint <= 0x7F) {
+                out.push_back(static_cast<char>(codepoint));
+            } else if (codepoint <= 0x7FF) {
+                out.push_back(static_cast<char>(0xC0 | (codepoint >> 6)));
+                out.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+            } else {
+                out.push_back(static_cast<char>(0xE0 | (codepoint >> 12)));
+                out.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+                out.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+            }
+            return out;
+        }
+
+        void _finishClose()
+        {
+            m_open = false;
+            m_closing = false;
+            setVisibility(brls::Visibility::GONE);
+            if (onClosed)
+                onClosed();
+        }
+
+        void _drawChoice(NVGcontext* vg, float x, float y,
+                         const char* text, bool selected)
+        {
+            nvgBeginPath(vg);
+            nvgRoundedRect(vg, x, y, 86.f, 44.f, 10.f);
+            nvgFillColor(vg, selected
+                ? nvgRGBA(91, 193, 255, 220)
+                : nvgRGBA(255, 255, 255, 12));
+            nvgFill(vg);
+            nvgStrokeColor(vg, selected
+                ? nvgRGBA(168, 224, 255, 230)
+                : nvgRGBA(255, 255, 255, 45));
+            nvgStrokeWidth(vg, 1.f);
+            nvgStroke(vg);
+            nvgFontFaceId(vg, m_defaultFont);
+            nvgFontSize(vg, 20.f);
+            nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+            nvgFillColor(vg, selected
+                ? nvgRGBA(18, 24, 34, 245)
+                : nvgRGBA(220, 228, 240, 225));
+            nvgText(vg, x + 43.f, y + 22.f, text, nullptr);
+        }
+
+        void _drawHint(NVGcontext* vg, brls::ControllerButton button,
+                       const char* text, float& cursor, float y, float alpha)
+        {
+            nvgFontFaceId(vg, m_defaultFont);
+            nvgFontSize(vg, 16.f);
+            float bounds[4]{};
+            nvgTextBounds(vg, 0, 0, text, nullptr, bounds);
+            cursor -= bounds[2] - bounds[0] + 41.f;
+            nvgFontFaceId(vg, m_switchFont);
+            nvgFontSize(vg, 26.f);
+            nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+            nvgFillColor(vg, nvgRGBA(255, 255, 255,
+                static_cast<unsigned char>(245.f * alpha)));
+            const std::string glyph = brls::Hint::getKeyIcon(button);
+            nvgText(vg, cursor + 12.f, y, glyph.c_str(), nullptr);
+            nvgFontFaceId(vg, m_defaultFont);
+            nvgFontSize(vg, 16.f);
+            nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+            nvgText(vg, cursor + 28.f, y, text, nullptr);
+            cursor -= 12.f;
+        }
+
+        bool m_open = false;
+        bool m_closing = false;
+        bool m_pico8Visible = true;
+        float m_progress = 0.f;
+        float m_press = 0.f;
+        int m_defaultFont = -1;
+        int m_materialFont = -1;
+        int m_switchFont = -1;
+        std::chrono::steady_clock::time_point m_lastFrame;
+    };
+
     namespace
     {
         // Leave the first frame free, then prepare the complete library snapshot.
@@ -390,6 +723,10 @@ namespace beiklive
             if (!bgPath.empty())
                 this->setBackgroundImage(bgPath);
         }
+        if (switchLayout) {
+            switchLayout->setPico8ShortcutVisible(
+                GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_UI_PICO8_SHORTCUT_VISIBLE, 1) != 0);
+        }
     }
 
     void StartPage::_requestRecentGamesRefresh(bool defer)
@@ -530,6 +867,8 @@ namespace beiklive
         brls::Logger::debug("Using SWITCH theme layout");
         switchLayout = new beiklive::SwitchLayout();
         switchLayout->setGrow(1.f);
+        switchLayout->setPico8ShortcutVisible(
+            GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_UI_PICO8_SHORTCUT_VISIBLE, 1) != 0);
         switchLayout->onGameActivated = [this](const beiklive::GameEntry &entry)
         {
             m_resetCardFocusOnNextRefresh = true;
@@ -594,8 +933,38 @@ namespace beiklive
                 brls::Application::quit();
             }
         };
+        switchLayout->registerAction("设置主页", brls::BUTTON_START,
+            [this](brls::View*) -> bool {
+                _showShortcutSettings();
+                return true;
+            },
+            false, false, brls::SOUND_CLICK);
         this->getContentBox()->addView(switchLayout);
+        m_shortcutSettingsOverlay = new HomeShortcutSettingsOverlay();
+        m_shortcutSettingsOverlay->onPico8VisibleChanged = [this](bool visible) {
+            SET_SETTING_KEY_INT(
+                beiklive::SettingKey::KEY_UI_PICO8_SHORTCUT_VISIBLE,
+                visible ? 1 : 0);
+            if (switchLayout)
+                switchLayout->setPico8ShortcutVisible(visible);
+            brls::Application::notify(
+                visible ? "已显示 PICO-8 入口" : "已隐藏 PICO-8 入口");
+        };
+        m_shortcutSettingsOverlay->onClosed = [this]() {
+            if (switchLayout)
+                brls::Application::giveFocus(switchLayout);
+        };
+        this->getContentBox()->addView(m_shortcutSettingsOverlay);
         _requestRecentGamesRefresh(true);
+    }
+
+    void StartPage::_showShortcutSettings()
+    {
+        if (!m_shortcutSettingsOverlay || m_shortcutSettingsOverlay->isOpen())
+            return;
+        const bool visible = GET_SETTING_KEY_INT(
+            beiklive::SettingKey::KEY_UI_PICO8_SHORTCUT_VISIBLE, 1) != 0;
+        m_shortcutSettingsOverlay->open(visible);
     }
 
     void StartPage::_openPico8Page()
@@ -941,8 +1310,12 @@ namespace beiklive
                             auto alive = m_aliveToken;
                             ThreadPool::instance().enqueue([
                                 this, alive, path, entry, deleteRomFile]() {
+                                bool removedFile = true;
+                                if (deleteRomFile)
+                                    removedFile = deleteGameFilesForEntry(entry);
+
                                 bool removedRecord = false;
-                                if (alive->load() && beiklive::GameDB) {
+                                if (removedFile && alive->load() && beiklive::GameDB) {
                                     if (beiklive::GameDB->getAll().size() <= 1) {
                                         beiklive::GameDB->clearAll();
                                         removedRecord = true;
@@ -953,10 +1326,10 @@ namespace beiklive
                                             beiklive::GameDB->flush();
                                     }
                                 }
-
-                                bool removedFile = true;
-                                if (removedRecord && deleteRomFile)
-                                    removedFile = deleteGameFilesForEntry(entry);
+                                brls::Logger::info(
+                                    "[Game Delete] database remove result: path={} removed={} "
+                                    "delete_files={} files_removed={}",
+                                    path, removedRecord, deleteRomFile, removedFile);
                                 if (!alive->load())
                                     return;
 
@@ -969,7 +1342,10 @@ namespace beiklive
                                         m_homeDeletePending = false;
                                         if (switchLayout)
                                             switchLayout->cancelGameRemoval();
-                                        brls::Application::notify("删除失败");
+                                        brls::Application::notify(
+                                            deleteRomFile && !removedFile
+                                                ? "游戏文件删除失败，记录已保留"
+                                                : "删除失败");
                                         _requestRecentGamesRefresh(false);
                                         return;
                                     }

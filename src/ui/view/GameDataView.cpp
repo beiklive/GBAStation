@@ -83,6 +83,8 @@ namespace beiklive
         m_switchIconFontId = brls::Application::getFont(brls::FONT_SWITCH_ICONS);
         m_lastFrameTime = std::chrono::steady_clock::now();
         m_states.resize(10);
+        if (_isThreeDs())
+            m_section = Section::BATTERY;
 
         registerClickAction([this](brls::View*) -> bool {
             _activate();
@@ -102,6 +104,15 @@ namespace beiklive
         registerAction("下一分类", brls::BUTTON_RB, [this](brls::View*) -> bool {
             _switchSection(1);
             return true;
+        });
+        registerAction("管理金手指", brls::BUTTON_START, [this](brls::View*) -> bool {
+            if (m_section == Section::CHEATS && m_cheatPane == 1 &&
+                m_cheatIndex >= 0 && m_cheatIndex < static_cast<int>(m_cheats.size()) &&
+                onCheatOptions) {
+                onCheatOptions(m_cheatIndex);
+                return true;
+            }
+            return false;
         });
         registerAction("次要操作", brls::BUTTON_X, [this](brls::View*) -> bool {
             _secondaryAction();
@@ -235,9 +246,26 @@ namespace beiklive
             }
             return;
         }
-        int index = static_cast<int>(m_section);
-        index = (index + (direction < 0 ? -1 : 1) + 3) % 3;
-        m_section = static_cast<Section>(index);
+        if (_isThreeDs()) {
+            constexpr std::array<Section, 4> sections{
+                Section::BATTERY, Section::CHEATS, Section::LOAD_CONTENT, Section::ADDONS};
+            auto current = std::find(sections.begin(), sections.end(), m_section);
+            int index = current == sections.end()
+                ? 0 : static_cast<int>(std::distance(sections.begin(), current));
+            index = (index + (direction < 0 ? -1 : 1) +
+                     static_cast<int>(sections.size())) % static_cast<int>(sections.size());
+            m_section = sections[static_cast<size_t>(index)];
+            if (m_section == Section::CHEATS)
+                m_cheatPane = m_cheats.empty() ? 0 : 1;
+            if (m_section == Section::LOAD_CONTENT || m_section == Section::ADDONS) {
+                m_managedIndex = 0;
+                m_managedAction = 0;
+            }
+        } else {
+            int index = static_cast<int>(m_section);
+            index = (index + (direction < 0 ? -1 : 1) + 3) % 3;
+            m_section = static_cast<Section>(index);
+        }
         m_sectionDirection = direction < 0 ? -1 : 1;
         m_contentTransition = 0.f;
         m_scrollY = 0.f;
@@ -245,6 +273,38 @@ namespace beiklive
         if (onSectionChanged) onSectionChanged(m_section);
         brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_CHANGE);
         invalidate();
+    }
+
+    void GameDataView::setCheats(std::vector<CheatItem> cheats)
+    {
+        m_cheats = std::move(cheats);
+        if (m_cheats.empty()) {
+            m_cheatIndex = 0;
+            m_cheatPane = 0;
+        } else {
+            m_cheatIndex = std::clamp(m_cheatIndex, 0, static_cast<int>(m_cheats.size()) - 1);
+            if (m_section == Section::CHEATS)
+                m_cheatPane = 1;
+        }
+        invalidate();
+    }
+
+    void GameDataView::setLoadContent(ManagedContentItem textures, ManagedContentItem mods)
+    {
+        m_loadContent = {std::move(textures), std::move(mods)};
+        invalidate();
+    }
+
+    void GameDataView::setAddons(ManagedContentItem update, ManagedContentItem dlc)
+    {
+        m_addons = {std::move(update), std::move(dlc)};
+        invalidate();
+    }
+
+    bool GameDataView::_isThreeDs() const
+    {
+        return m_entry.platform ==
+            static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS);
     }
 
     bool GameDataView::_moveUp()
@@ -266,6 +326,13 @@ namespace beiklive
             case Section::BATTERY:
                 if (m_batteryPane == 0 && m_actionIndex > 0) { --m_actionIndex; return true; }
                 if (m_batteryPane == 1 && m_backupIndex > 0) { --m_backupIndex; return true; }
+                break;
+            case Section::CHEATS:
+                if (m_cheatPane == 1 && m_cheatIndex > 0) { --m_cheatIndex; return true; }
+                break;
+            case Section::LOAD_CONTENT:
+            case Section::ADDONS:
+                if (m_managedIndex > 0) { --m_managedIndex; return true; }
                 break;
         }
         return false;
@@ -294,11 +361,22 @@ namespace beiklive
                 break;
             }
             case Section::BATTERY:
-                if (m_batteryPane == 0 && m_actionIndex < 2) { ++m_actionIndex; return true; }
+                if (m_batteryPane == 0 &&
+                    m_actionIndex < (_isThreeDs() ? 3 : 2)) { ++m_actionIndex; return true; }
                 if (m_batteryPane == 1 && m_backupIndex + 1 < static_cast<int>(m_backups.size())) {
                     ++m_backupIndex;
                     return true;
                 }
+                break;
+            case Section::CHEATS:
+                if (m_cheatPane == 1 && m_cheatIndex + 1 < static_cast<int>(m_cheats.size())) {
+                    ++m_cheatIndex;
+                    return true;
+                }
+                break;
+            case Section::LOAD_CONTENT:
+            case Section::ADDONS:
+                if (m_managedIndex < 1) { ++m_managedIndex; return true; }
                 break;
         }
         return false;
@@ -323,6 +401,13 @@ namespace beiklive
                 break;
             case Section::BATTERY:
                 if (m_batteryPane == 1) { m_batteryPane = 0; return true; }
+                break;
+            case Section::CHEATS:
+                if (m_cheatPane == 1) { m_cheatPane = 0; return true; }
+                break;
+            case Section::LOAD_CONTENT:
+            case Section::ADDONS:
+                if (m_managedAction > 0) { --m_managedAction; return true; }
                 break;
         }
         return false;
@@ -356,6 +441,16 @@ namespace beiklive
                     return true;
                 }
                 break;
+            case Section::CHEATS:
+                if (m_cheatPane == 0 && !m_cheats.empty()) {
+                    m_cheatPane = 1;
+                    return true;
+                }
+                break;
+            case Section::LOAD_CONTENT:
+            case Section::ADDONS:
+                if (m_managedAction < 1) { ++m_managedAction; return true; }
+                break;
         }
         return false;
     }
@@ -380,14 +475,34 @@ namespace beiklive
                 openImagePreview(m_screenshotIndex);
             return;
         }
-        if (m_batteryPane == 0) {
-            if (m_actionIndex == 0 && onExportSave) onExportSave();
-            else if (m_actionIndex == 1 && onImportSave) onImportSave();
-            else if (m_actionIndex == 2 && onBackupSave) onBackupSave();
-        } else if (m_backupIndex >= 0 &&
-                   m_backupIndex < static_cast<int>(m_backups.size()) &&
-                   onRestoreBackup) {
-            onRestoreBackup(m_backupIndex);
+        if (m_section == Section::BATTERY) {
+            if (m_batteryPane == 0) {
+                if (m_actionIndex == 0 && onExportSave) onExportSave();
+                else if (m_actionIndex == 1 && onImportSave) onImportSave();
+                else if (m_actionIndex == 2 && onBackupSave) onBackupSave();
+                else if (m_actionIndex == 3 && onClearShaderCache) onClearShaderCache();
+            } else if (m_backupIndex >= 0 &&
+                       m_backupIndex < static_cast<int>(m_backups.size()) &&
+                       onRestoreBackup) {
+                onRestoreBackup(m_backupIndex);
+            }
+            return;
+        }
+        if (m_section == Section::CHEATS) {
+            if (m_cheatPane == 0) {
+                if (onAddCheat) onAddCheat();
+            } else if (m_cheatIndex >= 0 && m_cheatIndex < static_cast<int>(m_cheats.size()) &&
+                       onCheatOptions) {
+                onCheatOptions(m_cheatIndex);
+            }
+            return;
+        }
+        if ((m_section == Section::LOAD_CONTENT || m_section == Section::ADDONS) &&
+            m_managedIndex >= 0 && m_managedIndex < 2) {
+            if (m_managedAction == 0 && onToggleManagedContent)
+                onToggleManagedContent(m_section, m_managedIndex);
+            else if (m_managedAction == 1 && onDeleteManagedContent)
+                onDeleteManagedContent(m_section, m_managedIndex);
         }
     }
 
@@ -529,6 +644,12 @@ namespace beiklive
             const float total = m_backups.size() * rowHeight;
             m_targetScrollY = std::clamp(
                 m_backupIndex * rowHeight + rowHeight * 0.5f - viewportHeight * 0.5f,
+                0.f, std::max(0.f, total - viewportHeight));
+        } else if (m_section == Section::CHEATS && m_cheatPane == 1 && !m_cheats.empty()) {
+            const float rowHeight = 76.f;
+            const float total = m_cheats.size() * rowHeight;
+            m_targetScrollY = std::clamp(
+                m_cheatIndex * rowHeight + rowHeight * 0.5f - viewportHeight * 0.5f,
                 0.f, std::max(0.f, total - viewportHeight));
         } else {
             m_targetScrollY = 0.f;
@@ -720,30 +841,57 @@ namespace beiklive
         nvgFillColor(vg, nvgRGBA(247, 248, 252, 255));
         nvgText(vg, x + 30.f, y + 35.f, "游戏数据", nullptr);
 
-        const bool isThreeDs = m_entry.platform ==
-            static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS);
-        const char* labels[] = {"即时存档", "游戏图片", isThreeDs ? "游戏存档" : "电池存档"};
+        const bool isThreeDs = _isThreeDs();
         const float centerX = x + w * 0.5f;
         const float centerY = y + 35.f;
-        const int selected = static_cast<int>(m_section);
-        _drawSwitchButton(vg, brls::BUTTON_LB, centerX - 260.f, centerY,
-                          22.f, nvgRGBA(255, 255, 255, 218));
-        _drawSwitchButton(vg, brls::BUTTON_RB, centerX + 260.f, centerY,
-                          22.f, nvgRGBA(255, 255, 255, 218));
-        for (int offset = -1; offset <= 1; ++offset) {
-            const int index = (selected + offset + 3) % 3;
-            const float itemX = centerX + offset * 158.f;
-            const float prominence = offset == 0 ? 1.f : 0.42f;
-            if (offset == 0) {
-                _drawPanel(vg, itemX - 69.f, centerY - 23.f, 138.f, 46.f,
-                           8.f, true, 1.f);
+        if (isThreeDs) {
+            constexpr std::array<Section, 4> sections{
+                Section::BATTERY, Section::CHEATS, Section::LOAD_CONTENT, Section::ADDONS};
+            constexpr const char* labels[] = {
+                "游戏存档", "金手指管理", "纹理和MOD", "DLC与更新"};
+            auto selectedIt = std::find(sections.begin(), sections.end(), m_section);
+            const int selected = selectedIt == sections.end()
+                ? 0 : static_cast<int>(std::distance(sections.begin(), selectedIt));
+            _drawSwitchButton(vg, brls::BUTTON_LB, centerX - 286.f, centerY,
+                              22.f, nvgRGBA(255, 255, 255, 218));
+            _drawSwitchButton(vg, brls::BUTTON_RB, centerX + 286.f, centerY,
+                              22.f, nvgRGBA(255, 255, 255, 218));
+            for (int offset = -1; offset <= 1; ++offset) {
+                const int index = (selected + offset + 4) % 4;
+                const float itemX = centerX + offset * 170.f;
+                const float prominence = offset == 0 ? 1.f : 0.42f;
+                if (offset == 0)
+                    _drawPanel(vg, itemX - 76.f, centerY - 23.f, 152.f, 46.f,
+                               8.f, true, 1.f);
+                nvgFontFaceId(vg, m_fontId);
+                nvgFontSize(vg, offset == 0 ? 21.f : 17.f);
+                nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+                nvgFillColor(vg, nvgRGBA(255, 255, 255,
+                    static_cast<unsigned char>(255.f * prominence)));
+                nvgText(vg, itemX, centerY, labels[index], nullptr);
             }
-            nvgFontFaceId(vg, m_fontId);
-            nvgFontSize(vg, offset == 0 ? 22.f : 18.f);
-            nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-            nvgFillColor(vg, nvgRGBA(255, 255, 255,
-                static_cast<unsigned char>(255.f * prominence)));
-            nvgText(vg, itemX, centerY, labels[index], nullptr);
+        } else {
+            const char* labels[] = {"即时存档", "游戏图片", "电池存档"};
+            const int selected = static_cast<int>(m_section);
+            _drawSwitchButton(vg, brls::BUTTON_LB, centerX - 260.f, centerY,
+                              22.f, nvgRGBA(255, 255, 255, 218));
+            _drawSwitchButton(vg, brls::BUTTON_RB, centerX + 260.f, centerY,
+                              22.f, nvgRGBA(255, 255, 255, 218));
+            for (int offset = -1; offset <= 1; ++offset) {
+                const int index = (selected + offset + 3) % 3;
+                const float itemX = centerX + offset * 158.f;
+                const float prominence = offset == 0 ? 1.f : 0.42f;
+                if (offset == 0) {
+                    _drawPanel(vg, itemX - 69.f, centerY - 23.f, 138.f, 46.f,
+                               8.f, true, 1.f);
+                }
+                nvgFontFaceId(vg, m_fontId);
+                nvgFontSize(vg, offset == 0 ? 22.f : 18.f);
+                nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+                nvgFillColor(vg, nvgRGBA(255, 255, 255,
+                    static_cast<unsigned char>(255.f * prominence)));
+                nvgText(vg, itemX, centerY, labels[index], nullptr);
+            }
         }
 
         if (isThreeDs && !m_entry.threeDsTitleId.empty()) {
@@ -776,8 +924,7 @@ namespace beiklive
 
     void GameDataView::_drawSummary(NVGcontext* vg, float x, float y, float w, float h)
     {
-        const bool isThreeDs = m_entry.platform ==
-            static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS);
+        const bool isThreeDs = _isThreeDs();
         _drawPanel(vg, x, y, w, h, 8.f, true, 1.f);
         const float coverX = x + 28.f;
         const float coverY = y + 28.f;
@@ -810,26 +957,38 @@ namespace beiklive
 
         int stateCount = 0;
         for (const auto& state : m_states) if (state.exists) ++stateCount;
-        const std::string values[] = {
-            std::to_string(stateCount) + " / 10",
-            std::to_string(m_screenshots.size()),
-            m_batterySaveExists ? "存在" : "不存在",
-            std::to_string(m_backups.size())
-        };
-        const char* names[] = {
-            "即时存档", "游戏图片", isThreeDs ? "游戏存档" : "电池存档", "备份数量"
-        };
+        std::vector<std::pair<std::string, std::string>> summary;
+        if (isThreeDs) {
+            const int loadCount = static_cast<int>(std::count_if(
+                m_loadContent.begin(), m_loadContent.end(), [](const ManagedContentItem& item) {
+                    return item.enabledExists || item.disabledExists;
+                }));
+            summary = {
+                {"游戏存档", m_batterySaveExists ? "存在" : "不存在"},
+                {"备份数量", std::to_string(m_backups.size())},
+                {"金手指", std::to_string(m_cheats.size()) + " 个"},
+                {"纹理 / MOD", std::to_string(loadCount) + " / 2"},
+            };
+        } else {
+            summary = {
+                {"即时存档", std::to_string(stateCount) + " / 10"},
+                {"游戏图片", std::to_string(m_screenshots.size())},
+                {"电池存档", m_batterySaveExists ? "存在" : "不存在"},
+                {"备份数量", std::to_string(m_backups.size())},
+            };
+        }
         const float startY = coverY + coverH + 126.f;
-        for (int i = 0; i < 4; ++i) {
+        for (int i = 0; i < static_cast<int>(summary.size()); ++i) {
             const float rowY = startY + i * 35.f;
             nvgFontFaceId(vg, m_fontId);
             nvgFontSize(vg, 16.f);
             nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
             nvgFillColor(vg, nvgRGBA(255, 255, 255, 145));
-            nvgText(vg, x + 24.f, rowY, names[i], nullptr);
+            nvgText(vg, x + 24.f, rowY, summary[static_cast<size_t>(i)].first.c_str(), nullptr);
             nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
             nvgFillColor(vg, nvgRGBA(255, 255, 255, 232));
-            nvgText(vg, x + w - 24.f, rowY, values[i].c_str(), nullptr);
+            nvgText(vg, x + w - 24.f, rowY,
+                    summary[static_cast<size_t>(i)].second.c_str(), nullptr);
         }
     }
 
@@ -928,21 +1087,25 @@ namespace beiklive
         const float gap = 24.f;
         const float listX = x + actionW + gap;
         const float listW = w - actionW - gap;
-        const char* labels[] = {"导出存档", "导入存档", "创建备份"};
+        const char* labels[] = {"导出存档", "导入存档", "创建备份", "清除着色器缓存"};
         const char32_t icons[] = {
             beiklive::material::CLOUD_UPLOAD,
             beiklive::material::CLOUD_DOWNLOAD,
-            beiklive::material::BACKUP
+            beiklive::material::BACKUP,
+            beiklive::material::DELETE_SWEEP_ICON,
         };
-        const float buttonH = 90.f;
-        const float startY = y + (h - buttonH * 3.f - 28.f) * 0.5f;
-        for (int i = 0; i < 3; ++i) {
-            const float buttonY = startY + i * (buttonH + 14.f);
+        const int actionCount = _isThreeDs() ? 4 : 3;
+        const float buttonH = _isThreeDs() ? 70.f : 90.f;
+        const float actionGap = _isThreeDs() ? 11.f : 14.f;
+        const float startY = y + (h - buttonH * actionCount -
+                                  actionGap * (actionCount - 1)) * 0.5f;
+        for (int i = 0; i < actionCount; ++i) {
+            const float buttonY = startY + i * (buttonH + actionGap);
             _drawPanel(vg, x, buttonY, actionW, buttonH, 8.f, true, 1.f);
             _drawMaterialIcon(vg, icons[i], x + 46.f, buttonY + buttonH * 0.5f,
                               36.f, nvgRGBA(255, 255, 255, 225));
             nvgFontFaceId(vg, m_fontId);
-            nvgFontSize(vg, 23.f);
+            nvgFontSize(vg, i == 3 ? 22.f : 23.f);
             nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
             nvgFillColor(vg, nvgRGBA(255, 255, 255, 235));
             nvgText(vg, x + 82.f, buttonY + buttonH * 0.5f, labels[i], nullptr);
@@ -1021,6 +1184,192 @@ namespace beiklive
         nvgRestore(vg);
     }
 
+    void GameDataView::_drawCheats(NVGcontext* vg, float x, float y, float w, float h)
+    {
+        const float actionW = 230.f;
+        const float gap = 24.f;
+        const float listX = x + actionW + gap;
+        const float listW = w - actionW - gap;
+        const float addH = 126.f;
+        const float addY = y + (h - addH) * 0.5f;
+
+        _drawPanel(vg, x, addY, actionW, addH, 8.f, true, 1.f);
+        _drawMaterialIcon(vg, beiklive::material::EDIT, x + actionW * 0.5f,
+                          addY + 39.f, 38.f, nvgRGBA(255, 255, 255, 220));
+        nvgFontFaceId(vg, m_fontId);
+        nvgFontSize(vg, 22.f);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(255, 255, 255, 238));
+        nvgText(vg, x + actionW * 0.5f, addY + 82.f, "新增金手指", nullptr);
+        nvgFontSize(vg, 14.f);
+        nvgFillColor(vg, nvgRGBA(255, 255, 255, 130));
+        nvgText(vg, x + actionW * 0.5f, addY + 107.f, "名称与代码分步输入", nullptr);
+        if (m_cheatPane == 0)
+            _drawFocus(vg, x, addY, actionW, addH, 8.f);
+
+        _drawPanel(vg, listX, y, listW, h, 8.f, true, 1.f);
+        nvgFontFaceId(vg, m_fontId);
+        nvgFontSize(vg, 22.f);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(255, 255, 255, 238));
+        nvgText(vg, listX + 26.f, y + 30.f, "金手指列表", nullptr);
+        const std::string count = std::to_string(m_cheats.size()) + " 个";
+        nvgFontSize(vg, 15.f);
+        nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(255, 255, 255, 135));
+        nvgText(vg, listX + listW - 26.f, y + 30.f, count.c_str(), nullptr);
+
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, listX + 26.f, y + 57.f);
+        nvgLineTo(vg, listX + listW - 26.f, y + 57.f);
+        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 42));
+        nvgStrokeWidth(vg, 1.f);
+        nvgStroke(vg);
+
+        if (m_cheats.empty()) {
+            _drawMaterialIcon(vg, beiklive::material::DESCRIPTION,
+                              listX + listW * 0.5f, y + h * 0.45f, 60.f,
+                              nvgRGBA(255, 255, 255, 65));
+            nvgFontFaceId(vg, m_fontId);
+            nvgFontSize(vg, 20.f);
+            nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+            nvgFillColor(vg, nvgRGBA(255, 255, 255, 125));
+            nvgText(vg, listX + listW * 0.5f, y + h * 0.59f, "为空", nullptr);
+            return;
+        }
+
+        const float contentY = y + 70.f;
+        const float rowH = 76.f;
+        nvgSave(vg);
+        nvgIntersectScissor(vg, listX + 20.f, contentY, listW - 40.f, h - 84.f);
+        for (int i = 0; i < static_cast<int>(m_cheats.size()); ++i) {
+            const float rowY = contentY + i * rowH - m_scrollY;
+            if (rowY + 64.f < contentY || rowY > y + h - 10.f)
+                continue;
+            const auto& cheat = m_cheats[static_cast<size_t>(i)];
+            const float rowX = listX + 26.f;
+            const float rowW = listW - 52.f;
+            _drawPanel(vg, rowX, rowY, rowW, 64.f, 7.f, false, 0.85f);
+            _drawMaterialIcon(vg, beiklive::material::DESCRIPTION,
+                              rowX + 30.f, rowY + 32.f, 28.f,
+                              nvgRGBA(255, 255, 255, 188));
+            nvgSave(vg);
+            nvgIntersectScissor(vg, rowX + 56.f, rowY + 5.f, rowW - 76.f, 27.f);
+            nvgFontFaceId(vg, m_fontId);
+            nvgFontSize(vg, 18.f);
+            nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+            nvgFillColor(vg, nvgRGBA(255, 255, 255, 235));
+            nvgText(vg, rowX + 56.f, rowY + 19.f, cheat.name.c_str(), nullptr);
+            nvgRestore(vg);
+            const size_t lineEnd = cheat.code.find('\n');
+            std::string detail = cheat.code.substr(0, lineEnd);
+            if (lineEnd != std::string::npos)
+                detail += " ...";
+            nvgFontSize(vg, 15.f);
+            nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+            nvgFillColor(vg, nvgRGBA(255, 255, 255, 125));
+            nvgText(vg, rowX + 56.f, rowY + 45.f, detail.c_str(), nullptr);
+            if (m_cheatPane == 1 && i == m_cheatIndex)
+                _drawFocus(vg, rowX, rowY, rowW, 64.f, 7.f);
+        }
+        nvgRestore(vg);
+    }
+
+    void GameDataView::_drawManagedContent(
+        NVGcontext* vg, float x, float y, float w, float h,
+        const std::array<ManagedContentItem, 2>& items)
+    {
+        const float gap = 18.f;
+        const float panelH = (h - gap) * 0.5f;
+        for (int index = 0; index < 2; ++index) {
+            const auto& item = items[static_cast<size_t>(index)];
+            const float panelY = y + index * (panelH + gap);
+            _drawPanel(vg, x, panelY, w, panelH, 8.f, true, 1.f);
+
+            const bool conflict = item.enabledExists && item.disabledExists;
+            const bool present = item.enabledExists || item.disabledExists;
+            const std::size_t fileCount = item.enabledExists
+                ? item.enabledFileCount : item.disabledFileCount;
+            const std::string status = conflict ? "状态冲突"
+                : item.enabledExists ? "已启用"
+                : item.disabledExists ? "已停用" : item.emptyText;
+            const std::string path = item.enabledExists ? item.enabledPath
+                : item.disabledExists ? item.disabledPath : item.enabledPath;
+
+            nvgFontFaceId(vg, m_fontId);
+            nvgFontSize(vg, 23.f);
+            nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+            nvgFillColor(vg, nvgRGBA(255, 255, 255, 242));
+            nvgText(vg, x + 26.f, panelY + 31.f, item.label.c_str(), nullptr);
+            if (present) {
+                const std::string countText = std::to_string(fileCount) + " 个文件";
+                nvgFontSize(vg, 15.f);
+                nvgFillColor(vg, nvgRGBA(255, 255, 255, 140));
+                nvgText(vg, x + 112.f, panelY + 31.f, countText.c_str(), nullptr);
+            }
+
+            const float statusW = 92.f;
+            nvgBeginPath(vg);
+            nvgRoundedRect(vg, x + w - statusW - 24.f, panelY + 15.f,
+                           statusW, 32.f, 5.f);
+            nvgFillColor(vg, conflict ? nvgRGBA(205, 90, 83, 190)
+                : item.enabledExists ? nvgRGBA(66, 156, 112, 190)
+                : item.disabledExists ? nvgRGBA(194, 139, 61, 190)
+                : nvgRGBA(90, 99, 112, 180));
+            nvgFill(vg);
+            nvgFontSize(vg, 15.f);
+            nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+            nvgFillColor(vg, nvgRGBA(255, 255, 255, 235));
+            nvgText(vg, x + w - statusW * 0.5f - 24.f, panelY + 31.f,
+                    status.c_str(), nullptr);
+
+            const float buttonW = 168.f;
+            const float buttonGap = 12.f;
+            const float buttonsX = x + w - buttonW * 2.f - buttonGap - 24.f;
+            const float buttonY = panelY + panelH - 66.f;
+            const float pathW = w - 52.f;
+            nvgFontSize(vg, 18.f);
+            nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+            nvgFillColor(vg, nvgRGBA(255, 255, 255, present ? 145 : 85));
+            float pathBounds[4]{};
+            nvgTextBounds(vg, 0.f, 0.f, path.c_str(), nullptr, pathBounds);
+            const float pathWidth = pathBounds[2] - pathBounds[0];
+            nvgSave(vg);
+            nvgIntersectScissor(vg, x + 26.f, panelY + 55.f, pathW, 60.f);
+            if (pathWidth <= pathW) {
+                nvgText(vg, x + 26.f, panelY + 77.f, path.c_str(), nullptr);
+            } else {
+                const float travel = pathWidth + 52.f;
+                const float offset = std::fmod(
+                    std::max(0.f, m_focusTime - 0.8f) * 30.f, travel);
+                nvgText(vg, x + 26.f - offset, panelY + 77.f, path.c_str(), nullptr);
+                nvgText(vg, x + 26.f - offset + travel, panelY + 77.f,
+                        path.c_str(), nullptr);
+            }
+            nvgRestore(vg);
+
+            std::string toggleLabel = conflict ? "状态冲突"
+                : item.enabledExists ? "停用" + item.label
+                : item.disabledExists ? "启用" + item.label : item.emptyText;
+            const std::array<std::string, 2> labels{
+                std::move(toggleLabel), "删除" + item.label};
+            for (int action = 0; action < 2; ++action) {
+                const float buttonX = buttonsX + action * (buttonW + buttonGap);
+                _drawPanel(vg, buttonX, buttonY, buttonW, 46.f, 7.f,
+                           present && !conflict, present ? 0.95f : 0.48f);
+                nvgFontFaceId(vg, m_fontId);
+                nvgFontSize(vg, 17.f);
+                nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+                nvgFillColor(vg, nvgRGBA(255, 255, 255, present ? 225 : 105));
+                nvgText(vg, buttonX + buttonW * 0.5f, buttonY + 23.f,
+                        labels[static_cast<size_t>(action)].c_str(), nullptr);
+                if (index == m_managedIndex && action == m_managedAction)
+                    _drawFocus(vg, buttonX, buttonY, buttonW, 46.f, 7.f,
+                               present && !conflict ? 1.f : 0.55f);
+            }
+        }
+    }
+
     void GameDataView::_drawFooter(NVGcontext* vg, float x, float y, float w, float h)
     {
         const float lineY = y + 1.f;
@@ -1068,11 +1417,15 @@ namespace beiklive
             hints.push_back({brls::BUTTON_Y, "设为封面"});
             hints.push_back({brls::BUTTON_X, "删除"});
             hints.push_back({brls::BUTTON_A, "查看"});
-        } else if (m_batteryPane == 1) {
+        } else if (m_section == Section::BATTERY && m_batteryPane == 1) {
             hints.push_back({brls::BUTTON_X, "删除"});
             hints.push_back({brls::BUTTON_A, "还原"});
+        } else if (m_section == Section::CHEATS) {
+            if (m_cheatPane == 1)
+                hints.push_back({brls::BUTTON_START, "管理"});
+            hints.push_back({brls::BUTTON_A, m_cheatPane == 0 ? "新增" : "确认"});
         } else {
-            hints.push_back({brls::BUTTON_A, "执行"});
+            hints.push_back({brls::BUTTON_A, "确认"});
         }
 
         float cursor = x + w - 28.f;
@@ -1213,8 +1566,14 @@ namespace beiklive
             _drawStates(vg, mainX + slide, contentY, mainW, contentH);
         else if (m_section == Section::SCREENSHOTS)
             _drawScreenshots(vg, mainX + slide, contentY, mainW, contentH);
-        else
+        else if (m_section == Section::BATTERY)
             _drawBattery(vg, mainX + slide, contentY, mainW, contentH);
+        else if (m_section == Section::CHEATS)
+            _drawCheats(vg, mainX + slide, contentY, mainW, contentH);
+        else if (m_section == Section::LOAD_CONTENT)
+            _drawManagedContent(vg, mainX + slide, contentY, mainW, contentH, m_loadContent);
+        else
+            _drawManagedContent(vg, mainX + slide, contentY, mainW, contentH, m_addons);
         nvgRestore(vg);
         _drawImagePreview(vg, x, y, w, h);
         nvgRestore(vg);

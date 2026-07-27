@@ -1,5 +1,7 @@
 #include "core/ThreeDsTitlePaths.hpp"
 
+#include <borealis/core/logger.hpp>
+
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -7,7 +9,6 @@
 #include <fstream>
 #include <iomanip>
 #include <sstream>
-#include <unordered_set>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -19,7 +20,8 @@ namespace
 
     std::string titleRoot()
     {
-        return std::string(ThreeDsRoot) + "/Nintendo 3DS/" + ZeroId + "/" + ZeroId + "/title";
+        return std::string(ThreeDsRoot) + "/sdmc/Nintendo 3DS/" + ZeroId + "/" +
+               ZeroId + "/title";
     }
 
     std::string categoryPath(std::string_view titleId, std::string_view category)
@@ -28,6 +30,15 @@ namespace
         if (normalized.empty())
             return {};
         return titleRoot() + "/" + std::string(category) + "/" + normalized.substr(8);
+    }
+
+    std::string disabledCategoryPath(std::string_view titleId, std::string_view category)
+    {
+        const std::string normalized = beiklive::three_ds::normalizeTitleId(titleId);
+        if (normalized.empty())
+            return {};
+        return titleRoot() + "/" + std::string(category) + "/disabled_" +
+               normalized.substr(8);
     }
 
     std::string extractTitleIdFromLegacySavePath(const std::string& path)
@@ -54,23 +65,236 @@ namespace
     bool removeRecursivelyIfExists(const fs::path& path)
     {
         std::error_code ec;
-        if (!fs::exists(path, ec))
-            return !ec;
+        const bool exists = fs::exists(path, ec);
+        if (ec)
+        {
+            brls::Logger::warning(
+                "[3DS Delete] exists failed: path={} code={} error={}",
+                path.string(), ec.value(), ec.message());
+            return false;
+        }
+        if (!exists)
+        {
+            brls::Logger::info("[3DS Delete] skip missing directory: {}", path.string());
+            return true;
+        }
+
+        std::vector<fs::path> descendants;
+        {
+            fs::recursive_directory_iterator iterator(
+                path, fs::directory_options::skip_permission_denied, ec);
+            const fs::recursive_directory_iterator end;
+            while (!ec && iterator != end)
+            {
+                descendants.push_back(iterator->path());
+                iterator.increment(ec);
+            }
+        }
+        if (ec)
+        {
+            brls::Logger::warning(
+                "[3DS Delete] directory scan failed: path={} collected={} code={} error={}",
+                path.string(), descendants.size(), ec.value(), ec.message());
+            return false;
+        }
+
+        std::sort(descendants.begin(), descendants.end(),
+                  [](const fs::path& lhs, const fs::path& rhs) {
+                      return lhs.native().size() > rhs.native().size();
+                  });
+        brls::Logger::info(
+            "[3DS Delete] directory scan complete: path={} entries={}",
+            path.string(), descendants.size());
+
+        std::size_t removedCount = 0;
+        bool success = true;
+        for (const auto& descendant : descendants)
+        {
+            ec.clear();
+            const bool removed = fs::remove(descendant, ec);
+            if (ec)
+            {
+                brls::Logger::warning(
+                    "[3DS Delete] remove entry failed: path={} code={} error={}",
+                    descendant.string(), ec.value(), ec.message());
+                success = false;
+                continue;
+            }
+            if (!removed)
+            {
+                ec.clear();
+                const bool remains = fs::exists(descendant, ec);
+                if (ec || remains)
+                {
+                    brls::Logger::warning(
+                        "[3DS Delete] entry remains: path={} code={} error={}",
+                        descendant.string(), ec.value(),
+                        ec ? ec.message() : "remove returned false");
+                    success = false;
+                    continue;
+                }
+            }
+            else
+            {
+                ++removedCount;
+            }
+        }
+
         ec.clear();
-        fs::remove_all(path, ec);
-        return !ec;
+        const bool rootRemoved = fs::remove(path, ec);
+        if (ec || !rootRemoved)
+        {
+            std::error_code existsError;
+            const bool remains = fs::exists(path, existsError);
+            if (ec || existsError || remains)
+            {
+                brls::Logger::warning(
+                    "[3DS Delete] remove root failed: path={} code={} error={} "
+                    "exists_code={} remains={}",
+                    path.string(), ec.value(), ec ? ec.message() : "remove returned false",
+                    existsError.value(), remains);
+                success = false;
+            }
+        }
+        else
+        {
+            ++removedCount;
+        }
+
+        brls::Logger::info(
+            "[3DS Delete] directory removal complete: path={} removed={} success={}",
+            path.string(), removedCount, success);
+        return success;
     }
 
     bool removeFileIfExists(const fs::path& path)
     {
         std::error_code ec;
-        if (!fs::exists(path, ec))
-            return !ec;
+        const bool exists = fs::exists(path, ec);
+        if (ec)
+        {
+            brls::Logger::warning(
+                "[3DS Delete] cache exists failed: path={} code={} error={}",
+                path.string(), ec.value(), ec.message());
+            return false;
+        }
+        if (!exists)
+        {
+            brls::Logger::info("[3DS Delete] skip missing cache: {}", path.string());
+            return true;
+        }
+
         ec.clear();
         if (fs::is_directory(path, ec))
             return removeRecursivelyIfExists(path);
+        if (ec)
+        {
+            brls::Logger::warning(
+                "[3DS Delete] cache type check failed: path={} code={} error={}",
+                path.string(), ec.value(), ec.message());
+            return false;
+        }
+
         ec.clear();
-        return fs::remove(path, ec) && !ec;
+        const bool removed = fs::remove(path, ec);
+        if (ec || !removed)
+        {
+            brls::Logger::warning(
+                "[3DS Delete] remove cache failed: path={} removed={} code={} error={}",
+                path.string(), removed, ec.value(), ec ? ec.message() : "remove returned false");
+            return false;
+        }
+        brls::Logger::info("[3DS Delete] removed cache: {}", path.string());
+        return true;
+    }
+
+    bool startsWithTitleId(const std::string& filename, const std::string& titleId)
+    {
+        if (filename.size() < titleId.size())
+            return false;
+        for (size_t index = 0; index < titleId.size(); ++index)
+        {
+            const auto value = static_cast<unsigned char>(filename[index]);
+            if (static_cast<char>(std::toupper(value)) != titleId[index])
+                return false;
+        }
+        return true;
+    }
+
+    bool clearShaderRoot(const fs::path& root, const std::string& titleId)
+    {
+        brls::Logger::info(
+            "[3DS Delete] shader scan begin: title_id={} root={}", titleId, root.string());
+        std::error_code ec;
+        const bool rootExists = fs::exists(root, ec);
+        if (ec)
+        {
+            brls::Logger::warning(
+                "[3DS Delete] shader root check failed: root={} code={} error={}",
+                root.string(), ec.value(), ec.message());
+            return false;
+        }
+        if (!rootExists)
+        {
+            brls::Logger::info("[3DS Delete] shader root missing, nothing to remove");
+            return true;
+        }
+
+        std::vector<fs::path> matches;
+        fs::recursive_directory_iterator iterator(
+            root, fs::directory_options::skip_permission_denied, ec);
+        if (ec)
+        {
+            brls::Logger::warning(
+                "[3DS Delete] shader iterator open failed: root={} code={} error={}",
+                root.string(), ec.value(), ec.message());
+            return false;
+        }
+        const fs::recursive_directory_iterator end;
+        std::string lastPath;
+        while (!ec && iterator != end)
+        {
+            const fs::path current = iterator->path();
+            lastPath = current.string();
+            if (startsWithTitleId(current.filename().string(), titleId))
+            {
+                matches.push_back(current);
+                if (iterator->is_directory(ec) && !ec)
+                    iterator.disable_recursion_pending();
+            }
+            if (!ec)
+                iterator.increment(ec);
+        }
+        if (ec)
+        {
+            brls::Logger::warning(
+                "[3DS Delete] shader scan failed: last_path={} code={} error={}",
+                lastPath, ec.value(), ec.message());
+            return false;
+        }
+
+        std::sort(matches.begin(), matches.end(), [](const fs::path& lhs, const fs::path& rhs) {
+            return lhs.native().size() > rhs.native().size();
+        });
+        brls::Logger::info(
+            "[3DS Delete] shader scan complete: title_id={} matches={}",
+            titleId, matches.size());
+        bool success = true;
+        for (const auto& path : matches)
+            success = removeFileIfExists(path) && success;
+        brls::Logger::info(
+            "[3DS Delete] shader removal complete: title_id={} success={}",
+            titleId, success);
+        return success;
+    }
+
+    bool isManagedPath(const fs::path& path)
+    {
+        std::string value = path.lexically_normal().generic_string();
+        std::transform(value.begin(), value.end(), value.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        constexpr std::string_view root = "sdmc:/gbastation/3ds/";
+        return value.rfind(root, 0) == 0 && value.size() > root.size();
     }
 }
 
@@ -167,18 +391,18 @@ namespace beiklive::three_ds
 
     std::string updateTitlePath(std::string_view titleId)
     {
-        return categoryPath(titleId, "0004000e");
+        return categoryPath(titleId, "0004000E");
     }
 
     std::string dlcTitlePath(std::string_view titleId)
     {
-        return categoryPath(titleId, "0004008c");
+        return categoryPath(titleId, "0004008C");
     }
 
     std::string saveDataPath(std::string_view titleId)
     {
-        const std::string base = baseTitlePath(titleId);
-        return base.empty() ? std::string{} : base + "/data";
+        const std::string titlePath = baseTitlePath(titleId);
+        return titlePath.empty() ? std::string{} : titlePath + "/data";
     }
 
     std::string exportDirectory()
@@ -193,54 +417,131 @@ namespace beiklive::three_ds
                                   : "sdmc:/GBAStation/backup/3DS/" + normalized;
     }
 
-    bool deleteInstalledContentAndShaderCache(std::string_view titleId)
+    std::string cheatFilePath(std::string_view titleId)
+    {
+        const std::string normalized = normalizeTitleId(titleId);
+        return normalized.empty() ? std::string{}
+                                  : std::string(ThreeDsRoot) + "/cheats/" + normalized + ".txt";
+    }
+
+    std::string texturePath(std::string_view titleId)
+    {
+        const std::string normalized = normalizeTitleId(titleId);
+        return normalized.empty() ? std::string{}
+                                  : std::string(ThreeDsRoot) + "/load/textures/" + normalized;
+    }
+
+    std::string disabledTexturePath(std::string_view titleId)
+    {
+        const std::string normalized = normalizeTitleId(titleId);
+        return normalized.empty() ? std::string{}
+                                  : std::string(ThreeDsRoot) + "/load/textures/disabled_" + normalized;
+    }
+
+    std::string modPath(std::string_view titleId)
+    {
+        const std::string normalized = normalizeTitleId(titleId);
+        return normalized.empty() ? std::string{}
+                                  : std::string(ThreeDsRoot) + "/load/mods/" + normalized;
+    }
+
+    std::string disabledModPath(std::string_view titleId)
+    {
+        const std::string normalized = normalizeTitleId(titleId);
+        return normalized.empty() ? std::string{}
+                                  : std::string(ThreeDsRoot) + "/load/mods/disabled_" + normalized;
+    }
+
+    std::string disabledUpdateTitlePath(std::string_view titleId)
+    {
+        return disabledCategoryPath(titleId, "0004000E");
+    }
+
+    std::string disabledDlcTitlePath(std::string_view titleId)
+    {
+        return disabledCategoryPath(titleId, "0004008C");
+    }
+
+    bool clearShaderCache(std::string_view titleId)
     {
         const std::string normalized = normalizeTitleId(titleId);
         if (normalized.empty())
             return false;
 
+        return clearShaderRoot(fs::path(ThreeDsRoot) / "shaders", normalized);
+    }
+
+    bool setManagedContentEnabled(const std::string& enabledPath,
+                                  const std::string& disabledPath, bool enabled)
+    {
+        const fs::path source = enabled ? fs::path(disabledPath) : fs::path(enabledPath);
+        const fs::path destination = enabled ? fs::path(enabledPath) : fs::path(disabledPath);
+        if (!isManagedPath(source) || !isManagedPath(destination) ||
+            source.parent_path() != destination.parent_path())
+            return false;
+
+        std::error_code ec;
+        if (!fs::exists(source, ec) || ec || fs::exists(destination, ec) || ec)
+            return false;
+        fs::rename(source, destination, ec);
+        return !ec;
+    }
+
+    bool deleteManagedContent(const std::string& enabledPath,
+                              const std::string& disabledPath)
+    {
+        const fs::path enabled = enabledPath;
+        const fs::path disabled = disabledPath;
+        if (!isManagedPath(enabled) || !isManagedPath(disabled) ||
+            enabled.parent_path() != disabled.parent_path())
+            return false;
+        return removeRecursivelyIfExists(enabled) && removeRecursivelyIfExists(disabled);
+    }
+
+    bool deleteInstalledContent(std::string_view titleId)
+    {
+        const std::string normalized = normalizeTitleId(titleId);
+        if (normalized.empty())
+        {
+            brls::Logger::warning(
+                "[3DS Delete] invalid title id: {}", std::string(titleId));
+            return false;
+        }
+
+        brls::Logger::info(
+            "[3DS Delete] installed content removal begin: title_id={}", normalized);
         bool success = true;
-        std::unordered_set<std::string> titlePaths{
+        const std::array<std::string, 5> titlePaths{
             baseTitlePath(normalized),
             updateTitlePath(normalized),
             dlcTitlePath(normalized),
+            disabledUpdateTitlePath(normalized),
+            disabledDlcTitlePath(normalized),
         };
-        const std::string originalCategory = normalized.substr(0, 8);
-        titlePaths.insert(categoryPath(normalized, originalCategory));
-        if (originalCategory == "00040002")
-            titlePaths.insert(categoryPath(normalized, "00040002"));
         for (const auto& path : titlePaths)
         {
             if (!path.empty())
-                success = removeRecursivelyIfExists(path) && success;
+            {
+                const bool removed = removeRecursivelyIfExists(path);
+                brls::Logger::info(
+                    "[3DS Delete] title path result: path={} success={}", path, removed);
+                success = removed && success;
+            }
         }
-
-        const fs::path shaderRoot = std::string(ThreeDsRoot) + "/shaders";
-        const std::vector<fs::path> exactCachePaths{
-            shaderRoot / "opengl" / "precompiled" / "separable" / (normalized + ".bin"),
-            shaderRoot / "opengl" / "precompiled" / "conventional" / (normalized + ".bin"),
-            shaderRoot / "opengl" / "transferable" / (normalized + ".bin"),
-        };
-        for (const auto& path : exactCachePaths)
-            success = removeFileIfExists(path) && success;
-
-        const fs::path transferable = shaderRoot / "vulkan" / "transferable";
-        for (const char* stage : {"vs", "fs", "gs", "pl"})
-        {
-            success = removeFileIfExists(transferable / (normalized + "_" + stage + ".vkch")) && success;
-            success = removeFileIfExists(transferable / (normalized + "_" + stage + "_temp.vkch")) && success;
-        }
-
-        const fs::path pipeline = shaderRoot / "vulkan" / "pipeline";
-        std::error_code ec;
-        for (fs::directory_iterator it(pipeline, ec), end; !ec && it != end; it.increment(ec))
-        {
-            const std::string filename = it->path().filename().string();
-            if (filename.rfind(normalized, 0) == 0)
-                success = removeFileIfExists(it->path()) && success;
-        }
-        if (ec && fs::exists(pipeline))
-            success = false;
+        brls::Logger::info(
+            "[3DS Delete] installed content removal complete: title_id={} success={}",
+            normalized, success);
         return success;
+    }
+
+    bool deleteInstalledContentAndShaderCache(std::string_view titleId)
+    {
+        const bool contentRemoved = deleteInstalledContent(titleId);
+        const bool cacheRemoved = clearShaderCache(titleId);
+        brls::Logger::info(
+            "[3DS Delete] final result: title_id={} content_removed={} cache_removed={} success={}",
+            std::string(titleId), contentRemoved, cacheRemoved,
+            contentRemoved && cacheRemoved);
+        return contentRemoved && cacheRemoved;
     }
 }

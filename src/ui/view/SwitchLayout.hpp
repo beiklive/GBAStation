@@ -43,6 +43,8 @@ namespace beiklive
         void beginPico8ReturnAnimation();
         void setPico8ReturnProgress(float progress);
         void finishPico8ReturnAnimation();
+        void setPico8ShortcutVisible(bool visible);
+        bool isPico8ShortcutVisible() const { return m_pico8ShortcutVisible; }
 
         std::function<void()> onPico8Opened;
 
@@ -126,6 +128,7 @@ namespace beiklive
         bool m_pico8HoldActive = false;
         bool m_pico8ReleaseAnimating = false;
         bool m_prevPico8Button = false;
+        bool m_pico8ShortcutVisible = true;
         float m_pico8ShortcutScale = 1.f;
         float m_pico8ReleaseTime = 0.f;
         bool m_fastScroll = false;

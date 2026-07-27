@@ -174,6 +174,7 @@ namespace beiklive::SettingKey
 
     // UI 缩略图设置
     constexpr const char *KEY_UI_USE_SAVESTATE_THUMB = "UI.useSavestateThumbnail"; ///< 无封面时使用存档0截图作为缩略图
+    constexpr const char *KEY_UI_PICO8_SHORTCUT_VISIBLE = "UI.pico8ShortcutVisible"; ///< 是否显示首页 PICO-8 快捷入口
 
     // 遮罩设置
     constexpr const char *KEY_DISPLAY_OVERLAY_ENABLED  ="display.overlay.enabled"; ///< 遮罩总开关

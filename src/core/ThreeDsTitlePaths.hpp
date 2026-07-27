@@ -16,6 +16,19 @@ namespace beiklive::three_ds
     std::string saveDataPath(std::string_view titleId);
     std::string exportDirectory();
     std::string backupDirectory(std::string_view titleId);
+    std::string cheatFilePath(std::string_view titleId);
+    std::string texturePath(std::string_view titleId);
+    std::string disabledTexturePath(std::string_view titleId);
+    std::string modPath(std::string_view titleId);
+    std::string disabledModPath(std::string_view titleId);
+    std::string disabledUpdateTitlePath(std::string_view titleId);
+    std::string disabledDlcTitlePath(std::string_view titleId);
 
+    bool clearShaderCache(std::string_view titleId);
+    bool setManagedContentEnabled(const std::string& enabledPath,
+                                  const std::string& disabledPath, bool enabled);
+    bool deleteManagedContent(const std::string& enabledPath,
+                              const std::string& disabledPath);
+    bool deleteInstalledContent(std::string_view titleId);
     bool deleteInstalledContentAndShaderCache(std::string_view titleId);
 }

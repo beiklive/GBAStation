@@ -482,6 +482,21 @@ namespace beiklive
         invalidate();
     }
 
+    void SwitchLayout::setPico8ShortcutVisible(bool visible)
+    {
+        if (m_pico8ShortcutVisible == visible)
+            return;
+        m_pico8ShortcutVisible = visible;
+        if (!visible) {
+            m_pico8HoldActive = false;
+            m_pico8ReleaseAnimating = false;
+            m_pico8ReleaseTime = 0.f;
+            m_pico8ShortcutScale = 1.f;
+        }
+        _captureInputState();
+        invalidate();
+    }
+
     void SwitchLayout::frame(brls::FrameContext* ctx)
     {
         brls::Box::frame(ctx);
@@ -639,6 +654,14 @@ namespace beiklive
         auto& state = brls::Application::getControllerState();
         const bool pressed =
             state.buttons[static_cast<int>(brls::BUTTON_LB)];
+        if (!m_pico8ShortcutVisible) {
+            m_pico8HoldActive = false;
+            m_pico8ReleaseAnimating = false;
+            m_pico8ReleaseTime = 0.f;
+            m_pico8ShortcutScale = 1.f;
+            m_prevPico8Button = pressed;
+            return;
+        }
         const bool canInteract = isFocused() &&
             !brls::Application::isInputBlocks() &&
             !m_exitAnimationRunning &&
@@ -1342,23 +1365,31 @@ namespace beiklive
         const float cy = y + h - 35.f;
         const std::string label =
             m_focusRow == FocusRow::GAMES ? "选择" : "打开";
-        nvgFontFaceId(vg, m_fontId);
-        nvgFontSize(vg, 20.f);
-        float labelBounds[4]{};
-        nvgTextBounds(vg, 0.f, 0.f, label.c_str(), nullptr, labelBounds);
-        const float labelWidth = labelBounds[2] - labelBounds[0];
-        const float labelX = x + w - 30.f - labelWidth;
-        const std::string glyph = brls::Hint::getKeyIcon(brls::BUTTON_A);
-        nvgFontFaceId(vg, m_switchIconFontId);
-        nvgFontSize(vg, 29.f);
-        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-        nvgFillColor(vg, nvgRGBA(255, 255, 255,
-            static_cast<unsigned char>(245.f * eased)));
-        nvgText(vg, labelX - 20.f, cy, glyph.c_str(), nullptr);
-        nvgFontFaceId(vg, m_fontId);
-        nvgFontSize(vg, 20.f);
-        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-        nvgText(vg, labelX, cy, label.c_str(), nullptr);
+        auto drawHint = [&](brls::ControllerButton button,
+                            const std::string& text,
+                            float& cursor) {
+            nvgFontFaceId(vg, m_fontId);
+            nvgFontSize(vg, 20.f);
+            float bounds[4]{};
+            nvgTextBounds(vg, 0.f, 0.f, text.c_str(), nullptr, bounds);
+            const float textWidth = bounds[2] - bounds[0];
+            const float labelX = cursor - textWidth;
+            const std::string glyph = brls::Hint::getKeyIcon(button);
+            nvgFontFaceId(vg, m_switchIconFontId);
+            nvgFontSize(vg, 29.f);
+            nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+            nvgFillColor(vg, nvgRGBA(255, 255, 255,
+                static_cast<unsigned char>(245.f * eased)));
+            nvgText(vg, labelX - 20.f, cy, glyph.c_str(), nullptr);
+            nvgFontFaceId(vg, m_fontId);
+            nvgFontSize(vg, 20.f);
+            nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+            nvgText(vg, labelX, cy, text.c_str(), nullptr);
+            cursor = labelX - 58.f;
+        };
+        float hintCursor = x + w - 30.f;
+        drawHint(brls::BUTTON_A, label, hintCursor);
+        drawHint(brls::BUTTON_START, "设置主页", hintCursor);
 
         const char32_t networkCodepoint = m_networkConnected
             ? beiklive::material::WIFI
@@ -1387,6 +1418,11 @@ namespace beiklive
     void SwitchLayout::_drawPico8Shortcut(NVGcontext* vg, float x, float y,
                                           float w, float h)
     {
+        if (!m_pico8ShortcutVisible &&
+            !m_pico8ExitAnimationRunning &&
+            !m_pico8ReturnAnimationRunning)
+            return;
+
         if (m_pico8LogoImageHandle == 0)
             m_pico8LogoImageHandle = nvgCreateImage(
                 vg, BK_RES("img/pico8_logo_vector.png").c_str(), 0);

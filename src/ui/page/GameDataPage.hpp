@@ -22,6 +22,7 @@ namespace beiklive
         beiklive::GameDataView* m_view = nullptr;
         std::vector<std::filesystem::path> m_screenshotPaths;
         std::vector<std::filesystem::path> m_backupPaths;
+        std::vector<GameDataView::CheatItem> m_cheats;
         std::shared_ptr<std::atomic<bool>> m_alive =
             std::make_shared<std::atomic<bool>>(true);
         bool m_closing = false;
@@ -39,13 +40,24 @@ namespace beiklive
         void _refreshStateList();
         void _refreshScreenshotList();
         void _refreshBackupList();
+        void _refreshCheats();
+        void _refreshManagedContent();
         void _confirmDeleteState(int slot);
         void _confirmDeleteScreenshot(int index);
         void _confirmSetScreenshotAsCover(int index);
         void _exportSav();
         void _importSav();
         void _backupSav();
+        void _confirmClearShaderCache();
         void _confirmRestoreBackup(int index);
         void _confirmDeleteBackup(int index);
+        void _addCheat();
+        void _showCheatOptions(int index);
+        void _editCheatName(int index);
+        void _editCheatCode(int index);
+        void _confirmDeleteCheat(int index);
+        bool _saveCheats();
+        void _confirmToggleManagedContent(GameDataView::Section section, int index);
+        void _confirmDeleteManagedContent(GameDataView::Section section, int index);
     };
 }
