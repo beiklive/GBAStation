@@ -71,7 +71,7 @@ namespace beiklive::input_mapping
     inline constexpr HotkeyDefault kPointerHotkeys[] = {
         {"hotkey.pointer_mode.pad", "指针模式切换", "none", false},
         {"hotkey.pointer_click.pad", "指针点击", "none", false},
-        {"hotkey.swap_screens.pad", "交换上下屏", "none", false, true},
+        {"hotkey.swap_screens.pad", "交换上下屏", "none", false, false},
         {"hotkey.mic_input.pad", "模拟麦克风输入", "none", false},
     };
 

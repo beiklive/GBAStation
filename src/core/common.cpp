@@ -602,7 +602,6 @@ namespace beiklive
         }
         // 3DS 独立运行时不支持倒带，清理旧版本可能写入的无效绑定。
         SettingManager->Remove("3ds.handle.rewind");
-        SettingManager->Remove("3ds.hotkey.swap_screens.pad");
         SettingManager->Remove("core.azahar.swap_screens");
         for (const char* prefix : {"nds.", "3ds."})
         {
