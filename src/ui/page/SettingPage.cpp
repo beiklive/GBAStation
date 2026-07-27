@@ -2245,6 +2245,11 @@ private:
                 if (i >= 0 && i < static_cast<int>(cpuValues.size()))
                     cfgSetInt(key("cpu_clock"), cpuValues[static_cast<size_t>(i)]);
             }));
+        m_coreItems.push_back(_toggle(
+            "打开菜单时暂停", "打开游戏内菜单时暂停模拟并静音",
+            0xE034,
+            [key]() { return cfgGetBool(key("pause_when_menu_open"), true); },
+            [key](bool v) { cfgSetBool(key("pause_when_menu_open"), v); }));
         const std::vector<std::string> regionValues = {"auto", "japan", "usa", "europe", "australia", "china", "korea", "taiwan"};
         m_coreItems.push_back(_selector("系统区域", "覆盖 3DS 系统区域，自动适合大多数游戏", 0xE8C4,
             {"自动", "日本", "美国", "欧洲", "澳大利亚", "中国", "韩国", "台湾"},
