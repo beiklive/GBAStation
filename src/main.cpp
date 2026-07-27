@@ -7,6 +7,7 @@
 #include "core/common.h"
 #include "core/AppUpdater.hpp"
 #include "core/ThreadPool.hpp"
+#include "core/ThreeDsTitlePaths.hpp"
 #include "core/Tools.hpp"
 #include "ui/utils/BKAudioPlayer.hpp"
 #include "ui/page/StartPage.hpp"
@@ -138,6 +139,16 @@ void ensureDirectGameDbEntry(const std::string& romPath, beiklive::enums::FileTy
 	{
 		entry.screenShotPath = beiklive::path::screenshotPath();
 		changed = true;
+	}
+	if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS))
+	{
+		const std::string titleId = beiklive::three_ds::resolveTitleId(
+			entry.threeDsTitleId, entry.path);
+		if (!titleId.empty() && titleId != entry.threeDsTitleId)
+		{
+			entry.threeDsTitleId = titleId;
+			changed = true;
+		}
 	}
 	std::error_code ec;
 	std::filesystem::create_directories(entry.savePath, ec);

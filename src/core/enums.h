@@ -103,6 +103,7 @@ namespace beiklive // 结构体
     {
         std::string path = "";                                  // 游戏文件路径
         std::string title = "";                                 // 显示标题（默认为映射名）
+        std::string threeDsTitleId = "";                        // 3DS Title ID（16位十六进制）
         int playCount = 0;                                      // 玩过的次数
         int playTime = 0;                                       // 玩过的总时间（单位：秒）
         int platform = (int)beiklive::enums::EmuPlatform::NONE; // 游戏平台（如 GBA、GBC、GB）

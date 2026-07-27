@@ -1,5 +1,6 @@
 #include "ApiRouter.h"
 
+#include "core/ThreeDsTitlePaths.hpp"
 #include "core/Tools.hpp"
 #include "core/common.h"
 #include "core/game_database.hpp"
@@ -1165,6 +1166,8 @@ void ApiRouter::handleUploadFinish(mg_connection* c, mg_http_message* hm)
         entry.path = session.targetPath;
         entry.title = session.title;
         entry.platform = session.platform;
+        if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS))
+            entry.threeDsTitleId = beiklive::three_ds::readNcsdTitleId(session.targetPath);
         entry.logoPath = beiklive::tools::getDefaultLogoPath(static_cast<beiklive::enums::EmuPlatform>(session.platform));
         entry.savePath = beiklive::tools::defaultGameSavePath(session.platform, session.targetPath);
         if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)) {

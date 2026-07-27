@@ -5,6 +5,7 @@
 #include "ui/utils/GradientFocus.hpp"
 #include "ui/utils/MaterialIcons.hpp"
 #include "ui/widget/DetailCell.hpp"
+#include "core/ThreeDsTitlePaths.hpp"
 #include "core/Tools.hpp"
 #include "network/WebService.h"
 #include "third_party/qrcodegen/qrcodegen.hpp"
@@ -2048,6 +2049,8 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
             entry.path = romPath;
             entry.title = item.label;
             entry.platform = config.platform;
+            if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS))
+                entry.threeDsTitleId = beiklive::three_ds::readNcsdTitleId(romPath);
             entry.logoPath = logoPath;
             entry.savePath = savePath;
             entry.overlayPath = config.overlayPath;
@@ -2061,6 +2064,12 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
                 entry.ndsIntegerScale = true;
                 entry.ndsScreenGap = 0;
                 entry.ndsBottomOpacity = 1.0f;
+            }
+
+            if (entry.threeDsTitleId.empty()) {
+                const auto existing = beiklive::GameDB->findByPath(romPath);
+                if (existing)
+                    entry.threeDsTitleId = existing->threeDsTitleId;
             }
 
             beiklive::GameDB->upsertByPath(entry);
@@ -2188,6 +2197,8 @@ void DataManagementPage::startDirImport(const std::string& dirPath)
             entry.path = path;
             entry.title = displayName;
             entry.platform = platform;
+            if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS))
+                entry.threeDsTitleId = beiklive::three_ds::readNcsdTitleId(path);
             entry.logoPath = beiklive::tools::getDefaultLogoPath(
                 static_cast<beiklive::enums::EmuPlatform>(platform));
             entry.overlayEnabled = config.overlayEnabled;
@@ -2226,6 +2237,8 @@ void DataManagementPage::startDirImport(const std::string& dirPath)
                     entry.logoPath = existing->logoPath;
                 if (!existing->savePath.empty())
                     entry.savePath = existing->savePath;
+                if (entry.threeDsTitleId.empty())
+                    entry.threeDsTitleId = existing->threeDsTitleId;
                 if (!existing->ndsScreenLayout.empty())
                     entry.ndsScreenLayout = existing->ndsScreenLayout;
                 if (!existing->ndsScreenOrientation.empty())

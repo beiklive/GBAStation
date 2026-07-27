@@ -1,5 +1,6 @@
 #include "game_database.hpp"
 #include "common.h"
+#include "core/ThreeDsTitlePaths.hpp"
 #include <algorithm>
 #include <cctype>
 #include <fstream>
@@ -263,6 +264,7 @@ namespace beiklive
         j = nlohmann::json{
             {"path", sanitizeUtf8(entry.path)},
             {"title", sanitizeUtf8(entry.title)},
+            {"3ds_titleid", sanitizeUtf8(entry.threeDsTitleId)},
             {"logoPath", sanitizeUtf8(entry.logoPath)},
             {"playCount", entry.playCount},
             {"playTime", entry.playTime},
@@ -306,6 +308,7 @@ namespace beiklive
         // 统一使用 value() 并提供默认值，兼容新旧数据
         entry.path = j.value("path", "");
         entry.title = j.value("title", "");
+        entry.threeDsTitleId = j.value("3ds_titleid", "");
         entry.logoPath = j.value("logoPath", "");
         entry.playCount = j.value("playCount", 0);
         entry.playTime = j.value("playTime", 0);
@@ -493,6 +496,7 @@ namespace beiklive
         std::lock_guard<std::recursive_mutex> lock(m_mutex);
         doClear();
         dbDir_ = dir;
+        std::size_t migratedThreeDsTitleIds = 0;
 
         const int platforms[] = {
             (int)beiklive::enums::EmuPlatform::EmuGBA,
@@ -519,6 +523,19 @@ namespace beiklive
                 for (const auto &item : j)
                 {
                     GameEntry entry = item.get<GameEntry>();
+                    if (platform == (int)beiklive::enums::EmuPlatform::Emu3DS)
+                    {
+                        entry.platform = platform;
+                        std::string titleId =
+                            beiklive::three_ds::resolveTitleId(entry.threeDsTitleId, entry.path);
+                        if (titleId.empty())
+                            titleId = beiklive::three_ds::resolveTitleId({}, entry.savePath);
+                        if (!titleId.empty() && titleId != entry.threeDsTitleId)
+                        {
+                            entry.threeDsTitleId = titleId;
+                            ++migratedThreeDsTitleIds;
+                        }
+                    }
                     doUpsertByPath(entry);
                 }
             }
@@ -533,6 +550,33 @@ namespace beiklive
         }
 
         dirty_ = false;
+        if (migratedThreeDsTitleIds != 0)
+        {
+            nlohmann::json threeDsData = nlohmann::json::array();
+            for (const auto &entry : data_)
+            {
+                if (entry.platform != (int)beiklive::enums::EmuPlatform::Emu3DS)
+                    continue;
+                nlohmann::json item;
+                to_json(item, entry);
+                threeDsData.push_back(std::move(item));
+            }
+
+            const std::string filePath =
+                dir + beiklive::path::SPLIT_CHAR +
+                getPlatformFileName((int)beiklive::enums::EmuPlatform::Emu3DS);
+            if (writeJsonFileSafely(filePath, threeDsData))
+            {
+                brls::Logger::info("GameDatabase: migrated {} legacy 3DS Title ID records",
+                                   migratedThreeDsTitleIds);
+            }
+            else
+            {
+                brls::Logger::warning(
+                    "GameDatabase: failed to persist {} migrated 3DS Title ID records",
+                    migratedThreeDsTitleIds);
+            }
+        }
         return true;
     }
 
