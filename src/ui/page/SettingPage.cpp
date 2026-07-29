@@ -2232,14 +2232,20 @@ private:
             {"Old 3DS", "New 3DS"},
             [key]() { return cfgGetBool(key("new_3ds"), true) ? 1 : 0; },
             [key](int i) { cfgSetBool(key("new_3ds"), i == 1); }));
-        const std::vector<int> cpuValues = {50, 75, 100, 150, 200, 300, 400};
+        std::vector<int> cpuValues;
+        std::vector<std::string> cpuLabels;
+        cpuValues.reserve(80);
+        cpuLabels.reserve(80);
+        for (int value = 10; value <= 800; value += 10) {
+            cpuValues.push_back(value);
+            cpuLabels.push_back(std::to_string(value) + "%");
+        }
         m_coreItems.push_back(_selector("CPU 时钟", "提高可改善部分游戏速度，也可能引入兼容性问题", 0xE8EF,
-            {"50%", "75%", "100%", "150%", "200%", "300%", "400%"},
+            cpuLabels,
             [key, cpuValues]() {
                 const int cur = cfgGetInt(key("cpu_clock"), 100);
-                for (int i = 0; i < static_cast<int>(cpuValues.size()); ++i)
-                    if (cpuValues[static_cast<size_t>(i)] == cur) return i;
-                return 2;
+                const int normalized = std::clamp(((cur + 5) / 10) * 10, 10, 800);
+                return (normalized - 10) / 10;
             },
             [key, cpuValues](int i) {
                 if (i >= 0 && i < static_cast<int>(cpuValues.size()))

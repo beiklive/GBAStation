@@ -86,6 +86,7 @@ namespace beiklive
         std::function<void(int)> onSetScreenshotCover;
         std::function<void()> onExportSave;
         std::function<void()> onImportSave;
+        std::function<void()> onDeleteSave;
         std::function<void()> onBackupSave;
         std::function<void()> onClearShaderCache;
         std::function<void(int)> onRestoreBackup;
@@ -193,7 +194,8 @@ namespace beiklive
         void _drawHint(NVGcontext* vg, float x, float y,
                        brls::ControllerButton button, const std::string& label);
         void _drawImageCover(NVGcontext* vg, const std::string& path,
-                             float x, float y, float w, float h, float radius);
+                             float x, float y, float w, float h, float radius,
+                             bool fit = false);
         int _getImage(NVGcontext* vg, const std::string& path, bool nearest = false);
     };
 }

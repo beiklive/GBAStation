@@ -288,6 +288,55 @@ namespace
         return success;
     }
 
+    beiklive::three_ds::ShaderCacheStats shaderStatsForRoot(
+        const fs::path& root, const std::string& titleId)
+    {
+        beiklive::three_ds::ShaderCacheStats stats;
+        std::error_code ec;
+        if (!fs::exists(root, ec)) {
+            stats.valid = !ec;
+            return stats;
+        }
+
+        fs::recursive_directory_iterator iterator(
+            root, fs::directory_options::skip_permission_denied, ec);
+        const fs::recursive_directory_iterator end;
+        while (!ec && iterator != end) {
+            const fs::path current = iterator->path();
+            if (!startsWithTitleId(current.filename().string(), titleId)) {
+                iterator.increment(ec);
+                continue;
+            }
+
+            if (iterator->is_directory(ec) && !ec) {
+                iterator.disable_recursion_pending();
+                fs::recursive_directory_iterator child(
+                    current, fs::directory_options::skip_permission_denied, ec);
+                while (!ec && child != end) {
+                    if (child->is_regular_file(ec) && !ec) {
+                        const auto size = child->file_size(ec);
+                        if (!ec) {
+                            ++stats.fileCount;
+                            stats.totalBytes += size;
+                        }
+                    }
+                    if (!ec)
+                        child.increment(ec);
+                }
+            } else if (!ec && iterator->is_regular_file(ec) && !ec) {
+                const auto size = iterator->file_size(ec);
+                if (!ec) {
+                    ++stats.fileCount;
+                    stats.totalBytes += size;
+                }
+            }
+            if (!ec)
+                iterator.increment(ec);
+        }
+        stats.valid = !ec;
+        return stats;
+    }
+
     bool isManagedPath(const fs::path& path)
     {
         std::string value = path.lexically_normal().generic_string();
@@ -471,6 +520,14 @@ namespace beiklive::three_ds
         return clearShaderRoot(fs::path(ThreeDsRoot) / "shaders", normalized);
     }
 
+    ShaderCacheStats shaderCacheStats(std::string_view titleId)
+    {
+        const std::string normalized = normalizeTitleId(titleId);
+        if (normalized.empty())
+            return {0, 0, false};
+        return shaderStatsForRoot(fs::path(ThreeDsRoot) / "shaders", normalized);
+    }
+
     bool setManagedContentEnabled(const std::string& enabledPath,
                                   const std::string& disabledPath, bool enabled)
     {
@@ -481,8 +538,14 @@ namespace beiklive::three_ds
             return false;
 
         std::error_code ec;
-        if (!fs::exists(source, ec) || ec || fs::exists(destination, ec) || ec)
+        const bool sourceExists = fs::exists(source, ec);
+        if (ec || !sourceExists)
             return false;
+        ec.clear();
+        const bool destinationExists = fs::exists(destination, ec);
+        if (ec || destinationExists)
+            return false;
+        ec.clear();
         fs::rename(source, destination, ec);
         return !ec;
     }
@@ -495,7 +558,9 @@ namespace beiklive::three_ds
         if (!isManagedPath(enabled) || !isManagedPath(disabled) ||
             enabled.parent_path() != disabled.parent_path())
             return false;
-        return removeRecursivelyIfExists(enabled) && removeRecursivelyIfExists(disabled);
+        const bool enabledRemoved = removeRecursivelyIfExists(enabled);
+        const bool disabledRemoved = removeRecursivelyIfExists(disabled);
+        return enabledRemoved && disabledRemoved;
     }
 
     bool deleteInstalledContent(std::string_view titleId)

@@ -1,10 +1,19 @@
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
 #include <string>
 #include <string_view>
 
 namespace beiklive::three_ds
 {
+    struct ShaderCacheStats
+    {
+        std::size_t fileCount = 0;
+        std::uint64_t totalBytes = 0;
+        bool valid = true;
+    };
+
     std::string normalizeTitleId(std::string_view titleId);
     std::string readNcsdTitleId(const std::string& path);
     std::string extractTitleIdFromInstalledPath(const std::string& path);
@@ -25,6 +34,7 @@ namespace beiklive::three_ds
     std::string disabledDlcTitlePath(std::string_view titleId);
 
     bool clearShaderCache(std::string_view titleId);
+    ShaderCacheStats shaderCacheStats(std::string_view titleId);
     bool setManagedContentEnabled(const std::string& enabledPath,
                                   const std::string& disabledPath, bool enabled);
     bool deleteManagedContent(const std::string& enabledPath,

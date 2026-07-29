@@ -11,6 +11,7 @@
 #include <cerrno>
 #include <cctype>
 #include <chrono>
+#include <cstdint>
 #include <cstring>
 #include <fstream>
 #include <iomanip>
@@ -162,6 +163,75 @@ namespace
             iterator.increment(ec);
         }
         return ec ? 0 : count;
+    }
+
+    bool pathExists(const fs::path& path)
+    {
+        if (path.empty())
+            return false;
+        std::error_code ec;
+        return fs::exists(path, ec) && !ec;
+    }
+
+    bool clearDirectoryContents(const fs::path& directory, std::string* error = nullptr)
+    {
+        if (error) error->clear();
+        if (directory.empty()) {
+            if (error) *error = "save directory is empty";
+            return false;
+        }
+
+        std::error_code ec;
+        const bool exists = fs::exists(directory, ec);
+        if (ec) {
+            if (error) *error = ec.message();
+            return false;
+        }
+        if (!exists)
+            return true;
+        if (!fs::is_directory(directory, ec) || ec) {
+            if (error) *error = ec ? ec.message() : "save path is not a directory";
+            return false;
+        }
+
+        std::vector<fs::path> children;
+        fs::directory_iterator iterator(directory, ec);
+        const fs::directory_iterator end;
+        while (!ec && iterator != end) {
+            children.push_back(iterator->path());
+            iterator.increment(ec);
+        }
+        if (ec) {
+            if (error) *error = ec.message();
+            return false;
+        }
+
+        bool success = true;
+        for (const auto& child : children) {
+            std::error_code removeError;
+            fs::remove_all(child, removeError);
+            if (removeError) {
+                success = false;
+                if (error && error->empty())
+                    *error = removeError.message();
+            }
+        }
+        return success;
+    }
+
+    std::string formatByteSize(std::uint64_t bytes)
+    {
+        static constexpr const char* units[] = {"B", "KiB", "MiB", "GiB"};
+        double value = static_cast<double>(bytes);
+        int unit = 0;
+        while (value >= 1024.0 && unit < 3) {
+            value /= 1024.0;
+            ++unit;
+        }
+        std::ostringstream stream;
+        stream << std::fixed << std::setprecision(unit == 0 ? 0 : 2)
+               << value << ' ' << units[unit];
+        return stream.str();
     }
 
     std::string zipError(const mz_zip_archive& archive)
@@ -553,7 +623,9 @@ namespace
 
         fs::remove(previous, ec);
         ec.clear();
-        const bool hadPrevious = fs::exists(path, ec) && !ec;
+        const bool hadPrevious = fs::exists(path, ec);
+        if (ec)
+            return false;
         if (hadPrevious)
             fs::rename(path, previous, ec);
         if (ec)
@@ -658,6 +730,7 @@ namespace beiklive
         }
         m_view->onExportSave = [this]() { _exportSav(); };
         m_view->onImportSave = [this]() { _importSav(); };
+        m_view->onDeleteSave = [this]() { _confirmDeleteSav(); };
         m_view->onBackupSave = [this]() { _backupSav(); };
         m_view->onClearShaderCache = [this]() { _confirmClearShaderCache(); };
         m_view->onRestoreBackup = [this](int index) { _confirmRestoreBackup(index); };
@@ -807,8 +880,8 @@ namespace beiklive
             item.disabledPath = std::move(disabledPath);
             item.enabledFileCount = countRegularFiles(item.enabledPath);
             item.disabledFileCount = countRegularFiles(item.disabledPath);
-            item.enabledExists = item.enabledFileCount > 0;
-            item.disabledExists = item.disabledFileCount > 0;
+            item.enabledExists = pathExists(item.enabledPath);
+            item.disabledExists = pathExists(item.disabledPath);
             return item;
         };
 
@@ -1079,6 +1152,49 @@ namespace beiklive
         dialog->open();
     }
 
+    void GameDataPage::_confirmDeleteSav()
+    {
+        const bool isThreeDs = _isThreeDs();
+        const fs::path savePath = isThreeDs ? fs::path(_batterySaveDir()) : fs::path(_savPath());
+        if (savePath.empty()) {
+            brls::Application::notify("无法定位游戏存档");
+            return;
+        }
+
+        const bool saveExists = isThreeDs ? directoryContainsFiles(savePath) : [&]() {
+            std::error_code ec;
+            return fs::is_regular_file(savePath, ec) && !ec;
+        }();
+        if (!saveExists) {
+            brls::Application::notify(isThreeDs ? "未找到3DS游戏存档" : "未找到电池存档");
+            return;
+        }
+
+        auto* dialog = new brls::Dialog(
+            isThreeDs
+                ? "确认删除该游戏存档目录中的所有文件？\n此操作不可撤销，备份文件不会被删除。"
+                : "确认删除该游戏的 .sav 存档？\n此操作不可撤销，备份文件不会被删除。");
+        dialog->addButton("取消", [this]() { m_view->restoreFocus(); });
+        dialog->addButton("删除", [this, isThreeDs, savePath]() {
+            std::string error;
+            bool success = false;
+            if (isThreeDs) {
+                success = clearDirectoryContents(savePath, &error);
+            } else {
+                std::error_code ec;
+                success = fs::remove(savePath, ec);
+                if (ec) error = ec.message();
+            }
+            if (!success && !error.empty())
+                brls::Logger::warning("删除游戏存档失败: path={} error={}",
+                                      savePath.string(), error);
+            brls::Application::notify(success ? "已删除游戏存档" : "删除游戏存档失败");
+            _refreshBackupList();
+            m_view->restoreFocus();
+        });
+        dialog->open();
+    }
+
     void GameDataPage::_confirmClearShaderCache()
     {
         const std::string titleId = _threeDsTitleId();
@@ -1086,8 +1202,15 @@ namespace beiklive
             brls::Application::notify("缺少3DS Title ID，无法清理缓存");
             return;
         }
+        const auto stats = beiklive::three_ds::shaderCacheStats(titleId);
+        if (!stats.valid) {
+            brls::Application::notify("读取着色器缓存信息失败");
+            return;
+        }
         auto* dialog = new brls::Dialog(
             "确认清除该游戏的着色器缓存？\nTitle ID: " + titleId +
+            "\n缓存文件：" + std::to_string(stats.fileCount) +
+            " 个\n占用空间：" + formatByteSize(stats.totalBytes) +
             "\n下次启动游戏时将重新编译着色器。");
         dialog->addButton("取消", []() {});
         dialog->addButton("清除", [this, titleId]() {
@@ -1110,6 +1233,33 @@ namespace beiklive
 
     void GameDataPage::_addCheat()
     {
+        const fs::path cheatPath =
+            beiklive::three_ds::cheatFilePath(_threeDsTitleId());
+        std::string directoryError;
+        if (cheatPath.empty() ||
+            !ensureDirectory(cheatPath.parent_path(), &directoryError)) {
+            brls::Logger::warning("创建金手指目录失败: path={} error={}",
+                                  cheatPath.string(), directoryError);
+            brls::Application::notify("创建金手指文件失败");
+            return;
+        }
+        std::error_code existsError;
+        const bool cheatFileExists = fs::exists(cheatPath, existsError);
+        if (existsError) {
+            brls::Logger::warning("检查金手指文件失败: path={} error={}",
+                                  cheatPath.string(), existsError.message());
+            brls::Application::notify("创建金手指文件失败");
+            return;
+        }
+        if (!cheatFileExists) {
+            std::ofstream file(cheatPath, std::ios::app);
+            if (!file) {
+                brls::Logger::warning("创建金手指文件失败: path={}",
+                                      cheatPath.string());
+                brls::Application::notify("创建金手指文件失败");
+                return;
+            }
+        }
         auto* ime = brls::Application::getPlatform()->getImeManager();
         if (!ime) {
             brls::Application::notify("输入法不可用");
@@ -1145,6 +1295,8 @@ namespace beiklive
                         if (_saveCheats()) {
                             brls::Application::notify("已新增金手指");
                             _refreshCheats();
+                        } else {
+                            m_cheats.pop_back();
                         }
                         m_view->restoreFocus();
                     },
@@ -1267,8 +1419,8 @@ namespace beiklive
             return;
         }
 
-        const bool enabledExists = countRegularFiles(enabledPath) > 0;
-        const bool disabledExists = countRegularFiles(disabledPath) > 0;
+        const bool enabledExists = pathExists(enabledPath);
+        const bool disabledExists = pathExists(disabledPath);
         if (enabledExists && disabledExists) {
             brls::Application::notify(label + "同时存在启用和停用目录，请先手动处理冲突");
             return;
@@ -1319,8 +1471,7 @@ namespace beiklive
             return;
         }
 
-        const bool present = countRegularFiles(enabledPath) > 0 ||
-                             countRegularFiles(disabledPath) > 0;
+        const bool present = pathExists(enabledPath) || pathExists(disabledPath);
         if (!present) {
             brls::Application::notify(label + (section == GameDataView::Section::ADDONS
                 ? "未安装" : "未导入"));

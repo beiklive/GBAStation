@@ -362,7 +362,7 @@ namespace beiklive
             }
             case Section::BATTERY:
                 if (m_batteryPane == 0 &&
-                    m_actionIndex < (_isThreeDs() ? 3 : 2)) { ++m_actionIndex; return true; }
+                    m_actionIndex < (_isThreeDs() ? 4 : 3)) { ++m_actionIndex; return true; }
                 if (m_batteryPane == 1 && m_backupIndex + 1 < static_cast<int>(m_backups.size())) {
                     ++m_backupIndex;
                     return true;
@@ -479,8 +479,9 @@ namespace beiklive
             if (m_batteryPane == 0) {
                 if (m_actionIndex == 0 && onExportSave) onExportSave();
                 else if (m_actionIndex == 1 && onImportSave) onImportSave();
-                else if (m_actionIndex == 2 && onBackupSave) onBackupSave();
-                else if (m_actionIndex == 3 && onClearShaderCache) onClearShaderCache();
+                else if (m_actionIndex == 2 && onDeleteSave) onDeleteSave();
+                else if (m_actionIndex == 3 && onBackupSave) onBackupSave();
+                else if (m_actionIndex == 4 && onClearShaderCache) onClearShaderCache();
             } else if (m_backupIndex >= 0 &&
                        m_backupIndex < static_cast<int>(m_backups.size()) &&
                        onRestoreBackup) {
@@ -646,11 +647,14 @@ namespace beiklive
                 m_backupIndex * rowHeight + rowHeight * 0.5f - viewportHeight * 0.5f,
                 0.f, std::max(0.f, total - viewportHeight));
         } else if (m_section == Section::CHEATS && m_cheatPane == 1 && !m_cheats.empty()) {
-            const float rowHeight = 76.f;
-            const float total = m_cheats.size() * rowHeight;
+            const float rowHeight = 64.f;
+            const float verticalPadding = 12.f;
+            const float contentViewport = std::max(1.f, viewportHeight - 94.f);
+            const float total = verticalPadding * 2.f + m_cheats.size() * rowHeight;
             m_targetScrollY = std::clamp(
-                m_cheatIndex * rowHeight + rowHeight * 0.5f - viewportHeight * 0.5f,
-                0.f, std::max(0.f, total - viewportHeight));
+                verticalPadding + m_cheatIndex * rowHeight + rowHeight * 0.5f -
+                    contentViewport * 0.5f,
+                0.f, std::max(0.f, total - contentViewport));
         } else {
             m_targetScrollY = 0.f;
         }
@@ -766,7 +770,8 @@ namespace beiklive
     }
 
     void GameDataView::_drawImageCover(NVGcontext* vg, const std::string& path,
-                                       float x, float y, float w, float h, float radius)
+                                       float x, float y, float w, float h, float radius,
+                                       bool fit)
     {
         const int image = _getImage(vg, path);
         if (image <= 0) {
@@ -779,8 +784,9 @@ namespace beiklive
         int ih = 0;
         nvgImageSize(vg, image, &iw, &ih);
         if (iw <= 0 || ih <= 0) return;
-        const float scale = std::max(w / static_cast<float>(iw),
-                                     h / static_cast<float>(ih));
+        const float scale = fit
+            ? std::min(w / static_cast<float>(iw), h / static_cast<float>(ih))
+            : std::max(w / static_cast<float>(iw), h / static_cast<float>(ih));
         const float dw = iw * scale;
         const float dh = ih * scale;
         const float ix = x + (w - dw) * 0.5f;
@@ -789,7 +795,8 @@ namespace beiklive
         nvgIntersectScissor(vg, x, y, w, h);
         NVGpaint paint = nvgImagePattern(vg, ix, iy, dw, dh, 0.f, image, 1.f);
         nvgBeginPath(vg);
-        nvgRoundedRect(vg, x, y, w, h, radius);
+        nvgRoundedRect(vg, fit ? ix : x, fit ? iy : y,
+                       fit ? dw : w, fit ? dh : h, radius);
         nvgFillPaint(vg, paint);
         nvgFill(vg);
         nvgRestore(vg);
@@ -931,16 +938,34 @@ namespace beiklive
         const float coverW = w - 56.f;
         const float coverH = 238.f;
         _drawPanel(vg, coverX, coverY, coverW, coverH, 8.f, false, 0.8f);
-        _drawImageCover(vg, m_entry.logoPath, coverX, coverY, coverW, coverH, 8.f);
+        _drawImageCover(vg, m_entry.logoPath, coverX, coverY, coverW, coverH, 8.f, true);
 
         const std::string title = m_entry.title.empty() ? m_entry.path : m_entry.title;
         nvgSave(vg);
         nvgIntersectScissor(vg, x + 22.f, coverY + coverH + 24.f, w - 44.f, 38.f);
         nvgFontFaceId(vg, m_fontId);
         nvgFontSize(vg, 24.f);
-        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
         nvgFillColor(vg, nvgRGBA(255, 255, 255, 245));
-        nvgText(vg, x + w * 0.5f, coverY + coverH + 43.f, title.c_str(), nullptr);
+        const float titleX = x + 22.f;
+        const float titleW = w - 44.f;
+        float bounds[4]{};
+        nvgTextBounds(vg, 0.f, 0.f, title.c_str(), nullptr, bounds);
+        const float measuredTitleW = bounds[2] - bounds[0];
+        const float titleY = coverY + coverH + 43.f;
+        if (measuredTitleW <= titleW) {
+            nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+            nvgText(vg, x + w * 0.5f, titleY, title.c_str(), nullptr);
+        } else {
+            constexpr float gap = 48.f;
+            constexpr float delay = 1.2f;
+            constexpr float speed = 42.f;
+            const float offset = std::fmod(std::max(0.f, m_focusTime - delay) * speed,
+                                           measuredTitleW + gap);
+            nvgText(vg, titleX - offset, titleY, title.c_str(), nullptr);
+            nvgText(vg, titleX - offset + measuredTitleW + gap, titleY,
+                    title.c_str(), nullptr);
+        }
         nvgRestore(vg);
 
         const std::string badge = beiklive::tools::platformBadgeName(m_entry.platform);
@@ -1087,14 +1112,16 @@ namespace beiklive
         const float gap = 24.f;
         const float listX = x + actionW + gap;
         const float listW = w - actionW - gap;
-        const char* labels[] = {"导出存档", "导入存档", "创建备份", "清除着色器缓存"};
+        const char* labels[] = {
+            "导出存档", "导入存档", "删除存档", "创建备份", "清除着色器缓存"};
         const char32_t icons[] = {
             beiklive::material::CLOUD_UPLOAD,
             beiklive::material::CLOUD_DOWNLOAD,
+            beiklive::material::DELETE_ICON,
             beiklive::material::BACKUP,
             beiklive::material::DELETE_SWEEP_ICON,
         };
-        const int actionCount = _isThreeDs() ? 4 : 3;
+        const int actionCount = _isThreeDs() ? 5 : 4;
         const float buttonH = _isThreeDs() ? 70.f : 90.f;
         const float actionGap = _isThreeDs() ? 11.f : 14.f;
         const float startY = y + (h - buttonH * actionCount -
@@ -1105,7 +1132,7 @@ namespace beiklive
             _drawMaterialIcon(vg, icons[i], x + 46.f, buttonY + buttonH * 0.5f,
                               36.f, nvgRGBA(255, 255, 255, 225));
             nvgFontFaceId(vg, m_fontId);
-            nvgFontSize(vg, i == 3 ? 22.f : 23.f);
+            nvgFontSize(vg, i == 4 ? 22.f : 23.f);
             nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
             nvgFillColor(vg, nvgRGBA(255, 255, 255, 235));
             nvgText(vg, x + 82.f, buttonY + buttonH * 0.5f, labels[i], nullptr);
@@ -1239,38 +1266,34 @@ namespace beiklive
         }
 
         const float contentY = y + 70.f;
-        const float rowH = 76.f;
+        const float contentBottom = y + h - 16.f;
+        const float verticalPadding = 12.f;
+        const float rowH = 64.f;
+        const float panelH = 54.f;
         nvgSave(vg);
-        nvgIntersectScissor(vg, listX + 20.f, contentY, listW - 40.f, h - 84.f);
+        nvgIntersectScissor(vg, listX + 20.f, contentY, listW - 40.f,
+                            contentBottom - contentY);
         for (int i = 0; i < static_cast<int>(m_cheats.size()); ++i) {
-            const float rowY = contentY + i * rowH - m_scrollY;
-            if (rowY + 64.f < contentY || rowY > y + h - 10.f)
+            const float rowY = contentY + verticalPadding + i * rowH - m_scrollY;
+            if (rowY + panelH < contentY || rowY > contentBottom)
                 continue;
             const auto& cheat = m_cheats[static_cast<size_t>(i)];
             const float rowX = listX + 26.f;
             const float rowW = listW - 52.f;
-            _drawPanel(vg, rowX, rowY, rowW, 64.f, 7.f, false, 0.85f);
+            _drawPanel(vg, rowX, rowY, rowW, panelH, 7.f, false, 0.85f);
             _drawMaterialIcon(vg, beiklive::material::DESCRIPTION,
-                              rowX + 30.f, rowY + 32.f, 28.f,
+                              rowX + 30.f, rowY + panelH * 0.5f, 28.f,
                               nvgRGBA(255, 255, 255, 188));
             nvgSave(vg);
-            nvgIntersectScissor(vg, rowX + 56.f, rowY + 5.f, rowW - 76.f, 27.f);
+            nvgIntersectScissor(vg, rowX + 56.f, rowY + 5.f, rowW - 76.f, panelH - 10.f);
             nvgFontFaceId(vg, m_fontId);
             nvgFontSize(vg, 18.f);
             nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
             nvgFillColor(vg, nvgRGBA(255, 255, 255, 235));
-            nvgText(vg, rowX + 56.f, rowY + 19.f, cheat.name.c_str(), nullptr);
+            nvgText(vg, rowX + 56.f, rowY + panelH * 0.5f, cheat.name.c_str(), nullptr);
             nvgRestore(vg);
-            const size_t lineEnd = cheat.code.find('\n');
-            std::string detail = cheat.code.substr(0, lineEnd);
-            if (lineEnd != std::string::npos)
-                detail += " ...";
-            nvgFontSize(vg, 15.f);
-            nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-            nvgFillColor(vg, nvgRGBA(255, 255, 255, 125));
-            nvgText(vg, rowX + 56.f, rowY + 45.f, detail.c_str(), nullptr);
             if (m_cheatPane == 1 && i == m_cheatIndex)
-                _drawFocus(vg, rowX, rowY, rowW, 64.f, 7.f);
+                _drawFocus(vg, rowX, rowY, rowW, panelH, 7.f);
         }
         nvgRestore(vg);
     }
