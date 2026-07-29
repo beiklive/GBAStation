@@ -146,6 +146,23 @@ namespace beiklive::input_mapping
         return kPlatformGbFamily;
     }
 
+    inline const char* gameButtonLabelForPrefix(const std::string& prefix,
+                                                const GameButtonDefault& entry)
+    {
+        if (prefix != "md.")
+            return entry.label;
+
+        const std::string suffix = entry.suffix;
+        if (suffix == "y") return "MD A键";
+        if (suffix == "b") return "MD B键";
+        if (suffix == "a") return "MD C键";
+        if (suffix == "l") return "MD X键";
+        if (suffix == "x") return "MD Y键";
+        if (suffix == "r") return "MD Z键";
+        if (suffix == "select") return "MD Mode键";
+        return entry.label;
+    }
+
     inline std::string makeKey(const std::string& prefix, const std::string& key)
     {
         return prefix + key;

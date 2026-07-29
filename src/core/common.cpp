@@ -495,6 +495,15 @@ namespace beiklive
         SettingManager->SetDefault("core.melonds_dldi_path", ConfigValue(std::string("")));
         SettingManager->SetDefault("core.melonds_randomize_mac", ConfigValue(0));
 
+        SettingManager->SetDefault("core.genesis.region", ConfigValue(std::string("auto")));
+        SettingManager->SetDefault("core.genesis.pad_buttons", ConfigValue(6));
+        SettingManager->SetDefault("core.genesis.no_sprite_limit", ConfigValue(std::string("disabled")));
+        SettingManager->SetDefault("core.genesis.low_pass", ConfigValue(std::string("enabled")));
+        SettingManager->SetDefault("core.genesis.low_pass_range", ConfigValue(60));
+        SettingManager->SetDefault("core.genesis.hq_fm", ConfigValue(std::string("enabled")));
+        SettingManager->SetDefault("core.genesis.hq_psg", ConfigValue(std::string("enabled")));
+        SettingManager->SetDefault("core.genesis.mono", ConfigValue(std::string("disabled")));
+
         // BIOS 路径设置
         SettingManager->SetDefault("bios.path", ConfigValue(beiklive::path::biosPath()));
 

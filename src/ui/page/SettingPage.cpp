@@ -1621,6 +1621,8 @@ private:
                 [this]() { _openLibretroCore("Snes9x 核心设置", CoreType::Snes9x); });
         addCore("SFC 核心", "Snes9x 2005", 0xE338,
                 [this]() { _openLibretroCore("Snes9x 2005 核心设置", CoreType::Snes9x2005); });
+        addCore("MD 核心", "Genesis Plus GX", 0xE338,
+                [this]() { _openGenesisCore(); });
 
         emulator.push_back(_section("存档与封面"));
         emulator.push_back(_selector("SRAM 存档目录", "选择 SRAM 与 ROM 同目录或模拟器统一目录", beiklive::material::STORAGE,
@@ -1710,6 +1712,7 @@ private:
             {"SFC 按键映射", "sfc.", "Super Famicom 游戏", false},
             {"NDS 按键映射", "nds.", "Nintendo DS 游戏与触摸指针热键", true},
             {"3DS 按键映射", "3ds.", "Nintendo 3DS 游戏与双摇杆控制", false},
+            {"MD 按键映射", "md.", "Mega Drive 六键手柄与 Mode 键", false},
         };
         for (const auto& platform : platforms)
         {
@@ -1802,10 +1805,10 @@ private:
         display.push_back(_toggle("显示 FPS 覆盖层", "在游戏画面上显示实时帧率", 0xE8E5,
             []() { return cfgGetBool("display.showFps", false); }, [](bool v) { cfgSetBool("display.showFps", v); }));
 
-        const std::array<std::pair<const char*, const char*>, 5> platforms{{
+        const std::array<std::pair<const char*, const char*>, 6> platforms{{
             {"GBA", KEY_DISPLAY_OVERLAY_GBA_PATH}, {"GBC", KEY_DISPLAY_OVERLAY_GBC_PATH},
             {"GB", KEY_DISPLAY_OVERLAY_GB_PATH}, {"FC", KEY_DISPLAY_OVERLAY_NES_PATH},
-            {"SFC", KEY_DISPLAY_OVERLAY_SNES_PATH}}};
+            {"SFC", KEY_DISPLAY_OVERLAY_SNES_PATH}, {"MD", KEY_DISPLAY_OVERLAY_GENESIS_PATH}}};
         display.push_back(_section("默认遮罩"));
         for (const auto& platform : platforms)
         {
@@ -1814,10 +1817,10 @@ private:
                 [key]() { const auto path = cfgGetStr(key, ""); return path.empty() ? "未设置" : beiklive::tools::getFileName(path); },
                 [this, key]() { _pickFile(key, {"png"}); }));
         }
-        const std::array<std::pair<const char*, const char*>, 5> shaders{{
+        const std::array<std::pair<const char*, const char*>, 6> shaders{{
             {"GBA", KEY_DISPLAY_SHADER_GBA_PATH}, {"GBC", KEY_DISPLAY_SHADER_GBC_PATH},
             {"GB", KEY_DISPLAY_SHADER_GB_PATH}, {"FC", KEY_DISPLAY_SHADER_NES_PATH},
-            {"SFC", KEY_DISPLAY_SHADER_SNES_PATH}}};
+            {"SFC", KEY_DISPLAY_SHADER_SNES_PATH}, {"MD", KEY_DISPLAY_SHADER_GENESIS_PATH}}};
         display.push_back(_section("默认着色器"));
         for (const auto& platform : shaders)
         {
@@ -2205,6 +2208,65 @@ private:
         file("DLDI SD 镜像", "core.melonds_dldi_path", {"img","bin"});
         m_coreItems.push_back(_toggle("随机 MAC 地址", "每次启动生成随机无线地址", beiklive::material::WIFI, []() { return cfgGetBool("core.melonds_randomize_mac", false); }, [](bool v) { cfgSetBool("core.melonds_randomize_mac", v); }));
         _finishCorePage("melonDS 核心设置");
+    }
+
+    void _openGenesisCore()
+    {
+        m_coreItems.clear();
+        m_coreItems.push_back(_section("系统与兼容性"));
+        const std::vector<std::string> regionValues = {"auto", "ntsc-u", "pal", "ntsc-j"};
+        m_coreItems.push_back(_selector(
+            "主机区域", "自动识别失败时可强制游戏区域，重新启动游戏后生效", 0xE8B5,
+            {"自动识别", "NTSC-U（美版）", "PAL（欧版）", "NTSC-J（日版）"},
+            [regionValues]() {
+                return findIndex(regionValues, cfgGetStr("core.genesis.region", "auto"));
+            },
+            [regionValues](int i) {
+                if (i >= 0 && i < static_cast<int>(regionValues.size()))
+                    cfgSetStr("core.genesis.region", regionValues[static_cast<size_t>(i)]);
+            }));
+        m_coreItems.push_back(_selector(
+            "手柄类型", "六键模式支持 X、Y、Z 与 Mode，重新启动游戏后生效", 0xE30F,
+            {"三键手柄", "六键手柄"},
+            []() { return cfgGetInt("core.genesis.pad_buttons", 6) == 3 ? 0 : 1; },
+            [](int i) { cfgSetInt("core.genesis.pad_buttons", i == 0 ? 3 : 6); }));
+        m_coreItems.push_back(_toggle(
+            "移除精灵限制", "减少横向精灵过多时的闪烁，可能改变原始硬件表现", 0xE8EF,
+            []() { return cfgGetStr("core.genesis.no_sprite_limit", "disabled") == "enabled"; },
+            [](bool v) { cfgSetStr("core.genesis.no_sprite_limit", v ? "enabled" : "disabled"); }));
+
+        m_coreItems.push_back(_section("音频"));
+        m_coreItems.push_back(_toggle(
+            "低通滤波", "模拟 Mega Drive 原机的柔和音色", 0xE050,
+            []() { return cfgGetStr("core.genesis.low_pass", "enabled") == "enabled"; },
+            [](bool v) { cfgSetStr("core.genesis.low_pass", v ? "enabled" : "disabled"); }));
+        const std::vector<int> lowPassValues = {20, 40, 60, 80, 100};
+        m_coreItems.push_back(_selector(
+            "低通滤波强度", "数值越高，保留的高频越多", 0xE8E5,
+            {"20%", "40%", "60%", "80%", "100%"},
+            [lowPassValues]() {
+                const int current = cfgGetInt("core.genesis.low_pass_range", 60);
+                for (int i = 0; i < static_cast<int>(lowPassValues.size()); ++i)
+                    if (lowPassValues[static_cast<size_t>(i)] == current) return i;
+                return 2;
+            },
+            [lowPassValues](int i) {
+                if (i >= 0 && i < static_cast<int>(lowPassValues.size()))
+                    cfgSetInt("core.genesis.low_pass_range", lowPassValues[static_cast<size_t>(i)]);
+            }));
+        m_coreItems.push_back(_toggle(
+            "高质量 FM 重采样", "提高 YM2612 音频质量，低性能设备可关闭", 0xE050,
+            []() { return cfgGetStr("core.genesis.hq_fm", "enabled") == "enabled"; },
+            [](bool v) { cfgSetStr("core.genesis.hq_fm", v ? "enabled" : "disabled"); }));
+        m_coreItems.push_back(_toggle(
+            "高质量 PSG 重采样", "提高 PSG 方波音频质量，低性能设备可关闭", 0xE050,
+            []() { return cfgGetStr("core.genesis.hq_psg", "enabled") == "enabled"; },
+            [](bool v) { cfgSetStr("core.genesis.hq_psg", v ? "enabled" : "disabled"); }));
+        m_coreItems.push_back(_toggle(
+            "单声道输出", "将左右声道混合为单声道", 0xE04F,
+            []() { return cfgGetStr("core.genesis.mono", "disabled") == "enabled"; },
+            [](bool v) { cfgSetStr("core.genesis.mono", v ? "enabled" : "disabled"); }));
+        _finishCorePage("Genesis Plus GX 核心设置");
     }
 
     void _openThreeDsTextInput(const std::string& title, const std::string& key,
@@ -2612,7 +2674,8 @@ private:
         for (const auto& entry : beiklive::input_mapping::kGameButtonDefaults)
         {
             if ((entry.platformMask & mask) == 0) continue;
-            _addBinding(entry.label, "游戏内对应按键", beiklive::input_mapping::makeHandleKey(prefix, entry.suffix), entry.defaultValue);
+            _addBinding(beiklive::input_mapping::gameButtonLabelForPrefix(prefix, entry),
+                        "游戏内对应按键", beiklive::input_mapping::makeHandleKey(prefix, entry.suffix), entry.defaultValue);
         }
         m_mappingItems.push_back(_section("功能热键"));
         for (const auto& entry : beiklive::input_mapping::kHotkeyDefaults)
@@ -2635,8 +2698,14 @@ private:
             }
         }
         m_mappingItems.push_back(_section("连发"));
-        _addBinding("A 连发", "按住时自动重复触发 A", beiklive::input_mapping::makeKey(prefix, beiklive::input_mapping::kTurboAKey), beiklive::input_mapping::kTurboADefault);
-        _addBinding("B 连发", "按住时自动重复触发 B", beiklive::input_mapping::makeKey(prefix, beiklive::input_mapping::kTurboBKey), beiklive::input_mapping::kTurboBDefault);
+        _addBinding(prefix == "md." ? "MD C 连发" : "A 连发",
+                    prefix == "md." ? "按住时自动重复触发 MD C" : "按住时自动重复触发 A",
+                    beiklive::input_mapping::makeKey(prefix, beiklive::input_mapping::kTurboAKey),
+                    beiklive::input_mapping::kTurboADefault);
+        _addBinding(prefix == "md." ? "MD B 连发" : "B 连发",
+                    prefix == "md." ? "按住时自动重复触发 MD B" : "按住时自动重复触发 B",
+                    beiklive::input_mapping::makeKey(prefix, beiklive::input_mapping::kTurboBKey),
+                    beiklive::input_mapping::kTurboBDefault);
         const std::vector<float> rates = {1.f, 5.f, 10.f, 15.f, 30.f};
         m_mappingItems.push_back(_selector("连发速度", "每秒自动触发次数", 0xE8E5,
             {"每秒1次", "每秒5次", "每秒10次", "每秒15次", "每秒30次"},
@@ -4185,7 +4254,7 @@ namespace
             std::string cfgKey = beiklive::input_mapping::makeHandleKey(prefix, entry.suffix);
             auto* cell = new beiklive::DetailCell();
             cell->setLeftTextSize(18.f);
-            cell->setLeftText(entry.label);
+            cell->setLeftText(beiklive::input_mapping::gameButtonLabelForPrefix(prefix, entry));
             cell->setRightText(cfgGetStr(cfgKey, entry.defaultValue));
             registerKeyBindActions(cell, cfgKey);
             mapcontainer->addView(cell);

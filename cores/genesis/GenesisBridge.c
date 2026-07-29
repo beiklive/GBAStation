@@ -105,6 +105,29 @@ void gpgx_configure_defaults(void)
         config.input[i].padtype = DEVICE_PAD2B | DEVICE_PAD3B | DEVICE_PAD6B;
 }
 
+void gpgx_apply_config(int region, int pad_buttons, int low_pass, int low_pass_range,
+                       int hq_fm, int hq_psg, int mono, int no_sprite_limit)
+{
+    int i;
+    if (region < 0 || region > 3)
+        region = 0;
+    if (low_pass_range < 0)
+        low_pass_range = 0;
+    if (low_pass_range > 100)
+        low_pass_range = 100;
+
+    config.region_detect = (uint8_t)region;
+    config.filter = low_pass ? 1 : 0;
+    config.lp_range = (uint16_t)(((uint32_t)low_pass_range * 0xffffu) / 100u);
+    config.hq_fm = hq_fm ? 1 : 0;
+    config.hq_psg = hq_psg ? 1 : 0;
+    config.mono = mono ? 1 : 0;
+    config.no_sprite_limit = no_sprite_limit ? 1 : 0;
+
+    for (i = 0; i < MAX_INPUTS; ++i)
+        config.input[i].padtype = pad_buttons == 3 ? DEVICE_PAD3B : DEVICE_PAD6B;
+}
+
 void osd_input_update(void)
 {
 }

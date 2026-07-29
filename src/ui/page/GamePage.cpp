@@ -317,9 +317,8 @@ namespace beiklive
         // setOnResume和setOnExit回调由GamePage注入，触发时分别执行对应的动画和操作
         m_gameMenuView->setOnResume([this]() {
             brls::sync([this]() {
-                beiklive::GameDB->flush();
-                m_gameView->setFocusable(true);
-                AnimationHelper::slideOutToBottom(m_gameMenuView, MENU_FADE_OUT_MS, 120.f,true, [this]() {
+                AnimationHelper::slideOutToBottom(m_gameMenuView, 120.f, MENU_FADE_OUT_MS, true, [this]() {
+                    m_gameView->setFocusable(true);
                     brls::Application::giveFocus(m_gameView);
                 });
             });
@@ -328,9 +327,9 @@ namespace beiklive
         // "重置游戏"回调：触发重置信号
         m_gameMenuView->setOnReset([this]() {
             brls::sync([this]() {
-                m_gameView->setFocusable(true);
-                AnimationHelper::slideOutToBottom(m_gameMenuView, MENU_FADE_OUT_MS, 120.f,true, [this]() {
+                AnimationHelper::slideOutToBottom(m_gameMenuView, 120.f, MENU_FADE_OUT_MS, true, [this]() {
                     GameSignal::instance().requestReset();
+                    m_gameView->setFocusable(true);
                     brls::Application::giveFocus(m_gameView);
 
                 });
@@ -349,7 +348,7 @@ namespace beiklive
                 if (m_gameMenuView)
                     m_gameMenuView->setFocusable(false);
                 GameSignal::instance().requestPause(true);
-                AnimationHelper::slideOutToBottom(m_gameMenuView, MENU_EXIT_FADE_MS, 120.f,true, [this]() {
+                AnimationHelper::slideOutToBottom(m_gameMenuView, 120.f, MENU_EXIT_FADE_MS, true, [this]() {
                     int exitSlot = GET_SETTING_KEY_INT("save.autoSaveOnExit", 0);
                     if (exitSlot > 0 && exitSlot <= 10) {
                         brls::Application::notify("正在自动存档...");

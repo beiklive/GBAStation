@@ -1,6 +1,7 @@
 #include "GenesisCore.h"
 
 #include "core/Tools.hpp"
+#include "core/common.h"
 
 #include <algorithm>
 #include <cstring>
@@ -12,6 +13,8 @@ extern "C"
 {
 #include "shared.h"
 void gpgx_configure_defaults(void);
+void gpgx_apply_config(int region, int pad_buttons, int low_pass, int low_pass_range,
+                       int hq_fm, int hq_psg, int mono, int no_sprite_limit);
 }
 
 namespace beiklive::genesis
@@ -76,6 +79,20 @@ bool GenesisCore::SetupGame(beiklive::GameEntry gameEntry)
     bitmap.data = reinterpret_cast<uint8*>(m_bitmapStorage.data());
 
     gpgx_configure_defaults();
+    const std::string region = GET_SETTING_KEY_STR("core.genesis.region", "auto");
+    int regionCode = 0;
+    if (region == "ntsc-u") regionCode = 1;
+    else if (region == "pal") regionCode = 2;
+    else if (region == "ntsc-j") regionCode = 3;
+    gpgx_apply_config(
+        regionCode,
+        GET_SETTING_KEY_INT("core.genesis.pad_buttons", 6),
+        GET_SETTING_KEY_STR("core.genesis.low_pass", "enabled") == "enabled",
+        GET_SETTING_KEY_INT("core.genesis.low_pass_range", 60),
+        GET_SETTING_KEY_STR("core.genesis.hq_fm", "enabled") == "enabled",
+        GET_SETTING_KEY_STR("core.genesis.hq_psg", "enabled") == "enabled",
+        GET_SETTING_KEY_STR("core.genesis.mono", "disabled") == "enabled",
+        GET_SETTING_KEY_STR("core.genesis.no_sprite_limit", "disabled") == "enabled");
     system_hw = 0;
 
     std::vector<char> mutablePath(m_gameEntry.path.begin(), m_gameEntry.path.end());
