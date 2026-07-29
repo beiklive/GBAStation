@@ -24,9 +24,10 @@ namespace beiklive::pico8
         bool RunFrame(float deltaSeconds);
         const uint8_t* GetFrameBuffer() const;
         void SetInput(const InputState& state);
-        void Reset();
+        bool Reset();
         void Pause();
         void Resume();
+        void SetAudioVolumes(float sfxVolume, float musicVolume);
         bool SaveState(std::vector<uint8_t>& output);
         bool LoadState(const uint8_t* data, size_t size);
         size_t GetStateSize() const;

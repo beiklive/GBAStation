@@ -175,5 +175,9 @@ class Vm {
 
     size_t serializeLuaState(char* dest);
     void deserializeLuaState(const char* src, size_t len);
-};
 
+    bool SerializeState(std::vector<uint8_t>& output, std::string& error);
+    bool DeserializeState(const uint8_t* data, size_t size, std::string& error);
+    void SetAudioVolumes(float sfxVolume, float musicVolume);
+    void GetAudioVolumes(float& sfxVolume, float& musicVolume) const;
+};

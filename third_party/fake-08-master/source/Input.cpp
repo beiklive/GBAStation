@@ -33,7 +33,7 @@ void Input::SetState(uint8_t kdown, uint8_t kheld){
 
     uint8_t repeatInterval = _memory->hwState.btnpRepeatInterval == 0 
         ? 4 
-        : _memory->hwState.btnpRepeatDelay;
+        : _memory->hwState.btnpRepeatInterval;
 
     for (int i = 0; i < 7; i ++) {
         bool down = BITMASK(i) & kheld;
@@ -120,4 +120,3 @@ const char* Input::getKey() {
     _kbDown = false;
     return _kbKey.c_str();
 }
-

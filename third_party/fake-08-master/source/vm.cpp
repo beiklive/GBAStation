@@ -10,6 +10,9 @@
 #include <iostream>
 #include <iomanip>
 #include <ctime>
+#include <cstdint>
+#include <limits>
+#include <type_traits>
 
 #include "vm.h"
 #include "graphics.h"
@@ -37,6 +40,145 @@ using namespace z8;
 
 static const char DefaultCartName[] = "__FAKE08-DEFAULT.p8";
 static const char SettingsCartName[] = "__FAKE08-SETTINGS.p8";
+
+namespace
+{
+    constexpr size_t STATE_HEADER_SIZE = 48;
+    constexpr size_t STATE_CHECKSUM_OFFSET = 44;
+    constexpr size_t STATE_INPUT_SIZE = 18;
+    constexpr size_t MAX_LUA_STATE_SIZE = 32 * 1024 * 1024;
+    constexpr uint32_t STATE_VERSION = 2;
+    constexpr uint8_t STATE_MAGIC[8] = {
+        'F', '0', '8', 'S', 'T', 'A', 'T', 'E'};
+
+    template <typename T>
+    void writeStateValue(std::vector<uint8_t>& output, size_t offset, T value)
+    {
+        std::memcpy(output.data() + offset, &value, sizeof(value));
+    }
+
+    template <typename T>
+    T readStateValue(const uint8_t* data, size_t offset)
+    {
+        T value{};
+        std::memcpy(&value, data + offset, sizeof(value));
+        return value;
+    }
+
+    uint32_t updateStateChecksum(uint32_t hash, const uint8_t* data,
+                                 size_t size)
+    {
+        for (size_t i = 0; i < size; ++i) {
+            hash ^= data[i];
+            hash *= 16777619u;
+        }
+        return hash;
+    }
+
+    uint32_t stateChecksum(const uint8_t* data, size_t size)
+    {
+        uint32_t hash = 2166136261u;
+        hash = updateStateChecksum(hash, data, STATE_CHECKSUM_OFFSET);
+        return updateStateChecksum(
+            hash, data + STATE_HEADER_SIZE, size - STATE_HEADER_SIZE);
+    }
+
+    bool hasRestorableRuntime(lua_State* state)
+    {
+        const int stackTop = lua_gettop(state);
+        lua_getglobal(state, "__z8_loop");
+        const bool hasLoop = lua_isthread(state, -1);
+        lua_getglobal(state, "__cart_sandbox");
+        const bool hasSandbox = lua_istable(state, -1);
+        lua_settop(state, stackTop);
+        return hasLoop && hasSandbox;
+    }
+
+    bool serializeLuaRuntime(lua_State* state, std::vector<uint8_t>& output,
+                             std::string& error)
+    {
+        output.clear();
+        if (!state || !hasRestorableRuntime(state)) {
+            error = "cart Lua coroutine is not ready";
+            return false;
+        }
+
+        const int stackTop = lua_gettop(state);
+        lua_getglobal(state, "eris");
+        if (!lua_istable(state, -1)) {
+            error = "global eris table is unavailable";
+            lua_settop(state, stackTop);
+            return false;
+        }
+        lua_getfield(state, -1, "persist_all");
+        if (!lua_isfunction(state, -1)) {
+            error = "eris.persist_all is unavailable";
+            lua_settop(state, stackTop);
+            return false;
+        }
+        if (lua_pcall(state, 0, 1, 0) != LUA_OK) {
+            const char* message = lua_tostring(state, -1);
+            error = message ? message : "eris.persist_all failed";
+            lua_settop(state, stackTop);
+            return false;
+        }
+
+        size_t size = 0;
+        const char* bytes = lua_tolstring(state, -1, &size);
+        if (!bytes || size == 0 || size > MAX_LUA_STATE_SIZE) {
+            error = "eris.persist_all returned an invalid state";
+            lua_settop(state, stackTop);
+            return false;
+        }
+        output.assign(reinterpret_cast<const uint8_t*>(bytes),
+                      reinterpret_cast<const uint8_t*>(bytes) + size);
+        lua_settop(state, stackTop);
+        return true;
+    }
+
+    bool deserializeLuaRuntime(lua_State* state, const uint8_t* data,
+                               size_t size, std::string& error)
+    {
+        if (!state || !data || size == 0 || size > MAX_LUA_STATE_SIZE) {
+            error = "serialized Lua state is invalid";
+            return false;
+        }
+
+        const int stackTop = lua_gettop(state);
+        lua_getglobal(state, "eris");
+        if (!lua_istable(state, -1)) {
+            error = "global eris table is unavailable";
+            lua_settop(state, stackTop);
+            return false;
+        }
+        lua_getfield(state, -1, "restore_all");
+        if (!lua_isfunction(state, -1)) {
+            error = "eris.restore_all is unavailable";
+            lua_settop(state, stackTop);
+            return false;
+        }
+        lua_pushlstring(state, reinterpret_cast<const char*>(data), size);
+        if (lua_pcall(state, 1, 0, 0) != LUA_OK) {
+            const char* message = lua_tostring(state, -1);
+            error = message ? message : "eris.restore_all failed";
+            lua_settop(state, stackTop);
+            return false;
+        }
+
+        lua_getglobal(state, "__cart_sandbox");
+        if (!lua_istable(state, -1)) {
+            error = "restored cart sandbox is unavailable";
+            lua_settop(state, stackTop);
+            return false;
+        }
+        lua_setfield(state, LUA_REGISTRYINDEX, "__PICO8_SANDBOX");
+        const bool ready = hasRestorableRuntime(state);
+        lua_settop(state, stackTop);
+        if (!ready)
+            error = "restored cart coroutine is unavailable";
+        return ready;
+    }
+}
 
 bool _initializeLuaState(lua_State* luaState) {
     // initialize Lua interpreter
@@ -1491,33 +1633,155 @@ std::string Vm::getLuaLine(string filename, int linenumber) {
 
 
 size_t Vm::serializeLuaState(char* dest) {
-    lua_getglobal(_luaState, "eris");
-	lua_getfield(_luaState, -1, "persist_all");
-
-	if (lua_pcall(_luaState, 0, 1, 0) != 0) {
-		std::string e = lua_tostring(_luaState, -1);
-		lua_pop(_luaState, 1);
-		return 0;
-	}
-
-	size_t len;
-	const char* result = lua_tolstring(_luaState, -1, &len);
-    memcpy(dest, result, len);
-	lua_pop(_luaState, 2);
-
-    return len;
+    std::vector<uint8_t> luaState;
+    std::string error;
+    if (!dest || !serializeLuaRuntime(_luaState, luaState, error))
+        return 0;
+    std::memcpy(dest, luaState.data(), luaState.size());
+    return luaState.size();
 }
 
 void Vm::deserializeLuaState(const char* src, size_t len) {
-    lua_getglobal(_luaState, "eris");
-	lua_getfield(_luaState, -1, "restore_all");
-	lua_pushlstring(_luaState, src, len);
-
-	if (lua_pcall(_luaState, 1, 0, 0) != 0) {
-		std::string e = lua_tostring(_luaState, -1);
-		lua_pop(_luaState, 1);
-		return;
-	}
-	lua_pop(_luaState, 1);
+    std::string error;
+    deserializeLuaRuntime(_luaState,
+                          reinterpret_cast<const uint8_t*>(src), len, error);
 }
 
+bool Vm::SerializeState(std::vector<uint8_t>& output, std::string& error)
+{
+    output.clear();
+    error.clear();
+    if (!_luaState || !_memory || !_audio || !_input) {
+        error = "FAKE-08 runtime is incomplete";
+        return false;
+    }
+
+    static_assert(std::is_trivially_copyable<audioState_t>::value,
+                  "audioState_t must remain byte-serializable");
+    std::vector<uint8_t> luaState;
+    if (!serializeLuaRuntime(_luaState, luaState, error))
+        return false;
+
+    const size_t audioSize = sizeof(audioState_t);
+    const size_t totalSize = STATE_HEADER_SIZE + luaState.size() +
+        sizeof(PicoRam) + audioSize + STATE_INPUT_SIZE;
+    output.assign(totalSize, 0);
+    std::memcpy(output.data(), STATE_MAGIC, sizeof(STATE_MAGIC));
+    writeStateValue<uint32_t>(output, 8, STATE_VERSION);
+    writeStateValue<uint32_t>(output, 12,
+                              static_cast<uint32_t>(STATE_HEADER_SIZE));
+    writeStateValue<uint64_t>(output, 16,
+                              static_cast<uint64_t>(luaState.size()));
+    writeStateValue<uint32_t>(output, 24,
+                              static_cast<uint32_t>(sizeof(PicoRam)));
+    writeStateValue<uint32_t>(output, 28,
+                              static_cast<uint32_t>(audioSize));
+    writeStateValue<uint32_t>(output, 32,
+                              static_cast<uint32_t>(STATE_INPUT_SIZE));
+    writeStateValue<int32_t>(output, 36, _picoFrameCount);
+    writeStateValue<int32_t>(output, 40, _targetFps);
+
+    size_t offset = STATE_HEADER_SIZE;
+    std::memcpy(output.data() + offset, luaState.data(), luaState.size());
+    offset += luaState.size();
+    std::memcpy(output.data() + offset, _memory->data, sizeof(PicoRam));
+    offset += sizeof(PicoRam);
+    std::memcpy(output.data() + offset, _audio->getAudioState(), audioSize);
+    offset += audioSize;
+    output[offset++] = _input->_currentKDown;
+    output[offset++] = _input->_currentKHeld;
+    for (uint16_t frames : _input->_framesHeld) {
+        std::memcpy(output.data() + offset, &frames, sizeof(frames));
+        offset += sizeof(frames);
+    }
+
+    const uint32_t checksum = stateChecksum(output.data(), output.size());
+    writeStateValue<uint32_t>(output, STATE_CHECKSUM_OFFSET, checksum);
+    return true;
+}
+
+bool Vm::DeserializeState(const uint8_t* data, size_t size, std::string& error)
+{
+    error.clear();
+    if (!_luaState || !_memory || !_audio || !_input || !data ||
+        size < STATE_HEADER_SIZE ||
+        std::memcmp(data, STATE_MAGIC, sizeof(STATE_MAGIC)) != 0) {
+        error = "invalid FAKE-08 state header";
+        return false;
+    }
+
+    const uint32_t version = readStateValue<uint32_t>(data, 8);
+    const uint32_t headerSize = readStateValue<uint32_t>(data, 12);
+    const uint64_t luaSize64 = readStateValue<uint64_t>(data, 16);
+    const uint32_t ramSize = readStateValue<uint32_t>(data, 24);
+    const uint32_t audioSize = readStateValue<uint32_t>(data, 28);
+    const uint32_t inputSize = readStateValue<uint32_t>(data, 32);
+    const int32_t frameCount = readStateValue<int32_t>(data, 36);
+    const int32_t targetFps = readStateValue<int32_t>(data, 40);
+    const uint32_t expectedChecksum =
+        readStateValue<uint32_t>(data, STATE_CHECKSUM_OFFSET);
+
+    if (version != STATE_VERSION || headerSize != STATE_HEADER_SIZE ||
+        luaSize64 == 0 || luaSize64 > MAX_LUA_STATE_SIZE ||
+        ramSize != sizeof(PicoRam) || audioSize != sizeof(audioState_t) ||
+        inputSize != STATE_INPUT_SIZE || frameCount < 0 ||
+        targetFps <= 0 || targetFps > 240) {
+        error = "unsupported or incompatible FAKE-08 state";
+        return false;
+    }
+
+    const size_t luaSize = static_cast<size_t>(luaSize64);
+    if (luaSize > std::numeric_limits<size_t>::max() - STATE_HEADER_SIZE -
+                      ramSize - audioSize - inputSize ||
+        STATE_HEADER_SIZE + luaSize + ramSize + audioSize + inputSize != size) {
+        error = "FAKE-08 state size is invalid";
+        return false;
+    }
+    const uint32_t actualChecksum = stateChecksum(data, size);
+    if (actualChecksum != expectedChecksum) {
+        error = "FAKE-08 state checksum mismatch";
+        return false;
+    }
+
+    size_t offset = STATE_HEADER_SIZE;
+    if (!deserializeLuaRuntime(_luaState, data + offset, luaSize, error))
+        return false;
+    offset += luaSize;
+    std::memcpy(_memory->data, data + offset, ramSize);
+    offset += ramSize;
+    std::memcpy(_audio->getAudioState(), data + offset, audioSize);
+    offset += audioSize;
+    _input->_currentKDown = data[offset++];
+    _input->_currentKHeld = data[offset++];
+    for (uint16_t& frames : _input->_framesHeld) {
+        std::memcpy(&frames, data + offset, sizeof(frames));
+        offset += sizeof(frames);
+    }
+
+    _picoFrameCount = frameCount;
+    _targetFps = targetFps;
+    _pauseMenu = false;
+    _clearInputOnResume = true;
+    _audio->setPaused(false);
+    return true;
+}
+
+void Vm::SetAudioVolumes(float sfxVolume, float musicVolume)
+{
+    if (!_audio)
+        return;
+    audioState_t* state = _audio->getAudioState();
+    state->_musicChannel.volume_sfx = std::max(0.f, std::min(1.f, sfxVolume));
+    state->_musicChannel.volume_music = std::max(0.f, std::min(1.f, musicVolume));
+}
+
+void Vm::GetAudioVolumes(float& sfxVolume, float& musicVolume) const
+{
+    sfxVolume = 0.5f;
+    musicVolume = 0.5f;
+    if (!_audio)
+        return;
+    const audioState_t* state = _audio->getAudioState();
+    sfxVolume = state->_musicChannel.volume_sfx;
+    musicVolume = state->_musicChannel.volume_music;
+}

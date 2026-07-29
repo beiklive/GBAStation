@@ -44,12 +44,32 @@ namespace beiklive
             Exiting,
         };
 
+        enum class MenuScreen
+        {
+            Main,
+            Settings,
+        };
+
+        enum class VideoFilter
+        {
+            None,
+            Dot,
+            Crt,
+        };
+
         void _beginLaunch();
-        void _beginPause();
+        void _openMenu();
+        void _closeMenu();
+        void _handleMenuInput(float dt);
+        void _activateMenuItem();
+        void _adjustMenuSetting(int direction);
+        void _restartGame();
+        void _returnToGameList();
+        void _applyRuntimeSettings();
         void _beginClose();
         void _returnToRunningGame();
-        void _quickSave();
-        void _quickLoad();
+        bool _quickSave();
+        bool _quickLoad();
         bool _writeQuickState(const std::string& gamePath,
                               const std::vector<uint8_t>& state);
         bool _readQuickState(const std::string& gamePath,
@@ -82,6 +102,10 @@ namespace beiklive
                        float height, float alpha);
         void _drawGameRect(NVGcontext* vg, float x, float y, float width,
                            float height, float alpha);
+        void _drawVideoFilter(NVGcontext* vg, float x, float y, float width,
+                              float height, float alpha);
+        void _drawPauseMenu(NVGcontext* vg, float x, float y, float width,
+                            float height, float alpha);
         void _drawCoverRect(NVGcontext* vg, float x, float y, float width,
                             float height, float alpha);
         void _drawHeaderLogo(NVGcontext* vg, float x, float y, float width,
@@ -139,14 +163,22 @@ namespace beiklive
         bool m_exitUsesRuntimePreview = false;
         bool m_returnToGamePending = false;
         float m_returnToGameTime = 0.f;
+        bool m_menuOpen = false;
+        MenuScreen m_menuScreen = MenuScreen::Main;
+        int m_menuSelectedIndex = 0;
+        float m_menuTime = 0.f;
+        bool m_returningToGameList = false;
+        VideoFilter m_videoFilter = VideoFilter::None;
+        int m_sfxVolume = 5;
+        int m_musicVolume = 5;
+        bool m_invertButtons = false;
         bool m_prevUp = false;
         bool m_prevDown = false;
+        bool m_prevLeft = false;
+        bool m_prevRight = false;
         bool m_prevA = false;
         bool m_prevB = false;
         bool m_prevStart = false;
-        bool m_prevLt = false;
-        bool m_prevRt = false;
-
         int m_logoImageHandle = 0;
         int m_coverImageHandle = 0;
         int m_fontId = -1;

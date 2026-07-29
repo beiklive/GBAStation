@@ -2296,9 +2296,9 @@ private:
             [key](int i) { cfgSetBool(key("new_3ds"), i == 1); }));
         std::vector<int> cpuValues;
         std::vector<std::string> cpuLabels;
-        cpuValues.reserve(80);
-        cpuLabels.reserve(80);
-        for (int value = 10; value <= 800; value += 10) {
+        cpuValues.reserve(159);
+        cpuLabels.reserve(159);
+        for (int value = 10; value <= 800; value += 5) {
             cpuValues.push_back(value);
             cpuLabels.push_back(std::to_string(value) + "%");
         }
@@ -2306,8 +2306,8 @@ private:
             cpuLabels,
             [key, cpuValues]() {
                 const int cur = cfgGetInt(key("cpu_clock"), 100);
-                const int normalized = std::clamp(((cur + 5) / 10) * 10, 10, 800);
-                return (normalized - 10) / 10;
+                const int normalized = std::clamp(((cur + 2) / 5) * 5, 10, 800);
+                return (normalized - 10) / 5;
             },
             [key, cpuValues](int i) {
                 if (i >= 0 && i < static_cast<int>(cpuValues.size()))

@@ -373,6 +373,15 @@ end
 
 eris.restore_all = function(persisted)
   local new_symbols = eris.unpersist(eris.unperm, persisted)
+  local stale_symbols = {}
+  for k,v in pairs(_G) do
+    if eris.original_G[k] != v and new_symbols[k] == nil then
+      stale_symbols[#stale_symbols + 1] = k
+    end
+  end
+  for i=1,#stale_symbols do
+    _G[stale_symbols[i]] = nil
+  end
   for k,v in pairs(new_symbols) do
     _G[k] = v
   end
@@ -759,5 +768,4 @@ end
 __z8_loop = cocreate(__z8_shell)
 
 )#";
-
 

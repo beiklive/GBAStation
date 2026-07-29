@@ -3,7 +3,11 @@
 #include <stdint.h>
 #include "PicoRam.h"
 
+class Vm;
+
 class Input{
+    friend class Vm;
+
     PicoRam* _memory;
 	uint8_t _currentKDown;
     uint8_t _currentKHeld;

@@ -159,6 +159,15 @@ namespace beiklive
         setHideHighlightBorder(true);
         setHideClickAnimation(true);
         m_lastFrameTime = std::chrono::steady_clock::now();
+        m_videoFilter = static_cast<VideoFilter>(std::max(0, std::min(2,
+            GET_SETTING_KEY_INT("pico8.video_filter", 0))));
+        m_sfxVolume = std::max(0, std::min(10,
+            GET_SETTING_KEY_INT("pico8.sfx_volume", 5)));
+        m_musicVolume = std::max(0, std::min(10,
+            GET_SETTING_KEY_INT("pico8.music_volume", 5)));
+        m_invertButtons = GET_SETTING_KEY_INT(
+            "pico8.invert_buttons", 0) != 0;
+        m_input.setInvertButtons(m_invertButtons);
 
         auto consume = [](brls::View*) { return true; };
         registerAction("", brls::BUTTON_A, consume, true, false, brls::SOUND_NONE);
@@ -174,7 +183,7 @@ namespace beiklive
         registerAction("", brls::BUTTON_START,
             [this](brls::View*) {
                 if (m_state == State::Running)
-                    _beginPause();
+                    _openMenu();
                 else if (m_state == State::Waiting ||
                          m_state == State::Empty ||
                          m_state == State::Library ||
@@ -215,18 +224,25 @@ namespace beiklive
         const auto& input = brls::Application::getControllerState();
         const float ly = input.axes[static_cast<int>(brls::LEFT_Y)];
         const float ry = input.axes[static_cast<int>(brls::RIGHT_Y)];
-        const float navY = std::abs(ry) > std::abs(ly) ? ry : ly;
-        m_prevUp = input.buttons[static_cast<int>(brls::BUTTON_UP)] || navY < -0.5f;
-        m_prevDown = input.buttons[static_cast<int>(brls::BUTTON_DOWN)] || navY > 0.5f;
+        const float lx = input.axes[static_cast<int>(brls::LEFT_X)];
+        const float rx = input.axes[static_cast<int>(brls::RIGHT_X)];
+        m_prevUp = input.buttons[static_cast<int>(brls::BUTTON_UP)] ||
+            input.buttons[static_cast<int>(brls::BUTTON_NAV_UP)] ||
+            ly < -0.5f || ry < -0.5f;
+        m_prevDown = input.buttons[static_cast<int>(brls::BUTTON_DOWN)] ||
+            input.buttons[static_cast<int>(brls::BUTTON_NAV_DOWN)] ||
+            ly > 0.5f || ry > 0.5f;
+        m_prevLeft = input.buttons[static_cast<int>(brls::BUTTON_LEFT)] ||
+            input.buttons[static_cast<int>(brls::BUTTON_NAV_LEFT)] ||
+            lx < -0.5f || rx < -0.5f;
+        m_prevRight = input.buttons[static_cast<int>(brls::BUTTON_RIGHT)] ||
+            input.buttons[static_cast<int>(brls::BUTTON_NAV_RIGHT)] ||
+            lx > 0.5f || rx > 0.5f;
         m_prevA = input.buttons[static_cast<int>(brls::BUTTON_A)];
         m_prevB = input.buttons[static_cast<int>(brls::BUTTON_B)];
         m_prevStart = input.buttons[static_cast<int>(brls::BUTTON_START)];
-        m_prevLt = input.buttons[static_cast<int>(brls::BUTTON_LT)];
-        m_prevRt = input.buttons[static_cast<int>(brls::BUTTON_RT)];
-        const bool up = input.buttons[static_cast<int>(brls::BUTTON_UP)] ||
-            input.buttons[static_cast<int>(brls::BUTTON_NAV_UP)] || navY < -0.5f;
-        const bool down = input.buttons[static_cast<int>(brls::BUTTON_DOWN)] ||
-            input.buttons[static_cast<int>(brls::BUTTON_NAV_DOWN)] || navY > 0.5f;
+        const bool up = m_prevUp;
+        const bool down = m_prevDown;
         m_navAwaitRelease = up || down;
         m_navDirection = 0;
         m_navHold = 0.f;
@@ -248,7 +264,9 @@ namespace beiklive
             m_coreFuture.wait_for(0ms) == std::future_status::ready) {
             m_coreReady = m_coreFuture.get();
             m_coreFinished = true;
-            if (!m_coreReady)
+            if (m_coreReady)
+                _applyRuntimeSettings();
+            else
                 m_errorText = "FAKE-08 Runtime 初始化失败";
         }
     }
@@ -278,11 +296,12 @@ namespace beiklive
         const auto& input = brls::Application::getControllerState();
         const float ly = input.axes[static_cast<int>(brls::LEFT_Y)];
         const float ry = input.axes[static_cast<int>(brls::RIGHT_Y)];
-        const float navY = std::abs(ry) > std::abs(ly) ? ry : ly;
         const bool up = input.buttons[static_cast<int>(brls::BUTTON_UP)] ||
-            input.buttons[static_cast<int>(brls::BUTTON_NAV_UP)] || navY < -0.5f;
+            input.buttons[static_cast<int>(brls::BUTTON_NAV_UP)] ||
+            ly < -0.5f || ry < -0.5f;
         const bool down = input.buttons[static_cast<int>(brls::BUTTON_DOWN)] ||
-            input.buttons[static_cast<int>(brls::BUTTON_NAV_DOWN)] || navY > 0.5f;
+            input.buttons[static_cast<int>(brls::BUTTON_NAV_DOWN)] ||
+            ly > 0.5f || ry > 0.5f;
         const bool a = input.buttons[static_cast<int>(brls::BUTTON_A)];
         const bool b = input.buttons[static_cast<int>(brls::BUTTON_B)];
         const bool start = input.buttons[static_cast<int>(brls::BUTTON_START)];
@@ -364,16 +383,230 @@ namespace beiklive
         _captureInputState();
     }
 
-    void Pico8Page::_beginPause()
+    void Pico8Page::_openMenu()
     {
-        if (m_state != State::Running)
+        if (m_state != State::Running || m_menuOpen)
             return;
         m_core.Pause();
         m_input.reset();
+        m_menuOpen = true;
+        m_menuScreen = MenuScreen::Main;
+        m_menuSelectedIndex = 0;
+        m_menuTime = 0.f;
+        _captureInputState();
+    }
+
+    void Pico8Page::_closeMenu()
+    {
+        if (!m_menuOpen)
+            return;
+        m_menuOpen = false;
+        m_menuScreen = MenuScreen::Main;
+        m_menuSelectedIndex = 0;
+        m_core.Resume();
+        m_input.reset();
+        m_input.suppressActionsUntilRelease();
+        _captureInputState();
+        _captureTraceInput();
+    }
+
+    void Pico8Page::_handleMenuInput(float dt)
+    {
+        const auto& input = brls::Application::getControllerState();
+        const float lx = input.axes[static_cast<int>(brls::LEFT_X)];
+        const float ly = input.axes[static_cast<int>(brls::LEFT_Y)];
+        const float rx = input.axes[static_cast<int>(brls::RIGHT_X)];
+        const float ry = input.axes[static_cast<int>(brls::RIGHT_Y)];
+        const bool up = input.buttons[static_cast<int>(brls::BUTTON_UP)] ||
+            input.buttons[static_cast<int>(brls::BUTTON_NAV_UP)] ||
+            ly < -0.5f || ry < -0.5f;
+        const bool down = input.buttons[static_cast<int>(brls::BUTTON_DOWN)] ||
+            input.buttons[static_cast<int>(brls::BUTTON_NAV_DOWN)] ||
+            ly > 0.5f || ry > 0.5f;
+        const bool left = input.buttons[static_cast<int>(brls::BUTTON_LEFT)] ||
+            input.buttons[static_cast<int>(brls::BUTTON_NAV_LEFT)] ||
+            lx < -0.5f || rx < -0.5f;
+        const bool right = input.buttons[static_cast<int>(brls::BUTTON_RIGHT)] ||
+            input.buttons[static_cast<int>(brls::BUTTON_NAV_RIGHT)] ||
+            lx > 0.5f || rx > 0.5f;
+        const bool a = input.buttons[static_cast<int>(brls::BUTTON_A)];
+        const bool b = input.buttons[static_cast<int>(brls::BUTTON_B)];
+        const bool start = input.buttons[static_cast<int>(brls::BUTTON_START)];
+        const int itemCount = m_menuScreen == MenuScreen::Main ? 6 : 5;
+
+        const int direction = up == down ? 0 : (up ? -1 : 1);
+        auto moveSelection = [&](int amount) {
+            m_menuSelectedIndex =
+                (m_menuSelectedIndex + amount + itemCount) % itemCount;
+        };
+        if (m_navAwaitRelease) {
+            if (direction == 0)
+                m_navAwaitRelease = false;
+            m_navDirection = 0;
+            m_navHold = 0.f;
+            m_navRepeat = 0.f;
+        } else if (direction == 0) {
+            m_navDirection = 0;
+            m_navHold = 0.f;
+            m_navRepeat = 0.f;
+        } else if (direction != m_navDirection) {
+            m_navDirection = direction;
+            m_navHold = 0.f;
+            m_navRepeat = 0.f;
+            moveSelection(direction);
+        } else {
+            const float previousHold = m_navHold;
+            m_navHold += dt;
+            if (previousHold < NAV_DELAY && m_navHold >= NAV_DELAY) {
+                moveSelection(direction);
+                m_navRepeat = 0.f;
+            } else if (m_navHold >= NAV_DELAY) {
+                m_navRepeat += dt;
+                while (m_navRepeat >= NAV_REPEAT) {
+                    m_navRepeat -= NAV_REPEAT;
+                    moveSelection(direction);
+                }
+            }
+        }
+
+        if (m_menuScreen == MenuScreen::Settings) {
+            if (left && !m_prevLeft)
+                _adjustMenuSetting(-1);
+            if (right && !m_prevRight)
+                _adjustMenuSetting(1);
+        }
+        if (a && !m_prevA)
+            _activateMenuItem();
+        if ((b && !m_prevB) || (start && !m_prevStart)) {
+            if (m_menuScreen == MenuScreen::Settings) {
+                m_menuScreen = MenuScreen::Main;
+                m_menuSelectedIndex = 4;
+                _captureInputState();
+            } else {
+                _closeMenu();
+            }
+        }
+
+        m_prevUp = up;
+        m_prevDown = down;
+        m_prevLeft = left;
+        m_prevRight = right;
+        m_prevA = a;
+        m_prevB = b;
+        m_prevStart = start;
+    }
+
+    void Pico8Page::_activateMenuItem()
+    {
+        if (m_menuScreen == MenuScreen::Settings) {
+            if (m_menuSelectedIndex == 0) {
+                m_menuScreen = MenuScreen::Main;
+                m_menuSelectedIndex = 4;
+                _captureInputState();
+            } else if (m_menuSelectedIndex == 4) {
+                _adjustMenuSetting(1);
+            }
+            return;
+        }
+
+        switch (m_menuSelectedIndex) {
+            case 0:
+                _closeMenu();
+                break;
+            case 1:
+                _restartGame();
+                break;
+            case 2:
+                _quickSave();
+                _closeMenu();
+                break;
+            case 3:
+                _quickLoad();
+                _closeMenu();
+                break;
+            case 4:
+                m_menuScreen = MenuScreen::Settings;
+                m_menuSelectedIndex = 0;
+                _captureInputState();
+                break;
+            case 5:
+                _returnToGameList();
+                break;
+            default:
+                break;
+        }
+    }
+
+    void Pico8Page::_adjustMenuSetting(int direction)
+    {
+        if (direction == 0 || m_menuScreen != MenuScreen::Settings)
+            return;
+        switch (m_menuSelectedIndex) {
+            case 1: {
+                int filter = static_cast<int>(m_videoFilter);
+                filter = (filter + direction + 3) % 3;
+                m_videoFilter = static_cast<VideoFilter>(filter);
+                SET_SETTING_KEY_INT("pico8.video_filter", filter);
+                break;
+            }
+            case 2:
+                m_sfxVolume = std::max(0, std::min(10,
+                    m_sfxVolume + direction));
+                SET_SETTING_KEY_INT("pico8.sfx_volume", m_sfxVolume);
+                _applyRuntimeSettings();
+                break;
+            case 3:
+                m_musicVolume = std::max(0, std::min(10,
+                    m_musicVolume + direction));
+                SET_SETTING_KEY_INT("pico8.music_volume", m_musicVolume);
+                _applyRuntimeSettings();
+                break;
+            case 4:
+                m_invertButtons = !m_invertButtons;
+                SET_SETTING_KEY_INT("pico8.invert_buttons",
+                                    m_invertButtons ? 1 : 0);
+                m_input.setInvertButtons(m_invertButtons);
+                break;
+            default:
+                break;
+        }
+    }
+
+    void Pico8Page::_restartGame()
+    {
+        if (!m_core.isGameLoaded())
+            return;
+        if (!m_core.Reset()) {
+            brls::Application::notify("PICO-8 游戏重启失败，已返回游戏列表");
+            _returnToGameList();
+            return;
+        }
+        _applyRuntimeSettings();
+        m_frameDirty = true;
+        m_input.reset();
+        _closeMenu();
+        brls::Application::notify("PICO-8 游戏已重启");
+    }
+
+    void Pico8Page::_returnToGameList()
+    {
+        if (!m_menuOpen)
+            return;
+        m_menuOpen = false;
+        m_returningToGameList = true;
         m_state = State::Pausing;
         m_stateTime = 0.f;
+        m_input.reset();
         brls::Application::blockInputs();
         _captureInputState();
+    }
+
+    void Pico8Page::_applyRuntimeSettings()
+    {
+        m_core.SetAudioVolumes(
+            static_cast<float>(m_sfxVolume) / 10.f,
+            static_cast<float>(m_musicVolume) / 10.f);
+        m_input.setInvertButtons(m_invertButtons);
     }
 
     void Pico8Page::_returnToRunningGame()
@@ -403,44 +636,50 @@ namespace beiklive
         _captureInputState();
     }
 
-    void Pico8Page::_quickSave()
+    bool Pico8Page::_quickSave()
     {
         if (m_state != State::Running || m_loadedGamePath.empty())
-            return;
+            return false;
         std::vector<uint8_t> state;
         if (m_core.SaveState(state) &&
             _writeQuickState(m_loadedGamePath, state)) {
             m_quickState = std::move(state);
             m_quickStateGamePath = m_loadedGamePath;
-            brls::Application::notify("PICO-8 快速存档完成");
+            brls::Application::notify("PICO-8 保存状态完成");
+            return true;
         } else {
-            brls::Application::notify("PICO-8 快速存档失败，请查看 pico.log");
+            brls::Application::notify("PICO-8 保存状态失败，请查看 pico.log");
+            return false;
         }
     }
 
-    void Pico8Page::_quickLoad()
+    bool Pico8Page::_quickLoad()
     {
         if (m_state != State::Running)
-            return;
+            return false;
         if (m_loadedGamePath.empty())
-            return;
+            return false;
         if (m_quickState.empty() || m_quickStateGamePath != m_loadedGamePath) {
             m_quickState.clear();
             if (_readQuickState(m_loadedGamePath, m_quickState))
                 m_quickStateGamePath = m_loadedGamePath;
         }
         if (m_quickState.empty()) {
-            brls::Application::notify("没有可读取的 PICO-8 快速存档");
-            return;
+            brls::Application::notify("没有可读取的 PICO-8 状态");
+            return false;
         }
         if (m_core.LoadState(m_quickState.data(), m_quickState.size())) {
+            _applyRuntimeSettings();
             m_input.reset();
+            m_input.suppressActionsUntilRelease();
             m_frameDirty = true;
             _captureInputState();
             _captureTraceInput();
-            brls::Application::notify("PICO-8 快速读档完成");
+            brls::Application::notify("PICO-8 读取状态完成");
+            return true;
         } else {
-            brls::Application::notify("PICO-8 快速读档失败，请查看 pico.log");
+            brls::Application::notify("PICO-8 读取状态失败，请查看 pico.log");
+            return false;
         }
     }
 
@@ -535,8 +774,8 @@ namespace beiklive
             {brls::BUTTON_NAV_DOWN, "↓"},
             {brls::BUTTON_NAV_LEFT, "←"},
             {brls::BUTTON_NAV_RIGHT, "→"},
-            {brls::BUTTON_A, "O"},
-            {brls::BUTTON_B, "X"},
+            {brls::BUTTON_A, "X"},
+            {brls::BUTTON_B, "O"},
             {brls::BUTTON_X, "O"},
             {brls::BUTTON_Y, "X"},
             {brls::BUTTON_LB, "L"},
@@ -654,6 +893,7 @@ namespace beiklive
                             m_quickState.clear();
                             m_quickStateGamePath.clear();
                         }
+                        _applyRuntimeSettings();
                         m_loadedGamePath = game.path;
                         m_input.reset();
                         m_inputTrace.clear();
@@ -686,20 +926,17 @@ namespace beiklive
             case State::Running: {
                 const auto& raw = brls::Application::getControllerState();
                 const bool start = raw.buttons[static_cast<int>(brls::BUTTON_START)];
-                const bool lt = raw.buttons[static_cast<int>(brls::BUTTON_LT)];
-                const bool rt = raw.buttons[static_cast<int>(brls::BUTTON_RT)];
-                _updateInputTrace(dt);
-                if (start && !m_prevStart) {
-                    _beginPause();
+                if (m_menuOpen) {
+                    m_menuTime += dt;
+                    _handleMenuInput(dt);
                     break;
                 }
-                if (rt && !m_prevRt)
-                    _quickSave();
-                if (lt && !m_prevLt)
-                    _quickLoad();
+                _updateInputTrace(dt);
+                if (start && !m_prevStart) {
+                    _openMenu();
+                    break;
+                }
                 m_prevStart = start;
-                m_prevLt = lt;
-                m_prevRt = rt;
                 m_core.SetInput(m_input.poll());
                 if (m_core.RunFrame(dt))
                     m_frameDirty = true;
@@ -707,7 +944,17 @@ namespace beiklive
             }
             case State::Pausing:
                 if (m_stateTime >= PAUSE_DURATION) {
-                    m_state = State::PausedLibrary;
+                    if (m_returningToGameList) {
+                        m_core.UnloadGame();
+                        m_loadedGamePath.clear();
+                        m_quickState.clear();
+                        m_quickStateGamePath.clear();
+                        m_launchUsesRuntime = false;
+                        m_returningToGameList = false;
+                        m_state = State::Library;
+                    } else {
+                        m_state = State::PausedLibrary;
+                    }
                     m_stateTime = 0.f;
                     m_selectionIdle = 1.f;
                     brls::Application::unblockInputs();
@@ -992,6 +1239,154 @@ namespace beiklive
             vg, x, y, width, height, 0.f, m_video.imageHandle(), 1.f));
         nvgFill(vg);
         nvgRestore(vg);
+        _drawVideoFilter(vg, x, y, width, height, alpha);
+    }
+
+    void Pico8Page::_drawVideoFilter(NVGcontext* vg, float x, float y,
+                                     float width, float height, float alpha)
+    {
+        if (m_videoFilter == VideoFilter::None || alpha <= 0.f)
+            return;
+
+        const float pixelWidth = width / 128.f;
+        const float pixelHeight = height / 128.f;
+        nvgSave(vg);
+        nvgScissor(vg, x, y, width, height);
+        if (m_videoFilter == VideoFilter::Dot) {
+            nvgBeginPath(vg);
+            for (int i = 1; i < 128; ++i) {
+                const float px = x + static_cast<float>(i) * pixelWidth;
+                const float py = y + static_cast<float>(i) * pixelHeight;
+                nvgMoveTo(vg, px, y);
+                nvgLineTo(vg, px, y + height);
+                nvgMoveTo(vg, x, py);
+                nvgLineTo(vg, x + width, py);
+            }
+            nvgStrokeWidth(vg, std::max(0.55f,
+                std::min(pixelWidth, pixelHeight) * 0.16f));
+            nvgStrokeColor(vg, nvgRGBA(0, 0, 0,
+                alphaByte(alpha * 0.30f)));
+            nvgStroke(vg);
+
+            nvgBeginPath(vg);
+            nvgRect(vg, x, y, width, height);
+            nvgFillColor(vg, nvgRGBA(16, 52, 28,
+                alphaByte(alpha * 0.06f)));
+            nvgFill(vg);
+        } else {
+            const float lineStep = std::max(2.f, pixelHeight * 2.f);
+            nvgBeginPath(vg);
+            for (float py = y + pixelHeight; py < y + height;
+                 py += lineStep) {
+                nvgRect(vg, x, py, width,
+                        std::max(1.f, pixelHeight * 0.32f));
+            }
+            nvgFillColor(vg, nvgRGBA(0, 0, 0,
+                alphaByte(alpha * 0.34f)));
+            nvgFill(vg);
+
+            const NVGpaint vignette = nvgBoxGradient(
+                vg, x + width * 0.06f, y + height * 0.06f,
+                width * 0.88f, height * 0.88f,
+                std::min(width, height) * 0.18f,
+                std::min(width, height) * 0.22f,
+                nvgRGBA(0, 0, 0, 0),
+                nvgRGBA(0, 0, 0, alphaByte(alpha * 0.58f)));
+            nvgBeginPath(vg);
+            nvgRect(vg, x, y, width, height);
+            nvgFillPaint(vg, vignette);
+            nvgFill(vg);
+        }
+        nvgResetScissor(vg);
+        nvgRestore(vg);
+    }
+
+    void Pico8Page::_drawPauseMenu(NVGcontext* vg, float x, float y,
+                                   float width, float height, float alpha)
+    {
+        if (!m_menuOpen || alpha <= 0.f)
+            return;
+
+        const float menuAlpha = smoothStep(m_menuTime / 0.16f) * alpha;
+        const bool settings = m_menuScreen == MenuScreen::Settings;
+        const int itemCount = settings ? 5 : 6;
+        constexpr float rowHeight = 49.f;
+        constexpr float headerHeight = 50.f;
+        constexpr float padding = 10.f;
+        const float panelWidth = std::max(300.f, std::min(410.f, width - 56.f));
+        const float panelHeight = headerHeight + padding * 2.f +
+            rowHeight * static_cast<float>(itemCount);
+        const float panelX = x + (width - panelWidth) * 0.5f;
+        const float panelY = y + (height - panelHeight) * 0.5f;
+
+        nvgSave(vg);
+        nvgBeginPath(vg);
+        nvgRect(vg, x, y, width, height);
+        nvgFillColor(vg, nvgRGBA(0, 0, 0,
+            alphaByte(menuAlpha * 0.68f)));
+        nvgFill(vg);
+
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, panelX, panelY, panelWidth, panelHeight, 6.f);
+        nvgFillColor(vg, nvgRGBA(8, 10, 15,
+            alphaByte(menuAlpha * 0.98f)));
+        nvgFill(vg);
+        nvgStrokeWidth(vg, 1.5f);
+        nvgStrokeColor(vg, nvgRGBA(255, 255, 255,
+            alphaByte(menuAlpha * 0.78f)));
+        nvgStroke(vg);
+
+        nvgFontFaceId(vg, m_fontId);
+        nvgFontSize(vg, 22.f);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(255, 241, 232,
+            alphaByte(menuAlpha)));
+        nvgText(vg, panelX + 20.f, panelY + headerHeight * 0.5f,
+                settings ? "设置" : "游戏菜单", nullptr);
+
+        const std::array<const char*, 6> mainItems{
+            "继续游戏", "重启游戏", "保存状态", "读取状态", "设置", "退出游戏"};
+        const std::array<const char*, 3> filterNames{"无", "点阵", "CRT"};
+        std::array<std::string, 5> settingItems{
+            "返回",
+            std::string("画面滤镜  ") +
+                filterNames[static_cast<size_t>(m_videoFilter)],
+            "音效音量  " + std::to_string(m_sfxVolume),
+            "音乐音量  " + std::to_string(m_musicVolume),
+            std::string("按键反转  ") + (m_invertButtons ? "是" : "否"),
+        };
+
+        const float listY = panelY + headerHeight + padding;
+        for (int index = 0; index < itemCount; ++index) {
+            const float rowY = listY + static_cast<float>(index) * rowHeight;
+            const bool selected = index == m_menuSelectedIndex;
+            if (selected) {
+                nvgBeginPath(vg);
+                nvgRect(vg, panelX + 8.f, rowY,
+                        panelWidth - 16.f, rowHeight);
+                nvgFillColor(vg, nvgRGBA(29, 124, 242,
+                    alphaByte(menuAlpha * 0.96f)));
+                nvgFill(vg);
+            }
+
+            const std::string label = settings
+                ? settingItems[static_cast<size_t>(index)]
+                : mainItems[static_cast<size_t>(index)];
+            nvgFontSize(vg, 21.f);
+            nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+            nvgFillColor(vg, nvgRGBA(255, 255, 255,
+                alphaByte(menuAlpha * (selected ? 1.f : 0.88f))));
+            nvgText(vg, panelX + 24.f, rowY + rowHeight * 0.5f,
+                    label.c_str(), nullptr);
+            if (settings && selected && index > 0) {
+                nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
+                nvgFillColor(vg, nvgRGBA(255, 255, 255,
+                    alphaByte(menuAlpha * 0.92f)));
+                nvgText(vg, panelX + panelWidth - 23.f,
+                        rowY + rowHeight * 0.5f, "<  >", nullptr);
+            }
+        }
+        nvgRestore(vg);
     }
 
     void Pico8Page::_drawPreview(NVGcontext* vg, float x, float y,
@@ -1116,29 +1511,16 @@ namespace beiklive
         _drawInputTrace(vg, x, y, width, height, alpha);
         _drawGameControls(vg, x, y, width, height, alpha * 0.9f);
 
-        struct HintItem
-        {
-            brls::ControllerButton button;
-            const char* label;
-        };
-        constexpr HintItem hints[] = {
-            {brls::BUTTON_RT, "快速存档"},
-            {brls::BUTTON_LT, "快速读档"},
-            {brls::BUTTON_START, "游戏列表"},
-        };
         const float right = x + width - 35.f;
-        const float firstY = y + height - 111.f;
+        const char* label = "打开菜单";
         nvgFontFaceId(vg, m_fontId);
         nvgFontSize(vg, 21.f);
-        for (size_t index = 0; index < 3u; ++index) {
-            float bounds[4]{};
-            nvgTextBounds(vg, 0.f, 0.f, hints[index].label, nullptr, bounds);
-            const float labelWidth = bounds[2] - bounds[0];
-            const float glyphX = right - labelWidth - 22.f;
-            _drawHint(vg, hints[index].button, hints[index].label,
-                      glyphX, firstY + static_cast<float>(index) * 40.f,
-                      alpha * 0.88f);
-        }
+        float bounds[4]{};
+        nvgTextBounds(vg, 0.f, 0.f, label, nullptr, bounds);
+        const float labelWidth = bounds[2] - bounds[0];
+        _drawHint(vg, brls::BUTTON_START, label,
+                  right - labelWidth - 22.f, y + height - 31.f,
+                  alpha * 0.9f);
     }
 
     void Pico8Page::_drawGameControls(NVGcontext* vg, float x, float y,
@@ -1193,8 +1575,8 @@ namespace beiklive
         nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
         nvgText(vg, actionEqualsX, oY, "=", nullptr);
         nvgText(vg, actionEqualsX, xY, "=", nullptr);
-        drawSwitchGlyph(0xE0E0, actionGlyphX, oY, 32.f);
-        drawSwitchGlyph(0xE0E1, actionGlyphX, xY, 32.f);
+        drawSwitchGlyph(0xE0E1, actionGlyphX, oY, 32.f);
+        drawSwitchGlyph(0xE0E0, actionGlyphX, xY, 32.f);
     }
 
     void Pico8Page::_drawInputTrace(NVGcontext* vg, float x, float y,
@@ -1311,6 +1693,7 @@ namespace beiklive
                 if (!m_launchUsesRuntime && gameAlpha < 1.f)
                     _drawTransitionPreview(vg, x, y, width, height,
                                            1.f, 1.f - gameAlpha, false);
+                _drawPauseMenu(vg, x, y, width, height, gameAlpha);
                 break;
             }
             case State::Pausing: {

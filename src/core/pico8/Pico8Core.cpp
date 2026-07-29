@@ -27,6 +27,8 @@ namespace
     constexpr size_t MAX_LUA_STATE_SIZE = 32 * 1024 * 1024;
     constexpr std::array<uint8_t, 8> STATE_MAGIC{
         {'P', '8', 'S', 'T', 'A', 'T', 'E', '1'}};
+    constexpr std::array<uint8_t, 8> RUNTIME_STATE_MAGIC{
+        {'F', '0', '8', 'S', 'T', 'A', 'T', 'E'}};
     std::once_flag g_loggerInit;
 
     template <typename Tag, typename Tag::type Member>
@@ -91,45 +93,6 @@ namespace
         return hasLoop && hasSandbox;
     }
 
-    bool persistLuaState(lua_State* state, std::vector<uint8_t>& output,
-                         std::string& error)
-    {
-        if (!state || !hasRestorableRuntime(state)) {
-            error = "cart Lua coroutine is not ready";
-            return false;
-        }
-        const int stackTop = lua_gettop(state);
-        lua_getglobal(state, "eris");
-        if (!lua_istable(state, -1)) {
-            error = "global eris table is unavailable";
-            lua_settop(state, stackTop);
-            return false;
-        }
-        lua_getfield(state, -1, "persist_all");
-        if (!lua_isfunction(state, -1)) {
-            error = "eris.persist_all is unavailable";
-            lua_settop(state, stackTop);
-            return false;
-        }
-        if (lua_pcall(state, 0, 1, 0) != LUA_OK) {
-            const char* message = lua_tostring(state, -1);
-            error = message ? message : "eris.persist_all failed";
-            lua_settop(state, stackTop);
-            return false;
-        }
-        size_t size = 0;
-        const char* bytes = lua_tolstring(state, -1, &size);
-        if (!bytes || size == 0 || size > MAX_LUA_STATE_SIZE) {
-            error = "eris.persist_all returned an invalid state";
-            lua_settop(state, stackTop);
-            return false;
-        }
-        output.assign(reinterpret_cast<const uint8_t*>(bytes),
-                      reinterpret_cast<const uint8_t*>(bytes) + size);
-        lua_settop(state, stackTop);
-        return true;
-    }
-
     bool restoreLuaState(lua_State* state, const uint8_t* data, size_t size,
                          std::string& error)
     {
@@ -170,12 +133,6 @@ namespace
         if (!ready)
             error = "restored cart coroutine is unavailable";
         return ready;
-    }
-
-    template <typename T>
-    void writeStateValue(std::vector<uint8_t>& output, size_t offset, T value)
-    {
-        std::memcpy(output.data() + offset, &value, sizeof(value));
     }
 
     template <typename T>
@@ -412,11 +369,10 @@ namespace beiklive::pico8
         m_impl->input.held = state.held;
     }
 
-    void Core::Reset()
+    bool Core::Reset()
     {
         const std::string path = m_impl->gamePath;
-        if (!path.empty())
-            LoadGame(path);
+        return !path.empty() && LoadGame(path);
     }
 
     void Core::Pause()
@@ -431,36 +387,26 @@ namespace beiklive::pico8
         m_impl->outputAudio.resume();
     }
 
+    void Core::SetAudioVolumes(float sfxVolume, float musicVolume)
+    {
+        if (m_impl->vm)
+            m_impl->vm->SetAudioVolumes(sfxVolume, musicVolume);
+    }
+
     bool Core::SaveState(std::vector<uint8_t>& output)
     {
         output.clear();
         if (!m_impl->loaded || !m_impl->vm ||
             !m_impl->statePersistenceReady)
             return false;
-        PicoRam* memory = m_impl->vm->getPicoRam();
-        if (!memory)
-            return false;
-
-        std::vector<uint8_t> luaState;
         std::string stateError;
-        if (!persistLuaState(getVmLuaState(m_impl->vm.get()), luaState,
-                            stateError)) {
+        if (!m_impl->vm->SerializeState(output, stateError)) {
             brls::Logger::error(
                 "Pico8Core: quick save failed path={} error={}",
                 m_impl->gamePath, stateError);
             Logger_Write("Quick save failed: %s\n", stateError.c_str());
             return false;
         }
-        const size_t luaSize = luaState.size();
-
-        output.resize(STATE_HEADER_SIZE + RAM_SIZE + luaSize);
-        std::memcpy(output.data(), STATE_MAGIC.data(), STATE_MAGIC.size());
-        writeStateValue<uint32_t>(output, 8, 1);
-        writeStateValue<uint32_t>(output, 12, static_cast<uint32_t>(RAM_SIZE));
-        writeStateValue<uint64_t>(output, 16, static_cast<uint64_t>(luaSize));
-        std::memcpy(output.data() + STATE_HEADER_SIZE, memory->data, RAM_SIZE);
-        std::memcpy(output.data() + STATE_HEADER_SIZE + RAM_SIZE,
-                    luaState.data(), luaSize);
         brls::Logger::info("Pico8Core: quick save created bytes={}", output.size());
         return true;
     }
@@ -468,125 +414,63 @@ namespace beiklive::pico8
     bool Core::LoadState(const uint8_t* data, size_t size)
     {
         if (!m_impl->loaded || !m_impl->vm ||
-            !m_impl->statePersistenceReady || !data ||
-            size < STATE_HEADER_SIZE + RAM_SIZE ||
-            std::memcmp(data, STATE_MAGIC.data(), STATE_MAGIC.size()) != 0)
+            !m_impl->statePersistenceReady || !data)
             return false;
-        const uint32_t version = readStateValue<uint32_t>(data, 8);
-        const uint32_t ramSize = readStateValue<uint32_t>(data, 12);
-        const uint64_t luaSize = readStateValue<uint64_t>(data, 16);
-        if (version != 1 || ramSize != RAM_SIZE || luaSize == 0 ||
-            luaSize > MAX_LUA_STATE_SIZE ||
-            STATE_HEADER_SIZE + RAM_SIZE + luaSize != size)
-            return false;
-        const std::string gamePath = m_impl->gamePath;
+        const bool wasPaused = m_impl->paused;
         m_impl->outputAudio.pause();
-
-        auto buildRuntime = [&](std::unique_ptr<Host>& host,
-                                std::unique_ptr<Vm>& vm,
-                                bool restoreState,
-                                std::string& error) -> bool {
-            host = std::make_unique<Host>(WIDTH, HEIGHT);
-            vm = std::make_unique<Vm>(host.get());
-            if (!initializeStatePersistence(vm.get(), error))
-                return false;
-            if (!vm->LoadCart(gamePath, false)) {
-                error = vm->GetBiosError();
-                if (error.empty())
-                    error = "failed to reload cart";
-                return false;
-            }
-            vm->vm_run();
-            error = vm->GetBiosError();
-            if (!error.empty())
-                return false;
-            if (!restoreState)
-                return true;
-
-            PicoRam* candidateMemory = vm->getPicoRam();
-            if (!candidateMemory) {
-                error = "candidate PICO-8 memory is unavailable";
-                return false;
-            }
-            if (!restoreLuaState(
-                    getVmLuaState(vm.get()),
-                    data + STATE_HEADER_SIZE + RAM_SIZE,
-                    static_cast<size_t>(luaSize), error))
-                return false;
-            std::memcpy(candidateMemory->data,
-                        data + STATE_HEADER_SIZE, RAM_SIZE);
-            return true;
-        };
-
-        auto replaceRuntime = [&](std::unique_ptr<Host> host,
-                                  std::unique_ptr<Vm> vm) {
-            m_impl->vm = std::move(vm);
-            m_impl->host = std::move(host);
-        };
-
-        std::unique_ptr<Host> candidateHost;
-        std::unique_ptr<Vm> candidateVm;
         std::string stateError;
-        if (!buildRuntime(candidateHost, candidateVm, true, stateError)) {
+        bool restored = false;
+        if (size >= RUNTIME_STATE_MAGIC.size() &&
+            std::memcmp(data, RUNTIME_STATE_MAGIC.data(),
+                        RUNTIME_STATE_MAGIC.size()) == 0) {
+            restored = m_impl->vm->DeserializeState(data, size, stateError);
+        } else if (size >= STATE_HEADER_SIZE + RAM_SIZE &&
+                   std::memcmp(data, STATE_MAGIC.data(),
+                               STATE_MAGIC.size()) == 0) {
+            const uint32_t version = readStateValue<uint32_t>(data, 8);
+            const uint32_t ramSize = readStateValue<uint32_t>(data, 12);
+            const uint64_t luaSize = readStateValue<uint64_t>(data, 16);
+            if (version == 1 && ramSize == RAM_SIZE && luaSize > 0 &&
+                luaSize <= MAX_LUA_STATE_SIZE &&
+                STATE_HEADER_SIZE + RAM_SIZE + luaSize == size) {
+                PicoRam* memory = m_impl->vm->getPicoRam();
+                restored = memory && restoreLuaState(
+                    getVmLuaState(m_impl->vm.get()),
+                    data + STATE_HEADER_SIZE + RAM_SIZE,
+                    static_cast<size_t>(luaSize), stateError);
+                if (restored)
+                    std::memcpy(memory->data,
+                                data + STATE_HEADER_SIZE, RAM_SIZE);
+            } else {
+                stateError = "legacy quick state is incompatible";
+            }
+        } else {
+            stateError = "quick state header is invalid";
+        }
+
+        if (!restored) {
             brls::Logger::error(
                 "Pico8Core: quick load failed path={} error={}",
-                gamePath, stateError);
+                m_impl->gamePath, stateError);
             Logger_Write("Quick load failed: %s\n", stateError.c_str());
-
-            // FAKE-08 binds its Lua API to process-global VM pointers. Once a
-            // candidate VM has been constructed, a failed restore cannot
-            // safely resume the old VM. Rebuild the current cart so input and
-            // Lua callbacks always point at live objects.
-            candidateVm.reset();
-            candidateHost.reset();
-            std::string recoveryError;
-            if (buildRuntime(candidateHost, candidateVm, false,
-                             recoveryError)) {
-                replaceRuntime(std::move(candidateHost),
-                               std::move(candidateVm));
-                m_impl->statePersistenceReady = true;
-                m_impl->frameAccumulator = 0.f;
-                m_impl->audioAccumulator = 0.0;
-                m_impl->input = {};
-                m_impl->paused = false;
-                m_impl->runtimeErrorLogged = false;
-                m_impl->error.clear();
-                m_impl->convertFrame();
-                m_impl->outputAudio.initialize();
-                brls::Logger::warning(
-                    "Pico8Core: quick-load recovery restarted cart path={}",
-                    gamePath);
-                Logger_Write("Quick-load recovery restarted cart\n");
-            } else {
-                brls::Logger::error(
-                    "Pico8Core: quick-load recovery failed path={} error={}",
-                    gamePath, recoveryError);
-                Logger_Write("Quick-load recovery failed: %s\n",
-                             recoveryError.c_str());
-                if (m_impl->vm)
-                    m_impl->vm->CloseCart();
-                m_impl->vm.reset();
-                m_impl->host.reset();
-                m_impl->loaded = false;
-                m_impl->initialized = false;
-                m_impl->statePersistenceReady = false;
-                m_impl->gamePath.clear();
-                m_impl->error = recoveryError;
-            }
+            if (wasPaused)
+                m_impl->outputAudio.pause();
+            else
+                m_impl->outputAudio.resume();
             return false;
         }
 
-        replaceRuntime(std::move(candidateHost), std::move(candidateVm));
-        m_impl->statePersistenceReady = true;
         m_impl->frameAccumulator = 0.f;
         m_impl->audioAccumulator = 0.0;
         m_impl->input = {};
-        m_impl->paused = false;
+        m_impl->paused = wasPaused;
         m_impl->runtimeErrorLogged = false;
         m_impl->error.clear();
         host_bridge::setInput(0, 0);
         m_impl->convertFrame();
         m_impl->outputAudio.initialize();
+        if (wasPaused)
+            m_impl->outputAudio.pause();
         brls::Logger::info("Pico8Core: quick state loaded bytes={}", size);
         return true;
     }
