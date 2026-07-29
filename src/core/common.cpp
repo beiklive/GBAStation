@@ -392,7 +392,7 @@ namespace beiklive
         // 快进设置
         SettingManager->SetDefault("fastforward.enabled", ConfigValue(1));
         SettingManager->SetDefault("fastforward.mode", ConfigValue(std::string("hold")));
-        SettingManager->SetDefault("fastforward.multiplier", ConfigValue(4.0f));
+        SettingManager->SetDefault("fastforward.multiplier", ConfigValue(2.0f));
         SettingManager->SetDefault("fastforward.mute", ConfigValue(1));
 
         // 倒带设置

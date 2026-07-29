@@ -1734,7 +1734,7 @@ private:
         const std::vector<std::string> multiplierLabels = {"0.1倍", "0.5倍", "1倍", "1.25倍", "1.5倍", "1.75倍", "2倍", "3倍", "4倍", "5倍", "6倍", "7倍", "8倍", "9倍", "10倍"};
         const std::vector<float> multiplierValues = {0.1f, 0.5f, 1.f, 1.25f, 1.5f, 1.75f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f, 9.f, 10.f};
         game.push_back(_selector("快进倍率", "低于 1 倍可用于慢动作", 0xE8E5, multiplierLabels,
-            [multiplierValues]() { const float cur = GET_SETTING_KEY_FLOAT("fastforward.multiplier", 4.f); for (int i = 0; i < static_cast<int>(multiplierValues.size()); ++i) if (std::fabs(cur - multiplierValues[i]) < 0.001f) return i; return 8; },
+            [multiplierValues]() { const float cur = GET_SETTING_KEY_FLOAT("fastforward.multiplier", 2.f); for (int i = 0; i < static_cast<int>(multiplierValues.size()); ++i) if (std::fabs(cur - multiplierValues[i]) < 0.001f) return i; return 6; },
             [multiplierValues](int i) { if (i >= 0 && i < static_cast<int>(multiplierValues.size())) SET_SETTING_KEY_FLOAT("fastforward.multiplier", multiplierValues[i]); }));
         game.push_back(_toggle("快进时静音", "避免高速播放产生刺耳音频", 0xE04F,
             []() { return cfgGetBool("fastforward.mute", true); }, [](bool v) { cfgSetBool("fastforward.mute", v); }));
@@ -3766,8 +3766,8 @@ brls::View *SettingPage::buildGameTab()
     {
         std::vector<std::string> multis = {"0.1倍", "0.5倍", "1倍", "1.25倍", "1.5倍", "1.75倍", "2倍", "3倍", "4倍", "5倍", "6倍", "7倍", "8倍", "9倍", "10倍"};
         static const float multiVals[] = {0.1f, 0.5f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f};
-        float curMulti = GET_SETTING_KEY_FLOAT("fastforward.multiplier", 4.0f);
-        int idx = 8;
+        float curMulti = GET_SETTING_KEY_FLOAT("fastforward.multiplier", 2.0f);
+        int idx = 6;
         for (int i = 0; i < 15; ++i) if (multiVals[i] == curMulti) { idx = i; break; }
         auto *cell = new brls::SelectorCell();
         cell->init("快进倍率", multis, idx,

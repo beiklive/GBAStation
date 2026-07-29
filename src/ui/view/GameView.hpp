@@ -116,7 +116,7 @@ namespace beiklive
             beiklive::GameEntry m_gameEntry; ///< 游戏条目数据
 
             // ---- 快进倍率（从配置读取，支持慢动作）--------------------------
-            float m_ffMultiplier = 4.0f;     ///< 快进倍率（>1=加速, <1=慢动作）
+            float m_ffMultiplier = 2.0f;     ///< 快进倍率（>1=加速, <1=慢动作）
             float m_ffSlowAccum  = 0.0f;     ///< 慢动作帧累加器
             bool  m_ffMute       = true;     ///< 快进时静音（缓存配置避免每帧读取）
             bool  m_rewindEnabled = false;   ///< 是否启用倒带状态缓存

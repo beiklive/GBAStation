@@ -2491,7 +2491,7 @@ namespace beiklive
         bool autoLoadDone = false;
 
         // 读取快进倍率配置
-        m_ffMultiplier = GET_SETTING_KEY_FLOAT("fastforward.multiplier", 4.0f);
+        m_ffMultiplier = GET_SETTING_KEY_FLOAT("fastforward.multiplier", 2.0f);
         if (m_ffMultiplier <= 0.0f) m_ffMultiplier = 1.0f;
         m_ffSlowAccum = 0.0f;
         m_ffMute = GET_SETTING_KEY_INT("fastforward.mute", 1) != 0;
@@ -2705,7 +2705,7 @@ namespace beiklive
             if (rew) ff = false;
 
             // 每帧读取快进倍率（支持菜单中实时调整）
-            m_ffMultiplier = GET_SETTING_KEY_FLOAT("fastforward.multiplier", 4.0f);
+            m_ffMultiplier = GET_SETTING_KEY_FLOAT("fastforward.multiplier", 2.0f);
             if (m_ffMultiplier <= 0.0f)
                 m_ffMultiplier = 1.0f;
             else if (m_ffMultiplier < 0.1f)
