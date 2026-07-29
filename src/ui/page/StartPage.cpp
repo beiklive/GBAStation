@@ -1051,6 +1051,7 @@ namespace beiklive
             case beiklive::enums::FileType::SNES_ROM:
             case beiklive::enums::FileType::NDS_ROM:
             case beiklive::enums::FileType::THREEDS_ROM:
+            case beiklive::enums::FileType::GENESIS_ROM:
                 brls::Application::notify("启动游戏：" + dirItem.fileName);
                 _pushGameActivity(dirItem, this);
                 break;

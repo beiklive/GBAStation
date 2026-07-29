@@ -1,0 +1,107 @@
+LIBRETRO_COMM_DIR := $(CORE_DIR)/libretro/libretro-common
+LIBRETRO_DIR      := $(CORE_DIR)/libretro
+LIBRETRO_DEPS_DIR := $(CORE_DIR)/libretro/deps
+INCFLAGS          :=
+GENPLUS_SRC_DIR   := $(CORE_DIR)/core \
+                   $(CORE_DIR)/core/z80 \
+                   $(CORE_DIR)/core/m68k \
+                   $(CORE_DIR)/core/ntsc \
+                   $(CORE_DIR)/core/sound \
+                   $(CORE_DIR)/core/sound/minimp3 \
+                   $(CORE_DIR)/core/input_hw \
+                   $(CORE_DIR)/core/cd_hw \
+                   $(CORE_DIR)/core/cart_hw \
+                   $(CORE_DIR)/core/cart_hw/svp
+
+ifneq (,$(findstring msvc2003,$(platform)))
+INCFLAGS += -I$(LIBRETRO_COMM_DIR)/include/compat/msvc
+endif
+
+ifeq ($(HOOK_CPU), 1)
+   GENPLUS_SRC_DIR += $(CORE_DIR)/core/debug
+   FLAGS += -DHOOK_CPU
+endif
+
+ifeq ($(HAVE_CHD), 1)
+   FLAGS += -D_7ZIP_ST -DZSTD_DISABLE_ASM
+   INCFLAGS += \
+               -I$(LIBRETRO_DEPS_DIR)/libchdr/include \
+               -I$(LIBRETRO_DEPS_DIR)/lzma-19.00/include \
+               -I$(LIBRETRO_DEPS_DIR)/zlib-1.2.11 \
+               -I$(LIBRETRO_DEPS_DIR)/zstd/lib
+
+   SOURCES_C += \
+                $(LIBRETRO_DEPS_DIR)/lzma-19.00/src/Alloc.c \
+                $(LIBRETRO_DEPS_DIR)/lzma-19.00/src/Bra86.c \
+                $(LIBRETRO_DEPS_DIR)/lzma-19.00/src/BraIA64.c \
+                $(LIBRETRO_DEPS_DIR)/lzma-19.00/src/CpuArch.c \
+                $(LIBRETRO_DEPS_DIR)/lzma-19.00/src/Delta.c \
+                $(LIBRETRO_DEPS_DIR)/lzma-19.00/src/LzFind.c \
+                $(LIBRETRO_DEPS_DIR)/lzma-19.00/src/Lzma86Dec.c \
+                $(LIBRETRO_DEPS_DIR)/lzma-19.00/src/LzmaDec.c \
+                $(LIBRETRO_DEPS_DIR)/lzma-19.00/src/LzmaEnc.c \
+                $(LIBRETRO_DEPS_DIR)/lzma-19.00/src/Sort.c \
+                $(LIBRETRO_DEPS_DIR)/libchdr/src/libchdr_bitstream.c \
+                $(LIBRETRO_DEPS_DIR)/libchdr/src/libchdr_cdrom.c \
+                $(LIBRETRO_DEPS_DIR)/libchdr/src/libchdr_chd.c \
+                $(LIBRETRO_DEPS_DIR)/libchdr/src/libchdr_flac.c \
+                $(LIBRETRO_DEPS_DIR)/libchdr/src/libchdr_huffman.c \
+                $(LIBRETRO_DEPS_DIR)/zstd/lib/common/entropy_common.c \
+                $(LIBRETRO_DEPS_DIR)/zstd/lib/common/error_private.c \
+                $(LIBRETRO_DEPS_DIR)/zstd/lib/common/fse_decompress.c \
+                $(LIBRETRO_DEPS_DIR)/zstd/lib/common/zstd_common.c \
+                $(LIBRETRO_DEPS_DIR)/zstd/lib/common/xxhash.c \
+                $(LIBRETRO_DEPS_DIR)/zstd/lib/decompress/huf_decompress.c \
+                $(LIBRETRO_DEPS_DIR)/zstd/lib/decompress/zstd_ddict.c \
+                $(LIBRETRO_DEPS_DIR)/zstd/lib/decompress/zstd_decompress.c \
+                $(LIBRETRO_DEPS_DIR)/zstd/lib/decompress/zstd_decompress_block.c
+endif
+
+SOURCES_C += $(foreach dir,$(GENPLUS_SRC_DIR),$(wildcard $(dir)/*.c))
+
+ifneq ($(STATIC_LINKING), 1)
+SOURCES_C += \
+				$(LIBRETRO_COMM_DIR)/streams/file_stream.c \
+				$(LIBRETRO_COMM_DIR)/streams/file_stream_transforms.c \
+				$(LIBRETRO_COMM_DIR)/compat/fopen_utf8.c \
+				$(LIBRETRO_COMM_DIR)/compat/compat_snprintf.c \
+				$(LIBRETRO_COMM_DIR)/compat/compat_strl.c \
+				$(LIBRETRO_COMM_DIR)/compat/compat_strcasestr.c \
+				$(LIBRETRO_COMM_DIR)/compat/compat_posix_string.c \
+				$(LIBRETRO_COMM_DIR)/encodings/encoding_utf.c \
+				$(LIBRETRO_COMM_DIR)/file/file_path.c \
+				$(LIBRETRO_COMM_DIR)/file/retro_dirent.c \
+				$(LIBRETRO_COMM_DIR)/lists/string_list.c \
+				$(LIBRETRO_COMM_DIR)/lists/dir_list.c \
+				$(LIBRETRO_COMM_DIR)/memmap/memalign.c \
+				$(LIBRETRO_COMM_DIR)/string/stdstring.c
+
+ifneq (,$(findstring uwp,$(PlatformSuffix)))
+SOURCES_CXX += $(LIBRETRO_COMM_DIR)/vfs/vfs_implementation_uwp.cpp
+else
+SOURCES_C += $(LIBRETRO_COMM_DIR)/vfs/vfs_implementation.c
+endif
+
+ifeq ($(HAVE_CDROM), 1)
+SOURCES_C += \
+				$(LIBRETRO_COMM_DIR)/cdrom/cdrom.c \
+				$(LIBRETRO_COMM_DIR)/vfs/vfs_implementation_cdrom.c
+endif
+
+SOURCES_C += \
+             $(LIBRETRO_DEPS_DIR)/zlib-1.2.11/adler32.c \
+             $(LIBRETRO_DEPS_DIR)/zlib-1.2.11/crc32.c \
+             $(LIBRETRO_DEPS_DIR)/zlib-1.2.11/inffast.c \
+             $(LIBRETRO_DEPS_DIR)/zlib-1.2.11/inflate.c \
+             $(LIBRETRO_DEPS_DIR)/zlib-1.2.11/inftrees.c \
+             $(LIBRETRO_DEPS_DIR)/zlib-1.2.11/zutil.c
+
+endif
+
+ifeq ($(SHARED_LIBVORBIS),)
+   SOURCES_C += $(foreach dir,$(TREMOR_SRC_DIR),$(wildcard $(dir)/*.c))
+endif
+
+SOURCES_C += $(LIBRETRO_DIR)/libretro.c
+
+INCFLAGS += $(foreach dir,$(GENPLUS_SRC_DIR),-I$(dir)) -I$(LIBRETRO_DIR) -I$(LIBRETRO_COMM_DIR)/include

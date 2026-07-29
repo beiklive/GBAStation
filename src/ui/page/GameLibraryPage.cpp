@@ -1020,6 +1020,7 @@ namespace beiklive
         bool hasSnes = false;
         bool hasNds = false;
         bool hasThreeDs = false;
+        bool hasGenesis = false;
         for (const auto& entry : entries) {
             hasFavourite = hasFavourite || entry.favourite;
             switch (static_cast<beiklive::enums::EmuPlatform>(entry.platform)) {
@@ -1030,6 +1031,7 @@ namespace beiklive
                 case beiklive::enums::EmuPlatform::EmuSNES: hasSnes = true; break;
                 case beiklive::enums::EmuPlatform::EmuNDS:  hasNds = true; break;
                 case beiklive::enums::EmuPlatform::Emu3DS:  hasThreeDs = true; break;
+                case beiklive::enums::EmuPlatform::EmuGenesis: hasGenesis = true; break;
                 default: break;
             }
         }
@@ -1043,6 +1045,7 @@ namespace beiklive
         if (hasSnes) filters.push_back(PlatformFilter::SNES);
         if (hasNds) filters.push_back(PlatformFilter::NDS);
         if (hasThreeDs) filters.push_back(PlatformFilter::THREEDS);
+        if (hasGenesis) filters.push_back(PlatformFilter::GENESIS);
         return filters;
     }
 
@@ -1162,7 +1165,7 @@ namespace beiklive
         ThreadPool::instance().enqueue([this, alive]() {
             if (!alive->load()) return;
             auto ae = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
-            bool hG = false, hC = false, hB = false, hN = false, hS = false, hD = false, h3 = false;
+            bool hG = false, hC = false, hB = false, hN = false, hS = false, hD = false, h3 = false, hMD = false;
             int favCount = 0;
             for (auto& e : ae) {
                 if (e.favourite) favCount++;
@@ -1174,10 +1177,11 @@ namespace beiklive
                     case beiklive::enums::EmuPlatform::EmuSNES: hS = true; break;
                     case beiklive::enums::EmuPlatform::EmuNDS: hD = true; break;
                     case beiklive::enums::EmuPlatform::Emu3DS: h3 = true; break;
+                    case beiklive::enums::EmuPlatform::EmuGenesis: hMD = true; break;
                     default: break;
                 }
             }
-            brls::sync([this, alive, hG, hC, hB, hN, hS, hD, h3, favCount]() {
+            brls::sync([this, alive, hG, hC, hB, hN, hS, hD, h3, hMD, favCount]() {
                 if (!alive->load()) return;
                 std::vector<std::string> opts;
                 std::vector<PlatformFilter> map;
@@ -1190,6 +1194,7 @@ namespace beiklive
                 if (hS) { opts.push_back("SFC"); map.push_back(PlatformFilter::SNES); }
                 if (hD) { opts.push_back("NDS"); map.push_back(PlatformFilter::NDS); }
                 if (h3) { opts.push_back("3DS"); map.push_back(PlatformFilter::THREEDS); }
+                if (hMD) { opts.push_back("MD"); map.push_back(PlatformFilter::GENESIS); }
                 int cur = 0;
                 for (size_t i = 0; i < map.size(); i++)
                     if (map[i] == m_platformFilter) { cur = (int)i; break; }
@@ -1225,6 +1230,7 @@ namespace beiklive
             case PlatformFilter::SNES:     fs = "SFC"; break;
             case PlatformFilter::NDS:      fs = "NDS"; break;
             case PlatformFilter::THREEDS:  fs = "3DS"; break;
+            case PlatformFilter::GENESIS:  fs = "MD"; break;
             case PlatformFilter::FAVORITE: fs = "收藏"; break;
         }
         this->getHeader()->setPath((m_isSearching ? "搜索" : "分类") + (": " + fs));
@@ -1241,6 +1247,7 @@ namespace beiklive
                     case PlatformFilter::SNES: return "SFC";
                     case PlatformFilter::NDS: return "NDS";
                     case PlatformFilter::THREEDS: return "3DS";
+                    case PlatformFilter::GENESIS: return "MD";
                 }
                 return "所有";
             };

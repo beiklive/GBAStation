@@ -11,7 +11,8 @@ namespace beiklive
         Fceumm,
         Snes9x,
         Nestopia,
-        Snes9x2005
+        Snes9x2005,
+        Genesis
     };
 
     /// 游戏画面缩放模式
@@ -55,7 +56,8 @@ namespace beiklive::enums
         EmuNES,
         EmuSNES,
         EmuNDS,
-        Emu3DS
+        Emu3DS,
+        EmuGenesis
     };
     // 文件类型,用于文件浏览器
     enum class FileType
@@ -68,6 +70,7 @@ namespace beiklive::enums
         SNES_ROM,// SNES/SFC文件
         NDS_ROM, // NDS文件
         THREEDS_ROM, // Nintendo 3DS文件（.cia/.cci/.3ds）
+        GENESIS_ROM, // Mega Drive / Genesis文件
 
         // 上面的顺序必须与EmuPlatform保持一致，方便后续通过平台类型直接转换为文件类型
 

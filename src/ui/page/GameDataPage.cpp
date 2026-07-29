@@ -690,7 +690,9 @@ namespace beiklive
 
     std::string GameDataPage::_savPath() const
     {
-        return (fs::path(_saveDir()) / (gameStem(m_entry) + ".sav")).string();
+        const bool isGenesis =
+            m_entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuGenesis);
+        return (fs::path(_saveDir()) / (gameStem(m_entry) + (isGenesis ? ".srm" : ".sav"))).string();
     }
 
     bool GameDataPage::_isThreeDs() const
@@ -1035,11 +1037,15 @@ namespace beiklive
             return;
         }
 
-        auto* dialog = new brls::Dialog("确认导入外部 .sav 并覆盖当前电池存档？");
+        const bool isGenesis =
+            m_entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuGenesis);
+        const std::string extension = isGenesis ? "srm" : "sav";
+        auto* dialog = new brls::Dialog(
+            "确认导入外部 ." + extension + " 并覆盖当前电池存档？");
         dialog->addButton("取消", []() {});
         const auto alive = m_alive;
-        dialog->addButton("选择文件", [this, alive]() {
-            beiklive::openFilePicker({"sav"}, [this, alive](const std::string& selected) {
+        dialog->addButton("选择文件", [this, alive, extension]() {
+            beiklive::openFilePicker({extension}, [this, alive](const std::string& selected) {
                 if (!alive->load()) return;
                 std::string error;
                 if (!copyBinaryFile(selected, _savPath(), &error)) {
@@ -1173,7 +1179,9 @@ namespace beiklive
         auto* dialog = new brls::Dialog(
             isThreeDs
                 ? "确认删除该游戏存档目录中的所有文件？\n此操作不可撤销，备份文件不会被删除。"
-                : "确认删除该游戏的 .sav 存档？\n此操作不可撤销，备份文件不会被删除。");
+                : (m_entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuGenesis)
+                       ? "确认删除该游戏的 .srm 存档？\n此操作不可撤销，备份文件不会被删除。"
+                       : "确认删除该游戏的 .sav 存档？\n此操作不可撤销，备份文件不会被删除。"));
         dialog->addButton("取消", [this]() { m_view->restoreFocus(); });
         dialog->addButton("删除", [this, isThreeDs, savePath]() {
             std::string error;

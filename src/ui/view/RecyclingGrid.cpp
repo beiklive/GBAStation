@@ -1505,6 +1505,7 @@ NVGcolor GameGridView::_getBadgeColor(PlatformBadgeColor color) const
         case PlatformBadgeColor::SNES:    return nvgRGBA(160, 100, 180, 220);
         case PlatformBadgeColor::NDS:     return nvgRGBA(54,  150, 190, 220);
         case PlatformBadgeColor::THREEDS: return nvgRGBA(230, 79,  91,  220);
+        case PlatformBadgeColor::GENESIS: return nvgRGBA(23, 55, 139, 220);
         default:                          return nvgRGBA(100, 100, 100, 200);
     }
 }

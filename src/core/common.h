@@ -156,6 +156,9 @@ namespace beiklive // 全局功能函数
         static const std::vector<CoreOption> threeDsCores = {
             {"azahar", "Azahar", CoreType::Mgba},
         };
+        static const std::vector<CoreOption> genesisCores = {
+            {"genesis-plus-gx", "Genesis Plus GX", CoreType::Genesis},
+        };
         static const std::vector<CoreOption> emptyCores;
 
         switch (platform)
@@ -172,6 +175,8 @@ namespace beiklive // 全局功能函数
             return ndsCores;
         case (int)beiklive::enums::EmuPlatform::Emu3DS:
             return threeDsCores;
+        case (int)beiklive::enums::EmuPlatform::EmuGenesis:
+            return genesisCores;
         default:
             return emptyCores;
         }
@@ -193,6 +198,8 @@ namespace beiklive // 全局功能函数
             return "melonds";
         case (int)beiklive::enums::EmuPlatform::Emu3DS:
             return "azahar";
+        case (int)beiklive::enums::EmuPlatform::EmuGenesis:
+            return "genesis-plus-gx";
         default:
             return "";
         }
@@ -248,6 +255,8 @@ namespace beiklive // 全局功能函数
             return "";  // FCEUmm 静态链接，无需路径
         case (int)beiklive::enums::EmuPlatform::EmuSNES:
             return "";  // Snes9x 静态链接，无需路径
+        case (int)beiklive::enums::EmuPlatform::EmuGenesis:
+            return "";  // Genesis Plus GX 源码静态接入，无需路径
         default:
             return "";
         }

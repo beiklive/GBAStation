@@ -59,6 +59,8 @@ int platformFromExt(const std::string& ext)
     if (ext == "nds") return static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS);
     if (ext == "cia" || ext == "cci" || ext == "3ds")
         return static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS);
+    if (ext == "md" || ext == "gen" || ext == "bin" || ext == "smd")
+        return static_cast<int>(beiklive::enums::EmuPlatform::EmuGenesis);
     return 0;
 }
 

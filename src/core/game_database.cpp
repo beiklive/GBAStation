@@ -468,6 +468,7 @@ namespace beiklive
                 (int)beiklive::enums::EmuPlatform::EmuSNES,
                 (int)beiklive::enums::EmuPlatform::EmuNDS,
                 (int)beiklive::enums::EmuPlatform::Emu3DS,
+                (int)beiklive::enums::EmuPlatform::EmuGenesis,
             };
             std::error_code ec;
             for (int p : platforms)
@@ -487,6 +488,7 @@ namespace beiklive
         case (int)beiklive::enums::EmuPlatform::EmuSNES: return beiklive::path::DATA_BASE_FILE_SNES;
         case (int)beiklive::enums::EmuPlatform::EmuNDS: return beiklive::path::DATA_BASE_FILE_NDS;
         case (int)beiklive::enums::EmuPlatform::Emu3DS: return beiklive::path::DATA_BASE_FILE_3DS;
+        case (int)beiklive::enums::EmuPlatform::EmuGenesis: return beiklive::path::DATA_BASE_FILE_GENESIS;
         default: return beiklive::path::DATA_BASE_FILE;
         }
     }
@@ -506,6 +508,7 @@ namespace beiklive
             (int)beiklive::enums::EmuPlatform::EmuSNES,
             (int)beiklive::enums::EmuPlatform::EmuNDS,
             (int)beiklive::enums::EmuPlatform::Emu3DS,
+            (int)beiklive::enums::EmuPlatform::EmuGenesis,
         };
 
         for (int platform : platforms)
@@ -597,6 +600,7 @@ namespace beiklive
             (int)beiklive::enums::EmuPlatform::EmuSNES,
             (int)beiklive::enums::EmuPlatform::EmuNDS,
             (int)beiklive::enums::EmuPlatform::Emu3DS,
+            (int)beiklive::enums::EmuPlatform::EmuGenesis,
         };
         for (int platform : platforms)
             platformData[platform] = nlohmann::json::array();

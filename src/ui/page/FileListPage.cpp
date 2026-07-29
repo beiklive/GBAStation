@@ -410,7 +410,8 @@ namespace beiklive
             ft == beiklive::enums::FileType::NES_ROM ||
             ft == beiklive::enums::FileType::SNES_ROM ||
             ft == beiklive::enums::FileType::NDS_ROM ||
-            ft == beiklive::enums::FileType::THREEDS_ROM)
+            ft == beiklive::enums::FileType::THREEDS_ROM ||
+            ft == beiklive::enums::FileType::GENESIS_ROM)
         {
             auto entryOpt = beiklive::GameDB ? beiklive::GameDB->findByPath(data.fullPath) : std::nullopt;
             if (entryOpt)

@@ -11,6 +11,7 @@ enum class PlatformBadgeColor {
     SNES,
     NDS,
     THREEDS,
+    GENESIS,
     NONE,
 };
 

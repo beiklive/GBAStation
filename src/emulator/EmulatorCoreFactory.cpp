@@ -2,6 +2,7 @@
 #include "emulator/CoreFceumm.hpp"
 #include "emulator/CoreSnes9x.hpp"
 #include "emulator/mgba_native/MgbaNativeCore.hpp"
+#include "cores/genesis/GenesisCore.h"
 
 namespace beiklive {
 
@@ -25,6 +26,8 @@ IEmulatorCore* CreateEmulatorCore(const beiklive::GameEntry& entry)
         if (coreId == "snes9x")
             return new beiklive::snes9x::CoreSnes9x(beiklive::CoreType::Snes9x, "Snes9x");
         return new beiklive::snes9x::CoreSnes9x(beiklive::CoreType::Snes9x2005, "Snes9x 2005");
+    case beiklive::enums::EmuPlatform::EmuGenesis:
+        return new beiklive::genesis::GenesisCore();
     case beiklive::enums::EmuPlatform::EmuNDS:
     case beiklive::enums::EmuPlatform::Emu3DS:
         return nullptr;

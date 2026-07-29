@@ -372,6 +372,10 @@ bool LibretroLoader::load(CoreType coreType)
             brls::Logger::error("[LibretroLoader] mGBA libretro backend is disabled; use MgbaNativeCore");
             return false;
 
+        case CoreType::Genesis:
+            brls::Logger::error("[LibretroLoader] Genesis libretro backend is disabled; use GenesisCore");
+            return false;
+
         case CoreType::Fceumm:
             fn_set_environment        = fceumm_retro_set_environment;
             fn_set_video_refresh      = fceumm_retro_set_video_refresh;

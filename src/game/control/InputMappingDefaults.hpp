@@ -11,7 +11,8 @@ namespace beiklive::input_mapping
     inline constexpr unsigned kPlatformSfc = 1u << 2;
     inline constexpr unsigned kPlatformNds = 1u << 3;
     inline constexpr unsigned kPlatformThreeDs = 1u << 4;
-    inline constexpr unsigned kPlatformAll = kPlatformGbFamily | kPlatformNes | kPlatformSfc | kPlatformNds | kPlatformThreeDs;
+    inline constexpr unsigned kPlatformGenesis = 1u << 5;
+    inline constexpr unsigned kPlatformAll = kPlatformGbFamily | kPlatformNes | kPlatformSfc | kPlatformNds | kPlatformThreeDs | kPlatformGenesis;
 
     struct GameButtonDefault
     {
@@ -24,14 +25,14 @@ namespace beiklive::input_mapping
     inline constexpr GameButtonDefault kGameButtonDefaults[] = {
         {"A键", "a", "PAD_A", kPlatformAll},
         {"B键", "b", "PAD_B", kPlatformAll},
-        {"X键", "x", "PAD_X", kPlatformSfc | kPlatformNds | kPlatformThreeDs},
-        {"Y键", "y", "PAD_Y", kPlatformSfc | kPlatformNds | kPlatformThreeDs},
+        {"X键", "x", "PAD_X", kPlatformSfc | kPlatformNds | kPlatformThreeDs | kPlatformGenesis},
+        {"Y键", "y", "PAD_Y", kPlatformSfc | kPlatformNds | kPlatformThreeDs | kPlatformGenesis},
         {"方向键上", "up", "PAD_UP", kPlatformAll},
         {"方向键下", "down", "PAD_DOWN", kPlatformAll},
         {"方向键左", "left", "PAD_LEFT", kPlatformAll},
         {"方向键右", "right", "PAD_RIGHT", kPlatformAll},
-        {"L键", "l", "PAD_LB", kPlatformGbFamily | kPlatformSfc | kPlatformNds | kPlatformThreeDs},
-        {"R键", "r", "PAD_RB", kPlatformGbFamily | kPlatformSfc | kPlatformNds | kPlatformThreeDs},
+        {"L键", "l", "PAD_LB", kPlatformGbFamily | kPlatformSfc | kPlatformNds | kPlatformThreeDs | kPlatformGenesis},
+        {"R键", "r", "PAD_RB", kPlatformGbFamily | kPlatformSfc | kPlatformNds | kPlatformThreeDs | kPlatformGenesis},
         {"ZL键", "l2", "PAD_LT", kPlatformThreeDs},
         {"ZR键", "r2", "PAD_RT", kPlatformThreeDs},
         {"L3键", "l3", "PAD_LSB", 0},
@@ -101,6 +102,8 @@ namespace beiklive::input_mapping
             return "nds.";
         case beiklive::enums::EmuPlatform::Emu3DS:
             return "3ds.";
+        case beiklive::enums::EmuPlatform::EmuGenesis:
+            return "md.";
         default:
             return "";
         }
@@ -118,6 +121,8 @@ namespace beiklive::input_mapping
             return kPlatformNds;
         case beiklive::enums::EmuPlatform::Emu3DS:
             return kPlatformThreeDs;
+        case beiklive::enums::EmuPlatform::EmuGenesis:
+            return kPlatformGenesis;
         case beiklive::enums::EmuPlatform::EmuGBA:
         case beiklive::enums::EmuPlatform::EmuGBC:
         case beiklive::enums::EmuPlatform::EmuGB:
@@ -136,6 +141,8 @@ namespace beiklive::input_mapping
             return kPlatformNds;
         if (prefix == "3ds.")
             return kPlatformThreeDs;
+        if (prefix == "md.")
+            return kPlatformGenesis;
         return kPlatformGbFamily;
     }
 

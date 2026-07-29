@@ -3985,6 +3985,7 @@ brls::View *SettingPage::buildDisplayTab()
     box->addView(makeOverlayPathCell(beiklive::SettingKey::KEY_DISPLAY_OVERLAY_GB_PATH,  "GB 遮罩"));
     box->addView(makeOverlayPathCell(beiklive::SettingKey::KEY_DISPLAY_OVERLAY_NES_PATH,  "FC 遮罩"));
     box->addView(makeOverlayPathCell(beiklive::SettingKey::KEY_DISPLAY_OVERLAY_SNES_PATH, "SFC 遮罩"));
+    box->addView(makeOverlayPathCell(beiklive::SettingKey::KEY_DISPLAY_OVERLAY_GENESIS_PATH, "MD 遮罩"));
 
     // ── 着色器设置 ────────────────────────────────────────────────────────────
     box->addView(makeHeader("着色器设置"));
@@ -4012,6 +4013,7 @@ brls::View *SettingPage::buildDisplayTab()
     box->addView(makeShaderPathCell(beiklive::SettingKey::KEY_DISPLAY_SHADER_GB_PATH,  "GB 着色器"));
     box->addView(makeShaderPathCell(beiklive::SettingKey::KEY_DISPLAY_SHADER_NES_PATH,  "FC 着色器"));
     box->addView(makeShaderPathCell(beiklive::SettingKey::KEY_DISPLAY_SHADER_SNES_PATH, "SFC 着色器"));
+    box->addView(makeShaderPathCell(beiklive::SettingKey::KEY_DISPLAY_SHADER_GENESIS_PATH, "MD 着色器"));
 
     scroll->setContentView(box);
     auto *container = new brls::Box(brls::Axis::COLUMN);

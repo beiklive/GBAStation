@@ -48,7 +48,8 @@ bool isDirectLaunchRomType(beiklive::enums::FileType type)
 		   type == FileType::GBC_ROM ||
 		   type == FileType::GB_ROM ||
 		   type == FileType::NES_ROM ||
-		   type == FileType::SNES_ROM;
+		   type == FileType::SNES_ROM ||
+		   type == FileType::GENESIS_ROM;
 }
 
 bool isLibraryRomType(beiklive::enums::FileType type)

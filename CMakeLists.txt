@@ -66,6 +66,7 @@ if (TARGET mgba AND PLATFORM_SWITCH)
 endif ()
 
 add_subdirectory(third_party)
+add_subdirectory(cores/genesis)
 
 # FAKE-08 is embedded as a runtime-only static library. Platform hosts,
 # SDL frontends, libretro glue and the upstream main() are intentionally
@@ -248,6 +249,7 @@ set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17)
 target_compile_definitions(${PROJECT_NAME} PRIVATE APP_VERSION="${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_ALTER}")
 target_compile_definitions(${PROJECT_NAME} PRIVATE COLOR_16_BIT COLOR_5_6_5)
 target_link_libraries(${PROJECT_NAME} PRIVATE fake08_runtime)
+target_link_libraries(${PROJECT_NAME} PRIVATE genesis_core)
 if (PLATFORM_SWITCH)
     add_subdirectory(src/core/forwarder/hbl forwarder_hbl)
     add_dependencies(${PROJECT_NAME} gbastation_forwarder_hbl_exefs)

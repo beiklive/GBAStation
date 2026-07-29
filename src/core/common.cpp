@@ -366,6 +366,7 @@ namespace beiklive
         SettingManager->SetDefault(KEY_DISPLAY_OVERLAY_NES_PATH, ConfigValue(std::string("")));
         SettingManager->SetDefault(KEY_DISPLAY_OVERLAY_SNES_PATH, ConfigValue(std::string("")));
         SettingManager->SetDefault(KEY_DISPLAY_OVERLAY_NDS_PATH, ConfigValue(std::string("")));
+        SettingManager->SetDefault(KEY_DISPLAY_OVERLAY_GENESIS_PATH, ConfigValue(std::string("")));
 
         // 着色器设置
         SettingManager->SetDefault(KEY_DISPLAY_SHADER_ENABLED, ConfigValue(0));
@@ -376,6 +377,7 @@ namespace beiklive
         SettingManager->SetDefault(KEY_DISPLAY_SHADER_NES_PATH, ConfigValue(std::string("")));
         SettingManager->SetDefault(KEY_DISPLAY_SHADER_SNES_PATH, ConfigValue(std::string("")));
         SettingManager->SetDefault(KEY_DISPLAY_SHADER_NDS_PATH, ConfigValue(std::string("")));
+        SettingManager->SetDefault(KEY_DISPLAY_SHADER_GENESIS_PATH, ConfigValue(std::string("")));
 
         // 调试设置
         SettingManager->SetDefault(KEY_DEBUG_LOG_LEVEL, ConfigValue(std::string("info")));
@@ -756,6 +758,8 @@ namespace beiklive
             return 384;
         case beiklive::enums::EmuPlatform::Emu3DS:
             return 480;
+        case beiklive::enums::EmuPlatform::EmuGenesis:
+            return 224;
         default:
             break;
         }
@@ -780,6 +784,8 @@ namespace beiklive
             return 256;
         case beiklive::enums::EmuPlatform::Emu3DS:
             return 400;
+        case beiklive::enums::EmuPlatform::EmuGenesis:
+            return 320;
         default:
             break;
         }
@@ -803,6 +809,8 @@ namespace beiklive
         case beiklive::enums::EmuPlatform::EmuNDS:
             return BK_RES("img/LogoLayer/GBA_LOGOLAY.png");
         case beiklive::enums::EmuPlatform::Emu3DS:
+            return BK_RES("img/LogoLayer/GBA_LOGOLAY.png");
+        case beiklive::enums::EmuPlatform::EmuGenesis:
             return BK_RES("img/LogoLayer/GBA_LOGOLAY.png");
         default:
             return BK_RES("img/LogoLayer/GBA_LOGOLAY.png");
