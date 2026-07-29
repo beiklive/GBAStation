@@ -2675,7 +2675,10 @@ private:
         {
             if ((entry.platformMask & mask) == 0) continue;
             _addBinding(beiklive::input_mapping::gameButtonLabelForPrefix(prefix, entry),
-                        "游戏内对应按键", beiklive::input_mapping::makeHandleKey(prefix, entry.suffix), entry.defaultValue);
+                        "游戏内对应按键",
+                        beiklive::input_mapping::makeHandleKey(prefix, entry.suffix),
+                        beiklive::input_mapping::defaultHandleValueForPrefix(
+                            prefix, entry.suffix, entry.defaultValue));
         }
         m_mappingItems.push_back(_section("功能热键"));
         for (const auto& entry : beiklive::input_mapping::kHotkeyDefaults)
@@ -4255,7 +4258,10 @@ namespace
             auto* cell = new beiklive::DetailCell();
             cell->setLeftTextSize(18.f);
             cell->setLeftText(beiklive::input_mapping::gameButtonLabelForPrefix(prefix, entry));
-            cell->setRightText(cfgGetStr(cfgKey, entry.defaultValue));
+            cell->setRightText(cfgGetStr(
+                cfgKey,
+                beiklive::input_mapping::defaultHandleValueForPrefix(
+                    prefix, entry.suffix, entry.defaultValue)));
             registerKeyBindActions(cell, cfgKey);
             mapcontainer->addView(cell);
         }
@@ -4370,6 +4376,7 @@ brls::View *SettingPage::buildKeyBindTab()
         {"映射NES游戏", "nes.", false},
         {"映射SFC游戏", "sfc.", false},
         {"映射NDS游戏", "nds.", true},
+        {"映射MD游戏", "md.", false},
     };
 
     for (const auto& platform : platforms)

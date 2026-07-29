@@ -13,6 +13,8 @@ namespace beiklive::input_mapping
     inline constexpr unsigned kPlatformThreeDs = 1u << 4;
     inline constexpr unsigned kPlatformGenesis = 1u << 5;
     inline constexpr unsigned kPlatformAll = kPlatformGbFamily | kPlatformNes | kPlatformSfc | kPlatformNds | kPlatformThreeDs | kPlatformGenesis;
+    inline constexpr unsigned kPlatformExplicitRightStick =
+        kPlatformGbFamily | kPlatformNes | kPlatformSfc | kPlatformThreeDs | kPlatformGenesis;
 
     struct GameButtonDefault
     {
@@ -43,10 +45,10 @@ namespace beiklive::input_mapping
         {"左摇杆下", "lstick_down", "PAD_LEFTSTICKDOWN", kPlatformThreeDs},
         {"左摇杆左", "lstick_left", "PAD_LEFTSTICKLEFT", kPlatformThreeDs},
         {"左摇杆右", "lstick_right", "PAD_LEFTSTICKRIGHT", kPlatformThreeDs},
-        {"右摇杆上", "rstick_up", "PAD_RIGHTSTICKUP", kPlatformThreeDs},
-        {"右摇杆下", "rstick_down", "PAD_RIGHTSTICKDOWN", kPlatformThreeDs},
-        {"右摇杆左", "rstick_left", "PAD_RIGHTSTICKLEFT", kPlatformThreeDs},
-        {"右摇杆右", "rstick_right", "PAD_RIGHTSTICKRIGHT", kPlatformThreeDs},
+        {"右摇杆上", "rstick_up", "PAD_RIGHTSTICKUP", kPlatformExplicitRightStick},
+        {"右摇杆下", "rstick_down", "PAD_RIGHTSTICKDOWN", kPlatformExplicitRightStick},
+        {"右摇杆左", "rstick_left", "PAD_RIGHTSTICKLEFT", kPlatformExplicitRightStick},
+        {"右摇杆右", "rstick_right", "PAD_RIGHTSTICKRIGHT", kPlatformExplicitRightStick},
     };
 
     struct HotkeyDefault
@@ -181,5 +183,25 @@ namespace beiklive::input_mapping
                 return entry.defaultValue;
         }
         return fallback;
+    }
+
+    inline bool isRightStickMapping(const std::string& suffix)
+    {
+        return suffix.rfind("rstick_", 0) == 0;
+    }
+
+    inline bool requiresExplicitRightStickMapping(const std::string& prefix)
+    {
+        return prefix.empty() || prefix == "gbc." || prefix == "gb." ||
+               prefix == "nes." || prefix == "sfc." || prefix == "md.";
+    }
+
+    inline const char* defaultHandleValueForPrefix(const std::string& prefix,
+                                                   const std::string& suffix,
+                                                   const char* fallback = "none")
+    {
+        if (requiresExplicitRightStickMapping(prefix) && isRightStickMapping(suffix))
+            return "none";
+        return defaultHandleValue(suffix, fallback);
     }
 }

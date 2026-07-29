@@ -917,7 +917,10 @@ namespace beiklive
             if (!supported)
                 continue;
             const std::string key = prefix + "handle." + entry.suffix;
-            const std::string value = GET_SETTING_KEY_STR(key.c_str(), entry.fallback);
+            const std::string value = GET_SETTING_KEY_STR(
+                key.c_str(),
+                beiklive::input_mapping::defaultHandleValueForPrefix(
+                    prefix, entry.suffix, entry.fallback));
             if (value.empty() || value == "none")
                 continue;
             auto combos = beiklive::tools::parseMultiCombo(value);

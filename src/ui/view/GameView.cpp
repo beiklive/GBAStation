@@ -1212,7 +1212,8 @@ namespace beiklive
                 const std::string cfgKey = beiklive::input_mapping::makeHandleKey(mappingPrefix, info.cfgSuffix);
                 std::string val = GET_SETTING_KEY_STR(
                     cfgKey,
-                    beiklive::input_mapping::defaultHandleValue(info.cfgSuffix));
+                    beiklive::input_mapping::defaultHandleValueForPrefix(
+                        mappingPrefix, info.cfgSuffix));
                 const bool usePolledGameInput =
                     GET_SETTING_KEY_INT("input.polled_game_input", 1) != 0;
                 if (usePolledGameInput)
