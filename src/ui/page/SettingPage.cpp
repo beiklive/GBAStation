@@ -2296,6 +2296,16 @@ private:
             [key]() { return cfgGetBool(key("disk_shader_cache"), true); },
             [key](bool v) { cfgSetBool(key("disk_shader_cache"), v); }));
         m_coreItems.push_back(_toggle(
+            "异步 GPU 模拟", "实验性并行 GPU 路径；默认关闭以保证稳定性能",
+            0xE8D5,
+            [key]() { return cfgGetBool(key("async_gpu"), false); },
+            [key](bool v) { cfgSetBool(key("async_gpu"), v); }));
+        m_coreItems.push_back(_toggle(
+            "严格 GPU 同步", "异步 GPU 开启时强制同步，用于兼容性排查",
+            0xE8D5,
+            [key]() { return cfgGetBool(key("strict_gpu_sync"), false); },
+            [key](bool v) { cfgSetBool(key("strict_gpu_sync"), v); }));
+        m_coreItems.push_back(_toggle(
             "异步 Shader 编译", "减少运行时卡顿，少数游戏可能闪烁", 0xE8D5,
             [key]() { return cfgGetBool(key("async_shaders"), true); },
             [key](bool v) { cfgSetBool(key("async_shaders"), v); }));

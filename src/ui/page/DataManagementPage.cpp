@@ -395,6 +395,8 @@ bool exportThreeDsCoreConfigForDataPage()
     putInt("use_shader_jit", "core.azahar.use_shader_jit", 1);
     putInt("accurate_mul", "core.azahar.accurate_mul", 1);
     putInt("disk_shader_cache", "core.azahar.disk_shader_cache", 1);
+    putInt("async_gpu", "core.azahar.async_gpu", 0);
+    putInt("strict_gpu_sync", "core.azahar.strict_gpu_sync", 0);
     putInt("async_shaders", "core.azahar.async_shaders", 1);
     putInt("show_shader_compile_notice", "core.azahar.show_shader_compile_notice", 1);
     putInt("async_presentation", "core.azahar.async_presentation", 1);
