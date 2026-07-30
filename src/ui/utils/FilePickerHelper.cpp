@@ -14,8 +14,13 @@ namespace beiklive
     {
         const auto platform = static_cast<beiklive::enums::EmuPlatform>(entry.platform);
         const std::string defaultLogo = beiklive::tools::getDefaultLogoPath(platform);
+        const std::string ndsAutoLogo = platform == beiklive::enums::EmuPlatform::EmuNDS
+            ? beiklive::GetNdsIconCachePath(entry.path)
+            : "";
         const bool usesBuiltInLogo = entry.logoPath.empty() ||
-            entry.logoPath == defaultLogo || entry.logoPath.rfind("romfs:/", 0) == 0;
+            entry.logoPath == defaultLogo ||
+            (!ndsAutoLogo.empty() && entry.logoPath == ndsAutoLogo) ||
+            entry.logoPath.rfind("romfs:/", 0) == 0;
 
         if (usesBuiltInLogo) {
             FilePickerLocation location;

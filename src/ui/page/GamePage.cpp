@@ -120,7 +120,8 @@ namespace beiklive
 
         // 使用 setDefault 为可选字段设置首次默认值（已有值时不覆盖）
         std::string defaultLogo = beiklive::tools::getDefaultLogoPath(
-            static_cast<beiklive::enums::EmuPlatform>((int)m_gameData.itemType));
+            static_cast<beiklive::enums::EmuPlatform>((int)m_gameData.itemType),
+            m_gameData.fullPath);
 
         auto& path = m_gameData.fullPath;
         db->setDefault(path, "core", beiklive::GetDefaultCoreId((int)m_gameData.itemType));
@@ -233,8 +234,10 @@ namespace beiklive
         if (m_gameEntry.logoPath.empty())
         {
             m_gameEntry.logoPath = beiklive::tools::getDefaultLogoPath(
-                static_cast<beiklive::enums::EmuPlatform>(m_gameEntry.platform));
+                static_cast<beiklive::enums::EmuPlatform>(m_gameEntry.platform),
+                m_gameEntry.path);
         }
+        beiklive::tools::tryUseNdsInternalIconCover(m_gameEntry);
         // 检查一次 封面是否需要替换
         _tryUpdateLogoFromThumbnail();
 

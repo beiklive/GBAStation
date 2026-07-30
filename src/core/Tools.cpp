@@ -218,6 +218,41 @@ std::string getDefaultLogoPath(beiklive::enums::EmuPlatform platform)
     }
 }
 
+std::string getDefaultLogoPath(beiklive::enums::EmuPlatform platform, const std::string& romPath)
+{
+    if (platform == beiklive::enums::EmuPlatform::EmuNDS)
+    {
+        const std::string ndsIcon = beiklive::GetOrCreateNdsIconPath(romPath);
+        if (!ndsIcon.empty())
+            return ndsIcon;
+    }
+
+    return getDefaultLogoPath(platform);
+}
+
+bool tryUseNdsInternalIconCover(beiklive::GameEntry& entry)
+{
+    if (entry.platform != static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS) ||
+        entry.path.empty())
+        return false;
+
+    const auto platform = static_cast<beiklive::enums::EmuPlatform>(entry.platform);
+    const std::string defaultLogo = getDefaultLogoPath(platform);
+    const std::string cachePath = beiklive::GetNdsIconCachePath(entry.path);
+    const bool usesAutomaticCover = entry.logoPath.empty() ||
+        entry.logoPath == defaultLogo ||
+        (!cachePath.empty() && entry.logoPath == cachePath);
+    if (!usesAutomaticCover)
+        return false;
+
+    const std::string ndsIcon = beiklive::GetOrCreateNdsIconPath(entry.path);
+    if (ndsIcon.empty() || entry.logoPath == ndsIcon)
+        return false;
+
+    entry.logoPath = ndsIcon;
+    return true;
+}
+
 bool tryUseSavestateThumbnailCover(beiklive::GameEntry& entry)
 {
     if (GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_UI_USE_SAVESTATE_THUMB, 0) == 0 ||

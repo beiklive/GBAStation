@@ -375,6 +375,7 @@ bool saveGame(beiklive::GameEntry& entry)
 {
     if (!beiklive::GameDB)
         return false;
+    beiklive::tools::tryUseNdsInternalIconCover(entry);
     beiklive::GameDB->upsertByPath(entry);
     return beiklive::GameDB->flush();
 }
@@ -1170,7 +1171,9 @@ void ApiRouter::handleUploadFinish(mg_connection* c, mg_http_message* hm)
         entry.platform = session.platform;
         if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS))
             entry.threeDsTitleId = beiklive::three_ds::readNcsdTitleId(session.targetPath);
-        entry.logoPath = beiklive::tools::getDefaultLogoPath(static_cast<beiklive::enums::EmuPlatform>(session.platform));
+        entry.logoPath = beiklive::tools::getDefaultLogoPath(
+            static_cast<beiklive::enums::EmuPlatform>(session.platform),
+            session.targetPath);
         entry.savePath = beiklive::tools::defaultGameSavePath(session.platform, session.targetPath);
         if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)) {
             entry.ndsScreenLayout = "priority_top";
@@ -1522,9 +1525,13 @@ void ApiRouter::handleCoverFile(mg_connection* c, mg_http_message* hm, const std
     auto game = findGame(gameId);
     if (!game)
         return replyError(c, 404, "game not found");
+    if (beiklive::tools::tryUseNdsInternalIconCover(*game))
+        saveGame(*game);
     std::string path = game->logoPath;
     if (path.empty() || !fs::exists(path))
-        path = beiklive::tools::getDefaultLogoPath(static_cast<beiklive::enums::EmuPlatform>(game->platform));
+        path = beiklive::tools::getDefaultLogoPath(
+            static_cast<beiklive::enums::EmuPlatform>(game->platform),
+            game->path);
     if (!fs::exists(path))
         return replyError(c, 404, "cover not found");
     mg_http_serve_opts opts = {};

@@ -570,9 +570,12 @@ namespace beiklive
             }
             if (entry.logoPath.empty()) {
                 entry.logoPath = beiklive::tools::getDefaultLogoPath(
-                    static_cast<beiklive::enums::EmuPlatform>(entry.platform));
+                    static_cast<beiklive::enums::EmuPlatform>(entry.platform),
+                    entry.path);
                 changed = true;
             }
+            if (beiklive::tools::tryUseNdsInternalIconCover(entry))
+                changed = true;
             if (entry.screenShotPath.empty()) {
                 entry.screenShotPath = beiklive::path::screenshotPath();
                 changed = true;

@@ -2043,7 +2043,8 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
             if (logoPath.empty() || !fs::exists(logoPath))
             {
                 logoPath = beiklive::tools::getDefaultLogoPath(
-                    static_cast<beiklive::enums::EmuPlatform>(config.platform));
+                    static_cast<beiklive::enums::EmuPlatform>(config.platform),
+                    romPath);
             }
 
             std::string savePath = (fs::path(beiklive::path::savePath()) /
@@ -2215,7 +2216,8 @@ void DataManagementPage::startDirImport(const std::string& dirPath)
             if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS))
                 entry.threeDsTitleId = beiklive::three_ds::readNcsdTitleId(path);
             entry.logoPath = beiklive::tools::getDefaultLogoPath(
-                static_cast<beiklive::enums::EmuPlatform>(platform));
+                static_cast<beiklive::enums::EmuPlatform>(platform),
+                path);
             entry.overlayEnabled = config.overlayEnabled;
             entry.shaderEnabled = config.shaderEnabled;
             entry.overlayPath = config.overlayPath;
@@ -2248,8 +2250,10 @@ void DataManagementPage::startDirImport(const std::string& dirPath)
                 entry.favourite = existing->favourite;
                 if (!existing->cheatPath.empty())
                     entry.cheatPath = existing->cheatPath;
-                if (!existing->logoPath.empty())
+                if (!existing->logoPath.empty()) {
                     entry.logoPath = existing->logoPath;
+                    beiklive::tools::tryUseNdsInternalIconCover(entry);
+                }
                 if (!existing->savePath.empty())
                     entry.savePath = existing->savePath;
                 if (entry.threeDsTitleId.empty())
