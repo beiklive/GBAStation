@@ -23,9 +23,61 @@
 #include "oslib/directory.h"
 #include <vector>
 #include <string>
+#include <cstring>
+#include <cstdio>
+
+namespace {
+
+std::string g_returnNroPath = "sdmc:/switch/GBAStation.nro";
+
+std::string quoteArg(const std::string& value)
+{
+	std::string out;
+	out.reserve(value.size() + 2);
+	out.push_back('"');
+	for (char c : value)
+	{
+		if (c == '"' || c == '\\')
+			out.push_back('\\');
+		out.push_back(c);
+	}
+	out.push_back('"');
+	return out;
+}
+
+void parseGbastationArgs(int argc, char *argv[])
+{
+	for (int i = 1; i < argc; ++i)
+	{
+		if (!argv[i])
+			continue;
+		if (std::strcmp(argv[i], "--return") == 0 && i + 1 < argc && argv[i + 1])
+		{
+			g_returnNroPath = argv[i + 1];
+			++i;
+		}
+	}
+}
+
+void returnToGbastation()
+{
+	if (g_returnNroPath.empty())
+		return;
+	if (!envHasNextLoad())
+		return;
+
+	const std::string args = quoteArg(g_returnNroPath);
+	const Result rc = envSetNextLoad(g_returnNroPath.c_str(), args.c_str());
+	if (R_FAILED(rc))
+		std::printf("Flycast: envSetNextLoad return to GBAStation failed: %x\n", rc);
+}
+
+} // namespace
 
 int main(int argc, char *argv[])
 {
+	parseGbastationArgs(argc, argv);
+
 	socketInitializeDefault();
 	nxlinkStdio();
 	//appletSetFocusHandlingMode(AppletFocusHandlingMode_NoSuspend);
@@ -52,6 +104,7 @@ int main(int argc, char *argv[])
 	flycast_term();
 
 	socketExit();
+	returnToGbastation();
 
 	return 0;
 }

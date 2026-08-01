@@ -1,0 +1,17 @@
+name: macOS CI
+
+on:
+  push
+
+jobs:
+  build:
+    name: build
+    runs-on: macOS-latest
+    env:
+      DEVELOPER_DIR: /Applications/Xcode.app
+    steps:
+      - uses: actions/checkout@v1
+      - name: build
+        run: |
+             cd projectfiles/xcode
+             xcodebuild ARCHS=x86_64 ONLY_ACTIVE_ARCH=NO -target Emulator -configuration Debug

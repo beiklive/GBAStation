@@ -1,0 +1,12 @@
+.idea
+cmake-build-*
+ss_dev_id.key
+ss_dev_pwd.key
+ss_user_id.key
+ss_user_pwd.key
+
+# vs crap
+.vs/
+vstudio/.vs/
+vstudio/x64/
+vstudio/sscrap.vcxproj.user

@@ -1,0 +1,105 @@
+
+struct InputVertex
+{
+    float4 vertex    : POSITION;
+    float3 normal    : NORMAL;
+    float4 color     : COLOR;
+    float2 texcoord  : TEXCOORD0;
+    float2 texcoord2 : TEXCOORD1;
+};
+
+struct OutputVertex
+{
+    float4 vertex    : POSITION;
+    float4 color     : COLOR;
+    float2 texcoord  : TEXCOORD0;
+    float2 texcoord2 : TEXCOORD1;
+};
+
+uniform float4x4 ProjMatrix;
+uniform float4x4 WorldMatrix;
+
+// lights
+uniform float3   CameraPosition;
+uniform float4   lightAmbient;
+uniform float4x4 lightColor;
+uniform float4x4 lightPosition;
+
+// materials
+uniform float4 Memissive;
+uniform float4 Mambient;
+uniform float4 Mdiffuse;
+uniform float4 Mspecular;
+
+/*
+lightAmbient.xyz -> ambient light multiplier
+lightAmbient.w   -> 0.0 = disable lights/material, other = enable lights/material
+
+lightPosition[n].xyz -> light position
+lightPosition[n].w    -> 0.0 = Disable, 0.5 = Diffuse, 1.0 = Specular
+
+Mambient.xyz -> Material ambient color
+Mambient.w   -> Output alpha
+
+Mspecular.xyz -> MaterialSpecular
+Mspecular.w   -> shininess (with 0.0 disables specular)
+
+Mdiffuse.xyz -> MaterialDiffuse
+Mdiffuse.w   -> with 0.0 disables diffuse
+*/
+
+OutputVertex  main(InputVertex inputvertex)
+{
+    OutputVertex outputvertex;
+
+    float4 v;
+    int n;
+
+    v = mul(inputvertex.vertex, WorldMatrix);
+    outputvertex.vertex    = mul(v,ProjMatrix);
+    outputvertex.vertex.z *= outputvertex.vertex.w;
+
+    if(lightAmbient.w != 0.0) {
+
+        float3 N = float3(mul( inputvertex.normal.xyz, (float3x3) WorldMatrix));
+
+        float3 color = min(Memissive.xyz + (Mambient.xyz * lightAmbient.xyz), 1.0f);
+
+        float3 V = normalize(CameraPosition-v.xyz);
+
+        for(n=0;n<4;n++) {
+
+            if(lightPosition[n].w == 0.0) continue;
+
+            float3 L = normalize(lightPosition[n].xyz - v.xyz);
+            float diffuseLight = 1.0f;
+
+            // Difusse
+            if(Mdiffuse.w != 0.0f) {
+
+                diffuseLight = max(dot(N, L), 0);
+                color = min(color + Mdiffuse.xyz * lightColor[n].xyz * diffuseLight, 1.0f);
+                
+            }
+
+            // Specular
+            if(Mspecular.w != 0.0f && lightPosition[n].w == 1.0f && diffuseLight > 0) {
+
+                float3 H = normalize(L + V);
+                float specularLight = pow(max(dot(N, H), 0), Mspecular.w);
+                color = min(color + Mspecular.xyz * lightColor[n].xyz  * specularLight, 1.0f);
+            }
+        }
+
+        outputvertex.color.xyz = color;
+        outputvertex.color.w   = Mambient.w;
+        }
+    else 
+        outputvertex.color = inputvertex.color;
+
+    outputvertex.texcoord  = inputvertex.texcoord;
+    outputvertex.texcoord2 = inputvertex.texcoord2;
+
+    return outputvertex;
+
+}

@@ -309,7 +309,10 @@ if(LIBRETRO)
 	target_include_directories(${PROJECT_NAME} PRIVATE shell/libretro)
 endif()
 if(NINTENDO_SWITCH)
-	target_include_directories(${PROJECT_NAME} PRIVATE shell/switch)
+	target_compile_definitions(${PROJECT_NAME} PRIVATE __SWITCH__ HAVE_LIBNX)
+	target_include_directories(${PROJECT_NAME} PRIVATE
+		shell/switch
+		$ENV{DEVKITPRO}/libnx/include)
 endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "OpenBSD")
@@ -1588,8 +1591,18 @@ if(NINTENDO_SWITCH)
 			WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}
 			DEPENDS xxHash::xxhash chdr-static zip ${PROJECT_NAME})
 	else()
-		nx_generate_nacp(flycast.nacp NAME "Flycast" AUTHOR "flyinghead, M4xw" VERSION "${GIT_VERSION}")
-		nx_create_nro(flycast NACP flycast.nacp ICON "${CMAKE_SOURCE_DIR}/shell/switch/flycast.jpeg")
+		add_custom_command(
+			OUTPUT ${CMAKE_BINARY_DIR}/flycast.nacp
+			COMMAND nacptool --create "Flycast" "flyinghead, M4xw" "${GIT_VERSION}" ${CMAKE_BINARY_DIR}/flycast.nacp
+			DEPENDS ${PROJECT_NAME}
+		)
+		add_custom_target(
+			flycast.nro
+			COMMAND elf2nro $<TARGET_FILE:${PROJECT_NAME}> ${CMAKE_BINARY_DIR}/flycast.nro
+				--icon=${CMAKE_SOURCE_DIR}/shell/switch/flycast.jpeg
+				--nacp=${CMAKE_BINARY_DIR}/flycast.nacp
+			DEPENDS ${PROJECT_NAME} ${CMAKE_BINARY_DIR}/flycast.nacp
+		)
 	endif()
 endif()
 

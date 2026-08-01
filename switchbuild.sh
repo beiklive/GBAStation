@@ -80,8 +80,10 @@ echo "[平台] ${PLATFORM}"
 export DEVKITPRO="${DEVKITPRO:-/opt/devkitpro}"
 export DEVKITA64="${DEVKITA64:-${DEVKITPRO}/devkitA64}"
 
+export PATH="/usr/bin:/mingw64/bin:/ucrt64/bin:${PATH}"
 export PATH="${DEVKITPRO}/tools/bin:${PATH}"
 export PATH="${DEVKITA64}/bin:${PATH}"
+export PKG_CONFIG_PATH="${DEVKITPRO}/portlibs/switch/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
 
 if [ ! -f "${DEVKITPRO}/cmake/Switch.cmake" ]; then
 
@@ -138,6 +140,8 @@ echo "[线程] ${JOBS}"
 
 ROOT_DIR="$(pwd)"
 BUILD_DIR="${ROOT_DIR}/build_switch"
+PFBN_BUILD_DIR="${ROOT_DIR}/build_switch_pfbneo"
+FLYCAST_BUILD_DIR="${ROOT_DIR}/build_switch_flycast"
 THREEDS_STUB_SOURCE="${ROOT_DIR}/../GBAStation_3DS/GBAStation3DSStub.nro"
 EXTERNAL_CORE_NROS=(
     "FBNeo.nro"
@@ -183,13 +187,126 @@ else
 fi
 
 # ────────────────────────────────────────────────────────────
+# 外置核心构建
+# ────────────────────────────────────────────────────────────
+
+require_external_core_tools() {
+    if ! command -v ninja >/dev/null 2>&1; then
+        echo "[错误] 构建外置核心需要 Ninja，请先安装 ninja"
+        exit 1
+    fi
+}
+
+build_pfbneo_external_core() {
+    echo ""
+    echo "[4/6] 构建 FBNeo 外置核心..."
+
+    if [ ! -d "${ROOT_DIR}/third_party/pemu" ]; then
+        echo "[错误] 找不到 third_party/pemu，无法构建 FBNeo 外置核心"
+        exit 1
+    fi
+
+    mkdir -p "${PFBN_BUILD_DIR}/tmp"
+
+    TMPDIR="${PFBN_BUILD_DIR}/tmp" \
+    TMP="${PFBN_BUILD_DIR}/tmp" \
+    TEMP="${PFBN_BUILD_DIR}/tmp" \
+    cmake \
+        -S "${ROOT_DIR}/third_party/pemu" \
+        -B "${PFBN_BUILD_DIR}" \
+        -DPLATFORM_SWITCH=ON \
+        -DOPTION_EMU=pfbneo \
+        -DOPTION_MPV_PLAYER=OFF \
+        -DOPTION_BUILTIN_LIBCONFIG=ON \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_TOOLCHAIN_FILE="${DEVKITPRO}/cmake/Switch.cmake" \
+        -DCMAKE_PREFIX_PATH="${DEVKITPRO}/portlibs/switch" \
+        -G Ninja
+
+    TMPDIR="${PFBN_BUILD_DIR}/tmp" \
+    TMP="${PFBN_BUILD_DIR}/tmp" \
+    TEMP="${PFBN_BUILD_DIR}/tmp" \
+    cmake --build "${PFBN_BUILD_DIR}" --target pfbneo.nro -j "${JOBS}"
+
+    local output="${PFBN_BUILD_DIR}/src/cores/pfbneo/pfbneo.nro"
+    if [ ! -f "${output}" ]; then
+        echo "[错误] FBNeo 外置核心构建完成但未找到输出: ${output}"
+        exit 1
+    fi
+
+    mkdir -p "${BUILD_DIR}/GBAStation/core"
+    cp "${output}" "${BUILD_DIR}/GBAStation/core/FBNeo.nro"
+}
+
+build_flycast_external_core() {
+    echo ""
+    echo "[5/6] 构建 Flycast 外置核心..."
+
+    if [ ! -d "${ROOT_DIR}/third_party/flycast" ]; then
+        echo "[错误] 找不到 third_party/flycast，无法构建 Flycast 外置核心"
+        exit 1
+    fi
+
+    mkdir -p "${FLYCAST_BUILD_DIR}/tmp"
+    rm -f "${FLYCAST_BUILD_DIR}/CMakeCache.txt"
+    rm -rf "${FLYCAST_BUILD_DIR}/CMakeFiles"
+
+    TMPDIR="${FLYCAST_BUILD_DIR}/tmp" \
+    TMP="${FLYCAST_BUILD_DIR}/tmp" \
+    TEMP="${FLYCAST_BUILD_DIR}/tmp" \
+    cmake \
+        -S "${ROOT_DIR}/third_party/flycast" \
+        -B "${FLYCAST_BUILD_DIR}" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DNINTENDO_SWITCH=ON \
+        -DUSE_VULKAN=OFF \
+        -DUSE_HOST_SDL=ON \
+        -DCMAKE_TOOLCHAIN_FILE="${DEVKITPRO}/cmake/Switch.cmake" \
+        -DCMAKE_PREFIX_PATH="${DEVKITPRO}/portlibs/switch" \
+        -G Ninja
+
+    TMPDIR="${FLYCAST_BUILD_DIR}/tmp" \
+    TMP="${FLYCAST_BUILD_DIR}/tmp" \
+    TEMP="${FLYCAST_BUILD_DIR}/tmp" \
+    cmake --build "${FLYCAST_BUILD_DIR}" --target flycast.nro -j "${JOBS}"
+
+    local output="${FLYCAST_BUILD_DIR}/flycast.nro"
+    if [ ! -f "${output}" ]; then
+        echo "[错误] Flycast 外置核心构建完成但未找到输出: ${output}"
+        exit 1
+    fi
+
+    mkdir -p "${BUILD_DIR}/GBAStation/core"
+    cp "${output}" "${BUILD_DIR}/GBAStation/core/Flycast.nro"
+}
+
+print_nro_size() {
+    local label="$1"
+    local file="$2"
+
+    if [ -f "${file}" ]; then
+        local size
+        if [ "$PLATFORM" = "mac" ]; then
+            size=$(stat -f%z "${file}")
+        else
+            size=$(stat -c%s "${file}")
+        fi
+        local size_mb
+        size_mb=$(awk "BEGIN {printf \"%.2f\", ${size}/1024/1024}")
+        echo "✅ ${label} : ${size_mb} MB"
+    else
+        echo "❌ ${label} 不存在"
+    fi
+}
+
+# ────────────────────────────────────────────────────────────
 # 开始构建
 # ────────────────────────────────────────────────────────────
 
 cd "${BUILD_DIR}"
 
 echo ""
-echo "[1/4] CMake配置..."
+echo "[1/6] CMake配置..."
 
 cmake .. \
     -DPLATFORM_SWITCH=ON \
@@ -198,12 +315,12 @@ cmake .. \
     -DCMAKE_DEPENDS_USE_COMPILER=FALSE
 
 echo ""
-echo "[2/4] 编译..."
+echo "[2/6] 编译..."
 
 cmake --build . -j "${JOBS}"
 
 echo ""
-echo "[3/4] 打包 NRO..."
+echo "[3/6] 打包 NRO..."
 
 cmake --build . --target GBAStation.nro
 cmake --build . --target GBAStationNDSStub.nro
@@ -221,8 +338,9 @@ else
     echo "[警告] 未找到 3DS Stub: ${THREEDS_STUB_SOURCE}"
 fi
 
-clean_external_core_nro_outputs
-echo "[外置核心] FBNeo/Flycast 不写入仓库和发布包，请放到 SD 卡 /GBAStation/core/"
+require_external_core_tools
+build_pfbneo_external_core
+build_flycast_external_core
 
 # ────────────────────────────────────────────────────────────
 # 输出大小
@@ -231,53 +349,12 @@ echo "[外置核心] FBNeo/Flycast 不写入仓库和发布包，请放到 SD �
 echo ""
 echo "==================== 编译结果 ===================="
 
-if [ -f "${BUILD_DIR}/GBAStation.nro" ]; then
-
-    if [ "$PLATFORM" = "mac" ]; then
-        SIZE=$(stat -f%z "${BUILD_DIR}/GBAStation.nro")
-    else
-        SIZE=$(stat -c%s "${BUILD_DIR}/GBAStation.nro")
-    fi
-
-    SIZE_MB=$(awk "BEGIN {printf \"%.2f\", ${SIZE}/1024/1024}")
-
-    echo "✅ GBAStation.nro : ${SIZE_MB} MB"
-
-else
-
-    echo "❌ GBAStation.nro 不存在"
-
-fi
-
-if [ -f "${BUILD_DIR}/GBAStationNDSStub.nro" ]; then
-
-    if [ "$PLATFORM" = "mac" ]; then
-        SIZE=$(stat -f%z "${BUILD_DIR}/GBAStationNDSStub.nro")
-    else
-        SIZE=$(stat -c%s "${BUILD_DIR}/GBAStationNDSStub.nro")
-    fi
-
-    SIZE_MB=$(awk "BEGIN {printf \"%.2f\", ${SIZE}/1024/1024}")
-
-    echo "✅ GBAStationNDSStub.nro : ${SIZE_MB} MB"
-
-else
-
-    echo "❌ GBAStationNDSStub.nro 不存在"
-
-fi
-
-if [ -f "${BUILD_DIR}/GBAStation/core/GBAStation3DSStub.nro" ]; then
-    if [ "$PLATFORM" = "mac" ]; then
-        SIZE=$(stat -f%z "${BUILD_DIR}/GBAStation/core/GBAStation3DSStub.nro")
-    else
-        SIZE=$(stat -c%s "${BUILD_DIR}/GBAStation/core/GBAStation3DSStub.nro")
-    fi
-    SIZE_MB=$(awk "BEGIN {printf \"%.2f\", ${SIZE}/1024/1024}")
-    echo "✅ GBAStation/core/GBAStation3DSStub.nro : ${SIZE_MB} MB"
-else
-    echo "❌ GBAStation/core/GBAStation3DSStub.nro 不存在"
-fi
+print_nro_size "GBAStation.nro" "${BUILD_DIR}/GBAStation.nro"
+print_nro_size "GBAStationNDSStub.nro" "${BUILD_DIR}/GBAStationNDSStub.nro"
+print_nro_size "GBAStation/core/GBAStationNDSStub.nro" "${BUILD_DIR}/GBAStation/core/GBAStationNDSStub.nro"
+print_nro_size "GBAStation/core/GBAStation3DSStub.nro" "${BUILD_DIR}/GBAStation/core/GBAStation3DSStub.nro"
+print_nro_size "GBAStation/core/FBNeo.nro" "${BUILD_DIR}/GBAStation/core/FBNeo.nro"
+print_nro_size "GBAStation/core/Flycast.nro" "${BUILD_DIR}/GBAStation/core/Flycast.nro"
 
 echo "=================================================="
 
@@ -287,5 +364,5 @@ echo "${BUILD_DIR}/GBAStation.nro"
 echo "${BUILD_DIR}/GBAStationNDSStub.nro"
 echo "${BUILD_DIR}/GBAStation/core/GBAStationNDSStub.nro"
 echo "${BUILD_DIR}/GBAStation/core/GBAStation3DSStub.nro"
-echo "SD:/GBAStation/core/FBNeo.nro"
-echo "SD:/GBAStation/core/Flycast.nro"
+echo "${BUILD_DIR}/GBAStation/core/FBNeo.nro"
+echo "${BUILD_DIR}/GBAStation/core/Flycast.nro"
