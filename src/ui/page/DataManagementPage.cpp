@@ -284,6 +284,18 @@ int platformFromExtension(const std::string& ext)
     return -1;
 }
 
+int platformFromExistingPath(const fs::path& path)
+{
+    int detected = beiklive::tools::detectGamePlatform(path);
+    if (detected >= 0)
+        return detected;
+
+    std::string ext = normalizeExtension(path.extension().string());
+    if (ext == "zip" || ext == "7z")
+        return -1;
+    return platformFromExtension(ext);
+}
+
 std::string overlayKeyForPlatform(int platform)
 {
     namespace sk = beiklive::SettingKey;
@@ -509,8 +521,9 @@ int findUnexpectedLplPlatform(const json& items, int expectedPlatform)
         if (romPath.empty())
             continue;
 
-        std::string ext = normalizeExtension(fs::path(romPath).extension().string());
-        int detectedPlatform = platformFromExtension(ext);
+        fs::path path(romPath);
+        int detectedPlatform = fs::exists(path) ? platformFromExistingPath(path) :
+            platformFromExtension(normalizeExtension(path.extension().string()));
         if (detectedPlatform >= 0 && detectedPlatform != expectedPlatform)
             return detectedPlatform;
     }
@@ -2212,8 +2225,7 @@ void DataManagementPage::startDirImport(const std::string& dirPath)
             const auto& romPath = roms[i];
             std::string path = romPath.string();
             std::string romStem = romPath.stem().string();
-            std::string ext = normalizeExtension(romPath.extension().string());
-            int platform = platformFromExtension(ext);
+            int platform = platformFromExistingPath(romPath);
             if (platform < 0)
             {
                 m_progress.store(i + 1, std::memory_order_release);

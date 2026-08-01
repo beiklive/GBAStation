@@ -22,6 +22,15 @@ std::string getFileExtension(const fs::path& path);
 // 主函数：根据文件路径判断类型
 beiklive::enums::FileType getFileType(const fs::path& path);
 
+// 检测压缩包内容。ZIP 会枚举内部文件；7Z 会校验签名并轻量探测常见 ROM 文件名标记。
+beiklive::enums::FileType detectArchiveFileType(const fs::path& path);
+
+// 根据文件类型映射游戏平台；无法映射返回 -1。
+int platformFromFileType(beiklive::enums::FileType type);
+
+// 根据真实文件路径判断游戏平台；会对 ZIP/7Z 做内容检测。
+int detectGamePlatform(const fs::path& path);
+
 // 传入文件路径，提取文件名（包含扩展名）
 std::string getFileName(const fs::path& path);
 

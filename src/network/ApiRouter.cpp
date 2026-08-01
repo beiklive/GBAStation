@@ -1169,16 +1169,29 @@ void ApiRouter::handleUploadFinish(mg_connection* c, mg_http_message* hm)
 
     if (session.kind == "rom")
     {
+        int detectedPlatform = beiklive::tools::detectGamePlatform(session.targetPath);
+        int platform = detectedPlatform >= 0 ? detectedPlatform : session.platform;
+        if (platform != session.platform)
+        {
+            fs::path targetDir = uploadDirForKind("rom", platform);
+            ensureDir(targetDir.string());
+            fs::path movedPath = uniqueFileTarget(targetDir / fs::path(session.targetPath).filename());
+            std::error_code ec;
+            fs::rename(session.targetPath, movedPath, ec);
+            if (!ec)
+                session.targetPath = movedPath.string();
+        }
+
         beiklive::GameEntry entry;
         entry.path = session.targetPath;
         entry.title = session.title;
-        entry.platform = session.platform;
+        entry.platform = platform;
         if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS))
             entry.threeDsTitleId = beiklive::three_ds::readNcsdTitleId(session.targetPath);
         entry.logoPath = beiklive::tools::getDefaultLogoPath(
-            static_cast<beiklive::enums::EmuPlatform>(session.platform),
+            static_cast<beiklive::enums::EmuPlatform>(platform),
             session.targetPath);
-        entry.savePath = beiklive::tools::defaultGameSavePath(session.platform, session.targetPath);
+        entry.savePath = beiklive::tools::defaultGameSavePath(platform, session.targetPath);
         if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)) {
             entry.ndsScreenLayout = "priority_top";
             entry.ndsScreenOrientation = "0";
@@ -1198,7 +1211,7 @@ void ApiRouter::handleUploadFinish(mg_connection* c, mg_http_message* hm)
                 beiklive::NameMappingManager->Save();
             }
         }
-        return replyJson(c, 200, {{"ok", saved}, {"saved", saved}, {"gameId", gameIdFromEntry(entry)}});
+        return replyJson(c, 200, {{"ok", saved}, {"saved", saved}, {"gameId", gameIdFromEntry(entry)}, {"platform", platform}});
     }
 
     if (session.kind == "save")
