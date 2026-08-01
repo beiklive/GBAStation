@@ -50,7 +50,7 @@ void UiEmu::addVideo(uint8_t **pixels, int *pitch,
 int UiEmu::load(const Game &game) {
     printf("UiEmu::load: name: %s, path: %s\n",
            game.path.c_str(), game.romsPath.c_str());
-    pMain->getUiStatusBox()->show("TIPS: PRESS MENU1 + MENU2 BUTTONS FOR IN GAME MENU...");
+    pMain->getUiStatusBox()->show("TIPS: PRESS MENU1 / START BUTTON FOR IN GAME MENU...");
     currentGame = game;
 
     // set fps text on top
@@ -133,8 +133,10 @@ bool UiEmu::onInput(c2d::Input::Player *players) {
         return C2DObject::onInput(players);
     }
 
-    // look for player 1 menu combo
-    if (((players[0].buttons & Input::Button::Menu1) && (players[0].buttons & Input::Button::Menu2))) {
+    // look for player 1 menu button (Menu1 is +/Start on Switch).
+    // Keep the old Menu1 + Menu2 combo working for users with existing configs.
+    if ((players[0].buttons & Input::Button::Menu1) ||
+        ((players[0].buttons & Input::Button::Menu1) && (players[0].buttons & Input::Button::Menu2))) {
         pause();
         pMain->getUiMenu()->load(true);
         pMain->getInput()->clear();

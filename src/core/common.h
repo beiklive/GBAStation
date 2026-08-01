@@ -144,7 +144,7 @@ namespace beiklive // 全局功能函数
         };
         static const std::vector<CoreOption> gbCores = {
             {"mgba", "mGBA", CoreType::Mgba},
-            {"gambatte", "Gambatte", CoreType::Gambatte},
+            {"gambatte", "GameBattle", CoreType::Gambatte},
         };
         static const std::vector<CoreOption> nesCores = {
             {"nestopia", "Nestopia", CoreType::Nestopia},

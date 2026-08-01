@@ -172,6 +172,7 @@ namespace beiklive
             m_badgeBox->setVisibility(brls::Visibility::GONE);
             return;
         }
+        m_badgeBox->setWidth(text.size() > 3 ? 58.f : 36.f);
         m_badgeLabel->setText(text);
         m_badgeBox->setBackgroundColor(_getBadgeColor(color));
         m_badgeBox->setVisibility(brls::Visibility::VISIBLE);
@@ -228,6 +229,8 @@ namespace beiklive
             case PlatformBadgeColor::NDS:     return nvgRGBA(54,  150, 190, 220);
             case PlatformBadgeColor::THREEDS: return nvgRGBA(230, 79,  91,  220);
             case PlatformBadgeColor::GENESIS: return nvgRGBA(23, 55, 139, 220);
+            case PlatformBadgeColor::ARCADE:  return nvgRGBA(236, 134, 44, 220);
+            case PlatformBadgeColor::DREAMCAST: return nvgRGBA(0, 142, 180, 220);
             default:                          return nvgRGBA(100, 100, 100, 200);
         }
     }
@@ -280,6 +283,8 @@ namespace beiklive
         case beiklive::enums::EmuPlatform::EmuNDS: item.badgeColor = PlatformBadgeColor::NDS; break;
         case beiklive::enums::EmuPlatform::Emu3DS: item.badgeColor = PlatformBadgeColor::THREEDS; break;
         case beiklive::enums::EmuPlatform::EmuGenesis: item.badgeColor = PlatformBadgeColor::GENESIS; break;
+        case beiklive::enums::EmuPlatform::EmuArcade: item.badgeColor = PlatformBadgeColor::ARCADE; break;
+        case beiklive::enums::EmuPlatform::EmuDreamcast: item.badgeColor = PlatformBadgeColor::DREAMCAST; break;
         default: item.badgeColor = PlatformBadgeColor::NONE; break;
     }
         item.badgeText = badgeText;

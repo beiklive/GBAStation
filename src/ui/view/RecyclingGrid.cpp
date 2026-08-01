@@ -1506,6 +1506,8 @@ NVGcolor GameGridView::_getBadgeColor(PlatformBadgeColor color) const
         case PlatformBadgeColor::NDS:     return nvgRGBA(54,  150, 190, 220);
         case PlatformBadgeColor::THREEDS: return nvgRGBA(230, 79,  91,  220);
         case PlatformBadgeColor::GENESIS: return nvgRGBA(23, 55, 139, 220);
+        case PlatformBadgeColor::ARCADE:  return nvgRGBA(236, 134, 44, 220);
+        case PlatformBadgeColor::DREAMCAST: return nvgRGBA(0, 142, 180, 220);
         default:                          return nvgRGBA(100, 100, 100, 200);
     }
 }
@@ -1856,7 +1858,7 @@ void GameGridView::_drawBadge(NVGcontext* vg, const GridDrawItem& item, float x,
 {
     if (item.badgeText.empty() || item.badgeColor == PlatformBadgeColor::NONE) return;
 
-    float badgeW = 36.f;
+    float badgeW = item.badgeText.size() > 3 ? 58.f : 36.f;
     float badgeH = 20.f;
 
     nvgBeginPath(vg);

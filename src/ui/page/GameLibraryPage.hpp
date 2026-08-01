@@ -27,6 +27,8 @@ enum class PlatformFilter : int
     NDS = (int)beiklive::enums::EmuPlatform::EmuNDS,
     THREEDS = (int)beiklive::enums::EmuPlatform::Emu3DS,
     GENESIS = (int)beiklive::enums::EmuPlatform::EmuGenesis,
+    ARCADE = (int)beiklive::enums::EmuPlatform::EmuArcade,
+    DREAMCAST = (int)beiklive::enums::EmuPlatform::EmuDreamcast,
     FAVORITE = 999,
 };
 

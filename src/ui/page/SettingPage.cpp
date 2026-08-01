@@ -1621,8 +1621,18 @@ private:
                 [this]() { _openLibretroCore("Snes9x 核心设置", CoreType::Snes9x); });
         addCore("SFC 核心", "Snes9x 2005", 0xE338,
                 [this]() { _openLibretroCore("Snes9x 2005 核心设置", CoreType::Snes9x2005); });
+        addCore("GB/GBC 核心", "GameBattle", 0xE30F,
+                [this]() { _openLibretroCore("GameBattle 核心设置", CoreType::Gambatte); });
         addCore("MD 核心", "Genesis Plus GX", 0xE338,
                 [this]() { _openGenesisCore(); });
+        addCore("Arcade 核心", "FBNeo", 0xE338,
+                [this]() { _openExternalCore("FBNeo 外置核心设置",
+                    "arcade.externalNro.path", "/GBAStation/core/FBNeo.nro",
+                    "arcade.externalNro.returnPath"); });
+        addCore("DC 核心", "Flycast", 0xE338,
+                [this]() { _openExternalCore("Flycast 外置核心设置",
+                    "dc.externalNro.path", "/GBAStation/core/Flycast.nro",
+                    "dc.externalNro.returnPath"); });
 
         emulator.push_back(_section("存档与封面"));
         emulator.push_back(_selector("SRAM 存档目录", "选择 SRAM 与 ROM 同目录或模拟器统一目录", beiklive::material::STORAGE,
@@ -1713,6 +1723,8 @@ private:
             {"NDS 按键映射", "nds.", "Nintendo DS 游戏与触摸指针热键", true},
             {"3DS 按键映射", "3ds.", "Nintendo 3DS 游戏与双摇杆控制", false},
             {"MD 按键映射", "md.", "Mega Drive 六键手柄与 Mode 键", false},
+            {"Arcade 按键映射", "arcade.", "FBNeo 街机游戏与热键", false},
+            {"DC 按键映射", "dc.", "Flycast Dreamcast 游戏与热键", false},
         };
         for (const auto& platform : platforms)
         {
@@ -1805,10 +1817,11 @@ private:
         display.push_back(_toggle("显示 FPS 覆盖层", "在游戏画面上显示实时帧率", 0xE8E5,
             []() { return cfgGetBool("display.showFps", false); }, [](bool v) { cfgSetBool("display.showFps", v); }));
 
-        const std::array<std::pair<const char*, const char*>, 6> platforms{{
+        const std::array<std::pair<const char*, const char*>, 8> platforms{{
             {"GBA", KEY_DISPLAY_OVERLAY_GBA_PATH}, {"GBC", KEY_DISPLAY_OVERLAY_GBC_PATH},
             {"GB", KEY_DISPLAY_OVERLAY_GB_PATH}, {"FC", KEY_DISPLAY_OVERLAY_NES_PATH},
-            {"SFC", KEY_DISPLAY_OVERLAY_SNES_PATH}, {"MD", KEY_DISPLAY_OVERLAY_GENESIS_PATH}}};
+            {"SFC", KEY_DISPLAY_OVERLAY_SNES_PATH}, {"MD", KEY_DISPLAY_OVERLAY_GENESIS_PATH},
+            {"Arcade", KEY_DISPLAY_OVERLAY_ARCADE_PATH}, {"DC", KEY_DISPLAY_OVERLAY_DC_PATH}}};
         display.push_back(_section("默认遮罩"));
         for (const auto& platform : platforms)
         {
@@ -1817,10 +1830,11 @@ private:
                 [key]() { const auto path = cfgGetStr(key, ""); return path.empty() ? "未设置" : beiklive::tools::getFileName(path); },
                 [this, key]() { _pickFile(key, {"png"}); }));
         }
-        const std::array<std::pair<const char*, const char*>, 6> shaders{{
+        const std::array<std::pair<const char*, const char*>, 8> shaders{{
             {"GBA", KEY_DISPLAY_SHADER_GBA_PATH}, {"GBC", KEY_DISPLAY_SHADER_GBC_PATH},
             {"GB", KEY_DISPLAY_SHADER_GB_PATH}, {"FC", KEY_DISPLAY_SHADER_NES_PATH},
-            {"SFC", KEY_DISPLAY_SHADER_SNES_PATH}, {"MD", KEY_DISPLAY_SHADER_GENESIS_PATH}}};
+            {"SFC", KEY_DISPLAY_SHADER_SNES_PATH}, {"MD", KEY_DISPLAY_SHADER_GENESIS_PATH},
+            {"Arcade", KEY_DISPLAY_SHADER_ARCADE_PATH}, {"DC", KEY_DISPLAY_SHADER_DC_PATH}}};
         display.push_back(_section("默认着色器"));
         for (const auto& platform : shaders)
         {
@@ -2267,6 +2281,32 @@ private:
             []() { return cfgGetStr("core.genesis.mono", "disabled") == "enabled"; },
             [](bool v) { cfgSetStr("core.genesis.mono", v ? "enabled" : "disabled"); }));
         _finishCorePage("Genesis Plus GX 核心设置");
+    }
+
+    void _openExternalCore(const std::string& title,
+                           const std::string& nroPathKey,
+                           const std::string& defaultNroPath,
+                           const std::string& returnPathKey)
+    {
+        m_coreItems.clear();
+        m_coreItems.push_back(_section("外置核心"));
+        m_coreItems.push_back(_action("核心 NRO 路径", "链式启动时加载的核心文件", beiklive::material::DESCRIPTION,
+            [nroPathKey, defaultNroPath]() {
+                const auto path = cfgGetStr(nroPathKey, defaultNroPath);
+                return path.empty() ? "未设置  >" : beiklive::tools::getFileName(path) + "  >";
+            },
+            [this, nroPathKey]() { _pickFile(nroPathKey, {"nro"}); }));
+        m_coreItems.push_back(_action("返回前端路径", "退出核心后返回的 GBAStation NRO", beiklive::material::DESCRIPTION,
+            [returnPathKey]() {
+                const auto path = cfgGetStr(returnPathKey, "sdmc:/switch/GBAStation.nro");
+                return path.empty() ? "未设置  >" : beiklive::tools::getFileName(path) + "  >";
+            },
+            [this, returnPathKey]() { _pickFile(returnPathKey, {"nro"}); }));
+        m_coreItems.push_back(_section("菜单"));
+        m_coreItems.push_back(_action("游戏内菜单", "Switch 上按 + / Start 可呼出核心菜单", 0xE88E,
+            []() { return std::string("+ / Start"); },
+            []() { brls::Application::notify("游戏内按 + / Start 打开核心菜单，菜单中退出游戏会返回 GBAStation"); }));
+        _finishCorePage(title);
     }
 
     void _openThreeDsTextInput(const std::string& title, const std::string& key,
@@ -4058,6 +4098,8 @@ brls::View *SettingPage::buildDisplayTab()
     box->addView(makeOverlayPathCell(beiklive::SettingKey::KEY_DISPLAY_OVERLAY_NES_PATH,  "FC 遮罩"));
     box->addView(makeOverlayPathCell(beiklive::SettingKey::KEY_DISPLAY_OVERLAY_SNES_PATH, "SFC 遮罩"));
     box->addView(makeOverlayPathCell(beiklive::SettingKey::KEY_DISPLAY_OVERLAY_GENESIS_PATH, "MD 遮罩"));
+    box->addView(makeOverlayPathCell(beiklive::SettingKey::KEY_DISPLAY_OVERLAY_ARCADE_PATH, "Arcade 遮罩"));
+    box->addView(makeOverlayPathCell(beiklive::SettingKey::KEY_DISPLAY_OVERLAY_DC_PATH, "DC 遮罩"));
 
     // ── 着色器设置 ────────────────────────────────────────────────────────────
     box->addView(makeHeader("着色器设置"));
@@ -4086,6 +4128,8 @@ brls::View *SettingPage::buildDisplayTab()
     box->addView(makeShaderPathCell(beiklive::SettingKey::KEY_DISPLAY_SHADER_NES_PATH,  "FC 着色器"));
     box->addView(makeShaderPathCell(beiklive::SettingKey::KEY_DISPLAY_SHADER_SNES_PATH, "SFC 着色器"));
     box->addView(makeShaderPathCell(beiklive::SettingKey::KEY_DISPLAY_SHADER_GENESIS_PATH, "MD 着色器"));
+    box->addView(makeShaderPathCell(beiklive::SettingKey::KEY_DISPLAY_SHADER_ARCADE_PATH, "Arcade 着色器"));
+    box->addView(makeShaderPathCell(beiklive::SettingKey::KEY_DISPLAY_SHADER_DC_PATH, "DC 着色器"));
 
     scroll->setContentView(box);
     auto *container = new brls::Box(brls::Axis::COLUMN);

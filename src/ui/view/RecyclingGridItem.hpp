@@ -12,6 +12,8 @@ enum class PlatformBadgeColor {
     NDS,
     THREEDS,
     GENESIS,
+    ARCADE,
+    DREAMCAST,
     NONE,
 };
 

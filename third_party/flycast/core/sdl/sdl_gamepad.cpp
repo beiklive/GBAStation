@@ -32,7 +32,12 @@ public:
 		set_button(DC_BTN_B, 1);
 		set_button(DC_BTN_A, 2);
 		set_button(DC_BTN_X, 3);
+#ifdef __SWITCH__
+		set_button(DC_BTN_START, 6);
+		set_button(EMU_BTN_MENU, 7);
+#else
 		set_button(DC_BTN_START, 9);
+#endif
 
 		set_axis(0, DC_AXIS_LEFT, 0, false);
 		set_axis(0, DC_AXIS_RIGHT, 0, true);
@@ -184,13 +189,20 @@ public:
 			else
 				map_button(SDL_CONTROLLER_BUTTON_RIGHTSHOULDER, DC_BTN_C);
 		}
+#ifdef __SWITCH__
+		map_button(SDL_CONTROLLER_BUTTON_BACK, DC_BTN_START);
+		map_button(SDL_CONTROLLER_BUTTON_START, EMU_BTN_MENU);
+#else
 		map_button(SDL_CONTROLLER_BUTTON_START, DC_BTN_START);
+#endif
 		map_button(SDL_CONTROLLER_BUTTON_DPAD_UP, DC_DPAD_UP);
 		map_button(SDL_CONTROLLER_BUTTON_DPAD_DOWN, DC_DPAD_DOWN);
 		map_button(SDL_CONTROLLER_BUTTON_DPAD_LEFT, DC_DPAD_LEFT);
 		map_button(SDL_CONTROLLER_BUTTON_DPAD_RIGHT, DC_DPAD_RIGHT);
 		map_button(SDL_CONTROLLER_BUTTON_GUIDE, DC_DPAD2_UP); // service
+#ifndef __SWITCH__
 		map_button(SDL_CONTROLLER_BUTTON_BACK, EMU_BTN_MENU);
+#endif
 
 		map_axis(SDL_CONTROLLER_AXIS_LEFTX, DC_AXIS_LEFT, false);
 		map_axis(SDL_CONTROLLER_AXIS_LEFTX, DC_AXIS_RIGHT, true);
