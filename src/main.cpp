@@ -9,6 +9,7 @@
 #include "core/ThreadPool.hpp"
 #include "core/ThreeDsTitlePaths.hpp"
 #include "core/Tools.hpp"
+#include "core/ExternalCoreSession.hpp"
 #include "ui/utils/BKAudioPlayer.hpp"
 #include "ui/page/StartPage.hpp"
 #include "ui/utils/MyActivity.hpp"
@@ -71,6 +72,12 @@ std::optional<std::string> parseDirectLaunchRom(int argc, char* argv[])
 		if (arg == "-d" || arg == "-v")
 			continue;
 		if (arg == "-o" || arg == "--return")
+		{
+			if (i + 1 < argc)
+				++i;
+			continue;
+		}
+		if (arg == "--external-return")
 		{
 			if (i + 1 < argc)
 				++i;
@@ -237,6 +244,14 @@ int main(int argc, char* argv[]) {
 
 
 	beiklive::ConfigureInit();
+
+	const std::string externalReturnToken = beiklive::externalCoreReturnToken(argc, argv);
+	if (!externalReturnToken.empty())
+	{
+		const bool updated = beiklive::finishExternalCoreSession(externalReturnToken);
+		brls::Logger::info("External core session stats {} for token {}",
+			updated ? "updated" : "not updated", externalReturnToken);
+	}
 
 	// ── 从配置文件读取调试设置 ──────────────────────────────────
 	{

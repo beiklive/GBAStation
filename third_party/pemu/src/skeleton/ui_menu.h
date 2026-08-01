@@ -9,7 +9,7 @@ class MenuLine;
 
 namespace pemu {
 
-    class UiMenu : public SkinnedRectangle {
+    class UiMenu : public c2d::RectangleShape {
 
     public:
         struct MenuOption {
@@ -55,8 +55,12 @@ namespace pemu {
         void updateLines();
 
         UiMain *ui = nullptr;
-        SkinnedText *title = nullptr;
+        c2d::Text *title = nullptr;
+        c2d::RectangleShape *panel = nullptr;
+        c2d::RectangleShape *tabHighlight = nullptr;
         c2d::RectangleShape *highlight = nullptr;
+        c2d::Text *footer = nullptr;
+        std::vector<c2d::Text *> tabLabels;
         std::vector<MenuLine *> lines;
         float alpha = 230;
 

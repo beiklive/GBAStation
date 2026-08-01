@@ -15,17 +15,20 @@ constexpr const char *MENU_RESTART = "重启游戏";
 constexpr const char *MENU_SAVE_STATE = "保存状态";
 constexpr const char *MENU_LOAD_STATE = "读取状态";
 constexpr const char *MENU_EXIT = "退出游戏";
-constexpr const char *MENU_TAB_PREFIX = "TAB:";
 constexpr const char *MENU_EMPTY = "此页暂无设置";
+constexpr int MENU_MAX_TABS = 6;
+constexpr float MENU_PANEL_X = 72.0f;
+constexpr float MENU_PANEL_Y = 42.0f;
+constexpr float MENU_PANEL_W = 1136.0f;
+constexpr float MENU_PANEL_H = 636.0f;
+constexpr float MENU_CONTENT_X = 112.0f;
+constexpr float MENU_CONTENT_Y = 206.0f;
+constexpr float MENU_CONTENT_W = 1056.0f;
 
 bool isFrontendMenuAction(const std::string &name) {
     return name == MENU_RESUME || name == MENU_RESTART ||
            name == MENU_SAVE_STATE || name == MENU_LOAD_STATE ||
            name == MENU_EXIT;
-}
-
-bool isTabHeader(const std::string &name) {
-    return name.compare(0, 4, MENU_TAB_PREFIX) == 0;
 }
 
 bool isSelectableCustomAction(const std::string &name) {
@@ -34,7 +37,7 @@ bool isSelectableCustomAction(const std::string &name) {
 
 std::string translateGroupName(const std::string &name) {
     if (name == "UI_FILTERING") return "过滤";
-    if (name == "UI_OPTIONS") return "界面";
+    if (name == "UI_OPTIONS") return "画面";
     if (name == "EMULATION") return "模拟";
     if (name == "GAMEPAD") return "按键";
     if (name == "KEYBOARD") return "键盘";
@@ -131,8 +134,8 @@ public:
         p_name->setOutlineThickness(m_textGroup.outlineSize);
         p_name->setOutlineColor(m_textGroup.outlineColor);
         p_name->setOrigin(Origin::Left);
-        p_name->setPosition(2 * pMain->getScaling().x, MenuLine::getSize().y / 2);
-        p_name->setSizeMax((MenuLine::getSize().x * 0.55f), 0);
+        p_name->setPosition(18 * pMain->getScaling().x, MenuLine::getSize().y / 2);
+        p_name->setSizeMax((MenuLine::getSize().x * 0.62f), 0);
         MenuLine::add(p_name);
 
         p_value = new Text("OPTION VALUE", m_textGroup.size, font);
@@ -140,8 +143,8 @@ public:
         p_value->setOutlineThickness(m_textGroup.outlineSize);
         p_value->setOutlineColor(m_textGroup.outlineColor);
         p_value->setOrigin(Origin::Left);
-        p_value->setPosition((MenuLine::getSize().x * 0.6f), MenuLine::getSize().y / 2);
-        p_value->setSizeMax(MenuLine::getSize().x * 0.38f, 0);
+        p_value->setPosition((MenuLine::getSize().x * 0.70f), MenuLine::getSize().y / 2);
+        p_value->setSizeMax(MenuLine::getSize().x * 0.27f, 0);
         MenuLine::add(p_value);
 
         p_sprite = new Sprite();
@@ -159,20 +162,13 @@ public:
         setVisibility(Visibility::Visible);
         p_sprite->setVisibility(Visibility::Hidden);
         p_name->setString(name);
-        p_name->setSizeMax((MenuLine::getSize().x * 0.55f), 0);
+        p_name->setSizeMax((MenuLine::getSize().x * 0.62f), 0);
         p_value->setVisibility(Visibility::Visible);
         setFillColor(Color::Transparent);
 
         // this is a menu title (or custom option)
         if (!option) {
             // custom options
-            if (isTabHeader(name)) {
-                p_name->setString(name.substr(4));
-                p_name->setSizeMax((MenuLine::getSize().x * 0.96f), 0);
-                p_value->setVisibility(Visibility::Hidden);
-                setFillColor(pMain->getUiMenu()->getOutlineColor());
-                return;
-            }
             if (name == "STATES" || name == "QUIT" || isFrontendMenuAction(name)) {
                 p_value->setVisibility(Visibility::Visible);
                 p_value->setString(isFrontendMenuAction(name) ? ">" : "GO");
@@ -226,42 +222,80 @@ public:
     Skin::TextGroup m_textGroup;
 };
 
-UiMenu::UiMenu(UiMain *uiMain) : SkinnedRectangle(uiMain, {"OPTIONS_MENU"}) {
+UiMenu::UiMenu(UiMain *uiMain) : RectangleShape({0, 0}) {
     ui = uiMain;
-    alpha = UiMenu::getAlpha();
+    alpha = 238;
 
-    // menu title
-    title = new SkinnedText(uiMain, {"OPTIONS_MENU", "TITLE_TEXT"});
+    // GBAStation-owned full-screen menu surface. It intentionally does not
+    // reuse the original pEMU side-panel geometry or skin placement.
+    setOrigin(Origin::TopLeft);
+    setPosition(0, 0);
+    setSize(ui->getSize());
+    setFillColor(Color(4, 8, 14, 218));
+    setOutlineThickness(0);
+
+    panel = new RectangleShape({MENU_PANEL_X, MENU_PANEL_Y, MENU_PANEL_W, MENU_PANEL_H});
+    panel->setFillColor(Color(20, 28, 38, 250));
+    panel->setOutlineColor(Color(76, 91, 108, 255));
+    panel->setOutlineThickness(2);
+    UiMenu::add(panel);
+
+    Font *font = ui->getSkin()->getFont();
+    title = new Text("FBNeo 游戏菜单", 31, font);
+    title->setFillColor(Color(244, 247, 250, 255));
+    title->setOutlineThickness(0);
+    title->setOrigin(Origin::Left);
+    title->setPosition(MENU_CONTENT_X, 88);
     UiMenu::add(title);
+
+    tabHighlight = new RectangleShape({MENU_CONTENT_X, 132, 164, 44});
+    tabHighlight->setFillColor(Color(28, 139, 198, 255));
+    tabHighlight->setOutlineColor(Color(101, 202, 241, 255));
+    tabHighlight->setOutlineThickness(1);
+    UiMenu::add(tabHighlight);
+
+    for (int i = 0; i < MENU_MAX_TABS; ++i) {
+        auto *tab = new Text("", 21, font);
+        tab->setOrigin(Origin::Center);
+        tab->setOutlineThickness(0);
+        tab->setVisibility(Visibility::Hidden);
+        tabLabels.push_back(tab);
+        UiMenu::add(tab);
+    }
+
+    footer = new Text("L / R  切换页面     A  确认     B  返回游戏", 18, font);
+    footer->setFillColor(Color(166, 178, 191, 255));
+    footer->setOutlineThickness(0);
+    footer->setOrigin(Origin::Left);
+    footer->setPosition(MENU_CONTENT_X, 642);
+    UiMenu::add(footer);
 
     // retrieve skin config for options items
     textGroup = ui->getSkin()->getText({"OPTIONS_MENU", "ITEMS_TEXT"});
 
     // calculate number of items shown
-    lineHeight = (float) textGroup.size + (2 * ui->getScaling().y);
-    maxLines = (int) (UiMenu::getSize().y / lineHeight);
-    if ((float) maxLines * lineHeight < UiMenu::getSize().y) {
-        lineHeight = UiMenu::getSize().y / (float) maxLines;
-    }
+    lineHeight = 54.0f;
+    maxLines = 7;
 
     // add selection rectangle (highlight)
-    highlight = new RectangleShape({16, 16});
-    ui->getSkin()->loadRectangleShape(highlight, {"SKIN_CONFIG", "HIGHLIGHT"});
-    highlight->setSize(UiMenu::getSize().x - 2, lineHeight - (highlight->getOutlineThickness() * 2));
-    highlight->move(1, 0);
+    highlight = new RectangleShape({MENU_CONTENT_X, MENU_CONTENT_Y, MENU_CONTENT_W, lineHeight - 6});
+    highlight->setFillColor(Color(38, 58, 76, 255));
+    highlight->setOutlineColor(Color(92, 174, 220, 255));
+    highlight->setOutlineThickness(2);
     UiMenu::add(highlight);
 
     // add options items
     for (unsigned int i = 0; i < (unsigned int) maxLines; i++) {
-        FloatRect r = {0, lineHeight * (float) i, UiMenu::getSize().x, lineHeight};
+        FloatRect r = {MENU_CONTENT_X, MENU_CONTENT_Y + lineHeight * (float) i,
+                       MENU_CONTENT_W, lineHeight};
         auto line = new MenuLine(ui, r, textGroup);
         lines.push_back(line);
         UiMenu::add(line);
     }
 
     // tween
-    Vector2f targetPos = {UiMenu::getPosition().x - UiMenu::getSize().x,
-                          UiMenu::getPosition().y};
+    Vector2f targetPos = {UiMenu::getPosition().x,
+                          UiMenu::getPosition().y + UiMenu::getSize().y};
     tweenPosition = new TweenPosition({UiMenu::getPosition()}, targetPos, 0.2f);
     tweenPosition->setState(TweenState::Stopped);
     UiMenu::add(tweenPosition);
@@ -320,6 +354,7 @@ void UiMenu::buildTabs() {
         const std::string groupName = group.getName();
         if (groupName == "ROMS") continue;
         if (isInputConfigGroup(groupName)) continue;
+        if (frontendGameMenu && groupName == "UI_FILTERING") continue;
 
         bool hasVisibleOption = false;
         auto options = group.getOptions();
@@ -347,17 +382,28 @@ void UiMenu::buildTabs() {
 }
 
 void UiMenu::refreshTitle() {
-    if (menu_tabs.empty()) {
-        title->setString(frontendGameMenu ? "FBNeo 菜单" : "设置");
-        return;
-    }
+    title->setString(frontendGameMenu ? "FBNeo 游戏菜单" : "FBNeo 设置");
 
-    std::string tabs;
-    for (size_t i = 0; i < menu_tabs.size(); ++i) {
-        if (!tabs.empty()) tabs += "  ";
-        tabs += (i == (size_t) tabIndex ? "[" + menu_tabs[i].name + "]" : menu_tabs[i].name);
+    const int visibleTabs = std::min((int) menu_tabs.size(), MENU_MAX_TABS);
+    const float tabWidth = visibleTabs > 0
+        ? std::min(176.0f, MENU_CONTENT_W / (float) visibleTabs)
+        : 176.0f;
+    for (int i = 0; i < MENU_MAX_TABS; ++i) {
+        auto *tab = tabLabels.at(i);
+        if (i >= visibleTabs) {
+            tab->setVisibility(Visibility::Hidden);
+            continue;
+        }
+        tab->setVisibility(Visibility::Visible);
+        tab->setString(menu_tabs.at(i).name);
+        tab->setFillColor(i == tabIndex
+            ? Color(255, 255, 255, 255)
+            : Color(151, 165, 180, 255));
+        tab->setPosition(MENU_CONTENT_X + tabWidth * ((float) i + 0.5f), 154);
     }
-    title->setString(frontendGameMenu ? "FBNeo 菜单  " + tabs : "设置  " + tabs);
+    tabHighlight->setVisibility(visibleTabs > 0 ? Visibility::Visible : Visibility::Hidden);
+    tabHighlight->setSize(tabWidth - 8.0f, 44.0f);
+    tabHighlight->setPosition(MENU_CONTENT_X + tabWidth * (float) tabIndex + 4.0f, 132.0f);
 }
 
 void UiMenu::rebuildCurrentTab() {
@@ -369,7 +415,6 @@ void UiMenu::rebuildCurrentTab() {
     }
 
     const auto &tab = menu_tabs.at(tabIndex);
-    menu_options.push_back({std::string(MENU_TAB_PREFIX) + "ZL/ZR 切换：" + tab.name, nullptr});
 
     if (tab.actionPage) {
         if (frontendGameMenu) {
@@ -395,7 +440,7 @@ void UiMenu::rebuildCurrentTab() {
         }
     }
 
-    if (menu_options.size() == 1) {
+    if (menu_options.empty()) {
         menu_options.push_back({MENU_EMPTY, nullptr});
     }
 
@@ -462,7 +507,7 @@ void UiMenu::updateLines() {
         // set highlight position and color
         if ((int) i == highlightIndex) {
             highlight->setPosition({highlight->getPosition().x,
-                                    lines[i]->getPosition().y + highlight->getOutlineThickness()});
+                                    lines[i]->getPosition().y + 3.0f});
             lines[i]->p_value->setOutlineColor(getOutlineColor());
         } else {
             lines[i]->p_value->setOutlineColor(textGroup.outlineColor);

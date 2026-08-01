@@ -2674,6 +2674,48 @@ private:
     void _buildMappingItems(const std::string& prefix, bool nds)
     {
         m_mappingItems.clear();
+
+        if (prefix == "arcade.")
+        {
+            struct ArcadeBinding
+            {
+                const char* label;
+                const char* suffix;
+                const char* defaultValue;
+            };
+            static constexpr ArcadeBinding arcadeBindings[] = {
+                {"方向 上", "up", "PAD_UP"},
+                {"方向 下", "down", "PAD_DOWN"},
+                {"方向 左", "left", "PAD_LEFT"},
+                {"方向 右", "right", "PAD_RIGHT"},
+                {"FBNeo 按钮 1", "a", "PAD_A"},
+                {"FBNeo 按钮 2", "b", "PAD_B"},
+                {"FBNeo 按钮 3", "x", "PAD_X"},
+                {"FBNeo 按钮 4", "y", "PAD_Y"},
+                {"FBNeo 按钮 5", "l", "PAD_LB"},
+                {"FBNeo 按钮 6", "r", "PAD_RB"},
+                {"FBNeo 按钮 7", "l2", "PAD_LT"},
+                {"FBNeo 按钮 8", "r2", "PAD_RT"},
+                {"投币", "select", "PAD_BACK"},
+                {"开始", "start", "PAD_START"},
+            };
+
+            m_mappingItems.push_back(_section("FBNeo 游戏按键"));
+            for (const auto& binding : arcadeBindings)
+            {
+                _addBinding(binding.label, "直接映射到 FBNeo 游戏输入",
+                            beiklive::input_mapping::makeHandleKey(prefix, binding.suffix),
+                            binding.defaultValue);
+            }
+            m_mappingItems.push_back(_section("FBNeo 功能键"));
+            _addBinding("打开菜单", "可绑定单键或双键组合",
+                        beiklive::input_mapping::makeKey(prefix, "hotkey.menu.pad"),
+                        "PAD_LT+PAD_RT");
+            m_mappingFocus = _firstFocusable(m_mappingItems);
+            m_mappingScroll = m_mappingTargetScroll = 0.f;
+            return;
+        }
+
         const unsigned mask = beiklive::input_mapping::platformMaskForPrefix(prefix);
         m_mappingItems.push_back(_section("游戏按键"));
         for (const auto& entry : beiklive::input_mapping::kGameButtonDefaults)
@@ -2901,6 +2943,12 @@ private:
             const std::string key = item.configKey;
             openKeyCapture([this, key](const std::string& captured) {
                 if (captured.empty()) return;
+                if (key.rfind("arcade.", 0) == 0)
+                {
+                    cfgSetStr(key, captured);
+                    invalidate();
+                    return;
+                }
                 std::string current = cfgGetStr(key, "none");
                 if (current.empty() || current == "none") current = captured;
                 else

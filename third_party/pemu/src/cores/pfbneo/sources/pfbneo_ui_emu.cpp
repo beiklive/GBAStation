@@ -126,23 +126,37 @@ std::string mappingValue(const std::unordered_map<std::string, std::string> &val
     return it->second;
 }
 
-std::vector<std::string> firstComboTokens(const std::string &value) {
-    std::vector<std::string> tokens;
-    if (value.empty() || value == "none") return tokens;
+std::vector<std::string> selectedComboTokens(const std::string &value) {
+    std::vector<std::string> selected;
+    size_t alternativeStart = 0;
+    while (alternativeStart <= value.size()) {
+        const auto alternativeEnd = value.find('|', alternativeStart);
+        const std::string alternative = trim(value.substr(
+            alternativeStart,
+            alternativeEnd == std::string::npos
+                ? std::string::npos
+                : alternativeEnd - alternativeStart));
 
-    const auto firstAltEnd = value.find('|');
-    const std::string firstAlt = value.substr(0, firstAltEnd);
-    size_t start = 0;
-    while (start <= firstAlt.size()) {
-        const auto end = firstAlt.find('+', start);
-        std::string token = trim(firstAlt.substr(
-            start, end == std::string::npos ? std::string::npos : end - start));
-        if (!token.empty() && token != "none") tokens.push_back(token);
-        if (end == std::string::npos) break;
-        start = end + 1;
+        std::vector<std::string> tokens;
+        size_t tokenStart = 0;
+        while (!alternative.empty() && alternative != "none" &&
+               tokenStart <= alternative.size()) {
+            const auto tokenEnd = alternative.find('+', tokenStart);
+            std::string token = trim(alternative.substr(
+                tokenStart,
+                tokenEnd == std::string::npos
+                    ? std::string::npos
+                    : tokenEnd - tokenStart));
+            if (!token.empty() && token != "none") tokens.push_back(token);
+            if (tokenEnd == std::string::npos) break;
+            tokenStart = tokenEnd + 1;
+        }
+        if (!tokens.empty()) selected = std::move(tokens);
+
+        if (alternativeEnd == std::string::npos) break;
+        alternativeStart = alternativeEnd + 1;
     }
-
-    return tokens;
+    return selected;
 }
 
 int tokenToPemuButton(const std::string &token, int fallback) {
@@ -173,7 +187,7 @@ void setOptionFromMapping(PEMUConfig *config,
     auto option = config->get(optionId, true);
     if (!option) return;
 
-    const auto tokens = firstComboTokens(mappingValue(values, key, fallback));
+    const auto tokens = selectedComboTokens(mappingValue(values, key, fallback));
     if (tokens.empty()) {
         option->setInteger(-1);
         return;
@@ -188,11 +202,11 @@ void setMenuHotkeyFromMapping(PEMUConfig *config,
     auto menu2 = config->get(PEMUConfig::OptId::JOY_MENU2, true);
     if (!menu1 || !menu2) return;
 
-    const auto tokens = firstComboTokens(
+    const auto tokens = selectedComboTokens(
         mappingValue(values, "arcade.hotkey.menu.pad", "PAD_LT+PAD_RT"));
     if (tokens.empty()) {
-        menu1->setInteger(KEY_JOY_LT_DEFAULT);
-        menu2->setInteger(KEY_JOY_RT_DEFAULT);
+        menu1->setInteger(-1);
+        menu2->setInteger(-1);
         return;
     }
 

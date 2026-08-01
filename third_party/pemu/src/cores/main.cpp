@@ -21,6 +21,7 @@ PEMUUiMain *pemu_ui;
 namespace {
 
 std::string g_returnNroPath = "sdmc:/switch/GBAStation.nro";
+std::string g_gbastationSessionToken;
 
 bool endsWithNoCase(const std::string &value, const std::string &suffix) {
     if (suffix.size() > value.size()) {
@@ -55,7 +56,10 @@ void returnToGbastation() {
     if (g_returnNroPath.empty() || !envHasNextLoad()) {
         return;
     }
-    const std::string args = quoteArg(g_returnNroPath);
+    std::string args = quoteArg(g_returnNroPath);
+    if (!g_gbastationSessionToken.empty()) {
+        args += " --external-return " + quoteArg(g_gbastationSessionToken);
+    }
     const Result rc = envSetNextLoad(g_returnNroPath.c_str(), args.c_str());
     printf("pFBN: return to GBAStation rc=0x%x path=%s\n", rc, g_returnNroPath.c_str());
 }
@@ -92,6 +96,11 @@ int main(int argc, char **argv) {
 #ifdef __SWITCH__
         if (std::strcmp(argv[i], "--return") == 0 && i + 1 < argc && argv[i + 1]) {
             g_returnNroPath = argv[i + 1];
+            ++i;
+            continue;
+        }
+        if (std::strcmp(argv[i], "--gbastation-session") == 0 && i + 1 < argc && argv[i + 1]) {
+            g_gbastationSessionToken = argv[i + 1];
             ++i;
             continue;
         }

@@ -29,6 +29,7 @@
 namespace {
 
 std::string g_returnNroPath = "sdmc:/switch/GBAStation.nro";
+std::string g_gbastationSessionToken;
 
 std::string quoteArg(const std::string& value)
 {
@@ -45,8 +46,9 @@ std::string quoteArg(const std::string& value)
 	return out;
 }
 
-void parseGbastationArgs(int argc, char *argv[])
+void parseGbastationArgs(int& argc, char *argv[])
 {
+	int output = 1;
 	for (int i = 1; i < argc; ++i)
 	{
 		if (!argv[i])
@@ -55,8 +57,18 @@ void parseGbastationArgs(int argc, char *argv[])
 		{
 			g_returnNroPath = argv[i + 1];
 			++i;
+			continue;
 		}
+		else if (std::strcmp(argv[i], "--gbastation-session") == 0 && i + 1 < argc && argv[i + 1])
+		{
+			g_gbastationSessionToken = argv[i + 1];
+			++i;
+			continue;
+		}
+		argv[output++] = argv[i];
 	}
+	argc = output;
+	argv[output] = nullptr;
 }
 
 void returnToGbastation()
@@ -66,7 +78,9 @@ void returnToGbastation()
 	if (!envHasNextLoad())
 		return;
 
-	const std::string args = quoteArg(g_returnNroPath);
+	std::string args = quoteArg(g_returnNroPath);
+	if (!g_gbastationSessionToken.empty())
+		args += " --external-return " + quoteArg(g_gbastationSessionToken);
 	const Result rc = envSetNextLoad(g_returnNroPath.c_str(), args.c_str());
 	if (R_FAILED(rc))
 		std::printf("Flycast: envSetNextLoad return to GBAStation failed: %x\n", rc);

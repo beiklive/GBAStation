@@ -5,6 +5,7 @@
 #include "core/Tools.hpp"
 #include "core/ThreadPool.hpp"
 #include "core/ThreeDsTitlePaths.hpp"
+#include "core/ExternalCoreSession.hpp"
 #include "core/forwarder/ForwarderInstaller.hpp"
 #include "ui/utils/MaterialIcons.hpp"
 #include "ui/utils/NdsEnvironment.hpp"
@@ -675,20 +676,30 @@ namespace beiklive
         bool launchExternalCoreNro(const std::string& romPath,
                                    const std::string& title,
                                    const std::string& label,
+                                   int platform,
                                    const char* pathKey,
                                    const char* defaultPath,
                                    const char* returnKey)
         {
             const std::string nroPath = GET_SETTING_KEY_STR(pathKey, defaultPath);
             const std::string returnPath = GET_SETTING_KEY_STR(returnKey, "sdmc:/switch/GBAStation.nro");
+			const std::string sessionToken = beiklive::makeExternalCoreSessionToken(romPath);
 
-            auto result = beiklive::switch_platform::launchNroOnExit({nroPath, romPath, returnPath});
+			beiklive::switch_platform::NroLaunchRequest request;
+			request.nroPath = nroPath;
+			request.romPath = romPath;
+			request.returnNroPath = returnPath;
+			request.extraArgs = {"--gbastation-session", sessionToken};
+			auto result = beiklive::switch_platform::launchNroOnExit(request);
             if (!result.success)
             {
                 brls::Logger::error("{} external NRO launch failed for {}: {}", label, title, result.message);
                 brls::Application::notify(label + std::string("独立NRO启动失败：") + result.message);
                 return false;
             }
+
+			if (!beiklive::beginExternalCoreSession(romPath, platform, sessionToken))
+				brls::Logger::error("{} external session tracking could not start for {}", label, romPath);
 
             brls::Logger::info("{} external NRO configured for {}: {}", label, title, result.message);
             brls::Application::notify("正在启动" + label + "独立NRO...");
@@ -859,6 +870,7 @@ namespace beiklive
         {
 #ifdef __SWITCH__
             return launchExternalCoreNro(entry.path, entry.title, "Arcade",
+				static_cast<int>(beiklive::enums::EmuPlatform::EmuArcade),
                 "arcade.externalNro.path", "/GBAStation/core/FBNeo.nro",
                 "arcade.externalNro.returnPath");
 #else
@@ -870,6 +882,7 @@ namespace beiklive
         {
 #ifdef __SWITCH__
             return launchExternalCoreNro(entry.path, entry.title, "DC",
+				static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast),
                 "dc.externalNro.path", "/GBAStation/core/Flycast.nro",
                 "dc.externalNro.returnPath");
 #else
@@ -926,6 +939,7 @@ namespace beiklive
             ensureGameDbEntryForFileLaunch(dirItem);
 #ifdef __SWITCH__
             launchExternalCoreNro(dirItem.fullPath, dirItem.fileName, "Arcade",
+				static_cast<int>(beiklive::enums::EmuPlatform::EmuArcade),
                 "arcade.externalNro.path", "/GBAStation/core/FBNeo.nro",
                 "arcade.externalNro.returnPath");
             return;
@@ -939,6 +953,7 @@ namespace beiklive
             ensureGameDbEntryForFileLaunch(dirItem);
 #ifdef __SWITCH__
             launchExternalCoreNro(dirItem.fullPath, dirItem.fileName, "DC",
+				static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast),
                 "dc.externalNro.path", "/GBAStation/core/Flycast.nro",
                 "dc.externalNro.returnPath");
             return;
@@ -1147,6 +1162,8 @@ namespace beiklive
             case beiklive::enums::FileType::NDS_ROM:
             case beiklive::enums::FileType::THREEDS_ROM:
             case beiklive::enums::FileType::GENESIS_ROM:
+            case beiklive::enums::FileType::ARCADE_ROM:
+            case beiklive::enums::FileType::DREAMCAST_ROM:
                 brls::Application::notify("启动游戏：" + dirItem.fileName);
                 _pushGameActivity(dirItem, this);
                 break;
