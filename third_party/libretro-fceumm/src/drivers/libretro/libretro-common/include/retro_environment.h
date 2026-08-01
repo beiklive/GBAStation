@@ -32,9 +32,6 @@ need to be full of platform-specific workarounds.
 */
 
 #if defined (__cplusplus)
-#if 0
-printf("This is C++, version %d.\n", __cplusplus);
-#endif
 /* The expected values would be
  *   199711L, for ISO/IEC 14882:1998 or 14882:2003
  */
@@ -102,9 +99,9 @@ printf("This is C++, version %d.\n", __cplusplus);
 #endif
 
 /* MSVC obviously has to have some non-standard constants... */
-#if _M_IX86_FP == 1
+#if defined(_M_IX86_FP) && (_M_IX86_FP == 1)
 #define __SSE__ 1
-#elif _M_IX86_FP == 2 || (defined(_M_AMD64) || defined(_M_X64))
+#elif (defined(_M_IX86_FP) && (_M_IX86_FP == 2)) || (defined(_M_AMD64) || defined(_M_X64))
 #define __SSE__ 1
 #define __SSE2__ 1
 #endif

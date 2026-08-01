@@ -80,6 +80,9 @@ namespace beiklive
             /// 请求更新金手指文件路径（UI线程调用）
             void requestCheatPathUpdate(const std::string& path);
             void applyCheatsUpdate(const std::vector<CheatEntry>& cheats);
+            LibretroLoader::DiskControlState getDiskControlStateSnapshot() const;
+            void requestDiskEjectState(bool ejected);
+            void requestDiskImageIndex(unsigned index, bool insertAfter = true);
 
             /// 着色器开关（UI线程调用）
             void _onShaderToggle(bool on);
@@ -172,6 +175,8 @@ namespace beiklive
             // ---- 游戏线程 -----------------------------------------------------
             std::thread       m_gameThread;
             std::atomic<bool> m_running{false}; ///< 游戏线程运行标志
+            mutable std::mutex m_diskControlMutex;
+            LibretroLoader::DiskControlState m_diskControlState;
 
             // ---- FPS 统计（游戏线程写，UI 线程读）-----------------------------
             mutable std::mutex m_fpsMutex;
@@ -277,6 +282,8 @@ namespace beiklive
 
             /// 启动游戏主循环线程
             void _startGameThread();
+            void _refreshDiskControlState();
+            void _processDiskControlSignal(GameSignal& sig);
 
             /// 停止游戏主循环线程并等待退出
             void _stopGameThread();

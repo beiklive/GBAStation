@@ -10,6 +10,7 @@
 #include "ui/widget/DetailCell.hpp"
 #include "ui/widget/FunctionButtons.hpp"
 #include "game/render/GLSLPParser.hpp"
+#include "game/retro/LibretroLoader.hpp"
 #include <borealis/views/cells/cell_selector.hpp>
 namespace beiklive
 {
@@ -49,6 +50,9 @@ namespace beiklive
             void setCheatPathCallback(std::function<void(const std::string&)> cb) { m_cheatPathCallback = std::move(cb); }
             void setCheatsChangedCallback(std::function<void(const std::vector<CheatEntry>&)> cb) { m_cheatsChangedCallback = std::move(cb); }
             const std::vector<CheatEntry>& getCheats() const { return m_cheats; }
+            void setDiskStateCallback(std::function<LibretroLoader::DiskControlState()> cb) { m_diskStateCallback = std::move(cb); }
+            void setDiskEjectCallback(std::function<void(bool)> cb) { m_diskEjectCallback = std::move(cb); }
+            void setDiskIndexCallback(std::function<void(unsigned)> cb) { m_diskIndexCallback = std::move(cb); }
 
             /// 向画面设置页追加由具体游戏视图拥有的平台专属控件。
             void addCoreDisplaySettingView(brls::View* view);
@@ -77,6 +81,9 @@ namespace beiklive
             std::function<void(int, bool)> m_cheatToggleCallback;
             std::function<void(const std::string&)> m_cheatPathCallback;
             std::function<void(const std::vector<CheatEntry>&)> m_cheatsChangedCallback;
+            std::function<LibretroLoader::DiskControlState()> m_diskStateCallback;
+            std::function<void(bool)> m_diskEjectCallback;
+            std::function<void(unsigned)> m_diskIndexCallback;
             std::function<void(const std::string&)> m_displayModeCallback;
             std::function<void(float)> m_integerScaleCallback; ///< 整数倍缩放变更回调 (newScale)
             std::function<void(bool)> m_shaderToggleCallback;
@@ -106,6 +113,8 @@ namespace beiklive
             std::vector<beiklive::SwitchButton*> m_cheatSwitches;
             std::vector<CheatEntry> m_cheats;
             bool m_cheatFileReadOnly = false;
+            brls::Label* m_diskStatusLabel = nullptr;
+            beiklive::DetailCell* m_diskSelectCell = nullptr;
 
             void _initLayout();
             brls::View* _createSaveStatePanel();
@@ -129,6 +138,9 @@ namespace beiklive
             void _openCustomScaleSettings();
             void _rebuildShaderParamUI();
             brls::View* _createControllerPanel();
+            brls::View* _createDiskControlPanel();
+            void _refreshDiskControlPanel();
+            bool _isFdsGame() const;
             brls::View* _createNesPlayerBox(int player);
             void _openNesKeyCapture(beiklive::DetailCell* cell, const std::string& cfgKey);
             void _notifyPressedController();

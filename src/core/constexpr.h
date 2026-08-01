@@ -59,6 +59,8 @@ inline std::string GetRootPath()
     constexpr const char *DATA_BASE_FILE_NDS     = "GameData_NDS.json";     ///< NDS 平台数据库文件
     constexpr const char *DATA_BASE_FILE_3DS     = "GameData_3DS.json";     ///< Nintendo 3DS 平台数据库文件
     constexpr const char *DATA_BASE_FILE_GENESIS = "GameData_Genesis.json"; ///< Mega Drive / Genesis 平台数据库文件
+    constexpr const char *DATA_BASE_FILE_ARCADE  = "GameData_Arcade.json";  ///< Arcade / FBNeo 平台数据库文件
+    constexpr const char *DATA_BASE_FILE_DC      = "GameData_DC.json";      ///< Dreamcast 平台数据库文件
 
     namespace 
     {
@@ -97,6 +99,8 @@ inline std::string GetRootPath()
             case 6: return DATA_BASE_FILE_NDS;      // EmuPlatform::EmuNDS
             case 7: return DATA_BASE_FILE_3DS;      // EmuPlatform::Emu3DS
             case 8: return DATA_BASE_FILE_GENESIS;  // EmuPlatform::EmuGenesis
+            case 9: return DATA_BASE_FILE_ARCADE;   // EmuPlatform::EmuArcade
+            case 10: return DATA_BASE_FILE_DC;       // EmuPlatform::EmuDreamcast
             default: return DATA_BASE_FILE;
             }
         }
@@ -187,6 +191,8 @@ namespace beiklive::SettingKey
     constexpr const char *KEY_DISPLAY_OVERLAY_SNES_PATH ="display.overlay.snesPath"; ///< 全局 SNES 遮罩 PNG 路径
     constexpr const char *KEY_DISPLAY_OVERLAY_NDS_PATH  ="display.overlay.ndsPath";  ///< 全局 NDS 遮罩 PNG 路径
     constexpr const char *KEY_DISPLAY_OVERLAY_GENESIS_PATH ="display.overlay.genesisPath"; ///< 全局 MD 遮罩 PNG 路径
+    constexpr const char *KEY_DISPLAY_OVERLAY_ARCADE_PATH ="display.overlay.arcadePath"; ///< 全局 Arcade 遮罩 PNG 路径
+    constexpr const char *KEY_DISPLAY_OVERLAY_DC_PATH ="display.overlay.dcPath"; ///< 全局 DC 遮罩 PNG 路径
 
     // 着色器设置（全局默认）
     constexpr const char *KEY_DISPLAY_SHADER_ENABLED   ="display.shaderEnabled";   ///< 着色器总开关（true=启用）
@@ -198,6 +204,8 @@ namespace beiklive::SettingKey
     constexpr const char *KEY_DISPLAY_SHADER_SNES_PATH ="display.shader.snes";     ///< SNES 着色器预设路径
     constexpr const char *KEY_DISPLAY_SHADER_NDS_PATH  ="display.shader.nds";      ///< NDS 着色器预设路径
     constexpr const char *KEY_DISPLAY_SHADER_GENESIS_PATH ="display.shader.genesis"; ///< MD 着色器预设路径
+    constexpr const char *KEY_DISPLAY_SHADER_ARCADE_PATH ="display.shader.arcade"; ///< Arcade 着色器预设路径
+    constexpr const char *KEY_DISPLAY_SHADER_DC_PATH ="display.shader.dc"; ///< DC 着色器预设路径
 
     // 音频设置
     constexpr const char *KEY_AUDIO_BUTTON_SFX          = "audio.buttonSfx";          ///< 按钮音效开关

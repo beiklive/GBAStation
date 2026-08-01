@@ -1,0 +1,16 @@
+Prerequisites
+
+1) Install Visual Studio 2026 with Desktop development with C++.
+2) Install the v145 x64/x86 and ARM64 C++ build tools and a Windows 10 or newer SDK.
+3) Install a Windows Perl interpreter and add perl.exe to PATH. The pre-build scripts require it.
+4) Win32 builds require nasm.exe in this directory. x64 and ARM64 builds do not compile the NASM sources.
+
+Building
+
+1) Open projectfiles/visualstudio-2026/fbneo_vs2026.sln.
+2) Select Debug or Release and the target platform.
+3) Build fbneo_vs2026.
+
+ARM64 builds automatically compile the four code generators as Release x64 host tools, run them on the build host, and then compile the generated sources for ARM64. A complete x64 FBNeo build is not required first.
+
+An x64 development machine can cross-compile the ARM64 executable but cannot validate its runtime behavior. Test the resulting executable on Windows 11 ARM64. Kaillera is disabled for native ARM64 because this repository does not provide an ARM64 Kaillera client DLL.

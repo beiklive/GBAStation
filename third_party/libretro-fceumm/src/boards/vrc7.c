@@ -45,26 +45,50 @@ static SFORMAT StateRegs[] =
 
 /* VRC7 Sound */
 
+/* Apply per-channel volume (#512) around OPLL_fillbuf.  Default volume
+ * 256 dispatches to the plain OPLL_fillbuf for a bit-identical
+ * pre-#512 path; volume 0 drops the chip silently; intermediate
+ * values run a local mix loop that calls OPLL_calc (equivalent to
+ * the internal calc() when quality=0, which is the VRC7 default).
+ * The (calc + 32768) << shift formulation matches OPLL_fillbuf's
+ * inner expression. */
+static void VRC7Mix(int32_t *buf, int32_t len, int shift) {
+	int v;
+	if (!VRC7Sound || len <= 0)
+		return;
+	v = FSettings.ExpVolume[SND_VRC7];
+	if (v == 0)
+		return;
+	if (v == 256) {
+		OPLL_fillbuf(VRC7Sound, buf, len, shift);
+	} else {
+		int32_t i;
+		for (i = 0; i < len; i++) {
+			int32_t s = (OPLL_calc(VRC7Sound) + 32768);
+			buf[i] += ((s * v) / 256) << shift;
+		}
+	}
+}
+
 static void DoVRC7Sound(void) {
 	int32_t z, a;
 	if (FSettings.soundq >= 1)
 		return;
 	z = ((SOUNDTS << 16) / soundtsinc) >> 4;
 	a = z - dwave;
-	OPLL_fillbuf(VRC7Sound, &Wave[dwave], a, 1);
+	VRC7Mix(&Wave[dwave], a, 1);
 	dwave += a;
 }
 
 static void UpdateOPLNEO(int32_t *WaveBuf, int Count) {
-	OPLL_fillbuf(VRC7Sound, WaveBuf, Count, 4);
+	VRC7Mix(WaveBuf, Count, 4);
 }
 
 static void UpdateOPL(int Count) {
 	int32_t z, a;
 	z = ((SOUNDTS << 16) / soundtsinc) >> 4;
 	a = z - dwave;
-	if (VRC7Sound && a)
-		OPLL_fillbuf(VRC7Sound, &Wave[dwave], a, 1);
+	VRC7Mix(&Wave[dwave], a, 1);
 	dwave = 0;
 }
 
@@ -175,9 +199,13 @@ static void VRC7IRQHook(int a) {
 static void StateRestore(int version) {
 	Sync();
 
-#ifndef GEKKO
+	/* Must run unconditionally: the SLOT savestate chunk restores raw
+	 * OPLL_SLOT contents including the sintbl wavetable pointer, which
+	 * is only valid for the process that saved the state. forceRefresh
+	 * re-derives sintbl and the other rate/patch-dependent fields.
+	 * Previously guarded out on GEKKO together with the (also since-
+	 * unguarded) sound-state registration. */
 	OPLL_forceRefresh(VRC7Sound);
-#endif
 }
 
 void Mapper85_Init(CartInfo *info) {
@@ -196,8 +224,18 @@ void Mapper85_Init(CartInfo *info) {
 	VRC7_ESI();
 	AddExState(&StateRegs, ~0, 0, 0);
 
-/* Ignoring these sound state files for Wii since it causes states unable to load */
-#ifndef GEKKO
+/* These were excluded on Wii/GC (GEKKO) after 2018 reports of states
+ * failing to load on big-endian hosts. The failures traced back to
+ * since-fixed state-layer bugs (FlipByteOrder's over-iteration no-op,
+ * ReadStateChunk's unchecked skip-seek), not to these entries.
+ * Register them everywhere so big-endian builds save and restore the
+ * full OPLL state; StateRestore's OPLL_forceRefresh re-derives the
+ * slot table pointers and rate-dependent fields after load. The
+ * chunks are raw native-order dumps (type=0), which is correct for
+ * same-machine save/load on either endianness; the SLOT chunk cannot
+ * be made cross-endian portable regardless, as OPLL_SLOT embeds a
+ * wavetable pointer and its size differs across 32/64-bit ABIs (a
+ * size mismatch CheckS already skips gracefully on load). */
 	/* Sound states */
 	AddExState(&VRC7Sound->adr, sizeof(VRC7Sound->adr), 0, "ADDR");
 	AddExState(&VRC7Sound->out, sizeof(VRC7Sound->out), 0, "OUT0");
@@ -219,7 +257,6 @@ void Mapper85_Init(CartInfo *info) {
 	AddExState(&VRC7Sound->key_status, sizeof(VRC7Sound->key_status), 0, "KET");
 	AddExState(&VRC7Sound->mask, sizeof(VRC7Sound->mask), 0, "MASK");
 	AddExState((uint8_t *)VRC7Sound->slot, sizeof(VRC7Sound->slot), 0, "SLOT");
-#endif
 }
 
 void NSFVRC7_Init(void) {

@@ -5,6 +5,21 @@ ifneq (,$(findstring msvc2003,$(platform)))
 INCFLAGS += -I$(LIBRETRO_COMM_DIR)/include/compat/msvc
 endif
 
+# libretro-common
+SOURCES_C =
+
+SOURCES_C += $(LIBRETRO_COMM_DIR)/compat/compat_posix_string.c
+SOURCES_C += $(LIBRETRO_COMM_DIR)/compat/compat_strcasestr.c
+SOURCES_C += $(LIBRETRO_COMM_DIR)/compat/compat_snprintf.c
+SOURCES_C += $(LIBRETRO_COMM_DIR)/compat/compat_strl.c
+SOURCES_C += $(LIBRETRO_COMM_DIR)/compat/fopen_utf8.c
+SOURCES_C += $(LIBRETRO_COMM_DIR)/encodings/encoding_utf.c
+SOURCES_C += $(LIBRETRO_COMM_DIR)/file/file_path.c
+SOURCES_C += $(LIBRETRO_COMM_DIR)/file/file_path_io.c
+SOURCES_C += $(LIBRETRO_COMM_DIR)/streams/file_stream.c
+SOURCES_C += $(LIBRETRO_COMM_DIR)/time/rtime.c
+SOURCES_C += $(LIBRETRO_COMM_DIR)/vfs/vfs_implementation.c
+
 # Core
 SOURCES_CXX =
 

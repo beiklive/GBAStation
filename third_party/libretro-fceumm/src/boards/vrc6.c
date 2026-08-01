@@ -57,8 +57,13 @@ static SFORMAT SStateRegs[] =
 	{ vpsg1, 8, "PSG1" },
 	{ vpsg2, 4, "PSG2" },
 
-/* Ignoring these sound state files for Wii since it causes states unable to load */
-#ifndef GEKKO
+/* These were excluded on Wii/GC (GEKKO) after 2018 reports of states
+ * failing to load on big-endian hosts. The failures traced back to the
+ * since-fixed FlipByteOrder over-iteration no-op and ReadStateChunk's
+ * unchecked skip-seek, not to these entries: they are plain 4-byte
+ * scalars with FCEUSTATE_RLSB, which the state layer byte-swaps
+ * correctly on MSB_FIRST hosts. Register them everywhere so big-endian
+ * builds save and restore the full expansion-audio state. */
 	/* rw - 2018-11-28 Added */
 	{ &cvbc[0], 4 | FCEUSTATE_RLSB, "BC01" },
 	{ &cvbc[1], 4 | FCEUSTATE_RLSB, "BC02" },
@@ -70,7 +75,6 @@ static SFORMAT SStateRegs[] =
 	{ &vcount[1], 4 | FCEUSTATE_RLSB, "VCT1" },
 	{ &vcount[2], 4 | FCEUSTATE_RLSB, "VCT2" },
 	{ &phaseacc, 4 | FCEUSTATE_RLSB, "ACCU" },
-#endif
 	{ 0 }
 };
 
@@ -179,7 +183,8 @@ static void DoSawV(void);
 
 static INLINE void DoSQV(int x) {
 	int32_t V;
-	int32_t amp = (((vpsg1[x << 2] & 15) << 8) * 6 / 8) >> 4;
+	int32_t amp = GetExpOutput(SND_VRC6,
+		(((vpsg1[x << 2] & 15) << 8) * 6 / 8) >> 4);
 	int32_t start, end;
 
 	start = cvbc[x];
@@ -251,7 +256,8 @@ static void DoSawV(void) {
 				}
 				if (vcount[2] <= 0)
 					goto rea;
-				duff = (((phaseacc >> 3) & 0x1f) << 4) * 6 / 8;
+				duff = GetExpOutput(SND_VRC6,
+					(((phaseacc >> 3) & 0x1f) << 4) * 6 / 8);
 			}
 			Wave[V >> 4] += duff;
 		}
@@ -260,7 +266,8 @@ static void DoSawV(void) {
 
 static INLINE void DoSQVHQ(int x) {
 	int32_t V;
-	int32_t amp = ((vpsg1[x << 2] & 15) << 8) * 6 / 8;
+	int32_t amp = GetExpOutput(SND_VRC6,
+		((vpsg1[x << 2] & 15) << 8) * 6 / 8);
 
 	if (vpsg1[(x << 2) | 0x2] & 0x80) {
 		if (vpsg1[x << 2] & 0x80) {
@@ -300,7 +307,8 @@ static void DoSawVHQ(void) {
 
 	if (vpsg2[2] & 0x80) {
 		for (V = cvbc[2]; V < (int)SOUNDTS; V++) {
-			WaveHi[V] += (((phaseacc >> 3) & 0x1f) << 8) * 6 / 8;
+			WaveHi[V] += GetExpOutput(SND_VRC6,
+				(((phaseacc >> 3) & 0x1f) << 8) * 6 / 8);
 			vcount[2]--;
 			if (vcount[2] <= 0) {
 				vcount[2] = (vpsg2[1] + ((vpsg2[2] & 15) << 8) + 1) << 1;

@@ -10,6 +10,14 @@
 #endif
 
 #include <libretro.h>
+
+/* Older bundled libretro.h headers may not define this experimental
+ * environment callback. Define it locally so the core still builds and
+ * can probe for it at runtime (the frontend returns false when absent). */
+#ifndef RETRO_ENVIRONMENT_GET_TARGET_SAMPLE_RATE
+#define RETRO_ENVIRONMENT_GET_TARGET_SAMPLE_RATE (81 | RETRO_ENVIRONMENT_EXPERIMENTAL)
+#endif
+
 #include <string/stdstring.h>
 #include <file/file_path.h>
 #include <streams/file_stream.h>
@@ -33,6 +41,10 @@
 #include "../../unif.h"
 #include "../../fds.h"
 #include "../../vsuni.h"
+
+#ifdef HAVE_HDPACK
+#include "../../hdpack/hdpack.h"
+#endif
 #include "../../video.h"
 
 #ifdef PSP
@@ -158,6 +170,16 @@ static int aspect_ratio_par;
  * GET_CURRENT_SOFTWARE_FRAMEBUFFER returned a format we can write into
  * directly. */
 static enum retro_pixel_format active_pixformat = RETRO_PIXEL_FORMAT_UNKNOWN;
+
+#ifdef HAVE_HDPACK
+/* Set while a hires.txt parsed successfully in retro_load_game but the
+ * game itself has not finished loading yet (hdnes_active is only raised
+ * by HDNes_PostLoadInit). */
+static int hd_pack_pending = 0;
+/* Soft-patched ROM copy produced from the pack's <patch> IPS; owned
+ * here for the lifetime of the loaded game. */
+static uint8_t *hd_patched_rom = NULL;
+#endif
 
 /*
  * Flags to keep track of whether turbo
@@ -293,6 +315,9 @@ static bpp_t* fceu_video_out;
 
 /* Some timing-related variables. */
 static unsigned sndsamplerate;
+/* User-selected samplerate hint: 0 = Auto, else an explicit rate in Hz
+ * (one of the supported 32000/44100/48000/96000 values). */
+static unsigned sndsamplerate_hint = 0;
 static unsigned sndquality;
 static unsigned sndvolume;
 unsigned swapDuty;
@@ -325,6 +350,16 @@ const char * GetKeyboard(void)
 void FCEUD_SetPalette(uint16_t index, uint8_t r, uint8_t g, uint8_t b)
 {
    uint16_t index_to_write = index;
+
+#ifdef HAVE_HDPACK
+   /* HD pack composition uses its own 32-bit palette so output follows
+    * the user's palette selection unless the pack ships palette.dat.
+    * WritePalette() installs the visible 64-colour NES palette at
+    * frontend indices 128..191 (0..127 is the "unvaried" region padded
+    * with 205,205,205 filler), so capture that window. */
+   if (index >= 128 && index < 128 + 64)
+      HDNes_SetPaletteColor(index - 128, r, g, b);
+#endif
 #if defined(RENDER_GSKIT_PS2)
    /* Index correction for PS2 GS */
    int modi = index & 63;
@@ -1040,6 +1075,23 @@ static void stereo_filter_apply_null(int32_t *sound_buffer, size_t size)
             (sound_buffer[i] & 0xFFFF);
 }
 
+/* Pack a (current, delayed) stereo sample pair into one int32_t such
+ * that the in-memory int16_t order seen by audio_batch_cb is the same
+ * on every host: delayed sample in the first (left) slot, current
+ * sample in the second (right) slot. On little-endian the low half of
+ * the word is stored first; on big-endian the high half is, so the
+ * two halves must be swapped to keep the interleaved channel order
+ * host-independent. (stereo_filter_apply_null needs no such handling
+ * because it duplicates the same mono sample into both halves.) */
+static INLINE int32_t stereo_filter_pack_pair(int32_t current, int32_t delayed)
+{
+#ifdef MSB_FIRST
+   return (delayed << 16) | (current & 0xFFFF);
+#else
+   return (current << 16) | (delayed & 0xFFFF);
+#endif
+}
+
 static void stereo_filter_apply_delay(int32_t *sound_buffer, size_t size)
 {
    size_t delay_capacity = stereo_filter_delay.samples_size -
@@ -1102,13 +1154,14 @@ static void stereo_filter_apply_delay(int32_t *sound_buffer, size_t size)
 
       /* Each element of sound_buffer is a 16 bit mono sample
        * stored in a 32 bit value. We convert this to stereo
-       * by copying the mono sample to the high (left channel)
-       * 16 bit region and the delayed sample to the low
-       * (right channel) region, casting sound_buffer
-       * to int16_t when uploading to the frontend */
+       * by mixing the current sample with the delayed sample
+       * as an interleaved pair, casting sound_buffer to
+       * int16_t when uploading to the frontend. The packing
+       * helper keeps the delayed/current channel order the
+       * same on little- and big-endian hosts. */
       for (i = size - samples_to_mix; i < size; i++)
-         sound_buffer[i] = (sound_buffer[i] << 16) |
-               (stereo_filter_delay.samples[delay_index++] & 0xFFFF);
+         sound_buffer[i] = stereo_filter_pack_pair(sound_buffer[i],
+               stereo_filter_delay.samples[delay_index++]);
 
       /* Remove the mixed samples from the delay buffer */
       memmove(stereo_filter_delay.samples,
@@ -1569,10 +1622,12 @@ static bool update_option_visibility(void)
          struct retro_core_option_display option_display;
          unsigned i;
          unsigned size;
-         char options_list[][25] = {
+         char options_list[][32] = {
             "fceumm_sndvolume",
             "fceumm_sndquality",
             "fceumm_sndlowpass",
+            "fceumm_removetrianglenoise",
+            "fceumm_reducedmcpopping",
             "fceumm_sndstereodelay",
             "fceumm_swapduty",
             "fceumm_apu_1",
@@ -1770,7 +1825,13 @@ void retro_set_environment(retro_environment_t cb)
 
    environ_cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void*)ports);
 
-   vfs_iface_info.required_interface_version = 1;
+   /* libretro-common's file_stream wires the v2 truncate callback, so
+    * it ignores any interface negotiated below
+    * FILESTREAM_REQUIRED_VFS_VERSION (2). Requesting version 1 here
+    * made filestream_vfs_init a silent no-op and left every
+    * filestream call on the local fallback implementation instead of
+    * the frontend's VFS. */
+   vfs_iface_info.required_interface_version = FILESTREAM_REQUIRED_VFS_VERSION;
    vfs_iface_info.iface                      = NULL;
    if (environ_cb(RETRO_ENVIRONMENT_GET_VFS_INTERFACE, &vfs_iface_info))
       filestream_vfs_init(&vfs_iface_info);
@@ -1806,6 +1867,20 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
 {
    unsigned width  = NES_WIDTH  - crop_overscan_h_left - crop_overscan_h_right;
    unsigned height = NES_HEIGHT - crop_overscan_v_top - crop_overscan_v_bottom;
+#ifdef HAVE_HDPACK
+   if (hdnes_active)
+   {
+      unsigned scale = HDNes_GetScale();
+      info->geometry.base_width = width * scale;
+      info->geometry.max_width = NES_WIDTH * scale;
+      info->geometry.base_height = height * scale;
+      info->geometry.max_height = NES_HEIGHT * scale;
+      info->geometry.aspect_ratio = get_aspect_ratio(width, height);
+      info->timing.sample_rate = (float)sndsamplerate;
+      info->timing.fps = (FSettings.PAL || dendy) ? NES_PAL_FPS : NES_NTSC_FPS;
+      return;
+   }
+#endif
 #ifdef HAVE_NTSC_FILTER
    info->geometry.base_width = (use_ntsc ? NES_NTSC_OUT_WIDTH(width) : width);
    info->geometry.max_width = (use_ntsc ? NES_NTSC_WIDTH : NES_WIDTH);
@@ -1970,7 +2045,18 @@ void retro_deinit (void)
 
 void retro_reset(void)
 {
+   /* Reset clears the turbo toggle phase so the rapid-fire cycle starts
+    * at the same point every reset, matching how the core's other
+    * input-poll state behaves on power-cycle.  Without this, a held
+    * turbo button would resume mid-cycle after Reset and produce a
+    * different first-frame input than a fresh boot. */
+   memset(turbo_button_toggle, 0, sizeof(turbo_button_toggle));
    ResetNES();
+#ifdef HAVE_HDPACK
+   /* Mapper power/reset handler reinstalls can shadow the HD audio
+    * registers; claim them back. */
+   HDNes_InstallAudioHandlers();
+#endif
 }
 
 static void set_apu_channels(int chan)
@@ -1992,6 +2078,59 @@ static void set_apu_channels(int chan)
    FSettings.TriangleVolume  = (chan & 0x04) ? 256 : 0;
    FSettings.NoiseVolume     = (chan & 0x08) ? 256 : 0;
    FSettings.PCMVolume       = (chan & 0x10) ? 256 : 0;
+}
+
+/* Resolve the user's samplerate hint into an actual output rate in Hz.
+ *
+ * The NES has no sample-based audio hardware; sound is synthesized in
+ * realtime, so there is no single 'native' rate. We support 32000, 44100,
+ * 48000 and 96000 Hz. When the hint is "Auto", we query the frontend for
+ * its target output rate via RETRO_ENVIRONMENT_GET_TARGET_SAMPLE_RATE and
+ * snap to whichever of our supported rates is closest, minimising the work
+ * the frontend's resampler has to do (lower latency, less aliasing, no
+ * low-pass "smearing", better time-domain resolution at the higher rates).
+ *
+ * Fallback: if the frontend does not implement the callback (older
+ * frontends return false), or returns an implausible value, we fall back
+ * to a platform-appropriate default (32000 Hz on Wii, else 48000 Hz). */
+static unsigned resolve_samplerate_hint(void)
+{
+   static const unsigned supported[4] = { 32000, 44100, 48000, 96000 };
+
+   /* Explicit user selection always wins over Auto. */
+   if (sndsamplerate_hint != 0)
+      return sndsamplerate_hint;
+
+   /* Auto: ask the frontend what it is targeting. */
+   {
+      unsigned target = 0;
+      if (environ_cb(RETRO_ENVIRONMENT_GET_TARGET_SAMPLE_RATE, &target) &&
+            target >= 8000 && target <= 384000)
+      {
+         unsigned best      = supported[0];
+         unsigned best_dist = (target > supported[0]) ?
+               (target - supported[0]) : (supported[0] - target);
+         int i;
+         for (i = 1; i < 4; i++)
+         {
+            unsigned dist = (target > supported[i]) ?
+                  (target - supported[i]) : (supported[i] - target);
+            if (dist < best_dist)
+            {
+               best_dist = dist;
+               best      = supported[i];
+            }
+         }
+         return best;
+      }
+   }
+
+   /* Fallback: callback unavailable or returned an implausible value. */
+#ifdef GEKKO
+   return 32000;
+#else
+   return 48000;
+#endif
 }
 
 static void check_variables(bool startup)
@@ -2368,6 +2507,47 @@ static void check_variables(bool startup)
       }
    }
 
+   var.key = "fceumm_sndrate_hint";
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+      unsigned oldhint = sndsamplerate_hint;
+      unsigned oldrate = sndsamplerate;
+      unsigned newrate;
+
+      if (!strcmp(var.value, "32KHz"))
+         sndsamplerate_hint = 32000;
+      else if (!strcmp(var.value, "44KHz"))
+         sndsamplerate_hint = 44100;
+      else if (!strcmp(var.value, "48KHz"))
+         sndsamplerate_hint = 48000;
+      else if (!strcmp(var.value, "96KHz"))
+         sndsamplerate_hint = 96000;
+      else /* "Auto" */
+         sndsamplerate_hint = 0;
+
+      newrate = resolve_samplerate_hint();
+
+      if (startup)
+      {
+         /* During load, just settle the rate before the av_info is first
+          * reported to the frontend. No SET_SYSTEM_AV_INFO needed yet. */
+         if (newrate != oldrate)
+         {
+            sndsamplerate = newrate;
+            FCEUI_Sound(sndsamplerate);
+         }
+      }
+      /* Re-init the synthesizer and request a frontend av_info update only
+       * when the resolved output rate actually changes at runtime. */
+      else if (sndsamplerate_hint != oldhint || newrate != oldrate)
+      {
+         sndsamplerate = newrate;
+         FCEUI_Sound(sndsamplerate);
+         audio_video_updated = 2;
+      }
+   }
+
    var.key = "fceumm_sndquality";
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
@@ -2389,6 +2569,22 @@ static void check_variables(bool startup)
    {
       int lowpass = (!strcmp(var.value, "enabled")) ? 1 : 0;
       FCEUI_SetLowPass(lowpass);
+   }
+
+   var.key = "fceumm_removetrianglenoise";
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+      int newval = (!strcmp(var.value, "enabled")) ? 1 : 0;
+      FCEUI_RemoveTriangleNoise(newval);
+   }
+
+   var.key = "fceumm_reducedmcpopping";
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+      int newval = (!strcmp(var.value, "enabled")) ? 1 : 0;
+      FCEUI_ReduceDmcPopping(newval);
    }
 
    var.key = "fceumm_sndstereodelay";
@@ -2474,6 +2670,39 @@ static void check_variables(bool startup)
          enable_apu &= ~(1 << i);
    }
    set_apu_channels(enable_apu);
+
+   /* Per-channel expansion-audio volume controls (#512).  Six options
+    * map 1:1 to SND_FDS..SND_MMC5 indexing FSettings.ExpVolume[].  UI
+    * values are 0..100 in steps of 5; the internal scale is 0..256
+    * (matching the convention used for FSettings.SquareVolume[] etc).
+    * A value of 256 (i.e. UI "100") is the default and leaves the
+    * mixing path bit-identical to pre-#512 builds. */
+   {
+      static const struct { int channel; const char *key; } expvol_opts[] = {
+         { SND_FDS,  "fceumm_apu_fds"  },
+         { SND_S5B,  "fceumm_apu_s5b"  },
+         { SND_N163, "fceumm_apu_n163" },
+         { SND_VRC6, "fceumm_apu_vrc6" },
+         { SND_VRC7, "fceumm_apu_vrc7" },
+         { SND_MMC5, "fceumm_apu_mmc5" },
+      };
+      size_t j;
+      for (j = 0; j < sizeof(expvol_opts) / sizeof(expvol_opts[0]); j++)
+      {
+         struct retro_variable expv = { 0 };
+         expv.key = expvol_opts[j].key;
+         if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &expv) && expv.value)
+         {
+            int pct = atoi(expv.value);
+            int newval;
+            if (pct < 0)   pct = 0;
+            if (pct > 100) pct = 100;
+            newval = (256 * pct) / 100;
+            if (FSettings.ExpVolume[expvol_opts[j].channel] != newval)
+               FSettings.ExpVolume[expvol_opts[j].channel] = newval;
+         }
+      }
+   }
 
    update_dipswitch();
 
@@ -2947,6 +3176,25 @@ static void retro_run_blit(uint8_t *gfx)
    unsigned height = 240;
    unsigned pitch  = width * sizeof(bpp_t);
 
+#ifdef HAVE_HDPACK
+   if (hdnes_active)
+   {
+      const uint32_t *hdbuf = HDNes_ComposeFrame();
+      if (hdbuf)
+      {
+         unsigned scale   = HDNes_GetScale();
+         unsigned hwidth  = (NES_WIDTH - crop_overscan_h_left - crop_overscan_h_right) * scale;
+         unsigned hheight = (NES_HEIGHT - crop_overscan_v_top - crop_overscan_v_bottom) * scale;
+         size_t   stride  = (size_t)NES_WIDTH * scale;
+
+         video_cb(hdbuf + (size_t)crop_overscan_v_top * scale * stride
+                    + (size_t)crop_overscan_h_left * scale,
+               hwidth, hheight, stride * sizeof(uint32_t));
+         return;
+      }
+   }
+#endif
+
 #ifdef PSP
    if (crop_overscan)
    {
@@ -3121,9 +3369,21 @@ void retro_run(void)
    FCEUD_UpdateInput();
    FCEUI_Emulate(&gfx, &sound, &ssize, 0);
 
+#ifdef HAVE_HDPACK
+   if (hdnes_active)
+      HDNes_FrameEnd();
+#endif
+
    retro_run_blit(gfx);
 
    stereo_filter_apply(sound, ssize);
+#ifdef HAVE_HDPACK
+   if (hdnes_active)
+   {
+      HDNes_AudioStateSync();
+      HDNes_MixAudio(sound, (size_t)ssize, sndsamplerate);
+   }
+#endif
    audio_batch_cb((const int16_t*)sound, ssize);
 }
 
@@ -3135,10 +3395,8 @@ size_t retro_serialize_size(void)
       uint8_t *buffer = (uint8_t*)malloc(1000000);
       if (!buffer)
          return 0;
-      memstream_set_buffer(buffer, 1000000);
 
-      FCEUSS_Save_Mem();
-      serialize_size = memstream_get_last_size();
+      serialize_size = FCEUSS_Save_Mem(buffer, 1000000);
       free(buffer);
    }
 
@@ -3155,8 +3413,7 @@ bool retro_serialize(void *data, size_t size)
    if (!data || size != retro_serialize_size())
       return false;
 
-   memstream_set_buffer((uint8_t*)data, size);
-   FCEUSS_Save_Mem();
+   FCEUSS_Save_Mem(data, size);
    return true;
 }
 
@@ -3167,11 +3424,20 @@ bool retro_unserialize(const void * data, size_t size)
    if (geniestage == 1)
       return false;
 
-   if (!data || size != retro_serialize_size())
+   /* The state file's own 16-byte header carries an explicit totalsize
+    * and ReadStateChunk already skips unknown chunk tags, so a strict
+    * size-equality check against the current build's serialize_size is
+    * not necessary for parser safety - and is actively harmful when
+    * SFORMAT contents change between builds (recent example: the FDS
+    * audio rewrite for #560 added/removed chunk tags, leaving older
+    * savestates a fixed delta smaller than the new core's expected
+    * size, with no recourse for the user).  Accept any buffer at least
+    * as large as the header; cap the upper end to a generous multiple
+    * of the current size as a sanity guard against pathological input. */
+   if (!data || size < 16 || size > retro_serialize_size() * 4)
       return false;
 
-   memstream_set_buffer((uint8_t*)data, size);
-   FCEUSS_Load_Mem();
+   FCEUSS_Load_Mem(data, size);
    return true;
 }
 
@@ -3703,6 +3969,46 @@ bool retro_load_game(const struct retro_game_info *info)
             sizeof(content_path));
    }
 
+#ifdef HAVE_HDPACK
+   /* Look for <system_dir>/HdPacks/<rom name>/hires.txt before pixel
+    * format negotiation: HD composition outputs XRGB8888 regardless of
+    * the build's native SD format. */
+   hd_pack_pending = 0;
+   {
+      struct retro_variable hd_var;
+      const char *hd_sys_dir = NULL;
+      int hd_enabled = 1;
+
+      hd_var.key = "fceumm_hdpacks";
+      hd_var.value = NULL;
+      if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &hd_var) && hd_var.value)
+         hd_enabled = (strcmp(hd_var.value, "disabled") != 0);
+
+      if (hd_enabled &&
+            environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &hd_sys_dir) &&
+            hd_sys_dir)
+         hd_pack_pending = HDNes_LoadPack(hd_sys_dir, content_path);
+   }
+
+   if (hd_pack_pending)
+   {
+      pixformat = RETRO_PIXEL_FORMAT_XRGB8888;
+      if (environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &pixformat))
+      {
+         log_cb.log(RETRO_LOG_INFO, "HD pack found - using XRGB8888 output.\n");
+         active_pixformat = pixformat;
+      }
+      else
+      {
+         log_cb.log(RETRO_LOG_WARN, "Frontend refused XRGB8888; HD pack disabled.\n");
+         HDNes_Unload();
+         hd_pack_pending = 0;
+      }
+   }
+
+   if (!hd_pack_pending)
+#endif
+   {
 #ifdef FRONTEND_SUPPORTS_RGB888
    pixformat = RETRO_PIXEL_FORMAT_XRGB8888;
    if(environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &pixformat))
@@ -3720,6 +4026,7 @@ bool retro_load_game(const struct retro_game_info *info)
       }
    #endif
 #endif
+   }
 
    /* initialize some of the default variables */
 #ifdef GEKKO
@@ -3768,11 +4075,74 @@ bool retro_load_game(const struct retro_game_info *info)
    FCEUI_SetSoundVolume(sndvolume);
    FCEUI_Sound(sndsamplerate);
 
+#ifdef HAVE_HDPACK
+   /* Apply the pack's <patch> IPS (SHA-1 verified) to an in-memory
+    * copy so packs that rely on soft-patched game behaviour - e.g.
+    * button-driven overlay triggers - work out of the box, matching
+    * Mesen. */
+   if (hd_patched_rom)
+   {
+      free(hd_patched_rom);
+      hd_patched_rom = NULL;
+   }
+   if (hd_pack_pending)
+   {
+      const uint8_t *hd_rom      = content_data;
+      size_t hd_rom_size         = content_size;
+      uint8_t *hd_file_buf       = NULL;
+      size_t hd_patched_size     = 0;
+
+      /* Fall back to the classic game_info buffer, then to reading the
+       * content file, for frontends without GAME_INFO_EXT or with
+       * need_fullpath loading. */
+      if (!hd_rom && info && info->data && info->size)
+      {
+         hd_rom      = (const uint8_t *)info->data;
+         hd_rom_size = info->size;
+      }
+      if (!hd_rom && content_path[0])
+      {
+         RFILE *hd_f = filestream_open(content_path,
+               RETRO_VFS_FILE_ACCESS_READ,
+               RETRO_VFS_FILE_ACCESS_HINT_NONE);
+         if (hd_f)
+         {
+            int64_t hd_len = filestream_get_size(hd_f);
+            if (hd_len > 0)
+            {
+               hd_file_buf = (uint8_t*)malloc((size_t)hd_len);
+               if (hd_file_buf &&
+                     filestream_read(hd_f, hd_file_buf, hd_len) == hd_len)
+               {
+                  hd_rom      = hd_file_buf;
+                  hd_rom_size = (size_t)hd_len;
+               }
+            }
+            filestream_close(hd_f);
+         }
+      }
+
+      if (hd_rom &&
+            HDNes_PatchRom(hd_rom, hd_rom_size, &hd_patched_rom,
+               &hd_patched_size))
+      {
+         content_data = hd_patched_rom;
+         content_size = hd_patched_size;
+      }
+      if (hd_file_buf)
+         free(hd_file_buf);
+   }
+#endif
+
    GameInfo = (FCEUGI*)FCEUI_LoadGame(content_path, content_data, content_size,
          frontend_post_load_init);
 
    if (!GameInfo)
    {
+#ifdef HAVE_HDPACK
+      HDNes_Unload();
+      hd_pack_pending = 0;
+#endif
       /* On load failure the libretro frontend won't call retro_unload_game,
        * so free the framebuffer we just allocated to avoid leaking ~256 KB
        * per failed load. */
@@ -3791,6 +4161,35 @@ bool retro_load_game(const struct retro_game_info *info)
 #endif
       return false;
    }
+
+   /* Piggyback the libretro-side turbo toggle phase into the core's
+    * savestate (#75).  FCEUI_LoadGame just finished populating SFMDATA[]
+    * with the mapper's chunks via AddExState; appending one more chunk
+    * here for the turbo counters makes them save/restore alongside
+    * everything else.  Without this, the toggle phase isn't part of
+    * the state - host and client in a netplay session can drift on
+    * the counter even after exchanging savestates, producing input
+    * desync whenever the turbo button is held.  The "TBTG" tag is
+    * unused by any mapper, and ReadStateChunk's skip-unknown logic
+    * handles older states gracefully (the array stays at retro_reset's
+    * zero initialisation, which is the post-#75-fix steady state). */
+   AddExState(turbo_button_toggle, sizeof(turbo_button_toggle), 0, "TBTG");
+
+#ifdef HAVE_HDPACK
+   if (hd_pack_pending)
+   {
+      /* Game is loaded: resolve CHR ROM info, fallback tiles, sprite
+       * limit and audio, then raise hdnes_active. */
+      HDNes_PostLoadInit();
+      if (hdnes_active)
+      {
+         HDNes_InstallAudioHandlers();
+         if (HDNes_HasAudio())
+            AddExState(&hdnes_audio_ss, sizeof(hdnes_audio_ss), 0, "HDAU");
+      }
+      hd_pack_pending = 0;
+   }
+#endif
 
    if (palette_switch_enabled)
       environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, desc_ps);
@@ -3817,6 +4216,13 @@ bool retro_load_game(const struct retro_game_info *info)
    check_variables(true);
    stereo_filter_init();
    PowerNES();
+
+#ifdef HAVE_HDPACK
+   /* PowerNES resets every bus handler to the defaults and lets the
+    * mapper reinstall its own, so the HD audio registers must be
+    * claimed after it (same as in retro_reset). */
+   HDNes_InstallAudioHandlers();
+#endif
 
    FCEUI_DisableFourScore(1);
 
@@ -3924,6 +4330,14 @@ bool retro_load_game_special(
 
 void retro_unload_game(void)
 {
+#ifdef HAVE_HDPACK
+   HDNes_Unload();
+   if (hd_patched_rom)
+   {
+      free(hd_patched_rom);
+      hd_patched_rom = NULL;
+   }
+#endif
    FCEUI_CloseGame();
 #if defined(_3DS)
    if (fceu_video_out)

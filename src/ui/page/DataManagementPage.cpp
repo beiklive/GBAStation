@@ -277,6 +277,10 @@ int platformFromExtension(const std::string& ext)
         return static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS);
     if (ext == "md" || ext == "gen" || ext == "bin" || ext == "smd")
         return static_cast<int>(beiklive::enums::EmuPlatform::EmuGenesis);
+    if (ext == "zip" || ext == "7z")
+        return static_cast<int>(beiklive::enums::EmuPlatform::EmuArcade);
+    if (ext == "cdi" || ext == "gdi" || ext == "chd")
+        return static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast);
     return -1;
 }
 
@@ -292,6 +296,8 @@ std::string overlayKeyForPlatform(int platform)
     case beiklive::enums::EmuPlatform::EmuSNES: return sk::KEY_DISPLAY_OVERLAY_SNES_PATH;
     case beiklive::enums::EmuPlatform::EmuNDS: return sk::KEY_DISPLAY_OVERLAY_NDS_PATH;
     case beiklive::enums::EmuPlatform::EmuGenesis: return sk::KEY_DISPLAY_OVERLAY_GENESIS_PATH;
+    case beiklive::enums::EmuPlatform::EmuArcade: return sk::KEY_DISPLAY_OVERLAY_ARCADE_PATH;
+    case beiklive::enums::EmuPlatform::EmuDreamcast: return sk::KEY_DISPLAY_OVERLAY_DC_PATH;
     default: return "";
     }
 }
@@ -308,6 +314,8 @@ std::string shaderKeyForPlatform(int platform)
     case beiklive::enums::EmuPlatform::EmuSNES: return sk::KEY_DISPLAY_SHADER_SNES_PATH;
     case beiklive::enums::EmuPlatform::EmuNDS: return sk::KEY_DISPLAY_SHADER_NDS_PATH;
     case beiklive::enums::EmuPlatform::EmuGenesis: return sk::KEY_DISPLAY_SHADER_GENESIS_PATH;
+    case beiklive::enums::EmuPlatform::EmuArcade: return sk::KEY_DISPLAY_SHADER_ARCADE_PATH;
+    case beiklive::enums::EmuPlatform::EmuDreamcast: return sk::KEY_DISPLAY_SHADER_DC_PATH;
     default: return "";
     }
 }
@@ -1398,6 +1406,8 @@ void DataManagementPage::init()
         {"导入 NDS 播放列表", "NDS · .lpl", static_cast<int>(enums::EmuPlatform::EmuNDS)},
         {"导入 3DS 播放列表", "3DS · .lpl", static_cast<int>(enums::EmuPlatform::Emu3DS)},
         {"导入 MD 播放列表", "MD · .lpl", static_cast<int>(enums::EmuPlatform::EmuGenesis)},
+        {"导入 Arcade 播放列表", "Arcade · .lpl", static_cast<int>(enums::EmuPlatform::EmuArcade)},
+        {"导入 DC 播放列表", "DC · .lpl", static_cast<int>(enums::EmuPlatform::EmuDreamcast)},
     };
     for (const auto& platform : bundlePlatforms)
     {
@@ -1453,6 +1463,10 @@ void DataManagementPage::init()
                           material::MEMORY, {}, &m_scan3DS, false});
     scan.items.push_back({"扫描 MD 游戏", "识别 .md、.gen、.bin 与 .smd 文件", "",
                           material::MEMORY, {}, &m_scanGenesis, false});
+    scan.items.push_back({"扫描 Arcade 游戏", "识别 .zip 与 .7z 文件", "",
+                          material::MEMORY, {}, &m_scanArcade, false});
+    scan.items.push_back({"扫描 DC 游戏", "识别 .cdi、.gdi 与 .chd 文件", "",
+                          material::MEMORY, {}, &m_scanDreamcast, false});
     tabs.push_back(std::move(scan));
 
     Canvas::Tab process;
@@ -1708,6 +1722,14 @@ brls::View* DataManagementPage::buildScanImportTab()
     genesisSwitch->init("扫描MD游戏", m_scanGenesis, [this](bool on) { m_scanGenesis = on; });
     box->addView(genesisSwitch);
 
+    auto* arcadeSwitch = new brls::BooleanCell();
+    arcadeSwitch->init("扫描Arcade游戏", m_scanArcade, [this](bool on) { m_scanArcade = on; });
+    box->addView(arcadeSwitch);
+
+    auto* dcSwitch = new brls::BooleanCell();
+    dcSwitch->init("扫描DC游戏", m_scanDreamcast, [this](bool on) { m_scanDreamcast = on; });
+    box->addView(dcSwitch);
+
 
     scroll->setContentView(box);
 
@@ -1745,6 +1767,8 @@ brls::View* DataManagementPage::buildBundleImportTab()
         {"选择NDS游戏的lpl文件",  "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)},
         {"选择3DS游戏的lpl文件",  "img/ui/3ds.png", static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS)},
         {"选择MD游戏的lpl文件",  "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuGenesis)},
+        {"选择Arcade游戏的lpl文件",  "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuArcade)},
+        {"选择DC游戏的lpl文件",  "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast)},
     };
     
     box->addView(makeHint("lpl 文件通常位于 RetroArch 的 playlists 目录下，不懂lpl文件语法规则不要自行删改"));
@@ -2139,6 +2163,8 @@ void DataManagementPage::startDirImport(const std::string& dirPath)
     if (m_scanNDS) exts.insert("nds");
     if (m_scan3DS) { exts.insert("cia"); exts.insert("cci"); exts.insert("3ds"); }
     if (m_scanGenesis) { exts.insert("md"); exts.insert("gen"); exts.insert("bin"); exts.insert("smd"); }
+    if (m_scanArcade) { exts.insert("zip"); exts.insert("7z"); }
+    if (m_scanDreamcast) { exts.insert("cdi"); exts.insert("gdi"); exts.insert("chd"); }
 
     m_importing.store(true, std::memory_order_release);
 

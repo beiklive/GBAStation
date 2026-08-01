@@ -50,6 +50,10 @@ public:
     void SetCheatPath(const std::string& path) { m_gameEntry.cheatPath = path; }
 
     bool IsReady() const { return m_ready; }
+    std::string LastError() const override { return m_lastError; }
+    LibretroLoader::DiskControlState GetDiskControlState() const override { return m_core.diskControlState(); }
+    bool SetDiskEjected(bool ejected) override { return m_core.setDiskEjected(ejected); }
+    bool SetDiskImageIndex(unsigned index, bool insertAfter = true) override { return m_core.switchDiskImage(index, insertAfter); }
 
     const void* getSramData() const { return m_core.getMemoryData(RETRO_MEMORY_SAVE_RAM); }
     size_t      getSramSize() const { return m_core.getMemorySize(RETRO_MEMORY_SAVE_RAM); }
@@ -61,10 +65,12 @@ private:
     std::vector<beiklive::CheatEntry> m_cheats;
     beiklive::CoreType m_coreType = beiklive::CoreType::Fceumm;
     std::string m_coreName = "FCEUmm";
+    std::string m_lastError;
     bool m_ready = false;
 
     bool _loadCore();
     bool _loadRom(const std::string &romPath);
+    bool _checkFdsBios(const std::string& romPath);
     void _initConfig();
 
     bool _loadSram();

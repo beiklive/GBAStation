@@ -40,6 +40,9 @@
 #include "crc32.h"
 #include "md5.h"
 #include "cheat.h"
+#ifdef HAVE_HDPACK
+#include "hdpack/hdpack.h"
+#endif
 #include "vsuni.h"
 
 extern SFORMAT FCEUVSUNI_STATEINFO[];
@@ -756,7 +759,7 @@ INES_BOARD_BEGIN()
 	INES_BOARD( "8-in-1 JY-119",            267, Mapper267_Init         )
 	INES_BOARD( "COOLBOY/MINDKIDS",         268, Mapper268_Init         ) /* Submapper distinguishes between COOLBOY and MINDKIDS */
 	INES_BOARD( "Games Xplosion 121-in-1",  269, Mapper269_Init         )
-	INES_BOARD( "OneBus+412C Bankswitch",   270, Mapper270_Init         )
+	INES_BOARD( "VT42xx",                   270, Mapper270_Init         )
 	INES_BOARD( "MGC-026",                  271, Mapper271_Init         )
 	INES_BOARD( "Akumajō Special: Boku Dracula-kun", 272, Mapper272_Init         )
 	INES_BOARD( "J-3?-C",                   273, Mapper273_Init         )
@@ -880,6 +883,7 @@ INES_BOARD_BEGIN()
 	INES_BOARD( "89433",                    403, Mapper403_Init         )
 	INES_BOARD( "JY012005",                 404, Mapper404_Init         )
 	INES_BOARD( "Impact Soft",              406, Mapper406_Init         )
+	INES_BOARD( "VT4FFx",                   408, Mapper408_Init         )
 	INES_BOARD( "retroUSB DPCMcart",        409, Mapper409_Init         )
 	INES_BOARD( "JY-302",                   410, Mapper410_Init         )
 	INES_BOARD( "A88S-1",                   411, Mapper411_Init         )
@@ -910,7 +914,7 @@ INES_BOARD_BEGIN()
 	INES_BOARD( "NC-7000M/NC-8000M",        444, Mapper444_Init         )
 	INES_BOARD( "DG574B",                   445, Mapper445_Init         )
 	INES_BOARD( "SMD172B_FPGA",             446, Mapper446_Init         )
-	INES_BOARD( "KL-06/GC007",              447, Mapper447_Init         )
+	INES_BOARD( "KL-06/GC007/KL-07",        447, Mapper447_Init         )
 	INES_BOARD( "830768C",                  448, Mapper448_Init         )
 	INES_BOARD( "22-in-1 King Series",      449, Mapper449_Init         )
 	INES_BOARD( "晶太 YY841157C",          	450, Mapper450_Init         )
@@ -1051,7 +1055,7 @@ INES_BOARD_BEGIN()
 	INES_BOARD( "4MROM-512",                595, Mapper595_Init         )
 	INES_BOARD( "FC-49",                    596, Mapper596_Init         )
 	INES_BOARD( "GN-27",                    597, Mapper597_Init         )
-	INES_BOARD( "3936",                     598, Mapper598_Init         )
+	INES_BOARD( "K-3021, 3936",             598, Mapper598_Init         )
 	INES_BOARD( "ET-133A",                  599, Mapper599_Init         )
 	INES_BOARD( "J-2061",                   603, Mapper603_Init         )
 	INES_BOARD( "New Star TX5/8IN1",        605, Mapper605_Init         )
@@ -1068,6 +1072,13 @@ INES_BOARD_BEGIN()
 	INES_BOARD( "K-3044",                   616, Mapper616_Init         )
 	INES_BOARD( "AD-301",                   617, Mapper617_Init         )
 	INES_BOARD( "FC 4-in-1 (NS32)",         618, Mapper618_Init         )
+	INES_BOARD( "68-in-1",                  619, Mapper619_Init         )
+	INES_BOARD( "4782/820226",              620, Mapper620_Init         )
+	INES_BOARD( "Unmarked Predator bootleg",621, Mapper621_Init         )
+	INES_BOARD( "3945",                     622, Mapper622_Init         )
+	INES_BOARD( "J-2083",                   623, Mapper623_Init         )
+	INES_BOARD( "KL-08/KL-09B",             624, Mapper624_Init         )
+	INES_BOARD( "ET-20",                    625, Mapper625_Init         )
 INES_BOARD_END()
 
 static uint32_t iNES_get_mapper_id(void)
@@ -1465,12 +1476,26 @@ static int iNES_Init(int num) {
 				}
 				if (CHRRAMSize > 0) { /* TODO: CHR-RAM are sometimes handled in mappers e.g. MMC1 using submapper 1/2/4 and CHR-RAM can be zero here */
 					if ((VROM = (uint8_t*)malloc(CHRRAMSize)) == NULL) return 0;
+#ifdef HAVE_HDPACK
+					/* HD packs key replacement tiles and conditions by
+					 * CHR tile data and are authored against Mesen,
+					 * whose RAM power-on default is all zeros. Tiles a
+					 * game never writes must stay all-zero (invisible,
+					 * colour 0) rather than taking the RAM-state fill
+					 * pattern, which turns them into solid colour-3
+					 * blocks that no pack entry matches. */
+					if (HDNes_PackLoaded())
+						memset(VROM, 0, CHRRAMSize);
+					else
+#endif
+					{
 					/* Seed the deterministic memory PRNG from the cart's
 					 * PRG CRC32 so the same ROM always produces the same
 					 * initial CHR-RAM contents but different ROMs differ.
 					 * iNESCart.PRGCRC32 was set above. */
 					FCEU_MemoryRand_Reseed(iNESCart.PRGCRC32);
 					FCEU_MemoryRand(VROM, CHRRAMSize);
+					}
 					UNIFchrrama = VROM;
 					SetupCartCHRMapping(0, VROM, CHRRAMSize, 1);
 					AddExState(VROM, CHRRAMSize, 0, "CHRR");

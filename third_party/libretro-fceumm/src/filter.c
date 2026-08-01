@@ -7,6 +7,15 @@
 
 #include "fcoeffs.h"
 
+/* Reference rate at which SexyFilter2's one-pole reproduces the legacy
+ * hardcoded ">>3" coefficient (1/8 == 8192 in Q16).  The coefficient is
+ * scaled by SEXYFILTER2_REF_RATE / SndRate so the corner frequency stays
+ * fixed in Hz across every output rate the core selects, instead of
+ * drifting with the rate as the old fixed shift did.  Changing this value
+ * retunes the corner (it sits at ~0.0199 * SEXYFILTER2_REF_RATE Hz, i.e.
+ * ~955 Hz at 48000). */
+#define SEXYFILTER2_REF_RATE 48000
+
 static uint32_t mrindex;
 static uint32_t mrratio;
 
@@ -29,12 +38,34 @@ void SexyFilter_Reset(void)
 }
 
 void SexyFilter2(int32_t *in, int32_t count) {
+	int64_t  coeff;
+	uint32_t rate = FSettings.SndRate ? FSettings.SndRate
+	                                  : SEXYFILTER2_REF_RATE;
+
+	/* Derive the one-pole coefficient from the output rate so the corner
+	 * frequency is rate-invariant.  coeff == 8192 (the legacy 1/8) exactly
+	 * at rate == SEXYFILTER2_REF_RATE. */
+	coeff = ((int64_t)8192 * SEXYFILTER2_REF_RATE + (rate >> 1)) / rate;
+
+	/* A stable one-pole requires 0 < coeff <= 65536 (65536 == passthrough).
+	 * The rates this core offers (>= 32 kHz) keep coeff in ~4096..12288;
+	 * clamp defensively so an unusual rate can never push the pole onto or
+	 * outside the unit circle. */
+	if (coeff < 1)     coeff = 1;
+	if (coeff > 65536) coeff = 65536;
+
 	while (count--) {
+		int64_t diff;
 		int64_t dropcurrent;
-		dropcurrent = ((*in << 16) - sexyfilter2_acc) >> 3;
+
+		diff        = ((int64_t)*in << 16) - sexyfilter2_acc;
+		/* Round to nearest instead of truncating toward -inf, so the
+		 * feedback path neither accumulates a sub-LSB downward bias nor
+		 * settles to a stuck negative offset on silence. */
+		dropcurrent = (diff * coeff + (1 << 15)) >> 16;
 
 		sexyfilter2_acc += dropcurrent;
-		*in = sexyfilter2_acc >> 16;
+		*in = (int32_t)(sexyfilter2_acc >> 16);
 		in++;
 	}
 }
@@ -53,11 +84,23 @@ void SexyFilter(int32_t *in, int32_t *out, int32_t count) {
 
 	while (count) {
 		int64_t ino = (int64_t) * in * vmul;
-		sexyfilter_acc1 += ((ino - sexyfilter_acc1) * mul1) >> 16;
-		sexyfilter_acc2 += ((ino - sexyfilter_acc1 - sexyfilter_acc2) * mul2) >> 16;
+		/* Round to nearest in the recursive updates and in the output
+		 * quantisation rather than truncating toward -inf.  This removes
+		 * the systematic sub-LSB downward bias the floor shifts impart to
+		 * the feedback state.  mul1/mul2 (the pole placement) are
+		 * untouched, so the filter's frequency response/voicing is
+		 * identical; only the quantisation noise floor is tightened. */
+		sexyfilter_acc1 += ((ino - sexyfilter_acc1) * mul1 + (1 << 15)) >> 16;
+		sexyfilter_acc2 += ((ino - sexyfilter_acc1 - sexyfilter_acc2) * mul2 + (1 << 15)) >> 16;
+		/* Clearing the source sample is load-bearing only in the LQ call
+		 * SexyFilter(Wave, WaveFinal, ...): it resets Wave for the next
+		 * frame's accumulation.  In the HQ in-place call (out == in) it is
+		 * a dead store immediately overwritten by *out below.  Do NOT
+		 * remove it - the LQ accumulation path depends on it. */
 		*in = 0;
 		{
-			int32_t t = (sexyfilter_acc1 - ino + sexyfilter_acc2) >> 16;
+			int32_t t = (int32_t)((sexyfilter_acc1 - ino + sexyfilter_acc2
+			            + (1 << 15)) >> 16);
 			if (t > 32767) t = 32767;
 			if (t < -32768) t = -32768;
 			*out = t;
@@ -86,6 +129,15 @@ int32_t NeoFilterSound(int32_t *in, int32_t *out, uint32_t inlen, int32_t *lefto
 	int32_t count = 0;
 	uint32_t max = (inlen - 1) << 16;
 
+	/* Both resample paths below round the final >> (16 + 11) to nearest
+	 * (the + (1 << 26) term == half an output LSB) rather than flooring
+	 * toward -inf.  Flooring here left a systematic ~-0.6 LSB downward
+	 * bias on the output; rounding removes the bulk of it and roughly
+	 * halves the quantisation error, matching the round-to-nearest the
+	 * SexyFilter/SexyFilter2 stages already apply.  The tap loop and its
+	 * per-tap >> 6 (which is int32/SIMD-friendly and overflow-bounded)
+	 * are deliberately left unchanged: a full int64 accumulation removes
+	 * the remaining ~0.1 LSB but regresses this hot loop >20%. */
 	if (FSettings.soundq == 2) {
 		for (x = mrindex; x < max; x += mrratio) {
 			int32_t acc = 0, acc2 = 0;
@@ -97,7 +149,8 @@ int32_t NeoFilterSound(int32_t *in, int32_t *out, uint32_t inlen, int32_t *lefto
 				acc2 += (S[1 + c] * *D) >> 6;
 			}
 
-			acc = ((int64_t)acc * (65536 - (x & 65535)) + (int64_t)acc2 * (x & 65535)) >> (16 + 11);
+			acc = ((int64_t)acc * (65536 - (x & 65535)) + (int64_t)acc2 * (x & 65535)
+			       + (1 << 26)) >> (16 + 11);
 			*out = acc;
 			out++;
 			count++;
@@ -113,7 +166,8 @@ int32_t NeoFilterSound(int32_t *in, int32_t *out, uint32_t inlen, int32_t *lefto
 				acc2 += (S[1 + c] * *D) >> 6;
 			}
 
-			acc = ((int64_t)acc * (65536 - (x & 65535)) + (int64_t)acc2 * (x & 65535)) >> (16 + 11);
+			acc = ((int64_t)acc * (65536 - (x & 65535)) + (int64_t)acc2 * (x & 65535)
+			       + (1 << 26)) >> (16 + 11);
 			*out = acc;
 			out++;
 			count++;
@@ -140,14 +194,15 @@ int32_t NeoFilterSound(int32_t *in, int32_t *out, uint32_t inlen, int32_t *lefto
 }
 
 void MakeFilters(int32_t rate) {
-	int32_t *tabs[6] = { C44100NTSC, C44100PAL, C48000NTSC, C48000PAL, C96000NTSC,
-					   C96000PAL };
-	int32_t *sq2tabs[6] = { SQ2C44100NTSC, SQ2C44100PAL, SQ2C48000NTSC, SQ2C48000PAL,
-						  SQ2C96000NTSC, SQ2C96000PAL };
+	int32_t *tabs[8] = { C44100NTSC, C44100PAL, C48000NTSC, C48000PAL, C96000NTSC,
+					   C96000PAL, C32000NTSC, C32000PAL };
+	int32_t *sq2tabs[8] = { SQ2C44100NTSC, SQ2C44100PAL, SQ2C48000NTSC, SQ2C48000PAL,
+						  SQ2C96000NTSC, SQ2C96000PAL, SQ2C32000NTSC, SQ2C32000PAL };
 
 	int32_t *tmp;
 	int32_t x;
 	uint32_t nco;
+	uint32_t idx;
 
 	if (FSettings.soundq == 2)
 		nco = SQ2NCOEFFS;
@@ -157,10 +212,23 @@ void MakeFilters(int32_t rate) {
 	mrindex = (nco + 1) << 16;
 	mrratio = (PAL ? (int64_t)(PAL_CPU * 65536) : (int64_t)(NTSC_CPU * 65536)) / rate;
 
+	/* Select the coefficient table matched to the output rate. Bit 0 is
+	 * the PAL/NTSC region; the rate selects the base index. Rates without
+	 * a dedicated table fall back to the 44100 design (index 0/1). */
+	if (rate == 48000)
+		idx = 2;
+	else if (rate == 96000)
+		idx = 4;
+	else if (rate == 32000)
+		idx = 6;
+	else /* 44100 and any other rate */
+		idx = 0;
+	idx |= (PAL ? 1 : 0);
+
 	if (FSettings.soundq == 2)
-		tmp = sq2tabs[(PAL ? 1 : 0) | (rate == 48000 ? 2 : 0) | (rate == 96000 ? 4 : 0)];
+		tmp = sq2tabs[idx];
 	else
-		tmp = tabs[(PAL ? 1 : 0) | (rate == 48000 ? 2 : 0) | (rate == 96000 ? 4 : 0)];
+		tmp = tabs[idx];
 
 	if (FSettings.soundq == 2)
 		for (x = 0; x < (SQ2NCOEFFS >> 1); x++)

@@ -367,6 +367,8 @@ namespace beiklive
         SettingManager->SetDefault(KEY_DISPLAY_OVERLAY_SNES_PATH, ConfigValue(std::string("")));
         SettingManager->SetDefault(KEY_DISPLAY_OVERLAY_NDS_PATH, ConfigValue(std::string("")));
         SettingManager->SetDefault(KEY_DISPLAY_OVERLAY_GENESIS_PATH, ConfigValue(std::string("")));
+        SettingManager->SetDefault(KEY_DISPLAY_OVERLAY_ARCADE_PATH, ConfigValue(std::string("")));
+        SettingManager->SetDefault(KEY_DISPLAY_OVERLAY_DC_PATH, ConfigValue(std::string("")));
 
         // 着色器设置
         SettingManager->SetDefault(KEY_DISPLAY_SHADER_ENABLED, ConfigValue(0));
@@ -378,6 +380,8 @@ namespace beiklive
         SettingManager->SetDefault(KEY_DISPLAY_SHADER_SNES_PATH, ConfigValue(std::string("")));
         SettingManager->SetDefault(KEY_DISPLAY_SHADER_NDS_PATH, ConfigValue(std::string("")));
         SettingManager->SetDefault(KEY_DISPLAY_SHADER_GENESIS_PATH, ConfigValue(std::string("")));
+        SettingManager->SetDefault(KEY_DISPLAY_SHADER_ARCADE_PATH, ConfigValue(std::string("")));
+        SettingManager->SetDefault(KEY_DISPLAY_SHADER_DC_PATH, ConfigValue(std::string("")));
 
         // 调试设置
         SettingManager->SetDefault(KEY_DEBUG_LOG_LEVEL, ConfigValue(std::string("info")));
@@ -417,6 +421,10 @@ namespace beiklive
         SettingManager->SetDefault("nds.externalNro.returnPath", ConfigValue(std::string("sdmc:/switch/GBAStation.nro")));
         SettingManager->SetDefault("3ds.externalNro.path", ConfigValue(std::string("/GBAStation/core/GBAStation3DSStub.nro")));
         SettingManager->SetDefault("3ds.externalNro.returnPath", ConfigValue(std::string("sdmc:/switch/GBAStation.nro")));
+        SettingManager->SetDefault("arcade.externalNro.path", ConfigValue(std::string("/GBAStation/core/FBNeo.nro")));
+        SettingManager->SetDefault("arcade.externalNro.returnPath", ConfigValue(std::string("sdmc:/switch/GBAStation.nro")));
+        SettingManager->SetDefault("dc.externalNro.path", ConfigValue(std::string("/GBAStation/core/Flycast.nro")));
+        SettingManager->SetDefault("dc.externalNro.returnPath", ConfigValue(std::string("sdmc:/switch/GBAStation.nro")));
         if (auto pathValue = SettingManager->Get("nds.externalNro.path"))
         {
             const auto path = pathValue->AsString().value_or("");
@@ -478,6 +486,10 @@ namespace beiklive
         SettingManager->SetDefault("core.mgba_allow_opposing_directions", ConfigValue(std::string("no")));
         SettingManager->SetDefault("core.mgba_force_gbp", ConfigValue(std::string("OFF")));
         SettingManager->SetDefault("core.mgba_frameskip", ConfigValue(std::string("0")));
+        SettingManager->SetDefault("core.gambatte_gb_colorization", ConfigValue(std::string("disabled")));
+        SettingManager->SetDefault("core.gambatte_gb_hwmode", ConfigValue(std::string("Auto")));
+        SettingManager->SetDefault("core.gambatte_gbc_color_correction", ConfigValue(std::string("disabled")));
+        SettingManager->SetDefault("core.gambatte_mix_frames", ConfigValue(std::string("disabled")));
 
         SettingManager->SetDefault("core.melonds_bios9_path", ConfigValue(std::string("sdmc:/GBAStation/bios/nds/bios9.bin")));
         SettingManager->SetDefault("core.melonds_bios7_path", ConfigValue(std::string("sdmc:/GBAStation/bios/nds/bios7.bin")));
@@ -540,7 +552,7 @@ namespace beiklive
         SettingManager->SetDefault("cheat.dir", ConfigValue(std::string("")));
 
         // 按键绑定默认值。GBA 保持无前缀；GBC/GB 独立前缀首次默认继承旧的无前缀配置。
-        const std::string mappingPrefixes[] = {"", "gbc.", "gb.", "nes.", "sfc.", "nds.", "3ds.", "md."};
+        const std::string mappingPrefixes[] = {"", "gbc.", "gb.", "nes.", "sfc.", "nds.", "3ds.", "md.", "arcade.", "dc."};
         for (const auto& prefix : mappingPrefixes)
         {
             const unsigned platformMask = beiklive::input_mapping::platformMaskForPrefix(prefix);
@@ -772,6 +784,10 @@ namespace beiklive
             return 480;
         case beiklive::enums::EmuPlatform::EmuGenesis:
             return 224;
+        case beiklive::enums::EmuPlatform::EmuArcade:
+            return 240;
+        case beiklive::enums::EmuPlatform::EmuDreamcast:
+            return 480;
         default:
             break;
         }
@@ -798,6 +814,10 @@ namespace beiklive
             return 400;
         case beiklive::enums::EmuPlatform::EmuGenesis:
             return 320;
+        case beiklive::enums::EmuPlatform::EmuArcade:
+            return 320;
+        case beiklive::enums::EmuPlatform::EmuDreamcast:
+            return 640;
         default:
             break;
         }
@@ -823,6 +843,9 @@ namespace beiklive
         case beiklive::enums::EmuPlatform::Emu3DS:
             return BK_RES("img/LogoLayer/GBA_LOGOLAY.png");
         case beiklive::enums::EmuPlatform::EmuGenesis:
+            return BK_RES("img/LogoLayer/GBA_LOGOLAY.png");
+        case beiklive::enums::EmuPlatform::EmuArcade:
+        case beiklive::enums::EmuPlatform::EmuDreamcast:
             return BK_RES("img/LogoLayer/GBA_LOGOLAY.png");
         default:
             return BK_RES("img/LogoLayer/GBA_LOGOLAY.png");

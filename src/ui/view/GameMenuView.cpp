@@ -500,6 +500,16 @@ namespace beiklive
 
         if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNES))
         {
+            if (_isFdsGame())
+            {
+                auto* diskPanel = _createDiskControlPanel();
+                m_panel->addTab(
+                    "磁盘",
+                    BK_RES("img/ui/menu/load.png"),
+                    nullptr, nullptr, nullptr,
+                    diskPanel);
+            }
+
             auto* controllerPanel = _createControllerPanel();
             m_panel->addTab(
                 "手柄",
@@ -808,7 +818,166 @@ namespace beiklive
     {
         _refreshStatePanel(true);
         _refreshStatePanel(false);
+        _refreshDiskControlPanel();
         m_panel->onShow();
+    }
+
+    bool GameMenuView::_isFdsGame() const
+    {
+        return beiklive::tools::getFileExtension(m_gameEntry.path) == "fds";
+    }
+
+    brls::View* GameMenuView::_createDiskControlPanel()
+    {
+        auto* scroll = beiklive::ui::makeScrollTab();
+        auto* box = beiklive::ui::makeContentBox();
+
+        box->addView(beiklive::ui::makeHeader("FDS 磁盘"));
+
+        m_diskStatusLabel = new brls::Label();
+        m_diskStatusLabel->setText("正在读取磁盘状态...");
+        m_diskStatusLabel->setFontSize(14.f);
+        m_diskStatusLabel->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
+        m_diskStatusLabel->setMarginLeft(20.f);
+        m_diskStatusLabel->setMarginRight(20.f);
+        m_diskStatusLabel->setMarginBottom(10.f);
+        box->addView(m_diskStatusLabel);
+
+        m_diskSelectCell = new beiklive::DetailCell();
+        m_diskSelectCell->setLeftText("选择磁盘面");
+        m_diskSelectCell->setRightText("不可用");
+        m_diskSelectCell->registerClickAction([this](brls::View*) -> bool {
+            if (!m_diskStateCallback || !m_diskIndexCallback)
+                return true;
+            auto state = m_diskStateCallback();
+            if (!state.supported || state.numImages == 0)
+            {
+                brls::Application::notify("当前核心未提供磁盘控制");
+                return true;
+            }
+
+            std::vector<std::string> options;
+            options.reserve(state.numImages);
+            for (unsigned i = 0; i < state.numImages; ++i)
+            {
+                std::string label = i < state.labels.size() ? state.labels[i] : "";
+                if (label.empty())
+                    label = "磁盘面 " + std::to_string(i + 1);
+                options.push_back(std::to_string(i + 1) + ". " + label);
+            }
+            int selected = state.currentIndex < state.numImages ? static_cast<int>(state.currentIndex) : 0;
+            auto* dropdown = new brls::Dropdown(
+                "选择磁盘面",
+                options,
+                [this](int idx) {
+                    if (idx < 0)
+                        return;
+                    if (m_diskIndexCallback)
+                        m_diskIndexCallback(static_cast<unsigned>(idx));
+                    if (m_diskSelectCell)
+                        m_diskSelectCell->setRightText("切换中...");
+                },
+                selected,
+                [this](int) { _refreshDiskControlPanel(); });
+            brls::Application::pushActivity(new brls::Activity(dropdown));
+            return true;
+        });
+        box->addView(m_diskSelectCell);
+
+        auto* ejectCell = new beiklive::DetailCell();
+        ejectCell->setLeftText("弹出磁盘");
+        ejectCell->setRightText("执行");
+        ejectCell->registerClickAction([this](brls::View*) -> bool {
+            if (m_diskEjectCallback)
+                m_diskEjectCallback(true);
+            return true;
+        });
+        box->addView(ejectCell);
+
+        auto* insertCell = new beiklive::DetailCell();
+        insertCell->setLeftText("插入磁盘");
+        insertCell->setRightText("执行");
+        insertCell->registerClickAction([this](brls::View*) -> bool {
+            if (m_diskEjectCallback)
+                m_diskEjectCallback(false);
+            return true;
+        });
+        box->addView(insertCell);
+
+        auto* prevCell = new beiklive::DetailCell();
+        prevCell->setLeftText("上一面");
+        prevCell->setRightText("切换");
+        prevCell->registerClickAction([this](brls::View*) -> bool {
+            if (!m_diskStateCallback || !m_diskIndexCallback)
+                return true;
+            auto state = m_diskStateCallback();
+            if (!state.supported || state.numImages == 0)
+                return true;
+            unsigned cur = state.currentIndex < state.numImages ? state.currentIndex : 0;
+            unsigned next = cur == 0 ? state.numImages - 1 : cur - 1;
+            m_diskIndexCallback(next);
+            return true;
+        });
+        box->addView(prevCell);
+
+        auto* nextCell = new beiklive::DetailCell();
+        nextCell->setLeftText("下一面");
+        nextCell->setRightText("切换");
+        nextCell->registerClickAction([this](brls::View*) -> bool {
+            if (!m_diskStateCallback || !m_diskIndexCallback)
+                return true;
+            auto state = m_diskStateCallback();
+            if (!state.supported || state.numImages == 0)
+                return true;
+            unsigned cur = state.currentIndex < state.numImages ? state.currentIndex : 0;
+            unsigned next = (cur + 1) % state.numImages;
+            m_diskIndexCallback(next);
+            return true;
+        });
+        box->addView(nextCell);
+        box->addView(beiklive::ui::makeHint("换盘时会自动弹出当前磁盘、切换盘面并重新插入"));
+
+        scroll->setContentView(box);
+        auto* container = new brls::Box(brls::Axis::COLUMN);
+        container->setVisibility(brls::Visibility::GONE);
+        container->setGrow(1.f);
+        container->setWidthPercentage(100.f);
+        container->addView(scroll);
+        return container;
+    }
+
+    void GameMenuView::_refreshDiskControlPanel()
+    {
+        if (!m_diskStatusLabel || !m_diskSelectCell)
+            return;
+        if (!m_diskStateCallback)
+        {
+            m_diskStatusLabel->setText("当前游戏没有可用的磁盘控制接口");
+            m_diskSelectCell->setRightText("不可用");
+            return;
+        }
+
+        auto state = m_diskStateCallback();
+        if (!state.supported || state.numImages == 0)
+        {
+            m_diskStatusLabel->setText("当前核心尚未提供磁盘控制接口");
+            m_diskSelectCell->setRightText("不可用");
+            return;
+        }
+
+        std::string current = "未插入";
+        if (state.currentIndex < state.numImages)
+        {
+            current = state.currentIndex < state.labels.size() ? state.labels[state.currentIndex] : "";
+            if (current.empty())
+                current = "磁盘面 " + std::to_string(state.currentIndex + 1);
+        }
+
+        m_diskStatusLabel->setText(
+            "状态: " + std::string(state.ejected ? "已弹出" : "已插入") +
+            "    当前: " + std::to_string(std::min(state.currentIndex + 1, state.numImages)) +
+            " / " + std::to_string(state.numImages));
+        m_diskSelectCell->setRightText(current);
     }
 
     std::vector<std::string> GameMenuView::_controllerOptions() const

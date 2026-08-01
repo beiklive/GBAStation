@@ -13,8 +13,11 @@ IEmulatorCore* CreateEmulatorCore(const beiklive::GameEntry& entry)
     switch (static_cast<beiklive::enums::EmuPlatform>(platform))
     {
     case beiklive::enums::EmuPlatform::EmuGBA:
+        return new beiklive::mgba_native::MgbaNativeCore();
     case beiklive::enums::EmuPlatform::EmuGBC:
     case beiklive::enums::EmuPlatform::EmuGB:
+        if (coreId == "gambatte")
+            return new beiklive::fceumm::CoreFceumm(beiklive::CoreType::Gambatte, "Gambatte");
         return new beiklive::mgba_native::MgbaNativeCore();
     case beiklive::enums::EmuPlatform::EmuNES:
         if (coreId == "nestopia")
@@ -30,6 +33,8 @@ IEmulatorCore* CreateEmulatorCore(const beiklive::GameEntry& entry)
         return new beiklive::genesis::GenesisCore();
     case beiklive::enums::EmuPlatform::EmuNDS:
     case beiklive::enums::EmuPlatform::Emu3DS:
+    case beiklive::enums::EmuPlatform::EmuArcade:
+    case beiklive::enums::EmuPlatform::EmuDreamcast:
         return nullptr;
     default:
         return nullptr;

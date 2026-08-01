@@ -61,8 +61,8 @@ beiklive::enums::FileType getFileType(const fs::path& path) {
 
     if (ext == "png")
         return beiklive::enums::FileType::IMAGE_FILE;
-    if (ext == "zip")
-        return beiklive::enums::FileType::ZIP_FILE;
+    if (ext == "zip" || ext == "7z")
+        return beiklive::enums::FileType::ARCADE_ROM;
     if (ext == "gba")
         return beiklive::enums::FileType::GBA_ROM;
     if (ext == "gbc")
@@ -75,6 +75,8 @@ beiklive::enums::FileType getFileType(const fs::path& path) {
         return beiklive::enums::FileType::SNES_ROM;
     if (ext == "md" || ext == "gen" || ext == "bin" || ext == "smd")
         return beiklive::enums::FileType::GENESIS_ROM;
+    if (ext == "cdi" || ext == "gdi" || ext == "chd")
+        return beiklive::enums::FileType::DREAMCAST_ROM;
     if (ext == "nds")
         return beiklive::enums::FileType::NDS_ROM;
     if (ext == "cia" || ext == "cci" || ext == "3ds")
@@ -153,6 +155,8 @@ std::string getIconPath(beiklive::enums::FileType type) {
         case beiklive::enums::FileType::THREEDS_ROM:
             return BK_RES("img/ui/3ds.png");
         case beiklive::enums::FileType::GENESIS_ROM:
+        case beiklive::enums::FileType::ARCADE_ROM:
+        case beiklive::enums::FileType::DREAMCAST_ROM:
             return BK_RES(path_prefix + "icon_gba.png");
         default:
             return BK_RES(path_prefix + "wenjian.png");
@@ -188,6 +192,10 @@ std::string getIconPathWithPrefix(beiklive::enums::FileType type, const std::str
             return BK_RES(prefix + "icon_gba.png");
         case beiklive::enums::FileType::THREEDS_ROM:
             return BK_RES("img/ui/3ds.png");
+        case beiklive::enums::FileType::GENESIS_ROM:
+        case beiklive::enums::FileType::ARCADE_ROM:
+        case beiklive::enums::FileType::DREAMCAST_ROM:
+            return BK_RES(prefix + "icon_gba.png");
         default:
             return BK_RES(prefix + "wenjian.png");
     }
@@ -212,6 +220,10 @@ std::string getDefaultLogoPath(beiklive::enums::EmuPlatform platform)
         case beiklive::enums::EmuPlatform::Emu3DS:
             return BK_RES(path_prefix + "3ds.png");
         case beiklive::enums::EmuPlatform::EmuGenesis:
+            return BK_RES(path_prefix + "gba.png");
+        case beiklive::enums::EmuPlatform::EmuArcade:
+            return BK_RES(path_prefix + "gba.png");
+        case beiklive::enums::EmuPlatform::EmuDreamcast:
             return BK_RES(path_prefix + "gba.png");
         default:
             return BK_RES(path_prefix + "gba.png");
@@ -454,6 +466,8 @@ std::string platformName(int platform) {
         case beiklive::enums::EmuPlatform::EmuNDS: return "NDS";
         case beiklive::enums::EmuPlatform::Emu3DS: return "3DS";
         case beiklive::enums::EmuPlatform::EmuGenesis: return "MD";
+        case beiklive::enums::EmuPlatform::EmuArcade: return "Arcade";
+        case beiklive::enums::EmuPlatform::EmuDreamcast: return "DC";
         default: return "";
     }
 }
@@ -467,6 +481,8 @@ std::string platformOverlayKey(int platform) {
         case beiklive::enums::EmuPlatform::EmuSNES: return beiklive::SettingKey::KEY_DISPLAY_OVERLAY_SNES_PATH;
         case beiklive::enums::EmuPlatform::EmuNDS: return beiklive::SettingKey::KEY_DISPLAY_OVERLAY_NDS_PATH;
         case beiklive::enums::EmuPlatform::EmuGenesis: return beiklive::SettingKey::KEY_DISPLAY_OVERLAY_GENESIS_PATH;
+        case beiklive::enums::EmuPlatform::EmuArcade: return beiklive::SettingKey::KEY_DISPLAY_OVERLAY_ARCADE_PATH;
+        case beiklive::enums::EmuPlatform::EmuDreamcast: return beiklive::SettingKey::KEY_DISPLAY_OVERLAY_DC_PATH;
         default: return "";
     }
 }
@@ -480,6 +496,8 @@ std::string platformShaderKey(int platform) {
         case beiklive::enums::EmuPlatform::EmuSNES: return beiklive::SettingKey::KEY_DISPLAY_SHADER_SNES_PATH;
         case beiklive::enums::EmuPlatform::EmuNDS: return beiklive::SettingKey::KEY_DISPLAY_SHADER_NDS_PATH;
         case beiklive::enums::EmuPlatform::EmuGenesis: return beiklive::SettingKey::KEY_DISPLAY_SHADER_GENESIS_PATH;
+        case beiklive::enums::EmuPlatform::EmuArcade: return beiklive::SettingKey::KEY_DISPLAY_SHADER_ARCADE_PATH;
+        case beiklive::enums::EmuPlatform::EmuDreamcast: return beiklive::SettingKey::KEY_DISPLAY_SHADER_DC_PATH;
         default: return "";
     }
 }
@@ -508,6 +526,8 @@ std::string platformBadgeName(int platform) {
         case beiklive::enums::EmuPlatform::EmuNDS: return "NDS";
         case beiklive::enums::EmuPlatform::Emu3DS: return "3DS";
         case beiklive::enums::EmuPlatform::EmuGenesis: return "MD";
+        case beiklive::enums::EmuPlatform::EmuArcade: return "Arcade";
+        case beiklive::enums::EmuPlatform::EmuDreamcast: return "DC";
         default: return "";
     }
 }

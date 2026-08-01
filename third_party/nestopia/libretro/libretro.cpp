@@ -6,7 +6,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <sstream>
-#include <fstream>
+
+#include <streams/file_stream.h>
+#include <file/file_path.h>
+#include <compat/strl.h>
+#include <retro_miscellaneous.h>
 
 #include "../source/core/api/NstApiMachine.hpp"
 #include "../source/core/api/NstApiEmulator.hpp"
@@ -25,8 +29,6 @@
 
 #define NST_VERSION "1.53.2"
 
-#define MIN(a,b)      ((a)<(b)?(a):(b))
-#define MAX(a,b)      ((a)>(b)?(a):(b))
 #define NES_NTSC_PAR ((Api::Video::Output::WIDTH - (overscan_h_left + overscan_h_right)) * (8.0 / 7.0)) / (Api::Video::Output::HEIGHT - (overscan_v_top + overscan_v_bottom))
 #define NES_PAL_PAR ((Api::Video::Output::WIDTH - (overscan_h_left + overscan_h_right)) * (2950000.0 / 2128137.0)) / (Api::Video::Output::HEIGHT - (overscan_v_top + overscan_v_bottom))
 #define NES_4_3_DAR (4.0 / 3.0);
@@ -61,7 +63,7 @@ static Api::Fds *fds;
 static char g_basename[256];
 static char g_rom_dir[256];
 static char *g_save_dir;
-static char samp_dir[256];
+static char samp_dir[PATH_MAX_LENGTH];
 static unsigned blargg_ntsc;
 static bool fds_auto_insert;
 static int arkanoid_paddle_min = 0;
@@ -77,7 +79,7 @@ static int cur_x = 0; // Absolute x coordinate of zapper/arkanoid in pixels
 static int cur_y = 0; // Absolute y coordinate of zapper          in pixels
 static unsigned char prevL = false; // => L Button is held; controls famicon disc drive
 static unsigned char prevR = false; // => R Button is held; controls famicon disc drive
-static const int tracked_input_state_size_bytes = 8; // Send the 8 previous fields as unsigned char
+static const int tracked_input_state_size_bytes = 12; // 8 tracked-input bytes + 4 bytes of audio pacing accumulator
 static size_t state_size = 0;
 
 static enum {
@@ -102,7 +104,59 @@ static void *sram;
 static unsigned long sram_size;
 static bool is_pal;
 static byte custpal[64*3];
-static char slash;
+
+/* Exact audio pacing.  The APU synthesizes SAMPLERATE samples per
+ * emulated second of master-clock time, so the true number of samples
+ * per video frame is
+ *
+ *    SAMPLERATE * master_ticks_per_frame / master_clock
+ *
+ * (798.68... for NTSC, 959.87... for PAL/Dendy), not SAMPLERATE/60 or
+ * SAMPLERATE/50.  Requesting the rounded-up integer every frame makes
+ * Apu::FlushSound() pad the difference by repeating the instantaneous
+ * sample without advancing synthesis time (measured with an
+ * instrumented build: 79 padded samples per 60 NTSC frames, 8 per 60
+ * PAL frames).  Track the exact rational with a remainder accumulator
+ * instead and request 798/799 (959/960) so generation and consumption
+ * stay in lock step. */
+static unsigned audio_spf_base;  /* whole samples per frame            */
+static unsigned long audio_spf_rem;  /* numerator of fractional part   */
+static unsigned long audio_spf_den;  /* denominator                    */
+static unsigned long audio_frac;     /* running remainder accumulator  */
+
+static unsigned long gcd_ul(unsigned long a, unsigned long b)
+{
+   while (b)
+   {
+      unsigned long t = a % b;
+      a = b;
+      b = t;
+   }
+   return a;
+}
+
+static void update_audio_timing(void)
+{
+   /* PAL and Dendy share the frame clock (PPU_DENDY_HVSYNC equals
+    * PPU_RP2C07_HVSYNC). */
+   unsigned long clk  = is_pal ? (unsigned long)Core::CLK_PAL
+                               : (unsigned long)Core::CLK_NTSC;
+   unsigned long tick = is_pal
+      ? Core::CLK_PAL_DIV  * (unsigned long)Core::PPU_RP2C07_HVSYNC
+      : Core::CLK_NTSC_DIV * (unsigned long)Core::PPU_RP2C02_HVSYNC;
+   /* Reduce SAMPLERATE/clk before multiplying so everything fits in
+    * 32 bits: 48000 and both master clocks share a large factor
+    * (worst case after reduction is 160 * 4255680 < 2^31). */
+   unsigned long g    = gcd_ul(SAMPLERATE, clk);
+   unsigned long rn   = SAMPLERATE / g;
+   unsigned long rd   = clk / g;
+
+   audio_spf_base = (unsigned)(rn * tick / rd);
+   audio_spf_rem  = rn * tick % rd;
+   audio_spf_den  = rd;
+   audio_frac     = 0;
+}
+
 
 static enum {
    FDS_SAVEFILE_SAV_UPS = 0,
@@ -142,42 +196,49 @@ void draw_crosshair(int x, int y)
 
 static void load_wav(const char* sampgame, Api::User::File& file)
 {
-   char samp_path[292];
-   int length = 0;
+   char game_dir[PATH_MAX_LENGTH];
+   char samp_path[PATH_MAX_LENGTH];
+   char samp_name[16];
+   int64_t length = 0;
    int blockalign = 0;
    int numchannels = 0;
    int bitspersample = 0;
    char fmt[4] = { 0x66, 0x6d, 0x74, 0x20};
    char subchunk2id[4] = { 0x64, 0x61, 0x74, 0x61};
-   char *wavfile;
+   char *wavfile = NULL;
    char *dataptr;
 
-   sprintf(samp_path, "%s%c%s%c%02d.wav", samp_dir, slash, sampgame, slash, file.GetId());
-   printf("samp_path: %s\n", samp_path);
+   fill_pathname_join_special(game_dir, samp_dir, sampgame, sizeof(game_dir));
+   /* sprintf rather than snprintf: newlib hides the C99 snprintf
+    * declaration under -std=c++98 (psl1ght).  Bounded by construction:
+    * "%02u.wav" of a 32-bit unsigned is at most 10 + 4 characters,
+    * 15 bytes with the terminator, and samp_name holds 16. */
+   sprintf(samp_name, "%02u.wav", file.GetId());
+   fill_pathname_join_special(samp_path, game_dir, samp_name, sizeof(samp_path));
+   if (log_cb)
+      log_cb(RETRO_LOG_INFO, "samp_path: %s\n", samp_path);
 
-   std::ifstream samp_file(samp_path, std::ifstream::in|std::ifstream::binary);
+   if (!filestream_read_file(samp_path, (void**)&wavfile, &length))
+      return;
 
-   if (samp_file) {
-       samp_file.seekg(0, samp_file.end);
-       length = samp_file.tellg();
-       samp_file.seekg(0, samp_file.beg);
-       wavfile = (char*)malloc(length * sizeof(char));
-       samp_file.read(wavfile, length);
-
-       // Check to see if it has a valid header
-       if (memcmp(&wavfile[0x00], "RIFF", 4) != 0) { return; }
-       if (memcmp(&wavfile[0x08], "WAVE", 4) != 0) { return; }
-       if (memcmp(&wavfile[0x0c], &fmt, 4) != 0) { return; }
-       if (memcmp(&wavfile[0x24], &subchunk2id, 4) != 0) { return; }
-
-       // Load the sample into the emulator
-       dataptr = &wavfile[0x2c];
-       blockalign = wavfile[0x21] << 8 | wavfile[0x20];
-       numchannels = wavfile[0x17] << 8 | wavfile[0x16];
-       bitspersample = wavfile[0x23] << 8 | wavfile[0x22];
-       file.SetSampleContent(dataptr, (length - 44) / blockalign, 0, bitspersample, 44100);
-       free(wavfile);
+   /* Smallest valid file: 44 byte canonical header plus sample data.
+    * Check to see if it has a valid header */
+   if (length > 44 &&
+         memcmp(&wavfile[0x00], "RIFF", 4) == 0 &&
+         memcmp(&wavfile[0x08], "WAVE", 4) == 0 &&
+         memcmp(&wavfile[0x0c], &fmt, 4) == 0 &&
+         memcmp(&wavfile[0x24], &subchunk2id, 4) == 0)
+   {
+      /* Load the sample into the emulator */
+      dataptr = &wavfile[0x2c];
+      blockalign = wavfile[0x21] << 8 | wavfile[0x20];
+      numchannels = wavfile[0x17] << 8 | wavfile[0x16];
+      bitspersample = wavfile[0x23] << 8 | wavfile[0x22];
+      if (blockalign > 0)
+         file.SetSampleContent(dataptr, (length - 44) / blockalign, 0, bitspersample, 44100);
    }
+
+   free(wavfile);
 }
 
 static void display_msg(enum retro_log_level level, unsigned duration, const char *str)
@@ -235,12 +296,6 @@ static void NST_CALLBACK file_io_callback(void*, Api::User::File &file)
    const void *addr;
    unsigned long addr_size;
 
-#ifdef _WIN32
-   slash = '\\';
-#else
-   slash = '/';
-#endif
-
    switch (file.GetAction())
    {
       case Api::User::File::LOAD_SAMPLE_MOERO_PRO_YAKYUU:
@@ -272,44 +327,65 @@ static void NST_CALLBACK file_io_callback(void*, Api::User::File &file)
          break;
       case Api::User::File::LOAD_FDS:
          {
-            std::string base;
-            std::string ext;
+            char base[PATH_MAX_LENGTH];
+            const char *ext      = "";
+            const char *save_dir = (g_save_dir && *g_save_dir)
+                  ? g_save_dir : g_rom_dir;
+            char *patch_data     = NULL;
+            int64_t patch_size   = 0;
             if (fds_sav_extension)
                ext = ".sav";
             else if (fds_ups_extension)
                ext = ".ups";
             else if (fds_ips_extension)
                ext = ".ips";
-            base = std::string(g_save_dir) + slash + g_basename + ext;
+            fill_pathname_join_special(base, save_dir, g_basename, sizeof(base));
+            strlcat(base, ext, sizeof(base));
             if (log_cb)
-               log_cb(RETRO_LOG_INFO, "Want to load FDS savefile using %s extension from: %s\n", ext.c_str(), base.c_str());
-            std::ifstream in_tmp(base.c_str(),std::ifstream::in|std::ifstream::binary);
+               log_cb(RETRO_LOG_INFO, "Want to load FDS savefile using %s extension from: %s\n", ext, base);
 
-            if (!in_tmp.is_open())
+            if (!filestream_read_file(base, (void**)&patch_data, &patch_size))
                return;
 
-            file.SetPatchContent(in_tmp);
+            {
+               std::istringstream in_tmp(
+                     std::string(patch_data, (size_t)patch_size),
+                     std::istringstream::in | std::istringstream::binary);
+               file.SetPatchContent(in_tmp);
+            }
+            free(patch_data);
          }
          break;
       case Api::User::File::SAVE_FDS:
          {
-            std::string base;
-            std::string ext;
+            char base[PATH_MAX_LENGTH];
+            const char *ext      = "";
+            const char *save_dir = (g_save_dir && *g_save_dir)
+                  ? g_save_dir : g_rom_dir;
+            Result result = RESULT_ERR_GENERIC;
+            std::ostringstream out_tmp(
+                  std::ostringstream::out | std::ostringstream::binary);
             if (fds_sav_extension)
                ext = ".sav";
             else if (fds_ups_extension)
                ext = ".ups";
             else if (fds_ips_extension)
                ext = ".ips";
-            base = std::string(g_save_dir) + slash + g_basename + ext;
+            fill_pathname_join_special(base, save_dir, g_basename, sizeof(base));
+            strlcat(base, ext, sizeof(base));
             if (log_cb)
-               log_cb(RETRO_LOG_INFO, "Want to save FDS savefile using %s extension to: %s\n", ext.c_str(), base.c_str());
-            std::ofstream out_tmp(base.c_str(),std::ifstream::out|std::ifstream::binary);
+               log_cb(RETRO_LOG_INFO, "Want to save FDS savefile using %s extension to: %s\n", ext, base);
 
-            if ((out_tmp.is_open()) && (fds_patch_format_ups))
-               file.GetPatchContent(Api::User::File::PATCH_UPS, out_tmp);
-            else if ((out_tmp.is_open()) && (fds_patch_format_ips))
-               file.GetPatchContent(Api::User::File::PATCH_IPS, out_tmp);
+            if (fds_patch_format_ups)
+               result = file.GetPatchContent(Api::User::File::PATCH_UPS, out_tmp);
+            else if (fds_patch_format_ips)
+               result = file.GetPatchContent(Api::User::File::PATCH_IPS, out_tmp);
+
+            if (NES_SUCCEEDED(result))
+            {
+               const std::string patch = out_tmp.str();
+               filestream_write_file(base, patch.data(), (int64_t)patch.size());
+            }
          }
          break;
       default:
@@ -426,7 +502,10 @@ double get_aspect_ratio(void)
 
 void retro_get_system_av_info(struct retro_system_av_info *info)
 {
-   const retro_system_timing timing = { is_pal ? 50.0 : 60.0, SAMPLERATE };
+   const retro_system_timing timing = {
+      is_pal ? (double)Core::CLK_PAL  / (Core::CLK_PAL_DIV  * (double)Core::PPU_RP2C07_HVSYNC)
+             : (double)Core::CLK_NTSC / (Core::CLK_NTSC_DIV * (double)Core::PPU_RP2C02_HVSYNC),
+      SAMPLERATE };
    info->timing = timing;
 
    // It's better if the size is based on NTSC_WIDTH if the filter is on
@@ -443,9 +522,16 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
 
 void retro_set_environment(retro_environment_t cb)
 {
+   struct retro_vfs_interface_info vfs_iface_info;
+
    environ_cb = cb;
    libretro_set_core_options(environ_cb,
          &libretro_supports_option_categories);
+
+   vfs_iface_info.required_interface_version = FILESTREAM_REQUIRED_VFS_VERSION;
+   vfs_iface_info.iface                      = NULL;
+   if (cb(RETRO_ENVIRONMENT_GET_VFS_INTERFACE, &vfs_iface_info))
+      filestream_vfs_init(&vfs_iface_info);
 
    static const struct retro_controller_description port1[] = {
       { "Auto", RETRO_DEVICE_AUTO },
@@ -563,6 +649,68 @@ static keymap bindmap_shifted[] = {
 
 static keymap *bindmap = bindmap_default;
 
+/* Input snapshot, captured exactly once per retro_run.
+ *
+ * Nestopia invokes the controller callbacks below from inside
+ * emulator.Execute(), once per hardware controller strobe.  A game may
+ * strobe zero or several times per frame, so polling and reading the
+ * frontend from those callbacks calls retro_input_poll_t an arbitrary
+ * number of times per frame and can observe several different input
+ * states within a single video frame.  Everything is sampled here
+ * instead; the callbacks only consume the snapshot. */
+static int16_t pad_state[4];
+static int16_t aux_mouse_dx, aux_mouse_dy;
+static int16_t aux_mouse_left;
+static int16_t aux_pointer_x, aux_pointer_y, aux_pointer_pressed;
+static int16_t aux_gun_x, aux_gun_y;
+static int16_t aux_gun_trigger, aux_gun_reload, aux_gun_offscreen;
+
+static void update_input_snapshot(void)
+{
+   unsigned p;
+
+   input_poll_cb();
+
+   for (p = 0; p < 4; p++)
+   {
+      if (libretro_supports_bitmasks)
+         pad_state[p] = input_state_cb(p, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
+      else
+      {
+         int16_t ret = 0;
+         for (unsigned i = 0; i < (RETRO_DEVICE_ID_JOYPAD_R3 + 1); i++)
+            ret |= input_state_cb(p, RETRO_DEVICE_JOYPAD, 0, i) ? (1 << i) : 0;
+         pad_state[p] = ret;
+      }
+
+      /* A/B turbo cadence advances once per video frame, not once per
+       * controller strobe. */
+      if (tstate[p]) tstate[p]--; else tstate[p] = tpulse;
+   }
+
+   aux_mouse_dx        = input_state_cb(1, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_X);
+   aux_mouse_dy        = input_state_cb(1, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_Y);
+   aux_mouse_left      = input_state_cb(1, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_LEFT);
+   aux_pointer_x       = input_state_cb(1, RETRO_DEVICE_POINTER, 0, RETRO_DEVICE_ID_POINTER_X);
+   aux_pointer_y       = input_state_cb(1, RETRO_DEVICE_POINTER, 0, RETRO_DEVICE_ID_POINTER_Y);
+   aux_pointer_pressed = input_state_cb(1, RETRO_DEVICE_POINTER, 0, RETRO_DEVICE_ID_POINTER_PRESSED);
+   aux_gun_offscreen   = input_state_cb(1, RETRO_DEVICE_LIGHTGUN, 0, RETRO_DEVICE_ID_LIGHTGUN_IS_OFFSCREEN);
+   aux_gun_x           = input_state_cb(1, RETRO_DEVICE_LIGHTGUN, 0, RETRO_DEVICE_ID_LIGHTGUN_SCREEN_X);
+   aux_gun_y           = input_state_cb(1, RETRO_DEVICE_LIGHTGUN, 0, RETRO_DEVICE_ID_LIGHTGUN_SCREEN_Y);
+   aux_gun_trigger     = input_state_cb(1, RETRO_DEVICE_LIGHTGUN, 0, RETRO_DEVICE_ID_LIGHTGUN_TRIGGER);
+   aux_gun_reload      = input_state_cb(1, RETRO_DEVICE_LIGHTGUN, 0, RETRO_DEVICE_ID_LIGHTGUN_RELOAD);
+}
+
+/* Consume the frame's relative mouse motion exactly once, however many
+ * times the game strobes a mouse-driven controller this frame. */
+static void take_mouse_delta(int *dx, int *dy)
+{
+   if (dx) *dx = aux_mouse_dx;
+   if (dy) *dy = aux_mouse_dy;
+   aux_mouse_dx = 0;
+   aux_mouse_dy = 0;
+}
+
 static void NST_CALLBACK nst_cb_event(void *userdata, Api::User::Event event, const void *data) {
    // Handle special events
    switch (event) {
@@ -581,20 +729,10 @@ static void NST_CALLBACK nst_cb_event(void *userdata, Api::User::Event event, co
 
 static bool NST_CALLBACK gamepad_callback(Api::Base::UserData data, Core::Input::Controllers::Pad& pad, unsigned int port)
 {
-   input_poll_cb();
-
    bool pressed_l3        = false;
 
    uint buttons = 0;
-   int16_t ret = 0;
-
-   if (libretro_supports_bitmasks)
-      ret = input_state_cb(port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
-   else
-   {
-      for (unsigned i = 0; i < (RETRO_DEVICE_ID_JOYPAD_R3 + 1); i++)
-         ret |= input_state_cb(port, RETRO_DEVICE_JOYPAD, 0, i) ? (1 << i) : 0;
-   }
+   int16_t ret = pad_state[port];
 
    for (unsigned bind = 0; bind < sizeof(bindmap_default) / sizeof(bindmap[0]); bind++)
       buttons |= (ret & (1 << bindmap[bind].retro)) ? bindmap[bind].nes : 0;
@@ -612,8 +750,6 @@ static bool NST_CALLBACK gamepad_callback(Api::Base::UserData data, Core::Input:
       pressed_l3       = ret & (1 << RETRO_DEVICE_ID_JOYPAD_L3);
    }
 
-   if (tstate[port]) tstate[port]--; else tstate[port] = tpulse;
-
    if (pressed_l3)
       buttons = pad.mic | 0x04;
    pad.mic = buttons;
@@ -623,8 +759,6 @@ static bool NST_CALLBACK gamepad_callback(Api::Base::UserData data, Core::Input:
 
 static bool NST_CALLBACK arkanoid_callback(Api::Base::UserData data, Core::Input::Controllers::Paddle& paddle)
 {
-   input_poll_cb();
-
    int min_x = overscan_h_left;
    int max_x = 255 - overscan_h_right;
 
@@ -633,15 +767,19 @@ static bool NST_CALLBACK arkanoid_callback(Api::Base::UserData data, Core::Input
    switch (arkanoid_device)
    {
       case ARKANOID_DEVICE_MOUSE:
+      {
+         int dx;
          min_x = arkanoid_paddle_min;
          max_x = arkanoid_paddle_max;
-         cur_x += input_state_cb(1, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_X);
-         button = input_state_cb(1, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_LEFT);
+         take_mouse_delta(&dx, NULL);
+         cur_x += dx;
+         button = aux_mouse_left;
          break;
+      }
       case ARKANOID_DEVICE_POINTER:
-         cur_x = input_state_cb(1, RETRO_DEVICE_POINTER, 0, RETRO_DEVICE_ID_POINTER_X);
+         cur_x = aux_pointer_x;
          cur_x = (cur_x + 0x7FFF) * max_x / (0x7FFF * 2);
-         button = input_state_cb(1, RETRO_DEVICE_POINTER, 0, RETRO_DEVICE_ID_POINTER_PRESSED);
+         button = aux_pointer_pressed;
          break;
    }
 
@@ -657,18 +795,8 @@ static bool NST_CALLBACK arkanoid_callback(Api::Base::UserData data, Core::Input
 
 static bool NST_CALLBACK vssystem_callback(Api::Base::UserData data, Core::Input::Controllers::VsSystem& vsSystem)
 {
-   input_poll_cb();
-
    uint buttons = 0;
-   int16_t ret = 0;
-
-   if (libretro_supports_bitmasks)
-      ret = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
-   else
-   {
-      for (unsigned i = RETRO_DEVICE_ID_JOYPAD_L2; i < (RETRO_DEVICE_ID_JOYPAD_R2 + 1); i++)
-         ret |= input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, i) ? (1 << i) : 0;
-   }
+   int16_t ret = pad_state[0];
 
    if (ret & (1 << RETRO_DEVICE_ID_JOYPAD_L2))
       buttons |= Core::Input::Controllers::VsSystem::COIN_1;
@@ -683,8 +811,6 @@ static bool NST_CALLBACK vssystem_callback(Api::Base::UserData data, Core::Input
 
 static bool NST_CALLBACK zapper_callback(Api::Base::UserData data, Core::Input::Controllers::Zapper& zapper)
 {
-   input_poll_cb();
-
    int min_x = overscan_h_left;
    int max_x = 255 - overscan_h_right;
    int min_y = overscan_v_top;
@@ -698,10 +824,10 @@ static bool NST_CALLBACK zapper_callback(Api::Base::UserData data, Core::Input::
    switch (zapper_device)
    {
       case ZAPPER_DEVICE_LIGHTGUN:
-         if (!input_state_cb(1, RETRO_DEVICE_LIGHTGUN, 0, RETRO_DEVICE_ID_LIGHTGUN_IS_OFFSCREEN))
+         if (!aux_gun_offscreen)
          {
-            cur_x = input_state_cb(1, RETRO_DEVICE_LIGHTGUN, 0, RETRO_DEVICE_ID_LIGHTGUN_SCREEN_X);
-            cur_y = input_state_cb(1, RETRO_DEVICE_LIGHTGUN, 0, RETRO_DEVICE_ID_LIGHTGUN_SCREEN_Y);
+            cur_x = aux_gun_x;
+            cur_y = aux_gun_y;
 
             cur_x = cur_x != 0 ? (cur_x + 0x7FFF) * max_x / (0x7FFF * 2) : crossx;
             cur_y = cur_y != 0 ? (cur_y + 0x7FFF) * max_y / (0x7FFF * 2) : crossy;
@@ -712,20 +838,23 @@ static bool NST_CALLBACK zapper_callback(Api::Base::UserData data, Core::Input::
             cur_y = min_y;
          }
 
-         if (input_state_cb(1, RETRO_DEVICE_LIGHTGUN, 0, RETRO_DEVICE_ID_LIGHTGUN_TRIGGER)) {
+         if (aux_gun_trigger) {
             zapper.x = cur_x;
             zapper.y = cur_y;
             zapper.fire = 1;
          }
 
-         if (input_state_cb(1, RETRO_DEVICE_LIGHTGUN, 0, RETRO_DEVICE_ID_LIGHTGUN_RELOAD)) {
+         if (aux_gun_reload) {
             zapper.x = ~1U;
             zapper.fire = 1;
          }
          break;
       case ZAPPER_DEVICE_MOUSE:
-         cur_x += input_state_cb(1, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_X);
-         cur_y += input_state_cb(1, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_Y);
+      {
+         int dx, dy;
+         take_mouse_delta(&dx, &dy);
+         cur_x += dx;
+         cur_y += dy;
 
          if (cur_x < min_x)
             cur_x = min_x;
@@ -737,21 +866,22 @@ static bool NST_CALLBACK zapper_callback(Api::Base::UserData data, Core::Input::
          else if (cur_y > max_y)
             cur_y = max_y;
 
-         if (input_state_cb(1, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_LEFT))
+         if (aux_mouse_left)
          {
             zapper.x = cur_x;
             zapper.y = cur_y;
             zapper.fire = 1;
          }
          break;
+      }
       case ZAPPER_DEVICE_POINTER:
-         cur_x = input_state_cb(1, RETRO_DEVICE_POINTER, 0, RETRO_DEVICE_ID_POINTER_X);
-         cur_y = input_state_cb(1, RETRO_DEVICE_POINTER, 0, RETRO_DEVICE_ID_POINTER_Y);
+         cur_x = aux_pointer_x;
+         cur_y = aux_pointer_y;
 
          cur_x = cur_x != 0 ? (cur_x + 0x7FFF) * max_x / (0x7FFF * 2) : crossx;
          cur_y = cur_y != 0 ? (cur_y + 0x7FFF) * max_y / (0x7FFF * 2) : crossy;
 
-         if (input_state_cb(1, RETRO_DEVICE_POINTER, 0, RETRO_DEVICE_ID_POINTER_PRESSED))
+         if (aux_pointer_pressed)
          {
             zapper.x = cur_x;
             zapper.y = cur_y;
@@ -777,26 +907,10 @@ static void poll_fds_buttons()
 {
    if (machine->Is(Nes::Api::Machine::DISK))
    {
-      input_poll_cb();
-
-      bool pressed_l         = false;
-      bool pressed_r         = false;
-
-      int16_t ret = 0;
-      if (libretro_supports_bitmasks)
-      {
-         ret = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
-         pressed_l           = ret & (1 << RETRO_DEVICE_ID_JOYPAD_L);
-         pressed_r           = ret & (1 << RETRO_DEVICE_ID_JOYPAD_R);
-      }
-      else
-      {
-         pressed_l           = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L);
-         pressed_r           = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R);
-      }
+      bool pressed_l = pad_state[0] & (1 << RETRO_DEVICE_ID_JOYPAD_L);
+      bool pressed_r = pad_state[0] & (1 << RETRO_DEVICE_ID_JOYPAD_R);
 
       bool curL         = pressed_l;
-      static bool prevL = false;
 
       if (curL && !prevL)
       {
@@ -815,7 +929,6 @@ static void poll_fds_buttons()
       prevL = curL;
 
       bool curR         = pressed_r;
-      static bool prevR = false;
 
       if (curR && !prevR && (fds->GetNumDisks() > 1))
       {
@@ -899,7 +1012,8 @@ static void check_variables(void)
       }
    }
    if (audio) delete audio;
-   audio = new Api::Sound::Output(audio_buffer, is_pal ? SAMPLERATE / 50 : SAMPLERATE / 60);
+   update_audio_timing();
+   audio = new Api::Sound::Output(audio_buffer, audio_spf_base);
 
    var.key = "nestopia_fds_auto_insert"; // FDS Auto Insert
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var))
@@ -1374,13 +1488,24 @@ static void check_variables(void)
 
 void retro_run(void)
 {
+   /* Exact per-frame sample count via remainder carry; must be set
+    * before Execute() since the APU reads the requested length when
+    * it flushes the frame's audio. */
+   unsigned frames = audio_spf_base;
+   audio_frac += audio_spf_rem;
+   if (audio_frac >= audio_spf_den)
+   {
+      audio_frac -= audio_spf_den;
+      frames++;
+   }
+   audio->length[0] = frames;
+
+   update_input_snapshot();
    poll_fds_buttons();
    emulator.Execute(video, audio, input);
 
    if (show_crosshair == SHOW_CROSSHAIR_ON)
       draw_crosshair(crossx, crossy);
-   
-   unsigned frames = is_pal ? SAMPLERATE / 50 : SAMPLERATE / 60;
 
    bool updated = false;
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated)
@@ -1451,15 +1576,9 @@ static void extract_directory(char *buf, const char *path, size_t size)
 bool retro_load_game(const struct retro_game_info *info)
 {
    const char *dir;
-   char slash;
-   char db_path[256];
-   char palette_path[256];
-   
-#if defined(_WIN32)
-   slash = '\\';
-#else
-   slash = '/';
-#endif
+   char nestopia_dir[PATH_MAX_LENGTH];
+   char db_path[PATH_MAX_LENGTH];
+   char palette_path[PATH_MAX_LENGTH];
 
    struct retro_input_descriptor desc[] = {
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT,  "D-Pad Left" },
@@ -1535,18 +1654,21 @@ bool retro_load_game(const struct retro_game_info *info)
    if (!environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &dir) || !dir)
       return false;
 
-   sprintf(samp_dir, "%s%cnestopia%csamples", dir, slash, slash);
+   fill_pathname_join_special(nestopia_dir, dir, "nestopia", sizeof(nestopia_dir));
+   fill_pathname_join_special(samp_dir, nestopia_dir, "samples", sizeof(samp_dir));
 
-   sprintf(palette_path, "%s%ccustom.pal", dir, slash);
+   fill_pathname_join_special(palette_path, dir, "custom.pal", sizeof(palette_path));
 
    if (log_cb)
       log_cb(RETRO_LOG_INFO, "Custom palette path: %s\n", palette_path);
    
-   std::ifstream *custompalette = new std::ifstream(palette_path, std::ifstream::in|std::ifstream::binary);
-   
-   if (custompalette->is_open())
+   RFILE *custompalette = filestream_open(palette_path,
+         RETRO_VFS_FILE_ACCESS_READ, RETRO_VFS_FILE_ACCESS_HINT_NONE);
+
+   if (custompalette)
    {
-      custompalette->read((char*)custpal, sizeof(custpal));
+      filestream_read(custompalette, custpal, sizeof(custpal));
+      filestream_close(custompalette);
       if (log_cb)
          log_cb(RETRO_LOG_INFO, "custom.pal loaded from system directory.\n");
    }
@@ -1556,20 +1678,24 @@ bool retro_load_game(const struct retro_game_info *info)
       if (log_cb)
          log_cb(RETRO_LOG_INFO, "custom.pal not found in system directory.\n");
    }
-   delete custompalette;
 
-   sprintf(db_path, "%s%cNstDatabase.xml", dir, slash);
+   fill_pathname_join_special(db_path, dir, "NstDatabase.xml", sizeof(db_path));
 
    if (log_cb)
       log_cb(RETRO_LOG_INFO, "NstDatabase.xml path: %s\n", db_path);
    
    Api::Cartridge::Database database(emulator);
 
-   std::ifstream *db_file = new std::ifstream(db_path, std::ifstream::in|std::ifstream::binary);
+   char *db_data       = NULL;
+   int64_t db_file_len = 0;
 
-   if (db_file->is_open())
+   if (filestream_read_file(db_path, (void**)&db_data, &db_file_len))
    {
-      database.Load(*db_file);
+      std::istringstream db_external(
+            std::string(db_data, (size_t)db_file_len),
+            std::istringstream::in | std::istringstream::binary);
+      database.Load(db_external);
+      free(db_data);
       if (log_cb)
          log_cb(RETRO_LOG_INFO, "Using external XML database\n");
    }
@@ -1577,17 +1703,13 @@ bool retro_load_game(const struct retro_game_info *info)
    {
       size_t db_size = sizeof(nst_db_xml)/sizeof(unsigned char);
       std::string db_buf((const char*)nst_db_xml, db_size);
-      std::istringstream *db_baked = new std::istringstream(db_buf);
-      database.Load(*db_baked);
+      std::istringstream db_baked(db_buf);
+      database.Load(db_baked);
       if (log_cb)
          log_cb(RETRO_LOG_INFO, "Using baked in XML database\n");
    }
 
    database.Enable(true);
-
-   if (db_file)
-      delete db_file;
-   
    if (info->path != NULL)
    {
       extract_basename(g_basename, info->path, sizeof(g_basename));
@@ -1611,23 +1733,25 @@ bool retro_load_game(const struct retro_game_info *info)
 
       if (fds)
       {
-         char fds_bios_path[256];
-         /* search for BIOS in system directory */
-         bool found = false;
+         char fds_bios_path[PATH_MAX_LENGTH];
+         char *bios_data     = NULL;
+         int64_t bios_size   = 0;
 
-         sprintf(fds_bios_path, "%s%cdisksys.rom", dir, slash);
+         /* search for BIOS in system directory */
+         fill_pathname_join_special(fds_bios_path, dir, "disksys.rom", sizeof(fds_bios_path));
          if (log_cb)
             log_cb(RETRO_LOG_INFO, "FDS BIOS path: %s\n", fds_bios_path);
 
-         std::ifstream *fds_bios_file = new std::ifstream(fds_bios_path, std::ifstream::in|std::ifstream::binary);
-
-         if (fds_bios_file->is_open())
-            fds->SetBIOS(fds_bios_file);
-         else
-         {
-            delete fds_bios_file;
+         if (!filestream_read_file(fds_bios_path, (void**)&bios_data, &bios_size))
             return false;
+
+         {
+            std::istringstream fds_bios_stream(
+                  std::string(bios_data, (size_t)bios_size),
+                  std::istringstream::in | std::istringstream::binary);
+            fds->SetBIOS(&fds_bios_stream);
          }
+         free(bios_data);
       }
       else
          return false;
@@ -1778,21 +1902,33 @@ bool retro_serialize(void *data, size_t size)
    *tracked_input_state_ptr++ = (unsigned char) cur_y;
    *tracked_input_state_ptr++ = prevL;
    *tracked_input_state_ptr++ = prevR;
+   *tracked_input_state_ptr++ = (unsigned char)(audio_frac       & 0xff);
+   *tracked_input_state_ptr++ = (unsigned char)((audio_frac >> 8) & 0xff);
+   *tracked_input_state_ptr++ = (unsigned char)((audio_frac >> 16) & 0xff);
+   *tracked_input_state_ptr++ = (unsigned char)((audio_frac >> 24) & 0xff);
 
    return true;
 }
 
 bool retro_unserialize(const void *data, size_t size)
 {
-   // Preserve ability to load states not containing libretro-specific bits
-   size_t nestopia_savestate_size = size < retro_serialize_size() ?
-      size : size - tracked_input_state_size_bytes;
+   // Footer size detection: current states carry the full footer,
+   // states from the 8-byte-footer era carry 4 bytes less, and legacy
+   // states carry no footer at all.
+   size_t expected = retro_serialize_size();
+   size_t footer   = 0;
+
+   if (size >= expected)
+      footer = tracked_input_state_size_bytes;
+   else if (size + 4 >= expected)
+      footer = tracked_input_state_size_bytes - 4;
+
+   size_t nestopia_savestate_size = size - footer;
 
    std::stringstream ss(std::string(reinterpret_cast<const char*>(data),
       reinterpret_cast<const char*>(data) + nestopia_savestate_size));
 
-   // Only load libretro-specific bits if they exist
-   if (size < retro_serialize_size()) {
+   if (footer >= 8) {
       unsigned char const *tracked_input_state_ptr =
          reinterpret_cast<unsigned char const*>(data) + nestopia_savestate_size;
       tstate[0] = *tracked_input_state_ptr++;
@@ -1803,6 +1939,20 @@ bool retro_unserialize(const void *data, size_t size)
       cur_y  = (int) *tracked_input_state_ptr++;
       prevL  = *tracked_input_state_ptr++;
       prevR  = *tracked_input_state_ptr++;
+
+      if (footer >= 12) {
+         audio_frac  = (unsigned long)*tracked_input_state_ptr++;
+         audio_frac |= (unsigned long)*tracked_input_state_ptr++ << 8;
+         audio_frac |= (unsigned long)*tracked_input_state_ptr++ << 16;
+         audio_frac |= (unsigned long)*tracked_input_state_ptr++ << 24;
+      }
+      else
+         audio_frac = 0;
+
+      /* Guard against a state saved under the other region's
+       * denominator. */
+      if (audio_spf_den && audio_frac >= audio_spf_den)
+         audio_frac %= audio_spf_den;
    }
 
    return !machine->LoadState(ss);

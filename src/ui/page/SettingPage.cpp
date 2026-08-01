@@ -4377,6 +4377,8 @@ brls::View *SettingPage::buildKeyBindTab()
         {"映射SFC游戏", "sfc.", false},
         {"映射NDS游戏", "nds.", true},
         {"映射MD游戏", "md.", false},
+        {"映射Arcade游戏", "arcade.", false},
+        {"映射DC游戏", "dc.", false},
     };
 
     for (const auto& platform : platforms)

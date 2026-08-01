@@ -33,6 +33,9 @@
 static uint32_t wlookup1[32];
 static uint32_t wlookup2[203];
 
+/* Baked, rate-independent base values for the two tables above. */
+#include "sound_tables.h"
+
 /* Helper: clamp wlookup2's combined index to the table size.
  *
  * The LQ Tri/Noise/PCM mix sums lq_tcout, noiseout, and RawDALatch (with
@@ -313,7 +316,25 @@ static DECLFW(Write_DMCRegs) {
 		DMCFormat = V;
 		break;
 	case 0x01: DoPCM();
-		RawDALatch = V & 0x7F;
+		{
+			/* $4011 is the 7-bit DAC latch.  Games like Castlevania II
+			 * pulse this register directly to produce sample-style audio
+			 * out-of-band from the DPCM bit-stream; the abrupt steps
+			 * between successive writes are the audible "pop".  When
+			 * ReduceDMCPopping is on, take only the midpoint of the
+			 * old-vs-new transition - i.e. step the DAC halfway toward
+			 * the requested value rather than jumping straight to it.
+			 * This is the same algorithm libretro-fceumm_next ships
+			 * (backport reference: negativeExponent's fceumm_next).
+			 * The DPCM playback path (the +/-2 per bit update further
+			 * down) is left untouched. */
+			uint8_t newval  = V & 0x7F;
+			uint8_t lastval = RawDALatch;
+			RawDALatch = newval;
+			if (FSettings.ReduceDMCPopping) {
+				RawDALatch = (uint8_t)(newval - ((int)newval - (int)lastval) / 2);
+			}
+		}
 		if (RawDALatch)
 			DMC_7bit = 1;
 		break;
@@ -733,10 +754,21 @@ static void RDoSQLQ(void) {
 static void RDoTriangle(void) {
 	uint32_t V;
 	int32_t tcout = (tristep & 0xF);
+	uint32_t triangle_raw_period = (PSG[0xa] | ((PSG[0xb] & 7) << 8));
 	if (!(tristep & 0x10)) tcout ^= 0xF;
 	tcout = (tcout * 3) << 16;	/* (tcout<<1); */
 
-	if (!lengthcount[2] || !TriCount) {	/* Counter is halted, but we still need to output. */
+	/* The LQ tri/noise/PCM mixer (RDoTriangleNoisePCMLQ below) already
+	 * forces the triangle channel quiet when its period is low enough
+	 * to produce only ultrasonic output - games like Castlevania II
+	 * and Jackal repeatedly drop the triangle into that range when
+	 * they want silence, and without the gate the DAC reconstruction
+	 * filter folds the high-frequency content back as audible
+	 * popping.  Mirror the gate in the HQ path, conditional on the
+	 * RemoveTriangleNoise option so the default HQ output stays
+	 * bit-exact with the original code unless the user opts in. */
+	if (!lengthcount[2] || !TriCount
+	    || (FSettings.RemoveTriangleNoise && triangle_raw_period <= 3)) {	/* Counter is halted, but we still need to output. */
 		int32_t *start = &WaveHi[ChannelBC[2]];
 		int32_t count = SOUNDTS - ChannelBC[2];
 		while (count--) {
@@ -1099,7 +1131,30 @@ void FCEUSND_Reset(void) {
 
 	fhcnt = fhinc;
 	fcnt = 0;
-	nreg = 1;
+	/* Power-on noise shift register state.
+	 *
+	 * Real hardware initializes the 15-bit noise LFSR to $0001 with bit
+	 * 0 set (the output bit, muting the channel until the first feedback
+	 * cycle).  This file stores the LFSR with the bit order reversed -
+	 * the output is read from bit 14, the feedback taps are at 13/14
+	 * (long mode) or 8/14 (short mode), and the shift goes left rather
+	 * than right (see RDoNoise / NoLQNoise).  Under that mirroring, the
+	 * real-hardware $0001 state corresponds to nreg = 0x4000 here, not
+	 * nreg = 1.
+	 *
+	 * Initialising to 1 left the LFSR running 14 long-mode steps ahead
+	 * of every other accurate emulator (Mesen, NSFPlay, _next), and made
+	 * short-mode output diverge entirely - the 93-cycle period is short
+	 * enough that the position offset is audible as "rougher" or
+	 * subtly wrong percussion.  Reported as libretro-fceumm issue #466
+	 * (Moon8 audio inaccuracy, by NSFPlay author Brad Smith).
+	 *
+	 * Per-channel bisection of moon8.nes against negativeExponent's
+	 * _next branch (which uses the un-mirrored layout from nesdev wiki)
+	 * shows the noise channel as the only meaningful divergence after
+	 * the music kicks in at ~22 s; squares and DMC are bit-identical.
+	 */
+	nreg = 0x4000;
 
 	for (x = 0; x < 2; x++) {
 		wlcount[x] = 2048;
@@ -1166,14 +1221,16 @@ void SetSoundVariables(void) {
 	fhinc *= 24;
 
 	if (FSettings.SndRate) {
-		wlookup1[0] = 0;
-		for (x = 1; x < 32; x++) {
-			wlookup1[x] = (double)16 * 16 * 16 * 4 * 95.52 / ((double)8128 / (double)x + 100);
+		/* wlookup1/wlookup2 are baked constants (sound_tables.h); the old
+		 * floating-point division that built them is gone. LQ mode (!soundq)
+		 * still applies the >>4 here, so the runtime tables stay mutable.
+		 * Bit-identical to the previous double-derived values. */
+		for (x = 0; x < 32; x++) {
+			wlookup1[x] = wlookup1_base[x];
 			if (!FSettings.soundq) wlookup1[x] >>= 4;
 		}
-		wlookup2[0] = 0;
-		for (x = 1; x < 203; x++) {
-			wlookup2[x] = (double)16 * 16 * 16 * 4 * 163.67 / ((double)24329 / (double)x + 100);
+		for (x = 0; x < 203; x++) {
+			wlookup2[x] = wlookup2_base[x];
 			if (!FSettings.soundq) wlookup2[x] >>= 4;
 		}
 		if (FSettings.soundq >= 1) {
@@ -1222,19 +1279,34 @@ void SetSoundVariables(void) {
 	if (GameExpSound.RChange)
 		GameExpSound.RChange();
 
-	nesincsize = (int64_t)(((int64_t)1 << 17) * (double)(PAL ? PAL_CPU : NTSC_CPU) / (FSettings.SndRate * 16));
+	/* nesincsize / soundtsinc are derived from the CPU clock (x6502.h) and
+	 * the output rate. The CPU clock is exactly NTSC=19687500/11,
+	 * PAL=13300857/8 (1662607.125), dendy=1773447467/1000 (1773447.467), so
+	 * both quantities reduce to exact integer math - no floating point, and
+	 * deterministic on every platform. Verified bit-identical to the old
+	 * double form at every output rate the core selects (32000/44100/48000/
+	 * 96000) for all three regions. If the x6502.h clock constants change,
+	 * update the rationals below to match. */
+	{
+		uint64_t cpu_num, cpu_den;
+		if (PAL)        { cpu_num = 13300857ULL;   cpu_den = 8ULL;    }
+		else if (dendy) { cpu_num = 1773447467ULL; cpu_den = 1000ULL; }
+		else            { cpu_num = 19687500ULL;   cpu_den = 11ULL;   }
+
+		/* (1<<17) * CPU / (rate*16), truncated */
+		nesincsize = (int32_t)(((uint64_t)1 << 17) * cpu_num /
+				(cpu_den * 16 * FSettings.SndRate));
+
+		/* (uint64_t)(CPU*65536) / (rate*16); the inner term matches the old
+		 * (uint64_t)((double)CPU * 65536.0) truncation exactly. */
+		soundtsinc = (uint32_t)(((cpu_num * 65536ULL) / cpu_den) /
+				(FSettings.SndRate * 16));
+	}
+
 	memset(sqacc, 0, sizeof(sqacc));
 	memset(ChannelBC, 0, sizeof(ChannelBC));
 
 	LoadDMCPeriod(DMCFormat & 0xF);	/* For changing from PAL to NTSC */
-
-	/* Use double rather than long double here. long double has
-	 * platform-dependent precision (80-bit on x87, 64-bit with
-	 * -mfpmath=sse, 128-bit on some non-x86), so the cast-to-uint32
-	 * result varies across platforms. double is guaranteed 64-bit
-	 * IEEE-754 on every platform we target, keeping soundtsinc
-	 * deterministic across builds for replay/netplay. */
-	soundtsinc = (uint32_t)((uint64_t)((double)(PAL ? PAL_CPU : NTSC_CPU) * 65536.0) / (FSettings.SndRate * 16));
 }
 
 void FCEUI_Sound(int Rate) {
@@ -1246,6 +1318,14 @@ void FCEUI_SetLowPass(int q) {
 	FSettings.lowpass = q;
 }
 
+void FCEUI_RemoveTriangleNoise(int d) {
+	FSettings.RemoveTriangleNoise = d ? 1 : 0;
+}
+
+void FCEUI_ReduceDmcPopping(int d) {
+	FSettings.ReduceDMCPopping = d ? 1 : 0;
+}
+
 void FCEUI_SetSoundQuality(int quality) {
 	FSettings.soundq = quality;
 	SetSoundVariables();
@@ -1253,6 +1333,22 @@ void FCEUI_SetSoundQuality(int quality) {
 
 void FCEUI_SetSoundVolume(uint32_t volume) {
 	FSettings.SoundVolume = volume;
+}
+
+/* Per-channel expansion-audio volume scaling.  See sound.h for context.
+ * Hot-path consideration: the common case (vol == 256, the default)
+ * returns immediately with no multiply, keeping the existing
+ * bit-identical behaviour on builds where the new options haven't
+ * been touched.  When vol is 0 the channel is silenced cleanly
+ * regardless of the input sample. */
+int32_t GetExpOutput(int channel, int32_t in) {
+	int v;
+	if ((unsigned)channel >= (unsigned)SND_EXP_LAST)
+		return in;
+	v = FSettings.ExpVolume[channel];
+	if (v == 256) return in;
+	if (v == 0)   return 0;
+	return (in * v) / 256;
 }
 
 
@@ -1333,15 +1429,15 @@ SFORMAT FCEUSND_STATEINFO[] = {
 	{ &sexyfilter2_acc, sizeof(sexyfilter2_acc) | FCEUSTATE_RLSB, "FAC3" },
 	{ &lq_tcout, sizeof(lq_tcout) | FCEUSTATE_RLSB, "TCOU"},
 
-/* 2018-12-14 - Wii and possibly other big-endian platforms are having
- * issues loading states with this. Increasing it only helps a few games.
- * Disabling this state variable for Wii/WiiU/GC for now. */
-/* TODO: fix this for better runahead feature for big-endian */
-/* UPDATE: Try to ignore this for all big-endian for now */
-#ifndef MSB_FIRST
+/* Historical note: this entry was excluded on big-endian hosts
+ * (2018-12-14, Wii state-load failures). The root causes are gone:
+ * FlipByteOrder's over-iteration no-op and ReadStateChunk's unchecked
+ * seek were both fixed, and FCEUSTATE_RLSB_ARRAY gives per-element
+ * byte-swapping so the int32_t array is stored little-endian on disk
+ * on every host. On LE builds the flag is inert and the on-disk
+ * format is unchanged. */
 	/* wave buffer is used for filtering, only need first 17 values from it */
-	{ &Wave, 32 * sizeof(int32_t), "WAVE"},
-#endif
+	{ &Wave, (32 * sizeof(int32_t)) | FCEUSTATE_RLSB_ARRAY(sizeof(int32_t)), "WAVE"},
 
 	{ 0 }
 };

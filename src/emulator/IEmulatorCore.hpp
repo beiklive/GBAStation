@@ -34,6 +34,11 @@ struct IEmulatorCore {
     virtual void SetCheatPath(const std::string& path) = 0;
 
     virtual bool IsReady() const = 0;
+    virtual std::string LastError() const { return {}; }
+
+    virtual LibretroLoader::DiskControlState GetDiskControlState() const { return {}; }
+    virtual bool SetDiskEjected(bool) { return false; }
+    virtual bool SetDiskImageIndex(unsigned, bool = true) { return false; }
 
     virtual const void* getSramData() const = 0;
     virtual size_t      getSramSize() const = 0;

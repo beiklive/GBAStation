@@ -30,6 +30,13 @@ public:
         std::string defaultValue;
         std::vector<CoreOptionValue> values;
     };
+    struct DiskControlState {
+        bool supported = false;
+        bool ejected = false;
+        unsigned currentIndex = 0;
+        unsigned numImages = 0;
+        std::vector<std::string> labels;
+    };
 
     static constexpr unsigned kMaxInputPorts = 2;
 
@@ -146,6 +153,13 @@ public:
     /// 通知核心配置已更新，下次 GET_VARIABLE_UPDATE 返回 true，触发核心重读变量
     void notifyConfigUpdated() { m_configChanged.store(true, std::memory_order_release); }
 
+    // ---- 磁盘控制 ---------------------------------------------------
+
+    DiskControlState diskControlState() const;
+    bool setDiskEjected(bool ejected);
+    bool setDiskImageIndex(unsigned index);
+    bool switchDiskImage(unsigned index, bool insertAfter = true);
+
     static void discoverCoreOptions(CoreType coreType, ConfigManager* config);
     static const std::vector<CoreOptionDefinition>& coreOptions(CoreType coreType);
 
@@ -214,6 +228,12 @@ private:
     // ---- 存档/系统目录 ----------------------------------------------
     std::string m_saveDirectory;    ///< 通过GET_SAVE_DIRECTORY返回给核心
     std::string m_systemDirectory;  ///< 通过GET_SYSTEM_DIRECTORY返回给核心
+
+    // ---- 磁盘控制 ----------------------------------------------------
+    retro_disk_control_callback m_diskControl{};
+    retro_disk_control_ext_callback m_diskControlExt{};
+    bool m_hasDiskControl = false;
+    bool m_hasDiskControlExt = false;
 
     // ---- 传递给核心的宿主状态 ----------------------------------------
     std::atomic<bool> m_fastForwarding{false};  ///< 跟踪宿主快进状态

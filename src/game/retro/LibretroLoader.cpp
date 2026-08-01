@@ -77,6 +77,32 @@ void nestopia_retro_cheat_reset(void);
 void nestopia_retro_cheat_set(unsigned, bool, const char*);
 unsigned nestopia_retro_get_region(void);
 
+// ---- Gambatte（GB/GBC）重命名符号 -------------------------
+void gambatte_retro_init(void);
+void gambatte_retro_deinit(void);
+unsigned gambatte_retro_api_version(void);
+void gambatte_retro_get_system_info(struct retro_system_info*);
+void gambatte_retro_get_system_av_info(struct retro_system_av_info*);
+void gambatte_retro_set_environment(retro_environment_t);
+void gambatte_retro_set_video_refresh(retro_video_refresh_t);
+void gambatte_retro_set_audio_sample(retro_audio_sample_t);
+void gambatte_retro_set_audio_sample_batch(retro_audio_sample_batch_t);
+void gambatte_retro_set_input_poll(retro_input_poll_t);
+void gambatte_retro_set_input_state(retro_input_state_t);
+void gambatte_retro_set_controller_port_device(unsigned, unsigned);
+void gambatte_retro_reset(void);
+void gambatte_retro_run(void);
+size_t gambatte_retro_serialize_size(void);
+bool gambatte_retro_serialize(void*, size_t);
+bool gambatte_retro_unserialize(const void*, size_t);
+bool gambatte_retro_load_game(const struct retro_game_info*);
+void gambatte_retro_unload_game(void);
+void* gambatte_retro_get_memory_data(unsigned);
+size_t gambatte_retro_get_memory_size(unsigned);
+void gambatte_retro_cheat_reset(void);
+void gambatte_retro_cheat_set(unsigned, bool, const char*);
+unsigned gambatte_retro_get_region(void);
+
 // ---- Snes9x（SNES）重命名符号 ------------------------------
 void snes9x_retro_init(void);
 void snes9x_retro_deinit(void);
@@ -229,7 +255,7 @@ static uint64_t RETRO_CALLCONV s_perfGetCpuFeatures(void) { return 0; }
 namespace beiklive {
 
 namespace {
-std::array<std::vector<LibretroLoader::CoreOptionDefinition>, 5> g_coreOptions;
+std::array<std::vector<LibretroLoader::CoreOptionDefinition>, 7> g_coreOptions;
 
 size_t coreOptionIndex(CoreType type)
 {
@@ -375,6 +401,32 @@ bool LibretroLoader::load(CoreType coreType)
         case CoreType::Genesis:
             brls::Logger::error("[LibretroLoader] Genesis libretro backend is disabled; use GenesisCore");
             return false;
+
+        case CoreType::Gambatte:
+            fn_set_environment        = gambatte_retro_set_environment;
+            fn_set_video_refresh      = gambatte_retro_set_video_refresh;
+            fn_set_audio_sample       = gambatte_retro_set_audio_sample;
+            fn_set_audio_sample_batch = gambatte_retro_set_audio_sample_batch;
+            fn_set_input_poll         = gambatte_retro_set_input_poll;
+            fn_set_input_state        = gambatte_retro_set_input_state;
+            fn_init                   = gambatte_retro_init;
+            fn_deinit                 = gambatte_retro_deinit;
+            fn_api_version            = gambatte_retro_api_version;
+            fn_get_system_info        = gambatte_retro_get_system_info;
+            fn_get_system_av_info     = gambatte_retro_get_system_av_info;
+            fn_set_controller_port_device = gambatte_retro_set_controller_port_device;
+            fn_reset                  = gambatte_retro_reset;
+            fn_run                    = gambatte_retro_run;
+            fn_serialize_size         = gambatte_retro_serialize_size;
+            fn_serialize              = gambatte_retro_serialize;
+            fn_unserialize            = gambatte_retro_unserialize;
+            fn_load_game              = gambatte_retro_load_game;
+            fn_unload_game            = gambatte_retro_unload_game;
+            fn_cheat_reset            = gambatte_retro_cheat_reset;
+            fn_cheat_set              = gambatte_retro_cheat_set;
+            fn_get_memory_data        = gambatte_retro_get_memory_data;
+            fn_get_memory_size        = gambatte_retro_get_memory_size;
+            break;
 
         case CoreType::Fceumm:
             fn_set_environment        = fceumm_retro_set_environment;
@@ -559,6 +611,10 @@ void LibretroLoader::unload()
         fn_unload_game();
         m_gameLoaded = false;
     }
+    m_diskControl = {};
+    m_diskControlExt = {};
+    m_hasDiskControl = false;
+    m_hasDiskControlExt = false;
     // retro_deinit() intentionally not called here:
     // many cores (especially PicoDrive) don't handle repeated init/deinit cycles.
     // deinitCore() can be called explicitly when program exits.
@@ -705,6 +761,10 @@ void LibretroLoader::unloadGame()
     brls::Logger::debug("[LibretroLoader] unloadGame");
     fn_unload_game();
     m_gameLoaded = false;
+    m_diskControl = {};
+    m_diskControlExt = {};
+    m_hasDiskControl = false;
+    m_hasDiskControlExt = false;
 }
 
 void LibretroLoader::run()
@@ -848,6 +908,78 @@ void LibretroLoader::cheatSet(unsigned index, bool enabled, const std::string& c
 }
 
 // ============================================================
+// 磁盘控制
+// ============================================================
+
+LibretroLoader::DiskControlState LibretroLoader::diskControlState() const
+{
+    DiskControlState state;
+    const auto getNumImages = m_hasDiskControlExt ? m_diskControlExt.get_num_images : m_diskControl.get_num_images;
+    const auto getImageIndex = m_hasDiskControlExt ? m_diskControlExt.get_image_index : m_diskControl.get_image_index;
+    const auto getEjectState = m_hasDiskControlExt ? m_diskControlExt.get_eject_state : m_diskControl.get_eject_state;
+    if (!m_gameLoaded || !m_hasDiskControl || !getNumImages || !getImageIndex || !getEjectState)
+        return state;
+
+    state.supported = true;
+    state.ejected = getEjectState();
+    state.currentIndex = getImageIndex();
+    state.numImages = getNumImages();
+    state.labels.reserve(state.numImages);
+    for (unsigned i = 0; i < state.numImages; ++i)
+    {
+        std::string label;
+        if (m_hasDiskControlExt && m_diskControlExt.get_image_label)
+        {
+            std::array<char, 256> buf{};
+            if (m_diskControlExt.get_image_label(i, buf.data(), buf.size()) && buf[0] != '\0')
+                label = buf.data();
+        }
+        if (label.empty() && m_hasDiskControlExt && m_diskControlExt.get_image_path)
+        {
+            std::array<char, 512> buf{};
+            if (m_diskControlExt.get_image_path(i, buf.data(), buf.size()) && buf[0] != '\0')
+            {
+                std::string path = buf.data();
+                const size_t pos = path.find_last_of("/\\");
+                label = pos == std::string::npos ? path : path.substr(pos + 1);
+            }
+        }
+        if (label.empty())
+            label = "磁盘面 " + std::to_string(i + 1);
+        state.labels.push_back(std::move(label));
+    }
+    return state;
+}
+
+bool LibretroLoader::setDiskEjected(bool ejected)
+{
+    const auto setEjectState = m_hasDiskControlExt ? m_diskControlExt.set_eject_state : m_diskControl.set_eject_state;
+    return m_gameLoaded && m_hasDiskControl && setEjectState && setEjectState(ejected);
+}
+
+bool LibretroLoader::setDiskImageIndex(unsigned index)
+{
+    const auto setImageIndex = m_hasDiskControlExt ? m_diskControlExt.set_image_index : m_diskControl.set_image_index;
+    return m_gameLoaded && m_hasDiskControl && setImageIndex && setImageIndex(index);
+}
+
+bool LibretroLoader::switchDiskImage(unsigned index, bool insertAfter)
+{
+    const auto setEjectState = m_hasDiskControlExt ? m_diskControlExt.set_eject_state : m_diskControl.set_eject_state;
+    const auto setImageIndex = m_hasDiskControlExt ? m_diskControlExt.set_image_index : m_diskControl.set_image_index;
+    const auto getNumImages = m_hasDiskControlExt ? m_diskControlExt.get_num_images : m_diskControl.get_num_images;
+    if (!m_gameLoaded || !m_hasDiskControl || !setEjectState || !setImageIndex || !getNumImages)
+        return false;
+    if (index >= getNumImages())
+        return false;
+    if (!setEjectState(true))
+        return false;
+    if (!setImageIndex(index))
+        return false;
+    return insertAfter ? setEjectState(false) : true;
+}
+
+// ============================================================
 // 静态回调（libretro C 接口）
 // ============================================================
 
@@ -895,6 +1027,11 @@ bool LibretroLoader::s_environmentCallback(unsigned cmd, void* data)
             // 返回当前目录
             const char** dir = static_cast<const char**>(data);
             if (dir) *dir = ".";
+            return true;
+        }
+        case RETRO_ENVIRONMENT_GET_DISK_CONTROL_INTERFACE_VERSION: {
+            unsigned* version = static_cast<unsigned*>(data);
+            if (version) *version = 1;
             return true;
         }
         case RETRO_ENVIRONMENT_SET_MESSAGE: {
@@ -991,8 +1128,30 @@ bool LibretroLoader::s_environmentCallback(unsigned cmd, void* data)
         case RETRO_ENVIRONMENT_SET_MEMORY_MAPS:
         case RETRO_ENVIRONMENT_SET_ROTATION:
         case RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS:
-        case RETRO_ENVIRONMENT_SET_DISK_CONTROL_INTERFACE:
             return true;
+        case RETRO_ENVIRONMENT_SET_DISK_CONTROL_INTERFACE: {
+            const auto* cb = static_cast<const retro_disk_control_callback*>(data);
+            if (!cb || !cb->set_eject_state || !cb->get_eject_state ||
+                !cb->get_image_index || !cb->set_image_index || !cb->get_num_images)
+                return false;
+            s_current->m_diskControl = *cb;
+            s_current->m_diskControlExt = {};
+            s_current->m_hasDiskControl = true;
+            s_current->m_hasDiskControlExt = false;
+            brls::Logger::debug("[LibretroLoader] disk control interface registered");
+            return true;
+        }
+        case RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT_INTERFACE: {
+            const auto* cb = static_cast<const retro_disk_control_ext_callback*>(data);
+            if (!cb || !cb->set_eject_state || !cb->get_eject_state ||
+                !cb->get_image_index || !cb->set_image_index || !cb->get_num_images)
+                return false;
+            s_current->m_diskControlExt = *cb;
+            s_current->m_hasDiskControl = true;
+            s_current->m_hasDiskControlExt = true;
+            brls::Logger::debug("[LibretroLoader] disk control ext interface registered");
+            return true;
+        }
         case RETRO_ENVIRONMENT_SET_GEOMETRY: {
             const retro_game_geometry* geometry =
                 static_cast<const retro_game_geometry*>(data);

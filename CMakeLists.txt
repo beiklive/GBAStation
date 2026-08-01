@@ -297,6 +297,10 @@ elseif (PLATFORM_SWITCH)
         COMMAND ${NX_NACPTOOL_EXE} --create "${PROJECT_NAME}" "${PROJECT_AUTHOR}" "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_ALTER}" ${PROJECT_NAME}.nacp --titleid=${PROJECT_TITLEID}
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_RESOURCES} ${CMAKE_BINARY_DIR}/resources
         COMMAND ${CMAKE_COMMAND} -E rm -f ${CMAKE_BINARY_DIR}/resources/core/GBAStationNDSStub.nro
+        COMMAND ${CMAKE_COMMAND} -E rm -f ${CMAKE_BINARY_DIR}/resources/core/Flycast.nro
+        COMMAND ${CMAKE_COMMAND} -E rm -f ${CMAKE_BINARY_DIR}/resources/core/FBNeo.nro
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/resources/core/Flycast.nro ${CMAKE_BINARY_DIR}/Flycast.nro
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/resources/core/FBNeo.nro ${CMAKE_BINARY_DIR}/FBNeo.nro
         COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/resources/font
         COMMAND ${NX_ELF2NRO_EXE} ${PROJECT_NAME}.elf ${PROJECT_NAME}.nro --icon=${PROJECT_ICON} --nacp=${PROJECT_NAME}.nacp --romfsdir=${CMAKE_BINARY_DIR}/resources
     )
@@ -324,6 +328,7 @@ endif()
 # FCEUmm        – NES / Famicom       (libretro, fceumm_retro_*)
 # Snes9x        – SNES / SFC          (libretro, snes9x_retro_*)
 # Nestopia      – NES / Famicom       (libretro, nestopia_retro_*)
+# Gambatte      – GB / GBC            (libretro source, gambatte_retro_*)
 # Snes9x 2005   – SNES / SFC          (libretro, snes9x2005_retro_*)
 # NDS runs in GBAStationNDSStub.nro, launched as a separate Switch NRO.
 #
@@ -340,6 +345,10 @@ endif()
 if (TARGET nestopia_core)
     target_link_libraries(${PROJECT_NAME} PRIVATE nestopia_core)
     message(STATUS "Linking Nestopia (NES) core statically")
+endif()
+if (TARGET gambatte_core)
+    target_link_libraries(${PROJECT_NAME} PRIVATE gambatte_core)
+    message(STATUS "Linking Gambatte (GB/GBC) core statically")
 endif()
 if (TARGET snes9x2005_core)
     target_link_libraries(${PROJECT_NAME} PRIVATE snes9x2005_core)

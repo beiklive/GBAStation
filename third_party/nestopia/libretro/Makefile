@@ -173,6 +173,7 @@ else ifeq ($(platform), psp1)
 	CXX = psp-g++$(EXE_EXT)
 	AR = psp-ar$(EXE_EXT)
 	PLATFORM_DEFINES := -DPSP -G0
+	INCFLAGS_PLATFORM = -I$(shell psp-config --pspsdk-path)/include
 	STATIC_LINKING = 1
 
 # Vita
@@ -244,6 +245,7 @@ else ifneq (,$(filter $(platform), ps3 psl1ght))
 	STATIC_LINKING = 1
 	ifeq ($(platform), psl1ght)
 		PLATFORM_DEFINES += -D__PSL1GHT__
+		INCFLAGS_PLATFORM = -I$(PS3DEV)/ppu/include
 	endif
 
 # Windows MSVC 2003 Xbox 1
@@ -745,7 +747,7 @@ CORE_DIR = ..
 
 include Makefile.common
 
-OBJECTS := $(SOURCES_CXX:.cpp=.o)
+OBJECTS := $(SOURCES_CXX:.cpp=.o) $(SOURCES_C:.c=.o)
 
 ifeq ($(HAS_GCC), 1)
 

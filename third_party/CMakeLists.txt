@@ -8,6 +8,7 @@ set(MGBA_PATH          ${CMAKE_CURRENT_SOURCE_DIR}/mgba)
 set(FCEUMM_PATH        ${CMAKE_CURRENT_SOURCE_DIR}/libretro-fceumm)
 set(SNES9X_PATH        ${CMAKE_CURRENT_SOURCE_DIR}/snes9x)
 set(NESTOPIA_PATH      ${CMAKE_CURRENT_SOURCE_DIR}/nestopia)
+set(GAMBATTE_PATH      ${CMAKE_CURRENT_SOURCE_DIR}/gambatte-libretro)
 set(SNES9X2005_PATH    ${CMAKE_CURRENT_SOURCE_DIR}/snes9x2005)
 set(MELONDS_PATH       ${CMAKE_CURRENT_SOURCE_DIR}/melonDS)
 
@@ -142,6 +143,32 @@ function(add_isolated_libretro_core TARGET OBJECT_TARGET PREFIX)
     foreach(_sym IN LISTS LIBRETRO_API_SYMBOLS)
         list(APPEND _keep_args "--keep-global-symbol=${PREFIX}_${_sym}")
     endforeach()
+    if (PREFIX STREQUAL "nestopia")
+        list(APPEND _keep_args
+            "--wildcard"
+            "--keep-global-symbol=_ZN3Nes*"
+            "--keep-global-symbol=_ZNK3Nes*"
+            "--keep-global-symbol=_ZTVN3Nes*"
+            "--keep-global-symbol=_ZTIN3Nes*"
+            "--keep-global-symbol=_ZTSN3Nes*"
+            "--keep-global-symbol=_ZNSt*"
+            "--keep-global-symbol=_ZNKSt*"
+            "--keep-global-symbol=_ZSt*"
+        )
+    elseif(PREFIX STREQUAL "gambatte")
+        list(APPEND _keep_args
+            "--wildcard"
+            "--keep-global-symbol=_ZN8gambatte*"
+            "--keep-global-symbol=_ZNK8gambatte*"
+            "--keep-global-symbol=_ZTVN8gambatte*"
+            "--keep-global-symbol=_ZTIN8gambatte*"
+            "--keep-global-symbol=_ZTSN8gambatte*"
+            "--keep-global-symbol=_ZNSt*"
+            "--keep-global-symbol=_ZNKSt*"
+            "--keep-global-symbol=_ZSt*"
+            "--keep-global-symbol=blip*"
+        )
+    endif()
 
     add_library(${_raw_target} STATIC $<TARGET_OBJECTS:${OBJECT_TARGET}>)
     add_dependencies(${_raw_target} ${OBJECT_TARGET})
@@ -150,7 +177,7 @@ function(add_isolated_libretro_core TARGET OBJECT_TARGET PREFIX)
     add_custom_command(
         OUTPUT "${_out_obj}"
         COMMAND ${CMAKE_COMMAND} -E rm -f "${_tmp_obj}" "${_out_obj}"
-        COMMAND ${CMAKE_C_COMPILER} -r -o "${_tmp_obj}"
+        COMMAND ${CMAKE_CXX_COMPILER} -r -o "${_tmp_obj}"
                 -Wl,--whole-archive "$<TARGET_FILE:${_raw_target}>" -Wl,--no-whole-archive
         COMMAND ${CMAKE_OBJCOPY} ${_keep_args} "${_tmp_obj}" "${_out_obj}"
         DEPENDS ${_raw_target}
@@ -245,7 +272,7 @@ target_include_directories(fceumm_core_obj PRIVATE
 target_compile_definitions(fceumm_core_obj PRIVATE
     __LIBRETRO__
     PATH_MAX=1024
-    FCEU_VERSION_NUMERIC=9813
+    FCEU_VERSION_NUMERIC=9900
     FRONTEND_SUPPORTS_RGB888
     HAVE_NTSC_FILTER
 )
@@ -401,16 +428,108 @@ list(APPEND NESTOPIA_CORE_SRC
     ${NESTOPIA_PATH}/libretro/libretro.cpp
 )
 
-add_library(nestopia_core STATIC ${NESTOPIA_CORE_SRC})
-target_include_directories(nestopia_core PRIVATE
+set(NESTOPIA_LRC_DIR ${NESTOPIA_PATH}/libretro/libretro-common)
+set(NESTOPIA_LRC_SRC
+    ${NESTOPIA_LRC_DIR}/compat/compat_posix_string.c
+    ${NESTOPIA_LRC_DIR}/compat/compat_strcasestr.c
+    ${NESTOPIA_LRC_DIR}/compat/compat_snprintf.c
+    ${NESTOPIA_LRC_DIR}/compat/compat_strl.c
+    ${NESTOPIA_LRC_DIR}/compat/fopen_utf8.c
+    ${NESTOPIA_LRC_DIR}/encodings/encoding_utf.c
+    ${NESTOPIA_LRC_DIR}/file/file_path.c
+    ${NESTOPIA_LRC_DIR}/file/file_path_io.c
+    ${NESTOPIA_LRC_DIR}/streams/file_stream.c
+    ${NESTOPIA_LRC_DIR}/time/rtime.c
+    ${NESTOPIA_LRC_DIR}/vfs/vfs_implementation.c
+)
+
+add_library(nestopia_core_obj OBJECT ${NESTOPIA_CORE_SRC} ${NESTOPIA_LRC_SRC})
+target_include_directories(nestopia_core_obj PRIVATE
     ${NESTOPIA_PATH}/libretro
     ${NESTOPIA_PATH}
     ${NESTOPIA_PATH}/libretro/libretro-common/include
 )
-target_compile_definitions(nestopia_core PRIVATE __LIBRETRO__)
-apply_retro_symbol_rename(nestopia_core nestopia)
-apply_data_symbol_rename(nestopia_core nestopia)
-set_target_properties(nestopia_core PROPERTIES CXX_STANDARD 11)
+target_compile_definitions(nestopia_core_obj PRIVATE __LIBRETRO__)
+apply_retro_symbol_rename(nestopia_core_obj nestopia)
+apply_data_symbol_rename(nestopia_core_obj nestopia)
+set_target_properties(nestopia_core_obj PROPERTIES CXX_STANDARD 11 C_STANDARD 11)
+add_isolated_libretro_core(nestopia_core nestopia_core_obj nestopia)
+
+# =========================================================
+# Gambatte (GB/GBC) 核心
+# =========================================================
+set(GAMBATTE_CORE_DIR ${GAMBATTE_PATH}/libgambatte/src)
+set(GAMBATTE_LR_DIR ${GAMBATTE_PATH}/libgambatte/libretro)
+set(GAMBATTE_LRC_DIR ${GAMBATTE_PATH}/libgambatte/libretro-common)
+set(GAMBATTE_SRC
+    ${GAMBATTE_LR_DIR}/gambatte_log.c
+    ${GAMBATTE_LR_DIR}/blipper.c
+    ${GAMBATTE_LR_DIR}/cc_resampler.c
+    ${GAMBATTE_CORE_DIR}/bootloader.cpp
+    ${GAMBATTE_CORE_DIR}/cpu.cpp
+    ${GAMBATTE_CORE_DIR}/gambatte.cpp
+    ${GAMBATTE_CORE_DIR}/initstate.cpp
+    ${GAMBATTE_CORE_DIR}/interrupter.cpp
+    ${GAMBATTE_CORE_DIR}/interruptrequester.cpp
+    ${GAMBATTE_CORE_DIR}/gambatte-memory.cpp
+    ${GAMBATTE_CORE_DIR}/sound.cpp
+    ${GAMBATTE_CORE_DIR}/statesaver.cpp
+    ${GAMBATTE_CORE_DIR}/tima.cpp
+    ${GAMBATTE_CORE_DIR}/video.cpp
+    ${GAMBATTE_CORE_DIR}/video_libretro.cpp
+    ${GAMBATTE_CORE_DIR}/mem/cartridge.cpp
+    ${GAMBATTE_CORE_DIR}/mem/cartridge_libretro.cpp
+    ${GAMBATTE_CORE_DIR}/mem/huc3.cpp
+    ${GAMBATTE_CORE_DIR}/mem/memptrs.cpp
+    ${GAMBATTE_CORE_DIR}/mem/rtc.cpp
+    ${GAMBATTE_CORE_DIR}/sound/channel1.cpp
+    ${GAMBATTE_CORE_DIR}/sound/channel2.cpp
+    ${GAMBATTE_CORE_DIR}/sound/channel3.cpp
+    ${GAMBATTE_CORE_DIR}/sound/channel4.cpp
+    ${GAMBATTE_CORE_DIR}/sound/duty_unit.cpp
+    ${GAMBATTE_CORE_DIR}/sound/envelope_unit.cpp
+    ${GAMBATTE_CORE_DIR}/sound/length_counter.cpp
+    ${GAMBATTE_CORE_DIR}/video/ly_counter.cpp
+    ${GAMBATTE_CORE_DIR}/video/lyc_irq.cpp
+    ${GAMBATTE_CORE_DIR}/video/next_m0_time.cpp
+    ${GAMBATTE_CORE_DIR}/video/ppu.cpp
+    ${GAMBATTE_CORE_DIR}/video/sprite_mapper.cpp
+    ${GAMBATTE_LR_DIR}/libretro.cpp
+    ${GAMBATTE_LRC_DIR}/compat/compat_posix_string.c
+    ${GAMBATTE_LRC_DIR}/compat/compat_snprintf.c
+    ${GAMBATTE_LRC_DIR}/compat/compat_strcasestr.c
+    ${GAMBATTE_LRC_DIR}/compat/compat_strl.c
+    ${GAMBATTE_LRC_DIR}/compat/fopen_utf8.c
+    ${GAMBATTE_LRC_DIR}/encodings/encoding_utf.c
+    ${GAMBATTE_LRC_DIR}/file/file_path.c
+    ${GAMBATTE_LRC_DIR}/file/file_path_io.c
+    ${GAMBATTE_LRC_DIR}/streams/file_stream.c
+    ${GAMBATTE_LRC_DIR}/streams/file_stream_transforms.c
+    ${GAMBATTE_LRC_DIR}/string/stdstring.c
+    ${GAMBATTE_LRC_DIR}/time/rtime.c
+    ${GAMBATTE_LRC_DIR}/vfs/vfs_implementation.c
+)
+
+add_library(gambatte_core_obj OBJECT ${GAMBATTE_SRC})
+target_include_directories(gambatte_core_obj PRIVATE
+    ${GAMBATTE_CORE_DIR}
+    ${GAMBATTE_PATH}/libgambatte/include
+    ${GAMBATTE_PATH}/common
+    ${GAMBATTE_LR_DIR}
+    ${GAMBATTE_LRC_DIR}/include
+)
+target_compile_definitions(gambatte_core_obj PRIVATE __LIBRETRO__)
+target_compile_options(gambatte_core_obj PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:-include;cstdint>")
+if (PLATFORM_SWITCH)
+    target_compile_definitions(gambatte_core_obj PRIVATE __SWITCH__ SWITCH HAVE_LIBNX)
+endif()
+apply_retro_symbol_rename(gambatte_core_obj gambatte)
+apply_data_symbol_rename(gambatte_core_obj gambatte)
+set_target_properties(gambatte_core_obj PROPERTIES
+    CXX_STANDARD 11
+    C_STANDARD 11
+)
+add_isolated_libretro_core(gambatte_core gambatte_core_obj gambatte)
 
 # =========================================================
 # Snes9x 2005 (SNES) 核心

@@ -204,6 +204,14 @@ public:
 
     struct CheatPathReq { std::string path; bool pending = false; };
     struct CheatApplyReq { std::vector<CheatEntry> cheats; bool pending = false; };
+    struct DiskControlReq {
+        enum class Action { None, Eject, SetIndex };
+        Action action = Action::None;
+        bool pending = false;
+        bool ejected = false;
+        unsigned index = 0;
+        bool insertAfter = true;
+    };
 
     /// UI 线程调用：请求在游戏线程中更新金手指文件路径。
     void requestCheatPathUpdate(std::string path) {
@@ -244,6 +252,35 @@ public:
         req.pending = true;
         m_pendingCheatsApply.clear();
         m_hasPendingCheatsApply = false;
+        return req;
+    }
+
+    // ---- 磁盘控制信号 -------------------------------------------------
+
+    /// UI 线程调用：请求弹出/插入虚拟磁盘。
+    void requestDiskEjectState(bool ejected) {
+        std::lock_guard<std::mutex> lock(m_diskControlMutex);
+        m_pendingDiskControl.action = DiskControlReq::Action::Eject;
+        m_pendingDiskControl.pending = true;
+        m_pendingDiskControl.ejected = ejected;
+    }
+
+    /// UI 线程调用：请求切换磁盘面。insertAfter=true 会在切换后自动插入。
+    void requestDiskImageIndex(unsigned index, bool insertAfter = true) {
+        std::lock_guard<std::mutex> lock(m_diskControlMutex);
+        m_pendingDiskControl.action = DiskControlReq::Action::SetIndex;
+        m_pendingDiskControl.pending = true;
+        m_pendingDiskControl.index = index;
+        m_pendingDiskControl.insertAfter = insertAfter;
+    }
+
+    /// 游戏线程调用：获取并消费磁盘控制请求。
+    DiskControlReq consumeDiskControl() {
+        std::lock_guard<std::mutex> lock(m_diskControlMutex);
+        if (!m_pendingDiskControl.pending)
+            return {};
+        DiskControlReq req = m_pendingDiskControl;
+        m_pendingDiskControl = {};
         return req;
     }
 
@@ -301,6 +338,10 @@ public:
             m_pendingCheatsApply.clear();
             m_hasPendingCheatsApply = false;
         }
+        {
+            std::lock_guard<std::mutex> lock(m_diskControlMutex);
+            m_pendingDiskControl = {};
+        }
         m_pendingAutoSave.store(-1, std::memory_order_relaxed);
         m_autoSaveDone.store(false, std::memory_order_relaxed);
         m_pendingConfigUpdate.store(false, std::memory_order_relaxed);
@@ -326,6 +367,8 @@ private:
     bool m_hasPendingCheatPath = false;
     std::vector<CheatEntry> m_pendingCheatsApply;
     bool m_hasPendingCheatsApply = false;
+    std::mutex m_diskControlMutex;
+    DiskControlReq m_pendingDiskControl;
     std::atomic<int>  m_pendingAutoSave{-1};            ///< 待自动存档槽位（-1=无）
     std::atomic<bool> m_autoSaveDone{false};             ///< 退出自动存档是否已处理完毕
     std::atomic<bool> m_pendingConfigUpdate{false};    ///< 待刷新核心配置

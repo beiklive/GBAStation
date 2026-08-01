@@ -453,6 +453,26 @@ namespace beiklive
             return dirItem.itemType == beiklive::enums::FileType::THREEDS_ROM;
         }
 
+        bool shouldUseArcadeExternalNro(const beiklive::GameEntry& entry)
+        {
+            return entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuArcade);
+        }
+
+        bool shouldUseArcadeExternalNro(const beiklive::DirListData& dirItem)
+        {
+            return dirItem.itemType == beiklive::enums::FileType::ARCADE_ROM;
+        }
+
+        bool shouldUseDreamcastExternalNro(const beiklive::GameEntry& entry)
+        {
+            return entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast);
+        }
+
+        bool shouldUseDreamcastExternalNro(const beiklive::DirListData& dirItem)
+        {
+            return dirItem.itemType == beiklive::enums::FileType::DREAMCAST_ROM;
+        }
+
         [[maybe_unused]] bool exportThreeDsCoreConfig()
         {
             if (!beiklive::SettingManager)
@@ -652,6 +672,30 @@ namespace beiklive
             return true;
         }
 
+        bool launchExternalCoreNro(const std::string& romPath,
+                                   const std::string& title,
+                                   const std::string& label,
+                                   const char* pathKey,
+                                   const char* defaultPath,
+                                   const char* returnKey)
+        {
+            const std::string nroPath = GET_SETTING_KEY_STR(pathKey, defaultPath);
+            const std::string returnPath = GET_SETTING_KEY_STR(returnKey, "sdmc:/switch/GBAStation.nro");
+
+            auto result = beiklive::switch_platform::launchNroOnExit({nroPath, romPath, returnPath});
+            if (!result.success)
+            {
+                brls::Logger::error("{} external NRO launch failed for {}: {}", label, title, result.message);
+                brls::Application::notify(label + std::string("独立NRO启动失败：") + result.message);
+                return false;
+            }
+
+            brls::Logger::info("{} external NRO configured for {}: {}", label, title, result.message);
+            brls::Application::notify("正在启动" + label + "独立NRO...");
+            brls::sync([]() { brls::Application::quit(); });
+            return true;
+        }
+
 #endif
     }
 
@@ -811,6 +855,28 @@ namespace beiklive
             return false;
 #endif
         }
+        if (shouldUseArcadeExternalNro(entry))
+        {
+#ifdef __SWITCH__
+            return launchExternalCoreNro(entry.path, entry.title, "Arcade",
+                "arcade.externalNro.path", "/GBAStation/core/FBNeo.nro",
+                "arcade.externalNro.returnPath");
+#else
+            brls::Application::notify("Arcade 独立运行时仅支持 Switch");
+            return false;
+#endif
+        }
+        if (shouldUseDreamcastExternalNro(entry))
+        {
+#ifdef __SWITCH__
+            return launchExternalCoreNro(entry.path, entry.title, "DC",
+                "dc.externalNro.path", "/GBAStation/core/Flycast.nro",
+                "dc.externalNro.returnPath");
+#else
+            brls::Application::notify("DC 独立运行时仅支持 Switch");
+            return false;
+#endif
+        }
 
         auto* gamePage = new beiklive::GamePage(entry);
         m_gamePage = gamePage;
@@ -852,6 +918,32 @@ namespace beiklive
             ensureGameDbEntryForFileLaunch(dirItem);
 #ifdef __SWITCH__
             launchNdsExternalNro(dirItem.fullPath, dirItem.fileName);
+            return;
+#endif
+        }
+        if (shouldUseArcadeExternalNro(dirItem))
+        {
+            ensureGameDbEntryForFileLaunch(dirItem);
+#ifdef __SWITCH__
+            launchExternalCoreNro(dirItem.fullPath, dirItem.fileName, "Arcade",
+                "arcade.externalNro.path", "/GBAStation/core/FBNeo.nro",
+                "arcade.externalNro.returnPath");
+            return;
+#else
+            brls::Application::notify("Arcade 独立运行时仅支持 Switch");
+            return;
+#endif
+        }
+        if (shouldUseDreamcastExternalNro(dirItem))
+        {
+            ensureGameDbEntryForFileLaunch(dirItem);
+#ifdef __SWITCH__
+            launchExternalCoreNro(dirItem.fullPath, dirItem.fileName, "DC",
+                "dc.externalNro.path", "/GBAStation/core/Flycast.nro",
+                "dc.externalNro.returnPath");
+            return;
+#else
+            brls::Application::notify("DC 独立运行时仅支持 Switch");
             return;
 #endif
         }

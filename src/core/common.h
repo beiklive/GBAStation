@@ -142,6 +142,10 @@ namespace beiklive // 全局功能函数
         static const std::vector<CoreOption> gbaCores = {
             {"mgba", "mGBA", CoreType::Mgba},
         };
+        static const std::vector<CoreOption> gbCores = {
+            {"mgba", "mGBA", CoreType::Mgba},
+            {"gambatte", "Gambatte", CoreType::Gambatte},
+        };
         static const std::vector<CoreOption> nesCores = {
             {"nestopia", "Nestopia", CoreType::Nestopia},
             {"fceumm", "FCEUmm", CoreType::Fceumm},
@@ -159,14 +163,21 @@ namespace beiklive // 全局功能函数
         static const std::vector<CoreOption> genesisCores = {
             {"genesis-plus-gx", "Genesis Plus GX", CoreType::Genesis},
         };
+        static const std::vector<CoreOption> arcadeCores = {
+            {"fbneo-external", "FBNeo", CoreType::Mgba},
+        };
+        static const std::vector<CoreOption> dreamcastCores = {
+            {"flycast-external", "Flycast", CoreType::Mgba},
+        };
         static const std::vector<CoreOption> emptyCores;
 
         switch (platform)
         {
         case (int)beiklive::enums::EmuPlatform::EmuGBA:
+            return gbaCores;
         case (int)beiklive::enums::EmuPlatform::EmuGBC:
         case (int)beiklive::enums::EmuPlatform::EmuGB:
-            return gbaCores;
+            return gbCores;
         case (int)beiklive::enums::EmuPlatform::EmuNES:
             return nesCores;
         case (int)beiklive::enums::EmuPlatform::EmuSNES:
@@ -177,6 +188,10 @@ namespace beiklive // 全局功能函数
             return threeDsCores;
         case (int)beiklive::enums::EmuPlatform::EmuGenesis:
             return genesisCores;
+        case (int)beiklive::enums::EmuPlatform::EmuArcade:
+            return arcadeCores;
+        case (int)beiklive::enums::EmuPlatform::EmuDreamcast:
+            return dreamcastCores;
         default:
             return emptyCores;
         }
@@ -200,6 +215,10 @@ namespace beiklive // 全局功能函数
             return "azahar";
         case (int)beiklive::enums::EmuPlatform::EmuGenesis:
             return "genesis-plus-gx";
+        case (int)beiklive::enums::EmuPlatform::EmuArcade:
+            return "fbneo-external";
+        case (int)beiklive::enums::EmuPlatform::EmuDreamcast:
+            return "flycast-external";
         default:
             return "";
         }
@@ -257,6 +276,9 @@ namespace beiklive // 全局功能函数
             return "";  // Snes9x 静态链接，无需路径
         case (int)beiklive::enums::EmuPlatform::EmuGenesis:
             return "";  // Genesis Plus GX 源码静态接入，无需路径
+        case (int)beiklive::enums::EmuPlatform::EmuArcade:
+        case (int)beiklive::enums::EmuPlatform::EmuDreamcast:
+            return "";  // 大型核心走独立 NRO 配置
         default:
             return "";
         }

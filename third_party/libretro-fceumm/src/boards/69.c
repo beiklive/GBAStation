@@ -114,8 +114,13 @@ static SFORMAT SStateRegs[] =
 	{ &sndcmd, 1, "SCMD" },
 	{ sreg, 14, "SREG" },
 
-/* Ignoring these sound state files for Wii since it causes states unable to load */
-#ifndef GEKKO
+/* These were excluded on Wii/GC (GEKKO) after 2018 reports of states
+ * failing to load on big-endian hosts. The failures traced back to the
+ * since-fixed FlipByteOrder over-iteration no-op and ReadStateChunk's
+ * unchecked skip-seek, not to these entries: they are plain 4-byte
+ * scalars with FCEUSTATE_RLSB, which the state layer byte-swaps
+ * correctly on MSB_FIRST hosts. Register them everywhere so big-endian
+ * builds save and restore the full expansion-audio state. */
 	{ &dcount[0], 4 | FCEUSTATE_RLSB, "DCT0" },
 	{ &dcount[1], 4 | FCEUSTATE_RLSB, "DCT1" },
 	{ &dcount[2], 4 | FCEUSTATE_RLSB, "DCT2" },
@@ -125,7 +130,6 @@ static SFORMAT SStateRegs[] =
 	{ &CAYBC[0], 4 | FCEUSTATE_RLSB, "BC00" },
 	{ &CAYBC[1], 4 | FCEUSTATE_RLSB, "BC01" },
 	{ &CAYBC[2], 4 | FCEUSTATE_RLSB, "BC02" },
-#endif
 
 	{ 0 }
 };
@@ -162,6 +166,7 @@ static void DoAYSQ(int x) {
 	int V;
 
 	amp += amp >> 1;
+	amp = GetExpOutput(SND_S5B, amp);
 
 	start = CAYBC[x];
 	end = (SOUNDTS << 16) / soundtsinc;
@@ -186,6 +191,7 @@ static void DoAYSQHQ(int x) {
 	int32_t amp = (sreg[0x8 + x] & 15) << 6;
 
 	amp += amp >> 1;
+	amp = GetExpOutput(SND_S5B, amp);
 
 	if (!(sreg[0x7] & (1 << x))) {
 		for (V = CAYBC[x]; V < SOUNDTS; V++) {

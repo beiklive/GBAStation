@@ -80,6 +80,12 @@ typedef struct {
 	int SquareVolume[2];
 	int NoiseVolume;
 	int PCMVolume;
+	int ExpVolume[6];	/* Per-channel expansion-audio volume,
+	                     * indexed by SND_FDS..SND_MMC5 (see
+	                     * src/sound.h).  Scale is 0-256 where 256 =
+	                     * unscaled output and 0 = silence.  Default
+	                     * 256 leaves output bit-identical to builds
+	                     * predating issue #512. */
 	int GameGenie;
 
 	/* Current first and last rendered scanlines. */
@@ -94,6 +100,28 @@ typedef struct {
 	uint32_t SndRate;
 	int soundq;
 	int lowpass;
+	int RemoveTriangleNoise;	/* Mute triangle channel when its period
+	                             * is low enough to produce only ultrasonic
+	                             * output (period <= 3, > ~12 kHz at NTSC),
+	                             * which the DAC reconstruction filter
+	                             * folds back as audible popping in HQ
+	                             * mode.  LQ already silences these
+	                             * unconditionally; this option mirrors
+	                             * that behaviour in HQ.  Default off to
+	                             * preserve existing HQ output bit-exactly
+	                             * when the option is not set. */
+	int ReduceDMCPopping;		/* Smooth direct writes to the DMC DAC
+	                             * register ($4011) by stepping the DAC
+	                             * only halfway from its previous value
+	                             * toward the newly written value, which
+	                             * attenuates the audible click games
+	                             * like Castlevania II generate when they
+	                             * pulse the DAC for manual sample
+	                             * playback.  Normal DPCM bit-decode
+	                             * playback (the +/-2 per bit update) is
+	                             * NOT affected.  Default off so the DAC
+	                             * trajectory is bit-exact when the
+	                             * option is not set. */
 } FCEUS;
 
 extern FCEUS FSettings;

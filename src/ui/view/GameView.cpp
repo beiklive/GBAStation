@@ -16,6 +16,7 @@
 #include <cmath>
 #include <mutex>
 #include <utility>
+#include <borealis/views/dialog.hpp>
 
 // stb_image_write 用于保存存档缩略图（PNG 格式）
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -69,6 +70,15 @@ namespace
     bool shouldSetupCoreOnGameThread(int platform)
     {
         return isNdsPlatform(platform);
+    }
+
+    void showCoreSetupError(const std::string& message)
+    {
+        if (message.empty())
+            return;
+        auto* dialog = new brls::Dialog(message);
+        dialog->addButton("确定", []() {});
+        dialog->open();
     }
 
     std::pair<unsigned, unsigned> rewindThumbSizeForFrame(unsigned srcW, unsigned srcH)
@@ -1995,6 +2005,7 @@ namespace beiklive
             double fps = m_core->Fps();
             double srate = m_core->SampleRate();
             _initAudioForCore(fps, srate);
+            _refreshDiskControlState();
             GameSignal::instance().resetAll();
             _initPlayTimeTracking();
             brls::Logger::debug("[GameView] starting game thread...");
@@ -2005,6 +2016,7 @@ namespace beiklive
             brls::Logger::error("核心初始化失败，平台={}, 路径={}",
                                 beiklive::tools::platformName(m_gameEntry.platform),
                                 m_gameEntry.path);
+            showCoreSetupError(m_core->LastError());
             delete m_core;
             m_core = nullptr;
         }
@@ -2029,6 +2041,65 @@ namespace beiklive
         if (m_gameThread.joinable())
             m_gameThread.join();
         brls::Logger::debug("[GameView] _stopGameThread end");
+    }
+
+    LibretroLoader::DiskControlState GameView::getDiskControlStateSnapshot() const
+    {
+        std::lock_guard<std::mutex> lock(m_diskControlMutex);
+        return m_diskControlState;
+    }
+
+    void GameView::requestDiskEjectState(bool ejected)
+    {
+        GameSignal::instance().requestDiskEjectState(ejected);
+    }
+
+    void GameView::requestDiskImageIndex(unsigned index, bool insertAfter)
+    {
+        GameSignal::instance().requestDiskImageIndex(index, insertAfter);
+    }
+
+    void GameView::_refreshDiskControlState()
+    {
+        LibretroLoader::DiskControlState state;
+        if (m_core && m_core->IsReady())
+            state = m_core->GetDiskControlState();
+        std::lock_guard<std::mutex> lock(m_diskControlMutex);
+        m_diskControlState = std::move(state);
+    }
+
+    void GameView::_processDiskControlSignal(GameSignal& sig)
+    {
+        if (!m_core || !m_core->IsReady())
+            return;
+
+        auto req = sig.consumeDiskControl();
+        if (!req.pending)
+        {
+            _refreshDiskControlState();
+            return;
+        }
+
+        bool ok = false;
+        std::string message;
+        if (req.action == GameSignal::DiskControlReq::Action::Eject)
+        {
+            ok = m_core->SetDiskEjected(req.ejected);
+            message = ok
+                ? (req.ejected ? "已弹出磁盘" : "已插入磁盘")
+                : "磁盘操作失败";
+        }
+        else if (req.action == GameSignal::DiskControlReq::Action::SetIndex)
+        {
+            ok = m_core->SetDiskImageIndex(req.index, req.insertAfter);
+            message = ok
+                ? "已切换到磁盘面 " + std::to_string(req.index + 1)
+                : "切换磁盘面失败";
+        }
+
+        _refreshDiskControlState();
+        if (!message.empty())
+            brls::sync([message]() { brls::Application::notify(message); });
     }
 
     // ============================================================
@@ -2437,6 +2508,8 @@ namespace beiklive
                 brls::Logger::error("核心初始化失败，平台={}, 路径={}",
                                     beiklive::tools::platformName(m_gameEntry.platform),
                                     m_gameEntry.path);
+                const std::string error = m_core->LastError();
+                brls::sync([error]() { showCoreSetupError(error); });
                 m_running.store(false, std::memory_order_release);
                 return;
             }
@@ -2447,6 +2520,7 @@ namespace beiklive
             double fps = m_core->Fps();
             double srate = m_core->SampleRate();
             _initAudioForCore(fps, srate);
+            _refreshDiskControlState();
             _initPlayTimeTracking();
         }
 
@@ -2577,6 +2651,7 @@ namespace beiklive
                 }
                 // 暂停菜单中切换/编辑金手指时，也要及时同步到核心。
                 processCheatSignals(sig, true);
+                _processDiskControlSignal(sig);
                 // 暂停时允许截图，便于在菜单暂停后保存当前画面。
                 if (sig.consumeScreenshot())
                     _doScreenshot();
@@ -2647,6 +2722,9 @@ namespace beiklive
                 m_core->NotifyConfigUpdated();
                 _syncNdsVideoFrameMode();
             }
+
+            // ---- 磁盘控制 ----
+            _processDiskControlSignal(sig);
 
             // ---- 退出自动存档 ----
             {

@@ -38,6 +38,10 @@
 #include        "video.h"
 #include        "input.h"
 
+#ifdef HAVE_HDPACK
+#include        "hdpack/hdpack.h"
+#endif
+
 #define VBlankON        (PPU[0] & 0x80)		/* Generate VBlank NMI */
 #define Sprite16        (PPU[0] & 0x20)		/* Sprites 8x16/8x8 */
 #define BGAdrHI         (PPU[0] & 0x10)		/* BG pattern adr $0000/$1000 */
@@ -130,6 +134,44 @@ uint8_t NTARAM[0x800], PALRAM[0x20], SPRAM[0x100], SPRBUF[0x100];
 uint8_t UPALRAM[0x03];/* for 0x4/0x8/0xC addresses in palette, the ones in
 					 * 0x20 are 0 to not break fceu rendering.
 					 */
+
+/* Background pair LUT for pputile.h's per-tile 8-pixel palette gather.
+ * Each 8-bit chunk of pixdata indexes two 4-bit pens (low nibble = even
+ * pixel, high nibble = odd), so a 256-entry uint16_t table maps each
+ * pixdata byte to a pre-packed 2-pen pair, letting the per-tile body
+ * emit four pair-lookups and a single 64-bit store instead of eight
+ * serial nibble-load-store iterations.
+ *
+ * Rebuilt INSIDE RefreshLine just before the pputile.h includes, so
+ * that:
+ *   (a) any PALRAM[0x00..0x0F] change since the previous RefreshLine
+ *       is reflected on the next tile span, and
+ *   (b) crucially, the 0x40 "background priority" bit that RefreshLine
+ *       OR's into Pal[0/4/8/0xC] right before rendering -- and ANDs
+ *       off again after -- is captured in the LUT.  Without that the
+ *       sprite compositor cannot tell BG-color pixels apart from the
+ *       universal background, breaking sprite priority for any game
+ *       that hits Pal[0x04/0x08/0x0C] (e.g. Mega Man 3 sprites). */
+static uint16_t fceu_bg_pair_lut[256];
+
+static void FCEU_BuildBgPairLUT(void)
+{
+	int b;
+	for (b = 0; b < 256; b++)
+	{
+#ifdef MSB_FIRST
+		/* Big-endian: the 64-bit tile word in pputile.h is stored
+		 * most-significant byte first, so the even (leftmost) pen of
+		 * each pair must live in the HIGH byte of the LUT entry for
+		 * it to land at the lower memory address. */
+		fceu_bg_pair_lut[b] = ((uint16_t)PALRAM[b & 0x0F] << 8) |
+		                       (uint16_t)PALRAM[b >> 4];
+#else
+		fceu_bg_pair_lut[b] = (uint16_t)PALRAM[b & 0x0F] |
+		                      ((uint16_t)PALRAM[b >> 4] << 8);
+#endif
+	}
+}
 
 #define MMC5SPRVRAMADR(V)   &MMC5SPRVPage[(V) >> 10][(V)]
 #define VRAMADR(V)          &VPage[(V) >> 10][(V)]
@@ -482,6 +524,17 @@ static void FASTAPASS(1) RefreshLine(int lastpixel) {
 	Pal[8] |= 64;
 	Pal[0xC] |= 64;
 
+	/* Rebuild the bg pair LUT *after* the priority |= 64 modification
+	 * above so that the LUT entries for PALRAM[0/4/8/0xC] carry the
+	 * 0x40 bit while the pputile.h includes below run.  The matching
+	 * Pal[i] &= 63 cleanup at the bottom of this function does NOT
+	 * require a second rebuild: the LUT is only consumed by the
+	 * pputile.h block, which runs between the |= 64 and the &= 63.
+	 * The LUT is also rebuilt at every mid-scanline RefreshLine call
+	 * via FCEUPPU_LineUpdate, picking up any $3F00..$3F0F write the
+	 * CPU made since the previous tile span. */
+	FCEU_BuildBgPairLUT();
+
 	/* This high-level graphics MMC5 emulation code was written for MMC5 carts in "CL" mode.
 	 * It's probably not totally correct for carts in "SL" mode.
 	 */
@@ -648,6 +701,13 @@ static void DoLine(void)
 	target = XBuf + ((scanline < 240 ? scanline : 240) << 8);
 	dtarget = XDBuf + ((scanline < 240 ? scanline : 240) << 8);
 
+#ifdef HAVE_HDPACK
+	/* HD packs: snapshot the loopy-t / fine-x scroll registers at line
+	 * start and invalidate the per-line tile fetch slots. */
+	if (hdnes_active && scanline < 240)
+		HDNes_LineStart(scanline);
+#endif
+
 	if (MMC5Hack && (ScreenON || SpriteON)) MMC5_hb(scanline);
 
 	X6502_Run(256);
@@ -659,6 +719,15 @@ static void DoLine(void)
 		tem |= 0x40404040;
 		FCEU_dwmemset(target, tem, 256);
 	}
+
+#ifdef HAVE_HDPACK
+	/* HD packs: the line's XBuf still holds pure background pixels
+	 * here (bit 6 = colour-0 transparency), which is exactly what the
+	 * per-pixel HD screen info needs; sprites are merged from the
+	 * records made by FetchSpriteData on the previous line. */
+	if (hdnes_active && scanline < 240)
+		HDNes_RecordLine(scanline, target, rendis);
+#endif
 
 	if (SpriteON)
 		CopySprites(target);
@@ -749,6 +818,11 @@ static void FetchSpriteData(void) {
 	vofs = (uint32_t)(P0 & 0x8 & (((P0 & 0x20) ^ 0x20) >> 2)) << 9;
 	H += (P0 & 0x20) >> 2;
 
+#ifdef HAVE_HDPACK
+	if (hdnes_active)
+		HDNes_SpriteFetchStart();
+#endif
+
 	if (!PPU_hook)
 		for (n = 63; n >= 0; n--, spr++) {
 			if ((uint32_t)(scanline - spr->y) >= H) continue;
@@ -795,6 +869,18 @@ static void FetchSpriteData(void) {
 					 * strict-alignment hosts. The compiler emits the
 					 * same single 32-bit move on x86/ARM. */
 					memcpy(&SPRBUF[ns << 2], &dst, 4);
+
+#ifdef HAVE_HDPACK
+					/* HD packs: record the sprite for next
+					 * line's per-pixel assembly.  vadr has
+					 * v-flip and the 8x16 half applied, so
+					 * (vadr & 7) is the source row and
+					 * C - (vadr & 7) the 16-byte tile base. */
+					if (hdnes_active)
+						HDNes_RecordSprite(ns, spr->x, spr->atr,
+							C - (vadr & 7), (uint8_t)(vadr & 7),
+							dst.ca[0], dst.ca[1]);
+#endif
 				}
 
 				ns++;
@@ -848,6 +934,18 @@ static void FetchSpriteData(void) {
 
 
 					memcpy(&SPRBUF[ns << 2], &dst, 4);
+
+#ifdef HAVE_HDPACK
+					/* HD packs: record the sprite for next
+					 * line's per-pixel assembly.  vadr has
+					 * v-flip and the 8x16 half applied, so
+					 * (vadr & 7) is the source row and
+					 * C - (vadr & 7) the 16-byte tile base. */
+					if (hdnes_active)
+						HDNes_RecordSprite(ns, spr->x, spr->atr,
+							C - (vadr & 7), (uint8_t)(vadr & 7),
+							dst.ca[0], dst.ca[1]);
+#endif
 				}
 
 				ns++;

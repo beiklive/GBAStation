@@ -400,6 +400,20 @@ namespace beiklive
                 m_gameView->applyCheatsUpdate(cheats);
         });
 
+        m_gameMenuView->setDiskStateCallback([this]() -> LibretroLoader::DiskControlState {
+            if (auto* gameView = dynamic_cast<GameView*>(m_gameView))
+                return gameView->getDiskControlStateSnapshot();
+            return {};
+        });
+        m_gameMenuView->setDiskEjectCallback([this](bool ejected) {
+            if (auto* gameView = dynamic_cast<GameView*>(m_gameView))
+                gameView->requestDiskEjectState(ejected);
+        });
+        m_gameMenuView->setDiskIndexCallback([this](unsigned index) {
+            if (auto* gameView = dynamic_cast<GameView*>(m_gameView))
+                gameView->requestDiskImageIndex(index, true);
+        });
+
         // 注入画面设置回调
         m_gameMenuView->setDisplayModeCallback([this](const std::string& mode) {
             if (m_gameView) m_gameView->_onDisplayModeChange(mode);
