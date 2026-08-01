@@ -50,7 +50,7 @@ void UiEmu::addVideo(uint8_t **pixels, int *pitch,
 int UiEmu::load(const Game &game) {
     printf("UiEmu::load: name: %s, path: %s\n",
            game.path.c_str(), game.romsPath.c_str());
-    pMain->getUiStatusBox()->show("TIPS: PRESS MENU1 / START BUTTON FOR IN GAME MENU...");
+    pMain->getUiStatusBox()->show("提示：按菜单热键打开游戏菜单");
     currentGame = game;
 
     // set fps text on top
@@ -133,10 +133,13 @@ bool UiEmu::onInput(c2d::Input::Player *players) {
         return C2DObject::onInput(players);
     }
 
-    // look for player 1 menu button (Menu1 is +/Start on Switch).
-    // Keep the old Menu1 + Menu2 combo working for users with existing configs.
-    if ((players[0].buttons & Input::Button::Menu1) ||
-        ((players[0].buttons & Input::Button::Menu1) && (players[0].buttons & Input::Button::Menu2))) {
+    // GBAStation owns the in-game menu hotkey. For FBNeo this is fed from
+    // arcade.hotkey.menu.pad, so Start/Select can remain normal game inputs.
+    auto menu2 = pMain->getConfig()->get(PEMUConfig::OptId::JOY_MENU2, true);
+    const bool menu1Pressed = players[0].buttons & Input::Button::Menu1;
+    const bool menu2Pressed = players[0].buttons & Input::Button::Menu2;
+    const bool menu2Disabled = menu2 && menu2->getInteger() < 0;
+    if (menu1Pressed && (menu2Disabled || menu2Pressed)) {
         pause();
         pMain->getUiMenu()->load(true);
         pMain->getInput()->clear();

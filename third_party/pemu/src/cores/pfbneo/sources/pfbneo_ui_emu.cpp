@@ -12,6 +12,13 @@
 #include "pfbneo_utility.h"
 #include "retro_input_wrapper.h"
 
+#include <algorithm>
+#include <cctype>
+#include <fstream>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
 using namespace c2d;
 using namespace pemu;
 
@@ -41,6 +48,180 @@ static UINT32 myHighCol16(int r, int g, int b, int /* i */) {
 }
 
 static UiMain *uiInstance;
+
+namespace {
+
+std::string trim(const std::string &text) {
+    const auto begin = std::find_if_not(text.begin(), text.end(), [](unsigned char ch) {
+        return std::isspace(ch) != 0;
+    });
+    const auto end = std::find_if_not(text.rbegin(), text.rend(), [](unsigned char ch) {
+        return std::isspace(ch) != 0;
+    }).base();
+    if (begin >= end) return "";
+    return std::string(begin, end);
+}
+
+std::string unescapeConfigValue(const std::string &text) {
+    std::string out;
+    out.reserve(text.size());
+    bool escaped = false;
+    for (char ch: text) {
+        if (escaped) {
+            out.push_back(ch);
+            escaped = false;
+        } else if (ch == '\\') {
+            escaped = true;
+        } else {
+            out.push_back(ch);
+        }
+    }
+    if (escaped) out.push_back('\\');
+    return out;
+}
+
+std::unordered_map<std::string, std::string> loadGbastationNameMapping() {
+    std::unordered_map<std::string, std::string> values;
+    const std::vector<std::string> paths = {
+        "sdmc:/GBAStation/config/name_mapping.cfg",
+        "./GBAStation/config/name_mapping.cfg",
+        "GBAStation/config/name_mapping.cfg"
+    };
+
+    std::ifstream in;
+    for (const auto &path: paths) {
+        in.open(path);
+        if (in.is_open()) break;
+        in.clear();
+    }
+    if (!in.is_open()) return values;
+
+    std::string line;
+    while (std::getline(in, line)) {
+        line = trim(line);
+        if (line.empty() || line[0] == '#') continue;
+
+        const auto eq = line.find('=');
+        if (eq == std::string::npos) continue;
+
+        std::string key = trim(line.substr(0, eq));
+        std::string encoded = trim(line.substr(eq + 1));
+        if (key.empty()) continue;
+
+        if (encoded.rfind("s|", 0) == 0) {
+            values[key] = unescapeConfigValue(encoded.substr(2));
+        } else {
+            values[key] = encoded;
+        }
+    }
+
+    return values;
+}
+
+std::string mappingValue(const std::unordered_map<std::string, std::string> &values,
+                         const std::string &key,
+                         const std::string &fallback) {
+    auto it = values.find(key);
+    if (it == values.end() || it->second.empty()) return fallback;
+    return it->second;
+}
+
+std::vector<std::string> firstComboTokens(const std::string &value) {
+    std::vector<std::string> tokens;
+    if (value.empty() || value == "none") return tokens;
+
+    const auto firstAltEnd = value.find('|');
+    const std::string firstAlt = value.substr(0, firstAltEnd);
+    size_t start = 0;
+    while (start <= firstAlt.size()) {
+        const auto end = firstAlt.find('+', start);
+        std::string token = trim(firstAlt.substr(
+            start, end == std::string::npos ? std::string::npos : end - start));
+        if (!token.empty() && token != "none") tokens.push_back(token);
+        if (end == std::string::npos) break;
+        start = end + 1;
+    }
+
+    return tokens;
+}
+
+int tokenToPemuButton(const std::string &token, int fallback) {
+    if (token == "PAD_A") return KEY_JOY_A_DEFAULT;
+    if (token == "PAD_B") return KEY_JOY_B_DEFAULT;
+    if (token == "PAD_X") return KEY_JOY_X_DEFAULT;
+    if (token == "PAD_Y") return KEY_JOY_Y_DEFAULT;
+    if (token == "PAD_UP") return KEY_JOY_UP_DEFAULT;
+    if (token == "PAD_DOWN") return KEY_JOY_DOWN_DEFAULT;
+    if (token == "PAD_LEFT") return KEY_JOY_LEFT_DEFAULT;
+    if (token == "PAD_RIGHT") return KEY_JOY_RIGHT_DEFAULT;
+    if (token == "PAD_LB" || token == "PAD_L") return KEY_JOY_LB_DEFAULT;
+    if (token == "PAD_RB" || token == "PAD_R") return KEY_JOY_RB_DEFAULT;
+    if (token == "PAD_LT" || token == "PAD_ZL") return KEY_JOY_LT_DEFAULT;
+    if (token == "PAD_RT" || token == "PAD_ZR") return KEY_JOY_RT_DEFAULT;
+    if (token == "PAD_LSB" || token == "PAD_L3") return KEY_JOY_LS_DEFAULT;
+    if (token == "PAD_RSB" || token == "PAD_R3") return KEY_JOY_RS_DEFAULT;
+    if (token == "PAD_START") return KEY_JOY_START_DEFAULT;
+    if (token == "PAD_BACK" || token == "PAD_SELECT") return KEY_JOY_SELECT_DEFAULT;
+    return fallback;
+}
+
+void setOptionFromMapping(PEMUConfig *config,
+                          const std::unordered_map<std::string, std::string> &values,
+                          PEMUConfig::OptId optionId,
+                          const std::string &key,
+                          const std::string &fallback) {
+    auto option = config->get(optionId, true);
+    if (!option) return;
+
+    const auto tokens = firstComboTokens(mappingValue(values, key, fallback));
+    if (tokens.empty()) {
+        option->setInteger(-1);
+        return;
+    }
+
+    option->setInteger(tokenToPemuButton(tokens.front(), option->getInteger()));
+}
+
+void setMenuHotkeyFromMapping(PEMUConfig *config,
+                              const std::unordered_map<std::string, std::string> &values) {
+    auto menu1 = config->get(PEMUConfig::OptId::JOY_MENU1, true);
+    auto menu2 = config->get(PEMUConfig::OptId::JOY_MENU2, true);
+    if (!menu1 || !menu2) return;
+
+    const auto tokens = firstComboTokens(
+        mappingValue(values, "arcade.hotkey.menu.pad", "PAD_LT+PAD_RT"));
+    if (tokens.empty()) {
+        menu1->setInteger(KEY_JOY_LT_DEFAULT);
+        menu2->setInteger(KEY_JOY_RT_DEFAULT);
+        return;
+    }
+
+    menu1->setInteger(tokenToPemuButton(tokens[0], menu1->getInteger()));
+    menu2->setInteger(tokens.size() > 1 ? tokenToPemuButton(tokens[1], menu2->getInteger()) : -1);
+}
+
+void applyGbastationArcadeInputMapping(PEMUConfig *config) {
+    if (!config) return;
+
+    const auto values = loadGbastationNameMapping();
+    setOptionFromMapping(config, values, PEMUConfig::OptId::JOY_UP, "arcade.handle.up", "PAD_UP");
+    setOptionFromMapping(config, values, PEMUConfig::OptId::JOY_DOWN, "arcade.handle.down", "PAD_DOWN");
+    setOptionFromMapping(config, values, PEMUConfig::OptId::JOY_LEFT, "arcade.handle.left", "PAD_LEFT");
+    setOptionFromMapping(config, values, PEMUConfig::OptId::JOY_RIGHT, "arcade.handle.right", "PAD_RIGHT");
+    setOptionFromMapping(config, values, PEMUConfig::OptId::JOY_A, "arcade.handle.a", "PAD_A");
+    setOptionFromMapping(config, values, PEMUConfig::OptId::JOY_B, "arcade.handle.b", "PAD_B");
+    setOptionFromMapping(config, values, PEMUConfig::OptId::JOY_X, "arcade.handle.x", "PAD_X");
+    setOptionFromMapping(config, values, PEMUConfig::OptId::JOY_Y, "arcade.handle.y", "PAD_Y");
+    setOptionFromMapping(config, values, PEMUConfig::OptId::JOY_LT, "arcade.handle.l", "PAD_LB");
+    setOptionFromMapping(config, values, PEMUConfig::OptId::JOY_RT, "arcade.handle.r", "PAD_RB");
+    setOptionFromMapping(config, values, PEMUConfig::OptId::JOY_LB, "arcade.handle.l2", "PAD_LT");
+    setOptionFromMapping(config, values, PEMUConfig::OptId::JOY_RB, "arcade.handle.r2", "PAD_RT");
+    setOptionFromMapping(config, values, PEMUConfig::OptId::JOY_SELECT, "arcade.handle.select", "PAD_BACK");
+    setOptionFromMapping(config, values, PEMUConfig::OptId::JOY_START, "arcade.handle.start", "PAD_START");
+    setMenuHotkeyFromMapping(config, values);
+}
+
+}
 
 PFBAUiEmu::PFBAUiEmu(UiMain *ui) : UiEmu(ui) {
     printf("PFBAUiEmu()\n");
@@ -111,6 +292,7 @@ int PFBAUiEmu::getSekCpuCore() {
 int PFBAUiEmu::load(const ss_api::Game &game) {
     currentGame = game;
     BurnPathsSetGame(pMain->getIo(), Utility::removeExt(Utility::baseName(game.path)));
+    applyGbastationArcadeInputMapping(pMain->getConfig());
 
     PFBNEOUtility::setDriverActive(game);
     if (nBurnDrvActive >= nBurnDrvCount) {
@@ -256,33 +438,9 @@ void PFBAUiEmu::onUpdate() {
     // update fbneo inputs
     InputMake(true);
 
-    // handle diagnostic and reset switch
-    unsigned int buttons = pMain->getInput()->getButtons();
-    if (buttons & Input::Button::Select) {
-        if (clock.getElapsedTime().asSeconds() > 2) {
-            if (pgi_reset) {
-                pMain->getUiStatusBox()->show("TIPS: PRESS START "
-                                              "BUTTON 2 SECONDS FOR DIAG MENU...");
-                pgi_reset->Input.nVal = 1;
-                *(pgi_reset->Input.pVal) = pgi_reset->Input.nVal;
-            }
-            nCurrentFrame = 0;
-            nFramesEmulated = 0;
-            clock.restart();
-        }
-    } else if (buttons & Input::Button::Start) {
-        if (clock.getElapsedTime().asSeconds() > 2) {
-            if (pgi_diag) {
-                pMain->getUiStatusBox()->show("TIPS: PRESS COIN "
-                                              "BUTTON 2 SECONDS TO RESET CURRENT GAME...");
-                pgi_diag->Input.nVal = 1;
-                *(pgi_diag->Input.pVal) = pgi_diag->Input.nVal;
-            }
-            clock.restart();
-        }
-    } else {
-        clock.restart();
-    }
+    // GBAStation handles Arcade menus and hotkeys from the frontend. Do not
+    // let FBNeo long-press Start/Select enter its original service/reset menu.
+    clock.restart();
 
     // update fbneo video buffer and audio
 #ifdef __VITA__

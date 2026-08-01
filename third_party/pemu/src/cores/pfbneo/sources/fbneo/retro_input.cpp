@@ -2477,6 +2477,11 @@ INT32 GameInpDefault()
 
 static bool PollDiagInput()
 {
+#if 1
+	// GBAStation owns the in-game menu. Disable FBNeo's original diagnostic
+	// combo so Arcade games cannot open the upstream service/menu UI.
+	return false;
+#else
 	if (pgi_diag && diag_input)
 	{
 		bOneDiagInputPressed = false;
@@ -2530,6 +2535,7 @@ static bool PollDiagInput()
 
 	// Return false to poll game inputs
 	return false;
+#endif
 }
 
 void SetDefaultDeviceTypes()

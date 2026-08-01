@@ -112,6 +112,10 @@ std::string translateOptionName(const std::string &name) {
 bool groupUsesGameConfig(const std::string &group) {
     return group == "EMULATION" || group == "GAMEPAD" || group == "KEYBOARD";
 }
+
+bool isInputConfigGroup(const std::string &group) {
+    return group == "GAMEPAD" || group == "KEYBOARD";
+}
 }
 
 class MenuLine : public c2d::RectangleShape {
@@ -155,6 +159,7 @@ public:
         setVisibility(Visibility::Visible);
         p_sprite->setVisibility(Visibility::Hidden);
         p_name->setString(name);
+        p_name->setSizeMax((MenuLine::getSize().x * 0.55f), 0);
         p_value->setVisibility(Visibility::Visible);
         setFillColor(Color::Transparent);
 
@@ -163,6 +168,7 @@ public:
             // custom options
             if (isTabHeader(name)) {
                 p_name->setString(name.substr(4));
+                p_name->setSizeMax((MenuLine::getSize().x * 0.96f), 0);
                 p_value->setVisibility(Visibility::Hidden);
                 setFillColor(pMain->getUiMenu()->getOutlineColor());
                 return;
@@ -313,6 +319,7 @@ void UiMenu::buildTabs() {
     for (auto &group: *groups) {
         const std::string groupName = group.getName();
         if (groupName == "ROMS") continue;
+        if (isInputConfigGroup(groupName)) continue;
 
         bool hasVisibleOption = false;
         auto options = group.getOptions();
@@ -362,7 +369,7 @@ void UiMenu::rebuildCurrentTab() {
     }
 
     const auto &tab = menu_tabs.at(tabIndex);
-    menu_options.push_back({std::string(MENU_TAB_PREFIX) + "L/R 切换：" + tab.name, nullptr});
+    menu_options.push_back({std::string(MENU_TAB_PREFIX) + "ZL/ZR 切换：" + tab.name, nullptr});
 
     if (tab.actionPage) {
         if (frontendGameMenu) {
