@@ -1708,7 +1708,7 @@ private:
             {"GBA 按键映射", "", "Game Boy Advance 游戏", false},
             {"GBC 按键映射", "gbc.", "Game Boy Color 游戏", false},
             {"GB 按键映射", "gb.", "Game Boy 游戏", false},
-            {"NES 按键映射", "nes.", "Nintendo Entertainment System 游戏", false},
+            {"FC/NES 按键映射", "nes.", "Nintendo Entertainment System 游戏", false},
             {"SFC 按键映射", "sfc.", "Super Famicom 游戏", false},
             {"NDS 按键映射", "nds.", "Nintendo DS 游戏与触摸指针热键", true},
             {"3DS 按键映射", "3ds.", "Nintendo 3DS 游戏与双摇杆控制", false},
