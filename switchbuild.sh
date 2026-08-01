@@ -139,8 +139,22 @@ echo "[线程] ${JOBS}"
 ROOT_DIR="$(pwd)"
 BUILD_DIR="${ROOT_DIR}/build_switch"
 THREEDS_STUB_SOURCE="${ROOT_DIR}/../GBAStation_3DS/GBAStation3DSStub.nro"
+EXTERNAL_CORE_NROS=(
+    "FBNeo.nro"
+    "Flycast.nro"
+)
 
 mkdir -p "${BUILD_DIR}"
+
+clean_external_core_nro_outputs() {
+    for nro in "${EXTERNAL_CORE_NROS[@]}"; do
+        rm -f "${BUILD_DIR}/${nro}"
+        rm -f "${BUILD_DIR}/GBAStation/core/${nro}"
+        rm -f "${BUILD_DIR}/resources/core/${nro}"
+    done
+}
+
+clean_external_core_nro_outputs
 
 # ────────────────────────────────────────────────────────────
 # 临时目录
@@ -207,6 +221,9 @@ else
     echo "[警告] 未找到 3DS Stub: ${THREEDS_STUB_SOURCE}"
 fi
 
+clean_external_core_nro_outputs
+echo "[外置核心] FBNeo/Flycast 不写入仓库和发布包，请放到 SD 卡 /GBAStation/core/"
+
 # ────────────────────────────────────────────────────────────
 # 输出大小
 # ────────────────────────────────────────────────────────────
@@ -270,3 +287,5 @@ echo "${BUILD_DIR}/GBAStation.nro"
 echo "${BUILD_DIR}/GBAStationNDSStub.nro"
 echo "${BUILD_DIR}/GBAStation/core/GBAStationNDSStub.nro"
 echo "${BUILD_DIR}/GBAStation/core/GBAStation3DSStub.nro"
+echo "SD:/GBAStation/core/FBNeo.nro"
+echo "SD:/GBAStation/core/Flycast.nro"
