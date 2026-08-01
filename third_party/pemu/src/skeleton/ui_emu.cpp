@@ -142,7 +142,6 @@ bool UiEmu::onInput(c2d::Input::Player *players) {
     if (menu1Pressed && (menu2Disabled || menu2Pressed)) {
         pause();
         pMain->getUiMenu()->load(true);
-        pMain->getInput()->clear();
         return true;
     }
 

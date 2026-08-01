@@ -564,7 +564,12 @@ void gui_start_game(const std::string& path)
 void gui_stop_game(const std::string& message)
 {
 	const LockGuard lock(guiMutex);
-	if (!commandLineStart)
+	// A command-line game load error used to call dc_exit() immediately. In a
+	// GBAStation chain launch this looked exactly like an NRO crash and hid the
+	// real format/BIOS/renderer error. Keep the direct-exit behaviour only for
+	// an explicit close request (empty message); failures return to the Flycast
+	// UI and display their reason.
+	if (!commandLineStart || !message.empty())
 	{
 		// Exit to main menu
 		emu.unloadGame();

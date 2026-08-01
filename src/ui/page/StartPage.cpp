@@ -681,6 +681,25 @@ namespace beiklive
                                    const char* defaultPath,
                                    const char* returnKey)
         {
+            if (platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast))
+            {
+                std::string extension = std::filesystem::path(romPath).extension().string();
+                std::transform(extension.begin(), extension.end(), extension.begin(),
+                               [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+                if (extension == ".iso")
+                {
+                    brls::Application::notify(
+                        "Flycast不支持缺少轨道信息的原始ISO，请转换为CHD，或使用GDI/CDI/CUE");
+                    return false;
+                }
+                if (extension == ".zip" || extension == ".7z")
+                {
+                    brls::Application::notify(
+                        "Flycast不能直接运行压缩包，请先解压为CHD/GDI/CDI/CUE");
+                    return false;
+                }
+            }
+
             const std::string nroPath = GET_SETTING_KEY_STR(pathKey, defaultPath);
             const std::string returnPath = GET_SETTING_KEY_STR(returnKey, "sdmc:/switch/GBAStation.nro");
 			const std::string sessionToken = beiklive::makeExternalCoreSessionToken(romPath);

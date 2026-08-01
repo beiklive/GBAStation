@@ -40,6 +40,8 @@ namespace pemu {
 
         void onKeyDown();
 
+        void onUpdate() override;
+
         bool onInput(c2d::Input::Player *players) override;
 
         void setVisibility(c2d::Visibility visibility, bool tweenPlay = false) override;
@@ -79,6 +81,7 @@ namespace pemu {
         bool isEmuRunning = false;
         bool needSave = false;
         bool frontendGameMenu = false;
+        bool waitForInputRelease = false;
     };
 }
 

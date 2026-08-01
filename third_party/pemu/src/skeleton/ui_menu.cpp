@@ -321,6 +321,10 @@ void UiMenu::load(bool isGame) {
     optionIndex = highlightIndex = 0;
     menu_options.clear();
     frontendGameMenu = isRomMenu && isEmuRunning;
+    // pause() switches from the per-game mapping to the menu mapping while
+    // the opening hotkey is still held. Do not let that same physical press
+    // select a tab/action (or close the menu) after the remap.
+    waitForInputRelease = frontendGameMenu;
     buildTabs();
     rebuildCurrentTab();
 
@@ -339,6 +343,18 @@ void UiMenu::load(bool isGame) {
         setLayer(1);
         setVisibility(Visibility::Visible, true);
     }
+}
+
+void UiMenu::onUpdate() {
+    if (waitForInputRelease) {
+        const unsigned int buttons = ui->getInput()->getButtons();
+        if (buttons == 0) {
+            waitForInputRelease = false;
+            ui->getInput()->setRepeatDelay(INPUT_DELAY);
+        }
+    }
+
+    RectangleShape::onUpdate();
 }
 
 void UiMenu::buildTabs() {
@@ -552,6 +568,10 @@ void UiMenu::onKeyDown() {
 bool UiMenu::onInput(c2d::Input::Player *players) {
     unsigned int buttons = players[0].buttons;
 
+    if (waitForInputRelease) {
+        return true;
+    }
+
     if (ui->getUiStateMenu()->isVisible()) {
         return C2DObject::onInput(players);
     }
@@ -739,7 +759,7 @@ bool UiMenu::onInput(c2d::Input::Player *players) {
     }
 
     // FIRE2 (BACK)
-    if (buttons & Input::Button::Menu1 || buttons & Input::Button::Menu2 || buttons & Input::Button::B) {
+    if (buttons & Input::Button::B) {
         setVisibility(Visibility::Hidden, true);
         if (isEmuRunning) {
             ui->getUiEmu()->resume();

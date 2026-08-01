@@ -25,11 +25,33 @@
 #include <string>
 #include <cstring>
 #include <cstdio>
+#include <exception>
 
 namespace {
 
 std::string g_returnNroPath = "sdmc:/switch/GBAStation.nro";
 std::string g_gbastationSessionToken;
+constexpr const char *FLYCAST_ROOT = "sdmc:/GBAStation/Flycast";
+constexpr const char *FLYCAST_DATA = "sdmc:/GBAStation/Flycast/data";
+constexpr const char *STARTUP_LOG = "sdmc:/GBAStation/Flycast/flycast_startup.log";
+constexpr const char *LAST_ERROR = "sdmc:/GBAStation/Flycast/last_error.txt";
+
+void logStage(FILE *log, const char *stage)
+{
+	if (!log)
+		return;
+	std::fprintf(log, "%s\n", stage);
+	std::fflush(log);
+}
+
+void writeLastError(const char *message)
+{
+	FILE *error = std::fopen(LAST_ERROR, "w");
+	if (!error)
+		return;
+	std::fprintf(error, "%s\n", message ? message : "Unknown Flycast error");
+	std::fclose(error);
+}
 
 std::string quoteArg(const std::string& value)
 {
@@ -92,33 +114,102 @@ int main(int argc, char *argv[])
 {
 	parseGbastationArgs(argc, argv);
 
-	socketInitializeDefault();
-	nxlinkStdio();
-	//appletSetFocusHandlingMode(AppletFocusHandlingMode_NoSuspend);
+	// Keep every Flycast-owned file below GBAStation instead of creating files
+	// beside the NRO or at the SD root.
+	flycast::mkdir("sdmc:/GBAStation", 0755);
+	flycast::mkdir(FLYCAST_ROOT, 0755);
+	flycast::mkdir(FLYCAST_DATA, 0755);
+	std::remove(LAST_ERROR);
+	FILE *startupLog = std::fopen(STARTUP_LOG, "w");
+	logStage(startupLog, "Flycast Switch startup");
+	if (startupLog)
+	{
+		std::fprintf(startupLog, "argc=%d\n", argc);
+		for (int i = 0; i < argc; ++i)
+			std::fprintf(startupLog, "argv[%d]=%s\n", i, argv[i] ? argv[i] : "<null>");
+		std::fflush(startupLog);
+	}
 
-	LogManager::Init();
-
-	// Set directories
-	flycast::mkdir("/flycast", 0755);
-	flycast::mkdir("/flycast/data", 0755);
-	set_user_config_dir("/flycast/");
-	set_user_data_dir("/flycast/data/");
-
-	add_system_config_dir("/flycast");
+	set_user_config_dir(FLYCAST_ROOT);
+	set_user_data_dir(FLYCAST_DATA);
+	add_system_config_dir(FLYCAST_ROOT);
 	add_system_config_dir("./");
-	add_system_data_dir("/flycast/data/");
+	add_system_data_dir(FLYCAST_DATA);
 	add_system_data_dir("./");
 	add_system_data_dir("data/");
 
-	if (flycast_init(argc, argv))
-		die("Flycast initialization failed");
+	const Result socketResult = socketInitializeDefault();
+	const bool socketReady = R_SUCCEEDED(socketResult);
+	if (startupLog)
+	{
+		std::fprintf(startupLog, "socketInitializeDefault=0x%x\n", socketResult);
+		std::fflush(startupLog);
+	}
+	nxlinkStdio();
+	//appletSetFocusHandlingMode(AppletFocusHandlingMode_NoSuspend);
 
-	mainui_loop();
+	logStage(startupLog, "LogManager::Init begin");
+	LogManager::Init();
+	logStage(startupLog, "LogManager::Init complete");
 
-	flycast_term();
+	bool initialized = false;
+	try
+	{
+		logStage(startupLog, "flycast_init begin");
+		const int initResult = flycast_init(argc, argv);
+		if (initResult != 0)
+		{
+			if (startupLog)
+			{
+				std::fprintf(startupLog, "flycast_init failed: %d\n", initResult);
+				std::fflush(startupLog);
+			}
+			writeLastError("Flycast 初始化失败，请查看 flycast_startup.log 和 data/flycast.log");
+		}
+		else
+		{
+			initialized = true;
+			logStage(startupLog, "flycast_init complete; mainui_loop begin");
+			mainui_loop();
+			logStage(startupLog, "mainui_loop complete; flycast_term begin");
+			flycast_term();
+			initialized = false;
+			logStage(startupLog, "flycast_term complete");
+		}
+	}
+	catch (const std::exception& e)
+	{
+		if (startupLog)
+		{
+			std::fprintf(startupLog, "Unhandled exception: %s\n", e.what());
+			std::fflush(startupLog);
+		}
+		writeLastError(e.what());
+	}
+	catch (...)
+	{
+		logStage(startupLog, "Unhandled non-standard exception");
+		writeLastError("Flycast 发生未知异常，请查看 flycast_startup.log 和 data/flycast.log");
+	}
 
-	socketExit();
+	if (initialized)
+	{
+		try
+		{
+			flycast_term();
+		}
+		catch (...)
+		{
+			logStage(startupLog, "flycast_term failed during cleanup");
+		}
+	}
+
+	if (socketReady)
+		socketExit();
+	logStage(startupLog, "returning to GBAStation");
 	returnToGbastation();
+	if (startupLog)
+		std::fclose(startupLog);
 
 	return 0;
 }

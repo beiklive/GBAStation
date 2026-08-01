@@ -145,13 +145,18 @@ LogManager::LogManager()
 void LogManager::UpdateConfig()
 {
 	bool logToFile = cfgLoadBool("log", "LogToFile", false);
+#ifdef __SWITCH__
+	// External-core failures must remain diagnosable after chain-loading back
+	// to GBAStation. Keep a persistent log in Flycast's managed data folder.
+	logToFile = true;
+#endif
 	if (logToFile != IsListenerEnabled(LogListener::FILE_LISTENER))
 	{
 		if (!logToFile) {
 			m_listeners[LogListener::FILE_LISTENER].reset();
 		}
 		else {
-#if defined(__ANDROID__) || defined(__APPLE__) || defined(TARGET_UWP)
+#if defined(__ANDROID__) || defined(__APPLE__) || defined(TARGET_UWP) || defined(__SWITCH__)
 			std::string logPath = get_writable_data_path("flycast.log");
 #else
 			std::string logPath = "flycast.log";
