@@ -80,12 +80,12 @@ std::string unescapeConfigValue(const std::string &text) {
     return out;
 }
 
-std::unordered_map<std::string, std::string> loadGbastationNameMapping() {
+std::unordered_map<std::string, std::string> loadGbastationConfig() {
     std::unordered_map<std::string, std::string> values;
     const std::vector<std::string> paths = {
-        "sdmc:/GBAStation/config/name_mapping.cfg",
-        "./GBAStation/config/name_mapping.cfg",
-        "GBAStation/config/name_mapping.cfg"
+        "sdmc:/GBAStation/config/config.cfg",
+        "./GBAStation/config/config.cfg",
+        "GBAStation/config/config.cfg"
     };
 
     std::ifstream in;
@@ -203,7 +203,7 @@ void setMenuHotkeyFromMapping(PEMUConfig *config,
 void applyGbastationArcadeInputMapping(PEMUConfig *config) {
     if (!config) return;
 
-    const auto values = loadGbastationNameMapping();
+    const auto values = loadGbastationConfig();
     setOptionFromMapping(config, values, PEMUConfig::OptId::JOY_UP, "arcade.handle.up", "PAD_UP");
     setOptionFromMapping(config, values, PEMUConfig::OptId::JOY_DOWN, "arcade.handle.down", "PAD_DOWN");
     setOptionFromMapping(config, values, PEMUConfig::OptId::JOY_LEFT, "arcade.handle.left", "PAD_LEFT");
