@@ -1715,8 +1715,6 @@ private:
             {"NDS 按键映射", "nds.", "Nintendo DS 游戏与触摸指针热键", true},
             {"3DS 按键映射", "3ds.", "Nintendo 3DS 游戏与双摇杆控制", false},
             {"MD 按键映射", "md.", "Mega Drive 六键手柄与 Mode 键", false},
-            {"Arcade 按键映射", "arcade.", "FBNeo 街机游戏与热键", false},
-            {"DC 按键映射", "dc.", "Flycast Dreamcast 游戏与热键", false},
         };
         for (const auto& platform : platforms)
         {
@@ -4387,8 +4385,6 @@ brls::View *SettingPage::buildKeyBindTab()
         {"映射SFC游戏", "sfc.", false},
         {"映射NDS游戏", "nds.", true},
         {"映射MD游戏", "md.", false},
-        {"映射Arcade游戏", "arcade.", false},
-        {"映射DC游戏", "dc.", false},
     };
 
     for (const auto& platform : platforms)

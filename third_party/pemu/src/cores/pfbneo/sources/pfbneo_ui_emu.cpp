@@ -7,6 +7,7 @@
 
 #include "skeleton/pemu.h"
 #include "pfbneo_ui_emu.h"
+#include "pfbneo_io.h"
 #include "pfbneo_ui_video.h"
 #include "pfbneo_utility.h"
 #include "retro_input_wrapper.h"
@@ -109,6 +110,7 @@ int PFBAUiEmu::getSekCpuCore() {
 
 int PFBAUiEmu::load(const ss_api::Game &game) {
     currentGame = game;
+    BurnPathsSetGame(pMain->getIo(), Utility::removeExt(Utility::baseName(game.path)));
 
     PFBNEOUtility::setDriverActive(game);
     if (nBurnDrvActive >= nBurnDrvCount) {

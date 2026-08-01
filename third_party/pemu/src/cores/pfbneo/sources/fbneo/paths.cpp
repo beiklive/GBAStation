@@ -22,6 +22,7 @@ char szAppRomPath[MAX_PATH];
 char szAppSavePath[MAX_PATH];
 char szAppConfigPath[MAX_PATH];
 char szAppIconPath[MAX_PATH];
+char szAppSaveRootPath[MAX_PATH];
 // fbneo
 char szAppHiscorePath[MAX_PATH];
 char szAppSamplesPath[MAX_PATH];
@@ -29,7 +30,27 @@ char szAppBlendPath[MAX_PATH];
 char szAppEEPROMPath[MAX_PATH];
 char szAppHDDPath[MAX_PATH];
 
-void BurnPathsInit(c2d::C2DIo *io) {
+static std::string sanitizeGamePath(const std::string &gameName) {
+    std::string safe = gameName.empty() ? "_global" : gameName;
+    for (auto &c: safe) {
+        if (c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' ||
+            c == '"' || c == '<' || c == '>' || c == '|') {
+            c = '_';
+        }
+    }
+    return safe;
+}
+
+void BurnPathsSetGame(c2d::Io *io, const std::string &gameName) {
+    const std::string safeName = sanitizeGamePath(gameName);
+    snprintf(szAppSavePath, MAX_PATH - 1, "%s%s/", szAppSaveRootPath, safeName.c_str());
+    io->create(szAppSavePath);
+
+    snprintf(szAppEEPROMPath, MAX_PATH - 1, "%s", szAppSavePath);
+    io->create(szAppEEPROMPath);
+}
+
+void BurnPathsInit(c2d::Io *io) {
     printf("BurnPathsInit: dataPath = %s\n", io->getDataPath().c_str());
 
     snprintf(szAppHomePath, MAX_PATH - 1, "%s", io->getDataPath().c_str());
@@ -38,8 +59,9 @@ void BurnPathsInit(c2d::C2DIo *io) {
     snprintf(szAppRomPath, MAX_PATH - 1, "%s%s/", szAppHomePath, "arcade");
     io->create(szAppRomPath);
 
-    snprintf(szAppSavePath, MAX_PATH - 1, "%s%s/", szAppHomePath, "saves");
-    io->create(szAppSavePath);
+    snprintf(szAppSaveRootPath, MAX_PATH - 1, "%s", "sdmc:/GBAStation/saves/FBNeo/");
+    io->create(szAppSaveRootPath);
+    BurnPathsSetGame(io, "_global");
     //printf("szAppSavePath: %s\n", szAppSavePath);
 
     snprintf(szAppConfigPath, MAX_PATH - 1, "%s%s/", szAppHomePath, "configs");
@@ -61,9 +83,6 @@ void BurnPathsInit(c2d::C2DIo *io) {
     snprintf(szAppHDDPath, MAX_PATH - 1, "%s%s/", szAppHomePath, "hdd");
     io->create(szAppHDDPath);
     //printf("szAppHDDPath: %s\n", szAppHDDPath);
-
-    snprintf(szAppEEPROMPath, MAX_PATH - 1, "%s%s/", szAppHomePath, "eeproms");
-    io->create(szAppEEPROMPath);
 
     snprintf(szAppHiscorePath, MAX_PATH - 1, "%s%s/", szAppHomePath, "hiscores");
     // copy hiscore.dat from romfs to datadir

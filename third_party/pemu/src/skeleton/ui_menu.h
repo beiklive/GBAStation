@@ -17,6 +17,13 @@ namespace pemu {
             c2d::config::Option *option = nullptr;
         };
 
+        struct MenuTab {
+            std::string name;
+            std::string group;
+            bool actionPage = false;
+            bool gameConfig = false;
+        };
+
         explicit UiMenu(UiMain *uiMain);
 
         ~UiMenu() override;
@@ -38,6 +45,13 @@ namespace pemu {
         void setVisibility(c2d::Visibility visibility, bool tweenPlay = false) override;
 
     private:
+        void buildTabs();
+        void rebuildCurrentTab();
+        void refreshTitle();
+        void switchTab(int direction);
+        void setSelectionAbsolute(int index);
+        bool isSelectable(const MenuOption &menuOption) const;
+        bool hasSelectableOptions() const;
         void updateLines();
 
         UiMain *ui = nullptr;
@@ -47,6 +61,7 @@ namespace pemu {
         float alpha = 230;
 
         std::vector<MenuOption> menu_options;
+        std::vector<MenuTab> menu_tabs;
         c2d::TweenPosition *tweenPosition;
         Skin::TextGroup textGroup;
 
@@ -54,6 +69,7 @@ namespace pemu {
         int maxLines = 0;
         int optionIndex = 0;
         int highlightIndex = 0;
+        int tabIndex = 0;
 
         bool isRomMenu = false;
         bool isEmuRunning = false;

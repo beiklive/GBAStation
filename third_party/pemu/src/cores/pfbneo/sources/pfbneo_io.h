@@ -5,9 +5,12 @@
 #ifndef PEMU_PFBNEO_IO_H
 #define PEMU_PFBNEO_IO_H
 
+#include <string>
+
 #include "burner.h"
 
-extern void BurnPathsInit(C2DIo *io);
+extern void BurnPathsInit(c2d::Io *io);
+extern void BurnPathsSetGame(c2d::Io *io, const std::string &gameName);
 
 namespace c2d {
     class PFBAIo : public c2d::C2DIo {
@@ -15,7 +18,7 @@ namespace c2d {
         PFBAIo() : C2DIo() {
             C2DIo::create(PFBAIo::getDataPath());
             C2DIo::create(PFBAIo::getDataPath() + "configs");
-            C2DIo::create(PFBAIo::getDataPath() + "saves");
+            C2DIo::create("sdmc:/GBAStation/saves/FBNeo/");
             BurnPathsInit(this);
             BurnLibInit();
         }
@@ -46,11 +49,9 @@ namespace c2d {
         }
 #endif
 #elif __SWITCH__
-#if __DEBUG_SVC__
         std::string getDataPath() override {
-            return "/switch/pfbn/";
+            return "sdmc:/GBAStation/FBNeo/";
         }
-#endif
 #endif
     };
 }

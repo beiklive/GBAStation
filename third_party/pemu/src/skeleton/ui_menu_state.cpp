@@ -73,10 +73,20 @@ public:
     void setRom(const ss_api::Game &game) {
         memset(path, 0, MAX_PATH);
         memset(shot, 0, MAX_PATH);
-        snprintf(path, 1023, "%ssaves/%s-%i.state",
-                 ui->getIo()->getDataPath().c_str(), Utility::removeExt(game.path).c_str(), id);
-        snprintf(shot, 1023, "%ssaves/%s-%i.png",
-                 ui->getIo()->getDataPath().c_str(), Utility::removeExt(game.path).c_str(), id);
+        std::string gameName = Utility::removeExt(Utility::baseName(game.path));
+        if (gameName.empty()) {
+            gameName = "_global";
+        }
+        for (auto &c: gameName) {
+            if (c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' ||
+                c == '"' || c == '<' || c == '>' || c == '|') {
+                c = '_';
+            }
+        }
+        const std::string saveDir = "sdmc:/GBAStation/saves/FBNeo/" + gameName + "/";
+        ui->getIo()->create(saveDir);
+        snprintf(path, 1023, "%sslot-%i.state", saveDir.c_str(), id);
+        snprintf(shot, 1023, "%sslot-%i.png", saveDir.c_str(), id);
 
         loadTexture();
     }
