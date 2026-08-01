@@ -39,7 +39,7 @@ beiklive::enums::FileType fileTypeFromExtension(const std::string& ext, bool arc
         return beiklive::enums::FileType::SNES_ROM;
     if (ext == "md" || ext == "gen" || ext == "smd" || (!archiveMember && ext == "bin"))
         return beiklive::enums::FileType::GENESIS_ROM;
-    if (ext == "cdi" || ext == "gdi" || ext == "chd")
+    if (ext == "cdi" || ext == "gdi" || ext == "chd" || ext == "cue")
         return beiklive::enums::FileType::DREAMCAST_ROM;
     if (ext == "nds")
         return beiklive::enums::FileType::NDS_ROM;
@@ -61,7 +61,7 @@ bool isIgnoredArchiveMember(const std::string& name)
     if (base[0] == '.')
         return true;
     std::string ext = getFileExtension(memberPath);
-    return ext == "txt" || ext == "nfo" || ext == "cue" || ext == "m3u" || ext == "jpg" ||
+    return ext == "txt" || ext == "nfo" || ext == "m3u" || ext == "jpg" ||
            ext == "jpeg" || ext == "png" || ext == "xml" || ext == "dat" || ext == "sav" ||
            ext == "srm" || ext == "state";
 }
@@ -157,7 +157,8 @@ beiklive::enums::FileType fileTypeFromArchiveProbe(const std::vector<unsigned ch
 {
     if (archiveProbeContainsExtension(bytes, "cdi") ||
         archiveProbeContainsExtension(bytes, "gdi") ||
-        archiveProbeContainsExtension(bytes, "chd"))
+        archiveProbeContainsExtension(bytes, "chd") ||
+        archiveProbeContainsExtension(bytes, "cue"))
         return beiklive::enums::FileType::DREAMCAST_ROM;
 
     if (archiveProbeContainsExtension(bytes, "md") ||
@@ -288,7 +289,7 @@ beiklive::enums::FileType detectArchiveFileType(const fs::path& path)
         std::string memberExt = getFileExtension(memberPath);
         contentExts.push_back(memberExt);
 
-        if (memberExt == "cdi" || memberExt == "gdi" || memberExt == "chd")
+        if (memberExt == "cdi" || memberExt == "gdi" || memberExt == "chd" || memberExt == "cue")
             hasDreamcastDisc = true;
 
         if (memberExt == "bin")

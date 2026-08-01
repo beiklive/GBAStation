@@ -1625,14 +1625,6 @@ private:
                 [this]() { _openLibretroCore("GameBattle 核心设置", CoreType::Gambatte); });
         addCore("MD 核心", "Genesis Plus GX", 0xE338,
                 [this]() { _openGenesisCore(); });
-        addCore("Arcade 核心", "FBNeo", 0xE338,
-                [this]() { _openExternalCore("FBNeo 外置核心设置",
-                    "arcade.externalNro.path", "/GBAStation/core/FBNeo.nro",
-                    "arcade.externalNro.returnPath"); });
-        addCore("DC 核心", "Flycast", 0xE338,
-                [this]() { _openExternalCore("Flycast 外置核心设置",
-                    "dc.externalNro.path", "/GBAStation/core/Flycast.nro",
-                    "dc.externalNro.returnPath"); });
 
         emulator.push_back(_section("存档与封面"));
         emulator.push_back(_selector("SRAM 存档目录", "选择 SRAM 与 ROM 同目录或模拟器统一目录", beiklive::material::STORAGE,
@@ -2281,32 +2273,6 @@ private:
             []() { return cfgGetStr("core.genesis.mono", "disabled") == "enabled"; },
             [](bool v) { cfgSetStr("core.genesis.mono", v ? "enabled" : "disabled"); }));
         _finishCorePage("Genesis Plus GX 核心设置");
-    }
-
-    void _openExternalCore(const std::string& title,
-                           const std::string& nroPathKey,
-                           const std::string& defaultNroPath,
-                           const std::string& returnPathKey)
-    {
-        m_coreItems.clear();
-        m_coreItems.push_back(_section("外置核心"));
-        m_coreItems.push_back(_action("核心 NRO 路径", "链式启动时加载的核心文件", beiklive::material::DESCRIPTION,
-            [nroPathKey, defaultNroPath]() {
-                const auto path = cfgGetStr(nroPathKey, defaultNroPath);
-                return path.empty() ? "未设置  >" : beiklive::tools::getFileName(path) + "  >";
-            },
-            [this, nroPathKey]() { _pickFile(nroPathKey, {"nro"}); }));
-        m_coreItems.push_back(_action("返回前端路径", "退出核心后返回的 GBAStation NRO", beiklive::material::DESCRIPTION,
-            [returnPathKey]() {
-                const auto path = cfgGetStr(returnPathKey, "sdmc:/switch/GBAStation.nro");
-                return path.empty() ? "未设置  >" : beiklive::tools::getFileName(path) + "  >";
-            },
-            [this, returnPathKey]() { _pickFile(returnPathKey, {"nro"}); }));
-        m_coreItems.push_back(_section("菜单"));
-        m_coreItems.push_back(_action("游戏内菜单", "Switch 上按 + / Start 可呼出核心菜单", 0xE88E,
-            []() { return std::string("+ / Start"); },
-            []() { brls::Application::notify("游戏内按 + / Start 打开核心菜单，菜单中退出游戏会返回 GBAStation"); }));
-        _finishCorePage(title);
     }
 
     void _openThreeDsTextInput(const std::string& title, const std::string& key,

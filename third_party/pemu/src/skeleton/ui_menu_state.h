@@ -21,6 +21,10 @@ namespace pemu {
 
         UiMain *getUi() { return ui; };
 
+        bool quickLoadSlot(int slot);
+
+        bool quickSaveSlot(int slot);
+
         virtual bool loadStateCore(const char *path) { return false; };
 
         virtual bool saveStateCore(const char *path) { return false; };

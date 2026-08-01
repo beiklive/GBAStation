@@ -212,6 +212,39 @@ void UiMenuState::setVisibility(c2d::Visibility visibility, bool tweenPlay) {
     RectangleShape::setVisibility(visibility, tweenPlay);
 }
 
+bool UiMenuState::quickLoadSlot(int slot) {
+    if (!ui || !ui->getUiEmu() || !ui->getUiEmu()->isVisible() || slot < 0 || slot >= STATES_COUNT) {
+        return false;
+    }
+
+    UiState *state = uiStateList->states[slot];
+    state->setRom(ui->getUiEmu()->getCurrentGame());
+    if (!state->exist) {
+        ui->getUiStatusBox()->show("没有可读取的状态");
+        return false;
+    }
+
+    const bool ok = loadStateCore(state->path);
+    ui->getUiStatusBox()->show(ok ? "读取状态完成" : "读取状态失败");
+    return ok;
+}
+
+bool UiMenuState::quickSaveSlot(int slot) {
+    if (!ui || !ui->getUiEmu() || !ui->getUiEmu()->isVisible() || slot < 0 || slot >= STATES_COUNT) {
+        return false;
+    }
+
+    UiState *state = uiStateList->states[slot];
+    state->setRom(ui->getUiEmu()->getCurrentGame());
+    const bool ok = saveStateCore(state->path);
+    if (ok && ui->getUiEmu()->getVideo()) {
+        ui->getUiEmu()->getVideo()->save(state->shot);
+        state->loadTexture();
+    }
+    ui->getUiStatusBox()->show(ok ? "保存状态完成" : "保存状态失败");
+    return ok;
+}
+
 bool UiMenuState::onInput(c2d::Input::Player *players) {
     unsigned int buttons = players[0].buttons;
 

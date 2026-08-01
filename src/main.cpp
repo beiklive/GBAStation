@@ -55,7 +55,9 @@ bool isDirectLaunchRomType(beiklive::enums::FileType type)
 bool isLibraryRomType(beiklive::enums::FileType type)
 {
 	return isDirectLaunchRomType(type) ||
-		   type == beiklive::enums::FileType::THREEDS_ROM;
+		   type == beiklive::enums::FileType::THREEDS_ROM ||
+		   type == beiklive::enums::FileType::ARCADE_ROM ||
+		   type == beiklive::enums::FileType::DREAMCAST_ROM;
 }
 
 std::optional<std::string> parseDirectLaunchRom(int argc, char* argv[])

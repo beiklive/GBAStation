@@ -404,12 +404,20 @@ if (PLATFORM_SWITCH)
 endif ()
 
 # add common skin data
+set(GBASTATION_CJK_FONT "${CMAKE_SOURCE_DIR}/../../resources/font/font.ttf")
+set(PFBNEO_CJK_FONT_COPY_COMMAND "")
+if (EXISTS "${GBASTATION_CJK_FONT}")
+    list(APPEND PFBNEO_CJK_FONT_COPY_COMMAND
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${GBASTATION_CJK_FONT}"
+            "${CMAKE_CURRENT_BINARY_DIR}/data_romfs/skins/default/default.ttf")
+endif ()
 add_custom_target(${PROJECT_NAME}.data.skin
         COMMAND ${CMAKE_COMMAND} -D SRC=${CMAKE_SOURCE_DIR}/data/common/datadir -D DST=${CMAKE_CURRENT_BINARY_DIR}/data_datadir -P ${CMAKE_SOURCE_DIR}/external/libcross2d/cmake/copy_custom.cmake
         COMMAND ${CMAKE_COMMAND} -D SRC=${CMAKE_SOURCE_DIR}/data/${TARGET_PLATFORM}/datadir -D DST=${CMAKE_CURRENT_BINARY_DIR}/data_datadir -P ${CMAKE_SOURCE_DIR}/external/libcross2d/cmake/copy_custom.cmake
         COMMAND ${CMAKE_COMMAND} -D SRC=${CMAKE_SOURCE_DIR}/data/common/romfs -D DST=${CMAKE_CURRENT_BINARY_DIR}/data_romfs -P ${CMAKE_SOURCE_DIR}/external/libcross2d/cmake/copy_custom.cmake
         COMMAND ${CMAKE_COMMAND} -D SRC=${CMAKE_SOURCE_DIR}/data/${TARGET_PLATFORM}/romfs -D DST=${CMAKE_CURRENT_BINARY_DIR}/data_romfs -P ${CMAKE_SOURCE_DIR}/external/libcross2d/cmake/copy_custom.cmake
-)
+        ${PFBNEO_CJK_FONT_COPY_COMMAND})
 add_dependencies(${PROJECT_NAME}.data.skin ${PROJECT_NAME}.data)
 if (OPTION_LIGHT)
     add_custom_target(${PROJECT_NAME}.data.light

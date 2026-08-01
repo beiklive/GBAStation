@@ -7,6 +7,25 @@
 
 using namespace c2d::config;
 
+namespace {
+constexpr const char *MENU_RESUME = "继续游戏";
+constexpr const char *MENU_RESTART = "重启游戏";
+constexpr const char *MENU_SAVE_STATE = "保存状态";
+constexpr const char *MENU_LOAD_STATE = "读取状态";
+constexpr const char *MENU_SETTINGS = "设置";
+constexpr const char *MENU_EXIT = "退出游戏";
+
+bool isFrontendMenuAction(const std::string &name) {
+    return name == MENU_RESUME || name == MENU_RESTART ||
+           name == MENU_SAVE_STATE || name == MENU_LOAD_STATE ||
+           name == MENU_SETTINGS || name == MENU_EXIT;
+}
+
+bool isSelectableCustomAction(const std::string &name) {
+    return isFrontendMenuAction(name) || name == "STATES" || name == "QUIT";
+}
+}
+
 class MenuLine : public c2d::RectangleShape {
 
 public:
@@ -54,9 +73,9 @@ public:
         // this is a menu title (or custom option)
         if (!option) {
             // custom options
-            if (name == "STATES" || name == "QUIT") {
+            if (name == "STATES" || name == "QUIT" || isFrontendMenuAction(name)) {
                 p_value->setVisibility(Visibility::Visible);
-                p_value->setString("GO");
+                p_value->setString(isFrontendMenuAction(name) ? ">" : "GO");
                 return;
             }
             p_value->setVisibility(Visibility::Hidden);
@@ -163,27 +182,39 @@ void UiMenu::load(bool isGame) {
     // set options items
     optionIndex = highlightIndex = 0;
     menu_options.clear();
-    auto groups = ui->getConfig()->getGroups();
-    for (auto &group: *groups) {
-        // skip some options if needed
-        if (group.getName() == "ROMS") continue;
-        if (isRomMenu && (group.getName() == "UI_OPTIONS" || group.getName() == "UI_FILTERING")) continue;
-        // push group title
-        menu_options.push_back({group.getName(), nullptr});
-        auto options = group.getOptions();
-        for (auto &option: *options) {
-            // skip hidden options
-            if (option.getFlags() & PEMUConfig::Flags::HIDDEN) continue;
-            // push option
-            auto opt = ui->getConfig()->get(option.getId(), isGame);
-            menu_options.push_back({option.getName(), opt});
+    frontendGameMenu = isRomMenu && isEmuRunning;
+    if (frontendGameMenu) {
+        title->setString("游戏菜单");
+        menu_options.push_back({MENU_RESUME, nullptr});
+        menu_options.push_back({MENU_RESTART, nullptr});
+        menu_options.push_back({MENU_SAVE_STATE, nullptr});
+        menu_options.push_back({MENU_LOAD_STATE, nullptr});
+        menu_options.push_back({MENU_SETTINGS, nullptr});
+        menu_options.push_back({MENU_EXIT, nullptr});
+        highlightIndex = -1;
+    } else {
+        auto groups = ui->getConfig()->getGroups();
+        for (auto &group: *groups) {
+            // skip some options if needed
+            if (group.getName() == "ROMS") continue;
+            if (isRomMenu && (group.getName() == "UI_OPTIONS" || group.getName() == "UI_FILTERING")) continue;
+            // push group title
+            menu_options.push_back({group.getName(), nullptr});
+            auto options = group.getOptions();
+            for (auto &option: *options) {
+                // skip hidden options
+                if (option.getFlags() & PEMUConfig::Flags::HIDDEN) continue;
+                // push option
+                auto opt = ui->getConfig()->get(option.getId(), isGame);
+                menu_options.push_back({option.getName(), opt});
+            }
         }
-    }
 
-    // add "OTHER" option menu
-    menu_options.push_back({"OTHER", nullptr});
-    if (isRomMenu) menu_options.push_back({"STATES", nullptr});
-    menu_options.push_back({"QUIT", nullptr});
+        // add "OTHER" option menu
+        menu_options.push_back({"OTHER", nullptr});
+        if (isRomMenu) menu_options.push_back({"STATES", nullptr});
+        menu_options.push_back({"QUIT", nullptr});
+    }
 
     setAlpha(isEmuRunning ? (uint8_t) (alpha - 50) : (uint8_t) alpha);
 
@@ -234,7 +265,7 @@ void UiMenu::onKeyUp() {
 
     // skip menus
     auto opt = menu_options.at(optionIndex + highlightIndex);
-    if (opt.option == nullptr && opt.name != "STATES" && opt.name != "QUIT") {
+    if (opt.option == nullptr && !isSelectableCustomAction(opt.name)) {
         return onKeyUp();
     }
 
@@ -258,7 +289,7 @@ void UiMenu::onKeyDown() {
 
     // skip menus
     auto opt = menu_options.at(optionIndex + highlightIndex);
-    if (opt.option == nullptr && opt.name != "STATES" && opt.name != "QUIT") {
+    if (opt.option == nullptr && !isSelectableCustomAction(opt.name)) {
         return onKeyDown();
     }
 
@@ -383,7 +414,37 @@ bool UiMenu::onInput(c2d::Input::Player *players) {
     // FIRE1 (ENTER)
     if (buttons & Input::Button::A) {
         auto option = lines.at(highlightIndex)->p_option;
-        if (option && option->getFlags() == PEMUConfig::Flags::INPUT) {
+        const std::string actionName = lines.at(highlightIndex)->p_name->getString();
+        if (frontendGameMenu && isFrontendMenuAction(actionName)) {
+            if (actionName == MENU_RESUME) {
+                setVisibility(Visibility::Hidden, true);
+                ui->getUiEmu()->resume();
+            } else if (actionName == MENU_RESTART) {
+                ss_api::Game game = ui->getUiEmu()->getCurrentGame();
+                const bool exitOnStop = ui->getUiEmu()->getExitOnStop();
+                setVisibility(Visibility::Hidden, true);
+                ui->getConfig()->loadGame(game);
+                ui->getUiEmu()->setExitOnStop(false);
+                ui->getUiEmu()->stop();
+                ui->getUiEmu()->setExitOnStop(exitOnStop);
+                ui->getUiEmu()->load(game);
+                ui->getInput()->clear();
+            } else if (actionName == MENU_SAVE_STATE) {
+                ui->getUiStateMenu()->quickSaveSlot(0);
+                setVisibility(Visibility::Hidden, true);
+                ui->getUiEmu()->resume();
+            } else if (actionName == MENU_LOAD_STATE) {
+                ui->getUiStateMenu()->quickLoadSlot(0);
+                setVisibility(Visibility::Hidden, true);
+                ui->getUiEmu()->resume();
+            } else if (actionName == MENU_SETTINGS) {
+                load(false);
+            } else if (actionName == MENU_EXIT) {
+                setVisibility(Visibility::Hidden, true);
+                ui->getUiEmu()->stop();
+                ui->getInput()->clear();
+            }
+        } else if (option && option->getFlags() == PEMUConfig::Flags::INPUT) {
             int new_key = 0;
             int res = ui->getUiMessageBox()->show("NEW INPUT", "PRESS A BUTTON", "", "", &new_key, 9);
             if (res != MessageBox::TIMEOUT) {

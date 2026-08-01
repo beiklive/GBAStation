@@ -58,6 +58,7 @@ namespace pemu {
         bool isRomMenu = false;
         bool isEmuRunning = false;
         bool needSave = false;
+        bool frontendGameMenu = false;
     };
 }
 
