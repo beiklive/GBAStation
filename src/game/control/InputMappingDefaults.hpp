@@ -14,9 +14,10 @@ namespace beiklive::input_mapping
     inline constexpr unsigned kPlatformGenesis = 1u << 5;
     inline constexpr unsigned kPlatformArcade = 1u << 6;
     inline constexpr unsigned kPlatformDreamcast = 1u << 7;
-    inline constexpr unsigned kPlatformAll = kPlatformGbFamily | kPlatformNes | kPlatformSfc | kPlatformNds | kPlatformThreeDs | kPlatformGenesis | kPlatformArcade | kPlatformDreamcast;
+    inline constexpr unsigned kPlatformPsp = 1u << 8;
+    inline constexpr unsigned kPlatformAll = kPlatformGbFamily | kPlatformNes | kPlatformSfc | kPlatformNds | kPlatformThreeDs | kPlatformGenesis | kPlatformArcade | kPlatformDreamcast | kPlatformPsp;
     inline constexpr unsigned kPlatformExplicitRightStick =
-        kPlatformGbFamily | kPlatformNes | kPlatformSfc | kPlatformThreeDs | kPlatformGenesis | kPlatformArcade | kPlatformDreamcast;
+        kPlatformGbFamily | kPlatformNes | kPlatformSfc | kPlatformThreeDs | kPlatformGenesis | kPlatformArcade | kPlatformDreamcast | kPlatformPsp;
 
     struct GameButtonDefault
     {
@@ -29,18 +30,18 @@ namespace beiklive::input_mapping
     inline constexpr GameButtonDefault kGameButtonDefaults[] = {
         {"A键", "a", "PAD_A", kPlatformAll},
         {"B键", "b", "PAD_B", kPlatformAll},
-        {"X键", "x", "PAD_X", kPlatformSfc | kPlatformNds | kPlatformThreeDs | kPlatformGenesis | kPlatformArcade | kPlatformDreamcast},
-        {"Y键", "y", "PAD_Y", kPlatformSfc | kPlatformNds | kPlatformThreeDs | kPlatformGenesis | kPlatformArcade | kPlatformDreamcast},
+        {"X键", "x", "PAD_X", kPlatformSfc | kPlatformNds | kPlatformThreeDs | kPlatformGenesis | kPlatformArcade | kPlatformDreamcast | kPlatformPsp},
+        {"Y键", "y", "PAD_Y", kPlatformSfc | kPlatformNds | kPlatformThreeDs | kPlatformGenesis | kPlatformArcade | kPlatformDreamcast | kPlatformPsp},
         {"方向键上", "up", "PAD_UP", kPlatformAll},
         {"方向键下", "down", "PAD_DOWN", kPlatformAll},
         {"方向键左", "left", "PAD_LEFT", kPlatformAll},
         {"方向键右", "right", "PAD_RIGHT", kPlatformAll},
-        {"L键", "l", "PAD_LB", kPlatformGbFamily | kPlatformSfc | kPlatformNds | kPlatformThreeDs | kPlatformGenesis | kPlatformArcade | kPlatformDreamcast},
-        {"R键", "r", "PAD_RB", kPlatformGbFamily | kPlatformSfc | kPlatformNds | kPlatformThreeDs | kPlatformGenesis | kPlatformArcade | kPlatformDreamcast},
-        {"ZL键", "l2", "PAD_LT", kPlatformThreeDs | kPlatformArcade | kPlatformDreamcast},
-        {"ZR键", "r2", "PAD_RT", kPlatformThreeDs | kPlatformArcade | kPlatformDreamcast},
-        {"L3键", "l3", "PAD_LSB", 0},
-        {"R3键", "r3", "PAD_RSB", 0},
+        {"L键", "l", "PAD_LB", kPlatformGbFamily | kPlatformSfc | kPlatformNds | kPlatformThreeDs | kPlatformGenesis | kPlatformArcade | kPlatformDreamcast | kPlatformPsp},
+        {"R键", "r", "PAD_RB", kPlatformGbFamily | kPlatformSfc | kPlatformNds | kPlatformThreeDs | kPlatformGenesis | kPlatformArcade | kPlatformDreamcast | kPlatformPsp},
+        {"ZL键", "l2", "PAD_LT", kPlatformThreeDs | kPlatformArcade | kPlatformDreamcast | kPlatformPsp},
+        {"ZR键", "r2", "PAD_RT", kPlatformThreeDs | kPlatformArcade | kPlatformDreamcast | kPlatformPsp},
+        {"L3键", "l3", "PAD_LSB", kPlatformPsp},
+        {"R3键", "r3", "PAD_RSB", kPlatformPsp},
         {"开始键", "start", "PAD_START", kPlatformAll},
         {"选择键", "select", "PAD_BACK", kPlatformAll},
         {"左摇杆上", "lstick_up", "PAD_LEFTSTICKUP", kPlatformThreeDs},
@@ -112,6 +113,8 @@ namespace beiklive::input_mapping
             return "arcade.";
         case beiklive::enums::EmuPlatform::EmuDreamcast:
             return "dc.";
+        case beiklive::enums::EmuPlatform::EmuPSP:
+            return "psp.";
         default:
             return "";
         }
@@ -135,6 +138,8 @@ namespace beiklive::input_mapping
             return kPlatformArcade;
         case beiklive::enums::EmuPlatform::EmuDreamcast:
             return kPlatformDreamcast;
+        case beiklive::enums::EmuPlatform::EmuPSP:
+            return kPlatformPsp;
         case beiklive::enums::EmuPlatform::EmuGBA:
         case beiklive::enums::EmuPlatform::EmuGBC:
         case beiklive::enums::EmuPlatform::EmuGB:
@@ -159,6 +164,8 @@ namespace beiklive::input_mapping
             return kPlatformArcade;
         if (prefix == "dc.")
             return kPlatformDreamcast;
+        if (prefix == "psp.")
+            return kPlatformPsp;
         return kPlatformGbFamily;
     }
 
@@ -208,7 +215,7 @@ namespace beiklive::input_mapping
     {
         return prefix.empty() || prefix == "gbc." || prefix == "gb." ||
                prefix == "nes." || prefix == "sfc." || prefix == "md." ||
-               prefix == "arcade." || prefix == "dc.";
+               prefix == "arcade." || prefix == "dc." || prefix == "psp.";
     }
 
     inline const char* defaultHandleValueForPrefix(const std::string& prefix,

@@ -2891,7 +2891,7 @@ private:
         nvgFontSize(vg, 17.f);
         nvgFillColor(vg, nvgRGBA(220, 225, 234, 210));
         nvgTextBox(vg, px, project.y + 68.f, project.w - 60.f,
-            "GBAStation 是面向 Switch 平台的模拟器前端，统一管理游戏、核心、存档、封面与输入配置；MD 由 Genesis Plus GX 运行，Arcade/DC 通过 FBNeo 与 Flycast 链式核心运行。", nullptr);
+            "GBAStation 是面向 Switch 平台的模拟器前端，统一管理游戏、核心、存档、封面与输入配置；MD 由 Genesis Plus GX 运行，Arcade/DC 通过独立外置 NRO 核心运行。", nullptr);
 
         float badgeX = px;
         const float badgeY = project.y + 126.f;
@@ -3243,7 +3243,7 @@ brls::View* AboutPage::_buildInfoTab() {
     std::vector<std::string> descLines = {
         "GBAStation 是一个基于 borealis UI 的跨平台模拟器前端，整合 libretro 核心，并原生集成 melonDS 与 Genesis Plus GX。",
         "当前支持 GB、GBC、GBA、FC、SFC、NDS、3DS、PICO-8、MD、Arcade 与 DC（NDS/3DS/DC 性能仍在优化中）。",
-        "内置核心包含 mGBA、GameBattle、Nestopia、FCEUmm、Snes9x 2005、Snes9x、melonDS、Azahar 与 Genesis Plus GX；外置链式核心包含 FBNeo 与 Flycast。",
+        "内置核心包含 mGBA、GameBattle、Nestopia、FCEUmm、Snes9x 2005、Snes9x、melonDS、Azahar 与 Genesis Plus GX；Arcade 与 DC 使用独立外置 NRO 核心。",
         "",
         "目前已实现功能：",
         "  •  游戏库功能、游戏封面、游玩时长、游戏次数",

@@ -14,6 +14,7 @@ enum class PlatformBadgeColor {
     GENESIS,
     ARCADE,
     DREAMCAST,
+    PSP,
     NONE,
 };
 

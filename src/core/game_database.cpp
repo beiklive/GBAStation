@@ -471,6 +471,7 @@ namespace beiklive
                 (int)beiklive::enums::EmuPlatform::EmuGenesis,
                 (int)beiklive::enums::EmuPlatform::EmuArcade,
                 (int)beiklive::enums::EmuPlatform::EmuDreamcast,
+                (int)beiklive::enums::EmuPlatform::EmuPSP,
             };
             std::error_code ec;
             for (int p : platforms)
@@ -493,6 +494,7 @@ namespace beiklive
         case (int)beiklive::enums::EmuPlatform::EmuGenesis: return beiklive::path::DATA_BASE_FILE_GENESIS;
         case (int)beiklive::enums::EmuPlatform::EmuArcade: return beiklive::path::DATA_BASE_FILE_ARCADE;
         case (int)beiklive::enums::EmuPlatform::EmuDreamcast: return beiklive::path::DATA_BASE_FILE_DC;
+        case (int)beiklive::enums::EmuPlatform::EmuPSP: return beiklive::path::DATA_BASE_FILE_PSP;
         default: return beiklive::path::DATA_BASE_FILE;
         }
     }
@@ -515,6 +517,7 @@ namespace beiklive
             (int)beiklive::enums::EmuPlatform::EmuGenesis,
             (int)beiklive::enums::EmuPlatform::EmuArcade,
             (int)beiklive::enums::EmuPlatform::EmuDreamcast,
+            (int)beiklive::enums::EmuPlatform::EmuPSP,
         };
 
         for (int platform : platforms)
@@ -609,6 +612,7 @@ namespace beiklive
             (int)beiklive::enums::EmuPlatform::EmuGenesis,
             (int)beiklive::enums::EmuPlatform::EmuArcade,
             (int)beiklive::enums::EmuPlatform::EmuDreamcast,
+            (int)beiklive::enums::EmuPlatform::EmuPSP,
         };
         for (int platform : platforms)
             platformData[platform] = nlohmann::json::array();

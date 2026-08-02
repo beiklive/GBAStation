@@ -192,14 +192,29 @@ InstallResult installGame(const beiklive::GameEntry& entry)
         entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS);
     const bool isThreeDs =
         entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS);
+    const bool isArcade =
+        entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuArcade);
+    const bool isDreamcast =
+        entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast);
+    const bool isPsp =
+        entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP);
     const std::string mainNro = "sdmc:/switch/GBAStation.nro";
-    const std::string nroPath = isNds
-        ? normalizeNroPath(GET_SETTING_KEY_STR(
-              "nds.externalNro.path", "/GBAStation/core/GBAStationNDSStub.nro"))
-        : isThreeDs
-            ? normalizeNroPath(GET_SETTING_KEY_STR(
-                  "3ds.externalNro.path", "/GBAStation/core/GBAStation3DSStub.nro"))
-            : mainNro;
+    std::string nroPath = mainNro;
+    if (isNds)
+        nroPath = normalizeNroPath(GET_SETTING_KEY_STR(
+            "nds.externalNro.path", "/GBAStation/core/GBAStationNDSStub.nro"));
+    else if (isThreeDs)
+        nroPath = normalizeNroPath(GET_SETTING_KEY_STR(
+            "3ds.externalNro.path", "/GBAStation/core/GBAStation3DSStub.nro"));
+    else if (isArcade)
+        nroPath = normalizeNroPath(GET_SETTING_KEY_STR(
+            "arcade.externalNro.path", "/GBAStation/core/GBAStationFBNeoStub.nro"));
+    else if (isDreamcast)
+        nroPath = normalizeNroPath(GET_SETTING_KEY_STR(
+            "dc.externalNro.path", "/GBAStation/core/GBAStationFlycastStub.nro"));
+    else if (isPsp)
+        nroPath = normalizeNroPath(GET_SETTING_KEY_STR(
+            "psp.externalNro.path", "/GBAStation/core/GBAStationPPSSPPStub.nro"));
 
     std::string args = quoteArgument(entry.path);
     std::string legacyArgs;
@@ -207,6 +222,10 @@ InstallResult installGame(const beiklive::GameEntry& entry)
     {
         legacyArgs = args + " --return " + quoteArgument(mainNro);
         args += " --exit-to-home";
+    }
+    else if (isArcade || isDreamcast || isPsp)
+    {
+        legacyArgs = args + " --return " + quoteArgument(mainNro);
     }
 
     const Result rc = sphaira::installForwarder(

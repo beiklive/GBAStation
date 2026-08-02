@@ -58,7 +58,8 @@ bool isLibraryRomType(beiklive::enums::FileType type)
 	return isDirectLaunchRomType(type) ||
 		   type == beiklive::enums::FileType::THREEDS_ROM ||
 		   type == beiklive::enums::FileType::ARCADE_ROM ||
-		   type == beiklive::enums::FileType::DREAMCAST_ROM;
+		   type == beiklive::enums::FileType::DREAMCAST_ROM ||
+		   type == beiklive::enums::FileType::PSP_ROM;
 }
 
 std::optional<std::string> parseDirectLaunchRom(int argc, char* argv[])
@@ -182,6 +183,46 @@ bool launchDirectGameActivity(const std::string& romPath)
 	ensureDirectGameDbEntry(romPath, fileType);
 
 #ifdef __SWITCH__
+	const auto launchExternalCore = [&](const char* label, int platform,
+	                                    const char* pathKey, const char* defaultPath,
+	                                    const char* returnKey) {
+		if (platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast))
+		{
+			std::string extension = std::filesystem::path(romPath).extension().string();
+			std::transform(extension.begin(), extension.end(), extension.begin(),
+				[](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+			if (extension == ".zip" || extension == ".7z")
+			{
+				brls::Application::notify("DC外部核心不能直接运行压缩包，请先解压为CHD/GDI/CDI/CUE");
+				return false;
+			}
+		}
+
+		const std::string nroPath = GET_SETTING_KEY_STR(pathKey, defaultPath);
+		const std::string returnPath = GET_SETTING_KEY_STR(returnKey, "sdmc:/switch/GBAStation.nro");
+		const std::string sessionToken = beiklive::makeExternalCoreSessionToken(romPath);
+
+		beiklive::switch_platform::NroLaunchRequest request;
+		request.nroPath = nroPath;
+		request.romPath = romPath;
+		request.returnNroPath = returnPath;
+		request.extraArgs = {"--gbastation-session", sessionToken};
+		auto result = beiklive::switch_platform::launchNroOnExit(request);
+		if (!result.success)
+		{
+			brls::Logger::error("Direct {} NRO launch failed: {}", label, result.message);
+			brls::Application::notify(std::string(label) + "独立NRO启动失败：" + result.message);
+			return false;
+		}
+
+		if (!beiklive::beginExternalCoreSession(romPath, platform, sessionToken))
+			brls::Logger::error("Direct {} external session tracking could not start for {}", label, romPath);
+
+		brls::Logger::info("Direct {} NRO launch configured: {}", label, result.message);
+		brls::Application::quit();
+		return true;
+	};
+
 	if (fileType == beiklive::enums::FileType::THREEDS_ROM)
 	{
 		const std::string nroPath = GET_SETTING_KEY_STR(
@@ -199,6 +240,27 @@ bool launchDirectGameActivity(const std::string& romPath)
 		brls::Logger::info("Direct 3DS NRO launch configured: {}", result.message);
 		brls::Application::quit();
 		return true;
+	}
+	if (fileType == beiklive::enums::FileType::ARCADE_ROM)
+	{
+		return launchExternalCore("Arcade",
+			static_cast<int>(beiklive::enums::EmuPlatform::EmuArcade),
+			"arcade.externalNro.path", "/GBAStation/core/GBAStationFBNeoStub.nro",
+			"arcade.externalNro.returnPath");
+	}
+	if (fileType == beiklive::enums::FileType::DREAMCAST_ROM)
+	{
+		return launchExternalCore("DC",
+			static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast),
+			"dc.externalNro.path", "/GBAStation/core/GBAStationFlycastStub.nro",
+			"dc.externalNro.returnPath");
+	}
+	if (fileType == beiklive::enums::FileType::PSP_ROM)
+	{
+		return launchExternalCore("PSP",
+			static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP),
+			"psp.externalNro.path", "/GBAStation/core/GBAStationPPSSPPStub.nro",
+			"psp.externalNro.returnPath");
 	}
 #endif
 

@@ -63,8 +63,10 @@ int platformFromExt(const std::string& ext)
         return static_cast<int>(beiklive::enums::EmuPlatform::EmuGenesis);
     if (ext == "zip" || ext == "7z")
         return static_cast<int>(beiklive::enums::EmuPlatform::EmuArcade);
-    if (ext == "cdi" || ext == "gdi" || ext == "chd")
+    if (ext == "cdi" || ext == "gdi" || ext == "chd" || ext == "cue")
         return static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast);
+    if (ext == "iso" || ext == "cso")
+        return static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP);
     return 0;
 }
 

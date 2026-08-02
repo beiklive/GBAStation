@@ -369,6 +369,7 @@ namespace beiklive
         SettingManager->SetDefault(KEY_DISPLAY_OVERLAY_GENESIS_PATH, ConfigValue(std::string("")));
         SettingManager->SetDefault(KEY_DISPLAY_OVERLAY_ARCADE_PATH, ConfigValue(std::string("")));
         SettingManager->SetDefault(KEY_DISPLAY_OVERLAY_DC_PATH, ConfigValue(std::string("")));
+        SettingManager->SetDefault(KEY_DISPLAY_OVERLAY_PSP_PATH, ConfigValue(std::string("")));
 
         // 着色器设置
         SettingManager->SetDefault(KEY_DISPLAY_SHADER_ENABLED, ConfigValue(0));
@@ -382,6 +383,7 @@ namespace beiklive
         SettingManager->SetDefault(KEY_DISPLAY_SHADER_GENESIS_PATH, ConfigValue(std::string("")));
         SettingManager->SetDefault(KEY_DISPLAY_SHADER_ARCADE_PATH, ConfigValue(std::string("")));
         SettingManager->SetDefault(KEY_DISPLAY_SHADER_DC_PATH, ConfigValue(std::string("")));
+        SettingManager->SetDefault(KEY_DISPLAY_SHADER_PSP_PATH, ConfigValue(std::string("")));
 
         // 调试设置
         SettingManager->SetDefault(KEY_DEBUG_LOG_LEVEL, ConfigValue(std::string("info")));
@@ -421,15 +423,37 @@ namespace beiklive
         SettingManager->SetDefault("nds.externalNro.returnPath", ConfigValue(std::string("sdmc:/switch/GBAStation.nro")));
         SettingManager->SetDefault("3ds.externalNro.path", ConfigValue(std::string("/GBAStation/core/GBAStation3DSStub.nro")));
         SettingManager->SetDefault("3ds.externalNro.returnPath", ConfigValue(std::string("sdmc:/switch/GBAStation.nro")));
-        SettingManager->SetDefault("arcade.externalNro.path", ConfigValue(std::string("/GBAStation/core/FBNeo.nro")));
+        SettingManager->SetDefault("arcade.externalNro.path", ConfigValue(std::string("/GBAStation/core/GBAStationFBNeoStub.nro")));
         SettingManager->SetDefault("arcade.externalNro.returnPath", ConfigValue(std::string("sdmc:/switch/GBAStation.nro")));
-        SettingManager->SetDefault("dc.externalNro.path", ConfigValue(std::string("/GBAStation/core/Flycast.nro")));
+        SettingManager->SetDefault("dc.externalNro.path", ConfigValue(std::string("/GBAStation/core/GBAStationFlycastStub.nro")));
         SettingManager->SetDefault("dc.externalNro.returnPath", ConfigValue(std::string("sdmc:/switch/GBAStation.nro")));
+        SettingManager->SetDefault("psp.externalNro.path", ConfigValue(std::string("/GBAStation/core/GBAStationPPSSPPStub.nro")));
+        SettingManager->SetDefault("psp.externalNro.returnPath", ConfigValue(std::string("sdmc:/switch/GBAStation.nro")));
         if (auto pathValue = SettingManager->Get("nds.externalNro.path"))
         {
             const auto path = pathValue->AsString().value_or("");
             if (path == "sdmc:/switch/GBAStationNDSStub.nro")
                 SettingManager->Set("nds.externalNro.path", ConfigValue(std::string("/GBAStation/core/GBAStationNDSStub.nro")));
+        }
+        if (auto pathValue = SettingManager->Get("arcade.externalNro.path"))
+        {
+            const auto path = pathValue->AsString().value_or("");
+            if (path == "/GBAStation/core/FBNeo.nro" || path == "sdmc:/switch/FBNeo.nro")
+                SettingManager->Set("arcade.externalNro.path", ConfigValue(std::string("/GBAStation/core/GBAStationFBNeoStub.nro")));
+        }
+        if (auto pathValue = SettingManager->Get("dc.externalNro.path"))
+        {
+            const auto path = pathValue->AsString().value_or("");
+            if (path == "/GBAStation/core/Flycast.nro" || path == "sdmc:/switch/Flycast.nro")
+                SettingManager->Set("dc.externalNro.path", ConfigValue(std::string("/GBAStation/core/GBAStationFlycastStub.nro")));
+        }
+        if (auto pathValue = SettingManager->Get("psp.externalNro.path"))
+        {
+            const auto path = pathValue->AsString().value_or("");
+            if (path == "/GBAStation/core/PPSSPP.nro" ||
+                path == "/GBAStation/core/PPSSPPStub.nro" ||
+                path == "sdmc:/switch/PPSSPP.nro")
+                SettingManager->Set("psp.externalNro.path", ConfigValue(std::string("/GBAStation/core/GBAStationPPSSPPStub.nro")));
         }
 
         // 核心设置
@@ -472,6 +496,21 @@ namespace beiklive
         SettingManager->SetDefault("core.azahar.audio_emulation", ConfigValue(std::string("hle")));
         SettingManager->SetDefault("core.azahar.audio_stretching", ConfigValue(0));
         SettingManager->SetDefault("core.azahar.realtime_audio", ConfigValue(1));
+
+        SettingManager->SetDefault("core.ppsspp.rendering_resolution", ConfigValue(std::string("1")));
+        SettingManager->SetDefault("core.ppsspp.frameskip", ConfigValue(std::string("0")));
+        SettingManager->SetDefault("core.ppsspp.auto_frameskip", ConfigValue(0));
+        SettingManager->SetDefault("core.ppsspp.fast_memory", ConfigValue(1));
+        SettingManager->SetDefault("core.ppsspp.io_thread", ConfigValue(1));
+        SettingManager->SetDefault("core.ppsspp.display_mode", ConfigValue(std::string("Display")));
+        SettingManager->SetDefault("core.ppsspp.display_size", ConfigValue(std::string("16:9")));
+
+        SettingManager->SetDefault("core.fbneo.display_mode", ConfigValue(std::string("Integer")));
+        SettingManager->SetDefault("core.fbneo.display_size", ConfigValue(std::string("Auto")));
+        SettingManager->SetDefault("core.fbneo.shader_type", ConfigValue(std::string("None")));
+
+        SettingManager->SetDefault("core.flycast.display_mode", ConfigValue(std::string("Display")));
+        SettingManager->SetDefault("core.flycast.display_size", ConfigValue(std::string("4:3")));
 
         SettingManager->SetDefault("core.mgba_gb_model", ConfigValue(std::string("Autodetect")));
         SettingManager->SetDefault("core.mgba_use_bios", ConfigValue(std::string("ON")));
@@ -552,7 +591,7 @@ namespace beiklive
         SettingManager->SetDefault("cheat.dir", ConfigValue(std::string("")));
 
         // 按键绑定默认值。GBA 保持无前缀；GBC/GB 独立前缀首次默认继承旧的无前缀配置。
-        const std::string mappingPrefixes[] = {"", "gbc.", "gb.", "nes.", "sfc.", "nds.", "3ds.", "md.", "arcade.", "dc."};
+        const std::string mappingPrefixes[] = {"", "gbc.", "gb.", "nes.", "sfc.", "nds.", "3ds.", "md.", "arcade.", "dc.", "psp."};
         for (const auto& prefix : mappingPrefixes)
         {
             const unsigned platformMask = beiklive::input_mapping::platformMaskForPrefix(prefix);
@@ -788,6 +827,8 @@ namespace beiklive
             return 240;
         case beiklive::enums::EmuPlatform::EmuDreamcast:
             return 480;
+        case beiklive::enums::EmuPlatform::EmuPSP:
+            return 272;
         default:
             break;
         }
@@ -818,6 +859,8 @@ namespace beiklive
             return 320;
         case beiklive::enums::EmuPlatform::EmuDreamcast:
             return 640;
+        case beiklive::enums::EmuPlatform::EmuPSP:
+            return 480;
         default:
             break;
         }
@@ -846,6 +889,7 @@ namespace beiklive
             return BK_RES("img/LogoLayer/GBA_LOGOLAY.png");
         case beiklive::enums::EmuPlatform::EmuArcade:
         case beiklive::enums::EmuPlatform::EmuDreamcast:
+        case beiklive::enums::EmuPlatform::EmuPSP:
             return BK_RES("img/LogoLayer/GBA_LOGOLAY.png");
         default:
             return BK_RES("img/LogoLayer/GBA_LOGOLAY.png");

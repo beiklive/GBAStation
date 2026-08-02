@@ -79,6 +79,9 @@ namespace
             case EmuPlatform::EmuNDS:  return nvgRGBA(54, 150, 190, 220);
             case EmuPlatform::Emu3DS:  return nvgRGBA(230, 79, 91, 220);
             case EmuPlatform::EmuGenesis: return nvgRGBA(23, 55, 139, 220);
+            case EmuPlatform::EmuArcade: return nvgRGBA(236, 134, 44, 220);
+            case EmuPlatform::EmuDreamcast: return nvgRGBA(0, 142, 180, 220);
+            case EmuPlatform::EmuPSP: return nvgRGBA(67, 118, 226, 220);
             default:                   return nvgRGBA(100, 100, 100, 200);
         }
     }

@@ -1625,6 +1625,12 @@ private:
                 [this]() { _openLibretroCore("GameBattle 核心设置", CoreType::Gambatte); });
         addCore("MD 核心", "Genesis Plus GX", 0xE338,
                 [this]() { _openGenesisCore(); });
+        addCore("Arcade 核心", "FBNeo", 0xE30F,
+                [this]() { _openFbneoCore(); });
+        addCore("Dreamcast 核心", "Flycast", 0xE30F,
+                [this]() { _openFlycastCore(); });
+        addCore("PSP 核心", "PPSSPP", 0xE30F,
+                [this]() { _openPpssppCore(); });
 
         emulator.push_back(_section("存档与封面"));
         emulator.push_back(_selector("SRAM 存档目录", "选择 SRAM 与 ROM 同目录或模拟器统一目录", beiklive::material::STORAGE,
@@ -1715,7 +1721,9 @@ private:
             {"NDS 按键映射", "nds.", "Nintendo DS 游戏与触摸指针热键", true},
             {"3DS 按键映射", "3ds.", "Nintendo 3DS 游戏与双摇杆控制", false},
             {"MD 按键映射", "md.", "Mega Drive 六键手柄与 Mode 键", false},
-            {"Arcade 按键映射", "arcade.", "FBNeo 街机游戏与热键", false},
+            {"Arcade 按键映射", "arcade.", "外部街机核心按键与热键", false},
+            {"DC 按键映射", "dc.", "Dreamcast 外部核心按键与热键", false},
+            {"PSP 按键映射", "psp.", "PPSSPP 外部核心按键与热键", false},
         };
         for (const auto& platform : platforms)
         {
@@ -1808,11 +1816,12 @@ private:
         display.push_back(_toggle("显示 FPS 覆盖层", "在游戏画面上显示实时帧率", 0xE8E5,
             []() { return cfgGetBool("display.showFps", false); }, [](bool v) { cfgSetBool("display.showFps", v); }));
 
-        const std::array<std::pair<const char*, const char*>, 8> platforms{{
+        const std::array<std::pair<const char*, const char*>, 9> platforms{{
             {"GBA", KEY_DISPLAY_OVERLAY_GBA_PATH}, {"GBC", KEY_DISPLAY_OVERLAY_GBC_PATH},
             {"GB", KEY_DISPLAY_OVERLAY_GB_PATH}, {"FC", KEY_DISPLAY_OVERLAY_NES_PATH},
             {"SFC", KEY_DISPLAY_OVERLAY_SNES_PATH}, {"MD", KEY_DISPLAY_OVERLAY_GENESIS_PATH},
-            {"Arcade", KEY_DISPLAY_OVERLAY_ARCADE_PATH}, {"DC", KEY_DISPLAY_OVERLAY_DC_PATH}}};
+            {"Arcade", KEY_DISPLAY_OVERLAY_ARCADE_PATH}, {"DC", KEY_DISPLAY_OVERLAY_DC_PATH},
+            {"PSP", KEY_DISPLAY_OVERLAY_PSP_PATH}}};
         display.push_back(_section("默认遮罩"));
         for (const auto& platform : platforms)
         {
@@ -1821,11 +1830,12 @@ private:
                 [key]() { const auto path = cfgGetStr(key, ""); return path.empty() ? "未设置" : beiklive::tools::getFileName(path); },
                 [this, key]() { _pickFile(key, {"png"}); }));
         }
-        const std::array<std::pair<const char*, const char*>, 8> shaders{{
+        const std::array<std::pair<const char*, const char*>, 9> shaders{{
             {"GBA", KEY_DISPLAY_SHADER_GBA_PATH}, {"GBC", KEY_DISPLAY_SHADER_GBC_PATH},
             {"GB", KEY_DISPLAY_SHADER_GB_PATH}, {"FC", KEY_DISPLAY_SHADER_NES_PATH},
             {"SFC", KEY_DISPLAY_SHADER_SNES_PATH}, {"MD", KEY_DISPLAY_SHADER_GENESIS_PATH},
-            {"Arcade", KEY_DISPLAY_SHADER_ARCADE_PATH}, {"DC", KEY_DISPLAY_SHADER_DC_PATH}}};
+            {"Arcade", KEY_DISPLAY_SHADER_ARCADE_PATH}, {"DC", KEY_DISPLAY_SHADER_DC_PATH},
+            {"PSP", KEY_DISPLAY_SHADER_PSP_PATH}}};
         display.push_back(_section("默认着色器"));
         for (const auto& platform : shaders)
         {
@@ -2100,6 +2110,66 @@ private:
         m_contentEntrance = 0.f;
     }
 
+    void _openMappingPage(const std::string& title, const std::string& prefix, bool nds)
+    {
+        m_mappingTitle = title;
+        m_mappingPrefix = prefix;
+        m_mappingNds = nds;
+        _buildMappingItems(m_mappingPrefix, m_mappingNds);
+        m_inMapping = true;
+        m_contentEntrance = 0.f;
+        invalidate();
+    }
+
+    void _appendExternalCorePaths(const std::string& coreName,
+                                  const std::string& pathKey,
+                                  const std::string& defaultPath,
+                                  const std::string& returnKey)
+    {
+        m_coreItems.push_back(_action(
+            coreName + " NRO 路径", "链式调用时启动的外部核心 Stub", beiklive::material::DESCRIPTION,
+            [pathKey, defaultPath]() {
+                const auto p = cfgGetStr(pathKey, defaultPath);
+                return p.empty() ? "未设置  >" : beiklive::tools::getFileName(p) + "  >";
+            },
+            [this, pathKey]() { _pickFile(pathKey, {"nro"}); }));
+        m_coreItems.push_back(_action(
+            "返回主程序路径", "外部核心退出游戏后返回的 GBAStation NRO", beiklive::material::DESCRIPTION,
+            [returnKey]() {
+                const auto p = cfgGetStr(returnKey, "sdmc:/switch/GBAStation.nro");
+                return p.empty() ? "未设置  >" : beiklive::tools::getFileName(p) + "  >";
+            },
+            [this, returnKey]() { _pickFile(returnKey, {"nro"}); }));
+    }
+
+    void _appendExternalDisplaySettings(const std::string& prefix,
+                                        const std::vector<std::string>& sizeValues,
+                                        const std::vector<std::string>& sizeLabels,
+                                        const std::string& defaultSize)
+    {
+        const std::vector<std::string> modeValues = {"Display", "Integer"};
+        m_coreItems.push_back(_selector(
+            "画面模式", "Display 为按比例填充，Integer 为整数缩放", 0xE8FF,
+            {"屏幕适配", "整数缩放"},
+            [prefix, modeValues]() {
+                return findIndex(modeValues, cfgGetStr("core." + prefix + ".display_mode", "Display"));
+            },
+            [prefix, modeValues](int i) {
+                if (i >= 0 && i < static_cast<int>(modeValues.size()))
+                    cfgSetStr("core." + prefix + ".display_mode", modeValues[static_cast<size_t>(i)]);
+            }));
+        m_coreItems.push_back(_selector(
+            "画面尺寸", "外部核心启动和菜单会读取同一配置", 0xE8FF,
+            sizeLabels,
+            [prefix, sizeValues, defaultSize]() {
+                return findIndex(sizeValues, cfgGetStr("core." + prefix + ".display_size", defaultSize));
+            },
+            [prefix, sizeValues](int i) {
+                if (i >= 0 && i < static_cast<int>(sizeValues.size()))
+                    cfgSetStr("core." + prefix + ".display_size", sizeValues[static_cast<size_t>(i)]);
+            }));
+    }
+
     void _openLibretroCore(const std::string& title, CoreType type)
     {
         m_coreItems.clear();
@@ -2213,6 +2283,120 @@ private:
         file("DLDI SD 镜像", "core.melonds_dldi_path", {"img","bin"});
         m_coreItems.push_back(_toggle("随机 MAC 地址", "每次启动生成随机无线地址", beiklive::material::WIFI, []() { return cfgGetBool("core.melonds_randomize_mac", false); }, [](bool v) { cfgSetBool("core.melonds_randomize_mac", v); }));
         _finishCorePage("melonDS 核心设置");
+    }
+
+    void _openFbneoCore()
+    {
+        m_coreItems.clear();
+        m_coreItems.push_back(_section("外部核心"));
+        _appendExternalCorePaths(
+            "FBNeo", "arcade.externalNro.path", "/GBAStation/core/GBAStationFBNeoStub.nro",
+            "arcade.externalNro.returnPath");
+
+        m_coreItems.push_back(_section("画面"));
+        _appendExternalDisplaySettings(
+            "fbneo",
+            {"Auto", "4:3", "16:9", "Stretch", "Original", "1x", "2x"},
+            {"自动", "4:3", "16:9", "拉伸", "原始", "1x", "2x"},
+            "Auto");
+        const std::vector<std::string> shaderValues = {"None", "xBRZ", "Eagle", "CrtEasyMode"};
+        m_coreItems.push_back(_selector(
+            "着色器", "外部街机核心的画面滤镜", 0xE40A,
+            {"关闭", "xBRZ", "Eagle", "CRT EasyMode"},
+            [shaderValues]() {
+                return findIndex(shaderValues, cfgGetStr("core.fbneo.shader_type", "None"));
+            },
+            [shaderValues](int i) {
+                if (i >= 0 && i < static_cast<int>(shaderValues.size()))
+                    cfgSetStr("core.fbneo.shader_type", shaderValues[static_cast<size_t>(i)]);
+            }));
+
+        m_coreItems.push_back(_section("按键"));
+        m_coreItems.push_back(_action(
+            "Arcade 按键映射", "配置 FBNeo 外部核心使用的 config.cfg 映射", 0xE30F,
+            []() { return std::string("进入配置  >"); },
+            [this]() { _openMappingPage("Arcade 按键映射", "arcade.", false); }));
+        _finishCorePage("FBNeo 核心设置");
+    }
+
+    void _openFlycastCore()
+    {
+        m_coreItems.clear();
+        m_coreItems.push_back(_section("外部核心"));
+        _appendExternalCorePaths(
+            "Flycast", "dc.externalNro.path", "/GBAStation/core/GBAStationFlycastStub.nro",
+            "dc.externalNro.returnPath");
+
+        m_coreItems.push_back(_section("画面"));
+        _appendExternalDisplaySettings(
+            "flycast",
+            {"4:3", "16:9", "Stretch", "Original", "1x", "2x", "Auto"},
+            {"4:3", "16:9", "拉伸", "原始", "1x", "2x", "自动"},
+            "4:3");
+
+        m_coreItems.push_back(_section("按键"));
+        m_coreItems.push_back(_action(
+            "DC 按键映射", "配置 Flycast 外部核心使用的 config.cfg 映射", 0xE30F,
+            []() { return std::string("进入配置  >"); },
+            [this]() { _openMappingPage("DC 按键映射", "dc.", false); }));
+        _finishCorePage("Flycast 核心设置");
+    }
+
+    void _openPpssppCore()
+    {
+        m_coreItems.clear();
+        m_coreItems.push_back(_section("外部核心"));
+        _appendExternalCorePaths(
+            "PPSSPP", "psp.externalNro.path", "/GBAStation/core/GBAStationPPSSPPStub.nro",
+            "psp.externalNro.returnPath");
+
+        m_coreItems.push_back(_section("性能与画面"));
+        _appendExternalDisplaySettings(
+            "ppsspp",
+            {"16:9", "4:3", "Stretch", "Original", "1x", "2x", "3x", "4x", "Auto"},
+            {"16:9", "4:3", "拉伸", "原始", "1x", "2x", "3x", "4x", "自动"},
+            "16:9");
+        const std::vector<std::string> resolutionValues = {"1", "2", "3", "4"};
+        m_coreItems.push_back(_selector(
+            "渲染分辨率", "提高 3D 画面内部清晰度，倍率越高负载越大", 0xE8FF,
+            {"1x PSP", "2x PSP", "3x PSP", "4x PSP"},
+            [resolutionValues]() {
+                return findIndex(resolutionValues, cfgGetStr("core.ppsspp.rendering_resolution", "1"));
+            },
+            [resolutionValues](int i) {
+                if (i >= 0 && i < static_cast<int>(resolutionValues.size()))
+                    cfgSetStr("core.ppsspp.rendering_resolution", resolutionValues[static_cast<size_t>(i)]);
+            }));
+        const std::vector<std::string> frameskipValues = {"0", "1", "2", "3", "4", "5"};
+        m_coreItems.push_back(_selector(
+            "跳帧", "降低渲染压力；0 表示关闭", 0xE8D5,
+            {"关闭", "1", "2", "3", "4", "5"},
+            [frameskipValues]() {
+                return findIndex(frameskipValues, cfgGetStr("core.ppsspp.frameskip", "0"));
+            },
+            [frameskipValues](int i) {
+                if (i >= 0 && i < static_cast<int>(frameskipValues.size()))
+                    cfgSetStr("core.ppsspp.frameskip", frameskipValues[static_cast<size_t>(i)]);
+            }));
+        m_coreItems.push_back(_toggle(
+            "自动跳帧", "低帧率时自动跳过部分画面", 0xE8D5,
+            []() { return cfgGetBool("core.ppsspp.auto_frameskip", false); },
+            [](bool v) { cfgSetBool("core.ppsspp.auto_frameskip", v); }));
+        m_coreItems.push_back(_toggle(
+            "快速内存", "启用 PPSSPP Fast Memory，速度更快但可能影响少数游戏", 0xE8EF,
+            []() { return cfgGetBool("core.ppsspp.fast_memory", true); },
+            [](bool v) { cfgSetBool("core.ppsspp.fast_memory", v); }));
+        m_coreItems.push_back(_toggle(
+            "I/O 独立线程", "将部分文件读取放到独立线程，减少卡顿", 0xE8D5,
+            []() { return cfgGetBool("core.ppsspp.io_thread", true); },
+            [](bool v) { cfgSetBool("core.ppsspp.io_thread", v); }));
+
+        m_coreItems.push_back(_section("按键"));
+        m_coreItems.push_back(_action(
+            "PSP 按键映射", "配置 PPSSPP 外部核心使用的 config.cfg 映射", 0xE30F,
+            []() { return std::string("进入配置  >"); },
+            [this]() { _openMappingPage("PSP 按键映射", "psp.", false); }));
+        _finishCorePage("PPSSPP 核心设置");
     }
 
     void _openGenesisCore()
@@ -2688,26 +2872,26 @@ private:
                 {"方向 下", "down", "PAD_DOWN"},
                 {"方向 左", "left", "PAD_LEFT"},
                 {"方向 右", "right", "PAD_RIGHT"},
-                {"FBNeo 按钮 1", "a", "PAD_A"},
-                {"FBNeo 按钮 2", "b", "PAD_B"},
-                {"FBNeo 按钮 3", "x", "PAD_X"},
-                {"FBNeo 按钮 4", "y", "PAD_Y"},
-                {"FBNeo 按钮 5", "l", "PAD_LB"},
-                {"FBNeo 按钮 6", "r", "PAD_RB"},
-                {"FBNeo 按钮 7", "l2", "PAD_LT"},
-                {"FBNeo 按钮 8", "r2", "PAD_RT"},
+                {"街机按钮 1", "a", "PAD_A"},
+                {"街机按钮 2", "b", "PAD_B"},
+                {"街机按钮 3", "x", "PAD_X"},
+                {"街机按钮 4", "y", "PAD_Y"},
+                {"街机按钮 5", "l", "PAD_LB"},
+                {"街机按钮 6", "r", "PAD_RB"},
+                {"街机按钮 7", "l2", "PAD_LT"},
+                {"街机按钮 8", "r2", "PAD_RT"},
                 {"投币", "select", "PAD_BACK"},
                 {"开始", "start", "PAD_START"},
             };
 
-            m_mappingItems.push_back(_section("FBNeo 游戏按键"));
+            m_mappingItems.push_back(_section("Arcade 游戏按键"));
             for (const auto& binding : arcadeBindings)
             {
-                _addBinding(binding.label, "直接映射到 FBNeo 游戏输入",
+                _addBinding(binding.label, "直接映射到外部街机核心输入",
                             beiklive::input_mapping::makeHandleKey(prefix, binding.suffix),
                             binding.defaultValue);
             }
-            m_mappingItems.push_back(_section("FBNeo 功能键"));
+            m_mappingItems.push_back(_section("Arcade 功能键"));
             _addBinding("打开菜单", "可绑定单键或双键组合",
                         beiklive::input_mapping::makeKey(prefix, "hotkey.menu.pad"),
                         "PAD_LT+PAD_RT");
@@ -2943,7 +3127,9 @@ private:
             const std::string key = item.configKey;
             openKeyCapture([this, key](const std::string& captured) {
                 if (captured.empty()) return;
-                if (key.rfind("arcade.", 0) == 0)
+                if (key.rfind("arcade.", 0) == 0 ||
+                    key.rfind("dc.", 0) == 0 ||
+                    key.rfind("psp.", 0) == 0)
                 {
                     cfgSetStr(key, captured);
                     invalidate();
@@ -4113,6 +4299,7 @@ brls::View *SettingPage::buildDisplayTab()
     box->addView(makeOverlayPathCell(beiklive::SettingKey::KEY_DISPLAY_OVERLAY_GENESIS_PATH, "MD 遮罩"));
     box->addView(makeOverlayPathCell(beiklive::SettingKey::KEY_DISPLAY_OVERLAY_ARCADE_PATH, "Arcade 遮罩"));
     box->addView(makeOverlayPathCell(beiklive::SettingKey::KEY_DISPLAY_OVERLAY_DC_PATH, "DC 遮罩"));
+    box->addView(makeOverlayPathCell(beiklive::SettingKey::KEY_DISPLAY_OVERLAY_PSP_PATH, "PSP 遮罩"));
 
     // ── 着色器设置 ────────────────────────────────────────────────────────────
     box->addView(makeHeader("着色器设置"));
@@ -4143,6 +4330,7 @@ brls::View *SettingPage::buildDisplayTab()
     box->addView(makeShaderPathCell(beiklive::SettingKey::KEY_DISPLAY_SHADER_GENESIS_PATH, "MD 着色器"));
     box->addView(makeShaderPathCell(beiklive::SettingKey::KEY_DISPLAY_SHADER_ARCADE_PATH, "Arcade 着色器"));
     box->addView(makeShaderPathCell(beiklive::SettingKey::KEY_DISPLAY_SHADER_DC_PATH, "DC 着色器"));
+    box->addView(makeShaderPathCell(beiklive::SettingKey::KEY_DISPLAY_SHADER_PSP_PATH, "PSP 着色器"));
 
     scroll->setContentView(box);
     auto *container = new brls::Box(brls::Axis::COLUMN);
@@ -4435,6 +4623,8 @@ brls::View *SettingPage::buildKeyBindTab()
         {"映射NDS游戏", "nds.", true},
         {"映射MD游戏", "md.", false},
         {"映射Arcade游戏", "arcade.", false},
+        {"映射DC游戏", "dc.", false},
+        {"映射PSP游戏", "psp.", false},
     };
 
     for (const auto& platform : platforms)

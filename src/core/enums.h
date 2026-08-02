@@ -60,7 +60,8 @@ namespace beiklive::enums
         Emu3DS,
         EmuGenesis,
         EmuArcade,
-        EmuDreamcast
+        EmuDreamcast,
+        EmuPSP
     };
     // 文件类型,用于文件浏览器
     enum class FileType
@@ -74,8 +75,9 @@ namespace beiklive::enums
         NDS_ROM, // NDS文件
         THREEDS_ROM, // Nintendo 3DS文件（.cia/.cci/.3ds）
         GENESIS_ROM, // Mega Drive / Genesis文件
-        ARCADE_ROM, // Arcade / FBNeo文件
+        ARCADE_ROM, // Arcade文件
         DREAMCAST_ROM, // Dreamcast文件
+        PSP_ROM, // PSP文件
 
         // 上面的顺序必须与EmuPlatform保持一致，方便后续通过平台类型直接转换为文件类型
 

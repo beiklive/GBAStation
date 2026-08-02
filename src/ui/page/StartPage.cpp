@@ -474,6 +474,16 @@ namespace beiklive
             return dirItem.itemType == beiklive::enums::FileType::DREAMCAST_ROM;
         }
 
+        bool shouldUsePspExternalNro(const beiklive::GameEntry& entry)
+        {
+            return entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP);
+        }
+
+        bool shouldUsePspExternalNro(const beiklive::DirListData& dirItem)
+        {
+            return dirItem.itemType == beiklive::enums::FileType::PSP_ROM;
+        }
+
         [[maybe_unused]] bool exportThreeDsCoreConfig()
         {
             if (!beiklive::SettingManager)
@@ -689,13 +699,13 @@ namespace beiklive
                 if (extension == ".iso")
                 {
                     brls::Application::notify(
-                        "Flycast不支持缺少轨道信息的原始ISO，请转换为CHD，或使用GDI/CDI/CUE");
+                        "DC外部核心不支持缺少轨道信息的原始ISO，请转换为CHD，或使用GDI/CDI/CUE");
                     return false;
                 }
                 if (extension == ".zip" || extension == ".7z")
                 {
                     brls::Application::notify(
-                        "Flycast不能直接运行压缩包，请先解压为CHD/GDI/CDI/CUE");
+                        "DC外部核心不能直接运行压缩包，请先解压为CHD/GDI/CDI/CUE");
                     return false;
                 }
             }
@@ -889,8 +899,8 @@ namespace beiklive
         {
 #ifdef __SWITCH__
             return launchExternalCoreNro(entry.path, entry.title, "Arcade",
-				static_cast<int>(beiklive::enums::EmuPlatform::EmuArcade),
-                "arcade.externalNro.path", "/GBAStation/core/FBNeo.nro",
+                static_cast<int>(beiklive::enums::EmuPlatform::EmuArcade),
+                "arcade.externalNro.path", "/GBAStation/core/GBAStationFBNeoStub.nro",
                 "arcade.externalNro.returnPath");
 #else
             brls::Application::notify("Arcade 独立运行时仅支持 Switch");
@@ -901,11 +911,23 @@ namespace beiklive
         {
 #ifdef __SWITCH__
             return launchExternalCoreNro(entry.path, entry.title, "DC",
-				static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast),
-                "dc.externalNro.path", "/GBAStation/core/Flycast.nro",
+                static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast),
+                "dc.externalNro.path", "/GBAStation/core/GBAStationFlycastStub.nro",
                 "dc.externalNro.returnPath");
 #else
             brls::Application::notify("DC 独立运行时仅支持 Switch");
+            return false;
+#endif
+        }
+        if (shouldUsePspExternalNro(entry))
+        {
+#ifdef __SWITCH__
+            return launchExternalCoreNro(entry.path, entry.title, "PSP",
+				static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP),
+                "psp.externalNro.path", "/GBAStation/core/GBAStationPPSSPPStub.nro",
+                "psp.externalNro.returnPath");
+#else
+            brls::Application::notify("PSP 独立运行时仅支持 Switch");
             return false;
 #endif
         }
@@ -958,8 +980,8 @@ namespace beiklive
             ensureGameDbEntryForFileLaunch(dirItem);
 #ifdef __SWITCH__
             launchExternalCoreNro(dirItem.fullPath, dirItem.fileName, "Arcade",
-				static_cast<int>(beiklive::enums::EmuPlatform::EmuArcade),
-                "arcade.externalNro.path", "/GBAStation/core/FBNeo.nro",
+                static_cast<int>(beiklive::enums::EmuPlatform::EmuArcade),
+                "arcade.externalNro.path", "/GBAStation/core/GBAStationFBNeoStub.nro",
                 "arcade.externalNro.returnPath");
             return;
 #else
@@ -972,12 +994,26 @@ namespace beiklive
             ensureGameDbEntryForFileLaunch(dirItem);
 #ifdef __SWITCH__
             launchExternalCoreNro(dirItem.fullPath, dirItem.fileName, "DC",
-				static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast),
-                "dc.externalNro.path", "/GBAStation/core/Flycast.nro",
+                static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast),
+                "dc.externalNro.path", "/GBAStation/core/GBAStationFlycastStub.nro",
                 "dc.externalNro.returnPath");
             return;
 #else
             brls::Application::notify("DC 独立运行时仅支持 Switch");
+            return;
+#endif
+        }
+        if (shouldUsePspExternalNro(dirItem))
+        {
+            ensureGameDbEntryForFileLaunch(dirItem);
+#ifdef __SWITCH__
+            launchExternalCoreNro(dirItem.fullPath, dirItem.fileName, "PSP",
+				static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP),
+                "psp.externalNro.path", "/GBAStation/core/GBAStationPPSSPPStub.nro",
+                "psp.externalNro.returnPath");
+            return;
+#else
+            brls::Application::notify("PSP 独立运行时仅支持 Switch");
             return;
 #endif
         }
@@ -1183,6 +1219,7 @@ namespace beiklive
             case beiklive::enums::FileType::GENESIS_ROM:
             case beiklive::enums::FileType::ARCADE_ROM:
             case beiklive::enums::FileType::DREAMCAST_ROM:
+            case beiklive::enums::FileType::PSP_ROM:
                 brls::Application::notify("启动游戏：" + dirItem.fileName);
                 _pushGameActivity(dirItem, this);
                 break;

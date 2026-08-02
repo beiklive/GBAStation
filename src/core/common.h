@@ -169,6 +169,9 @@ namespace beiklive // 全局功能函数
         static const std::vector<CoreOption> dreamcastCores = {
             {"flycast-external", "Flycast", CoreType::Mgba},
         };
+        static const std::vector<CoreOption> pspCores = {
+            {"ppsspp-external", "PPSSPP", CoreType::Mgba},
+        };
         static const std::vector<CoreOption> emptyCores;
 
         switch (platform)
@@ -192,6 +195,8 @@ namespace beiklive // 全局功能函数
             return arcadeCores;
         case (int)beiklive::enums::EmuPlatform::EmuDreamcast:
             return dreamcastCores;
+        case (int)beiklive::enums::EmuPlatform::EmuPSP:
+            return pspCores;
         default:
             return emptyCores;
         }
@@ -219,6 +224,8 @@ namespace beiklive // 全局功能函数
             return "fbneo-external";
         case (int)beiklive::enums::EmuPlatform::EmuDreamcast:
             return "flycast-external";
+        case (int)beiklive::enums::EmuPlatform::EmuPSP:
+            return "ppsspp-external";
         default:
             return "";
         }
@@ -278,6 +285,7 @@ namespace beiklive // 全局功能函数
             return "";  // Genesis Plus GX 源码静态接入，无需路径
         case (int)beiklive::enums::EmuPlatform::EmuArcade:
         case (int)beiklive::enums::EmuPlatform::EmuDreamcast:
+        case (int)beiklive::enums::EmuPlatform::EmuPSP:
             return "";  // 大型核心走独立 NRO 配置
         default:
             return "";

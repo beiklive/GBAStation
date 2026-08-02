@@ -3,9 +3,11 @@
 #include <cstdio>
 #include <mutex>
 #include <sstream>
+#include <cstdarg>
 
 #ifdef __SWITCH__
 #include <switch.h>
+#include <sys/stat.h>
 #endif
 
 namespace beiklive::switch_platform {
@@ -58,6 +60,26 @@ bool fileExistsWithSdmcAlias(const std::string& path)
     return false;
 }
 
+void appendLaunchLog(const char* fmt, ...)
+{
+#ifdef __SWITCH__
+    mkdir("sdmc:/GBAStation", 0777);
+    mkdir("sdmc:/GBAStation/debug", 0777);
+    FILE* fp = std::fopen("sdmc:/GBAStation/debug/external_core_launch.log", "a");
+    if (!fp)
+        return;
+    va_list args;
+    va_start(args, fmt);
+    std::vfprintf(fp, fmt, args);
+    va_end(args);
+    std::fputc('\n', fp);
+    std::fflush(fp);
+    std::fclose(fp);
+#else
+    (void)fmt;
+#endif
+}
+
 } // namespace
 
 NroLaunchResult launchNroOnExit(const NroLaunchRequest& request)
@@ -66,14 +88,28 @@ NroLaunchResult launchNroOnExit(const NroLaunchRequest& request)
     (void)request;
     return {false, "NRO chainload is only available on Switch"};
 #else
+    appendLaunchLog("launch request nro=%s rom=%s return=%s",
+        request.nroPath.c_str(), request.romPath.c_str(), request.returnNroPath.c_str());
     if (request.nroPath.empty())
+    {
+        appendLaunchLog("launch reject: empty nro path");
         return {false, "NRO path is empty"};
+    }
     if (!fileExistsWithSdmcAlias(request.nroPath))
+    {
+        appendLaunchLog("launch reject: missing nro %s", request.nroPath.c_str());
         return {false, "NRO does not exist: " + request.nroPath};
+    }
     if (!request.romPath.empty() && !fileExistsWithSdmcAlias(request.romPath))
+    {
+        appendLaunchLog("launch reject: missing rom %s", request.romPath.c_str());
         return {false, "ROM does not exist: " + request.romPath};
+    }
     if (!envHasNextLoad())
+    {
+        appendLaunchLog("launch reject: envSetNextLoad unavailable");
         return {false, "Current homebrew loader does not support envSetNextLoad"};
+    }
 
     std::ostringstream argv;
     argv << quoteArg(request.nroPath);
@@ -90,6 +126,7 @@ NroLaunchResult launchNroOnExit(const NroLaunchRequest& request)
         g_pendingLaunch.argv = argv.str();
     }
 
+    appendLaunchLog("launch pending nro=%s argv=%s", request.nroPath.c_str(), argv.str().c_str());
     return {true, "Next NRO pending: " + request.nroPath};
 #endif
 }
@@ -107,19 +144,28 @@ NroLaunchResult commitPendingNroLaunch()
     }
 
     if (pending.nroPath.empty())
+    {
+        appendLaunchLog("commit: no pending nro");
         return {true, "No pending NRO launch"};
+    }
 
     if (!envHasNextLoad())
+    {
+        appendLaunchLog("commit reject: envSetNextLoad unavailable");
         return {false, "Current homebrew loader does not support envSetNextLoad"};
+    }
 
     const Result rc = envSetNextLoad(pending.nroPath.c_str(), pending.argv.c_str());
     if (R_FAILED(rc))
     {
         std::ostringstream msg;
         msg << "envSetNextLoad failed: 0x" << std::hex << rc;
+        appendLaunchLog("commit failed nro=%s rc=0x%x argv=%s",
+            pending.nroPath.c_str(), static_cast<unsigned>(rc), pending.argv.c_str());
         return {false, msg.str()};
     }
 
+    appendLaunchLog("commit ok nro=%s argv=%s", pending.nroPath.c_str(), pending.argv.c_str());
     return {true, "Next NRO configured: " + pending.nroPath};
 #endif
 }

@@ -297,8 +297,8 @@ elseif (PLATFORM_SWITCH)
         COMMAND ${NX_NACPTOOL_EXE} --create "${PROJECT_NAME}" "${PROJECT_AUTHOR}" "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_ALTER}" ${PROJECT_NAME}.nacp --titleid=${PROJECT_TITLEID}
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_RESOURCES} ${CMAKE_BINARY_DIR}/resources
         COMMAND ${CMAKE_COMMAND} -E rm -f ${CMAKE_BINARY_DIR}/resources/core/GBAStationNDSStub.nro
-        COMMAND ${CMAKE_COMMAND} -E rm -f ${CMAKE_BINARY_DIR}/resources/core/Flycast.nro
-        COMMAND ${CMAKE_COMMAND} -E rm -f ${CMAKE_BINARY_DIR}/resources/core/FBNeo.nro
+        COMMAND ${CMAKE_COMMAND} -E rm -f ${CMAKE_BINARY_DIR}/resources/core/GBAStationFlycastStub.nro
+        COMMAND ${CMAKE_COMMAND} -E rm -f ${CMAKE_BINARY_DIR}/resources/core/GBAStationFBNeoStub.nro
         COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/resources/font
         COMMAND ${NX_ELF2NRO_EXE} ${PROJECT_NAME}.elf ${PROJECT_NAME}.nro --icon=${PROJECT_ICON} --nacp=${PROJECT_NAME}.nacp --romfsdir=${CMAKE_BINARY_DIR}/resources
     )

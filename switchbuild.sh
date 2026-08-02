@@ -139,13 +139,17 @@ echo "[线程] ${JOBS}"
 # ────────────────────────────────────────────────────────────
 
 ROOT_DIR="$(pwd)"
-BUILD_DIR="${ROOT_DIR}/build_switch"
-PFBN_BUILD_DIR="${ROOT_DIR}/build_switch_pfbneo"
-FLYCAST_BUILD_DIR="${ROOT_DIR}/build_switch_flycast"
-THREEDS_STUB_SOURCE="${ROOT_DIR}/../GBAStation_3DS/GBAStation3DSStub.nro"
+BUILD_DIR="${BUILD_DIR:-${ROOT_DIR}/build_switch}"
+THREEDS_STUB_SOURCE="${ROOT_DIR}/../.example/dekopon/build/switch-codex/src/citra_switch/dekopon.nro"
+FBNEO_STUB_SOURCE="${ROOT_DIR}/../GBAStation_fbneo/GBAStationFBNeoStub.nro"
+FLYCAST_STUB_SOURCE="${ROOT_DIR}/../GBAStation_flycast/GBAStationFlycastStub.nro"
+PPSSPP_STUB_SOURCE="${ROOT_DIR}/../GBAStation_ppsspp/GBAStationPPSSPPStub.nro"
 EXTERNAL_CORE_NROS=(
     "FBNeo.nro"
     "Flycast.nro"
+    "GBAStationFBNeoStub.nro"
+    "GBAStationFlycastStub.nro"
+    "GBAStationPPSSPPStub.nro"
 )
 
 mkdir -p "${BUILD_DIR}"
@@ -187,97 +191,25 @@ else
 fi
 
 # ────────────────────────────────────────────────────────────
-# 外置核心构建
+# 外置核心复制
 # ────────────────────────────────────────────────────────────
 
-require_external_core_tools() {
-    if ! command -v ninja >/dev/null 2>&1; then
-        echo "[错误] 构建外置核心需要 Ninja，请先安装 ninja"
-        exit 1
-    fi
-}
+copy_external_core_stub() {
+    local label="$1"
+    local source="$2"
+    local output_name="$3"
 
-build_pfbneo_external_core() {
     echo ""
-    echo "[4/6] 构建 FBNeo 外置核心..."
+    echo "[4/4] 复制 ${label} 外置核心..."
 
-    if [ ! -d "${ROOT_DIR}/third_party/pemu" ]; then
-        echo "[错误] 找不到 third_party/pemu，无法构建 FBNeo 外置核心"
-        exit 1
-    fi
-
-    mkdir -p "${PFBN_BUILD_DIR}/tmp"
-
-    TMPDIR="${PFBN_BUILD_DIR}/tmp" \
-    TMP="${PFBN_BUILD_DIR}/tmp" \
-    TEMP="${PFBN_BUILD_DIR}/tmp" \
-    cmake \
-        -S "${ROOT_DIR}/third_party/pemu" \
-        -B "${PFBN_BUILD_DIR}" \
-        -DPLATFORM_SWITCH=ON \
-        -DOPTION_EMU=pfbneo \
-        -DOPTION_MPV_PLAYER=OFF \
-        -DOPTION_BUILTIN_LIBCONFIG=ON \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_TOOLCHAIN_FILE="${DEVKITPRO}/cmake/Switch.cmake" \
-        -DCMAKE_PREFIX_PATH="${DEVKITPRO}/portlibs/switch" \
-        -G Ninja
-
-    TMPDIR="${PFBN_BUILD_DIR}/tmp" \
-    TMP="${PFBN_BUILD_DIR}/tmp" \
-    TEMP="${PFBN_BUILD_DIR}/tmp" \
-    cmake --build "${PFBN_BUILD_DIR}" --target pfbneo.nro -j "${JOBS}"
-
-    local output="${PFBN_BUILD_DIR}/src/cores/pfbneo/pfbneo.nro"
-    if [ ! -f "${output}" ]; then
-        echo "[错误] FBNeo 外置核心构建完成但未找到输出: ${output}"
+    if [ ! -f "${source}" ]; then
+        echo "[错误] 找不到 ${label} 外置核心: ${source}"
+        echo "请先在对应独立仓库构建 ${output_name}"
         exit 1
     fi
 
     mkdir -p "${BUILD_DIR}/GBAStation/core"
-    cp "${output}" "${BUILD_DIR}/GBAStation/core/FBNeo.nro"
-}
-
-build_flycast_external_core() {
-    echo ""
-    echo "[5/6] 构建 Flycast 外置核心..."
-
-    if [ ! -d "${ROOT_DIR}/third_party/flycast" ]; then
-        echo "[错误] 找不到 third_party/flycast，无法构建 Flycast 外置核心"
-        exit 1
-    fi
-
-    mkdir -p "${FLYCAST_BUILD_DIR}/tmp"
-    rm -f "${FLYCAST_BUILD_DIR}/CMakeCache.txt"
-    rm -rf "${FLYCAST_BUILD_DIR}/CMakeFiles"
-
-    TMPDIR="${FLYCAST_BUILD_DIR}/tmp" \
-    TMP="${FLYCAST_BUILD_DIR}/tmp" \
-    TEMP="${FLYCAST_BUILD_DIR}/tmp" \
-    cmake \
-        -S "${ROOT_DIR}/third_party/flycast" \
-        -B "${FLYCAST_BUILD_DIR}" \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DNINTENDO_SWITCH=ON \
-        -DUSE_VULKAN=OFF \
-        -DUSE_HOST_SDL=ON \
-        -DCMAKE_TOOLCHAIN_FILE="${DEVKITPRO}/cmake/Switch.cmake" \
-        -DCMAKE_PREFIX_PATH="${DEVKITPRO}/portlibs/switch" \
-        -G Ninja
-
-    TMPDIR="${FLYCAST_BUILD_DIR}/tmp" \
-    TMP="${FLYCAST_BUILD_DIR}/tmp" \
-    TEMP="${FLYCAST_BUILD_DIR}/tmp" \
-    cmake --build "${FLYCAST_BUILD_DIR}" --target flycast.nro -j "${JOBS}"
-
-    local output="${FLYCAST_BUILD_DIR}/flycast.nro"
-    if [ ! -f "${output}" ]; then
-        echo "[错误] Flycast 外置核心构建完成但未找到输出: ${output}"
-        exit 1
-    fi
-
-    mkdir -p "${BUILD_DIR}/GBAStation/core"
-    cp "${output}" "${BUILD_DIR}/GBAStation/core/Flycast.nro"
+    cp "${source}" "${BUILD_DIR}/GBAStation/core/${output_name}"
 }
 
 print_nro_size() {
@@ -306,7 +238,7 @@ print_nro_size() {
 cd "${BUILD_DIR}"
 
 echo ""
-echo "[1/6] CMake配置..."
+echo "[1/4] CMake配置..."
 
 cmake .. \
     -DPLATFORM_SWITCH=ON \
@@ -315,12 +247,12 @@ cmake .. \
     -DCMAKE_DEPENDS_USE_COMPILER=FALSE
 
 echo ""
-echo "[2/6] 编译..."
+echo "[2/4] 编译..."
 
 cmake --build . -j "${JOBS}"
 
 echo ""
-echo "[3/6] 打包 NRO..."
+echo "[3/4] 打包 NRO..."
 
 cmake --build . --target GBAStation.nro
 cmake --build . --target GBAStationNDSStub.nro
@@ -338,9 +270,9 @@ else
     echo "[警告] 未找到 3DS Stub: ${THREEDS_STUB_SOURCE}"
 fi
 
-require_external_core_tools
-build_pfbneo_external_core
-build_flycast_external_core
+copy_external_core_stub "FBNeo" "${FBNEO_STUB_SOURCE}" "GBAStationFBNeoStub.nro"
+copy_external_core_stub "Flycast" "${FLYCAST_STUB_SOURCE}" "GBAStationFlycastStub.nro"
+copy_external_core_stub "PPSSPP" "${PPSSPP_STUB_SOURCE}" "GBAStationPPSSPPStub.nro"
 
 # ────────────────────────────────────────────────────────────
 # 输出大小
@@ -353,8 +285,9 @@ print_nro_size "GBAStation.nro" "${BUILD_DIR}/GBAStation.nro"
 print_nro_size "GBAStationNDSStub.nro" "${BUILD_DIR}/GBAStationNDSStub.nro"
 print_nro_size "GBAStation/core/GBAStationNDSStub.nro" "${BUILD_DIR}/GBAStation/core/GBAStationNDSStub.nro"
 print_nro_size "GBAStation/core/GBAStation3DSStub.nro" "${BUILD_DIR}/GBAStation/core/GBAStation3DSStub.nro"
-print_nro_size "GBAStation/core/FBNeo.nro" "${BUILD_DIR}/GBAStation/core/FBNeo.nro"
-print_nro_size "GBAStation/core/Flycast.nro" "${BUILD_DIR}/GBAStation/core/Flycast.nro"
+print_nro_size "GBAStation/core/GBAStationFBNeoStub.nro" "${BUILD_DIR}/GBAStation/core/GBAStationFBNeoStub.nro"
+print_nro_size "GBAStation/core/GBAStationFlycastStub.nro" "${BUILD_DIR}/GBAStation/core/GBAStationFlycastStub.nro"
+print_nro_size "GBAStation/core/GBAStationPPSSPPStub.nro" "${BUILD_DIR}/GBAStation/core/GBAStationPPSSPPStub.nro"
 
 echo "=================================================="
 
@@ -364,5 +297,6 @@ echo "${BUILD_DIR}/GBAStation.nro"
 echo "${BUILD_DIR}/GBAStationNDSStub.nro"
 echo "${BUILD_DIR}/GBAStation/core/GBAStationNDSStub.nro"
 echo "${BUILD_DIR}/GBAStation/core/GBAStation3DSStub.nro"
-echo "${BUILD_DIR}/GBAStation/core/FBNeo.nro"
-echo "${BUILD_DIR}/GBAStation/core/Flycast.nro"
+echo "${BUILD_DIR}/GBAStation/core/GBAStationFBNeoStub.nro"
+echo "${BUILD_DIR}/GBAStation/core/GBAStationFlycastStub.nro"
+echo "${BUILD_DIR}/GBAStation/core/GBAStationPPSSPPStub.nro"

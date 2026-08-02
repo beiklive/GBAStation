@@ -279,8 +279,10 @@ int platformFromExtension(const std::string& ext)
         return static_cast<int>(beiklive::enums::EmuPlatform::EmuGenesis);
     if (ext == "zip" || ext == "7z")
         return static_cast<int>(beiklive::enums::EmuPlatform::EmuArcade);
-    if (ext == "cdi" || ext == "gdi" || ext == "chd")
+    if (ext == "cdi" || ext == "gdi" || ext == "chd" || ext == "cue")
         return static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast);
+    if (ext == "iso" || ext == "cso")
+        return static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP);
     return -1;
 }
 
@@ -310,6 +312,7 @@ std::string overlayKeyForPlatform(int platform)
     case beiklive::enums::EmuPlatform::EmuGenesis: return sk::KEY_DISPLAY_OVERLAY_GENESIS_PATH;
     case beiklive::enums::EmuPlatform::EmuArcade: return sk::KEY_DISPLAY_OVERLAY_ARCADE_PATH;
     case beiklive::enums::EmuPlatform::EmuDreamcast: return sk::KEY_DISPLAY_OVERLAY_DC_PATH;
+    case beiklive::enums::EmuPlatform::EmuPSP: return sk::KEY_DISPLAY_OVERLAY_PSP_PATH;
     default: return "";
     }
 }
@@ -328,6 +331,7 @@ std::string shaderKeyForPlatform(int platform)
     case beiklive::enums::EmuPlatform::EmuGenesis: return sk::KEY_DISPLAY_SHADER_GENESIS_PATH;
     case beiklive::enums::EmuPlatform::EmuArcade: return sk::KEY_DISPLAY_SHADER_ARCADE_PATH;
     case beiklive::enums::EmuPlatform::EmuDreamcast: return sk::KEY_DISPLAY_SHADER_DC_PATH;
+    case beiklive::enums::EmuPlatform::EmuPSP: return sk::KEY_DISPLAY_SHADER_PSP_PATH;
     default: return "";
     }
 }
@@ -1421,6 +1425,7 @@ void DataManagementPage::init()
         {"导入 MD 播放列表", "MD · .lpl", static_cast<int>(enums::EmuPlatform::EmuGenesis)},
         {"导入 Arcade 播放列表", "Arcade · .lpl", static_cast<int>(enums::EmuPlatform::EmuArcade)},
         {"导入 DC 播放列表", "DC · .lpl", static_cast<int>(enums::EmuPlatform::EmuDreamcast)},
+        {"导入 PSP 播放列表", "PSP · .lpl", static_cast<int>(enums::EmuPlatform::EmuPSP)},
     };
     for (const auto& platform : bundlePlatforms)
     {
@@ -1782,6 +1787,7 @@ brls::View* DataManagementPage::buildBundleImportTab()
         {"选择MD游戏的lpl文件",  "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuGenesis)},
         {"选择Arcade游戏的lpl文件",  "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuArcade)},
         {"选择DC游戏的lpl文件",  "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast)},
+        {"选择PSP游戏的lpl文件",  "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP)},
     };
     
     box->addView(makeHint("lpl 文件通常位于 RetroArch 的 playlists 目录下，不懂lpl文件语法规则不要自行删改"));

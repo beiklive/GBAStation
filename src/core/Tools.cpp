@@ -39,8 +39,10 @@ beiklive::enums::FileType fileTypeFromExtension(const std::string& ext, bool arc
         return beiklive::enums::FileType::SNES_ROM;
     if (ext == "md" || ext == "gen" || ext == "smd" || (!archiveMember && ext == "bin"))
         return beiklive::enums::FileType::GENESIS_ROM;
-    if (ext == "cdi" || ext == "gdi" || ext == "chd" || ext == "cue" || ext == "iso")
+    if (ext == "cdi" || ext == "gdi" || ext == "chd" || ext == "cue")
         return beiklive::enums::FileType::DREAMCAST_ROM;
+    if (ext == "iso" || ext == "cso")
+        return beiklive::enums::FileType::PSP_ROM;
     if (ext == "nds")
         return beiklive::enums::FileType::NDS_ROM;
     if (ext == "cia" || ext == "cci" || ext == "3ds")
@@ -158,9 +160,12 @@ beiklive::enums::FileType fileTypeFromArchiveProbe(const std::vector<unsigned ch
     if (archiveProbeContainsExtension(bytes, "cdi") ||
         archiveProbeContainsExtension(bytes, "gdi") ||
         archiveProbeContainsExtension(bytes, "chd") ||
-        archiveProbeContainsExtension(bytes, "cue") ||
-        archiveProbeContainsExtension(bytes, "iso"))
+        archiveProbeContainsExtension(bytes, "cue"))
         return beiklive::enums::FileType::DREAMCAST_ROM;
+
+    if (archiveProbeContainsExtension(bytes, "iso") ||
+        archiveProbeContainsExtension(bytes, "cso"))
+        return beiklive::enums::FileType::PSP_ROM;
 
     if (archiveProbeContainsExtension(bytes, "md") ||
         archiveProbeContainsExtension(bytes, "gen") ||
@@ -290,7 +295,7 @@ beiklive::enums::FileType detectArchiveFileType(const fs::path& path)
         std::string memberExt = getFileExtension(memberPath);
         contentExts.push_back(memberExt);
 
-        if (memberExt == "cdi" || memberExt == "gdi" || memberExt == "chd" || memberExt == "cue" || memberExt == "iso")
+        if (memberExt == "cdi" || memberExt == "gdi" || memberExt == "chd" || memberExt == "cue")
             hasDreamcastDisc = true;
 
         if (memberExt == "bin")
@@ -345,6 +350,8 @@ int platformFromFileType(beiklive::enums::FileType type)
             return static_cast<int>(beiklive::enums::EmuPlatform::EmuArcade);
         case beiklive::enums::FileType::DREAMCAST_ROM:
             return static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast);
+        case beiklive::enums::FileType::PSP_ROM:
+            return static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP);
         default:
             return -1;
     }
@@ -465,6 +472,7 @@ std::string getIconPathWithPrefix(beiklive::enums::FileType type, const std::str
         case beiklive::enums::FileType::GENESIS_ROM:
         case beiklive::enums::FileType::ARCADE_ROM:
         case beiklive::enums::FileType::DREAMCAST_ROM:
+        case beiklive::enums::FileType::PSP_ROM:
             return BK_RES(prefix + "icon_gba.png");
         default:
             return BK_RES(prefix + "wenjian.png");
@@ -494,6 +502,8 @@ std::string getDefaultLogoPath(beiklive::enums::EmuPlatform platform)
         case beiklive::enums::EmuPlatform::EmuArcade:
             return BK_RES(path_prefix + "gba.png");
         case beiklive::enums::EmuPlatform::EmuDreamcast:
+            return BK_RES(path_prefix + "gba.png");
+        case beiklive::enums::EmuPlatform::EmuPSP:
             return BK_RES(path_prefix + "gba.png");
         default:
             return BK_RES(path_prefix + "gba.png");
@@ -738,6 +748,7 @@ std::string platformName(int platform) {
         case beiklive::enums::EmuPlatform::EmuGenesis: return "MD";
         case beiklive::enums::EmuPlatform::EmuArcade: return "Arcade";
         case beiklive::enums::EmuPlatform::EmuDreamcast: return "DC";
+        case beiklive::enums::EmuPlatform::EmuPSP: return "PSP";
         default: return "";
     }
 }
@@ -753,6 +764,7 @@ std::string platformOverlayKey(int platform) {
         case beiklive::enums::EmuPlatform::EmuGenesis: return beiklive::SettingKey::KEY_DISPLAY_OVERLAY_GENESIS_PATH;
         case beiklive::enums::EmuPlatform::EmuArcade: return beiklive::SettingKey::KEY_DISPLAY_OVERLAY_ARCADE_PATH;
         case beiklive::enums::EmuPlatform::EmuDreamcast: return beiklive::SettingKey::KEY_DISPLAY_OVERLAY_DC_PATH;
+        case beiklive::enums::EmuPlatform::EmuPSP: return beiklive::SettingKey::KEY_DISPLAY_OVERLAY_PSP_PATH;
         default: return "";
     }
 }
@@ -768,6 +780,7 @@ std::string platformShaderKey(int platform) {
         case beiklive::enums::EmuPlatform::EmuGenesis: return beiklive::SettingKey::KEY_DISPLAY_SHADER_GENESIS_PATH;
         case beiklive::enums::EmuPlatform::EmuArcade: return beiklive::SettingKey::KEY_DISPLAY_SHADER_ARCADE_PATH;
         case beiklive::enums::EmuPlatform::EmuDreamcast: return beiklive::SettingKey::KEY_DISPLAY_SHADER_DC_PATH;
+        case beiklive::enums::EmuPlatform::EmuPSP: return beiklive::SettingKey::KEY_DISPLAY_SHADER_PSP_PATH;
         default: return "";
     }
 }
@@ -798,6 +811,7 @@ std::string platformBadgeName(int platform) {
         case beiklive::enums::EmuPlatform::EmuGenesis: return "MD";
         case beiklive::enums::EmuPlatform::EmuArcade: return "Arcade";
         case beiklive::enums::EmuPlatform::EmuDreamcast: return "DC";
+        case beiklive::enums::EmuPlatform::EmuPSP: return "PSP";
         default: return "";
     }
 }
