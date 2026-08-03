@@ -11,17 +11,23 @@
 #   build_switch/GBAStation.nro
 #
 # 使用：
-#   ./switchbuild.sh
+#   ./switchbuild.sh [-j JOBS] [--build-dir DIR] [--core-dir DIR]
 #
 # ============================================================
 
-set -e
+set -euo pipefail
 
 # ────────────────────────────────────────────────────────────
 # Windows 非 MSYS 环境自动切换到 MSYS2
 # ────────────────────────────────────────────────────────────
 
-if [ -z "$MSYSTEM" ] && [ -n "$WINDIR" ]; then
+if [ -z "${MSYSTEM:-}" ] && [ -n "${WINDIR:-}" ]; then
+
+    FORWARDED_ARGS=""
+    for arg in "$@"; do
+        printf -v escaped_arg ' %q' "$arg"
+        FORWARDED_ARGS+="$escaped_arg"
+    done
 
     MSYS2_PATHS=(
         "C:/msys64/msys2.exe"
@@ -40,7 +46,7 @@ if [ -z "$MSYSTEM" ] && [ -n "$WINDIR" ]; then
                 -here \
                 -ucrt64 \
                 -shell bash \
-                -lc "cd \"$(pwd)\" && ./switchbuild.sh"
+                -lc "cd \"$(pwd)\" && ./switchbuild.sh${FORWARDED_ARGS}"
 
             exit $?
         fi
@@ -72,6 +78,37 @@ case "$OS" in
 esac
 
 echo "[平台] ${PLATFORM}"
+
+usage() {
+    cat <<'EOF'
+Usage: ./switchbuild.sh [-j JOBS] [--build-dir DIR] [--core-dir DIR]
+
+  --core-dir DIR  Directory containing the four downloaded core Release NROs:
+                  GBAStation3DSStub.nro, GBAStationFBNeoStub.nro,
+                  GBAStationFlycastStub.nro and GBAStationPPSSPPStub.nro.
+  --build-dir DIR CMake build directory (default: build_switch).
+  -j, --jobs N   Parallel build jobs.
+EOF
+}
+
+BUILD_DIR_OVERRIDE=""
+CORE_DIR="${CORE_DIR:-}"
+JOBS_OVERRIDE=""
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -j|--jobs)
+            [ "$#" -ge 2 ] || { echo "[错误] $1 需要参数"; exit 2; }
+            JOBS_OVERRIDE="$2"; shift 2 ;;
+        --build-dir)
+            [ "$#" -ge 2 ] || { echo "[错误] --build-dir 需要参数"; exit 2; }
+            BUILD_DIR_OVERRIDE="$2"; shift 2 ;;
+        --core-dir)
+            [ "$#" -ge 2 ] || { echo "[错误] --core-dir 需要参数"; exit 2; }
+            CORE_DIR="$2"; shift 2 ;;
+        -h|--help) usage; exit 0 ;;
+        *) echo "[错误] 未知参数: $1"; usage; exit 2 ;;
+    esac
+done
 
 # ────────────────────────────────────────────────────────────
 # devkitPro 环境
@@ -132,21 +169,45 @@ else
 
 fi
 
+if [ -n "${JOBS_OVERRIDE}" ]; then
+    JOBS="${JOBS_OVERRIDE}"
+fi
+
 echo "[线程] ${JOBS}"
 
 # ────────────────────────────────────────────────────────────
 # 路径
 # ────────────────────────────────────────────────────────────
 
-ROOT_DIR="$(pwd)"
-BUILD_DIR="${BUILD_DIR:-${ROOT_DIR}/build_switch}"
-THREEDS_STUB_SOURCE="${ROOT_DIR}/../.example/dekopon/build/switch-codex/src/citra_switch/dekopon.nro"
-FBNEO_STUB_SOURCE="${ROOT_DIR}/../GBAStation_fbneo/GBAStationFBNeoStub.nro"
-FLYCAST_STUB_SOURCE="${ROOT_DIR}/../GBAStation_flycast/GBAStationFlycastStub.nro"
-PPSSPP_STUB_SOURCE="${ROOT_DIR}/../GBAStation_ppsspp/GBAStationPPSSPPStub.nro"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BUILD_DIR="${BUILD_DIR_OVERRIDE:-${BUILD_DIR:-${ROOT_DIR}/build_switch}}"
+
+if [ -n "${CORE_DIR}" ]; then
+    CORE_DIR="$(cd "${CORE_DIR}" && pwd)"
+    THREEDS_STUB_SOURCE="${CORE_DIR}/GBAStation3DSStub.nro"
+    FBNEO_STUB_SOURCE="${CORE_DIR}/GBAStationFBNeoStub.nro"
+    FLYCAST_STUB_SOURCE="${CORE_DIR}/GBAStationFlycastStub.nro"
+    PPSSPP_STUB_SOURCE="${CORE_DIR}/GBAStationPPSSPPStub.nro"
+    echo "[核心] 使用预置 Release 目录: ${CORE_DIR}"
+else
+    THREEDS_STUB_SOURCE="${ROOT_DIR}/../.example/dekopon/build/switch-codex/src/citra_switch/dekopon.nro"
+    FBNEO_STUB_SOURCE="${ROOT_DIR}/../GBAStation_fbneo/GBAStationFBNeoStub.nro"
+    FLYCAST_STUB_SOURCE="${ROOT_DIR}/../GBAStation_flycast/GBAStationFlycastStub.nro"
+    PPSSPP_STUB_SOURCE="${ROOT_DIR}/../GBAStation_ppsspp/GBAStationPPSSPPStub.nro"
+fi
+
+if [ -n "${CORE_DIR}" ]; then
+    for core in GBAStation3DSStub.nro GBAStationFBNeoStub.nro GBAStationFlycastStub.nro GBAStationPPSSPPStub.nro; do
+        if [ ! -s "${CORE_DIR}/${core}" ]; then
+            echo "[错误] --core-dir 缺少 Release 核心: ${CORE_DIR}/${core}"
+            exit 1
+        fi
+    done
+fi
 EXTERNAL_CORE_NROS=(
     "FBNeo.nro"
     "Flycast.nro"
+    "GBAStation3DSStub.nro"
     "GBAStationFBNeoStub.nro"
     "GBAStationFlycastStub.nro"
     "GBAStationPPSSPPStub.nro"
@@ -168,7 +229,9 @@ clean_external_core_nro_outputs
 # 临时目录
 # ────────────────────────────────────────────────────────────
 
-export TMPDIR="${BUILD_DIR}/tmp"
+# Compiler subprocesses run from nested CMake directories.  Keep the temp
+# directory absolute so make never interprets it relative to a subproject.
+export TMPDIR="$(cd "${BUILD_DIR}" && pwd)/tmp"
 
 mkdir -p "${TMPDIR}"
 
@@ -267,7 +330,8 @@ if [ -f "${THREEDS_STUB_SOURCE}" ]; then
     cp "${THREEDS_STUB_SOURCE}" "${BUILD_DIR}/GBAStation/core/GBAStation3DSStub.nro"
     echo "[3DS] 已复制最新 GBAStation3DSStub.nro"
 else
-    echo "[警告] 未找到 3DS Stub: ${THREEDS_STUB_SOURCE}"
+    echo "[错误] 未找到 3DS Stub: ${THREEDS_STUB_SOURCE}"
+    exit 1
 fi
 
 copy_external_core_stub "FBNeo" "${FBNEO_STUB_SOURCE}" "GBAStationFBNeoStub.nro"
@@ -288,6 +352,12 @@ print_nro_size "GBAStation/core/GBAStation3DSStub.nro" "${BUILD_DIR}/GBAStation/
 print_nro_size "GBAStation/core/GBAStationFBNeoStub.nro" "${BUILD_DIR}/GBAStation/core/GBAStationFBNeoStub.nro"
 print_nro_size "GBAStation/core/GBAStationFlycastStub.nro" "${BUILD_DIR}/GBAStation/core/GBAStationFlycastStub.nro"
 print_nro_size "GBAStation/core/GBAStationPPSSPPStub.nro" "${BUILD_DIR}/GBAStation/core/GBAStationPPSSPPStub.nro"
+
+echo ""
+echo "==================== SHA-256 ===================="
+for nro in "${BUILD_DIR}/GBAStation.nro" "${BUILD_DIR}/GBAStationNDSStub.nro" "${BUILD_DIR}/GBAStation/core/"*.nro; do
+    [ -f "${nro}" ] && sha256sum "${nro}"
+done
 
 echo "=================================================="
 

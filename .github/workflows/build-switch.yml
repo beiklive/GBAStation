@@ -1,10 +1,10 @@
-name: Build Switch NRO
+name: Build GBAStation Switch Release
 
 on:
+  workflow_dispatch:
   push:
     tags:
       - 'v*'
-      - 'V*'
 
 permissions:
   contents: write
@@ -12,156 +12,164 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-
+    timeout-minutes: 90
     container:
       image: devkitpro/devkita64:latest
+    env:
+      # Configure CORE_RELEASE_TOKEN when the core repositories are private.
+      # For public repositories github.token is sufficient.
+      GH_TOKEN: ${{ secrets.CORE_RELEASE_TOKEN || github.token }}
 
     steps:
-      - name: 检出代码
+      - name: Check out frontend source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: 修复 Git 权限
-        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Install Switch dependencies
+        shell: bash
+        run: dkp-pacman -S --noconfirm --needed switch-dev switch-curl
 
-      - name: 安装依赖
+      - name: Download latest external core Releases
+        shell: bash
         run: |
-          dkp-pacman -S --noconfirm --needed switch-dev switch-curl
+          set -euo pipefail
+          mkdir -p external-cores core-release-info
 
-      - name: 编译 NRO
+          download_latest() {
+            local repository=$1
+            local asset_name=$2
+            local release_json="core-release-info/${asset_name}.json"
+            local metadata
+            local tag_name
+            local asset_url
+
+            curl --fail --location --retry 3 --retry-all-errors \
+              --header "Authorization: Bearer ${GH_TOKEN}" \
+              --header 'Accept: application/vnd.github+json' \
+              --output "$release_json" \
+              "https://api.github.com/repos/${repository}/releases/latest"
+
+            metadata=$(python3 - "$release_json" "$asset_name" <<'PY'
+          import json
+          import sys
+
+          release_path, asset_name = sys.argv[1:]
+          with open(release_path, encoding='utf-8') as stream:
+              release = json.load(stream)
+          tag = release.get('tag_name')
+          assets = [asset for asset in release.get('assets', [])
+                    if asset.get('name') == asset_name]
+          if not isinstance(tag, str) or not tag or len(assets) != 1:
+              raise SystemExit('latest Release does not contain exactly one required asset: ' + asset_name)
+          url = assets[0].get('browser_download_url')
+          if not isinstance(url, str) or not url:
+              raise SystemExit('invalid asset URL for: ' + asset_name)
+          print(tag + '\t' + url)
+          PY
+          )
+            IFS=$'\t' read -r tag_name asset_url <<< "$metadata"
+            curl --fail --location --retry 3 --retry-all-errors \
+              --header "Authorization: Bearer ${GH_TOKEN}" \
+              --output "external-cores/${asset_name}" "$asset_url"
+            test -s "external-cores/${asset_name}"
+            printf '%s\t%s\t%s\n' "$repository" "$tag_name" "$asset_url" \
+              >> core-release-info/CORE-RELEASES.txt
+          }
+
+          download_latest beiklive/GBAStation_3DS GBAStation3DSStub.nro
+          download_latest beiklive/GBAStation_FBNeo GBAStationFBNeoStub.nro
+          download_latest beiklive/GBAStation_flycast GBAStationFlycastStub.nro
+          download_latest beiklive/GBAStation_ppsspp GBAStationPPSSPPStub.nro
+          sha256sum external-cores/*.nro | tee core-release-info/CORE-NRO-SHA256SUMS.txt
+
+      - name: Build frontend and stage external cores
+        shell: bash
         run: |
           chmod +x switchbuild.sh
-          ./switchbuild.sh
+          ./switchbuild.sh --core-dir "$GITHUB_WORKSPACE/external-cores" -j "$(nproc)"
 
-      - name: 检查输出文件
-        run: |
-          echo "===== NRO FILES ====="
-          find . -name "*.nro"
-
-      - name: 下载 GBAStation_3DS 最新 Release Stub
-        run: |
-          curl -fL --retry 3 --retry-all-errors \
-            -o GBAStation3DSStub.nro \
-            https://github.com/beiklive/GBAStation_3DS/releases/latest/download/GBAStation3DSStub.nro
-          echo "===== GBAStation_3DS STUB ====="
-          ls -lh GBAStation3DSStub.nro
-
-      - name: 生成发布文件
+      - name: Create release package
         id: prep
+        shell: bash
         run: |
+          set -euo pipefail
           TAG_NAME=${GITHUB_REF_NAME}
           VERSION_NAME=${TAG_NAME#v}
-          VERSION_NAME=${VERSION_NAME#V}
-          ZIP_FILE="GBAStation.zip"
+          PACKAGE_DIR=package
+          ZIP_FILE=GBAStation.zip
           CHANGELOG_FILE="${VERSION_NAME}.txt"
+          SUMS_FILE=SHA256SUMS.txt
+          CORE_INFO_FILE=CORE-RELEASES.txt
 
-          CHANGELOG=$(git tag -l --format='%(contents)' "$TAG_NAME")
+          rm -rf "$PACKAGE_DIR"
+          mkdir -p "$PACKAGE_DIR/switch" "$PACKAGE_DIR/GBAStation/core"
+          cp build_switch/GBAStation.nro "$PACKAGE_DIR/switch/GBAStation.nro"
+          for core in GBAStationNDSStub.nro GBAStation3DSStub.nro GBAStationFBNeoStub.nro GBAStationFlycastStub.nro GBAStationPPSSPPStub.nro; do
+            test -s "build_switch/GBAStation/core/$core"
+            cp "build_switch/GBAStation/core/$core" "$PACKAGE_DIR/GBAStation/core/$core"
+          done
 
-          NRO_FILE="build_switch/GBAStation.nro"
-          NDS_STUB_NRO_FILE="build_switch/GBAStationNDSStub.nro"
-          THREEDS_STUB_NRO_FILE="GBAStation3DSStub.nro"
-
-          mkdir -p switch
-          mkdir -p GBAStation/core
-          cp "$NRO_FILE" switch/GBAStation.nro
-          cp "$THREEDS_STUB_NRO_FILE" GBAStation/core/GBAStation3DSStub.nro
-          cp "$NDS_STUB_NRO_FILE" GBAStation/core/GBAStationNDSStub.nro
-          cmake -E tar cf "$ZIP_FILE" --format=zip switch GBAStation
-          rm -rf switch GBAStation
-
-          printf '%s\n' "$CHANGELOG" > "$CHANGELOG_FILE"
+          cmake -E tar cf "$ZIP_FILE" --format=zip "$PACKAGE_DIR/switch" "$PACKAGE_DIR/GBAStation"
+          (
+            cd "$PACKAGE_DIR"
+            sha256sum switch/GBAStation.nro GBAStation/core/*.nro > "../$SUMS_FILE"
+          )
+          sha256sum "$ZIP_FILE" >> "$SUMS_FILE"
+          cp core-release-info/CORE-RELEASES.txt "$CORE_INFO_FILE"
+          printf '%s\n' "$(git tag -l --format='%(contents)' "$TAG_NAME")" > "$CHANGELOG_FILE"
 
           echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
           echo "zip_file=$ZIP_FILE" >> "$GITHUB_OUTPUT"
           echo "changelog_file=$CHANGELOG_FILE" >> "$GITHUB_OUTPUT"
+          echo "sums_file=$SUMS_FILE" >> "$GITHUB_OUTPUT"
+          echo "core_info_file=$CORE_INFO_FILE" >> "$GITHUB_OUTPUT"
 
-          echo "===== ZIP FILE ====="
-          ls -lh "$ZIP_FILE"
-          echo "===== CHANGELOG FILE ====="
-          cat "$CHANGELOG_FILE"
+      - name: Upload Nintendo Switch package
+        uses: actions/upload-artifact@v4
+        with:
+          name: GBAStation-Switch-${{ github.sha }}
+          path: |
+            ${{ steps.prep.outputs.zip_file }}
+            ${{ steps.prep.outputs.sums_file }}
+            ${{ steps.prep.outputs.core_info_file }}
+            ${{ steps.prep.outputs.changelog_file }}
+          if-no-files-found: error
+          retention-days: 30
 
-      - name: 上传到 GitHub Release
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
           body_path: ${{ steps.prep.outputs.changelog_file }}
-          files: ${{ steps.prep.outputs.zip_file }}
+          files: |
+            ${{ steps.prep.outputs.zip_file }}
+            ${{ steps.prep.outputs.sums_file }}
+            ${{ steps.prep.outputs.core_info_file }}
 
-      - name: Clone Release Repo
+      # Keep the historical release repository integration optional. It is not
+      # part of the build dependency chain and must not fail the GitHub Release.
+      - name: Clone legacy release repository
+        if: ${{ secrets.RELEASE_REPO_TOKEN != '' }}
+        shell: bash
         run: |
-          git clone https://x-access-token:${{ secrets.RELEASE_REPO_TOKEN }}@github.com/beiklive/GBAStation_Release.git release_repo
+          git clone "https://x-access-token:${{ secrets.RELEASE_REPO_TOKEN }}@github.com/beiklive/GBAStation_Release.git" release_repo
 
-      - name: 保存版本更新说明
+      - name: Publish NDS stub to legacy release repository
+        if: ${{ secrets.RELEASE_REPO_TOKEN != '' }}
+        shell: bash
         run: |
+          set -euo pipefail
+          mkdir -p nds_stub_package release_repo/emu_res/core
+          cp build_switch/GBAStation/core/GBAStationNDSStub.nro nds_stub_package/GBAStationNDSStub.nro
+          cmake -E chdir nds_stub_package cmake -E tar cf ../GBAStationNDSStub.zip --format=zip GBAStationNDSStub.nro
+          cp GBAStationNDSStub.zip release_repo/emu_res/core/GBAStationNDSStub.zip
           cp "${{ steps.prep.outputs.changelog_file }}" "release_repo/${{ steps.prep.outputs.changelog_file }}"
-
-          NDS_STUB_NRO_FILE="build_switch/GBAStationNDSStub.nro"
-          NDS_STUB_ZIP_FILE="GBAStationNDSStub.zip"
-
-          mkdir -p nds_stub_package
-          cp "$NDS_STUB_NRO_FILE" nds_stub_package/GBAStationNDSStub.nro
-          cmake -E chdir nds_stub_package cmake -E tar cf "../$NDS_STUB_ZIP_FILE" --format=zip GBAStationNDSStub.nro
-          rm -rf nds_stub_package
-
-          mkdir -p "release_repo/emu_res/core"
-          cp "$NDS_STUB_ZIP_FILE" "release_repo/emu_res/core/GBAStationNDSStub.zip"
-
-          echo "===== NDS STUB ZIP FILE ====="
-          ls -lh "release_repo/emu_res/core/GBAStationNDSStub.zip"
-
-      - name: 更新 README 更新说明
-        run: |
-          VERSION_NAME="${{ steps.prep.outputs.version_name }}"
-          CHANGELOG_FILE="${{ steps.prep.outputs.changelog_file }}"
-
-          CHANGELOG=$(cat "$CHANGELOG_FILE")
-
-          README_FILE="release_repo/README.md"
-
-          # README 不存在则创建
-          touch "$README_FILE"
-
-          # 不存在更新说明标题则创建
-          if ! grep -q "^#更新说明" "$README_FILE"; then
-            echo -e "\n#更新说明\n" >> "$README_FILE"
-          fi
-
-          # 构造插入内容
-          NEW_CONTENT=$(cat <<EOF
-
-          ## ${VERSION_NAME}
-
-          ${CHANGELOG}
-
-          EOF
-          )
-
-          # 在 #更新说明 后插入
-          awk -v insert="$NEW_CONTENT" '
-          {
-            print
-            if ($0 ~ /^#更新说明$/) {
-              print insert
-            }
-          }' "$README_FILE" > "$README_FILE.tmp"
-
-          mv "$README_FILE.tmp" "$README_FILE"
-
-          echo "===== README.md ====="
-          cat "$README_FILE"
-
-      - name: 提交到 Release Repo
-        run: |
-          TAG_NAME=${GITHUB_REF_NAME}
-
           cd release_repo
-
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-
+          git config user.name github-actions
+          git config user.email github-actions@github.com
           git add .
-
-          git commit -m "Release $TAG_NAME" || echo "Nothing to commit"
-
+          git commit -m "Release $GITHUB_REF_NAME" || echo "Nothing to commit"
           git push
-

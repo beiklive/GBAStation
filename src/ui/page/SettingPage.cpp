@@ -34,6 +34,7 @@
 #include <sstream>
 #include <iomanip>
 #include <memory>
+#include <map>
 #include <string>
 #include <utility>
 #include <vector>
@@ -2170,6 +2171,127 @@ private:
             }));
     }
 
+    struct ExternalCoreOption {
+        const char* category;
+        const char* key;
+        const char* title;
+        const char* defaultValue;
+    };
+
+    static std::string _externalOptionDescription(const ExternalCoreOption& option)
+    {
+        const std::string key = option.key;
+        if (key.find("resolution") != std::string::npos) return "提高内部渲染精度；较高倍率会增加 GPU 负载。";
+        if (key.find("frameskip") != std::string::npos || key.find("frame_skip") != std::string::npos) return "在性能不足时减少绘制的画面数量以保持运行速度。";
+        if (key.find("texture") != std::string::npos || key.find("filter") != std::string::npos) return "控制纹理的采样、过滤或替换方式。";
+        if (key.find("anisotropic") != std::string::npos) return "改善倾斜角度下的纹理清晰度。";
+        if (key.find("widescreen") != std::string::npos) return "为支持的游戏启用宽屏画面修正。";
+        if (key.find("vmu") != std::string::npos) return "配置 Dreamcast VMU 记忆卡及其屏幕显示。";
+        if (key.find("lightgun") != std::string::npos || key.find("crosshair") != std::string::npos) return "配置光枪输入和准星显示。";
+        if (key.find("deadzone") != std::string::npos) return "过滤摇杆或扳机的轻微抖动。";
+        if (key.find("language") != std::string::npos) return "设置模拟主机向游戏报告的系统语言。";
+        if (key.find("region") != std::string::npos || key.find("broadcast") != std::string::npos) return "设置模拟主机的地区和视频制式。";
+        if (key.find("bios") != std::string::npos) return "控制 BIOS 启动流程与兼容性行为。";
+        if (key.find("renderer") != std::string::npos || key.find("rendering") != std::string::npos) return "控制图形后端及渲染工作方式。";
+        if (key.find("cpu") != std::string::npos || key.find("clock") != std::string::npos) return "调整模拟 CPU 的执行方式或运行频率。";
+        if (key.find("cheat") != std::string::npos) return "控制游戏金手指功能。";
+        if (key.find("network") != std::string::npos || key.find("bba") != std::string::npos || key.find("upnp") != std::string::npos) return "控制网络与宽带适配器功能。";
+        if (key.find("audio") != std::string::npos || key.find("dsp") != std::string::npos) return "控制声音模拟和音频输出行为。";
+        if (key.find("input") != std::string::npos || key.find("analog") != std::string::npos || key.find("trigger") != std::string::npos) return "控制模拟器接收和解释手柄输入的方式。";
+        return "调整该核心功能的兼容性、画面或运行行为。";
+    }
+
+    static std::vector<std::string> _externalOptionValues(const ExternalCoreOption& option)
+    {
+        const std::string key = option.key;
+        const std::string value = option.defaultValue;
+        if (value == "enabled" || value == "disabled") return {"disabled", "enabled"};
+        if (key == "ppsspp_cpu_core") return {"JIT", "IR JIT", "Interpreter"};
+        if (key == "ppsspp_io_timing_method") return {"Fast", "Host", "Simulate UMD delays", "Simulate UMD slow reading speed"};
+        if (key == "ppsspp_psp_model") return {"psp_1000", "psp_2000_3000"};
+        if (key == "ppsspp_button_preference") return {"Cross", "Circle"};
+        if (key == "ppsspp_internal_resolution") return {"480x272", "960x544", "1440x816", "1920x1088", "2400x1360", "2880x1632"};
+        if (key == "ppsspp_rendering_mode") return {"buffered", "nonbuffered"};
+        if (key == "ppsspp_texture_filtering") return {"Auto", "Nearest", "Linear", "Auto max quality"};
+        if (key == "ppsspp_texture_anisotropic_filtering") return {"Off", "2x", "4x", "8x", "16x"};
+        if (key == "ppsspp_lower_resolution_for_effects") return {"Off", "Safe", "Balanced", "Aggressive"};
+        if (key == "ppsspp_texture_scaling_type") return {"xbrz", "hybrid", "bicubic", "hybrid_bicubic"};
+        if (key == "ppsspp_texture_scaling_level") return {"disabled", "2x", "3x", "4x", "5x"};
+        if (key == "ppsspp_frameskip") return {"0", "1", "2", "3", "4", "5"};
+        if (key == "ppsspp_inflight_frames") return {"No buffer", "Up to 1", "Up to 2"};
+        if (key == "ppsspp_analog_deadzone") return {"0.00", "0.10", "0.15", "0.20", "0.25", "0.30"};
+        if (key == "ppsspp_analog_sensitivity") return {"0.80", "0.90", "1.00", "1.10", "1.20", "1.30"};
+        if (key == "ppsspp_language") return {"Automatic", "English", "Japanese", "French", "Spanish", "German", "Italian", "Korean", "Chinese Traditional", "Chinese Simplified"};
+        if (key == "reicast_renderer") return {"vulkan"};
+        if (key == "reicast_internal_resolution") return {"640x480", "960x720", "1280x960", "1920x1440"};
+        if (key == "reicast_region") return {"USA", "Japan", "Europe"};
+        if (key == "reicast_language") return {"English", "Japanese", "French", "German", "Italian", "Spanish", "Chinese", "Korean"};
+        if (key == "reicast_cable_type") return {"TV (Composite)", "TV (RGB)", "VGA"};
+        if (key == "reicast_broadcast") return {"NTSC", "PAL", "PAL-M", "PAL-N"};
+        if (key == "reicast_screen_rotation") return {"horizontal", "vertical"};
+        if (key == "reicast_alpha_sorting") return {"per-strip", "per-triangle (normal)", "per-pixel"};
+        if (key == "reicast_oit_abuffer_size") return {"128MB", "256MB", "512MB", "1024MB"};
+        if (key == "reicast_oit_layers") return {"8", "16", "32", "64"};
+        if (key == "reicast_anisotropic_filtering") return {"1", "2", "4", "8", "16"};
+        if (key == "reicast_texture_filtering") return {"0", "1", "2", "3", "4"};
+        if (key == "reicast_texupscale") return {"1", "2", "3", "4", "5", "6"};
+        if (key == "reicast_texupscale_max_filtered_texture_size") return {"64", "128", "256", "512", "1024"};
+        if (key == "reicast_sh4clock") return {"100", "150", "180", "200", "220", "240"};
+        if (key.find("deadzone") != std::string::npos) return {"0%", "5%", "10%", "15%", "20%", "25%", "30%"};
+        if (key == "reicast_lightgun_crosshair_size_scaling") return {"50%", "75%", "100%", "125%", "150%"};
+        if (key.find("device_port") != std::string::npos) return {"None", "VMU", "Purupuru", "Microphone"};
+        if (key == "reicast_per_content_vmus") return {"All VMUs", "Per-Game VMUs"};
+        if (key.find("screen_position") != std::string::npos) return {"Upper Left", "Upper Right", "Lower Left", "Lower Right"};
+        if (key.find("screen_size_mult") != std::string::npos) return {"1x", "2x", "3x", "4x"};
+        if (key.find("screen_opacity") != std::string::npos) return {"25%", "50%", "75%", "100%"};
+        if (key == "fbneo-cpu-speed-adjust") return {"50%", "75%", "100%", "125%", "150%", "200%"};
+        if (key == "fbneo-analog-speed") return {"50%", "75%", "100%", "125%", "150%"};
+        if (key == "fbneo-frameskip") return {"0", "1", "2", "3", "4", "5"};
+        if (key == "fbneo-resolution") return {"640x480", "800x600", "1024x768", "1280x960", "1600x1200", "1920x1440"};
+        if (key == "fbneo-vertical-mode") return {"disabled", "enabled", "alternate", "TATE", "TATE alternate"};
+        if (key == "fbneo-frameskip-type") return {"disabled", "Fixed", "Auto", "Manual"};
+        if (key == "fbneo-fixed-frameskip") return {"0", "1", "2", "3", "4", "5"};
+        if (key == "fbneo-frameskip-manual-threshold") return {"15", "18", "21", "24", "27", "30", "33", "36", "39", "42", "45", "48", "51", "54", "57", "60"};
+        if (key == "fbneo-diagnostic-input") return {"None", "Hold Start", "Start + A + B", "Hold Start + A + B", "Start + L + R", "Hold Start + L + R", "Hold Select", "Select + A + B", "Select + L + R"};
+        if (key == "fbneo-samplerate") return {"44100", "48000"};
+        if (key == "fbneo-sample-interpolation") return {"disabled", "2-point 1st order", "4-point 3rd order"};
+        if (key == "fbneo-fm-interpolation") return {"disabled", "4-point 3rd order"};
+        if (key == "fbneo-socd") return {"0", "1", "2", "3", "4", "5", "6"};
+        if (key == "fbneo-lightgun-crosshair-emulation") return {"hide with lightgun device", "always hide", "always show"};
+        if (key == "fbneo-neogeo-mode") return {"DIPSWITCH", "MVS_EUR", "MVS_USA", "MVS_JAP", "AES_EUR", "AES_JAP", "UNIBIOS"};
+        if (key == "fbneo-memcard-mode") return {"disabled", "shared", "per-game"};
+        return {value};
+    }
+
+    // External cores deliberately keep their own JSONC files.  The launcher is
+    // the common source of truth, so every option is mirrored in config.cfg and
+    // copied into the JSONC file by the core before it boots.
+    void _appendExternalOptions(const std::string& prefix,
+                                const std::vector<ExternalCoreOption>& options)
+    {
+        std::string category;
+        for (const auto& option : options) {
+            if (category != option.category) {
+                category = option.category;
+                m_coreItems.push_back(_section(category));
+            }
+            const std::string configKey = "core." + prefix + "." + option.key;
+            const std::string fallback = option.defaultValue;
+            const std::vector<std::string> values = _externalOptionValues(option);
+            std::vector<std::string> labels;
+            labels.reserve(values.size());
+            for (const auto& value : values)
+                labels.push_back(_coreOptionValue(value, value));
+            m_coreItems.push_back(_selector(
+                option.title, _externalOptionDescription(option), beiklive::material::SETTINGS, labels,
+                [configKey, values, fallback]() { return findIndex(values, cfgGetStr(configKey, fallback)); },
+                [configKey, values](int index) {
+                    if (index >= 0 && index < static_cast<int>(values.size()))
+                        cfgSetStr(configKey, values[static_cast<size_t>(index)]);
+                }));
+        }
+    }
+
     void _openLibretroCore(const std::string& title, CoreType type)
     {
         m_coreItems.clear();
@@ -2311,6 +2433,29 @@ private:
                     cfgSetStr("core.fbneo.shader_type", shaderValues[static_cast<size_t>(i)]);
             }));
 
+        _appendExternalOptions("fbneo", {
+            {"视频", "fbneo-allow-depth-32", "32 位色深", "enabled"},
+            {"视频", "fbneo-vertical-mode", "竖屏游戏方向", "disabled"},
+            {"视频", "fbneo-force-60hz", "强制 60Hz", "disabled"},
+            {"视频", "fbneo-resolution", "矢量游戏分辨率", "640x480"},
+            {"性能", "fbneo-frameskip-type", "跳帧方式", "disabled"},
+            {"性能", "fbneo-fixed-frameskip", "固定跳帧", "0"},
+            {"性能", "fbneo-frameskip-manual-threshold", "手动跳帧阈值", "33"},
+            {"性能", "fbneo-cpu-speed-adjust", "CPU 时钟", "100%"},
+            {"街机系统", "fbneo-diagnostic-input", "诊断输入", "Hold Start"},
+            {"街机系统", "fbneo-hiscores", "高分记录", "enabled"},
+            {"街机系统", "fbneo-allow-patched-romsets", "允许补丁 ROM", "enabled"},
+            {"音频", "fbneo-samplerate", "采样率", "48000"},
+            {"音频", "fbneo-sample-interpolation", "采样插值", "4-point 3rd order"},
+            {"音频", "fbneo-fm-interpolation", "FM 插值", "4-point 3rd order"},
+            {"音频", "fbneo-lowpass-filter", "低通滤波", "disabled"},
+            {"输入", "fbneo-analog-speed", "模拟摇杆速度", "100%"},
+            {"输入", "fbneo-socd", "相反方向处理", "3"},
+            {"输入", "fbneo-lightgun-crosshair-emulation", "光枪准星", "hide with lightgun device"},
+            {"Neo Geo", "fbneo-neogeo-mode", "Neo Geo BIOS 模式", "DIPSWITCH"},
+            {"Neo Geo", "fbneo-memcard-mode", "Neo Geo 记忆卡", "disabled"},
+        });
+
         m_coreItems.push_back(_section("按键"));
         m_coreItems.push_back(_action(
             "Arcade 按键映射", "配置 FBNeo 外部核心使用的 config.cfg 映射", 0xE30F,
@@ -2333,6 +2478,93 @@ private:
             {"4:3", "16:9", "Stretch", "Original", "1x", "2x", "Auto"},
             {"4:3", "16:9", "拉伸", "原始", "1x", "2x", "自动"},
             "4:3");
+
+        _appendExternalOptions("flycast", {
+            {"系统与 BIOS", "reicast_renderer", "渲染器", "vulkan"},
+            {"系统与 BIOS", "reicast_region", "主机地区", "USA"},
+            {"系统与 BIOS", "reicast_language", "系统语言", "English"},
+            {"系统与 BIOS", "reicast_hle_bios", "HLE BIOS", "disabled"},
+            {"系统与 BIOS", "reicast_boot_to_bios", "启动至 BIOS", "disabled"},
+            {"系统与 BIOS", "reicast_enable_dsp", "启用 DSP", "enabled"},
+            {"系统与 BIOS", "reicast_allow_service_buttons", "服务按键", "disabled"},
+            {"系统与 BIOS", "reicast_force_freeplay", "强制免费游戏", "enabled"},
+            {"系统与 BIOS", "reicast_emulate_bba", "模拟宽带适配器", "disabled"},
+            {"系统与 BIOS", "reicast_upnp", "UPnP", "enabled"},
+            {"视频与渲染", "reicast_internal_resolution", "内部渲染分辨率", "640x480"},
+            {"视频与渲染", "reicast_screen_rotation", "屏幕旋转", "horizontal"},
+            {"视频与渲染", "reicast_alpha_sorting", "透明排序", "per-triangle (normal)"},
+            {"视频与渲染", "reicast_oit_abuffer_size", "OIT 缓冲区", "512MB"},
+            {"视频与渲染", "reicast_oit_layers", "OIT 图层数", "32"},
+            {"视频与渲染", "reicast_emulate_framebuffer", "模拟帧缓冲", "disabled"},
+            {"视频与渲染", "reicast_enable_rttb", "渲染至纹理缓冲", "disabled"},
+            {"视频与渲染", "reicast_mipmapping", "Mipmapping", "enabled"},
+            {"视频与渲染", "reicast_fog", "雾化效果", "enabled"},
+            {"视频与渲染", "reicast_volume_modifier_enable", "体积修饰器", "enabled"},
+            {"视频与渲染", "reicast_anisotropic_filtering", "各向异性过滤", "4"},
+            {"视频与渲染", "reicast_texture_filtering", "纹理过滤", "0"},
+            {"性能", "reicast_delay_frame_swapping", "延迟交换帧", "enabled"},
+            {"性能", "reicast_detect_vsync_swap_interval", "检测垂直同步", "disabled"},
+            {"性能", "reicast_pvr2_filtering", "PVR2 过滤", "disabled"},
+            {"性能", "reicast_texupscale", "纹理放大", "1"},
+            {"性能", "reicast_texupscale_max_filtered_texture_size", "纹理放大最大尺寸", "256"},
+            {"性能", "reicast_native_depth_interpolation", "原生深度插值", "disabled"},
+            {"性能", "reicast_fix_upscale_bleeding_edge", "修复放大边缘渗色", "enabled"},
+            {"性能", "reicast_threaded_rendering", "线程渲染", "enabled"},
+            {"性能", "reicast_auto_skip_frame", "自动跳帧", "disabled"},
+            {"性能", "reicast_frame_skipping", "跳帧", "disabled"},
+            {"游戏兼容", "reicast_widescreen_cheats", "宽屏金手指", "disabled"},
+            {"游戏兼容", "reicast_widescreen_hack", "宽屏补丁", "disabled"},
+            {"游戏兼容", "reicast_gdrom_fast_loading", "GD-ROM 快速读取", "disabled"},
+            {"游戏兼容", "reicast_dc_32mb_mod", "32MB 内存扩展", "disabled"},
+            {"游戏兼容", "reicast_sh4clock", "SH4 时钟", "200"},
+            {"纹理", "reicast_custom_textures", "自定义纹理", "disabled"},
+            {"纹理", "reicast_dump_textures", "导出纹理", "disabled"},
+            {"输入与网络", "reicast_analog_stick_deadzone", "摇杆死区", "15%"},
+            {"输入与网络", "reicast_trigger_deadzone", "扳机死区", "0%"},
+            {"输入与网络", "reicast_digital_triggers", "数字扳机", "disabled"},
+            {"输入与网络", "reicast_network_output", "网络输出", "disabled"},
+            {"光枪", "reicast_show_lightgun_settings", "显示光枪设置", "disabled"},
+            {"光枪", "reicast_lightgun_crosshair_size_scaling", "光枪准星大小", "100%"},
+            {"光枪", "reicast_lightgun1_crosshair", "光枪 1 准星", "disabled"},
+            {"光枪", "reicast_lightgun2_crosshair", "光枪 2 准星", "disabled"},
+            {"光枪", "reicast_lightgun3_crosshair", "光枪 3 准星", "disabled"},
+            {"光枪", "reicast_lightgun4_crosshair", "光枪 4 准星", "disabled"},
+            {"VMU 与外设", "reicast_device_port1_slot1", "端口 1 插槽 1", "VMU"},
+            {"VMU 与外设", "reicast_device_port1_slot2", "端口 1 插槽 2", "Purupuru"},
+            {"VMU 与外设", "reicast_device_port2_slot1", "端口 2 插槽 1", "VMU"},
+            {"VMU 与外设", "reicast_device_port2_slot2", "端口 2 插槽 2", "Purupuru"},
+            {"VMU 与外设", "reicast_device_port3_slot1", "端口 3 插槽 1", "VMU"},
+            {"VMU 与外设", "reicast_device_port3_slot2", "端口 3 插槽 2", "Purupuru"},
+            {"VMU 与外设", "reicast_device_port4_slot1", "端口 4 插槽 1", "VMU"},
+            {"VMU 与外设", "reicast_device_port4_slot2", "端口 4 插槽 2", "Purupuru"},
+            {"VMU 与外设", "reicast_per_content_vmus", "每游戏独立 VMU", "All VMUs"},
+            {"VMU 与外设", "reicast_vmu_sound", "VMU 声音", "disabled"},
+            {"VMU 屏幕", "reicast_show_vmu_screen_settings", "显示 VMU 屏幕设置", "disabled"},
+            {"VMU 屏幕", "reicast_vmu1_screen_display", "VMU 1 屏幕", "disabled"},
+            {"VMU 屏幕", "reicast_vmu1_screen_position", "VMU 1 位置", "Upper Left"},
+            {"VMU 屏幕", "reicast_vmu1_screen_size_mult", "VMU 1 尺寸", "1x"},
+            {"VMU 屏幕", "reicast_vmu1_pixel_on_color", "VMU 1 亮点颜色", "DEFAULT_ON 00"},
+            {"VMU 屏幕", "reicast_vmu1_pixel_off_color", "VMU 1 暗点颜色", "DEFAULT_OFF 01"},
+            {"VMU 屏幕", "reicast_vmu1_screen_opacity", "VMU 1 不透明度", "100%"},
+            {"VMU 屏幕", "reicast_vmu2_screen_display", "VMU 2 屏幕", "disabled"},
+            {"VMU 屏幕", "reicast_vmu2_screen_position", "VMU 2 位置", "Upper Right"},
+            {"VMU 屏幕", "reicast_vmu2_screen_size_mult", "VMU 2 尺寸", "1x"},
+            {"VMU 屏幕", "reicast_vmu2_pixel_on_color", "VMU 2 亮点颜色", "DEFAULT_ON 00"},
+            {"VMU 屏幕", "reicast_vmu2_pixel_off_color", "VMU 2 暗点颜色", "DEFAULT_OFF 01"},
+            {"VMU 屏幕", "reicast_vmu2_screen_opacity", "VMU 2 不透明度", "100%"},
+            {"VMU 屏幕", "reicast_vmu3_screen_display", "VMU 3 屏幕", "disabled"},
+            {"VMU 屏幕", "reicast_vmu3_screen_position", "VMU 3 位置", "Lower Left"},
+            {"VMU 屏幕", "reicast_vmu3_screen_size_mult", "VMU 3 尺寸", "1x"},
+            {"VMU 屏幕", "reicast_vmu3_pixel_on_color", "VMU 3 亮点颜色", "DEFAULT_ON 00"},
+            {"VMU 屏幕", "reicast_vmu3_pixel_off_color", "VMU 3 暗点颜色", "DEFAULT_OFF 01"},
+            {"VMU 屏幕", "reicast_vmu3_screen_opacity", "VMU 3 不透明度", "100%"},
+            {"VMU 屏幕", "reicast_vmu4_screen_display", "VMU 4 屏幕", "disabled"},
+            {"VMU 屏幕", "reicast_vmu4_screen_position", "VMU 4 位置", "Lower Right"},
+            {"VMU 屏幕", "reicast_vmu4_screen_size_mult", "VMU 4 尺寸", "1x"},
+            {"VMU 屏幕", "reicast_vmu4_pixel_on_color", "VMU 4 亮点颜色", "DEFAULT_ON 00"},
+            {"VMU 屏幕", "reicast_vmu4_pixel_off_color", "VMU 4 暗点颜色", "DEFAULT_OFF 01"},
+            {"VMU 屏幕", "reicast_vmu4_screen_opacity", "VMU 4 不透明度", "100%"},
+        });
 
         m_coreItems.push_back(_section("按键"));
         m_coreItems.push_back(_action(
@@ -2390,6 +2622,44 @@ private:
             "I/O 独立线程", "将部分文件读取放到独立线程，减少卡顿", 0xE8D5,
             []() { return cfgGetBool("core.ppsspp.io_thread", true); },
             [](bool v) { cfgSetBool("core.ppsspp.io_thread", v); }));
+
+        _appendExternalOptions("ppsspp", {
+            {"CPU 与性能", "ppsspp_cpu_core", "CPU 后端", "JIT"},
+            {"CPU 与性能", "ppsspp_fast_memory", "快速内存", "enabled"},
+            {"CPU 与性能", "ppsspp_ignore_bad_memory_access", "忽略错误内存访问", "enabled"},
+            {"CPU 与性能", "ppsspp_io_timing_method", "I/O 时序", "Fast"},
+            {"CPU 与性能", "ppsspp_force_lag_sync", "强制延迟同步", "disabled"},
+            {"CPU 与性能", "ppsspp_locked_cpu_speed", "锁定 CPU 时钟", "0"},
+            {"CPU 与性能", "ppsspp_cache_iso", "缓存 ISO", "disabled"},
+            {"系统", "ppsspp_cheats", "启用金手指", "disabled"},
+            {"系统", "ppsspp_psp_model", "PSP 机型", "psp_2000_3000"},
+            {"系统", "ppsspp_button_preference", "确认键偏好", "Cross"},
+            {"系统", "ppsspp_language", "PSP 系统语言", "Automatic"},
+            {"系统", "ppsspp_memstick_inserted", "插入记忆棒", "enabled"},
+            {"视频与渲染", "ppsspp_internal_resolution", "内部渲染分辨率", "480x272"},
+            {"视频与渲染", "ppsspp_software_rendering", "软件渲染", "disabled"},
+            {"视频与渲染", "ppsspp_rendering_mode", "渲染模式", "buffered"},
+            {"视频与渲染", "ppsspp_gpu_hardware_transform", "硬件变换", "enabled"},
+            {"视频与渲染", "ppsspp_skip_buffer_effects", "跳过缓冲效果", "disabled"},
+            {"视频与渲染", "ppsspp_frameskip", "跳帧", "0"},
+            {"视频与渲染", "ppsspp_auto_frameskip", "自动跳帧", "disabled"},
+            {"视频与渲染", "ppsspp_frame_duplication", "重复帧", "disabled"},
+            {"视频与渲染", "ppsspp_detect_vsync_swap_interval", "检测垂直同步", "disabled"},
+            {"视频与渲染", "ppsspp_inflight_frames", "在途帧数", "Up to 2"},
+            {"纹理", "ppsspp_texture_filtering", "纹理过滤", "Auto"},
+            {"纹理", "ppsspp_texture_anisotropic_filtering", "各向异性过滤", "Off"},
+            {"纹理", "ppsspp_lower_resolution_for_effects", "降低特效分辨率", "Off"},
+            {"纹理", "ppsspp_texture_deposterize", "去色带", "disabled"},
+            {"纹理", "ppsspp_texture_scaling_type", "纹理缩放算法", "xbrz"},
+            {"纹理", "ppsspp_texture_scaling_level", "纹理缩放倍率", "1"},
+            {"纹理", "ppsspp_texture_replacement", "纹理替换", "enabled"},
+            {"输入", "ppsspp_analog_is_circular", "圆形模拟摇杆", "disabled"},
+            {"输入", "ppsspp_analog_deadzone", "摇杆死区", "0.15"},
+            {"输入", "ppsspp_analog_sensitivity", "摇杆灵敏度", "1.10"},
+            {"显示", "ppsspp_cropto16x9", "裁切至 16:9", "disabled"},
+            {"高级", "ppsspp_block_transfer_gpu", "GPU 块传输", "enabled"},
+            {"高级", "ppsspp_disable_range_culling", "禁用范围剔除", "disabled"},
+        });
 
         m_coreItems.push_back(_section("按键"));
         m_coreItems.push_back(_action(
@@ -3127,14 +3397,6 @@ private:
             const std::string key = item.configKey;
             openKeyCapture([this, key](const std::string& captured) {
                 if (captured.empty()) return;
-                if (key.rfind("arcade.", 0) == 0 ||
-                    key.rfind("dc.", 0) == 0 ||
-                    key.rfind("psp.", 0) == 0)
-                {
-                    cfgSetStr(key, captured);
-                    invalidate();
-                    return;
-                }
                 std::string current = cfgGetStr(key, "none");
                 if (current.empty() || current == "none") current = captured;
                 else
