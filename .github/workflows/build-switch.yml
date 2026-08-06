@@ -19,6 +19,7 @@ jobs:
       # Configure CORE_RELEASE_TOKEN when the core repositories are private.
       # For public repositories github.token is sufficient.
       GH_TOKEN: ${{ secrets.CORE_RELEASE_TOKEN || github.token }}
+      RELEASE_REPO_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
 
     steps:
       - name: Check out frontend source
@@ -152,13 +153,13 @@ jobs:
       # Keep the historical release repository integration optional. It is not
       # part of the build dependency chain and must not fail the GitHub Release.
       - name: Clone legacy release repository
-        if: ${{ secrets.RELEASE_REPO_TOKEN != '' }}
+        if: env.RELEASE_REPO_TOKEN != ''
         shell: bash
         run: |
-          git clone "https://x-access-token:${{ secrets.RELEASE_REPO_TOKEN }}@github.com/beiklive/GBAStation_Release.git" release_repo
+          git clone "https://x-access-token:${RELEASE_REPO_TOKEN}@github.com/beiklive/GBAStation_Release.git" release_repo
 
       - name: Publish NDS stub to legacy release repository
-        if: ${{ secrets.RELEASE_REPO_TOKEN != '' }}
+        if: env.RELEASE_REPO_TOKEN != ''
         shell: bash
         run: |
           set -euo pipefail
