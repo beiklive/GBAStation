@@ -1,5 +1,7 @@
 # GBAStation
 
+![logo](./resources/icon/default.png)
+
 GBAStation 是面向 Nintendo Switch 的多核心模拟器前端。主程序负责游戏库、文件识别、配置管理、按键映射、资源更新与链式启动，不再依赖 libretro 动态核心加载。
 
 当前架构采用“小型核心主程序内置 + 大型核心独立 NRO”的方式：FC、SFC、MD、GBA、GB、GBC 等核心直接集成在主程序中；NDS、3DS、街机、DC、PSP 等核心以 `GBAStation*Stub.nro` 形式独立运行，核心退出后再返回 `sdmc:/switch/GBAStation.nro`。
