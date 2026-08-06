@@ -111,7 +111,7 @@ jobs:
             cp "build_switch/GBAStation/core/$core" "$PACKAGE_DIR/GBAStation/core/$core"
           done
 
-          cmake -E tar cf "$ZIP_FILE" --format=zip "$PACKAGE_DIR/switch" "$PACKAGE_DIR/GBAStation"
+          cmake -E chdir "$PACKAGE_DIR" cmake -E tar cf "../$ZIP_FILE" --format=zip switch GBAStation
           (
             cd "$PACKAGE_DIR"
             sha256sum switch/GBAStation.nro GBAStation/core/*.nro > "../$SUMS_FILE"
