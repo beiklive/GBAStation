@@ -101,3 +101,12 @@ windowsbuild.bat
 如果这个项目对你有帮助，欢迎 Star 项目、提交 Issue / PR，或通过下方二维码支持开发。
 
 ![pay](./assets/pay.png)
+
+
+
+## 模拟器截图展示
+
+![alt text](./assets/1.png)
+![alt text](./assets/2.png)
+![alt text](./assets/3.png)
+![alt text](./assets/4.png)
