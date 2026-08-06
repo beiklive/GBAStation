@@ -69,10 +69,6 @@ NanoSearchOverlay::NanoSearchOverlay()
     auto consume = [this](brls::View*) {
         return m_open;
     };
-    registerAction("", brls::BUTTON_UP, up, true, false, brls::SOUND_NONE);
-    registerAction("", brls::BUTTON_DOWN, down, true, false, brls::SOUND_NONE);
-    registerAction("", brls::BUTTON_LEFT, consume, true, false, brls::SOUND_NONE);
-    registerAction("", brls::BUTTON_RIGHT, consume, true, false, brls::SOUND_NONE);
     registerAction("", brls::BUTTON_NAV_UP, up, true, false, brls::SOUND_NONE);
     registerAction("", brls::BUTTON_NAV_DOWN, down, true, false, brls::SOUND_NONE);
     registerAction("", brls::BUTTON_NAV_LEFT, consume, true, false, brls::SOUND_NONE);
