@@ -10,6 +10,7 @@
 #include "core/ThreadPool.hpp"
 #include "core/ThreeDsTitlePaths.hpp"
 #include "core/Tools.hpp"
+#include "core/rom/PspMeta.hpp"
 #include "core/ExternalCoreSession.hpp"
 #include "ui/utils/BKAudioPlayer.hpp"
 #include "ui/page/StartPage.hpp"
@@ -135,6 +136,26 @@ void ensureDirectGameDbEntry(const std::string& romPath, beiklive::enums::FileTy
 	{
 		entry.title = GET_MAPPING_KEY_STR(stem, stem);
 		changed = true;
+	}
+	if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP))
+	{
+		// PSP ROM：提取真实游戏标题与 ICON0 封面（仅未设置时）。
+		const std::string realTitle = beiklive::psp_meta::ExtractTitle(entry.path);
+		if (!realTitle.empty() && entry.title == GET_MAPPING_KEY_STR(stem, stem))
+		{
+			entry.title = realTitle;
+			changed = true;
+		}
+		if (entry.logoPath.empty())
+		{
+			const std::string icon = beiklive::psp_meta::ExtractIcon0(
+				entry.path, beiklive::path::cachePath());
+			if (!icon.empty())
+			{
+				entry.logoPath = icon;
+				changed = true;
+			}
+		}
 	}
 	if (entry.savePath.empty())
 	{
