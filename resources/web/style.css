@@ -434,6 +434,9 @@ button:disabled {
 .platform-nds { --platform-color: #0ca678; --platform-bg: rgba(12, 166, 120, .12); }
 .platform-3ds { --platform-color: #e64f5b; --platform-bg: rgba(230, 79, 91, .12); }
 .platform-md { --platform-color: #f76707; --platform-bg: rgba(247, 103, 7, .12); }
+.platform-arcade { --platform-color: #ec862c; --platform-bg: rgba(236, 134, 44, .12); }
+.platform-dc { --platform-color: #008eb4; --platform-bg: rgba(0, 142, 180, .12); }
+.platform-psp { --platform-color: #4376e2; --platform-bg: rgba(67, 118, 226, .12); }
 .platform-other { --platform-color: #6c7a91; --platform-bg: rgba(108, 122, 145, .12); }
 
 .platform-dot {
