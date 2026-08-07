@@ -8,6 +8,7 @@
 #include "ui/widget/DetailCell.hpp"
 #include "core/ThreeDsTitlePaths.hpp"
 #include "core/Tools.hpp"
+#include "core/rom/PspMeta.hpp"
 #include "network/WebService.h"
 #include "third_party/qrcodegen/qrcodegen.hpp"
 
@@ -2286,6 +2287,16 @@ void DataManagementPage::startDirImport(const std::string& dirPath)
             entry.logoPath = beiklive::tools::getDefaultLogoPath(
                 static_cast<beiklive::enums::EmuPlatform>(platform),
                 path);
+            if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP)) {
+                // PSP ROM 提取真实游戏标题与 ICON0 封面。
+                const std::string realTitle = beiklive::psp_meta::ExtractTitle(path);
+                if (!realTitle.empty())
+                    entry.title = realTitle;
+                const std::string icon = beiklive::psp_meta::ExtractIcon0(
+                    path, beiklive::path::cachePath());
+                if (!icon.empty())
+                    entry.logoPath = icon;
+            }
             entry.overlayEnabled = config.overlayEnabled;
             entry.shaderEnabled = config.shaderEnabled;
             entry.overlayPath = config.overlayPath;
